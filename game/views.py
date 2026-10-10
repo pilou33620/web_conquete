@@ -25,10 +25,14 @@ def migrate(g):
     for f in g.factions.values():
         f.setdefault('tax', 0.5)
         f.setdefault('intel', {})
+        f.setdefault('prisoners', {})
+    for n in g.nodes:
+        n.setdefault('depot', 0)
     for a in g.armies.values():
         if not a.get('gen'):
             a['gen'] = g.new_general(a['owner'])
-        for k, v in dict(fm='ligne', pl='frontal', fm_t=-9.0, tac_auto=True, landing=False, boat=False, emb=0.0).items():
+        for k, v in dict(fm='ligne', pl='frontal', fm_t=-9.0, tac_auto=True, landing=False, boat=False, emb=0.0,
+                         rx=True, des=0.0, depot=None).items():
             a.setdefault(k, v)
     for bt in g.battles.values():
         bt.setdefault('mor', [100, 100])
@@ -122,12 +126,21 @@ def player_state(g, since=0):
                  if n['siege'] else None)
         if n['id'] in g._blockade:
             d['bk'] = 1
+        if n.get('depot'):
+            d['dp'] = 1
         if n['owner'] in side:
             d['m'] = round(n['milice'])
             d['mm'] = round(n['milice_max'] * (1 + g.mod(n['owner'], 'milice')))
             d['g'] = [_reg(r) for r in n['garrison']]
             if n['owner'] == p:
                 d['fx'] = g.fort_max(p, n['id'])
+                d['ru'], d['rw'] = [], {}
+                for u in R.UNIT_ORDER:
+                    ok, why = g.can_recruit(p, n['id'], u)
+                    if ok:
+                        d['ru'].append(u)
+                    else:
+                        d['rw'][u] = why
                 d['q'] = [dict(kind=q['kind'], what=q['what'], left=round(q['left'], 1), total=round(q['total'], 1)) for q in n['queue']]
         elif g.intel_active(p, n['id']):
             d['m'] = round(n['milice'])
@@ -167,6 +180,11 @@ def player_state(g, since=0):
                 d['emb'] = round(a['emb'], 2)
             if a.get('_fire'):
                 d['fire'] = 1
+            d['rx'] = bool(a.get('rx', True))
+            d['des'] = int(a.get('des', 0))
+            d['wn'] = [w for w, on in (('solde', me.get('banqueroute')),
+                                       ('faim', me.get('famine') or a['supply'] < 0.35)) if on]
+            d['dp'] = g.geo.nodes[a['depot']]['name'] if a.get('depot') is not None else None
         else:
             d['regs'] = [[None, r['type'], round(r['n']), r['max'], 0, 0] for r in a['regs']]
         armies.append(d)
@@ -204,7 +222,8 @@ def player_state(g, since=0):
                          trade=bool(me['trade'].get(code)), over=f['overlord'],
                          truce=g.date_str(me['truce'][code]) if code in me['truce'] else None,
                          wars=[o for o in g.factions if o != code and g.at_war(code, o)],
-                         cap_owner=g.nodes[g.capital_of(code)]['owner'], techs=len(f['techs'])))
+                         cap_owner=g.nodes[g.capital_of(code)]['owner'], techs=len(f['techs']),
+                         pr=int(f.get('prisoners', {}).get(p, 0)) if code != p else 0))
 
     has_port = any('port' in g.geo.nodes[n['id']]['spec'] for n in g.owned_nodes(p))
     tb, cov = g.tools_bonus(p)
@@ -219,7 +238,9 @@ def player_state(g, since=0):
                 floor=me.get('_floor', {}), tax=me.get('tax', 0.5), order=_order(g, p),
                 spies=[dict(node=s['node'], kind=s['kind'], left=round(s['done'] - g.t, 1)) for s in g.spies if s['by'] == p],
                 has_port=has_port, famine=bool(me.get('famine')), banqueroute=bool(me.get('banqueroute')),
-                stats={k: int(v) for k, v in me['stats'].items()}, mods={k: round(v, 3) for k, v in me['mods'].items()})
+                stats={k: int(v) for k, v in me['stats'].items()}, mods={k: round(v, 3) for k, v in me['mods'].items()},
+                prisoners={k: int(v) for k, v in me.get('prisoners', {}).items() if v > 0},
+                prisoner_upkeep=round(me.get('_upkeep', {}).get('prisoners', 0), 2))
 
     return dict(t=round(g.t, 3), date=g.date_str(), season=g.season(), speed=g.speed_idx, over=g.over,
                 weather={z: dict(kind=w['kind'], left=w['left']) for z, w in g.weather.items()},

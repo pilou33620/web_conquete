@@ -153,6 +153,18 @@ class App:
                     ar['mode'] = body['value']
                     return dict(ok=True)
                 return dict(ok=False, msg='Armée introuvable.')
+            if c == 'reflex':
+                ar = g.armies.get(a)
+                if ar and ar['owner'] == p:
+                    ar['rx'] = bool(body.get('value'))
+                    return dict(ok=True, msg='Carré réflexe activé.' if ar['rx'] else 'Carré réflexe désactivé : '
+                                                                                      'vous formerez le carré vous-même.')
+                return dict(ok=False, msg='Armée introuvable.')
+            if c == 'enroll':
+                frm = body.get('from')
+                if frm not in g.factions and frm != R.NEUTRAL:
+                    return dict(ok=False, msg='Origine inconnue.')
+                return self._r(g.enroll(p, frm))
             if c == 'rename':
                 ar = g.armies.get(a)
                 name = str(body.get('value', ''))[:40].strip()

@@ -1,5 +1,5 @@
 import { ICON, speedIcon, coat } from './icons.js';
-import { fmtMen } from './map.js';
+import { fmtMen, unitCls } from './map.js';
 
 const fmt = n => Math.round(n).toLocaleString('fr-FR');
 const fmt1 = n => (Math.abs(n) >= 10 ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('fr-FR');
@@ -8,7 +8,7 @@ const STATUS = { paix: 'En paix', guerre: 'En guerre', alliance: 'Alliés', self
 const TYPE_LABEL = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' };
 const RES_ORDER = ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'];
 const BRANCH_LABEL = { militaire: 'Militaire', civil: 'Civil', industriel: 'Industriel', agricole: 'Agricole' };
-const ACTION_LABEL = { paix: 'propose la paix', alliance: 'propose une alliance', commerce: 'propose un accord commercial', echange: 'propose un échange' };
+const ACTION_LABEL = { paix: 'propose la paix', alliance: 'propose une alliance', commerce: 'propose un accord commercial', echange: 'propose un échange', prisonniers: 'propose un échange de prisonniers' };
 
 function relLabel(r) {
   if (r <= -50) return 'Haineux';
@@ -232,7 +232,7 @@ export class UI {
       if (me.upkeep.forts) rows.push(['Entretien des remparts', '−' + fmt1(me.upkeep.forts)]);
       rows.push(['Commerce', '+' + fmt1(me.trade.livres || 0)]);
     }
-    if (r === 'vivres') { rows.push(['Rations des troupes', '−' + fmt1(me.upkeep.vivres || 0)]); rows.push(['Saison', this.rules.seasons[this.st.season]]); }
+    if (r === 'vivres') { rows.push(['Rations des troupes', '−' + fmt1(me.upkeep.vivres || 0)]); if (me.prisoner_upkeep) rows.push(['Prisonniers détenus', '−' + fmt1(me.prisoner_upkeep)]); rows.push(['Saison', this.rules.seasons[this.st.season]]); }
     if (r === 'armes' || r === 'outils') rows.push(['Capacité industrielle', fmt1(me.cap) + ' /j']);
     if (r === 'outils') rows.push(['Bonus des outils', '+' + Math.round((me.tools_bonus - 1) * 100) + ' %']);
     if (r === 'fer' || r === 'bois') rows.push(['Consommés par les ateliers', 'oui']);
@@ -261,6 +261,7 @@ export class UI {
       if (p.action === 'echange') detail = `Il offre ${fmt(p.give[1])} ${this.rules.res_label[p.give[0]].toLowerCase()} contre ${fmt(p.get[1])} ${this.rules.res_label[p.get[0]].toLowerCase()}.`;
       if (p.action === 'paix' && p.amount) detail = `Il offre un tribut de ${fmt(p.amount)} livres.`;
       if (p.action === 'commerce') detail = 'Chacun gagnera des livres et la ressource phare de l’autre.';
+      if (p.action === 'prisonniers') detail = 'Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.';
       if (p.action === 'alliance') detail = 'Vision partagée et entrée en guerre à vos côtés si vous êtes attaqué.';
       return `<div class="sheet proposal" style="border-left-color:${f.color}"><div class="pt">${esc(f.name)} ${esc(ACTION_LABEL[p.action] || p.action)}</div>
         <p>${detail}</p><div class="btns"><button class="btn primary" data-act="answer" data-id="${p.id}" data-v="1">Accepter</button>
@@ -455,6 +456,13 @@ export class UI {
       case 'mode': this.cmd({ cmd: 'mode', army: sel.id, value: d.v }, false); break;
       case 'formation': this.cmd({ cmd: 'formation', army: d.army || sel.id, value: d.v }); break;
       case 'plan': this.cmd({ cmd: 'plan', army: d.army || sel.id, value: d.v }); break;
+      case 'reflex': this.cmd({ cmd: 'reflex', army: d.army || sel.id, value: d.v === '1' }); break;
+      case 'enroll': {
+        const n = +d.n || 0;
+        if (!confirm(d.from === 'neutre' ? `Enrôler ${fmt(n)} prisonniers insurgés ?` : `Enrôler ${fmt(n)} prisonniers ? Leur département vous en voudra.`)) break;
+        this.cmd({ cmd: 'enroll', from: d.from });
+        break;
+      }
       case 'split-type':
         this.cmd({ cmd: 'split_type', army: sel.id, value: d.v }, false).then(r => { if (r.ok) { this.toast('Détachement formé.', 'good'); this.select({ kind: 'army', id: r.id }); } else if (r.msg) this.toast(r.msg, 'bad'); });
         break;
@@ -483,8 +491,9 @@ export class UI {
       case 'merge': this.cmd({ cmd: 'merge', army: sel.id, other: d.other }); break;
       case 'form': {
         const n = this.st.nodes[sel.id];
-        let regs = [...this.checked].filter(id => n.g.some(r => r[0] === id));
-        if (!regs.length) regs = n.g.map(r => r[0]);
+        const mob = (n.g || []).filter(r => !this.rules.units[r[1]]?.garrison_only);   // la Garde nationale reste en ville
+        let regs = [...this.checked].filter(id => mob.some(r => r[0] === id));
+        if (!regs.length) regs = mob.map(r => r[0]);
         const body = { cmd: 'form', node: sel.id, regs };
         if (d.into) body.into = d.into;
         this.cmd(body, false).then(r => {
@@ -576,11 +585,13 @@ export class UI {
   }
 
   regRow(r, owner, check) {
-    const u = this.rules.units[r[1]];
+    const u = this.rules.units[r[1]] || { short: r[1] };
     const frac = r[2] / r[3];
     const stars = r[4] >= 60 ? '★★★' : r[4] >= 30 ? '★★' : r[4] >= 10 ? '★' : '';
-    const ck = check ? `<input type="checkbox" data-reg="${r[0]}" ${this.checked.has(r[0]) ? 'checked' : ''} aria-label="Sélectionner">` : '<span></span>';
-    return `<label class="reg ${this.checked.has(r[0]) ? 'sel' : ''}">${ck}${ICON[r[1]]}
+    const fixed = check && u.garrison_only;
+    const ck = fixed ? '<input type="checkbox" disabled aria-label="Ne quitte pas sa ville">'
+      : check ? `<input type="checkbox" data-reg="${r[0]}" ${this.checked.has(r[0]) ? 'checked' : ''} aria-label="Sélectionner">` : '<span></span>';
+    return `<label class="reg ${this.checked.has(r[0]) ? 'sel' : ''}"${fixed ? ' title="La Garde nationale ne quitte pas sa ville"' : u.desc ? ` title="${esc(u.desc)}"` : ''}>${ck}${ICON[r[1]] || ICON.ligne}
       <div class="rn">${u.short}${stars ? ` <span style="color:var(--laiton-clair)">${stars}</span>` : ''}
         ${check ? `<div class="bars"><div class="bar ${frac < 0.5 ? 'red' : ''}"><i style="width:${Math.round(frac * 100)}%"></i></div><div class="bar green"><i style="width:${Math.min(100, r[5])}%"></i></div></div>` : ''}</div>
       <div class="rv">${fmt(r[2])}<small class="muted" style="display:block;font-weight:400;font-size:12px">${check ? 'moral ' + r[5] : '/ ' + r[3]}</small></div></label>`;
@@ -616,6 +627,7 @@ export class UI {
     if (own && ns.s < 0.5) h += `<div class="warnline">Population agitée : ${ns.g && ns.g.length ? 'la garnison maintient l’ordre.' : 'sans garnison ni armée sur place, la ville peut se révolter. Baissez les impôts ou laissez-y un régiment.'}</div>`;
     if (gn.star) h += this.starLine(gn.star, own, gn.type === 'capitale');
     const chips = gn.spec.map(s => `<span class="chip">${this.rules.spec[s]}</span>`);
+    if (ns.dp) chips.push(`<span class="chip">${ICON.depot.replace('<svg', '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:3px"')}Magasin aux vivres</span>`);
     if (gn.quai) chips.push(`<span class="chip water">${ICON.anchor.replace('<svg', '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:3px"')}Quai : ${gn.quai.join(', ')}</span>`);
     if (chips.length) h += `<div class="chips">${chips.join('')}</div>`;
     if (ns.bk) h += `<div class="warnline">Blocus : une place ennemie en aval coupe la route de la mer. Le commerce du port et du quai tombe à ${Math.round(this.rules.water.blockade * 100)} %.</div>`;
@@ -645,27 +657,41 @@ export class UI {
     if (own) {
       const here = st.armies.filter(a => a.o === me && a.n === id && a.st === 'idle');
       if (ns.g && ns.g.length) {
-        h += `<div class="section-t">Garnison</div><div class="reg-list">${ns.g.map(r => this.regRow(r, me, true)).join('')}</div>
-          <div class="btns"><button class="btn primary" data-act="form">Former une armée</button>
+        const mobile = ns.g.some(r => !this.rules.units[r[1]]?.garrison_only), garde = ns.g.length > 1 && !ns.g.every(r => !this.rules.units[r[1]]?.garrison_only);
+        h += `<div class="section-t">Garnison</div><div class="reg-list">${ns.g.map(r => this.regRow(r, me, true)).join('')}</div>` + (mobile
+          ? `<div class="btns"><button class="btn primary" data-act="form">Former une armée</button>
           ${here.map(a => `<button class="btn" data-act="form" data-into="${a.id}">Renforcer ${esc(a.name)}</button>`).join('')}</div>
-          <div class="muted small" style="margin-top:4px">Cochez des régiments, sinon toute la garnison part.</div>`;
+          <div class="muted small" style="margin-top:4px">Cochez des régiments, sinon toute la garnison part${garde ? ' (sauf la Garde nationale)' : ''}.</div>`
+          : `<div class="muted small" style="margin-top:4px">La Garde nationale défend la ville mais n’en sort pas.</div>`);
       }
-      if (gn.type !== 'village') {
-        const allowed = gn.type === 'fort' ? ['ligne', 'legere'] : this.rules.unit_order;
-        h += `<div class="section-t">Lever un régiment</div><div class="units-grid">${allowed.map(u => {
-          const c = st.me.unit_costs[u];
-          return `<button class="btn unit-card" data-act="recruit" data-v="${u}" ${this.canPay(c) && !ns.sg ? '' : 'disabled'} title="${esc(this.rules.units[u].name)}">
-            ${ICON[u]}<span class="un">${this.rules.units[u].short} <span class="muted" style="font-weight:400">(${this.rules.units[u].men})</span></span>
-            <span class="uc">${this.costHtml(c)}, ${st.me.unit_days[u]} j</span></button>`;
+      // ru : armes qu'on peut lever ici (coût mis à part) ; rw : raison pour les autres
+      const U = this.rules.units;
+      const ru = ns.ru || (gn.type === 'village' ? [] : gn.type === 'fort' ? ['ligne', 'legere'] : this.rules.unit_order);
+      const rw = ns.rw || {};
+      if (ru.length) {
+        h += `<div class="section-t">Lever un régiment</div><div class="units-grid">${ru.filter(u => U[u]).map(u => {
+          const c = st.me.unit_costs[u] || {};
+          return `<button class="btn unit-card" data-act="recruit" data-v="${u}" ${this.canPay(c) && !ns.sg ? '' : 'disabled'} title="${esc(U[u].name + (U[u].desc ? ' : ' + U[u].desc : ''))}">
+            ${ICON[u] || ICON.ligne}<span class="un">${U[u].short} <span class="muted" style="font-weight:400">(${U[u].men})</span></span>
+            <span class="uc">${this.costHtml(c)}, ${st.me.unit_days[u] ?? '?'} j</span></button>`;
         }).join('')}</div>`;
+        // armes encore à découvrir (technologie manquante) : une ligne discrète
+        const later = this.rules.unit_order.filter(u => !ru.includes(u) && U[u]?.req && !st.me.techs.includes(U[u].req) && rw[u]);
+        if (later.length) h += `<div class="muted small" style="margin-top:4px">Plus tard : ${later.map(u => `<span title="${esc(U[u].desc || '')}">${esc(U[u].short)} (${esc(rw[u])})</span>`).join(', ')}.</div>`;
       }
       h += `<div class="section-t">Aménagements</div><div class="btns">`;
-      for (const k of ['fort', 'dev']) {
+      for (const k of ['fort', 'dev', 'depot'].filter(k => this.rules.build[k])) {
         const b = this.rules.build[k];
-        const lvl = k === 'fort' ? ns.f : ns.d;
+        const lvl = k === 'fort' ? ns.f : k === 'depot' ? (ns.dp ? 1 : 0) : ns.d;
         const pend = (ns.q || []).filter(q => q.kind === 'build' && q.what === k).length;
         const l = lvl + pend;
-        const top = k === 'fort' ? (ns.fx || this.rules.fort.max) : b.max;
+        const top = k === 'fort' ? (ns.fx || this.rules.fort.max) : b.max || 1;
+        if (k === 'depot') {
+          // magasin aux vivres : un seul par place
+          if (l >= top) h += `<button class="btn" disabled>${ns.dp ? 'Magasin aux vivres construit' : 'Magasin aux vivres en chantier'}</button>`;
+          else h += `<button class="btn" data-act="build" data-v="depot" ${this.canPay(b.costs?.[0] || {}) ? '' : 'disabled'} title="${esc(b.desc || '')}">Magasin aux vivres<small>${this.costHtml(b.costs?.[0] || {})}, ${b.days?.[0] ?? '?'} j</small></button>`;
+          continue;
+        }
         if (l >= top) {
           const vauban = k === 'fort' && top < this.rules.fort.bastion && this.rules.fort.bastion_types.includes(gn.type);
           h += vauban ? `<button class="btn" disabled title="Recherchez « Fortifications à la Vauban » (militaire)">Bastions à la Vauban<small>technologie Vauban requise</small></button>`
@@ -680,7 +706,7 @@ export class UI {
       h += `</div>`;
       if (ns.q && ns.q.length) {
         h += `<div class="section-t">En préparation</div>` + ns.q.map((q, i) => {
-          const lab = q.kind === 'unit' ? this.rules.units[q.what].name : this.rules.build[q.what].name;
+          const lab = q.kind === 'unit' ? this.rules.units[q.what]?.name || q.what : this.rules.build[q.what]?.name || q.what;
           const pct = i === 0 ? Math.round((1 - q.left / q.total) * 100) : 0;
           return `<div class="queue-item"><span>${lab}</span><span class="muted">${i === 0 ? Math.ceil(q.left) + ' j' : 'en attente'}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`;
         }).join('');
@@ -706,11 +732,15 @@ export class UI {
   tacHtml(a, inBattle) {
     const F = this.rules.formations, P = this.rules.plans;
     const fm = a.fm || 'ligne', pl = a.pl || 'frontal';
-    const hasInf = a.regs.some(r => r[1] === 'ligne' || r[1] === 'legere');
+    const hasInf = a.regs.some(r => unitCls(this.rules, r[1]) === 'inf');
+    const rx = a.rx !== false;
+    // le carré met un moment à se former : précision si la description du serveur ne le dit pas déjà
+    const sqNote = fm === 'carre' && !/vuln/i.test(F.carre.desc) ? ' Former le carré prend un moment, pendant lequel l’infanterie est très vulnérable aux cavaliers.' : '';
     return `<div class="section-t">Tactique</div>
       ${hasInf ? `<div class="row"><span class="lab">Formation</span><span class="seg wrap">${Object.entries(F).map(([k, f]) =>
         `<button data-act="formation" data-army="${a.id}" data-v="${k}" class="${fm === k ? 'on' : ''}" title="${esc(f.desc)}">${f.label}</button>`).join('')}</span></div>
-      <div class="tac-desc">${esc(F[fm].desc)}</div>` : ''}
+      <div class="tac-desc">${esc(F[fm].desc)}${sqNote}</div>
+      <div class="btns"><button class="btn ${rx ? 'primary' : ''}" data-act="reflex" data-army="${a.id}" data-v="${rx ? 0 : 1}" title="Quand vous commandez vous-même, l’infanterie se forme d’elle-même en carré si la cavalerie ennemie charge.">Carré réflexe face aux charges : ${rx ? 'oui' : 'non'}</button></div>` : ''}
       <div class="row"><span class="lab">Plan de bataille</span><span class="seg wrap">${Object.entries(P).map(([k, p]) =>
         `<button data-act="plan" data-army="${a.id}" data-v="${k}" class="${pl === k ? 'on' : ''}" title="${esc(p.desc)}">${p.label}</button>`).join('')}</span></div>
       <div class="tac-desc">${esc(P[pl].desc)}</div>
@@ -747,8 +777,13 @@ export class UI {
     if (a.fire) h += `<div class="warnline">Les gabares essuient le feu des canons ennemis sur la berge !</div>`;
     if (own) {
       h += `<dl class="kv"><dt>Terrain</dt><dd>${terr}${a.h ? ', à couvert' : ''}</dd><dt>Ravitaillement</dt><dd>${Math.round(a.sup * 100)} %</dd>
+        ${a.dp ? `<dt></dt><dd class="muted small">Ravitaillée par le magasin de ${esc(a.dp)}</dd>` : ''}
         <dt>Vitesse de marche</dt><dd>${fmt1(a.sp)} km/j${a.boat ? `, ${this.rules.water.speed} en gabare` : ''}</dd></dl>`;
-      if (a.sup < 0.35) h += `<div class="warnline">Ravitaillement épuisé : l’armée s’use. Revenez en territoire ami.</div>`;
+      const wn = a.wn || [];
+      if (a.sup < 0.35 && !wn.includes('faim')) h += `<div class="warnline">Ravitaillement épuisé : l’armée s’use. Revenez en territoire ami.</div>`;
+      if (wn.includes('solde')) h += `<div class="warnline">Solde impayée : le moral chute et les soldats désertent.</div>`;
+      if (wn.includes('faim')) h += `<div class="warnline">Vivres épuisés : le moral chute et les soldats désertent.</div>`;
+      if (a.des > 0) h += `<div class="warnline">Déserteurs ce mois-ci : ${fmt(a.des)}</div>`;
       h += `<div class="reg-list">${a.regs.map(r => this.regRow(r, me, true)).join('')}</div>`;
       const canAct = a.st !== 'battle';
       h += `<div class="section-t">Ordres</div>`;
@@ -767,7 +802,7 @@ export class UI {
         if (a.st === 'siege' || a.st === 'move') h += `<button class="btn" data-act="retreat">Se replier</button>`;
         h += `</div>`;
         // détacher une arme entière
-        const cls = r => r[1] === 'cavalerie' ? 'cavalerie' : r[1] === 'artillerie' ? 'artillerie' : 'inf';
+        const cls = r => unitCls(this.rules, r[1]);
         const kinds = [...new Set(a.regs.map(cls))];
         if (kinds.length > 1) {
           const lab = { cavalerie: 'la cavalerie', artillerie: 'l’artillerie', inf: 'l’infanterie' };
@@ -788,7 +823,7 @@ export class UI {
     h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
     const sig = JSON.stringify([id, a.st, a.sk, a.md, a.h, a.n, Math.round(a.sup * 20), a.regs.map(r => [r[0], r[2], Math.round(r[5] / 5)]),
       lastNode(), st.armies.filter(b => b.o === me && Math.hypot(b.x - a.x, b.y - a.y) < 3).length, a.n != null ? st.nodes[a.n].sg : null,
-      a.fm, a.pl, a.auto, a.gen, a.boat, !!a.emb, a.fire, a.e && a.e[0]]);
+      a.fm, a.pl, a.auto, a.gen, a.boat, !!a.emb, a.fire, a.e && a.e[0], a.dp, a.wn, a.des, a.rx]);
     return [h, sig];
   }
 
@@ -808,7 +843,7 @@ export class UI {
       h += `<div class="section-t" style="color:${f ? f.color : '#ccc'}">${i === 0 ? 'Attaque' : 'Défense'} : ${f ? f.name : 'Insurgés'}</div>
         <dl class="kv"><dt>Hommes engagés</dt><dd>${fmt(s.men)}</dd><dt>Pertes</dt><dd>${fmt(s.lost)}</dd><dt>Moral</dt><dd>${s.mor}</dd></dl>
         <div class="bar green"><i style="width:${s.mor}%"></i></div>
-        <div class="chips">${Object.entries(s.mix || {}).filter(([, v]) => v > 0).map(([k, v]) => `<span class="chip">${fmt(v)} ${MIX[k]}</span>`).join('')}</div>`;
+        <div class="chips">${Object.entries(s.mix || {}).filter(([, v]) => v > 0).map(([k, v]) => `<span class="chip">${fmt(v)} ${MIX[k] || this.rules.units[k]?.short?.toLowerCase() || k}</span>`).join('')}</div>`;
       for (const t of s.tac || []) {
         const mine = s.o === me;
         h += `<div class="tac-army">${mine ? `<button class="linkish" data-act="selarmy" data-id="${t.id}">${esc(t.name)}</button>` : `<b>${esc(t.name)}</b>`}
@@ -894,11 +929,15 @@ export class UI {
   diploModal() {
     const st = this.st, me = st.me.code;
     const myPow = st.factions.find(f => f.code === me).power;
+    const pris = st.me.prisoners || {};
+    const enrollBtn = (code, n, l) => `<button class="btn" data-act="enroll" data-from="${code}" data-n="${n}" ${n ? '' : 'disabled'}>${l}</button>`;
     const cards = st.factions.filter(f => f.code !== me).map(f => {
       const R = this.rules.factions[f.code];
+      const held = pris[f.code] || 0;
       if (!f.alive) {
         const by = this.rules.factions[f.cap_owner]?.name || '?';
-        return `<div class="dcard dead">${coat(R.color, f.code)}<div><div class="dn">${R.name}</div><div class="dt">A capitulé. Son chef-lieu appartient à ${by}.</div></div></div>`;
+        return `<div class="dcard dead">${coat(R.color, f.code)}<div><div class="dn">${R.name}</div><div class="dt">A capitulé. Son chef-lieu appartient à ${by}.</div>
+          ${held ? `<div class="small">Vous tenez ${fmt(held)} de ses soldats.</div><div class="btns">${enrollBtn(f.code, held, 'Enrôler ses prisonniers')}</div>` : ''}</div></div>`;
       }
       const statusChip = f.over === me ? '<span class="chip ally">Votre vassal</span>' : `<span class="chip ${f.st === 'guerre' ? 'war' : f.st === 'alliance' ? 'ally' : ''}">${STATUS[f.st]}</span>`;
       const wars = f.wars.filter(w => w !== me).map(w => this.rules.factions[w].name);
@@ -916,6 +955,9 @@ export class UI {
           ${f.trade ? btn('fin_commerce', 'Dénoncer l’accord commercial') : btn('commerce', 'Proposer un accord commercial')}</div>`;
       }
       acts += `<div class="row"><input class="amount" type="number" min="0" step="50" value="100" id="amt-cadeau-${f.code}" aria-label="Montant du présent"><span class="muted small">livres</span>${btn('cadeau', 'Offrir un présent')}</div>`;
+      const theirs = f.pr || 0;
+      acts += `<div class="small">Prisonniers : vous tenez ${fmt(held)} de ses soldats, il tient ${fmt(theirs)} des vôtres.</div>
+        <div class="btns"><button class="btn" data-act="diplo" data-to="${f.code}" data-v="prisonniers" ${held || theirs ? '' : 'disabled'} title="Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.">Échanger les prisonniers</button>${enrollBtn(f.code, held, 'Enrôler ses prisonniers')}</div>`;
       return `<div class="dcard">${coat(R.color, f.code)}<div>
           <div class="dn">${R.name}</div><div class="dt">${R.title}, chef-lieu ${R.capital}</div>
           <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}</div>
@@ -925,8 +967,10 @@ export class UI {
           <ul>${R.pros.map(p => `<li>${p}</li>`).join('')}${R.cons.map(p => `<li class="con">${p}</li>`).join('')}</ul>
         </div><div class="dact">${acts}</div></div>`;
     }).join('');
-    const html = `<h2 class="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque département pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p><div class="diplo-list">${cards}</div>`;
-    return [html, JSON.stringify(st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars]))];
+    const neu = pris.neutre || 0;
+    const neuLine = neu ? `<div class="row" style="margin-bottom:8px"><span class="small">Vous détenez ${fmt(neu)} miliciens insurgés prisonniers${st.me.prisoner_upkeep ? `, nourris ${fmt1(st.me.prisoner_upkeep)} vivres /j pour tous vos prisonniers` : ''}.</span>${enrollBtn('neutre', neu, 'Enrôler')}</div>` : '';
+    const html = `<h2 class="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque département pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${neuLine}<div class="diplo-list">${cards}</div>`;
+    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0]), pris])];
   }
 
   commerceModal() {
@@ -971,6 +1015,7 @@ export class UI {
       return `<tr class="click" data-act="selnode-modal" data-node="${n.id}"><td>${n.name}${ns.bk ? ' <span title="Blocus" style="color:#ff9a85">⚓</span>' : ''}</td><td>${TYPE_LABEL[n.type]}</td><td>${fmt(ns.m || 0)}${gar ? ' + ' + fmt(gar) : ''}</td><td>${ns.f}/${ns.d}</td><td style="${ns.s < 0.5 ? 'color:#ff9a85' : ''}">${Math.round(ns.s * 100)} %</td><td class="small">${q || '<span class="muted">—</span>'}</td></tr>`;
     }).join('');
     const tax = Math.round(me.tax * 100), od = me.order;
+    const nPr = Object.values(me.prisoners || {}).reduce((a, v) => a + (v || 0), 0);
     const taxK = 0.6 + 0.8 * me.tax;
     const unrest = od.unrest.map(([nid, v]) => `<span class="chip ${od.risk.includes(nid) ? 'war' : ''}" data-act="selnode-modal" data-node="${nid}" style="cursor:pointer">${esc(this.md.nodes[nid].name)} ${Math.round(v * 100)} %</span>`).join('');
     const html = `<h2 class="m-title">Production et impôts</h2><p class="m-sub">Vos ateliers transforment le fer et le bois. Les impôts remplissent le trésor, mais un pays pressuré produit moins et finit par se soulever.</p>
@@ -1000,6 +1045,7 @@ export class UI {
           <dt>Solde des troupes</dt><dd>${fmt1(me.upkeep.livres || 0)} livres /j</dd>
           <dt>Entretien des remparts</dt><dd>${fmt1(me.upkeep.forts || 0)} livres /j</dd>
           <dt>Rations des troupes</dt><dd>${fmt1(me.upkeep.vivres || 0)} vivres /j</dd>
+          ${nPr ? `<dt>Prisonniers détenus</dt><dd>${fmt(nPr)} (${fmt1(me.prisoner_upkeep || 0)} vivres /j)</dd>` : ''}
         </dl>
         <div class="bar"><i style="width:${Math.round(me.cov * 100)}%"></i></div>
         ${me.res.fer < 5 || me.res.bois < 5 ? `<p class="warnline">Les ateliers manquent de ${me.res.fer < 5 ? 'fer' : 'bois'} : achetez-en au marché, négociez un échange ou prenez ${me.res.fer < 5 ? 'une forge ou une mine' : 'un village forestier'}.</p>` : ''}
@@ -1008,7 +1054,7 @@ export class UI {
         <h3 class="section-t" style="border:0;padding:0">Vos villes et villages (${own.length})</h3>
         <table class="grid"><thead><tr><th>Lieu</th><th>Type</th><th>Défense</th><th>Fort/Dév.</th><th>Ordre</th><th>Chantier</th></tr></thead><tbody>${rows}</tbody></table>
       </div></div>`;
-    return [html, JSON.stringify([Math.round(me.cap * 10), Math.round(me.cov * 100), own.map(n => [st.nodes[n.id].m, (st.nodes[n.id].q || []).length, Math.round(st.nodes[n.id].s * 20), st.nodes[n.id].bk]), s, tax, Math.round(od.avg * 100), od.risk])];
+    return [html, JSON.stringify([Math.round(me.cap * 10), Math.round(me.cov * 100), own.map(n => [st.nodes[n.id].m, (st.nodes[n.id].q || []).length, Math.round(st.nodes[n.id].s * 20), st.nodes[n.id].bk, st.nodes[n.id].dp]), s, tax, Math.round(od.avg * 100), od.risk, nPr])];
   }
 
   journalModal() {
@@ -1046,6 +1092,7 @@ export class UI {
           <li>Les routes sont rapides. À travers champs, l’armée peut se cacher dans les bois, landes, marais ou montagnes et tendre une embuscade (posture « Embuscade »), mais avance plus lentement, s’use et perd son ravitaillement.</li>
           <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite. Les remparts ont quatre niveaux (le quatrième, les bastions à la Vauban, après la technologie du même nom, dans le chef-lieu et les places fortes) ; ils coûtent un entretien et perdent un niveau quand la place est prise de force.</li>
           <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
+          <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>
           <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
           <li><b>Espions</b> : depuis une place étrangère, espionnez (vision et garnison pendant 45 jours) ou sabotez ses remparts en temps de guerre. Le brouillard de guerre (bouton œil) montre ce que vous voyez réellement.</li>
           <li><b>Impôts</b> (fenêtre Production) : plus d’argent tout de suite, mais l’ordre public baisse ; une ville agitée sans garnison peut se révolter.</li>

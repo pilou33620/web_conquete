@@ -54,7 +54,7 @@ class Game:
                 income={r: 0.0 for r in R.RESOURCES}, slider=0.5, research={b: None for b in R.BRANCHES}, techs=[],
                 rel={o: self.rng.randint(-15, 25) for o in R.FACTIONS if o != code}, trade={}, truce={},
                 overlord=None, war_since={}, mods={}, army_count=0, stats=dict(won=0, lost=0, captured=0, killed=0),
-                start_nodes=0, alerts={}, tax=0.5, intel={})
+                start_nodes=0, alerts={}, tax=0.5, intel={}, prisoners={})
         for a in R.FACTIONS:
             for b in R.FACTIONS:
                 if a < b:
@@ -69,7 +69,7 @@ class Game:
             mm = base['milice'] + 40 * fort0
             milice = mm if owner != R.NEUTRAL else int(mm * self.rng.uniform(0.55, 1.0))
             self.nodes.append(dict(id=n['id'], owner=owner, milice=float(milice), milice_max=mm, fort=fort0, dev=0,
-                                   stab=1.0, garrison=[], queue=[], siege=None, last_seen={}))
+                                   stab=1.0, garrison=[], queue=[], siege=None, last_seen={}, depot=0))
             if owner != R.NEUTRAL:
                 self.factions[owner]['start_nodes'] += 1
         for code in R.FACTIONS:
@@ -92,7 +92,27 @@ class Game:
 
     def new_reg(self, typ, n=None):
         u = R.UNITS[typ]
-        return dict(id=self.nid('r'), type=typ, n=float(u['men'] if n is None else n), max=u['men'], xp=0.0, morale=80.0)
+        return dict(id=self.nid('r'), type=typ, n=float(u['men'] if n is None else n), max=u['men'],
+                    xp=float(u.get('xp0', 0)), morale=80.0 + u.get('morale0', 0))
+
+    def has_sapeurs(self, a):
+        return any(r['type'] == 'sapeurs' for r in a['regs'])
+
+    def can_recruit(self, code, nid, typ):
+        """(possible, raison) : ce lieu peut-il lever ce régiment (sans compter le coût) ?"""
+        u = R.UNITS.get(typ)
+        if not u:
+            return False, "Unité inconnue."
+        gn = self.geo.nodes[nid]
+        if gn['type'] == 'village' and typ != 'garde':
+            return False, "Un village ne lève que la Garde nationale."
+        if gn['type'] == 'fort' and u['cls'] != 'inf':
+            return False, "Un fort ne lève que de l'infanterie."
+        if u['req'] and u['req'] not in self.factions[code]['techs']:
+            return False, f"Technologie requise : {R.TECH[u['req']]['name']}."
+        if u.get('where') and gn['dept'] not in u['where']:
+            return False, "Se lève seulement en Pays basque et en Béarn."
+        return True, ''
 
     def capital_of(self, code):
         for n in self.geo.nodes:
@@ -322,6 +342,26 @@ class Game:
                                         f"(niveau {n['fort']}).", gn['x'], gn['y'], who=code, important=True)
             for k in [k for k, v in f.get('intel', {}).items() if v < self.t]:
                 del f['intel'][k]
+            # prisonniers : quelques évasions, davantage quand le grenier est vide ; les IA enrôlent
+            pr = f.setdefault('prisoners', {})
+            for o in list(pr):
+                pr[o] = int(pr[o] * (0.88 if f.get('famine') else 0.97))
+                if pr[o] <= 0:
+                    del pr[o]
+            if code != self.player and pr:
+                for o in list(pr):
+                    if o == R.NEUTRAL or f['res']['recrues'] < 500 or pr[o] > 300:
+                        self.enroll(code, o)
+        # désertions du mois écoulé
+        for a in self.armies.values():
+            des = int(a.get('des', 0))
+            if des >= 10 and a['owner'] == self.player:
+                f = self.factions[a['owner']]
+                why = 'solde impayée' if f.get('banqueroute') else ('vivres épuisés' if f.get('famine') or a['supply'] < 0.35
+                                                                    else 'moral au plus bas')
+                self.log('armee', f"Désertions dans la {a['name']} : {des} hommes ont quitté les rangs ({why}).",
+                         a['x'], a['y'], who=a['owner'], important=des >= 50)
+            a['des'] = 0.0
         if season == 'printemps' and self.rng.random() < 0.35:
             self.flood_until = self.t + 10
             self.log('meteo', 'Crue de la Garonne et de la Dordogne : les bacs sont ralentis pendant 10 jours.', important=True)
@@ -451,6 +491,8 @@ class Game:
             tot['livres'] -= up_l * k_up
             up_f = sum(R.FORT_UPKEEP[min(n['fort'], R.BASTION_LEVEL)] for n in self.owned_nodes(code))
             tot['livres'] -= up_f
+            up_p = sum(f.get('prisoners', {}).values()) * R.PRISONER_FOOD
+            tot['vivres'] -= up_p
             # industrie
             cap = tot['industrie']
             s = f['slider']
@@ -458,7 +500,7 @@ class Game:
             f['_tool_rate'] = cap * (1 - s) * 0.5
             f['_cap'] = cap
             f['_cov'] = cov
-            f['_upkeep'] = dict(vivres=up_v * k_up, livres=up_l * k_up, forts=up_f)
+            f['_upkeep'] = dict(vivres=up_v * k_up, livres=up_l * k_up, forts=up_f, prisoners=up_p)
             f['_trade'] = dict(trade_s)
             f['_trade']['livres'] = f['_trade'].get('livres', 0) + trade_l
             f['income'] = dict(livres=tot['livres'], vivres=tot['vivres'], fer=tot['fer'] - f['_arm_rate'] - 0.5 * f['_tool_rate'] * (1 + self.mod(code, 'tools_cost')),
@@ -619,12 +661,9 @@ class Game:
         gn = self.geo.nodes[nid]
         if n['owner'] != code:
             return False, "Cette ville ne vous appartient pas."
-        if typ not in R.UNITS:
-            return False, "Unité inconnue."
-        if gn['type'] == 'village':
-            return False, "Seuls le chef-lieu, les villes et les forts lèvent des régiments."
-        if gn['type'] == 'fort' and typ in ('cavalerie', 'artillerie'):
-            return False, "Un fort ne lève que de l'infanterie."
+        ok, why = self.can_recruit(code, nid, typ)
+        if not ok:
+            return False, why
         if n['siege']:
             return False, "La place est assiégée."
         if len(n['queue']) >= 4:
@@ -644,7 +683,7 @@ class Game:
         b = R.BUILD.get(what)
         if not b:
             return False, "Construction inconnue."
-        lvl = n['fort'] if what == 'fort' else n['dev']
+        lvl = n['fort'] if what == 'fort' else n.get('depot', 0) if what == 'depot' else n['dev']
         pending = sum(1 for q in n['queue'] if q['kind'] == 'build' and q['what'] == what)
         top = self.fort_max(code, nid) if what == 'fort' else b['max']
         if lvl + pending >= top:
@@ -682,6 +721,8 @@ class Game:
                     if q['what'] == 'fort':
                         n['fort'] = min(R.BASTION_LEVEL, n['fort'] + 1)
                         n['milice_max'] += 40
+                    elif q['what'] == 'depot':
+                        n['depot'] = 1
                     else:
                         n['dev'] = min(3, n['dev'] + 1)
                     self._dirty_income = True
@@ -714,7 +755,7 @@ class Game:
                  regs=regs, x=float(x), y=float(y), at_node=node, path=[], target=None, state='idle', stance='normal',
                  mode='route', supply=1.0, battle=None, grace=0.0, hidden=False, onroad=node is not None, edge=None,
                  assault=False, ai=None, viol=0.0, gen=self.new_general(code), fm='ligne', pl='frontal', fm_t=-9.0,
-                 tac_auto=True, landing=False, boat=False)
+                 tac_auto=True, landing=False, boat=False, rx=True, des=0.0, depot=None)
         self.armies[aid] = a
         return a
 
@@ -765,16 +806,17 @@ class Game:
         u = R.UNITS[r['type']]
         p = r['n'] * u['power'] * u['terrain'].get(tname, 1.0)
         k = 1 + self.mod(code, 'all_power')
-        if r['type'] in ('ligne', 'legere'):
+        cls = u['cls']
+        if cls == 'inf':
             k += self.mod(code, 'inf_power')
             p *= wx_fire
-        elif r['type'] == 'artillerie':
+        elif cls == 'artillerie':
             k += self.mod(code, 'art_power')
             p *= wx_fire
         else:
             k += self.mod(code, 'cav_power')
             p *= (1 + wx_fire) / 2
-        if r['type'] == 'legere' and cover:
+        if u['light'] and cover:
             k += self.mod(code, 'legere_cover')
         mountain = tname in ('Montagne', 'Collines', 'Haute montagne')
         if mountain:
@@ -787,7 +829,7 @@ class Game:
                 k += 0.25
             elif tr == 'montagnard' and mountain:
                 k += 0.15
-            elif tr == 'eclaireur' and r['type'] == 'legere':
+            elif tr == 'eclaireur' and u['light']:
                 k += 0.10
             k *= self.gen_level_k(a)
         p *= k * (0.55 + 0.45 * r['morale'] / 100) * (1 + r['xp'] / 250)
@@ -802,7 +844,7 @@ class Game:
         tname = TERRAIN[self.geo.terrain_at(gn['x'], gn['y'])][0]
         p = n['milice'] * R.MILICE_POWER
         if code != R.NEUTRAL:
-            p += sum(self.reg_power(code, r, tname) for r in n['garrison'])
+            p += sum(self.reg_power(code, r, tname) * (R.GARDE_HOME if r['type'] == 'garde' else 1) for r in n['garrison'])
         p *= fb
         if include_armies:
             for a in self.armies.values():
@@ -1206,7 +1248,7 @@ class Game:
                     if self.wx(a['x'], a['y']) is R.WEATHER['neige'] and self.zone_of(a['x'], a['y']) == 'montagne':
                         sp *= 0.6
                     zone_end = e['len']
-                    if e['rrank'] == 1 and not self.mod(a['owner'], 'bridges'):
+                    if e['rrank'] == 1 and not self.mod(a['owner'], 'bridges') and not self.has_sapeurs(a):
                         if e['ferry']:
                             sp *= 0.35  # bac sur l'estuaire : toute la traversée est lente
                         else:
@@ -1421,8 +1463,9 @@ class Game:
                         a['state'] = 'move' if a['path'] else 'idle'
                 continue
             n_art = sum(1 for a in bes for r in a['regs'] if r['type'] == 'artillerie')
+            n_sap = sum(1 for a in bes for r in a['regs'] if r['type'] == 'sapeurs')
             power_art = 1 + self.mod(s['by'], 'art_power')
-            rate = (0.02 + 0.06 * n_art * power_art) / max(1, n['fort'])
+            rate = (0.02 + 0.06 * n_art * power_art + R.SAPEUR_SIEGE * n_sap) / max(1, n['fort'])
             if any(self.gen_trait(a) == 'artilleur' for a in bes):
                 rate *= 1.4
             rate *= 1 + self.mod(s['by'], 'siege_speed')
@@ -1570,6 +1613,32 @@ class Game:
             self.log('battle', f"{a['name']} rejoint la bataille {self.place_name(bt['x'], bt['y'])}.",
                      bt['x'], bt['y'], who=a['owner'])
 
+    def square_reflex(self, bt, phase, cav_share, dt):
+        """Réflexe du carré : une infanterie commandée à la main forme d'elle-même le carré quand les escadrons chargent.
+        Les vétérans le forment vite ; les conscrits tardent, et la manœuvre est le moment le plus dangereux."""
+        if phase == 'canonnade':
+            return
+        for si in (0, 1):
+            if cav_share[1 - si] < 0.3:
+                continue
+            for aid in bt['sides'][si]['armies']:
+                a = self.armies.get(aid)
+                if not a or a.get('tac_auto', True) or not a.get('rx', True) or a.get('fm') == 'carre':
+                    continue
+                inf = [r for r in a['regs'] if self.arm_class(r['type']) == 'inf']
+                if not inf:
+                    continue
+                men = sum(r['n'] for r in inf) or 1.0
+                xp = sum(r['n'] * r['xp'] for r in inf) / men
+                mor = sum(r['n'] * r['morale'] for r in inf) / men
+                if self.rng.random() < dt * 4 * (0.5 + xp / 100 + mor / 200):
+                    a['fm'] = 'carre'
+                    a['fm_t'] = self.t - 0.1 * min(0.8, xp / 100)   # les vétérans se forment plus vite
+                    if a['owner'] == self.player and a.get('_rx_bt') != bt['id']:
+                        a['_rx_bt'] = bt['id']
+                        self.log('battle', f"Les escadrons chargent : l'infanterie de la {a['name']} forme le carré !",
+                                 bt['x'], bt['y'], who=a['owner'])
+
     def dissolve_battle(self, bt):
         """Fin sans vainqueur : paix signée, capitulation ou place passée à un autre camp en cours de combat."""
         for side in bt['sides']:
@@ -1687,7 +1756,7 @@ class Game:
     # ------------------------------------------------------------------ tactique
     @staticmethod
     def arm_class(typ):
-        return 'artillerie' if typ == 'artillerie' else ('cavalerie' if typ == 'cavalerie' else 'inf')
+        return R.UNITS[typ]['cls'] if typ in R.UNITS else 'inf'
 
     def battle_phase(self, bt):
         age = self.t - bt['t0']
@@ -1723,6 +1792,9 @@ class Game:
                 v *= 1.35 if cls_att == 'artillerie' else 1.0
             elif fm == 'carre':
                 v *= {'artillerie': 1.6, 'cavalerie': 0.35, 'inf': 1.1}[cls_att]
+            elif fm == 'carre_forme':
+                # surprise pendant qu'elle forme le carré : l'infanterie est à la merci des cavaliers
+                v *= {'artillerie': 1.3, 'cavalerie': 1.7, 'inf': 1.2}[cls_att]
             elif fm == 'tirailleurs':
                 v *= {'artillerie': 0.75, 'cavalerie': 1.4, 'inf': 0.85}[cls_att]
         return v
@@ -1805,6 +1877,7 @@ class Game:
                 tot = sum(r['n'] for _, r, _ in us) or 1.0
                 cav_share.append(sum(r['n'] for _, r, _ in us if r['type'] == 'cavalerie') / tot)
             bt['cav'] = cav_share
+            self.square_reflex(bt, phase, cav_share, dt)
             flank = [False, False]
             for si in (0, 1):
                 side = bt['sides'][si]
@@ -1878,7 +1951,10 @@ class Game:
                         recv *= 0.88
                     elif tr == 'audacieux':
                         recv *= 1.05
-                    targets[si].append((r['n'], r['type'], fm, protected, r, a, recv * wall))
+                    fm_t = fm
+                    if fm == 'carre' and self.t - a.get('fm_t', -9) < 0.1 * max(0.2, 1 - self.mod(owner, 'fm_swift')):
+                        fm_t = 'carre_forme'
+                    targets[si].append((r['n'], r['type'], fm_t, protected, r, a, recv * wall))
                 if node is not None:
                     o = node['owner']
                     P[si]['inf'] += node['milice'] * R.MILICE_POWER * fb * R.PHASE_W[phase]['inf'] * 1.05
@@ -1887,7 +1963,8 @@ class Game:
                     if o != R.NEUTRAL:
                         for r in node['garrison']:
                             cls = self.arm_class(r['type'])
-                            P[si][cls] += self.reg_power(o, r, bt['terrain'], wxf) * fb * R.PHASE_W[phase][cls]
+                            P[si][cls] += self.reg_power(o, r, bt['terrain'], wxf) * fb * R.PHASE_W[phase][cls] \
+                                * (R.GARDE_HOME if r['type'] == 'garde' else 1)
                             men[si] += r['n']
                             targets[si].append((r['n'], r['type'], 'ligne', protected, r, None, wall))
             # pertes typées : chaque arme frappe selon la vulnérabilité des cibles
@@ -1994,6 +2071,7 @@ class Game:
     def end_battle(self, bt, winner, disengage=False):
         loser = 1 - winner
         W, L = bt['sides'][winner], bt['sides'][loser]
+        caught = 0.0   # hommes rattrapés pendant la poursuite
         gname = self.place_name(bt['x'], bt['y'])
         has_cav = any(r['type'] == 'cavalerie' for _, r, _ in self.side_units(bt, winner))
         if not disengage and L['node'] is not None:
@@ -2031,6 +2109,7 @@ class Game:
                     if self.gen_trait(a) == 'prudent':
                         pursuit *= 0.5
                     for r in a['regs']:
+                        caught += r['n'] * pursuit
                         r['n'] *= 1 - pursuit
                         r['morale'] = max(r['morale'], 18)
                     a['regs'] = [r for r in a['regs'] if r['n'] >= 5]
@@ -2053,6 +2132,10 @@ class Game:
                          f"{self.fname(bt['sides'][1]['owner'])} {int(bt['sides'][1]['lost'])}.", bt['x'], bt['y'],
                          who=W['owner'], important=True)
             return
+        prisoners = int(L['lost'] * 0.2 + caught * 0.6)
+        if prisoners > 0 and W['owner'] in self.factions:
+            pr = self.factions[W['owner']].setdefault('prisoners', {})
+            pr[L['owner']] = pr.get(L['owner'], 0) + prisoners
         for si, side in ((winner, W), (loser, L)):
             if side['owner'] in self.factions:
                 st = self.factions[side['owner']]['stats']
@@ -2070,7 +2153,8 @@ class Game:
             wn = self.fname(W['owner'])
             txt = (f"{'Victoire' if won else 'Défaite'} {gname} — {wn} l'emporte{'nt' if W['owner'] == R.NEUTRAL else ''}. "
                    f"Pertes : {self.fname(bt['sides'][0]['owner'])} {int(bt['sides'][0]['lost'])}, "
-                   f"{self.fname(bt['sides'][1]['owner'])} {int(bt['sides'][1]['lost'])}.")
+                   f"{self.fname(bt['sides'][1]['owner'])} {int(bt['sides'][1]['lost'])}."
+                   + (f" Prisonniers : {prisoners}." if prisoners > 0 else ''))
             self.log('battle_end', txt, bt['x'], bt['y'], who=W['owner'], important=True,
                      extra=dict(win=won, a=bt['sides'][0]['owner'], d=bt['sides'][1]['owner'],
                                 la=int(bt['sides'][0]['lost']), ld=int(bt['sides'][1]['lost'])))
@@ -2150,6 +2234,13 @@ class Game:
         if not peaceful and n['dev'] > 0 and old != R.NEUTRAL and self.rng.random() < 0.35:
             n['dev'] -= 1
         breached = not peaceful and self.lose_fort_level(nid)
+        if n.get('depot'):
+            n['depot'] = 0
+            if code in self.factions:
+                self.factions[code]['res']['vivres'] += 150
+            if self.player in (code, old):
+                self.log('eco', f"Le magasin aux vivres de {gn['name']} est pillé par {self.fname(code)}.", gn['x'], gn['y'],
+                         who=code)
         n['milice'] = n['milice_max'] * (0.5 if peaceful else 0.15)
         self._dirty_income = True
         if code in self.factions:
@@ -2177,6 +2268,7 @@ class Game:
         if not lf['alive']:
             return
         lf['alive'] = False
+        lf['prisoners'] = {}
         for n in self.nodes:
             if n['owner'] == loser:
                 n['owner'] = winner
@@ -2227,17 +2319,38 @@ class Game:
             self.log('fin', self.over['text'], important=True)
 
     # ------------------------------------------------------------------ usure, ravitaillement
+    def depot_near(self, a):
+        """Magasin aux vivres (à soi ou à un allié) assez proche pour ravitailler l'armée, sinon None."""
+        best, bd = None, R.DEPOT_KM ** 2
+        for n in self.nodes:
+            if n.get('depot') and not n['siege'] and self.friendly(a['owner'], n['owner']):
+                x, y = self.node_xy(n['id'])
+                d = (x - a['x']) ** 2 + (y - a['y']) ** 2
+                if d <= bd:
+                    best, bd = n['id'], d
+        return best
+
     def attrition(self, dt):
         season = self.season()
         for a in list(self.armies.values()):
             code = a['owner']
+            f = self.factions[code]
             nd = self.geo.node_of_cell(a['x'], a['y'])
             friendly_land = nd is not None and (self.nodes[nd]['owner'] == code or self.friendly(code, self.nodes[nd]['owner']))
             if a.get('boat'):
                 friendly_land = True  # les gabares emportent leurs vivres
             logi = self.gen_trait(a) == 'logisticien'
+            a['depot'] = None
+            if not friendly_land and f['res']['vivres'] > 1:
+                dep = self.depot_near(a)
+                if dep is not None:
+                    # les charrois du magasin suivent l'armée : ravitaillée, mais aux frais du grenier
+                    a['depot'] = dep
+                    f['res']['vivres'] = max(0.0, f['res']['vivres'] - self.army_men(a) / 100 * R.DEPOT_FOOD * dt)
             if friendly_land:
                 a['supply'] = min(1.0, a['supply'] + 0.3 * dt)
+            elif a['depot'] is not None:
+                a['supply'] = min(1.0, a['supply'] + 0.15 * dt)
             else:
                 k = 1.8 if season == 'hiver' else (0.6 if season in ('été', 'automne') else 1.0)
                 a['supply'] = max(0.0, a['supply'] - 0.035 * k * dt * (0.5 if logi else 1.0)
@@ -2252,26 +2365,42 @@ class Game:
                     base *= max(0.0, 1 + self.mod(code, 'marsh_attr'))
                 if season == 'hiver':
                     base *= 3 if tname in ('Montagne', 'Haute montagne') else 1.6
+                if tname in ('Montagne', 'Haute montagne', 'Collines'):
+                    men = sum(r['n'] for r in a['regs']) or 1.0
+                    share = sum(r['n'] for r in a['regs'] if r['type'] == 'chasseurs') / men
+                    base *= 1 - 0.7 * share   # les montagnards connaissent les cols
                 if season == 'été' and tname == 'Marais':
                     base *= 1.5
                 rate += base
+            unpaid = bool(f.get('banqueroute'))
+            hungry = bool(f.get('famine')) or a['supply'] < 0.35
             if a['supply'] < 0.35:
                 rate += 0.012
-            f = self.factions[code]
             if f.get('famine'):
-                rate += 0.015
-            if f.get('banqueroute'):
-                rate += 0.008
+                rate += 0.012
             if self.weather[self.zone_of(a['x'], a['y'])]['kind'] == 'canicule' and a['state'] == 'move':
                 rate += 0.002
             rate *= max(0.2, 1 + self.mod(code, 'attrition')) * (0.6 if logi else 1.0)
+            # moral et désertions : une armée mal payée ou affamée fond
+            if unpaid or hungry:
+                for r in a['regs']:
+                    r['morale'] = max(5, r['morale'] - (2.5 * unpaid + 2.5 * hungry) * dt)
+            men = sum(r['n'] for r in a['regs'])
+            if men > 0 and a['state'] != 'battle':
+                mor = sum(r['n'] * r['morale'] for r in a['regs']) / men
+                drate = max(0.0, (45 - mor) / 45) * 0.014 + (0.003 if unpaid else 0.0)
+                if drate > 0:
+                    gone = 0.0
+                    for r in a['regs']:
+                        g_ = r['n'] * drate * dt
+                        r['n'] -= g_
+                        gone += g_
+                    a['des'] = a.get('des', 0.0) + gone
             if rate > 0:
                 for r in a['regs']:
                     r['n'] -= r['n'] * rate * dt
-                    if f.get('famine') or f.get('banqueroute'):
-                        r['morale'] = max(5, r['morale'] - 3 * dt)
-                a['regs'] = [r for r in a['regs'] if r['n'] >= 5]
-            if a['state'] == 'idle':
+            a['regs'] = [r for r in a['regs'] if r['n'] >= 5]
+            if a['state'] == 'idle' and not (unpaid or hungry):
                 if friendly_land:
                     for r in a['regs']:
                         r['morale'] = min(100 + self.mod(code, 'morale'), r['morale'] + 5 * dt)
@@ -2305,7 +2434,7 @@ class Game:
                     continue
                 if (x['x'] - b['x']) ** 2 + (x['y'] - b['y']) ** 2 > R.RIVER_FIRE_KM ** 2:
                     continue
-                f = sum(1.0 if r['type'] == 'artillerie' else (0.15 if r['type'] in ('ligne', 'legere') else 0) for r in x['regs'])
+                f = sum(1.0 if r['type'] == 'artillerie' else (0.15 if self.arm_class(r['type']) == 'inf' else 0) for r in x['regs'])
                 if f:
                     fire += f
                     who = x['owner']
@@ -2482,6 +2611,10 @@ class Game:
         if not isinstance(reg_ids, (list, tuple)):
             return False, "Choisissez au moins un régiment."
         regs = [r for r in n['garrison'] if r['id'] in reg_ids]
+        if regs and all(R.UNITS[r['type']]['garrison_only'] for r in regs):
+            return False, "La Garde nationale ne quitte pas sa ville."
+        regs = [r for r in regs if not R.UNITS[r['type']]['garrison_only']]
+        reg_ids = [r['id'] for r in regs]
         if not regs:
             return False, "Choisissez au moins un régiment."
         if into:
@@ -2494,6 +2627,22 @@ class Game:
             a = self.create_army(code, gx, gy, regs, node=nid)
         n['garrison'] = [r for r in n['garrison'] if r['id'] not in reg_ids]
         return True, a['id']
+
+    def enroll(self, code, frm):
+        """Enrôle les prisonniers d'une origine : une partie seulement accepte de servir, leur département s'en fâche."""
+        f = self.factions[code]
+        n = int(f.setdefault('prisoners', {}).get(frm, 0))
+        if n <= 0:
+            return False, "Aucun prisonnier de cette origine."
+        gain = int(n * 0.6)
+        f['res']['recrues'] += gain
+        del f['prisoners'][frm]
+        if frm in self.factions:
+            self.factions[frm]['rel'][code] = max(-100, self.factions[frm]['rel'][code] - 8)
+        if code == self.player:
+            self.log('armee', f"{gain} prisonniers ({self.fname(frm)}) acceptent de servir sous vos drapeaux ; "
+                              f"les autres sont renvoyés.", who=code)
+        return True, f"{gain} prisonniers enrôlés comme recrues."
 
     def to_garrison(self, code, aid):
         a = self.armies.get(aid)
@@ -2523,6 +2672,7 @@ class Game:
         b['fm'], b['pl'], b['tac_auto'], b['stance'] = a.get('fm', 'ligne'), a.get('pl', 'frontal'), a.get('tac_auto', True), \
             a['stance']
         b['supply'] = a['supply']
+        b['rx'] = a.get('rx', True)
         if a['state'] == 'siege':
             b['state'] = 'siege'
         return True, b['id']

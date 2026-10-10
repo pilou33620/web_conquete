@@ -108,6 +108,22 @@ Chaque place a un niveau de fortification, dessiné sur la carte autour de la vi
 - Une place prise par la force perd un niveau (remparts éventrés). Si le trésor est vide, faute d'entretien,
   les remparts les plus hauts se délabrent d'un niveau chaque mois. Le sabotage d'un espion retire aussi un niveau.
 
+### Unités, intendance et prisonniers
+- Outre la ligne, les voltigeurs, la cavalerie et l'artillerie :
+  - **Grenadiers** : infanterie d'élite, déjà aguerrie, chère ; après la technologie « Baïonnette à douille ».
+  - **Chasseurs basques** : infanterie légère des montagnes, redoutable en relief, s'use peu dans les cols ;
+    levés seulement en Pays basque et en Béarn.
+  - **Sapeurs du génie** : peu combatifs, mais ils accélèrent les sièges et jettent des ponts (plus d'attente au bac).
+  - **Garde nationale** : milice bon marché, levée même dans un village ; elle ne quitte pas sa ville mais la défend
+    avec ardeur (+30 %).
+- **Magasin aux vivres** (150 livres, 60 bois) : les armées en campagne à moins de 30 km restent ravitaillées, en puisant
+  dans vos vivres. Pris par l'ennemi, il est pillé.
+- **Moral et désertions** : trésor vide (solde impayée) ou vivres épuisés, le moral chute et les soldats désertent.
+  Le journal fait le compte chaque mois.
+- **Prisonniers** : une victoire en ramène (davantage avec une cavalerie qui poursuit). Ils mangent des vivres ;
+  on peut les **enrôler** (une partie accepte de servir, leur département s'en fâche) ou les **échanger** dans la fenêtre
+  Diplomatie (homme pour homme, puis le surplus se rachète 2 livres par tête).
+
 ### Généraux, formations et plans de bataille
 - Chaque armée est menée par un **général** (colonel, puis général de brigade et de division après des victoires)
   doté d'un trait : audacieux, prudent, cavalier, artilleur, montagnard, éclaireur, inspirant ou logisticien.
@@ -120,12 +136,14 @@ Chaque place a un niveau de fortification, dessiné sur la carte autour de la vi
 |---|---|---|
 | Ligne | feu nourri (+20 % en fusillade) | prise de flanc par la cavalerie |
 | Colonne | choc à la charge (+25 %), marche +10 % | cible facile pour les canons |
-| Carré | brise les charges (−65 % de dégâts de cavalerie) et fusille les escadrons | ravagée par l'artillerie, marche lente |
+| Carré | brise les charges (−65 % de dégâts de cavalerie) et fusille les escadrons | ravagée par l'artillerie, marche lente ; très exposée pendant qu'elle se forme |
 | Tirailleurs | dispersés : moins touchés par les boulets, forts à couvert | fragiles face aux cavaliers |
 
 - **Plans de bataille** : assaut frontal, préparation d'artillerie (+40 % aux canons), débordement (la cavalerie tourne
   l'ennemi en terrain ouvert et brise son moral), tenir la position (défense acharnée), harcèlement (escarmouche,
   on décroche au bout d'un jour).
+- **Carré réflexe** : même quand vous commandez vous-même, l'infanterie forme d'elle-même le carré quand les escadrons
+  chargent (les vétérans plus vite que les conscrits). Désactivable dans le panneau de l'armée.
 - Par défaut, **le général décide** : il choisit selon les armes de l'ennemi et change de formation à chaque phase
   (au prix d'un court moment de désordre). Vous pouvez aussi tout commander vous-même, y compris en pleine bataille.
 - Bouton « Détacher la cavalerie / l'artillerie / l'infanterie » : une arme entière forme sa propre armée,

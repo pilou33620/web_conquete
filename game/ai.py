@@ -7,11 +7,11 @@ from . import diplomacy as D
 from .geo import TERRAIN
 
 MIX = {
-    '33': ['ligne'] * 5 + ['legere'] * 2 + ['cavalerie'] * 2 + ['artillerie'] * 1,
-    '24': ['ligne'] * 4 + ['legere'] * 2 + ['cavalerie'] * 1 + ['artillerie'] * 2,
-    '40': ['ligne'] * 3 + ['legere'] * 4 + ['cavalerie'] * 2 + ['artillerie'] * 1,
-    '47': ['ligne'] * 4 + ['legere'] * 1 + ['cavalerie'] * 3 + ['artillerie'] * 1,
-    '64': ['ligne'] * 6 + ['legere'] * 3 + ['cavalerie'] * 1 + ['artillerie'] * 1,
+    '33': ['ligne'] * 5 + ['legere'] * 2 + ['cavalerie'] * 2 + ['artillerie'] * 1 + ['grenadiers', 'sapeurs'],
+    '24': ['ligne'] * 4 + ['legere'] * 2 + ['cavalerie'] * 1 + ['artillerie'] * 2 + ['grenadiers', 'sapeurs'],
+    '40': ['ligne'] * 3 + ['legere'] * 4 + ['cavalerie'] * 2 + ['artillerie'] * 1 + ['grenadiers'],
+    '47': ['ligne'] * 4 + ['legere'] * 1 + ['cavalerie'] * 3 + ['artillerie'] * 1 + ['grenadiers'],
+    '64': ['ligne'] * 5 + ['legere'] * 1 + ['chasseurs'] * 3 + ['cavalerie'] * 1 + ['artillerie'] * 1 + ['grenadiers'],
 }
 VALUE = {'capitale': 12, 'ville': 5, 'fort': 3, 'village': 2}
 
@@ -125,6 +125,7 @@ class AI:
 
     def recruit(self):
         g, f, code = self.g, self.f, self.code
+        self.raise_garde()
         aggr = self.pers['aggr'] * R.DIFFICULTY[g.difficulty]['ai_aggr']
         gross = f.get('_gross_livres', 20)
         time_target = 4 + int(g.t / 90) + int(5 * aggr) + (4 if self.wars() else 0)
@@ -145,10 +146,26 @@ class AI:
                 return
         cands = [n for n in g.owned_nodes(code) if g.geo.nodes[n['id']]['type'] in ('capitale', 'ville') and not n['siege']
                  and len(n['queue']) < 2]
+        if typ != 'ligne' and not any(g.can_recruit(code, n['id'], typ)[0] for n in cands):
+            typ = 'ligne'   # technologie manquante, ou unité régionale levée ailleurs
+        cands = [n for n in cands if g.can_recruit(code, n['id'], typ)[0]]
         if not cands:
             return
         cands.sort(key=lambda n: (len(n['queue']), g.geo.nodes[n['id']]['type'] != 'capitale', -self.threat_at(n['id'])))
         g.recruit(code, cands[0]['id'], typ)
+
+    def raise_garde(self):
+        """Une place menacée et mal défendue lève sa Garde nationale."""
+        g, f, code = self.g, self.f, self.code
+        if f['res']['livres'] < 250 or not self.wars():
+            return
+        for n in g.owned_nodes(code):
+            if n['siege'] or n['queue'] or sum(1 for r in n['garrison'] if r['type'] == 'garde') >= 2:
+                continue
+            th = self.threat_at(n['id'], 30)
+            if th > 0 and th > g.node_defense_power(n['id']) * 0.7:
+                if g.recruit(code, n['id'], 'garde')[0]:
+                    return
 
     # ------------------------------------------------------------------ militaire
     def threat_at(self, nid, radius=35):
@@ -431,6 +448,9 @@ class AI:
                 delta -= 1.2
             f['rel'][o] = max(-100, min(100, rel + delta))
             rel = f['rel'][o]
+            # cartel d'échange : on récupère ses hommes prisonniers
+            if D.held(g, o, code) >= 40 and rel > -70 and self.rng.random() < 0.3:
+                self.propose(o, 'prisonniers')
             if f['overlord']:
                 continue
             po = max(1.0, g.faction_power(o))

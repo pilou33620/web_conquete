@@ -59,8 +59,47 @@ UNITS = {
                        cost=dict(livres=300, armes=60, fer=40, bois=30, recrues=120), days=24, upkeep_v=0.8, upkeep_l=2.2,
                        terrain={'Plaine': 1.3, 'Collines': 1.15, 'Vignoble': 1.0, 'Forêt': 0.5, 'Marais': 0.5, 'Montagne': 0.6,
                                 'Haute montagne': 0.4, 'Lande': 0.9}),
+    'grenadiers': dict(name="Grenadiers (compagnies d'élite)", short='Grenadiers', men=200, speed=22, power=1.45,
+                       cost=dict(livres=260, armes=45, recrues=200), days=20, upkeep_v=0.7, upkeep_l=1.7,
+                       terrain={'Plaine': 1.0, 'Forêt': 0.9, 'Marais': 0.85, 'Montagne': 0.9}, xp0=30, morale0=10,
+                       req='baionnette', desc='Infanterie d’élite : frappe fort, tient sous le feu, coûte cher.'),
+    'chasseurs': dict(name='Chasseurs basques (montagnards)', short='Chasseurs', men=200, speed=27, power=0.95,
+                      cost=dict(livres=160, armes=30, recrues=200), days=14, upkeep_v=0.6, upkeep_l=1.1,
+                      terrain={'Plaine': 0.85, 'Forêt': 1.25, 'Lande': 1.0, 'Marais': 1.0, 'Vignoble': 1.05, 'Collines': 1.35,
+                               'Montagne': 1.6, 'Haute montagne': 1.7},
+                      where=('64',), desc='Infanterie légère des montagnes : redoutable en relief, s’use peu dans les cols. '
+                                          'Levée seulement en Pays basque et en Béarn.'),
+    'sapeurs': dict(name='Sapeurs du génie', short='Sapeurs', men=150, speed=20, power=0.55,
+                    cost=dict(livres=200, armes=20, outils=30, recrues=150), days=16, upkeep_v=0.6, upkeep_l=1.3,
+                    terrain={'Plaine': 1.0, 'Forêt': 0.9, 'Marais': 0.9, 'Montagne': 0.9},
+                    desc='Peu combatifs, mais chaque compagnie accélère les sièges et jette des ponts : '
+                         'l’armée franchit les fleuves sans attendre le bac.'),
+    'garde': dict(name='Garde nationale', short='Garde nat.', men=300, speed=20, power=0.55,
+                  cost=dict(livres=50, armes=15, recrues=200), days=6, upkeep_v=0.3, upkeep_l=0.3,
+                  terrain={'Plaine': 1.0, 'Forêt': 0.9, 'Marais': 0.9, 'Montagne': 0.9}, garrison_only=True,
+                  desc='Milice citoyenne bon marché, levée même dans un village : elle ne quitte pas sa ville, '
+                       'mais la défend avec ardeur (+30 %).'),
 }
-UNIT_ORDER = ['ligne', 'legere', 'cavalerie', 'artillerie']
+UNIT_ORDER = ['ligne', 'legere', 'grenadiers', 'chasseurs', 'cavalerie', 'artillerie', 'sapeurs', 'garde']
+UNIT_CLS = {'cavalerie': 'cavalerie', 'artillerie': 'artillerie'}   # tout le reste est de l'infanterie
+LIGHT_UNITS = ('legere', 'chasseurs')
+for _k, _u in UNITS.items():
+    _u.setdefault('cls', UNIT_CLS.get(_k, 'inf'))
+    _u.setdefault('light', _k in LIGHT_UNITS)
+    _u.setdefault('garrison_only', False)
+    _u.setdefault('req', None)
+    _u.setdefault('desc', '')
+UNITS['ligne']['desc'] = 'Le gros de l’armée : feu de ligne, colonne d’assaut ou carré.'
+UNITS['legere']['desc'] = 'Voltigeurs : rapides, à l’aise en forêt, en lande et en marais, tendent des embuscades.'
+UNITS['cavalerie']['desc'] = 'Dragons et hussards : charge en terrain ouvert, poursuite, éclairage.'
+UNITS['artillerie']['desc'] = 'Batterie de 8 pièces : domine la canonnade et ouvre les brèches.'
+DEPOT_KM = 30.0              # rayon d'action d'un magasin aux vivres
+DEPOT_FOOD = 0.15            # vivres par jour et par centaine d'hommes ravitaillés par un magasin
+PRISONER_FOOD = 0.003        # vivres par jour et par prisonnier
+PRISONER_RANSOM = 2          # livres par prisonnier racheté
+SAPEUR_SIEGE = 0.04          # avancée du siège par jour et par compagnie de sapeurs
+GARDE_HOME = 1.3             # la Garde nationale défend sa propre ville
+
 MILICE_POWER = 0.6
 
 # ------------------------------------------------------------------ nœuds
@@ -114,6 +153,9 @@ BUILD = {
                  else dict(livres=650, bois=180, fer=90),
                  days=lambda lvl: 20 + 12 * lvl if lvl < 3 else 70,
                  desc='+1 niveau de fortification : défense accrue, sièges plus longs, mais entretien plus cher'),
+    'depot': dict(name='Magasin aux vivres', max=1, cost=lambda lvl: dict(livres=150, bois=60), days=lambda lvl: 12,
+                  desc='Entrepôt et charrois : les armées en campagne à moins de 30 km restent ravitaillées, '
+                       'en puisant dans vos vivres'),
     'dev': dict(name='Développement', max=3, cost=lambda lvl: dict(livres=100 * (lvl + 1), bois=50 * (lvl + 1), outils=15 * (lvl + 1)),
                 days=lambda lvl: 18 + 10 * lvl, desc='Moulins, ateliers, manufacture : +25 % de production par niveau'),
 }
@@ -237,7 +279,7 @@ SURNAMES = ['Labat', 'Dufau', 'Lacoste', 'Darricau', 'Etcheverry', 'Bordenave', 
 FORMATIONS = {
     'ligne': dict(label='Ligne', desc='Infanterie déployée : feu nourri (+20 %), mais vulnérable aux charges de cavalerie.'),
     'colonne': dict(label='Colonne', desc='Colonnes d’attaque : choc à la charge (+25 %), marche plus rapide, cible facile pour les canons.'),
-    'carre': dict(label='Carré', desc='Repousse la cavalerie (−65 % de dégâts), mais l’artillerie y fait des ravages ; marche lente.'),
+    'carre': dict(label='Carré', desc='Repousse la cavalerie (−65 % de dégâts), mais l’artillerie y fait des ravages ; marche lente. Le former prend un moment : surprise pendant la manœuvre, l’infanterie est très exposée aux cavaliers.'),
     'tirailleurs': dict(label='Tirailleurs', desc='Ordre dispersé : moins exposé aux canons, efficace à couvert, fragile face aux cavaliers.'),
 }
 PLANS = {

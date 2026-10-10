@@ -31,6 +31,11 @@ function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`
 function lighten(h, t) { return rgb(mix(hexRgb(h), [255, 255, 255], t)); }
 function darken(h, t) { return rgb(mix(hexRgb(h), [0, 0, 0], t)); }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+// arme d'un type de régiment ('inf', 'cavalerie', 'artillerie') et ordre dispersé, d'après les règles (repli pour les anciennes règles)
+export const unitCls = (rules, t) => rules.units[t]?.cls || (t === 'cavalerie' || t === 'artillerie' ? t : 'inf');
+export const unitLight = (rules, t) => rules.units[t]?.light ?? t === 'legere';
+const CLS_ORDER = { inf: 0, cavalerie: 1, artillerie: 2 };
+const TYPE_DOT = { ligne: '#f1ead8', legere: '#bfe39a', grenadiers: '#9fb8e8', chasseurs: '#7fd6b0', sapeurs: '#d6a878', garde: '#f0b8c8', cavalerie: '#e6c97f', artillerie: '#ff9a7a' };
 
 export class MapView {
   constructor(canvas, payload) {
@@ -584,11 +589,16 @@ export class MapView {
       const men = ns.m != null ? ns.m + (ns.g ? ns.g.reduce((s, r) => s + r[2], 0) : (ns.gm || 0)) : null;
       lines = [n.name, `${t}, ${own(ns.o)}`];
       if (n.star) lines.push(`★ ${n.star[1]}`);
+      if (ns.dp) lines.push('Magasin aux vivres');
       if (men != null) lines.push(`Défenseurs : ${fmtMen(men)}`);
       if (ns.sg) lines.push(`Siège : ${Math.round(ns.sg.dmg * 100)} %`);
     } else if (hit.kind === 'army') {
       const a = st.armies.find(x => x.id === hit.id);
-      if (a) lines = [a.name, `${own(a.o)}, ${fmtMen(a.men)} hommes`];
+      if (a) {
+        lines = [a.name, `${own(a.o)}, ${fmtMen(a.men)} hommes`];
+        if (a.wn?.includes('faim')) lines.push('Vivres épuisés');
+        if (a.wn?.includes('solde')) lines.push('Solde impayée');
+      }
     } else if (hit.kind === 'battle') {
       const b = st.battles.find(x => x.id === hit.id);
       if (b) lines = [b.amb ? 'Embuscade' : 'Bataille', `${fmtMen(b.sides[0].men)} contre ${fmtMen(b.sides[1].men)}`];
@@ -1264,6 +1274,19 @@ export class MapView {
     ctx.restore();
   }
 
+  // magasin aux vivres : un petit tonneau cerclé
+  depot(ctx, x, y, s) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(14,20,30,.85)';
+    ctx.beginPath(); ctx.ellipse(0, 0, s * 0.52, s * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#a0723f'; ctx.strokeStyle = '#3b2814'; ctx.lineWidth = Math.max(1, s * 0.08);
+    ctx.beginPath(); ctx.ellipse(0, 0, s * 0.38, s * 0.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#e6c97f'; ctx.lineWidth = Math.max(0.8, s * 0.07);
+    ctx.beginPath(); ctx.moveTo(-s * 0.36, -s * 0.2); ctx.lineTo(s * 0.36, -s * 0.2); ctx.moveTo(-s * 0.36, s * 0.2); ctx.lineTo(s * 0.36, s * 0.2); ctx.stroke();
+    ctx.restore();
+  }
+
   eye(ctx, x, y, s, col) {
     ctx.save();
     ctx.translate(x, y);
@@ -1326,6 +1349,7 @@ export class MapView {
         ctx.beginPath(); ctx.arc(0, 0, sr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0.03, ns.sg.dmg)); ctx.stroke();
       }
       if (n.quai && (z >= 3.2 || ns.bk)) this.anchor(ctx, -s * 0.62, s * 0.3, clamp(s * 0.36, 7, 13), ns.bk ? '#ff8a6a' : '#cfe8ff');
+      if (ns.dp && z >= 3.2) this.depot(ctx, s * 0.62, s * 0.32, clamp(s * 0.34, 7, 12));
       if (ns.intel || ns.spy) this.eye(ctx, s * 0.62, -s * 0.5, clamp(s * 0.4, 9, 14), ns.intel ? '#f3d98e' : 'rgba(243,217,142,0.6)');
       ctx.restore();
       const showLabel = n.type === 'capitale' || (n.type !== 'village' && z >= 2.3) || z >= 4.8 || sel;
@@ -1601,16 +1625,17 @@ export class MapView {
     // types
     const types = {};
     for (const r of a.regs) types[r[1]] = (types[r[1]] || 0) + 1;
-    const order = ['ligne', 'legere', 'cavalerie', 'artillerie'];
+    const order = Object.keys(types).sort((p, q) => CLS_ORDER[unitCls(this.rules, p)] - CLS_ORDER[unitCls(this.rules, q)] || this.rules.unit_order.indexOf(p) - this.rules.unit_order.indexOf(q));
     let px = -((Object.keys(types).length - 1) * 8) / 2;
     for (const t of order) {
       if (!types[t]) continue;
       ctx.fillStyle = '#13233a';
       ctx.beginPath(); ctx.arc(px, h / 2 + 5, 4.2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = { ligne: '#f1ead8', legere: '#bfe39a', cavalerie: '#e6c97f', artillerie: '#ff9a7a' }[t];
+      ctx.fillStyle = TYPE_DOT[t] || TYPE_DOT[unitCls(this.rules, t) === 'inf' ? 'ligne' : unitCls(this.rules, t)];
       ctx.beginPath(); ctx.arc(px, h / 2 + 5, 2.8, 0, Math.PI * 2); ctx.fill();
       px += 8;
     }
+    if (a.wn?.length) this.warnMark(ctx, w / 2 - 1, -h / 2 + 1);
     if (a.st === 'battle') {
       ctx.strokeStyle = 'rgba(255,120,80,' + (0.5 + 0.5 * Math.sin(time * 8)) + ')';
       ctx.lineWidth = 2; roundRect(ctx, -w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 7); ctx.stroke();
@@ -1620,9 +1645,9 @@ export class MapView {
   formationLayout(a, bw, bd, gap) {
     // placement des blocs dans le repère de l'armée (l'avant est vers le haut, y négatif)
     const regs = a.regs;
-    const inf = regs.filter(r => r[1] === 'ligne' || r[1] === 'legere');
-    const cav = regs.filter(r => r[1] === 'cavalerie');
-    const art = regs.filter(r => r[1] === 'artillerie');
+    const inf = regs.filter(r => unitCls(this.rules, r[1]) === 'inf');
+    const cav = regs.filter(r => unitCls(this.rules, r[1]) === 'cavalerie');
+    const art = regs.filter(r => unitCls(this.rules, r[1]) === 'artillerie');
     const fm = a.fm || 'ligne';
     const out = [];
     const row = (list, y, spacing, jitter = 0) => {
@@ -1699,9 +1724,10 @@ export class MapView {
       ctx.rotate(b.rot);
       ctx.scale(sc, sc);
       ctx.translate(-bw / 2, -bd / 2);
-      if (r[1] === 'artillerie') this.drawGuns(ctx, bw, bd, col, frac);
-      else if (r[1] === 'cavalerie') this.drawHorse(ctx, bw, bd, col, frac);
-      else this.drawFoot(ctx, bw, bd, col, frac, r[1] === 'legere' || a.fm === 'tirailleurs');
+      const uc = unitCls(this.rules, r[1]);
+      if (uc === 'artillerie') this.drawGuns(ctx, bw, bd, col, frac);
+      else if (uc === 'cavalerie') this.drawHorse(ctx, bw, bd, col, frac);
+      else this.drawFoot(ctx, bw, bd, col, frac, unitLight(this.rules, r[1]) || a.fm === 'tirailleurs', r[1] === 'grenadiers');
       if (fighting && Math.random() < 0.18) {
         ctx.fillStyle = 'rgba(255,226,140,0.95)';
         ctx.beginPath(); ctx.arc(Math.random() * bw, -2, Math.max(1.5, bw * 0.05), 0, Math.PI * 2); ctx.fill();
@@ -1733,7 +1759,19 @@ export class MapView {
       const txt = a.name + gen + fmLab;
       ctx.strokeStyle = 'rgba(14,20,30,.8)'; ctx.lineWidth = 3;
       ctx.strokeText(txt, 0, ty); ctx.fillStyle = '#f1ead8'; ctx.fillText(txt, 0, ty);
+      if (a.wn?.length) this.warnMark(ctx, ctx.measureText(txt).width / 2 + 9, ty + 7);
     }
+  }
+
+  // armée qui déserte (solde impayée, vivres épuisés) : petit point d'exclamation rouge
+  warnMark(ctx, x, y) {
+    ctx.save();
+    ctx.fillStyle = '#c0392b'; ctx.strokeStyle = 'rgba(14,20,30,.85)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff4e8'; ctx.font = '700 10px "EB Garamond", Georgia, serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('!', x, y + 0.5);
+    ctx.restore();
   }
 
   drawBoat(ctx, a, d, col, sel, time) {
@@ -1774,19 +1812,21 @@ export class MapView {
     }
   }
 
-  drawFoot(ctx, bw, bd, col, frac, light) {
+  drawFoot(ctx, bw, bd, col, frac, light, heavy = false) {
     ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(2, 2.5, bw, bd);
     ctx.fillStyle = darken(col, 0.35); ctx.fillRect(0, 0, bw, bd);
     const cols = Math.max(4, Math.round(bw / 4.2)), rows = light ? 2 : 3;
     const n = Math.round(cols * rows * frac);
     const dx = bw / cols, dy = bd / rows, r = Math.min(dx, dy) * 0.36;
-    const c1 = col, c2 = lighten(col, 0.4);
+    const c1 = col, c2 = heavy ? '#2a1f16' : lighten(col, 0.4);   // grenadiers : hauts bonnets à poil sombres
     let k = 0;
     for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
       if (k++ >= n) continue;
       const x = dx * (i + 0.5) + (light ? (hash(i, j) - 0.5) * dx * 0.5 : 0), y = dy * (j + 0.5);
       ctx.fillStyle = c1; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = c2; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.45, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = c2; ctx.beginPath();
+      if (heavy) ctx.ellipse(x, y - r * 0.35, r * 0.5, r * 0.75, 0, 0, Math.PI * 2); else ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.45, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.strokeStyle = lighten(col, 0.6); ctx.lineWidth = 1; ctx.strokeRect(0, 0, bw, bd);
   }

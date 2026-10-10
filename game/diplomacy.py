@@ -102,6 +102,45 @@ def make_peace(game, a, b):
     game.log('diplo', f"Paix signée entre {fn(a)} et {fn(b)} (trêve de 120 jours).", who=a, important=True)
 
 
+def held(game, a, b):
+    """Prisonniers originaires de b détenus par a."""
+    return int(game.factions[a].get('prisoners', {}).get(b, 0))
+
+
+def exchange_prisoners(game, a, b):
+    """Cartel d'échange : chacun rend les prisonniers de l'autre, homme pour homme, puis le surplus se rachète."""
+    fa, fb = game.factions[a], game.factions[b]
+    pa, pb = fa.setdefault('prisoners', {}), fb.setdefault('prisoners', {})
+    A, B = held(game, a, b), held(game, b, a)
+    k = min(A, B)
+    out = []
+    if k:
+        pa[b] = A - k
+        pb[a] = B - k
+        fa['res']['recrues'] += k
+        fb['res']['recrues'] += k
+        out.append(f"{k} prisonniers rendus de part et d'autre")
+    for x, y, fx, fy, surplus in ((a, b, fa, fb, A - k), (b, a, fb, fa, B - k)):
+        if surplus <= 0:
+            continue
+        m = min(surplus, int(max(0.0, fy['res']['livres']) // R.PRISONER_RANSOM))
+        if m <= 0:
+            continue
+        fy['res']['livres'] -= m * R.PRISONER_RANSOM
+        fx['res']['livres'] += m * R.PRISONER_RANSOM
+        fx['prisoners'][y] = fx['prisoners'].get(y, 0) - m
+        fy['res']['recrues'] += m
+        out.append(f"{fn(y)} rachète {m} des siens pour {m * R.PRISONER_RANSOM} livres")
+    for x, y in ((a, b), (b, a)):
+        if game.factions[x]['prisoners'].get(y, 1) <= 0:
+            del game.factions[x]['prisoners'][y]
+        game.factions[x]['rel'][y] = min(100, game.factions[x]['rel'][y] + 5)
+    txt = ' ; '.join(out) or 'aucun prisonnier rendu'
+    game.log('diplo', f"Échange de prisonniers entre {fn(a)} et {fn(b)} : {txt}.", who=a,
+             important=game.player in (a, b))
+    return txt
+
+
 def make_alliance(game, a, b):
     game.set_status(a, b, 'alliance')
     for x, y in ((a, b), (b, a)):
@@ -188,6 +227,13 @@ def ai_evaluate(game, ai, frm, action, amount=0, give=None, get=None):
         if v_in >= v_out:
             return True, f"{fn(ai)} accepte l'échange."
         return False, f"{fn(ai)} juge l'échange déséquilibré."
+    if action == 'prisonniers':
+        mine, theirs = held(game, ai, frm), held(game, frm, ai)
+        if not mine and not theirs:
+            return False, "Personne n'a de prisonniers à échanger."
+        if op < -70:
+            return False, f"{fn(ai)} refuse de traiter avec vous, même pour ses prisonniers."
+        return True, f"{fn(ai)} accepte l'échange de prisonniers."
     if action == 'soumission':
         if st != 'guerre':
             return False, "On n'exige la soumission que d'un ennemi."
@@ -243,6 +289,8 @@ def act(game, frm, to, action, amount=0, give=None, get=None):
             return False, "Stock insuffisant."
         if give[0] == 'livres' and amount + give[1] > f['res']['livres']:
             return False, "Livres insuffisantes pour l'échange et le tribut."
+    if action == 'prisonniers' and not held(game, frm, to) and not held(game, to, frm):
+        return False, "Personne n'a de prisonniers à échanger."
     if to == game.player:
         game.proposals.append(dict(id=game.nid('p'), frm=frm, action=action, amount=amount, give=give, get=get,
                                    expires=game.t + 15, date=game.date_str()))
@@ -277,6 +325,8 @@ def apply(game, frm, to, action, amount=0, give=None, get=None):
         f['res'][wr] += wq
     elif action == 'soumission':
         make_vassal(game, to, frm)
+    elif action == 'prisonniers':
+        exchange_prisoners(game, frm, to)
 
 
 def answer(game, pid, accept):
@@ -306,5 +356,7 @@ def answer(game, pid, accept):
         return False, "Nous sommes en guerre : cette proposition n'a plus lieu d'être."
     if p['action'] == 'alliance' and st == 'alliance':
         return False, "Déjà alliés."
+    if p['action'] == 'prisonniers' and not held(game, me, frm) and not held(game, frm, me):
+        return False, "Il n'y a plus de prisonniers à échanger."
     apply(game, frm, me, p['action'], p['amount'], p['give'], p['get'])
     return True, "Proposition acceptée."
