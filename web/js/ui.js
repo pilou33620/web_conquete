@@ -66,12 +66,17 @@ export class UI {
       const t = e.target;
       if (t.dataset.reg) { t.checked ? this.checked.add(t.dataset.reg) : this.checked.delete(t.dataset.reg); t.closest('.reg')?.classList.toggle('sel', t.checked); }
       if (t.dataset.act === 'slider') this.cmd({ cmd: 'slider', value: t.value / 100 }, false);
+      if (t.dataset.act === 'tax') this.cmd({ cmd: 'tax', value: t.value / 100 }, false);
     });
     document.body.addEventListener('input', e => {
       if (e.target.dataset.live === 'slider') {
         const v = e.target.value;
         const l = document.getElementById('slider-val');
         if (l) l.textContent = `${v} % armes, ${100 - v} % outils`;
+      }
+      if (e.target.dataset.live === 'tax') {
+        const l = document.getElementById('tax-val');
+        if (l) l.textContent = this.taxLabel(e.target.value / 100);
       }
     });
     for (const id of ['panel', 'modal']) {
@@ -153,6 +158,7 @@ export class UI {
       this.$('rail').hidden = false;
       this.$('feed').hidden = false;
       this.$('zoombar').hidden = false;
+      this.$('zb-fog').classList.toggle('on', this.map.fogOn);
       const f = this.rules.factions[st.me.code];
       this.$('tb-faction').innerHTML = `${coat(f.color, st.me.code)}<div><div class="fname">${esc(f.name)}</div><div class="ftitle">${esc(f.title)}</div></div>`;
     }
@@ -173,7 +179,7 @@ export class UI {
     if (this.events.length > 600) this.events.splice(0, 100);
     if (initial) return;
     if (ev.coins) this.map.spawnCoins(this.st.me.code);
-    const toastKinds = ['tech', 'eco', 'meteo', 'fin', 'info', 'diplo', 'revolte', 'siege', 'armee'];
+    const toastKinds = ['tech', 'eco', 'meteo', 'fin', 'info', 'diplo', 'revolte', 'siege', 'armee', 'espion'];
     if (ev.important && toastKinds.includes(ev.kind)) this.toast(ev.text, ev.kind === 'diplo' && /guerre/.test(ev.text) ? 'bad' : '');
   }
 
@@ -409,7 +415,26 @@ export class UI {
       }
       case 'selnode': this.select({ kind: 'node', id: +d.node }); break;
       case 'selarmy': this.select({ kind: 'army', id: d.id }); break;
+      case 'selbattle': this.select({ kind: 'battle', id: d.id }); break;
       case 'mode': this.cmd({ cmd: 'mode', army: sel.id, value: d.v }, false); break;
+      case 'formation': this.cmd({ cmd: 'formation', army: d.army || sel.id, value: d.v }); break;
+      case 'plan': this.cmd({ cmd: 'plan', army: d.army || sel.id, value: d.v }); break;
+      case 'split-type':
+        this.cmd({ cmd: 'split_type', army: sel.id, value: d.v }, false).then(r => { if (r.ok) { this.toast('Détachement formé.', 'good'); this.select({ kind: 'army', id: r.id }); } else if (r.msg) this.toast(r.msg, 'bad'); });
+        break;
+      case 'spy': {
+        const sp = this.rules.spy[d.v];
+        if (d.v === 'saboter' && !confirm(`Envoyer des saboteurs (${sp.cost} livres) ? En cas d’échec, la relation se dégrade.`)) break;
+        this.cmd({ cmd: 'spy', node: sel.id, value: d.v });
+        break;
+      }
+      case 'fog': {
+        this.map.fogOn = !this.map.fogOn;
+        try { localStorage.setItem('conquete.fog', this.map.fogOn ? '1' : '0'); } catch (e) { /* stockage indisponible */ }
+        this.$('zb-fog').classList.toggle('on', this.map.fogOn);
+        this.toast(this.map.fogOn ? 'Brouillard de guerre affiché.' : 'Brouillard de guerre masqué.');
+        break;
+      }
       case 'stance': this.cmd({ cmd: 'stance', army: sel.id, value: d.v }); break;
       case 'retreat': this.cmd({ cmd: 'retreat', army: sel.id }); break;
       case 'assault': this.cmd({ cmd: 'assault', army: sel.id }); break;
@@ -549,15 +574,36 @@ export class UI {
       ${ns.gm != null ? `<dt>Garnison repérée</dt><dd>${fmt(ns.gm)} hommes</dd>` : ''}
       <dt>Fortifications</dt><dd>${pips(ns.f)}</dd>
       <dt>Développement</dt><dd>${pips(ns.d)}</dd>
-      ${own ? `<dt>Stabilité</dt><dd>${Math.round(ns.s * 100)} %</dd>` : ''}
+      ${own ? `<dt>Ordre public</dt><dd>${Math.round(ns.s * 100)} %</dd>` : ''}
       <dt>Terrain</dt><dd>${terr}</dd></dl>`;
-    if (gn.spec.length) h += `<div class="chips">${gn.spec.map(s => `<span class="chip">${this.rules.spec[s]}</span>`).join('')}</div>`;
+    if (own && ns.s < 0.5) h += `<div class="warnline">Population agitée : ${ns.g && ns.g.length ? 'la garnison maintient l’ordre.' : 'sans garnison ni armée sur place, la ville peut se révolter. Baissez les impôts ou laissez-y un régiment.'}</div>`;
+    const chips = gn.spec.map(s => `<span class="chip">${this.rules.spec[s]}</span>`);
+    if (gn.quai) chips.push(`<span class="chip water">${ICON.anchor.replace('<svg', '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:3px"')}Quai : ${gn.quai.join(', ')}</span>`);
+    if (chips.length) h += `<div class="chips">${chips.join('')}</div>`;
+    if (ns.bk) h += `<div class="warnline">Blocus : une place ennemie en aval coupe la route de la mer. Le commerce du port et du quai tombe à ${Math.round(this.rules.water.blockade * 100)} %.</div>`;
     if (!own && ns.o !== 'neutre') {
       const fs = st.factions.find(f => f.code === ns.o);
       h += `<div class="row" style="margin-top:8px"><span class="chip ${fs.st === 'guerre' ? 'war' : fs.st === 'alliance' ? 'ally' : ''}">${STATUS[fs.st]}</span>
         ${fs.st === 'paix' ? '<span class="muted small">Déclarez la guerre (Diplomatie) pour attaquer.</span>' : ''}</div>`;
     }
     if (ns.o === 'neutre') h += `<p class="muted small">Village indépendant : envoyez une armée nettement plus forte que sa milice pour le rallier en quelques jours, sinon il faudra combattre.</p>`;
+    if (!own) {
+      // renseignement
+      if (ns.intel) {
+        h += `<div class="section-t">Rapport d’espion (jusqu’au ${ns.intel})</div>` +
+          (ns.g && ns.g.length ? `<div class="reg-list">${ns.g.map(r => this.regRow(r, ns.o, false)).join('')}</div>` : '<p class="muted small">Aucun régiment en garnison, seulement la milice.</p>');
+      }
+      const fsn = st.factions.find(x => x.code === ns.o);
+      const atWar = fsn && fsn.st === 'guerre';
+      h += `<div class="section-t">Espionnage</div>`;
+      if (ns.spy) h += `<p class="small">${ICON.spy.replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Un agent est en route (${this.rules.spy[ns.spy.kind].label.toLowerCase()}), ${Math.max(0, Math.ceil(ns.spy.left * 24))} h restantes.</p>`;
+      else {
+        h += `<div class="btns">${Object.entries(this.rules.spy).map(([k, sp]) => {
+          const ok = st.me.res.livres >= sp.cost && (k !== 'saboter' || (atWar && ns.f > 0));
+          return `<button class="btn" data-act="spy" data-v="${k}" ${ok ? '' : 'disabled'} title="${esc(sp.desc)}">${sp.label}<small>${sp.cost} livres, ${sp.days} j, ${Math.round(sp.chance * 100)} % de réussite</small></button>`;
+        }).join('')}</div><div class="muted small">Espionner révèle la garnison et les armées alentour pendant ${this.rules.spy_days} jours. Saboter (en guerre) ouvre une brèche dans les remparts. Un agent démasqué fâche le département visé.</div>`;
+      }
+    }
     if (own) {
       const here = st.armies.filter(a => a.o === me && a.n === id && a.st === 'idle');
       if (ns.g && ns.g.length) {
@@ -599,6 +645,34 @@ export class UI {
     return [h, sig];
   }
 
+  taxLabel(v) {
+    for (const [lim, lab] of this.rules.tax_labels) if (v < lim) return lab;
+    return this.rules.tax_labels[this.rules.tax_labels.length - 1][1];
+  }
+
+  genHtml(g) {
+    if (!g) return '';
+    const tr = this.rules.traits[g.trait];
+    return `<div class="gen">${ICON.bicorne}<div><div class="gn">${esc(g.rank)} ${esc(g.name)} <span class="stars" title="Niveau ${g.lvl}">${'★'.repeat(g.lvl)}</span></div>
+      <div class="gt"><b>${tr.label}</b> : ${esc(tr.desc)}</div></div></div>`;
+  }
+
+  tacHtml(a, inBattle) {
+    const F = this.rules.formations, P = this.rules.plans;
+    const fm = a.fm || 'ligne', pl = a.pl || 'frontal';
+    const hasInf = a.regs.some(r => r[1] === 'ligne' || r[1] === 'legere');
+    return `<div class="section-t">Tactique</div>
+      ${hasInf ? `<div class="row"><span class="lab">Formation</span><span class="seg wrap">${Object.entries(F).map(([k, f]) =>
+        `<button data-act="formation" data-army="${a.id}" data-v="${k}" class="${fm === k ? 'on' : ''}" title="${esc(f.desc)}">${f.label}</button>`).join('')}</span></div>
+      <div class="tac-desc">${esc(F[fm].desc)}</div>` : ''}
+      <div class="row"><span class="lab">Plan de bataille</span><span class="seg wrap">${Object.entries(P).map(([k, p]) =>
+        `<button data-act="plan" data-army="${a.id}" data-v="${k}" class="${pl === k ? 'on' : ''}" title="${esc(p.desc)}">${p.label}</button>`).join('')}</span></div>
+      <div class="tac-desc">${esc(P[pl].desc)}</div>
+      <div class="btns"><button class="btn ${a.auto ? 'primary' : ''}" data-act="plan" data-army="${a.id}" data-v="auto">${a.auto ? '✓ Le général décide' : 'Laisser le général décider'}</button></div>
+      <div class="muted small">${a.auto ? 'Le général choisit formation et plan selon les armes de l’ennemi, et s’adapte à chaque phase : canonnade, fusillade, charge.' : 'Vos ordres tactiques sont appliqués tels quels.'}
+      ${inBattle ? ' Changer de formation sous le feu désorganise les rangs quelques heures.' : ' Le carré brise les charges mais souffre du canon ; la ligne fusille, la colonne charge, les tirailleurs esquivent les boulets.'}</div>`;
+  }
+
   armyPanel(id) {
     const st = this.st, a = this.armyById(id);
     if (!a) return [null, ''];
@@ -611,8 +685,9 @@ export class UI {
       const l = a.path[a.path.length - 1];
       return l.to != null ? nodeName(l.to) : null;
     };
+    const way = a.e ? this.md.edges[a.e[0]] : null;
     if (a.st === 'idle') state = a.sk === 'embuscade' ? (a.h ? 'En embuscade, invisible' : 'En embuscade, mais repérée') : a.n != null ? `Au repos à ${nodeName(a.n)}` : 'Au repos en rase campagne';
-    else if (a.st === 'move') state = `En marche ${lastNode() ? 'vers ' + lastNode() : 'à travers champs'}`;
+    else if (a.st === 'move') state = a.boat ? `${a.emb ? 'Embarque sur les gabares' : 'En gabare'}${way && way.water ? ` (${way.sea ? 'cabotage' : way.way})` : ''}${lastNode() ? ' vers ' + lastNode() : ''}` : `En marche ${lastNode() ? 'vers ' + lastNode() : 'à travers champs'}`;
     else if (a.st === 'retreat') state = `En retraite ${lastNode() ? 'vers ' + lastNode() : ''}`;
     else if (a.st === 'battle') state = 'Engagée dans une bataille';
     else if (a.st === 'siege') {
@@ -620,18 +695,20 @@ export class UI {
       state = ns && ns.o === 'neutre' ? `Rallie ${nodeName(a.n)} (${Math.round((ns.sg?.dmg || 0) * 100)} %)` : `Assiège ${nodeName(a.n)} (brèche ${Math.round((ns?.sg?.dmg || 0) * 100)} %)`;
     }
     const cell = Math.floor(a.y) * this.md.W + Math.floor(a.x);
-    const terr = this.md.terrain_names[this.map.terrain[cell]];
+    const terr = a.boat && a.n == null ? (way && way.sea ? 'Océan' : 'Fleuve') : this.md.terrain_names[this.map.terrain[cell]];
     let h = `<div class="p-head">${coat(f.color, a.o)}<div><div class="p-title">${esc(a.name)}</div><div class="p-sub">${f.name}, ${fmtMen(a.men)} hommes</div></div></div>
-      <div class="p-state">${state}</div>`;
+      <div class="p-state">${state}</div>${this.genHtml(a.gen)}`;
+    if (a.fire) h += `<div class="warnline">Les gabares essuient le feu des canons ennemis sur la berge !</div>`;
     if (own) {
-      h += `<dl class="kv"><dt>Terrain</dt><dd>${terr}${a.h ? ', à couvert' : ''}</dd><dt>Ravitaillement</dt><dd>${Math.round(a.sup * 100)} %</dd></dl>`;
+      h += `<dl class="kv"><dt>Terrain</dt><dd>${terr}${a.h ? ', à couvert' : ''}</dd><dt>Ravitaillement</dt><dd>${Math.round(a.sup * 100)} %</dd>
+        <dt>Vitesse de marche</dt><dd>${fmt1(a.sp)} km/j${a.boat ? `, ${this.rules.water.speed} en gabare` : ''}</dd></dl>`;
       if (a.sup < 0.35) h += `<div class="warnline">Ravitaillement épuisé : l’armée s’use. Revenez en territoire ami.</div>`;
       h += `<div class="reg-list">${a.regs.map(r => this.regRow(r, me, true)).join('')}</div>`;
       const canAct = a.st !== 'battle';
       h += `<div class="section-t">Ordres</div>`;
       if (canAct) {
         h += `<div class="row"><span class="lab">Itinéraire</span><span class="seg">
-          <button data-act="mode" data-v="route" class="${a.md !== 'champs' ? 'on' : ''}">Par les routes</button>
+          <button data-act="mode" data-v="route" class="${a.md !== 'champs' ? 'on' : ''}">Routes et fleuves</button>
           <button data-act="mode" data-v="champs" class="${a.md === 'champs' ? 'on' : ''}">À travers champs</button></span></div>
           <div class="row"><span class="lab">Posture</span><span class="seg">
           ${[['normal', 'Normale'], ['embuscade', 'Embuscade'], ['retranche', 'Retranchée']].map(([k, l]) => `<button data-act="stance" data-v="${k}" class="${a.sk === k ? 'on' : ''}">${l}</button>`).join('')}</span></div>
@@ -642,32 +719,59 @@ export class UI {
         if (a.n != null && st.nodes[a.n].o === me && a.st === 'idle') h += `<button class="btn" data-act="garrison" data-node="${a.n}">Mettre en garnison</button>`;
         if (a.st === 'siege') h += `<button class="btn danger" data-act="assault">Donner l’assaut</button>`;
         if (a.st === 'siege' || a.st === 'move') h += `<button class="btn" data-act="retreat">Se replier</button>`;
-        h += `</div><div class="muted small" style="margin-top:6px">Glissez l’armée du doigt ou du stylet pour tracer son chemin. Appui long (ou clic droit) sur la carte : elle part tout de suite. Embuscade : hors des routes, dans un bois, une lande, un marais ou en montagne.</div>`;
+        h += `</div>`;
+        // détacher une arme entière
+        const cls = r => r[1] === 'cavalerie' ? 'cavalerie' : r[1] === 'artillerie' ? 'artillerie' : 'inf';
+        const kinds = [...new Set(a.regs.map(cls))];
+        if (kinds.length > 1) {
+          const lab = { cavalerie: 'la cavalerie', artillerie: 'l’artillerie', inf: 'l’infanterie' };
+          h += `<div class="btns">${kinds.map(k => `<button class="btn" data-act="split-type" data-v="${k}">${ICON[k === 'inf' ? 'ligne' : k].replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Détacher ${lab[k]}</button>`).join('')}</div>`;
+        }
+        h += this.tacHtml(a, false);
+        h += `<div class="muted small" style="margin-top:6px">Glissez l’armée du doigt ou du stylet pour tracer son chemin. Par les routes, l’armée embarque d’elle-même sur les gabares quand le fleuve est plus rapide (l’artillerie y gagne beaucoup). Embuscade : hors des routes, dans un bois, une lande, un marais ou en montagne.</div>`;
       } else {
-        h += `<div class="btns"><button class="btn danger" data-act="retreat">Ordonner la retraite</button></div><div class="muted small">La retraite coûte des hommes, surtout face à la cavalerie.</div>`;
+        h += `<div class="btns"><button class="btn danger" data-act="retreat">Ordonner la retraite</button>${a.bt ? `<button class="btn" data-act="selbattle" data-id="${a.bt}">Voir la bataille</button>` : ''}</div><div class="muted small">La retraite coûte des hommes, surtout face à la cavalerie.</div>`;
+        h += this.tacHtml(a, true);
       }
     } else {
       const fs = st.factions.find(x => x.code === a.o);
-      h += `<div class="row"><span class="chip ${fs?.st === 'guerre' ? 'war' : fs?.st === 'alliance' ? 'ally' : ''}">${STATUS[fs?.st] || ''}</span><span class="muted small">Terrain : ${terr}</span></div>
+      const fmL = this.rules.formations[a.fm || 'ligne'].label;
+      h += `<div class="row"><span class="chip ${fs?.st === 'guerre' ? 'war' : fs?.st === 'alliance' ? 'ally' : ''}">${STATUS[fs?.st] || ''}</span><span class="muted small">Terrain : ${terr}, en ${fmL.toLowerCase()}</span></div>
         <div class="reg-list">${a.regs.map(r => this.regRow(r, a.o, false)).join('')}</div>`;
     }
     h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
     const sig = JSON.stringify([id, a.st, a.sk, a.md, a.h, a.n, Math.round(a.sup * 20), a.regs.map(r => [r[0], r[2], Math.round(r[5] / 5)]),
-      lastNode(), st.armies.filter(b => b.o === me && Math.hypot(b.x - a.x, b.y - a.y) < 3).length, a.n != null ? st.nodes[a.n].sg : null]);
+      lastNode(), st.armies.filter(b => b.o === me && Math.hypot(b.x - a.x, b.y - a.y) < 3).length, a.n != null ? st.nodes[a.n].sg : null,
+      a.fm, a.pl, a.auto, a.gen, a.boat, !!a.emb, a.fire, a.e && a.e[0]]);
     return [h, sig];
   }
 
   battlePanel(id) {
     const b = this.st.battles.find(x => x.id === id);
     if (!b) return [null, ''];
-    let h = `<div class="p-head">${ICON.swords.replace('<svg', '<svg style="width:32px;height:32px;color:var(--laiton-clair)"')}<div><div class="p-title">${b.amb ? 'Embuscade' : 'Bataille'}</div><div class="p-sub">Terrain : ${b.terrain}, depuis ${Math.round(b.age * 24)} h</div></div></div>`;
-    for (const s of b.sides) {
+    const me = this.st.me.code;
+    const phases = Object.entries(this.rules.phases);
+    const pi = phases.findIndex(([k]) => k === b.phase);
+    let h = `<div class="p-head">${ICON.swords.replace('<svg', '<svg style="width:32px;height:32px;color:var(--laiton-clair)"')}<div><div class="p-title">${b.amb ? 'Embuscade' : b.node != null ? 'Assaut de ' + esc(this.md.nodes[b.node].name) : 'Bataille'}</div><div class="p-sub">Terrain : ${b.terrain}, depuis ${Math.round(b.age * 24)} h</div></div></div>
+      <div class="phases">${phases.map(([k, l], i) => `<span class="ph ${i === pi ? 'on' : i < pi ? 'done' : ''}">${l}</span>`).join('<span class="ph-sep">›</span>')}</div>
+      <div class="muted small">${{ canonnade: 'Les batteries ouvrent le feu : l’artillerie domine, les carrés et les colonnes souffrent.', fusillade: 'Feux de salve : la ligne et les voltigeurs font la différence, la cavalerie attend son heure.', charge: 'Charges et corps à corps : la cavalerie et les colonnes décident, le carré tient bon.' }[b.phase] || ''}
+      ${b.land ? ' Les troupes débarquent sous le feu (attaque affaiblie).' : ''}${b.river >= 2 ? ' L’attaquant doit franchir la rivière.' : ''}</div>`;
+    const MIX = { inf: 'infanterie', cavalerie: 'cavalerie', artillerie: 'artillerie', milice: 'milice' };
+    b.sides.forEach((s, i) => {
       const f = this.rules.factions[s.o];
-      h += `<div class="section-t" style="color:${f ? f.color : '#ccc'}">${f ? f.name : 'Insurgés'}</div>
+      h += `<div class="section-t" style="color:${f ? f.color : '#ccc'}">${i === 0 ? 'Attaque' : 'Défense'} : ${f ? f.name : 'Insurgés'}</div>
         <dl class="kv"><dt>Hommes engagés</dt><dd>${fmt(s.men)}</dd><dt>Pertes</dt><dd>${fmt(s.lost)}</dd><dt>Moral</dt><dd>${s.mor}</dd></dl>
-        <div class="bar green"><i style="width:${s.mor}%"></i></div>`;
-    }
-    return [h, JSON.stringify(b.sides.map(s => [s.men, s.lost, s.mor]))];
+        <div class="bar green"><i style="width:${s.mor}%"></i></div>
+        <div class="chips">${Object.entries(s.mix || {}).filter(([, v]) => v > 0).map(([k, v]) => `<span class="chip">${fmt(v)} ${MIX[k]}</span>`).join('')}</div>`;
+      for (const t of s.tac || []) {
+        const mine = s.o === me;
+        h += `<div class="tac-army">${mine ? `<button class="linkish" data-act="selarmy" data-id="${t.id}">${esc(t.name)}</button>` : `<b>${esc(t.name)}</b>`}
+          <span class="muted small">${t.gen ? esc(t.gen.rank + ' ' + t.gen.name) + ' (' + this.rules.traits[t.gen.trait].label.toLowerCase() + '), ' : ''}en ${this.rules.formations[t.fm].label.toLowerCase()}, ${this.rules.plans[t.pl].label.toLowerCase()}${t.reorg ? ', se réorganise' : ''}</span></div>`;
+      }
+    });
+    const mineIn = b.sides.flatMap(s => s.o === me ? (s.tac || []) : []);
+    if (mineIn.length) h += `<p class="muted small">Touchez une de vos armées pour changer sa formation ou son plan pendant le combat.</p>`;
+    return [h, JSON.stringify([b.phase, b.sides.map(s => [s.men, s.lost, s.mor, (s.tac || []).map(t => [t.fm, t.pl, t.reorg])])])];
   }
 
   // ------------------------------------------------------------------ fenêtres
@@ -687,6 +791,7 @@ export class UI {
   async refreshSaves() {
     const r = await this.api.get('/api/saves');
     this.saves = r.saves;
+    this.net = r.net;
     this.modalSig = '';
     if (this.modal === 'menu') this.renderModal(true);
   }
@@ -812,10 +917,26 @@ export class UI {
       const ns = st.nodes[n.id];
       const gar = (ns.g || []).reduce((a, r) => a + r[2], 0);
       const q = (ns.q || []).map(q => q.kind === 'unit' ? this.rules.units[q.what].short : this.rules.build[q.what].name).join(', ');
-      return `<tr class="click" data-act="selnode-modal" data-node="${n.id}"><td>${n.name}</td><td>${TYPE_LABEL[n.type]}</td><td>${fmt(ns.m || 0)}${gar ? ' + ' + fmt(gar) : ''}</td><td>${ns.f}/${ns.d}</td><td>${Math.round(ns.s * 100)} %</td><td class="small">${q || '<span class="muted">—</span>'}</td></tr>`;
+      return `<tr class="click" data-act="selnode-modal" data-node="${n.id}"><td>${n.name}${ns.bk ? ' <span title="Blocus" style="color:#ff9a85">⚓</span>' : ''}</td><td>${TYPE_LABEL[n.type]}</td><td>${fmt(ns.m || 0)}${gar ? ' + ' + fmt(gar) : ''}</td><td>${ns.f}/${ns.d}</td><td style="${ns.s < 0.5 ? 'color:#ff9a85' : ''}">${Math.round(ns.s * 100)} %</td><td class="small">${q || '<span class="muted">—</span>'}</td></tr>`;
     }).join('');
-    const html = `<h2 class="m-title">Production</h2><p class="m-sub">Vos ateliers transforment le fer et le bois. Les armes équipent les régiments ; les outils augmentent toute la production de vos villes.</p>
+    const tax = Math.round(me.tax * 100), od = me.order;
+    const taxK = 0.6 + 0.8 * me.tax;
+    const unrest = od.unrest.map(([nid, v]) => `<span class="chip ${od.risk.includes(nid) ? 'war' : ''}" data-act="selnode-modal" data-node="${nid}" style="cursor:pointer">${esc(this.md.nodes[nid].name)} ${Math.round(v * 100)} %</span>`).join('');
+    const html = `<h2 class="m-title">Production et impôts</h2><p class="m-sub">Vos ateliers transforment le fer et le bois. Les impôts remplissent le trésor, mais un pays pressuré produit moins et finit par se soulever.</p>
       <div class="two"><div>
+        <h3 class="section-t" style="border:0;padding:0">${ICON.scale.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px;margin-right:6px"')}Impôts</h3>
+        <input id="tx" class="slider" type="range" min="0" max="100" step="5" value="${tax}" data-act="tax" data-live="tax" aria-label="Niveau des impôts">
+        <div class="big-slider-labels"><span>Légers</span><span id="tax-val">${this.taxLabel(me.tax)}</span><span>Écrasants</span></div>
+        <dl class="kv" style="margin-top:10px">
+          <dt>Rendement des impôts</dt><dd>${Math.round(taxK * 100)} % des livres</dd>
+          <dt>Recrues</dt><dd>${me.tax < 0.5 ? '+' : me.tax > 0.5 ? '−' : ''}${Math.round(Math.abs(0.3 * (0.5 - me.tax)) * 100)} %</dd>
+          <dt>Ordre public moyen</dt><dd>${Math.round(od.avg * 100)} % (tend vers ${Math.round(od.target * 100)} %)</dd>
+        </dl>
+        <div class="bar green"><i style="width:${Math.round(od.avg * 100)}%"></i></div>
+        ${od.risk.length ? `<p class="warnline">${od.risk.length} place(s) menacée(s) de révolte : ordre public très bas et ni garnison ni armée sur place.</p>` : ''}
+        ${unrest ? `<div class="chips" style="margin-top:6px">${unrest}</div>` : ''}
+        <p class="muted small">Au-delà d’impôts « normaux », l’ordre public baisse lentement : la production de chaque place suit son ordre public. Des impôts légers pacifient plus vite les villes conquises. Famine et banqueroute agitent aussi la population ; une garnison la calme.</p>
+        <h3 class="section-t">Ateliers</h3>
         <label for="sl" class="small muted">Répartition des ateliers</label>
         <input id="sl" class="slider" type="range" min="0" max="100" step="5" value="${s}" data-act="slider" data-live="slider">
         <div class="big-slider-labels"><span>Tout en outils</span><span id="slider-val">${s} % armes, ${100 - s} % outils</span><span>Tout en armes</span></div>
@@ -833,14 +954,14 @@ export class UI {
         <p class="muted small">Chaque arme coûte 1 fer et ½ bois ; chaque outil ½ fer et 1 bois. Sans fer ni bois, les ateliers s’arrêtent.</p>
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Vos villes et villages (${own.length})</h3>
-        <table class="grid"><thead><tr><th>Lieu</th><th>Type</th><th>Défense</th><th>Fort/Dév.</th><th>Stab.</th><th>Chantier</th></tr></thead><tbody>${rows}</tbody></table>
+        <table class="grid"><thead><tr><th>Lieu</th><th>Type</th><th>Défense</th><th>Fort/Dév.</th><th>Ordre</th><th>Chantier</th></tr></thead><tbody>${rows}</tbody></table>
       </div></div>`;
-    return [html, JSON.stringify([Math.round(me.cap * 10), Math.round(me.cov * 100), own.map(n => [st.nodes[n.id].m, (st.nodes[n.id].q || []).length]), s])];
+    return [html, JSON.stringify([Math.round(me.cap * 10), Math.round(me.cov * 100), own.map(n => [st.nodes[n.id].m, (st.nodes[n.id].q || []).length, Math.round(st.nodes[n.id].s * 20), st.nodes[n.id].bk]), s, tax, Math.round(od.avg * 100), od.risk])];
   }
 
   journalModal() {
     const f = this.journalFilter || 'all';
-    const groups = { all: null, battle: ['battle', 'battle_end', 'siege', 'capture', 'capitulation', 'revolte'], diplo: ['diplo'], eco: ['eco', 'tech', 'meteo', 'armee'] };
+    const groups = { all: null, battle: ['battle', 'battle_end', 'siege', 'capture', 'capitulation', 'revolte', 'espion'], diplo: ['diplo', 'espion'], eco: ['eco', 'tech', 'meteo', 'armee'] };
     const evs = this.events.filter(e => !groups[f] || groups[f].includes(e.kind)).slice(-250).reverse();
     const tabs = [['all', 'Tout'], ['battle', 'Guerre'], ['diplo', 'Diplomatie'], ['eco', 'Économie']].map(([k, l]) =>
       `<button class="btn ${k === f ? 'primary' : ''}" data-act="jtab" data-v="${k}">${l}</button>`).join('');
@@ -853,7 +974,7 @@ export class UI {
     const me = this.st.me;
     const f = this.rules.factions[me.code];
     const def = `${f.name} ${this.st.date.split(' ').slice(1).join(' ')}`;
-    const saves = (this.saves || []).map(s => `<div class="save-item"><span>${esc(s.name)}<br><span class="muted small">${s.faction || ''}, ${s.date || ''}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
+    const saves = (this.saves || []).map(s => `<div class="save-item"><span>${s.auto ? '<i>Sauvegarde automatique</i>' : esc(s.name)}<br><span class="muted small">${s.faction || ''}, ${s.date || ''}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
     const html = `<h2 class="m-title">Partie</h2><p class="m-sub">${f.name}, ${this.st.date}. Victoires ${me.stats.won}, défaites ${me.stats.lost}, places prises ${me.stats.captured}.</p>
       <div class="two"><div>
         <h3 class="section-t" style="border:0;padding:0">Sauvegarder</h3>
@@ -861,6 +982,7 @@ export class UI {
         <div class="btns"><button class="btn primary" data-act="save">Sauvegarder</button></div>
         <h3 class="section-t">Charger</h3><div class="saves">${saves || '<p class="muted">Aucune sauvegarde.</p>'}</div>
         <h3 class="section-t">Recommencer</h3><div class="btns"><button class="btn danger" data-act="newgame">Nouvelle partie</button></div>
+        <h3 class="section-t">Jouer depuis un autre appareil</h3>${this.netHtml(this.net)}
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Comment jouer</h3>
         <ul class="small" style="padding-left:18px;margin:0">
@@ -871,12 +993,25 @@ export class UI {
           <li>Au stylet ou à la souris, survolez une ville ou une armée pour voir ses forces. La paume posée sur l’écran est ignorée pendant l’usage du stylet.</li>
           <li>Les routes sont rapides. À travers champs, l’armée peut se cacher dans les bois, landes, marais ou montagnes et tendre une embuscade (posture « Embuscade »), mais avance plus lentement, s’use et perd son ravitaillement.</li>
           <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite.</li>
+          <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
+          <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
+          <li><b>Espions</b> : depuis une place étrangère, espionnez (vision et garnison pendant 45 jours) ou sabotez ses remparts en temps de guerre. Le brouillard de guerre (bouton œil) montre ce que vous voyez réellement.</li>
+          <li><b>Impôts</b> (fenêtre Production) : plus d’argent tout de suite, mais l’ordre public baisse ; une ville agitée sans garnison peut se révolter.</li>
+          <li>La partie est sauvegardée automatiquement chaque mois ; elle reprend au redémarrage du serveur.</li>
           <li>La pluie mouille la poudre, la neige ferme les cols, l’hiver vide les greniers. Les récoltes arrivent en été et en automne.</li>
           <li>Prenez tous les chefs-lieux, ou obtenez la soumission de leurs départements. Si votre chef-lieu tombe, la partie est perdue.</li>
           <li>Raccourcis : espace pour la pause, 1 à 4 pour la vitesse, Échap pour annuler.</li>
         </ul>
       </div></div>`;
-    return [html, JSON.stringify([(this.saves || []).map(s => s.name), me.stats])];
+    return [html, JSON.stringify([(this.saves || []).map(s => s.name), me.stats, this.net])];
+  }
+
+  netHtml(net) {
+    if (!net) return '<p class="muted small">…</p>';
+    if (!net.lan) return `<p class="muted small">Le jeu n’est ouvert qu’à cet ordinateur. Relancez le serveur avec <code>--lan</code> (ou « lancer-reseau ») pour jouer depuis l’iPad.</p>`;
+    if (!net.urls.length) return '<p class="muted small">Réseau pas encore disponible.</p>';
+    return `<p class="small" style="margin:0 0 4px">Sur l’iPad ou un téléphone connecté au même Wi-Fi, ouvrez :</p>
+      <div class="net-urls">${net.urls.map(u => `<code>${esc(u)}</code>`).join('')}</div>`;
   }
 
   endModal() {
@@ -915,7 +1050,7 @@ export class UI {
         <div class="traits">${f.pros.map(p => `<div>${p}</div>`).join('')}${f.cons.map(p => `<div class="con">${p}</div>`).join('')}</div>
       </button>`).join('');
     const diffs = Object.entries(this.rules.difficulty).map(([k, l]) => `<button class="${k === this.startDiff ? 'on' : ''}" data-act="pick-diff" data-v="${k}">${l}</button>`).join('');
-    const saves = (info.saves || []).slice(0, 5).map(s => `<div class="save-item"><span>${esc(s.name)}<br><span class="muted small">${s.faction || ''}, ${s.date || ''}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
+    const saves = (info.saves || []).slice(0, 5).map(s => `<div class="save-item"><span>${s.auto ? '<i>Sauvegarde automatique</i>' : esc(s.name)}<br><span class="muted small">${s.faction || ''}, ${s.date || ''}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
     this.$('start').innerHTML = `<div class="start-side">
       <div class="cartouche"><h1>Conquête</h1><div class="campaign">Aquitaine, 1790</div><p>L’Assemblée vient de créer les départements. Choisissez le vôtre, ralliez ses villages, puis prenez les chefs-lieux voisins par les armes, le commerce ou la diplomatie.</p></div>
       ${info.running ? '<button class="btn primary" data-act="resume">Reprendre la partie en cours</button>' : ''}
@@ -924,6 +1059,7 @@ export class UI {
       <div class="start-actions">
         <button class="btn primary" data-act="start-game" ${this.startDept ? '' : 'disabled'}>${this.startDept ? `Commencer avec ${this.rules.factions[this.startDept].name}` : 'Choisissez un département'}</button>
         ${saves ? `<div class="section-t">Parties sauvegardées</div><div class="saves">${saves}</div>` : ''}
+        ${info.net && info.net.lan && info.net.urls.length ? `<div class="section-t">Sur le réseau local</div>${this.netHtml(info.net)}` : ''}
       </div></div>`;
   }
 }

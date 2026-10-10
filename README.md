@@ -15,11 +15,25 @@ Il faut seulement **Python 3.8 ou plus récent**. Aucune bibliothèque à instal
 | Windows | double-clic sur `lancer.bat` (ou `python server.py`) |
 | Linux, macOS | `./lancer.sh` (ou `python3 server.py`) |
 | Android (Termux) | `pkg install python` puis `python server.py --no-browser`, et ouvrir `http://127.0.0.1:8790` dans Chrome |
-| Raspberry Pi | `sh raspberry/installer.sh` (le jeu démarre ensuite tout seul à chaque allumage, voir plus bas) |
+| Raspberry Pi | `./lancer.sh` (sans navigateur, ouvert au réseau local, adresse affichée), ou `sh raspberry/installer.sh` pour un démarrage automatique à l'allumage (voir plus bas) |
 | iPad (Pyto) | exécuter `server.py`, puis ouvrir `http://127.0.0.1:8790` dans Safari |
 
-Options : `--lan` (ouvre le jeu aux autres appareils du réseau local), `--port 8790`, `--no-browser`.
-Sous Windows, `lancer-reseau.bat` lance directement le jeu en mode réseau.
+Options : `--lan` (ouvre le jeu aux autres appareils du réseau local), `--local` (cette machine seulement),
+`--port 8790`, `--no-browser`, `--browser`. Sous Windows, `lancer-reseau.bat` lance directement le jeu en mode réseau.
+
+**Sur un Raspberry Pi (ou tout Linux sans écran)**, le serveur le détecte tout seul : il ne lance pas de navigateur,
+s'ouvre au réseau local et affiche en grand les adresses à taper depuis l'iPad, un téléphone ou un PC de la maison :
+
+```
+   Pour jouer depuis l'iPad, un téléphone ou un PC du réseau local,
+   ouvrez le navigateur à l'une de ces adresses :
+
+      http://192.168.1.42:8790
+      http://raspberrypi.local:8790
+```
+
+Ces adresses sont aussi écrites dans `adresse-reseau.txt` (à côté de `server.py`), réaffichées si le Wi-Fi change
+d'adresse, et visibles dans le jeu (écran d'accueil et menu ☰, rubrique « Jouer depuis un autre appareil »).
 
 ## Jouer sur l'iPad avec le jeu installé sur un Raspberry Pi
 
@@ -42,7 +56,10 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
   voient et commandent la même partie. On peut donc commencer sur l'ordinateur et continuer sur l'iPad.
 - Les sauvegardes sont stockées sur le Raspberry, dans `saves/`.
 - Le jeu n'a pas de mot de passe : gardez-le sur le réseau de la maison, ne l'ouvrez pas sur Internet.
-- Si l'adresse `.local` ne répond pas, utilisez l'adresse IP (`hostname -I` sur le Raspberry).
+- Si l'adresse `.local` ne répond pas, utilisez l'adresse IP : elle est dans `adresse-reseau.txt`,
+  dans `journalctl -u web_conquete` ou via `hostname -I` sur le Raspberry.
+- La partie est **sauvegardée automatiquement** chaque mois de jeu ; après une coupure de courant ou un redémarrage,
+  le Raspberry la reprend telle quelle (en pause).
 - Commandes utiles : `sudo systemctl status web_conquete`, `sudo systemctl restart web_conquete`,
   `journalctl -u web_conquete -f`.
 
@@ -72,6 +89,55 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
 - Terrain du combat : la cavalerie charge en plaine mais s'enlise en forêt ; l'artillerie domine en terrain dégagé ;
   la défense profite des collines et des montagnes ; traverser une rivière affaiblit l'attaquant.
 - Places fortes : elles se prennent par **siège**. L'artillerie ouvre la brèche bien plus vite. On peut donner l'assaut avant.
+
+### Généraux, formations et plans de bataille
+- Chaque armée est menée par un **général** (colonel, puis général de brigade et de division après des victoires)
+  doté d'un trait : audacieux, prudent, cavalier, artilleur, montagnard, éclaireur, inspirant ou logisticien.
+  Un général peut tomber au combat. Chaque département a son trait de prédilection (artilleurs du Périgord, éclaireurs landais…).
+- Une bataille se déroule en trois **phases** : la **canonnade** (l'artillerie domine), la **fusillade** (la ligne et
+  les voltigeurs), puis la **charge** (cavalerie et colonnes). Une armée surtout montée charge plus tôt.
+- **Formations** de l'infanterie, visibles sur la carte :
+
+| Formation | Force | Faiblesse |
+|---|---|---|
+| Ligne | feu nourri (+20 % en fusillade) | prise de flanc par la cavalerie |
+| Colonne | choc à la charge (+25 %), marche +10 % | cible facile pour les canons |
+| Carré | brise les charges (−65 % de dégâts de cavalerie) et fusille les escadrons | ravagée par l'artillerie, marche lente |
+| Tirailleurs | dispersés : moins touchés par les boulets, forts à couvert | fragiles face aux cavaliers |
+
+- **Plans de bataille** : assaut frontal, préparation d'artillerie (+40 % aux canons), débordement (la cavalerie tourne
+  l'ennemi en terrain ouvert et brise son moral), tenir la position (défense acharnée), harcèlement (escarmouche,
+  on décroche au bout d'un jour).
+- Par défaut, **le général décide** : il choisit selon les armes de l'ennemi et change de formation à chaque phase
+  (au prix d'un court moment de désordre). Vous pouvez aussi tout commander vous-même, y compris en pleine bataille.
+- Bouton « Détacher la cavalerie / l'artillerie / l'infanterie » : une arme entière forme sa propre armée,
+  par exemple pour envoyer la cavalerie en reconnaissance ou déborder par un autre chemin.
+
+### Fleuves, gabares et blocus
+- La Garonne et l'estuaire de la Gironde, la Dordogne, l'Isle, le Lot, la Baïse, la Midouze et l'Adour sont
+  **navigables**, et un cabotage relie l'estuaire, le bassin d'Arcachon, Capbreton, Bayonne, Biarritz,
+  Saint-Jean-de-Luz et Hendaye. Les quais sont marqués d'une ancre.
+- En marche « routes et fleuves », l'armée **embarque toute seule** quand c'est plus rapide : environ 30 km par jour,
+  plus vite en descendant le courant, moins vite en remontant ; basses eaux en été, crues au printemps,
+  les tempêtes clouent les navires au port. L'artillerie, lente sur les routes, y gagne beaucoup.
+- Arriver par le fleuve sur une place ennemie, c'est un **débarquement** : l'attaque est affaiblie au début.
+- Des **canons ennemis sur la berge** (armée ou place forte riveraine, comme Blaye ou Fort Médoc) tirent sur les gabares qui passent.
+- **Blocus** : si une place en aval, sur la route de la mer, est tenue par un ennemi, le commerce du port ou du quai
+  tombe à 35 %. Tenir Blaye étrangle Bordeaux ; tenir Bordeaux étrangle l'Agenais et le Bergeracois.
+
+### Brouillard de guerre et espions
+- Vous ne voyez que ce que voient vos villes, vos armées, vos alliés et vos espions : le reste de la carte est assombri
+  (bouton œil pour l'afficher ou le masquer). Les armées ennemies hors de vue n'apparaissent pas.
+- Depuis une place étrangère : **Espionner** (60 livres, 2 jours) révèle sa garnison et les armées alentour pendant 45 jours ;
+  **Saboter** (150 livres, 3 jours, en guerre) fait perdre un niveau de remparts. Un agent démasqué fâche le département visé.
+  Les IA sabotent aussi les places que leurs armées convoitent.
+
+### Impôts et ordre public
+- Les impôts (fenêtre Production) vont de « très légers » (60 % des livres, recrues +15 %, pacification rapide des
+  conquêtes) à « écrasants » (140 % des livres tout de suite).
+- Au-delà d'impôts normaux, l'**ordre public** baisse lentement, et la production de chaque place suit son ordre public :
+  pressurer le pays rapporte sur quelques semaines, puis coûte. Famine et banqueroute l'abaissent aussi.
+- Une place agitée sans garnison ni armée peut **se révolter** et redevenir indépendante. Un régiment en garnison calme la population.
 
 ### Saisons et météo
 - Récoltes faibles en hiver, abondantes en été et en automne ; vendanges en septembre et octobre.
@@ -106,6 +172,7 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
 | Survol au stylet ou à la souris | Petite fiche : propriétaire, défenseurs, effectifs |
 | Appui sur une ressource en haut | Détail de la production et du minimum garanti |
 | Bouton viseur | Recentrer sur la sélection ou sur votre chef-lieu |
+| Bouton œil | Afficher ou masquer le brouillard de guerre |
 
 Pendant l'usage d'un stylet (Apple Pencil, stylet Android ou Windows), la paume posée sur l'écran est ignorée.
 Sur grand écran tactile, les boutons et les cases sont agrandis automatiquement.
@@ -117,8 +184,9 @@ server.py            serveur HTTP local + boucle temps réel (10 pas par seconde
 game/geo.py          carte : projection, grilles de terrain, réseau routier, recherche de chemin A*
 game/places.py       les 223 villes, villages et places fortes, routes royales
 raspberry/           installation en service sur Raspberry Pi
-game/rules.py        départements, unités, technologies, bâtiments, météo
-game/engine.py       simulation : économie, armées, combats, sièges, embuscades, saisons
+game/rules.py        départements, unités, technologies, généraux, formations, météo
+game/engine.py       simulation : économie, impôts, armées, gabares, combats par phases, sièges, espions
+game/waterways.py    voies navigables (fleuves, estuaire, cabotage) et blocus
 game/ai.py           IA des départements
 game/diplomacy.py    diplomatie et commerce
 game/views.py        état envoyé au navigateur (brouillard de guerre), sauvegardes

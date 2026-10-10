@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 saves/*.json
 game/data/map_cache.json
+adresse-reseau.txt
+saves/*.tmp

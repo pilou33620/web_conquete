@@ -20,6 +20,7 @@
 <body>
 <div id="app">
   <canvas id="map" aria-label="Carte de l'Aquitaine"></canvas>
+  <canvas id="fog" aria-hidden="true"></canvas>
 
   <header id="topbar" hidden>
     <div class="tb-faction" id="tb-faction"></div>
@@ -40,6 +41,8 @@
     <button class="zb" data-act="zoom" data-v="out" aria-label="Zoom arrière">−</button>
     <button class="zb" data-act="zoom" data-v="home" aria-label="Centrer">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg></button>
+    <button class="zb" id="zb-fog" data-act="fog" aria-label="Brouillard de guerre" title="Brouillard de guerre">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/></svg></button>
   </div>
   <div id="proposals"></div>
   <div id="toasts" aria-live="polite"></div>

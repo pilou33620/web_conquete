@@ -39,6 +39,27 @@ class AI:
         if self.g.t >= self.diplo_clock:
             self.diplo_clock = self.g.t + 8 + self.rng.random() * 5
             self.diplomacy()
+            self.espionage()
+
+    def espionage(self):
+        """Saboter les remparts d'une place ennemie que nos armées convoitent, ou espionner un voisin."""
+        g, code, f = self.g, self.code, self.f
+        wars = self.wars()
+        if not wars or f['res']['livres'] < 450 or self.rng.random() > 0.35:
+            return
+        mine = [a for a in g.armies.values() if a['owner'] == code]
+        cands = []
+        for n in g.nodes:
+            if n['owner'] not in wars or n['fort'] < 2:
+                continue
+            x, y = g.node_xy(n['id'])
+            d = min((math.hypot(a['x'] - x, a['y'] - y) for a in mine), default=999)
+            if d < 70:
+                val = VALUE[g.geo.nodes[n['id']]['type']] * n['fort'] / (d + 10)
+                cands.append((val, n['id']))
+        if cands:
+            cands.sort(reverse=True)
+            g.spy(code, cands[0][1], 'saboter')
 
     # ------------------------------------------------------------------ économie
     def economy(self):
@@ -47,6 +68,18 @@ class AI:
         s = 0.8 if r['armes'] < 150 else (0.3 if f.get('_cov', 1) < 0.6 else 0.55)
         if abs(s - f['slider']) > 0.01:
             g.set_slider(code, s)
+        # impôts : on presse le contribuable en cas de besoin, on desserre l'étau si l'ordre public vacille
+        mine = g.owned_nodes(code)
+        avg = sum(n['stab'] for n in mine) / max(1, len(mine))
+        tax = 0.5
+        if avg < 0.62:
+            tax = 0.3
+        elif r['livres'] < 150 and avg > 0.8:
+            tax = 0.7
+        elif self.wars() and r['livres'] < 500 and avg > 0.85:
+            tax = 0.62
+        if abs(tax - f.get('tax', 0.5)) > 0.01:
+            g.set_tax(code, tax)
         if r['livres'] < 120:
             for res, keep in (('vivres', 500), ('bois', 350), ('fer', 300)):
                 if r[res] > keep + 50:
@@ -344,6 +377,8 @@ class AI:
         # un chemin qui relie une de nos villes à une ville ennemie
         front = []
         for e in g.geo.edges:
+            if e.get('kind') == 'water':
+                continue
             oa, ob = g.nodes[e['a']]['owner'], g.nodes[e['b']]['owner']
             if oa == code and ob in wars:
                 front.append((e, e['a'], e['b']))

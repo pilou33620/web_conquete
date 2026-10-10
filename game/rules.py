@@ -157,3 +157,71 @@ DIFFICULTY = {
     'difficile': dict(label='Difficile', ai_income=1.25, ai_aggr=1.25),
 }
 SPEEDS = [0, 0.5, 1.0, 2.0, 4.0]  # jours de jeu par seconde réelle
+
+# ------------------------------------------------------------------ généraux
+GENERAL_TRAITS = {
+    'audacieux': dict(label='Audacieux', desc='Frappe plus fort en attaque (+12 %), mais s’expose davantage.'),
+    'prudent': dict(label='Prudent', desc='Pertes réduites en défense (−12 %), retraites deux fois moins coûteuses.'),
+    'cavalier': dict(label='Cavalier', desc='Cavalerie +20 %, l’armée marche 10 % plus vite.'),
+    'artilleur': dict(label='Artilleur', desc='Artillerie +25 %, sièges 40 % plus rapides.'),
+    'montagnard': dict(label='Montagnard', desc='+15 % au combat et marche facilitée en collines et montagne.'),
+    'eclaireur': dict(label='Éclaireur', desc='Embuscades +25 %, voltigeurs +10 %, repère les ennemis cachés de plus loin.'),
+    'inspirant': dict(label='Inspirant', desc='Moral de départ +10, pertes de moral −15 %.'),
+    'logisticien': dict(label='Logisticien', desc='Ravitaillement deux fois plus durable, usure −40 %.'),
+}
+GENERAL_RANKS = ['Colonel', 'Général de brigade', 'Général de division']
+# trait plus fréquent selon le département
+GENERAL_FAVORITE = {'33': 'logisticien', '24': 'artilleur', '40': 'eclaireur', '47': 'prudent', '64': 'montagnard'}
+SURNAMES = ['Labat', 'Dufau', 'Lacoste', 'Darricau', 'Etcheverry', 'Bordenave', 'Lafargue', 'Larrieu', 'Castaing', 'Duprat',
+            'Garat', 'Lassalle', 'Fourcade', 'Peyrot', 'Ducasse', 'Lamothe', 'Delbos', 'Chastang', 'Vergnaud', 'Darriet',
+            'Lagarde', 'Lalanne', 'Bernadet', 'Cazenave', 'Mondiet', 'Puyo', 'Sallenave', 'Hiriart', 'Iribarne', 'Larrouy',
+            'Faget', 'Lartigue', 'Daguerre', 'Barrère', 'Courrèges', 'Lacaze', 'Saint-Martin', 'Doumecq', 'Laborde', 'Pédelaborde',
+            'Mauriac', 'Lafon', 'Delpech', 'Marty', 'Roumégoux', 'Sudre', 'Bouyssou', 'Vialle', 'Escande', 'Fabre']
+
+# ------------------------------------------------------------------ tactique
+FORMATIONS = {
+    'ligne': dict(label='Ligne', desc='Infanterie déployée : feu nourri (+20 %), mais vulnérable aux charges de cavalerie.'),
+    'colonne': dict(label='Colonne', desc='Colonnes d’attaque : choc à la charge (+25 %), marche plus rapide, cible facile pour les canons.'),
+    'carre': dict(label='Carré', desc='Repousse la cavalerie (−65 % de dégâts), mais l’artillerie y fait des ravages ; marche lente.'),
+    'tirailleurs': dict(label='Tirailleurs', desc='Ordre dispersé : moins exposé aux canons, efficace à couvert, fragile face aux cavaliers.'),
+}
+PLANS = {
+    'frontal': dict(label='Assaut frontal', desc='Engagement classique, toutes armes ensemble.'),
+    'artillerie': dict(label='Préparation d’artillerie', desc='Les canons pilonnent d’abord (+40 %) pendant que l’infanterie s’abrite.'),
+    'debordement': dict(label='Débordement', desc='La cavalerie tourne l’ennemi (+50 % en terrain ouvert), le centre est plus léger.'),
+    'tenir': dict(label='Tenir la position', desc='Défense acharnée : pertes −20 %, moral plus solide, mais moins d’attaque.'),
+    'harcelement': dict(label='Harcèlement', desc='Escarmouches : pertes réduites des deux côtés, on décroche au bout d’un jour.'),
+}
+FORMATION_SPEED = {'ligne': 1.0, 'colonne': 1.1, 'carre': 0.6, 'tirailleurs': 0.95}
+PHASES = {'canonnade': 'Canonnade', 'fusillade': 'Fusillade', 'charge': 'Charge'}
+# poids de chaque arme selon la phase
+PHASE_W = {
+    'canonnade': dict(artillerie=1.0, inf=0.35, cavalerie=0.1),
+    'fusillade': dict(artillerie=0.8, inf=1.0, cavalerie=0.45),
+    'charge': dict(artillerie=0.5, inf=1.0, cavalerie=1.25),
+}
+OPEN_TERRAIN = ('Plaine', 'Vignoble', 'Lande', 'Collines')
+
+# ------------------------------------------------------------------ espions, impôts, fleuves
+SPY = {
+    'espionner': dict(label='Espionner', cost=60, days=2, chance=0.8,
+                      desc='Révèle la garnison et les environs (14 km) pendant 45 jours.'),
+    'saboter': dict(label='Saboter les remparts', cost=150, days=3, chance=0.5,
+                    desc='En guerre seulement : fait perdre un niveau de fortification à la place.'),
+}
+SPY_INTEL_DAYS = 45
+WATER_SPEED = 30  # km par jour en gabare (avant courant et météo)
+SEA_SPEED = 55  # cabotage le long de la côte (les tempêtes immobilisent les navires)
+EMBARK_DAYS = 0.35  # chargement des gabares (hommes, chevaux, canons)
+DISEMBARK_DAYS = 0.15
+RIVER_FIRE_KM = 3.0  # portée des canons sur les berges
+QUAI_LIVRES = 0.5  # commerce fluvial d'un quai (par jour)
+BLOCKADE_K = 0.35  # revenus portuaires et fluviaux sous blocus
+TAX_LABELS = [(0.15, 'Très légers'), (0.4, 'Légers'), (0.6, 'Normaux'), (0.85, 'Lourds'), (1.01, 'Écrasants')]
+
+
+def tax_label(v):
+    for lim, lab in TAX_LABELS:
+        if v < lim:
+            return lab
+    return TAX_LABELS[-1][1]

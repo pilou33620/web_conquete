@@ -25,6 +25,12 @@ export const ICON = {
   coin: S('<circle cx="12" cy="12" r="8"/>'),
   eye_off: S('<path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/><path d="M4 20 20 4"/>'),
   target: S('<circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/>'),
+  eye: S('<path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/>'),
+  anchor: S('<circle cx="12" cy="4.5" r="1.8"/><path d="M12 6.3V20"/><path d="M8 9.5h8"/><path d="M4.5 13.5c.5 4 3.5 6.5 7.5 6.5s7-2.5 7.5-6.5"/>'),
+  boat: S('<path d="M3 15h18l-2.5 4.5h-13z"/><path d="M12 15V3"/><path d="M12 4c3 2 4.5 5 4.5 9H12"/><path d="M11 6c-2.5 1.5-3.5 4-3.5 7H11"/>'),
+  spy: S('<path d="M3 10.5h18"/><path d="M6 10.5 7.5 5h9l1.5 5.5"/><circle cx="8.5" cy="15.5" r="2.6"/><circle cx="15.5" cy="15.5" r="2.6"/><path d="M11.1 15.5h1.8"/>'),
+  bicorne: S('<path d="M2.5 17h19c-1.2-5.5-5.2-9-9.5-9s-8.3 3.5-9.5 9z"/><path d="M5 14.5h14" stroke-width="1.2"/><circle cx="12" cy="11.6" r="1.7" fill="currentColor"/><path d="M12 8V5.5"/>'),
+  scale: S('<path d="M12 3v17"/><path d="M7 20h10"/><path d="M5 7h14"/><path d="M5 7l-2.5 6a2.5 2.5 0 0 0 5 0zM19 7l-2.5 6a2.5 2.5 0 0 0 5 0z"/>'),
 
   ligne: S('<path d="M6 21v-7M12 21v-7M18 21v-7"/><circle cx="6" cy="10" r="1.8"/><circle cx="12" cy="10" r="1.8"/><circle cx="18" cy="10" r="1.8"/><path d="M7.5 13 9 3M13.5 13 15 3M19.5 13 21 3"/>'),
   legere: S('<circle cx="10" cy="6" r="2.2"/><path d="M10 9v6l-3 6M10 15l3 6"/><path d="M5 13 18 5"/><path d="M8.5 4.2 13 2.5"/>'),

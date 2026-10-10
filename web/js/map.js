@@ -57,6 +57,8 @@ export class MapView {
     this.flash = { cote: 0, interieur: 0, montagne: 0 };
     this.season = 'printemps';
     this.highlightDept = null;
+    this.fogOn = true;
+    try { this.fogOn = localStorage.getItem('conquete.fog') !== '0'; } catch (e) { /* stockage indisponible */ }
     this.colors = {};
     for (const [c, f] of Object.entries(this.rules.factions)) this.colors[c] = f.color;
     this.colors.neutre = this.rules.neutral_color;
@@ -88,16 +90,45 @@ export class MapView {
     for (const e of this.edges) {
       const A = this.nodes[e.a], B = this.nodes[e.b];
       e.A = [A.x, A.y]; e.B = [B.x, B.y];
+      if (e.kind === 'water') {
+        // voie d'eau : polyligne le long du fleuve ou de la côte
+        e.water = true;
+        e.cum = [0];
+        for (let i = 1; i < e.pts.length; i++) e.cum.push(e.cum[i - 1] + Math.hypot(e.pts[i][0] - e.pts[i - 1][0], e.pts[i][1] - e.pts[i - 1][1]));
+        e.C = [(A.x + B.x) / 2, (A.y + B.y) / 2];
+        continue;
+      }
       const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1;
       const off = e.rrank ? 0 : (hash(e.a, e.b, 5) - 0.5) * 0.16 * L;
       e.C = [(A.x + B.x) / 2 - dy / L * off, (A.y + B.y) / 2 + dx / L * off];
     }
+    // voies navigables découpées en tronçons avec leur emprise : chaque tuile ne trace que ce qui la traverse
+    this.wayPaths = [];
+    for (const w of this.m.ways || []) {
+      for (let i = 0; i < w.pts.length - 1; i += 8) {
+        const seg = w.pts.slice(i, i + 9);
+        const p = new Path2D();
+        seg.forEach((q, k) => k ? p.lineTo(q[0], q[1]) : p.moveTo(q[0], q[1]));
+        const xs = seg.map(q => q[0]), ys = seg.map(q => q[1]);
+        this.wayPaths.push({ sea: w.sea, p, box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] });
+      }
+    }
+  }
+  waterSeg(e, t) {
+    const total = e.cum[e.cum.length - 1] || 1, s = clamp(t, 0, 1) * total;
+    let i = 1;
+    while (i < e.cum.length - 1 && e.cum[i] < s) i++;
+    const seg = (e.cum[i] - e.cum[i - 1]) || 1e-9, f = (s - e.cum[i - 1]) / seg;
+    const p = e.pts[i - 1], q = e.pts[i];
+    return [[p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f], [q[0] - p[0], q[1] - p[1]]];
   }
   edgePoint(e, t) {
+    if (e.water) return this.waterSeg(e, t)[0];
     const u = 1 - t;
     return [u * u * e.A[0] + 2 * u * t * e.C[0] + t * t * e.B[0], u * u * e.A[1] + 2 * u * t * e.C[1] + t * t * e.B[1]];
   }
   edgeTangent(e, t) {
+    if (e.water) return this.waterSeg(e, t)[1];
     return [2 * (1 - t) * (e.C[0] - e.A[0]) + 2 * t * (e.B[0] - e.C[0]), 2 * (1 - t) * (e.C[1] - e.A[1]) + 2 * t * (e.B[1] - e.C[1])];
   }
   pointFrom(e, frm, f) { return this.edgePoint(e, frm === e.a ? f : 1 - f); }
@@ -433,7 +464,7 @@ export class MapView {
         const s = g.samples;
         if (s.length >= 2 && g.type !== 'mouse') {
           const a = s[0], b = s[s.length - 1], dts = (b[0] - a[0]) / 1000;
-          if (dts > 0 && now - b[0] < 90) {
+          if (dts > 0 && now - b[0] < 140) {
             const vx = (b[1] - a[1]) / dts, vy = (b[2] - a[2]) / dts;
             if (Math.hypot(vx, vy) > 300) this.inertia = { vx, vy };
           }
@@ -601,6 +632,25 @@ export class MapView {
         }
       }
     }
+    // en bataille, chaque armée fait face à l'ennemi
+    const byId = new Map(st.armies.map(a => [a.id, a]));
+    const face = new Map();
+    for (const b of st.battles) {
+      const cen = b.sides.map(s => {
+        const arr = s.armies.map(id => byId.get(id)).filter(Boolean);
+        if (!arr.length) return null;
+        return [arr.reduce((t, a) => t + a.x, 0) / arr.length, arr.reduce((t, a) => t + a.y, 0) / arr.length];
+      });
+      b.sides.forEach((s, i) => {
+        for (const id of s.armies) {
+          const a = byId.get(id);
+          if (!a) continue;
+          let tgt = cen[1 - i] || [b.x, b.y];
+          if (Math.hypot(tgt[0] - a.x, tgt[1] - a.y) < 0.05) tgt = [b.x + (i ? -1 : 1), b.y];
+          face.set(id, Math.atan2(tgt[1] - a.y, tgt[0] - a.x));
+        }
+      });
+    }
     const seen = new Set();
     for (const a of st.armies) {
       seen.add(a.id);
@@ -620,6 +670,7 @@ export class MapView {
           head = Math.atan2(p0[1] - a.y, p0[0] - a.x);
         }
       }
+      if (face.has(a.id)) head = face.get(a.id);  // en bataille : face à l'ennemi
       let d = this.disp.get(a.id);
       if (!d) {
         d = { x: tx, y: ty, tx, ty, head: head ?? -Math.PI / 2 };
@@ -806,6 +857,25 @@ export class MapView {
       g.strokeStyle = '#5c9ee0'; g.lineWidth = ww; g.stroke(r.p);
       if (L >= 8) { g.strokeStyle = 'rgba(178,215,246,0.7)'; g.lineWidth = ww * 0.28; g.stroke(r.p); }
     }
+    // voies navigables (fleuves à gabares) et route du cabotage
+    for (const w of this.wayPaths) {
+      const bx = w.box;
+      if (bx[2] < x0 - 1 || bx[0] > x0 + span + 1 || bx[3] < y0 - 1 || bx[1] > y0 + span + 1) continue;
+      if (w.sea) {
+        g.strokeStyle = 'rgba(235,246,255,0.55)';
+        g.lineWidth = Math.max(0.12, 1.1 / L);
+        const d = Math.max(0.6, 5 / L);
+        g.setLineDash([d * 0.5, d]);
+      } else {
+        if (L < 4) continue;
+        g.strokeStyle = 'rgba(232,244,255,0.75)';
+        g.lineWidth = Math.max(0.08, 0.9 / L);
+        const d = Math.max(0.5, 4 / L);
+        g.setLineDash([d * 1.4, d]);
+      }
+      g.stroke(w.p);
+    }
+    g.setLineDash([]);
     // limites des départements
     g.save();
     g.strokeStyle = 'rgba(62,44,24,0.55)';
@@ -825,7 +895,7 @@ export class MapView {
       const miny = Math.min(e.A[1], e.B[1], e.C[1]), maxy = Math.max(e.A[1], e.B[1], e.C[1]);
       return maxx > x0 - 1 && minx < x0 + span + 1 && maxy > y0 - 1 && miny < y0 + span + 1;
     };
-    const es = this.edges.filter(vis);
+    const es = this.edges.filter(e => !e.water && vis(e));
     g.lineCap = 'round';
     for (const pass of [0, 1]) {
       for (const e of es) {
@@ -1048,6 +1118,7 @@ export class MapView {
       }
     }
     this.draw(dt, now / 1000);
+    this.drawFog();
     requestAnimationFrame(t => this.frame(t));
   }
 
@@ -1128,6 +1199,73 @@ export class MapView {
     this.drawGesture(ctx);
   }
 
+  drawFog() {
+    // brouillard de guerre : on ne voit que ce que voient vos villes, vos armées, vos alliés et vos espions.
+    // Il est peint en basse résolution sur un calque séparé, que le navigateur agrandit et superpose à la carte.
+    const el = this.fogEl || (this.fogEl = document.getElementById('fog'));
+    if (!el) return;
+    const st = this.state;
+    const startEl = this.startEl || (this.startEl = document.getElementById('start'));
+    const on = this.fogOn && st && st.vis && !(startEl && !startEl.hidden);
+    const k = 0.25;
+    const w = Math.max(1, Math.ceil(this.vw * k)), h = Math.max(1, Math.ceil(this.vh * k));
+    const c = this.cam;
+    const sig = on ? `${w}x${h}|${c.x.toFixed(2)},${c.y.toFixed(2)},${c.z.toFixed(3)}|${st.t}|${st.vis.length}` : 'off';
+    if (sig === this.fogSig) return;
+    this.fogSig = sig;
+    if (el.width !== w || el.height !== h) { el.width = w; el.height = h; }
+    const g = el.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    g.clearRect(0, 0, w, h);
+    if (!on) return;
+    if (!this.holeSprite) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+      const gg = cv.getContext('2d'), gr = gg.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.75, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      gg.fillStyle = gr; gg.fillRect(0, 0, 64, 64);
+      this.holeSprite = cv;
+    }
+    const [x0, y0] = this.toScreen(0, 0), [x1, y1] = this.toScreen(this.W, this.H);
+    g.fillStyle = 'rgba(20,17,12,0.42)';
+    g.fillRect(x0 * k, y0 * k, (x1 - x0) * k, (y1 - y0) * k);
+    g.globalCompositeOperation = 'destination-out';
+    for (const [x, y, r] of st.vis) {
+      const [sx, sy] = this.toScreen(x, y);
+      const R = r * c.z * k * 1.1;
+      if (sx * k + R < 0 || sy * k + R < 0 || sx * k - R > w || sy * k - R > h) continue;
+      g.drawImage(this.holeSprite, sx * k - R, sy * k - R, 2 * R, 2 * R);
+    }
+    g.globalCompositeOperation = 'source-over';
+  }
+
+  anchor(ctx, x, y, s, col) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = 'rgba(14,20,30,.85)'; ctx.lineWidth = s * 0.34;
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.45); ctx.lineTo(0, s * 0.45);
+      ctx.moveTo(-s * 0.28, -s * 0.2); ctx.lineTo(s * 0.28, -s * 0.2);
+      ctx.moveTo(-s * 0.42, s * 0.12); ctx.quadraticCurveTo(-s * 0.3, s * 0.48, 0, s * 0.45); ctx.quadraticCurveTo(s * 0.3, s * 0.48, s * 0.42, s * 0.12);
+    };
+    path(); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = s * 0.14; path(); ctx.stroke();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, -s * 0.5, s * 0.12, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  eye(ctx, x, y, s, col) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(14,20,30,.85)';
+    ctx.beginPath(); ctx.ellipse(0, 0, s * 0.62, s * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = Math.max(1, s * 0.1);
+    ctx.beginPath(); ctx.moveTo(-s * 0.5, 0); ctx.quadraticCurveTo(0, -s * 0.42, s * 0.5, 0); ctx.quadraticCurveTo(0, s * 0.42, -s * 0.5, 0); ctx.stroke();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, 0, s * 0.14, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
   drawSeasonTint(ctx) {
     const tint = { hiver: 'rgba(214,228,248,0.17)', automne: 'rgba(222,140,60,0.07)', 'été': 'rgba(255,232,140,0.05)' }[this.season];
     if (tint) {
@@ -1176,6 +1314,8 @@ export class MapView {
         ctx.strokeStyle = this.colors[ns.sg.by] || '#f80'; ctx.lineWidth = 3.4;
         ctx.beginPath(); ctx.arc(0, 0, s * 0.62 + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0.03, ns.sg.dmg)); ctx.stroke();
       }
+      if (n.quai && (z >= 3.2 || ns.bk)) this.anchor(ctx, -s * 0.62, s * 0.3, clamp(s * 0.36, 7, 13), ns.bk ? '#ff8a6a' : '#cfe8ff');
+      if (ns.intel || ns.spy) this.eye(ctx, s * 0.62, -s * 0.5, clamp(s * 0.4, 9, 14), ns.intel ? '#f3d98e' : 'rgba(243,217,142,0.6)');
       ctx.restore();
       const showLabel = n.type === 'capitale' || (n.type !== 'village' && z >= 2.3) || z >= 4.8 || sel;
       if (showLabel) labels.push([n, x, y, s, ns]);
@@ -1294,23 +1434,37 @@ export class MapView {
     if (!d) return;
     ctx.save();
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    const pts = [[d.x, d.y]];
+    // tronçons : terre (jaune ou vert) et eau (bleu clair, en gabare)
+    const segs = [];
+    let cur = { water: false, pts: [[d.x, d.y]] };
     for (const leg of a.path) {
+      let water = false, add = [];
       if (leg.e != null) {
         const e = this.edges[leg.e];
-        const f0 = leg.pos / Math.max(0.01, e.len);
-        for (let k = 1; k <= 14; k++) pts.push(this.pointFrom(e, leg.frm, f0 + (1 - f0) * k / 14));
-      } else if (leg.pts) {
-        for (const p of leg.pts.slice(1)) pts.push(p);
+        water = !!e.water;
+        const f0 = leg.pos / Math.max(0.01, e.len), nseg = water ? 48 : 14;
+        for (let k = 1; k <= nseg; k++) add.push(this.pointFrom(e, leg.frm, f0 + (1 - f0) * k / nseg));
+      } else if (leg.pts) add = leg.pts.slice(1);
+      if (water !== cur.water) {
+        const lastP = cur.pts[cur.pts.length - 1];
+        segs.push(cur);
+        cur = { water, pts: [lastP] };
       }
+      cur.pts.push(...add);
     }
-    const sp = pts.map(p => this.toScreen(p[0], p[1]));
-    ctx.beginPath(); sp.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
-    ctx.strokeStyle = 'rgba(19,35,58,0.7)'; ctx.lineWidth = 6; ctx.stroke();
-    ctx.setLineDash([9, 7]);
-    ctx.strokeStyle = a.md === 'champs' ? '#bfe39a' : '#f1d58a'; ctx.lineWidth = 3; ctx.stroke();
-    ctx.setLineDash([]);
-    const last = sp[sp.length - 1];
+    segs.push(cur);
+    let last = null;
+    for (const sg of segs) {
+      if (sg.pts.length < 2) continue;
+      const sp = sg.pts.map(p => this.toScreen(p[0], p[1]));
+      ctx.beginPath(); sp.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+      ctx.strokeStyle = 'rgba(19,35,58,0.7)'; ctx.lineWidth = 6; ctx.stroke();
+      ctx.setLineDash(sg.water ? [4, 6] : [9, 7]);
+      ctx.strokeStyle = sg.water ? '#bfe6ff' : a.md === 'champs' ? '#bfe39a' : '#f1d58a'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.setLineDash([]);
+      last = sp[sp.length - 1];
+    }
+    if (!last) { ctx.restore(); return; }
     this.flag(ctx, last[0], last[1], 22, this.colors[a.o]);
     ctx.restore();
   }
@@ -1331,7 +1485,8 @@ export class MapView {
       ctx.save();
       ctx.translate(x, y);
       if (a.h) ctx.globalAlpha = 0.62;
-      if (detailed) this.drawFormation(ctx, a, d, col, sel, time);
+      if (a.boat && a.n == null) this.drawBoat(ctx, a, d, col, sel, time);
+      else if (detailed) this.drawFormation(ctx, a, d, col, sel, time);
       else this.drawToken(ctx, a, d, col, sel, time);
       ctx.restore();
     }
@@ -1375,50 +1530,99 @@ export class MapView {
     }
   }
 
-  drawFormation(ctx, a, d, col, sel, time) {
-    const z = this.cam.z;
-    const bw = clamp(z * 2.3, 22, 66), bd = bw * 0.38, gap = bw * 0.2;
+  formationLayout(a, bw, bd, gap) {
+    // placement des blocs dans le repère de l'armée (l'avant est vers le haut, y négatif)
     const regs = a.regs;
     const inf = regs.filter(r => r[1] === 'ligne' || r[1] === 'legere');
     const cav = regs.filter(r => r[1] === 'cavalerie');
     const art = regs.filter(r => r[1] === 'artillerie');
-    const front = [...cav.slice(0, Math.ceil(cav.length / 2)), ...inf, ...cav.slice(Math.ceil(cav.length / 2))];
-    const rows = [front];
-    if (art.length) rows.push(art);
-    const maxPerRow = 6;
-    const lines = [];
-    for (const row of rows) for (let k = 0; k < row.length; k += maxPerRow) lines.push(row.slice(k, k + maxPerRow));
-    const totalW = Math.max(...lines.map(l => l.length)) * (bw + gap) - gap;
-    const totalD = lines.length * (bd + gap * 2.4);
+    const fm = a.fm || 'ligne';
+    const out = [];
+    const row = (list, y, spacing, jitter = 0) => {
+      const w = list.length * (bw + spacing) - spacing;
+      list.forEach((r, k) => {
+        const jx = jitter ? (hash(k, list.length, 7) - 0.5) * jitter : 0, jy = jitter ? (hash(k, list.length, 8) - 0.5) * jitter : 0;
+        out.push({ r, x: -w / 2 + k * (bw + spacing) + bw / 2 + jx, y: y + jy, rot: 0 });
+      });
+    };
+    const chunk = (list, n) => { const res = []; for (let k = 0; k < list.length; k += n) res.push(list.slice(k, k + n)); return res; };
+    if (fm === 'carre' && inf.length) {
+      // carré creux : l'infanterie fait face de tous côtés, canons et cavaliers à l'abri au centre
+      const perSide = Math.max(1, Math.ceil(inf.length / 4));
+      const S = perSide * (bw + gap) + bd;
+      inf.forEach((r, k) => {
+        const side = k % 4, idx = Math.floor(k / 4);
+        const off = -((perSide - 1) * (bw + gap)) / 2 + idx * (bw + gap);
+        const rot = side * Math.PI / 2;
+        const cx = Math.sin(rot) * S / 2 + Math.cos(rot) * off, cy = -Math.cos(rot) * S / 2 + Math.sin(rot) * off;
+        out.push({ r, x: cx, y: cy, rot });
+      });
+      const inner = [...art, ...cav];
+      const small = 0.55;
+      inner.forEach((r, k) => {
+        const n = inner.length, w = n * (bw * small + 3) - 3;
+        out.push({ r, x: -w / 2 + k * (bw * small + 3) + bw * small / 2, y: 0, rot: 0, scale: small });
+      });
+    } else if (fm === 'colonne') {
+      // colonnes d'attaque : deux bataillons de front, en profondeur
+      let y = 0;
+      for (const line of chunk(inf, 2)) { row(line, y, gap * 0.6); y += bd + gap * 0.8; }
+      const cavRows = chunk(cav, 2);
+      for (const line of cavRows) { row(line, y + gap, gap * 3); y += bd + gap * 1.6; }
+      if (art.length) { row(art, y + gap * 1.5, gap); }
+    } else if (fm === 'tirailleurs') {
+      // ordre dispersé : un large rideau irrégulier
+      row(inf, 0, gap * 2.8, bd * 0.9);
+      if (cav.length) row(cav, bd + gap * 3.2, gap * 4);
+      if (art.length) row(art, (cav.length ? 2 : 1) * (bd + gap * 3.2), gap);
+    } else {
+      // ligne : cavalerie aux ailes, artillerie en second rang
+      const front = [...cav.slice(0, Math.ceil(cav.length / 2)), ...inf, ...cav.slice(Math.ceil(cav.length / 2))];
+      let y = 0;
+      for (const line of chunk(front, 6)) { row(line, y, gap); y += bd + gap * 2.4; }
+      for (const line of chunk(art, 6)) { row(line, y, gap); y += bd + gap * 2.4; }
+    }
+    return out;
+  }
+
+  drawFormation(ctx, a, d, col, sel, time) {
+    const z = this.cam.z;
+    const bw = clamp(z * 2.3, 22, 66), bd = bw * 0.38, gap = bw * 0.2;
+    const blocks = this.formationLayout(a, bw, bd, gap);
+    if (!blocks.length) return;
+    // recentre la formation sur la position de l'armée
+    const xs = blocks.map(b => b.x), ys = blocks.map(b => b.y);
+    const minx = Math.min(...xs) - bw / 2, maxx = Math.max(...xs) + bw / 2, miny = Math.min(...ys) - bd / 2, maxy = Math.max(...ys) + bd / 2;
+    const cy = (miny + maxy) / 2 - (a.fm === 'carre' ? 0 : bd * 0.3);
     ctx.save();
     ctx.rotate(d.head + Math.PI / 2);
+    ctx.translate(0, -cy);
     if (sel) {
       ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.ellipse(0, totalD / 2 - bd, totalW / 2 + 12, totalD / 2 + 10, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse((minx + maxx) / 2, (miny + maxy) / 2, (maxx - minx) / 2 + 12, (maxy - miny) / 2 + 10, 0, 0, Math.PI * 2); ctx.stroke();
     }
     const fighting = a.st === 'battle';
     const labels = [];
-    lines.forEach((line, li) => {
-      const y0 = li * (bd + gap * 2.4);
-      const w = line.length * (bw + gap) - gap;
-      line.forEach((r, k) => {
-        const x0 = -w / 2 + k * (bw + gap);
-        const jx = fighting ? (Math.sin(time * 9 + k * 1.7) * 0.8) : 0;
-        const frac = clamp(r[2] / r[3], 0.08, 1);
-        ctx.save();
-        ctx.translate(x0 + jx, y0);
-        if (r[1] === 'artillerie') this.drawGuns(ctx, bw, bd, col, frac);
-        else if (r[1] === 'cavalerie') this.drawHorse(ctx, bw, bd, col, frac);
-        else this.drawFoot(ctx, bw, bd, col, frac, r[1] === 'legere');
-        if (fighting && li === 0 && Math.random() < 0.18) {
-          ctx.fillStyle = 'rgba(255,226,140,0.95)';
-          ctx.beginPath(); ctx.arc(Math.random() * bw, -2, Math.max(1.5, bw * 0.05), 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = 'rgba(240,240,235,0.5)';
-          ctx.beginPath(); ctx.arc(Math.random() * bw, -bd * 0.4, bw * 0.12, 0, Math.PI * 2); ctx.fill();
-        }
-        ctx.restore();
-        labels.push([x0 + bw / 2 + jx, y0 - 3, r[2]]);
-      });
+    blocks.forEach((b, k) => {
+      const r = b.r, sc = b.scale || 1;
+      const jx = fighting ? (Math.sin(time * 9 + k * 1.7) * 0.8) : 0;
+      const frac = clamp(r[2] / r[3], 0.08, 1);
+      ctx.save();
+      ctx.translate(b.x + jx, b.y);
+      ctx.rotate(b.rot);
+      ctx.scale(sc, sc);
+      ctx.translate(-bw / 2, -bd / 2);
+      if (r[1] === 'artillerie') this.drawGuns(ctx, bw, bd, col, frac);
+      else if (r[1] === 'cavalerie') this.drawHorse(ctx, bw, bd, col, frac);
+      else this.drawFoot(ctx, bw, bd, col, frac, r[1] === 'legere' || a.fm === 'tirailleurs');
+      if (fighting && Math.random() < 0.18) {
+        ctx.fillStyle = 'rgba(255,226,140,0.95)';
+        ctx.beginPath(); ctx.arc(Math.random() * bw, -2, Math.max(1.5, bw * 0.05), 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(240,240,235,0.5)';
+        ctx.beginPath(); ctx.arc(Math.random() * bw, -bd * 0.4, bw * 0.12, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+      if (sc === 1) labels.push([b.x + jx, b.y - bd / 2 - 3 - cy, r[2]]);
     });
     ctx.restore();
     // chiffres au-dessus des blocs (non tournés)
@@ -1435,9 +1639,51 @@ export class MapView {
     if (z >= 7 && (sel || a.o === this.state.me.code)) {
       ctx.font = `italic 500 ${clamp(z * 0.6 + 5, 11, 15)}px "EB Garamond", Georgia, serif`;
       ctx.textBaseline = 'top';
-      const ty = totalD + 8;
+      const th = d.head + Math.PI / 2;
+      const ty = 0.5 * (Math.abs(Math.sin(th)) * (maxx - minx) + Math.abs(Math.cos(th)) * (maxy - miny)) + 12;
+      const gen = a.gen ? ` · ${a.gen.name}` : '';
+      const fmLab = a.fm && a.fm !== 'ligne' ? ` · ${this.rules.formations[a.fm].label.toLowerCase()}` : '';
+      const txt = a.name + gen + fmLab;
       ctx.strokeStyle = 'rgba(14,20,30,.8)'; ctx.lineWidth = 3;
-      ctx.strokeText(a.name, 0, ty); ctx.fillStyle = '#f1ead8'; ctx.fillText(a.name, 0, ty);
+      ctx.strokeText(txt, 0, ty); ctx.fillStyle = '#f1ead8'; ctx.fillText(txt, 0, ty);
+    }
+  }
+
+  drawBoat(ctx, a, d, col, sel, time) {
+    // gabares : coque, voile carrée aux couleurs du département, effectif
+    const z = this.cam.z;
+    const s = clamp(z * 2.4, 22, 54);
+    const n = clamp(Math.ceil(a.regs.length / 2), 1, 3);
+    const bob = Math.sin(time * 2.4) * s * 0.03;
+    if (sel) { ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(0, 0, s * 0.9 + n * 4, s * 0.55, 0, 0, Math.PI * 2); ctx.stroke(); }
+    const flip = Math.cos(d.head) < 0 ? -1 : 1;
+    for (let k = 0; k < n; k++) {
+      ctx.save();
+      ctx.translate((k - (n - 1) / 2) * s * 0.42 * flip, (k % 2 ? s * 0.18 : -s * 0.05) + bob * (k % 2 ? -1 : 1));
+      ctx.scale(flip, 1);
+      // sillage
+      ctx.strokeStyle = 'rgba(235,246,255,0.55)'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(-s * 0.5, s * 0.2); ctx.lineTo(-s * 0.85, s * 0.28); ctx.moveTo(-s * 0.5, s * 0.26); ctx.lineTo(-s * 0.8, s * 0.38); ctx.stroke();
+      // coque
+      ctx.fillStyle = '#5b3d22';
+      ctx.beginPath(); ctx.moveTo(-s * 0.5, s * 0.08); ctx.lineTo(s * 0.5, s * 0.08); ctx.lineTo(s * 0.36, s * 0.3); ctx.lineTo(-s * 0.4, s * 0.3); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#2f1f10'; ctx.lineWidth = 1; ctx.stroke();
+      // mât et voile
+      ctx.strokeStyle = '#3b2a18'; ctx.lineWidth = Math.max(1, s * 0.04);
+      ctx.beginPath(); ctx.moveTo(0, s * 0.08); ctx.lineTo(0, -s * 0.48); ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.moveTo(-s * 0.22, -s * 0.42); ctx.quadraticCurveTo(-s * 0.02, -s * 0.15, -s * 0.24, s * 0.02); ctx.lineTo(s * 0.24, s * 0.02); ctx.quadraticCurveTo(s * 0.36, -s * 0.15, s * 0.22, -s * 0.42); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = lighten(col, 0.5); ctx.lineWidth = 1; ctx.stroke();
+      ctx.restore();
+    }
+    ctx.font = `700 ${clamp(s * 0.36, 12, 17)}px "EB Garamond", Georgia, serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.strokeStyle = 'rgba(14,20,30,.85)'; ctx.lineWidth = 3;
+    const txt = fmtMen(a.men);
+    ctx.strokeText(txt, 0, s * 0.38); ctx.fillStyle = '#fffaf0'; ctx.fillText(txt, 0, s * 0.38);
+    if (a.fire) {
+      ctx.fillStyle = `rgba(255,140,80,${0.5 + 0.5 * Math.sin(time * 10)})`;
+      ctx.beginPath(); ctx.arc(s * 0.3, -s * 0.5, 4, 0, Math.PI * 2); ctx.fill();
     }
   }
 

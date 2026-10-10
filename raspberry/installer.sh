@@ -44,13 +44,19 @@ UNITEOF
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now "$SERVICE"
-sleep 3
-IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+# attend que le Wi-Fi ait une adresse (au plus 30 s)
+IP=""
+for i in $(seq 1 15); do
+  IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  [ -n "$IP" ] && break
+  sleep 2
+done
 echo ""
-echo "Conquête tourne sur le Raspberry et démarrera à chaque allumage."
-echo "Sur l'iPad, ouvrez Safari à l'adresse :"
+echo "Conquête tourne sur le Raspberry et démarrera à chaque allumage (sans navigateur)."
+echo "Sur l'iPad, un téléphone ou un PC du réseau local, ouvrez :"
 [ -n "$IP" ] && echo "    http://$IP:$PORT"
 echo "    http://$(hostname).local:$PORT"
 echo ""
+echo "Ces adresses sont aussi écrites dans $DIR/adresse-reseau.txt"
 echo "État du service : sudo systemctl status $SERVICE"
 echo "Journal         : journalctl -u $SERVICE -f"

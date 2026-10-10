@@ -108,6 +108,8 @@ class GeoMap:
         self.dept_codes = sorted(self.src['depts'].keys())
         self._build_nodes()
         self._load_or_generate()
+        from . import waterways
+        waterways.build(self)
         self.adj = {i: [] for i in range(len(self.nodes))}
         for e in self.edges:
             self.adj[e['a']].append(e['id'])
@@ -785,4 +787,6 @@ class GeoMap:
                     river=base64.b64encode(bytes(self.river)).decode(),
                     dept_codes=self.dept_codes, depts=depts, rivers=rivers, waters=waters,
                     nodes=self.nodes, edges=self.edges,
+                    ways=[dict(name=w['name'], label=w['label'], sea=w['sea'],
+                               pts=[[round(x, 2), round(y, 2)] for x, y in w['pts']]) for w in self.ways.values()],
                     terrain_names={k: v[0] for k, v in TERRAIN.items()})
