@@ -273,3 +273,63 @@ EXTRA_ROADS = [
     ('Mauléon', 'Tardets'),
 ]
 FERRIES = {('Blaye', 'Fort Médoc')}
+
+# Spécialité phare de chaque ville principale : (type, nom affiché). Le type renvoie à rules.SPECIALTY
+# (production par jour et technologie qui l'améliore).
+CITY_SPECIALTIES = {
+    # Gironde
+    'Bordeaux': ('grand_vin', 'Grands crus du Médoc et des Graves'),
+    'Bazas': ('betail', 'Bœuf de Bazas'),
+    'Blaye': ('vin', 'Vins des Côtes de Blaye'),
+    'Coutras': ('ble', 'Moulins de la Dronne'),
+    'La Réole': ('ble', 'Marché aux grains de La Réole'),
+    'La Teste-de-Buch': ('peche', "Huîtres et pêcheries d'Arcachon"),
+    'Langon': ('grand_vin', 'Vins liquoreux de Sauternes'),
+    'Lesparre-Médoc': ('vin', 'Crus du Bas-Médoc'),
+    'Libourne': ('grand_vin', 'Saint-Émilion et Pomerol'),
+    'Saint-André-de-Cubzac': ('vin', 'Vins de Bourg et du Cubzaguais'),
+    # Dordogne
+    'Périgueux': ('terroir', 'Truffes et pâtés de Périgueux'),
+    'Bergerac': ('vin', 'Vins de Bergerac et de Monbazillac'),
+    'Lalinde': ('ble', 'Blé et gabariers de la Dordogne'),
+    'Montpon': ('resine', 'Bois et charbon de la Double'),
+    'Mussidan': ('textile', "Papeteries et moulins de l'Isle"),
+    'Nontron': ('forge', 'Couteliers et forges de Nontron'),
+    'Ribérac': ('ble', 'Marché aux grains du Ribéracois'),
+    'Sarlat': ('terroir', 'Noix et truffes du Périgord noir'),
+    'Terrasson': ('terroir', 'Noyeraies de la Vézère'),
+    'Thiviers': ('terroir', 'Foie gras de Thiviers'),
+    # Landes
+    'Mont-de-Marsan': ('terroir', 'Volailles et foie gras des Landes'),
+    "Aire-sur-l'Adour": ('betail', 'Foires aux bestiaux de l’Adour'),
+    'Biscarrosse': ('resine', 'Résine des grands lacs'),
+    'Capbreton': ('peche', 'Pêcheurs du gouf de Capbreton'),
+    'Dax': ('sel', 'Salines et eaux chaudes de Dax'),
+    'Mimizan': ('resine', 'Gemmage et résine de Mimizan'),
+    'Morcenx': ('resine', 'Charbon de bois et résine'),
+    'Peyrehorade': ('peche', "Saumon de l'Adour"),
+    'Saint-Sever': ('terroir', 'Volailles de Chalosse'),
+    'Soustons': ('resine', 'Liège et pins du Marensin'),
+    # Lot-et-Garonne
+    'Agen': ('prune', "Pruneaux d'Agen"),
+    'Aiguillon': ('textile', 'Chanvre et cordages'),
+    'Casteljaloux': ('resine', 'Pins et résine de la Lande'),
+    'Fumel': ('forge', 'Forges et fonderies du Lot'),
+    'Marmande': ('ble', 'Grenier de la moyenne Garonne'),
+    'Miramont': ('ble', 'Moulins de Miramont'),
+    'Nérac': ('eau_de_vie', 'Armagnac de Ténarèze'),
+    'Sainte-Livrade': ('prune', "Prunes d'ente"),
+    'Tonneins': ('tabac', 'Manufacture royale des tabacs'),
+    'Villeneuve-sur-Lot': ('prune', 'Pruneaux du Villeneuvois'),
+    # Basses-Pyrénées
+    'Pau': ('grand_vin', 'Vin de Jurançon'),
+    'Bayonne': ('negoce', 'Chocolatiers et négociants de Bayonne'),
+    'Biarritz': ('peche', 'Baleiniers et pêcheurs de Biarritz'),
+    'Hasparren': ('textile', 'Tanneries et cuirs'),
+    'Hendaye': ('peche', 'Pêche et contrebande de la Bidassoa'),
+    'Mauléon': ('textile', 'Espadrilles de Mauléon'),
+    'Oloron-Sainte-Marie': ('textile', 'Bérets et draperies d’Oloron'),
+    'Orthez': ('salaisons', 'Jambons et salaisons du Béarn'),
+    'Saint-Jean-de-Luz': ('peche', 'Morutiers et corsaires de Saint-Jean-de-Luz'),
+    'Salies-de-Béarn': ('sel', 'Sources salées de Salies'),
+}

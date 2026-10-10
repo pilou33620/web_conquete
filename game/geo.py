@@ -11,7 +11,7 @@ import json
 import math
 import os
 
-from .places import PLACES, ROYAL_ROUTES, EXTRA_ROADS, FERRIES
+from .places import PLACES, ROYAL_ROUTES, EXTRA_ROADS, FERRIES, CITY_SPECIALTIES
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 CACHE_VERSION = 7
@@ -156,6 +156,8 @@ class GeoMap:
             x, y = self.xy(lat, lon)
             n = dict(id=k, slug=slugify(name), name=name, x=round(x, 2), y=round(y, 2), dept=dept,
                      type=typ, spec=list(spec), fort=fort)
+            if name in CITY_SPECIALTIES:
+                n['star'] = list(CITY_SPECIALTIES[name])   # spécialité phare : [type, nom]
             self.nodes.append(n)
             self.by_name[name] = k
 

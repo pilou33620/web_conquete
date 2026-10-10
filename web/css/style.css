@@ -376,3 +376,7 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
   #zoombar { flex-direction: row; top: calc(var(--tb-h) + var(--safe-t) + 8px); bottom: auto; }
   #zoombar .zb { width: 42px; height: 42px; }
 }
+/* spécialité phare d'une ville */
+.star-line { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 8px; padding: 7px 9px; border: 1px solid rgba(214,180,106,.35); border-radius: 8px; background: rgba(214,180,106,.08); }
+.star-line .star { color: var(--laiton-clair); font-size: 17px; line-height: 1.2; }
+.star-line b { font-weight: 600; }

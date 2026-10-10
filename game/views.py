@@ -72,6 +72,7 @@ def rules_payload():
     fort = dict(max=R.FORT_MAX, bastion=R.BASTION_LEVEL, bastion_types=R.BASTION_TYPES, upkeep=R.FORT_UPKEEP,
                 names=R.FORT_NAMES)
     return dict(factions=R.FACTIONS, units=R.UNITS, unit_order=R.UNIT_ORDER, techs=list(R.TECH.values()), fort=fort,
+                specialty=R.SPECIALTY, specialty_capital=R.SPECIALTY_CAPITAL,
                 branches=R.BRANCHES, build=build, node_base=R.NODE_BASE, spec={k: v['label'] for k, v in R.SPEC.items()},
                 weather=R.WEATHER, zones=R.ZONES, speeds=R.SPEEDS, res=R.RESOURCES, res_label=R.RES_LABEL,
                 difficulty={k: v['label'] for k, v in R.DIFFICULTY.items()}, neutral_color=R.NEUTRAL_COLOR,

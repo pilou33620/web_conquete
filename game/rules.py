@@ -79,6 +79,28 @@ SPEC = {
     'sel': dict(livres=1.2, label='Salines'),
     'tabac': dict(livres=0.9, label='Tabac & prunes'),
 }
+# Spécialités phares des villes principales (voir places.CITY_SPECIALTIES) : production par jour,
+# et le modificateur (technologies) qui l'augmente.
+SPECIALTY = {
+    'grand_vin': dict(label='Grand vin', livres=0.85, boost='vin'),
+    'vin': dict(label='Vin', livres=0.55, boost='vin'),
+    'eau_de_vie': dict(label='Eau-de-vie', livres=0.6, boost='vin'),
+    'negoce': dict(label='Négoce', livres=0.85, boost='port'),
+    'peche': dict(label='Pêche', livres=0.3, vivres=0.8, boost='port'),
+    'sel': dict(label='Sel', livres=0.6),
+    'prune': dict(label='Pruneaux', livres=0.5, vivres=0.3, boost='terroir'),
+    'terroir': dict(label='Terroir', livres=0.45, vivres=0.3, boost='terroir'),
+    'salaisons': dict(label='Salaisons', livres=0.35, vivres=0.4, boost='terroir'),
+    'betail': dict(label='Élevage', livres=0.25, vivres=0.6, recrues=0.2, boost='terroir'),
+    'ble': dict(label='Grains', livres=0.2, vivres=0.9),
+    'resine': dict(label='Résine', livres=0.3, bois=0.6, boost='resine'),
+    'textile': dict(label='Manufacture', livres=0.35, industrie=0.5, boost='manuf'),
+    'tabac': dict(label='Tabacs', livres=0.55, industrie=0.3, boost='manuf'),
+    'forge': dict(label='Forges', fer=0.6, industrie=0.4, boost='manuf'),
+}
+SPECIALTY_CAPITAL = 2.0   # un chef-lieu produit davantage de sa spécialité
+VIN_KINDS = {'grand_vin': 2, 'vin': 1, 'eau_de_vie': 1}   # comptent aux vendanges (nombre de vignobles)
+
 # Fortifications : niveaux 1 à 3 partout, niveau 4 (bastions à la Vauban) dans les chefs-lieux et les places fortes,
 # après la technologie « Fortifications à la Vauban ». Chaque niveau s'entretient (livres par jour et par place).
 FORT_MAX = 3
@@ -107,6 +129,12 @@ TECHS = [
     ('vauban', 'militaire', 'Fortifications à la Vauban', 'Défense des places +15 %, milice +25 %, bastions (fortifications niveau 4) dans le chef-lieu et les places fortes.', 750, 42, [], dict(fort_bonus=0.15, milice=0.25)),
     ('levee', 'militaire', 'Levée en masse', 'Recrutement −25 % de livres, formation −30 %, recrues +20 %.', 1125, 56, ['fusil1777'], dict(recruit_cost=-0.25, train=-0.30, recrues=0.20)),
     ('divisions', 'militaire', 'Système divisionnaire', 'Toutes armes +8 %, moral +10, retraites moins coûteuses.', 1500, 70, ['gribeauval', 'levee'], dict(all_power=0.08, morale=10, retreat=-0.5)),
+    ('tir_rang', 'militaire', 'Feu de rang (tir en ligne)', 'Les trois rangs tirent ensemble : infanterie en ligne +12 % en fusillade.', 625, 35, ['baionnette'], dict(ligne_fire=0.12)),
+    ('feu_peloton', 'militaire', 'Feu de peloton', 'Feux roulants par pelotons : ligne encore +10 % en fusillade, le carré fusille mieux les escadrons (+30 %).', 875, 49, ['tir_rang'], dict(ligne_fire=0.10, carre_fire=0.30)),
+    ('ordre_mixte', 'militaire', 'Ordre mixte (Guibert)', 'Lignes et colonnes combinées : colonne +15 % à la charge, changements de formation deux fois plus rapides.', 750, 42, ['tir_rang'], dict(colonne_charge=0.15, fm_swift=0.5)),
+    ('cuirassiers', 'militaire', 'Cuirassiers et carabiniers', 'Cavalerie lourde cuirassée : cavalerie +20 % pendant la charge.', 875, 49, ['hussards'], dict(cav_charge=0.20)),
+    ('art_cheval', 'militaire', 'Artillerie à cheval', 'Batteries montées : artillerie +10 %, plus rapide, et efficace jusque dans la charge (+30 %).', 1000, 56, ['gribeauval'], dict(art_power=0.10, art_speed=0.20, art_charge=0.30)),
+    ('genie', 'militaire', 'Corps du génie et sapeurs', 'Tranchées et mines : les sièges avancent 40 % plus vite.', 875, 49, ['vauban'], dict(siege_speed=0.40)),
 
     ('ponts_chaussees', 'civil', 'Corps des Ponts et Chaussées', 'Routes entretenues : +15 % de vitesse sur route.', 500, 35, [], dict(road_speed=0.15)),
     ('ponts', 'civil', 'Ponts de pierre', 'Plus de bac : les fleuves se franchissent sans délai.', 750, 42, ['ponts_chaussees'], dict(bridges=1)),
@@ -115,6 +143,12 @@ TECHS = [
     ('larrey', 'civil', 'Ambulances de Larrey', 'Pertes au combat −15 %, usure −40 %.', 750, 42, [], dict(casualties=-0.15, attrition=-0.40)),
     ('codecivil', 'civil', 'Code civil', 'Livres +10 %, recrues +10 %, prestige diplomatique.', 1250, 62, ['prefectures'], dict(livres=0.10, recrues=0.10, prestige=10)),
     ('diplomates', 'civil', 'Corps diplomatique', 'Accords commerciaux +30 %, propositions mieux reçues.', 625, 35, [], dict(trade=0.30, diplo=15)),
+    ('gendarmerie', 'civil', 'Gendarmerie nationale', 'Brigades dans chaque canton : ordre public +8 %, moins de révoltes.', 625, 35, [], dict(order=0.08)),
+    ('cadastre', 'civil', 'Cadastre et contribution foncière', 'Impôt juste et bien réparti : livres +6 %, les impôts lourds fâchent 40 % moins.', 750, 42, ['prefectures'], dict(livres=0.06, tax_unrest=-0.40)),
+    ('poste', 'civil', 'Poste aux chevaux et relais', 'Relais sur les grandes routes : +8 % sur route, les armées s’épuisent 35 % moins vite hors de chez elles.', 625, 35, ['ponts_chaussees'], dict(road_speed=0.08, supply_drain=-0.35)),
+    ('canal', 'civil', 'Balisage de la Garonne et canaux', 'Chenaux balisés, chemins de halage : gabares +25 % plus rapides, ports +10 %.', 875, 49, ['ponts_chaussees'], dict(river_speed=0.25, port=0.10)),
+    ('ecoles', 'civil', 'Écoles centrales', 'Savants et ingénieurs formés : toutes les recherches 25 % plus rapides.', 1000, 56, ['codecivil'], dict(research_speed=0.25)),
+    ('escompte', 'civil', "Caisse d'escompte", 'Crédit aux négociants : meilleurs prix au marché, commerce +10 %.', 750, 42, ['diplomates'], dict(market=0.08, trade=0.10)),
 
     ('hauts_fourneaux', 'industriel', 'Hauts fourneaux', 'Production de fer +30 %.', 500, 35, [], dict(fer=0.30)),
     ('manufactures', 'industriel', 'Manufactures royales', 'Capacité industrielle +25 %.', 625, 42, [], dict(industrie=0.25)),
@@ -122,6 +156,11 @@ TECHS = [
     ('vapeur', 'industriel', 'Machine à vapeur', 'Capacité industrielle +35 %.', 1250, 62, ['manufactures'], dict(industrie=0.35)),
     ('outillage', 'industriel', 'Outillage standardisé', 'Bonus des outils jusqu’à +45 %, usure −40 %, outils moins chers.', 875, 49, ['manufactures'], dict(tools_max=0.15, tools_wear=-0.40, tools_cost=-0.30)),
     ('armureries', 'industriel', "Armureries d'État", 'Fabrication des armes +40 %.', 875, 49, ['hauts_fourneaux'], dict(armes_eff=0.40)),
+    ('poudreries', 'industriel', 'Poudreries nationales', 'Salpêtre raffiné, poudre régulière : infanterie et artillerie +5 %.', 625, 35, [], dict(inf_power=0.05, art_power=0.05)),
+    ('coke', 'industriel', 'Forges à l’anglaise (coke)', 'Fonte au coke : fer +25 %, capacité industrielle +10 %.', 1000, 56, ['hauts_fourneaux'], dict(fer=0.25, industrie=0.10)),
+    ('pieces', 'industriel', 'Pièces interchangeables (Honoré Blanc)', 'Platines identiques : armes +30 %, la ligne coûte 10 % d’armes en moins.', 1125, 56, ['armureries'], dict(armes_eff=0.30, ligne_armes=-0.10)),
+    ('draperies', 'industriel', 'Draperies et manufactures de province', 'Draps, cuirs, tabacs et forges des villes +40 % ; uniformes : moral +5.', 750, 42, ['manufactures'], dict(manuf=0.40, morale=5)),
+    ('gabares', 'industriel', 'Chantiers de gabares', 'Gabares et couraux plus grands : transport fluvial +15 %, ports +10 %.', 625, 35, [], dict(river_speed=0.15, port=0.10)),
 
     ('assolement', 'agricole', 'Assolement sans jachère', 'Vivres +20 %.', 375, 28, [], dict(vivres=0.20)),
     ('pomme_de_terre', 'agricole', 'Pomme de terre (Parmentier)', "L'hiver ne vide plus les greniers.", 500, 35, [], dict(winter_food=0.30)),
@@ -130,6 +169,12 @@ TECHS = [
     ('haras', 'agricole', 'Haras et élevage', 'Cavalerie −25 % de coût et de délai, vivres +5 %.', 750, 42, ['assolement'], dict(cav_cost=-0.25, cav_train=-0.25, vivres=0.05)),
     ('chais', 'agricole', 'Chais et négoce du vin', 'Revenus du vin +40 %, ports +15 %.', 625, 35, [], dict(vin=0.40, port=0.15)),
     ('engrais', 'agricole', 'Prairies artificielles', 'Vivres +25 %, recrues +10 %.', 1125, 56, ['pomme_de_terre', 'drainage'], dict(vivres=0.25, recrues=0.10)),
+    ('mais', 'agricole', 'Maïs de Chalosse et du Béarn', 'Le « blé d’Espagne » : vivres +12 %, hivers moins durs.', 500, 35, [], dict(vivres=0.12, winter_food=0.10)),
+    ('foires', 'agricole', 'Foires et marchés agricoles', 'Pruneaux, foie gras, jambons, bœufs : produits du terroir des villes +35 %.', 625, 35, [], dict(terroir=0.35)),
+    ('gemmage', 'agricole', 'Gemmage et résiniers', 'Les pins saignés donnent la résine : spécialités résinières +50 %, landes +10 %.', 625, 35, ['pins'], dict(resine=0.50, lande_prod=0.10)),
+    ('transhumance', 'agricole', 'Transhumance et estives', 'Troupeaux aux estives : places en montagne et en collines +30 %.', 625, 35, [], dict(mountain_prod=0.30)),
+    ('greniers', 'agricole', 'Greniers publics', 'Réserves de la nation : greniers +50 %.', 750, 42, ['assolement'], dict(granary=0.50)),
+    ('conserves', 'agricole', 'Conserves d’Appert', 'Vivres en bocaux : les armées s’épuisent 40 % moins vite loin de chez elles.', 1000, 56, ['pomme_de_terre'], dict(supply_drain=-0.40)),
 ]
 TECH = {t[0]: dict(id=t[0], branch=t[1], name=t[2], desc=t[3], cost=t[4], days=t[5], req=t[6], fx=t[7]) for t in TECHS}
 BRANCHES = ['militaire', 'civil', 'industriel', 'agricole']

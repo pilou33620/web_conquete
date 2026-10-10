@@ -211,6 +211,16 @@ export class UI {
     }
   }
 
+  // spécialité phare d'une ville : nom, type et production par jour (avec les technologies du joueur s'il la tient)
+  starLine([kind, label], own, capital) {
+    const sp = this.rules.specialty[kind];
+    if (!sp) return '';
+    const k = (1 + (own && sp.boost ? (this.st.me.mods[sp.boost] || 0) : 0)) * (capital ? this.rules.specialty_capital : 1);
+    const prod = ['livres', 'vivres', 'recrues', 'industrie', 'fer', 'bois'].filter(r => sp[r])
+      .map(r => `+${fmt1(sp[r] * k)} ${r === 'industrie' ? 'industrie' : this.rules.res_label[r].toLowerCase()}`).join(', ');
+    return `<div class="star-line"><span class="star">★</span><div><b>${esc(label)}</b><div class="muted small">${esc(sp.label)} : ${prod} par jour (production de base)${own ? '' : ', pour qui tient la ville'}</div></div></div>`;
+  }
+
   fortName(f) { return this.rules.fort.names[Math.min(f, this.rules.fort.names.length - 1)] || ''; }
 
   resTip(r) {
@@ -604,6 +614,7 @@ export class UI {
       ${own ? `<dt>Ordre public</dt><dd>${Math.round(ns.s * 100)} %</dd>` : ''}
       <dt>Terrain</dt><dd>${terr}</dd></dl>`;
     if (own && ns.s < 0.5) h += `<div class="warnline">Population agitée : ${ns.g && ns.g.length ? 'la garnison maintient l’ordre.' : 'sans garnison ni armée sur place, la ville peut se révolter. Baissez les impôts ou laissez-y un régiment.'}</div>`;
+    if (gn.star) h += this.starLine(gn.star, own, gn.type === 'capitale');
     const chips = gn.spec.map(s => `<span class="chip">${this.rules.spec[s]}</span>`);
     if (gn.quai) chips.push(`<span class="chip water">${ICON.anchor.replace('<svg', '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:3px"')}Quai : ${gn.quai.join(', ')}</span>`);
     if (chips.length) h += `<div class="chips">${chips.join('')}</div>`;
@@ -857,7 +868,9 @@ export class UI {
     const me = this.st.me;
     const cols = this.rules.branches.map(br => {
       const cur = me.research[br];
-      const techs = this.rules.techs.filter(t => t.branch === br).sort((a, b) => a.cost - b.cost);
+      // par étage de l'arbre (les prérequis d'abord), puis par coût
+      const depth = t => t.req.length ? 1 + Math.max(...t.req.map(r => depth(this.rules.techs.find(x => x.id === r)))) : 0;
+      const techs = this.rules.techs.filter(t => t.branch === br).sort((a, b) => depth(a) - depth(b) || a.cost - b.cost);
       const curT = cur ? this.rules.techs.find(t => t.id === cur.tech) : null;
       const head = curT ? `En cours : ${curT.name}, ${Math.ceil(cur.left)} j<div class="bar green" style="margin-top:4px"><i style="width:${Math.round((1 - cur.left / cur.total) * 100)}%"></i></div>` : 'Aucune recherche en cours.';
       const cards = techs.map(t => {

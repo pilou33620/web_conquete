@@ -280,6 +280,7 @@ class Game:
             mine = self.owned_nodes(code)
             if d.month in (9, 10):
                 vin = sum(1 for n in mine if 'vin' in self.geo.nodes[n['id']]['spec'])
+                vin += sum(R.VIN_KINDS.get((self.geo.nodes[n['id']].get('star') or [''])[0], 0) for n in mine)
                 if vin:
                     gain = 18 * vin * (1 + self.mod(code, 'vin'))
                     f['res']['livres'] += gain
@@ -352,6 +353,15 @@ class Game:
                         bonus += self.mod(code, 'port')
                         trade += v * bonus
                     out[k] = out.get(k, 0) + v * bonus
+        star = gn.get('star')
+        if star:
+            sp = R.SPECIALTY[star[0]]
+            k = (1 + (self.mod(code, sp['boost']) if sp.get('boost') else 0)) * (R.SPECIALTY_CAPITAL if gn['type'] == 'capitale' else 1)
+            for r in ('livres', 'vivres', 'recrues', 'industrie', 'fer', 'bois'):
+                if r in sp:
+                    out[r] += sp[r] * k
+            if sp.get('boost') == 'port':
+                trade += sp.get('livres', 0) * k
         if n['id'] in self.geo.ports and gn['type'] != 'fort':
             out['livres'] += R.QUAI_LIVRES
             trade += R.QUAI_LIVRES
@@ -363,6 +373,8 @@ class Game:
         ter = self.geo.terrain_at(gn['x'], gn['y'])
         if ter in (T_LANDE, T_MARAIS):
             mult *= 1 + self.mod(code, 'lande_prod')
+        if TERRAIN[ter][0] in ('Montagne', 'Collines', 'Haute montagne'):
+            mult *= 1 + self.mod(code, 'mountain_prod')
         return {k: v * mult for k, v in out.items()}
 
     def compute_income(self):
@@ -499,7 +511,7 @@ class Game:
             # recherche
             for b, cur in f['research'].items():
                 if cur:
-                    cur['left'] -= dt
+                    cur['left'] -= dt * (1 + self.mod(code, 'research_speed'))
                     if cur['left'] <= 0:
                         f['research'][b] = None
                         f['techs'].append(cur['tech'])
@@ -548,7 +560,7 @@ class Game:
         return False
 
     def granary_cap(self, code):
-        return 600 + 70 * self.factions[code].get('_nn', 1)
+        return (600 + 70 * self.factions[code].get('_nn', 1)) * (1 + self.mod(code, 'granary'))
 
     def replenish(self, code, regs, dt, rate):
         f = self.factions[code]
@@ -826,15 +838,19 @@ class Game:
     def edge_cost(self, code, e, frm=None, speed=22.0):
         """Coût d'un tronçon en « km de route équivalents » pour une armée marchant à `speed` km/j."""
         if e.get('kind') == 'water':
-            return e['len'] * 22.0 / max(5.0, self.water_speed(e, frm, estimate=True))
+            return e['len'] * 22.0 / max(5.0, self.water_speed(e, frm, estimate=True, code=code))
         sp = 1.15 if e['royal'] else 1.0
         c = e['len'] / sp
         if e['rrank'] == 1 and not self.mod(code, 'bridges'):
             c += 8 if not e['ferry'] else 20
         return c * 22.0 / max(5.0, speed)
 
-    def water_speed(self, e, frm, x=None, y=None, estimate=False):
+    def water_speed(self, e, frm, x=None, y=None, estimate=False, code=None):
         """Vitesse des gabares (km/j) : courant, crues, basses eaux d'été, tempêtes sur la côte."""
+        k = 1 + (self.mod(code, 'river_speed') if code else 0)
+        return k * self._water_speed(e, frm, x, y, estimate)
+
+    def _water_speed(self, e, frm, x=None, y=None, estimate=False):
         way = self.geo.ways[e['way']]
         if e['sea']:
             sp = R.SEA_SPEED
@@ -1157,7 +1173,7 @@ class Game:
                     continue
                 if is_water:
                     e = self.geo.edges[leg['e']]
-                    sp = max(1.0, self.water_speed(e, leg['frm'], a['x'], a['y']))
+                    sp = max(1.0, self.water_speed(e, leg['frm'], a['x'], a['y'], code=a['owner']))
                     remaining = e['len'] - leg['pos']
                     step = sp * budget
                     if step >= remaining:
@@ -1409,6 +1425,7 @@ class Game:
             rate = (0.02 + 0.06 * n_art * power_art) / max(1, n['fort'])
             if any(self.gen_trait(a) == 'artilleur' for a in bes):
                 rate *= 1.4
+            rate *= 1 + self.mod(s['by'], 'siege_speed')
             s['dmg'] = min(1.0, s['dmg'] + rate * dt)
             n['milice'] = max(0.0, n['milice'] - n['milice'] * 0.015 * dt)
             for r in n['garrison']:
@@ -1808,13 +1825,15 @@ class Game:
                     rp *= (0.75 + 0.25 * a['supply']) * R.PHASE_W[phase][cls] * fb
                     if cls == 'inf':
                         if fm == 'ligne':
-                            rp *= 1.2 if phase == 'fusillade' else 1.05
+                            rp *= 1.2 + self.mod(owner, 'ligne_fire') if phase == 'fusillade' else 1.05
                         elif fm == 'colonne':
-                            rp *= 1.25 if phase == 'charge' else 0.85
+                            rp *= 1.25 + self.mod(owner, 'colonne_charge') if phase == 'charge' else 0.85
                         elif fm == 'carre':
-                            rp *= 0.9 * (1 + 0.6 * cav_share[1 - si])
+                            rp *= 0.9 * (1 + (0.6 + self.mod(owner, 'carre_fire')) * cav_share[1 - si])
                         elif fm == 'tirailleurs' and bt['cover']:
                             rp *= 1.15
+                    elif phase == 'charge':
+                        rp *= 1 + self.mod(owner, 'cav_charge' if cls == 'cavalerie' else 'art_charge')
                     if pl == 'artillerie':
                         if cls == 'artillerie' and phase != 'charge':
                             rp *= 1.4
@@ -1844,7 +1863,7 @@ class Game:
                             rp *= 1.8 + self.mod(owner, 'ambush') + (0.25 if tr == 'eclaireur' else 0)
                         elif bt['surprise'] and age < 0.2:
                             rp *= 1.3
-                    if self.t - a.get('fm_t', -9) < 0.1:
+                    if self.t - a.get('fm_t', -9) < 0.1 * max(0.2, 1 - self.mod(owner, 'fm_swift')):
                         rp *= 0.6  # réorganisation en cours
                     P[si][cls] += rp
                     men[si] += r['n']
@@ -2221,7 +2240,8 @@ class Game:
                 a['supply'] = min(1.0, a['supply'] + 0.3 * dt)
             else:
                 k = 1.8 if season == 'hiver' else (0.6 if season in ('été', 'automne') else 1.0)
-                a['supply'] = max(0.0, a['supply'] - 0.035 * k * dt * (0.5 if logi else 1.0))
+                a['supply'] = max(0.0, a['supply'] - 0.035 * k * dt * (0.5 if logi else 1.0)
+                                  * max(0.2, 1 + self.mod(code, 'supply_drain')))
             rate = 0.0
             if not a['onroad'] and a['at_node'] is None:
                 ter = self.geo.terrain_at(a['x'], a['y'])
@@ -2446,7 +2466,7 @@ class Game:
             if not f['alive']:
                 continue
             tax = f.get('tax', 0.5)
-            t = 1.0 - max(0.0, tax - 0.5) * 1.2
+            t = 1.0 - max(0.0, tax - 0.5) * 1.2 * max(0.0, 1 + self.mod(code, 'tax_unrest')) + self.mod(code, 'order')
             if f.get('famine'):
                 t -= 0.3
             if f.get('banqueroute'):
@@ -2617,6 +2637,8 @@ class Game:
         qty = max(1, min(1000, int(qty)))
         has_port = any('port' in self.geo.nodes[n['id']]['spec'] for n in self.owned_nodes(code))
         spread = (1.15, 0.85) if has_port else (1.4, 0.6)
+        m = self.mod(code, 'market')
+        spread = (max(1.02, spread[0] - m), min(0.98, spread[1] + m))
         p = self.market[res]
         r = self.factions[code]['res']
         if side == 'buy':

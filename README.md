@@ -168,7 +168,15 @@ Chaque place a un niveau de fortification, dessiné sur la carte autour de la vi
 - **Minimum garanti** : tant qu'un département tient son chef-lieu, il produit au moins 20 livres, 16 vivres, 6 fer,
   6 bois et 8 recrues par jour, modulés par ses traits (Périgord +40 % de fer, Landes +30 % de bois, Agenais +35 % de vivres…).
   Les vivres minimum suivent les saisons. Au-delà, il faut des villages, des forges, du commerce.
-- 28 technologies en quatre branches : militaire, civile, industrielle, agricole.
+- 51 technologies en quatre branches : militaire (feu de rang, feu de peloton, ordre mixte de Guibert, cuirassiers,
+  artillerie à cheval, génie…), civile (gendarmerie, cadastre, poste aux chevaux, écoles centrales, caisse d'escompte…),
+  industrielle (poudreries, forges au coke, pièces interchangeables, draperies, chantiers de gabares…)
+  et agricole (maïs, foires agricoles, gemmage, transhumance, greniers publics, conserves d'Appert…).
+- **Spécialités** : chacune des 50 villes principales a son produit phare, qui rapporte à qui la tient
+  (grands crus de Bordeaux, Sauternes et Saint-Émilion, pruneaux d'Agen, truffes de Périgueux, jambons d'Orthez,
+  chocolatiers de Bayonne, résine de Mimizan, tabacs de Tonneins, sel de Salies…). Un chef-lieu en produit deux fois plus.
+  Des technologies les améliorent : chais (vins), foires agricoles (terroir), gemmage (résine), draperies (manufactures),
+  ports et gabares (pêche et négoce). Aux vendanges, les grands vins comptent double.
 - Chaque département a ses avantages et inconvénients (négoce bordelais, forges du Périgord, échassiers landais,
   grenier agenais, montagnards basques et béarnais).
 - Diplomatie : guerre, paix (avec tribut), alliance, accord commercial, présents, échanges de ressources, exigence de soumission.

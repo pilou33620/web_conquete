@@ -583,6 +583,7 @@ export class MapView {
       const t = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' }[n.type];
       const men = ns.m != null ? ns.m + (ns.g ? ns.g.reduce((s, r) => s + r[2], 0) : (ns.gm || 0)) : null;
       lines = [n.name, `${t}, ${own(ns.o)}`];
+      if (n.star) lines.push(`★ ${n.star[1]}`);
       if (men != null) lines.push(`Défenseurs : ${fmtMen(men)}`);
       if (ns.sg) lines.push(`Siège : ${Math.round(ns.sg.dmg * 100)} %`);
     } else if (hit.kind === 'army') {
