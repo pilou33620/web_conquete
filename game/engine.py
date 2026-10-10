@@ -145,6 +145,13 @@ class Game:
     def friendly(self, a, b):
         return a == b or self.status(a, b) == 'alliance'
 
+    def hostile(self, a, b):
+        """Deux camps qui peuvent se battre : en guerre, ou l'un des deux est la milice d'une place indépendante."""
+        return a != b and (R.NEUTRAL in (a, b) or self.at_war(a, b))
+
+    def valid_node(self, nid):
+        return isinstance(nid, int) and 0 <= nid < len(self.nodes)
+
     def node_xy(self, nid):
         n = self.geo.nodes[nid]
         return n['x'], n['y']
@@ -192,6 +199,7 @@ class Game:
         self.update_spies()
         self.update_hidden()
         self.detect_contacts()
+        self.settle_conflicts()
         self.update_sieges(dt)
         self.update_battles(dt)
         self.attrition(dt)
@@ -428,7 +436,8 @@ class Game:
             inc = f['income']
             r['livres'] += inc['livres'] * dt
             r['vivres'] += inc['vivres'] * dt
-            r['recrues'] = min(r['recrues'] + inc['recrues'] * dt, 3000 + 250 * len(self.owned_nodes(code)))
+            # au-delà du plafond des casernes, plus de nouvelles recrues (mais on ne perd pas celles reçues par échange)
+            r['recrues'] = min(r['recrues'] + inc['recrues'] * dt, max(self.recruit_cap(code), r['recrues']))
             gross_fer = inc['fer'] + f['_arm_rate'] + 0.5 * f['_tool_rate'] * (1 + self.mod(code, 'tools_cost'))
             gross_bois = inc['bois'] + 0.5 * f['_arm_rate'] + f['_tool_rate'] * (1 + self.mod(code, 'tools_cost'))
             r['fer'] += gross_fer * dt
@@ -500,6 +509,9 @@ class Game:
         for code, f in self.factions.items():
             if f['alive'] and f['overlord']:
                 pass
+
+    def recruit_cap(self, code):
+        return 3000 + 250 * len(self.owned_nodes(code))
 
     def _granary_dirty(self, code):
         f = self.factions[code]
@@ -963,15 +975,27 @@ class Game:
             return False, "Armée introuvable."
         if a['state'] == 'battle':
             return False, "Cette armée est engagée dans une bataille (ordonnez la retraite)."
-        if mode:
-            a['mode'] = mode
+        if mode not in (None, 'route', 'champs'):
+            return False, "Itinéraire inconnu."
         if node is not None:
             node = int(node)
+            if not self.valid_node(node):
+                return False, "Lieu inconnu."
             o = self.nodes[node]['owner']
             if o not in (code, R.NEUTRAL) and self.status(code, o) == 'paix':
                 return False, f"{self.geo.nodes[node]['name']} appartient à {R.FACTIONS[o]['name']} (en paix). Déclarez la guerre d'abord."
-        if a['state'] == 'siege':
-            self.end_siege_for(a)
+        elif x is None or y is None or not (math.isfinite(x) and math.isfinite(y)):
+            return False, "Destination invalide."
+        # un ordre refusé ne doit ni lever le siège en cours ni changer l'itinéraire choisi
+        old_mode = a['mode']
+        if mode:
+            a['mode'] = mode
+        ok, msg = self._order_move(code, a, x, y, node)
+        if not ok:
+            a['mode'] = old_mode
+        return ok, msg
+
+    def _order_move(self, code, a, x, y, node):
         if a['mode'] == 'route':
             if node is None:
                 node_near = self.nearest_node(x, y, maxd=6)
@@ -1013,6 +1037,8 @@ class Game:
                 return False, "Destination inaccessible à travers champs (fleuve sans pont, eau ou hors région)."
             a['path'] = pre + [dict(kind='off', pts=[list(p) for p in pts], i=1)]
             a['target'] = dict(node=node) if node is not None else dict(x=x, y=y)
+        if a['state'] == 'siege':
+            self.end_siege_for(a)
         a['state'] = 'move'
         a['assault'] = False
         if a['stance'] == 'embuscade':
@@ -1028,7 +1054,8 @@ class Game:
             return False, "Armée introuvable."
         if a['state'] == 'battle':
             return False, "Cette armée est engagée dans une bataille (ordonnez la retraite)."
-        pts = [(float(p[0]), float(p[1])) for p in pts if len(p) >= 2][:400]
+        pts = [(float(p[0]), float(p[1])) for p in pts if isinstance(p, (list, tuple)) and len(p) >= 2][:400]
+        pts = [p for p in pts if math.isfinite(p[0]) and math.isfinite(p[1])]
         if not pts:
             return False, "Tracé vide."
         pre = self.boat_prefix(a)
@@ -1258,6 +1285,15 @@ class Game:
         if a['state'] == 'retreat':
             a['path'] = []
             a['state'] = 'idle'
+        # une bataille s'y livre déjà : on rejoint les assaillants s'ils sont des nôtres, sinon on attend
+        bt = next((b for b in self.battles.values() if b['node'] == nid), None)
+        if bt:
+            a['path'] = []
+            if self.friendly(code, bt['sides'][0]['owner']) and self.hostile(code, bt['sides'][1]['owner']):
+                self.join_battle(a, bt, 0)
+            else:
+                a['state'] = 'idle'
+            return True
         # nœud hostile ou neutre : combat ou siège
         defense = self.node_defense_power(nid)
         gn = self.geo.nodes[nid]
@@ -1320,7 +1356,9 @@ class Game:
             nid = n['id']
             bes = [a for a in self.armies.values() if a['at_node'] == nid and a['state'] == 'siege' and a['owner'] == s['by']]
             if not bes:
-                n['siege'] = None
+                # assiégeants occupés à repousser une armée de secours : le siège est suspendu, pas levé
+                if not any(a['at_node'] == nid and a['owner'] == s['by'] and a['state'] == 'battle' for a in self.armies.values()):
+                    n['siege'] = None
                 continue
             if s.get('occupy'):
                 gtyp = self.geo.nodes[nid]['type']
@@ -1464,18 +1502,66 @@ class Game:
                     continue
                 for si, side in enumerate(bt['sides']):
                     other = bt['sides'][1 - si]
-                    if self.friendly(a['owner'], side['owner']) and self.at_war(a['owner'], other['owner']):
-                        side['armies'].append(a['id'])
-                        side['men0'] += self.army_men(a)
-                        a['state'] = 'battle'
-                        a['battle'] = bt['id']
-                        a['path'] = []
-                        if a['owner'] != self.player or a.get('tac_auto', True):
-                            self.choose_tactics(a, bt, si)
-                        if a['owner'] == self.player:
-                            self.log('battle', f"{a['name']} rejoint la bataille {self.place_name(bt['x'], bt['y'])}.",
-                                     bt['x'], bt['y'], who=a['owner'])
+                    if self.friendly(a['owner'], side['owner']) and self.hostile(a['owner'], other['owner']):
+                        self.join_battle(a, bt, si)
                         break
+
+    def join_battle(self, a, bt, si):
+        side = bt['sides'][si]
+        if a['id'] in side['armies']:
+            return
+        side['armies'].append(a['id'])
+        side['men0'] += self.army_men(a)
+        a['state'] = 'battle'
+        a['battle'] = bt['id']
+        a['path'] = []
+        if a['owner'] != self.player or a.get('tac_auto', True):
+            self.choose_tactics(a, bt, si)
+        if a['owner'] == self.player:
+            self.log('battle', f"{a['name']} rejoint la bataille {self.place_name(bt['x'], bt['y'])}.",
+                     bt['x'], bt['y'], who=a['owner'])
+
+    def dissolve_battle(self, bt):
+        """Fin sans vainqueur : paix signée, capitulation ou place passée à un autre camp en cours de combat."""
+        for side in bt['sides']:
+            for aid in side['armies']:
+                a = self.armies.get(aid)
+                if a and a['battle'] == bt['id']:
+                    a['battle'] = None
+                    a['assault'] = False
+                    a['state'] = 'move' if a['path'] else 'idle'
+                    a['grace'] = self.t + 1.0
+        self.battles.pop(bt['id'], None)
+
+    def settle_conflicts(self):
+        """Remet d'aplomb batailles, sièges et armées que la diplomatie ou une prise ont laissés sans objet."""
+        for bt in list(self.battles.values()):
+            s0, s1 = bt['sides']
+            if not self.hostile(s0['owner'], s1['owner']) or \
+                    (s1['node'] is not None and self.nodes[s1['node']]['owner'] != s1['owner']):
+                self.dissolve_battle(bt)
+        for n in self.nodes:
+            s = n['siege']
+            if s and (s['by'] not in self.factions or not self.factions[s['by']]['alive'] or not self.hostile(s['by'], n['owner'])):
+                n['siege'] = None
+        battle_nodes = {bt['node'] for bt in self.battles.values() if bt['node'] is not None}
+        for a in list(self.armies.values()):
+            nid = a['at_node']
+            if nid is None or a['state'] not in ('idle', 'siege') or a['battle'] or not a['regs'] or a.get('boat'):
+                continue
+            n = self.nodes[nid]
+            if n['siege'] and n['siege']['by'] == a['owner'] and a['state'] == 'siege':
+                continue
+            if a['state'] == 'idle' and not self.hostile(a['owner'], n['owner']):
+                continue
+            if nid in battle_nodes or (n['siege'] and n['siege']['by'] != a['owner']) or self.t < a.get('grace', 0):
+                a['state'] = 'idle'
+                continue
+            # armée restée sur une place hostile sans siège (relève battue, siège levé...) : on reprend comme à l'arrivée
+            a['state'] = 'idle'
+            self.arrive_node(a, nid)
+            if a['state'] == 'siege' or a['battle']:
+                battle_nodes.update(bt['node'] for bt in self.battles.values() if bt['node'] is not None)
 
     def start_battle(self, att, de, gx, gy, node=None, ambush=False, surprise=False):
         bid = self.nid('b')
@@ -1639,6 +1725,11 @@ class Game:
         for bid in list(self.battles):
             bt = self.battles.get(bid)
             if not bt:
+                continue
+            s0, s1 = bt['sides']
+            if not self.hostile(s0['owner'], s1['owner']) or \
+                    (s1['node'] is not None and self.nodes[s1['node']]['owner'] != s1['owner']):
+                self.dissolve_battle(bt)  # capitulation ou paix survenue pendant ce même pas de temps
                 continue
             age = self.t - bt['t0']
             phase = self.battle_phase(bt)
@@ -1854,6 +1945,19 @@ class Game:
         W, L = bt['sides'][winner], bt['sides'][loser]
         gname = self.place_name(bt['x'], bt['y'])
         has_cav = any(r['type'] == 'cavalerie' for _, r, _ in self.side_units(bt, winner))
+        if not disengage and L['node'] is not None:
+            # prise de la place, avant la retraite des vaincus (sinon ils se replieraient dans la place perdue)
+            nid = L['node']
+            self.nodes[nid]['milice'] = 0
+            self.nodes[nid]['garrison'] = []
+            self.capture(nid, W['owner'])
+            for aid in W['armies']:
+                a = self.armies.get(aid)
+                if a:
+                    a['at_node'] = nid
+                    a['x'], a['y'] = self.node_xy(nid)
+                    a['edge'] = None
+                    a['onroad'] = True
         for si in (0, 1):
             for aid in bt['sides'][si]['armies']:
                 a = self.armies.get(aid)
@@ -1903,22 +2007,12 @@ class Game:
                 st = self.factions[side['owner']]['stats']
                 st['won' if si == winner else 'lost'] += 1
                 st['killed'] += bt['sides'][1 - si]['lost']
-        # prise de la place ?
-        if L['node'] is not None:
-            nid = L['node']
-            self.nodes[nid]['milice'] = 0
-            self.nodes[nid]['garrison'] = []
-            self.capture(nid, W['owner'])
-            for aid in W['armies']:
-                a = self.armies.get(aid)
-                if a:
-                    a['at_node'] = nid
-                    a['x'], a['y'] = self.node_xy(nid)
-        elif W['node'] is not None:
+        if W['node'] is not None:
+            # la place a tenu : le siège des vaincus est levé (pas celui d'un autre camp)
             n = self.nodes[W['node']]
-            if n['siege']:
+            if n['siege'] and n['siege']['by'] == L['owner']:
                 n['siege'] = None
-        del self.battles[bt['id']]
+        self.battles.pop(bt['id'], None)
         if self.player in (W['owner'], L['owner']) or any(
                 self.friendly(self.player, s['owner']) for s in (W, L)):
             won = self.friendly(self.player, W['owner'])
@@ -2147,7 +2241,7 @@ class Game:
             if not b.get('boat') or b['at_node'] is not None or not b['edge'] or not b['regs']:
                 continue
             e = self.geo.edges[b['edge']['e']]
-            if e['sea']:
+            if e.get('kind') != 'water' or e.get('sea'):
                 continue
             fire, who = 0.0, None
             for x in self.armies.values():
@@ -2301,8 +2395,11 @@ class Game:
 
     # ------------------------------------------------------------------ impôts et ordre public
     def set_tax(self, code, v):
+        v = float(v)
+        if not math.isfinite(v):
+            return False, "Niveau d'impôts invalide."
         f = self.factions[code]
-        f['tax'] = max(0.0, min(1.0, round(float(v), 2)))
+        f['tax'] = max(0.0, min(1.0, round(v, 2)))
         self._dirty_income = True
         return True, f"Impôts : {R.tax_label(f['tax']).lower()}."
 
@@ -2326,12 +2423,14 @@ class Game:
         n = self.nodes[nid]
         if n['owner'] != code:
             return False, "Garnison introuvable."
+        if not isinstance(reg_ids, (list, tuple)):
+            return False, "Choisissez au moins un régiment."
         regs = [r for r in n['garrison'] if r['id'] in reg_ids]
         if not regs:
             return False, "Choisissez au moins un régiment."
         if into:
             a = self.armies.get(into)
-            if not a or a['owner'] != code or a['at_node'] != nid or a['state'] not in ('idle',):
+            if not a or a['owner'] != code or a['at_node'] != nid or a['state'] not in ('idle',) or a.get('boat'):
                 return False, "L'armée doit être sur place et au repos."
             a['regs'] += regs
         else:
@@ -2354,6 +2453,10 @@ class Game:
         a = self.armies.get(aid)
         if not a or a['owner'] != code or a['state'] in ('battle',):
             return False, "Impossible de scinder cette armée maintenant."
+        if a.get('boat') and a['at_node'] is None:
+            return False, "Impossible de scinder une armée embarquée : attendez qu'elle accoste."
+        if not isinstance(reg_ids, (list, tuple)):
+            return False, "Choisissez une partie des régiments."
         regs = [r for r in a['regs'] if r['id'] in reg_ids]
         if not regs or len(regs) == len(a['regs']):
             return False, "Choisissez une partie des régiments."
@@ -2460,19 +2563,32 @@ class Game:
         return True, "Assaut ordonné !"
 
     def set_slider(self, code, v):
-        self.factions[code]['slider'] = max(0.0, min(1.0, float(v)))
+        v = float(v)
+        if not math.isfinite(v):
+            return False, "Réglage invalide."
+        self.factions[code]['slider'] = max(0.0, min(1.0, v))
         self._dirty_income = True
         return True, "Production ajustée."
 
     def market_trade(self, code, res, qty, side):
         if res not in self.market:
             return False, "Ressource non négociable."
+        if side not in ('buy', 'sell'):
+            return False, "Opération inconnue."
+        qty = float(qty)
+        if not math.isfinite(qty):
+            return False, "Quantité invalide."
         qty = max(1, min(1000, int(qty)))
         has_port = any('port' in self.geo.nodes[n['id']]['spec'] for n in self.owned_nodes(code))
         spread = (1.15, 0.85) if has_port else (1.4, 0.6)
         p = self.market[res]
         r = self.factions[code]['res']
         if side == 'buy':
+            if res == 'recrues':
+                room = int(self.recruit_cap(code) - r['recrues'])
+                if room <= 0:
+                    return False, "Vos casernes sont pleines : aucune recrue de plus ne peut être accueillie."
+                qty = min(qty, room)
             cost = qty * p * spread[0]
             if r['livres'] < cost:
                 return False, "Livres insuffisantes."

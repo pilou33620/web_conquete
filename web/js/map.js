@@ -432,7 +432,12 @@ export class MapView {
       const now = performance.now();
       const cancel = e.type === 'pointercancel';
       if (g.kind === 'pinch') {
-        if (pts.size === 1) {
+        if (pts.size === 2) {
+          // trois doigts -> deux : on repart des deux restants pour que le zoom ne saute pas
+          const [a, b] = [...pts.values()];
+          const mid = [(a.x + b.x) / 2, (a.y + b.y) / 2];
+          Object.assign(g, { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: this.cam.z, w: this.toWorld(mid[0], mid[1]), mid0: mid });
+        } else if (pts.size === 1) {
           const [p] = [...pts.values()];
           const quick = !g.moved && now - g.t0 < 300;
           g = { kind: quick ? 'twotap' : 'pan', sx: p.x, sy: p.y, cx: this.cam.x, cy: this.cam.y, moved: !quick, type: 'touch',
@@ -506,14 +511,15 @@ export class MapView {
     this.moveTo(w[0] - (sx - this.vw / 2) / z, w[1] - (sy - this.vh / 2) / z, z);
   }
 
-  hitTest(sx, sy, type = 'mouse') {
+  // opt.skipArmy(a) : ignore ces armées (ordre de marche : ses propres jetons ne doivent pas masquer la ville dessous)
+  hitTest(sx, sy, type = 'mouse', opt = {}) {
     const z = this.cam.z;
     const pad = type === 'touch' ? 12 : type === 'pen' ? 3 : 0;
     let best = null;
     const st = this.state || this.preview;
     for (const a of st.armies) {
       const d = this.disp.get(a.id);
-      if (!d) continue;
+      if (!d || (opt.skipArmy && opt.skipArmy(a))) continue;
       const [x, y] = this.armyScreen(d);
       const r = (z >= 5.5 ? Math.max(20, z * 2.4) : 22) + pad;
       const dd = Math.hypot(sx - x, sy - y);
@@ -613,6 +619,8 @@ export class MapView {
   setState(st) {
     const prev = this.state;
     this.state = st;
+    // la neige des sommets est peinte dans les tuiles : on les repeint en entrant ou en sortant de l'hiver
+    if ((st.season === 'hiver') !== (this.season === 'hiver')) this.invalidateTiles();
     this.season = st.season;
     const key = st.nodes.map(n => n.o).join(',');
     if (key !== this.ownersKey) {

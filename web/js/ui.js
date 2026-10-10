@@ -83,10 +83,12 @@ export class UI {
       const el = this.$(id);
       el.addEventListener('pointerdown', () => { this.pressing = true; });
     }
-    window.addEventListener('pointerup', () => { setTimeout(() => { this.pressing = false; }, 30); });
+    // un défilement au doigt dans le panneau finit par pointercancel, pas pointerup
+    for (const t of ['pointerup', 'pointercancel']) window.addEventListener(t, () => { setTimeout(() => { this.pressing = false; }, 30); });
     // infobulles des ressources
     const tt = this.$('tooltip');
     this.$('tb-res').addEventListener('pointerover', e => {
+      if (e.pointerType !== 'mouse') return;   // au doigt, c'est le clic qui ouvre et referme l'infobulle
       const r = e.target.closest('.res');
       if (!r || !this.st) return;
       tt.innerHTML = this.resTip(r.dataset.res);
@@ -114,7 +116,7 @@ export class UI {
   }
 
   onKey(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || e.target.isContentEditable) return;
     if (!this.st) return;
     if (e.key === ' ') {
       e.preventDefault();
@@ -131,7 +133,8 @@ export class UI {
 
   // ------------------------------------------------------------------ commandes serveur
   async cmd(body, toastOk = true) {
-    const r = await this.api.post('/api/cmd', body);
+    let r;
+    try { r = await this.api.post('/api/cmd', body); } catch (e) { r = { ok: false, msg: 'Serveur injoignable : ordre non transmis.' }; }
     if (r.msg && (!r.ok || toastOk)) this.toast(r.msg, r.ok ? (r.pending ? '' : 'good') : 'bad');
     this.onRefresh && this.onRefresh();
     return r;
@@ -243,7 +246,7 @@ export class UI {
       if (p.action === 'paix' && p.amount) detail = `Il offre un tribut de ${fmt(p.amount)} livres.`;
       if (p.action === 'commerce') detail = 'Chacun gagnera des livres et la ressource phare de l’autre.';
       if (p.action === 'alliance') detail = 'Vision partagée et entrée en guerre à vos côtés si vous êtes attaqué.';
-      return `<div class="sheet proposal" style="border-left-color:${f.color}"><div class="pt">${esc(f.name)} ${ACTION_LABEL[p.action] || p.action}</div>
+      return `<div class="sheet proposal" style="border-left-color:${f.color}"><div class="pt">${esc(f.name)} ${esc(ACTION_LABEL[p.action] || p.action)}</div>
         <p>${detail}</p><div class="btns"><button class="btn primary" data-act="answer" data-id="${p.id}" data-v="1">Accepter</button>
         <button class="btn" data-act="answer" data-id="${p.id}" data-v="0">Refuser</button></div></div>`;
     }).join('');
@@ -266,6 +269,7 @@ export class UI {
 
   // ------------------------------------------------------------------ sélection
   select(sel) {
+    if (!sel || !this.sel || sel.kind !== this.sel.kind || sel.id !== this.sel.id) this.stopTargeting();
     this.sel = sel;
     this.map.selection = sel;
     this.checked.clear();
@@ -304,6 +308,7 @@ export class UI {
     if (!this.st) return;
     const cur = this.sel && this.sel.kind === 'army' ? this.armyById(this.sel.id) : null;
     if (cur && this.isMine(cur.o)) {
+      e = this.moveTarget(e);
       const hit = e.hit;
       if (hit && hit.kind === 'army') {
         const a = this.armyById(hit.id);
@@ -335,13 +340,22 @@ export class UI {
     let len = 0;
     for (let i = 1; i < tr.length; i++) len += Math.hypot(tr[i][0] - tr[i - 1][0], tr[i][1] - tr[i - 1][1]);
     this.pendingTrail = { army: a.id, pts: tr.map(p => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]) };
-    const end = e.end;
+    let end = e.end;
     if (end.hit && end.hit.kind === 'army' && end.hit.id === a.id) return;
+    end = this.moveTarget(end);
     const enemy = end.hit && end.hit.kind === 'army' ? this.armyById(end.hit.id) : null;
     this.showBubble(end, a, enemy && !this.isMine(enemy.o) ? enemy : null, len > 1.5);
   }
 
+  // ordre de marche : nos propres jetons (décalés sous leur ville) ne doivent pas masquer la ville ou le point visé
+  moveTarget(e) {
+    const h = e.hit && e.hit.kind === 'army' ? this.armyById(e.hit.id) : null;
+    if (!h || !this.isMine(h.o) || e.sx == null) return e;
+    return { ...e, hit: this.map.hitTest(e.sx, e.sy, e.type, { skipArmy: b => this.isMine(b.o) }) };
+  }
+
   orderMove(a, e, mode) {
+    e = this.moveTarget(e);
     const body = { cmd: 'move', army: a.id, mode };
     if (e.hit && e.hit.kind === 'node') body.node = e.hit.id;
     else { body.x = e.x; body.y = e.y; }
@@ -365,6 +379,12 @@ export class UI {
     b.style.left = clampN(e.sx, 110, window.innerWidth - 110) + 'px';
     b.style.top = Math.max(e.sy, 230) + 'px';
     b.hidden = false;
+    // avec cinq boutons, la bulle peut sortir de l'écran : on la ramène entière dans la fenêtre
+    const r = b.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+    const dx = r.left < 6 ? 6 - r.left : r.right > W - 6 ? Math.max(6 - r.left, W - 6 - r.right) : 0;
+    const dy = r.top < 6 ? 6 - r.top : r.bottom > H - 6 ? Math.max(6 - r.top, H - 6 - r.bottom) : 0;
+    if (dx) b.style.left = (parseFloat(b.style.left) + dx) + 'px';
+    if (dy) b.style.top = (parseFloat(b.style.top) + dy) + 'px';
   }
   hideBubble() { this.$('bubble').hidden = true; }
   stopTargeting() { this.targeting = null; this.map.cv.classList.remove('targeting'); }
@@ -799,12 +819,15 @@ export class UI {
   renderModal(force = false) {
     const k = this.modal;
     if (!k || !this.st) return;
+    const card = this.$('modal').firstElementChild;
+    // saisie en cours (quantité, montant…) : ne pas reconstruire, sinon le champ perd le focus à chaque frappe
+    const ae = document.activeElement;
+    if (!force && ae && card.contains(ae) && (/^(SELECT|TEXTAREA)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !['range', 'checkbox'].includes(ae.type)))) return;
     const fn = { tech: this.techModal, diplo: this.diploModal, commerce: this.commerceModal, production: this.prodModal,
                  journal: this.journalModal, menu: this.menuModal, fin: this.endModal }[k];
     const [html, sig] = fn.call(this);
     if (!force && sig === this.modalSig) return;
     this.modalSig = sig;
-    const card = this.$('modal').firstElementChild;
     const scroll = card.scrollTop;
     // conserve les saisies
     const vals = {};
@@ -974,7 +997,7 @@ export class UI {
     const me = this.st.me;
     const f = this.rules.factions[me.code];
     const def = `${f.name} ${this.st.date.split(' ').slice(1).join(' ')}`;
-    const saves = (this.saves || []).map(s => `<div class="save-item"><span>${s.auto ? '<i>Sauvegarde automatique</i>' : esc(s.name)}<br><span class="muted small">${s.faction || ''}, ${s.date || ''}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
+    const saves = (this.saves || []).map(s => `<div class="save-item"><span>${s.auto ? '<i>Sauvegarde automatique</i>' : esc(s.name)}<br><span class="muted small">${esc(s.faction || '')}, ${esc(s.date || '')}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
     const html = `<h2 class="m-title">Partie</h2><p class="m-sub">${f.name}, ${this.st.date}. Victoires ${me.stats.won}, défaites ${me.stats.lost}, places prises ${me.stats.captured}.</p>
       <div class="two"><div>
         <h3 class="section-t" style="border:0;padding:0">Sauvegarder</h3>
@@ -1050,7 +1073,7 @@ export class UI {
         <div class="traits">${f.pros.map(p => `<div>${p}</div>`).join('')}${f.cons.map(p => `<div class="con">${p}</div>`).join('')}</div>
       </button>`).join('');
     const diffs = Object.entries(this.rules.difficulty).map(([k, l]) => `<button class="${k === this.startDiff ? 'on' : ''}" data-act="pick-diff" data-v="${k}">${l}</button>`).join('');
-    const saves = (info.saves || []).slice(0, 5).map(s => `<div class="save-item"><span>${s.auto ? '<i>Sauvegarde automatique</i>' : esc(s.name)}<br><span class="muted small">${s.faction || ''}, ${s.date || ''}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
+    const saves = (info.saves || []).slice(0, 5).map(s => `<div class="save-item"><span>${s.auto ? '<i>Sauvegarde automatique</i>' : esc(s.name)}<br><span class="muted small">${esc(s.faction || '')}, ${esc(s.date || '')}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
     this.$('start').innerHTML = `<div class="start-side">
       <div class="cartouche"><h1>Conquête</h1><div class="campaign">Aquitaine, 1790</div><p>L’Assemblée vient de créer les départements. Choisissez le vôtre, ralliez ses villages, puis prenez les chefs-lieux voisins par les armes, le commerce ou la diplomatie.</p></div>
       ${info.running ? '<button class="btn primary" data-act="resume">Reprendre la partie en cours</button>' : ''}

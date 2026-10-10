@@ -36,6 +36,8 @@ def declare_war(game, a, b, quiet=False):
     fa = game.factions[a]
     if fa['overlord']:
         return False, "Un vassal ne déclare pas la guerre seul."
+    if game.factions[b]['overlord'] == a:
+        return False, f"{fn(b)} est votre vassal : un lien de vassalité ne se rompt pas ainsi."
     if b in fa['truce']:
         return False, f"Une trêve avec {fn(b)} court jusqu'au {game.date_str(fa['truce'][b])}."
     was_ally = game.status(a, b) == 'alliance'
@@ -231,12 +233,16 @@ def act(game, frm, to, action, amount=0, give=None, get=None):
         game.factions[to]['rel'][frm] = min(100, game.factions[to]['rel'][frm] + gain)
         return True, f"{fn(to)} apprécie votre présent (+{gain:.0f} relation)."
     if action == 'echange':
-        if not give or not get:
+        if not give or not get or len(give) != 2 or len(get) != 2:
             return False, "Échange incomplet."
+        if give[0] not in BASE_VALUE or get[0] not in BASE_VALUE or give[0] == get[0]:
+            return False, "Échange invalide."
         give = (give[0], max(1, int(give[1])))
         get = (get[0], max(1, int(get[1])))
         if f['res'].get(give[0], 0) < give[1]:
             return False, "Stock insuffisant."
+        if give[0] == 'livres' and amount + give[1] > f['res']['livres']:
+            return False, "Livres insuffisantes pour l'échange et le tribut."
     if to == game.player:
         game.proposals.append(dict(id=game.nid('p'), frm=frm, action=action, amount=amount, give=give, get=get,
                                    expires=game.t + 15, date=game.date_str()))
@@ -280,14 +286,25 @@ def answer(game, pid, accept):
     game.proposals.remove(p)
     frm = p['frm']
     me = game.player
+    if not game.factions[frm]['alive']:
+        return False, f"{fn(frm)} n'existe plus : sa proposition tombe."
     if not accept:
         game.factions[frm]['rel'][me] = max(-100, game.factions[frm]['rel'][me] - 4)
         return True, "Proposition refusée."
+    ff = game.factions[frm]['res']
+    give_l = p['give'][1] if p['action'] == 'echange' and p['give'][0] == 'livres' else 0
+    if p['amount'] and ff['livres'] < p['amount'] + give_l:
+        return False, f"{fn(frm)} n'a plus de quoi payer le tribut promis."
     if p['action'] == 'echange':
         (gr, gq), (wr, wq) = p['give'], p['get']
-        if game.factions[me]['res'].get(wr, 0) < wq or game.factions[frm]['res'].get(gr, 0) < gq:
+        if game.factions[me]['res'].get(wr, 0) < wq or ff.get(gr, 0) < gq:
             return False, "Les stocks ne permettent plus cet échange."
-    if p['action'] == 'paix' and not game.at_war(me, frm):
+    st = game.status(me, frm)
+    if p['action'] == 'paix' and st != 'guerre':
         return False, "Nous ne sommes plus en guerre."
+    if p['action'] in ('alliance', 'commerce', 'echange') and st == 'guerre':
+        return False, "Nous sommes en guerre : cette proposition n'a plus lieu d'être."
+    if p['action'] == 'alliance' and st == 'alliance':
+        return False, "Déjà alliés."
     apply(game, frm, me, p['action'], p['amount'], p['give'], p['get'])
     return True, "Proposition acceptée."

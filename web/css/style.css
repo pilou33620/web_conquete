@@ -328,7 +328,7 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
   #rail button .lbl { display: none; }
   #panel { left: 6px; right: 6px; width: auto; bottom: calc(66px + var(--safe-b)); max-height: 52%; }
   #feed { width: auto; left: 8px; right: 8px; bottom: calc(66px + var(--safe-b)); }
-  #feed .feed-item:nth-child(n+3) { display: none; }
+  #feed .feed-item:nth-last-child(n+3) { display: none; }
   #panel:not([hidden]) ~ #feed { display: none; }
   #proposals { right: 8px; left: 8px; width: auto; }
   #zoombar { top: auto; right: 8px; bottom: calc(66px + var(--safe-b) + 120px); }
@@ -359,4 +359,20 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 }
 @media (prefers-reduced-motion: reduce) {
   .feed-item, .toast { animation: none; }
+}
+/* téléphones à l'horizontale : peu de hauteur, le rail et le zoom doivent tenir à l'écran */
+@media (max-height: 520px) and (min-width: 761px) {
+  #rail { top: calc(var(--tb-h) + var(--safe-t) + 8px); gap: 5px; }
+  #rail button { width: 42px; height: 42px; }
+  #rail button svg { width: 22px; height: 22px; }
+  #rail button .lbl { display: none; }
+  #zoombar { top: calc(var(--tb-h) + var(--safe-t) + 8px); right: 60px; gap: 5px; }
+  #zoombar .zb { width: 42px; height: 42px; }
+  #proposals { right: 112px; }
+  #feed { right: 112px; width: 300px; }
+  #feed .feed-item:nth-last-child(n+4) { display: none; }
+}
+@media (max-height: 520px) and (max-width: 760px) {
+  #zoombar { flex-direction: row; top: calc(var(--tb-h) + var(--safe-t) + 8px); bottom: auto; }
+  #zoombar .zb { width: 42px; height: 42px; }
 }

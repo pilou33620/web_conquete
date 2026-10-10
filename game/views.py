@@ -12,6 +12,10 @@ DEFAULTS = dict(spies=list)
 def to_dict(g):
     d = {k: getattr(g, k) for k in SAVE_KEYS}
     d['diplo'] = [[a, b, s] for (a, b), s in g.diplo.items()]
+    d['blockade'] = sorted(g._blockade)
+    # horloges des IA : sans elles, un chargement relance aussitôt leur diplomatie et leurs propositions
+    d['ai_state'] = {c: dict(diplo_clock=ai.diplo_clock, cool=[[k[0], k[1], v] for k, v in ai.cool.items()])
+                     for c, ai in getattr(g, 'ais', {}).items()}
     d['version'] = 2
     return d
 
@@ -37,7 +41,7 @@ def from_dict(geo, d):
     g.geo = geo
     for k in SAVE_KEYS:
         setattr(g, k, d[k] if k in d else DEFAULTS[k]())
-    g._blockade = set()
+    g._blockade = set(d.get('blockade', []))
     g.diplo = {(a, b): s for a, b, s in d['diplo']}
     g.rng = random.Random(g.seed + int(g.t * 1000))
     g.speed_idx = 0
@@ -52,6 +56,10 @@ def from_dict(geo, d):
     migrate(g)
     from .ai import AI
     g.ais = {c: AI(g, c) for c in R.FACTIONS if c != g.player}
+    for c, st in (d.get('ai_state') or {}).items():
+        if c in g.ais:
+            g.ais[c].diplo_clock = st.get('diplo_clock', g.ais[c].diplo_clock)
+            g.ais[c].cool = {(o, act): t for o, act, t in st.get('cool', [])}
     for c in g.factions:
         g.recompute_mods(c)
     g.compute_income()

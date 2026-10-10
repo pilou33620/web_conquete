@@ -10,6 +10,7 @@ Aucune dépendance externe : Python 3.8+ suffit (Windows, Linux, macOS, Termux).
 import argparse
 import gzip
 import json
+import math
 import mimetypes
 import os
 import re
@@ -75,10 +76,25 @@ class App:
                         self.game.speed_idx = 0
 
     # ------------------------------------------------------------------ commandes
+    def _node(self, v):
+        nid = int(v)
+        if not self.game.valid_node(nid):
+            raise ValueError('lieu inconnu')
+        return nid
+
+    @staticmethod
+    def _num(v):
+        x = float(v)
+        if not math.isfinite(x):
+            raise ValueError('nombre invalide')
+        return x
+
     def command(self, body):
         g = self.game
         if not g:
             return dict(ok=False, msg='Aucune partie en cours.')
+        if not isinstance(body, dict):
+            return dict(ok=False, msg='Commande invalide.')
         p = g.player
         c = body.get('cmd')
         a = body.get('army')
@@ -86,12 +102,13 @@ class App:
             if c == 'speed':
                 if g.over:
                     return dict(ok=False, msg='La partie est terminée.')
-                g.speed_idx = max(0, min(len(R.SPEEDS) - 1, int(body.get('value', 0))))
+                g.speed_idx = max(0, min(len(R.SPEEDS) - 1, int(self._num(body.get('value', 0)))))
                 return dict(ok=True)
             if c == 'move':
                 x, y = body.get('x'), body.get('y')
-                return self._r(g.order_move(p, a, None if x is None else float(x), None if y is None else float(y),
-                                            body.get('node'), body.get('mode')))
+                node = body.get('node')
+                return self._r(g.order_move(p, a, None if x is None else self._num(x), None if y is None else self._num(y),
+                                            None if node is None else self._node(node), body.get('mode')))
             if c == 'path':
                 return self._r(g.order_path(p, a, body.get('pts') or []))
             if c == 'stance':
@@ -113,17 +130,17 @@ class App:
             if c == 'plan':
                 return self._r(g.set_plan(p, a, body.get('value')))
             if c == 'spy':
-                return self._r(g.spy(p, int(body['node']), body.get('value')))
+                return self._r(g.spy(p, self._node(body['node']), body.get('value')))
             if c == 'tax':
                 return self._r(g.set_tax(p, body.get('value', 0.5)))
             if c == 'form':
-                return self._r(g.form_army(p, int(body['node']), body.get('regs', []), body.get('into')))
+                return self._r(g.form_army(p, self._node(body['node']), body.get('regs', []), body.get('into')))
             if c == 'take':
-                return self._r(g.form_army(p, int(body['node']), body.get('regs', []), a))
+                return self._r(g.form_army(p, self._node(body['node']), body.get('regs', []), a))
             if c == 'recruit':
-                return self._r(g.recruit(p, int(body['node']), body.get('unit')))
+                return self._r(g.recruit(p, self._node(body['node']), body.get('unit')))
             if c == 'build':
-                return self._r(g.build(p, int(body['node']), body.get('what')))
+                return self._r(g.build(p, self._node(body['node']), body.get('what')))
             if c == 'research':
                 return self._r(g.research(p, body.get('tech')))
             if c == 'slider':
@@ -151,8 +168,11 @@ class App:
                 return dict(ok=bool(ok), msg=msg, pending=ok is None)
             if c == 'answer':
                 return self._r(D.answer(g, body.get('id'), bool(body.get('accept'))))
-        except (KeyError, ValueError, TypeError) as e:
+        except (KeyError, ValueError, TypeError, OverflowError, IndexError) as e:
             return dict(ok=False, msg=f'Commande invalide ({e}).')
+        except Exception:
+            traceback.print_exc()
+            return dict(ok=False, msg='Erreur interne : commande ignorée.')
         return dict(ok=False, msg='Commande inconnue.')
 
     @staticmethod
@@ -182,7 +202,10 @@ class App:
         name = re.sub(r'[^A-Za-z0-9_\- àâäéèêëîïôöùûüç]', '', name or '').strip()[:40] or 'partie'
         if not self.game:
             return dict(ok=False, msg='Aucune partie à sauvegarder.')
-        self.write_save(name)
+        try:
+            self.write_save(name)
+        except OSError as e:
+            return dict(ok=False, msg=f'Sauvegarde impossible ({e.strerror or e}).')
         return dict(ok=True, msg=f'Partie sauvegardée : « {name} ».')
 
     def write_save(self, name, auto=False):
@@ -236,9 +259,14 @@ class App:
         path = os.path.join(SAVES, os.path.basename(name or '') + '.json')
         if not os.path.exists(path):
             return dict(ok=False, msg='Sauvegarde introuvable.')
-        with open(path, encoding='utf-8') as f:
-            data = json.load(f)
-        self.game = V.from_dict(self.geo, data['game'])
+        try:
+            with open(path, encoding='utf-8') as f:
+                data = json.load(f)
+            game = V.from_dict(self.geo, data['game'])
+        except Exception:
+            traceback.print_exc()
+            return dict(ok=False, msg='Sauvegarde illisible ou abîmée.')
+        self.game = game
         return dict(ok=True, msg=f'Partie « {name} » chargée.')
 
 
@@ -274,9 +302,10 @@ class Handler(BaseHTTPRequestHandler):
         if n <= 0:
             return {}
         try:
-            return json.loads(self.rfile.read(n).decode('utf-8'))
+            body = json.loads(self.rfile.read(n).decode('utf-8'))
         except Exception:
             return {}
+        return body if isinstance(body, dict) else {}
 
     def do_GET(self):
         u = urlparse(self.path)
@@ -287,7 +316,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, APP.static_raw)
         if path == '/api/state':
             q = parse_qs(u.query)
-            since = int(q.get('since', ['0'])[0] or 0)
+            try:
+                since = int(q.get('since', ['0'])[0] or 0)
+            except ValueError:
+                since = 0
             with APP.lock:
                 if not APP.game:
                     return self._json(dict(game=None))
@@ -315,8 +347,11 @@ class Handler(BaseHTTPRequestHandler):
                 dept = body.get('dept')
                 if dept not in R.FACTIONS:
                     return self._json(dict(ok=False, msg='Département inconnu.'), 400)
-                seed = body.get('seed')
-                APP.game = Game(APP.geo, dept, body.get('difficulty', 'normal'), int(seed) if seed else None)
+                try:
+                    seed = int(body['seed']) if body.get('seed') else None
+                except (TypeError, ValueError, OverflowError):
+                    seed = None
+                APP.game = Game(APP.geo, dept, body.get('difficulty', 'normal'), seed)
                 return self._json(dict(ok=True))
             if path == '/api/cmd':
                 return self._json(APP.command(body))

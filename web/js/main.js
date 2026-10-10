@@ -11,21 +11,34 @@ for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEv
 document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
 
 let ui, map, seq = 0, polling = false, running = false, timer = null;
+let epoch = 0, lost = false;   // epoch : change à chaque resetUI, pour jeter les réponses d'une ancienne partie
 
 async function poll() {
   if (!running || polling) return;
   polling = true;
+  const ep = epoch;
+  let st;
   try {
-    const st = await api.get(`/api/state?since=${seq}`);
-    if (st && st.me) {
-      seq = st.seq;
-      ui.update(st);
-    }
+    st = await api.get(`/api/state?since=${seq}`);
   } catch (e) {
-    ui && ui.toast('Connexion au serveur perdue. Relancez « python server.py ».', 'bad');
+    // un seul message par coupure
+    if (!lost && ep === epoch) ui && ui.toast('Connexion au serveur perdue. Relancez « python server.py ».', 'bad');
+    lost = true;
+    return;
   } finally {
     polling = false;
   }
+  if (lost) { lost = false; ui.toast('Connexion au serveur rétablie.', 'good'); }
+  if (ep !== epoch || !running) return;
+  if (st && st.game === null) {   // le serveur n'a plus de partie : retour à l'écran de départ
+    resetUI();
+    showStart();
+    ui.toast('Aucune partie en cours sur le serveur.');
+    return;
+  }
+  if (!st || !st.me) return;
+  seq = st.seq;
+  try { ui.update(st); } catch (e) { console.error(e); }
 }
 
 function startPolling() {
@@ -35,6 +48,7 @@ function startPolling() {
 }
 
 function resetUI() {
+  epoch++;
   running = false;
   seq = 0;
   ui.st = null;
@@ -50,9 +64,10 @@ function resetUI() {
   document.getElementById('feed').dataset.sig = '';
 }
 
-async function showStart() {
-  const info = await api.get('/api/saves');
-  ui.showStart(info);
+async function showStart(info) {
+  if (!info) try { info = await api.get('/api/saves'); } catch (e) { info = null; }
+  if (!info) ui.toast('Serveur injoignable : liste des sauvegardes indisponible.', 'bad');
+  ui.showStart(info || { saves: [], running: false });
   const side = window.innerWidth > 760 ? Math.min(470, Math.max(320, window.innerWidth * 0.33)) : 0;
   map.fitAll(false, side, 20);
 }
@@ -107,8 +122,13 @@ async function boot() {
   ui.onStartTap = e => {
     if (e.hit && e.hit.kind === 'node') ui.pickDept(payload.map.nodes[e.hit.id].dept);
   };
+  let info;
+  try { info = await api.get('/api/saves'); } catch (e) {
+    lt.textContent = 'Le serveur ne répond plus. Relancez « python server.py » puis rechargez la page.';
+    return;
+  }
   document.getElementById('loading').hidden = true;
-  await showStart();
+  await showStart(info);
 }
 
 boot().then(() => { window.__ui = ui; });
