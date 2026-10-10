@@ -1,0 +1,114 @@
+import { MapView } from './map.js';
+import { UI } from './ui.js';
+
+const api = {
+  get: u => fetch(u, { cache: 'no-store' }).then(r => r.json()),
+  post: (u, b) => fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b || {}) }).then(r => r.json()),
+};
+
+// Safari (iPad) : empêche le zoom de la page entière, la carte gère elle-même le pincement
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+
+let ui, map, seq = 0, polling = false, running = false, timer = null;
+
+async function poll() {
+  if (!running || polling) return;
+  polling = true;
+  try {
+    const st = await api.get(`/api/state?since=${seq}`);
+    if (st && st.me) {
+      seq = st.seq;
+      ui.update(st);
+    }
+  } catch (e) {
+    ui && ui.toast('Connexion au serveur perdue. Relancez « python server.py ».', 'bad');
+  } finally {
+    polling = false;
+  }
+}
+
+function startPolling() {
+  running = true;
+  if (!timer) timer = setInterval(poll, 250);
+  poll();
+}
+
+function resetUI() {
+  running = false;
+  seq = 0;
+  ui.st = null;
+  ui.events = [];
+  ui.overShown = false;
+  ui.select(null);
+  ui.closeModal();
+  map.selection = null;
+  map.showPreview();
+  for (const id of ['topbar', 'rail', 'feed', 'zoombar']) document.getElementById(id).hidden = true;
+  document.getElementById('proposals').innerHTML = '';
+  document.getElementById('proposals').dataset.sig = '';
+  document.getElementById('feed').dataset.sig = '';
+}
+
+async function showStart() {
+  const info = await api.get('/api/saves');
+  ui.showStart(info);
+  const side = window.innerWidth > 760 ? Math.min(470, Math.max(320, window.innerWidth * 0.33)) : 0;
+  map.fitAll(false, side, 20);
+}
+
+async function boot() {
+  const lt = document.getElementById('loading-text');
+  let payload;
+  try {
+    payload = await api.get('/api/map');
+  } catch (e) {
+    lt.textContent = 'Impossible de joindre le serveur. Lancez « python server.py » puis rechargez la page.';
+    return;
+  }
+  lt.textContent = 'Peinture du terrain…';
+  await new Promise(r => setTimeout(r, 30));
+  map = new MapView(document.getElementById('map'), payload);
+  ui = new UI(map, payload.rules, payload.map, api);
+  ui.onRefresh = () => setTimeout(poll, 60);
+  ui.onStartGame = async (dept, difficulty) => {
+    if (!dept) return;
+    const r = await api.post('/api/new', { dept, difficulty });
+    if (!r.ok) return ui.toast(r.msg, 'bad');
+    resetUI();
+    ui.hideStart();
+    const cap = payload.map.nodes.find(n => n.type === 'capitale' && n.dept === dept);
+    map.moveTo(cap.x, cap.y, 7);
+    startPolling();
+    setTimeout(() => ui.select({ kind: 'node', id: cap.id }), 600);
+    ui.toast('La partie est en pause. Choisissez une vitesse en haut pour lancer le temps.');
+  };
+  const focusCapital = async () => {
+    const st = await api.get('/api/state');
+    if (!st || !st.me) return;
+    const cap = payload.map.nodes.find(n => n.type === 'capitale' && n.dept === st.me.code);
+    if (cap) map.moveTo(cap.x, cap.y, 5, true);
+  };
+  ui.onResume = async () => { resetUI(); ui.hideStart(); await focusCapital(); startPolling(); };
+  ui.onLoad = async name => {
+    const r = await api.post('/api/load', { name });
+    ui.toast(r.msg, r.ok ? 'good' : 'bad');
+    if (!r.ok) return;
+    resetUI();
+    ui.hideStart();
+    await focusCapital();
+    startPolling();
+  };
+  ui.onNewGame = async () => {
+    await api.post('/api/cmd', { cmd: 'speed', value: 0 });
+    resetUI();
+    showStart();
+  };
+  ui.onStartTap = e => {
+    if (e.hit && e.hit.kind === 'node') ui.pickDept(payload.map.nodes[e.hit.id].dept);
+  };
+  document.getElementById('loading').hidden = true;
+  await showStart();
+}
+
+boot().then(() => { window.__ui = ui; });

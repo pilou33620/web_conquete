@@ -1,0 +1,931 @@
+import { ICON, speedIcon, coat } from './icons.js';
+import { fmtMen } from './map.js';
+
+const fmt = n => Math.round(n).toLocaleString('fr-FR');
+const fmt1 = n => (Math.abs(n) >= 10 ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('fr-FR');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const STATUS = { paix: 'En paix', guerre: 'En guerre', alliance: 'Alliés', self: 'Vous' };
+const TYPE_LABEL = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' };
+const RES_ORDER = ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'];
+const BRANCH_LABEL = { militaire: 'Militaire', civil: 'Civil', industriel: 'Industriel', agricole: 'Agricole' };
+const ACTION_LABEL = { paix: 'propose la paix', alliance: 'propose une alliance', commerce: 'propose un accord commercial', echange: 'propose un échange' };
+
+function relLabel(r) {
+  if (r <= -50) return 'Haineux';
+  if (r <= -20) return 'Hostile';
+  if (r < 10) return 'Méfiant';
+  if (r < 40) return 'Cordial';
+  return 'Amical';
+}
+
+export class UI {
+  constructor(map, rules, mapData, api) {
+    this.map = map; this.rules = rules; this.md = mapData; this.api = api;
+    this.st = null;
+    this.sel = null;
+    this.checked = new Set();
+    this.targeting = null;
+    this.modal = null;
+    this.events = [];
+    this.lastSpeed = 1;
+    this.panelSig = '';
+    this.modalSig = '';
+    this.pressing = false;
+    this.startDept = null;
+    this.startDiff = 'normal';
+    this.overShown = false;
+    this.$ = id => document.getElementById(id);
+    this.buildStatic();
+    map.onTap = e => this.onTap(e);
+    map.onContext = e => this.onContext(e);
+    map.onLongPress = e => this.onLongPress(e);
+    map.onDragOrder = e => this.onDragOrder(e);
+    map.onGesture = () => this.hideBubble();
+    map.onDoubleTap = () => this.hideBubble();
+    map.canDragArmy = id => {
+      const a = this.armyById(id);
+      return !!(a && this.st && this.isMine(a.o) && a.st !== 'battle');
+    };
+  }
+
+  // ------------------------------------------------------------------ squelette
+  buildStatic() {
+    const sp = this.$('tb-speed');
+    sp.innerHTML = this.rules.speeds.map((v, i) => `<button data-act="speed" data-v="${i}" aria-label="${i ? 'Vitesse ' + i : 'Pause'}" title="${i ? 'Vitesse ×' + i + ' (touche ' + i + ')' : 'Pause (espace)'}">${speedIcon(i)}</button>`).join('');
+    this.$('btn-menu').innerHTML = ICON.menu;
+    this.$('btn-menu').dataset.act = 'modal';
+    this.$('btn-menu').dataset.v = 'menu';
+    const rail = [['tech', 'Technologies'], ['diplo', 'Diplomatie'], ['commerce', 'Commerce'], ['production', 'Production'], ['journal', 'Journal']];
+    this.$('rail').innerHTML = rail.map(([k, l]) => `<button data-act="modal" data-v="${k}" aria-label="${l}">${ICON[k]}<span class="lbl">${l}</span><span class="badge" id="badge-${k}" hidden></span></button>`).join('');
+    this.$('tb-res').innerHTML = RES_ORDER.map(r => `<div class="res" data-res="${r}">${ICON[r]}<span class="v" id="res-${r}">0</span><span class="d" id="inc-${r}"></span></div>`).join('');
+    document.body.addEventListener('click', e => {
+      const b = e.target.closest('[data-act]');
+      if (b && !b.disabled) { e.preventDefault(); this.action(b.dataset.act, b.dataset, b); }
+    });
+    document.body.addEventListener('change', e => {
+      const t = e.target;
+      if (t.dataset.reg) { t.checked ? this.checked.add(t.dataset.reg) : this.checked.delete(t.dataset.reg); t.closest('.reg')?.classList.toggle('sel', t.checked); }
+      if (t.dataset.act === 'slider') this.cmd({ cmd: 'slider', value: t.value / 100 }, false);
+    });
+    document.body.addEventListener('input', e => {
+      if (e.target.dataset.live === 'slider') {
+        const v = e.target.value;
+        const l = document.getElementById('slider-val');
+        if (l) l.textContent = `${v} % armes, ${100 - v} % outils`;
+      }
+    });
+    for (const id of ['panel', 'modal']) {
+      const el = this.$(id);
+      el.addEventListener('pointerdown', () => { this.pressing = true; });
+    }
+    window.addEventListener('pointerup', () => { setTimeout(() => { this.pressing = false; }, 30); });
+    // infobulles des ressources
+    const tt = this.$('tooltip');
+    this.$('tb-res').addEventListener('pointerover', e => {
+      const r = e.target.closest('.res');
+      if (!r || !this.st) return;
+      tt.innerHTML = this.resTip(r.dataset.res);
+      const b = r.getBoundingClientRect();
+      tt.hidden = false;
+      tt.style.left = Math.min(window.innerWidth - 310, b.left) + 'px';
+      tt.style.top = (b.bottom + 6) + 'px';
+    });
+    this.$('tb-res').addEventListener('pointerout', e => { if (e.pointerType === 'mouse') tt.hidden = true; });
+    this.$('tb-res').addEventListener('click', e => {
+      const r = e.target.closest('.res');
+      if (!r || !this.st) return;
+      if (!tt.hidden && tt.dataset.res === r.dataset.res) { tt.hidden = true; return; }
+      tt.dataset.res = r.dataset.res;
+      tt.innerHTML = this.resTip(r.dataset.res);
+      const b = r.getBoundingClientRect();
+      tt.hidden = false;
+      tt.style.left = Math.max(6, Math.min(window.innerWidth - 310, b.left)) + 'px';
+      tt.style.top = (b.bottom + 6) + 'px';
+      clearTimeout(this.ttTimer);
+      this.ttTimer = setTimeout(() => { tt.hidden = true; }, 5000);
+    });
+    document.addEventListener('pointerdown', e => { if (!e.target.closest('.res')) tt.hidden = true; });
+    document.addEventListener('keydown', e => this.onKey(e));
+  }
+
+  onKey(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (!this.st) return;
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (this.st.speed) { this.lastSpeed = this.st.speed; this.setSpeed(0); } else this.setSpeed(this.lastSpeed || 1);
+    } else if (/^[1-4]$/.test(e.key)) this.setSpeed(+e.key);
+    else if (e.key === 'Escape') {
+      if (!this.$('modal').hidden) this.closeModal();
+      else if (this.targeting) this.stopTargeting();
+      else if (!this.$('bubble').hidden) this.hideBubble();
+      else this.select(null);
+    } else if (e.key === '+' || e.key === '=') this.map.zoomBy(1.4);
+    else if (e.key === '-') this.map.zoomBy(1 / 1.4);
+  }
+
+  // ------------------------------------------------------------------ commandes serveur
+  async cmd(body, toastOk = true) {
+    const r = await this.api.post('/api/cmd', body);
+    if (r.msg && (!r.ok || toastOk)) this.toast(r.msg, r.ok ? (r.pending ? '' : 'good') : 'bad');
+    this.onRefresh && this.onRefresh();
+    return r;
+  }
+  setSpeed(v) { this.cmd({ cmd: 'speed', value: v }, false); if (this.st) this.st.speed = v; this.renderSpeed(v); }
+
+  toast(text, kind = '') {
+    const t = document.createElement('div');
+    t.className = 'toast ' + kind;
+    t.textContent = text;
+    const box = this.$('toasts');
+    box.appendChild(t);
+    while (box.children.length > 4) box.firstChild.remove();
+    setTimeout(() => t.remove(), 4200);
+  }
+
+  // ------------------------------------------------------------------ mise à jour
+  update(st) {
+    const first = !this.st;
+    this.st = st;
+    this.map.setState(st);
+    if (first) {
+      this.$('topbar').hidden = false;
+      this.$('rail').hidden = false;
+      this.$('feed').hidden = false;
+      this.$('zoombar').hidden = false;
+      const f = this.rules.factions[st.me.code];
+      this.$('tb-faction').innerHTML = `${coat(f.color, st.me.code)}<div><div class="fname">${esc(f.name)}</div><div class="ftitle">${esc(f.title)}</div></div>`;
+    }
+    for (const ev of st.events) this.onEvent(ev, first);
+    this.renderTop();
+    this.renderProposals();
+    this.renderFeed();
+    if (this.sel) this.renderPanel();
+    if (this.modal && !this.pressing) this.renderModal();
+    const pend = st.proposals.length;
+    const b = this.$('badge-diplo');
+    b.hidden = !pend; b.textContent = pend;
+    if (st.over && !this.overShown) { this.overShown = true; this.openModal('fin'); }
+  }
+
+  onEvent(ev, initial) {
+    this.events.push(ev);
+    if (this.events.length > 600) this.events.splice(0, 100);
+    if (initial) return;
+    if (ev.coins) this.map.spawnCoins(this.st.me.code);
+    const toastKinds = ['tech', 'eco', 'meteo', 'fin', 'info', 'diplo', 'revolte', 'siege', 'armee'];
+    if (ev.important && toastKinds.includes(ev.kind)) this.toast(ev.text, ev.kind === 'diplo' && /guerre/.test(ev.text) ? 'bad' : '');
+  }
+
+  renderSpeed(v) {
+    for (const b of this.$('tb-speed').children) b.classList.toggle('on', +b.dataset.v === v);
+  }
+
+  renderTop() {
+    const st = this.st, me = st.me;
+    this.$('tb-day').textContent = st.date;
+    const zones = ['cote', 'interieur', 'montagne'];
+    const wx = zones.map(z => {
+      const w = this.rules.weather[st.weather[z].kind];
+      return `<span class="wx" title="${this.rules.zones[z]} : ${w.label}">${w.icon}<span>${this.rules.zones[z].split(' ')[0]}</span></span>`;
+    }).join('');
+    this.$('tb-season').innerHTML = `<span>${this.rules.seasons[st.season]}</span>${wx}${st.flood ? '<span class="wx" title="Crue des fleuves">🌊</span>' : ''}`;
+    this.renderSpeed(st.speed);
+    for (const r of RES_ORDER) {
+      const v = me.res[r], inc = me.income[r];
+      this.$('res-' + r).textContent = fmt(v);
+      const d = this.$('inc-' + r);
+      d.textContent = (inc >= 0 ? '+' : '−') + fmt1(Math.abs(inc));
+      d.classList.toggle('neg', inc < 0);
+      const warn = (r === 'vivres' && me.famine) || (r === 'livres' && me.banqueroute);
+      d.parentElement.classList.toggle('warn', warn);
+    }
+  }
+
+  resTip(r) {
+    const me = this.st.me;
+    const lab = this.rules.res_label[r];
+    const rows = [[`Stock`, fmt(me.res[r])], [`Variation par jour`, (me.income[r] >= 0 ? '+' : '') + fmt1(me.income[r])]];
+    if (r === 'livres') { rows.push(['Solde des troupes', '−' + fmt1(me.upkeep.livres || 0)]); rows.push(['Commerce', '+' + fmt1(me.trade.livres || 0)]); }
+    if (r === 'vivres') { rows.push(['Rations des troupes', '−' + fmt1(me.upkeep.vivres || 0)]); rows.push(['Saison', this.rules.seasons[this.st.season]]); }
+    if (r === 'armes' || r === 'outils') rows.push(['Capacité industrielle', fmt1(me.cap) + ' /j']);
+    if (r === 'outils') rows.push(['Bonus des outils', '+' + Math.round((me.tools_bonus - 1) * 100) + ' %']);
+    if (r === 'fer' || r === 'bois') rows.push(['Consommés par les ateliers', 'oui']);
+    const fl = me.floor && me.floor[r];
+    if (fl) rows.push(['Minimum garanti du département', fmt1(fl.min) + ' /j' + (fl.add > 0.05 ? ` (+${fmt1(fl.add)} en ce moment)` : '')]);
+    const help = {
+      livres: 'Monnaie : solde, recrutement, recherches, constructions.',
+      vivres: 'Nourrissent les troupes. Récoltes fortes en été et en automne, faibles en hiver.',
+      fer: 'Forges et mines. Sert aux armes, aux outils et aux canons.',
+      bois: 'Forêts et landes. Sert aux outils, aux fortifications et aux affûts.',
+      armes: 'Mousquets et sabres : nécessaires pour lever et compléter les régiments.',
+      outils: 'Augmentent toute la production tant que le stock couvre vos villes.',
+      recrues: 'Hommes disponibles pour former et compléter les régiments.',
+    }[r];
+    return `<b>${lab}</b><div class="muted small" style="margin:2px 0 6px">${help}</div><table>${rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>`;
+  }
+
+  renderProposals() {
+    const box = this.$('proposals');
+    const sig = this.st.proposals.map(p => p.id).join(',');
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.innerHTML = this.st.proposals.map(p => {
+      const f = this.rules.factions[p.frm];
+      let detail = '';
+      if (p.action === 'echange') detail = `Il offre ${fmt(p.give[1])} ${this.rules.res_label[p.give[0]].toLowerCase()} contre ${fmt(p.get[1])} ${this.rules.res_label[p.get[0]].toLowerCase()}.`;
+      if (p.action === 'paix' && p.amount) detail = `Il offre un tribut de ${fmt(p.amount)} livres.`;
+      if (p.action === 'commerce') detail = 'Chacun gagnera des livres et la ressource phare de l’autre.';
+      if (p.action === 'alliance') detail = 'Vision partagée et entrée en guerre à vos côtés si vous êtes attaqué.';
+      return `<div class="sheet proposal" style="border-left-color:${f.color}"><div class="pt">${esc(f.name)} ${ACTION_LABEL[p.action] || p.action}</div>
+        <p>${detail}</p><div class="btns"><button class="btn primary" data-act="answer" data-id="${p.id}" data-v="1">Accepter</button>
+        <button class="btn" data-act="answer" data-id="${p.id}" data-v="0">Refuser</button></div></div>`;
+    }).join('');
+  }
+
+  renderFeed() {
+    const kinds = ['battle_end', 'capture', 'capitulation', 'revolte'];
+    const items = this.events.filter(e => kinds.includes(e.kind) && (e.important || e.kind === 'capitulation')).slice(-5);
+    const box = this.$('feed');
+    const sig = items.map(e => e.seq).join(',');
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.innerHTML = items.map((e, i) => {
+      const col = this.map.colors[e.who] || '#8d8a7a';
+      const icon = e.kind === 'battle_end' ? ICON.swords : e.kind === 'capture' ? ICON.flag : ICON.seal;
+      return `<div class="feed-item ${i < items.length - 2 ? 'old' : ''}" data-act="goto" data-x="${e.x ?? ''}" data-y="${e.y ?? ''}">
+        <span class="stripe" style="background:${col}"></span>${icon}<span>${esc(e.text)}</span></div>`;
+    }).join('');
+  }
+
+  // ------------------------------------------------------------------ sélection
+  select(sel) {
+    this.sel = sel;
+    this.map.selection = sel;
+    this.checked.clear();
+    this.panelSig = '';
+    this.hideBubble();
+    if (!sel) { this.$('panel').hidden = true; return; }
+    this.renderPanel(true);
+  }
+
+  armyById(id) { return this.st?.armies.find(a => a.id === id); }
+  isMine(o) { return o === this.st.me.code; }
+
+  onTap(e) {
+    if (!this.st) { this.onStartTap && this.onStartTap(e); return; }
+    this.hideBubble();
+    if (this.targeting) {
+      const a = this.armyById(this.targeting);
+      this.stopTargeting();
+      if (a) this.orderMove(a, e, a.md || 'route');
+      return;
+    }
+    const cur = this.sel && this.sel.kind === 'army' ? this.armyById(this.sel.id) : null;
+    const mineSel = cur && this.isMine(cur.o) && cur.st !== 'battle';
+    if (e.hit && e.hit.kind === 'army') {
+      const a = this.armyById(e.hit.id);
+      if (mineSel && a && !this.isMine(a.o)) { this.showBubble(e, cur, a); return; }
+      this.select({ kind: 'army', id: e.hit.id });
+      return;
+    }
+    if (mineSel) { this.showBubble(e, cur, null); return; }
+    if (e.hit) this.select({ kind: e.hit.kind, id: e.hit.id });
+    else this.select(null);
+  }
+
+  onContext(e) {
+    if (!this.st) return;
+    const cur = this.sel && this.sel.kind === 'army' ? this.armyById(this.sel.id) : null;
+    if (cur && this.isMine(cur.o)) {
+      const hit = e.hit;
+      if (hit && hit.kind === 'army') {
+        const a = this.armyById(hit.id);
+        if (a) return this.orderMove(cur, { x: a.x, y: a.y, hit: null }, cur.md || 'route');
+      }
+      this.orderMove(cur, e, cur.md || 'route');
+    }
+  }
+
+  onLongPress(e) {
+    if (!this.st) return;
+    this.hideBubble();
+    const cur = this.sel && this.sel.kind === 'army' ? this.armyById(this.sel.id) : null;
+    if (cur && this.isMine(cur.o) && cur.st !== 'battle' && !(e.hit && e.hit.kind === 'army' && e.hit.id === cur.id)) {
+      this.onContext(e);   // appui long = clic droit : l'armée part tout de suite
+      return;
+    }
+    if (e.hit) {
+      this.select({ kind: e.hit.kind, id: e.hit.id });
+      this.action('center', {});
+    }
+  }
+
+  onDragOrder(e) {
+    const a = this.armyById(e.army);
+    if (!a) return;
+    if (!this.sel || this.sel.kind !== 'army' || this.sel.id !== a.id) this.select({ kind: 'army', id: a.id });
+    const tr = e.trail;
+    let len = 0;
+    for (let i = 1; i < tr.length; i++) len += Math.hypot(tr[i][0] - tr[i - 1][0], tr[i][1] - tr[i - 1][1]);
+    this.pendingTrail = { army: a.id, pts: tr.map(p => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]) };
+    const end = e.end;
+    if (end.hit && end.hit.kind === 'army' && end.hit.id === a.id) return;
+    const enemy = end.hit && end.hit.kind === 'army' ? this.armyById(end.hit.id) : null;
+    this.showBubble(end, a, enemy && !this.isMine(enemy.o) ? enemy : null, len > 1.5);
+  }
+
+  orderMove(a, e, mode) {
+    const body = { cmd: 'move', army: a.id, mode };
+    if (e.hit && e.hit.kind === 'node') body.node = e.hit.id;
+    else { body.x = e.x; body.y = e.y; }
+    this.cmd(body, false).then(r => { if (r.ok) this.toast(r.msg || 'En marche.', 'good'); });
+  }
+
+  showBubble(e, army, enemy, withTrail = false) {
+    const b = this.$('bubble');
+    const hitNode = e.hit && e.hit.kind === 'node' ? this.md.nodes[e.hit.id] : null;
+    let title = 'Ordre de marche';
+    if (hitNode) title = hitNode.name;
+    if (enemy) title = `${enemy.name} (${this.rules.factions[enemy.o].name})`;
+    const target = enemy ? `data-x="${enemy.x}" data-y="${enemy.y}"` : hitNode ? `data-node="${hitNode.id}"` : `data-x="${e.x}" data-y="${e.y}"`;
+    b.innerHTML = `<div class="bt">${esc(title)}</div>
+      ${withTrail ? `<button class="btn primary" data-act="go-trail">Suivre mon tracé</button>` : ''}
+      <button class="btn ${withTrail ? '' : 'primary'}" data-act="go" data-mode="route" ${target}>Marcher par les routes</button>
+      <button class="btn" data-act="go" data-mode="champs" ${target}>Marcher à travers champs</button>
+      ${hitNode ? `<button class="btn" data-act="selnode" data-node="${hitNode.id}">Voir ${esc(hitNode.name)}</button>` : ''}
+      ${enemy ? `<button class="btn" data-act="selarmy" data-id="${enemy.id}">Voir cette armée</button>` : ''}
+      <button class="btn" data-act="hidebubble">Annuler</button>`;
+    b.style.left = clampN(e.sx, 110, window.innerWidth - 110) + 'px';
+    b.style.top = Math.max(e.sy, 230) + 'px';
+    b.hidden = false;
+  }
+  hideBubble() { this.$('bubble').hidden = true; }
+  stopTargeting() { this.targeting = null; this.map.cv.classList.remove('targeting'); }
+
+  // ------------------------------------------------------------------ actions
+  action(act, d, el) {
+    const sel = this.sel;
+    switch (act) {
+      case 'speed': this.setSpeed(+d.v); break;
+      case 'modal': this.openModal(d.v); break;
+      case 'close-modal': this.closeModal(); break;
+      case 'close-panel': this.select(null); break;
+      case 'goto': if (d.x) this.map.moveTo(+d.x, +d.y, Math.max(this.map.cam.z, 6)); break;
+      case 'center': {
+        const p = this.selPos();
+        if (p) this.map.moveTo(p[0], p[1], Math.max(this.map.cam.z, 7));
+        break;
+      }
+      case 'march':
+        this.targeting = sel.id;
+        this.map.cv.classList.add('targeting');
+        this.toast('Touchez la destination : une ville ou un point de la carte.');
+        break;
+      case 'go': {
+        this.hideBubble();
+        const a = this.armyById(sel?.id);
+        if (!a) break;
+        const e = d.node != null && d.node !== '' ? { hit: { kind: 'node', id: +d.node } } : { x: +d.x, y: +d.y, hit: null };
+        this.orderMove(a, e, d.mode);
+        break;
+      }
+      case 'hidebubble': this.hideBubble(); break;
+      case 'go-trail': {
+        this.hideBubble();
+        const t = this.pendingTrail;
+        if (t) this.cmd({ cmd: 'path', army: t.army, pts: t.pts }, false).then(r => this.toast(r.msg || 'En marche.', r.ok ? 'good' : 'bad'));
+        break;
+      }
+      case 'zoom': {
+        if (d.v === 'in') this.map.zoomBy(1.6);
+        else if (d.v === 'out') this.map.zoomBy(1 / 1.6);
+        else if (this.sel) this.action('center', {});
+        else if (this.st) {
+          const cap = this.md.nodes.find(n => n.type === 'capitale' && n.dept === this.st.me.code);
+          if (cap) this.map.moveTo(cap.x, cap.y, Math.max(this.map.cam.z, 5));
+        }
+        break;
+      }
+      case 'selnode': this.select({ kind: 'node', id: +d.node }); break;
+      case 'selarmy': this.select({ kind: 'army', id: d.id }); break;
+      case 'mode': this.cmd({ cmd: 'mode', army: sel.id, value: d.v }, false); break;
+      case 'stance': this.cmd({ cmd: 'stance', army: sel.id, value: d.v }); break;
+      case 'retreat': this.cmd({ cmd: 'retreat', army: sel.id }); break;
+      case 'assault': this.cmd({ cmd: 'assault', army: sel.id }); break;
+      case 'garrison': this.cmd({ cmd: 'garrison', army: sel.id }).then(r => { if (r.ok) this.select({ kind: 'node', id: this.armyById(sel.id)?.n ?? d.node }); }); break;
+      case 'split': {
+        const regs = [...this.checked];
+        this.cmd({ cmd: 'split', army: sel.id, regs }, false).then(r => { if (r.ok) { this.toast('Armée scindée.', 'good'); this.select({ kind: 'army', id: r.id }); } });
+        break;
+      }
+      case 'merge': this.cmd({ cmd: 'merge', army: sel.id, other: d.other }); break;
+      case 'form': {
+        const n = this.st.nodes[sel.id];
+        let regs = [...this.checked].filter(id => n.g.some(r => r[0] === id));
+        if (!regs.length) regs = n.g.map(r => r[0]);
+        const body = { cmd: 'form', node: sel.id, regs };
+        if (d.into) body.into = d.into;
+        this.cmd(body, false).then(r => {
+          if (r.ok) { this.toast(d.into ? 'Régiments ajoutés à l’armée.' : 'Nouvelle armée formée.', 'good'); this.select({ kind: 'army', id: d.into || r.id }); }
+        });
+        break;
+      }
+      case 'recruit': this.cmd({ cmd: 'recruit', node: sel.id, unit: d.v }); break;
+      case 'build': this.cmd({ cmd: 'build', node: sel.id, what: d.v }); break;
+      case 'research': this.cmd({ cmd: 'research', tech: d.v }); break;
+      case 'diplo': {
+        const body = { cmd: 'diplo', to: d.to, action: d.v };
+        const inp = document.getElementById(`amt-${d.v}-${d.to}`);
+        if (inp) body.amount = +inp.value || 0;
+        if ((d.v === 'guerre') && !confirm(`Déclarer la guerre à ${this.rules.factions[d.to].name} ?`)) break;
+        this.cmd(body);
+        break;
+      }
+      case 'answer': this.cmd({ cmd: 'answer', id: d.id, accept: d.v === '1' }); break;
+      case 'market': {
+        const q = +document.getElementById(`mq-${d.res}`).value || 0;
+        this.cmd({ cmd: 'market', res: d.res, qty: q, side: d.side });
+        break;
+      }
+      case 'trade-offer': {
+        const to = document.getElementById('tr-to').value;
+        const give = [document.getElementById('tr-gr').value, +document.getElementById('tr-gq').value || 0];
+        const get = [document.getElementById('tr-wr').value, +document.getElementById('tr-wq').value || 0];
+        this.cmd({ cmd: 'diplo', to, action: 'echange', give, get });
+        break;
+      }
+      case 'jtab': this.journalFilter = d.v; this.modalSig = ''; this.renderModal(); break;
+      case 'save': {
+        const name = document.getElementById('save-name').value;
+        this.api.post('/api/save', { name }).then(r => { this.toast(r.msg, r.ok ? 'good' : 'bad'); this.modalSig = ''; this.refreshSaves(); });
+        break;
+      }
+      case 'load': this.onLoad && this.onLoad(d.v); break;
+      case 'newgame': if (confirm('Abandonner la partie en cours et revenir au choix du département ?')) this.onNewGame && this.onNewGame(); break;
+      case 'selnode-modal': this.closeModal(); this.select({ kind: 'node', id: +d.node }); this.action('center', {}); break;
+      // écran de départ
+      case 'pick-dept': this.pickDept(d.v); break;
+      case 'pick-diff': this.startDiff = d.v; this.renderStart(); break;
+      case 'start-game': this.onStartGame && this.onStartGame(this.startDept, this.startDiff); break;
+      case 'resume': this.onResume && this.onResume(); break;
+      default: break;
+    }
+  }
+
+  selPos() {
+    const s = this.sel;
+    if (!s) return null;
+    if (s.kind === 'node') { const n = this.md.nodes[s.id]; return [n.x, n.y]; }
+    if (s.kind === 'army') { const d = this.map.disp.get(s.id); return d ? [d.x, d.y] : null; }
+    if (s.kind === 'battle') { const b = this.st.battles.find(x => x.id === s.id); return b ? [b.x, b.y] : null; }
+    return null;
+  }
+
+  // ------------------------------------------------------------------ panneau
+  renderPanel(force = false) {
+    const p = this.$('panel');
+    const s = this.sel;
+    let html = '', sig = '';
+    if (s.kind === 'node') [html, sig] = this.nodePanel(s.id);
+    else if (s.kind === 'army') [html, sig] = this.armyPanel(s.id);
+    else if (s.kind === 'battle') [html, sig] = this.battlePanel(s.id);
+    if (html == null) {
+      // l'objet peut manquer brièvement (nouvelle armée pas encore reçue) : on patiente un peu
+      this.missing = (this.missing || 0) + 1;
+      if (this.missing > 6) this.select(null);
+      return;
+    }
+    this.missing = 0;
+    if (!force && (sig === this.panelSig || this.pressing)) return;
+    this.panelSig = sig;
+    const scroll = p.scrollTop;
+    p.innerHTML = `<button class="icon-btn close" data-act="close-panel" aria-label="Fermer">${ICON.close}</button>` + html;
+    p.scrollTop = scroll;
+    p.hidden = false;
+  }
+
+  costHtml(cost) {
+    return Object.entries(cost).map(([k, v]) => `<span title="${this.rules.res_label[k]}" style="white-space:nowrap">${fmt(v)} ${this.rules.res_label[k].toLowerCase()}</span>`).join(', ');
+  }
+
+  canPay(cost) {
+    const r = this.st.me.res;
+    return Object.entries(cost).every(([k, v]) => (r[k] || 0) >= v);
+  }
+
+  regRow(r, owner, check) {
+    const u = this.rules.units[r[1]];
+    const frac = r[2] / r[3];
+    const stars = r[4] >= 60 ? '★★★' : r[4] >= 30 ? '★★' : r[4] >= 10 ? '★' : '';
+    const ck = check ? `<input type="checkbox" data-reg="${r[0]}" ${this.checked.has(r[0]) ? 'checked' : ''} aria-label="Sélectionner">` : '<span></span>';
+    return `<label class="reg ${this.checked.has(r[0]) ? 'sel' : ''}">${ck}${ICON[r[1]]}
+      <div class="rn">${u.short}${stars ? ` <span style="color:var(--laiton-clair)">${stars}</span>` : ''}
+        ${check ? `<div class="bars"><div class="bar ${frac < 0.5 ? 'red' : ''}"><i style="width:${Math.round(frac * 100)}%"></i></div><div class="bar green"><i style="width:${Math.min(100, r[5])}%"></i></div></div>` : ''}</div>
+      <div class="rv">${fmt(r[2])}<small class="muted" style="display:block;font-weight:400;font-size:12px">${check ? 'moral ' + r[5] : '/ ' + r[3]}</small></div></label>`;
+  }
+
+  nodePanel(id) {
+    const st = this.st, gn = this.md.nodes[id], ns = st.nodes[id];
+    if (!gn || !ns) return [null, ''];
+    const me = st.me.code;
+    const own = ns.o === me;
+    const oname = ns.o === 'neutre' ? 'Indépendant (à rallier)' : this.rules.factions[ns.o].name;
+    const col = this.map.colors[ns.o];
+    const DE = { '33': 'de la Gironde', '24': 'de la Dordogne', '40': 'des Landes', '47': 'du Lot-et-Garonne', '64': 'des Basses-Pyrénées' };
+    const typeLab = gn.type === 'capitale' ? `Chef-lieu ${DE[gn.dept]}` : TYPE_LABEL[gn.type];
+    const terr = this.md.terrain_names[this.map.terrain[Math.floor(gn.y) * this.md.W + Math.floor(gn.x)]];
+    const sub = ns.o === gn.dept && gn.type === 'capitale' ? typeLab : gn.type === 'capitale' ? `${typeLab}, tenu par ${oname}` : `${typeLab}, ${oname}`;
+    let h = `<div class="p-head">${ns.o === 'neutre' ? coat('#8d8a7a', '—') : coat(col, ns.o)}<div><div class="p-title">${esc(gn.name)}</div>
+      <div class="p-sub">${sub}</div></div></div>`;
+    if (ns.sg) {
+      const by = this.rules.factions[ns.sg.by]?.name || ns.sg.by;
+      const occ = ns.o === 'neutre';
+      h += `<div class="p-state">${occ ? `Ralliement par ${by}` : `Assiégée par ${by}`} : ${Math.round(ns.sg.dmg * 100)} %</div><div class="bar red"><i style="width:${Math.round(ns.sg.dmg * 100)}%"></i></div>`;
+    }
+    const pips = (v, m = 3) => `<span class="pips">${Array.from({ length: m }, (_, i) => `<i class="${i < v ? 'on' : ''}"></i>`).join('')}</span>`;
+    h += `<dl class="kv">
+      <dt>Milice</dt><dd>${ns.m != null ? fmt(ns.m) + (ns.mm ? ' / ' + fmt(ns.mm) : '') : 'inconnue'}</dd>
+      ${ns.gm != null ? `<dt>Garnison repérée</dt><dd>${fmt(ns.gm)} hommes</dd>` : ''}
+      <dt>Fortifications</dt><dd>${pips(ns.f)}</dd>
+      <dt>Développement</dt><dd>${pips(ns.d)}</dd>
+      ${own ? `<dt>Stabilité</dt><dd>${Math.round(ns.s * 100)} %</dd>` : ''}
+      <dt>Terrain</dt><dd>${terr}</dd></dl>`;
+    if (gn.spec.length) h += `<div class="chips">${gn.spec.map(s => `<span class="chip">${this.rules.spec[s]}</span>`).join('')}</div>`;
+    if (!own && ns.o !== 'neutre') {
+      const fs = st.factions.find(f => f.code === ns.o);
+      h += `<div class="row" style="margin-top:8px"><span class="chip ${fs.st === 'guerre' ? 'war' : fs.st === 'alliance' ? 'ally' : ''}">${STATUS[fs.st]}</span>
+        ${fs.st === 'paix' ? '<span class="muted small">Déclarez la guerre (Diplomatie) pour attaquer.</span>' : ''}</div>`;
+    }
+    if (ns.o === 'neutre') h += `<p class="muted small">Village indépendant : envoyez une armée nettement plus forte que sa milice pour le rallier en quelques jours, sinon il faudra combattre.</p>`;
+    if (own) {
+      const here = st.armies.filter(a => a.o === me && a.n === id && a.st === 'idle');
+      if (ns.g && ns.g.length) {
+        h += `<div class="section-t">Garnison</div><div class="reg-list">${ns.g.map(r => this.regRow(r, me, true)).join('')}</div>
+          <div class="btns"><button class="btn primary" data-act="form">Former une armée</button>
+          ${here.map(a => `<button class="btn" data-act="form" data-into="${a.id}">Renforcer ${esc(a.name)}</button>`).join('')}</div>
+          <div class="muted small" style="margin-top:4px">Cochez des régiments, sinon toute la garnison part.</div>`;
+      }
+      if (gn.type !== 'village') {
+        const allowed = gn.type === 'fort' ? ['ligne', 'legere'] : this.rules.unit_order;
+        h += `<div class="section-t">Lever un régiment</div><div class="units-grid">${allowed.map(u => {
+          const c = st.me.unit_costs[u];
+          return `<button class="btn unit-card" data-act="recruit" data-v="${u}" ${this.canPay(c) && !ns.sg ? '' : 'disabled'} title="${esc(this.rules.units[u].name)}">
+            ${ICON[u]}<span class="un">${this.rules.units[u].short} <span class="muted" style="font-weight:400">(${this.rules.units[u].men})</span></span>
+            <span class="uc">${this.costHtml(c)}, ${st.me.unit_days[u]} j</span></button>`;
+        }).join('')}</div>`;
+      }
+      h += `<div class="section-t">Aménagements</div><div class="btns">`;
+      for (const k of ['fort', 'dev']) {
+        const b = this.rules.build[k];
+        const lvl = k === 'fort' ? ns.f : ns.d;
+        const pend = (ns.q || []).filter(q => q.kind === 'build' && q.what === k).length;
+        const l = lvl + pend;
+        if (l >= b.max) { h += `<button class="btn" disabled>${b.name} au maximum</button>`; continue; }
+        const c = b.costs[l];
+        h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'} title="${esc(b.desc)}">${b.name} niveau ${l + 1}<small>${this.costHtml(c)}, ${b.days[l]} j</small></button>`;
+      }
+      h += `</div>`;
+      if (ns.q && ns.q.length) {
+        h += `<div class="section-t">En préparation</div>` + ns.q.map((q, i) => {
+          const lab = q.kind === 'unit' ? this.rules.units[q.what].name : this.rules.build[q.what].name;
+          const pct = i === 0 ? Math.round((1 - q.left / q.total) * 100) : 0;
+          return `<div class="queue-item"><span>${lab}</span><span class="muted">${i === 0 ? Math.ceil(q.left) + ' j' : 'en attente'}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`;
+        }).join('');
+      }
+    }
+    h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
+    const sig = JSON.stringify([id, ns, st.me.res.livres > 0 ? Math.floor(st.me.res.livres / 25) : 0, Math.floor(st.me.res.armes / 10), st.armies.filter(a => a.n === id).map(a => a.id + a.st)]);
+    return [h, sig];
+  }
+
+  armyPanel(id) {
+    const st = this.st, a = this.armyById(id);
+    if (!a) return [null, ''];
+    const me = st.me.code, own = a.o === me;
+    const f = this.rules.factions[a.o];
+    const nodeName = n => this.md.nodes[n]?.name;
+    let state = '';
+    const lastNode = () => {
+      if (!a.path || !a.path.length) return null;
+      const l = a.path[a.path.length - 1];
+      return l.to != null ? nodeName(l.to) : null;
+    };
+    if (a.st === 'idle') state = a.sk === 'embuscade' ? (a.h ? 'En embuscade, invisible' : 'En embuscade, mais repérée') : a.n != null ? `Au repos à ${nodeName(a.n)}` : 'Au repos en rase campagne';
+    else if (a.st === 'move') state = `En marche ${lastNode() ? 'vers ' + lastNode() : 'à travers champs'}`;
+    else if (a.st === 'retreat') state = `En retraite ${lastNode() ? 'vers ' + lastNode() : ''}`;
+    else if (a.st === 'battle') state = 'Engagée dans une bataille';
+    else if (a.st === 'siege') {
+      const ns = a.n != null ? st.nodes[a.n] : null;
+      state = ns && ns.o === 'neutre' ? `Rallie ${nodeName(a.n)} (${Math.round((ns.sg?.dmg || 0) * 100)} %)` : `Assiège ${nodeName(a.n)} (brèche ${Math.round((ns?.sg?.dmg || 0) * 100)} %)`;
+    }
+    const cell = Math.floor(a.y) * this.md.W + Math.floor(a.x);
+    const terr = this.md.terrain_names[this.map.terrain[cell]];
+    let h = `<div class="p-head">${coat(f.color, a.o)}<div><div class="p-title">${esc(a.name)}</div><div class="p-sub">${f.name}, ${fmtMen(a.men)} hommes</div></div></div>
+      <div class="p-state">${state}</div>`;
+    if (own) {
+      h += `<dl class="kv"><dt>Terrain</dt><dd>${terr}${a.h ? ', à couvert' : ''}</dd><dt>Ravitaillement</dt><dd>${Math.round(a.sup * 100)} %</dd></dl>`;
+      if (a.sup < 0.35) h += `<div class="warnline">Ravitaillement épuisé : l’armée s’use. Revenez en territoire ami.</div>`;
+      h += `<div class="reg-list">${a.regs.map(r => this.regRow(r, me, true)).join('')}</div>`;
+      const canAct = a.st !== 'battle';
+      h += `<div class="section-t">Ordres</div>`;
+      if (canAct) {
+        h += `<div class="row"><span class="lab">Itinéraire</span><span class="seg">
+          <button data-act="mode" data-v="route" class="${a.md !== 'champs' ? 'on' : ''}">Par les routes</button>
+          <button data-act="mode" data-v="champs" class="${a.md === 'champs' ? 'on' : ''}">À travers champs</button></span></div>
+          <div class="row"><span class="lab">Posture</span><span class="seg">
+          ${[['normal', 'Normale'], ['embuscade', 'Embuscade'], ['retranche', 'Retranchée']].map(([k, l]) => `<button data-act="stance" data-v="${k}" class="${a.sk === k ? 'on' : ''}">${l}</button>`).join('')}</span></div>
+          <div class="btns"><button class="btn primary" data-act="march">${ICON.target.replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Marcher</button>`;
+        if (a.regs.length > 1) h += `<button class="btn" data-act="split">Scinder la sélection</button>`;
+        const near = st.armies.filter(b => b.o === me && b.id !== a.id && Math.hypot(b.x - a.x, b.y - a.y) < 3 && b.st !== 'battle');
+        for (const b of near) h += `<button class="btn" data-act="merge" data-other="${b.id}">Réunir ${esc(b.name)}</button>`;
+        if (a.n != null && st.nodes[a.n].o === me && a.st === 'idle') h += `<button class="btn" data-act="garrison" data-node="${a.n}">Mettre en garnison</button>`;
+        if (a.st === 'siege') h += `<button class="btn danger" data-act="assault">Donner l’assaut</button>`;
+        if (a.st === 'siege' || a.st === 'move') h += `<button class="btn" data-act="retreat">Se replier</button>`;
+        h += `</div><div class="muted small" style="margin-top:6px">Glissez l’armée du doigt ou du stylet pour tracer son chemin. Appui long (ou clic droit) sur la carte : elle part tout de suite. Embuscade : hors des routes, dans un bois, une lande, un marais ou en montagne.</div>`;
+      } else {
+        h += `<div class="btns"><button class="btn danger" data-act="retreat">Ordonner la retraite</button></div><div class="muted small">La retraite coûte des hommes, surtout face à la cavalerie.</div>`;
+      }
+    } else {
+      const fs = st.factions.find(x => x.code === a.o);
+      h += `<div class="row"><span class="chip ${fs?.st === 'guerre' ? 'war' : fs?.st === 'alliance' ? 'ally' : ''}">${STATUS[fs?.st] || ''}</span><span class="muted small">Terrain : ${terr}</span></div>
+        <div class="reg-list">${a.regs.map(r => this.regRow(r, a.o, false)).join('')}</div>`;
+    }
+    h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
+    const sig = JSON.stringify([id, a.st, a.sk, a.md, a.h, a.n, Math.round(a.sup * 20), a.regs.map(r => [r[0], r[2], Math.round(r[5] / 5)]),
+      lastNode(), st.armies.filter(b => b.o === me && Math.hypot(b.x - a.x, b.y - a.y) < 3).length, a.n != null ? st.nodes[a.n].sg : null]);
+    return [h, sig];
+  }
+
+  battlePanel(id) {
+    const b = this.st.battles.find(x => x.id === id);
+    if (!b) return [null, ''];
+    let h = `<div class="p-head">${ICON.swords.replace('<svg', '<svg style="width:32px;height:32px;color:var(--laiton-clair)"')}<div><div class="p-title">${b.amb ? 'Embuscade' : 'Bataille'}</div><div class="p-sub">Terrain : ${b.terrain}, depuis ${Math.round(b.age * 24)} h</div></div></div>`;
+    for (const s of b.sides) {
+      const f = this.rules.factions[s.o];
+      h += `<div class="section-t" style="color:${f ? f.color : '#ccc'}">${f ? f.name : 'Insurgés'}</div>
+        <dl class="kv"><dt>Hommes engagés</dt><dd>${fmt(s.men)}</dd><dt>Pertes</dt><dd>${fmt(s.lost)}</dd><dt>Moral</dt><dd>${s.mor}</dd></dl>
+        <div class="bar green"><i style="width:${s.mor}%"></i></div>`;
+    }
+    return [h, JSON.stringify(b.sides.map(s => [s.men, s.lost, s.mor]))];
+  }
+
+  // ------------------------------------------------------------------ fenêtres
+  openModal(kind) {
+    this.modal = kind;
+    this.modalSig = '';
+    this.$('modal').hidden = false;
+    this.renderModal(true);
+    if (kind === 'menu') this.refreshSaves();
+  }
+  closeModal() {
+    this.modal = null;
+    this.$('modal').hidden = true;
+    for (const b of this.$('rail').children) b.classList.remove('on');
+  }
+
+  async refreshSaves() {
+    const r = await this.api.get('/api/saves');
+    this.saves = r.saves;
+    this.modalSig = '';
+    if (this.modal === 'menu') this.renderModal(true);
+  }
+
+  renderModal(force = false) {
+    const k = this.modal;
+    if (!k || !this.st) return;
+    const fn = { tech: this.techModal, diplo: this.diploModal, commerce: this.commerceModal, production: this.prodModal,
+                 journal: this.journalModal, menu: this.menuModal, fin: this.endModal }[k];
+    const [html, sig] = fn.call(this);
+    if (!force && sig === this.modalSig) return;
+    this.modalSig = sig;
+    const card = this.$('modal').firstElementChild;
+    const scroll = card.scrollTop;
+    // conserve les saisies
+    const vals = {};
+    card.querySelectorAll('input[id],select[id]').forEach(i => { vals[i.id] = i.value; });
+    card.innerHTML = `<button class="icon-btn close" data-act="close-modal" aria-label="Fermer">${ICON.close}</button>` + html;
+    for (const [id, v] of Object.entries(vals)) { const i = document.getElementById(id); if (i && i.type !== 'range') i.value = v; }
+    card.scrollTop = scroll;
+    for (const b of this.$('rail').children) b.classList.toggle('on', b.dataset.v === k);
+  }
+
+  techModal() {
+    const me = this.st.me;
+    const cols = this.rules.branches.map(br => {
+      const cur = me.research[br];
+      const techs = this.rules.techs.filter(t => t.branch === br).sort((a, b) => a.cost - b.cost);
+      const curT = cur ? this.rules.techs.find(t => t.id === cur.tech) : null;
+      const head = curT ? `En cours : ${curT.name}, ${Math.ceil(cur.left)} j<div class="bar green" style="margin-top:4px"><i style="width:${Math.round((1 - cur.left / cur.total) * 100)}%"></i></div>` : 'Aucune recherche en cours.';
+      const cards = techs.map(t => {
+        const done = me.techs.includes(t.id);
+        const running = cur && cur.tech === t.id;
+        const ready = t.req.every(r => me.techs.includes(r));
+        const reqNames = t.req.map(r => this.rules.techs.find(x => x.id === r).name).join(', ');
+        let foot = '';
+        if (done) foot = '<span class="muted">Acquise</span>';
+        else if (running) foot = '<span>En cours…</span>';
+        else if (!ready) foot = `<span class="muted">Requiert : ${reqNames}</span>`;
+        else foot = `<span>${fmt(t.cost)} livres, ${t.days} j</span><button class="btn" data-act="research" data-v="${t.id}" ${cur || me.res.livres < t.cost ? 'disabled' : ''}>Rechercher</button>`;
+        return `<div class="tech ${done ? 'done' : running ? 'running' : !ready ? 'locked' : ''}"><div class="tn">${t.name}</div><div class="td">${t.desc}</div><div class="tc">${foot}</div></div>`;
+      }).join('');
+      return `<div class="tech-col"><h3>${BRANCH_LABEL[br]}</h3><div class="cur">${head}</div>${cards}</div>`;
+    }).join('');
+    const html = `<h2 class="m-title">Technologies</h2><p class="m-sub">Une recherche à la fois par branche. Le militaire gagne les batailles, le civil fait marcher l’État, l’industriel forge armes et outils, l’agricole remplit les greniers.</p><div class="tech-cols">${cols}</div>`;
+    return [html, JSON.stringify([me.techs, Object.values(me.research).map(r => r && Math.ceil(r.left)), Math.floor(me.res.livres / 25)])];
+  }
+
+  diploModal() {
+    const st = this.st, me = st.me.code;
+    const myPow = st.factions.find(f => f.code === me).power;
+    const cards = st.factions.filter(f => f.code !== me).map(f => {
+      const R = this.rules.factions[f.code];
+      if (!f.alive) {
+        const by = this.rules.factions[f.cap_owner]?.name || '?';
+        return `<div class="dcard dead">${coat(R.color, f.code)}<div><div class="dn">${R.name}</div><div class="dt">A capitulé. Son chef-lieu appartient à ${by}.</div></div></div>`;
+      }
+      const statusChip = f.over === me ? '<span class="chip ally">Votre vassal</span>' : `<span class="chip ${f.st === 'guerre' ? 'war' : f.st === 'alliance' ? 'ally' : ''}">${STATUS[f.st]}</span>`;
+      const wars = f.wars.filter(w => w !== me).map(w => this.rules.factions[w].name);
+      const relPos = Math.round((f.rel + 100) / 2);
+      let acts = '';
+      const btn = (v, l, cls = '') => `<button class="btn ${cls}" data-act="diplo" data-to="${f.code}" data-v="${v}">${l}</button>`;
+      if (f.over === me) {
+        acts += `<div class="muted small">Ce département vous verse un tribut et combat vos ennemis.</div>`;
+      } else if (f.st === 'guerre') {
+        acts += `<div class="row"><input class="amount" type="number" min="0" step="50" value="0" id="amt-paix-${f.code}" aria-label="Tribut offert"><span class="muted small">livres offertes</span>${btn('paix', 'Proposer la paix')}</div>`;
+        acts += `<div class="btns">${btn('soumission', 'Exiger la soumission', 'danger')}</div>`;
+      } else {
+        acts += `<div class="btns">${btn('guerre', 'Déclarer la guerre', 'danger')}
+          ${f.st === 'alliance' ? btn('rompre', 'Rompre l’alliance') : btn('alliance', 'Proposer une alliance')}
+          ${f.trade ? btn('fin_commerce', 'Dénoncer l’accord commercial') : btn('commerce', 'Proposer un accord commercial')}</div>`;
+      }
+      acts += `<div class="row"><input class="amount" type="number" min="0" step="50" value="100" id="amt-cadeau-${f.code}" aria-label="Montant du présent"><span class="muted small">livres</span>${btn('cadeau', 'Offrir un présent')}</div>`;
+      return `<div class="dcard">${coat(R.color, f.code)}<div>
+          <div class="dn">${R.name}</div><div class="dt">${R.title}, chef-lieu ${R.capital}</div>
+          <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}</div>
+          <div class="row"><span class="lab">${relLabel(f.rel)} (${f.rel})</span><div class="relbar" style="flex:1;min-width:120px"><i style="left:${relPos}%"></i></div></div>
+          <div class="small">Puissance estimée ${fmt(f.power)} (vous ${fmt(myPow)}), ${f.nodes} villes et villages, ${f.techs} technologies.</div>
+          ${wars.length ? `<div class="small" style="color:#ffb3a6">En guerre contre : ${wars.join(', ')}</div>` : ''}
+          <ul>${R.pros.map(p => `<li>${p}</li>`).join('')}${R.cons.map(p => `<li class="con">${p}</li>`).join('')}</ul>
+        </div><div class="dact">${acts}</div></div>`;
+    }).join('');
+    const html = `<h2 class="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque département pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p><div class="diplo-list">${cards}</div>`;
+    return [html, JSON.stringify(st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars]))];
+  }
+
+  commerceModal() {
+    const st = this.st, me = st.me;
+    const [buyK, sellK] = st.market.spread;
+    const rows = Object.entries(st.market.prices).map(([r, p]) => `<tr><td>${ICON[r].replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-4px;margin-right:6px;color:var(--laiton)"')}${this.rules.res_label[r]}</td>
+      <td>${fmt(me.res[r])}</td><td>${(p * buyK).toFixed(2)}</td><td>${(p * sellK).toFixed(2)}</td>
+      <td><input class="amount" type="number" min="1" max="1000" value="50" id="mq-${r}" aria-label="Quantité"></td>
+      <td><button class="btn" data-act="market" data-res="${r}" data-side="buy">Acheter</button> <button class="btn" data-act="market" data-res="${r}" data-side="sell">Vendre</button></td></tr>`).join('');
+    const partners = st.factions.filter(f => f.code !== me.code && f.alive && f.st !== 'guerre');
+    const resOpts = sel => ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'].map(r => `<option value="${r}" ${r === sel ? 'selected' : ''}>${this.rules.res_label[r]}</option>`).join('');
+    const trades = st.factions.filter(f => f.trade);
+    const html = `<h2 class="m-title">Commerce</h2>
+      <p class="m-sub">${me.has_port ? 'Vous tenez un port : les négociants vous font de bons prix.' : 'Sans port, les négociants prennent une forte marge. Prenez Bordeaux, Libourne, Bayonne ou un autre port pour mieux commercer.'}</p>
+      <div class="two"><div>
+        <h3 class="section-t" style="border:0;padding:0">Marché des négociants</h3>
+        <table class="grid"><thead><tr><th>Ressource</th><th>Stock</th><th>Achat</th><th>Vente</th><th>Quantité</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+        <p class="muted small">Prix en livres par unité. Les prix bougent avec les saisons et vos propres ventes.</p>
+      </div><div>
+        <h3 class="section-t" style="border:0;padding:0">Proposer un échange</h3>
+        ${partners.length ? `<div class="row"><span class="lab">Avec</span><select class="amount" id="tr-to">${partners.map(f => `<option value="${f.code}">${this.rules.factions[f.code].name}</option>`).join('')}</select></div>
+        <div class="row"><span class="lab">Je donne</span><input class="amount" type="number" id="tr-gq" value="100" min="1"><select class="amount" id="tr-gr">${resOpts('vivres')}</select></div>
+        <div class="row"><span class="lab">Je reçois</span><input class="amount" type="number" id="tr-wq" value="40" min="1"><select class="amount" id="tr-wr">${resOpts('fer')}</select></div>
+        <div class="btns"><button class="btn primary" data-act="trade-offer">Proposer l’échange</button></div>` : '<p class="muted">Aucun partenaire en paix.</p>'}
+        <h3 class="section-t">Accords commerciaux</h3>
+        ${trades.length ? trades.map(f => `<div class="row"><span class="chip ally">${this.rules.factions[f.code].name}</span><span class="muted small">Spécialité reçue : ${this.rules.res_label[this.rules.factions[f.code].specialty].toLowerCase()}</span></div>`).join('') +
+          `<p class="small">Gains par jour : ${Object.entries(me.trade).filter(([, v]) => v > 0.01).map(([k, v]) => `+${fmt1(v)} ${this.rules.res_label[k].toLowerCase()}`).join(', ') || 'aucun'}</p>`
+          : '<p class="muted">Aucun accord. Proposez-en un depuis la Diplomatie.</p>'}
+      </div></div>`;
+    return [html, JSON.stringify([Object.values(st.market.prices).map(p => p.toFixed(2)), Object.values(me.res).map(Math.round), partners.map(f => f.code), trades.map(f => f.code)])];
+  }
+
+  prodModal() {
+    const st = this.st, me = st.me;
+    const s = Math.round(me.slider * 100);
+    const own = this.md.nodes.filter(n => st.nodes[n.id].o === me.code);
+    own.sort((a, b) => ['capitale', 'ville', 'fort', 'village'].indexOf(a.type) - ['capitale', 'ville', 'fort', 'village'].indexOf(b.type) || a.name.localeCompare(b.name));
+    const rows = own.map(n => {
+      const ns = st.nodes[n.id];
+      const gar = (ns.g || []).reduce((a, r) => a + r[2], 0);
+      const q = (ns.q || []).map(q => q.kind === 'unit' ? this.rules.units[q.what].short : this.rules.build[q.what].name).join(', ');
+      return `<tr class="click" data-act="selnode-modal" data-node="${n.id}"><td>${n.name}</td><td>${TYPE_LABEL[n.type]}</td><td>${fmt(ns.m || 0)}${gar ? ' + ' + fmt(gar) : ''}</td><td>${ns.f}/${ns.d}</td><td>${Math.round(ns.s * 100)} %</td><td class="small">${q || '<span class="muted">—</span>'}</td></tr>`;
+    }).join('');
+    const html = `<h2 class="m-title">Production</h2><p class="m-sub">Vos ateliers transforment le fer et le bois. Les armes équipent les régiments ; les outils augmentent toute la production de vos villes.</p>
+      <div class="two"><div>
+        <label for="sl" class="small muted">Répartition des ateliers</label>
+        <input id="sl" class="slider" type="range" min="0" max="100" step="5" value="${s}" data-act="slider" data-live="slider">
+        <div class="big-slider-labels"><span>Tout en outils</span><span id="slider-val">${s} % armes, ${100 - s} % outils</span><span>Tout en armes</span></div>
+        <dl class="kv" style="margin-top:12px">
+          <dt>Capacité industrielle</dt><dd>${fmt1(me.cap)} /j</dd>
+          <dt>Armes fabriquées</dt><dd>+${fmt1(me.income.armes)} /j</dd>
+          <dt>Outils fabriqués</dt><dd>+${fmt1(me.income.outils)} /j</dd>
+          <dt>Couverture en outils</dt><dd>${Math.round(me.cov * 100)} %</dd>
+          <dt>Bonus de production</dt><dd>+${Math.round((me.tools_bonus - 1) * 100)} %</dd>
+          <dt>Solde des troupes</dt><dd>${fmt1(me.upkeep.livres || 0)} livres /j</dd>
+          <dt>Rations des troupes</dt><dd>${fmt1(me.upkeep.vivres || 0)} vivres /j</dd>
+        </dl>
+        <div class="bar"><i style="width:${Math.round(me.cov * 100)}%"></i></div>
+        ${me.res.fer < 5 || me.res.bois < 5 ? `<p class="warnline">Les ateliers manquent de ${me.res.fer < 5 ? 'fer' : 'bois'} : achetez-en au marché, négociez un échange ou prenez ${me.res.fer < 5 ? 'une forge ou une mine' : 'un village forestier'}.</p>` : ''}
+        <p class="muted small">Chaque arme coûte 1 fer et ½ bois ; chaque outil ½ fer et 1 bois. Sans fer ni bois, les ateliers s’arrêtent.</p>
+      </div><div>
+        <h3 class="section-t" style="border:0;padding:0">Vos villes et villages (${own.length})</h3>
+        <table class="grid"><thead><tr><th>Lieu</th><th>Type</th><th>Défense</th><th>Fort/Dév.</th><th>Stab.</th><th>Chantier</th></tr></thead><tbody>${rows}</tbody></table>
+      </div></div>`;
+    return [html, JSON.stringify([Math.round(me.cap * 10), Math.round(me.cov * 100), own.map(n => [st.nodes[n.id].m, (st.nodes[n.id].q || []).length]), s])];
+  }
+
+  journalModal() {
+    const f = this.journalFilter || 'all';
+    const groups = { all: null, battle: ['battle', 'battle_end', 'siege', 'capture', 'capitulation', 'revolte'], diplo: ['diplo'], eco: ['eco', 'tech', 'meteo', 'armee'] };
+    const evs = this.events.filter(e => !groups[f] || groups[f].includes(e.kind)).slice(-250).reverse();
+    const tabs = [['all', 'Tout'], ['battle', 'Guerre'], ['diplo', 'Diplomatie'], ['eco', 'Économie']].map(([k, l]) =>
+      `<button class="btn ${k === f ? 'primary' : ''}" data-act="jtab" data-v="${k}">${l}</button>`).join('');
+    const html = `<h2 class="m-title">Journal de campagne</h2><div class="tabs">${tabs}</div><div class="journal">${evs.map(e =>
+      `<div class="ev ${e.important ? 'imp' : ''}" ${e.x != null ? `data-act="goto" data-x="${e.x}" data-y="${e.y}" style="cursor:pointer"` : ''}><span class="when">${e.date}</span><span class="what">${esc(e.text)}</span></div>`).join('') || '<p class="muted">Rien à signaler pour l’instant.</p>'}</div>`;
+    return [html, f + this.events.length];
+  }
+
+  menuModal() {
+    const me = this.st.me;
+    const f = this.rules.factions[me.code];
+    const def = `${f.name} ${this.st.date.split(' ').slice(1).join(' ')}`;
+    const saves = (this.saves || []).map(s => `<div class="save-item"><span>${esc(s.name)}<br><span class="muted small">${s.faction || ''}, ${s.date || ''}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
+    const html = `<h2 class="m-title">Partie</h2><p class="m-sub">${f.name}, ${this.st.date}. Victoires ${me.stats.won}, défaites ${me.stats.lost}, places prises ${me.stats.captured}.</p>
+      <div class="two"><div>
+        <h3 class="section-t" style="border:0;padding:0">Sauvegarder</h3>
+        <div class="row"><input class="amount" style="width:100%" id="save-name" value="${esc(def)}" maxlength="40" aria-label="Nom de la sauvegarde"></div>
+        <div class="btns"><button class="btn primary" data-act="save">Sauvegarder</button></div>
+        <h3 class="section-t">Charger</h3><div class="saves">${saves || '<p class="muted">Aucune sauvegarde.</p>'}</div>
+        <h3 class="section-t">Recommencer</h3><div class="btns"><button class="btn danger" data-act="newgame">Nouvelle partie</button></div>
+      </div><div>
+        <h3 class="section-t" style="border:0;padding:0">Comment jouer</h3>
+        <ul class="small" style="padding-left:18px;margin:0">
+          <li>Carte : glissez pour la déplacer (elle garde son élan), pincez ou utilisez les boutons + et − pour zoomer. Double appui : zoom avant ; appui à deux doigts : zoom arrière.</li>
+          <li>Touchez une armée pour la sélectionner, puis touchez une destination : choisissez la route ou la marche à travers champs.</li>
+          <li>Glissez une de vos armées du doigt ou du stylet pour <b>dessiner son itinéraire</b>, par exemple à travers un bois pour préparer une embuscade, puis choisissez « Suivre mon tracé ».</li>
+          <li>Appui long sur la carte (ou clic droit) avec une armée sélectionnée : elle part aussitôt. Appui long sur une ville ou une armée : sélection et centrage.</li>
+          <li>Au stylet ou à la souris, survolez une ville ou une armée pour voir ses forces. La paume posée sur l’écran est ignorée pendant l’usage du stylet.</li>
+          <li>Les routes sont rapides. À travers champs, l’armée peut se cacher dans les bois, landes, marais ou montagnes et tendre une embuscade (posture « Embuscade »), mais avance plus lentement, s’use et perd son ravitaillement.</li>
+          <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite.</li>
+          <li>La pluie mouille la poudre, la neige ferme les cols, l’hiver vide les greniers. Les récoltes arrivent en été et en automne.</li>
+          <li>Prenez tous les chefs-lieux, ou obtenez la soumission de leurs départements. Si votre chef-lieu tombe, la partie est perdue.</li>
+          <li>Raccourcis : espace pour la pause, 1 à 4 pour la vitesse, Échap pour annuler.</li>
+        </ul>
+      </div></div>`;
+    return [html, JSON.stringify([(this.saves || []).map(s => s.name), me.stats])];
+  }
+
+  endModal() {
+    const o = this.st.over;
+    const win = o.result === 'victoire';
+    const me = this.st.me;
+    const html = `<div class="endcard"><h2 style="color:${win ? 'var(--laiton-clair)' : '#ff9a85'}">${win ? 'Victoire' : 'Défaite'}</h2><p>${esc(o.text)}</p>
+      <p class="muted">${me.stats.won} batailles gagnées, ${me.stats.lost} perdues, ${me.stats.captured} places prises, ${fmt(me.stats.killed)} ennemis hors de combat.</p>
+      <div class="btns" style="justify-content:center"><button class="btn primary" data-act="newgame">Nouvelle partie</button><button class="btn" data-act="close-modal">Regarder la carte</button></div></div>`;
+    return [html, 'fin'];
+  }
+
+  // ------------------------------------------------------------------ écran de départ
+  showStart(info) {
+    this.startInfo = info;
+    this.$('start').hidden = false;
+    this.renderStart();
+  }
+  hideStart() { this.$('start').hidden = true; this.map.highlightDept = null; }
+
+  pickDept(code) {
+    this.startDept = code;
+    this.map.highlightDept = code;
+    const cap = this.md.nodes.find(n => n.type === 'capitale' && n.dept === code);
+    const side = window.innerWidth > 760 ? Math.min(470, window.innerWidth * 0.4) : 0;
+    const z = Math.min(window.innerWidth - side, window.innerHeight) / 120;
+    this.map.moveTo(cap.x - side / 2 / z, cap.y, z);
+    this.renderStart();
+  }
+
+  renderStart() {
+    const info = this.startInfo || { saves: [], running: false };
+    const cards = Object.entries(this.rules.factions).map(([code, f]) => `
+      <button class="dept-card ${this.startDept === code ? 'on' : ''}" data-act="pick-dept" data-v="${code}">
+        ${coat(f.color, code)}<div class="dn">${f.name}<small>${f.capital}</small></div><div class="dd">${f.title}</div>
+        <div class="traits">${f.pros.map(p => `<div>${p}</div>`).join('')}${f.cons.map(p => `<div class="con">${p}</div>`).join('')}</div>
+      </button>`).join('');
+    const diffs = Object.entries(this.rules.difficulty).map(([k, l]) => `<button class="${k === this.startDiff ? 'on' : ''}" data-act="pick-diff" data-v="${k}">${l}</button>`).join('');
+    const saves = (info.saves || []).slice(0, 5).map(s => `<div class="save-item"><span>${esc(s.name)}<br><span class="muted small">${s.faction || ''}, ${s.date || ''}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
+    this.$('start').innerHTML = `<div class="start-side">
+      <div class="cartouche"><h1>Conquête</h1><div class="campaign">Aquitaine, 1790</div><p>L’Assemblée vient de créer les départements. Choisissez le vôtre, ralliez ses villages, puis prenez les chefs-lieux voisins par les armes, le commerce ou la diplomatie.</p></div>
+      ${info.running ? '<button class="btn primary" data-act="resume">Reprendre la partie en cours</button>' : ''}
+      <div class="dept-list">${cards}</div>
+      <div class="row"><span class="lab">Difficulté</span><span class="seg">${diffs}</span></div>
+      <div class="start-actions">
+        <button class="btn primary" data-act="start-game" ${this.startDept ? '' : 'disabled'}>${this.startDept ? `Commencer avec ${this.rules.factions[this.startDept].name}` : 'Choisissez un département'}</button>
+        ${saves ? `<div class="section-t">Parties sauvegardées</div><div class="saves">${saves}</div>` : ''}
+      </div></div>`;
+  }
+}
+
+function clampN(v, a, b) { return Math.max(a, Math.min(b, v)); }
