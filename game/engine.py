@@ -152,6 +152,21 @@ class Game:
     def valid_node(self, nid):
         return isinstance(nid, int) and 0 <= nid < len(self.nodes)
 
+    def fort_max(self, code, nid):
+        """Niveau de fortification le plus haut qu'on peut bâtir ici : bastions à la Vauban réservés aux grandes places."""
+        if self.geo.nodes[nid]['type'] in R.BASTION_TYPES and code in self.factions and 'vauban' in self.factions[code]['techs']:
+            return R.BASTION_LEVEL
+        return R.FORT_MAX
+
+    def lose_fort_level(self, nid):
+        n = self.nodes[nid]
+        if n['fort'] <= 0:
+            return False
+        n['fort'] -= 1
+        n['milice_max'] = max(20.0, n['milice_max'] - 40)
+        n['milice'] = min(n['milice'], n['milice_max'])
+        return True
+
     def node_xy(self, nid):
         n = self.geo.nodes[nid]
         return n['x'], n['y']
@@ -294,6 +309,16 @@ class Game:
                     self.log('revolte', f"Agitation à {gn['name']} (ordre public {int(n['stab'] * 100)} %) : "
                                         f"une garnison ou des impôts plus légers calmeraient la population.",
                              gn['x'], gn['y'], who=code)
+            if f.get('banqueroute'):
+                forts = [n for n in mine if n['fort'] > 0 and not n['siege']]
+                if forts:
+                    n = max(forts, key=lambda x: (x['fort'], -self.geo.nodes[x['id']]['type'].startswith('cap')))
+                    self.lose_fort_level(n['id'])
+                    self._dirty_income = True
+                    if code == self.player:
+                        gn = self.geo.nodes[n['id']]
+                        self.log('eco', f"Trésor vide : faute d'entretien, les remparts de {gn['name']} se délabrent "
+                                        f"(niveau {n['fort']}).", gn['x'], gn['y'], who=code, important=True)
             for k in [k for k, v in f.get('intel', {}).items() if v < self.t]:
                 del f['intel'][k]
         if season == 'printemps' and self.rng.random() < 0.35:
@@ -412,6 +437,8 @@ class Game:
             k_up = 1 + self.mod(code, 'upkeep')
             tot['vivres'] -= up_v * k_up
             tot['livres'] -= up_l * k_up
+            up_f = sum(R.FORT_UPKEEP[min(n['fort'], R.BASTION_LEVEL)] for n in self.owned_nodes(code))
+            tot['livres'] -= up_f
             # industrie
             cap = tot['industrie']
             s = f['slider']
@@ -419,7 +446,7 @@ class Game:
             f['_tool_rate'] = cap * (1 - s) * 0.5
             f['_cap'] = cap
             f['_cov'] = cov
-            f['_upkeep'] = dict(vivres=up_v * k_up, livres=up_l * k_up)
+            f['_upkeep'] = dict(vivres=up_v * k_up, livres=up_l * k_up, forts=up_f)
             f['_trade'] = dict(trade_s)
             f['_trade']['livres'] = f['_trade'].get('livres', 0) + trade_l
             f['income'] = dict(livres=tot['livres'], vivres=tot['vivres'], fer=tot['fer'] - f['_arm_rate'] - 0.5 * f['_tool_rate'] * (1 + self.mod(code, 'tools_cost')),
@@ -607,7 +634,10 @@ class Game:
             return False, "Construction inconnue."
         lvl = n['fort'] if what == 'fort' else n['dev']
         pending = sum(1 for q in n['queue'] if q['kind'] == 'build' and q['what'] == what)
-        if lvl + pending >= b['max']:
+        top = self.fort_max(code, nid) if what == 'fort' else b['max']
+        if lvl + pending >= top:
+            if what == 'fort' and top < R.BASTION_LEVEL and gn['type'] in R.BASTION_TYPES:
+                return False, "Niveau maximal : les bastions demandent la technologie « Fortifications à la Vauban »."
             return False, "Niveau maximal atteint."
         if len(n['queue']) >= 4:
             return False, "File de production pleine."
@@ -617,6 +647,8 @@ class Game:
         self.pay(code, cost)
         days = b['days'](lvl + pending)
         n['queue'].append(dict(kind='build', what=what, left=days, total=days))
+        if what == 'fort' and lvl + pending + 1 == R.BASTION_LEVEL:
+            return True, f"Bastions à la Vauban lancés à {gn['name']}."
         return True, f"{b['name']} lancées à {gn['name']}."
 
     def update_queues(self, dt):
@@ -636,7 +668,7 @@ class Game:
                         self.log('armee', f"{R.UNITS[q['what']]['name']} prêt(e) à {gn['name']}.", gn['x'], gn['y'])
                 else:
                     if q['what'] == 'fort':
-                        n['fort'] = min(3, n['fort'] + 1)
+                        n['fort'] = min(R.BASTION_LEVEL, n['fort'] + 1)
                         n['milice_max'] += 40
                     else:
                         n['dev'] = min(3, n['dev'] + 1)
@@ -2092,19 +2124,23 @@ class Game:
         if old == code:
             return
         n['owner'] = code
-        n['milice'] = n['milice_max'] * (0.5 if peaceful else 0.15)
         n['stab'] = 0.6 if peaceful else 0.35
         n['garrison'] = []
         n['queue'] = []
         n['siege'] = None
         if not peaceful and n['dev'] > 0 and old != R.NEUTRAL and self.rng.random() < 0.35:
             n['dev'] -= 1
+        breached = not peaceful and self.lose_fort_level(nid)
+        n['milice'] = n['milice_max'] * (0.5 if peaceful else 0.15)
         self._dirty_income = True
         if code in self.factions:
             self.factions[code]['stats']['captured'] += 1
         if old in self.factions:
             self.factions[old]['rel'][code] = max(-100, self.factions[old]['rel'][code] - 12)
-        if not peaceful and (code == self.player or old == self.player):
+        if breached and (code == self.player or old == self.player):
+            self.log('capture', f"{gn['name']} tombe aux mains de {self.fname(code)} ; ses remparts éventrés retombent au "
+                                f"niveau {n['fort']}.", gn['x'], gn['y'], who=code, important=True)
+        elif not peaceful and (code == self.player or old == self.player):
             self.log('capture', f"{gn['name']} tombe aux mains de {self.fname(code)}.", gn['x'], gn['y'], who=code, important=True)
         elif not peaceful:
             self.log('capture', f"{gn['name']} tombe aux mains de {self.fname(code)}.", gn['x'], gn['y'], who=code)

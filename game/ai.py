@@ -96,7 +96,7 @@ class AI:
                     if g.build(code, n['id'], 'dev')[0]:
                         built += 1
                         continue
-                if (self.threat_at(n['id']) > 0 or gn['type'] == 'capitale') and n['fort'] < 3:
+                if (self.threat_at(n['id']) > 0 or gn['type'] == 'capitale') and n['fort'] < g.fort_max(code, n['id']):
                     if g.build(code, n['id'], 'fort')[0]:
                         built += 1
 

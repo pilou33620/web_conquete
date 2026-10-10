@@ -90,6 +90,24 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
   la défense profite des collines et des montagnes ; traverser une rivière affaiblit l'attaquant.
 - Places fortes : elles se prennent par **siège**. L'artillerie ouvre la brèche bien plus vite. On peut donner l'assaut avant.
 
+### Fortifications
+Chaque place a un niveau de fortification, dessiné sur la carte autour de la ville :
+
+| Niveau | Ouvrage | Entretien |
+|---|---|---|
+| 1 | Mur d'enceinte flanqué de tours | 0,3 livre par jour |
+| 2 | Remparts épais | 0,7 livre par jour |
+| 3 | Remparts bastionnés (pointes de flèche) | 1,2 livre par jour |
+| 4 | Bastions à la Vauban, avec demi-lunes | 2 livres par jour |
+
+- Chaque niveau donne +40 de milice, +35 % de puissance aux défenseurs, les abrite derrière les murs et allonge le siège.
+  Une ville tenue par un département et fortifiée (niveau 1 ou plus) ne se prend que par siège.
+- On monte d'un niveau dans le panneau de la ville (« Aménagements »). Le niveau 4 n'existe que dans les chefs-lieux
+  et les places fortes, après la technologie « Fortifications à la Vauban » (650 livres, 180 bois, 90 fer, 70 jours).
+- Pendant un siège, la brèche s'ouvre dans l'enceinte dessinée à mesure que l'artillerie travaille.
+- Une place prise par la force perd un niveau (remparts éventrés). Si le trésor est vide, faute d'entretien,
+  les remparts les plus hauts se délabrent d'un niveau chaque mois. Le sabotage d'un espion retire aussi un niveau.
+
 ### Généraux, formations et plans de bataille
 - Chaque armée est menée par un **général** (colonel, puis général de brigade et de division après des victoires)
   doté d'un trait : audacieux, prudent, cavalier, artilleur, montagnard, éclaireur, inspirant ou logisticien.

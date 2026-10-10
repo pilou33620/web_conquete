@@ -69,7 +69,9 @@ def from_dict(geo, d):
 def rules_payload():
     build = {k: dict(name=b['name'], max=b['max'], desc=b['desc'], costs=[b['cost'](l) for l in range(b['max'])],
                      days=[b['days'](l) for l in range(b['max'])]) for k, b in R.BUILD.items()}
-    return dict(factions=R.FACTIONS, units=R.UNITS, unit_order=R.UNIT_ORDER, techs=list(R.TECH.values()),
+    fort = dict(max=R.FORT_MAX, bastion=R.BASTION_LEVEL, bastion_types=R.BASTION_TYPES, upkeep=R.FORT_UPKEEP,
+                names=R.FORT_NAMES)
+    return dict(factions=R.FACTIONS, units=R.UNITS, unit_order=R.UNIT_ORDER, techs=list(R.TECH.values()), fort=fort,
                 branches=R.BRANCHES, build=build, node_base=R.NODE_BASE, spec={k: v['label'] for k, v in R.SPEC.items()},
                 weather=R.WEATHER, zones=R.ZONES, speeds=R.SPEEDS, res=R.RESOURCES, res_label=R.RES_LABEL,
                 difficulty={k: v['label'] for k, v in R.DIFFICULTY.items()}, neutral_color=R.NEUTRAL_COLOR,
@@ -115,7 +117,8 @@ def player_state(g, since=0):
     for n in g.nodes:
         gn = g.geo.nodes[n['id']]
         d = dict(id=n['id'], o=n['owner'], f=n['fort'], d=n['dev'], s=round(n['stab'], 2),
-                 sg=dict(by=n['siege']['by'], dmg=round(n['siege']['dmg'], 2)) if n['siege'] else None)
+                 sg=dict(by=n['siege']['by'], dmg=round(n['siege']['dmg'], 2), occ=bool(n['siege'].get('occupy')))
+                 if n['siege'] else None)
         if n['id'] in g._blockade:
             d['bk'] = 1
         if n['owner'] in side:
@@ -123,6 +126,7 @@ def player_state(g, since=0):
             d['mm'] = round(n['milice_max'] * (1 + g.mod(n['owner'], 'milice')))
             d['g'] = [_reg(r) for r in n['garrison']]
             if n['owner'] == p:
+                d['fx'] = g.fort_max(p, n['id'])
                 d['q'] = [dict(kind=q['kind'], what=q['what'], left=round(q['left'], 1), total=round(q['total'], 1)) for q in n['queue']]
         elif g.intel_active(p, n['id']):
             d['m'] = round(n['milice'])

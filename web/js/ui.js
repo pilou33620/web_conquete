@@ -211,11 +211,17 @@ export class UI {
     }
   }
 
+  fortName(f) { return this.rules.fort.names[Math.min(f, this.rules.fort.names.length - 1)] || ''; }
+
   resTip(r) {
     const me = this.st.me;
     const lab = this.rules.res_label[r];
     const rows = [[`Stock`, fmt(me.res[r])], [`Variation par jour`, (me.income[r] >= 0 ? '+' : '') + fmt1(me.income[r])]];
-    if (r === 'livres') { rows.push(['Solde des troupes', '−' + fmt1(me.upkeep.livres || 0)]); rows.push(['Commerce', '+' + fmt1(me.trade.livres || 0)]); }
+    if (r === 'livres') {
+      rows.push(['Solde des troupes', '−' + fmt1(me.upkeep.livres || 0)]);
+      if (me.upkeep.forts) rows.push(['Entretien des remparts', '−' + fmt1(me.upkeep.forts)]);
+      rows.push(['Commerce', '+' + fmt1(me.trade.livres || 0)]);
+    }
     if (r === 'vivres') { rows.push(['Rations des troupes', '−' + fmt1(me.upkeep.vivres || 0)]); rows.push(['Saison', this.rules.seasons[this.st.season]]); }
     if (r === 'armes' || r === 'outils') rows.push(['Capacité industrielle', fmt1(me.cap) + ' /j']);
     if (r === 'outils') rows.push(['Bonus des outils', '+' + Math.round((me.tools_bonus - 1) * 100) + ' %']);
@@ -585,14 +591,15 @@ export class UI {
       <div class="p-sub">${sub}</div></div></div>`;
     if (ns.sg) {
       const by = this.rules.factions[ns.sg.by]?.name || ns.sg.by;
-      const occ = ns.o === 'neutre';
+      const occ = ns.sg.occ;
       h += `<div class="p-state">${occ ? `Ralliement par ${by}` : `Assiégée par ${by}`} : ${Math.round(ns.sg.dmg * 100)} %</div><div class="bar red"><i style="width:${Math.round(ns.sg.dmg * 100)}%"></i></div>`;
     }
     const pips = (v, m = 3) => `<span class="pips">${Array.from({ length: m }, (_, i) => `<i class="${i < v ? 'on' : ''}"></i>`).join('')}</span>`;
     h += `<dl class="kv">
       <dt>Milice</dt><dd>${ns.m != null ? fmt(ns.m) + (ns.mm ? ' / ' + fmt(ns.mm) : '') : 'inconnue'}</dd>
       ${ns.gm != null ? `<dt>Garnison repérée</dt><dd>${fmt(ns.gm)} hommes</dd>` : ''}
-      <dt>Fortifications</dt><dd>${pips(ns.f)}</dd>
+      <dt>Fortifications</dt><dd title="${esc(this.fortName(ns.f))}">${pips(ns.f, Math.max(this.rules.fort.max, ns.f, ns.fx || 0))}</dd>
+      ${ns.f > 0 ? `<dt></dt><dd class="muted small">${esc(this.fortName(ns.f))}${own ? `, entretien ${fmt1(this.rules.fort.upkeep[ns.f])} livres /j` : ''}</dd>` : ''}
       <dt>Développement</dt><dd>${pips(ns.d)}</dd>
       ${own ? `<dt>Ordre public</dt><dd>${Math.round(ns.s * 100)} %</dd>` : ''}
       <dt>Terrain</dt><dd>${terr}</dd></dl>`;
@@ -647,9 +654,17 @@ export class UI {
         const lvl = k === 'fort' ? ns.f : ns.d;
         const pend = (ns.q || []).filter(q => q.kind === 'build' && q.what === k).length;
         const l = lvl + pend;
-        if (l >= b.max) { h += `<button class="btn" disabled>${b.name} au maximum</button>`; continue; }
+        const top = k === 'fort' ? (ns.fx || this.rules.fort.max) : b.max;
+        if (l >= top) {
+          const vauban = k === 'fort' && top < this.rules.fort.bastion && this.rules.fort.bastion_types.includes(gn.type);
+          h += vauban ? `<button class="btn" disabled title="Recherchez « Fortifications à la Vauban » (militaire)">Bastions à la Vauban<small>technologie Vauban requise</small></button>`
+            : `<button class="btn" disabled>${b.name} au maximum</button>`;
+          continue;
+        }
         const c = b.costs[l];
-        h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'} title="${esc(b.desc)}">${b.name} niveau ${l + 1}<small>${this.costHtml(c)}, ${b.days[l]} j</small></button>`;
+        const lab = k === 'fort' ? `${l + 1 === this.rules.fort.bastion ? 'Bastions à la Vauban' : b.name + ' niveau ' + (l + 1)}` : `${b.name} niveau ${l + 1}`;
+        const up = k === 'fort' ? `, entretien ${fmt1(this.rules.fort.upkeep[l + 1])} livres /j` : '';
+        h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'} title="${esc(b.desc)}">${lab}<small>${this.costHtml(c)}, ${b.days[l]} j${up}</small></button>`;
       }
       h += `</div>`;
       if (ns.q && ns.q.length) {
@@ -970,6 +985,7 @@ export class UI {
           <dt>Couverture en outils</dt><dd>${Math.round(me.cov * 100)} %</dd>
           <dt>Bonus de production</dt><dd>+${Math.round((me.tools_bonus - 1) * 100)} %</dd>
           <dt>Solde des troupes</dt><dd>${fmt1(me.upkeep.livres || 0)} livres /j</dd>
+          <dt>Entretien des remparts</dt><dd>${fmt1(me.upkeep.forts || 0)} livres /j</dd>
           <dt>Rations des troupes</dt><dd>${fmt1(me.upkeep.vivres || 0)} vivres /j</dd>
         </dl>
         <div class="bar"><i style="width:${Math.round(me.cov * 100)}%"></i></div>
@@ -1015,7 +1031,7 @@ export class UI {
           <li>Appui long sur la carte (ou clic droit) avec une armée sélectionnée : elle part aussitôt. Appui long sur une ville ou une armée : sélection et centrage.</li>
           <li>Au stylet ou à la souris, survolez une ville ou une armée pour voir ses forces. La paume posée sur l’écran est ignorée pendant l’usage du stylet.</li>
           <li>Les routes sont rapides. À travers champs, l’armée peut se cacher dans les bois, landes, marais ou montagnes et tendre une embuscade (posture « Embuscade »), mais avance plus lentement, s’use et perd son ravitaillement.</li>
-          <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite.</li>
+          <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite. Les remparts ont quatre niveaux (le quatrième, les bastions à la Vauban, après la technologie du même nom, dans le chef-lieu et les places fortes) ; ils coûtent un entretien et perdent un niveau quand la place est prise de force.</li>
           <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
           <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
           <li><b>Espions</b> : depuis une place étrangère, espionnez (vision et garnison pendant 45 jours) ou sabotez ses remparts en temps de guerre. Le brouillard de guerre (bouton œil) montre ce que vous voyez réellement.</li>

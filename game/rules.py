@@ -79,9 +79,19 @@ SPEC = {
     'sel': dict(livres=1.2, label='Salines'),
     'tabac': dict(livres=0.9, label='Tabac & prunes'),
 }
+# Fortifications : niveaux 1 à 3 partout, niveau 4 (bastions à la Vauban) dans les chefs-lieux et les places fortes,
+# après la technologie « Fortifications à la Vauban ». Chaque niveau s'entretient (livres par jour et par place).
+FORT_MAX = 3
+BASTION_LEVEL = 4
+BASTION_TYPES = ('capitale', 'fort')
+FORT_UPKEEP = [0.0, 0.3, 0.7, 1.2, 2.0]
+FORT_NAMES = ['Sans remparts', 'Mur d’enceinte', 'Remparts', 'Remparts bastionnés', 'Bastions à la Vauban']
 BUILD = {
-    'fort': dict(name='Fortifications', max=3, cost=lambda lvl: dict(livres=120 * (lvl + 1), bois=40 * (lvl + 1), fer=15 * (lvl + 1)),
-                 days=lambda lvl: 20 + 12 * lvl, desc='+1 niveau de fortification : défense accrue, sièges plus longs'),
+    'fort': dict(name='Fortifications', max=BASTION_LEVEL,
+                 cost=lambda lvl: dict(livres=120 * (lvl + 1), bois=40 * (lvl + 1), fer=15 * (lvl + 1)) if lvl < 3
+                 else dict(livres=650, bois=180, fer=90),
+                 days=lambda lvl: 20 + 12 * lvl if lvl < 3 else 70,
+                 desc='+1 niveau de fortification : défense accrue, sièges plus longs, mais entretien plus cher'),
     'dev': dict(name='Développement', max=3, cost=lambda lvl: dict(livres=100 * (lvl + 1), bois=50 * (lvl + 1), outils=15 * (lvl + 1)),
                 days=lambda lvl: 18 + 10 * lvl, desc='Moulins, ateliers, manufacture : +25 % de production par niveau'),
 }
@@ -94,7 +104,7 @@ TECHS = [
     ('gribeauval', 'militaire', 'Système Gribeauval', 'Canons standardisés et légers : artillerie +25 %, plus rapide.', 875, 49, [], dict(art_power=0.25, art_speed=0.25)),
     ('hussards', 'militaire', 'Hussards et éclaireurs', 'Cavalerie +15 %, vision +6 km, débusque les embuscades.', 625, 35, [], dict(cav_power=0.15, vision=6, detect=3)),
     ('voltigeurs', 'militaire', 'Tirailleurs et voltigeurs', 'Embuscades +30 %, infanterie légère +20 % à couvert.', 750, 42, ['baionnette'], dict(ambush=0.30, legere_cover=0.20)),
-    ('vauban', 'militaire', 'Fortifications à la Vauban', 'Défense des places +15 %, milice +25 %.', 750, 42, [], dict(fort_bonus=0.15, milice=0.25)),
+    ('vauban', 'militaire', 'Fortifications à la Vauban', 'Défense des places +15 %, milice +25 %, bastions (fortifications niveau 4) dans le chef-lieu et les places fortes.', 750, 42, [], dict(fort_bonus=0.15, milice=0.25)),
     ('levee', 'militaire', 'Levée en masse', 'Recrutement −25 % de livres, formation −30 %, recrues +20 %.', 1125, 56, ['fusil1777'], dict(recruit_cost=-0.25, train=-0.30, recrues=0.20)),
     ('divisions', 'militaire', 'Système divisionnaire', 'Toutes armes +8 %, moral +10, retraites moins coûteuses.', 1500, 70, ['gribeauval', 'levee'], dict(all_power=0.08, morale=10, retreat=-0.5)),
 

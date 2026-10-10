@@ -1311,16 +1311,18 @@ export class MapView {
         ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.ellipse(0, s * 0.12, s * 0.72 + 3, s * 0.5 + 3, 0, 0, Math.PI * 2); ctx.stroke();
       }
+      const wallR = ns.f > 0 ? this.walls(ctx, s, ns.f, n.id, ns.sg && !ns.sg.occ ? ns.sg.dmg : 0) : 0;
       if (n.type === 'capitale') this.iconStar(ctx, s, 5, col, true);
       else if (n.type === 'fort') this.iconStar(ctx, s, 4, col, false);
       else if (n.type === 'ville') this.iconTown(ctx, s, col, n.id);
       else this.iconVillage(ctx, s, col, n.id, ns.o);
       // siège
       if (ns.sg) {
+        const sr = Math.max(s * 0.62 + 4, wallR + 4);
         ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.arc(0, 0, s * 0.62 + 4, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, sr, 0, Math.PI * 2); ctx.stroke();
         ctx.strokeStyle = this.colors[ns.sg.by] || '#f80'; ctx.lineWidth = 3.4;
-        ctx.beginPath(); ctx.arc(0, 0, s * 0.62 + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0.03, ns.sg.dmg)); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, sr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0.03, ns.sg.dmg)); ctx.stroke();
       }
       if (n.quai && (z >= 3.2 || ns.bk)) this.anchor(ctx, -s * 0.62, s * 0.3, clamp(s * 0.36, 7, 13), ns.bk ? '#ff8a6a' : '#cfe8ff');
       if (ns.intel || ns.spy) this.eye(ctx, s * 0.62, -s * 0.5, clamp(s * 0.4, 9, 14), ns.intel ? '#f3d98e' : 'rgba(243,217,142,0.6)');
@@ -1367,6 +1369,82 @@ export class MapView {
         ctx.beginPath(); ctx.arc(x - s * 0.55 - 4, y - s * 0.35, 4, 0, Math.PI * 2); ctx.fill();
       }
     }
+  }
+
+  // enceinte autour d'une place, selon son niveau : mur d'enceinte flanqué de tours (1), remparts épais (2),
+  // tracé bastionné en pointes de flèche (3), bastions et demi-lunes à la Vauban (4).
+  // Pendant un siège, la brèche s'ouvre à mesure que les canons travaillent. Retourne le rayon extérieur de l'ouvrage.
+  walls(ctx, s, f, id, dmg) {
+    const R = s * 0.62 + 2, sq = 0.86, TAU = Math.PI * 2;
+    const a0 = (id * 2.399) % TAU;   // orientation propre à chaque ville : la brèche y reste au même endroit
+    const half = dmg > 0.02 ? Math.PI * 0.5 * Math.min(1, dmg) : 0;
+    const P = (a, r) => [Math.cos(a) * r, Math.sin(a) * r * sq];
+    const inGap = (x, y) => {
+      if (!half) return false;
+      const d = Math.abs((((Math.atan2(y / sq, x) - a0) % TAU) + TAU * 1.5) % TAU - Math.PI);
+      return d < half;
+    };
+    const lw = clamp(s * 0.03 * (1 + f * 0.5), 1.3, 6);
+    const dark = 'rgba(28,22,14,0.9)', stone = f >= 4 ? '#f2e6c4' : '#e6d9b3';
+    const ring = [], towers = [], lunes = [];
+    let outer;
+    if (f <= 2) {
+      const N = 12;
+      for (let i = 0; i <= N; i++) ring.push(P(a0 + i * TAU / N, R));
+      for (let i = 0; i < N; i += f === 1 ? 3 : 2) towers.push(ring[i]);
+      outer = R + lw;
+    } else {
+      const m = f >= 4 ? 6 : 5, w = Math.PI / m * 0.42;
+      for (let k = 0; k < m; k++) {
+        const a = a0 + (k + 0.5) * TAU / m;
+        ring.push(P(a - w, R), P(a - w, R * 1.13), P(a, R * 1.42), P(a + w, R * 1.13), P(a + w, R));
+      }
+      ring.push(ring[0]);
+      outer = R * 1.42;
+      if (f >= 4) {
+        const d = Math.PI / m * 0.32;
+        for (let k = 0; k < m; k++) {
+          const a = a0 + k * TAU / m;
+          lunes.push([P(a - d, R * 1.22), P(a, R * 1.62), P(a + d, R * 1.22)]);
+        }
+        outer = R * 1.62;
+      }
+    }
+    const path = (pts, closedSkip) => {
+      ctx.beginPath();
+      let pen = false;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+        if (closedSkip && inGap((x1 + x2) / 2, (y1 + y2) / 2)) { pen = false; continue; }
+        if (!pen) { ctx.moveTo(x1, y1); pen = true; }
+        ctx.lineTo(x2, y2);
+      }
+    };
+    ctx.lineJoin = 'miter'; ctx.lineCap = 'butt'; ctx.miterLimit = 6;
+    for (const [w2, c] of [[lw + 2.6, dark], [lw, stone]]) {
+      path(ring, true); ctx.strokeStyle = c; ctx.lineWidth = w2; ctx.stroke();
+      for (const t of lunes) {
+        if (inGap(t[1][0], t[1][1])) continue;
+        path(t, false); ctx.strokeStyle = c; ctx.lineWidth = w2 * 0.7; ctx.stroke();
+      }
+    }
+    for (const [x, y] of towers) {
+      if (inGap(x, y)) continue;
+      const r = lw * (f === 1 ? 0.95 : 1.25);
+      ctx.fillStyle = dark; ctx.beginPath(); ctx.arc(x, y, r + 1.3, 0, TAU); ctx.fill();
+      ctx.fillStyle = stone; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    }
+    if (half) {
+      // éboulis dans la brèche
+      ctx.fillStyle = 'rgba(110,95,72,0.95)';
+      const k = Math.ceil(4 + dmg * 6);
+      for (let i = 0; i < k; i++) {
+        const a = a0 + (i / (k - 1) - 0.5) * half * 1.5;
+        const [x, y] = P(a, R * (0.98 + ((i * 7) % 5) * 0.06));
+        ctx.beginPath(); ctx.arc(x, y, Math.max(1, lw * 0.5), 0, TAU); ctx.fill();
+      }
+    }
+    return outer;
   }
 
   flag(ctx, x, y, h, col) {
