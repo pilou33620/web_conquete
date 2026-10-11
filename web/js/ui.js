@@ -618,6 +618,12 @@ export class UI {
         break;
       }
       case 'load': this.onLoad && this.onLoad(d.v); break;
+      case 'anim': {
+        this.map.ambient.setOn(!this.map.ambient.on);
+        this.toast(this.map.ambient.on ? 'Animations de la carte activées.' : 'Animations de la carte coupées.');
+        this.modalSig = ''; this.renderModal(true);
+        break;
+      }
       case 'newgame': if (confirm('Abandonner la partie en cours et revenir à l’écran de départ ?')) this.onNewGame && this.onNewGame(); break;
       case 'selnode-modal': this.closeModal(); this.select({ kind: 'node', id: +d.node }); this.action('center', {}); break;
       // écran de départ
@@ -1270,6 +1276,8 @@ export class UI {
         <div class="btns"><button class="btn primary" data-act="save">Sauvegarder</button></div>
         <h3 class="section-t">Charger</h3><div class="saves">${saves || '<p class="muted">Aucune sauvegarde.</p>'}</div>
         <h3 class="section-t">Recommencer</h3><div class="btns"><button class="btn danger" data-act="newgame">Nouvelle partie</button></div>
+        <h3 class="section-t">Affichage</h3><div class="btns"><button class="btn" data-act="anim">${this.map.ambient.on ? 'Couper les animations de la carte' : 'Animer la carte'}</button></div>
+        <p class="muted small" style="margin:4px 0 0">Moulins, fumées, oiseaux, bateaux, charrettes et troupeaux.</p>
         <h3 class="section-t">Jouer depuis un autre appareil</h3>${this.netHtml(this.net)}
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Comment jouer</h3>
@@ -1356,7 +1364,26 @@ export class UI {
         <button class="btn primary" data-act="start-game" ${this.startDept ? '' : 'disabled'}>${this.startDept ? `Commencer avec ${esc(sc.names[this.startDept] || this.rules.factions[this.startDept].name)} en ${sc.year}` : (sc.word === 'province' ? 'Choisissez une province' : 'Choisissez un département')}</button>
         ${saves ? `<div class="section-t">Parties sauvegardées${info.saves.length > 5 ? ` <span class="muted small">(${info.saves.length})</span>` : ''}</div><div class="saves scroll">${saves}</div>` : ''}
         ${info.net && info.net.lan && info.net.urls.length ? `<div class="section-t">Sur le réseau local</div>${this.netHtml(info.net)}` : ''}
+        ${this.versionHtml(info.update)}
       </div></div>`;
+    const det = this.$('start').querySelector('details.ver-line');
+    if (det) det.addEventListener('toggle', () => { this.verOpen = det.open; });   // reste ouvert d'un rendu à l'autre
+  }
+
+  // ligne discrète : version du jeu et résultat de la recherche de mise à jour au démarrage du serveur
+  versionHtml(u) {
+    if (!u) return '';
+    const v = u.version ? `Version ${esc(u.version)}${u.date ? ` du ${esc(u.date)}` : ''}` : 'Version inconnue';
+    const label = { a_jour: 'à jour', hors_ligne: 'mise à jour non vérifiée', bloque: 'mise à jour bloquée',
+      desactive: 'vérification désactivée', pas_git: 'pas de mise à jour automatique' }[u.status] || '';
+    if (u.status === 'mis_a_jour') {
+      const news = (u.news || []).map(t => `<li>${esc(t)}</li>`).join('');
+      const rest = u.n - (u.news || []).length;
+      const more = rest > 0 ? `<li class="muted">… et ${rest} ${rest > 1 ? 'autres' : 'autre'}</li>` : '';
+      return `<details class="ver-line maj" ${this.verOpen ? 'open' : ''}><summary>Mise à jour installée : ${u.n} ${u.n > 1 ? 'nouveautés' : 'nouveauté'} <span class="muted">· ${v}</span></summary>${news ? `<ul>${news}${more}</ul>` : ''}</details>`;
+    }
+    if (u.status === 'a_jour' || !u.msg) return `<div class="ver-line">${v}${label ? ` · ${label}` : ''}</div>`;
+    return `<details class="ver-line" ${this.verOpen ? 'open' : ''}><summary>${v} · ${label}</summary><p>${esc(u.msg)}</p></details>`;
   }
 }
 

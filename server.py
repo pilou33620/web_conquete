@@ -2,7 +2,8 @@
 """Conquête (Aquitaine 1790) — serveur local du jeu.
 
 Lancement :  python server.py            (puis ouvrir http://127.0.0.1:8790)
-Options   :  --port 8790  --lan  --local  --no-browser  --browser
+Options   :  --port 8790  --lan  --local  --no-browser  --browser  --no-update
+Au démarrage, le jeu cherche une mise à jour sur GitHub (installé avec git clone) et se relance si besoin.
 Sur un Raspberry Pi (ou un Linux sans écran), le jeu s'ouvre tout seul au réseau local,
 n'essaie pas de lancer de navigateur et affiche son adresse réseau.
 Aucune dépendance externe : Python 3.8+ suffit (Windows, Linux, macOS, Termux).
@@ -14,6 +15,7 @@ import math
 import mimetypes
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -52,7 +54,7 @@ class App:
         self.port = 8790
         self.lan = False
         self.ips = []
-        payload = dict(map=self.geo.client_payload(), rules=V.rules_payload())
+        payload = dict(map=self.geo.client_payload(), rules=V.rules_payload(), ver=UPDATE['version'])
         raw = json.dumps(payload, ensure_ascii=False, separators=(',', ':'), default=str).encode('utf-8')
         self.static_raw = raw
         self.static_gz = gzip.compress(raw, 6)
@@ -341,10 +343,12 @@ class Handler(BaseHTTPRequestHandler):
                 since = 0
             with APP.lock:
                 if not APP.game:
-                    return self._json(dict(game=None))
-                return self._json(V.player_state(APP.game, since))
+                    return self._json(dict(game=None, ver=UPDATE['version']))
+                st = V.player_state(APP.game, since)
+            st['ver'] = UPDATE['version']   # le client recharge la page si le serveur a changé de version
+            return self._json(st)
         if path == '/api/saves':
-            return self._json(dict(saves=APP.list_saves(), running=APP.game is not None, net=APP.net_info()))
+            return self._json(dict(saves=APP.list_saves(), running=APP.game is not None, net=APP.net_info(), update=UPDATE))
         if path == '/api/info':
             return self._json(APP.net_info())
         if path == '/' or path == '':
@@ -472,6 +476,160 @@ def watch_network(app, local_url):
             banner(app, local_url, 'nouvelle adresse réseau')
 
 
+# ---------------------------------------------------------------------- mise à jour automatique
+MAJ_ENV = 'CONQUETE_MAJ'   # posée lors de la relance après une mise à jour (évite une boucle)
+# état exposé au client (écran de départ) : version = hash court du commit, date = sa date
+UPDATE = dict(version=None, date=None, status='pas_git', msg='', news=[], n=0)
+NET_ERR = ('could not resolve', 'resolve host', 'timed out', 'timeout', 'network is unreachable', 'no route to host',
+           'connection refused', 'connection reset', 'connection closed', 'failed to connect', 'temporary failure',
+           'unable to access', 'name or service not known', 'ssh: connect to host', 'could not read from remote')
+AUTH_ERR = ('permission denied', 'authentication failed', 'terminal prompts disabled', 'could not read username',
+            'could not read password', 'repository not found', 'host key verification failed')
+
+
+def _git_env():
+    """Jamais d'invite de mot de passe : si la clé SSH ou le jeton manque, git échoue tout de suite."""
+    env = dict(os.environ)
+    env.pop(MAJ_ENV, None)
+    env['GIT_TERMINAL_PROMPT'] = '0'
+    env['GCM_INTERACTIVE'] = 'never'   # gestionnaire d'identifiants de Git pour Windows : pas de fenêtre
+    env['LC_ALL'] = 'C'                # messages de git en anglais : plus faciles à reconnaître
+    env.setdefault('GIT_SSH_COMMAND', 'ssh -o BatchMode=yes -o ConnectTimeout=10')
+    return env
+
+
+def _git(env, *args, timeout=10):
+    """Lance git dans le dossier du jeu ; renvoie (code, sortie, erreur), code None si git n'a pas répondu."""
+    try:
+        r = subprocess.run(['git', *args], cwd=ROOT, env=env, stdin=subprocess.DEVNULL, capture_output=True,
+                           encoding='utf-8', errors='replace', timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None, '', 'timed out'
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, '', str(e)
+    return r.returncode, r.stdout.strip(), r.stderr.strip()
+
+
+def _plural(n, mot):
+    return f'{n} {mot}{"s" if n > 1 else ""}'
+
+
+def _set_update(status, msg, detail='', **kw):
+    """msg : phrase courte montrée aussi sur l'écran de départ ; detail : conseils pour la console seulement."""
+    UPDATE.update(status=status, msg=msg, **kw)
+    print(msg + (f'\n   {detail}' if detail else ''), flush=True)
+
+
+def _relaunch(info):
+    """Relance le serveur avec le nouveau code (même PID sous Linux : systemd ne voit rien)."""
+    os.environ[MAJ_ENV] = json.dumps(info, separators=(',', ':'))
+    argv = [sys.executable, os.path.abspath(__file__)] + sys.argv[1:]
+    print('Redémarrage du jeu avec la nouvelle version…\n', flush=True)
+    sys.stderr.flush()
+    if os.name == 'nt':   # Windows : la fenêtre du .bat attend la fin du nouveau serveur
+        try:
+            sys.exit(subprocess.call(argv))
+        except KeyboardInterrupt:
+            sys.exit(0)
+    os.execv(sys.executable, argv)
+
+
+def auto_update(enabled=True, patient=False):
+    """Au démarrage : récupère la dernière version sur GitHub (avance rapide seulement) puis relance le jeu.
+    patient : Raspberry Pi / machine sans écran, où le Wi-Fi peut arriver après le service."""
+    relaunched = os.environ.pop(MAJ_ENV, None)
+    if not shutil.which('git'):
+        return _set_update('pas_git', 'Mise à jour automatique impossible : git n\'est pas installé.')
+    env = _git_env()
+    code, top, err = _git(env, 'rev-parse', '--show-toplevel')
+    if code != 0 or os.path.normcase(os.path.realpath(top)) != os.path.normcase(os.path.realpath(ROOT)):
+        if 'dubious ownership' in err:
+            return _set_update('pas_git', 'Mise à jour automatique impossible : git refuse ce dossier (autre propriétaire).',
+                               f'Corrigez avec : git config --global --add safe.directory "{ROOT}"')
+        return _set_update('pas_git', 'Mise à jour automatique impossible : le jeu n\'a pas été installé avec « git clone ».')
+
+    def version():
+        c, out, _ = _git(env, 'log', '-1', '--format=%h|%cd', '--date=short')
+        h, _, d = out.partition('|') if c == 0 else ('', '', '')
+        UPDATE.update(version=h or None, date=d or None)
+        return h
+
+    cur = version()
+    if relaunched is not None:   # nouveau processus après une mise à jour : on l'annonce, sans revérifier
+        try:
+            info = json.loads(relaunched)
+            c, out, _ = _git(env, 'log', '--format=%s', '--no-merges', f'{info["de"]}..{info["a"]}')
+            news = out.splitlines() if c == 0 else []
+            n = len(news) or int(info.get('n') or 0)
+            news = news[:15]
+        except (ValueError, KeyError, TypeError):
+            news, n = [], 0
+        return _set_update('mis_a_jour', f'Mise à jour installée : {_plural(n, "nouveauté")} (version {cur}).', news=news, n=n)
+    if not enabled:
+        return _set_update('desactive', f'Vérification des mises à jour désactivée (--no-update). Version {cur}.')
+    if _git(env, 'symbolic-ref', '-q', 'HEAD')[0] != 0:
+        return _set_update('desactive', f'Mise à jour non vérifiée : version figée (HEAD détaché sur {cur}).')
+    code, up, _ = _git(env, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}')
+    if code != 0:
+        return _set_update('desactive', f'Mise à jour non vérifiée : la branche locale ne suit aucune branche de GitHub (version {cur}).')
+
+    print(f'Recherche d\'une mise à jour sur GitHub ({up})…', flush=True)
+    deadline = time.monotonic() + 40
+    tries = 5 if patient else 1
+    for i in range(tries):
+        code, _, err = _git(env, 'fetch', '--quiet', timeout=max(5, min(25, deadline - time.monotonic())))
+        if code == 0:
+            break
+        low = err.lower()
+        network = not any(k in low for k in AUTH_ERR) and (code is None or any(k in low for k in NET_ERR))
+        if network and i + 1 < tries and deadline - time.monotonic() > 10:
+            print('GitHub injoignable (réseau pas encore prêt ?) : nouvel essai dans 5 s…', flush=True)
+            time.sleep(5)
+            continue
+        last = next((ln.strip() for ln in err.splitlines() if ln.strip()), 'pas de réponse')[:160]
+        if any(k in low for k in AUTH_ERR):
+            why = 'accès refusé par GitHub (clé SSH ou jeton à configurer)'
+        else:
+            why = 'GitHub injoignable (pas d\'Internet ?)'
+        return _set_update('hors_ligne', f'Mise à jour non vérifiée : {why}. Le jeu démarre avec la version {cur}.',
+                           f'(git : {last})')
+
+    code, out, _ = _git(env, 'rev-list', '--count', 'HEAD..@{u}')
+    behind = int(out) if code == 0 and out.isdigit() else 0
+    if not behind:
+        return _set_update('a_jour', f'Le jeu est à jour (version {cur}).')
+
+    print(f'Nouvelle version disponible ({_plural(behind, "nouveauté")}) : installation…', flush=True)
+    old = _git(env, 'rev-parse', 'HEAD')[1]
+    code, _, err = _git(env, 'merge', '--ff-only', '--quiet', '@{u}', timeout=60)
+    if code != 0:
+        ahead = _git(env, 'rev-list', '--count', '@{u}..HEAD')[1]
+        low = err.lower()
+        if ahead.isdigit() and int(ahead) > 0:
+            why = f'cette copie contient {_plural(int(ahead), "commit")} local(aux) absent(s) de GitHub'
+            how = ('Pour les combiner avec la nouvelle version : git pull --rebase\n'
+                   '   (ou, pour les abandonner : git reset --hard @{u}), puis relancez le jeu.')
+        elif 'overwritten' in low or 'local changes' in low:
+            why = 'des fichiers du jeu ont été modifiés ou ajoutés à la main sur cette machine'
+            how = ('Voir lesquels : git status. Pour abandonner ces changements : git stash (ou git checkout -- .),\n'
+                   '   puis relancez le jeu.')
+        else:
+            why = 'git a refusé'
+            how = f'(git : {(err.splitlines() or ["erreur inconnue"])[-1].strip()[:160]})\n   Essayez « git pull » dans le dossier du jeu.'
+        return _set_update('bloque', f'Mise à jour disponible mais non installée : {why}. '
+                                     f'Le jeu démarre avec la version {cur}.', how)
+
+    new = _git(env, 'rev-parse', 'HEAD')[1]
+    print(f'Jeu mis à jour de la version {cur} à la version {version()}. Nouveautés :', flush=True)
+    c, out, _ = _git(env, 'log', '--oneline', '--no-decorate', '--no-merges', f'{old}..{new}')
+    lines = out.splitlines() if c == 0 else []
+    for ln in lines[:10]:
+        print('   ' + ln, flush=True)
+    if len(lines) > 10:
+        print(f'   … et {len(lines) - 10} autres.', flush=True)
+    _relaunch(dict(de=old, a=new, n=behind))
+
+
 def main():
     global APP
     ap = argparse.ArgumentParser(description='Conquête — serveur local')
@@ -481,9 +639,11 @@ def main():
     ap.add_argument('--local', action='store_true', help='n\'accepter que les connexions de cette machine')
     ap.add_argument('--no-browser', action='store_true', help='ne pas ouvrir le navigateur')
     ap.add_argument('--browser', action='store_true', help='ouvrir le navigateur même sur un Raspberry Pi')
+    ap.add_argument('--no-update', action='store_true', help='ne pas chercher de mise à jour sur GitHub au démarrage')
     args = ap.parse_args()
     rpi = is_raspberry()
     auto = rpi or is_headless()  # Raspberry Pi ou machine sans écran : réseau local, pas de navigateur
+    auto_update(not args.no_update, patient=auto)   # peut relancer le serveur avec le nouveau code
     if args.local:
         host = '127.0.0.1'
     elif args.lan or (auto and args.host is None):

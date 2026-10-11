@@ -1,10 +1,11 @@
 // Rendu de la carte illustrée de l'Aquitaine (canvas 2D, coordonnées monde en km)
+import { Ambient } from './ambient.js';
 const TILE = 256;
 const LEVELS = [2, 4, 8, 16, 32];
 const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 const TCOL = {
   0: [62, 118, 182], 1: [74, 139, 208], 2: [150, 194, 82], 3: [86, 140, 62], 4: [176, 174, 104], 5: [118, 160, 128],
-  6: [140, 178, 80], 7: [150, 156, 128], 8: [214, 218, 214], 9: [226, 212, 160], 10: [150, 170, 86],
+  6: [140, 178, 80], 7: [150, 156, 128], 8: [214, 218, 214], 9: [226, 212, 160], 10: [146, 182, 80],
 };
 const PLAYABLE = ['33', '24', '40', '47', '64'];
 
@@ -89,8 +90,8 @@ export class MapView {
     this.buildLandPath();
     this.buildProxy();
     this.buildFieldCells();
+    this.ambient = new Ambient(this);
     this.fillCanvas = document.createElement('canvas');
-    this.fillCanvas.width = this.W; this.fillCanvas.height = this.H;
     this.frontiers = [];
     this.showPreview();
     this.lastFrame = performance.now();
@@ -161,28 +162,48 @@ export class MapView {
   buildBases() {
     const W = this.W, H = this.H, N = W * H;
     // distance à la côte côté mer
-    const dist = new Int16Array(N).fill(-1);
-    const q = [];
-    for (let c = 0; c < N; c++) if (this.terrain[c] !== T.OCEAN) { dist[c] = 0; q.push(c); }
-    for (let h = 0; h < q.length; h++) {
-      const c = q[h], i = c % W, j = (c / W) | 0, d = dist[c] + 1;
-      if (d > 40) continue;
-      const nb = [i > 0 ? c - 1 : -1, i < W - 1 ? c + 1 : -1, j > 0 ? c - W : -1, j < H - 1 ? c + W : -1];
-      for (const n of nb) if (n >= 0 && dist[n] < 0) { dist[n] = d; q.push(n); }
+    // distance à la côte côté mer : chanfrein en deux passes (diagonales comprises), proche de la vraie distance,
+    // puis lissée ; une simple distance en croix dessinait des marches en escalier dans le dégradé de l'océan
+    const big = 1e4, df = new Float32Array(N);
+    for (let c = 0; c < N; c++) df[c] = this.terrain[c] !== T.OCEAN ? 0 : big;
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      const c = j * W + i;
+      if (!df[c]) continue;
+      let v = df[c];
+      if (i > 0) v = Math.min(v, df[c - 1] + 1);
+      if (j > 0) { v = Math.min(v, df[c - W] + 1); if (i > 0) v = Math.min(v, df[c - W - 1] + 1.414); if (i < W - 1) v = Math.min(v, df[c - W + 1] + 1.414); }
+      df[c] = v;
     }
+    for (let j = H - 1; j >= 0; j--) for (let i = W - 1; i >= 0; i--) {
+      const c = j * W + i;
+      if (!df[c]) continue;
+      let v = df[c];
+      if (i < W - 1) v = Math.min(v, df[c + 1] + 1);
+      if (j < H - 1) { v = Math.min(v, df[c + W] + 1); if (i < W - 1) v = Math.min(v, df[c + W + 1] + 1.414); if (i > 0) v = Math.min(v, df[c + W - 1] + 1.414); }
+      df[c] = v;
+    }
+    const dsm = new Float32Array(N);
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      let sum = 0, n = 0;
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+        const ii = i + di, jj = j + dj;
+        if (ii >= 0 && jj >= 0 && ii < W && jj < H) { sum += Math.min(40, df[jj * W + ii]); n++; }
+      }
+      dsm[j * W + i] = sum / n;
+    }
+    const dist = df;
     const mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
-    this.landCanvas = mk(); this.oceanCanvas = mk(); this.outMask = mk();
+    this.landCanvas = mk(); this.oceanCanvas = mk();
     const L = this.landCanvas.getContext('2d').createImageData(W, H);
     const O = this.oceanCanvas.getContext('2d').createImageData(W, H);
-    const M = this.outMask.getContext('2d').createImageData(W, H);
     const shallow = [88, 150, 206], deep = [36, 86, 150], sand = [228, 214, 160];
     for (let c = 0; c < N; c++) {
       const i = c % W, j = (c / W) | 0, t = this.terrain[c];
       const n = vnoise(i / 9, j / 9, 3) * 0.6 + vnoise(i / 3, j / 3, 4) * 0.4;
       let col;
       if (t === T.OCEAN) {
-        const d = dist[c] < 0 ? 40 : dist[c];
-        const oc = mix(shallow, deep, Math.min(1, d / 22));
+        const d = Math.min(40, dist[c]);
+        const oc = mix(shallow, deep, Math.min(1, Math.max(0, dsm[c] - 0.6) / 20));
         O.data.set([oc[0], oc[1], oc[2], 255], c * 4);
         col = d <= 1 ? sand : oc;
       } else {
@@ -193,11 +214,9 @@ export class MapView {
         O.data.set([shallow[0], shallow[1], shallow[2], 255], c * 4);
       }
       L.data.set([col[0], col[1], col[2], 255], c * 4);
-      if (t > T.EAU && !this.playable[c]) M.data.set([44, 42, 36, 120], c * 4);
     }
     this.landCanvas.getContext('2d').putImageData(L, 0, 0);
     this.oceanCanvas.getContext('2d').putImageData(O, 0, 0);
-    this.outMask.getContext('2d').putImageData(M, 0, 0);
     // grain de papier
     this.grain = document.createElement('canvas');
     this.grain.width = this.grain.height = 128;
@@ -239,6 +258,10 @@ export class MapView {
       }
       this.deptPaths[code] = pp;
     }
+    // tout sauf les départements jouables (règle pair-impair : la carte entière, trouée par chacun d'eux)
+    this.outPath = new Path2D();
+    this.outPath.rect(-2, -2, this.W + 4, this.H + 4);
+    for (const pp of Object.values(this.deptPaths)) this.outPath.addPath(pp);
     this.riverPaths = this.m.rivers.map(r => {
       const pp = new Path2D();
       pp.moveTo(r.pts[0][0], r.pts[0][1]);
@@ -310,7 +333,12 @@ export class MapView {
       const k = d.slot || 0;
       // une armée qui assiège se tient au-delà des remparts et de l'anneau de siège : la brèche reste visible
       const below = a.st !== 'siege' ? s * 0.5 : z >= 5.5 ? this.siegeRadius(n, s) + 4 : Math.max(s * 0.5, this.siegeRadius(n, s) - 8);
-      y += below + (z >= 5.5 ? clamp(z * 2.3, 22, 66) * 0.5 + 18 : 22);
+      // l'armée se range sous le nom de la place : ses chiffres de régiments ne doivent pas le recouvrir
+      const name = a.st !== 'siege' ? this.labelFs(n) + 4 : 0;
+      if (z >= 5.5) {
+        const bw = clamp(z * 2.3, 22, 66), bd = bw * 0.38, rows = Math.max(1, Math.ceil(a.regs.length / 6));
+        y += below + name + clamp(bw * 0.42, 10, 16) + 8 + (rows > 1 ? (rows - 1) * bd * 1.4 : 0) + bd * 0.5;
+      } else y += below + name + 14;
       x += (k - (d.slots - 1) / 2) * (z >= 5.5 ? Math.min(6, d.a.regs.length) * clamp(z * 2.3, 22, 66) * 1.25 + 20 : 56);
     }
     return [x, y];
@@ -727,7 +755,7 @@ export class MapView {
         }
       }
       if (face.has(a.id)) head = face.get(a.id);  // en bataille : face à l'ennemi
-      else if (a.st === 'siege' && a.n != null) head = -Math.PI / 2;   // au siège : rangée sous la place, face aux remparts
+      else if (a.n != null && a.st !== 'move' && a.st !== 'retreat') head = -Math.PI / 2;   // rangée sous la place, face à elle (et aux remparts au siège)
       let d = this.disp.get(a.id);
       if (!d) {
         d = { x: tx, y: ty, tx, ty, head: head ?? -Math.PI / 2 };
@@ -757,20 +785,12 @@ export class MapView {
       const o = this.owners[this.cellnode[p]];
       idx[c] = codes.indexOf(o);
     }
-    // remplissage
-    const fctx = this.fillCanvas.getContext('2d');
-    const img = fctx.createImageData(W, H);
-    const cols = codes.map(c => hexRgb(this.colors[c]));
-    for (let c = 0; c < N; c++) {
-      if (!this.playable[c] || idx[c] < 0) continue;
-      const k = cols[idx[c]];
-      img.data.set([k[0], k[1], k[2], 62], c * 4);
-    }
-    fctx.putImageData(img, 0, 0);
     // frontières (carrés marchants sur un champ lissé)
     this.frontiers = [];
-    const f = new Float32Array(N), g = new Float32Array(N);
+    const fields = codes.map(() => null);
+    const g = new Float32Array(N);
     for (let ci = 0; ci < codes.length; ci++) {
+      const f = new Float32Array(N);
       let any = false;
       for (let c = 0; c < N; c++) { f[c] = idx[c] === ci ? 1 : 0; if (f[c]) any = true; }
       if (!any) continue;
@@ -785,6 +805,7 @@ export class MapView {
         }
         f.set(g);
       }
+      fields[ci] = f;
       const path = new Path2D();
       const L = 0.5;
       for (let j = 0; j < H - 1; j++) {
@@ -814,6 +835,41 @@ export class MapView {
       }
       this.frontiers.push({ code: codes[ci], path });
     }
+    this.paintTerritory(idx, fields, codes);
+  }
+
+  // remplissage des territoires, en sous-cases : il suit le même champ lissé que les frontières, donc colle au trait
+  // au lieu de dessiner des marches d'escalier d'1 km (le littoral et les limites du jeu sont lissés de même)
+  paintTerritory(idx, fields, codes) {
+    const W = this.W, H = this.H, R = 3, FW = W * R, FH = H * R;
+    const cv = this.fillCanvas;
+    if (cv.width !== FW || cv.height !== FH) { cv.width = FW; cv.height = FH; }
+    const fctx = cv.getContext('2d');
+    const img = fctx.createImageData(FW, FH), data = img.data;
+    const cols = codes.map(c => hexRgb(this.colors[c]));
+    const pl = this.playable;
+    for (let sy = 0; sy < FH; sy++) {
+      const v = (sy + 0.5) / R - 0.5, j = clamp(Math.floor(v), 0, H - 2), fy = clamp(v - j, 0, 1);
+      for (let sx = 0; sx < FW; sx++) {
+        const u = (sx + 0.5) / R - 0.5, i = clamp(Math.floor(u), 0, W - 2), fx = clamp(u - i, 0, 1);
+        const c00 = j * W + i, c10 = c00 + 1, c01 = c00 + W, c11 = c01 + 1;
+        const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+        const pv = pl[c00] * w00 + pl[c10] * w10 + pl[c01] * w01 + pl[c11] * w11;
+        if (pv < 0.3) continue;
+        let best = -1, bv = 0;
+        for (const k of [idx[c00], idx[c10], idx[c01], idx[c11]]) {
+          if (k < 0 || k === best || !fields[k]) continue;
+          const f = fields[k], val = f[c00] * w00 + f[c10] * w10 + f[c01] * w01 + f[c11] * w11;
+          if (val > bv) { bv = val; best = k; }
+        }
+        if (best < 0) continue;
+        const a = Math.min(clamp((bv - 0.5) * 10 + 0.5, 0, 1), clamp((pv - 0.5) * 4 + 0.5, 0, 1));
+        if (a <= 0) continue;
+        const o = (sy * FW + sx) * 4, k = cols[best];
+        data[o] = k[0]; data[o + 1] = k[1]; data[o + 2] = k[2]; data[o + 3] = 62 * a;
+      }
+    }
+    fctx.putImageData(img, 0, 0);
   }
 
   // ------------------------------------------------------------------ tuiles
@@ -892,9 +948,9 @@ export class MapView {
     g.globalCompositeOperation = 'source-over';
     W();
     if (L >= 4) this.decorate(g, L, i0, i1, j0, j1);
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    this.drawSub(g, this.outMask, x0, y0, span);
-    W();
+    // hors du jeu : voile sombre suivant le tracé exact des départements (et non les cases d'1 km)
+    g.fillStyle = 'rgba(44,42,36,0.47)';
+    g.fill(this.outPath, 'evenodd');
     g.restore();
     W();
     // eaux intérieures
@@ -1006,7 +1062,6 @@ export class MapView {
     const shrubs = [new Path2D(), new Path2D()];
     const pools = new Path2D();
     const reeds = new Path2D();
-    const vines = new Path2D();
     const dunes = new Path2D();
     const hillL = new Path2D(), hillD = new Path2D();
     const peaks = [];
@@ -1051,17 +1106,6 @@ export class MapView {
           }
         } else if (t === T.MONTAGNE || t === T.HAUTE) {
           if (h(1) < (t === T.HAUTE ? 0.9 : 0.62)) peaks.push([i + h(2), j + h(3) + 0.4, (t === T.HAUTE ? 1.25 : 0.85) + h(4) * 0.55, t === T.HAUTE]);
-        } else if (t === T.VIGNE) {
-          if (L >= 8) {
-            const ang = 0.45;
-            for (let r = 0; r < 4; r++) {
-              const y = j + 0.15 + r * 0.24;
-              for (let k = 0; k < 5; k++) {
-                const x = i + 0.08 + k * 0.2 + (r % 2) * 0.1;
-                vines.moveTo(x + 0.055, y + (x - i) * ang * 0.1); vines.arc(x, y + (x - i) * ang * 0.1, 0.055, 0, Math.PI * 2);
-              }
-            }
-          }
         } else if (t === T.DUNES) {
           if (h(1) < 0.7) {
             const x = i + h(2) * 0.6, y = j + h(3);
@@ -1104,7 +1148,7 @@ export class MapView {
     g.fillStyle = 'rgba(92,150,180,0.85)'; g.fill(pools);
     g.strokeStyle = 'rgba(60,96,120,0.6)'; g.lineWidth = 0.6 / L; g.stroke(pools);
     g.strokeStyle = 'rgba(70,98,52,0.8)'; g.lineWidth = Math.max(0.03, 0.7 / L); g.stroke(reeds);
-    g.fillStyle = 'rgba(56,84,30,0.8)'; g.fill(vines);
+    this.vineyards(g, L, i0, i1, j0, j1);
     g.strokeStyle = 'rgba(176,150,96,0.7)'; g.lineWidth = Math.max(0.05, 0.8 / L); g.stroke(dunes);
     g.lineWidth = Math.max(0.1, 1.2 / L);
     g.strokeStyle = 'rgba(206,224,150,0.85)'; g.stroke(hillL);
@@ -1135,6 +1179,61 @@ export class MapView {
         g.strokeStyle = 'rgba(50,50,36,0.55)'; g.lineWidth = 0.6 / L;
         g.beginPath(); g.moveTo(x - half, y); g.lineTo(x, y - hgt); g.lineTo(x + half, y); g.stroke();
       }
+    }
+  }
+
+  // part de vigne autour d'un point (interpolée entre les centres des cases d'1 km)
+  vineAt(x, y) {
+    const u = x - 0.5, v = y - 0.5, i = Math.floor(u), j = Math.floor(v), fx = u - i, fy = v - j;
+    const at = (a, b) => (a < 0 || b < 0 || a >= this.W || b >= this.H) ? 0 : this.terrain[b * this.W + a] === T.VIGNE ? 1 : 0;
+    const a = at(i, j), b = at(i + 1, j), c = at(i, j + 1), d = at(i + 1, j + 1);
+    return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+  }
+
+  // vignobles : un patchwork de parcelles sur une grille inclinée, sans rapport avec les cases du terrain,
+  // aux rangs orientés parcelle par parcelle. La lisière suit un champ lissé et bruité : plus de marches d'escalier.
+  vineyards(g, L, i0, i1, j0, j1) {
+    const S = 0.62, th = 0.38, ca = Math.cos(th), sa = Math.sin(th);
+    let pmin = Infinity, pmax = -Infinity, qmin = Infinity, qmax = -Infinity;
+    for (const [x, y] of [[i0, j0], [i1 + 1, j0], [i0, j1 + 1], [i1 + 1, j1 + 1]]) {
+      const p = (x * ca + y * sa) / S, q = (-x * sa + y * ca) / S;
+      pmin = Math.min(pmin, p); pmax = Math.max(pmax, p); qmin = Math.min(qmin, q); qmax = Math.max(qmax, q);
+    }
+    const tones = ['rgba(122,156,64,0.34)', 'rgba(168,156,92,0.3)', 'rgba(108,146,58,0.3)', 'rgba(176,170,104,0.26)', 'rgba(136,164,70,0.22)'];
+    const plots = tones.map(() => new Path2D());
+    const rows = new Path2D();
+    const sp = Math.max(0.085, 2.4 / L), half = S * 0.5 - Math.max(0.025, 0.8 / L);
+    const P = (cx, cy, u, v) => [cx + u * ca - v * sa, cy + u * sa + v * ca];
+    for (let q = Math.floor(qmin) - 1; q <= qmax; q++) {
+      for (let p = Math.floor(pmin) - 1; p <= pmax; p++) {
+        const h = k => hash(p, q, 900 + k);
+        const pc = p + 0.5 + (h(1) - 0.5) * 0.16, qc = q + 0.5 + (h(2) - 0.5) * 0.16;
+        const cx = (pc * ca - qc * sa) * S, cy = (pc * sa + qc * ca) * S;
+        if (cx < i0 - 1 || cx > i1 + 2 || cy < j0 - 1 || cy > j1 + 2) continue;
+        const m = this.vineAt(cx, cy) + (vnoise(cx * 0.8, cy * 0.8, 41) - 0.5) * 0.55;
+        if (m < 0.5 || h(7) < 0.1) continue;   // quelques parcelles en friche ou en prés
+        // vers la lisière, les parcelles rapetissent : le vignoble se fond dans la campagne
+        const edge = clamp((m - 0.5) / 0.3, 0.45, 1);
+        const hw = half * (0.72 + h(3) * 0.3) * edge, hh = half * (0.72 + h(4) * 0.3) * edge;
+        const pl = plots[(h(5) * tones.length) | 0];
+        const c0 = P(cx, cy, -hw, -hh);
+        pl.moveTo(c0[0], c0[1]);
+        for (const [u, v] of [[hw, -hh], [hw, hh], [-hw, hh]]) { const c = P(cx, cy, u, v); pl.lineTo(c[0], c[1]); }
+        pl.closePath();
+        if (L < 8) continue;
+        const along = h(6) < 0.5;
+        const lim = along ? hh : hw, len = along ? hw : hh;
+        for (let t = -lim + sp * 0.5; t < lim; t += sp) {
+          const a = along ? P(cx, cy, -len, t) : P(cx, cy, t, -len), b = along ? P(cx, cy, len, t) : P(cx, cy, t, len);
+          rows.moveTo(a[0], a[1]); rows.lineTo(b[0], b[1]);
+        }
+      }
+    }
+    plots.forEach((pl, k) => { g.fillStyle = tones[k]; g.fill(pl); });
+    if (L >= 8) {
+      g.lineCap = 'round';
+      g.strokeStyle = 'rgba(58,92,34,0.5)'; g.lineWidth = Math.max(0.03, 0.9 / L);
+      g.stroke(rows);
     }
   }
 
@@ -1245,12 +1344,16 @@ export class MapView {
     ctx.restore();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.drawSeasonTint(ctx);
-    if (!this.state) { this.drawNodes(ctx, time, this.preview); this.drawGesture(ctx); return; }
-    this.drawNodes(ctx, time, this.state);
+    this.now = time;
+    const st = this.state || this.preview;
+    this.ambient.under(ctx, dt, time, this.state);
+    if (!this.state) { this.drawNodes(ctx, time, st); this.ambient.over(ctx, dt, time, null); this.drawGesture(ctx); return; }
+    this.drawNodes(ctx, time, st);
     this.drawPaths(ctx);
     this.drawArmies(ctx, time);
     this.drawBattles(ctx, dt, time);
     this.drawParticles(ctx, dt);
+    this.ambient.over(ctx, dt, time, st);
     this.drawWeather(ctx, dt, time);
     this.drawGesture(ctx);
   }
@@ -1356,6 +1459,12 @@ export class MapView {
     return clamp(z * 1.25, 9, 34);
   }
 
+  // taille du nom d'une place sur la carte
+  labelFs(n) {
+    const z = this.cam.z;
+    return n.type === 'capitale' ? clamp(13 + z * 0.5, 15, 21) : n.type === 'village' ? clamp(10 + z * 0.25, 11, 15) : clamp(11 + z * 0.4, 13, 18);
+  }
+
   drawNodes(ctx, time, st) {
     const z = this.cam.z;
     const labels = [];
@@ -1405,7 +1514,7 @@ export class MapView {
     labels.sort((a, b) => prio[a[0].type] - prio[b[0].type]);
     const placed = [];
     for (const [n, x, y, s, ns] of labels) {
-      const fs = n.type === 'capitale' ? clamp(13 + z * 0.5, 15, 21) : n.type === 'village' ? clamp(10 + z * 0.25, 11, 15) : clamp(11 + z * 0.4, 13, 18);
+      const fs = this.labelFs(n);
       ctx.font = `${n.type === 'capitale' ? 600 : 500} ${fs}px "EB Garamond", Georgia, serif`;
       const ty = y + s * 0.5 + 2;
       const tw = this.textW(ctx, n.name);
@@ -1538,11 +1647,18 @@ export class MapView {
     return g;
   }
 
+  // drapeau qui flotte au vent (chaque place a son propre rythme, d'après sa position à l'écran)
   flag(ctx, x, y, h, col) {
     ctx.strokeStyle = '#3b2c1c'; ctx.lineWidth = Math.max(1, h * 0.07);
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h); ctx.stroke();
     ctx.fillStyle = col;
-    ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + h * 0.62, y - h * 0.82); ctx.lineTo(x, y - h * 0.62); ctx.fill();
+    const m = ctx.getTransform();
+    const ph = (this.now || 0) * 4.2 + m.e * 0.031 + m.f * 0.017, on = this.ambient?.on;
+    const a = on ? Math.sin(ph) * h * 0.07 : 0, b = on ? Math.sin(ph - 1.4) * h * 0.06 : 0, w = h * (on ? 0.6 + Math.sin(ph * 0.5) * 0.03 : 0.62);
+    ctx.beginPath(); ctx.moveTo(x, y - h);
+    ctx.quadraticCurveTo(x + w * 0.5, y - h + a, x + w, y - h * 0.82 + b);
+    ctx.quadraticCurveTo(x + w * 0.5, y - h * 0.64 + a, x, y - h * 0.62);
+    ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 0.8; ctx.stroke();
   }
 

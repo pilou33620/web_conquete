@@ -19,7 +19,15 @@ Il faut seulement **Python 3.8 ou plus récent**. Aucune bibliothèque à instal
 | iPad (Pyto) | exécuter `server.py`, puis ouvrir `http://127.0.0.1:8790` dans Safari |
 
 Options : `--lan` (ouvre le jeu aux autres appareils du réseau local), `--local` (cette machine seulement),
-`--port 8790`, `--no-browser`, `--browser`. Sous Windows, `lancer-reseau.bat` lance directement le jeu en mode réseau.
+`--port 8790`, `--no-browser`, `--browser`, `--no-update`. Sous Windows, `lancer-reseau.bat` lance directement le jeu en mode réseau.
+
+**Mise à jour automatique.** Si le jeu a été installé avec `git clone`, le serveur cherche une nouvelle version sur GitHub
+à chaque démarrage : il l'installe (avance rapide seulement, sauvegardes intactes), affiche les nouveautés et se relance
+tout seul. Sans Internet, ou si la clé SSH / le jeton manque, il démarre simplement avec la version actuelle (aucune invite
+de mot de passe ne bloque le démarrage). Sur un Raspberry Pi, il patiente jusqu'à 40 secondes que le Wi-Fi arrive.
+Si des fichiers ont été modifiés à la main, la mise à jour est mise de côté et la console explique quoi faire.
+L'écran d'accueil indique la version et le résultat de la vérification ; une page restée ouverte sur l'iPad se recharge
+d'elle-même quand le serveur a changé de version. `--no-update` désactive la vérification.
 
 **Sur un Raspberry Pi (ou tout Linux sans écran)**, le serveur le détecte tout seul : il ne lance pas de navigateur,
 s'ouvre au réseau local et affiche en grand les adresses à taper depuis l'iPad, un téléphone ou un PC de la maison :
@@ -41,7 +49,8 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
 
 1. Récupérez le jeu sur le Raspberry : `git clone https://github.com/pilou33620/web_conquete.git`
    (dépôt privé : utilisez une clé SSH ou un jeton d'accès GitHub), ou copiez le dossier par clé USB ou `scp`.
-   Mise à jour plus tard : `cd web_conquete && git pull && sudo systemctl restart web_conquete`.
+   Les mises à jour s'installent ensuite toutes seules à chaque démarrage du Raspberry (ou avec
+   `sudo systemctl restart web_conquete`).
 2. Sur le Raspberry : `cd web_conquete && sh raspberry/installer.sh`
    Le script crée le service `web_conquete` (systemd) : le jeu démarre à chaque allumage et redémarre s'il plante.
    Il affiche l'adresse à taper sur l'iPad, par exemple `http://192.168.1.42:8790` ou `http://raspberrypi.local:8790`.
@@ -168,6 +177,11 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
   ralliez-les avec une armée nettement plus forte que leur milice pour gagner des revenus.
 - **Victoire** : tous les chefs-lieux vous appartiennent, ou appartiennent à un département qui s'est soumis à vous.
   **Défaite** : votre chef-lieu tombe. Un département qui perd son chef-lieu capitule et ses villes passent au vainqueur.
+- La carte vit : moulins à vent qui tournent dans les champs (plus vite par gros temps), moulins à eau, fumées des
+  cheminées (épaisses en hiver, noires sur une place assiégée), drapeaux au vent, vols d'oiseaux en V (migrations au
+  printemps et à l'automne), mouettes, gabares sur les fleuves et navires du cabotage, barques de pêche, courant des
+  fleuves, écume et reflets sur l'océan, charrettes, cavaliers et colporteurs sur les routes, vaches et moutons, bergers
+  landais sur leurs échasses, phare de Cordouan. Menu ☰, rubrique « Affichage », pour couper ces animations.
 
 ### Armées et terrain
 - Infanterie de ligne, infanterie légère (voltigeurs), cavalerie, artillerie. Chaque régiment a ses effectifs, son moral et son expérience.
@@ -329,7 +343,8 @@ game/waterways.py    voies navigables (fleuves, estuaire, cabotage) et blocus
 game/ai.py           IA des départements
 game/diplomacy.py    diplomatie et commerce
 game/views.py        état envoyé au navigateur (brouillard de guerre), sauvegardes
-web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/ui.js, js/main.js
+web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/ambient.js (animations
+                     de la carte), js/ui.js, js/main.js
 saves/               parties sauvegardées (JSON)
 ```
 

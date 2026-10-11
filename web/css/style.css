@@ -291,6 +291,12 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 .saves { display: flex; flex-direction: column; gap: 5px; }
 .saves.scroll { max-height: 260px; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding-right: 4px; flex: none; }
 .save-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; }
+/* version du jeu et mise à jour automatique */
+.ver-line { font-size: 13.5px; color: var(--papier-2); border-top: 1px solid var(--hair); padding-top: 8px; }
+.ver-line summary { cursor: pointer; }
+.ver-line.maj summary { color: var(--laiton-clair); }
+.ver-line p { margin: 5px 0 0; }
+.ver-line ul { margin: 5px 0 0; padding-left: 18px; color: var(--papier); }
 
 /* ------------------------------------------------------------- chargement */
 #loading { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; background: var(--nuit); }

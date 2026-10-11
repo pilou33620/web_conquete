@@ -12,6 +12,16 @@ document.addEventListener('dblclick', e => e.preventDefault(), { passive: false 
 
 let ui, map, seq = 0, polling = false, running = false, timer = null;
 let epoch = 0, lost = false;   // epoch : change à chaque resetUI, pour jeter les réponses d'une ancienne partie
+let bootVer, reloading = false;  // version du serveur au chargement de la page
+
+// le serveur a été relancé sur une nouvelle version : cette page tourne encore avec l'ancien code
+function checkVersion(ver) {
+  if (!ver || bootVer === undefined || ver === bootVer || reloading) return reloading;
+  reloading = true;
+  ui && ui.toast('Nouvelle version du jeu installée : la page va se recharger.', 'good');
+  setTimeout(() => location.reload(), 2500);   // la partie est sur le serveur : rien n'est perdu
+  return true;
+}
 
 async function poll() {
   if (!running || polling) return;
@@ -30,6 +40,7 @@ async function poll() {
   }
   if (lost) { lost = false; ui.toast('Connexion au serveur rétablie.', 'good'); }
   if (ep !== epoch || !running) return;
+  if (st && checkVersion(st.ver)) return;
   if (st && st.game === null) {   // le serveur n'a plus de partie : retour à l'écran de départ
     resetUI();
     showStart();
@@ -67,6 +78,7 @@ function resetUI() {
 async function showStart(info) {
   if (!info) try { info = await api.get('/api/saves'); } catch (e) { info = null; }
   if (!info) ui.toast('Serveur injoignable : liste des sauvegardes indisponible.', 'bad');
+  if (info && info.update) checkVersion(info.update.version);
   ui.showStart(info || { saves: [], running: false });
   const side = window.innerWidth > 760 ? Math.min(470, Math.max(320, window.innerWidth * 0.33)) : 0;
   map.fitAll(false, side, 20);
@@ -81,6 +93,7 @@ async function boot() {
     lt.textContent = 'Impossible de joindre le serveur. Lancez « python server.py » puis rechargez la page.';
     return;
   }
+  bootVer = payload.ver;
   lt.textContent = 'Peinture du terrain…';
   await new Promise(r => setTimeout(r, 30));
   map = new MapView(document.getElementById('map'), payload);
@@ -132,6 +145,17 @@ async function boot() {
   }
   document.getElementById('loading').hidden = true;
   await showStart(info);
+  announceUpdate(info.update);
+}
+
+// « Jeu mis à jour » : une seule fois par version sur cet appareil
+function announceUpdate(u) {
+  if (!u || u.status !== 'mis_a_jour') return;
+  let seen = null;
+  try { seen = localStorage.getItem('conquete-maj-vue'); } catch (e) { /* stockage indisponible */ }
+  if (seen === u.version) return;
+  ui.toast(`Jeu mis à jour : ${u.n} ${u.n > 1 ? 'nouveautés' : 'nouveauté'}.`, 'good');
+  try { localStorage.setItem('conquete-maj-vue', u.version); } catch (e) { /* tant pis */ }
 }
 
 boot().then(() => { window.__ui = ui; });
