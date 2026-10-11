@@ -30,7 +30,9 @@ export class Bataille {
   }
   // faut-il ouvrir la vue pour cet état de campagne ?
   wants(tac) {
-    return !!tac && tac.bid != null && !this.active && !(this.closed.has(String(tac.bid)) && tac.phase === 'fin');
+    if (!tac || tac.bid == null || this.active) return false;
+    if (this.failedAt && performance.now() - this.failedAt < 15000) return false;   // échec récent : pas de boucle
+    return !(this.closed.has(String(tac.bid)) && tac.phase === 'fin');
   }
   // tac : {bid, phase} ; st : état de campagne (pour trouver le lieu de la bataille)
   async enter(tac, st = null) {
@@ -103,6 +105,7 @@ export class Bataille {
   }
   // interrompt sans animation (nouvelle partie, erreur)
   abort(msg) {
+    if (msg) this.failedAt = performance.now();
     if (this.view) this.view.dispose();
     this.root?.remove();
     this.resumeMap();

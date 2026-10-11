@@ -368,7 +368,13 @@ export class BattleUI {
       case 'feedtog': this.setFeed(this.feedOff); break;
       case 'dscroll': { const d = this.$('.bt-dock'); d.scrollBy({ left: +b.dataset.d * d.clientWidth * 0.75, behavior: 'smooth' }); break; }
       case 'aide': this.tips(true); break;
-      case 'decrocher': this.confirm('Décrocher ?', 'Toute l’armée rompt le combat et quitte le champ de bataille. L’ennemi reste maître du terrain ; vos blessés restent en arrière.', 'Décrocher', () => v.cmd('withdraw'), true); break;
+      case 'decrocher': this.confirm('Décrocher ?', 'Toute l’armée rompt le combat et quitte le champ de bataille. L’ennemi reste maître du terrain ; vos blessés restent en arrière.', 'Décrocher', async () => {
+        const r = await v.cmd('withdraw');
+        if (!r.ok) return;
+        // le décrochage se fait en marchant vers son bord : le temps doit tourner
+        this.toast('L’armée décroche et quitte le champ de bataille…');
+        if (!(v.st?.speed > 0)) { v.st.phase = 'combat'; this.setSpeed(2); }
+      }, true); break;
       case 'auto': this.confirm('Finir automatiquement ?', 'La suite de la bataille est calculée d’un coup, d’après la situation présente : effectifs, moral, munitions et positions tenues.', 'Finir automatiquement', async () => { const r = await v.cmd('autofinish'); if (r.ok) this.toast('Résolution de la bataille…'); }); break;
       case 'close': this.closeModal(); break;
       case 'ok': { const f = this.onOk; this.closeModal(); f && f(); break; }
