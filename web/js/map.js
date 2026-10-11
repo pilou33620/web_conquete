@@ -1,7 +1,9 @@
 // Rendu de la carte illustrée de l'Aquitaine (canvas 2D, coordonnées monde en km)
 import { Ambient } from './ambient.js';
 const TILE = 256;
-const LEVELS = [2, 4, 8, 16, 32];
+// niveaux de détail des tuiles (pixels par km) : une échelle fine, pour qu'une tuile ne soit jamais beaucoup
+// réduite à l'écran (sinon il en faut des centaines pour couvrir un grand écran d'iPad)
+const LEVELS = [2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64];
 const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 const TCOL = {
   0: [62, 118, 182], 1: [74, 139, 208], 2: [150, 194, 82], 3: [86, 140, 62], 4: [176, 174, 104], 5: [118, 160, 128],
@@ -59,8 +61,13 @@ export class MapView {
     this.depts = m.depts; this.deptCodes = m.dept_codes;
     this.cam = { x: m.W / 2, y: m.H / 2, z: 2 };
     this.camAnim = null;
-    this.tiles = new Map();
-    this.tileOrder = [];
+    this.tiles = new Map();       // tuiles détaillées, de la moins récemment vue à la plus récente
+    this.baseTiles = new Map();   // tuiles du niveau le plus bas : jamais évincées, elles servent de fond de secours
+    this.tileLimit = 160;
+    this.frameNo = 0;
+    this.curL = 0;                // niveau affiché (figé pendant un pincement ou un zoom animé)
+    this.zoomT = 0;               // dernier changement de zoom
+    this.lastZ = 0;
     this.state = null;
     this.owners = null;
     this.ownersKey = '';
@@ -96,7 +103,7 @@ export class MapView {
     this.showPreview();
     this.lastFrame = performance.now();
     this.resize();
-    for (let ty = 0; ty * 128 < this.H; ty++) for (let tx = 0; tx * 128 < this.W; tx++) this.getTile(2, tx, ty, true);
+    for (let ty = 0; ty * 128 < this.H; ty++) for (let tx = 0; tx * 128 < this.W; tx++) this.getTile(LEVELS[0], tx, ty, true);
     this.fitAll(true);
     window.addEventListener('resize', () => this.resize());
     this.bindInput();
@@ -875,28 +882,72 @@ export class MapView {
   }
 
   // ------------------------------------------------------------------ tuiles
+  // niveau voulu pour le zoom : le plus petit qui ne soit pas agrandi de plus de 10 % à l'écran,
+  // avec une marge pour ne pas basculer d'un niveau à l'autre au moindre mouvement
   level() {
-    const want = this.cam.z * this.dpr;
-    for (const L of LEVELS) if (L >= want * 0.85) return L;
+    const want = this.cam.z * this.dpr, cur = this.curL;
+    if (cur && want / cur >= 0.78 && want / cur <= 1.12) return cur;
+    for (const L of LEVELS) if (L >= want * 0.91) return L;
     return LEVELS[LEVELS.length - 1];
   }
 
   getTile(L, tx, ty, allowRender) {
     const key = `${L}:${tx}:${ty}`;
+    if (L === LEVELS[0]) {
+      let b = this.baseTiles.get(key);
+      if (!b && allowRender) { b = this.renderTile(L, tx, ty); this.baseTiles.set(key, b); }
+      return b || null;
+    }
     let t = this.tiles.get(key);
-    if (t) return t;
+    if (t) {
+      // vue à l'instant : elle passe en fin de file (la plus récente)
+      this.tiles.delete(key); this.tiles.set(key, t);
+      t.seen = this.frameNo;
+      return t;
+    }
     if (!allowRender) return null;
     t = this.renderTile(L, tx, ty);
+    t.seen = this.frameNo;
     this.tiles.set(key, t);
-    this.tileOrder.push(key);
-    if (this.tileOrder.length > 140) {
-      const old = this.tileOrder.shift();
-      this.tiles.delete(old);
+    // les plus anciennes partent, jamais celles affichées à cette image. Le canevas est vidé tout de suite :
+    // Safari (iPad) garde sinon leur mémoire et, passé sa limite, laisse des tuiles blanches
+    for (const [k, old] of this.tiles) {
+      if (this.tiles.size <= this.tileLimit || old.seen === this.frameNo) break;
+      this.tiles.delete(k);
+      old.width = old.height = 0;
     }
     return t;
   }
 
-  invalidateTiles() { this.tiles.clear(); this.tileOrder = []; }
+  invalidateTiles() {
+    for (const m of [this.tiles, this.baseTiles]) { for (const t of m.values()) t.width = t.height = 0; m.clear(); }
+  }
+
+  // portion manquante d'une tuile : on la recouvre avec les tuiles déjà prêtes d'un autre niveau
+  // (celui qu'on quitte en zoomant, sinon le plus proche), à défaut avec le fond du niveau le plus bas
+  drawFallback(ctx, L, tx, ty, ox, oy, z) {
+    const span = TILE / L, x0 = tx * span, y0 = ty * span;
+    const order = LEVELS.filter(l => l !== L && l !== LEVELS[0]).sort((a, b) => Math.abs(Math.log(a / L)) - Math.abs(Math.log(b / L)));
+    if (this.prevL && this.prevL !== L && this.prevL !== LEVELS[0]) order.unshift(this.prevL);
+    order.push(LEVELS[0]);
+    for (const Lo of order) {
+      const so = TILE / Lo;
+      const i0 = Math.floor(x0 / so), i1 = Math.floor((x0 + span - 1e-6) / so), j0 = Math.floor(y0 / so), j1 = Math.floor((y0 + span - 1e-6) / so);
+      if ((i1 - i0 + 1) * (j1 - j0 + 1) > 16) continue;
+      const parts = [];
+      for (let j = j0; j <= j1 && parts; j++) for (let i = i0; i <= i1; i++) {
+        const t = this.getTile(Lo, i, j, Lo === LEVELS[0]);
+        if (!t) { parts.length = 0; break; }
+        parts.push([t, i, j]);
+      }
+      if (!parts.length) continue;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(ox + x0 * z, oy + y0 * z, span * z + 0.6, span * z + 0.6); ctx.clip();
+      for (const [t, i, j] of parts) ctx.drawImage(t, ox + i * so * z, oy + j * so * z, so * z + 0.6, so * z + 0.6);
+      ctx.restore();
+      return;
+    }
+  }
 
   drawSub(g, img, x0, y0, span) {
     // dessine la portion [x0, x0+span] de l'image (1 px = 1 km) sur la tuile, en restant dans les bornes
@@ -1288,13 +1339,40 @@ export class MapView {
     // fond rapide
     ctx.imageSmoothingEnabled = true;
     const ox = this.vw / 2 - this.cam.x * z, oy = this.vh / 2 - this.cam.y * z;
-    // tuiles
-    const L = this.level();
+    // tuiles. Pendant un pincement ou un zoom animé, on garde le niveau en cours (agrandi ou réduit) au lieu
+    // d'en repeindre un nouveau à chaque palier ; le bon niveau se peint quand le zoom se pose
+    const now = performance.now();
+    this.frameNo++;
+    if (z !== this.lastZ) { this.zoomT = now; this.lastZ = z; }
+    const want = this.level();
+    if (!this.curL) this.curL = want;
+    else if (want !== this.curL) {
+      const sc = z * dpr / this.curL;
+      if (now - this.zoomT > 180 || sc < 0.55 || sc > 1.9) { this.prevL = this.curL; this.curL = want; }
+    }
+    const L = this.curL;
     const span = TILE / L;
-    let budget = 3;
     const tx0 = Math.floor(Math.max(0, wx0) / span), tx1 = Math.floor((Math.min(this.W, wx1) - 0.001) / span);
     const ty0 = Math.floor(Math.max(0, wy0) / span), ty1 = Math.floor((Math.min(this.H, wy1) - 0.001) / span);
-    const lowL = LEVELS[0], lowSpan = TILE / lowL;
+    const nVis = Math.max(0, tx1 - tx0 + 1) * Math.max(0, ty1 - ty0 + 1);
+    this.tileLimit = clamp(Math.ceil(nVis * 1.6) + 24, 160, 320);
+    // tuiles à peindre, du centre vers les bords, dans un budget de temps par image (au moins une)
+    const missing = [];
+    for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) if (!this.getTile(L, tx, ty, false)) missing.push([tx, ty]);
+    if (missing.length) {
+      const cx = (wx0 + wx1) / 2 / span - 0.5, cy = (wy0 + wy1) / 2 / span - 0.5;
+      missing.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy));
+      for (const [tx, ty] of missing) {
+        this.getTile(L, tx, ty, true);
+        if (performance.now() - now > 9) break;
+      }
+    } else if (now - this.zoomT > 300 && this.tiles.size + 12 < this.tileLimit) {
+      // tout est prêt : on prépare une tuile de la couronne autour de l'écran, pour les déplacements
+      for (let ty = ty0 - 1; ty <= ty1 + 1; ty++) for (let tx = tx0 - 1; tx <= tx1 + 1; tx++) {
+        if (tx < 0 || ty < 0 || tx * span >= this.W || ty * span >= this.H || this.getTile(L, tx, ty, false)) continue;
+        this.getTile(L, tx, ty, true); ty = ty1 + 2; break;
+      }
+    }
     // feuille de carte
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
     ctx.fillRect(ox + 6, oy + 8, this.W * z, this.H * z);
@@ -1302,17 +1380,10 @@ export class MapView {
     ctx.beginPath(); ctx.rect(ox, oy, this.W * z, this.H * z); ctx.clip();
     for (let ty = ty0; ty <= ty1; ty++) {
       for (let tx = tx0; tx <= tx1; tx++) {
-        let t = this.getTile(L, tx, ty, false);
-        if (!t && budget > 0) { t = this.getTile(L, tx, ty, true); budget--; }
+        const t = this.getTile(L, tx, ty, false);
         const dx = ox + tx * span * z, dy = oy + ty * span * z, ds = span * z;
-        if (t) {
-          ctx.drawImage(t, dx, dy, ds + 0.6, ds + 0.6);
-        } else {
-          const ltx = Math.floor(tx * span / lowSpan), lty = Math.floor(ty * span / lowSpan);
-          const lt = this.getTile(lowL, ltx, lty, true);
-          const sx = (tx * span - ltx * lowSpan) * lowL, sy = (ty * span - lty * lowSpan) * lowL, ss = span * lowL;
-          ctx.drawImage(lt, sx, sy, ss, ss, dx, dy, ds + 0.6, ds + 0.6);
-        }
+        if (t) ctx.drawImage(t, dx, dy, ds + 0.6, ds + 0.6);
+        else this.drawFallback(ctx, L, tx, ty, ox, oy, z);
       }
     }
     ctx.restore();
