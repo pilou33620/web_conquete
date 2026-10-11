@@ -358,7 +358,7 @@ def _choose_plan(b, side, mem, L, g, pl):
         if want == 'artillerie' and nart == 0:
             want = None
         if want is None:
-            if ncav >= 2 and ncav / n >= 0.15 and L['n'] >= 1 and (tr == 'cavalier' or (L['n'] == 2 and r >= 0.9)):
+            if ncav >= 2 and ncav / n >= 0.15 and L['n'] >= 1 and tr == 'cavalier':
                 want = 'debordement'
             elif nart and (tr == 'artilleur' or nart / n >= 0.15):
                 want = 'artillerie'
@@ -602,12 +602,23 @@ def _deploy_place_def(b, side, mem, L, g, pl):
     mem['ring'] = [None if r is None else round(r) for r in ring]
     walled = any(r is not None for r in ring)
     r_def = (R * 0.8) if not walled else None
+    # brèches : un bataillon de chaque côté, à l'intérieur, à l'abri du mur (les canons du dehors ne le voient pas à
+    # travers la brèche) ; les colonnes qui la franchissent sont prises entre deux feux
     posts = []                                        # (x, y, dir, genre)
+    centers = []
     for bx, by, br in sorted(_breaches(b, pl), key=lambda t: _ang(math.atan2(t[1] - py, t[0] - px), fa)):
         a = math.atan2(by - py, bx - px)
         ri = _ring_at(mem, a, math.hypot(bx - px, by - py) - 10)
-        posts.append((px + math.cos(a) * (ri - 45), py + math.sin(a) * (ri - 45), a, 'breche'))
-    mem['breach'] = [[round(p[0]), round(p[1]), round(p[2], 3)] for p in posts]
+        cx_, cy_ = px + math.cos(a) * (ri - 30), py + math.sin(a) * (ri - 30)
+        ox, oy = px + math.cos(a) * (ri + 50), py + math.sin(a) * (ri + 50)
+        centers.append([round(cx_), round(cy_), round(a, 3)])
+        da = (br + 55) / max(60.0, ri)
+        for sgn in (1, -1):
+            aa = a + sgn * da
+            rr = _ring_at(mem, aa, ri) - 22
+            x, y = px + math.cos(aa) * rr, py + math.sin(aa) * rr
+            posts.append((x, y, math.atan2(oy - y, ox - x), 'breche'))
+    mem['breach'] = centers
     wall_posts = []
     for k in (0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 8, -8, 10, -10, 12):
         a = fa + k * 0.38
