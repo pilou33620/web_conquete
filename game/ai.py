@@ -56,7 +56,11 @@ class AI:
         g = self.g
         if self.go_cooled(a, node):
             return False
-        ok = g.order_move(self.code, a['id'], node=node, **kw)[0]
+        comp, starts = self.reach_from(a) if isinstance(node, int) else (None, None)
+        if starts is not None and comp[node] not in starts:
+            ok = False   # aucune route n'y mène sans entrer dans des terres fermées : refusé sans chercher de chemin
+        else:
+            ok = g.order_move(self.code, a['id'], node=node, **kw)[0]
         if not ok:
             self.cool[('go', a['id'], node)] = g.t + self.GO_CD
             if node is not None and g.nodes[node]['owner'] != self.code:
