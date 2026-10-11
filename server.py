@@ -38,6 +38,7 @@ from game import cities as CT  # noqa: E402
 from game import diplomacy as D  # noqa: E402
 from game import events as EV  # noqa: E402
 from game import rules as R  # noqa: E402
+from game import turns as TT  # noqa: E402
 from game import views as V  # noqa: E402
 from game.engine import Game  # noqa: E402
 from game.geo import GeoMap  # noqa: E402
@@ -107,8 +108,14 @@ class App:
             if c == 'speed':
                 if g.over:
                     return dict(ok=False, msg='La partie est terminée.')
+                if g.tour['on']:   # tour par tour : « pause » arrête le mois en cours, le reste passe par « tour »
+                    if self._num(body.get('value', 0)):
+                        return dict(ok=False, msg='Tour par tour : touchez « Fin du mois » en haut.')
+                    return self._r(TT.halt(g))
                 g.speed_idx = max(0, min(len(R.SPEEDS) - 1, int(self._num(body.get('value', 0)))))
                 return dict(ok=True)
+            if c == 'tour':   # fin du mois, continuer, arrêter, rythme, temps réel (game/turns.py)
+                return self._r(TT.command(g, str(body.get('action')), body.get('value')))
             if c == 'move':
                 x, y = body.get('x'), body.get('y')
                 node = body.get('node')

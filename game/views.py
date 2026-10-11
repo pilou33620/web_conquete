@@ -6,13 +6,14 @@ from . import rules as R
 from . import events as EV
 from . import army_actions as AA
 from . import cities as CT
+from . import turns as TT
 from .engine import Game
 
 SAVE_KEYS = ['player', 'difficulty', 'seed', 't', 'uid', 'seq', 'events', 'proposals', 'armies', 'battles', 'over',
              'flood_until', 'market', 'weather', 'factions', 'nodes', '_ai_clock', 'spies', 'scenario', 'start_ord',
-             'era_id', 'pending_ev', 'ev_done']
+             'era_id', 'pending_ev', 'ev_done', 'tour']
 DEFAULTS = dict(spies=list, scenario=lambda: '1790', start_ord=lambda: datetime.date(1790, 3, 4).toordinal(),
-                era_id=lambda: None, pending_ev=list, ev_done=lambda: None)
+                era_id=lambda: None, pending_ev=list, ev_done=lambda: None, tour=lambda: None)
 
 
 def to_dict(g):
@@ -65,6 +66,7 @@ def migrate(g):
                 r['arm'] = g.arm_level(n['owner'], cls)
     AA.migrate(g)   # actions d'armée : droits de passage, quartiers, traversée
     CT.migrate(g)   # emplacements : un magasin aux vivres existant en occupe un
+    TT.migrate(g)   # tour par tour : les anciennes parties y passent aussi (temps réel dans le menu)
     for bt in g.battles.values():
         bt.setdefault('mor', [100, 100])
         bt.setdefault('phase', 'fusillade')
@@ -126,7 +128,7 @@ def rules_payload():
                 formation_speed=R.FORMATION_SPEED, plans=R.PLANS, phases=R.PHASES, spy=R.SPY, spy_days=R.SPY_INTEL_DAYS,
                 tax_labels=R.TAX_LABELS, water=dict(speed=R.WATER_SPEED, sea=R.SEA_SPEED, embark=R.EMBARK_DAYS,
                                                     quai=R.QUAI_LIVRES, blockade=R.BLOCKADE_K),
-                cities=CT.rules_payload())
+                cities=CT.rules_payload(), paces=[list(p) for p in TT.PACES])
 
 
 def _gen(g):
@@ -336,7 +338,7 @@ def player_state(g, since=0):
                 proposals=[dict(id=x['id'], frm=x['frm'], action=x['action'], amount=x['amount'], give=x['give'],
                                 get=x['get'], date=x['date']) for x in g.proposals],
                 market=dict(prices=g.market, spread=[1.15, 0.85] if has_port else [1.4, 0.6]),
-                flood=g.t < g.flood_until, vis=[[round(x, 1), round(y, 1), round(r, 1)] for x, y, r in srcs])
+                flood=g.t < g.flood_until, tour=TT.view(g), vis=[[round(x, 1), round(y, 1), round(r, 1)] for x, y, r in srcs])
 
 
 def _popy(g, p):
