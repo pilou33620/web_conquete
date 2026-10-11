@@ -16,6 +16,9 @@ CONTACT_KM = 2.6
 AMBUSH_KM = 5.0
 BASE_DETECT = 2.5
 START_DATE = datetime.date(1790, 3, 4)
+START_ORD = START_DATE.toordinal()
+PROD_KEYS = ('livres', 'vivres', 'recrues', 'industrie', 'fer', 'bois')
+_BASE_OUT = {}   # production de base de chaque type de place (R.NODE_BASE, qui ne change pas)
 
 
 def ordinal(n):
@@ -33,6 +36,12 @@ def curve_at(pts, y):
 
 
 class Game:
+    # caches de calcul (jamais sauvegardés) : date du jour, année et croissance séculaire du jour, chefs-lieux
+    _cache_date = None
+    _cache_year = None
+    _cache_era = None
+    _cache_cap = None
+
     # ================================================================== création
     def __init__(self, geo, player, difficulty='normal', seed=None, scenario='1790'):
         self.geo = geo
@@ -224,12 +233,25 @@ class Game:
         return True, ''
 
     def capital_of(self, code):
-        for n in self.geo.nodes:
-            if n['dept'] == code and n['type'] == 'capitale':
-                return n['id']
+        # la carte ne change pas : le chef-lieu de chaque camp n'est cherché qu'une fois
+        c = self._cache_cap
+        if c is None or c[0] is not self.geo:
+            c = self._cache_cap = (self.geo, {})
+        if code not in c[1]:
+            c[1][code] = next((n['id'] for n in self.geo.nodes if n['dept'] == code and n['type'] == 'capitale'), None)
+        return c[1][code]
 
     def date(self, t=None):
-        return datetime.date.fromordinal(getattr(self, 'start_ord', START_DATE.toordinal()) + int(self.t if t is None else t))
+        if t is not None:
+            return datetime.date.fromordinal(getattr(self, 'start_ord', START_ORD) + int(t))
+        # la date du jour, très demandée (saisons, courbes de population…) : calculée une fois par jour
+        o = getattr(self, 'start_ord', START_ORD) + int(self.t)
+        c = self._cache_date
+        if c is not None and c[0] == o:
+            return c[1]
+        d = datetime.date.fromordinal(o)
+        self._cache_date = (o, d)
+        return d
 
     def date_str(self, t=None):
         d = self.date(t)
@@ -237,7 +259,12 @@ class Game:
 
     def year(self):
         d = self.date()
-        return d.year + (d.timetuple().tm_yday - 1) / 365.25
+        c = self._cache_year
+        if c is not None and c[0] == d:
+            return c[1]
+        y = d.year + (d.timetuple().tm_yday - 1) / 365.25
+        self._cache_year = (d, y)
+        return y
 
     def era(self):
         y = self.date().year
@@ -245,7 +272,15 @@ class Game:
 
     def pop_era(self, year=None):
         """Croissance séculaire de l'économie à cette date, par rapport à 1790."""
-        return curve_at(R.POP_ERA, self.year() if year is None else year)[0]
+        if year is not None:
+            return curve_at(R.POP_ERA, year)[0]
+        y = self.year()
+        c = self._cache_era
+        if c is not None and c[0] == y:
+            return c[1]
+        v = curve_at(R.POP_ERA, y)[0]
+        self._cache_era = (y, v)
+        return v
 
     def _pop_curves(self):
         """Trajectoires de population de tous les lieux à la date du jour (recalculées une fois par mois) :
@@ -615,8 +650,11 @@ class Game:
 
     def node_output(self, n, code):
         gn = self.geo.nodes[n['id']]
-        base = R.NODE_BASE[gn['type']]
-        out = {k: base.get(k, 0) for k in ('livres', 'vivres', 'recrues', 'industrie', 'fer', 'bois')}
+        b0 = _BASE_OUT.get(gn['type'])
+        if b0 is None:
+            base = R.NODE_BASE[gn['type']]
+            b0 = _BASE_OUT[gn['type']] = {k: base.get(k, 0) for k in PROD_KEYS}
+        out = dict(b0)
         trade = 0.0
         for s in gn['spec']:
             for k, v in R.SPEC[s].items():
@@ -664,13 +702,14 @@ class Game:
             tb, cov = self.tools_bonus(code)
             ai = 1 + self.mod(code, 'ai_income')
             tot = dict(livres=0.0, vivres=0.0, recrues=0.0, industrie=0.0, fer=0.0, bois=0.0)
-            for n in self.owned_nodes(code):
+            own = self.owned_nodes(code)
+            food0 = R.SEASON_FOOD[season]
+            if season == 'hiver':
+                food0 += self.mod(code, 'winter_food')
+            for n in own:
                 gn = self.geo.nodes[n['id']]
                 o = self.node_output(n, code)
-                food = R.SEASON_FOOD[season]
-                if season == 'hiver':
-                    food += self.mod(code, 'winter_food')
-                food *= self.wx(gn['x'], gn['y'])['food']
+                food = food0 * self.wx(gn['x'], gn['y'])['food']
                 tot['livres'] += o['livres'] * tb
                 tot['vivres'] += o['vivres'] * food * tb
                 tot['recrues'] += o['recrues']
@@ -727,7 +766,7 @@ class Game:
             k_up = 1 + self.mod(code, 'upkeep')
             tot['vivres'] -= up_v * k_up
             tot['livres'] -= up_l * k_up
-            up_f = sum(R.FORT_UPKEEP[min(n['fort'], R.BASTION_LEVEL)] for n in self.owned_nodes(code))
+            up_f = sum(R.FORT_UPKEEP[min(n['fort'], R.BASTION_LEVEL)] for n in own)
             tot['livres'] -= up_f
             up_b = CT.upkeep(self, code)   # bâtiments d'emplacement
             tot['livres'] -= up_b
@@ -750,6 +789,10 @@ class Game:
                 f['income'].update(f['_measured'])
 
     def economy(self, dt):
+        # places tenues par chacun (plafond des casernes, voir recruit_cap) : un seul passage sur la carte
+        held_n = {}
+        for n in self.nodes:
+            held_n[n['owner']] = held_n.get(n['owner'], 0) + 1
         for code, f in self.factions.items():
             if not f['alive']:
                 continue
@@ -758,13 +801,13 @@ class Game:
             r['livres'] += inc['livres'] * dt
             r['vivres'] += inc['vivres'] * dt
             # au-delà du plafond des casernes, plus de nouvelles recrues (mais on ne perd pas celles reçues par échange)
-            r['recrues'] = min(r['recrues'] + inc['recrues'] * dt, max(self.recruit_cap(code), r['recrues']))
-            gross_fer = inc['fer'] + f['_arm_rate'] + 0.5 * f['_tool_rate'] * (1 + self.mod(code, 'tools_cost'))
-            gross_bois = inc['bois'] + 0.5 * f['_arm_rate'] + f['_tool_rate'] * (1 + self.mod(code, 'tools_cost'))
+            r['recrues'] = min(r['recrues'] + inc['recrues'] * dt, max(3000 + 250 * held_n.get(code, 0), r['recrues']))
+            kc = 1 + self.mod(code, 'tools_cost')
+            gross_fer = inc['fer'] + f['_arm_rate'] + 0.5 * f['_tool_rate'] * kc
+            gross_bois = inc['bois'] + 0.5 * f['_arm_rate'] + f['_tool_rate'] * kc
             r['fer'] += gross_fer * dt
             r['bois'] += gross_bois * dt
             # fabrication limitée par les stocks
-            kc = 1 + self.mod(code, 'tools_cost')
             want_a = f['_arm_rate'] * dt
             want_t = f['_tool_rate'] * dt
             ka = min(1.0, r['fer'] / max(1e-9, want_a * 1.0 + want_t * 0.5 * kc), r['bois'] / max(1e-9, want_a * 0.5 + want_t * kc)) \
@@ -815,28 +858,38 @@ class Game:
         for a in self.armies.values():
             if a['at_node'] is not None:
                 held.setdefault(a['at_node'], set()).add(a['owner'])
+        per = {}   # ce qui ne dépend que du maître de la place (rien ne le change dans cette boucle)
         for n in self.nodes:
             if n['siege']:
                 continue
             code = n['owner']
-            k = 1 + (self.mod(code, 'milice') if code != R.NEUTRAL else 0)
+            pc = per.get(code)
+            if pc is None:
+                if code == R.NEUTRAL:
+                    pc = (1 + 0, 1.0, 0, 1.0, 1 + 0)
+                else:
+                    fc = self.factions[code]
+                    pc = (1 + self.mod(code, 'milice'), targets.get(code, 1.0), fc.get('weary', 0) / 250,
+                          1 + max(0.0, 0.5 - fc.get('tax', 0.5)) * 2, 1 + self.mod(code, 'stab'))
+                per[code] = pc
+            k, tgt0, weary, boost0, kstab = pc
             mm = n['milice_max'] * k
             if n['milice'] < mm:
                 n['milice'] = min(mm, n['milice'] + mm * 0.012 * dt)
             if code == R.NEUTRAL:
                 tgt, boost = 1.0, 1.0
             else:
-                tgt = targets.get(code, 1.0)
-                tgt -= 0.2 * (1 - self.assim(n)) + self.factions[code].get('weary', 0) / 250
+                tgt = tgt0
+                tgt -= 0.2 * (1 - self.assim(n)) + weary
                 friends = any(self.friendly(code, o) for o in held.get(n['id'], ()))
                 if n['garrison'] or friends or self.geo.nodes[n['id']]['type'] == 'capitale':
                     tgt += 0.15
                 tgt += AA.stab_bonus(self, n)
                 tgt += CT.stab_bonus(self, n)   # hospices, politique de la ville
                 tgt = max(0.1, min(1.0, tgt))
-                boost = 1 + max(0.0, 0.5 - self.factions[code].get('tax', 0.5)) * 2
+                boost = boost0
             if n['stab'] < tgt:
-                rate = 0.012 * boost * (1 + (self.mod(code, 'stab') if code != R.NEUTRAL else 0))
+                rate = 0.012 * boost * kstab
                 n['stab'] = min(tgt, n['stab'] + rate * dt)
             elif n['stab'] > tgt:
                 n['stab'] = max(tgt, n['stab'] - 0.01 * dt)
@@ -976,6 +1029,7 @@ class Game:
 
     def replenish(self, code, regs, dt, rate):
         f = self.factions[code]
+        top = 100 + self.mod(code, 'morale')
         for reg in regs:
             if reg['n'] < reg['max']:
                 add = min(reg['max'] - reg['n'], reg['max'] * rate * dt)
@@ -984,7 +1038,7 @@ class Game:
                     f['res']['recrues'] -= need_r
                     f['res']['armes'] -= need_a
                     reg['n'] += add
-            reg['morale'] = min(100 + self.mod(code, 'morale'), reg['morale'] + 6 * dt)
+            reg['morale'] = min(top, reg['morale'] + 6 * dt)
 
     def all_regs(self, code):
         for n in self.nodes:
@@ -1196,25 +1250,26 @@ class Game:
 
     def reg_power(self, code, r, tname, wx_fire=1.0, cover=False, a=None):
         u = R.UNITS[r['type']]
+        md = self.factions[code]['mods']   # comme self.mod(code, …), sans l'appel
         p = r['n'] * u['power'] * u['terrain'].get(tname, 1.0)
-        k = 1 + self.mod(code, 'all_power')
+        k = 1 + md.get('all_power', 0.0)
         cls = u['cls']
         if cls in R.ARMS:
             p *= R.ARMS[cls][min(r.get('arm', 0), len(R.ARMS[cls]) - 1)][2]
         if cls == 'inf':
-            k += self.mod(code, 'inf_power')
-            p *= 1 - (1 - wx_fire) * (1 - self.mod(code, 'rain'))   # l'amorce à percussion ne craint plus la pluie
+            k += md.get('inf_power', 0.0)
+            p *= 1 - (1 - wx_fire) * (1 - md.get('rain', 0.0))   # l'amorce à percussion ne craint plus la pluie
         elif cls == 'artillerie':
-            k += self.mod(code, 'art_power')
+            k += md.get('art_power', 0.0)
             p *= wx_fire
         else:
-            k += self.mod(code, 'cav_power')
+            k += md.get('cav_power', 0.0)
             p *= (1 + wx_fire) / 2
         if u['light'] and cover:
-            k += self.mod(code, 'legere_cover')
+            k += md.get('legere_cover', 0.0)
         mountain = tname in ('Montagne', 'Collines', 'Haute montagne')
         if mountain:
-            k += self.mod(code, 'mountain')
+            k += md.get('mountain', 0.0)
         if a is not None and a.get('gen'):
             tr = a['gen']['trait']
             if tr == 'cavalier' and r['type'] == 'cavalerie':
@@ -1262,9 +1317,12 @@ class Game:
         for a in self.armies.values():
             if a['owner'] == code:
                 p += self.army_power(a)
+        mk = None
         for n in self.nodes:
             if n['owner'] == code:
-                p += n['milice'] * R.MILICE_POWER * self.milice_k(code) * 0.5 + sum(self.reg_power(code, r, 'Plaine') for r in n['garrison'])
+                if mk is None:
+                    mk = self.milice_k(code)   # les armes de la milice : les mêmes dans toutes ses places
+                p += n['milice'] * R.MILICE_POWER * mk * 0.5 + sum(self.reg_power(code, r, 'Plaine') for r in n['garrison'])
         return p
 
     def army_pos_node(self, a):
@@ -3051,10 +3109,11 @@ class Game:
             self.log('fin', self.over['text'], important=True)
 
     # ------------------------------------------------------------------ usure, ravitaillement
-    def depot_near(self, a):
-        """Magasin aux vivres (à soi ou à un allié) assez proche pour ravitailler l'armée, sinon None."""
+    def depot_near(self, a, depots=None):
+        """Magasin aux vivres (à soi ou à un allié) assez proche pour ravitailler l'armée, sinon None.
+        depots : les places à magasin hors siège, déjà relevées (même ordre que self.nodes)."""
         best, bd = None, R.DEPOT_KM ** 2
-        for n in self.nodes:
+        for n in (self.nodes if depots is None else depots):
             if n.get('depot') and not n['siege'] and self.friendly(a['owner'], n['owner']):
                 x, y = self.node_xy(n['id'])
                 d = (x - a['x']) ** 2 + (y - a['y']) ** 2
@@ -3064,6 +3123,7 @@ class Game:
 
     def attrition(self, dt):
         season = self.season()
+        depots = None   # places à magasin hors siège : relevées une fois, si une armée en cherche un
         for a in list(self.armies.values()):
             code = a['owner']
             f = self.factions[code]
@@ -3074,7 +3134,9 @@ class Game:
             logi = self.gen_trait(a) == 'logisticien'
             a['depot'] = None
             if not friendly_land and f['res']['vivres'] > 1:
-                dep = self.depot_near(a)
+                if depots is None:
+                    depots = [n for n in self.nodes if n.get('depot') and not n['siege']]
+                dep = self.depot_near(a, depots)
                 if dep is not None:
                     # les charrois du magasin suivent l'armée : ravitaillée, mais aux frais du grenier
                     a['depot'] = dep
@@ -3137,8 +3199,9 @@ class Game:
             a['regs'] = [r for r in a['regs'] if r['n'] >= 5]
             if a['state'] == 'idle' and not (unpaid or hungry):
                 if friendly_land:
+                    top = 100 + self.mod(code, 'morale')
                     for r in a['regs']:
-                        r['morale'] = min(100 + self.mod(code, 'morale'), r['morale'] + 5 * dt)
+                        r['morale'] = min(top, r['morale'] + 5 * dt)
                     if a['at_node'] is not None and self.geo.nodes[a['at_node']]['type'] != 'village':
                         self.replenish(code, a['regs'], dt, 0.02)
                 else:
@@ -3164,19 +3227,22 @@ class Game:
             if e.get('kind') != 'water' or e.get('sea'):
                 continue
             fire, who = 0.0, None
+            r2 = R.RIVER_FIRE_KM ** 2
             for x in self.armies.values():
-                if x is b or x.get('boat') or x['state'] == 'battle' or not self.at_war(x['owner'], b['owner']):
+                if x is b or x.get('boat') or x['state'] == 'battle':
                     continue
-                if (x['x'] - b['x']) ** 2 + (x['y'] - b['y']) ** 2 > R.RIVER_FIRE_KM ** 2:
+                if (x['x'] - b['x']) ** 2 + (x['y'] - b['y']) ** 2 > r2 or not self.at_war(x['owner'], b['owner']):
                     continue
                 f = sum(1.0 if r['type'] == 'artillerie' else (0.15 if self.arm_class(r['type']) == 'inf' else 0) for r in x['regs'])
                 if f:
                     fire += f
                     who = x['owner']
+            rn2 = (R.RIVER_FIRE_KM + 0.5) ** 2
             for n in self.nodes:
-                if n['fort'] >= 1 and n['owner'] in self.factions and self.at_war(n['owner'], b['owner']):
+                if n['fort'] >= 1:
                     nx, ny = self.node_xy(n['id'])
-                    if (nx - b['x']) ** 2 + (ny - b['y']) ** 2 <= (R.RIVER_FIRE_KM + 0.5) ** 2:
+                    if (nx - b['x']) ** 2 + (ny - b['y']) ** 2 <= rn2 and n['owner'] in self.factions \
+                            and self.at_war(n['owner'], b['owner']):
                         fire += n['fort']
                         who = n['owner']
             if not fire:
