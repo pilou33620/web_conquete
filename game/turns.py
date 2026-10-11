@@ -36,6 +36,7 @@ NEAR_KM = 25.0        # une bataille entre d'autres camps interrompt si elle se 
 PRIORITY = ['fin', 'decision', 'guerre', 'grand', 'siege', 'bataille', 'entree', 'diplo']
 BIG_PROPOSALS = ('paix', 'alliance', 'soumission')
 MAX_ITEMS = 30        # par rubrique du récapitulatif
+_DIPLO = re.compile(r"guerre|paix|alliance|trêve|soumi|vassal|traité")   # pas les accords de commerce ni les échanges
 _BUILT = re.compile(r"^(Fin des travaux à |Magasin aux vivres construit à )|( terminées à | s'agrandit )")
 
 
@@ -341,7 +342,9 @@ def _accumulate(g, dt):
             continue
         elif k == 'tech' and txt.startswith('Découverte'):
             lst, it = acc['techs'], _item(e)
-        elif e.get('important') and k in ('capitulation', 'epoque', 'revolte', 'evenement', 'diplo', 'fin', 'siege'):
+        elif e.get('important') and (k in ('capitulation', 'epoque', 'revolte', 'fin', 'siege')
+                                     or (k == 'diplo' and _DIPLO.search(txt) and 'répondez' not in txt)
+                                     or (k == 'evenement' and 'Une décision vous attend' not in txt)):
             lst, it = acc['facts'], _item(e)
         else:
             continue
@@ -362,7 +365,7 @@ def _recap(g):
         return [dict(id=i, name=g.geo.nodes[i]['name'], x=g.geo.nodes[i]['x'], y=g.geo.nodes[i]['y'])
                 for i in sorted(ids, key=lambda i: g.geo.nodes[i]['name'])][:MAX_ITEMS]
     d = g.date(g.t - 1)   # le mois qui s'achève
-    return dict(id=f"{acc['t0']}-{round(g.t, 3)}", title=f"Bilan {R.de(R.MONTHS[d.month - 1])} {d.year}",
+    return dict(id=f"{g.seed}-{acc['t0']}-{round(g.t, 3)}", title=f"Bilan {R.de(R.MONTHS[d.month - 1])} {d.year}",
                 period=f"du {acc['date0']} au {g.date_str()}", battles=acc['battles'], built=acc['built'],
                 techs=acc['techs'], facts=acc['facts'], levied=acc['levied'], gained=places(now - before),
                 lost=places(before - now), inc={r: round(v, 1) for r, v in acc['inc'].items()},

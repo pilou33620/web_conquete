@@ -41,6 +41,7 @@ export class UI {
     this.modal = null;
     this.events = [];
     this.lastSpeed = 1;
+    this.cmdSeq = 0;
     this.panelSig = '';
     this.modalSig = '';
     this.pressing = false;
@@ -134,9 +135,14 @@ export class UI {
   onKey(e) {
     if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || e.target.isContentEditable) return;
     if (!this.st) return;
+    const tour = this.st.tour && this.st.tour.on;
     if (e.key === ' ') {
       e.preventDefault();
-      if (this.st.speed) { this.lastSpeed = this.st.speed; this.setSpeed(0); } else this.setSpeed(this.lastSpeed || 1);
+      if (tour) this.turnCmd(this.st.tour.phase === 'cours' ? 'stop' : 'go');   // tour par tour : fin du mois, arrêter, continuer
+      else if (this.st.speed) { this.lastSpeed = this.st.speed; this.setSpeed(0); } else this.setSpeed(this.lastSpeed || 1);
+    } else if (tour && /^[1-9]$/.test(e.key)) {
+      const p = (this.rules.paces || [])[+e.key - 1];
+      if (p) this.cmd({ cmd: 'tour', action: 'pace', value: p[0] }, false);
     } else if (/^[1-9]$/.test(e.key) && +e.key < this.rules.speeds.length) this.setSpeed(+e.key);
     else if (e.key === 'Escape') {
       if (!this.$('modal').hidden) this.closeModal();
@@ -150,12 +156,23 @@ export class UI {
   // ------------------------------------------------------------------ commandes serveur
   async cmd(body, toastOk = true) {
     let r;
+    this.cmdSeq++;
     try { r = await this.api.post('/api/cmd', body); } catch (e) { r = { ok: false, msg: 'Serveur injoignable : ordre non transmis.' }; }
+    this.cmdSeq++;   // avant et après l'ordre : un état demandé entre-temps est périmé (voir poll)
     if (r.msg && (!r.ok || toastOk)) this.toast(r.msg, r.ok ? (r.pending ? '' : 'good') : 'bad');
     this.onRefresh && this.onRefresh();
     return r;
   }
   setSpeed(v) { this.cmd({ cmd: 'speed', value: v }, false); if (this.st) this.st.speed = v; this.renderSpeed(v); }
+  // tour par tour : 'go' (fin du mois, continuer le mois) ou 'stop' (arrêter le temps)
+  turnCmd(v) {
+    const tr = this.st && this.st.tour;
+    if (!tr || !tr.on || this.st.over) return;
+    this.cmd({ cmd: 'tour', action: v }, false);
+    // réponse immédiate à l'écran, sans attendre le prochain état du serveur
+    if (v === 'go') { tr.phase = 'cours'; tr.recap = null; } else if (tr.phase === 'cours') tr.phase = 'arret';
+    this.renderTurn();
+  }
 
   toast(text, kind = '') {
     const t = document.createElement('div');
@@ -227,6 +244,87 @@ export class UI {
     for (const b of this.$('tb-speed').children) b.classList.toggle('on', +b.dataset.v === v);
   }
 
+  // ------------------------------------------------------------------ tour par tour
+  // barre du haut : « Fin du mois » (ordres), progression et « Arrêter » (le mois se joue),
+  // « Continuer le mois » et la raison de l'arrêt (interruption)
+  renderTurn() {
+    const tr = this.st.tour || { on: false };
+    const tb = this.$('tb-turn');
+    this.$('tb-speed').hidden = !!tr.on;
+    tb.hidden = !tr.on;
+    document.body.classList.toggle('mode-tour', !!tr.on);
+    this.renderRecap();
+    if (!tr.on) return;
+    const pace = (this.rules.paces || []).find(p => p[0] === tr.pace) || ['normal', 'Normal', 15];
+    const until = `jusqu’au ${esc(tr.end || '')}`;
+    const stop = tr.stop;
+    const sig = [tr.phase, tr.end, tr.pace, stop ? stop.text + stop.date + stop.more : '', !!this.st.over].join('|');
+    if (sig !== tb.dataset.sig) {
+      tb.dataset.sig = sig;
+      const paceBtn = `<button class="turn-pace" data-act="turn-pace" title="Rythme : un mois se joue en ${pace[2]} secondes environ (touches 1 à ${(this.rules.paces || []).length}). Toucher pour changer." aria-label="Rythme du mois : ${pace[1]}">${speedIcon(Math.max(1, (this.rules.paces || []).findIndex(p => p[0] === pace[0]) + 1))}<span>${pace[1]}</span></button>`;
+      const off = this.st.over ? ' disabled' : '';
+      if (tr.phase === 'cours') {
+        tb.innerHTML = `<div class="turn-run" title="Le mois se joue ${until}"><div class="turn-lbl">Le mois se joue… <span>${until.replace(/ \d{4}$/, '')}</span></div><div class="bar"><i id="turn-bar"></i></div></div>
+          <button class="turn-stop" data-act="turn" data-v="stop" title="Arrêter le temps (espace)">${speedIcon(0)}<span>Arrêter</span></button>${paceBtn}`;
+      } else if (tr.phase === 'arret') {
+        const why = stop ? `<button class="turn-why k-${esc(stop.kind)}" data-act="turn-why" title="${esc(stop.text)}${stop.x != null || stop.sel ? ' — toucher pour voir' : ''}">${esc(stop.text)}${stop.more ? ` <span class="more">+${stop.more}</span>` : ''}</button>`
+          : '<span class="turn-why muted">Mois interrompu.</span>';
+        tb.innerHTML = `<button class="turn-go" data-act="turn" data-v="go"${off} title="Reprendre le mois (espace)"><b>Continuer le mois</b><small>${until}</small></button>${why}`;
+      } else {
+        tb.innerHTML = `<button class="turn-go" data-act="turn" data-v="go"${off} title="Jouer le mois (espace) : tout s’arrête au ${esc(tr.end || '')}"><b>Fin du mois</b><small>${until}</small></button>${paceBtn}`;
+      }
+    }
+    const bar = document.getElementById('turn-bar');
+    if (bar) bar.style.width = (Math.max(0, Math.min(1, tr.prog || 0)) * 100).toFixed(1) + '%';
+  }
+
+  // raison de l'arrêt : centrer la carte, sélectionner la bataille, la place ou l'armée, ou ouvrir la décision
+  turnWhy() {
+    const s = this.st.tour && this.st.tour.stop;
+    if (!s) return;
+    if (s.sel === 'event' && (this.st.pending || []).length) { this.openModal('event'); return; }
+    if (s.x != null) this.map.moveTo(s.x, s.y, Math.max(this.map.cam.z, 7));
+    if (Array.isArray(s.sel)) {
+      const [kind, id] = s.sel;
+      const there = kind === 'node' || (kind === 'battle' ? this.st.battles.some(b => b.id === id) : !!this.armyById(id));
+      if (there) this.select({ kind, id });
+    }
+  }
+
+  // récapitulatif du mois écoulé, au début de chaque tour : discret, refermable (une fois par appareil)
+  renderRecap() {
+    const box = this.$('recap');
+    const tr = this.st.tour || {};
+    const rc = tr.on && tr.phase === 'ordres' ? tr.recap : null;
+    if (this.recapClosed === undefined) { try { this.recapClosed = localStorage.getItem('conquete.recap') || ''; } catch (e) { this.recapClosed = ''; } }
+    if (!rc || rc.id === this.recapClosed || this.st.over) { box.hidden = true; box.dataset.sig = ''; return; }
+    const sig = rc.id + (this.recapOpen ? '+' : '-');
+    if (box.dataset.sig === sig && !box.hidden) return;
+    box.dataset.sig = sig;
+    const go = it => it.x != null ? ` data-act="goto" data-x="${it.x}" data-y="${it.y}"` : '';
+    const line = (icon, html, it, cls = '') => `<li class="${cls}"${it ? go(it) : ''}>${icon}<span>${html}</span></li>`;
+    const places = l => l.map(p => `<button class="linkish" data-act="goto" data-x="${p.x}" data-y="${p.y}">${esc(p.name)}</button>`).join(', ');
+    const lines = [];
+    for (const b of rc.battles) lines.push(line(ICON.swords, esc(b.text), b, b.win === true ? 'good' : b.win === false ? 'bad' : ''));
+    if (rc.gained.length) lines.push(line(ICON.flag, `${rc.gained.length > 1 ? 'Places prises' : 'Place prise'} : ${places(rc.gained)}`, null, 'good'));
+    if (rc.lost.length) lines.push(line(ICON.flag, `${rc.lost.length > 1 ? 'Places perdues' : 'Place perdue'} : ${places(rc.lost)}`, null, 'bad'));
+    for (const f of rc.facts) lines.push(line(ICON.seal, esc(f.text), f));
+    for (const t of rc.techs) lines.push(line(ICON.tech, esc(t.text), t));
+    for (const b of rc.built) lines.push(line(ICON.ville, esc(b.text), b));
+    if (rc.levied) lines.push(line(ICON.recrues, `${rc.levied} ${rc.levied > 1 ? 'régiments levés' : 'régiment levé'}.`));
+    const inc = RES_ORDER.filter(r => Math.abs(rc.inc[r] || 0) >= 1)
+      .map(r => `<span class="rc-r" title="${esc(this.rules.res_label[r])}">${ICON[r]}${signed(rc.inc[r])}</span>`).join('');
+    const SHOW = 4;
+    const more = lines.length - SHOW;
+    const shown = this.recapOpen ? lines : lines.slice(0, SHOW);
+    box.innerHTML = `<button class="icon-btn close" data-act="recap-close" aria-label="Fermer le récapitulatif">${ICON.close}</button>
+      <div class="rc-title">${esc(rc.title)}</div><div class="rc-sub">${esc(rc.period)}${rc.stops ? ` · ${rc.stops} ${rc.stops > 1 ? 'interruptions' : 'interruption'}` : ''}</div>
+      <div class="rc-inc"><span class="rc-k">Revenus nets du mois</span>${inc || '<span class="muted">aucun</span>'}</div>
+      <ul class="rc-list">${shown.join('') || '<li class="muted"><span>Un mois calme : ni bataille, ni conquête, ni chantier achevé.</span></li>'}</ul>
+      ${more > 0 ? `<button class="linkish rc-more" data-act="recap-more">${this.recapOpen ? 'Réduire' : `Tout voir (${more} de plus)`}</button>` : ''}`;
+    box.hidden = false;
+  }
+
   renderTop() {
     const st = this.st, me = st.me;
     this.$('tb-day').textContent = st.date;
@@ -242,6 +340,7 @@ export class UI {
       this.$('tb-season').innerHTML = `<span>${this.rules.seasons[st.season]}</span>${wx}${st.flood ? '<span class="wx" title="Crue des fleuves">🌊</span>' : ''}`;
     }
     this.renderSpeed(st.speed);
+    this.renderTurn();
     for (const r of RES_ORDER) {
       const v = me.res[r], inc = me.income[r];
       this.$('res-' + r).textContent = fmt(v);
@@ -519,6 +618,24 @@ export class UI {
     const sel = this.sel;
     switch (act) {
       case 'speed': this.setSpeed(+d.v); break;
+      case 'turn': this.turnCmd(d.v); break;
+      case 'turn-why': this.turnWhy(); break;
+      case 'turn-pace': {   // rythme suivant (ou celui choisi dans le menu)
+        const ps = this.rules.paces || [];
+        const i = ps.findIndex(p => p[0] === this.st.tour.pace);
+        const v = d.v || (ps[(i + 1) % ps.length] || [])[0];
+        if (v) this.cmd({ cmd: 'tour', action: 'pace', value: v }, false).then(() => { this.modalSig = ''; });
+        break;
+      }
+      case 'turn-mode': this.cmd({ cmd: 'tour', action: 'mode', value: d.v === '1' }); break;
+      case 'recap-close': {
+        const rc = this.st.tour && this.st.tour.recap;
+        this.recapClosed = rc ? rc.id : '';
+        try { localStorage.setItem('conquete.recap', this.recapClosed); } catch (e) { /* stockage indisponible */ }
+        this.renderRecap();
+        break;
+      }
+      case 'recap-more': this.recapOpen = !this.recapOpen; this.renderRecap(); break;
       case 'modal': this.openModal(d.v); break;
       case 'close-modal': this.closeModal(); break;
       case 'close-panel': this.select(null); break;
@@ -1490,6 +1607,7 @@ export class UI {
         <div class="btns"><button class="btn primary" data-act="save">Sauvegarder</button></div>
         <h3 class="section-t">Charger</h3><div class="saves">${saves || '<p class="muted">Aucune sauvegarde.</p>'}</div>
         <h3 class="section-t">Recommencer</h3><div class="btns"><button class="btn danger" data-act="newgame">Nouvelle partie</button></div>
+        ${this.turnSettings()}
         <h3 class="section-t">Affichage</h3><div class="btns"><button class="btn" data-act="anim">${this.map.ambient.on ? 'Couper les animations de la carte' : 'Animer la carte'}</button></div>
         <p class="muted small" style="margin:4px 0 0">Moulins, fumées, oiseaux, bateaux, charrettes et troupeaux.</p>
         <h3 class="section-t">Jouer depuis un autre appareil</h3>${this.netHtml(this.net)}
@@ -1503,7 +1621,8 @@ export class UI {
           <li>Au stylet ou à la souris, survolez une ville ou une armée pour voir ses forces. La paume posée sur l’écran est ignorée pendant l’usage du stylet.</li>
           <li>Les routes sont rapides. À travers champs, l’armée peut se cacher dans les bois, landes, marais ou montagnes et tendre une embuscade (posture « Embuscade »), mais avance plus lentement, s’use et perd son ravitaillement.</li>
           <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite. Les remparts ont quatre niveaux (le quatrième, les bastions à la Vauban, après la technologie du même nom, dans le chef-lieu et les places fortes) ; ils coûtent un entretien et perdent un niveau quand la place est prise de force.</li>
-          <li><b>Deux siècles</b> : la grande campagne part de 1700 (ou de 1790, 1813, 1870) et s’achève fin 1899 ; le plus prestigieux l’emporte. Les provinces deviennent départements en 1790 ; technologies et unités n’apparaissent qu’à leur époque. Vitesses ×10 et ×30 (touches 5 et 6) pour les années de paix : guerres, batailles et grandes propositions remettent en pause.</li>
+          <li><b>Deux siècles</b> : la grande campagne part de 1700 (ou de 1790, 1813, 1870) et s’achève fin 1899 ; le plus prestigieux l’emporte. Les provinces deviennent départements en 1790 ; technologies et unités n’apparaissent qu’à leur époque. ${this.st.tour && this.st.tour.on ? '' : 'Vitesses ×10 et ×30 (touches 5 et 6) pour les années de paix : guerres, batailles et grandes propositions remettent en pause.'}</li>
+          <li><b>Tour par tour</b> : chaque tour est un mois. Donnez vos ordres, puis « Fin du mois » : le mois se joue en accéléré (rythme réglable ci-contre) et s’arrête au 1er du mois suivant, avec le bilan du mois écoulé. Une bataille qui vous concerne, une armée ennemie sur vos terres, un siège ou une décision arrêtent le temps : touchez la raison affichée en haut pour la voir, puis « Continuer le mois ».</li>
           <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
           <li><b>Événements</b> : aux grandes dates (Grand Hiver, Révolution, Blocus continental, phylloxéra…) et au gré des imprévus, une fenêtre vous demande un choix ; chaque option affiche ses effets. Vos choix nourrissent l’« histoire » de votre prestige. Sans réponse en 30 jours, l’option la plus prudente s’applique.</li>
           <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes reçues à sa levée (affichées à côté de son nom) : après une découverte, réarmez les régiments démodés dans une de vos places (bouton « Réarmer », payé en armes, et en fer pour l’artillerie). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
@@ -1514,10 +1633,25 @@ export class UI {
           <li>La partie est sauvegardée automatiquement chaque mois ; elle reprend au redémarrage du serveur.</li>
           <li>La pluie mouille la poudre, la neige ferme les cols, l’hiver vide les greniers. Les récoltes arrivent en été et en automne.</li>
           <li>Prenez tous les chefs-lieux, ou obtenez la soumission des autres camps. Un camp dont le chef-lieu tombe signe un traité (places cédées, tribut, trêve de cinq ans) ; il n’est rayé de la carte que s’il est déjà écrasé, ou si le même vainqueur le fait plier deux fois en 25 ans. Vous aussi.</li>
-          <li>Raccourcis : espace pour la pause, 1 à 6 pour la vitesse, Échap pour annuler.</li>
+          <li>Raccourcis : ${this.st.tour && this.st.tour.on ? 'espace pour finir le mois, l’arrêter ou le continuer, 1 à 4 pour le rythme' : 'espace pour la pause, 1 à 6 pour la vitesse'}, Échap pour annuler.</li>
         </ul>
       </div></div>`;
-    return [html, JSON.stringify([(this.saves || []).map(s => s.name), me.stats, this.net])];
+    const tr = this.st.tour || {};
+    return [html, JSON.stringify([(this.saves || []).map(s => s.name), me.stats, this.net, tr.on, tr.pace])];
+  }
+
+  // menu ☰ : rythme du tour, et en réglage avancé le temps réel d'origine
+  turnSettings() {
+    const tr = this.st.tour || {};
+    const ps = this.rules.paces || [];
+    const seg = `<div class="seg pace-seg" role="group" aria-label="Rythme du mois">${ps.map(([k, l, sec]) =>
+      `<button class="${k === tr.pace ? 'on' : ''}" data-act="turn-pace" data-v="${k}" aria-pressed="${k === tr.pace}">${l}<small>${sec} s</small></button>`).join('')}</div>`;
+    return `<h3 class="section-t">Rythme du jeu</h3>${tr.on ? `
+        <p class="muted small" style="margin:0 0 6px">Tour par tour : donnez vos ordres sur la carte figée, puis « Fin du mois ». Le mois se joue sous vos yeux et s’arrête au 1er du mois suivant ; une bataille, une invasion, un siège ou une décision l’interrompent.</p>
+        <p class="small" style="margin:0 0 4px">Durée d’un mois à l’écran :</p>${seg}` : `
+        <p class="muted small" style="margin:0 0 6px">Temps réel avec pause : choisissez la vitesse en haut (espace pour la pause).</p>`}
+        <p class="small" style="margin:10px 0 0"><b>Réglage avancé</b></p>
+        <div class="btns" style="margin-top:4px"><button class="btn" data-act="turn-mode" data-v="${tr.on ? '0' : '1'}">${tr.on ? 'Jouer en temps réel (avec pause)' : 'Revenir au tour par tour'}</button></div>`;
   }
 
   netHtml(net) {
