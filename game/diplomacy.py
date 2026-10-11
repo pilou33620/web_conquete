@@ -40,6 +40,7 @@ def declare_war(game, a, b, quiet=False):
         return False, f"Une trêve avec {game.fname(b)} court jusqu'au {game.date_str(fa['truce'][b])}."
     was_ally = game.status(a, b) == 'alliance'
     game.set_status(a, b, 'guerre')
+    game.factions[a]['last_war'] = game.factions[b]['last_war'] = game.t
     for x, y in ((a, b), (b, a)):
         game.factions[x]['trade'].pop(y, None)
         game.factions[x]['war_since'][y] = game.t
@@ -58,15 +59,17 @@ def declare_war(game, a, b, quiet=False):
     for o, f in game.factions.items():
         if not f['alive'] or o in (a, b):
             continue
+        if f['overlord'] == b and a in f['truce']:
+            continue   # une trêve signée se respecte, même pour secourir un allié
         if f['overlord'] == b or (game.status(o, b) == 'alliance' and f['rel'][b] > 15 and not game.at_war(o, a)
-                                  and game.status(o, a) != 'alliance'):
+                                  and game.status(o, a) != 'alliance' and a not in f['truce']):
             game.set_status(o, a, 'guerre')
             f['trade'].pop(a, None)
             game.factions[a]['trade'].pop(o, None)
             f['war_since'][a] = game.t
             game.factions[a]['war_since'][o] = game.t
             game.log('diplo', f"{game.fname(o)} honore son alliance et entre en guerre contre {game.fname(a)}.", who=o, important=True)
-        elif f['overlord'] == a and not game.at_war(o, b):
+        elif f['overlord'] == a and not game.at_war(o, b) and b not in f['truce']:
             game.set_status(o, b, 'guerre')
             f['trade'].pop(b, None)
             f['war_since'][b] = game.t
@@ -75,6 +78,7 @@ def declare_war(game, a, b, quiet=False):
 
 def make_peace(game, a, b):
     game.set_status(a, b, 'paix')
+    game.factions[a]['last_war'] = game.factions[b]['last_war'] = game.t
     until = game.t + 120
     game.factions[a]['truce'][b] = until
     game.factions[b]['truce'][a] = until
@@ -182,7 +186,7 @@ def ai_evaluate(game, ai, frm, action, amount=0, give=None, get=None):
         if st != 'guerre':
             return False, "Nous ne sommes pas en guerre."
         days = game.t - f['war_since'].get(frm, game.t)
-        score = 32 * (pb / pa) + days / 5 + amount / 12 + op / 3 + diplo + 6 * lost_nodes(game, ai) \
+        score = 32 * (pb / pa) + days / 5 + amount / 12 + op / 3 + diplo + 6 * lost_nodes(game, ai) + f.get('weary', 0) / 2 \
             - 6 * lost_nodes(game, frm) - 20 * pers['aggr']
         if score > 45:
             return True, f"{game.fname(ai)} accepte la paix."

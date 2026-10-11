@@ -483,19 +483,26 @@ class AI:
             if f['overlord']:
                 continue
             po = max(1.0, g.faction_power(o))
+            weary = f.get('weary', 0)
+            # années depuis la dernière paix : l'envie de guerre revient peu à peu (deux siècles à jouer)
+            calm = (g.t - f.get('last_war', 0.0)) / 365
+            pace = R.WAR_PACE * min(1.0, calm / R.WAR_REST)
             if st == 'guerre':
                 days = g.t - f['war_since'].get(o, g.t)
-                if (pa < 0.65 * po and days > 25) or (days > 180 and self.rng.random() < 0.25):
+                if (pa < 0.65 * po and days > 25) or (days > 180 and self.rng.random() < 0.25) \
+                        or (weary > 55 and days > 60 and self.rng.random() < weary / 150):
                     trib = int(min(f['res']['livres'] * 0.3, 250)) if pa < 0.5 * po else 0
                     self.propose(o, 'paix', trib)
                 elif po < 0.3 * pa and D.lost_nodes(g, o) >= 2 and o != g.player and self.rng.random() < 0.5:
                     D.act(g, code, o, 'soumission')
             elif st == 'paix':
-                if g.t > 120 and len(wars) < 2 and o not in f['truce'] and D.borders(g, code, o) and not of['overlord'] == code:
-                    want = (rel < -20 and pa > 1.15 * po and self.rng.random() < aggr * 0.55) or \
-                        (rel < 15 and pa > 1.7 * po and self.rng.random() < aggr * 0.3)
+                if g.t > 120 and len(wars) < 2 and o not in f['truce'] and D.borders(g, code, o) and not of['overlord'] == code \
+                        and weary < 35:
+                    want = (rel < -20 and pa > 1.15 * po and self.rng.random() < aggr * 0.55 * pace) or \
+                        (rel < 15 and pa > 1.7 * po and self.rng.random() < aggr * 0.3 * pace) or \
+                        (calm > 8 and rel < 25 and pa > 1.05 * po and self.rng.random() < aggr * min(0.1, calm / 80))
                     weak_target = any(g.at_war(o, x) for x in g.factions if x != code) and pa > 1.3 * po \
-                        and self.rng.random() < aggr * 0.25
+                        and self.rng.random() < aggr * 0.25 * pace
                     if want or weak_target:
                         D.declare_war(g, code, o)
                         wars = self.wars()

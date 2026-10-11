@@ -258,7 +258,7 @@ export class UI {
     if (r === 'outils') rows.push(['Bonus des outils', '+' + Math.round((me.tools_bonus - 1) * 100) + ' %']);
     if (r === 'fer' || r === 'bois') rows.push(['Consommés par les ateliers', 'oui']);
     const fl = me.floor && me.floor[r];
-    if (fl) rows.push(['Minimum garanti du département', fmt1(fl.min) + ' /j' + (fl.add > 0.05 ? ` (+${fmt1(fl.add)} en ce moment)` : '')]);
+    if (fl) rows.push([this.st.word === 'province' ? 'Minimum garanti de la province' : 'Minimum garanti du département', fmt1(fl.min) + ' /j' + (fl.add > 0.05 ? ` (+${fmt1(fl.add)} en ce moment)` : '')]);
     const help = {
       livres: 'Monnaie : solde, recrutement, recherches, constructions.',
       vivres: 'Nourrissent les troupes. Récoltes fortes en été et en automne, faibles en hiver.',
@@ -480,7 +480,7 @@ export class UI {
       case 'reflex': this.cmd({ cmd: 'reflex', army: d.army || sel.id, value: d.v === '1' }); break;
       case 'enroll': {
         const n = +d.n || 0;
-        if (!confirm(d.from === 'neutre' ? `Enrôler ${fmt(n)} prisonniers insurgés ?` : `Enrôler ${fmt(n)} prisonniers ? Leur département vous en voudra.`)) break;
+        if (!confirm(d.from === 'neutre' ? `Enrôler ${fmt(n)} prisonniers insurgés ?` : `Enrôler ${fmt(n)} prisonniers ? Leur ${this.st.word || 'département'} vous en voudra.`)) break;
         this.cmd({ cmd: 'enroll', from: d.from });
         break;
       }
@@ -554,7 +554,7 @@ export class UI {
         break;
       }
       case 'load': this.onLoad && this.onLoad(d.v); break;
-      case 'newgame': if (confirm('Abandonner la partie en cours et revenir au choix du département ?')) this.onNewGame && this.onNewGame(); break;
+      case 'newgame': if (confirm('Abandonner la partie en cours et revenir à l’écran de départ ?')) this.onNewGame && this.onNewGame(); break;
       case 'selnode-modal': this.closeModal(); this.select({ kind: 'node', id: +d.node }); this.action('center', {}); break;
       // écran de départ
       case 'pick-dept': this.pickDept(d.v); break;
@@ -678,6 +678,10 @@ export class UI {
       else if (free > ns.pc * 0.02) h += `<div class="muted small" style="margin:-4px 0 8px">Personne ne vient s’installer : l’ordre public est trop bas ou les impôts trop lourds.</div>`;
       else if (ns.d < 3) h += `<div class="muted small" style="margin:-4px 0 8px">La ville est pleine : agrandissez-la pour attirer de nouveaux habitants.</div>`;
     }
+    if (ns.as != null && ns.as < 1 && this.rules.factions[gn.dept]) {
+      const home = this.rules.factions[gn.dept].name;
+      h += `<div class="muted small" style="margin:-2px 0 8px">Place conquise, encore attachée à ${esc(home)} : assimilation ${Math.round(ns.as * 100)} %${own ? ' (production réduite, ordre public fragile ; une révolte la rendrait à son pays)' : ''}.</div>`;
+    }
     if (gn.star) h += this.starLine(gn.star, own, gn.type === 'capitale');
     const chips = gn.spec.map(s => `<span class="chip">${this.rules.spec[s]}</span>`);
     if (ns.dp) chips.push(`<span class="chip">${ICON.depot.replace('<svg', '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:3px"')}Magasin aux vivres</span>`);
@@ -704,7 +708,7 @@ export class UI {
         h += `<div class="btns">${Object.entries(this.rules.spy).map(([k, sp]) => {
           const ok = st.me.res.livres >= sp.cost && (k !== 'saboter' || (atWar && ns.f > 0));
           return `<button class="btn" data-act="spy" data-v="${k}" ${ok ? '' : 'disabled'} title="${esc(sp.desc)}">${sp.label}<small>${sp.cost} livres, ${sp.days} j, ${Math.round(sp.chance * 100)} % de réussite</small></button>`;
-        }).join('')}</div><div class="muted small">Espionner révèle la garnison et les armées alentour pendant ${this.rules.spy_days} jours. Saboter (en guerre) ouvre une brèche dans les remparts. Un agent démasqué fâche le département visé.</div>`;
+        }).join('')}</div><div class="muted small">Espionner révèle la garnison et les armées alentour pendant ${this.rules.spy_days} jours. Saboter (en guerre) ouvre une brèche dans les remparts. Un agent démasqué fâche ${this.st.word === 'province' ? 'la province visée' : 'le département visé'}.</div>`;
       }
     }
     if (own) {
@@ -1017,7 +1021,7 @@ export class UI {
       let acts = '';
       const btn = (v, l, cls = '') => `<button class="btn ${cls}" data-act="diplo" data-to="${f.code}" data-v="${v}">${l}</button>`;
       if (f.over === me) {
-        acts += `<div class="muted small">Ce département vous verse un tribut et combat vos ennemis.</div>`;
+        acts += `<div class="muted small">${this.st.word === 'province' ? 'Cette province' : 'Ce département'} vous verse un tribut et combat vos ennemis.</div>`;
       } else if (f.st === 'guerre') {
         acts += `<div class="row"><input class="amount" type="number" min="0" step="50" value="0" id="amt-paix-${f.code}" aria-label="Tribut offert"><span class="muted small">livres offertes</span>${btn('paix', 'Proposer la paix')}</div>`;
         acts += `<div class="btns">${btn('soumission', 'Exiger la soumission', 'danger')}</div>`;
@@ -1035,13 +1039,14 @@ export class UI {
           <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}</div>
           <div class="row"><span class="lab">${relLabel(f.rel)} (${fmt(f.rel)})</span><div class="relbar" style="flex:1;min-width:120px"><i style="left:${relPos}%"></i></div></div>
           <div class="small">Puissance estimée ${fmt(f.power)} (vous ${fmt(myPow)}), ${f.nodes} villes et villages, ${f.techs} technologies.</div>
+          <div class="small">Prestige ${fmt(f.prestige || 0)} (vous ${fmt(st.me.prestige || 0)})${f.weary >= 30 ? ` · <span style="color:#ff9a85">las de la guerre (${f.weary} %)</span>` : ''}</div>
           ${wars.length ? `<div class="small" style="color:#ffb3a6">En guerre contre : ${wars.join(', ')}</div>` : ''}
           <ul>${R.pros.map(p => `<li>${p}</li>`).join('')}${R.cons.map(p => `<li class="con">${p}</li>`).join('')}</ul>
         </div><div class="dact">${acts}</div></div>`;
     }).join('');
     const neu = pris.neutre || 0;
     const neuLine = neu ? `<div class="row" style="margin-bottom:8px"><span class="small">Vous détenez ${fmt(neu)} miliciens insurgés prisonniers${st.me.prisoner_upkeep ? `, nourris ${fmt1(st.me.prisoner_upkeep)} vivres /j pour tous vos prisonniers` : ''}.</span>${enrollBtn('neutre', neu, 'Enrôler')}</div>` : '';
-    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque département pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${neuLine}<div class="diplo-list">${cards}</div>`;
+    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${neuLine}<div class="diplo-list">${cards}</div>`;
     return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner]),
       pris, fmt1(st.me.prisoner_upkeep || 0), Math.round(myPow / 500)])];
   }
@@ -1116,6 +1121,7 @@ export class UI {
           <dt>Couverture en outils</dt><dd>${Math.round(me.cov * 100)} %</dd>
           <dt>Bonus de production</dt><dd>+${Math.round((me.tools_bonus - 1) * 100)} %</dd>
           ${me.pop ? `<dt>Population de vos terres</dt><dd>${fmt(me.pop)} habitants</dd>` : ''}
+          <dt>Lassitude de la guerre</dt><dd style="${(me.weary || 0) >= 50 ? 'color:#ff9a85' : ''}">${me.weary || 0} %</dd>
           <dt>Solde des troupes</dt><dd>${fmt1(me.upkeep.livres || 0)} livres /j</dd>
           <dt>Entretien des remparts</dt><dd>${fmt1(me.upkeep.forts || 0)} livres /j</dd>
           <dt>Rations des troupes</dt><dd>${fmt1(me.upkeep.vivres || 0)} vivres /j</dd>
@@ -1148,7 +1154,16 @@ export class UI {
     const f = this.rules.factions[me.code];
     const def = `${f.name} ${this.st.date.split(' ').slice(1).join(' ')}`;
     const saves = (this.saves || []).map(s => `<div class="save-item"><span>${s.auto ? '<i>Sauvegarde automatique</i>' : esc(s.name)}<br><span class="muted small">${esc(s.faction || '')}, ${esc(s.date || '')}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
-    const html = `<h2 class="m-title" id="m-title">Partie</h2><p class="m-sub">${f.name}, ${this.st.date}. Victoires ${me.stats.won}, défaites ${me.stats.lost}, places prises ${me.stats.captured}.</p>
+    const rank = [{ code: me.code, prestige: me.prestige || 0, alive: true }, ...this.st.factions.filter(x => x.code !== me.code)]
+      .filter(x => x.alive).sort((a, b) => b.prestige - a.prestige);
+    const PL = { territoire: 'Territoire', population: 'Population', richesse: 'Richesse', villes: 'Villes et remparts', savoir: 'Savoir', armes: 'Faits d’armes', histoire: 'Histoire' };
+    const parts = Object.entries(me.prestige_parts || {}).map(([k, v]) => `<dt>${PL[k] || k}</dt><dd>${fmt(v)}</dd>`).join('');
+    const prest = `<h3 class="section-t">Prestige</h3><p class="muted small">En 1900, le plus prestigieux l’emporte. Chaque 1er janvier, votre rayonnement du moment s’ajoute à votre gloire.</p>
+      <table class="grid"><tbody>${rank.map((x, i) => `<tr${x.code === me.code ? ' style="font-weight:600"' : ''}><td>${i + 1}.</td><td>${esc(this.rules.factions[x.code].name)}</td><td style="text-align:right">${fmt(x.prestige)}</td></tr>`).join('')}</tbody></table>
+      <dl class="kv" style="margin-top:8px"><dt>Gloire accumulée (bilans du 1er janvier)</dt><dd>${fmt(me.glory || 0)}</dd></dl>
+      <p class="muted small" style="margin:8px 0 2px">Rayonnement du moment :</p><dl class="kv">${parts}</dl>`;
+    const html = `<h2 class="m-title" id="m-title">Partie</h2><p class="m-sub">${f.name}, ${this.st.date}${this.st.era ? ` — ${esc(this.st.era.name)}` : ''}. Victoires ${me.stats.won}, défaites ${me.stats.lost}, places prises ${me.stats.captured}.</p>
+      ${prest}
       <div class="two"><div>
         <h3 class="section-t" style="border:0;padding:0">Sauvegarder</h3>
         <div class="row"><input class="amount" style="width:100%" id="save-name" value="${esc(def)}" maxlength="40" aria-label="Nom de la sauvegarde"></div>
@@ -1174,8 +1189,8 @@ export class UI {
           <li><b>Impôts</b> (fenêtre Production) : plus d’argent tout de suite, mais l’ordre public baisse ; une ville agitée sans garnison peut se révolter.</li>
           <li>La partie est sauvegardée automatiquement chaque mois ; elle reprend au redémarrage du serveur.</li>
           <li>La pluie mouille la poudre, la neige ferme les cols, l’hiver vide les greniers. Les récoltes arrivent en été et en automne.</li>
-          <li>Prenez tous les chefs-lieux, ou obtenez la soumission de leurs départements. Si votre chef-lieu tombe, la partie est perdue.</li>
-          <li>Raccourcis : espace pour la pause, 1 à 4 pour la vitesse, Échap pour annuler.</li>
+          <li>Prenez tous les chefs-lieux, ou obtenez la soumission des autres camps. Un camp dont le chef-lieu tombe signe un traité (places cédées, tribut, trêve de cinq ans) ; il n’est rayé de la carte que s’il est déjà écrasé, ou si le même vainqueur le fait plier deux fois en 25 ans. Vous aussi.</li>
+          <li>Raccourcis : espace pour la pause, 1 à 6 pour la vitesse, Échap pour annuler.</li>
         </ul>
       </div></div>`;
     return [html, JSON.stringify([(this.saves || []).map(s => s.name), me.stats, this.net])];

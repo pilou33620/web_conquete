@@ -56,7 +56,8 @@ class Game:
                 income={r: 0.0 for r in R.RESOURCES}, slider=0.5, research={b: None for b in R.BRANCHES}, techs=[],
                 rel={o: self.rng.randint(-15, 25) for o in R.FACTIONS if o != code}, trade={}, truce={},
                 overlord=None, war_since={}, mods={}, army_count=0, stats=dict(won=0, lost=0, captured=0, killed=0),
-                start_nodes=0, alerts={}, tax=0.5, intel={}, prisoners={})
+                start_nodes=0, alerts={}, tax=0.5, intel={}, prisoners={}, weary=0.0, prestige=0.0, treaties={},
+                last_war=-2 * 365.0)   # au départ, de vieilles rancunes : les premières guerres viennent vite
         for a in R.FACTIONS:
             for b in R.FACTIONS:
                 if a < b:
@@ -71,7 +72,7 @@ class Game:
             mm = base['milice'] + 40 * fort0
             milice = mm if owner != R.NEUTRAL else int(mm * self.rng.uniform(0.55, 1.0))
             self.nodes.append(dict(id=n['id'], owner=owner, milice=float(milice), milice_max=mm, fort=fort0, dev=0,
-                                   pop=float(n['pop0']) * self.pop_era(),
+                                   pop=float(n['pop0']) * self.pop_era(), assim=1.0,
                                    stab=1.0, garrison=[], queue=[], siege=None, last_seen={}, depot=0))
             if owner != R.NEUTRAL:
                 self.factions[owner]['start_nodes'] += 1
@@ -207,6 +208,7 @@ class Game:
 
     def set_status(self, a, b, s):
         self.diplo[(min(a, b), max(a, b))] = s
+        self._dirty_income = True  # un blocus fluvial dépend de l'état de guerre
 
     def at_war(self, a, b):
         return self.status(a, b) == 'guerre'
@@ -373,16 +375,25 @@ class Game:
                 if gn['type'] == 'capitale' or n['garrison'] or n['id'] in held or n['siege']:
                     continue
                 if n['stab'] < 0.45 and self.rng.random() < (0.45 - n['stab']) * 0.5:
-                    n['owner'] = R.NEUTRAL
+                    home = gn['dept']
+                    back = home != code and home in self.factions and self.factions[home]['alive']
+                    n['owner'] = home if back else R.NEUTRAL
+                    n['assim'] = 1.0
                     n['depot'] = 0
                     n['milice'] = n['milice_max'] * 0.6
                     n['stab'] = 0.8
                     n['queue'] = []
                     self._dirty_income = True
-                    why = "écrasée d'impôts" if f.get('tax', 0.5) > 0.6 else "lasse de l'occupant"
-                    self.log('revolte', f"Révolte à {gn['name']} : la population, {why}, chasse les autorités "
-                                        f"({self.fname(code)}).",
-                             gn['x'], gn['y'], who=code, important=code == self.player)
+                    if back:
+                        # attachement régional : la ville se donne à sa province d'origine
+                        self.log('revolte', f"Révolte à {gn['name']} : fidèle à son pays, la ville chasse les autorités "
+                                            f"({self.fname(code)}) et retourne à {self.fname(home)}.",
+                                 gn['x'], gn['y'], who=home, important=self.player in (code, home))
+                    else:
+                        why = "écrasée d'impôts" if f.get('tax', 0.5) > 0.6 else "lasse de l'occupant"
+                        self.log('revolte', f"Révolte à {gn['name']} : la population, {why}, chasse les autorités "
+                                            f"({self.fname(code)}).",
+                                 gn['x'], gn['y'], who=code, important=code == self.player)
                 elif n['stab'] < 0.5 and code == self.player and self.rng.random() < 0.3:
                     cure = 'une garnison ou des impôts plus légers' if f.get('tax', 0.5) > 0.05 else 'une garnison'
                     if f.get('famine'):
@@ -412,6 +423,27 @@ class Game:
                 for o in list(pr):
                     if o == R.NEUTRAL or f['res']['recrues'] < 500 or pr[o] > 300:
                         self.enroll(code, o)
+        # une génération pour faire sienne une place conquise
+        for n in self.nodes:
+            if n['owner'] != R.NEUTRAL and n.get('assim', 1.0) < 1.0:
+                n['assim'] = min(1.0, n['assim'] + 1 / (12 * R.ASSIM_YEARS))
+        # lassitude de la guerre : chaque mois de guerre et chaque homme perdu pèsent, la paix apaise
+        for code, f in self.factions.items():
+            if not f['alive']:
+                continue
+            wars = sum(1 for o in self.factions if o != code and self.factions[o]['alive'] and self.at_war(code, o))
+            before = f.get('weary', 0.0)
+            delta = (R.WEARY_PER_WAR * wars + f.get('_lost_m', 0.0) * R.WEARY_PER_LOSS) if wars else -R.WEARY_PEACE
+            f['weary'] = max(0.0, min(100.0, before + delta))
+            f['_lost_m'] = 0.0
+            if code == self.player and any(before < s_ <= f['weary'] for s_ in (60, 80)):
+                self.log('revolte', f"Le pays est las de la guerre (lassitude {int(f['weary'])} %) : l'ordre public "
+                                    f"se dégrade partout. Songez à la paix.", important=True)
+        # prestige : chaque année, le rayonnement de chacun s'ajoute à sa gloire
+        if d.month == 1:
+            for code, f in self.factions.items():
+                if f['alive']:
+                    f['prestige'] = f.get('prestige', 0.0) + self.prestige_now(code) / 10
         # désertions du mois écoulé
         for a in self.armies.values():
             des = int(a.get('des', 0))
@@ -467,7 +499,7 @@ class Game:
             trade += R.QUAI_LIVRES
         if n['id'] in self._blockade:
             out['livres'] -= trade * (1 - R.BLOCKADE_K)
-        mult = self.pop_factor(n) * max(0.3, n['stab'])
+        mult = self.pop_factor(n) * max(0.3, n['stab']) * (0.7 + 0.3 * self.assim(n))
         if n['siege']:
             mult = 0
         ter = self.geo.terrain_at(gn['x'], gn['y'])
@@ -643,6 +675,7 @@ class Game:
                 tgt, boost = 1.0, 1.0
             else:
                 tgt = targets.get(code, 1.0)
+                tgt -= 0.2 * (1 - self.assim(n)) + self.factions[code].get('weary', 0) / 250
                 friends = any(self.friendly(code, o) for o in held.get(n['id'], ()))
                 if n['garrison'] or friends or self.geo.nodes[n['id']]['type'] == 'capitale':
                     tgt += 0.15
@@ -659,6 +692,12 @@ class Game:
         for code, f in self.factions.items():
             if f['alive'] and f['overlord']:
                 pass
+
+    def assim(self, n):
+        """Attachement à son nouveau maître : 1 dans sa province d'origine, de 0 à 1 en une génération ailleurs."""
+        if n['owner'] == self.geo.nodes[n['id']]['dept'] or n['owner'] == R.NEUTRAL:
+            return 1.0
+        return n.get('assim', 1.0)
 
     def pop_factor(self, n):
         """Population rapportée à celle de 1790 : la production d'une place la suit."""
@@ -1225,7 +1264,7 @@ class Game:
                     return False, "L'armée y est déjà."
                 legs = self.plan_route(a, node)
                 if not legs:
-                    return False, "Aucun chemin par les routes (territoire d'un département en paix ?). Essayez à travers champs."
+                    return False, f"Aucun chemin par les routes (territoire {'d’un département' if self.departements() else 'd’une province'} en paix ?). Essayez à travers champs."
                 a['path'] = legs
                 a['target'] = dict(node=node)
             else:
@@ -1811,6 +1850,8 @@ class Game:
             if n['siege'] and n['siege']['by'] == a['owner'] and a['state'] == 'siege':
                 continue
             if a['state'] == 'idle' and not self.hostile(a['owner'], n['owner']):
+                if not self.friendly(a['owner'], n['owner']) and self.t >= a.get('grace', 0):
+                    self.retreat(a)   # la paix (ou un traité) l'a laissée chez un voisin : elle rentre chez elle
                 continue
             if nid in battle_nodes or (n['siege'] and n['siege']['by'] != a['owner']) or self.t < a.get('grace', 0):
                 a['state'] = 'idle'
@@ -2274,6 +2315,10 @@ class Game:
                          who=W['owner'], important=True)
             return
         prisoners = int(L['lost'] * 0.2 + caught * 0.6)
+        for side in (W, L):
+            if side['owner'] in self.factions:
+                f_ = self.factions[side['owner']]
+                f_['_lost_m'] = f_.get('_lost_m', 0.0) + side['lost']
         if prisoners > 0 and W['owner'] in self.factions:
             pr = self.factions[W['owner']].setdefault('prisoners', {})
             pr[L['owner']] = pr.get(L['owner'], 0) + prisoners
@@ -2373,6 +2418,7 @@ class Game:
         if old == code:
             return
         n['owner'] = code
+        n['assim'] = 1.0 if code == gn['dept'] else (0.3 if peaceful else 0.0)
         n['stab'] = 0.6 if peaceful else 0.35
         n['garrison'] = []
         n['queue'] = []
@@ -2397,20 +2443,66 @@ class Game:
         if old in self.factions:
             self.factions[old]['rel'][code] = max(-100, self.factions[old]['rel'][code] - 12)
         if breached and (code == self.player or old == self.player):
-            self.log('capture', f"{gn['name']} tombe aux mains de {self.fname(code)} ; ses remparts éventrés retombent au "
+            self.log('capture', f"{gn['name']} tombe aux mains {R.de(self.fname(code))} ; ses remparts éventrés retombent au "
                                 f"niveau {n['fort']}.", gn['x'], gn['y'], who=code, important=True)
         elif not peaceful and (code == self.player or old == self.player):
-            self.log('capture', f"{gn['name']} tombe aux mains de {self.fname(code)}.", gn['x'], gn['y'], who=code, important=True)
+            self.log('capture', f"{gn['name']} tombe aux mains {R.de(self.fname(code))}.", gn['x'], gn['y'], who=code, important=True)
         elif not peaceful:
-            self.log('capture', f"{gn['name']} tombe aux mains de {self.fname(code)}.", gn['x'], gn['y'], who=code)
+            self.log('capture', f"{gn['name']} tombe aux mains {R.de(self.fname(code))}.", gn['x'], gn['y'], who=code)
         # pénalité pour l'expansion près des voisins
         if old == R.NEUTRAL and code in self.factions:
             for o in self.factions:
                 if o != code and gn['dept'] == o:
                     self.factions[o]['rel'][code] = max(-100, self.factions[o]['rel'][code] - 3)
         if gn['type'] == 'capitale' and old in self.factions and gn['dept'] == old:
-            self.capitulate(old, code)
+            lf = self.factions[old]
+            left = len(self.owned_nodes(old))
+            if left <= max(3, lf['start_nodes'] * R.TREATY_CRUSHED) or self.t - lf.get('treaties', {}).get(code, -1e9) < R.TREATY_AGAIN \
+                    or code not in self.factions:
+                self.capitulate(old, code)
+            else:
+                self.treaty(old, code, nid)
         self.check_end()
+
+    def treaty(self, loser, winner, cap):
+        """Le chef-lieu est tombé : le vaincu signe la paix, cède les places que le vainqueur occupe, paie un tribut
+        et récupère son chef-lieu. Il peut se relever ; une seconde défaite face au même vainqueur avant 25 ans lui sera fatale."""
+        from . import diplomacy as D
+        lf, wf = self.factions[loser], self.factions[winner]
+        n = self.nodes[cap]
+        gn = self.geo.nodes[cap]
+        n['owner'] = loser
+        n['assim'] = 1.0
+        n['siege'] = None
+        n['garrison'] = []
+        n['milice'] = n['milice_max'] * 0.4
+        for a in list(self.armies.values()):
+            if a['at_node'] == cap and a['owner'] != loser and a['state'] != 'battle':
+                self.retreat(a)   # l'occupant évacue la ville rendue
+        ceded = sum(1 for x in self.nodes if x['owner'] == winner and self.geo.nodes[x['id']]['dept'] == loser)
+        pay = int(max(0.0, lf['res']['livres']) * 0.4) + 150
+        pay = min(pay, int(max(0.0, lf['res']['livres'])))
+        lf['res']['livres'] -= pay
+        wf['res']['livres'] += pay
+        D.make_peace(self, winner, loser)
+        until = self.t + R.TREATY_TRUCE
+        lf['truce'][winner] = wf['truce'][loser] = until
+        lf.setdefault('treaties', {})[winner] = self.t  # le même vainqueur n'accorde pas deux traités en 25 ans
+        lf['weary'] = max(0.0, lf.get('weary', 0) - 40)
+        lf['rel'][winner] = max(-100, lf['rel'][winner] - 20)
+        # le congrès règle aussi les autres guerres du vaincu : sans cela, ses voisins l'achèvent en quelques semaines
+        others = [o for o, f in self.factions.items() if f['alive'] and o not in (loser, winner) and self.at_war(o, loser)]
+        for o in others:
+            D.make_peace(self, o, loser)
+            until = self.t + R.TREATY_CONGRESS
+            lf['truce'][o] = self.factions[o]['truce'][loser] = max(until, lf['truce'].get(o, 0))
+        self._dirty_income = True
+        cede = f"cède {R.pl(ceded, 'place')} à {self.fname(winner)} et lui verse" if ceded else f"verse à {self.fname(winner)}"
+        self.log('capitulation', f"Traité {R.de(gn['name'])} : {self.fname(loser)} {cede} {pay} livres. Trêve de cinq ans."
+                                 + (f" Le congrès rétablit aussi la paix avec {', '.join(self.fname(o) for o in others)} "
+                                    f"pour deux ans." if others else ''),
+                 gn['x'], gn['y'], who=winner, important=True)
+        self.alert_pause(big=True)
 
     def capitulate(self, loser, winner):
         lf = self.factions[loser]
@@ -2462,14 +2554,29 @@ class Game:
         if d >= datetime.date(*R.CAMPAIGN_END) and not self.over:
             self.end_campaign()
 
-    def prestige(self, code):
-        """Prestige provisoire (étape suivante : un vrai score) : places, habitants, trésor et victoires."""
+    def prestige_parts(self, code):
+        """Rayonnement actuel d'un camp, par rubrique : la paix et le développement comptent autant que la guerre."""
         f = self.factions[code]
         if not f['alive']:
-            return 0
+            return dict(territoire=0, population=0, richesse=0, villes=0, savoir=0, armes=0, histoire=0)
         mine = self.owned_nodes(code)
-        return int(len(mine) * 10 + sum(n.get('pop', 0) for n in mine) / 2000 + f['res']['livres'] / 500
-                   + f['stats']['won'] * 3 + f['stats']['captured'])
+        caps = sum(1 for n in mine if self.geo.nodes[n['id']]['type'] == 'capitale')
+        return dict(
+            territoire=len(mine) * 3 + caps * 25,
+            population=sum(min(n.get('pop', 0), 25000) for n in mine) / 4000,   # une métropole ne fait pas tout
+            richesse=min(40.0, max(0.0, f['res']['livres']) / 1500) + max(0.0, f['income'].get('livres', 0)) * 0.25,
+            villes=sum(n['dev'] for n in mine) * 4 + sum(n['fort'] for n in mine) * 2,
+            savoir=len(f['techs']) * 3,
+            armes=f['stats']['won'] * 2 + f['stats']['captured'] * 0.5,
+            histoire=f.get('glory', 0.0))
+
+    def prestige_now(self, code):
+        return sum(self.prestige_parts(code).values())
+
+    def prestige(self, code):
+        """Prestige total : la gloire accumulée année après année, plus le rayonnement présent."""
+        f = self.factions[code]
+        return int(f.get('prestige', 0.0) + self.prestige_now(code)) if f['alive'] else 0
 
     def end_campaign(self):
         ranks = sorted(self.factions, key=lambda c: -self.prestige(c))
@@ -2486,7 +2593,8 @@ class Game:
             return
         p = self.player
         if not self.factions[p]['alive'] or self.nodes[self.capital_of(p)]['owner'] != p:
-            self.over = dict(result='defaite', text="Votre chef-lieu est tombé. La partie est perdue.", t=self.t)
+            self.over = dict(result='defaite', t=self.t,
+                             text=f"Votre {self.dept_word()} a été {'rayé' if self.departements() else 'rayée'} de la carte : la partie est perdue.")
             self.speed_idx = 0
             self.log('fin', self.over['text'], important=True)
             return
@@ -2690,7 +2798,7 @@ class Game:
             return False, "Cette place vous appartient déjà."
         if kind == 'saboter':
             if o == R.NEUTRAL or not self.at_war(code, o):
-                return False, "Le sabotage n'est possible que contre un département avec lequel vous êtes en guerre."
+                return False, "Le sabotage n'est possible que contre un camp avec lequel vous êtes en guerre."
             if n['fort'] <= 0:
                 return False, "Cette place n'a pas de remparts à saboter."
         if any(s['by'] == code and s['node'] == nid for s in self.spies):

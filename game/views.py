@@ -29,8 +29,12 @@ def migrate(g):
         f.setdefault('tax', 0.5)
         f.setdefault('intel', {})
         f.setdefault('prisoners', {})
+    for f in g.factions.values():
+        for k, v in dict(weary=0.0, prestige=0.0, treaties={}, last_war=0.0).items():
+            f.setdefault(k, v)
     for n in g.nodes:
         n.setdefault('depot', 0)
+        n.setdefault('assim', 1.0)
         # anciennes sauvegardes : le développement d'alors devient une population équivalente
         n.setdefault('pop', g.geo.nodes[n['id']]['pop0'] * (1 + 0.25 * n.get('dev', 0)))
     for a in g.armies.values():
@@ -144,6 +148,8 @@ def player_state(g, since=0):
             d['bk'] = 1
         if n.get('depot'):
             d['dp'] = 1
+        if n['owner'] != R.NEUTRAL and n['owner'] != gn['dept']:
+            d['as'] = round(g.assim(n), 2)   # place conquise : attachement à son nouveau maître
         if n['owner'] in side:
             d['m'] = round(n['milice'])
             d['mm'] = round(n['milice_max'] * (1 + g.mod(n['owner'], 'milice')))
@@ -242,7 +248,8 @@ def player_state(g, since=0):
                          truce=g.date_str(me['truce'][code]) if code in me['truce'] else None,
                          wars=[o for o in g.factions if o != code and g.at_war(code, o)],
                          cap_owner=g.nodes[g.capital_of(code)]['owner'], techs=len(f['techs']),
-                         pr=int(f.get('prisoners', {}).get(p, 0)) if code != p else 0))
+                         pr=int(f.get('prisoners', {}).get(p, 0)) if code != p else 0,
+                         prestige=g.prestige(code), weary=int(f.get('weary', 0))))
 
     has_port = any('port' in g.geo.nodes[n['id']]['spec'] for n in g.owned_nodes(p))
     tb, cov = g.tools_bonus(p)
@@ -260,7 +267,10 @@ def player_state(g, since=0):
                 stats={k: int(v) for k, v in me['stats'].items()}, mods={k: round(v, 3) for k, v in me['mods'].items()},
                 prisoners={k: int(v) for k, v in me.get('prisoners', {}).items() if v > 0},
                 prisoner_upkeep=round(me.get('_upkeep', {}).get('prisoners', 0), 2),
-                pop=int(round(sum(n.get('pop', 0) for n in g.owned_nodes(p)), -2)))
+                pop=int(round(sum(n.get('pop', 0) for n in g.owned_nodes(p)), -2)),
+                weary=int(me.get('weary', 0)), prestige=g.prestige(p),
+                prestige_parts={k: int(round(v)) for k, v in g.prestige_parts(p).items()},
+                glory=int(me.get('prestige', 0)))
 
     era = g.era()
     return dict(t=round(g.t, 3), date=g.date_str(), season=g.season(), speed=g.speed_idx, over=g.over,

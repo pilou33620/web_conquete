@@ -83,8 +83,23 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
   le canal vers 1838…). La Garde nationale n'existe qu'à partir de 1789, les chasseurs basques qu'à partir de 1792.
 - **Villes** : leur population suit une croissance séculaire. Bordeaux compte environ 80 000 habitants en 1700 et
   110 000 en 1790 ; sa population « normale » est multipliée par 1,6 en 1900. Les agrandissements s'y ajoutent.
-- **Fin de partie** : à la fin de 1899, le camp le plus prestigieux l'emporte (pour l'instant : places, habitants,
-  trésor et victoires). Prendre tous les chefs-lieux reste une victoire anticipée.
+- **Fin de partie** : au 1er janvier 1900, le camp le plus **prestigieux** l'emporte. Prendre tous les chefs-lieux
+  reste une victoire anticipée.
+- **Prestige** : rayonnement équilibré, pour gagner par la paix comme par la guerre. Il compte le territoire
+  (et les chefs-lieux), la population (chaque ville plafonnée à 25 000 habitants), la richesse, les agrandissements et
+  les remparts, les technologies, les faits d'armes, et bientôt l'histoire. Chaque 1er janvier, le rayonnement du moment
+  s'ajoute à la gloire accumulée. Le classement est dans le menu « Partie ».
+- **Traités plutôt qu'anéantissement** : quand un chef-lieu tombe, le vaincu signe un traité. Il cède les places
+  occupées, verse un tribut, récupère son chef-lieu et doit respecter une trêve de cinq ans. Le congrès rétablit aussi
+  la paix entre le vaincu et ses autres ennemis pour deux ans (les alliés eux-mêmes respectent ces trêves). Le vaincu
+  n'est absorbé que s'il est déjà écrasé (un quart de ses places de départ, ou 3 places) ou si le même vainqueur le
+  fait plier une seconde fois en moins de 25 ans. Cela vaut aussi pour vous : perdre son chef-lieu n'est plus la fin
+  de la partie.
+- **Attachement régional** : une place prise hors de sa province d'origine produit 30 % de moins et tient moins bien
+  l'ordre, le temps d'une génération (25 ans) d'assimilation. Si elle se révolte, elle retourne à son camp d'origine.
+- **Lassitude de la guerre** (0 à 100 %) : chaque mois de guerre et chaque homme perdu l'augmentent, la paix la fait
+  retomber. Elle dégrade l'ordre public partout et pousse les IA à signer la paix. À l'inverse, après de longues années
+  de paix, les ambitions des voisins se réveillent.
 - **Rythme** :
   - deux vitesses rapides pour les années de paix, **×10** et **×30** jours par seconde (touches 5 et 6) ;
   - à ces vitesses, une bataille ou une guerre qui vous concerne, une proposition de paix ou d'alliance, ou le siège

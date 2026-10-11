@@ -330,6 +330,20 @@ SCENARIOS = {
                  intro='La France déclare la guerre à la Prusse. Chemins de fer et fusils Chassepot : '
                        'un autre siècle commence.', techs_before=1862),
 }
+# traités : un camp dont le chef-lieu tombe signe la paix au lieu de disparaître, sauf s'il est déjà écrasé
+TREATY_TRUCE = 5 * 365       # trêve imposée par un traité (jours)
+TREATY_CRUSHED = 0.25        # absorbé si ce camp ne tient plus que ce quart de ses places de départ (ou 3 places)
+WAR_PACE = 0.12             # appétit de guerre des IA (1 = celui de l'ancienne partie courte de 1790)
+WAR_REST = 3.0              # années de paix avant que cet appétit soit entier
+TREATY_CONGRESS = 2 * 365    # le congrès impose aussi la paix aux autres ennemis du vaincu
+TREATY_AGAIN = 25 * 365      # second traité avec le même vainqueur en moins de 25 ans : absorbé
+# attachement régional : une place conquise reste fidèle à sa province d'origine pendant une génération
+ASSIM_YEARS = 25
+# lassitude de la guerre (0 à 100)
+WEARY_PER_WAR = 3.0          # par mois et par guerre
+WEARY_PER_LOSS = 1 / 300     # par homme perdu
+WEARY_PEACE = 5.0            # baisse mensuelle en paix
+
 # croissance séculaire des villes : population « normale » par rapport à 1790
 POP_ERA = [(1700, 0.72), (1790, 1.0), (1850, 1.3), (1900, 1.6)]
 # années à partir desquelles une technologie est connue (on ne recherche pas la machine à vapeur en 1700)
