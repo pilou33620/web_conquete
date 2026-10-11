@@ -416,3 +416,21 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 .ev-choices { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 10px; }
 .ev-choice { text-align: left; padding: 10px 14px; white-space: normal; }
 .ev-choice b { display: block; font-size: 15.5px; margin-bottom: 2px; }
+
+/* ------------------------------------------------------------- villes : emplacements et politique */
+.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 5px; }
+.slot { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 68px; padding: 6px 4px 5px;
+  border: 1px solid var(--hair); border-radius: 7px; background: rgba(0,0,0,.2); color: var(--papier); font-size: 12.5px; line-height: 1.1; text-align: center; }
+.slot svg { width: 22px; height: 22px; color: var(--laiton-clair); }
+.slot .si { font-size: 19px; line-height: 22px; color: var(--laiton-clair); }
+.slot .pips i { width: 7px; height: 7px; }
+.slot .sw { font-size: 11px; font-style: italic; color: var(--laiton-clair); }
+.slot.empty { border-style: dashed; color: var(--papier-2); background: rgba(0,0,0,.1); }
+.slot.on { outline: 2px solid var(--laiton-clair); background: rgba(200,162,83,.16); }
+.slot.over { border-color: #b8564a; }
+.slot:hover { border-color: var(--laiton); }
+.slot-box { margin: 6px 0 2px; padding: 8px; border: 1px solid var(--hair); border-radius: 8px; background: rgba(0,0,0,.14); }
+.slot-opts { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.slot-opt { text-align: left; white-space: normal; }
+.slot-opt small.why { color: #ffb3a6; opacity: 1; }
+body.modal-event #proposals { display: none; }   /* une décision à prendre : les propositions attendront */

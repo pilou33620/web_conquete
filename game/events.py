@@ -11,6 +11,7 @@ Effets (dictionnaire fx) :
   glory     points                           « Histoire » dans le prestige
   pop       fraction                         population de toutes vos places
   town_pop / town_stab                       la ville touchée seulement (événements aléatoires)
+  ville     {nid, pop, stab, tm, add…}       événement local d'une place (voir cities.py)
   tmod      {modificateur: valeur}, days     effet temporaire (en jours)
   pmod      {modificateur: valeur}           effet durable
   rel       points                           ce que les autres camps pensent de vous
@@ -198,20 +199,7 @@ RANDOM = [
          text="Un riche négociant {de_ville} lègue sa fortune à la province.", base=dict(res=dict(livres=400))),
     dict(id='filon', w=1, title='Un filon de fer',
          text="Des mineurs découvrent un filon de fer près {de_ville}.", base=dict(pmod=dict(fer=0.08))),
-    dict(id='foire', w=2, title='Une grande foire',
-         text="La foire {de_ville} attire marchands et maquignons de tout le pays.", base=dict(res=dict(livres=250))),
-    dict(id='incendie', w=2, title="L'incendie {de_ville}",
-         text="Un incendie ravage {ville} : des rues entières sont en cendres.", base=dict(town_pop=-0.08),
-         choices=[dict(label='Reconstruire en pierre', fx=dict(res=dict(livres=-250), town_stab=0.1), ai=2),
-                  dict(label='Laisser les habitants se débrouiller', fx=dict(town_stab=-0.15), ai=1)]),
-    dict(id='epidemie', w=2, title='La fièvre {a_ville}',
-         text="Une épidémie de fièvre se déclare à {ville}.", base=dict(town_pop=-0.06),
-         choices=[dict(label='Quarantaine et médecins', fx=dict(res=dict(livres=-200)), ai=2),
-                  dict(label='Ne rien faire', fx=dict(town_pop=-0.05, stab=-0.03), ai=1)]),
-    dict(id='brigands', w=2, title='Des brigands sur les routes',
-         text="Des bandes de brigands détroussent les voyageurs entre {ville} et {chef}.",
-         choices=[dict(label='Envoyer la maréchaussée', fx=dict(res=dict(livres=-200)), ai=2),
-                  dict(label='Laisser faire', fx=dict(tmod=dict(livres=-0.08), days=365), ai=1)]),
+    # incendies, fièvres, brigands et foires touchent désormais une seule ville : voir les événements locaux (cities.py)
     dict(id='savant', w=1, title="Un savant {a_ville}",
          text="Un savant renommé propose de s'installer à {ville} si on le pensionne.",
          choices=[dict(label='Le pensionner', fx=dict(res=dict(livres=-250), research=1), ai=2),
@@ -273,11 +261,18 @@ def describe(g, code, fx, town=None):
         out.append(f"+{cnt} {g.unit_name(code, typ)[1].lower()} au chef-lieu")
     if fx.get('research'):
         out.append("recherches en cours avancées de moitié")
+    if fx.get('ville'):
+        from . import cities as CT   # événements locaux (game/cities.py)
+        out += CT.describe_local(g, fx['ville'])
     return out or ['aucun effet']
 
 
 def affordable(g, code, fx):
     r = g.factions[code]['res']
+    if fx.get('ville'):
+        from . import cities as CT
+        if not CT.local_ok(g, code, fx['ville']):
+            return False
     return all(r.get(k, 0) + v >= 0 for k, v in (fx.get('res') or {}).items())
 
 
@@ -327,6 +322,9 @@ def apply(g, code, fx, town=None):
         for cur in f['research'].values():
             if cur:
                 cur['left'] *= 0.5
+    if fx.get('ville'):
+        from . import cities as CT
+        CT.apply_local(g, code, fx['ville'])
     g.recompute_mods(code)
     g._dirty_income = True
 

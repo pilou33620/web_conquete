@@ -6,6 +6,7 @@ import random
 
 from . import rules as R
 from . import events as EV
+from . import cities as CT
 from .geo import TERRAIN, T_LANDE, T_MARAIS, T_PLAINE
 
 SUBSTEP = 0.05  # jours
@@ -458,6 +459,7 @@ class Game:
         if not self.over:
             EV.tick(self, d)
             EV.expire(self)
+        CT.daily(self, d)   # emplacements, collèges, événements locaux
         if d.day == 1:
             self.grow_population()
             self.monthly(d)
@@ -631,6 +633,7 @@ class Game:
         if n['id'] in self.geo.ports and gn['type'] != 'fort':
             out['livres'] += R.QUAI_LIVRES
             trade += R.QUAI_LIVRES
+        trade = CT.node_extra(self, n, code, out, trade)   # bâtiments, politique, événements de la ville
         if n['id'] in self._blockade:
             out['livres'] -= trade * (1 - R.BLOCKADE_K)
         mult = self.pop_factor(n) * max(0.3, n['stab']) * (0.7 + 0.3 * self.assim(n))
@@ -717,6 +720,8 @@ class Game:
             tot['livres'] -= up_l * k_up
             up_f = sum(R.FORT_UPKEEP[min(n['fort'], R.BASTION_LEVEL)] for n in self.owned_nodes(code))
             tot['livres'] -= up_f
+            up_b = CT.upkeep(self, code)   # bâtiments d'emplacement
+            tot['livres'] -= up_b
             up_p = sum(f.get('prisoners', {}).values()) * R.PRISONER_FOOD
             tot['vivres'] -= up_p
             # industrie
@@ -726,7 +731,7 @@ class Game:
             f['_tool_rate'] = cap * (1 - s) * 0.5
             f['_cap'] = cap
             f['_cov'] = cov
-            f['_upkeep'] = dict(vivres=up_v * k_up, livres=up_l * k_up, forts=up_f, prisoners=up_p)
+            f['_upkeep'] = dict(vivres=up_v * k_up, livres=up_l * k_up, forts=up_f, prisoners=up_p, batiments=up_b)
             f['_trade'] = dict(trade_s)
             f['_trade']['livres'] = f['_trade'].get('livres', 0) + trade_l
             f['income'] = dict(livres=tot['livres'], vivres=tot['vivres'], fer=tot['fer'] - f['_arm_rate'] - 0.5 * f['_tool_rate'] * (1 + self.mod(code, 'tools_cost')),
@@ -817,6 +822,7 @@ class Game:
                 friends = any(self.friendly(code, o) for o in held.get(n['id'], ()))
                 if n['garrison'] or friends or self.geo.nodes[n['id']]['type'] == 'capitale':
                     tgt += 0.15
+                tgt += CT.stab_bonus(self, n)   # hospices, politique de la ville
                 tgt = max(0.1, min(1.0, tgt))
                 boost = 1 + max(0.0, 0.5 - self.factions[code].get('tax', 0.5)) * 2
             if n['stab'] < tgt:
@@ -875,6 +881,7 @@ class Game:
         rate = R.POP_RATE * max(0.0, min(1.0, (n['stab'] - 0.3) / 0.7))
         if f and f.get('tax', 0.5) > 0.6:
             rate *= max(0.0, 1 - (f['tax'] - 0.6) * 2.5)
+        rate *= CT.growth_k(self, n)   # hospices, politique de la ville
         if n['pop'] < self.pop_norm(n) * R.POP_FLOOR:
             rate = max(rate, R.POP_RETURN)
         return rate
@@ -1025,7 +1032,8 @@ class Game:
         if not self.can_pay(code, cost):
             return False, "Ressources insuffisantes."
         self.pay(code, cost)
-        n['queue'].append(dict(kind='unit', what=typ, left=self.unit_days(code, typ), total=self.unit_days(code, typ)))
+        days = self.unit_days(code, typ) * CT.train_k(self, n, typ)   # casernes, place d'armes
+        n['queue'].append(dict(kind='unit', what=typ, left=days, total=days))
         return True, f"{self.unit_name(code, typ)[0]} en formation à {gn['name']}."
 
     def build(self, code, nid, what):
@@ -1033,6 +1041,8 @@ class Game:
         gn = self.geo.nodes[nid]
         if n['owner'] != code:
             return False, "Cette ville ne vous appartient pas."
+        if what == 'depot':
+            return CT.slot_build(self, code, nid, 'depot')   # le magasin aux vivres occupe un emplacement
         b = R.BUILD.get(what)
         if not b:
             return False, "Construction inconnue."
@@ -1071,10 +1081,13 @@ class Game:
                 if q['kind'] == 'unit':
                     reg = self.new_reg(q['what'], code=n['owner'])
                     reg['morale'] = 70 + R.UNITS[q['what']].get('morale0', 0) + self.mod(n['owner'], 'morale')
+                    reg['xp'] += CT.train_xp(self, n)   # école militaire, place d'armes
                     n['garrison'].append(reg)
                     if n['owner'] == self.player:
                         self.log('armee', f"Régiment levé à {gn['name']} : {self.unit_name(n['owner'], q['what'])[0].lower()}.",
                                  gn['x'], gn['y'])
+                elif q['kind'] == 'slot':
+                    CT.finish(self, n, q)   # bâtiment d'emplacement
                 else:
                     if q['what'] == 'fort':
                         n['fort'] = min(R.BASTION_LEVEL, n['fort'] + 1)
@@ -2836,7 +2849,7 @@ class Game:
             territoire=len(mine) * 3 + caps * 25,
             population=sum(min(n.get('pop', 0), 25000) for n in mine) / 4000,   # une métropole ne fait pas tout
             richesse=min(40.0, max(0.0, f['res']['livres']) / 1500) + max(0.0, f['income'].get('livres', 0)) * 0.25,
-            villes=sum(n['dev'] for n in mine) * 4 + sum(n['fort'] for n in mine) * 2,
+            villes=sum(n['dev'] for n in mine) * 4 + sum(n['fort'] for n in mine) * 2 + CT.prestige(mine),
             savoir=len(f['techs']) * 3,
             armes=f['stats']['won'] * 2 + f['stats']['captured'] * 0.5,
             histoire=f.get('glory', 0.0))

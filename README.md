@@ -127,8 +127,8 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
     s'applique.
   - Les effets en cours sont rappelés dans la fenêtre Production, et le journal a un onglet « Histoire ».
 - **Imprévus** : tous les 8 à 18 mois environ, chaque camp connaît un événement aléatoire : récolte magnifique,
-  épizootie, legs d'un négociant, filon de fer, foire, incendie, fièvre, brigands, savant à pensionner,
-  contrebandiers. Certains demandent une décision.
+  épizootie, legs d'un négociant, filon de fer, savant à pensionner, contrebandiers. Certains demandent une décision.
+  Incendies, fièvres, brigands et foires touchent désormais une seule ville (voir « Villes »).
 - **Traités plutôt qu'anéantissement** : quand un chef-lieu tombe, le vaincu signe un traité. Il cède les places
   occupées, verse un tribut, récupère son chef-lieu et doit respecter une trêve de cinq ans. Le congrès rétablit aussi
   la paix entre le vaincu et ses autres ennemis pour deux ans (les alliés eux-mêmes respectent ces trêves). Le vaincu
@@ -206,7 +206,7 @@ Chaque place a un niveau de fortification, dessiné sur la carte autour de la vi
   - **Sapeurs du génie** : peu combatifs, mais ils accélèrent les sièges et jettent des ponts (plus d'attente au bac).
   - **Garde nationale** : milice bon marché, levée même dans un village ; elle ne quitte pas sa ville mais la défend
     avec ardeur (+30 %).
-- **Magasin aux vivres** (150 livres, 60 bois) : les armées en campagne à moins de 30 km restent ravitaillées, en puisant
+- **Magasin aux vivres** (150 livres, 60 bois, un emplacement de la ville) : les armées en campagne à moins de 30 km restent ravitaillées, en puisant
   dans vos vivres. Pris par l'ennemi, il est pillé.
 - **Moral et désertions** : trésor vide (solde impayée) ou vivres épuisés, le moral chute et les soldats désertent.
   Le journal fait le compte chaque mois.
@@ -264,6 +264,54 @@ Chaque place a un niveau de fortification, dessiné sur la carte autour de la vi
 - Au-delà d'impôts normaux, l'**ordre public** baisse lentement, et la production de chaque place suit son ordre public :
   pressurer le pays rapporte sur quelques semaines, puis coûte. Famine et banqueroute l'abaissent aussi.
 - Une place agitée sans garnison ni armée peut **se révolter** et redevenir indépendante. Un régiment en garnison calme la population.
+
+### Villes : emplacements, politique et événements locaux
+Tout marche seul avec les réglages par défaut ; on intervient quand on veut, depuis le panneau de la ville.
+
+- **Emplacements** : village et place forte 1, ville 3, chef-lieu 5, plus 1 par agrandissement. Chacun accueille une
+  chaîne de bâtiments à trois niveaux, bâtie dans la file de la place comme les remparts (ressources et jours).
+  Certains niveaux demandent un agrandissement, une technologie ou une spécialité. Remparts et agrandissements restent
+  à part. Toucher un emplacement vide montre les chaînes possibles ; un emplacement occupé propose l'amélioration ou la
+  démolition.
+
+| Chaîne | Niveaux | Effet (niveau 1 / 2 / 3) | Entretien |
+|---|---|---|---|
+| Commerce | Marché, Halle couverte, Bourse de commerce (Caisse d'escompte) | +0,1 / 0,2 / 0,35 livre par jour, foires plus fréquentes | 0 / 0,05 / 0,15 |
+| Grains | Moulins, Minoterie, Greniers d'abondance (Greniers publics) | +0,2 / 0,4 / 0,6 vivres, moins de disettes | 0 / 0,05 / 0,1 |
+| Spécialité | Chai, Maison de négoce, Grand chai… (selon la ville ; technologie de la spécialité) | spécialité +20 / 40 / 60 % | 0 / 0,05 / 0,15 |
+| Industrie | Atelier, Manufacture (Manufactures royales), Fabrique (Machine à vapeur) | +0,1 / 0,25 / 0,45 industrie | 0 / 0,05 / 0,15 |
+| Garnison | Caserne, Quartier de cavalerie (Haras), École militaire (Système divisionnaire) | recrues +0,1 / 0,2 / 0,3, régiments formés 15 à 25 % plus vite, milice +40 à +80, recrues aguerries à l'École | 0,1 / 0,2 / 0,35 |
+| Charité | Hospice, Hôtel-Dieu, Collège | ordre public +3 / 5 / 7 %, croissance +10 / 20 / 25 %, moins de fièvres ; le Collège accélère les recherches | 0,05 / 0,15 / 0,25 |
+| Port fluvial (quais) | Cale et entrepôts, Chantier de gabares, Arsenal | +0,1 / 0,2 / 0,35 livre de commerce par eau (sensible au blocus), bois, industrie | 0 / 0,05 / 0,15 |
+| Magasin aux vivres | un seul niveau | ravitaille les armées à moins de 30 km | 0 |
+
+  La production des bâtiments est réduite de moitié dans un village ou une place forte, augmentée de moitié au
+  chef-lieu ; elle suit ensuite la population, l'ordre public et les outils de la place. Une ancienne sauvegarde se charge telle
+  quelle : un magasin existant occupe un emplacement, et une place qui a plus de bâtiments que d'emplacements (ville
+  réduite après un sac) garde tout, mais ne peut plus en bâtir de nouveaux.
+- **Politique de la ville** : une orientation par place, sans rien construire. Un changement prend effet peu à peu
+  (18 jours). Un bouton l'applique à toutes vos places du même type.
+
+| Politique | Bonus | Contrepartie |
+|---|---|---|
+| Équilibre (par défaut) | — | — |
+| Commerce | livres +10 %, foires plus fréquentes | vivres −10 %, recrues −15 % |
+| Grenier | vivres +15 %, disettes deux fois plus rares | livres −8 % |
+| Recrutement | recrues +25 % | croissance −25 %, ordre public −3 % |
+| Place d'armes | régiments formés 20 % plus vite et plus aguerris, ordre public +3 %, moins de brigands | livres −10 % |
+| Fêtes et culte | ordre public +7 %, croissance +15 %, moins d'émeutes | livres −15 % |
+
+- **Événements locaux** : environ un tous les deux à trois mois de jeu pour vos places (davantage si l'ordre public est
+  bas ou en guerre). Incendie, fièvre, disette, brigands, grande foire, crue (au printemps, villes sur les fleuves),
+  réfugiés (surtout en guerre), filon de fer, émotion populaire. Chacun propose deux ou trois choix (payer, envoyer la
+  garnison, laisser faire…) dont les effets ne touchent que la ville. Le jeu se met en pause, la fenêtre montre les
+  coûts et effets et permet d'aller voir la ville ; un sceau rouge la signale sur la carte. Saisons, ordre public,
+  bâtiments et politique pèsent sur les chances : un Hôtel-Dieu éloigne les fièvres, une Halle attire les foires, des
+  greniers préviennent les disettes. Sans réponse au bout de 30 jours, la dernière option s'applique.
+- **IA** : elles jouent avec les mêmes règles. Elles bâtissent là où un bâtiment rapporte le plus pour son prix, selon
+  leur personnalité (négoce girondin, forges du Périgord, grenier agenais…), choisissent la politique de leurs villes
+  selon leurs besoins (fêtes si l'ordre vacille, recrutement et place d'armes en guerre, grenier quand la faim menace,
+  commerce dans les places de négoce) et répondent à leurs propres événements, sans pause.
 
 ### Saisons et météo
 - Récoltes faibles en hiver, abondantes en été et en automne ; vendanges en septembre et octobre.
@@ -327,6 +375,7 @@ game/rules.py        départements, unités, technologies, généraux, formation
 game/engine.py       simulation : économie, impôts, armées, gabares, combats par phases, sièges, espions
 game/waterways.py    voies navigables (fleuves, estuaire, cabotage) et blocus
 game/ai.py           IA des départements
+game/cities.py       villes : emplacements et bâtiments, politique de la ville, événements locaux
 game/diplomacy.py    diplomatie et commerce
 game/views.py        état envoyé au navigateur (brouillard de guerre), sauvegardes
 web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/ui.js, js/main.js
