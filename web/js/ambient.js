@@ -78,13 +78,14 @@ export class Ambient {
     }
     // mouettes : quelques rondes au-dessus du rivage et des ports
     this.gulls = gullSpots.filter((_, k) => k % 3 === 0).map((p, k) => ({ x: p[0] - 1, y: p[1], n: 2 + (k % 3), r: 0.6 + hash(k, 3, 91) * 0.7, ph: hash(k, 4, 92) * TAU, sp: (hash(k, 5, 93) < 0.5 ? -1 : 1) * (0.35 + hash(k, 6, 94) * 0.3) }));
-    // moulins à vent : dans les champs autour des bourgs (au-dessus d'eux, pour ne pas cacher les noms)
+    // moulins à vent : dans les champs autour des bourgs
     this.mills = [];
     for (const n of mp.nodes) {
       const want = n.type === 'capitale' ? 3 : n.type === 'ville' ? 2 : hash(n.id, 1, 71) < 0.55 ? 1 : 0;
       let placed = 0;
       for (let k = 0; k < 12 && placed < want; k++) {
-        const a = -Math.PI * (0.05 + hash(n.id, k, 72) * 0.9), r = (n.type === 'capitale' ? 3.2 : n.type === 'ville' ? 2.4 : 1.7) + hash(n.id, k, 73) * 1.6;
+        // en haut à gauche du bourg : ni sur son nom, ni sur l'effectif de sa garnison
+        const a = -Math.PI * (0.55 + hash(n.id, k, 72) * 0.42), r = (n.type === 'capitale' ? 3.2 : n.type === 'ville' ? 2.4 : 1.7) + hash(n.id, k, 73) * 1.6;
         const x = n.x + Math.cos(a) * r, y = n.y + Math.sin(a) * r * 0.8;
         const t = tAt(x, y);
         if (t !== T.PLAINE && t !== T.COLLINES && t !== T.VIGNE) continue;
@@ -299,7 +300,7 @@ export class Ambient {
 
   drawMills(ctx, time, st) {
     const z = this.map.cam.z, [x0, y0, x1, y1] = this.view(40);
-    const s = clamp(z * 1.5, 12, 36);
+    const s = clamp(z * 1.15, 10, 28);
     for (const m of this.mills) {
       if (m.x < x0 || m.x > x1 || m.y < y0 || m.y > y1) continue;
       const [sx, sy] = this.scr(m.x, m.y);

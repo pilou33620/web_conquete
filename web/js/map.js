@@ -1,5 +1,6 @@
 // Rendu de la carte illustrée de l'Aquitaine (canvas 2D, coordonnées monde en km)
 import { Ambient } from './ambient.js';
+import { TownArt } from './towns.js';
 const TILE = 256;
 // niveaux de détail des tuiles (pixels par km) : une échelle fine, pour qu'une tuile ne soit jamais beaucoup
 // réduite à l'écran (sinon il en faut des centaines pour couvrir un grand écran d'iPad)
@@ -98,6 +99,7 @@ export class MapView {
     this.buildProxy();
     this.buildFieldCells();
     this.ambient = new Ambient(this);
+    this.towns = new TownArt(this);
     this.fillCanvas = document.createElement('canvas');
     this.frontiers = [];
     this.showPreview();
@@ -1541,10 +1543,10 @@ export class MapView {
 
   baseSize(n) {
     const z = this.cam.z;
-    if (n.type === 'capitale') return clamp(z * 2.6, 22, 70);
-    if (n.type === 'ville') return clamp(z * 1.9, 15, 50);
-    if (n.type === 'fort') return clamp(z * 1.6, 13, 42);
-    return clamp(z * 1.25, 9, 34);
+    if (n.type === 'capitale') return clamp(z * 3, 22, 84);
+    if (n.type === 'ville') return clamp(z * 2.2, 15, 60);
+    if (n.type === 'fort') return clamp(z * 1.8, 13, 48);
+    return clamp(z * 1.5, 9, 40);
   }
 
   // taille du nom d'une place sur la carte
@@ -1580,10 +1582,7 @@ export class MapView {
       const wallR = ns.f > 0 ? this.walls(ctx, s, ns.f, n.id, ns.sg && !ns.sg.occ && !ns.sg.bl ? ns.sg.dmg : 0) : 0;
       const worksR = ns.bar != null || ns.bw ? this.works(ctx, s, ns.f, n.id, ns.bar || 0, ns.bw, wallR) : 0;
       if (camp.has(n.id) && z >= 2.8) this.tents(ctx, s, n.id, this.colors[camp.get(n.id)] || col);
-      if (n.type === 'capitale') this.iconStar(ctx, s, 5, col, true);
-      else if (n.type === 'fort') this.iconStar(ctx, s, 4, col, false);
-      else if (n.type === 'ville') this.iconTown(ctx, s, col, n.id);
-      else this.iconVillage(ctx, s, col, n.id, ns.o);
+      this.towns.draw(ctx, n, s, col, ns, time, ns.o);
       // siège
       if (ns.sg && ns.sg.bl) this.blockadeRing(ctx, Math.max(s * 0.62 + 6, wallR + 6, worksR + 5), ns.sg, n.id);
       else if (ns.sg) {
@@ -1875,62 +1874,6 @@ export class MapView {
     ctx.quadraticCurveTo(x + w * 0.5, y - h * 0.64 + a, x, y - h * 0.62);
     ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 0.8; ctx.stroke();
-  }
-
-  iconStar(ctx, s, k, col, capital) {
-    const R = s * 0.5, r = R * 0.62;
-    const star = (R1, R2) => {
-      ctx.beginPath();
-      for (let i = 0; i < k * 2; i++) {
-        const a = -Math.PI / 2 + i * Math.PI / k, rr = i % 2 ? R2 : R1;
-        ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr * 0.8);
-      }
-      ctx.closePath();
-    };
-    ctx.fillStyle = 'rgba(30,24,14,0.3)'; ctx.save(); ctx.translate(2, 3); star(R, r); ctx.fill(); ctx.restore();
-    star(R, r); ctx.fillStyle = '#c9b78d'; ctx.fill(); ctx.strokeStyle = '#5c4b30'; ctx.lineWidth = Math.max(1, s * 0.04); ctx.stroke();
-    star(R * 0.74, r * 0.74); ctx.fillStyle = '#e4d5ad'; ctx.fill(); ctx.strokeStyle = 'rgba(92,75,48,0.6)'; ctx.stroke();
-    // bâtiments
-    const b = s * (capital ? 0.2 : 0.14);
-    ctx.fillStyle = '#efe7d2'; ctx.fillRect(-b, -b * 0.7, b * 2, b * 1.3);
-    ctx.fillStyle = darken(col, 0.15); ctx.fillRect(-b * 1.1, -b * 1.05, b * 2.2, b * 0.45);
-    ctx.strokeStyle = '#5c4b30'; ctx.lineWidth = 0.8; ctx.strokeRect(-b, -b * 0.7, b * 2, b * 1.3);
-    this.flag(ctx, b * 0.2, -b * 1.05, s * (capital ? 0.42 : 0.36), col);
-  }
-
-  iconTown(ctx, s, col, id) {
-    const R = s * 0.45;
-    ctx.fillStyle = 'rgba(30,24,14,0.3)'; ctx.beginPath(); ctx.ellipse(2, 3, R, R * 0.78, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#d6c69d'; ctx.beginPath(); ctx.ellipse(0, 0, R, R * 0.78, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#5c4b30'; ctx.lineWidth = Math.max(1.2, s * 0.06); ctx.stroke();
-    // tours
-    for (let k = 0; k < 6; k++) {
-      const a = k * Math.PI / 3 + 0.3;
-      ctx.fillStyle = '#b9a67c';
-      ctx.beginPath(); ctx.arc(Math.cos(a) * R, Math.sin(a) * R * 0.78, s * 0.07, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#5c4b30'; ctx.lineWidth = 0.8; ctx.stroke();
-    }
-    const roofs = [[-0.18, -0.08], [0.12, -0.14], [-0.02, 0.12], [0.2, 0.1]];
-    for (const [dx, dy] of roofs) {
-      const x = dx * s, y = dy * s, w = s * 0.17, h = s * 0.12;
-      ctx.fillStyle = '#f1e9d6'; ctx.fillRect(x - w / 2, y - h / 2, w, h);
-      ctx.fillStyle = '#b4513a'; ctx.fillRect(x - w / 2, y - h / 2, w, h * 0.45);
-    }
-    this.flag(ctx, 0, -s * 0.1, s * 0.4, col);
-  }
-
-  iconVillage(ctx, s, col, id, owner) {
-    const houses = [[-0.22, 0.05], [0.18, -0.06], [0, 0.22], [0.26, 0.24]];
-    for (let k = 0; k < (s > 16 ? 4 : 3); k++) {
-      const [dx, dy] = houses[k];
-      const x = dx * s, y = dy * s, w = s * 0.3, h = s * 0.2;
-      ctx.fillStyle = 'rgba(30,24,14,0.3)'; ctx.fillRect(x - w / 2 + 1.5, y - h / 2 + 2, w, h);
-      ctx.fillStyle = '#f0e8d4'; ctx.fillRect(x - w / 2, y - h / 2, w, h);
-      ctx.fillStyle = '#a9472f';
-      ctx.beginPath(); ctx.moveTo(x - w / 2 - 1, y - h / 2 + 1); ctx.lineTo(x, y - h / 2 - h * 0.7); ctx.lineTo(x + w / 2 + 1, y - h / 2 + 1); ctx.fill();
-    }
-    if (owner !== 'neutre') this.flag(ctx, -s * 0.05, -s * 0.12, s * 0.5, col);
-    else this.flag(ctx, -s * 0.05, -s * 0.12, s * 0.42, '#e9e4d4');
   }
 
   drawPaths(ctx) {

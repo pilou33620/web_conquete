@@ -177,6 +177,11 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
   ralliez-les avec une armée nettement plus forte que leur milice pour gagner des revenus.
 - **Victoire** : tous les chefs-lieux vous appartiennent, ou appartiennent à un département qui s'est soumis à vous.
   **Défaite** : votre chef-lieu tombe. Un département qui perd son chef-lieu capitule et ses villes passent au vainqueur.
+- Villes et villages sont dessinés en vue cavalière : maisons, église à clocher, grande église des villes, cathédrale et
+  hôtel de ville des chefs-lieux, citadelle des places fortes. Chaque pays a ses couleurs (pierre blonde et tuiles du
+  Bordelais, toits bruns du Périgord, colombages des Landes, brique de l'Agenais, murs blancs et ardoise du Béarn),
+  le nombre de maisons suit la population et les agrandissements, la neige couvre les toits en hiver.
+  Drapeau au clocher, passants dans les rues et pigeons autour du clocher les animent.
 - La carte vit : moulins à vent qui tournent dans les champs (plus vite par gros temps), moulins à eau, fumées des
   cheminées (épaisses en hiver, noires sur une place assiégée), drapeaux au vent, vols d'oiseaux en V (migrations au
   printemps et à l'automne), mouettes, gabares sur les fleuves et navires du cabotage, barques de pêche, courant des
@@ -434,7 +439,7 @@ game/cities.py       villes : emplacements et bâtiments, politique de la ville,
 game/diplomacy.py    diplomatie et commerce
 game/views.py        état envoyé au navigateur (brouillard de guerre), sauvegardes
 web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/ambient.js (animations
-                     de la carte), js/ui.js, js/main.js
+                     de la carte), js/towns.js (dessin des villes), js/ui.js, js/main.js
 saves/               parties sauvegardées (JSON)
 ```
 
