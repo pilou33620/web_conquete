@@ -195,10 +195,11 @@ body.en-bataille #proposals, body.en-bataille #bubble { opacity: 0; pointer-even
 .br-units div { display: grid; grid-template-columns: 1fr 70px 70px; gap: 6px; padding: 3px 2px; border-bottom: 1px solid rgba(200,162,83,.13); }
 .br-units span:nth-child(2) { color: #ffb3a6; text-align: right; } .br-units span:nth-child(3) { color: var(--laiton-clair, #e6c97f); text-align: right; }
 /* cartouche du titre à l'entrée */
-.bt-cartouche { position: absolute; left: 50%; top: 24%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; padding: 14px 40px;
-  background: radial-gradient(ellipse, rgba(12,24,40,.78), rgba(12,24,40,0) 72%); }
+.bt-cartouche { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; padding: 12px 56px 14px;
+  max-width: 94%; background: linear-gradient(90deg, rgba(12,24,40,0), rgba(12,24,40,.84) 18%, rgba(12,24,40,.84) 82%, rgba(12,24,40,0));
+  border-top: 1px solid rgba(200,162,83,.55); border-bottom: 1px solid rgba(200,162,83,.55); }
 .bt-cartouche.go { animation: bt-cart 3.2s ease-in-out forwards; }
-.bc-t { font-family: var(--f-titre, Georgia, serif); font-size: 44px; line-height: 1; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+.bc-t { font-family: var(--f-titre, Georgia, serif); font-size: 38px; line-height: 1.05; white-space: nowrap; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
 .bc-t::before, .bc-t::after { content: "❧"; color: var(--laiton-clair, #e6c97f); font-size: 24px; margin: 0 14px; vertical-align: 8px; }
 .bc-t::before { display: inline-block; transform: scaleX(-1); }
 .bc-s { font-size: 18px; font-style: italic; color: var(--laiton-clair, #e6c97f); margin-top: 6px; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
@@ -243,7 +244,7 @@ body.en-bataille #proposals, body.en-bataille #bubble { opacity: 0; pointer-even
   .bt-uc .uc-bars { bottom: 3px; }
   .br-stats { grid-template-columns: repeat(2, 1fr); }
   .br-head h2 { font-size: 38px; }
-  .bc-t { font-size: 30px; } .bc-t::before, .bc-t::after { display: none; }
+  .bc-t { font-size: 27px; white-space: normal; } .bc-t::before, .bc-t::after { display: none; }
   .bc-s { font-size: 15px; }
   .bt-cartouche { width: 92%; padding: 10px; }
 }

@@ -259,7 +259,8 @@ export class BattleView {
       u.y = u.from.y + (u.to.y - u.from.y) * k;
       u.dir = u.from.dir + wrapAngle(u.to.dir - u.from.dir) * k;
       u._fade = u._ghost ? clamp(1 - (now - u.ghostT) / 60000, 0.25, 1) : 1;
-      if (u.state === 'charge' && clsOf(u) === 'cavalerie' && !u._ghost) this.fx.trail(u.x, u.y, u.dir, u.w);
+      // poussière sous les sabots, seulement si la charge avance vraiment
+      if (u.state === 'charge' && clsOf(u) === 'cavalerie' && !u._ghost && Math.hypot(u.to.x - u.from.x, u.to.y - u.from.y) > 2) this.fx.trail(u.x, u.y, u.dir, u.w);
     }
     const speed = this.st?.speed ?? 1;
     this.fx.update(speed === 0 ? dt * 0.15 : dt * Math.min(1.6, 0.8 + speed * 0.2), this.st?.wind);

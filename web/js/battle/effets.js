@@ -53,7 +53,12 @@ export class Effects {
     const k = f.k;
     if (k === 'salve') this.volley(f, un);
     else if (k === 'canon' || k === 'mitraille') this.cannon(f, un, k === 'mitraille');
-    else if (k === 'impact') { if (!this.balls.some(b => Math.hypot(b.x1 - f.x, b.y1 - f.y) < 40)) this.burst(f.x, f.y, 1); }
+    else if (k === 'impact') {
+      // choc d'une charge (moteur, n = hommes qui chargent) ou point de chute (maquette) : poussière, une fois
+      if (this.balls.some(b => Math.hypot(b.x1 - f.x, b.y1 - f.y) < 40)) return;
+      if (f.n > 20) { for (let q = 0; q < 10; q++) { const a = q / 10 * TAU; this.addPuff(this.dust, f.x + Math.cos(a) * 14, f.y + Math.sin(a) * 9, 1, 4, 3, 0.45, 2.5, Math.cos(a) * 6, Math.sin(a) * 4, 1); } }
+      else this.burst(f.x, f.y, 1);
+    }
     else if (k === 'explosion') this.explosion(f.x, f.y);
     else if (k === 'charge') { for (let q = 0; q < 6; q++) this.addPuff(this.dust, f.x + (Math.random() - 0.5) * 30, f.y + (Math.random() - 0.5) * 12, 0, 4, 2, 0.35, 3); }
     else if (k === 'deroute') { for (let q = 0; q < 5; q++) this.addPuff(this.dust, f.x + (Math.random() - 0.5) * 40, f.y + (Math.random() - 0.5) * 20, 0.5, 4, 3, 0.3, 3); }
@@ -72,12 +77,20 @@ export class Effects {
     let x = f.x, y = f.y, dir = Math.atan2((f.y2 ?? y + 1) - y, (f.x2 ?? x) - x), w = 60;
     if (un) { x = un.x; y = un.y; w = un.form === 'tirailleurs' ? un.w * 0.8 : un.w; dir = un.dir; }
     const c = Math.cos(dir), s = Math.sin(dir), front = (un?.d || 12) / 2 + 2;
-    const n = clamp(Math.round(w / 3.5), 5, 44);
+    // salves rapprochées (vitesse ×2, ×4, feu roulant) : moins de fumée neuve, sinon elle devient une masse opaque
+    const since = un ? this.t - (un._lastVolley ?? -99) : 99;
+    if (un) un._lastVolley = this.t;
+    let n = Math.max(3, Math.round(clamp(Math.round(w / 3.5), 5, 44) * (since < 1.5 ? 0.25 : since < 4 ? 0.5 : 1)));
+    // déjà un nuage épais devant ce front : on ne l'épaissit plus (sans vent, la fumée finirait en tache opaque)
+    const R2 = Math.max(40, w * 0.6) ** 2;
+    let near = 0;
+    for (const p of this.puffs) if (p.img === this.white && (p.x - x) ** 2 + (p.y - y) ** 2 < R2) near++;
+    if (near > n * 2.5) n = Math.min(n, 2);
     for (let q = 0; q < n; q++) {
       const u = (q + Math.random() * 0.8) / n * w - w / 2, fwd = front + Math.random() * 6;
       const px = x + c * fwd - s * u, py = y + s * fwd + c * u;
       const sp = 3 + Math.random() * 3;
-      this.addPuff(this.white, px, py, 3, 5 + Math.random() * 7, 1.6 + Math.random() * 2, 0.45 + Math.random() * 0.2, 16 + Math.random() * 12, c * sp * 1.6, s * sp * 1.6, 0.1 + Math.random() * 0.2);
+      this.addPuff(this.white, px, py, 3, 5 + Math.random() * 7, 1.6 + Math.random() * 2, 0.35 + Math.random() * 0.2, 11 + Math.random() * 8, c * sp * 1.6 + (Math.random() - 0.5) * 3, s * sp * 1.6 + (Math.random() - 0.5) * 3, 0.1 + Math.random() * 0.2);
       if (Math.random() < 0.7) this.flashes.push({ x: px + c * 3, y: py + s * 3, alt: 4, r: 4 + Math.random() * 2, t: 0, life: 0.12 + Math.random() * 0.08 });
     }
   }
@@ -129,7 +142,10 @@ export class Effects {
   // ------------------------------------------------------------------ animation
   update(dt, wind) {
     this.t += dt;
-    const wx = clamp(wind?.[0] ?? 1.5, -12, 12), wy = clamp(wind?.[1] ?? 0.5, -12, 12);
+    let wx = clamp(wind?.[0] ?? 1.5, -12, 12), wy = clamp(wind?.[1] ?? 0.5, -12, 12);
+    // toujours une petite brise : la fumée finit par s'en aller
+    const wl = Math.hypot(wx, wy);
+    if (wl < 1.2) { const a = wl > 0.01 ? Math.atan2(wy, wx) : 0.4; wx = Math.cos(a) * 1.2; wy = Math.sin(a) * 1.2; }
     for (let q = this.queue.length - 1; q >= 0; q--) {
       const e = this.queue[q];
       if (e.at > this.t) continue;
@@ -143,7 +159,7 @@ export class Effects {
       if (p.t >= p.life) continue;
       const drag = Math.exp(-dt * 1.6);
       p.vx *= drag; p.vy *= drag;
-      p.x += (p.vx + wx * 0.8) * dt; p.y += (p.vy + wy * 0.8) * dt; p.alt += p.valt * dt;
+      p.x += (p.vx + wx * 2.2) * dt; p.y += (p.vy + wy * 2.2) * dt; p.alt += p.valt * dt;   // le vent emporte la fumée
       p.r += p.grow * dt * (1 - p.t / p.life * 0.6);
       P[n++] = p;
     }
