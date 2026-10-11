@@ -36,6 +36,7 @@ export class UI {
     this.pressing = false;
     this.startDept = null;
     this.startDiff = 'normal';
+    this.startScen = (rules.scenario_order || ['1790'])[0];
     this.overShown = false;
     this.$ = id => document.getElementById(id);
     this.buildStatic();
@@ -54,7 +55,7 @@ export class UI {
   // ------------------------------------------------------------------ squelette
   buildStatic() {
     const sp = this.$('tb-speed');
-    sp.innerHTML = this.rules.speeds.map((v, i) => `<button data-act="speed" data-v="${i}" aria-label="${i ? 'Vitesse ' + i : 'Pause'}" title="${i ? 'Vitesse ×' + i + ' (touche ' + i + ')' : 'Pause (espace)'}">${speedIcon(i)}</button>`).join('');
+    sp.innerHTML = this.rules.speeds.map((v, i) => `<button data-act="speed" data-v="${i}" aria-label="${i ? 'Vitesse ' + i : 'Pause'}" title="${!i ? 'Pause (espace)' : i >= 5 ? `×${this.rules.speeds[i]} jours par seconde : pour les années de paix (touche ${i}) — guerres, batailles et propositions mettent le jeu en pause` : 'Vitesse ×' + i + ' (touche ' + i + ')'}">${speedIcon(i)}</button>`).join('');
     this.$('btn-menu').innerHTML = ICON.menu;
     this.$('btn-menu').dataset.act = 'modal';
     this.$('btn-menu').dataset.v = 'menu';
@@ -124,7 +125,7 @@ export class UI {
     if (e.key === ' ') {
       e.preventDefault();
       if (this.st.speed) { this.lastSpeed = this.st.speed; this.setSpeed(0); } else this.setSpeed(this.lastSpeed || 1);
-    } else if (/^[1-4]$/.test(e.key)) this.setSpeed(+e.key);
+    } else if (/^[1-9]$/.test(e.key) && +e.key < this.rules.speeds.length) this.setSpeed(+e.key);
     else if (e.key === 'Escape') {
       if (!this.$('modal').hidden) this.closeModal();
       else if (this.targeting) this.stopTargeting();
@@ -158,7 +159,15 @@ export class UI {
   update(st) {
     const first = !this.st;
     this.st = st;
+    let renamed = false;
+    for (const [c, n] of Object.entries(st.names || {})) {
+      if (this.rules.factions[c] && this.rules.factions[c].name !== n) { this.rules.factions[c].name = n; renamed = true; }
+    }
     this.map.setState(st);
+    if (first || renamed) {
+      const f = this.rules.factions[st.me.code];
+      this.$('tb-faction').innerHTML = `${coat(f.color, st.me.code)}<div><div class="fname">${esc(f.name)}</div><div class="ftitle">${esc(f.title)}</div></div>`;
+    }
     if (first) {
       this.$('topbar').hidden = false;
       this.$('rail').hidden = false;
@@ -196,6 +205,7 @@ export class UI {
   renderTop() {
     const st = this.st, me = st.me;
     this.$('tb-day').textContent = st.date;
+    if (st.era) this.$('tb-day').title = `${st.era.name} — ${st.era.desc}`;
     const zones = ['cote', 'interieur', 'montagne'];
     const wsig = st.season + zones.map(z => st.weather[z].kind).join() + !!st.flood;
     if (wsig !== this.wxSig) {   // ne réécrit la météo que si elle change
@@ -281,7 +291,7 @@ export class UI {
   }
 
   renderFeed() {
-    const kinds = ['battle_end', 'capture', 'capitulation', 'revolte'];
+    const kinds = ['battle_end', 'capture', 'capitulation', 'revolte', 'epoque'];
     const items = this.events.filter(e => kinds.includes(e.kind) && (e.important || e.kind === 'capitulation')).slice(-5);
     const box = this.$('feed');
     const sig = items.map(e => e.seq).join(',');
@@ -549,7 +559,8 @@ export class UI {
       // écran de départ
       case 'pick-dept': this.pickDept(d.v); break;
       case 'pick-diff': this.startDiff = d.v; this.renderStart(); break;
-      case 'start-game': this.onStartGame && this.onStartGame(this.startDept, this.startDiff); break;
+      case 'pick-scen': this.startScen = d.v; this.renderStart(); break;
+      case 'start-game': this.onStartGame && this.onStartGame(this.startDept, this.startDiff, this.startScen); break;
       case 'resume': this.onResume && this.onResume(); break;
       default: break;
     }
@@ -635,7 +646,9 @@ export class UI {
     const own = ns.o === me;
     const oname = ns.o === 'neutre' ? 'Indépendant (à rallier)' : this.rules.factions[ns.o].name;
     const col = this.map.colors[ns.o];
-    const DE = { '33': 'de la Gironde', '24': 'de la Dordogne', '40': 'des Landes', '47': 'du Lot-et-Garonne', '64': 'des Basses-Pyrénées' };
+    const DE = st.word === 'province'
+      ? { '33': 'de la Guyenne', '24': 'du Périgord', '40': 'des Landes de Gascogne', '47': 'de l’Agenais', '64': 'du Béarn et du Pays basque' }
+      : { '33': 'de la Gironde', '24': 'de la Dordogne', '40': 'des Landes', '47': 'du Lot-et-Garonne', '64': 'des Basses-Pyrénées' };
     const typeLab = gn.type === 'capitale' ? `Chef-lieu ${DE[gn.dept]}` : TYPE_LABEL[gn.type];
     const terr = this.md.terrain_names[this.map.terrain[Math.floor(gn.y) * this.md.W + Math.floor(gn.x)]];
     const sub = ns.o === gn.dept && gn.type === 'capitale' ? typeLab : gn.type === 'capitale' ? `${typeLab}, tenu par ${oname}` : `${typeLab}, ${oname}`;
@@ -969,11 +982,12 @@ export class UI {
       const cards = techs.map(t => {
         const done = me.techs.includes(t.id);
         const running = cur && cur.tech === t.id;
-        const ready = t.req.every(r => me.techs.includes(r));
+        const ready = t.req.every(r => me.techs.includes(r)) && !(t.year > (this.st.year || 0));
         const reqNames = t.req.map(r => this.rules.techs.find(x => x.id === r).name).join(', ');
         let foot = '';
         if (done) foot = '<span class="muted">Acquise</span>';
         else if (running) foot = '<span>En cours…</span>';
+        else if (t.year > (this.st.year || 0)) foot = `<span class="muted">Pas encore inventée : vers ${t.year}${t.req.length ? ' ; requiert ' + reqNames : ''}</span>`;
         else if (!ready) foot = `<span class="muted">Requiert : ${reqNames}</span>`;
         else foot = `<span>${fmt(t.cost)} livres, ${t.days} j</span><button class="btn" data-act="research" data-v="${t.id}" ${cur || me.res.livres < t.cost ? 'disabled' : ''}>Rechercher</button>`;
         return `<div class="tech ${done ? 'done' : running ? 'running' : !ready ? 'locked' : ''}"><div class="tn">${t.name}</div><div class="td">${t.desc}</div><div class="tc">${foot}</div></div>`;
@@ -1152,6 +1166,7 @@ export class UI {
           <li>Au stylet ou à la souris, survolez une ville ou une armée pour voir ses forces. La paume posée sur l’écran est ignorée pendant l’usage du stylet.</li>
           <li>Les routes sont rapides. À travers champs, l’armée peut se cacher dans les bois, landes, marais ou montagnes et tendre une embuscade (posture « Embuscade »), mais avance plus lentement, s’use et perd son ravitaillement.</li>
           <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite. Les remparts ont quatre niveaux (le quatrième, les bastions à la Vauban, après la technologie du même nom, dans le chef-lieu et les places fortes) ; ils coûtent un entretien et perdent un niveau quand la place est prise de force.</li>
+          <li><b>Deux siècles</b> : la grande campagne part de 1700 (ou de 1790, 1813, 1870) et s’achève fin 1899 ; le plus prestigieux l’emporte. Les provinces deviennent départements en 1790 ; technologies et unités n’apparaissent qu’à leur époque. Vitesses ×10 et ×30 (touches 5 et 6) pour les années de paix : guerres, batailles et grandes propositions remettent en pause.</li>
           <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
           <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>
           <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
@@ -1204,20 +1219,24 @@ export class UI {
 
   renderStart() {
     const info = this.startInfo || { saves: [], running: false };
+    const scs = this.rules.scenarios || {};
+    const sc = scs[this.startScen] || { title: 'Aquitaine, 1790', intro: '', names: {}, word: 'département' };
+    const scenBtns = (this.rules.scenario_order || []).map(k => `<button class="${k === this.startScen ? 'on' : ''}" data-act="pick-scen" data-v="${k}" title="${esc(scs[k].campaign)}">${k}</button>`).join('');
     const cards = Object.entries(this.rules.factions).map(([code, f]) => `
       <button class="dept-card ${this.startDept === code ? 'on' : ''}" data-act="pick-dept" data-v="${code}">
-        ${coat(f.color, code)}<div class="dn">${f.name}<small>${f.capital}</small></div><div class="dd">${f.title}</div>
+        ${coat(f.color, code)}<div class="dn">${esc(sc.names[code] || f.name)}<small>${f.capital}</small></div><div class="dd">${f.title}</div>
         <div class="traits">${f.pros.map(p => `<div>${p}</div>`).join('')}${f.cons.map(p => `<div class="con">${p}</div>`).join('')}</div>
       </button>`).join('');
     const diffs = Object.entries(this.rules.difficulty).map(([k, l]) => `<button class="${k === this.startDiff ? 'on' : ''}" data-act="pick-diff" data-v="${k}">${l}</button>`).join('');
     const saves = (info.saves || []).map(s => `<div class="save-item"><span>${s.auto ? '<i>Sauvegarde automatique</i>' : esc(s.name)}<br><span class="muted small">${esc(s.faction || '')}, ${esc(s.date || '')}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
     this.$('start').innerHTML = `<div class="start-side">
-      <div class="cartouche"><h1>Conquête</h1><div class="campaign">Aquitaine, 1790</div><p>L’Assemblée vient de créer les départements. Choisissez le vôtre, ralliez ses villages, puis prenez les chefs-lieux voisins par les armes, le commerce ou la diplomatie.</p></div>
+      <div class="cartouche"><h1>Conquête</h1><div class="campaign">${esc(sc.title)}</div><p><b>${esc(sc.campaign || '')}.</b> ${esc(sc.intro)}</p></div>
+      <div class="row"><span class="lab">Début</span><span class="seg">${scenBtns}</span></div>
       ${info.running ? '<button class="btn primary" data-act="resume">Reprendre la partie en cours</button>' : ''}
       <div class="dept-list">${cards}</div>
       <div class="row"><span class="lab">Difficulté</span><span class="seg">${diffs}</span></div>
       <div class="start-actions">
-        <button class="btn primary" data-act="start-game" ${this.startDept ? '' : 'disabled'}>${this.startDept ? `Commencer avec ${this.rules.factions[this.startDept].name}` : 'Choisissez un département'}</button>
+        <button class="btn primary" data-act="start-game" ${this.startDept ? '' : 'disabled'}>${this.startDept ? `Commencer avec ${esc(sc.names[this.startDept] || this.rules.factions[this.startDept].name)} en ${sc.year}` : (sc.word === 'province' ? 'Choisissez une province' : 'Choisissez un département')}</button>
         ${saves ? `<div class="section-t">Parties sauvegardées${info.saves.length > 5 ? ` <span class="muted small">(${info.saves.length})</span>` : ''}</div><div class="saves scroll">${saves}</div>` : ''}
         ${info.net && info.net.lan && info.net.urls.length ? `<div class="section-t">Sur le réseau local</div>${this.netHtml(info.net)}` : ''}
       </div></div>`;

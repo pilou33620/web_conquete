@@ -20,9 +20,11 @@ def ordinal(n):
 
 class Game:
     # ================================================================== création
-    def __init__(self, geo, player, difficulty='normal', seed=None):
+    def __init__(self, geo, player, difficulty='normal', seed=None, scenario='1790'):
         self.geo = geo
         self.player = player
+        self.scenario = scenario if scenario in R.SCENARIOS else '1790'
+        self.start_ord = datetime.date(*R.SCENARIOS[self.scenario]['date']).toordinal()
         self.difficulty = difficulty if difficulty in R.DIFFICULTY else 'normal'
         self.seed = seed if seed is not None else random.randrange(1 << 30)
         self.rng = random.Random(self.seed)
@@ -69,7 +71,7 @@ class Game:
             mm = base['milice'] + 40 * fort0
             milice = mm if owner != R.NEUTRAL else int(mm * self.rng.uniform(0.55, 1.0))
             self.nodes.append(dict(id=n['id'], owner=owner, milice=float(milice), milice_max=mm, fort=fort0, dev=0,
-                                   pop=float(n['pop0']),
+                                   pop=float(n['pop0']) * self.pop_era(),
                                    stab=1.0, garrison=[], queue=[], siege=None, last_seen={}, depot=0))
             if owner != R.NEUTRAL:
                 self.factions[owner]['start_nodes'] += 1
@@ -79,9 +81,19 @@ class Game:
             gx, gy = geo.nodes[cap]['x'], geo.nodes[cap]['y']
             self.create_army(code, gx, gy, [self.new_reg('ligne'), self.new_reg('legere'), self.new_reg('cavalerie')], node=cap)
             self.recompute_mods(code)
-        self.log('info', f"4 mars 1790 : l'Assemblée crée les départements. Vous gouvernez {R.FACTIONS[player]['name']}.",
-                 important=True)
-        self.log('info', "Objectif : prendre tous les chefs-lieux (ou obtenir la soumission de leurs départements).")
+        sc = R.SCENARIOS[self.scenario]
+        if sc.get('techs_before'):
+            for f in self.factions.values():
+                f['techs'] = [t for t in R.TECH if R.TECH_YEAR[t] <= sc['techs_before']]
+                self.recompute_mods(f['code'])
+        self.era_id = self.era()['id']
+        if self.scenario == '1790':
+            self.log('info', f"4 mars 1790 : l'Assemblée crée les départements. Vous gouvernez {self.fname(player)}.",
+                     important=True)
+        else:
+            self.log('info', f"{self.date_str()} — {self.era()['name']}. Vous gouvernez {self.fname(player)}.", important=True)
+        self.log('info', f"Objectif : prendre tous les chefs-lieux (ou obtenir la soumission de leurs {self.dept_word()}s), "
+                         f"ou être le plus prestigieux à la fin de 1899.")
         from .ai import AI
         self.ais = {c: AI(self, c) for c in R.FACTIONS if c != player}
         self.compute_income()
@@ -109,6 +121,8 @@ class Game:
             return False, "Un village ne lève que la Garde nationale."
         if gn['type'] == 'fort' and u['cls'] != 'inf':
             return False, "Un fort ne lève que de l'infanterie."
+        if R.UNIT_YEAR.get(typ, 0) > self.date().year:
+            return False, f"N'existe pas encore (vers {R.UNIT_YEAR[typ]})."
         if u['req'] and u['req'] not in self.factions[code]['techs']:
             return False, f"Technologie requise : {R.TECH[u['req']]['name']}."
         if u.get('where') and gn['dept'] not in u['where']:
@@ -120,12 +134,46 @@ class Game:
             if n['dept'] == code and n['type'] == 'capitale':
                 return n['id']
 
-    def date(self):
-        return START_DATE + datetime.timedelta(days=int(self.t))
+    def date(self, t=None):
+        return datetime.date.fromordinal(getattr(self, 'start_ord', START_DATE.toordinal()) + int(self.t if t is None else t))
 
     def date_str(self, t=None):
-        d = START_DATE + datetime.timedelta(days=int(self.t if t is None else t))
+        d = self.date(t)
         return f"{d.day if d.day > 1 else '1er'} {R.MONTHS[d.month - 1]} {d.year}"
+
+    def year(self):
+        d = self.date()
+        return d.year + (d.timetuple().tm_yday - 1) / 365.25
+
+    def era(self):
+        y = self.date().year
+        return [e for e in R.ERAS if e['year'] <= y][-1] if y >= R.ERAS[0]['year'] else R.ERAS[0]
+
+    def pop_era(self, year=None):
+        """Population « normale » des villes à cette date, par rapport à 1790 (croissance séculaire)."""
+        y = self.year() if year is None else year
+        pts = R.POP_ERA
+        if y <= pts[0][0]:
+            return pts[0][1]
+        for (y0, v0), (y1, v1) in zip(pts, pts[1:]):
+            if y <= y1:
+                return v0 + (v1 - v0) * (y - y0) / (y1 - y0)
+        return pts[-1][1]
+
+    def departements(self):
+        return self.date() >= datetime.date(*R.DEPT_DATE)
+
+    def dept_word(self):
+        return 'département' if self.departements() else 'province'
+
+    def faction_name(self, code):
+        return R.FACTIONS[code]['name'] if self.departements() else R.PROVINCES[code]['name']
+
+    def alert_pause(self, big=False):
+        """Aux vitesses rapides, une guerre, une bataille ou une proposition arrête le temps ; un grand moment
+        de l'histoire l'arrête toujours."""
+        if big or self.speed_idx >= R.FAST_SPEED:
+            self.speed_idx = 0
 
     def season(self):
         return R.SEASONS[self.date().month - 1]
@@ -215,8 +263,9 @@ class Game:
         if self.over or self.speed_idx == 0:
             return
         days = R.SPEEDS[self.speed_idx] * real_dt
-        while days > 1e-9 and not self.over:
-            dt = min(SUBSTEP, days)
+        while days > 1e-9 and not self.over and self.speed_idx:
+            sub = SUBSTEP if (self.battles or self.speed_idx < R.FAST_SPEED) else SUBSTEP * 2
+            dt = min(sub, days)
             self.step(dt)
             days -= dt
 
@@ -275,6 +324,7 @@ class Game:
                 w['kind'] = self.rng.choices(kinds, ws)[0]
                 w['left'] = self.rng.randint(1, 4)
         d = self.date()
+        self.check_era(d)
         if d.day == 1:
             self.grow_population()
             self.monthly(d)
@@ -331,7 +381,7 @@ class Game:
                     self._dirty_income = True
                     why = "écrasée d'impôts" if f.get('tax', 0.5) > 0.6 else "lasse de l'occupant"
                     self.log('revolte', f"Révolte à {gn['name']} : la population, {why}, chasse les autorités "
-                                        f"({R.FACTIONS[code]['name']}).",
+                                        f"({self.fname(code)}).",
                              gn['x'], gn['y'], who=code, important=code == self.player)
                 elif n['stab'] < 0.5 and code == self.player and self.rng.random() < 0.3:
                     cure = 'une garnison ou des impôts plus légers' if f.get('tax', 0.5) > 0.05 else 'une garnison'
@@ -612,10 +662,14 @@ class Game:
 
     def pop_factor(self, n):
         """Population rapportée à celle de 1790 : la production d'une place la suit."""
-        return n.get('pop', 0) / max(1.0, self.geo.nodes[n['id']]['pop0']) if 'pop' in n else 1 + 0.25 * n['dev']
+        if 'pop' not in n:
+            return 1 + 0.25 * n['dev']
+        # la production suit la population ; la croissance séculaire n'en donne que la racine (les métiers suivent)
+        era = self.pop_era()
+        return n['pop'] / max(1.0, self.geo.nodes[n['id']]['pop0'] * era) * era ** 0.5
 
     def pop_cap(self, n):
-        return self.geo.nodes[n['id']]['pop0'] * (1 + R.POP_NATURAL + R.POP_PER_LEVEL * n['dev'])
+        return self.geo.nodes[n['id']]['pop0'] * (self.pop_era() + R.POP_NATURAL + R.POP_PER_LEVEL * n['dev'])
 
     def pop_growth(self, n):
         """Part de la place libre comblée en un mois (négative : la ville se vide)."""
@@ -809,6 +863,8 @@ class Game:
             return False, "Technologie inconnue."
         if tech in f['techs']:
             return False, "Déjà connue."
+        if R.TECH_YEAR.get(tech, 0) > self.date().year:
+            return False, f"Pas encore inventée : disponible vers {R.TECH_YEAR[tech]}."
         if f['research'][t['branch']]:
             return False, "Une recherche est déjà en cours dans cette branche."
         if any(r not in f['techs'] for r in t['req']):
@@ -1146,7 +1202,7 @@ class Game:
                 return False, "Lieu inconnu."
             o = self.nodes[node]['owner']
             if o not in (code, R.NEUTRAL) and self.status(code, o) == 'paix':
-                return False, f"{self.geo.nodes[node]['name']} appartient à {R.FACTIONS[o]['name']} (en paix). Déclarez la guerre d'abord."
+                return False, f"{self.geo.nodes[node]['name']} appartient à {self.fname(o)} (en paix). Déclarez la guerre d'abord."
         elif x is None or y is None or not (math.isfinite(x) and math.isfinite(y)):
             return False, "Destination invalide."
         # un ordre refusé ne doit ni lever le siège en cours ni changer l'itinéraire choisi
@@ -1480,7 +1536,9 @@ class Game:
             n['siege'] = dict(by=code, dmg=0.0, since=self.t)
             a['state'] = 'siege'
             if code == self.player or o == self.player:
-                self.log('siege', f"Siège de {gn['name']} par {R.FACTIONS[code]['name']}.", gn['x'], gn['y'], who=code,
+                if o == self.player:
+                    self.alert_pause()
+                self.log('siege', f"Siège {R.de(gn['name'])} par {self.fname(code)}.", gn['x'], gn['y'], who=code,
                          important=True)
             return True
         if n['siege'] and n['siege']['by'] == code and not a['assault']:
@@ -1810,12 +1868,13 @@ class Game:
         self.battles[bid] = bt
         gname = self.place_name(gx, gy)
         if code_a == self.player or code_d == self.player or self.player in (code_a, code_d):
+            self.alert_pause()
             kind = 'Embuscade' if ambush else ('Assaut' if node is not None else 'Bataille')
             self.log('battle', f"{kind} {gname} : {self.fname(code_a)} attaque {self.fname(code_d)}.", gx, gy,
                      who=code_a, important=True)
 
     def fname(self, code):
-        return 'les insurgés' if code == R.NEUTRAL else R.FACTIONS[code]['name']
+        return 'les insurgés' if code == R.NEUTRAL else self.faction_name(code)
 
     def place_name(self, x, y):
         nid = self.nearest_node(x, y)
@@ -2384,8 +2443,43 @@ class Game:
             if o != loser:
                 self.set_status(loser, o, 'paix')
         self._dirty_income = True
-        self.log('capitulation', f"{R.FACTIONS[loser]['name']} capitule ! Ses villes passent à {self.fname(winner)}.",
+        self.alert_pause(big=True)
+        self.log('capitulation', f"{self.fname(loser)} capitule ! Ses villes passent à {self.fname(winner)}.",
                  who=winner, important=True)
+
+    def check_era(self, d):
+        if not getattr(self, 'era_id', None):
+            self.era_id = self.era()['id']
+        if d == datetime.date(*R.DEPT_DATE) and self.t > 0.5:
+            self.log('info', "4 mars 1790 : l'Assemblée crée les départements. Les provinces deviennent la Gironde, "
+                             "la Dordogne, les Landes, le Lot-et-Garonne et les Basses-Pyrénées.", important=True)
+            self.alert_pause(big=True)
+        e = self.era()
+        if e['id'] != self.era_id:
+            self.era_id = e['id']
+            self.log('epoque', f"Nouvelle époque : {e['name']}. {e['desc']}", important=True)
+            self.alert_pause(big=True)
+        if d >= datetime.date(*R.CAMPAIGN_END) and not self.over:
+            self.end_campaign()
+
+    def prestige(self, code):
+        """Prestige provisoire (étape suivante : un vrai score) : places, habitants, trésor et victoires."""
+        f = self.factions[code]
+        if not f['alive']:
+            return 0
+        mine = self.owned_nodes(code)
+        return int(len(mine) * 10 + sum(n.get('pop', 0) for n in mine) / 2000 + f['res']['livres'] / 500
+                   + f['stats']['won'] * 3 + f['stats']['captured'])
+
+    def end_campaign(self):
+        ranks = sorted(self.factions, key=lambda c: -self.prestige(c))
+        first = ranks[0]
+        win = first == self.player or self.factions[first]['overlord'] == self.player
+        self.over = dict(result='victoire' if win else 'defaite', t=self.t,
+                         text=("Le siècle s'achève : votre " + self.dept_word() + " est le plus prestigieux d'Aquitaine."
+                               if win else f"Le siècle s'achève : {self.fname(first)} est le plus prestigieux d'Aquitaine."))
+        self.speed_idx = 0
+        self.log('fin', self.over['text'], important=True)
 
     def check_end(self):
         if self.over:

@@ -1,6 +1,6 @@
-# web_conquete — Conquête : Aquitaine 1790
+# web_conquete — Conquête : Aquitaine 1700-1899
 
-Première campagne : la guerre des départements de l’ancienne Aquitaine, en 1790.
+Deux siècles de guerres, de commerce et de diplomatie dans l’ancienne Aquitaine, de Louis XIV à la IIIe République.
 
 Jeu de stratégie en temps réel (avec pause) sur la carte de l'ancienne Aquitaine, à l'époque des mousquets,
 de la cavalerie et de l'artillerie. Le moteur tourne en Python sur un petit serveur local ; l'interface est une
@@ -67,6 +67,31 @@ Au premier lancement, la carte est calculée (3 à 4 secondes sur un PC, 15 à 3
 puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
 
 ## Principe
+
+### La grande campagne et les époques
+- **Quatre départs** au choix sur l'écran d'accueil :
+  - **1700** : la grande campagne, jusqu'à la fin de 1899 ;
+  - **1790** : la Révolution, comme à l'origine du jeu ;
+  - **1813** : la fin de l'Empire, avec les technologies d'époque déjà acquises ;
+  - **1870** : la guerre de 1870, avec toutes les technologies.
+- **Provinces puis départements** : avant le 4 mars 1790, les cinq camps sont la **Guyenne**, le **Périgord**,
+  les **Landes de Gascogne**, l'**Agenais** et le **Béarn et Pays basque**. À cette date, ils deviennent les cinq départements.
+- **Époques** : Grand Siècle finissant (1700), Lumières (1715), Révolution (1789), Consulat et Empire (1804), Restauration
+  (1815), IIe République et Second Empire (1848), IIIe République (1870). Le passage d'une époque à l'autre est annoncé
+  et met le jeu en pause.
+- **Technologies et unités datées** : une technologie ne se recherche qu'une fois inventée (la machine à vapeur vers 1820,
+  le canal vers 1838…). La Garde nationale n'existe qu'à partir de 1789, les chasseurs basques qu'à partir de 1792.
+- **Villes** : leur population suit une croissance séculaire. Bordeaux compte environ 80 000 habitants en 1700 et
+  110 000 en 1790 ; sa population « normale » est multipliée par 1,6 en 1900. Les agrandissements s'y ajoutent.
+- **Fin de partie** : à la fin de 1899, le camp le plus prestigieux l'emporte (pour l'instant : places, habitants,
+  trésor et victoires). Prendre tous les chefs-lieux reste une victoire anticipée.
+- **Rythme** :
+  - deux vitesses rapides pour les années de paix, **×10** et **×30** jours par seconde (touches 5 et 6) ;
+  - à ces vitesses, une bataille ou une guerre qui vous concerne, une proposition de paix ou d'alliance, ou le siège
+    d'une de vos places remettent le jeu en pause ;
+  - une nouvelle époque ou une capitulation arrête toujours le temps.
+
+### La carte et les camps
 
 - Cinq départements créés en mars 1790 : **Gironde** (Bordeaux), **Dordogne** (Périgueux), **Landes** (Mont-de-Marsan),
   **Lot-et-Garonne** (Agen) et **Basses-Pyrénées** (Pau, l'actuel département des Pyrénées-Atlantiques).

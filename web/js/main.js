@@ -86,10 +86,10 @@ async function boot() {
   map = new MapView(document.getElementById('map'), payload);
   ui = new UI(map, payload.rules, payload.map, api);
   ui.onRefresh = () => setTimeout(poll, 60);
-  ui.onStartGame = async (dept, difficulty) => {
+  ui.onStartGame = async (dept, difficulty, scenario) => {
     if (!dept) return;
     let r;
-    try { r = await api.post('/api/new', { dept, difficulty }); } catch (e) { return ui.toast('Serveur injoignable : la partie n’a pas pu commencer.', 'bad'); }
+    try { r = await api.post('/api/new', { dept, difficulty, scenario }); } catch (e) { return ui.toast('Serveur injoignable : la partie n’a pas pu commencer.', 'bad'); }
     if (!r.ok) return ui.toast(r.msg, 'bad');
     resetUI();
     ui.hideStart();

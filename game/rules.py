@@ -285,7 +285,65 @@ DIFFICULTY = {
     'normal': dict(label='Normal', ai_income=1.0, ai_aggr=1.0),
     'difficile': dict(label='Difficile', ai_income=1.25, ai_aggr=1.25),
 }
-SPEEDS = [0, 0.5, 1.0, 2.0, 4.0]  # jours de jeu par seconde réelle
+SPEEDS = [0, 0.5, 1.0, 2.0, 4.0, 10.0, 30.0]  # jours de jeu par seconde réelle (×10 et ×30 : années de paix)
+FAST_SPEED = 5               # à partir de cette vitesse, guerres, batailles et propositions mettent le jeu en pause
+
+# ------------------------------------------------------------------ grande campagne 1700-1899
+CAMPAIGN_END = (1900, 1, 1)
+DEPT_DATE = (1790, 3, 4)     # l'Assemblée crée les départements : les provinces deviennent départements
+PROVINCES = {
+    '33': dict(name='Guyenne', title='Guyenne (Bordelais)'),
+    '24': dict(name='Périgord', title='Périgord'),
+    '40': dict(name='Landes de Gascogne', title='Landes de Gascogne'),
+    '47': dict(name='Agenais', title='Agenais'),
+    '64': dict(name='Béarn et Pays basque', title='Béarn, Labourd et Soule'),
+}
+ERAS = [
+    dict(id='louis14', year=1700, name='Le Grand Siècle finissant',
+         desc='Louis XIV règne encore. Mousquets à mèche et à silex, derniers piquiers, places de Vauban.'),
+    dict(id='lumieres', year=1715, name='Le siècle des Lumières',
+         desc='Régence puis Louis XV et Louis XVI. Âge d’or du négoce bordelais, l’intendant Tourny embellit Bordeaux.'),
+    dict(id='revolution', year=1789, name='La Révolution',
+         desc='États généraux, départements, Garde nationale, levée en masse : la nation en armes.'),
+    dict(id='empire', year=1804, name='Le Consulat et l’Empire',
+         desc='Napoléon. Guerre d’Espagne : les Pyrénées redeviennent une frontière en armes.'),
+    dict(id='restauration', year=1815, name='La Restauration',
+         desc='Retour des Bourbons, puis monarchie de Juillet. Premières gabares à vapeur sur la Garonne.'),
+    dict(id='second_empire', year=1848, name='La IIe République et le Second Empire',
+         desc='Chemins de fer, télégraphe électrique, pins des Landes, Arcachon et Biarritz.'),
+    dict(id='troisieme', year=1870, name='La IIIe République',
+         desc='Guerre de 1870, armée moderne, phylloxéra dans les vignes.'),
+]
+SCENARIOS = {
+    '1700': dict(date=(1700, 3, 1), title='Aquitaine, 1700', campaign='Grande campagne 1700 – 1899',
+                 intro='Louis XIV règne. Cinq provinces du Sud-Ouest se disputent l’Aquitaine : traversez deux siècles, '
+                       'de la Guerre de Succession d’Espagne à la IIIe République. Le plus prestigieux en 1900 l’emporte.',
+                 techs_before=None),
+    '1790': dict(date=(1790, 3, 4), title='Aquitaine, 1790', campaign='Depuis la Révolution',
+                 intro='L’Assemblée vient de créer les départements. Choisissez le vôtre, ralliez ses villages, '
+                       'puis prenez les chefs-lieux voisins par les armes, le commerce ou la diplomatie.',
+                 techs_before=None),
+    '1813': dict(date=(1813, 6, 1), title='Aquitaine, 1813', campaign='La fin de l’Empire',
+                 intro='L’Empire vacille, la guerre d’Espagne tourne mal : la frontière des Pyrénées s’embrase.',
+                 techs_before=1806),
+    '1870': dict(date=(1870, 7, 19), title='Aquitaine, 1870', campaign='La guerre de 1870',
+                 intro='La France déclare la guerre à la Prusse. Chemins de fer et fusils Chassepot : '
+                       'un autre siècle commence.', techs_before=1862),
+}
+# croissance séculaire des villes : population « normale » par rapport à 1790
+POP_ERA = [(1700, 0.72), (1790, 1.0), (1850, 1.3), (1900, 1.6)]
+# années à partir desquelles une technologie est connue (on ne recherche pas la machine à vapeur en 1700)
+TECH_YEAR = dict(
+    baionnette=1700, vauban=1700, tir_rang=1700, cuirassiers=1700, diplomates=1700, manufactures=1700, gabares=1700,
+    mais=1700, foires=1700, transhumance=1700, haras=1700, ponts_chaussees=1716, hussards=1720, feu_peloton=1720,
+    armureries=1720, hauts_fourneaux=1720, chais=1720, draperies=1710, gemmage=1740, genie=1748, fonderie=1750,
+    gribeauval=1765, assolement=1760, fusil1777=1777, escompte=1776, poudreries=1775, ordre_mixte=1772,
+    pomme_de_terre=1785, coke=1785, pins=1787, ponts=1770, gendarmerie=1791, levee=1793, chappe=1794, pieces=1790,
+    voltigeurs=1795, ecoles=1795, divisions=1796, art_cheval=1792, larrey=1797, prefectures=1800, drainage=1800,
+    greniers=1790, codecivil=1804, cadastre=1807, conserves=1810, vapeur=1820, engrais=1820, outillage=1830,
+    canal=1838, poste=1700)
+# unités apparues en cours de route
+UNIT_YEAR = dict(garde=1789, chasseurs=1792)
 
 # ------------------------------------------------------------------ généraux
 GENERAL_TRAITS = {

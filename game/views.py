@@ -1,12 +1,15 @@
 """Vues envoyées au navigateur et sauvegarde/chargement."""
+import datetime
 import random
 
 from . import rules as R
 from .engine import Game
 
 SAVE_KEYS = ['player', 'difficulty', 'seed', 't', 'uid', 'seq', 'events', 'proposals', 'armies', 'battles', 'over',
-             'flood_until', 'market', 'weather', 'factions', 'nodes', '_ai_clock', 'spies']
-DEFAULTS = dict(spies=list)
+             'flood_until', 'market', 'weather', 'factions', 'nodes', '_ai_clock', 'spies', 'scenario', 'start_ord',
+             'era_id']
+DEFAULTS = dict(spies=list, scenario=lambda: '1790', start_ord=lambda: datetime.date(1790, 3, 4).toordinal(),
+                era_id=lambda: None)
 
 
 def to_dict(g):
@@ -78,7 +81,17 @@ def rules_payload():
     fort = dict(max=R.FORT_MAX, bastion=R.BASTION_LEVEL, bastion_types=R.BASTION_TYPES, upkeep=R.FORT_UPKEEP,
                 names=R.FORT_NAMES)
     dev = dict(names=R.DEV_NAMES, per_level=R.POP_PER_LEVEL)
-    return dict(factions=R.FACTIONS, units=R.UNITS, unit_order=R.UNIT_ORDER, techs=list(R.TECH.values()), fort=fort,
+    scen = {}
+    for k, sc in R.SCENARIOS.items():
+        d = datetime.date(*sc['date'])
+        dept = d >= datetime.date(*R.DEPT_DATE)
+        scen[k] = dict(title=sc['title'], campaign=sc['campaign'], intro=sc['intro'], year=d.year,
+                       word='département' if dept else 'province',
+                       names={c: (f['name'] if dept else R.PROVINCES[c]['name']) for c, f in R.FACTIONS.items()})
+    techs = [dict(t, year=R.TECH_YEAR.get(t['id'], 0)) for t in R.TECH.values()]
+    return dict(factions=R.FACTIONS, units=R.UNITS, unit_order=R.UNIT_ORDER, techs=techs, fort=fort,
+                scenarios=scen, scenario_order=list(R.SCENARIOS), eras=R.ERAS, unit_year=R.UNIT_YEAR,
+                fast_speed=R.FAST_SPEED,
                 specialty=R.SPECIALTY, specialty_capital=R.SPECIALTY_CAPITAL, dev=dev,
                 branches=R.BRANCHES, build=build, node_base=R.NODE_BASE, spec={k: v['label'] for k, v in R.SPEC.items()},
                 weather=R.WEATHER, zones=R.ZONES, speeds=R.SPEEDS, res=R.RESOURCES, res_label=R.RES_LABEL,
@@ -249,7 +262,10 @@ def player_state(g, since=0):
                 prisoner_upkeep=round(me.get('_upkeep', {}).get('prisoners', 0), 2),
                 pop=int(round(sum(n.get('pop', 0) for n in g.owned_nodes(p)), -2)))
 
+    era = g.era()
     return dict(t=round(g.t, 3), date=g.date_str(), season=g.season(), speed=g.speed_idx, over=g.over,
+                year=g.date().year, scenario=g.scenario, era=dict(id=era['id'], name=era['name'], desc=era['desc']),
+                names={c: g.faction_name(c) for c in g.factions}, word=g.dept_word(),
                 weather={z: dict(kind=w['kind'], left=w['left']) for z, w in g.weather.items()},
                 me=mine, factions=facs, nodes=nodes, armies=armies, battles=battles,
                 events=[e for e in g.events if e['seq'] > since], seq=g.seq,

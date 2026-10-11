@@ -49,6 +49,7 @@ export const ICON = {
 };
 
 export function speedIcon(i) {
+  if (i >= 5) return `<svg viewBox="0 0 24 20"><text x="12" y="14.5" text-anchor="middle" font-size="${i === 5 ? 10 : 10}" font-weight="700" fill="currentColor" font-family="Georgia, serif">×${i === 5 ? 10 : 30}</text></svg>`;
   if (i === 0) return '<svg viewBox="0 0 24 20"><rect x="7" y="3" width="3.6" height="14" rx="1" fill="currentColor"/><rect x="13.4" y="3" width="3.6" height="14" rx="1" fill="currentColor"/></svg>';
   let p = '';
   const w = 7, gap = 0.5, total = i * w - (i - 1) * 1.5;

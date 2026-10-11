@@ -222,7 +222,7 @@ class App:
 
     def write_save(self, name, auto=False):
         g = self.game
-        data = dict(meta=dict(player=g.player, faction=R.FACTIONS[g.player]['name'], date=g.date_str(), t=g.t,
+        data = dict(meta=dict(player=g.player, faction=g.fname(g.player), date=g.date_str(), t=g.t,
                               difficulty=g.difficulty, auto=auto), game=V.to_dict(g))
         path = os.path.join(SAVES, name + '.json')
         tmp = path + '.tmp'
@@ -363,7 +363,7 @@ class Handler(BaseHTTPRequestHandler):
                     seed = int(body['seed']) if body.get('seed') else None
                 except (TypeError, ValueError, OverflowError):
                     seed = None
-                APP.game = Game(APP.geo, dept, body.get('difficulty', 'normal'), seed)
+                APP.game = Game(APP.geo, dept, body.get('difficulty', 'normal'), seed, body.get('scenario', '1790'))
                 return self._json(dict(ok=True))
             if path == '/api/cmd':
                 return self._json(APP.command(body))

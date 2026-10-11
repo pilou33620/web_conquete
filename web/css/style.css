@@ -378,9 +378,9 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
   .res { padding: 4px 3px; gap: 2px; }
   .res svg { width: 16px; height: 16px; }
   .res .v { font-size: 14px; }
-  .tb-day { font-size: 15px; }
+  .tb-day { font-size: 14px; }
   .tb-season { gap: 3px; }
-  .tb-speed button { width: 30px; }
+  .tb-speed button { width: 25px; }
   .tbl-wrap table.grid { font-size: 14px; }
   .tbl-wrap .amount { width: 54px; padding: 4px; }
   .tbl-wrap .btn { padding-left: 8px; padding-right: 8px; }
