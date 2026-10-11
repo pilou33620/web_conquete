@@ -16,6 +16,10 @@ MIX = {
     '64': ['ligne'] * 5 + ['legere'] * 1 + ['chasseurs'] * 3 + ['cavalerie'] * 1 + ['artillerie'] * 1 + ['grenadiers'],
 }
 VALUE = {'capitale': 12, 'ville': 5, 'fort': 3, 'village': 2}
+# cours ordinaires du marché (voir Game.new_day) : on n'achète pas quand les prix s'envolent
+MARKET_BASE = dict(vivres=0.6, fer=2.0, bois=1.0, outils=3.0, recrues=0.5)
+TAX_FLOOR = 0.1   # impôts les plus légers qu'une IA consente quand son trésor déborde
+FLOOD = 4.0       # au-delà de ce multiple du trésor de guerre, c'est le trop-plein : impôts remis, remparts partout
 
 
 class AI:
@@ -25,6 +29,11 @@ class AI:
         self.pers = R.FACTIONS[code]['personality']
         self.rng = random.Random(game.seed * 7 + int(code))
         self.diplo_clock = 5 + self.rng.random() * 5
+        self.spend_clock = 3 + self.rng.random() * 3
+        self.tax_clock = 30.0
+        # impôts allégés quand le trésor déborde (repris d'une sauvegarde : on garde le niveau atteint)
+        self.relief = min(0.5, game.factions[code].get('tax', 0.5))
+        self.menace = True
         self.cool = {}
 
     @property
@@ -38,6 +47,9 @@ class AI:
         self.research()
         self.recruit()
         self.military()
+        if self.g.t >= self.spend_clock:
+            self.spend_clock = self.g.t + 4 + self.rng.random() * 2
+            self.spend()
         if self.g.t >= self.diplo_clock:
             self.diplo_clock = self.g.t + 8 + self.rng.random() * 5
             self.diplomacy()
@@ -88,9 +100,9 @@ class AI:
         # impôts : on presse le contribuable en cas de besoin, on desserre l'étau si l'ordre public vacille
         mine = g.owned_nodes(code)
         avg = sum(n['stab'] for n in mine) / max(1, len(mine))
-        tax = 0.5
+        tax = self.relief   # 0,5 d'ordinaire, moins quand le trésor déborde (voir spend)
         if avg < 0.62:
-            tax = 0.3
+            tax = min(tax, 0.3)
         elif r['livres'] < 150 and avg > 0.8:
             tax = 0.7
         elif self.wars() and r['livres'] < 500 and avg > 0.85:
@@ -137,10 +149,222 @@ class AI:
         if not front.get('depot') and not any(q['what'] == 'depot' for q in front['queue']):
             g.build(code, front['id'], 'depot')
 
+    # ------------------------------------------------------------------ trésor : dépenser ce qui dort
+    def gross_norm(self):
+        """Revenu brut en livres ramené à des impôts normaux (0,5), pour ne pas mesurer le trésor à l'aune de ses propres allègements."""
+        f = self.f
+        return f.get('_gross_livres', 20) / (0.6 + 0.8 * f.get('tax', 0.5))   # voir Game.compute_income
+
+    def reserve(self):
+        """Trésor de guerre à garder sous la main : quarante jours de revenu brut, plus un fonds fixe.
+        Au-delà, l'argent qui dort est dépensé (impôts allégés, faubourgs, remparts, présents)."""
+        return (1000 + 40 * self.gross_norm()) * (1.5 if self.menace else 1.0)   # un voisin menaçant : on garde davantage
+
+    def spend(self):
+        """Tous les cinq jours environ : un trésor qui déborde se dépense, utilement et sans tout miser sur l'armée."""
+        g, f = self.g, self.f
+        r = f['res']
+        wars = self.wars()
+        self.menace = self.menaced(wars)
+        res = self.reserve()
+        self.relieve_taxes(res, wars)
+        excess = r['livres'] - res
+        if excess <= 0:
+            return
+        # en guerre, on garde davantage pour lever des troupes ; en paix, on bâtit
+        budget = excess * (0.3 if wars else 0.6)
+        budget -= self.stock_up(budget, res)
+        budget = self.expand_towns(budget, wars)
+        budget = self.fortify_frontier(budget, wars, res)
+        if not wars and excess > 1500:
+            self.gift(excess)
+
+    def menaced(self, wars):
+        """Un danger à nos portes : une guerre, ou une frontière avec plus fort que soi ou avec un voisin hostile."""
+        if wars:
+            return True
+        g, code, f = self.g, self.code, self.f
+        pa = max(1.0, g.faction_power(code))
+        for o, of in g.factions.items():
+            if o == code or not of['alive'] or g.friendly(code, o) or of['overlord'] == code:
+                continue
+            if (f['rel'][o] < -30 or g.faction_power(o) > 0.8 * pa) and D.borders(g, code, o):
+                return True
+        return False
+
+    def relieve_taxes(self, res, wars):
+        """Un mois sur l'autre, alléger les impôts quand le trésor déborde, les relever quand il fond.
+        Des impôts légers coûtent des livres mais calment les villes, attirent les habitants et donnent des recrues."""
+        g = self.g
+        if g.t < self.tax_clock:
+            return
+        self.tax_clock = g.t + 30
+        liv = self.f['res']['livres']
+        flood = liv > FLOOD * res   # trop-plein : on va jusqu'à remettre l'impôt, le temps que le trésor fonde
+        if wars and liv < 3 * res:
+            self.relief = min(0.5, self.relief + 0.1)   # la guerre coûte : on revient vite aux impôts normaux
+        elif liv > 1.5 * res and (flood or self.f['income']['livres'] > -0.05 * self.gross_norm()):
+            self.relief = max(0.0 if flood else TAX_FLOOR, self.relief - 0.1)
+        elif liv < res or (self.relief < TAX_FLOOR and not flood):
+            self.relief = min(0.5, self.relief + 0.1)
+
+    def buy(self, res, qty, max_price=1.5):
+        """Achète au marché si le cours reste raisonnable ; renvoie les livres dépensées."""
+        g, code = self.g, self.code
+        qty = int(qty)
+        if qty < 10 or g.market[res] > MARKET_BASE[res] * max_price:
+            return 0.0
+        before = self.f['res']['livres']
+        g.market_trade(code, res, qty, 'buy')
+        return before - self.f['res']['livres']
+
+    def stock_up(self, budget, res):
+        """Outils pour l'atelier de chaque place (jusqu'à +30 % de production), vivres si la famine menace,
+        et recrues pour compléter des régiments clairsemés quand le danger guette ou que le trésor déborde."""
+        g, f, code = self.g, self.f, self.code
+        r = f['res']
+        spent = 0.0
+        nn = max(1, len(g.owned_nodes(code)))
+        want = 3.2 * nn   # la couverture d'outils est complète à 3 par place
+        if r['outils'] < 0.9 * want and budget > 300:
+            spent += self.buy('outils', min(300, want - r['outils'], budget * 0.3 / g.market['outils']))
+        if r['vivres'] < 250 and f['income']['vivres'] < 0 and budget - spent > 300:
+            room = g.granary_cap(code) - r['vivres']
+            spent += self.buy('vivres', min(500, room, (budget - spent) * 0.3 / g.market['vivres']), 1.3)
+        if (self.menace or r['livres'] > FLOOD * res) and r['recrues'] < 600 and budget - spent > 300:
+            regs = [x for x in g.all_regs(code) if not R.UNITS[x['type']]['garrison_only']]
+            short = sum(x['max'] - x['n'] for x in regs)
+            if short > 0.15 * sum(x['max'] for x in regs):
+                room = g.recruit_cap(code) - r['recrues']
+                spent += self.buy('recrues', min(800, short, room, (budget - spent) * 0.4 / g.market['recrues']))
+        return spent
+
+    def provide(self, cost, budget):
+        """Acheter au marché le bois, le fer ou les outils qui manquent à une construction, si le budget le permet."""
+        g, r = self.g, self.f['res']
+        need = {k: v - r.get(k, 0) for k, v in cost.items() if k in MARKET_BASE and v > r.get(k, 0)}
+        price = cost.get('livres', 0) + sum(q * g.market[k] * 1.5 for k, q in need.items())
+        if price > budget or any(g.market[k] > MARKET_BASE[k] * 1.5 for k in need):
+            return None
+        spent = 0.0
+        for k, q in need.items():
+            spent += self.buy(k, max(10, q + 5))
+        return spent if g.can_pay(self.code, cost) else None
+
+    def expand_towns(self, budget, wars):
+        """Agrandir les villes et les bourgs à spécialité dont la population touche aux murs : plus d'habitants,
+        plus de production. Les simples villages restent des villages (sinon les grandes puissances s'emballent)."""
+        g, code = self.g, self.code
+        cands = []
+        for n in g.owned_nodes(code):
+            gn = g.geo.nodes[n['id']]
+            if gn['type'] == 'village' and not gn['spec']:
+                continue
+            if n['dev'] >= R.BUILD['dev']['max'] or n['siege'] or len(n['queue']) >= 2 \
+                    or any(q['kind'] == 'build' and q['what'] == 'dev' for q in n['queue']):
+                continue
+            pop_cap = getattr(g, 'pop_cap', None)
+            if pop_cap and n.get('pop', 0) < 0.88 * pop_cap(n):
+                continue   # il reste de la place : inutile de bâtir des faubourgs vides
+            if self.threat_at(n['id'], 45) > 0:
+                continue
+            o = g.node_output(n, code)
+            val = o['livres'] + 0.4 * o['vivres'] + 0.4 * o['recrues'] + 0.5 * o['industrie'] + 0.6 * (o['fer'] + o['bois'])
+            val *= g.assim(n)   # une place conquise d'hier peut se révolter : on bâtit d'abord chez soi
+            cands.append((val / (1 + n['dev']), n))
+        cands.sort(key=lambda c: -c[0])
+        built = 0
+        for _, n in cands:
+            if built >= (1 if wars else 2) or budget < 150:
+                break
+            cost = R.BUILD['dev']['cost'](n['dev'])
+            extra = self.provide(cost, budget)
+            if extra is None:
+                continue
+            if g.build(code, n['id'], 'dev')[0]:
+                budget -= cost['livres'] + extra
+                built += 1
+        return budget
+
+    def neighbours(self):
+        """Places voisines par les chemins (calculé une fois : la carte ne change pas)."""
+        if not hasattr(self, '_nb'):
+            self._nb = {}
+            for e in self.g.geo.edges:
+                self._nb.setdefault(e['a'], set()).add(e['b'])
+                self._nb.setdefault(e['b'], set()).add(e['a'])
+        return self._nb
+
+    def fortify_frontier(self, budget, wars, res):
+        """Fortifier les places qui bordent un voisin dangereux (en guerre, hostile ou plus fort que nous),
+        sans que l'entretien des remparts dépasse une petite part du revenu."""
+        g, f, code = self.g, self.f, self.code
+        pa = max(1.0, g.faction_power(code))
+        flood = f['res']['livres'] > FLOOD * res   # trop-plein : toutes les frontières, et plus de remparts à entretenir
+        danger = {o for o, of in g.factions.items() if o != code and of['alive'] and not g.friendly(code, o)
+                  and of['overlord'] != code and f['overlord'] != o
+                  and (flood or o in wars or f['rel'][o] < -10 or g.faction_power(o) > 0.9 * pa)}
+        if not danger:
+            return budget
+        own = g.owned_nodes(code)
+        up_f = sum(R.FORT_UPKEEP[min(n['fort'], R.BASTION_LEVEL)] for n in own)
+        if up_f > (0.18 if flood else 0.1) * self.gross_norm():
+            return budget
+        nb = self.neighbours()
+        cands = []
+        for n in own:
+            typ = g.geo.nodes[n['id']]['type']
+            if n['siege'] or len(n['queue']) >= 2 or any(q['kind'] == 'build' and q['what'] == 'fort' for q in n['queue']):
+                continue
+            foes = {g.nodes[m]['owner'] for m in nb.get(n['id'], ())} & danger
+            if typ == 'village':
+                top = 1 if flood and foes else 0   # un mur d'enceinte aux villages de la frontière, quand l'argent abonde
+            elif foes or flood:   # en trop-plein, les villes de l'intérieur aussi
+                top = 3 if typ in ('capitale', 'fort') else 2
+                if typ == 'capitale' and f['res']['livres'] > 2 * res:
+                    top = g.fort_max(code, n['id'])   # bastions à la Vauban pour un chef-lieu riche
+            else:
+                continue
+            if n['fort'] >= min(top, g.fort_max(code, n['id'])):
+                continue
+            val = VALUE[typ] * (2 if foes & set(wars) else 1 if foes else 0.4) / (1 + n['fort'])
+            cands.append((val, n))
+        cands.sort(key=lambda c: -c[0])
+        built = 0
+        for _, n in cands:
+            if built >= 2 or budget < 150:
+                break
+            cost = R.BUILD['fort']['cost'](n['fort'])
+            extra = self.provide(cost, budget)
+            if extra is None:
+                continue
+            if g.build(code, n['id'], 'fort')[0]:
+                budget -= cost['livres'] + extra
+                built += 1
+        return budget
+
+    def gift(self, excess):
+        """Un présent à un voisin plus fort qui nous regarde de travers : mieux vaut payer que se battre."""
+        g, code = self.g, self.code
+        pa = max(1.0, g.faction_power(code))
+        heg = g.hegemon()
+        for o, of in g.factions.items():
+            if o == code or not of['alive'] or g.status(code, o) != 'paix' or g.t < self.cool.get((o, 'cadeau'), 0):
+                continue
+            if of['rel'][code] >= 0 or not (g.faction_power(o) > 1.2 * pa or o == heg) or not D.borders(g, code, o):
+                continue
+            amount = int(min(240, excess * 0.05))
+            self.cool[(o, 'cadeau')] = g.t + 240
+            if amount >= 80 and D.act(g, code, o, 'cadeau', amount)[0]:
+                if o == g.player:
+                    g.log('diplo', f"{g.fname(code)} vous fait présent de {amount} livres en gage d'amitié.", who=code)
+                return
+
     def research(self):
         g, f = self.g, self.f
         busy = sum(1 for v in f['research'].values() if v)
-        if busy >= (3 if f['res']['livres'] > 1200 else 2):
+        rich = f['res']['livres'] > self.reserve()   # un trésor plein fait chercher dans toutes les branches
+        if busy >= (4 if rich else 3 if f['res']['livres'] > 1200 else 2):
             return
         for b in sorted(R.BRANCHES, key=lambda b: (b != self.pers['tech'], self.rng.random())):
             if f['research'][b]:
@@ -167,9 +391,14 @@ class AI:
         g, f, code = self.g, self.f, self.code
         self.raise_garde()
         aggr = self.pers['aggr'] * R.DIFFICULTY[g.difficulty]['ai_aggr']
-        gross = f.get('_gross_livres', 20)
+        gross = self.gross_norm()   # des impôts allégés ne doivent pas désarmer le pays
         time_target = 4 + int(g.t / 90) + int(5 * aggr) + (4 if self.wars() else 0)
-        surplus = min(25, int(max(0.0, f['res']['livres'] - 1000) / 400))  # trésor qui dort : on arme
+        # trésor qui dort : on arme, mais en paix seulement au-delà du trésor de guerre (le reste va aux
+        # agrandissements et aux remparts) ; en guerre, on puise dans ce trésor de guerre
+        base = 1000 if self.wars() else self.reserve()
+        surplus = min(25, int(max(0.0, f['res']['livres'] - base) / 400))
+        if not self.menace and f['res']['livres'] < FLOOD * self.reserve():
+            surplus = 0   # en paix et sans voisin menaçant, l'armée s'en tient à ce que paie le revenu
         income_cap = max(5, int(gross * (0.5 + 0.25 * aggr) / 2.6))
         target = min(time_target + surplus, income_cap + surplus // 2)
         if self.regs_total() >= target:
