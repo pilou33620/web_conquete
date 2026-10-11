@@ -21,6 +21,7 @@ body.en-bataille #proposals, body.en-bataille #bubble { opacity: 0; pointer-even
 .bt-place { min-width: 0; flex: 0 1 auto; }
 .bt-name { font-family: var(--f-titre, Georgia, serif); font-size: 20px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bt-when { font-size: 13.5px; color: var(--papier-2, #c9c0a8); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.bt-dusk { color: #ffcf85; font-style: italic; }
 .bt-wx svg { width: 16px; height: 16px; color: var(--laiton-clair, #e6c97f); vertical-align: -3px; }
 .bt-gauge { flex: 1 1 260px; max-width: 460px; margin: 0 auto; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
 .bt-g-l, .bt-g-r { display: flex; flex-direction: column; line-height: 1.05; font-size: 15px; }

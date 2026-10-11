@@ -188,15 +188,24 @@ export class BattleView {
   minZ() { return this.fitZ() * 0.85; }
   toScreen = (x, y) => [(x - this.cam.x) * this.cam.z + this.vw / 2, (y - this.cam.y) * this.cam.z * TILT + this.vh / 2];
   toWorld(sx, sy) { return [(sx - this.vw / 2) / this.cam.z + this.cam.x, (sy - this.vh / 2) / (this.cam.z * TILT) + this.cam.y]; }
+  // la caméra peut dépasser un peu les bords : de quoi voir ce qui est sous la barre du haut, le bandeau du
+  // déploiement et la barre des unités
   clampCam() {
     const c = this.cam;
     c.z = clamp(c.z, this.minZ(), MAX_Z);
     const mx = this.vw / 2 / c.z, my = this.vh / 2 / (c.z * TILT);
-    c.x = mx * 2 >= this.W ? this.W / 2 : clamp(c.x, mx - 60, this.W - mx + 60);
-    c.y = my * 2 >= this.H ? this.H / 2 : clamp(c.y, my - 80, this.H - my + 120);
+    const top = (this.st?.phase === 'deploiement' ? 230 : 110) / (c.z * TILT), bottom = 150 / (c.z * TILT), side = 70 / c.z;
+    c.x = mx * 2 >= this.W + side * 2 ? this.W / 2 : clamp(c.x, mx - side, this.W - mx + side);
+    c.y = my * 2 >= this.H + top + bottom ? this.H / 2 + (bottom - top) / 2 : clamp(c.y, my - top, this.H - my + bottom);
   }
   moveCam(x, y, z, dur = 600) {
-    this.camAnim = { from: { ...this.cam }, to: { x, y, z: clamp(z ?? this.cam.z, this.minZ(), MAX_Z) }, t0: performance.now(), dur };
+    // la cible est ramenée dans les bornes dès le départ : pas de saut à l'arrivée
+    const from = { ...this.cam };
+    this.cam = { x, y, z: clamp(z ?? from.z, this.minZ(), MAX_Z) };
+    this.clampCam();
+    const to = this.cam;
+    this.cam = from;
+    this.camAnim = { from, to, t0: performance.now(), dur };
   }
   zoomAt(sx, sy, f) {
     const [wx, wy] = this.toWorld(sx, sy);
@@ -207,20 +216,24 @@ export class BattleView {
     this.clampCam();
   }
   // centre la caméra sur la zone de déploiement (ou sur ses troupes)
+  // cadre ses propres troupes, le regard tourné vers l'ennemi (ou, sans ennemi en vue, vers le centre du champ)
   focusMine(dur = 900) {
-    const mine = [...this.units.values()].filter(u => u.side === this.me && !u._ghost);
-    const z = this.st?.zone;
-    let x0, y0, x1, y1;
-    if (z && this.st.phase === 'deploiement') [x0, y0, x1, y1] = z;
-    else if (mine.length) { x0 = Math.min(...mine.map(u => u.x)) - 150; x1 = Math.max(...mine.map(u => u.x)) + 150; y0 = Math.min(...mine.map(u => u.y)) - 150; y1 = Math.max(...mine.map(u => u.y)) + 150; }
-    else return;
-    // assez près pour distinguer les régiments, le regard tourné vers l'ennemi
-    const zz = clamp(Math.min(this.vw / (x1 - x0 + 900), (this.vh - 220) / ((y1 - y0 + 200) * TILT)), 0.75, 1.4);
-    const foe = [...this.units.values()].filter(u => u.side !== this.me);
-    const fx = foe.length ? foe.reduce((a, u) => a + u.x, 0) / foe.length : this.W / 2;
-    const cx = (x0 + x1) / 2, span = this.vw / zz;
-    const x = clamp(fx > cx ? cx + span * 0.28 : cx - span * 0.28, span / 2 - 60, this.W - span / 2 + 60);
-    this.moveCam(x, (y0 + y1) / 2 + 30, zz, dur);
+    const mine = [...this.units.values()].filter(u => u.side === this.me && !u._ghost && u.state !== 'hors');
+    if (!mine.length) { const z = this.st?.zone; if (z) this.moveCam((z[0] + z[2]) / 2, (z[1] + z[3]) / 2, 0.8, dur); return; }
+    const x0 = Math.min(...mine.map(u => u.x)), x1 = Math.max(...mine.map(u => u.x));
+    const y0 = Math.min(...mine.map(u => u.y)), y1 = Math.max(...mine.map(u => u.y));
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const foe = [...this.units.values()].filter(u => u.side !== this.me && u.state !== 'hors');
+    const tx = foe.length ? foe.reduce((a, u) => a + u.x, 0) / foe.length : this.W / 2;
+    const ty = foe.length ? foe.reduce((a, u) => a + u.y, 0) / foe.length : this.H / 2;
+    // assez près pour distinguer les régiments, toutes ses troupes dans le cadre
+    const zz = clamp(Math.min(this.vw / (x1 - x0 + 500), (this.vh - 240) / ((y1 - y0 + 400) * TILT)), 0.6, 1.3);
+    const sw = this.vw / zz, sh = this.vh / (zz * TILT);
+    const d = Math.hypot(tx - cx, ty - cy) || 1;
+    // les troupes restent dans le cadre : le décalage vers l'ennemi est borné par la place libre
+    const fx = Math.max(0, sw / 2 - (x1 - x0) / 2 - 120), fy = Math.max(0, sh / 2 - (y1 - y0) / 2 - 160);
+    const x = cx + clamp((tx - cx) / d * sw * 0.3, -fx, fx), y = cy + clamp((ty - cy) / d * sh * 0.3, -fy, fy);
+    this.moveCam(x, y - (this.st?.phase === 'deploiement' ? 70 : 0) / (zz * TILT), zz, dur);
   }
 
   // ------------------------------------------------------------------ boucle
@@ -330,12 +343,15 @@ export class BattleView {
     // ordres en cours de mes unités : trajet pointillé et emplacement d'arrivée
     for (const u of this.units.values()) {
       if (u.side !== this.me || u._ghost || u.state === 'hors') continue;
-      const o = this.orders.get(u.id) || (u.order && u.order.kind === 'move' ? u.order : null);
+      const o = this.orders.get(u.id) || (u.order && typeof u.order === 'object' && u.order.kind === 'move' ? u.order : null);
       const selected = this.sel.has(u.id);
+      const path = Array.isArray(u.path) && u.path.length ? u.path : null;
       if (o && o.kind === 'move' && o.x != null && Math.hypot(o.x - u.x, o.y - u.y) > 10) {
         ctx.strokeStyle = selected ? 'rgba(255,230,160,0.9)' : 'rgba(255,230,160,0.45)'; ctx.lineWidth = (selected ? 2.2 : 1.4) / z;
         ctx.setLineDash([6 / z, 6 / z]);
-        ctx.beginPath(); ctx.moveTo(u.x, u.y); ctx.lineTo(o.x, o.y); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(u.x, u.y);
+        if (path) for (const p of path) ctx.lineTo(p[0], p[1]); else ctx.lineTo(o.x, o.y);
+        ctx.stroke(); ctx.setLineDash([]);
         art.footprint(ctx, proj, o.x, o.y, o.dir ?? Math.atan2(o.y - u.y, o.x - u.x), u.w, u.d, 1);
         ctx.stroke();
       }
@@ -352,6 +368,14 @@ export class BattleView {
         ctx.fillStyle = 'rgba(255,226,150,0.95)';
         ctx.beginPath(); ctx.moveTo(u.x + c * (f + 9), u.y + s * (f + 9)); ctx.lineTo(u.x + c * f - s * 6, u.y + s * f + c * 6); ctx.lineTo(u.x + c * f + s * 6, u.y + s * f - c * 6); ctx.closePath(); ctx.fill();
       }
+    }
+    // objectif d'un assaut : le cœur de la place (tenu 60 s sans défenseur pour l'emporter)
+    const obj = st?.objective || (this.map?.heart && this.map?.place ? this.map.heart : null);
+    if (obj) {
+      const r = 26, k = clamp((st?.hold || 0) / 60, 0, 1);
+      ctx.lineWidth = 3 / z; ctx.strokeStyle = 'rgba(255,226,150,0.85)'; ctx.setLineDash([7 / z, 5 / z]);
+      ctx.beginPath(); ctx.arc(obj[0], obj[1], r + Math.sin(time * 2) * 2, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+      if (k > 0) { ctx.strokeStyle = 'rgba(255,120,90,0.95)'; ctx.lineWidth = 5 / z; ctx.beginPath(); ctx.arc(obj[0], obj[1], r, -Math.PI / 2, -Math.PI / 2 + k * TAU); ctx.stroke(); }
     }
     // cible survolée ou désignée
     const hov = this.controls.hover && this.units.get(this.controls.hover);

@@ -46,6 +46,7 @@ export class Bataille {
     document.body.classList.add('en-bataille');
     const view = new BattleView(this.api, root);
     this.view = view;
+    window.__btView = view;   // pour les essais (comme window.__ui)
     view.onExit = r => this.exit(r);
     const t0 = performance.now();
     // le lieu : la bataille de campagne, sinon le centre donné par la carte de bataille
@@ -86,6 +87,8 @@ export class Bataille {
     this.leaving = true;
     const view = this.view;
     this.closed.add(this.bid);
+    // le serveur oublie la bataille terminée (sous-commande « close »)
+    if (this.view?.st?.phase === 'fin') this.api.post('/api/cmd', { cmd: 'tac', sub: 'close', bid: this.bid }).catch(() => {});
     view.moveCam(view.cam.x, view.cam.y, view.cam.z * 0.7, FADE_MS);
     this.resumeMap();
     this.root.classList.remove('on');

@@ -1,5 +1,6 @@
 import { MapView } from './map.js';
 import { UI } from './ui.js';
+import { Bataille } from './battle/bataille.js';
 
 const api = {
   get: u => fetch(u, { cache: 'no-store' }).then(r => r.json()),
@@ -11,6 +12,7 @@ for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEv
 document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
 
 let ui, map, seq = 0, polling = false, running = false, timer = null;
+let bataille = null;   // vue de bataille tactique : pendant qu'elle est ouverte, la campagne n'est plus interrogée
 let epoch = 0, lost = false;   // epoch : change à chaque resetUI, pour jeter les réponses d'une ancienne partie
 let bootVer, reloading = false;  // version du serveur au chargement de la page
 
@@ -24,7 +26,7 @@ function checkVersion(ver) {
 }
 
 async function poll() {
-  if (!running || polling) return;
+  if (!running || polling || (bataille && bataille.active)) return;
   polling = true;
   const ep = epoch, cs = ui.cmdSeq;   // cs : un ordre envoyé pendant la requête rend cet état périmé
   let st;
@@ -51,6 +53,8 @@ async function poll() {
   if (!st || !st.me) return;
   seq = st.seq;
   try { ui.update(st); } catch (e) { console.error(e); }
+  // une bataille tactique du joueur se livre : la carte zoome vers elle et la vue de bataille prend la main
+  if (bataille && bataille.wants(st.tac)) bataille.enter(st.tac, st);
 }
 
 function startPolling() {
@@ -60,6 +64,7 @@ function startPolling() {
 }
 
 function resetUI() {
+  if (bataille && bataille.active) bataille.abort();
   epoch++;
   running = false;
   seq = 0;
@@ -100,6 +105,16 @@ async function boot() {
   map = new MapView(document.getElementById('map'), payload);
   ui = new UI(map, payload.rules, payload.map, api);
   ui.onRefresh = () => setTimeout(poll, 60);
+  // bataille tactique : ouverte au choix « Commander la bataille » (ui.js) ou quand l'état l'annonce (poll)
+  bataille = new Bataille({
+    api, map,
+    onEnd: (res, bid, msg) => {
+      if (msg) ui.toast(msg, 'bad');
+      else if (res && res.title) ui.toast(`${res.title} — la campagne attend vos ordres.`, res.won ? 'good' : '');
+      setTimeout(poll, 60);
+    },
+  });
+  ui.onTactic = bid => { if (bid != null && bataille.wants({ bid, phase: 'deploiement' })) bataille.enter({ bid, phase: 'deploiement' }, ui.st); };
   ui.onStartGame = async (dept, difficulty, scenario) => {
     if (!dept) return;
     let r;

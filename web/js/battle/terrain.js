@@ -132,6 +132,12 @@ export class Terrain {
     this.t = new Uint8Array(n); this.h = new Uint8Array(n);
     for (let c = 0; c < n; c++) { this.t[c] = tr ? remap[tr[c]] : T.PRE; this.h[c] = hr ? hr[c] : 0; }
     this.roads = (m.roads || []).filter(r => r && r.length > 1);
+    // genre de chaque route (« route », « chemin »…) quand le moteur le donne
+    this.roadKinds = (m.roads || []).map((r, k) => (m.road_kinds || [])[k] || 'route').filter((k, i) => m.roads[i] && m.roads[i].length > 1);
+    this.fences = (m.fences || []).filter(f => f && f.pts && f.pts.length > 1);
+    this.bridgesIn = m.bridges || null;
+    this.heart = m.heart || null;
+    this.region = m.region || '';
     this.rivers = (m.rivers || []).filter(r => r && r.pts && r.pts.length > 1);
     this.buildings = m.buildings || [];
     this.walls = (m.walls || []).filter(w => w && w.pts && w.pts.length > 1);
@@ -196,7 +202,7 @@ export class Terrain {
       this.regions.push(reg);
     }
     this.label = label;
-    const jitterOf = v => (v === T.CHAMP || v === T.VIGNE || v === T.PRE ? 2 : v === T.ROUTE || v === T.CHEMIN || v === T.BATI || v === T.MUR || v === T.BRECHE || v === T.PORTE ? 0 : 5);
+    const jitterOf = v => (v === T.CHAMP || v === T.VIGNE || v === T.PRE ? 2 : v === T.ROUTE || v === T.CHEMIN || v === T.BATI || v === T.MUR || v === T.BRECHE || v === T.PORTE || v === T.BARRICADE ? 0 : 5);
     for (const [id, reg] of this.regions.entries()) {
       reg.path = this.regionPath(id, jitterOf(reg.type), reg.box);
       const c = reg.cells[0], i = c % cols, j = (c / cols) | 0;
@@ -206,7 +212,7 @@ export class Terrain {
       reg.tone = (hash(reg.parcel, 5, S) * 4) | 0;
     }
     // ordre de peinture : les sols d'abord, l'eau et le bâti ensuite
-    const ORDER = [T.PRE, T.LANDE, T.SABLE, T.ROCHE, T.CHAMP, T.VIGNE, T.MARAIS, T.BOIS, T.FORET, T.ROUTE, T.CHEMIN, T.BATI, T.MUR, T.BRECHE, T.PORTE, T.GUE, T.EAU];
+    const ORDER = [T.PRE, T.LANDE, T.SABLE, T.ROCHE, T.CHAMP, T.VIGNE, T.MARAIS, T.BOIS, T.FORET, T.ROUTE, T.CHEMIN, T.BATI, T.MUR, T.BRECHE, T.PORTE, T.BARRICADE, T.GUE, T.EAU];
     this.regions.sort((a, b) => ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
     this.prepTrees();
     this.prepShade();
@@ -386,6 +392,9 @@ export class Terrain {
   prepPaths() {
     const sm = pts => chaikin(pts.map(p => [p[0], p[1]]), 2, false);
     this.roadPts = this.roads.map(sm);
+    this.lanePts = this.roadPts.filter((r, k) => this.roadKinds[k] === 'chemin');
+    this.roadPts = this.roadPts.filter((r, k) => this.roadKinds[k] !== 'chemin');
+    this.fencePts = this.fences.map(f => ({ kind: f.kind, pts: f.pts }));
     this.riverPts = this.rivers.map(r => ({ w: r.w || 12, pts: sm(r.pts) }));
     const { cols, rows, cell, t } = this;
     const isPath = c => t[c] === T.CHEMIN;
@@ -419,9 +428,12 @@ export class Terrain {
         chains.push(chain);
       }
     }
-    this.pathPts = chains.map(ch => chaikin(ch.map(c => [(c % cols + 0.5) * cell + (hash(c, 1, this.seed) - 0.5) * 5, (((c / cols) | 0) + 0.5) * cell + (hash(c, 2, this.seed) - 0.5) * 5]), 2, false));
+    this.pathPts = this.lanePts.length ? this.lanePts : chains.map(ch => chaikin(ch.map(c => [(c % cols + 0.5) * cell + (hash(c, 1, this.seed) - 0.5) * 5, (((c / cols) | 0) + 0.5) * cell + (hash(c, 2, this.seed) - 0.5) * 5]), 2, false));
     // ponts : là où une route croise une rivière
     this.bridges = [];
+    // ponts donnés par le moteur, sinon calculés là où une route croise une rivière
+    if (this.bridgesIn && this.bridgesIn.length) this.bridges = this.bridgesIn.map(b => ({ x: b.x, y: b.y, a: b.a || 0, len: b.len || 30 }));
+    else
     for (const r of this.roadPts) for (const rv of this.riverPts) {
       for (let a = 1; a < r.length; a++) for (let b = 1; b < rv.pts.length; b++) {
         const p = segInter(r[a - 1], r[a], rv.pts[b - 1], rv.pts[b]);
@@ -512,6 +524,7 @@ export class Terrain {
         case T.ROUTE: case T.CHEMIN: fill = pal.pre[1]; break;
         case T.BATI: case T.PORTE: fill = pal.bati; break;
         case T.MUR: case T.BRECHE: fill = pal.bati; break;
+        case T.BARRICADE: fill = snow ? '#d9d4ca' : '#b49a72'; break;
         case T.GUE: case T.EAU: continue;   // plus bas
       }
       if (!fill) continue;
@@ -844,29 +857,63 @@ export class Terrain {
       g.clip(clip, 'evenodd');
     }
     g.lineJoin = 'miter'; g.lineCap = 'butt'; g.miterLimit = 3;
-    const fort = this.walls.filter(w => w.kind === 'rempart' || w.kind === 'bastion');
+    // enceintes : rempart, enceinte bastionnée, ou mur de ville épais ; la largeur suit `thick` quand il est donné
+    const small = w => { const xs = w.pts.map(p => p[0]), ys = w.pts.map(p => p[1]); return Math.max(...xs) - Math.min(...xs) < 160 && Math.max(...ys) - Math.min(...ys) < 160; };
+    const fort = this.walls.filter(w => w.kind === 'rempart' || w.kind === 'bastion' || (w.kind === 'mur' && (w.thick || 0) >= 5));
+    const th = w => clamp(w.thick || (w.kind === 'mur' ? 6 : 16), 4, 30);
     // fossé, puis talus extérieur (glacis clair), escarpe de pierre, terre-plein gazonné, parapet
-    for (const w of fort) { g.strokeStyle = snow ? '#aab4b8' : '#7f8f62'; g.lineWidth = 34; strokePts(g, w.pts); }
-    for (const w of fort) { g.strokeStyle = snow ? '#c5ccd0' : '#6d7d55'; g.lineWidth = 24; strokePts(g, w.pts); }
-    for (const w of fort) { g.strokeStyle = 'rgba(20,20,26,0.4)'; g.lineWidth = 17; g.save(); g.translate(2.5, 2.5); strokePts(g, w.pts); g.restore(); }
-    for (const w of fort) { g.strokeStyle = snow ? '#e4e4e0' : '#d3c6a2'; g.lineWidth = 16; strokePts(g, w.pts); }
+    for (const w of fort) { if (w.kind === 'mur') continue; g.strokeStyle = snow ? '#aab4b8' : '#7f8f62'; g.lineWidth = th(w) * 2.1; strokePts(g, w.pts); }
+    for (const w of fort) { if (w.kind === 'mur') continue; g.strokeStyle = snow ? '#c5ccd0' : '#6d7d55'; g.lineWidth = th(w) * 1.5; strokePts(g, w.pts); }
+    for (const w of fort) { g.strokeStyle = 'rgba(20,20,26,0.4)'; g.lineWidth = th(w) * 1.06; g.save(); g.translate(2.5, 2.5); strokePts(g, w.pts); g.restore(); }
+    for (const w of fort) { g.strokeStyle = snow ? '#e4e4e0' : '#d3c6a2'; g.lineWidth = th(w); strokePts(g, w.pts); }
     for (const w of fort) {
-      if (w.kind === 'bastion') { g.fillStyle = snow ? '#eef0f0' : '#9aab6c'; fillPts(g, w.pts); }
-      g.strokeStyle = snow ? '#f2f3f3' : '#9aab6c'; g.lineWidth = 11; strokePts(g, w.pts);
+      if (w.kind === 'bastion' && small(w)) { g.fillStyle = snow ? '#eef0f0' : '#9aab6c'; fillPts(g, w.pts); }
+      g.strokeStyle = w.kind === 'mur' ? (snow ? '#e8e8e4' : '#c9bb96') : snow ? '#f2f3f3' : '#9aab6c'; g.lineWidth = th(w) * 0.68; strokePts(g, w.pts);
     }
-    for (const w of fort) { g.strokeStyle = snow ? '#d6d8d6' : '#c2b48e'; g.lineWidth = 2.2; strokePts(g, w.pts); }
+    for (const w of fort) { g.strokeStyle = snow ? '#d6d8d6' : '#c2b48e'; g.lineWidth = Math.max(1.4, th(w) * 0.14); strokePts(g, w.pts); }
+    // créneaux : petites dents le long du mur de ville
+    for (const w of fort) {
+      if (w.kind !== 'mur') continue;
+      g.fillStyle = snow ? '#b9b9b4' : '#a39472';
+      for (const p of resample(w.pts, 3)) g.fillRect(p[0] - 0.6, p[1] - 0.6, 1.2, 1.2);
+    }
     // murs de clôture
     for (const w of this.walls) {
-      if (w.kind !== 'mur') continue;
+      if (w.kind !== 'mur' || fort.includes(w)) continue;
       g.strokeStyle = 'rgba(25,20,30,0.3)'; g.lineWidth = 2.4; g.save(); g.translate(1, 1); strokePts(g, w.pts); g.restore();
       g.strokeStyle = snow ? '#f0f0ee' : '#d4c7a5'; g.lineWidth = 1.8; strokePts(g, w.pts);
+    }
+    // clôtures, haies et murets qui bordent champs et chemins
+    for (const f of this.fencePts) {
+      if (f.kind === 'haie') {
+        g.strokeStyle = snow ? 'rgba(60,70,60,0.5)' : 'rgba(30,60,24,0.45)'; g.lineWidth = 4.2; g.lineCap = 'round'; strokePts(g, f.pts.map(p => [p[0] + 0.8, p[1] + 0.8]));
+        g.fillStyle = snow ? '#6f7d6c' : this.pal.arbres[1];
+        for (const [k, p] of resample(f.pts, 2.2).entries()) { g.beginPath(); g.arc(p[0] + (hash(k, 1, p[0] | 0) - 0.5), p[1] + (hash(k, 2, p[1] | 0) - 0.5), 1.5 + hash(k, 3, 7) * 0.8, 0, TAU); g.fill(); }
+        if (snow) { g.fillStyle = 'rgba(250,252,255,0.8)'; for (const p of resample(f.pts, 3)) { g.beginPath(); g.arc(p[0] - 0.5, p[1] - 0.6, 0.8, 0, TAU); g.fill(); } }
+      } else if (f.kind === 'muret') {
+        g.strokeStyle = 'rgba(30,26,20,0.3)'; g.lineWidth = 1.8; g.save(); g.translate(0.6, 0.6); strokePts(g, f.pts); g.restore();
+        g.strokeStyle = snow ? '#e6e6e2' : '#b9b09a'; g.lineWidth = 1.4; strokePts(g, f.pts);
+        if (s >= 1.5) { g.strokeStyle = 'rgba(90,80,64,0.5)'; g.lineWidth = 0.25; g.setLineDash([0.9, 0.7]); strokePts(g, f.pts); g.setLineDash([]); }
+      } else {
+        // clôture de bois : lisses et piquets
+        g.strokeStyle = snow ? 'rgba(90,76,60,0.8)' : 'rgba(110,84,52,0.85)'; g.lineWidth = 0.5; strokePts(g, f.pts);
+        if (s >= 0.9) { g.fillStyle = '#5a4430'; for (const p of resample(f.pts, 3)) g.fillRect(p[0] - 0.35, p[1] - 0.35, 0.7, 0.7); }
+      }
     }
     // barricades et tranchées. Les longs tracés sont des tranchées de siège : terre rejetée en parapet, fond sombre,
     // gabions (paniers de terre) sur la crête ; les courts, des barricades de charrettes et de poutres.
     // On ne les trace jamais sur l'eau.
+    const hasBar = this.t.includes(T.BARRICADE);
     for (const w of this.walls) {
       if (w.kind !== 'barricade') continue;
-      for (const pts of this.splitDry(w.pts)) {
+      if (small(w) && hasBar) {
+        // redoute : terre remuée, parapet en carré, gabions aux angles
+        g.fillStyle = snow ? 'rgba(200,192,180,0.7)' : 'rgba(150,120,80,0.55)'; fillPts(g, w.pts);
+        g.strokeStyle = snow ? '#d8d2c8' : '#9c7a4e'; g.lineWidth = 7; g.lineJoin = 'round'; strokePts(g, w.pts);
+        g.strokeStyle = snow ? '#7d7468' : '#4d3b26'; g.lineWidth = 1.6; strokePts(g, w.pts);
+        continue;
+      }
+      for (const pts of this.splitDry(w.pts, hasBar)) {
         if (pts.length < 2) continue;
         const len = pts.reduce((a, p, k) => k ? a + Math.hypot(p[0] - pts[k - 1][0], p[1] - pts[k - 1][1]) : 0, 0);
         g.lineCap = 'round'; g.lineJoin = 'round';
@@ -908,12 +955,13 @@ export class Terrain {
   }
 
   // découpe une ligne là où elle passe sur l'eau
-  splitDry(pts) {
+  // (et, si onlyBar, là où la case n'est pas une barricade : le moteur laisse des trouées)
+  splitDry(pts, onlyBar = false) {
     const out = [];
     let cur = [];
     for (const p of resample(pts, 4).concat([pts[pts.length - 1]])) {
       const t = this.at(p[0], p[1]);
-      if (t === T.EAU || t === T.GUE) { if (cur.length > 1) out.push(cur); cur = []; } else cur.push(p);
+      if (t === T.EAU || t === T.GUE || (onlyBar && t !== T.BARRICADE)) { if (cur.length > 1) out.push(cur); cur = []; } else cur.push(p);
     }
     if (cur.length > 1) out.push(cur);
     return out;

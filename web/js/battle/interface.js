@@ -2,7 +2,7 @@
 // boutons), bandeau du déploiement, journal, panneau de l'unité choisie avec ses ordres, barre des cartes
 // d'unités groupées en bas, mini-carte et vitesses en bas à droite, bulles d'aide, confirmations et récapitulatif.
 import { ICON } from '../icons.js';
-import { clsOf, isGeneral, isLight, emprise, stars, fmt, esc, clamp, TYPE_LABEL, FORM_LABEL, FORM_HELP, FORMS, STATE_LABEL, SEASON_LABEL, WEATHER_LABEL, normSeason, TILT } from './formes.js';
+import { clsOf, isGeneral, isLight, isWagon, genName, emprise, stars, fmt, esc, clamp, TYPE_LABEL, FORM_LABEL, FORM_HELP, FORMS, STATE_LABEL, SEASON_LABEL, WEATHER_LABEL, normSeason, TILT } from './formes.js';
 
 const WX_ICON = {
   soleil: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
@@ -87,14 +87,16 @@ export class BattleUI {
     const title = st.title || v.map?.title || (v.map?.place ? `Assaut de ${v.map.place.name}` : 'Bataille');
     this.$('.bt-name').textContent = title;
     const wx = st.weather || v.map?.weather || 'soleil', season = normSeason(st.season || v.map?.season);
-    this.$('.bt-when').innerHTML = `<span class="bt-wx">${svg(WX_ICON[wx] || WX_ICON.soleil)}</span>${esc(st.hour || '')} · ${esc(WEATHER_LABEL[wx] || wx)} · ${esc(SEASON_LABEL[season] || '')}`;
+    const left = st.dusk != null && st.clock != null ? st.dusk - st.clock : null;
+    const dusk = left != null && left < 5400 && left > 0 ? ` · <span class="bt-dusk">nuit dans ${Math.max(1, Math.round(left / 60))} min</span>` : '';
+    this.$('.bt-when').innerHTML = `<span class="bt-wx">${svg(WX_ICON[wx] || WX_ICON.soleil)}</span>${esc(st.hour || '')} · ${esc(WEATHER_LABEL[wx] || wx)} · ${esc(SEASON_LABEL[season] || '')}${dusk}`;
     // jauge du rapport de forces
     const a = side[me]?.men ?? 0, b = side[foe]?.men ?? 0, tot = a + b || 1;
     const ga = this.$('.bt-g-bar .a'), gb = this.$('.bt-g-bar .b');
     ga.style.width = (a / tot * 100) + '%'; gb.style.width = (b / tot * 100) + '%';
     ga.style.background = v.colors[me] || '#b8352a'; gb.style.background = v.colors[foe] || '#3f6fb5';
     this.$('.bt-g-l').innerHTML = `<b>${fmt(a)}</b><small>${esc(side[me]?.name || 'Vous')}</small>`;
-    this.$('.bt-g-r').innerHTML = `<small>${esc(side[foe]?.name || 'Ennemi')}</small><b>${fmt(b)}</b>`;
+    this.$('.bt-g-r').innerHTML = `<small>${esc(side[foe]?.name || 'Ennemi')}${side[foe]?.seen ? ' (vus)' : ''}</small><b>${fmt(b)}</b>`;
     // phase
     const deploy = st.phase === 'deploiement';
     this.$('.bt-deploy').hidden = !deploy;
@@ -162,13 +164,13 @@ export class BattleUI {
     const by = new Map();
     const gen = mine.find(isGeneral);
     for (const u of mine) {
-      const k = u.brigade ?? u.army ?? (isGeneral(u) ? 'gen' : clsOf(u));
+      const k = u.group ?? u.brigade ?? u.army ?? (isGeneral(u) ? 'gen' : clsOf(u));
       if (!by.has(k)) by.set(k, []);
       by.get(k).push(u);
     }
     const order = ['gen', 'inf', 'cavalerie', 'artillerie'];
     const label = { gen: gen ? (gen.gen || gen.name) : 'État-major', inf: 'Infanterie', cavalerie: 'Cavalerie', artillerie: 'Artillerie' };
-    return [...by.entries()].sort((a, b) => (order.indexOf(a[0]) + 10) % 14 - (order.indexOf(b[0]) + 10) % 14).map(([k, us]) => ({ k, label: us[0].brigade_name || us[0].army_name || label[k] || String(k), us }));
+    return [...by.entries()].sort((a, b) => (order.indexOf(a[0]) + 10) % 14 - (order.indexOf(b[0]) + 10) % 14).map(([k, us]) => ({ k, label: us.find(u => u.gname)?.gname || us[0].brigade_name || us[0].army_name || label[k] || String(k), us }));
   }
   renderDock() {
     const v = this.v, gs = this.groups();
@@ -187,9 +189,9 @@ export class BattleUI {
     const v = this.v, sel = v.sel.has(u.id), mor = clamp(u.morale ?? 70, 0, 100), end = clamp(100 - (u.fat ?? 0), 0, 100), am = this.ammoFrac(u) * 100;
     const st = u.state === 'deroute' ? 'rout' : u.state === 'charge' || u.state === 'melee' ? 'fight' : u.state === 'feu' ? 'fire' : '';
     const range = u.range && u.range[0] ? `${fmt(u.range[0])} m` : '';
-    return `<button class="bt-uc ${sel ? 'on' : ''} ${st}" data-a="selunit" data-id="${esc(u.id)}" title="${esc(u.name)} — ${esc(TYPE_LABEL[u.type] || u.type)}">
+    return `<button class="bt-uc ${sel ? 'on' : ''} ${st} ${u.busy ? 'busy' : ''}" data-a="selunit" data-id="${esc(u.id)}" title="${esc(u.name)} — ${esc(TYPE_LABEL[u.type] || u.type)}">
       <canvas data-fig="${esc(u.id)}" width="56" height="64"></canvas>
-      <span class="uc-n">${esc(short(u.name))}</span>
+      <span class="uc-n">${esc(short(isGeneral(u) && genName(u) ? genName(u) : u.name))}</span>
       <span class="uc-m">${fmt(u.men)}</span>
       <span class="uc-x">${'★'.repeat(stars(u.xp))}<i>${'★'.repeat(5 - stars(u.xp))}</i></span>
       <span class="uc-bars"><i class="mor" style="width:${mor}%"></i><i class="end" style="width:${end}%"></i><i class="amm" style="width:${am}%"></i></span>
@@ -202,8 +204,8 @@ export class BattleUI {
     if (!u) return;
     const g = cv.getContext('2d'), col = this.v.colors[u.side] || '#888', cls = clsOf(u);
     g.clearRect(0, 0, cv.width, cv.height);
-    const kind = isGeneral(u) || cls === 'cavalerie' ? 'cav' : cls === 'artillerie' ? 'canon' : u.type === 'grenadiers' || u.type === 'garde' ? 'gren' : u.type === 'milice' ? 'milice' : isLight(u) ? 'leger' : 'inf';
-    const H = kind === 'cav' ? 34 : kind === 'canon' ? 38 : 50;
+    const kind = isGeneral(u) || cls === 'cavalerie' ? 'cav' : cls === 'artillerie' ? 'canon' : isWagon(u) ? 'caisson' : u.type === 'grenadiers' || u.type === 'garde' ? 'gren' : u.type === 'milice' ? 'milice' : isLight(u) ? 'leger' : 'inf';
+    const H = kind === 'cav' ? 34 : kind === 'canon' || kind === 'caisson' ? 38 : 50;
     const sp = this.v.art.sprite(kind, col, kind === 'inf' || kind === 'gren' || kind === 'leger' || kind === 'milice' ? 0 : 1, H, 0);
     const sc = H / sp.h;
     if (kind === 'canon') { const s2 = this.v.art.sprite('inf', col, 0, 40, 0); g.drawImage(s2.cv, 34 - s2.ax * (40 / s2.h), 60 - s2.ay * (40 / s2.h), s2.cv.width * 40 / s2.h, s2.cv.height * 40 / s2.h); }
@@ -311,7 +313,7 @@ export class BattleUI {
         this.renderPanel(true);
       } else c.order('form', { form: d.f });
     }
-    else if (a === 'fire') { const hold = !us.every(u => u.fire === 'hold'); for (const u of us) u.fire = hold ? 'hold' : 'free'; c.order('fire', { fire: hold ? 'hold' : 'free' }); }
+    else if (a === 'fire') { const hold = !us.every(u => u.fire === 'hold'); for (const u of us) u.fire = hold ? 'hold' : 'free'; c.order('fire', { mode: hold ? 'hold' : 'free', fire: hold ? 'hold' : 'free' }); }
     else if (a === 'hold') c.order('hold');
     else if (a === 'rally') c.order('rally');
     else if (a === 'retreat') c.order('retreat');
@@ -399,7 +401,9 @@ export class BattleUI {
     const v = this.v;
     this.result = r;
     const me = v.me;
-    const win = r.winner === me || r.winner === v.st?.sides?.[me]?.owner;
+    const win = r.won ?? (r.winner === me || r.winner === v.st?.sides?.[me]?.owner);
+    // prisonniers : [les nôtres capturés, ennemis capturés] (moteur) ou un seul nombre (faits)
+    const pris = Array.isArray(r.prisoners) ? r.prisoners : [0, r.prisoners ?? 0];
     const ls = Array.isArray(r.losses?.[0]) ? r.losses[0] : r.losses || [];
     const mine = v.mine().concat([...v.units.values()].filter(u => u.side === me && u.state === 'hors'));
     const lostMine = ls[0] ?? mine.reduce((a, u) => a + Math.max(0, (u.men0 || u.men) - u.men), 0);
@@ -411,7 +415,7 @@ export class BattleUI {
       <div class="br-stats">
         <div><b>${fmt(lostMine)}</b><span>vos pertes</span></div>
         <div><b>${typeof lostFoe === 'number' ? fmt(lostFoe) : lostFoe}</b><span>pertes ennemies</span></div>
-        <div><b>${fmt(r.prisoners ?? 0)}</b><span>prisonniers</span></div>
+        <div><b>${fmt(pris[1])}</b><span>prisonniers faits${pris[0] ? ` <small>(${fmt(pris[0])} perdus)</small>` : ''}</span></div>
         <div><b>+${fmt(r.xp ?? 0)}</b><span>expérience</span></div>
       </div>
       <div class="br-units">${per.map(p => `<div><span>${esc(p.name)}</span><span>${p.lost ? '−' + fmt(p.lost) : '—'}</span><span>${p.xp ? '+' + fmt(p.xp) + ' xp' : ''}</span></div>`).join('')}</div>

@@ -3,7 +3,7 @@
 // pièces, avant-trains et servants. Chaque silhouette est une petite image mise en cache (par camp, type, sens
 // et taille à l'écran) : une image ne coûte qu'un drawImage par silhouette.
 // Au-dessus de chaque régiment, un fanion de taille constante aux couleurs du camp porte l'effectif.
-import { clsOf, isLight, isGeneral, pieces, hash, clamp, TAU, TILT } from './formes.js';
+import { clsOf, isLight, isGeneral, isWagon, genName, pieces, hash, clamp, TAU, TILT } from './formes.js';
 
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', BRONZE = '#a5843f';
 const HORSES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#d9d2c4', '#54402e'];
@@ -182,7 +182,10 @@ export class UnitArt {
     const out = [], id = String(un.id).length * 97 + (un.men0 || 0);
     const rnd = k => hash(k, id, 41);
     const rout = un.state === 'deroute', melee = un.state === 'melee';
-    if (isGeneral(un)) {
+    if (isWagon(un)) {
+      // chariot de munitions : deux chevaux, la voiture, le conducteur
+      out.push([-1.4, 6, 'attelage', 0, 4], [1.4, 6, 'attelage', 0, 12], [0, -2, 'caisson', 0, 0], [0, -6, 'caisson', 0, 0], [2.6, 0, 'inf', 0, 0]);
+    } else if (isGeneral(un)) {
       out.push([0, 0, 'cav', 0, 0]);
       for (let k = 0; k < 4; k++) out.push([(k - 1.5) * 7, -6 - (k % 2) * 4, 'cav', 0, k * 4]);
       out.push([11, -2, 'officier', 0, 0]);
@@ -394,7 +397,7 @@ export class UnitArt {
     ctx.fillStyle = '#16120e';
     ctx.beginPath(); ctx.moveTo(x - 8, y + 2); ctx.quadraticCurveTo(x, y - 9, x + 8, y + 2); ctx.quadraticCurveTo(x, y - 1, x - 8, y + 2); ctx.fill();
     ctx.fillStyle = '#e6c97f'; ctx.beginPath(); ctx.arc(x, y - 3, 1.6, 0, TAU); ctx.fill();
-    const name = (un.gen || un.name || '').toUpperCase();
+    const name = (genName(un) || un.name || '').toUpperCase();
     ctx.font = '600 10.5px "EB Garamond", Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const tw = ctx.measureText(name).width + 10;
     ctx.fillStyle = 'rgba(19,35,58,0.9)'; ctx.fillRect(x - tw / 2, y + 17, tw, 13);
@@ -411,6 +414,8 @@ export class UnitArt {
     } else if (cls === 'artillerie') {
       ctx.beginPath(); ctx.arc(-1, 2.5, 3.2, 0, TAU); ctx.stroke();
       ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(-3.5, 0.5); ctx.lineTo(5, -3.5); ctx.stroke();
+    } else if (cls === 'chariot') {
+      ctx.beginPath(); ctx.arc(0, 1, 4.5, 0, TAU); ctx.moveTo(-4.5, 1); ctx.lineTo(4.5, 1); ctx.moveTo(0, -3.5); ctx.lineTo(0, 5.5); ctx.stroke();
     } else if (cls === 'general') {
       ctx.beginPath(); ctx.moveTo(-5, 1); ctx.quadraticCurveTo(0, -7, 5, 1); ctx.quadraticCurveTo(0, -2, -5, 1); ctx.fill();
     } else {

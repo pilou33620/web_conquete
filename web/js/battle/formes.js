@@ -2,15 +2,19 @@
 // Types de cases du champ de bataille, emprise au sol des formations, libellés en français.
 
 // Types de case, dans l'ordre du contrat (§ 3). Si le serveur envoie `types: {PRE: 0, …}`, cette table est remplacée.
+// BARRICADE (17) : ouvrages de fortune, ajoutés par le moteur.
 export const CELL_NAMES = ['PRE', 'CHAMP', 'VIGNE', 'LANDE', 'BOIS', 'FORET', 'MARAIS', 'EAU', 'GUE', 'ROUTE', 'CHEMIN',
-  'BATI', 'MUR', 'BRECHE', 'PORTE', 'SABLE', 'ROCHE'];
+  'BATI', 'MUR', 'BRECHE', 'PORTE', 'SABLE', 'ROCHE', 'BARRICADE'];
 export const T = Object.fromEntries(CELL_NAMES.map((k, i) => [k, i]));
 
-// table de correspondance : code reçu → code du client (identité, sauf si le serveur a numéroté autrement)
+// table de correspondance : code reçu → code du client (identité, sauf si le serveur a numéroté autrement).
+// `types` est soit la liste des noms dans l'ordre des codes (moteur), soit un objet {nom: code}.
 export function cellRemap(types) {
   const map = new Uint8Array(256);
   for (let i = 0; i < 256; i++) map[i] = i < CELL_NAMES.length ? i : T.PRE;
-  if (types && typeof types === 'object') {
+  if (Array.isArray(types)) {
+    types.forEach((name, code) => { const k = T[String(name).toUpperCase().replace(/^T_/, '')]; if (k !== undefined && code < 256) map[code] = k; });
+  } else if (types && typeof types === 'object') {
     for (const [name, code] of Object.entries(types)) {
       const k = T[String(name).toUpperCase().replace(/^T_/, '')];
       if (k !== undefined && code >= 0 && code < 256) map[code] = k;
@@ -19,15 +23,18 @@ export function cellRemap(types) {
   return map;
 }
 
-export const CLS_OF_TYPE = { cavalerie: 'cavalerie', artillerie: 'artillerie', general: 'general', etat_major: 'general' };
+export const CLS_OF_TYPE = { cavalerie: 'cavalerie', artillerie: 'artillerie', general: 'general', etat_major: 'general', chariot: 'chariot' };
 export const clsOf = u => u.cls || CLS_OF_TYPE[u.type] || 'inf';
 export const isLight = u => u.light ?? (u.type === 'legere' || u.type === 'chasseurs');
 export const isGeneral = u => u.type === 'general' || u.cls === 'general' || u.cls === 'etat_major';
+export const isWagon = u => u.type === 'chariot' || u.cls === 'chariot';
+// nom du général : champ `gen` (objet {name, trait…} du moteur, ou texte)
+export const genName = u => (u.gen && typeof u.gen === 'object' ? u.gen.name : u.gen) || '';
 
 export const TYPE_LABEL = {
   ligne: 'Infanterie de ligne', legere: 'Infanterie légère', grenadiers: 'Grenadiers', chasseurs: 'Chasseurs',
   sapeurs: 'Sapeurs', garde: 'Garde nationale', cavalerie: 'Cavalerie', artillerie: 'Artillerie', milice: 'Milice',
-  general: 'État-major',
+  general: 'État-major', chariot: 'Chariot de munitions',
 };
 export const FORM_LABEL = { ligne: 'Ligne', colonne: 'Colonne', carre: 'Carré', tirailleurs: 'Tirailleurs', batterie: 'En batterie', attelee: 'Attelée' };
 export const FORM_HELP = {
@@ -38,7 +45,7 @@ export const FORM_HELP = {
   batterie: 'Pièces dételées, prêtes à tirer.',
   attelee: 'Pièces attelées : se déplacent, ne tirent pas.',
 };
-export const FORMS = { inf: ['ligne', 'colonne', 'carre', 'tirailleurs'], cavalerie: ['ligne', 'colonne'], artillerie: ['batterie', 'attelee'], general: [] };
+export const FORMS = { inf: ['ligne', 'colonne', 'carre', 'tirailleurs'], cavalerie: ['ligne', 'colonne'], artillerie: ['batterie', 'attelee'], general: [], chariot: [] };
 export const STATE_LABEL = {
   repos: 'En position', marche: 'En marche', feu: 'Fait feu', recharge: 'Recharge', charge: 'Charge !', melee: 'Corps à corps',
   deroute: 'En déroute', ralliement: 'Se rallie', hors: 'Hors de combat', formation: 'Change de formation',
@@ -51,12 +58,13 @@ export const WEATHER_LABEL = {
 export const normSeason = s => (s === 'été' ? 'ete' : SEASON_LABEL[s] ? s : 'printemps');
 
 // pièces d'une batterie : 8 au complet, moins avec les pertes
-export const pieces = u => Math.max(1, Math.min(8, Math.round(8 * (u.men || 0) / Math.max(1, u.men0 || u.men || 1))));
+export const pieces = u => u.pieces != null ? Math.max(1, Math.min(8, Math.round(u.pieces))) : Math.max(1, Math.min(8, Math.round(8 * (u.men || 0) / Math.max(1, u.men0 || u.men || 1))));
 
 // emprise au sol (m) : largeur du front × profondeur (contrat § 4) ; elle rétrécit avec les pertes
 export function emprise(u) {
   const cls = clsOf(u), men = Math.max(1, u.men || 0), form = u.form;
   if (isGeneral(u)) return [26, 16];
+  if (isWagon(u)) return [8, 18];
   if (cls === 'artillerie') {
     const p = pieces(u);
     return form === 'attelee' ? [22, 30 + 9 * p] : [Math.max(14, 10 * p), 30];
