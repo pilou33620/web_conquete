@@ -8,6 +8,8 @@ from . import rules as R
 from . import events as EV
 from . import army_actions as AA
 from . import cities as CT
+from . import turns as TT
+from .tactics import bridge as TB
 from .geo import TERRAIN, T_LANDE, T_MARAIS, T_PLAINE
 
 SUBSTEP = 0.05  # jours
@@ -103,7 +105,9 @@ class Game:
             self.create_army(code, gx, gy, [self.new_reg(t, code=code) for t in ('ligne', 'legere', 'cavalerie')], node=cap)
             self.recompute_mods(code)
         self.era_id = self.era()['id']
+        TB.ensure(self)        # batailles tactiques : réglage, bataille en cours
         self.pending_ev = []   # décisions qui attendent le joueur
+        self.tour = TT.new_state()   # tour par tour, mois par mois (game/turns.py)
         self.ev_done = []      # événements datés déjà passés
         if self.scenario == '1790':
             self.log('info', f"4 mars 1790 : l'Assemblée crée les départements. Vous gouvernez {self.fname(player)}.",
@@ -124,7 +128,7 @@ class Game:
     def new_reg(self, typ, n=None, code=None):
         u = R.UNITS[typ]
         reg = dict(id=self.nid('r'), type=typ, n=float(u['men'] if n is None else n), max=u['men'],
-                   xp=float(u.get('xp0', 0)), morale=80.0 + u.get('morale0', 0))
+                   xp=float(u.get('xp0', 0)), morale=80.0 + u.get('morale0', 0), ammo=100.0, fat=0.0)
         if u['cls'] in R.ARMS:
             reg['arm'] = self.arm_level(code, u['cls']) if code else 0   # les armes du moment, gardées jusqu'au réarmement
         return reg
@@ -388,6 +392,10 @@ class Game:
 
     # ================================================================== boucle
     def advance(self, real_dt):
+        if TB.frozen(self):
+            return   # bataille en attente du choix du joueur, ou bataille tactique en cours : campagne figée
+        if self.tour['on']:
+            return TT.advance(self, real_dt)   # tour par tour : jusqu'au 1er du mois suivant ou à une alerte
         if self.over or self.speed_idx == 0:
             return
         days = R.SPEEDS[self.speed_idx] * real_dt
@@ -408,6 +416,7 @@ class Game:
         self.economy(dt)
         self.update_queues(dt)
         self.move_armies(dt)
+        self.land_check(dt)
         self.river_fire(dt)
         self.update_spies()
         self.update_hidden()
@@ -1157,7 +1166,7 @@ class Game:
         sp *= R.FORMATION_SPEED.get(a.get('fm', 'ligne'), 1.0)
         if self.gen_trait(a) == 'cavalier':
             sp *= 1.1
-        return sp
+        return sp * TB.march_k(a)   # des troupes fourbues marchent moins vite
 
     # ------------------------------------------------------------------ généraux
     def new_general(self, code):
@@ -1196,6 +1205,7 @@ class Game:
         cls = u['cls']
         if cls in R.ARMS:
             p *= R.ARMS[cls][min(r.get('arm', 0), len(R.ARMS[cls]) - 1)][2]
+        p *= TB.reg_k(r, cls)   # fatigue et munitions (effet modéré)
         if cls == 'inf':
             k += self.mod(code, 'inf_power')
             p *= 1 - (1 - wx_fire) * (1 - self.mod(code, 'rain'))   # l'amorce à percussion ne craint plus la pluie
@@ -1268,15 +1278,18 @@ class Game:
         return None
 
     # ------------------------------------------------------------------ chemins
-    def passable_node(self, code, nid, target, tr=0):
+    def passable_node(self, code, nid, target, tr=0, block=None):
+        """block : propriétaires dont les terres sont fermées (voir AA.closed_owners) ; None : comme avant, selon tr."""
         o = self.nodes[nid]['owner']
+        if block is not None:
+            return o not in block
         if o == code or o == R.NEUTRAL:
             return True
         st = self.status(code, o)
         if st in ('guerre', 'alliance'):
             return True
-        # en traversant : avec un droit de passage, ou (joueur prévenu) quitte à provoquer un incident
-        return bool(tr) and (tr >= 2 or AA.has_passage(self, code, o))
+        # en traversant : avec un droit de passage
+        return bool(tr) and AA.has_passage(self, code, o)
 
     def edge_cost(self, code, e, frm=None, speed=22.0):
         """Coût d'un tronçon en « km de route équivalents » pour une armée marchant à `speed` km/j."""
@@ -1318,10 +1331,15 @@ class Game:
             sp *= 0.5 + 0.5 * self.wx(x, y)['move']
         return sp
 
-    def road_route(self, code, start_nodes, goal, speed=22.0, boat=False, tr=0):
+    def road_route(self, code, start_nodes, goal, speed=22.0, boat=False, tr=0, block=None):
         """Plus court chemin par les routes et les voies d'eau.
         start_nodes : dict nœud -> coût initial. Retourne (coût, [nœuds], [arêtes]).
-        L'état « à bord » est suivi : embarquer et débarquer prennent du temps."""
+        L'état « à bord » est suivi : embarquer et débarquer prennent du temps.
+        block : propriétaires dont les terres sont fermées (None : places traversables selon passable_node).
+        Leurs places ne se franchissent qu'à bord, devant le quai, sans y débarquer ni embarquer ; partie de
+        l'une d'elles, une armée peut d'abord sortir par les routes de ce même département."""
+        if block is not None and self.nodes[goal]['owner'] in block:
+            return None
         b0 = 1 if boat else 0
         dist = {}
         prev = {}
@@ -1340,17 +1358,24 @@ class Game:
             ou = self.nodes[u]['owner']
             if u not in start_nodes and ou != code and not self.friendly(code, ou):
                 # on peut traverser un nœud hostile/neutre mais on s'y arrêtera : coût dissuasif
-                # (en traversant, on ne s'arrête qu'aux places ennemies ; on évite les terres sans droit de passage)
-                if not tr or (ou != R.NEUTRAL and self.at_war(code, ou)):
+                # (en traversant, on ne s'arrête qu'aux places ennemies ; chez un voisin en paix, on passe)
+                if (ou == R.NEUTRAL and not tr) or (ou != R.NEUTRAL and self.at_war(code, ou)):
                     d += 25
-                elif ou != R.NEUTRAL and not AA.has_passage(self, code, ou):
-                    d += 40
+            ub = block is not None and ou in block and u not in start_nodes   # place fermée : de passage seulement
+            if ub and not b:
+                d += 30   # en sortant de ses terres par la route, au plus court
             for eid in self.geo.adj[u]:
                 e = self.geo.edges[eid]
                 v = e['b'] if e['a'] == u else e['a']
-                if not self.passable_node(code, v, goal, tr):
-                    continue
                 water = e.get('kind') == 'water'
+                if block is not None:
+                    if ub and b and not water:
+                        continue   # à bord devant des terres fermées : pas de débarquement
+                    ov = self.nodes[v]['owner']
+                    if ov in block and not water and not (ov == ou and (u in start_nodes or ub)):
+                        continue   # on n'y entre pas par la route (sauf pour sortir de chez lui)
+                elif not self.passable_node(code, v, goal, tr):
+                    continue
                 nb = 1 if water else 0
                 nd = d + self.edge_cost(code, e, u, speed)
                 if water and not b:
@@ -1391,7 +1416,8 @@ class Game:
                 return e
         return None
 
-    def plan_route(self, a, goal):
+    def plan_route(self, a, goal, block=None):
+        """block : propriétaires dont les terres sont fermées (None : comme avant, selon passable_node)."""
         code = a['owner']
         tr = AA.route_level(self, a)
         legs = []
@@ -1401,24 +1427,26 @@ class Game:
             e = self.geo.edges[a['edge']['e']]
             frm, pos = a['edge']['frm'], a['edge']['pos']
             to = e['b'] if e['a'] == frm else e['a']
+            here = AA.land_owner(self, a['x'], a['y']) if block else None
             starts = {}
-            if self.passable_node(code, frm, goal, tr):
+            # sur la route d'une place fermée, là où l'on se trouve : on peut toujours en repartir pour sortir
+            if self.passable_node(code, frm, goal, tr, block) or (block and self.nodes[frm]['owner'] == here):
                 starts[frm] = pos
-            if self.passable_node(code, to, goal, tr):
+            if self.passable_node(code, to, goal, tr, block) or (block and self.nodes[to]['owner'] == here):
                 starts[to] = e['len'] - pos
             if not starts:
                 return None
         else:
-            near = self.nearest_node(a['x'], a['y'], lambda i: self.passable_node(code, i, goal, tr), 60)
+            near = self.nearest_node(a['x'], a['y'], lambda i: self.passable_node(code, i, goal, tr, block), 60)
             if near is None:
                 return None
             nx, ny = self.node_xy(near)
-            pts = self.geo.astar(a['x'], a['y'], nx, ny)
+            pts = self.geo.astar(a['x'], a['y'], nx, ny, block=AA.cell_mask(self, block))
             if not pts:
                 return None
             legs.append(dict(kind='off', pts=[list(p) for p in pts], i=1))
             starts = {near: 0.0}
-        r = self.road_route(code, starts, goal, self.army_speed(a), bool(a.get('boat')), tr)
+        r = self.road_route(code, starts, goal, self.army_speed(a), bool(a.get('boat')), tr, block)
         if not r:
             return None
         _, nodes, eids = r
@@ -1468,8 +1496,8 @@ class Game:
 
     def order_move(self, code, aid, x=None, y=None, node=None, mode=None, tr=None, force=False):
         """tr : traverser (True) ou conquérir en chemin (False), None pour garder le choix de l'armée ;
-        force : le joueur, prévenu, accepte de passer sans droit de passage. Retourne (None, avertissement)
-        quand il faut d'abord sa confirmation."""
+        force : le joueur, prévenu, passe en force sur des terres fermées (déclaration de guerre). Retourne
+        (None, question) quand il faut d'abord sa confirmation."""
         a = self.armies.get(aid)
         if not a or a['owner'] != code:
             return False, "Armée introuvable."
@@ -1482,24 +1510,27 @@ class Game:
             if not self.valid_node(node):
                 return False, "Lieu inconnu."
             o = self.nodes[node]['owner']
-            if o not in (code, R.NEUTRAL) and self.status(code, o) == 'paix' and not (a.get('tr') if tr is None else tr):
-                return False, f"{self.geo.nodes[node]['name']} appartient à {self.fname(o)} (en paix). Déclarez la guerre d'abord, ou marchez en traversant."
+            if o not in (code, R.NEUTRAL) and self.status(code, o) == 'paix' and not (a.get('tr') if tr is None else tr) \
+                    and not AA.closed_to(self, code, o):
+                return False, f"{self.geo.nodes[node]['name']} appartient à {self.fname(o)} (en paix) : on n'y entre qu'en traversant."
         elif x is None or y is None or not (math.isfinite(x) and math.isfinite(y)):
             return False, "Destination invalide."
         # un ordre refusé ne doit ni lever le siège en cours ni changer l'itinéraire choisi
-        old = a['mode'], a.get('tr', False), a.get('trx', False)
+        old = a['mode'], a.get('tr', False)
         if mode:
             a['mode'] = mode
         if tr is not None:
             a['tr'] = bool(tr)
-        a['trx'] = bool(force)
-        ok, msg = self._order_move(code, a, x, y, node)
+        ok, msg = self._order_move(code, a, x, y, node, force)
         if not ok:
-            a['mode'], a['tr'], a['trx'] = old
+            a['mode'], a['tr'] = old
         return ok, msg
 
-    def _order_move(self, code, a, x, y, node):
-        old_path, old_target = a['path'], a['target']
+    def plan_legs(self, a, x, y, node, block=None):
+        """Itinéraire selon le mode de marche de l'armée : (étapes, destination, None) ou (None, None, raison).
+        block : propriétaires dont les terres sont fermées (None : comme avant)."""
+        code = a['owner']
+        mask = AA.cell_mask(self, block)
         if a['mode'] == 'route':
             if node is None:
                 node_near = self.nearest_node(x, y, maxd=6)
@@ -1507,47 +1538,74 @@ class Game:
                     node = node_near
             if node is not None:
                 if node == a['at_node']:
-                    return False, "L'armée y est déjà."
-                legs = self.plan_route(a, node)
+                    return None, None, "L'armée y est déjà."
+                legs = self.plan_route(a, node, block)
                 if not legs:
-                    return False, f"Aucun chemin par les routes (territoire {'d’un département' if self.departements() else 'd’une province'} en paix ?). Essayez à travers champs."
-                a['path'] = legs
-                a['target'] = dict(node=node)
+                    return None, None, f"Aucun chemin par les routes (territoire {'d’un département' if self.departements() else 'd’une province'} en paix ?). Essayez à travers champs."
+                return legs, dict(node=node), None
+            # route jusqu'au nœud le plus proche puis hors route
+            near = self.nearest_node(x, y, lambda i: self.passable_node(code, i, None, block=block), 40)
+            legs = self.plan_route(a, near, block) if near is not None and near != a['at_node'] else self.boat_prefix(a)
+            if legs is None:
+                return None, None, "Aucun chemin praticable."
+            if near is not None:
+                sx, sy = self.node_xy(near)
+            elif legs:
+                sx, sy = self.node_xy(legs[-1]['to'])
             else:
-                # route jusqu'au nœud le plus proche puis hors route
-                near = self.nearest_node(x, y, lambda i: self.passable_node(code, i, None), 40)
-                legs = self.plan_route(a, near) if near is not None and near != a['at_node'] else self.boat_prefix(a)
-                if legs is None:
-                    return False, "Aucun chemin praticable."
-                if near is not None:
-                    sx, sy = self.node_xy(near)
-                elif legs:
-                    sx, sy = self.node_xy(legs[-1]['to'])
-                else:
-                    sx, sy = a['x'], a['y']
-                pts = self.geo.astar(sx, sy, x, y)
-                if not pts:
-                    return False, "Destination inaccessible (eau, montagne ou hors de la région)."
-                legs.append(dict(kind='off', pts=[list(p) for p in pts], i=1))
-                a['path'] = legs
-                a['target'] = dict(x=x, y=y)
-        else:
-            if node is not None:
-                x, y = self.node_xy(node)
-            pre = self.boat_prefix(a)
-            sx, sy = self.node_xy(pre[0]['to']) if pre else (a['x'], a['y'])
-            pts = self.geo.astar(sx, sy, x, y)
+                sx, sy = a['x'], a['y']
+            pts = self.geo.astar(sx, sy, x, y, block=mask)
             if not pts:
-                return False, "Destination inaccessible à travers champs (fleuve sans pont, eau ou hors région)."
-            a['path'] = pre + [dict(kind='off', pts=[list(p) for p in pts], i=1)]
-            a['target'] = dict(node=node) if node is not None else dict(x=x, y=y)
-        # le joueur est prévenu avant de traverser sans droit de passage les terres d'un voisin en paix
-        warn = AA.trespass_warning(self, code, a) if code == self.player and not a.get('trx') else None
-        if warn:
-            a['path'], a['target'] = old_path, old_target
-            return None, warn
+                return None, None, "Destination inaccessible (eau, montagne ou hors de la région)."
+            legs.append(dict(kind='off', pts=[list(p) for p in pts], i=1))
+            return legs, dict(x=x, y=y), None
+        if node is not None:
+            x, y = self.node_xy(node)
+        pre = self.boat_prefix(a)
+        sx, sy = self.node_xy(pre[0]['to']) if pre else (a['x'], a['y'])
+        pts = self.geo.astar(sx, sy, x, y, block=mask)
+        if not pts:
+            return None, None, "Destination inaccessible à travers champs (fleuve sans pont, eau ou hors région)."
+        return (pre + [dict(kind='off', pts=[list(p) for p in pts], i=1)],
+                dict(node=node) if node is not None else dict(x=x, y=y), None)
+
+    def start_land(self, a, block):
+        """Terres fermées où se trouve l'armée (elle peut toujours en sortir), sinon None."""
+        o = self.nodes[a['at_node']]['owner'] if a['at_node'] is not None else AA.land_owner(self, a['x'], a['y'])
+        return o if o in block else None
+
+    def _order_move(self, code, a, x, y, node, force=False):
+        block = AA.closed_owners(self, code)
+        here = self.start_land(a, block)
+        ask = code == self.player and code not in self.ais   # le joueur : contournement signalé, passage en force proposé
+        legs, target, err = self.plan_legs(a, x, y, node, block)
+        detour, war = [], ''
+        if block and ask and err != "L'armée y est déjà.":
+            # le même ordre, terres fermées comprises : contourne-t-on, ou faut-il passer en force ?
+            fl, ft, _ = self.plan_legs(a, x, y, node, frozenset())
+            who = AA.crossed(self, fl, ft, block, here) if fl else []
+            if legs is None and who:
+                if not force:
+                    return None, AA.force_question(self, who)
+                ok, war = AA.force_passage(self, code, who)
+                if not ok:
+                    return False, war
+                block = AA.closed_owners(self, code)
+                here = self.start_land(a, block)
+                legs, target, err = self.plan_legs(a, x, y, node, block)
+            elif legs is None and fl:
+                legs, target = fl, ft   # rien de fermé en chemin (seulement les terres d'où l'on sort)
+            elif legs is not None:
+                detour = who
+        elif legs is None and block and err != "L'armée y est déjà.":
+            err = f"{err} Terres fermées (sans droit de passage) : {AA.names_of(self, sorted(block))}."
+        if legs is None:
+            return False, f"{war} {err}" if war else err
         if a['state'] == 'siege':
             self.end_siege_for(a)
+        a['path'], a['target'] = legs, target
+        a['ex'] = here          # terres fermées dont on sort (le délai de grâce court, sans détour imposé)
+        a['dt'] = detour        # terres fermées contournées
         a['hold'] = a['qrt'] = False
         a['state'] = 'move'
         a['assault'] = False
@@ -1555,10 +1613,50 @@ class Game:
             a['stance'] = 'normal'
         if a['at_node'] is not None:
             a['at_node'] = None
-        return True, "En marche."
+        msg = war or "En marche."
+        if detour:
+            msg = f"En marche, en contournant les terres {R.de(AA.names_of(self, detour))} (sans droit de passage)."
+        if here:
+            msg += f" L'armée sort d'abord des terres {R.de(self.fname(here))}."
+        return True, msg
+
+    def reroute(self, a):
+        """Même destination, par un itinéraire qui évite les terres fermées (en sortant de celles où l'on se trouve)."""
+        tgt = a.get('target') or {}
+        node, x, y = tgt.get('node'), tgt.get('x'), tgt.get('y')
+        if node is None and x is None:
+            return False
+        block = AA.closed_owners(self, a['owner'])
+        legs, target, _ = self.plan_legs(a, x, y, node, block)
+        if not legs:
+            return False
+        a['path'], a['target'] = legs, target
+        a['ex'] = self.start_land(a, block)
+        return True
+
+    def exit_path(self, a, o):
+        """Sortie au plus court des terres fermées de o, vers les terres les plus proches où l'armée a le droit d'être."""
+        mask = AA.cell_mask(self, AA.closed_owners(self, a['owner']))
+        if mask is None:
+            return False
+        pts = self.geo.nearest_open(a['x'], a['y'], mask) or self.geo.nearest_open(a['x'], a['y'], mask, strict=False)
+        if not pts or len(pts) < 2:
+            return False
+        a['path'] = [dict(kind='off', pts=[list(p) for p in pts], i=1)]
+        a['target'] = dict(x=pts[-1][0], y=pts[-1][1])
+        a['ex'] = o
+        a['dt'] = []
+        a['state'] = 'move'
+        a['at_node'] = None
+        a['hold'] = a['qrt'] = False
+        a['assault'] = False
+        if a['stance'] == 'embuscade':
+            a['stance'] = 'normal'
+        return True
 
     def order_path(self, code, aid, pts, tr=None, force=False):
-        """Itinéraire tracé au doigt ou au stylet : l'armée passe par les points dessinés, à travers champs."""
+        """Itinéraire tracé au doigt ou au stylet : l'armée passe par les points dessinés, à travers champs, en
+        contournant les terres fermées. force : le joueur, prévenu, passe en force (déclaration de guerre)."""
         a = self.armies.get(aid)
         if not a or a['owner'] != code:
             return False, "Armée introuvable."
@@ -1576,14 +1674,35 @@ class Game:
         if math.dist(pts[-1], way[-1]) > 0.4:
             way.append(pts[-1])
         way = way[:45]
-        full = [way[0]]
-        skipped = 0
-        for p in way[1:]:
-            seg = self.geo.astar(full[-1][0], full[-1][1], p[0], p[1], max_nodes=40000)
-            if not seg:
-                skipped += 1
-                continue
-            full += seg[1:]
+
+        def trace(mask):
+            full, skipped = [way[0]], 0
+            for p in way[1:]:
+                seg = self.geo.astar(full[-1][0], full[-1][1], p[0], p[1], max_nodes=40000, block=mask)
+                if not seg:
+                    skipped += 1
+                    continue
+                full += seg[1:]
+            return full, skipped
+        block = AA.closed_owners(self, code)
+        here = self.start_land(a, block) if not pre else None
+        full, skipped = trace(AA.cell_mask(self, block))
+        # le tracé dessiné passe-t-il sur des terres fermées ?
+        who = AA.crossed(self, [dict(kind='off', pts=way)], dict(x=way[-1][0], y=way[-1][1]), block, here)
+        war = ''
+        if who and (len(full) < 2 or math.dist(full[-1], way[-1]) > 2.0):
+            # impossible d'arriver au bout sans y passer
+            if code != self.player or code in self.ais:
+                return False, AA.closed_msg(self, who)
+            if not force:
+                return None, AA.force_question(self, who)
+            ok, war = AA.force_passage(self, code, who)
+            if not ok:
+                return False, war
+            block = AA.closed_owners(self, code)
+            here = self.start_land(a, block) if not pre else None
+            who = []
+            full, skipped = trace(AA.cell_mask(self, block))
         if len(full) < 2:
             return False, "Tracé impraticable (eau, fleuve sans pont ou hors de la région)."
         ex, ey = full[-1]
@@ -1594,10 +1713,6 @@ class Game:
                 node = None
         path = pre + [dict(kind='off', pts=[list(p) for p in full], i=1)]
         target = dict(node=node) if node is not None else dict(x=ex, y=ey)
-        if code == self.player and not force:
-            warn = AA.trespass_warning(self, code, dict(path=path, target=target))
-            if warn:
-                return None, warn
         if tr is not None:
             a['tr'] = bool(tr)
         if a['state'] == 'siege':
@@ -1605,12 +1720,16 @@ class Game:
         a['hold'] = a['qrt'] = False
         a['path'] = path
         a['target'] = target
+        a['ex'] = here
+        a['dt'] = who
         a['state'] = 'move'
         a['assault'] = False
         if a['stance'] == 'embuscade':
             a['stance'] = 'normal'
         a['at_node'] = None
-        msg = "En marche le long du tracé."
+        msg = war or "En marche le long du tracé."
+        if who:
+            msg += f" Le tracé contourne les terres {R.de(AA.names_of(self, who))} (sans droit de passage)."
         if skipped:
             msg += " Les passages impossibles ont été contournés."
         return True, msg
@@ -1772,18 +1891,11 @@ class Game:
                 if a['ai'] and a['ai'].get('then') == 'embuscade':
                     a['stance'] = 'embuscade'
                     a['ai']['then'] = None
-            # violation de territoire en paix
-            if a['state'] in ('move', 'idle'):
-                nd = self.geo.node_of_cell(a['x'], a['y'])
-                if nd is not None:
-                    o = self.nodes[nd]['owner']
-                    if o not in (a['owner'], R.NEUTRAL) and self.status(a['owner'], o) == 'paix' \
-                            and not AA.on_peace_land(self, a, o):   # droit de passage, sinon incident
-                        self.factions[o]['rel'][a['owner']] = max(-100, self.factions[o]['rel'][a['owner']] - 1.2 * dt)
-                        a['viol'] += dt
-                        if a['viol'] > 0.5 and o == self.player and self.rng.random() < dt:
-                            self.log('diplo', f"Des troupes de {R.FACTIONS[a['owner']]['name']} violent votre territoire.",
-                                     a['x'], a['y'], who=a['owner'])
+
+    def land_check(self, dt):
+        """Terres fermées : délai de grâce, chemin de sortie, puis incidents (voir AA.land_tick)."""
+        for a in list(self.armies.values()):
+            AA.land_tick(self, a, dt)
 
     def arrive_node(self, a, nid):
         """Retourne True si l'armée doit s'arrêter (combat, siège...)."""
@@ -1797,13 +1909,9 @@ class Game:
             if not a['path']:
                 a['state'] = 'idle' if a['state'] != 'retreat' else 'idle'
             return False
-        stop = AA.arrive(self, a, nid)   # en traversant : on passe, ou l'on fait halte devant la destination
+        stop = AA.arrive(self, a, nid)   # chez un voisin en paix, ou en traversant : on passe, ou l'on fait halte
         if stop is not None:
             return stop
-        if o != R.NEUTRAL and not self.at_war(code, o):
-            a['path'] = []
-            a['state'] = 'idle'
-            return True
         if a['state'] == 'retreat':
             a['path'] = []
             a['state'] = 'idle'
@@ -2176,6 +2284,7 @@ class Game:
                 if a['owner'] != self.player or a.get('tac_auto', True):
                     self.choose_tactics(a, bt, si)
         self.battles[bid] = bt
+        TB.on_battle_start(self, bt)   # bataille du joueur : elle attend son choix (manuel ou automatique)
         gname = self.place_name(gx, gy)
         if code_a == self.player or code_d == self.player or self.player in (code_a, code_d):
             self.alert_pause()
@@ -2296,8 +2405,8 @@ class Game:
         K = 0.20
         for bid in list(self.battles):
             bt = self.battles.get(bid)
-            if not bt:
-                continue
+            if not bt or not TB.is_auto(bt):
+                continue   # (bataille en attente du choix, ou commandée sur le champ de bataille)
             s0, s1 = bt['sides']
             if not self.hostile(s0['owner'], s1['owner']) or \
                     (s1['node'] is not None and self.nodes[s1['node']]['owner'] != s1['owner']):
@@ -2316,6 +2425,7 @@ class Game:
                                 a['fm'] = fm
                                 a['fm_t'] = self.t - 0.05
             bt['phase'] = phase
+            TB.auto_battle_tick(self, bt, dt)   # munitions consommées, fatigue
             wxf = self.wx(bt['x'], bt['y'])['fire']
             open_ground = bt['terrain'] in R.OPEN_TERRAIN
             P = [dict(artillerie=0.0, inf=0.0, cavalerie=0.0), dict(artillerie=0.0, inf=0.0, cavalerie=0.0)]
@@ -2635,10 +2745,17 @@ class Game:
             a['state'] = 'idle'
             return
         a['mode'] = 'route'
-        legs = self.plan_route(a, best[1])
-        if not legs:
-            pts = self.geo.astar(a['x'], a['y'], *self.node_xy(best[1]))
-            legs = [dict(kind='off', pts=[list(p) for p in pts], i=1)] if pts else None
+        # d'abord sans traverser de terres fermées ; une retraite ne doit jamais piéger l'armée : au besoin, elle
+        # passe quand même, et le délai de grâce s'applique
+        block = AA.closed_owners(self, code)
+        legs = None
+        for blk in (block, frozenset()):
+            legs = self.plan_route(a, best[1], blk)
+            if not legs:
+                pts = self.geo.astar(a['x'], a['y'], *self.node_xy(best[1]), block=AA.cell_mask(self, blk))
+                legs = [dict(kind='off', pts=[list(p) for p in pts], i=1)] if pts else None
+            if legs or not block:
+                break
         if not legs:
             for r in a['regs']:
                 r['n'] *= 0.6
@@ -3040,6 +3157,7 @@ class Game:
                         if a['id'] in s['armies']:
                             s['armies'].remove(a['id'])
                 del self.armies[a['id']]
+        TB.campaign_tick(self, dt)   # munitions recomplétées, fatigue de la marche et du repos
         # sièges : les assiégeants s'usent aussi
         if not self.factions[self.player]['alive']:
             self.check_end()

@@ -2,8 +2,9 @@
 
 Deux siècles de guerres, de commerce et de diplomatie dans l’ancienne Aquitaine, de Louis XIV à la IIIe République.
 
-Jeu de stratégie en temps réel (avec pause) sur la carte de l'ancienne Aquitaine, à l'époque des mousquets,
-de la cavalerie et de l'artillerie. Le moteur tourne en Python sur un petit serveur local ; l'interface est une
+Jeu de stratégie au tour par tour, mois par mois, sur la carte de l'ancienne Aquitaine, à l'époque des mousquets,
+de la cavalerie et de l'artillerie : vous donnez vos ordres, puis le mois se joue sous vos yeux.
+Le temps réel avec pause d'origine reste disponible en réglage avancé. Le moteur tourne en Python sur un petit serveur local ; l'interface est une
 page web (HTML, CSS, JavaScript) qui s'ouvre dans le navigateur.
 
 ## Lancer le jeu
@@ -67,8 +68,10 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
 - Le jeu n'a pas de mot de passe : gardez-le sur le réseau de la maison, ne l'ouvrez pas sur Internet.
 - Si l'adresse `.local` ne répond pas, utilisez l'adresse IP : elle est dans `adresse-reseau.txt`,
   dans `journalctl -u web_conquete` ou via `hostname -I` sur le Raspberry.
-- La partie est **sauvegardée automatiquement** chaque mois de jeu ; après une coupure de courant ou un redémarrage,
-  le Raspberry la reprend telle quelle (en pause).
+- La partie est **sauvegardée automatiquement** au début de chaque mois de jeu (donc au début de chaque tour) ; après
+  une coupure de courant ou un redémarrage, le Raspberry la reprend telle quelle (en pause).
+- Le tour par tour ménage le Raspberry : un mois demande environ une demi-seconde de calcul sur un PC, soit 2,5 à 5 secondes
+  sur un Raspberry Pi pour les 15 secondes que dure le mois à l'écran.
 - Commandes utiles : `sudo systemctl status web_conquete`, `sudo systemctl restart web_conquete`,
   `journalctl -u web_conquete -f`.
 
@@ -76,6 +79,44 @@ Au premier lancement, la carte est calculée (3 à 4 secondes sur un PC, 15 à 3
 puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
 
 ## Principe
+
+### Tour par tour, mois par mois
+Chaque tour est un mois. La carte est figée : déplacez vos armées, levez des troupes, bâtissez, négociez, puis touchez
+**« Fin du mois »** en haut de l'écran (ou la barre d'espace). Le mois se joue alors en accéléré sous vos yeux, avec ses
+marches, ses batailles en trois phases et ses sièges, et tout s'arrête au **1er du mois suivant, à 0 h**. Les IA jouent
+en même temps que vous, pendant le mois, comme auparavant.
+
+- **Durée à l'écran** : 15 secondes par mois au rythme normal, quelle que soit la longueur du mois. Le bouton de rythme,
+  à côté de « Fin du mois » (ou le menu ☰, rubrique « Rythme du jeu », ou les touches 1 à 4), propose aussi
+  **Lent** (30 s), **Rapide** (8 s) et **Éclair** (4 s). Pendant le mois, une barre montre sa progression et
+  **« Arrêter »** fige le temps à tout moment.
+- **Le mois s'interrompt** aux moments clés, pour vous laisser réagir :
+  - une bataille commence avec vos armées ou devant une de vos places, ou se livre à vue à moins de 25 km de chez vous ;
+  - une armée ennemie (150 hommes ou plus, et visible) entre sur vos terres ;
+  - un siège ou un blocus commence contre une de vos places, ou par une de vos armées ;
+  - une décision vous attend : événement historique ou local, proposition de paix, d'alliance ou exigence de
+    soumission, déclaration de guerre ;
+  - une nouvelle époque, un traité, une capitulation arrêtent toujours le temps.
+
+  La raison s'affiche en haut : touchez-la pour centrer la carte et sélectionner la bataille, la place ou l'armée (ou
+  ouvrir la décision). Donnez vos ordres, puis **« Continuer le mois »** : le mois reprend là où il s'était arrêté et
+  s'achève toujours au 1er du mois suivant.
+- **Pas d'interruptions à répétition** : jamais deux fois pour la même bataille, le même siège ou la même décision ;
+  au moins 1,5 jour de jeu entre deux batailles, 2 jours entre deux sièges, 4 jours entre deux entrées d'armées ennemies ;
+  un même lieu (assauts répétés, siège qui suit la bataille) n'arrête le temps qu'une fois en 4 jours, la même armée
+  qu'une fois en 20 jours, la même proposition d'un camp qu'une fois en 45 jours. Les escarmouches lointaines entre
+  autres camps et les partis d'éclaireurs ne comptent pas.
+- **Récapitulatif du mois** : au début de chaque tour, une fiche discrète en haut à gauche résume le mois écoulé :
+  revenus nets de chaque ressource, batailles (victoires et défaites), places prises et perdues, constructions
+  terminées, régiments levés, découvertes et faits marquants (guerres, paix, traités, révoltes, nouvelle époque). Chaque
+  ligne centre la carte au bon endroit ; « Tout voir » déplie la liste, la croix la referme.
+- **Un seul joueur, plusieurs écrans** : l'iPad et le PC ouverts sur le même serveur voient et commandent le même tour.
+  « Fin du mois » touché sur l'un lance le mois sur les deux ; « Arrêter » sur l'iPad l'arrête aussi sur le PC.
+- **Sauvegardes** : on peut sauvegarder et recharger en plein mois (la partie reprend en pause, même échéance, même
+  récapitulatif en cours). Les anciennes sauvegardes se chargent au tour par tour, en attente des ordres.
+- **Temps réel** : menu ☰, rubrique « Rythme du jeu », « Jouer en temps réel (avec pause) » rend les boutons de vitesse
+  d'origine (pause, ×½ à ×30 jours par seconde) ; « Revenir au tour par tour » fait l'inverse. Les nouvelles parties
+  commencent au tour par tour.
 
 ### La grande campagne et les époques
 - **Quatre départs** au choix sur l'écran d'accueil :
@@ -159,7 +200,7 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
 - **Lassitude de la guerre** (0 à 100 %) : chaque mois de guerre et chaque homme perdu l'augmentent, la paix la fait
   retomber. Elle dégrade l'ordre public partout et pousse les IA à signer la paix. À l'inverse, après de longues années
   de paix, les ambitions des voisins se réveillent.
-- **Rythme** :
+- **Rythme en temps réel** (réglage avancé, voir « Tour par tour ») :
   - deux vitesses rapides pour les années de paix, **×10** et **×30** jours par seconde (touches 5 et 6) ;
   - à ces vitesses, une bataille ou une guerre qui vous concerne, une proposition de paix ou d'alliance, ou le siège
     d'une de vos places remettent le jeu en pause ;
@@ -233,13 +274,33 @@ Le panneau d'une armée à l'arrêt propose des actions selon l'endroit où elle
   400 livres ; un village : une quarantaine de vivres). L'ordre public perd 25 %. Une fois tous les quatre mois par place.
 
 **En marche, au moment de choisir la destination** : « Conquérir en chemin » (on rallie ou on attaque les places sur la
-route) ou « Traverser » (le choix est gardé). En traversant, l'armée passe les places indépendantes et les terres d'un
-voisin en paix sans combattre, puis fait halte devant sa destination sans l'attaquer ; une place ennemie tenue lui barre
-toujours la route. Le tracé en pointillé clair et le drapeau blanc le rappellent.
-- **Droit de passage** (fenêtre Diplomatie) : un an, révocable. Les IA l'accordent selon la relation, leur caractère, la peur
-  d'être envahies et l'ennemi visé ; elles le demandent aussi pour atteindre un ennemi.
-- Sans droit de passage, traverser est un **incident diplomatique** : le jeu vous prévient avant. La relation baisse
-  d'au moins 10 points, et un voisin fâché peut déclarer la guerre. On ne peut s'attarder chez un voisin qu'avec ce droit.
+route) ou « Traverser » (le choix est gardé). En traversant, l'armée passe les places indépendantes sans combattre,
+puis fait halte devant sa destination sans l'attaquer ; une place ennemie tenue lui barre toujours la route. Le tracé en
+pointillé clair et le drapeau blanc le rappellent.
+
+**Frontières : terres fermées et droit de passage**
+- Les terres d'un département qui n'est ni à vous, ni votre allié (alliance, suzerain, vassal, vassal du même suzerain),
+  ni en guerre avec vous, et qui ne vous accorde pas de droit de passage, sont **fermées** : vos armées n'y entrent pas,
+  ni par ses places, ni à travers ses campagnes (une campagne appartient au maître de la place dont elle relève).
+  Les places indépendantes restent ouvertes, même enclavées chez un voisin, et les terres d'un ennemi se traversent
+  (ses places tenues arrêtent toujours l'armée).
+- **Contournement** : par les routes, à travers champs ou en suivant votre tracé, l'itinéraire évite les terres fermées.
+  La bulle de destination prévient quand le chemin direct les traverse, et le tracé affiche le détour.
+- **Pas de chemin sans y passer** : l'ordre est refusé. Vous pouvez demander un droit de passage, ou **passer en force** :
+  le jeu demande confirmation, car c'est **déclarer la guerre** à ce département (règles ordinaires : une trêve ou un
+  suzerain l'interdisent, et ses alliés peuvent entrer en guerre).
+- **Fleuves et côte** : les gabares passent librement devant les quais d'un département aux terres fermées, mais
+  n'y embarquent ni n'y débarquent. Le délai de grâce ne court pas à bord.
+- **Droit de passage** (fenêtre Diplomatie) : un an, révocable. Les IA l'accordent selon la relation (plus volontiers
+  quand elle est bonne), leur caractère, la peur d'être envahies et l'ennemi visé. Elles le demandent quand le détour
+  est trop long ou impossible, contournent sinon, ou renoncent un mois à une destination refusée ; elles ne passent
+  jamais en force. La fenêtre Diplomatie résume qui vous laisse passer et à qui vous laissez passer.
+- **Délai de grâce** : une armée qui se retrouve sur des terres fermées sans l'avoir voulu (droit retiré ou échu en
+  chemin, place qui change de mains, paix signée en territoire ennemi, retraite) a **5 jours** pour en sortir. Elle
+  reçoit d'elle-même un itinéraire de sortie (même destination par un détour, sinon les terres ouvertes les plus
+  proches) et vous êtes prévenu. Au-delà, la relation baisse chaque jour, un **incident diplomatique** (−10 points au
+  moins, tous les deux mois au plus) peut pousser le voisin à vous déclarer la guerre. Une retraite n'est jamais piégée :
+  elle traverse s'il le faut, et le délai s'applique. Une armée qui part de terres fermées peut toujours en sortir.
 
 **Devant une place qui n'est pas à vous :**
 - **Négocier le ralliement** (place indépendante) : 2 à 5 jours de pourparlers, contre une somme qui dépend des habitants et
@@ -297,6 +358,18 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   (au prix d'un court moment de désordre). Vous pouvez aussi tout commander vous-même, y compris en pleine bataille.
 - Bouton « Détacher la cavalerie / l'artillerie / l'infanterie » : une arme entière forme sa propre armée,
   par exemple pour envoyer la cavalerie en reconnaissance ou déborder par un autre chemin.
+
+### Batailles manuelles
+- Quand une bataille concerne vos armées ou vos places (assauts compris), la campagne s'arrête et une fenêtre propose
+  **« Commander la bataille »** ou **« Résolution automatique »** (réglage dans le menu ☰ : toujours demander,
+  escarmouches automatiques, toujours automatiques). Les batailles entre IA se résolvent toujours seules.
+- Commandée, la bataille se joue **en temps réel avec pause** (×1, ×2, ×4 ; à ×1 une seconde vaut 30 secondes de
+  bataille, de 8 h au crépuscule) sur une carte de 3 × 2 km tirée du terrain de la campagne : relief, bois, champs,
+  vignes, haies, clôtures et murets, routes, rivières avec gués et ponts, fermes, et la ville avec ses remparts,
+  ses portes et la brèche du siège. Chaque régiment a son expérience, son endurance, la portée de ses armes et ses
+  munitions (un chariot par armée les recomplète) ; les bois cachent les troupes, la nuit arrête le combat.
+- « Finir automatiquement » résout la bataille d'un coup à partir de la situation du moment. Munitions et fatigue
+  restent d'une bataille à l'autre : elles se recomplètent en campagne (vite chez soi, peu en pays ennemi).
 
 ### Fleuves, gabares et blocus
 - La Garonne et l'estuaire de la Gironde, la Dordogne, l'Isle, le Lot, la Baïse, la Midouze et l'Adour sont
@@ -422,22 +495,26 @@ Tout marche seul avec les réglages par défaut ; on intervient quand on veut, d
 
 Pendant l'usage d'un stylet (Apple Pencil, stylet Android ou Windows), la paume posée sur l'écran est ignorée.
 Sur grand écran tactile, les boutons et les cases sont agrandis automatiquement.
-Clavier : espace pour la pause, 1 à 4 pour la vitesse, Échap pour annuler, + et − pour zoomer.
+Clavier : espace pour « Fin du mois », « Arrêter » ou « Continuer le mois » (pour la pause en temps réel), 1 à 4 pour le
+rythme du mois (pour la vitesse en temps réel), Échap pour annuler, + et − pour zoomer.
 
 ## Organisation du code
 ```
-server.py            serveur HTTP local + boucle temps réel (10 pas par seconde)
-game/geo.py          carte : projection, grilles de terrain, réseau routier, recherche de chemin A*
+server.py            serveur HTTP local + boucle de simulation (10 pas par seconde)
+game/turns.py        tour par tour : échéance au 1er du mois, rythme, interruptions, récapitulatif du mois
+game/geo.py          carte : projection, grilles de terrain, réseau routier, recherche de chemin A* (avec terres interdites)
 game/places.py       les 223 villes, villages et places fortes, routes royales
 raspberry/           installation en service sur Raspberry Pi
 game/rules.py        départements, unités, technologies, généraux, formations, météo
 game/engine.py       simulation : économie, impôts, armées, gabares, combats par phases, sièges, espions
-game/army_actions.py actions d’armée : barricades, quartiers, garde bourgeoise, réquisition, traversée, blocus
+game/army_actions.py actions d’armée : barricades, quartiers, garde bourgeoise, réquisition, traversée, terres fermées et droit de passage, blocus
 game/waterways.py    voies navigables (fleuves, estuaire, cabotage) et blocus
 game/ai.py           IA des départements
 game/cities.py       villes : emplacements et bâtiments, politique de la ville, événements locaux
 game/diplomacy.py    diplomatie et commerce
 game/views.py        état envoyé au navigateur (brouillard de guerre), sauvegardes
+game/tactics/        batailles manuelles : carte de bataille (terrain.py), unités (units.py), simulation
+                     (battle.py), IA de secours (ai.py), raccord avec la campagne (bridge.py)
 web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/ambient.js (animations
                      de la carte), js/towns.js (dessin des villes), js/ui.js, js/main.js
 saves/               parties sauvegardées (JSON)

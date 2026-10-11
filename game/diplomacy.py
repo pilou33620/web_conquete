@@ -29,16 +29,24 @@ def value_of(game, code, res, qty):
 
 
 # ------------------------------------------------------------------ effets
-def declare_war(game, a, b, quiet=False):
+def war_refusal(game, a, b):
+    """Raison pour laquelle a ne peut pas déclarer la guerre à b (None : il le peut)."""
     if game.at_war(a, b):
-        return False, "Déjà en guerre."
+        return "Déjà en guerre."
     fa = game.factions[a]
     if fa['overlord']:
-        return False, "Un vassal ne déclare pas la guerre seul."
+        return "Un vassal ne déclare pas la guerre seul."
     if game.factions[b]['overlord'] == a:
-        return False, f"{game.fname(b)} est votre vassal : un lien de vassalité ne se rompt pas ainsi."
+        return f"{game.fname(b)} est votre vassal : un lien de vassalité ne se rompt pas ainsi."
     if b in fa['truce']:
-        return False, f"Une trêve avec {game.fname(b)} court jusqu'au {game.date_str(fa['truce'][b])}."
+        return f"Une trêve avec {game.fname(b)} court jusqu'au {game.date_str(fa['truce'][b])}."
+    return None
+
+
+def declare_war(game, a, b, quiet=False):
+    why = war_refusal(game, a, b)
+    if why:
+        return False, why
     was_ally = game.status(a, b) == 'alliance'
     game.set_status(a, b, 'guerre')
     game.factions[a]['last_war'] = game.factions[b]['last_war'] = game.t

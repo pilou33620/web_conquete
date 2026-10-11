@@ -26,7 +26,7 @@ function checkVersion(ver) {
 async function poll() {
   if (!running || polling) return;
   polling = true;
-  const ep = epoch;
+  const ep = epoch, cs = ui.cmdSeq;   // cs : un ordre envoyé pendant la requête rend cet état périmé
   let st;
   try {
     st = await api.get(`/api/state?since=${seq}`);
@@ -40,6 +40,7 @@ async function poll() {
   }
   if (lost) { lost = false; ui.toast('Connexion au serveur rétablie.', 'good'); }
   if (ep !== epoch || !running) return;
+  if (ui.cmdSeq !== cs) { setTimeout(poll, 40); return; }   // état d’avant l’ordre (fin du mois…) : on le redemande
   if (st && checkVersion(st.ver)) return;
   if (st && st.game === null) {   // le serveur n'a plus de partie : retour à l'écran de départ
     resetUI();
@@ -110,7 +111,7 @@ async function boot() {
     map.moveTo(cap.x, cap.y, 7);
     startPolling();
     setTimeout(() => ui.select({ kind: 'node', id: cap.id }), 600);
-    ui.toast('La partie est en pause. Choisissez une vitesse en haut pour lancer le temps.');
+    ui.toast('Donnez vos ordres, puis touchez « Fin du mois » en haut : le mois se joue et s’arrête au 1er du mois suivant.');
   };
   const focusCapital = async () => {
     let st;

@@ -6,13 +6,16 @@ from . import rules as R
 from . import events as EV
 from . import army_actions as AA
 from . import cities as CT
+from . import turns as TT
 from .engine import Game
+from .tactics import bridge as TB
+from .tactics import units as TU
 
 SAVE_KEYS = ['player', 'difficulty', 'seed', 't', 'uid', 'seq', 'events', 'proposals', 'armies', 'battles', 'over',
              'flood_until', 'market', 'weather', 'factions', 'nodes', '_ai_clock', 'spies', 'scenario', 'start_ord',
-             'era_id', 'pending_ev', 'ev_done']
+             'era_id', 'pending_ev', 'ev_done', 'tour']
 DEFAULTS = dict(spies=list, scenario=lambda: '1790', start_ord=lambda: datetime.date(1790, 3, 4).toordinal(),
-                era_id=lambda: None, pending_ev=list, ev_done=lambda: None)
+                era_id=lambda: None, pending_ev=list, ev_done=lambda: None, tour=lambda: None)
 
 
 def to_dict(g):
@@ -23,6 +26,7 @@ def to_dict(g):
     d['ai_state'] = {c: dict(diplo_clock=ai.diplo_clock, cool=[[k[0], k[1], v] for k, v in ai.cool.items()])
                      for c, ai in getattr(g, 'ais', {}).items()}
     d['version'] = 2
+    TB.save_into(g, d)   # réglage des batailles et bataille tactique en cours
     return d
 
 
@@ -65,6 +69,8 @@ def migrate(g):
                 r['arm'] = g.arm_level(n['owner'], cls)
     AA.migrate(g)   # actions d'armée : droits de passage, quartiers, traversée
     CT.migrate(g)   # emplacements : un magasin aux vivres existant en occupe un
+    TB.migrate(g)   # munitions, fatigue, mode des batailles
+    TT.migrate(g)   # tour par tour : les anciennes parties y passent aussi (temps réel dans le menu)
     for bt in g.battles.values():
         bt.setdefault('mor', [100, 100])
         bt.setdefault('phase', 'fusillade')
@@ -89,6 +95,7 @@ def from_dict(geo, d):
             p['give'] = tuple(p['give'])
             p['get'] = tuple(p['get'])
     migrate(g)
+    TB.load_from(g, d)
     from .ai import AI
     g.ais = {c: AI(g, c) for c in R.FACTIONS if c != g.player}
     for c, st in (d.get('ai_state') or {}).items():
@@ -126,7 +133,7 @@ def rules_payload():
                 formation_speed=R.FORMATION_SPEED, plans=R.PLANS, phases=R.PHASES, spy=R.SPY, spy_days=R.SPY_INTEL_DAYS,
                 tax_labels=R.TAX_LABELS, water=dict(speed=R.WATER_SPEED, sea=R.SEA_SPEED, embark=R.EMBARK_DAYS,
                                                     quai=R.QUAI_LIVRES, blockade=R.BLOCKADE_K),
-                cities=CT.rules_payload())
+                cities=CT.rules_payload(), paces=[list(p) for p in TT.PACES])
 
 
 def _gen(g):
@@ -149,7 +156,9 @@ def _effects(g, f):
 
 
 def _reg(r):
-    return [r['id'], r['type'], round(r['n']), r['max'], round(r['xp']), round(r['morale']), r.get('arm')]
+    # … munitions (%), fatigue, portée efficace (m)
+    return [r['id'], r['type'], round(r['n']), r['max'], round(r['xp']), round(r['morale']), r.get('arm'),
+            round(r.get('ammo', 100.0)), round(r.get('fat', 0.0)), TU.ranges(r)[0]]
 
 
 def _legs(a):
@@ -285,7 +294,8 @@ def player_state(g, since=0):
                               mor=round(g.side_morale(bt, i)), armies=s['armies'], tac=tac, mix=mix))
         battles.append(dict(id=bt['id'], x=round(bt['x'], 2), y=round(bt['y'], 2), node=bt['node'], amb=bt['ambush'],
                             age=round(g.t - bt['t0'], 2), terrain=bt['terrain'], phase=bt.get('phase', 'fusillade'),
-                            land=bool(bt.get('landing')), river=bt.get('river', 0), sides=sides))
+                            land=bool(bt.get('landing')), river=bt.get('river', 0), sides=sides,
+                            mode=bt.get('mode', 'auto')))
 
     facs = []
     for code, f in g.factions.items():
@@ -336,7 +346,8 @@ def player_state(g, since=0):
                 proposals=[dict(id=x['id'], frm=x['frm'], action=x['action'], amount=x['amount'], give=x['give'],
                                 get=x['get'], date=x['date']) for x in g.proposals],
                 market=dict(prices=g.market, spread=[1.15, 0.85] if has_port else [1.4, 0.6]),
-                flood=g.t < g.flood_until, vis=[[round(x, 1), round(y, 1), round(r, 1)] for x, y, r in srcs])
+                tac=TB.tac_view(g), settings=dict(g.settings),
+                flood=g.t < g.flood_until, tour=TT.view(g), vis=[[round(x, 1), round(y, 1), round(r, 1)] for x, y, r in srcs])
 
 
 def _popy(g, p):
