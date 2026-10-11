@@ -839,7 +839,8 @@ def _picture(b, side, mem):
     vu, vu0 = mem.setdefault('vu', {}), mem.setdefault('vu0', {})
     foes = b.visible_enemies(side)
     for e in foes:
-        vu[e.id] = [round(e.x), round(e.y), now, round(e.men), e.cls, e.form, e.state, round(e.morale), round(e.dir, 2)]
+        vu[e.id] = [round(e.x), round(e.y), now, round(e.men), e.cls, e.form, e.state, round(e.morale), round(e.dir, 2),
+                    (b.ranges(e)[2] or 0) if e.cls == 'artillerie' else 0]
         if e.cls not in ('general', 'chariot') and e.id not in vu0:
             vu0[e.id] = round(e.men0)
     return foes
@@ -1073,9 +1074,11 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         return
     # --------------------------------------------------------------- assaillant (ou contre-attaque)
     ax, ay = mem['ax'], mem['ay']
-    if body and abs(lat_c) > width / 2 and L['n'] >= 1:
-        # l'ennemi n'est pas en face : la ligne glisse vers lui
-        step = max(-120.0, min(120.0, lat_c * 0.5))
+    shift = _oblique(b, mem, L, body, plan, width) if ph in ('attente', 'marche', 'prepa', 'assaut') else None
+    if shift is None and body and abs(lat_c) > width / 2 and L['n'] >= 1:
+        shift = lat_c * 0.5   # l'ennemi n'est pas en face : la ligne glisse vers lui
+    if shift and abs(shift) > 30:
+        step = max(-140.0, min(140.0, shift))
         ax, ay = _at(ax, ay, fd, 0, step)
         mem['ax'], mem['ay'] = round(ax, 1), round(ay, 1)
     has_art = any(roles.get(u.id) == 'art' and u.valid for u in us)
@@ -1124,7 +1127,9 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         if done:
             _set_phase(b, mem, 'assaut', "fin de la préparation : la ligne avance par bonds.")
     ph = mem['phase']
-    if ph == 'combat' and line and now - mem['t_phase'] > 240 and now - max(u.fired_t for u in line) > 240:
+    guns = _gun_zones(b, mem) if L['n'] >= 1 else []
+    if ph == 'combat' and line and now - mem['t_phase'] > 240 and now - max(u.fired_t for u in line) > 240 and \
+            not any(_d2(gx, gy, mem['ax'], mem['ay']) < (gr + 250) ** 2 for gx, gy, gr, gid in guns):
         halt *= 0.5   # personne ne tire : l'ennemi est hors de vue ou hors de portée, on serre
         if not mem['notes'].get('serre'):
             mem['notes']['serre'] = 1
@@ -1147,12 +1152,73 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
     for u in line:
         sx, sy = _slot(mem, u.id)
         if mem['phase'] == 'combat' and L['n'] >= 1:
-            sx, sy = _fine_halt(b, mem, u, sx, sy, body, halt)
+            sx, sy = _fine_halt(b, side, mem, L, u, sx, sy, body, halt)
+        if guns:
+            sx, sy = _out_of_grape(mem, guns, sx, sy, fd)
         fdist = _foe_dist(u, body)
         want[u.id] = [sx, sy, fd, _march_form(b, L, u, sx, sy, fdist), False]
     if plan == 'debordement':
         _flank_group(b, side, mem, L, us, foes, sit, want, busy, body)
     _lights_att(b, side, mem, L, us, foes, sit, want, body, front, halt)
+
+
+def _gun_zones(b, mem, maxage=600.0):
+    """Batteries ennemies connues (vues depuis moins de 10 min, ni en déroute ni hors de combat) : [(x, y, rayon de
+    mitraille + 40 m, id)]."""
+    now = b.clock
+    out = []
+    for k, v in mem['vu'].items():
+        if v[4] == 'artillerie' and now - v[2] <= maxage and v[6] not in ('deroute', 'hors') and v[3] > 25:
+            out.append((v[0], v[1], (v[9] if len(v) > 9 and v[9] else 280) + 40, k))
+    return out
+
+
+def _out_of_grape(mem, guns, x, y, fd):
+    """Recule un poste hors de portée de mitraille des batteries ennemies connues (au plus de 300 m)."""
+    for _ in range(8):
+        hit = False
+        for gx, gy, gr, gid in guns:
+            if _d2(gx, gy, x, y) < gr * gr:
+                hit = True
+                break
+        if not hit:
+            break
+        x, y = _clamp(*_at(x, y, fd, -40))
+    return x, y
+
+
+def _oblique(b, mem, L, body, plan, width):
+    """Ordre oblique (normal, difficile) : la ligne se décale pour déborder une aile ennemie, la plus faible, d'un tiers
+    de sa longueur ; ses bataillons d'aile la prennent de flanc (_fine_halt). Renvoie le décalage latéral voulu."""
+    if L['n'] == 0 or plan not in ('frontal', 'artillerie') or not body:
+        return None
+    fd = mem['fd']
+    pts = [(_rel(x, y, mem['ax'], mem['ay'], fd), k) for k, x, y, cls, form in body]
+    front = min(d for (d, l), k in pts)
+    pts = [(d, l, k) for (d, l), k in pts if d < front + 350]
+    if len(pts) < 2:
+        return None
+    lo, hi = min(l for d, l, k in pts), max(l for d, l, k in pts)
+    s = mem.get('obl')
+    if s is None:
+        # l'aile la moins garnie (d'après les effectifs vus près de chaque bout)
+        vu = mem['vu']
+        men = {1: 0.0, -1: 0.0}
+        for d, l, k in pts:
+            if l > hi - 260:
+                men[1] += vu.get(k, [0, 0, 0, 0])[3]
+            if l < lo + 260:
+                men[-1] += vu.get(k, [0, 0, 0, 0])[3]
+        for gx, gy, gr, gid in _gun_zones(b, mem):
+            d, l = _rel(gx, gy, mem['ax'], mem['ay'], fd)
+            men[1] += 600 * max(0.0, 1 - abs(hi - l) / 500)
+            men[-1] += 600 * max(0.0, 1 - abs(l - lo) / 500)
+        s = 1 if men[1] <= men[-1] else -1
+        mem['obl'] = s
+        _note(b, mem, f"attaque oblique : la ligne se porte contre l'aile {'gauche' if s > 0 else 'droite'} "
+                      f"de l'ennemi pour la déborder.")
+    end = hi if s > 0 else lo
+    return end - s * 0.15 * width
 
 
 def _recenter(b, mem, line):
@@ -1194,19 +1260,43 @@ def _advance(b, mem, L, line, target):
     mem['t_bound'] = round(now)
 
 
-def _fine_halt(b, mem, u, sx, sy, body, halt):
-    """Chaque bataillon règle sa distance sur l'ennemi qui lui fait face (sans s'écarter de plus de 70 m)."""
+def _fine_halt(b, side, mem, L, u, sx, sy, body, halt):
+    """Chaque bataillon règle sa distance sur l'ennemi qui lui fait face (sans s'écarter de plus de 70 m) et y cherche
+    un couvert (haie, muret, vigne) à bonne portée ; au-delà de l'aile ennemie, il s'avance à sa hauteur pour la
+    prendre de flanc."""
     fd = mem['fd']
-    best = None
+    best, aside = None, None
     for k, x, y, cls, form in body:
         d, l = _rel(x, y, sx, sy, fd)
-        if abs(l) < 140 and d > -60:
+        if d < -60:
+            continue
+        if abs(l) < 140:
             if best is None or d < best:
                 best = d
+        elif abs(l) < 330 and (aside is None or d < aside):
+            aside = d
     if best is None:
-        return sx, sy
+        if aside is None or L['n'] == 0:
+            return sx, sy
+        return _clamp(*_at(sx, sy, fd, max(-70.0, min(120.0, aside - 10))))
     adj = max(-70.0, min(70.0, best - halt))
-    return _clamp(*_at(sx, sy, fd, adj))
+    x, y = _at(sx, sy, fd, adj)
+    if L['terrain']:
+        e = halt / max(0.3, mem.get('halt_k', 0.85))
+        bx, by, bv = x, y, b.cover_at(x, y) + 0.01
+        for dd in (-40, -20, 20):
+            a2 = adj + dd
+            if not (0.6 * halt <= best - a2 <= 1.1 * e) or abs(a2) > 90:
+                continue
+            px, py = _at(sx, sy, fd, a2)
+            if not b.passable(px, py, 'inf', side):
+                continue
+            qx, qy = _at(px, py, fd, 20)
+            v = max(b.cover_at(px, py), 0.8 * b.cover_at(qx, qy))
+            if v > bv + 0.05:
+                bx, by, bv = px, py, v
+        x, y = bx, by
+    return _clamp(x, y)
 
 
 def _foe_dist(u, body):
@@ -2053,8 +2143,8 @@ def _artillery(b, side, mem, L, us, foes, sit, want, busy):
 
 def _grape_dist(b, mem, L, u, g, foes):
     """Distance de tir à mitraille quand elle dépasse la portée des fusils ennemis (canons Gribeauval contre fusils à
-    silex, par exemple) et que ni cavaliers ni canons ennemis ne menacent la batterie ; sinon None.
-    Normal : aucun cavalier ni canon ennemi repéré depuis 5 min ; difficile : aucun à moins de 800 m."""
+    silex, par exemple) et qu'aucun cavalier ennemi ne menace la batterie ; sinon None.
+    Normal : aucun cavalier ennemi vu depuis 5 min à moins de 1 000 m ; difficile : à moins de 700 m."""
     if not L['grape'] or not g:
         return None
     inf_mx = 0
@@ -2063,12 +2153,8 @@ def _grape_dist(b, mem, L, u, g, foes):
             inf_mx = max(inf_mx, b.ranges(e)[1])
     if not inf_mx or g < inf_mx + 25:
         return None
-    now = b.clock
-    for v in mem['vu'].values():
-        if v[6] in ('deroute', 'hors') or v[4] not in ('cavalerie', 'artillerie') or now - v[2] > 300:
-            continue
-        if L['grape'] == 1 or _d2(v[0], v[1], u.x, u.y) < 800 ** 2:
-            return None
+    if _cav_near(b, mem, u.x, u.y, 1000 if L['grape'] == 1 else 700):
+        return None
     return min(g * 0.95, inf_mx + 35)
 
 
@@ -2145,7 +2231,9 @@ def _art_target(b, L, u, foes, ours, mem, mx, e_r, g):
         else:
             v = 0.35 * pr * BALL.get(t.form, 1.0) * (1 - 0.6 * cov)
         if t.cls == 'artillerie':
-            v *= 1.35 if d <= e_r else 1.0
+            g_t = b.ranges(t)[2] or 280
+            threat = min((_d2(t.x, t.y, o.x, o.y) for o in ours), default=1e12) < (g_t + 60) ** 2
+            v *= (2.0 if threat else 1.4) if d <= e_r else 1.0
         elif t.cls == 'cavalerie':
             v *= 1.3
         elif t.cls == 'chariot':
