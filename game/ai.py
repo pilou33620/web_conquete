@@ -4,6 +4,7 @@ import random
 
 from . import rules as R
 from . import diplomacy as D
+from . import army_actions as AA
 
 ARM_TECHS = {t for l in R.ARMS.values() for t, _, _ in l if t}
 from .geo import TERRAIN
@@ -47,6 +48,9 @@ class AI:
         self.research()
         self.recruit()
         self.military()
+        if self.g.t >= getattr(self, 'aa_clock', 0):
+            self.aa_clock = self.g.t + 3   # barricades, garde bourgeoise, quartiers, réquisition, droit de passage
+            AA.ai_step(self)
         if self.g.t >= self.spend_clock:
             self.spend_clock = self.g.t + 4 + self.rng.random() * 2
             self.spend()
@@ -204,7 +208,7 @@ class AI:
             if d <= reach and (best is None or d < best[0]):
                 best = (d, n['id'])
         self.cool[('rearm', a['id'])] = g.t + 45   # pas de va-et-vient : un essai par mois et demi
-        if best is None or not g.order_move(code, a['id'], node=best[1])[0]:
+        if best is None or not g.order_move(code, a['id'], node=best[1], tr=True)[0]:
             return False
         a['ai'] = dict(then='rearm')
         return True
@@ -660,6 +664,8 @@ class AI:
             has_art = any(r['type'] == 'artillerie' for r in a['regs'])
             dur = g.t - (n['siege']['since'] if n['siege'] else g.t)
             dmg = n['siege']['dmg'] if n['siege'] else 0
+            if AA.ai_siege(self, a, ratio):   # rançonner avant de partir, ou affamer plutôt qu'attendre la brèche
+                return
             if (n['fort'] == 0 and ratio > 1.5) or (dmg >= 0.6 and ratio > 1.5) or (dur > 45 and ratio > 1.2) \
                     or (ratio > 6 and dmg >= 0.3):
                 g.assault(code, a['id'])
@@ -687,10 +693,12 @@ class AI:
             g.to_garrison(code, a['id'])
             return
         self.rearm_here(a)
+        if a.get('qrt') and (men < 0.8 * mx or not self.wars()):
+            return   # en quartiers : on se refait avant de repartir
         if men < 0.45 * mx or a['supply'] < 0.25:
             home = self.home_node(a)
             if home is not None and home != a['at_node']:
-                if g.order_move(code, a['id'], node=home)[0]:
+                if g.order_move(code, a['id'], node=home, tr=True)[0]:
                     a['ai'] = dict(then='garrison')
                     return
             elif home is not None:
@@ -710,7 +718,7 @@ class AI:
                 if d < (160 if typ == 'capitale' else 90) and (best is None or val > best[0]):
                     best = (val, n['id'])
         if best and best[1] != a['at_node']:
-            if g.order_move(code, a['id'], node=best[1])[0]:
+            if g.order_move(code, a['id'], node=best[1], tr=True)[0]:   # secourir une place : pas de détour
                 return
         elif best:
             return
@@ -727,7 +735,7 @@ class AI:
         if not self.pick_target(a, taken, wars):
             r = self.rally
             if r is not None and r != a['at_node']:
-                g.order_move(code, a['id'], node=r)
+                g.order_move(code, a['id'], node=r, tr=not wars)   # en guerre, le front se gagne en chemin
 
     def rally_node(self):
         g, code = self.g, self.code
@@ -807,7 +815,7 @@ class AI:
             cands.append((sc, n['id']))
         cands.sort(reverse=True)
         for sc, nid in cands[:4]:
-            ok, _ = g.order_move(code, a['id'], node=nid)
+            ok, _ = g.order_move(code, a['id'], node=nid, tr=False)
             if ok:
                 taken[nid] = taken.get(nid, 0) + 1
                 a['ai'] = None
@@ -843,7 +851,7 @@ class AI:
                 py += (tx - mx) / L * off
                 ter = g.geo.terrain_at(px, py)
                 if TERRAIN[ter][2] and g.geo.playable_at(px, py) and not g.geo.road[g.geo.cell(px, py)]:
-                    ok, _ = g.order_move(code, a['id'], x=px, y=py, mode='champs')
+                    ok, _ = g.order_move(code, a['id'], x=px, y=py, mode='champs', tr=False)
                     a['mode'] = 'route'
                     if ok:
                         a['ai'] = dict(then='embuscade', until=g.t + 30)

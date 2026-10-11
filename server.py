@@ -31,6 +31,7 @@ ADDR_FILE = os.path.join(ROOT, 'adresse-reseau.txt')
 AUTOSAVE = 'sauvegarde-automatique'
 sys.path.insert(0, ROOT)
 
+from game import army_actions as AA  # noqa: E402
 from game import diplomacy as D  # noqa: E402
 from game import events as EV  # noqa: E402
 from game import rules as R  # noqa: E402
@@ -108,10 +109,23 @@ class App:
             if c == 'move':
                 x, y = body.get('x'), body.get('y')
                 node = body.get('node')
+                tr = body.get('tr')
                 return self._r(g.order_move(p, a, None if x is None else self._num(x), None if y is None else self._num(y),
-                                            None if node is None else self._node(node), body.get('mode')))
+                                            None if node is None else self._node(node), body.get('mode'),
+                                            None if tr is None else bool(tr), bool(body.get('force'))))
             if c == 'path':
-                return self._r(g.order_path(p, a, body.get('pts') or []))
+                tr = body.get('tr')
+                return self._r(g.order_path(p, a, body.get('pts') or [], None if tr is None else bool(tr),
+                                            bool(body.get('force'))))
+            if c == 'army_act':
+                return self._r(AA.command(g, p, a, body.get('value')))
+            if c == 'conduct':
+                ar = g.armies.get(a)
+                if ar and ar['owner'] == p:
+                    ar['tr'] = bool(body.get('value'))
+                    return dict(ok=True, msg='L’armée traversera sans combattre en chemin.' if ar['tr']
+                                else 'L’armée ralliera ou attaquera les places sur sa route.')
+                return dict(ok=False, msg='Armée introuvable.')
             if c == 'stance':
                 return self._r(g.set_stance(p, a, body.get('value')))
             if c == 'retreat':
@@ -197,6 +211,8 @@ class App:
     @staticmethod
     def _r(res):
         ok, msg = res
+        if ok is None:   # l'ordre attend la confirmation du joueur (incident diplomatique…)
+            return dict(ok=False, confirm=msg)
         if ok and isinstance(msg, str) and msg.startswith(('a', 'r')) and msg[1:].isdigit():
             return dict(ok=True, id=msg)
         return dict(ok=bool(ok), msg=msg)

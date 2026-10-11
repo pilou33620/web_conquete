@@ -198,6 +198,46 @@ Chaque place a un niveau de fortification, dessiné sur la carte autour de la vi
 - Une place prise par la force perd un niveau (remparts éventrés). Si le trésor est vide, faute d'entretien,
   les remparts les plus hauts se délabrent d'un niveau chaque mois. Le sabotage d'un espion retire aussi un niveau.
 
+### Ce qu'une armée fait dans une place
+Le panneau d'une armée à l'arrêt propose des actions selon l'endroit où elle se tient.
+
+**Dans une de vos places :**
+- **Barricades et palissades** : quelques jours de travaux (plus vite avec beaucoup d'hommes ou des sapeurs), 40 à 90 bois.
+  Une place sans remparts vaut alors presque un mur d'enceinte (niveau 0,8) et soutient un siège au lieu d'être emportée
+  d'emblée. L'ouvrage s'use en trois mois environ, plus vite sous la pluie, en hiver, et bien plus vite sous le canon.
+  Devant des remparts, ce sont des **redoutes** : un petit bonus (+0,3 niveau). Pieux, gabions et redoutes sont dessinés sur la carte.
+- **Prendre ses quartiers** : renforts et moral plus rapides, ordre public en hausse, mais 60 % de vivres en plus pour
+  l'armée. Le cantonnement cesse dès qu'elle se met en marche. Des tentes apparaissent autour de la place.
+- **Armer les habitants** : la milice gagne 60 % de son effectif et un peu plus selon la population (jusqu'à 900 hommes),
+  pour 60 jours, contre 0,15 arme par homme ; la production baisse de 10 %. Une fois tous les six mois par place.
+- **Réquisitionner** : vivres, recrues et livres pris sur-le-champ selon la population (Bordeaux : 900 vivres, 300 recrues,
+  400 livres ; un village : une quarantaine de vivres). L'ordre public perd 25 %. Une fois tous les quatre mois par place.
+
+**En marche, au moment de choisir la destination** : « Conquérir en chemin » (on rallie ou on attaque les places sur la
+route) ou « Traverser » (le choix est gardé). En traversant, l'armée passe les places indépendantes et les terres d'un
+voisin en paix sans combattre, puis fait halte devant sa destination sans l'attaquer ; une place ennemie tenue lui barre
+toujours la route. Le tracé en pointillé clair et le drapeau blanc le rappellent.
+- **Droit de passage** (fenêtre Diplomatie) : un an, révocable. Les IA l'accordent selon la relation, leur caractère, la peur
+  d'être envahies et l'ennemi visé ; elles le demandent aussi pour atteindre un ennemi.
+- Sans droit de passage, traverser est un **incident diplomatique** : le jeu vous prévient avant. La relation baisse
+  d'au moins 10 points, et un voisin fâché peut déclarer la guerre. On ne peut s'attarder chez un voisin qu'avec ce droit.
+
+**Devant une place qui n'est pas à vous :**
+- **Négocier le ralliement** (place indépendante) : 2 à 5 jours de pourparlers, contre une somme qui dépend des habitants et
+  de la milice, réduite devant une armée imposante. Les notables peuvent refuser : l'argent revient, et ils ne vous
+  recevront plus pendant un mois.
+- **Exiger une contribution** (indépendante, ou ennemie en guerre) : livres et vivres tout de suite, puis on laisse la place.
+  Une place indépendante indigne tous les départements, une place ennemie fâche son maître. Une fois tous les trois mois par place.
+- **Bloquer et affamer** : ni bombardement ni assaut, les remparts restent intacts mais la place ne produit plus rien.
+  Ses réserves tiennent 18 à 35 jours, 40 de plus avec un magasin aux vivres. Puis la faim et les désertions minent la
+  garnison et la milice jusqu'à la reddition, environ 25 jours plus tard. Le blocus est dessiné comme un cordon en pointillé.
+  On peut toujours bombarder ou donner l'assaut.
+
+Les IA s'en servent avec mesure. Elles barricadent les places menacées, arment les bourgeois face au danger et prennent
+leurs quartiers pour se refaire. Elles réquisitionnent en cas de disette, affament les hautes murailles faute de canons,
+rançonnent avant de lever un siège sans espoir et traversent quand elles se portent au secours d'une place. Le journal
+vous prévient d'un blocus ou d'une contribution sur vos places et des troupes qui passent sur vos terres.
+
 ### Unités, intendance et prisonniers
 - Outre la ligne, les voltigeurs, la cavalerie et l'artillerie :
   - **Grenadiers** : infanterie d'élite, déjà aguerrie, chère ; après la technologie « Fusil et baïonnette à douille ».
@@ -325,6 +365,7 @@ game/places.py       les 223 villes, villages et places fortes, routes royales
 raspberry/           installation en service sur Raspberry Pi
 game/rules.py        départements, unités, technologies, généraux, formations, météo
 game/engine.py       simulation : économie, impôts, armées, gabares, combats par phases, sièges, espions
+game/army_actions.py actions d’armée : barricades, quartiers, garde bourgeoise, réquisition, traversée, blocus
 game/waterways.py    voies navigables (fleuves, estuaire, cabotage) et blocus
 game/ai.py           IA des départements
 game/diplomacy.py    diplomatie et commerce

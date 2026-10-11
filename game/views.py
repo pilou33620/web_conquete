@@ -4,6 +4,7 @@ import random
 
 from . import rules as R
 from . import events as EV
+from . import army_actions as AA
 from .engine import Game
 
 SAVE_KEYS = ['player', 'difficulty', 'seed', 't', 'uid', 'seq', 'events', 'proposals', 'armies', 'battles', 'over',
@@ -61,6 +62,7 @@ def migrate(g):
             cls = R.UNITS[r['type']]['cls']
             if cls in R.ARMS and 'arm' not in r:
                 r['arm'] = g.arm_level(n['owner'], cls)
+    AA.migrate(g)   # actions d'armée : droits de passage, quartiers, traversée
     for bt in g.battles.values():
         bt.setdefault('mor', [100, 100])
         bt.setdefault('phase', 'fusillade')
@@ -216,6 +218,7 @@ def player_state(g, since=0):
         spy = next((s for s in g.spies if s['by'] == p and s['node'] == n['id']), None)
         if spy:
             d['spy'] = dict(kind=spy['kind'], left=round(spy['done'] - g.t, 1))
+        AA.view_node(g, n, d, n['owner'] in side, lambda: g.intel_active(p, n['id']) or seen(gn['x'], gn['y']))
         nodes.append(d)
 
     armies = []
@@ -250,6 +253,7 @@ def player_state(g, since=0):
             d['dp'] = g.geo.nodes[a['depot']]['name'] if a.get('depot') is not None else None
         else:
             d['regs'] = [[None, r['type'], round(r['n']), r['max'], 0, 0] for r in a['regs']]
+        AA.view_army(g, a, d, a['owner'] == p)   # quartiers, traversée, actions possibles sur place
         armies.append(d)
 
     battles = []
@@ -288,7 +292,7 @@ def player_state(g, since=0):
                          wars=[o for o in g.factions if o != code and g.at_war(code, o)],
                          cap_owner=g.nodes[g.capital_of(code)]['owner'], techs=len(f['techs']),
                          pr=int(f.get('prisoners', {}).get(p, 0)) if code != p else 0,
-                         prestige=g.prestige(code), weary=int(f.get('weary', 0))))
+                         prestige=g.prestige(code), weary=int(f.get('weary', 0)), **AA.view_passage(g, p, code)))
 
     has_port = any('port' in g.geo.nodes[n['id']]['spec'] for n in g.owned_nodes(p))
     tb, cov = g.tools_bonus(p)

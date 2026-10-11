@@ -6,6 +6,7 @@ import random
 
 from . import rules as R
 from . import events as EV
+from . import army_actions as AA
 from .geo import TERRAIN, T_LANDE, T_MARAIS, T_PLAINE
 
 SUBSTEP = 0.05  # jours
@@ -412,6 +413,7 @@ class Game:
         self.detect_contacts()
         self.settle_conflicts()
         self.update_sieges(dt)
+        AA.tick(self, dt)
         self.update_battles(dt)
         self.attrition(dt)
         for code, ai in self.ais.items():
@@ -636,6 +638,7 @@ class Game:
         mult = self.pop_factor(n) * max(0.3, n['stab']) * (0.7 + 0.3 * self.assim(n))
         if n['siege']:
             mult = 0
+        mult *= AA.output_k(self, n)   # bourgeois sous les armes
         ter = self.geo.terrain_at(gn['x'], gn['y'])
         if ter in (T_LANDE, T_MARAIS):
             mult *= 1 + self.mod(code, 'lande_prod')
@@ -712,6 +715,7 @@ class Game:
                 u = R.UNITS[reg['type']]
                 up_v += u['upkeep_v'] * reg['n'] / 100
                 up_l += u['upkeep_l'] * reg['n'] / 100
+            up_v += AA.extra_food(self, code)   # armées en quartiers
             k_up = 1 + self.mod(code, 'upkeep')
             tot['vivres'] -= up_v * k_up
             tot['livres'] -= up_l * k_up
@@ -817,6 +821,7 @@ class Game:
                 friends = any(self.friendly(code, o) for o in held.get(n['id'], ()))
                 if n['garrison'] or friends or self.geo.nodes[n['id']]['type'] == 'capitale':
                     tgt += 0.15
+                tgt += AA.stab_bonus(self, n)
                 tgt = max(0.1, min(1.0, tgt))
                 boost = 1 + max(0.0, 0.5 - self.factions[code].get('tax', 0.5)) * 2
             if n['stab'] < tgt:
@@ -1124,7 +1129,7 @@ class Game:
                  regs=regs, x=float(x), y=float(y), at_node=node, path=[], target=None, state='idle', stance='normal',
                  mode='route', supply=1.0, battle=None, grace=0.0, hidden=False, onroad=node is not None, edge=None,
                  assault=False, ai=None, viol=0.0, gen=self.new_general(code), fm='ligne', pl='frontal', fm_t=-9.0,
-                 tac_auto=True, landing=False, boat=False, rx=True, des=0.0, depot=None)
+                 tac_auto=True, landing=False, boat=False, rx=True, des=0.0, depot=None, tr=False, hold=False, qrt=False)
         self.armies[aid] = a
         return a
 
@@ -1210,7 +1215,7 @@ class Game:
         n = self.nodes[nid]
         code = n['owner']
         gn = self.geo.nodes[nid]
-        fort_eff = n['fort'] * (1 - (n['siege']['dmg'] if n['siege'] else 0))
+        fort_eff = AA.fort_eff(self, n)   # remparts moins la brèche, et ouvrages de fortune
         fb = 1 + 0.35 * fort_eff + (self.mod(code, 'fort_bonus') if code != R.NEUTRAL else 0)
         tname = TERRAIN[self.geo.terrain_at(gn['x'], gn['y'])][0]
         p = n['milice'] * R.MILICE_POWER * self.milice_k(code)
@@ -1250,14 +1255,15 @@ class Game:
         return None
 
     # ------------------------------------------------------------------ chemins
-    def passable_node(self, code, nid, target):
+    def passable_node(self, code, nid, target, tr=0):
         o = self.nodes[nid]['owner']
         if o == code or o == R.NEUTRAL:
             return True
         st = self.status(code, o)
         if st in ('guerre', 'alliance'):
             return True
-        return False
+        # en traversant : avec un droit de passage, ou (joueur prévenu) quitte à provoquer un incident
+        return bool(tr) and (tr >= 2 or AA.has_passage(self, code, o))
 
     def edge_cost(self, code, e, frm=None, speed=22.0):
         """Coût d'un tronçon en « km de route équivalents » pour une armée marchant à `speed` km/j."""
@@ -1299,7 +1305,7 @@ class Game:
             sp *= 0.5 + 0.5 * self.wx(x, y)['move']
         return sp
 
-    def road_route(self, code, start_nodes, goal, speed=22.0, boat=False):
+    def road_route(self, code, start_nodes, goal, speed=22.0, boat=False, tr=0):
         """Plus court chemin par les routes et les voies d'eau.
         start_nodes : dict nœud -> coût initial. Retourne (coût, [nœuds], [arêtes]).
         L'état « à bord » est suivi : embarquer et débarquer prennent du temps."""
@@ -1318,13 +1324,18 @@ class Game:
             if u == goal:
                 best_goal = (u, b)
                 break
-            if u not in start_nodes and self.nodes[u]['owner'] != code and not self.friendly(code, self.nodes[u]['owner']):
+            ou = self.nodes[u]['owner']
+            if u not in start_nodes and ou != code and not self.friendly(code, ou):
                 # on peut traverser un nœud hostile/neutre mais on s'y arrêtera : coût dissuasif
-                d += 25
+                # (en traversant, on ne s'arrête qu'aux places ennemies ; on évite les terres sans droit de passage)
+                if not tr or (ou != R.NEUTRAL and self.at_war(code, ou)):
+                    d += 25
+                elif ou != R.NEUTRAL and not AA.has_passage(self, code, ou):
+                    d += 40
             for eid in self.geo.adj[u]:
                 e = self.geo.edges[eid]
                 v = e['b'] if e['a'] == u else e['a']
-                if not self.passable_node(code, v, goal):
+                if not self.passable_node(code, v, goal, tr):
                     continue
                 water = e.get('kind') == 'water'
                 nb = 1 if water else 0
@@ -1369,6 +1380,7 @@ class Game:
 
     def plan_route(self, a, goal):
         code = a['owner']
+        tr = AA.route_level(self, a)
         legs = []
         if a['at_node'] is not None:
             starts = {a['at_node']: 0.0}
@@ -1377,14 +1389,14 @@ class Game:
             frm, pos = a['edge']['frm'], a['edge']['pos']
             to = e['b'] if e['a'] == frm else e['a']
             starts = {}
-            if self.passable_node(code, frm, goal):
+            if self.passable_node(code, frm, goal, tr):
                 starts[frm] = pos
-            if self.passable_node(code, to, goal):
+            if self.passable_node(code, to, goal, tr):
                 starts[to] = e['len'] - pos
             if not starts:
                 return None
         else:
-            near = self.nearest_node(a['x'], a['y'], lambda i: self.passable_node(code, i, goal), 60)
+            near = self.nearest_node(a['x'], a['y'], lambda i: self.passable_node(code, i, goal, tr), 60)
             if near is None:
                 return None
             nx, ny = self.node_xy(near)
@@ -1393,7 +1405,7 @@ class Game:
                 return None
             legs.append(dict(kind='off', pts=[list(p) for p in pts], i=1))
             starts = {near: 0.0}
-        r = self.road_route(code, starts, goal, self.army_speed(a), bool(a.get('boat')))
+        r = self.road_route(code, starts, goal, self.army_speed(a), bool(a.get('boat')), tr)
         if not r:
             return None
         _, nodes, eids = r
@@ -1441,7 +1453,10 @@ class Game:
         f = pos / e['len']
         return A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f
 
-    def order_move(self, code, aid, x=None, y=None, node=None, mode=None):
+    def order_move(self, code, aid, x=None, y=None, node=None, mode=None, tr=None, force=False):
+        """tr : traverser (True) ou conquérir en chemin (False), None pour garder le choix de l'armée ;
+        force : le joueur, prévenu, accepte de passer sans droit de passage. Retourne (None, avertissement)
+        quand il faut d'abord sa confirmation."""
         a = self.armies.get(aid)
         if not a or a['owner'] != code:
             return False, "Armée introuvable."
@@ -1454,20 +1469,24 @@ class Game:
             if not self.valid_node(node):
                 return False, "Lieu inconnu."
             o = self.nodes[node]['owner']
-            if o not in (code, R.NEUTRAL) and self.status(code, o) == 'paix':
-                return False, f"{self.geo.nodes[node]['name']} appartient à {self.fname(o)} (en paix). Déclarez la guerre d'abord."
+            if o not in (code, R.NEUTRAL) and self.status(code, o) == 'paix' and not (a.get('tr') if tr is None else tr):
+                return False, f"{self.geo.nodes[node]['name']} appartient à {self.fname(o)} (en paix). Déclarez la guerre d'abord, ou marchez en traversant."
         elif x is None or y is None or not (math.isfinite(x) and math.isfinite(y)):
             return False, "Destination invalide."
         # un ordre refusé ne doit ni lever le siège en cours ni changer l'itinéraire choisi
-        old_mode = a['mode']
+        old = a['mode'], a.get('tr', False), a.get('trx', False)
         if mode:
             a['mode'] = mode
+        if tr is not None:
+            a['tr'] = bool(tr)
+        a['trx'] = bool(force)
         ok, msg = self._order_move(code, a, x, y, node)
         if not ok:
-            a['mode'] = old_mode
+            a['mode'], a['tr'], a['trx'] = old
         return ok, msg
 
     def _order_move(self, code, a, x, y, node):
+        old_path, old_target = a['path'], a['target']
         if a['mode'] == 'route':
             if node is None:
                 node_near = self.nearest_node(x, y, maxd=6)
@@ -1509,8 +1528,14 @@ class Game:
                 return False, "Destination inaccessible à travers champs (fleuve sans pont, eau ou hors région)."
             a['path'] = pre + [dict(kind='off', pts=[list(p) for p in pts], i=1)]
             a['target'] = dict(node=node) if node is not None else dict(x=x, y=y)
+        # le joueur est prévenu avant de traverser sans droit de passage les terres d'un voisin en paix
+        warn = AA.trespass_warning(self, code, a) if code == self.player and not a.get('trx') else None
+        if warn:
+            a['path'], a['target'] = old_path, old_target
+            return None, warn
         if a['state'] == 'siege':
             self.end_siege_for(a)
+        a['hold'] = a['qrt'] = False
         a['state'] = 'move'
         a['assault'] = False
         if a['stance'] == 'embuscade':
@@ -1519,7 +1544,7 @@ class Game:
             a['at_node'] = None
         return True, "En marche."
 
-    def order_path(self, code, aid, pts):
+    def order_path(self, code, aid, pts, tr=None, force=False):
         """Itinéraire tracé au doigt ou au stylet : l'armée passe par les points dessinés, à travers champs."""
         a = self.armies.get(aid)
         if not a or a['owner'] != code:
@@ -1554,10 +1579,19 @@ class Game:
             o = self.nodes[node]['owner']
             if o not in (code, R.NEUTRAL) and self.status(code, o) == 'paix':
                 node = None
+        path = pre + [dict(kind='off', pts=[list(p) for p in full], i=1)]
+        target = dict(node=node) if node is not None else dict(x=ex, y=ey)
+        if code == self.player and not force:
+            warn = AA.trespass_warning(self, code, dict(path=path, target=target))
+            if warn:
+                return None, warn
+        if tr is not None:
+            a['tr'] = bool(tr)
         if a['state'] == 'siege':
             self.end_siege_for(a)
-        a['path'] = pre + [dict(kind='off', pts=[list(p) for p in full], i=1)]
-        a['target'] = dict(node=node) if node is not None else dict(x=ex, y=ey)
+        a['hold'] = a['qrt'] = False
+        a['path'] = path
+        a['target'] = target
         a['state'] = 'move'
         a['assault'] = False
         if a['stance'] == 'embuscade':
@@ -1730,7 +1764,8 @@ class Game:
                 nd = self.geo.node_of_cell(a['x'], a['y'])
                 if nd is not None:
                     o = self.nodes[nd]['owner']
-                    if o not in (a['owner'], R.NEUTRAL) and self.status(a['owner'], o) == 'paix':
+                    if o not in (a['owner'], R.NEUTRAL) and self.status(a['owner'], o) == 'paix' \
+                            and not AA.on_peace_land(self, a, o):   # droit de passage, sinon incident
                         self.factions[o]['rel'][a['owner']] = max(-100, self.factions[o]['rel'][a['owner']] - 1.2 * dt)
                         a['viol'] += dt
                         if a['viol'] > 0.5 and o == self.player and self.rng.random() < dt:
@@ -1749,6 +1784,9 @@ class Game:
             if not a['path']:
                 a['state'] = 'idle' if a['state'] != 'retreat' else 'idle'
             return False
+        stop = AA.arrive(self, a, nid)   # en traversant : on passe, ou l'on fait halte devant la destination
+        if stop is not None:
+            return stop
         if o != R.NEUTRAL and not self.at_war(code, o):
             a['path'] = []
             a['state'] = 'idle'
@@ -1785,7 +1823,7 @@ class Game:
                     self.log('siege', f"Vos troupes occupent {gn['name']} : ralliement en cours…", gn['x'], gn['y'], who=code)
             a['state'] = 'siege'
             return True
-        if n['fort'] >= 1 and not a['assault'] and n['siege'] is None and (o != R.NEUTRAL or n['fort'] >= 2):
+        if AA.walled(n) and not a['assault'] and n['siege'] is None and (o != R.NEUTRAL or n['fort'] >= 2):
             n['siege'] = dict(by=code, dmg=0.0, since=self.t)
             a['state'] = 'siege'
             if code == self.player or o == self.player:
@@ -1833,6 +1871,9 @@ class Game:
                 if not any(a['at_node'] == nid and a['owner'] == s['by'] and a['state'] == 'battle' for a in self.armies.values()):
                     n['siege'] = None
                 continue
+            if s.get('blocus'):
+                AA.blockade_tick(self, n, bes, dt)   # ni bombardement ni assaut : la faim
+                continue
             if s.get('occupy'):
                 gtyp = self.geo.nodes[nid]['type']
                 s['dmg'] = min(1.0, s['dmg'] + dt / {'village': 3.0, 'fort': 5.0}.get(gtyp, 5.0))
@@ -1848,7 +1889,7 @@ class Game:
             n_art = sum(1 for a in bes for r in a['regs'] if r['type'] == 'artillerie')
             n_sap = sum(1 for a in bes for r in a['regs'] if r['type'] == 'sapeurs')
             power_art = 1 + self.mod(s['by'], 'art_power')
-            rate = (0.02 + 0.06 * n_art * power_art + R.SAPEUR_SIEGE * n_sap) / max(1, n['fort'])
+            rate = (0.02 + 0.06 * n_art * power_art + R.SAPEUR_SIEGE * n_sap) / max(1, n['fort']) * AA.siege_k(n)
             if any(self.gen_trait(a) == 'artilleur' for a in bes):
                 rate *= 1.4
             rate *= 1 + self.mod(s['by'], 'siege_speed')
@@ -2064,7 +2105,8 @@ class Game:
             if n['siege'] and n['siege']['by'] == a['owner'] and a['state'] == 'siege':
                 continue
             if a['state'] == 'idle' and not self.hostile(a['owner'], n['owner']):
-                if not self.friendly(a['owner'], n['owner']) and self.t >= a.get('grace', 0):
+                if not self.friendly(a['owner'], n['owner']) and self.t >= a.get('grace', 0) \
+                        and not AA.may_stay(self, a, n['owner']):
                     self.retreat(a)   # la paix (ou un traité) l'a laissée chez un voisin : elle rentre chez elle
                 continue
             if nid in battle_nodes or (n['siege'] and n['siege']['by'] != a['owner']) or self.t < a.get('grace', 0):
@@ -2284,7 +2326,7 @@ class Game:
                 fb, wall = 1.0, 1.0
                 if node is not None:
                     o = node['owner']
-                    fort_eff = node['fort'] * (1 - (node['siege']['dmg'] if node['siege'] else 0))
+                    fort_eff = AA.fort_eff(self, node)
                     fb = 1 + 0.35 * fort_eff + (self.mod(o, 'fort_bonus') if o != R.NEUTRAL else 0)
                     wall = 1.0 / (1 + 0.55 * fort_eff)  # les remparts abritent les défenseurs
                 for owner, r, a in units:
@@ -2458,7 +2500,7 @@ class Game:
             for r in n['garrison']:
                 tot += r['morale'] * r['n']
                 w += r['n']
-            fort = n['fort'] * (1 - (n['siege']['dmg'] if n['siege'] else 0))
+            fort = AA.fort_eff(self, n)
             mm = min(100, 55 + 15 * fort)
             tot += mm * n['milice']
             w += n['milice']
@@ -2564,6 +2606,7 @@ class Game:
         a['state'] = 'retreat'
         a['grace'] = self.t + 1.0
         a['stance'] = 'normal'
+        a['hold'] = a['qrt'] = False
         a['assault'] = False
         best = None
         for gn in self.geo.nodes:
@@ -2631,6 +2674,7 @@ class Game:
         old = n['owner']
         if old == code:
             return
+        AA.on_capture(self, nid)
         n['owner'] = code
         n['assim'] = 1.0 if code == gn['dept'] else (0.3 if peaceful else 0.0)
         n['stab'] = 0.6 if peaceful else 0.35

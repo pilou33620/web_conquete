@@ -197,6 +197,11 @@ button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   border-bottom: 1px solid var(--laiton); transform: translateX(-50%) rotate(45deg); }
 #bubble .bt { font-size: 14px; color: var(--papier-2); padding: 0 4px; }
 #bubble .btn { text-align: left; }
+/* conduite d'une marche : conquérir en chemin ou traverser */
+.seg.conduct button { font-size: 13.5px; padding: 4px 9px; }
+#bubble .seg.conduct { display: flex; }
+#bubble .seg.conduct button { flex: 1; }
+#bubble .bh { font-size: 12.5px; line-height: 1.25; color: var(--papier-2); opacity: .85; max-width: 250px; padding: 0 4px; }
 #tooltip { position: absolute; z-index: 50; background: var(--nuit); border: 1px solid var(--hair); border-radius: 6px; padding: 7px 10px; font-size: 14px;
   max-width: 300px; pointer-events: none; box-shadow: 0 4px 14px var(--ombre); }
 #tooltip table { border-collapse: collapse; width: 100%; }
