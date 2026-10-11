@@ -1,5 +1,6 @@
 """Diplomatie et commerce entre départements."""
 from . import rules as R
+from . import army_actions as AA
 
 BASE_VALUE = dict(livres=1.0, vivres=0.6, fer=2.0, bois=1.0, armes=3.5, outils=3.0, recrues=0.5)
 
@@ -226,6 +227,8 @@ def ai_evaluate(game, ai, frm, action, amount=0, give=None, get=None):
         if v_in >= v_out:
             return True, f"{game.fname(ai)} accepte l'échange."
         return False, f"{game.fname(ai)} juge l'échange déséquilibré."
+    if action == 'passage':
+        return AA.eval_passage(game, ai, frm, amount)
     if action == 'prisonniers':
         mine, theirs = held(game, ai, frm), held(game, frm, ai)
         if not mine and not theirs:
@@ -269,6 +272,14 @@ def act(game, frm, to, action, amount=0, give=None, get=None):
         game.factions[to]['rel'][frm] = max(-100, game.factions[to]['rel'][frm] - 8)
         game._dirty_income = True
         return True, "Accord commercial dénoncé."
+    if action == 'fin_passage':
+        return AA.revoke_passage(game, frm, to)
+    if action == 'passage':
+        st = game.status(frm, to)
+        if st != 'paix':
+            return False, "Le droit de passage se demande à un voisin en paix (vos alliés passent déjà librement)."
+        if AA.has_passage(game, frm, to):
+            return False, "Vous avez déjà le droit de passage."
     if action == 'cadeau':
         if amount <= 0:
             return False, "Indiquez un montant."
@@ -297,6 +308,7 @@ def act(game, frm, to, action, amount=0, give=None, get=None):
                                    expires=game.t + R.PROPOSAL_DAYS, date=game.date_str()))
         what = dict(paix='propose la paix', alliance='propose une alliance', commerce='propose un accord commercial',
                     echange='propose un échange', prisonniers='propose un échange de prisonniers',
+                    passage='demande le droit de passage sur vos terres',
                     soumission='exige votre soumission').get(action, 'vous fait une proposition')
         game.log('diplo', f"{game.fname(frm)} {what} : répondez dans les {R.PROPOSAL_DAYS} jours.", who=frm, important=True)
         if action in ('paix', 'alliance', 'soumission'):
@@ -337,6 +349,8 @@ def apply(game, frm, to, action, amount=0, give=None, get=None):
         make_vassal(game, to, frm)
     elif action == 'prisonniers':
         exchange_prisoners(game, frm, to)
+    elif action == 'passage':
+        AA.grant_passage(game, to, frm)
 
 
 def answer(game, pid, accept):
@@ -366,6 +380,8 @@ def answer(game, pid, accept):
         return False, "Nous sommes en guerre : cette proposition n'a plus lieu d'être."
     if p['action'] == 'alliance' and st == 'alliance':
         return False, "Déjà alliés."
+    if p['action'] == 'passage' and st != 'paix':
+        return False, "Nous ne sommes plus en paix : cette demande n'a plus lieu d'être."
     if p['action'] == 'prisonniers' and not held(game, me, frm) and not held(game, frm, me):
         return False, "Il n'y a plus de prisonniers à échanger."
     apply(game, frm, me, p['action'], p['amount'], p['give'], p['get'])

@@ -622,8 +622,8 @@ export class MapView {
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.beginPath(); sp.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
       ctx.strokeStyle = 'rgba(19,35,58,0.75)'; ctx.lineWidth = 8; ctx.stroke();
-      ctx.setLineDash([10, 8]);
-      ctx.strokeStyle = '#bfe39a'; ctx.lineWidth = 4; ctx.stroke();
+      ctx.setLineDash(this.trMode ? [3, 8] : [10, 8]);
+      ctx.strokeStyle = this.trMode ? '#f6efdc' : '#bfe39a'; ctx.lineWidth = 4; ctx.stroke();
       ctx.setLineDash([]);
       const [ex, ey] = tr.end;
       if (tr.hit && tr.hit.kind === 'node') {
@@ -656,11 +656,13 @@ export class MapView {
       if (n.star) lines.push(`★ ${n.star[1]}`);
       if (ns.dp) lines.push('Magasin aux vivres');
       if (men != null) lines.push(`Défenseurs : ${fmtMen(men)}`);
-      if (ns.sg) lines.push(`Siège : ${Math.round(ns.sg.dmg * 100)} %`);
+      if (ns.bar != null) lines.push(`${ns.f > 0 ? 'Redoutes' : 'Barricades'} : ${Math.round(ns.bar * 100)} %`);
+      if (ns.sg) lines.push(ns.sg.bl ? `Blocus : famine ${Math.round(ns.sg.dmg * 100)} %` : `Siège : ${Math.round(ns.sg.dmg * 100)} %`);
     } else if (hit.kind === 'army') {
       const a = st.armies.find(x => x.id === hit.id);
       if (a) {
         lines = [a.name, `${own(a.o)}, ${fmtMen(a.men)} hommes`];
+        if (a.qr) lines.push('En quartiers');
         if (a.wn?.includes('faim')) lines.push('Vivres épuisés');
         if (a.wn?.includes('solde')) lines.push('Solde impayée');
       }
@@ -1468,6 +1470,9 @@ export class MapView {
   drawNodes(ctx, time, st) {
     const z = this.cam.z;
     const labels = [];
+    // armées en quartiers : quelques tentes autour de la place (couleur de leur camp)
+    const camp = new Map();
+    for (const a of st.armies) if (a.qr && a.n != null && a.st === 'idle') camp.set(a.n, a.o);
     for (const n of this.nodes) {
       const [x, y] = this.toScreen(n.x, n.y);
       const s = this.nodeSize(n);
@@ -1486,14 +1491,17 @@ export class MapView {
         ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.ellipse(0, s * 0.12, s * 0.72 + 3, s * 0.5 + 3, 0, 0, Math.PI * 2); ctx.stroke();
       }
-      const wallR = ns.f > 0 ? this.walls(ctx, s, ns.f, n.id, ns.sg && !ns.sg.occ ? ns.sg.dmg : 0) : 0;
+      const wallR = ns.f > 0 ? this.walls(ctx, s, ns.f, n.id, ns.sg && !ns.sg.occ && !ns.sg.bl ? ns.sg.dmg : 0) : 0;
+      const worksR = ns.bar != null || ns.bw ? this.works(ctx, s, ns.f, n.id, ns.bar || 0, ns.bw, wallR) : 0;
+      if (camp.has(n.id) && z >= 2.8) this.tents(ctx, s, n.id, this.colors[camp.get(n.id)] || col);
       if (n.type === 'capitale') this.iconStar(ctx, s, 5, col, true);
       else if (n.type === 'fort') this.iconStar(ctx, s, 4, col, false);
       else if (n.type === 'ville') this.iconTown(ctx, s, col, n.id);
       else this.iconVillage(ctx, s, col, n.id, ns.o);
       // siège
-      if (ns.sg) {
-        const sr = Math.max(s * 0.62 + 4, wallR + 4);
+      if (ns.sg && ns.sg.bl) this.blockadeRing(ctx, Math.max(s * 0.62 + 6, wallR + 6, worksR + 5), ns.sg, n.id);
+      else if (ns.sg) {
+        const sr = Math.max(s * 0.62 + 4, wallR + 4, worksR + 3);
         ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 5;
         ctx.beginPath(); ctx.arc(0, 0, sr, 0, Math.PI * 2); ctx.stroke();
         ctx.strokeStyle = this.colors[ns.sg.by] || '#f80'; ctx.lineWidth = 3.4;
@@ -1502,6 +1510,7 @@ export class MapView {
       if (n.quai && (z >= 3.2 || ns.bk)) this.anchor(ctx, -s * 0.62, s * 0.3, clamp(s * 0.36, 7, 13), ns.bk ? '#ff8a6a' : '#cfe8ff');
       if (ns.dp && z >= 3.2) this.depot(ctx, s * 0.62, s * 0.32, clamp(s * 0.34, 7, 12));
       if (ns.intel || ns.spy) this.eye(ctx, s * 0.62, -s * 0.5, clamp(s * 0.4, 9, 14), ns.intel ? '#f3d98e' : 'rgba(243,217,142,0.6)');
+      if (ns.bw) this.worksBar(ctx, s, ns.bw[0]);
       ctx.restore();
       const showLabel = n.type === 'capitale' || (n.type !== 'village' && z >= 2.3) || z >= 4.8 || sel;
       if (showLabel) labels.push([n, x, y, s, ns]);
@@ -1574,6 +1583,125 @@ export class MapView {
     }
     if (w.rubble) { ctx.fillStyle = 'rgba(110,95,72,0.95)'; ctx.fill(w.rubble); }
     return w.outer;
+  }
+
+  // Fortification de fortune, dessinée autour de la place : sans remparts, une palissade de pieux appointés,
+  // des gabions et un fossé ; devant des remparts, quelques redoutes de terre. Les pieux tombent avec l'usure ;
+  // pendant les travaux, ils se dressent à mesure (bw = [avancement, jours, sorte]). Retourne le rayon extérieur.
+  works(ctx, s, f, id, str, bw, wallR) {
+    const TAU = Math.PI * 2, sq = 0.86, a0 = (id * 2.399) % TAU;
+    const P = (a, r) => [Math.cos(a) * r, Math.sin(a) * r * sq];
+    const keep = bw ? Math.max(str, bw[0]) : str;     // part des pieux encore debout
+    const up = i => hash(id, i, 7) < keep;
+    ctx.save();
+    ctx.lineCap = 'round';
+    if (f <= 0) {
+      const R = s * 0.62 + 4, N = clamp(Math.round(R * 0.75), 14, 34);
+      const len = clamp(s * 0.2, 4, 11), lw = clamp(s * 0.055, 1.5, 3.4);
+      // fossé
+      ctx.strokeStyle = `rgba(58,42,22,${0.35 + 0.4 * keep})`; ctx.lineWidth = clamp(s * 0.07, 2, 4.5);
+      ctx.beginPath(); ctx.ellipse(0, 0, R + len + 3, (R + len + 3) * sq, 0, 0, TAU); ctx.stroke();
+      // lices : deux traverses qui tiennent les pieux
+      ctx.strokeStyle = `rgba(110,80,44,${0.5 + 0.4 * keep})`; ctx.lineWidth = Math.max(1, lw * 0.6);
+      ctx.beginPath(); ctx.ellipse(0, 0, R + len * 0.35, (R + len * 0.35) * sq, 0, 0, TAU); ctx.stroke();
+      // palissade : pieux penchés vers l'extérieur, la pointe claire
+      for (const [w, c] of [[lw + 1.6, 'rgba(36,26,14,0.85)'], [lw, '#9b7444']]) {
+        ctx.strokeStyle = c; ctx.lineWidth = w;
+        ctx.beginPath();
+        for (let i = 0; i < N; i++) {
+          if (!up(i)) continue;
+          const a = a0 + i * TAU / N, [x1, y1] = P(a, R - 1), [x2, y2] = P(a + 0.04, R + len);
+          ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+        }
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#e2c890';
+      for (let i = 0; i < N; i++) {
+        if (!up(i)) continue;
+        const [x, y] = P(a0 + i * TAU / N + 0.04, R + len);
+        ctx.beginPath(); ctx.arc(x, y, lw * 0.45, 0, TAU); ctx.fill();
+      }
+      // gabions (paniers d'osier remplis de terre) aux entrées
+      const gr = clamp(s * 0.1, 2.6, 6.5);
+      for (let k = 0; k < 4; k++) {
+        if (!up(100 + k)) continue;
+        const [x, y] = P(a0 + (k + 0.5) * TAU / 4, R + len * 0.4);
+        for (const dx of [-gr * 1.05, gr * 1.05]) {
+          ctx.fillStyle = 'rgba(36,26,14,0.85)'; ctx.beginPath(); ctx.arc(x + dx, y, gr + 1, 0, TAU); ctx.fill();
+          ctx.fillStyle = '#c4a46a'; ctx.beginPath(); ctx.arc(x + dx, y, gr, 0, TAU); ctx.fill();
+          ctx.strokeStyle = 'rgba(90,64,32,0.9)'; ctx.lineWidth = 0.8;
+          ctx.beginPath(); ctx.moveTo(x + dx - gr * 0.7, y); ctx.lineTo(x + dx + gr * 0.7, y);
+          ctx.moveTo(x + dx, y - gr * 0.7); ctx.lineTo(x + dx, y + gr * 0.7); ctx.stroke();
+        }
+      }
+      ctx.restore();
+      return R + len + 3;
+    }
+    // redoutes : petits ouvrages de terre en pointe, devant l'enceinte
+    const R = Math.max(wallR, s * 0.62) + clamp(s * 0.12, 4, 9), d = clamp(s * 0.14, 4, 10);
+    for (let k = 0; k < 4; k++) {
+      if (!up(200 + k)) continue;
+      const a = a0 + (k + 0.25) * TAU / 4;
+      const [cx, cy] = P(a, R), [tx, ty] = P(a, R + d), [lx, ly] = P(a - 0.3, R - d * 0.2), [rx, ry] = P(a + 0.3, R - d * 0.2);
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(tx, ty); ctx.lineTo(rx, ry); ctx.quadraticCurveTo(cx, cy, lx, ly);
+      ctx.fillStyle = '#a88a56'; ctx.fill();
+      ctx.strokeStyle = 'rgba(36,26,14,0.85)'; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.strokeStyle = '#7d5f35'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(...P(a, R + d * 1.35)); ctx.stroke();
+    }
+    ctx.restore();
+    return R + d;
+  }
+
+  // barre d'avancement des travaux, au-dessus de la place
+  worksBar(ctx, s, frac) {
+    const w = clamp(s * 1.1, 20, 54), h = 5, y = -s * 0.78 - 8;
+    ctx.fillStyle = 'rgba(19,35,58,0.88)'; roundRect(ctx, -w / 2 - 1.5, y - 1.5, w + 3, h + 3, 3); ctx.fill();
+    ctx.fillStyle = '#c9a25a'; ctx.fillRect(-w / 2, y, w * clamp(frac, 0.04, 1), h);
+    ctx.strokeStyle = 'rgba(243,217,142,0.7)'; ctx.lineWidth = 0.8; ctx.strokeRect(-w / 2, y, w, h);
+  }
+
+  // blocus : un cordon de postes en pointillé, aux couleurs de l'assiégeant, sans brèche ; la faim en arc fin
+  blockadeRing(ctx, r, sg, id) {
+    const TAU = Math.PI * 2, col = this.colors[sg.by] || '#f80';
+    ctx.save();
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU);
+    ctx.strokeStyle = 'rgba(20,14,8,.7)'; ctx.lineWidth = 6; ctx.stroke();
+    ctx.setLineDash([7, 5]);
+    ctx.strokeStyle = '#f3e7c6'; ctx.lineWidth = 3.4; ctx.stroke();
+    ctx.lineDashOffset = 6; ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = col; ctx.lineWidth = 3.4; ctx.stroke();
+    ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    // postes de garde sur les routes de la place
+    const n = 6, a0 = (id * 2.399) % TAU, p = 4;
+    for (let k = 0; k < n; k++) {
+      const a = a0 + k * TAU / n, x = Math.cos(a) * r, y = Math.sin(a) * r;
+      ctx.fillStyle = 'rgba(20,14,8,0.9)'; ctx.fillRect(x - p - 1.2, y - p - 1.2, 2 * p + 2.4, 2 * p + 2.4);
+      ctx.fillStyle = col; ctx.fillRect(x - p, y - p, 2 * p, 2 * p);
+      ctx.fillStyle = '#f3e7c6'; ctx.fillRect(x - p * 0.35, y - p * 0.35, p * 0.7, p * 0.7);
+    }
+    // la faim gagne : arc intérieur
+    ctx.strokeStyle = 'rgba(20,14,8,.6)'; ctx.lineWidth = 3.6;
+    ctx.beginPath(); ctx.arc(0, 0, r - 5.5, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0.03, sg.dmg)); ctx.stroke();
+    ctx.strokeStyle = '#e8c070'; ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // tentes d'une armée en quartiers
+  tents(ctx, s, id, col) {
+    const TAU = Math.PI * 2, a0 = (id * 1.7) % TAU, R = s * 0.82 + 4, t = clamp(s * 0.13, 3.5, 8);
+    for (let k = 0; k < 4; k++) {
+      const a = a0 + (k + 0.5) * TAU / 4 + 0.35, x = Math.cos(a) * R, y = Math.sin(a) * R * 0.86;
+      ctx.fillStyle = 'rgba(30,24,14,0.3)';
+      ctx.beginPath(); ctx.moveTo(x - t + 1.5, y + 2); ctx.lineTo(x + 1.5, y - t * 1.1 + 2); ctx.lineTo(x + t + 1.5, y + 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - t, y); ctx.lineTo(x, y - t * 1.1); ctx.lineTo(x + t, y); ctx.closePath();
+      ctx.fillStyle = '#efe6cf'; ctx.fill();
+      ctx.strokeStyle = '#5c4b30'; ctx.lineWidth = 0.9; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, y - t * 1.1); ctx.lineTo(x, y); ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.moveTo(x, y - t * 1.1); ctx.lineTo(x + t * 0.55, y - t * 0.95); ctx.lineTo(x, y - t * 0.8); ctx.fill();
+    }
   }
 
   // géométrie d'une enceinte (voir walls) : chemins prêts à tracer et rayon extérieur
@@ -1752,13 +1880,13 @@ export class MapView {
       const sp = sg.pts.map(p => this.toScreen(p[0], p[1]));
       ctx.beginPath(); sp.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
       ctx.strokeStyle = 'rgba(19,35,58,0.7)'; ctx.lineWidth = 6; ctx.stroke();
-      ctx.setLineDash(sg.water ? [4, 6] : [9, 7]);
-      ctx.strokeStyle = sg.water ? '#bfe6ff' : a.md === 'champs' ? '#bfe39a' : '#f1d58a'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.setLineDash(sg.water ? [4, 6] : a.tr ? [2, 7] : [9, 7]);
+      ctx.strokeStyle = sg.water ? '#bfe6ff' : a.tr ? '#f6efdc' : a.md === 'champs' ? '#bfe39a' : '#f1d58a'; ctx.lineWidth = 3; ctx.stroke();
       ctx.setLineDash([]);
       last = sp[sp.length - 1];
     }
     if (!last) { ctx.restore(); return; }
-    this.flag(ctx, last[0], last[1], 22, this.colors[a.o]);
+    this.flag(ctx, last[0], last[1], 22, a.tr ? '#f6efdc' : this.colors[a.o]);   // en traversant : halte, drapeau blanc
     ctx.restore();
   }
 
