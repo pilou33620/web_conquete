@@ -18,7 +18,6 @@ BASE_DETECT = 2.5
 START_DATE = datetime.date(1790, 3, 4)
 START_ORD = START_DATE.toordinal()
 PROD_KEYS = ('livres', 'vivres', 'recrues', 'industrie', 'fer', 'bois')
-_BASE_OUT = {}   # production de base de chaque type de place (R.NODE_BASE, qui ne change pas)
 
 
 def ordinal(n):
@@ -41,6 +40,8 @@ class Game:
     _cache_year = None
     _cache_era = None
     _cache_cap = None
+    _cache_ns = None
+    _cache_rel = None
 
     # ================================================================== création
     def __init__(self, geo, player, difficulty='normal', seed=None, scenario='1790'):
@@ -648,12 +649,23 @@ class Game:
         cov = min(1.0, f['res']['outils'] / (3.0 * nn))
         return 1 + (0.30 + self.mod(code, 'tools_max')) * cov, cov
 
-    def node_output(self, n, code):
-        gn = self.geo.nodes[n['id']]
-        b0 = _BASE_OUT.get(gn['type'])
-        if b0 is None:
+    def node_static(self, nid):
+        """Ce qui ne change jamais d'une place (la carte est fixe), relevé une fois : production de base de son
+        type, quai, terrain (landes et marais, collines et montagnes)."""
+        c = self._cache_ns
+        if c is None or c[0] is not self.geo:
+            c = self._cache_ns = (self.geo, {})
+        st = c[1].get(nid)
+        if st is None:
+            gn = self.geo.nodes[nid]
             base = R.NODE_BASE[gn['type']]
-            b0 = _BASE_OUT[gn['type']] = {k: base.get(k, 0) for k in PROD_KEYS}
+            ter = self.geo.terrain_at(gn['x'], gn['y'])
+            st = c[1][nid] = (gn, {k: base.get(k, 0) for k in PROD_KEYS}, nid in self.geo.ports and gn['type'] != 'fort',
+                              ter in (T_LANDE, T_MARAIS), TERRAIN[ter][0] in ('Montagne', 'Collines', 'Haute montagne'))
+        return st
+
+    def node_output(self, n, code):
+        gn, b0, quai, lande, mont = self.node_static(n['id'])
         out = dict(b0)
         trade = 0.0
         for s in gn['spec']:
@@ -675,7 +687,7 @@ class Game:
                     out[r] += sp[r] * k
             if sp.get('boost') == 'port':
                 trade += sp.get('livres', 0) * k
-        if n['id'] in self.geo.ports and gn['type'] != 'fort':
+        if quai:
             out['livres'] += R.QUAI_LIVRES
             trade += R.QUAI_LIVRES
         trade = CT.node_extra(self, n, code, out, trade)   # bâtiments, politique, événements de la ville
@@ -685,10 +697,9 @@ class Game:
         if n['siege']:
             mult = 0
         mult *= AA.output_k(self, n)   # bourgeois sous les armes
-        ter = self.geo.terrain_at(gn['x'], gn['y'])
-        if ter in (T_LANDE, T_MARAIS):
+        if lande:
             mult *= 1 + self.mod(code, 'lande_prod')
-        if TERRAIN[ter][0] in ('Montagne', 'Collines', 'Haute montagne'):
+        if mont:
             mult *= 1 + self.mod(code, 'mountain_prod')
         return {k: v * mult for k, v in out.items()}
 
@@ -915,8 +926,11 @@ class Game:
         # (les métiers suivent), et une place qui grandit plus vite que les autres n'en tire qu'un peu plus
         # (racine quatrième de sa trajectoire, moyenne normalisée à 1 sur toute la carte)
         c = self._pop_curves()
-        m = c['mult'][n['id']]
-        rel = m ** R.POP_TREND_K / c['mean_k']
+        r = self._cache_rel
+        if r is None or r[0] is not c:
+            # part de chaque place dans la croissance (ne change qu'avec les courbes, une fois par mois)
+            r = self._cache_rel = (c, [m ** R.POP_TREND_K / c['mean_k'] for m in c['mult']])
+        rel = r[1][n['id']]
         era = self.pop_era()
         fill = min(1.1, n['pop'] / max(1.0, self.pop_cap(n)))
         return fill * (1 + (R.POP_NATURAL + R.DEV_PROD * n['dev']) / era) * era ** 0.5 * rel
@@ -3220,6 +3234,7 @@ class Game:
     # ------------------------------------------------------------------ fleuves : feu des berges, blocus
     def river_fire(self, dt):
         """Les gabares qui passent à portée de canons ennemis (armées ou forts riverains) essuient des pertes."""
+        forts = None   # places à remparts (rien ne les change pendant ce pas) : relevées s'il y a des gabares en route
         for b in list(self.armies.values()):
             if not b.get('boat') or b['at_node'] is not None or not b['edge'] or not b['regs']:
                 continue
@@ -3238,13 +3253,13 @@ class Game:
                     fire += f
                     who = x['owner']
             rn2 = (R.RIVER_FIRE_KM + 0.5) ** 2
-            for n in self.nodes:
-                if n['fort'] >= 1:
-                    nx, ny = self.node_xy(n['id'])
-                    if (nx - b['x']) ** 2 + (ny - b['y']) ** 2 <= rn2 and n['owner'] in self.factions \
-                            and self.at_war(n['owner'], b['owner']):
-                        fire += n['fort']
-                        who = n['owner']
+            if forts is None:
+                forts = [(n,) + self.node_xy(n['id']) for n in self.nodes if n['fort'] >= 1]
+            for n, nx, ny in forts:
+                if (nx - b['x']) ** 2 + (ny - b['y']) ** 2 <= rn2 and n['owner'] in self.factions \
+                        and self.at_war(n['owner'], b['owner']):
+                    fire += n['fort']
+                    who = n['owner']
             if not fire:
                 b['_fire'] = False
                 continue

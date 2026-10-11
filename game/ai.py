@@ -613,11 +613,26 @@ class AI:
                     return
 
     # ------------------------------------------------------------------ militaire
-    def threat_at(self, nid, radius=35):
+    def foes(self):
+        """Armées ennemies visibles (en guerre avec nous, pas cachées), dans l'ordre de g.armies."""
+        g, code = self.g, self.code
+        return [a for a in g.armies.values() if not a['hidden'] and g.at_war(code, a['owner'])]
+
+    def threat_at(self, nid, radius=35, foes=None, power=None):
+        """Puissance des armées ennemies à moins de radius km de la place. foes : self.foes() déjà relevé, et power :
+        puissances déjà calculées (id -> army_power), quand on passe toutes nos places en revue sans rien changer."""
         g = self.g
         x, y = g.node_xy(nid)
         p = 0.0
         r2 = radius * radius
+        if foes is not None:
+            for a in foes:
+                if (a['x'] - x) ** 2 + (a['y'] - y) ** 2 < r2:
+                    pw = power.get(a['id'])
+                    if pw is None:
+                        pw = power[a['id']] = g.army_power(a)
+                    p += pw
+            return p
         code = self.code
         for a in g.armies.values():
             # la distance d'abord (appelée pour chaque place à chaque réflexion : l'état de guerre coûte plus cher)
@@ -730,8 +745,9 @@ class AI:
                 return
         # défense
         best = None
+        foes, power = self.foes(), {}
         for n in g.owned_nodes(code):
-            th = self.threat_at(n['id'], 30)
+            th = self.threat_at(n['id'], 30, foes, power)
             if th <= 0:
                 continue
             dfn = g.node_defense_power(n['id'], include_armies=False)
