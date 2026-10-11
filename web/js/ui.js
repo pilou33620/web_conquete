@@ -261,7 +261,9 @@ export class UI {
   }
 
   renderSpeed(v) {
-    for (const b of this.$('tb-speed').children) b.classList.toggle('on', +b.dataset.v === v);
+    // une bataille se livre sur le champ de bataille : la campagne ne peut pas reprendre
+    const tac = this.st && this.st.tac && this.st.tac.phase !== 'fin';
+    for (const b of this.$('tb-speed').children) { b.classList.toggle('on', +b.dataset.v === v); b.disabled = !!tac && +b.dataset.v > 0; }
   }
 
   // ------------------------------------------------------------------ tour par tour
@@ -745,6 +747,7 @@ export class UI {
       case 'selnode': this.select({ kind: 'node', id: +d.node }); break;
       case 'selarmy': this.select({ kind: 'army', id: d.id }); break;
       case 'selbattle': this.select({ kind: 'battle', id: d.id }); break;
+      case 'tactic': if (this.onTactic) this.onTactic(d.id); break;
       case 'mode': this.cmd({ cmd: 'mode', army: sel.id, value: d.v }, false); break;
       case 'formation': this.cmd({ cmd: 'formation', army: d.army || sel.id, value: d.v }); break;
       case 'plan': this.cmd({ cmd: 'plan', army: d.army || sel.id, value: d.v }); break;
@@ -961,8 +964,8 @@ export class UI {
     const ck = fixed ? '<input type="checkbox" disabled aria-label="Ne quitte pas sa ville">'
       : check ? `<input type="checkbox" data-reg="${r[0]}" ${this.checked.has(r[0]) ? 'checked' : ''} aria-label="Sélectionner">` : '<span></span>';
     return `<label class="reg ${this.checked.has(r[0]) ? 'sel' : ''}"${fixed ? ` title="${esc(u.name)} : ne quitte pas sa ville"` : u.desc ? ` title="${esc(u.desc)}"` : ''}>${ck}${ICON[r[1]] || ICON.ligne}
-      <div class="rn">${u.short}${stars ? ` <span style="color:var(--laiton-clair)">${stars}</span>` : ''}${armTxt}
-        ${check ? `<div class="bars"><div class="bar ${frac < 0.5 ? 'red' : ''}"><i style="width:${Math.round(frac * 100)}%"></i></div><div class="bar green"><i style="width:${Math.min(100, r[5])}%"></i></div></div>` : ''}</div>
+      <div class="rn">${u.short}${stars ? ` <span style="color:var(--laiton-clair)">${stars}</span>` : ''}${armTxt}${r[9] ? `<span class="small" style="font-weight:400;color:var(--papier-2)" title="Portée efficace"> · ${fmt(r[9])} m</span>` : ''}
+        ${check ? `<div class="bars"><div class="bar ${frac < 0.5 ? 'red' : ''}" title="Effectif"><i style="width:${Math.round(frac * 100)}%"></i></div><div class="bar green" title="Moral"><i style="width:${Math.min(100, r[5])}%"></i></div>${r[7] != null ? `<div class="bar" style="height:4px" title="Munitions : ${Math.round(r[7])} %"><i style="width:${Math.max(0, Math.min(100, r[7]))}%;background:var(--laiton)"></i></div>` : ''}${r[8] != null ? `<div class="bar" style="height:4px" title="Endurance : ${Math.round(100 - r[8])} %"><i style="width:${Math.max(0, Math.min(100, 100 - r[8]))}%;background:#7fb2e0"></i></div>` : ''}</div>` : ''}</div>
       <div class="rv">${fmt(r[2])}<small class="muted" style="display:block;font-weight:400;font-size:12px">${check ? 'moral ' + r[5] : '/ ' + r[3]}</small></div></label>`;
   }
 
@@ -1399,7 +1402,8 @@ export class UI {
     const mineIn = b.sides.flatMap(s => s.o === me ? (s.tac || []) : []);
     const lastSeq = this.events.length ? this.events[this.events.length - 1].seq : 0;
     this.fightMemo = { id, x: b.x, y: b.y, seq: lastSeq, mine: b.sides.flatMap(s => s.o === me ? [...(s.armies || []), ...(s.tac || []).map(t => t.id)] : []) };
-    if (mineIn.length) h += `<p class="muted small">Touchez une de vos armées pour changer sa formation ou son plan pendant le combat.</p>`;
+    if (b.mode === 'manuel') h += `<div class="btns"><button class="btn primary" data-act="tactic" data-id="${b.id}">Commander la bataille</button></div>`;
+    else if (mineIn.length) h += `<p class="muted small">Touchez une de vos armées pour changer sa formation ou son plan pendant le combat.</p>`;
     return [h, JSON.stringify([b.phase, b.sides.map(s => [s.men, s.lost, s.mor, (s.tac || []).map(t => [t.fm, t.pl, t.reorg])])])];
   }
 

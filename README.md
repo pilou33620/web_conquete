@@ -371,6 +371,34 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
 - « Finir automatiquement » résout la bataille d'un coup à partir de la situation du moment. Munitions et fatigue
   restent d'une bataille à l'autre : elles se recomplètent en campagne (vite chez soi, peu en pays ennemi).
 
+#### Conduire une bataille
+- **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît en vue
+  cavalière : chaque régiment est une ligne de petits soldats aux couleurs de son camp, surmontée d'un fanion qui
+  porte son effectif (barré et décoloré s'il est en déroute) ; le général a son médaillon. Le temps, la saison et
+  l'heure se voient : pluie, brouillard, neige, orage, canicule, lumière du matin, couchant puis nuit.
+- **Le déploiement.** Vos troupes sont dans la zone dorée. Glissez un régiment pour le placer, glissez depuis le
+  sol pour fixer l'emplacement et l'orientation de la ligne, pivotez-le avec ses boutons. Les **couverts** sont mis
+  en évidence : bois en vert (les canons y restent cachés jusqu'à leur première salve), hauteurs en or (vue et
+  portée), bâti et murs en bleu. Puis **« Engager la bataille »**.
+- **Choisir.** Touchez un régiment (sur le terrain, son fanion ou sa carte en bas) ; **appui long puis glisser**
+  pour un cadre de sélection (maj + clic ou maj + glisser à la souris) ; touchez le titre d'un groupe pour toute
+  la brigade. Double appui sur une carte : la vue s'y rend.
+- **Ordonner.** Régiment choisi : **touchez le sol** pour qu'il y aille ; **glissez depuis le régiment** pour tracer
+  sa route (flèche courbe et silhouette du régiment à l'arrivée, avec la largeur de son front) ; **glissez depuis le
+  sol** pour fixer le point d'arrivée et le sens de la ligne ; **touchez un ennemi** pour l'attaquer. Le panneau du
+  régiment donne sa formation (ligne, colonne, carré, tirailleurs ; batterie ou attelée pour le canon), le feu à
+  volonté ou cessez-le-feu, tenir, **charger** (puis toucher l'ennemi), rallier, retraite. Portée efficace et
+  maximale (et mitraille) s'affichent en éventail devant lui.
+- **La vue.** Pincer pour zoomer, glisser à deux doigts (ou d'un doigt sans régiment choisi) pour se déplacer ;
+  molette et clic droit ou du milieu à la souris ; flèches du clavier. La **mini-carte** (en bas à droite) se touche
+  pour s'y rendre ; dessous, la vitesse : pause, ×1, ×2, ×4 (espace, 1, 2, 4 au clavier).
+- **En haut** : l'heure (et la nuit qui approche), le temps, le rapport de forces (l'ennemi : seulement ce que
+  vous en voyez), le journal (repliable, et complet derrière son bouton), l'aide, **« Finir auto. »** et
+  **« Décrocher »** (toute l'armée quitte le terrain), chacun avec confirmation.
+- **La fin.** Le récapitulatif donne victoire ou défaite, pertes des deux camps, prisonniers, expérience, et les
+  pertes de chaque régiment ; « Retour à la carte » ramène la campagne, que vous relancez quand vous voulez.
+- Clavier : C charger, H tenir, F feu, R rallier, Échap désélectionner, Ctrl + A tout choisir, + et − zoom.
+
 ### Fleuves, gabares et blocus
 - La Garonne et l'estuaire de la Gironde, la Dordogne, l'Isle, le Lot, la Baïse, la Midouze et l'Adour sont
   **navigables**, et un cabotage relie l'estuaire, le bassin d'Arcachon, Capbreton, Bayonne, Biarritz,
@@ -517,6 +545,12 @@ game/tactics/        batailles manuelles : carte de bataille (terrain.py), unit�
                      (battle.py), IA de secours (ai.py), raccord avec la campagne (bridge.py)
 web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/ambient.js (animations
                      de la carte), js/towns.js (dessin des villes), js/ui.js, js/main.js
+web/js/battle/       vue de bataille : bataille.js (entrée et sortie depuis la campagne), vue.js (caméra,
+                     boucle, interrogation du serveur), terrain.js (champ de bataille peint en tuiles),
+                     unites.js (soldats, chevaux, canons, fanions), effets.js (fumées, tirs, météo, lumière),
+                     commandes.js (gestes et clavier), interface.js (barres, panneaux, récapitulatif),
+                     formes.js (constantes communes), css/bataille.css ; dev/maquette.mjs : serveur de
+                     maquette (node web/js/battle/dev/maquette.mjs, puis /js/battle/dev/banc.html)
 saves/               parties sauvegardées (JSON)
 ```
 
