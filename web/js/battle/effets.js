@@ -77,7 +77,7 @@ export class Effects {
       const u = (q + Math.random() * 0.8) / n * w - w / 2, fwd = front + Math.random() * 6;
       const px = x + c * fwd - s * u, py = y + s * fwd + c * u;
       const sp = 3 + Math.random() * 3;
-      this.addPuff(this.white, px, py, 3, 5 + Math.random() * 7, 1.8 + Math.random() * 2.2, 0.62 + Math.random() * 0.2, 16 + Math.random() * 12, c * sp * 1.6, s * sp * 1.6, 0.1 + Math.random() * 0.2);
+      this.addPuff(this.white, px, py, 3, 5 + Math.random() * 7, 1.6 + Math.random() * 2, 0.45 + Math.random() * 0.2, 16 + Math.random() * 12, c * sp * 1.6, s * sp * 1.6, 0.1 + Math.random() * 0.2);
       if (Math.random() < 0.7) this.flashes.push({ x: px + c * 3, y: py + s * 3, alt: 4, r: 4 + Math.random() * 2, t: 0, life: 0.12 + Math.random() * 0.08 });
     }
   }
@@ -93,7 +93,7 @@ export class Effects {
       const at = q * 0.07 + Math.random() * 0.05;
       this.queue.push({ fn: () => {
         this.flashes.push({ x: px + fc * 3, y: py + fs * 3, alt: 1, r: grape ? 5 : 4, t: 0, life: 0.18 });
-        for (let k = 0; k < 4; k++) this.addPuff(this.white, px + fc * (5 + k * 5), py + fs * (5 + k * 5), 3, 6 + k * 1.5, 2, 0.7, 14 + Math.random() * 8, fc * (10 - k * 2), fs * (10 - k * 2), 0.2);
+        for (let k = 0; k < 3; k++) this.addPuff(this.white, px + fc * (5 + k * 6), py + fs * (5 + k * 6), 3, 5 + k * 1.5, 1.5, 0.5, 12 + Math.random() * 8, fc * (10 - k * 2), fs * (10 - k * 2), 0.2);
         if (grape) {
           for (let k = 0; k < 14; k++) {
             const a = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.28, L = d * (0.75 + Math.random() * 0.35);
@@ -220,7 +220,7 @@ export class Effects {
     const mist = w === 'brouillard' ? 1 : (st.hour < 9.5 && (w === 'soleil' || w === 'nuages')) ? 0.2 * clamp((9.5 - st.hour) / 1.5, 0, 1) : w === 'pluie' || w === 'neige' ? 0.25 : 0;
     if (mist > 0) {
       this.fog = this.fog || fogTexture();
-      ctx.fillStyle = `rgba(214,220,226,${0.32 * mist})`; ctx.fillRect(0, 0, vw, vh);
+      ctx.fillStyle = `rgba(226,230,234,${0.38 * mist})`; ctx.fillRect(0, 0, vw, vh);
       const pat = ctx.createPattern(this.fog, 'repeat');
       for (let layer = 0; layer < 2; layer++) {
         const sc = (layer ? 3.2 : 2.2) * clamp(view.z, 0.4, 2), ox = (time * (6 + layer * 4) * (wind[0] >= 0 ? 1 : -1)) % (256 * sc), oy = layer * 90;
@@ -231,24 +231,30 @@ export class Effects {
       }
       ctx.globalAlpha = 1;
     }
-    // lumière : matin doré, crépuscule orangé puis bleu, nuit
+    // lumière : matin doré, midi neutre, couchant doré puis rose, nuit bleue (sauf par brouillard : gris)
     const L = clamp(st.light ?? 1, 0, 1), h = st.hour ?? 12;
     let tint = null;
+    const k = clamp((1 - L) / 0.8, 0, 1);
     if (L < 0.97) {
-      const k = clamp((1 - L) / 0.75, 0, 1);
-      const c = k < 0.45 ? mix3([255, 255, 255], [255, 196, 140], k / 0.45) : mix3([255, 196, 140], [88, 96, 160], (k - 0.45) / 0.55);
-      tint = c;
-    } else if (h < 9.8) tint = mix3([255, 236, 205], [255, 255, 255], clamp((h - 8) / 1.8, 0, 1));
+      tint = k < 0.35 ? mix3([255, 255, 255], [255, 214, 158], k / 0.35)
+        : k < 0.65 ? mix3([255, 214, 158], [236, 156, 132], (k - 0.35) / 0.3)
+        : mix3([236, 156, 132], [74, 84, 142], (k - 0.65) / 0.35);
+    } else if (h < 9.8 && w !== 'brouillard') tint = mix3([255, 232, 196], [255, 255, 255], clamp((h - 8) / 1.8, 0, 1));
     else if (w === 'canicule') tint = [255, 232, 196];
+    if (tint && w === 'brouillard') tint = mix3(tint, [235, 238, 242], 0.6);
     if (tint) {
       ctx.globalCompositeOperation = 'multiply';
       ctx.fillStyle = `rgb(${tint[0] | 0},${tint[1] | 0},${tint[2] | 0})`; ctx.fillRect(0, 0, vw, vh);
       ctx.globalCompositeOperation = 'source-over';
-      if (L < 0.9 && L > 0.35) {   // lueur du couchant à l'ouest
-        const gr = ctx.createLinearGradient(0, 0, vw * 0.7, 0);
-        gr.addColorStop(0, `rgba(255,150,80,${0.18 * (1 - L)})`); gr.addColorStop(1, 'rgba(255,150,80,0)');
-        ctx.fillStyle = gr; ctx.fillRect(0, 0, vw, vh);
-      }
+    }
+    if (L < 0.95) {
+      // lueur du couchant à l'ouest, puis ombre qui gagne les bords
+      const glow = ctx.createLinearGradient(0, 0, vw * 0.8, vh * 0.3);
+      glow.addColorStop(0, `rgba(255,170,90,${0.28 * Math.sin(Math.PI * Math.min(1, k * 1.2))})`); glow.addColorStop(1, 'rgba(255,170,90,0)');
+      ctx.fillStyle = glow; ctx.fillRect(0, 0, vw, vh);
+      const vig = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.35, vw / 2, vh / 2, Math.hypot(vw, vh) * 0.62);
+      vig.addColorStop(0, 'rgba(12,18,40,0)'); vig.addColorStop(1, `rgba(12,18,40,${0.55 * k})`);
+      ctx.fillStyle = vig; ctx.fillRect(0, 0, vw, vh);
     }
     if (wet) { ctx.fillStyle = 'rgba(30,40,58,0.16)'; ctx.fillRect(0, 0, vw, vh); }
     // pluie

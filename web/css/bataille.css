@@ -233,7 +233,9 @@ body.en-bataille #proposals, body.en-bataille #bubble { opacity: 0; pointer-even
   .bt-panel { left: 6px; right: 6px; width: auto; max-height: 46%; bottom: calc(var(--dock-h) + var(--safe-b, 0px) + 6px); }
   .bt-ui.has-panel .bt-side { display: none; }
   .bt-side { right: 8px; bottom: calc(var(--dock-h) + var(--safe-b, 0px) + 6px); }
-  .bt-mini { width: 150px; height: 100px; }
+  .bt-mini { width: 126px; height: 84px; }
+  .bt-speed { padding: 2px; }
+  .bt-speed button svg { width: 20px; height: 16px; }
   .bt-speed button { height: 34px; }
   .bt-uc { width: 72px; height: 74px; }
   .bt-dscroll { width: 30px; }

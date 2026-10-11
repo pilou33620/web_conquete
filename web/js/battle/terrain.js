@@ -75,10 +75,11 @@ function vinePattern(sol, rang, s, winter) {
   const sp = Math.max(3, Math.round(2.6 * s)), cv = canvas(Math.max(8, Math.round(6 * s)), sp), g = cv.getContext('2d');
   g.fillStyle = sol; g.fillRect(0, 0, cv.width, sp);
   g.fillStyle = rang;
-  const th = Math.max(1, Math.round(s * (winter ? 0.25 : 1.0)));
+  const th = Math.max(1, Math.round(s * (winter ? 0.25 : 1.3)));
   g.fillRect(0, Math.round(sp / 2 - th / 2), cv.width, th);
-  if (s >= 2) {   // ceps, un tous les 1,2 m
-    for (let x = 0; x < cv.width; x += Math.round(1.2 * s)) { g.beginPath(); g.arc(x + 0.5, sp / 2, Math.max(1, s * (winter ? 0.25 : 0.65)), 0, TAU); g.fill(); }
+  if (s >= 2) {   // ceps feuillus, un tous les 1,2 m, éclairés par-dessus
+    for (let x = 0; x < cv.width; x += Math.round(1.2 * s)) { g.beginPath(); g.arc(x + 0.5, sp / 2, Math.max(1, s * (winter ? 0.25 : 0.8)), 0, TAU); g.fill(); }
+    if (!winter) { g.fillStyle = 'rgba(255,255,220,0.22)'; for (let x = 0; x < cv.width; x += Math.round(1.2 * s)) { g.beginPath(); g.arc(x, sp / 2 - s * 0.3, s * 0.35, 0, TAU); g.fill(); } }
   }
   return cv;
 }
@@ -860,17 +861,18 @@ export class Terrain {
     // enceintes : rempart, enceinte bastionnée, ou mur de ville épais ; la largeur suit `thick` quand il est donné
     const small = w => { const xs = w.pts.map(p => p[0]), ys = w.pts.map(p => p[1]); return Math.max(...xs) - Math.min(...xs) < 160 && Math.max(...ys) - Math.min(...ys) < 160; };
     const fort = this.walls.filter(w => w.kind === 'rempart' || w.kind === 'bastion' || (w.kind === 'mur' && (w.thick || 0) >= 5));
-    const th = w => clamp(w.thick || (w.kind === 'mur' ? 6 : 16), 4, 30);
-    // fossé, puis talus extérieur (glacis clair), escarpe de pierre, terre-plein gazonné, parapet
-    for (const w of fort) { if (w.kind === 'mur') continue; g.strokeStyle = snow ? '#aab4b8' : '#7f8f62'; g.lineWidth = th(w) * 2.1; strokePts(g, w.pts); }
-    for (const w of fort) { if (w.kind === 'mur') continue; g.strokeStyle = snow ? '#c5ccd0' : '#6d7d55'; g.lineWidth = th(w) * 1.5; strokePts(g, w.pts); }
-    for (const w of fort) { g.strokeStyle = 'rgba(20,20,26,0.4)'; g.lineWidth = th(w) * 1.06; g.save(); g.translate(2.5, 2.5); strokePts(g, w.pts); g.restore(); }
-    for (const w of fort) { g.strokeStyle = snow ? '#e4e4e0' : '#d3c6a2'; g.lineWidth = th(w); strokePts(g, w.pts); }
-    for (const w of fort) {
-      if (w.kind === 'bastion' && small(w)) { g.fillStyle = snow ? '#eef0f0' : '#9aab6c'; fillPts(g, w.pts); }
-      g.strokeStyle = w.kind === 'mur' ? (snow ? '#e8e8e4' : '#c9bb96') : snow ? '#f2f3f3' : '#9aab6c'; g.lineWidth = th(w) * 0.68; strokePts(g, w.pts);
-    }
-    for (const w of fort) { g.strokeStyle = snow ? '#d6d8d6' : '#c2b48e'; g.lineWidth = Math.max(1.4, th(w) * 0.14); strokePts(g, w.pts); }
+    const th = w => clamp(w.thick || (w.kind === 'mur' ? 6 : 16), 4, 24);
+    // fossé, puis talus extérieur (glacis clair), escarpe de pierre, terre-plein gazonné, parapet ; jamais sur l'eau
+    const segs = fort.map(w => ({ w, parts: small(w) ? [w.pts] : this.splitDry(w.pts) }));
+    const each = (f, skipMur = false) => { for (const { w, parts } of segs) { if (skipMur && w.kind === 'mur') continue; for (const pts of parts) f(w, pts); } };
+    g.lineJoin = 'round';
+    each((w, pts) => { g.strokeStyle = snow ? '#aab4b8' : '#7f8f62'; g.lineWidth = th(w) * 1.7; strokePts(g, pts); }, true);
+    each((w, pts) => { g.strokeStyle = snow ? '#c5ccd0' : '#6d7d55'; g.lineWidth = th(w) * 1.3; strokePts(g, pts); }, true);
+    each((w, pts) => { g.strokeStyle = 'rgba(20,20,26,0.4)'; g.lineWidth = th(w) * 0.9; g.save(); g.translate(2.5, 2.5); strokePts(g, pts); g.restore(); });
+    each((w, pts) => { g.strokeStyle = snow ? '#e4e4e0' : '#d3c6a2'; g.lineWidth = th(w) * 0.85; strokePts(g, pts); });
+    for (const w of fort) if (w.kind === 'bastion' && small(w)) { g.fillStyle = snow ? '#eef0f0' : '#9aab6c'; fillPts(g, w.pts); }
+    each((w, pts) => { g.strokeStyle = w.kind === 'mur' ? (snow ? '#e8e8e4' : '#c9bb96') : snow ? '#f2f3f3' : '#9aab6c'; g.lineWidth = th(w) * 0.58; strokePts(g, pts); });
+    each((w, pts) => { g.strokeStyle = snow ? '#d6d8d6' : '#c2b48e'; g.lineWidth = Math.max(1.4, th(w) * 0.12); strokePts(g, pts); });
     // créneaux : petites dents le long du mur de ville
     for (const w of fort) {
       if (w.kind !== 'mur') continue;
@@ -1005,9 +1007,30 @@ export class Terrain {
     }
     // léger recouvrement : pas de joint visible entre deux tuiles
     for (const [tile, i, j] of draws) ctx.drawImage(tile, i * span, j * span, span + 0.6 / cam.z, span + 0.6 / cam.z);
+    this.pending = missing ? null : { L, span, i0: i0 - 1, i1: i1 + 1, j0: j0 - 1, j1: j1 + 1 };
     // éviction après le dessin : jamais une tuile de cette image (elles sont en fin de file)
     this.evict(Math.max(MAX_TILES, draws.length + 8));
     return missing;
+  }
+  // temps libre : peint d'avance une tuile voisine de la vue (rastérisée tout de suite), pour un défilement sans à-coup
+  prefetch() {
+    const p = this.pending;
+    if (!p) return false;
+    const ni = Math.ceil(this.W / p.span) - 1, nj = Math.ceil(this.H / p.span) - 1;
+    for (let j = Math.max(0, p.j0); j <= Math.min(nj, p.j1); j++) for (let i = Math.max(0, p.i0); i <= Math.min(ni, p.i1); i++) {
+      const k = this.tileKey(p.L, i, j);
+      if (this.tiles.has(k)) continue;
+      const tile = this.paintCanvas(i * p.span, j * p.span, p.span, p.span, p.L);
+      tile.getContext('2d').getImageData(0, 0, 1, 1);
+      tile._k = k;
+      // en tête de file : la première évincée si la vue part ailleurs
+      const rest = [...this.tiles.entries()];
+      this.tiles.clear(); this.tiles.set(k, tile); for (const [kk, t] of rest) this.tiles.set(kk, t);
+      this.evict();
+      return true;
+    }
+    this.pending = null;
+    return false;
   }
   evict(max = MAX_TILES) {
     while (this.tiles.size > max) {

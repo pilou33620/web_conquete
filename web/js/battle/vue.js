@@ -266,7 +266,9 @@ export class BattleView {
     this.draw(dt, now / 1000);
     this.ui.frame(now);
     const ms = performance.now() - t0;
-    this.frameMs.push(ms); if (this.frameMs.length > 120) this.frameMs.shift();
+    this.frameMs.push(ms);
+    // une image rapide, sans geste en cours : on avance la peinture des tuiles voisines
+    if (ms < 7 && !this.controls.busy() && !this.camAnim && (this.idleN = (this.idleN || 0) + 1) % 3 === 0) this.terrain?.prefetch(); if (this.frameMs.length > 120) this.frameMs.shift();
   }
 
   draw(dt, time) {
@@ -278,21 +280,30 @@ export class BattleView {
     // monde : x → (x − cx)·z + vw/2 ; y → (y − cy)·z·TILT + vh/2
     const world = () => ctx.setTransform(dpr * z, 0, 0, dpr * z * TILT, dpr * (this.vw / 2 - cam.x * z), dpr * (this.vh / 2 - cam.y * z * TILT));
     world();
+    // mesure facultative, poste par poste (this.prof = {} pour l'activer)
+    let tm = performance.now();
+    const mark = k => { if (!this.prof) return; const n = performance.now(); this.prof[k] = (this.prof[k] || 0) + n - tm; tm = n; };
     const pinching = this.controls.busy();
     this.terrain.draw(ctx, cam, this.vw, this.vh / TILT, dpr, pinching ? 0 : this.ui.entering ? 3 : 1);
     // cadre du champ de bataille
     ctx.strokeStyle = 'rgba(200,162,83,0.65)'; ctx.lineWidth = 2 / z; ctx.strokeRect(0, 0, this.W, this.H);
+    mark('terrain');
     this.drawGround(ctx, z, time);
+    mark('sol');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const view = { toScreen: this.toScreen, z, figScale: this.figScale, vw: this.vw, vh: this.vh, dpr };
     const vis = [...this.units.values()].filter(u => u.state !== 'hors' && this.onScreen(u));
     this.art.draw(ctx, view, vis, time, this.colors || []);
+    mark('unites');
     this.fx.draw(ctx, view);
+    mark('effets');
     const hour = this.hourNum();
     this.fx.atmosphere(ctx, view, { weather: this.st?.weather || this.map?.weather, light: this.st?.light ?? 1, hour, wind: this.st?.wind }, dt, time);
+    mark('atmosphere');
     this.drawLabels(ctx);
     this.bannerRects = this.art.banners(ctx, view, vis, this.colors || [], { sel: this.sel, me: this.me, time });
     this.controls.drawOverlay(ctx, view, time);
+    mark('fanions');
   }
   onScreen(u) {
     const [sx, sy] = this.toScreen(u.x, u.y), m = Math.max(u.w, u.d) * this.cam.z + 80;

@@ -124,7 +124,11 @@ export class BattleUI {
     if (changed && !this.feed.length) box.innerHTML = '';
   }
   addLog(txt) {
-    const v = this.v, hour = v.st?.hour || '';
+    const v = this.v;
+    // le moteur met parfois l'heure en tête du message (« 8 h 08 — … ») : on la garde à part
+    const m = /^(Ennemi : )?(\d{1,2} h \d{2}) — /.exec(txt);
+    const hour = m ? m[2] : v.st?.hour || '';
+    if (m) txt = (m[1] || '') + txt.slice(m[0].length);
     this.logAll.push({ hour, txt });
     if (this.logAll.length > 400) this.logAll.shift();
     const box = this.$('.bt-feed'), d = document.createElement('div');
@@ -418,7 +422,7 @@ export class BattleUI {
         <div><b>${fmt(pris[1])}</b><span>prisonniers faits${pris[0] ? ` <small>(${fmt(pris[0])} perdus)</small>` : ''}</span></div>
         <div><b>+${fmt(r.xp ?? 0)}</b><span>expérience</span></div>
       </div>
-      <div class="br-units">${per.map(p => `<div><span>${esc(p.name)}</span><span>${p.lost ? '−' + fmt(p.lost) : '—'}</span><span>${p.xp ? '+' + fmt(p.xp) + ' xp' : ''}</span></div>`).join('')}</div>
+      <div class="br-units">${per.map(p => `<div><span>${esc(p.name)}</span><span>${p.lost ? '−' + fmt(p.lost) : '—'}</span><span>${Math.round(p.xp || 0) ? '+' + fmt(p.xp) + ' xp' : ''}</span></div>`).join('')}</div>
       <div class="bm-btns"><button class="bt-btn primary big" data-a="retour">Retour à la carte</button></div>`);
   }
   // cartouche du titre à l'entrée
