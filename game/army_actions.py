@@ -2,8 +2,10 @@
 devant une place étrangère : traversée et droit de passage, ralliement négocié, contribution, blocus.
 
 L'état propre à une place est rangé dans n['aa'] (travaux, solidité des barricades, garde, négociation, délais) ;
-celui d'une armée dans a['tr'] (traverser), a['hold'] (halte devant une place), a['qrt'] (quartiers) ;
-les droits de passage dans faction['passage'] = {bénéficiaire: échéance}.
+celui d'une armée dans a['tr'] (traverser), a['hold'] (halte devant une place), a['qrt'] (quartiers),
+a['cl'] (sur des terres fermées : délai de grâce), a['ex'] (terres fermées dont son itinéraire la fait sortir),
+a['dt'] (terres fermées que son itinéraire contourne) ; les droits de passage dans
+faction['passage'] = {bénéficiaire: échéance}.
 """
 import math
 
@@ -67,9 +69,8 @@ BLOC_MIN = 0.5          # rapport de forces pour investir la place
 
 # ------------------------------------------------------------------ passage
 PASSAGE_DAYS = 365
-INCIDENT_CD = 60        # un incident par armée et par département, au plus tous les deux mois
+INCIDENT_CD = 60        # au-delà du délai de grâce : un incident par armée et par département, au plus tous les deux mois
 INCIDENT_REL = 10
-INCIDENT_DAYS = 1.0     # présence continue sur ses terres (hors de ses places) qui vaut incident
 NOTICE_CD = 60
 
 
@@ -104,6 +105,7 @@ def migrate(g):
     for a in g.armies.values():
         for k in ('tr', 'hold', 'qrt'):
             a.setdefault(k, False)
+        a.pop('trx', None)   # ancien passage forcé « quitte à provoquer un incident »
 
 
 # ================================================================== défense des places
@@ -383,32 +385,79 @@ def requisition(g, code, a):
 
 
 # ================================================================== 5. traverser, droit de passage
+# Terres fermées : celles d'un département qui n'est ni nous, ni un allié (suzerain, vassal, vassal du même suzerain),
+# ni en guerre avec nous, et qui ne nous accorde pas le droit de passage. On ne les traverse pas : ni ses places par
+# la route, ni ses campagnes (cellules rattachées à ses places, voir geo.node_of_cell). Les places indépendantes et
+# les terres d'un ennemi se traversent. Sur les fleuves, les gabares passent librement devant ses quais, sans y
+# débarquer. Une armée qui s'y trouve sans l'avoir voulu a quelques jours de grâce pour en sortir.
 def has_passage(g, code, o):
     """o laisse-t-il passer les armées de code ?"""
     f = g.factions.get(o)
     return bool(f) and f.get('passage', {}).get(code, -1) > g.t
 
 
+def closed_to(g, code, o):
+    """Les terres de o sont-elles fermées aux armées de code ?"""
+    if o == code or o == R.NEUTRAL or o not in g.factions or code not in g.factions:
+        return False
+    if g.status(code, o) in ('guerre', 'alliance'):
+        return False
+    ov = g.factions[code]['overlord']
+    if ov and ov == g.factions[o]['overlord']:
+        return False   # vassaux du même suzerain
+    return not has_passage(g, code, o)
+
+
+def closed_owners(g, code):
+    """Départements dont les terres sont fermées à code (à passer à la recherche de chemin)."""
+    return frozenset(o for o in g.factions if closed_to(g, code, o))
+
+
+def cell_mask(g, owners):
+    """Pour geo.astar : une marque par propriétaire interdit, indexée par lieu (valeurs de geo.cellnode) ; None si aucun."""
+    if not owners:
+        return None
+    tag = {o: i + 1 for i, o in enumerate(sorted(owners))}
+    m = bytearray(256)
+    for n in g.nodes:
+        t = tag.get(n['owner'])
+        if t:
+            m[n['id']] = t
+    return m
+
+
+def land_owner(g, x, y):
+    """Maître des terres en (x, y) : celui de la place dont relève la cellule (None : eau, hors région)."""
+    nd = g.geo.node_of_cell(x, y)
+    return None if nd is None else g.nodes[nd]['owner']
+
+
 def route_level(g, a):
-    """Places traversables par la route : 0 en conquérant (comme avant), 1 en traversant avec droit de passage,
-    2 en traversant quitte à provoquer un incident (le joueur, prévenu, le confirme)."""
-    if not a.get('tr') or a['state'] == 'retreat':
-        return 0   # une retraite garde ses chemins d'avant
-    return 2 if a['owner'] == g.player else 1
+    """Places traversables par la route : 0 en conquérant, 1 en traversant (une retraite garde ses chemins d'avant)."""
+    return 1 if a.get('tr') and a['state'] != 'retreat' else 0
 
 
 def arrive(g, a, nid):
     """Arrivée d'une armée sur une place ni à elle ni alliée. None : comme avant (rallier, assiéger, combattre) ;
-    False : elle passe son chemin ; True : elle fait halte devant la place, sans l'attaquer."""
-    if a['state'] == 'retreat' or not (a.get('tr') or a.get('hold')):
-        return None
+    False : elle passe son chemin ; True : elle s'arrête devant la place, sans l'attaquer."""
     n = g.nodes[nid]
     o, code = n['owner'], a['owner']
     war = o != R.NEUTRAL and g.at_war(code, o)
-    if o in g.factions and not war and not has_passage(g, code, o):
-        trespassed(g, a, o)             # entrer dans une de ses places sans y être invité
+    if o != R.NEUTRAL and not war:
+        # voisin en paix (droit de passage, gabare devant ses quais, sortie de ses terres) : on ne fait que passer
+        if a['path']:
+            return False
+        a['state'] = 'idle'
+        if a.get('tr') and not a.get('hold'):
+            a['hold'] = True
+            if code == g.player:
+                g.log('armee', f"La {a['name']} fait halte devant {place(g, nid)} (en paix, elle n'y entre pas).",
+                      *g.node_xy(nid), who=code)
+        return True
+    if a['state'] == 'retreat' or not (a.get('tr') or a.get('hold')):
+        return None
     if a['path'] and a.get('tr'):
-        return None if war else False   # une place ennemie tenue barre la route ; neutres et voisins en paix se traversent
+        return None if war else False   # une place ennemie tenue barre la route ; les neutres se traversent
     if n['siege'] and n['siege']['by'] == code:
         return None                     # nos troupes l'investissent déjà : on se joint à elles
     a['path'] = []
@@ -416,60 +465,138 @@ def arrive(g, a, nid):
     if not a.get('hold'):
         a['hold'] = True
         if code == g.player:
-            what = ("négociez, rançonnez, bloquez ou attaquez" if o == R.NEUTRAL or war else "en paix, elle n'y entre pas")
-            g.log('armee', f"La {a['name']} fait halte devant {place(g, nid)} ({what}).", *g.node_xy(nid), who=code)
+            g.log('armee', f"La {a['name']} fait halte devant {place(g, nid)} (négociez, rançonnez, bloquez ou attaquez).",
+                  *g.node_xy(nid), who=code)
     return True
 
 
-def trespass(g, code, path, target):
-    """Départements en paix dont l'itinéraire traverse les terres sans droit de passage."""
+def crossed(g, path, target, owners, skip=None):
+    """Départements de `owners` dont l'itinéraire traverse les terres : places par la route (une gabare passe devant
+    les quais sans y débarquer), campagnes à travers champs, destination. skip : celui dont on sort."""
+    if not owners:
+        return []
     seen = set()
 
-    def chk(nid):
-        if nid is None:
-            return
-        o = g.nodes[nid]['owner']
-        if o in g.factions and o != code and g.status(code, o) == 'paix' and not has_passage(g, code, o):
+    def chk(o):
+        if o in owners and o != skip:
             seen.add(o)
-    for leg in path:
+    for i, leg in enumerate(path):
         if leg['kind'] == 'road':
-            chk(leg['to'])
+            if g.geo.edges[leg['e']].get('kind') == 'water':
+                nxt = path[i + 1] if i + 1 < len(path) else None
+                if nxt and nxt['kind'] == 'road' and g.geo.edges[nxt['e']].get('kind') == 'water':
+                    continue   # toujours à bord
+            chk(g.nodes[leg['to']]['owner'])
         else:
             pts = leg['pts']
-            for p in pts[::3] + pts[-1:]:
-                chk(g.geo.node_of_cell(p[0], p[1]))
-    if target and target.get('node') is not None:
-        chk(target['node'])
+            for p, q in zip(pts, pts[1:]):
+                k = max(1, int(math.dist(p, q)))
+                for s in range(k):
+                    chk(land_owner(g, p[0] + (q[0] - p[0]) * s / k, p[1] + (q[1] - p[1]) * s / k))
+            if pts:
+                chk(land_owner(g, *pts[-1]))
+    if target:
+        # la destination elle-même, même chez celui dont on sort
+        o = g.nodes[target['node']]['owner'] if target.get('node') is not None else \
+            land_owner(g, target['x'], target['y']) if target.get('x') is not None else None
+        if o in owners:
+            seen.add(o)
     return sorted(seen)
 
 
-def trespass_warning(g, code, a):
-    who = trespass(g, code, a['path'], a['target'])
-    if not who:
-        return None
-    names = ' et '.join(g.fname(o) for o in who)
-    return (f"Cet itinéraire traverse les terres de {names} sans droit de passage : ce sera un incident diplomatique "
-            f"(les relations se dégradent, et l'on peut vous déclarer la guerre). Passer quand même ?")
+def names_of(g, who):
+    return ' et '.join(g.fname(o) for o in who)
 
 
-def on_peace_land(g, a, o):
-    """Armée sur les terres d'un voisin en paix. True si elle y a droit de passage (rien à redire) ;
-    sinon incident diplomatique (au plus un par armée et par voisin tous les deux mois)."""
+def closed_msg(g, who):
+    return (f"Aucun chemin sans traverser les terres {R.de(names_of(g, who))} : demandez un droit de passage "
+            f"(Diplomatie), ou passez en force (déclaration de guerre).")
+
+
+def force_question(g, who):
+    n = names_of(g, who)
+    return (f"Aucun chemin sans traverser les terres {R.de(n)}, qui ne vous {'ont' if len(who) > 1 else 'a'} pas "
+            f"accordé le droit de passage.\n\nPasser en force, c'est DÉCLARER LA GUERRE à {n} (ses alliés "
+            f"peuvent s'en mêler). Sinon, annulez et demandez un droit de passage dans la fenêtre Diplomatie.\n\n"
+            f"Déclarer la guerre à {n} et passer en force ?")
+
+
+def force_passage(g, code, who):
+    """Passage en force : la guerre à chacun, selon les règles ordinaires (trêve, suzerain…). (ok, message)."""
+    from . import diplomacy as D
+    for o in who:
+        why = D.war_refusal(g, code, o)
+        if why:
+            return False, f"Passage en force impossible : {why}"
+    for o in who:
+        if not g.at_war(code, o):
+            D.declare_war(g, code, o)
+            g.log('diplo', f"{g.fname(code)} force le passage sur les terres {R.de(g.fname(o))}.", who=code,
+                  important=g.player in (code, o))
+    return True, f"Guerre déclarée à {names_of(g, who)} : l'armée passe en force."
+
+
+# ------------------------------------------------------------------ délai de grâce
+GRACE_DAYS = 5.0        # pour sortir de terres fermées où l'on se retrouve sans l'avoir voulu
+
+
+def land_tick(g, a, dt):
+    """Armée sur des terres qui lui sont fermées (droit échu ou retiré en chemin, place passée en d'autres mains,
+    paix signée en territoire ennemi, retraite) : chemin de sortie et délai de grâce, puis incidents."""
+    if a.get('boat') or a['state'] not in ('move', 'idle', 'retreat'):
+        return   # à bord, le fleuve est libre ; en bataille ou en siège, on ne compte pas
     code = a['owner']
-    if has_passage(g, code, o):
-        if o == g.player and g.t >= a.setdefault('_ntc', {}).get(o, -1):
+    o = g.nodes[a['at_node']]['owner'] if a['at_node'] is not None else land_owner(g, a['x'], a['y'])
+    if o is None or o in (code, R.NEUTRAL) or o not in g.factions:
+        a.pop('cl', None)
+        return
+    if not closed_to(g, code, o):
+        a.pop('cl', None)
+        if o == g.player and g.status(code, o) == 'paix' and g.t >= a.setdefault('_ntc', {}).get(o, -1):
             a['_ntc'][o] = g.t + NOTICE_CD
             g.log('diplo', f"Des troupes {R.de(g.fname(code))} traversent vos terres (droit de passage).",
                   a['x'], a['y'], who=code)
-        return True
-    # une route qui frôle ses terres n'est pas une invasion : il faut y rester un jour entier
-    vo, vt, acc = a.get('_vt') or (None, -9.0, 0.0)
-    acc = acc + (g.t - vt) if vo == o and g.t - vt < 0.3 else 0.0
-    a['_vt'] = [o, g.t, acc]
-    if acc >= INCIDENT_DAYS:
-        a['_vt'] = [o, g.t, 0.0]
+        return
+    if a['state'] == 'move' and a['edge'] and a.get('ex') != o:
+        # une route entre deux places ouvertes peut frôler ses campagnes : ce n'est pas y entrer
+        e = g.geo.edges[a['edge']['e']]
+        if not closed_to(g, code, g.nodes[e['a']]['owner']) and not closed_to(g, code, g.nodes[e['b']]['owner']):
+            return
+    cl = a.get('cl')
+    if not cl or cl['o'] != o:
+        cl = a['cl'] = dict(o=o, until=round(g.t + GRACE_DAYS, 2), rt=0.0)
+        if code == g.player:
+            g.log('armee', f"La {a['name']} se trouve sur les terres {R.de(g.fname(o))} sans droit de passage : "
+                           f"elle a {GRACE_DAYS:.0f} jours pour en sortir.", a['x'], a['y'], who=o, important=True)
+    if g.t >= cl['rt'] and not (a['state'] == 'move' and a.get('ex') == o):
+        cl['rt'] = round(g.t + 1.0, 2)   # au plus une tentative par jour
+        way_out(g, a, o)
+    if g.t > cl['until']:
+        # au-delà du délai de grâce : les relations se dégradent, et l'on peut lui déclarer la guerre
+        fo = g.factions[o]
+        fo['rel'][code] = max(-100, fo['rel'][code] - 1.2 * dt)
+        a['viol'] = a.get('viol', 0.0) + dt
         trespassed(g, a, o)
-    return False
+
+
+def way_out(g, a, o):
+    """Itinéraire de sortie : vers la même destination par un détour si l'on marchait, sinon vers les terres
+    les plus proches où l'armée a le droit d'être. Une retraite garde son chemin."""
+    if a['state'] == 'retreat':
+        return True
+    code = a['owner']
+    mine = code == g.player
+    if a['state'] == 'move' and g.reroute(a):
+        if mine:
+            g.log('armee', f"La {a['name']} change d'itinéraire pour quitter les terres {R.de(g.fname(o))}.",
+                  a['x'], a['y'], who=code)
+        return True
+    if not g.exit_path(a, o):
+        return False
+    if mine:
+        g.log('armee', f"La {a['name']} quitte les terres {R.de(g.fname(o))} par le plus court.", a['x'], a['y'],
+              who=code)
+    return True
 
 
 def trespassed(g, a, o):
@@ -487,10 +614,10 @@ def incident(g, a, o):
     pen = INCIDENT_REL + min(15, g.army_men(a) / 400)
     fo['rel'][code] = max(-100, fo['rel'][code] - pen)
     if code == g.player:
-        g.log('diplo', f"Incident diplomatique : la {a['name']} entre sans droit de passage sur les terres "
+        g.log('diplo', f"Incident diplomatique : la {a['name']} s'attarde sans droit de passage sur les terres "
                        f"{R.de(g.fname(o))} (relation −{int(pen)}).", a['x'], a['y'], who=o, important=True)
     elif o == g.player:
-        g.log('diplo', f"Incident : des troupes {R.de(g.fname(code))} franchissent vos frontières sans droit de passage.",
+        g.log('diplo', f"Incident : des troupes {R.de(g.fname(code))} s'attardent sur vos terres sans droit de passage.",
               a['x'], a['y'], who=code, important=True)
     if o == g.player or fo['overlord'] or code in fo['truce']:
         return
@@ -505,8 +632,8 @@ def incident(g, a, o):
 
 
 def may_stay(g, a, o):
-    """Une armée à l'arrêt chez un voisin en paix peut y rester si elle a le droit de passage."""
-    return o in g.factions and has_passage(g, a['owner'], o)
+    """Une armée à l'arrêt chez un voisin en paix peut y rester si ses terres lui sont ouvertes (droit de passage)."""
+    return o in g.factions and not closed_to(g, a['owner'], o)
 
 
 def grant_passage(g, grantor, grantee, days=PASSAGE_DAYS):
@@ -550,6 +677,8 @@ def eval_passage(g, ai, frm, amount=0):
         score += 20   # il va frapper notre ennemi : tant mieux
     if any(g.friendly(ai, x) or f['rel'][x] > 40 for x in foes):
         score -= 30   # il va frapper un ami : non
+    if f['rel'][frm] > 20:
+        score += 8    # sans ce droit, ses armées ne passent pas du tout : on l'accorde plus volontiers aux amis
     if score >= 10:
         return True, f"{g.fname(ai)} accorde le droit de passage pour un an."
     return False, f"{g.fname(ai)} refuse de laisser passer vos troupes (relation {int(f['rel'][frm])})."
@@ -891,6 +1020,11 @@ def view_army(g, a, d, own):
         d['tr'] = 1
     if a.get('hold'):
         d['hold'] = 1
+    if a.get('dt') and a['path']:
+        d['dt'] = [g.fname(o) for o in a['dt']]   # terres fermées contournées
+    cl = a.get('cl')
+    if cl:
+        d['cl'] = [g.fname(cl['o']), round(cl['until'] - g.t, 1)]   # sur des terres fermées : délai de grâce
     nid = a['at_node']
     if nid is None or a['state'] not in ('idle', 'siege') or a.get('boat') or a['battle']:
         return
@@ -963,7 +1097,8 @@ def options(g, a, nid):
 
 
 def view_passage(g, p, code):
-    """Droits de passage entre le joueur et ce département : ps (il nous l'accorde), pg (nous le lui accordons)."""
+    """Droits de passage entre le joueur et ce département : ps (il nous l'accorde), pg (nous le lui accordons) ;
+    cl : ses terres nous sont fermées ; cg : les nôtres lui sont fermées."""
     if code == p:
         return {}
     out = {}
@@ -971,6 +1106,10 @@ def view_passage(g, p, code):
         out['ps'] = g.date_str(g.factions[code]['passage'][p])
     if has_passage(g, code, p):
         out['pg'] = g.date_str(g.factions[p]['passage'][code])
+    if closed_to(g, p, code):
+        out['cl'] = 1
+    if closed_to(g, code, p):
+        out['cg'] = 1
     return out
 
 
@@ -1028,31 +1167,38 @@ def ai_step(ai):
 
 
 def ai_passage(ai, wars):
-    """Demander le passage chez un voisin en paix qui sépare de l'ennemi ; retirer le sien à qui nous déteste."""
+    """Demander le passage chez un voisin dont les terres sont fermées quand le contournement est trop long ou
+    impossible (vers l'ennemi, ou vers une destination refusée naguère) ; retirer le sien à qui nous déteste."""
     from . import diplomacy as D
     g, code, f = ai.g, ai.code, ai.f
     for o in list(f.get('passage', {})):
         if f['passage'][o] > g.t and f['rel'].get(o, 0) < -25:
             revoke_passage(g, code, o)
-    if not wars or f['overlord'] or g.t < ai.cool.get(('aa', 'route'), -1):
+    refused = getattr(ai, 'refused', {})
+    for nid in [k for k, t in refused.items() if g.t - t > 90]:
+        del refused[nid]   # vieux refus : oubliés
+    if (not wars and not refused) or f['overlord'] or g.t < ai.cool.get(('aa', 'route'), -1):
         return
     ai.cool[('aa', 'route')] = g.t + 15
     start = ai.rally if getattr(ai, 'rally', None) is not None else g.capital_of(code)
     if start is None or g.nodes[start]['owner'] != code:
         return
-    for x in wars[:2]:
-        goal = g.capital_of(x)
-        if g.nodes[goal]['owner'] != x:
+    block = closed_owners(g, code)
+    if not block:
+        return
+    goals = [g.capital_of(x) for x in wars[:2]]
+    goals = [v for v in goals if g.nodes[v]['owner'] in wars]
+    goals += sorted(refused, key=lambda v: -refused[v])[:2]
+    for goal in goals:
+        if g.nodes[goal]['owner'] in block:
+            continue   # la destination elle-même est fermée : ce n'est pas un passage qu'il faut
+        free = g.road_route(code, {start: 0.0}, goal, 22.0, False, 1, frozenset())
+        if not free:
             continue
-        r2 = g.road_route(code, {start: 0.0}, goal, 22.0, False, tr=2)
-        if not r2:
-            continue
-        r0 = g.road_route(code, {start: 0.0}, goal, 22.0, False)
-        if r0 and r0[0] <= 1.3 * r2[0]:
-            continue   # le détour par chez nous est court : pas besoin de demander
-        for o in sorted({g.nodes[v]['owner'] for v in r2[1]}):
-            if o not in g.factions or o in (code, x) or g.status(code, o) != 'paix' or has_passage(g, code, o):
-                continue
+        r = g.road_route(code, {start: 0.0}, goal, 22.0, False, 1, block)
+        if r and r[0] <= 1.3 * free[0]:
+            continue   # le détour est court : pas besoin de demander
+        for o in sorted({g.nodes[v]['owner'] for v in free[1]} & block):
             if g.t < ai.cool.get((o, 'passage'), -1):
                 continue
             ai.cool[(o, 'passage')] = g.t + 120

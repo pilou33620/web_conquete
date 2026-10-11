@@ -14,6 +14,8 @@ const pctChg = (now, before) => {
   return (v > 0 ? '+' : '') + minus((v || 0).toLocaleString('fr-FR')) + '\u202f%';
 };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// « de » élidé, comme côté serveur (rules.de) : de Dordogne, d’Agen, du Bugue
+const de = n => /^Le /.test(n) ? 'du ' + n.slice(3) : /^Les /.test(n) ? 'des ' + n.slice(4) : /^[aeiouyhâàéèêîïôöûü]/i.test(n) ? `d’${n}` : `de ${n}`;
 const STATUS = { paix: 'En paix', guerre: 'En guerre', alliance: 'Alliés', self: 'Vous' };
 const TYPE_LABEL = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' };
 const RES_ORDER = ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'];
@@ -21,7 +23,7 @@ const BRANCH_LABEL = { militaire: 'Militaire', civil: 'Civil', industriel: 'Indu
 const ACTION_LABEL = { paix: 'propose la paix', alliance: 'propose une alliance', commerce: 'propose un accord commercial', echange: 'propose un échange', prisonniers: 'propose un échange de prisonniers', passage: 'demande le droit de passage sur vos terres' };
 // conduite d'une marche : conquérir en chemin ou traverser (le dernier choix est gardé)
 const TR_HELP = ['Rallie ou attaque les places indépendantes et ennemies sur la route.',
-  'Passe les places indépendantes et les terres en paix sans combattre ; halte devant la destination.'];
+  'Passe les places indépendantes sans combattre ; halte devant la destination.'];
 
 function relLabel(r) {
   if (r <= -50) return 'Haineux';
@@ -41,6 +43,7 @@ export class UI {
     this.modal = null;
     this.events = [];
     this.lastSpeed = 1;
+    this.cmdSeq = 0;
     this.panelSig = '';
     this.modalSig = '';
     this.pressing = false;
@@ -134,9 +137,14 @@ export class UI {
   onKey(e) {
     if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || e.target.isContentEditable) return;
     if (!this.st) return;
+    const tour = this.st.tour && this.st.tour.on;
     if (e.key === ' ') {
       e.preventDefault();
-      if (this.st.speed) { this.lastSpeed = this.st.speed; this.setSpeed(0); } else this.setSpeed(this.lastSpeed || 1);
+      if (tour) this.turnCmd(this.st.tour.phase === 'cours' ? 'stop' : 'go');   // tour par tour : fin du mois, arrêter, continuer
+      else if (this.st.speed) { this.lastSpeed = this.st.speed; this.setSpeed(0); } else this.setSpeed(this.lastSpeed || 1);
+    } else if (tour && /^[1-9]$/.test(e.key)) {
+      const p = (this.rules.paces || [])[+e.key - 1];
+      if (p) this.cmd({ cmd: 'tour', action: 'pace', value: p[0] }, false);
     } else if (/^[1-9]$/.test(e.key) && +e.key < this.rules.speeds.length) this.setSpeed(+e.key);
     else if (e.key === 'Escape') {
       if (!this.$('modal').hidden) this.closeModal();
@@ -150,12 +158,23 @@ export class UI {
   // ------------------------------------------------------------------ commandes serveur
   async cmd(body, toastOk = true) {
     let r;
+    this.cmdSeq++;
     try { r = await this.api.post('/api/cmd', body); } catch (e) { r = { ok: false, msg: 'Serveur injoignable : ordre non transmis.' }; }
+    this.cmdSeq++;   // avant et après l'ordre : un état demandé entre-temps est périmé (voir poll)
     if (r.msg && (!r.ok || toastOk)) this.toast(r.msg, r.ok ? (r.pending ? '' : 'good') : 'bad');
     this.onRefresh && this.onRefresh();
     return r;
   }
   setSpeed(v) { this.cmd({ cmd: 'speed', value: v }, false); if (this.st) this.st.speed = v; this.renderSpeed(v); }
+  // tour par tour : 'go' (fin du mois, continuer le mois) ou 'stop' (arrêter le temps)
+  turnCmd(v) {
+    const tr = this.st && this.st.tour;
+    if (!tr || !tr.on || this.st.over) return;
+    this.cmd({ cmd: 'tour', action: v }, false);
+    // réponse immédiate à l'écran, sans attendre le prochain état du serveur
+    if (v === 'go') { tr.phase = 'cours'; tr.recap = null; } else if (tr.phase === 'cours') tr.phase = 'arret';
+    this.renderTurn();
+  }
 
   toast(text, kind = '') {
     const t = document.createElement('div');
@@ -227,7 +246,7 @@ export class UI {
     const html = `<h2 class="m-title" id="m-title">${b.amb ? 'Embuscade' : b.node != null ? 'Assaut' : 'Bataille'}${place ? ' — ' + esc(place) : ''}</h2>
       <p class="m-sub">${esc(b.terrain)}${b.river ? ', rivière' : ''}. ${side(b.sides[0])} attaque ; ${side(b.sides[1])}.</p>
       <div class="ev-choices"><button class="btn primary ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="manuel"><b>Commander la bataille</b><small>Disposez et menez vos troupes sur le champ de bataille</small></button>
-        <button class="btn ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="auto"><b>Résolution automatique</b><small>Le général décide ; la campagne reprend aussitôt</small></button></div>
+        <button class="btn ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="auto"><b>Résolution automatique</b><small>Le général décide ; la bataille se joue avec la campagne</small></button></div>
       <p class="muted small">La campagne reste en pause tant que vous n’avez pas choisi. Réglage dans le menu ☰.</p>`;
     return [html, b.id];
   }
@@ -245,6 +264,89 @@ export class UI {
     for (const b of this.$('tb-speed').children) b.classList.toggle('on', +b.dataset.v === v);
   }
 
+  // ------------------------------------------------------------------ tour par tour
+  // barre du haut : « Fin du mois » (ordres), progression et « Arrêter » (le mois se joue),
+  // « Continuer le mois » et la raison de l'arrêt (interruption)
+  renderTurn() {
+    const tr = this.st.tour || { on: false };
+    const tb = this.$('tb-turn');
+    this.$('tb-speed').hidden = !!tr.on;
+    tb.hidden = !tr.on;
+    document.body.classList.toggle('mode-tour', !!tr.on);
+    this.renderRecap();
+    if (!tr.on) return;
+    const pace = (this.rules.paces || []).find(p => p[0] === tr.pace) || ['normal', 'Normal', 15];
+    const until = `jusqu’au ${esc(tr.end || '')}`;
+    const stop = tr.stop;
+    // une bataille attend le choix du joueur, ou se livre sur le champ de bataille : le mois ne reprend pas
+    const held = (this.st.tac && this.st.tac.phase !== 'fin') || (this.st.battles || []).some(b => b.mode === 'attente');
+    const sig = [tr.phase, tr.end, tr.pace, stop ? stop.text + stop.date + stop.more : '', !!this.st.over, held].join('|');
+    if (sig !== tb.dataset.sig) {
+      tb.dataset.sig = sig;
+      const paceBtn = `<button class="turn-pace" data-act="turn-pace" title="Rythme : un mois se joue en ${pace[2]} secondes environ (touches 1 à ${(this.rules.paces || []).length}). Toucher pour changer." aria-label="Rythme du mois : ${pace[1]}">${speedIcon(Math.max(1, (this.rules.paces || []).findIndex(p => p[0] === pace[0]) + 1))}<span>${pace[1]}</span></button>`;
+      const off = this.st.over || held ? ' disabled' : '';
+      if (tr.phase === 'cours') {
+        tb.innerHTML = `<div class="turn-run" title="Le mois se joue ${until}"><div class="turn-lbl">Le mois se joue… <span>${until.replace(/ \d{4}$/, '')}</span></div><div class="bar"><i id="turn-bar"></i></div></div>
+          <button class="turn-stop" data-act="turn" data-v="stop" title="Arrêter le temps (espace)">${speedIcon(0)}<span>Arrêter</span></button>${paceBtn}`;
+      } else if (tr.phase === 'arret') {
+        const why = stop ? `<button class="turn-why k-${esc(stop.kind)}" data-act="turn-why" title="${esc(stop.text)}${stop.x != null || stop.sel ? ' — toucher pour voir' : ''}">${esc(stop.text)}${stop.more ? ` <span class="more">+${stop.more}</span>` : ''}</button>`
+          : '<span class="turn-why muted">Mois interrompu.</span>';
+        tb.innerHTML = `<button class="turn-go" data-act="turn" data-v="go"${off} title="Reprendre le mois (espace)"><b>Continuer le mois</b><small>${until}</small></button>${why}`;
+      } else {
+        tb.innerHTML = `<button class="turn-go" data-act="turn" data-v="go"${off} title="Jouer le mois (espace) : tout s’arrête au ${esc(tr.end || '')}"><b>Fin du mois</b><small>${until}</small></button>${paceBtn}`;
+      }
+    }
+    const bar = document.getElementById('turn-bar');
+    if (bar) bar.style.width = (Math.max(0, Math.min(1, tr.prog || 0)) * 100).toFixed(1) + '%';
+  }
+
+  // raison de l'arrêt : centrer la carte, sélectionner la bataille, la place ou l'armée, ou ouvrir la décision
+  turnWhy() {
+    const s = this.st.tour && this.st.tour.stop;
+    if (!s) return;
+    if (s.sel === 'event' && (this.st.pending || []).length) { this.openModal('event'); return; }
+    if (s.x != null) this.map.moveTo(s.x, s.y, Math.max(this.map.cam.z, 7));
+    if (Array.isArray(s.sel)) {
+      const [kind, id] = s.sel;
+      const there = kind === 'node' || (kind === 'battle' ? this.st.battles.some(b => b.id === id) : !!this.armyById(id));
+      if (there) this.select({ kind, id });
+    }
+  }
+
+  // récapitulatif du mois écoulé, au début de chaque tour : discret, refermable (une fois par appareil)
+  renderRecap() {
+    const box = this.$('recap');
+    const tr = this.st.tour || {};
+    const rc = tr.on && tr.phase === 'ordres' ? tr.recap : null;
+    if (this.recapClosed === undefined) { try { this.recapClosed = localStorage.getItem('conquete.recap') || ''; } catch (e) { this.recapClosed = ''; } }
+    if (!rc || rc.id === this.recapClosed || this.st.over) { box.hidden = true; box.dataset.sig = ''; return; }
+    const sig = rc.id + (this.recapOpen ? '+' : '-');
+    if (box.dataset.sig === sig && !box.hidden) return;
+    box.dataset.sig = sig;
+    const go = it => it.x != null ? ` data-act="goto" data-x="${it.x}" data-y="${it.y}"` : '';
+    const line = (icon, html, it, cls = '') => `<li class="${cls}"${it ? go(it) : ''}>${icon}<span>${html}</span></li>`;
+    const places = l => l.map(p => `<button class="linkish" data-act="goto" data-x="${p.x}" data-y="${p.y}">${esc(p.name)}</button>`).join(', ');
+    const lines = [];
+    for (const b of rc.battles) lines.push(line(ICON.swords, esc(b.text), b, b.win === true ? 'good' : b.win === false ? 'bad' : ''));
+    if (rc.gained.length) lines.push(line(ICON.flag, `${rc.gained.length > 1 ? 'Places prises' : 'Place prise'} : ${places(rc.gained)}`, null, 'good'));
+    if (rc.lost.length) lines.push(line(ICON.flag, `${rc.lost.length > 1 ? 'Places perdues' : 'Place perdue'} : ${places(rc.lost)}`, null, 'bad'));
+    for (const f of rc.facts) lines.push(line(ICON.seal, esc(f.text), f));
+    for (const t of rc.techs) lines.push(line(ICON.tech, esc(t.text), t));
+    for (const b of rc.built) lines.push(line(ICON.ville, esc(b.text), b));
+    if (rc.levied) lines.push(line(ICON.recrues, `${rc.levied} ${rc.levied > 1 ? 'régiments levés' : 'régiment levé'}.`));
+    const inc = RES_ORDER.filter(r => Math.abs(rc.inc[r] || 0) >= 1)
+      .map(r => `<span class="rc-r" title="${esc(this.rules.res_label[r])}">${ICON[r]}${signed(rc.inc[r])}</span>`).join('');
+    const SHOW = 4;
+    const more = lines.length - SHOW;
+    const shown = this.recapOpen ? lines : lines.slice(0, SHOW);
+    box.innerHTML = `<button class="icon-btn close" data-act="recap-close" aria-label="Fermer le récapitulatif">${ICON.close}</button>
+      <div class="rc-title">${esc(rc.title)}</div><div class="rc-sub">${esc(rc.period)}${rc.stops ? ` · ${rc.stops} ${rc.stops > 1 ? 'interruptions' : 'interruption'}` : ''}</div>
+      <div class="rc-inc"><span class="rc-k">Revenus nets du mois</span>${inc || '<span class="muted">aucun</span>'}</div>
+      <ul class="rc-list">${shown.join('') || '<li class="muted"><span>Un mois calme : ni bataille, ni conquête, ni chantier achevé.</span></li>'}</ul>
+      ${more > 0 ? `<button class="linkish rc-more" data-act="recap-more">${this.recapOpen ? 'Réduire' : `Tout voir (${more} de plus)`}</button>` : ''}`;
+    box.hidden = false;
+  }
+
   renderTop() {
     const st = this.st, me = st.me;
     this.$('tb-day').textContent = st.date;
@@ -260,6 +362,7 @@ export class UI {
       this.$('tb-season').innerHTML = `<span>${this.rules.seasons[st.season]}</span>${wx}${st.flood ? '<span class="wx" title="Crue des fleuves">🌊</span>' : ''}`;
     }
     this.renderSpeed(st.speed);
+    this.renderTurn();
     for (const r of RES_ORDER) {
       const v = me.res[r], inc = me.income[r];
       this.$('res-' + r).textContent = fmt(v);
@@ -370,7 +473,7 @@ export class UI {
       if (p.action === 'commerce') detail = 'Chacun gagnera des livres et la ressource phare de l’autre.';
       if (p.action === 'prisonniers') detail = 'Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.';
       if (p.action === 'alliance') detail = 'Vision partagée et entrée en guerre à vos côtés si vous êtes attaqué.';
-      if (p.action === 'passage') detail = `Ses armées pourront traverser vos terres pendant un an sans incident (révocable dans la fenêtre Diplomatie).${p.amount ? ` Il offre ${fmt(p.amount)} livres.` : ''}`;
+      if (p.action === 'passage') detail = `Sans ce droit, ses armées ne peuvent pas traverser vos terres. Accordé, il vaut un an (révocable dans la fenêtre Diplomatie).${p.amount ? ` Il offre ${fmt(p.amount)} livres.` : ''}`;
       return `<div class="sheet proposal" style="border-left-color:${f.color}"><div class="pt">${esc(f.name)} ${esc(ACTION_LABEL[p.action] || p.action)}</div>
         <p>${detail}</p><div class="btns"><button class="btn primary" data-act="answer" data-id="${p.id}" data-v="1">Accepter</button>
         <button class="btn" data-act="answer" data-id="${p.id}" data-v="0">Refuser</button></div></div>`;
@@ -485,10 +588,33 @@ export class UI {
     if (e.hit && e.hit.kind === 'node') body.node = e.hit.id;
     else { body.x = e.x; body.y = e.y; }
     this.cmd(body, false).then(r => {
-      // traverser sans droit de passage : le joueur est prévenu de l'incident diplomatique
+      // pas de chemin sans terres fermées : passer en force, c'est déclarer la guerre (le joueur confirme)
       if (r.confirm) { if (confirm(r.confirm)) this.orderMove(a, e, mode, true); return; }
       if (r.ok) this.toast(r.msg || 'En marche.', 'good');
     });
+  }
+
+  // terres fermées (ni à nous, ni alliées, ni ennemies, sans droit de passage) : sur la destination, et sur le
+  // chemin direct (le tracé dessiné, sinon à vol d'oiseau) ; propriétaire d'une cellule = celui de sa place
+  closedOnWay(army, tx, ty, trail) {
+    const closed = new Set(this.st.factions.filter(f => f.cl).map(f => f.code));
+    const out = { target: null, way: [] };
+    if (!closed.size || !army) return out;
+    const owner = (x, y) => {
+      const nd = this.map.cellnode[Math.floor(y) * this.md.W + Math.floor(x)];
+      return nd == null || nd === 255 ? null : this.st.nodes[nd]?.o;
+    };
+    const pts = trail && trail.length > 1 ? trail : [[army.x, army.y], [tx, ty]];
+    const start = owner(army.x, army.y), seen = new Set();
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], k = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0)));
+      for (let s = 0; s <= k; s++) { const o = owner(x0 + (x1 - x0) * s / k, y0 + (y1 - y0) * s / k); if (closed.has(o) && o !== start) seen.add(o); }
+    }
+    const end = pts[pts.length - 1];
+    const to = owner(end[0], end[1]);
+    if (closed.has(to)) out.target = to;
+    out.way = [...seen].filter(o => o !== out.target);
+    return out;
   }
 
   setTrMode(on) {
@@ -511,8 +637,14 @@ export class UI {
     if (hitNode) title = hitNode.name;
     if (enemy) title = `${enemy.name} (${this.rules.factions[enemy.o].name})`;
     const target = enemy ? `data-x="${enemy.x}" data-y="${enemy.y}"` : hitNode ? `data-node="${hitNode.id}"` : `data-x="${e.x}" data-y="${e.y}"`;
+    // terres fermées : destination interdite (droit de passage ou passage en force), ou contournement à prévoir
+    const [tx, ty] = enemy ? [enemy.x, enemy.y] : hitNode ? [hitNode.x, hitNode.y] : [e.x, e.y];
+    const trail = withTrail && this.pendingTrail?.army === army?.id ? this.pendingTrail.pts : null;
+    const cw = this.closedOnWay(army, tx, ty, trail);
+    const closedTxt = (cw.target ? `<div class="bh warnline">Terres ${esc(de(this.rules.factions[cw.target].name))}, fermées : demandez un droit de passage (Diplomatie), ou passez en force (déclaration de guerre).</div>` : '')
+      + (cw.way.length ? `<div class="bh">Détour : les terres ${esc(de(cw.way.map(c => this.rules.factions[c].name).join(' et ')))} sont fermées (sans droit de passage), l’itinéraire les contournera${cw.target ? '' : ' s’il le peut'}.</div>` : '');
     b.innerHTML = `<div class="bt">${esc(title)}</div>${this.trSeg(this.trMode, 'trmode')}
-      <div class="bh">${peace && !this.trMode ? 'En paix : on n’y entre qu’en traversant.' : TR_HELP[+this.trMode]}</div>
+      <div class="bh">${peace && !this.trMode && !cw.target ? 'En paix : on n’y entre qu’en traversant.' : TR_HELP[+this.trMode]}</div>${closedTxt}
       ${withTrail ? `<button class="btn primary" data-act="go-trail">Suivre mon tracé</button>` : ''}
       <button class="btn ${withTrail ? '' : 'primary'}" data-act="go" data-mode="route" ${target}>Marcher par les routes</button>
       <button class="btn" data-act="go" data-mode="champs" ${target}>Marcher à travers champs</button>
@@ -537,6 +669,24 @@ export class UI {
     const sel = this.sel;
     switch (act) {
       case 'speed': this.setSpeed(+d.v); break;
+      case 'turn': this.turnCmd(d.v); break;
+      case 'turn-why': this.turnWhy(); break;
+      case 'turn-pace': {   // rythme suivant (ou celui choisi dans le menu)
+        const ps = this.rules.paces || [];
+        const i = ps.findIndex(p => p[0] === this.st.tour.pace);
+        const v = d.v || (ps[(i + 1) % ps.length] || [])[0];
+        if (v) this.cmd({ cmd: 'tour', action: 'pace', value: v }, false).then(() => { this.modalSig = ''; });
+        break;
+      }
+      case 'turn-mode': this.cmd({ cmd: 'tour', action: 'mode', value: d.v === '1' }); break;
+      case 'recap-close': {
+        const rc = this.st.tour && this.st.tour.recap;
+        this.recapClosed = rc ? rc.id : '';
+        try { localStorage.setItem('conquete.recap', this.recapClosed); } catch (e) { /* stockage indisponible */ }
+        this.renderRecap();
+        break;
+      }
+      case 'recap-more': this.recapOpen = !this.recapOpen; this.renderRecap(); break;
       case 'modal': this.openModal(d.v); break;
       case 'close-modal': this.closeModal(); break;
       case 'close-panel': this.select(null); break;
@@ -1100,6 +1250,11 @@ export class UI {
     let h = `<div class="p-head">${coat(f.color, a.o)}<div><div class="p-title">${esc(a.name)}</div><div class="p-sub">${f.name}, ${fmtMen(a.men)} hommes</div></div></div>
       <div class="p-state">${state}</div>${this.genHtml(a.gen)}`;
     if (a.fire) h += `<div class="warnline">Les gabares essuient le feu des canons ennemis sur la berge !</div>`;
+    // terres fermées : délai de grâce pour en sortir, ou contournement
+    if (a.cl) h += `<div class="warnline">Sur les terres ${esc(de(a.cl[0]))}, sans droit de passage : ${a.cl[1] > 0
+      ? `encore ${Math.ceil(a.cl[1])} j pour en sortir (itinéraire de sortie tracé), sinon incident diplomatique.`
+      : `délai de grâce écoulé, chaque jour ici fâche ${esc(a.cl[0])} (incident, voire la guerre).`}</div>`;
+    else if (a.dt && a.st === 'move') h += `<div class="muted small">Détour : l’itinéraire contourne les terres ${esc(de(a.dt.join(' et ')))} (sans droit de passage).</div>`;
     if (own) {
       h += `<dl class="kv"><dt>Terrain</dt><dd>${terr}${a.h ? ', à couvert' : ''}</dd><dt>Ravitaillement</dt><dd>${Math.round(a.sup * 100)} %</dd>
         ${a.dp ? `<dt></dt><dd class="muted small">Ravitaillée par le magasin de ${esc(a.dp)}</dd>` : ''}
@@ -1153,6 +1308,7 @@ export class UI {
     const sig = JSON.stringify([id, a.st, a.sk, a.md, a.h, a.n, Math.round(a.sup * 20), a.regs.map(r => [r[0], r[2], Math.round(r[5] / 5), r[6]]), st.me.arm, (this.rearmCost(a.regs) || []).map(([k, v]) => st.me.res[k] >= v),
       lastNode(), st.armies.filter(b => b.o === me && Math.hypot(b.x - a.x, b.y - a.y) < 3).length, a.n != null ? st.nodes[a.n].sg : null,
       a.fm, a.pl, a.auto, a.gen, a.boat, !!a.emb, a.fire, a.e && a.e[0], a.dp, a.wn, a.des, a.rx, a.tr, a.hold, a.qr, a.ax,
+      a.cl && [a.cl[0], Math.ceil(a.cl[1])], a.dt,
       a.n != null ? [st.nodes[a.n].o, st.nodes[a.n].bar] : null]);
     return [h, sig];
   }
@@ -1190,7 +1346,7 @@ export class UI {
     }
     let h = `<div class="section-t">Devant ${nm}</div>`;
     if (x.o !== 'neutre' && !x.neg && !x.ctb && !x.blq && !x.bl && !x.busy) {
-      return h + `<div class="muted small">Terres d’un voisin en paix : l’armée ne fait que passer${a.hold ? ' (avec un droit de passage, elle peut s’y tenir)' : ''}.</div>`;
+      return h + `<div class="muted small">Terres d’un voisin en paix : avec son droit de passage, l’armée passe ou s’y tient sans l’attaquer ; sans lui, elle doit en sortir.</div>`;
     }
     if (x.busy) return h + `<div class="muted small">La place est déjà investie par un autre camp.</div>`;
     h += `<div class="btns">`;
@@ -1380,7 +1536,7 @@ export class UI {
         <div class="btns"><button class="btn" data-act="diplo" data-to="${f.code}" data-v="prisonniers" ${held || theirs ? '' : 'disabled'} title="Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.">Échanger les prisonniers</button>${enrollBtn(f.code, held, 'Enrôler ses prisonniers')}</div>`;
       return `<div class="dcard">${coat(R.color, f.code)}<div>
           <div class="dn">${R.name}</div><div class="dt">${R.title}, chef-lieu ${R.capital}</div>
-          <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}${f.ps ? `<span class="chip ally" title="Vos armées peuvent traverser ses terres sans incident">Passage chez lui jusqu’au ${f.ps}</span>` : ''}${f.pg ? `<span class="chip" title="Ses armées peuvent traverser vos terres">Vous lui accordez le passage jusqu’au ${f.pg}</span>` : ''}</div>
+          <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}${f.ps ? `<span class="chip ally" title="Vos armées peuvent traverser ses terres">Passage chez lui jusqu’au ${f.ps}</span>` : ''}${f.pg ? `<span class="chip" title="Ses armées peuvent traverser vos terres">Vous lui accordez le passage jusqu’au ${f.pg}</span>` : ''}${f.cl ? '<span class="chip" title="Sans droit de passage, vos armées ne traversent ni ses places ni ses campagnes : elles contournent, ou passent en force (déclaration de guerre)">Terres fermées</span>' : ''}</div>
           <div class="row"><span class="lab">${relLabel(f.rel)} (${fmt(f.rel)})</span><div class="relbar" style="flex:1;min-width:120px"><i style="left:${relPos}%"></i></div></div>
           <div class="small">Puissance estimée ${fmt(f.power)} (vous ${fmt(myPow)}), ${f.nodes} villes et villages, ${f.techs} technologies.</div>
           <div class="small">Prestige ${fmt(f.prestige || 0)} (vous ${fmt(st.me.prestige || 0)})${f.weary >= 30 ? ` · <span style="color:#ff9a85">las de la guerre (${f.weary} %)</span>` : ''}</div>
@@ -1393,8 +1549,16 @@ export class UI {
       ? 'Vous dominez l’Aquitaine : les autres camps se méfient de vous et se liguent contre vous dès que vous êtes en guerre.'
       : `${esc(this.rules.factions[st.heg].name)} domine l’Aquitaine : les autres camps s’en méfient et entrent volontiers dans ses guerres, dans le camp adverse.`}</p>`;
     const neuLine = neu ? `<div class="row" style="margin-bottom:8px"><span class="small">Vous détenez ${fmt(neu)} miliciens insurgés prisonniers${st.me.prisoner_upkeep ? `, nourris ${fmt1(st.me.prisoner_upkeep)} vivres /j pour tous vos prisonniers` : ''}.</span>${enrollBtn('neutre', neu, 'Enrôler')}</div>` : '';
-    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${hegLine}${neuLine}<div class="diplo-list">${cards}</div>`;
-    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner, f.ps, f.pg]),
+    // droits de passage : qui nous laisse passer, à qui nous laissons passer (sinon, terres fermées)
+    const others = st.factions.filter(f => f.code !== me && f.alive);
+    const nm = f => esc(this.rules.factions[f.code].name);
+    const why = (f, until) => until ? `${nm(f)} (droit jusqu’au ${until})` : `${nm(f)} (${f.st === 'guerre' ? 'en guerre' : f.st === 'alliance' ? 'allié' : 'vassalité'})`;
+    const list = l => l.join(', ') || 'personne';
+    const passLine = `<div class="small" style="margin:0 0 8px"><b>Droits de passage</b> · Vous laissent passer : ${list(others.filter(f => !f.cl).map(f => why(f, f.ps)))} ; terres fermées à vos armées : ${list(others.filter(f => f.cl).map(nm))}.<br>
+      Vous laissez passer : ${list(others.filter(f => !f.cg).map(f => why(f, f.pg)))} ; vos terres sont fermées à : ${list(others.filter(f => f.cg).map(nm))}.
+      <span class="muted">Sans droit de passage (ni alliance, ni guerre), on contourne ses terres, ou l’on passe en force : c’est la guerre.</span></div>`;
+    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${hegLine}${neuLine}${passLine}<div class="diplo-list">${cards}</div>`;
+    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner, f.ps, f.pg, f.cl, f.cg]),
       pris, fmt1(st.me.prisoner_upkeep || 0), Math.round(myPow / 500), st.heg])];
   }
 
@@ -1518,6 +1682,7 @@ export class UI {
         <div class="btns"><button class="btn primary" data-act="save">Sauvegarder</button></div>
         <h3 class="section-t">Charger</h3><div class="saves">${saves || '<p class="muted">Aucune sauvegarde.</p>'}</div>
         <h3 class="section-t">Recommencer</h3><div class="btns"><button class="btn danger" data-act="newgame">Nouvelle partie</button></div>
+        ${this.turnSettings()}
         <h3 class="section-t">Affichage</h3><div class="btns"><button class="btn" data-act="anim">${this.map.ambient.on ? 'Couper les animations de la carte' : 'Animer la carte'}</button></div>
         <p class="muted small" style="margin:4px 0 0">Moulins, fumées, oiseaux, bateaux, charrettes et troupeaux.</p>
         <h3 class="section-t">Batailles</h3><div class="seg wrap">${[['demander', 'Toujours demander'], ['auto_petites', 'Escarmouches automatiques'], ['auto', 'Toujours automatiques']].map(([k, l]) =>
@@ -1534,21 +1699,38 @@ export class UI {
           <li>Au stylet ou à la souris, survolez une ville ou une armée pour voir ses forces. La paume posée sur l’écran est ignorée pendant l’usage du stylet.</li>
           <li>Les routes sont rapides. À travers champs, l’armée peut se cacher dans les bois, landes, marais ou montagnes et tendre une embuscade (posture « Embuscade »), mais avance plus lentement, s’use et perd son ravitaillement.</li>
           <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite. Les remparts ont quatre niveaux (le quatrième, les bastions à la Vauban, après la technologie du même nom, dans le chef-lieu et les places fortes) ; ils coûtent un entretien et perdent un niveau quand la place est prise de force.</li>
-          <li><b>Deux siècles</b> : la grande campagne part de 1700 (ou de 1790, 1813, 1870) et s’achève fin 1899 ; le plus prestigieux l’emporte. Les provinces deviennent départements en 1790 ; technologies et unités n’apparaissent qu’à leur époque. Vitesses ×10 et ×30 (touches 5 et 6) pour les années de paix : guerres, batailles et grandes propositions remettent en pause.</li>
+          <li><b>Deux siècles</b> : la grande campagne part de 1700 (ou de 1790, 1813, 1870) et s’achève fin 1899 ; le plus prestigieux l’emporte. Les provinces deviennent départements en 1790 ; technologies et unités n’apparaissent qu’à leur époque. ${this.st.tour && this.st.tour.on ? '' : 'Vitesses ×10 et ×30 (touches 5 et 6) pour les années de paix : guerres, batailles et grandes propositions remettent en pause.'}</li>
+          <li><b>Tour par tour</b> : chaque tour est un mois. Donnez vos ordres, puis « Fin du mois » : le mois se joue en accéléré (rythme réglable ci-contre) et s’arrête au 1er du mois suivant, avec le bilan du mois écoulé. Une bataille qui vous concerne, une armée ennemie sur vos terres, un siège ou une décision arrêtent le temps : touchez la raison affichée en haut pour la voir, puis « Continuer le mois ».</li>
           <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
           <li><b>Événements</b> : aux grandes dates (Grand Hiver, Révolution, Blocus continental, phylloxéra…) et au gré des imprévus, une fenêtre vous demande un choix ; chaque option affiche ses effets. Vos choix nourrissent l’« histoire » de votre prestige. Sans réponse en 30 jours, l’option la plus prudente s’applique.</li>
           <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes reçues à sa levée (affichées à côté de son nom) : après une découverte, réarmez les régiments démodés dans une de vos places (bouton « Réarmer », payé en armes, et en fer pour l’artillerie). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
           <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>
           <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
+          <li><b>Frontières</b> : les terres d’un ${this.st?.word || 'département'} en paix vous sont fermées, sauf droit de passage (fenêtre Diplomatie) ou alliance. Vos armées les contournent ; sans détour possible, vous pouvez passer en force, ce qui revient à lui déclarer la guerre. Les gabares passent devant ses quais sans y débarquer. Une armée surprise sur des terres fermées (droit retiré, paix signée…) a cinq jours pour en sortir.</li>
           <li><b>Espions</b> : depuis une place étrangère, espionnez (vision et garnison pendant 45 jours) ou sabotez ses remparts en temps de guerre. Le brouillard de guerre (bouton œil) montre ce que vous voyez réellement.</li>
           <li><b>Impôts</b> (fenêtre Production) : plus d’argent tout de suite, mais l’ordre public baisse ; une ville agitée sans garnison peut se révolter.</li>
           <li>La partie est sauvegardée automatiquement chaque mois ; elle reprend au redémarrage du serveur.</li>
           <li>La pluie mouille la poudre, la neige ferme les cols, l’hiver vide les greniers. Les récoltes arrivent en été et en automne.</li>
           <li>Prenez tous les chefs-lieux, ou obtenez la soumission des autres camps. Un camp dont le chef-lieu tombe signe un traité (places cédées, tribut, trêve de cinq ans) ; il n’est rayé de la carte que s’il est déjà écrasé, ou si le même vainqueur le fait plier deux fois en 25 ans. Vous aussi.</li>
-          <li>Raccourcis : espace pour la pause, 1 à 6 pour la vitesse, Échap pour annuler.</li>
+          <li>Raccourcis : ${this.st.tour && this.st.tour.on ? 'espace pour finir le mois, l’arrêter ou le continuer, 1 à 4 pour le rythme' : 'espace pour la pause, 1 à 6 pour la vitesse'}, Échap pour annuler.</li>
         </ul>
       </div></div>`;
-    return [html, JSON.stringify([(this.saves || []).map(s => s.name), me.stats, this.net])];
+    const tr = this.st.tour || {};
+    return [html, JSON.stringify([(this.saves || []).map(s => s.name), me.stats, this.net, tr.on, tr.pace])];
+  }
+
+  // menu ☰ : rythme du tour, et en réglage avancé le temps réel d'origine
+  turnSettings() {
+    const tr = this.st.tour || {};
+    const ps = this.rules.paces || [];
+    const seg = `<div class="seg pace-seg" role="group" aria-label="Rythme du mois">${ps.map(([k, l, sec]) =>
+      `<button class="${k === tr.pace ? 'on' : ''}" data-act="turn-pace" data-v="${k}" aria-pressed="${k === tr.pace}">${l}<small>${sec} s</small></button>`).join('')}</div>`;
+    return `<h3 class="section-t">Rythme du jeu</h3>${tr.on ? `
+        <p class="muted small" style="margin:0 0 6px">Tour par tour : donnez vos ordres sur la carte figée, puis « Fin du mois ». Le mois se joue sous vos yeux et s’arrête au 1er du mois suivant ; une bataille, une invasion, un siège ou une décision l’interrompent.</p>
+        <p class="small" style="margin:0 0 4px">Durée d’un mois à l’écran :</p>${seg}` : `
+        <p class="muted small" style="margin:0 0 6px">Temps réel avec pause : choisissez la vitesse en haut (espace pour la pause).</p>`}
+        <p class="small" style="margin:10px 0 0"><b>Réglage avancé</b></p>
+        <div class="btns" style="margin-top:4px"><button class="btn" data-act="turn-mode" data-v="${tr.on ? '0' : '1'}">${tr.on ? 'Jouer en temps réel (avec pause)' : 'Revenir au tour par tour'}</button></div>`;
   }
 
   netHtml(net) {

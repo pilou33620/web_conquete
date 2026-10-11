@@ -1156,6 +1156,9 @@ class TacticalBattle:
                     u.dir += max(-rate * DT, min(rate * DT, delta))
             return
         e, mx, grape = U.ranges(u)
+        if u.cls == 'inf' and not (u.order and u.order.get('kind') == 'attack'):
+            # feu à volonté : l'infanterie attend que l'ennemi soit à bonne portée (on ménage les cartouches)
+            mx = min(mx, e * 1.3)
         hu = self.height_at(u.x, u.y)
         tg = self._pick_target(u, mx * 1.15)
         if not tg:

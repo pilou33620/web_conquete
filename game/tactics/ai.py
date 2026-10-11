@@ -112,7 +112,7 @@ def think(battle, side, dt):
     # décrocher quand tout est perdu (jamais pour le défenseur d'une place)
     if battle.withdrawing[side]:
         return
-    if mine < 0.3 * m['init'] and battle.seen_strength(side) > 1.5 * mine and not (obj and side == 1):
+    if mine < 0.45 * m['init'] and battle.seen_strength(side) > 1.3 * mine and not (obj and side == 1):
         battle.withdraw(side)
         return
     valid = [u for u in us if u.valid]

@@ -38,6 +38,7 @@ from game import cities as CT  # noqa: E402
 from game import diplomacy as D  # noqa: E402
 from game import events as EV  # noqa: E402
 from game import rules as R  # noqa: E402
+from game import turns as TT  # noqa: E402
 from game import views as V  # noqa: E402
 from game.engine import Game  # noqa: E402
 from game.tactics import bridge as TB  # noqa: E402
@@ -109,12 +110,22 @@ class App:
             if c == 'speed':
                 if g.over:
                     return dict(ok=False, msg='La partie est terminée.')
+                if g.tour['on']:   # tour par tour : « pause » arrête le mois en cours, le reste passe par « tour »
+                    if self._num(body.get('value', 0)):
+                        return dict(ok=False, msg='Tour par tour : touchez « Fin du mois » en haut.')
+                    return self._r(TT.halt(g))
                 v = max(0, min(len(R.SPEEDS) - 1, int(self._num(body.get('value', 0)))))
                 ok, why = TB.on_speed(g, v)   # une bataille attend le joueur : la campagne reste figée
                 if not ok:
                     return dict(ok=False, msg=why)
                 g.speed_idx = v
                 return dict(ok=True)
+            if c == 'tour':   # fin du mois, continuer, arrêter, rythme, temps réel (game/turns.py)
+                if str(body.get('action')) == 'go':
+                    ok, why = TB.on_speed(g, 1)   # pas de mois qui reprend tant qu'une bataille attend ou se livre
+                    if not ok:
+                        return dict(ok=False, msg=why)
+                return self._r(TT.command(g, str(body.get('action')), body.get('value')))
             if c == 'tac':
                 return TB.command(g, body)   # batailles tactiques (choix, déploiement, ordres, vitesse…)
             if c in ('retreat', 'split', 'merge', 'split_type', 'garrison', 'move', 'path') and TB.army_locked(g, a):
