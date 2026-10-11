@@ -70,12 +70,13 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
   dans `journalctl -u web_conquete` ou via `hostname -I` sur le Raspberry.
 - La partie est **sauvegardée automatiquement** au début de chaque mois de jeu (donc au début de chaque tour) ; après
   une coupure de courant ou un redémarrage, le Raspberry la reprend telle quelle (en pause).
-- Le tour par tour ménage le Raspberry : un mois demande environ une demi-seconde de calcul sur un PC, soit 2,5 à 5 secondes
-  sur un Raspberry Pi pour les 15 secondes que dure le mois à l'écran.
+- Le tour par tour ménage le Raspberry : un mois demande environ 0,4 seconde de calcul sur un PC (guerres comprises),
+  soit 2 à 4 secondes sur un Raspberry Pi pour les 15 secondes que dure le mois à l'écran.
 - Commandes utiles : `sudo systemctl status web_conquete`, `sudo systemctl restart web_conquete`,
   `journalctl -u web_conquete -f`.
 
-Au premier lancement, la carte est calculée (3 à 4 secondes sur un PC, 15 à 30 secondes sur un Raspberry Pi),
+Au premier lancement (et après une mise à jour du calcul de la carte, `game/geo.py`), la carte est calculée
+(3 à 4 secondes sur un PC, 15 à 30 secondes sur un Raspberry Pi),
 puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
 
 ## Principe
