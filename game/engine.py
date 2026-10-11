@@ -1591,7 +1591,7 @@ class Game:
         elif legs is None and block and err != "L'armée y est déjà.":
             err = f"{err} Terres fermées (sans droit de passage) : {AA.names_of(self, sorted(block))}."
         if legs is None:
-            return False, err
+            return False, f"{war} {err}" if war else err
         if a['state'] == 'siege':
             self.end_siege_for(a)
         a['path'], a['target'] = legs, target

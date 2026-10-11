@@ -105,6 +105,7 @@ def migrate(g):
     for a in g.armies.values():
         for k in ('tr', 'hold', 'qrt'):
             a.setdefault(k, False)
+        a.pop('trx', None)   # ancien passage forcé « quitte à provoquer un incident »
 
 
 # ================================================================== défense des places
