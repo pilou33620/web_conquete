@@ -194,7 +194,8 @@ def watch(g, dt, seq0):
                              else 'La partie est terminée.'))
     if not cands and not stopped:
         return
-    if stopped and not any(c['kind'] in ('fin', 'decision') for c in cands):
+    # (une bataille du joueur arrête elle-même le temps, le temps de choisir : c'est elle, la raison)
+    if stopped and not any(c['kind'] in ('fin', 'decision', 'bataille') for c in cands):
         # la raison d'un grand moment est la dernière nouvelle importante du journal
         ev = next((e for e in reversed(g.events) if e['seq'] > seq0 and e.get('important')), None) \
             or next((e for e in reversed(g.events) if e['seq'] > seq0), None)

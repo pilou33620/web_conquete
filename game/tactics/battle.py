@@ -32,6 +32,7 @@ Lecture (sans tricher sur la vue) :
   battle.ranges(u) → (efficace, max, mitraille|None) ;    battle.dist(a, b) ; battle.bearing(a, b) ;
   battle.zone(side) → [x0, y0, x1, y1]                    zone de déploiement ; battle.edge(side) : 'N','S','E','O' ;
   battle.front_dir(side) → angle vers l'ennemi depuis sa zone ;
+  battle.feature_at(x, y) → 0 aucun, 1 clôture, 2 haie, 3 muret (couvert léger à moyen, léger ralentissement) ;
   battle.objective() → (x, y) | None                      cœur de la place (assaut) ;
   battle.place_info() → dict | None                       {x, y, r, fort} de la place ;
   battle.best_spot(x, y, radius, kind, side, facing=None) meilleure case proche : kind = 'cover' (couvert),
@@ -41,8 +42,20 @@ Lecture (sans tricher sur la vue) :
   battle.time_left() → s avant le crépuscule ;           battle.clock, battle.phase, battle.difficulty ;
   battle.strength(side) → hommes valides de son camp ;    battle.seen_strength(side) → ennemis repérés (hommes).
 
-Champs d'une unité (Unit) : id, side, owner, type, cls ('inf', 'cavalerie', 'artillerie', 'general'), light, men,
-men0, xp, morale, fat, ammo, ammo0, x, y, dir, form, state, order, target, busy (s de manœuvre restantes), valid.
+  battle.general_near(u) → état-major ami à moins de 400 m ;  battle.trait(side) → trait du général du camp ;
+  battle.rng (hasard déterministe de la bataille) ;  battle.ai_mem (dict libre pour la mémoire de l'IA) ;
+  battle.withdrawing[side] (le camp décroche déjà).
+
+Champs d'une unité (Unit) : id, side, owner, type, cls ('inf', 'cavalerie', 'artillerie', 'general', 'chariot'), light,
+men, men0, xp, morale, fat, ammo, ammo0, x, y, dir, form, state, order, target, busy (s de manœuvre restantes), valid
+(en état de combattre : ni déroute, ni hors de combat, ni état-major, ni chariot), group / gname (armée de campagne),
+ctrl ('joueur' | 'ia'). Le chariot de munitions (type 'chariot', ammo = chargement en %) recomplète les régiments à
+moins de 150 m (4 % de la dotation par minute) ; il se prend s'il reste sans escorte à moins de 40 m d'un ennemi.
+Le général (type 'general') donne +10 de moral à moins de 400 m ; il peut être blessé.
+
+Résolution d'un coup : battle.autofinish() (« Finir automatiquement »).
+Chiffres : DT = 2 s par pas, TIME_K = 30 s de bataille par seconde réelle à ×1, repérage toutes les 4 s, IA toutes
+les 2 s ; fin au crépuscule (DUSK) ; assaut gagné en tenant le cœur de la place 60 s sans défenseur à 150 m.
 ==================================================================================================================
 """
 import heapq
@@ -1708,9 +1721,11 @@ class TacticalBattle:
                               out=sum(1 for u in us if u.state == 'hors')))
             if me is not None and s != me and self.phase != 'fin':
                 # l'ennemi : seulement ce qu'on en voit, et l'effectif de départ annoncé par les éclaireurs
-                vis = [u for u in us if seen and u.id in seen]
+                vis = [u for u in us if seen and u.id in seen and u.alive]
                 sides[-1]['men'] = int(round(sum(u.men for u in vis)))
-                sides[-1]['morale'] = None
+                # moral apparent : celui des troupes qu'on voit (0 si l'on ne voit personne)
+                sides[-1]['morale'] = int(round(sum(u.morale * u.men for u in vis) / max(1.0, sum(u.men for u in vis))))
+                sides[-1]['seen'] = True
         out = dict(bid=self.bid, seq=self.seq, phase=self.phase, speed=self.speed, clock=round(self.clock),
                    hour=fmt_hour(self.clock), weather=self.weather, season=self.season, light=round(self.light, 2),
                    wind=self.wind, me=me, sides=sides, units=units, dusk=round(self.dusk),
