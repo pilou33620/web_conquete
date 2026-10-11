@@ -32,6 +32,7 @@ AUTOSAVE = 'sauvegarde-automatique'
 sys.path.insert(0, ROOT)
 
 from game import diplomacy as D  # noqa: E402
+from game import events as EV  # noqa: E402
 from game import rules as R  # noqa: E402
 from game import views as V  # noqa: E402
 from game.engine import Game  # noqa: E402
@@ -153,6 +154,8 @@ class App:
                     ar['mode'] = body['value']
                     return dict(ok=True)
                 return dict(ok=False, msg='Armée introuvable.')
+            if c == 'event':
+                return self._r(EV.resolve(g, str(body.get('id')), int(self._num(body.get('choice', -1)))))
             if c == 'rearm':
                 node = body.get('node')
                 return self._r(g.rearm(p, army_id=a if node is None else None,

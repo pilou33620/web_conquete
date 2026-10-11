@@ -411,3 +411,8 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 .star-line .star { color: var(--laiton-clair); font-size: 17px; line-height: 1.2; }
 .star-line b { font-weight: 600; }
 .reg input:disabled { opacity: .35; cursor: not-allowed; }
+
+/* décisions historiques */
+.ev-choices { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 10px; }
+.ev-choice { text-align: left; padding: 10px 14px; white-space: normal; }
+.ev-choice b { display: block; font-size: 15.5px; margin-bottom: 2px; }

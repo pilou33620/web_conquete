@@ -99,8 +99,23 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
   reste une victoire anticipée.
 - **Prestige** : rayonnement équilibré, pour gagner par la paix comme par la guerre. Il compte le territoire
   (et les chefs-lieux), la population (chaque ville plafonnée à 25 000 habitants), la richesse, les agrandissements et
-  les remparts, les technologies, les faits d'armes, et bientôt l'histoire. Chaque 1er janvier, le rayonnement du moment
+  les remparts, les technologies, les faits d'armes et l'histoire (vos choix lors des grands événements). Chaque 1er janvier, le rayonnement du moment
   s'ajoute à la gloire accumulée. Le classement est dans le menu « Partie ».
+- **Événements historiques** : une trentaine de dates de l'histoire de France et du Sud-Ouest vous demandent un choix,
+  et le jeu se met en pause. On y trouve la guerre de Succession d'Espagne (1701), le Grand Hiver (1709), la
+  banqueroute de Law, l'intendant Tourny à Bordeaux, les fors du Béarn, la guerre de Sept Ans, la guerre des
+  farines, les cahiers de doléances et la Grande Peur, la chute des Girondins, la levée en masse, le sacre, le Blocus
+  continental, le 12 mars 1814, les Cent-Jours, le choléra, le train de La Teste, 1848, Biarritz impériale, le
+  classement de 1855, la loi des Landes de 1857, 1870 et le gouvernement à Bordeaux, la Commune, le phylloxéra,
+  l'Exposition de 1889 et l'affaire Dreyfus.
+  - Chaque option affiche ses effets : ressources, ordre public, lassitude, population, régiments offerts, effets
+    temporaires ou durables, et points d'**histoire** qui comptent dans le prestige.
+  - Les IA choisissent elles aussi. Sans réponse au bout de 30 jours, la dernière option, la plus prudente,
+    s'applique.
+  - Les effets en cours sont rappelés dans la fenêtre Production, et le journal a un onglet « Histoire ».
+- **Imprévus** : tous les 8 à 18 mois environ, chaque camp connaît un événement aléatoire : récolte magnifique,
+  épizootie, legs d'un négociant, filon de fer, foire, incendie, fièvre, brigands, savant à pensionner,
+  contrebandiers. Certains demandent une décision.
 - **Traités plutôt qu'anéantissement** : quand un chef-lieu tombe, le vaincu signe un traité. Il cède les places
   occupées, verse un tribut, récupère son chef-lieu et doit respecter une trêve de cinq ans. Le congrès rétablit aussi
   la paix entre le vaincu et ses autres ennemis pour deux ans (les alliés eux-mêmes respectent ces trêves). Le vaincu

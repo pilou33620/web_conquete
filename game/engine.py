@@ -5,6 +5,7 @@ import math
 import random
 
 from . import rules as R
+from . import events as EV
 from .geo import TERRAIN, T_LANDE, T_MARAIS, T_PLAINE
 
 SUBSTEP = 0.05  # jours
@@ -89,6 +90,8 @@ class Game:
             self.create_army(code, gx, gy, [self.new_reg(t, code=code) for t in ('ligne', 'legere', 'cavalerie')], node=cap)
             self.recompute_mods(code)
         self.era_id = self.era()['id']
+        self.pending_ev = []   # décisions qui attendent le joueur
+        self.ev_done = []      # événements datés déjà passés
         if self.scenario == '1790':
             self.log('info', f"4 mars 1790 : l'Assemblée crée les départements. Vous gouvernez {self.fname(player)}.",
                      important=True)
@@ -329,6 +332,12 @@ class Game:
         for t in f['techs']:
             for k, v in R.TECH[t]['fx'].items():
                 m[k] = m.get(k, 0) + v
+        # effets des événements : durables (classement de 1855…) ou temporaires (blocus, phylloxéra…)
+        for k, v in f.get('emods', {}).items():
+            m[k] = m.get(k, 0) + v
+        for e in f.get('tmods', []):
+            if e['until'] > self.t:
+                m[e['k']] = m.get(e['k'], 0) + e['v']
         if code != self.player:
             d = R.DIFFICULTY[self.difficulty]
             m['ai_income'] = d['ai_income'] - 1
@@ -402,6 +411,13 @@ class Game:
                 w['left'] = self.rng.randint(1, 4)
         d = self.date()
         self.check_era(d)
+        for code, f in self.factions.items():
+            if f.get('tmods') and any(e['until'] <= self.t for e in f['tmods']):
+                f['tmods'] = [e for e in f['tmods'] if e['until'] > self.t]
+                self.recompute_mods(code)
+        if not self.over:
+            EV.tick(self, d)
+            EV.expire(self)
         if d.day == 1:
             self.grow_population()
             self.monthly(d)

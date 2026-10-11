@@ -3,13 +3,14 @@ import datetime
 import random
 
 from . import rules as R
+from . import events as EV
 from .engine import Game
 
 SAVE_KEYS = ['player', 'difficulty', 'seed', 't', 'uid', 'seq', 'events', 'proposals', 'armies', 'battles', 'over',
              'flood_until', 'market', 'weather', 'factions', 'nodes', '_ai_clock', 'spies', 'scenario', 'start_ord',
-             'era_id']
+             'era_id', 'pending_ev', 'ev_done']
 DEFAULTS = dict(spies=list, scenario=lambda: '1790', start_ord=lambda: datetime.date(1790, 3, 4).toordinal(),
-                era_id=lambda: None)
+                era_id=lambda: None, pending_ev=list, ev_done=lambda: None)
 
 
 def to_dict(g):
@@ -34,6 +35,10 @@ def migrate(g):
             f.setdefault(k, v)
         if not f['alive']:
             f.setdefault('dead_t', g.t)
+    if g.ev_done is None:
+        # sauvegarde d'avant les événements : ce qui est déjà passé ne se rejoue pas
+        today = g.date().toordinal()
+        g.ev_done = [e['id'] for e in EV.HIST if datetime.date(*e['date']).toordinal() <= today]
     for n in g.nodes:
         n.setdefault('depot', 0)
         n.setdefault('assim', 1.0)
@@ -119,6 +124,21 @@ def rules_payload():
 
 def _gen(g):
     return dict(name=g['name'], rank=R.GENERAL_RANKS[g['lvl'] - 1], trait=g['trait'], lvl=g['lvl'], xp=round(g['xp'], 1)) if g else None
+
+
+def _effects(g, f):
+    """Effets des événements encore actifs, en clair."""
+    out = []
+    for e in f.get('tmods', []):
+        if e['until'] > g.t:
+            v = e['v']
+            val = f"{'+' if v > 0 else '−'}{abs(v)}" if e['k'] in EV.ABS_MODS else EV._pct(v)
+            out.append(f"{EV.MOD_LABEL.get(e['k'], e['k'])} {val} jusqu'au {g.date_str(e['until'])}")
+    for k, v in f.get('emods', {}).items():
+        if v:
+            val = f"{'+' if v > 0 else '−'}{abs(v)}" if k in EV.ABS_MODS else EV._pct(v)
+            out.append(f"{EV.MOD_LABEL.get(k, k)} {val} (durable)")
+    return out
 
 
 def _reg(r):
@@ -282,12 +302,17 @@ def player_state(g, since=0):
                 weary=int(me.get('weary', 0)), prestige=g.prestige(p),
                 prestige_parts={k: int(round(v)) for k, v in g.prestige_parts(p).items()},
                 glory=int(me.get('prestige', 0)),
-                arm={c: g.arm_level(p, c) for c in R.ARMS}, unames={u: g.unit_name(p, u) for u in R.UNITS})
+                arm={c: g.arm_level(p, c) for c in R.ARMS}, unames={u: g.unit_name(p, u) for u in R.UNITS},
+                effects=_effects(g, me))
 
     era = g.era()
     return dict(t=round(g.t, 3), date=g.date_str(), season=g.season(), speed=g.speed_idx, over=g.over,
                 year=g.date().year, scenario=g.scenario, era=dict(id=era['id'], name=era['name'], desc=era['desc']),
                 names={c: g.faction_name(c) for c in g.factions}, word=g.dept_word(), heg=g.hegemon(),
+                pending=[dict(id=x['id'], title=x['title'], text=x['text'], base=x['base'], date=x['date'],
+                              left=max(0, int(x['until'] - g.t)),
+                              choices=[dict(label=c['label'], desc=c['desc'], ok=EV.affordable(g, p, c['fx']))
+                                       for c in x['choices']]) for x in g.pending_ev],
                 weather={z: dict(kind=w['kind'], left=w['left']) for z, w in g.weather.items()},
                 me=mine, factions=facs, nodes=nodes, armies=armies, battles=battles,
                 events=[e for e in g.events if e['seq'] > since], seq=g.seq,

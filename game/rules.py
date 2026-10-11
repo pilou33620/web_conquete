@@ -116,6 +116,10 @@ PROPOSAL_DAYS = 40           # durée de validité d'une proposition reçue
 
 def de(nom):
     """« de » élidé devant une voyelle ou un h muet : d'Agen, d'avril, de Bordeaux."""
+    if nom.startswith('Le '):
+        return 'du ' + nom[3:]       # le Bugue → du Bugue
+    if nom.startswith('Les '):
+        return 'des ' + nom[4:]
     return f"d'{nom}" if nom[:1].lower() in 'aeiouyhâàéèêîïôöûü' else f"de {nom}"
 
 

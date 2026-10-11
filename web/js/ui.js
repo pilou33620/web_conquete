@@ -192,6 +192,14 @@ export class UI {
     const b = this.$('badge-diplo');
     b.hidden = !pend; b.textContent = pend;
     if (st.over && !this.overShown) { this.overShown = true; this.openModal('fin'); }
+    // une décision historique ou un imprévu : la fenêtre s'ouvre d'elle-même, une fois par événement
+    this.evSeen = this.evSeen || new Set();
+    const fresh = (st.pending || []).find(p => !this.evSeen.has(p.id));
+    if (fresh && !st.over && (!this.modal || this.modal === 'event')) {
+      for (const p of st.pending) this.evSeen.add(p.id);
+      if (this.modal !== 'event') this.openModal('event');
+    }
+    if (this.modal === 'event' && !(st.pending || []).length) this.closeModal();
   }
 
   onEvent(ev, initial) {
@@ -278,10 +286,11 @@ export class UI {
 
   renderProposals() {
     const box = this.$('proposals');
-    const sig = this.st.proposals.map(p => p.id).join(',');
+    const sig = this.st.proposals.map(p => p.id).join(',') + '|' + (this.st.pending || []).map(p => p.id + ':' + p.left).join(',');
     if (box.dataset.sig === sig) return;
     box.dataset.sig = sig;
-    box.innerHTML = this.st.proposals.map(p => {
+    box.innerHTML = (this.st.pending || []).map(p => `<div class="sheet proposal" style="border-left-color:var(--laiton)"><div class="pt">${esc(p.title)}</div>
+        <p>Une décision vous attend (${p.left} j).</p><div class="btns"><button class="btn primary" data-act="modal" data-v="event">Décider</button></div></div>`).join('') + this.st.proposals.map(p => {
       const f = this.rules.factions[p.frm];
       let detail = '';
       if (p.action === 'echange') detail = `Il offre ${fmt(p.give[1])} ${this.rules.res_label[p.give[0]].toLowerCase()} contre ${fmt(p.get[1])} ${this.rules.res_label[p.get[0]].toLowerCase()}.`;
@@ -296,7 +305,7 @@ export class UI {
   }
 
   renderFeed() {
-    const kinds = ['battle_end', 'capture', 'capitulation', 'revolte', 'epoque'];
+    const kinds = ['battle_end', 'capture', 'capitulation', 'revolte', 'epoque', 'evenement'];
     const items = this.events.filter(e => kinds.includes(e.kind) && (e.important || e.kind === 'capitulation')).slice(-5);
     const box = this.$('feed');
     const sig = items.map(e => e.seq).join(',');
@@ -483,6 +492,7 @@ export class UI {
       case 'formation': this.cmd({ cmd: 'formation', army: d.army || sel.id, value: d.v }); break;
       case 'plan': this.cmd({ cmd: 'plan', army: d.army || sel.id, value: d.v }); break;
       case 'reflex': this.cmd({ cmd: 'reflex', army: d.army || sel.id, value: d.v === '1' }); break;
+      case 'evchoice': this.cmd({ cmd: 'event', id: d.id, choice: +d.v }).then(r => { if (r && r.ok && (this.st.pending || []).length <= 1) this.closeModal(); }); break;
       case 'rearm': this.cmd(d.node != null ? { cmd: 'rearm', node: +d.node } : { cmd: 'rearm', army: sel.id }); break;
       case 'enroll': {
         const n = +d.n || 0;
@@ -952,6 +962,21 @@ export class UI {
     return [h, JSON.stringify([b.phase, b.sides.map(s => [s.men, s.lost, s.mor, (s.tac || []).map(t => [t.fm, t.pl, t.reorg])])])];
   }
 
+  // ------------------------------------------------------------------ décisions (événements)
+  eventModal() {
+    const all = this.st.pending || [];
+    const p = all[0];
+    if (!p) return ['<p class="muted">Aucune décision en attente.</p>', 'none'];
+    const html = `<h2 class="m-title" id="m-title">${esc(p.title)}</h2>
+      <p class="m-sub">${esc(p.date)}${all.length > 1 ? ` — décision 1 sur ${all.length}` : ''}</p>
+      <p style="font-size:16px;line-height:1.5">${esc(p.text)}</p>
+      ${p.base ? `<p class="small" style="color:#ffcf85">Déjà : ${esc(p.base)}.</p>` : ''}
+      <div class="ev-choices">${p.choices.map((c, i) => `<button class="btn ${i === 0 ? 'primary' : ''} ev-choice" data-act="evchoice" data-id="${p.id}" data-v="${i}" ${c.ok ? '' : 'disabled title="Vous n’en avez pas les moyens"'}>
+        <b>${esc(c.label)}</b><small>${c.desc.map(esc).join(' · ')}</small></button>`).join('')}</div>
+      <p class="muted small">Sans réponse d’ici ${p.left} jours, la dernière option s’appliquera.</p>`;
+    return [html, JSON.stringify([p.id, all.length, p.left, p.choices.map(c => c.ok)])];
+  }
+
   // ------------------------------------------------------------------ fenêtres
   openModal(kind) {
     this.modal = kind;
@@ -988,7 +1013,7 @@ export class UI {
     const ae = document.activeElement;
     if (!force && ae && card.contains(ae) && (/^(SELECT|TEXTAREA)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !['range', 'checkbox'].includes(ae.type)))) return;
     const fn = { tech: this.techModal, diplo: this.diploModal, commerce: this.commerceModal, production: this.prodModal,
-                 journal: this.journalModal, menu: this.menuModal, fin: this.endModal }[k];
+                 journal: this.journalModal, menu: this.menuModal, fin: this.endModal, event: this.eventModal }[k];
     const [html, sig] = fn.call(this);
     if (!force && sig === this.modalSig) return;
     this.modalSig = sig;
@@ -1159,6 +1184,7 @@ export class UI {
           <dt>Rations des troupes</dt><dd>${fmt1(me.upkeep.vivres || 0)} vivres /j</dd>
           ${nPr ? `<dt>Prisonniers détenus</dt><dd>${fmt(nPr)} (${fmt1(me.prisoner_upkeep || 0)} vivres /j)</dd>` : ''}
         </dl>
+        ${(me.effects || []).length ? `<div class="muted small" style="margin-top:6px"><b>Effets des événements :</b> ${me.effects.map(esc).join(' · ')}</div>` : ''}
         <div class="bar"><i style="width:${Math.round(me.cov * 100)}%"></i></div>
         ${me.res.fer < 5 || me.res.bois < 5 ? `<p class="warnline">Les ateliers manquent de ${me.res.fer < 5 ? 'fer' : 'bois'} : achetez-en au marché, négociez un échange ou prenez ${me.res.fer < 5 ? 'une forge ou une mine' : 'un village forestier'}.</p>` : ''}
         <p class="muted small">Chaque arme coûte 1 fer et ½ bois ; chaque outil ½ fer et 1 bois. Sans fer ni bois, les ateliers s’arrêtent.</p>
@@ -1172,9 +1198,9 @@ export class UI {
 
   journalModal() {
     const f = this.journalFilter || 'all';
-    const groups = { all: null, battle: ['battle', 'battle_end', 'siege', 'capture', 'capitulation', 'revolte', 'espion'], diplo: ['diplo', 'espion'], eco: ['eco', 'tech', 'meteo', 'armee'] };
+    const groups = { all: null, battle: ['battle', 'battle_end', 'siege', 'capture', 'capitulation', 'revolte', 'espion'], diplo: ['diplo', 'espion'], eco: ['eco', 'tech', 'meteo', 'armee'], hist: ['evenement', 'epoque', 'info'] };
     const evs = this.events.filter(e => !groups[f] || groups[f].includes(e.kind)).slice(-250).reverse();
-    const tabs = [['all', 'Tout'], ['battle', 'Guerre'], ['diplo', 'Diplomatie'], ['eco', 'Économie']].map(([k, l]) =>
+    const tabs = [['all', 'Tout'], ['battle', 'Guerre'], ['diplo', 'Diplomatie'], ['eco', 'Économie'], ['hist', 'Histoire']].map(([k, l]) =>
       `<button class="btn ${k === f ? 'primary' : ''}" data-act="jtab" data-v="${k}">${l}</button>`).join('');
     const html = `<h2 class="m-title" id="m-title">Journal de campagne</h2><div class="tabs">${tabs}</div><div class="journal">${evs.map(e =>
       `<div class="ev ${e.important ? 'imp' : ''}" ${e.x != null ? `data-act="goto" data-x="${e.x}" data-y="${e.y}" style="cursor:pointer"` : ''}><span class="when">${e.date}</span><span class="what">${esc(e.text)}</span></div>`).join('') || '<p class="muted">Rien à signaler pour l’instant.</p>'}</div>`;
@@ -1215,6 +1241,7 @@ export class UI {
           <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite. Les remparts ont quatre niveaux (le quatrième, les bastions à la Vauban, après la technologie du même nom, dans le chef-lieu et les places fortes) ; ils coûtent un entretien et perdent un niveau quand la place est prise de force.</li>
           <li><b>Deux siècles</b> : la grande campagne part de 1700 (ou de 1790, 1813, 1870) et s’achève fin 1899 ; le plus prestigieux l’emporte. Les provinces deviennent départements en 1790 ; technologies et unités n’apparaissent qu’à leur époque. Vitesses ×10 et ×30 (touches 5 et 6) pour les années de paix : guerres, batailles et grandes propositions remettent en pause.</li>
           <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
+          <li><b>Événements</b> : aux grandes dates (Grand Hiver, Révolution, Blocus continental, phylloxéra…) et au gré des imprévus, une fenêtre vous demande un choix ; chaque option affiche ses effets. Vos choix nourrissent l’« histoire » de votre prestige. Sans réponse en 30 jours, l’option la plus prudente s’applique.</li>
           <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes reçues à sa levée (affichées à côté de son nom) : après une découverte, réarmez les régiments démodés dans une de vos places (bouton « Réarmer », payé en armes, et en fer pour l’artillerie). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
           <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>
           <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
