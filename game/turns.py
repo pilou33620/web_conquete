@@ -31,7 +31,10 @@ PACE_SEC = {k: s for k, _, s in PACES}
 DEFAULT_PACE = 'normal'
 # délai minimal, en jours de jeu, entre deux interruptions du même genre (0 : toujours)
 COOLDOWN = dict(bataille=1.5, siege=2.0, entree=4.0, diplo=1.0, guerre=0.0, decision=0.0, grand=0.0)
-ENTRY_AGAIN = 20.0    # la même armée ennemie n'interrompt pas deux fois en 20 jours (va-et-vient sur la frontière)
+# la même armée ennemie n'interrompt pas deux fois en 20 jours (va-et-vient sur la frontière), ni la même proposition
+# du même camp en 45 jours (une IA lasse de la guerre propose la paix toutes les deux semaines)
+AGAIN = dict(a=20.0, p=45.0, l=4.0)   # l : un même lieu (assauts répétés, siège qui suit la bataille) pendant 4 jours
+ENTRY_MIN_MEN = 150   # un parti de moins de 150 hommes (éclaireurs, fourrageurs) n'arrête pas le temps
 NEAR_KM = 25.0        # une bataille entre d'autres camps interrompt si elle se livre à moins de 25 km de vous et à vue
 PRIORITY = ['fin', 'decision', 'guerre', 'grand', 'siege', 'bataille', 'entree', 'diplo']
 BIG_PROPOSALS = ('paix', 'alliance', 'soumission')
@@ -42,7 +45,7 @@ _BUILT = re.compile(r"^(Fin des travaux à |Magasin aux vivres construit à )|( 
 
 def new_state(on=True):
     """État du tour par tour, enregistré dans la sauvegarde (Game.tour)."""
-    return dict(on=on, pace=DEFAULT_PACE, end=None, stop=None, last={}, seen=None, amem={}, acc=None, recap=None)
+    return dict(on=on, pace=DEFAULT_PACE, end=None, stop=None, last={}, seen=None, mem={}, acc=None, recap=None)
 
 
 def migrate(g):
@@ -53,6 +56,8 @@ def migrate(g):
         tr = g.tour = new_state()
     for k, v in new_state().items():
         tr.setdefault(k, v)
+    if not isinstance(tr['seen'], dict) or set(tr['seen']) != {'bt', 'sg', 'inn', 'ev', 'pr', 'war'}:
+        tr['seen'] = None
     if tr['pace'] not in PACE_SEC:
         tr['pace'] = DEFAULT_PACE
     if tr['end'] is not None and tr['end'] <= g.t - 1e-6:
@@ -117,6 +122,8 @@ def command(g, action, value=None):
 def go(g):
     """« Fin du mois » (début du déroulement) ou « Continuer le mois » (après une interruption ou un arrêt)."""
     tr = g.tour
+    if g.over or not tr['on']:
+        return False, 'La partie est terminée.' if g.over else 'La partie se joue en temps réel.'
     if tr['end'] is None:
         tr['end'] = month_end(g)
         tr['recap'] = None
@@ -145,8 +152,7 @@ def advance(g, real_dt):
     if g.over or not g.speed_idx:
         return
     if tr['end'] is None:
-        g.speed_idx = 0
-        return
+        go(g)   # le temps lancé autrement que par « Fin du mois » (script, ancienne commande) : le mois se joue
     rt = rate(g)
     days = rt * real_dt
     while days > 1e-9 and not g.over and g.speed_idx:
@@ -244,9 +250,14 @@ def _candidates(g, old, cur, seq0):
         ev = next((e for e in reversed(g.events) if e['seq'] > seq0 and e['kind'] == 'diplo' and 'guerre' in e['text']
                    and g.fname(c) in e['text']), None)
         out.append(dict(kind='guerre', text=ev['text'] if ev else f"Vous voici en guerre avec {g.fname(c)} !"))
+    mem = g.tour['mem']
+    for k in list(mem):
+        if g.t - mem[k] > AGAIN[k[0]] or (k[0] == 'a' and k[2:] not in g.armies):
+            del mem[k]
     for pid in new['pr']:
         x = next((e for e in g.proposals if e['id'] == pid), None)
-        if x and x['action'] in BIG_PROPOSALS:
+        if x and x['action'] in BIG_PROPOSALS and f"p:{x['frm']}:{x['action']}" not in mem:
+            mem[f"p:{x['frm']}:{x['action']}"] = round(g.t, 2)
             what = dict(paix='vous propose la paix', alliance='vous propose une alliance',
                         soumission='exige votre soumission')[x['action']]
             out.append(dict(kind='diplo', text=f"{g.fname(x['frm'])} {what}."))
@@ -254,6 +265,8 @@ def _candidates(g, old, cur, seq0):
         nid, by, kind = key.split(':')
         nid = int(nid)
         gn = g.geo.nodes[nid]
+        if not _fresh_place(g, nid):
+            continue
         if by == p:
             txt = f"Vos troupes {'bloquent' if kind == 'b' else 'assiègent'} {gn['name']}."
         else:
@@ -273,26 +286,33 @@ def _candidates(g, old, cur, seq0):
                     vis = g.vision_sources(p)[1]
                 if not _near(g, bt['x'], bt['y'], vis):
                     continue
+            if not _fresh_place(g, bt['node'] if bt['node'] is not None else g.nearest_node(bt['x'], bt['y'])):
+                continue
             kind = 'Embuscade' if bt.get('ambush') else ('Assaut' if bt['node'] is not None else 'Bataille')
             txt = f"{kind} {g.place_name(bt['x'], bt['y'])} : {g.fname(owners[0])} attaque {g.fname(owners[1])}."
             out.append(dict(kind='bataille', text=txt, x=bt['x'], y=bt['y'], sel=['battle', bid]))
-    if new['inn']:
-        amem = g.tour['amem']
-        for aid in list(amem):
-            if g.t - amem[aid] > ENTRY_AGAIN or aid not in g.armies:
-                del amem[aid]
-        fresh = [aid for aid in new['inn'] if aid not in amem]
-        if fresh:
-            seen = g.visible_armies(p)[0]
-            for aid in fresh:
-                if aid not in seen:
-                    continue   # une armée cachée (embuscade, brouillard) ne se trahit pas
-                amem[aid] = round(g.t, 2)
-                a = g.armies[aid]
-                out.append(dict(kind='entree', text=f"Une armée ennemie ({g.fname(a['owner'])}, {int(g.army_men(a))} hommes) "
-                                f"entre sur vos terres, {_where(g, a['x'], a['y'])}.", x=a['x'], y=a['y'],
-                                sel=['army', aid]))
+    fresh = [aid for aid in new['inn'] if 'a:' + aid not in mem and g.army_men(g.armies[aid]) >= ENTRY_MIN_MEN]
+    if fresh:
+        seen = g.visible_armies(p)[0]
+        for aid in fresh:
+            if aid not in seen:
+                # une armée cachée (embuscade, brouillard) ne se trahit pas : on la guettera au pas suivant
+                cur['inn'].remove(aid)
+                continue
+            mem['a:' + aid] = round(g.t, 2)
+            a = g.armies[aid]
+            out.append(dict(kind='entree', text=f"Une armée ennemie ({g.fname(a['owner'])}, {int(g.army_men(a))} hommes) "
+                            f"entre sur vos terres, {_where(g, a['x'], a['y'])}.", x=a['x'], y=a['y'], sel=['army', aid]))
     return out
+
+
+def _fresh_place(g, nid):
+    """Un lieu n'interrompt qu'une fois en quelques jours : assauts répétés, siège qui suit la bataille."""
+    k = f'l:{nid}'
+    if k in g.tour['mem']:
+        return False
+    g.tour['mem'][k] = round(g.t, 2)
+    return True
 
 
 def _where(g, x, y):
