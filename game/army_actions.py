@@ -2,8 +2,10 @@
 devant une place étrangère : traversée et droit de passage, ralliement négocié, contribution, blocus.
 
 L'état propre à une place est rangé dans n['aa'] (travaux, solidité des barricades, garde, négociation, délais) ;
-celui d'une armée dans a['tr'] (traverser), a['hold'] (halte devant une place), a['qrt'] (quartiers) ;
-les droits de passage dans faction['passage'] = {bénéficiaire: échéance}.
+celui d'une armée dans a['tr'] (traverser), a['hold'] (halte devant une place), a['qrt'] (quartiers),
+a['cl'] (sur des terres fermées : délai de grâce), a['ex'] (terres fermées dont son itinéraire la fait sortir),
+a['dt'] (terres fermées que son itinéraire contourne) ; les droits de passage dans
+faction['passage'] = {bénéficiaire: échéance}.
 """
 import math
 
@@ -534,7 +536,7 @@ def force_passage(g, code, who):
 
 
 # ------------------------------------------------------------------ délai de grâce
-GRACE_DAYS = 4.0        # pour sortir de terres fermées où l'on se retrouve sans l'avoir voulu
+GRACE_DAYS = 5.0        # pour sortir de terres fermées où l'on se retrouve sans l'avoir voulu
 
 
 def land_tick(g, a, dt):
@@ -674,6 +676,8 @@ def eval_passage(g, ai, frm, amount=0):
         score += 20   # il va frapper notre ennemi : tant mieux
     if any(g.friendly(ai, x) or f['rel'][x] > 40 for x in foes):
         score -= 30   # il va frapper un ami : non
+    if f['rel'][frm] > 20:
+        score += 8    # sans ce droit, ses armées ne passent pas du tout : on l'accorde plus volontiers aux amis
     if score >= 10:
         return True, f"{g.fname(ai)} accorde le droit de passage pour un an."
     return False, f"{g.fname(ai)} refuse de laisser passer vos troupes (relation {int(f['rel'][frm])})."
@@ -1015,6 +1019,11 @@ def view_army(g, a, d, own):
         d['tr'] = 1
     if a.get('hold'):
         d['hold'] = 1
+    if a.get('dt') and a['path']:
+        d['dt'] = [g.fname(o) for o in a['dt']]   # terres fermées contournées
+    cl = a.get('cl')
+    if cl:
+        d['cl'] = [g.fname(cl['o']), round(cl['until'] - g.t, 1)]   # sur des terres fermées : délai de grâce
     nid = a['at_node']
     if nid is None or a['state'] not in ('idle', 'siege') or a.get('boat') or a['battle']:
         return
@@ -1087,7 +1096,8 @@ def options(g, a, nid):
 
 
 def view_passage(g, p, code):
-    """Droits de passage entre le joueur et ce département : ps (il nous l'accorde), pg (nous le lui accordons)."""
+    """Droits de passage entre le joueur et ce département : ps (il nous l'accorde), pg (nous le lui accordons) ;
+    cl : ses terres nous sont fermées ; cg : les nôtres lui sont fermées."""
     if code == p:
         return {}
     out = {}
@@ -1095,6 +1105,10 @@ def view_passage(g, p, code):
         out['ps'] = g.date_str(g.factions[code]['passage'][p])
     if has_passage(g, code, p):
         out['pg'] = g.date_str(g.factions[p]['passage'][code])
+    if closed_to(g, p, code):
+        out['cl'] = 1
+    if closed_to(g, code, p):
+        out['cg'] = 1
     return out
 
 
@@ -1152,31 +1166,38 @@ def ai_step(ai):
 
 
 def ai_passage(ai, wars):
-    """Demander le passage chez un voisin en paix qui sépare de l'ennemi ; retirer le sien à qui nous déteste."""
+    """Demander le passage chez un voisin dont les terres sont fermées quand le contournement est trop long ou
+    impossible (vers l'ennemi, ou vers une destination refusée naguère) ; retirer le sien à qui nous déteste."""
     from . import diplomacy as D
     g, code, f = ai.g, ai.code, ai.f
     for o in list(f.get('passage', {})):
         if f['passage'][o] > g.t and f['rel'].get(o, 0) < -25:
             revoke_passage(g, code, o)
-    if not wars or f['overlord'] or g.t < ai.cool.get(('aa', 'route'), -1):
+    refused = getattr(ai, 'refused', {})
+    for nid in [k for k, t in refused.items() if g.t - t > 90]:
+        del refused[nid]   # vieux refus : oubliés
+    if (not wars and not refused) or f['overlord'] or g.t < ai.cool.get(('aa', 'route'), -1):
         return
     ai.cool[('aa', 'route')] = g.t + 15
     start = ai.rally if getattr(ai, 'rally', None) is not None else g.capital_of(code)
     if start is None or g.nodes[start]['owner'] != code:
         return
-    for x in wars[:2]:
-        goal = g.capital_of(x)
-        if g.nodes[goal]['owner'] != x:
+    block = closed_owners(g, code)
+    if not block:
+        return
+    goals = [g.capital_of(x) for x in wars[:2]]
+    goals = [v for v in goals if g.nodes[v]['owner'] in wars]
+    goals += sorted(refused, key=lambda v: -refused[v])[:2]
+    for goal in goals:
+        if g.nodes[goal]['owner'] in block:
+            continue   # la destination elle-même est fermée : ce n'est pas un passage qu'il faut
+        free = g.road_route(code, {start: 0.0}, goal, 22.0, False, 1, frozenset())
+        if not free:
             continue
-        r2 = g.road_route(code, {start: 0.0}, goal, 22.0, False, tr=2)
-        if not r2:
-            continue
-        r0 = g.road_route(code, {start: 0.0}, goal, 22.0, False)
-        if r0 and r0[0] <= 1.3 * r2[0]:
-            continue   # le détour par chez nous est court : pas besoin de demander
-        for o in sorted({g.nodes[v]['owner'] for v in r2[1]}):
-            if o not in g.factions or o in (code, x) or g.status(code, o) != 'paix' or has_passage(g, code, o):
-                continue
+        r = g.road_route(code, {start: 0.0}, goal, 22.0, False, 1, block)
+        if r and r[0] <= 1.3 * free[0]:
+            continue   # le détour est court : pas besoin de demander
+        for o in sorted({g.nodes[v]['owner'] for v in free[1]} & block):
             if g.t < ai.cool.get((o, 'passage'), -1):
                 continue
             ai.cool[(o, 'passage')] = g.t + 120
