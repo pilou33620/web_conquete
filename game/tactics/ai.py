@@ -880,7 +880,7 @@ def _reflexes(b, side, mem, L, us, foes):
             continue
         _square(b, side, mem, L, u, cavs)
     if L['counter'] and cavs:
-        _counter_charge(b, side, mem, L, us, cavs)
+        _counter_charge(b, side, mem, L, us, cavs, foes)
 
 
 def _square(b, side, mem, L, u, cavs):
@@ -930,25 +930,38 @@ def _charge_ok(b, side, u, e):
     return True
 
 
-def _counter_charge(b, side, mem, L, us, cavs):
-    """La cavalerie ennemie qui charge nos troupes, ou qui s'y est engagée, est chargée à son tour."""
+def _counter_charge(b, side, mem, L, us, cavs, foes):
+    """La cavalerie ennemie qui charge nos troupes, ou qui s'y est engagée, est chargée à son tour : avec assez
+    d'escadrons pour l'emporter, et pas sous le nez de son infanterie."""
     mine = [u for u in us if u.cls == 'cavalerie' and u.valid and u.state not in ('charge', 'melee') and u.busy <= 0
             and u.morale > 45 and u.men > 0.3 * u.men0 and not (u.order and u.order.get('kind') == 'attack' and u.path)]
     if not mine:
         return
     ours = [o for o in us if o.cls in ('inf', 'artillerie') and o.alive]
+    e_inf = [f for f in foes if f.cls == 'inf' and f.valid]
     for e in cavs:
-        if e.state not in ('melee', 'charge'):
+        if e.state not in ('melee', 'charge') or not mine:
             continue
         if not any(_d2(o.x, o.y, e.x, e.y) < 300 ** 2 for o in ours):
             continue
-        c = min(mine, key=lambda m: _d2(m.x, m.y, e.x, e.y))
-        if _d2(c.x, c.y, e.x, e.y) < 550 ** 2 and _charge_ok(b, side, c, e):
+        if any(_d2(f.x, f.y, e.x, e.y) < 120 ** 2 for f in e_inf):
+            continue   # escortée par son infanterie : nos cavaliers s'y feraient massacrer
+        foe_men = sum(c.men for c in cavs if _d2(c.x, c.y, e.x, e.y) < 220 ** 2)
+        cand = sorted((c for c in mine if _d2(c.x, c.y, e.x, e.y) < 600 ** 2), key=lambda c: _d2(c.x, c.y, e.x, e.y))
+        got, men = [], 0.0
+        for c in cand:
+            if _charge_ok(b, side, c, e):
+                got.append(c)
+                men += c.men
+                if men >= 0.8 * foe_men:
+                    break
+        if not got or men < 0.55 * foe_men:
+            continue
+        for c in got:
             b.order(side, [c.id], 'charge', target=e.id)
-            _note_once(b, mem, f"cc{c.id}{e.id}", f"{c.name} contre-charge les cavaliers ennemis ({e.name}).", 300)
             mine.remove(c)
-            if not mine:
-                return
+        _note_once(b, mem, f"cc{e.id}", f"{' et '.join(c.name for c in got)} contre-charge{'nt' if len(got) > 1 else ''}"
+                                         f" les cavaliers ennemis ({e.name}).", 300)
 
 
 # ---------------------------------------------------------------------- réflexion lourde
@@ -1069,7 +1082,9 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         for u in line:
             p = mem['post'].get(u.id)
             if p:
-                want[u.id] = [p[0], p[1], p[2], 'ligne', False]
+                f = _march_form(b, mem, L, u, p[0], p[1], _foe_dist(u, body)) or 'ligne'
+                want[u.id] = [p[0], p[1], p[2], 'colonne' if f == 'colonne' and front is None else
+                              ('ligne' if f == 'colonne' else f), False]
         _lights_def(b, side, mem, L, us, foes, sit, want)
         return
     # --------------------------------------------------------------- assaillant (ou contre-attaque)
@@ -1156,10 +1171,42 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         if guns:
             sx, sy = _out_of_grape(mem, guns, sx, sy, fd)
         fdist = _foe_dist(u, body)
-        want[u.id] = [sx, sy, fd, _march_form(b, L, u, sx, sy, fdist), False]
+        want[u.id] = [sx, sy, fd, _march_form(b, mem, L, u, sx, sy, fdist), False]
+    if guns and mem['phase'] in ('assaut', 'combat'):
+        _storm_guns(b, side, mem, L, us, foes, guns, busy)
     if plan == 'debordement':
         _flank_group(b, side, mem, L, us, foes, sit, want, busy, body)
     _lights_att(b, side, mem, L, us, foes, sit, want, body, front, halt)
+
+
+def _storm_guns(b, side, mem, L, us, foes, guns, busy):
+    """Une batterie ennemie interdit l'approche (mitraille) et nos canons ne la font pas taire : un ou deux bataillons
+    frais l'enlèvent à la baïonnette (les canonniers tiennent mal au corps à corps). Pas si des cavaliers ennemis
+    rôdent autour."""
+    now = b.clock
+    vis = {e.id: e for e in foes if e.cls == 'artillerie' and e.valid}
+    storm = mem.setdefault('storm', {})
+    roles = mem['role']
+    for gx, gy, gr, gid in guns:
+        e = vis.get(gid)
+        if e is None or now - storm.get(gid, -1e9) < 240:
+            continue
+        if _cav_near(b, mem, e.x, e.y, 500, 120):
+            continue
+        cand = [u for u in us if u.cls == 'inf' and not u.light and u.valid and u.id not in busy and
+                u.state not in ('charge', 'melee') and u.busy <= 0 and u.form != 'carre' and u.morale > 65 and
+                u.men > 0.6 * u.men0 and roles.get(u.id) in ('ligne', 'res') and
+                _d2(u.x, u.y, e.x, e.y) < 380 ** 2]
+        cand.sort(key=lambda u: _d2(u.x, u.y, e.x, e.y))
+        got = [u for u in cand if _charge_ok(b, side, u, e)][:2]
+        if not got or sum(u.men for u in got) < 1.5 * e.men:
+            continue
+        for u in got:
+            b.order(side, [u.id], 'charge', target=e.id)
+            busy.add(u.id)
+        storm[gid] = round(now)
+        _note(b, mem, f"la batterie ennemie ({e.name}) interdit l'approche : {' et '.join(u.name for u in got)} "
+                      f"l'enlève{'nt' if len(got) > 1 else ''} à la baïonnette.")
 
 
 def _gun_zones(b, mem, maxage=600.0):
@@ -1308,13 +1355,18 @@ def _foe_dist(u, body):
     return math.sqrt(best)
 
 
-def _march_form(b, L, u, sx, sy, fdist):
-    """Colonne pour marcher loin du feu, ligne à portée de l'ennemi ou sous le feu."""
+def _march_form(b, mem, L, u, sx, sy, fdist):
+    """Formation de l'infanterie : colonne pour marcher loin du feu ; à portée de l'ennemi ou sous le feu, l'ordre
+    dispersé (tirailleurs : deux fois moins de pertes au boulet, à la mitraille et à la fusillade, pour 40 % de feu en
+    moins) tant qu'aucun cavalier ennemi ne rôde (normal : à moins de 1 000 m ; difficile : 700 m), sinon la ligne.
+    Facile : la ligne, et la colonne gardée trop longtemps."""
     if u.light:
         return 'tirailleurs'
     near = fdist < (380 if L['col_late'] else 720)
     hit = b.clock - u.hit_t < 40 and not L['col_late']
     if near or hit:
+        if L['n'] >= 1 and not _cav_near(b, mem, u.x, u.y, 1000 if L['n'] == 1 else 700):
+            return 'tirailleurs'
         return 'ligne'
     if math.hypot(sx - u.x, sy - u.y) > 320:
         return 'colonne'
@@ -1764,6 +1816,8 @@ def _support(b, side, mem, L, us, foes, sit, want):
                 if _d2(e.x, e.y, gx, gy) < 230 ** 2 and e.cls != 'artillerie':
                     a = math.atan2(gy - e.y, gx - e.x)
                     gx, gy = e.x + math.cos(a) * 260, e.y + math.sin(a) * 260
+            if L['n'] >= 1:
+                gx, gy = _shelter(b, mem, us, u, gx, gy, fd)
             gen_pos = (gx, gy)
             want[u.id] = [gx, gy, fd, None, False]
     for u in us:
@@ -1787,6 +1841,8 @@ def _support(b, side, mem, L, us, foes, sit, want):
                 if _d2(e.x, e.y, wx, wy) < 200 ** 2:
                     a = math.atan2(wy - e.y, wx - e.x)
                     wx, wy = e.x + math.cos(a) * 320, e.y + math.sin(a) * 320
+            if L['n'] >= 1:
+                wx, wy = _shelter(b, mem, us, u, wx, wy, fd)
             want[u.id] = [wx, wy, fd, None, False]
         elif r == 'rallie' and u.valid and u.state == 'repos':
             # ralliés : se refaire près du général, à l'abri
@@ -1808,6 +1864,19 @@ def _support(b, side, mem, L, us, foes, sit, want):
                 _at(mem['ax'], mem['ay'], fd, -mem['back'].get(u.id, 60.0), mem['lat'].get(u.id, 0.0))
             s = 1 if mem['lat'].get(u.id, 0.0) > 0 else -1
             want[u.id] = [sx, sy, fd + s * 0.9, 'ligne', False]
+
+
+def _shelter(b, mem, us, u, x, y, fd):
+    """Des cavaliers ennemis rôdent : l'état-major ou le chariot se met derrière le bataillon le plus proche
+    (un chariot escorté ne se laisse pas enlever)."""
+    if not _cav_near(b, mem, x, y, 550, 120) and not _cav_near(b, mem, u.x, u.y, 550, 120):
+        return x, y
+    inf = [o for o in us if o.cls == 'inf' and o.valid and o.state not in ('charge', 'melee')]
+    if not inf:
+        return x, y
+    o = min(inf, key=lambda v: _d2(v.x, v.y, x, y))
+    _note_once(b, mem, 'abri' + u.id, f"des cavaliers ennemis rôdent : {u.name} s'abrite derrière {o.name}.", 900)
+    return _at(o.x, o.y, fd, -45)
 
 
 # ---------------------------------------------------------------------- cavalerie
@@ -2080,7 +2149,8 @@ def _artillery(b, side, mem, L, us, foes, sit, want, busy):
                     _clamp(*_at(mem['ax'], mem['ay'], fd, -60, mem['lat'].get(u.id, 0.0)))
             # batterie aveugle (haies, bois, crête) alors que l'ennemi est à portée : on cherche un emplacement qui voit
             if fixed and L['n'] >= 1 and not looked and u.form == 'batterie' and not u.path and \
-                    now - max(u.fired_t, c[3] if c else 0.0) > 180 and not _cav_near(b, mem, u.x, u.y, 550):
+                    now - max(u.fired_t, c[3] if c else 0.0) > 180 and not _cav_near(b, mem, u.x, u.y, 800) and \
+                    not any(_d2(f.x, f.y, u.x, u.y) < 450 ** 2 for f in foes if f.valid):
                 if known is None:
                     known = _known_targets(b, mem)
                 near = [t for t in known if _d2(t[0], t[1], u.x, u.y) < (mx * 1.1) ** 2]
@@ -2278,8 +2348,6 @@ def _apply(b, side, mem, L, us, want, busy):
             continue
         if form and form != u.form and form in ('ligne', 'colonne', 'tirailleurs') and \
                 now - fm.get(u.id, -999) > 75 and u.cls == 'inf':
-            if form == 'tirailleurs' and not u.light:
-                form = 'ligne'
             if form != u.form and _form(b, side, u, form):
                 fm[u.id] = round(now)
                 continue
