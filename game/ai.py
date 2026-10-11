@@ -37,10 +37,29 @@ class AI:
         self.relief = min(0.5, game.factions[code].get('tax', 0.5))
         self.menace = True
         self.cool = {}
+        self.refused = {}   # destinations refusées (terres fermées en chemin ?) : nœud -> date, pour demander le passage
 
     @property
     def f(self):
         return self.g.factions[self.code]
+
+    GO_CD = 30          # après un ordre de marche refusé, cette armée laisse cette destination un mois
+
+    def go_cooled(self, a, node):
+        return self.g.t < self.cool.get(('go', a['id'], node), -1)
+
+    def go(self, a, node, **kw):
+        """Ordre de marche d'une IA, jamais en force : refusé (terres fermées, pas de chemin), elle n'insiste pas
+        avant un mois et pourra demander un droit de passage."""
+        g = self.g
+        if self.go_cooled(a, node):
+            return False
+        ok = g.order_move(self.code, a['id'], node=node, **kw)[0]
+        if not ok:
+            self.cool[('go', a['id'], node)] = g.t + self.GO_CD
+            if node is not None and g.nodes[node]['owner'] != self.code:
+                self.refused[node] = g.t
+        return bool(ok)
 
     def step(self):
         if not self.f['alive']:
@@ -209,7 +228,7 @@ class AI:
             if d <= reach and (best is None or d < best[0]):
                 best = (d, n['id'])
         self.cool[('rearm', a['id'])] = g.t + 45   # pas de va-et-vient : un essai par mois et demi
-        if best is None or not g.order_move(code, a['id'], node=best[1], tr=True)[0]:
+        if best is None or not self.go(a, best[1], tr=True):
             return False
         a['ai'] = dict(then='rearm')
         return True
@@ -701,7 +720,7 @@ class AI:
         if men < 0.45 * mx or a['supply'] < 0.25:
             home = self.home_node(a)
             if home is not None and home != a['at_node']:
-                if g.order_move(code, a['id'], node=home, tr=True)[0]:
+                if self.go(a, home, tr=True):
                     a['ai'] = dict(then='garrison')
                     return
             elif home is not None:
@@ -721,7 +740,7 @@ class AI:
                 if d < (160 if typ == 'capitale' else 90) and (best is None or val > best[0]):
                     best = (val, n['id'])
         if best and best[1] != a['at_node']:
-            if g.order_move(code, a['id'], node=best[1], tr=True)[0]:   # secourir une place : pas de détour
+            if self.go(a, best[1], tr=True):   # secourir une place : pas de détour
                 return
         elif best:
             return
@@ -738,7 +757,7 @@ class AI:
         if not self.pick_target(a, taken, wars):
             r = self.rally
             if r is not None and r != a['at_node']:
-                g.order_move(code, a['id'], node=r, tr=not wars)   # en guerre, le front se gagne en chemin
+                self.go(a, r, tr=not wars)   # en guerre, le front se gagne en chemin
 
     def rally_node(self):
         g, code = self.g, self.code
@@ -817,8 +836,9 @@ class AI:
                 sc *= 0.25 / k
             cands.append((sc, n['id']))
         cands.sort(reverse=True)
+        cands = [c for c in cands if not self.go_cooled(a, c[1])]   # destinations refusées naguère : on passe
         for sc, nid in cands[:4]:
-            ok, _ = g.order_move(code, a['id'], node=nid, tr=False)
+            ok = self.go(a, nid, tr=False)
             if ok:
                 taken[nid] = taken.get(nid, 0) + 1
                 a['ai'] = None

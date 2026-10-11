@@ -14,6 +14,8 @@ const pctChg = (now, before) => {
   return (v > 0 ? '+' : '') + minus((v || 0).toLocaleString('fr-FR')) + '\u202f%';
 };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// « de » élidé, comme côté serveur (rules.de) : de Dordogne, d’Agen, du Bugue
+const de = n => /^Le /.test(n) ? 'du ' + n.slice(3) : /^Les /.test(n) ? 'des ' + n.slice(4) : /^[aeiouyhâàéèêîïôöûü]/i.test(n) ? `d’${n}` : `de ${n}`;
 const STATUS = { paix: 'En paix', guerre: 'En guerre', alliance: 'Alliés', self: 'Vous' };
 const TYPE_LABEL = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' };
 const RES_ORDER = ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'];
@@ -21,7 +23,7 @@ const BRANCH_LABEL = { militaire: 'Militaire', civil: 'Civil', industriel: 'Indu
 const ACTION_LABEL = { paix: 'propose la paix', alliance: 'propose une alliance', commerce: 'propose un accord commercial', echange: 'propose un échange', prisonniers: 'propose un échange de prisonniers', passage: 'demande le droit de passage sur vos terres' };
 // conduite d'une marche : conquérir en chemin ou traverser (le dernier choix est gardé)
 const TR_HELP = ['Rallie ou attaque les places indépendantes et ennemies sur la route.',
-  'Passe les places indépendantes et les terres en paix sans combattre ; halte devant la destination.'];
+  'Passe les places indépendantes sans combattre ; halte devant la destination.'];
 
 function relLabel(r) {
   if (r <= -50) return 'Haineux';
@@ -352,7 +354,7 @@ export class UI {
       if (p.action === 'commerce') detail = 'Chacun gagnera des livres et la ressource phare de l’autre.';
       if (p.action === 'prisonniers') detail = 'Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.';
       if (p.action === 'alliance') detail = 'Vision partagée et entrée en guerre à vos côtés si vous êtes attaqué.';
-      if (p.action === 'passage') detail = `Ses armées pourront traverser vos terres pendant un an sans incident (révocable dans la fenêtre Diplomatie).${p.amount ? ` Il offre ${fmt(p.amount)} livres.` : ''}`;
+      if (p.action === 'passage') detail = `Sans ce droit, ses armées ne peuvent pas traverser vos terres. Accordé, il vaut un an (révocable dans la fenêtre Diplomatie).${p.amount ? ` Il offre ${fmt(p.amount)} livres.` : ''}`;
       return `<div class="sheet proposal" style="border-left-color:${f.color}"><div class="pt">${esc(f.name)} ${esc(ACTION_LABEL[p.action] || p.action)}</div>
         <p>${detail}</p><div class="btns"><button class="btn primary" data-act="answer" data-id="${p.id}" data-v="1">Accepter</button>
         <button class="btn" data-act="answer" data-id="${p.id}" data-v="0">Refuser</button></div></div>`;
@@ -467,10 +469,33 @@ export class UI {
     if (e.hit && e.hit.kind === 'node') body.node = e.hit.id;
     else { body.x = e.x; body.y = e.y; }
     this.cmd(body, false).then(r => {
-      // traverser sans droit de passage : le joueur est prévenu de l'incident diplomatique
+      // pas de chemin sans terres fermées : passer en force, c'est déclarer la guerre (le joueur confirme)
       if (r.confirm) { if (confirm(r.confirm)) this.orderMove(a, e, mode, true); return; }
       if (r.ok) this.toast(r.msg || 'En marche.', 'good');
     });
+  }
+
+  // terres fermées (ni à nous, ni alliées, ni ennemies, sans droit de passage) : sur la destination, et sur le
+  // chemin direct (le tracé dessiné, sinon à vol d'oiseau) ; propriétaire d'une cellule = celui de sa place
+  closedOnWay(army, tx, ty, trail) {
+    const closed = new Set(this.st.factions.filter(f => f.cl).map(f => f.code));
+    const out = { target: null, way: [] };
+    if (!closed.size || !army) return out;
+    const owner = (x, y) => {
+      const nd = this.map.cellnode[Math.floor(y) * this.md.W + Math.floor(x)];
+      return nd == null || nd === 255 ? null : this.st.nodes[nd]?.o;
+    };
+    const pts = trail && trail.length > 1 ? trail : [[army.x, army.y], [tx, ty]];
+    const start = owner(army.x, army.y), seen = new Set();
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], k = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0)));
+      for (let s = 0; s <= k; s++) { const o = owner(x0 + (x1 - x0) * s / k, y0 + (y1 - y0) * s / k); if (closed.has(o) && o !== start) seen.add(o); }
+    }
+    const end = pts[pts.length - 1];
+    const to = owner(end[0], end[1]);
+    if (closed.has(to)) out.target = to;
+    out.way = [...seen].filter(o => o !== out.target);
+    return out;
   }
 
   setTrMode(on) {
@@ -493,8 +518,14 @@ export class UI {
     if (hitNode) title = hitNode.name;
     if (enemy) title = `${enemy.name} (${this.rules.factions[enemy.o].name})`;
     const target = enemy ? `data-x="${enemy.x}" data-y="${enemy.y}"` : hitNode ? `data-node="${hitNode.id}"` : `data-x="${e.x}" data-y="${e.y}"`;
+    // terres fermées : destination interdite (droit de passage ou passage en force), ou contournement à prévoir
+    const [tx, ty] = enemy ? [enemy.x, enemy.y] : hitNode ? [hitNode.x, hitNode.y] : [e.x, e.y];
+    const trail = withTrail && this.pendingTrail?.army === army?.id ? this.pendingTrail.pts : null;
+    const cw = this.closedOnWay(army, tx, ty, trail);
+    const closedTxt = (cw.target ? `<div class="bh warnline">Terres ${esc(de(this.rules.factions[cw.target].name))}, fermées : demandez un droit de passage (Diplomatie), ou passez en force (déclaration de guerre).</div>` : '')
+      + (cw.way.length ? `<div class="bh">Détour : les terres ${esc(de(cw.way.map(c => this.rules.factions[c].name).join(' et ')))} sont fermées (sans droit de passage), l’itinéraire les contournera${cw.target ? '' : ' s’il le peut'}.</div>` : '');
     b.innerHTML = `<div class="bt">${esc(title)}</div>${this.trSeg(this.trMode, 'trmode')}
-      <div class="bh">${peace && !this.trMode ? 'En paix : on n’y entre qu’en traversant.' : TR_HELP[+this.trMode]}</div>
+      <div class="bh">${peace && !this.trMode && !cw.target ? 'En paix : on n’y entre qu’en traversant.' : TR_HELP[+this.trMode]}</div>${closedTxt}
       ${withTrail ? `<button class="btn primary" data-act="go-trail">Suivre mon tracé</button>` : ''}
       <button class="btn ${withTrail ? '' : 'primary'}" data-act="go" data-mode="route" ${target}>Marcher par les routes</button>
       <button class="btn" data-act="go" data-mode="champs" ${target}>Marcher à travers champs</button>
@@ -1073,6 +1104,11 @@ export class UI {
     let h = `<div class="p-head">${coat(f.color, a.o)}<div><div class="p-title">${esc(a.name)}</div><div class="p-sub">${f.name}, ${fmtMen(a.men)} hommes</div></div></div>
       <div class="p-state">${state}</div>${this.genHtml(a.gen)}`;
     if (a.fire) h += `<div class="warnline">Les gabares essuient le feu des canons ennemis sur la berge !</div>`;
+    // terres fermées : délai de grâce pour en sortir, ou contournement
+    if (a.cl) h += `<div class="warnline">Sur les terres ${esc(de(a.cl[0]))}, sans droit de passage : ${a.cl[1] > 0
+      ? `encore ${Math.ceil(a.cl[1])} j pour en sortir (itinéraire de sortie tracé), sinon incident diplomatique.`
+      : `délai de grâce écoulé, chaque jour ici fâche ${esc(a.cl[0])} (incident, voire la guerre).`}</div>`;
+    else if (a.dt && a.st === 'move') h += `<div class="muted small">Détour : l’itinéraire contourne les terres ${esc(de(a.dt.join(' et ')))} (sans droit de passage).</div>`;
     if (own) {
       h += `<dl class="kv"><dt>Terrain</dt><dd>${terr}${a.h ? ', à couvert' : ''}</dd><dt>Ravitaillement</dt><dd>${Math.round(a.sup * 100)} %</dd>
         ${a.dp ? `<dt></dt><dd class="muted small">Ravitaillée par le magasin de ${esc(a.dp)}</dd>` : ''}
@@ -1126,6 +1162,7 @@ export class UI {
     const sig = JSON.stringify([id, a.st, a.sk, a.md, a.h, a.n, Math.round(a.sup * 20), a.regs.map(r => [r[0], r[2], Math.round(r[5] / 5), r[6]]), st.me.arm, (this.rearmCost(a.regs) || []).map(([k, v]) => st.me.res[k] >= v),
       lastNode(), st.armies.filter(b => b.o === me && Math.hypot(b.x - a.x, b.y - a.y) < 3).length, a.n != null ? st.nodes[a.n].sg : null,
       a.fm, a.pl, a.auto, a.gen, a.boat, !!a.emb, a.fire, a.e && a.e[0], a.dp, a.wn, a.des, a.rx, a.tr, a.hold, a.qr, a.ax,
+      a.cl && [a.cl[0], Math.ceil(a.cl[1])], a.dt,
       a.n != null ? [st.nodes[a.n].o, st.nodes[a.n].bar] : null]);
     return [h, sig];
   }
@@ -1163,7 +1200,7 @@ export class UI {
     }
     let h = `<div class="section-t">Devant ${nm}</div>`;
     if (x.o !== 'neutre' && !x.neg && !x.ctb && !x.blq && !x.bl && !x.busy) {
-      return h + `<div class="muted small">Terres d’un voisin en paix : l’armée ne fait que passer${a.hold ? ' (avec un droit de passage, elle peut s’y tenir)' : ''}.</div>`;
+      return h + `<div class="muted small">Terres d’un voisin en paix : avec son droit de passage, l’armée passe ou s’y tient sans l’attaquer ; sans lui, elle doit en sortir.</div>`;
     }
     if (x.busy) return h + `<div class="muted small">La place est déjà investie par un autre camp.</div>`;
     h += `<div class="btns">`;
@@ -1352,7 +1389,7 @@ export class UI {
         <div class="btns"><button class="btn" data-act="diplo" data-to="${f.code}" data-v="prisonniers" ${held || theirs ? '' : 'disabled'} title="Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.">Échanger les prisonniers</button>${enrollBtn(f.code, held, 'Enrôler ses prisonniers')}</div>`;
       return `<div class="dcard">${coat(R.color, f.code)}<div>
           <div class="dn">${R.name}</div><div class="dt">${R.title}, chef-lieu ${R.capital}</div>
-          <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}${f.ps ? `<span class="chip ally" title="Vos armées peuvent traverser ses terres sans incident">Passage chez lui jusqu’au ${f.ps}</span>` : ''}${f.pg ? `<span class="chip" title="Ses armées peuvent traverser vos terres">Vous lui accordez le passage jusqu’au ${f.pg}</span>` : ''}</div>
+          <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}${f.ps ? `<span class="chip ally" title="Vos armées peuvent traverser ses terres">Passage chez lui jusqu’au ${f.ps}</span>` : ''}${f.pg ? `<span class="chip" title="Ses armées peuvent traverser vos terres">Vous lui accordez le passage jusqu’au ${f.pg}</span>` : ''}${f.cl ? '<span class="chip" title="Sans droit de passage, vos armées ne traversent ni ses places ni ses campagnes : elles contournent, ou passent en force (déclaration de guerre)">Terres fermées</span>' : ''}</div>
           <div class="row"><span class="lab">${relLabel(f.rel)} (${fmt(f.rel)})</span><div class="relbar" style="flex:1;min-width:120px"><i style="left:${relPos}%"></i></div></div>
           <div class="small">Puissance estimée ${fmt(f.power)} (vous ${fmt(myPow)}), ${f.nodes} villes et villages, ${f.techs} technologies.</div>
           <div class="small">Prestige ${fmt(f.prestige || 0)} (vous ${fmt(st.me.prestige || 0)})${f.weary >= 30 ? ` · <span style="color:#ff9a85">las de la guerre (${f.weary} %)</span>` : ''}</div>
@@ -1365,8 +1402,16 @@ export class UI {
       ? 'Vous dominez l’Aquitaine : les autres camps se méfient de vous et se liguent contre vous dès que vous êtes en guerre.'
       : `${esc(this.rules.factions[st.heg].name)} domine l’Aquitaine : les autres camps s’en méfient et entrent volontiers dans ses guerres, dans le camp adverse.`}</p>`;
     const neuLine = neu ? `<div class="row" style="margin-bottom:8px"><span class="small">Vous détenez ${fmt(neu)} miliciens insurgés prisonniers${st.me.prisoner_upkeep ? `, nourris ${fmt1(st.me.prisoner_upkeep)} vivres /j pour tous vos prisonniers` : ''}.</span>${enrollBtn('neutre', neu, 'Enrôler')}</div>` : '';
-    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${hegLine}${neuLine}<div class="diplo-list">${cards}</div>`;
-    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner, f.ps, f.pg]),
+    // droits de passage : qui nous laisse passer, à qui nous laissons passer (sinon, terres fermées)
+    const others = st.factions.filter(f => f.code !== me && f.alive);
+    const nm = f => esc(this.rules.factions[f.code].name);
+    const why = (f, until) => until ? `${nm(f)} (droit jusqu’au ${until})` : `${nm(f)} (${f.st === 'guerre' ? 'en guerre' : f.st === 'alliance' ? 'allié' : 'vassalité'})`;
+    const list = l => l.join(', ') || 'personne';
+    const passLine = `<div class="small" style="margin:0 0 8px"><b>Droits de passage</b> · Vous laissent passer : ${list(others.filter(f => !f.cl).map(f => why(f, f.ps)))} ; terres fermées à vos armées : ${list(others.filter(f => f.cl).map(nm))}.<br>
+      Vous laissez passer : ${list(others.filter(f => !f.cg).map(f => why(f, f.pg)))} ; vos terres sont fermées à : ${list(others.filter(f => f.cg).map(nm))}.
+      <span class="muted">Sans droit de passage (ni alliance, ni guerre), on contourne ses terres, ou l’on passe en force : c’est la guerre.</span></div>`;
+    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${hegLine}${neuLine}${passLine}<div class="diplo-list">${cards}</div>`;
+    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner, f.ps, f.pg, f.cl, f.cg]),
       pris, fmt1(st.me.prisoner_upkeep || 0), Math.round(myPow / 500), st.heg])];
   }
 
@@ -1509,6 +1554,7 @@ export class UI {
           <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes reçues à sa levée (affichées à côté de son nom) : après une découverte, réarmez les régiments démodés dans une de vos places (bouton « Réarmer », payé en armes, et en fer pour l’artillerie). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
           <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>
           <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
+          <li><b>Frontières</b> : les terres d’un ${this.st?.word || 'département'} en paix vous sont fermées, sauf droit de passage (fenêtre Diplomatie) ou alliance. Vos armées les contournent ; sans détour possible, vous pouvez passer en force, ce qui revient à lui déclarer la guerre. Les gabares passent devant ses quais sans y débarquer. Une armée surprise sur des terres fermées (droit retiré, paix signée…) a cinq jours pour en sortir.</li>
           <li><b>Espions</b> : depuis une place étrangère, espionnez (vision et garnison pendant 45 jours) ou sabotez ses remparts en temps de guerre. Le brouillard de guerre (bouton œil) montre ce que vous voyez réellement.</li>
           <li><b>Impôts</b> (fenêtre Production) : plus d’argent tout de suite, mais l’ordre public baisse ; une ville agitée sans garnison peut se révolter.</li>
           <li>La partie est sauvegardée automatiquement chaque mois ; elle reprend au redémarrage du serveur.</li>

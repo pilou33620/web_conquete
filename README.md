@@ -233,13 +233,33 @@ Le panneau d'une armée à l'arrêt propose des actions selon l'endroit où elle
   400 livres ; un village : une quarantaine de vivres). L'ordre public perd 25 %. Une fois tous les quatre mois par place.
 
 **En marche, au moment de choisir la destination** : « Conquérir en chemin » (on rallie ou on attaque les places sur la
-route) ou « Traverser » (le choix est gardé). En traversant, l'armée passe les places indépendantes et les terres d'un
-voisin en paix sans combattre, puis fait halte devant sa destination sans l'attaquer ; une place ennemie tenue lui barre
-toujours la route. Le tracé en pointillé clair et le drapeau blanc le rappellent.
-- **Droit de passage** (fenêtre Diplomatie) : un an, révocable. Les IA l'accordent selon la relation, leur caractère, la peur
-  d'être envahies et l'ennemi visé ; elles le demandent aussi pour atteindre un ennemi.
-- Sans droit de passage, traverser est un **incident diplomatique** : le jeu vous prévient avant. La relation baisse
-  d'au moins 10 points, et un voisin fâché peut déclarer la guerre. On ne peut s'attarder chez un voisin qu'avec ce droit.
+route) ou « Traverser » (le choix est gardé). En traversant, l'armée passe les places indépendantes sans combattre,
+puis fait halte devant sa destination sans l'attaquer ; une place ennemie tenue lui barre toujours la route. Le tracé en
+pointillé clair et le drapeau blanc le rappellent.
+
+**Frontières : terres fermées et droit de passage**
+- Les terres d'un département qui n'est ni à vous, ni votre allié (alliance, suzerain, vassal, vassal du même suzerain),
+  ni en guerre avec vous, et qui ne vous accorde pas de droit de passage, sont **fermées** : vos armées n'y entrent pas,
+  ni par ses places, ni à travers ses campagnes (une campagne appartient au maître de la place dont elle relève).
+  Les places indépendantes restent ouvertes, même enclavées chez un voisin, et les terres d'un ennemi se traversent
+  (ses places tenues arrêtent toujours l'armée).
+- **Contournement** : par les routes, à travers champs ou en suivant votre tracé, l'itinéraire évite les terres fermées.
+  La bulle de destination prévient quand le chemin direct les traverse, et le tracé affiche le détour.
+- **Pas de chemin sans y passer** : l'ordre est refusé. Vous pouvez demander un droit de passage, ou **passer en force** :
+  le jeu demande confirmation, car c'est **déclarer la guerre** à ce département (règles ordinaires : une trêve ou un
+  suzerain l'interdisent, et ses alliés peuvent entrer en guerre).
+- **Fleuves et côte** : les gabares passent librement devant les quais d'un département aux terres fermées, mais
+  n'y embarquent ni n'y débarquent. Le délai de grâce ne court pas à bord.
+- **Droit de passage** (fenêtre Diplomatie) : un an, révocable. Les IA l'accordent selon la relation (plus volontiers
+  quand elle est bonne), leur caractère, la peur d'être envahies et l'ennemi visé. Elles le demandent quand le détour
+  est trop long ou impossible, contournent sinon, ou renoncent un mois à une destination refusée ; elles ne passent
+  jamais en force. La fenêtre Diplomatie résume qui vous laisse passer et à qui vous laissez passer.
+- **Délai de grâce** : une armée qui se retrouve sur des terres fermées sans l'avoir voulu (droit retiré ou échu en
+  chemin, place qui change de mains, paix signée en territoire ennemi, retraite) a **5 jours** pour en sortir. Elle
+  reçoit d'elle-même un itinéraire de sortie (même destination par un détour, sinon les terres ouvertes les plus
+  proches) et vous êtes prévenu. Au-delà, la relation baisse chaque jour, un **incident diplomatique** (−10 points au
+  moins, tous les deux mois au plus) peut pousser le voisin à vous déclarer la guerre. Une retraite n'est jamais piégée :
+  elle traverse s'il le faut, et le délai s'applique. Une armée qui part de terres fermées peut toujours en sortir.
 
 **Devant une place qui n'est pas à vous :**
 - **Négocier le ralliement** (place indépendante) : 2 à 5 jours de pourparlers, contre une somme qui dépend des habitants et
@@ -427,12 +447,12 @@ Clavier : espace pour la pause, 1 à 4 pour la vitesse, Échap pour annuler, + e
 ## Organisation du code
 ```
 server.py            serveur HTTP local + boucle temps réel (10 pas par seconde)
-game/geo.py          carte : projection, grilles de terrain, réseau routier, recherche de chemin A*
+game/geo.py          carte : projection, grilles de terrain, réseau routier, recherche de chemin A* (avec terres interdites)
 game/places.py       les 223 villes, villages et places fortes, routes royales
 raspberry/           installation en service sur Raspberry Pi
 game/rules.py        départements, unités, technologies, généraux, formations, météo
 game/engine.py       simulation : économie, impôts, armées, gabares, combats par phases, sièges, espions
-game/army_actions.py actions d’armée : barricades, quartiers, garde bourgeoise, réquisition, traversée, blocus
+game/army_actions.py actions d’armée : barricades, quartiers, garde bourgeoise, réquisition, traversée, terres fermées et droit de passage, blocus
 game/waterways.py    voies navigables (fleuves, estuaire, cabotage) et blocus
 game/ai.py           IA des départements
 game/cities.py       villes : emplacements et bâtiments, politique de la ville, événements locaux
