@@ -31,7 +31,7 @@ def migrate(g):
         f.setdefault('intel', {})
         f.setdefault('prisoners', {})
     for f in g.factions.values():
-        for k, v in dict(weary=0.0, prestige=0.0, treaties={}, last_war=0.0).items():
+        for k, v in dict(weary=0.0, prestige=0.0, treaties={}, last_war=0.0, refu=0.0).items():
             f.setdefault(k, v)
         if not f['alive']:
             f.setdefault('dead_t', g.t)
@@ -44,6 +44,8 @@ def migrate(g):
         n.setdefault('assim', 1.0)
         # anciennes sauvegardes : le développement d'alors devient une population équivalente
         n.setdefault('pop', g.geo.nodes[n['id']]['pop0'] * (1 + 0.25 * n.get('dev', 0)))
+        n.setdefault('ph', [int(n['pop'])])   # population des douze derniers mois : l'historique commence ici
+        n.setdefault('rf', 0)                 # réfugiés accueillis le mois dernier
     for a in g.armies.values():
         if not a.get('gen'):
             a['gen'] = g.new_general(a['owner'])
@@ -100,7 +102,7 @@ def rules_payload():
                      days=[b['days'](l) for l in range(b['max'])]) for k, b in R.BUILD.items()}
     fort = dict(max=R.FORT_MAX, bastion=R.BASTION_LEVEL, bastion_types=R.BASTION_TYPES, upkeep=R.FORT_UPKEEP,
                 names=R.FORT_NAMES)
-    dev = dict(names=R.DEV_NAMES, per_level=R.POP_PER_LEVEL)
+    dev = dict(names=R.DEV_NAMES, per_level=R.POP_PER_LEVEL, excess=R.POP_EXCESS, unrest=R.POP_UNREST, why=R.POP_WHY)
     scen = {}
     for k, sc in R.SCENARIOS.items():
         d = datetime.date(*sc['date'])
@@ -170,11 +172,13 @@ def player_state(g, since=0):
         return False
 
     nodes = []
+    tr = g._pop_curves()
     for n in g.nodes:
         gn = g.geo.nodes[n['id']]
         d = dict(id=n['id'], o=n['owner'], f=n['fort'], d=n['dev'], s=round(n['stab'], 2), pop=int(round(n.get('pop', 0), -1)),
                  sg=dict(by=n['siege']['by'], dmg=round(n['siege']['dmg'], 2), occ=bool(n['siege'].get('occupy')))
                  if n['siege'] else None)
+        d['pt'] = [round(tr['rate'][n['id']] * 100, 1), tr['why'][n['id']]]   # tendance : % par an et sa raison
         if n['id'] in g._blockade:
             d['bk'] = 1
         if n.get('depot'):
@@ -189,6 +193,10 @@ def player_state(g, since=0):
                 d['fx'] = g.fort_max(p, n['id'])
                 d['pc'] = int(round(g.pop_cap(n), -1))
                 d['pg'] = round(g.pop_growth(n), 3)
+                d['py'] = int(round((n.get('ph') or [n['pop']])[0], -1))   # population il y a un an
+                d['pm'] = len(n.get('ph') or [0]) - 1                      # … ou il y a tant de mois
+                if n.get('rf'):
+                    d['rf'] = int(round(n['rf'], -1))
                 d['ru'], d['rw'] = [], {}
                 for u in R.UNIT_ORDER:
                     ok, why = g.can_recruit(p, n['id'], u)
@@ -298,7 +306,7 @@ def player_state(g, since=0):
                 stats={k: int(v) for k, v in me['stats'].items()}, mods={k: round(v, 3) for k, v in me['mods'].items()},
                 prisoners={k: int(v) for k, v in me.get('prisoners', {}).items() if v > 0},
                 prisoner_upkeep=round(me.get('_upkeep', {}).get('prisoners', 0), 2),
-                pop=int(round(sum(n.get('pop', 0) for n in g.owned_nodes(p)), -2)),
+                pop=int(round(sum(n.get('pop', 0) for n in g.owned_nodes(p)), -2)), popy=_popy(g, p),
                 weary=int(me.get('weary', 0)), prestige=g.prestige(p),
                 prestige_parts={k: int(round(v)) for k, v in g.prestige_parts(p).items()},
                 glory=int(me.get('prestige', 0)),
@@ -320,6 +328,16 @@ def player_state(g, since=0):
                                 get=x['get'], date=x['date']) for x in g.proposals],
                 market=dict(prices=g.market, spread=[1.15, 0.85] if has_port else [1.4, 0.6]),
                 flood=g.t < g.flood_until, vis=[[round(x, 1), round(y, 1), round(r, 1)] for x, y, r in srcs])
+
+
+def _popy(g, p):
+    """Population de vos terres, villes et campagnes à part : aujourd'hui et il y a un an (mêmes places)."""
+    mine = g.owned_nodes(p)
+    towns = [n for n in mine if g.geo.nodes[n['id']]['type'] != 'village']
+    fields = [n for n in mine if g.geo.nodes[n['id']]['type'] == 'village']
+    rnd = lambda v: [int(round(x, -1)) for x in v]
+    return dict(all=rnd(g.pop_year(mine)), towns=rnd(g.pop_year(towns)), fields=rnd(g.pop_year(fields)),
+                months=max((len(n.get('ph') or [0]) - 1 for n in mine), default=0))
 
 
 def _order(g, p):

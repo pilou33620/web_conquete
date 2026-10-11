@@ -6,6 +6,13 @@ const minus = s => s.replace(/^-/, '−');
 const fmt = n => minus((Math.round(n) || 0).toLocaleString('fr-FR'));   // || 0 : pas de « −0 »
 const fmt1 = n => minus(((Math.abs(n) >= 10 ? Math.round(n) : Math.round(n * 10) / 10) || 0).toLocaleString('fr-FR'));
 const fmt2 = n => minus((Math.round(n * 100) / 100 || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const signed = n => (Math.round(n) > 0 ? '+' : '') + fmt(n);   // « +2 300 », « −150 »
+const hab = n => `${signed(n)} ${Math.abs(Math.round(n)) >= 2 ? 'habitants' : 'habitant'}`;
+// variation en pour cent, une décimale, espace fine avant le signe % : « +0,7 % »
+const pctChg = (now, before) => {
+  const v = before > 0 ? Math.round((now - before) / before * 1000) / 10 : 0;
+  return (v > 0 ? '+' : '') + minus((v || 0).toLocaleString('fr-FR')) + '\u202f%';
+};
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const STATUS = { paix: 'En paix', guerre: 'En guerre', alliance: 'Alliés', self: 'Vous' };
 const TYPE_LABEL = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' };
@@ -251,6 +258,47 @@ export class UI {
       .map(r => { const v = sp[r] * k, lab = r === 'industrie' ? 'industrie' : this.rules.res_label[r].toLowerCase();
         return `+${fmt1(v)} ${r === 'livres' && v < 2 ? 'livre' : lab}`; }).join(', ');
     return `<div class="star-line"><span class="star">★</span><div><b>${esc(label)}</b><div class="muted small">${esc(sp.label)} : ${prod} par jour (production de base)${own ? '' : ', pour qui tient la ville'}</div></div></div>`;
+  }
+
+  // tendance de la population d'une place (trajectoire de l'époque) et, pour les vôtres, ce qui se passe ce mois-ci
+  popLines(ns, own) {
+    const line = t => `<div class="muted small" style="margin:-4px 0 8px">${t}</div>`;
+    let h = '';
+    if (ns.pt) {
+      const [r, why] = ns.pt;
+      const rate = `${r > 0 ? '+' : ''}${minus(r.toLocaleString('fr-FR'))}\u202f% par an`;
+      const lab = r >= 1.5 ? `en plein essor (${rate})` : r >= 0.3 ? `en croissance (${rate})` : r > -0.3 ? 'stable' : `en déclin (${rate})`;
+      const txt = this.rules.dev?.why?.[why];
+      h += line(`Population ${lab}${txt ? ` : ${esc(txt)}` : ''}.`);
+    }
+    if (!own || !ns.pc || !ns.pop) return h;
+    if (ns.pm > 0 && ns.py) {
+      h += line(`${hab(ns.pop - ns.py)} depuis ${ns.pm >= 12 ? 'un an' : ns.pm + ' mois'} (${pctChg(ns.pop, ns.py)}).`);
+    }
+    if (ns.rf) h += line(`Des réfugiés affluent : +${fmt(ns.rf)} le mois dernier.`);
+    const free = ns.pc - ns.pop;
+    if (ns.pg < 0) {
+      const why = ns.sg ? 'le siège' : ns.s < (this.rules.dev?.unrest || 0.35) ? 'le désordre' : 'la disette';
+      h += `<div class="warnline">La population fuit ${why} : environ −${fmt(ns.pop * -ns.pg)} habitants le mois prochain${why === 'le désordre' ? ', vers des places plus sûres' : ''}.</div>`;
+    } else if (free < -ns.pc * 0.01) {
+      h += line(`Trop de monde pour la place : environ −${fmt(-free * (this.rules.dev?.excess || 0.05))} habitants le mois prochain${ns.d < 3 ? ' (un agrandissement les retiendrait)' : ''}.`);
+    } else if (free > ns.pc * 0.02 && ns.pg > 0) h += line(`De nouveaux habitants arrivent : environ +${fmt(free * ns.pg)} le mois prochain.`);
+    else if (free > ns.pc * 0.02) h += line('Personne ne vient s’installer : l’ordre public est trop bas ou les impôts trop lourds.');
+    else if (ns.d < 3) h += line('La ville est pleine : agrandissez-la pour attirer de nouveaux habitants.');
+    return h;
+  }
+
+  // population de vos terres : évolution sur l'année, villes et campagnes à part
+  popYear(py) {
+    if (!py || !py.months) return '';
+    const when = py.months >= 12 ? 'un an' : `${py.months} mois`;
+    const [now, before] = py.all;
+    let h = `<dt></dt><dd class="muted small">${hab(now - before)} depuis ${when} (${pctChg(now, before)})</dd>`;
+    if (py.towns[0] && py.fields[0]) {
+      h += `<dt>dont villes</dt><dd>${fmt(py.towns[0])} <span class="muted small">(${pctChg(...py.towns)})</span></dd>
+          <dt>dont campagnes</dt><dd>${fmt(py.fields[0])} <span class="muted small">(${pctChg(...py.fields)})</span></dd>`;
+    }
+    return h;
   }
 
   devName(type, d) { const n = this.rules.dev?.names?.[type] || []; return n[Math.min(d, n.length - 1)] || ''; }
@@ -709,13 +757,7 @@ export class UI {
       ${own ? `<dt>Ordre public</dt><dd>${Math.round(ns.s * 100)} %</dd>` : ''}
       <dt>Terrain</dt><dd>${terr}</dd></dl>`;
     if (own && ns.s < 0.5) h += `<div class="warnline">Population agitée : ${ns.g && ns.g.length ? 'la garnison maintient l’ordre.' : 'sans garnison ni armée sur place, la ville peut se révolter. Baissez les impôts ou laissez-y un régiment.'}</div>`;
-    if (own && ns.pc && ns.pop) {
-      const free = ns.pc - ns.pop;
-      if (ns.pg < 0) h += `<div class="warnline">La population fuit ${ns.sg ? 'le siège' : 'la disette'} : la ville se vide.</div>`;
-      else if (free > ns.pc * 0.02 && ns.pg > 0) h += `<div class="muted small" style="margin:-4px 0 8px">De nouveaux habitants arrivent : environ +${fmt(free * ns.pg)} le mois prochain.</div>`;
-      else if (free > ns.pc * 0.02) h += `<div class="muted small" style="margin:-4px 0 8px">Personne ne vient s’installer : l’ordre public est trop bas ou les impôts trop lourds.</div>`;
-      else if (ns.d < 3) h += `<div class="muted small" style="margin:-4px 0 8px">La ville est pleine : agrandissez-la pour attirer de nouveaux habitants.</div>`;
-    }
+    if (ns.pop) h += this.popLines(ns, own);
     if (ns.as != null && ns.as < 1 && this.rules.factions[gn.dept]) {
       const home = this.rules.factions[gn.dept].name;
       h += `<div class="muted small" style="margin:-2px 0 8px">Place conquise, encore attachée à ${esc(home)} : assimilation ${Math.round(ns.as * 100)} %${own ? ' (production réduite, ordre public fragile ; une révolte la rendrait à son pays)' : ''}.</div>`;
@@ -1177,7 +1219,7 @@ export class UI {
           <dt>Outils fabriqués</dt><dd>+${fmt1(me.income.outils)} /j</dd>
           <dt>Couverture en outils</dt><dd>${Math.round(me.cov * 100)} %</dd>
           <dt>Bonus de production</dt><dd>+${Math.round((me.tools_bonus - 1) * 100)} %</dd>
-          ${me.pop ? `<dt>Population de vos terres</dt><dd>${fmt(me.pop)} habitants</dd>` : ''}
+          ${me.pop ? `<dt>Population de vos terres</dt><dd>${fmt(me.pop)} habitants</dd>${this.popYear(me.popy)}` : ''}
           <dt>Lassitude de la guerre</dt><dd style="${(me.weary || 0) >= 50 ? 'color:#ff9a85' : ''}">${me.weary || 0} %</dd>
           <dt>Solde des troupes</dt><dd>${fmt1(me.upkeep.livres || 0)} livres /j</dd>
           <dt>Entretien des remparts</dt><dd>${fmt1(me.upkeep.forts || 0)} livres /j</dd>

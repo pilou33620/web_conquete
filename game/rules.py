@@ -95,10 +95,13 @@ UNITS['ligne']['desc'] = 'Le gros de l’armée : feu de ligne, colonne d’assa
 UNITS['legere']['desc'] = 'Voltigeurs : rapides, à l’aise en forêt, en lande et en marais, tendent des embuscades.'
 UNITS['cavalerie']['desc'] = 'Dragons et hussards : charge en terrain ouvert, poursuite, éclairage.'
 UNITS['artillerie']['desc'] = 'Batterie de 8 pièces : domine la canonnade et ouvre les brèches.'
-# Population : chaque agrandissement ouvre de la place (+30 %), que les habitants remplissent mois après mois
-# si la ville est sûre, nourrie et pas trop imposée. La production suit la population.
+# Population : chaque agrandissement ouvre de la place (+10 %), que les habitants remplissent mois après mois
+# si la ville est sûre, nourrie et pas trop imposée ; ses ateliers produisent davantage une fois les faubourgs
+# remplis. La production suit la population (son remplissage), la taille des villes suit l'histoire (POP_CURVES).
 POP_NATURAL = 0.05           # croissance possible sans agrandissement
-POP_PER_LEVEL = 0.30         # place gagnée à chaque agrandissement
+POP_PER_LEVEL = 0.10         # place gagnée à chaque agrandissement
+DEV_PROD = 0.30              # production gagnée à chaque agrandissement, faubourgs remplis (aux prix de 1790 : un
+                             # faubourg compte un peu plus en 1700, un peu moins en 1890, quand tout a grandi)
 POP_RATE = 0.12              # part de la place libre comblée chaque mois, dans de bonnes conditions
 DEV_NAMES = {
     'village': ['Village', 'Village agrandi', 'Gros bourg', 'Bourg prospère'],
@@ -127,6 +130,12 @@ def num(x, dec=1):
     """Nombre à la française : virgule décimale, signe moins typographique."""
     s = f"{abs(x):.{dec}f}".replace('.', ',')
     return ('−' if x < 0 else '+') + s
+
+
+def nb(x):
+    """Entier à la française, milliers séparés par une espace fine insécable : « 5 350 habitants »."""
+    s = f"{abs(int(round(x))):,}".replace(',', ' ')
+    return ('−' if x < -0.5 else '') + s
 
 
 def pl(n, sing, plur=None):
@@ -192,8 +201,8 @@ BUILD = {
                        'en puisant dans vos vivres'),
     'dev': dict(name='Agrandissement', max=3, cost=lambda lvl: dict(livres=100 * (lvl + 1), bois=50 * (lvl + 1), outils=15 * (lvl + 1)),
                 days=lambda lvl: 18 + 10 * lvl,
-                desc='Nouveaux faubourgs : la ville peut accueillir 30 % d’habitants de plus, qui viennent s’y installer '
-                     'peu à peu ; plus de monde, c’est plus de production, de recrues et de milice'),
+                desc='Nouveaux faubourgs : la ville peut accueillir 10 % d’habitants de plus, qui viennent s’y installer '
+                     'peu à peu, et ses ateliers s’étendent : plus de production, de recrues et de milice'),
 }
 
 # ------------------------------------------------------------------ technologies
@@ -372,8 +381,152 @@ WEARY_PER_WAR = 3.0          # par mois et par guerre
 WEARY_PER_LOSS = 1 / 300     # par homme perdu
 WEARY_PEACE = 5.0            # baisse mensuelle en paix
 
-# croissance séculaire des villes : population « normale » par rapport à 1790
+# croissance séculaire de l'économie, par rapport à 1790 : la production d'une place n'en suit que la racine
 POP_ERA = [(1700, 0.72), (1790, 1.0), (1850, 1.3), (1900, 1.6)]
+
+# ------------------------------------------------------------------ population sur deux siècles
+# Chaque place suit sa propre trajectoire « normale » : un multiplicateur de sa population de 1790
+# (places.CITY_POP), interpolé entre des années repères. Chaque repère porte la raison de l'évolution jusqu'au
+# repère suivant (affichée dans le panneau de la ville). Les villes s'envolent avec le chemin de fer et l'industrie ;
+# les campagnes se remplissent jusque vers 1850 puis se vident (exode rural, émigration basque et béarnaise),
+# sauf la lande plantée de pins après la loi de 1857.
+POP_WHY = dict(
+    paix='la paix et le commerce font grandir la ville',
+    guerres='Révolution et guerres freinent la ville',
+    ville='routes neuves et chemin de fer animent le marché',
+    bourg='petite ville de marché, qui grandit lentement',
+    declin='le marché languit, les jeunes partent pour la grande ville',
+    iles='le commerce des Îles et du vin enrichit le port',
+    revolution='Terreur et guerre sur mer ruinent le négoce',
+    blocus='le blocus anglais étouffe le port',
+    reprise='le négoce se relève lentement',
+    metropole='chemins de fer, usines et faubourgs : tout le Sud-Ouest y afflue',
+    prefecture='préfecture, routes neuves puis chemin de fer',
+    ateliers='préfecture, puis ateliers du chemin de fer d’Orléans',
+    hivernants='les hivernants anglais en font une ville d’hiver',
+    port='le port et le chemin de fer d’Espagne',
+    bains='les bains de mer attirent baigneurs et villas',
+    imperiale='station impériale, puis rendez-vous de l’Europe',
+    teste='résiniers et pêcheurs du Bassin',
+    arcachon='Arcachon sort des dunes : ville d’hiver et bains de mer',
+    ostreicole='huîtres et bains de mer font vivre le Bassin',
+    terreneuve='la perte de Terre-Neuve ruine armateurs et pêcheurs',
+    thermes='les eaux chaudes et le chemin de fer amènent les curistes',
+    gare='carrefour du chemin de fer',
+    frontiere='la gare frontière avec l’Espagne',
+    forges='les forges et les hauts fourneaux embauchent',
+    espadrilles='les fabriques d’espadrilles embauchent',
+    banlieue='Bordeaux déborde : maraîchers et ouvriers s’y installent',
+    defrichement='défrichements et maïs nourrissent plus de bouches',
+    plein='les campagnes n’ont jamais été si peuplées',
+    exode='l’exode rural vide les campagnes vers les villes',
+    phylloxera='le phylloxéra ruine les vignerons',
+    ameriques='on émigre vers les Amériques',
+    lande='bergers et échassiers vivent chichement de la lande',
+    pins='les pins et la résine font vivre la lande',
+    remparts='les remparts ne font plus vivre la place',
+)
+
+
+def _town(e1850, e1900, late='ville'):
+    """Ville ordinaire : croissance lente au XVIIIe siècle, pause sous la Révolution, puis le chemin de fer."""
+    return [(1700, 0.82, 'paix'), (1790, 1.0, 'guerres'), (1801, 0.97, 'paix'), (1831, 1.07, late),
+            (1851, e1850, late), (1900, e1900, late)]
+
+
+def _rural(peak_year, peak, e1900, late, early='plein'):
+    """Campagne : défrichements, apogée vers 1850, puis exode."""
+    return [(1700, 0.81, 'defrichement'), (1790, 1.0, early), (peak_year, peak, late), (1900, e1900, late)]
+
+
+POP_CURVES = dict(
+    # Bordeaux : ~45 000 âmes en 1700, ~110 000 en 1790, ~91 000 en 1801, ~130 000 en 1851, ~256 000 en 1901
+    bordeaux=[(1700, 0.41, 'iles'), (1750, 0.58, 'iles'), (1790, 1.0, 'revolution'), (1801, 0.83, 'blocus'),
+              (1815, 0.84, 'reprise'), (1831, 0.92, 'metropole'), (1851, 1.18, 'metropole'), (1872, 1.76, 'metropole'),
+              (1900, 2.3, 'metropole')],
+    libourne=[(1700, 0.75, 'paix'), (1790, 1.0, 'guerres'), (1801, 0.95, 'ville'), (1851, 1.65, 'ville'), (1900, 2.3, 'ville')],
+    # La Teste porte aussi Arcachon, détachée en 1857 : quelques cabanes de pêcheurs, puis la ville d'hiver des Pereire
+    teste=[(1700, 0.85, 'teste'), (1790, 1.0, 'teste'), (1841, 1.25, 'bains'), (1857, 1.6, 'arcachon'),
+           (1880, 3.4, 'arcachon'), (1900, 5.0, 'arcachon')],
+    bassin=[(1700, 0.85, 'teste'), (1790, 1.0, 'teste'), (1857, 1.2, 'ostreicole'), (1900, 2.0, 'ostreicole')],
+    soulac=[(1700, 0.9, 'lande'), (1790, 1.0, 'lande'), (1874, 1.05, 'bains'), (1900, 1.9, 'bains')],
+    banlieue=[(1700, 0.8, 'defrichement'), (1790, 1.0, 'plein'), (1831, 1.15, 'banlieue'), (1851, 1.45, 'banlieue'),
+              (1900, 3.0, 'banlieue')],
+    perigueux=[(1700, 0.85, 'paix'), (1790, 1.0, 'guerres'), (1801, 0.95, 'ateliers'), (1831, 1.43, 'ateliers'),
+               (1851, 2.2, 'ateliers'), (1872, 3.6, 'ateliers'), (1900, 5.2, 'ateliers')],
+    bergerac=[(1700, 0.85, 'paix'), (1790, 1.0, 'guerres'), (1801, 0.97, 'ville'), (1851, 1.45, 'ville'), (1900, 1.95, 'ville')],
+    montdemarsan=[(1700, 0.75, 'paix'), (1790, 1.0, 'prefecture'), (1851, 1.45, 'prefecture'), (1900, 3.0, 'prefecture')],
+    dax=[(1700, 0.85, 'paix'), (1790, 1.0, 'guerres'), (1801, 0.97, 'thermes'), (1851, 1.3, 'thermes'), (1900, 2.35, 'thermes')],
+    salies=[(1700, 0.9, 'paix'), (1790, 1.0, 'bourg'), (1857, 1.05, 'thermes'), (1900, 1.25, 'thermes')],
+    gare=[(1700, 0.85, 'lande'), (1790, 1.0, 'lande'), (1854, 1.2, 'gare'), (1900, 3.0, 'gare')],
+    agen=[(1700, 0.8, 'paix'), (1790, 1.0, 'guerres'), (1801, 0.97, 'prefecture'), (1851, 1.4, 'prefecture'),
+          (1900, 2.1, 'prefecture')],
+    villeneuve=[(1700, 0.82, 'paix'), (1790, 1.0, 'guerres'), (1801, 0.97, 'ville'), (1851, 1.35, 'ville'), (1900, 1.55, 'ville')],
+    marmande=[(1700, 0.82, 'paix'), (1790, 1.0, 'guerres'), (1801, 0.97, 'ville'), (1851, 1.35, 'ville'), (1900, 1.6, 'ville')],
+    forges=[(1700, 0.8, 'forges'), (1790, 1.0, 'forges'), (1851, 1.3, 'forges'), (1900, 1.6, 'forges')],
+    # Pau : ~9 000 en 1790, ~16 000 en 1851, ~34 000 en 1901 (les Anglais y passent l'hiver dès les années 1840)
+    pau=[(1700, 0.8, 'paix'), (1790, 1.0, 'guerres'), (1801, 0.95, 'prefecture'), (1836, 1.4, 'hivernants'),
+         (1851, 1.8, 'hivernants'), (1872, 2.85, 'hivernants'), (1900, 3.8, 'hivernants')],
+    bayonne=[(1700, 0.95, 'paix'), (1790, 1.0, 'guerres'), (1801, 0.97, 'port'), (1851, 1.45, 'port'), (1900, 2.05, 'port')],
+    # Biarritz : village de pêcheurs (~2 000 âmes), plage de l'impératrice en 1854, ~12 000 habitants en 1901
+    biarritz=[(1700, 0.8, 'terreneuve'), (1790, 1.0, 'bains'), (1854, 1.4, 'imperiale'), (1872, 2.6, 'imperiale'),
+              (1900, 6.0, 'imperiale')],
+    # Saint-Jean-de-Luz : grand port baleinier vers 1700, ruiné par le traité d'Utrecht et les tempêtes
+    stjeandeluz=[(1700, 2.2, 'terreneuve'), (1750, 1.4, 'terreneuve'), (1790, 1.0, 'terreneuve'), (1851, 0.9, 'bains'),
+                 (1900, 1.25, 'bains')],
+    hendaye=[(1700, 0.9, 'bourg'), (1790, 1.0, 'bourg'), (1864, 1.4, 'frontiere'), (1900, 3.5, 'frontiere')],
+    mauleon=[(1700, 0.9, 'bourg'), (1790, 1.0, 'bourg'), (1851, 1.4, 'espadrilles'), (1900, 2.8, 'espadrilles')],
+    oloron=[(1700, 0.85, 'paix'), (1790, 1.0, 'guerres'), (1801, 0.97, 'ville'), (1851, 1.3, 'ville'), (1900, 1.4, 'ville')],
+    # villes ordinaires, selon le pays (les petites villes du Périgord et de l'Agenais végètent après 1860)
+    ville_33=_town(1.2, 1.45), ville_24=_town(1.15, 1.22, 'bourg'), ville_40=_town(1.25, 1.4),
+    ville_47=_town(1.15, 1.1, 'declin'), ville_64=_town(1.15, 1.3),
+    # campagnes : la Dordogne, l'Agenais et le Béarn se vident après 1850, le vignoble girondin souffre du phylloxéra
+    rural_33=_rural(1875, 1.17, 1.05, 'phylloxera'), rural_24=_rural(1851, 1.2, 1.0, 'exode'),
+    rural_40=_rural(1857, 1.25, 1.18, 'exode'), rural_47=_rural(1846, 1.12, 0.85, 'exode'),
+    rural_64=_rural(1846, 1.18, 0.98, 'ameriques'),
+    pins=[(1700, 0.85, 'lande'), (1790, 1.0, 'lande'), (1857, 1.15, 'pins'), (1900, 1.6, 'pins')],
+    fort=[(1700, 1.05, 'remparts'), (1790, 1.0, 'remparts'), (1900, 0.92, 'remparts')],
+)
+# trajectoires particulières (les autres places suivent celle de leur type et de leur pays)
+POP_PLACE = {
+    'Bordeaux': 'bordeaux', 'Libourne': 'libourne', 'La Teste-de-Buch': 'teste', 'Soulac': 'soulac',
+    'Gujan-Mestras': 'bassin', 'Andernos': 'bassin', 'Lanton': 'bassin', 'Lège': 'bassin', 'Biganos': 'bassin',
+    'Mérignac': 'banlieue', 'Lormont': 'banlieue', "Villenave-d'Ornon": 'banlieue', 'Ambarès-et-Lagrave': 'banlieue',
+    'Blanquefort': 'banlieue', 'Saint-Médard-en-Jalles': 'banlieue', 'Cestas': 'banlieue',
+    'Belin': 'pins', 'Captieux': 'pins', 'Mios': 'pins', 'Salles': 'pins', 'Saint-Symphorien': 'pins',
+    'Lacanau': 'pins', "Saint-Jean-d'Illac": 'pins', 'Houeillès': 'pins',
+    'Périgueux': 'perigueux', 'Bergerac': 'bergerac', 'Mont-de-Marsan': 'montdemarsan', 'Dax': 'dax',
+    'Morcenx': 'gare', 'Labouheyre': 'gare', 'Agen': 'agen', 'Villeneuve-sur-Lot': 'villeneuve', 'Marmande': 'marmande',
+    'Fumel': 'forges', 'Pau': 'pau', 'Bayonne': 'bayonne', 'Biarritz': 'biarritz', 'Saint-Jean-de-Luz': 'stjeandeluz',
+    'Hendaye': 'hendaye', 'Mauléon': 'mauleon', 'Oloron-Sainte-Marie': 'oloron', 'Salies-de-Béarn': 'salies',
+}
+POP_TREND_K = 0.25       # une place qui grandit plus vite que la moyenne produit un peu plus (racine quatrième)
+POP_EXCESS = 0.05        # part de l'excédent qui s'en va chaque mois quand la place est trop pleine
+POP_SIEGE = 0.02         # fuite mensuelle sous un siège, aggravée de 1 % par mois de siège (jusqu'à 5 %)
+POP_FAMINE = 0.015       # fuite mensuelle quand le grenier est vide
+POP_UNREST = 0.35        # sous cet ordre public, des habitants partent vers les places sûres…
+POP_UNREST_RATE = 0.006  # … à ce rythme mensuel
+POP_SACK = 0.06          # place prise de force : habitants tués ou en fuite…
+POP_SACK_FORT = 0.025    # … davantage par niveau de remparts (on pille la ville qui a résisté)
+POP_REFUGE = 0.5         # part des fuyards qui gagnent une place sûre de leur camp
+POP_FLOOR = 0.5          # la disette et le désordre ne vident pas une place sous la moitié de sa normale…
+POP_FLOOR_SIEGE = 0.3    # … un siège ou un sac, pas sous 30 % : il reste toujours des habitants
+POP_RETURN = 0.02        # sous ce plancher, hors siège, les familles reviennent peu à peu (part du vide comblée par mois)
+POP_SAFE_STAB = 0.6      # ordre public d'une place sûre, qui accueille les réfugiés
+
+
+def pop_curve(gn):
+    """Trajectoire de population d'un lieu (nœud de la carte)."""
+    key = POP_PLACE.get(gn['name'])
+    if key is None:
+        typ, dept = gn['type'], gn['dept']
+        if typ == 'fort':
+            key = 'fort'
+        elif typ == 'village':
+            key = 'pins' if dept == '40' and ('bois' in gn['spec'] or 'fer' in gn['spec']) else f'rural_{dept}'
+        else:
+            key = f'ville_{dept}'
+    return POP_CURVES[key]
 # années à partir desquelles une technologie est connue (on ne recherche pas la machine à vapeur en 1700)
 TECH_YEAR = dict(
     baionnette=1700, vauban=1700, tir_rang=1700, cuirassiers=1700, diplomates=1700, manufactures=1700, gabares=1700,

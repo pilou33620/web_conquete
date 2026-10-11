@@ -19,6 +19,16 @@ def ordinal(n):
     return '1re' if n == 1 else f'{n}e'
 
 
+def curve_at(pts, y):
+    """Valeur d'une courbe [(année, valeur, …)] interpolée à l'année y, et l'étiquette du segment en cours."""
+    if y <= pts[0][0]:
+        return pts[0][1], (pts[0][2] if len(pts[0]) > 2 else None)
+    for a, b in zip(pts, pts[1:]):
+        if y < b[0]:
+            return a[1] + (b[1] - a[1]) * (y - a[0]) / (b[0] - a[0]), (a[2] if len(a) > 2 else None)
+    return pts[-1][1], (pts[-1][2] if len(pts[-1]) > 2 else None)
+
+
 class Game:
     # ================================================================== création
     def __init__(self, geo, player, difficulty='normal', seed=None, scenario='1790'):
@@ -58,7 +68,7 @@ class Game:
                 rel={o: self.rng.randint(-15, 25) for o in R.FACTIONS if o != code}, trade={}, truce={},
                 overlord=None, war_since={}, mods={}, army_count=0, stats=dict(won=0, lost=0, captured=0, killed=0),
                 start_nodes=0, alerts={}, tax=0.5, intel={}, prisoners={}, weary=0.0, prestige=0.0, treaties={},
-                last_war=-2 * 365.0)   # au départ, de vieilles rancunes : les premières guerres viennent vite
+                last_war=-2 * 365.0, refu=0.0)   # au départ, de vieilles rancunes : les premières guerres viennent vite
         for a in R.FACTIONS:
             for b in R.FACTIONS:
                 if a < b:
@@ -73,8 +83,9 @@ class Game:
             mm = base['milice'] + 40 * fort0
             milice = mm if owner != R.NEUTRAL else int(mm * self.rng.uniform(0.55, 1.0))
             self.nodes.append(dict(id=n['id'], owner=owner, milice=float(milice), milice_max=mm, fort=fort0, dev=0,
-                                   pop=float(n['pop0']) * self.pop_era(), assim=1.0,
-                                   stab=1.0, garrison=[], queue=[], siege=None, last_seen={}, depot=0))
+                                   pop=float(n['pop0']) * self.pop_trend(n['id']), assim=1.0,
+                                   stab=1.0, garrison=[], queue=[], siege=None, last_seen={}, depot=0, rf=0))
+            self.nodes[-1]['ph'] = [int(self.nodes[-1]['pop'])]   # population des douze derniers mois
             if owner != R.NEUTRAL:
                 self.factions[owner]['start_nodes'] += 1
         sc = R.SCENARIOS[self.scenario]
@@ -229,15 +240,44 @@ class Game:
         return [e for e in R.ERAS if e['year'] <= y][-1] if y >= R.ERAS[0]['year'] else R.ERAS[0]
 
     def pop_era(self, year=None):
-        """Population « normale » des villes à cette date, par rapport à 1790 (croissance séculaire)."""
-        y = self.year() if year is None else year
-        pts = R.POP_ERA
-        if y <= pts[0][0]:
-            return pts[0][1]
-        for (y0, v0), (y1, v1) in zip(pts, pts[1:]):
-            if y <= y1:
-                return v0 + (v1 - v0) * (y - y0) / (y1 - y0)
-        return pts[-1][1]
+        """Croissance séculaire de l'économie à cette date, par rapport à 1790."""
+        return curve_at(R.POP_ERA, self.year() if year is None else year)[0]
+
+    def _pop_curves(self):
+        """Trajectoires de population de tous les lieux à la date du jour (recalculées une fois par mois) :
+        multiplicateurs de 1790, croissance annuelle et sa raison, et la moyenne qui sert à normaliser la production."""
+        d = self.date()
+        key = d.year * 12 + d.month
+        c = getattr(self, '_pcache', None)
+        if c is None or c['key'] != key:
+            y = self.year()
+            mult, rate, why = [], [], []
+            num = den = 0.0
+            for gn in self.geo.nodes:
+                cv = R.pop_curve(gn)
+                m, w = curve_at(cv, y)
+                mult.append(m)
+                rate.append(curve_at(cv, y + 1)[0] / m - 1)
+                why.append(w)
+                # poids : ce que la place produit d'ordinaire (de base, ses spécialités et sa spécialité phare)
+                k = sum(R.NODE_BASE[gn['type']][r] for r in ('livres', 'vivres', 'industrie'))
+                k += sum(v for s in gn['spec'] for r, v in R.SPEC[s].items() if r != 'label')
+                if gn.get('star'):
+                    k += sum(v for r, v in R.SPECIALTY[gn['star'][0]].items() if r in ('livres', 'vivres', 'industrie')) \
+                        * (R.SPECIALTY_CAPITAL if gn['type'] == 'capitale' else 1)
+                num += k * m ** R.POP_TREND_K
+                den += k
+            c = self._pcache = dict(key=key, mult=mult, rate=rate, why=why, mean_k=num / den)
+        return c
+
+    def pop_trend(self, nid, year=None):
+        """Population « normale » d'un lieu à cette date, en multiple de celle de 1790 (sa trajectoire propre)."""
+        if year is not None:
+            return curve_at(R.pop_curve(self.geo.nodes[nid]), year)[0]
+        return self._pop_curves()['mult'][nid]
+
+    def pop_norm(self, n):
+        return self.geo.nodes[n['id']]['pop0'] * self.pop_trend(n['id'])
 
     def departements(self):
         return self.date() >= datetime.date(*R.DEPT_DATE)
@@ -798,40 +838,103 @@ class Game:
         return n.get('assim', 1.0)
 
     def pop_factor(self, n):
-        """Population rapportée à celle de 1790 : la production d'une place la suit."""
+        """Multiplicateur de production d'une place : il suit sa population."""
         if 'pop' not in n:
             return 1 + 0.25 * n['dev']
-        # la production suit la population ; la croissance séculaire n'en donne que la racine (les métiers suivent)
+        # remplissage de la place (au plus 110 %, réfugiés compris), multiplié par ce que ses faubourgs font produire
+        # (30 % de la production de 1790 par agrandissement) ; la croissance séculaire n'en donne que la racine
+        # (les métiers suivent), et une place qui grandit plus vite que les autres n'en tire qu'un peu plus
+        # (racine quatrième de sa trajectoire, moyenne normalisée à 1 sur toute la carte)
+        c = self._pop_curves()
+        m = c['mult'][n['id']]
+        rel = m ** R.POP_TREND_K / c['mean_k']
         era = self.pop_era()
-        return n['pop'] / max(1.0, self.geo.nodes[n['id']]['pop0'] * era) * era ** 0.5
+        fill = min(1.1, n['pop'] / max(1.0, self.pop_cap(n)))
+        return fill * (1 + (R.POP_NATURAL + R.DEV_PROD * n['dev']) / era) * era ** 0.5 * rel
 
     def pop_cap(self, n):
-        return self.geo.nodes[n['id']]['pop0'] * (self.pop_era() + R.POP_NATURAL + R.POP_PER_LEVEL * n['dev'])
+        """Population que la place peut loger : sa normale de l'époque, plus 10 % par agrandissement."""
+        return self.pop_norm(n) * (1 + R.POP_NATURAL + R.POP_PER_LEVEL * n['dev'])
 
     def pop_growth(self, n):
-        """Part de la place libre comblée en un mois (négative : la ville se vide)."""
+        """Part de la place libre comblée en un mois (négative : part des habitants qui s'en vont)."""
         o = n['owner']
-        if n['siege']:
-            return -0.03
+        s = n['siege']
+        if s:
+            if s.get('occupy'):
+                return 0.0    # ralliement : on attend de voir
+            # plus le siège dure, plus on fuit (ou on meurt de faim derrière les remparts)
+            months = int((self.t - s.get('since', self.t)) / 30)
+            return -min(0.05, R.POP_SIEGE + 0.01 * months) if self.pop_above_floor(n) else 0.0
         f = self.factions.get(o)
-        if f and f.get('famine'):
-            return -0.015
+        if f and (f.get('famine') or n['stab'] < R.POP_UNREST):
+            if not self.pop_above_floor(n):
+                # la place a touché le fond : les familles reviennent peu à peu, malgré tout
+                return R.POP_RETURN if n['pop'] < self.pop_norm(n) * R.POP_FLOOR else 0.0
+            return -R.POP_FAMINE if f.get('famine') else -R.POP_UNREST_RATE
         rate = R.POP_RATE * max(0.0, min(1.0, (n['stab'] - 0.3) / 0.7))
         if f and f.get('tax', 0.5) > 0.6:
             rate *= max(0.0, 1 - (f['tax'] - 0.6) * 2.5)
+        if n['pop'] < self.pop_norm(n) * R.POP_FLOOR:
+            rate = max(rate, R.POP_RETURN)
         return rate
 
+    def pop_above_floor(self, n):
+        """Reste-t-il des habitants à faire fuir ? (plancher : 50 % de la normale, 30 % sous un siège)"""
+        return n['pop'] > self.pop_norm(n) * (R.POP_FLOOR_SIEGE if n['siege'] else R.POP_FLOOR) + 1
+
     def grow_population(self):
+        """Chaque mois, chaque place tend vers sa population normale (sa trajectoire, plus la place gagnée par ses
+        agrandissements). Sièges et désordre font fuir les habitants vers les places sûres du même camp ;
+        la disette les chasse au loin."""
+        fled = {}
         for n in self.nodes:
+            n['rf'] = 0
             cap = self.pop_cap(n)
             g = self.pop_growth(n)
             if g < 0:
-                n['pop'] *= 1 + g
+                # la fuite ralentit à l'approche du plancher : une disette qui dure ne vide pas tout le pays
+                floor = self.pop_norm(n) * (R.POP_FLOOR_SIEGE if n['siege'] else R.POP_FLOOR)
+                lost = max(0.0, min(n['pop'] * -g, n['pop'] - floor))
+                n['pop'] -= lost
+                f = self.factions.get(n['owner'])
+                if f and not f.get('famine'):
+                    fled[n['owner']] = fled.get(n['owner'], 0.0) + lost * R.POP_REFUGE
             elif n['pop'] < cap:
                 n['pop'] += (cap - n['pop']) * g
             else:
-                n['pop'] -= (n['pop'] - cap) * 0.05
+                # trop de monde pour la place (campagne qui se vide, réfugiés) : le surplus s'en va peu à peu
+                n['pop'] -= (n['pop'] - cap) * R.POP_EXCESS
+        for code, f in self.factions.items():
+            k = fled.get(code, 0.0) + f.get('refu', 0.0)
+            f['refu'] = 0.0
+            if k >= 1 and f['alive']:
+                self.shelter(code, k)
+        for n in self.nodes:
+            ph = n.setdefault('ph', [])
+            ph.append(int(n['pop']))
+            del ph[:-13]
         self._dirty_income = True
+
+    def shelter(self, code, k):
+        """Des réfugiés gagnent les places sûres de leur camp, au prorata de la place libre ; les autres s'exilent."""
+        room = [(n, max(0.0, self.pop_cap(n) * 1.1 - n['pop'])) for n in self.owned_nodes(code)
+                if not n['siege'] and n['stab'] >= R.POP_SAFE_STAB]
+        tot = sum(r for _, r in room)
+        if tot < 1:
+            return 0
+        k = min(k, tot)
+        for n, r in room:
+            add = k * r / tot
+            n['pop'] += add
+            n['rf'] = n.get('rf', 0) + int(add)
+        return k
+
+    def pop_year(self, nodes):
+        """Population de ces places aujourd'hui et il y a un an (ou au plus loin dont on se souvienne)."""
+        now = sum(n.get('pop', 0) for n in nodes)
+        before = sum((n.get('ph') or [n.get('pop', 0)])[0] for n in nodes)
+        return now, before
 
     def recruit_cap(self, code):
         return 3000 + 250 * len(self.owned_nodes(code))
@@ -2537,8 +2640,16 @@ class Game:
         if not peaceful and n['dev'] > 0 and old != R.NEUTRAL and self.rng.random() < 0.35:
             n['dev'] -= 1
             n['milice_max'] = max(20.0, n['milice_max'] - R.NODE_BASE[gn['type']]['milice'] * 0.15)
+        lost = 0.0
         if not peaceful and 'pop' in n:
-            n['pop'] *= 0.92   # pillage, fuite des habitants
+            # pillage : on saccage d'autant plus la ville qu'elle a résisté ; une partie des habitants s'enfuit
+            # chez son ancien maître et gagne ses places sûres le mois suivant
+            lost = n['pop'] * min(0.15, R.POP_SACK + R.POP_SACK_FORT * n['fort'])
+            lost = max(0.0, min(lost, n['pop'] - self.pop_norm(n) * R.POP_FLOOR_SIEGE))
+            n['pop'] -= lost
+            if old in self.factions and self.factions[old]['alive']:
+                fo = self.factions[old]
+                fo['refu'] = fo.get('refu', 0.0) + lost * R.POP_REFUGE
         breached = not peaceful and self.lose_fort_level(nid)
         if n.get('depot'):
             n['depot'] = 0
@@ -2553,11 +2664,13 @@ class Game:
             self.factions[code]['stats']['captured'] += 1
         if old in self.factions:
             self.factions[old]['rel'][code] = max(-100, self.factions[old]['rel'][code] - 12)
+        sack = f" Pillage : {R.nb(round(lost, -1))} habitants fuient ou périssent." if lost >= 50 else ''
         if breached and (code == self.player or old == self.player):
             self.log('capture', f"{gn['name']} tombe aux mains {R.de(self.fname(code))} ; ses remparts éventrés retombent au "
-                                f"niveau {n['fort']}.", gn['x'], gn['y'], who=code, important=True)
+                                f"niveau {n['fort']}.{sack}", gn['x'], gn['y'], who=code, important=True)
         elif not peaceful and (code == self.player or old == self.player):
-            self.log('capture', f"{gn['name']} tombe aux mains {R.de(self.fname(code))}.", gn['x'], gn['y'], who=code, important=True)
+            self.log('capture', f"{gn['name']} tombe aux mains {R.de(self.fname(code))}.{sack}", gn['x'], gn['y'], who=code,
+                     important=True)
         elif not peaceful:
             self.log('capture', f"{gn['name']} tombe aux mains {R.de(self.fname(code))}.", gn['x'], gn['y'], who=code)
         # pénalité pour l'expansion près des voisins
