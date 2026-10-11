@@ -25,6 +25,8 @@ FLOOD = 4.0       # au-delà de ce multiple du trésor de guerre, c'est le trop-
 
 
 class AI:
+    _cache_reach = None   # composantes des places accessibles (voir reach), recalculées quand la carte politique change
+
     def __init__(self, game, code):
         self.g = game
         self.code = code
@@ -54,7 +56,11 @@ class AI:
         g = self.g
         if self.go_cooled(a, node):
             return False
-        ok = g.order_move(self.code, a['id'], node=node, **kw)[0]
+        comp, starts = self.reach_from(a) if isinstance(node, int) else (None, None)
+        if starts is not None and comp[node] not in starts:
+            ok = False   # aucune route n'y mène sans entrer dans des terres fermées : refusé sans chercher de chemin
+        else:
+            ok = g.order_move(self.code, a['id'], node=node, **kw)[0]
         if not ok:
             self.cool[('go', a['id'], node)] = g.t + self.GO_CD
             if node is not None and g.nodes[node]['owner'] != self.code:
@@ -613,15 +619,32 @@ class AI:
                     return
 
     # ------------------------------------------------------------------ militaire
-    def threat_at(self, nid, radius=35):
+    def foes(self):
+        """Armées ennemies visibles (en guerre avec nous, pas cachées), dans l'ordre de g.armies."""
+        g, code = self.g, self.code
+        return [a for a in g.armies.values() if not a['hidden'] and g.at_war(code, a['owner'])]
+
+    def threat_at(self, nid, radius=35, foes=None, power=None):
+        """Puissance des armées ennemies à moins de radius km de la place. foes : self.foes() déjà relevé, et power :
+        puissances déjà calculées (id -> army_power), quand on passe toutes nos places en revue sans rien changer."""
         g = self.g
         x, y = g.node_xy(nid)
         p = 0.0
+        r2 = radius * radius
+        if foes is not None:
+            for a in foes:
+                if (a['x'] - x) ** 2 + (a['y'] - y) ** 2 < r2:
+                    pw = power.get(a['id'])
+                    if pw is None:
+                        pw = power[a['id']] = g.army_power(a)
+                    p += pw
+            return p
+        code = self.code
         for a in g.armies.values():
-            if a['hidden'] or not g.at_war(self.code, a['owner']):
+            # la distance d'abord (appelée pour chaque place à chaque réflexion : l'état de guerre coûte plus cher)
+            if a['hidden'] or not ((a['x'] - x) ** 2 + (a['y'] - y) ** 2 < r2) or not g.at_war(code, a['owner']):
                 continue
-            if (a['x'] - x) ** 2 + (a['y'] - y) ** 2 < radius * radius:
-                p += g.army_power(a)
+            p += g.army_power(a)
         return p
 
     def military(self):
@@ -728,8 +751,9 @@ class AI:
                 return
         # défense
         best = None
+        foes, power = self.foes(), {}
         for n in g.owned_nodes(code):
-            th = self.threat_at(n['id'], 30)
+            th = self.threat_at(n['id'], 30, foes, power)
             if th <= 0:
                 continue
             dfn = g.node_defense_power(n['id'], include_armies=False)
@@ -775,9 +799,10 @@ class AI:
             if not targets:
                 return None
         best = None
+        pts = [g.node_xy(t) for t in targets]
         for i in own:
             x, y = g.node_xy(i)
-            d = min(math.hypot(x - g.node_xy(t)[0], y - g.node_xy(t)[1]) for t in targets)
+            d = min(math.hypot(x - tx, y - ty) for tx, ty in pts)
             typ = g.geo.nodes[i]['type']
             d -= {'capitale': 6, 'ville': 4, 'fort': 3, 'village': 0}[typ]
             if best is None or d < best[0]:
@@ -837,13 +862,86 @@ class AI:
             cands.append((sc, n['id']))
         cands.sort(reverse=True)
         cands = [c for c in cands if not self.go_cooled(a, c[1])]   # destinations refusées naguère : on passe
-        for sc, nid in cands[:4]:
+        # destinations qu'aucune route ne permet d'atteindre (terres fermées tout autour) : écartées sans chercher de
+        # chemin ; parmi les quatre premières, notées comme un ordre refusé (pour demander un droit de passage)
+        comp, starts = self.reach_from(a) if cands else (None, None)
+        tries = 0
+        for i, (sc, nid) in enumerate(cands):
+            if tries >= 4:
+                break
+            if starts is not None and comp[nid] not in starts:
+                if i < 4:
+                    self.cool[('go', a['id'], nid)] = g.t + self.GO_CD
+                    self.refused[nid] = g.t
+                continue
+            tries += 1
             ok = self.go(a, nid, tr=False)
             if ok:
                 taken[nid] = taken.get(nid, 0) + 1
                 a['ai'] = None
                 return True
         return False
+
+    def reach(self):
+        """(terres fermées, composante de chaque place) : deux places de même composante se rejoignent par les routes
+        et les fleuves sans entrer dans des terres fermées à ce camp (règle d'engine.road_route : on n'entre pas par la
+        route dans une place fermée, les gabares passent devant ses quais sans y débarquer). Recalculé seulement quand
+        les terres fermées (diplomatie, droits de passage) ou les maîtres des places changent."""
+        g = self.g
+        block = AA.closed_owners(g, self.code)
+        if not block:
+            return block, None   # rien de fermé : tout se rejoint (le réseau des routes est d'un seul tenant)
+        owners = tuple(n['owner'] for n in g.nodes)
+        c = self._cache_reach
+        if c is not None and c[0] == block and c[1] == owners:
+            return block, c[2]
+        parent = list(range(len(g.nodes)))
+
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+        for e in g.geo.edges:
+            if e.get('kind') != 'water' and (owners[e['a']] in block or owners[e['b']] in block):
+                continue
+            parent[find(e['a'])] = find(e['b'])
+        comp = [find(i) for i in range(len(parent))]
+        self._cache_reach = (block, owners, comp)
+        return block, comp
+
+    def reach_from(self, a):
+        """(composantes, celles d'où partirait par la route un ordre de marche de cette armée), ou (None, None) quand
+        on ne peut le dire à coup sûr (armée sortant de terres fermées par leurs routes…) : rien n'est alors écarté.
+        Une destination d'une autre composante serait refusée par engine.plan_route (mêmes points de départ)."""
+        g = self.g
+        if a.get('mode', 'route') != 'route':
+            return None, None
+        block, comp = self.reach()
+        if comp is None:
+            return None, None
+        own = g.nodes
+        if a['at_node'] is not None:
+            if own[a['at_node']]['owner'] in block:
+                return None, None
+            return comp, {comp[a['at_node']]}
+        if a['edge']:
+            # sur une route ou un fleuve : on repart par un bout ouvert ; un bout fermé ne sert que pour sortir des
+            # terres où l'on se trouve (cas non filtré) ; sans aucun bout praticable, tout ordre serait refusé
+            e = g.geo.edges[a['edge']['e']]
+            here = AA.land_owner(g, a['x'], a['y'])
+            starts = set()
+            for v in (e['a'], e['b']):
+                o = own[v]['owner']
+                if o not in block:
+                    starts.add(comp[v])
+                elif o == here:
+                    return None, None
+            return comp, starts
+        near = g.nearest_node(a['x'], a['y'], lambda i: own[i]['owner'] not in block, 60)
+        if near is None:
+            return None, None
+        return comp, {comp[near]}
 
     def try_ambush(self, a, wars):
         g, code = self.g, self.code

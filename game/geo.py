@@ -672,6 +672,14 @@ class GeoMap:
         return None if v == 255 else v
 
     # ------------------------------------------------------------ A* hors route
+    def cell_costs(self):
+        """cell_cost de toutes les cellules, calculé une fois (la carte ne change pas) : la recherche de chemin y lit
+        directement au lieu d'appeler cell_cost pour chaque voisin."""
+        cc = self.__dict__.get('_ccost')
+        if cc is None:
+            cc = self._ccost = [self.cell_cost(c) for c in range(self.W * self.H)]
+        return cc
+
     def cell_cost(self, c):
         t = self.terrain[c]
         sp = TERRAIN[t][1]
@@ -695,7 +703,8 @@ class GeoMap:
         on peut sortir des terres où l'on se trouve, pas y entrer."""
         W, H = self.W, self.H
         s, g = self.cell(sx, sy), self.cell(gx, gy)
-        if s < 0 or g < 0 or self.cell_cost(g) is None:
+        ccost = self.cell_costs()
+        if s < 0 or g < 0 or ccost[g] is None:
             return None
         cn = self.cellnode
         if block is not None and block[cn[g]]:
@@ -707,8 +716,10 @@ class GeoMap:
         came = {}
         seen = 0
         D2 = math.sqrt(2)
+        nbrs = ((1, 0, 1), (-1, 0, 1), (0, 1, 1), (0, -1, 1), (1, 1, D2), (1, -1, D2), (-1, 1, D2), (-1, -1, D2))
+        pop, push, hypot, gget = heapq.heappop, heapq.heappush, math.hypot, gs.get
         while openh:
-            f, c = heapq.heappop(openh)
+            f, c = pop(openh)
             if c == g:
                 break
             seen += 1
@@ -716,29 +727,29 @@ class GeoMap:
                 return None
             gc = gs[c]
             i, j = c % W, c // W
-            for di, dj, m in ((1, 0, 1), (-1, 0, 1), (0, 1, 1), (0, -1, 1),
-                              (1, 1, D2), (1, -1, D2), (-1, 1, D2), (-1, -1, D2)):
+            bc = block[cn[c]] if block is not None else 0
+            for di, dj, m in nbrs:
                 ni, nj = i + di, j + dj
                 if not (0 <= ni < W and 0 <= nj < H):
                     continue
                 nc = nj * W + ni
-                cc = self.cell_cost(nc)
-                if cc is None and nc != s:
-                    continue
+                cc = ccost[nc]
                 if cc is None:
+                    if nc != s:
+                        continue
                     cc = 2.0
                 if block is not None:
                     bk = block[cn[nc]]
                     if bk:
-                        if bk != block[cn[c]]:
+                        if bk != bc:
                             continue
                         cc *= 3   # en sortant de terres fermées, au plus court
                 ng = gc + cc * m
-                if ng < gs.get(nc, 1e18):
+                if ng < gget(nc, 1e18):
                     gs[nc] = ng
                     came[nc] = c
-                    hh = math.hypot(ni - gi, nj - gj) * hmin
-                    heapq.heappush(openh, (ng + hh, nc))
+                    hh = hypot(ni - gi, nj - gj) * hmin
+                    push(openh, (ng + hh, nc))
         if g not in came and g != s:
             return None
         path = [g]
@@ -758,6 +769,7 @@ class GeoMap:
         if s < 0:
             return None
         cn = self.cellnode
+        ccost = self.cell_costs()
         t0 = block[cn[s]]
         dist = {s: 0.0}
         came = {}
@@ -786,7 +798,7 @@ class GeoMap:
                 if not (0 <= ni < W and 0 <= nj < H):
                     continue
                 nc = nj * W + ni
-                cc = self.cell_cost(nc)
+                cc = ccost[nc]
                 if cc is None:
                     continue
                 bk = block[cn[nc]]
@@ -806,10 +818,11 @@ class GeoMap:
         if block is not None:
             c0 = self.cell(*a)
             t0 = block[self.cellnode[c0]] if c0 >= 0 else 0
+        ccost = self.cell_costs()
         for s in range(1, n):
             t = s / n
             c = self.cell(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
-            cc = self.cell_cost(c) if c >= 0 else None
+            cc = ccost[c] if c >= 0 else None
             if cc is None or cc > maxcost + 0.01:
                 return False
             if block is not None and block[self.cellnode[c]] not in (0, t0):
@@ -820,9 +833,10 @@ class GeoMap:
         if len(pts) <= 2:
             return pts
         costs = []
+        ccost = self.cell_costs()
         for p in pts:
             c = self.cell(*p)
-            cc = self.cell_cost(c) if c >= 0 else None
+            cc = ccost[c] if c >= 0 else None
             costs.append(cc if cc is not None else 2.0)
         out = [pts[0]]
         i = 0

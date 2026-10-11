@@ -240,7 +240,10 @@ def _scan(g):
 def _candidates(g, old, cur, seq0):
     p = g.player
     out = []
-    new = {k: [v for v in cur[k] if v not in set(old.get(k, ()))] for k in cur}
+    new = {}
+    for k in cur:
+        before = set(old.get(k, ()))
+        new[k] = [v for v in cur[k] if v not in before]
     for pid in new['ev']:
         x = next((e for e in g.pending_ev if e['id'] == pid), None)
         if x:
@@ -350,7 +353,12 @@ def _accumulate(g, dt):
         acc['inc'][r] += f['income'].get(r, 0.0) * dt
     if g.seq <= acc['seq']:
         return
-    for e in g.events:
+    # seules les dernières lignes sont nouvelles (le journal est dans l'ordre) : on ne relit pas tout
+    evs = g.events
+    i = len(evs)
+    while i > 0 and evs[i - 1]['seq'] > acc['seq']:
+        i -= 1
+    for e in evs[i:]:
         if e['seq'] <= acc['seq']:
             continue
         k, txt = e['kind'], e['text']

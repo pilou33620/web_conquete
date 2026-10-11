@@ -280,8 +280,11 @@ class App:
                               difficulty=g.difficulty, auto=auto), game=V.to_dict(g))
         path = os.path.join(SAVES, name + '.json')
         tmp = path + '.tmp'
+        # json.dumps (encodeur en C) plutôt que json.dump (encodeur en Python, cinq fois plus lent) : même texte,
+        # et la sauvegarde automatique du 1er du mois ne fige plus le jeu sur un Raspberry Pi
+        txt = json.dumps(data, ensure_ascii=False)
         with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False)
+            f.write(txt)
         os.replace(tmp, path)  # écriture atomique : une coupure de courant ne corrompt pas la sauvegarde
 
     def net_info(self):
@@ -339,6 +342,29 @@ class App:
 APP = None
 
 
+class GzipCache:
+    """Derniers corps JSON compressés (quelques-uns : un par navigateur) : un état identique, partie en pause et
+    navigateur qui interroge le serveur 4 fois par seconde, n'est pas recompressé."""
+    def __init__(self, n=4):
+        self.n = n
+        self.d = {}
+        self.lock = threading.Lock()
+
+    def compress(self, raw):
+        with self.lock:
+            gz = self.d.get(raw)
+        if gz is None:
+            gz = gzip.compress(raw, 4)
+            with self.lock:
+                self.d[raw] = gz
+                while len(self.d) > self.n:
+                    del self.d[next(iter(self.d))]
+        return gz
+
+
+GZ = GzipCache()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = 'Conquete/1.0'
 
@@ -359,7 +385,7 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, obj, code=200):
         raw = json.dumps(obj, ensure_ascii=False, separators=(',', ':'), default=str).encode('utf-8')
         if len(raw) > 4000 and 'gzip' in self.headers.get('Accept-Encoding', ''):
-            self._send(code, raw, gz=gzip.compress(raw, 4))
+            self._send(code, raw, gz=GZ.compress(raw))
         else:
             self._send(code, raw)
 
