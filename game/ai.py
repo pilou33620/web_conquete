@@ -70,6 +70,10 @@ class AI:
     def step(self):
         if not self.f['alive']:
             return
+        if self.g.t >= getattr(self, 'cool_purge', 0):
+            # les délais échus ne servent plus à rien : sans cette purge, la table grossit toute la partie
+            self.cool_purge = self.g.t + 30
+            self.cool = {k: v for k, v in self.cool.items() if v > self.g.t}
         self.economy()
         self.research()
         self.recruit()
@@ -925,6 +929,8 @@ class AI:
             if own[a['at_node']]['owner'] in block:
                 return None, None
             return comp, {comp[a['at_node']]}
+        if a['edge'] and a.get('boat') and g.geo.edges[a['edge']['e']].get('kind') == 'water':
+            return None, None   # à flot : l'eau est libre, engine.plan_route en décidera
         if a['edge']:
             # sur une route ou un fleuve : on repart par un bout ouvert ; un bout fermé ne sert que pour sortir des
             # terres où l'on se trouve (cas non filtré) ; sans aucun bout praticable, tout ordre serait refusé

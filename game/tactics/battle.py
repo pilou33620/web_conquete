@@ -657,7 +657,7 @@ class TacticalBattle:
         self.phase = 'combat'
         self.warm()
         self._update_vision()
-        self.log(f"{fmt_hour(self.clock)} : la bataille commence.")
+        self.log("La bataille commence.")
         return True, "La bataille commence !"
 
     # ================================================================== ordres
@@ -1542,7 +1542,7 @@ class TacticalBattle:
         u.path = []   # la fuite se fait droit vers son bord, en contournant les obstacles (voir _flee)
         u.goal = None
         self.emit('deroute', u.x, u.y, src=u.id)
-        self.log(f"{fmt_hour(self.clock)} — {u.name} est en déroute !", None, u.side)
+        self.log(f"{u.name} est en déroute !", None, u.side)
         for o in self.units:
             if o.side == u.side and o is not u and o.valid and (o.x - u.x) ** 2 + (o.y - u.y) ** 2 < 300 * 300:
                 o.morale = max(0.0, o.morale - 4 / U.TYPE.get(o.type, U.TYPE['ligne'])['steady'])
@@ -1609,7 +1609,7 @@ class TacticalBattle:
         self.winner = winner
         self.disengage = disengage
         self.why = why
-        self.log(f"{fmt_hour(self.clock)} — {why}")
+        self.log(why[:1].upper() + why[1:] if why else why)
         self.result = self._result()
 
     def _result(self):
@@ -1753,12 +1753,18 @@ class TacticalBattle:
         lines.append(f"Pertes : {names[m]} {int(r['lost'][m])}, {names[1 - m]} {int(r['lost'][1 - m])}.")
         if r['prisoners'][1 - m] or r['prisoners'][m]:
             lines.append(f"Prisonniers faits : {int(r['prisoners'][1 - m])} ; perdus : {int(r['prisoners'][m])}.")
-        xs = [v['xp'] for k, v in r['units'].items()
-              if self.by_id[k].side == m and self.by_id[k].cls not in ('general', 'chariot')]
-        xp = round(sum(xs) / len(xs), 1) if xs else 0
+        # expérience réellement gagnée : celle de la bataille, au moins les +8 que la campagne donne aux vainqueurs
+        per = []
+        for k, v in r['units'].items():
+            u = self.by_id[k]
+            if u.side != m or u.cls in ('general', 'chariot') or u.type == 'milice':
+                continue
+            gain = max(v['xp'], 8.0) if r['winner'] == m else v['xp']
+            per.append(dict(id=k, name=u.name, lost=int(v['lost']), xp=round(gain)))
+        xp = round(sum(p['xp'] for p in per) / len(per), 1) if per else 0
         return dict(winner=r['winner'], won=won, disengage=r['disengage'], title=title, lines=lines,
                     losses=[[int(r['lost'][m]), int(r['lost'][1 - m])]],
-                    prisoners=[int(r['prisoners'][m]), int(r['prisoners'][1 - m])], xp=xp)
+                    prisoners=[int(r['prisoners'][m]), int(r['prisoners'][1 - m])], xp=xp, units=per)
 
     def map_view(self):
         return self.map.to_client(self.spec)

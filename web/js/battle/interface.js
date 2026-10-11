@@ -523,4 +523,8 @@ export class BattleUI {
     g.strokeRect(ax * sx, ay * sy, (bx - ax) * sx, (by - ay) * sy);
   }
 }
-const short = n => String(n || '').replace(/^Batterie /, 'Bie ').replace(/ de ligne$/, ' ligne').replace(/chasseurs à cheval/, 'ch. à cheval');
+// nom court pour les cartes d'unités : abréviations d'état-major pour les mots longs
+const ABBR = [[/^Batterie /, 'Bie '], [/ de ligne$/, ' ligne'], [/chasseurs à cheval/i, 'ch. à cheval'], [/grenadiers?/i, 'Gren.'],
+  [/cavalerie/i, 'Cav.'], [/artillerie/i, 'Art.'], [/chasseurs?/i, 'Chass.'], [/voltigeurs?/i, 'Volt.'], [/Miquelets?/, 'Miq.'],
+  [/Sapeurs?/, 'Sap.'], [/Garde nationale/, 'Garde nat.'], [/Territoriale/, 'Territ.'], [/réunis$/, 'réun.']];
+const short = n => ABBR.reduce((t, [re, by]) => (t.length > 11 ? t.replace(re, by) : t), String(n || ''));

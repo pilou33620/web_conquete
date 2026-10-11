@@ -1403,7 +1403,7 @@ class Game:
             sp *= 0.5 + 0.5 * self.wx(x, y)['move']
         return sp
 
-    def road_route(self, code, start_nodes, goal, speed=22.0, boat=False, tr=0, block=None):
+    def road_route(self, code, start_nodes, goal, speed=22.0, boat=False, tr=0, block=None, afloat=False):
         """Plus court chemin par les routes et les voies d'eau.
         start_nodes : dict nœud -> coût initial. Retourne (coût, [nœuds], [arêtes]).
         L'état « à bord » est suivi : embarquer et débarquer prennent du temps.
@@ -1433,7 +1433,8 @@ class Game:
                 # (en traversant, on ne s'arrête qu'aux places ennemies ; chez un voisin en paix, on passe)
                 if (ou == R.NEUTRAL and not tr) or (ou != R.NEUTRAL and self.at_war(code, ou)):
                     d += 25
-            ub = block is not None and ou in block and u not in start_nodes   # place fermée : de passage seulement
+            # place fermée : de passage seulement (une armée à flot n'y débarque pas, même au premier quai)
+            ub = block is not None and ou in block and (afloat or u not in start_nodes)
             if ub and not b:
                 d += 30   # en sortant de ses terres par la route, au plus court
             for eid in self.geo.adj[u]:
@@ -1493,6 +1494,7 @@ class Game:
         code = a['owner']
         tr = AA.route_level(self, a)
         legs = []
+        afloat = False
         if a['at_node'] is not None:
             starts = {a['at_node']: 0.0}
         elif a['edge']:
@@ -1500,11 +1502,14 @@ class Game:
             frm, pos = a['edge']['frm'], a['edge']['pos']
             to = e['b'] if e['a'] == frm else e['a']
             here = AA.land_owner(self, a['x'], a['y']) if block else None
+            # à bord, sur le fleuve ou la côte : l'eau est libre, on peut repartir par un bout comme par l'autre,
+            # même devant une place fermée (sans y débarquer) ; sinon l'armée resterait immobilisée entre deux
+            afloat = bool(block) and bool(a.get('boat')) and e.get('kind') == 'water'
             starts = {}
             # sur la route d'une place fermée, là où l'on se trouve : on peut toujours en repartir pour sortir
-            if self.passable_node(code, frm, goal, tr, block) or (block and self.nodes[frm]['owner'] == here):
+            if self.passable_node(code, frm, goal, tr, block) or (block and self.nodes[frm]['owner'] == here) or afloat:
                 starts[frm] = pos
-            if self.passable_node(code, to, goal, tr, block) or (block and self.nodes[to]['owner'] == here):
+            if self.passable_node(code, to, goal, tr, block) or (block and self.nodes[to]['owner'] == here) or afloat:
                 starts[to] = e['len'] - pos
             if not starts:
                 return None
@@ -1518,7 +1523,8 @@ class Game:
                 return None
             legs.append(dict(kind='off', pts=[list(p) for p in pts], i=1))
             starts = {near: 0.0}
-        r = self.road_route(code, starts, goal, self.army_speed(a), bool(a.get('boat')), tr, block)
+        r = self.road_route(code, starts, goal, self.army_speed(a), bool(a.get('boat')), tr, block,
+                            afloat=afloat)
         if not r:
             return None
         _, nodes, eids = r

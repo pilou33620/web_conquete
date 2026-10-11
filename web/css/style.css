@@ -363,7 +363,8 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
   .tb-faction .ftitle { display: none; }
   .turn-why { max-width: 250px; }
 }
-@media (max-width: 1280px) {
+/* avec les boutons du tour (« Fin du mois », rythme, raison d'un arrêt), une seule ligne ne tient plus en dessous de 1 500 px */
+@media (max-width: 1500px) {
   :root { --tb-h: 92px; }
   #topbar { flex-wrap: wrap; row-gap: 2px; padding-top: calc(4px + var(--safe-t)); padding-bottom: 3px; }
   .tb-res { order: 5; flex-basis: 100%; }

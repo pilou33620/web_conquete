@@ -24,7 +24,7 @@ def to_dict(g):
     d['diplo'] = [[a, b, s] for (a, b), s in g.diplo.items()]
     d['blockade'] = sorted(g._blockade)
     # horloges des IA : sans elles, un chargement relance aussitôt leur diplomatie et leurs propositions
-    d['ai_state'] = {c: dict(diplo_clock=ai.diplo_clock, cool=[[k[0], k[1], v] for k, v in ai.cool.items()])
+    d['ai_state'] = {c: dict(diplo_clock=ai.diplo_clock, cool=[[*k, v] for k, v in ai.cool.items()])
                      for c, ai in getattr(g, 'ais', {}).items()}
     d['version'] = 2
     TB.save_into(g, d)   # réglage des batailles et bataille tactique en cours
@@ -102,7 +102,7 @@ def from_dict(geo, d):
     for c, st in (d.get('ai_state') or {}).items():
         if c in g.ais:
             g.ais[c].diplo_clock = st.get('diplo_clock', g.ais[c].diplo_clock)
-            g.ais[c].cool = {(o, act): t for o, act, t in st.get('cool', [])}
+            g.ais[c].cool = {tuple(e[:-1]): e[-1] for e in st.get('cool', [])}   # clés de 2 ou 3 éléments
     for c in g.factions:
         g.recompute_mods(c)
     g.compute_income()
