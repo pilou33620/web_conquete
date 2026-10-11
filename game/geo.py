@@ -11,7 +11,7 @@ import json
 import math
 import os
 
-from .places import PLACES, ROYAL_ROUTES, EXTRA_ROADS, FERRIES, CITY_SPECIALTIES
+from .places import PLACES, ROYAL_ROUTES, EXTRA_ROADS, FERRIES, CITY_SPECIALTIES, CITY_POP
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 CACHE_VERSION = 7
@@ -158,6 +158,9 @@ class GeoMap:
                      type=typ, spec=list(spec), fort=fort)
             if name in CITY_SPECIALTIES:
                 n['star'] = list(CITY_SPECIALTIES[name])   # spécialité phare : [type, nom]
+            # population de départ : chiffres d'époque pour les villes, 300 à 1 600 âmes pour un village
+            h = int(hashlib.sha1(name.encode()).hexdigest()[:6], 16)
+            n['pop0'] = CITY_POP.get(name, 300 + (h % 1301))
             self.nodes.append(n)
             self.by_name[name] = k
 

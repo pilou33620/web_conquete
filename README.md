@@ -190,6 +190,11 @@ Chaque place a un niveau de fortification, dessiné sur la carte autour de la vi
   artillerie à cheval, génie…), civile (gendarmerie, cadastre, poste aux chevaux, écoles centrales, caisse d'escompte…),
   industrielle (poudreries, forges au coke, pièces interchangeables, draperies, chantiers de gabares…)
   et agricole (maïs, foires agricoles, gemmage, transhumance, greniers publics, conserves d'Appert…).
+- **Population et agrandissement** : chaque place a ses habitants (estimations de 1790 : Bordeaux 110 000, Bayonne
+  13 000, Agen 11 000, Pau 9 000…). Sa production suit sa population. « Agrandir » la ville (3 niveaux : premiers
+  faubourgs, nouveaux quartiers, grande ville ; pour un village : village agrandi, gros bourg, bourg prospère) ouvre
+  de la place pour 30 % d'habitants de plus, qui viennent s'installer mois après mois si l'ordre public est bon et les
+  impôts raisonnables. Un siège ou la disette vident la ville, une prise de force fait fuir une partie des habitants.
 - **Spécialités** : chacune des 50 villes principales a son produit phare, qui rapporte à qui la tient
   (grands crus de Bordeaux, Sauternes et Saint-Émilion, pruneaux d'Agen, truffes de Périgueux, jambons d'Orthez,
   chocolatiers de Bayonne, résine de Mimizan, tabacs de Tonneins, sel de Salies…). Un chef-lieu en produit deux fois plus.

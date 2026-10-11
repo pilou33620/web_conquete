@@ -221,6 +221,8 @@ export class UI {
     return `<div class="star-line"><span class="star">★</span><div><b>${esc(label)}</b><div class="muted small">${esc(sp.label)} : ${prod} par jour (production de base)${own ? '' : ', pour qui tient la ville'}</div></div></div>`;
   }
 
+  devName(type, d) { const n = this.rules.dev?.names?.[type] || []; return n[Math.min(d, n.length - 1)] || ''; }
+
   fortName(f) { return this.rules.fort.names[Math.min(f, this.rules.fort.names.length - 1)] || ''; }
 
   resTip(r) {
@@ -621,10 +623,19 @@ export class UI {
       ${ns.gm != null ? `<dt>Garnison repérée</dt><dd>${fmt(ns.gm)} hommes</dd>` : ''}
       <dt>Fortifications</dt><dd title="${esc(this.fortName(ns.f))}">${pips(ns.f, Math.max(this.rules.fort.max, ns.f, ns.fx || 0))}</dd>
       ${ns.f > 0 ? `<dt></dt><dd class="muted small">${esc(this.fortName(ns.f))}${own ? `, entretien ${fmt1(this.rules.fort.upkeep[ns.f])} livres /j` : ''}</dd>` : ''}
-      <dt>Développement</dt><dd>${pips(ns.d)}</dd>
+      ${ns.pop ? `<dt>Population</dt><dd>${fmt(ns.pop)} habitants</dd>` : ''}
+      <dt>Agrandissement</dt><dd title="${esc(this.devName(gn.type, ns.d))}">${pips(ns.d)}</dd>
+      <dt></dt><dd class="muted small">${esc(this.devName(gn.type, ns.d))}${own && ns.pc ? `, place pour ${fmt(ns.pc)}` : ''}</dd>
       ${own ? `<dt>Ordre public</dt><dd>${Math.round(ns.s * 100)} %</dd>` : ''}
       <dt>Terrain</dt><dd>${terr}</dd></dl>`;
     if (own && ns.s < 0.5) h += `<div class="warnline">Population agitée : ${ns.g && ns.g.length ? 'la garnison maintient l’ordre.' : 'sans garnison ni armée sur place, la ville peut se révolter. Baissez les impôts ou laissez-y un régiment.'}</div>`;
+    if (own && ns.pc && ns.pop) {
+      const free = ns.pc - ns.pop;
+      if (ns.pg < 0) h += `<div class="warnline">La population fuit ${ns.sg ? 'le siège' : 'la disette'} : la ville se vide.</div>`;
+      else if (free > ns.pc * 0.02 && ns.pg > 0) h += `<div class="muted small" style="margin:-4px 0 8px">De nouveaux habitants arrivent : environ +${fmt(free * ns.pg)} le mois prochain.</div>`;
+      else if (free > ns.pc * 0.02) h += `<div class="muted small" style="margin:-4px 0 8px">Personne ne vient s’installer : l’ordre public est trop bas ou les impôts trop lourds.</div>`;
+      else if (ns.d < 3) h += `<div class="muted small" style="margin:-4px 0 8px">La ville est pleine : agrandissez-la pour attirer de nouveaux habitants.</div>`;
+    }
     if (gn.star) h += this.starLine(gn.star, own, gn.type === 'capitale');
     const chips = gn.spec.map(s => `<span class="chip">${this.rules.spec[s]}</span>`);
     if (ns.dp) chips.push(`<span class="chip">${ICON.depot.replace('<svg', '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:3px"')}Magasin aux vivres</span>`);
@@ -695,11 +706,12 @@ export class UI {
         if (l >= top) {
           const vauban = k === 'fort' && top < this.rules.fort.bastion && this.rules.fort.bastion_types.includes(gn.type);
           h += vauban ? `<button class="btn" disabled title="Recherchez « Fortifications à la Vauban » (militaire)">Bastions à la Vauban<small>technologie Vauban requise</small></button>`
-            : `<button class="btn" disabled>${b.name} au maximum</button>`;
+            : `<button class="btn" disabled>${k === 'dev' ? this.devName(gn.type, lvl) + ' : agrandissement maximal' : b.name + ' au maximum'}</button>`;
           continue;
         }
         const c = b.costs[l];
-        const lab = k === 'fort' ? `${l + 1 === this.rules.fort.bastion ? 'Bastions à la Vauban' : b.name + ' niveau ' + (l + 1)}` : `${b.name} niveau ${l + 1}`;
+        const lab = k === 'fort' ? `${l + 1 === this.rules.fort.bastion ? 'Bastions à la Vauban' : b.name + ' niveau ' + (l + 1)}`
+          : k === 'dev' ? `Agrandir : ${this.devName(gn.type, l + 1).toLowerCase()}` : `${b.name} niveau ${l + 1}`;
         const up = k === 'fort' ? `, entretien ${fmt1(this.rules.fort.upkeep[l + 1])} livres /j` : '';
         h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'} title="${esc(b.desc)}">${lab}<small>${this.costHtml(c)}, ${b.days[l]} j${up}</small></button>`;
       }
@@ -1012,7 +1024,7 @@ export class UI {
       const ns = st.nodes[n.id];
       const gar = (ns.g || []).reduce((a, r) => a + r[2], 0);
       const q = (ns.q || []).map(q => q.kind === 'unit' ? this.rules.units[q.what].short : this.rules.build[q.what].name).join(', ');
-      return `<tr class="click" data-act="selnode-modal" data-node="${n.id}"><td>${n.name}${ns.bk ? ' <span title="Blocus" style="color:#ff9a85">⚓</span>' : ''}</td><td>${TYPE_LABEL[n.type]}</td><td>${fmt(ns.m || 0)}${gar ? ' + ' + fmt(gar) : ''}</td><td>${ns.f}/${ns.d}</td><td style="${ns.s < 0.5 ? 'color:#ff9a85' : ''}">${Math.round(ns.s * 100)} %</td><td class="small">${q || '<span class="muted">—</span>'}</td></tr>`;
+      return `<tr class="click" data-act="selnode-modal" data-node="${n.id}"><td>${n.name}${ns.bk ? ' <span title="Blocus" style="color:#ff9a85">⚓</span>' : ''}</td><td>${TYPE_LABEL[n.type]}</td><td>${fmt(ns.m || 0)}${gar ? ' + ' + fmt(gar) : ''}</td><td>${fmt(ns.pop || 0)}</td><td>${ns.f}/${ns.d}</td><td style="${ns.s < 0.5 ? 'color:#ff9a85' : ''}">${Math.round(ns.s * 100)} %</td><td class="small">${q || '<span class="muted">—</span>'}</td></tr>`;
     }).join('');
     const tax = Math.round(me.tax * 100), od = me.order;
     const nPr = Object.values(me.prisoners || {}).reduce((a, v) => a + (v || 0), 0);
@@ -1042,6 +1054,7 @@ export class UI {
           <dt>Outils fabriqués</dt><dd>+${fmt1(me.income.outils)} /j</dd>
           <dt>Couverture en outils</dt><dd>${Math.round(me.cov * 100)} %</dd>
           <dt>Bonus de production</dt><dd>+${Math.round((me.tools_bonus - 1) * 100)} %</dd>
+          ${me.pop ? `<dt>Population de vos terres</dt><dd>${fmt(me.pop)} habitants</dd>` : ''}
           <dt>Solde des troupes</dt><dd>${fmt1(me.upkeep.livres || 0)} livres /j</dd>
           <dt>Entretien des remparts</dt><dd>${fmt1(me.upkeep.forts || 0)} livres /j</dd>
           <dt>Rations des troupes</dt><dd>${fmt1(me.upkeep.vivres || 0)} vivres /j</dd>
@@ -1052,7 +1065,7 @@ export class UI {
         <p class="muted small">Chaque arme coûte 1 fer et ½ bois ; chaque outil ½ fer et 1 bois. Sans fer ni bois, les ateliers s’arrêtent.</p>
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Vos villes et villages (${own.length})</h3>
-        <table class="grid"><thead><tr><th>Lieu</th><th>Type</th><th>Défense</th><th>Fort/Dév.</th><th>Ordre</th><th>Chantier</th></tr></thead><tbody>${rows}</tbody></table>
+        <table class="grid"><thead><tr><th>Lieu</th><th>Type</th><th>Défense</th><th>Habitants</th><th>Fort/Agr.</th><th>Ordre</th><th>Chantier</th></tr></thead><tbody>${rows}</tbody></table>
       </div></div>`;
     return [html, JSON.stringify([Math.round(me.cap * 10), Math.round(me.cov * 100), own.map(n => [st.nodes[n.id].m, (st.nodes[n.id].q || []).length, Math.round(st.nodes[n.id].s * 20), st.nodes[n.id].bk, st.nodes[n.id].dp]), s, tax, Math.round(od.avg * 100), od.risk, nPr])];
   }

@@ -587,7 +587,7 @@ export class MapView {
       const n = this.nodes[hit.id], ns = st.nodes[hit.id];
       const t = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' }[n.type];
       const men = ns.m != null ? ns.m + (ns.g ? ns.g.reduce((s, r) => s + r[2], 0) : (ns.gm || 0)) : null;
-      lines = [n.name, `${t}, ${own(ns.o)}`];
+      lines = [n.name, `${t}, ${own(ns.o)}${ns.pop ? ` · ${fmtMen(ns.pop)} hab.` : ""}`];
       if (n.star) lines.push(`★ ${n.star[1]}`);
       if (ns.dp) lines.push('Magasin aux vivres');
       if (men != null) lines.push(`Défenseurs : ${fmtMen(men)}`);
@@ -1307,6 +1307,11 @@ export class MapView {
   }
 
   nodeSize(n) {
+    const ns = this.state && this.state.nodes[n.id];
+    return this.baseSize(n) * (1 + 0.1 * ((ns && ns.d) || 0));   // une ville agrandie s'étale
+  }
+
+  baseSize(n) {
     const z = this.cam.z;
     if (n.type === 'capitale') return clamp(z * 2.6, 22, 70);
     if (n.type === 'ville') return clamp(z * 1.9, 15, 50);

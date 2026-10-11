@@ -333,3 +333,20 @@ CITY_SPECIALTIES = {
     'Saint-Jean-de-Luz': ('peche', 'Morutiers et corsaires de Saint-Jean-de-Luz'),
     'Salies-de-Béarn': ('sel', 'Sources salées de Salies'),
 }
+
+# Population vers 1790 (estimations d'après les premiers recensements) des villes principales et places fortes.
+# Les villages, sans chiffre ici, reçoivent de 300 à 1 600 habitants.
+CITY_POP = {
+    'Bordeaux': 110000, 'Bazas': 4000, 'Blaye': 4500, 'Coutras': 2500, 'La Réole': 3800, 'La Teste-de-Buch': 2500,
+    'Langon': 3500, 'Lesparre-Médoc': 1500, 'Libourne': 8000, 'Saint-André-de-Cubzac': 2500,
+    'Périgueux': 6000, 'Bergerac': 8000, 'Lalinde': 2000, 'Montpon': 2000, 'Mussidan': 2000, 'Nontron': 3000,
+    'Ribérac': 3500, 'Sarlat': 5500, 'Terrasson': 2500, 'Thiviers': 2500,
+    'Mont-de-Marsan': 4000, "Aire-sur-l'Adour": 3500, 'Biscarrosse': 1200, 'Capbreton': 1000, 'Dax': 4500,
+    'Mimizan': 900, 'Morcenx': 800, 'Peyrehorade': 2000, 'Saint-Sever': 4500, 'Soustons': 1800,
+    'Agen': 11000, 'Aiguillon': 3500, 'Casteljaloux': 2500, 'Fumel': 2500, 'Marmande': 6000, 'Miramont': 2500,
+    'Nérac': 6000, 'Sainte-Livrade': 3000, 'Tonneins': 6000, 'Villeneuve-sur-Lot': 9000,
+    'Pau': 9000, 'Bayonne': 13000, 'Biarritz': 2000, 'Hasparren': 4000, 'Hendaye': 600, 'Mauléon': 1500,
+    'Oloron-Sainte-Marie': 6500, 'Orthez': 6000, 'Saint-Jean-de-Luz': 3500, 'Salies-de-Béarn': 5500,
+    'Fort Médoc': 300, 'Beynac': 600, 'Domme': 1500, 'Hautefort': 1000, "Penne-d'Agenais": 2000,
+    'Navarrenx': 1300, 'Saint-Jean-Pied-de-Port': 1500, 'Urdos': 400,
+}

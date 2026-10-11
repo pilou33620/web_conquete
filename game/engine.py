@@ -69,6 +69,7 @@ class Game:
             mm = base['milice'] + 40 * fort0
             milice = mm if owner != R.NEUTRAL else int(mm * self.rng.uniform(0.55, 1.0))
             self.nodes.append(dict(id=n['id'], owner=owner, milice=float(milice), milice_max=mm, fort=fort0, dev=0,
+                                   pop=float(n['pop0']),
                                    stab=1.0, garrison=[], queue=[], siege=None, last_seen={}, depot=0))
             if owner != R.NEUTRAL:
                 self.factions[owner]['start_nodes'] += 1
@@ -275,6 +276,7 @@ class Game:
                 w['left'] = self.rng.randint(1, 4)
         d = self.date()
         if d.day == 1:
+            self.grow_population()
             self.monthly(d)
         for f in self.factions.values():
             if not f['alive']:
@@ -407,7 +409,7 @@ class Game:
             trade += R.QUAI_LIVRES
         if n['id'] in self._blockade:
             out['livres'] -= trade * (1 - R.BLOCKADE_K)
-        mult = (1 + 0.25 * n['dev']) * max(0.3, n['stab'])
+        mult = self.pop_factor(n) * max(0.3, n['stab'])
         if n['siege']:
             mult = 0
         ter = self.geo.terrain_at(gn['x'], gn['y'])
@@ -591,6 +593,38 @@ class Game:
             if f['alive'] and f['overlord']:
                 pass
 
+    def pop_factor(self, n):
+        """Population rapportée à celle de 1790 : la production d'une place la suit."""
+        return n.get('pop', 0) / max(1.0, self.geo.nodes[n['id']]['pop0']) if 'pop' in n else 1 + 0.25 * n['dev']
+
+    def pop_cap(self, n):
+        return self.geo.nodes[n['id']]['pop0'] * (1 + R.POP_NATURAL + R.POP_PER_LEVEL * n['dev'])
+
+    def pop_growth(self, n):
+        """Part de la place libre comblée en un mois (négative : la ville se vide)."""
+        o = n['owner']
+        if n['siege']:
+            return -0.03
+        f = self.factions.get(o)
+        if f and f.get('famine'):
+            return -0.015
+        rate = R.POP_RATE * max(0.0, min(1.0, (n['stab'] - 0.3) / 0.7))
+        if f and f.get('tax', 0.5) > 0.6:
+            rate *= max(0.0, 1 - (f['tax'] - 0.6) * 2.5)
+        return rate
+
+    def grow_population(self):
+        for n in self.nodes:
+            cap = self.pop_cap(n)
+            g = self.pop_growth(n)
+            if g < 0:
+                n['pop'] *= 1 + g
+            elif n['pop'] < cap:
+                n['pop'] += (cap - n['pop']) * g
+            else:
+                n['pop'] -= (n['pop'] - cap) * 0.05
+        self._dirty_income = True
+
     def recruit_cap(self, code):
         return 3000 + 250 * len(self.owned_nodes(code))
 
@@ -700,6 +734,10 @@ class Game:
         n['queue'].append(dict(kind='build', what=what, left=days, total=days))
         if what == 'fort' and lvl + pending + 1 == R.BASTION_LEVEL:
             return True, f"Bastions à la Vauban lancés à {gn['name']}."
+        if what == 'depot':
+            return True, f"Construction d'un magasin aux vivres à {gn['name']}."
+        if what == 'dev':
+            return True, f"Agrandissement de {gn['name']} lancé : {R.DEV_NAMES[gn['type']][lvl + pending + 1].lower()}."
         return True, f"{b['name']} lancées à {gn['name']}."
 
     def update_queues(self, dt):
@@ -723,8 +761,17 @@ class Game:
                         n['milice_max'] += 40
                     elif q['what'] == 'depot':
                         n['depot'] = 1
+                        if n['owner'] == self.player:
+                            self.log('eco', f"Magasin aux vivres construit à {gn['name']}.", gn['x'], gn['y'])
+                        continue
                     else:
                         n['dev'] = min(3, n['dev'] + 1)
+                        n['milice_max'] += R.NODE_BASE[gn['type']]['milice'] * 0.15
+                        self._dirty_income = True
+                        if n['owner'] == self.player:
+                            self.log('eco', f"{gn['name']} s'agrandit ({R.DEV_NAMES[gn['type']][n['dev']].lower()}) : "
+                                            f"de nouveaux habitants vont venir s'y installer.", gn['x'], gn['y'])
+                        continue
                     self._dirty_income = True
                     if n['owner'] == self.player:
                         self.log('eco', f"{R.BUILD[q['what']]['name']} terminées à {gn['name']}.", gn['x'], gn['y'])
@@ -2233,6 +2280,8 @@ class Game:
         n['siege'] = None
         if not peaceful and n['dev'] > 0 and old != R.NEUTRAL and self.rng.random() < 0.35:
             n['dev'] -= 1
+        if not peaceful and 'pop' in n:
+            n['pop'] *= 0.92   # pillage, fuite des habitants
         breached = not peaceful and self.lose_fort_level(nid)
         if n.get('depot'):
             n['depot'] = 0

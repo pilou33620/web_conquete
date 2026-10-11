@@ -93,6 +93,17 @@ UNITS['ligne']['desc'] = 'Le gros de l’armée : feu de ligne, colonne d’assa
 UNITS['legere']['desc'] = 'Voltigeurs : rapides, à l’aise en forêt, en lande et en marais, tendent des embuscades.'
 UNITS['cavalerie']['desc'] = 'Dragons et hussards : charge en terrain ouvert, poursuite, éclairage.'
 UNITS['artillerie']['desc'] = 'Batterie de 8 pièces : domine la canonnade et ouvre les brèches.'
+# Population : chaque agrandissement ouvre de la place (+30 %), que les habitants remplissent mois après mois
+# si la ville est sûre, nourrie et pas trop imposée. La production suit la population.
+POP_NATURAL = 0.05           # croissance possible sans agrandissement
+POP_PER_LEVEL = 0.30         # place gagnée à chaque agrandissement
+POP_RATE = 0.12              # part de la place libre comblée chaque mois, dans de bonnes conditions
+DEV_NAMES = {
+    'village': ['Village', 'Village agrandi', 'Gros bourg', 'Bourg prospère'],
+    'fort': ['Place forte', 'Quartier neuf', 'Ville de garnison', 'Ville forte prospère'],
+    'ville': ['Ville close', 'Premiers faubourgs', 'Nouveaux quartiers', 'Grande ville'],
+    'capitale': ['Ville close', 'Premiers faubourgs', 'Nouveaux quartiers', 'Métropole'],
+}
 DEPOT_KM = 30.0              # rayon d'action d'un magasin aux vivres
 DEPOT_FOOD = 0.15            # vivres par jour et par centaine d'hommes ravitaillés par un magasin
 PRISONER_FOOD = 0.003        # vivres par jour et par prisonnier
@@ -156,8 +167,10 @@ BUILD = {
     'depot': dict(name='Magasin aux vivres', max=1, cost=lambda lvl: dict(livres=150, bois=60), days=lambda lvl: 12,
                   desc='Entrepôt et charrois : les armées en campagne à moins de 30 km restent ravitaillées, '
                        'en puisant dans vos vivres'),
-    'dev': dict(name='Développement', max=3, cost=lambda lvl: dict(livres=100 * (lvl + 1), bois=50 * (lvl + 1), outils=15 * (lvl + 1)),
-                days=lambda lvl: 18 + 10 * lvl, desc='Moulins, ateliers, manufacture : +25 % de production par niveau'),
+    'dev': dict(name='Agrandissement', max=3, cost=lambda lvl: dict(livres=100 * (lvl + 1), bois=50 * (lvl + 1), outils=15 * (lvl + 1)),
+                days=lambda lvl: 18 + 10 * lvl,
+                desc='Nouveaux faubourgs : la ville peut accueillir 30 % d’habitants de plus, qui viennent s’y installer '
+                     'peu à peu ; plus de monde, c’est plus de production, de recrues et de milice'),
 }
 
 # ------------------------------------------------------------------ technologies

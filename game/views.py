@@ -28,6 +28,8 @@ def migrate(g):
         f.setdefault('prisoners', {})
     for n in g.nodes:
         n.setdefault('depot', 0)
+        # anciennes sauvegardes : le développement d'alors devient une population équivalente
+        n.setdefault('pop', g.geo.nodes[n['id']]['pop0'] * (1 + 0.25 * n.get('dev', 0)))
     for a in g.armies.values():
         if not a.get('gen'):
             a['gen'] = g.new_general(a['owner'])
@@ -75,8 +77,9 @@ def rules_payload():
                      days=[b['days'](l) for l in range(b['max'])]) for k, b in R.BUILD.items()}
     fort = dict(max=R.FORT_MAX, bastion=R.BASTION_LEVEL, bastion_types=R.BASTION_TYPES, upkeep=R.FORT_UPKEEP,
                 names=R.FORT_NAMES)
+    dev = dict(names=R.DEV_NAMES, per_level=R.POP_PER_LEVEL)
     return dict(factions=R.FACTIONS, units=R.UNITS, unit_order=R.UNIT_ORDER, techs=list(R.TECH.values()), fort=fort,
-                specialty=R.SPECIALTY, specialty_capital=R.SPECIALTY_CAPITAL,
+                specialty=R.SPECIALTY, specialty_capital=R.SPECIALTY_CAPITAL, dev=dev,
                 branches=R.BRANCHES, build=build, node_base=R.NODE_BASE, spec={k: v['label'] for k, v in R.SPEC.items()},
                 weather=R.WEATHER, zones=R.ZONES, speeds=R.SPEEDS, res=R.RESOURCES, res_label=R.RES_LABEL,
                 difficulty={k: v['label'] for k, v in R.DIFFICULTY.items()}, neutral_color=R.NEUTRAL_COLOR,
@@ -121,7 +124,7 @@ def player_state(g, since=0):
     nodes = []
     for n in g.nodes:
         gn = g.geo.nodes[n['id']]
-        d = dict(id=n['id'], o=n['owner'], f=n['fort'], d=n['dev'], s=round(n['stab'], 2),
+        d = dict(id=n['id'], o=n['owner'], f=n['fort'], d=n['dev'], s=round(n['stab'], 2), pop=int(round(n.get('pop', 0), -1)),
                  sg=dict(by=n['siege']['by'], dmg=round(n['siege']['dmg'], 2), occ=bool(n['siege'].get('occupy')))
                  if n['siege'] else None)
         if n['id'] in g._blockade:
@@ -134,6 +137,8 @@ def player_state(g, since=0):
             d['g'] = [_reg(r) for r in n['garrison']]
             if n['owner'] == p:
                 d['fx'] = g.fort_max(p, n['id'])
+                d['pc'] = int(round(g.pop_cap(n), -1))
+                d['pg'] = round(g.pop_growth(n), 3)
                 d['ru'], d['rw'] = [], {}
                 for u in R.UNIT_ORDER:
                     ok, why = g.can_recruit(p, n['id'], u)
@@ -240,7 +245,8 @@ def player_state(g, since=0):
                 has_port=has_port, famine=bool(me.get('famine')), banqueroute=bool(me.get('banqueroute')),
                 stats={k: int(v) for k, v in me['stats'].items()}, mods={k: round(v, 3) for k, v in me['mods'].items()},
                 prisoners={k: int(v) for k, v in me.get('prisoners', {}).items() if v > 0},
-                prisoner_upkeep=round(me.get('_upkeep', {}).get('prisoners', 0), 2))
+                prisoner_upkeep=round(me.get('_upkeep', {}).get('prisoners', 0), 2),
+                pop=int(round(sum(n.get('pop', 0) for n in g.owned_nodes(p)), -2)))
 
     return dict(t=round(g.t, 3), date=g.date_str(), season=g.season(), speed=g.speed_idx, over=g.over,
                 weather={z: dict(kind=w['kind'], left=w['left']) for z, w in g.weather.items()},
