@@ -465,7 +465,8 @@ def generate(geo, spec):
                     break
             t[c] = ty
             # haies au bord des blocs (bocage)
-            if ty in (T_CHAMP, T_PRE, T_VIGNE_T, T_LANDE_T) and ((ii % BS) == 0 or (j % BS) == 0):
+            if ty in (T_CHAMP, T_PRE, T_VIGNE_T, T_LANDE_T) and ((ii % BS) == 0 or (j % BS) == 0) \
+                    and _hash(i, j, seed + 7) > 0.12:   # (des trouées, des barrières ouvertes)
                 hv = _hash(bi * 3 + (ii % BS == 0), bj * 5 + 11, seed)
                 if hv < bocage and ty != T_VIGNE_T:
                     hedge_cells.append(c)
