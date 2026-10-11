@@ -231,6 +231,24 @@ export class UI {
       if (this.modal !== 'event') this.openModal('event');
     }
     if (this.modal === 'event' && !(st.pending || []).length) this.closeModal();
+    // une bataille du joueur attend : la commander, ou la laisser au général (résolution automatique)
+    const waitBt = (st.battles || []).find(b => b.mode === 'attente');
+    if (waitBt && !st.over && (!this.modal || this.modal === 'bataille')) { if (this.modal !== 'bataille') this.openModal('bataille'); }
+    else if (this.modal === 'bataille' && !waitBt) this.closeModal();
+  }
+
+  battleModal() {
+    const b = (this.st.battles || []).find(x => x.mode === 'attente');
+    if (!b) return ['<p class="muted">Aucune bataille en attente.</p>', 'none'];
+    const nm = o => esc(this.st.names[o] || 'Les insurgés');
+    const side = s => `<b>${nm(s.o)}</b> : ${fmt(s.men)} hommes${Object.entries(s.mix || {}).map(([k, v]) => ` · ${fmt(v)} ${k}`).join('')}`;
+    const place = b.node != null && this.md.nodes[b.node] ? this.md.nodes[b.node].name : null;
+    const html = `<h2 class="m-title" id="m-title">${b.amb ? 'Embuscade' : b.node != null ? 'Assaut' : 'Bataille'}${place ? ' — ' + esc(place) : ''}</h2>
+      <p class="m-sub">${esc(b.terrain)}${b.river ? ', rivière' : ''}. ${side(b.sides[0])} attaque ; ${side(b.sides[1])}.</p>
+      <div class="ev-choices"><button class="btn primary ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="manuel"><b>Commander la bataille</b><small>Disposez et menez vos troupes sur le champ de bataille</small></button>
+        <button class="btn ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="auto"><b>Résolution automatique</b><small>Le général décide ; la bataille se joue avec la campagne</small></button></div>
+      <p class="muted small">La campagne reste en pause tant que vous n’avez pas choisi. Réglage dans le menu ☰.</p>`;
+    return [html, b.id];
   }
 
   onEvent(ev, initial) {
@@ -260,11 +278,13 @@ export class UI {
     const pace = (this.rules.paces || []).find(p => p[0] === tr.pace) || ['normal', 'Normal', 15];
     const until = `jusqu’au ${esc(tr.end || '')}`;
     const stop = tr.stop;
-    const sig = [tr.phase, tr.end, tr.pace, stop ? stop.text + stop.date + stop.more : '', !!this.st.over].join('|');
+    // une bataille attend le choix du joueur, ou se livre sur le champ de bataille : le mois ne reprend pas
+    const held = (this.st.tac && this.st.tac.phase !== 'fin') || (this.st.battles || []).some(b => b.mode === 'attente');
+    const sig = [tr.phase, tr.end, tr.pace, stop ? stop.text + stop.date + stop.more : '', !!this.st.over, held].join('|');
     if (sig !== tb.dataset.sig) {
       tb.dataset.sig = sig;
       const paceBtn = `<button class="turn-pace" data-act="turn-pace" title="Rythme : un mois se joue en ${pace[2]} secondes environ (touches 1 à ${(this.rules.paces || []).length}). Toucher pour changer." aria-label="Rythme du mois : ${pace[1]}">${speedIcon(Math.max(1, (this.rules.paces || []).findIndex(p => p[0] === pace[0]) + 1))}<span>${pace[1]}</span></button>`;
-      const off = this.st.over ? ' disabled' : '';
+      const off = this.st.over || held ? ' disabled' : '';
       if (tr.phase === 'cours') {
         tb.innerHTML = `<div class="turn-run" title="Le mois se joue ${until}"><div class="turn-lbl">Le mois se joue… <span>${until.replace(/ \d{4}$/, '')}</span></div><div class="bar"><i id="turn-bar"></i></div></div>
           <button class="turn-stop" data-act="turn" data-v="stop" title="Arrêter le temps (espace)">${speedIcon(0)}<span>Arrêter</span></button>${paceBtn}`;
@@ -824,6 +844,15 @@ export class UI {
         break;
       }
       case 'load': this.onLoad && this.onLoad(d.v); break;
+      case 'tac-choose':
+        this.cmd({ cmd: 'tac', sub: 'choose', bid: d.id, mode: d.v }, d.v === 'auto').then(r => {
+          if (r && r.ok) { this.closeModal(); if (d.v === 'manuel' && this.onTactic) this.onTactic(r.bid); }
+        });
+        break;
+      case 'tac-set':
+        this.st.settings = { battles: d.v };
+        this.cmd({ cmd: 'tac', sub: 'settings', battles: d.v }).then(() => { this.modalSig = ''; this.renderModal(true); });
+        break;
       case 'anim': {
         this.map.ambient.setOn(!this.map.ambient.on);
         this.toast(this.map.ambient.on ? 'Animations de la carte activées.' : 'Animations de la carte coupées.');
@@ -1427,7 +1456,8 @@ export class UI {
     const ae = document.activeElement;
     if (!force && ae && card.contains(ae) && (/^(SELECT|TEXTAREA)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !['range', 'checkbox'].includes(ae.type)))) return;
     const fn = { tech: this.techModal, diplo: this.diploModal, commerce: this.commerceModal, production: this.prodModal,
-                 journal: this.journalModal, menu: this.menuModal, fin: this.endModal, event: this.eventModal }[k];
+                 journal: this.journalModal, menu: this.menuModal, fin: this.endModal, event: this.eventModal,
+                 bataille: this.battleModal }[k];
     const [html, sig] = fn.call(this);
     if (!force && sig === this.modalSig) return;
     this.modalSig = sig;
@@ -1655,6 +1685,9 @@ export class UI {
         ${this.turnSettings()}
         <h3 class="section-t">Affichage</h3><div class="btns"><button class="btn" data-act="anim">${this.map.ambient.on ? 'Couper les animations de la carte' : 'Animer la carte'}</button></div>
         <p class="muted small" style="margin:4px 0 0">Moulins, fumées, oiseaux, bateaux, charrettes et troupeaux.</p>
+        <h3 class="section-t">Batailles</h3><div class="seg wrap">${[['demander', 'Toujours demander'], ['auto_petites', 'Escarmouches automatiques'], ['auto', 'Toujours automatiques']].map(([k, l]) =>
+          `<button class="${(this.st.settings || {}).battles === k ? 'on' : ''}" data-act="tac-set" data-v="${k}">${l}</button>`).join('')}</div>
+        <p class="muted small" style="margin:4px 0 0">Commander soi-même ses batailles, ou laisser le général les résoudre.</p>
         <h3 class="section-t">Jouer depuis un autre appareil</h3>${this.netHtml(this.net)}
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Comment jouer</h3>
