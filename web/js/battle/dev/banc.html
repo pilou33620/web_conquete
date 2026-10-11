@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Banc d'essai de la bataille</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../css/style.css">
+</head>
+<body>
+<div id="app" style="background:#0c1828"></div>
+<script type="module">
+// Banc d'essai : ouvre directement une bataille simulée par la maquette (dev/maquette.mjs), sans la campagne.
+//   banc.html?scen=vignes&season=automne&weather=pluie&hour=17&start=1&avance=900
+import { Bataille } from '../bataille.js';
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+const api = {
+  get: u => fetch(u, { cache: 'no-store' }).then(r => r.json()),
+  post: (u, b) => fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b || {}) }).then(r => r.json()),
+};
+const q = new URLSearchParams(location.search);
+if (q.get('aide') !== '1') try { localStorage.setItem('conquete.bataille.aide', '1'); } catch (e) { /* rien */ }
+else try { localStorage.removeItem('conquete.bataille.aide'); } catch (e) { /* rien */ }
+const r = await api.get('/__maquette/nouvelle?' + q.toString());
+const b = new Bataille({ api, onEnd: () => { document.title = 'fin'; } });
+window.__bt = b;
+await b.enter({ bid: r.bid, phase: 'deploiement' });
+document.title = 'pret';
+</script>
+</body>
+</html>

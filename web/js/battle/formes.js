@@ -79,6 +79,8 @@ export const stars = xp => Math.max(0, Math.min(5, Math.round((xp || 0) / 20)));
 // nombres à la française
 export const fmt = n => (Math.round(n) || 0).toLocaleString('fr-FR').replace(/^-/, '−');
 export const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// vue cavalière : le sol est vu un peu de biais, les profondeurs (y) sont écrasées à l'écran
+export const TILT = 0.8;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const TAU = Math.PI * 2;
 export function hash(i, j, k = 0) {

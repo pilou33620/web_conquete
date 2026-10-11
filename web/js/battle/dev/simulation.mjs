@@ -326,27 +326,39 @@ function genUnits(scen, map, R) {
     general: () => 'État-major', milice: k => `Milice ${['de la ville', 'du faubourg', 'des quais', 'de Saint-Romain', 'bourgeoise'][k % 5]}` };
   const MEN = { ligne: 600, legere: 420, grenadiers: 380, chasseurs: 300, cavalerie: 300, artillerie: 160, general: 30, milice: 250 };
   const zone = [80, 160, 520, 1840];
+  // ordre de bataille : tirailleurs devant, première et seconde lignes, batteries dans les intervalles,
+  // cavalerie aux ailes, général en arrière au centre (côté ennemi : en miroir, vers l'est)
   const place = (side, list) => {
     const out = [];
-    let row = 0, k = 0;
-    const cols = side === 0 ? [430, 300, 170] : scen === 'assaut' ? null : [2020, 2200, 2400];
+    const X = x => side === 0 ? x : 2550 - (x - 80) * 0.9;
+    const slots = { skirm: [], front: [], second: [], art: [], cav: [], gen: [] };
     for (const [type, cnt] of list) for (let q = 0; q < cnt; q++) {
-      k++;
-      let x, y, dir = side === 0 ? 0 : Math.PI;
-      if (scen === 'assaut' && side === 1) {
-        if (type === 'artillerie') { const a = Math.PI * (0.83 + q * 0.17); x = 1600 + Math.cos(a) * 300; y = 1000 + Math.sin(a) * 300; dir = a; }
-        else if (type === 'milice' || type === 'grenadiers') { const a = Math.PI * (0.75 + q * 0.12); x = 1600 + Math.cos(a) * 230; y = 1000 + Math.sin(a) * 230; dir = a; }
-        else { x = 1480 + (q % 3) * 80 + R() * 20; y = 860 + q * 70; }
-      } else {
-        const c = type === 'artillerie' ? 0 : type === 'cavalerie' || type === 'general' ? 2 : type === 'legere' || type === 'chasseurs' ? 0 : 1;
-        x = cols[c] + (R() - 0.5) * 40;
-        y = 260 + ((row++ * 213) % 1480) + (R() - 0.5) * 60;
-        if (side === 0) { x = clamp(x, zone[0] + 40, zone[2] - 40); y = clamp(y, zone[1] + 40, zone[3] - 40); }
-      }
-      for (let tries = 0; tries < 30 && !free(x, y); tries++) { x += (R() - 0.5) * 60; y += (R() - 0.5) * 60; }
-      const u = mkUnit((side ? 'e' : 'r') + (++n), side, type, names[type](q + 1 + (side && type !== 'artillerie' ? 4 : side ? 2 : 0)), Math.round(MEN[type] * (0.75 + R() * 0.25)), Math.round(x), Math.round(y), dir);
-      if (type === 'milice') u.form = 'ligne';
-      out.push(u);
+      const k = type === 'legere' || type === 'chasseurs' ? 'skirm' : type === 'artillerie' ? 'art' : type === 'cavalerie' ? 'cav' : type === 'general' ? 'gen' : 'front';
+      slots[k].push([type, q]);
+    }
+    while (slots.front.length > 5) slots.second.unshift(slots.front.pop());
+    const lineX = { skirm: 495, front: 420, art: 455, second: 280, cav: 200, gen: 170 };
+    for (const [k, arr] of Object.entries(slots)) {
+      arr.forEach(([type, q], i) => {
+        let y;
+        if (k === 'cav') y = i % 2 ? 1640 - (i >> 1) * 260 : 360 + (i >> 1) * 260;
+        else if (k === 'gen') y = 1000;
+        else if (k === 'art') y = 320 + (i + 0.5) * 1360 / arr.length + 70;
+        else y = 300 + (i + 0.5) * 1400 / arr.length;
+        let x = X(lineX[k]) + (R() - 0.5) * 16, dir = side === 0 ? 0 : Math.PI;
+        if (scen === 'assaut' && side === 1) {
+          if (type === 'artillerie') { const a = Math.PI * (0.83 + q * 0.17); x = 1600 + Math.cos(a) * 300; y = 1000 + Math.sin(a) * 300; dir = a; }
+          else if (type === 'milice' || type === 'grenadiers') { const a = Math.PI * (0.75 + q * 0.12); x = 1600 + Math.cos(a) * 230; y = 1000 + Math.sin(a) * 230; dir = a; }
+          else { x = 1480 + (q % 3) * 80 + R() * 20; y = 860 + q * 70; }
+        }
+        if (side === 0) { x = clamp(x, zone[0] + 20, zone[2] - 20); y = clamp(y, zone[1] + 30, zone[3] - 30); }
+        for (let tries = 0; tries < 30 && !free(x, y); tries++) { x += (R() - 0.5) * 40; y += (R() - 0.5) * 40; }
+        const num = q + 1 + (side && type !== 'artillerie' ? 4 : side ? 2 : 0);
+        const u = mkUnit((side ? 'e' : 'r') + (++n), side, type, names[type](num), Math.round(MEN[type] * (0.75 + R() * 0.25)), Math.round(x), Math.round(y), dir);
+        if (type === 'milice') u.form = 'ligne';
+        if (type === 'general') u.gen = side ? 'Général Lacoste' : 'Général Moreau';
+        out.push(u);
+      });
     }
     return out;
   };
@@ -379,6 +391,8 @@ export class MockBattle {
     this.wind = [Math.cos(this.seed % 7) * (this.weather === 'tempete' ? 9 : 3), Math.sin(this.seed % 5) * 2];
     this.name = S.name;
     this.aiT = 0;
+    // option « proche » : l'ennemi est déjà au contact (pour les captures de combat)
+    if (opts.proche) for (const u of this.units) if (u.side === 1 && this.scen !== 'assaut') u.x -= +opts.proche || 1300;
     this.t0 = this.units.reduce((a, u) => (a[u.side] += u.men, a), [0, 0]);
   }
   cellAt(x, y) { return this.map._t[clamp(Math.floor(y / CELL), 0, ROWS - 1) * COLS + clamp(Math.floor(x / CELL), 0, COLS - 1)]; }
