@@ -93,8 +93,21 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
 - **Noms d'époque** : mousquetaires et piquiers avant la baïonnette, miquelets (fusiliers de montagne) avant les chasseurs
   basques de 1792, milice bourgeoise puis Garde nationale (1789) puis armée territoriale (1872), voltigeurs puis
   chasseurs à pied (1838), cuirassiers sous l'Empire…
-- **Villes** : leur population suit une croissance séculaire. Bordeaux compte environ 80 000 habitants en 1700 et
-  110 000 en 1790 ; sa population « normale » est multipliée par 1,6 en 1900. Les agrandissements s'y ajoutent.
+- **Population sur deux siècles** : chaque place suit sa propre trajectoire, tirée de l'histoire.
+  - Bordeaux passe d'environ 45 000 âmes en 1700 à 110 000 en 1790, retombe sous la Révolution et le blocus, puis
+    dépasse 250 000 en 1900 avec les chemins de fer et les usines.
+  - Les villes grandissent surtout après 1830-1850 : Périgueux et les ateliers du chemin de fer d'Orléans, Pau ville
+    d'hiver des Anglais, Dax et ses curistes, Biarritz station impériale dès 1854, Arcachon (rattachée à La Teste)
+    qui sort des dunes après 1857. Saint-Jean-de-Luz, grand port baleinier vers 1700, décline après le traité
+    d'Utrecht.
+  - Les campagnes se remplissent jusque vers 1850 puis se vident : exode rural en Dordogne et dans l'Agenais,
+    émigration béarnaise et basque vers les Amériques, phylloxéra dans le vignoble girondin. Seule la lande plantée
+    de pins après la loi de 1857 continue de croître.
+  - La guerre pèse : une ville prise de force est pillée (6 à 15 % de ses habitants, selon les remparts qui ont
+    résisté), un siège qui s'éternise la vide de plus en plus vite, le désordre fait partir les habitants. Une partie
+    des fuyards gagne les places sûres de leur camp.
+  - Le panneau d'une ville indique la tendance et sa raison ; la fenêtre Production donne l'évolution de vos terres
+    sur l'année, villes et campagnes à part.
 - **Fin de partie** : au 1er janvier 1900, le camp le plus **prestigieux** l'emporte. Prendre tous les chefs-lieux
   reste une victoire anticipée.
 - **Prestige** : rayonnement équilibré, pour gagner par la paix comme par la guerre. Il compte le territoire
@@ -122,6 +135,12 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
   n'est absorbé que s'il est déjà écrasé (un quart de ses places de départ, ou 3 places) ou si le même vainqueur le
   fait plier une seconde fois en moins de 25 ans. Cela vaut aussi pour vous : perdre son chef-lieu n'est plus la fin
   de la partie.
+- **IA** : elles ne thésaurisent plus. Au-delà d'un trésor de guerre (une quarantaine de jours de revenu), elles
+  allègent leurs impôts, agrandissent leurs villes, fortifient leurs frontières, cherchent dans toutes les branches,
+  vendent leurs surplus d'armes et d'outils et font des présents aux voisins redoutés. En guerre, elles puisent dans
+  ce trésor pour lever des troupes. Elles généralisent aussi un nouvel armement en quelques jours : réarmement des
+  régiments les plus en retard d'abord, achat au marché du fer et des armes qui manquent, grandes armées réarmées par
+  fournées, crochet par la place amie la plus proche quand l'ennemi est loin.
 - **Équilibre des puissances** : qui tient plus de 40 % des places de l'Aquitaine inquiète tout le monde. Les autres
   camps s'en méfient, s'allient plus volontiers et se joignent à ses guerres. Tenir beaucoup de pays mal assimilés
   accroît la lassitude (surextension). Enfin, un pays absorbé depuis plus de dix ans peut se soulever si son ancien
@@ -264,8 +283,8 @@ Chaque place a un niveau de fortification, dessiné sur la carte autour de la vi
 - **Population et agrandissement** : chaque place a ses habitants (estimations de 1790 : Bordeaux 110 000, Bayonne
   13 000, Agen 11 000, Pau 9 000…). Sa production suit sa population. « Agrandir » la ville (3 niveaux : premiers
   faubourgs, nouveaux quartiers, grande ville ; pour un village : village agrandi, gros bourg, bourg prospère) ouvre
-  de la place pour 30 % d'habitants de plus, qui viennent s'installer mois après mois si l'ordre public est bon et les
-  impôts raisonnables. Un siège ou la disette vident la ville, une prise de force fait fuir une partie des habitants.
+  de la place pour 10 % d'habitants de plus, qui viennent s'installer mois après mois si l'ordre public est bon et les
+  impôts raisonnables. La production de la place suit son remplissage et la valeur de ses agrandissements.
 - **Spécialités** : chacune des 50 villes principales a son produit phare, qui rapporte à qui la tient
   (grands crus de Bordeaux, Sauternes et Saint-Émilion, pruneaux d'Agen, truffes de Périgueux, jambons d'Orthez,
   chocolatiers de Bayonne, résine de Mimizan, tabacs de Tonneins, sel de Salies…). Un chef-lieu en produit deux fois plus.
