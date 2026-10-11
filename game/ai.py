@@ -254,6 +254,12 @@ class AI:
             for res, keep in (('vivres', 500), ('bois', 350), ('fer', 300)):
                 if r[res] > keep + 50:
                     g.market_trade(code, res, int(r[res] - keep), 'sell')
+        # surplus de l'atelier : au-delà de ce qu'exigent le réarmement et les levées, on vend aux négociants
+        # (le produit part ensuite en agrandissements, remparts ou impôts allégés, voir spend)
+        for res, keep in (('armes', 2500 + 40 * self.regs_total()), ('outils', 1500)):
+            # pas de bradage : on attend que les cours se refassent (le marché est commun à tous, joueur compris)
+            if r[res] > keep + 200 and g.market[res] > 0.85 * D.BASE_VALUE[res]:
+                g.market_trade(code, res, int(min(150, r[res] - keep)), 'sell')
         # matières premières : un trésor qui dort achète le fer et le bois des remparts et des agrandissements
         if r['livres'] > 1500:
             for res, low in (('bois', 250), ('fer', 150)):
