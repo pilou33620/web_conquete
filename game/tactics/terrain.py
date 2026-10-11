@@ -25,6 +25,13 @@ N = COLS * ROWS
  T_BRECHE, T_PORTE, T_SABLE, T_ROCHE, T_BARRICADE) = range(18)
 TYPE_NAMES = ['PRE', 'CHAMP', 'VIGNE', 'LANDE', 'BOIS', 'FORET', 'MARAIS', 'EAU', 'GUE', 'ROUTE', 'CHEMIN', 'BATI',
               'MUR', 'BRECHE', 'PORTE', 'SABLE', 'ROCHE', 'BARRICADE']
+# Éléments linéaires (couche à part, `f`) : bordent champs et chemins, donnent un couvert léger à moyen
+F_NONE, F_CLOTURE, F_HAIE, F_MURET = range(4)
+FEAT_NAMES = ['', 'cloture', 'haie', 'muret']
+# probabilité qu'un bord de parcelle porte une clôture ou un muret (en plus des haies du bocage)
+FENCE = {T_PLAINE: 0.22, T_COLLINES: 0.30, T_VIGNE: 0.32, T_MONTAGNE: 0.30, T_HAUTE: 0.15, T_LANDE: 0.08,
+         T_MARAIS: 0.12, T_FORET: 0.05, T_DUNES: 0.0}
+STONY = ('24', '64')   # pays de pierre : murets plutôt que clôtures
 TYPE_LABEL = ['Prairie', 'Champs', 'Vignes', 'Lande', 'Bois', 'Forêt', 'Marais', 'Eau', 'Gué', 'Route', 'Chemin',
               'Maisons', 'Rempart', 'Brèche', 'Porte', 'Sable', 'Rochers', 'Barricade']
 
@@ -160,6 +167,8 @@ class BattleMap:
         self.buildings = []
         self.walls = []
         self.hedges = []
+        self.f = bytearray(N)
+        self.fences = []
         self.bridges = []
         self.place = None
         self.heart = None
@@ -178,6 +187,8 @@ class BattleMap:
                             for r in self.rivers],
                     buildings=self.buildings, walls=self.walls, place=self.place,
                     hedges=[[r2(p) for p in hd] for hd in self.hedges], bridges=self.bridges,
+                    f=base64.b64encode(bytes(self.f)).decode(), feature_names=FEAT_NAMES,
+                    fences=[dict(kind=k, pts=[r2(p) for p in pts]) for k, pts in self.fences],
                     heart=list(self.heart) if self.heart else None,
                     seed=spec['seed'], season=spec['season'], weather=spec['weather'],
                     camp=dict(x=spec['cx'], y=spec['cy']), region=self.region,
@@ -409,6 +420,9 @@ def generate(geo, spec):
     if main == T_LANDE:
         bocage *= 0.3
     hedge_cells = []
+    feat = m.f
+    fence_p = FENCE.get(main, 0.2)
+    wall_kind = F_MURET if dept in STONY or main in (T_MONTAGNE, T_HAUTE, T_VIGNE) else F_CLOTURE
     for j in range(ROWS):
         bj = j // BS
         sh = shifts[bj]
@@ -451,12 +465,14 @@ def generate(geo, spec):
                     break
             t[c] = ty
             # haies au bord des blocs (bocage)
-            if bocage > 0 and ty in (T_CHAMP, T_PRE) and ((ii % BS) == 0 or (j % BS) == 0):
-                if _hash(bi * 3 + (ii % BS == 0), bj * 5 + 11, seed) < bocage:
+            if ty in (T_CHAMP, T_PRE, T_VIGNE_T, T_LANDE_T) and ((ii % BS) == 0 or (j % BS) == 0):
+                hv = _hash(bi * 3 + (ii % BS == 0), bj * 5 + 11, seed)
+                if hv < bocage and ty != T_VIGNE_T:
                     hedge_cells.append(c)
-    for c in hedge_cells:
-        t[c] = T_BOIS
-    m.hedges = _hedge_lines(hedge_cells)
+                    feat[c] = F_HAIE
+                elif hv < bocage + fence_p:
+                    feat[c] = wall_kind if (ty == T_VIGNE_T or _hash(bi, bj, seed + 3) < 0.7) else \
+                        (F_CLOTURE if wall_kind == F_MURET else F_MURET)
 
     # mares
     if main in (T_PLAINE, T_LANDE, T_MARAIS, T_COLLINES):
@@ -529,7 +545,23 @@ def generate(geo, spec):
         if tc == T_EAU:
             v = min(v, 2.0)
         hb[c] = 0 if v < 0 else (80 if v > 80 else int(v))
-    m.stats = dict(main=main, dept=dept, hist={TYPE_NAMES[k]: t.count(k) for k in range(len(TYPE_NAMES)) if t.count(k)})
+    # éléments linéaires : pas sur les routes, l'eau ni le bâti ; les chemins creux du bocage sont bordés de haies
+    for c in range(N):
+        tc = t[c]
+        if tc in (T_ROUTE, T_CHEMIN, T_EAU, T_GUE, T_BATI, T_MUR, T_BRECHE, T_PORTE, T_BARRICADE, T_BOIS, T_FORET_T):
+            feat[c] = F_NONE
+    if bocage > 0.12:
+        for c in range(COLS, N - COLS):
+            if t[c] == T_CHEMIN and _hash(c, 17, seed) < bocage:
+                for nc in (c - 1, c + 1, c - COLS, c + COLS):
+                    if t[nc] in (T_CHAMP, T_PRE, T_LANDE_T):
+                        feat[nc] = F_HAIE
+    for k in (F_CLOTURE, F_HAIE, F_MURET):
+        for a, b in _hedge_lines([c for c in range(N) if feat[c] == k]):
+            m.fences.append((FEAT_NAMES[k], [a, b]))
+    m.hedges = [pts for k, pts in m.fences if k == 'haie']
+    m.stats = dict(main=main, dept=dept, hist={TYPE_NAMES[k]: t.count(k) for k in range(len(TYPE_NAMES)) if t.count(k)},
+                   feat={FEAT_NAMES[k]: feat.count(k) for k in (1, 2, 3)})
     return m
 
 
@@ -578,7 +610,7 @@ def _hedge_lines(cells):
             while k + step in s and (step == COLS or (k + 1) % COLS):
                 k += step
                 run.append(k)
-            if len(run) >= 3:
+            if len(run) >= 2:
                 done.update(run)
                 out.append([center_of(run[0]), center_of(run[-1])])
                 break
