@@ -44,17 +44,158 @@ class AI:
             self.espionage()
             self.rearm()
 
+    # ------------------------------------------------------------------ réarmement
     def rearm(self):
-        """Remettre des armes neuves aux régiments au repos dans nos places, en gardant de quoi lever des troupes."""
-        g, code, r = self.g, self.code, self.f['res']
+        """Généraliser au plus vite un nouveau fusil ou un nouveau canon : les régiments les plus en retard d'abord,
+        garnisons comprises, en gardant de quoi lever et compléter des troupes ; le marché comble ce qui manque."""
+        g, code = self.g, self.code
         groups = [('army', a['id'], a['regs']) for a in g.armies.values()
                   if a['owner'] == code and a['state'] == 'idle' and a['at_node'] is not None
                   and g.nodes[a['at_node']]['owner'] == code and not g.nodes[a['at_node']]['siege']]
         groups += [('node', n['id'], n['garrison']) for n in g.nodes if n['owner'] == code and n['garrison'] and not n['siege']]
-        for kind, ident, regs in groups:
-            cost = g.rearm_cost(code, regs)
-            if cost and all(r[k] - v > 120 for k, v in cost.items()):
-                g.rearm(code, army_id=ident) if kind == 'army' else g.rearm(code, nid=ident)
+        # les plus démodés d'abord (écart de générations, puis nombre d'hommes concernés)
+        groups = [(self.arm_gap(regs), kind, ident, regs) for kind, ident, regs in groups]
+        groups.sort(key=lambda x: (-x[0][0], -x[0][1]))
+        for (gap, _men), kind, ident, regs in groups:
+            if not gap:
+                break
+            self.rearm_group(kind, ident, regs)
+        self.stock_arms()
+
+    def arm_gap(self, regs):
+        """(plus grand retard en générations d'armes, hommes à réarmer) d'un groupe de régiments."""
+        lv = {cls: self.g.arm_level(self.code, cls) for cls in R.ARMS}
+        gap = men = 0
+        for r in regs:
+            d = lv.get(R.UNITS[r['type']]['cls'], 0) - r.get('arm', 0)
+            if d > 0:
+                gap = max(gap, d)
+                men += r['max']
+        return gap, men
+
+    def arms_floor(self):
+        """Stock à ne pas entamer pour réarmer : de quoi lever et compléter des régiments (davantage en guerre)."""
+        return dict(armes=220 if self.wars() else 120, fer=120)
+
+    def arms_purse(self):
+        """Livres que l'on peut consacrer à acheter des armes sans compromettre la solde ni le recrutement."""
+        return self.f['res']['livres'] - (1000 + (500 if self.wars() else 0))
+
+    def arms_room(self):
+        """Armes et fer disponibles pour réarmer : le stock au-dessus du plancher, plus ce que le marché peut fournir
+        à un prix raisonnable."""
+        g, r, floor, purse = self.g, self.f['res'], self.arms_floor(), self.arms_purse()
+        room = {}
+        for k, base in (('armes', 3.5), ('fer', 2.0)):
+            p = g.market[k]
+            buy = min(1000, purse / (1.5 * p)) if purse > 0 and p <= 1.35 * base else 0
+            room[k] = r[k] - floor[k] + buy
+        return room
+
+    def arm_supply(self, cost):
+        """Réunir de quoi payer ce réarmement sans descendre sous le plancher, en achetant au marché ce qui manque."""
+        g, r, floor = self.g, self.f['res'], self.arms_floor()
+        if not cost or any(v > self.arms_room().get(k, 0) for k, v in cost.items()):
+            return False
+        for k, v in cost.items():
+            short = v + floor[k] - r[k]
+            if short > 0:
+                g.market_trade(self.code, k, max(20, int(short) + 1), 'buy')
+        return all(r[k] - v >= floor[k] for k, v in cost.items())
+
+    def rearm_group(self, kind, ident, regs):
+        """Réarmer une armée au repos dans une de nos places, ou une garnison. Si l'arsenal ne suffit pas pour tous,
+        l'armée détache ses régiments les plus démodés, les réarme et les reprend aussitôt."""
+        g, code = self.g, self.code
+        cost = g.rearm_cost(code, regs)
+        if not cost:
+            return False
+        if self.arm_supply(cost):
+            return (g.rearm(code, army_id=ident) if kind == 'army' else g.rearm(code, nid=ident))[0]
+        if kind != 'army':
+            return False
+        room = self.arms_room()
+        lv = {cls: g.arm_level(code, cls) for cls in R.ARMS}
+        old = [r for r in regs if r.get('arm', 0) < lv.get(R.UNITS[r['type']]['cls'], 0)]
+        old.sort(key=lambda r: r.get('arm', 0) - lv[R.UNITS[r['type']]['cls']])
+        pick, tot = [], {}
+        for r in old:
+            add = {k: v * r['max'] for k, v in R.REARM[R.UNITS[r['type']]['cls']].items()}
+            if all(tot.get(k, 0) + v <= room.get(k, 0) for k, v in add.items()):
+                pick.append(r)
+                for k, v in add.items():
+                    tot[k] = tot.get(k, 0) + v
+        if not pick or len(pick) == len(regs) or not self.arm_supply(g.rearm_cost(code, pick)):
+            return False
+        a = g.armies[ident]
+        gen = a.get('gen')
+        ok, bid = g.split(code, ident, [r['id'] for r in pick])
+        if not ok:
+            return False
+        done = g.rearm(code, army_id=bid)[0]
+        g.merge(code, ident, bid)
+        a['gen'] = gen                  # le détachement n'a duré qu'un instant : ni nouveau général ni nouveau numéro
+        self.f['army_count'] -= 1
+        return done
+
+    def stock_arms(self):
+        """Faire provision au marché des armes qui manquent pour réarmer tout le monde, si le trésor le permet
+        (le fer des canons s'achète au moment du réarmement : en magasin, l'atelier le consommerait)."""
+        g, code, r = self.g, self.code, self.f['res']
+        need = g.rearm_cost(code, list(g.all_regs(code))).get('armes', 0)
+        short = need + self.arms_floor()['armes'] - r['armes']
+        p = g.market['armes']
+        if short >= 20 and p <= 1.35 * 3.5:
+            qty = int(min(1000, short, self.arms_purse() / (1.5 * p)))
+            if qty >= 20:
+                g.market_trade(code, 'armes', qty, 'buy')
+
+    def rearm_here(self, a):
+        """Une armée au repos dans une de nos places reçoit les armes du moment, si l'arsenal peut les fournir."""
+        g, code = self.g, self.code
+        if a['ai'] and a['ai'].get('then') == 'rearm':
+            a['ai'] = None   # détour accompli (ou impossible) : l'armée reprend le cours de ses ordres
+        nid = a['at_node']
+        if nid is None or g.nodes[nid]['owner'] != code or g.nodes[nid]['siege']:
+            return
+        if self.arm_gap(a['regs'])[0]:
+            self.rearm_group('army', a['id'], a['regs'])
+
+    def rearm_detour(self, a, wars):
+        """Une armée démodée fait un crochet par la place amie la plus proche pour y toucher ses nouvelles armes :
+        en paix ou loin de l'ennemi ; en guerre près du front, seulement si elle a deux générations de retard
+        ou si la place est sur son chemin."""
+        g, code = self.g, self.code
+        gap, _ = self.arm_gap(a['regs'])
+        if not gap or g.t < self.cool.get(('rearm', a['id']), -1):
+            return False
+        if a['at_node'] is not None and g.nodes[a['at_node']]['owner'] == code:
+            return False    # déjà dans une de nos places : l'arsenal y a donné ce qu'il pouvait
+        # le détour n'en vaut la peine que si l'arsenal peut réarmer une bonne part de l'armée
+        cost, room = g.rearm_cost(code, a['regs']), self.arms_room()
+        if any(v > 0 and room.get(k, 0) < 0.4 * v for k, v in cost.items()):
+            return False
+        x, y = a['x'], a['y']
+        if wars:
+            foes = [math.hypot(b['x'] - x, b['y'] - y) for b in g.armies.values() if b['owner'] in wars and not b['hidden']]
+            foes += [math.hypot(gn['x'] - x, gn['y'] - y) for n, gn in zip(g.nodes, g.geo.nodes) if n['owner'] in wars]
+            far = min(foes, default=999) > 90
+            reach = 150 if far else (80 if gap >= 2 else 15)
+        else:
+            reach = 180
+        best = None
+        for n in g.owned_nodes(code):
+            if n['siege'] or (wars and self.threat_at(n['id'], 25) > 0):
+                continue
+            gn = g.geo.nodes[n['id']]
+            d = math.hypot(gn['x'] - x, gn['y'] - y)
+            if d <= reach and (best is None or d < best[0]):
+                best = (d, n['id'])
+        self.cool[('rearm', a['id'])] = g.t + 45   # pas de va-et-vient : un essai par mois et demi
+        if best is None or not g.order_move(code, a['id'], node=best[1])[0]:
+            return False
+        a['ai'] = dict(then='rearm')
+        return True
 
     def espionage(self):
         """Saboter les remparts d'une place ennemie que nos armées convoitent, ou espionner un voisin."""
@@ -310,6 +451,7 @@ class AI:
         if ai.get('then') == 'garrison' and a['at_node'] is not None and g.nodes[a['at_node']]['owner'] == code:
             g.to_garrison(code, a['id'])
             return
+        self.rearm_here(a)
         if men < 0.45 * mx or a['supply'] < 0.25:
             home = self.home_node(a)
             if home is not None and home != a['at_node']:
@@ -337,8 +479,10 @@ class AI:
                 return
         elif best:
             return
-        # embuscade
         wars = self.wars()
+        if self.rearm_detour(a, wars):
+            return
+        # embuscade
         n_legere = sum(1 for r in a['regs'] if r['type'] == 'legere')
         amb_chance = 0.12 + (0.25 if code == '40' else 0) + 0.08 * n_legere
         if wars and self.rng.random() < amb_chance and not any(r['type'] == 'artillerie' for r in a['regs']):
