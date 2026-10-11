@@ -617,11 +617,13 @@ class AI:
         g = self.g
         x, y = g.node_xy(nid)
         p = 0.0
+        r2 = radius * radius
+        code = self.code
         for a in g.armies.values():
-            if a['hidden'] or not g.at_war(self.code, a['owner']):
+            # la distance d'abord (appelée pour chaque place à chaque réflexion : l'état de guerre coûte plus cher)
+            if a['hidden'] or not ((a['x'] - x) ** 2 + (a['y'] - y) ** 2 < r2) or not g.at_war(code, a['owner']):
                 continue
-            if (a['x'] - x) ** 2 + (a['y'] - y) ** 2 < radius * radius:
-                p += g.army_power(a)
+            p += g.army_power(a)
         return p
 
     def military(self):
@@ -775,9 +777,10 @@ class AI:
             if not targets:
                 return None
         best = None
+        pts = [g.node_xy(t) for t in targets]
         for i in own:
             x, y = g.node_xy(i)
-            d = min(math.hypot(x - g.node_xy(t)[0], y - g.node_xy(t)[1]) for t in targets)
+            d = min(math.hypot(x - tx, y - ty) for tx, ty in pts)
             typ = g.geo.nodes[i]['type']
             d -= {'capitale': 6, 'ville': 4, 'fort': 3, 'village': 0}[typ]
             if best is None or d < best[0]:

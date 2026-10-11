@@ -1,5 +1,6 @@
 """Vues envoyées au navigateur et sauvegarde/chargement."""
 import datetime
+import math
 import random
 
 from . import rules as R
@@ -164,6 +165,36 @@ def _legs(a):
     return out
 
 
+def _seer(srcs, cell=20.0):
+    """seen(x, y) : le point est-il à portée d'une des sources de vision (sx, sy, r) ? Même réponse que le parcours
+    de toutes les sources, mais on ne regarde que celles dont le carré de portée (élargi d'1 km) touche la case du
+    point : la vue interroge ainsi plus de 200 lieux sans tout reparcourir."""
+    grid, always = {}, []
+    for s in srcs:
+        sx, sy, r = s
+        ext = abs(r) + 1.0
+        if not (math.isfinite(sx) and math.isfinite(sy) and math.isfinite(ext)) or ext > 400:
+            always.append(s)
+            continue
+        for i in range(math.floor((sx - ext) / cell), math.floor((sx + ext) / cell) + 1):
+            for j in range(math.floor((sy - ext) / cell), math.floor((sy + ext) / cell) + 1):
+                grid.setdefault((i, j), []).append(s)
+
+    def seen(x, y):
+        if not (math.isfinite(x) and math.isfinite(y)):
+            cand = srcs
+        else:
+            cand = grid.get((math.floor(x / cell), math.floor(y / cell)), ())
+            for sx, sy, r in always:
+                if (sx - x) ** 2 + (sy - y) ** 2 <= r * r:
+                    return True
+        for sx, sy, r in cand:
+            if (sx - x) ** 2 + (sy - y) ** 2 <= r * r:
+                return True
+        return False
+    return seen
+
+
 def player_state(g, since=0):
     if g._dirty_income:
         g.compute_income()
@@ -172,11 +203,7 @@ def player_state(g, since=0):
     vis, srcs = g.visible_armies(p)
     side = {c for c in g.factions if g.friendly(p, c) or g.factions[c]['overlord'] == p or me['overlord'] == c} | {p}
 
-    def seen(x, y):
-        for sx, sy, r in srcs:
-            if (sx - x) ** 2 + (sy - y) ** 2 <= r * r:
-                return True
-        return False
+    seen = _seer(srcs)
 
     nodes = []
     tr = g._pop_curves()
