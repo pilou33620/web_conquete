@@ -279,8 +279,8 @@ def _candidates(g, old, cur, seq0):
             if not bt:
                 continue
             owners = [s['owner'] for s in bt['sides']]
-            mine = p in owners or any(o in g.factions and g.friendly(p, o) for o in owners) \
-                or (bt['node'] is not None and g.nodes[bt['node']]['owner'] == p)
+            # vos armées ou vos places ; les batailles de vos alliés et des autres, seulement près de vous et à vue
+            mine = p in owners or (bt['node'] is not None and g.nodes[bt['node']]['owner'] == p)
             if not mine:
                 if vis is None:
                     vis = g.vision_sources(p)[1]
