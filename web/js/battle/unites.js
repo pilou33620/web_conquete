@@ -28,7 +28,7 @@ export class UnitArt {
     const hb = Math.max(4, Math.round(Math.log(H) / Math.log(1.1)));
     const key = `${kind}|${color}|${face}|${hb}|${pose}`;
     let sp = this.sprites.get(key);
-    if (sp) return sp;
+    if (sp) { this.sprites.delete(key); this.sprites.set(key, sp); return sp; }   // le plus récemment servi passe en fin de file
     const h = Math.pow(1.1, hb);
     const wide = kind === 'cav' || kind === 'canon' || kind === 'caisson' || kind === 'attelage';
     const W = Math.ceil(h * (wide ? 2.0 : 0.95)), HH = Math.ceil(h * (wide ? 1.75 : 1.35));
@@ -43,7 +43,7 @@ export class UnitArt {
     else this.soldier(g, u, kind, color, face, pose);
     sp = { cv, ax: W / 2, ay: HH - 1, h };
     this.sprites.set(key, sp);
-    if (this.sprites.size > 900) { const [k, o] = this.sprites.entries().next().value; o.cv.width = 0; this.sprites.delete(k); }
+    if (this.sprites.size > 1500) { const [k] = this.sprites.keys(); this.sprites.delete(k); }
     return sp;
   }
   soldier(g, u, kind, color, face, pose) {
@@ -355,23 +355,30 @@ export class UnitArt {
       if (isGeneral(un)) {
         this.medallion(ctx, sx, p.y, col, un, sel);
       } else {
-        const x0 = sx - p.w / 2, y0 = p.y - p.h / 2, wave = Math.sin(opts.time * 3 + sx * 0.05) * 1.2;
+        const x0 = sx - p.w / 2, y0 = p.y - p.h / 2, rout = un.state === 'deroute' && !ghost;
+        const wave = Math.sin(opts.time * (rout ? 7 : 3) + sx * 0.05) * (rout ? 2.4 : 1.2);
         ctx.fillStyle = 'rgba(8,14,24,0.35)'; ctx.fillRect(x0 + 2, y0 + 2, p.w, p.h);
-        ctx.fillStyle = col;
+        // en déroute : fanion décoloré et barré
+        ctx.fillStyle = rout ? shadeHex(col, 0.45) : col;
         ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(x0 + p.w / 2, y0 + wave, x0 + p.w, y0); ctx.lineTo(x0 + p.w, y0 + p.h); ctx.quadraticCurveTo(x0 + p.w / 2, y0 + p.h + wave, x0, y0 + p.h); ctx.closePath(); ctx.fill();
+        if (rout) { ctx.save(); ctx.globalAlpha *= 0.55; ctx.fillStyle = '#6d6a64'; ctx.fill(); ctx.restore(); }
         ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(x0, y0, 17, p.h);
         ctx.strokeStyle = sel ? '#ffe39a' : mine ? 'rgba(230,201,127,0.9)' : 'rgba(255,255,255,0.45)'; ctx.lineWidth = sel ? 2.4 : 1;
         ctx.stroke();
         this.picto(ctx, clsOf(un), x0 + 8.5, p.y, '#fff8e6');
-        ctx.fillStyle = '#fff8e6'; ctx.font = '600 13px "EB Garamond", Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff8e6'; ctx.font = (rout ? 'italic ' : '') + '600 13px "EB Garamond", Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(ghost ? '?' : un.men >= 1000 ? (un.men / 1000).toFixed(1).replace('.', ',') + 'k' : String(Math.round(un.men)), x0 + 17 + (p.w - 17) / 2, p.y + 1);
+        if (rout) {   // la barre
+          ctx.strokeStyle = '#ffe2c8'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(x0 + 3, y0 + p.h - 3); ctx.lineTo(x0 + p.w - 3, y0 + 3); ctx.stroke();
+          ctx.strokeStyle = '#b8352a'; ctx.lineWidth = 1; ctx.stroke();
+        }
         // moral : un liseré sous le fanion (vert → rouge) pour ses propres troupes
         if (mine) {
           const m = clamp((un.morale ?? 70) / 100, 0, 1);
           ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(x0, y0 + p.h + 1, p.w, 3);
           ctx.fillStyle = m > 0.5 ? '#8fcf6b' : m > 0.3 ? '#e6c45a' : '#e0604f'; ctx.fillRect(x0, y0 + p.h + 1, p.w * m, 3);
         }
-        if (un.state === 'deroute') { ctx.fillStyle = '#ffdf8a'; ctx.font = 'italic 600 12px "EB Garamond", Georgia, serif'; ctx.fillText('déroute', sx, y0 - 8); }
       }
       ctx.globalAlpha = 1;
       out.push({ id: String(un.id), x0: sx - p.w / 2 - 4, y0: p.y - p.h / 2 - 4, x1: sx + p.w / 2 + 4, y1: sy });

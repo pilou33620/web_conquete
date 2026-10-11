@@ -282,12 +282,13 @@ function genMap(scen, seed) {
       if (lineDist(x, y, trace) < 12) t[c] = t[c] === T.ROUTE ? T.PORTE : T.MUR;
       if (Math.hypot(x - bx, y - by) < 26) t[c] = T.BRECHE;
     }
-    // tranchées et gabions de l'assiégeant, barricades des faubourgs
-    for (const r of [520, 610]) {
+    // tranchées de l'assiégeant : deux parallèles devant le front d'attaque, reliées par un boyau en zigzag
+    for (const [r, span] of [[470, 0.2], [600, 0.26]]) {
       const pts = [];
-      for (let a = Math.PI * 0.72; a <= Math.PI * 1.28; a += 0.05) pts.push([Math.round(X + Math.cos(a) * r), Math.round(Y + Math.sin(a) * r * 0.9)]);
+      for (let a = Math.PI - span; a <= Math.PI + span + 1e-6; a += span / 6) pts.push([Math.round(X + Math.cos(a) * r), Math.round(Y + Math.sin(a) * r)]);
       walls.push({ kind: 'barricade', pts, breach: [] });
     }
+    walls.push({ kind: 'barricade', pts: [[X - 600, Y + 30], [X - 570, Y - 25], [X - 530, Y + 25], [X - 500, Y - 20], [X - 470, Y + 10]], breach: [] });
     walls.push({ kind: 'barricade', pts: [[X + 360, Y - 30], [X + 372, Y + 34]], breach: [] });
   }
   return {

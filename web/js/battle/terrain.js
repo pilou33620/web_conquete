@@ -861,14 +861,30 @@ export class Terrain {
       g.strokeStyle = 'rgba(25,20,30,0.3)'; g.lineWidth = 2.4; g.save(); g.translate(1, 1); strokePts(g, w.pts); g.restore();
       g.strokeStyle = snow ? '#f0f0ee' : '#d4c7a5'; g.lineWidth = 1.8; strokePts(g, w.pts);
     }
-    // barricades et tranchées : levée de terre et gabions
+    // barricades et tranchées. Les longs tracés sont des tranchées de siège : terre rejetée en parapet, fond sombre,
+    // gabions (paniers de terre) sur la crête ; les courts, des barricades de charrettes et de poutres.
+    // On ne les trace jamais sur l'eau.
     for (const w of this.walls) {
       if (w.kind !== 'barricade') continue;
-      g.lineCap = 'round';
-      g.strokeStyle = snow ? '#cfc9c0' : '#8c6e48'; g.lineWidth = 6; strokePts(g, w.pts);
-      g.strokeStyle = snow ? '#e6e2da' : '#b8956a'; g.lineWidth = 3; strokePts(g, w.pts);
-      g.fillStyle = '#6a5034';
-      for (const p of resample(w.pts, 3.2)) { g.beginPath(); g.arc(p[0], p[1], 1.1, 0, TAU); g.fill(); }
+      for (const pts of this.splitDry(w.pts)) {
+        if (pts.length < 2) continue;
+        const len = pts.reduce((a, p, k) => k ? a + Math.hypot(p[0] - pts[k - 1][0], p[1] - pts[k - 1][1]) : 0, 0);
+        g.lineCap = 'round'; g.lineJoin = 'round';
+        if (len > 70) {
+          g.strokeStyle = snow ? 'rgba(150,140,128,0.5)' : 'rgba(120,92,58,0.45)'; g.lineWidth = 12; strokePts(g, pts);   // terre remuée
+          g.strokeStyle = snow ? '#d8d2c8' : '#9c7a4e'; g.lineWidth = 7; strokePts(g, offsetPts(pts, -2));                 // parapet
+          g.strokeStyle = snow ? '#7d7468' : '#4d3b26'; g.lineWidth = 2.6; strokePts(g, offsetPts(pts, 2.2));              // le fossé
+          const gab = resample(offsetPts(pts, -3.2), 2.6);
+          for (const [k, p] of gab.entries()) {
+            g.fillStyle = 'rgba(40,28,16,0.45)'; g.beginPath(); g.arc(p[0] + 0.4, p[1] + 0.4, 1.2, 0, TAU); g.fill();
+            g.fillStyle = k % 2 ? '#a88452' : '#b8955f'; g.beginPath(); g.arc(p[0], p[1] - 0.3, 1.05, 0, TAU); g.fill();
+          }
+        } else {
+          g.strokeStyle = 'rgba(30,22,14,0.35)'; g.lineWidth = 4.5; g.save(); g.translate(1, 1); strokePts(g, pts); g.restore();
+          g.strokeStyle = snow ? '#8d8070' : '#6e5134'; g.lineWidth = 3.5; strokePts(g, pts);
+          g.strokeStyle = snow ? '#c9c1b5' : '#9a7650'; g.lineWidth = 1; g.setLineDash([2.5, 1.5]); strokePts(g, pts); g.setLineDash([]);
+        }
+      }
     }
     g.restore();
     // éboulis des brèches
@@ -891,8 +907,21 @@ export class Terrain {
     }
   }
 
+  // découpe une ligne là où elle passe sur l'eau
+  splitDry(pts) {
+    const out = [];
+    let cur = [];
+    for (const p of resample(pts, 4).concat([pts[pts.length - 1]])) {
+      const t = this.at(p[0], p[1]);
+      if (t === T.EAU || t === T.GUE) { if (cur.length > 1) out.push(cur); cur = []; } else cur.push(p);
+    }
+    if (cur.length > 1) out.push(cur);
+    return out;
+  }
+
   // ------------------------------------------------------------------ tuiles
-  level(zp) { for (const L of LEVELS) if (L >= zp * 0.85) return L; return LEVELS[LEVELS.length - 1]; }
+  // niveau des tuiles : on accepte de les agrandir un peu (30 %) plutôt que d'en peindre quatre fois plus
+  level(zp) { for (const L of LEVELS) if (L >= zp * 0.75) return L; return LEVELS[LEVELS.length - 1]; }
   tileKey(L, i, j) { return L * 100000 + j * 1000 + i; }
   // dessine le fond visible ; budget : nombre de tuiles qu'on peut encore peindre à cette image
   draw(ctx, cam, vw, vh, dpr, budget = 2) {
@@ -911,7 +940,7 @@ export class Terrain {
     for (const [i, j] of order) {
       const k = this.tileKey(L, i, j);
       let tile = this.tiles.get(k);
-      if (!tile && painted < budget) { tile = this.paintCanvas(i * span, j * span, span, span, L); tile._k = k; this.tiles.set(k, tile); painted++; this.evict(); }
+      if (!tile && painted < budget) { tile = this.paintCanvas(i * span, j * span, span, span, L); tile._k = k; this.tiles.set(k, tile); painted++; }
       if (tile) { this.tiles.delete(k); this.tiles.set(k, tile); draws.push([tile, i, j]); } else missing = true;
     }
     if (missing || !draws.length) {
@@ -922,16 +951,18 @@ export class Terrain {
         const sp2 = TS / L2;
         for (let j = Math.max(0, Math.floor(y0 / sp2)); j <= Math.floor(y1 / sp2); j++) for (let i = Math.max(0, Math.floor(x0 / sp2)); i <= Math.floor(x1 / sp2); i++) {
           const t2 = this.tiles.get(this.tileKey(L2, i, j));
-          if (t2) ctx.drawImage(t2, i * sp2, j * sp2, sp2 + 0.6 / cam.z, sp2 + 0.6 / cam.z);
+          if (t2 && t2.width) ctx.drawImage(t2, i * sp2, j * sp2, sp2 + 0.6 / cam.z, sp2 + 0.6 / cam.z);
         }
       }
     }
     // léger recouvrement : pas de joint visible entre deux tuiles
     for (const [tile, i, j] of draws) ctx.drawImage(tile, i * span, j * span, span + 0.6 / cam.z, span + 0.6 / cam.z);
+    // éviction après le dessin : jamais une tuile de cette image (elles sont en fin de file)
+    this.evict(Math.max(MAX_TILES, draws.length + 8));
     return missing;
   }
-  evict() {
-    while (this.tiles.size > MAX_TILES) {
+  evict(max = MAX_TILES) {
+    while (this.tiles.size > max) {
       const [k, t] = this.tiles.entries().next().value;
       this.tiles.delete(k);
       t.width = t.height = 0;   // Safari garde sinon la mémoire

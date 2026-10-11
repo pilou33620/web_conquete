@@ -74,10 +74,10 @@ export class Effects {
     const c = Math.cos(dir), s = Math.sin(dir), front = (un?.d || 12) / 2 + 2;
     const n = clamp(Math.round(w / 3.5), 5, 44);
     for (let q = 0; q < n; q++) {
-      const u = (q + Math.random() * 0.8) / n * w - w / 2;
-      const px = x + c * front - s * u, py = y + s * front + c * u;
+      const u = (q + Math.random() * 0.8) / n * w - w / 2, fwd = front + Math.random() * 6;
+      const px = x + c * fwd - s * u, py = y + s * fwd + c * u;
       const sp = 3 + Math.random() * 3;
-      this.addPuff(this.white, px, py, 3, 7 + Math.random() * 4, 2.4 + Math.random() * 1.4, 0.9, 16 + Math.random() * 10, c * sp * 1.6, s * sp * 1.6, 0.15);
+      this.addPuff(this.white, px, py, 3, 5 + Math.random() * 7, 1.8 + Math.random() * 2.2, 0.62 + Math.random() * 0.2, 16 + Math.random() * 12, c * sp * 1.6, s * sp * 1.6, 0.1 + Math.random() * 0.2);
       if (Math.random() < 0.7) this.flashes.push({ x: px + c * 3, y: py + s * 3, alt: 4, r: 4 + Math.random() * 2, t: 0, life: 0.12 + Math.random() * 0.08 });
     }
   }
@@ -93,7 +93,7 @@ export class Effects {
       const at = q * 0.07 + Math.random() * 0.05;
       this.queue.push({ fn: () => {
         this.flashes.push({ x: px + fc * 3, y: py + fs * 3, alt: 1, r: grape ? 5 : 4, t: 0, life: 0.18 });
-        for (let k = 0; k < 4; k++) this.addPuff(this.white, px + fc * (5 + k * 5), py + fs * (5 + k * 5), 3, 8 + k * 2, 3.6, 0.85, 16 + Math.random() * 8, fc * (10 - k * 2), fs * (10 - k * 2), 0.2);
+        for (let k = 0; k < 4; k++) this.addPuff(this.white, px + fc * (5 + k * 5), py + fs * (5 + k * 5), 3, 6 + k * 1.5, 2, 0.7, 14 + Math.random() * 8, fc * (10 - k * 2), fs * (10 - k * 2), 0.2);
         if (grape) {
           for (let k = 0; k < 14; k++) {
             const a = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.28, L = d * (0.75 + Math.random() * 0.35);
@@ -183,8 +183,8 @@ export class Effects {
     }
     ctx.lineCap = 'round';
     for (const s of this.streaks) {
-      const k = s.t / s.life, [ax, ay] = view.toScreen(s.x + (s.x1 - s.x) * Math.max(0, k - 0.25), s.y + (s.y1 - s.y) * Math.max(0, k - 0.25)), [bx, by] = view.toScreen(s.x + (s.x1 - s.x) * k, s.y + (s.y1 - s.y) * k);
-      ctx.strokeStyle = s.dark ? 'rgba(50,40,30,0.8)' : 'rgba(40,36,30,0.65)'; ctx.lineWidth = s.dark ? 1.6 : 1;
+      const k = s.t / s.life, [ax, ay] = view.toScreen(s.x + (s.x1 - s.x) * Math.max(0, k - 0.12), s.y + (s.y1 - s.y) * Math.max(0, k - 0.12)), [bx, by] = view.toScreen(s.x + (s.x1 - s.x) * k, s.y + (s.y1 - s.y) * k);
+      ctx.strokeStyle = s.dark ? 'rgba(50,40,30,0.7)' : 'rgba(70,62,50,0.32)'; ctx.lineWidth = s.dark ? 1.6 : 0.8;
       ctx.beginPath(); ctx.moveTo(ax, ay - z); ctx.lineTo(bx, by - z); ctx.stroke();
     }
     ctx.globalCompositeOperation = 'lighter';

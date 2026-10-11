@@ -43,6 +43,7 @@ export class BattleUI {
         <div class="bt-dtxt"><b>Déploiement</b> — glissez vos régiments dans la zone dorée et orientez-les. <span class="bt-legend"><i class="lg-bois"></i>bois : couvert <i class="lg-haut"></i>hauteurs : vue et portée <i class="lg-bati"></i>bâti, murs</span></div>
         <div class="bt-dbtns"><button class="bt-btn" data-a="couverts">${I.couvert}<span>Couverts</span></button><button class="bt-btn primary" data-a="engager">Engager la bataille</button></div>
       </div>
+      <button class="bt-feedtog" data-a="feedtog" aria-label="Afficher ou replier le fil des événements" title="Fil des événements"><span class="ft-i">‹</span><span class="ft-n" hidden></span></button>
       <div class="bt-feed" aria-live="polite"></div>
       <div class="bt-target-hint" hidden></div>
       <section class="bt-panel" hidden></section>
@@ -53,6 +54,8 @@ export class BattleUI {
         </div>
       </div>
       <nav class="bt-dock" aria-label="Vos régiments"></nav>
+      <button class="bt-dscroll l" data-a="dscroll" data-d="-1" aria-label="Régiments précédents" hidden>‹</button>
+      <button class="bt-dscroll r" data-a="dscroll" data-d="1" aria-label="Régiments suivants" hidden>›</button>
       <div class="bt-toasts"></div>
       <div class="bt-tip" hidden></div>
       <div class="bt-modal" hidden><div class="bt-card" role="dialog" aria-modal="true"></div></div>
@@ -66,7 +69,12 @@ export class BattleUI {
     this.inspected = null;
     this.miniT = 0;
     this.entering = false;
+    // fil des événements replié ou non (gardé sur cet appareil)
+    try { this.feedOff = localStorage.getItem('conquete.bataille.fil') === '0'; } catch (e) { this.feedOff = false; }
+    this.unseen = 0;
+    this.setFeed(!this.feedOff);
     el.addEventListener('click', e => this.click(e));
+    this.$('.bt-dock').addEventListener('scroll', () => this.dockArrows(), { passive: true });
     this.bindMini();
     this.bindDock();
   }
@@ -91,6 +99,7 @@ export class BattleUI {
     const deploy = st.phase === 'deploiement';
     this.$('.bt-deploy').hidden = !deploy;
     this.el.classList.toggle('deploy', deploy);
+    this.el.classList.toggle('fin', st.phase === 'fin');
     this.$('[data-a="auto"]').hidden = deploy || st.phase === 'fin';
     this.$('[data-a="decrocher"]').hidden = st.phase === 'fin';
     for (const bt of this.$('.bt-speed').children) bt.classList.toggle('on', +bt.dataset.v === (st.speed ?? 0) && !deploy);
@@ -109,7 +118,7 @@ export class BattleUI {
     // le journal s'efface peu à peu
     const box = this.$('.bt-feed');
     let changed = false;
-    this.feed = this.feed.filter(f => { const keep = now - f.t < 12000; if (!keep) { f.el.remove(); changed = true; } return keep; });
+    this.feed = this.feed.filter(f => { const keep = now - f.t < 7000; if (!keep) { f.el.remove(); changed = true; } return keep; });
     if (changed && !this.feed.length) box.innerHTML = '';
   }
   addLog(txt) {
@@ -121,8 +130,22 @@ export class BattleUI {
     d.innerHTML = `<span>${esc(hour)}</span>${esc(txt)}`;
     box.appendChild(d);
     this.feed.push({ el: d, t: performance.now() });
-    while (this.feed.length > 4) this.feed.shift().el.remove();
+    while (this.feed.length > 2) this.feed.shift().el.remove();
+    if (this.feedOff) { this.unseen++; const n = this.$('.ft-n'); n.hidden = false; n.textContent = this.unseen > 9 ? '9+' : this.unseen; }
     if (this.modal === 'journal') this.journal();
+  }
+  setFeed(on) {
+    this.feedOff = !on;
+    this.el.classList.toggle('feed-off', !on);
+    this.$('.ft-i').textContent = on ? '‹' : '›';
+    if (on) { this.unseen = 0; this.$('.ft-n').hidden = true; }
+    try { localStorage.setItem('conquete.bataille.fil', on ? '1' : '0'); } catch (e) { /* tant pis */ }
+  }
+  // flèches de défilement de la barre des unités, quand elle déborde
+  dockArrows() {
+    const d = this.$('.bt-dock'), over = d.scrollWidth > d.clientWidth + 4;
+    this.$('.bt-dscroll.l').hidden = !over || d.scrollLeft < 4;
+    this.$('.bt-dscroll.r').hidden = !over || d.scrollLeft + d.clientWidth > d.scrollWidth - 4;
   }
   toast(text, kind = '') {
     const t = document.createElement('div');
@@ -156,6 +179,7 @@ export class BattleUI {
     const scroll = dock.scrollLeft;
     dock.innerHTML = gs.map(g => `<div class="bt-grp"><button class="bt-gl" data-a="selgroup" data-k="${esc(g.k)}">${esc(g.label)}</button><div class="bt-cards">${g.us.map(u => this.cardHtml(u)).join('')}</div></div>`).join('');
     dock.scrollLeft = scroll;
+    this.dockArrows();
     for (const c of dock.querySelectorAll('canvas[data-fig]')) this.figure(c, v.units.get(c.dataset.fig));
   }
   ammoFrac(u) { return u.ammo0 ? clamp(u.ammo / u.ammo0, 0, 1) : u.ammo != null ? clamp(u.ammo / 100, 0, 1) : 1; }
@@ -224,17 +248,18 @@ export class BattleUI {
       h += `<div class="bp-head"><div><div class="bp-t">${us.length} régiments</div><div class="bp-s">${fmt(men)} hommes · moral moyen ${Math.round(us.reduce((a, x) => a + (x.morale ?? 0), 0) / us.length)}</div></div></div>`;
     } else {
       const am = u.ammo0 ? `${fmt(u.ammo)} / ${fmt(u.ammo0)} ${clsOf(u) === 'artillerie' ? 'coups' : 'cartouches'}` : `${fmt(u.ammo ?? 100)} %`;
-      const rg = u.range ? `${fmt(u.range[0])} m efficace · ${fmt(u.range[1])} m max${u.range[2] ? ` · mitraille ${fmt(u.range[2])} m` : ''}` : '—';
+      const rg = u.range ? `portée max ${fmt(u.range[1])} m${u.range[2] ? `, mitraille ${fmt(u.range[2])} m` : ''}` : '';
       h += `<div class="bp-head"><canvas class="bp-fig" data-fig="${esc(u.id)}" width="56" height="64"></canvas><div><div class="bp-t">${esc(u.name)}</div>
         <div class="bp-s">${esc(TYPE_LABEL[u.type] || u.type)} · ${esc(FORM_LABEL[u.form] || u.form || '')} · <span class="bp-state ${u.state}">${esc(STATE_LABEL[u.state] || u.state || '')}</span></div></div></div>
-        <dl class="bp-kv">
+        <dl class="bp-kv two">
           <dt>Hommes</dt><dd>${fmt(u.men)} <small>/ ${fmt(u.men0 || u.men)}</small></dd>
           <dt>Expérience</dt><dd class="bp-stars">${'★'.repeat(stars(u.xp))}<i>${'★'.repeat(5 - stars(u.xp))}</i></dd>
           <dt>Moral</dt><dd><span class="bp-bar mor"><i style="width:${clamp(u.morale ?? 0, 0, 100)}%"></i></span></dd>
           <dt>Endurance</dt><dd><span class="bp-bar end"><i style="width:${clamp(100 - (u.fat ?? 0), 0, 100)}%"></i></span></dd>
-          <dt>Munitions</dt><dd><span class="bp-bar amm"><i style="width:${this.ammoFrac(u) * 100}%"></i></span><small>${am}</small></dd>
-          <dt>Portée</dt><dd><small>${rg}</small></dd>
-        </dl>`;
+          <dt>Munitions</dt><dd><span class="bp-bar amm"><i style="width:${this.ammoFrac(u) * 100}%"></i></span></dd>
+          <dt>Portée</dt><dd>${u.range ? fmt(u.range[0]) + ' m' : '—'}</dd>
+        </dl>
+        <div class="bp-note">${am} · ${rg}</div>`;
     }
     // formations communes
     const forms = cls === 'mix' ? [] : FORMS[cls] || [];
@@ -251,8 +276,7 @@ export class BattleUI {
         <button class="bt-btn" data-a="hold">Tenir</button>
         ${canCharge ? `<button class="bt-btn charge" data-a="charge">Charger !</button>` : ''}
         <button class="bt-btn" data-a="rally" ${anyRout ? '' : 'disabled'}>Rallier</button>
-        <button class="bt-btn danger" data-a="retreat">Retraite</button></div>
-        <p class="bp-help">Touchez le sol pour y aller, un ennemi pour l'attaquer ; glissez pour orienter la ligne.</p>`;
+        <button class="bt-btn danger" data-a="retreat">Retraite</button></div>`;
     }
     p.innerHTML = h;
     const c = p.querySelector('canvas[data-fig]');
@@ -335,6 +359,8 @@ export class BattleUI {
       case 'engager': this.engage(); break;
       case 'couverts': v.showCover = v.showCover === false ? (v.st?.phase === 'deploiement' ? null : true) : false; b.classList.toggle('on', v.showCover !== false); break;
       case 'journal': this.journal(); break;
+      case 'feedtog': this.setFeed(this.feedOff); break;
+      case 'dscroll': { const d = this.$('.bt-dock'); d.scrollBy({ left: +b.dataset.d * d.clientWidth * 0.75, behavior: 'smooth' }); break; }
       case 'aide': this.tips(true); break;
       case 'decrocher': this.confirm('Décrocher ?', 'Toute l’armée rompt le combat et quitte le champ de bataille. L’ennemi reste maître du terrain ; vos blessés restent en arrière.', 'Décrocher', () => v.cmd('withdraw'), true); break;
       case 'auto': this.confirm('Finir automatiquement ?', 'La suite de la bataille est calculée d’un coup, d’après la situation présente : effectifs, moral, munitions et positions tenues.', 'Finir automatiquement', async () => { const r = await v.cmd('autofinish'); if (r.ok) this.toast('Résolution de la bataille…'); }); break;

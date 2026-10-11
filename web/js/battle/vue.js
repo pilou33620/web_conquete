@@ -59,7 +59,12 @@ export class BattleView {
     if (this.running) return;
     this.running = true;
     this.poll();
-    const loop = t => { if (!this.running) return; this.frame(t); this.raf = requestAnimationFrame(loop); };
+    // une erreur dans une image ne doit pas arrêter l'animation
+    const loop = t => {
+      if (!this.running) return;
+      this.raf = requestAnimationFrame(loop);
+      try { this.frame(t); } catch (e) { if (!this.errShown) { this.errShown = true; console.error(e); } }
+    };
     this.raf = requestAnimationFrame(loop);
   }
   stop() {
