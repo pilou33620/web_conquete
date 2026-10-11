@@ -153,6 +153,10 @@ class App:
                     ar['mode'] = body['value']
                     return dict(ok=True)
                 return dict(ok=False, msg='Armée introuvable.')
+            if c == 'rearm':
+                node = body.get('node')
+                return self._r(g.rearm(p, army_id=a if node is None else None,
+                                       nid=None if node is None else self._node(node)))
             if c == 'reflex':
                 ar = g.armies.get(a)
                 if ar and ar['owner'] == p:

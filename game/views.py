@@ -45,6 +45,15 @@ def migrate(g):
         for k, v in dict(fm='ligne', pl='frontal', fm_t=-9.0, tac_auto=True, landing=False, boat=False, emb=0.0,
                          rx=True, des=0.0, depot=None).items():
             a.setdefault(k, v)
+        for r in a['regs']:
+            cls = R.UNITS[r['type']]['cls']
+            if cls in R.ARMS and 'arm' not in r:
+                r['arm'] = g.arm_level(a['owner'], cls)   # anciennes sauvegardes : armes du moment
+    for n in g.nodes:
+        for r in n['garrison']:
+            cls = R.UNITS[r['type']]['cls']
+            if cls in R.ARMS and 'arm' not in r:
+                r['arm'] = g.arm_level(n['owner'], cls)
     for bt in g.battles.values():
         bt.setdefault('mor', [100, 100])
         bt.setdefault('phase', 'fusillade')
@@ -97,7 +106,7 @@ def rules_payload():
     techs = [dict(t, year=R.TECH_YEAR.get(t['id'], 0)) for t in R.TECH.values()]
     return dict(factions=R.FACTIONS, units=R.UNITS, unit_order=R.UNIT_ORDER, techs=techs, fort=fort,
                 scenarios=scen, scenario_order=list(R.SCENARIOS), eras=R.ERAS, unit_year=R.UNIT_YEAR,
-                fast_speed=R.FAST_SPEED,
+                fast_speed=R.FAST_SPEED, arms={c: [[t, nm, k] for t, nm, k in l] for c, l in R.ARMS.items()}, rearm=R.REARM,
                 specialty=R.SPECIALTY, specialty_capital=R.SPECIALTY_CAPITAL, dev=dev,
                 branches=R.BRANCHES, build=build, node_base=R.NODE_BASE, spec={k: v['label'] for k, v in R.SPEC.items()},
                 weather=R.WEATHER, zones=R.ZONES, speeds=R.SPEEDS, res=R.RESOURCES, res_label=R.RES_LABEL,
@@ -113,7 +122,7 @@ def _gen(g):
 
 
 def _reg(r):
-    return [r['id'], r['type'], round(r['n']), r['max'], round(r['xp']), round(r['morale'])]
+    return [r['id'], r['type'], round(r['n']), r['max'], round(r['xp']), round(r['morale']), r.get('arm')]
 
 
 def _legs(a):
@@ -272,7 +281,8 @@ def player_state(g, since=0):
                 pop=int(round(sum(n.get('pop', 0) for n in g.owned_nodes(p)), -2)),
                 weary=int(me.get('weary', 0)), prestige=g.prestige(p),
                 prestige_parts={k: int(round(v)) for k, v in g.prestige_parts(p).items()},
-                glory=int(me.get('prestige', 0)))
+                glory=int(me.get('prestige', 0)),
+                arm={c: g.arm_level(p, c) for c in R.ARMS}, unames={u: g.unit_name(p, u) for u in R.UNITS})
 
     era = g.era()
     return dict(t=round(g.t, 3), date=g.date_str(), season=g.season(), speed=g.speed_idx, over=g.over,

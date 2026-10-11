@@ -163,6 +163,11 @@ export class UI {
     for (const [c, n] of Object.entries(st.names || {})) {
       if (this.rules.factions[c] && this.rules.factions[c].name !== n) { this.rules.factions[c].name = n; renamed = true; }
     }
+    // noms des troupes selon l'époque : piquiers, miquelets, milice bourgeoise, chasseurs à pied…
+    for (const [k, [nm, sh]] of Object.entries(st.me.unames || {})) {
+      const u = this.rules.units[k];
+      if (u && (u.name !== nm || u.short !== sh)) { u.name = nm; u.short = sh; }
+    }
     this.map.setState(st);
     if (first || renamed) {
       const f = this.rules.factions[st.me.code];
@@ -478,6 +483,7 @@ export class UI {
       case 'formation': this.cmd({ cmd: 'formation', army: d.army || sel.id, value: d.v }); break;
       case 'plan': this.cmd({ cmd: 'plan', army: d.army || sel.id, value: d.v }); break;
       case 'reflex': this.cmd({ cmd: 'reflex', army: d.army || sel.id, value: d.v === '1' }); break;
+      case 'rearm': this.cmd(d.node != null ? { cmd: 'rearm', node: +d.node } : { cmd: 'rearm', army: sel.id }); break;
       case 'enroll': {
         const n = +d.n || 0;
         if (!confirm(d.from === 'neutre' ? `Enrôler ${fmt(n)} prisonniers insurgés ?` : `Enrôler ${fmt(n)} prisonniers ? Leur ${this.st.word || 'département'} vous en voudra.`)) break;
@@ -626,15 +632,37 @@ export class UI {
     return Object.entries(cost).every(([k, v]) => (r[k] || 0) >= v);
   }
 
+  // coût pour remettre les armes du moment à ces régiments (null s'ils sont à jour)
+  rearmCost(regs) {
+    const need = {}, arm = this.st.me.arm || {};
+    for (const r of regs) {
+      const cls = this.rules.units[r[1]]?.cls;
+      if (r[6] == null || !this.rules.rearm[cls] || r[6] >= arm[cls]) continue;
+      for (const [k, v] of Object.entries(this.rules.rearm[cls])) need[k] = (need[k] || 0) + v * r[3];
+    }
+    const out = Object.entries(need).map(([k, v]) => [k, Math.round(v)]);
+    return out.length ? out : null;
+  }
+
+  rearmBtn(regs, node) {
+    const cost = this.rearmCost(regs);
+    if (!cost) return '';
+    const ok = cost.every(([k, v]) => (this.st.me.res[k] || 0) >= v);
+    return `<button class="btn" data-act="rearm"${node != null ? ` data-node="${node}"` : ''} ${ok ? '' : 'disabled'} title="Remettre les armes du moment aux régiments démodés">Réarmer<small>${cost.map(([k, v]) => `${fmt(v)} ${k}`).join(', ')}</small></button>`;
+  }
+
   regRow(r, owner, check) {
     const u = this.rules.units[r[1]] || { short: r[1] };
+    const arms = r[6] != null && this.rules.arms[u.cls] ? this.rules.arms[u.cls][r[6]] : null;
+    const old = arms && owner === this.st.me.code && r[6] < (this.st.me.arm || {})[u.cls];
+    const armTxt = arms ? `<span class="small" style="font-weight:400;color:${old ? '#ff9a85' : 'var(--muted, #9a9483)'}" title="${old ? 'Armes démodées : réarmez ce régiment dans une de vos places' : 'Armement'}"> · ${esc(arms[1])}${old ? ' (démodé)' : ''}</span>` : '';
     const frac = r[2] / r[3];
     const stars = r[4] >= 60 ? '★★★' : r[4] >= 30 ? '★★' : r[4] >= 10 ? '★' : '';
     const fixed = check && u.garrison_only;
     const ck = fixed ? '<input type="checkbox" disabled aria-label="Ne quitte pas sa ville">'
       : check ? `<input type="checkbox" data-reg="${r[0]}" ${this.checked.has(r[0]) ? 'checked' : ''} aria-label="Sélectionner">` : '<span></span>';
-    return `<label class="reg ${this.checked.has(r[0]) ? 'sel' : ''}"${fixed ? ' title="La Garde nationale ne quitte pas sa ville"' : u.desc ? ` title="${esc(u.desc)}"` : ''}>${ck}${ICON[r[1]] || ICON.ligne}
-      <div class="rn">${u.short}${stars ? ` <span style="color:var(--laiton-clair)">${stars}</span>` : ''}
+    return `<label class="reg ${this.checked.has(r[0]) ? 'sel' : ''}"${fixed ? ` title="${esc(u.name)} : ne quitte pas sa ville"` : u.desc ? ` title="${esc(u.desc)}"` : ''}>${ck}${ICON[r[1]] || ICON.ligne}
+      <div class="rn">${u.short}${stars ? ` <span style="color:var(--laiton-clair)">${stars}</span>` : ''}${armTxt}
         ${check ? `<div class="bars"><div class="bar ${frac < 0.5 ? 'red' : ''}"><i style="width:${Math.round(frac * 100)}%"></i></div><div class="bar green"><i style="width:${Math.min(100, r[5])}%"></i></div></div>` : ''}</div>
       <div class="rv">${fmt(r[2])}<small class="muted" style="display:block;font-weight:400;font-size:12px">${check ? 'moral ' + r[5] : '/ ' + r[3]}</small></div></label>`;
   }
@@ -717,9 +745,9 @@ export class UI {
         const mobile = ns.g.some(r => !this.rules.units[r[1]]?.garrison_only), garde = ns.g.length > 1 && !ns.g.every(r => !this.rules.units[r[1]]?.garrison_only);
         h += `<div class="section-t">Garnison</div><div class="reg-list">${ns.g.map(r => this.regRow(r, me, true)).join('')}</div>` + (mobile
           ? `<div class="btns"><button class="btn primary" data-act="form">Former une armée</button>
-          ${here.map(a => `<button class="btn" data-act="form" data-into="${a.id}">Renforcer ${esc(a.name)}</button>`).join('')}</div>
-          <div class="muted small" style="margin-top:4px">Cochez des régiments, sinon toute la garnison part${garde ? ' (sauf la Garde nationale)' : ''}.</div>`
-          : `<div class="muted small" style="margin-top:4px">La Garde nationale défend la ville mais n’en sort pas.</div>`);
+          ${here.map(a => `<button class="btn" data-act="form" data-into="${a.id}">Renforcer ${esc(a.name)}</button>`).join('')}${ns.sg ? '' : this.rearmBtn(ns.g, id)}</div>
+          <div class="muted small" style="margin-top:4px">Cochez des régiments, sinon toute la garnison part${garde ? ` (sauf ${/^[aeiouéh]/i.test(this.rules.units.garde.name) ? 'l’' : 'la '}${esc(this.rules.units.garde.name.toLowerCase())})` : ''}.</div>`
+          : `<div class="btns">${ns.sg ? '' : this.rearmBtn(ns.g, id)}</div><div class="muted small" style="margin-top:4px">${esc(this.rules.units.garde.name)} : elle défend la ville mais n’en sort pas.</div>`);
       }
       // ru : armes qu'on peut lever ici (coût mis à part) ; rw : raison pour les autres
       const U = this.rules.units;
@@ -864,6 +892,7 @@ export class UI {
         const near = st.armies.filter(b => b.o === me && b.id !== a.id && Math.hypot(b.x - a.x, b.y - a.y) < 3 && b.st !== 'battle');
         for (const b of near) h += `<button class="btn" data-act="merge" data-other="${b.id}">Réunir ${esc(b.name)}</button>`;
         if (a.n != null && st.nodes[a.n].o === me && a.st === 'idle') h += `<button class="btn" data-act="garrison" data-node="${a.n}">Mettre en garnison</button>`;
+        if (a.n != null && st.nodes[a.n].o === me && a.st === 'idle' && !st.nodes[a.n].sg) h += this.rearmBtn(a.regs);
         if (a.st === 'siege') h += `<button class="btn danger" data-act="assault">Donner l’assaut</button>`;
         if (a.st === 'siege' || a.st === 'move') h += `<button class="btn" data-act="retreat">Se replier</button>`;
         h += `</div>`;
@@ -887,7 +916,7 @@ export class UI {
         <div class="reg-list">${a.regs.map(r => this.regRow(r, a.o, false)).join('')}</div>`;
     }
     h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
-    const sig = JSON.stringify([id, a.st, a.sk, a.md, a.h, a.n, Math.round(a.sup * 20), a.regs.map(r => [r[0], r[2], Math.round(r[5] / 5)]),
+    const sig = JSON.stringify([id, a.st, a.sk, a.md, a.h, a.n, Math.round(a.sup * 20), a.regs.map(r => [r[0], r[2], Math.round(r[5] / 5), r[6]]), st.me.arm, (this.rearmCost(a.regs) || []).map(([k, v]) => st.me.res[k] >= v),
       lastNode(), st.armies.filter(b => b.o === me && Math.hypot(b.x - a.x, b.y - a.y) < 3).length, a.n != null ? st.nodes[a.n].sg : null,
       a.fm, a.pl, a.auto, a.gen, a.boat, !!a.emb, a.fire, a.e && a.e[0], a.dp, a.wn, a.des, a.rx]);
     return [h, sig];
@@ -1186,6 +1215,7 @@ export class UI {
           <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite. Les remparts ont quatre niveaux (le quatrième, les bastions à la Vauban, après la technologie du même nom, dans le chef-lieu et les places fortes) ; ils coûtent un entretien et perdent un niveau quand la place est prise de force.</li>
           <li><b>Deux siècles</b> : la grande campagne part de 1700 (ou de 1790, 1813, 1870) et s’achève fin 1899 ; le plus prestigieux l’emporte. Les provinces deviennent départements en 1790 ; technologies et unités n’apparaissent qu’à leur époque. Vitesses ×10 et ×30 (touches 5 et 6) pour les années de paix : guerres, batailles et grandes propositions remettent en pause.</li>
           <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
+          <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes reçues à sa levée (affichées à côté de son nom) : après une découverte, réarmez les régiments démodés dans une de vos places (bouton « Réarmer », payé en armes, et en fer pour l’artillerie). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
           <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>
           <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
           <li><b>Espions</b> : depuis une place étrangère, espionnez (vision et garnison pendant 45 jours) ou sabotez ses remparts en temps de guerre. Le brouillard de guerre (bouton œil) montre ce que vous voyez réellement.</li>

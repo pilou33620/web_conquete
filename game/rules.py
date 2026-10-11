@@ -195,9 +195,22 @@ BUILD = {
 # ------------------------------------------------------------------ technologies
 TECHS = [
     # id, branche, nom, description, coût, jours, prérequis, effets
-    ('baionnette', 'militaire', 'Baïonnette à douille', "Inventée à Bayonne : l'infanterie tient au corps à corps.", 375, 28, [], dict(inf_power=0.10)),
-    ('fusil1777', 'militaire', 'Fusil modèle 1777', 'Platine fiable, tir plus nourri. Ligne −10 % armes.', 750, 42, ['baionnette'], dict(inf_power=0.12, ligne_armes=-0.10)),
-    ('gribeauval', 'militaire', 'Système Gribeauval', 'Canons standardisés et légers : artillerie +25 %, plus rapide.', 875, 49, [], dict(art_power=0.25, art_speed=0.25)),
+    ('baionnette', 'militaire', 'Fusil et baïonnette à douille', "Inventée à Bayonne : la pique disparaît, chaque fantassin tire et charge. Armement de l'infanterie : fusil à silex (×1,00 au lieu de ×0,85).", 375, 28, [], dict()),
+    ('fusil1777', 'militaire', 'Fusil modèle 1777', 'Platine fiable, tir plus nourri (armement ×1,10). Ligne −10 % armes.', 750, 42, ['baionnette'], dict(ligne_armes=-0.10)),
+    ('valliere', 'militaire', 'Système Vallière', 'Calibres réglementés de 4 à 24 : artillerie ×0,95 au lieu de ×0,85.', 625, 35, [], dict()),
+    ('gribeauval', 'militaire', 'Système Gribeauval', 'Canons standardisés et légers : artillerie ×1,15, plus rapide.', 875, 49, ['valliere'], dict(art_speed=0.25)),
+    ('etat_major', 'militaire', "École d'état-major", 'Officiers formés aux cartes et à la logistique : toutes armes +5 %, moral +5.', 1125, 56, ['divisions'], dict(all_power=0.05, morale=5)),
+    ('valee', 'militaire', 'Système Valée', 'Affûts à flèche, caissons montés : artillerie ×1,30, +10 % de vitesse.', 1125, 56, ['gribeauval'], dict(art_speed=0.10)),
+    ('percussion', 'militaire', 'Fusil à percussion', "L'amorce au fulminate ne craint plus l'humidité : armement ×1,22, la pluie gêne 60 % moins le tir.", 1125, 56, ['fusil1777'], dict(rain=0.60)),
+    ('minie', 'militaire', 'Fusil rayé (balle Minié)', 'Le canon rayé porte à 400 mètres : armement ×1,40, tirailleurs +10 % à couvert.', 1375, 63, ['percussion'], dict(legere_cover=0.10)),
+    ('lahitte', 'militaire', 'Canons rayés La Hitte', 'Obus oblongs, tir précis à 3 km : artillerie ×1,55.', 1375, 63, ['valee'], dict()),
+    ('chassepot', 'militaire', 'Fusil Chassepot', 'Chargement par la culasse, 1 200 mètres : armement ×1,70. On tire couché, cinq coups à la minute.', 1625, 70, ['minie'], dict(ligne_fire=0.10)),
+    ('mitrailleuse', 'militaire', 'Mitrailleuse de Reffye', '25 canons tournés à la manivelle : la ligne fusille +10 %, le carré +30 %.', 1250, 56, ['lahitte'], dict(ligne_fire=0.10, carre_fire=0.30)),
+    ('service_mil', 'militaire', 'Service militaire obligatoire', 'Loi de 1872 : chaque classe passe sous les drapeaux. Recrues +25 %, recrutement −15 % de livres, moral +5.', 1375, 63, ['levee'], dict(recrues=0.25, recruit_cost=-0.15, morale=5)),
+    ('gras', 'militaire', 'Fusil Gras (cartouche métallique)', "La douille de laiton ne s'enraye plus : armement ×1,82.", 1500, 63, ['chassepot'], dict()),
+    ('debange', 'militaire', 'Canons de Bange', 'Acier et culasse étanche : artillerie ×1,85, les sièges avancent 25 % plus vite.', 1750, 70, ['lahitte'], dict(siege_speed=0.25)),
+    ('lebel', 'militaire', 'Fusil Lebel et poudre sans fumée', "Magasin de huit cartouches, poudre B de Vieille : armement ×2,05, plus de nuage pour trahir le tireur (embuscades +20 %).", 1875, 77, ['gras'], dict(ambush=0.20)),
+    ('canon75', 'militaire', 'Canon de 75', 'Frein hydropneumatique, tir rapide : artillerie ×2,30.', 2000, 84, ['debange'], dict()),
     ('hussards', 'militaire', 'Hussards et éclaireurs', 'Cavalerie +15 %, vision +6 km, débusque les embuscades.', 625, 35, [], dict(cav_power=0.15, vision=6, detect=3)),
     ('voltigeurs', 'militaire', 'Tirailleurs et voltigeurs', 'Embuscades +30 %, infanterie légère +20 % à couvert.', 750, 42, ['baionnette'], dict(ambush=0.30, legere_cover=0.20)),
     ('vauban', 'militaire', 'Fortifications à la Vauban', 'Défense des places +15 %, milice +25 %, bastions (fortifications niveau 4) dans le chef-lieu et les places fortes.', 750, 42, [], dict(fort_bonus=0.15, milice=0.25)),
@@ -223,6 +236,10 @@ TECHS = [
     ('canal', 'civil', 'Balisage de la Garonne et canaux', 'Chenaux balisés, chemins de halage : gabares +25 % plus rapides, ports +10 %.', 875, 49, ['ponts_chaussees'], dict(river_speed=0.25, port=0.10)),
     ('ecoles', 'civil', 'Écoles centrales', 'Savants et ingénieurs formés : toutes les recherches 25 % plus rapides.', 1000, 56, ['codecivil'], dict(research_speed=0.25)),
     ('escompte', 'civil', "Caisse d'escompte", 'Crédit aux négociants : meilleurs prix au marché, commerce +10 %.', 750, 42, ['diplomates'], dict(market=0.08, trade=0.10)),
+    ('chemins_fer', 'civil', 'Chemins de fer', 'Bordeaux–La Teste en 1841, puis Paris : +30 % sur route, les armées s’épuisent 30 % moins vite loin de chez elles.', 1500, 70, ['ponts'], dict(road_speed=0.30, supply_drain=-0.30)),
+    ('telegraphe', 'civil', 'Télégraphe électrique', 'Les nouvelles vont à la vitesse de l’éclair : vision des villes +15 km, des armées +4 km.', 1125, 56, ['chappe'], dict(node_vision=15, vision=4)),
+    ('ferry', 'civil', 'Écoles de Jules Ferry', 'École gratuite, laïque et obligatoire : recherches +20 %, ordre public +5 %, recrues +5 %.', 1375, 63, ['ecoles'], dict(research_speed=0.20, order=0.05, recrues=0.05)),
+    ('hygiene', 'civil', 'Hygiène pastorienne', 'Vaccins, eau saine, asepsie : usure des armées −30 %, pertes −10 %.', 1250, 56, ['larrey'], dict(attrition=-0.30, casualties=-0.10)),
 
     ('hauts_fourneaux', 'industriel', 'Hauts fourneaux', 'Production de fer +30 %.', 500, 35, [], dict(fer=0.30)),
     ('manufactures', 'industriel', 'Manufactures royales', 'Capacité industrielle +25 %.', 625, 42, [], dict(industrie=0.25)),
@@ -234,6 +251,8 @@ TECHS = [
     ('coke', 'industriel', 'Forges à l’anglaise (coke)', 'Fonte au coke : fer +25 %, capacité industrielle +10 %.', 1000, 56, ['hauts_fourneaux'], dict(fer=0.25, industrie=0.10)),
     ('pieces', 'industriel', 'Pièces interchangeables (Honoré Blanc)', 'Platines identiques : armes +30 %, la ligne coûte 10 % d’armes en moins.', 1125, 56, ['armureries'], dict(armes_eff=0.30, ligne_armes=-0.10)),
     ('draperies', 'industriel', 'Draperies et manufactures de province', 'Draps, cuirs, tabacs et forges des villes +40 % ; uniformes : moral +5.', 750, 42, ['manufactures'], dict(manuf=0.40, morale=5)),
+    ('acier', 'industriel', 'Acier Bessemer et Martin', 'Convertisseurs et fours Martin : fer +30 %, armes +20 %.', 1375, 63, ['coke'], dict(fer=0.30, armes_eff=0.20)),
+    ('electricite', 'industriel', 'Électricité', 'Dynamos et moteurs : capacité industrielle +30 %.', 1625, 70, ['vapeur'], dict(industrie=0.30)),
     ('gabares', 'industriel', 'Chantiers de gabares', 'Gabares et couraux plus grands : transport fluvial +15 %, ports +10 %.', 625, 35, [], dict(river_speed=0.15, port=0.10)),
 
     ('assolement', 'agricole', 'Assolement sans jachère', 'Vivres +20 %.', 375, 28, [], dict(vivres=0.20)),
@@ -248,6 +267,9 @@ TECHS = [
     ('gemmage', 'agricole', 'Gemmage et résiniers', 'Les pins saignés donnent la résine : spécialités résinières +50 %, landes +10 %.', 625, 35, ['pins'], dict(resine=0.50, lande_prod=0.10)),
     ('transhumance', 'agricole', 'Transhumance et estives', 'Troupeaux aux estives : places en montagne et en collines +30 %.', 625, 35, [], dict(mountain_prod=0.30)),
     ('greniers', 'agricole', 'Greniers publics', 'Réserves de la nation : greniers +50 %.', 750, 42, ['assolement'], dict(granary=0.50)),
+    ('engrais_chim', 'agricole', 'Engrais chimiques', 'Guano, phosphates, superphosphates : vivres +20 %.', 1250, 56, ['engrais'], dict(vivres=0.20)),
+    ('landes1857', 'agricole', 'Assainissement des Landes (loi de 1857)', 'Les communes plantent et drainent la lande : landes et marais +40 %, bois +20 %.', 1125, 56, ['drainage', 'pins'], dict(lande_prod=0.40, bois=0.20)),
+    ('greffe', 'agricole', 'Vignes greffées sur plants américains', 'Après le phylloxéra, le vignoble renaît : revenus du vin +30 %.', 1125, 56, ['chais'], dict(vin=0.30)),
     ('conserves', 'agricole', 'Conserves d’Appert', 'Vivres en bocaux : les armées s’épuisent 40 % moins vite loin de chez elles.', 1000, 56, ['pomme_de_terre'], dict(supply_drain=-0.40)),
 ]
 TECH = {t[0]: dict(id=t[0], branch=t[1], name=t[2], desc=t[3], cost=t[4], days=t[5], req=t[6], fx=t[7]) for t in TECHS}
@@ -322,13 +344,13 @@ SCENARIOS = {
     '1790': dict(date=(1790, 3, 4), title='Aquitaine, 1790', campaign='Depuis la Révolution',
                  intro='L’Assemblée vient de créer les départements. Choisissez le vôtre, ralliez ses villages, '
                        'puis prenez les chefs-lieux voisins par les armes, le commerce ou la diplomatie.',
-                 techs_before=None),
+                 techs_before=1778),
     '1813': dict(date=(1813, 6, 1), title='Aquitaine, 1813', campaign='La fin de l’Empire',
                  intro='L’Empire vacille, la guerre d’Espagne tourne mal : la frontière des Pyrénées s’embrase.',
                  techs_before=1806),
     '1870': dict(date=(1870, 7, 19), title='Aquitaine, 1870', campaign='La guerre de 1870',
                  intro='La France déclare la guerre à la Prusse. Chemins de fer et fusils Chassepot : '
-                       'un autre siècle commence.', techs_before=1862),
+                       'un autre siècle commence.', techs_before=1866),
 }
 # traités : un camp dont le chef-lieu tombe signe la paix au lieu de disparaître, sauf s'il est déjà écrasé
 TREATY_TRUCE = 5 * 365       # trêve imposée par un traité (jours)
@@ -357,9 +379,37 @@ TECH_YEAR = dict(
     pomme_de_terre=1785, coke=1785, pins=1787, ponts=1770, gendarmerie=1791, levee=1793, chappe=1794, pieces=1790,
     voltigeurs=1795, ecoles=1795, divisions=1796, art_cheval=1792, larrey=1797, prefectures=1800, drainage=1800,
     greniers=1790, codecivil=1804, cadastre=1807, conserves=1810, vapeur=1820, engrais=1820, outillage=1830,
-    canal=1838, poste=1700)
-# unités apparues en cours de route
-UNIT_YEAR = dict(garde=1789, chasseurs=1792)
+    canal=1838, poste=1700, valliere=1732, etat_major=1818, valee=1827, percussion=1840, minie=1849, lahitte=1858,
+    chassepot=1866, mitrailleuse=1866, service_mil=1872, gras=1874, debange=1877, lebel=1886, canon75=1897,
+    chemins_fer=1841, telegraphe=1850, ferry=1881, hygiene=1885, acier=1860, electricite=1882, engrais_chim=1850,
+    landes1857=1857, greffe=1880)
+# unités apparues en cours de route (la milice bourgeoise et les miquelets existent dès 1700 sous d'autres noms)
+UNIT_YEAR = dict()
+
+# ------------------------------------------------------------------ armement
+# Chaque régiment garde les armes reçues à sa levée ; il faut le réarmer pour profiter d'un nouveau fusil.
+# (technologie, nom, multiplicateur de puissance)
+ARMS = {
+    'inf': [(None, 'mousquet et piques', 0.85), ('baionnette', 'fusil à silex', 1.0), ('fusil1777', 'fusil 1777', 1.10),
+            ('percussion', 'fusil à percussion', 1.22), ('minie', 'fusil rayé', 1.40), ('chassepot', 'Chassepot', 1.70),
+            ('gras', 'fusil Gras', 1.82), ('lebel', 'Lebel', 2.05)],
+    'artillerie': [(None, 'canons de bronze', 0.85), ('valliere', 'système Vallière', 0.95), ('gribeauval', 'Gribeauval', 1.15),
+                   ('valee', 'système Valée', 1.30), ('lahitte', 'canons rayés', 1.55), ('debange', 'de Bange', 1.85),
+                   ('canon75', 'canon de 75', 2.30)],
+}
+REARM = dict(inf=dict(armes=0.12), artillerie=dict(armes=0.25, fer=0.25))   # par homme du régiment
+# noms des troupes selon l'époque : (année de début, technologie requise ou None, nom, nom court)
+UNIT_NAMES = {
+    'ligne': [(1700, None, 'Mousquetaires et piquiers', 'Piquiers'), (1700, 'baionnette', 'Infanterie de ligne', 'Ligne')],
+    'legere': [(1700, None, 'Troupes légères (fusiliers, arquebusiers)', 'Légère'),
+               (1700, 'voltigeurs', 'Infanterie légère (voltigeurs)', 'Légère'), (1838, None, 'Chasseurs à pied', 'Chass. à pied')],
+    'cavalerie': [(1700, None, 'Cavalerie (dragons, chevau-légers)', 'Cavalerie'), (1700, 'hussards', 'Cavalerie (dragons, hussards)', 'Cavalerie'),
+                  (1800, 'cuirassiers', 'Cavalerie (cuirassiers, dragons, hussards)', 'Cavalerie'),
+                  (1871, None, 'Cavalerie (dragons, chasseurs à cheval)', 'Cavalerie')],
+    'chasseurs': [(1700, None, 'Miquelets (fusiliers de montagne)', 'Miquelets'), (1792, None, 'Chasseurs basques (montagnards)', 'Chasseurs')],
+    'garde': [(1700, None, 'Milice bourgeoise', 'Milice b.'), (1789, None, 'Garde nationale', 'Garde nat.'),
+              (1872, None, 'Armée territoriale', 'Territoriale')],
+}
 
 # ------------------------------------------------------------------ généraux
 GENERAL_TRAITS = {

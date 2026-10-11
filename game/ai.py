@@ -4,6 +4,8 @@ import random
 
 from . import rules as R
 from . import diplomacy as D
+
+ARM_TECHS = {t for l in R.ARMS.values() for t, _, _ in l if t}
 from .geo import TERRAIN
 
 MIX = {
@@ -40,6 +42,19 @@ class AI:
             self.diplo_clock = self.g.t + 8 + self.rng.random() * 5
             self.diplomacy()
             self.espionage()
+            self.rearm()
+
+    def rearm(self):
+        """Remettre des armes neuves aux régiments au repos dans nos places, en gardant de quoi lever des troupes."""
+        g, code, r = self.g, self.code, self.f['res']
+        groups = [('army', a['id'], a['regs']) for a in g.armies.values()
+                  if a['owner'] == code and a['state'] == 'idle' and a['at_node'] is not None
+                  and g.nodes[a['at_node']]['owner'] == code and not g.nodes[a['at_node']]['siege']]
+        groups += [('node', n['id'], n['garrison']) for n in g.nodes if n['owner'] == code and n['garrison'] and not n['siege']]
+        for kind, ident, regs in groups:
+            cost = g.rearm_cost(code, regs)
+            if cost and all(r[k] - v > 120 for k, v in cost.items()):
+                g.rearm(code, army_id=ident) if kind == 'army' else g.rearm(code, nid=ident)
 
     def espionage(self):
         """Saboter les remparts d'une place ennemie que nos armées convoitent, ou espionner un voisin."""
@@ -130,11 +145,13 @@ class AI:
         for b in sorted(R.BRANCHES, key=lambda b: (b != self.pers['tech'], self.rng.random())):
             if f['research'][b]:
                 continue
+            year = g.date().year
             avail = [t for t in R.TECH.values() if t['branch'] == b and t['id'] not in f['techs']
-                     and all(q in f['techs'] for q in t['req'])]
+                     and all(q in f['techs'] for q in t['req']) and R.TECH_YEAR.get(t['id'], 0) <= year]
             if not avail:
                 continue
-            t = min(avail, key=lambda t: t['cost'] * (0.8 + 0.4 * self.rng.random()))
+            # un nouveau fusil ou un nouveau canon passe avant tout : une armée démodée est une armée battue
+            t = min(avail, key=lambda t: t['cost'] * (0.8 + 0.4 * self.rng.random()) * (0.4 if t['id'] in ARM_TECHS else 1))
             if f['res']['livres'] > t['cost'] + 180:
                 g.research(self.code, t['id'])
                 return

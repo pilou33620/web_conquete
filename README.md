@@ -71,16 +71,28 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
 ### La grande campagne et les époques
 - **Quatre départs** au choix sur l'écran d'accueil :
   - **1700** : la grande campagne, jusqu'à la fin de 1899 ;
-  - **1790** : la Révolution, comme à l'origine du jeu ;
+  - **1790** : la Révolution, avec les techniques connues vers 1778 (fusil 1777, système Gribeauval…) ;
   - **1813** : la fin de l'Empire, avec les technologies d'époque déjà acquises ;
-  - **1870** : la guerre de 1870, avec toutes les technologies.
+  - **1870** : la guerre de 1870, avec le Chassepot, les canons rayés et la mitrailleuse.
 - **Provinces puis départements** : avant le 4 mars 1790, les cinq camps sont la **Guyenne**, le **Périgord**,
   les **Landes de Gascogne**, l'**Agenais** et le **Béarn et Pays basque**. À cette date, ils deviennent les cinq départements.
 - **Époques** : Grand Siècle finissant (1700), Lumières (1715), Révolution (1789), Consulat et Empire (1804), Restauration
   (1815), IIe République et Second Empire (1848), IIIe République (1870). Le passage d'une époque à l'autre est annoncé
   et met le jeu en pause.
-- **Technologies et unités datées** : une technologie ne se recherche qu'une fois inventée (la machine à vapeur vers 1820,
-  le canal vers 1838…). La Garde nationale n'existe qu'à partir de 1789, les chasseurs basques qu'à partir de 1792.
+- **Technologies datées** : 73 technologies, de la baïonnette à douille (1700) au canon de 75 (1897) ; chacune ne se
+  recherche qu'une fois inventée (la machine à vapeur vers 1820, les chemins de fer vers 1841, le Chassepot vers 1866…).
+- **Armement par époque** : chaque régiment garde les armes reçues à sa levée, affichées à côté de son nom.
+  - Infanterie : mousquet et piques (×0,85), fusil à silex (×1), fusil 1777 (×1,10), fusil à percussion (×1,22, ne
+    craint plus la pluie), fusil rayé Minié (×1,40), Chassepot (×1,70), fusil Gras (×1,82), Lebel (×2,05).
+  - Artillerie : canons de bronze (×0,85), système Vallière (×0,95), Gribeauval (×1,15), Valée (×1,30), canons rayés
+    La Hitte (×1,55), de Bange (×1,85), canon de 75 (×2,30).
+  - Après une découverte, les nouveaux régiments reçoivent les nouvelles armes ; les anciens se **réarment** dans une
+    de vos places, au repos et hors siège (bouton « Réarmer » : 0,12 arme par homme, 0,25 arme et 0,25 fer par
+    artilleur ; les soldats perdent un peu d'expérience à réapprendre). La milice prend toujours les armes de son camp.
+  - La cavalerie ne change pas d'armes : face aux fusils rayés, ses charges perdent peu à peu leur avantage.
+- **Noms d'époque** : mousquetaires et piquiers avant la baïonnette, miquelets (fusiliers de montagne) avant les chasseurs
+  basques de 1792, milice bourgeoise puis Garde nationale (1789) puis armée territoriale (1872), voltigeurs puis
+  chasseurs à pied (1838), cuirassiers sous l'Empire…
 - **Villes** : leur population suit une croissance séculaire. Bordeaux compte environ 80 000 habitants en 1700 et
   110 000 en 1790 ; sa population « normale » est multipliée par 1,6 en 1900. Les agrandissements s'y ajoutent.
 - **Fin de partie** : au 1er janvier 1900, le camp le plus **prestigieux** l'emporte. Prendre tous les chefs-lieux
@@ -154,7 +166,7 @@ Chaque place a un niveau de fortification, dessiné sur la carte autour de la vi
 
 ### Unités, intendance et prisonniers
 - Outre la ligne, les voltigeurs, la cavalerie et l'artillerie :
-  - **Grenadiers** : infanterie d'élite, déjà aguerrie, chère ; après la technologie « Baïonnette à douille ».
+  - **Grenadiers** : infanterie d'élite, déjà aguerrie, chère ; après la technologie « Fusil et baïonnette à douille ».
   - **Chasseurs basques** : infanterie légère des montagnes, redoutable en relief, s'use peu dans les cols ;
     levés seulement en Pays basque et en Béarn.
   - **Sapeurs du génie** : peu combatifs, mais ils accélèrent les sièges et jettent des ponts (plus d'attente au bac).

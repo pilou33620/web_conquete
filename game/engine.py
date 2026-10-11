@@ -76,17 +76,18 @@ class Game:
                                    stab=1.0, garrison=[], queue=[], siege=None, last_seen={}, depot=0))
             if owner != R.NEUTRAL:
                 self.factions[owner]['start_nodes'] += 1
-        for code in R.FACTIONS:
-            cap = self.capital_of(code)
-            self.nodes[cap]['garrison'] = [self.new_reg('ligne'), self.new_reg('ligne'), self.new_reg('cavalerie')]
-            gx, gy = geo.nodes[cap]['x'], geo.nodes[cap]['y']
-            self.create_army(code, gx, gy, [self.new_reg('ligne'), self.new_reg('legere'), self.new_reg('cavalerie')], node=cap)
-            self.recompute_mods(code)
         sc = R.SCENARIOS[self.scenario]
         if sc.get('techs_before'):
             for f in self.factions.values():
                 f['techs'] = [t for t in R.TECH if R.TECH_YEAR[t] <= sc['techs_before']]
-                self.recompute_mods(f['code'])
+        # (les techniques de l'époque d'abord : les premières troupes en ont les armes)
+        for code in R.FACTIONS:
+            cap = self.capital_of(code)
+            self.nodes[cap]['garrison'] = [self.new_reg('ligne', code=code), self.new_reg('ligne', code=code),
+                                           self.new_reg('cavalerie', code=code)]
+            gx, gy = geo.nodes[cap]['x'], geo.nodes[cap]['y']
+            self.create_army(code, gx, gy, [self.new_reg(t, code=code) for t in ('ligne', 'legere', 'cavalerie')], node=cap)
+            self.recompute_mods(code)
         self.era_id = self.era()['id']
         if self.scenario == '1790':
             self.log('info', f"4 mars 1790 : l'Assemblée crée les départements. Vous gouvernez {self.fname(player)}.",
@@ -104,10 +105,84 @@ class Game:
         self.uid += 1
         return f'{prefix}{self.uid}'
 
-    def new_reg(self, typ, n=None):
+    def new_reg(self, typ, n=None, code=None):
         u = R.UNITS[typ]
-        return dict(id=self.nid('r'), type=typ, n=float(u['men'] if n is None else n), max=u['men'],
-                    xp=float(u.get('xp0', 0)), morale=80.0 + u.get('morale0', 0))
+        reg = dict(id=self.nid('r'), type=typ, n=float(u['men'] if n is None else n), max=u['men'],
+                   xp=float(u.get('xp0', 0)), morale=80.0 + u.get('morale0', 0))
+        if u['cls'] in R.ARMS:
+            reg['arm'] = self.arm_level(code, u['cls']) if code else 0   # les armes du moment, gardées jusqu'au réarmement
+        return reg
+
+    # ------------------------------------------------------------------ armement et noms d'époque
+    def arm_level(self, code, cls):
+        """Meilleure génération d'armes que ce camp sait fabriquer (0 = mousquet et piques, canons de bronze)."""
+        if code not in self.factions:
+            # villages insurgés : les armes d'une génération déjà répandue (une dizaine d'années de retard)
+            y = self.date().year - 10
+            return max(i for i, (t, _, _) in enumerate(R.ARMS[cls]) if t is None or R.TECH_YEAR.get(t, 0) <= y)
+        techs = self.factions[code]['techs']
+        return max(i for i, (t, _, _) in enumerate(R.ARMS[cls]) if t is None or t in techs)
+
+    def arm_k(self, code, cls, level=None):
+        return R.ARMS[cls][self.arm_level(code, cls) if level is None else min(level, len(R.ARMS[cls]) - 1)][2]
+
+    def milice_k(self, code):
+        """La milice se rééquipe à l'arsenal de sa ville : elle a toujours les armes de son camp."""
+        return self.arm_k(code, 'inf')
+
+    def unit_name(self, code, typ):
+        """(nom, nom court) de ce type de troupe pour ce camp, selon l'époque et ses technologies."""
+        u = R.UNITS[typ]
+        name, short = u['name'], u['short']
+        techs = self.factions[code]['techs'] if code in self.factions else []
+        y = self.date().year
+        for y0, tech, nm, sh in R.UNIT_NAMES.get(typ, []):
+            if y >= y0 and (tech is None or tech in techs):
+                name, short = nm, sh
+        return name, short
+
+    def rearm_cost(self, code, regs):
+        need = {}
+        for r in regs:
+            cls = R.UNITS[r['type']]['cls']
+            if cls in R.ARMS and r.get('arm', 0) < self.arm_level(code, cls):
+                for k, v in R.REARM[cls].items():
+                    need[k] = need.get(k, 0) + v * r['max']
+        return {k: int(round(v)) for k, v in need.items()}
+
+    def rearm(self, code, army_id=None, nid=None):
+        """Remet les armes du moment aux régiments d'une armée au repos dans une place amie, ou d'une garnison."""
+        f = self.factions[code]
+        if army_id is not None:
+            a = self.armies.get(army_id)
+            if not a or a['owner'] != code:
+                return False, "Armée introuvable."
+            if a['state'] != 'idle' or a['at_node'] is None or self.nodes[a['at_node']]['owner'] != code \
+                    or self.nodes[a['at_node']]['siege']:
+                return False, "Il faut un arsenal : l'armée doit être au repos dans une de vos places, hors siège."
+            regs, where = a['regs'], self.geo.nodes[a['at_node']]['name']
+        else:
+            n = self.nodes[nid]
+            if n['owner'] != code or n['siege']:
+                return False, "Place indisponible."
+            regs, where = n['garrison'], self.geo.nodes[nid]['name']
+        cost = self.rearm_cost(code, regs)
+        if not cost:
+            return False, "Ces régiments ont déjà les meilleures armes."
+        if any(f['res'][k] < v for k, v in cost.items()):
+            return False, "Pas assez " + ' ni '.join(R.de(k) for k, v in cost.items() if f['res'][k] < v) + " pour réarmer."
+        for k, v in cost.items():
+            f['res'][k] -= v
+        cnt = 0
+        for r in regs:
+            cls = R.UNITS[r['type']]['cls']
+            if cls in R.ARMS and r.get('arm', 0) < self.arm_level(code, cls):
+                r['arm'] = self.arm_level(code, cls)
+                r['xp'] *= 0.85   # il faut réapprendre à tirer
+                cnt += 1
+        self._dirty_income = True
+        return True, f"{R.pl(cnt, 'régiment réarmé', 'régiments réarmés')} à {where} (" + \
+            ', '.join(f"{v} {k}" for k, v in cost.items()) + ")."
 
     def has_sapeurs(self, a):
         return any(r['type'] == 'sapeurs' for r in a['regs'])
@@ -654,7 +729,11 @@ class Game:
                         f['techs'].append(cur['tech'])
                         self.recompute_mods(code)
                         if code == self.player:
-                            self.log('tech', f"Découverte : {R.TECH[cur['tech']]['name']}.", important=True)
+                            arm = next((R.ARMS[c][i][1] for c in R.ARMS for i in range(len(R.ARMS[c]))
+                                        if R.ARMS[c][i][0] == cur['tech']), None)
+                            self.log('tech', f"Découverte : {R.TECH[cur['tech']]['name']}." +
+                                     (f" Nouvel armement ({arm}) pour les régiments levés désormais ; réarmez les anciens "
+                                      f"dans vos places (bouton « Réarmer »)." if arm else ''), important=True)
         # milice et stabilité (l'ordre public tend vers une cible : impôts, famine, banqueroute, garnison) :
         # évolutions lentes, calculées par paquets d'un quart de jour pour ménager les petites machines
         self._slow_dt = getattr(self, '_slow_dt', 0.0) + dt
@@ -828,7 +907,7 @@ class Game:
             return False, "Ressources insuffisantes."
         self.pay(code, cost)
         n['queue'].append(dict(kind='unit', what=typ, left=self.unit_days(code, typ), total=self.unit_days(code, typ)))
-        return True, f"{R.UNITS[typ]['name']} en formation à {gn['name']}."
+        return True, f"{self.unit_name(code, typ)[0]} en formation à {gn['name']}."
 
     def build(self, code, nid, what):
         n = self.nodes[nid]
@@ -871,11 +950,11 @@ class Game:
                 n['queue'].pop(0)
                 gn = self.geo.nodes[n['id']]
                 if q['kind'] == 'unit':
-                    reg = self.new_reg(q['what'])
+                    reg = self.new_reg(q['what'], code=n['owner'])
                     reg['morale'] = 70 + R.UNITS[q['what']].get('morale0', 0) + self.mod(n['owner'], 'morale')
                     n['garrison'].append(reg)
                     if n['owner'] == self.player:
-                        self.log('armee', f"{R.UNITS[q['what']]['name']} : {R.UNITS[q['what']]['ready']} à {gn['name']}.",
+                        self.log('armee', f"Régiment levé à {gn['name']} : {self.unit_name(n['owner'], q['what'])[0].lower()}.",
                                  gn['x'], gn['y'])
                 else:
                     if q['what'] == 'fort':
@@ -978,9 +1057,11 @@ class Game:
         p = r['n'] * u['power'] * u['terrain'].get(tname, 1.0)
         k = 1 + self.mod(code, 'all_power')
         cls = u['cls']
+        if cls in R.ARMS:
+            p *= R.ARMS[cls][min(r.get('arm', 0), len(R.ARMS[cls]) - 1)][2]
         if cls == 'inf':
             k += self.mod(code, 'inf_power')
-            p *= wx_fire
+            p *= 1 - (1 - wx_fire) * (1 - self.mod(code, 'rain'))   # l'amorce à percussion ne craint plus la pluie
         elif cls == 'artillerie':
             k += self.mod(code, 'art_power')
             p *= wx_fire
@@ -1013,7 +1094,7 @@ class Game:
         fort_eff = n['fort'] * (1 - (n['siege']['dmg'] if n['siege'] else 0))
         fb = 1 + 0.35 * fort_eff + (self.mod(code, 'fort_bonus') if code != R.NEUTRAL else 0)
         tname = TERRAIN[self.geo.terrain_at(gn['x'], gn['y'])][0]
-        p = n['milice'] * R.MILICE_POWER
+        p = n['milice'] * R.MILICE_POWER * self.milice_k(code)
         if code != R.NEUTRAL:
             p += sum(self.reg_power(code, r, tname) * (R.GARDE_HOME if r['type'] == 'garde' else 1) for r in n['garrison'])
         p *= fb
@@ -1041,7 +1122,7 @@ class Game:
                 p += self.army_power(a)
         for n in self.nodes:
             if n['owner'] == code:
-                p += n['milice'] * R.MILICE_POWER * 0.5 + sum(self.reg_power(code, r, 'Plaine') for r in n['garrison'])
+                p += n['milice'] * R.MILICE_POWER * self.milice_k(code) * 0.5 + sum(self.reg_power(code, r, 'Plaine') for r in n['garrison'])
         return p
 
     def army_pos_node(self, a):
@@ -2024,7 +2105,7 @@ class Game:
         foe_pow = sum(self.reg_power(o, r, bt['terrain'], 1.0, False, x) for o, r, x in foe) + 1
         if bt['sides'][1 - si]['node'] is not None:
             n = self.nodes[bt['sides'][1 - si]['node']]
-            foe_pow += n['milice'] * R.MILICE_POWER * (1 + 0.35 * n['fort'])
+            foe_pow += n['milice'] * R.MILICE_POWER * self.milice_k(n['owner']) * (1 + 0.35 * n['fort'])
         if my_pow < 0.5 * foe_pow and bt['sides'][si]['node'] is None:
             pl = 'harcelement'
         elif my_art >= 0.08 and (si == 0 or bt['node'] is not None):
@@ -2153,7 +2234,7 @@ class Game:
                     targets[si].append((r['n'], r['type'], fm_t, protected, r, a, recv * wall))
                 if node is not None:
                     o = node['owner']
-                    P[si]['inf'] += node['milice'] * R.MILICE_POWER * fb * R.PHASE_W[phase]['inf'] * 1.05
+                    P[si]['inf'] += node['milice'] * R.MILICE_POWER * self.milice_k(o) * fb * R.PHASE_W[phase]['inf'] * 1.05
                     men[si] += node['milice']
                     targets[si].append((node['milice'], 'milice', 'ligne', protected, node, None, wall))
                     if o != R.NEUTRAL:
