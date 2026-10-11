@@ -38,7 +38,7 @@ FACTIONS = {
 }
 # Production minimale garantie par jour tant que le département tient son chef-lieu
 # (modulée par ses traits : forges du Périgord, pins des Landes, grenier agenais… ; les vivres suivent les saisons)
-FLOOR = dict(livres=20, vivres=16, fer=6, bois=6, recrues=8)
+FLOOR = dict(livres=20, vivres=16, fer=9, bois=9, recrues=8)
 
 NEUTRAL = 'neutre'
 NEUTRAL_COLOR = '#8d8a7a'
@@ -83,7 +83,9 @@ UNITS = {
 UNIT_ORDER = ['ligne', 'legere', 'grenadiers', 'chasseurs', 'cavalerie', 'artillerie', 'sapeurs', 'garde']
 UNIT_CLS = {'cavalerie': 'cavalerie', 'artillerie': 'artillerie'}   # tout le reste est de l'infanterie
 LIGHT_UNITS = ('legere', 'chasseurs')
+READY = {'grenadiers': 'prêts', 'chasseurs': 'prêts', 'sapeurs': 'prêts'}   # les autres noms sont féminins
 for _k, _u in UNITS.items():
+    _u.setdefault('ready', READY.get(_k, 'prête'))
     _u.setdefault('cls', UNIT_CLS.get(_k, 'inf'))
     _u.setdefault('light', _k in LIGHT_UNITS)
     _u.setdefault('garrison_only', False)
@@ -108,7 +110,24 @@ DEPOT_KM = 30.0              # rayon d'action d'un magasin aux vivres
 DEPOT_FOOD = 0.15            # vivres par jour et par centaine d'hommes ravitaillés par un magasin
 PRISONER_FOOD = 0.003        # vivres par jour et par prisonnier
 PRISONER_RANSOM = 2          # livres par prisonnier racheté
-SAPEUR_SIEGE = 0.04          # avancée du siège par jour et par compagnie de sapeurs
+SAPEUR_SIEGE = 0.04
+PROPOSAL_DAYS = 40           # durée de validité d'une proposition reçue
+
+
+def de(nom):
+    """« de » élidé devant une voyelle ou un h muet : d'Agen, d'avril, de Bordeaux."""
+    return f"d'{nom}" if nom[:1].lower() in 'aeiouyhâàéèêîïôöûü' else f"de {nom}"
+
+
+def num(x, dec=1):
+    """Nombre à la française : virgule décimale, signe moins typographique."""
+    s = f"{abs(x):.{dec}f}".replace('.', ',')
+    return ('−' if x < 0 else '+') + s
+
+
+def pl(n, sing, plur=None):
+    """« 1 vignoble », « 3 vignobles »."""
+    return f"{n} {sing if abs(n) < 2 else (plur or sing + 's')}"          # avancée du siège par jour et par compagnie de sapeurs
 GARDE_HOME = 1.3             # la Garde nationale défend sa propre ville
 
 MILICE_POWER = 0.6

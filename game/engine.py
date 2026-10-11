@@ -284,7 +284,11 @@ class Game:
             for o in list(f['truce']):
                 if f['truce'][o] < self.t:
                     del f['truce'][o]
-        # propositions expirées
+        # propositions expirées : on le dit au joueur au lieu de les laisser disparaître
+        for p in self.proposals:
+            if p['expires'] <= self.t:
+                self.log('diplo', f"La proposition de {R.FACTIONS[p['frm']]['name']} est restée sans réponse et a expiré.",
+                         who=p['frm'])
         self.proposals = [p for p in self.proposals if p['expires'] > self.t]
         # prix du marché
         for r in self.market:
@@ -307,7 +311,7 @@ class Game:
                     gain = 18 * vin * (1 + self.mod(code, 'vin'))
                     f['res']['livres'] += gain
                     if code == self.player:
-                        self.log('eco', f"Vendanges : vos {vin} vignobles rapportent {int(gain)} livres.", important=True)
+                        self.log('eco', f"Vendanges : vos {R.pl(vin, 'vignoble')} rapportent {int(gain)} livres.", important=True)
             if season == 'été' and self.rng.random() < 0.10:
                 loss = f['res']['vivres'] * 0.12
                 f['res']['vivres'] -= loss
@@ -320,6 +324,7 @@ class Game:
                     continue
                 if n['stab'] < 0.45 and self.rng.random() < (0.45 - n['stab']) * 0.5:
                     n['owner'] = R.NEUTRAL
+                    n['depot'] = 0
                     n['milice'] = n['milice_max'] * 0.6
                     n['stab'] = 0.8
                     n['queue'] = []
@@ -329,8 +334,11 @@ class Game:
                                         f"({R.FACTIONS[code]['name']}).",
                              gn['x'], gn['y'], who=code, important=code == self.player)
                 elif n['stab'] < 0.5 and code == self.player and self.rng.random() < 0.3:
+                    cure = 'une garnison ou des impôts plus légers' if f.get('tax', 0.5) > 0.05 else 'une garnison'
+                    if f.get('famine'):
+                        cure = 'des vivres et ' + cure
                     self.log('revolte', f"Agitation à {gn['name']} (ordre public {int(n['stab'] * 100)} %) : "
-                                        f"une garnison ou des impôts plus légers calmeraient la population.",
+                                        f"{cure} calmeraient la population.",
                              gn['x'], gn['y'], who=code)
             if f.get('banqueroute'):
                 forts = [n for n in mine if n['fort'] > 0 and not n['siege']]
@@ -359,19 +367,19 @@ class Game:
             des = int(a.get('des', 0))
             if des >= 10 and a['owner'] == self.player:
                 f = self.factions[a['owner']]
-                why = 'solde impayée' if f.get('banqueroute') else ('vivres épuisés' if f.get('famine') or a['supply'] < 0.35
-                                                                    else 'moral au plus bas')
+                why = a.get('des_why') or 'moral au plus bas'
                 self.log('armee', f"Désertions dans la {a['name']} : {des} hommes ont quitté les rangs ({why}).",
                          a['x'], a['y'], who=a['owner'], important=des >= 50)
             a['des'] = 0.0
+            a['des_why'] = None
         if season == 'printemps' and self.rng.random() < 0.35:
             self.flood_until = self.t + 10
             self.log('meteo', 'Crue de la Garonne et de la Dordogne : les bacs sont ralentis pendant 10 jours.', important=True)
         if self.factions[self.player]['alive']:
             f = self.factions[self.player]
             inc = f['income']
-            self.log('eco', f"Bilan de {R.MONTHS[d.month - 2] if d.month > 1 else 'décembre'} : "
-                            f"{inc['livres']:+.1f} livres/j, {inc['vivres']:+.1f} vivres/j.", extra=dict(coins=True))
+            self.log('eco', f"Bilan {R.de(R.MONTHS[d.month - 2] if d.month > 1 else 'décembre')} : "
+                            f"{R.num(inc['livres'])} livres/j, {R.num(inc['vivres'])} vivres/j.", extra=dict(coins=True))
 
     # ================================================================== économie
     def tools_bonus(self, code):
@@ -543,8 +551,8 @@ class Game:
             acc['armes'] += want_a * ka
             acc['outils'] += want_t * ka
             r['outils'] -= r['outils'] * 0.004 * (1 + self.mod(code, 'tools_wear')) * dt
-            nn = len(self.owned_nodes(code)) if self._granary_dirty(code) else f.get('_nn', 1)
-            cap = 600 + 70 * nn
+            self._granary_dirty(code)
+            cap = self.granary_cap(code)
             if r['vivres'] > cap:
                 r['vivres'] -= (r['vivres'] - cap) * min(1.0, 0.5 * dt)
             for k in ('vivres', 'fer', 'bois'):
@@ -562,9 +570,17 @@ class Game:
                         self.recompute_mods(code)
                         if code == self.player:
                             self.log('tech', f"Découverte : {R.TECH[cur['tech']]['name']}.", important=True)
-        # milice et stabilité (l'ordre public tend vers une cible : impôts, famine, banqueroute, garnison)
+        # milice et stabilité (l'ordre public tend vers une cible : impôts, famine, banqueroute, garnison) :
+        # évolutions lentes, calculées par paquets d'un quart de jour pour ménager les petites machines
+        self._slow_dt = getattr(self, '_slow_dt', 0.0) + dt
+        if self._slow_dt < 0.25:
+            return
+        dt, self._slow_dt = self._slow_dt, 0.0
         targets = self.stab_targets()
-        held = {a['at_node'] for a in self.armies.values() if a['at_node'] is not None}
+        held = {}
+        for a in self.armies.values():
+            if a['at_node'] is not None:
+                held.setdefault(a['at_node'], set()).add(a['owner'])
         for n in self.nodes:
             if n['siege']:
                 continue
@@ -577,7 +593,8 @@ class Game:
                 tgt, boost = 1.0, 1.0
             else:
                 tgt = targets.get(code, 1.0)
-                if n['garrison'] or n['id'] in held or self.geo.nodes[n['id']]['type'] == 'capitale':
+                friends = any(self.friendly(code, o) for o in held.get(n['id'], ()))
+                if n['garrison'] or friends or self.geo.nodes[n['id']]['type'] == 'capitale':
                     tgt += 0.15
                 tgt = max(0.1, min(1.0, tgt))
                 boost = 1 + max(0.0, 0.5 - self.factions[code].get('tax', 0.5)) * 2
@@ -627,6 +644,14 @@ class Game:
 
     def recruit_cap(self, code):
         return 3000 + 250 * len(self.owned_nodes(code))
+
+    def add_recrues(self, code, n):
+        """Recrues venues d'ailleurs (échange, prisonniers) : pas au-delà de ce que les casernes peuvent loger."""
+        r = self.factions[code]['res']
+        room = max(0.0, self.recruit_cap(code) - r['recrues'])
+        got = min(float(n), room)
+        r['recrues'] += got
+        return got
 
     def _granary_dirty(self, code):
         f = self.factions[code]
@@ -751,10 +776,11 @@ class Game:
                 gn = self.geo.nodes[n['id']]
                 if q['kind'] == 'unit':
                     reg = self.new_reg(q['what'])
-                    reg['morale'] = 70 + self.mod(n['owner'], 'morale')
+                    reg['morale'] = 70 + R.UNITS[q['what']].get('morale0', 0) + self.mod(n['owner'], 'morale')
                     n['garrison'].append(reg)
                     if n['owner'] == self.player:
-                        self.log('armee', f"{R.UNITS[q['what']]['name']} prêt(e) à {gn['name']}.", gn['x'], gn['y'])
+                        self.log('armee', f"{R.UNITS[q['what']]['name']} : {R.UNITS[q['what']]['ready']} à {gn['name']}.",
+                                 gn['x'], gn['y'])
                 else:
                     if q['what'] == 'fort':
                         n['fort'] = min(R.BASTION_LEVEL, n['fort'] + 1)
@@ -1221,7 +1247,6 @@ class Game:
                 node = None
         if a['state'] == 'siege':
             self.end_siege_for(a)
-        a['mode'] = 'champs'
         a['path'] = pre + [dict(kind='off', pts=[list(p) for p in full], i=1)]
         a['target'] = dict(node=node) if node is not None else dict(x=ex, y=ey)
         a['state'] = 'move'
@@ -1628,6 +1653,8 @@ class Game:
                 elif d2 <= CONTACT_KM * CONTACT_KM:
                     if a['state'] == 'siege' and b['state'] == 'siege':
                         continue
+                    if self.behind_walls(a, b) or self.behind_walls(b, a):
+                        continue
                     surprise = a['hidden'] or b['hidden']
                     att, de = (a, b) if (a['state'] == 'move' or a['hidden']) else (b, a)
                     self.start_battle([att], [de], gx=(a['x'] + b['x']) / 2, gy=(a['y'] + b['y']) / 2,
@@ -1645,6 +1672,15 @@ class Game:
                         self.join_battle(a, bt, si)
                         break
 
+    def behind_walls(self, d, s):
+        """d est retranchée dans une place amie que s assiège ou devant laquelle s attend : on ne sort pas se battre,
+        les défenseurs combattront avec la garnison et les remparts quand l'assaut viendra."""
+        nid = d['at_node']
+        if nid is None or d['state'] not in ('idle', 'siege') or s['state'] in ('move', 'retreat'):
+            return False
+        n = self.nodes[nid]
+        return self.friendly(d['owner'], n['owner']) and s['at_node'] == nid
+
     def join_battle(self, a, bt, si):
         side = bt['sides'][si]
         if a['id'] in side['armies']:
@@ -1653,7 +1689,6 @@ class Game:
         side['men0'] += self.army_men(a)
         a['state'] = 'battle'
         a['battle'] = bt['id']
-        a['path'] = []
         if a['owner'] != self.player or a.get('tac_auto', True):
             self.choose_tactics(a, bt, si)
         if a['owner'] == self.player:
@@ -1937,7 +1972,7 @@ class Game:
                     o = node['owner']
                     fort_eff = node['fort'] * (1 - (node['siege']['dmg'] if node['siege'] else 0))
                     fb = 1 + 0.35 * fort_eff + (self.mod(o, 'fort_bonus') if o != R.NEUTRAL else 0)
-                    wall = 1.0 / (1 + 0.3 * fort_eff)  # les remparts abritent les défenseurs
+                    wall = 1.0 / (1 + 0.55 * fort_eff)  # les remparts abritent les défenseurs
                 for owner, r, a in units:
                     cls = self.arm_class(r['type'])
                     fm, pl, tr = a.get('fm', 'ligne'), a.get('pl', 'frontal'), self.gen_trait(a)
@@ -2215,7 +2250,7 @@ class Game:
         best = None
         for gn in self.geo.nodes:
             n = self.nodes[gn['id']]
-            if n['owner'] == code or self.friendly(code, n['owner']):
+            if (n['owner'] == code or self.friendly(code, n['owner'])) and not (n['siege'] and n['siege']['by'] != code):
                 d = math.hypot(gn['x'] - a['x'], gn['y'] - a['y'])
                 if best is None or d < best[0]:
                     best = (d, gn['id'])
@@ -2263,7 +2298,12 @@ class Game:
                 return True, "Retraite ordonnée."
         if a['state'] == 'siege':
             self.end_siege_for(a)
+        here = a['at_node']
         self.retreat(a)
+        if aid not in self.armies:
+            return True, "L'armée, cernée, se débande."
+        if a['state'] == 'idle' and a['at_node'] == here:
+            return False, "Aucune place amie libre où se replier : l'armée reste sur place."
         return True, "Retraite ordonnée."
 
     # ------------------------------------------------------------------ prise d'une place
@@ -2280,6 +2320,7 @@ class Game:
         n['siege'] = None
         if not peaceful and n['dev'] > 0 and old != R.NEUTRAL and self.rng.random() < 0.35:
             n['dev'] -= 1
+            n['milice_max'] = max(20.0, n['milice_max'] - R.NODE_BASE[gn['type']]['milice'] * 0.15)
         if not peaceful and 'pop' in n:
             n['pop'] *= 0.92   # pillage, fuite des habitants
         breached = not peaceful and self.lose_fort_level(nid)
@@ -2318,6 +2359,8 @@ class Game:
             return
         lf['alive'] = False
         lf['prisoners'] = {}
+        for f in self.factions.values():
+            f.get('prisoners', {}).pop(loser, None)
         for n in self.nodes:
             if n['owner'] == loser:
                 n['owner'] = winner
@@ -2423,6 +2466,9 @@ class Game:
                 rate += base
             unpaid = bool(f.get('banqueroute'))
             hungry = bool(f.get('famine')) or a['supply'] < 0.35
+            if unpaid or hungry:
+                a['des_why'] = ('solde impayée' if unpaid else 'disette dans le pays' if f.get('famine')
+                                else 'ravitaillement épuisé')
             if a['supply'] < 0.35:
                 rate += 0.012
             if f.get('famine'):
@@ -2457,7 +2503,7 @@ class Game:
                         self.replenish(code, a['regs'], dt, 0.02)
                 else:
                     for r in a['regs']:
-                        r['morale'] = min(90, r['morale'] + 1.5 * dt)
+                        r['morale'] = max(r['morale'], min(90, r['morale'] + 1.5 * dt))
             if not a['regs']:
                 if a['battle'] and a['battle'] in self.battles:
                     for s in self.battles[a['battle']]['sides']:
@@ -2528,16 +2574,15 @@ class Game:
                     out.add(nid)
                     break
         old = getattr(self, '_blockade', set())
-        for nid in out - old:
-            if self.nodes[nid]['owner'] == self.player:
-                gn = self.geo.nodes[nid]
-                self.log('eco', f"Blocus : le commerce fluvial de {gn['name']} est coupé par l'ennemi en aval.",
-                         gn['x'], gn['y'], important=True)
-        for nid in old - out:
-            if self.nodes[nid]['owner'] == self.player:
-                gn = self.geo.nodes[nid]
-                self.log('eco', f"Le blocus de {gn['name']} est levé : les gabares descendent de nouveau vers la mer.",
-                         gn['x'], gn['y'])
+        cut = [self.geo.nodes[n] for n in sorted(out - old) if self.nodes[n]['owner'] == self.player]
+        freed = [self.geo.nodes[n] for n in sorted(old - out) if self.nodes[n]['owner'] == self.player]
+        names = lambda gs: ', '.join(g['name'] for g in gs[:4]) + (f" et {len(gs) - 4} autres" if len(gs) > 4 else '')
+        if cut:
+            self.log('eco', f"Blocus : l'ennemi en aval coupe le commerce fluvial {R.de(names(cut))}.",
+                     cut[0]['x'], cut[0]['y'], important=True)
+        if freed:
+            self.log('eco', f"Blocus levé pour {names(freed)} : les gabares descendent de nouveau vers la mer.",
+                     freed[0]['x'], freed[0]['y'])
         self._blockade = out
 
     # ------------------------------------------------------------------ espions
@@ -2683,8 +2728,7 @@ class Game:
         n = int(f.setdefault('prisoners', {}).get(frm, 0))
         if n <= 0:
             return False, "Aucun prisonnier de cette origine."
-        gain = int(n * 0.6)
-        f['res']['recrues'] += gain
+        gain = int(self.add_recrues(code, int(n * 0.6)))
         del f['prisoners'][frm]
         if frm in self.factions:
             self.factions[frm]['rel'][code] = max(-100, self.factions[frm]['rel'][code] - 8)
@@ -2758,7 +2802,10 @@ class Game:
             a['gen'] = gb
         a['supply'] = min(a['supply'], b['supply'])
         del self.armies[bid]
-        return True, "Armées réunies" + (f" sous le commandement de {self.gen_title(a['gen'])}." if a.get('gen') else ".")
+        if not a.get('gen'):
+            return True, "Armées réunies."
+        t = self.gen_title(a['gen'])
+        return True, f"Armées réunies sous le commandement du {t[0].lower() + t[1:]}."
 
     def set_formation(self, code, aid, fm):
         a = self.armies.get(aid)
@@ -2833,7 +2880,9 @@ class Game:
         qty = float(qty)
         if not math.isfinite(qty):
             return False, "Quantité invalide."
-        qty = max(1, min(1000, int(qty)))
+        if qty < 1:
+            return False, "Indiquez une quantité."
+        qty = min(1000, int(qty))
         has_port = any('port' in self.geo.nodes[n['id']]['spec'] for n in self.owned_nodes(code))
         spread = (1.15, 0.85) if has_port else (1.4, 0.6)
         m = self.mod(code, 'market')
@@ -2846,7 +2895,7 @@ class Game:
                 if room <= 0:
                     return False, "Vos casernes sont pleines : aucune recrue de plus ne peut être accueillie."
                 qty = min(qty, room)
-            cost = qty * p * spread[0]
+            cost = qty * p * (1 + 0.0002 * qty) * spread[0]
             if r['livres'] < cost:
                 return False, "Livres insuffisantes."
             r['livres'] -= cost
@@ -2855,7 +2904,7 @@ class Game:
             return True, f"Acheté {qty} {R.RES_LABEL[res].lower()} pour {int(cost)} livres."
         if r[res] < qty:
             return False, "Stock insuffisant."
-        gain = qty * p * spread[1]
+        gain = qty * p * (1 - 0.0002 * qty) * spread[1]
         r[res] -= qty
         r['livres'] += gain
         self.market[res] = round(max(0.05, p * (1 - 0.0004 * qty)), 3)

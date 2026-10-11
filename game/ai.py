@@ -66,6 +66,8 @@ class AI:
         g, f, code = self.g, self.f, self.code
         r = f['res']
         s = 0.8 if r['armes'] < 150 else (0.3 if f.get('_cov', 1) < 0.6 else 0.55)
+        if r['armes'] > 1000:
+            s = 0.15 if r['outils'] < 600 else 0.5
         if abs(s - f['slider']) > 0.01:
             g.set_slider(code, s)
         # impôts : on presse le contribuable en cas de besoin, on desserre l'étau si l'ordre public vacille
@@ -84,6 +86,12 @@ class AI:
             for res, keep in (('vivres', 500), ('bois', 350), ('fer', 300)):
                 if r[res] > keep + 50:
                     g.market_trade(code, res, int(r[res] - keep), 'sell')
+        # matières premières : un trésor qui dort achète le fer et le bois des remparts et des agrandissements
+        if r['livres'] > 1500:
+            for res, low in (('bois', 250), ('fer', 150)):
+                if r[res] < low:
+                    g.market_trade(code, res, min(400, int((r['livres'] - 1200) / (4 * g.market[res]))), 'buy')
+        self.build_depot()
         if r['livres'] > 900:
             own = [n for n in g.owned_nodes(code) if not n['queue'] and not n['siege']]
             own.sort(key=lambda n: (-VALUE[g.geo.nodes[n['id']]['type']], -len(g.geo.nodes[n['id']]['spec'])))
@@ -99,6 +107,20 @@ class AI:
                 if (self.threat_at(n['id']) > 0 or gn['type'] == 'capitale') and n['fort'] < g.fort_max(code, n['id']):
                     if g.build(code, n['id'], 'fort')[0]:
                         built += 1
+
+    def build_depot(self):
+        """En guerre, un magasin aux vivres dans la place la plus avancée vers l'ennemi."""
+        g, f, code = self.g, self.f, self.code
+        wars = self.wars()
+        if not wars or f['res']['livres'] < 600 or f['res']['bois'] < 80:
+            return
+        own = [n for n in g.owned_nodes(code) if not n['siege'] and len(n['queue']) < 3]
+        if not own or any(n.get('depot') for n in own if self.threat_at(n['id'], 60) > 0):
+            return
+        foes = [g.node_xy(g.capital_of(o)) for o in wars]
+        front = min(own, key=lambda n: min(math.dist(g.node_xy(n['id']), p) for p in foes))
+        if not front.get('depot') and not any(q['what'] == 'depot' for q in front['queue']):
+            g.build(code, front['id'], 'depot')
 
     def research(self):
         g, f = self.g, self.f
@@ -118,7 +140,8 @@ class AI:
                 return
 
     def regs_total(self):
-        return sum(1 for _ in self.g.all_regs(self.code))
+        """Régiments de campagne (la Garde nationale, qui ne quitte pas sa ville, ne compte pas)."""
+        return sum(1 for r in self.g.all_regs(self.code) if not R.UNITS[r['type']]['garrison_only'])
 
     def wars(self):
         return [o for o in self.g.factions if o != self.code and self.g.at_war(self.code, o) and self.g.factions[o]['alive']]
@@ -158,6 +181,9 @@ class AI:
         """Une place menacée et mal défendue lève sa Garde nationale."""
         g, f, code = self.g, self.f, self.code
         if f['res']['livres'] < 250 or not self.wars():
+            return
+        gardes = sum(1 for r in g.all_regs(code) if r['type'] == 'garde')
+        if gardes >= max(3, len(g.owned_nodes(code)) // 5):
             return
         for n in g.owned_nodes(code):
             if n['siege'] or n['queue'] or sum(1 for r in n['garrison'] if r['type'] == 'garde') >= 2:
@@ -241,7 +267,8 @@ class AI:
             has_art = any(r['type'] == 'artillerie' for r in a['regs'])
             dur = g.t - (n['siege']['since'] if n['siege'] else g.t)
             dmg = n['siege']['dmg'] if n['siege'] else 0
-            if ratio > 4 or (dmg >= 0.6 and ratio > 1.5) or (dur > 45 and ratio > 1.2) or (n['fort'] == 0 and ratio > 1.5):
+            if (n['fort'] == 0 and ratio > 1.5) or (dmg >= 0.6 and ratio > 1.5) or (dur > 45 and ratio > 1.2) \
+                    or (ratio > 6 and dmg >= 0.3):
                 g.assault(code, a['id'])
             elif ratio < 0.6:
                 g.order_retreat(code, a['id'])
@@ -368,6 +395,8 @@ class AI:
                 continue
             val = VALUE[gn['type']] + 1.5 * len(gn['spec'])
             if o == R.NEUTRAL:
+                if gn['dept'] != code and gn['dept'] in g.factions and g.t < 45:
+                    continue   # les premières semaines, chacun rallie d'abord ses propres villages
                 val *= 0.8 + expand
                 if gn['dept'] == code:
                     val *= 1.6

@@ -83,22 +83,21 @@ def make_peace(game, a, b):
         game.factions[x]['war_since'].pop(y, None)
     # les sièges et batailles en cours entre eux cessent
     for bt in list(game.battles.values()):
-        owners = {bt['sides'][0]['owner'], bt['sides'][1]['owner']}
-        if owners == {a, b}:
-            for side in bt['sides']:
-                for aid in side['armies']:
-                    ar = game.armies.get(aid)
-                    if ar:
-                        ar['state'] = 'idle'
-                        ar['battle'] = None
-                        ar['grace'] = game.t + 2
-            del game.battles[bt['id']]
+        if {bt['sides'][0]['owner'], bt['sides'][1]['owner']} == {a, b}:
+            game.dissolve_battle(bt)
     for n in game.nodes:
         if n['siege'] and {n['siege']['by'], n['owner']} == {a, b}:
             n['siege'] = None
     for ar in game.armies.values():
-        if ar['state'] == 'siege' and ar['at_node'] is not None and game.nodes[ar['at_node']]['siege'] is None:
-            ar['state'] = 'idle'
+        if ar['owner'] in (a, b):
+            if ar['state'] == 'siege' and ar['at_node'] is not None and game.nodes[ar['at_node']]['siege'] is None:
+                ar['state'] = 'idle'
+            tgt = (ar.get('target') or {}).get('node')
+            if tgt is not None and game.nodes[tgt]['owner'] in (a, b) and game.nodes[tgt]['owner'] != ar['owner']:
+                ar['path'] = []   # la marche contre l'ancien ennemi s'arrête
+                if ar['state'] == 'move':
+                    ar['state'] = 'idle'
+            ar['grace'] = game.t + 2
     game.log('diplo', f"Paix signée entre {fn(a)} et {fn(b)} (trêve de 120 jours).", who=a, important=True)
 
 
@@ -117,8 +116,8 @@ def exchange_prisoners(game, a, b):
     if k:
         pa[b] = A - k
         pb[a] = B - k
-        fa['res']['recrues'] += k
-        fb['res']['recrues'] += k
+        game.add_recrues(a, k)
+        game.add_recrues(b, k)
         out.append(f"{k} prisonniers rendus de part et d'autre")
     for x, y, fx, fy, surplus in ((a, b, fa, fb, A - k), (b, a, fb, fa, B - k)):
         if surplus <= 0:
@@ -129,7 +128,7 @@ def exchange_prisoners(game, a, b):
         fy['res']['livres'] -= m * R.PRISONER_RANSOM
         fx['res']['livres'] += m * R.PRISONER_RANSOM
         fx['prisoners'][y] = fx['prisoners'].get(y, 0) - m
-        fy['res']['recrues'] += m
+        game.add_recrues(y, m)
         out.append(f"{fn(y)} rachète {m} des siens pour {m * R.PRISONER_RANSOM} livres")
     for x, y in ((a, b), (b, a)):
         if game.factions[x]['prisoners'].get(y, 1) <= 0:
@@ -161,15 +160,8 @@ def make_vassal(game, v, over):
         elif game.at_war(v, o):
             game.set_status(v, o, 'paix')
     for bt in list(game.battles.values()):
-        owners = {bt['sides'][0]['owner'], bt['sides'][1]['owner']}
-        if owners == {v, over}:
-            for side in bt['sides']:
-                for aid in side['armies']:
-                    ar = game.armies.get(aid)
-                    if ar:
-                        ar['state'] = 'idle'
-                        ar['battle'] = None
-            del game.battles[bt['id']]
+        if {bt['sides'][0]['owner'], bt['sides'][1]['owner']} == {v, over}:
+            game.dissolve_battle(bt)
     for n in game.nodes:
         if n['siege'] and {n['siege']['by'], n['owner']} == {v, over}:
             n['siege'] = None
@@ -224,6 +216,9 @@ def ai_evaluate(game, ai, frm, action, amount=0, give=None, get=None):
             return False, f"{fn(ai)} n'a pas assez de {R.RES_LABEL[wr].lower()}."
         v_in = value_of(game, ai, gr, gq)
         v_out = value_of(game, ai, wr, wq) * (1.15 - op / 400 - diplo / 200)
+        mkt = lambda r, q: q * (1.0 if r == 'livres' else game.market.get(r, BASE_VALUE[r]))
+        if mkt(gr, gq) < mkt(wr, wq) * 0.95:
+            return False, f"{fn(ai)} connaît les prix du marché et juge l'échange déséquilibré."
         if v_in >= v_out:
             return True, f"{fn(ai)} accepte l'échange."
         return False, f"{fn(ai)} juge l'échange déséquilibré."
@@ -261,13 +256,13 @@ def act(game, frm, to, action, amount=0, give=None, get=None):
         if game.factions[to]['overlord'] == frm or f['overlord'] == to:
             return False, "Un lien de vassalité ne se rompt pas ainsi."
         game.set_status(frm, to, 'paix')
-        game.factions[to]['rel'][frm] -= 25
+        game.factions[to]['rel'][frm] = max(-100, game.factions[to]['rel'][frm] - 25)
         game.log('diplo', f"{fn(frm)} rompt son alliance avec {fn(to)}.", who=frm, important=True)
         return True, "Alliance rompue."
     if action == 'fin_commerce':
         f['trade'].pop(to, None)
         game.factions[to]['trade'].pop(frm, None)
-        game.factions[to]['rel'][frm] -= 8
+        game.factions[to]['rel'][frm] = max(-100, game.factions[to]['rel'][frm] - 8)
         game._dirty_income = True
         return True, "Accord commercial dénoncé."
     if action == 'cadeau':
@@ -277,7 +272,7 @@ def act(game, frm, to, action, amount=0, give=None, get=None):
         game.factions[to]['res']['livres'] += amount
         gain = min(30.0, amount / 8)
         game.factions[to]['rel'][frm] = min(100, game.factions[to]['rel'][frm] + gain)
-        return True, f"{fn(to)} apprécie votre présent (+{gain:.0f} relation)."
+        return True, f"{fn(to)} apprécie votre présent (relation {R.num(gain)})."
     if action == 'echange':
         if not give or not get or len(give) != 2 or len(get) != 2:
             return False, "Échange incomplet."
@@ -287,13 +282,19 @@ def act(game, frm, to, action, amount=0, give=None, get=None):
         get = (get[0], max(1, int(get[1])))
         if f['res'].get(give[0], 0) < give[1]:
             return False, "Stock insuffisant."
+        if get[0] == 'recrues' and game.factions[frm]['res']['recrues'] + get[1] > max(game.recruit_cap(frm), 0):
+            return False, "Vos casernes ne peuvent pas loger autant de recrues."
         if give[0] == 'livres' and amount + give[1] > f['res']['livres']:
             return False, "Livres insuffisantes pour l'échange et le tribut."
     if action == 'prisonniers' and not held(game, frm, to) and not held(game, to, frm):
         return False, "Personne n'a de prisonniers à échanger."
     if to == game.player:
         game.proposals.append(dict(id=game.nid('p'), frm=frm, action=action, amount=amount, give=give, get=get,
-                                   expires=game.t + 15, date=game.date_str()))
+                                   expires=game.t + R.PROPOSAL_DAYS, date=game.date_str()))
+        what = dict(paix='propose la paix', alliance='propose une alliance', commerce='propose un accord commercial',
+                    echange='propose un échange', prisonniers='propose un échange de prisonniers',
+                    soumission='exige votre soumission').get(action, 'vous fait une proposition')
+        game.log('diplo', f"{fn(frm)} {what} : répondez dans les {R.PROPOSAL_DAYS} jours.", who=frm, important=True)
         return None, "Proposition envoyée."
     ok, msg = ai_evaluate(game, to, frm, action, amount, give, get)
     if ok:
@@ -320,9 +321,12 @@ def apply(game, frm, to, action, amount=0, give=None, get=None):
     elif action == 'echange':
         (gr, gq), (wr, wq) = give, get
         f['res'][gr] -= gq
-        g['res'][gr] += gq
         g['res'][wr] -= wq
-        f['res'][wr] += wq
+        for side, res, q in ((to, gr, gq), (frm, wr, wq)):
+            if res == 'recrues':
+                game.add_recrues(side, q)
+            else:
+                game.factions[side]['res'][res] += q
     elif action == 'soumission':
         make_vassal(game, to, frm)
     elif action == 'prisonniers':

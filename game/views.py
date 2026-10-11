@@ -145,7 +145,7 @@ def player_state(g, since=0):
                     if ok:
                         d['ru'].append(u)
                     else:
-                        d['rw'][u] = why
+                        d['rw'][u] = why.rstrip('.')
                 d['q'] = [dict(kind=q['kind'], what=q['what'], left=round(q['left'], 1), total=round(q['total'], 1)) for q in n['queue']]
         elif g.intel_active(p, n['id']):
             d['m'] = round(n['milice'])
@@ -188,7 +188,7 @@ def player_state(g, since=0):
             d['rx'] = bool(a.get('rx', True))
             d['des'] = int(a.get('des', 0))
             d['wn'] = [w for w, on in (('solde', me.get('banqueroute')),
-                                       ('faim', me.get('famine') or a['supply'] < 0.35)) if on]
+                                       ('faim', me.get('famine'))) if on]
             d['dp'] = g.geo.nodes[a['depot']]['name'] if a.get('depot') is not None else None
         else:
             d['regs'] = [[None, r['type'], round(r['n']), r['max'], 0, 0] for r in a['regs']]
@@ -206,7 +206,8 @@ def player_state(g, since=0):
                 a = g.armies.get(aid)
                 if a:
                     tac.append(dict(id=aid, name=a['name'], fm=a.get('fm', 'ligne'), pl=a.get('pl', 'frontal'),
-                                    gen=_gen(a.get('gen')), reorg=g.t - a.get('fm_t', -9) < 0.1))
+                                    gen=_gen(a.get('gen')),
+                                    reorg=g.t - a.get('fm_t', -9) < 0.1 * max(0.2, 1 - g.mod(a['owner'], 'fm_swift'))))
             mix = {}
             for _, r, _ in g.side_units(bt, i):
                 c = g.arm_class(r['type'])
