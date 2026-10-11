@@ -1440,6 +1440,21 @@ export class MapView {
     ctx.restore();
   }
 
+  // événement local en attente d'une décision : un sceau de cire qui palpite
+  evMark(ctx, x, y, s, time) {
+    const k = 1 + 0.12 * Math.sin(time / 260);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(14,20,30,.85)';
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.62 * k, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#b8352a'; ctx.strokeStyle = '#e6c97f'; ctx.lineWidth = Math.max(1, s * 0.09);
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.48 * k, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fbf6e6'; ctx.font = `700 ${Math.round(s * 0.7)}px Georgia, serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('!', 0, s * 0.04);
+    ctx.restore();
+  }
+
   drawSeasonTint(ctx) {
     const tint = { hiver: 'rgba(214,228,248,0.17)', automne: 'rgba(222,140,60,0.07)', 'été': 'rgba(255,232,140,0.05)' }[this.season];
     if (tint) {
@@ -1511,6 +1526,7 @@ export class MapView {
       if (ns.dp && z >= 3.2) this.depot(ctx, s * 0.62, s * 0.32, clamp(s * 0.34, 7, 12));
       if (ns.intel || ns.spy) this.eye(ctx, s * 0.62, -s * 0.5, clamp(s * 0.4, 9, 14), ns.intel ? '#f3d98e' : 'rgba(243,217,142,0.6)');
       if (ns.bw) this.worksBar(ctx, s, ns.bw[0]);
+      if (ns.ev) this.evMark(ctx, -s * 0.6, -s * 0.55, clamp(s * 0.45, 10, 15), time);   // décision locale en attente
       ctx.restore();
       const showLabel = n.type === 'capitale' || (n.type !== 'village' && z >= 2.3) || z >= 4.8 || sel;
       if (showLabel) labels.push([n, x, y, s, ns]);

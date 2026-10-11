@@ -317,6 +317,7 @@ export class UI {
     if (r === 'livres') {
       rows.push(['Solde des troupes', '−' + fmt1(me.upkeep.livres || 0)]);
       if (me.upkeep.forts) rows.push(['Entretien des remparts', '−' + fmt1(me.upkeep.forts)]);
+      if (me.upkeep.batiments) rows.push(['Entretien des bâtiments', '−' + fmt1(me.upkeep.batiments)]);
       rows.push(['Commerce', '+' + fmt1(me.trade.livres || 0)]);
     }
     if (r === 'vivres') { rows.push(['Rations des troupes', '−' + fmt1(me.upkeep.vivres || 0)]); if (me.prisoner_upkeep) rows.push(['Prisonniers détenus', '−' + fmt1(me.prisoner_upkeep)]); rows.push(['Saison', this.rules.seasons[this.st.season]]); }
@@ -628,6 +629,23 @@ export class UI {
       }
       case 'recruit': this.cmd({ cmd: 'recruit', node: sel.id, unit: d.v }); break;
       case 'build': this.cmd({ cmd: 'build', node: sel.id, what: d.v }); break;
+      // villes : emplacements et politique
+      case 'slot': {
+        const same = this.slotSel && this.slotSel.node === sel.id && this.slotSel.i === +d.v;
+        this.slotSel = same ? null : { node: sel.id, i: +d.v };
+        this.renderPanel(true);
+        break;
+      }
+      case 'slot-build': this.cmd({ cmd: 'slot_build', node: sel.id, chain: d.v }).then(r => { if (r.ok) { this.slotSel = null; this.renderPanel(true); } }); break;
+      case 'slot-demolish': {
+        const ns = this.st.nodes[sel.id], s = (ns.sl || []).find(x => x[0] === d.v);
+        const name = s ? this.slotName(this.md.nodes[sel.id], d.v, s[1] || 1) : d.v;
+        if (!confirm(s && s[1] ? `Démolir « ${name} » ? Le bâtiment est perdu et l’emplacement libéré.` : `Abandonner le chantier de « ${name} » ? Les ressources engagées sont perdues.`)) break;
+        this.cmd({ cmd: 'slot_demolish', node: sel.id, chain: d.v }).then(r => { if (r.ok) { this.slotSel = null; this.renderPanel(true); } });
+        break;
+      }
+      case 'policy': this.cmd({ cmd: 'policy', node: sel.id, value: d.v }); break;
+      case 'policy-all': this.cmd({ cmd: 'policy', node: sel.id, value: d.v, all: true }); break;
       case 'research': this.cmd({ cmd: 'research', tech: d.v }); break;
       case 'diplo': {
         const body = { cmd: 'diplo', to: d.to, action: d.v };
@@ -867,21 +885,15 @@ export class UI {
         if (later.length) h += `<div class="muted small" style="margin-top:4px">Plus tard : ${later.map(u => `<span title="${esc(U[u].desc || '')}">${esc(U[u].short)} (${esc(rw[u])})</span>`).join(', ')}.</div>`;
       }
       h += `<div class="section-t">Aménagements</div><div class="btns">`;
-      for (const k of ['fort', 'dev', 'depot'].filter(k => this.rules.build[k])) {
+      for (const k of ['fort', 'dev'].filter(k => this.rules.build[k])) {   // le magasin aux vivres est dans les emplacements
         const b = this.rules.build[k];
-        const lvl = k === 'fort' ? ns.f : k === 'depot' ? (ns.dp ? 1 : 0) : ns.d;
+        const lvl = k === 'fort' ? ns.f : ns.d;
         const pend = queue.filter(q => q.kind === 'build' && q.what === k).length;
         const l = lvl + pend;
         const top = k === 'fort' ? (ns.fx || this.rules.fort.max) : b.max || 1;
         // dernier niveau seulement commandé : en chantier (premier de la file) ou en attente derrière d'autres ordres
         const qState = pend ? (queue[0]?.kind === 'build' && queue[0]?.what === k ? 'en chantier' : 'en file d’attente') : '';
         const qDis = qFull ? ` disabled title="${fullT}"` : '';
-        if (k === 'depot') {
-          // magasin aux vivres : un seul par place
-          if (l >= top) h += `<button class="btn" disabled>${ns.dp ? 'Magasin aux vivres construit' : 'Magasin aux vivres : ' + (qState || 'en chantier')}</button>`;
-          else h += `<button class="btn" data-act="build" data-v="depot" ${this.canPay(b.costs?.[0] || {}) ? '' : 'disabled'}${qDis || ` title="${esc(b.desc || '')}"`}>Magasin aux vivres<small>${this.costHtml(b.costs?.[0] || {})}, ${b.days?.[0] ?? '?'} j</small></button>`;
-          continue;
-        }
         if (l >= top) {
           const vauban = k === 'fort' && top < this.rules.fort.bastion && this.rules.fort.bastion_types.includes(gn.type);
           const done = k === 'dev' ? this.devName(gn.type, l) : l === this.rules.fort.bastion ? 'Bastions à la Vauban' : `${b.name} niveau ${l}`;
@@ -897,9 +909,11 @@ export class UI {
         h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'}${qDis || ` title="${esc(b.desc)}"`}>${lab}<small>${this.costHtml(c)}, ${b.days[l]} j${up}</small></button>`;
       }
       h += `</div>`;
+      h += this.cityHtml(id, gn, ns, queue, qFull);   // emplacements et politique de la ville
       if (queue.length) {
         h += `<div class="section-t">En préparation${qFull ? ' <span class="muted small">(file pleine)</span>' : ''}</div>` + queue.map((q, i) => {
-          const lab = q.kind === 'unit' ? this.rules.units[q.what]?.name || q.what : this.rules.build[q.what]?.name || q.what;
+          const lab = q.kind === 'unit' ? this.rules.units[q.what]?.name || q.what
+            : q.kind === 'slot' && this.rules.cities?.chains[q.what] ? this.slotName(gn, q.what, q.lvl || 1) : this.rules.build[q.what]?.name || q.what;
           const pct = i === 0 ? Math.round((1 - q.left / q.total) * 20) * 5 : 0;   // par pas de 5 % : moins de redessins
           return `<div class="queue-item"><span>${lab}</span><span class="muted">${i === 0 ? Math.ceil(q.left) + ' j' : 'en attente'}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`;
         }).join('');
@@ -908,6 +922,99 @@ export class UI {
     h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
     // signature = ce qui est affiché (valeurs arrondies, boutons actifs ou non) : pas de redessin à chaque relevé
     return [h, id + '|' + h];
+  }
+
+  // ------------------------------------------------------------------ villes : emplacements et politique
+  slotName(gn, k, lvl) {
+    const C = this.rules.cities, sp = gn.star && C.spec_names[gn.star[0]];
+    lvl = Math.max(1, lvl);
+    if (k === 'specialite' && sp) return sp.names[lvl - 1];
+    return C.chains[k].levels[lvl - 1].name;
+  }
+
+  slotTech(gn, k, lvl) {
+    const C = this.rules.cities, t = C.chains[k].levels[lvl - 1].tech;
+    return t === '*' ? (gn.star && C.spec_names[gn.star[0]]?.tech) || null : t;
+  }
+
+  // ce que le serveur vérifiera (cities.check) : niveau visé et raison d'un refus
+  slotCheck(gn, ns, k) {
+    const C = this.rules.cities, ch = C.chains[k];
+    if (ch.where === 'star' && !(gn.star && this.rules.specialty[gn.star[0]])) return { why: 'Il faut une spécialité dans la ville', hide: true };
+    if (ch.where === 'quai' && !(gn.quai && gn.type !== 'fort')) return { why: 'Il faut un quai sur un fleuve navigable', hide: true };
+    const cur = (ns.sl.find(s => s[0] === k) || [])[1];
+    if (cur === 0 || (ns.q || []).some(q => (q.kind === 'slot' || q.kind === 'build') && q.what === k)) return { why: 'Déjà en chantier' };
+    const lvl = cur == null ? 1 : cur + 1;
+    if (lvl > ch.levels.length) return { why: 'Niveau maximal atteint' };
+    if (cur == null && ns.sl.length >= ns.sn) return { lvl, why: 'Plus d’emplacement libre' };
+    const L = ch.levels[lvl - 1];
+    if ((ns.d || 0) < (L.dev || 0)) return { lvl, why: `Il faut d’abord agrandir la ville (niveau ${L.dev})` };
+    const t = this.slotTech(gn, k, lvl);
+    if (t && !this.st.me.techs.includes(t)) return { lvl, why: `Technologie requise : ${C.tech_names[t] || t}` };
+    return { lvl };
+  }
+
+  // effets d'un niveau ; la production des bâtiments dépend de la taille de la place
+  slotFx(gn, L) {
+    const sk = this.rules.cities.size_k[gn.type];
+    const note = sk !== 1 && /\/j/.test(L.txt) ? ` (production ×${fmt1(sk)} ${gn.type === 'capitale' ? 'au chef-lieu' : gn.type === 'fort' ? 'dans une place forte' : 'dans un village'})` : '';
+    return L.txt + note + (L.up ? `, entretien ${fmt2(L.up)} livre /j` : '');
+  }
+
+  slotBtn(gn, ns, k, chk, qFull, label) {
+    const L = this.rules.cities.chains[k].levels[chk.lvl - 1];
+    const ok = !chk.why && !qFull && !ns.sg && this.canPay(L.cost);
+    const why = chk.why || (qFull ? 'File de production pleine' : ns.sg ? 'Place assiégée' : !this.canPay(L.cost) ? 'Ressources insuffisantes' : '');
+    return `<button class="btn slot-opt" data-act="slot-build" data-v="${k}" ${ok ? '' : 'disabled'}><b>${esc(label)}</b>
+      <small>${this.costHtml(L.cost)}, ${L.days} j</small><small>${esc(this.slotFx(gn, L))}</small>${why ? `<small class="why">${esc(why)}</small>` : ''}</button>`;
+  }
+
+  cityHtml(id, gn, ns, queue, qFull) {
+    const C = this.rules.cities;
+    if (!C || !ns.sl) return '';
+    const sl = ns.sl, sn = ns.sn, n = Math.max(sn, sl.length);
+    const cur = this.slotSel && this.slotSel.node === id && this.slotSel.i < n ? this.slotSel.i : null;
+    let h = `<div class="section-t">Emplacements <span class="muted small">(${sl.length} / ${sn})</span></div><div class="slots">`;
+    for (let i = 0; i < n; i++) {
+      const s = sl[i], on = cur === i ? ' on' : '';
+      if (!s) { h += `<button class="slot empty${on}" data-act="slot" data-v="${i}" aria-label="Emplacement libre"><span class="si">+</span><span>Libre</span></button>`; continue; }
+      const [k, lvl] = s, ch = C.chains[k];
+      const work = lvl === 0 || queue.some(q => q.kind === 'slot' && q.what === k);
+      const ic = ch.icon === 'star' ? '<span class="si">★</span>' : (ICON[ch.icon] || '');
+      h += `<button class="slot${on}${i >= sn ? ' over' : ''}" data-act="slot" data-v="${i}" title="${esc(ch.name)}">${ic}<span>${esc(this.slotName(gn, k, lvl || 1))}</span>
+        <span class="pips">${ch.levels.map((_, j) => `<i class="${j < lvl ? 'on' : ''}"></i>`).join('')}</span>${work ? '<span class="sw">en chantier</span>' : ''}</button>`;
+    }
+    h += '</div>';
+    if (sl.length > sn) h += `<div class="muted small" style="margin-top:4px">Plus de bâtiments que d’emplacements (ville réduite) : rien n’est détruit, mais on ne peut plus en bâtir de nouveaux.</div>`;
+    if (cur != null) {
+      h += '<div class="slot-box">';
+      const s = sl[cur];
+      if (!s) {
+        const opts = C.order.filter(k => !sl.some(x => x[0] === k)).map(k => [k, this.slotCheck(gn, ns, k)]).filter(([, c]) => !c.hide);
+        h += sl.length >= sn ? `<div class="warnline">Plus d’emplacement libre : agrandissez la ville ou démolissez un bâtiment.</div>`
+          : `<div class="small muted">Emplacement libre : choisissez une chaîne de bâtiments (trois niveaux au plus).</div>`;
+        if (sl.length < sn) h += `<div class="slot-opts">${opts.map(([k, c]) => this.slotBtn(gn, ns, k, { ...c, lvl: c.lvl || 1 }, qFull,
+          `${this.slotName(gn, k, 1)}${C.chains[k].levels.length > 1 ? ` — ${C.chains[k].name.toLowerCase()}` : ''}`)).join('')}</div>`;
+      } else {
+        const [k, lvl] = s, ch = C.chains[k], chk = this.slotCheck(gn, ns, k);
+        h += `<div><b>${esc(this.slotName(gn, k, lvl || 1))}</b> <span class="muted small">${ch.levels.length > 1 ? `${esc(ch.name)}, ${lvl ? `niveau ${lvl} sur ${ch.levels.length}` : 'en chantier'}` : lvl ? 'construit' : 'en chantier'}</span></div>`;
+        h += lvl ? `<div class="small">${esc(this.slotFx(gn, ch.levels[lvl - 1]))}.</div>` : `<div class="small muted">Premier niveau en chantier.</div>`;
+        if (chk.lvl) h += `<div class="slot-opts">${this.slotBtn(gn, ns, k, chk, qFull, `Améliorer : ${this.slotName(gn, k, chk.lvl)}`)}</div>`;
+        else if (chk.why && lvl) h += `<div class="muted small" style="margin-top:4px">${esc(chk.why)}.</div>`;
+        h += `<div class="btns"><button class="btn danger" data-act="slot-demolish" data-v="${k}" ${ns.sg ? 'disabled' : ''}>${lvl ? 'Démolir' : 'Abandonner le chantier'}</button></div>`;
+      }
+      h += '</div>';
+    }
+    // politique de la ville
+    const [pk, prev, w] = ns.pol || ['equilibre', 'equilibre', 1];
+    const P = C.policies[pk];
+    h += `<div class="section-t">Politique de la ville</div><div class="seg wrap">${C.policy_order.map(k => `<button class="${k === pk ? 'on' : ''}" data-act="policy" data-v="${k}" title="${esc(C.policies[k].pro + (C.policies[k].con ? ' ; ' + C.policies[k].con : ''))}">${esc(C.policies[k].label)}</button>`).join('')}</div>`;
+    h += `<div class="tac-desc" style="margin-top:4px">${esc(P.pro)}${P.con ? `. En contrepartie : ${esc(P.con)}` : ''}.</div>`;
+    if (w < 1) h += `<div class="muted small">Transition depuis « ${esc(C.policies[prev].label)} » : ${Math.round(w * 100)} % (${C.policy_days} jours en tout)</div><div class="bar"><i style="width:${Math.round(w * 100)}%"></i></div>`;
+    const plural = { village: 'tous mes villages', fort: 'toutes mes places fortes', ville: 'toutes mes villes' }[gn.type];
+    if (plural) h += `<div style="margin-top:4px"><button class="linkish small" data-act="policy-all" data-v="${pk}">Appliquer « ${esc(P.label)} » à ${plural}</button></div>`;
+    if (ns.tm) h += `<div class="muted small" style="margin-top:6px">Effets en cours : ${ns.tm.map(esc).join(' ; ')}.</div>`;
+    return h;
   }
 
   taxLabel(v) {
@@ -1122,6 +1229,7 @@ export class UI {
       <p class="m-sub">${esc(p.date)}${all.length > 1 ? ` — décision 1 sur ${all.length}` : ''}</p>
       <p style="font-size:16px;line-height:1.5">${esc(p.text)}</p>
       ${p.base ? `<p class="small" style="color:#ffcf85">Déjà : ${esc(p.base)}.</p>` : ''}
+      ${p.town != null && this.md.nodes[p.town] ? `<div class="btns" style="margin-top:0"><button class="btn" data-act="selnode-modal" data-node="${p.town}">Voir ${esc(this.md.nodes[p.town].name)} sur la carte</button></div>` : ''}
       <div class="ev-choices">${p.choices.map((c, i) => `<button class="btn ${i === 0 ? 'primary' : ''} ev-choice" data-act="evchoice" data-id="${p.id}" data-v="${i}" ${c.ok ? '' : 'disabled title="Vous n’en avez pas les moyens"'}>
         <b>${esc(c.label)}</b><small>${c.desc.map(esc).join(' · ')}</small></button>`).join('')}</div>
       <p class="muted small">Sans réponse d’ici ${p.left} jours, la dernière option s’appliquera.</p>`;
@@ -1134,13 +1242,14 @@ export class UI {
     this.modalSig = '';
     this.$('modal').hidden = false;
     document.body.classList.add('modal-open');
+    document.body.classList.toggle('modal-event', kind === 'event');   // une décision : rien ne doit masquer ses choix
     this.renderModal(true);
     if (kind === 'menu') this.refreshSaves();
   }
   closeModal() {
     this.modal = null;
     this.$('modal').hidden = true;
-    document.body.classList.remove('modal-open');
+    document.body.classList.remove('modal-open', 'modal-event');
     for (const b of this.$('rail').children) b.classList.remove('on');
   }
 

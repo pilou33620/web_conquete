@@ -5,6 +5,7 @@ import random
 from . import rules as R
 from . import events as EV
 from . import army_actions as AA
+from . import cities as CT
 from .engine import Game
 
 SAVE_KEYS = ['player', 'difficulty', 'seed', 't', 'uid', 'seq', 'events', 'proposals', 'armies', 'battles', 'over',
@@ -63,6 +64,7 @@ def migrate(g):
             if cls in R.ARMS and 'arm' not in r:
                 r['arm'] = g.arm_level(n['owner'], cls)
     AA.migrate(g)   # actions d'armée : droits de passage, quartiers, traversée
+    CT.migrate(g)   # emplacements : un magasin aux vivres existant en occupe un
     for bt in g.battles.values():
         bt.setdefault('mor', [100, 100])
         bt.setdefault('phase', 'fusillade')
@@ -123,7 +125,8 @@ def rules_payload():
                 seasons=R.SEASON_LABEL, traits=R.GENERAL_TRAITS, ranks=R.GENERAL_RANKS, formations=R.FORMATIONS,
                 formation_speed=R.FORMATION_SPEED, plans=R.PLANS, phases=R.PHASES, spy=R.SPY, spy_days=R.SPY_INTEL_DAYS,
                 tax_labels=R.TAX_LABELS, water=dict(speed=R.WATER_SPEED, sea=R.SEA_SPEED, embark=R.EMBARK_DAYS,
-                                                    quai=R.QUAI_LIVRES, blockade=R.BLOCKADE_K))
+                                                    quai=R.QUAI_LIVRES, blockade=R.BLOCKADE_K),
+                cities=CT.rules_payload())
 
 
 def _gen(g):
@@ -206,7 +209,9 @@ def player_state(g, since=0):
                         d['ru'].append(u)
                     else:
                         d['rw'][u] = why.rstrip('.')
-                d['q'] = [dict(kind=q['kind'], what=q['what'], left=round(q['left'], 1), total=round(q['total'], 1)) for q in n['queue']]
+                d['q'] = [dict(kind=q['kind'], what=q['what'], left=round(q['left'], 1), total=round(q['total'], 1),
+                               lvl=q.get('lvl')) for q in n['queue']]
+                d.update(CT.node_view(g, n))   # emplacements, politique, événement en attente
         elif g.intel_active(p, n['id']):
             d['m'] = round(n['milice'])
             d['gm'] = round(sum(r['n'] for r in n['garrison']))
@@ -322,7 +327,7 @@ def player_state(g, since=0):
                 year=g.date().year, scenario=g.scenario, era=dict(id=era['id'], name=era['name'], desc=era['desc']),
                 names={c: g.faction_name(c) for c in g.factions}, word=g.dept_word(), heg=g.hegemon(),
                 pending=[dict(id=x['id'], title=x['title'], text=x['text'], base=x['base'], date=x['date'],
-                              left=max(0, int(x['until'] - g.t)),
+                              left=max(0, int(x['until'] - g.t)), town=x.get('town'), kind=x.get('kind'),
                               choices=[dict(label=c['label'], desc=c['desc'], ok=EV.affordable(g, p, c['fx']))
                                        for c in x['choices']]) for x in g.pending_ev],
                 weather={z: dict(kind=w['kind'], left=w['left']) for z, w in g.weather.items()},

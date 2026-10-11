@@ -3,6 +3,7 @@ import math
 import random
 
 from . import rules as R
+from . import cities as CT
 from . import diplomacy as D
 from . import army_actions as AA
 
@@ -317,6 +318,7 @@ class AI:
         r = f['res']
         wars = self.wars()
         self.menace = self.menaced(wars)
+        CT.ai_policies(self)   # orientation des villes (game/cities.py)
         res = self.reserve()
         self.relieve_taxes(res, wars)
         excess = r['livres'] - res
@@ -327,6 +329,7 @@ class AI:
         budget -= self.stock_up(budget, res)
         budget = self.expand_towns(budget, wars)
         budget = self.fortify_frontier(budget, wars, res)
+        budget = CT.ai_build(self, budget, wars)   # bâtiments d'emplacement
         if not wars and excess > 1500:
             self.gift(excess)
 
