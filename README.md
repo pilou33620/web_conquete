@@ -359,6 +359,18 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
 - Bouton « Détacher la cavalerie / l'artillerie / l'infanterie » : une arme entière forme sa propre armée,
   par exemple pour envoyer la cavalerie en reconnaissance ou déborder par un autre chemin.
 
+### Batailles manuelles
+- Quand une bataille concerne vos armées ou vos places (assauts compris), la campagne s'arrête et une fenêtre propose
+  **« Commander la bataille »** ou **« Résolution automatique »** (réglage dans le menu ☰ : toujours demander,
+  escarmouches automatiques, toujours automatiques). Les batailles entre IA se résolvent toujours seules.
+- Commandée, la bataille se joue **en temps réel avec pause** (×1, ×2, ×4 ; à ×1 une seconde vaut 30 secondes de
+  bataille, de 8 h au crépuscule) sur une carte de 3 × 2 km tirée du terrain de la campagne : relief, bois, champs,
+  vignes, haies, clôtures et murets, routes, rivières avec gués et ponts, fermes, et la ville avec ses remparts,
+  ses portes et la brèche du siège. Chaque régiment a son expérience, son endurance, la portée de ses armes et ses
+  munitions (un chariot par armée les recomplète) ; les bois cachent les troupes, la nuit arrête le combat.
+- « Finir automatiquement » résout la bataille d'un coup à partir de la situation du moment. Munitions et fatigue
+  restent d'une bataille à l'autre : elles se recomplètent en campagne (vite chez soi, peu en pays ennemi).
+
 ### Fleuves, gabares et blocus
 - La Garonne et l'estuaire de la Gironde, la Dordogne, l'Isle, le Lot, la Baïse, la Midouze et l'Adour sont
   **navigables**, et un cabotage relie l'estuaire, le bassin d'Arcachon, Capbreton, Bayonne, Biarritz,
@@ -501,6 +513,8 @@ game/ai.py           IA des départements
 game/cities.py       villes : emplacements et bâtiments, politique de la ville, événements locaux
 game/diplomacy.py    diplomatie et commerce
 game/views.py        état envoyé au navigateur (brouillard de guerre), sauvegardes
+game/tactics/        batailles manuelles : carte de bataille (terrain.py), unités (units.py), simulation
+                     (battle.py), IA de secours (ai.py), raccord avec la campagne (bridge.py)
 web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/ambient.js (animations
                      de la carte), js/towns.js (dessin des villes), js/ui.js, js/main.js
 saves/               parties sauvegardées (JSON)
