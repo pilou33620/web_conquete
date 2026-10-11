@@ -62,6 +62,51 @@ button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 .tb-speed button svg { width: 22px; height: 18px; }
 .tb-speed button.on { background: var(--laiton); color: var(--nuit); }
 .tb-speed button:hover:not(.on) { color: var(--papier); background: rgba(255,255,255,.06); }
+/* tour par tour : « Fin du mois », progression du mois, « Continuer le mois » et raison de l'arrêt */
+.tb-turn { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.tb-turn button { border-radius: 8px; min-height: 42px; display: inline-flex; align-items: center; }
+.turn-go { flex-direction: column; align-items: flex-start !important; justify-content: center; padding: 3px 16px 4px;
+  background: var(--laiton); color: var(--nuit); border: 1px solid var(--laiton-clair); box-shadow: 0 2px 8px var(--ombre); line-height: 1.05; }
+.turn-go b { font-family: var(--f-titre); font-size: 19px; font-weight: normal; white-space: nowrap; }
+.turn-go small { font-size: 12.5px; white-space: nowrap; opacity: .82; }
+.turn-go:hover:not(:disabled) { background: var(--laiton-clair); }
+.turn-go:disabled { opacity: .5; cursor: not-allowed; }
+.turn-stop, .turn-pace { gap: 4px; padding: 3px 10px; background: rgba(0,0,0,.25); border: 1px solid var(--hair); color: var(--papier); font-size: 15px; }
+.turn-stop svg, .turn-pace svg { width: 20px; height: 17px; flex: none; }
+.turn-pace { color: var(--papier-2); font-size: 14px; }
+.turn-stop:hover, .turn-pace:hover { border-color: var(--laiton); }
+.turn-run { display: flex; flex-direction: column; gap: 5px; width: 230px; }
+.turn-lbl { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.turn-lbl span { color: var(--papier-2); }
+.turn-run .bar { height: 8px; }
+.turn-run .bar > i { transition: width .25s linear; }
+.turn-why { max-width: 330px; text-align: left; padding: 3px 10px; font-size: 14px; line-height: 1.15; background: rgba(184,53,42,.16);
+  border: 1px solid rgba(209,105,91,.6); border-left: 4px solid var(--cire); color: var(--papier); overflow: hidden;
+  display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; animation: why-in .5s ease-out; }
+.turn-why.k-decision, .turn-why.k-diplo, .turn-why.k-grand, .turn-why.k-arret { background: rgba(200,162,83,.14); border-color: var(--hair); border-left-color: var(--laiton); }
+.turn-why .more { color: var(--papier-2); font-size: 12.5px; }
+span.turn-why { padding: 8px 10px; }
+@keyframes why-in { from { box-shadow: 0 0 0 4px rgba(230,201,127,.55); } to { box-shadow: 0 0 0 0 rgba(230,201,127,0); } }
+/* récapitulatif du mois écoulé, au début du tour */
+#recap { position: absolute; left: 12px; top: calc(var(--tb-h) + var(--safe-t) + 12px); width: 340px; max-height: calc(100% - var(--tb-h) - var(--safe-t) - 120px);
+  overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; z-index: 15; padding: 10px 12px 10px; animation: toast-in .3s ease-out; }
+#recap .close { position: absolute; top: 6px; right: 6px; width: 32px; height: 32px; }
+.rc-title { font-family: var(--f-titre); font-size: 19px; color: var(--laiton-clair); padding-right: 34px; line-height: 1.1; }
+.rc-sub { font-size: 13px; color: var(--papier-2); font-style: italic; margin-bottom: 6px; }
+.rc-inc { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 9px; font-size: 14px; padding: 5px 0 6px; border-top: 1px solid var(--hair); }
+.rc-inc .rc-k { flex-basis: 100%; font-size: 13px; color: var(--papier-2); }
+.rc-r { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.rc-r svg { width: 16px; height: 16px; color: var(--laiton); }
+.rc-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--hair); }
+.rc-list li { display: grid; grid-template-columns: 22px 1fr; gap: 6px; align-items: start; font-size: 14px; line-height: 1.22; padding: 5px 0; }
+.rc-list li[data-act] { cursor: pointer; }
+.rc-list li svg { width: 18px; height: 18px; color: var(--laiton-clair); margin-top: 1px; }
+.rc-list li.good svg { color: var(--sauge); }
+.rc-list li.bad svg { color: #e07a6c; }
+.rc-list li + li { border-top: 1px dotted rgba(200,162,83,.25); }
+.rc-more { font-size: 14px; margin-top: 4px; }
+.pace-seg button { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.pace-seg small { font-size: 12px; opacity: .75; }
 .tb-res { display: flex; gap: 2px; flex: 1; overflow-x: auto; scrollbar-width: none; min-width: 0; }
 .tb-res > :first-child { margin-left: auto; }
 .tb-res::-webkit-scrollbar { display: none; }
@@ -316,6 +361,7 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 /* ------------------------------------------------------------- petits écrans */
 @media (max-width: 1500px) {
   .tb-faction .ftitle { display: none; }
+  .turn-why { max-width: 250px; }
 }
 @media (max-width: 1280px) {
   :root { --tb-h: 92px; }
@@ -382,6 +428,30 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 /* téléphone tactile : boutons de vitesse moins larges, la date ne déborde plus dessus */
 @media (max-width: 760px) and (pointer: coarse) {
   .tb-speed button { width: 32px; height: 34px; }
+}
+/* tour par tour au doigt (iPad, téléphone) : grandes cibles */
+@media (pointer: coarse) {
+  .tb-turn button { min-height: 46px; }
+  .turn-go { padding-left: 18px; padding-right: 18px; }
+  #recap .close { width: 40px; height: 40px; }
+  .rc-list li { padding: 7px 0; }
+  .rc-more { min-height: 36px; }
+}
+/* écrans étroits : la raison de l'arrêt passe en bandeau sous la barre, le récapitulatif prend la largeur */
+@media (max-width: 760px) {
+  .turn-pace { display: none !important; }
+  .turn-go { padding: 2px 11px 3px; }
+  .turn-go b { font-size: 16.5px; }
+  .turn-go small { font-size: 11.5px; }
+  .turn-run { width: 112px; }
+  .turn-lbl { font-size: 12.5px; }
+  .turn-lbl span { display: none; }
+  .turn-stop span { display: none; }
+  .turn-why { position: absolute; left: 8px; right: 8px; top: calc(100% + 6px); max-width: none; box-shadow: 0 4px 14px var(--ombre);
+    background: rgba(70, 28, 26, .94); }
+  .turn-why.k-decision, .turn-why.k-diplo, .turn-why.k-grand, .turn-why.k-arret { background: var(--panel); }
+  #recap { left: 8px; right: 8px; width: auto; max-height: 46%; }
+  body.mode-tour #toasts { top: calc(var(--tb-h) + var(--safe-t) + 58px); }
 }
 /* téléphone à la verticale : les sept ressources tiennent sur la ligne */
 @media (max-width: 420px) {

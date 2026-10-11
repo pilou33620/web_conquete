@@ -8,6 +8,7 @@ from . import rules as R
 from . import events as EV
 from . import army_actions as AA
 from . import cities as CT
+from . import turns as TT
 from .geo import TERRAIN, T_LANDE, T_MARAIS, T_PLAINE
 
 SUBSTEP = 0.05  # jours
@@ -104,6 +105,7 @@ class Game:
             self.recompute_mods(code)
         self.era_id = self.era()['id']
         self.pending_ev = []   # décisions qui attendent le joueur
+        self.tour = TT.new_state()   # tour par tour, mois par mois (game/turns.py)
         self.ev_done = []      # événements datés déjà passés
         if self.scenario == '1790':
             self.log('info', f"4 mars 1790 : l'Assemblée crée les départements. Vous gouvernez {self.fname(player)}.",
@@ -388,6 +390,8 @@ class Game:
 
     # ================================================================== boucle
     def advance(self, real_dt):
+        if self.tour['on']:
+            return TT.advance(self, real_dt)   # tour par tour : jusqu'au 1er du mois suivant ou à une alerte
         if self.over or self.speed_idx == 0:
             return
         days = R.SPEEDS[self.speed_idx] * real_dt
