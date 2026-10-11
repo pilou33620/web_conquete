@@ -361,6 +361,7 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 /* ------------------------------------------------------------- petits écrans */
 @media (max-width: 1500px) {
   .tb-faction .ftitle { display: none; }
+  .turn-why { max-width: 250px; }
 }
 @media (max-width: 1280px) {
   :root { --tb-h: 92px; }

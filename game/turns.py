@@ -5,8 +5,8 @@ Le joueur donne ses ordres sur une carte figée, puis « Fin du mois » : le moi
 phases, sièges et IA restent continus : seul le temps est découpé.
 
 Le tour s'interrompt aux moments clés pour laisser le joueur réagir, puis reprend avec « Continuer le mois » :
-- une bataille commence et concerne ses armées, ses places ou ses alliés, ou se livre près de lui (à portée de vue) ;
-- une armée ennemie entre sur ses terres ;
+- une bataille commence et concerne ses armées ou ses places, ou se livre près de lui (à vue, à moins de 25 km) ;
+- une armée ennemie (150 hommes ou plus, et visible) entre sur ses terres ;
 - un siège ou un blocus commence sur une de ses places, ou par une de ses armées ;
 - une décision l'attend (événement historique ou local), une proposition importante (paix, alliance, soumission),
   une déclaration de guerre ;
@@ -30,7 +30,7 @@ PACES = [('lent', 'Lent', 30), ('normal', 'Normal', 15), ('rapide', 'Rapide', 8)
 PACE_SEC = {k: s for k, _, s in PACES}
 DEFAULT_PACE = 'normal'
 # délai minimal, en jours de jeu, entre deux interruptions du même genre (0 : toujours)
-COOLDOWN = dict(bataille=1.5, siege=2.0, entree=4.0, diplo=1.0, guerre=0.0, decision=0.0, grand=0.0)
+COOLDOWN = dict(bataille=1.5, siege=2.0, entree=4.0, diplo=1.0, guerre=0.0, decision=0.0, grand=0.0, fin=0.0)
 # la même armée ennemie n'interrompt pas deux fois en 20 jours (va-et-vient sur la frontière), ni la même proposition
 # du même camp en 45 jours (une IA lasse de la guerre propose la paix toutes les deux semaines)
 AGAIN = dict(a=20.0, p=45.0, l=4.0)   # l : un même lieu (assauts répétés, siège qui suit la bataille) pendant 4 jours
@@ -161,7 +161,7 @@ def advance(g, real_dt):
         seq0 = g.seq
         if rem <= min(sub, days) + 1e-6:
             # dernier pas : on franchit minuit pour que le 1er du mois se joue (revenus, bilan, sauvegarde)…
-            g.step(rem + 1e-9)
+            g.step(max(rem, 0.0) + 1e-9)
             g.t = tr['end']   # … et l'on s'arrête pile au 1er, à 0 h
             watch(g, rem, seq0)
             finish(g)
