@@ -434,6 +434,8 @@ class Game:
             wars = sum(1 for o in self.factions if o != code and self.factions[o]['alive'] and self.at_war(code, o))
             before = f.get('weary', 0.0)
             delta = (R.WEARY_PER_WAR * wars + f.get('_lost_m', 0.0) * R.WEARY_PER_LOSS) if wars else -R.WEARY_PEACE
+            # surextension : tenir des pays qui ne vous aiment pas épuise
+            delta += R.WEARY_PER_UNRULY * sum(1 for n in self.nodes if n['owner'] == code and n.get('assim', 1.0) < 0.5)
             f['weary'] = max(0.0, min(100.0, before + delta))
             f['_lost_m'] = 0.0
             if code == self.player and any(before < s_ <= f['weary'] for s_ in (60, 80)):
@@ -444,6 +446,7 @@ class Game:
             for code, f in self.factions.items():
                 if f['alive']:
                     f['prestige'] = f.get('prestige', 0.0) + self.prestige_now(code) / 10
+            self.uprisings()
         # désertions du mois écoulé
         for a in self.armies.values():
             des = int(a.get('des', 0))
@@ -1019,6 +1022,17 @@ class Game:
                 if a['at_node'] == nid and a['state'] in ('idle',) and self.friendly(a['owner'], code):
                     p += self.army_power(a, tname) * fb
         return p
+
+    def hegemon(self):
+        """La puissance qui domine l'Aquitaine (plus de 40 % des places tenues), contre laquelle les autres se liguent."""
+        cnt = {}
+        for n in self.nodes:
+            if n['owner'] in self.factions:
+                cnt[n['owner']] = cnt.get(n['owner'], 0) + 1
+        if len(cnt) < 3:
+            return None
+        top = max(cnt, key=cnt.get)
+        return top if cnt[top] > 0.4 * sum(cnt.values()) else None
 
     def faction_power(self, code):
         p = 0.0
@@ -2504,17 +2518,64 @@ class Game:
                  gn['x'], gn['y'], who=winner, important=True)
         self.alert_pause(big=True)
 
+    def uprisings(self):
+        """Chaque année, un pays absorbé depuis dix ans peut se soulever et recouvrer sa liberté si son ancien
+        chef-lieu, mal tenu, n'a pas oublié qui il était."""
+        from . import diplomacy as D
+        for code, f in self.factions.items():
+            if f['alive'] or code == self.player or self.t - f.get('dead_t', self.t) < R.REVIVE_YEARS * 365:
+                continue
+            cap = next(n for n in self.nodes if self.geo.nodes[n['id']]['type'] == 'capitale'
+                       and self.geo.nodes[n['id']]['dept'] == code)
+            owner = cap['owner']
+            if owner not in self.factions or cap.get('assim', 1.0) >= 0.6:
+                continue
+            held = {a['at_node'] for a in self.armies.values() if a['owner'] == owner and a['at_node'] is not None}
+            ow = self.factions[owner]
+            if cap['id'] in held or cap['garrison'] or cap['siege'] \
+                    or self.rng.random() > 0.25 + ow.get('weary', 0) / 200:
+                continue
+            freed = []
+            for n in self.nodes:
+                if self.geo.nodes[n['id']]['dept'] != code or n['owner'] in (code, R.NEUTRAL) or n.get('assim', 1.0) >= 0.6:
+                    continue
+                if n['id'] != cap['id'] and (n['id'] in held or n['garrison'] or n['siege']):
+                    continue
+                o = n['owner']
+                n.update(owner=code, assim=1.0, stab=0.8, queue=[], depot=0, milice=n['milice_max'] * 0.6)
+                freed.append((o, n))
+            f.update(alive=True, overlord=None, trade={}, war_since={}, prisoners={}, weary=0.0, treaties={},
+                     last_war=self.t, res=dict(livres=400, vivres=400, fer=60, bois=100, armes=150, outils=30, recrues=800))
+            for o, of in self.factions.items():
+                if o != code:
+                    self.set_status(code, o, 'paix')
+                    f['rel'][o] = 0
+            until = self.t + 3 * 365   # l'ancien maître, épuisé, laisse faire... pour un temps
+            for o in {o for o, _ in freed}:
+                f['truce'][o] = self.factions[o]['truce'][code] = until
+                f['rel'][o] = self.factions[o]['rel'][code] = -40
+            self._dirty_income = True
+            gn = self.geo.nodes[cap['id']]
+            self.log('revolte', f"Soulèvement {R.de(gn['name'])} : {self.fname(code)} recouvre sa liberté et chasse "
+                                f"{self.fname(owner)} de {R.pl(len(freed), 'place')}. Trêve de trois ans.",
+                     gn['x'], gn['y'], who=code, important=True)
+            if owner == self.player:
+                self.alert_pause(big=True)
+
     def capitulate(self, loser, winner):
         lf = self.factions[loser]
         if not lf['alive']:
             return
         lf['alive'] = False
+        lf['dead_t'] = self.t
         lf['prisoners'] = {}
         for f in self.factions.values():
             f.get('prisoners', {}).pop(loser, None)
         for n in self.nodes:
             if n['owner'] == loser:
                 n['owner'] = winner
+                if self.geo.nodes[n['id']]['dept'] != winner:
+                    n['assim'] = 0.0   # le pays absorbé garde le souvenir de sa liberté
                 n['stab'] = 0.4
                 n['milice'] = n['milice_max'] * 0.2
                 n['garrison'] = []

@@ -460,6 +460,7 @@ class AI:
         aggr = self.pers['aggr'] * R.DIFFICULTY[g.difficulty]['ai_aggr']
         pa = max(1.0, g.faction_power(code))
         wars = self.wars()
+        heg = g.hegemon()
         for o, of in g.factions.items():
             if o == code or not of['alive']:
                 continue
@@ -475,6 +476,10 @@ class AI:
                 delta -= 1.0
             if st == 'paix' and D.borders(g, code, o):
                 delta -= 1.2
+            if heg and o == heg:
+                delta -= 1.5   # équilibre des puissances : on se méfie de qui domine l'Aquitaine
+            elif heg and heg != code and g.at_war(o, heg):
+                delta += 1.5
             f['rel'][o] = max(-100, min(100, rel + delta))
             rel = f['rel'][o]
             # cartel d'échange : on récupère ses hommes prisonniers
@@ -503,13 +508,18 @@ class AI:
                         (calm > 8 and rel < 25 and pa > 1.05 * po and self.rng.random() < aggr * min(0.1, calm / 80))
                     weak_target = any(g.at_war(o, x) for x in g.factions if x != code) and pa > 1.3 * po \
                         and self.rng.random() < aggr * 0.25 * pace
+                    # coalition : quand la puissance dominante est déjà en guerre, ses voisins se joignent à l'hallali
+                    coalition = o == heg and any(g.at_war(o, x) for x in g.factions if x != code) \
+                        and self.rng.random() < aggr * 0.2
+                    want = want or coalition
                     if want or weak_target:
                         D.declare_war(g, code, o)
                         wars = self.wars()
                         continue
                 if o not in f['trade'] and rel > 5 and self.rng.random() < self.pers['trade'] * 0.5:
                     self.propose(o, 'commerce')
-                elif rel > 40 and self.rng.random() < 0.35 and any(g.at_war(code, x) and g.at_war(o, x) for x in g.factions):
+                elif (rel > 40 or (heg and heg not in (code, o) and rel > 0)) and self.rng.random() < 0.35 \
+                        and any(g.at_war(code, x) and g.at_war(o, x) for x in g.factions):
                     self.propose(o, 'alliance')
             # échange de ressources avec le joueur de temps en temps
             if o == g.player and st != 'guerre' and rel > 10 and self.rng.random() < 0.12:

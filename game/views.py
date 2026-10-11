@@ -32,6 +32,8 @@ def migrate(g):
     for f in g.factions.values():
         for k, v in dict(weary=0.0, prestige=0.0, treaties={}, last_war=0.0).items():
             f.setdefault(k, v)
+        if not f['alive']:
+            f.setdefault('dead_t', g.t)
     for n in g.nodes:
         n.setdefault('depot', 0)
         n.setdefault('assim', 1.0)
@@ -275,7 +277,7 @@ def player_state(g, since=0):
     era = g.era()
     return dict(t=round(g.t, 3), date=g.date_str(), season=g.season(), speed=g.speed_idx, over=g.over,
                 year=g.date().year, scenario=g.scenario, era=dict(id=era['id'], name=era['name'], desc=era['desc']),
-                names={c: g.faction_name(c) for c in g.factions}, word=g.dept_word(),
+                names={c: g.faction_name(c) for c in g.factions}, word=g.dept_word(), heg=g.hegemon(),
                 weather={z: dict(kind=w['kind'], left=w['left']) for z, w in g.weather.items()},
                 me=mine, factions=facs, nodes=nodes, armies=armies, battles=battles,
                 events=[e for e in g.events if e['seq'] > since], seq=g.seq,

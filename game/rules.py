@@ -333,6 +333,8 @@ SCENARIOS = {
 # traités : un camp dont le chef-lieu tombe signe la paix au lieu de disparaître, sauf s'il est déjà écrasé
 TREATY_TRUCE = 5 * 365       # trêve imposée par un traité (jours)
 TREATY_CRUSHED = 0.25        # absorbé si ce camp ne tient plus que ce quart de ses places de départ (ou 3 places)
+WEARY_PER_UNRULY = 0.08     # lassitude mensuelle par place conquise encore mal assimilée
+REVIVE_YEARS = 10           # un pays absorbé peut se soulever après dix ans
 WAR_PACE = 0.12             # appétit de guerre des IA (1 = celui de l'ancienne partie courte de 1790)
 WAR_REST = 3.0              # années de paix avant que cet appétit soit entier
 TREATY_CONGRESS = 2 * 365    # le congrès impose aussi la paix aux autres ennemis du vaincu

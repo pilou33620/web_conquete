@@ -1045,10 +1045,13 @@ export class UI {
         </div><div class="dact">${acts}</div></div>`;
     }).join('');
     const neu = pris.neutre || 0;
+    const hegLine = !st.heg ? '' : `<p class="small" style="color:#ffcf85;margin:0 0 8px">${st.heg === st.me.code
+      ? 'Vous dominez l’Aquitaine : les autres camps se méfient de vous et se liguent contre vous dès que vous êtes en guerre.'
+      : `${esc(this.rules.factions[st.heg].name)} domine l’Aquitaine : les autres camps s’en méfient et entrent volontiers dans ses guerres, dans le camp adverse.`}</p>`;
     const neuLine = neu ? `<div class="row" style="margin-bottom:8px"><span class="small">Vous détenez ${fmt(neu)} miliciens insurgés prisonniers${st.me.prisoner_upkeep ? `, nourris ${fmt1(st.me.prisoner_upkeep)} vivres /j pour tous vos prisonniers` : ''}.</span>${enrollBtn('neutre', neu, 'Enrôler')}</div>` : '';
-    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${neuLine}<div class="diplo-list">${cards}</div>`;
+    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${hegLine}${neuLine}<div class="diplo-list">${cards}</div>`;
     return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner]),
-      pris, fmt1(st.me.prisoner_upkeep || 0), Math.round(myPow / 500)])];
+      pris, fmt1(st.me.prisoner_upkeep || 0), Math.round(myPow / 500), st.heg])];
   }
 
   commerceModal() {
