@@ -689,10 +689,16 @@ class GeoMap:
             cost += 0.8
         return cost
 
-    def astar(self, sx, sy, gx, gy, max_nodes=120000):
+    def astar(self, sx, sy, gx, gy, max_nodes=120000, block=None):
+        """Chemin à travers champs. block : terres interdites, une marque par lieu (indice de self.cellnode, 0 : libre ;
+        voir army_actions.cell_mask). Une cellule marquée ne s'atteint que depuis une cellule de même marque :
+        on peut sortir des terres où l'on se trouve, pas y entrer."""
         W, H = self.W, self.H
         s, g = self.cell(sx, sy), self.cell(gx, gy)
         if s < 0 or g < 0 or self.cell_cost(g) is None:
+            return None
+        cn = self.cellnode
+        if block is not None and block[cn[g]]:
             return None
         gi, gj = g % W, g // W
         hmin = 1.0 / 0.70
@@ -721,6 +727,12 @@ class GeoMap:
                     continue
                 if cc is None:
                     cc = 2.0
+                if block is not None:
+                    bk = block[cn[nc]]
+                    if bk:
+                        if bk != block[cn[c]]:
+                            continue
+                        cc *= 3   # en sortant de terres fermées, au plus court
                 ng = gc + cc * m
                 if ng < gs.get(nc, 1e18):
                     gs[nc] = ng
@@ -736,20 +748,75 @@ class GeoMap:
         pts = [(c % W + 0.5, c // W + 0.5) for c in path]
         pts[0] = (sx, sy)
         pts[-1] = (gx, gy)
-        return self._smooth(pts)
+        return self._smooth(pts, block)
 
-    def _line_ok(self, a, b, maxcost):
+    def nearest_open(self, x, y, block, strict=True, max_nodes=40000):
+        """Sortie de terres interdites (marques de block) : chemin lissé vers la cellule libre la plus proche
+        en temps de marche, ou None. strict : sans passer par d'autres terres interdites que celles où l'on est."""
+        W, H = self.W, self.H
+        s = self.cell(x, y)
+        if s < 0:
+            return None
+        cn = self.cellnode
+        t0 = block[cn[s]]
+        dist = {s: 0.0}
+        came = {}
+        pq = [(0.0, s)]
+        seen = 0
+        D2 = math.sqrt(2)
+        while pq:
+            d, c = heapq.heappop(pq)
+            if d > dist[c]:
+                continue
+            if c != s and not block[cn[c]] and cn[c] != 255:
+                path = [c]
+                while path[-1] != s:
+                    path.append(came[path[-1]])
+                path.reverse()
+                pts = [(p % W + 0.5, p // W + 0.5) for p in path]
+                pts[0] = (x, y)
+                return self._smooth(pts, block if strict else None)
+            seen += 1
+            if seen > max_nodes:
+                return None
+            i, j = c % W, c // W
+            for di, dj, m in ((1, 0, 1), (-1, 0, 1), (0, 1, 1), (0, -1, 1),
+                              (1, 1, D2), (1, -1, D2), (-1, 1, D2), (-1, -1, D2)):
+                ni, nj = i + di, j + dj
+                if not (0 <= ni < W and 0 <= nj < H):
+                    continue
+                nc = nj * W + ni
+                cc = self.cell_cost(nc)
+                if cc is None:
+                    continue
+                bk = block[cn[nc]]
+                if strict and bk and bk != t0:
+                    continue
+                nd = d + cc * m
+                if nd < dist.get(nc, 1e18):
+                    dist[nc] = nd
+                    came[nc] = c
+                    heapq.heappush(pq, (nd, nc))
+        return None
+
+    def _line_ok(self, a, b, maxcost, block=None):
         L = math.dist(a, b)
         n = max(1, int(L / 0.5))
+        t0 = 0
+        if block is not None:
+            c0 = self.cell(*a)
+            t0 = block[self.cellnode[c0]] if c0 >= 0 else 0
         for s in range(1, n):
             t = s / n
             c = self.cell(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
             cc = self.cell_cost(c) if c >= 0 else None
             if cc is None or cc > maxcost + 0.01:
                 return False
+            if block is not None and block[self.cellnode[c]] not in (0, t0):
+                return False   # le raccourci ne coupe pas par des terres interdites
         return True
 
-    def _smooth(self, pts):
+    def _smooth(self, pts, block=None):
         if len(pts) <= 2:
             return pts
         costs = []
@@ -765,7 +832,7 @@ class GeoMap:
             k = j
             while k + 1 < len(pts):
                 mc2 = max(mc, costs[k + 1])
-                if self._line_ok(pts[i], pts[k + 1], mc2):
+                if self._line_ok(pts[i], pts[k + 1], mc2, block):
                     k += 1
                     mc = mc2
                 else:
