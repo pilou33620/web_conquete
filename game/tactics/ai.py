@@ -213,6 +213,11 @@ def _note_once(b, mem, key, txt, delay=180.0):
     _note(b, mem, txt)
 
 
+def _foe(e):
+    """Nom d'une unité ennemie pour le journal : « 1er Ligne ennemi »."""
+    return f"{e.name} ennemi" if e.name[:1].isdigit() else f"{e.name} (ennemi)"
+
+
 def _announced(b, side):
     """Effectif de départ de l'ennemi, tel que les éclaireurs l'annoncent (le joueur le voit aussi)."""
     return sum(u.men0 for u in b.units if u.side != side and u.cls not in ('general', 'chariot'))
@@ -920,7 +925,7 @@ def _square(b, side, mem, L, u, cavs):
             mem['notes']['carre'] = 1
             _note(b, mem, f"des cavaliers menacent : {u.name} forme le carré.")
     elif not want and (u.form == 'carre' or forming):
-        far = best is None or bd > L['sq_r'] * 1.25
+        far = best is None or bd > L['sq_r'] * 0.9
         if far and now - sq.get(u.id, -999) > 40:
             role = mem['role'].get(u.id)
             back = 'tirailleurs' if u.light else ('colonne' if role in ('res', 'assaut', 'vague2') else 'ligne')
@@ -972,7 +977,7 @@ def _counter_charge(b, side, mem, L, us, cavs, foes):
             b.order(side, [c.id], 'charge', target=e.id)
             mine.remove(c)
         _note_once(b, mem, f"cc{e.id}", f"{' et '.join(c.name for c in got)} contre-charge{'nt' if len(got) > 1 else ''}"
-                                         f" les cavaliers ennemis ({e.name}).", 300)
+                                         f" les cavaliers ennemis ({_foe(e)}).", 300)
 
 
 # ---------------------------------------------------------------------- réflexion lourde
@@ -1013,7 +1018,7 @@ def _situation(b, side, mem, L, us, foes):
     if seen and mem.get('t_contact') is None:
         mem['t_contact'] = round(now)
         e = min(seen, key=lambda e: min((_d2(e.x, e.y, u.x, u.y) for u in combat), default=0))
-        _note(b, mem, f"premier contact : {e.name} repéré.")
+        _note(b, mem, f"premier contact : {_foe(e)} repéré.")
     return dict(combat=combat, valid=valid, mine=mine, init=init, foe=foe, ratio=mine / max(1.0, foe),
                 loss=1 - mine / max(1.0, init), mor=mor, routed=routed, e_routed=e_routed, seen=seen)
 
@@ -1216,7 +1221,7 @@ def _storm_guns(b, side, mem, L, us, foes, guns, busy):
             b.order(side, [u.id], 'charge', target=e.id)
             busy.add(u.id)
         storm[gid] = round(now)
-        _note(b, mem, f"la batterie ennemie ({e.name}) interdit l'approche : {' et '.join(u.name for u in got)} "
+        _note(b, mem, f"la batterie ennemie ({_foe(e)}) interdit l'approche : {' et '.join(u.name for u in got)} "
                       f"l'enlève{'nt' if len(got) > 1 else ''} à la baïonnette.")
 
 
@@ -1376,7 +1381,7 @@ def _march_form(b, mem, L, u, sx, sy, fdist):
     near = fdist < (380 if L['col_late'] else 720)
     hit = b.clock - u.hit_t < 40 and not L['col_late']
     if near or hit:
-        if L['n'] >= 1 and not _cav_near(b, mem, u.x, u.y, 1000 if L['n'] == 1 else 700):
+        if L['n'] >= 1 and not _cav_near(b, mem, u.x, u.y, 1500 if L['n'] == 1 else 1200, 600):
             return 'tirailleurs'
         return 'ligne'
     if math.hypot(sx - u.x, sy - u.y) > 320:
@@ -1490,7 +1495,7 @@ def _roles_update(b, side, mem, L, us, sit, front):
             if e.cls not in ('inf', 'cavalerie'):
                 continue
             d, l = _rel(e.x, e.y, mem['ax'], mem['ay'], mem['fd'])
-            if abs(l) > w + 120 and -400 < d < 450:
+            if abs(l) > w + 120 and -400 < d < 200:
                 s = 1 if l > 0 else -1
                 thr[s] = thr.get(s, 0.0) + e.men
         guards = mem.setdefault('guard', {})
@@ -1591,7 +1596,20 @@ def _flank_group(b, side, mem, L, us, foes, sit, want, busy, body):
         mem['fl'] = 'attaque'
         return
     fl = mem.get('fl', 'attente')
-    if fl == 'attente' and (body or mem['phase'] in ('prepa', 'assaut', 'combat')):
+    # des cavaliers ennemis plus nombreux barrent le chemin : on revient sur l'aile et on réessaiera plus tard
+    if fl in ('marche', 'attaque') and grp:
+        gx = sum(u.x for u in grp) / len(grp)
+        gy = sum(u.y for u in grp) / len(grp)
+        e_men = sum(e.men for e in foes if e.cls == 'cavalerie' and e.valid and _d2(e.x, e.y, gx, gy) < 650 ** 2)
+        my_men = sum(u.men for u in grp if u.cls == 'cavalerie' and u.valid)
+        if e_men > 0.9 * my_men and e_men > 60:
+            fl = mem['fl'] = 'attente'
+            mem['t_fl'] = round(b.clock)
+            _note_once(b, mem, 'fl_abort', f"des cavaliers ennemis plus nombreux barrent le débordement : "
+                                           f"la colonne de flanc se replie sur {WING[flank]}.", 900)
+            return
+    if fl == 'attente' and (body or mem['phase'] in ('prepa', 'assaut', 'combat')) and \
+            b.clock - mem.get('t_fl', -1e9) > 600:
         fl = mem['fl'] = 'marche'
         mem['t_fl'] = round(b.clock)
         _note(b, mem, f"débordement par {WING[flank]} : la cavalerie et les légers tournent l'ennemi.")
@@ -1624,7 +1642,7 @@ def _flank_group(b, side, mem, L, us, foes, sit, want, busy, body):
             x, y = _at(ax, ay, fd, dep + 40, end_lat + flank * 130)
             want[u.id] = [x, y, fd - flank * math.pi / 2, 'tirailleurs', False]
         else:
-            x, y = _at(ax, ay, fd, dep + 120, end_lat + flank * 260)
+            x, y = _at(ax, ay, fd, dep + 60, end_lat + flank * 360)
             want[u.id] = [x, y, fd - flank * math.pi / 2, None, False]
         mem.setdefault('flg', {})[u.id] = 2
 
@@ -1976,17 +1994,17 @@ def _out_of_guns(b, mem, x, y, fd):
 
 def _note_charge(b, mem, u, tgt, wing):
     if tgt.cls == 'artillerie':
-        what = f"la batterie isolée ({tgt.name})"
+        what = f"la batterie isolée ({_foe(tgt)})"
     elif tgt.cls == 'chariot':
         what = "un chariot de munitions ennemi"
     elif tgt.cls == 'general':
         what = "l'état-major ennemi"
     elif tgt.state == 'deroute':
-        what = f"les fuyards du {tgt.name}"
+        what = f"les fuyards du {_foe(tgt)}"
     else:
         a = _ang(tgt.dir, math.atan2(u.y - tgt.y, u.x - tgt.x))
         how = ' de dos' if a > 2.3 else (' de flanc' if a > 1.2 else '')
-        what = f"le {tgt.name}{how}"
+        what = f"le {_foe(tgt)}{how}"
     who = f"la cavalerie de {WING.get(wing, 'la réserve')}" if wing in WING else u.name
     _note_once(b, mem, f"ch{u.id}{tgt.id}", f"{who} ({u.name}) charge {what}.", 300)
 
@@ -2122,7 +2140,7 @@ def _bayonets(b, side, mem, L, us, foes, sit, busy):
             busy.add(u.id)
             if not mem['notes'].get('bayonet') or best.cls == 'artillerie':
                 mem['notes']['bayonet'] = 1
-                what = f"les canons du {best.name}" if best.cls == 'artillerie' else f"le {best.name} ébranlé"
+                what = f"les canons du {_foe(best)}" if best.cls == 'artillerie' else f"le {_foe(best)} ébranlé"
                 _note(b, mem, f"{u.name} charge à la baïonnette {what}.")
 
 

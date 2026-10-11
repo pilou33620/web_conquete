@@ -201,7 +201,18 @@ def make_spec(g, bt):
                 colors=[R.FACTIONS[o]['color'] if o in R.FACTIONS else R.NEUTRAL_COLOR for o in owners],
                 me=me, difficulty=g.difficulty, title=f"{kind} {gname}", place_name=gname, date=g.date_str(),
                 fm_swift=[min(0.5, g.mod(o, 'fm_swift')) if o in g.factions else 0.0 for o in owners],
-                art_cheval=['art_cheval' in t for t in techs], ambush=bt['ambush'], surprise=bt['surprise'])
+                art_cheval=['art_cheval' in t for t in techs], ambush=bt['ambush'], surprise=bt['surprise'],
+                plans=[_side_plan(g, bt, si) for si in (0, 1)])
+
+
+def _side_plan(g, bt, si):
+    """Plan de bataille de campagne (rules.PLANS) de la plus grosse armée du camp : l'IA de combat le reprend."""
+    best = None
+    for aid in bt['sides'][si]['armies']:
+        a = g.armies.get(aid)
+        if a and (best is None or g.army_men(a) > g.army_men(best)):
+            best = a
+    return best.get('pl') if best else None
 
 
 def make_units(g, bt, manual):
