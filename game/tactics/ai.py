@@ -68,23 +68,24 @@ PLAN_LABEL = dict(frontal='assaut frontal coordonné', artillerie="préparation 
                   debordement='débordement par un flanc', tenir="tenir la position et user l'adversaire",
                   harcelement='escarmouche, puis retraite', assaut='assaut de la place', place='défense de la place')
 WING = {-1: "l'aile gauche", 1: "l'aile droite", 0: 'la réserve'}
+LEG = 450.0          # une longue marche se donne par étapes (recherches de chemin courtes)
 
 LEVELS = {
     'facile': dict(n=0, period=20.0, jitter=12.0, reflex=6.0, sq_r=210.0, sq_miss=0.3, sq_late=True, terrain=0,
                    cohesion=False, bound=600.0, halt=(0.5, 1.45), prep=5 * 60, prep_max=8 * 60, cav_r=330.0,
                    cav_pick=False, counter=False, col_late=True, res_early=True, flank=False, relief=False,
                    art_pick=False, wd_loss=0.36, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
-                   grape=False, assault_prep=6 * 60),
+                   grape=0, assault_prep=6 * 60),
     'normal': dict(n=1, period=10.0, jitter=4.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=1,
                    cohesion=True, bound=220.0, halt=(0.82, 0.92), prep=12 * 60, prep_max=25 * 60, cav_r=430.0,
                    cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
                    art_pick=True, wd_loss=0.5, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
-                   grape=False, assault_prep=12 * 60),
+                   grape=1, assault_prep=12 * 60),
     'difficile': dict(n=2, period=6.0, jitter=0.0, reflex=2.0, sq_r=440.0, sq_miss=0.0, sq_late=False, terrain=2,
                       cohesion=True, bound=170.0, halt=(0.78, 0.85), prep=15 * 60, prep_max=35 * 60, cav_r=520.0,
                       cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
                       art_pick=True, wd_loss=0.55, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
-                      grape=True, assault_prep=15 * 60),
+                      grape=2, assault_prep=15 * 60),
 }
 
 
@@ -191,6 +192,27 @@ def _seed_rand(b, side, k):
     return random.Random((int(b.spec.get('seed', 0)) * 31 + side * 7 + k) & 0x7FFFFFFF).random()
 
 
+def _form(b, side, u, f):
+    """Change de formation, sauf si la manœuvre est déjà en cours (le moteur la recommencerait à zéro)."""
+    if u.busy > 0 and u.next_form == f:
+        return False
+    if f == u.form and u.busy <= 0:
+        return False
+    return b.order(side, [u.id], 'form', form=f)[0]
+
+
+def _note_once(b, mem, key, txt, delay=180.0):
+    """Note du journal, une seule fois par clé dans le délai donné (charges répétées…)."""
+    seen = mem.setdefault('noted', {})
+    if b.clock - seen.get(key, -1e9) < delay:
+        return
+    seen[key] = round(b.clock)
+    if len(seen) > 120:
+        for k in sorted(seen, key=seen.get)[:60]:
+            del seen[k]
+    _note(b, mem, txt)
+
+
 def _announced(b, side):
     """Effectif de départ de l'ennemi, tel que les éclaireurs l'annoncent (le joueur le voit aussi)."""
     return sum(u.men0 for u in b.units if u.side != side and u.cls not in ('general', 'chariot'))
@@ -265,9 +287,10 @@ def _cover_spot(b, side, x, y, fd, r):
     return best
 
 
-def _gun_spot(b, side, x, y, fd, r, wood=False, ahead=1e9):
+def _gun_spot(b, side, x, y, fd, r, wood=False, ahead=1e9, rough=False):
     """Emplacement de batterie près de (x, y) : hauteur et champ de tir dégagé vers fd ; en difficile, une lisière de
-    bois (les canons y restent cachés jusqu'à leur première salve)."""
+    bois (les canons y restent cachés jusqu'à leur première salve). rough : vignes et lisières, où la cavalerie
+    ennemie charge mal, sont préférées."""
     best, bv = (x, y), -1e9
     n = max(1, int(r // 40))
     for i in range(-n, n + 1):
@@ -292,7 +315,9 @@ def _gun_spot(b, side, x, y, fd, r, wood=False, ahead=1e9):
                 continue
             v = h / 12.0 + f * 0.8 - math.hypot(i, j) / n * 1.2
             if t in WOODS:
-                v += 1.5 if wood else -1.0
+                v += 1.5 if wood else (0.6 if rough else -1.0)
+            elif t == T_VIGNE_T and rough:
+                v += 0.6
             if v > bv:
                 best, bv = (px, py), v
     return best
@@ -481,7 +506,7 @@ def _deploy_field(b, side, mem, L, g, plan):
         x0, y0 = _at(ax, ay, fd, -40, lat)
         if L['terrain']:
             x0, y0 = _gun_spot(b, side, x0, y0, fd, 200 if L['terrain'] == 2 else 110, wood=L['terrain'] == 2,
-                               ahead=15)
+                               ahead=15, rough=True)
         _put(b, side, mem, u, x0, y0, fd, 'batterie', 'art', lat)
     # cavalerie aux ailes (l'aile du débordement en a davantage), réserve de cavalerie en difficile
     cav = sorted(g['cav'], key=_quality, reverse=True)
@@ -722,7 +747,7 @@ def _deploy_place_att(b, side, mem, L, g, pl):
         lat = (k - (na - 1) / 2) * 120 + (-sgn * 150)
         x, y = _at(stx, sty, fd, -30, lat)
         if L['terrain']:
-            x, y = _gun_spot(b, side, x, y, fd, 160 if L['terrain'] == 2 else 90)
+            x, y = _gun_spot(b, side, x, y, fd, 160 if L['terrain'] == 2 else 90, rough=True)
         _put(b, side, mem, u, x, y, fd, 'batterie', 'art', lat)
     for k, u in enumerate(g['cav']):
         w = 1 if k % 2 == 0 else -1
@@ -877,7 +902,7 @@ def _square(b, side, mem, L, u, cavs):
             return   # trop tard : pris en pleine manœuvre, ce serait pire
         if L['sq_miss'] and b.rng.random() < L['sq_miss']:
             return
-        b.order(side, [u.id], 'form', form='carre')
+        _form(b, side, u, 'carre')
         sq[u.id] = round(now)
         if not mem['notes'].get('carre'):
             mem['notes']['carre'] = 1
@@ -887,15 +912,27 @@ def _square(b, side, mem, L, u, cavs):
         if far and now - sq.get(u.id, -999) > 40:
             role = mem['role'].get(u.id)
             back = 'tirailleurs' if u.light else ('colonne' if role in ('res', 'assaut', 'vague2') else 'ligne')
-            b.order(side, [u.id], 'form', form=back)
-            sq.pop(u.id, None)
+            if _form(b, side, u, back) or (u.busy > 0 and u.next_form == back):
+                sq.pop(u.id, None)
             mem['fm'][u.id] = round(now)
+
+
+def _charge_ok(b, side, u, e):
+    """La charge peut-elle aller droit au but ? (le moteur charge en ligne droite ; rochers, eau, forêt l'arrêtent)"""
+    mc = 'cav' if u.cls == 'cavalerie' else ('light' if u.light else 'inf')
+    dx, dy = e.x - u.x, e.y - u.y
+    n = max(1, int(math.hypot(dx, dy) // 25))
+    for k in range(1, n):
+        x, y = u.x + dx * k / n, u.y + dy * k / n
+        if not b.passable(x, y, mc, side) or (mc == 'cav' and b.terrain_at(x, y) in (T_FORET_T, T_MARAIS_T)):
+            return False
+    return True
 
 
 def _counter_charge(b, side, mem, L, us, cavs):
     """La cavalerie ennemie qui charge nos troupes, ou qui s'y est engagée, est chargée à son tour."""
     mine = [u for u in us if u.cls == 'cavalerie' and u.valid and u.state not in ('charge', 'melee') and u.busy <= 0
-            and u.morale > 45 and u.men > 0.3 * u.men0]
+            and u.morale > 45 and u.men > 0.3 * u.men0 and not (u.order and u.order.get('kind') == 'attack' and u.path)]
     if not mine:
         return
     ours = [o for o in us if o.cls in ('inf', 'artillerie') and o.alive]
@@ -905,9 +942,9 @@ def _counter_charge(b, side, mem, L, us, cavs):
         if not any(_d2(o.x, o.y, e.x, e.y) < 300 ** 2 for o in ours):
             continue
         c = min(mine, key=lambda m: _d2(m.x, m.y, e.x, e.y))
-        if _d2(c.x, c.y, e.x, e.y) < 550 ** 2:
+        if _d2(c.x, c.y, e.x, e.y) < 550 ** 2 and _charge_ok(b, side, c, e):
             b.order(side, [c.id], 'charge', target=e.id)
-            _note(b, mem, f"{c.name} contre-charge les cavaliers ennemis ({e.name}).")
+            _note_once(b, mem, f"cc{c.id}{e.id}", f"{c.name} contre-charge les cavaliers ennemis ({e.name}).", 300)
             mine.remove(c)
             if not mine:
                 return
@@ -1077,6 +1114,9 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
                 done = False
         if plan == 'debordement':
             done = mem.get('fl') == 'attaque' or t >= prep_max
+        gun = next((u for u in us if u.cls == 'artillerie' and u.valid), None)
+        if gun is not None and t > 120 and _grape_dist(b, mem, L, gun, b.ranges(gun)[2], foes):
+            done = True   # plus rien ne menace nos canons : ligne et batteries s'avancent ensemble
         if plan == 'harcelement':
             done = False
         if front is not None:
@@ -1084,6 +1124,11 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         if done:
             _set_phase(b, mem, 'assaut', "fin de la préparation : la ligne avance par bonds.")
     ph = mem['phase']
+    if ph == 'combat' and line and now - mem['t_phase'] > 240 and now - max(u.fired_t for u in line) > 240:
+        halt *= 0.5   # personne ne tire : l'ennemi est hors de vue ou hors de portée, on serre
+        if not mem['notes'].get('serre'):
+            mem['notes']['serre'] = 1
+            _note(b, mem, "la ligne ne voit plus l'ennemi : elle serre au plus près.")
     if ph in ('assaut', 'combat', 'poursuite'):
         if front is not None:
             gap = front - halt
@@ -1217,6 +1262,31 @@ def _roles_update(b, side, mem, L, us, sit, front):
                                                               mem['lat'][u.id])] + [mem['fd']]
         _note(b, mem, "la réserve est engagée d'emblée dans la ligne.")
         return
+    # ligne débordée : la réserve prolonge l'aile (on garde un bataillon pour les trous et les relèves)
+    if L['n'] >= 1 and res and len(res) >= 2 and (front is not None and front < 450):
+        w = mem.get('width', 600) / 2
+        lats = []
+        for k, x, y, cls, form in _body(b, mem):
+            d, l = _rel(x, y, mem['ax'], mem['ay'], mem['fd'])
+            if d < 600:
+                lats.append(l)
+        for s in (1, -1):
+            if not lats or max(l * s for l in lats) < w + 60 or len(res) < 2:
+                continue
+            lat = s * (w + 75)
+            tx, ty = _at(mem['ax'], mem['ay'], mem['fd'], 0, lat)
+            u = min(res, key=lambda r: _d2(r.x, r.y, tx, ty))
+            res.remove(u)
+            roles[u.id] = 'ligne'
+            mem['lat'][u.id] = round(lat, 1)
+            mem['back'][u.id] = 0.0
+            mem.setdefault('lat0', []).append(round(lat, 1))
+            if mem.get('mode') == 'poste':
+                px, py = _best_depth(b, side, tx, ty, mem['fd'], 40) if L['terrain'] else (tx, ty)
+                mem['post'][u.id] = [round(px, 1), round(py, 1), mem['fd']]
+            mem['width'] = round(2 * w + 150)
+            w = mem['width'] / 2
+            _note(b, mem, f"l'ennemi déborde {WING[s]} : {u.name} quitte la réserve et prolonge la ligne.")
     # trous dans la ligne
     lat0 = mem.get('lat0') or []
     held = [mem['lat'].get(u.id, 0.0) for u in line]
@@ -1271,6 +1341,17 @@ def _roles_update(b, side, mem, L, us, sit, front):
                 s = 1 if l > 0 else -1
                 thr[s] = thr.get(s, 0.0) + e.men
         guards = mem.setdefault('guard', {})
+        gt = mem.setdefault('guard_t', {})
+        for s, men in thr.items():
+            if men >= 150:
+                gt[str(s)] = round(now)
+        for s in list(guards):
+            if now - gt.get(s, 0) > 300:   # la menace a disparu : la garde de flanc retourne en réserve
+                uid = guards.pop(s)
+                if roles.get(uid) == 'garde_flanc':
+                    roles[uid] = 'res'
+                    mem['back'][uid] = 220.0
+                    mem['lat'][uid] = 0.0
         for s, men in thr.items():
             if men < 150 or str(s) in guards and any(g.id == guards[str(s)] and g.valid for g in us):
                 continue
@@ -1306,6 +1387,9 @@ def _lights_def(b, side, mem, L, us, foes, sit, want):
                 danger = True
         if danger and L['n'] >= 1:
             fold[u.id] = round(b.clock)
+        elif L['n'] >= 1 and b.clock - u.fired_t > 240 and b.clock - mem.get('t_contact', b.clock) > 240 and \
+                any(b.clock - v.fired_t < 60 for v in us if mem['role'].get(v.id) == 'ligne'):
+            fold[u.id] = round(b.clock)   # poste inutile : on rejoint l'aile de la ligne, qui se bat
         if u.id in fold and b.clock - fold[u.id] < 300:
             s = 1 if mem['lat'].get(u.id, 0.0) >= 0 else -1
             x, y = _at(mem['ax'], mem['ay'], mem['fd'], -20, s * (w + 60))
@@ -1610,7 +1694,7 @@ def _support(b, side, mem, L, us, foes, sit, want):
                 back = 260
             wx, wy = _at(cx, cy, fd, -back, lat)
             for e in seen:
-                if _d2(e.x, e.y, wx, wy) < 280 ** 2:
+                if _d2(e.x, e.y, wx, wy) < 200 ** 2:
                     a = math.atan2(wy - e.y, wx - e.x)
                     wx, wy = e.x + math.cos(a) * 320, e.y + math.sin(a) * 320
             want[u.id] = [wx, wy, fd, None, False]
@@ -1650,9 +1734,17 @@ def _cavalry(b, side, mem, L, us, foes, sit, want, busy):
     e_cav = [e for e in foes if e.cls == 'cavalerie' and e.valid]
     friends = [o for o in us if o.cls == 'inf' and o.valid]
     idle = mem.setdefault('idle', {})
+    seen_ids = {e.id: e for e in foes}
     for u in cavs:
         if u.state in ('charge', 'melee', 'deroute', 'ralliement') or u.busy > 0:
             continue
+        if u.order and u.order.get('kind') == 'attack' and u.path and u.target in seen_ids:
+            t = seen_ids[u.target]
+            if t.alive and t.state != 'hors':
+                if _d2(t.x, t.y, u.x, u.y) < 150 ** 2 and t.form != 'carre':
+                    b.order(side, [u.id], 'charge', target=t.id)   # l'obstacle est contourné : on charge
+                busy.add(u.id)
+                continue
         # poste : l'aile, en retrait, hors de portée efficace des canons ennemis repérés
         wing = mem['wing'].get(u.id, 1)
         if plan in ('place', 'assaut'):
@@ -1714,7 +1806,7 @@ def _out_of_guns(b, mem, x, y, fd):
 
 def _note_charge(b, mem, u, tgt, wing):
     if tgt.cls == 'artillerie':
-        what = f"la batterie {'isolée ' if True else ''}({tgt.name})"
+        what = f"la batterie isolée ({tgt.name})"
     elif tgt.cls == 'chariot':
         what = "un chariot de munitions ennemi"
     elif tgt.cls == 'general':
@@ -1726,7 +1818,7 @@ def _note_charge(b, mem, u, tgt, wing):
         how = ' de dos' if a > 2.3 else (' de flanc' if a > 1.2 else '')
         what = f"le {tgt.name}{how}"
     who = f"la cavalerie de {WING.get(wing, 'la réserve')}" if wing in WING else u.name
-    _note(b, mem, f"{who} ({u.name}) charge {what}.")
+    _note_once(b, mem, f"ch{u.id}{tgt.id}", f"{who} ({u.name}) charge {what}.", 300)
 
 
 def _cav_target(b, side, L, u, foes, friends, e_cav, r):
@@ -1751,9 +1843,6 @@ def _cav_target(b, side, L, u, foes, friends, e_cav, r):
                 best, bv = e, v
             continue
         if e.form == 'carre' or rough:
-            continue
-        mx, my = (u.x + e.x) / 2, (u.y + e.y) / 2
-        if not b.passable(mx, my, 'cav', side) or b.terrain_at(mx, my) in (T_MARAIS_T, T_BOIS, T_FORET_T):
             continue
         support = sum(1 for f in foes if f is not e and f.valid and f.cls == 'inf' and
                       _d2(f.x, f.y, e.x, e.y) < 130 ** 2 and f.state not in ('melee',))
@@ -1795,7 +1884,7 @@ def _cav_target(b, side, L, u, foes, friends, e_cav, r):
                 v *= 0.6
                 break
         v *= 1.25 - d / r * 0.5
-        if v > bv:
+        if v > bv and _charge_ok(b, side, u, e):
             best, bv = e, v
     return best if bv >= (0.55 if L['cav_pick'] else 0.0) else None
 
@@ -1858,7 +1947,7 @@ def _bayonets(b, side, mem, L, us, foes, sit, busy):
                 v *= 0.5
             if v > bv:
                 best, bv = e, v
-        if best is not None and bv >= 1.0:
+        if best is not None and bv >= 1.0 and _charge_ok(b, side, u, best):
             b.order(side, [u.id], 'charge', target=best.id)
             busy.add(u.id)
             if not mem['notes'].get('bayonet') or best.cls == 'artillerie':
@@ -1880,52 +1969,77 @@ def _artillery(b, side, mem, L, us, foes, sit, want, busy):
     ours = [o for o in us if o.cls in ('inf', 'cavalerie') and o.valid]
     wagon = next((w for w in us if w.cls == 'chariot' and w.alive), None)
     arts = [u for u in us if u.cls == 'artillerie' and roles.get(u.id) == 'art']
+    known = None
+    looked = False   # (une seule recherche d'emplacement par réflexion : elle coûte des lignes de vue)
     for u in arts:
         if u.state in ('deroute', 'ralliement', 'melee'):
             continue
         e, mx, g = b.ranges(u)
-        # position
         p = mem['post'].get(u.id)
+        c = gslot.get(u.id)
+        fixed = plan in ('place', 'assaut') or (mem.get('mode') == 'poste' and ph in ('attente', 'combat'))
         if wagon is not None and u.ammo < 0.15 * u.ammo0 and L['n'] >= 1:
             pos = (wagon.x + 40, wagon.y)
-            mem['refill'] = mem.get('refill', 0) + 1
-        elif plan in ('place', 'assaut') or mem.get('mode') == 'poste' and ph in ('attente', 'combat'):
-            pos = (p[0], p[1]) if p else (u.x, u.y)
-        elif ph == 'marche':
-            pos = _clamp(*_at(mem['ax'], mem['ay'], fd, -60, mem['lat'].get(u.id, 0.0)))
-        elif front is not None:
-            # à bonne portée du front ennemi (85 % de la portée efficace), sur une hauteur qui voit
-            dist = e * 0.85
-            if L['grape'] and ph == 'combat' and g and not any(c.cls == 'cavalerie' and c.valid and
-                                                               _d2(c.x, c.y, u.x, u.y) < 700 ** 2 for c in foes):
-                dist = max(g * 0.9, 200.0)   # difficile : batterie avancée à mitraille quand nul cavalier ne rôde
-            dist = max(dist, 230.0)
-            key = f"{round(front / 60)}:{round(mem['ax'] / 60)}:{round(mem['ay'] / 60)}:{round(dist / 50)}"
-            c = gslot.get(u.id)
-            if c and c[0] == key:
-                pos = (c[1], c[2])
+        elif fixed or ph == 'marche' or front is None:
+            if fixed:
+                pos = (c[1], c[2]) if c and c[0] == 'fixe' else ((p[0], p[1]) if p else (u.x, u.y))
+            elif ph == 'marche':
+                pos = _clamp(*_at(mem['ax'], mem['ay'], fd, -60, mem['lat'].get(u.id, 0.0)))
             else:
+                pos = (u.x, u.y) if u.form == 'batterie' else \
+                    _clamp(*_at(mem['ax'], mem['ay'], fd, -60, mem['lat'].get(u.id, 0.0)))
+            # batterie aveugle (haies, bois, crête) alors que l'ennemi est à portée : on cherche un emplacement qui voit
+            if fixed and L['n'] >= 1 and not looked and u.form == 'batterie' and not u.path and \
+                    now - max(u.fired_t, c[3] if c else 0.0) > 180 and not _cav_near(b, mem, u.x, u.y, 550):
+                if known is None:
+                    known = _known_targets(b, mem)
+                near = [t for t in known if _d2(t[0], t[1], u.x, u.y) < (mx * 1.1) ** 2]
+                if near and not _gun_view(b, u.x, u.y, near, mx):
+                    looked = True
+                    x, y = _gun_spot_view(b, side, u.x, u.y, fd, 120, near, mx, 1e9)
+                    gslot[u.id] = ['fixe', round(x, 1), round(y, 1), round(now)]
+                    if _d2(x, y, u.x, u.y) > 40 ** 2:
+                        _note_once(b, mem, 'aveugle' + u.id, f"{u.name} ne voit rien : elle change d'emplacement.", 600)
+                    pos = (x, y)
+        else:
+            # à bonne portée du front ennemi, sur un emplacement qui voit l'ennemi
+            dist = e * (0.85 if ph == 'prepa' else 0.6)
+            gd = _grape_dist(b, mem, L, u, g, foes) if ph != 'marche' else None
+            if gd:
+                dist = gd   # batterie avancée à mitraille, hors de portée des fusils ennemis
+                _note_once(b, mem, 'mitraille', f"plus de canons ni de cavaliers ennemis en vue : les batteries "
+                                                f"s'avancent à portée de mitraille ({round(gd)} m).", 1800)
+            dist = max(dist, 200.0)
+            key = f"{round(front / 80)}:{round(mem['ax'] / 80)}:{round(mem['ay'] / 80)}:{round(dist / 60)}"
+            idle = c is not None and now - max(u.fired_t, c[3]) > 150 and u.form == 'batterie' and not u.path
+            if c and c[0] == key and not (idle and L['n'] >= 1):
+                pos = (c[1], c[2])
+            elif looked:
+                pos = (c[1], c[2]) if c else (u.x, u.y)
+            else:
+                looked = True
                 x, y = _clamp(*_at(mem['ax'], mem['ay'], fd, front - dist, mem['lat'].get(u.id, 0.0)), 50)
                 if L['terrain']:
-                    x, y = _gun_spot(b, side, x, y, fd, 120 if L['terrain'] == 2 else 70, ahead=30)
-                cur = (u.x, u.y)
-                # on ne déplace pas une batterie pour quelques mètres
-                if c and _d2(c[1], c[2], x, y) < 110 ** 2:
-                    x, y = c[1], c[2]
-                elif _d2(cur[0], cur[1], x, y) < 110 ** 2:
-                    x, y = cur
-                gslot[u.id] = [key, round(x, 1), round(y, 1)]
+                    if known is None:
+                        known = _known_targets(b, mem)
+                    near = [t for t in known if _d2(t[0], t[1], x, y) < (mx * 1.05) ** 2]
+                    if near:
+                        x, y = _gun_spot_view(b, side, x, y, fd, 160 if L['terrain'] == 2 else 100, near,
+                                              (g * 0.98 if gd else e * 1.1), 0 if gd else 40)
+                    else:
+                        x, y = _gun_spot(b, side, x, y, fd, 120 if L['terrain'] == 2 else 70, ahead=30, rough=True)
+                # on ne déplace pas une batterie qui tire pour quelques mètres
+                if not idle and _d2(u.x, u.y, x, y) < (40 if gd else 110) ** 2 and u.form == 'batterie':
+                    x, y = u.x, u.y
+                gslot[u.id] = [key, round(x, 1), round(y, 1), round(now)]
                 pos = (x, y)
-        else:
-            pos = (u.x, u.y) if u.form == 'batterie' else _clamp(*_at(mem['ax'], mem['ay'], fd, -60,
-                                                                          mem['lat'].get(u.id, 0.0)))
         dist2 = _d2(u.x, u.y, pos[0], pos[1])
         if dist2 > 45 ** 2:
             want[u.id] = [pos[0], pos[1], fd, 'attelee', False]
             continue
         if u.form != 'batterie':
             if u.busy <= 0 and not u.path:
-                b.order(side, [u.id], 'form', form='batterie')
+                _form(b, side, u, 'batterie')
             busy.add(u.id)
             continue
         busy.add(u.id)
@@ -1935,6 +2049,83 @@ def _artillery(b, side, mem, L, us, foes, sit, want, busy):
         tgt = _art_target(b, L, u, foes, ours, mem, mx, e, g)
         if tgt is not None and (u.target != tgt.id or not u.order or u.order.get('kind') != 'attack'):
             b.order(side, [u.id], 'attack', target=tgt.id)
+
+
+def _grape_dist(b, mem, L, u, g, foes):
+    """Distance de tir à mitraille quand elle dépasse la portée des fusils ennemis (canons Gribeauval contre fusils à
+    silex, par exemple) et que ni cavaliers ni canons ennemis ne menacent la batterie ; sinon None.
+    Normal : aucun cavalier ni canon ennemi repéré depuis 5 min ; difficile : aucun à moins de 800 m."""
+    if not L['grape'] or not g:
+        return None
+    inf_mx = 0
+    for e in foes:
+        if e.cls == 'inf' and e.valid:
+            inf_mx = max(inf_mx, b.ranges(e)[1])
+    if not inf_mx or g < inf_mx + 25:
+        return None
+    now = b.clock
+    for v in mem['vu'].values():
+        if v[6] in ('deroute', 'hors') or v[4] not in ('cavalerie', 'artillerie') or now - v[2] > 300:
+            continue
+        if L['grape'] == 1 or _d2(v[0], v[1], u.x, u.y) < 800 ** 2:
+            return None
+    return min(g * 0.95, inf_mx + 35)
+
+
+def _cav_near(b, mem, x, y, r, maxage=300.0):
+    """Des cavaliers ennemis ont-ils été vus récemment à moins de r mètres ?"""
+    now = b.clock
+    r2 = r * r
+    for v in mem['vu'].values():
+        if v[4] == 'cavalerie' and now - v[2] <= maxage and v[6] not in ('deroute', 'hors') and \
+                _d2(v[0], v[1], x, y) < r2:
+            return True
+    return False
+
+
+def _known_targets(b, mem, maxage=300.0):
+    """Ennemis repérés récemment (positions connues) : [(x, y, cls)], les plus proches de notre ancre d'abord."""
+    now = b.clock
+    out = [(v[0], v[1], v[4]) for v in mem['vu'].values()
+           if now - v[2] <= maxage and v[6] not in ('deroute', 'hors') and v[4] in ('inf', 'artillerie', 'cavalerie')]
+    ax, ay = mem['ax'], mem['ay']
+    out.sort(key=lambda t: _d2(t[0], t[1], ax, ay))
+    return out[:7]
+
+
+def _gun_view(b, x, y, tg, reach):
+    n = 0
+    r2 = reach * reach
+    for tx, ty, cls in tg:
+        if _d2(x, y, tx, ty) <= r2 and b.los(x, y, tx, ty):
+            n += 1
+    return n
+
+
+def _gun_spot_view(b, side, x, y, fd, r, tg, reach, ahead):
+    """Emplacement de batterie qui voit le plus d'ennemis connus à portée (la hauteur départage ; lisières et vignes,
+    où la cavalerie charge mal, sont préférées). Au plus une trentaine de cases et cinq cibles : quelques ms."""
+    best, bv = (x, y), -1e9
+    n = max(1, min(3, int(r // 40)))
+    tg = tg[:5]
+    for i in range(-n, n + 1):
+        for j in range(-n, n + 1):
+            if i * i + j * j > n * n:
+                continue
+            px, py = x + i * 40, y + j * 40
+            if not (30 < px < W - 30 and 30 < py < H - 30) or not b.passable(px, py, 'artillerie', side):
+                continue
+            if _rel(px, py, x, y, fd)[0] > ahead:
+                continue
+            t = b.terrain_at(px, py)
+            if t == T_BATI:
+                continue
+            seen = _gun_view(b, px, py, tg, reach)
+            v = seen * 1.5 + b.height_at(px, py) / 12.0 - math.hypot(i, j) / n * 0.8 + \
+                (0.5 if t in WOODS or t == T_VIGNE_T else 0.0)
+            if v > bv:
+                best, bv = (px, py), v
+    return best
 
 
 def _art_target(b, L, u, foes, ours, mem, mx, e_r, g):
@@ -1973,12 +2164,17 @@ def _art_target(b, L, u, foes, ours, mem, mx, e_r, g):
     return best
 
 
+
+
 # ---------------------------------------------------------------------- exécution
 def _apply(b, side, mem, L, us, want, busy):
     """Transforme les intentions (position, orientation, formation) en ordres, seulement quand ils changent quelque
     chose : on ne recalcule pas les chemins à chaque réflexion."""
     now = b.clock
     fm = mem['fm']
+    blocked = mem.setdefault('blocked', {})
+    for k in [k for k, v in blocked.items() if now - v[2] > 120]:
+        del blocked[k]
     for u in us:
         w = want.get(u.id)
         if w is None or u.id in busy:
@@ -1990,21 +2186,20 @@ def _apply(b, side, mem, L, us, want, busy):
         dist2 = _d2(u.x, u.y, x, y)
         if u.cls == 'artillerie':
             if dist2 > 45 ** 2:
-                _goto(b, side, u, x, y, d, run, 30.0)
+                _goto(b, side, mem, u, x, y, d, run, 30.0)
             continue
         if form and form != u.form and form in ('ligne', 'colonne', 'tirailleurs') and \
                 now - fm.get(u.id, -999) > 75 and u.cls == 'inf':
             if form == 'tirailleurs' and not u.light:
                 form = 'ligne'
-            if form != u.form:
-                b.order(side, [u.id], 'form', form=form)
+            if form != u.form and _form(b, side, u, form):
                 fm[u.id] = round(now)
                 continue
         tol = 22.0 if mem['role'].get(u.id) in ('ligne', 'breche', 'mur') else 35.0
-        _goto(b, side, u, x, y, d, run, tol)
+        _goto(b, side, mem, u, x, y, d, run, tol)
 
 
-def _goto(b, side, u, x, y, d=None, run=False, tol=22.0):
+def _goto(b, side, mem, u, x, y, d=None, run=False, tol=22.0):
     dx, dy = x - u.x, y - u.y
     g = u.goal
     if dx * dx + dy * dy <= tol * tol:
@@ -2016,4 +2211,21 @@ def _goto(b, side, u, x, y, d=None, run=False, tol=22.0):
         return
     if u.path and g and _d2(g[0], g[1], x, y) <= (tol * 1.2) ** 2:
         return
+    bl = mem['blocked'].get(u.id)
+    if bl and _d2(bl[0], bl[1], x, y) < 80 ** 2:
+        return   # destination introuvable il y a peu : on ne relance pas la recherche de chemin
+    dist = math.sqrt(dx * dx + dy * dy)
+    legs = mem.setdefault('leg', {})
+    if dist > LEG + 80:
+        # longue marche : par étapes (la recherche de chemin du moteur reste courte, donc bon marché)
+        lg = legs.get(u.id)
+        if u.path and g and lg and _d2(lg[0], lg[1], x, y) < (tol * 2) ** 2 and _d2(g[0], g[1], u.x, u.y) > 120 ** 2:
+            return
+        legs[u.id] = [round(x), round(y)]
+        k = LEG / dist
+        x, y, d = u.x + dx * k, u.y + dy * k, None
+    else:
+        legs.pop(u.id, None)
     b.order(side, [u.id], 'move', x=x, y=y, dir=d, run=run)
+    if not u.path:
+        mem['blocked'][u.id] = [round(x), round(y), round(b.clock)]
