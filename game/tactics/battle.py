@@ -137,6 +137,7 @@ class TacticalBattle:
         self.ai_sides = list(ai_sides)
         self.seen_by = [set(), set()]
         self.withdrawing = [False, False]
+        self.withdraw_t = [0.0, 0.0]
         self.hold_t = 0.0
         self.prisoners = [0.0, 0.0]          # hommes de ce camp faits prisonniers
         self._acc = 0.0
@@ -144,6 +145,7 @@ class TacticalBattle:
         self._ai_t = -99.0
         self._cost_cache = {}
         self._path_cache = {}
+        self._astar_left = 6
         self._los_cache = {}
         rng = random.Random(spec['seed'] ^ 0x5A5A)
         self.rng = rng
@@ -293,6 +295,11 @@ class TacticalBattle:
         self._cost_cache[key] = arr
         return arr
 
+    def warm(self):
+        """Prépare les tables de coût de marche des classes présentes (hors de la boucle tactique)."""
+        for u in self.units:
+            self.costs(move_class(u), u.side)
+
     def passable(self, x, y, cls='inf', side=0):
         if not (0 <= x < W and 0 <= y < H):
             return False
@@ -425,7 +432,10 @@ class TacticalBattle:
             return [(gx, gy)]
         key = (mc, u.side, s, g)
         pts = self._path_cache.get(key)
+        if pts is None and self._astar_left <= 0:
+            return [(gx, gy)]   # trop de recherches ce pas-ci : en ligne droite, on recalculera si ça bloque
         if pts is None:
+            self._astar_left -= 1
             cells = self._astar(cost, s, g)
             if cells is None:
                 pts = [(gx, gy)] if self._line_ok(cost, u.x, u.y, gx, gy, 99) else []
@@ -549,21 +559,28 @@ class TacticalBattle:
     def time_left(self):
         return max(0.0, self.dusk - self.clock)
 
+    def _refresh_gens(self):
+        """États-majors présents et trait du général de chaque camp (recalculés à chaque pas)."""
+        self._gens = [g for g in self.units if g.cls == 'general' and g.alive]
+        self._traits = [None, None]
+        for g in self._gens:
+            if g.gen and self._traits[g.side] is None:
+                self._traits[g.side] = g.gen.get('trait')
+
     def general_near(self, u, r=400):
-        best = None
-        for g in self.units:
-            if g.cls == 'general' and g.side == u.side and g.alive and g is not u:
+        if not hasattr(self, '_gens'):
+            self._refresh_gens()
+        for g in self._gens:
+            if g.side == u.side and g is not u and g.alive:
                 rr = r + (200 if (g.gen or {}).get('trait') == 'inspirant' else 0)
                 if (g.x - u.x) ** 2 + (g.y - u.y) ** 2 <= rr * rr:
-                    best = g
-                    break
-        return best
+                    return g
+        return None
 
     def trait(self, side):
-        for g in self.units:
-            if g.cls == 'general' and g.side == side and g.alive and g.gen:
-                return g.gen.get('trait')
-        return None
+        if not hasattr(self, '_traits'):
+            self._refresh_gens()
+        return self._traits[side]
 
     # ================================================================== journal et effets
     def emit(self, k, x, y, x2=None, y2=None, n=None, src=None):
@@ -625,7 +642,7 @@ class TacticalBattle:
         if self.phase != 'deploiement':
             return False, "La bataille est déjà engagée."
         self.phase = 'combat'
-        # les unités hors de leur zone (jamais placées) sont posées par défaut
+        self.warm()
         self._update_vision()
         self.log(f"{fmt_hour(self.clock)} : la bataille commence.")
         return True, "La bataille commence !"
@@ -710,11 +727,12 @@ class TacticalBattle:
             f = p.get('form')
             n = 0
             for u in us:
-                if f in U.FORMS.get(u.cls, ()) and f != u.form:
-                    if self.phase == 'deploiement':
-                        u.form = f
-                    else:
-                        self._change_form(u, f)
+                if f in U.FORMS.get(u.cls, ()):
+                    if f != u.form or (u.busy > 0 and u.next_form != f):
+                        if self.phase == 'deploiement':
+                            u.form = f
+                        else:
+                            self._change_form(u, f)
                     n += 1
             return (True, "Changement de formation.") if n else (False, "Formation impossible.")
         if kind == 'rally':
@@ -740,23 +758,28 @@ class TacticalBattle:
         """Le camp décroche : toutes ses unités quittent la carte par leur bord ; la bataille finit quand c'est fait."""
         if self.phase == 'fin':
             return False, "La bataille est terminée."
+        if self.withdrawing[side]:
+            return True, "Le camp décroche déjà."
         if self.phase == 'deploiement':
-            self.phase = 'combat'
+            self.start()
         self.withdrawing[side] = True
+        self.withdraw_t[side] = self.clock
         for u in self.units_of(side):
             self._retreat(u)
         self.log("Ordre de décrocher : l'armée se retire du champ de bataille.", None)
         return True, "Le camp décroche."
 
     def _retreat(self, u):
+        """Retraite en ordre vers son bord (sans recherche de chemin : on oblique devant les obstacles)."""
         if u.state == 'melee':
             self._end_melee(u)
-        ex, ey = self.edge_point(u.side, u.x, u.y)
         if u.cls == 'artillerie' and u.form == 'batterie':
             self._change_form(u, 'attelee')
         u.order = dict(kind='retreat')
         u.target = None
-        self._go(u, ex, ey, None, False, allow_out=True)
+        u.path, u.goal = [], None
+        if u.state not in ('deroute', 'ralliement'):
+            u.state = 'marche'
 
     def _go(self, u, gx, gy, d, run=False, allow_out=False):
         if u.cls == 'artillerie' and u.form == 'batterie':
@@ -845,6 +868,8 @@ class TacticalBattle:
         self.clock += dt
         left = self.dusk - self.clock
         self.light = 1.0 if left > 3600 else max(0.15, 0.15 + 0.85 * left / 3600)
+        self._refresh_gens()
+        self._astar_left = 3
         if self.clock - self._vis_t >= VIS_DT:
             self._update_vision()
         if self.clock - self._ai_t >= AI_DT:
@@ -938,6 +963,14 @@ class TacticalBattle:
         if st == 'charge':
             self._charge(u, dt)
             return
+        if u.order and u.order.get('kind') == 'retreat':
+            if u.busy <= 0:
+                self._flee(u, self._speed(u) * dt, self.costs(move_class(u), u.side))
+                u.state = 'marche'
+                if self.off_map(u.side, u.x, u.y):
+                    u.state = 'hors'
+                    self.log(f"{u.name} s'est retiré du champ de bataille.", u.side)
+            return
         if u.order and u.order.get('kind') == 'attack':
             tg = self.by_id.get(u.target)
             if tg and tg.alive and tg.state != 'hors' and tg.id in self.seen_by[u.side]:
@@ -992,8 +1025,8 @@ class TacticalBattle:
         if sp <= 0:
             return
         if rout and not u.path:
-            ex, ey = self.edge_point(u.side, u.x, u.y)
-            u.path = self.plan_path(u, min(max(ex, 1), W - 1), min(max(ey, 1), H - 1)) + [(ex, ey)]
+            self._flee(u, sp * dt, cost)
+            return
         budget = sp * dt
         steps = 0
         moved = 0.0
@@ -1034,6 +1067,23 @@ class TacticalBattle:
                 u.path.pop(0)
         if moved > 0:
             self._fatigue(u, dt, 'run' if (run or rout) else 'marche', self.costs(move_class(u), u.side)[self.cell(u.x, u.y)] or 1.0)
+
+    def _flee(self, u, dist, cost):
+        """Fuite d'une troupe en déroute : vers son bord, en obliquant devant l'eau, les murs ou les bois épais."""
+        ex, ey = self.edge_point(u.side, u.x, u.y)
+        base = math.atan2(ey - u.y, ex - u.x)
+        c0 = cost[self.cell(u.x, u.y)] or 1.5
+        step = min(CELL, dist / c0)
+        for da in (0.0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.2, -2.2):
+            a = base + da
+            nx, ny = u.x + math.cos(a) * step, u.y + math.sin(a) * step
+            if not (0 <= nx < W and 0 <= ny < H):
+                u.x, u.y, u.dir = nx, ny, a   # il sort de la carte
+                return
+            if cost[self.cell(nx, ny)] is not None:
+                u.x, u.y, u.dir = nx, ny, a
+                self._fatigue(u, DT, 'run')
+                return
 
     def _fatigue(self, u, dt, what, cost=1.0):
         k = 1.5 if self.weather == 'canicule' else 1.0
@@ -1095,6 +1145,16 @@ class TacticalBattle:
             return
         if u.cls == 'artillerie' and u.form != 'batterie':
             return
+        if u.reload > DT * 1.5 and not moving:
+            # en plein rechargement : on garde sa cible et on pivote vers elle
+            tg = self.by_id.get(u.target)
+            if tg is not None and tg.alive and u.cls != 'cavalerie':
+                b = self.bearing(u, tg)
+                if ang_diff(u.dir, b) > ARC.get(u.form, 1.0):
+                    rate = TURN.get(u.form, 0.1)
+                    delta = (b - u.dir + math.pi) % (2 * math.pi) - math.pi
+                    u.dir += max(-rate * DT, min(rate * DT, delta))
+            return
         e, mx, grape = U.ranges(u)
         hu = self.height_at(u.x, u.y)
         tg = self._pick_target(u, mx * 1.15)
@@ -1132,7 +1192,7 @@ class TacticalBattle:
             if tr == 'artilleur':
                 mult *= 1.25
             if grape and d <= grape:
-                cas = pcs * 1.6 * mult * VUL_GRAPE.get(tg.form, 1.0) * (1 - cov)
+                cas = pcs * 0.9 * mult * VUL_GRAPE.get(tg.form, 1.0) * (1 - cov)
                 kind = 'mitraille'
             else:
                 cas = pcs * 0.35 * mult * pr * VUL_BALL.get(tg.form, 1.0) * (1 - cov * 0.6)
@@ -1146,7 +1206,7 @@ class TacticalBattle:
             if moving:
                 shooters *= 0.5
             mult = R.ARMS['inf'][min(u.arm, len(R.ARMS['inf']) - 1)][2] if u.cls == 'inf' else 0.8
-            p0 = 0.0028 * tk * math.sqrt(mult)
+            p0 = 0.005 * tk * math.sqrt(mult)
             cas = shooters * p0 * pr * fat_k * mor_k * xp_k * self._wx_k(u) * (1 - cov) * VUL_FIRE.get(tg.form, 1.0)
             cas *= self.light ** 0.5
             if tg.cls == 'general':
@@ -1204,7 +1264,7 @@ class TacticalBattle:
             elif a > 1.2 and tg.form != 'carre':
                 shock *= 1.4
         steady = U.TYPE.get(tg.type, U.TYPE['ligne'])['steady']
-        k = 170.0 / steady
+        k = 140.0 / steady
         tr = self.trait(tg.side)
         if tr == 'inspirant':
             k *= 0.85
@@ -1276,7 +1336,7 @@ class TacticalBattle:
             a.state = 'repos'
             return
         if tg.state == 'deroute':
-            self._capture(a, tg, 0.15 if a.cls == 'cavalerie' else 0.05)
+            self._capture(a, tg, 0.08 if a.cls == 'cavalerie' else 0.03)
             a.state = 'repos'
             return
         if cav and tg.form == 'carre' and tg.busy <= 0:
@@ -1354,15 +1414,25 @@ class TacticalBattle:
                 if u.cls == 'cavalerie':
                     self._capture(u, f, 0.08)
                 self._end_melee(u)
-        # déroutés rattrapés, et troupes qui se heurtent (baïonnette)
-        n = len(alive)
-        for i in range(n):
-            a = alive[i]
-            if not a.alive:
-                continue
-            for j in range(i + 1, n):
-                b = alive[j]
-                if not b.alive:
+        # déroutés rattrapés, et troupes qui se heurtent (baïonnette) : seulement les voisines (cases de 40 m)
+        bins = {}
+        for u in alive:
+            if u.state != 'hors':
+                bins.setdefault((int(u.x // 40), int(u.y // 40)), []).append(u)
+        pairs = []
+        for (bx, by), lst in bins.items():
+            for k, a in enumerate(lst):
+                for b in lst[k + 1:]:
+                    pairs.append((a, b))
+            for nb in ((bx + 1, by), (bx - 1, by + 1), (bx, by + 1), (bx + 1, by + 1)):
+                o = bins.get(nb)
+                if o:
+                    for a in lst:
+                        for b in o:
+                            pairs.append((a, b))
+        for a, b in pairs:
+            if True:
+                if not a.alive or not b.alive:
                     continue
                 dx, dy = b.x - a.x, b.y - a.y
                 d2 = dx * dx + dy * dy
@@ -1379,7 +1449,7 @@ class TacticalBattle:
                     continue
                 for x, y in ((a, b), (b, a)):
                     if y.state == 'deroute' and x.valid and x.state != 'melee':
-                        self._capture(x, y, 0.01 if x.cls != 'cavalerie' else 0.04)
+                        self._capture(x, y, 0.006 if x.cls != 'cavalerie' else 0.025)
                 if a.valid and b.valid and a.state not in ('melee', 'charge') and b.state not in ('melee', 'charge') \
                         and a.cls not in ('general', 'chariot') and b.cls not in ('general', 'chariot') and d2 < 400:
                     a.state = b.state = 'melee'
@@ -1453,14 +1523,13 @@ class TacticalBattle:
         u.target = None
         u.busy = 0.0
         u.next_form = None
-        ex, ey = self.edge_point(u.side, u.x, u.y)
-        u.path = self.plan_path(u, min(max(ex, 1), W - 1), min(max(ey, 1), H - 1)) + [(ex, ey)]
+        u.path = []   # la fuite se fait droit vers son bord, en contournant les obstacles (voir _flee)
         u.goal = None
         self.emit('deroute', u.x, u.y, src=u.id)
         self.log(f"{fmt_hour(self.clock)} — {u.name} est en déroute !", None, u.side)
         for o in self.units:
             if o.side == u.side and o is not u and o.valid and (o.x - u.x) ** 2 + (o.y - u.y) ** 2 < 300 * 300:
-                o.morale = max(0.0, o.morale - 6 / U.TYPE.get(o.type, U.TYPE['ligne'])['steady'])
+                o.morale = max(0.0, o.morale - 4 / U.TYPE.get(o.type, U.TYPE['ligne'])['steady'])
 
     def _morale(self, u, dt):
         if u.state == 'hors':
@@ -1496,6 +1565,13 @@ class TacticalBattle:
             self.hold_t = self.hold_t + DT if att and not dfd else 0.0
             if self.hold_t >= 60:
                 res = (0, False, "L'assaillant tient le cœur de la place.")
+        for s in (0, 1):
+            if self.withdrawing[s] and self.clock - self.withdraw_t[s] > 1800 and v[s]:
+                # une demi-heure après l'ordre de décrocher, l'arrière-garde a filé
+                for u in self.units:
+                    if u.side == s and u.valid:
+                        u.state = 'hors'
+                v[s] = False
         if res is None:
             if not v[0] and not v[1]:
                 res = (1, True, "Les deux armées se sont débandées.")
@@ -1673,7 +1749,7 @@ class TacticalBattle:
     def to_dict(self):
         return dict(spec=self.spec, units=[u.to_dict() for u in self.units], phase=self.phase, clock=self.clock,
                     speed=self.speed, seq=self.seq, logs=[list(x) for x in self.logs[-60:]], ai_sides=self.ai_sides,
-                    withdrawing=self.withdrawing, hold_t=self.hold_t, prisoners=self.prisoners, acc=self._acc,
+                    withdrawing=self.withdrawing, withdraw_t=self.withdraw_t, hold_t=self.hold_t, prisoners=self.prisoners, acc=self._acc,
                     result=self.result, end=[getattr(self, 'winner', None), getattr(self, 'disengage', None),
                                              getattr(self, 'why', None)])
 
@@ -1687,6 +1763,7 @@ class TacticalBattle:
         tb.seq = d.get('seq', 0)
         tb.logs = [tuple(x) + (None,) * (4 - len(x)) for x in d.get('logs', [])]
         tb.withdrawing = d.get('withdrawing', [False, False])
+        tb.withdraw_t = d.get('withdraw_t', [0.0, 0.0])
         tb.hold_t = d.get('hold_t', 0.0)
         tb.prisoners = d.get('prisoners', [0.0, 0.0])
         tb._acc = d.get('acc', 0.0)

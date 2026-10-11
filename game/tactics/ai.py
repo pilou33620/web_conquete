@@ -99,7 +99,7 @@ def think(battle, side, dt):
             continue
         if u.cls == 'inf' and u.busy <= 0 and u.state not in ('melee', 'charge'):
             cav, d = _nearest(u, valid_foes, lambda e: e.cls == 'cavalerie')
-            if cav is not None and d < 320 and u.form != 'carre' and battle.difficulty != 'facile':
+            if cav is not None and d < 260 and u.form != 'carre' and battle.difficulty != 'facile':
                 battle.order(side, [u.id], 'form', form='carre')
             elif u.form == 'carre' and (cav is None or d > 500):
                 battle.order(side, [u.id], 'form', form='tirailleurs' if u.light else 'ligne')
@@ -110,6 +110,8 @@ def think(battle, side, dt):
     attacker = side == 0
     obj = battle.objective()
     # décrocher quand tout est perdu (jamais pour le défenseur d'une place)
+    if battle.withdrawing[side]:
+        return
     if mine < 0.3 * m['init'] and battle.seen_strength(side) > 1.5 * mine and not (obj and side == 1):
         battle.withdraw(side)
         return
@@ -134,10 +136,25 @@ def think(battle, side, dt):
                 battle.order(side, [u.id], 'move', x=gx, y=gy)
             continue
         e, mx, _ = battle.ranges(u)
-        tg, d = _nearest(u, valid_foes)
+        # cibles : l'infanterie ne court pas après les cavaliers (sauf tout près)
+        tg, d = _nearest(u, valid_foes, lambda f: f.cls not in ('cavalerie', 'general', 'chariot'))
+        if tg is None or u.cls == 'cavalerie':
+            tg, d = _nearest(u, valid_foes)
+        else:
+            c2, d2 = _nearest(u, valid_foes, lambda f: f.cls == 'cavalerie')
+            if c2 is not None and d2 < 150:
+                tg, d = c2, d2
         if u.cls == 'cavalerie':
-            prey, pd = _nearest(u, foes, lambda f: f.state == 'deroute' or f.cls in ('artillerie', 'chariot')
-                                or (f.form in ('ligne', 'tirailleurs', 'attelee') and f.cls != 'cavalerie'))
+            def prey_ok(f):
+                if f.state == 'deroute' or f.cls in ('artillerie', 'chariot') or f.form in ('attelee', 'tirailleurs'):
+                    return True
+                if f.form == 'carre' or f.cls == 'cavalerie':
+                    return battle.difficulty == 'facile' and f.cls == 'cavalerie'
+                if f.state == 'melee':
+                    return True
+                # de flanc ou de dos
+                return math.cos(f.dir - math.atan2(u.y - f.y, u.x - f.x)) < 0.3 or battle.difficulty == 'facile'
+            prey, pd = _nearest(u, foes, prey_ok)
             if prey is not None and pd < (450 if attacker else 300) and u.morale > 45:
                 battle.order(side, [u.id], 'charge', target=prey.id)
             elif tg is not None and d > 520 and not u.path:
@@ -164,8 +181,10 @@ def think(battle, side, dt):
                 if not (u.order and u.order.get('kind') == 'attack' and u.target == tg.id):
                     if attacker or u.cls == 'artillerie':
                         battle.order(side, [u.id], 'attack', target=tg.id)
-                if attacker and u.cls == 'inf' and d < 120 and tg.state != 'deroute' and u.morale > 55 \
-                        and battle.difficulty != 'facile':
+                # à la baïonnette seulement contre un ennemi déjà éprouvé (ou au hasard pour une IA maladroite)
+                weak = tg.men < 0.6 * u.men or tg.men < 0.55 * tg.men0
+                if attacker and u.cls == 'inf' and d < 120 and tg.state != 'deroute' and u.morale > 55 and \
+                        (weak if battle.difficulty != 'facile' else battle.rng.random() < 0.3):
                     battle.order(side, [u.id], 'charge', target=tg.id)
             elif u.cls == 'artillerie' and u.form != 'batterie' and not u.path:
                 battle.order(side, [u.id], 'form', form='batterie')

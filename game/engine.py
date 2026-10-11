@@ -8,6 +8,7 @@ from . import rules as R
 from . import events as EV
 from . import army_actions as AA
 from . import cities as CT
+from .tactics import bridge as TB
 from .geo import TERRAIN, T_LANDE, T_MARAIS, T_PLAINE
 
 SUBSTEP = 0.05  # jours
@@ -103,6 +104,7 @@ class Game:
             self.create_army(code, gx, gy, [self.new_reg(t, code=code) for t in ('ligne', 'legere', 'cavalerie')], node=cap)
             self.recompute_mods(code)
         self.era_id = self.era()['id']
+        TB.ensure(self)        # batailles tactiques : réglage, bataille en cours
         self.pending_ev = []   # décisions qui attendent le joueur
         self.ev_done = []      # événements datés déjà passés
         if self.scenario == '1790':
@@ -124,7 +126,7 @@ class Game:
     def new_reg(self, typ, n=None, code=None):
         u = R.UNITS[typ]
         reg = dict(id=self.nid('r'), type=typ, n=float(u['men'] if n is None else n), max=u['men'],
-                   xp=float(u.get('xp0', 0)), morale=80.0 + u.get('morale0', 0))
+                   xp=float(u.get('xp0', 0)), morale=80.0 + u.get('morale0', 0), ammo=100.0, fat=0.0)
         if u['cls'] in R.ARMS:
             reg['arm'] = self.arm_level(code, u['cls']) if code else 0   # les armes du moment, gardées jusqu'au réarmement
         return reg
@@ -388,8 +390,8 @@ class Game:
 
     # ================================================================== boucle
     def advance(self, real_dt):
-        if self.over or self.speed_idx == 0:
-            return
+        if self.over or self.speed_idx == 0 or TB.frozen(self):
+            return   # (bataille en attente du choix du joueur, ou bataille tactique en cours : campagne figée)
         days = R.SPEEDS[self.speed_idx] * real_dt
         while days > 1e-9 and not self.over and self.speed_idx:
             sub = SUBSTEP if (self.battles or self.speed_idx < R.FAST_SPEED) else SUBSTEP * 2
@@ -1157,7 +1159,7 @@ class Game:
         sp *= R.FORMATION_SPEED.get(a.get('fm', 'ligne'), 1.0)
         if self.gen_trait(a) == 'cavalier':
             sp *= 1.1
-        return sp
+        return sp * TB.march_k(a)   # des troupes fourbues marchent moins vite
 
     # ------------------------------------------------------------------ généraux
     def new_general(self, code):
@@ -1196,6 +1198,7 @@ class Game:
         cls = u['cls']
         if cls in R.ARMS:
             p *= R.ARMS[cls][min(r.get('arm', 0), len(R.ARMS[cls]) - 1)][2]
+        p *= TB.reg_k(r, cls)   # fatigue et munitions (effet modéré)
         if cls == 'inf':
             k += self.mod(code, 'inf_power')
             p *= 1 - (1 - wx_fire) * (1 - self.mod(code, 'rain'))   # l'amorce à percussion ne craint plus la pluie
@@ -2176,6 +2179,7 @@ class Game:
                 if a['owner'] != self.player or a.get('tac_auto', True):
                     self.choose_tactics(a, bt, si)
         self.battles[bid] = bt
+        TB.on_battle_start(self, bt)   # bataille du joueur : elle attend son choix (manuel ou automatique)
         gname = self.place_name(gx, gy)
         if code_a == self.player or code_d == self.player or self.player in (code_a, code_d):
             self.alert_pause()
@@ -2296,8 +2300,8 @@ class Game:
         K = 0.20
         for bid in list(self.battles):
             bt = self.battles.get(bid)
-            if not bt:
-                continue
+            if not bt or not TB.is_auto(bt):
+                continue   # (bataille en attente du choix, ou commandée sur le champ de bataille)
             s0, s1 = bt['sides']
             if not self.hostile(s0['owner'], s1['owner']) or \
                     (s1['node'] is not None and self.nodes[s1['node']]['owner'] != s1['owner']):
@@ -2316,6 +2320,7 @@ class Game:
                                 a['fm'] = fm
                                 a['fm_t'] = self.t - 0.05
             bt['phase'] = phase
+            TB.auto_battle_tick(self, bt, dt)   # munitions consommées, fatigue
             wxf = self.wx(bt['x'], bt['y'])['fire']
             open_ground = bt['terrain'] in R.OPEN_TERRAIN
             P = [dict(artillerie=0.0, inf=0.0, cavalerie=0.0), dict(artillerie=0.0, inf=0.0, cavalerie=0.0)]
@@ -3040,6 +3045,7 @@ class Game:
                         if a['id'] in s['armies']:
                             s['armies'].remove(a['id'])
                 del self.armies[a['id']]
+        TB.campaign_tick(self, dt)   # munitions recomplétées, fatigue de la marche et du repos
         # sièges : les assiégeants s'usent aussi
         if not self.factions[self.player]['alive']:
             self.check_end()
