@@ -28,8 +28,16 @@ function vnoise(x, y, s) {
 function hexRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
-function lighten(h, t) { return rgb(mix(hexRgb(h), [255, 255, 255], t)); }
-function darken(h, t) { return rgb(mix(hexRgb(h), [0, 0, 0], t)); }
+// éclaircir / assombrir une couleur : mis en cache, appelés pour chaque bloc de régiment à chaque image
+const shadeCache = new Map();
+function shade(h, t, to) {
+  const k = h + to + t;
+  let v = shadeCache.get(k);
+  if (v === undefined) { v = rgb(mix(hexRgb(h), to ? [255, 255, 255] : [0, 0, 0], t)); if (shadeCache.size > 500) shadeCache.clear(); shadeCache.set(k, v); }
+  return v;
+}
+function lighten(h, t) { return shade(h, t, 1); }
+function darken(h, t) { return shade(h, t, 0); }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // arme d'un type de régiment ('inf', 'cavalerie', 'artillerie') et ordre dispersé, d'après les règles (repli pour les anciennes règles)
 export const unitCls = (rules, t) => rules.units[t]?.cls || (t === 'cavalerie' || t === 'artillerie' ? t : 'inf');
@@ -58,6 +66,10 @@ export class MapView {
     this.selection = null;
     this.disp = new Map();
     this.particles = [];
+    this.twCache = new Map();   // largeurs des étiquettes, par police et texte
+    this.wallCache = new Map();   // tracés des remparts, par niveau, taille, brèche et ville
+    // les polices du web arrivent après les premiers dessins : les largeurs mesurées avant sont fausses
+    try { document.fonts?.addEventListener?.('loadingdone', () => this.twCache.clear()); } catch (e) { /* API absente */ }
     this.wx = { cote: [], interieur: [], montagne: [] };
     this.flash = { cote: 0, interieur: 0, montagne: 0 };
     this.season = 'printemps';
@@ -88,6 +100,14 @@ export class MapView {
     window.addEventListener('resize', () => this.resize());
     this.bindInput();
     requestAnimationFrame(t => this.frame(t));
+  }
+
+  // largeur d'un texte dans la police courante du contexte (mise en cache)
+  textW(ctx, txt) {
+    const k = ctx.font + '|' + txt;
+    let w = this.twCache.get(k);
+    if (w === undefined) { w = ctx.measureText(txt).width; if (this.twCache.size > 3000) this.twCache.clear(); this.twCache.set(k, w); }
+    return w;
   }
 
   // ------------------------------------------------------------------ préparation
@@ -288,11 +308,21 @@ export class MapView {
       const s = this.nodeSize(n);
       const z = this.cam.z;
       const k = d.slot || 0;
-      y += s * 0.5 + (z >= 5.5 ? clamp(z * 2.3, 22, 66) * 0.5 + 18 : 22);
+      // une armée qui assiège se tient au-delà des remparts et de l'anneau de siège : la brèche reste visible
+      const below = a.st !== 'siege' ? s * 0.5 : z >= 5.5 ? this.siegeRadius(n, s) + 4 : Math.max(s * 0.5, this.siegeRadius(n, s) - 8);
+      y += below + (z >= 5.5 ? clamp(z * 2.3, 22, 66) * 0.5 + 18 : 22);
       x += (k - (d.slots - 1) / 2) * (z >= 5.5 ? Math.min(6, d.a.regs.length) * clamp(z * 2.3, 22, 66) * 1.25 + 20 : 56);
     }
     return [x, y];
   }
+  // rayon extérieur des remparts et de l'anneau de siège d'une place (voir walls() et drawNodes())
+  siegeRadius(n, s) {
+    const f = this.state?.nodes[n.id]?.f || 0;
+    const R = s * 0.62 + 2, lw = clamp(s * 0.03 * (1 + f * 0.5), 1.3, 6);
+    const outer = !f ? 0 : f <= 2 ? R + lw : f >= 4 ? R * 1.62 : R * 1.42;
+    return Math.max(s * 0.62 + 4, outer + 4) + 3;
+  }
+
   fitAll(instant, left = 0, top = 60) {
     const aw = this.vw - left, ah = this.vh - top;
     const z = Math.min(aw / this.W, ah / this.H) * 0.96;
@@ -528,9 +558,16 @@ export class MapView {
       const [x, y] = this.armyScreen(d);
       const r = (z >= 5.5 ? Math.max(20, z * 2.4) : 22) + pad;
       const dd = Math.hypot(sx - x, sy - y);
-      if (dd < r && (!best || dd < best.d)) best = { kind: 'army', id: a.id, d: dd };
+      if (dd < r && (!best || dd < best.d)) best = { kind: 'army', id: a.id, d: dd, a };
     }
-    if (best) return best;
+    if (best && (best.a.st === 'move' || best.a.st === 'retreat') && best.a.n == null) {
+      // une armée de passage posée sur une ville ne doit pas la rendre inaccessible : le cœur de l'icône reste à la ville
+      for (const n of this.nodes) {
+        const [x, y] = this.toScreen(n.x, n.y);
+        if (Math.hypot(sx - x, sy - y) < this.nodeSize(n) * 0.4) return { kind: 'node', id: n.id, d: 0 };
+      }
+    }
+    if (best) return { kind: best.kind, id: best.id, d: best.d };
     for (const b of st.battles) {
       const [x, y] = this.toScreen(b.x, b.y);
       const dd = Math.hypot(sx - x, sy - y - 26);
@@ -690,6 +727,7 @@ export class MapView {
         }
       }
       if (face.has(a.id)) head = face.get(a.id);  // en bataille : face à l'ennemi
+      else if (a.st === 'siege' && a.n != null) head = -Math.PI / 2;   // au siège : rangée sous la place, face aux remparts
       let d = this.disp.get(a.id);
       if (!d) {
         d = { x: tx, y: ty, tx, ty, head: head ?? -Math.PI / 2 };
@@ -711,7 +749,6 @@ export class MapView {
 
   rebuildTerritory() {
     const W = this.W, H = this.H, N = W * H;
-    const own = new Array(N);
     const codes = Object.keys(this.rules.factions);
     const idx = new Int8Array(N).fill(-1);
     for (let c = 0; c < N; c++) {
@@ -1371,7 +1408,7 @@ export class MapView {
       const fs = n.type === 'capitale' ? clamp(13 + z * 0.5, 15, 21) : n.type === 'village' ? clamp(10 + z * 0.25, 11, 15) : clamp(11 + z * 0.4, 13, 18);
       ctx.font = `${n.type === 'capitale' ? 600 : 500} ${fs}px "EB Garamond", Georgia, serif`;
       const ty = y + s * 0.5 + 2;
-      const tw = ctx.measureText(n.name).width;
+      const tw = this.textW(ctx, n.name);
       const box = [x - tw / 2 - 2, ty, x + tw / 2 + 2, ty + fs];
       const isSel = this.selection && this.selection.kind === 'node' && this.selection.id === n.id;
       if (n.type !== 'capitale' && !isSel && placed.some(b => b[0] < box[2] && b[2] > box[0] && b[1] < box[3] && b[3] > box[1])) continue;
@@ -1385,7 +1422,7 @@ export class MapView {
       if (men != null && (z >= 3.2 || n.type === 'capitale')) {
         const txt = String(Math.round(men));
         ctx.font = `600 ${fs - 2}px "EB Garamond", Georgia, serif`;
-        const w = ctx.measureText(txt).width + 10;
+        const w = this.textW(ctx, txt) + 10;
         const bx = x + s * 0.5 + 2, by = y - s * 0.45;
         ctx.fillStyle = 'rgba(19,35,58,0.88)';
         roundRect(ctx, bx, by, w, fs + 1, 4); ctx.fill();
@@ -1405,6 +1442,33 @@ export class MapView {
   // tracé bastionné en pointes de flèche (3), bastions et demi-lunes à la Vauban (4).
   // Pendant un siège, la brèche s'ouvre à mesure que les canons travaillent. Retourne le rayon extérieur de l'ouvrage.
   walls(ctx, s, f, id, dmg) {
+    // le tracé ne dépend que du niveau, de la taille, de la brèche et de la ville : on le garde en cache (Path2D)
+    s = Math.round(s * 2) / 2;
+    const db = dmg > 0.02 ? Math.round(dmg * 50) / 50 : 0;
+    const key = `${f}|${s}|${db}|${id}`;
+    let w = this.wallCache.get(key);
+    if (!w) {
+      w = this.wallGeom(s, f, id, db);
+      if (this.wallCache.size > 400) this.wallCache.clear();
+      this.wallCache.set(key, w);
+    }
+    const dark = 'rgba(28,22,14,0.9)', stone = f >= 4 ? '#f2e6c4' : '#e6d9b3';
+    ctx.lineJoin = 'miter'; ctx.lineCap = 'butt'; ctx.miterLimit = 6;
+    for (const [w2, c] of [[w.lw + 2.6, dark], [w.lw, stone]]) {
+      ctx.strokeStyle = c;
+      ctx.lineWidth = w2; ctx.stroke(w.ring);
+      if (w.lunes) { ctx.lineWidth = w2 * 0.7; ctx.stroke(w.lunes); }
+    }
+    if (w.towersDark) {
+      ctx.fillStyle = dark; ctx.fill(w.towersDark);
+      ctx.fillStyle = stone; ctx.fill(w.towers);
+    }
+    if (w.rubble) { ctx.fillStyle = 'rgba(110,95,72,0.95)'; ctx.fill(w.rubble); }
+    return w.outer;
+  }
+
+  // géométrie d'une enceinte (voir walls) : chemins prêts à tracer et rayon extérieur
+  wallGeom(s, f, id, dmg) {
     const R = s * 0.62 + 2, sq = 0.86, TAU = Math.PI * 2;
     const a0 = (id * 2.399) % TAU;   // orientation propre à chaque ville : la brèche y reste au même endroit
     const half = dmg > 0.02 ? Math.PI * 0.5 * Math.min(1, dmg) : 0;
@@ -1415,7 +1479,6 @@ export class MapView {
       return d < half;
     };
     const lw = clamp(s * 0.03 * (1 + f * 0.5), 1.3, 6);
-    const dark = 'rgba(28,22,14,0.9)', stone = f >= 4 ? '#f2e6c4' : '#e6d9b3';
     const ring = [], towers = [], lunes = [];
     let outer;
     if (f <= 2) {
@@ -1440,41 +1503,39 @@ export class MapView {
         outer = R * 1.62;
       }
     }
-    const path = (pts, closedSkip) => {
-      ctx.beginPath();
+    const trace = (path, pts, closedSkip) => {
       let pen = false;
       for (let i = 0; i < pts.length - 1; i++) {
         const [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
         if (closedSkip && inGap((x1 + x2) / 2, (y1 + y2) / 2)) { pen = false; continue; }
-        if (!pen) { ctx.moveTo(x1, y1); pen = true; }
-        ctx.lineTo(x2, y2);
+        if (!pen) { path.moveTo(x1, y1); pen = true; }
+        path.lineTo(x2, y2);
       }
     };
-    ctx.lineJoin = 'miter'; ctx.lineCap = 'butt'; ctx.miterLimit = 6;
-    for (const [w2, c] of [[lw + 2.6, dark], [lw, stone]]) {
-      path(ring, true); ctx.strokeStyle = c; ctx.lineWidth = w2; ctx.stroke();
-      for (const t of lunes) {
-        if (inGap(t[1][0], t[1][1])) continue;
-        path(t, false); ctx.strokeStyle = c; ctx.lineWidth = w2 * 0.7; ctx.stroke();
-      }
-    }
-    for (const [x, y] of towers) {
-      if (inGap(x, y)) continue;
+    const g = { lw, outer, ring: new Path2D(), lunes: null, towers: null, towersDark: null, rubble: null };
+    trace(g.ring, ring, true);
+    const lu = lunes.filter(t => !inGap(t[1][0], t[1][1]));
+    if (lu.length) { g.lunes = new Path2D(); for (const t of lu) trace(g.lunes, t, false); }
+    const tw = towers.filter(([x, y]) => !inGap(x, y));
+    if (tw.length) {
       const r = lw * (f === 1 ? 0.95 : 1.25);
-      ctx.fillStyle = dark; ctx.beginPath(); ctx.arc(x, y, r + 1.3, 0, TAU); ctx.fill();
-      ctx.fillStyle = stone; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+      g.towers = new Path2D(); g.towersDark = new Path2D();
+      for (const [x, y] of tw) {
+        g.towersDark.moveTo(x + r + 1.3, y); g.towersDark.arc(x, y, r + 1.3, 0, TAU);
+        g.towers.moveTo(x + r, y); g.towers.arc(x, y, r, 0, TAU);
+      }
     }
     if (half) {
       // éboulis dans la brèche
-      ctx.fillStyle = 'rgba(110,95,72,0.95)';
-      const k = Math.ceil(4 + dmg * 6);
+      g.rubble = new Path2D();
+      const k = Math.ceil(4 + dmg * 6), rr = Math.max(1, lw * 0.5);
       for (let i = 0; i < k; i++) {
         const a = a0 + (i / (k - 1) - 0.5) * half * 1.5;
         const [x, y] = P(a, R * (0.98 + ((i * 7) % 5) * 0.06));
-        ctx.beginPath(); ctx.arc(x, y, Math.max(1, lw * 0.5), 0, TAU); ctx.fill();
+        g.rubble.moveTo(x + rr, y); g.rubble.arc(x, y, rr, 0, TAU);
       }
     }
-    return outer;
+    return g;
   }
 
   flag(ctx, x, y, h, col) {
@@ -1592,6 +1653,7 @@ export class MapView {
     const atNode = {};
     for (const d of list) if (d.a.n != null && d.a.st !== 'battle') (atNode[d.a.n] = atNode[d.a.n] || []).push(d);
     for (const arr of Object.values(atNode)) arr.forEach((d, i) => { d.slot = i; d.slots = arr.length; });
+    this.armyLabels = [];
     for (const d of list) {
       const a = d.a;
       const [x, y] = this.armyScreen(d);
@@ -1606,6 +1668,7 @@ export class MapView {
       else this.drawToken(ctx, a, d, col, sel, time);
       ctx.restore();
     }
+    this.drawArmyLabels(ctx);
   }
 
   drawToken(ctx, a, d, col, sel, time) {
@@ -1747,25 +1810,45 @@ export class MapView {
     ctx.font = `700 ${clamp(bw * 0.42, 10, 16)}px "EB Garamond", Georgia, serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     const ca = Math.cos(d.head + Math.PI / 2), sa = Math.sin(d.head + Math.PI / 2);
+    // bas de la formation à l'écran (blocs tournés et chiffres compris) : le nom de l'armée se place dessous
+    let bottom = 0;
+    const rad = Math.hypot(bw, bd) / 2;
+    for (const b of blocks) bottom = Math.max(bottom, b.x * sa + (b.y - cy) * ca + rad * (b.scale || 1));
     for (const [lx, ly, n] of labels) {
       const X = lx * ca - ly * sa, Y = lx * sa + ly * ca;
+      bottom = Math.max(bottom, Y - 4);
       ctx.strokeStyle = 'rgba(14,20,30,.85)'; ctx.lineWidth = 3;
       ctx.strokeText(String(n), X, Y - 4);
       ctx.fillStyle = '#fff6dc';
       ctx.fillText(String(n), X, Y - 4);
     }
     if (z >= 7 && (sel || a.o === this.state.me.code)) {
-      ctx.font = `italic 500 ${clamp(z * 0.6 + 5, 11, 15)}px "EB Garamond", Georgia, serif`;
-      ctx.textBaseline = 'top';
-      const th = d.head + Math.PI / 2;
-      const ty = 0.5 * (Math.abs(Math.sin(th)) * (maxx - minx) + Math.abs(Math.cos(th)) * (maxy - miny)) + 12;
       const gen = a.gen ? ` · ${a.gen.name}` : '';
       const fmLab = a.fm && a.fm !== 'ligne' ? ` · ${this.rules.formations[a.fm].label.toLowerCase()}` : '';
-      const txt = a.name + gen + fmLab;
-      ctx.strokeStyle = 'rgba(14,20,30,.8)'; ctx.lineWidth = 3;
-      ctx.strokeText(txt, 0, ty); ctx.fillStyle = '#f1ead8'; ctx.fillText(txt, 0, ty);
-      if (a.wn?.length) this.warnMark(ctx, ctx.measureText(txt).width / 2 + 9, ty + 7);
+      // dessiné après toutes les armées, pour ne pas disparaître sous les chiffres d'une voisine
+      const m = ctx.getTransform();
+      this.armyLabels.push({ x: m.e / this.dpr, y: m.f / this.dpr + bottom + 6, txt: a.name + gen + fmLab, warn: !!a.wn?.length, alpha: ctx.globalAlpha });
     }
+  }
+
+  // noms des armées (grand zoom) : sous les chiffres des régiments, sur un léger fond pour rester lisibles
+  drawArmyLabels(ctx) {
+    const z = this.cam.z;
+    ctx.save();
+    ctx.font = `italic 500 ${clamp(z * 0.6 + 5, 11, 15)}px "EB Garamond", Georgia, serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const fs = clamp(z * 0.6 + 5, 11, 15);
+    for (const l of this.armyLabels) {
+      const w = this.textW(ctx, l.txt);
+      ctx.globalAlpha = l.alpha;
+      ctx.fillStyle = 'rgba(14,20,30,0.5)';
+      roundRect(ctx, l.x - w / 2 - 5, l.y - 1, w + 10, fs + 4, 4); ctx.fill();
+      ctx.strokeStyle = 'rgba(14,20,30,.8)'; ctx.lineWidth = 3;
+      ctx.strokeText(l.txt, l.x, l.y); ctx.fillStyle = '#f1ead8'; ctx.fillText(l.txt, l.x, l.y);
+      if (l.warn) this.warnMark(ctx, l.x + w / 2 + 9, l.y + 7);
+    }
+    ctx.restore();
+    this.armyLabels.length = 0;
   }
 
   // armée qui déserte (solde impayée, vivres épuisés) : petit point d'exclamation rouge
@@ -1949,69 +2032,108 @@ export class MapView {
     const st = this.state;
     const [mx0, my0] = this.toScreen(0, 0), [mx1, my1] = this.toScreen(this.W, this.H);
     const X0 = Math.max(0, mx0), Y0 = Math.max(0, my0), X1 = Math.min(this.vw, mx1), Y1 = Math.min(this.vh, my1);
+    if (X1 <= X0 || Y1 <= Y0) return;
     const ym = clamp(this.toScreen(0, this.m.y_mont)[1], Y0, Y1);
     const xc = clamp(this.toScreen(this.m.x_cote, 0)[0], X0, X1);
+    // zones : [x0, y0, x1, y1] et bords intérieurs (gauche, droite, haut, bas) qui touchent une autre zone
     const zones = {
-      montagne: [X0, ym, X1 - X0, Y1 - ym],
-      cote: [X0, Y0, xc - X0, ym - Y0],
-      interieur: [xc, Y0, X1 - xc, ym - Y0],
+      montagne: [X0, ym, X1, Y1, 0, 0, ym > Y0, 0],
+      cote: [X0, Y0, xc, ym, 0, xc < X1, 0, ym < Y1],
+      interieur: [xc, Y0, X1, ym, xc > X0, 0, 0, ym < Y1],
     };
-    for (const [zn, rect] of Object.entries(zones)) {
-      const [rx, ry, rw, rh] = rect;
-      if (rw <= 0 || rh <= 0) continue;
-      const kind = st.weather[zn]?.kind;
-      if (!kind) continue;
+    // Les voiles de couleur sont peints sur un calque en très basse résolution que le navigateur agrandit :
+    // le lissage fond les limites entre zones sur une quarantaine de pixels, sans couture droite.
+    const K = 1 / 40;
+    const tw = Math.ceil(this.vw * K) + 1, th = Math.ceil(this.vh * K) + 1;
+    const tint = this.wxTint || (this.wxTint = document.createElement('canvas'));
+    if (tint.width !== tw || tint.height !== th) { tint.width = tw; tint.height = th; }
+    const tg = tint.getContext('2d');
+    tg.setTransform(1, 0, 0, 1, 0, 0);
+    tg.clearRect(0, 0, tw, th);
+    tg.setTransform(K, 0, 0, K, 0, 0);
+    let tinted = false;
+    // vers l'extérieur de la carte, le voile déborde : la découpe au bord de la carte reste franche
+    const ext = zr => [zr[4] ? zr[0] : zr[0] - 60, zr[6] ? zr[1] : zr[1] - 60, zr[5] ? zr[2] : zr[2] + 60, zr[7] ? zr[3] : zr[3] + 60];
+    const veil = (zr, col) => { const [a, b, c, d] = ext(zr); tg.fillStyle = col; tg.fillRect(a, b, c - a, d - b); tinted = true; };
+    const live = Object.entries(zones).filter(([zn, zr]) => zr[2] > zr[0] && zr[3] > zr[1] && st.weather[zn]?.kind);
+    // 1) voiles (calque basse résolution)
+    for (const [zn, zr] of live) {
+      const kind = st.weather[zn].kind;
+      if (kind === 'pluie' || kind === 'orage' || kind === 'tempete') {
+        veil(zr, 'rgba(40,52,70,0.12)');
+        if (kind === 'orage') {
+          if (Math.random() < dt * 0.35) this.flash[zn] = 0.4;
+          if (this.flash[zn] > 0) { veil(zr, `rgba(255,255,255,${this.flash[zn]})`); this.flash[zn] -= dt * 1.6; }
+        }
+      } else if (kind === 'neige') veil(zr, 'rgba(240,246,255,0.22)');
+      else if (kind === 'brouillard') {
+        // voile discret et nappes peu blanches : sous le brouillard de guerre, les cercles de vision
+        // ne doivent pas ressortir comme des disques éclatants
+        const pool = this.wx[zn];
+        while (pool.length < 9) pool.push({ x: Math.random(), y: Math.random(), r: 0.25 + Math.random() * 0.3, v: 0.004 + Math.random() * 0.006 });
+        veil(zr, 'rgba(214,220,228,0.12)');
+        const [x0, y0, x1, y1] = zr, zw = x1 - x0, zh = y1 - y0, [ea, eb, ec, ed] = ext(zr);
+        tg.save();
+        tg.beginPath(); tg.rect(ea, eb, ec - ea, ed - eb); tg.clip();
+        for (const p of pool) {
+          p.x += p.v * dt; if (p.x > 1.3) p.x = -0.3;
+          const cx = x0 + p.x * zw, cy = y0 + p.y * zh, R = p.r * Math.max(zw, zh);
+          const gr = tg.createRadialGradient(cx, cy, 0, cx, cy, R);
+          gr.addColorStop(0, 'rgba(224,228,234,0.24)'); gr.addColorStop(1, 'rgba(224,228,234,0)');
+          tg.fillStyle = gr; tg.fillRect(cx - R, cy - R, R * 2, R * 2);
+        }
+        tg.restore();
+      } else if (kind === 'canicule') veil(zr, 'rgba(255,170,70,0.09)');
+      else if (kind === 'nuages') veil(zr, 'rgba(60,70,90,0.06)');
+    }
+    if (tinted) {
       ctx.save();
-      ctx.beginPath(); ctx.rect(rx, ry, rw, rh); ctx.clip();
+      ctx.beginPath(); ctx.rect(X0, Y0, X1 - X0, Y1 - Y0); ctx.clip();   // le lissage ne déborde pas hors de la carte
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(tint, 0, 0, tw / K, th / K);
+      ctx.restore();
+    }
+    // 2) gouttes et flocons : ils débordent un peu sur la zone voisine et s'y effacent progressivement
+    const F = 40, Hf = F / 2;
+    for (const [zn, zr] of live) {
+      const kind = st.weather[zn].kind;
+      const rain = kind === 'pluie' || kind === 'orage' || kind === 'tempete';
+      if (!rain && kind !== 'neige') continue;
+      const [x0, y0, x1, y1, eL, eR, eT, eB] = zr;
+      const rx = x0 - (eL ? Hf : 0), ry = y0 - (eT ? Hf : 0), rw = x1 + (eR ? Hf : 0) - rx, rh = y1 + (eB ? Hf : 0) - ry;
+      const fade = (x, y) => Math.min(eL ? (x - x0 + Hf) / F : 1, eR ? (x1 + Hf - x) / F : 1, eT ? (y - y0 + Hf) / F : 1, eB ? (y1 + Hf - y) / F : 1);
+      const bucket = (x, y) => Math.ceil(clamp(fade(x, y), 0, 1) * 4) - 1;   // 4 niveaux d'opacité, -1 : invisible
+      const P = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
       const pool = this.wx[zn];
       const area = rw * rh / 1e5;
-      if (kind === 'pluie' || kind === 'orage' || kind === 'tempete') {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(rx, ry, rw, rh); ctx.clip();
+      if (rain) {
         const want = Math.min(420, area * (kind === 'pluie' ? 60 : 95));
         while (pool.length < want) pool.push({ x: rx + Math.random() * rw, y: ry + Math.random() * rh, l: 8 + Math.random() * 10 });
         pool.length = Math.min(pool.length, Math.ceil(want));
         const vx = kind === 'tempete' ? -260 : -60, vy = 620;
-        ctx.strokeStyle = 'rgba(205,222,240,0.45)'; ctx.lineWidth = 1;
-        ctx.beginPath();
         for (const p of pool) {
           p.x += vx * dt; p.y += vy * dt;
           if (p.y > ry + rh) { p.y = ry - 10; p.x = rx + Math.random() * (rw + 200); }
           if (p.x < rx - 50) p.x += rw + 100;
-          ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + vx * 0.02, p.y + p.l);
+          const b = bucket(p.x, p.y);
+          if (b >= 0) { P[b].moveTo(p.x, p.y); P[b].lineTo(p.x + vx * 0.02, p.y + p.l); }
         }
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(40,52,70,0.12)'; ctx.fillRect(rx, ry, rw, rh);
-        if (kind === 'orage') {
-          if (Math.random() < dt * 0.35) this.flash[zn] = 0.4;
-          if (this.flash[zn] > 0) { ctx.fillStyle = `rgba(255,255,255,${this.flash[zn]})`; ctx.fillRect(rx, ry, rw, rh); this.flash[zn] -= dt * 1.6; }
-        }
-      } else if (kind === 'neige') {
+        ctx.strokeStyle = 'rgb(205,222,240)'; ctx.lineWidth = 1;
+        P.forEach((path, i) => { ctx.globalAlpha = 0.45 * (i + 1) / 4; ctx.stroke(path); });
+      } else {
         const want = Math.min(360, area * 55);
         while (pool.length < want) pool.push({ x: rx + Math.random() * rw, y: ry + Math.random() * rh, r: 1 + Math.random() * 2, ph: Math.random() * 6 });
         pool.length = Math.min(pool.length, Math.ceil(want));
-        ctx.fillStyle = 'rgba(240,246,255,0.22)'; ctx.fillRect(rx, ry, rw, rh);
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        ctx.beginPath();
         for (const p of pool) {
           p.y += 40 * dt; p.x += Math.sin(time + p.ph) * 12 * dt;
           if (p.y > ry + rh) { p.y = ry - 4; p.x = rx + Math.random() * rw; }
-          ctx.moveTo(p.x + p.r, p.y); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          const b = bucket(p.x, p.y);
+          if (b >= 0) { P[b].moveTo(p.x + p.r, p.y); P[b].arc(p.x, p.y, p.r, 0, Math.PI * 2); }
         }
-        ctx.fill();
-      } else if (kind === 'brouillard') {
-        const want = 9;
-        while (pool.length < want) pool.push({ x: Math.random(), y: Math.random(), r: 0.25 + Math.random() * 0.3, v: 0.004 + Math.random() * 0.006 });
-        ctx.fillStyle = 'rgba(232,236,240,0.2)'; ctx.fillRect(rx, ry, rw, rh);
-        for (const p of pool) {
-          p.x += p.v * dt; if (p.x > 1.3) p.x = -0.3;
-          const cx = rx + p.x * rw, cy = ry + p.y * rh, R = p.r * Math.max(rw, rh);
-          const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
-          gr.addColorStop(0, 'rgba(240,242,245,0.42)'); gr.addColorStop(1, 'rgba(240,242,245,0)');
-          ctx.fillStyle = gr; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
-        }
-      } else if (kind === 'canicule') {
-        ctx.fillStyle = 'rgba(255,170,70,0.09)'; ctx.fillRect(rx, ry, rw, rh);
-      } else if (kind === 'nuages') {
-        ctx.fillStyle = 'rgba(60,70,90,0.06)'; ctx.fillRect(rx, ry, rw, rh);
+        ctx.fillStyle = '#ffffff';
+        P.forEach((path, i) => { ctx.globalAlpha = 0.9 * (i + 1) / 4; ctx.fill(path); });
       }
       ctx.restore();
     }

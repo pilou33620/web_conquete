@@ -1,8 +1,11 @@
 import { ICON, speedIcon, coat } from './icons.js';
 import { fmtMen, unitCls } from './map.js';
 
-const fmt = n => Math.round(n).toLocaleString('fr-FR');
-const fmt1 = n => (Math.abs(n) >= 10 ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('fr-FR');
+// nombres à la française : virgule décimale et vrai signe moins (−)
+const minus = s => s.replace(/^-/, '−');
+const fmt = n => minus((Math.round(n) || 0).toLocaleString('fr-FR'));   // || 0 : pas de « −0 »
+const fmt1 = n => minus(((Math.abs(n) >= 10 ? Math.round(n) : Math.round(n * 10) / 10) || 0).toLocaleString('fr-FR'));
+const fmt2 = n => minus((Math.round(n * 100) / 100 || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const STATUS = { paix: 'En paix', guerre: 'En guerre', alliance: 'Alliés', self: 'Vous' };
 const TYPE_LABEL = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' };
@@ -194,18 +197,23 @@ export class UI {
     const st = this.st, me = st.me;
     this.$('tb-day').textContent = st.date;
     const zones = ['cote', 'interieur', 'montagne'];
-    const wx = zones.map(z => {
-      const w = this.rules.weather[st.weather[z].kind];
-      return `<span class="wx" title="${this.rules.zones[z]} : ${w.label}">${w.icon}<span>${this.rules.zones[z].split(' ')[0]}</span></span>`;
-    }).join('');
-    this.$('tb-season').innerHTML = `<span>${this.rules.seasons[st.season]}</span>${wx}${st.flood ? '<span class="wx" title="Crue des fleuves">🌊</span>' : ''}`;
+    const wsig = st.season + zones.map(z => st.weather[z].kind).join() + !!st.flood;
+    if (wsig !== this.wxSig) {   // ne réécrit la météo que si elle change
+      this.wxSig = wsig;
+      const wx = zones.map(z => {
+        const w = this.rules.weather[st.weather[z].kind];
+        return `<span class="wx" title="${this.rules.zones[z]} : ${w.label}">${w.icon}<span>${this.rules.zones[z].split(' ')[0]}</span></span>`;
+      }).join('');
+      this.$('tb-season').innerHTML = `<span>${this.rules.seasons[st.season]}</span>${wx}${st.flood ? '<span class="wx" title="Crue des fleuves">🌊</span>' : ''}`;
+    }
     this.renderSpeed(st.speed);
     for (const r of RES_ORDER) {
       const v = me.res[r], inc = me.income[r];
       this.$('res-' + r).textContent = fmt(v);
       const d = this.$('inc-' + r);
-      d.textContent = (inc >= 0 ? '+' : '−') + fmt1(Math.abs(inc));
-      d.classList.toggle('neg', inc < 0);
+      const iv = fmt1(inc);
+      d.textContent = (iv[0] === '−' ? '' : '+') + iv;
+      d.classList.toggle('neg', iv[0] === '−');
       const warn = (r === 'vivres' && me.famine) || (r === 'livres' && me.banqueroute);
       d.parentElement.classList.toggle('warn', warn);
     }
@@ -217,7 +225,8 @@ export class UI {
     if (!sp) return '';
     const k = (1 + (own && sp.boost ? (this.st.me.mods[sp.boost] || 0) : 0)) * (capital ? this.rules.specialty_capital : 1);
     const prod = ['livres', 'vivres', 'recrues', 'industrie', 'fer', 'bois'].filter(r => sp[r])
-      .map(r => `+${fmt1(sp[r] * k)} ${r === 'industrie' ? 'industrie' : this.rules.res_label[r].toLowerCase()}`).join(', ');
+      .map(r => { const v = sp[r] * k, lab = r === 'industrie' ? 'industrie' : this.rules.res_label[r].toLowerCase();
+        return `+${fmt1(v)} ${r === 'livres' && v < 2 ? 'livre' : lab}`; }).join(', ');
     return `<div class="star-line"><span class="star">★</span><div><b>${esc(label)}</b><div class="muted small">${esc(sp.label)} : ${prod} par jour (production de base)${own ? '' : ', pour qui tient la ville'}</div></div></div>`;
   }
 
@@ -228,7 +237,7 @@ export class UI {
   resTip(r) {
     const me = this.st.me;
     const lab = this.rules.res_label[r];
-    const rows = [[`Stock`, fmt(me.res[r])], [`Variation par jour`, (me.income[r] >= 0 ? '+' : '') + fmt1(me.income[r])]];
+    const rows = [[`Stock`, fmt(me.res[r])], [`Variation par jour`, (fmt1(me.income[r])[0] === '−' ? '' : '+') + fmt1(me.income[r])]];
     if (r === 'livres') {
       rows.push(['Solde des troupes', '−' + fmt1(me.upkeep.livres || 0)]);
       if (me.upkeep.forts) rows.push(['Entretien des remparts', '−' + fmt1(me.upkeep.forts)]);
@@ -416,7 +425,7 @@ export class UI {
       case 'modal': this.openModal(d.v); break;
       case 'close-modal': this.closeModal(); break;
       case 'close-panel': this.select(null); break;
-      case 'goto': if (d.x) this.map.moveTo(+d.x, +d.y, Math.max(this.map.cam.z, 6)); break;
+      case 'goto': if (d.x) { if (this.modal) this.closeModal(); this.map.moveTo(+d.x, +d.y, Math.max(this.map.cam.z, 6)); } break;
       case 'center': {
         const p = this.selPos();
         if (p) this.map.moveTo(p[0], p[1], Math.max(this.map.cam.z, 7));
@@ -439,7 +448,7 @@ export class UI {
       case 'go-trail': {
         this.hideBubble();
         const t = this.pendingTrail;
-        if (t) this.cmd({ cmd: 'path', army: t.army, pts: t.pts }, false).then(r => this.toast(r.msg || 'En marche.', r.ok ? 'good' : 'bad'));
+        if (t) this.cmd({ cmd: 'path', army: t.army, pts: t.pts }, false).then(r => { if (r.ok) this.toast(r.msg || 'En marche.', 'good'); });
         break;
       }
       case 'zoom': {
@@ -466,7 +475,7 @@ export class UI {
         break;
       }
       case 'split-type':
-        this.cmd({ cmd: 'split_type', army: sel.id, value: d.v }, false).then(r => { if (r.ok) { this.toast('Détachement formé.', 'good'); this.select({ kind: 'army', id: r.id }); } else if (r.msg) this.toast(r.msg, 'bad'); });
+        this.cmd({ cmd: 'split_type', army: sel.id, value: d.v }, false).then(r => { if (r.ok) { this.toast('Détachement formé.', 'good'); this.select({ kind: 'army', id: r.id }); } });
         break;
       case 'spy': {
         const sp = this.rules.spy[d.v];
@@ -484,7 +493,7 @@ export class UI {
       case 'stance': this.cmd({ cmd: 'stance', army: sel.id, value: d.v }); break;
       case 'retreat': this.cmd({ cmd: 'retreat', army: sel.id }); break;
       case 'assault': this.cmd({ cmd: 'assault', army: sel.id }); break;
-      case 'garrison': this.cmd({ cmd: 'garrison', army: sel.id }).then(r => { if (r.ok) this.select({ kind: 'node', id: this.armyById(sel.id)?.n ?? d.node }); }); break;
+      case 'garrison': this.cmd({ cmd: 'garrison', army: sel.id }).then(r => { if (r.ok) this.select({ kind: 'node', id: this.armyById(sel.id)?.n ?? +d.node }); }); break;
       case 'split': {
         const regs = [...this.checked];
         this.cmd({ cmd: 'split', army: sel.id, regs }, false).then(r => { if (r.ok) { this.toast('Armée scindée.', 'good'); this.select({ kind: 'army', id: r.id }); } });
@@ -511,7 +520,7 @@ export class UI {
         const inp = document.getElementById(`amt-${d.v}-${d.to}`);
         if (inp) body.amount = +inp.value || 0;
         if ((d.v === 'guerre') && !confirm(`Déclarer la guerre à ${this.rules.factions[d.to].name} ?`)) break;
-        this.cmd(body);
+        this.cmd(body, d.v !== 'guerre');   // la déclaration de guerre est déjà annoncée par le journal
         break;
       }
       case 'answer': this.cmd({ cmd: 'answer', id: d.id, accept: d.v === '1' }); break;
@@ -530,7 +539,8 @@ export class UI {
       case 'jtab': this.journalFilter = d.v; this.modalSig = ''; this.renderModal(); break;
       case 'save': {
         const name = document.getElementById('save-name').value;
-        this.api.post('/api/save', { name }).then(r => { this.toast(r.msg, r.ok ? 'good' : 'bad'); this.modalSig = ''; this.refreshSaves(); });
+        this.api.post('/api/save', { name }).then(r => { this.toast(r.msg, r.ok ? 'good' : 'bad'); this.modalSig = ''; this.refreshSaves(); })
+          .catch(() => this.toast('Serveur injoignable : partie non sauvegardée.', 'bad'));
         break;
       }
       case 'load': this.onLoad && this.onLoad(d.v); break;
@@ -563,9 +573,21 @@ export class UI {
     else if (s.kind === 'army') [html, sig] = this.armyPanel(s.id);
     else if (s.kind === 'battle') [html, sig] = this.battlePanel(s.id);
     if (html == null) {
+      // bataille terminée : on annonce l'issue et on garde la main sur une de nos armées qui y était
+      const m = this.fightMemo;
+      if (s.kind === 'battle' && m && m.id === s.id) {
+        this.fightMemo = null;
+        this.toastBattleEnd(m);
+        const mine = m.mine.find(id => this.armyById(id));
+        this.select(mine ? { kind: 'army', id: mine } : null);
+        return;
+      }
       // l'objet peut manquer brièvement (nouvelle armée pas encore reçue) : on patiente un peu
       this.missing = (this.missing || 0) + 1;
-      if (this.missing > 6) this.select(null);
+      if (this.missing > 6) {
+        if (s.kind === 'army' && m && m.army === s.id) { this.fightMemo = null; this.toastBattleEnd(m, true); }
+        this.select(null);
+      }
       return;
     }
     this.missing = 0;
@@ -575,6 +597,13 @@ export class UI {
     p.innerHTML = `<button class="icon-btn close" data-act="close-panel" aria-label="Fermer">${ICON.close}</button>` + html;
     p.scrollTop = scroll;
     p.hidden = false;
+  }
+
+  // issue de la dernière bataille livrée près de (m.x, m.y), d'après le journal
+  toastBattleEnd(m, gone = false) {
+    const ev = [...this.events].reverse().find(e => e.kind === 'battle_end' && e.seq > m.seq && e.x != null && Math.hypot(e.x - m.x, e.y - m.y) < 4);
+    if (ev) this.toast(ev.text, ev.win === true ? 'good' : ev.win === false ? 'bad' : '');
+    else if (gone && m.army) this.toast(`${m.name} n’existe plus.`, 'bad');
   }
 
   costHtml(cost) {
@@ -679,10 +708,13 @@ export class UI {
       const U = this.rules.units;
       const ru = ns.ru || (gn.type === 'village' ? [] : gn.type === 'fort' ? ['ligne', 'legere'] : this.rules.unit_order);
       const rw = ns.rw || {};
+      const queue = ns.q || [];
+      const qFull = queue.length >= 4;   // le serveur refuse au-delà de 4 ordres en file
+      const fullT = 'File de production pleine (4 maximum)';
       if (ru.length) {
         h += `<div class="section-t">Lever un régiment</div><div class="units-grid">${ru.filter(u => U[u]).map(u => {
           const c = st.me.unit_costs[u] || {};
-          return `<button class="btn unit-card" data-act="recruit" data-v="${u}" ${this.canPay(c) && !ns.sg ? '' : 'disabled'} title="${esc(U[u].name + (U[u].desc ? ' : ' + U[u].desc : ''))}">
+          return `<button class="btn unit-card" data-act="recruit" data-v="${u}" ${this.canPay(c) && !ns.sg && !qFull ? '' : 'disabled'} title="${qFull ? fullT : esc(U[u].name + (U[u].desc ? ' : ' + U[u].desc : ''))}">
             ${ICON[u] || ICON.ligne}<span class="un">${U[u].short} <span class="muted" style="font-weight:400">(${U[u].men})</span></span>
             <span class="uc">${this.costHtml(c)}, ${st.me.unit_days[u] ?? '?'} j</span></button>`;
         }).join('')}</div>`;
@@ -694,18 +726,23 @@ export class UI {
       for (const k of ['fort', 'dev', 'depot'].filter(k => this.rules.build[k])) {
         const b = this.rules.build[k];
         const lvl = k === 'fort' ? ns.f : k === 'depot' ? (ns.dp ? 1 : 0) : ns.d;
-        const pend = (ns.q || []).filter(q => q.kind === 'build' && q.what === k).length;
+        const pend = queue.filter(q => q.kind === 'build' && q.what === k).length;
         const l = lvl + pend;
         const top = k === 'fort' ? (ns.fx || this.rules.fort.max) : b.max || 1;
+        // dernier niveau seulement commandé : en chantier (premier de la file) ou en attente derrière d'autres ordres
+        const qState = pend ? (queue[0]?.kind === 'build' && queue[0]?.what === k ? 'en chantier' : 'en file d’attente') : '';
+        const qDis = qFull ? ` disabled title="${fullT}"` : '';
         if (k === 'depot') {
           // magasin aux vivres : un seul par place
-          if (l >= top) h += `<button class="btn" disabled>${ns.dp ? 'Magasin aux vivres construit' : 'Magasin aux vivres en chantier'}</button>`;
-          else h += `<button class="btn" data-act="build" data-v="depot" ${this.canPay(b.costs?.[0] || {}) ? '' : 'disabled'} title="${esc(b.desc || '')}">Magasin aux vivres<small>${this.costHtml(b.costs?.[0] || {})}, ${b.days?.[0] ?? '?'} j</small></button>`;
+          if (l >= top) h += `<button class="btn" disabled>${ns.dp ? 'Magasin aux vivres construit' : 'Magasin aux vivres : ' + (qState || 'en chantier')}</button>`;
+          else h += `<button class="btn" data-act="build" data-v="depot" ${this.canPay(b.costs?.[0] || {}) ? '' : 'disabled'}${qDis || ` title="${esc(b.desc || '')}"`}>Magasin aux vivres<small>${this.costHtml(b.costs?.[0] || {})}, ${b.days?.[0] ?? '?'} j</small></button>`;
           continue;
         }
         if (l >= top) {
           const vauban = k === 'fort' && top < this.rules.fort.bastion && this.rules.fort.bastion_types.includes(gn.type);
-          h += vauban ? `<button class="btn" disabled title="Recherchez « Fortifications à la Vauban » (militaire)">Bastions à la Vauban<small>technologie Vauban requise</small></button>`
+          const done = k === 'dev' ? this.devName(gn.type, l) : l === this.rules.fort.bastion ? 'Bastions à la Vauban' : `${b.name} niveau ${l}`;
+          h += pend ? `<button class="btn" disabled>${esc(done)} : ${qState}</button>`
+            : vauban ? `<button class="btn" disabled title="Recherchez « Fortifications à la Vauban » (militaire)">Bastions à la Vauban<small>technologie Vauban requise</small></button>`
             : `<button class="btn" disabled>${k === 'dev' ? this.devName(gn.type, lvl) + ' : agrandissement maximal' : b.name + ' au maximum'}</button>`;
           continue;
         }
@@ -713,20 +750,20 @@ export class UI {
         const lab = k === 'fort' ? `${l + 1 === this.rules.fort.bastion ? 'Bastions à la Vauban' : b.name + ' niveau ' + (l + 1)}`
           : k === 'dev' ? `Agrandir : ${this.devName(gn.type, l + 1).toLowerCase()}` : `${b.name} niveau ${l + 1}`;
         const up = k === 'fort' ? `, entretien ${fmt1(this.rules.fort.upkeep[l + 1])} livres /j` : '';
-        h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'} title="${esc(b.desc)}">${lab}<small>${this.costHtml(c)}, ${b.days[l]} j${up}</small></button>`;
+        h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'}${qDis || ` title="${esc(b.desc)}"`}>${lab}<small>${this.costHtml(c)}, ${b.days[l]} j${up}</small></button>`;
       }
       h += `</div>`;
-      if (ns.q && ns.q.length) {
-        h += `<div class="section-t">En préparation</div>` + ns.q.map((q, i) => {
+      if (queue.length) {
+        h += `<div class="section-t">En préparation${qFull ? ' <span class="muted small">(file pleine)</span>' : ''}</div>` + queue.map((q, i) => {
           const lab = q.kind === 'unit' ? this.rules.units[q.what]?.name || q.what : this.rules.build[q.what]?.name || q.what;
-          const pct = i === 0 ? Math.round((1 - q.left / q.total) * 100) : 0;
+          const pct = i === 0 ? Math.round((1 - q.left / q.total) * 20) * 5 : 0;   // par pas de 5 % : moins de redessins
           return `<div class="queue-item"><span>${lab}</span><span class="muted">${i === 0 ? Math.ceil(q.left) + ' j' : 'en attente'}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`;
         }).join('');
       }
     }
     h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
-    const sig = JSON.stringify([id, ns, st.me.res.livres > 0 ? Math.floor(st.me.res.livres / 25) : 0, Math.floor(st.me.res.armes / 10), st.armies.filter(a => a.n === id).map(a => a.id + a.st)]);
-    return [h, sig];
+    // signature = ce qui est affiché (valeurs arrondies, boutons actifs ou non) : pas de redessin à chaque relevé
+    return [h, id + '|' + h];
   }
 
   taxLabel(v) {
@@ -746,12 +783,10 @@ export class UI {
     const fm = a.fm || 'ligne', pl = a.pl || 'frontal';
     const hasInf = a.regs.some(r => unitCls(this.rules, r[1]) === 'inf');
     const rx = a.rx !== false;
-    // le carré met un moment à se former : précision si la description du serveur ne le dit pas déjà
-    const sqNote = fm === 'carre' && !/vuln/i.test(F.carre.desc) ? ' Former le carré prend un moment, pendant lequel l’infanterie est très vulnérable aux cavaliers.' : '';
     return `<div class="section-t">Tactique</div>
       ${hasInf ? `<div class="row"><span class="lab">Formation</span><span class="seg wrap">${Object.entries(F).map(([k, f]) =>
         `<button data-act="formation" data-army="${a.id}" data-v="${k}" class="${fm === k ? 'on' : ''}" title="${esc(f.desc)}">${f.label}</button>`).join('')}</span></div>
-      <div class="tac-desc">${esc(F[fm].desc)}${sqNote}</div>
+      <div class="tac-desc">${esc(F[fm].desc)}</div>
       <div class="btns"><button class="btn ${rx ? 'primary' : ''}" data-act="reflex" data-army="${a.id}" data-v="${rx ? 0 : 1}" title="Quand vous commandez vous-même, l’infanterie se forme d’elle-même en carré si la cavalerie ennemie charge.">Carré réflexe face aux charges : ${rx ? 'oui' : 'non'}</button></div>` : ''}
       <div class="row"><span class="lab">Plan de bataille</span><span class="seg wrap">${Object.entries(P).map(([k, p]) =>
         `<button data-act="plan" data-army="${a.id}" data-v="${k}" class="${pl === k ? 'on' : ''}" title="${esc(p.desc)}">${p.label}</button>`).join('')}</span></div>
@@ -798,6 +833,8 @@ export class UI {
       if (a.des > 0) h += `<div class="warnline">Déserteurs ce mois-ci : ${fmt(a.des)}</div>`;
       h += `<div class="reg-list">${a.regs.map(r => this.regRow(r, me, true)).join('')}</div>`;
       const canAct = a.st !== 'battle';
+      if (!canAct) this.fightMemo = { army: a.id, name: a.name, x: a.x, y: a.y, seq: this.events.length ? this.events[this.events.length - 1].seq : 0, mine: [] };
+      else if (this.fightMemo?.army === a.id) { this.toastBattleEnd(this.fightMemo); this.fightMemo = null; }   // sortie de bataille : son issue
       h += `<div class="section-t">Ordres</div>`;
       if (canAct) {
         h += `<div class="row"><span class="lab">Itinéraire</span><span class="seg">
@@ -863,6 +900,8 @@ export class UI {
       }
     });
     const mineIn = b.sides.flatMap(s => s.o === me ? (s.tac || []) : []);
+    const lastSeq = this.events.length ? this.events[this.events.length - 1].seq : 0;
+    this.fightMemo = { id, x: b.x, y: b.y, seq: lastSeq, mine: b.sides.flatMap(s => s.o === me ? [...(s.armies || []), ...(s.tac || []).map(t => t.id)] : []) };
     if (mineIn.length) h += `<p class="muted small">Touchez une de vos armées pour changer sa formation ou son plan pendant le combat.</p>`;
     return [h, JSON.stringify([b.phase, b.sides.map(s => [s.men, s.lost, s.mor, (s.tac || []).map(t => [t.fm, t.pl, t.reorg])])])];
   }
@@ -872,17 +911,20 @@ export class UI {
     this.modal = kind;
     this.modalSig = '';
     this.$('modal').hidden = false;
+    document.body.classList.add('modal-open');
     this.renderModal(true);
     if (kind === 'menu') this.refreshSaves();
   }
   closeModal() {
     this.modal = null;
     this.$('modal').hidden = true;
+    document.body.classList.remove('modal-open');
     for (const b of this.$('rail').children) b.classList.remove('on');
   }
 
   async refreshSaves() {
-    const r = await this.api.get('/api/saves');
+    let r;
+    try { r = await this.api.get('/api/saves'); } catch (e) { this.toast('Serveur injoignable : liste des sauvegardes indisponible.', 'bad'); return; }
     this.saves = r.saves;
     this.net = r.net;
     this.modalSig = '';
@@ -892,6 +934,9 @@ export class UI {
   renderModal(force = false) {
     const k = this.modal;
     if (!k || !this.st) return;
+    // pendant que le temps file, une fenêtre se met à jour au plus une fois par seconde (lecture et survol tranquilles)
+    const now = performance.now();
+    if (!force && now - (this.modalAt || 0) < 1000) return;
     const card = this.$('modal').firstElementChild;
     // saisie en cours (quantité, montant…) : ne pas reconstruire, sinon le champ perd le focus à chaque frappe
     const ae = document.activeElement;
@@ -901,6 +946,7 @@ export class UI {
     const [html, sig] = fn.call(this);
     if (!force && sig === this.modalSig) return;
     this.modalSig = sig;
+    this.modalAt = now;
     const scroll = card.scrollTop;
     // conserve les saisies
     const vals = {};
@@ -934,7 +980,7 @@ export class UI {
       }).join('');
       return `<div class="tech-col"><h3>${BRANCH_LABEL[br]}</h3><div class="cur">${head}</div>${cards}</div>`;
     }).join('');
-    const html = `<h2 class="m-title">Technologies</h2><p class="m-sub">Une recherche à la fois par branche. Le militaire gagne les batailles, le civil fait marcher l’État, l’industriel forge armes et outils, l’agricole remplit les greniers.</p><div class="tech-cols">${cols}</div>`;
+    const html = `<h2 class="m-title" id="m-title">Technologies</h2><p class="m-sub">Une recherche à la fois par branche. Le militaire gagne les batailles, le civil fait marcher l’État, l’industriel forge armes et outils, l’agricole remplit les greniers.</p><div class="tech-cols">${cols}</div>`;
     return [html, JSON.stringify([me.techs, Object.values(me.research).map(r => r && Math.ceil(r.left)), Math.floor(me.res.livres / 25)])];
   }
 
@@ -973,7 +1019,7 @@ export class UI {
       return `<div class="dcard">${coat(R.color, f.code)}<div>
           <div class="dn">${R.name}</div><div class="dt">${R.title}, chef-lieu ${R.capital}</div>
           <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}</div>
-          <div class="row"><span class="lab">${relLabel(f.rel)} (${f.rel})</span><div class="relbar" style="flex:1;min-width:120px"><i style="left:${relPos}%"></i></div></div>
+          <div class="row"><span class="lab">${relLabel(f.rel)} (${fmt(f.rel)})</span><div class="relbar" style="flex:1;min-width:120px"><i style="left:${relPos}%"></i></div></div>
           <div class="small">Puissance estimée ${fmt(f.power)} (vous ${fmt(myPow)}), ${f.nodes} villes et villages, ${f.techs} technologies.</div>
           ${wars.length ? `<div class="small" style="color:#ffb3a6">En guerre contre : ${wars.join(', ')}</div>` : ''}
           <ul>${R.pros.map(p => `<li>${p}</li>`).join('')}${R.cons.map(p => `<li class="con">${p}</li>`).join('')}</ul>
@@ -981,31 +1027,32 @@ export class UI {
     }).join('');
     const neu = pris.neutre || 0;
     const neuLine = neu ? `<div class="row" style="margin-bottom:8px"><span class="small">Vous détenez ${fmt(neu)} miliciens insurgés prisonniers${st.me.prisoner_upkeep ? `, nourris ${fmt1(st.me.prisoner_upkeep)} vivres /j pour tous vos prisonniers` : ''}.</span>${enrollBtn('neutre', neu, 'Enrôler')}</div>` : '';
-    const html = `<h2 class="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque département pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${neuLine}<div class="diplo-list">${cards}</div>`;
-    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0]), pris])];
+    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque département pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${neuLine}<div class="diplo-list">${cards}</div>`;
+    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner]),
+      pris, fmt1(st.me.prisoner_upkeep || 0), Math.round(myPow / 500)])];
   }
 
   commerceModal() {
     const st = this.st, me = st.me;
     const [buyK, sellK] = st.market.spread;
     const rows = Object.entries(st.market.prices).map(([r, p]) => `<tr><td>${ICON[r].replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-4px;margin-right:6px;color:var(--laiton)"')}${this.rules.res_label[r]}</td>
-      <td>${fmt(me.res[r])}</td><td>${(p * buyK).toFixed(2)}</td><td>${(p * sellK).toFixed(2)}</td>
-      <td><input class="amount" type="number" min="1" max="1000" value="50" id="mq-${r}" aria-label="Quantité"></td>
+      <td>${fmt(me.res[r])}</td><td>${fmt2(p * buyK)}</td><td>${fmt2(p * sellK)}</td>
+      <td><input class="amount" type="number" min="1" max="1000" value="50" id="mq-${r}" aria-label="Quantité de ${esc(this.rules.res_label[r].toLowerCase())}"></td>
       <td><button class="btn" data-act="market" data-res="${r}" data-side="buy">Acheter</button> <button class="btn" data-act="market" data-res="${r}" data-side="sell">Vendre</button></td></tr>`).join('');
     const partners = st.factions.filter(f => f.code !== me.code && f.alive && f.st !== 'guerre');
     const resOpts = sel => ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'].map(r => `<option value="${r}" ${r === sel ? 'selected' : ''}>${this.rules.res_label[r]}</option>`).join('');
     const trades = st.factions.filter(f => f.trade);
-    const html = `<h2 class="m-title">Commerce</h2>
+    const html = `<h2 class="m-title" id="m-title">Commerce</h2>
       <p class="m-sub">${me.has_port ? 'Vous tenez un port : les négociants vous font de bons prix.' : 'Sans port, les négociants prennent une forte marge. Prenez Bordeaux, Libourne, Bayonne ou un autre port pour mieux commercer.'}</p>
       <div class="two"><div>
         <h3 class="section-t" style="border:0;padding:0">Marché des négociants</h3>
-        <table class="grid"><thead><tr><th>Ressource</th><th>Stock</th><th>Achat</th><th>Vente</th><th>Quantité</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+        <div class="tbl-wrap"><table class="grid"><thead><tr><th>Ressource</th><th>Stock</th><th>Achat</th><th>Vente</th><th>Quantité</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
         <p class="muted small">Prix en livres par unité. Les prix bougent avec les saisons et vos propres ventes.</p>
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Proposer un échange</h3>
-        ${partners.length ? `<div class="row"><span class="lab">Avec</span><select class="amount" id="tr-to">${partners.map(f => `<option value="${f.code}">${this.rules.factions[f.code].name}</option>`).join('')}</select></div>
-        <div class="row"><span class="lab">Je donne</span><input class="amount" type="number" id="tr-gq" value="100" min="1"><select class="amount" id="tr-gr">${resOpts('vivres')}</select></div>
-        <div class="row"><span class="lab">Je reçois</span><input class="amount" type="number" id="tr-wq" value="40" min="1"><select class="amount" id="tr-wr">${resOpts('fer')}</select></div>
+        ${partners.length ? `<div class="row"><span class="lab">Avec</span><select class="amount" id="tr-to" aria-label="Partenaire de l’échange">${partners.map(f => `<option value="${f.code}">${this.rules.factions[f.code].name}</option>`).join('')}</select></div>
+        <div class="row"><span class="lab">Je donne</span><input class="amount" type="number" id="tr-gq" value="100" min="1" aria-label="Quantité donnée"><select class="amount" id="tr-gr" aria-label="Ressource donnée">${resOpts('vivres')}</select></div>
+        <div class="row"><span class="lab">Je reçois</span><input class="amount" type="number" id="tr-wq" value="40" min="1" aria-label="Quantité reçue"><select class="amount" id="tr-wr" aria-label="Ressource reçue">${resOpts('fer')}</select></div>
         <div class="btns"><button class="btn primary" data-act="trade-offer">Proposer l’échange</button></div>` : '<p class="muted">Aucun partenaire en paix.</p>'}
         <h3 class="section-t">Accords commerciaux</h3>
         ${trades.length ? trades.map(f => `<div class="row"><span class="chip ally">${this.rules.factions[f.code].name}</span><span class="muted small">Spécialité reçue : ${this.rules.res_label[this.rules.factions[f.code].specialty].toLowerCase()}</span></div>`).join('') +
@@ -1030,7 +1077,7 @@ export class UI {
     const nPr = Object.values(me.prisoners || {}).reduce((a, v) => a + (v || 0), 0);
     const taxK = 0.6 + 0.8 * me.tax;
     const unrest = od.unrest.map(([nid, v]) => `<span class="chip ${od.risk.includes(nid) ? 'war' : ''}" data-act="selnode-modal" data-node="${nid}" style="cursor:pointer">${esc(this.md.nodes[nid].name)} ${Math.round(v * 100)} %</span>`).join('');
-    const html = `<h2 class="m-title">Production et impôts</h2><p class="m-sub">Vos ateliers transforment le fer et le bois. Les impôts remplissent le trésor, mais un pays pressuré produit moins et finit par se soulever.</p>
+    const html = `<h2 class="m-title" id="m-title">Production et impôts</h2><p class="m-sub">Vos ateliers transforment le fer et le bois. Les impôts remplissent le trésor, mais un pays pressuré produit moins et finit par se soulever.</p>
       <div class="two"><div>
         <h3 class="section-t" style="border:0;padding:0">${ICON.scale.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px;margin-right:6px"')}Impôts</h3>
         <input id="tx" class="slider" type="range" min="0" max="100" step="5" value="${tax}" data-act="tax" data-live="tax" aria-label="Niveau des impôts">
@@ -1065,9 +1112,10 @@ export class UI {
         <p class="muted small">Chaque arme coûte 1 fer et ½ bois ; chaque outil ½ fer et 1 bois. Sans fer ni bois, les ateliers s’arrêtent.</p>
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Vos villes et villages (${own.length})</h3>
-        <table class="grid"><thead><tr><th>Lieu</th><th>Type</th><th>Défense</th><th>Habitants</th><th>Fort/Agr.</th><th>Ordre</th><th>Chantier</th></tr></thead><tbody>${rows}</tbody></table>
+        <div class="tbl-wrap"><table class="grid"><thead><tr><th>Lieu</th><th>Type</th><th>Défense</th><th>Habitants</th><th>Fort/Agr.</th><th>Ordre</th><th>Chantier</th></tr></thead><tbody>${rows}</tbody></table></div>
       </div></div>`;
-    return [html, JSON.stringify([Math.round(me.cap * 10), Math.round(me.cov * 100), own.map(n => [st.nodes[n.id].m, (st.nodes[n.id].q || []).length, Math.round(st.nodes[n.id].s * 20), st.nodes[n.id].bk, st.nodes[n.id].dp]), s, tax, Math.round(od.avg * 100), od.risk, nPr])];
+    // signature = le texte affiché (habitants, solde, rations, prisonniers, fabrication…), arrondi comme à l'écran
+    return [html, html];
   }
 
   journalModal() {
@@ -1076,7 +1124,7 @@ export class UI {
     const evs = this.events.filter(e => !groups[f] || groups[f].includes(e.kind)).slice(-250).reverse();
     const tabs = [['all', 'Tout'], ['battle', 'Guerre'], ['diplo', 'Diplomatie'], ['eco', 'Économie']].map(([k, l]) =>
       `<button class="btn ${k === f ? 'primary' : ''}" data-act="jtab" data-v="${k}">${l}</button>`).join('');
-    const html = `<h2 class="m-title">Journal de campagne</h2><div class="tabs">${tabs}</div><div class="journal">${evs.map(e =>
+    const html = `<h2 class="m-title" id="m-title">Journal de campagne</h2><div class="tabs">${tabs}</div><div class="journal">${evs.map(e =>
       `<div class="ev ${e.important ? 'imp' : ''}" ${e.x != null ? `data-act="goto" data-x="${e.x}" data-y="${e.y}" style="cursor:pointer"` : ''}><span class="when">${e.date}</span><span class="what">${esc(e.text)}</span></div>`).join('') || '<p class="muted">Rien à signaler pour l’instant.</p>'}</div>`;
     return [html, f + this.events.length];
   }
@@ -1086,7 +1134,7 @@ export class UI {
     const f = this.rules.factions[me.code];
     const def = `${f.name} ${this.st.date.split(' ').slice(1).join(' ')}`;
     const saves = (this.saves || []).map(s => `<div class="save-item"><span>${s.auto ? '<i>Sauvegarde automatique</i>' : esc(s.name)}<br><span class="muted small">${esc(s.faction || '')}, ${esc(s.date || '')}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
-    const html = `<h2 class="m-title">Partie</h2><p class="m-sub">${f.name}, ${this.st.date}. Victoires ${me.stats.won}, défaites ${me.stats.lost}, places prises ${me.stats.captured}.</p>
+    const html = `<h2 class="m-title" id="m-title">Partie</h2><p class="m-sub">${f.name}, ${this.st.date}. Victoires ${me.stats.won}, défaites ${me.stats.lost}, places prises ${me.stats.captured}.</p>
       <div class="two"><div>
         <h3 class="section-t" style="border:0;padding:0">Sauvegarder</h3>
         <div class="row"><input class="amount" style="width:100%" id="save-name" value="${esc(def)}" maxlength="40" aria-label="Nom de la sauvegarde"></div>
@@ -1130,8 +1178,8 @@ export class UI {
     const o = this.st.over;
     const win = o.result === 'victoire';
     const me = this.st.me;
-    const html = `<div class="endcard"><h2 style="color:${win ? 'var(--laiton-clair)' : '#ff9a85'}">${win ? 'Victoire' : 'Défaite'}</h2><p>${esc(o.text)}</p>
-      <p class="muted">${me.stats.won} batailles gagnées, ${me.stats.lost} perdues, ${me.stats.captured} places prises, ${fmt(me.stats.killed)} ennemis hors de combat.</p>
+    const html = `<div class="endcard"><h2 id="m-title" style="color:${win ? 'var(--laiton-clair)' : '#ff9a85'}">${win ? 'Victoire' : 'Défaite'}</h2><p>${esc(o.text)}</p>
+      <p class="muted">${me.stats.won} ${me.stats.won > 1 ? 'batailles gagnées' : 'bataille gagnée'}, ${me.stats.lost} ${me.stats.lost > 1 ? 'perdues' : 'perdue'}, ${me.stats.captured} places prises, ${fmt(me.stats.killed)} ennemis hors de combat.</p>
       <div class="btns" style="justify-content:center"><button class="btn primary" data-act="newgame">Nouvelle partie</button><button class="btn" data-act="close-modal">Regarder la carte</button></div></div>`;
     return [html, 'fin'];
   }
@@ -1162,7 +1210,7 @@ export class UI {
         <div class="traits">${f.pros.map(p => `<div>${p}</div>`).join('')}${f.cons.map(p => `<div class="con">${p}</div>`).join('')}</div>
       </button>`).join('');
     const diffs = Object.entries(this.rules.difficulty).map(([k, l]) => `<button class="${k === this.startDiff ? 'on' : ''}" data-act="pick-diff" data-v="${k}">${l}</button>`).join('');
-    const saves = (info.saves || []).slice(0, 5).map(s => `<div class="save-item"><span>${s.auto ? '<i>Sauvegarde automatique</i>' : esc(s.name)}<br><span class="muted small">${esc(s.faction || '')}, ${esc(s.date || '')}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
+    const saves = (info.saves || []).map(s => `<div class="save-item"><span>${s.auto ? '<i>Sauvegarde automatique</i>' : esc(s.name)}<br><span class="muted small">${esc(s.faction || '')}, ${esc(s.date || '')}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
     this.$('start').innerHTML = `<div class="start-side">
       <div class="cartouche"><h1>Conquête</h1><div class="campaign">Aquitaine, 1790</div><p>L’Assemblée vient de créer les départements. Choisissez le vôtre, ralliez ses villages, puis prenez les chefs-lieux voisins par les armes, le commerce ou la diplomatie.</p></div>
       ${info.running ? '<button class="btn primary" data-act="resume">Reprendre la partie en cours</button>' : ''}
@@ -1170,7 +1218,7 @@ export class UI {
       <div class="row"><span class="lab">Difficulté</span><span class="seg">${diffs}</span></div>
       <div class="start-actions">
         <button class="btn primary" data-act="start-game" ${this.startDept ? '' : 'disabled'}>${this.startDept ? `Commencer avec ${this.rules.factions[this.startDept].name}` : 'Choisissez un département'}</button>
-        ${saves ? `<div class="section-t">Parties sauvegardées</div><div class="saves">${saves}</div>` : ''}
+        ${saves ? `<div class="section-t">Parties sauvegardées${info.saves.length > 5 ? ` <span class="muted small">(${info.saves.length})</span>` : ''}</div><div class="saves scroll">${saves}</div>` : ''}
         ${info.net && info.net.lan && info.net.urls.length ? `<div class="section-t">Sur le réseau local</div>${this.netHtml(info.net)}` : ''}
       </div></div>`;
   }

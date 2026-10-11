@@ -138,7 +138,7 @@ button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 .seg.wrap { display: flex; flex-wrap: wrap; overflow: visible; border: 0; gap: 4px; }
 .seg.wrap button { border: 1px solid var(--hair); border-radius: 6px; }
 .seg.wrap button + button { border-left: 1px solid var(--hair); }
-.row .seg.wrap { flex: 1; }
+.row .seg.wrap { flex: 1 1 240px; }   /* trop étroit à côté de son libellé : passe dessous, sur toute la largeur */
 .tac-desc { font-size: 13.5px; color: var(--papier-2); margin: -2px 0 8px; font-style: italic; }
 /* général */
 .gen { display: grid; grid-template-columns: 30px 1fr; gap: 8px; align-items: start; margin: 4px 0 8px; padding: 6px 8px;
@@ -204,7 +204,11 @@ button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 #tooltip td:last-child { text-align: right; }
 
 /* ------------------------------------------------------------- propositions */
-#proposals { position: absolute; right: 76px; top: calc(var(--tb-h) + var(--safe-t) + 14px); width: 320px; display: flex; flex-direction: column; gap: 8px; z-index: 25; }
+#proposals { position: absolute; right: 76px; top: calc(var(--tb-h) + var(--safe-t) + 14px); width: 320px; display: flex; flex-direction: column; gap: 8px; z-index: 25;
+  max-height: calc(100% - var(--tb-h) - var(--safe-t) - 90px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: thin; }
+#proposals .proposal { flex: none; }
+/* fenêtre ouverte : les propositions restent visibles au-dessus du voile, en bas à droite pour ne pas couvrir le titre */
+body.modal-open #proposals { z-index: 36; top: auto; bottom: calc(12px + var(--safe-b)); max-height: 45%; }
 .proposal { padding: 10px 12px; border-left: 4px solid var(--laiton); }
 .proposal .pt { font-family: var(--f-titre); font-size: 17px; }
 .proposal p { margin: 4px 0 8px; font-size: 15px; }
@@ -249,7 +253,13 @@ table.grid tr.click { cursor: pointer; }
 table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .slider { width: 100%; accent-color: var(--laiton); }
-.big-slider-labels { display: flex; justify-content: space-between; font-size: 14.5px; color: var(--papier-2); }
+.big-slider-labels { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; font-size: 14.5px; color: var(--papier-2); }
+.two > div { min-width: 0; }   /* un tableau large ne doit pas élargir toute la colonne */
+.tbl-wrap td.small { min-width: 110px; }
+.tbl-wrap { overflow-x: auto; touch-action: pan-x pan-y; overscroll-behavior-x: contain; max-width: 100%;
+  /* ombre à droite tant qu'il reste des colonnes à faire défiler */
+  background: linear-gradient(to left, rgba(19,35,58,1) 35%, rgba(19,35,58,0)) right / 26px 100% no-repeat local,
+    linear-gradient(to left, rgba(200,162,83,.32), rgba(200,162,83,0)) right / 14px 100% no-repeat scroll; }
 .journal .ev { display: grid; grid-template-columns: 120px 1fr; gap: 10px; padding: 4px 0; border-bottom: 1px solid rgba(200,162,83,.15); font-size: 15px; }
 .journal .ev .when { color: var(--papier-2); font-size: 14px; }
 .journal .ev.imp .what { color: var(--papier); }
@@ -279,6 +289,7 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 .start-actions { display: flex; flex-direction: column; gap: 9px; margin-top: auto; }
 .start-actions .btn.primary { font-size: 19px; padding: 10px 14px; }
 .saves { display: flex; flex-direction: column; gap: 5px; }
+.saves.scroll { max-height: 260px; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding-right: 4px; flex: none; }
 .save-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; }
 
 /* ------------------------------------------------------------- chargement */
@@ -356,6 +367,25 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
   .amount { min-height: 40px; }
   .feed-item { padding-top: 8px; padding-bottom: 8px; }
   #zoombar .zb { width: 48px; height: 48px; }
+}
+/* téléphone tactile : boutons de vitesse moins larges, la date ne déborde plus dessus */
+@media (max-width: 760px) and (pointer: coarse) {
+  .tb-speed button { width: 32px; height: 34px; }
+}
+/* téléphone à la verticale : les sept ressources tiennent sur la ligne */
+@media (max-width: 420px) {
+  .tb-res { gap: 0; justify-content: space-between; }
+  .res { padding: 4px 3px; gap: 2px; }
+  .res svg { width: 16px; height: 16px; }
+  .res .v { font-size: 14px; }
+  .tb-day { font-size: 15px; }
+  .tb-season { gap: 3px; }
+  .tb-speed button { width: 30px; }
+  .tbl-wrap table.grid { font-size: 14px; }
+  .tbl-wrap .amount { width: 54px; padding: 4px; }
+  .tbl-wrap .btn { padding-left: 8px; padding-right: 8px; }
+  table.grid td, table.grid th { padding: 4px 3px; }
+  table.grid th { font-size: 14.5px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .feed-item, .toast { animation: none; }

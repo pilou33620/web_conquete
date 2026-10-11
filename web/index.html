@@ -19,7 +19,7 @@
 </head>
 <body>
 <div id="app">
-  <canvas id="map" aria-label="Carte de l'Aquitaine"></canvas>
+  <canvas id="map" role="img" aria-label="Carte de l'Aquitaine"></canvas>
   <canvas id="fog" aria-hidden="true"></canvas>
 
   <header id="topbar" hidden>
@@ -48,7 +48,7 @@
   <div id="toasts" aria-live="polite"></div>
   <div id="bubble" hidden></div>
   <div id="tooltip" hidden></div>
-  <div id="modal" hidden><div class="modal-card" role="dialog" aria-modal="true"></div></div>
+  <div id="modal" hidden><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="m-title"></div></div>
   <div id="start" hidden></div>
   <div id="loading"><div class="loading-card"><div class="loading-title">Conquête</div><div id="loading-text">Gravure de la carte…</div></div></div>
 </div>

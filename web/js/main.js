@@ -88,7 +88,8 @@ async function boot() {
   ui.onRefresh = () => setTimeout(poll, 60);
   ui.onStartGame = async (dept, difficulty) => {
     if (!dept) return;
-    const r = await api.post('/api/new', { dept, difficulty });
+    let r;
+    try { r = await api.post('/api/new', { dept, difficulty }); } catch (e) { return ui.toast('Serveur injoignable : la partie n’a pas pu commencer.', 'bad'); }
     if (!r.ok) return ui.toast(r.msg, 'bad');
     resetUI();
     ui.hideStart();
@@ -99,14 +100,16 @@ async function boot() {
     ui.toast('La partie est en pause. Choisissez une vitesse en haut pour lancer le temps.');
   };
   const focusCapital = async () => {
-    const st = await api.get('/api/state');
+    let st;
+    try { st = await api.get('/api/state'); } catch (e) { return; }
     if (!st || !st.me) return;
     const cap = payload.map.nodes.find(n => n.type === 'capitale' && n.dept === st.me.code);
     if (cap) map.moveTo(cap.x, cap.y, 5, true);
   };
   ui.onResume = async () => { resetUI(); ui.hideStart(); await focusCapital(); startPolling(); };
   ui.onLoad = async name => {
-    const r = await api.post('/api/load', { name });
+    let r;
+    try { r = await api.post('/api/load', { name }); } catch (e) { return ui.toast('Serveur injoignable : sauvegarde non chargée.', 'bad'); }
     ui.toast(r.msg, r.ok ? 'good' : 'bad');
     if (!r.ok) return;
     resetUI();
@@ -115,7 +118,7 @@ async function boot() {
     startPolling();
   };
   ui.onNewGame = async () => {
-    await api.post('/api/cmd', { cmd: 'speed', value: 0 });
+    try { await api.post('/api/cmd', { cmd: 'speed', value: 0 }); } catch (e) { return ui.toast('Serveur injoignable : impossible de quitter la partie.', 'bad'); }
     resetUI();
     showStart();
   };
