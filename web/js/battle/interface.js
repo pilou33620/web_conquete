@@ -84,6 +84,15 @@ export class BattleUI {
   update(st, prev) {
     const v = this.v;
     const side = st.sides || [], me = v.me, foe = 1 - me;
+    // la bulle d'aide ouverte suit la phase : les conseils de déploiement ne restent pas affichés pendant le combat
+    if (st.phase !== this.tipPhase) {
+      this.tipPhase = st.phase;
+      const tip = this.$('.bt-tip');
+      if (tip && !tip.hidden) {
+        if (st.phase === 'fin') tip.hidden = true;
+        else this.tipStep(Math.min(this.tipI || 0, 3));
+      }
+    }
     const title = st.title || v.map?.title || (v.map?.place ? `Assaut de ${v.map.place.name}` : 'Bataille');
     this.$('.bt-name').textContent = title;
     const wx = st.weather || v.map?.weather || 'soleil', season = normSeason(st.season || v.map?.season);
@@ -524,7 +533,7 @@ export class BattleUI {
   }
 }
 // nom court pour les cartes d'unités : abréviations d'état-major pour les mots longs
-const ABBR = [[/^Batterie /, 'Bie '], [/ de ligne$/, ' ligne'], [/chasseurs à cheval/i, 'ch. à cheval'], [/grenadiers?/i, 'Gren.'],
+const ABBR = [[/^Chariot de munitions.*/i, 'Munitions'], [/^Batterie /, 'Bie '], [/ de ligne$/, ' ligne'], [/chasseurs à cheval/i, 'ch. à cheval'], [/grenadiers?/i, 'Gren.'],
   [/cavalerie/i, 'Cav.'], [/artillerie/i, 'Art.'], [/chasseurs?/i, 'Chass.'], [/voltigeurs?/i, 'Volt.'], [/Miquelets?/, 'Miq.'],
   [/Sapeurs?/, 'Sap.'], [/Garde nationale/, 'Garde nat.'], [/Territoriale/, 'Territ.'], [/réunis$/, 'réun.']];
 const short = n => ABBR.reduce((t, [re, by]) => (t.length > 11 ? t.replace(re, by) : t), String(n || ''));

@@ -1604,7 +1604,9 @@ export class UI {
     const rows = own.map(n => {
       const ns = st.nodes[n.id];
       const gar = (ns.g || []).reduce((a, r) => a + r[2], 0);
-      const q = (ns.q || []).map(q => q.kind === 'unit' ? this.rules.units[q.what].short : this.rules.build[q.what].name).join(', ');
+      // chantiers : régiments, aménagements et bâtiments d'emplacement (marché, moulins…)
+      const q = (ns.q || []).map(q => q.kind === 'unit' ? this.rules.units[q.what]?.short || q.what
+        : q.kind === 'slot' && this.rules.cities?.chains[q.what] ? this.slotName(n, q.what, q.lvl || 1) : this.rules.build[q.what]?.name || q.what).join(', ');
       return `<tr class="click" data-act="selnode-modal" data-node="${n.id}"><td>${n.name}${ns.bk ? ' <span title="Blocus" style="color:#ff9a85">⚓</span>' : ''}</td><td>${TYPE_LABEL[n.type]}</td><td>${fmt(ns.m || 0)}${gar ? ' + ' + fmt(gar) : ''}</td><td>${fmt(ns.pop || 0)}</td><td>${ns.f}/${ns.d}</td><td style="${ns.s < 0.5 ? 'color:#ff9a85' : ''}">${Math.round(ns.s * 100)} %</td><td class="small">${q || '<span class="muted">—</span>'}</td></tr>`;
     }).join('');
     const tax = Math.round(me.tax * 100), od = me.order;

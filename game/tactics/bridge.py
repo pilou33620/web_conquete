@@ -379,13 +379,18 @@ def finish(g, tb):
             if not a['regs']:
                 bt['sides'][si]['armies'].remove(aid)
                 del g.armies[aid]
-    if g.player in (bt['sides'][0]['owner'], bt['sides'][1]['owner']):
-        f = g.factions.get(g.player)
-        mine = tb.me if tb.me is not None else 0
-        if f is not None and res['prisoners'][1 - mine] > 0:
-            g.log('battle', f"{int(res['prisoners'][1 - mine])} prisonniers faits sur le champ de bataille.",
-                  bt['x'], bt['y'], who=g.player)
+    # la poursuite et les prisonniers ont déjà eu lieu sur le champ de bataille : la campagne reprend ce décompte
+    # (res['prisoners'][i] : hommes du camp i faits prisonniers) au lieu de recalculer les siens
+    bt['tac'] = dict(prisoners=[int(res['prisoners'][0]), int(res['prisoners'][1])])
     g.end_battle(bt, winner, disengage)
+    # le mois s'était arrêté sur cette bataille : la raison affichée dit maintenant son issue
+    tr = getattr(g, 'tour', None)
+    stop = tr.get('stop') if isinstance(tr, dict) else None
+    if isinstance(stop, dict) and stop.get('sel') == ['battle', bt['id']] and tb.me is not None:
+        issue = ('Victoire' if winner == tb.me else 'Défaite') if not disengage else \
+            ("L'ennemi décroche" if winner == tb.me else 'Retraite')
+        stop['text'] = f"{issue} — {tb.spec.get('title') or 'bataille'}. À vous de jouer."
+        stop['sel'] = None
     g.speed_idx = 0
 
 

@@ -2744,7 +2744,7 @@ class Game:
                         foe_armies = bool(L['armies']) or (L['node'] is not None and self.geo.nodes[L['node']]['type'] in ('capitale', 'ville', 'fort'))
                         self.general_xp(a, 1 if foe_armies and L['men0'] >= 300 else 0.34)
                 else:
-                    pursuit = 0.0 if disengage else (0.10 if has_cav else 0.04) * (1 + self.mod(a['owner'], 'retreat'))
+                    pursuit = 0.0 if disengage or bt.get('tac') else (0.10 if has_cav else 0.04) * (1 + self.mod(a['owner'], 'retreat'))
                     if self.gen_trait(a) == 'prudent':
                         pursuit *= 0.5
                     for r in a['regs']:
@@ -2763,6 +2763,13 @@ class Game:
                                               f"prend la tête de la {a['name']}.",
                                      a['x'], a['y'], who=a['owner'], important=True)
                     self.retreat(a)
+        tac = bt.get('tac')   # bataille menée à la main : ses prisonniers, déjà faits sur le champ de bataille
+        if tac:
+            for si in (0, 1):
+                taker, n_ = bt['sides'][1 - si]['owner'], tac['prisoners'][si]
+                if n_ > 0 and taker in self.factions:
+                    pr = self.factions[taker].setdefault('prisoners', {})
+                    pr[bt['sides'][si]['owner']] = pr.get(bt['sides'][si]['owner'], 0) + n_
         if disengage:
             del self.battles[bt['id']]
             if self.player in (W['owner'], L['owner']):
@@ -2771,12 +2778,12 @@ class Game:
                          f"{self.fname(bt['sides'][1]['owner'])} {int(bt['sides'][1]['lost'])}.", bt['x'], bt['y'],
                          who=W['owner'], important=True)
             return
-        prisoners = int(L['lost'] * 0.2 + caught * 0.6)
+        prisoners = tac['prisoners'][loser] if tac else int(L['lost'] * 0.2 + caught * 0.6)
         for side in (W, L):
             if side['owner'] in self.factions:
                 f_ = self.factions[side['owner']]
                 f_['_lost_m'] = f_.get('_lost_m', 0.0) + side['lost']
-        if prisoners > 0 and W['owner'] in self.factions:
+        if prisoners > 0 and W['owner'] in self.factions and not tac:
             pr = self.factions[W['owner']].setdefault('prisoners', {})
             pr[L['owner']] = pr.get(L['owner'], 0) + prisoners
         for si, side in ((winner, W), (loser, L)):
