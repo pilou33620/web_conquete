@@ -239,6 +239,8 @@ export class Controls {
   order(kind, body = {}) {
     const v = this.v, us = this.mineSel();
     if (!us.length) return;
+    // « Finir automatiquement » : vos officiers commandent ; un geste sur le terrain ne leur reprend pas la main
+    if (v.st?.accel) { v.ui.toast('Vos officiers mènent la bataille : touchez « Reprendre le commandement » pour donner vos ordres.'); return; }
     if (kind === 'move') {
       for (const d of this.spread(us, body.x, body.y, body.dir)) v.orders.set(d.u.id, { kind: 'move', x: d.x, y: d.y, dir: d.dir, t: performance.now() });
       this.ping(body.x, body.y);

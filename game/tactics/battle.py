@@ -3,7 +3,10 @@
 Le temps s'exprime en secondes de bataille (0 = 8 h du matin). Le serveur fait avancer la bataille par pas fixes
 de DT = 2 s de bataille ; à ×1, une seconde réelle vaut TIME_K = 18 s de bataille : une bataille rangée de 3 à 6 h
 dure 10 à 20 min à ×1 (×2 et ×4 pour accélérer). Les vitesses de marche restent celles du contrat (§ 4) : une ligne
-qui avance à 1 m/s parcourt 18 m par seconde réelle, sa propre largeur en 6 à 7 s.
+qui avance à 1 m/s parcourt 18 m par seconde réelle, sa propre largeur en 6 à 7 s. « Finir automatiquement » joue la
+suite avec les mêmes pas DT, IA contre IA, aussi vite que le serveur le permet (mode accéléré, voir l'aide-mémoire) :
+0,3 à 0,6 ms par pas sur un PC, une bataille complète en 2,5 s de calcul en médiane (6 s pour 9 sur 10), soit, avec
+le budget de bridge.tick, une dizaine de secondes à l'écran ; 3 à 4 fois plus sur un Raspberry Pi 4.
 
 ==================================================================================================================
 RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MELEE_*, FORMED… ci-dessous)
@@ -84,8 +87,13 @@ ctrl ('joueur' | 'ia'). Le chariot de munitions (type 'chariot', ammo = chargeme
 moins de 150 m (4 % de la dotation par minute) ; il se prend s'il reste sans escorte à moins de 40 m d'un ennemi.
 Le général (type 'general') donne +10 de moral à moins de 400 m ; il peut être blessé.
 
-Résolution d'un coup : battle.autofinish() (« Finir automatiquement ») : par quarts d'heure, jusqu'à ce qu'un camp
-décroche comme le ferait l'IA (AUTO_WD), soit rompu, ou jusqu'à la nuit ; une place aux murs intacts ne tombe guère.
+« Finir automatiquement » : battle.autofinish() fait passer la bataille en mode accéléré (battle.accel) : les unités
+du joueur passent sous le contrôle de l'IA (son camp rejoint ai_sides, au niveau ACCEL_LEVEL = normal ; en plein combat,
+elle reprend la situation telle qu'elle est : mémoire absente → ai._adopt), et la suite se joue IA contre IA avec les
+mêmes règles et les mêmes pas DT qu'une bataille commandée. Le serveur avance une bataille accélérée par
+battle.run_for(budget) (bridge.tick : un budget de calcul par appel, pour rester réactif) ; battle.run_to_end() la
+joue d'un coup (essais, bancs). battle.resume() rend le commandement au joueur (en pause). Le mode accéléré est
+enregistré avec la bataille.
 Chiffres : DT = 2 s par pas, TIME_K = 18 s de bataille par seconde réelle à ×1, repérage toutes les 4 s, IA toutes
 les 2 s ; fin au crépuscule (DUSK) ; assaut gagné en tenant le cœur de la place 6 min (au moins 150 hommes à 90 m)
 sans défenseur à 160 m.
@@ -94,6 +102,7 @@ sans défenseur à 160 m.
 import heapq
 import math
 import random
+import time
 
 from .. import rules as R
 from . import terrain as TR
@@ -159,13 +168,13 @@ CAPTURE = dict(contact_cav=0.004, contact_inf=0.0007,  # part des fuyards rattra
                choc_cav=0.03, choc_inf=0.02,            # … par une charge sur des fuyards
                rupture_cav=0.04, melee_cav=0.03)        # … quand la cavalerie rompt une troupe (choc, mêlée)
 CHARGE_FAT = dict(cav=12.0, inf=6.0)   # fatigue d'une charge menée jusqu'au choc : les chevaux sont essoufflés
-# résolution automatique : comme l'IA, un camp décroche passé AUTO_WD de pertes (déroutés pour moitié) s'il est dominé,
-# passé AUTO_WD + AUTO_EVEN dans un combat égal ; l'assaillant accepte AUTO_ATT de plus ; jamais le défenseur d'une place
-AUTO_WD, AUTO_EVEN, AUTO_ATT = 0.22, 0.07, 0.05
-# … et derrière une enceinte fermée, le défenseur pèse (1 + AUTO_SHUT[0]) fois plus et perd AUTO_SHUT[1] de moins ; des
-# barricades ferment AUTO_BAR × leur densité
-AUTO_SHUT, AUTO_BAR, AUTO_BREACH = (1.0, 0.5), 1.25, 0.95
-AUTO_LUCK = 0.15   # … et le sort des armes : chaque camp pèse de ±15 % pour toute la résolution
+# « Finir automatiquement » : la suite de la bataille est jouée par le moteur, IA contre IA, aussi vite que le serveur
+# le permet. Les officiers du joueur commandent au niveau ACCEL_LEVEL (celui de son déploiement de départ : une IA
+# correcte, quelle que soit la difficulté, qui ne règle que l'IA adverse) ; pendant l'accéléré, le client ne reçoit
+# que les ACCEL_FX derniers effets de chaque réponse (le reste a défilé trop vite pour être vu)
+ACCEL_LEVEL = 'normal'
+ACCEL_FX = 80
+ACCEL_BUSY = "Vos officiers mènent la bataille : reprenez le commandement pour donner vos ordres."
 FCOST_K = dict(inf=1.0, light=0.6, cav=2.0, art=2.5)
 WALLISH = {T_MUR: 0.65, T_PORTE: 0.65, T_BRECHE: 0.4, T_BARRICADE: 0.5}
 NARROW = (T_BATI, T_MUR, T_PORTE, T_BRECHE, T_BARRICADE)
@@ -242,6 +251,9 @@ class TacticalBattle:
         self.hold_t = 0.0
         self.prisoners = [0.0, 0.0]          # hommes de ce camp faits prisonniers
         self.ai_mem = {}                     # mémoire de l'IA (types JSON seulement : enregistrée avec la bataille)
+        self.accel = False                   # « Finir automatiquement » : les officiers jouent la suite en accéléré…
+        self.accel_ids = []                  # … avec ces unités du joueur (rendues s'il reprend le commandement)…
+        self.accel_t = 0.0                   # … depuis cette heure de bataille
         self._acc = 0.0
         self._vis_t = -99.0
         self._ai_t = -99.0
@@ -768,6 +780,8 @@ class TacticalBattle:
         """Ordre à des unités du camp side (voir l'aide-mémoire en tête du fichier). Renvoie (ok, msg)."""
         if self.phase == 'fin':
             return False, "La bataille est terminée."
+        if self.accel and who == 'joueur':
+            return False, ACCEL_BUSY
         if isinstance(ids, str):
             ids = [ids]
         us = [self.by_id.get(i) for i in ids or []]
@@ -990,6 +1004,31 @@ class TacticalBattle:
         n = 0
         while self._acc >= DT and self.phase == 'combat' and n < 40:
             self._acc -= DT
+            self.step(DT)
+            n += 1
+        return n
+
+    def run_for(self, budget):
+        """Bataille accélérée (« Finir automatiquement ») : des pas DT ordinaires, le même déroulé qu'à ×1, autant que
+        le permet budget (secondes de calcul réelles ; au moins un pas). Renvoie le nombre de pas."""
+        if self.phase != 'combat':
+            return 0
+        t_end = time.perf_counter() + budget
+        n = 0
+        while self.phase == 'combat':
+            self.step(DT)
+            n += 1
+            if time.perf_counter() >= t_end:
+                break
+        return n
+
+    def run_to_end(self):
+        """Synchrone, sans budget de temps (essais, bancs) : joue la bataille jusqu'au bout par pas DT (la nuit y met
+        fin au plus tard). Renvoie le nombre de pas."""
+        if self.phase == 'deploiement':
+            self.start()
+        n = 0
+        while self.phase == 'combat':
             self.step(DT)
             n += 1
         return n
@@ -1853,109 +1892,73 @@ class TacticalBattle:
                 res['men0'][u.side] += u.men0
         return res
 
-    # ================================================================== résolution automatique (« Finir automatiquement »)
+    # ================================================================== « Finir automatiquement » : la bataille en accéléré
     def autofinish(self):
-        """Résout la bataille d'un coup à partir de la situation du moment : effectifs, moral, munitions, fatigue,
-        couverts et hauteurs tenus. Par manches d'un quart d'heure jusqu'à ce qu'un camp décroche (comme l'IA : voir
-        AUTO_WD), soit rompu, ou jusqu'à la nuit."""
+        """« Finir automatiquement » : les officiers du joueur (l'IA, au niveau ACCEL_LEVEL) prennent le commandement de
+        ses unités et la suite se joue jusqu'au bout, IA contre IA, avec les mêmes règles et les mêmes pas DT qu'une
+        bataille commandée, aussi vite que le serveur le permet (bridge.tick : budget de calcul par appel ; run_to_end
+        pour les essais). Pendant le déploiement, les officiers déploient le camp à leur idée, puis engagent la bataille ;
+        en plein combat, l'IA reprend la situation telle qu'elle est (ai._adopt) : les charges et mêlées en cours
+        continuent, les troupes que le joueur a envoyées en retraite poursuivent leur retraite (elles restent à lui),
+        celles à qui il avait fait cesser le feu le rouvrent, et un camp qui décroche continue de décrocher. Le joueur
+        peut reprendre le commandement (resume)."""
         if self.phase == 'fin':
             return False, "La bataille est terminée."
+        if self.accel:
+            return True, "Vos officiers poursuivent déjà la bataille."
+        me = self.me
+        if me in (0, 1):
+            lv = self.spec.get('ai_levels')
+            lv = list(lv) if isinstance(lv, (list, tuple)) and len(lv) == 2 else [self.difficulty, self.difficulty]
+            lv[me] = ACCEL_LEVEL   # (l'adversaire garde le sien : spec['ai_levels'], sinon la difficulté de la partie)
+            self.spec['ai_levels'] = lv
+            took = []
+            for u in self.units:
+                if u.side != me or u.ctrl != 'joueur':
+                    continue
+                if self.phase == 'combat' and u.order and u.order.get('kind') == 'retreat':
+                    continue
+                u.ctrl = 'ia'
+                u.fire_mode = 'free'
+                took.append(u.id)
+            self.accel_ids = took
+            if me not in self.ai_sides:
+                self.ai_sides.append(me)
+            # l'IA n'a rien gardé du camp du joueur (bridge.default_deploy) : elle repart de son propre déploiement, ou
+            # de la situation présente à sa première réflexion
+            self.ai_mem.pop(f's{me}', None)
+            if self.phase == 'deploiement':
+                from . import ai as AI
+                AI.deploy(self, me)
         if self.phase == 'deploiement':
-            self.phase = 'combat'
-        rnd = self.rng
-        place = self.objective() is not None
-        wall = self.place_info()
-        quits = None
-        # place : enceinte encore fermée (de 0 à 1) ; les brèches l'ouvrent, les barricades la ferment selon leur
-        # densité. Murs fermés, on ne la prend guère que par la faim ; brèche ouverte, l'assaut se joue
-        shut = 0.0
-        pl = self.spec.get('place') or {}
-        if place and pl:
-            if pl.get('fort', 0) >= 1:
-                shut = 1.0 if pl.get('dmg', 0.0) < 0.12 else max(0.0, 1.0 - AUTO_BREACH * pl.get('dmg', 0.0))
-            else:
-                shut = min(1.0, AUTO_BAR * pl.get('bar', 0.0))
-        luck = [rnd.uniform(1 - AUTO_LUCK, 1 + AUTO_LUCK) for _ in (0, 1)]
-        for _ in range(80):
-            if self.clock >= self.dusk:
-                break
-            P = [0.0, 0.0]
-            lists = [[], []]
+            self.start()
+        self.accel = True
+        self.accel_t = self.clock
+        self.log("Vos officiers prennent le commandement : la bataille se poursuit en accéléré.", me)
+        return True, "Vos officiers poursuivent la bataille."
+
+    def resume(self):
+        """Le joueur reprend le commandement pendant l'accéléré : ses unités repassent sous ses ordres (avec les chariots
+        pris à l'ennemi entre-temps), la bataille se met en pause pour qu'il voie où en sont les choses."""
+        if self.phase == 'fin':
+            return False, "La bataille est terminée."
+        if not self.accel:
+            return False, "Vous avez déjà le commandement."
+        me = self.me
+        self.accel = False
+        if me in (0, 1):
+            back = set(self.accel_ids)
+            owners = {self.by_id[i].owner for i in back if i in self.by_id and self.by_id[i].cls != 'chariot'}
             for u in self.units:
-                if not u.valid:
-                    continue
-                k = U.TYPE.get(u.type, U.TYPE['ligne'])
-                if u.cls == 'artillerie':
-                    p = U.pieces(u) * 30 * R.ARMS['artillerie'][min(u.arm, 6)][2] * (1.0 if u.ammo >= 1 else 0.1)
-                elif u.cls == 'cavalerie':
-                    p = u.men * 1.3 * k['melee'] / 1.6
-                else:
-                    mult = R.ARMS['inf'][min(u.arm, 7)][2]
-                    p = u.men * k['fire'] * mult * (1.0 if u.ammo >= 1 else 0.35)
-                cov = self.cover_at(u.x, u.y)
-                if wall and u.side == 1:
-                    cov = max(cov, 0.25 + 0.1 * wall['fort'])
-                p *= (0.5 + u.morale / 200) * (0.8 + u.xp / 250) * (1 - 0.3 * u.fat / 100)
-                p *= 1 + 0.5 * cov + self.height_at(u.x, u.y) / 400
-                p *= luck[u.side] * (1 + AUTO_SHUT[0] * shut if u.side == 1 else 1.0)
-                P[u.side] += p
-                lists[u.side].append((u, cov))
-            if not lists[0] or not lists[1]:
-                break
-            for s in (0, 1):
-                dmg = 0.035 * P[1 - s] * rnd.uniform(0.85, 1.15) * (1 - AUTO_SHUT[1] * shut if s == 1 else 1.0)
-                tot = sum(u.men * (1 - c * 0.6) for u, c in lists[s]) or 1.0
-                for u, c in lists[s]:
-                    share = dmg * u.men * (1 - c * 0.6) / tot
-                    if u.cls == 'general':
-                        share *= 0.1
-                    self._damage(u, share, None, 'auto')
-                    u.fought += 900
-                    u.ammo = max(0.0, u.ammo - (6 if u.cls == 'inf' else 8 if u.cls == 'artillerie' else 1))
-                    u.fat = min(100.0, u.fat + 3)
-            for u in self.units:
-                if u.valid and u.morale < 25:
-                    self._rout(u)
-            # les déroutés de l'un sont en partie rattrapés si l'autre tient
-            self.clock += 900
-            v = [any(u.valid for u in self.units if u.side == s) for s in (0, 1)]
-            if not v[0] or not v[1]:
-                break
-            # le camp trop éprouvé et dominé décroche en ordre (les pertes comptent pour moitié les déroutés)
-            worst = None
-            for s in (0, 1):
-                if place and s == 1:
-                    continue
-                us = [u for u in self.units if u.side == s and u.cls not in ('general', 'chariot')]
-                m0 = sum(u.men0 for u in us) or 1.0
-                left = sum(u.men * (0.5 if u.state == 'deroute' else 1.0) for u in us if u.state != 'hors')
-                loss, ratio = 1.0 - left / m0, P[s] / max(1.0, P[1 - s])
-                k = AUTO_ATT if s == 0 else 0.0
-                if (loss > AUTO_WD + k and ratio < 0.9) or (loss > AUTO_WD + AUTO_EVEN + k and ratio < 1.0):
-                    if worst is None or ratio < worst[1]:
-                        worst = (s, ratio)
-            if worst:
-                quits = worst[0]
-                break
-        for u in self.units:
-            if u.state == 'deroute':
-                foe_ok = any(e.valid for e in self.units if e.side != u.side)
-                if foe_ok:
-                    self._capture(None, u, 0.1)
-                u.state = 'hors'
-        self.clock = min(self.clock, self.dusk)
-        v = [any(u.valid for u in self.units if u.side == s) for s in (0, 1)]
-        if quits is not None:
-            self.finish(1 - quits, True, "Résolution automatique : " +
-                        ("l'assaillant" if quits == 0 else "le défenseur") + " décroche.")
-        elif v[0] and not v[1]:
-            self.finish(0, False, "Résolution automatique : le défenseur est rompu.")
-        elif v[1] and not v[0]:
-            self.finish(1, False, "Résolution automatique : l'assaillant est rompu.")
-        else:
-            self.finish(1, True, "Résolution automatique : la nuit tombe sans décision ; l'assaillant se retire."
-                        if not place else "Résolution automatique : la place a tenu jusqu'à la nuit.")
-        return True, "Bataille résolue automatiquement."
+                if u.side == me and (u.id in back or (u.cls == 'chariot' and u.owner in owners)):
+                    u.ctrl = 'joueur'
+            if me in self.ai_sides:
+                self.ai_sides.remove(me)
+            self.ai_mem.pop(f's{me}', None)   # (si les officiers reprennent la main, ils repartiront de la situation)
+        self.accel_ids = []
+        self.speed = 0
+        self.log("Vous reprenez le commandement.", me)
+        return True, "Vous reprenez le commandement : la bataille est en pause."
 
     # ================================================================== vue client
     def view(self, me=None, since=0):
@@ -1995,6 +1998,12 @@ class TacticalBattle:
                         for s, sd, txt, ab in self.logs if s > since and (sd is None or me is None or sd == me)])
         if self.phase == 'deploiement' and me in (0, 1):
             out['zone'] = self.zone(me)
+        if self.accel:
+            # « Finir automatiquement » : les officiers commandent, la bataille défile ; seuls les derniers effets
+            # partent (les autres ont eu lieu trop vite pour être vus)
+            out['accel'] = True
+            out['accel_t'] = round(self.accel_t)
+            out['fx'] = out['fx'][-ACCEL_FX:]
         if self.objective():
             out['objective'] = list(self.objective())
             out['hold'] = round(self.hold_t)
@@ -2010,6 +2019,8 @@ class TacticalBattle:
         title = ('Victoire' if won else 'Défaite') if not r['disengage'] else \
             ('L\'ennemi décroche' if won else 'Retraite')
         lines = [r['why'], f"Bataille terminée à {fmt_hour(self.clock)}."]
+        if self.accel and me in (0, 1):
+            lines.append(f"Vos officiers ont mené la bataille à partir de {fmt_hour(self.accel_t)}.")
         names = self.spec['names']
         lines.append(f"Pertes : {names[m]} {int(r['lost'][m])}, {names[1 - m]} {int(r['lost'][1 - m])}.")
         if r['prisoners'][1 - m] or r['prisoners'][m]:
@@ -2036,6 +2047,7 @@ class TacticalBattle:
                     speed=self.speed, seq=self.seq, logs=[list(x) for x in self.logs[-60:]], ai_sides=self.ai_sides,
                     withdrawing=self.withdrawing, withdraw_t=self.withdraw_t, hold_t=self.hold_t, prisoners=self.prisoners, acc=self._acc,
                     ai_mem=self.ai_mem, result=self.result,
+                    accel=self.accel, accel_ids=self.accel_ids, accel_t=self.accel_t,
                     end=[getattr(self, 'winner', None), getattr(self, 'disengage', None), getattr(self, 'why', None)])
 
     @classmethod
@@ -2054,6 +2066,9 @@ class TacticalBattle:
         tb._acc = d.get('acc', 0.0)
         tb.ai_mem = d.get('ai_mem') or {}
         tb.result = d.get('result')
+        tb.accel = bool(d.get('accel'))   # (anciennes sauvegardes : pas d'accéléré)
+        tb.accel_ids = list(d.get('accel_ids') or [])
+        tb.accel_t = d.get('accel_t', 0.0)
         e = d.get('end') or [None, None, None]
         if e[0] is not None:
             tb.winner, tb.disengage, tb.why = e

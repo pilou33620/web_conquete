@@ -99,22 +99,24 @@ export class BattleView {
 
   // ------------------------------------------------------------------ serveur
   async poll() {
-    if (!this.running) return;
+    if (!this.running || this.closing) return;
     const t0 = performance.now();
     let st = null;
     try { st = await this.api.get(`/api/tactic?bid=${encodeURIComponent(this.bid)}&since=${this.seq}`); } catch (e) { st = null; }
-    if (!this.running) return;
+    if (!this.running || this.closing) return;
     if (st && st.units) {
       try { this.apply(st); } catch (e) { console.error(e); }
       this.lost = false;
     } else if (!this.lost) { this.lost = true; this.ui.toast('Liaison avec le serveur perdue…', 'bad'); }
-    // en pause ou en fin de bataille, on interroge moins souvent
-    const wait = st && st.phase === 'fin' ? 1500 : st && st.speed === 0 && st.phase !== 'deploiement' ? 400 : POLL_MS;
+    // en pause ou en fin de bataille, on interroge moins souvent (pas pendant l'accéléré : la bataille défile) ; une
+    // commande achevée pendant la question peut rendre la réponse périmée (accéléré, reprise, vitesse) : on redemande
+    const wait = this.cmdT > t0 ? 0 : st && st.phase === 'fin' ? 1500 : st && st.speed === 0 && st.phase !== 'deploiement' && !st.accel ? 400 : POLL_MS;
     this.pollT = setTimeout(() => this.poll(), Math.max(10, wait - (performance.now() - t0)));
   }
   async cmd(sub, body = {}) {
     let r;
     try { r = await this.api.post('/api/cmd', { cmd: 'tac', sub, bid: this.bid, ...body }); } catch (e) { r = { ok: false, msg: 'Serveur injoignable.' }; }
+    this.cmdT = performance.now();
     if (r && !r.ok && r.msg) this.ui.toast(r.msg, 'bad');
     return r || { ok: false };
   }

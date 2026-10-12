@@ -60,6 +60,24 @@ body.en-bataille #proposals, body.en-bataille #bubble { opacity: 0; pointer-even
 .bt-dbtns { display: flex; gap: 8px; flex: none; }
 .bt-dbtns .primary { font-size: 16.5px; padding: 8px 18px; min-height: 46px; }
 
+/* ------------------------------------------------------------- « Finir automatiquement » : la bataille en accéléré */
+.bt-accel { position: absolute; top: calc(var(--top-h) + var(--safe-t, 0px) + 10px); left: 50%; transform: translateX(-50%); width: min(600px, calc(100% - 24px));
+  display: flex; align-items: center; gap: 14px; padding: 8px 10px 9px 16px; background: rgba(19,35,58,.93); border: 1px solid var(--laiton, #c8a253);
+  border-radius: 9px; box-shadow: 0 6px 22px rgba(4,10,20,.5); animation: bt-in-c .5s ease-out; }
+.ba-txt { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; }
+.ba-txt b { font-family: var(--f-titre, Georgia, serif); font-weight: normal; font-size: 18px; color: var(--laiton-clair, #e6c97f); white-space: nowrap; }
+.ba-h { font-size: 14px; color: var(--papier-2, #c9c0a8); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ba-prog { position: relative; flex-basis: 100%; height: 7px; margin-top: 6px; border-radius: 4px; background: #0c1828; border: 1px solid rgba(230,201,127,.45); overflow: hidden; }
+.ba-done { position: absolute; left: 0; top: 0; bottom: 0; width: 0; transition: width .3s linear;
+  background: repeating-linear-gradient(115deg, var(--laiton, #c8a253) 0 8px, var(--laiton-clair, #e6c97f) 8px 16px); background-size: 34px 100%;
+  animation: ba-flow 1s linear infinite; }
+.ba-from { position: absolute; top: -1px; bottom: -1px; width: 2px; margin-left: -1px; background: var(--papier, #f1ead8); opacity: .8; }
+@keyframes ba-flow { from { background-position: 0 0; } to { background-position: 34px 0; } }
+.bt-accel .bt-btn.primary { flex: none; min-height: 44px; }
+/* le fil des événements et les messages passent sous le bandeau */
+.bt-ui.accel .bt-feed, .bt-ui.accel .bt-feedtog { top: calc(var(--top-h) + var(--safe-t, 0px) + 84px); }
+.bt-ui.accel .bt-toasts { top: calc(var(--top-h) + var(--safe-t, 0px) + 92px); }
+
 /* ------------------------------------------------------------- journal */
 .bt-feedtog { position: absolute; left: 10px; top: calc(var(--top-h) + var(--safe-t, 0px) + 8px); width: 30px; height: 30px; border-radius: 15px;
   border: 1px solid var(--hair, rgba(200,162,83,.45)); background: rgba(19,35,58,.7); color: var(--laiton-clair, #e6c97f); font-size: 18px; line-height: 1; padding: 0; }
@@ -230,6 +248,13 @@ body.en-bataille #proposals, body.en-bataille #bubble { opacity: 0; pointer-even
   .bt-dtxt { font-size: 13.5px; }
   .bt-dtxt b { font-size: 16px; }
   .bt-dbtns .primary { flex: 1; }
+  .bt-accel { flex-direction: column; align-items: stretch; gap: 6px; padding: 7px 10px 8px; }
+  .ba-txt b { font-size: 15.5px; }
+  .ba-h { font-size: 12.5px; }
+  .ba-prog { margin-top: 4px; }
+  .bt-accel .bt-btn.primary { min-height: 38px; font-size: 14.5px; }
+  .bt-ui.accel .bt-feed, .bt-ui.accel .bt-feedtog { top: calc(var(--top-h) + var(--safe-t, 0px) + 126px); }
+  .bt-ui.accel .bt-toasts { top: calc(var(--top-h) + var(--safe-t, 0px) + 190px); }
   .bt-feed { width: auto; right: 12px; }
   .bt-panel { left: 6px; right: 6px; width: auto; max-height: 46%; bottom: calc(var(--dock-h) + var(--safe-b, 0px) + 6px); }
   .bt-ui.has-panel .bt-side { display: none; }
@@ -256,5 +281,5 @@ body.en-bataille #proposals, body.en-bataille #bubble { opacity: 0; pointer-even
 }
 @media (prefers-reduced-motion: reduce) {
   .bt-root { transition: none; }
-  .bt-ev, .bt-toast, .bt-panel, .bt-card, .bt-tip, .bt-deploy { animation: none; }
+  .bt-ev, .bt-toast, .bt-panel, .bt-card, .bt-tip, .bt-deploy, .bt-accel, .ba-done { animation: none; }
 }
