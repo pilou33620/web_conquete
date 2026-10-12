@@ -378,7 +378,7 @@ TREATY_AGAIN = 25 * 365      # second traité avec le même vainqueur en moins d
 ASSIM_YEARS = 25
 # lassitude de la guerre (0 à 100)
 WEARY_PER_WAR = 3.0          # par mois et par guerre
-WEARY_PER_LOSS = 1 / 300     # par homme perdu
+WEARY_PER_LOSS = 1 / 150     # par homme perdu
 WEARY_PEACE = 5.0            # baisse mensuelle en paix
 
 # croissance séculaire de l'économie, par rapport à 1790 : la production d'une place n'en suit que la racine
@@ -611,6 +611,21 @@ PHASE_W = {
     'charge': dict(artillerie=0.5, inf=1.0, cavalerie=1.25),
 }
 OPEN_TERRAIN = ('Plaine', 'Vignoble', 'Lande', 'Collines')
+# résolution automatique (engine.update_battles, end_battle), recalée sur les batailles jouées sur le champ de bataille
+# (banc apparié : même bataille résolue des deux façons). Comme l'IA des batailles commandées, un camp dominé cède avant
+# la déroute. Hors d'une place, passé WD_LOSS de pertes (part de ses hommes) face à un ennemi plus fort (sa puissance
+# sous WD_RATIO fois celle de l'ennemi), ou WD_EVEN_LOSS face à un ennemi à peine plus fort, il décroche en bon ordre.
+# Le défenseur d'une place ne décroche pas : dominé, passé WD_PLACE_LOSS, il la rend. Dans ce compte, le défenseur tient
+# comme s'il était WD_DEF fois plus fort (le défenseur des batailles commandées a l'avantage du terrain).
+WD_LOSS, WD_RATIO, WD_EVEN_LOSS, WD_PLACE_LOSS = 0.12, 0.8, 0.19, 0.2
+WD_DEF = 1.4
+# poursuite d'un vaincu rompu (part de ses hommes rattrapés, selon que le vainqueur a de la cavalerie ou non) : une armée
+# presque anéantie, ou celle qui défendait une place prise ; prisonniers : part des pertes au combat du vaincu (à
+# l'assaut d'une place, pris ou repoussé : PRISON_ASSAULT) et des rattrapés
+PURSUIT_CAV, PURSUIT_FOOT = 0.05, 0.02
+PRISON_LOSS, PRISON_ASSAULT, PRISON_CAUGHT = 0.07, 0.2, 0.15
+# usure : le vaincu, même en bon ordre, perd cette part de ses hommes en traînards pendant la retraite (désertions)
+LOSER_STRAGGLE = 0.05
 
 # ------------------------------------------------------------------ espions, impôts, fleuves
 SPY = {

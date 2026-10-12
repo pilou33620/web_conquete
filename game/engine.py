@@ -2480,6 +2480,12 @@ class Game:
         a['fm'], a['pl'] = fm, pl
 
     def update_battles(self, dt):
+        """Résolution automatique (choix « Automatique », batailles sans le joueur), par pas de campagne : pertes typées
+        selon la phase, les formations et les plans, puis la fin, recalée sur les batailles jouées sur le champ de
+        bataille. En rase campagne, le camp dominé (battle_yield) ou dont le moral casse se retire en bon ordre ; seule une
+        armée presque anéantie (moins de 18 % de ses hommes) est mise en déroute et poursuivie. Devant une place,
+        l'assaillant dominé décroche, mais un assaut brisé reflue en désordre ; le défenseur ne décroche jamais : il rend
+        la place s'il cède. Au bout de 4 jours, le plus puissant l'emporte."""
         K = 0.20
         for bid in list(self.battles):
             bt = self.battles.get(bid)
@@ -2636,9 +2642,16 @@ class Game:
             for si in (0, 1):
                 side = bt['sides'][si]
                 m_now = self.side_men(bt, si)
-                if m_now < 10 or m_now < side['men0'] * 0.18 or bt['mor'][si] < 12:
+                wiped = m_now < 10 or m_now < side['men0'] * 0.18
+                if wiped or bt['mor'][si] < 12:
                     res = 1 - si
+                    # en rase campagne, une armée ébranlée se retire comme dans les batailles commandées (ses fuyards la
+                    # rejoignent) : seuls les débris d'une armée presque anéantie sont poursuivis ; devant une place,
+                    # l'assaut brisé reflue en désordre
+                    disengage = bt['node'] is None and not wiped
                     break
+            if res is None:
+                res, disengage = self.battle_yield(bt, P)
             if res is None and age > 1.0:
                 for si in (0, 1):
                     side = bt['sides'][si]
@@ -2650,8 +2663,25 @@ class Game:
             if res is None and age > 4.0:
                 tot = [sum(P[i].values()) for i in (0, 1)]
                 res = 0 if tot[0] >= tot[1] else 1
+                disengage = bt['sides'][1 - res]['node'] is None
             if res is not None:
                 self.end_battle(bt, res, disengage)
+
+    def battle_yield(self, bt, P):
+        """Un camp dominé cède avant la déroute, comme dans les batailles commandées (rules.WD_*) : hors d'une place, il
+        décroche en bon ordre ; le défenseur d'une place la rend. P : puissance de chaque camp à cet instant, par arme.
+        Renvoie (vainqueur, décrochage), ou (None, False) si le combat continue."""
+        tot = [sum(P[0].values()), sum(P[1].values()) * R.WD_DEF]   # (le défenseur tient mieux que sa puissance)
+        loss = [s['lost'] / max(1.0, s['men0']) for s in bt['sides']]
+        for si in sorted((0, 1), key=lambda i: -loss[i]):   # le plus éprouvé d'abord
+            ratio = tot[si] / max(1e-9, tot[1 - si])
+            if bt['sides'][si]['node'] is not None:
+                if loss[si] > R.WD_PLACE_LOSS and ratio < R.WD_RATIO:
+                    return 1 - si, False
+                continue
+            if (loss[si] > R.WD_LOSS and ratio < R.WD_RATIO) or (loss[si] > R.WD_EVEN_LOSS and ratio < 1.0):
+                return 1 - si, True
+        return None, False
 
     def apply_typed_losses(self, bt, si, tg, dmg_j, men_total, shock=1.0):
         side = bt['sides'][si]
@@ -2708,6 +2738,9 @@ class Game:
         return tot / w if w > 0 else 0
 
     def end_battle(self, bt, winner, disengage=False):
+        """Fin d'une bataille, automatique ou commandée (bridge.finish) : prise de la place (sauf décrochage), retraite du
+        vaincu (poursuivi s'il est rompu, en bon ordre s'il décroche ; il y perd des traînards : rules.LOSER_STRAGGLE),
+        prisonniers (ceux du champ de bataille pour une bataille commandée), lassitude et bilan des deux camps, journal."""
         loser = 1 - winner
         W, L = bt['sides'][winner], bt['sides'][loser]
         caught = 0.0   # hommes rattrapés pendant la poursuite
@@ -2739,18 +2772,27 @@ class Game:
                         r['morale'] = max(r['morale'], 35)
                     a['state'] = 'move' if a['path'] else 'idle'
                     a['assault'] = False
-                    if not disengage:
-                        # une vraie bataille rangée compte plus qu'une escarmouche contre la milice d'un village
-                        foe_armies = bool(L['armies']) or (L['node'] is not None and self.geo.nodes[L['node']]['type'] in ('capitale', 'ville', 'fort'))
-                        self.general_xp(a, 1 if foe_armies and L['men0'] >= 300 else 0.34)
+                    # (l'ennemi qui décroche en bon ordre lui laisse aussi le terrain : c'est une victoire)
+                    # une vraie bataille rangée compte plus qu'une escarmouche contre la milice d'un village
+                    foe_armies = bool(L['armies']) or (L['node'] is not None and self.geo.nodes[L['node']]['type'] in ('capitale', 'ville', 'fort'))
+                    self.general_xp(a, 1 if foe_armies and L['men0'] >= 300 else 0.34)
                 else:
-                    pursuit = 0.0 if disengage or bt.get('tac') else (0.10 if has_cav else 0.04) * (1 + self.mod(a['owner'], 'retreat'))
+                    # poursuite d'un vaincu rompu (déjà faite sur le champ de bataille d'une bataille commandée)
+                    pursuit = 0.0 if disengage or bt.get('tac') else \
+                        (R.PURSUIT_CAV if has_cav else R.PURSUIT_FOOT) * (1 + self.mod(a['owner'], 'retreat'))
                     if self.gen_trait(a) == 'prudent':
                         pursuit *= 0.5
+                    # battu, même en bon ordre, il sème des traînards dans la retraite (comptés avec les désertions du mois)
+                    gone = 0.0
                     for r in a['regs']:
                         caught += r['n'] * pursuit
                         r['n'] *= 1 - pursuit
+                        gone += r['n'] * R.LOSER_STRAGGLE
+                        r['n'] *= 1 - R.LOSER_STRAGGLE
                         r['morale'] = max(r['morale'], 18)
+                    if gone > 0:
+                        a['des'] = a.get('des', 0.0) + gone
+                        a['des_why'] = a.get('des_why') or 'traînards de la retraite'
                     a['regs'] = [r for r in a['regs'] if r['n'] >= 5]
                     if not a['regs']:
                         del self.armies[aid]
@@ -2770,25 +2812,18 @@ class Game:
                 if n_ > 0 and taker in self.factions:
                     pr = self.factions[taker].setdefault('prisoners', {})
                     pr[bt['sides'][si]['owner']] = pr.get(bt['sides'][si]['owner'], 0) + n_
-        if disengage:
-            del self.battles[bt['id']]
-            if self.player in (W['owner'], L['owner']):
-                self.log('battle_end', f"Escarmouche {gname} : {self.fname(L['owner'])} décroche. Pertes : "
-                         f"{self.fname(bt['sides'][0]['owner'])} {int(bt['sides'][0]['lost'])}, "
-                         f"{self.fname(bt['sides'][1]['owner'])} {int(bt['sides'][1]['lost'])}.", bt['x'], bt['y'],
-                         who=W['owner'], important=True)
-            return
-        prisoners = tac['prisoners'][loser] if tac else int(L['lost'] * 0.2 + caught * 0.6)
-        for side in (W, L):
-            if side['owner'] in self.factions:
-                f_ = self.factions[side['owner']]
-                f_['_lost_m'] = f_.get('_lost_m', 0.0) + side['lost']
+        # (dans les rues d'une place, assaillants repoussés ou défenseurs cernés se rendent plus souvent)
+        prisoners = tac['prisoners'][loser] if tac else \
+            int(L['lost'] * (R.PRISON_LOSS if bt['node'] is None else R.PRISON_ASSAULT) + caught * R.PRISON_CAUGHT)
         if prisoners > 0 and W['owner'] in self.factions and not tac:
             pr = self.factions[W['owner']].setdefault('prisoners', {})
             pr[L['owner']] = pr.get(L['owner'], 0) + prisoners
+        # toute bataille lasse le pays et compte au bilan, qu'elle finisse par une déroute ou par un décrochage
         for si, side in ((winner, W), (loser, L)):
             if side['owner'] in self.factions:
-                st = self.factions[side['owner']]['stats']
+                f_ = self.factions[side['owner']]
+                f_['_lost_m'] = f_.get('_lost_m', 0.0) + side['lost']
+                st = f_['stats']
                 st['won' if si == winner else 'lost'] += 1
                 st['killed'] += bt['sides'][1 - si]['lost']
         if W['node'] is not None:
@@ -2800,9 +2835,14 @@ class Game:
         if self.player in (W['owner'], L['owner']) or any(
                 self.friendly(self.player, s['owner']) for s in (W, L)):
             won = self.friendly(self.player, W['owner'])
-            wn = self.fname(W['owner'])
-            txt = (f"{'Victoire' if won else 'Défaite'} {gname} — {wn} l'emporte{'nt' if W['owner'] == R.NEUTRAL else ''}. "
-                   f"Pertes : {self.fname(bt['sides'][0]['owner'])} {int(bt['sides'][0]['lost'])}, "
+            nt = 'nt' if (L if disengage else W)['owner'] == R.NEUTRAL else ''
+            if disengage:
+                kind = 'Assaut' if bt['node'] is not None else ('Embuscade' if bt['ambush'] else 'Bataille')
+                head = (f"{kind} {gname} : {self.fname(L['owner'])} se replie{nt} en bon ordre devant "
+                        f"{self.fname(W['owner'])}.")
+            else:
+                head = f"{'Victoire' if won else 'Défaite'} {gname} — {self.fname(W['owner'])} l'emporte{nt}."
+            txt = (f"{head} Pertes : {self.fname(bt['sides'][0]['owner'])} {int(bt['sides'][0]['lost'])}, "
                    f"{self.fname(bt['sides'][1]['owner'])} {int(bt['sides'][1]['lost'])}."
                    + (f" Prisonniers : {prisoners}." if prisoners > 0 else ''))
             self.log('battle_end', txt, bt['x'], bt['y'], who=W['owner'], important=True,
