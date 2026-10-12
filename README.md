@@ -382,9 +382,16 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
 
 #### Conduire une bataille
 - **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît en vue
-  cavalière : chaque régiment est une ligne de petits soldats aux couleurs de son camp, surmontée d'un fanion qui
-  porte son effectif (barré et décoloré s'il est en déroute) ; le général a son médaillon. Le temps, la saison et
-  l'heure se voient : pluie, brouillard, neige, orage, canicule, lumière du matin, couchant puis nuit.
+  cavalière, peint comme un paysage : herbe aux nuances multiples, blé doré, chaumes et labours selon la saison,
+  vignes en rangs, chemins de terre à ornières, haies, murets et clôtures, arbres et bois éclairés avec leur ombre,
+  fermes en volume, rivières avec berges et reflets, relief ombré. Chaque régiment est fait de nombreuses figurines
+  aux couleurs de son camp, en rangs serrés (trois rangs pour une ligne), avec porte-drapeau, tambours, officiers et
+  colonel à cheval ; les coiffures suivent l'époque (tricorne, bicorne, shako, képi, bonnet à poil). Les hommes
+  marchent au pas, mettent en joue l'un après l'autre quand la salve roule le long du front, puis rechargent ; la
+  fumée blanche reste et dérive avec le vent ; les pièces reculent au départ du coup et leurs servants s'affairent ;
+  les tués restent au sol. Au-dessus de chaque régiment, un fanion porte son effectif (barré et décoloré s'il est
+  en déroute) ; le général a son médaillon. Le temps, la saison et l'heure se voient : pluie, brouillard, neige,
+  orage, canicule, ombres des nuages, lumière dorée du matin, couchant puis nuit.
 - **Le déploiement.** Vos troupes sont dans la zone dorée. Glissez un régiment pour le placer, glissez depuis le
   sol pour fixer l'emplacement et l'orientation de la ligne, pivotez-le avec ses boutons. Les **couverts** sont mis
   en évidence : bois en vert (les canons y restent cachés jusqu'à leur première salve), hauteurs en or (vue et
@@ -417,6 +424,12 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   achèvent la bataille en accéléré) et **« Décrocher »** (toute l'armée quitte le terrain), chacun avec confirmation.
 - **La fin.** Le récapitulatif donne victoire ou défaite, pertes des deux camps, prisonniers, expérience, et les
   pertes de chaque régiment ; « Retour à la carte » ramène la campagne, que vous relancez quand vous voulez.
+- **Qualité graphique** (menu ☰, section Affichage, ou fenêtre du journal de bataille) : **Basse** (appareils
+  anciens : image moins fine, peu de fumée), **Moyenne** (tablettes et téléphones modestes), **Haute** (iPad récent : écran Retina, terrain
+  détaillé jusqu'à 16 pixels par mètre, zoom très rapproché sur les figurines), **Ultra** (ordinateurs : plus de
+  figurines, de fumée et de mémoire). Au premier lancement, elle est choisie d'après l'appareil, puis baisse d'elle-
+  même d'un cran si la bataille saccade (moins de 26 images par seconde) ; un choix fait à la main est gardé tel
+  quel. Elle est enregistrée sur l'appareil et s'applique tout de suite, sans quitter la bataille.
 - Clavier : C charger, H tenir, F feu, R rallier, Échap désélectionner, Ctrl + A tout choisir, + et − zoom.
 
 ### Fleuves, gabares et blocus
@@ -567,10 +580,12 @@ web/                 interface : index.html, css/style.css, js/map.js (rendu can
                      de la carte), js/towns.js (dessin des villes), js/ui.js, js/main.js
 web/js/battle/       vue de bataille : bataille.js (entrée et sortie depuis la campagne), vue.js (caméra,
                      boucle, interrogation du serveur), terrain.js (champ de bataille peint en tuiles),
-                     unites.js (soldats, chevaux, canons, fanions), effets.js (fumées, tirs, météo, lumière),
-                     commandes.js (gestes et clavier), interface.js (barres, panneaux, récapitulatif),
-                     formes.js (constantes communes), css/bataille.css ; dev/maquette.mjs : serveur de
-                     maquette (node web/js/battle/dev/maquette.mjs, puis /js/battle/dev/banc.html)
+                     textures.js (motifs du sol et silhouettes d'arbres), unites.js (figurines, chevaux,
+                     canons, drapeaux, fanions), effets.js (fumées, tirs, météo, lumière), qualite.js
+                     (qualité graphique), commandes.js (gestes et clavier), interface.js (barres,
+                     panneaux, récapitulatif), formes.js (constantes et outils communs), css/bataille.css ;
+                     dev/maquette.mjs : serveur de maquette (node web/js/battle/dev/maquette.mjs, puis
+                     /js/battle/dev/banc.html?scen=…&season=…&weather=…&hour=…&year=…&start=1)
 saves/               parties sauvegardées (JSON)
 ```
 

@@ -2,6 +2,7 @@
 // boutons), bandeau du déploiement, journal, panneau de l'unité choisie avec ses ordres, barre des cartes
 // d'unités groupées en bas, mini-carte et vitesses en bas à droite, bulles d'aide, confirmations et récapitulatif.
 import { ICON } from '../icons.js';
+import { QUALITES, QUALITE_LABEL, qualite, setQualite } from './qualite.js';
 import { clsOf, isGeneral, isLight, isWagon, genName, emprise, stars, fmt, esc, clamp, TYPE_LABEL, FORM_LABEL, FORM_HELP, FORMS, STATE_LABEL, SEASON_LABEL, WEATHER_LABEL, normSeason, TILT } from './formes.js';
 
 const WX_ICON = {
@@ -408,6 +409,7 @@ export class BattleUI {
       case 'engager': this.engage(); break;
       case 'couverts': v.showCover = v.showCover === false ? (v.st?.phase === 'deploiement' ? null : true) : false; b.classList.toggle('on', v.showCover !== false); break;
       case 'journal': this.journal(); break;
+      case 'qualite': setQualite(b.dataset.q); this.journal(); break;
       case 'feedtog': this.setFeed(this.feedOff); break;
       case 'dscroll': { const d = this.$('.bt-dock'); d.scrollBy({ left: +b.dataset.d * d.clientWidth * 0.75, behavior: 'smooth' }); break; }
       case 'aide': this.tips(true); break;
@@ -468,7 +470,10 @@ export class BattleUI {
   }
   journal() {
     const rows = this.logAll.slice().reverse().map(l => `<div class="bj-ev"><span>${esc(l.hour)}</span>${esc(l.txt)}</div>`).join('') || '<p class="bp-help">Rien encore.</p>';
-    this.openModal('journal', `<button class="bt-x" data-a="close" aria-label="Fermer">${I.close}</button><h2 class="bm-t">Journal de la bataille</h2><div class="bj">${rows}</div>`);
+    // la qualité graphique se règle aussi d'ici (comme dans le menu ☰ de la campagne)
+    const q = qualite().q, qs = QUALITES.map(k => `<button class="bt-btn ${k === q ? 'on' : ''}" data-a="qualite" data-q="${k}" aria-pressed="${k === q}">${QUALITE_LABEL[k]}</button>`).join('');
+    this.openModal('journal', `<button class="bt-x" data-a="close" aria-label="Fermer">${I.close}</button><h2 class="bm-t">Journal de la bataille</h2><div class="bj">${rows}</div>
+      <div class="bm-btns" role="group" aria-label="Qualité graphique"><span class="bp-help">Qualité graphique</span>${qs}</div>`);
   }
   // récapitulatif de fin de bataille
   recap(r) {
