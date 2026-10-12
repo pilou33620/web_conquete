@@ -377,21 +377,24 @@ def _choose_plan(b, side, mem, L, g, pl):
             else:
                 want = 'frontal'
         return want
-    if r < harass - 0.1:
+    # défenseur en rase campagne : le plan de campagne est suivi s'il n'est pas absurde
+    if r < harass - 0.1 or (camp == 'harcelement' and r < 1.2):
         return 'harcelement'
-    if r >= L['counter_k'] or (tr == 'audacieux' and r >= L['counter_k'] * 0.8) or \
-            (camp == 'frontal' and r >= max(1.25, L['counter_k'] * 0.8)):
+    if r >= L['counter_k'] or (tr == 'audacieux' and r >= L['counter_k'] * 0.8) or (camp == 'frontal' and r >= 0.9):
         return 'frontal'
     return 'tenir'
 
 
 # ====================================================================== déploiement
 def deploy(battle, side):
+    """Déploiement du camp side (unités commandées par l'IA). Sert aussi de placement de départ au camp du joueur
+    (bridge.default_deploy) : il est alors fait au niveau normal, quelle que soit la difficulté, et sans mémoire."""
     b = battle
     us = b.ai_units(side)
     if not us:
         return
-    L, lname = _lvl(b, side)
+    player = side not in (getattr(b, 'ai_sides', None) or (0, 1))
+    L, lname = (LEVELS['normal'], 'normal') if player else _lvl(b, side)
     mem = _mem(b, side)
     mem.clear()
     mem.update(v=1, lvl=lname, role={}, lat={}, back={}, wing={}, post={}, vu={}, vu0={}, sq={}, fm={}, gslot={},
@@ -410,6 +413,9 @@ def deploy(battle, side):
         _deploy_place_att(b, side, mem, L, g, pl)
     else:
         _deploy_field(b, side, mem, L, g, plan)
+    if player:
+        b.ai_mem.pop(f's{side}', None)   # (le joueur commande ce camp : l'IA n'en garde rien)
+        return
     tr = b.trait(side)
     _note(b, mem, f"plan choisi : {PLAN_LABEL[plan]} (niveau {lname}"
                   f"{', général ' + tr if tr else ''}, {mem['init']} hommes contre {mem['ann']} annoncés).")
