@@ -33,20 +33,24 @@ prudent → harcèlement plus tôt, audacieux → contre-offensive plus tôt)
   de dos pendant que le centre le fixe ; ils reviennent sur l'aile si des cavaliers plus nombreux leur barrent la route ;
 - tenir : défense de la position et usure de l'assaillant ; contre-attaque générale quand il flanche ;
 - harcelement : escarmouche à longue portée (canons, légers), puis retraite (quand on est nettement inférieur) ;
-- assaut : assaut d'une place (canons sur la brèche, diversion, colonnes quand les défenseurs sont usés, puis le cœur ;
-  nouvelle vague si la première est repoussée) ;
+- assaut : assaut d'une place (une heure de canonnade sur la brèche (40 min en facile, 70 en difficile), diversion,
+  colonnes quand les défenseurs sont usés, puis le cœur ; nouvelle vague si la première est repoussée) ;
 - place : défense d'une place.
 
 Pendant la bataille
 - Ligne : avance par bonds en attendant ses retardataires ; colonne pour marcher loin du feu, ligne sous le feu, ou ordre
-  dispersé (deux fois moins de pertes au canon, à la mitraille et au fusil) tant qu'aucun cavalier ennemi ne rôde ;
+  dispersé (nettement moins de pertes au canon, un peu moins au fusil) tant qu'aucun cavalier ennemi ne rôde ;
   arrêt à portée efficace, chaque bataillon réglant sa distance sur l'ennemi d'en face et cherchant un couvert ;
-  jamais à portée de mitraille d'une batterie ennemie connue ; baïonnette après la fusillade quand le corps à corps est
-  favorable (et contre l'ennemi ébranlé, pris de flanc, ou des canons sans soutien) ; une batterie qui interdit
-  l'approche est enlevée à la baïonnette ; si plus rien ne bouge pendant trois quarts d'heure : assaut général quand on
-  est plus fort, sinon on décroche.
+  jamais dans la mitraille meurtrière d'une batterie ennemie connue (60 % de sa portée : au-delà, la gerbe s'ouvre) ;
+  baïonnette après un quart d'heure de fusillade quand le corps à corps est favorable (et contre l'ennemi ébranlé, pris
+  de flanc, ou des canons sans soutien) ; une batterie qui interdit l'approche est enlevée à la baïonnette ; si plus
+  rien ne bouge pendant trois quarts d'heure, ou si la ligne ne tire plus depuis une demi-heure sans que l'ennemi
+  perde rien : assaut général (sans plus craindre la mitraille) quand on n'est pas nettement plus faible, renouvelé
+  tant qu'on est nettement plus fort ; sinon on décroche.
 - Carré seulement face à une vraie charge (cavaliers qui chargent ou arrivent droit sur nous, par un chemin praticable),
-  rompu dès que la menace passe (le canon ravage les carrés).
+  rompu dès que la menace passe (le canon ravage les carrés) ; pas de carré à moins de 200 m de l'infanterie ennemie
+  (il y serait fusillé) sauf si les cavaliers chargent cette troupe même, ni quand une ligne ferme voit venir la charge
+  de face (son feu de défense la repousse).
 - Cavalerie : charges choisies (artillerie sans soutien, fuyards, chariot, état-major, de flanc ou de dos, ennemi
   ébranlé ou en tirailleurs, jamais un carré ni une ligne fraîche de face), sur un chemin libre ; contre-charges avec
   assez d'escadrons, loin de l'infanterie ennemie ; postes d'attente hors de portée des canons ennemis.
@@ -58,7 +62,8 @@ Pendant la bataille
   débordée (difficile) ; ralliés reformés près du général. Général et chariot derrière le secteur qui en a besoin,
   abrités derrière un bataillon quand des cavaliers rôdent.
 - Décrochage en bon ordre quand la bataille est perdue (pertes, rapport de forces vu, moral, nuit), jamais pour le
-  défenseur d'une place.
+  défenseur d'une place : passé wd_loss de pertes (les troupes en déroute comptent pour moitié) si l'ennemi est nettement
+  plus fort, ou passé wd_loss + 7 % dans un combat égal ; l'assaillant qui mène l'attaque accepte 5 % de plus.
 
 Niveaux (battle.difficulty ; spec['ai_levels'] = [niveau du camp 0, du camp 1] et spec['ai_tweak'] pour les essais).
 Ils ne changent que la qualité des décisions, jamais les dégâts :
@@ -68,7 +73,8 @@ Ils ne changent que la qualité des décisions, jamais les dégâts :
   canons, engage sa réserve d'emblée, ne surveille pas ses flancs, ne relève personne, décroche tôt ;
 - normal : correcte : terrain, cohésion, carrés, charges choisies, contre-charges, mitraille prudente, ordre dispersé,
   réserves pour les trous, les relèves et les flancs, batteries enlevées à la baïonnette ;
-- difficile : réfléchit toutes les 6 s ; terrain plus fouillé (crêtes, haies, lisières, canons cachés) ; ordre oblique
+- difficile : réfléchit toutes les 6 s ; s'arrête à pleine portée efficace et avance par bonds réguliers ; terrain plus
+  fouillé (crêtes, haies, lisières, canons cachés) ; attend que l'artillerie ait ébranlé l'ennemi ; ordre oblique
   qui déborde l'aile la plus faible, loin des batteries ennemies ; réserves qui prolongent une ligne débordée et
   contre-attaquent les percées ; légers qui prennent l'ennemi de flanc ; cavalerie qui ne s'expose pas aux
   contre-charges ; contre-offensive plus tôt.
@@ -112,24 +118,25 @@ GRAPE_DEADLY = 0.6
 ATT_TENACITY = 0.05
 # combat égal qui s'éternise : passé wd_loss + 7 % de pertes, on cède si le rapport de forces vu est sous wd_ratio + ceci
 WD_EVEN = 0.2
+FIRE_LONG = 900.0   # durée de fusillade avant la baïonnette à forces égales (s)
 
 LEVELS = {
     'facile': dict(n=0, period=20.0, jitter=12.0, reflex=6.0, sq_r=210.0, sq_miss=0.3, sq_late=True, terrain=0,
                    cohesion=False, bound=600.0, halt=(0.5, 1.45), prep=5 * 60, prep_max=8 * 60, cav_r=330.0,
                    cav_pick=False, counter=False, col_late=True, res_early=True, flank=False, relief=False,
-                   art_pick=False, wd_loss=0.2, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
+                   art_pick=False, wd_loss=0.18, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
                    grape=0, assault_prep=40 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False,
                    storm=False, oblique=False, extend=False, flankfire=False),
     'normal': dict(n=1, period=10.0, jitter=4.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=1,
                    cohesion=True, bound=220.0, halt=(0.82, 0.92), prep=12 * 60, prep_max=25 * 60, cav_r=430.0,
                    cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
-                   art_pick=True, wd_loss=0.24, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
+                   art_pick=True, wd_loss=0.22, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
                    grape=1, assault_prep=60 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False,
                    storm=True, oblique=False, extend=False, flankfire=False),
     'difficile': dict(n=2, period=6.0, jitter=0.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=2,
-                      cohesion=True, bound=170.0, halt=(0.78, 0.85), prep=15 * 60, prep_max=35 * 60, cav_r=430.0,
+                      cohesion=True, bound=220.0, halt=(0.88, 0.98), prep=15 * 60, prep_max=35 * 60, cav_r=430.0,
                       cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
-                      art_pick=True, wd_loss=0.27, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
+                      art_pick=True, wd_loss=0.25, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
                       grape=1, assault_prep=70 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True,
                       storm=True, oblique=True, extend=True, flankfire=True),
 }
@@ -1138,6 +1145,7 @@ def _decide_withdraw(b, side, mem, L, sit):
         why = 'pertes trop lourdes'
     elif sit['loss'] > L['wd_loss'] + 0.07 - k and sit['ratio'] < L['wd_ratio'] + L.get('wd_even', WD_EVEN):
         why = 'pertes trop lourdes'   # (combat égal qui s'éternise : le plus éprouvé cède)
+
     elif sit['ratio'] < 0.45 and sit['loss'] > 0.2:
         why = "l'ennemi est bien plus fort"
     elif sit['valid'] and sit['mor'] < 32 and sit['routed'] >= len(sit['valid']):
@@ -1493,7 +1501,7 @@ def _foe_dist(u, body):
 
 def _march_form(b, mem, L, u, sx, sy, fdist, defending=False):
     """Formation de l'infanterie : colonne pour marcher loin du feu ; à portée de l'ennemi ou sous le feu, l'ordre
-    dispersé (tirailleurs : deux fois moins de pertes au boulet, à la mitraille et à la fusillade, pour 40 % de feu en
+    dispersé (tirailleurs : pertes ×0,35 au boulet, ×0,55 à la mitraille, ×0,8 à la fusillade, pour 40 % de feu en
     moins) tant qu'aucun cavalier ennemi n'a été vu depuis 10 min (normal : à moins de 1 500 m ; difficile :
     1 200 m), sinon la ligne.
     Facile : la ligne, et la colonne gardée trop longtemps."""
@@ -2295,7 +2303,9 @@ def _bayonets(b, side, mem, L, us, foes, sit, busy):
     plan = mem['plan']
     now = b.clock
     cav_near = [e for e in foes if e.cls == 'cavalerie' and e.valid]
-    fired_long = mem.get('phase') == 'combat' and now - mem.get('t_phase', now) >= 180
+    # (une fusillade d'une salve par minute use l'ennemi lentement : on ne croise la baïonnette, à forces égales, qu'après
+    # un quart d'heure de feu)
+    fired_long = mem.get('phase') == 'combat' and now - mem.get('t_phase', now) >= FIRE_LONG
     cands = []
     for u in us:
         if u.cls != 'inf' or not u.valid or u.id in busy or u.busy > 0 or u.state in ('charge', 'melee') or \
