@@ -1,5 +1,6 @@
 import { ICON, speedIcon, coat } from './icons.js';
 import { fmtMen, unitCls } from './map.js';
+import { QUALITES, QUALITE_LABEL, QUALITE_AIDE, qualite, setQualite } from './battle/qualite.js';
 
 // nombres à la française : virgule décimale et vrai signe moins (−)
 const minus = s => s.replace(/^-/, '−');
@@ -862,6 +863,12 @@ export class UI {
         this.modalSig = ''; this.renderModal(true);
         break;
       }
+      case 'bt-qualite': {   // qualité graphique des batailles (enregistrée sur cet appareil)
+        setQualite(d.v);
+        this.toast(`Qualité graphique des batailles : ${QUALITE_LABEL[d.v].toLowerCase()}.`);
+        this.modalSig = ''; this.renderModal(true);
+        break;
+      }
       case 'newgame': if (confirm('Abandonner la partie en cours et revenir à l’écran de départ ?')) this.onNewGame && this.onNewGame(); break;
       case 'selnode-modal': this.closeModal(); this.select({ kind: 'node', id: +d.node }); this.action('center', {}); break;
       // écran de départ
@@ -1691,6 +1698,9 @@ export class UI {
         ${this.turnSettings()}
         <h3 class="section-t">Affichage</h3><div class="btns"><button class="btn" data-act="anim">${this.map.ambient.on ? 'Couper les animations de la carte' : 'Animer la carte'}</button></div>
         <p class="muted small" style="margin:4px 0 0">Moulins, fumées, oiseaux, bateaux, charrettes et troupeaux.</p>
+        <p class="small" style="margin:10px 0 4px">Qualité graphique des batailles :</p><div class="seg wrap" role="group" aria-label="Qualité graphique des batailles">${QUALITES.map(k =>
+          `<button class="${k === qualite().q ? 'on' : ''}" data-act="bt-qualite" data-v="${k}" aria-pressed="${k === qualite().q}" title="${QUALITE_AIDE[k]}">${QUALITE_LABEL[k]}</button>`).join('')}</div>
+        <p class="muted small" style="margin:4px 0 0">${qualite().auto ? 'Choisie d’après cet appareil ; elle baisse d’elle-même si la bataille saccade.' : QUALITE_AIDE[qualite().q]}</p>
         <h3 class="section-t">Batailles</h3><div class="seg wrap">${[['demander', 'Toujours demander'], ['auto_petites', 'Escarmouches automatiques'], ['auto', 'Toujours automatiques']].map(([k, l]) =>
           `<button class="${(this.st.settings || {}).battles === k ? 'on' : ''}" data-act="tac-set" data-v="${k}">${l}</button>`).join('')}</div>
         <p class="muted small" style="margin:4px 0 0">Commander soi-même ses batailles, ou laisser le général les résoudre.</p>

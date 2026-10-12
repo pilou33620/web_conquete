@@ -30,7 +30,9 @@ function fogTexture() {
 }
 
 export class Effects {
-  constructor() {
+  // q : profil de qualité graphique (qualite.js)
+  constructor(q) {
+    this.q = q;
     this.puffs = [];      // fumées, poussières (x, y en m ; alt en m ; r rayon en m)
     this.flashes = [];    // éclairs de bouche, explosions (additifs)
     this.balls = [];      // boulets en vol
@@ -46,6 +48,8 @@ export class Effects {
     this.bolt = null; this.flashT = 0; this.nextBolt = 4;
     this.t = 0;
   }
+  setQuality(q) { this.q = q; }
+  dispose() { this.puffs.length = 0; this.flashes.length = 0; }
   // ------------------------------------------------------------------ effets envoyés par le serveur
   // f : {k, x, y, x2, y2, n, u} ; unit : l'unité qui l'a produit (pour le front d'une salve) ; delay en s
   push(f, unit, delay = 0) { this.queue.push({ f, unit, at: this.t + delay }); }

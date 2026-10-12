@@ -17,9 +17,12 @@ function shadeHex(h, t) {
 const facingOf = dir => { const c = Math.cos(dir), s = Math.sin(dir); return Math.abs(c) > Math.abs(s) * 0.9 ? (c > 0 ? 1 : 3) : (s > 0 ? 0 : 2); };
 
 export class UnitArt {
-  constructor() {
+  // q : profil de qualité graphique (qualite.js)
+  constructor(q) {
     this.sprites = new Map();
+    this.q = q;
   }
+  setQuality(q) { this.q = q; }
   clear() { for (const s of this.sprites.values()) s.cv.width = s.cv.height = 0; this.sprites.clear(); }
 
   // ------------------------------------------------------------------ silhouettes en cache

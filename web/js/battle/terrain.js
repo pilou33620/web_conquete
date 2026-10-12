@@ -5,9 +5,8 @@
 import { T, cellRemap, normSeason, hash, clamp, TAU, TILT } from './formes.js';
 
 const TS = 512;                         // côté d'une tuile, en pixels de l'écran
-const LEVELS = [1, 2, 4];               // pixels (physiques) par mètre des tuiles ; l'image entière est à BASE
-const BASE = 0.5;
-const MAX_TILES = 64;
+const LEVELS = [1, 2, 4, 8, 16];        // pixels (physiques) par mètre des tuiles, jusqu'au plus fin permis par la
+const BASE = 0.5;                       // qualité graphique ; l'image entière est à BASE
 
 function b64(s) {
   if (!s) return null;
@@ -125,7 +124,8 @@ function chaikin(pts, iters, closed) {
 }
 
 export class Terrain {
-  constructor(m) {
+  // q : profil de qualité graphique (qualite.js) : niveau de tuiles le plus fin, nombre de tuiles gardées
+  constructor(m, q) {
     this.W = m.W || 3000; this.H = m.H || 2000; this.cell = m.cell || 20;
     this.cols = m.cols || Math.round(this.W / this.cell); this.rows = m.rows || Math.round(this.H / this.cell);
     const n = this.cols * this.rows, remap = cellRemap(m.types);
@@ -147,6 +147,7 @@ export class Terrain {
     this.season = normSeason(m.season);
     this.pal = PALETTES[this.season];
     this.tiles = new Map();
+    this.setQuality(q);
     this.decals = [];
     this.patterns = new Map();
     this.grain = grainCanvas();
@@ -970,8 +971,15 @@ export class Terrain {
   }
 
   // ------------------------------------------------------------------ tuiles
+  setQuality(q) {
+    this.q = q || { level: 4, tiles: 64 };
+    this.levels = LEVELS.filter(L => L <= this.q.level);
+    // tuiles d'un niveau désormais trop fin : libérées tout de suite
+    for (const [k, t] of this.tiles) if (Math.floor(k / 100000) > this.q.level) { this.tiles.delete(k); t.width = t.height = 0; }
+    this.evict();
+  }
   // niveau des tuiles : on accepte de les agrandir un peu (30 %) plutôt que d'en peindre quatre fois plus
-  level(zp) { for (const L of LEVELS) if (L >= zp * 0.75) return L; return LEVELS[LEVELS.length - 1]; }
+  level(zp) { for (const L of this.levels) if (L >= zp * 0.75) return L; return this.levels[this.levels.length - 1]; }
   tileKey(L, i, j) { return L * 100000 + j * 1000 + i; }
   // dessine le fond visible ; budget : nombre de tuiles qu'on peut encore peindre à cette image
   draw(ctx, cam, vw, vh, dpr, budget = 2) {
@@ -983,6 +991,7 @@ export class Terrain {
     const i0 = Math.max(0, Math.floor(x0 / span)), i1 = Math.min(Math.ceil(this.W / span) - 1, Math.floor(x1 / span));
     const j0 = Math.max(0, Math.floor(y0 / span)), j1 = Math.min(Math.ceil(this.H / span) - 1, Math.floor(y1 / span));
     let missing = false, painted = 0;
+    this.busy = false;
     const order = [];
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) order.push([i, j, Math.hypot((i + 0.5) * span - cam.x, (j + 0.5) * span - cam.y)]);
     order.sort((a, b) => a[2] - b[2]);
@@ -990,13 +999,13 @@ export class Terrain {
     for (const [i, j] of order) {
       const k = this.tileKey(L, i, j);
       let tile = this.tiles.get(k);
-      if (!tile && painted < budget) { tile = this.paintCanvas(i * span, j * span, span, span, L); tile._k = k; this.tiles.set(k, tile); painted++; }
+      if (!tile && painted < budget) { tile = this.paintCanvas(i * span, j * span, span, span, L); tile._k = k; this.tiles.set(k, tile); painted++; this.busy = true; }
       if (tile) { this.tiles.delete(k); this.tiles.set(k, tile); draws.push([tile, i, j]); } else missing = true;
     }
     if (missing || !draws.length) {
       // l'image entière, agrandie, ou une tuile d'un autre niveau déjà prête
       ctx.drawImage(this.base, 0, 0, this.W * BASE, this.H * BASE, 0, 0, this.W, this.H);
-      for (const L2 of LEVELS) {
+      for (const L2 of this.levels) {
         if (L2 === L) continue;
         const sp2 = TS / L2;
         for (let j = Math.max(0, Math.floor(y0 / sp2)); j <= Math.floor(y1 / sp2); j++) for (let i = Math.max(0, Math.floor(x0 / sp2)); i <= Math.floor(x1 / sp2); i++) {
@@ -1009,7 +1018,7 @@ export class Terrain {
     for (const [tile, i, j] of draws) ctx.drawImage(tile, i * span, j * span, span + 0.6 / cam.z, span + 0.6 / cam.z);
     this.pending = missing ? null : { L, span, i0: i0 - 1, i1: i1 + 1, j0: j0 - 1, j1: j1 + 1 };
     // éviction après le dessin : jamais une tuile de cette image (elles sont en fin de file)
-    this.evict(Math.max(MAX_TILES, draws.length + 8));
+    this.evict(Math.max(this.q.tiles, draws.length + 8));
     return missing;
   }
   // temps libre : peint d'avance une tuile voisine de la vue (rastérisée tout de suite), pour un défilement sans à-coup
@@ -1022,6 +1031,7 @@ export class Terrain {
       if (this.tiles.has(k)) continue;
       const tile = this.paintCanvas(i * p.span, j * p.span, p.span, p.span, p.L);
       tile.getContext('2d').getImageData(0, 0, 1, 1);
+      this.busy = true;
       tile._k = k;
       // en tête de file : la première évincée si la vue part ailleurs
       const rest = [...this.tiles.entries()];
@@ -1032,7 +1042,7 @@ export class Terrain {
     this.pending = null;
     return false;
   }
-  evict(max = MAX_TILES) {
+  evict(max = this.q.tiles) {
     while (this.tiles.size > max) {
       const [k, t] = this.tiles.entries().next().value;
       this.tiles.delete(k);

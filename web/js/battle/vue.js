@@ -298,6 +298,7 @@ export class BattleView {
   draw(dt, time) {
     const ctx = this.ctx, dpr = this.dpr, cam = this.cam, z = cam.z;
     if (!this.terrain) return;
+    this.figScale = this.figScaleAt(z);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#0c1828';
     ctx.fillRect(0, 0, this.vw, this.vh);
