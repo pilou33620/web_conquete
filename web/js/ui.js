@@ -864,6 +864,7 @@ export class UI {
         break;
       }
       case 'bt-qualite': {   // qualité graphique des batailles (enregistrée sur cet appareil)
+        if (!QUALITE_LABEL[d.v]) break;
         setQualite(d.v);
         this.toast(`Qualité graphique des batailles : ${QUALITE_LABEL[d.v].toLowerCase()}.`);
         this.modalSig = ''; this.renderModal(true);
