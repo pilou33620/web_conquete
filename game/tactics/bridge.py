@@ -3,6 +3,8 @@
 - choix du mode d'une bataille du joueur (attente / manuel / auto) et réglage `settings['battles']` ;
 - création d'une TacticalBattle depuis une bataille de campagne (`bt`), boucle tactique (tick), report du résultat
   sur les régiments puis `engine.end_battle` ;
+- « Finir automatiquement » : la bataille jouée en accéléré par tick (budget de calcul ACCEL_BUDGET par appel),
+  reprise du commandement (`resume`), et resolve_now pour la jouer d'un coup (essais, bancs) ;
 - munitions (`ammo`, 0–100 %) et fatigue (`fat`, 0–100) persistantes des régiments en campagne ;
 - sauvegarde, chargement et migration ; vues pour /api/state, /api/tactic et /api/tactic_map ; commandes `tac`.
 
