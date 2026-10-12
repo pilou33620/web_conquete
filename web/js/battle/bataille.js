@@ -62,23 +62,29 @@ export class Bataille {
       if (map.camAnim) map.camAnim.dur = ZOOM_MS;
     };
     zoomTo(pos);
+    // interrompue pendant l'ouverture (abort : nouvelle partie, chargement) : cette vue est déjà défaite, on s'arrête là
+    const gone = () => this.view !== view;
     let ok = true;
     try { await view.load(this.bid); } catch (e) { ok = false; console.error(e); }
+    if (gone()) return;
     if (!ok) { this.abort('La carte de cette bataille n’a pas pu être chargée.'); return; }
     if (!pos && view.map?.camp) { pos = [view.map.camp.x, view.map.camp.y]; zoomTo(pos); await wait(ZOOM_MS); }
     // le temps que la caméra de campagne arrive
     const left = ZOOM_MS - (performance.now() - t0);
     if (left > 0) await wait(left);
+    if (gone()) return;
     // la vue de bataille prend le relais : elle part d'un peu plus loin et poursuit le zoom
     const fit = view.fitZ();
     view.cam = { x: view.W / 2, y: view.H / 2, z: fit * 0.62 };
     view.ui.entering = true;
     view.start();
     await waitFor(() => view.st, 2500);
+    if (gone()) return;
     requestAnimationFrame(() => root.classList.add('on'));
     view.ui.cartouche();
     if (view.st) view.focusMine(1500); else view.moveCam(view.W / 2, view.H / 2, fit, 1500);
     await wait(FADE_MS + 100);
+    if (gone()) return;
     this.suspendMap();
     view.ui.entering = false;
     setTimeout(() => this.view === view && view.ui.tips(), 1800);
