@@ -765,9 +765,9 @@ export class Terrain {
     const sp = this.cached(`a|${kind}|${col}|${variant}|${px}`, () => treeSprite(kind, col, variant, px, snow));
     const m = r / px;   // mètres par pixel de la silhouette
     if (kind === 'sapin') { g.drawImage(sp.cv, x - sp.cx * m, y - sp.cy * m, sp.cv.width * m, sp.cv.height * m); return; }
-    const th = (kind === 'parasol' ? r * 2.0 : kind === 'buisson' ? 0 : kind === 'peuplier' ? r * 0.6 : r * 0.55) * k;
-    if (th) { const tw = r * (kind === 'parasol' ? 0.16 : 0.2); g.fillStyle = snow ? '#4a3c30' : '#5a4430'; g.fillRect(x - tw / 2, y - th - r * 0.3, tw, th + r * 0.3); }
-    const cy = y - th - r * (kind === 'buisson' ? 0.45 : kind === 'parasol' ? 0.15 : kind === 'peuplier' ? 1.9 : 0.75);
+    const th = (kind === 'parasol' ? r * 2.0 : kind === 'buisson' ? 0 : kind === 'peuplier' ? r * 0.6 : r * 0.38) * k;
+    if (th) { const tw = r * (kind === 'parasol' ? 0.16 : 0.2); g.fillStyle = snow ? '#4a3c30' : '#5a4430'; g.fillRect(x - tw / 2, y - th - r * 0.3, tw, th + r * 0.3); g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(x, y - th - r * 0.3, tw / 2, th + r * 0.3); }
+    const cy = y - th - r * (kind === 'buisson' ? 0.45 : kind === 'parasol' ? 0.15 : kind === 'peuplier' ? 1.9 : 0.62);
     g.drawImage(sp.cv, x - sp.cx * m, cy - sp.cy * m, sp.cv.width * m, sp.cv.height * m);
   }
   // meule de foin : un dôme de paille, clair au nord-ouest
@@ -1099,6 +1099,8 @@ export class Terrain {
   prefetch() {
     const p = this.pending;
     if (!p) return false;
+    // plus de place pour une tuile d'avance : elle chasserait une tuile visible, repeinte aussitôt, sans fin
+    if (this.tiles.size >= this.q.tiles) { this.pending = null; return false; }
     const ni = Math.ceil(this.W / p.span) - 1, nj = Math.ceil(this.H / p.span) - 1;
     for (let j = Math.max(0, p.j0); j <= Math.min(nj, p.j1); j++) for (let i = Math.max(0, p.i0); i <= Math.min(ni, p.i1); i++) {
       const k = this.tileKey(p.L, i, j);
@@ -1185,10 +1187,10 @@ function paintDecal(g, d, s) {
   g.save(); g.translate(d.x, d.y); g.rotate(d.a || 0);
   if (d.k === 'trou') {
     // entonnoir d'obus : terre rejetée tout autour, fond sombre
-    const r = (d.r || 2.6) * 0.85;
-    g.fillStyle = 'rgba(122,98,64,0.22)'; el(0, 0, r * 1.35, r * 1.1);
-    g.fillStyle = 'rgba(84,62,38,0.32)'; el(0, 0, r, r * 0.8);
-    g.fillStyle = 'rgba(42,30,18,0.3)'; el(r * 0.12, r * 0.1, r * 0.5, r * 0.4);
+    const r = (d.r || 2.6) * 0.7;
+    g.fillStyle = 'rgba(122,98,64,0.18)'; el(0, 0, r * 1.35, r * 1.1);
+    g.fillStyle = 'rgba(84,62,38,0.26)'; el(0, 0, r, r * 0.8);
+    g.fillStyle = 'rgba(42,30,18,0.24)'; el(r * 0.12, r * 0.1, r * 0.5, r * 0.4);
   } else if (d.k === 'cheval') {
     g.fillStyle = 'rgba(30,20,15,0.25)'; g.fillRect(-1.3 + 0.3, -0.5 + 0.3, 2.6, 1.0);
     g.fillStyle = d.c2 || '#5a3e26'; el(0, 0, 1.3, 0.5);

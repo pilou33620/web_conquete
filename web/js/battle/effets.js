@@ -184,7 +184,7 @@ export class Effects {
   }
   // point de chute : gerbe de terre (éclats qui retombent), poussière, trou
   burst(x, y, k = 1) {
-    for (let q = 0; q < 2 * k + 2; q++) this.addPuff(this.dust, x + (Math.random() - 0.5) * 10, y + (Math.random() - 0.5) * 6, 1, 3 + Math.random() * 3, 3.5, 0.75, 2.5 + Math.random() * 2, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 3, 3);
+    for (let q = 0; q < 2 * k + 2; q++) this.addPuff(this.dust, x + (Math.random() - 0.5) * 10, y + (Math.random() - 0.5) * 6, 1, 2.5 + Math.random() * 2.5, 3, 0.55, 2.5 + Math.random() * 2, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 3, 3);
     const nb = [2, 4, 6, 8][this.q?.fx ?? 2] * k;
     for (let q = 0; q < nb; q++) { const a = Math.random() * TAU, v = 2 + Math.random() * 6; this.bits.push({ x, y, alt: 0.5, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.7, valt: 4 + Math.random() * 6, t: 0, life: 2 }); }
     if (Math.random() < 0.6) this.decals.push({ k: 'trou', x, y, r: 1.4 + Math.random() * 1.2 * k, a: Math.random() * 3 });
@@ -257,8 +257,8 @@ export class Effects {
     const thin = clamp(1.25 - z / 16, 0.55, 1);
     // opacité selon l'âge : apparaît vite, reste épaisse longtemps, s'efface à la fin
     const fade = p => { const k = p.t / p.life; return p.a * (k < 0.05 ? k / 0.05 : 1 - Math.pow((k - 0.05) / 0.95, p.imgs === this.white ? 1.8 : 0.8)); };
-    // ombre de la fumée au sol (au sud-est), légère
-    if ((this.q?.fx ?? 2) >= 2) {
+    // ombre de la fumée au sol (au sud-est), légère ; seulement en qualité Ultra (autant de dessins que de fumées)
+    if ((this.q?.fx ?? 2) >= 3) {
       ctx.globalAlpha = 1;
       for (const p of this.puffs) {
         if (p.imgs !== this.white || p.alt > 30) continue;

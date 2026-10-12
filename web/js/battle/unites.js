@@ -399,10 +399,11 @@ export class UnitArt {
   // ------------------------------------------------------------------ disposition des figurines
   // Renvoie une liste [[u, v, kind, faceOffset, pose, rang, phase], …] en mètres dans le repère de l'unité : u le long
   // du front, v vers l'avant ; rang : 0 pour le premier rang (il tire), −1 hors des rangs ; phase : décalage de
-  // l'animation. sp : écartement des figurines (m) ; per : hommes par figurine. Recalculée seulement quand l'effectif,
-  // la formation, l'état, l'écartement ou le nombre d'hommes par figurine changent.
-  layout(un, w, d, sp, per) {
-    const cls = clsOf(un), key = `${un.form}|${un.state}|${Math.round(un.men / 8)}|${w | 0}|${d | 0}|${un.type}|${per}|${sp.toFixed(2)}`;
+  // l'animation. sp, sr : écartement des files et des rangs (m), selon la taille des figurines à l'écran et le sens
+  // du front ; per : hommes par figurine. Recalculée seulement quand l'effectif, la formation, l'état, les
+  // écartements ou le nombre d'hommes par figurine changent.
+  layout(un, w, d, sp, sr, per) {
+    const cls = clsOf(un), key = `${un.form}|${un.state}|${Math.round(un.men / 8)}|${w | 0}|${d | 0}|${un.type}|${per}|${sp.toFixed(2)}|${sr.toFixed(2)}`;
     if (un._lay && un._layKey === key) return un._lay;
     const out = [], id = String(un.id).length * 97 + (un.men0 || 0) + (String(un.id).charCodeAt(0) || 0) * 7;
     const rnd = k => hash(k, id, 41);
@@ -442,7 +443,7 @@ export class UnitArt {
         // carré : trois rangs par face, tournés vers l'extérieur ; drapeau, tambours et officiers au milieu
         const ranks = n > 60 ? 3 : 2, per4 = Math.max(2, Math.round(n / 4 / ranks)), s = w / 2;
         for (let f = 0; f < 4; f++) for (let r = 0; r < ranks; r++) for (let k = 0; k < per4; k++) {
-          const t = (k + 0.5) / per4 * 2 - 1, e = s - r * sp * 0.75;
+          const t = (k + 0.5) / per4 * 2 - 1, e = s - r * Math.min(sp, sr);
           const [u0, v0] = [[t * e, e], [e, -t * e], [-t * e, -e], [-e, t * e]][f];
           push(u0, v0, kind, f, 0, r);   // f : face du carré, la figurine regarde vers l'extérieur
         }
@@ -460,11 +461,12 @@ export class UnitArt {
         const ranks = cav ? (col ? Math.max(2, Math.round(n / Math.max(2, Math.round(w / sp)))) : 2)
           : col ? Math.max(3, Math.ceil(n / Math.max(4, Math.round(w / sp)))) : n >= 36 ? 3 : 2;
         const files = Math.max(1, Math.ceil(n / ranks));
-        const du = w / files, dv = cav ? sp * 2.4 : Math.min(d / ranks, sp * 0.7);
+        const du = w / files, dv = cav ? sr * 2.4 : Math.min(d / ranks, sr);
         const v0 = d / 2 - dv * 0.5;
         for (let r = 0; r < ranks; r++) for (let k = 0; k < files && out.length < n; k++) {
-          const jit = cav ? 0.3 : 0.12;
-          push((k + 0.5) * du - w / 2 + (rnd(r * 300 + k) - 0.5) * du * jit, v0 - r * dv + (rnd(r * 300 + k + 7) - 0.5) * dv * jit, kind, 0, cav ? ((r * 3 + k) % 4) << 4 : 0, r);
+          // les rangs de derrière décalés d'une demi-file : on voit les hommes entre les épaules du rang de devant
+          const jit = cav ? 0.3 : 0.12, stag = cav || col ? 0 : (r & 1) * 0.5 * du;
+          push((k + 0.5) * du - w / 2 + stag + (rnd(r * 300 + k) - 0.5) * du * jit, v0 - r * dv + (rnd(r * 300 + k + 7) - 0.5) * dv * jit, kind, 0, cav ? ((r * 3 + k) % 4) << 4 : 0, r);
         }
         const rear = v0 - ranks * dv;
         if (cav) {
@@ -473,10 +475,10 @@ export class UnitArt {
           // porte-drapeau au milieu du premier rang (à la place d'un homme), tambours, officiers et colonel derrière
           const mid = out.reduce((b, f, i) => (f[5] === 0 && Math.abs(f[0]) < Math.abs(out[b][0]) ? i : b), 0);
           out[mid][2] = 'drapeau'; out[mid][5] = -2;
-          push(-du * 2, rear - sp * 0.5, 'tambour'); push(du * 2, rear - sp * 0.6, 'tambour');
-          for (const f of [-0.42, 0.42]) push(f * w, rear - sp * 0.6, 'officier');
-          if (n > 60) push(0, rear - sp * 2.8, 'colonel');
-          if (col) push(-w / 2 - sp, d / 2 - sp, 'officier');
+          push(-du * 2, rear - sr * 0.5, 'tambour'); push(du * 2, rear - sr * 0.6, 'tambour');
+          for (const f of [-0.42, 0.42]) push(f * w, rear - sr * 0.6, 'officier');
+          if (n > 60) push(0, rear - sr * 3, 'colonel');
+          if (col) push(-w / 2 - sp, d / 2 - sr, 'officier');
         }
       }
       // déroute : chacun pour soi, éparpillés vers l'arrière ; mêlée : les rangs se brouillent
@@ -500,23 +502,30 @@ export class UnitArt {
     if (z < 0.22) { for (const un of list) { ctx.globalAlpha = un._ghost ? 0.4 : un._fade ?? 1; this.drawBlock(ctx, un, view, colors[un.side] || '#888', z); } ctx.globalAlpha = 1; return; }
     // écartement des figurines (m) : une largeur d'homme à l'écran ; au-delà du budget de la qualité, chaque
     // figurine compte plus d'hommes
-    const sp = Math.pow(1.1, Math.round(Math.log(0.5 * H / z) / Math.log(1.1)));   // par paliers : pas de nouvelle disposition à chaque image d'un zoom
+    const sp = 0.5 * H / z;
     let want = 0;
     for (const un of list) want += Math.min(un.men || 0, (un.w / sp + 2) * (clsOf(un) === 'cavalerie' ? 2 : un.form === 'colonne' ? Math.max(3, un.d / (sp * 0.7)) : un.form === 'carre' ? 12 : 3));
-    const crowd = Math.max(1, want / (this.q?.figures ?? 9000));
+    // (par paliers de 25 % : le nombre d'hommes par figurine ne change pas à chaque image, ni la disposition)
+    const crowd = Math.pow(1.25, Math.max(0, Math.ceil(Math.log(want / (this.q?.figures ?? 9000)) / Math.log(1.25))));
     for (const un of list) this.drawUnit(ctx, view, un, time, colors[un.side] || '#888', H, sp, crowd);
     ctx.globalAlpha = 1;
   }
   drawUnit(ctx, view, un, time, col, H, sp, crowd) {
     const z = view.z, dpr = view.dpr || 1, fxT = view.fxT ?? time, cls = clsOf(un), cav = cls === 'cavalerie';
     const { w, d } = un, c = Math.cos(un.dir), s = Math.sin(un.dir);
-    // repère : avant (c, s), front (−s, c)
-    const P = (uu, vv) => view.toScreen(un.x + c * vv - s * uu, un.y + s * vv + c * uu);
+    // repère : avant (c, s), front (−s, c) ; la projection est affine : calculée ici sans passer par toScreen
+    const [ox, oy] = view.toScreen(un.x, un.y), zt = z * TILT;
     ctx.globalAlpha = un._ghost ? 0.4 : un._fade ?? 1;
+    // écartements à l'écran : côte à côte, une largeur d'homme ; l'un derrière l'autre (vers le haut de l'écran), les
+    // têtes dépassent des épaules du rang de devant. Par paliers : pas de nouvelle disposition à chaque image.
+    const step = x => Math.pow(1.1, Math.round(Math.log(x) / Math.log(1.1)));
+    const nf = Math.hypot(s, c * TILT), nr = Math.hypot(c, s * TILT);
+    const spF = step(H * (0.45 * Math.abs(s) + 0.3 * Math.abs(c) * TILT) / nf / (z * nf));
+    const spR = step(H * (0.55 * Math.abs(c) + 0.42 * Math.abs(s) * TILT) / nr / (z * nr));
     // hommes par figurine : autant qu'il faut pour remplir le front à l'écartement voulu, plus si le budget l'exige
-    const slots = cav ? (w / sp + 1) * 2 : un.form === 'colonne' ? (w / sp + 1) * Math.max(3, d / (sp * 0.7)) : un.form === 'carre' ? (w / sp + 1) * 8 : (w / sp + 1) * 3;
+    const slots = (w / spF + 1) * (cav ? 2 : un.form === 'colonne' ? Math.max(3, d / spR) : un.form === 'carre' ? 8 : 3);
     const per = Math.max(1, Math.round(Math.max(1, (un.men || 1) / slots) * crowd * 2) / 2);
-    const lay = this.layout(un, w, d, sp, per);
+    const lay = this.layout(un, w, d, spF, spR, per);
     const face0 = facingOf(un.dir);
     const moving = un.to && un.from && Math.hypot(un.to.x - un.from.x, un.to.y - un.from.y) > 0.3;
     const march = un.state === 'marche' || (moving && un.state !== 'charge' && un.state !== 'deroute');
@@ -559,8 +568,7 @@ export class UnitArt {
           pose = cyc < 0.18 ? AIM : cyc < 0.62 ? RELOAD : STAND;
         }
       }
-      const [sx, sy] = P(uu, vv);
-      items.push(sy, sx, kind, face, pose, bob, rank);
+      items.push(oy + (s * vv + c * uu) * zt, ox + (c * vv - s * uu) * z, kind, face, pose, bob, rank);
     }
     // du fond vers le devant
     const n = items.length / 7, order = Array.from({ length: n }, (_, i) => i).sort((a, b) => items[a * 7] - items[b * 7]);
@@ -579,7 +587,7 @@ export class UnitArt {
   // drapeau qui flotte au vent : la hampe, l'étoffe en bandes ombrées selon l'ondulation ; avant 1790, la croix
   // blanche des drapeaux d'ordonnance ; ensuite un losange blanc au centre
   flag(ctx, x, y, H, col, un, time, face, small) {
-    const pole = H * (small ? 1.55 : 1.85), fw = H * (small ? 0.62 : 0.95), fh = H * (small ? 0.42 : 0.66);
+    const pole = H * (small ? 1.7 : 2.6), fw = H * (small ? 0.7 : 1.3), fh = H * (small ? 0.48 : 0.85);
     const px = x + (face === 3 ? -H * 0.1 : face === 1 ? H * 0.12 : H * 0.03), top = y - pole;
     ctx.strokeStyle = '#3d2c1a'; ctx.lineWidth = Math.max(1, H * 0.045);
     ctx.beginPath(); ctx.moveTo(px, y - H * 0.55); ctx.lineTo(px, top); ctx.stroke();
@@ -598,7 +606,8 @@ export class UnitArt {
     const poly = pts => { ctx.beginPath(); pts.forEach(([f, v], k) => { const [a, b] = at(f, v); if (k) ctx.lineTo(a, b); else ctx.moveTo(a, b); }); ctx.closePath(); ctx.fill(); };
     if (this.year < 1790) { poly([[0.42, 0], [0.58, 0], [0.58, 1], [0.42, 1]]); poly([[0, 0.4], [1, 0.4], [1, 0.6], [0, 0.6]]); }
     else poly([[0.5, 0.08], [0.88, 0.5], [0.5, 0.92], [0.12, 0.5]]);
-    ctx.strokeStyle = 'rgba(30,20,10,0.35)'; ctx.lineWidth = 0.8;
+    // frange dorée
+    ctx.strokeStyle = 'rgba(214,182,90,0.9)'; ctx.lineWidth = Math.max(0.8, H * 0.03);
     ctx.beginPath(); for (let k = 0; k <= N; k++) { const [a, b] = at(k / N, 0); if (k) ctx.lineTo(a, b); else ctx.moveTo(a, b); }
     for (let k = N; k >= 0; k--) { const [a, b] = at(k / N, 1); ctx.lineTo(a, b); } ctx.closePath(); ctx.stroke();
   }
