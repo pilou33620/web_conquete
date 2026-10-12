@@ -71,9 +71,10 @@ Pendant la bataille
 - Décrochage en bon ordre quand la bataille est perdue (pertes, rapport de forces vu, moral, nuit), jamais pour le
   défenseur d'une place : passé wd_loss de pertes (les troupes en déroute comptent pour moitié) si l'ennemi est nettement
   plus fort, ou passé wd_loss + 7 % dans un combat égal ; l'assaillant qui mène l'attaque accepte 5 % de plus.
-  Obstination selon la situation (_tenacity, TEN_*) : on accepte jusqu'à 14 % de pertes de plus quand on a l'avantage
-  (ennemi plus éprouvé que nous, rapport de forces vu favorable, ennemi en déroute, réserves fraîches) ou qu'on tient
-  une bonne position en défense ; sans rien de tout cela, on décroche 3 % plus tôt.
+  Obstination selon la situation (_tenacity, TEN_*) : on accepte jusqu'à 18 % de pertes de plus quand on a l'avantage
+  (l'ennemi a perdu plus d'hommes que nous, à l'aune de l'échange ordinaire où l'assaillant perd 20 % de plus ; rapport
+  de forces vu favorable ; ennemi en déroute ou ébranlé ; réserves fraîches) ou qu'on tient une bonne position en
+  défense (crête, haies, murets, bois, bâti) ; sans rien de tout cela, on décroche 3 % plus tôt.
 
 Niveaux (battle.difficulty ; spec['ai_levels'] = [niveau du camp 0, du camp 1] et spec['ai_tweak'] pour les essais).
 Ils ne changent que la qualité des décisions, jamais les dégâts :
@@ -84,10 +85,12 @@ Ils ne changent que la qualité des décisions, jamais les dégâts :
 - normal : correcte : terrain, cohésion, carrés, charges choisies, contre-charges, mitraille prudente, ordre dispersé,
   réserves pour les trous, les relèves et les flancs, batteries enlevées à la baïonnette ;
 - difficile : réfléchit toutes les 6 s ; s'arrête à pleine portée efficace et avance par bonds réguliers ; terrain plus
-  fouillé (crêtes, haies, lisières, canons cachés) ; attend que l'artillerie ait ébranlé l'ennemi ; ordre oblique
-  qui déborde l'aile la plus faible, loin des batteries ennemies ; réserves qui prolongent une ligne débordée et
-  contre-attaquent les percées ; légers qui prennent l'ennemi de flanc ; cavalerie qui ne s'expose pas aux
-  contre-charges ; contre-offensive plus tôt.
+  fouillé (crêtes, haies, lisières, canons cachés) ; attend que l'artillerie ait ébranlé l'ennemi ; réserves qui
+  prolongent une ligne débordée et contre-attaquent les percées ; légers qui prennent l'ennemi de flanc ; cavalerie
+  qui ne s'expose pas aux contre-charges ; contre-offensive plus tôt ; le général va chercher ses fuyards plus loin.
+  (L'ordre oblique a été retiré, et les essais d'aile refusée, d'attaque concentrée de flanc au bout de l'aile ennemie
+  et de contre-batterie d'abord n'ont pas été gardés : sur 96 batailles chacun, ils faisaient perdre l'assaillant plus
+  souvent ; voir le rapport de mise au point.)
 
 Vue : l'IA ne lit que les ennemis repérés par son camp (battle.visible_enemies) et sa mémoire de ce qu'elle a vu
 (positions, effectifs, état ; batteries et leur portée de mitraille), plus ce que le joueur sait aussi : le terrain
@@ -134,14 +137,12 @@ FIRE_LONG = 900.0   # durée de fusillade avant la baïonnette à forces égales
 # assaut d'une place : vagues de plus après la première, au plus (avec les troupes ralliées depuis, qui ne restent plus
 # en réserve : une seule suffit, deux feraient tomber les places bien plus souvent qu'avant)
 ASSAULT_WAVES = 1
-EXCHANGE = 1.2      # l'assaillant perd d'ordinaire 20 % de plus que le défenseur à couvert (obstination)
-REFUSE_K = 1.7      # ordre oblique : l'aile refusée s'arrête à 1,7 fois la portée efficace (hors de la fusillade utile)
-WING_SIDE = 160.0   # attaque concentrée : le groupe se porte à 160 m au-delà du bout de l'aile ennemie, puis charge
 # obstination selon la situation (_tenacity) : supplément de pertes accepté avant de décrocher quand l'ennemi a perdu
-# plus que nous (tués, blessés, prisonniers : une fois et demie l'écart, au plus TEN_TRIED), quand le rapport de forces vu
-# est favorable, quand
-# l'ennemi a des troupes en déroute, qu'il nous reste des réserves fraîches, que la ligne du défenseur tient une bonne
-# position ; au plus TEN_MAX en tout. Rien de tout cela : on décroche plus tôt (TEN_NONE)
+# plus que nous (tués, blessés, prisonniers, à l'aune d'EXCHANGE : TEN_TRIED_K fois l'écart, au plus TEN_TRIED), quand le
+# rapport de forces vu est favorable, quand l'ennemi a des troupes en déroute ou est ébranlé, qu'il nous reste des
+# réserves fraîches, que la ligne du défenseur tient une bonne position ; au plus TEN_MAX en tout. Rien de tout cela :
+# on décroche plus tôt (TEN_NONE)
+EXCHANGE = 1.2      # (l'assaillant perd d'ordinaire 20 % de plus que le défenseur à couvert)
 TEN_TRIED, TEN_TRIED_K, TEN_RATIO, TEN_ROUT, TEN_RES, TEN_POS, TEN_MAX, TEN_NONE = \
     0.12, 2.0, 0.03, 0.03, 0.03, 0.04, 0.18, -0.03
 # le général va chercher ses fuyards jusqu'à FETCH_REACH (m) selon le niveau (facile : il ne bouge pas), sans
@@ -154,19 +155,19 @@ LEVELS = {
                    cav_pick=False, counter=False, col_late=True, res_early=True, flank=False, relief=False,
                    art_pick=False, wd_loss=0.18, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
                    grape=0, assault_prep=40 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False,
-                   storm=False, oblique=False, extend=False, flankfire=False, ten_k=0.0),
+                   storm=False, extend=False, flankfire=False, ten_k=0.0),
     'normal': dict(n=1, period=10.0, jitter=4.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=1,
                    cohesion=True, bound=220.0, halt=(0.82, 0.92), prep=12 * 60, prep_max=25 * 60, cav_r=430.0,
                    cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
                    art_pick=True, wd_loss=0.22, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
                    grape=1, assault_prep=60 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False,
-                   storm=True, oblique=False, extend=False, flankfire=False, ten_k=1.0),
+                   storm=True, extend=False, flankfire=False, ten_k=1.0),
     'difficile': dict(n=2, period=6.0, jitter=0.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=2,
                       cohesion=True, bound=220.0, halt=(0.88, 0.98), prep=15 * 60, prep_max=35 * 60, cav_r=430.0,
                       cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
                       art_pick=True, wd_loss=0.25, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
                       grape=1, assault_prep=70 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True,
-                      storm=True, oblique=True, extend=True, flankfire=True, ten_k=1.0, gz=1.0),
+                      storm=True, extend=True, flankfire=True, ten_k=1.0),
 }
 
 
@@ -1335,8 +1336,10 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         return
     # --------------------------------------------------------------- assaillant (ou contre-attaque)
     ax, ay = mem['ax'], mem['ay']
-    shift = _oblique(b, mem, L, body, plan, width) if ph in ('attente', 'marche', 'prepa', 'assaut') else None
-    if shift is None and body and abs(lat_c) > width / 2 and L['n'] >= 1:
+    # (l'ordre oblique du difficile, qui portait toute la ligne contre l'aile ennemie la plus faible, a été retiré :
+    # sur 96 batailles, l'assaillant difficile gagnait 27 fois avec, 36 sans ; la mitraille à bout portant le punissait)
+    shift = None
+    if body and abs(lat_c) > width / 2 and L['n'] >= 1:
         shift = lat_c * 0.5   # l'ennemi n'est pas en face : la ligne glisse vers lui
     if shift and abs(shift) > 30:
         step = max(-140.0, min(140.0, shift))
@@ -1401,7 +1404,7 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         if done:
             _set_phase(b, mem, 'assaut', "fin de la préparation : la ligne avance par bonds.")
     ph = mem['phase']
-    batteries = _gun_zones(b, mem, k=L.get('gz')) if L['n'] >= 1 else []
+    batteries = _gun_zones(b, mem) if L['n'] >= 1 else []
     # (assaut général : on serre l'ennemi et on enlève ses canons, de flanc ; on brave la mitraille, mais pas sa gerbe
     # serrée à moins de 150 m d'une batterie en ordre, qui faucherait les files entières)
     guns = [(gx, gy, BT.GRAPE_CLOSE + 20, gid) for gx, gy, gr, gid in batteries] if mem.get('general_assault') \
@@ -1426,14 +1429,11 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         else:
             ez = b.zone(1 - side)
             _advance(b, mem, L, line, min(250.0, _rel((ez[0] + ez[2]) / 2, (ez[1] + ez[3]) / 2, ax, ay, fd)[0]))
-    # ordres de la ligne ; ordre oblique (difficile) : l'aile refusée reste hors de portée efficace, elle fixe l'ennemi
-    # sans s'user pendant que l'aile d'attaque l'emporte sur son point faible
-    obl = mem.get('obl') if L['oblique'] and plan in ('frontal', 'artillerie') else None
+    # ordres de la ligne
     for u in line:
         sx, sy = _slot(mem, u.id)
         if mem['phase'] == 'combat' and L['n'] >= 1:
-            refused = obl and mem['lat'].get(u.id, 0.0) * obl < -0.1 * width
-            sx, sy = _fine_halt(b, side, mem, L, sx, sy, body, max(halt, REFUSE_K * e_inf) if refused else halt)
+            sx, sy = _fine_halt(b, side, mem, L, sx, sy, body, halt)
         if guns:
             sx, sy = _out_of_grape(guns, sx, sy, fd)
         fdist = _foe_dist(u, body)
@@ -1442,10 +1442,6 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         _storm_guns(b, side, mem, us, foes, batteries, busy)
     if plan == 'debordement':
         _flank_group(b, side, mem, L, us, foes, sit, want, busy, body)
-    if obl:
-        mem['focus'] = _wing_end(b, side, mem, foes) if mem['phase'] in ('prepa', 'assaut', 'combat') else None
-        if mem['phase'] == 'combat':
-            _wing_attack(b, side, mem, us, foes, want, busy)
     _lights_att(b, side, mem, L, us, foes, sit, want, body, front, halt)
 
 
@@ -1512,40 +1508,6 @@ def _out_of_grape(guns, x, y, fd):
             break
         x, y = _clamp(*_at(x, y, fd, -40))
     return x, y
-
-
-def _oblique(b, mem, L, body, plan, width):
-    """Ordre oblique (difficile) : la ligne se décale pour déborder une aile ennemie, la plus faible, d'un tiers
-    de sa longueur ; ses bataillons d'aile la prennent de flanc (_fine_halt). Renvoie le décalage latéral voulu."""
-    if not L['oblique'] or plan not in ('frontal', 'artillerie') or not body:
-        return None
-    fd = mem['fd']
-    pts = [(_rel(x, y, mem['ax'], mem['ay'], fd), k) for k, x, y, cls, form in body]
-    front = min(d for (d, l), k in pts)
-    pts = [(d, l, k) for (d, l), k in pts if d < front + 350]
-    if len(pts) < 2:
-        return None
-    lo, hi = min(l for d, l, k in pts), max(l for d, l, k in pts)
-    s = mem.get('obl')
-    if s is None:
-        # l'aile la moins garnie (d'après les effectifs vus près de chaque bout)
-        vu = mem['vu']
-        men = {1: 0.0, -1: 0.0}
-        for d, l, k in pts:
-            if l > hi - 260:
-                men[1] += vu.get(k, [0, 0, 0, 0])[3]
-            if l < lo + 260:
-                men[-1] += vu.get(k, [0, 0, 0, 0])[3]
-        for gx, gy, gr, gid in _gun_zones(b, mem):
-            d, l = _rel(gx, gy, mem['ax'], mem['ay'], fd)
-            men[1] += 600 * max(0.0, 1 - abs(hi - l) / 500)
-            men[-1] += 600 * max(0.0, 1 - abs(l - lo) / 500)
-        s = 1 if men[1] <= men[-1] else -1
-        mem['obl'] = s
-        _note(b, mem, f"attaque oblique : la ligne se porte contre l'aile {'gauche' if s > 0 else 'droite'} "
-                      f"de l'ennemi pour la déborder.")
-    end = hi if s > 0 else lo
-    return end - s * 0.15 * width
 
 
 def _recenter(mem, line):
@@ -1908,71 +1870,6 @@ def _lights_att(b, side, mem, L, us, foes, sit, want, body, front, halt):
         if L['terrain'] and c:
             x, y = c[1], c[2]
         want[u.id] = [x, y, mem['fd'], 'tirailleurs', False]
-
-
-def _wing_end(b, side, mem, foes):
-    """Ordre oblique (difficile) : le bataillon ennemi qui termine l'aile attaquée (à moins de 450 m devant la ligne),
-    que nos canons pilonnent et que l'attaque concentrée prendra de flanc ; None s'il n'y en a pas."""
-    ax, ay, fd, s = mem['ax'], mem['ay'], mem['fd'], mem.get('obl')
-    cand = [e for e in foes if e.valid and e.cls == 'inf' and _rel(e.x, e.y, ax, ay, fd)[0] < 450]
-    return max(cand, key=lambda e: _rel(e.x, e.y, ax, ay, fd)[1] * s).id if cand and s else None
-
-
-def _wing_attack(b, side, mem, us, foes, want, busy):
-    """Attaque concentrée (difficile, ordre oblique) : plutôt que d'assaillir tout le front, deux ou trois bataillons
-    frais (ceux de l'aile d'attaque, puis la réserve) se portent au-delà du bataillon ennemi qui termine l'aile
-    attaquée, puis le chargent de flanc (ni feu de défense, choc plus rude) ; ensuite le suivant (on roule la ligne).
-    mem['wa'] : [id de la cible, [ids du groupe], début, étape]."""
-    s = mem.get('obl')
-    now = b.clock
-    roles = mem['role']
-    fd = mem['fd']
-    wa = mem.get('wa')
-    if wa:
-        tgt = b.unit(wa[0])
-        grp = [u for u in us if u.id in wa[1] and u.valid and u.state != 'melee']
-        if tgt is None or not tgt.valid or tgt.id not in b.seen_by[side] or not grp or now - wa[2] > 1200:
-            mem['wa'] = None
-            mem['wa_t'] = round(now)
-            return
-        if wa[3] == 2:
-            busy.update(u.id for u in grp)
-            return
-        px, py = _clamp(*_at(tgt.x, tgt.y, fd, 0, s * WING_SIDE))
-        near = [u for u in grp if _d2(u.x, u.y, px, py) < 100 ** 2]
-        flank = [u for u in grp if _ang(tgt.dir, math.atan2(u.y - tgt.y, u.x - tgt.x)) > 1.2]
-        if len(near) >= max(1, len(grp) - 1) or (len(flank) == len(grp) and now - wa[2] > 300):
-            for u in grp:
-                if _charge_ok(b, side, u, tgt):
-                    b.order(side, [u.id], 'charge', target=tgt.id)
-                busy.add(u.id)
-            wa[3] = 2
-            _note(b, mem, f"{' et '.join(u.name for u in grp)} chargent de flanc le {_foe(tgt)}, au bout de la "
-                          f"ligne ennemie.")
-            return
-        for k, u in enumerate(grp):
-            x, y = _clamp(*_at(px, py, fd, -40 * k, s * 50 * k))
-            want[u.id] = [x, y, math.atan2(tgt.y - y, tgt.x - x), 'colonne', False]
-        return
-    if now - mem.get('wa_t', -1e9) < 300:
-        return
-    tgt = b.unit(mem.get('focus'))
-    if tgt is None or not tgt.valid or tgt.form == 'carre' or tgt.id not in b.seen_by[side]:
-        return
-    guns = _gun_zones(b, mem, 300.0)
-    px, py = _at(tgt.x, tgt.y, fd, 0, s * WING_SIDE)
-    if any(_d2(gx, gy, px, py) < gr * gr for gx, gy, gr, gid in guns) or _cav_near(b, mem, px, py, 500, 240):
-        return
-    pool = [u for u in us if u.cls == 'inf' and not u.light and u.valid and u.busy <= 0 and u.id not in busy and
-            u.state not in ('melee', 'charge') and u.morale > 60 and u.men > 0.6 * u.men0 and
-            (roles.get(u.id) == 'res' or (roles.get(u.id) == 'ligne' and mem['lat'].get(u.id, 0.0) * s > 0))]
-    pool.sort(key=lambda u: (roles.get(u.id) != 'ligne', _d2(u.x, u.y, px, py)))
-    grp = pool[:3]
-    if len(grp) < 2 or sum(u.men for u in grp) < 1.8 * tgt.men:
-        return
-    mem['wa'] = [tgt.id, [u.id for u in grp], round(now), 1]
-    _note(b, mem, f"attaque concentrée : {', '.join(u.name for u in grp)} tournent le {_foe(tgt)}, au bout de "
-                  f"l'aile attaquée.")
 
 
 def _flank_group(b, side, mem, L, us, foes, sit, want, busy, body):
@@ -2736,7 +2633,7 @@ def _artillery(b, side, mem, L, us, foes, sit, want, busy):
         # cible
         if not L['art_pick']:
             continue   # facile : les canons tirent sur ce qui se présente (choix du moteur)
-        tgt = _art_target(b, u, foes, ours, mem, mx, e, g, L['oblique'])
+        tgt = _art_target(b, u, foes, ours, mem, mx, e, g)
         if tgt is not None and (u.target != tgt.id or not u.order or u.order.get('kind') != 'attack'):
             b.order(side, [u.id], 'attack', target=tgt.id)
 
@@ -2814,10 +2711,7 @@ def _gun_spot_view(b, side, x, y, fd, r, tg, reach, ahead):
     return best
 
 
-def _art_target(b, u, foes, ours, mem, mx, e_r, g, cb=False):
-    """Cible d'une batterie : ce que la mitraille ou le boulet touche le mieux, les canons qui menacent nos lignes, les
-    cavaliers, le chariot. cb (difficile) : contre-batterie d'abord, les canons ennemis à portée efficace avant tout (leur
-    mitraille à bout portant interdirait l'assaut), puis le bout de l'aile qu'on va attaquer (mem['focus'])."""
+def _art_target(b, u, foes, ours, mem, mx, e_r, g):
     best, bv = None, 0.0
     cur = u.target
     bout = mem.get('bout') if mem['plan'] == 'assaut' else None
@@ -2835,7 +2729,7 @@ def _art_target(b, u, foes, ours, mem, mx, e_r, g, cb=False):
         if t.cls == 'artillerie':
             g_t = b.ranges(t)[2] or 280
             threat = min((_d2(t.x, t.y, o.x, o.y) for o in ours), default=1e12) < (g_t + 60) ** 2
-            v *= ((2.0 if threat else 1.4) * (1.8 if cb else 1.0)) if d <= e_r else 1.0
+            v *= (2.0 if threat else 1.4) if d <= e_r else 1.0
         elif t.cls == 'cavalerie':
             v *= 1.3
         elif t.cls == 'chariot':
@@ -2847,8 +2741,6 @@ def _art_target(b, u, foes, ours, mem, mx, e_r, g, cb=False):
             v *= 1 + 0.6 * (1 - math.sqrt(near) / 400)
         if bout and _d2(t.x, t.y, bout[0], bout[1]) < 260 ** 2:
             v *= 1.6
-        if t.id == mem.get('focus'):
-            v *= 1.4   # (ordre oblique : on pilonne le bout de l'aile qu'on va prendre de flanc)
         if t.id == cur:
             v *= 1.25   # (changer de cible coûte du temps de pointage)
         if v > bv and b.los_units(u, t):
