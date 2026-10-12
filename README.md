@@ -372,13 +372,13 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   recomplète) ; les bois cachent les troupes, la nuit arrête le combat.
 - **« Finir automatiquement »** confie la suite à vos officiers : la vraie bataille continue, avec les mêmes règles,
   l'IA commandant vos régiments (au niveau « normal », quelle que soit la difficulté) contre celle de l'ennemi, et le
-  serveur la joue aussi vite qu'il le peut — quelques secondes sur un PC, une minute environ sur un Raspberry Pi pour
-  une longue journée. Vous la voyez défiler sous un bandeau « Les généraux poursuivent la bataille… » (l'heure, la
-  journée jusqu'à la nuit) ; **« Reprendre le commandement »** vous rend la main, bataille en pause. Pendant
-  l'accéléré, vos ordres et les vitesses n'ont pas cours ; « Décrocher » reste possible. Le récapitulatif et le report
-  en campagne sont ceux d'une bataille commandée, et une partie enregistrée en plein accéléré reprend en accéléré.
-  Munitions et fatigue restent d'une bataille à l'autre : elles se recomplètent en campagne (vite chez soi, peu en
-  pays ennemi).
+  serveur la joue aussi vite qu'il le peut sans cesser de répondre — une dizaine de secondes en général sur un PC,
+  une demi-minute à deux minutes sur un Raspberry Pi 4. Vous la voyez défiler sous un bandeau « Les généraux
+  poursuivent la bataille… » (l'heure, la journée jusqu'à la nuit) ; **« Reprendre le commandement »** vous rend la
+  main, bataille en pause. Pendant l'accéléré, vos ordres et les vitesses n'ont pas cours ; « Décrocher » reste
+  possible. Le récapitulatif et le report en campagne sont ceux d'une bataille commandée, et une partie enregistrée
+  en plein accéléré reprend en accéléré. Munitions et fatigue restent d'une bataille à l'autre : elles se
+  recomplètent en campagne (vite chez soi, peu en pays ennemi).
 
 #### Conduire une bataille
 - **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît en vue
