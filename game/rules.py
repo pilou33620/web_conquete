@@ -611,6 +611,17 @@ PHASE_W = {
     'charge': dict(artillerie=0.5, inf=1.0, cavalerie=1.25),
 }
 OPEN_TERRAIN = ('Plaine', 'Vignoble', 'Lande', 'Collines')
+# résolution automatique (engine.update_battles, end_battle), recalée sur les batailles jouées sur le champ de bataille :
+# comme l'IA des batailles commandées, un camp dominé cède avant la déroute. Hors d'une place, passé WD_LOSS de
+# pertes (part de ses hommes) face à un ennemi plus fort (sa puissance sous WD_RATIO fois celle de l'ennemi), ou
+# WD_EVEN_LOSS dans un combat égal (sous WD_EVEN), il décroche en bon ordre ; l'assaillant accepte WD_ATT de plus.
+# Le défenseur d'une place ne décroche pas : dominé, passé WD_PLACE_LOSS, il la rend.
+WD_LOSS, WD_RATIO, WD_EVEN_LOSS, WD_EVEN, WD_ATT, WD_PLACE_LOSS = 0.12, 0.8, 0.19, 1.0, 0.0, 1.0
+# poursuite d'un vaincu rompu (part de ses hommes rattrapés, avec ou sans cavalerie chez le vainqueur) ; prisonniers :
+# part des pertes au combat du vaincu, et des rattrapés
+PURSUIT_CAV, PURSUIT_FOOT = 0.10, 0.04
+PRISON_LOSS, PRISON_CAUGHT = 0.2, 0.6
+LOSER_MORALE = 100           # moral au plus du vaincu qui se retire (rompu ou en bon ordre)
 
 # ------------------------------------------------------------------ espions, impôts, fleuves
 SPY = {
