@@ -22,9 +22,11 @@ INF_RANGE = [(80, 150), (100, 200), (120, 230), (130, 250), (300, 600), (500, 12
 ART_RANGE = [(500, 900, 250), (600, 1000, 260), (700, 1100, 280), (800, 1200, 300), (1400, 2500, 330),
              (1800, 3000, 360), (2200, 3500, 400)]
 CAV_RANGE = (30, 60)
-# rechargement entre deux salves (s de bataille) : le chargement par la culasse change tout
-INF_RELOAD = [28, 25, 24, 22, 22, 10, 9, 7]
-ART_RELOAD = [40, 38, 34, 32, 32, 26, 12]
+# rechargement entre deux salves (s de bataille) : cadence d'un feu soutenu en bataille (une salve par minute environ
+# pour le fusil à silex, une volée par minute pour les canons lisses), pas celle de l'exercice ; le chargement par la
+# culasse change tout
+INF_RELOAD = [56, 50, 48, 44, 44, 20, 18, 14]
+ART_RELOAD = [80, 76, 68, 64, 64, 52, 24]
 CAV_RELOAD = 30
 
 # caractère de chaque type de troupe

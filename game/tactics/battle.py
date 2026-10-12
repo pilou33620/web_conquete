@@ -104,22 +104,27 @@ BRAKE_CAV = {T_BOIS: 0.45, T_FORET_T: 0.3, T_MARAIS_T: 0.35, T_VIGNE_T: 0.5, T_B
 BRAKE_INF = {T_BOIS: 0.85, T_FORET_T: 0.7, T_MARAIS_T: 0.6, T_VIGNE_T: 0.85, T_BATI: 0.8, T_ROCHE: 0.55,
              T_SABLE: 0.8, T_MUR: 0.5, T_PORTE: 0.5, T_BRECHE: 0.7, T_BARRICADE: 0.7, T_GUE: 0.7}
 # ---- équilibre du combat (voir « Règles de combat » dans l'aide-mémoire) ----
-P_FUSIL = 0.005          # touchés par homme qui tire et par salve, à portée efficace (avant arme, expérience, moral…)
-P_BOULET = 0.2           # touchés par pièce et par coup de boulet à courte distance, sur une ligne à découvert
-P_MITRAILLE = 0.45       # … à mitraille, jusqu'à 30 % de la portée de mitraille (puis de moins en moins : grape_k)
+P_FUSIL = 0.0085         # touchés par homme qui tire et par salve, à portée efficace (avant arme, expérience, moral…)
+P_BOULET = 0.34          # touchés par pièce et par coup de boulet à courte distance, sur une ligne à découvert
+P_MITRAILLE = 0.75       # … à mitraille, jusqu'à 30 % de la portée de mitraille (puis de moins en moins : grape_k)
 P_RECEPTION = 0.04       # feu de défense à bout portant contre une charge, par homme du front
+COVER_K = 1.0            # part du couvert (COVER, haies, murs) qui protège du feu
 CHOC = 0.03              # pertes du choc d'une charge, par homme qui charge (× élan, flanc, ordre de la cible, type)
 MELEE_K = 0.0005         # pertes infligées en mêlée, par homme et par seconde (× force au corps à corps)
 MELEE_MOR = 0.5          # moral perdu par seconde de mêlée, partagé selon le rapport des forces au corps à corps
 GIVE_WAY = 35            # au corps à corps, le plus faible cède du terrain (repli de 100 m) sous ce moral, sans fuir
 FORMED = 50              # moral d'une troupe en ligne ou en colonne qui reçoit une charge de face en bon ordre…
 HOLD = 40                # … et qui, s'il lui en reste autant après le choc, repousse les cavaliers
+FALTER = 50              # une charge d'infanterie qui, sous le feu de défense, tombe sous ce moral s'arrête court
+MOR_REC, MOR_REC_GEN = 0.02, 0.05   # moral regagné par seconde au calme (plus près du général)…
+MOR_GEN_CAP = 1.0        # … jusqu'au moral de départ + 5 (+ cette part du bonus du général), moins la fatigue…
+MOR_WEAR = 0.0           # … et moins MOR_WEAR × la part des hommes perdus
 ROUT_R = 220.0           # une déroute ébranle les amis à moins de 220 m…
 ROUT_MOR = 3.0           # … de 3 points de moral (bataillon de 250 hommes ; deux fois moins près du général)
 # assaut d'une place : l'assaillant l'emporte s'il tient le cœur (au moins HEART_MEN hommes en état de combattre à
 # moins de HEART_R) sans défenseur en état de combattre à moins de HEART_FREE, pendant HEART_HOLD secondes de suite
 HEART_R, HEART_MEN, HEART_FREE, HEART_HOLD = 90.0, 150.0, 200.0, 600.0
-CAPTURE = dict(contact_cav=0.006, contact_inf=0.002,   # part des fuyards rattrapés par pas de 2 s au contact
+CAPTURE = dict(contact_cav=0.006, contact_inf=0.001,   # part des fuyards rattrapés par pas de 2 s au contact
                choc_cav=0.04, choc_inf=0.02,            # … par une charge sur des fuyards
                rupture_cav=0.04, melee_cav=0.03)        # … quand la cavalerie rompt une troupe (choc, mêlée)
 CHARGE_FAT = dict(cav=12.0, inf=6.0)   # fatigue d'une charge menée jusqu'au choc : les chevaux sont essoufflés
@@ -1015,14 +1020,21 @@ class TacticalBattle:
                     if recent:
                         seen.add(e.id)
                         break
-                    if hidden and d2 > near * near:
-                        continue
+                    if hidden and d2 > near * near and (e.light or self._deep(e, o, d2)):
+                        continue   # (un bataillon posté à la lisière, face à qui regarde, se voit ; les légers non)
                     if d2 < 60 * 60 or self.los_units(o, e):
                         seen.add(e.id)
                         break
             self.seen_by[side] = seen
         for u in self.units:
             u.seen = u.id in self.seen_by[1 - u.side]
+
+    def _deep(self, e, o, d2):
+        """L'unité e est-elle enfoncée dans son bois ou ses maisons du côté de l'observateur o (la case à 40 m vers lui
+        est encore du bois ou du bâti) ? Sinon elle est à la lisière, et se voit comme en terrain découvert."""
+        d = math.sqrt(d2) or 1.0
+        t = self.t[self.cell(e.x + (o.x - e.x) / d * 2 * CELL, e.y + (o.y - e.y) / d * 2 * CELL)]
+        return t in WOODS or t == T_BATI
 
     # ------------------------------------------------------------------ une unité
     def _update_unit(self, u, dt):
@@ -1283,10 +1295,10 @@ class TacticalBattle:
             if tr == 'artilleur':
                 mult *= 1.25
             if grape and d <= grape:
-                cas = pcs * P_MITRAILLE * grape_k(d, grape) * mult * VUL_GRAPE.get(tg.form, 1.0) * (1 - cov)
+                cas = pcs * P_MITRAILLE * grape_k(d, grape) * mult * VUL_GRAPE.get(tg.form, 1.0) * (1 - cov * COVER_K)
                 kind = 'mitraille'
             else:
-                cas = pcs * P_BOULET * mult * ball_k(d, e) * VUL_BALL.get(tg.form, 1.0) * (1 - cov * 0.6)
+                cas = pcs * P_BOULET * mult * ball_k(d, e) * VUL_BALL.get(tg.form, 1.0) * (1 - cov * 0.6 * COVER_K)
                 kind = 'canon'
             if tg.cls == 'general':
                 cas *= 0.2
@@ -1298,7 +1310,7 @@ class TacticalBattle:
                 shooters *= 0.5
             mult = R.ARMS['inf'][min(u.arm, len(R.ARMS['inf']) - 1)][2] if u.cls == 'inf' else 0.8
             p0 = P_FUSIL * tk * math.sqrt(mult)
-            cas = shooters * p0 * pr * fat_k * mor_k * xp_k * self._wx_k(u) * (1 - cov) * VUL_FIRE.get(tg.form, 1.0)
+            cas = shooters * p0 * pr * fat_k * mor_k * xp_k * self._wx_k(u) * (1 - cov * COVER_K) * VUL_FIRE.get(tg.form, 1.0)
             cas *= self.light ** 0.5
             if tg.cls == 'general':
                 cas *= 0.3
@@ -1348,7 +1360,8 @@ class TacticalBattle:
             src.killed += cas
         # moral : pertes (surtout brutales), feu de flanc ou de dos
         shock = 1.5 if cas > 0.03 * max(1.0, tg.men + cas) else 1.0
-        if src is not None:
+        if src is not None and not (tg.order and tg.order.get('kind') == 'retreat'):
+            # (une troupe qui se retire en ordre tourne le dos à l'ennemi sans être surprise)
             a = ang_diff(tg.dir, math.atan2(src.y - tg.y, src.x - tg.x))
             if a > 2.3:
                 shock *= 1.8
@@ -1475,7 +1488,7 @@ class TacticalBattle:
             self._damage(a, vol, tg, kind)
             if not a.alive:
                 return
-            if not cav and a.morale < FORMED:
+            if not cav and a.morale < FALTER:
                 # la colonne hésite sous le feu et s'arrête court
                 self._repulse(a, tg, 60.0)
                 self.log(f"La charge de {a.name} s'arrête sous le feu de {tg.name}.", None, a.side)
@@ -1701,7 +1714,9 @@ class TacticalBattle:
         gen = self.general_near(u)
         bonus = (15 if (gen.gen or {}).get('trait') == 'inspirant' else 10) if gen else 0
         calm = self.clock - u.hit_t > 30 and u.state != 'melee'
-        cap = min(100.0, max(u.morale0, 60) + 5 + bonus - u.fat / 4)
+        # le moral remonte au repos, sans jamais retrouver tout à fait son niveau quand la troupe a beaucoup perdu
+        wear = MOR_WEAR * max(0.0, 1 - u.men / max(1.0, u.men0))
+        cap = min(100.0, max(u.morale0, 60) + 5 + bonus * MOR_GEN_CAP - u.fat / 4 - wear)
         if u.state == 'deroute':
             foe = self._nearest_foe_dist(u)
             if foe > 400:
@@ -1711,7 +1726,7 @@ class TacticalBattle:
                     self.log(f"{u.name} se rallie.", u.side)
             return
         if calm and u.morale < cap:
-            rec = 0.02 + (0.05 if gen else 0) + 0.01 * self.cover_at(u.x, u.y)
+            rec = MOR_REC + (MOR_REC_GEN if gen else 0) + 0.01 * self.cover_at(u.x, u.y)
             u.morale = min(cap, u.morale + rec * dt)
         if u.ammo < 1 and u.cls != 'cavalerie' and self._nearest_foe_dist(u) < 400:
             u.morale = max(0.0, u.morale - 0.01 * dt)

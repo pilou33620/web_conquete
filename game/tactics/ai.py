@@ -107,23 +107,27 @@ GUN_EYE = EYES['artillerie']
 # c'est cette zone que la ligne évite
 GRAPE_DEADLY = 0.6
 
+# l'assaillant qui mène l'attaque (plans frontal, artillerie, débordement) ne décroche qu'avec ce supplément de pertes :
+# il sait qu'on n'emporte pas une position sans le payer (même valeur à tous les niveaux)
+ATT_TENACITY = 0.05
+
 LEVELS = {
     'facile': dict(n=0, period=20.0, jitter=12.0, reflex=6.0, sq_r=210.0, sq_miss=0.3, sq_late=True, terrain=0,
                    cohesion=False, bound=600.0, halt=(0.5, 1.45), prep=5 * 60, prep_max=8 * 60, cav_r=330.0,
                    cav_pick=False, counter=False, col_late=True, res_early=True, flank=False, relief=False,
-                   art_pick=False, wd_loss=0.26, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
+                   art_pick=False, wd_loss=0.24, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
                    grape=0, assault_prep=6 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False,
                    storm=False, oblique=False, extend=False, flankfire=False),
     'normal': dict(n=1, period=10.0, jitter=4.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=1,
                    cohesion=True, bound=220.0, halt=(0.82, 0.92), prep=12 * 60, prep_max=25 * 60, cav_r=430.0,
                    cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
-                   art_pick=True, wd_loss=0.32, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
+                   art_pick=True, wd_loss=0.3, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
                    grape=1, assault_prep=12 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False,
                    storm=True, oblique=False, extend=False, flankfire=False),
     'difficile': dict(n=2, period=6.0, jitter=0.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=2,
                       cohesion=True, bound=170.0, halt=(0.78, 0.85), prep=15 * 60, prep_max=35 * 60, cav_r=430.0,
                       cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
-                      art_pick=True, wd_loss=0.35, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
+                      art_pick=True, wd_loss=0.33, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
                       grape=1, assault_prep=15 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True,
                       storm=True, oblique=True, extend=True, flankfire=True),
 }
@@ -963,6 +967,9 @@ def _square(b, side, mem, L, u, cavs):
         coming = best.state == 'charge' or bd < L['sq_r'] * 0.5 or \
             (best.state == 'marche' and _ang(best.dir, math.atan2(u.y - best.y, u.x - best.x)) < 0.6)
         want = coming and (L['n'] == 0 or _charge_ok(b, best.side, best, u))   # (rochers, forêt, eau : pas de charge)
+        if want and L['n'] >= 1 and u.form in ('ligne', 'colonne') and u.busy <= 0 and u.morale >= BT.FORMED + 10 \
+                and u.ammo >= 1 and _ang(u.dir, math.atan2(best.y - u.y, best.x - u.x)) < 1.0:
+            want = False   # une ligne ferme qui voit venir la charge de face la reçoit par son feu (le moteur la repousse)
     forming = u.busy > 0 and u.next_form == 'carre'
     if want and u.form != 'carre' and not forming:
         if not L['sq_late'] and best.state == 'charge' and bd < 110:
@@ -1057,7 +1064,8 @@ def _heavy(b, side, mem, L, us, foes):
 def _situation(b, mem, us, foes):
     combat = [u for u in us if u.cls in ('inf', 'cavalerie', 'artillerie')]
     valid = [u for u in combat if u.valid]
-    mine = sum(u.men for u in valid)
+    # (une troupe en déroute compte pour moitié : la plupart se rallient quelques minutes plus tard)
+    mine = sum(u.men for u in valid) + 0.5 * sum(u.men for u in combat if u.state == 'deroute')
     init = mem.get('init') or mine
     foe = _foe_est(mem)
     mor = sum(u.morale * u.men for u in valid) / max(1.0, mine)
@@ -1073,8 +1081,10 @@ def _situation(b, mem, us, foes):
                 loss=1 - mine / max(1.0, init), mor=mor, routed=routed, e_routed=e_routed, seen=seen)
 
 
-def _stalled(b, mem, sit):
-    """Rien ne bouge depuis 45 min : les effectifs des deux camps (vus) n'ont presque pas changé."""
+def _stalled(b, mem, sit, line=None):
+    """Rien ne bouge depuis 45 min : les effectifs des deux camps (vus) n'ont presque pas changé ; ou notre ligne
+    n'a pas tiré un coup de fusil depuis 30 min alors que l'ennemi n'a presque rien perdu (on se fait canonner de loin
+    sans pouvoir répondre)."""
     now = b.clock
     hist = mem.setdefault('hist', [])
     if not hist or now - hist[-1][0] >= 300:
@@ -1082,7 +1092,14 @@ def _stalled(b, mem, sit):
         if len(hist) > 12:
             del hist[:len(hist) - 12]
     old = [h for h in hist if now - h[0] >= 2700]
-    if not old or mem.get('t_contact') is None:
+    if mem.get('t_contact') is None:
+        return False
+    if line and mem.get('phase') == 'combat' and now - mem.get('t_phase', now) > 1800 and \
+            now - max(u.fired_t for u in line) > 1800:
+        h30 = [h for h in hist if now - h[0] >= 1800]
+        if h30 and h30[-1][2] - sit['foe'] < 0.02 * max(1, h30[-1][2]):
+            return True
+    if not old:
         return False
     h = old[-1]
     return h[1] - sit['mine'] < 0.01 * max(1, h[1]) and h[2] - sit['foe'] < 0.01 * max(1, h[2])
@@ -1096,6 +1113,8 @@ def _decide_withdraw(b, side, mem, L, sit):
     why = None
     tr = b.trait(side)
     k = 0.08 if tr == 'prudent' else (-0.05 if tr == 'audacieux' else 0.0)
+    if side == 0 and plan in ('frontal', 'artillerie', 'debordement'):
+        k -= L.get('wd_att', ATT_TENACITY)   # l'assaillant accepte des pertes plus lourdes pour emporter la position
     if plan == 'harcelement' and mem.get('t_contact') is not None:
         if b.clock - mem['t_contact'] > mem.get('harass_t', 2700) or sit['loss'] > 0.18:
             why = "l'escarmouche a assez duré"
@@ -1110,7 +1129,8 @@ def _decide_withdraw(b, side, mem, L, sit):
         why = 'le moral est brisé'
     elif side == 0 and b.time_left() < 900 and sit['ratio'] < 1.6 and mem.get('t_contact') is not None:
         why = 'la nuit tombe'
-    elif side == 0 and plan != 'harcelement' and _stalled(b, mem, sit):
+    elif side == 0 and plan != 'harcelement' and \
+            _stalled(b, mem, sit, [u for u in sit['valid'] if mem['role'].get(u.id) == 'ligne' and u.cls == 'inf']):
         # (les combats durent : une ligne qui ne gagne plus de terrain n'est pas battue, elle serre au plus près ;
         # on ne décroche qu'après un assaut général manqué, ou nettement plus faible)
         if sit['ratio'] >= 0.85 and L['n'] >= 1 and not mem.get('general_assault'):
@@ -1236,7 +1256,9 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         if done:
             _set_phase(b, mem, 'assaut', "fin de la préparation : la ligne avance par bonds.")
     ph = mem['phase']
-    guns = _gun_zones(b, mem) if L['n'] >= 1 else []
+    batteries = _gun_zones(b, mem) if L['n'] >= 1 else []
+    # (assaut général : on ne craint plus la mitraille, on serre l'ennemi et on enlève ses canons)
+    guns = [] if mem.get('general_assault') else batteries
     if ph == 'combat' and line and now - mem['t_phase'] > 240 and now - max(u.fired_t for u in line) > 240 and \
             not any(_d2(gx, gy, mem['ax'], mem['ay']) < (gr + 250) ** 2 for gx, gy, gr, gid in guns):
         halt *= 0.5   # personne ne tire : l'ennemi est hors de vue ou hors de portée, on serre
@@ -1266,8 +1288,8 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
             sx, sy = _out_of_grape(guns, sx, sy, fd)
         fdist = _foe_dist(u, body)
         want[u.id] = [sx, sy, fd, _march_form(b, mem, L, u, sx, sy, fdist), False]
-    if guns and mem['phase'] in ('assaut', 'combat') and L['storm']:
-        _storm_guns(b, side, mem, us, foes, guns, busy)
+    if batteries and mem['phase'] in ('assaut', 'combat') and L['storm']:
+        _storm_guns(b, side, mem, us, foes, batteries, busy)
     if plan == 'debordement':
         _flank_group(b, side, mem, L, us, foes, sit, want, busy, body)
     _lights_att(b, side, mem, L, us, foes, sit, want, body, front, halt)
@@ -1288,7 +1310,7 @@ def _storm_guns(b, side, mem, us, foes, guns, busy):
         if _cav_near(b, mem, e.x, e.y, 500, 120):
             continue
         cand = [u for u in us if u.cls == 'inf' and not u.light and u.valid and u.id not in busy and
-                u.state not in ('charge', 'melee') and u.busy <= 0 and u.form != 'carre' and u.morale > 65 and
+                u.state not in ('charge', 'melee') and u.busy <= 0 and u.form != 'carre' and u.morale > BT.FORMED + 5 and
                 u.men > 0.6 * u.men0 and roles.get(u.id) in ('ligne', 'res') and
                 _d2(u.x, u.y, e.x, e.y) < 380 ** 2]
         cand.sort(key=lambda u: _d2(u.x, u.y, e.x, e.y))
@@ -1303,14 +1325,14 @@ def _storm_guns(b, side, mem, us, foes, guns, busy):
                       f"l'enlève{'nt' if len(got) > 1 else ''} à la baïonnette.")
 
 
-def _gun_zones(b, mem, maxage=600.0):
+def _gun_zones(b, mem, maxage=600.0, k=None):
     """Batteries ennemies connues (vues depuis moins de 10 min, ni en déroute ni hors de combat) : [(x, y, rayon de
     mitraille meurtrière (60 % de la portée de mitraille) + 40 m, id)]."""
     now = b.clock
     out = []
-    for k, v in mem['vu'].items():
+    for key, v in mem['vu'].items():
         if v[4] == 'artillerie' and now - v[2] <= maxage and v[6] not in ('deroute', 'hors') and v[3] > 25:
-            out.append((v[0], v[1], GRAPE_DEADLY * (v[9] if len(v) > 9 and v[9] else 280) + 40, k))
+            out.append((v[0], v[1], (k or GRAPE_DEADLY) * (v[9] if len(v) > 9 and v[9] else 280) + 40, key))
     return out
 
 
