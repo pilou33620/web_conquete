@@ -391,7 +391,7 @@ def _choose_plan(b, side, mem, L, g, pl):
     ncav, nart = len(g['cav']), len(g['art'])
     harass = L['harass'] + (0.1 if tr == 'prudent' else 0.0) - (0.1 if tr == 'audacieux' else 0.0)
     if side == 0:
-        if r < harass or (camp == 'harcelement' and r < 1.0):
+        if r < harass or (camp == 'harcelement' and r < 1.2):
             return 'harcelement'
         want = camp if camp in ('frontal', 'artillerie', 'debordement') else None
         if want == 'debordement' and (ncav == 0 or L['n'] == 0):
