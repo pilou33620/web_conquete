@@ -34,7 +34,8 @@ prudent → harcèlement plus tôt, audacieux → contre-offensive plus tôt)
 - tenir : défense de la position et usure de l'assaillant ; contre-attaque générale quand il flanche ;
 - harcelement : escarmouche à longue portée (canons, légers), puis retraite (quand on est nettement inférieur) ;
 - assaut : assaut d'une place (une heure de canonnade sur la brèche (40 min en facile, 70 en difficile), diversion,
-  colonnes quand les défenseurs sont usés, puis le cœur ; nouvelle vague, avec les troupes ralliées, si la première est repoussée ou si tout piétine) ;
+  colonnes quand les défenseurs sont usés, puis le cœur ; nouvelle vague, avec les troupes ralliées, si la première
+  est repoussée ou si tout piétine) ;
 - place : défense d'une place.
 
 Pendant la bataille
@@ -987,8 +988,9 @@ def _reflexes(b, side, mem, L, us, foes):
 
 def _square(b, side, mem, L, u, cavs, foes=()):
     """Carré quand des cavaliers menacent ; on reprend sa formation quand ils s'éloignent. Pas de carré sous le fusil
-    de l'infanterie ennemie (à moins de 200 m) tant que les cavaliers ne chargent pas cette troupe : le carré y serait
-    fusillé sans pouvoir répondre."""
+    de l'infanterie ennemie (à moins de 200 m), ni dans la mitraille d'une batterie ennemie connue, tant que les
+    cavaliers ne chargent pas cette troupe : le carré y serait fusillé sans pouvoir répondre. Des cavaliers qui
+    marchent vers nous ne menacent qu'à moins des trois quarts de sq_r (au pas, ils ne surprennent personne)."""
     now = b.clock
     best, bd = None, 1e9
     for e in cavs:
@@ -999,14 +1001,16 @@ def _square(b, side, mem, L, u, cavs, foes=()):
     want = False
     if best is not None and bd < L['sq_r'] and b.terrain_at(u.x, u.y) not in ROUGH:
         coming = best.state == 'charge' or bd < L['sq_r'] * 0.5 or \
-            (best.state == 'marche' and _ang(best.dir, math.atan2(u.y - best.y, u.x - best.x)) < 0.6)
+            (best.state == 'marche' and _ang(best.dir, math.atan2(u.y - best.y, u.x - best.x)) < 0.6 and
+             (L['n'] == 0 or bd < L['sq_r'] * 0.75))
         want = coming and (L['n'] == 0 or _charge_ok(b, best.side, best, u))   # (rochers, forêt, eau : pas de charge)
         if want and L['n'] >= 1 and u.form in ('ligne', 'colonne') and u.busy <= 0 and u.morale >= BT.FORMED + 10 \
                 and u.ammo >= 1 and _ang(u.dir, math.atan2(best.y - u.y, best.x - u.x)) < 1.0:
             # une ligne ferme qui voit venir la charge de face la reçoit par son feu (le moteur la repousse)
             want = False
     shot = L['n'] >= 1 and best is not None and not (best.state == 'charge' and best.target == u.id) and \
-        any(e.cls == 'inf' and e.valid and _d2(e.x, e.y, u.x, u.y) < 200 ** 2 for e in foes)
+        (any(e.cls == 'inf' and e.valid and _d2(e.x, e.y, u.x, u.y) < 200 ** 2 for e in foes) or
+         any(_d2(gx, gy, u.x, u.y) < gr * gr for gx, gy, gr, gid in _gun_zones(b, mem, 300.0)))
     if shot:
         want = False
     forming = u.busy > 0 and u.next_form == 'carre'
