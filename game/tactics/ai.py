@@ -981,7 +981,8 @@ def _square(b, side, mem, L, u, cavs, foes=()):
         want = coming and (L['n'] == 0 or _charge_ok(b, best.side, best, u))   # (rochers, forêt, eau : pas de charge)
         if want and L['n'] >= 1 and u.form in ('ligne', 'colonne') and u.busy <= 0 and u.morale >= BT.FORMED + 10 \
                 and u.ammo >= 1 and _ang(u.dir, math.atan2(best.y - u.y, best.x - u.x)) < 1.0:
-            want = False   # une ligne ferme qui voit venir la charge de face la reçoit par son feu (le moteur la repousse)
+            # une ligne ferme qui voit venir la charge de face la reçoit par son feu (le moteur la repousse)
+            want = False
     shot = L['n'] >= 1 and best is not None and not (best.state == 'charge' and best.target == u.id) and \
         any(e.cls == 'inf' and e.valid and _d2(e.x, e.y, u.x, u.y) < 200 ** 2 for e in foes)
     if shot:

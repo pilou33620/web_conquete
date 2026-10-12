@@ -84,7 +84,8 @@ ctrl ('joueur' | 'ia'). Le chariot de munitions (type 'chariot', ammo = chargeme
 moins de 150 m (4 % de la dotation par minute) ; il se prend s'il reste sans escorte à moins de 40 m d'un ennemi.
 Le général (type 'general') donne +10 de moral à moins de 400 m ; il peut être blessé.
 
-Résolution d'un coup : battle.autofinish() (« Finir automatiquement »).
+Résolution d'un coup : battle.autofinish() (« Finir automatiquement ») : par quarts d'heure, jusqu'à ce qu'un camp
+décroche comme le ferait l'IA (AUTO_WD), soit rompu, ou jusqu'à la nuit ; une place aux murs intacts ne tombe guère.
 Chiffres : DT = 2 s par pas, TIME_K = 18 s de bataille par seconde réelle à ×1, repérage toutes les 4 s, IA toutes
 les 2 s ; fin au crépuscule (DUSK) ; assaut gagné en tenant le cœur de la place 6 min (au moins 150 hommes à 90 m)
 sans défenseur à 160 m.
@@ -158,6 +159,13 @@ CAPTURE = dict(contact_cav=0.004, contact_inf=0.0007,  # part des fuyards rattra
                choc_cav=0.03, choc_inf=0.02,            # … par une charge sur des fuyards
                rupture_cav=0.04, melee_cav=0.03)        # … quand la cavalerie rompt une troupe (choc, mêlée)
 CHARGE_FAT = dict(cav=12.0, inf=6.0)   # fatigue d'une charge menée jusqu'au choc : les chevaux sont essoufflés
+# résolution automatique : comme l'IA, un camp décroche passé AUTO_WD de pertes (déroutés pour moitié) s'il est dominé,
+# passé AUTO_WD + AUTO_EVEN dans un combat égal ; l'assaillant accepte AUTO_ATT de plus ; jamais le défenseur d'une place
+AUTO_WD, AUTO_EVEN, AUTO_ATT = 0.22, 0.07, 0.05
+# … et derrière une enceinte fermée, le défenseur pèse (1 + AUTO_SHUT[0]) fois plus et perd AUTO_SHUT[1] de moins ; des
+# barricades ferment AUTO_BAR × leur densité
+AUTO_SHUT, AUTO_BAR, AUTO_BREACH = (1.0, 0.5), 1.25, 0.95
+AUTO_LUCK = 0.15   # … et le sort des armes : chaque camp pèse de ±15 % pour toute la résolution
 FCOST_K = dict(inf=1.0, light=0.6, cav=2.0, art=2.5)
 WALLISH = {T_MUR: 0.65, T_PORTE: 0.65, T_BRECHE: 0.4, T_BARRICADE: 0.5}
 NARROW = (T_BATI, T_MUR, T_PORTE, T_BRECHE, T_BARRICADE)
@@ -1473,7 +1481,8 @@ class TacticalBattle:
         a.fat = min(100.0, a.fat + CHARGE_FAT['cav' if cav else 'inf'])
         mom *= 0.3 + 0.7 * elan
         tt = self.t[self.cell(tg.x, tg.y)]
-        mom *= (BRAKE_CAV if cav else BRAKE_INF).get(tt, 1.0)   # bois, rochers, marais, maisons, murs : la charge s'y brise
+        # bois, rochers, marais, maisons, murs : la charge s'y brise
+        mom *= (BRAKE_CAV if cav else BRAKE_INF).get(tt, 1.0)
         if cav and self.trait(a.side) == 'cavalier':
             mom *= 1.2
         if self.trait(a.side) == 'audacieux':
@@ -1500,7 +1509,8 @@ class TacticalBattle:
             self._repulse(a, tg)
             self.log(f"La charge de {a.name} se brise sur le carré de {tg.name} !", None, a.side)
             return
-        # feu de défense : de face, une troupe en ordre (ou une batterie chargée) tire à bout portant sur ceux qui chargent
+        # feu de défense : de face, une troupe en ordre (ou une batterie chargée) tire à bout portant sur ceux qui
+        # chargent
         ready = flank == 1.0 and tg.busy <= 0 and tg.ammo >= 1 and tg.state not in ('melee', 'ralliement', 'charge') and \
             ((tg.cls == 'inf' and tg.form in ('ligne', 'colonne', 'tirailleurs')) or
              (tg.cls == 'artillerie' and tg.form == 'batterie'))
@@ -1846,7 +1856,8 @@ class TacticalBattle:
     # ================================================================== résolution automatique (« Finir automatiquement »)
     def autofinish(self):
         """Résout la bataille d'un coup à partir de la situation du moment : effectifs, moral, munitions, fatigue,
-        couverts et hauteurs tenus. Par manches d'un quart d'heure jusqu'à la rupture d'un camp ou la nuit."""
+        couverts et hauteurs tenus. Par manches d'un quart d'heure jusqu'à ce qu'un camp décroche (comme l'IA : voir
+        AUTO_WD), soit rompu, ou jusqu'à la nuit."""
         if self.phase == 'fin':
             return False, "La bataille est terminée."
         if self.phase == 'deploiement':
@@ -1854,6 +1865,17 @@ class TacticalBattle:
         rnd = self.rng
         place = self.objective() is not None
         wall = self.place_info()
+        quits = None
+        # place : enceinte encore fermée (de 0 à 1) ; les brèches l'ouvrent, les barricades la ferment selon leur
+        # densité. Murs fermés, on ne la prend guère que par la faim ; brèche ouverte, l'assaut se joue
+        shut = 0.0
+        pl = self.spec.get('place') or {}
+        if place and pl:
+            if pl.get('fort', 0) >= 1:
+                shut = 1.0 if pl.get('dmg', 0.0) < 0.12 else max(0.0, 1.0 - AUTO_BREACH * pl.get('dmg', 0.0))
+            else:
+                shut = min(1.0, AUTO_BAR * pl.get('bar', 0.0))
+        luck = [rnd.uniform(1 - AUTO_LUCK, 1 + AUTO_LUCK) for _ in (0, 1)]
         for _ in range(80):
             if self.clock >= self.dusk:
                 break
@@ -1875,12 +1897,13 @@ class TacticalBattle:
                     cov = max(cov, 0.25 + 0.1 * wall['fort'])
                 p *= (0.5 + u.morale / 200) * (0.8 + u.xp / 250) * (1 - 0.3 * u.fat / 100)
                 p *= 1 + 0.5 * cov + self.height_at(u.x, u.y) / 400
+                p *= luck[u.side] * (1 + AUTO_SHUT[0] * shut if u.side == 1 else 1.0)
                 P[u.side] += p
                 lists[u.side].append((u, cov))
             if not lists[0] or not lists[1]:
                 break
             for s in (0, 1):
-                dmg = 0.035 * P[1 - s] * rnd.uniform(0.85, 1.15)
+                dmg = 0.035 * P[1 - s] * rnd.uniform(0.85, 1.15) * (1 - AUTO_SHUT[1] * shut if s == 1 else 1.0)
                 tot = sum(u.men * (1 - c * 0.6) for u, c in lists[s]) or 1.0
                 for u, c in lists[s]:
                     share = dmg * u.men * (1 - c * 0.6) / tot
@@ -1898,15 +1921,34 @@ class TacticalBattle:
             v = [any(u.valid for u in self.units if u.side == s) for s in (0, 1)]
             if not v[0] or not v[1]:
                 break
+            # le camp trop éprouvé et dominé décroche en ordre (les pertes comptent pour moitié les déroutés)
+            worst = None
+            for s in (0, 1):
+                if place and s == 1:
+                    continue
+                us = [u for u in self.units if u.side == s and u.cls not in ('general', 'chariot')]
+                m0 = sum(u.men0 for u in us) or 1.0
+                left = sum(u.men * (0.5 if u.state == 'deroute' else 1.0) for u in us if u.state != 'hors')
+                loss, ratio = 1.0 - left / m0, P[s] / max(1.0, P[1 - s])
+                k = AUTO_ATT if s == 0 else 0.0
+                if (loss > AUTO_WD + k and ratio < 0.9) or (loss > AUTO_WD + AUTO_EVEN + k and ratio < 1.0):
+                    if worst is None or ratio < worst[1]:
+                        worst = (s, ratio)
+            if worst:
+                quits = worst[0]
+                break
         for u in self.units:
             if u.state == 'deroute':
                 foe_ok = any(e.valid for e in self.units if e.side != u.side)
                 if foe_ok:
-                    self._capture(None, u, 0.15)
+                    self._capture(None, u, 0.1)
                 u.state = 'hors'
         self.clock = min(self.clock, self.dusk)
         v = [any(u.valid for u in self.units if u.side == s) for s in (0, 1)]
-        if v[0] and not v[1]:
+        if quits is not None:
+            self.finish(1 - quits, True, "Résolution automatique : " +
+                        ("l'assaillant" if quits == 0 else "le défenseur") + " décroche.")
+        elif v[0] and not v[1]:
             self.finish(0, False, "Résolution automatique : le défenseur est rompu.")
         elif v[1] and not v[0]:
             self.finish(1, False, "Résolution automatique : l'assaillant est rompu.")
