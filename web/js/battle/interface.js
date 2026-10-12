@@ -302,7 +302,8 @@ export class BattleUI {
   rallyHint(rs) {
     const gen = this.v.mine().some(x => isGeneral(x) && x.rally);
     if (rs.length && rs.every(x => x.halt)) return gen ? 'Les fuyards se sont arrêtés : les officiers les reforment.' : 'Loin de l’ennemi, les officiers reforment les rangs.';
-    if (gen) return `${rs.length > 1 ? 'En déroute : approchez le général pour les rallier' : 'En déroute : approchez le général pour la rallier'} (cercle doré), loin de l’ennemi, avant qu’ils ne quittent le terrain.`;
+    if (gen) return rs.length > 1 ? 'En déroute : approchez le général pour les rallier (cercle doré), loin de l’ennemi, avant qu’elles ne quittent le terrain.'
+      : 'En déroute : approchez le général pour la rallier (cercle doré), loin de l’ennemi, avant qu’elle ne quitte le terrain.';
     return 'En déroute, sans général pour les rallier : ces hommes ne s’arrêteront que loin de l’ennemi (ou dans les maisons d’une place).';
   }
   foeHtml(u) {

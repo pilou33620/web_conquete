@@ -367,14 +367,6 @@ export class BattleView {
         ctx.setLineDash([10 / z, 8 / z]); ctx.lineDashOffset = -time * 12 / z;
         ctx.beginPath(); ctx.arc(g.x, g.y, g.rally, 0, TAU); ctx.fill(); ctx.stroke();
         ctx.setLineDash([]); ctx.lineDashOffset = 0;
-        // fuyards choisis : un trait léger vers le général le plus proche
-        for (const u of routed) {
-          if (!this.sel.has(u.id)) continue;
-          const near = mine.filter(x => isGeneral(x) && x.rally).reduce((a, x) => (!a || Math.hypot(x.x - u.x, x.y - u.y) < Math.hypot(a.x - u.x, a.y - u.y) ? x : a), null);
-          if (near !== g) continue;
-          ctx.strokeStyle = 'rgba(255,226,150,0.45)'; ctx.lineWidth = 1.2 / z; ctx.setLineDash([4 / z, 6 / z]);
-          ctx.beginPath(); ctx.moveTo(u.x, u.y); ctx.lineTo(g.x, g.y); ctx.stroke(); ctx.setLineDash([]);
-        }
       }
     }
     // ordres en cours de mes unités : trajet pointillé et emplacement d'arrivée
