@@ -121,7 +121,8 @@ export class BattleUI {
     this.el.classList.toggle('accel', accel);
     this.$('.bt-accel').hidden = !accel;
     if (accel) this.accelBar(st);
-    if (accel && !prev?.accel) { if (v.controls.targeting) v.controls.setTargeting(null); this.panelSig = ''; }
+    // (les bulles d'aide parlent de commander : elles se referment quand les officiers prennent la main)
+    if (accel && !prev?.accel) { if (v.controls.targeting) v.controls.setTargeting(null); this.$('.bt-tip').hidden = true; this.panelSig = ''; }
     this.$('[data-a="auto"]').hidden = deploy || st.phase === 'fin' || accel;
     this.$('[data-a="decrocher"]').hidden = st.phase === 'fin';
     for (const bt of this.$('.bt-speed').children) bt.classList.toggle('on', +bt.dataset.v === (st.speed ?? 0) && !deploy && !accel);

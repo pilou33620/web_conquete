@@ -876,9 +876,14 @@ def _adopt(b, side, mem, L, lname, us):
     mem['halt_k'] = round(sum(L['halt']) / 2, 2)
     pl = b.place_info()
     plan = _choose_plan(b, side, mem, L, g, pl)
-    if plan == 'assaut':
-        plan = 'frontal'   # (l'assaut se prépare au déploiement : on reprend en assaut frontal vers le cœur)
     mem['plan'] = mem['plan0'] = plan
+    if plan == 'assaut':
+        # assaut d'une place : le plan du déploiement (colonnes face à la brèche, seconde vague, diversion, canons),
+        # chacun gardant sa place du moment pour poste (la bataille est engagée : b.deploy ne déplace plus personne).
+        # (En assaut frontal, la ligne s'arrêtait hors de vue des défenseurs abrités et attendait la nuit.)
+        _deploy_place_att(b, side, mem, L, g, pl)
+        _note(b, mem, f"l'IA reprend le commandement : {PLAN_LABEL[plan]}.")
+        return
     fd = b.front_dir(side)
     combat = [u for u in us if u.cls in ('inf', 'cavalerie', 'artillerie')] or us
     ax = sum(u.x for u in combat) / len(combat)
