@@ -817,6 +817,13 @@ def _deploy_place_att(b, side, mem, L, g, pl):
                bout=[round(bout[0]), round(bout[1])], bin=[round(bin_[0]), round(bin_[1])],
                div=[round(dpt[0]), round(dpt[1])], a_b=round(a_b, 3), r_in=round(ri))
     inf = sorted(g['inf'] + g['mil'], key=_quality, reverse=True)
+    lights, cavs = list(g['light']), list(g['cav'])
+    # sans assez d'infanterie de ligne (la campagne envoie souvent un bataillon léger ou des cavaliers prendre un
+    # village), les légers forment les colonnes d'assaut ; sans aucun fantassin, les cavaliers donnent l'assaut
+    while len(inf) < 2 and lights:
+        inf.append(lights.pop(0))
+    if not inf and cavs:
+        inf, cavs = cavs, []
     n_inf = len(inf)
     n1 = max(1, min(4, (n_inf + 1) // 2))
     first = inf[:n1]
@@ -834,7 +841,6 @@ def _deploy_place_att(b, side, mem, L, g, pl):
         _put(b, side, mem, u, x, y, fd, 'colonne', 'vague2', lat)
     # diversion : un bataillon et les légers, déployés vers l'autre face
     sgn = 1 if _rel(dpt[0], dpt[1], stx, sty, fd)[1] >= 0 else -1
-    lights = list(g['light'])
     if L['n'] >= 1 and lights:
         div.append(lights.pop(0))
     for k, u in enumerate(div):
@@ -852,7 +858,7 @@ def _deploy_place_att(b, side, mem, L, g, pl):
         if L['terrain']:
             x, y = _gun_spot(b, side, x, y, fd, 90 * L['r_k'], rough=True)
         _put(b, side, mem, u, x, y, fd, 'batterie', 'art', lat)
-    for k, u in enumerate(g['cav']):
+    for k, u in enumerate(cavs):
         w = 1 if k % 2 == 0 else -1
         x, y = _at(stx, sty, fd, -260, w * (220 + 100 * (k // 2)))
         _put(b, side, mem, u, x, y, fd, 'ligne', 'cav', w * 220)
@@ -1351,6 +1357,18 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
             else:
                 ez = b.zone(1 - side)
                 tgt = _rel((ez[0] + ez[2]) / 2, (ez[1] + ez[3]) / 2, ax, ay, fd)[0] - 450
+                seen_once = _body(b, mem, 7200.0)
+                if seen_once:
+                    # l'ennemi a été vu, puis perdu de vue (bois, brouillard) : on marche sur sa dernière position connue
+                    tgt = min(_rel(x, y, ax, ay, fd)[0] for k, x, y, cls, form in seen_once) - standoff
+                elif mem.get('t_probe') is not None or abs(tgt) < 40:
+                    # personne en vue au bout de la marche : l'ennemi attend peut-être dans les bois ; après 5 min, la
+                    # ligne (ses légers devant) va le chercher par bonds, jusqu'au fond de sa zone
+                    t0 = mem.setdefault('t_probe', round(now))
+                    tgt = tgt + 750 if now - t0 > 300 else 0.0
+                    if tgt:
+                        _note_once(b, mem, 'probe', "personne en vue : la ligne s'avance à la recherche de l'ennemi.",
+                                   7200)
             _advance(b, mem, L, line, tgt)
     ph = mem['phase']
     if ph == 'prepa':
