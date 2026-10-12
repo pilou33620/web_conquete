@@ -112,6 +112,7 @@ COVER_K = 1.0            # part du couvert (COVER, haies, murs) qui protège du 
 CHOC = 0.027             # pertes du choc d'une charge, par homme qui charge (× élan, flanc, ordre de la cible, type)
 MELEE_K = 0.00045        # pertes infligées en mêlée, par homme et par seconde (× force au corps à corps)
 MELEE_MOR = 0.5          # moral perdu par seconde de mêlée, partagé selon le rapport des forces au corps à corps
+GANG_CAP = True          # à plusieurs contre un dans un passage étroit (NARROW), la pression ne dépasse pas MELEE_MOR
 GIVE_WAY = 35            # au corps à corps, le plus faible cède du terrain (repli de 100 m) sous ce moral, sans fuir
 FORMED = 50              # moral d'une troupe en ligne ou en colonne qui reçoit une charge de face en bon ordre…
 HOLD = 40                # … et qui, s'il lui en reste autant après le choc, repousse les cavaliers
@@ -120,16 +121,18 @@ MOR_REC, MOR_REC_GEN = 0.02, 0.05   # moral regagné par seconde au calme (plus 
 MOR_GEN_CAP = 1.0        # … jusqu'au moral de départ + 5 (+ cette part du bonus du général), moins la fatigue…
 MOR_WEAR = 0.0           # … et moins MOR_WEAR × la part des hommes perdus
 ROUT_R = 220.0           # une déroute ébranle les amis à moins de 220 m…
-ROUT_MOR = 3.0           # … de 3 points de moral (bataillon de 250 hommes ; deux fois moins près du général)
+ROUT_MOR = 3.0           # … de 3 points de moral (bataillon de 250 hommes ; deux fois moins près du général)…
+ROUT_STEADY = 60         # … s'ils sont déjà ébranlés : rien au-dessus de 60 de moral, tout sous 30
 # assaut d'une place : l'assaillant l'emporte s'il tient le cœur (au moins HEART_MEN hommes en état de combattre à
 # moins de HEART_R) sans défenseur en état de combattre à moins de HEART_FREE, pendant HEART_HOLD secondes de suite
-HEART_R, HEART_MEN, HEART_FREE, HEART_HOLD = 90.0, 150.0, 200.0, 600.0
+HEART_R, HEART_MEN, HEART_FREE, HEART_HOLD = 90.0, 150.0, 160.0, 360.0
 CAPTURE = dict(contact_cav=0.004, contact_inf=0.0007,  # part des fuyards rattrapés par pas de 2 s au contact
                choc_cav=0.03, choc_inf=0.02,            # … par une charge sur des fuyards
                rupture_cav=0.04, melee_cav=0.03)        # … quand la cavalerie rompt une troupe (choc, mêlée)
 CHARGE_FAT = dict(cav=12.0, inf=6.0)   # fatigue d'une charge menée jusqu'au choc : les chevaux sont essoufflés
 FCOST_K = dict(inf=1.0, light=0.6, cav=2.0, art=2.5)
 WALLISH = {T_MUR: 0.65, T_PORTE: 0.65, T_BRECHE: 0.4, T_BARRICADE: 0.5}
+NARROW = (T_BATI, T_MUR, T_PORTE, T_BRECHE, T_BARRICADE)
 OFFROAD = tuple(k for k in range(18) if k not in (T_ROUTE, T_CHEMIN))
 VIEW = {'soleil': 2000, 'nuages': 1800, 'canicule': 1800, 'brouillard': 250, 'pluie': 600, 'orage': 500,
         'neige': 800, 'tempete': 700}
@@ -1542,10 +1545,12 @@ class TacticalBattle:
         elif u.form == 'tirailleurs':
             k *= 0.7
         tt = self.t[self.cell(u.x, u.y)]
-        if tt == T_BATI:
+        if tt in (T_MUR, T_PORTE, T_BARRICADE) and u.side == 0:
+            k *= 0.6   # l'assaillant à cheval sur l'obstacle (à l'échelle, sur la barricade) se bat mal
+        elif tt == T_BATI:
             k *= 1.4
-        elif tt in WALLISH or self._cover_vs(u, foe) >= 0.5:
-            k *= 1.5
+        elif tt != T_BRECHE and self._cover_vs(u, foe) >= 0.5:
+            k *= 1.5   # derrière un mur, une barricade, une haie épaisse
         if foe.cls == 'cavalerie' and tt in (T_BOIS, T_FORET_T, T_MARAIS_T, T_VIGNE_T):
             k *= 1.4
         if self.trait(u.side) == 'audacieux':
@@ -1563,25 +1568,40 @@ class TacticalBattle:
                 f.state = 'repos'
 
     def _contacts(self, alive, dt):
-        # mêlées en cours
+        # mêlées en cours ; plusieurs troupes peuvent s'acharner sur une même : leurs forces s'additionnent
+        fights = []
+        press = {}
         for u in alive:
             if u.state != 'melee':
                 continue
             f = self.by_id.get(u.melee_with)
-            if not f or not f.alive or f.state in ('deroute', 'hors'):
-                self._end_melee(u)
+            if not f or not f.alive or f.state != 'melee':
+                self._end_melee(u)   # (l'adversaire a fui, cédé du terrain ou s'est dégagé)
                 continue
-            ku, kf = self._melee_k(u, f) * u.men, self._melee_k(f, u) * f.men
+            ku = self._melee_k(u, f) * u.men
+            fights.append((u, f, ku))
+            press[f.id] = press.get(f.id, 0.0) + ku
+        for u, f, ku in fights:
+            if u.state != 'melee' or f.state != 'melee':
+                continue
+            kf = self._melee_k(f, u) * f.men
+            tot = press.get(f.id, ku)
             self._damage(f, MELEE_K * ku * dt, u, 'melee')
-            # la mêlée se décide surtout au moral : le plus faible plie le premier
-            f.morale = max(0.0, f.morale - MELEE_MOR * dt * ku / max(1.0, ku + kf))
+            # la mêlée se décide surtout au moral : le plus faible plie le premier (la pression subie ne dépasse
+            # jamais MELEE_MOR par seconde, même à un contre trois)
+            # (dans une brèche, une rue, des maisons, derrière un mur, on ne se bat pas à plus de front que le passage :
+            # à plusieurs contre un, la pression s'additionne sans dépasser MELEE_MOR ; à découvert, elle s'additionne)
+            narrow = GANG_CAP and (self.t[self.cell(f.x, f.y)] in NARROW or self.t[self.cell(u.x, u.y)] in NARROW or
+                                   self.cover_at(f.x, f.y) >= 0.5)
+            share = (ku / max(1.0, tot)) * tot / max(1.0, tot + kf) if narrow else ku / max(1.0, ku + kf)
+            f.morale = max(0.0, f.morale - MELEE_MOR * dt * share)
             u.fought += dt
             if f.morale < 25 and f.state != 'deroute':
                 self._rout(f)
                 if u.cls == 'cavalerie':
                     self._capture(u, f, CAPTURE['melee_cav'])
                 self._end_melee(u)
-            elif f.morale < GIVE_WAY and f.state == 'melee' and kf < ku:
+            elif f.morale < GIVE_WAY and f.state == 'melee' and kf < tot:
                 # le plus faible cède du terrain sans se débander : il se replie et se reforme
                 self._end_melee(f)
                 self._repulse(f, u, 100.0)
@@ -1699,11 +1719,13 @@ class TacticalBattle:
         u.goal = None
         self.emit('deroute', u.x, u.y, src=u.id)
         self.log(f"{u.name} est en déroute !", None, u.side)
-        # la déroute ébranle les voisins, d'autant plus que la troupe qui fuit est nombreuse ; moins près du général
+        # la déroute ébranle les voisins déjà éprouvés (une troupe ferme la laisse passer), d'autant plus que la troupe
+        # qui fuit est nombreuse ; moins près du général
         k = ROUT_MOR * min(1.5, u.men / 250.0)
         for o in self.units:
             if o.side == u.side and o is not u and o.valid and (o.x - u.x) ** 2 + (o.y - u.y) ** 2 < ROUT_R * ROUT_R:
-                hit = k / U.TYPE.get(o.type, U.TYPE['ligne'])['steady']
+                shaken = min(1.0, max(0.0, (ROUT_STEADY - o.morale) / 30.0))
+                hit = k * shaken / U.TYPE.get(o.type, U.TYPE['ligne'])['steady']
                 if self.general_near(o):
                     hit *= 0.5
                 o.morale = max(0.0, o.morale - hit)
@@ -1719,7 +1741,8 @@ class TacticalBattle:
         cap = min(100.0, max(u.morale0, 60) + 5 + bonus * MOR_GEN_CAP - u.fat / 4 - wear)
         if u.state == 'deroute':
             foe = self._nearest_foe_dist(u)
-            if foe > 400:
+            # (à l'abri des maisons, les fuyards se reprennent plus près de l'ennemi qu'en rase campagne)
+            if foe > (150 if self.t[self.cell(u.x, u.y)] == T_BATI else 400):
                 u.morale = min(cap, u.morale + 0.08 * dt)
                 if u.morale >= 40:
                     self._start_rally(u)

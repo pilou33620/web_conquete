@@ -116,19 +116,19 @@ LEVELS = {
                    cohesion=False, bound=600.0, halt=(0.5, 1.45), prep=5 * 60, prep_max=8 * 60, cav_r=330.0,
                    cav_pick=False, counter=False, col_late=True, res_early=True, flank=False, relief=False,
                    art_pick=False, wd_loss=0.2, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
-                   grape=0, assault_prep=6 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False,
+                   grape=0, assault_prep=40 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False,
                    storm=False, oblique=False, extend=False, flankfire=False),
     'normal': dict(n=1, period=10.0, jitter=4.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=1,
                    cohesion=True, bound=220.0, halt=(0.82, 0.92), prep=12 * 60, prep_max=25 * 60, cav_r=430.0,
                    cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
                    art_pick=True, wd_loss=0.24, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
-                   grape=1, assault_prep=12 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False,
+                   grape=1, assault_prep=60 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False,
                    storm=True, oblique=False, extend=False, flankfire=False),
     'difficile': dict(n=2, period=6.0, jitter=0.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=2,
                       cohesion=True, bound=170.0, halt=(0.78, 0.85), prep=15 * 60, prep_max=35 * 60, cav_r=430.0,
                       cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
                       art_pick=True, wd_loss=0.27, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
-                      grape=1, assault_prep=15 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True,
+                      grape=1, assault_prep=70 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True,
                       storm=True, oblique=True, extend=True, flankfire=True),
 }
 
@@ -1143,8 +1143,12 @@ def _decide_withdraw(b, side, mem, L, sit):
             mem['general_assault'] = round(b.clock)
             mem['halt_k'] = round(mem.get('halt_k', 0.85) * 0.5, 2)
             _note(b, mem, f"l'attaque piétine : assaut général (rapport de forces vu {sit['ratio']:.2f}).")
-        elif sit['ratio'] < 0.7 or b.clock - mem.get('general_assault', b.clock) > 2700:
+        elif sit['ratio'] < 0.7 or (b.clock - mem.get('general_assault', b.clock) > 2700 and sit['ratio'] < 1.2):
             why = "l'attaque piétine"
+        elif b.clock - mem.get('general_assault', b.clock) > 2700:
+            # (nettement plus fort : on ne lâche pas, on relance l'assaut)
+            mem['general_assault'] = round(b.clock)
+            _note(b, mem, f"nouvel assaut général (rapport de forces vu {sit['ratio']:.2f}).")
 
     if why is None:
         return False
@@ -1913,7 +1917,7 @@ def _think_place_att(b, side, mem, L, us, foes, sit, want, busy):
         ready = t >= prep
         if L['n'] == 2 and ready and t < prep * 2:
             near = [e for e in sit['seen'] if _d2(e.x, e.y, bout[0], bout[1]) < 260 ** 2 and e.cls == 'inf']
-            if near and sum(e.morale for e in near) / len(near) > 62:
+            if near and sum(e.morale for e in near) / len(near) > 82:
                 ready = False   # les défenseurs de la brèche tiennent encore : on pilonne
         if not any(u.cls == 'artillerie' and u.valid for u in us) and t > 120:
             ready = True
@@ -2265,9 +2269,11 @@ def _melee_power(b, u):
     if u.form == 'tirailleurs':
         k *= 0.7
     t = b.terrain_at(u.x, u.y)
-    if t == T_BATI:
+    if t in (T_MUR, T_PORTE, T_BARRICADE) and u.side == 0:
+        k *= 0.6
+    elif t == T_BATI:
         k *= 1.4
-    elif t in WALLS or b.cover_at(u.x, u.y) >= 0.5:
+    elif t != T_BRECHE and b.cover_at(u.x, u.y) >= 0.5:
         k *= 1.5
     return k * u.men
 
