@@ -179,7 +179,7 @@ export function texture(kind, L, pal, season) {
     case 'roche': {
       const v = n([[6, 0.1], [1.6, 0.12], [0.4, 0.1], [0.1, 0.06]]);
       const cv = paintBase(size, hexRgb(pal.roche), v, hexRgb(pal.rocheSombre), ramp(n([[2.5, 1]]), 0.3, 0.8, 0.6)), g = cv.getContext('2d');
-      if (fine) strew(g, size, Math.round(size * size / (L * L) * 0.05), S, [{ stroke: 'rgba(60,56,48,0.45)', w: Math.max(0.6, 0.04 * L) }], (p, x, y, k) => { p.moveTo(x, y); let a = hash(k, 7, S) * TAU, xx = x, yy = y; for (let q = 0; q < 4; q++) { a += (hash(k, q, S + 1) - 0.5) * 1.6; xx += Math.cos(a) * 0.5 * L; yy += Math.sin(a) * 0.5 * L; p.lineTo(xx, yy); } });
+      if (fine) strew(g, size, Math.round(size * size / (L * L) * 0.05), S, [{ stroke: 'rgba(60,56,48,0.45)', w: Math.max(0.6, 0.04 * L) }], (p, x, y, k) => { p.moveTo(x, y); let a = hash(k, 7, S) * TAU, xx = x, yy = y; for (let q = 0; q < 4; q++) { a += (hash(k, q, S + 1) - 0.5) * 1.6; xx += Math.cos(a) * 0.5 * L; yy += Math.sin(a) * 0.5 * L; p.lineTo(xx, yy); } }, 2.2 * L);
       return cv;
     }
     case 'sousBois': {

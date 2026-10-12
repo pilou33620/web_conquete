@@ -576,7 +576,7 @@ export class UnitArt {
       const o = i * 7, sy = items[o], sx = items[o + 1], kind = items[o + 2], face = items[o + 3], pose = items[o + 4], bob = items[o + 5], rank = items[o + 6];
       const lk = kind + face + pose;   // (un seul chiffre pour le sens : pas d'ambiguïté)
       let spr = local.get(lk);
-      if (!spr) { spr = this.sprite(kind, col, face, Hp, pose); local.set(lk, spr); }
+      if (!spr || !spr.cv.width) { spr = this.sprite(kind, col, face, Hp, pose); local.set(lk, spr); }   // (libérée par le cache entre-temps : repeinte)
       const sc = H / spr.h;   // pixels CSS par pixel de la figurine
       ctx.drawImage(spr.cv, sx - spr.ax * sc, sy - spr.ay * sc - bob * H, spr.cv.width * sc, spr.cv.height * sc);
       // drapeau du porte-drapeau, étendard d'un cavalier
