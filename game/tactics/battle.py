@@ -30,8 +30,9 @@ RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MEL
   fatigue ; remonte au calme (MOR_REC), plus vite près du général. Déroute sous 25 : la troupe fuit vers son bord.
 - Ralliement (RALLY_*) : seulement auprès d'un général (état-major ami à moins de 400 m, 500 m s'il est inspirant), au
   calme (aucun ennemi en état de combattre à moins de 400 m) : il faut aller chercher les fuyards ; ils s'y arrêtent,
-  se reprennent (0,1 point de moral par seconde) et reforment les rangs à 40. Dans une place, leurs officiers les
-  rallient sans le général (au calme : 400 m, 150 m dans les maisons). Sans général sur le terrain (blessé, absent,
+  se reprennent (0,1 point de moral par seconde) et reforment les rangs à 40. Dans une place, et partout pour les
+  défenseurs de la place (chez eux), leurs officiers les rallient sans le général (au calme : 400 m, 150 m dans les
+  maisons). Sans général sur le terrain (blessé, absent,
   garnison seule), seulement loin de l'ennemi (700 m), deux fois et demie plus lentement. Sinon, les fuyards courent
   jusqu'au bord de la carte et quittent la bataille. L'ordre « Rallier » suit la même règle (l'ennemi à plus de 150 m
   suffit) et dit pourquoi il échoue (« Le général est trop loin pour rallier ces hommes. »).
@@ -169,8 +170,8 @@ ROUT_STEADY = 60         # … s'ils sont déjà ébranlés : rien au-dessus de 
 # ralliement : une troupe en déroute ne se reforme que près d'un général (état-major ami à moins de RALLY_R, RALLY_R +
 # RALLY_INSP pour un général inspirant) et au calme (aucun ennemi en état de combattre à moins de RALLY_CALM) : il faut
 # aller la chercher. Les fuyards s'y arrêtent et regagnent RALLY_REC de moral par seconde ; à 40, ils reforment les rangs.
-# Dans une place, les officiers rallient leurs hommes sans le général (au calme ; RALLY_CALM_BATI dans les maisons ;
-# RALLY_REC_PLACE).
+# Dans une place, et partout pour les défenseurs d'une place (chez eux), les officiers rallient leurs hommes sans le
+# général (au calme ; RALLY_CALM_BATI dans les maisons ; RALLY_REC_PLACE), comme avant.
 # Sans général sur le terrain (blessé, absent, garnison seule), ils ne les arrêtent que loin de l'ennemi (RALLY_ALONE),
 # et lentement (RALLY_REC_ALONE). Partout ailleurs, les fuyards courent jusqu'au bord de la carte et quittent la bataille.
 RALLY_R, RALLY_INSP = 400.0, 100.0
@@ -761,8 +762,9 @@ class TacticalBattle:
         order : l'ordre « Rallier » (les officiers s'y mettent tous : il suffit que l'ennemi soit à plus de 150 m)."""
         if foe is None:
             foe = self._nearest_foe_dist(u)
-        if self.in_place(u.x, u.y):
-            # dans une place, les officiers rallient leurs hommes au calme (plus près de l'ennemi à l'abri des maisons)
+        if self.in_place(u.x, u.y) or (u.side == 1 and self.objective() is not None):
+            # dans une place (et partout pour ses défenseurs, chez eux), les officiers rallient leurs hommes au calme
+            # (plus près de l'ennemi à l'abri des maisons)
             calm = RALLY_CALM_BATI if order or self.t[self.cell(u.x, u.y)] == T_BATI else RALLY_CALM
             return (RALLY_REC_PLACE, 'place') if foe > calm else (0.0, 'ennemi')
         if foe <= (RALLY_CALM_BATI if order else RALLY_CALM):

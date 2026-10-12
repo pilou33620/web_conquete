@@ -63,9 +63,10 @@ Pendant la bataille
   chariot), couvrir un flanc débordé, soutenir une batterie menacée, contre-attaquer une percée, prolonger la ligne
   débordée (difficile) ; ralliés reformés près du général. Général et chariot derrière le secteur qui en a besoin,
   abrités derrière un bataillon quand des cavaliers rôdent.
-- Fuyards : le moteur ne les rallie qu'auprès d'un général, au calme. Le général (normal, difficile) va au-devant
-  d'eux sur leur chemin de fuite, là où l'ennemi repéré est à plus de 470 m, s'il peut y aller sans passer sous le feu
-  ni croiser des cavaliers ennemis (jusqu'à 900 m, 1 200 m en difficile) ; facile le laisse à son poste.
+- Fuyards : le moteur ne les rallie qu'auprès d'un général. Le général (normal, difficile) va au-devant d'eux sur
+  leur chemin de fuite, hors de portée de fusil (330 m de l'ennemi repéré), s'il peut y aller sans passer sous le feu
+  ni croiser des cavaliers ennemis (jusqu'à 900 m, 1 200 m en difficile) ; les réflexes les rallient dès qu'il est
+  auprès d'eux. Facile le laisse à son poste.
 - Décrochage en bon ordre quand la bataille est perdue (pertes, rapport de forces vu, moral, nuit), jamais pour le
   défenseur d'une place : passé wd_loss de pertes (les troupes en déroute comptent pour moitié) si l'ennemi est nettement
   plus fort, ou passé wd_loss + 7 % dans un combat égal ; l'assaillant qui mène l'attaque accepte 5 % de plus.
@@ -129,13 +130,15 @@ ATT_TENACITY = 0.05
 # wd_ratio + WD_EVEN
 WD_EVEN_LOSS, WD_EVEN = 0.07, 0.2
 FIRE_LONG = 900.0   # durée de fusillade avant la baïonnette à forces égales (s)
-# obstination selon la situation (_tenacity) : supplément de pertes accepté avant de décrocher quand l'ennemi est plus
-# éprouvé que nous (au plus TEN_TRIED, autant que l'écart des pertes), quand le rapport de forces vu est favorable, quand
+# obstination selon la situation (_tenacity) : supplément de pertes accepté avant de décrocher quand l'ennemi a perdu
+# plus que nous (tués, blessés, prisonniers : une fois et demie l'écart, au plus TEN_TRIED), quand le rapport de forces vu
+# est favorable, quand
 # l'ennemi a des troupes en déroute, qu'il nous reste des réserves fraîches, que la ligne du défenseur tient une bonne
 # position ; au plus TEN_MAX en tout. Rien de tout cela : on décroche plus tôt (TEN_NONE)
 TEN_TRIED, TEN_RATIO, TEN_ROUT, TEN_RES, TEN_POS, TEN_MAX, TEN_NONE = 0.08, 0.03, 0.03, 0.03, 0.04, 0.14, -0.03
-# le général va chercher ses fuyards jusqu'à cette distance (m) selon le niveau (facile : il ne bouge pas)
-FETCH_REACH = (0.0, 900.0, 1200.0)
+# le général va chercher ses fuyards jusqu'à FETCH_REACH (m) selon le niveau (facile : il ne bouge pas), sans
+# s'approcher à moins de FETCH_SAFE de l'ennemi repéré (hors de portée de fusil)
+FETCH_REACH, FETCH_SAFE = (0.0, 900.0, 1200.0), 330.0
 
 LEVELS = {
     'facile': dict(n=0, period=20.0, jitter=12.0, reflex=6.0, sq_r=210.0, sq_miss=0.3, sq_late=True, terrain=0,
@@ -1110,11 +1113,8 @@ def _situation(b, mem, us, foes):
         mem['t_contact'] = round(now)
         e = min(seen, key=lambda e: min((_d2(e.x, e.y, u.x, u.y) for u in combat), default=0))
         _note(b, mem, f"premier contact : {_foe(e)} repéré.")
-    # pertes de l'ennemi, estimées comme les nôtres (ses troupes vues en déroute depuis moins de 5 min pour moitié)
-    e_run = sum(v[3] for k, v in mem['vu'].items() if v[6] == 'deroute' and now - v[2] < 300 and k in mem['vu0'])
-    e_loss = 1 - (foe + 0.5 * e_run) / max(1.0, mem.get('ann') or foe)
     return dict(combat=combat, valid=valid, mine=mine, init=init, foe=foe, ratio=mine / max(1.0, foe),
-                loss=1 - mine / max(1.0, init), mor=mor, routed=routed, e_routed=e_routed, seen=seen, e_loss=e_loss)
+                loss=1 - mine / max(1.0, init), mor=mor, routed=routed, e_routed=e_routed, seen=seen)
 
 
 def _stalled(b, mem, sit, line=None):
@@ -1149,7 +1149,7 @@ def _history(b, mem, sit):
 
 def _tenacity(b, side, mem, L, sit):
     """Obstination selon la situation : supplément de pertes accepté avant de décrocher (négatif : on décroche plus
-    tôt). On s'accroche quand on a l'avantage — l'ennemi est plus éprouvé que nous (pertes estimées de la même façon),
+    tôt). On s'accroche quand on a l'avantage — l'ennemi a perdu plus d'hommes que nous (d'après ses effectifs vus),
     le rapport de forces vu est favorable, des troupes ennemies sont en déroute, il nous reste des réserves fraîches —
     ou qu'on tient une position clé (la ligne du défenseur sur une crête, derrière des haies, des murets, dans un
     village) ; sans rien de tout cela, on décroche plus tôt (TEN_NONE). Rase campagne seulement (l'assaut et la défense
@@ -1157,10 +1157,15 @@ def _tenacity(b, side, mem, L, sit):
     if mem['plan'] in ('place', 'assaut') or mem.get('t_contact') is None or not L.get('ten_k', 1.0):
         return 0.0, []   # (facile : ne lit pas la situation)
     k, why = 0.0, []
-    d = sit['e_loss'] - sit['loss']
+    # tués, blessés et prisonniers des deux camps (les nôtres ; ceux de l'ennemi d'après ses effectifs vus)
+    ours = [u for u in b.units if u.side == side and u.cls in ('inf', 'cavalerie', 'artillerie')]
+    cas = sum(u.men0 - u.men for u in ours) / max(1.0, sum(u.men0 for u in ours))
+    vu, vu0 = mem['vu'], mem['vu0']
+    e_cas = sum(max(0, n0 - vu[k_][3]) for k_, n0 in vu0.items() if k_ in vu) / max(1.0, mem.get('ann') or 1)
+    d = e_cas - cas
     if d > 0.02:
-        k += min(TEN_TRIED, d)
-        why.append(f"l'ennemi est plus éprouvé ({round(sit['e_loss'] * 100)} % contre {round(sit['loss'] * 100)} %)")
+        k += min(TEN_TRIED, 1.5 * d)
+        why.append(f"l'ennemi a perdu davantage ({round(e_cas * 100)} % contre {round(cas * 100)} %)")
     if sit['ratio'] >= 1.15:
         k += TEN_RATIO
         why.append('rapport de forces favorable')
@@ -1607,7 +1612,8 @@ def _roles_update(b, side, mem, L, us, sit, front):
             roles[u.id] = 'rallie'
         elif roles.get(u.id) == 'rallie' and u.state == 'repos' and u.morale > 55 and \
                 u.ammo >= 0.3 * u.ammo0 and u.cls == 'inf':
-            roles[u.id] = 'res'
+            # (assaut d'une place : la troupe reformée repart avec la prochaine vague, elle ne reste pas en réserve)
+            roles[u.id] = 'vague2' if mem['plan'] == 'assaut' else 'res'
             mem['back'][u.id] = 220.0
     if mem['plan'] in ('place', 'assaut'):
         return
@@ -2023,14 +2029,19 @@ def _think_place_att(b, side, mem, L, us, foes, sit, want, busy):
             ph = 'assaut'
             t = 0.0
     if ph == 'assaut':
-        if a_men < 0.35 * mem.get('n_assault', a_men or 1) and t > 300:
-            if sit['ratio'] > 0.9 and L['n'] >= 1 and mem.get('waves', 0) < 2:
-                mem['waves'] = mem.get('waves', 0) + 1
-                for u in us:
-                    if roles.get(u.id) == 'rallie' and u.state == 'repos':
-                        roles[u.id] = 'vague2'
-                _set_phase(b, mem, 'regroupe', "l'assaut est repoussé : on se regroupe sous la protection des canons.")
-                ph = 'regroupe'
+        # assaut repoussé (au plus deux fois), ou assaut général décidé quand tout piétine (_decide_withdraw) : on se
+        # regroupe et toutes les troupes reformées repartent avec la vague suivante
+        ga = mem.get('general_assault')
+        wave = a_men < 0.35 * mem.get('n_assault', a_men or 1) and sit['ratio'] > 0.9 and mem.get('waves', 0) < 2
+        if t > 300 and L['n'] >= 1 and (wave or (ga and ga != mem.get('ga_wave'))):
+            mem['ga_wave'] = ga
+            mem['waves'] = mem.get('waves', 0) + (1 if wave else 0)
+            for u in us:
+                if roles.get(u.id) in ('rallie', 'res') and u.state == 'repos' and u.cls == 'inf':
+                    roles[u.id] = 'vague2'
+            _set_phase(b, mem, 'regroupe', "l'assaut est repoussé : on se regroupe sous la protection des canons."
+                       if wave else "l'assaut piétine : on regroupe toutes les troupes pour un assaut général.")
+            ph = 'regroupe'
     for u in us:
         r = roles.get(u.id)
         p = mem['post'].get(u.id)
@@ -2180,11 +2191,12 @@ def _support(b, side, mem, L, us, foes, sit, want):
 
 
 def _fetch(b, side, mem, L, g, us, seen):
-    """Des fuyards à rallier : le moteur ne les arrête qu'auprès d'un général, au calme (l'ennemi à plus de 400 m). Le
-    général va au-devant d'eux, sur leur chemin de fuite (vers notre bord), au premier endroit où l'ennemi repéré est
-    à plus de 470 m, un peu en arrière : ils viennent à lui, s'arrêtent et se reforment. Pas s'il faut passer sous le
-    feu, si des cavaliers ennemis rôdent par là, ni pour une poignée d'hommes ; le groupe le plus nombreux qu'on
-    rejoint vite d'abord. Renvoie (x, y, au galop) ou None."""
+    """Des fuyards à rallier : le moteur ne les rallie qu'auprès d'un général (l'ordre « Rallier », que les réflexes
+    donnent sans cesse, dès que l'ennemi est à plus de 150 m ; d'eux-mêmes, au calme, à plus de 400 m). Le général va
+    au-devant d'eux, sur leur chemin de fuite (vers notre bord), au premier endroit où il est hors de portée de fusil
+    (l'ennemi repéré à plus de FETCH_SAFE), un peu en arrière : ils passent près de lui et se reforment. Pas s'il faut
+    passer sous le feu, si des cavaliers ennemis rôdent par là, ni pour une poignée d'hommes ; le groupe le plus
+    nombreux qu'on rejoint vite d'abord. Renvoie (x, y, au galop) ou None."""
     runs = [v for v in us if v.state == 'deroute' and v.men >= 50 and v.cls in ('inf', 'cavalerie', 'artillerie')]
     if not runs:
         return None
@@ -2200,12 +2212,13 @@ def _fetch(b, side, mem, L, g, us, seen):
             if s > far - 80:
                 break
             px, py = v.x + math.cos(a) * s, v.y + math.sin(a) * s
-            if any(_d2(e.x, e.y, px, py) < 470 ** 2 for e in foes):
-                continue   # pas encore au calme : plus loin sur son chemin
+            if any(_d2(e.x, e.y, px, py) < FETCH_SAFE ** 2 for e in foes):
+                continue   # trop près de l'ennemi : plus loin sur son chemin
             tx, ty = _clamp(px + math.cos(a) * ahead, py + math.sin(a) * ahead, 40)
             d = math.hypot(tx - g.x, ty - g.y)
             mx, my = (tx + g.x) / 2, (ty + g.y) / 2
-            if d > reach or any(_d2(e.x, e.y, mx, my) < 300 ** 2 or _d2(e.x, e.y, tx, ty) < 400 ** 2 for e in foes) \
+            if d > reach or any(_d2(e.x, e.y, mx, my) < 260 ** 2 or _d2(e.x, e.y, tx, ty) < FETCH_SAFE ** 2
+                                for e in foes) \
                     or _cav_near(b, mem, tx, ty, 550, 240) or _cav_near(b, mem, mx, my, 450, 240):
                 break      # trop loin, ou il faudrait s'exposer
             val = v.men / (1.0 + d / 500.0)
