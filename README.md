@@ -331,7 +331,7 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   dans vos vivres. Pris par l'ennemi, il est pillé.
 - **Moral et désertions** : trésor vide (solde impayée) ou vivres épuisés, le moral chute et les soldats désertent.
   Le journal fait le compte chaque mois.
-- **Prisonniers** : une victoire en ramène quelques-uns (davantage d'un assaut repoussé, ou d'une armée presque
+- **Prisonniers** : une victoire en ramène quelques-uns (davantage à l'assaut d'une place, ou d'une armée presque
   anéantie que la cavalerie poursuit). Ils mangent des vivres ;
   on peut les **enrôler** (une partie accepte de servir, leur département s'en fâche) ou les **échanger** dans la fenêtre
   Diplomatie (homme pour homme, puis le surplus se rachète 2 livres par tête).
@@ -366,11 +366,12 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   **« Commander la bataille »** ou **« Résolution automatique »** (réglage dans le menu ☰ : toujours demander,
   escarmouches automatiques, toujours automatiques). Les batailles entre IA se résolvent toujours seules.
 - La **résolution automatique** (et toute bataille entre IA) se joue sur la carte de campagne, en quelques heures à
-  quelques jours, et finit comme une bataille que vos officiers mènent jusqu'au bout : le camp dominé décroche en bon
-  ordre (passé environ 10 % de pertes face à un ennemi nettement plus fort, 19 % à forces voisines ; le défenseur tient
-  mieux que sa seule force, dans une place plus encore) ; le défenseur d'une place ne décroche pas, il la rend. Seule une
-  armée presque anéantie est poursuivie ; il y a peu de prisonniers, et le vaincu perd encore quelques traînards dans
-  sa retraite. Pertes, prisonniers et vainqueurs sont du même ordre dans les deux modes (mesuré bataille par bataille).
+  quelques jours, et finit comme une bataille que vos officiers mènent jusqu'au bout : en rase campagne, le camp dominé
+  ou ébranlé décroche en bon ordre (passé environ 12 % de pertes face à un ennemi nettement plus fort, 19 % à forces
+  voisines ; le défenseur tient mieux que sa seule force) ; le défenseur d'une place ne décroche pas, il la rend, et un
+  assaut brisé reflue en désordre. Seule une armée presque anéantie est poursuivie ; il y a peu de prisonniers
+  (davantage à l'assaut d'une place), et le vaincu perd encore quelques traînards dans sa retraite. Pertes,
+  prisonniers et vainqueurs sont du même ordre dans les deux modes (mesuré bataille par bataille).
 - Commandée, la bataille se joue **en temps réel avec pause** (×1, ×2, ×4 ; à ×1 une seconde vaut 18 secondes de
   bataille, de 8 h au crépuscule : une bataille rangée de 3 à 6 heures dure une dizaine à une vingtaine de minutes)
   sur une carte de 3 × 2 km tirée du terrain de la campagne : relief, bois, champs, vignes, haies, clôtures et

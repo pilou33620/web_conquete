@@ -616,14 +616,14 @@ OPEN_TERRAIN = ('Plaine', 'Vignoble', 'Lande', 'Collines')
 # la déroute. Hors d'une place, passé WD_LOSS de pertes (part de ses hommes) face à un ennemi plus fort (sa puissance
 # sous WD_RATIO fois celle de l'ennemi), ou WD_EVEN_LOSS face à un ennemi à peine plus fort, il décroche en bon ordre.
 # Le défenseur d'une place ne décroche pas : dominé, passé WD_PLACE_LOSS, il la rend. Dans ce compte, le défenseur tient
-# comme s'il était WD_DEF fois plus fort (WD_DEF_PLACE derrière les murs ou dans les maisons d'une place).
-WD_LOSS, WD_RATIO, WD_EVEN_LOSS, WD_PLACE_LOSS = 0.10, 0.8, 0.19, 0.2
-WD_DEF, WD_DEF_PLACE = 1.4, 1.8
+# comme s'il était WD_DEF fois plus fort (le défenseur des batailles commandées a l'avantage du terrain).
+WD_LOSS, WD_RATIO, WD_EVEN_LOSS, WD_PLACE_LOSS = 0.12, 0.8, 0.19, 0.2
+WD_DEF = 1.4
 # poursuite d'un vaincu rompu (part de ses hommes rattrapés, selon que le vainqueur a de la cavalerie ou non) : une armée
-# presque anéantie, ou celle qui défendait une place prise ; prisonniers : part des pertes au combat du vaincu (d'un
-# assaut repoussé : PRISON_REPULSED) et des rattrapés
+# presque anéantie, ou celle qui défendait une place prise ; prisonniers : part des pertes au combat du vaincu (à
+# l'assaut d'une place, pris ou repoussé : PRISON_ASSAULT) et des rattrapés
 PURSUIT_CAV, PURSUIT_FOOT = 0.05, 0.02
-PRISON_LOSS, PRISON_REPULSED, PRISON_CAUGHT = 0.07, 0.2, 0.15
+PRISON_LOSS, PRISON_ASSAULT, PRISON_CAUGHT = 0.07, 0.2, 0.15
 # usure : le vaincu, même en bon ordre, perd cette part de ses hommes en traînards pendant la retraite (désertions)
 LOSER_STRAGGLE = 0.05
 

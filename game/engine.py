@@ -2644,9 +2644,10 @@ class Game:
                 wiped = m_now < 10 or m_now < side['men0'] * 0.18
                 if wiped or bt['mor'][si] < 12:
                     res = 1 - si
-                    # hors d'une place, une armée ébranlée se retire comme dans les batailles commandées (ses fuyards la
-                    # rejoignent) : seuls les débris d'une armée presque anéantie sont poursuivis
-                    disengage = side['node'] is None and not wiped
+                    # en rase campagne, une armée ébranlée se retire comme dans les batailles commandées (ses fuyards la
+                    # rejoignent) : seuls les débris d'une armée presque anéantie sont poursuivis ; devant une place,
+                    # l'assaut brisé reflue en désordre
+                    disengage = bt['node'] is None and not wiped
                     break
             if res is None:
                 res, disengage = self.battle_yield(bt, P)
@@ -2669,8 +2670,7 @@ class Game:
         """Un camp dominé cède avant la déroute, comme dans les batailles commandées (rules.WD_*) : hors d'une place, il
         décroche en bon ordre ; le défenseur d'une place la rend. P : puissance de chaque camp à cet instant, par arme.
         Renvoie (vainqueur, décrochage), ou (None, False) si le combat continue."""
-        # (le défenseur tient mieux que sa puissance ne le dit, derrière des murs plus encore)
-        tot = [sum(P[0].values()), sum(P[1].values()) * (R.WD_DEF if bt['node'] is None else R.WD_DEF_PLACE)]
+        tot = [sum(P[0].values()), sum(P[1].values()) * R.WD_DEF]   # (le défenseur tient mieux que sa puissance)
         loss = [s['lost'] / max(1.0, s['men0']) for s in bt['sides']]
         for si in sorted((0, 1), key=lambda i: -loss[i]):   # le plus éprouvé d'abord
             ratio = tot[si] / max(1e-9, tot[1 - si])
@@ -2811,9 +2811,9 @@ class Game:
                 if n_ > 0 and taker in self.factions:
                     pr = self.factions[taker].setdefault('prisoners', {})
                     pr[bt['sides'][si]['owner']] = pr.get(bt['sides'][si]['owner'], 0) + n_
-        repulsed = disengage and W['node'] is not None   # assaut repoussé : des assaillants restent aux mains des défenseurs
+        # (dans les rues d'une place, assaillants repoussés ou défenseurs cernés se rendent plus souvent)
         prisoners = tac['prisoners'][loser] if tac else \
-            int(L['lost'] * (R.PRISON_REPULSED if repulsed else R.PRISON_LOSS) + caught * R.PRISON_CAUGHT)
+            int(L['lost'] * (R.PRISON_LOSS if bt['node'] is None else R.PRISON_ASSAULT) + caught * R.PRISON_CAUGHT)
         if prisoners > 0 and W['owner'] in self.factions and not tac:
             pr = self.factions[W['owner']].setdefault('prisoners', {})
             pr[L['owner']] = pr.get(L['owner'], 0) + prisoners
