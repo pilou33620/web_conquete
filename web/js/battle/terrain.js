@@ -1185,10 +1185,10 @@ function paintDecal(g, d, s) {
   g.save(); g.translate(d.x, d.y); g.rotate(d.a || 0);
   if (d.k === 'trou') {
     // entonnoir d'obus : terre rejetée tout autour, fond sombre
-    const r = d.r || 2.6;
-    g.fillStyle = 'rgba(122,98,64,0.32)'; el(0, 0, r * 1.4, r * 1.15);
-    g.fillStyle = 'rgba(84,62,38,0.5)'; el(0, 0, r, r * 0.8);
-    g.fillStyle = 'rgba(42,30,18,0.45)'; el(r * 0.12, r * 0.1, r * 0.55, r * 0.45);
+    const r = (d.r || 2.6) * 0.85;
+    g.fillStyle = 'rgba(122,98,64,0.22)'; el(0, 0, r * 1.35, r * 1.1);
+    g.fillStyle = 'rgba(84,62,38,0.32)'; el(0, 0, r, r * 0.8);
+    g.fillStyle = 'rgba(42,30,18,0.3)'; el(r * 0.12, r * 0.1, r * 0.5, r * 0.4);
   } else if (d.k === 'cheval') {
     g.fillStyle = 'rgba(30,20,15,0.25)'; g.fillRect(-1.3 + 0.3, -0.5 + 0.3, 2.6, 1.0);
     g.fillStyle = d.c2 || '#5a3e26'; el(0, 0, 1.3, 0.5);

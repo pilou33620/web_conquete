@@ -55,6 +55,7 @@ export class BattleView {
     if (!m || (!m.t && !m.W)) throw new Error('Carte de bataille indisponible');
     this.map = m;
     this.terrain = new Terrain(m, this.q);
+    this.art.setYear(m.year);   // coiffures de l'époque
     this.W = this.terrain.W; this.H = this.terrain.H;
     this.cam = { x: this.W / 2, y: this.H / 2, z: this.fitZ() };
     return m;
@@ -318,7 +319,7 @@ export class BattleView {
     this.drawGround(ctx, z, time);
     mark('sol');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const view = { toScreen: this.toScreen, z, figScale: this.figScale, vw: this.vw, vh: this.vh, dpr };
+    const view = { toScreen: this.toScreen, z, figScale: this.figScale, vw: this.vw, vh: this.vh, dpr, fxT: this.fx.t };
     const vis = [...this.units.values()].filter(u => u.state !== 'hors' && this.onScreen(u));
     this.art.draw(ctx, view, vis, time, this.colors || []);
     mark('unites');
@@ -327,6 +328,7 @@ export class BattleView {
     const hour = this.hourNum();
     this.fx.atmosphere(ctx, view, { weather: this.st?.weather || this.map?.weather, light: this.st?.light ?? 1, hour, wind: this.st?.wind }, dt, time);
     mark('atmosphere');
+    this.drawOverSmoke(ctx);
     this.drawLabels(ctx);
     this.bannerRects = this.art.banners(ctx, view, vis, this.colors || [], { sel: this.sel, me: this.me, time });
     this.controls.drawOverlay(ctx, view, time);
@@ -421,6 +423,24 @@ export class BattleView {
       ctx.strokeStyle = 'rgba(255,110,90,0.95)'; ctx.lineWidth = 2.2 / z;
       art.footprint(ctx, proj, hov.x, hov.y, hov.dir, hov.w, hov.d, 6); ctx.stroke();
     }
+  }
+  // par-dessus la fumée et la brume : le contour des régiments choisis et leur destination restent lisibles
+  drawOverSmoke(ctx) {
+    if (!this.sel.size) return;
+    const proj = { toScreen: this.toScreen };
+    ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    for (const id of this.sel) {
+      const u = this.units.get(id);
+      if (!u || u._ghost) continue;
+      ctx.strokeStyle = 'rgba(255,226,150,0.8)';
+      this.art.footprint(ctx, proj, u.x, u.y, u.dir, u.w, u.d, 4); ctx.stroke();
+      const o = this.orders.get(id);
+      if (o && o.kind === 'move' && o.x != null && Math.hypot(o.x - u.x, o.y - u.y) > 10) {
+        ctx.strokeStyle = 'rgba(255,230,160,0.55)';
+        this.art.footprint(ctx, proj, o.x, o.y, o.dir ?? Math.atan2(o.y - u.y, o.x - u.x), u.w, u.d, 1); ctx.stroke();
+      }
+    }
+    ctx.setLineDash([]);
   }
   // cotes des sommets et nom de la place, à la manière des cartes d'état-major
   drawLabels(ctx) {
