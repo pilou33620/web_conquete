@@ -76,17 +76,17 @@ LEVELS = {
                    cohesion=False, bound=600.0, halt=(0.5, 1.45), prep=5 * 60, prep_max=8 * 60, cav_r=330.0,
                    cav_pick=False, counter=False, col_late=True, res_early=True, flank=False, relief=False,
                    art_pick=False, wd_loss=0.36, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
-                   grape=0, assault_prep=6 * 60, span=0, r_k=1.0, wood=False),
+                   grape=0, assault_prep=6 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False),
     'normal': dict(n=1, period=10.0, jitter=4.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=1,
                    cohesion=True, bound=220.0, halt=(0.82, 0.92), prep=12 * 60, prep_max=25 * 60, cav_r=430.0,
                    cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
                    art_pick=True, wd_loss=0.5, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
-                   grape=1, assault_prep=12 * 60, span=30, r_k=1.0, wood=False),
-    'difficile': dict(n=2, period=6.0, jitter=0.0, reflex=2.0, sq_r=440.0, sq_miss=0.0, sq_late=False, terrain=2,
-                      cohesion=True, bound=170.0, halt=(0.78, 0.85), prep=15 * 60, prep_max=35 * 60, cav_r=520.0,
+                   grape=1, assault_prep=12 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False),
+    'difficile': dict(n=2, period=6.0, jitter=0.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=2,
+                      cohesion=True, bound=170.0, halt=(0.78, 0.85), prep=15 * 60, prep_max=35 * 60, cav_r=430.0,
                       cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
                       art_pick=True, wd_loss=0.55, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
-                      grape=2, assault_prep=15 * 60, span=60, r_k=1.8, wood=True),
+                      grape=2, assault_prep=15 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True),
 }
 
 
@@ -1125,7 +1125,7 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         for u in line:
             p = mem['post'].get(u.id)
             if p:
-                f = _march_form(b, mem, L, u, p[0], p[1], _foe_dist(u, body)) or 'ligne'
+                f = _march_form(b, mem, L, u, p[0], p[1], _foe_dist(u, body), True) or 'ligne'
                 want[u.id] = [p[0], p[1], p[2], 'colonne' if f == 'colonne' and front is None else
                               ('ligne' if f == 'colonne' else f), False]
         _lights_def(b, side, mem, L, us, foes, sit, want)
@@ -1398,7 +1398,7 @@ def _foe_dist(u, body):
     return math.sqrt(best)
 
 
-def _march_form(b, mem, L, u, sx, sy, fdist):
+def _march_form(b, mem, L, u, sx, sy, fdist, defending=False):
     """Formation de l'infanterie : colonne pour marcher loin du feu ; à portée de l'ennemi ou sous le feu, l'ordre
     dispersé (tirailleurs : deux fois moins de pertes au boulet, à la mitraille et à la fusillade, pour 40 % de feu en
     moins) tant qu'aucun cavalier ennemi ne rôde (normal : à moins de 1 000 m ; difficile : 700 m), sinon la ligne.
@@ -1408,7 +1408,7 @@ def _march_form(b, mem, L, u, sx, sy, fdist):
     near = fdist < (380 if L['col_late'] else 720)
     hit = b.clock - u.hit_t < 40 and not L['col_late']
     if near or hit:
-        if L['n'] >= 1 and not _cav_near(b, mem, u.x, u.y, 1500 if L['n'] == 1 else 1200, 600):
+        if L['skirm'] >= (2 if defending else 1) and not _cav_near(b, mem, u.x, u.y, 1500 if L['n'] == 1 else 1200, 600):
             return 'tirailleurs'
         return 'ligne'
     if math.hypot(sx - u.x, sy - u.y) > 320:
@@ -2093,11 +2093,13 @@ def _cav_target(b, side, L, u, foes, friends, e_cav, r):
             # une ligne fraîche, de face : on s'en garde
             if a <= 1.2 and e.morale >= 55 and e.state != 'melee' and e.form != 'tirailleurs':
                 v *= 0.25
-        # cavaliers ennemis frais à proximité : gare à la contre-charge
-        for c in e_cav:
-            if c is not e and _d2(c.x, c.y, e.x, e.y) < 250 ** 2 and c.morale > 50:
-                v *= 0.6
-                break
+        # cavaliers ennemis frais à proximité : gare à la contre-charge (difficile : on n'y va pas sans supériorité)
+        fresh = sum(c.men for c in e_cav if c is not e and c.morale > 50 and
+                    _d2(c.x, c.y, e.x, e.y) < (450 if L['cav_safe'] else 250) ** 2)
+        if fresh:
+            if L['cav_safe'] and fresh > 0.7 * u.men and e.cls != 'chariot':
+                continue
+            v *= 0.6
         v *= 1.25 - d / r * 0.5
         if v > bv and _charge_ok(b, side, u, e):
             best, bv = e, v
