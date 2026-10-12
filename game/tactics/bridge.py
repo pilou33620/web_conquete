@@ -3,6 +3,8 @@
 - choix du mode d'une bataille du joueur (attente / manuel / auto) et réglage `settings['battles']` ;
 - création d'une TacticalBattle depuis une bataille de campagne (`bt`), boucle tactique (tick), report du résultat
   sur les régiments puis `engine.end_battle` ;
+- « Finir automatiquement » : la bataille jouée en accéléré par tick (budget de calcul ACCEL_BUDGET par appel),
+  reprise du commandement (`resume`), et resolve_now pour la jouer d'un coup (essais, bancs) ;
 - munitions (`ammo`, 0–100 %) et fatigue (`fat`, 0–100) persistantes des régiments en campagne ;
 - sauvegarde, chargement et migration ; vues pour /api/state, /api/tactic et /api/tactic_map ; commandes `tac`.
 
@@ -27,6 +29,9 @@ AUTO_AMMO = {'canonnade': dict(artillerie=80, inf=10, cavalerie=0),
              'fusillade': dict(artillerie=50, inf=70, cavalerie=15),
              'charge': dict(artillerie=30, inf=40, cavalerie=25)}
 AUTO_FAT = 40              # fatigue par jour de bataille automatique
+# « Finir automatiquement » : une bataille accélérée avance par pas DT ordinaires tant que dure ce budget de calcul, à
+# chaque appel de tick (toutes les 0,1 s, sous le verrou du serveur : les requêtes attendent au plus autant)
+ACCEL_BUDGET = 0.045
 
 
 # ================================================================== état de la partie
@@ -304,7 +309,8 @@ def default_deploy(tb, side):
 
 # ================================================================== boucle et fin
 def tick(g, real_dt):
-    """Appelé par App.loop toutes les 0,1 s : fait avancer la bataille tactique en cours."""
+    """Appelé par App.loop toutes les 0,1 s : fait avancer la bataille tactique en cours (à sa vitesse, ou en accéléré
+    après « Finir automatiquement » : autant de pas que le permet ACCEL_BUDGET)."""
     ensure(g)
     if not g.tactical:
         return 0
@@ -314,10 +320,21 @@ def tick(g, real_dt):
             # paix signée ou place passée à un autre camp pendant la bataille : elle s'arrête sans vainqueur
             g.tactical.pop(bid, None)
             continue
-        n += tb.advance(real_dt)
+        n += tb.run_for(ACCEL_BUDGET) if tb.accel else tb.advance(real_dt)
         if tb.phase == 'fin':
             finish(g, tb)
     return n
+
+
+def resolve_now(g, tb):
+    """Synchrone (essais, bancs) : « Finir automatiquement », puis toute la suite de la bataille d'un coup, sans budget
+    de temps, et le report en campagne comme pour une bataille jouée."""
+    if tb.phase != 'fin':
+        if not tb.accel:
+            tb.autofinish()
+        tb.run_to_end()
+    if g.tactical.get(tb.bid) is tb:
+        finish(g, tb)
 
 
 def finish(g, tb):
@@ -548,15 +565,22 @@ def command(g, body):
         v = int(_num(body.get('v', 1)))
         if v not in (0, 1, 2, 4):
             return dict(ok=False, msg='Vitesse invalide.')
+        if tb.accel:
+            return dict(ok=False, msg='Vos officiers mènent la bataille au plus vite : reprenez le commandement pour '
+                                      'régler la vitesse.')
         tb.speed = v
         return dict(ok=True)
     if sub == 'withdraw':
         ok, msg = tb.withdraw(me)
         return dict(ok=ok, msg=msg)
     if sub == 'autofinish':
+        # la suite se joue en accéléré dans tick (le joueur la voit défiler et peut reprendre le commandement)
         ok, msg = tb.autofinish()
         if tb.phase == 'fin':
             finish(g, tb)
+        return dict(ok=ok, msg=msg)
+    if sub == 'resume':
+        ok, msg = tb.resume()
         return dict(ok=ok, msg=msg)
     return dict(ok=False, msg='Commande de bataille inconnue.')
 

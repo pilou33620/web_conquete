@@ -370,8 +370,15 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   murets, routes, rivières avec gués et ponts, fermes, et la ville avec ses remparts, ses portes et la brèche du siège.
   Chaque régiment a son expérience, son endurance, la portée de ses armes et ses munitions (un chariot par armée les
   recomplète) ; les bois cachent les troupes, la nuit arrête le combat.
-- « Finir automatiquement » résout la bataille d'un coup à partir de la situation du moment. Munitions et fatigue
-  restent d'une bataille à l'autre : elles se recomplètent en campagne (vite chez soi, peu en pays ennemi).
+- **« Finir automatiquement »** confie la suite à vos officiers : la vraie bataille continue, avec les mêmes règles,
+  l'IA commandant vos régiments (au niveau « normal », quelle que soit la difficulté) contre celle de l'ennemi, et le
+  serveur la joue aussi vite qu'il le peut sans cesser de répondre — une dizaine de secondes en général sur un PC,
+  une demi-minute à deux minutes sur un Raspberry Pi 4. Vous la voyez défiler sous un bandeau « Les généraux
+  poursuivent la bataille… » (l'heure, la journée jusqu'à la nuit) ; **« Reprendre le commandement »** vous rend la
+  main, bataille en pause. Pendant l'accéléré, vos ordres et les vitesses n'ont pas cours ; « Décrocher » reste
+  possible. Le récapitulatif et le report en campagne sont ceux d'une bataille commandée, et une partie enregistrée
+  en plein accéléré reprend en accéléré. Munitions et fatigue restent d'une bataille à l'autre : elles se
+  recomplètent en campagne (vite chez soi, peu en pays ennemi).
 
 #### Conduire une bataille
 - **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît en vue
@@ -395,8 +402,8 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   molette et clic droit ou du milieu à la souris ; flèches du clavier. La **mini-carte** (en bas à droite) se touche
   pour s'y rendre ; dessous, la vitesse : pause, ×1, ×2, ×4 (espace, 1, 2, 4 au clavier).
 - **En haut** : l'heure (et la nuit qui approche), le temps, le rapport de forces (l'ennemi : seulement ce que
-  vous en voyez), le journal (repliable, et complet derrière son bouton), l'aide, **« Finir auto. »** et
-  **« Décrocher »** (toute l'armée quitte le terrain), chacun avec confirmation.
+  vous en voyez), le journal (repliable, et complet derrière son bouton), l'aide, **« Finir auto. »** (vos officiers
+  achèvent la bataille en accéléré) et **« Décrocher »** (toute l'armée quitte le terrain), chacun avec confirmation.
 - **La fin.** Le récapitulatif donne victoire ou défaite, pertes des deux camps, prisonniers, expérience, et les
   pertes de chaque régiment ; « Retour à la carte » ramène la campagne, que vous relancez quand vous voulez.
 - Clavier : C charger, H tenir, F feu, R rallier, Échap désélectionner, Ctrl + A tout choisir, + et − zoom.

@@ -35,13 +35,18 @@ export class BattleUI {
         <div class="bt-acts">
           <button class="bt-ib" data-a="journal" aria-label="Journal de la bataille" title="Journal">${I.journal}</button>
           <button class="bt-ib" data-a="aide" aria-label="Aide" title="Aide">${I.aide}</button>
-          <button class="bt-btn" data-a="auto" title="Calculer la fin de la bataille">${I.auto}<span>Finir auto.</span></button>
+          <button class="bt-btn" data-a="auto" title="Confier la suite à vos officiers, en accéléré">${I.auto}<span>Finir auto.</span></button>
           <button class="bt-btn danger" data-a="decrocher" title="Faire retraite">${I.retraite}<span>Décrocher</span></button>
         </div>
       </header>
       <div class="bt-deploy" hidden>
         <div class="bt-dtxt"><b>Déploiement</b> — glissez vos régiments dans la zone dorée et orientez-les. <span class="bt-legend"><i class="lg-bois"></i>bois : couvert <i class="lg-haut"></i>hauteurs : vue et portée <i class="lg-bati"></i>bâti, murs</span></div>
         <div class="bt-dbtns"><button class="bt-btn" data-a="couverts">${I.couvert}<span>Couverts</span></button><button class="bt-btn primary" data-a="engager">Engager la bataille</button></div>
+      </div>
+      <div class="bt-accel" role="region" aria-label="Bataille en accéléré" hidden>
+        <div class="ba-txt"><b>Les généraux poursuivent la bataille…</b><span class="ba-h"></span>
+          <div class="ba-prog" aria-hidden="true"><i class="ba-done"></i><i class="ba-from"></i></div></div>
+        <button class="bt-btn primary" data-a="reprendre">Reprendre le commandement</button>
       </div>
       <button class="bt-feedtog" data-a="feedtog" aria-label="Afficher ou replier le fil des événements" title="Fil des événements"><span class="ft-i">‹</span><span class="ft-n" hidden></span></button>
       <div class="bt-feed" aria-live="polite"></div>
@@ -111,10 +116,17 @@ export class BattleUI {
     this.$('.bt-deploy').hidden = !deploy;
     this.el.classList.toggle('deploy', deploy);
     this.el.classList.toggle('fin', st.phase === 'fin');
-    this.$('[data-a="auto"]').hidden = deploy || st.phase === 'fin';
+    // « Finir automatiquement » : vos officiers commandent et la bataille défile en accéléré (les vitesses n'y font rien)
+    const accel = !!st.accel && st.phase === 'combat';
+    this.el.classList.toggle('accel', accel);
+    this.$('.bt-accel').hidden = !accel;
+    if (accel) this.accelBar(st);
+    // (les bulles d'aide parlent de commander : elles se referment quand les officiers prennent la main)
+    if (accel && !prev?.accel) { if (v.controls.targeting) v.controls.setTargeting(null); this.$('.bt-tip').hidden = true; this.panelSig = ''; }
+    this.$('[data-a="auto"]').hidden = deploy || st.phase === 'fin' || accel;
     this.$('[data-a="decrocher"]').hidden = st.phase === 'fin';
-    for (const bt of this.$('.bt-speed').children) bt.classList.toggle('on', +bt.dataset.v === (st.speed ?? 0) && !deploy);
-    this.$('.bt-speed').classList.toggle('off', deploy);
+    for (const bt of this.$('.bt-speed').children) bt.classList.toggle('on', +bt.dataset.v === (st.speed ?? 0) && !deploy && !accel);
+    this.$('.bt-speed').classList.toggle('off', deploy || accel);
     this.$('[data-a="couverts"]').classList.toggle('on', v.showCover !== false);
     // journal
     for (const txt of st.log || []) this.addLog(txt);
@@ -123,6 +135,16 @@ export class BattleUI {
     if (prev && prev.phase === 'deploiement' && st.phase === 'combat') { this.toast('La bataille est engagée !', 'good'); v.showCover = false; }
     this.renderDock();
     this.renderPanel();
+  }
+  // bandeau de l'accéléré : l'heure de bataille qui avance, et la journée de 8 h à la nuit (repère : la prise de
+  // commandement des officiers)
+  accelBar(st) {
+    const dusk = Math.max(1, st.dusk || 1), k = clamp((st.clock || 0) / dusk, 0, 1), k0 = clamp((st.accel_t || 0) / dusk, 0, 1);
+    this.$('.ba-h').textContent = `${st.hour || ''} — nuit vers ${hourOf(dusk)}`;
+    this.$('.ba-done').style.width = (k * 100).toFixed(1) + '%';
+    const from = this.$('.ba-from');
+    from.style.left = (k0 * 100).toFixed(1) + '%';
+    from.hidden = k0 <= 0.005;
   }
   frame(now) {
     if (now - this.miniT > 100) { this.miniT = now; this.drawMini(); }
@@ -250,7 +272,7 @@ export class BattleUI {
     const foe = this.inspected && v.units.get(this.inspected);
     if (!us.length && !foe) { p.hidden = true; this.panelSig = ''; this.el.classList.remove('has-panel'); return; }
     const deploy = v.st?.phase === 'deploiement';
-    const sig = JSON.stringify([deploy, foe ? [foe.id, foe.men, foe.state, foe.form, foe._ghost] : us.map(u => [u.id, u.men, Math.round(u.morale), Math.round(u.fat ?? 0), u.ammo, u.state, u.form, u.fire])]);
+    const sig = JSON.stringify([deploy, !!v.st?.accel, foe ? [foe.id, foe.men, foe.state, foe.form, foe._ghost] : us.map(u => [u.id, u.men, Math.round(u.morale), Math.round(u.fat ?? 0), u.ammo, u.state, u.form, u.fire])]);
     if (sig === this.panelSig && !force) return;
     this.panelSig = sig;
     p.hidden = false;
@@ -276,12 +298,14 @@ export class BattleUI {
         </dl>
         <div class="bp-note">${am} · ${rg}</div>`;
     }
-    // formations communes
-    const forms = cls === 'mix' ? [] : FORMS[cls] || [];
+    // formations communes (pas pendant l'accéléré : ce sont vos officiers qui commandent)
+    const forms = cls === 'mix' || v.st?.accel ? [] : FORMS[cls] || [];
     if (forms.length) h += `<div class="bp-row"><div class="bp-seg">${forms.map(f => `<button data-a="form" data-f="${f}" class="${us.every(x => x.form === f) ? 'on' : ''}" title="${esc(FORM_HELP[f])}">${esc(FORM_LABEL[f])}</button>`).join('')}</div></div>`;
     if (deploy) {
       h += `<div class="bp-row bp-btns"><button class="bt-btn" data-a="rot" data-r="-1">↺ Pivoter</button><button class="bt-btn" data-a="rot" data-r="1">Pivoter ↻</button></div>
         <p class="bp-help">Glissez le régiment pour le placer ; glissez depuis le sol pour fixer l'emplacement et l'orientation.</p>`;
+    } else if (v.st?.accel) {
+      h += `<p class="bp-help">Vos officiers commandent ce régiment. Touchez « Reprendre le commandement » pour lui donner vos ordres.</p>`;
     } else {
       const fireHold = us.every(x => x.fire === 'hold');
       const anyRout = us.some(x => x.state === 'deroute');
@@ -344,6 +368,7 @@ export class BattleUI {
   setSpeed(n) {
     const v = this.v;
     if (!v.st || v.st.phase !== 'combat') return;
+    if (v.st.accel) { this.toast('Vos officiers mènent la bataille au plus vite : reprenez le commandement pour régler la vitesse.'); return; }
     v.st.speed = n;
     for (const bt of this.$('.bt-speed').children) bt.classList.toggle('on', +bt.dataset.v === n);
     v.cmd('speed', { v: n });
@@ -382,15 +407,36 @@ export class BattleUI {
         if (!r.ok) return;
         // le décrochage se fait en marchant vers son bord : le temps doit tourner
         this.toast('L’armée décroche et quitte le champ de bataille…');
-        if (!(v.st?.speed > 0)) { v.st.phase = 'combat'; this.setSpeed(2); }
+        if (!(v.st?.speed > 0) && !v.st?.accel) { v.st.phase = 'combat'; this.setSpeed(2); }
       }, true); break;
-      case 'auto': this.confirm('Finir automatiquement ?', 'La suite de la bataille est calculée d’un coup, d’après la situation présente : effectifs, moral, munitions et positions tenues.', 'Finir automatiquement', async () => { const r = await v.cmd('autofinish'); if (r.ok) this.toast('Résolution de la bataille…'); }); break;
+      case 'auto': this.confirm('Finir automatiquement ?', 'La suite de la bataille est jouée par vos officiers, en accéléré, avec les mêmes règles que si vous commandiez : vous la voyez défiler jusqu’à son issue, et vous pouvez reprendre le commandement à tout moment.', 'Finir automatiquement', async () => {
+        const r = await v.cmd('autofinish');
+        if (!r.ok) return;
+        // (la prochaine réponse du serveur affiche le bandeau ; d'ici là, plus d'ordres)
+        if (v.st) v.st.accel = true;
+        v.sel.clear(); this.selChanged(); this.toast('Vos officiers prennent le commandement…');
+      }); break;
+      case 'reprendre': this.resume(); break;
       case 'close': this.closeModal(); break;
       case 'ok': { const f = this.onOk; this.closeModal(); f && f(); break; }
       case 'retour': this.closeModal(); v.onExit && v.onExit(this.result); break;
       case 'tipnext': this.tipStep(this.tipI + 1); break;
       case 'tipskip': this.tipStep(99); break;
     }
+  }
+  async resume() {
+    const v = this.v, b = this.$('[data-a="reprendre"]');
+    b.disabled = true;
+    const r = await v.cmd('resume');
+    b.disabled = false;
+    if (!r.ok) return;
+    // la bataille est en pause : le joueur voit où en sont les choses avant de donner ses ordres
+    // (la prochaine réponse du serveur met à jour le reste : vitesses, bouton « Finir auto. »)
+    if (v.st) { v.st.accel = false; v.st.speed = 0; }
+    this.$('.bt-accel').hidden = true;
+    this.el.classList.remove('accel');
+    this.renderPanel(true);
+    this.toast('Vous reprenez le commandement : la bataille est en pause.', 'good');
   }
   async engage() {
     const r = await this.v.cmd('start');
@@ -463,7 +509,7 @@ export class BattleUI {
       ['.bt-deploy', deploy ? 'Glissez vos régiments dans la zone dorée. Les bois (vert) cachent et protègent, les hauteurs (or) voient loin et portent plus loin, le bâti (bleu) abrite.' : 'Vos troupes sont engagées : touchez un régiment pour le commander.'],
       ['.bt-dock', 'Touchez un régiment (sur le terrain ou ici) pour le choisir. Puis touchez le sol pour l’y envoyer, ou glissez depuis le régiment pour tracer sa route. Appui long puis glisser : plusieurs à la fois.'],
       ['.bt-mini', 'Pincez pour zoomer, glissez à deux doigts pour déplacer la vue. Touchez la mini-carte pour y aller. Sous elle : pause, ×1, ×2, ×4.'],
-      ['.bt-acts', 'Le journal raconte la bataille. « Décrocher » sauve l’armée en lui faisant quitter le terrain ; « Finir auto. » calcule la suite d’un coup.'],
+      ['.bt-acts', 'Le journal raconte la bataille. « Décrocher » sauve l’armée en lui faisant quitter le terrain ; « Finir auto. » confie la suite à vos officiers : elle se joue en accéléré sous vos yeux, avec les mêmes règles, et vous pouvez reprendre le commandement à tout moment.'],
     ];
     if (deploy) steps.push(['[data-a="engager"]', 'Quand tout le monde est en place : « Engager la bataille ».']);
     const tip = this.$('.bt-tip');
@@ -537,3 +583,5 @@ const ABBR = [[/^Chariot de munitions.*/i, 'Munitions'], [/^Batterie /, 'Bie '],
   [/cavalerie/i, 'Cav.'], [/artillerie/i, 'Art.'], [/chasseurs?/i, 'Chass.'], [/voltigeurs?/i, 'Volt.'], [/Miquelets?/, 'Miq.'],
   [/Sapeurs?/, 'Sap.'], [/Garde nationale/, 'Garde nat.'], [/Territoriale/, 'Territ.'], [/réunis$/, 'réun.']];
 const short = n => ABBR.reduce((t, [re, by]) => (t.length > 11 ? t.replace(re, by) : t), String(n || ''));
+// heure de bataille (secondes depuis 8 h) écrite comme le serveur : « 20 h 30 »
+const hourOf = c => { const m = Math.floor(480 + c / 60); return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
