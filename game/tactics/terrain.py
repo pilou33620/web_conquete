@@ -190,7 +190,7 @@ class BattleMap:
                     f=base64.b64encode(bytes(self.f)).decode(), feature_names=FEAT_NAMES,
                     fences=[dict(kind=k, pts=[r2(p) for p in pts]) for k, pts in self.fences],
                     heart=list(self.heart) if self.heart else None,
-                    seed=spec['seed'], season=spec['season'], weather=spec['weather'],
+                    seed=spec['seed'], season=spec['season'], weather=spec['weather'], year=spec.get('year'),
                     camp=dict(x=spec['cx'], y=spec['cy']), region=self.region,
                     types=TYPE_NAMES, labels=TYPE_LABEL)
 

@@ -96,6 +96,22 @@ export function hash(i, j, k = 0) {
   n = Math.imul(n ^ (n >>> 13), 1274126177);
   return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
 }
+// bruit de valeur lissé (0 à 1), continu en x et y
+export function vnoise(x, y, s) {
+  const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const a = hash(ix, iy, s), b = hash(ix + 1, iy, s), c = hash(ix, iy + 1, s), d = hash(ix + 1, iy + 1, s);
+  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+}
+// couleurs : « #rrggbb » → [r, g, b], [r, g, b] → « rgba(…) », mélange de deux couleurs (t = 0 : a, 1 : b)
+export function hexRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+export function rgbStr(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
+export function mixHex(a, b, t) { const x = hexRgb(a), y = hexRgb(b); return rgbStr([x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t]); }
+export const canvas = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; };
+// lumière du soleil : elle vient du nord-ouest (en haut à gauche de l'écran) ; une chose haute de h mètres jette
+// son ombre au sol jusqu'à (h × OMBRE[0], h × OMBRE[1]) mètres, vers le sud-est. Terrain, figurines et relief
+// suivent la même lumière.
+export const OMBRE = [0.62, 0.42];
 // angle ramené dans ]−π, π]
 export function wrapAngle(a) {
   while (a > Math.PI) a -= TAU;

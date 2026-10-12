@@ -3,17 +3,18 @@
 <script type="module">
 import { Terrain } from '../terrain.js';
 import { TILT } from '../formes.js';
+import { profil } from '../qualite.js';
 const q = new URLSearchParams(location.search);
 const bid = q.get('bid') || 'bocage';
 const m = await (await fetch('/api/tactic_map?bid=' + bid)).json();
 const prof = {};
-for (const k of ['prepare','regionPath','prepTrees','prepShade','prepContours','prepPaths','prepCover','paintCanvas']) {
+for (const k of ['prepare','regionPath','prepTrees','prepShade','prepNuances','prepContours','prepPaths','prepCover','paintCanvas']) {
   const f = Terrain.prototype[k];
   Terrain.prototype[k] = function (...a) { const t = performance.now(); const r = f.apply(this, a); prof[k] = (prof[k] || 0) + performance.now() - t; return r; };
 }
 const t0 = performance.now();
 Terrain.prototype.prof = {};
-const T = new Terrain(m);
+const T = new Terrain(m, profil(q.get('q') || undefined));
 const t1 = performance.now();
 const cv = document.getElementById('c'), dpr = devicePixelRatio, vw = innerWidth, vh = innerHeight;
 cv.width = vw * dpr; cv.height = vh * dpr; cv.style.width = vw + 'px'; cv.style.height = vh + 'px';
