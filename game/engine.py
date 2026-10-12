@@ -2482,9 +2482,10 @@ class Game:
     def update_battles(self, dt):
         """Résolution automatique (choix « Automatique », batailles sans le joueur), par pas de campagne : pertes typées
         selon la phase, les formations et les plans, puis la fin, recalée sur les batailles jouées sur le champ de
-        bataille. Hors d'une place, le camp dominé (battle_yield) ou dont le moral casse se retire en bon ordre ; seule une
-        armée presque anéantie (moins de 18 % de ses hommes) est mise en déroute et poursuivie. Le défenseur d'une place
-        ne décroche jamais : il la rend s'il cède. Au bout de 4 jours, le plus puissant l'emporte."""
+        bataille. En rase campagne, le camp dominé (battle_yield) ou dont le moral casse se retire en bon ordre ; seule une
+        armée presque anéantie (moins de 18 % de ses hommes) est mise en déroute et poursuivie. Devant une place,
+        l'assaillant dominé décroche, mais un assaut brisé reflue en désordre ; le défenseur ne décroche jamais : il rend
+        la place s'il cède. Au bout de 4 jours, le plus puissant l'emporte."""
         K = 0.20
         for bid in list(self.battles):
             bt = self.battles.get(bid)
