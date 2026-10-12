@@ -147,7 +147,7 @@ export class Effects {
       this.queue.push({ fn: () => {
         this.flashes.push({ x: px + c * 1.2, y: py + s * 1.2, alt: 1.6, r: 2.2 + Math.random(), t: 0, life: 0.09 + Math.random() * 0.05 });
         const sp = 4 + Math.random() * 4;
-        this.addPuff(this.white, px + c * 1.5, py + s * 1.5, 1.5, 3 + Math.random() * 2, 0.9 + Math.random() * 0.7, 0.72 + Math.random() * 0.2, life * (0.7 + Math.random() * 0.5), c * sp + (Math.random() - 0.5) * 2, s * sp + (Math.random() - 0.5) * 2, 0.08 + Math.random() * 0.12);
+        this.addPuff(this.white, px + c * 1.5, py + s * 1.5, 1.5, 4 + Math.random() * 2.5, 1.2 + Math.random() * 0.8, 0.72 + Math.random() * 0.2, life * (0.7 + Math.random() * 0.5), c * sp + (Math.random() - 0.5) * 2, s * sp + (Math.random() - 0.5) * 2, 0.08 + Math.random() * 0.12);
       }, at: this.t + at });
     }
   }
