@@ -94,7 +94,7 @@ export class Effects {
     this.t = 0;
   }
   setQuality(q) { this.q = q; }
-  dispose() { this.puffs.length = 0; this.flashes.length = 0; this.bits.length = 0; }
+  dispose() { this.puffs.length = 0; this.flashes.length = 0; this.bits.length = 0; if (this.smokeCv) this.smokeCv.width = this.smokeCv.height = 0; }
   // ------------------------------------------------------------------ effets envoyés par le serveur
   // f : {k, x, y, x2, y2, n, u} ; unit : l'unité qui l'a produit (pour le front d'une salve) ; delay en s
   push(f, unit, delay = 0) { this.queue.push({ f, unit, at: this.t + delay }); }
@@ -257,16 +257,23 @@ export class Effects {
     const thin = clamp(1.25 - z / 16, 0.55, 1);
     // opacité selon l'âge : apparaît vite, reste épaisse longtemps, s'efface à la fin
     const fade = p => { const k = p.t / p.life; return p.a * (k < 0.05 ? k / 0.05 : 1 - Math.pow((k - 0.05) / 0.95, p.imgs === this.white ? 1.8 : 0.8)); };
-    // ombre de la fumée au sol (au sud-est), légère ; seulement en qualité Ultra (autant de dessins que de fumées)
+    // La fumée est douce : elle est peinte dans un canevas moins fin que l'écran (smoke pixels par pixel CSS), posé
+    // ensuite en une fois. Des centaines de bouffées coûtent alors bien moins à remplir.
+    const k = this.q?.smoke ?? 0.75, W = Math.ceil(view.vw * k), H = Math.ceil(view.vh * k);
+    const cv = this.smokeCv = this.smokeCv || canvas(W, H);
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    const g = cv.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H); g.setTransform(k, 0, 0, k, 0, 0);
+    let any = false;
+    // ombre de la fumée au sol (au sud-est), légère ; seulement en qualité Ultra
     if ((this.q?.fx ?? 2) >= 3) {
-      ctx.globalAlpha = 1;
       for (const p of this.puffs) {
         if (p.imgs !== this.white || p.alt > 30) continue;
         const a = fade(p) * 0.18;
         if (a <= 0.01) continue;
         const [sx, sy] = view.toScreen(p.x + p.alt * 0.62 + 2, p.y + p.alt * 0.42 + 1.5), r = p.r * z;
         if (sx < -r * 2 || sy < -r * 2 || sx > view.vw + r * 2 || sy > view.vh + r * 2) continue;
-        ctx.globalAlpha = a; ctx.drawImage(this.shade, sx - r, sy - r * TILT, r * 2, r * 2 * TILT);
+        g.globalAlpha = a; g.drawImage(this.shade, sx - r, sy - r * TILT, r * 2, r * 2 * TILT); any = true;
       }
     }
     for (const p of this.puffs) {
@@ -274,10 +281,11 @@ export class Effects {
       if (a <= 0.01) continue;
       const [sx, sy] = view.toScreen(p.x, p.y), r = p.r * z;
       if (sx < -r * 2 || sy < -r * 2 || sx > view.vw + r * 2 || sy > view.vh + r * 2) continue;
-      ctx.globalAlpha = a;
-      ctx.drawImage(p.img, sx - r, sy - r * 0.9 - p.alt * z, r * 2, r * 1.8);
+      g.globalAlpha = a;
+      g.drawImage(p.img, sx - r, sy - r * 0.9 - p.alt * z, r * 2, r * 1.8); any = true;
     }
-    ctx.globalAlpha = 1;
+    g.globalAlpha = 1;
+    if (any) { ctx.imageSmoothingEnabled = true; ctx.drawImage(cv, 0, 0, W / k, H / k); }
     // éclats de terre
     ctx.fillStyle = 'rgba(70,54,36,0.85)';
     for (const b of this.bits) {

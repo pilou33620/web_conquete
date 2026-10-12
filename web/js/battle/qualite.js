@@ -19,12 +19,13 @@ const KEY = 'conquete.bataille.qualite';
 // dpr : densité maximale du canevas ; level : tuiles les plus fines (pixels physiques par mètre) ; maxZ : zoom
 // le plus rapproché (pixels CSS par mètre) ; tiles : tuiles de 512 px gardées (1 Mo chacune) ; sprites : octets
 // de silhouettes en cache ; figures : figurines dessinées au plus par image ; puffs : fumées et poussières ;
-// fx : richesse des effets (0 à 3) ; clouds : ombres des nuages ; textures : octets de motifs du terrain
+// fx : richesse des effets (0 à 3) ; clouds : ombres des nuages ; textures : octets de motifs du terrain ; smoke :
+// finesse du canevas de la fumée (pixels par pixel CSS)
 export const PROFILS = {
-  basse: { dpr: 1, level: 4, maxZ: 6, tiles: 36, sprites: 6e6, figures: 2400, puffs: 420, fx: 0, clouds: false, textures: 8e6 },
-  moyenne: { dpr: 1.5, level: 8, maxZ: 9, tiles: 48, sprites: 12e6, figures: 5000, puffs: 800, fx: 1, clouds: true, textures: 14e6 },
-  haute: { dpr: 2, level: 16, maxZ: 14, tiles: 64, sprites: 24e6, figures: 9000, puffs: 1400, fx: 2, clouds: true, textures: 24e6 },
-  ultra: { dpr: 3, level: 16, maxZ: 20, tiles: 110, sprites: 48e6, figures: 16000, puffs: 2400, fx: 3, clouds: true, textures: 48e6 },
+  basse: { dpr: 1, level: 4, maxZ: 6, tiles: 36, sprites: 6e6, figures: 2400, puffs: 420, fx: 0, clouds: false, textures: 8e6, smoke: 0.5 },
+  moyenne: { dpr: 1.5, level: 8, maxZ: 9, tiles: 48, sprites: 12e6, figures: 5000, puffs: 800, fx: 1, clouds: true, textures: 14e6, smoke: 0.5 },
+  haute: { dpr: 2, level: 16, maxZ: 14, tiles: 64, sprites: 24e6, figures: 9000, puffs: 1400, fx: 2, clouds: true, textures: 24e6, smoke: 0.6 },
+  ultra: { dpr: 3, level: 16, maxZ: 20, tiles: 110, sprites: 48e6, figures: 16000, puffs: 2400, fx: 3, clouds: true, textures: 48e6, smoke: 1 },
 };
 
 // appareil : iPad (y compris ceux qui se disent Macintosh), iPhone, Android, ordinateur
