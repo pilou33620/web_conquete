@@ -1458,7 +1458,8 @@ class TacticalBattle:
             a.state = 'repos'
             return
         if tg.state == 'deroute':
-            self._capture(a, tg, CAPTURE['choc_cav'] if cav else CAPTURE['choc_inf'])
+            # (des chevaux essoufflés, une charge sans élan ramassent moins de fuyards)
+            self._capture(a, tg, (CAPTURE['choc_cav'] if cav else CAPTURE['choc_inf']) * min(1.0, mom / (2.2 if cav else 1.0)))
             a.state = 'repos'
             return
         if cav and tg.form == 'carre' and tg.busy <= 0:

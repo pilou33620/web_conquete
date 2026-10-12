@@ -110,6 +110,8 @@ GRAPE_DEADLY = 0.6
 # l'assaillant qui mène l'attaque (plans frontal, artillerie, débordement) ne décroche qu'avec ce supplément de pertes :
 # il sait qu'on n'emporte pas une position sans le payer (même valeur à tous les niveaux)
 ATT_TENACITY = 0.05
+# combat égal qui s'éternise : passé wd_loss + 7 % de pertes, on cède si le rapport de forces vu est sous wd_ratio + ceci
+WD_EVEN = 0.2
 
 LEVELS = {
     'facile': dict(n=0, period=20.0, jitter=12.0, reflex=6.0, sq_r=210.0, sq_miss=0.3, sq_late=True, terrain=0,
@@ -1092,11 +1094,7 @@ def _stalled(b, mem, sit, line=None):
     n'a pas tiré un coup de fusil depuis 30 min alors que l'ennemi n'a presque rien perdu (on se fait canonner de loin
     sans pouvoir répondre)."""
     now = b.clock
-    hist = mem.setdefault('hist', [])
-    if not hist or now - hist[-1][0] >= 300:
-        hist.append([round(now), round(sit['mine']), round(sit['foe'])])
-        if len(hist) > 12:
-            del hist[:len(hist) - 12]
+    hist = _history(b, mem, sit)
     old = [h for h in hist if now - h[0] >= 2700]
     if mem.get('t_contact') is None:
         return False
@@ -1111,11 +1109,22 @@ def _stalled(b, mem, sit, line=None):
     return h[1] - sit['mine'] < 0.01 * max(1, h[1]) and h[2] - sit['foe'] < 0.01 * max(1, h[2])
 
 
+def _history(b, mem, sit):
+    """Effectifs des deux camps (le nôtre, l'ennemi estimé), relevés toutes les 5 min (une heure au plus)."""
+    hist = mem.setdefault('hist', [])
+    if not hist or b.clock - hist[-1][0] >= 300:
+        hist.append([round(b.clock), round(sit['mine']), round(sit['foe'])])
+        if len(hist) > 12:
+            del hist[:len(hist) - 12]
+    return hist
+
+
 def _decide_withdraw(b, side, mem, L, sit):
     """Décrocher quand la bataille est perdue (jamais pour le défenseur d'une place)."""
     plan = mem['plan']
     if plan == 'place' or not sit['combat']:
         return False
+    _history(b, mem, sit)
     why = None
     tr = b.trait(side)
     k = 0.08 if tr == 'prudent' else (-0.05 if tr == 'audacieux' else 0.0)
@@ -1127,7 +1136,7 @@ def _decide_withdraw(b, side, mem, L, sit):
     # (les pertes comptent les troupes en déroute : un camp qui en a plusieurs à la fois plie)
     if sit['loss'] > L['wd_loss'] - k and sit['ratio'] < L['wd_ratio'] + 0.1:
         why = 'pertes trop lourdes'
-    elif sit['loss'] > L['wd_loss'] + 0.07 - k and sit['ratio'] < L['wd_ratio'] + 0.3:
+    elif sit['loss'] > L['wd_loss'] + 0.07 - k and sit['ratio'] < L['wd_ratio'] + L.get('wd_even', WD_EVEN):
         why = 'pertes trop lourdes'   # (combat égal qui s'éternise : le plus éprouvé cède)
     elif sit['ratio'] < 0.45 and sit['loss'] > 0.2:
         why = "l'ennemi est bien plus fort"
