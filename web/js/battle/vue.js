@@ -54,6 +54,7 @@ export class BattleView {
     const m = await this.api.get(`/api/tactic_map?bid=${encodeURIComponent(bid)}`);
     if (!m || (!m.t && !m.W)) throw new Error('Carte de bataille indisponible');
     this.map = m;
+    this.nBreach = m.nbreach || 0;
     this.terrain = new Terrain(m, this.q);
     this.art.setYear(m.year);   // coiffures de l'époque
     this.W = this.terrain.W; this.H = this.terrain.H;
@@ -127,6 +128,9 @@ export class BattleView {
     this.lastSnap = now;
     const prev = this.st;
     this.st = st;
+    // brèches ouvertes au canon depuis le chargement de la carte
+    for (const b of (st.breaches || []).slice(this.nBreach || 0)) this.terrain.addBreach(b);
+    this.nBreach = Math.max(this.nBreach || 0, (st.breaches || []).length);
     this.seq = st.seq ?? this.seq;
     this.me = st.me ?? 0;
     this.colors = (st.sides || []).map((s, i) => s.color || (i ? '#3f6fb5' : '#b8352a'));

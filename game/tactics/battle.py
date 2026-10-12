@@ -161,6 +161,15 @@ BRAKE_INF = {T_BOIS: 0.85, T_FORET_T: 0.7, T_MARAIS_T: 0.6, T_VIGNE_T: 0.85, T_B
 # ---- équilibre du combat (voir « Règles de combat » dans l'aide-mémoire) ----
 P_FUSIL = 0.0065         # touchés par homme qui tire et par salve, à portée efficace (avant arme, expérience, moral…)
 P_BOULET = 0.26          # touchés par pièce et par coup de boulet à courte distance, sur une ligne à découvert
+# les canons de l'assaillant battent le rempart d'une place : un pan s'effondre après BREACH_PTS coups de pièce (pondérés
+# par l'armement et la distance) par niveau de fortification, dans un des BREACH_SECT secteurs de l'enceinte
+# (deux batteries ouvrent une place ordinaire en une petite heure)
+BREACH_PTS = 240.0
+BREACH_SECT = 16
+BREACH_R = 24.0          # rayon de la brèche ouverte au canon (m)
+DEPLOY_GAP = 200.0       # demi-largeur de la bande neutre entre les deux zones de déploiement (m)
+DEPLOY_WALL = 450.0      # l'assaillant se déploie au moins à cette distance de l'enceinte…
+DEPLOY_DEF = 250.0       # … et le défenseur jusqu'à cette distance au-delà (m)
 P_MITRAILLE = 0.56       # … à mitraille, jusqu'à 30 % de la portée de mitraille (puis de moins en moins : grape_k)
 GRAPE_CLOSE = 150.0      # … et bien davantage à bout portant : sous 150 m, ×1,5 à 100 m…
 GRAPE_POINT = 1.6        # … ×1,6 dès 90 m (aussi le feu de défense d'une batterie abordée de face)
@@ -290,6 +299,8 @@ class TacticalBattle:
         self._path_cache = {}
         self._astar_left = 6
         self._los_cache = {}
+        self.pound = {}                      # coups encaissés par secteur de l'enceinte (canons de l'assaillant)
+        self.breaches = []                   # brèches ouvertes pendant la bataille : [mur, x, y, rayon]
         rng = random.Random(spec['seed'] ^ 0x5A5A)
         self.rng = rng
         wa = rng.random() * 6.283
@@ -309,30 +320,21 @@ class TacticalBattle:
             e0 = 'S' if sa > 0 else 'N'
         opp = dict(E='O', O='E', N='S', S='N')
         self.edges = [e0, opp[e0]]
+        # chaque camp se déploie librement dans sa moitié de la carte, sauf une bande neutre de 2 × DEPLOY_GAP au
+        # milieu ; devant une place, l'assaillant reste à DEPLOY_WALL de l'enceinte et le défenseur tient la place et
+        # ses abords (DEPLOY_DEF au-delà de l'enceinte)
         pl = self.map.place
         z = []
-        depth = 500
         if pl and pl.get('battle'):
             px, py, r = pl['x'], pl['y'], pl['r']
-            d = dict(O=px, E=W - px, N=py, S=H - py)[e0] - r - 350
-            depth = max(500, min(1400, d))
-        z.append(self._edge_band(e0, depth))
-        if pl and pl.get('battle'):
-            r = pl['r'] + 120
+            d = dict(O=px, E=W - px, N=py, S=H - py)[e0] - r - DEPLOY_WALL
+            z.append(self._edge_band(e0, max(500, d)))
+            r = pl['r'] + DEPLOY_DEF
             z.append([max(0, pl['x'] - r), max(0, pl['y'] - r), min(W, pl['x'] + r), min(H, pl['y'] + r)])
         else:
-            far = self._edge_band(e0, 1300 if e0 in 'NS' else 2100)
-            near = self._edge_band(e0, 1000 if e0 in 'NS' else 1250)
-            z1 = list(far)
-            if e0 == 'O':
-                z1[0] = near[2]
-            elif e0 == 'E':
-                z1[2] = near[0]
-            elif e0 == 'N':
-                z1[1] = near[3]
-            else:
-                z1[3] = near[1]
-            z.append(z1)
+            half = (W if e0 in 'OE' else H) / 2 - DEPLOY_GAP
+            z.append(self._edge_band(e0, half))
+            z.append(self._edge_band(opp[e0], half))
         self.zones = z
 
     @staticmethod
@@ -827,7 +829,9 @@ class TacticalBattle:
         px, py = -math.sin(dir), math.cos(dir)
         widths = []
         for u in us:
-            if form and form in U.FORMS.get(u.cls, ()) and form != 'batterie':
+            if u.src == 'rempart':
+                u.form = 'batterie'   # canons du rempart : toujours en batterie
+            elif form and form in U.FORMS.get(u.cls, ()) and form != 'batterie':
                 u.form = form
             elif form == 'batterie' and u.cls == 'artillerie':
                 u.form = 'batterie'
@@ -867,6 +871,10 @@ class TacticalBattle:
         us = [u for u in us if u and u.side == side and u.alive and (who == 'any' or u.ctrl == who)]
         if not us:
             return False, "Aucune unité à commander."
+        if kind not in ('fire', 'hold', 'rally') and any(u.src == 'rempart' for u in us):
+            us = [u for u in us if u.src != 'rempart']   # les canons du rempart ne bougent pas
+            if not us:
+                return False, "Les canons du rempart sont fixés sur la muraille : ils tirent, mais ne bougent pas."
         if self.phase == 'deploiement' and kind not in ('form', 'fire'):
             return False, "Déployez d'abord vos troupes, puis lancez la bataille."
         if kind in ('rally', 'retreat'):
@@ -1417,6 +1425,77 @@ class TacticalBattle:
             u.target = best.id
         return best
 
+    # ================================================================== brèches ouvertes au canon
+    def _wall_target(self, u, mx):
+        """Point de l'enceinte d'une place le plus proche du canon, à portée : (mur, x, y, distance) ou None."""
+        pl = self.map.place
+        if u.side != 0 or u.cls != 'artillerie' or not pl or not pl.get('battle'):
+            return None
+        best, bd = None, mx
+        for wi, w in enumerate(self.map.walls):
+            if w.get('kind') == 'barricade':
+                continue
+            for x, y in w['pts']:
+                d = math.hypot(x - u.x, y - u.y)
+                if d < bd:
+                    best, bd = (wi, x, y, d), d
+        return best
+
+    def _bombard(self, u, e, mx):
+        """Canon de l'assaillant sans cible : il bat le rempart à portée. Vrai s'il s'en occupe."""
+        wt = self._wall_target(u, mx)
+        if not wt:
+            return False
+        wi, x, y, d = wt
+        b = math.atan2(y - u.y, x - u.x)
+        if ang_diff(u.dir, b) > ARC.get(u.form, 1.0):
+            rate = TURN.get(u.form, 0.1)
+            delta = (b - u.dir + math.pi) % (2 * math.pi) - math.pi
+            u.dir += max(-rate * DT, min(rate * DT, delta))
+            return True
+        if u.reload > 0:
+            u.state = 'recharge'
+            return True
+        u.ammo = max(0.0, u.ammo - 1)
+        u.reload = U.reload_time(u)
+        u.fired_t = self.clock
+        u.state = 'feu'
+        self._fatigue(u, u.reload, 'feu')
+        self.emit('canon', u.x, u.y, x, y, n=0, src=u.id)
+        self._pound(u, wi, x, y, d, e, mx)
+        return True
+
+    def _pound(self, u, wi, x, y, d, e, mx):
+        pl = self.map.place
+        a = math.atan2(y - pl['y'], x - pl['x'])
+        k = str(int((a % (2 * math.pi)) / (2 * math.pi) * BREACH_SECT) % BREACH_SECT)
+        if self.pound.get(k, 0.0) < 0:
+            return   # ce pan est déjà à terre
+        mult = R.ARMS['artillerie'][min(u.arm, len(R.ARMS['artillerie']) - 1)][2]
+        dk = 1.0 if d <= e else max(0.3, 1 - 0.7 * (d - e) / max(1.0, mx - e))
+        self.pound[k] = self.pound.get(k, 0.0) + U.pieces(u) * mult * dk
+        if self.pound[k] >= BREACH_PTS * max(1, pl.get('fort', 1)):
+            self.pound[k] = -1.0
+            self._apply_breach(wi, x, y, BREACH_R)
+            self.log('Les canons ont ouvert une brèche dans le rempart !')
+            mem = self.ai_mem.get('s1')
+            if isinstance(mem, dict) and 'breach' in mem:   # la garnison (IA) la défendra
+                mem['breach'].append([round(x - math.cos(a) * 40), round(y - math.sin(a) * 40), round(a, 3)])
+
+    def _apply_breach(self, wi, x, y, r):
+        i0, i1 = max(0, int((x - r - 20) // CELL)), min(COLS - 1, int((x + r + 20) // CELL))
+        j0, j1 = max(0, int((y - r - 20) // CELL)), min(ROWS - 1, int((y + r + 20) // CELL))
+        for j in range(j0, j1 + 1):
+            for i in range(i0, i1 + 1):
+                c = j * COLS + i
+                if self.t[c] == T_MUR and math.hypot((i + 0.5) * CELL - x, (j + 0.5) * CELL - y) <= r + 10:
+                    self.t[c] = T_BRECHE
+        self.map.walls[wi].setdefault('breach', []).append([round(x), round(y), round(r)])
+        self.breaches.append([wi, round(x), round(y), round(r)])
+        self._cost_cache = {}
+        self._path_cache = {}
+        self._los_cache = {}
+
     def _fire(self, u, dt, moving=False):
         if u.fire_mode != 'free' and not (u.order and u.order.get('kind') == 'attack'):
             return
@@ -1440,6 +1519,8 @@ class TacticalBattle:
             mx = min(mx, e * 1.3)
         hu = self.height_at(u.x, u.y)
         tg = self._pick_target(u, mx * 1.15)
+        if not tg and self._bombard(u, e, mx):
+            return
         if not tg:
             if u.state in ('feu', 'recharge'):
                 u.state = 'repos'
@@ -1504,6 +1585,11 @@ class TacticalBattle:
         u.fought += u.reload
         self._fatigue(u, u.reload, 'feu')
         self.emit(kind, u.x, u.y, tg.x, tg.y, n=cas, src=u.id)
+        if kind == 'canon' and u.side == 0 and self.in_place(tg.x, tg.y, 0.0):
+            # les boulets tirés sur les défenseurs de la place frappent aussi son rempart
+            wt = self._wall_target(u, mx)
+            if wt:
+                self._pound(u, *wt, e, mx)
         self._damage(tg, cas, u, kind)
         if u.ammo < 1:
             self.log(f"{u.name} n'a plus de munitions !", u.side)
@@ -2102,6 +2188,8 @@ class TacticalBattle:
                    hour=fmt_hour(self.clock), weather=self.weather, season=self.season, light=round(self.light, 2),
                    wind=self.wind, me=me, sides=sides, units=units, dusk=round(self.dusk),
                    title=self.spec.get('title'), place=self.spec.get('place_name'),
+                   skirmish=bool(self.spec.get('skirmish')),   # mode Bataille : « Retour au menu »
+                   breaches=self.breaches,                     # brèches ouvertes au canon pendant la bataille
                    fx=[e for e in self.fx if e['s'] > since],
                    log=[(txt if ab is None or me is None or ab == me else 'Ennemi : ' + txt)
                         for s, sd, txt, ab in self.logs if s > since and (sd is None or me is None or sd == me)])
@@ -2148,14 +2236,16 @@ class TacticalBattle:
                     prisoners=[int(r['prisoners'][m]), int(r['prisoners'][1 - m])], xp=xp, units=per)
 
     def map_view(self):
-        return self.map.to_client(self.spec)
+        d = self.map.to_client(self.spec)
+        d['nbreach'] = len(self.breaches)   # (déjà dans les remparts envoyés : le client ne les rajoute pas)
+        return d
 
     # ================================================================== sauvegarde
     def to_dict(self):
         return dict(spec=self.spec, units=[u.to_dict() for u in self.units], phase=self.phase, clock=self.clock,
                     speed=self.speed, seq=self.seq, logs=[list(x) for x in self.logs[-60:]], ai_sides=self.ai_sides,
                     withdrawing=self.withdrawing, withdraw_t=self.withdraw_t, hold_t=self.hold_t, prisoners=self.prisoners, acc=self._acc,
-                    ai_mem=self.ai_mem, result=self.result,
+                    ai_mem=self.ai_mem, result=self.result, pound=self.pound, breaches=self.breaches,
                     accel=self.accel, accel_ids=self.accel_ids, accel_t=self.accel_t,
                     end=[getattr(self, 'winner', None), getattr(self, 'disengage', None), getattr(self, 'why', None)])
 
@@ -2178,6 +2268,9 @@ class TacticalBattle:
         tb.accel = bool(d.get('accel'))   # (anciennes sauvegardes : pas d'accéléré)
         tb.accel_ids = list(d.get('accel_ids') or [])
         tb.accel_t = d.get('accel_t', 0.0)
+        tb.pound = dict(d.get('pound') or {})
+        for wi, x, y, r in d.get('breaches') or []:
+            tb._apply_breach(wi, x, y, r)
         e = d.get('end') or [None, None, None]
         if e[0] is not None:
             tb.winner, tb.disengage, tb.why = e

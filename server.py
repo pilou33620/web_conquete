@@ -42,6 +42,7 @@ from game import turns as TT  # noqa: E402
 from game import views as V  # noqa: E402
 from game.engine import Game  # noqa: E402
 from game.tactics import bridge as TB  # noqa: E402
+from game.tactics import skirmish as SK  # noqa: E402
 from game.geo import GeoMap  # noqa: E402
 
 
@@ -54,11 +55,13 @@ class App:
         print(f'Carte prête ({time.time() - t0:.1f} s) : {len(self.geo.nodes)} villes et villages, '
               f'{len(self.geo.edges) - nw} routes, {nw} tronçons navigables.', flush=True)
         self.game = None
+        self.skirmish = None   # mode Bataille : une partie jetable, à côté de la campagne (game/tactics/skirmish.py)
         self.lock = threading.RLock()
         self.port = 8790
         self.lan = False
         self.ips = []
-        payload = dict(map=self.geo.client_payload(), rules=V.rules_payload(), ver=UPDATE['version'])
+        payload = dict(map=self.geo.client_payload(), rules=V.rules_payload(), skirmish=SK.options(self.geo),
+                       ver=UPDATE['version'])
         raw = json.dumps(payload, ensure_ascii=False, separators=(',', ':'), default=str).encode('utf-8')
         self.static_raw = raw
         self.static_gz = gzip.compress(raw, 6)
@@ -74,6 +77,12 @@ class App:
             dt = min(0.3, now - last)
             last = now
             with self.lock:
+                if self.skirmish:
+                    try:
+                        SK.tick(self.skirmish, dt)
+                    except Exception:
+                        traceback.print_exc()
+                        self.skirmish.tactical = {}
                 if self.game:
                     try:
                         TB.tick(self.game, dt)   # bataille tactique en cours (pas fixes, ×0 à ×4)
@@ -98,6 +107,11 @@ class App:
         return x
 
     def command(self, body):
+        if isinstance(body, dict) and body.get('cmd') == 'tac' and SK.owns(self.skirmish, body.get('bid')):
+            res = TB.command(self.skirmish, body)   # mode Bataille
+            if body.get('sub') == 'close':
+                self.skirmish = None
+            return res
         g = self.game
         if not g:
             return dict(ok=False, msg='Aucune partie en cours.')
@@ -429,9 +443,10 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 since = 0
             with APP.lock:
-                if not APP.game:
+                g = APP.skirmish if SK.owns(APP.skirmish, bid) else APP.game   # mode Bataille, ou campagne
+                if not g:
                     return self._json(dict(ok=False, msg='Aucune partie en cours.'), 404)
-                st = TB.battle_view(APP.game, bid, since) if path == '/api/tactic' else TB.map_view(APP.game, bid)
+                st = TB.battle_view(g, bid, since) if path == '/api/tactic' else TB.map_view(g, bid)
             if st is None:
                 return self._json(dict(ok=False, msg='Aucune bataille tactique.'), 404)
             return self._json(st)
@@ -464,6 +479,16 @@ class Handler(BaseHTTPRequestHandler):
                     seed = None
                 APP.game = Game(APP.geo, dept, body.get('difficulty', 'normal'), seed, body.get('scenario', '1790'))
                 return self._json(dict(ok=True))
+            if path == '/api/skirmish':   # mode Bataille : une bataille isolée, sans campagne
+                try:
+                    sk, bid = SK.new(APP.geo, body)
+                except Exception:
+                    traceback.print_exc()
+                    return self._json(dict(ok=False, msg='La bataille n’a pas pu être préparée.'))
+                if sk is None:
+                    return self._json(dict(ok=False, msg=bid))
+                APP.skirmish = sk
+                return self._json(dict(ok=True, bid=bid))
             if path == '/api/cmd':
                 return self._json(APP.command(body))
             if path == '/api/save':

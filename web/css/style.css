@@ -516,3 +516,19 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 .slot-opt { text-align: left; white-space: normal; }
 .slot-opt small.why { color: #ffb3a6; opacity: 1; }
 body.modal-event #proposals { display: none; }   /* une décision à prendre : les propositions attendront */
+/* écran de départ : onglets Campagne / Bataille, et le mode Bataille */
+.mode-tabs { display: flex; }
+.mode-tabs button { flex: 1; font-family: var(--f-titre); font-size: 18px; padding: 7px 10px; }
+.sk-l { font-family: var(--f-titre); font-size: 17px; color: var(--laiton-clair); margin-bottom: -6px; }
+.sk-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; box-shadow: 0 0 0 1px rgba(0,0,0,.4); }
+.sk-help { margin: -6px 0 0; }
+.sk-place { flex: 1; min-width: 0; font: inherit; font-size: 15px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--hair);
+  background: rgba(0,0,0,.25); color: var(--papier); }
+.sk-units { display: flex; flex-direction: column; gap: 5px; }
+.sk-unit { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px;
+  border: 1px solid var(--hair); background: rgba(0,0,0,.18); }
+.sk-unit.on { border-color: var(--laiton); background: rgba(200,162,83,.12); }
+.sk-unit small { display: block; color: var(--papier-2); font-size: 13px; line-height: 1.25; }
+.sk-ctr { display: inline-flex; align-items: center; gap: 6px; }
+.sk-ctr b { min-width: 1.4em; text-align: center; font-size: 17px; }
+.sk-ctr .btn { min-width: 36px; padding: 4px 0; font-size: 18px; }

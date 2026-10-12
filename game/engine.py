@@ -1303,6 +1303,26 @@ class Game:
         p *= k * (0.55 + 0.45 * r['morale'] / 100) * (1 + r['xp'] / 250)
         return max(0.0, p)
 
+    # ------------------------------------------------------------------ canons des remparts
+    def fort_guns(self, n):
+        """Batteries fixes d'une place forte : une par niveau de fortification (au plus rules.FORT_MAX)."""
+        return max(0, min(R.FORT_MAX, int(n['fort'])))
+
+    def fort_gun_reg(self, n, i):
+        """Une batterie du rempart, comme un régiment (pour la bataille commandée et le calcul de puissance)."""
+        men = float(R.UNITS['artillerie']['men'])
+        return dict(id=f"c{n['id']}-{i + 1}", type='artillerie', n=men, max=men, xp=30.0, morale=75.0, ammo=100.0,
+                    fat=0.0, arm=self.arm_level(n['owner'], 'artillerie'))
+
+    def fort_guns_power(self, n, tname, wx_fire=1.0):
+        k = self.fort_guns(n)
+        if not k:
+            return 0.0
+        r = self.fort_gun_reg(n, 0)
+        if n['owner'] in self.factions:
+            return k * self.reg_power(n['owner'], r, tname, wx_fire)
+        return k * r['n'] * R.UNITS['artillerie']['power'] * R.ARMS['artillerie'][r['arm']][2] * wx_fire
+
     def node_defense_power(self, nid, include_armies=True):
         n = self.nodes[nid]
         code = n['owner']
@@ -1314,6 +1334,7 @@ class Game:
         if code != R.NEUTRAL:
             p += sum(self.reg_power(code, r, tname) * (R.GARDE_HOME if r['type'] == 'garde' else 1) for r in n['garrison'])
         p *= fb
+        p += self.fort_guns_power(n, tname)   # les canons du rempart
         if include_armies:
             for a in self.armies.values():
                 if a['at_node'] == nid and a['state'] in ('idle',) and self.friendly(a['owner'], code):
@@ -2612,6 +2633,8 @@ class Game:
                                 * (R.GARDE_HOME if r['type'] == 'garde' else 1)
                             men[si] += r['n']
                             targets[si].append((r['n'], r['type'], 'ligne', protected, r, None, wall))
+                    # les canons du rempart (servants à l'abri des murs : ils ne comptent pas parmi les pertes)
+                    P[si]['artillerie'] += self.fort_guns_power(node, bt['terrain'], wxf) * R.PHASE_W[phase]['artillerie']
             # pertes typées : chaque arme frappe selon la vulnérabilité des cibles
             lost_now = [0.0, 0.0]
             for si in (0, 1):

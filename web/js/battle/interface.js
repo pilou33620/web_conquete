@@ -498,7 +498,7 @@ export class BattleUI {
         <div><b>+${fmt(r.xp ?? 0)}</b><span>expérience</span></div>
       </div>
       <div class="br-units">${per.map(p => `<div><span>${esc(p.name)}</span><span>${p.lost ? '−' + fmt(p.lost) : '—'}</span><span>${Math.round(p.xp || 0) ? '+' + fmt(p.xp) + ' xp' : ''}</span></div>`).join('')}</div>
-      <div class="bm-btns"><button class="bt-btn primary big" data-a="retour">Retour à la carte</button></div>`);
+      <div class="bm-btns"><button class="bt-btn primary big" data-a="retour">${v.st?.skirmish ? 'Retour au menu' : 'Retour à la carte'}</button></div>`);
   }
   // cartouche du titre à l'entrée
   cartouche() {

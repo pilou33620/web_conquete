@@ -13,6 +13,7 @@ document.addEventListener('dblclick', e => e.preventDefault(), { passive: false 
 
 let ui, map, seq = 0, polling = false, running = false, timer = null;
 let bataille = null;   // vue de bataille tactique : pendant qu'elle est ouverte, la campagne n'est plus interrogée
+let skirmishBid = null;   // mode Bataille : la bataille isolée en cours (au retour, l'écran de départ)
 let epoch = 0, lost = false;   // epoch : change à chaque resetUI, pour jeter les réponses d'une ancienne partie
 let bootVer, reloading = false;  // version du serveur au chargement de la page
 
@@ -109,6 +110,12 @@ async function boot() {
   bataille = new Bataille({
     api, map,
     onEnd: (res, bid, msg) => {
+      if (skirmishBid && bid === skirmishBid) {
+        skirmishBid = null;
+        if (msg) ui.toast(msg, 'bad');
+        showStart();
+        return;
+      }
       if (msg) ui.toast(msg, 'bad');
       else if (res && res.title) ui.toast(`${res.title} — la campagne attend vos ordres.`, res.won ? 'good' : '');
       setTimeout(poll, 60);
@@ -152,7 +159,21 @@ async function boot() {
     showStart();
   };
   ui.onStartTap = e => {
-    if (e.hit && e.hit.kind === 'node') ui.pickDept(payload.map.nodes[e.hit.id].dept);
+    if (!e.hit || e.hit.kind !== 'node') return;
+    if (ui.startMode === 'bataille') ui.skPickNode(e.hit.id);
+    else ui.pickDept(payload.map.nodes[e.hit.id].dept);
+  };
+  // mode Bataille : une bataille isolée, sans campagne (la campagne en cours reste telle quelle sur le serveur)
+  ui.skOpts = payload.skirmish || null;
+  ui.onStartSkirmish = async cfg => {
+    let r;
+    try { r = await api.post('/api/skirmish', cfg); } catch (e) { return ui.toast('Serveur injoignable : la bataille n’a pas pu commencer.', 'bad'); }
+    if (!r.ok) return ui.toast(r.msg, 'bad');
+    resetUI();
+    ui.hideStart();
+    skirmishBid = String(r.bid);
+    bataille.closed.delete(skirmishBid);
+    bataille.enter({ bid: r.bid, phase: 'deploiement' }, null);
   };
   let info;
   try { info = await api.get('/api/saves'); } catch (e) {

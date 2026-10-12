@@ -1154,6 +1154,20 @@ export class Terrain {
       t.width = t.height = 0;   // Safari garde sinon la mémoire
     }
   }
+  // brèche ouverte au canon pendant la bataille ([mur, x, y, rayon]) : le rempart est repeint autour d'elle
+  addBreach([wi, x, y, r]) {
+    const w = this.walls[wi];
+    if (!w) return;
+    (w.breach = w.breach || []).push([x, y, r]);
+    const m = r + 40, x0 = x - m, y0 = y - m;
+    const cv = this.paintCanvas(x0, y0, 2 * m, 2 * m, BASE);
+    this.base.getContext('2d').drawImage(cv, x0 * BASE, y0 * BASE);
+    cv.width = cv.height = 0;
+    for (const [k, t] of [...this.tiles]) {
+      const L = Math.floor(k / 100000), j = Math.floor((k % 100000) / 1000), i = k % 1000, span = TS / L;
+      if (x + m > i * span && x - m < (i + 1) * span && y + m > j * span && y - m < (j + 1) * span) { this.tiles.delete(k); t.width = t.height = 0; }
+    }
+  }
   // tués, chevaux, trous d'obus : peints dans le fond (tuiles faites et à venir)
   addDecals(list) {
     list = list.filter(d => this.bare(d.x, d.y));

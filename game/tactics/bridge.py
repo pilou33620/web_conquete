@@ -272,6 +272,14 @@ def make_units(g, bt, manual):
                     u = U.milice(uid, si, o, mil / k, mor, arm, nm, nid, ctrl)
                     u.group, u.gname = grp, f"Garnison de {pname}"
                     units.append(u)
+            # les canons du rempart : une batterie fixe par niveau de fortification
+            k = g.fort_guns(n)
+            for i in range(k):
+                nm = f"Canons du rempart de {pname}" if k == 1 else f"Canons du rempart de {pname} ({i + 1})"
+                u = U.from_reg(g.fort_gun_reg(n, i), si, o, nm, army=None, src='rempart', nid=nid, ctrl=ctrl)
+                u.form = 'batterie'
+                u.group, u.gname = grp, f"Garnison de {pname}"
+                units.append(u)
     return units
 
 

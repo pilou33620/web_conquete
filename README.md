@@ -388,6 +388,16 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   en plein accéléré reprend en accéléré. Munitions et fatigue restent d'une bataille à l'autre : elles se
   recomplètent en campagne (vite chez soi, peu en pays ennemi).
 
+#### Mode Bataille (sans campagne)
+L'écran d'accueil a deux onglets : **Campagne** (la partie habituelle) et **Bataille**, pour livrer une bataille isolée.
+On y choisit l'époque (1700, 1790, 1813, 1870), son camp, l'adversaire (ou au hasard), jusqu'à **10 régiments**, et le type
+de bataille : **bataille rangée** en rase campagne ou **place forte**, en attaquant ou en défenseur (l'assaillant d'une
+place, remparts intacts, reçoit 5 régiments de renfort : 2 batteries, des sapeurs, des grenadiers et de la ligne, soit
+15 régiments contre une garnison de 7 et la milice ; il faut escalader les murs). Lieu, saison et météo se
+règlent ou se tirent **au hasard** ; on peut aussi toucher une ville sur la carte. L'ennemi aligne autant de régiments,
+tirés au sort. La bataille se joue comme une bataille commandée, puis « Retour au menu ». Elle n'est pas enregistrée et
+ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
+
 #### Conduire une bataille
 - **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît en vue
   cavalière, peint comme un paysage : herbe aux nuances multiples, blé doré, chaumes et labours selon la saison,
@@ -400,7 +410,12 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   les tués restent au sol. Au-dessus de chaque régiment, un fanion porte son effectif (barré et décoloré s'il est
   en déroute) ; le général a son médaillon. Le temps, la saison et l'heure se voient : pluie, brouillard, neige,
   orage, canicule, ombres des nuages, lumière dorée du matin, couchant puis nuit.
-- **Le déploiement.** Vos troupes sont dans la zone dorée. Glissez un régiment pour le placer, glissez depuis le
+- **Le déploiement.** Vos troupes sont dans la zone dorée : toute votre moitié du champ de bataille, sauf une bande
+  neutre de 400 m au milieu. Devant une place, l'assaillant reste à 450 m de l'enceinte, le défenseur tient la place et
+  250 m autour. Une place forte a ses **canons du rempart** : une batterie fixe par niveau de fortification (1 à 3),
+  placée au déploiement puis immobile ; ils tirent, peuvent être pris, et comptent aussi dans la résolution
+  automatique. Les canons de l'assaillant **ouvrent des brèches** en battant le rempart (une petite heure pour deux
+  batteries contre une place ordinaire). Glissez un régiment pour le placer, glissez depuis le
   sol pour fixer l'emplacement et l'orientation de la ligne, pivotez-le avec ses boutons. Les **couverts** sont mis
   en évidence : bois en vert (les canons y restent cachés jusqu'à leur première salve), hauteurs en or (vue et
   portée), bâti et murs en bleu. Puis **« Engager la bataille »**.

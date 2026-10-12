@@ -51,6 +51,10 @@ export class UI {
     this.startDept = null;
     this.startDiff = 'normal';
     this.startScen = (rules.scenario_order || ['1790'])[0];
+    this.startMode = 'campagne';   // écran de départ : « campagne » ou « bataille » (mode Bataille, bataille isolée)
+    this.skOpts = null;            // choix du mode Bataille (serveur : game/tactics/skirmish.py, via main.js)
+    this.sk = { me: null, foe: '', era: '1790', kind: 'bataille', role: 'att', place: '', season: '', weather: '', units: {} };
+    try { Object.assign(this.sk, JSON.parse(localStorage.getItem('conquete.bataille') || '{}')); } catch (e) { /* réglages perdus */ }
     this.overShown = false;
     try { this.trMode = localStorage.getItem('conquete.traverse') === '1'; } catch (e) { this.trMode = false; }
     map.trMode = this.trMode;
@@ -878,6 +882,30 @@ export class UI {
       case 'pick-scen': this.startScen = d.v; this.renderStart(); break;
       case 'start-game': this.onStartGame && this.onStartGame(this.startDept, this.startDiff, this.startScen); break;
       case 'resume': this.onResume && this.onResume(); break;
+      case 'start-mode': this.startMode = d.v; this.map.highlightDept = d.v === 'bataille' ? this.sk.me : this.startDept; this.skMark(); this.renderStart(); break;
+      // mode Bataille
+      case 'sk-set': {
+        const k = d.k, sk = this.sk;
+        sk[k] = d.v;
+        if (k === 'me') { this.map.highlightDept = d.v; if (sk.foe === d.v) sk.foe = ''; }
+        if (k === 'kind' && sk.place && !this.skPlaceOk(+sk.place)) sk.place = '';
+        if (k === 'season' && sk.weather && d.v && !(sk.weather in this.skOpts.weather_w[d.v])) sk.weather = '';
+        if (k === 'kind') this.skMark();
+        this.renderStart();
+        break;
+      }
+      case 'sk-unit': {
+        const n = this.skCount(), u = this.sk.units, k = +d.d;
+        if (k > 0 && n >= this.skOpts.max) { this.toast(`Au plus ${this.skOpts.max} régiments.`); break; }
+        u[d.v] = Math.max(0, (u[d.v] || 0) + k);
+        this.renderStart();
+        break;
+      }
+      case 'sk-start': {
+        try { localStorage.setItem('conquete.bataille', JSON.stringify(this.sk)); } catch (e) { /* tant pis */ }
+        this.onStartSkirmish && this.onStartSkirmish({ ...this.sk, difficulty: this.startDiff });
+        break;
+      }
       default: break;
     }
   }
@@ -1774,7 +1802,7 @@ export class UI {
     this.$('start').hidden = false;
     this.renderStart();
   }
-  hideStart() { this.$('start').hidden = true; this.map.highlightDept = null; }
+  hideStart() { this.$('start').hidden = true; this.map.highlightDept = null; this.map.selection = null; }
 
   pickDept(code) {
     this.startDept = code;
@@ -1787,6 +1815,7 @@ export class UI {
   }
 
   renderStart() {
+    if (this.startMode === 'bataille' && this.skOpts) return this.renderSkirmish();
     const info = this.startInfo || { saves: [], running: false };
     const scs = this.rules.scenarios || {};
     const sc = scs[this.startScen] || { title: 'Aquitaine, 1790', intro: '', names: {}, word: 'département' };
@@ -1800,6 +1829,7 @@ export class UI {
     const saves = (info.saves || []).map(s => `<div class="save-item"><span>${s.auto ? '<i>Sauvegarde automatique</i>' : esc(s.name)}<br><span class="muted small">${esc(s.faction || '')}, ${esc(s.date || '')}</span></span><button class="btn" data-act="load" data-v="${esc(s.name)}">Charger</button></div>`).join('');
     this.$('start').innerHTML = `<div class="start-side">
       <div class="cartouche"><h1>Conquête</h1><div class="campaign">${esc(sc.title)}</div><p><b>${esc(sc.campaign || '')}.</b> ${esc(sc.intro)}</p></div>
+      ${this.modeTabs()}
       <div class="row"><span class="lab">Début</span><span class="seg">${scenBtns}</span></div>
       ${info.running ? '<button class="btn primary" data-act="resume">Reprendre la partie en cours</button>' : ''}
       <div class="dept-list">${cards}</div>
@@ -1812,6 +1842,104 @@ export class UI {
       </div></div>`;
     const det = this.$('start').querySelector('details.ver-line');
     if (det) det.addEventListener('toggle', () => { this.verOpen = det.open; });   // reste ouvert d'un rendu à l'autre
+  }
+
+  // ------------------------------------------------------------------ mode Bataille (écran de départ)
+  modeTabs() {
+    if (!this.skOpts) return '';
+    return `<div class="seg mode-tabs" role="tablist">${[['campagne', 'Campagne'], ['bataille', 'Bataille']].map(([k, l]) =>
+      `<button role="tab" aria-selected="${this.startMode === k}" class="${this.startMode === k ? 'on' : ''}" data-act="start-mode" data-v="${k}">${l}</button>`).join('')}</div>`;
+  }
+  skUnits() {
+    const o = this.skOpts, sk = this.sk;
+    const l = (o.units[sk.era] || o.units['1790'])[sk.kind === 'forteresse' && sk.role === 'def' ? 'garrison' : 'field'];
+    return l.filter(t => !this.rules.units[t].where || this.rules.units[t].where.includes(sk.me));
+  }
+  skCount() { return Object.values(this.sk.units).reduce((a, k) => a + (k > 0 ? k : 0), 0); }
+  // régiments devenus indisponibles (époque, camp, rôle) : retirés ; dix au plus
+  skClamp() {
+    const ok = new Set(this.skUnits());
+    for (const t of Object.keys(this.sk.units)) if (!ok.has(t)) delete this.sk.units[t];
+    let over = this.skCount() - this.skOpts.max;
+    for (const t of Object.keys(this.sk.units).reverse()) { while (over > 0 && this.sk.units[t] > 0) { this.sk.units[t]--; over--; } }
+  }
+  skPlaceOk(id) {
+    const n = this.md.nodes[id];
+    return !!n && (this.sk.kind !== 'forteresse' || (this.skOpts.places.find(p => p.id === id)?.fort || 0) >= 1);
+  }
+  // le lieu choisi, marqué et montré sur la carte
+  skMark() {
+    const id = this.startMode === 'bataille' && this.sk.place !== '' ? +this.sk.place : null;
+    this.map.selection = id != null ? { kind: 'node', id } : null;
+    if (id != null) {
+      const n = this.md.nodes[id], side = window.innerWidth > 760 ? Math.min(470, window.innerWidth * 0.4) : 0;
+      const z = Math.min(window.innerWidth - side, window.innerHeight) / 90;
+      this.map.moveTo(n.x - side / 2 / z, n.y, z);
+    }
+  }
+  // touché sur la carte de l'écran de départ, en mode Bataille : le lieu de la bataille
+  skPickNode(id) {
+    if (!this.skPlaceOk(id)) { this.toast('Choisissez une place forte (ville fortifiée ou fort) pour un assaut.'); return; }
+    this.sk.place = String(id);
+    this.skMark();
+    this.renderStart();
+  }
+  renderSkirmish() {
+    const info = this.startInfo || { saves: [], running: false };
+    const o = this.skOpts, sk = this.sk, R = this.rules, F = R.factions;
+    if (sk.me && !F[sk.me]) sk.me = null;
+    this.skClamp();
+    const scs = R.scenarios || {}, sc = scs[sk.era] || scs['1790'];
+    const fname = c => (sc && sc.names[c]) || F[c].name;
+    const seg = (k, items, wrap) => `<span class="seg${wrap ? ' wrap' : ''}">${items.map(([v, l, t]) =>
+      `<button class="${String(sk[k]) === String(v) ? 'on' : ''}" data-act="sk-set" data-k="${k}" data-v="${esc(v)}"${t ? ` title="${esc(t)}"` : ''}>${l}</button>`).join('')}</span>`;
+    const dot = c => `<i class="sk-dot" style="background:${F[c].color}"></i>`;
+    const eras = (R.scenario_order || []).map(k => [k, k, scs[k].campaign]);
+    const camps = Object.keys(F).map(c => [c, dot(c) + esc(fname(c))]);
+    const foes = [['', 'Au hasard']].concat(Object.keys(F).filter(c => c !== sk.me).map(c => [c, dot(c) + esc(fname(c))]));
+    const fort = sk.kind === 'forteresse';
+    const places = o.places.filter(p => !fort || p.fort >= 1);
+    const cur = sk.place !== '' ? this.md.nodes[+sk.place] : null;
+    const extra = cur && !places.some(p => p.id === cur.id) ? `<option value="${cur.id}" selected>${esc(cur.name)}</option>` : '';
+    const placeSel = `<select class="sk-place" aria-label="Lieu de la bataille"><option value="">Au hasard</option>${extra}${places.map(p =>
+      `<option value="${p.id}" ${String(p.id) === String(sk.place) ? 'selected' : ''}>${esc(p.name)}${fort ? ` (${'★'.repeat(Math.min(3, p.fort))})` : ''}</option>`).join('')}</select>`;
+    const seasons = [['', 'Au hasard']].concat(o.seasons.map(k => [k, R.seasons[k]]));
+    const wk = sk.season ? Object.keys(o.weather_w[sk.season]) : Object.keys(R.weather);
+    const weathers = [['', 'Au hasard']].concat(wk.map(k => [k, `${R.weather[k].icon} ${R.weather[k].label}`]));
+    const n = this.skCount();
+    const units = this.skUnits().map(t => {
+      const u = R.units[t], k = sk.units[t] || 0;
+      return `<div class="sk-unit ${k ? 'on' : ''}"><div><b>${esc(u.name)}</b><small>${esc(u.desc || '')}</small></div>
+        <span class="sk-ctr"><button class="btn" data-act="sk-unit" data-v="${t}" data-d="-1" ${k ? '' : 'disabled'} aria-label="Un de moins">−</button><b>${k}</b><button class="btn" data-act="sk-unit" data-v="${t}" data-d="1" ${n >= o.max ? 'disabled' : ''} aria-label="Un de plus">+</button></span></div>`;
+    }).join('');
+    const foeTxt = !fort ? 'L’ennemi aligne autant de régiments que vous, tirés au sort, avec son général.'
+      : sk.role === 'def' ? `Vous tenez la place, remparts intacts, avec la milice ; l’ennemi monte à l’assaut avec ${o.assault_units} régiments, dont son parc de siège.`
+        : `La garnison ennemie : ${o.garrison_units} régiments et la milice, derrière des remparts intacts (il faut les escalader). Renforts d’assaut : +${o.assault_bonus} régiments en plus des vôtres (2 batteries, sapeurs, grenadiers, ligne).`;
+    const diffs = Object.entries(R.difficulty).map(([k, l]) => `<button class="${k === this.startDiff ? 'on' : ''}" data-act="pick-diff" data-v="${k}">${l}</button>`).join('');
+    const ready = sk.me && n > 0;
+    this.$('start').innerHTML = `<div class="start-side">
+      <div class="cartouche"><h1>Conquête</h1><div class="campaign">Mode bataille</div><p>Une bataille, sans campagne : choisissez vos régiments, le reste se tire au sort ou se règle ci-dessous.</p></div>
+      ${this.modeTabs()}
+      ${info.running ? '<button class="btn" data-act="resume">Reprendre la campagne en cours</button>' : ''}
+      <div class="row"><span class="lab">Époque</span>${seg('era', eras)}</div>
+      <div class="sk-l">Votre camp</div>${seg('me', camps, true)}
+      <div class="sk-l">L’adversaire</div>${seg('foe', foes, true)}
+      <div class="sk-l">La bataille</div>${seg('kind', [['bataille', 'Bataille rangée', 'En rase campagne'], ['forteresse', 'Place forte', 'Assaut ou défense d’une place fortifiée']])}
+      ${seg('role', [['att', fort ? 'Vous attaquez la place' : 'Vous attaquez'], ['def', fort ? 'Vous la défendez' : 'Vous défendez']])}
+      <div class="row"><span class="lab">Lieu</span>${placeSel}</div>
+      <p class="muted small sk-help">${fort ? 'Au hasard parmi les places fortes, ou touchez une place sur la carte.' : 'Le combat se livre dans la campagne voisine. Touchez aussi une ville ou un village sur la carte.'}</p>
+      <div class="row"><span class="lab">Saison</span>${seg('season', seasons, true)}</div>
+      <div class="row"><span class="lab">Météo</span>${seg('weather', weathers, true)}</div>
+      <div class="sk-l">Vos régiments <span class="muted">${n} / ${o.max}</span></div>
+      <div class="sk-units">${units}</div>
+      <p class="muted small sk-help">${foeTxt}</p>
+      <div class="row"><span class="lab">Difficulté</span><span class="seg">${diffs}</span></div>
+      <div class="start-actions">
+        <button class="btn primary" data-act="sk-start" ${ready ? '' : 'disabled'}>${!sk.me ? 'Choisissez votre camp' : !n ? 'Choisissez vos régiments' : 'Livrer bataille'}</button>
+        ${this.versionHtml(info.update)}
+      </div></div>`;
+    const sel = this.$('start').querySelector('select.sk-place');
+    sel.addEventListener('change', () => { sk.place = sel.value; this.skMark(); this.renderStart(); });
   }
 
   // ligne discrète : version du jeu et résultat de la recherche de mise à jour au démarrage du serveur
