@@ -198,8 +198,8 @@ en même temps que vous, pendant le mois, comme auparavant.
   chef-lieu est mal tenu (ni garnison ni armée) : il renaît avec ses places mal assimilées et une trêve de trois ans.
 - **Attachement régional** : une place prise hors de sa province d'origine produit 30 % de moins et tient moins bien
   l'ordre, le temps d'une génération (25 ans) d'assimilation. Si elle se révolte, elle retourne à son camp d'origine.
-- **Lassitude de la guerre** (0 à 100 %) : chaque mois de guerre et chaque homme perdu l'augmentent, la paix la fait
-  retomber. Elle dégrade l'ordre public partout et pousse les IA à signer la paix. À l'inverse, après de longues années
+- **Lassitude de la guerre** (0 à 100 %) : chaque mois de guerre et chaque homme perdu (bataille gagnée, perdue ou
+  rompue par un décrochage) l'augmentent, la paix la fait retomber. Elle dégrade l'ordre public partout et pousse les IA à signer la paix. À l'inverse, après de longues années
   de paix, les ambitions des voisins se réveillent.
 - **Rythme en temps réel** (réglage avancé, voir « Tour par tour ») :
   - deux vitesses rapides pour les années de paix, **×10** et **×30** jours par seconde (touches 5 et 6) ;
@@ -331,7 +331,8 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   dans vos vivres. Pris par l'ennemi, il est pillé.
 - **Moral et désertions** : trésor vide (solde impayée) ou vivres épuisés, le moral chute et les soldats désertent.
   Le journal fait le compte chaque mois.
-- **Prisonniers** : une victoire en ramène (davantage avec une cavalerie qui poursuit). Ils mangent des vivres ;
+- **Prisonniers** : une victoire en ramène quelques-uns (davantage d'un assaut repoussé, ou d'une armée presque
+  anéantie que la cavalerie poursuit). Ils mangent des vivres ;
   on peut les **enrôler** (une partie accepte de servir, leur département s'en fâche) ou les **échanger** dans la fenêtre
   Diplomatie (homme pour homme, puis le surplus se rachète 2 livres par tête).
 
@@ -364,6 +365,12 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
 - Quand une bataille concerne vos armées ou vos places (assauts compris), la campagne s'arrête et une fenêtre propose
   **« Commander la bataille »** ou **« Résolution automatique »** (réglage dans le menu ☰ : toujours demander,
   escarmouches automatiques, toujours automatiques). Les batailles entre IA se résolvent toujours seules.
+- La **résolution automatique** (et toute bataille entre IA) se joue sur la carte de campagne, en quelques heures à
+  quelques jours, et finit comme une bataille que vos officiers mènent jusqu'au bout : le camp dominé décroche en bon
+  ordre (passé environ 10 % de pertes face à un ennemi nettement plus fort, 19 % à forces voisines ; le défenseur tient
+  mieux que sa seule force, dans une place plus encore) ; le défenseur d'une place ne décroche pas, il la rend. Seule une
+  armée presque anéantie est poursuivie ; il y a peu de prisonniers, et le vaincu perd encore quelques traînards dans
+  sa retraite. Pertes, prisonniers et vainqueurs sont du même ordre dans les deux modes (mesuré bataille par bataille).
 - Commandée, la bataille se joue **en temps réel avec pause** (×1, ×2, ×4 ; à ×1 une seconde vaut 18 secondes de
   bataille, de 8 h au crépuscule : une bataille rangée de 3 à 6 heures dure une dizaine à une vingtaine de minutes)
   sur une carte de 3 × 2 km tirée du terrain de la campagne : relief, bois, champs, vignes, haies, clôtures et
