@@ -43,7 +43,7 @@ export class BattleUI {
         <div class="bt-dtxt"><b>Déploiement</b> — glissez vos régiments dans la zone dorée et orientez-les. <span class="bt-legend"><i class="lg-bois"></i>bois : couvert <i class="lg-haut"></i>hauteurs : vue et portée <i class="lg-bati"></i>bâti, murs</span></div>
         <div class="bt-dbtns"><button class="bt-btn" data-a="couverts">${I.couvert}<span>Couverts</span></button><button class="bt-btn primary" data-a="engager">Engager la bataille</button></div>
       </div>
-      <div class="bt-accel" role="status" hidden>
+      <div class="bt-accel" role="region" aria-label="Bataille en accéléré" hidden>
         <div class="ba-txt"><b>Les généraux poursuivent la bataille…</b><span class="ba-h"></span>
           <div class="ba-prog" aria-hidden="true"><i class="ba-done"></i><i class="ba-from"></i></div></div>
         <button class="bt-btn primary" data-a="reprendre">Reprendre le commandement</button>
