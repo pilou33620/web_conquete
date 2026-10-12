@@ -1421,7 +1421,7 @@ def _roles_update(b, side, mem, L, us, sit, front):
     roles = mem['role']
     now = b.clock
     for u in us:
-        if u.state == 'deroute' and roles.get(u.id) in ('ligne', 'res', 'avant', 'garde_flanc', 'breche', 'mur', 'rue',
+        if u.state == 'deroute' and roles.get(u.id) in ('ligne', 'res', 'avant', 'garde_flanc', 'soutien', 'breche', 'mur', 'rue',
                                                          'coeur', 'assaut', 'vague2', 'diversion'):
             mem.setdefault('was', {})[u.id] = roles[u.id]
             roles[u.id] = 'rallie'
@@ -1472,8 +1472,26 @@ def _roles_update(b, side, mem, L, us, sit, front):
             mem['width'] = round(2 * w + 150)
             w = mem['width'] / 2
             _note(b, mem, f"l'ennemi déborde {WING[s]} : {u.name} quitte la réserve et prolonge la ligne.")
+    # canons menacés de près, sans infanterie auprès : un bataillon de réserve vient les couvrir
+    if L['n'] >= 1 and res and sit['seen']:
+        for g in us:
+            if g.cls != 'artillerie' or not g.valid or roles.get(g.id) != 'art':
+                continue
+            near_foe = any(e.cls in ('inf', 'cavalerie') and _d2(e.x, e.y, g.x, g.y) < 300 ** 2 for e in sit['seen'])
+            cover = any(o.cls == 'inf' and o.valid and o is not g and _d2(o.x, o.y, g.x, g.y) < 150 ** 2 for o in us)
+            if near_foe and not cover:
+                u = min(res, key=lambda r_: _d2(r_.x, r_.y, g.x, g.y))
+                if _d2(u.x, u.y, g.x, g.y) > 700 ** 2:
+                    continue
+                res.remove(u)
+                roles[u.id] = 'soutien'
+                mem.setdefault('escort', {})[u.id] = g.id
+                _note(b, mem, f"la batterie {g.name} est menacée : {u.name} vient la couvrir.")
+                if not res:
+                    break
     # trous dans la ligne
     lat0 = mem.get('lat0') or []
+    line = [u for u in us if roles.get(u.id) == 'ligne' and u.valid]   # (avec les bataillons qui viennent d'allonger la ligne)
     held = [mem['lat'].get(u.id, 0.0) for u in line]
     for lat in lat0:
         if any(abs(lat - h) < 60 for h in held):
@@ -1843,6 +1861,7 @@ def _support(b, side, mem, L, us, foes, sit, want):
     else:
         cx, cy = mem['ax'], mem['ay']
     gen_pos = None
+    wagons = {'w': next((w for w in us if w.cls == 'chariot' and w.alive and roles.get(w.id) == 'wagon'), None)}
     for u in us:
         r = roles.get(u.id)
         if r == 'gen':
@@ -1912,9 +1931,20 @@ def _support(b, side, mem, L, us, foes, sit, want):
             sx, sy = _slot(mem, u.id) if mem.get('mode') == 'ligne' else (mem['post'].get(u.id) or [None, None])[:2]
             if sx is None:
                 sx, sy = _at(cx, cy, fd, -220, mem['lat'].get(u.id, 0.0))
-            if mem.get('mode') == 'poste' and u.id in mem['post'] and mem['back'].get(u.id, 0) < 200:
-                pass
+            wagon = wagons.get('w')
+            if wagon is not None and u.ammo < 0.6 * u.ammo0 and u.cls == 'inf' and L['n'] >= 1:
+                # recompléter ses cartouches au chariot (il recomplète à moins de 150 m)
+                k = sum(1 for c in u.id if c.isdigit()) % 3 - 1
+                sx, sy = _at(wagon.x, wagon.y, fd, 40, 60 * k)
             want[u.id] = [sx, sy, fd, 'colonne', False]
+        elif r == 'soutien':
+            g = b.unit(mem.get('escort', {}).get(u.id))
+            if g is None or not g.alive or g.side != side or \
+                    not any(_d2(e.x, e.y, g.x, g.y) < 450 ** 2 for e in seen if e.cls in ('inf', 'cavalerie')):
+                roles[u.id] = 'res'   # la menace est passée (ou la batterie perdue) : retour en réserve
+                continue
+            x, y = _at(g.x, g.y, fd, 30, 70)
+            want[u.id] = [x, y, fd, 'ligne', False]
         elif r == 'garde_flanc':
             sx, sy = _slot(mem, u.id) if mem.get('mode') == 'ligne' else \
                 _at(mem['ax'], mem['ay'], fd, -mem['back'].get(u.id, 60.0), mem['lat'].get(u.id, 0.0))
@@ -2136,7 +2166,8 @@ def _bayonets(b, side, mem, L, us, foes, sit, busy):
                 u.form == 'carre':
             continue
         r = roles.get(u.id)
-        if r not in ('ligne', 'assaut', 'vague2', 'garde_flanc', 'res', 'breche', 'mur', 'rue', 'coeur', 'diversion'):
+        if r not in ('ligne', 'assaut', 'vague2', 'garde_flanc', 'soutien', 'res', 'breche', 'mur', 'rue', 'coeur',
+                     'diversion'):
             continue
         if r == 'res' and plan not in ('place',):
             continue
