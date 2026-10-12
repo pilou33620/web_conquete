@@ -170,6 +170,9 @@ BREACH_R = 24.0          # rayon de la brèche ouverte au canon (m)
 DEPLOY_GAP = 200.0       # demi-largeur de la bande neutre entre les deux zones de déploiement (m)
 DEPLOY_WALL = 450.0      # l'assaillant se déploie au moins à cette distance de l'enceinte…
 DEPLOY_DEF = 250.0       # … et le défenseur jusqu'à cette distance au-delà (m)
+AI_DEPLOY_ATT = 500.0    # zones de l'IA : l'assaillant à moins de 500 m de son bord…
+AI_DEPLOY_DEF_FRAC = 0.65   # … le défenseur sur le devant de sa zone (65 % de sa profondeur)…
+AI_DEPLOY_DEF = 120.0    # … et dans une place, à 120 m de l'enceinte au plus
 P_MITRAILLE = 0.56       # … à mitraille, jusqu'à 30 % de la portée de mitraille (puis de moins en moins : grape_k)
 GRAPE_CLOSE = 150.0      # … et bien davantage à bout portant : sous 150 m, ×1,5 à 100 m…
 GRAPE_POINT = 1.6        # … ×1,6 dès 90 m (aussi le feu de défense d'une batterie abordée de face)
@@ -301,6 +304,7 @@ class TacticalBattle:
         self._los_cache = {}
         self.pound = {}                      # coups encaissés par secteur de l'enceinte (canons de l'assaillant)
         self.breaches = []                   # brèches ouvertes pendant la bataille : [mur, x, y, rayon]
+        self.breach_t = []                   # … et quand : [heure de bataille (s), secteur] (journal des batailles)
         rng = random.Random(spec['seed'] ^ 0x5A5A)
         self.rng = rng
         wa = rng.random() * 6.283
@@ -323,19 +327,31 @@ class TacticalBattle:
         # chaque camp se déploie librement dans sa moitié de la carte, sauf une bande neutre de 2 × DEPLOY_GAP au
         # milieu ; devant une place, l'assaillant reste à DEPLOY_WALL de l'enceinte et le défenseur tient la place et
         # ses abords (DEPLOY_DEF au-delà de l'enceinte)
+        # l'IA (et le placement de départ des troupes du joueur) garde des zones plus serrées, à bonne distance l'une
+        # de l'autre (ai_zones, comprises dans les zones) : l'ennemi ne commence pas à 400 m de vos lignes
         pl = self.map.place
-        z = []
+        z, za = [], []
         if pl and pl.get('battle'):
             px, py, r = pl['x'], pl['y'], pl['r']
-            d = dict(O=px, E=W - px, N=py, S=H - py)[e0] - r - DEPLOY_WALL
-            z.append(self._edge_band(e0, max(500, d)))
-            r = pl['r'] + DEPLOY_DEF
-            z.append([max(0, pl['x'] - r), max(0, pl['y'] - r), min(W, pl['x'] + r), min(H, pl['y'] + r)])
+            d = dict(O=px, E=W - px, N=py, S=H - py)[e0] - r
+            z.append(self._edge_band(e0, max(500, d - DEPLOY_WALL)))
+            za.append(self._edge_band(e0, max(500, min(1400, d - DEPLOY_WALL))))
+            for k, lst in ((DEPLOY_DEF, z), (AI_DEPLOY_DEF, za)):
+                r = pl['r'] + k
+                lst.append([max(0, pl['x'] - r), max(0, pl['y'] - r), min(W, pl['x'] + r), min(H, pl['y'] + r)])
         else:
-            half = (W if e0 in 'OE' else H) / 2 - DEPLOY_GAP
+            span = W if e0 in 'OE' else H
+            half = span / 2 - DEPLOY_GAP
             z.append(self._edge_band(e0, half))
             z.append(self._edge_band(opp[e0], half))
+            za.append(self._edge_band(e0, AI_DEPLOY_ATT))
+            # le défenseur : le devant de sa zone, sur AI_DEPLOY_DEF_FRAC de sa profondeur
+            d1 = z[1]
+            back = half * (1 - AI_DEPLOY_DEF_FRAC)
+            za.append([d1[0] + (back if e0 == 'E' else 0), d1[1] + (back if e0 == 'S' else 0),
+                       d1[2] - (back if e0 == 'O' else 0), d1[3] - (back if e0 == 'N' else 0)])
         self.zones = z
+        self.ai_zones = za
 
     @staticmethod
     def _edge_band(e, depth):
@@ -349,6 +365,10 @@ class TacticalBattle:
 
     def zone(self, side):
         return list(self.zones[side])
+
+    def ai_zone(self, side):
+        """Zone où l'IA déploie et d'où elle juge l'ennemi (plus serrée que celle du joueur)."""
+        return list(self.ai_zones[side])
 
     def edge(self, side):
         return self.edges[side]
@@ -1477,6 +1497,7 @@ class TacticalBattle:
         if self.pound[k] >= BREACH_PTS * max(1, pl.get('fort', 1)):
             self.pound[k] = -1.0
             self._apply_breach(wi, x, y, BREACH_R)
+            self.breach_t.append([round(self.clock), k])
             self.log('Les canons ont ouvert une brèche dans le rempart !')
             mem = self.ai_mem.get('s1')
             if isinstance(mem, dict) and 'breach' in mem:   # la garnison (IA) la défendra
@@ -2246,6 +2267,7 @@ class TacticalBattle:
                     speed=self.speed, seq=self.seq, logs=[list(x) for x in self.logs[-60:]], ai_sides=self.ai_sides,
                     withdrawing=self.withdrawing, withdraw_t=self.withdraw_t, hold_t=self.hold_t, prisoners=self.prisoners, acc=self._acc,
                     ai_mem=self.ai_mem, result=self.result, pound=self.pound, breaches=self.breaches,
+                    breach_t=self.breach_t,
                     accel=self.accel, accel_ids=self.accel_ids, accel_t=self.accel_t,
                     end=[getattr(self, 'winner', None), getattr(self, 'disengage', None), getattr(self, 'why', None)])
 
@@ -2269,6 +2291,7 @@ class TacticalBattle:
         tb.accel_ids = list(d.get('accel_ids') or [])
         tb.accel_t = d.get('accel_t', 0.0)
         tb.pound = dict(d.get('pound') or {})
+        tb.breach_t = [list(x) for x in d.get('breach_t') or []]
         for wi, x, y, r in d.get('breaches') or []:
             tb._apply_breach(wi, x, y, r)
         e = d.get('end') or [None, None, None]

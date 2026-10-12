@@ -412,10 +412,13 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   orage, canicule, ombres des nuages, lumière dorée du matin, couchant puis nuit.
 - **Le déploiement.** Vos troupes sont dans la zone dorée : toute votre moitié du champ de bataille, sauf une bande
   neutre de 400 m au milieu. Devant une place, l'assaillant reste à 450 m de l'enceinte, le défenseur tient la place et
-  250 m autour. Une place forte a ses **canons du rempart** : une batterie fixe par niveau de fortification (1 à 3),
+  250 m autour. L'ennemi se déploie plus en retrait (son assaillant à moins de 500 m de son bord, son défenseur sur le
+  devant de sa zone, ou à 120 m au plus des murs de sa place) : les armées ne commencent pas au contact. Une place forte a ses **canons du rempart** : une batterie fixe par niveau de fortification (1 à 3),
   placée au déploiement puis immobile ; ils tirent, peuvent être pris, et comptent aussi dans la résolution
-  automatique. Les canons de l'assaillant **ouvrent des brèches** en battant le rempart (une petite heure pour deux
-  batteries contre une place ordinaire). Glissez un régiment pour le placer, glissez depuis le
+  automatique (à moitié : `rules.FORT_GUNS_AUTO`). Les canons de l'assaillant **ouvrent des brèches** en battant le
+  rempart (une petite heure pour deux batteries contre une place ordinaire). L'ennemi qui assiège laisse d'abord ses
+  canons travailler (jusqu'à 1,8 fois sa préparation d'assaut), puis lance ses colonnes dans la brèche dès qu'elle
+  s'ouvre ; sans brèche, il finit par escalader. Glissez un régiment pour le placer, glissez depuis le
   sol pour fixer l'emplacement et l'orientation de la ligne, pivotez-le avec ses boutons. Les **couverts** sont mis
   en évidence : bois en vert (les canons y restent cachés jusqu'à leur première salve), hauteurs en or (vue et
   portée), bâti et murs en bleu. Puis **« Engager la bataille »**.
@@ -559,6 +562,14 @@ Tout marche seul avec les réglages par défaut ; on intervient quand on veut, d
 - Diplomatie : guerre, paix (avec tribut), alliance, accord commercial, présents, échanges de ressources, exigence de soumission.
 - Marché des négociants : meilleurs prix si vous tenez un port.
 
+### Journal des batailles (pour l'équilibre)
+Chaque bataille terminée (automatique, commandée, entre IA ou du mode Bataille) ajoute une ligne à
+`logs/batailles.jsonl` (non suivi par git ; mis de côté dans `batailles.1.jsonl` au-delà de 20 Mo) : date, saison,
+météo, terrain, place, fortification et canons du rempart, forces des deux camps, durée, brèches ouvertes et à quelle
+heure, vainqueur, pertes, prisonniers, prise de la place. `python3 outils/bilan.py` (option `--depuis AAAA-MM-JJ`) en
+tire des tableaux : taux de prise des places selon leur fortification, temps pour ouvrir une brèche, places prises avec
+ou sans brèche, batailles automatiques face aux commandées, résultats du mode Bataille.
+
 ## Commandes (souris, doigt ou stylet)
 
 | Geste | Effet |
@@ -596,6 +607,7 @@ game/waterways.py    voies navigables (fleuves, estuaire, cabotage) et blocus
 game/ai.py           IA des départements
 game/cities.py       villes : emplacements et bâtiments, politique de la ville, événements locaux
 game/diplomacy.py    diplomatie et commerce
+game/battle_log.py   journal des batailles (logs/batailles.jsonl) ; outils/bilan.py en fait le bilan
 game/views.py        état envoyé au navigateur (brouillard de guerre), sauvegardes
 game/tactics/        batailles manuelles : carte de bataille (terrain.py), unités (units.py), simulation
                      (battle.py), IA de secours (ai.py), raccord avec la campagne (bridge.py)

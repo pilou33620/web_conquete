@@ -13,6 +13,7 @@ import random
 from .. import rules as R
 from ..geo import T_EAU, T_HAUTE, PLAYABLE
 from . import bridge as TB
+from .. import battle_log as BL
 
 MAX_UNITS = 10
 KINDS = ('bataille', 'forteresse')
@@ -206,6 +207,9 @@ def new(geo, body):
     bt = dict(id=bid, x=bx, y=by, node=nid, ambush=False, surprise=False, sides=sides)
     tb = TB.create(g, bt, manual=True)
     tb.spec['skirmish'] = True
+    tb.spec['sk'] = dict(kind=kind, role='att' if attack else 'def', me=me, foe=foe, era=era,
+                         place=bool(body.get('place')), season=bool(body.get('season') in SEASONS),
+                         weather=bool(body.get('weather') in R.WEATHER), units=mine)   # (journal des batailles)
     tb.spec['date'] = f"{R.SEASON_LABEL[season]} {d.year}"
     g.tactical = {bid: tb}
     g.tac_done = {}
@@ -225,3 +229,4 @@ def tick(g, dt):
             tb.advance(dt)
         if tb.phase == 'fin':
             TB.finish(g, tb)   # (aucune bataille de campagne derrière : elle passe seulement dans tac_done)
+            BL.skirmish_end(tb)

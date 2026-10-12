@@ -186,6 +186,9 @@ VIN_KINDS = {'grand_vin': 2, 'vin': 1, 'eau_de_vie': 1}   # comptent aux vendang
 # Fortifications : niveaux 1 à 3 partout, niveau 4 (bastions à la Vauban) dans les chefs-lieux et les places fortes,
 # après la technologie « Fortifications à la Vauban ». Chaque niveau s'entretient (livres par jour et par place).
 FORT_MAX = 3
+# canons du rempart (une batterie par niveau de fortification) : en résolution automatique, ils ne comptent qu'à
+# moitié (mal placés contre un assaut en masse, et les murs donnent déjà leur bonus) ; entiers en bataille commandée
+FORT_GUNS_AUTO = 0.5
 BASTION_LEVEL = 4
 BASTION_TYPES = ('capitale', 'fort')
 FORT_UPKEEP = [0.0, 0.3, 0.7, 1.2, 2.0]

@@ -7,6 +7,7 @@ import random
 from . import rules as R
 from . import events as EV
 from . import army_actions as AA
+from . import battle_log as BL
 from . import cities as CT
 from . import turns as TT
 from .tactics import bridge as TB
@@ -1334,7 +1335,7 @@ class Game:
         if code != R.NEUTRAL:
             p += sum(self.reg_power(code, r, tname) * (R.GARDE_HOME if r['type'] == 'garde' else 1) for r in n['garrison'])
         p *= fb
-        p += self.fort_guns_power(n, tname)   # les canons du rempart
+        p += self.fort_guns_power(n, tname) * R.FORT_GUNS_AUTO   # les canons du rempart
         if include_armies:
             for a in self.armies.values():
                 if a['at_node'] == nid and a['state'] in ('idle',) and self.friendly(a['owner'], code):
@@ -2383,6 +2384,7 @@ class Game:
                 if a['owner'] != self.player or a.get('tac_auto', True):
                     self.choose_tactics(a, bt, si)
         self.battles[bid] = bt
+        bt['log0'] = BL.snapshot(self, bt)   # forces au début, pour le journal des batailles (logs/)
         TB.on_battle_start(self, bt)   # bataille du joueur : elle attend son choix (manuel ou automatique)
         gname = self.place_name(gx, gy)
         if code_a == self.player or code_d == self.player or self.player in (code_a, code_d):
@@ -2634,7 +2636,8 @@ class Game:
                             men[si] += r['n']
                             targets[si].append((r['n'], r['type'], 'ligne', protected, r, None, wall))
                     # les canons du rempart (servants à l'abri des murs : ils ne comptent pas parmi les pertes)
-                    P[si]['artillerie'] += self.fort_guns_power(node, bt['terrain'], wxf) * R.PHASE_W[phase]['artillerie']
+                    P[si]['artillerie'] += self.fort_guns_power(node, bt['terrain'], wxf) * R.FORT_GUNS_AUTO \
+                        * R.PHASE_W[phase]['artillerie']
             # pertes typées : chaque arme frappe selon la vulnérabilité des cibles
             lost_now = [0.0, 0.0]
             for si in (0, 1):
@@ -2855,6 +2858,8 @@ class Game:
             if n['siege'] and n['siege']['by'] == L['owner']:
                 n['siege'] = None
         self.battles.pop(bt['id'], None)
+        BL.campaign_end(self, bt, winner, disengage, prisoners,
+                        TB.find(self, bt['id']) if bt.get('tac') else None)   # journal des batailles (logs/)
         if self.player in (W['owner'], L['owner']) or any(
                 self.friendly(self.player, s['owner']) for s in (W, L)):
             won = self.friendly(self.player, W['owner'])

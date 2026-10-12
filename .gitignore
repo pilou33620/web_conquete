@@ -5,3 +5,4 @@ game/data/map_cache.json
 adresse-reseau.txt
 saves/*.tmp
 .claude/worktrees/
+logs/

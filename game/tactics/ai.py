@@ -137,6 +137,7 @@ FIRE_LONG = 900.0   # durée de fusillade avant la baïonnette à forces égales
 # assaut d'une place : vagues de plus après la première, au plus (avec les troupes ralliées depuis, qui ne restent plus
 # en réserve : une seule suffit, deux feraient tomber les places bien plus souvent qu'avant)
 ASSAULT_WAVES = 1
+BREACH_WAIT = 1.8          # assaut d'une place : sans brèche, on attend jusqu'à 1,8 fois la préparation avant d'escalader
 # obstination selon la situation (_tenacity) : supplément de pertes accepté avant de décrocher quand l'ennemi a perdu
 # plus que nous (tués, blessés, prisonniers, à l'aune d'EXCHANGE : TEN_TRIED_K fois l'écart, au plus TEN_TRIED), quand le
 # rapport de forces vu est favorable, quand l'ennemi a des troupes en déroute ou est ébranlé, qu'il nous reste des
@@ -553,7 +554,7 @@ def _layout(units, half, gap=22.0):
 
 
 def _deploy_field(b, side, mem, L, g, plan):
-    z = b.zone(side)
+    z = b.ai_zone(side)
     fd = b.front_dir(side)
     c, s = math.cos(fd), math.sin(fd)
     cx, cy = (z[0] + z[2]) / 2, (z[1] + z[3]) / 2
@@ -692,7 +693,7 @@ def _breaches(b):
 def _deploy_place_def(b, side, mem, L, g, pl):
     px, py, R = pl['x'], pl['y'], pl['r']
     heart = b.objective() or (px, py)
-    z0 = b.zone(0)
+    z0 = b.ai_zone(0)
     ex, ey = (z0[0] + z0[2]) / 2, (z0[1] + z0[3]) / 2
     fa = math.atan2(ey - py, ex - px)                 # d'où vient l'assaillant
     mem.update(ax=round(px, 1), ay=round(py, 1), fd=round(fa, 4), mode='poste', heart=list(heart))
@@ -786,7 +787,7 @@ def _deploy_place_def(b, side, mem, L, g, pl):
 def _deploy_place_att(b, side, mem, L, g, pl):
     px, py, R = pl['x'], pl['y'], pl['r']
     heart = b.objective() or (px, py)
-    z = b.zone(side)
+    z = b.ai_zone(side)
     zx, zy = (z[0] + z[2]) / 2, (z[1] + z[3]) / 2
     fa = math.atan2(zy - py, zx - px)                 # de la place vers l'assaillant
     ring = _ring(b, pl)
@@ -1363,7 +1364,7 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
             if front is not None:
                 tgt = front - standoff
             else:
-                ez = b.zone(1 - side)
+                ez = b.ai_zone(1 - side)
                 tgt = _rel((ez[0] + ez[2]) / 2, (ez[1] + ez[3]) / 2, ax, ay, fd)[0] - 450
                 seen_once = _body(b, mem, 7200.0)
                 if seen_once:
@@ -1422,10 +1423,10 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         elif sit['e_routed'] and not sit['seen']:
             if ph != 'poursuite':
                 _set_phase(b, mem, 'poursuite', "l'ennemi plie : poursuite.")
-            ez = b.zone(1 - side)
+            ez = b.ai_zone(1 - side)
             _advance(b, mem, L, line, _rel((ez[0] + ez[2]) / 2, (ez[1] + ez[3]) / 2, ax, ay, fd)[0])
         else:
-            ez = b.zone(1 - side)
+            ez = b.ai_zone(1 - side)
             _advance(b, mem, L, line, min(250.0, _rel((ez[0] + ez[2]) / 2, (ez[1] + ez[3]) / 2, ax, ay, fd)[0]))
     # ordres de la ligne
     for u in line:
@@ -2008,6 +2009,30 @@ def _think_place_def(b, side, mem, L, us, foes, sit, want, busy):
 
 
 # ---------------------------------------------------------------------- place : assaut
+def _aim_breach(b, mem, pl):
+    """Une brèche s'est ouverte au canon depuis le déploiement : l'assaut s'y porte (au lieu d'escalader ailleurs).
+    Vrai si l'objectif a changé."""
+    brs = _breaches(b)
+    first = mem.get('n_br') is None
+    if len(brs) <= mem.get('n_br', 0):
+        mem.setdefault('n_br', len(brs))
+        return False
+    mem['n_br'] = len(brs)
+    px, py = pl['x'], pl['y']
+    if first:
+        return False   # (les brèches d'un siège : le déploiement les a déjà visées)
+    bx, by, _ = brs[-1]   # la dernière ouverte : celle que battent nos canons
+    a = math.atan2(by - py, bx - px)
+    ri = _ring_at(mem, a, pl['r'] + 15)
+    mem['bout'] = [round(px + math.cos(a) * (ri + 60)), round(py + math.sin(a) * (ri + 60))]
+    mem['bin'] = [round(px + math.cos(a) * (ri - 50)), round(py + math.sin(a) * (ri - 50))]
+    mem['a_b'] = round(a, 3)
+    mem['r_in'] = round(ri)
+    mem['t_breach'] = b.clock
+    _note(b, mem, "une brèche est ouverte : les colonnes d'assaut s'y portent.")
+    return True
+
+
 def _think_place_att(b, side, mem, L, us, foes, sit, want, busy):
     pl = b.place_info()
     px, py = pl['x'], pl['y']
@@ -2018,6 +2043,9 @@ def _think_place_att(b, side, mem, L, us, foes, sit, want, busy):
     r_in = mem.get('r_in', pl['r'])
     fd = mem['fd']
     _roles_update(b, side, mem, L, us, sit, None)
+    if _aim_breach(b, mem, pl):
+        bout, bin_ = mem['bout'], mem['bin']
+        r_in = mem['r_in']
     ph = mem['phase']
     if ph == 'attente':
         _set_phase(b, mem, 'prepa', "l'artillerie ouvre le feu sur la brèche ; les colonnes attendent.")
@@ -2032,7 +2060,12 @@ def _think_place_att(b, side, mem, L, us, foes, sit, want, busy):
             near = [e for e in sit['seen'] if _d2(e.x, e.y, bout[0], bout[1]) < 260 ** 2 and e.cls == 'inf']
             if near and sum(e.morale for e in near) / len(near) > 82:
                 ready = False   # les défenseurs de la brèche tiennent encore : on pilonne
-        if not any(u.cls == 'artillerie' and u.valid for u in us) and t > 120:
+        guns = any(u.cls == 'artillerie' and u.valid for u in us)
+        if ready and guns and L['n'] >= 1 and not _breaches(b) and t < prep * BREACH_WAIT:
+            ready = False   # pas encore de brèche : les canons battent le rempart avant qu'on escalade
+        if mem.get('t_breach') is not None and now - mem['t_breach'] > 120 and t > 120:
+            ready = True    # une brèche vient de s'ouvrir : on s'y porte sans attendre la fin de la préparation
+        if not guns and t > 120:
             ready = True
         if ready:
             mem['n_assault'] = round(max(1.0, a_men))
