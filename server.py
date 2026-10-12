@@ -265,7 +265,8 @@ class App:
         return out
 
     def save(self, name):
-        name = re.sub(r'[^A-Za-z0-9_\- àâäéèêëîïôöùûüç]', '', name or '').strip()[:40] or 'partie'
+        name = name if isinstance(name, str) else ''   # une requête bricolée peut envoyer autre chose qu'un nom
+        name = re.sub(r'[^A-Za-z0-9_\- àâäéèêëîïôöùûüç]', '', name).strip()[:40] or 'partie'
         if not self.game:
             return dict(ok=False, msg='Aucune partie à sauvegarder.')
         try:
@@ -325,7 +326,9 @@ class App:
             traceback.print_exc()
 
     def load(self, name):
-        path = os.path.join(SAVES, os.path.basename(name or '') + '.json')
+        if not isinstance(name, str) or not name.strip():
+            return dict(ok=False, msg='Sauvegarde introuvable.')
+        path = os.path.join(SAVES, os.path.basename(name) + '.json')
         if not os.path.exists(path):
             return dict(ok=False, msg='Sauvegarde introuvable.')
         try:
