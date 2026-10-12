@@ -2413,8 +2413,8 @@ def _artillery(b, side, mem, L, us, foes, sit, want, busy):
 
 def _grape_dist(b, mem, L, u, g, foes):
     """Distance de tir à mitraille quand elle dépasse la portée des fusils ennemis (canons Gribeauval contre fusils à
-    silex, par exemple) et qu'aucun cavalier ennemi ne menace la batterie ; sinon None.
-    Normal : aucun cavalier ennemi vu depuis 5 min à moins de 1 000 m ; difficile : à moins de 700 m."""
+    silex, par exemple) et qu'aucun cavalier ennemi ne menace la batterie : aucun vu depuis 5 min à moins de 1 000 m
+    (grape = 1 ; le réglage plus hardi, 700 m, grape = 2, perd ses canons trop souvent) ; sinon None."""
     if not L['grape'] or not g:
         return None
     inf_mx = 0
