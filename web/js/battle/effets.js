@@ -263,7 +263,12 @@ export class Effects {
     const cv = this.smokeCv = this.smokeCv || canvas(W, H);
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
     const g = cv.getContext('2d');
-    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H); g.setTransform(k, 0, 0, k, 0, 0);
+    // seul le rectangle où il y a de la fumée est effacé puis posé (bb : en pixels CSS)
+    const bb = [1e9, 1e9, -1e9, -1e9], grow = (x0, y0, x1, y1) => { if (x0 < bb[0]) bb[0] = x0; if (y0 < bb[1]) bb[1] = y0; if (x1 > bb[2]) bb[2] = x1; if (y1 > bb[3]) bb[3] = y1; };
+    const old = this.smokeBB;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    if (old) g.clearRect(old[0], old[1], old[2] - old[0], old[3] - old[1]);
+    g.setTransform(k, 0, 0, k, 0, 0);
     let any = false;
     // ombre de la fumée au sol (au sud-est), légère ; seulement en qualité Ultra
     if ((this.q?.fx ?? 2) >= 3) {
@@ -274,6 +279,7 @@ export class Effects {
         const [sx, sy] = view.toScreen(p.x + p.alt * 0.62 + 2, p.y + p.alt * 0.42 + 1.5), r = p.r * z;
         if (sx < -r * 2 || sy < -r * 2 || sx > view.vw + r * 2 || sy > view.vh + r * 2) continue;
         g.globalAlpha = a; g.drawImage(this.shade, sx - r, sy - r * TILT, r * 2, r * 2 * TILT); any = true;
+        grow(sx - r, sy - r * TILT, sx + r, sy + r * TILT);
       }
     }
     for (const p of this.puffs) {
@@ -283,9 +289,16 @@ export class Effects {
       if (sx < -r * 2 || sy < -r * 2 || sx > view.vw + r * 2 || sy > view.vh + r * 2) continue;
       g.globalAlpha = a;
       g.drawImage(p.img, sx - r, sy - r * 0.9 - p.alt * z, r * 2, r * 1.8); any = true;
+      grow(sx - r, sy - r * 0.9 - p.alt * z, sx + r, sy + r * 0.9 - p.alt * z);
     }
     g.globalAlpha = 1;
-    if (any) { ctx.imageSmoothingEnabled = true; ctx.drawImage(cv, 0, 0, W / k, H / k); }
+    if (any) {
+      // rectangle en pixels du canevas de la fumée, borné à celui-ci
+      const x0 = Math.max(0, Math.floor(bb[0] * k) - 1), y0 = Math.max(0, Math.floor(bb[1] * k) - 1);
+      const x1 = Math.min(W, Math.ceil(bb[2] * k) + 1), y1 = Math.min(H, Math.ceil(bb[3] * k) + 1);
+      this.smokeBB = x1 > x0 && y1 > y0 ? [x0, y0, x1, y1] : null;
+      if (this.smokeBB) { ctx.imageSmoothingEnabled = true; ctx.drawImage(cv, x0, y0, x1 - x0, y1 - y0, x0 / k, y0 / k, (x1 - x0) / k, (y1 - y0) / k); }
+    } else this.smokeBB = null;
     // éclats de terre
     ctx.fillStyle = 'rgba(70,54,36,0.85)';
     for (const b of this.bits) {
@@ -337,11 +350,15 @@ export class Effects {
     // ombres des nuages qui passent (ancrées au sol, poussées par le vent)
     const cloudA = { soleil: 0.22, canicule: 0.14, nuages: 0.34, pluie: 0.3, orage: 0.38, tempete: 0.38 }[w] || 0;
     if (cloudA && this.q?.clouds !== false) {
+      // le motif (un pixel = 6 m) est posé en quelques drawImage agrandis : bien moins coûteux qu'un remplissage
+      // par motif transformé
       this.clouds = this.clouds || cloudTexture();
-      const pat = ctx.createPattern(this.clouds, 'repeat'), S = 6;   // un pixel du motif = 6 m
+      const T = this.clouds.width * 6, tw = T * view.z, th = tw * TILT;
       const [ox, oy] = view.toScreen(time * (3 + wind[0] * 2.5), time * (1 + wind[1] * 2.5));
-      pat.setTransform(new DOMMatrix().translateSelf(ox, oy).scaleSelf(view.z * S, view.z * S * TILT));
-      ctx.globalAlpha = cloudA * L; ctx.fillStyle = pat; ctx.fillRect(0, 0, vw, vh); ctx.globalAlpha = 1;
+      const i0 = Math.floor(-ox / tw), j0 = Math.floor(-oy / th);
+      ctx.globalAlpha = cloudA * L; ctx.imageSmoothingEnabled = true;
+      for (let j = j0; oy + j * th < vh; j++) for (let i = i0; ox + i * tw < vw; i++) ctx.drawImage(this.clouds, ox + i * tw, oy + j * th, tw + 1, th + 1);
+      ctx.globalAlpha = 1;
     }
     const t = this.tint(st);
     if (t) {
@@ -398,7 +415,7 @@ export class Effects {
       ctx.fillStyle = glow; ctx.fillRect(0, 0, vw, vh);
     }
     // les bords de l'image un peu plus sombres ; davantage quand la nuit tombe
-    const vk = (this.q?.fx ?? 2) >= 2 ? 0.16 : 0;
+    const vk = (this.q?.fx ?? 2) >= 3 ? 0.16 : 0;
     if (vk || k > 0.05) {
       const vig = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.35, vw / 2, vh / 2, Math.hypot(vw, vh) * 0.62);
       vig.addColorStop(0, 'rgba(12,18,40,0)'); vig.addColorStop(1, `rgba(12,18,40,${Math.max(vk, 0.55 * k)})`);
