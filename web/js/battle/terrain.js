@@ -39,7 +39,7 @@ export const PALETTES = {
   },
   automne: {
     pre: ['#8e9e58', '#859651', '#97a35e', '#8a9152'], herbeSec: '#ab9c5c', champ: [['#8c6a46', '#7c5c3c'], ['#a3825a', '#93744e'], ['#b89a64', '#a98b58'], ['#7f8a4c', '#717c44']],
-    vigneSol: '#9e8460', vigneRang: '#b0602a', lande: '#93774f', landeFleurs: ['#a0522d', '#8a6a3a', '#6c6040'], sousBois: '#6a6234',
+    vigneSol: '#9e8460', vigneRang: '#a27a34', lande: '#93774f', landeFleurs: ['#a0522d', '#8a6a3a', '#6c6040'], sousBois: '#6a6234',
     arbres: ['#a8692a', '#c08a30', '#7c7a32', '#9a4a26'], arbreHi: 'rgba(240,200,110,0.45)', pins: ['#2f5a35', '#3a6439'], marais: '#7c8f6c', sable: '#dccb98',
     roche: '#a39d8a', rocheSombre: '#77715f', eau: '#4a7fb4', eauBord: '#2b5788', eauHi: 'rgba(200,222,240,0.5)', route: '#c2ab7c', routeBord: '#8a724c',
     chemin: '#b9a276', bati: '#b8a684', toit: ['#a94a2f', '#b85a3a', '#9a4229'], ardoise: ['#565d6c', '#4c5262'], neige: 0,

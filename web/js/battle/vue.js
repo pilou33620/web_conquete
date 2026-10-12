@@ -316,17 +316,20 @@ export class BattleView {
     // cadre du champ de bataille
     ctx.strokeStyle = 'rgba(200,162,83,0.65)'; ctx.lineWidth = 2 / z; ctx.strokeRect(0, 0, this.W, this.H);
     mark('terrain');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const view = { toScreen: this.toScreen, z, figScale: this.figScale, vw: this.vw, vh: this.vh, dpr, fxT: this.fx.t };
+    const hour = this.hourNum(), sky = { weather: this.st?.weather || this.map?.weather, light: this.st?.light ?? 1, hour, wind: this.st?.wind };
+    this.fx.ground(ctx, view, sky, time);   // ombres des nuages, lumière du soir sur le terrain
+    world();
     this.drawGround(ctx, z, time);
     mark('sol');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const view = { toScreen: this.toScreen, z, figScale: this.figScale, vw: this.vw, vh: this.vh, dpr, fxT: this.fx.t };
     const vis = [...this.units.values()].filter(u => u.state !== 'hors' && this.onScreen(u));
     this.art.draw(ctx, view, vis, time, this.colors || []);
     mark('unites');
     this.fx.draw(ctx, view);
     mark('effets');
-    const hour = this.hourNum();
-    this.fx.atmosphere(ctx, view, { weather: this.st?.weather || this.map?.weather, light: this.st?.light ?? 1, hour, wind: this.st?.wind }, dt, time);
+    this.fx.atmosphere(ctx, view, sky, dt, time);
     mark('atmosphere');
     this.drawOverSmoke(ctx);
     this.drawLabels(ctx);

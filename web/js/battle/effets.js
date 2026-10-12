@@ -308,12 +308,24 @@ export class Effects {
   }
 
   // ------------------------------------------------------------------ atmosphère (en coordonnées d'écran)
-  // st : {weather, light, hour (nombre), wind} ; view : caméra ; dt en s
-  atmosphere(ctx, view, st, dt, time) {
-    const vw = view.vw, vh = view.vh, w = st.weather || 'soleil';
-    const wind = st.wind || [1.5, 0.5];
-    const wet = w === 'pluie' || w === 'orage' || w === 'tempete';
-    const L = clamp(st.light ?? 1, 0, 1), h = st.hour ?? 12;
+  // Couleur de la lumière (multipliée) : matin doré, midi neutre, couchant doré puis rose, nuit bleue (par brouillard :
+  // grise) ; null à midi par beau temps
+  tint(st) {
+    const w = st.weather || 'soleil', L = clamp(st.light ?? 1, 0, 1), h = st.hour ?? 12, k = clamp((1 - L) / 0.8, 0, 1);
+    let tint = null;
+    if (L < 0.97) {
+      tint = k < 0.35 ? mix3([255, 255, 255], [255, 216, 164], k / 0.35)
+        : k < 0.65 ? mix3([255, 216, 164], [240, 172, 146], (k - 0.35) / 0.3)
+        : mix3([240, 172, 146], [74, 84, 142], (k - 0.65) / 0.35);
+    } else if (h < 9.8 && w !== 'brouillard') tint = mix3([255, 228, 188], [255, 255, 255], clamp((h - 8) / 1.8, 0, 1));
+    else if (w === 'canicule') tint = [255, 232, 196];
+    if (tint && w === 'brouillard') tint = mix3(tint, [235, 238, 242], 0.6);
+    return tint;
+  }
+  // Au sol, sous les régiments : ombres des nuages et la plus grande part de la lumière du soir. Les régiments ne
+  // reçoivent ensuite que le reste (atmosphere) : au crépuscule, ils se détachent sur le terrain assombri.
+  ground(ctx, view, st, time) {
+    const vw = view.vw, vh = view.vh, w = st.weather || 'soleil', wind = st.wind || [1.5, 0.5], L = clamp(st.light ?? 1, 0, 1);
     // ombres des nuages qui passent (ancrées au sol, poussées par le vent)
     const cloudA = { soleil: 0.22, canicule: 0.14, nuages: 0.34, pluie: 0.3, orage: 0.38, tempete: 0.38 }[w] || 0;
     if (cloudA && this.q?.clouds !== false) {
@@ -323,6 +335,21 @@ export class Effects {
       pat.setTransform(new DOMMatrix().translateSelf(ox, oy).scaleSelf(view.z * S, view.z * S * TILT));
       ctx.globalAlpha = cloudA * L; ctx.fillStyle = pat; ctx.fillRect(0, 0, vw, vh); ctx.globalAlpha = 1;
     }
+    const t = this.tint(st);
+    if (t) {
+      // part du sol : t / t′, où t′ (la part de tout le monde) est la lumière à moitié adoucie
+      const t2 = mix3(t, [255, 255, 255], 0.55), g = t.map((c, i) => 255 * c / t2[i]);
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = `rgb(${g[0] | 0},${g[1] | 0},${g[2] | 0})`; ctx.fillRect(0, 0, vw, vh);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+  // st : {weather, light, hour (nombre), wind} ; view : caméra ; dt en s
+  atmosphere(ctx, view, st, dt, time) {
+    const vw = view.vw, vh = view.vh, w = st.weather || 'soleil';
+    const wind = st.wind || [1.5, 0.5];
+    const wet = w === 'pluie' || w === 'orage' || w === 'tempete';
+    const L = clamp(st.light ?? 1, 0, 1), h = st.hour ?? 12;
     // brouillard, brume du matin
     const mist = w === 'brouillard' ? 1 : (h < 9.5 && (w === 'soleil' || w === 'nuages')) ? 0.2 * clamp((9.5 - h) / 1.5, 0, 1) : w === 'pluie' || w === 'neige' ? 0.25 : 0;
     if (mist > 0) {
@@ -347,22 +374,16 @@ export class Effects {
       gr.addColorStop(0, `rgba(${hc},${hz})`); gr.addColorStop(1, `rgba(${hc},0)`);
       ctx.fillStyle = gr; ctx.fillRect(0, 0, vw, vh * 0.62);
     }
-    // lumière : matin doré, midi neutre, couchant doré puis rose, nuit bleue (sauf par brouillard : gris)
-    let tint = null;
-    if (L < 0.97) {
-      tint = k < 0.35 ? mix3([255, 255, 255], [255, 214, 158], k / 0.35)
-        : k < 0.65 ? mix3([255, 214, 158], [236, 156, 132], (k - 0.35) / 0.3)
-        : mix3([236, 156, 132], [74, 84, 142], (k - 0.65) / 0.35);
-    } else if (h < 9.8 && w !== 'brouillard') tint = mix3([255, 228, 188], [255, 255, 255], clamp((h - 8) / 1.8, 0, 1));
-    else if (w === 'canicule') tint = [255, 232, 196];
-    if (tint && w === 'brouillard') tint = mix3(tint, [235, 238, 242], 0.6);
+    // lumière (la part commune au sol et aux régiments ; le sol a déjà reçu la sienne : ground)
+    let tint = this.tint(st);
     if (tint) {
+      tint = mix3(tint, [255, 255, 255], 0.55);
       ctx.globalCompositeOperation = 'multiply';
       ctx.fillStyle = `rgb(${tint[0] | 0},${tint[1] | 0},${tint[2] | 0})`; ctx.fillRect(0, 0, vw, vh);
       ctx.globalCompositeOperation = 'source-over';
     }
     // soleil bas (matin, soir) : une lueur chaude venue de l'ouest ou de l'est
-    const low = L < 0.95 ? Math.sin(Math.PI * Math.min(1, k * 1.2)) * 0.3 : h < 9.8 && w !== 'brouillard' && !wet ? 0.18 * clamp((9.8 - h) / 1.8, 0, 1) : 0;
+    const low = L < 0.95 ? Math.sin(Math.PI * Math.min(1, k * 1.2)) * 0.2 : h < 9.8 && w !== 'brouillard' && !wet ? 0.16 * clamp((9.8 - h) / 1.8, 0, 1) : 0;
     if (low > 0.01) {
       const east = h < 12, glow = ctx.createLinearGradient(east ? vw : 0, 0, east ? vw * 0.2 : vw * 0.8, vh * 0.3);
       glow.addColorStop(0, `rgba(255,176,96,${low})`); glow.addColorStop(1, 'rgba(255,176,96,0)');
