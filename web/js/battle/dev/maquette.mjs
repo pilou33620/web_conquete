@@ -35,7 +35,8 @@ const get = (bid) => {
   if (!battles.has(bid)) battles.set(bid, new MockBattle(bid));
   return battles.get(bid);
 };
-setInterval(() => { for (const b of battles.values()) if (b.speed) b.advance(0.1 * 30 * b.speed); }, 100);
+// comme le serveur : à ×1, une seconde réelle vaut 20 s de bataille (battle.TIME_K)
+setInterval(() => { for (const b of battles.values()) if (b.speed) b.advance(0.1 * 20 * b.speed); }, 100);
 
 const json = (res, o, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(o)); };
 const body = req => new Promise(r => { let s = ''; req.on('data', c => s += c); req.on('end', () => { try { r(JSON.parse(s || '{}')); } catch (e) { r({}); } }); });

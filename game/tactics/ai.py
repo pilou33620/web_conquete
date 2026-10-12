@@ -99,6 +99,9 @@ PLAN_LABEL = dict(frontal='assaut frontal coordonné', artillerie="préparation 
                   harcelement='escarmouche, puis retraite', assaut='assaut de la place', place='défense de la place')
 WING = {-1: "l'aile gauche", 1: "l'aile droite", 0: 'la réserve'}
 LEG = 450.0          # une longue marche se donne par étapes (recherches de chemin courtes)
+# hauteurs pour la vue (comme le moteur, battle.HEIGHT) : les canons (officiers à cheval) voient par-dessus les haies
+EYES = dict(inf=2.5, artillerie=3.0, cavalerie=3.5, general=3.5, chariot=3.0)
+GUN_EYE = EYES['artillerie']
 
 LEVELS = {
     'facile': dict(n=0, period=20.0, jitter=12.0, reflex=6.0, sq_r=210.0, sq_miss=0.3, sq_late=True, terrain=0,
@@ -350,7 +353,7 @@ def _gun_spot(b, side, x, y, fd, r, wood=False, ahead=1e9, rough=False):
             f = 0
             for d in (250, 450, 650):
                 qx, qy = _at(px, py, fd, d)
-                if 0 <= qx < W and 0 <= qy < H and b.los(px, py, qx, qy):
+                if 0 <= qx < W and 0 <= qy < H and b.los(px, py, qx, qy, GUN_EYE):
                     f += 1
             if f == 0:
                 continue
@@ -2453,7 +2456,7 @@ def _gun_view(b, x, y, tg, reach):
     n = 0
     r2 = reach * reach
     for tx, ty, cls in tg:
-        if _d2(x, y, tx, ty) <= r2 and b.los(x, y, tx, ty):
+        if _d2(x, y, tx, ty) <= r2 and b.los(x, y, tx, ty, GUN_EYE, EYES.get(cls, 2.5)):
             n += 1
     return n
 
@@ -2517,7 +2520,7 @@ def _art_target(b, u, foes, ours, mem, mx, e_r, g):
             v *= 1.6
         if t.id == cur:
             v *= 1.25   # (changer de cible coûte du temps de pointage)
-        if v > bv and b.los(u.x, u.y, t.x, t.y):
+        if v > bv and b.los_units(u, t):
             best, bv = t, v
     return best
 

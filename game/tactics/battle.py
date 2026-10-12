@@ -70,7 +70,7 @@ from .terrain import (COLS, ROWS, CELL, N, W, H, T_PRE, T_CHAMP, T_VIGNE_T, T_LA
                       T_BARRICADE)
 
 DT = 2.0                 # pas de simulation (s de bataille)
-TIME_K = 30.0            # s de bataille par s réelle, à ×1
+TIME_K = 20.0            # s de bataille par s réelle, à ×1 (une bataille de 3 à 6 h dure 9 à 18 min à ×1)
 VIS_DT = 4.0             # mise à jour du repérage
 AI_DT = 2.0              # l'IA réfléchit toutes les 2 s de bataille
 START_H = 8.0
@@ -87,20 +87,50 @@ COST = {
 }
 COVER = [0.0, 0.05, 0.15, 0.1, 0.35, 0.5, 0.1, 0.0, 0.0, 0.0, 0.05, 0.55, 0.7, 0.35, 0.5, 0.05, 0.4, 0.5]
 OPACITY = [0, 0, 0, 0, 34, 60, 0, 0, 0, 0, 0, 50, 100, 0, 100, 0, 0, 0]   # en centièmes, cumulés le long du regard
+# hauteur (m) de ce qui bouche la vue sur la case : un regard qui passe au-dessus n'est pas gêné
+TOP = [0, 0, 0, 0, 12, 16, 0, 0, 0, 0, 0, 8, 7, 0, 7, 0, 0, 0]
 WOODS = (T_BOIS, T_FORET_T)
 # éléments linéaires (couche f) : aucun, clôture, haie, muret
 FCOVER = [0.0, 0.12, 0.25, 0.35]
 FCOST = [0.0, 0.15, 0.4, 0.3]
-FOPAC = [0, 0, 25, 0]
+FOPAC = [0, 0, 15, 0]
+FTOP = [0, 0, 2.8, 0]    # une haie (talus compris) cache ce qui est à hauteur d'homme, pas ce qu'on voit de plus haut
+EYE = 2.5                # hauteur d'un fantassin, pour la vue (m)
+HEIGHT = dict(inf=2.5, artillerie=3.0, cavalerie=3.5, general=3.5, chariot=3.0)   # canons : officiers à cheval, caissons
+# élan d'une charge : il se gagne en courant (mètres pour un plein élan), se perd en terrain difficile et en montée
+ELAN_M = dict(cav=110.0, inf=45.0)
+BRAKE_CAV = {T_BOIS: 0.45, T_FORET_T: 0.3, T_MARAIS_T: 0.35, T_VIGNE_T: 0.5, T_BATI: 0.4, T_ROCHE: 0.25,
+             T_SABLE: 0.7, T_LANDE_T: 0.9, T_MUR: 0.3, T_PORTE: 0.3, T_BRECHE: 0.4, T_BARRICADE: 0.4, T_GUE: 0.6}
+BRAKE_INF = {T_BOIS: 0.85, T_FORET_T: 0.7, T_MARAIS_T: 0.6, T_VIGNE_T: 0.85, T_BATI: 0.8, T_ROCHE: 0.55,
+             T_SABLE: 0.8, T_MUR: 0.5, T_PORTE: 0.5, T_BRECHE: 0.7, T_BARRICADE: 0.7, T_GUE: 0.7}
+# ---- équilibre du combat (voir « Règles de combat » dans l'aide-mémoire) ----
+P_FUSIL = 0.005          # touchés par homme qui tire et par salve, à portée efficace (avant arme, expérience, moral…)
+P_BOULET = 0.35          # touchés par pièce et par coup de boulet à portée efficace, sur une ligne à découvert
+P_MITRAILLE = 0.9        # … à mitraille, jusqu'à 40 % de la portée de mitraille (puis de moins en moins : 35 % au bout)
+P_RECEPTION = 0.04       # feu de défense à bout portant contre une charge, par homme du front
+CHOC = 0.04              # pertes du choc d'une charge, par homme qui charge (× élan, flanc, ordre de la cible, type)
+MELEE_K = 0.0008         # pertes infligées en mêlée, par homme et par seconde (× force au corps à corps)
+MELEE_MOR = 0.5          # moral perdu par seconde de mêlée, partagé selon le rapport des forces au corps à corps
+FORMED = 50              # moral d'une troupe en ligne ou en colonne qui reçoit une charge de face en bon ordre…
+HOLD = 40                # … et qui, s'il lui en reste autant après le choc, repousse les cavaliers
+ROUT_R = 220.0           # une déroute ébranle les amis à moins de 220 m…
+ROUT_MOR = 3.0           # … de 3 points de moral (bataillon de 250 hommes ; deux fois moins près du général)
+# assaut d'une place : l'assaillant l'emporte s'il tient le cœur (au moins HEART_MEN hommes en état de combattre à
+# moins de HEART_R) sans défenseur en état de combattre à moins de HEART_FREE, pendant HEART_HOLD secondes de suite
+HEART_R, HEART_MEN, HEART_FREE, HEART_HOLD = 90.0, 150.0, 200.0, 600.0
+CAPTURE = dict(contact_cav=0.012, contact_inf=0.003,   # part des fuyards rattrapés par pas de 2 s au contact
+               choc_cav=0.06, choc_inf=0.03,            # … par une charge sur des fuyards
+               rupture_cav=0.06, melee_cav=0.05)        # … quand la cavalerie rompt une troupe (choc, mêlée)
 FCOST_K = dict(inf=1.0, light=0.6, cav=2.0, art=2.5)
 WALLISH = {T_MUR: 0.65, T_PORTE: 0.65, T_BRECHE: 0.4, T_BARRICADE: 0.5}
 OFFROAD = tuple(k for k in range(18) if k not in (T_ROUTE, T_CHEMIN))
 VIEW = {'soleil': 2000, 'nuages': 1800, 'canicule': 1800, 'brouillard': 250, 'pluie': 600, 'orage': 500,
         'neige': 800, 'tempete': 700}
 # vulnérabilité de la cible selon la formation : au feu de l'infanterie, au boulet, à la mitraille
-VUL_FIRE = dict(ligne=1.0, colonne=1.2, carre=1.3, tirailleurs=0.5, batterie=0.7, attelee=1.2)
+# (l'ordre dispersé : nettement moins touché par le canon, un peu moins par la fusillade)
+VUL_FIRE = dict(ligne=1.0, colonne=1.2, carre=1.3, tirailleurs=0.8, batterie=0.7, attelee=1.2)
 VUL_BALL = dict(ligne=0.8, colonne=1.5, carre=1.5, tirailleurs=0.35, batterie=0.6, attelee=1.2)
-VUL_GRAPE = dict(ligne=1.0, colonne=1.3, carre=1.3, tirailleurs=0.5, batterie=0.8, attelee=1.0)
+VUL_GRAPE = dict(ligne=1.0, colonne=1.3, carre=1.3, tirailleurs=0.55, batterie=0.8, attelee=1.0)
 ARC = dict(ligne=0.9, colonne=1.0, carre=4.0, tirailleurs=1.6, batterie=0.8, attelee=0.0)
 TURN = dict(ligne=0.03, colonne=0.12, carre=0.2, tirailleurs=0.1, batterie=0.05, attelee=0.1)
 FORM_TIME = dict(ligne=50, colonne=40, carre=60, tirailleurs=45, batterie=60, attelee=60)
@@ -343,11 +373,16 @@ class TacticalBattle:
                 return (best[1] + 0.5) * CELL, (best[2] + 0.5) * CELL
         return x, y
 
-    def los(self, x1, y1, x2, y2, eye1=3.0, eye2=2.0):
-        """Ligne de vue entre deux points : bois, bâti et murs la bouchent peu à peu, les crêtes la coupent.
-        Les deux premières cases de l'observateur (lisière) et la case de la cible ne comptent pas."""
+    def los(self, x1, y1, x2, y2, eye1=EYE, eye2=EYE):
+        """Ligne de vue entre deux points, la même dans les deux sens : eye1 et eye2 sont les hauteurs de ce qui regarde
+        ou est vu à chaque bout (fantassin 2,5 m, canons 3, cavaliers et état-major 3,5 : HEIGHT). Bois, bâti, murs et
+        haies la bouchent peu à peu quand le regard passe sous leur faîte (une haie ne cache rien à qui la domine) ; les
+        crêtes la coupent. Les deux cases au bord de chaque bout ne comptent pas : une troupe en lisière, ou postée
+        juste derrière un mur, une haie, les premières maisons, voit dehors et y est vue."""
         c1, c2 = self.cell(x1, y1), self.cell(x2, y2)
-        key = (c1, c2)
+        if c2 < c1:
+            c1, c2, eye1, eye2 = c2, c1, eye2, eye1
+        key = (c1, c2, eye1, eye2)
         r = self._los_cache.get(key)
         if r is not None:
             return r
@@ -357,24 +392,33 @@ class TacticalBattle:
         ok = True
         if n > 2:
             z1 = h[c1] + eye1
-            z2 = h[c2] + eye2
+            dz = (h[c2] + eye2 - z1) / n
             op = 0
             di, dj = (i2 - i1) / n, (j2 - j1) / n
             for s in range(1, n):
                 c = int(j1 + dj * s + 0.5) * COLS + int(i1 + di * s + 0.5)
-                tc = t[c]
-                if s > 2:
-                    op += OPACITY[tc] + FOPAC[f[c]]
+                clear = z1 + dz * s - h[c]
+                if clear < -0.5:
+                    ok = False
+                    break
+                if 2 < s < n - 2:
+                    tc = t[c]
+                    if OPACITY[tc] and clear < TOP[tc]:
+                        op += OPACITY[tc]
+                    fc = f[c]
+                    if fc and FOPAC[fc] and clear < FTOP[fc]:
+                        op += FOPAC[fc]
                     if op >= 100:
                         ok = False
                         break
-                if h[c] > z1 + (z2 - z1) * s / n + 0.5:
-                    ok = False
-                    break
         if len(self._los_cache) > 60000:
             self._los_cache.clear()
         self._los_cache[key] = ok
         return ok
+
+    def los_units(self, a, b):
+        """Ligne de vue entre deux unités (chacune à sa hauteur)."""
+        return self.los(a.x, a.y, b.x, b.y, HEIGHT.get(a.cls, EYE), HEIGHT.get(b.cls, EYE))
 
     def _line_ok(self, cost, x1, y1, x2, y2, maxc):
         L = math.hypot(x2 - x1, y2 - y1)
@@ -709,8 +753,17 @@ class TacticalBattle:
             if not tg or tg.side == side or not tg.alive or tg.id not in self.seen_by[side]:
                 return False, "Cible invisible ou introuvable."
             for u in us:
-                if kind == 'charge' and u.cls in ('artillerie', 'general'):
+                if kind == 'charge' and u.cls in ('artillerie', 'general', 'chariot'):
                     continue
+                if u.state == 'melee':
+                    if u.melee_with == tg.id:
+                        # déjà au corps à corps avec cette cible : la mêlée continue, sans nouveau choc
+                        u.target = tg.id
+                        u.order = dict(kind=kind, target=tg.id)
+                        continue
+                    self._end_melee(u)   # on se dégage pour aller ailleurs (sans élan : il faudra le reprendre)
+                if kind == 'charge' and u.state == 'charge' and u.target == tg.id:
+                    continue             # la charge est déjà lancée sur cette cible : elle garde son élan
                 if kind == 'charge' and u.form == 'carre':
                     u.form = 'colonne'
                 u.target = tg.id
@@ -831,6 +884,12 @@ class TacticalBattle:
     def _change_form(self, u, f):
         if u.form == f and u.busy <= 0:
             return
+        if u.busy > 0 and u.next_form == f:
+            return   # déjà en train de prendre cette formation : redonner l'ordre ne relance pas la manœuvre
+        if u.busy > 0 and u.form == f and u.state != 'ralliement':
+            # contrordre : on revient à la formation qu'on quittait, le temps de défaire ce qui est fait
+            u.next_form = f
+            return
         base = FORM_TIME.get(f, 50)
         trait = self.trait(u.side)
         k = 1 - 0.4 * u.xp / 100 - self.spec.get('fm_swift', [0, 0])[u.side]
@@ -839,7 +898,8 @@ class TacticalBattle:
         elif u.cls == 'cavalerie':
             base = 30
         u.next_form = f
-        u.busy = max(10.0, base * max(0.4, k))
+        # (pendant un ralliement, les officiers reforment d'abord les rangs : pas de raccourci)
+        u.busy = max(10.0, base * max(0.4, k), u.busy if u.state == 'ralliement' else 0.0)
         if u.state not in ('deroute',):
             if u.path and f == 'batterie':
                 u.path = []
@@ -943,7 +1003,7 @@ class TacticalBattle:
                         break
                     if hidden and d2 > near * near:
                         continue
-                    if d2 < 60 * 60 or self.los(o.x, o.y, e.x, e.y, 4.0 if o.cls in ('cavalerie', 'general') else 3.0):
+                    if d2 < 60 * 60 or self.los_units(o, e):
                         seen.add(e.id)
                         break
             self.seen_by[side] = seen
@@ -1130,7 +1190,7 @@ class TacticalBattle:
         seen = self.seen_by[u.side]
         cur = self.by_id.get(u.target)
         if cur and cur.alive and cur.id in seen and cur.state != 'hors':
-            if self.dist(u, cur) <= mx and self.los(u.x, u.y, cur.x, cur.y):
+            if self.dist(u, cur) <= mx and self.los_units(u, cur):
                 return cur
         best, bv = None, -1e9
         for e in self.units:
@@ -1146,7 +1206,7 @@ class TacticalBattle:
                 v -= 300
             if u.cls == 'artillerie' and e.form in ('colonne', 'carre'):
                 v += 250
-            if v > bv and self.los(u.x, u.y, e.x, e.y):
+            if v > bv and self.los_units(u, e):
                 best, bv = e, v
         if best is not None:
             u.target = best.id
@@ -1209,10 +1269,12 @@ class TacticalBattle:
             if tr == 'artilleur':
                 mult *= 1.25
             if grape and d <= grape:
-                cas = pcs * 0.9 * mult * VUL_GRAPE.get(tg.form, 1.0) * (1 - cov)
+                # la mitraille est terrible à bout portant, et s'éparpille au loin
+                gk = 1.0 if d <= 0.4 * grape else 1 - 0.65 * (d - 0.4 * grape) / (0.6 * grape)
+                cas = pcs * P_MITRAILLE * gk * mult * VUL_GRAPE.get(tg.form, 1.0) * (1 - cov)
                 kind = 'mitraille'
             else:
-                cas = pcs * 0.35 * mult * pr * VUL_BALL.get(tg.form, 1.0) * (1 - cov * 0.6)
+                cas = pcs * P_BOULET * mult * pr * VUL_BALL.get(tg.form, 1.0) * (1 - cov * 0.6)
                 kind = 'canon'
             if tg.cls == 'general':
                 cas *= 0.2
@@ -1223,7 +1285,7 @@ class TacticalBattle:
             if moving:
                 shooters *= 0.5
             mult = R.ARMS['inf'][min(u.arm, len(R.ARMS['inf']) - 1)][2] if u.cls == 'inf' else 0.8
-            p0 = 0.005 * tk * math.sqrt(mult)
+            p0 = P_FUSIL * tk * math.sqrt(mult)
             cas = shooters * p0 * pr * fat_k * mor_k * xp_k * self._wx_k(u) * (1 - cov) * VUL_FIRE.get(tg.form, 1.0)
             cas *= self.light ** 0.5
             if tg.cls == 'general':
@@ -1314,7 +1376,8 @@ class TacticalBattle:
             sp = 1.4 if d > 150 else 2.5
         sp *= 1 - 0.35 * u.fat / 100
         mc = move_class(u)
-        cc = self.costs(mc, u.side)[self.cell(u.x, u.y)] or 2.0
+        c0 = self.cell(u.x, u.y)
+        cc = self.costs(mc, u.side)[c0] or 2.0
         sp /= cc
         step = min(d, sp * dt)
         b = self.bearing(u, tg)
@@ -1323,10 +1386,19 @@ class TacticalBattle:
             # obstacle : on contourne par un chemin, puis on reprend la charge
             u.state = 'marche'
             u.order = dict(kind='attack', target=tg.id)
+            u.charge_v = 0.0
             self._go(u, tg.x, tg.y, b)
             return
+        # élan (charge_v, en mètres de course utile) : il se gagne en courant ; le terrain difficile, les haies et la
+        # montée le brisent, la descente l'augmente un peu
+        brake = (BRAKE_CAV if cav else BRAKE_INF).get(self.t[c0], 1.0)
+        if self.f[c0]:
+            brake *= 0.75 if cav else 0.9
+        grade = (self.h[self.cell(nx, ny)] - self.h[c0]) / CELL
+        slope = max(0.3, 1 - 4 * grade) if grade > 0 else min(1.2, 1 - 2 * grade)
+        full = ELAN_M['cav' if cav else 'inf']
+        u.charge_v = min(full, u.charge_v * (0.5 + 0.5 * brake) + step * brake * slope)
         u.x, u.y, u.dir = nx, ny, b
-        u.charge_v = sp
         self._fatigue(u, dt, 'run')
         wt, dtg = U.footprint(tg)
         wu, _ = U.footprint(u)
@@ -1334,13 +1406,17 @@ class TacticalBattle:
             self._impact(u, tg)
 
     def _impact(self, a, tg):
-        """Le choc d'une charge."""
+        """Le choc d'une charge : élan (course utile, terrain, pente), flanc ou dos, ordre de la cible. Une troupe en bon
+        ordre, de face, reçoit la charge par un feu à bout portant et, si elle tient, la repousse ; prise de flanc, de
+        dos, en désordre, en tirailleurs ou en pleine manœuvre, elle est culbutée."""
         cav = a.cls == 'cavalerie'
         mom = 2.2 if cav else 1.0
         mom *= 1 - a.fat / 150
+        elan = min(1.0, max(0.0, a.charge_v) / ELAN_M['cav' if cav else 'inf'])
+        a.charge_v = 0.0
+        mom *= 0.3 + 0.7 * elan
         tt = self.t[self.cell(tg.x, tg.y)]
-        if cav and (tt in (T_BOIS, T_FORET_T, T_MARAIS_T, T_VIGNE_T, T_BATI) or tt in WALLISH):
-            mom *= 0.4
+        mom *= (BRAKE_CAV if cav else BRAKE_INF).get(tt, 1.0)   # bois, rochers, marais, maisons, murs : la charge s'y brise
         if cav and self.trait(a.side) == 'cavalier':
             mom *= 1.2
         if self.trait(a.side) == 'audacieux':
@@ -1353,7 +1429,7 @@ class TacticalBattle:
             a.state = 'repos'
             return
         if tg.state == 'deroute':
-            self._capture(a, tg, 0.08 if a.cls == 'cavalerie' else 0.03)
+            self._capture(a, tg, CAPTURE['choc_cav'] if cav else CAPTURE['choc_inf'])
             a.state = 'repos'
             return
         if cav and tg.form == 'carre' and tg.busy <= 0:
@@ -1362,29 +1438,72 @@ class TacticalBattle:
             self._damage(a, back, tg, 'impact')
             a.morale = max(0.0, a.morale - 18)
             self._damage(tg, a.men * 0.01, a, 'impact')
-            a.state = 'repos'
-            a.order = dict(kind='hold')
-            b = math.atan2(a.y - tg.y, a.x - tg.x)
-            self._go(a, a.x + math.cos(b) * 120, a.y + math.sin(b) * 120, b + math.pi)
+            self._repulse(a, tg)
             self.log(f"La charge de {a.name} se brise sur le carré de {tg.name} !", None, a.side)
             return
+        # feu de défense : de face, une troupe en ordre (ou une batterie chargée) tire à bout portant sur ceux qui chargent
+        ready = flank == 1.0 and tg.busy <= 0 and tg.ammo >= 1 and tg.state not in ('melee', 'ralliement', 'charge') and \
+            ((tg.cls == 'inf' and tg.form in ('ligne', 'colonne', 'tirailleurs')) or
+             (tg.cls == 'artillerie' and tg.form == 'batterie'))
+        if ready:
+            if tg.cls == 'artillerie':
+                vol = U.pieces(tg) * P_MITRAILLE * 0.7 * (0.6 + 0.4 * tg.morale / 100)
+                kind = 'mitraille'
+            else:
+                vol = tg.men * U.FRONT.get(tg.form, 1.0) * P_RECEPTION * (0.5 + 0.5 * tg.morale / 100) * \
+                    (0.8 + tg.xp / 250) * self._wx_k(tg)
+                kind = 'salve'
+            vol *= (VUL_FIRE if tg.cls == 'inf' else VUL_GRAPE).get(a.form, 1.0)
+            tg.ammo = max(0.0, tg.ammo - 1)
+            tg.reload = max(tg.reload, U.reload_time(tg))
+            tg.fired_t = self.clock
+            self.emit(kind, tg.x, tg.y, a.x, a.y, n=vol, src=tg.id)
+            self._damage(a, vol, tg, kind)
+            if not a.alive:
+                return
+            if not cav and a.morale < FORMED:
+                # la colonne hésite sous le feu et s'arrête court
+                self._repulse(a, tg, 60.0)
+                self.log(f"La charge de {a.name} s'arrête sous le feu de {tg.name}.", None, a.side)
+                return
+        # une troupe en bon ordre, de face, encaisse le choc sans se rompre
+        formed = flank == 1.0 and tg.busy <= 0 and tg.morale >= FORMED and tg.state != 'ralliement' and \
+            tg.cls == 'inf' and tg.form in ('ligne', 'colonne')
         vul = 1.0
         if cav:
             vul = dict(ligne=1.2, tirailleurs=1.6, colonne=1.0, attelee=1.7, batterie=1.4).get(tg.form, 1.0)
             if tg.busy > 0 and tg.next_form == 'carre':
                 vul = 1.9   # pris en pleine manœuvre
-        cas = a.men * 0.05 * mom * flank * vul * U.TYPE.get(a.type, U.TYPE['ligne'])['melee'] * (0.5 + a.morale / 200)
+        if formed:
+            vul *= 0.4
+        cas = a.men * CHOC * mom * flank * vul * U.TYPE.get(a.type, U.TYPE['ligne'])['melee'] * (0.5 + a.morale / 200)
         self._damage(tg, cas, a, 'impact')
-        tg.morale = max(0.0, tg.morale - 6 * mom * flank * (1.3 if cav and tg.form in ('ligne', 'tirailleurs') else 1.0))
+        shock = 6 * mom * flank * (1.3 if cav and tg.form in ('ligne', 'tirailleurs') else 1.0)
+        tg.morale = max(0.0, tg.morale - shock * (0.5 if formed else 1.0))
         if tg.morale < 25:
             self._rout(tg)
             if cav:
-                self._capture(a, tg, 0.1)
+                self._capture(a, tg, CAPTURE['rupture_cav'])
             a.state = 'repos'
+            return
+        if formed and cav and tg.morale >= HOLD:
+            # la ligne a tenu : les cavaliers tournent bride
+            a.morale = max(0.0, a.morale - 8)
+            self._repulse(a, tg)
+            self.log(f"{tg.name} repousse la charge de {a.name}.", None, a.side)
             return
         a.state = tg.state = 'melee'
         a.melee_with, tg.melee_with = tg.id, a.id
         a.path, tg.path = [], []
+
+    def _repulse(self, a, tg, dist=120.0):
+        """Charge repoussée : la troupe se replie de dist mètres face à l'ennemi, puis attend les ordres."""
+        a.state = 'repos'
+        a.order = dict(kind='hold')
+        a.charge_v = 0.0
+        b = math.atan2(a.y - tg.y, a.x - tg.x)
+        gx, gy = min(max(a.x + math.cos(b) * dist, 10), W - 10), min(max(a.y + math.sin(b) * dist, 10), H - 10)
+        self._go(a, gx, gy, b + math.pi)
 
     def _melee_k(self, u, foe):
         k = U.TYPE.get(u.type, U.TYPE['ligne'])['melee']
@@ -1423,13 +1542,15 @@ class TacticalBattle:
             if not f or not f.alive or f.state in ('deroute', 'hors'):
                 self._end_melee(u)
                 continue
-            loss = 0.002 * self._melee_k(u, f) * u.men * dt
-            self._damage(f, loss, u, 'melee')
+            ku, kf = self._melee_k(u, f) * u.men, self._melee_k(f, u) * f.men
+            self._damage(f, MELEE_K * ku * dt, u, 'melee')
+            # la mêlée se décide surtout au moral : le plus faible plie le premier
+            f.morale = max(0.0, f.morale - MELEE_MOR * dt * ku / max(1.0, ku + kf))
             u.fought += dt
             if f.morale < 25 and f.state != 'deroute':
                 self._rout(f)
                 if u.cls == 'cavalerie':
-                    self._capture(u, f, 0.08)
+                    self._capture(u, f, CAPTURE['melee_cav'])
                 self._end_melee(u)
         # déroutés rattrapés, et troupes qui se heurtent (baïonnette) : seulement les voisines (cases de 40 m)
         bins = {}
@@ -1466,7 +1587,7 @@ class TacticalBattle:
                     continue
                 for x, y in ((a, b), (b, a)):
                     if y.state == 'deroute' and x.valid and x.state != 'melee':
-                        self._capture(x, y, 0.006 if x.cls != 'cavalerie' else 0.025)
+                        self._capture(x, y, CAPTURE['contact_cav'] if x.cls == 'cavalerie' else CAPTURE['contact_inf'])
                 if a.valid and b.valid and a.state not in ('melee', 'charge') and b.state not in ('melee', 'charge') \
                         and a.cls not in ('general', 'chariot') and b.cls not in ('general', 'chariot') and d2 < 400:
                     a.state = b.state = 'melee'
@@ -1544,9 +1665,14 @@ class TacticalBattle:
         u.goal = None
         self.emit('deroute', u.x, u.y, src=u.id)
         self.log(f"{u.name} est en déroute !", None, u.side)
+        # la déroute ébranle les voisins, d'autant plus que la troupe qui fuit est nombreuse ; moins près du général
+        k = ROUT_MOR * min(1.5, u.men / 250.0)
         for o in self.units:
-            if o.side == u.side and o is not u and o.valid and (o.x - u.x) ** 2 + (o.y - u.y) ** 2 < 300 * 300:
-                o.morale = max(0.0, o.morale - 4 / U.TYPE.get(o.type, U.TYPE['ligne'])['steady'])
+            if o.side == u.side and o is not u and o.valid and (o.x - u.x) ** 2 + (o.y - u.y) ** 2 < ROUT_R * ROUT_R:
+                hit = k / U.TYPE.get(o.type, U.TYPE['ligne'])['steady']
+                if self.general_near(o):
+                    hit *= 0.5
+                o.morale = max(0.0, o.morale - hit)
 
     def _morale(self, u, dt):
         if u.state == 'hors':
@@ -1577,10 +1703,12 @@ class TacticalBattle:
         res = None
         if self.objective() is not None:
             hx, hy = self.objective()
-            att = any(u.valid and u.side == 0 and (u.x - hx) ** 2 + (u.y - hy) ** 2 < 70 * 70 for u in self.units)
-            dfd = any(u.valid and u.side == 1 and (u.x - hx) ** 2 + (u.y - hy) ** 2 < 150 * 150 for u in self.units)
-            self.hold_t = self.hold_t + DT if att and not dfd else 0.0
-            if self.hold_t >= 60:
+            att = sum(u.men for u in self.units if u.valid and u.side == 0 and
+                      (u.x - hx) ** 2 + (u.y - hy) ** 2 < HEART_R * HEART_R)
+            dfd = any(u.valid and u.side == 1 and (u.x - hx) ** 2 + (u.y - hy) ** 2 < HEART_FREE * HEART_FREE
+                      for u in self.units)
+            self.hold_t = self.hold_t + DT if att >= HEART_MEN and not dfd else 0.0
+            if self.hold_t >= HEART_HOLD:
                 res = (0, False, "L'assaillant tient le cœur de la place.")
         for s in (0, 1):
             if self.withdrawing[s] and self.clock - self.withdraw_t[s] > 1800 and v[s]:
@@ -1739,6 +1867,7 @@ class TacticalBattle:
         if self.objective():
             out['objective'] = list(self.objective())
             out['hold'] = round(self.hold_t)
+            out['hold_need'] = round(HEART_HOLD)
         if self.phase == 'fin' and self.result:
             out['result'] = self.result_view(me)
         return out
