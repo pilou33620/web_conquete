@@ -56,7 +56,7 @@ import random
 
 from . import units as U
 from .terrain import (W, H, T_BOIS, T_FORET_T, T_MARAIS_T, T_VIGNE_T, T_BATI, T_MUR, T_PORTE, T_BRECHE,
-                      T_BARRICADE)
+                      T_BARRICADE, T_ROCHE)
 
 WOODS = (T_BOIS, T_FORET_T)
 ROUGH = (T_BOIS, T_FORET_T, T_MARAIS_T, T_VIGNE_T, T_BATI, T_MUR, T_PORTE, T_BRECHE, T_BARRICADE)
@@ -916,7 +916,7 @@ def _square(b, side, mem, L, u, cavs):
     if best is not None and bd < L['sq_r'] and b.terrain_at(u.x, u.y) not in ROUGH:
         coming = best.state == 'charge' or bd < L['sq_r'] * 0.5 or \
             (best.state == 'marche' and _ang(best.dir, math.atan2(u.y - best.y, u.x - best.x)) < 0.6)
-        want = coming
+        want = coming and (L['n'] == 0 or _charge_ok(b, best.side, best, u))   # (rochers, forêt, eau : pas de charge)
     forming = u.busy > 0 and u.next_form == 'carre'
     if want and u.form != 'carre' and not forming:
         if not L['sq_late'] and best.state == 'charge' and bd < 110:
@@ -945,7 +945,7 @@ def _charge_ok(b, side, u, e):
     n = max(1, int(math.hypot(dx, dy) // 25))
     for k in range(1, n):
         x, y = u.x + dx * k / n, u.y + dy * k / n
-        if not b.passable(x, y, mc, side) or (mc == 'cav' and b.terrain_at(x, y) in (T_FORET_T, T_MARAIS_T)):
+        if not b.passable(x, y, mc, side) or (mc == 'cav' and b.terrain_at(x, y) in (T_FORET_T, T_MARAIS_T, T_ROCHE)):
             return False
     return True
 
@@ -1472,6 +1472,23 @@ def _roles_update(b, side, mem, L, us, sit, front):
             mem['width'] = round(2 * w + 150)
             w = mem['width'] / 2
             _note(b, mem, f"l'ennemi déborde {WING[s]} : {u.name} quitte la réserve et prolonge la ligne.")
+    # percée : des ennemis derrière notre ligne ; la réserve les contre-attaque
+    if L['n'] >= 1 and res and sit['seen'] and mem['plan'] in ('tenir', 'harcelement'):
+        inside = [e for e in sit['seen'] if e.cls in ('inf', 'cavalerie') and
+                  _rel(e.x, e.y, mem['ax'], mem['ay'], mem['fd'])[0] < -40 and
+                  abs(_rel(e.x, e.y, mem['ax'], mem['ay'], mem['fd'])[1]) < mem.get('width', 600) / 2 + 150]
+        for e in inside:
+            if not res:
+                break
+            u = min(res, key=lambda r_: _d2(r_.x, r_.y, e.x, e.y))
+            if _d2(u.x, u.y, e.x, e.y) > 600 ** 2:
+                continue
+            res.remove(u)
+            if e.cls == 'inf' and _melee_power(b, u) > 1.1 * _melee_power(b, e) and _charge_ok(b, side, u, e):
+                b.order(side, [u.id], 'charge', target=e.id)
+            else:
+                b.order(side, [u.id], 'attack', target=e.id)
+            _note_once(b, mem, 'perce' + e.id, f"l'ennemi a percé ({_foe(e)}) : {u.name} contre-attaque.", 600)
     # canons menacés de près, sans infanterie auprès : un bataillon de réserve vient les couvrir
     if L['n'] >= 1 and res and sit['seen']:
         for g in us:
@@ -1590,15 +1607,40 @@ def _lights_def(b, side, mem, L, us, foes, sit, want):
                 danger = True
         if danger and L['n'] >= 1:
             fold[u.id] = round(b.clock)
-        elif L['n'] >= 1 and b.clock - u.fired_t > 240 and b.clock - mem.get('t_contact', b.clock) > 240 and \
-                any(b.clock - v.fired_t < 60 for v in us if mem['role'].get(v.id) == 'ligne'):
-            fold[u.id] = round(b.clock)   # poste inutile : on rejoint l'aile de la ligne, qui se bat
+        elif L['n'] >= 1 and b.clock - u.fired_t > 240 and b.clock - mem.get('t_contact', b.clock) > 240:
+            spot = _flank_fire_spot(b, side, mem, u, sit)
+            if spot:
+                fold.pop(u.id, None)
+                want[u.id] = [spot[0], spot[1], spot[2], 'tirailleurs', False]
+                continue
+            if any(b.clock - v.fired_t < 60 for v in us if mem['role'].get(v.id) == 'ligne'):
+                fold[u.id] = round(b.clock)   # poste inutile : on rejoint l'aile de la ligne, qui se bat
         if u.id in fold and b.clock - fold[u.id] < 300:
             s = 1 if mem['lat'].get(u.id, 0.0) >= 0 else -1
             x, y = _at(mem['ax'], mem['ay'], mem['fd'], -20, s * (w + 60))
             want[u.id] = [x, y, mem['fd'], 'tirailleurs', True]
         else:
             want[u.id] = [p[0], p[1], p[2], 'tirailleurs', False]
+
+
+def _flank_fire_spot(b, side, mem, u, sit):
+    """Un poste de tir pour des légers inoccupés : de flanc, à bonne portée de l'ennemi le plus proche de notre ligne
+    (à moins de 700 m d'eux), à couvert si possible ; None s'il n'y a rien à faire."""
+    best, bd = None, 700.0 ** 2
+    for e in sit['seen']:
+        if e.cls != 'inf' or not e.valid:
+            continue
+        d = _d2(e.x, e.y, u.x, u.y)
+        if d < bd:
+            best, bd = e, d
+    if best is None:
+        return None
+    e_r = b.ranges(u)[0]
+    a = math.atan2(u.y - best.y, u.x - best.x)
+    x, y = _clamp(best.x + math.cos(a) * e_r * 0.9, best.y + math.sin(a) * e_r * 0.9)
+    if b.terrain_at(x, y) not in ROUGH:
+        x, y = _cover_spot(b, side, x, y, a + math.pi, 60)
+    return x, y, a + math.pi
 
 
 def _lights_att(b, side, mem, L, us, foes, sit, want, body, front, halt):
