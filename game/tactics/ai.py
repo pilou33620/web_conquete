@@ -142,7 +142,8 @@ WING_SIDE = 160.0   # attaque concentrée : le groupe se porte à 160 m au-delà
 # est favorable, quand
 # l'ennemi a des troupes en déroute, qu'il nous reste des réserves fraîches, que la ligne du défenseur tient une bonne
 # position ; au plus TEN_MAX en tout. Rien de tout cela : on décroche plus tôt (TEN_NONE)
-TEN_TRIED, TEN_RATIO, TEN_ROUT, TEN_RES, TEN_POS, TEN_MAX, TEN_NONE = 0.08, 0.03, 0.03, 0.03, 0.04, 0.14, -0.03
+TEN_TRIED, TEN_TRIED_K, TEN_RATIO, TEN_ROUT, TEN_RES, TEN_POS, TEN_MAX, TEN_NONE = \
+    0.12, 2.0, 0.03, 0.03, 0.03, 0.04, 0.18, -0.03
 # le général va chercher ses fuyards jusqu'à FETCH_REACH (m) selon le niveau (facile : il ne bouge pas), sans
 # s'approcher à moins de FETCH_SAFE de l'ennemi repéré (hors de portée de fusil)
 FETCH_REACH, FETCH_SAFE = (0.0, 900.0, 1200.0), 330.0
@@ -1189,7 +1190,7 @@ def _tenacity(b, side, mem, L, sit):
     # (à couvert, le défenseur perd d'ordinaire moins que l'assaillant : chacun juge l'échange à cette aune)
     d = e_cas * EXCHANGE - cas if side == 0 else e_cas - cas * EXCHANGE
     if d > 0.02:
-        k += min(TEN_TRIED, 1.5 * d)
+        k += min(TEN_TRIED, TEN_TRIED_K * d)
         why.append(f"l'ennemi a perdu davantage ({round(e_cas * 100)} % contre {round(cas * 100)} %)")
     if sit['ratio'] >= 1.15:
         k += TEN_RATIO
@@ -2240,7 +2241,7 @@ def _support(b, side, mem, L, us, foes, sit, want):
             run = False
             if L['gen_move']:
                 # des fuyards : le général va les chercher (le moteur ne les rallie qu'auprès de lui)
-                f = _fetch(b, side, mem, L, u, us, seen)
+                f = _fetch(b, side, mem, L, u, us, seen, gx, gy)
                 if f is not None:
                     gx, gy, run = f
             # jamais à portée de fusil
@@ -2309,13 +2310,14 @@ def _support(b, side, mem, L, us, foes, sit, want):
             want[u.id] = [sx, sy, fd + s * 0.9, 'ligne', False]
 
 
-def _fetch(b, side, mem, L, g, us, seen):
+def _fetch(b, side, mem, L, g, us, seen, gx, gy):
     """Des fuyards à rallier : le moteur ne les rallie qu'auprès d'un général (l'ordre « Rallier », que les réflexes
     donnent sans cesse, dès que l'ennemi est à plus de 150 m ; d'eux-mêmes, au calme, à plus de 400 m). Le général va
     au-devant d'eux, sur leur chemin de fuite (vers notre bord), au premier endroit où il est hors de portée de fusil
     (l'ennemi repéré à plus de FETCH_SAFE), un peu en arrière : ils passent près de lui et se reforment. Pas s'il faut
     passer sous le feu, si des cavaliers ennemis rôdent par là, ni pour une poignée d'hommes ; le groupe le plus
-    nombreux qu'on rejoint vite d'abord. Renvoie (x, y, au galop) ou None."""
+    nombreux qu'on rejoint vite d'abord. Ceux qui passeront de toute façon près de son poste ordinaire (gx, gy), derrière
+    la ligne, l'y trouveront : il ne le quitte pas pour eux. Renvoie (x, y, au galop) ou None."""
     runs = [v for v in us if v.state == 'deroute' and v.men >= 50 and v.cls in ('inf', 'cavalerie', 'artillerie')]
     if not runs:
         return None
@@ -2323,10 +2325,13 @@ def _fetch(b, side, mem, L, g, us, seen):
     ahead = min(120.0, 0.3 * b.rally_radius(g))
     reach = FETCH_REACH[L['n']]
     best, bv = None, 0.0
+    r2 = (b.rally_radius(g) - 60) ** 2
     for v in runs:
         ex, ey = b.edge_point(side, v.x, v.y)
         far = math.hypot(ex - v.x, ey - v.y)
         a = math.atan2(ey - v.y, ex - v.x)
+        if any(_d2(v.x + math.cos(a) * s, v.y + math.sin(a) * s, gx, gy) < r2 for s in range(0, min(700, int(far)), 50)):
+            continue
         for s in range(0, 1000, 100):
             if s > far - 80:
                 break
@@ -2731,7 +2736,7 @@ def _artillery(b, side, mem, L, us, foes, sit, want, busy):
         # cible
         if not L['art_pick']:
             continue   # facile : les canons tirent sur ce qui se présente (choix du moteur)
-        tgt = _art_target(b, u, foes, ours, mem, mx, e, g)
+        tgt = _art_target(b, u, foes, ours, mem, mx, e, g, L['oblique'])
         if tgt is not None and (u.target != tgt.id or not u.order or u.order.get('kind') != 'attack'):
             b.order(side, [u.id], 'attack', target=tgt.id)
 
@@ -2809,7 +2814,10 @@ def _gun_spot_view(b, side, x, y, fd, r, tg, reach, ahead):
     return best
 
 
-def _art_target(b, u, foes, ours, mem, mx, e_r, g):
+def _art_target(b, u, foes, ours, mem, mx, e_r, g, cb=False):
+    """Cible d'une batterie : ce que la mitraille ou le boulet touche le mieux, les canons qui menacent nos lignes, les
+    cavaliers, le chariot. cb (difficile) : contre-batterie d'abord, les canons ennemis à portée efficace avant tout (leur
+    mitraille à bout portant interdirait l'assaut), puis le bout de l'aile qu'on va attaquer (mem['focus'])."""
     best, bv = None, 0.0
     cur = u.target
     bout = mem.get('bout') if mem['plan'] == 'assaut' else None
@@ -2827,7 +2835,7 @@ def _art_target(b, u, foes, ours, mem, mx, e_r, g):
         if t.cls == 'artillerie':
             g_t = b.ranges(t)[2] or 280
             threat = min((_d2(t.x, t.y, o.x, o.y) for o in ours), default=1e12) < (g_t + 60) ** 2
-            v *= (2.0 if threat else 1.4) if d <= e_r else 1.0
+            v *= ((2.0 if threat else 1.4) * (1.8 if cb else 1.0)) if d <= e_r else 1.0
         elif t.cls == 'cavalerie':
             v *= 1.3
         elif t.cls == 'chariot':
@@ -2840,7 +2848,7 @@ def _art_target(b, u, foes, ours, mem, mx, e_r, g):
         if bout and _d2(t.x, t.y, bout[0], bout[1]) < 260 ** 2:
             v *= 1.6
         if t.id == mem.get('focus'):
-            v *= 1.8   # (ordre oblique : on pilonne le bout de l'aile qu'on va prendre de flanc)
+            v *= 1.4   # (ordre oblique : on pilonne le bout de l'aile qu'on va prendre de flanc)
         if t.id == cur:
             v *= 1.25   # (changer de cible coûte du temps de pointage)
         if v > bv and b.los_units(u, t):
