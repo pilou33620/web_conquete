@@ -7,9 +7,9 @@ import { Effects } from './effets.js';
 import { Controls } from './commandes.js';
 import { BattleUI } from './interface.js';
 import { emprise, clsOf, isGeneral, clamp, wrapAngle, hash, TAU, TILT } from './formes.js';
+import { profil, qualite, onQualite, Mesure } from './qualite.js';
 
 const POLL_MS = 120;
-const MAX_Z = 6;
 
 export class BattleView {
   // api : {get(url), post(url, body)} ; root : élément qui recevra la vue
@@ -21,8 +21,11 @@ export class BattleView {
     this.cv.className = 'bt-canvas';
     root.appendChild(this.cv);
     this.ctx = this.cv.getContext('2d');
-    this.art = new UnitArt();
-    this.fx = new Effects();
+    // qualité graphique (qualite.js) : densité du canevas, détail du terrain, zoom maximal, caches
+    this.q = profil();
+    this.mesure = new Mesure();
+    this.art = new UnitArt(this.q);
+    this.fx = new Effects(this.q);
     this.units = new Map();
     this.sel = new Set();
     this.orders = new Map();     // derniers ordres donnés (affichés jusqu'à l'arrivée)
@@ -30,7 +33,7 @@ export class BattleView {
     this.seq = 0;
     this.cam = { x: 1500, y: 1000, z: 0.5 };
     this.camAnim = null;
-    this.figScale = 3;           // les silhouettes sont grandies (×3) pour rester lisibles, comme les arbres
+    this.figScale = 3;           // les silhouettes sont grandies (×3 de loin, presque rien de près) pour rester lisibles
     this.showCover = false;
     this.running = false;
     this.frameMs = [];
@@ -40,6 +43,7 @@ export class BattleView {
     this.resize();
     this._onResize = () => this.resize();
     window.addEventListener('resize', this._onResize);
+    this._offQ = onQualite(() => this.setQuality());
     this.controls = new Controls(this);
     this.ui = new BattleUI(this);
   }
@@ -50,7 +54,7 @@ export class BattleView {
     const m = await this.api.get(`/api/tactic_map?bid=${encodeURIComponent(bid)}`);
     if (!m || (!m.t && !m.W)) throw new Error('Carte de bataille indisponible');
     this.map = m;
-    this.terrain = new Terrain(m);
+    this.terrain = new Terrain(m, this.q);
     this.W = this.terrain.W; this.H = this.terrain.H;
     this.cam = { x: this.W / 2, y: this.H / 2, z: this.fitZ() };
     return m;
@@ -75,11 +79,22 @@ export class BattleView {
   dispose() {
     this.stop();
     window.removeEventListener('resize', this._onResize);
+    this._offQ();
     this.controls.dispose();
     this.ui.dispose();
     this.terrain?.dispose();
     this.art.clear();
+    this.fx.dispose();
     this.root.innerHTML = '';
+  }
+  // nouvelle qualité graphique (menu, bataille, ou mesure des images par seconde) : tout suit sans recharger
+  setQuality() {
+    this.q = profil();
+    this.art.setQuality(this.q);
+    this.fx.setQuality(this.q);
+    this.terrain?.setQuality(this.q);
+    this.resize();
+    this.clampCam();
   }
 
   // ------------------------------------------------------------------ serveur
@@ -178,7 +193,7 @@ export class BattleView {
 
   // ------------------------------------------------------------------ caméra
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, this.q.dpr);
     this.dpr = dpr;
     const r = this.root.getBoundingClientRect();
     this.vw = r.width > 10 ? r.width : window.innerWidth; this.vh = r.height > 10 ? r.height : window.innerHeight;
@@ -187,13 +202,16 @@ export class BattleView {
   }
   fitZ() { return Math.min(this.vw / (this.W || 3000), this.vh / ((this.H || 2000) * TILT)) * 0.98; }
   minZ() { return this.fitZ() * 0.85; }
+  maxZ() { return this.q.maxZ; }
+  // grossissement des figurines : ×3 de loin (lisibles sur la carte entière), presque à l'échelle de près
+  figScaleAt(z) { return clamp(3 * Math.pow(z / 1.2, -0.55), 1.15, 3); }
   toScreen = (x, y) => [(x - this.cam.x) * this.cam.z + this.vw / 2, (y - this.cam.y) * this.cam.z * TILT + this.vh / 2];
   toWorld(sx, sy) { return [(sx - this.vw / 2) / this.cam.z + this.cam.x, (sy - this.vh / 2) / (this.cam.z * TILT) + this.cam.y]; }
   // la caméra peut dépasser un peu les bords : de quoi voir ce qui est sous la barre du haut, le bandeau du
   // déploiement et la barre des unités
   clampCam() {
     const c = this.cam;
-    c.z = clamp(c.z, this.minZ(), MAX_Z);
+    c.z = clamp(c.z, this.minZ(), this.maxZ());
     const mx = this.vw / 2 / c.z, my = this.vh / 2 / (c.z * TILT);
     const top = (this.st?.phase === 'deploiement' ? 230 : 110) / (c.z * TILT), bottom = 150 / (c.z * TILT), side = 70 / c.z;
     c.x = mx * 2 >= this.W + side * 2 ? this.W / 2 : clamp(c.x, mx - side, this.W - mx + side);
@@ -202,7 +220,7 @@ export class BattleView {
   moveCam(x, y, z, dur = 600) {
     // la cible est ramenée dans les bornes dès le départ : pas de saut à l'arrivée
     const from = { ...this.cam };
-    this.cam = { x, y, z: clamp(z ?? from.z, this.minZ(), MAX_Z) };
+    this.cam = { x, y, z: clamp(z ?? from.z, this.minZ(), this.maxZ()) };
     this.clampCam();
     const to = this.cam;
     this.cam = from;
@@ -210,7 +228,7 @@ export class BattleView {
   }
   zoomAt(sx, sy, f) {
     const [wx, wy] = this.toWorld(sx, sy);
-    this.cam.z = clamp(this.cam.z * f, this.minZ(), MAX_Z);
+    this.cam.z = clamp(this.cam.z * f, this.minZ(), this.maxZ());
     this.cam.x = wx - (sx - this.vw / 2) / this.cam.z;
     this.cam.y = wy - (sy - this.vh / 2) / (this.cam.z * TILT);
     this.camAnim = null;
@@ -269,6 +287,10 @@ export class BattleView {
     this.ui.frame(now);
     const ms = performance.now() - t0;
     this.frameMs.push(ms);
+    this.drawMs = ms;
+    // qualité automatique : on descend d'un cran si l'appareil peine (combat, sans geste ni tuiles en rafale)
+    const calme = this.st?.phase === 'combat' && !this.controls.busy() && !this.camAnim && !this.terrain?.busy;
+    this.mesure.image(dt * 1000, calme, now);
     // une image rapide, sans geste en cours : on avance la peinture des tuiles voisines
     if (ms < 7 && !this.controls.busy() && !this.camAnim && (this.idleN = (this.idleN || 0) + 1) % 3 === 0) this.terrain?.prefetch(); if (this.frameMs.length > 120) this.frameMs.shift();
   }
