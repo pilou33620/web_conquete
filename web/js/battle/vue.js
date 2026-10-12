@@ -332,7 +332,7 @@ export class BattleView {
     mark('effets');
     this.fx.atmosphere(ctx, view, sky, dt, time);
     mark('atmosphere');
-    this.drawOverSmoke(ctx);
+    this.drawOverSmoke(ctx, time);
     this.drawLabels(ctx);
     this.bannerRects = this.art.banners(ctx, view, vis, this.colors || [], { sel: this.sel, me: this.me, time });
     this.controls.drawOverlay(ctx, view, time);
@@ -384,21 +384,11 @@ export class BattleView {
         ctx.setLineDash([]);
       }
     }
-    // ralliement : une troupe en déroute ne se reforme qu'auprès du général, loin de l'ennemi. Tant qu'une des miennes
-    // fuit, un cercle discret montre la zone de ralliement autour de mes états-majors (plus net si un fuyard est choisi)
-    const mine = [...this.units.values()].filter(u => u.side === this.me && !u._ghost && u.state !== 'hors');
-    const routed = mine.filter(u => u.state === 'deroute');
-    if (routed.length) {
-      const picked = routed.some(u => this.sel.has(u.id)), pulse = 0.5 + 0.5 * Math.sin(time * 2.4);
-      for (const g of mine) {
-        if (!isGeneral(g) || !g.rally) continue;
-        ctx.fillStyle = `rgba(255,226,150,${picked ? 0.09 : 0.045})`;
-        ctx.strokeStyle = `rgba(255,226,150,${picked ? 0.55 + 0.3 * pulse : 0.35})`;
-        ctx.lineWidth = (picked ? 2.2 : 1.4) / z;
-        ctx.setLineDash([10 / z, 8 / z]); ctx.lineDashOffset = -time * 12 / z;
-        ctx.beginPath(); ctx.arc(g.x, g.y, g.rally, 0, TAU); ctx.fill(); ctx.stroke();
-        ctx.setLineDash([]); ctx.lineDashOffset = 0;
-      }
+    // zone de ralliement : un voile doré au sol (son contour est tracé par-dessus la fumée : drawOverSmoke)
+    const rz = this.rallyZone();
+    if (rz) {
+      ctx.fillStyle = `rgba(255,226,150,${rz.picked ? 0.09 : 0.045})`;
+      for (const g of rz.gens) { ctx.beginPath(); ctx.arc(g.x, g.y, g.rally, 0, TAU); ctx.fill(); }
     }
     // ordres en cours de mes unités : trajet pointillé et emplacement d'arrivée
     for (const u of this.units.values()) {
@@ -444,8 +434,29 @@ export class BattleView {
       art.footprint(ctx, proj, hov.x, hov.y, hov.dir, hov.w, hov.d, 6); ctx.stroke();
     }
   }
-  // par-dessus la fumée et la brume : le contour des régiments choisis et leur destination restent lisibles
-  drawOverSmoke(ctx) {
+  // ralliement : une troupe en déroute ne se reforme qu'auprès du général, loin de l'ennemi. Tant qu'une des miennes
+  // fuit, la zone de ralliement autour de mes états-majors est montrée (plus nettement si un fuyard est choisi)
+  rallyZone() {
+    const mine = [...this.units.values()].filter(u => u.side === this.me && !u._ghost && u.state !== 'hors');
+    const routed = mine.filter(u => u.state === 'deroute');
+    const gens = mine.filter(g => isGeneral(g) && g.rally);
+    return routed.length && gens.length ? { gens, picked: routed.some(u => this.sel.has(u.id)) } : null;
+  }
+  // par-dessus la fumée et la brume : le contour des régiments choisis et leur destination, et celui de la zone de
+  // ralliement, restent lisibles
+  drawOverSmoke(ctx, time) {
+    const rz = this.rallyZone();
+    if (rz) {
+      const z = this.cam.z, pulse = 0.5 + 0.5 * Math.sin(time * 2.4);
+      ctx.strokeStyle = `rgba(255,226,150,${rz.picked ? 0.6 + 0.3 * pulse : 0.45})`;
+      ctx.lineWidth = rz.picked ? 2.2 : 1.4;
+      ctx.setLineDash([10, 8]); ctx.lineDashOffset = -time * 12;
+      for (const g of rz.gens) {
+        const [sx, sy] = this.toScreen(g.x, g.y);
+        ctx.beginPath(); ctx.ellipse(sx, sy, g.rally * z, g.rally * z * TILT, 0, 0, TAU); ctx.stroke();
+      }
+      ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    }
     if (!this.sel.size) return;
     const proj = { toScreen: this.toScreen };
     ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
