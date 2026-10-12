@@ -6,7 +6,7 @@
 // À chaque image ne sont plus dessinées que les unités et les effets. Les tués et les trous d'obus sont peints
 // dans les tuiles déjà faites (décalcomanies). Motifs et silhouettes d'arbres : textures.js.
 import { T, cellRemap, normSeason, hash, clamp, TAU, TILT, OMBRE, mixHex, vnoise, canvas } from './formes.js';
-import { texture, treeSprite, softShadow, culture } from './textures.js';
+import { texture, texSize, treeSprite, softShadow, culture } from './textures.js';
 import { profil } from './qualite.js';
 
 const TS = 512;                         // côté d'une tuile, en pixels de l'écran
@@ -177,6 +177,8 @@ export class Terrain {
       reg.off = [hash(id, 8, S) * 97, hash(id, 9, S) * 97];
     }
     this.byId = this.regions.slice();   // région d'après son numéro (label), avant le tri
+    // motifs dont cette carte se sert (préparés d'avance dans le temps libre : warm)
+    this.kinds = [...new Set([snow ? 'neige' : 'herbe', 'terre', 'route', 'eau', ...this.regions.map(r => r.tex)])];
     // ordre de peinture : les sols d'abord, l'eau et le bâti ensuite
     const ORDER = [T.PRE, T.LANDE, T.SABLE, T.ROCHE, T.CHAMP, T.VIGNE, T.MARAIS, T.BOIS, T.FORET, T.ROUTE, T.CHEMIN, T.BATI, T.MUR, T.BRECHE, T.PORTE, T.BARRICADE, T.GUE, T.EAU];
     this.regions.sort((a, b) => ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
@@ -1099,6 +1101,11 @@ export class Terrain {
   prefetch() {
     const p = this.pending;
     if (!p) return false;
+    // d'abord les motifs du niveau (le premier usage d'un motif coûte de 30 à 150 ms) : un seul par appel, pour que
+    // la première tuile de ce niveau ne les peigne pas tous d'un coup
+    // (seulement s'il reste de la place : sinon le motif chasserait un autre motif du même niveau, sans fin)
+    const kind = this.kinds.find(k => !this.cache.has(`t|${k}|${p.L}`));
+    if (kind && this.cacheBytes + texSize(p.L) ** 2 * 4 <= this.q.textures) { this.cached(`t|${kind}|${p.L}`, () => texture(kind, p.L, this.pal, this.season)); this.trim(); return true; }
     // plus de place pour une tuile d'avance : elle chasserait une tuile visible, repeinte aussitôt, sans fin
     if (this.tiles.size >= this.q.tiles) { this.pending = null; return false; }
     const ni = Math.ceil(this.W / p.span) - 1, nj = Math.ceil(this.H / p.span) - 1;
