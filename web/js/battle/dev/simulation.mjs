@@ -41,12 +41,13 @@ function lineDist(px, py, pts) {
 }
 const b64 = u8 => Buffer.from(u8).toString('base64');
 
+// year : l'année de la bataille (coiffures des figurines), réglable par ?year=
 export const SCENARIOS = {
-  bocage: { name: 'Bataille de Saint-Aulaye', relief: 30, season: 'printemps', weather: 'nuages', camp: [93, 74] },
-  landes: { name: 'Combat de Sabres', relief: 7, season: 'ete', weather: 'canicule', camp: [70, 150] },
-  vignes: { name: 'Bataille de Castillon', relief: 30, season: 'automne', weather: 'pluie', camp: [86, 96] },
-  montagne: { name: 'Combat du col d’Ispéguy', relief: 80, season: 'hiver', weather: 'neige', camp: [62, 262] },
-  assaut: { name: 'Assaut de Blaye', relief: 12, season: 'ete', weather: 'soleil', camp: [72, 74], place: 'Blaye' },
+  bocage: { name: 'Bataille de Saint-Aulaye', relief: 30, season: 'printemps', weather: 'nuages', camp: [93, 74], year: 1793 },
+  landes: { name: 'Combat de Sabres', relief: 7, season: 'ete', weather: 'canicule', camp: [70, 150], year: 1808 },
+  vignes: { name: 'Bataille de Castillon', relief: 30, season: 'automne', weather: 'pluie', camp: [86, 96], year: 1815 },
+  montagne: { name: 'Combat du col d’Ispéguy', relief: 80, season: 'hiver', weather: 'neige', camp: [62, 262], year: 1813 },
+  assaut: { name: 'Assaut de Blaye', relief: 12, season: 'ete', weather: 'soleil', camp: [72, 74], place: 'Blaye', year: 1870 },
 };
 
 // ------------------------------------------------------------------ carte
@@ -291,9 +292,31 @@ function genMap(scen, seed) {
     walls.push({ kind: 'barricade', pts: [[X - 600, Y + 30], [X - 570, Y - 25], [X - 530, Y + 25], [X - 500, Y - 20], [X - 470, Y + 10]], breach: [] });
     walls.push({ kind: 'barricade', pts: [[X + 360, Y - 30], [X + 372, Y + 34]], breach: [] });
   }
+  // clôtures, haies et murets au bord des parcelles, comme le moteur : tronçons de cases alignées
+  const KINDS = { bocage: ['haie', 'haie', 'cloture', 'muret'], vignes: ['muret', 'muret', 'cloture'], montagne: ['muret'], landes: ['cloture'], assaut: ['cloture', 'haie'] }[scen] || ['cloture'];
+  const open = v => v === T.PRE || v === T.CHAMP || v === T.VIGNE || v === T.LANDE;
+  const fk = new Int8Array(COLS * ROWS).fill(-1);
+  for (let j = 0; j < ROWS - 1; j++) for (let i = 0; i < COLS - 1; i++) {
+    const c = idx(i, j);
+    if (!open(t[c])) continue;
+    for (const q of [idx(i + 1, j), idx(i, j + 1)]) {
+      const a = Math.min(parcel[c], parcel[q]), b = Math.max(parcel[c], parcel[q]);
+      if (a !== b && open(t[q]) && hash(a, b, 77) < 0.4) fk[c] = (hash(a, b, 78) * KINDS.length) | 0;
+    }
+  }
+  const fences = [], used = new Uint8Array(COLS * ROWS);
+  for (const [di, dj] of [[1, 0], [0, 1]]) for (let j = 0; j < ROWS; j++) for (let i = 0; i < COLS; i++) {
+    const c = idx(i, j), k = fk[c];
+    if (k < 0 || used[c]) continue;
+    let n = 0;
+    while (i + (n + 1) * di < COLS && j + (n + 1) * dj < ROWS && fk[idx(i + (n + 1) * di, j + (n + 1) * dj)] === k) n++;
+    if (n < 2) continue;
+    for (let q = 0; q <= n; q++) used[idx(i + q * di, j + q * dj)] = 1;
+    fences.push({ kind: KINDS[k], pts: [[cx(i), cy(j)], [cx(i + n * di), cy(j + n * dj)]] });
+  }
   return {
-    W, H, cell: CELL, cols: COLS, rows: ROWS, t: b64(t), h: b64(h), roads, rivers, buildings, walls, place, seed,
-    season: S.season, weather: S.weather, camp: { x: S.camp[0], y: S.camp[1] }, _t: t, _h: h,
+    W, H, cell: CELL, cols: COLS, rows: ROWS, t: b64(t), h: b64(h), roads, rivers, buildings, walls, place, seed, fences,
+    season: S.season, weather: S.weather, year: S.year, camp: { x: S.camp[0], y: S.camp[1] }, _t: t, _h: h,
   };
 }
 
@@ -379,6 +402,7 @@ export class MockBattle {
     this.season = opts.season || parts[1] || S.season;
     this.weather = opts.weather || parts[2] || S.weather;
     this.map.season = this.season; this.map.weather = this.weather;
+    if (+opts.year) this.map.year = +opts.year;
     this.R = rng(this.seed + 1);
     const g = genUnits(this.scen, this.map, this.R);
     this.units = g.units; this.zone = g.zone;
