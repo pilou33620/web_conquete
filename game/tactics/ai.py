@@ -106,8 +106,8 @@ PLAN_LABEL = dict(frontal='assaut frontal coordonné', artillerie="préparation 
                   harcelement='escarmouche, puis retraite', assaut='assaut de la place', place='défense de la place')
 WING = {-1: "l'aile gauche", 1: "l'aile droite", 0: 'la réserve'}
 LEG = 450.0          # une longue marche se donne par étapes (recherches de chemin courtes)
-# hauteurs pour la vue (comme le moteur, battle.HEIGHT) : les canons (officiers à cheval) voient par-dessus les haies
-EYES = dict(inf=2.5, artillerie=3.0, cavalerie=3.5, general=3.5, chariot=3.0)
+# hauteurs pour la vue (celles du moteur) : les canons (officiers à cheval) voient par-dessus les haies proches
+EYES = BT.HEIGHT
 GUN_EYE = EYES['artillerie']
 # la mitraille ne fait de vrais ravages qu'à moins de 60 % de sa portée (le moteur l'éparpille au-delà : battle.grape_k) :
 # c'est cette zone que la ligne évite
@@ -116,8 +116,9 @@ GRAPE_DEADLY = 0.6
 # l'assaillant qui mène l'attaque (plans frontal, artillerie, débordement) ne décroche qu'avec ce supplément de pertes :
 # il sait qu'on n'emporte pas une position sans le payer (même valeur à tous les niveaux)
 ATT_TENACITY = 0.05
-# combat égal qui s'éternise : passé wd_loss + 7 % de pertes, on cède si le rapport de forces vu est sous wd_ratio + ceci
-WD_EVEN = 0.2
+# combat égal qui s'éternise : passé wd_loss + WD_EVEN_LOSS de pertes, on cède si le rapport de forces vu est sous
+# wd_ratio + WD_EVEN
+WD_EVEN_LOSS, WD_EVEN = 0.07, 0.2
 FIRE_LONG = 900.0   # durée de fusillade avant la baïonnette à forces égales (s)
 
 LEVELS = {
@@ -1140,12 +1141,12 @@ def _decide_withdraw(b, side, mem, L, sit):
     if plan == 'harcelement' and mem.get('t_contact') is not None:
         if b.clock - mem['t_contact'] > mem.get('harass_t', 2700) or sit['loss'] > 0.18:
             why = "l'escarmouche a assez duré"
-    # (les pertes comptent les troupes en déroute : un camp qui en a plusieurs à la fois plie)
+    # (les pertes comptent pour moitié les troupes en déroute : un camp qui en a plusieurs à la fois plie)
     if sit['loss'] > L['wd_loss'] - k and sit['ratio'] < L['wd_ratio'] + 0.1:
         why = 'pertes trop lourdes'
-    elif sit['loss'] > L['wd_loss'] + 0.07 - k and sit['ratio'] < L['wd_ratio'] + L.get('wd_even', WD_EVEN):
+    elif sit['loss'] > L['wd_loss'] + L.get('wd_even_loss', WD_EVEN_LOSS) - k and \
+            sit['ratio'] < L['wd_ratio'] + L.get('wd_even', WD_EVEN):
         why = 'pertes trop lourdes'   # (combat égal qui s'éternise : le plus éprouvé cède)
-
     elif sit['ratio'] < 0.45 and sit['loss'] > 0.2:
         why = "l'ennemi est bien plus fort"
     elif sit['valid'] and sit['mor'] < 32 and sit['routed'] >= len(sit['valid']):

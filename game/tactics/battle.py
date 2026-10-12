@@ -1617,16 +1617,18 @@ class TacticalBattle:
             kf = self._melee_k(f, u) * f.men
             tot = press.get(f.id, ku)
             self._damage(f, MELEE_K * ku * dt, u, 'melee')
-            # la mêlée se décide surtout au moral : le plus faible plie le premier (la pression subie ne dépasse
-            # jamais MELEE_MOR par seconde, même à un contre trois)
-            # (dans une brèche, une rue, des maisons, derrière un mur, on ne se bat pas à plus de front que le passage :
-            # à plusieurs contre un, la pression s'additionne sans dépasser MELEE_MOR ; à découvert, elle s'additionne)
+            # la mêlée se décide surtout au moral : le plus faible plie le premier ; à plusieurs contre un, la pression
+            # s'additionne, sauf dans une brèche, une rue, des maisons, derrière un mur, où l'on ne se bat pas à plus de
+            # front que le passage (elle ne dépasse alors pas MELEE_MOR par seconde)
             narrow = self.t[self.cell(f.x, f.y)] in NARROW or self.t[self.cell(u.x, u.y)] in NARROW or \
                 self.cover_at(f.x, f.y) >= 0.5
             share = (ku / max(1.0, tot)) * tot / max(1.0, tot + kf) if narrow else ku / max(1.0, ku + kf)
             f.morale = max(0.0, f.morale - MELEE_MOR * dt * share)
             u.fought += dt
-            if f.morale < 25 and f.state != 'deroute':
+            # (on ne se replie pas en ordre devant des cavaliers qui sont dans les rangs : fantassins hors du carré et
+            # canonniers se débandent)
+            ridden = u.cls == 'cavalerie' and f.form != 'carre' and f.cls in ('inf', 'artillerie')
+            if (f.morale < 25 or (ridden and f.morale < GIVE_WAY)) and f.state != 'deroute':
                 self._rout(f)
                 if u.cls == 'cavalerie':
                     self._capture(u, f, CAPTURE['melee_cav'])
