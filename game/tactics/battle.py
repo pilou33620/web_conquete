@@ -104,13 +104,13 @@ BRAKE_CAV = {T_BOIS: 0.45, T_FORET_T: 0.3, T_MARAIS_T: 0.35, T_VIGNE_T: 0.5, T_B
 BRAKE_INF = {T_BOIS: 0.85, T_FORET_T: 0.7, T_MARAIS_T: 0.6, T_VIGNE_T: 0.85, T_BATI: 0.8, T_ROCHE: 0.55,
              T_SABLE: 0.8, T_MUR: 0.5, T_PORTE: 0.5, T_BRECHE: 0.7, T_BARRICADE: 0.7, T_GUE: 0.7}
 # ---- équilibre du combat (voir « Règles de combat » dans l'aide-mémoire) ----
-P_FUSIL = 0.0085         # touchés par homme qui tire et par salve, à portée efficace (avant arme, expérience, moral…)
-P_BOULET = 0.34          # touchés par pièce et par coup de boulet à courte distance, sur une ligne à découvert
-P_MITRAILLE = 0.75       # … à mitraille, jusqu'à 30 % de la portée de mitraille (puis de moins en moins : grape_k)
+P_FUSIL = 0.0075         # touchés par homme qui tire et par salve, à portée efficace (avant arme, expérience, moral…)
+P_BOULET = 0.3           # touchés par pièce et par coup de boulet à courte distance, sur une ligne à découvert
+P_MITRAILLE = 0.65       # … à mitraille, jusqu'à 30 % de la portée de mitraille (puis de moins en moins : grape_k)
 P_RECEPTION = 0.04       # feu de défense à bout portant contre une charge, par homme du front
 COVER_K = 1.0            # part du couvert (COVER, haies, murs) qui protège du feu
-CHOC = 0.03              # pertes du choc d'une charge, par homme qui charge (× élan, flanc, ordre de la cible, type)
-MELEE_K = 0.0005         # pertes infligées en mêlée, par homme et par seconde (× force au corps à corps)
+CHOC = 0.027             # pertes du choc d'une charge, par homme qui charge (× élan, flanc, ordre de la cible, type)
+MELEE_K = 0.00045        # pertes infligées en mêlée, par homme et par seconde (× force au corps à corps)
 MELEE_MOR = 0.5          # moral perdu par seconde de mêlée, partagé selon le rapport des forces au corps à corps
 GIVE_WAY = 35            # au corps à corps, le plus faible cède du terrain (repli de 100 m) sous ce moral, sans fuir
 FORMED = 50              # moral d'une troupe en ligne ou en colonne qui reçoit une charge de face en bon ordre…
@@ -124,8 +124,8 @@ ROUT_MOR = 3.0           # … de 3 points de moral (bataillon de 250 hommes ; d
 # assaut d'une place : l'assaillant l'emporte s'il tient le cœur (au moins HEART_MEN hommes en état de combattre à
 # moins de HEART_R) sans défenseur en état de combattre à moins de HEART_FREE, pendant HEART_HOLD secondes de suite
 HEART_R, HEART_MEN, HEART_FREE, HEART_HOLD = 90.0, 150.0, 200.0, 600.0
-CAPTURE = dict(contact_cav=0.006, contact_inf=0.001,   # part des fuyards rattrapés par pas de 2 s au contact
-               choc_cav=0.04, choc_inf=0.02,            # … par une charge sur des fuyards
+CAPTURE = dict(contact_cav=0.004, contact_inf=0.0007,  # part des fuyards rattrapés par pas de 2 s au contact
+               choc_cav=0.03, choc_inf=0.02,            # … par une charge sur des fuyards
                rupture_cav=0.04, melee_cav=0.03)        # … quand la cavalerie rompt une troupe (choc, mêlée)
 CHARGE_FAT = dict(cav=12.0, inf=6.0)   # fatigue d'une charge menée jusqu'au choc : les chevaux sont essoufflés
 FCOST_K = dict(inf=1.0, light=0.6, cav=2.0, art=2.5)

@@ -115,19 +115,19 @@ LEVELS = {
     'facile': dict(n=0, period=20.0, jitter=12.0, reflex=6.0, sq_r=210.0, sq_miss=0.3, sq_late=True, terrain=0,
                    cohesion=False, bound=600.0, halt=(0.5, 1.45), prep=5 * 60, prep_max=8 * 60, cav_r=330.0,
                    cav_pick=False, counter=False, col_late=True, res_early=True, flank=False, relief=False,
-                   art_pick=False, wd_loss=0.24, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
+                   art_pick=False, wd_loss=0.2, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
                    grape=0, assault_prep=6 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False,
                    storm=False, oblique=False, extend=False, flankfire=False),
     'normal': dict(n=1, period=10.0, jitter=4.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=1,
                    cohesion=True, bound=220.0, halt=(0.82, 0.92), prep=12 * 60, prep_max=25 * 60, cav_r=430.0,
                    cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
-                   art_pick=True, wd_loss=0.3, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
+                   art_pick=True, wd_loss=0.24, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
                    grape=1, assault_prep=12 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False,
                    storm=True, oblique=False, extend=False, flankfire=False),
     'difficile': dict(n=2, period=6.0, jitter=0.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=2,
                       cohesion=True, bound=170.0, halt=(0.78, 0.85), prep=15 * 60, prep_max=35 * 60, cav_r=430.0,
                       cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
-                      art_pick=True, wd_loss=0.33, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
+                      art_pick=True, wd_loss=0.27, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
                       grape=1, assault_prep=15 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True,
                       storm=True, oblique=True, extend=True, flankfire=True),
 }
@@ -948,13 +948,15 @@ def _reflexes(b, side, mem, L, us, foes):
             continue
         if u.cls != 'inf' or st in ('melee', 'charge', 'ralliement'):
             continue
-        _square(b, side, mem, L, u, cavs)
+        _square(b, side, mem, L, u, cavs, foes)
     if L['counter'] and cavs:
         _counter_charge(b, side, mem, us, cavs, foes)
 
 
-def _square(b, side, mem, L, u, cavs):
-    """Carré quand des cavaliers menacent ; on reprend sa formation quand ils s'éloignent."""
+def _square(b, side, mem, L, u, cavs, foes=()):
+    """Carré quand des cavaliers menacent ; on reprend sa formation quand ils s'éloignent. Pas de carré sous le fusil
+    de l'infanterie ennemie (à moins de 200 m) tant que les cavaliers ne chargent pas cette troupe : le carré y serait
+    fusillé sans pouvoir répondre."""
     now = b.clock
     best, bd = None, 1e9
     for e in cavs:
@@ -970,6 +972,10 @@ def _square(b, side, mem, L, u, cavs):
         if want and L['n'] >= 1 and u.form in ('ligne', 'colonne') and u.busy <= 0 and u.morale >= BT.FORMED + 10 \
                 and u.ammo >= 1 and _ang(u.dir, math.atan2(best.y - u.y, best.x - u.x)) < 1.0:
             want = False   # une ligne ferme qui voit venir la charge de face la reçoit par son feu (le moteur la repousse)
+    shot = L['n'] >= 1 and best is not None and not (best.state == 'charge' and best.target == u.id) and \
+        any(e.cls == 'inf' and e.valid and _d2(e.x, e.y, u.x, u.y) < 200 ** 2 for e in foes)
+    if shot:
+        want = False
     forming = u.busy > 0 and u.next_form == 'carre'
     if want and u.form != 'carre' and not forming:
         if not L['sq_late'] and best.state == 'charge' and bd < 110:
@@ -982,7 +988,7 @@ def _square(b, side, mem, L, u, cavs):
             mem['notes']['carre'] = 1
             _note(b, mem, f"des cavaliers menacent : {u.name} forme le carré.")
     elif not want and (u.form == 'carre' or forming):
-        far = best is None or bd > L['sq_r'] * 0.9
+        far = best is None or bd > L['sq_r'] * 0.9 or shot
         if far and now - sq.get(u.id, -999) > 40:
             role = mem['role'].get(u.id)
             back = 'tirailleurs' if u.light else ('colonne' if role in ('res', 'assaut', 'vague2') else 'ligne')
@@ -1121,8 +1127,8 @@ def _decide_withdraw(b, side, mem, L, sit):
     # (les pertes comptent les troupes en déroute : un camp qui en a plusieurs à la fois plie)
     if sit['loss'] > L['wd_loss'] - k and sit['ratio'] < L['wd_ratio'] + 0.1:
         why = 'pertes trop lourdes'
-    elif sit['loss'] > L['wd_loss'] + 0.12 - k and sit['ratio'] < L['wd_ratio'] + 0.3:
-        why = 'pertes trop lourdes'
+    elif sit['loss'] > L['wd_loss'] + 0.07 - k and sit['ratio'] < L['wd_ratio'] + 0.3:
+        why = 'pertes trop lourdes'   # (combat égal qui s'éternise : le plus éprouvé cède)
     elif sit['ratio'] < 0.45 and sit['loss'] > 0.2:
         why = "l'ennemi est bien plus fort"
     elif sit['valid'] and sit['mor'] < 32 and sit['routed'] >= len(sit['valid']):
@@ -1242,7 +1248,8 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         if L['n'] == 2 and t < prep_max and done:
             # en difficile : on attend que l'artillerie ait ébranlé l'ennemi
             seen_mor = [e.morale for e in sit['seen'] if e.cls == 'inf']
-            if seen_mor and sum(seen_mor) / len(seen_mor) > 62 and sit['ratio'] < 1.3:
+            # (le moral remonte vite au repos, jusqu'à 90 et plus près du général : « ébranlé », c'est moins de 82)
+            if seen_mor and sum(seen_mor) / len(seen_mor) > 82 and sit['ratio'] < 1.3:
                 done = False
         if plan == 'debordement':
             done = mem.get('fl') == 'attaque' or t >= prep_max
