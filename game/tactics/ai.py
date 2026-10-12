@@ -882,6 +882,9 @@ def _adopt(b, side, mem, L, lname, us):
         # chacun gardant sa place du moment pour poste (la bataille est engagée : b.deploy ne déplace plus personne).
         # (En assaut frontal, la ligne s'arrêtait hors de vue des défenseurs abrités et attendait la nuit.)
         _deploy_place_att(b, side, mem, L, g, pl)
+        # la préparation d'artillerie compte depuis le début de la bataille, comme si l'IA l'avait menée (sinon une
+        # reprise en plein combat repartait pour une heure de canonnade avant le premier assaut)
+        mem.update(phase='prepa', t_phase=0.0)
         _note(b, mem, f"l'IA reprend le commandement : {PLAN_LABEL[plan]}.")
         return
     fd = b.front_dir(side)
