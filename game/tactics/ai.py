@@ -33,20 +33,24 @@ prudent → harcèlement plus tôt, audacieux → contre-offensive plus tôt)
   de dos pendant que le centre le fixe ; ils reviennent sur l'aile si des cavaliers plus nombreux leur barrent la route ;
 - tenir : défense de la position et usure de l'assaillant ; contre-attaque générale quand il flanche ;
 - harcelement : escarmouche à longue portée (canons, légers), puis retraite (quand on est nettement inférieur) ;
-- assaut : assaut d'une place (canons sur la brèche, diversion, colonnes quand les défenseurs sont usés, puis le cœur ;
-  nouvelle vague si la première est repoussée) ;
+- assaut : assaut d'une place (une heure de canonnade sur la brèche (40 min en facile, 70 en difficile), diversion,
+  colonnes quand les défenseurs sont usés, puis le cœur ; nouvelle vague si la première est repoussée) ;
 - place : défense d'une place.
 
 Pendant la bataille
 - Ligne : avance par bonds en attendant ses retardataires ; colonne pour marcher loin du feu, ligne sous le feu, ou ordre
-  dispersé (deux fois moins de pertes au canon, à la mitraille et au fusil) tant qu'aucun cavalier ennemi ne rôde ;
+  dispersé (nettement moins de pertes au canon, un peu moins au fusil) tant qu'aucun cavalier ennemi ne rôde ;
   arrêt à portée efficace, chaque bataillon réglant sa distance sur l'ennemi d'en face et cherchant un couvert ;
-  jamais à portée de mitraille d'une batterie ennemie connue ; baïonnette après la fusillade quand le corps à corps est
-  favorable (et contre l'ennemi ébranlé, pris de flanc, ou des canons sans soutien) ; une batterie qui interdit
-  l'approche est enlevée à la baïonnette ; si plus rien ne bouge pendant trois quarts d'heure : assaut général quand on
-  est plus fort, sinon on décroche.
+  jamais dans la mitraille meurtrière d'une batterie ennemie connue (60 % de sa portée : au-delà, la gerbe s'ouvre) ;
+  baïonnette après un quart d'heure de fusillade quand le corps à corps est favorable (et contre l'ennemi ébranlé, pris
+  de flanc, ou des canons sans soutien) ; une batterie qui interdit l'approche est enlevée à la baïonnette ; si plus
+  rien ne bouge pendant trois quarts d'heure, ou si la ligne ne tire plus depuis une demi-heure sans que l'ennemi
+  perde rien : assaut général (sans plus craindre la mitraille) quand on n'est pas nettement plus faible, renouvelé
+  tant qu'on est nettement plus fort ; sinon on décroche.
 - Carré seulement face à une vraie charge (cavaliers qui chargent ou arrivent droit sur nous, par un chemin praticable),
-  rompu dès que la menace passe (le canon ravage les carrés).
+  rompu dès que la menace passe (le canon ravage les carrés) ; pas de carré à moins de 200 m de l'infanterie ennemie
+  (il y serait fusillé) sauf si les cavaliers chargent cette troupe même, ni quand une ligne ferme voit venir la charge
+  de face (son feu de défense la repousse).
 - Cavalerie : charges choisies (artillerie sans soutien, fuyards, chariot, état-major, de flanc ou de dos, ennemi
   ébranlé ou en tirailleurs, jamais un carré ni une ligne fraîche de face), sur un chemin libre ; contre-charges avec
   assez d'escadrons, loin de l'infanterie ennemie ; postes d'attente hors de portée des canons ennemis.
@@ -58,7 +62,8 @@ Pendant la bataille
   débordée (difficile) ; ralliés reformés près du général. Général et chariot derrière le secteur qui en a besoin,
   abrités derrière un bataillon quand des cavaliers rôdent.
 - Décrochage en bon ordre quand la bataille est perdue (pertes, rapport de forces vu, moral, nuit), jamais pour le
-  défenseur d'une place.
+  défenseur d'une place : passé wd_loss de pertes (les troupes en déroute comptent pour moitié) si l'ennemi est nettement
+  plus fort, ou passé wd_loss + 7 % dans un combat égal ; l'assaillant qui mène l'attaque accepte 5 % de plus.
 
 Niveaux (battle.difficulty ; spec['ai_levels'] = [niveau du camp 0, du camp 1] et spec['ai_tweak'] pour les essais).
 Ils ne changent que la qualité des décisions, jamais les dégâts :
@@ -68,7 +73,8 @@ Ils ne changent que la qualité des décisions, jamais les dégâts :
   canons, engage sa réserve d'emblée, ne surveille pas ses flancs, ne relève personne, décroche tôt ;
 - normal : correcte : terrain, cohésion, carrés, charges choisies, contre-charges, mitraille prudente, ordre dispersé,
   réserves pour les trous, les relèves et les flancs, batteries enlevées à la baïonnette ;
-- difficile : réfléchit toutes les 6 s ; terrain plus fouillé (crêtes, haies, lisières, canons cachés) ; ordre oblique
+- difficile : réfléchit toutes les 6 s ; s'arrête à pleine portée efficace et avance par bonds réguliers ; terrain plus
+  fouillé (crêtes, haies, lisières, canons cachés) ; attend que l'artillerie ait ébranlé l'ennemi ; ordre oblique
   qui déborde l'aile la plus faible, loin des batteries ennemies ; réserves qui prolongent une ligne débordée et
   contre-attaquent les percées ; légers qui prennent l'ennemi de flanc ; cavalerie qui ne s'expose pas aux
   contre-charges ; contre-offensive plus tôt.
@@ -83,6 +89,7 @@ comptes rendus.
 import math
 import random
 
+from . import battle as BT
 from . import units as U
 from .terrain import (W, H, T_BOIS, T_FORET_T, T_MARAIS_T, T_VIGNE_T, T_BATI, T_MUR, T_PORTE, T_BRECHE,
                       T_BARRICADE, T_ROCHE)
@@ -91,33 +98,47 @@ WOODS = (T_BOIS, T_FORET_T)
 ROUGH = (T_BOIS, T_FORET_T, T_MARAIS_T, T_VIGNE_T, T_BATI, T_MUR, T_PORTE, T_BRECHE, T_BARRICADE)
 SCREEN = (T_BOIS, T_FORET_T, T_BATI, T_MUR, T_PORTE)
 WALLS = (T_MUR, T_PORTE, T_BRECHE, T_BARRICADE)
-# vulnérabilité des cibles au boulet et à la mitraille (comme le moteur) : pour choisir les cibles des canons
-BALL = dict(ligne=0.8, colonne=1.5, carre=1.5, tirailleurs=0.35, batterie=0.6, attelee=1.2)
-GRAPE = dict(ligne=1.0, colonne=1.3, carre=1.3, tirailleurs=0.5, batterie=0.8, attelee=1.0)
+# vulnérabilité des cibles au boulet et à la mitraille (celle du moteur) : pour choisir les cibles des canons
+BALL = BT.VUL_BALL
+GRAPE = BT.VUL_GRAPE
 PLAN_LABEL = dict(frontal='assaut frontal coordonné', artillerie="préparation d'artillerie, puis assaut",
                   debordement='débordement par un flanc', tenir="tenir la position et user l'adversaire",
                   harcelement='escarmouche, puis retraite', assaut='assaut de la place', place='défense de la place')
 WING = {-1: "l'aile gauche", 1: "l'aile droite", 0: 'la réserve'}
 LEG = 450.0          # une longue marche se donne par étapes (recherches de chemin courtes)
+# hauteurs pour la vue (celles du moteur) : les canons (officiers à cheval) voient par-dessus les haies proches
+EYES = BT.HEIGHT
+GUN_EYE = EYES['artillerie']
+# la mitraille ne fait de vrais ravages qu'à moins de 60 % de sa portée (le moteur l'éparpille au-delà : battle.grape_k) :
+# c'est cette zone que la ligne évite
+GRAPE_DEADLY = 0.6
+
+# l'assaillant qui mène l'attaque (plans frontal, artillerie, débordement) ne décroche qu'avec ce supplément de pertes :
+# il sait qu'on n'emporte pas une position sans le payer (même valeur à tous les niveaux)
+ATT_TENACITY = 0.05
+# combat égal qui s'éternise : passé wd_loss + WD_EVEN_LOSS de pertes, on cède si le rapport de forces vu est sous
+# wd_ratio + WD_EVEN
+WD_EVEN_LOSS, WD_EVEN = 0.07, 0.2
+FIRE_LONG = 900.0   # durée de fusillade avant la baïonnette à forces égales (s)
 
 LEVELS = {
     'facile': dict(n=0, period=20.0, jitter=12.0, reflex=6.0, sq_r=210.0, sq_miss=0.3, sq_late=True, terrain=0,
                    cohesion=False, bound=600.0, halt=(0.5, 1.45), prep=5 * 60, prep_max=8 * 60, cav_r=330.0,
                    cav_pick=False, counter=False, col_late=True, res_early=True, flank=False, relief=False,
-                   art_pick=False, wd_loss=0.36, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
-                   grape=0, assault_prep=6 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False,
+                   art_pick=False, wd_loss=0.18, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
+                   grape=0, assault_prep=40 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False,
                    storm=False, oblique=False, extend=False, flankfire=False),
     'normal': dict(n=1, period=10.0, jitter=4.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=1,
                    cohesion=True, bound=220.0, halt=(0.82, 0.92), prep=12 * 60, prep_max=25 * 60, cav_r=430.0,
                    cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
-                   art_pick=True, wd_loss=0.5, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
-                   grape=1, assault_prep=12 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False,
+                   art_pick=True, wd_loss=0.22, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
+                   grape=1, assault_prep=60 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False,
                    storm=True, oblique=False, extend=False, flankfire=False),
     'difficile': dict(n=2, period=6.0, jitter=0.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=2,
-                      cohesion=True, bound=170.0, halt=(0.78, 0.85), prep=15 * 60, prep_max=35 * 60, cav_r=430.0,
+                      cohesion=True, bound=220.0, halt=(0.88, 0.98), prep=15 * 60, prep_max=35 * 60, cav_r=430.0,
                       cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
-                      art_pick=True, wd_loss=0.55, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
-                      grape=1, assault_prep=15 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True,
+                      art_pick=True, wd_loss=0.25, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
+                      grape=1, assault_prep=70 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True,
                       storm=True, oblique=True, extend=True, flankfire=True),
 }
 
@@ -350,7 +371,7 @@ def _gun_spot(b, side, x, y, fd, r, wood=False, ahead=1e9, rough=False):
             f = 0
             for d in (250, 450, 650):
                 qx, qy = _at(px, py, fd, d)
-                if 0 <= qx < W and 0 <= qy < H and b.los(px, py, qx, qy):
+                if 0 <= qx < W and 0 <= qy < H and b.los(px, py, qx, qy, GUN_EYE):
                     f += 1
             if f == 0:
                 continue
@@ -937,13 +958,15 @@ def _reflexes(b, side, mem, L, us, foes):
             continue
         if u.cls != 'inf' or st in ('melee', 'charge', 'ralliement'):
             continue
-        _square(b, side, mem, L, u, cavs)
+        _square(b, side, mem, L, u, cavs, foes)
     if L['counter'] and cavs:
         _counter_charge(b, side, mem, us, cavs, foes)
 
 
-def _square(b, side, mem, L, u, cavs):
-    """Carré quand des cavaliers menacent ; on reprend sa formation quand ils s'éloignent."""
+def _square(b, side, mem, L, u, cavs, foes=()):
+    """Carré quand des cavaliers menacent ; on reprend sa formation quand ils s'éloignent. Pas de carré sous le fusil
+    de l'infanterie ennemie (à moins de 200 m) tant que les cavaliers ne chargent pas cette troupe : le carré y serait
+    fusillé sans pouvoir répondre."""
     now = b.clock
     best, bd = None, 1e9
     for e in cavs:
@@ -956,6 +979,14 @@ def _square(b, side, mem, L, u, cavs):
         coming = best.state == 'charge' or bd < L['sq_r'] * 0.5 or \
             (best.state == 'marche' and _ang(best.dir, math.atan2(u.y - best.y, u.x - best.x)) < 0.6)
         want = coming and (L['n'] == 0 or _charge_ok(b, best.side, best, u))   # (rochers, forêt, eau : pas de charge)
+        if want and L['n'] >= 1 and u.form in ('ligne', 'colonne') and u.busy <= 0 and u.morale >= BT.FORMED + 10 \
+                and u.ammo >= 1 and _ang(u.dir, math.atan2(best.y - u.y, best.x - u.x)) < 1.0:
+            # une ligne ferme qui voit venir la charge de face la reçoit par son feu (le moteur la repousse)
+            want = False
+    shot = L['n'] >= 1 and best is not None and not (best.state == 'charge' and best.target == u.id) and \
+        any(e.cls == 'inf' and e.valid and _d2(e.x, e.y, u.x, u.y) < 200 ** 2 for e in foes)
+    if shot:
+        want = False
     forming = u.busy > 0 and u.next_form == 'carre'
     if want and u.form != 'carre' and not forming:
         if not L['sq_late'] and best.state == 'charge' and bd < 110:
@@ -968,7 +999,7 @@ def _square(b, side, mem, L, u, cavs):
             mem['notes']['carre'] = 1
             _note(b, mem, f"des cavaliers menacent : {u.name} forme le carré.")
     elif not want and (u.form == 'carre' or forming):
-        far = best is None or bd > L['sq_r'] * 0.9
+        far = best is None or bd > L['sq_r'] * 0.9 or shot
         if far and now - sq.get(u.id, -999) > 40:
             role = mem['role'].get(u.id)
             back = 'tirailleurs' if u.light else ('colonne' if role in ('res', 'assaut', 'vague2') else 'ligne')
@@ -1050,7 +1081,8 @@ def _heavy(b, side, mem, L, us, foes):
 def _situation(b, mem, us, foes):
     combat = [u for u in us if u.cls in ('inf', 'cavalerie', 'artillerie')]
     valid = [u for u in combat if u.valid]
-    mine = sum(u.men for u in valid)
+    # (une troupe en déroute compte pour moitié : la plupart se rallient quelques minutes plus tard)
+    mine = sum(u.men for u in valid) + 0.5 * sum(u.men for u in combat if u.state == 'deroute')
     init = mem.get('init') or mine
     foe = _foe_est(mem)
     mor = sum(u.morale * u.men for u in valid) / max(1.0, mine)
@@ -1066,19 +1098,34 @@ def _situation(b, mem, us, foes):
                 loss=1 - mine / max(1.0, init), mor=mor, routed=routed, e_routed=e_routed, seen=seen)
 
 
-def _stalled(b, mem, sit):
-    """Rien ne bouge depuis 45 min : les effectifs des deux camps (vus) n'ont presque pas changé."""
+def _stalled(b, mem, sit, line=None):
+    """Rien ne bouge depuis 45 min : les effectifs des deux camps (vus) n'ont presque pas changé ; ou notre ligne
+    n'a pas tiré un coup de fusil depuis 30 min alors que l'ennemi n'a presque rien perdu (on se fait canonner de loin
+    sans pouvoir répondre)."""
     now = b.clock
-    hist = mem.setdefault('hist', [])
-    if not hist or now - hist[-1][0] >= 300:
-        hist.append([round(now), round(sit['mine']), round(sit['foe'])])
-        if len(hist) > 12:
-            del hist[:len(hist) - 12]
+    hist = _history(b, mem, sit)
     old = [h for h in hist if now - h[0] >= 2700]
-    if not old or mem.get('t_contact') is None:
+    if mem.get('t_contact') is None:
+        return False
+    if line and mem.get('phase') == 'combat' and now - mem.get('t_phase', now) > 1800 and \
+            now - max(u.fired_t for u in line) > 1800:
+        h30 = [h for h in hist if now - h[0] >= 1800]
+        if h30 and h30[-1][2] - sit['foe'] < 0.02 * max(1, h30[-1][2]):
+            return True
+    if not old:
         return False
     h = old[-1]
     return h[1] - sit['mine'] < 0.01 * max(1, h[1]) and h[2] - sit['foe'] < 0.01 * max(1, h[2])
+
+
+def _history(b, mem, sit):
+    """Effectifs des deux camps (le nôtre, l'ennemi estimé), relevés toutes les 5 min (une heure au plus)."""
+    hist = mem.setdefault('hist', [])
+    if not hist or b.clock - hist[-1][0] >= 300:
+        hist.append([round(b.clock), round(sit['mine']), round(sit['foe'])])
+        if len(hist) > 12:
+            del hist[:len(hist) - 12]
+    return hist
 
 
 def _decide_withdraw(b, side, mem, L, sit):
@@ -1086,27 +1133,41 @@ def _decide_withdraw(b, side, mem, L, sit):
     plan = mem['plan']
     if plan == 'place' or not sit['combat']:
         return False
+    _history(b, mem, sit)
     why = None
     tr = b.trait(side)
     k = 0.08 if tr == 'prudent' else (-0.05 if tr == 'audacieux' else 0.0)
+    if side == 0 and plan in ('frontal', 'artillerie', 'debordement'):
+        k -= L.get('wd_att', ATT_TENACITY)   # l'assaillant accepte des pertes plus lourdes pour emporter la position
     if plan == 'harcelement' and mem.get('t_contact') is not None:
         if b.clock - mem['t_contact'] > mem.get('harass_t', 2700) or sit['loss'] > 0.18:
             why = "l'escarmouche a assez duré"
-    if sit['loss'] > L['wd_loss'] - k and sit['ratio'] < L['wd_ratio'] + 0.25:
+    # (les pertes comptent pour moitié les troupes en déroute : un camp qui en a plusieurs à la fois plie)
+    if sit['loss'] > L['wd_loss'] - k and sit['ratio'] < L['wd_ratio'] + 0.1:
         why = 'pertes trop lourdes'
+    elif sit['loss'] > L['wd_loss'] + L.get('wd_even_loss', WD_EVEN_LOSS) - k and \
+            sit['ratio'] < L['wd_ratio'] + L.get('wd_even', WD_EVEN):
+        why = 'pertes trop lourdes'   # (combat égal qui s'éternise : le plus éprouvé cède)
     elif sit['ratio'] < 0.45 and sit['loss'] > 0.2:
         why = "l'ennemi est bien plus fort"
     elif sit['valid'] and sit['mor'] < 32 and sit['routed'] >= len(sit['valid']):
         why = 'le moral est brisé'
     elif side == 0 and b.time_left() < 900 and sit['ratio'] < 1.6 and mem.get('t_contact') is not None:
         why = 'la nuit tombe'
-    elif side == 0 and plan != 'harcelement' and _stalled(b, mem, sit):
-        if sit['ratio'] >= 1.15 and L['n'] >= 1 and not mem.get('general_assault'):
+    elif side == 0 and plan != 'harcelement' and \
+            _stalled(b, mem, sit, [u for u in sit['valid'] if mem['role'].get(u.id) == 'ligne' and u.cls == 'inf']):
+        # (les combats durent : une ligne qui ne gagne plus de terrain n'est pas battue, elle serre au plus près ;
+        # on ne décroche qu'après un assaut général manqué, ou nettement plus faible)
+        if sit['ratio'] >= 0.85 and L['n'] >= 1 and not mem.get('general_assault'):
             mem['general_assault'] = round(b.clock)
             mem['halt_k'] = round(mem.get('halt_k', 0.85) * 0.5, 2)
             _note(b, mem, f"l'attaque piétine : assaut général (rapport de forces vu {sit['ratio']:.2f}).")
-        elif sit['ratio'] < 1.15 or b.clock - mem.get('general_assault', b.clock) > 2700:
+        elif sit['ratio'] < 0.7 or (b.clock - mem.get('general_assault', b.clock) > 2700 and sit['ratio'] < 1.2):
             why = "l'attaque piétine"
+        elif b.clock - mem.get('general_assault', b.clock) > 2700:
+            # (nettement plus fort : on ne lâche pas, on relance l'assaut)
+            mem['general_assault'] = round(b.clock)
+            _note(b, mem, f"nouvel assaut général (rapport de forces vu {sit['ratio']:.2f}).")
 
     if why is None:
         return False
@@ -1210,12 +1271,13 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         if L['n'] == 2 and t < prep_max and done:
             # en difficile : on attend que l'artillerie ait ébranlé l'ennemi
             seen_mor = [e.morale for e in sit['seen'] if e.cls == 'inf']
-            if seen_mor and sum(seen_mor) / len(seen_mor) > 62 and sit['ratio'] < 1.3:
+            # (le moral remonte vite au repos, jusqu'à 90 et plus près du général : « ébranlé », c'est moins de 82)
+            if seen_mor and sum(seen_mor) / len(seen_mor) > 82 and sit['ratio'] < 1.3:
                 done = False
         if plan == 'debordement':
             done = mem.get('fl') == 'attaque' or t >= prep_max
         gun = next((u for u in us if u.cls == 'artillerie' and u.valid), None)
-        if gun is not None and t > 120 and _grape_dist(b, mem, L, gun, b.ranges(gun)[2], foes):
+        if gun is not None and t > prep * 0.5 and _grape_dist(b, mem, L, gun, b.ranges(gun)[2], foes):
             done = True   # plus rien ne menace nos canons : ligne et batteries s'avancent ensemble
         if plan == 'harcelement':
             done = False
@@ -1224,7 +1286,9 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         if done:
             _set_phase(b, mem, 'assaut', "fin de la préparation : la ligne avance par bonds.")
     ph = mem['phase']
-    guns = _gun_zones(b, mem) if L['n'] >= 1 else []
+    batteries = _gun_zones(b, mem) if L['n'] >= 1 else []
+    # (assaut général : on ne craint plus la mitraille, on serre l'ennemi et on enlève ses canons)
+    guns = [] if mem.get('general_assault') else batteries
     if ph == 'combat' and line and now - mem['t_phase'] > 240 and now - max(u.fired_t for u in line) > 240 and \
             not any(_d2(gx, gy, mem['ax'], mem['ay']) < (gr + 250) ** 2 for gx, gy, gr, gid in guns):
         halt *= 0.5   # personne ne tire : l'ennemi est hors de vue ou hors de portée, on serre
@@ -1254,8 +1318,8 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
             sx, sy = _out_of_grape(guns, sx, sy, fd)
         fdist = _foe_dist(u, body)
         want[u.id] = [sx, sy, fd, _march_form(b, mem, L, u, sx, sy, fdist), False]
-    if guns and mem['phase'] in ('assaut', 'combat') and L['storm']:
-        _storm_guns(b, side, mem, us, foes, guns, busy)
+    if batteries and mem['phase'] in ('assaut', 'combat') and L['storm']:
+        _storm_guns(b, side, mem, us, foes, batteries, busy)
     if plan == 'debordement':
         _flank_group(b, side, mem, L, us, foes, sit, want, busy, body)
     _lights_att(b, side, mem, L, us, foes, sit, want, body, front, halt)
@@ -1276,7 +1340,7 @@ def _storm_guns(b, side, mem, us, foes, guns, busy):
         if _cav_near(b, mem, e.x, e.y, 500, 120):
             continue
         cand = [u for u in us if u.cls == 'inf' and not u.light and u.valid and u.id not in busy and
-                u.state not in ('charge', 'melee') and u.busy <= 0 and u.form != 'carre' and u.morale > 65 and
+                u.state not in ('charge', 'melee') and u.busy <= 0 and u.form != 'carre' and u.morale > BT.FORMED + 5 and
                 u.men > 0.6 * u.men0 and roles.get(u.id) in ('ligne', 'res') and
                 _d2(u.x, u.y, e.x, e.y) < 380 ** 2]
         cand.sort(key=lambda u: _d2(u.x, u.y, e.x, e.y))
@@ -1291,14 +1355,14 @@ def _storm_guns(b, side, mem, us, foes, guns, busy):
                       f"l'enlève{'nt' if len(got) > 1 else ''} à la baïonnette.")
 
 
-def _gun_zones(b, mem, maxage=600.0):
+def _gun_zones(b, mem, maxage=600.0, k=None):
     """Batteries ennemies connues (vues depuis moins de 10 min, ni en déroute ni hors de combat) : [(x, y, rayon de
-    mitraille + 40 m, id)]."""
+    mitraille meurtrière (60 % de la portée de mitraille) + 40 m, id)]."""
     now = b.clock
     out = []
-    for k, v in mem['vu'].items():
+    for key, v in mem['vu'].items():
         if v[4] == 'artillerie' and now - v[2] <= maxage and v[6] not in ('deroute', 'hors') and v[3] > 25:
-            out.append((v[0], v[1], (v[9] if len(v) > 9 and v[9] else 280) + 40, k))
+            out.append((v[0], v[1], (k or GRAPE_DEADLY) * (v[9] if len(v) > 9 and v[9] else 280) + 40, key))
     return out
 
 
@@ -1439,7 +1503,7 @@ def _foe_dist(u, body):
 
 def _march_form(b, mem, L, u, sx, sy, fdist, defending=False):
     """Formation de l'infanterie : colonne pour marcher loin du feu ; à portée de l'ennemi ou sous le feu, l'ordre
-    dispersé (tirailleurs : deux fois moins de pertes au boulet, à la mitraille et à la fusillade, pour 40 % de feu en
+    dispersé (tirailleurs : pertes ×0,35 au boulet, ×0,55 à la mitraille, ×0,8 à la fusillade, pour 40 % de feu en
     moins) tant qu'aucun cavalier ennemi n'a été vu depuis 10 min (normal : à moins de 1 500 m ; difficile :
     1 200 m), sinon la ligne.
     Facile : la ligne, et la colonne gardée trop longtemps."""
@@ -1872,7 +1936,7 @@ def _think_place_att(b, side, mem, L, us, foes, sit, want, busy):
         ready = t >= prep
         if L['n'] == 2 and ready and t < prep * 2:
             near = [e for e in sit['seen'] if _d2(e.x, e.y, bout[0], bout[1]) < 260 ** 2 and e.cls == 'inf']
-            if near and sum(e.morale for e in near) / len(near) > 62:
+            if near and sum(e.morale for e in near) / len(near) > 82:
                 ready = False   # les défenseurs de la brèche tiennent encore : on pilonne
         if not any(u.cls == 'artillerie' and u.valid for u in us) and t > 120:
             ready = True
@@ -2224,9 +2288,11 @@ def _melee_power(b, u):
     if u.form == 'tirailleurs':
         k *= 0.7
     t = b.terrain_at(u.x, u.y)
-    if t == T_BATI:
+    if t in (T_MUR, T_PORTE, T_BARRICADE) and u.side == 0:
+        k *= 0.6
+    elif t == T_BATI:
         k *= 1.4
-    elif t in WALLS or b.cover_at(u.x, u.y) >= 0.5:
+    elif t != T_BRECHE and b.cover_at(u.x, u.y) >= 0.5:
         k *= 1.5
     return k * u.men
 
@@ -2239,7 +2305,9 @@ def _bayonets(b, side, mem, L, us, foes, sit, busy):
     plan = mem['plan']
     now = b.clock
     cav_near = [e for e in foes if e.cls == 'cavalerie' and e.valid]
-    fired_long = mem.get('phase') == 'combat' and now - mem.get('t_phase', now) >= 180
+    # (une fusillade d'une salve par minute use l'ennemi lentement : on ne croise la baïonnette, à forces égales, qu'après
+    # un quart d'heure de feu)
+    fired_long = mem.get('phase') == 'combat' and now - mem.get('t_phase', now) >= FIRE_LONG
     cands = []
     for u in us:
         if u.cls != 'inf' or not u.valid or u.id in busy or u.busy > 0 or u.state in ('charge', 'melee') or \
@@ -2453,7 +2521,7 @@ def _gun_view(b, x, y, tg, reach):
     n = 0
     r2 = reach * reach
     for tx, ty, cls in tg:
-        if _d2(x, y, tx, ty) <= r2 and b.los(x, y, tx, ty):
+        if _d2(x, y, tx, ty) <= r2 and b.los(x, y, tx, ty, GUN_EYE, EYES.get(cls, 2.5)):
             n += 1
     return n
 
@@ -2495,11 +2563,10 @@ def _art_target(b, u, foes, ours, mem, mx, e_r, g):
         if d > mx * 0.98:
             continue
         cov = b.cover_at(t.x, t.y)
-        pr = 1.0 if d <= e_r else max(0.2, 1 - 0.8 * (d - e_r) / max(1.0, mx - e_r))
         if g and d <= g:
-            v = 0.9 * GRAPE.get(t.form, 1.0) * (1 - cov)
+            v = BT.P_MITRAILLE * BT.grape_k(d, g) * GRAPE.get(t.form, 1.0) * (1 - cov)
         else:
-            v = 0.35 * pr * BALL.get(t.form, 1.0) * (1 - 0.6 * cov)
+            v = BT.P_BOULET * BT.ball_k(d, e_r) * BALL.get(t.form, 1.0) * (1 - 0.6 * cov)
         if t.cls == 'artillerie':
             g_t = b.ranges(t)[2] or 280
             threat = min((_d2(t.x, t.y, o.x, o.y) for o in ours), default=1e12) < (g_t + 60) ** 2
@@ -2517,7 +2584,7 @@ def _art_target(b, u, foes, ours, mem, mx, e_r, g):
             v *= 1.6
         if t.id == cur:
             v *= 1.25   # (changer de cible coûte du temps de pointage)
-        if v > bv and b.los(u.x, u.y, t.x, t.y):
+        if v > bv and b.los_units(u, t):
             best, bv = t, v
     return best
 

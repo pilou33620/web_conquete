@@ -149,7 +149,8 @@ export class BattleView {
     // effets depuis la dernière réponse, étalés sur l'intervalle selon leur instant
     const fxs = st.fx || [];
     if (fxs.length) {
-      const tA = prev?.clock ?? (st.clock ?? 0) - 3, tB = st.clock ?? tA + 3, span = Math.max(0.001, tB - tA);
+      // (première réponse : on suppose un pas du serveur, 2 s de bataille ; l'échelle de temps n'intervient pas ici)
+      const tA = prev?.clock ?? (st.clock ?? 0) - 2, tB = st.clock ?? tA + 2, span = Math.max(0.001, tB - tA);
       const gap = this.pollGap / 1000;
       for (const f of fxs.slice(prev ? -150 : -30)) {
         const k = f.t != null ? clamp((f.t - tA) / span, 0, 1) : Math.random();
@@ -381,10 +382,10 @@ export class BattleView {
         ctx.beginPath(); ctx.moveTo(u.x + c * (f + 9), u.y + s * (f + 9)); ctx.lineTo(u.x + c * f - s * 6, u.y + s * f + c * 6); ctx.lineTo(u.x + c * f + s * 6, u.y + s * f - c * 6); ctx.closePath(); ctx.fill();
       }
     }
-    // objectif d'un assaut : le cœur de la place (tenu 60 s sans défenseur pour l'emporter)
+    // objectif d'un assaut : le cœur de la place (tenu hold_need secondes sans défenseur pour l'emporter)
     const obj = st?.objective || (this.map?.heart && this.map?.place ? this.map.heart : null);
     if (obj) {
-      const r = 26, k = clamp((st?.hold || 0) / 60, 0, 1);
+      const r = 26, k = clamp((st?.hold || 0) / (st?.hold_need || 60), 0, 1);
       ctx.lineWidth = 3 / z; ctx.strokeStyle = 'rgba(255,226,150,0.85)'; ctx.setLineDash([7 / z, 5 / z]);
       ctx.beginPath(); ctx.arc(obj[0], obj[1], r + Math.sin(time * 2) * 2, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
       if (k > 0) { ctx.strokeStyle = 'rgba(255,120,90,0.95)'; ctx.lineWidth = 5 / z; ctx.beginPath(); ctx.arc(obj[0], obj[1], r, -Math.PI / 2, -Math.PI / 2 + k * TAU); ctx.stroke(); }

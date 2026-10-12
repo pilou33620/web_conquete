@@ -6,6 +6,8 @@ Chiffres de référence (contrat, § 2 et § 4) :
 - portées (efficace / maximale / mitraille), dérivées du type et de la génération d'armes `arm` : ranges(reg) ;
 - vitesses au pas sur prairie (m/s de bataille) : infanterie 1,2, légère 1,4, cavalerie 2,5 (galop 7),
   artillerie attelée 1,5 ;
+- cadence d'un feu soutenu : une salve par minute environ pour le fusil à silex, une volée toutes les 80 à 100 s pour
+  les canons lisses (la dotation dure une heure de feu pour l'infanterie, deux heures et demie pour les canons) ;
 - emprises au sol : ligne de 300 hommes ≈ 120 × 12 m, colonne ≈ 40 × 50, carré ≈ 45 × 45, tirailleurs ≈ 220 × 30,
   cavalerie en ligne ≈ 100 × 15, batterie en batterie ≈ 80 × 30 ; elles rétrécissent avec les pertes.
 """
@@ -22,9 +24,11 @@ INF_RANGE = [(80, 150), (100, 200), (120, 230), (130, 250), (300, 600), (500, 12
 ART_RANGE = [(500, 900, 250), (600, 1000, 260), (700, 1100, 280), (800, 1200, 300), (1400, 2500, 330),
              (1800, 3000, 360), (2200, 3500, 400)]
 CAV_RANGE = (30, 60)
-# rechargement entre deux salves (s de bataille) : le chargement par la culasse change tout
-INF_RELOAD = [28, 25, 24, 22, 22, 10, 9, 7]
-ART_RELOAD = [40, 38, 34, 32, 32, 26, 12]
+# rechargement entre deux salves (s de bataille) : cadence d'un feu soutenu en bataille (une salve par minute environ
+# pour le fusil à silex, une volée par minute pour les canons lisses), pas celle de l'exercice ; le chargement par la
+# culasse change tout
+INF_RELOAD = [70, 62, 60, 55, 55, 25, 22, 18]
+ART_RELOAD = [100, 95, 85, 80, 80, 65, 30]
 CAV_RELOAD = 30
 
 # caractère de chaque type de troupe

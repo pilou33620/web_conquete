@@ -364,11 +364,12 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
 - Quand une bataille concerne vos armées ou vos places (assauts compris), la campagne s'arrête et une fenêtre propose
   **« Commander la bataille »** ou **« Résolution automatique »** (réglage dans le menu ☰ : toujours demander,
   escarmouches automatiques, toujours automatiques). Les batailles entre IA se résolvent toujours seules.
-- Commandée, la bataille se joue **en temps réel avec pause** (×1, ×2, ×4 ; à ×1 une seconde vaut 30 secondes de
-  bataille, de 8 h au crépuscule) sur une carte de 3 × 2 km tirée du terrain de la campagne : relief, bois, champs,
-  vignes, haies, clôtures et murets, routes, rivières avec gués et ponts, fermes, et la ville avec ses remparts,
-  ses portes et la brèche du siège. Chaque régiment a son expérience, son endurance, la portée de ses armes et ses
-  munitions (un chariot par armée les recomplète) ; les bois cachent les troupes, la nuit arrête le combat.
+- Commandée, la bataille se joue **en temps réel avec pause** (×1, ×2, ×4 ; à ×1 une seconde vaut 18 secondes de
+  bataille, de 8 h au crépuscule : une bataille rangée de 3 à 6 heures dure une dizaine à une vingtaine de minutes)
+  sur une carte de 3 × 2 km tirée du terrain de la campagne : relief, bois, champs, vignes, haies, clôtures et
+  murets, routes, rivières avec gués et ponts, fermes, et la ville avec ses remparts, ses portes et la brèche du siège.
+  Chaque régiment a son expérience, son endurance, la portée de ses armes et ses munitions (un chariot par armée les
+  recomplète) ; les bois cachent les troupes, la nuit arrête le combat.
 - « Finir automatiquement » résout la bataille d'un coup à partir de la situation du moment. Munitions et fatigue
   restent d'une bataille à l'autre : elles se recomplètent en campagne (vite chez soi, peu en pays ennemi).
 
