@@ -10,14 +10,16 @@ RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MEL
 ==================================================================================================================
 - Feu soutenu : une salve par minute environ (units.INF_RELOAD, ART_RELOAD) ; 60 cartouches durent une heure de feu.
   Fusillade : P_FUSIL par homme du front et par salve, à portée efficace. Boulet : P_BOULET par pièce, de moins en moins
-  juste avec la distance (ball_k : moitié à la portée efficace). Mitraille : P_MITRAILLE par pièce à bout portant, la
-  gerbe s'ouvre au-delà de 30 % de sa portée (grape_k : effet en 1/distance). L'ordre dispersé (tirailleurs) prend
-  nettement moins au canon (×0,35 au boulet, ×0,55 à la mitraille), un peu moins au fusil (×0,8).
+  juste avec la distance (ball_k : moitié à la portée efficace). Mitraille : P_MITRAILLE par pièce, la gerbe s'ouvre
+  au-delà de 30 % de sa portée (grape_k : effet en 1/distance) ; terrible à bout portant (sous GRAPE_CLOSE = 150 m :
+  ×1,5 à 100 m, ×2 à 50 m, ×GRAPE_POINT = 2,2 au contact). L'ordre dispersé (tirailleurs) prend nettement moins au
+  canon (×0,35 au boulet, ×0,55 à la mitraille), un peu moins au fusil (×0,8).
 - Charge : l'élan (charge_v, mètres de course utile ; plein élan en 110 m pour la cavalerie, 45 m pour l'infanterie)
   se gagne en courant et se perd en terrain difficile (bois, rochers, marais, vignes, maisons, murs : BRAKE_*), aux
   haies et en montée ; une charge relancée au contact ou en pleine mêlée n'a pas d'élan. De face, une troupe en ordre
   (ligne ou colonne, moral ≥ FORMED) ou une batterie chargée tire à bout portant (feu de défense) ; une colonne
-  d'infanterie qui tombe sous FALTER s'arrête court ; la cavalerie qui ne rompt pas une ligne ferme est repoussée.
+  d'infanterie qui tombe sous FALTER s'arrête court ; la cavalerie qui ne rompt pas une ligne ferme est repoussée. Une
+  batterie abordée de face lâche deux décharges de mitraille à bout portant (×GRAPE_POINT) : on la prend de flanc.
   De flanc, de dos, sur des tirailleurs, une troupe en manœuvre ou ébranlée, sur des canons : le choc est rude. Une
   charge essouffle les chevaux (CHARGE_FAT), qui chargent ensuite moins bien.
 - Mêlée : peu de pertes (MELEE_K), décidée au moral (MELEE_MOR par seconde, partagé selon les forces) ; le plus faible
@@ -25,8 +27,14 @@ RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MEL
   dans un passage étroit (brèche, rue, maison, mur : NARROW) où la pression ne dépasse pas MELEE_MOR.
 - Moral : pertes (surtout brutales, de flanc, de dos ; pas de surprise pour une troupe qui se retire en ordre),
   déroutes voisines (ROUT_MOR, seulement pour les troupes déjà ébranlées : pas de déroute en chaîne), munitions,
-  fatigue ; remonte au calme (MOR_REC), plus vite près du général. Déroute sous 25 ; ralliement au calme (à 400 m de
-  l'ennemi en rase campagne, 150 m dans les maisons).
+  fatigue ; remonte au calme (MOR_REC), plus vite près du général. Déroute sous 25 : la troupe fuit vers son bord.
+- Ralliement (RALLY_*) : seulement auprès d'un général (état-major ami à moins de 400 m, 500 m s'il est inspirant), au
+  calme (aucun ennemi en état de combattre à moins de 400 m) : il faut aller chercher les fuyards ; ils s'y arrêtent,
+  se reprennent (0,1 point de moral par seconde) et reforment les rangs à 40. Dans une place, leurs officiers les
+  rallient sans le général (au calme : 400 m, 150 m dans les maisons). Sans général sur le terrain (blessé, absent,
+  garnison seule), seulement loin de l'ennemi (700 m), deux fois et demie plus lentement. Sinon, les fuyards courent
+  jusqu'au bord de la carte et quittent la bataille. L'ordre « Rallier » suit la même règle (l'ennemi à plus de 150 m
+  suffit) et dit pourquoi il échoue (« Le général est trop loin pour rallier ces hommes. »).
 - Prisonniers : fuyards rattrapés (CAPTURE), surtout par la cavalerie, moins par des chevaux essoufflés.
 - Vue : symétrique (si je te vois, tu me vois) ; une troupe en lisière d'un bois ou de maisons voit et se voit ; bois,
   bâti, murs et haies ne cachent que ce qui est sous leur faîte (une haie ne cache rien à qui la domine).
@@ -74,15 +82,19 @@ Lecture (sans tricher sur la vue) :
   battle.strength(side) → hommes valides de son camp ;    battle.seen_strength(side) → ennemis repérés (hommes).
 
   battle.general_near(u) → état-major ami à moins de 400 m ;  battle.trait(side) → trait du général du camp ;
+  battle.rally_general(u) → état-major qui peut rallier cette troupe ; battle.rally_radius(g) → son rayon (m) ;
+  battle.has_general(side) → le camp a encore un état-major sur le terrain ; battle.in_place(x, y) → dans la place ;
+  battle.edge_point(side, x, y) → où fuient les troupes en déroute ;
   battle.rng (hasard déterministe de la bataille) ;  battle.ai_mem (dict libre pour la mémoire de l'IA, en types JSON :
   il est enregistré avec la bataille) ;  battle.withdrawing[side] (le camp décroche déjà).
 
 Champs d'une unité (Unit) : id, side, owner, type, cls ('inf', 'cavalerie', 'artillerie', 'general', 'chariot'), light,
 men, men0, xp, morale, fat, ammo, ammo0, x, y, dir, form, state, order, target, busy (s de manœuvre restantes), valid
 (en état de combattre : ni déroute, ni hors de combat, ni état-major, ni chariot), group / gname (armée de campagne),
-ctrl ('joueur' | 'ia'). Le chariot de munitions (type 'chariot', ammo = chargement en %) recomplète les régiments à
-moins de 150 m (4 % de la dotation par minute) ; il se prend s'il reste sans escorte à moins de 40 m d'un ennemi.
-Le général (type 'general') donne +10 de moral à moins de 400 m ; il peut être blessé.
+ctrl ('joueur' | 'ia'), halt (en déroute : les fuyards se sont arrêtés pour se reformer). Le chariot de munitions (type
+'chariot', ammo = chargement en %) recomplète les régiments à moins de 150 m (4 % de la dotation par minute) ; il se
+prend s'il reste sans escorte à moins de 40 m d'un ennemi. Le général (type 'general') donne +10 de moral à moins de
+400 m et rallie les fuyards (voir « Ralliement ») ; il peut être blessé.
 
 Résolution d'un coup : battle.autofinish() (« Finir automatiquement ») : par quarts d'heure, jusqu'à ce qu'un camp
 décroche comme le ferait l'IA (AUTO_WD), soit rompu, ou jusqu'à la nuit ; une place aux murs intacts ne tombe guère.

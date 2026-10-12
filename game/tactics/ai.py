@@ -41,9 +41,11 @@ Pendant la bataille
 - Ligne : avance par bonds en attendant ses retardataires ; colonne pour marcher loin du feu, ligne sous le feu, ou ordre
   dispersé (nettement moins de pertes au canon, un peu moins au fusil) tant qu'aucun cavalier ennemi ne rôde ;
   arrêt à portée efficace, chaque bataillon réglant sa distance sur l'ennemi d'en face et cherchant un couvert ;
-  jamais dans la mitraille meurtrière d'une batterie ennemie connue (60 % de sa portée : au-delà, la gerbe s'ouvre) ;
-  baïonnette après un quart d'heure de fusillade quand le corps à corps est favorable (et contre l'ennemi ébranlé, pris
-  de flanc, ou des canons sans soutien) ; une batterie qui interdit l'approche est enlevée à la baïonnette ; si plus
+  jamais dans la mitraille meurtrière d'une batterie ennemie connue (60 % de sa portée : au-delà, la gerbe s'ouvre ;
+  terrible sous 150 m) ; baïonnette après un quart d'heure de fusillade quand le corps à corps est favorable (et contre
+  l'ennemi ébranlé, pris de flanc, ou des canons sans soutien, pas de face s'ils sont en ordre : leur mitraille à bout
+  portant coûte très cher) ; une batterie qui interdit l'approche est enlevée à la baïonnette, de flanc de préférence
+  (de face : seulement ébranlée, réduite, ou à quatre contre un) ; si plus
   rien ne bouge pendant trois quarts d'heure, ou si la ligne ne tire plus depuis une demi-heure sans que l'ennemi
   perde rien : assaut général (sans plus craindre la mitraille) quand on n'est pas nettement plus faible, renouvelé
   tant qu'on est nettement plus fort ; sinon on décroche.
@@ -61,9 +63,15 @@ Pendant la bataille
   chariot), couvrir un flanc débordé, soutenir une batterie menacée, contre-attaquer une percée, prolonger la ligne
   débordée (difficile) ; ralliés reformés près du général. Général et chariot derrière le secteur qui en a besoin,
   abrités derrière un bataillon quand des cavaliers rôdent.
+- Fuyards : le moteur ne les rallie qu'auprès d'un général, au calme. Le général (normal, difficile) va au-devant
+  d'eux sur leur chemin de fuite, là où l'ennemi repéré est à plus de 470 m, s'il peut y aller sans passer sous le feu
+  ni croiser des cavaliers ennemis (jusqu'à 900 m, 1 200 m en difficile) ; facile le laisse à son poste.
 - Décrochage en bon ordre quand la bataille est perdue (pertes, rapport de forces vu, moral, nuit), jamais pour le
   défenseur d'une place : passé wd_loss de pertes (les troupes en déroute comptent pour moitié) si l'ennemi est nettement
   plus fort, ou passé wd_loss + 7 % dans un combat égal ; l'assaillant qui mène l'attaque accepte 5 % de plus.
+  Obstination selon la situation (_tenacity, TEN_*) : on accepte jusqu'à 14 % de pertes de plus quand on a l'avantage
+  (ennemi plus éprouvé que nous, rapport de forces vu favorable, ennemi en déroute, réserves fraîches) ou qu'on tient
+  une bonne position en défense ; sans rien de tout cela, on décroche 3 % plus tôt.
 
 Niveaux (battle.difficulty ; spec['ai_levels'] = [niveau du camp 0, du camp 1] et spec['ai_tweak'] pour les essais).
 Ils ne changent que la qualité des décisions, jamais les dégâts :
@@ -109,8 +117,9 @@ LEG = 450.0          # une longue marche se donne par étapes (recherches de che
 # hauteurs pour la vue (celles du moteur) : les canons (officiers à cheval) voient par-dessus les haies proches
 EYES = BT.HEIGHT
 GUN_EYE = EYES['artillerie']
-# la mitraille ne fait de vrais ravages qu'à moins de 60 % de sa portée (le moteur l'éparpille au-delà : battle.grape_k) :
-# c'est cette zone que la ligne évite
+# la mitraille ne fait de vrais ravages qu'à moins de 60 % de sa portée (le moteur l'éparpille au-delà : battle.grape_k),
+# et elle est terrible sous 150 m (×1,5 à 100 m, ×2 à 50 m : battle.GRAPE_CLOSE) : c'est cette zone (plus 40 m) que la
+# ligne évite ; une batterie en ordre ne s'aborde pas de face (_gun_front), sauf déjà ébranlée ou en nombre
 GRAPE_DEADLY = 0.6
 
 # l'assaillant qui mène l'attaque (plans frontal, artillerie, débordement) ne décroche qu'avec ce supplément de pertes :
@@ -1400,9 +1409,14 @@ def _storm_guns(b, side, mem, us, foes, guns, busy):
                 u.state not in ('charge', 'melee') and u.busy <= 0 and u.form != 'carre' and u.morale > BT.FORMED + 5 and
                 u.men > 0.6 * u.men0 and roles.get(u.id) in ('ligne', 'res') and
                 _d2(u.x, u.y, e.x, e.y) < 380 ** 2]
-        cand.sort(key=lambda u: _d2(u.x, u.y, e.x, e.y))
+        # de face, une batterie en ordre reçoit la charge par deux décharges de mitraille à bout portant (très cher) :
+        # on la prend de flanc ou de dos, de face seulement quand elle est déjà ébranlée ou réduite, ou en nombre
+        intact = e.form == 'batterie' and e.morale >= 50 and e.men > 0.6 * e.men0
+        cand.sort(key=lambda u: (_gun_front(e, u) and intact, _d2(u.x, u.y, e.x, e.y)))
         got = [u for u in cand if _charge_ok(b, side, u, e)][:2]
         if not got or sum(u.men for u in got) < 1.5 * e.men:
+            continue
+        if intact and all(_gun_front(e, u) for u in got) and sum(u.men for u in got) < 4.0 * e.men:
             continue
         for u in got:
             b.order(side, [u.id], 'charge', target=e.id)
@@ -1410,6 +1424,11 @@ def _storm_guns(b, side, mem, us, foes, guns, busy):
         storm[gid] = round(now)
         _note(b, mem, f"la batterie ennemie ({_foe(e)}) interdit l'approche : {' et '.join(u.name for u in got)} "
                       f"l'enlève{'nt' if len(got) > 1 else ''} à la baïonnette.")
+
+
+def _gun_front(e, u):
+    """u aborderait-il cette batterie de face (dans son champ de tir) ?"""
+    return _ang(e.dir, math.atan2(u.y - e.y, u.x - e.x)) < 1.2
 
 
 def _gun_zones(b, mem, maxage=600.0, k=None):
@@ -2345,6 +2364,8 @@ def _cav_target(b, side, L, u, foes, e_cav, r):
             v = 1.8 * min(1.5, e.men / 250) if not support else 0.6
         elif e.cls == 'artillerie':
             v = (3.2 if e.form == 'attelee' else 2.6) * (0.35 if support else 1.0)
+            if e.form == 'batterie' and e.morale >= 50 and a <= 1.2:
+                v *= 0.4   # de face, la mitraille à bout portant vide les selles : de flanc ou de dos
         elif e.cls == 'general':
             v = 2.0 if not support else 0.5
         elif e.cls == 'cavalerie':
@@ -2446,7 +2467,8 @@ def _bayonets(b, side, mem, L, us, foes, sit, busy):
             ratio = mine / max(1.0, _melee_power(b, e))
             sup = sum(1 for f in foes if f is not e and f.valid and f.cls == 'inf' and _d2(f.x, f.y, e.x, e.y) < 110 ** 2)
             if e.cls == 'artillerie' and not sup:
-                v = 2.0
+                # (une batterie en ordre, abordée de face, vous reçoit à mitraille : pas sans l'avoir ébranlée)
+                v = 0.6 if e.form == 'batterie' and e.morale >= 50 and _gun_front(e, u) else 2.0
             if e.morale < 40:
                 v = max(v, 1.6)
             if e.men < 0.45 * e.men0:
