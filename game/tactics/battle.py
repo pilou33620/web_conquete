@@ -5,8 +5,8 @@ de DT = 2 s de bataille ; à ×1, une seconde réelle vaut TIME_K = 18 s de bata
 dure 10 à 20 min à ×1 (×2 et ×4 pour accélérer). Les vitesses de marche restent celles du contrat (§ 4) : une ligne
 qui avance à 1 m/s parcourt 18 m par seconde réelle, sa propre largeur en 6 à 7 s. « Finir automatiquement » joue la
 suite avec les mêmes pas DT, IA contre IA, aussi vite que le serveur le permet (mode accéléré, voir l'aide-mémoire) :
-une bataille complète demande quelques secondes de calcul (0,3 à 0,6 ms par pas sur un PC, 3 à 4 fois plus sur un
-Raspberry Pi 4).
+0,3 à 0,6 ms par pas sur un PC, une bataille complète en 2,5 s de calcul en médiane (6 s pour 9 sur 10), soit, avec
+le budget de bridge.tick, une dizaine de secondes à l'écran ; 3 à 4 fois plus sur un Raspberry Pi 4.
 
 ==================================================================================================================
 RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MELEE_*, FORMED… ci-dessous)
