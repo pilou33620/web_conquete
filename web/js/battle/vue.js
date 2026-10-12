@@ -7,7 +7,7 @@ import { Effects } from './effets.js';
 import { Controls } from './commandes.js';
 import { BattleUI } from './interface.js';
 import { emprise, clsOf, isGeneral, clamp, wrapAngle, hash, TAU, TILT } from './formes.js';
-import { profil, qualite, onQualite, Mesure } from './qualite.js';
+import { profil, onQualite, Mesure } from './qualite.js';
 
 const POLL_MS = 120;
 

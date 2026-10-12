@@ -10,7 +10,7 @@ export const QUALITES = ['basse', 'moyenne', 'haute', 'ultra'];
 export const QUALITE_LABEL = { basse: 'Basse', moyenne: 'Moyenne', haute: 'Haute', ultra: 'Ultra' };
 export const QUALITE_AIDE = {
   basse: 'Pour les appareils anciens : image moins fine, peu de fumée.',
-  moyenne: 'Bon compromis pour les téléphones.',
+  moyenne: 'Bon compromis pour les tablettes et téléphones modestes.',
   haute: 'Écran Retina, terrain détaillé, figurines fines (iPad récent).',
   ultra: 'Tout au maximum, pour les ordinateurs.',
 };
@@ -67,8 +67,9 @@ export function setQualite(q, auto = false) {
 export function onQualite(f) { ecoutes.add(f); return () => ecoutes.delete(f); }
 
 // Mesure des images par seconde pendant la bataille : sur 5 s de combat sans geste ni peinture de tuiles en
-// rafale, si la moitié des images dépasse 30 ms (moins de 33 images/s), on descend d'un niveau. Seulement tant
-// que le réglage est automatique, et deux fois au plus par bataille.
+// rafale, si la moitié des images dépasse 38 ms (moins de 26 images/s), on descend d'un niveau. Seulement tant
+// que le réglage est automatique, et deux fois au plus par bataille. (Un iPhone ou un iPad en mode économie
+// d'énergie bride l'affichage à 30 images/s, soit 33 ms : ce n'est pas une raison de descendre.)
 export class Mesure {
   constructor() { this.dts = []; this.t0 = 0; this.descentes = 0; }
   // dt : intervalle entre deux images (ms) ; calme : rien d'exceptionnel à cette image
@@ -82,7 +83,7 @@ export class Mesure {
     const s = this.dts.slice().sort((a, b) => a - b), med = s[s.length >> 1];
     this.dts.length = 0;
     const i = QUALITES.indexOf(c.q);
-    if (med > 30 && i > 0) { this.descentes++; setQualite(QUALITES[i - 1], true); return QUALITES[i - 1]; }
+    if (med > 38 && i > 0) { this.descentes++; setQualite(QUALITES[i - 1], true); return QUALITES[i - 1]; }
     return null;
   }
 }

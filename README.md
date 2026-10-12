@@ -414,10 +414,10 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
 - **La fin.** Le récapitulatif donne victoire ou défaite, pertes des deux camps, prisonniers, expérience, et les
   pertes de chaque régiment ; « Retour à la carte » ramène la campagne, que vous relancez quand vous voulez.
 - **Qualité graphique** (menu ☰, section Affichage, ou fenêtre du journal de bataille) : **Basse** (appareils
-  anciens : image moins fine, peu de fumée), **Moyenne** (téléphones), **Haute** (iPad récent : écran Retina, terrain
+  anciens : image moins fine, peu de fumée), **Moyenne** (tablettes et téléphones modestes), **Haute** (iPad récent : écran Retina, terrain
   détaillé jusqu'à 16 pixels par mètre, zoom très rapproché sur les figurines), **Ultra** (ordinateurs : plus de
   figurines, de fumée et de mémoire). Au premier lancement, elle est choisie d'après l'appareil, puis baisse d'elle-
-  même d'un cran si la bataille saccade (moins de 33 images par seconde) ; un choix fait à la main est gardé tel
+  même d'un cran si la bataille saccade (moins de 26 images par seconde) ; un choix fait à la main est gardé tel
   quel. Elle est enregistrée sur l'appareil et s'applique tout de suite, sans quitter la bataille.
 - Clavier : C charger, H tenir, F feu, R rallier, Échap désélectionner, Ctrl + A tout choisir, + et − zoom.
 
