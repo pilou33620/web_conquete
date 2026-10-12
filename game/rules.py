@@ -625,6 +625,7 @@ WD_DEF, WD_DEF_PLACE = 1.4, 1.8
 PURSUIT_CAV, PURSUIT_FOOT = 0.05, 0.02
 PRISON_LOSS, PRISON_REPULSED, PRISON_CAUGHT = 0.07, 0.2, 0.15
 LOSER_MORALE = 100           # moral au plus du vaincu qui se retire (rompu ou en bon ordre)
+LOSER_STRAGGLE = 0.0         # part de ses hommes que le vaincu perd en traînards pendant la retraite
 
 # ------------------------------------------------------------------ espions, impôts, fleuves
 SPY = {

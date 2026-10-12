@@ -2480,6 +2480,11 @@ class Game:
         a['fm'], a['pl'] = fm, pl
 
     def update_battles(self, dt):
+        """Résolution automatique (choix « Automatique », batailles sans le joueur), par pas de campagne : pertes typées
+        selon la phase, les formations et les plans, puis la fin, recalée sur les batailles jouées sur le champ de
+        bataille. Hors d'une place, le camp dominé (battle_yield) ou dont le moral casse se retire en bon ordre ; seule une
+        armée presque anéantie (moins de 18 % de ses hommes) est mise en déroute et poursuivie. Le défenseur d'une place
+        ne décroche jamais : il la rend s'il cède. Au bout de 4 jours, le plus puissant l'emporte."""
         K = 0.20
         for bid in list(self.battles):
             bt = self.battles.get(bid)
@@ -2731,6 +2736,9 @@ class Game:
         return tot / w if w > 0 else 0
 
     def end_battle(self, bt, winner, disengage=False):
+        """Fin d'une bataille, automatique ou commandée (bridge.finish) : prise de la place (sauf décrochage), retraite du
+        vaincu (poursuivi s'il est rompu, en bon ordre s'il décroche ; son moral reste au plus rules.LOSER_MORALE),
+        prisonniers (ceux du champ de bataille pour une bataille commandée), lassitude et bilan des deux camps, journal."""
         loser = 1 - winner
         W, L = bt['sides'][winner], bt['sides'][loser]
         caught = 0.0   # hommes rattrapés pendant la poursuite
@@ -2774,8 +2782,13 @@ class Game:
                         pursuit *= 0.5
                     for r in a['regs']:
                         caught += r['n'] * pursuit
+                        # battu, même en bon ordre, il perd des traînards dans la retraite (comptés comme désertions du
+                        # mois) et son moral reste bas quelques jours (d'autres désertions : attrition)
+                        gone = r['n'] * (1 - pursuit) * R.LOSER_STRAGGLE
+                        a['des'] = a.get('des', 0.0) + gone
+                        a['des_why'] = a.get('des_why') or ('traînards de la retraite' if gone > 0 else None)
                         r['n'] *= 1 - pursuit
-                        # battu, même en bon ordre, le moral reste bas quelques jours (désertions : attrition)
+                        r['n'] -= gone
                         r['morale'] = min(max(r['morale'], 18), R.LOSER_MORALE)
                     a['regs'] = [r for r in a['regs'] if r['n'] >= 5]
                     if not a['regs']:
