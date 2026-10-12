@@ -15,7 +15,7 @@ RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MEL
   Fusillade : P_FUSIL par homme du front et par salve, à portée efficace. Boulet : P_BOULET par pièce, de moins en moins
   juste avec la distance (ball_k : moitié à la portée efficace). Mitraille : P_MITRAILLE par pièce, la gerbe s'ouvre
   au-delà de 30 % de sa portée (grape_k : effet en 1/distance) ; terrible à bout portant (sous GRAPE_CLOSE = 150 m :
-  ×1,5 à 100 m, ×2 à 50 m, ×GRAPE_POINT = 2,2 au contact). L'ordre dispersé (tirailleurs) prend nettement moins au
+  ×1,5 à 100 m, ×GRAPE_POINT = 1,6 dès 90 m). L'ordre dispersé (tirailleurs) prend nettement moins au
   canon (×0,35 au boulet, ×0,55 à la mitraille), un peu moins au fusil (×0,8).
 - Charge : l'élan (charge_v, mètres de course utile ; plein élan en 110 m pour la cavalerie, 45 m pour l'infanterie)
   se gagne en courant et se perd en terrain difficile (bois, rochers, marais, vignes, maisons, murs : BRAKE_*), aux
@@ -162,8 +162,8 @@ BRAKE_INF = {T_BOIS: 0.85, T_FORET_T: 0.7, T_MARAIS_T: 0.6, T_VIGNE_T: 0.85, T_B
 P_FUSIL = 0.0065         # touchés par homme qui tire et par salve, à portée efficace (avant arme, expérience, moral…)
 P_BOULET = 0.26          # touchés par pièce et par coup de boulet à courte distance, sur une ligne à découvert
 P_MITRAILLE = 0.56       # … à mitraille, jusqu'à 30 % de la portée de mitraille (puis de moins en moins : grape_k)
-GRAPE_CLOSE = 150.0      # … et bien davantage à bout portant : sous 150 m, ×1,5 à 100 m, ×2 à 50 m…
-GRAPE_POINT = 2.2        # … ×2,2 au contact (le feu de défense d'une batterie abordée de face)
+GRAPE_CLOSE = 150.0      # … et bien davantage à bout portant : sous 150 m, ×1,5 à 100 m…
+GRAPE_POINT = 1.6        # … ×1,6 dès 90 m (aussi le feu de défense d'une batterie abordée de face)
 P_RECEPTION = 0.035      # feu de défense à bout portant contre une charge, par homme du front
 CHOC = 0.024             # pertes du choc d'une charge, par homme qui charge (× élan, flanc, ordre de la cible, type)
 MELEE_K = 0.0004         # pertes infligées en mêlée, par homme et par seconde (× force au corps à corps)
@@ -219,7 +219,7 @@ FORM_TIME = dict(ligne=50, colonne=40, carre=60, tirailleurs=45, batterie=60, at
 def grape_k(d, grape):
     """La mitraille est terrible à bout portant ; au-delà de 30 % de sa portée, la gerbe s'ouvre et son effet décroît
     comme l'inverse de la distance (moitié à 60 % de la portée, 30 % au bout). Sous GRAPE_CLOSE (150 m), la gerbe encore
-    serrée fauche des files entières : ×1,5 à 100 m, ×2 à 50 m, jusqu'à ×GRAPE_POINT au contact."""
+    serrée fauche des files entières : ×1,5 à 100 m, ×GRAPE_POINT dès 90 m."""
     k = min(1.0, 0.3 * grape / max(1.0, d))
     if d < GRAPE_CLOSE:
         k *= min(GRAPE_POINT, 1.0 + (GRAPE_CLOSE - d) / 100.0)

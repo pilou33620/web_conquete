@@ -414,7 +414,7 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   atteignent le bord quittent la bataille et retrouvent leur armée en campagne. Le général ennemi fait de même : il
   va au-devant de ses fuyards quand il peut le faire sans s'exposer.
 - **Le canon.** La mitraille est terrible à bout portant : sous 150 m, la gerbe encore serrée fauche des files
-  entières (à 50 m, elle tue autant que trois bataillons qui font feu). Aborder une batterie de face coûte très cher ;
+  entières (à 50 m, elle tue plus que deux bataillons qui font feu). Aborder une batterie de face coûte très cher ;
   prenez-la de flanc, ou faites-la taire d'abord.
 - **La vue.** Pincer pour zoomer, glisser à deux doigts (ou d'un doigt sans régiment choisi) pour se déplacer ;
   molette et clic droit ou du milieu à la souris ; flèches du clavier. La **mini-carte** (en bas à droite) se touche

@@ -123,7 +123,7 @@ LEG = 450.0          # une longue marche se donne par étapes (recherches de che
 EYES = BT.HEIGHT
 GUN_EYE = EYES['artillerie']
 # la mitraille ne fait de vrais ravages qu'à moins de 60 % de sa portée (le moteur l'éparpille au-delà : battle.grape_k),
-# et elle est terrible sous 150 m (×1,5 à 100 m, ×2 à 50 m : battle.GRAPE_CLOSE) : c'est cette zone (plus 40 m) que la
+# et elle est terrible sous 150 m (×1,5 à 100 m, ×1,6 dès 90 m : battle.GRAPE_CLOSE) : c'est cette zone (plus 40 m) que la
 # ligne évite ; une batterie en ordre ne s'aborde pas de face (_gun_front), sauf déjà ébranlée ou en nombre
 GRAPE_DEADLY = 0.6
 
