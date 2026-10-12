@@ -435,18 +435,24 @@ export class MockBattle {
       this.log('La bataille est engagée. Les tambours battent la charge.');
       return { ok: true, msg: 'La bataille commence.' };
     }
+    if (sub === 'speed' && this.accel) return { ok: false, msg: 'Vos officiers mènent la bataille au plus vite : reprenez le commandement pour régler la vitesse.' };
     if (sub === 'speed') { this.speed = [0, 1, 2, 4].includes(+b.v) ? +b.v : 1; return { ok: true, msg: '' }; }
     if (sub === 'withdraw') { this.finish(1, true); return { ok: true, msg: 'Vos troupes décrochent.' }; }
     if (sub === 'autofinish') {
-      if (this.phase !== 'combat') return { ok: false, msg: 'Le déploiement n’est pas terminé.' };
-      // calcul automatique grossier : effectifs × moral de chaque camp, pertes réparties au prorata
-      const force = s => this.units.filter(u => u.side === s && u.state !== 'hors').reduce((a, u) => a + u.men * u.morale * (u.state === 'deroute' ? 0.2 : 1), 0);
-      const f0 = force(0), f1 = force(1), k = f0 / (f0 + f1 || 1);
-      for (const u of this.units) if (u.state !== 'hors') u.men = Math.round(u.men * (1 - (u.side === 0 ? 1 - k : k) * 0.3));
-      this.log('Le reste de la bataille est résolu automatiquement.');
-      this.finish(k >= 0.5 ? 0 : 1, k < 0.5);
-      return { ok: true, msg: '' };
+      if (this.phase === 'fin') return { ok: false, msg: 'La bataille est terminée.' };
+      // comme le serveur : les officiers commandent et la bataille se joue en accéléré (maquette.mjs l'avance vite)
+      if (this.phase === 'deploiement') this.phase = 'combat';
+      this.accel = true; this.accelT = this.clock;
+      this.log('Vos officiers prennent le commandement : la bataille se poursuit en accéléré.');
+      return { ok: true, msg: 'Vos officiers poursuivent la bataille.' };
     }
+    if (sub === 'resume') {
+      if (!this.accel || this.phase === 'fin') return { ok: false, msg: 'Vous avez déjà le commandement.' };
+      this.accel = false; this.speed = 0;
+      this.log('Vous reprenez le commandement.');
+      return { ok: true, msg: 'Vous reprenez le commandement : la bataille est en pause.' };
+    }
+    if (this.accel && sub === 'order') return { ok: false, msg: 'Vos officiers mènent la bataille : reprenez le commandement pour donner vos ordres.' };
     if (sub === 'order') {
       const c = this.centroid(sel);
       for (const u of sel) {
@@ -684,7 +690,8 @@ export class MockBattle {
       zone: this.phase === 'deploiement' ? this.zone : undefined, units,
       fx: this.fx.filter(f => f.seq > since), log: this.logs.filter(l => l.seq > since).map(l => l.txt),
       title: this.name, place: this.map.place ? this.map.place.name : null,
-      result: this.result || undefined,
+      result: this.result || undefined, dusk: Math.round((this.dusk() - 8) * 3600),
+      ...(this.accel && this.phase === 'combat' ? { accel: true, accel_t: Math.round(this.accelT) } : {}),
     };
   }
   mapPayload() { const { _t, _h, ...m } = this.map; return { ...m, bid: this.bid, title: this.name }; }

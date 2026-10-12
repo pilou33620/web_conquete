@@ -89,8 +89,10 @@ export class Bataille {
     this.leaving = true;
     const view = this.view;
     this.closed.add(this.bid);
-    // le serveur oublie la bataille terminée (sous-commande « close »)
-    if (this.view?.st?.phase === 'fin') this.api.post('/api/cmd', { cmd: 'tac', sub: 'close', bid: this.bid }).catch(() => {});
+    // la vue cesse d'interroger le serveur (qui va oublier la bataille : une dernière question tomberait dans le vide)
+    view.closing = true;
+    clearTimeout(view.pollT);
+    const fin = view.st?.phase === 'fin';
     view.moveCam(view.cam.x, view.cam.y, view.cam.z * 0.7, FADE_MS);
     this.resumeMap();
     this.root.classList.remove('on');
@@ -98,6 +100,8 @@ export class Bataille {
     if (this.map && this.prevCam) { const p = this.prevCam; this.map.moveTo(p.x, p.y, Math.min(p.z, 8)); if (this.map.camAnim) this.map.camAnim.dur = ZOOM_MS; }
     await wait(FADE_MS);
     view.dispose();
+    // le serveur oublie la bataille terminée (sous-commande « close »)
+    if (fin) this.api.post('/api/cmd', { cmd: 'tac', sub: 'close', bid: this.bid }).catch(() => {});
     this.root.remove();
     this.view = null; this.root = null;
     this.active = false; this.leaving = false;
