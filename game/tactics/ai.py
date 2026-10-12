@@ -76,17 +76,20 @@ LEVELS = {
                    cohesion=False, bound=600.0, halt=(0.5, 1.45), prep=5 * 60, prep_max=8 * 60, cav_r=330.0,
                    cav_pick=False, counter=False, col_late=True, res_early=True, flank=False, relief=False,
                    art_pick=False, wd_loss=0.36, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
-                   grape=0, assault_prep=6 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False),
+                   grape=0, assault_prep=6 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False,
+                   storm=False, oblique=False, extend=False, flankfire=False),
     'normal': dict(n=1, period=10.0, jitter=4.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=1,
                    cohesion=True, bound=220.0, halt=(0.82, 0.92), prep=12 * 60, prep_max=25 * 60, cav_r=430.0,
                    cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
                    art_pick=True, wd_loss=0.5, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
-                   grape=1, assault_prep=12 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False),
+                   grape=1, assault_prep=12 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False,
+                   storm=True, oblique=False, extend=False, flankfire=False),
     'difficile': dict(n=2, period=6.0, jitter=0.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=2,
                       cohesion=True, bound=170.0, halt=(0.78, 0.85), prep=15 * 60, prep_max=35 * 60, cav_r=430.0,
                       cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
                       art_pick=True, wd_loss=0.55, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
-                      grape=2, assault_prep=15 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True),
+                      grape=1, assault_prep=15 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True,
+                      storm=True, oblique=True, extend=True, flankfire=True),
 }
 
 
@@ -1215,7 +1218,7 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
             sx, sy = _out_of_grape(mem, guns, sx, sy, fd)
         fdist = _foe_dist(u, body)
         want[u.id] = [sx, sy, fd, _march_form(b, mem, L, u, sx, sy, fdist), False]
-    if guns and mem['phase'] in ('assaut', 'combat'):
+    if guns and mem['phase'] in ('assaut', 'combat') and L['storm']:
         _storm_guns(b, side, mem, L, us, foes, guns, busy)
     if plan == 'debordement':
         _flank_group(b, side, mem, L, us, foes, sit, want, busy, body)
@@ -1280,7 +1283,7 @@ def _out_of_grape(mem, guns, x, y, fd):
 def _oblique(b, mem, L, body, plan, width):
     """Ordre oblique (normal, difficile) : la ligne se décale pour déborder une aile ennemie, la plus faible, d'un tiers
     de sa longueur ; ses bataillons d'aile la prennent de flanc (_fine_halt). Renvoie le décalage latéral voulu."""
-    if L['n'] == 0 or plan not in ('frontal', 'artillerie') or not body:
+    if not L['oblique'] or plan not in ('frontal', 'artillerie') or not body:
         return None
     fd = mem['fd']
     pts = [(_rel(x, y, mem['ax'], mem['ay'], fd), k) for k, x, y, cls, form in body]
@@ -1448,7 +1451,7 @@ def _roles_update(b, side, mem, L, us, sit, front):
         _note(b, mem, "la réserve est engagée d'emblée dans la ligne.")
         return
     # ligne débordée : la réserve prolonge l'aile (on garde un bataillon pour les trous et les relèves)
-    if L['n'] >= 1 and res and len(res) >= 2 and (front is not None and front < 450):
+    if L['extend'] and res and len(res) >= 2 and (front is not None and front < 450):
         w = mem.get('width', 600) / 2
         lats = []
         for k, x, y, cls, form in _body(b, mem):
@@ -1473,7 +1476,7 @@ def _roles_update(b, side, mem, L, us, sit, front):
             w = mem['width'] / 2
             _note(b, mem, f"l'ennemi déborde {WING[s]} : {u.name} quitte la réserve et prolonge la ligne.")
     # percée : des ennemis derrière notre ligne ; la réserve les contre-attaque
-    if L['n'] >= 1 and res and sit['seen'] and mem['plan'] in ('tenir', 'harcelement'):
+    if L['extend'] and res and sit['seen'] and mem['plan'] in ('tenir', 'harcelement'):
         inside = [e for e in sit['seen'] if e.cls in ('inf', 'cavalerie') and
                   _rel(e.x, e.y, mem['ax'], mem['ay'], mem['fd'])[0] < -40 and
                   abs(_rel(e.x, e.y, mem['ax'], mem['ay'], mem['fd'])[1]) < mem.get('width', 600) / 2 + 150]
@@ -1607,7 +1610,7 @@ def _lights_def(b, side, mem, L, us, foes, sit, want):
                 danger = True
         if danger and L['n'] >= 1:
             fold[u.id] = round(b.clock)
-        elif L['n'] >= 1 and b.clock - u.fired_t > 240 and b.clock - mem.get('t_contact', b.clock) > 240:
+        elif L['flankfire'] and b.clock - u.fired_t > 240 and b.clock - mem.get('t_contact', b.clock) > 240:
             spot = _flank_fire_spot(b, side, mem, u, sit)
             if spot:
                 fold.pop(u.id, None)
