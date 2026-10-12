@@ -83,6 +83,7 @@ comptes rendus.
 import math
 import random
 
+from . import battle as BT
 from . import units as U
 from .terrain import (W, H, T_BOIS, T_FORET_T, T_MARAIS_T, T_VIGNE_T, T_BATI, T_MUR, T_PORTE, T_BRECHE,
                       T_BARRICADE, T_ROCHE)
@@ -91,9 +92,9 @@ WOODS = (T_BOIS, T_FORET_T)
 ROUGH = (T_BOIS, T_FORET_T, T_MARAIS_T, T_VIGNE_T, T_BATI, T_MUR, T_PORTE, T_BRECHE, T_BARRICADE)
 SCREEN = (T_BOIS, T_FORET_T, T_BATI, T_MUR, T_PORTE)
 WALLS = (T_MUR, T_PORTE, T_BRECHE, T_BARRICADE)
-# vulnérabilité des cibles au boulet et à la mitraille (comme le moteur) : pour choisir les cibles des canons
-BALL = dict(ligne=0.8, colonne=1.5, carre=1.5, tirailleurs=0.35, batterie=0.6, attelee=1.2)
-GRAPE = dict(ligne=1.0, colonne=1.3, carre=1.3, tirailleurs=0.5, batterie=0.8, attelee=1.0)
+# vulnérabilité des cibles au boulet et à la mitraille (celle du moteur) : pour choisir les cibles des canons
+BALL = BT.VUL_BALL
+GRAPE = BT.VUL_GRAPE
 PLAN_LABEL = dict(frontal='assaut frontal coordonné', artillerie="préparation d'artillerie, puis assaut",
                   debordement='débordement par un flanc', tenir="tenir la position et user l'adversaire",
                   harcelement='escarmouche, puis retraite', assaut='assaut de la place', place='défense de la place')
@@ -102,24 +103,27 @@ LEG = 450.0          # une longue marche se donne par étapes (recherches de che
 # hauteurs pour la vue (comme le moteur, battle.HEIGHT) : les canons (officiers à cheval) voient par-dessus les haies
 EYES = dict(inf=2.5, artillerie=3.0, cavalerie=3.5, general=3.5, chariot=3.0)
 GUN_EYE = EYES['artillerie']
+# la mitraille ne fait de vrais ravages qu'à moins de 60 % de sa portée (le moteur l'éparpille au-delà : battle.grape_k) :
+# c'est cette zone que la ligne évite
+GRAPE_DEADLY = 0.6
 
 LEVELS = {
     'facile': dict(n=0, period=20.0, jitter=12.0, reflex=6.0, sq_r=210.0, sq_miss=0.3, sq_late=True, terrain=0,
                    cohesion=False, bound=600.0, halt=(0.5, 1.45), prep=5 * 60, prep_max=8 * 60, cav_r=330.0,
                    cav_pick=False, counter=False, col_late=True, res_early=True, flank=False, relief=False,
-                   art_pick=False, wd_loss=0.36, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
+                   art_pick=False, wd_loss=0.26, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
                    grape=0, assault_prep=6 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False,
                    storm=False, oblique=False, extend=False, flankfire=False),
     'normal': dict(n=1, period=10.0, jitter=4.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=1,
                    cohesion=True, bound=220.0, halt=(0.82, 0.92), prep=12 * 60, prep_max=25 * 60, cav_r=430.0,
                    cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
-                   art_pick=True, wd_loss=0.5, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
+                   art_pick=True, wd_loss=0.32, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
                    grape=1, assault_prep=12 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False,
                    storm=True, oblique=False, extend=False, flankfire=False),
     'difficile': dict(n=2, period=6.0, jitter=0.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=2,
                       cohesion=True, bound=170.0, halt=(0.78, 0.85), prep=15 * 60, prep_max=35 * 60, cav_r=430.0,
                       cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
-                      art_pick=True, wd_loss=0.55, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
+                      art_pick=True, wd_loss=0.35, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
                       grape=1, assault_prep=15 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True,
                       storm=True, oblique=True, extend=True, flankfire=True),
 }
@@ -1095,7 +1099,10 @@ def _decide_withdraw(b, side, mem, L, sit):
     if plan == 'harcelement' and mem.get('t_contact') is not None:
         if b.clock - mem['t_contact'] > mem.get('harass_t', 2700) or sit['loss'] > 0.18:
             why = "l'escarmouche a assez duré"
-    if sit['loss'] > L['wd_loss'] - k and sit['ratio'] < L['wd_ratio'] + 0.25:
+    # (les pertes comptent les troupes en déroute : un camp qui en a plusieurs à la fois plie)
+    if sit['loss'] > L['wd_loss'] - k and sit['ratio'] < L['wd_ratio'] + 0.1:
+        why = 'pertes trop lourdes'
+    elif sit['loss'] > L['wd_loss'] + 0.12 - k and sit['ratio'] < L['wd_ratio'] + 0.3:
         why = 'pertes trop lourdes'
     elif sit['ratio'] < 0.45 and sit['loss'] > 0.2:
         why = "l'ennemi est bien plus fort"
@@ -1104,11 +1111,13 @@ def _decide_withdraw(b, side, mem, L, sit):
     elif side == 0 and b.time_left() < 900 and sit['ratio'] < 1.6 and mem.get('t_contact') is not None:
         why = 'la nuit tombe'
     elif side == 0 and plan != 'harcelement' and _stalled(b, mem, sit):
-        if sit['ratio'] >= 1.15 and L['n'] >= 1 and not mem.get('general_assault'):
+        # (les combats durent : une ligne qui ne gagne plus de terrain n'est pas battue, elle serre au plus près ;
+        # on ne décroche qu'après un assaut général manqué, ou nettement plus faible)
+        if sit['ratio'] >= 0.85 and L['n'] >= 1 and not mem.get('general_assault'):
             mem['general_assault'] = round(b.clock)
             mem['halt_k'] = round(mem.get('halt_k', 0.85) * 0.5, 2)
             _note(b, mem, f"l'attaque piétine : assaut général (rapport de forces vu {sit['ratio']:.2f}).")
-        elif sit['ratio'] < 1.15 or b.clock - mem.get('general_assault', b.clock) > 2700:
+        elif sit['ratio'] < 0.7 or b.clock - mem.get('general_assault', b.clock) > 2700:
             why = "l'attaque piétine"
 
     if why is None:
@@ -1218,7 +1227,7 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         if plan == 'debordement':
             done = mem.get('fl') == 'attaque' or t >= prep_max
         gun = next((u for u in us if u.cls == 'artillerie' and u.valid), None)
-        if gun is not None and t > 120 and _grape_dist(b, mem, L, gun, b.ranges(gun)[2], foes):
+        if gun is not None and t > prep * 0.5 and _grape_dist(b, mem, L, gun, b.ranges(gun)[2], foes):
             done = True   # plus rien ne menace nos canons : ligne et batteries s'avancent ensemble
         if plan == 'harcelement':
             done = False
@@ -1296,12 +1305,12 @@ def _storm_guns(b, side, mem, us, foes, guns, busy):
 
 def _gun_zones(b, mem, maxage=600.0):
     """Batteries ennemies connues (vues depuis moins de 10 min, ni en déroute ni hors de combat) : [(x, y, rayon de
-    mitraille + 40 m, id)]."""
+    mitraille meurtrière (60 % de la portée de mitraille) + 40 m, id)]."""
     now = b.clock
     out = []
     for k, v in mem['vu'].items():
         if v[4] == 'artillerie' and now - v[2] <= maxage and v[6] not in ('deroute', 'hors') and v[3] > 25:
-            out.append((v[0], v[1], (v[9] if len(v) > 9 and v[9] else 280) + 40, k))
+            out.append((v[0], v[1], GRAPE_DEADLY * (v[9] if len(v) > 9 and v[9] else 280) + 40, k))
     return out
 
 
@@ -2498,11 +2507,10 @@ def _art_target(b, u, foes, ours, mem, mx, e_r, g):
         if d > mx * 0.98:
             continue
         cov = b.cover_at(t.x, t.y)
-        pr = 1.0 if d <= e_r else max(0.2, 1 - 0.8 * (d - e_r) / max(1.0, mx - e_r))
         if g and d <= g:
-            v = 0.9 * GRAPE.get(t.form, 1.0) * (1 - cov)
+            v = BT.P_MITRAILLE * BT.grape_k(d, g) * GRAPE.get(t.form, 1.0) * (1 - cov)
         else:
-            v = 0.35 * pr * BALL.get(t.form, 1.0) * (1 - 0.6 * cov)
+            v = BT.P_BOULET * BT.ball_k(d, e_r) * BALL.get(t.form, 1.0) * (1 - 0.6 * cov)
         if t.cls == 'artillerie':
             g_t = b.ranges(t)[2] or 280
             threat = min((_d2(t.x, t.y, o.x, o.y) for o in ours), default=1e12) < (g_t + 60) ** 2

@@ -105,12 +105,13 @@ BRAKE_INF = {T_BOIS: 0.85, T_FORET_T: 0.7, T_MARAIS_T: 0.6, T_VIGNE_T: 0.85, T_B
              T_SABLE: 0.8, T_MUR: 0.5, T_PORTE: 0.5, T_BRECHE: 0.7, T_BARRICADE: 0.7, T_GUE: 0.7}
 # ---- équilibre du combat (voir « Règles de combat » dans l'aide-mémoire) ----
 P_FUSIL = 0.005          # touchés par homme qui tire et par salve, à portée efficace (avant arme, expérience, moral…)
-P_BOULET = 0.35          # touchés par pièce et par coup de boulet à portée efficace, sur une ligne à découvert
-P_MITRAILLE = 0.9        # … à mitraille, jusqu'à 40 % de la portée de mitraille (puis de moins en moins : 35 % au bout)
+P_BOULET = 0.2           # touchés par pièce et par coup de boulet à courte distance, sur une ligne à découvert
+P_MITRAILLE = 0.45       # … à mitraille, jusqu'à 30 % de la portée de mitraille (puis de moins en moins : grape_k)
 P_RECEPTION = 0.04       # feu de défense à bout portant contre une charge, par homme du front
-CHOC = 0.04              # pertes du choc d'une charge, par homme qui charge (× élan, flanc, ordre de la cible, type)
-MELEE_K = 0.0008         # pertes infligées en mêlée, par homme et par seconde (× force au corps à corps)
+CHOC = 0.03              # pertes du choc d'une charge, par homme qui charge (× élan, flanc, ordre de la cible, type)
+MELEE_K = 0.0005         # pertes infligées en mêlée, par homme et par seconde (× force au corps à corps)
 MELEE_MOR = 0.5          # moral perdu par seconde de mêlée, partagé selon le rapport des forces au corps à corps
+GIVE_WAY = 35            # au corps à corps, le plus faible cède du terrain (repli de 100 m) sous ce moral, sans fuir
 FORMED = 50              # moral d'une troupe en ligne ou en colonne qui reçoit une charge de face en bon ordre…
 HOLD = 40                # … et qui, s'il lui en reste autant après le choc, repousse les cavaliers
 ROUT_R = 220.0           # une déroute ébranle les amis à moins de 220 m…
@@ -118,9 +119,10 @@ ROUT_MOR = 3.0           # … de 3 points de moral (bataillon de 250 hommes ; d
 # assaut d'une place : l'assaillant l'emporte s'il tient le cœur (au moins HEART_MEN hommes en état de combattre à
 # moins de HEART_R) sans défenseur en état de combattre à moins de HEART_FREE, pendant HEART_HOLD secondes de suite
 HEART_R, HEART_MEN, HEART_FREE, HEART_HOLD = 90.0, 150.0, 200.0, 600.0
-CAPTURE = dict(contact_cav=0.012, contact_inf=0.003,   # part des fuyards rattrapés par pas de 2 s au contact
-               choc_cav=0.06, choc_inf=0.03,            # … par une charge sur des fuyards
-               rupture_cav=0.06, melee_cav=0.05)        # … quand la cavalerie rompt une troupe (choc, mêlée)
+CAPTURE = dict(contact_cav=0.006, contact_inf=0.002,   # part des fuyards rattrapés par pas de 2 s au contact
+               choc_cav=0.04, choc_inf=0.02,            # … par une charge sur des fuyards
+               rupture_cav=0.04, melee_cav=0.03)        # … quand la cavalerie rompt une troupe (choc, mêlée)
+CHARGE_FAT = dict(cav=12.0, inf=6.0)   # fatigue d'une charge menée jusqu'au choc : les chevaux sont essoufflés
 FCOST_K = dict(inf=1.0, light=0.6, cav=2.0, art=2.5)
 WALLISH = {T_MUR: 0.65, T_PORTE: 0.65, T_BRECHE: 0.4, T_BARRICADE: 0.5}
 OFFROAD = tuple(k for k in range(18) if k not in (T_ROUTE, T_CHEMIN))
@@ -128,12 +130,24 @@ VIEW = {'soleil': 2000, 'nuages': 1800, 'canicule': 1800, 'brouillard': 250, 'pl
         'neige': 800, 'tempete': 700}
 # vulnérabilité de la cible selon la formation : au feu de l'infanterie, au boulet, à la mitraille
 # (l'ordre dispersé : nettement moins touché par le canon, un peu moins par la fusillade)
-VUL_FIRE = dict(ligne=1.0, colonne=1.2, carre=1.3, tirailleurs=0.8, batterie=0.7, attelee=1.2)
+VUL_FIRE = dict(ligne=1.0, colonne=1.2, carre=1.3, tirailleurs=0.8, batterie=0.9, attelee=1.2)
 VUL_BALL = dict(ligne=0.8, colonne=1.5, carre=1.5, tirailleurs=0.35, batterie=0.6, attelee=1.2)
 VUL_GRAPE = dict(ligne=1.0, colonne=1.3, carre=1.3, tirailleurs=0.55, batterie=0.8, attelee=1.0)
 ARC = dict(ligne=0.9, colonne=1.0, carre=4.0, tirailleurs=1.6, batterie=0.8, attelee=0.0)
 TURN = dict(ligne=0.03, colonne=0.12, carre=0.2, tirailleurs=0.1, batterie=0.05, attelee=0.1)
 FORM_TIME = dict(ligne=50, colonne=40, carre=60, tirailleurs=45, batterie=60, attelee=60)
+
+
+def grape_k(d, grape):
+    """La mitraille est terrible à bout portant ; au-delà de 30 % de sa portée, la gerbe s'ouvre et son effet décroît
+    comme l'inverse de la distance (moitié à 60 % de la portée, 30 % au bout)."""
+    return min(1.0, 0.3 * grape / max(1.0, d))
+
+
+def ball_k(d, e):
+    """Le boulet perd vite en justesse avec la distance : plein effet jusqu'au quart de la portée efficace, à peu près
+    moitié à la portée efficace, presque rien au bout de la portée maximale."""
+    return min(1.0, max(0.12, 1.2 - 0.75 * d / max(1.0, e)))
 
 
 def ang_diff(a, b):
@@ -1269,12 +1283,10 @@ class TacticalBattle:
             if tr == 'artilleur':
                 mult *= 1.25
             if grape and d <= grape:
-                # la mitraille est terrible à bout portant, et s'éparpille au loin
-                gk = 1.0 if d <= 0.4 * grape else 1 - 0.65 * (d - 0.4 * grape) / (0.6 * grape)
-                cas = pcs * P_MITRAILLE * gk * mult * VUL_GRAPE.get(tg.form, 1.0) * (1 - cov)
+                cas = pcs * P_MITRAILLE * grape_k(d, grape) * mult * VUL_GRAPE.get(tg.form, 1.0) * (1 - cov)
                 kind = 'mitraille'
             else:
-                cas = pcs * P_BOULET * mult * pr * VUL_BALL.get(tg.form, 1.0) * (1 - cov * 0.6)
+                cas = pcs * P_BOULET * mult * ball_k(d, e) * VUL_BALL.get(tg.form, 1.0) * (1 - cov * 0.6)
                 kind = 'canon'
             if tg.cls == 'general':
                 cas *= 0.2
@@ -1411,9 +1423,10 @@ class TacticalBattle:
         dos, en désordre, en tirailleurs ou en pleine manœuvre, elle est culbutée."""
         cav = a.cls == 'cavalerie'
         mom = 2.2 if cav else 1.0
-        mom *= 1 - a.fat / 150
+        mom *= 1 - a.fat / (120 if cav else 150)   # des chevaux essoufflés chargent mal
         elan = min(1.0, max(0.0, a.charge_v) / ELAN_M['cav' if cav else 'inf'])
         a.charge_v = 0.0
+        a.fat = min(100.0, a.fat + CHARGE_FAT['cav' if cav else 'inf'])
         mom *= 0.3 + 0.7 * elan
         tt = self.t[self.cell(tg.x, tg.y)]
         mom *= (BRAKE_CAV if cav else BRAKE_INF).get(tt, 1.0)   # bois, rochers, marais, maisons, murs : la charge s'y brise
@@ -1447,7 +1460,8 @@ class TacticalBattle:
              (tg.cls == 'artillerie' and tg.form == 'batterie'))
         if ready:
             if tg.cls == 'artillerie':
-                vol = U.pieces(tg) * P_MITRAILLE * 0.7 * (0.6 + 0.4 * tg.morale / 100)
+                # deux décharges de mitraille à bout portant pendant que la charge arrive
+                vol = U.pieces(tg) * P_MITRAILLE * 1.4 * (0.6 + 0.4 * tg.morale / 100)
                 kind = 'mitraille'
             else:
                 vol = tg.men * U.FRONT.get(tg.form, 1.0) * P_RECEPTION * (0.5 + 0.5 * tg.morale / 100) * \
@@ -1472,6 +1486,8 @@ class TacticalBattle:
         vul = 1.0
         if cav:
             vul = dict(ligne=1.2, tirailleurs=1.6, colonne=1.0, attelee=1.7, batterie=1.4).get(tg.form, 1.0)
+            if tg.cls == 'cavalerie':
+                vul = 0.8   # escadrons contre escadrons : on se sabre moins qu'on ne se bouscule
             if tg.busy > 0 and tg.next_form == 'carre':
                 vul = 1.9   # pris en pleine manœuvre
         if formed:
@@ -1552,6 +1568,11 @@ class TacticalBattle:
                 if u.cls == 'cavalerie':
                     self._capture(u, f, CAPTURE['melee_cav'])
                 self._end_melee(u)
+            elif f.morale < GIVE_WAY and f.state == 'melee' and kf < ku:
+                # le plus faible cède du terrain sans se débander : il se replie et se reforme
+                self._end_melee(f)
+                self._repulse(f, u, 100.0)
+                self.log(f"{f.name} cède du terrain devant {u.name}.", None, f.side)
         # déroutés rattrapés, et troupes qui se heurtent (baïonnette) : seulement les voisines (cases de 40 m)
         bins = {}
         for u in alive:
