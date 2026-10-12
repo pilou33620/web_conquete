@@ -120,6 +120,8 @@ ATT_TENACITY = 0.05
 # wd_ratio + WD_EVEN
 WD_EVEN_LOSS, WD_EVEN = 0.07, 0.2
 FIRE_LONG = 900.0   # durée de fusillade avant la baïonnette à forces égales (s)
+# le général va chercher ses fuyards jusqu'à cette distance (m) selon le niveau (facile : il ne bouge pas)
+FETCH_REACH = (0.0, 900.0, 1200.0)
 
 LEVELS = {
     'facile': dict(n=0, period=20.0, jitter=12.0, reflex=6.0, sq_r=210.0, sq_miss=0.3, sq_late=True, terrain=0,
@@ -2031,6 +2033,12 @@ def _support(b, side, mem, L, us, foes, sit, want):
                         gx, gy = p[0], p[1]
                     else:
                         mem['post'][u.id] = [round(gx, 1), round(gy, 1), fd]
+            run = False
+            if L['gen_move']:
+                # des fuyards : le général va les chercher (le moteur ne les rallie qu'auprès de lui)
+                f = _fetch(b, side, mem, L, u, us, seen)
+                if f is not None:
+                    gx, gy, run = f
             # jamais à portée de fusil
             for e in seen:
                 if _d2(e.x, e.y, gx, gy) < 230 ** 2 and e.cls != 'artillerie':
@@ -2039,7 +2047,7 @@ def _support(b, side, mem, L, us, foes, sit, want):
             if L['n'] >= 1:
                 gx, gy = _shelter(b, mem, us, u, gx, gy, fd)
             gen_pos = (gx, gy)
-            want[u.id] = [gx, gy, fd, None, False]
+            want[u.id] = [gx, gy, fd, None, run]
     for u in us:
         r = roles.get(u.id)
         if r == 'wagon':
@@ -2095,6 +2103,46 @@ def _support(b, side, mem, L, us, foes, sit, want):
                 _at(mem['ax'], mem['ay'], fd, -mem['back'].get(u.id, 60.0), mem['lat'].get(u.id, 0.0))
             s = 1 if mem['lat'].get(u.id, 0.0) > 0 else -1
             want[u.id] = [sx, sy, fd + s * 0.9, 'ligne', False]
+
+
+def _fetch(b, side, mem, L, g, us, seen):
+    """Des fuyards à rallier : le moteur ne les arrête qu'auprès d'un général, au calme (l'ennemi à plus de 400 m). Le
+    général va au-devant d'eux, sur leur chemin de fuite (vers notre bord), au premier endroit où l'ennemi repéré est
+    à plus de 470 m, un peu en arrière : ils viennent à lui, s'arrêtent et se reforment. Pas s'il faut passer sous le
+    feu, si des cavaliers ennemis rôdent par là, ni pour une poignée d'hommes ; le groupe le plus nombreux qu'on
+    rejoint vite d'abord. Renvoie (x, y, au galop) ou None."""
+    runs = [v for v in us if v.state == 'deroute' and v.men >= 50 and v.cls in ('inf', 'cavalerie', 'artillerie')]
+    if not runs:
+        return None
+    foes = [e for e in seen if e.valid and e.cls in ('inf', 'cavalerie')]
+    ahead = min(120.0, 0.3 * b.rally_radius(g))
+    reach = FETCH_REACH[L['n']]
+    best, bv = None, 0.0
+    for v in runs:
+        ex, ey = b.edge_point(side, v.x, v.y)
+        far = math.hypot(ex - v.x, ey - v.y)
+        a = math.atan2(ey - v.y, ex - v.x)
+        for s in range(0, 1000, 100):
+            if s > far - 80:
+                break
+            px, py = v.x + math.cos(a) * s, v.y + math.sin(a) * s
+            if any(_d2(e.x, e.y, px, py) < 470 ** 2 for e in foes):
+                continue   # pas encore au calme : plus loin sur son chemin
+            tx, ty = _clamp(px + math.cos(a) * ahead, py + math.sin(a) * ahead, 40)
+            d = math.hypot(tx - g.x, ty - g.y)
+            mx, my = (tx + g.x) / 2, (ty + g.y) / 2
+            if d > reach or any(_d2(e.x, e.y, mx, my) < 300 ** 2 or _d2(e.x, e.y, tx, ty) < 400 ** 2 for e in foes) \
+                    or _cav_near(b, mem, tx, ty, 550, 240) or _cav_near(b, mem, mx, my, 450, 240):
+                break      # trop loin, ou il faudrait s'exposer
+            val = v.men / (1.0 + d / 500.0)
+            if val > bv:
+                best, bv = (tx, ty, d > 150, v), val
+            break
+    if best is None:
+        return None
+    tx, ty, run, v = best
+    _note_once(b, mem, 'fetch' + v.id, f"le général va au-devant des fuyards du {v.name} pour les rallier.", 900)
+    return tx, ty, run
 
 
 def _shelter(b, mem, us, u, x, y, fd):

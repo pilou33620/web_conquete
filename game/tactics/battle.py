@@ -140,6 +140,8 @@ BRAKE_INF = {T_BOIS: 0.85, T_FORET_T: 0.7, T_MARAIS_T: 0.6, T_VIGNE_T: 0.85, T_B
 P_FUSIL = 0.0065         # touchés par homme qui tire et par salve, à portée efficace (avant arme, expérience, moral…)
 P_BOULET = 0.26          # touchés par pièce et par coup de boulet à courte distance, sur une ligne à découvert
 P_MITRAILLE = 0.56       # … à mitraille, jusqu'à 30 % de la portée de mitraille (puis de moins en moins : grape_k)
+GRAPE_CLOSE = 150.0      # … et bien davantage à bout portant : sous 150 m, ×1,5 à 100 m, ×2 à 50 m…
+GRAPE_POINT = 2.2        # … ×2,2 au contact (le feu de défense d'une batterie abordée de face)
 P_RECEPTION = 0.035      # feu de défense à bout portant contre une charge, par homme du front
 CHOC = 0.024             # pertes du choc d'une charge, par homme qui charge (× élan, flanc, ordre de la cible, type)
 MELEE_K = 0.0004         # pertes infligées en mêlée, par homme et par seconde (× force au corps à corps)
@@ -152,6 +154,16 @@ MOR_REC, MOR_REC_GEN = 0.02, 0.05   # moral regagné par seconde au calme (plus 
 ROUT_R = 220.0           # une déroute ébranle les amis à moins de 220 m…
 ROUT_MOR = 3.0           # … de 3 points de moral (bataillon de 250 hommes ; deux fois moins près du général)…
 ROUT_STEADY = 60         # … s'ils sont déjà ébranlés : rien au-dessus de 60 de moral, tout sous 30
+# ralliement : une troupe en déroute ne se reforme que près d'un général (état-major ami à moins de RALLY_R, RALLY_R +
+# RALLY_INSP pour un général inspirant) et au calme (aucun ennemi en état de combattre à moins de RALLY_CALM) : il faut
+# aller la chercher. Les fuyards s'y arrêtent et regagnent RALLY_REC de moral par seconde ; à 40, ils reforment les rangs.
+# Dans une place, les officiers rallient leurs hommes sans le général (au calme ; RALLY_CALM_BATI dans les maisons ;
+# RALLY_REC_PLACE).
+# Sans général sur le terrain (blessé, absent, garnison seule), ils ne les arrêtent que loin de l'ennemi (RALLY_ALONE),
+# et lentement (RALLY_REC_ALONE). Partout ailleurs, les fuyards courent jusqu'au bord de la carte et quittent la bataille.
+RALLY_R, RALLY_INSP = 400.0, 100.0
+RALLY_CALM, RALLY_CALM_BATI, RALLY_ALONE = 400.0, 150.0, 700.0
+RALLY_REC, RALLY_REC_PLACE, RALLY_REC_ALONE = 0.1, 0.08, 0.04
 # assaut d'une place : l'assaillant l'emporte s'il tient le cœur (au moins HEART_MEN hommes en état de combattre à
 # moins de HEART_R) sans défenseur en état de combattre à moins de HEART_FREE, pendant HEART_HOLD secondes de suite
 HEART_R, HEART_MEN, HEART_FREE, HEART_HOLD = 90.0, 150.0, 160.0, 360.0
@@ -184,8 +196,12 @@ FORM_TIME = dict(ligne=50, colonne=40, carre=60, tirailleurs=45, batterie=60, at
 
 def grape_k(d, grape):
     """La mitraille est terrible à bout portant ; au-delà de 30 % de sa portée, la gerbe s'ouvre et son effet décroît
-    comme l'inverse de la distance (moitié à 60 % de la portée, 30 % au bout)."""
-    return min(1.0, 0.3 * grape / max(1.0, d))
+    comme l'inverse de la distance (moitié à 60 % de la portée, 30 % au bout). Sous GRAPE_CLOSE (150 m), la gerbe encore
+    serrée fauche des files entières : ×1,5 à 100 m, ×2 à 50 m, jusqu'à ×GRAPE_POINT au contact."""
+    k = min(1.0, 0.3 * grape / max(1.0, d))
+    if d < GRAPE_CLOSE:
+        k *= min(GRAPE_POINT, 1.0 + (GRAPE_CLOSE - d) / 100.0)
+    return k
 
 
 def ball_k(d, e):
@@ -698,6 +714,55 @@ class TacticalBattle:
             self._refresh_gens()
         return self._traits[side]
 
+    def rally_radius(self, g):
+        """Rayon (m) dans lequel cet état-major rallie les fuyards (un peu plus pour un général inspirant)."""
+        return RALLY_R + (RALLY_INSP if (g.gen or {}).get('trait') == 'inspirant' else 0.0)
+
+    def rally_general(self, u):
+        """L'état-major ami qui peut rallier cette troupe (à moins de rally_radius), ou None."""
+        if not hasattr(self, '_gens'):
+            self._refresh_gens()
+        for g in self._gens:
+            if g.side == u.side and g is not u and g.alive:
+                r = self.rally_radius(g)
+                if (g.x - u.x) ** 2 + (g.y - u.y) ** 2 <= r * r:
+                    return g
+        return None
+
+    def has_general(self, side):
+        """Le camp a-t-il encore un état-major sur le terrain (ni blessé ni absent) ?"""
+        if not hasattr(self, '_gens'):
+            self._refresh_gens()
+        return any(g.side == side and g.alive for g in self._gens)
+
+    def in_place(self, x, y, margin=30.0):
+        """Le point est-il dans la place (enceinte ou bourg) dont on se dispute la possession ?"""
+        pl = self.map.place
+        if not pl or not pl.get('battle'):
+            return False
+        r = pl['r'] + margin
+        return (x - pl['x']) ** 2 + (y - pl['y']) ** 2 <= r * r
+
+    def _rally_k(self, u, foe=None, order=False):
+        """Une troupe en déroute peut-elle se reprendre ici et maintenant ? Renvoie (moral regagné par seconde, qui la
+        rallie : 'general', 'place', 'loin', ou la raison du refus : 'ennemi', 'general_loin', 'seuls').
+        order : l'ordre « Rallier » (les officiers s'y mettent tous : il suffit que l'ennemi soit à plus de 150 m)."""
+        if foe is None:
+            foe = self._nearest_foe_dist(u)
+        if self.in_place(u.x, u.y):
+            # dans une place, les officiers rallient leurs hommes au calme (plus près de l'ennemi à l'abri des maisons)
+            calm = RALLY_CALM_BATI if order or self.t[self.cell(u.x, u.y)] == T_BATI else RALLY_CALM
+            return (RALLY_REC_PLACE, 'place') if foe > calm else (0.0, 'ennemi')
+        if foe <= (RALLY_CALM_BATI if order else RALLY_CALM):
+            return 0.0, 'ennemi'
+        if self.rally_general(u) is not None:
+            return RALLY_REC, 'general'
+        if self.has_general(u.side):
+            return 0.0, 'general_loin'
+        if foe > RALLY_ALONE:
+            return RALLY_REC_ALONE, 'loin'
+        return 0.0, 'seuls'
+
     # ================================================================== journal et effets
     def emit(self, k, x, y, x2=None, y2=None, n=None, src=None):
         self.seq += 1
@@ -861,18 +926,34 @@ class TacticalBattle:
                     n += 1
             return (True, "Changement de formation.") if n else (False, "Formation impossible.")
         if kind == 'rally':
-            n = 0
+            # même règle que le ralliement de lui-même (voir RALLY_*) : il faut le général auprès des fuyards (ou les
+            # maisons d'une place, ou, sans général sur le terrain, être loin de l'ennemi)
+            n, why = 0, None
             for u in us:
-                if u.state == 'deroute':
-                    foe = self._nearest_foe_dist(u)
-                    if foe > 150 and self.clock >= u.rally_t:
-                        u.morale = min(100.0, u.morale + 12 + (6 if self.general_near(u) else 0))
-                        u.rally_t = self.clock + 300
-                        if u.morale >= 30:
-                            self._start_rally(u)
-                            n += 1
-            return (True, "Les officiers rallient leurs hommes.") if n else \
-                (False, "Impossible de rallier : l'ennemi est trop près, ou les hommes ne veulent rien entendre.")
+                if u.state != 'deroute':
+                    continue
+                k, who = self._rally_k(u, order=True)
+                if not k:
+                    why = why or who
+                    continue
+                if self.clock < u.rally_t:
+                    why = why or 'tot'
+                    continue
+                u.morale = min(100.0, u.morale + 12 + (6 if self.rally_general(u) else 0))
+                u.rally_t = self.clock + 300
+                if u.morale >= 30:
+                    self._start_rally(u)
+                    n += 1
+                else:
+                    why = why or 'sourds'
+            if n:
+                return True, "Les officiers rallient leurs hommes."
+            return False, {'general_loin': "Le général est trop loin pour rallier ces hommes.",
+                           'ennemi': "Impossible de rallier : l'ennemi est trop près.",
+                           'seuls': "Sans général sur le terrain, les officiers ne rallieront ces hommes que loin de "
+                                    "l'ennemi.",
+                           'tot': "Les officiers s'y emploient déjà : laissez-leur le temps.",
+                           }.get(why, "Les hommes ne veulent rien entendre.")
         if kind == 'retreat':
             for u in us:
                 self._retreat(u)
@@ -964,6 +1045,7 @@ class TacticalBattle:
 
     def _start_rally(self, u):
         u.state = 'ralliement'
+        u.halt = False
         u.busy = 60.0
         u.path = []
         u.goal = None
@@ -1091,6 +1173,11 @@ class TacticalBattle:
             u.reload -= dt
         st = u.state
         if st == 'deroute':
+            if u.halt:
+                # près du général (ou dans une place, ou loin de tout ennemi), au calme : les fuyards s'arrêtent et
+                # leurs officiers les reforment (voir _morale)
+                self._fatigue(u, dt, 'repos')
+                return
             self._move(u, dt, rout=True)
             if self.off_map(u.side, u.x, u.y):
                 u.state = 'hors'
@@ -1516,8 +1603,9 @@ class TacticalBattle:
              (tg.cls == 'artillerie' and tg.form == 'batterie'))
         if ready:
             if tg.cls == 'artillerie':
-                # deux décharges de mitraille à bout portant pendant que la charge arrive
-                vol = U.pieces(tg) * P_MITRAILLE * 1.4 * (0.6 + 0.4 * tg.morale / 100)
+                # deux décharges de mitraille à bout portant pendant que la charge arrive (la gerbe serrée : ×2,2) ;
+                # aborder une batterie de face coûte très cher, la prendre de flanc ou de dos ne coûte rien
+                vol = U.pieces(tg) * P_MITRAILLE * GRAPE_POINT * 1.4 * (0.6 + 0.4 * tg.morale / 100)
                 kind = 'mitraille'
             else:
                 vol = tg.men * U.FRONT.get(tg.form, 1.0) * P_RECEPTION * (0.5 + 0.5 * tg.morale / 100) * \
@@ -1753,6 +1841,7 @@ class TacticalBattle:
         if u.state == 'melee':
             self._end_melee(u)
         u.state = 'deroute'
+        u.halt = False
         u.order = dict(kind='deroute')
         u.target = None
         u.busy = 0.0
@@ -1780,13 +1869,15 @@ class TacticalBattle:
         calm = self.clock - u.hit_t > 30 and u.state != 'melee'
         cap = min(100.0, max(u.morale0, 60) + 5 + bonus - u.fat / 4)
         if u.state == 'deroute':
-            foe = self._nearest_foe_dist(u)
-            # (à l'abri des maisons, les fuyards se reprennent plus près de l'ennemi qu'en rase campagne)
-            if foe > (150 if self.t[self.cell(u.x, u.y)] == T_BATI else 400):
-                u.morale = min(cap, u.morale + 0.08 * dt)
+            # (seulement près du général, au calme ; dans une place, par ses officiers ; sans général sur le terrain,
+            # loin de l'ennemi : voir RALLY_*)
+            k, who = self._rally_k(u)
+            u.halt = k > 0
+            if k:
+                u.morale = min(cap, u.morale + k * dt)
                 if u.morale >= 40:
                     self._start_rally(u)
-                    self.log(f"{u.name} se rallie.", u.side)
+                    self.log(f"{u.name} se rallie" + (" autour du général." if who == 'general' else "."), u.side)
             return
         if calm and u.morale < cap:
             rec = MOR_REC + (MOR_REC_GEN if gen else 0) + 0.01 * self.cover_at(u.x, u.y)
@@ -1969,6 +2060,8 @@ class TacticalBattle:
             if not mine and (seen is None or u.id not in seen) and self.phase != 'fin':
                 continue
             units.append(u.view(mine, u.seen))
+            if mine and u.cls == 'general' and u.alive:
+                units[-1]['rally'] = round(self.rally_radius(u))   # (zone où il rallie les fuyards)
         sides = []
         for s in (0, 1):
             us = [u for u in self.units if u.side == s and u.cls not in ('general', 'chariot')]
