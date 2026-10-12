@@ -273,7 +273,7 @@ export class BattleUI {
     const foe = this.inspected && v.units.get(this.inspected);
     if (!us.length && !foe) { p.hidden = true; this.panelSig = ''; this.el.classList.remove('has-panel'); return; }
     const deploy = v.st?.phase === 'deploiement';
-    const sig = JSON.stringify([deploy, !!v.st?.accel, foe ? [foe.id, foe.men, foe.state, foe.form, foe._ghost] : us.map(u => [u.id, u.men, Math.round(u.morale), Math.round(u.fat ?? 0), u.ammo, u.state, u.form, u.fire])]);
+    const sig = JSON.stringify([deploy, !!v.st?.accel, foe ? [foe.id, foe.men, foe.state, foe.form, foe._ghost] : us.map(u => [u.id, u.men, Math.round(u.morale), Math.round(u.fat ?? 0), u.ammo, u.state, u.form, u.fire, u.state === 'deroute' && !!u.halt])]);
     if (sig === this.panelSig && !force) return;
     this.panelSig = sig;
     p.hidden = false;
@@ -317,10 +317,19 @@ export class BattleUI {
         ${canCharge ? `<button class="bt-btn charge" data-a="charge">Charger !</button>` : ''}
         <button class="bt-btn" data-a="rally" ${anyRout ? '' : 'disabled'}>Rallier</button>
         <button class="bt-btn danger" data-a="retreat">Retraite</button></div>`;
+      if (anyRout) h += `<p class="bp-help">${esc(this.rallyHint(us.filter(x => x.state === 'deroute')))}</p>`;
     }
     p.innerHTML = h;
     const c = p.querySelector('canvas[data-fig]');
     if (c) this.figure(c, u);
+  }
+  // troupes en déroute : elles ne se reforment qu'auprès du général (cercle doré), loin de l'ennemi
+  rallyHint(rs) {
+    const gen = this.v.mine().some(x => isGeneral(x) && x.rally);
+    if (rs.length && rs.every(x => x.halt)) return gen ? 'Les fuyards se sont arrêtés : les officiers les reforment.' : 'Loin de l’ennemi, les officiers reforment les rangs.';
+    if (gen) return rs.length > 1 ? 'En déroute : approchez le général pour les rallier (cercle doré), loin de l’ennemi, avant qu’elles ne quittent le terrain.'
+      : 'En déroute : approchez le général pour la rallier (cercle doré), loin de l’ennemi, avant qu’elle ne quitte le terrain.';
+    return 'En déroute, sans général pour les rallier : ces hommes ne s’arrêteront que loin de l’ennemi (ou dans les maisons d’une place).';
   }
   foeHtml(u) {
     const ghost = u._ghost;
@@ -516,6 +525,7 @@ export class BattleUI {
       ['.bt-mini', 'Pincez pour zoomer, glissez à deux doigts pour déplacer la vue. Touchez la mini-carte pour y aller. Sous elle : pause, ×1, ×2, ×4.'],
       ['.bt-acts', 'Le journal raconte la bataille. « Décrocher » sauve l’armée en lui faisant quitter le terrain ; « Finir auto. » confie la suite à vos officiers : elle se joue en accéléré sous vos yeux, avec les mêmes règles, et vous pouvez reprendre le commandement à tout moment.'],
     ];
+    steps.splice(2, 0, ['.bt-dock', 'Une troupe en déroute fuit vers votre bord : elle ne se reforme qu’auprès de votre général (cercle doré), loin de l’ennemi. Allez la chercher avec l’état-major avant qu’elle ne quitte le terrain. Et gare à la mitraille : abordez les canons par le flanc.']);
     if (deploy) steps.push(['[data-a="engager"]', 'Quand tout le monde est en place : « Engager la bataille ».']);
     const tip = this.$('.bt-tip');
     this.tipI = i;

@@ -405,6 +405,17 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   régiment donne sa formation (ligne, colonne, carré, tirailleurs ; batterie ou attelée pour le canon), le feu à
   volonté ou cessez-le-feu, tenir, **charger** (puis toucher l'ennemi), rallier, retraite. Portée efficace et
   maximale (et mitraille) s'affichent en éventail devant lui.
+- **Déroutes et ralliement.** Une troupe en déroute fuit vers votre bord de la carte. Elle ne se reforme **qu'auprès
+  de votre général**, loin de l'ennemi (à plus de 400 m) : il faut aller la chercher. Tant qu'une des vôtres fuit, un
+  cercle doré marque autour de l'état-major la zone où il rallie (400 m, 500 m pour un général inspirant) ; les
+  fuyards qui y entrent s'arrêtent et reforment leurs rangs en quelques minutes (le bouton « Rallier » presse les
+  officiers et dit pourquoi il échoue). Dans une place, les officiers rallient leurs hommes sans le général ; sans
+  général sur le terrain (blessé, ou garnison seule), ils n'arrêtent les fuyards que très loin de l'ennemi. Ceux qui
+  atteignent le bord quittent la bataille et retrouvent leur armée en campagne. Le général ennemi fait de même : il
+  va au-devant de ses fuyards quand il peut le faire sans s'exposer.
+- **Le canon.** La mitraille est terrible à bout portant : sous 150 m, la gerbe encore serrée fauche des files
+  entières (à 50 m, elle tue autant que trois bataillons qui font feu). Aborder une batterie de face coûte très cher ;
+  prenez-la de flanc, ou faites-la taire d'abord.
 - **La vue.** Pincer pour zoomer, glisser à deux doigts (ou d'un doigt sans régiment choisi) pour se déplacer ;
   molette et clic droit ou du milieu à la souris ; flèches du clavier. La **mini-carte** (en bas à droite) se touche
   pour s'y rendre ; dessous, la vitesse : pause, ×1, ×2, ×4 (espace, 1, 2, 4 au clavier).

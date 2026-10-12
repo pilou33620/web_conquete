@@ -126,7 +126,7 @@ SLOTS = ('id', 'side', 'owner', 'type', 'cls', 'light', 'name', 'men', 'men0', '
          'morale0', 'fat', 'ammo', 'ammo0', 'arm', 'x', 'y', 'dir', 'form', 'state', 'order', 'seen', 'target',
          'path', 'goal', 'reload', 'busy', 'next_form', 'fire_mode', 'fired_t', 'melee_with', 'rally_t', 'lost',
          'killed', 'captured', 'fought', 'army', 'src', 'nid', 'gen', 'ctrl', 'charge_v', 'spotted_t', 'stuck',
-         'rout_seen', 'hit_t', 'wounded', 'group', 'gname')
+         'rout_seen', 'hit_t', 'wounded', 'group', 'gname', 'halt')
 
 
 class Unit:
@@ -170,6 +170,7 @@ class Unit:
         self.wounded = False
         self.group = None
         self.gname = None
+        self.halt = False      # en déroute : les fuyards se sont arrêtés pour se reformer (près du général, au calme)
         for k, v in kw.items():
             setattr(self, k, v)
 
@@ -225,6 +226,8 @@ class Unit:
                 out['busy'] = round(self.busy)
             if self.path:
                 out['path'] = [[round(p[0]), round(p[1])] for p in self.path[:12]]
+            if self.state == 'deroute':
+                out['halt'] = bool(self.halt)   # (les fuyards se sont arrêtés : on les rallie)
         if self.gen:
             out['gen'] = self.gen
         return out
