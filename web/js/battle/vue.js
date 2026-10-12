@@ -93,8 +93,8 @@ export class BattleView {
       try { this.apply(st); } catch (e) { console.error(e); }
       this.lost = false;
     } else if (!this.lost) { this.lost = true; this.ui.toast('Liaison avec le serveur perdue…', 'bad'); }
-    // en pause ou en fin de bataille, on interroge moins souvent
-    const wait = st && st.phase === 'fin' ? 1500 : st && st.speed === 0 && st.phase !== 'deploiement' ? 400 : POLL_MS;
+    // en pause ou en fin de bataille, on interroge moins souvent (pas pendant l'accéléré : la bataille défile)
+    const wait = st && st.phase === 'fin' ? 1500 : st && st.speed === 0 && st.phase !== 'deploiement' && !st.accel ? 400 : POLL_MS;
     this.pollT = setTimeout(() => this.poll(), Math.max(10, wait - (performance.now() - t0)));
   }
   async cmd(sub, body = {}) {
