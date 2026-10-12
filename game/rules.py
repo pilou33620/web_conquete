@@ -378,7 +378,7 @@ TREATY_AGAIN = 25 * 365      # second traité avec le même vainqueur en moins d
 ASSIM_YEARS = 25
 # lassitude de la guerre (0 à 100)
 WEARY_PER_WAR = 3.0          # par mois et par guerre
-WEARY_PER_LOSS = 1 / 300     # par homme perdu
+WEARY_PER_LOSS = 1 / 150     # par homme perdu
 WEARY_PEACE = 5.0            # baisse mensuelle en paix
 
 # croissance séculaire de l'économie, par rapport à 1790 : la production d'une place n'en suit que la racine
@@ -624,8 +624,8 @@ WD_DEF, WD_DEF_PLACE = 1.4, 1.8
 # assaut repoussé : PRISON_REPULSED) et des rattrapés
 PURSUIT_CAV, PURSUIT_FOOT = 0.05, 0.02
 PRISON_LOSS, PRISON_REPULSED, PRISON_CAUGHT = 0.07, 0.2, 0.15
-LOSER_MORALE = 100           # moral au plus du vaincu qui se retire (rompu ou en bon ordre)
-LOSER_STRAGGLE = 0.0         # part de ses hommes que le vaincu perd en traînards pendant la retraite
+# usure : le vaincu, même en bon ordre, perd cette part de ses hommes en traînards pendant la retraite (désertions)
+LOSER_STRAGGLE = 0.05
 
 # ------------------------------------------------------------------ espions, impôts, fleuves
 SPY = {

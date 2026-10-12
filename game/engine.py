@@ -2661,6 +2661,7 @@ class Game:
             if res is None and age > 4.0:
                 tot = [sum(P[i].values()) for i in (0, 1)]
                 res = 0 if tot[0] >= tot[1] else 1
+                disengage = bt['sides'][1 - res]['node'] is None
             if res is not None:
                 self.end_battle(bt, res, disengage)
 
@@ -2737,7 +2738,7 @@ class Game:
 
     def end_battle(self, bt, winner, disengage=False):
         """Fin d'une bataille, automatique ou commandée (bridge.finish) : prise de la place (sauf décrochage), retraite du
-        vaincu (poursuivi s'il est rompu, en bon ordre s'il décroche ; son moral reste au plus rules.LOSER_MORALE),
+        vaincu (poursuivi s'il est rompu, en bon ordre s'il décroche ; il y perd des traînards : rules.LOSER_STRAGGLE),
         prisonniers (ceux du champ de bataille pour une bataille commandée), lassitude et bilan des deux camps, journal."""
         loser = 1 - winner
         W, L = bt['sides'][winner], bt['sides'][loser]
@@ -2780,16 +2781,17 @@ class Game:
                         (R.PURSUIT_CAV if has_cav else R.PURSUIT_FOOT) * (1 + self.mod(a['owner'], 'retreat'))
                     if self.gen_trait(a) == 'prudent':
                         pursuit *= 0.5
+                    # battu, même en bon ordre, il sème des traînards dans la retraite (comptés avec les désertions du mois)
+                    gone = 0.0
                     for r in a['regs']:
                         caught += r['n'] * pursuit
-                        # battu, même en bon ordre, il perd des traînards dans la retraite (comptés comme désertions du
-                        # mois) et son moral reste bas quelques jours (d'autres désertions : attrition)
-                        gone = r['n'] * (1 - pursuit) * R.LOSER_STRAGGLE
-                        a['des'] = a.get('des', 0.0) + gone
-                        a['des_why'] = a.get('des_why') or ('traînards de la retraite' if gone > 0 else None)
                         r['n'] *= 1 - pursuit
-                        r['n'] -= gone
-                        r['morale'] = min(max(r['morale'], 18), R.LOSER_MORALE)
+                        gone += r['n'] * R.LOSER_STRAGGLE
+                        r['n'] *= 1 - R.LOSER_STRAGGLE
+                        r['morale'] = max(r['morale'], 18)
+                    if gone > 0:
+                        a['des'] = a.get('des', 0.0) + gone
+                        a['des_why'] = a.get('des_why') or 'traînards de la retraite'
                     a['regs'] = [r for r in a['regs'] if r['n'] >= 5]
                     if not a['regs']:
                         del self.armies[aid]
