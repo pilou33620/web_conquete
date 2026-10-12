@@ -39,7 +39,9 @@ function appareil() {
 // premier choix, avant toute mesure
 export function devine() {
   const a = appareil();
-  if (a.mobile && a.petit) return a.memoire <= 2 ? 'basse' : 'moyenne';
+  // (un téléphone a peu de pixels à remplir : la qualité Haute lui va, sauf petite mémoire ; Safari ne donne pas
+  // deviceMemory : c'est la mesure des images par seconde qui corrige)
+  if (a.mobile && a.petit) return a.memoire <= 2 ? 'basse' : a.memoire <= 4 ? 'moyenne' : 'haute';
   if (a.mobile || a.touch) return a.memoire <= 2 || a.coeurs <= 2 ? 'moyenne' : 'haute';
   return a.coeurs >= 8 && a.memoire >= 8 ? 'ultra' : 'haute';
 }
