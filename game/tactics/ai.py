@@ -1241,13 +1241,11 @@ def _decide_withdraw(b, side, mem, L, sit):
         return (sit['loss'] > L['wd_loss'] - k and sit['ratio'] < L['wd_ratio'] + 0.1) or \
             (sit['loss'] > L['wd_loss'] + L.get('wd_even_loss', WD_EVEN_LOSS) - k and
              sit['ratio'] < L['wd_ratio'] + L.get('wd_even', WD_EVEN))   # (combat égal qui s'éternise : le plus éprouvé cède)
-    if heavy(k):
-        why = 'pertes trop lourdes'
-    elif ten > 0 and heavy(k + ten):
+    if ten > 0 and not heavy(k) and heavy(k + ten):
         _note_once(b, mem, 'tenace', f"l'armée s'accroche malgré {round(sit['loss'] * 100)} % de pertes : "
                                      f"{', '.join(ten_why)}.", 1200)
-    if why:
-        pass
+    if heavy(k):
+        why = 'pertes trop lourdes'
     elif sit['ratio'] < 0.45 and sit['loss'] > 0.2:
         why = "l'ennemi est bien plus fort"
     elif sit['valid'] and sit['mor'] < 32 and sit['routed'] >= len(sit['valid']):

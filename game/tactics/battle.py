@@ -1227,8 +1227,8 @@ class TacticalBattle:
         st = u.state
         if st == 'deroute':
             if u.halt:
-                # près du général (ou dans une place, ou loin de tout ennemi), au calme : les fuyards s'arrêtent et
-                # leurs officiers les reforment (voir _morale)
+                # près du général au calme (ou, sans général, loin de tout ennemi) : les fuyards s'arrêtent et leurs
+                # officiers les reforment (voir _morale)
                 self._fatigue(u, dt, 'repos')
                 return
             self._move(u, dt, rout=True)
