@@ -120,6 +120,11 @@ ATT_TENACITY = 0.05
 # wd_ratio + WD_EVEN
 WD_EVEN_LOSS, WD_EVEN = 0.07, 0.2
 FIRE_LONG = 900.0   # durée de fusillade avant la baïonnette à forces égales (s)
+# obstination selon la situation (_tenacity) : supplément de pertes accepté avant de décrocher quand l'ennemi est plus
+# éprouvé que nous (au plus TEN_TRIED, autant que l'écart des pertes), quand le rapport de forces vu est favorable, quand
+# l'ennemi a des troupes en déroute, qu'il nous reste des réserves fraîches, que la ligne du défenseur tient une bonne
+# position ; au plus TEN_MAX en tout. Rien de tout cela : on décroche plus tôt (TEN_NONE)
+TEN_TRIED, TEN_RATIO, TEN_ROUT, TEN_RES, TEN_POS, TEN_MAX, TEN_NONE = 0.08, 0.03, 0.03, 0.03, 0.04, 0.14, -0.03
 # le général va chercher ses fuyards jusqu'à cette distance (m) selon le niveau (facile : il ne bouge pas)
 FETCH_REACH = (0.0, 900.0, 1200.0)
 
@@ -129,19 +134,19 @@ LEVELS = {
                    cav_pick=False, counter=False, col_late=True, res_early=True, flank=False, relief=False,
                    art_pick=False, wd_loss=0.18, wd_ratio=0.95, harass=0.8, counter_k=99.0, gen_move=False,
                    grape=0, assault_prep=40 * 60, span=0, r_k=1.0, wood=False, skirm=0, cav_safe=False,
-                   storm=False, oblique=False, extend=False, flankfire=False),
+                   storm=False, oblique=False, extend=False, flankfire=False, ten_k=0.0),
     'normal': dict(n=1, period=10.0, jitter=4.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=1,
                    cohesion=True, bound=220.0, halt=(0.82, 0.92), prep=12 * 60, prep_max=25 * 60, cav_r=430.0,
                    cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
                    art_pick=True, wd_loss=0.22, wd_ratio=0.8, harass=0.6, counter_k=2.0, gen_move=True,
                    grape=1, assault_prep=60 * 60, span=30, r_k=1.0, wood=False, skirm=2, cav_safe=False,
-                   storm=True, oblique=False, extend=False, flankfire=False),
+                   storm=True, oblique=False, extend=False, flankfire=False, ten_k=1.0),
     'difficile': dict(n=2, period=6.0, jitter=0.0, reflex=2.0, sq_r=330.0, sq_miss=0.0, sq_late=False, terrain=2,
                       cohesion=True, bound=220.0, halt=(0.88, 0.98), prep=15 * 60, prep_max=35 * 60, cav_r=430.0,
                       cav_pick=True, counter=True, col_late=False, res_early=False, flank=True, relief=True,
                       art_pick=True, wd_loss=0.25, wd_ratio=0.75, harass=0.6, counter_k=1.5, gen_move=True,
                       grape=1, assault_prep=70 * 60, span=60, r_k=1.8, wood=True, skirm=2, cav_safe=True,
-                      storm=True, oblique=True, extend=True, flankfire=True),
+                      storm=True, oblique=True, extend=True, flankfire=True, ten_k=1.0),
 }
 
 
@@ -1096,8 +1101,11 @@ def _situation(b, mem, us, foes):
         mem['t_contact'] = round(now)
         e = min(seen, key=lambda e: min((_d2(e.x, e.y, u.x, u.y) for u in combat), default=0))
         _note(b, mem, f"premier contact : {_foe(e)} repéré.")
+    # pertes de l'ennemi, estimées comme les nôtres (ses troupes vues en déroute depuis moins de 5 min pour moitié)
+    e_run = sum(v[3] for k, v in mem['vu'].items() if v[6] == 'deroute' and now - v[2] < 300 and k in mem['vu0'])
+    e_loss = 1 - (foe + 0.5 * e_run) / max(1.0, mem.get('ann') or foe)
     return dict(combat=combat, valid=valid, mine=mine, init=init, foe=foe, ratio=mine / max(1.0, foe),
-                loss=1 - mine / max(1.0, init), mor=mor, routed=routed, e_routed=e_routed, seen=seen)
+                loss=1 - mine / max(1.0, init), mor=mor, routed=routed, e_routed=e_routed, seen=seen, e_loss=e_loss)
 
 
 def _stalled(b, mem, sit, line=None):
@@ -1130,6 +1138,45 @@ def _history(b, mem, sit):
     return hist
 
 
+def _tenacity(b, side, mem, L, sit):
+    """Obstination selon la situation : supplément de pertes accepté avant de décrocher (négatif : on décroche plus
+    tôt). On s'accroche quand on a l'avantage — l'ennemi est plus éprouvé que nous (pertes estimées de la même façon),
+    le rapport de forces vu est favorable, des troupes ennemies sont en déroute, il nous reste des réserves fraîches —
+    ou qu'on tient une position clé (la ligne du défenseur sur une crête, derrière des haies, des murets, dans un
+    village) ; sans rien de tout cela, on décroche plus tôt (TEN_NONE). Rase campagne seulement (l'assaut et la défense
+    d'une place ont leurs propres règles). Renvoie (supplément, raisons)."""
+    if mem['plan'] in ('place', 'assaut') or mem.get('t_contact') is None or not L.get('ten_k', 1.0):
+        return 0.0, []   # (facile : ne lit pas la situation)
+    k, why = 0.0, []
+    d = sit['e_loss'] - sit['loss']
+    if d > 0.02:
+        k += min(TEN_TRIED, d)
+        why.append(f"l'ennemi est plus éprouvé ({round(sit['e_loss'] * 100)} % contre {round(sit['loss'] * 100)} %)")
+    if sit['ratio'] >= 1.15:
+        k += TEN_RATIO
+        why.append('rapport de forces favorable')
+    if sit['e_routed'] >= 2:
+        k += TEN_ROUT
+        why.append('l\'ennemi a des troupes en déroute')
+    fresh = sum(u.men for u in sit['valid'] if mem['role'].get(u.id) in ('res', 'garde_flanc') and u.morale > 60
+                and u.ammo > 0.5 * u.ammo0 and u.cls == 'inf')
+    if fresh > 0.12 * max(1.0, sit['init']):
+        k += TEN_RES
+        why.append('des réserves fraîches')
+    if side == 1 and mem.get('mode') == 'poste':
+        line = [u for u in sit['valid'] if mem['role'].get(u.id) == 'ligne']
+        body = _body(b, mem)
+        eh = sum(b.height_at(x, y) for _, x, y, _c, _f in body) / len(body) if body else None
+        held = sum(u.men for u in line if b.cover_at(u.x, u.y) >= 0.2 or b.feature_at(u.x, u.y) >= 2 or
+                   (eh is not None and b.height_at(u.x, u.y) > eh + 8))
+        if line and held >= 0.4 * sum(u.men for u in line):
+            k += TEN_POS
+            why.append('la position est bonne')
+    if not why:
+        return TEN_NONE, []
+    return min(TEN_MAX, k) * L.get('ten_k', 1.0), why
+
+
 def _decide_withdraw(b, side, mem, L, sit):
     """Décrocher quand la bataille est perdue (jamais pour le défenseur d'une place)."""
     plan = mem['plan']
@@ -1141,15 +1188,23 @@ def _decide_withdraw(b, side, mem, L, sit):
     k = 0.08 if tr == 'prudent' else (-0.05 if tr == 'audacieux' else 0.0)
     if side == 0 and plan in ('frontal', 'artillerie', 'debordement'):
         k -= L.get('wd_att', ATT_TENACITY)   # l'assaillant accepte des pertes plus lourdes pour emporter la position
+    ten, ten_why = _tenacity(b, side, mem, L, sit)
+    k -= ten
     if plan == 'harcelement' and mem.get('t_contact') is not None:
         if b.clock - mem['t_contact'] > mem.get('harass_t', 2700) or sit['loss'] > 0.18:
             why = "l'escarmouche a assez duré"
     # (les pertes comptent pour moitié les troupes en déroute : un camp qui en a plusieurs à la fois plie)
-    if sit['loss'] > L['wd_loss'] - k and sit['ratio'] < L['wd_ratio'] + 0.1:
+    def heavy(k):
+        return (sit['loss'] > L['wd_loss'] - k and sit['ratio'] < L['wd_ratio'] + 0.1) or \
+            (sit['loss'] > L['wd_loss'] + L.get('wd_even_loss', WD_EVEN_LOSS) - k and
+             sit['ratio'] < L['wd_ratio'] + L.get('wd_even', WD_EVEN))   # (combat égal qui s'éternise : le plus éprouvé cède)
+    if heavy(k):
         why = 'pertes trop lourdes'
-    elif sit['loss'] > L['wd_loss'] + L.get('wd_even_loss', WD_EVEN_LOSS) - k and \
-            sit['ratio'] < L['wd_ratio'] + L.get('wd_even', WD_EVEN):
-        why = 'pertes trop lourdes'   # (combat égal qui s'éternise : le plus éprouvé cède)
+    elif ten > 0 and heavy(k + ten):
+        _note_once(b, mem, 'tenace', f"l'armée s'accroche malgré {round(sit['loss'] * 100)} % de pertes : "
+                                     f"{', '.join(ten_why)}.", 1200)
+    if why:
+        pass
     elif sit['ratio'] < 0.45 and sit['loss'] > 0.2:
         why = "l'ennemi est bien plus fort"
     elif sit['valid'] and sit['mor'] < 32 and sit['routed'] >= len(sit['valid']):

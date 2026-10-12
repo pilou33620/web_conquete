@@ -226,8 +226,8 @@ class Unit:
                 out['busy'] = round(self.busy)
             if self.path:
                 out['path'] = [[round(p[0]), round(p[1])] for p in self.path[:12]]
-            if self.state == 'deroute' and self.halt:
-                out['halt'] = True   # (les fuyards se sont arrêtés : on les rallie)
+            if self.state == 'deroute':
+                out['halt'] = bool(self.halt)   # (les fuyards se sont arrêtés : on les rallie)
         if self.gen:
             out['gen'] = self.gen
         return out

@@ -353,6 +353,30 @@ export class BattleView {
         ctx.setLineDash([]);
       }
     }
+    // ralliement : une troupe en déroute ne se reforme qu'auprès du général, loin de l'ennemi. Tant qu'une des miennes
+    // fuit, un cercle discret montre la zone de ralliement autour de mes états-majors (plus net si un fuyard est choisi)
+    const mine = [...this.units.values()].filter(u => u.side === this.me && !u._ghost && u.state !== 'hors');
+    const routed = mine.filter(u => u.state === 'deroute');
+    if (routed.length) {
+      const picked = routed.some(u => this.sel.has(u.id)), pulse = 0.5 + 0.5 * Math.sin(time * 2.4);
+      for (const g of mine) {
+        if (!isGeneral(g) || !g.rally) continue;
+        ctx.fillStyle = `rgba(255,226,150,${picked ? 0.09 : 0.045})`;
+        ctx.strokeStyle = `rgba(255,226,150,${picked ? 0.55 + 0.3 * pulse : 0.35})`;
+        ctx.lineWidth = (picked ? 2.2 : 1.4) / z;
+        ctx.setLineDash([10 / z, 8 / z]); ctx.lineDashOffset = -time * 12 / z;
+        ctx.beginPath(); ctx.arc(g.x, g.y, g.rally, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.setLineDash([]); ctx.lineDashOffset = 0;
+        // fuyards choisis : un trait léger vers le général le plus proche
+        for (const u of routed) {
+          if (!this.sel.has(u.id)) continue;
+          const near = mine.filter(x => isGeneral(x) && x.rally).reduce((a, x) => (!a || Math.hypot(x.x - u.x, x.y - u.y) < Math.hypot(a.x - u.x, a.y - u.y) ? x : a), null);
+          if (near !== g) continue;
+          ctx.strokeStyle = 'rgba(255,226,150,0.45)'; ctx.lineWidth = 1.2 / z; ctx.setLineDash([4 / z, 6 / z]);
+          ctx.beginPath(); ctx.moveTo(u.x, u.y); ctx.lineTo(g.x, g.y); ctx.stroke(); ctx.setLineDash([]);
+        }
+      }
+    }
     // ordres en cours de mes unités : trajet pointillé et emplacement d'arrivée
     for (const u of this.units.values()) {
       if (u.side !== this.me || u._ghost || u.state === 'hors') continue;
