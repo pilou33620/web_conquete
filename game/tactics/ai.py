@@ -34,7 +34,7 @@ prudent → harcèlement plus tôt, audacieux → contre-offensive plus tôt)
 - tenir : défense de la position et usure de l'assaillant ; contre-attaque générale quand il flanche ;
 - harcelement : escarmouche à longue portée (canons, légers), puis retraite (quand on est nettement inférieur) ;
 - assaut : assaut d'une place (une heure de canonnade sur la brèche (40 min en facile, 70 en difficile), diversion,
-  colonnes quand les défenseurs sont usés, puis le cœur ; nouvelle vague si la première est repoussée) ;
+  colonnes quand les défenseurs sont usés, puis le cœur ; nouvelle vague, avec les troupes ralliées, si la première est repoussée ou si tout piétine) ;
 - place : défense d'une place.
 
 Pendant la bataille
@@ -130,6 +130,9 @@ ATT_TENACITY = 0.05
 # wd_ratio + WD_EVEN
 WD_EVEN_LOSS, WD_EVEN = 0.07, 0.2
 FIRE_LONG = 900.0   # durée de fusillade avant la baïonnette à forces égales (s)
+# assaut d'une place : vagues de plus après la première, au plus (avec les troupes ralliées depuis, qui ne restent plus
+# en réserve : une seule suffit, deux feraient tomber les places bien plus souvent qu'avant)
+ASSAULT_WAVES = 1
 # obstination selon la situation (_tenacity) : supplément de pertes accepté avant de décrocher quand l'ennemi a perdu
 # plus que nous (tués, blessés, prisonniers : une fois et demie l'écart, au plus TEN_TRIED), quand le rapport de forces vu
 # est favorable, quand
@@ -1229,16 +1232,20 @@ def _decide_withdraw(b, side, mem, L, sit):
             _stalled(b, mem, sit, [u for u in sit['valid'] if mem['role'].get(u.id) == 'ligne' and u.cls == 'inf']):
         # (les combats durent : une ligne qui ne gagne plus de terrain n'est pas battue, elle serre au plus près ;
         # on ne décroche qu'après un assaut général manqué, ou nettement plus faible)
+        # (assaut d'une place : l'assaut général est une nouvelle vague ; ses vagues lancées, on n'annonce plus rien)
+        quiet = plan == 'assaut' and mem.get('waves', 0) >= L.get('waves', ASSAULT_WAVES)
         if sit['ratio'] >= 0.85 and L['n'] >= 1 and not mem.get('general_assault'):
             mem['general_assault'] = round(b.clock)
             mem['halt_k'] = round(mem.get('halt_k', 0.85) * 0.5, 2)
-            _note(b, mem, f"l'attaque piétine : assaut général (rapport de forces vu {sit['ratio']:.2f}).")
+            if not quiet:
+                _note(b, mem, f"l'attaque piétine : assaut général (rapport de forces vu {sit['ratio']:.2f}).")
         elif sit['ratio'] < 0.7 or (b.clock - mem.get('general_assault', b.clock) > 2700 and sit['ratio'] < 1.2):
             why = "l'attaque piétine"
         elif b.clock - mem.get('general_assault', b.clock) > 2700:
             # (nettement plus fort : on ne lâche pas, on relance l'assaut)
             mem['general_assault'] = round(b.clock)
-            _note(b, mem, f"nouvel assaut général (rapport de forces vu {sit['ratio']:.2f}).")
+            if not quiet:
+                _note(b, mem, f"nouvel assaut général (rapport de forces vu {sit['ratio']:.2f}).")
 
     if why is None:
         return False
@@ -1612,8 +1619,7 @@ def _roles_update(b, side, mem, L, us, sit, front):
             roles[u.id] = 'rallie'
         elif roles.get(u.id) == 'rallie' and u.state == 'repos' and u.morale > 55 and \
                 u.ammo >= 0.3 * u.ammo0 and u.cls == 'inf':
-            # (assaut d'une place : la troupe reformée repart avec la prochaine vague, elle ne reste pas en réserve)
-            roles[u.id] = 'vague2' if mem['plan'] == 'assaut' else 'res'
+            roles[u.id] = 'res'   # (assaut d'une place : elle repartira avec la prochaine vague)
             mem['back'][u.id] = 220.0
     if mem['plan'] in ('place', 'assaut'):
         return
@@ -2029,15 +2035,18 @@ def _think_place_att(b, side, mem, L, us, foes, sit, want, busy):
             ph = 'assaut'
             t = 0.0
     if ph == 'assaut':
-        # assaut repoussé (au plus deux fois), ou assaut général décidé quand tout piétine (_decide_withdraw) : on se
-        # regroupe et toutes les troupes reformées repartent avec la vague suivante
+        # assaut repoussé, ou assaut général décidé quand tout piétine (_decide_withdraw) : on se regroupe sous les
+        # canons, et les troupes ralliées depuis (en réserve ou encore à se reformer) repartent avec la vague suivante
+        # (ASSAULT_WAVES au plus)
         ga = mem.get('general_assault')
-        wave = a_men < 0.35 * mem.get('n_assault', a_men or 1) and sit['ratio'] > 0.9 and mem.get('waves', 0) < 2
-        if t > 300 and L['n'] >= 1 and (wave or (ga and ga != mem.get('ga_wave'))):
+        wave = a_men < 0.35 * mem.get('n_assault', a_men or 1) and sit['ratio'] > 0.9
+        if t > 300 and L['n'] >= 1 and mem.get('waves', 0) < L.get('waves', ASSAULT_WAVES) and \
+                (wave or (ga and ga != mem.get('ga_wave'))):
             mem['ga_wave'] = ga
-            mem['waves'] = mem.get('waves', 0) + (1 if wave else 0)
+            mem['waves'] = mem.get('waves', 0) + 1
+            was = mem.get('was', {})
             for u in us:
-                if roles.get(u.id) in ('rallie', 'res') and u.state == 'repos' and u.cls == 'inf':
+                if (roles.get(u.id) == 'rallie' or (roles.get(u.id) == 'res' and u.id in was)) and u.state == 'repos':
                     roles[u.id] = 'vague2'
             _set_phase(b, mem, 'regroupe', "l'assaut est repoussé : on se regroupe sous la protection des canons."
                        if wave else "l'assaut piétine : on regroupe toutes les troupes pour un assaut général.")

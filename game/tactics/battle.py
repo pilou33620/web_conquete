@@ -1886,7 +1886,9 @@ class TacticalBattle:
             # (seulement près du général, au calme ; dans une place, par ses officiers ; sans général sur le terrain,
             # loin de l'ennemi : voir RALLY_*)
             k, who = self._rally_k(u)
-            u.halt = k > 0
+            # (les fuyards s'arrêtent auprès du général ou, loin de tout, de leurs officiers ; dans une place, ils se
+            # reprennent en courant se mettre à l'abri au fond de la ville, comme avant)
+            u.halt = k > 0 and who != 'place'
             if k:
                 u.morale = min(cap, u.morale + k * dt)
                 if u.morale >= 40:
