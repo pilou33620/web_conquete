@@ -43,8 +43,8 @@ Lecture (sans tricher sur la vue) :
   battle.strength(side) → hommes valides de son camp ;    battle.seen_strength(side) → ennemis repérés (hommes).
 
   battle.general_near(u) → état-major ami à moins de 400 m ;  battle.trait(side) → trait du général du camp ;
-  battle.rng (hasard déterministe de la bataille) ;  battle.ai_mem (dict libre pour la mémoire de l'IA) ;
-  battle.withdrawing[side] (le camp décroche déjà).
+  battle.rng (hasard déterministe de la bataille) ;  battle.ai_mem (dict libre pour la mémoire de l'IA, en types JSON :
+  il est enregistré avec la bataille) ;  battle.withdrawing[side] (le camp décroche déjà).
 
 Champs d'une unité (Unit) : id, side, owner, type, cls ('inf', 'cavalerie', 'artillerie', 'general', 'chariot'), light,
 men, men0, xp, morale, fat, ammo, ammo0, x, y, dir, form, state, order, target, busy (s de manœuvre restantes), valid
@@ -153,6 +153,7 @@ class TacticalBattle:
         self.withdraw_t = [0.0, 0.0]
         self.hold_t = 0.0
         self.prisoners = [0.0, 0.0]          # hommes de ce camp faits prisonniers
+        self.ai_mem = {}                     # mémoire de l'IA (types JSON seulement : enregistrée avec la bataille)
         self._acc = 0.0
         self._vis_t = -99.0
         self._ai_t = -99.0
@@ -1774,8 +1775,8 @@ class TacticalBattle:
         return dict(spec=self.spec, units=[u.to_dict() for u in self.units], phase=self.phase, clock=self.clock,
                     speed=self.speed, seq=self.seq, logs=[list(x) for x in self.logs[-60:]], ai_sides=self.ai_sides,
                     withdrawing=self.withdrawing, withdraw_t=self.withdraw_t, hold_t=self.hold_t, prisoners=self.prisoners, acc=self._acc,
-                    result=self.result, end=[getattr(self, 'winner', None), getattr(self, 'disengage', None),
-                                             getattr(self, 'why', None)])
+                    ai_mem=self.ai_mem, result=self.result,
+                    end=[getattr(self, 'winner', None), getattr(self, 'disengage', None), getattr(self, 'why', None)])
 
     @classmethod
     def from_dict(cls, geo, d):
@@ -1791,6 +1792,7 @@ class TacticalBattle:
         tb.hold_t = d.get('hold_t', 0.0)
         tb.prisoners = d.get('prisoners', [0.0, 0.0])
         tb._acc = d.get('acc', 0.0)
+        tb.ai_mem = d.get('ai_mem') or {}
         tb.result = d.get('result')
         e = d.get('end') or [None, None, None]
         if e[0] is not None:
