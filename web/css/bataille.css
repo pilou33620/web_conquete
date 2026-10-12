@@ -253,8 +253,8 @@ body.en-bataille #proposals, body.en-bataille #bubble { opacity: 0; pointer-even
   .ba-h { font-size: 12.5px; }
   .ba-prog { margin-top: 4px; }
   .bt-accel .bt-btn.primary { min-height: 38px; font-size: 14.5px; }
-  .bt-ui.accel .bt-feed, .bt-ui.accel .bt-feedtog { top: calc(var(--top-h) + var(--safe-t, 0px) + 112px); }
-  .bt-ui.accel .bt-toasts { top: calc(var(--top-h) + var(--safe-t, 0px) + 118px); }
+  .bt-ui.accel .bt-feed, .bt-ui.accel .bt-feedtog { top: calc(var(--top-h) + var(--safe-t, 0px) + 126px); }
+  .bt-ui.accel .bt-toasts { top: calc(var(--top-h) + var(--safe-t, 0px) + 190px); }
   .bt-feed { width: auto; right: 12px; }
   .bt-panel { left: 6px; right: 6px; width: auto; max-height: 46%; bottom: calc(var(--dock-h) + var(--safe-b, 0px) + 6px); }
   .bt-ui.has-panel .bt-side { display: none; }

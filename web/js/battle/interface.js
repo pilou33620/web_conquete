@@ -297,8 +297,8 @@ export class BattleUI {
         </dl>
         <div class="bp-note">${am} · ${rg}</div>`;
     }
-    // formations communes
-    const forms = cls === 'mix' ? [] : FORMS[cls] || [];
+    // formations communes (pas pendant l'accéléré : ce sont vos officiers qui commandent)
+    const forms = cls === 'mix' || v.st?.accel ? [] : FORMS[cls] || [];
     if (forms.length) h += `<div class="bp-row"><div class="bp-seg">${forms.map(f => `<button data-a="form" data-f="${f}" class="${us.every(x => x.form === f) ? 'on' : ''}" title="${esc(FORM_HELP[f])}">${esc(FORM_LABEL[f])}</button>`).join('')}</div></div>`;
     if (deploy) {
       h += `<div class="bp-row bp-btns"><button class="bt-btn" data-a="rot" data-r="-1">↺ Pivoter</button><button class="bt-btn" data-a="rot" data-r="1">Pivoter ↻</button></div>
@@ -410,7 +410,10 @@ export class BattleUI {
       }, true); break;
       case 'auto': this.confirm('Finir automatiquement ?', 'La suite de la bataille est jouée par vos officiers, en accéléré, avec les mêmes règles que si vous commandiez : vous la voyez défiler jusqu’à son issue, et vous pouvez reprendre le commandement à tout moment.', 'Finir automatiquement', async () => {
         const r = await v.cmd('autofinish');
-        if (r.ok) { v.sel.clear(); this.selChanged(); this.toast('Vos officiers prennent le commandement…'); }
+        if (!r.ok) return;
+        // (la prochaine réponse du serveur affiche le bandeau ; d'ici là, plus d'ordres)
+        if (v.st) v.st.accel = true;
+        v.sel.clear(); this.selChanged(); this.toast('Vos officiers prennent le commandement…');
       }); break;
       case 'reprendre': this.resume(); break;
       case 'close': this.closeModal(); break;
