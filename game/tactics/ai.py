@@ -1,55 +1,84 @@
 """IA de combat des batailles tactiques.
 
 Deux points d'entrée, appelés par le moteur (battle.py) et le raccord de campagne (bridge.py) :
-- deploy(battle, side) : déploiement selon la mission et le terrain, et choix du plan de bataille ;
-- think(battle, side, dt) : appelée toutes les 2 s de bataille. Réflexes (carré face aux cavaliers, ralliement,
-  contre-charge) et réflexion « lourde », plus espacée selon le niveau : situation, plan, phases, ordres de chaque unité.
+- deploy(battle, side) : déploiement selon la mission et le terrain, et choix du plan de bataille (sert aussi de
+  placement de départ au camp du joueur, au niveau normal) ;
+- think(battle, side, dt) : appelée toutes les 2 s de bataille. Réflexes (carré face à une vraie charge, ralliement,
+  contre-charge) et réflexion « lourde », plus espacée selon le niveau : situation, plan, phases, ordres de chaque unité,
+  donnés seulement quand ils changent quelque chose (les longues marches par étapes : le moteur ne cherche que des
+  chemins courts).
 
 Déploiement
 - Rase campagne : la ligne d'infanterie au centre ; pour le défenseur, sur la meilleure ligne de sa zone (hauteur,
   haies et murets, champ de tir dégagé devant) ; chaque bataillon cherche sa haie ou sa crête à quelques dizaines de
-  mètres, les meilleurs au centre. Canons un peu en arrière, sur une hauteur qui voit loin, ou cachés en lisière de
-  bois (difficile). Légers en avant, dans les bois, les vignes, le bâti. Cavalerie aux ailes (davantage sur l'aile
-  du débordement ; une réserve de cavalerie en difficile). Réserve d'infanterie en colonne derrière le centre
-  (grenadiers d'abord ; sapeurs et gardes nationaux y restent). État-major derrière le centre, chariot à l'abri derrière.
-- Défense d'une place : un bataillon solide derrière chaque brèche, les autres et les légers le long des remparts face
-  à l'assaillant (ils tirent par-dessus le mur), les canons au rempart, la milice dans les rues entre le mur et le cœur
-  de la place, une réserve (et la cavalerie) au cœur avec l'état-major.
-- Assaut d'une place : colonnes d'assaut face à la brèche principale, seconde vague derrière, diversion face à une
-  autre partie de l'enceinte, canons en batterie à bonne portée de la brèche, cavalerie en réserve.
+  mètres, les meilleurs au centre. Canons un peu en arrière, sur une hauteur qui voit loin, de préférence dans les
+  vignes ou en lisière (la cavalerie y charge mal ; en difficile, cachés en lisière de bois). Légers en avant, dans les
+  bois, les vignes, le bâti. Cavalerie aux ailes (davantage sur l'aile du débordement ; une réserve de cavalerie en
+  difficile). Réserve d'infanterie en colonne derrière le centre (grenadiers d'abord ; sapeurs et gardes nationaux y
+  restent). État-major derrière le centre, chariot à l'abri derrière.
+- Défense d'une place : deux bataillons solides de part et d'autre de chaque brèche, à l'intérieur et à l'abri du mur
+  (les canons du dehors ne les voient pas ; les colonnes qui passent sont prises entre deux feux), les autres et les
+  légers le long des remparts face à l'assaillant (ils tirent par-dessus le mur), les canons au rempart, la milice dans
+  les rues et au cœur de la place, une réserve et la cavalerie au cœur. On ne la quitte pas.
+- Assaut d'une place : colonnes d'assaut face à la brèche principale (ou au point le plus proche de l'enceinte), seconde
+  vague derrière, diversion face à une autre face, canons en batterie à bonne portée de la brèche, cavalerie en réserve.
 
-Plans (repris de la campagne quand c'est possible : spec['plans'], voir rules.PLANS)
-- frontal : courte préparation d'artillerie, puis la ligne avance par bonds, s'arrête à portée efficace et fait feu ;
-  la baïonnette contre l'ennemi ébranlé ;
-- artillerie : la même chose après une longue préparation (grande batterie) ;
-- debordement : la cavalerie et les légers tournent le flanc le plus dégagé et prennent l'ennemi de flanc et de dos
-  pendant que le centre le fixe ;
-- tenir : défense de la position et usure de l'assaillant ; contre-attaque quand il flanche ;
+Plans (repris de la campagne quand c'est possible : spec['plans'], voir rules.PLANS ; sinon selon le rapport des
+forces annoncé, la mission, l'armement et le trait du général : cavalier → débordement, artilleur → artillerie,
+prudent → harcèlement plus tôt, audacieux → contre-offensive plus tôt)
+- frontal : courte préparation d'artillerie, puis la ligne avance par bonds, s'arrête à portée efficace et fait feu,
+  puis charge à la baïonnette ;
+- artillerie : la même chose après une longue préparation ;
+- debordement : la cavalerie de l'aile et les légers tournent le flanc le plus dégagé et prennent l'ennemi de flanc et
+  de dos pendant que le centre le fixe ; ils reviennent sur l'aile si des cavaliers plus nombreux leur barrent la route ;
+- tenir : défense de la position et usure de l'assaillant ; contre-attaque générale quand il flanche ;
 - harcelement : escarmouche à longue portée (canons, légers), puis retraite (quand on est nettement inférieur) ;
-- assaut : assaut d'une place (canons sur la brèche, diversion, colonnes quand les défenseurs sont usés, puis le cœur) ;
-- place : défense d'une place (on ne la quitte pas).
+- assaut : assaut d'une place (canons sur la brèche, diversion, colonnes quand les défenseurs sont usés, puis le cœur ;
+  nouvelle vague si la première est repoussée) ;
+- place : défense d'une place.
 
-Pendant la bataille : la ligne avance par bonds en attendant ses retardataires et s'arrête à portée efficace ; colonne
-pour marcher loin du feu, ligne sous le feu, carré quand des cavaliers menacent ; charges de cavalerie choisies
-(artillerie sans soutien, troupes en déroute, de flanc ou de dos, ennemi ébranlé, chariot) et contre-charges ; réserves
-engagées pour combler un trou, relever un bataillon épuisé ou sans cartouches, couvrir un flanc ou exploiter un succès ;
-ralliement près du général ; chariot derrière les bataillons qui en ont le plus besoin ; repli et décrochage quand la
-bataille est perdue (rapport de forces vu, moral, heure).
+Pendant la bataille
+- Ligne : avance par bonds en attendant ses retardataires ; colonne pour marcher loin du feu, ligne sous le feu, ou ordre
+  dispersé (deux fois moins de pertes au canon, à la mitraille et au fusil) tant qu'aucun cavalier ennemi ne rôde ;
+  arrêt à portée efficace, chaque bataillon réglant sa distance sur l'ennemi d'en face et cherchant un couvert ;
+  jamais à portée de mitraille d'une batterie ennemie connue ; baïonnette après la fusillade quand le corps à corps est
+  favorable (et contre l'ennemi ébranlé, pris de flanc, ou des canons sans soutien) ; une batterie qui interdit
+  l'approche est enlevée à la baïonnette ; si plus rien ne bouge pendant trois quarts d'heure : assaut général quand on
+  est plus fort, sinon on décroche.
+- Carré seulement face à une vraie charge (cavaliers qui chargent ou arrivent droit sur nous, par un chemin praticable),
+  rompu dès que la menace passe (le canon ravage les carrés).
+- Cavalerie : charges choisies (artillerie sans soutien, fuyards, chariot, état-major, de flanc ou de dos, ennemi
+  ébranlé ou en tirailleurs, jamais un carré ni une ligne fraîche de face), sur un chemin libre ; contre-charges avec
+  assez d'escadrons, loin de l'infanterie ennemie ; postes d'attente hors de portée des canons ennemis.
+- Artillerie : emplacements qui voient l'ennemi connu, à 85 % de la portée efficace pendant la préparation, plus près
+  ensuite ; mitraille hors de portée des fusils ennemis quand nul cavalier ne rôde ; batterie aveugle déplacée ; cibles :
+  colonnes, carrés, canons qui menacent nos lignes, cavaliers, chariot ; recomplètement au chariot.
+- Réserves : combler un trou, relever un bataillon épuisé, ébranlé ou sans cartouches (qui va se recompléter au
+  chariot), couvrir un flanc débordé, soutenir une batterie menacée, contre-attaquer une percée, prolonger la ligne
+  débordée (difficile) ; ralliés reformés près du général. Général et chariot derrière le secteur qui en a besoin,
+  abrités derrière un bataillon quand des cavaliers rôdent.
+- Décrochage en bon ordre quand la bataille est perdue (pertes, rapport de forces vu, moral, nuit), jamais pour le
+  défenseur d'une place.
 
-Niveaux (battle.difficulty ; spec['ai_levels'] = [niveau du camp 0, du camp 1] pour les essais). Ils ne changent que
-la qualité des décisions, jamais les dégâts :
-- facile : prudente et maladroite : réfléchit toutes les 20 à 32 s, réflexes lents, ne lit pas le terrain, marche
+Niveaux (battle.difficulty ; spec['ai_levels'] = [niveau du camp 0, du camp 1] et spec['ai_tweak'] pour les essais).
+Ils ne changent que la qualité des décisions, jamais les dégâts :
+- facile : prudente et maladroite : réfléchit toutes les 20 à 32 s, réflexes lents (6 s), ne lit pas le terrain, marche
   sans attendre les retardataires et reste en colonne trop longtemps, s'arrête à une mauvaise portée, voit tard les
-  cavaliers (et oublie parfois le carré), charge sans discernement, engage sa réserve d'emblée, ne surveille pas ses
-  flancs, décroche tôt ;
-- normal : correcte ;
-- difficile : réfléchit toutes les 6 s ; crêtes, haies et lisières, flancs surveillés, réserves au bon moment,
-  contre-charges, chariot et général au bon endroit, relèves, batterie avancée à mitraille.
+  cavaliers et oublie parfois le carré, charge sans discernement, ne contre-charge pas, choisit mal les cibles de ses
+  canons, engage sa réserve d'emblée, ne surveille pas ses flancs, ne relève personne, décroche tôt ;
+- normal : correcte : terrain, cohésion, carrés, charges choisies, contre-charges, mitraille prudente, ordre dispersé,
+  réserves pour les trous, les relèves et les flancs, batteries enlevées à la baïonnette ;
+- difficile : réfléchit toutes les 6 s ; terrain plus fouillé (crêtes, haies, lisières, canons cachés) ; ordre oblique
+  qui déborde l'aile la plus faible, loin des batteries ennemies ; réserves qui prolongent une ligne débordée et
+  contre-attaquent les percées ; légers qui prennent l'ennemi de flanc ; cavalerie qui ne s'expose pas aux
+  contre-charges ; contre-offensive plus tôt.
 
-Vue : l'IA ne lit que les ennemis repérés par son camp (battle.visible_enemies) et sa mémoire de ce qu'elle a vu, plus
-ce que le joueur sait aussi : le terrain (brèches comprises), les zones de déploiement et l'effectif de départ annoncé
-par les éclaireurs. Sa mémoire (battle.ai_mem['s0' | 's1']) ne contient que des types JSON : elle est enregistrée avec
-la bataille. Le journal des grands moments (mem['journal']) sert aux comptes rendus.
+Vue : l'IA ne lit que les ennemis repérés par son camp (battle.visible_enemies) et sa mémoire de ce qu'elle a vu
+(positions, effectifs, état ; batteries et leur portée de mitraille), plus ce que le joueur sait aussi : le terrain
+(brèches comprises), les zones de déploiement, l'effectif de départ annoncé par les éclaireurs, et ce que la vue du
+client montre des unités repérées (formation, moral, portées). Sa mémoire (battle.ai_mem['s0' | 's1']) ne contient que
+des types JSON : elle est enregistrée avec la bataille. Le journal des grands moments (mem['journal']) sert aux
+comptes rendus.
 """
 import math
 import random
