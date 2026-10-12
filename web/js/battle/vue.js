@@ -33,7 +33,7 @@ export class BattleView {
     this.seq = 0;
     this.cam = { x: 1500, y: 1000, z: 0.5 };
     this.camAnim = null;
-    this.figScale = 3;           // les silhouettes sont grandies (×3 de loin, presque rien de près) pour rester lisibles
+    this.figScale = 3;           // les silhouettes sont grandies (×3, un peu moins de très près) pour rester lisibles
     this.showCover = false;
     this.running = false;
     this.frameMs = [];
@@ -206,8 +206,9 @@ export class BattleView {
   fitZ() { return Math.min(this.vw / (this.W || 3000), this.vh / ((this.H || 2000) * TILT)) * 0.98; }
   minZ() { return this.fitZ() * 0.85; }
   maxZ() { return this.q.maxZ; }
-  // grossissement des figurines : ×3 de loin (lisibles sur la carte entière), presque à l'échelle de près
-  figScaleAt(z) { return clamp(3 * Math.pow(z / 1.2, -0.55), 1.15, 3); }
+  // grossissement des figurines : ×3 jusqu'au zoom 6 (comme avant), puis de moins en moins : de très près, elles
+  // grandissent encore à l'écran, moins vite que le terrain (un homme : 32 px au zoom 6, 47 au zoom 14, 56 au zoom 20)
+  figScaleAt(z) { return z <= 6 ? 3 : 3 * Math.pow(z / 6, -0.55); }
   toScreen = (x, y) => [(x - this.cam.x) * this.cam.z + this.vw / 2, (y - this.cam.y) * this.cam.z * TILT + this.vh / 2];
   toWorld(sx, sy) { return [(sx - this.vw / 2) / this.cam.z + this.cam.x, (sy - this.vh / 2) / (this.cam.z * TILT) + this.cam.y]; }
   // la caméra peut dépasser un peu les bords : de quoi voir ce qui est sous la barre du haut, le bandeau du

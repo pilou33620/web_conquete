@@ -677,13 +677,35 @@ export class Terrain {
       g.stroke(this.contours[1]);
     }
     mark('relief');
+    // décalcomanies : tués, trous d'obus (seulement sur le sol découvert : bare), sous tout ce qui est debout
+    for (const d of this.decals) if (d.x > x0 - 10 && d.x < x0 + wm + 10 && d.y > y0 - 10 && d.y < y0 + hm + 10) paintDecal(g, d, s);
     // murs et remparts, haies et clôtures, puis arbres et maisons en volume
     this.paintWalls(g, s);
     this.paintFences(g, s);
     this.paintStanding(g, x0, y0, wm, hm, s);
     mark('debout');
-    // décalcomanies : tués, trous d'obus
-    for (const d of this.decals) if (d.x > x0 - 10 && d.x < x0 + wm + 10 && d.y > y0 - 10 && d.y < y0 + hm + 10) paintDecal(g, d, s);
+  }
+  // Le sol est-il découvert en (x, y) ? Ni bois, ni eau, ni bâti, ni sous la cime d'un arbre ou le toit d'une maison
+  // tels qu'ils sont peints (vue cavalière : un arbre couvre le sol de son pied jusqu'à quelques rayons au nord).
+  // Les tués et les trous d'obus ajoutés pendant la bataille sont peints par-dessus les tuiles déjà faites : hors
+  // du sol découvert, ils marqueraient les cimes et les toits.
+  bare(x, y) {
+    const v = this.at(x, y);
+    if (v === T.BOIS || v === T.FORET || v === T.EAU || v === T.GUE || v === T.BATI || v === T.MUR || v === T.PORTE) return false;
+    const { cols, rows, cell } = this, i0 = Math.floor(x / cell), j0 = Math.floor(y / cell);
+    // hauteur (en rayons) et demi-largeur de l'image de chaque sorte d'arbre
+    const TOP = { sapin: 3.8, parasol: 3.4, peuplier: 5.2, buisson: 1.7, meule: 2.1 }, HALF = { peuplier: 0.8, parasol: 1.15 };
+    for (let j = j0 - 1; j <= j0 + 2; j++) for (let i = i0 - 1; i <= i0 + 1; i++) {
+      if (i < 0 || j < 0 || i >= cols || j >= rows) continue;
+      for (const tr of this.treeGrid[j * cols + i]) {
+        if (Math.abs(x - tr.x) < tr.r * (HALF[tr.kind] ?? 1.3) && y < tr.y + tr.r * 0.5 && y > tr.y - tr.r * (TOP[tr.kind] ?? 2.4)) return false;
+      }
+    }
+    for (const b of this.buildings) {
+      const m = Math.hypot(b.w, b.h) / 2 + 1, top = this.bHeight(b) + (b.kind === 'eglise' ? 40 : Math.min(b.w, b.h) * 0.7 / TILT);
+      if (Math.abs(x - b.x) < m && y < b.y + m && y > b.y - m - top) return false;
+    }
+    return true;
   }
   // rochers : blocs éclairés au nord-ouest, leur ombre au sud-est
   paintCells(g, x0, y0, wm, hm, s, snow) {
@@ -1134,6 +1156,7 @@ export class Terrain {
   }
   // tués, chevaux, trous d'obus : peints dans le fond (tuiles faites et à venir)
   addDecals(list) {
+    list = list.filter(d => this.bare(d.x, d.y));
     if (!list.length) return;
     this.decals.push(...list);
     if (this.decals.length > 6000) this.decals.splice(0, this.decals.length - 6000);

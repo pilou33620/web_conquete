@@ -520,7 +520,9 @@ export class UnitArt {
     // têtes dépassent des épaules du rang de devant. Par paliers : pas de nouvelle disposition à chaque image.
     const step = x => Math.pow(1.1, Math.round(Math.log(x) / Math.log(1.1)));
     const nf = Math.hypot(s, c * TILT), nr = Math.hypot(c, s * TILT);
-    const spF = step(H * (0.45 * Math.abs(s) + 0.3 * Math.abs(c) * TILT) / nf / (z * nf)) * (cav ? 1.7 : 1);   // un cheval tient plus de place
+    // (front nord-sud, vu de côté : les files s'empilent à l'écran ; on les écarte d'un demi-homme pour que chacun
+    // montre au moins sa tête et son buste)
+    const spF = step(H * (0.45 * Math.abs(s) + 0.55 * Math.abs(c) * TILT) / nf / (z * nf)) * (cav ? 1.7 : 1);   // un cheval tient plus de place
     const spR = step(H * (0.55 * Math.abs(c) + 0.42 * Math.abs(s) * TILT) / nr / (z * nr));
     // hommes par figurine : autant qu'il faut pour remplir le front à l'écartement voulu, plus si le budget l'exige
     const slots = (w / spF + 1) * (cav ? 2 : un.form === 'colonne' ? Math.max(3, d / spR) : un.form === 'carre' ? 8 : 3);
