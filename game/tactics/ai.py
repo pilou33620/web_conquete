@@ -1368,9 +1368,11 @@ def _think_field(b, side, mem, L, us, foes, sit, want, busy):
         if done:
             _set_phase(b, mem, 'assaut', "fin de la préparation : la ligne avance par bonds.")
     ph = mem['phase']
-    batteries = _gun_zones(b, mem) if L['n'] >= 1 else []
-    # (assaut général : on ne craint plus la mitraille, on serre l'ennemi et on enlève ses canons)
-    guns = [] if mem.get('general_assault') else batteries
+    batteries = _gun_zones(b, mem, k=L.get('gz')) if L['n'] >= 1 else []
+    # (assaut général : on serre l'ennemi et on enlève ses canons, de flanc ; on brave la mitraille, mais pas sa gerbe
+    # serrée à moins de 150 m d'une batterie en ordre, qui faucherait les files entières)
+    guns = [(gx, gy, BT.GRAPE_CLOSE + 20, gid) for gx, gy, gr, gid in batteries] if mem.get('general_assault') \
+        else batteries
     if ph == 'combat' and line and now - mem['t_phase'] > 240 and now - max(u.fired_t for u in line) > 240 and \
             not any(_d2(gx, gy, mem['ax'], mem['ay']) < (gr + 250) ** 2 for gx, gy, gr, gid in guns):
         halt *= 0.5   # personne ne tire : l'ennemi est hors de vue ou hors de portée, on serre
