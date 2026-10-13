@@ -107,20 +107,20 @@ class App:
         return x
 
     def command(self, body):
-        if isinstance(body, dict) and body.get('cmd') == 'tac' and SK.owns(self.skirmish, body.get('bid')):
-            res = TB.command(self.skirmish, body)   # mode Bataille
-            if body.get('sub') == 'close':
-                self.skirmish = None
-            return res
-        g = self.game
-        if not g:
-            return dict(ok=False, msg='Aucune partie en cours.')
-        if not isinstance(body, dict):
-            return dict(ok=False, msg='Commande invalide.')
-        p = g.player
-        c = body.get('cmd')
-        a = body.get('army')
         try:
+            if isinstance(body, dict) and body.get('cmd') == 'tac' and SK.owns(self.skirmish, body.get('bid')):
+                res = TB.command(self.skirmish, body)   # mode Bataille (une commande mal formée reçoit aussi une réponse)
+                if body.get('sub') == 'close':
+                    self.skirmish = None
+                return res
+            g = self.game
+            if not g:
+                return dict(ok=False, msg='Aucune partie en cours.')
+            if not isinstance(body, dict):
+                return dict(ok=False, msg='Commande invalide.')
+            p = g.player
+            c = body.get('cmd')
+            a = body.get('army')
             if c == 'speed':
                 if g.over:
                     return dict(ok=False, msg='La partie est terminée.')
@@ -333,6 +333,8 @@ class App:
         txt = json.dumps(data, ensure_ascii=False)
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(txt)
+            f.flush()
+            os.fsync(f.fileno())   # vraiment sur la carte SD avant de remplacer l'ancienne (coupure de courant)
         os.replace(tmp, path)  # écriture atomique : une coupure de courant ne corrompt pas la sauvegarde
 
     def net_info(self):
@@ -371,6 +373,13 @@ class App:
                   f"{data['meta'].get('date')}).", flush=True)
         except Exception:
             traceback.print_exc()
+            # mise de côté, pour que la prochaine sauvegarde automatique ne l'écrase pas (rechargeable une fois réparé)
+            keep = os.path.join(SAVES, f"{AUTOSAVE}-illisible-{time.strftime('%Y%m%d-%H%M%S')}.json")
+            try:
+                os.replace(path, keep)
+                print(f"Sauvegarde automatique illisible, mise de côté : {os.path.basename(keep)}", flush=True)
+            except OSError:
+                traceback.print_exc()
 
     def load(self, name):
         if not isinstance(name, str) or not name.strip():
@@ -440,7 +449,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(code, raw)
 
     def _body(self):
-        n = int(self.headers.get('Content-Length') or 0)
+        try:
+            n = int(self.headers.get('Content-Length') or 0)
+        except ValueError:
+            return {}
         if n <= 0:
             return {}
         try:
@@ -789,7 +801,6 @@ def main():
     args = ap.parse_args()
     rpi = is_raspberry()
     auto = rpi or is_headless()  # Raspberry Pi ou machine sans écran : réseau local, pas de navigateur
-    auto_update(not args.no_update, patient=auto)   # peut relancer le serveur avec le nouveau code
     if args.local:
         host = '127.0.0.1'
     elif args.lan or (auto and args.host is None):
@@ -797,6 +808,14 @@ def main():
     else:
         host = args.host or '127.0.0.1'
     open_browser = args.browser or (not args.no_browser and not auto)
+    # le port d'abord : si le jeu tourne déjà, on s'arrête avant de mettre à jour le code sous ses pieds
+    # (la socket n'est pas héritée par os.execv : le serveur relancé après une mise à jour la rouvre)
+    try:
+        srv = ThreadingHTTPServer((host, args.port), Handler)
+    except OSError as e:
+        print(f'\nImpossible d\'ouvrir le port {args.port} ({e}). Le jeu tourne peut-être déjà : essayez --port 8791.', flush=True)
+        sys.exit(1)
+    auto_update(not args.no_update, patient=auto)   # peut relancer le serveur avec le nouveau code
     mimetypes.add_type('application/javascript', '.js')
     mimetypes.add_type('text/css', '.css')
     mimetypes.add_type('application/manifest+json', '.webmanifest')
@@ -805,11 +824,6 @@ def main():
     APP.lan = host in ('0.0.0.0', '')
     APP.ips = lan_addresses() if APP.lan else []
     threading.Thread(target=APP.loop, daemon=True).start()
-    try:
-        srv = ThreadingHTTPServer((host, args.port), Handler)
-    except OSError as e:
-        print(f'\nImpossible d\'ouvrir le port {args.port} ({e}). Le jeu tourne peut-être déjà : essayez --port 8791.', flush=True)
-        sys.exit(1)
     url = f'http://127.0.0.1:{args.port}' if APP.lan else f'http://{host}:{args.port}'
     banner(APP, url, 'Raspberry Pi' if rpi else ('sans écran' if auto and not args.lan else ''))
     if APP.lan:

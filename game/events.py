@@ -281,9 +281,11 @@ def apply(g, code, fx, town=None):
     f = g.factions[code]
     r = f['res']
     for k, v in (fx.get('res') or {}).items():
-        r[k] = max(0.0, r.get(k, 0) + v)
+        cur = r.get(k, 0)
+        r[k] = max(min(cur, 0.0), cur + v)   # jamais sous 0 par l'événement, mais une dette (banqueroute) reste une dette
     for k, v in (fx.get('res_pct') or {}).items():
-        r[k] = max(0.0, r.get(k, 0) * (1 + v))
+        if r.get(k, 0) > 0:
+            r[k] = max(0.0, r[k] * (1 + v))  # (un pourcentage ne s'applique qu'à un avoir, pas à une dette)
     mine = g.owned_nodes(code)
     if fx.get('stab'):
         for n in mine:

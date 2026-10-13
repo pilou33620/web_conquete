@@ -31,7 +31,7 @@ class AI:
         self.g = game
         self.code = code
         self.pers = R.FACTIONS[code]['personality']
-        self.rng = random.Random(game.seed * 7 + int(code))
+        self.rng = random.Random(game.seed * 7 + int(code) + int(game.t * 1000))   # (un chargement ne rejoue pas les mêmes dés)
         self.diplo_clock = 5 + self.rng.random() * 5
         self.spend_clock = 3 + self.rng.random() * 3
         self.tax_clock = 30.0

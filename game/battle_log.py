@@ -18,7 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_DIR = os.path.join(ROOT, 'logs')
 LOG_FILE = os.path.join(LOG_DIR, 'batailles.jsonl')
 MAX_BYTES = 20 * 1024 * 1024
-ENABLED = True
+ENABLED = not os.environ.get('WEB_CONQUETE_NOLOG')   # tests et simulations : WEB_CONQUETE_NOLOG=1 (ne fausse pas outils/bilan.py)
 
 
 def write(rec):

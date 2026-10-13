@@ -1714,6 +1714,8 @@ class TacticalBattle:
         self._los_cache = {}
 
     def _fire(self, u, dt, moving=False):
+        if u.ammo < 1 and u.state in ('feu', 'recharge'):
+            u.state = 'repos'   # plus de munitions : on ne reste pas en position de tir
         if u.fire_mode == 'hold' and not (u.order and u.order.get('kind') == 'attack'):
             return
         volley = u.fire_mode == 'volley' and u.cls == 'inf'
@@ -1873,7 +1875,8 @@ class TacticalBattle:
             self.log(f"Le général {(tg.gen or {}).get('name', '')} est blessé et emporté loin du feu !", None)
         if tg.men < 8 and tg.state != 'hors':
             tg.state = 'hors'
-            tg.men = max(0.0, tg.men)
+            tg.lost += max(0.0, tg.men)   # les derniers hommes sont dispersés : le régiment ne revient pas en campagne
+            tg.men = 0.0
             self.log(f"{tg.name} est anéanti.", None, tg.side)
 
     # ------------------------------------------------------------------ charges et mêlées
@@ -2196,6 +2199,9 @@ class TacticalBattle:
         self.prisoners[y.side] += k
         if y.men < 8:
             y.state = 'hors'
+            y.captured += y.men   # les derniers aussi : le régiment ne revient pas en campagne
+            self.prisoners[y.side] += y.men
+            y.men = 0.0
             self.log(f"{y.name} est capturé.", None, y.side)
 
     # ------------------------------------------------------------------ moral

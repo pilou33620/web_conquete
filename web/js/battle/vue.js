@@ -158,7 +158,12 @@ export class BattleView {
         u.x = cur.x; u.y = cur.y; u.dir = cur.dir;
       }
       u.lastSeen = now; u._ghost = false;
-      if (s.side === this.me) { const o = this.orders.get(id); if (o && o.kind === 'move' && Math.hypot(s.x - o.x, s.y - o.y) < 12) this.orders.delete(id); }
+      if (s.side === this.me) {
+        const o = this.orders.get(id);
+        // arrivé, en déroute, ou ordre refusé / remplacé côté serveur (après 1,5 s de marge) : la flèche disparaît
+        const same = o && (s.order === o.kind || (o.kind === 'volley_charge' && s.order === 'charge'));
+        if (o && ((o.kind === 'move' && Math.hypot(s.x - o.x, s.y - o.y) < 12) || s.state === 'deroute' || (!same && now - o.t > 1500))) this.orders.delete(id);
+      }
     }
     // ennemis qu'on ne voit plus : on garde leur dernière position connue un moment (« devinés »)
     for (const [id, u] of this.units) {
