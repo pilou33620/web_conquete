@@ -1,10 +1,19 @@
-"""Tour par tour, mois par mois, bâti sur la simulation continue.
+"""Tour par tour, mois par mois (à la Civilization ou Empire : Total War), bâti sur la simulation continue.
 
-Le joueur donne ses ordres sur une carte figée, puis « Fin du mois » : le mois se joue en accéléré sous ses yeux
-(15 secondes réelles environ au rythme normal) et tout s'arrête au 1er du mois suivant, à 0 h. Marches, batailles en
-phases, sièges et IA restent continus : seul le temps est découpé.
+Un tour = un mois, en deux temps :
 
-Le tour s'interrompt aux moments clés pour laisser le joueur réagir, puis reprend avec « Continuer le mois » :
+1. **Le tour du joueur** (phase « ordres ») : la date ne bouge pas, et chaque ordre s'exécute tout de suite.
+   Une armée qui reçoit un ordre de marche part aussitôt, sous vos yeux, et avance jusqu'à épuiser ses jours de
+   marche du mois (march_days : tout le mois) ou jusqu'à rencontrer l'ennemi ; si la route est plus longue, elle
+   la reprend d'elle-même au tour suivant. Une bataille qu'elle déclenche se livre sur-le-champ (jouée sur le champ de
+   bataille, ou réglée par le général : resolve_battle_now), un assaut aussi. Les achats, constructions, recherches
+   et décisions de gouvernement sont payés tout de suite ; les travaux, eux, avancent avec le temps.
+2. **Le tour des IA** (« Tour suivant ») : le mois s'écoule en accéléré sous vos yeux (15 secondes réelles environ au
+   rythme normal) : les IA marchent, négocient et se battent, les travaux et les sièges avancent, les revenus
+   tombent. Vos armées, qui ont déjà joué, restent en place (Game.paused). Tout s'arrête au 1er du mois suivant, à 0 h :
+   les batailles encore en cours sont réglées, les jours de marche sont rendus (begin_turn) et c'est de nouveau à vous.
+
+Le tour des IA s'interrompt aux moments clés pour laisser le joueur réagir, puis reprend avec « Continuer » :
 - une bataille commence et concerne ses armées ou ses places, ou se livre près de lui (à vue, à moins de 25 km) ;
 - une armée ennemie (150 hommes ou plus, et visible) entre sur ses terres ;
 - un siège ou un blocus commence sur une de ses places, ou par une de ses armées ;
@@ -14,8 +23,8 @@ Le tour s'interrompt aux moments clés pour laisser le joueur réagir, puis repr
 Jamais deux fois pour la même bataille, le même siège ou la même décision, et un délai minimal (en jours de jeu)
 sépare deux interruptions du même genre.
 
-Pendant le tour, le journal est relu pas à pas pour préparer le récapitulatif du mois (batailles, places prises ou
-perdues, constructions, découvertes, revenus), affiché au début du tour suivant.
+Pendant le tour des IA, le journal est relu pas à pas pour préparer le récapitulatif du mois (batailles, places prises
+ou perdues, constructions, découvertes, revenus), affiché au début du tour suivant.
 
 Le temps réel d'origine (vitesses ×½ à ×30) reste disponible : tour['on'] = False.
 """
@@ -27,6 +36,10 @@ from . import rules as R
 
 # rythmes : secondes réelles pour jouer un mois entier (le mois de février dure aussi longtemps que les autres)
 PACES = [('lent', 'Lent', 30), ('normal', 'Normal', 15), ('rapide', 'Rapide', 8), ('eclair', 'Éclair', 4)]
+MARCH_FRAC = 1.0       # part du mois qu'une armée peut marcher pendant le tour du joueur (1 : tout le mois, comme les IA)
+MARCH_STEP = 0.1       # jours : pas de la marche instantanée (rencontres examinées à chaque pas, contact à 2,6 km)
+RETREAT_DAYS = 4.0     # jours de marche d'une armée battue qui se replie, tout de suite, pendant le tour du joueur
+TRAIL_PTS = 90         # points gardés du trajet d'une marche, pour l'animer dans le navigateur
 PACE_SEC = {k: s for k, _, s in PACES}
 DEFAULT_PACE = 'normal'
 # délai minimal, en jours de jeu, entre deux interruptions du même genre (0 : toujours)
@@ -62,6 +75,8 @@ def migrate(g):
         tr['pace'] = DEFAULT_PACE
     if tr['end'] is not None and tr['end'] <= g.t - 1e-6:
         tr['end'] = None   # échéance dépassée (sauvegarde bricolée) : on attend les ordres
+    for a in g.armies.values():
+        a.setdefault('mp', None)
 
 
 # ================================================================== calendrier
@@ -92,6 +107,129 @@ def phase(g):
     return 'cours' if g.speed_idx else 'arret'
 
 
+# ================================================================== le tour du joueur : tout s'exécute tout de suite
+def planning(g):
+    """Vrai pendant le tour du joueur (tour par tour, avant « Tour suivant ») : les ordres s'exécutent aussitôt."""
+    return g.tour['on'] and g.tour['end'] is None and not g.over
+
+
+def march_days(g):
+    """Jours de marche d'une armée par tour."""
+    return round(month_days(g, month_end(g)) * MARCH_FRAC, 2)
+
+
+def march_left(g, a):
+    """Jours de marche qui restent à cette armée ce tour."""
+    return march_days(g) if a.get('mp') is None else max(0.0, a['mp'])
+
+
+def begin_turn(g):
+    """Début du tour du joueur : les armées retrouvent tous leurs jours de marche, et celles qui avaient une longue
+    route la reprennent là où elles s'étaient arrêtées."""
+    for a in g.armies.values():
+        a['trail'] = None
+        a['mp'] = None
+        a['rt'] = False
+    settle(g)
+
+
+def lock_reason(g):
+    """Pourquoi le joueur ne peut pas donner d'ordre de marche maintenant, ou None."""
+    from .tactics import bridge as TB
+    if not g.tour['on'] or g.over:
+        return None
+    if g.tour['end'] is not None:
+        return "C'est le tour des IA : vos armées ont déjà joué ce mois-ci. Attendez le mois suivant."
+    if TB.frozen(g):
+        return "Réglez d'abord la bataille en cours."
+    return None
+
+
+def march_now(g, a, days=None):
+    """L'armée du joueur marche tout de suite, dans la limite de ses jours de marche (ou de `days` : retraite forcée), en
+    s'arrêtant au contact de l'ennemi, devant une place à assiéger ou quand la route est finie. Le temps est virtuel : la
+    date de la campagne ne bouge pas, mais délais de grâce, saisons et rencontres s'écoulent comme pendant la marche.
+    Renvoie le nombre de jours de marche employés."""
+    from .tactics import bridge as TB
+    aid = a['id']
+    mp0 = march_left(g, a)
+    left = mp0 if days is None else days
+    spent = 0.0
+    t0 = g.t
+    hot = {z: w['kind'] == 'canicule' for z, w in g.weather.items()}
+    trail = [(a['x'], a['y'])]
+    fought = False
+    try:
+        for _ in range(int(40 / MARCH_STEP)):
+            if left <= 1e-6 or aid not in g.armies or a['state'] not in ('move', 'retreat') or not a['path']:
+                break
+            dt = min(MARCH_STEP, left)
+            x0, y0, n0 = a['x'], a['y'], len(a['path'])
+            rem = g.move_army(a, dt)
+            used = max(0.0, dt - rem)
+            moved = (a['x'], a['y']) != (x0, y0) or len(a['path']) != n0
+            if not moved and used <= 1e-9:
+                break   # bloquée (rien ne se passe) : on n'insiste pas
+            used = used if used > 1e-9 else dt
+            left -= used
+            spent += used
+            g.t += max(used, 1e-4)
+            if (a['x'], a['y']) != (x0, y0):
+                trail.append((a['x'], a['y']))
+            TB.army_tick(g, a, used, hot)   # la marche fatigue les hommes comme pendant le tour des IA
+            g.update_hidden()
+            g.detect_contacts(only=aid)
+            if aid in g.armies and a['state'] == 'battle':
+                fought = True   # attaquer ou être arrêté au contact termine la marche du tour
+                break
+    finally:
+        g.restore_clock(t0)
+        if aid in g.armies and days is None:
+            a['mp'] = 0.0 if fought else round(max(0.0, mp0 - spent), 3)   # (même si la marche a échoué en chemin)
+    if aid in g.armies:
+        if len(trail) > TRAIL_PTS:
+            k = (len(trail) - 1) / (TRAIL_PTS - 1)
+            trail = [trail[round(i * k)] for i in range(TRAIL_PTS)]
+        if len(trail) > 1:
+            a['trail'] = [[round(x, 1), round(y, 1)] for x, y in trail]
+            a['tn'] = a.get('tn', 0) + 1
+    return spent
+
+
+def settle(g):
+    """Après un ordre du joueur : ses armées en marche partent (ou continuent) tout de suite, celles qui battent en
+    retraite se replient, puis les batailles que cela a déclenchées et que le général règle seul sont réglées.
+    Renvoie les jours de marche employés par armée."""
+    out = {}
+    if not planning(g):
+        return out
+    from .tactics import bridge as TB
+    for a in list(g.armies.values()):
+        if a['owner'] == g.player and a['state'] == 'move' and a['path'] and march_left(g, a) > 1e-6:
+            if TB.frozen(g):
+                break   # une bataille attend le joueur : les autres armées ne bougent pas avant qu'elle soit réglée
+            out[a['id']] = march_now(g, a)
+    resolve_autos(g)
+    for a in list(g.armies.values()):
+        if a['owner'] == g.player and a['state'] == 'retreat' and a['path'] and not a.get('rt') and not TB.frozen(g):
+            march_now(g, a, RETREAT_DAYS)   # une armée en retraite se replie tout de suite, une fois par tour…
+            if a['id'] in g.armies:
+                a['rt'] = True
+                a['mp'] = 0.0               # … et n'a plus de marche ce tour
+    resolve_autos(g)
+    return out
+
+
+def resolve_autos(g):
+    """Batailles automatiques (réglage « toujours automatique », ou choix du joueur) : réglées sur-le-champ."""
+    from .tactics import bridge as TB
+    if not planning(g):
+        return
+    for bt in list(g.battles.values()):
+        if TB.is_auto(bt) and bt['id'] in g.battles:
+            g.resolve_battle_now(bt)
+
+
 # ================================================================== commandes
 def command(g, action, value=None):
     tr = g.tour
@@ -101,7 +239,11 @@ def command(g, action, value=None):
             return True, None
         g.speed_idx = 0
         tr.update(on=on, end=None, stop=None, acc=None)
-        return True, ('Tour par tour : donnez vos ordres, puis « Fin du mois ».' if on else
+        for a in g.armies.values():
+            a['mp'] = None
+            a['trail'] = None
+            a['rt'] = False
+        return True, ('Tour par tour : donnez vos ordres (ils s’exécutent tout de suite), puis « Tour suivant ».' if on else
                       'Temps réel : choisissez une vitesse en haut. Le jeu est en pause.')
     if not tr['on']:
         return False, 'La partie se joue en temps réel (menu ☰, réglages avancés).'
@@ -177,6 +319,12 @@ def finish(g):
     g.speed_idx = 0
     tr['recap'] = _recap(g)
     tr.update(end=None, stop=None, acc=None)
+    for bt in list(g.battles.values()):
+        # (batailles automatiques qui duraient encore au 1er du mois : réglées, pour que le tour du joueur parte net)
+        from .tactics import bridge as TB
+        if TB.is_auto(bt) and bt['id'] in g.battles:
+            g.resolve_battle_now(bt)
+    begin_turn(g)
 
 
 def watch(g, dt, seq0):
@@ -405,7 +553,7 @@ def _recap(g):
 def view(g):
     tr = g.tour
     ph = phase(g)
-    out = dict(on=tr['on'], pace=tr['pace'], phase=ph, recap=tr['recap'])
+    out = dict(on=tr['on'], pace=tr['pace'], phase=ph, recap=tr['recap'], march=march_days(g) if tr['on'] else None)
     if not tr['on']:
         return out
     end = tr['end'] if tr['end'] is not None else month_end(g)

@@ -205,6 +205,18 @@ CAPTURE = dict(contact_cav=0.004, contact_inf=0.0007,  # part des fuyards rattra
                choc_cav=0.03, choc_inf=0.02,            # … par une charge sur des fuyards
                rupture_cav=0.04, melee_cav=0.03)        # … quand la cavalerie rompt une troupe (choc, mêlée)
 CHARGE_FAT = dict(cav=12.0, inf=6.0)   # fatigue d'une charge menée jusqu'au choc : les chevaux sont essoufflés
+# ordres propres à chaque arme (voir order) : feu de salve et salve puis baïonnette (ligne, grenadiers), harcèlement
+# et couvert (voltigeurs, chasseurs), poursuite (cavalerie), projectile et contre-batterie (artillerie)
+VOLLEY_RANGE = 0.85      # feu de salve : on ne tire qu'à moins de 85 % de la portée efficace (tout porte)…
+VOLLEY_POWER = 1.25      # … la volée groupée touche un quart de plus…
+VOLLEY_RELOAD = 1.15     # … mais on attend l'ordre : le rechargement est plus long
+VOLLEY_CHARGE_AT = 0.6   # « salve puis baïonnette » : on tire à 60 % de la portée efficace, puis on charge
+VOLLEY_WAIT = 30.0       # … et l'on charge quand même si la volée n'est pas partie 30 s après être arrivé à portée
+HARASS_NEAR = 0.8        # harcèlement : on recule devant l'ennemi qui s'approche à moins de 80 % de la portée efficace…
+HARASS_FAR = 1.05        # … et l'on s'avance s'il reste au-delà (jamais plus près que 90 % de la portée efficace)
+HARASS_EVERY = 6.0       # le tirailleur réfléchit toutes les 6 s
+COVER_RADIUS = 140.0     # « se couvrir » : meilleur couvert à moins de 140 m
+PURSUIT_RADIUS = 700.0   # « poursuivre » : fuyards à moins de 700 m
 # « Finir automatiquement » : la suite de la bataille est jouée par le moteur, IA contre IA, aussi vite que le serveur
 # le permet. Les officiers du joueur commandent au niveau ACCEL_LEVEL (celui de son déploiement de départ : une IA
 # correcte, quelle que soit la difficulté, qui ne règle que l'IA adverse) ; pendant l'accéléré, le client ne reçoit
@@ -891,11 +903,11 @@ class TacticalBattle:
         us = [u for u in us if u and u.side == side and u.alive and (who == 'any' or u.ctrl == who)]
         if not us:
             return False, "Aucune unité à commander."
-        if kind not in ('fire', 'hold', 'rally') and any(u.src == 'rempart' for u in us):
+        if kind not in ('fire', 'hold', 'rally', 'shot', 'counter') and any(u.src == 'rempart' for u in us):
             us = [u for u in us if u.src != 'rempart']   # les canons du rempart ne bougent pas
             if not us:
                 return False, "Les canons du rempart sont fixés sur la muraille : ils tirent, mais ne bougent pas."
-        if self.phase == 'deploiement' and kind not in ('form', 'fire'):
+        if self.phase == 'deploiement' and kind not in ('form', 'fire', 'shot', 'counter'):
             return False, "Déployez d'abord vos troupes, puis lancez la bataille."
         if kind in ('rally', 'retreat'):
             pass
@@ -961,14 +973,112 @@ class TacticalBattle:
                 u.order = rec
                 if u.state in ('marche', 'charge'):
                     u.state = 'repos'
-                u.fire_mode = 'free'
+                if u.fire_mode == 'hold':
+                    u.fire_mode = 'free'
             return True, "Tenez la position."
         if kind == 'fire':
             mode = p.get('mode') or p.get('fire') or p.get('value') or p.get('v') or 'free'
-            mode = 'hold' if mode in ('hold', 'cesser', False, 0) else 'free'
+            mode = 'hold' if mode in ('hold', 'cesser', False, 0) else ('volley' if mode == 'volley' else 'free')
             for u in us:
-                u.fire_mode = mode
+                # (le feu de salve est affaire d'infanterie ; ailleurs, c'est le feu à volonté)
+                u.fire_mode = 'free' if mode == 'volley' and u.cls != 'inf' else mode
+            if mode == 'volley':
+                return True, "Feu de salve : à mon commandement, à bonne portée."
             return True, "Feu à volonté !" if mode == 'free' else "Cessez le feu."
+        if kind == 'volley_charge':
+            # « salve puis baïonnette » : l'infanterie s'approche, lâche une volée à bout portant, puis charge
+            tg = self.by_id.get(p.get('target'))
+            if not tg or tg.side == side or not tg.alive or tg.id not in self.seen_by[side]:
+                return False, "Cible invisible ou introuvable."
+            n = 0
+            for u in us:
+                if u.cls != 'inf' or u.light or u.type in ('sapeurs',):
+                    continue
+                if u.state == 'melee':
+                    self._end_melee(u)
+                if u.form in ('carre', 'tirailleurs'):
+                    self._change_form(u, 'ligne')
+                u.target = tg.id
+                u.fire_mode = 'volley'
+                u.order = dict(kind='volley_charge', target=tg.id, t0=self.clock, f0=u.fired_t)
+                self._approach_to(u, tg, U.ranges(u)[0] * VOLLEY_CHARGE_AT)
+                n += 1
+            if not n:
+                return False, "Seule l'infanterie de ligne et les grenadiers donnent la salve et la baïonnette."
+            return True, "Salve, puis à la baïonnette !"
+        if kind == 'harass':
+            # voltigeurs, chasseurs : ils tiraillent à portée efficace et reculent devant l'ennemi qui approche
+            n = 0
+            for u in us:
+                if u.cls != 'inf':
+                    continue
+                if u.state == 'melee':
+                    self._end_melee(u)
+                u.target = None
+                u.fire_mode = 'free'
+                u.order = dict(kind='harass', next=0.0)
+                if u.form != 'tirailleurs':
+                    self._change_form(u, 'tirailleurs')
+                n += 1
+            if not n:
+                return False, "Seule l'infanterie harcèle."
+            return True, "Harcelez l'ennemi : feu et repli."
+        if kind == 'cover':
+            n = 0
+            for u in us:
+                if u.cls != 'inf':
+                    continue
+                foe = self.nearest_foe(u)
+                sx, sy = self.best_spot(u.x, u.y, COVER_RADIUS, 'cover', side, cls=move_class(u))
+                face = self.bearing(u, foe) if foe is not None else u.dir
+                self._go(u, sx, sy, face)
+                u.order = dict(kind='move', x=round(sx), y=round(sy), dir=face, run=False)
+                u.target = None
+                n += 1
+            if not n:
+                return False, "Seule l'infanterie se met à couvert."
+            return True, "Au couvert !"
+        if kind == 'pursue':
+            # la cavalerie court sus aux fuyards (le plus proche d'abord)
+            seen = self.seen_by[side]
+            n, why = 0, "Aucune troupe en fuite à poursuivre."
+            for u in us:
+                if u.cls != 'cavalerie':
+                    continue
+                best, bd = None, PURSUIT_RADIUS
+                for f in self.units:
+                    if f.side != side and f.alive and f.state == 'deroute' and f.id in seen:
+                        d = self.dist(u, f)
+                        if d < bd:
+                            best, bd = f, d
+                if best is None:
+                    continue
+                ok, _ = self.order(side, [u.id], 'charge', who=who, target=best.id)
+                n += 1 if ok else 0
+            return (True, "À la poursuite des fuyards !") if n else (False, why)
+        if kind == 'shot':
+            mode = p.get('mode') or p.get('value') or p.get('v') or 'auto'
+            mode = mode if mode in ('auto', 'boulet', 'mitraille') else 'auto'
+            n = 0
+            for u in us:
+                if u.cls == 'artillerie':
+                    u.shot = mode
+                    n += 1
+            if not n:
+                return False, "Seule l'artillerie choisit son projectile."
+            return True, {'auto': "Les pièces choisissent leur projectile.", 'boulet': "Boulets sur toute la portée.",
+                          'mitraille': "Mitraille : on attend l'ennemi à bout portant."}[mode]
+        if kind == 'counter':
+            on = (p.get('mode') or p.get('value') or p.get('v') or 'on') not in ('off', False, 0)
+            n = 0
+            for u in us:
+                if u.cls == 'artillerie':
+                    u.prio = 'artillerie' if on else None
+                    u.target = None
+                    n += 1
+            if not n:
+                return False, "Seule l'artillerie fait de la contre-batterie."
+            return True, "Contre-batterie : les canons ennemis d'abord." if on else "Les pièces tirent sur le plus proche."
         if kind == 'form':
             f = p.get('form')
             n = 0
@@ -1108,6 +1218,25 @@ class TacticalBattle:
         u.next_form = 'ligne' if u.cls in ('inf', 'cavalerie') else ('attelee' if u.cls == 'artillerie' else u.form)
         if u.light:
             u.next_form = 'tirailleurs'
+
+    def nearest_foe(self, u):
+        """L'ennemi repéré le plus proche (en état de combattre), ou None."""
+        best, bd = None, 1e18
+        for f in self.visible_enemies(u.side):
+            if f.valid:
+                d = (f.x - u.x) ** 2 + (f.y - u.y) ** 2
+                if d < bd:
+                    best, bd = f, d
+        return best
+
+    def _approach_to(self, u, tg, want):
+        """Se porter à la distance want de la cible (sans reculer)."""
+        d = self.dist(u, tg)
+        if d > want:
+            k = (d - want) / d
+            self._go(u, u.x + (tg.x - u.x) * k, u.y + (tg.y - u.y) * k, self.bearing(u, tg))
+        else:
+            u.path, u.goal = [], None
 
     def _nearest_foe_dist(self, u, valid=True):
         best = 1e9
@@ -1278,6 +1407,11 @@ class TacticalBattle:
                     u.state = 'hors'
                     self.log(f"{u.name} s'est retiré du champ de bataille.", u.side)
             return
+        kind = u.order.get('kind') if u.order else None
+        if kind == 'volley_charge' and self._volley_charge(u, dt):
+            return
+        if kind == 'harass':
+            self._harass(u, dt)
         if u.order and u.order.get('kind') == 'attack':
             tg = self.by_id.get(u.target)
             if tg and tg.alive and tg.state != 'hors' and tg.id in self.seen_by[u.side]:
@@ -1291,6 +1425,8 @@ class TacticalBattle:
         if u.path and u.busy <= 0:
             self._move(u, dt)
             if u.path:
+                if kind == 'harass' and u.order.get('face') is not None:
+                    u.dir = u.order['face']   # le tirailleur qui recule garde l'ennemi en face
                 if u.cls == 'inf' and u.form == 'tirailleurs':
                     self._fire(u, dt, moving=True)
                 return
@@ -1309,6 +1445,64 @@ class TacticalBattle:
         self._fatigue(u, dt, 'repos')
         if u.busy <= 0:
             self._fire(u, dt)
+
+    def _volley_charge(self, u, dt):
+        """« Salve puis baïonnette » : approche, volée à bout portant, charge. Vrai si l'unité a fini son tour."""
+        o = u.order
+        tg = self.by_id.get(o.get('target'))
+        if not (tg and tg.alive and tg.state != 'hors' and tg.id in self.seen_by[u.side]):
+            u.order = dict(kind='hold')
+            u.fire_mode = 'free'
+            u.path, u.goal = [], None
+            return False
+        e, mx, _ = U.ranges(u)
+        if u.ammo >= 1 and u.fired_t <= o.get('f0', o['t0']):
+            u.fire_mode = 'volley'   # (un « cessez le feu » donné entre-temps ne bloque pas la volée)
+            d = self.dist(u, tg)
+            if d > e * (VOLLEY_CHARGE_AT + 0.1):
+                o.pop('ready', None)
+                if u.busy <= 0 and not u.path:
+                    self._approach_to(u, tg, e * VOLLEY_CHARGE_AT)
+                return False   # (en marche : le mouvement et le tir suivent leur cours normal)
+            u.path, u.goal = [], None   # à bonne portée : on s'arrête et la volée part dès que les fusils sont chargés
+            o.setdefault('ready', self.clock)
+            if self.clock - o['ready'] < VOLLEY_WAIT:
+                return False   # (pas de ligne de tir : on n'attend pas indéfiniment, on charge)
+        # salve tirée (ou plus de cartouches) : à la baïonnette
+        u.fire_mode = 'free'
+        u.order = dict(kind='charge', target=tg.id)
+        u.target = tg.id
+        if u.form == 'carre':
+            u.form = 'colonne'
+        u.state = 'charge'
+        u.charge_v = 0.0
+        u.path = []
+        self.emit('charge', u.x, u.y, tg.x, tg.y, src=u.id)
+        return True
+
+    def _harass(self, u, dt):
+        """Tirailleurs qui harcèlent : à portée efficace de l'ennemi, ils reculent s'il approche, avancent s'il s'éloigne."""
+        o = u.order
+        if self.clock < o.get('next', 0.0) or u.busy > 0 or u.state in ('melee', 'charge'):
+            return
+        o['next'] = self.clock + HARASS_EVERY
+        foe = self.nearest_foe(u)
+        e, mx, _ = U.ranges(u)
+        if foe is None or self.dist(u, foe) > mx * 1.6:
+            return
+        d = self.dist(u, foe)
+        b = self.bearing(u, foe)
+        o['face'] = b
+        if d < e * HARASS_NEAR:
+            back = e * 0.95 - d + 30
+            self._go(u, u.x - math.cos(b) * back, u.y - math.sin(b) * back, b, run=True)
+            o['face'] = b
+        elif d > e * HARASS_FAR:
+            step = d - e * 0.9
+            self._go(u, u.x + math.cos(b) * step, u.y + math.sin(b) * step, b)
+        else:
+            u.path, u.goal = [], None
+            u.dir = b
 
     def _speed(self, u, run=False, rout=False):
         base = U.TYPE.get(u.type, U.TYPE['ligne'])['speed']
@@ -1439,6 +1633,8 @@ class TacticalBattle:
                 v -= 300
             if u.cls == 'artillerie' and e.form in ('colonne', 'carre'):
                 v += 250
+            if u.prio == 'artillerie' and e.cls == 'artillerie':
+                v += 700   # contre-batterie : les canons ennemis d'abord
             if v > bv and self.los_units(u, e):
                 best, bv = e, v
         if best is not None:
@@ -1518,8 +1714,9 @@ class TacticalBattle:
         self._los_cache = {}
 
     def _fire(self, u, dt, moving=False):
-        if u.fire_mode != 'free' and not (u.order and u.order.get('kind') == 'attack'):
+        if u.fire_mode == 'hold' and not (u.order and u.order.get('kind') == 'attack'):
             return
+        volley = u.fire_mode == 'volley' and u.cls == 'inf'
         if u.ammo < 1 or u.cls in ('general', 'chariot') or u.state in ('deroute', 'hors', 'melee', 'charge', 'ralliement'):
             return
         if u.cls == 'artillerie' and u.form != 'batterie':
@@ -1535,7 +1732,9 @@ class TacticalBattle:
                     u.dir += max(-rate * DT, min(rate * DT, delta))
             return
         e, mx, grape = U.ranges(u)
-        if u.cls == 'inf' and not (u.order and u.order.get('kind') == 'attack'):
+        if volley:
+            mx = min(mx, e * VOLLEY_RANGE)   # feu de salve : seulement quand tout porte
+        elif u.cls == 'inf' and not (u.order and u.order.get('kind') == 'attack'):
             # feu à volonté : l'infanterie attend que l'ennemi soit à bonne portée (on ménage les cartouches)
             mx = min(mx, e * 1.3)
         hu = self.height_at(u.x, u.y)
@@ -1575,7 +1774,10 @@ class TacticalBattle:
             mult = R.ARMS['artillerie'][min(u.arm, len(R.ARMS['artillerie']) - 1)][2]
             if tr == 'artilleur':
                 mult *= 1.25
-            if grape and d <= grape:
+            use_grape = bool(grape) and d <= grape and u.shot != 'boulet'
+            if u.shot == 'mitraille' and not use_grape:
+                return   # (mitraille ordonnée : les canons attendent l'ennemi à portée de gerbe)
+            if use_grape:
                 cas = pcs * P_MITRAILLE * grape_k(d, grape) * mult * VUL_GRAPE.get(tg.form, 1.0) * (1 - cov)
                 kind = 'mitraille'
             else:
@@ -1599,8 +1801,10 @@ class TacticalBattle:
                 cas *= 1.15
             kind = 'salve'
             u.ammo -= 1
+            if volley:
+                cas *= VOLLEY_POWER
         u.ammo = max(0.0, u.ammo)
-        u.reload = U.reload_time(u)
+        u.reload = U.reload_time(u) * (VOLLEY_RELOAD if volley else 1.0)
         u.fired_t = self.clock
         u.state = 'feu' if not moving else u.state
         u.fought += u.reload

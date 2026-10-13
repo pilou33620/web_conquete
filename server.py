@@ -144,17 +144,22 @@ class App:
                 return TB.command(g, body)   # batailles tactiques (choix, déploiement, ordres, vitesse…)
             if c in ('retreat', 'split', 'merge', 'split_type', 'garrison', 'move', 'path') and TB.army_locked(g, a):
                 return dict(ok=False, msg='Cette armée se bat sur le champ de bataille : donnez-y vos ordres.')
+            if c in ('move', 'path', 'assault'):
+                why = TT.lock_reason(g)   # tour par tour : les ordres de marche se donnent pendant son tour
+                if why:
+                    return dict(ok=False, msg=why)
             if c == 'move':
                 x, y = body.get('x'), body.get('y')
                 node = body.get('node')
                 tr = body.get('tr')
-                return self._r(g.order_move(p, a, None if x is None else self._num(x), None if y is None else self._num(y),
-                                            None if node is None else self._node(node), body.get('mode'),
-                                            None if tr is None else bool(tr), bool(body.get('force'))))
+                return self._marched(g, a, g.order_move(
+                    p, a, None if x is None else self._num(x), None if y is None else self._num(y),
+                    None if node is None else self._node(node), body.get('mode'),
+                    None if tr is None else bool(tr), bool(body.get('force'))))
             if c == 'path':
                 tr = body.get('tr')
-                return self._r(g.order_path(p, a, body.get('pts') or [], None if tr is None else bool(tr),
-                                            bool(body.get('force'))))
+                return self._marched(g, a, g.order_path(p, a, body.get('pts') or [], None if tr is None else bool(tr),
+                                                        bool(body.get('force'))))
             if c == 'army_act':
                 return self._r(AA.command(g, p, a, body.get('value')))
             if c == 'conduct':
@@ -167,9 +172,16 @@ class App:
             if c == 'stance':
                 return self._r(g.set_stance(p, a, body.get('value')))
             if c == 'retreat':
-                return self._r(g.order_retreat(p, a))
+                ar = g.armies.get(a)
+                if g.tour['on'] and g.tour['end'] is not None and ar and ar['state'] != 'battle':
+                    return dict(ok=False, msg="C'est le tour des IA : seule une armée au combat peut se replier.")
+                res = g.order_retreat(p, a)
+                TT.settle(g)
+                return self._r(res)
             if c == 'assault':
-                return self._r(g.assault(p, a))
+                res = g.assault(p, a)
+                TT.settle(g)   # l'assaut se livre tout de suite : une bataille s'engage
+                return self._r(res)
             if c == 'garrison':
                 return self._r(g.to_garrison(p, a))
             if c == 'split':
@@ -252,6 +264,27 @@ class App:
             traceback.print_exc()
             return dict(ok=False, msg='Erreur interne : commande ignorée.')
         return dict(ok=False, msg='Commande inconnue.')
+
+    def _marched(self, g, aid, res):
+        """Ordre de marche : en tour par tour, l'armée part tout de suite. Le message dit où elle en est."""
+        out = self._r(res)
+        if not out.get('ok') or not g.tour['on']:
+            return out
+        used = TT.settle(g)
+        a = g.armies.get(aid)
+        if aid in used and a is not None:
+            full = TT.march_days(g)
+            left = TT.march_left(g, a)
+            if a['state'] == 'battle':
+                out['msg'] = 'Au contact de l’ennemi : la bataille s’engage.'
+            elif a['path']:
+                out['msg'] = (f"En marche : {full - left:.0f} jours de marche employés sur {full:.0f}. "
+                              f"{'L’armée reprendra sa route au tour suivant.' if left <= 0.5 else ''}").strip()
+            elif a['state'] == 'siege':
+                out['msg'] = 'Arrivée : le siège commence.'
+            else:
+                out['msg'] = f"Arrivée à destination ({used[aid]:.0f} jours de marche, {left:.0f} restants)."
+        return out
 
     @staticmethod
     def _r(res):

@@ -769,12 +769,19 @@ export class MapView {
       else if (a.n != null && a.st !== 'move' && a.st !== 'retreat') head = -Math.PI / 2;   // rangée sous la place, face à elle (et aux remparts au siège)
       let d = this.disp.get(a.id);
       if (!d) {
-        d = { x: tx, y: ty, tx, ty, head: head ?? -Math.PI / 2 };
+        d = { x: tx, y: ty, tx, ty, head: head ?? -Math.PI / 2, tn: a.tn ?? 0 };
         this.disp.set(a.id, d);
       } else {
         if (head == null && Math.hypot(tx - d.tx, ty - d.ty) > 0.05) head = Math.atan2(ty - d.ty, tx - d.tx);
         d.tx = tx; d.ty = ty;
-        if (Math.hypot(d.x - tx, d.y - ty) > 25) { d.x = tx; d.y = ty; }
+        if (a.trl && a.trl.length > 1 && a.tn != null && a.tn !== d.tn) {
+          // tour par tour : la marche vient d'avoir lieu, l'armée la parcourt sous nos yeux
+          d.tn = a.tn;
+          let len = 0;
+          for (let i = 1; i < a.trl.length; i++) len += Math.hypot(a.trl[i][0] - a.trl[i - 1][0], a.trl[i][1] - a.trl[i - 1][1]);
+          d.anim = { pts: a.trl, len, t: 0, dur: Math.max(0.8, Math.min(3.5, len / 90)) };
+          d.x = a.trl[0][0]; d.y = a.trl[0][1];
+        } else if (!d.anim && Math.hypot(d.x - tx, d.y - ty) > 25) { d.x = tx; d.y = ty; }
       }
       if (head != null) d.thead = head;
       d.a = a;
@@ -1317,9 +1324,29 @@ export class MapView {
       if (ddx || ddy) { this.cam.x += ddx * v; this.cam.y += ddy * v; this.clampCam(); }
     }
     for (const d of this.disp.values()) {
-      const f = 1 - Math.exp(-dt * 7);
-      d.x += (d.tx - d.x) * f;
-      d.y += (d.ty - d.y) * f;
+      if (d.anim) {
+        // marche instantanée du tour : on suit le trajet à vitesse constante
+        const an = d.anim;
+        an.t += dt;
+        const k = Math.min(1, an.t / an.dur);
+        let want = k * an.len, i = 1;
+        for (; i < an.pts.length; i++) {
+          const sl = Math.hypot(an.pts[i][0] - an.pts[i - 1][0], an.pts[i][1] - an.pts[i - 1][1]);
+          if (want <= sl || i === an.pts.length - 1) {
+            const f = sl > 0 ? Math.min(1, want / sl) : 1;
+            d.x = an.pts[i - 1][0] + (an.pts[i][0] - an.pts[i - 1][0]) * f;
+            d.y = an.pts[i - 1][1] + (an.pts[i][1] - an.pts[i - 1][1]) * f;
+            if (sl > 0.01) d.thead = Math.atan2(an.pts[i][1] - an.pts[i - 1][1], an.pts[i][0] - an.pts[i - 1][0]);
+            break;
+          }
+          want -= sl;
+        }
+        if (k >= 1) d.anim = null;
+      } else {
+        const f = 1 - Math.exp(-dt * 7);
+        d.x += (d.tx - d.x) * f;
+        d.y += (d.ty - d.y) * f;
+      }
       if (d.thead != null) {
         let dh = d.thead - d.head;
         while (dh > Math.PI) dh -= 2 * Math.PI;

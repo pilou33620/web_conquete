@@ -82,16 +82,21 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
 ## Principe
 
 ### Tour par tour, mois par mois
-Chaque tour est un mois. La carte est figée : déplacez vos armées, levez des troupes, bâtissez, négociez, puis touchez
-**« Fin du mois »** en haut de l'écran (ou la barre d'espace). Le mois se joue alors en accéléré sous vos yeux, avec ses
-marches, ses batailles en trois phases et ses sièges, et tout s'arrête au **1er du mois suivant, à 0 h**. Les IA jouent
-en même temps que vous, pendant le mois, comme auparavant.
+Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War, en deux temps :
+
+1. **Votre tour** : la date ne bouge pas et chaque ordre s'exécute tout de suite. Une armée qui reçoit un ordre de
+   marche part aussitôt, sous vos yeux, jusqu'à épuiser ses jours de marche du mois ou rencontrer l'ennemi (une route
+   plus longue reprend d'elle-même au tour suivant). Une bataille ou un assaut se livre sur-le-champ ; achats,
+   constructions et recherches sont payés tout de suite.
+2. **Le tour des IA** : touchez **« Tour suivant »** en haut de l'écran (ou la barre d'espace). Le mois s'écoule en
+   accéléré : les IA marchent, négocient et se battent, travaux et sièges avancent, les revenus tombent. Vos armées,
+   qui ont déjà joué, restent en place. Tout s'arrête au **1er du mois suivant, à 0 h**, et c'est de nouveau à vous.
 
 - **Durée à l'écran** : 15 secondes par mois au rythme normal, quelle que soit la longueur du mois. Le bouton de rythme,
-  à côté de « Fin du mois » (ou le menu ☰, rubrique « Rythme du jeu », ou les touches 1 à 4), propose aussi
-  **Lent** (30 s), **Rapide** (8 s) et **Éclair** (4 s). Pendant le mois, une barre montre sa progression et
+  à côté de « Tour suivant » (ou le menu ☰, rubrique « Rythme du jeu », ou les touches 1 à 4), propose aussi
+  **Lent** (30 s), **Rapide** (8 s) et **Éclair** (4 s). Pendant le tour des IA, une barre montre sa progression et
   **« Arrêter »** fige le temps à tout moment.
-- **Le mois s'interrompt** aux moments clés, pour vous laisser réagir :
+- **Le tour des IA s'interrompt** aux moments clés, pour vous laisser réagir :
   - une bataille commence avec vos armées ou devant une de vos places, ou se livre à vue à moins de 25 km de chez vous ;
   - une armée ennemie (150 hommes ou plus, et visible) entre sur vos terres ;
   - un siège ou un blocus commence contre une de vos places, ou par une de vos armées ;
@@ -100,7 +105,7 @@ en même temps que vous, pendant le mois, comme auparavant.
   - une nouvelle époque, un traité, une capitulation arrêtent toujours le temps.
 
   La raison s'affiche en haut : touchez-la pour centrer la carte et sélectionner la bataille, la place ou l'armée (ou
-  ouvrir la décision). Donnez vos ordres, puis **« Continuer le mois »** : le mois reprend là où il s'était arrêté et
+  ouvrir la décision). Donnez vos ordres, puis **« Continuer »** : le tour des IA reprend là où il s'était arrêté et
   s'achève toujours au 1er du mois suivant.
 - **Pas d'interruptions à répétition** : jamais deux fois pour la même bataille, le même siège ou la même décision ;
   au moins 1,5 jour de jeu entre deux batailles, 2 jours entre deux sièges, 4 jours entre deux entrées d'armées ennemies ;
@@ -112,7 +117,7 @@ en même temps que vous, pendant le mois, comme auparavant.
   terminées, régiments levés, découvertes et faits marquants (guerres, paix, traités, révoltes, nouvelle époque). Chaque
   ligne centre la carte au bon endroit ; « Tout voir » déplie la liste, la croix la referme.
 - **Un seul joueur, plusieurs écrans** : l'iPad et le PC ouverts sur le même serveur voient et commandent le même tour.
-  « Fin du mois » touché sur l'un lance le mois sur les deux ; « Arrêter » sur l'iPad l'arrête aussi sur le PC.
+  « Tour suivant » touché sur l'un lance le mois sur les deux ; « Arrêter » sur l'iPad l'arrête aussi sur le PC.
 - **Sauvegardes** : on peut sauvegarder et recharger en plein mois (la partie reprend en pause, même échéance, même
   récapitulatif en cours). Les anciennes sauvegardes se chargent au tour par tour, en attente des ordres.
 - **Temps réel** : menu ☰, rubrique « Rythme du jeu », « Jouer en temps réel (avec pause) » rend les boutons de vitesse
@@ -428,9 +433,18 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
 - **Ordonner.** Régiment choisi : **touchez le sol** pour qu'il y aille ; **glissez depuis le régiment** pour tracer
   sa route (flèche courbe et silhouette du régiment à l'arrivée, avec la largeur de son front) ; **glissez depuis le
   sol** pour fixer le point d'arrivée et le sens de la ligne ; **touchez un ennemi** pour l'attaquer. Le panneau du
-  régiment donne sa formation (ligne, colonne, carré, tirailleurs ; batterie ou attelée pour le canon), le feu à
-  volonté ou cessez-le-feu, tenir, **charger** (puis toucher l'ennemi), rallier, retraite. Portée efficace et
-  maximale (et mitraille) s'affichent en éventail devant lui.
+  régiment donne sa formation (ligne, colonne, carré, tirailleurs ; batterie ou attelée pour le canon), tenir,
+  rallier, retraite, et des ordres **propres à chaque arme** :
+  - **infanterie de ligne et grenadiers** : feu à volonté, **en salve** (à 85 % de la portée efficace, plus juste,
+    plus lent) ou cessez-le-feu ; **« Salve + baïonnette »** (une volée à bout portant puis la charge) ou
+    **« Baïonnette ! »** (charge sans tirer) ; se couvrir ; pas de course ;
+  - **tirailleurs** (légère, chasseurs, voltigeurs) : **harceler** (tirer à portée efficace et reculer devant l'ennemi),
+    se couvrir ; pas de salve ;
+  - **cavalerie** : presque tout est charge : **« Charger ! »**, **poursuivre** les fuyards, galop ; elle ne tire pas ;
+  - **artillerie** : projectile (au choix, **boulet**, **mitraille**) et **contre-batterie** ;
+  - sapeurs : feu et couvert seulement.
+
+  Portée efficace et maximale (et mitraille) s'affichent en éventail devant lui.
 - **Déroutes et ralliement.** Une troupe en déroute fuit vers votre bord de la carte. Elle ne se reforme **qu'auprès
   de votre général**, loin de l'ennemi (à plus de 400 m) : il faut aller la chercher. Tant qu'une des vôtres fuit, un
   cercle doré marque autour de l'état-major la zone où il rallie (400 m, 500 m pour un général inspirant) ; les
@@ -590,7 +604,7 @@ ou sans brèche, batailles automatiques face aux commandées, résultats du mode
 
 Pendant l'usage d'un stylet (Apple Pencil, stylet Android ou Windows), la paume posée sur l'écran est ignorée.
 Sur grand écran tactile, les boutons et les cases sont agrandis automatiquement.
-Clavier : espace pour « Fin du mois », « Arrêter » ou « Continuer le mois » (pour la pause en temps réel), 1 à 4 pour le
+Clavier : espace pour « Tour suivant », « Arrêter » ou « Continuer » (pour la pause en temps réel), 1 à 4 pour le
 rythme du mois (pour la vitesse en temps réel), Échap pour annuler, + et − pour zoomer.
 
 ## Organisation du code

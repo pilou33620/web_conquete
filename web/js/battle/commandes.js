@@ -16,7 +16,8 @@ export class Controls {
     this.pts = new Map();
     this.g = null;
     this.hover = null;
-    this.targeting = null;    // 'charge' | 'attack' : le prochain appui sur un ennemi donne cet ordre
+    this.targeting = null;    // 'charge' | 'vcharge' (salve puis baïonnette) | 'attack' : le prochain appui sur un ennemi donne cet ordre
+    this.run = false;         // les prochains déplacements se font au galop (cavalerie) ou au pas de course
     this.pings = [];
     this.inertia = null;
     this.keys = new Set();
@@ -157,7 +158,7 @@ export class Controls {
       case 'order': {
         const tgt = this.hover;
         this.hover = null;
-        if (tgt) { this.order(this.targeting === 'charge' ? 'charge' : 'attack', { target: tgt }); break; }
+        if (tgt) { this.order(this.targetKind(), { target: tgt }); break; }
         const us = g.units.map(id => v.units.get(id)).filter(Boolean), c = centroid(us);
         this.order('move', { x: wx, y: wy, dir: Math.atan2(wy - c[1], wx - c[0]) });
         break;
@@ -188,7 +189,7 @@ export class Controls {
     const sel = this.mineSel();
     if (hitU && hitU.side !== v.me) {
       if (sel.length && !this.deploying()) {
-        this.order(this.targeting === 'charge' ? 'charge' : 'attack', { target: hitU.id });
+        this.order(this.targetKind(), { target: hitU.id });
         this.ping(hitU.x, hitU.y, 'rgba(255,120,90,');
       } else v.ui.inspect(hitU.id);
       return;
@@ -219,6 +220,8 @@ export class Controls {
     }
     v.ui.selChanged();
   }
+  // l'ordre que donnera le prochain appui sur un ennemi
+  targetKind() { return this.targeting === 'charge' ? 'charge' : this.targeting === 'vcharge' ? 'volley_charge' : 'attack'; }
   setTargeting(kind) {
     this.targeting = kind;
     this.v.cv.classList.toggle('bt-target', !!kind);
@@ -244,11 +247,11 @@ export class Controls {
     if (kind === 'move') {
       for (const d of this.spread(us, body.x, body.y, body.dir)) v.orders.set(d.u.id, { kind: 'move', x: d.x, y: d.y, dir: d.dir, t: performance.now() });
       this.ping(body.x, body.y);
-    } else if (kind === 'attack' || kind === 'charge') {
+    } else if (kind === 'attack' || kind === 'charge' || kind === 'volley_charge') {
       for (const u of us) v.orders.set(u.id, { kind, target: body.target, t: performance.now() });
     } else for (const u of us) v.orders.delete(u.id);
     if (kind === 'charge' || this.targeting) this.setTargeting(null);
-    v.cmd('order', { units: us.map(u => u.id), kind, ...body });
+    v.cmd('order', { units: us.map(u => u.id), kind, ...(kind === 'move' && this.run ? { run: true } : {}), ...body });
     v.ui.ordered(kind, us, body);
   }
   deploy(us, x, y, dir) {
@@ -277,7 +280,7 @@ export class Controls {
     else if (k === '1' || k === '2' || k === '4') v.ui.setSpeed(+k);
     else if (k === 'Escape') { if (this.targeting) this.setTargeting(null); else { v.sel.clear(); v.ui.selChanged(); } }
     else if ((k === 'a' || k === 'A') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); v.sel = new Set(v.mine().map(u => u.id)); v.ui.selChanged(); }
-    else if (k === 'c' || k === 'C') v.ui.act('charge');
+    else if (k === 'c' || k === 'C' || k === 'b' || k === 'B') v.ui.act('charge');
     else if (k === 'h' || k === 'H') v.ui.act('hold');
     else if (k === 'f' || k === 'F') v.ui.act('fire');
     else if (k === 'r' || k === 'R') v.ui.act('rally');
@@ -344,7 +347,7 @@ export class Controls {
     const d = Math.hypot(bx - ax, by - ay);
     const md = us.length === 1 ? us[0].dir : Math.atan2(by - ay, bx - ax);
     const cx = ax + Math.cos(md) * d * 0.4, cy = ay + Math.sin(md) * d * 0.4 * TILT;
-    const col = enemy ? (this.targeting === 'charge' ? '#ff7a5a' : '#ffae78') : '#ffe29a';
+    const col = enemy ? (this.targeting === 'charge' || this.targeting === 'vcharge' ? '#ff7a5a' : '#ffae78') : '#ffe29a';
     if (g.mode !== 'drag-unit' && d > 12) {
       ctx.lineCap = 'round';
       ctx.strokeStyle = 'rgba(20,14,8,0.55)'; ctx.lineWidth = 9;
@@ -360,7 +363,7 @@ export class Controls {
       v.art.footprint(ctx, view, tgt.x, tgt.y, tgt.dir, tgt.w, tgt.d, 8); ctx.stroke();
       ctx.font = '600 15px "EB Garamond", Georgia, serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff3d6';
       ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(12,24,40,0.8)';
-      const label = this.targeting === 'charge' ? 'Charger !' : 'Attaquer';
+      const label = this.targeting === 'charge' ? 'Charger !' : this.targeting === 'vcharge' ? 'Salve, puis baïonnette' : 'Attaquer';
       ctx.strokeText(label, bx, by - 28); ctx.fillText(label, bx, by - 28);
       return;
     }

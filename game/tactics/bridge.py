@@ -16,6 +16,7 @@ import zlib
 
 from .. import rules as R
 from .. import army_actions as AA
+from .. import turns as TT
 from . import units as U
 from . import ai as AI
 from .battle import TacticalBattle
@@ -115,35 +116,40 @@ def march_k(a):
     return 1 - 0.25 * fat / 100
 
 
+def army_tick(g, a, dt, hot):
+    """Munitions et fatigue d'une armée sur dt jours (pas de la campagne, ou jours de marche du tour du joueur)."""
+    if a['state'] == 'battle':
+        return
+    code = a['owner']
+    st = a['state']
+    if st in ('move', 'retreat') and not g.paused(a):
+        off = a.get('mode') == 'champs' or not a.get('onroad')
+        d = 12 if st == 'retreat' else (10 if off else 4)
+        if hot.get(g.zone_of(a['x'], a['y'])):
+            d *= 1.5
+    elif a.get('qrt'):
+        d = -25
+    else:
+        d = -15
+    nd = g.geo.node_of_cell(a['x'], a['y'])
+    home = nd is not None and g.friendly(code, g.nodes[nd]['owner'])
+    if home or a.get('depot') is not None or a.get('boat'):
+        refill = 10
+    elif a.get('supply', 1.0) >= 0.35:
+        refill = 3
+    else:
+        refill = 0   # en territoire ennemi, coupé du ravitaillement
+    for r in a['regs']:
+        r['fat'] = min(100.0, max(0.0, r.get('fat', 0.0) + d * dt))
+        if refill:
+            r['ammo'] = min(100.0, r.get('ammo', 100.0) + refill * dt)
+
+
 def campaign_tick(g, dt):
     """Recomplètement des munitions et fatigue des régiments, par pas de campagne (dt en jours)."""
     hot = {z: w['kind'] == 'canicule' for z, w in g.weather.items()}
     for a in g.armies.values():
-        if a['state'] == 'battle':
-            continue
-        code = a['owner']
-        st = a['state']
-        if st in ('move', 'retreat'):
-            off = a.get('mode') == 'champs' or not a.get('onroad')
-            d = 12 if st == 'retreat' else (10 if off else 4)
-            if hot.get(g.zone_of(a['x'], a['y'])):
-                d *= 1.5
-        elif a.get('qrt'):
-            d = -25
-        else:
-            d = -15
-        nd = g.geo.node_of_cell(a['x'], a['y'])
-        home = nd is not None and g.friendly(code, g.nodes[nd]['owner'])
-        if home or a.get('depot') is not None or a.get('boat'):
-            refill = 10
-        elif a.get('supply', 1.0) >= 0.35:
-            refill = 3
-        else:
-            refill = 0   # en territoire ennemi, coupé du ravitaillement
-        for r in a['regs']:
-            r['fat'] = min(100.0, max(0.0, r.get('fat', 0.0) + d * dt))
-            if refill:
-                r['ammo'] = min(100.0, r.get('ammo', 100.0) + refill * dt)
+        army_tick(g, a, dt, hot)
     for n in g.nodes:
         if n['garrison'] and not n['siege']:
             for r in n['garrison']:
@@ -417,6 +423,8 @@ def finish(g, tb):
         stop['text'] = f"{issue} — {tb.spec.get('title') or 'bataille'}. À vous de jouer."
         stop['sel'] = None
     g.speed_idx = 0
+    if TT.planning(g):
+        TT.settle(g)   # tour par tour : l'armée battue se replie tout de suite
 
 
 # ================================================================== sauvegarde
@@ -533,6 +541,9 @@ def command(g, body):
         mode = body.get('mode')
         if mode == 'auto':
             bt['mode'] = 'auto'
+            if TT.planning(g):
+                TT.settle(g)   # tour par tour : le général règle la bataille sur-le-champ, puis les marches suspendues reprennent
+                return dict(ok=True, msg='Le général a commandé la bataille.')
             return dict(ok=True, msg='Le général commande : résolution automatique.')
         if mode != 'manuel':
             return dict(ok=False, msg='Mode inconnu.')

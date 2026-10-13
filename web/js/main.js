@@ -133,7 +133,7 @@ async function boot() {
     map.moveTo(cap.x, cap.y, 7);
     startPolling();
     setTimeout(() => ui.select({ kind: 'node', id: cap.id }), 600);
-    ui.toast('Donnez vos ordres, puis touchez « Fin du mois » en haut : le mois se joue et s’arrête au 1er du mois suivant.');
+    ui.toast('Donnez vos ordres : ils s’exécutent tout de suite. Puis touchez « Tour suivant » en haut : les IA jouent, et c’est le mois suivant.');
   };
   const focusCapital = async () => {
     let st;

@@ -1220,7 +1220,8 @@ class Game:
                  regs=regs, x=float(x), y=float(y), at_node=node, path=[], target=None, state='idle', stance='normal',
                  mode='route', supply=1.0, battle=None, grace=0.0, hidden=False, onroad=node is not None, edge=None,
                  assault=False, ai=None, viol=0.0, gen=self.new_general(code), fm='ligne', pl='frontal', fm_t=-9.0,
-                 tac_auto=True, landing=False, boat=False, rx=True, des=0.0, depot=None, tr=False, hold=False, qrt=False)
+                 tac_auto=True, landing=False, boat=False, rx=True, des=0.0, depot=None, tr=False, hold=False, qrt=False,
+                 mp=None)   # mp : jours de marche qui restent ce tour (None : tout le mois), en tour par tour
         self.armies[aid] = a
         return a
 
@@ -1835,162 +1836,178 @@ class Game:
         return True, msg
 
     def move_armies(self, dt):
-        season = self.season()
         for a in list(self.armies.values()):
-            if a['state'] not in ('move', 'retreat') or not a['path']:
-                if a['state'] in ('move', 'retreat') and not a['path']:
-                    a['state'] = 'idle'
+            if self.paused(a):
                 continue
-            budget = dt
-            base = self.army_speed(a)
-            if a['state'] == 'retreat':
-                base *= 1.15
-            wx = self.wx(a['x'], a['y'])
-            while budget > 1e-9 and a['path']:
-                leg = a['path'][0]
-                is_water = leg['kind'] == 'road' and self.geo.edges[leg['e']].get('kind') == 'water'
-                if is_water != bool(a.get('boat')):
-                    # embarquement sur les gabares / débarquement sur le quai
-                    a['boat'] = is_water
-                    a['emb'] = R.EMBARK_DAYS if is_water else R.DISEMBARK_DAYS
-                    if a['at_node'] is not None and 'port' in self.geo.nodes[a['at_node']]['spec']:
-                        a['emb'] *= 0.6
-                if a.get('emb', 0) > 0:
-                    use = min(budget, a['emb'])
-                    a['emb'] -= use
-                    budget -= use
-                    continue
-                if is_water:
-                    e = self.geo.edges[leg['e']]
-                    sp = max(1.0, self.water_speed(e, leg['frm'], a['x'], a['y'], code=a['owner']))
-                    remaining = e['len'] - leg['pos']
-                    step = sp * budget
-                    if step >= remaining:
-                        budget -= remaining / sp
-                        leg['pos'] = e['len']
-                        a['path'].pop(0)
-                        a['x'], a['y'] = self.node_xy(leg['to'])
-                        a['edge'] = None
-                        a['onroad'] = True
-                        a['landing'] = True
-                        stop = self.arrive_node(a, leg['to'])
-                        if a['state'] not in ('move', 'retreat'):
-                            a['boat'] = False
-                        if a['state'] != 'battle':
-                            a['landing'] = False
-                        if stop:
-                            break
-                    else:
-                        leg['pos'] += step
-                        budget = 0
-                        a['x'], a['y'] = self.edge_xy(e, leg['frm'], leg['pos'])
-                        a['edge'] = dict(e=e['id'], frm=leg['frm'], pos=leg['pos'])
-                        a['onroad'] = True
-                        a['at_node'] = None
-                    continue
-                if leg['kind'] == 'road':
-                    e = self.geo.edges[leg['e']]
-                    sp = base * (1.15 if e['royal'] else 1.0) * R.SEASON_ROAD[season] * wx['move'] \
-                        * (1 + self.mod(a['owner'], 'road_speed'))
-                    if self.wx(a['x'], a['y']) is R.WEATHER['neige'] and self.zone_of(a['x'], a['y']) == 'montagne':
-                        sp *= 0.6
-                    zone_end = e['len']
-                    if e['rrank'] == 1 and not self.mod(a['owner'], 'bridges') and not self.has_sapeurs(a):
-                        if e['ferry']:
-                            sp *= 0.35  # bac sur l'estuaire : toute la traversée est lente
-                        else:
-                            # attente au bac : seul le passage du fleuve est lent (~0,3 jour pour l'infanterie)
-                            cp = self.cross_pos(e, leg['frm'])
-                            c0, c1 = max(0.0, cp - 0.8), min(e['len'], cp + 0.8)
-                            if leg['pos'] < c0:
-                                zone_end = c0
-                            elif leg['pos'] < c1:
-                                zone_end = c1
-                                sp *= 0.22 * (0.5 if self.t < self.flood_until else 1.0)
-                    step = sp * budget
-                    if zone_end < e['len'] - 1e-9 and step >= zone_end - leg['pos']:
-                        budget -= (zone_end - leg['pos']) / sp
-                        leg['pos'] = zone_end + 1e-6
-                        A, B = self.node_xy(leg['frm']), self.node_xy(leg['to'])
-                        f = leg['pos'] / e['len']
-                        a['x'], a['y'] = A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f
-                        a['edge'] = dict(e=e['id'], frm=leg['frm'], pos=leg['pos'])
-                        a['onroad'] = True
-                        a['at_node'] = None
-                        continue
-                    remaining = e['len'] - leg['pos']
-                    if step >= remaining:
-                        budget -= remaining / sp
-                        leg['pos'] = e['len']
-                        a['path'].pop(0)
-                        a['x'], a['y'] = self.node_xy(leg['to'])
-                        a['edge'] = None
-                        a['onroad'] = True
-                        if self.arrive_node(a, leg['to']):
-                            break
-                    else:
-                        leg['pos'] += step
-                        budget = 0
-                        A, B = self.node_xy(leg['frm']), self.node_xy(leg['to'])
-                        f = leg['pos'] / e['len']
-                        a['x'], a['y'] = A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f
-                        a['edge'] = dict(e=e['id'], frm=leg['frm'], pos=leg['pos'])
-                        a['onroad'] = True
-                        a['at_node'] = None
+            self.move_army(a, dt)
+
+    def paused(self, a):
+        """Tour par tour, pendant le tour des IA : les armées du joueur ont déjà marché à leur tour, elles restent en place
+        (sauf une retraite forcée)."""
+        return a['owner'] == self.player and (a['state'] != 'retreat' or a.get('rt')) and not a.get('cl') \
+            and self.tour['on'] and self.tour['end'] is not None   # (sauf pour sortir de terres fermées : délai de grâce)
+
+    def marching(self, a):
+        return a['state'] in ('move', 'retreat') and not self.paused(a)
+
+    def move_army(self, a, dt):
+        """Fait marcher une armée pendant dt jours. Renvoie ce qu'il reste de ce temps (armée arrivée ou arrêtée)."""
+        season = self.season()
+        if a['state'] not in ('move', 'retreat') or not a['path']:
+            if a['state'] in ('move', 'retreat') and not a['path']:
+                a['state'] = 'idle'
+            return dt
+        budget = dt
+        base = self.army_speed(a)
+        if a['state'] == 'retreat':
+            base *= 1.15
+        wx = self.wx(a['x'], a['y'])
+        while budget > 1e-9 and a['path']:
+            leg = a['path'][0]
+            is_water = leg['kind'] == 'road' and self.geo.edges[leg['e']].get('kind') == 'water'
+            if is_water != bool(a.get('boat')):
+                # embarquement sur les gabares / débarquement sur le quai
+                a['boat'] = is_water
+                a['emb'] = R.EMBARK_DAYS if is_water else R.DISEMBARK_DAYS
+                if a['at_node'] is not None and 'port' in self.geo.nodes[a['at_node']]['spec']:
+                    a['emb'] *= 0.6
+            if a.get('emb', 0) > 0:
+                use = min(budget, a['emb'])
+                a['emb'] -= use
+                budget -= use
+                continue
+            if is_water:
+                e = self.geo.edges[leg['e']]
+                sp = max(1.0, self.water_speed(e, leg['frm'], a['x'], a['y'], code=a['owner']))
+                remaining = e['len'] - leg['pos']
+                step = sp * budget
+                if step >= remaining:
+                    budget -= remaining / sp
+                    leg['pos'] = e['len']
+                    a['path'].pop(0)
+                    a['x'], a['y'] = self.node_xy(leg['to'])
+                    a['edge'] = None
+                    a['onroad'] = True
+                    a['landing'] = True
+                    stop = self.arrive_node(a, leg['to'])
+                    if a['state'] not in ('move', 'retreat'):
+                        a['boat'] = False
+                    if a['state'] != 'battle':
+                        a['landing'] = False
+                    if stop:
+                        break
                 else:
-                    pts = leg['pts']
+                    leg['pos'] += step
+                    budget = 0
+                    a['x'], a['y'] = self.edge_xy(e, leg['frm'], leg['pos'])
+                    a['edge'] = dict(e=e['id'], frm=leg['frm'], pos=leg['pos'])
+                    a['onroad'] = True
+                    a['at_node'] = None
+                continue
+            if leg['kind'] == 'road':
+                e = self.geo.edges[leg['e']]
+                sp = base * (1.15 if e['royal'] else 1.0) * R.SEASON_ROAD[season] * wx['move'] \
+                    * (1 + self.mod(a['owner'], 'road_speed'))
+                if self.wx(a['x'], a['y']) is R.WEATHER['neige'] and self.zone_of(a['x'], a['y']) == 'montagne':
+                    sp *= 0.6
+                zone_end = e['len']
+                if e['rrank'] == 1 and not self.mod(a['owner'], 'bridges') and not self.has_sapeurs(a):
+                    if e['ferry']:
+                        sp *= 0.35  # bac sur l'estuaire : toute la traversée est lente
+                    else:
+                        # attente au bac : seul le passage du fleuve est lent (~0,3 jour pour l'infanterie)
+                        cp = self.cross_pos(e, leg['frm'])
+                        c0, c1 = max(0.0, cp - 0.8), min(e['len'], cp + 0.8)
+                        if leg['pos'] < c0:
+                            zone_end = c0
+                        elif leg['pos'] < c1:
+                            zone_end = c1
+                            sp *= 0.22 * (0.5 if self.t < self.flood_until else 1.0)
+                step = sp * budget
+                if zone_end < e['len'] - 1e-9 and step >= zone_end - leg['pos']:
+                    budget -= (zone_end - leg['pos']) / sp
+                    leg['pos'] = zone_end + 1e-6
+                    A, B = self.node_xy(leg['frm']), self.node_xy(leg['to'])
+                    f = leg['pos'] / e['len']
+                    a['x'], a['y'] = A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f
+                    a['edge'] = dict(e=e['id'], frm=leg['frm'], pos=leg['pos'])
+                    a['onroad'] = True
+                    a['at_node'] = None
+                    continue
+                remaining = e['len'] - leg['pos']
+                if step >= remaining:
+                    budget -= remaining / sp
+                    leg['pos'] = e['len']
+                    a['path'].pop(0)
+                    a['x'], a['y'] = self.node_xy(leg['to'])
+                    a['edge'] = None
+                    a['onroad'] = True
+                    if self.arrive_node(a, leg['to']):
+                        break
+                else:
+                    leg['pos'] += step
+                    budget = 0
+                    A, B = self.node_xy(leg['frm']), self.node_xy(leg['to'])
+                    f = leg['pos'] / e['len']
+                    a['x'], a['y'] = A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f
+                    a['edge'] = dict(e=e['id'], frm=leg['frm'], pos=leg['pos'])
+                    a['onroad'] = True
+                    a['at_node'] = None
+            else:
+                pts = leg['pts']
+                if leg['i'] >= len(pts):
+                    a['path'].pop(0)
+                    continue
+                tx, ty = pts[leg['i']]
+                d = math.hypot(tx - a['x'], ty - a['y'])
+                ter = self.geo.terrain_at(a['x'], a['y'])
+                tname = TERRAIN[ter][0]
+                mult = TERRAIN[ter][1] or 0.3
+                for r in a['regs']:
+                    if r['type'] == 'cavalerie' and tname in ('Forêt', 'Marais'):
+                        mult *= 0.85
+                        break
+                if any(r['type'] == 'artillerie' for r in a['regs']) and tname in ('Forêt', 'Marais', 'Montagne', 'Haute montagne', 'Dunes'):
+                    mult *= 0.6
+                if tname in ('Montagne', 'Haute montagne', 'Collines'):
+                    mult *= 1 + self.mod(a['owner'], 'mountain')
+                    if self.gen_trait(a) == 'montagnard':
+                        mult *= 1.3
+                rv = self.geo.river[self.geo.cell(a['x'], a['y'])] if self.geo.cell(a['x'], a['y']) >= 0 else 0
+                if rv:
+                    mult *= 0.5 if rv >= 2 else 0.75
+                sp = base * mult * R.SEASON_OFF[season] * wx['move']
+                if season == 'hiver' and tname in ('Montagne', 'Haute montagne'):
+                    sp *= 0.5
+                sp = max(sp, 1.0)
+                step = min(sp * budget, 1.0)
+                if step >= d:
+                    budget -= d / sp
+                    a['x'], a['y'] = tx, ty
+                    leg['i'] += 1
                     if leg['i'] >= len(pts):
                         a['path'].pop(0)
-                        continue
-                    tx, ty = pts[leg['i']]
-                    d = math.hypot(tx - a['x'], ty - a['y'])
-                    ter = self.geo.terrain_at(a['x'], a['y'])
-                    tname = TERRAIN[ter][0]
-                    mult = TERRAIN[ter][1] or 0.3
-                    for r in a['regs']:
-                        if r['type'] == 'cavalerie' and tname in ('Forêt', 'Marais'):
-                            mult *= 0.85
-                            break
-                    if any(r['type'] == 'artillerie' for r in a['regs']) and tname in ('Forêt', 'Marais', 'Montagne', 'Haute montagne', 'Dunes'):
-                        mult *= 0.6
-                    if tname in ('Montagne', 'Haute montagne', 'Collines'):
-                        mult *= 1 + self.mod(a['owner'], 'mountain')
-                        if self.gen_trait(a) == 'montagnard':
-                            mult *= 1.3
-                    rv = self.geo.river[self.geo.cell(a['x'], a['y'])] if self.geo.cell(a['x'], a['y']) >= 0 else 0
-                    if rv:
-                        mult *= 0.5 if rv >= 2 else 0.75
-                    sp = base * mult * R.SEASON_OFF[season] * wx['move']
-                    if season == 'hiver' and tname in ('Montagne', 'Haute montagne'):
-                        sp *= 0.5
-                    sp = max(sp, 1.0)
-                    step = min(sp * budget, 1.0)
-                    if step >= d:
-                        budget -= d / sp
-                        a['x'], a['y'] = tx, ty
-                        leg['i'] += 1
-                        if leg['i'] >= len(pts):
-                            a['path'].pop(0)
-                            # arrivée sur un nœud ?
-                            tgt = a['target'] or {}
-                            if not a['path'] and tgt.get('node') is not None:
-                                if self.arrive_node(a, tgt['node']):
-                                    break
-                    else:
-                        a['x'] += (tx - a['x']) / d * step
-                        a['y'] += (ty - a['y']) / d * step
-                        budget -= step / sp
-                    a['onroad'] = False
-                    a['edge'] = None
-                    a['at_node'] = None
-            if not a['path'] and a.get('boat') and a['at_node'] is not None:
-                a['boat'] = False
-                a['emb'] = 0.0
-            if not a['path'] and a['state'] in ('move', 'retreat'):
-                a['state'] = 'idle' if a['state'] != 'battle' else a['state']
-                if a['ai'] and a['ai'].get('then') == 'embuscade':
-                    a['stance'] = 'embuscade'
-                    a['ai']['then'] = None
+                        # arrivée sur un nœud ?
+                        tgt = a['target'] or {}
+                        if not a['path'] and tgt.get('node') is not None:
+                            if self.arrive_node(a, tgt['node']):
+                                break
+                else:
+                    a['x'] += (tx - a['x']) / d * step
+                    a['y'] += (ty - a['y']) / d * step
+                    budget -= step / sp
+                a['onroad'] = False
+                a['edge'] = None
+                a['at_node'] = None
+        if not a['path'] and a.get('boat') and a['at_node'] is not None:
+            a['boat'] = False
+            a['emb'] = 0.0
+        if not a['path'] and a['state'] in ('move', 'retreat'):
+            a['state'] = 'idle' if a['state'] != 'battle' else a['state']
+            if a['ai'] and a['ai'].get('then') == 'embuscade':
+                a['stance'] = 'embuscade'
+                a['ai']['then'] = None
+        return budget
 
     def land_check(self, dt):
         """Terres fermées : délai de grâce, chemin de sortie, puis incidents (voir AA.land_tick)."""
@@ -2194,12 +2211,18 @@ class Game:
         return vis, srcs
 
     # ------------------------------------------------------------------ contacts et batailles
-    def detect_contacts(self):
+    def detect_contacts(self, only=None):
+        """only : n'examine que les rencontres de cette armée (marche instantanée du joueur, tour par tour)."""
         # les armées à bord des gabares ne livrent pas bataille en chemin (elles essuient le feu des berges : river_fire)
         arr = [a for a in self.armies.values() if a['state'] not in ('battle',) and self.t >= a['grace'] and a['regs']
                and not (a.get('boat') and a['at_node'] is None)]
         n = len(arr)
-        for i in range(n):
+        outer = n
+        if only is not None:
+            # l'armée examinée en tête, et elle seule contre toutes les autres (n paires au lieu de n²/2)
+            arr.sort(key=lambda x: x['id'] != only)
+            outer = 1 if arr and arr[0]['id'] == only else 0
+        for i in range(outer):
             a = arr[i]
             if a['state'] == 'battle':
                 continue
@@ -2235,6 +2258,8 @@ class Game:
         # renforts : armées proches d'une bataille en cours
         for bt in self.battles.values():
             for a in self.armies.values():
+                if only is not None and a['id'] != only:
+                    continue
                 if a['state'] == 'battle' or not a['regs'] or self.t < a['grace'] or (a.get('boat') and a['at_node'] is None):
                     continue
                 if (a['x'] - bt['x']) ** 2 + (a['y'] - bt['y']) ** 2 > 9:
@@ -2502,7 +2527,7 @@ class Game:
             pl = 'frontal'
         a['fm'], a['pl'] = fm, pl
 
-    def update_battles(self, dt):
+    def update_battles(self, dt, only=None):
         """Résolution automatique (choix « Automatique », batailles sans le joueur), par pas de campagne : pertes typées
         selon la phase, les formations et les plans, puis la fin, recalée sur les batailles jouées sur le champ de
         bataille. En rase campagne, le camp dominé (battle_yield) ou dont le moral casse se retire en bon ordre ; seule une
@@ -2511,6 +2536,8 @@ class Game:
         la place s'il cède. Au bout de 4 jours, le plus puissant l'emporte."""
         K = 0.20
         for bid in list(self.battles):
+            if only is not None and bid != only:
+                continue
             bt = self.battles.get(bid)
             if not bt or not TB.is_auto(bt):
                 continue   # (bataille en attente du choix, ou commandée sur le champ de bataille)
@@ -2692,6 +2719,31 @@ class Game:
                 disengage = bt['sides'][1 - res]['node'] is None
             if res is not None:
                 self.end_battle(bt, res, disengage)
+
+    def resolve_battle_now(self, bt):
+        """Tour par tour : une bataille automatique du joueur se règle sur-le-champ. Elle se joue en temps virtuel (la
+        date de la campagne ne bouge pas), comme les jours qu'elle durerait."""
+        bid, t0 = bt['id'], self.t
+        try:
+            for _ in range(int(8 / SUBSTEP)):
+                if bid not in self.battles:
+                    break
+                self.t += SUBSTEP
+                self.update_battles(SUBSTEP, only=bid)
+        finally:
+            self.restore_clock(t0)
+
+    def restore_clock(self, t0):
+        """Fin d'un temps virtuel (marche ou bataille réglée dans le tour du joueur) : la date reprend où elle était."""
+        self.t = t0
+        for b in self.battles.values():
+            b['t0'] = min(b['t0'], t0)
+        for a in self.armies.values():
+            if a.get('grace', 0.0) > t0 + 1.0:
+                a['grace'] = t0 + 1.0
+        for n in self.nodes:
+            if n.get('siege') and n['siege'].get('since', t0) > t0:
+                n['siege']['since'] = t0   # siège commencé en chemin : il commence aujourd'hui
 
     def battle_yield(self, bt, P):
         """Un camp dominé cède avant la déroute, comme dans les batailles commandées (rules.WD_*) : hors d'une place, il
@@ -3575,6 +3627,7 @@ class Game:
         b['fm'], b['pl'], b['tac_auto'], b['stance'] = a.get('fm', 'ligne'), a.get('pl', 'frontal'), a.get('tac_auto', True), \
             a['stance']
         b['supply'] = a['supply']
+        b['mp'] = a.get('mp')
         b['rx'] = a.get('rx', True)
         if a['state'] == 'siege':
             b['state'] = 'siege'
@@ -3611,6 +3664,9 @@ class Game:
         if gb and (not ga or (gb['lvl'], gb['xp']) > (ga['lvl'], ga['xp'])):
             a['gen'] = gb
         a['supply'] = min(a['supply'], b['supply'])
+        if a.get('mp') is not None or b.get('mp') is not None:
+            full = TT.march_days(self)
+            a['mp'] = min(full if a.get('mp') is None else a['mp'], full if b.get('mp') is None else b['mp'])
         del self.armies[bid]
         if not a.get('gen'):
             return True, "Armées réunies."
@@ -3672,6 +3728,8 @@ class Game:
         if not a or a['owner'] != code or a['state'] != 'siege':
             return False, "Cette armée n'assiège rien."
         a['assault'] = True
+        if self.tour['on'] and self.tour['end'] is None:
+            self.update_sieges(0.0)   # tour par tour : l'assaut se livre tout de suite
         return True, "Assaut ordonné !"
 
     def set_slider(self, code, v):

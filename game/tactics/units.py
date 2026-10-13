@@ -126,7 +126,7 @@ SLOTS = ('id', 'side', 'owner', 'type', 'cls', 'light', 'name', 'men', 'men0', '
          'morale0', 'fat', 'ammo', 'ammo0', 'arm', 'x', 'y', 'dir', 'form', 'state', 'order', 'seen', 'target',
          'path', 'goal', 'reload', 'busy', 'next_form', 'fire_mode', 'fired_t', 'melee_with', 'rally_t', 'lost',
          'killed', 'captured', 'fought', 'army', 'src', 'nid', 'gen', 'ctrl', 'charge_v', 'spotted_t', 'stuck',
-         'rout_seen', 'hit_t', 'wounded', 'group', 'gname', 'halt')
+         'rout_seen', 'hit_t', 'wounded', 'group', 'gname', 'halt', 'shot', 'prio')
 
 
 class Unit:
@@ -171,6 +171,8 @@ class Unit:
         self.group = None
         self.gname = None
         self.halt = False      # en déroute : les fuyards se sont arrêtés pour se reformer (près du général, au calme)
+        self.shot = 'auto'     # artillerie : projectile ordonné ('auto', 'boulet', 'mitraille')
+        self.prio = None       # artillerie : cible de prédilection ('artillerie' : contre-batterie)
         for k, v in kw.items():
             setattr(self, k, v)
 
@@ -218,6 +220,9 @@ class Unit:
         if mine:
             out['seen'] = bool(seen_by_foe)
             out['fire'] = self.fire_mode
+            if self.cls == 'artillerie':
+                out['shot'] = self.shot
+                out['prio'] = self.prio
             if self.target:
                 out['target'] = self.target
             if self.order:

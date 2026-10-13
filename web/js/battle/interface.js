@@ -4,6 +4,7 @@
 import { ICON } from '../icons.js';
 import { QUALITES, QUALITE_LABEL, qualite, setQualite } from './qualite.js';
 import { clsOf, isGeneral, isLight, isWagon, genName, emprise, stars, fmt, esc, clamp, TYPE_LABEL, FORM_LABEL, FORM_HELP, FORMS, STATE_LABEL, SEASON_LABEL, WEATHER_LABEL, normSeason, TILT } from './formes.js';
+import { ORDER_LABEL, ordresHtml, aide as aideArme } from './doctrine.js';
 
 const WX_ICON = {
   soleil: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
@@ -273,7 +274,7 @@ export class BattleUI {
     const foe = this.inspected && v.units.get(this.inspected);
     if (!us.length && !foe) { p.hidden = true; this.panelSig = ''; this.el.classList.remove('has-panel'); return; }
     const deploy = v.st?.phase === 'deploiement';
-    const sig = JSON.stringify([deploy, !!v.st?.accel, foe ? [foe.id, foe.men, foe.state, foe.form, foe._ghost] : us.map(u => [u.id, u.men, Math.round(u.morale), Math.round(u.fat ?? 0), u.ammo, u.state, u.form, u.fire, u.state === 'deroute' && !!u.halt])]);
+    const sig = JSON.stringify([deploy, !!v.st?.accel, foe ? [foe.id, foe.men, foe.state, foe.form, foe._ghost] : us.map(u => [u.id, u.men, Math.round(u.morale), Math.round(u.fat ?? 0), u.ammo, u.state, u.form, u.fire, u.shot, u.prio, u.order, u.state === 'deroute' && !!u.halt]), v.controls.run, v.controls.targeting]);
     if (sig === this.panelSig && !force) return;
     this.panelSig = sig;
     p.hidden = false;
@@ -288,7 +289,7 @@ export class BattleUI {
       const am = u.ammo0 ? `${fmt(u.ammo)} / ${fmt(u.ammo0)} ${clsOf(u) === 'artillerie' ? 'coups' : 'cartouches'}` : `${fmt(u.ammo ?? 100)} %`;
       const rg = u.range ? `portée max ${fmt(u.range[1])} m${u.range[2] ? `, mitraille ${fmt(u.range[2])} m` : ''}` : '';
       h += `<div class="bp-head"><canvas class="bp-fig" data-fig="${esc(u.id)}" width="56" height="64"></canvas><div><div class="bp-t">${esc(u.name)}</div>
-        <div class="bp-s">${esc(TYPE_LABEL[u.type] || u.type)} · ${esc(FORM_LABEL[u.form] || u.form || '')} · <span class="bp-state ${u.state}">${esc(STATE_LABEL[u.state] || u.state || '')}</span></div></div></div>
+        <div class="bp-s">${esc(TYPE_LABEL[u.type] || u.type)} · ${esc(FORM_LABEL[u.form] || u.form || '')} · <span class="bp-state ${u.state}">${esc(STATE_LABEL[u.state] || u.state || '')}</span>${u.order && ORDER_LABEL[u.order] && u.order !== 'hold' ? ` · ${esc(ORDER_LABEL[u.order])}` : ''}</div></div></div>
         <dl class="bp-kv two">
           <dt>Hommes</dt><dd>${fmt(u.men)} <small>/ ${fmt(u.men0 || u.men)}</small></dd>
           <dt>Expérience</dt><dd class="bp-stars">${'★'.repeat(stars(u.xp))}<i>${'★'.repeat(5 - stars(u.xp))}</i></dd>
@@ -308,15 +309,15 @@ export class BattleUI {
     } else if (v.st?.accel) {
       h += `<p class="bp-help">Vos officiers commandent ce régiment. Touchez « Reprendre le commandement » pour lui donner vos ordres.</p>`;
     } else {
-      const fireHold = us.every(x => x.fire === 'hold');
       const anyRout = us.some(x => x.state === 'deroute');
-      const canCharge = us.some(x => clsOf(x) === 'inf' || clsOf(x) === 'cavalerie');
-      h += `<div class="bp-row bp-btns">
-        <button class="bt-btn ${fireHold ? '' : 'on'}" data-a="fire">${fireHold ? 'Feu à volonté' : 'Cesser le feu'}</button>
-        <button class="bt-btn" data-a="hold">Tenir</button>
-        ${canCharge ? `<button class="bt-btn charge" data-a="charge">Charger !</button>` : ''}
+      // les ordres dépendent de l'arme : tir à volonté ou en salve, baïonnette, harcèlement, charge, projectile…
+      const o = ordresHtml(us, { targeting: v.controls.targeting, run: v.controls.run });
+      h += o.top;
+      h += `<div class="bp-row bp-btns">${o.btns}
         <button class="bt-btn" data-a="rally" ${anyRout ? '' : 'disabled'}>Rallier</button>
         <button class="bt-btn danger" data-a="retreat">Retraite</button></div>`;
+      const tip = aideArme(us);
+      if (tip) h += `<p class="bp-help">${esc(tip)}</p>`;
       if (anyRout) h += `<p class="bp-help">${esc(this.rallyHint(us.filter(x => x.state === 'deroute')))}</p>`;
     }
     p.innerHTML = h;
@@ -343,12 +344,13 @@ export class BattleUI {
   // ordre donné : un petit retour visuel et écrit
   ordered(kind, us, body) {
     if (kind === 'charge') this.toast(`${us.length > 1 ? 'Vos régiments chargent' : us[0].name + ' charge'} !`, 'good');
+    else if (kind === 'volley_charge') this.toast(`${us.length > 1 ? 'Vos régiments donnent' : us[0].name + ' donne'} la salve, puis la baïonnette !`, 'good');
     this.dockSig = ''; this.renderPanel(true);
   }
   targetingChanged(kind) {
     const h = this.$('.bt-target-hint');
     h.hidden = !kind;
-    if (kind) h.innerHTML = `Touchez l'ennemi à charger <button class="bt-btn" data-a="untarget">Annuler</button>`;
+    if (kind) h.innerHTML = `${kind === 'vcharge' ? 'Touchez l’ennemi : salve, puis baïonnette' : "Touchez l'ennemi à charger"} <button class="bt-btn" data-a="untarget">Annuler</button>`;
   }
   act(a, d = {}) {
     const v = this.v, c = v.controls, us = c.mineSel();
@@ -360,7 +362,14 @@ export class BattleUI {
         this.renderPanel(true);
       } else c.order('form', { form: d.f });
     }
-    else if (a === 'fire') { const hold = !us.every(u => u.fire === 'hold'); for (const u of us) u.fire = hold ? 'hold' : 'free'; c.order('fire', { mode: hold ? 'hold' : 'free', fire: hold ? 'hold' : 'free' }); }
+    else if (a === 'fire') { const m = d.m || (us.every(u => u.fire === 'hold') ? 'free' : 'hold'); for (const u of us) u.fire = m; c.order('fire', { mode: m, fire: m }); this.renderPanel(true); }
+    else if (a === 'shot') { for (const u of us) u.shot = d.m; c.order('shot', { mode: d.m }); this.renderPanel(true); }
+    else if (a === 'counter') { const on = !us.every(u => u.prio === 'artillerie'); for (const u of us) u.prio = on ? 'artillerie' : null; c.order('counter', { mode: on ? 'on' : 'off' }); this.renderPanel(true); }
+    else if (a === 'harass') c.order('harass');
+    else if (a === 'cover') c.order('cover');
+    else if (a === 'pursue') c.order('pursue');
+    else if (a === 'gait') { c.run = !c.run; this.toast(c.run ? 'Prochains déplacements : à marche forcée.' : 'Prochains déplacements : au pas.'); this.renderPanel(true); }
+    else if (a === 'vcharge') c.setTargeting(c.targeting === 'vcharge' ? null : 'vcharge');
     else if (a === 'hold') c.order('hold');
     else if (a === 'rally') c.order('rally');
     else if (a === 'retreat') c.order('retreat');
@@ -403,7 +412,8 @@ export class BattleUI {
       case 'desel': v.sel.clear(); this.inspected = null; this.selChanged(); break;
       case 'form': this.act('form', { f: b.dataset.f }); break;
       case 'rot': this.act('rot', { r: +b.dataset.r }); break;
-      case 'fire': case 'hold': case 'rally': case 'charge': this.act(a); break;
+      case 'fire': case 'shot': this.act(a, { m: b.dataset.m }); break;
+      case 'hold': case 'rally': case 'charge': case 'counter': case 'harass': case 'cover': case 'pursue': case 'gait': case 'vcharge': this.act(a); break;
       case 'retreat': this.confirm('Retraite', 'Les régiments choisis quittent le champ de bataille par votre bord. Ils reviennent en campagne avec leurs hommes.', 'Ordonner la retraite', () => this.act('retreat'), true); break;
       case 'untarget': v.controls.setTargeting(null); break;
       case 'engager': this.engage(); break;
