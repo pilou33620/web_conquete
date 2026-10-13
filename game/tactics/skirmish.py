@@ -133,7 +133,7 @@ def new(geo, body):
     era = body.get('era') if body.get('era') in R.SCENARIOS else '1790'
     kind = body.get('kind') if body.get('kind') in KINDS else 'bataille'
     attack = body.get('role') != 'def'
-    rng = random.Random()
+    rng = random.Random(body.get('seed'))   # (graine : bancs d'essai reproductibles ; sans graine, au hasard)
     foe = body.get('foe')
     if foe not in R.FACTIONS or foe == me:
         foe = rng.choice([c for c in R.FACTIONS if c != me])

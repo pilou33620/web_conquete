@@ -636,7 +636,32 @@ web/js/battle/       vue de bataille : bataille.js (entrée et sortie depuis la 
                      dev/maquette.mjs : serveur de maquette (node web/js/battle/dev/maquette.mjs, puis
                      /js/battle/dev/banc.html?scen=…&season=…&weather=…&hour=…&year=…&start=1)
 saves/               parties sauvegardées (JSON)
+tests/               bancs d'essai (voir « Tests » ci-dessous)
 ```
+
+## Tests
+
+Des bancs d'essai vérifient en une vingtaine de secondes ce qui demanderait des heures de jeu : batailles, campagne,
+serveur et interface. Aucune bibliothèque à installer (Python standard, et Node pour l'interface, facultatif).
+
+```bash
+python3 tests/lancer.py                          # tout (environ 20 s sur un Raspberry Pi)
+python3 tests/test_bataille.py                   # un seul banc Python
+node --test tests/                               # l'interface seule
+```
+
+| Fichier | Ce qu'il vérifie |
+|---|---|
+| `tests/test_bataille.py` | ordres propres à chaque arme (acceptés ou refusés), salve puis baïonnette, harcèlement, canons sans munitions, régiment anéanti, bataille jusqu'au bout et rechargement en plein combat |
+| `tests/test_campagne.py` | votre tour puis celui des IA, jours de marche, retraite une fois par tour, sièges, dettes et événements, prix du marché, sauvegarde (IA comprises) |
+| `tests/test_serveur.py` | un vrai serveur HTTP sur un port libre : requêtes mal formées, fichiers hors de `web/`, ordres pendant le tour des IA, sauvegardes (dossier temporaire, les vraies ne sont pas touchées) |
+| `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, boutons d'ordres par arme, panneau du régiment, barre du tour |
+
+**Essayer une nouvelle fonctionnalité sans jouer.** `tests/fabrique.py` fabrique une situation en une ligne : une
+partie (`partie('64', '1870')`), un ou plusieurs mois joués (`jouer_mois(g, 3)`), une bataille déjà engagée avec les
+régiments voulus (`bataille(dict(ligne=2, cavalerie=1))`), un ennemi placé à 200 m en vue (`face_a_face`), quelques
+secondes de bataille (`avancer(tb, 60)`). Les batailles sont tirées avec une graine fixe : même graine, même
+bataille. Les essais n'écrivent pas dans `logs/batailles.jsonl` (`WEB_CONQUETE_NOLOG=1`).
 
 ## Sources des données
 Contours des départements et des communes : [france-geojson](https://github.com/gregoiredavid/france-geojson) (données IGN, Licence Ouverte).
