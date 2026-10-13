@@ -67,7 +67,7 @@ class Game:
         self.over = None
         self.flood_until = -1
         self.diplo = {}
-        self.market = {r: p for r, p in dict(vivres=0.6, fer=2.0, bois=1.0, armes=3.5, outils=3.0, recrues=0.5).items()}
+        self.market = dict(R.MARKET_BASE)
         self._dirty_income = True
         self._last_day = -1
         self._ai_clock = {}
@@ -525,7 +525,7 @@ class Game:
         self.proposals = [p for p in self.proposals if p['expires'] > self.t]
         # prix du marché
         for r in self.market:
-            base = dict(vivres=0.6, fer=2.0, bois=1.0, armes=3.5, outils=3.0, recrues=0.5)[r]
+            base = R.MARKET_BASE[r]
             if r == 'vivres':
                 base *= {'hiver': 1.5, 'printemps': 1.1, 'été': 0.85, 'automne': 0.8}[season]
             p = self.market[r] * (1 + self.rng.uniform(-0.04, 0.04))
@@ -912,9 +912,6 @@ class Game:
             # renfort des garnisons
             if code != R.NEUTRAL and n['garrison']:
                 self.replenish(code, n['garrison'], dt, 0.04)
-        for code, f in self.factions.items():
-            if f['alive'] and f['overlord']:
-                pass
 
     def assim(self, n):
         """Attachement à son nouveau maître : 1 dans sa province d'origine, de 0 à 1 en une génération ailleurs."""
@@ -1129,7 +1126,7 @@ class Game:
         b = R.BUILD.get(what)
         if not b:
             return False, "Construction inconnue."
-        lvl = n['fort'] if what == 'fort' else n.get('depot', 0) if what == 'depot' else n['dev']
+        lvl = n['fort'] if what == 'fort' else n['dev']
         pending = sum(1 for q in n['queue'] if q['kind'] == 'build' and q['what'] == what)
         top = self.fort_max(code, nid) if what == 'fort' else b['max']
         if lvl + pending >= top:
@@ -1146,8 +1143,6 @@ class Game:
         n['queue'].append(dict(kind='build', what=what, left=days, total=days))
         if what == 'fort' and lvl + pending + 1 == R.BASTION_LEVEL:
             return True, f"Bastions à la Vauban lancés à {gn['name']}."
-        if what == 'depot':
-            return True, f"Construction d'un magasin aux vivres à {gn['name']}."
         if what == 'dev':
             return True, f"Agrandissement de {gn['name']} lancé : {R.DEV_NAMES[gn['type']][lvl + pending + 1].lower()}."
         return True, f"{b['name']} lancées à {gn['name']}."

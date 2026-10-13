@@ -26,11 +26,6 @@ export function arme(u) {
   return 'ligne';   // ligne, garde nationale, milice
 }
 
-export const ARME_LABEL = {
-  ligne: 'Infanterie de ligne', grenadiers: 'Grenadiers', tirailleurs: 'Tirailleurs', sapeurs: 'Sapeurs',
-  cavalerie: 'Cavalerie', artillerie: 'Artillerie', etat_major: 'État-major', chariot: 'Chariot',
-};
-
 // actions proposées, par arme (ordre d'affichage)
 const ACTIONS = {
   ligne: ['feu', 'assaut', 'couvert', 'allure', 'tenir'],

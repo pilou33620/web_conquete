@@ -1,4 +1,5 @@
 import { ICON, speedIcon, coat } from './icons.js';
+import { esc, clamp } from './battle/formes.js';
 import { fmtMen, unitCls } from './map.js';
 import { QUALITES, QUALITE_LABEL, QUALITE_AIDE, qualite, setQualite } from './battle/qualite.js';
 
@@ -14,7 +15,6 @@ const pctChg = (now, before) => {
   const v = before > 0 ? Math.round((now - before) / before * 1000) / 10 : 0;
   return (v > 0 ? '+' : '') + minus((v || 0).toLocaleString('fr-FR')) + '\u202f%';
 };
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 // « de » élidé, comme côté serveur (rules.de) : de Dordogne, d’Agen, du Bugue
 const de = n => /^Le /.test(n) ? 'du ' + n.slice(3) : /^Les /.test(n) ? 'des ' + n.slice(4) : /^[aeiouyhâàéèêîïôöûü]/i.test(n) ? `d’${n}` : `de ${n}`;
 const STATUS = { paix: 'En paix', guerre: 'En guerre', alliance: 'Alliés', self: 'Vous' };
@@ -659,7 +659,7 @@ export class UI {
       ${hitNode ? `<button class="btn" data-act="selnode" data-node="${hitNode.id}">Voir ${esc(hitNode.name)}</button>` : ''}
       ${enemy ? `<button class="btn" data-act="selarmy" data-id="${enemy.id}">Voir cette armée</button>` : ''}
       <button class="btn" data-act="hidebubble">Annuler</button>`;
-    b.style.left = clampN(e.sx, 110, window.innerWidth - 110) + 'px';
+    b.style.left = clamp(e.sx, 110, window.innerWidth - 110) + 'px';
     b.style.top = Math.max(e.sy, 230) + 'px';
     b.hidden = false;
     // avec cinq boutons, la bulle peut sortir de l'écran : on la ramène entière dans la fenêtre
@@ -1961,4 +1961,3 @@ export class UI {
   }
 }
 
-function clampN(v, a, b) { return Math.max(a, Math.min(b, v)); }

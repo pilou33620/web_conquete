@@ -2120,30 +2120,29 @@ class TacticalBattle:
                         for b in o:
                             pairs.append((a, b))
         for a, b in pairs:
-            if True:
-                if not a.alive or not b.alive:
-                    continue
-                dx, dy = b.x - a.x, b.y - a.y
-                d2 = dx * dx + dy * dy
-                if d2 > 900:
-                    continue
-                if a.side == b.side:
-                    if d2 < 400 and a.state != 'melee' and b.state != 'melee':
-                        d = math.sqrt(d2) or 1.0
-                        push = (20 - d) / 2
-                        for u, s in ((a, -1), (b, 1)):
-                            nx, ny = u.x + s * dx / d * push, u.y + s * dy / d * push
-                            if 0 <= nx < W and 0 <= ny < H and self._passable_u(u, nx, ny):
-                                u.x, u.y = nx, ny
-                    continue
-                for x, y in ((a, b), (b, a)):
-                    if y.state == 'deroute' and x.valid and x.state != 'melee':
-                        self._capture(x, y, CAPTURE['contact_cav'] if x.cls == 'cavalerie' else CAPTURE['contact_inf'])
-                if a.valid and b.valid and a.state not in ('melee', 'charge') and b.state not in ('melee', 'charge') \
-                        and a.cls not in ('general', 'chariot') and b.cls not in ('general', 'chariot') and d2 < 400:
-                    a.state = b.state = 'melee'
-                    a.melee_with, b.melee_with = b.id, a.id
-                    a.path, b.path = [], []
+            if not a.alive or not b.alive:
+                continue
+            dx, dy = b.x - a.x, b.y - a.y
+            d2 = dx * dx + dy * dy
+            if d2 > 900:
+                continue
+            if a.side == b.side:
+                if d2 < 400 and a.state != 'melee' and b.state != 'melee':
+                    d = math.sqrt(d2) or 1.0
+                    push = (20 - d) / 2
+                    for u, s in ((a, -1), (b, 1)):
+                        nx, ny = u.x + s * dx / d * push, u.y + s * dy / d * push
+                        if 0 <= nx < W and 0 <= ny < H and self._passable_u(u, nx, ny):
+                            u.x, u.y = nx, ny
+                continue
+            for x, y in ((a, b), (b, a)):
+                if y.state == 'deroute' and x.valid and x.state != 'melee':
+                    self._capture(x, y, CAPTURE['contact_cav'] if x.cls == 'cavalerie' else CAPTURE['contact_inf'])
+            if a.valid and b.valid and a.state not in ('melee', 'charge') and b.state not in ('melee', 'charge') \
+                    and a.cls not in ('general', 'chariot') and b.cls not in ('general', 'chariot') and d2 < 400:
+                a.state = b.state = 'melee'
+                a.melee_with, b.melee_with = b.id, a.id
+                a.path, b.path = [], []
 
     def _wagons(self, dt):
         """Chariots de munitions : recomplètent les régiments proches, se font prendre s'ils restent sans escorte."""

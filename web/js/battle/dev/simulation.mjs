@@ -478,6 +478,21 @@ export class MockBattle {
     }
     if (this.accel && sub === 'order') return { ok: false, msg: 'Vos officiers mènent la bataille : reprenez le commandement pour donner vos ordres.' };
     if (sub === 'order') {
+      // ordres propres à l'arme (mêmes refus que TacticalBattle.order ; effets très simplifiés)
+      const line = u => u.cls === 'inf' && !u.light && u.type !== 'sapeurs';
+      if (b.kind === 'volley_charge' && !sel.some(line)) return { ok: false, msg: "Seule l'infanterie de ligne et les grenadiers donnent la salve et la baïonnette." };
+      if (b.kind === 'harass' && !sel.some(u => u.cls === 'inf')) return { ok: false, msg: "Seule l'infanterie harcèle." };
+      if ((b.kind === 'shot' || b.kind === 'counter') && !sel.some(u => u.cls === 'artillerie')) return { ok: false, msg: "Ordre réservé à l'artillerie." };
+      if (b.kind === 'pursue') {
+        const cav = sel.filter(u => u.cls === 'cavalerie');
+        const fuyards = this.units.filter(e => e.side !== 0 && e.state === 'deroute');
+        if (!cav.length || !fuyards.length) return { ok: false, msg: !cav.length ? 'Seule la cavalerie poursuit.' : 'Aucune troupe en fuite à poursuivre.' };
+        for (const u of cav) {
+          const t = fuyards.reduce((m, e) => Math.hypot(e.x - u.x, e.y - u.y) < Math.hypot(m.x - u.x, m.y - u.y) ? e : m);
+          u.order = { kind: 'charge', target: t.id }; u.target = t.id; u.state = 'charge';
+        }
+        return { ok: true, msg: 'Sus aux fuyards !' };
+      }
       const c = this.centroid(sel);
       for (const u of sel) {
         switch (b.kind) {
@@ -497,7 +512,17 @@ export class MockBattle {
             if (b.kind === 'charge') { u.state = 'charge'; this.addFx({ k: 'charge', x: u.x, y: u.y, u: u.id }); this.log(`${u.name} charge !`); }
             break;
           case 'hold': u.order = { kind: 'hold' }; u.state = 'repos'; u.fire = 'free'; break;
-          case 'fire': u.fire = b.fire === 'hold' || b.v === 'hold' ? 'hold' : 'free'; break;
+          case 'fire': u.fire = b.mode === 'hold' ? 'hold' : b.mode === 'volley' && line(u) ? 'volley' : 'free'; break;
+          case 'volley_charge':
+            if (!line(u)) break;
+            u.order = { kind: 'charge', target: b.target };   // (la maquette charge aussitôt : pas de salve simulée)
+            u.target = b.target; u.fire = 'volley'; u.state = 'charge';
+            this.addFx({ k: 'charge', x: u.x, y: u.y, u: u.id }); this.log(`${u.name} : salve, puis à la baïonnette !`);
+            break;
+          case 'harass': if (u.cls === 'inf') { u.order = { kind: 'harass' }; u.form = 'tirailleurs'; u.fire = 'free'; u.target = null; } break;
+          case 'cover': if (u.cls === 'inf') u.order = { kind: 'hold' }; break;   // (pas de couvert dans la maquette)
+          case 'shot': if (u.cls === 'artillerie') u.shot = ['auto', 'boulet', 'mitraille'].includes(b.mode) ? b.mode : 'auto'; break;
+          case 'counter': if (u.cls === 'artillerie') { u.prio = b.mode === 'off' ? null : 'artillerie'; u.target = null; } break;
           case 'form': if (b.form) { u.form = b.form; u.busy = 30; if (u.state !== 'deroute') u.state = 'repos'; u.order = null; } break;
           case 'rally': if (u.state === 'deroute') { u.state = 'ralliement'; u.morale = Math.max(u.morale, 30); this.log(`${u.name} tente de se rallier.`); } break;
           case 'retreat': u.order = { kind: 'retreat' }; u.state = 'marche'; break;
@@ -706,7 +731,8 @@ export class MockBattle {
         x: Math.round(u.x * 10) / 10, y: Math.round(u.y * 10) / 10, dir: Math.round(u.dir * 1000) / 1000, form: u.form, state: u.state,
         morale: Math.round(u.morale), fat: Math.round(u.fat), xp: u.xp, ammo: u.ammo, ammo0: u.ammo0, range: u.range,
         w: Math.round(w), d: Math.round(d), target: u.target, seen: u.side === 0 ? this.units.some(e => e.side === 1 && Math.hypot(e.x - u.x, e.y - u.y) < 900) : true,
-        fire: u.fire, order: u.order && u.order.kind === 'move' ? { kind: 'move', x: u.order.x, y: u.order.y, dir: u.order.dir } : u.order ? { kind: u.order.kind, target: u.order.target } : null };
+        fire: u.fire, order: u.order ? u.order.kind : undefined,   // comme le vrai serveur : le nom de l'ordre seulement
+        ...(u.cls === 'artillerie' ? { shot: u.shot || 'auto', prio: u.prio || null } : {}) };
     });
     return {
       bid: this.bid, seq: this.seq, phase: this.phase, speed: this.speed, clock: Math.round(this.clock), hour: this.hourStr(),

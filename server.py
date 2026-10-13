@@ -314,6 +314,8 @@ class App:
     def save(self, name):
         name = name if isinstance(name, str) else ''   # une requête bricolée peut envoyer autre chose qu'un nom
         name = re.sub(r'[^A-Za-z0-9_\- àâäéèêëîïôöùûüç]', '', name).strip()[:40] or 'partie'
+        if name.lower() == AUTOSAVE:
+            name += '-1'   # sinon la prochaine sauvegarde automatique l'écraserait
         if not self.game:
             return dict(ok=False, msg='Aucune partie à sauvegarder.')
         try:
@@ -497,12 +499,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(st)
         if path == '/api/saves':
             return self._json(dict(saves=APP.list_saves(), running=APP.game is not None, net=APP.net_info(), update=UPDATE))
-        if path == '/api/info':
-            return self._json(APP.net_info())
         if path == '/' or path == '':
             path = '/index.html'
         full = os.path.normpath(os.path.join(WEB, path.lstrip('/')))
-        if not full.startswith(WEB) or not os.path.isfile(full):
+        if not full.startswith(WEB + os.sep) or not os.path.isfile(full):
             return self._send(404, b'Not found', 'text/plain')
         ctype = mimetypes.guess_type(full)[0] or 'application/octet-stream'
         if ctype.startswith('text/') or ctype in ('application/javascript',):
@@ -540,9 +540,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(APP.save(body.get('name')))
             if path == '/api/load':
                 return self._json(APP.load(body.get('name')))
-            if path == '/api/quit':
-                APP.game = None
-                return self._json(dict(ok=True))
         self._json(dict(ok=False, msg='Route inconnue.'), 404)
 
 

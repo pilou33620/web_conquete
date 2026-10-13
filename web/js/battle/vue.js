@@ -402,7 +402,7 @@ export class BattleView {
     // ordres en cours de mes unités : trajet pointillé et emplacement d'arrivée
     for (const u of this.units.values()) {
       if (u.side !== this.me || u._ghost || u.state === 'hors') continue;
-      const o = this.orders.get(u.id) || (u.order && typeof u.order === 'object' && u.order.kind === 'move' ? u.order : null);
+      const o = this.orders.get(u.id);
       const selected = this.sel.has(u.id);
       const path = Array.isArray(u.path) && u.path.length ? u.path : null;
       if (o && o.kind === 'move' && o.x != null && Math.hypot(o.x - u.x, o.y - u.y) > 10) {

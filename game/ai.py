@@ -19,7 +19,7 @@ MIX = {
 }
 VALUE = {'capitale': 12, 'ville': 5, 'fort': 3, 'village': 2}
 # cours ordinaires du marché (voir Game.new_day) : on n'achète pas quand les prix s'envolent
-MARKET_BASE = dict(vivres=0.6, fer=2.0, bois=1.0, outils=3.0, recrues=0.5)
+MARKET_BASE = {k: v for k, v in R.MARKET_BASE.items() if k != 'armes'}   # (les armes s'achètent à part : arms_room)
 TAX_FLOOR = 0.1   # impôts les plus légers qu'une IA consente quand son trésor déborde
 FLOOD = 4.0       # au-delà de ce multiple du trésor de guerre, c'est le trop-plein : impôts remis, remparts partout
 
@@ -132,7 +132,8 @@ class AI:
         à un prix raisonnable."""
         g, r, floor, purse = self.g, self.f['res'], self.arms_floor(), self.arms_purse()
         room = {}
-        for k, base in (('armes', 3.5), ('fer', 2.0)):
+        for k in ('armes', 'fer'):
+            base = R.MARKET_BASE[k]
             p = g.market[k]
             buy = min(1000, purse / (1.5 * p)) if purse > 0 and p <= 1.35 * base else 0
             room[k] = r[k] - floor[k] + buy
@@ -678,7 +679,7 @@ class AI:
             for b in idle[i + 1:]:
                 if b['id'] in g.armies and abs(a['x'] - b['x']) < 1.5 and abs(a['y'] - b['y']) < 1.5:
                     g.merge(code, a['id'], b['id'])
-        self.rally = self.rally_node()
+        self._rally_stale = True   # point de ralliement recalculé seulement s'il sert (voir rally)
         mine = [a for a in g.armies.values() if a['owner'] == code]
         taken = {}
         for a in mine:
@@ -786,6 +787,15 @@ class AI:
             r = self.rally
             if r is not None and r != a['at_node']:
                 self.go(a, r, tr=not wars)   # en guerre, le front se gagne en chemin
+
+    @property
+    def rally(self):
+        """Point de ralliement des armées sans objectif, calculé à la demande une fois par revue militaire
+        (le calcul compare chaque place à chaque cible : inutile quand toutes les armées ont un objectif)."""
+        if getattr(self, '_rally_stale', False):
+            self._rally_stale = False
+            self._rally = self.rally_node()
+        return getattr(self, '_rally', None)
 
     def rally_node(self):
         g, code = self.g, self.code

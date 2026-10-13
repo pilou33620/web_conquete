@@ -3,9 +3,9 @@
 // troupeaux (et bergers landais sur leurs échasses), écume sur la côte, reflets sur l'océan, courant des fleuves,
 // phare de Cordouan. Purement décoratif : animé en temps réel (même partie en pause), sans lien avec la simulation,
 // et dessiné seulement pour ce qui est à l'écran, au zoom où on le distingue.
+import { clamp } from './battle/formes.js';
 const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 const TAU = Math.PI * 2;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const frac = v => v - Math.floor(v);
 function hash(i, j, k = 0) {
   let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0;

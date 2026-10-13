@@ -640,30 +640,6 @@ class GeoMap:
             x, y = c % W + 0.5, c // W + 0.5
             self.cellnode[c] = min(by_dept[d], key=lambda t: (t[1] - x) ** 2 + (t[2] - y) ** 2)[0]
 
-    def _build_cellnode_euclid(self):
-        W, H = self.W, self.H
-        by_dept = {}
-        for n in self.nodes:
-            w = {'capitale': 1.35, 'ville': 1.15, 'village': 1.0, 'fort': 0.85}[n['type']]
-            by_dept.setdefault(self.dept_codes.index(n['dept']) + 1, []).append((n['id'], n['x'], n['y'], w))
-        cn = bytearray([255]) * (W * H)
-        for c in range(W * H):
-            d = self.dept[c]
-            if d == 0 or self.terrain[c] in (T_OCEAN, T_EAU):
-                continue
-            cands = by_dept.get(d)
-            if not cands:
-                continue
-            x, y = c % W + 0.5, c // W + 0.5
-            jit = (fbm(x / 6, y / 6, 21) - 0.5) * 6.0
-            best, bi = 1e9, 255
-            for nid, nx, ny, w in cands:
-                dd = math.hypot(x - nx, y - ny) / w + jit * (0.5 + _h(nid, 7, 3))
-                if dd < best:
-                    best, bi = dd, nid
-            cn[c] = bi
-        self.cellnode = cn
-
     def node_of_cell(self, x, y):
         c = self.cell(x, y)
         if c < 0:

@@ -1,5 +1,6 @@
 // Rendu de la carte illustrée de l'Aquitaine (canvas 2D, coordonnées monde en km)
 import { Ambient } from './ambient.js';
+import { clamp, hexRgb } from './battle/formes.js';
 import { TownArt } from './towns.js';
 const TILE = 256;
 // niveaux de détail des tuiles (pixels par km) : une échelle fine, pour qu'une tuile ne soit jamais beaucoup
@@ -29,7 +30,6 @@ function vnoise(x, y, s) {
   const a = hash(ix, iy, s), b = hash(ix + 1, iy, s), c = hash(ix, iy + 1, s), d = hash(ix + 1, iy + 1, s);
   return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
 }
-function hexRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
 // éclaircir / assombrir une couleur : mis en cache, appelés pour chaque bloc de régiment à chaque image
@@ -42,7 +42,6 @@ function shade(h, t, to) {
 }
 function lighten(h, t) { return shade(h, t, 1); }
 function darken(h, t) { return shade(h, t, 0); }
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // arme d'un type de régiment ('inf', 'cavalerie', 'artillerie') et ordre dispersé, d'après les règles (repli pour les anciennes règles)
 export const unitCls = (rules, t) => rules.units[t]?.cls || (t === 'cavalerie' || t === 'artillerie' ? t : 'inf');
 export const unitLight = (rules, t) => rules.units[t]?.light ?? t === 'legere';

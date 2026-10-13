@@ -2,7 +2,7 @@
 from . import rules as R
 from . import army_actions as AA
 
-BASE_VALUE = dict(livres=1.0, vivres=0.6, fer=2.0, bois=1.0, armes=3.5, outils=3.0, recrues=0.5)
+BASE_VALUE = dict(livres=1.0, **R.MARKET_BASE)
 
 
 

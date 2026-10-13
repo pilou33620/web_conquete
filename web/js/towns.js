@@ -2,8 +2,8 @@
 // (pierre blonde et tuiles du Bordelais, toits bruns du Périgord, colombages des Landes, brique de l'Agenais,
 // murs blancs et ardoise du Béarn). Chaque place est peinte une fois dans une petite image mise en cache ;
 // à chaque image ne s'ajoutent que l'animation : drapeau au clocher, habitants qui vont et viennent, pigeons.
+import { clamp } from './battle/formes.js';
 const TAU = Math.PI * 2;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function hash(i, j, k = 0) {
   let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0;
   n = Math.imul(n ^ (n >>> 13), 1274126177);
