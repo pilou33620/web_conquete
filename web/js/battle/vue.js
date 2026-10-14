@@ -77,6 +77,7 @@ export class BattleView {
     this.fx.attach(this.scene, this.relief.heightAt);
     this.decor = new Decor(this.terrain, this.relief, this.q);
     this.scene.add(this.decor.group);
+    this.setShadows();
     this.art.setYear(m.year);   // coiffures de l'époque
     this.W = this.terrain.W; this.H = this.terrain.H;
     this.cam = { x: this.W / 2, y: this.H / 2, z: this.fitZ(), yaw: 0 };
@@ -123,8 +124,18 @@ export class BattleView {
     this.terrain?.setQuality(this.q);
     this.relief?.setQuality(this.q);
     this.troops?.setQuality(this.q);
+    if (this.relief) this.setShadows();
     this.resize();
     this.clampCam();
+  }
+
+  // ombres portées selon la qualité (fx : 0 aucune, 1 le décor, 2 et 3 aussi les troupes)
+  setShadows() {
+    const level = this.q.ombres ?? this.q.fx ?? 2;
+    this.relief.shadows(this.renderer, level);
+    this.troops.setShadows(level >= 2);
+    // (les matériaux déjà compilés doivent l'être de nouveau avec ou sans ombres)
+    this.scene.traverse(o => { if (o.material) o.material.needsUpdate = true; });
   }
 
   // ------------------------------------------------------------------ serveur
@@ -359,6 +370,7 @@ export class BattleView {
     cam.aspect = this.vw / this.vh; cam.near = clamp(fr.dist * 0.02, 0.5, 50); cam.far = fr.dist * 6 + 9000;
     cam.updateProjectionMatrix();
     cam.position.set(fr.E[0], fr.E[1], fr.E[2]); cam.lookAt(fr.T[0], fr.T[1], fr.T[2]);
+    this.relief.follow(fr);
     const deploy = this.st?.phase === 'deploiement';
     const hour = this.hourNum(), sky = { weather: this.st?.weather || this.map?.weather, light: this.st?.light ?? 1, hour, wind: this.st?.wind };
     const ciel = this.fx.ciel(sky, this.terrain.season);

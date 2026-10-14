@@ -70,8 +70,8 @@ Détail, critères et vérifications : `tasks/todo.md`.
 - [x] T12 : arbres instanciés
 - [x] T13 : maisons, église, moulins, ponts, portes
 - [x] T14 : remparts, bastions, brèches, tranchées, barricades, haies, murets, clôtures
-- [ ] T15 : ombres portées
-- [ ] Point d'étape 4
+- [x] T15 : ombres portées
+- [x] Point d’étape 4
 
 ### Étape 5 : finitions
 - [ ] T16 : profils de qualité 3D, mesure automatique, message sans WebGL 2

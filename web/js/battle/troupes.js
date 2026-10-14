@@ -404,27 +404,33 @@ export class Troops {
     this.pattern = flagPattern(this.year);
     this.addKind('etoffe', flagCloth(), this.pattern);
     this.addKind('fanion', flagCloth(true), this.pattern);
+    const soft = new THREE.CanvasTexture(relief.t.ombre);
+    this.blobs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: soft, color: '#000000', transparent: true, opacity: 0.32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }), MAXU);
+    this.blobs.count = 0; this.blobs.frustumCulled = false; this.blobs.renderOrder = 1;
+    this.group.add(this.blobs);
   }
 
   // def : 'HORSE' (cheval), 'GUN' (pièce, voiture), 'CREW' (servant) : leur animation dans le vertex shader
   addKind(kind, geo, pattern = null, def = null) {
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: pattern ? THREE.DoubleSide : THREE.FrontSide });
     if (def) mat.defines = { [def]: '' };
-    mat.onBeforeCompile = sh => {
-      Object.assign(sh.uniforms, this.uni);
-      if (pattern) sh.uniforms.uPattern = { value: pattern };
-      sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\n' + VERT_HEAD + (pattern ? 'varying vec2 vUv2;' : ''))
-        .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${VERT_POSE}\n${turn('objectNormal', false)}`)
-        .replace('#include <begin_vertex>', `vec3 transformed = position;
-          ${pattern ? `vUv2 = uv;
+    const place = `vec3 transformed = position;
+          ${pattern ? `
           // l'étoffe ondule, d'autant plus loin de la hampe
           float k = 0.08 - transformed.z;
           transformed.x += sin(uTime * 4.2 - k * 2.0 + ph) * 0.12 * k;` : ''}
           ${turn('transformed', true)}
           transformed.y = transformed.y * crouch + bob;
           transformed *= aAnim.z;
-          transformed += vec3(base.x, hAt(base), base.y);`)
+          transformed += vec3(base.x, hAt(base), base.y);`;
+    mat.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, this.uni);
+      if (pattern) sh.uniforms.uPattern = { value: pattern };
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\n' + VERT_HEAD + (pattern ? 'varying vec2 vUv2;' : ''))
+        .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${VERT_POSE}\n${turn('objectNormal', false)}`)
+        .replace('#include <begin_vertex>', (pattern ? 'vUv2 = uv;\n' : '') + place)
         .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart;');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying float vFade, vPart;' + (pattern ? '\nuniform sampler2D uPattern; varying vec2 vUv2;' : ''))
@@ -434,7 +440,15 @@ export class Troops {
         .replace('#include <color_fragment>', pattern ? 'diffuseColor.rgb *= mix(vColor.rgb, vec3(0.95), texture2D(uPattern, vUv2).a * step(0.5, vPart));' : '#include <color_fragment>');
     };
     mat.customProgramCacheKey = () => 'troupes-' + (pattern ? 'etoffe' : def || 'homme');
-    const k = { geo, mat, mesh: null, cap: 0, n: 0, slot: null, anim: null, coat: null };
+    // passe d'ombre : la même mise en place des figurines
+    const depth = new THREE.MeshDepthMaterial();
+    if (def) depth.defines = { [def]: '' };
+    depth.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, this.uni);
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_HEAD).replace('#include <begin_vertex>', VERT_POSE + place);
+    };
+    depth.customProgramCacheKey = () => 'troupes-ombre-' + (pattern ? 'etoffe' : def || 'homme');
+    const k = { geo, mat, depth, mesh: null, cap: 0, n: 0, slot: null, anim: null, coat: null };
     this.kinds.set(kind, k);
     this.grow(k, 256);
   }
@@ -449,6 +463,7 @@ export class Troops {
     k.geo.setAttribute('aCoat', new THREE.InstancedBufferAttribute(coat, 3).setUsage(THREE.DynamicDrawUsage));
     k.mesh = new THREE.InstancedMesh(k.geo, k.mat, cap);
     k.mesh.count = 0; k.mesh.frustumCulled = false;
+    k.mesh.customDepthMaterial = k.depth; k.mesh.castShadow = !!this.castShadow;
     this.group.add(k.mesh);
   }
 
@@ -484,6 +499,7 @@ export class Troops {
     }
     for (const [id, i] of this.index) if (!seen.has(id)) { this.index.delete(id); this.lays.delete(id); this.free.push(i); dirty = true; }
     this.units.needsUpdate = true;
+    if (this.blobs.visible) this.drawBlobs(list);
     if (dirty) this.rebuild(colors, scale);
   }
   // toutes les figurines, rangées par sorte
@@ -521,9 +537,28 @@ export class Troops {
       for (const a of ['aSlot', 'aAnim', 'aCoat']) { const at = k.geo.attributes[a]; at.needsUpdate = true; at.clearUpdateRanges(); at.addUpdateRange(0, k.n * at.itemSize); }
     }
   }
+  // ombres portées des figurines (qualité Haute et Ultra) ; sinon une ombre douce sous chaque régiment (blobs)
+  setShadows(on) {
+    this.castShadow = on;
+    for (const k of this.kinds.values()) k.mesh.castShadow = on;
+    this.blobs.visible = !on;
+  }
+  // ombre douce sous chaque régiment : un panneau sombre posé au sol, à la taille de son emprise
+  drawBlobs(list) {
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    let n = 0;
+    for (const un of list) {
+      if (n >= this.blobs.instanceMatrix.count || un.state === 'deroute') continue;
+      p.set(un.x, this.relief.heightAt(un.x, un.y) + 0.08, un.y);
+      q.setFromAxisAngle(up, Math.PI / 2 - un.dir);
+      this.blobs.setMatrixAt(n++, m.compose(p, q, s.set(Math.max(4, un.w) + 5, 1, Math.max(4, un.d) + 5)));
+    }
+    this.blobs.count = n; this.blobs.instanceMatrix.needsUpdate = true;
+  }
   setQuality(q) { this.q = q; }
   dispose() {
-    for (const k of this.kinds.values()) { k.geo.dispose(); k.mat.dispose(); k.mesh.dispose(); }
+    this.blobs.geometry.dispose(); this.blobs.material.dispose(); this.blobs.material.map.dispose();
+    for (const k of this.kinds.values()) { k.geo.dispose(); k.mat.dispose(); k.depth.dispose(); k.mesh.dispose(); }
     this.units.dispose(); this.heights.dispose(); this.pattern.dispose();
   }
 }

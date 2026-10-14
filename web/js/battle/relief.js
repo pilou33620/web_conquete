@@ -81,8 +81,10 @@ export class Relief {
     // lumière : ciel et sol (hémisphère), soleil
     this.hemi = new THREE.HemisphereLight('#dfe8f2', '#5b5a3a', 1.7);
     this.sun = new THREE.DirectionalLight('#fff4e2', 2.2);
-    this.sun.position.set(-0.55, 0.75, 0.45);   // (direction seulement) le soleil au sud-ouest, haut sur l'horizon
-    this.group.add(this.hemi, this.sun);
+    this.sunDir = new THREE.Vector3(-0.55, 0.75, 0.45).normalize();   // vers le soleil (ciel la remplace)
+    this.sun.position.copy(this.sunDir).multiplyScalar(2500);
+    this.group.add(this.hemi, this.sun, this.sun.target);
+    this.mesh.receiveShadow = true;
   }
   // altitude de la scène (m, 0 au plus bas du champ) ; hors du champ, celle du bord
   heightAt = (x, y) => (this.t.fineAt(clamp(x, 0, this.W), clamp(y, 0, this.H)) - this.t.hmin) * this.ex;
@@ -222,6 +224,26 @@ export class Relief {
     this.dirty();
   }
 
+  // ombres portées du soleil (qualité : 0 aucune, 1 décor seulement, 2 et 3 décor et troupes), carte de 1024 à 4096 px
+  shadows(renderer, level) {
+    renderer.shadowMap.enabled = level > 0;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.sun.castShadow = level > 0;
+    if (level > 0) {
+      const size = [0, 1024, 2048, 4096][level];
+      if (this.sun.shadow.mapSize.x !== size) { this.sun.shadow.mapSize.set(size, size); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; }
+      this.sun.shadow.bias = -0.0004; this.sun.shadow.normalBias = 0.6;
+    }
+  }
+  // le cadre des ombres suit la cible de la caméra (plus grand de loin), calé sur les texels pour ne pas scintiller
+  follow(fr) {
+    if (!this.sun.castShadow) return;
+    const S = clamp(fr.dist * 0.9, 70, 1400), sh = this.sun.shadow, c = sh.camera, step = 2 * S / sh.mapSize.x;
+    const tx = Math.round(fr.T[0] / step) * step, tz = Math.round(fr.T[2] / step) * step, d = this.sunDir;
+    this.sun.target.position.set(tx, fr.T[1], tz);
+    this.sun.position.set(tx + d.x * 2500, fr.T[1] + d.y * 2500, tz + d.z * 2500);
+    if (c.right !== S) { c.left = -S; c.right = S; c.top = S; c.bottom = -S; c.near = 100; c.far = 5000; c.updateProjectionMatrix(); }
+  }
   // ciel, brume (selon la distance de la caméra : le champ reste net, le prolongement s'y perd)
   setup(scene) {
     const sky = new THREE.Color('#cbd8e4');
@@ -233,7 +255,8 @@ export class Relief {
   update(scene, dist, coverA = 0, sky = null, time = 0) {
     this.uni.uCoverA.value = coverA;
     if (!sky) return;
-    this.sun.position.set(...sky.sunDir); this.sun.color.setRGB(...sky.sun); this.sun.intensity = sky.sunI;
+    this.sunDir.set(...sky.sunDir).normalize();
+    this.sun.position.copy(this.sunDir).multiplyScalar(2500).add(this.sun.target.position); this.sun.color.setRGB(...sky.sun); this.sun.intensity = sky.sunI;
     this.hemi.color.setRGB(...sky.hemiSky); this.hemi.groundColor.setRGB(...sky.hemiGround); this.hemi.intensity = sky.hemiI;
     scene.background.setRGB(...sky.fog); scene.fog.color.setRGB(...sky.fog);
     scene.fog.near = (dist * 0.8 + 600) * sky.fogNear;

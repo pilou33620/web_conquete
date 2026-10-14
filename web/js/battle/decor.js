@@ -196,6 +196,7 @@ export class Decor {
           if (tint) mesh.setColorAt(i, tint(tr, col));
         });
         mesh.computeBoundingSphere();
+        mesh.castShadow = true;
         this.group.add(mesh);
       };
       if (crown) mk(crown, crownMat, (tr, c) => {
@@ -274,7 +275,9 @@ export class Decor {
     const geo = merge(P.map(([g, c]) => { const n = g.index ? g.toNonIndexed() : g; if (n !== g) g.dispose(); return paint(n, c); }));
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
     this.disposables.push(geo, mat);
-    this.group.add(new THREE.Mesh(geo, mat));
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = mesh.receiveShadow = true;
+    this.group.add(mesh);
   }
   // ------------------------------------------------------------------ enceintes, ouvrages, haies
   walls() {
@@ -338,6 +341,7 @@ export class Decor {
     if (!geo) return;
     if (!this.wallMat) { this.wallMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }); this.disposables.push(this.wallMat); }
     this.wallMesh = new THREE.Mesh(geo, this.wallMat);
+    this.wallMesh.castShadow = this.wallMesh.receiveShadow = true;
     this.group.add(this.wallMesh);
   }
   setQuality(q) { this.q = q; }

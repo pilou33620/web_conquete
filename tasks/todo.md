@@ -128,14 +128,14 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/decor.js`, `web/js/battle/terrain.js`
   - Taille : M
 
-- [ ] **T15 : ombres portées**
+- [x] **T15 : ombres portées**
   - Critères : ombre du soleil sur le relief, le décor et les troupes, autour de la cible de la caméra ; selon la
     qualité (sans ombre en Basse, ombre douce sous chaque régiment en repli).
   - Vérif : captures avec et sans ombres ; images par seconde relevées.
   - Fichiers : `web/js/battle/vue.js`, `web/js/battle/relief.js`, `web/js/battle/troupes.js`, `web/js/battle/decor.js`
   - Taille : M
 
-- [ ] **Point d'étape 4** : captures, commit, revue avec toi.
+- [x] **Point d’étape 4** : captures, commit, revue avec toi.
 
 ## Étape 5 : finitions
 
