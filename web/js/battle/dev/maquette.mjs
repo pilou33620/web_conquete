@@ -61,7 +61,7 @@ http.createServer(async (req, res) => {
       const bid = q.bid || [q.scen || 'bocage', q.season || '', q.weather || '', q.hour || ''].join('-').replace(/-+$/, '');
       const b = new MockBattle(bid, q);
       battles.set(bid, b);
-      if (q.start) b.command({ sub: 'start' });
+      if (q.start && q.start !== '0') b.command({ sub: 'start' });
       if (q.avance) { b.speed = 0; b.advance(+q.avance); }
       if (q.speed != null) b.speed = +q.speed;
       if (q.attente) pending = b; else active = b;

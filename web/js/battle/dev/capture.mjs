@@ -6,9 +6,10 @@
 //   node web/js/battle/dev/capture.mjs vignes /tmp/v.png --q "season=automne&hour=18&avance=600" --wait 6000 \
 //        --js "__btView.moveCam(1500, 1000, 3)" --size 1280x800
 //
-// Options : --q (paramètres de banc.html, en plus de scen et start=1), --js (code lancé quand la bataille est prête ;
+// Options : --q (paramètres de banc.html, en plus de scen et start=1 ; start=0 pour le déploiement), --js (code lancé quand la bataille est prête ;
 // window.__btView est la vue), --wait (ms avant la capture, défaut 4000), --size (défaut 1400x800), --gpu (essayer la
-// carte graphique au lieu de SwiftShader).
+// carte graphique au lieu de SwiftShader), --qualite basse|moyenne|haute|ultra (défaut haute, choisie « à la main » : la
+// mesure des images par seconde, très lente sans carte graphique, ne la fait pas descendre).
 // Gestes, après --js (de vrais événements, comme une souris ou des doigts) :
 //   --drag x0,y0,x1,y1 (ou --drag js : les coordonnées sont lues dans window.__drag), --button left|right|middle,
 //   --hold (capture avant de relâcher : la flèche d'ordre est encore tracée) ;
@@ -69,8 +70,9 @@ try {
   const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
   const s = (m, p) => send(m, p, sessionId);
   await s('Runtime.enable'); await s('Log.enable'); await s('Page.enable');
+  await s('Page.addScriptToEvaluateOnNewDocument', { source: `try { localStorage.setItem('conquete.bataille.qualite', '${opt('--qualite') || 'haute'}'); } catch (e) {}` });
   await s('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
-  const q = new URLSearchParams(`scen=${scen}&start=1${extra ? '&' + extra : ''}`);
+  const q = new URLSearchParams(`scen=${scen}${/(^|&)start=/.test(extra) ? '' : '&start=1'}${extra ? '&' + extra : ''}`);   // (start=0 : déploiement)
   await s('Page.navigate', { url: `http://127.0.0.1:${port}/js/battle/dev/banc.html?${q}` });
   const evalJs = async expr => (await s('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true })).result?.value;
   for (let t = 0; (await evalJs('document.title')) !== 'pret'; t += 250) {

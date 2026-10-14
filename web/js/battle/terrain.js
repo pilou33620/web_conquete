@@ -566,6 +566,14 @@ export class Terrain {
     p.setTransform(m.scaleSelf(1 / s, 1 / s));
     return p;
   }
+  // peint un rectangle du monde dans un canevas déjà fait (à la bonne taille : wm·s × hm·s), sans en créer un neuf
+  paintInto(cv, x0, y0, wm, hm, s) {
+    const g = cv.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    this.paint(g, x0, y0, wm, hm, s);
+    this.trim();
+    return cv;
+  }
   paintCanvas(x0, y0, wm, hm, s) {
     const cv = canvas(wm * s, hm * s), g = cv.getContext('2d');
     this.paint(g, x0, y0, wm, hm, s);
@@ -691,8 +699,9 @@ export class Terrain {
       }
     }
     mark('relief');
-    // décalcomanies : tués, trous d'obus (seulement sur le sol découvert : bare), sous tout ce qui est debout
-    for (const d of this.decals) if (d.x > x0 - 10 && d.x < x0 + wm + 10 && d.y > y0 - 10 && d.y < y0 + hm + 10) paintDecal(g, d, s);
+    // décalcomanies : tués, trous d'obus (seulement sur le sol découvert : bare), sous tout ce qui est debout (en 3D, ce
+    // sont des panneaux posés sur le relief : relief.js)
+    if (!this.flat) for (const d of this.decals) if (d.x > x0 - 10 && d.x < x0 + wm + 10 && d.y > y0 - 10 && d.y < y0 + hm + 10) paintDecal(g, d, s);
     // murs et remparts, haies et clôtures, puis arbres et maisons en volume
     this.paintWalls(g, s);
     this.paintFences(g, s);
@@ -1182,12 +1191,14 @@ export class Terrain {
       if (x + m > i * span && x - m < (i + 1) * span && y + m > j * span && y - m < (j + 1) * span) { this.tiles.delete(k); t.width = t.height = 0; }
     }
   }
-  // tués, chevaux, trous d'obus : peints dans le fond (tuiles faites et à venir)
+  // tués, chevaux, trous d'obus : peints dans le fond (tuiles faites et à venir) ; en 3D, seulement gardés (relief.js
+  // les pose sur le relief). Renvoie ceux qui tombent sur le sol découvert.
   addDecals(list) {
     list = list.filter(d => this.bare(d.x, d.y));
-    if (!list.length) return;
+    if (!list.length) return list;
     this.decals.push(...list);
     if (this.decals.length > 6000) this.decals.splice(0, this.decals.length - 6000);
+    if (this.flat) return list;
     const paintInto = (cv, x0, y0, s) => {
       const g = cv.getContext('2d');
       g.setTransform(s, 0, 0, s, -x0 * s, -y0 * s);
@@ -1198,6 +1209,7 @@ export class Terrain {
       const k = t._k, L = Math.floor(k / 100000), j = Math.floor((k % 100000) / 1000), i = k % 1000, span = TS / L;
       if (list.some(d => d.x > i * span - 10 && d.x < (i + 1) * span + 10 && d.y > j * span - 10 && d.y < (j + 1) * span + 10)) paintInto(t, i * span, j * span, L);
     }
+    return list;
   }
   dispose() {
     for (const t of this.tiles.values()) t.width = t.height = 0;
@@ -1240,7 +1252,7 @@ function segInter(p1, p2, p3, p4) {
   const v = ((p3[0] - p1[0]) * (p2[1] - p1[1]) - (p3[1] - p1[1]) * (p2[0] - p1[0])) / d;
   return u >= 0 && u <= 1 && v >= 0 && v <= 1 ? [p1[0] + (p2[0] - p1[0]) * u, p1[1] + (p2[1] - p1[1]) * u] : null;
 }
-function paintDecal(g, d, s) {
+export function paintDecal(g, d, s) {
   const el = (x, y, rx, ry) => { g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, TAU); g.fill(); };
   g.save(); g.translate(d.x, d.y); g.rotate(d.a || 0);
   if (d.k === 'trou') {

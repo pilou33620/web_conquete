@@ -113,6 +113,7 @@ export class BattleView {
     this.art.setQuality(this.q);
     this.fx.setQuality(this.q);
     this.terrain?.setQuality(this.q);
+    this.relief?.setQuality(this.q);
     this.resize();
     this.clampCam();
   }
@@ -147,7 +148,7 @@ export class BattleView {
     const prev = this.st;
     this.st = st;
     // brèches ouvertes au canon depuis le chargement de la carte
-    for (const b of (st.breaches || []).slice(this.nBreach || 0)) { this.terrain.addBreach(b); this.relief.dirty(); }
+    for (const b of (st.breaches || []).slice(this.nBreach || 0)) { this.terrain.addBreach(b); this.relief.invalidate(b[1], b[2], (b[3] || 20) + 40); }
     this.nBreach = Math.max(this.nBreach || 0, (st.breaches || []).length);
     this.seq = st.seq ?? this.seq;
     this.me = st.me ?? 0;
@@ -202,7 +203,7 @@ export class BattleView {
         this.fx.push(f, f.u != null ? this.units.get(String(f.u)) : this.nearest(f.x, f.y), k * gap);
       }
     }
-    if (this.fx.decals.length) { this.terrain.addDecals(this.fx.decals.splice(0)); this.relief.dirty(); }
+    if (this.fx.decals.length) this.relief.decals.add(this.terrain.addDecals(this.fx.decals.splice(0)));
     this.ui.update(st, prev);
   }
   // tués laissés au sol, dans l'emprise de l'unité
@@ -213,8 +214,7 @@ export class BattleView {
       const uu = (Math.random() - 0.5) * u.w, vv = (Math.random() - 0.5) * u.d - (u.state === 'marche' ? 4 : 0);
       out.push({ k: cav && q % 2 ? 'cheval' : 'mort', x: u.x + c * vv - s * uu, y: u.y + s * vv + c * uu, a: Math.random() * TAU, c: col });
     }
-    this.terrain.addDecals(out);
-    this.relief.dirty();
+    this.relief.decals.add(this.terrain.addDecals(out));
   }
   nearest(x, y) {
     let best = null, bd = 40;
@@ -350,7 +350,10 @@ export class BattleView {
     cam.aspect = this.vw / this.vh; cam.near = clamp(fr.dist * 0.02, 0.5, 50); cam.far = fr.dist * 6 + 9000;
     cam.updateProjectionMatrix();
     cam.position.set(fr.E[0], fr.E[1], fr.E[2]); cam.lookAt(fr.T[0], fr.T[1], fr.T[2]);
-    this.relief.update(this.scene, fr.dist);
+    const deploy = this.st?.phase === 'deploiement';
+    this.relief.update(this.scene, fr.dist, (deploy && this.showCover !== false) || this.showCover === true ? 0.42 + Math.sin(time * 2.2) * 0.1 : 0);
+    // sol plus fin autour de la caméra : un bloc par image (aucun pendant un pincement), deux si l'image est vite faite
+    this.detailBusy = this.relief.updateDetail(this.renderer, this, this.controls.busy() ? 0 : this.drawMs < 12 ? 2 : 1);
     const vis = [...this.units.values()].filter(u => u.state !== 'hors' && this.onScreen(u));
     this.drawBlocks(vis);
     this.renderer.render(this.scene, cam);

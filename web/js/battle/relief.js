@@ -2,10 +2,21 @@
 // lâche au-delà (le terrain se prolonge sur 2 km et se perd dans la brume, ses altitudes celles du bord). Le sol est
 // peint par terrain.js (en mode « à plat ») ; hors du champ, il passe à une herbe sans détail. Un liseré doré marque
 // le bord du champ. Ciel, brume et lumières de la scène sont ici aussi.
+//
+// Finesse du sol : l'image entière (0,5 px/m) en secours, et autour de la caméra des niveaux plus fins (2, 4, 8,
+// 16 px/m selon la qualité). Chaque niveau est une texture de 4 × 4 blocs de 512 px qui suit la caméra : un bloc qui
+// sort d'un côté est repeint de l'autre (adressage torique), quelques blocs par image. Mémoire fixe (16 Mo par
+// niveau). Pour chaque pixel, le shader prend le niveau le plus fin qui est peint à cet endroit et pas plus fin que
+// l'écran (sans quoi il scintillerait).
+//
+// Tués, chevaux et trous d'obus : de petits panneaux posés sur le relief (un lot par sorte), pas repeints dans le sol.
 import * as THREE from '../../vendor/three/three.module.js';
-import { clamp } from './formes.js';
+import { clamp, canvas } from './formes.js';
+import { paintDecal } from './terrain.js';
 
 const STEP = 10, OUT = 2000, OUT_STEP = 125;   // maille dans le champ, prolongement au-delà, maille du prolongement
+const TS = 512, N = 4;                         // côté d'un bloc (px), blocs par côté d'un niveau de détail
+const LEVELS = [2, 4, 8, 16];                  // niveaux de détail possibles (px/m)
 
 // abscisses du maillage : [−OUT, 0[ par OUT_STEP, [0, L] par STEP, ]L, L + OUT] par OUT_STEP
 function ticks(L) {
@@ -29,8 +40,22 @@ export class Relief {
     this.tex.colorSpace = THREE.SRGBColorSpace;
     this.tex.flipY = false;
     this.tex.anisotropy = 4;
+    this.cover = new THREE.CanvasTexture(terrain.coverImg);
+    this.cover.colorSpace = THREE.SRGBColorSpace;
+    this.cover.flipY = false;
+    this.uni = {
+      uOuter: { value: new THREE.Color() }, uSize: { value: new THREE.Vector2(this.W, this.H) },
+      uCover: { value: this.cover }, uCoverA: { value: 0 },
+      uLv0: { value: null }, uLv1: { value: null }, uLv2: { value: null }, uLv3: { value: null }, uSpan: { value: new THREE.Vector4() }, uSlots: { value: Array.from({ length: N * N * 4 }, () => new THREE.Vector2(-1e4, -1e4)) },
+    };
+    this.scratch = canvas(TS, TS);
+    this.scratchTex = new THREE.CanvasTexture(this.scratch);
+    this.scratchTex.colorSpace = THREE.SRGBColorSpace;
+    this.scratchTex.flipY = false;
+    this.setQuality(q);
     this.mesh = new THREE.Mesh(this.geometry(), this.material());
     this.group.add(this.mesh);
+    this.decals = new Decals(this);
     // lumière : ciel et sol (hémisphère), soleil
     this.hemi = new THREE.HemisphereLight('#dfe8f2', '#5b5a3a', 1.7);
     this.sun = new THREE.DirectionalLight('#fff4e2', 2.2);
@@ -66,13 +91,36 @@ export class Relief {
   material() {
     const m = new THREE.MeshLambertMaterial({ map: this.tex });
     const pal = this.t.pal;
-    this.outer = new THREE.Color(pal.neige ? '#dde3e8' : pal.pre[1]).multiplyScalar(pal.neige ? 0.95 : 0.82);
+    this.uni.uOuter.value.set(pal.neige ? '#dde3e8' : pal.pre[1]).multiplyScalar(pal.neige ? 0.95 : 0.82);
     m.onBeforeCompile = sh => {
-      sh.uniforms.uOuter = { value: this.outer };
-      sh.uniforms.uSize = { value: new THREE.Vector2(this.W, this.H) };
+      Object.assign(sh.uniforms, this.uni);
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec2 vWorld;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWorld = position.xz;');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform vec3 uOuter;\nuniform vec2 uSize;')
+        .replace('#include <common>', `#include <common>
+          uniform vec3 uOuter; uniform vec2 uSize; uniform sampler2D uCover; uniform float uCoverA;
+          // (quatre textures séparées : un tableau de textures se mêlait à uCover dans l'attribution des unités)
+          uniform sampler2D uLv0, uLv1, uLv2, uLv3; uniform vec4 uSpan; uniform vec2 uSlots[${N * N * 4}];
+          varying vec2 vWorld;
+          // un niveau de détail en p (m) : sa couleur, et ok = 1 si le bloc de p y est peint
+          vec4 lvl(sampler2D t, float span, int base, vec2 p, out float ok) {
+            ok = 0.0;
+            if (span <= 0.0) return vec4(0.0);
+            vec2 b = floor(p / span), s = mod(b, ${N}.0);
+            ok = all(equal(uSlots[base + int(s.x) + ${N} * int(s.y)], b)) ? 1.0 : 0.0;
+            return texture(t, fract(p / (span * ${N}.0)));
+          }`)
         .replace('#include <map_fragment>', `#include <map_fragment>
+          // niveaux de détail, du plus grossier au plus fin : chacun recouvre le précédent là où il est peint, et
+          // seulement s'il n'est pas plus fin que l'écran (texels par pixel : texels/m × m/pixel)
+          float mpp = length(fwidth(vWorld)), ok;
+          vec4 c;
+          ${LEVELS.map((L, i) => `c = lvl(uLv${i}, uSpan[${i}], ${i * N * N}, vWorld, ok);
+          diffuseColor.rgb = mix(diffuseColor.rgb, c.rgb, ok * (1.0 - smoothstep(1.2, 2.2, ${TS}.0 / max(uSpan[${i}], 1e-3) * mpp)));`).join('\n          ')}
+          // couverts (déploiement) : bois, bâti, hauteurs (plus appuyés que sur la carte 2D : la lumière les adoucit)
+          vec4 cv = texture(uCover, vMapUv);
+          diffuseColor.rgb = mix(diffuseColor.rgb, cv.rgb, min(0.85, cv.a * uCoverA * 2.4));
           // hors du champ : une herbe sans détail ; au bord, un liseré doré d'environ un pixel et demi
           vec2 m = min(vMapUv, 1.0 - vMapUv) * uSize;
           float e = min(m.x, m.y);
@@ -82,6 +130,73 @@ export class Relief {
     };
     return m;
   }
+
+  // ------------------------------------------------------------------ niveaux de détail du sol
+  setQuality(q) {
+    this.q = q;
+    for (const l of this.levels || []) l?.tex.dispose();
+    this.levels = LEVELS.map(L => L <= q.level ? { L, span: TS / L, slots: new Array(N * N).fill(null), tex: this.levelTex() } : null);
+    this.levels.forEach((l, i) => { this.uni[`uLv${i}`].value = l ? l.tex : this.tex; });   // (niveau absent : jamais lu, uSpan = 0)
+    this.uni.uSpan.value.set(...this.levels.map(l => l ? l.span : 0));
+    for (const v of this.uni.uSlots.value) v.set(-1e4, -1e4);
+  }
+  levelTex() {
+    const t = new THREE.DataTexture(null, TS * N, TS * N);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.minFilter = t.magFilter = THREE.LinearFilter;
+    t.generateMipmaps = false;
+    t.source.dataReady = false;   // réservée sur la carte graphique sans données : les blocs y sont copiés un à un
+    t.needsUpdate = true;
+    return t;
+  }
+  // peint au plus `budget` blocs manquants : ceux qu'on voit à l'écran d'abord, les niveaux grossiers avant les fins (un
+  // bloc grossier couvre 64 fois plus de terrain qu'un fin pour le même prix : la vue s'améliore partout, puis s'affine),
+  // les plus proches du sol vu au bas de l'écran (là où la caméra est la plus proche) ; les niveaux plus fins que
+  // nécessaire pour la vue sont sautés
+  updateDetail(renderer, view, budget) {
+    if (budget <= 0) return false;
+    const [gx, gy] = view.toWorld(view.vw / 2, view.vh * 0.72);
+    const near = view.toScreen(gx, gy)[2];                                    // distance de ce point à l'œil (m)
+    const need = clamp(view.fr().k / Math.max(1, near) * view.dpr * 2, 1, 16);   // px/m utiles au plus près
+    const todo = [];
+    this.levels.forEach((l, li) => {
+      if (!l || l.L > need * 1.5) return;
+      const bx0 = Math.floor(gx / l.span - N / 2 + 0.5), by0 = Math.floor(gy / l.span - N / 2 + 0.5);
+      const maxX = Math.ceil(this.W / l.span) - 1, maxY = Math.ceil(this.H / l.span) - 1;
+      for (let by = by0; by < by0 + N; by++) for (let bx = bx0; bx < bx0 + N; bx++) {
+        if (bx < 0 || by < 0 || bx > maxX || by > maxY) continue;
+        const si = (bx % N) + N * (by % N), s = l.slots[si];
+        if (s && s[0] === bx && s[1] === by) continue;
+        const [sx, sy, depth] = view.toScreen((bx + 0.5) * l.span, (by + 0.5) * l.span);
+        const seen = depth > 0 && sx > -view.vw * 0.5 && sx < view.vw * 1.5 && sy > -view.vh * 0.5 && sy < view.vh * 1.5;
+        todo.push({ li, bx, by, si, d: (seen ? 0 : 1000) + li * 10 + Math.hypot((bx + 0.5) * l.span - gx, (by + 0.5) * l.span - gy) / l.span });
+      }
+    });
+    todo.sort((a, b) => a.d - b.d);
+    for (const b of todo.slice(0, budget)) this.paintBlock(renderer, b.li, b.bx, b.by, b.si);
+    return todo.length > 0;
+  }
+  paintBlock(renderer, li, bx, by, si) {
+    const l = this.levels[li];
+    this.t.paintInto(this.scratch, bx * l.span, by * l.span, l.span, l.span, l.L);
+    // (le canevas n'est jamais une texture de la scène : ses pixels sont envoyés droit dans le niveau)
+    renderer.copyTextureToTexture(this.scratchTex, l.tex, null, new THREE.Vector2((si % N) * TS, Math.floor(si / N) * TS));
+    l.slots[si] = [bx, by];
+    this.uni.uSlots.value[li * N * N + si].set(bx, by);
+  }
+  // une brèche : les blocs qui la touchent sont à repeindre, l'image entière aussi
+  invalidate(x, y, r) {
+    this.levels.forEach((l, li) => {
+      if (!l) return;
+      l.slots.forEach((s, si) => {
+        if (!s || x + r < s[0] * l.span || x - r > (s[0] + 1) * l.span || y + r < s[1] * l.span || y - r > (s[1] + 1) * l.span) return;
+        l.slots[si] = null; this.uni.uSlots.value[li * N * N + si].set(-1e4, -1e4);
+      });
+    });
+    this.dirty();
+  }
+
   // ciel, brume (selon la distance de la caméra : le champ reste net, le prolongement s'y perd)
   setup(scene) {
     const sky = new THREE.Color('#cbd8e4');
@@ -89,17 +204,57 @@ export class Relief {
     scene.fog = new THREE.Fog(sky, 1000, 8000);
     scene.add(this.group);
   }
-  update(scene, dist) {
+  // coverA : opacité du voile des couverts (0 : caché)
+  update(scene, dist, coverA = 0) {
     scene.fog.near = dist * 0.8 + 600;
     scene.fog.far = dist * 3 + 5000;
+    this.uni.uCoverA.value = coverA;
   }
-  // le sol a été repeint (tués, trous d'obus, brèche) : la texture est renvoyée à la carte graphique, une fois par
-  // seconde au plus (une image entière à chaque tué coûterait trop)
+  // l'image entière a été repeinte (brèche) : renvoyée à la carte graphique, une fois par seconde au plus
   dirty() { this.isDirty = true; }
   tick(now) {
     if (this.isDirty && now - (this.upT || 0) > 1000) { this.tex.needsUpdate = true; this.isDirty = false; this.upT = now; }
   }
   dispose() {
-    this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.tex.dispose();
+    this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.tex.dispose(); this.cover.dispose(); this.scratchTex.dispose();
+    for (const l of this.levels) l?.tex.dispose();
+    this.decals.dispose();
   }
+}
+
+// ------------------------------------------------------------------ tués et trous d'obus
+// Un lot de panneaux par sorte (soldat tombé d'un camp, cheval, trou d'obus), peints une fois par terrain.js
+// (paintDecal) dans une petite image ; au-delà de 3000 panneaux d'une sorte, les plus anciens sont réutilisés.
+const DS = 3, DPX = 128, CAP = 3000, R0 = 1.48;   // côté de l'image (m), en pixels ; rayon du trou d'obus peint
+class Decals {
+  constructor(relief) { this.r = relief; this.sets = new Map(); }
+  add(list) {
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    for (const d of list) {
+      const key = d.k === 'mort' ? `mort|${d.c}` : d.k, set = this.sets.get(key) || this.make(key, d);
+      const k = d.k === 'trou' ? (d.r || 2.6) / R0 : 1;
+      p.set(d.x, this.r.heightAt(d.x, d.y) + 0.06, d.y);
+      q.setFromAxisAngle(up, -(d.a || 0));   // (le dessin tourne de x vers y ; autour de l'axe vertical, c'est −a)
+      set.mesh.setMatrixAt(set.n % CAP, m.compose(p, q, sc.set(DS * k, 1, DS * k)));
+      set.n++;
+      set.mesh.count = Math.min(set.n, CAP);
+      set.mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+  make(key, d) {
+    const cv = canvas(DPX, DPX), g = cv.getContext('2d'), s = DPX / DS;
+    g.setTransform(s, 0, 0, s, 0, 0);
+    paintDecal(g, { ...d, x: DS / 2, y: DS / 2, a: 0, r: R0 }, s);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const geo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshLambertMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
+    const mesh = new THREE.InstancedMesh(geo, mat, CAP);
+    mesh.count = 0; mesh.frustumCulled = false; mesh.renderOrder = 1;
+    this.r.group.add(mesh);
+    const set = { mesh, tex, n: 0 };
+    this.sets.set(key, set);
+    return set;
+  }
+  dispose() { for (const s of this.sets.values()) { s.mesh.geometry.dispose(); s.mesh.material.dispose(); s.tex.dispose(); s.mesh.dispose(); } this.sets.clear(); }
 }

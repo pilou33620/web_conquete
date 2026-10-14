@@ -51,7 +51,7 @@ Détail, critères et vérifications : `tasks/todo.md`.
 - [x] T2 : caméra orbitale (maths pures) et ses bancs
 - [x] T3 : vue WebGL, relief texturé par l'image entière, régiments en blocs, calque 2D
 - [x] T4 : gestes, tracés au sol et mini-carte en 3D
-- [ ] T5 : tuiles de texture du sol selon la distance, décalcomanies, brèches, voile des couverts
+- [x] T5 : tuiles de texture du sol selon la distance, décalcomanies, brèches, voile des couverts
 - [ ] Point d'étape 1 (captures envoyées, revue avec toi)
 
 ### Étape 2 : les troupes

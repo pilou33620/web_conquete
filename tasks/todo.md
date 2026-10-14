@@ -39,7 +39,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/commandes.js`, `web/js/battle/vue.js`, `web/js/battle/interface.js`
   - Taille : M
 
-- [ ] **T5 : tuiles de texture du sol, décalcomanies, brèches, couverts**
+- [x] **T5 : tuiles de texture du sol, décalcomanies, brèches, couverts**
   - Critères : les tuiles proches de la caméra reçoivent une texture plus fine (niveaux 1 à 16 px/m selon la qualité,
     budget mémoire repris), peinte quelques-unes par image, l'image entière en attendant ; tués et trous d'obus
     peints dans les textures ; brèche repeinte ; voile des couverts pendant le déploiement.
