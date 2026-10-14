@@ -763,6 +763,14 @@ export class Terrain {
     const items = [];
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) for (const tr of this.treeGrid[j * cols + i]) items.push(tr);
     const blds = this.buildings.filter(b => !(b.x < x0 - 60 || b.x > x0 + wm + 60 || b.y < y0 - 60 || b.y > y0 + hm + 90));
+    if (this.flat) {
+      // en 3D, arbres et maisons sont en volume (decor.js) : seulement l'ombre douce à leur pied
+      g.globalAlpha = snow ? 0.2 : 0.3;
+      for (const tr of items) { const rr = tr.r * 1.1; g.drawImage(this.ombre, tr.x - rr, tr.y - rr * 0.9, rr * 2, rr * 1.8); }
+      for (const b of blds) { const rr = Math.max(b.w, b.h) * 0.75 + 2; g.drawImage(this.ombre, b.x - rr, b.y - rr, rr * 2, rr * 2); }
+      g.globalAlpha = 1;
+      return;
+    }
     if (s < 0.8) {
       // petite échelle (image entière) : ombres et couronnes groupées par couleur, sans tri, par paquets (un seul
       // chemin de milliers d'ellipses qui se chevauchent est très lent à remplir)

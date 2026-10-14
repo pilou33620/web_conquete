@@ -67,8 +67,8 @@ Détail, critères et vérifications : `tasks/todo.md`.
 - [x] Point d’étape 3
 
 ### Étape 4 : le décor
-- [ ] T12 : arbres instanciés
-- [ ] T13 : maisons, église, moulins, ponts, portes
+- [x] T12 : arbres instanciés
+- [x] T13 : maisons, église, moulins, ponts, portes
 - [ ] T14 : remparts, bastions, brèches, tranchées, barricades, haies, murets, clôtures
 - [ ] T15 : ombres portées
 - [ ] Point d'étape 4

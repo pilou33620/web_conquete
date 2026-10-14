@@ -6,6 +6,7 @@ import * as THREE from '../../vendor/three/three.module.js';
 import { Terrain } from './terrain.js';
 import { Relief } from './relief.js';
 import { Troops } from './troupes.js';
+import { Decor } from './decor.js';
 import { drawBanners } from './fanions.js';
 import { UnitArt } from './unites.js';
 import { Effects } from './effets.js';
@@ -74,6 +75,8 @@ export class BattleView {
     this.troops = new Troops(this.relief, this.q, m.year);
     this.scene.add(this.troops.group);
     this.fx.attach(this.scene, this.relief.heightAt);
+    this.decor = new Decor(this.terrain, this.relief, this.q);
+    this.scene.add(this.decor.group);
     this.art.setYear(m.year);   // coiffures de l'époque
     this.W = this.terrain.W; this.H = this.terrain.H;
     this.cam = { x: this.W / 2, y: this.H / 2, z: this.fitZ(), yaw: 0 };
@@ -105,6 +108,7 @@ export class BattleView {
     this.terrain?.dispose();
     this.relief?.dispose();
     this.troops?.dispose();
+    this.decor?.dispose();
     this.art.clear();
     this.fx.dispose();
     // (Safari ne garde qu'une poignée de contextes WebGL : on rend celui-ci tout de suite)

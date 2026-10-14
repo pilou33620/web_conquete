@@ -106,7 +106,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
 
 ## Étape 4 : le décor
 
-- [ ] **T12 : arbres**
+- [x] **T12 : arbres**
   - Critères : `decor.js` : arbres instanciés d'après `treeGrid` (feuillus, pins parasols, sapins, peupliers,
     buissons, arbres nus l'hiver, meules), couleurs de la saison, découpés par zones pour n'envoyer que ce qui est
     vu ; densité selon la qualité.
@@ -114,7 +114,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/decor.js`, `web/js/battle/terrain.js`, `web/js/battle/vue.js`
   - Taille : M
 
-- [ ] **T13 : maisons, église, moulins, ponts, portes**
+- [x] **T13 : maisons, église, moulins, ponts, portes**
   - Critères : maisons et fermes (murs, toit à deux pans, cheminée), église et clocher, moulin et ailes, ponts sur les
     rivières, portes de ville ; tuiles ou ardoises selon la région, neige l'hiver.
   - Vérif : captures d'un village (vignes) et de l'assaut.
