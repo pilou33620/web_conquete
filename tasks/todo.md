@@ -13,7 +13,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/vendor/three/*`, `web/js/battle/dev/capture.mjs`
   - Taille : S
 
-- [ ] **T2 : caméra orbitale et ses bancs**
+- [x] **T2 : caméra orbitale et ses bancs**
   - Critères : `camera.js` : cible, distance, cap, inclinaison selon la distance, conversion `z` ↔ distance,
     projection monde → écran et écran → monde par marche de rayon sur une fonction d'altitude, bornes du champ.
   - Vérif : `node --test tests/camera.test.mjs` : aller-retour à 1 m près sur un relief en colline, à plusieurs caps

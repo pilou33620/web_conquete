@@ -48,7 +48,7 @@ Détail, critères et vérifications : `tasks/todo.md`.
 
 ### Étape 1 : la bataille se joue en 3D (régiments en blocs)
 - [x] T1 : Three.js copié, outil de capture
-- [ ] T2 : caméra orbitale (maths pures) et ses bancs
+- [x] T2 : caméra orbitale (maths pures) et ses bancs
 - [ ] T3 : vue WebGL, relief texturé par l'image entière, régiments en blocs, calque 2D
 - [ ] T4 : gestes, tracés au sol et mini-carte en 3D
 - [ ] T5 : tuiles de texture du sol selon la distance, décalcomanies, brèches, voile des couverts
