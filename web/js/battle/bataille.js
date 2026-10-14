@@ -6,6 +6,14 @@
 import { BattleView } from './vue.js';
 
 const ZOOM_MS = 1000, FADE_MS = 700;
+const NO_GL = 'Cet appareil ne peut pas afficher les batailles en 3D (WebGL 2 indisponible) : vos officiers mènent celle-ci, elle se résout automatiquement.';
+
+// WebGL 2, sans quoi la vue de bataille ne peut pas s'afficher
+let gl2 = null;
+function hasGL2() {
+  if (gl2 === null) try { gl2 = !!document.createElement('canvas').getContext('webgl2'); } catch (e) { gl2 = false; }
+  return gl2;
+}
 
 // la feuille de style de la bataille, chargée à la demande
 let styleP = null;
@@ -31,12 +39,14 @@ export class Bataille {
   // faut-il ouvrir la vue pour cet état de campagne ?
   wants(tac) {
     if (!tac || tac.bid == null || this.active) return false;
+    if (!hasGL2()) { this.withoutGL(tac); return false; }
     if (this.failedAt && performance.now() - this.failedAt < 15000) return false;   // échec récent : pas de boucle
     return !(this.closed.has(String(tac.bid)) && tac.phase === 'fin');
   }
   // tac : {bid, phase} ; st : état de campagne (pour trouver le lieu de la bataille)
   async enter(tac, st = null) {
     if (this.active) return;
+    if (!hasGL2()) { this.withoutGL(tac); return; }
     this.active = true;
     this.bid = String(tac.bid);
     this.onStart && this.onStart();
@@ -112,6 +122,19 @@ export class Bataille {
     this.view = null; this.root = null;
     this.active = false; this.leaving = false;
     this.onEnd && this.onEnd(result, this.bid);
+  }
+  // sans WebGL 2 : la bataille est confiée aux officiers (une fois), puis le serveur l'oublie quand elle est finie
+  withoutGL(tac) {
+    const bid = String(tac.bid);
+    this.sansGL = this.sansGL || new Set();
+    if (tac.phase === 'fin') {
+      if (!this.sansGL.has('fin|' + bid)) { this.sansGL.add('fin|' + bid); this.api.post('/api/cmd', { cmd: 'tac', sub: 'close', bid }).catch(() => {}); }
+      return;
+    }
+    if (this.sansGL.has(bid)) return;
+    this.sansGL.add(bid);
+    this.api.post('/api/cmd', { cmd: 'tac', sub: 'autofinish', bid }).catch(() => {});
+    this.onEnd && this.onEnd(null, bid, NO_GL);
   }
   // interrompt sans animation (nouvelle partie, erreur)
   abort(msg) {

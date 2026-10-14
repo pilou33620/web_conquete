@@ -8,7 +8,7 @@
 //
 // Options : --q (paramètres de banc.html, en plus de scen et start=1 ; start=0 pour le déploiement), --js (code lancé quand la bataille est prête ;
 // window.__btView est la vue), --wait (ms avant la capture, défaut 4000), --size (défaut 1400x800), --gpu (essayer la
-// carte graphique au lieu de SwiftShader), --qualite basse|moyenne|haute|ultra (défaut haute, choisie « à la main » : la
+// carte graphique au lieu de SwiftShader), --nogl (sans WebGL : le message et la résolution automatique), --qualite basse|moyenne|haute|ultra (défaut haute, choisie « à la main » : la
 // mesure des images par seconde, très lente sans carte graphique, ne la fait pas descendre).
 // Gestes, après --js (de vrais événements, comme une souris ou des doigts) :
 //   --drag x0,y0,x1,y1 (ou --drag js : les coordonnées sont lues dans window.__drag), --button left|right|middle,
@@ -34,7 +34,7 @@ const maq = spawn(process.execPath, [path.join(here, 'maquette.mjs'), '--port', 
 await new Promise((ok, ko) => { maq.stdout.once('data', ok); maq.once('exit', () => ko(new Error('maquette arrêtée'))); });
 
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'capture-'));
-const gl = argv.includes('--gpu') ? ['--use-angle=gles', '--ignore-gpu-blocklist'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
+const gl = argv.includes('--nogl') ? ['--disable-3d-apis'] : argv.includes('--gpu') ? ['--use-angle=gles', '--ignore-gpu-blocklist'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
 // (--password-store=basic : sans lui, Chromium attend le trousseau du bureau, verrouillé, avant toute requête)
 const chrome = spawn(process.env.CHROMIUM || 'chromium', ['--headless=new', '--no-sandbox', '--remote-debugging-pipe', `--user-data-dir=${profile}`, '--password-store=basic',
   `--window-size=${W},${H}`, '--hide-scrollbars', '--mute-audio', '--no-first-run', ...gl], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] });

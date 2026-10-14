@@ -139,7 +139,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
 
 ## Étape 5 : finitions
 
-- [ ] **T16 : qualité, mesure, sans WebGL 2**
+- [x] **T16 : qualité, mesure, sans WebGL 2**
   - Critères : profils Basse à Ultra pour la 3D (densité, soldats, fumées, arbres, ombres, détail du sol,
     anticrénelage) ; la mesure des images par seconde fait descendre la qualité ; sans WebGL 2, message et
     « Résolution automatique ».

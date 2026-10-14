@@ -33,7 +33,7 @@ export class BattleView {
     root.append(this.glc, this.cv);
     this.ctx = this.cv.getContext('2d');
     try {
-      this.renderer = new THREE.WebGLRenderer({ canvas: this.glc, antialias: this.q.dpr >= 2, powerPreference: 'high-performance' });
+      this.renderer = new THREE.WebGLRenderer({ canvas: this.glc, antialias: !!this.q.aa, powerPreference: 'high-performance' });
     } catch (e) { console.error(e); this.renderer = null; }
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(FOV * 180 / Math.PI, 1, 1, 10000);
@@ -124,6 +124,12 @@ export class BattleView {
     this.terrain?.setQuality(this.q);
     this.relief?.setQuality(this.q);
     this.troops?.setQuality(this.q);
+    // le décor dépend de la richesse des effets (bois allégés, arbres plus simples) : reconstruit s'il en change
+    if (this.decor && this.decor.q.fx !== this.q.fx) {
+      this.scene.remove(this.decor.group); this.decor.dispose();
+      this.decor = new Decor(this.terrain, this.relief, this.q);
+      this.scene.add(this.decor.group);
+    }
     if (this.relief) this.setShadows();
     this.resize();
     this.clampCam();
@@ -354,7 +360,7 @@ export class BattleView {
     this.frameMs.push(ms);
     this.drawMs = ms;
     // qualité automatique : on descend d'un cran si l'appareil peine (combat, sans geste ni tuiles en rafale)
-    const calme = this.st?.phase === 'combat' && !this.controls.busy() && !this.camAnim;
+    const calme = this.st?.phase === 'combat' && !this.controls.busy() && !this.camAnim && !this.detailBusy;
     this.mesure.image(dt * 1000, calme, now);
     if (this.frameMs.length > 120) this.frameMs.shift();
   }

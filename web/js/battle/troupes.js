@@ -473,7 +473,7 @@ export class Troops {
     this.uni.uTime.value = time; this.uni.uFxT.value = fxT;
     // hommes par figurine : autant qu'il faut pour tenir dans le budget de la qualité (par paliers de 25 % : la
     // disposition ne change pas à chaque perte)
-    const men = list.reduce((a, u) => a + Math.min(u.men || 0, 480), 0), budget = this.q.troupes ?? this.q.figures * 2;
+    const men = list.reduce((a, u) => a + Math.min(u.men || 0, 480), 0), budget = this.q.troupes ?? 10000;
     const per = Math.pow(1.25, Math.max(0, Math.ceil(Math.log(men / budget) / Math.log(1.25))));
     const scale = SCALE * clamp(Math.sqrt(per), 1, 1.4);
     let dirty = this.per !== per;

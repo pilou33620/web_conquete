@@ -1,7 +1,7 @@
-// Vue tactique : réglage « Qualité graphique » des batailles (Basse, Moyenne, Haute, Ultra).
-// Chaque niveau fixe la finesse du canevas (densité de pixels), le niveau de détail des tuiles du terrain, le
-// zoom le plus rapproché, le nombre de figurines et de fumées, et la mémoire laissée aux caches (Safari sur iPad ne
-// donne qu'environ 384 Mo à l'ensemble des canevas d'une page).
+// Vue tactique : réglage « Qualité graphique » des batailles en 3D (Basse, Moyenne, Haute, Ultra).
+// Chaque niveau fixe la finesse de l'image (densité de pixels, anticrénelage), le détail du sol, le zoom le plus
+// rapproché, le nombre de figurines et de fumées, la richesse du décor, les ombres, et la mémoire laissée aux caches
+// (Safari sur iPad ne donne qu'environ 384 Mo à l'ensemble des canevas d'une page).
 // Au premier lancement, le niveau est choisi selon l'appareil, puis ajusté d'après les images par seconde
 // mesurées pendant la première bataille (on ne fait que descendre). Un choix fait à la main n'est plus touché.
 // Enregistré dans localStorage ('conquete.bataille.qualite' : « haute », ou « auto-haute » tant qu'il est automatique).
@@ -9,23 +9,23 @@
 export const QUALITES = ['basse', 'moyenne', 'haute', 'ultra'];
 export const QUALITE_LABEL = { basse: 'Basse', moyenne: 'Moyenne', haute: 'Haute', ultra: 'Ultra' };
 export const QUALITE_AIDE = {
-  basse: 'Pour les appareils anciens : image moins fine, peu de fumée.',
-  moyenne: 'Bon compromis pour les tablettes et téléphones modestes.',
-  haute: 'Écran Retina, terrain détaillé, figurines fines (iPad récent).',
+  basse: 'Pour les appareils anciens : image moins fine, peu de fumée, bois allégés, sans ombres.',
+  moyenne: 'Bon compromis pour les tablettes et téléphones modestes : ombres du décor, moins de figurines.',
+  haute: 'Écran Retina, sol détaillé, ombres des troupes (iPad récent).',
   ultra: 'Tout au maximum, pour les ordinateurs.',
 };
 const KEY = 'conquete.bataille.qualite';
 
-// dpr : densité maximale du canevas ; level : tuiles les plus fines (pixels physiques par mètre) ; maxZ : zoom
-// le plus rapproché (pixels CSS par mètre) ; tiles : tuiles de 512 px gardées (1 Mo chacune) ; sprites : octets
-// de silhouettes en cache ; figures : figurines dessinées au plus par image ; puffs : fumées et poussières ;
-// fx : richesse des effets (0 à 3) ; clouds : ombres des nuages ; textures : octets de motifs du terrain ; smoke :
-// finesse du canevas de la fumée (pixels par pixel CSS)
+// dpr : densité maximale de l'image ; aa : anticrénelage (choisi à l'ouverture de la bataille) ; level : sol le plus
+// fin (pixels par mètre) ; maxZ : zoom le plus rapproché (pixels CSS par mètre) ; troupes : figurines au plus (au-delà,
+// chacune compte plusieurs hommes) ; puffs : fumées et poussières ; fx : richesse des effets et du décor (0 à 3 : bois
+// allégés, arbres plus simples, moins de fumée) ; ombres : 0 aucune, 1 le décor, 2 aussi les troupes, 3 plus fines ;
+// clouds : ombres des nuages ; textures : octets des motifs du sol ; sprites : octets des figurines des cartes d'unités
 export const PROFILS = {
-  basse: { dpr: 1, level: 4, maxZ: 6, tiles: 36, sprites: 6e6, figures: 2000, puffs: 420, fx: 0, clouds: false, textures: 8e6, smoke: 0.5 },
-  moyenne: { dpr: 1.5, level: 8, maxZ: 9, tiles: 48, sprites: 12e6, figures: 3000, puffs: 800, fx: 1, clouds: true, textures: 20e6, smoke: 0.5 },
-  haute: { dpr: 2, level: 16, maxZ: 14, tiles: 64, sprites: 24e6, figures: 4000, puffs: 1400, fx: 2, clouds: true, textures: 32e6, smoke: 0.6 },
-  ultra: { dpr: 3, level: 16, maxZ: 20, tiles: 110, sprites: 48e6, figures: 9000, puffs: 2400, fx: 3, clouds: true, textures: 48e6, smoke: 1 },
+  basse: { dpr: 1, aa: false, level: 4, maxZ: 25, troupes: 3000, puffs: 420, fx: 0, ombres: 0, clouds: false, textures: 8e6, sprites: 6e6 },
+  moyenne: { dpr: 1.5, aa: false, level: 8, maxZ: 32, troupes: 6000, puffs: 800, fx: 1, ombres: 1, clouds: true, textures: 20e6, sprites: 12e6 },
+  haute: { dpr: 2, aa: true, level: 16, maxZ: 40, troupes: 10000, puffs: 1400, fx: 2, ombres: 2, clouds: true, textures: 32e6, sprites: 24e6 },
+  ultra: { dpr: 2.5, aa: true, level: 16, maxZ: 45, troupes: 20000, puffs: 2400, fx: 3, ombres: 3, clouds: true, textures: 48e6, sprites: 48e6 },
 };
 
 // appareil : iPad (y compris ceux qui se disent Macintosh), iPhone, Android, ordinateur
@@ -66,7 +66,7 @@ export function setQualite(q, auto = false) {
 }
 export function onQualite(f) { ecoutes.add(f); return () => ecoutes.delete(f); }
 
-// Mesure des images par seconde pendant la bataille : sur 5 s de combat sans geste ni peinture de tuiles en
+// Mesure des images par seconde pendant la bataille : sur 5 s de combat sans geste ni peinture du sol en
 // rafale, si la moitié des images dépasse 38 ms (moins de 26 images/s), on descend d'un niveau. Seulement tant
 // que le réglage est automatique, et deux fois au plus par bataille. (Un iPhone ou un iPad en mode économie
 // d'énergie bride l'affichage à 30 images/s, soit 33 ms : ce n'est pas une raison de descendre.)
