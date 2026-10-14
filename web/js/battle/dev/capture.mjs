@@ -63,7 +63,7 @@ const done = code => {
   chrome.once('exit', () => { fs.rmSync(profile, { recursive: true, force: true }); process.exit(code); });
   chrome.kill();
 };
-setTimeout(() => { console.error('Délai dépassé.'); done(2); }, 180000);
+setTimeout(() => { console.error('Délai dépassé.'); done(2); }, +(opt('--timeout') || 300000));
 
 try {
   const { targetId } = await send('Target.createTarget', { url: 'about:blank' });

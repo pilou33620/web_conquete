@@ -87,7 +87,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
 
 ## Étape 3 : le feu et l'atmosphère
 
-- [ ] **T10 : fumées, éclairs, boulets, éclats, poussière**
+- [x] **T10 : fumées, éclairs, boulets, éclats, poussière**
   - Critères : bouffées en 3D (montent, grossissent, partent avec le vent, cachées par une colline), éclairs de bouche
     additifs, boulets en arc avec ricochets, mitraille, gerbes de terre, explosions ; même file d'effets et mêmes
     rythmes qu'aujourd'hui ; nombre borné par la qualité.

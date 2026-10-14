@@ -73,6 +73,7 @@ export class BattleView {
     this.relief.setup(this.scene);
     this.troops = new Troops(this.relief, this.q, m.year);
     this.scene.add(this.troops.group);
+    this.fx.attach(this.scene, this.relief.heightAt);
     this.art.setYear(m.year);   // coiffures de l'époque
     this.W = this.terrain.W; this.H = this.terrain.H;
     this.cam = { x: this.W / 2, y: this.H / 2, z: this.fitZ(), yaw: 0 };
@@ -359,6 +360,7 @@ export class BattleView {
     this.detailBusy = this.relief.updateDetail(this.renderer, this, this.controls.busy() ? 0 : this.drawMs < 12 ? 2 : 1);
     const all = [...this.units.values()].filter(u => u.state !== 'hors'), vis = all.filter(u => this.onScreen(u));
     this.troops.update(all, this.colors || [], time, this.fx.t);
+    this.fx.render(fr, z);
     this.renderer.render(this.scene, cam);
     mark('scene');
     // le calque 2D
@@ -367,8 +369,6 @@ export class BattleView {
     this.drawGround(ctx, time);
     mark('sol');
     const view = { toScreen: this.toScreen, z, vw: this.vw, vh: this.vh, dpr, fxT: this.fx.t };
-    this.fx.draw(ctx, view);
-    mark('effets');
     this.drawLabels(ctx);
     this.bannerRects = drawBanners(ctx, this, vis, this.colors || [], { sel: this.sel, me: this.me, time });
     this.controls.drawOverlay(ctx, view, time);

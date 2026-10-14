@@ -1,11 +1,13 @@
 // Vue tactique : effets (fumée des salves, éclairs, boulets et ricochets, mitraille, explosions, éclats de terre,
 // poussière des charges, débandade), puis l'atmosphère : ombres des nuages, brume de distance, pluie, neige,
-// brouillard, orage, chaleur, et la lumière selon l'heure (matin doré, midi, crépuscule). Tout est dessiné en
-// coordonnées d'écran à partir de positions du monde (mètres) ; les fumées ont aussi une altitude qui les fait
-// monter à l'écran.
+// brouillard, orage, chaleur, et la lumière selon l'heure (matin doré, midi, crépuscule).
+// Les effets vivent en mètres (x, y au sol, altitude) et sont rendus dans la scène 3D : les bouffées sont des panneaux
+// tournés vers la caméra (une image de bouffée parmi quelques-unes, dans un atlas), triés du plus loin au plus près et
+// cachés par le relief ; les éclairs s'ajoutent à la lumière ; boulets, éclats et mitraille sont de petits objets.
 // Une salve roule le long du front : chaque file fait feu à son tour (éclair, puis une bouffée de fumée blanche
-// épaisse qui grossit, monte et dérive avec le vent). La vue des régiments (unites.js) lit `un._volley` et
-// `un._shots` pour mettre les hommes en joue au même instant et faire reculer les pièces.
+// épaisse qui grossit, monte et dérive avec le vent). Les troupes (troupes.js) lisent `un._volley` et `un._shots`
+// pour mettre les hommes en joue au même instant et faire reculer les pièces.
+import * as THREE from '../../vendor/three/three.module.js';
 import { clamp, hash, TAU, TILT, canvas } from './formes.js';
 
 // fumée en volume : des boules douces qui se recouvrent, éclairées en haut à gauche (lumière du nord-ouest)
@@ -94,7 +96,115 @@ export class Effects {
     this.t = 0;
   }
   setQuality(q) { this.q = q; }
-  dispose() { this.puffs.length = 0; this.flashes.length = 0; this.bits.length = 0; if (this.smokeCv) this.smokeCv.width = this.smokeCv.height = 0; }
+  dispose() {
+    this.puffs.length = 0; this.flashes.length = 0; this.bits.length = 0;
+    for (const m of this.meshes || []) { m.geometry.dispose(); m.material.dispose(); m.dispose?.(); }
+    this.atlas?.dispose();
+  }
+
+  // ------------------------------------------------------------------ rendu dans la scène 3D
+  // heightAt : altitude du relief (m) ; les images des bouffées et des éclairs vont dans un atlas de 4 × 3 cases
+  attach(scene, heightAt) {
+    this.heightAt = heightAt;
+    const sprites = [...this.white, ...this.grey, ...this.dust, this.fire, this.flash], C = 128;
+    const at = canvas(4 * C, 3 * C), g = at.getContext('2d');
+    this.cell = new Map();
+    sprites.forEach((cv, i) => { g.drawImage(cv, (i % 4) * C, ((i / 4) | 0) * C, C, C); this.cell.set(cv, i); });
+    this.atlas = new THREE.CanvasTexture(at);
+    this.atlas.colorSpace = THREE.SRGBColorSpace; this.atlas.flipY = false;
+    this.uni = { uRight: { value: new THREE.Vector3(1, 0, 0) }, uUp: { value: new THREE.Vector3(0, 1, 0) }, uTint: { value: new THREE.Color(1, 1, 1) } };
+    this.smoke = this.billboards(false, 2600);
+    this.glow = this.billboards(true, 400);
+    const dark = new THREE.MeshLambertMaterial({ color: '#1b1a18' });
+    this.ballMesh = this.instanced(new THREE.SphereGeometry(0.28, 8, 6), dark, 200);
+    this.bitMesh = this.instanced(new THREE.BoxGeometry(0.22, 0.18, 0.22), new THREE.MeshLambertMaterial({ color: '#46362a' }), 1200);
+    this.streakGeo = new THREE.BufferGeometry();
+    this.streakGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(1200 * 6), 3).setUsage(THREE.DynamicDrawUsage));
+    this.streakLines = new THREE.LineSegments(this.streakGeo, new THREE.LineBasicMaterial({ color: '#463e32', transparent: true, opacity: 0.5 }));
+    this.streakLines.frustumCulled = false;
+    this.meshes = [this.smoke, this.glow, this.ballMesh, this.bitMesh, this.streakLines];
+    for (const m of this.meshes) scene.add(m);
+  }
+  instanced(geo, mat, cap) {
+    const m = new THREE.InstancedMesh(geo, mat, cap);
+    m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    return m;
+  }
+  // panneaux tournés vers la caméra : aP (x, altitude, y, rayon), aC (opacité, case de l'atlas)
+  billboards(additive, cap) {
+    const geo = new THREE.PlaneGeometry(1, 1);
+    geo.setAttribute('aP', new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage));
+    geo.setAttribute('aC', new THREE.InstancedBufferAttribute(new Float32Array(cap * 2), 2).setUsage(THREE.DynamicDrawUsage));
+    const mat = new THREE.MeshBasicMaterial({ map: this.atlas, transparent: true, depthWrite: false, fog: !additive, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
+    mat.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, this.uni);
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute vec4 aP; attribute vec2 aC; uniform vec3 uRight, uUp; varying float vAlpha;')
+        .replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv = (vec2(mod(aC.y, 4.0), floor(aC.y / 4.0)) + vec2(uv.x, 1.0 - uv.y)) / vec2(4.0, 3.0);\nvAlpha = aC.x;')
+        .replace('#include <begin_vertex>', 'vec3 transformed = aP.xyz + (uRight * position.x + uUp * position.y) * aP.w * 2.0;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform vec3 uTint; varying float vAlpha;')
+        .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.a *= vAlpha;\ndiffuseColor.rgb *= uTint;');
+    };
+    mat.customProgramCacheKey = () => 'effets-' + additive;
+    const m = new THREE.InstancedMesh(geo, mat, cap);
+    m.count = 0; m.frustumCulled = false; m.renderOrder = additive ? 3 : 2;
+    return m;
+  }
+  // à chaque image, avant le rendu : fr, repère de la caméra (camera.js) ; z, zoom (de très près, la fumée
+  // s'éclaircit : on voit encore les hommes au travers)
+  render(fr, z) {
+    if (!this.smoke) return;
+    const h = this.heightAt, E = fr.E;
+    this.uni.uRight.value.set(fr.R[0], fr.R[1], fr.R[2]);
+    this.uni.uUp.value.set(fr.U[0], fr.U[1], fr.U[2]);
+    const thin = clamp(1.25 - z / 16, 0.55, 1);
+    // opacité selon l'âge : apparaît vite, reste épaisse longtemps, s'efface à la fin
+    const fade = p => { const k = p.t / p.life; return p.a * (k < 0.05 ? k / 0.05 : 1 - Math.pow((k - 0.05) / 0.95, p.imgs === this.white ? 1.8 : 0.8)); };
+    // fumées, poussières : du plus loin au plus près (le mélange des transparences est alors juste)
+    const P = this.puffs, n0 = Math.min(P.length, 2600), tmp = this.tmp = this.tmp?.length >= n0 * 7 ? this.tmp : new Float64Array(n0 * 7 + 700);
+    const order = [];
+    for (let i = 0, n = 0; i < P.length && n < n0; i++) {
+      const p = P[i], a = fade(p) * (p.imgs === this.white ? thin : 1);
+      if (a <= 0.01) continue;
+      const y = h(p.x, p.y) + p.alt + p.r * 0.7, o = n * 7;
+      tmp[o] = (p.x - E[0]) ** 2 + (y - E[1]) ** 2 + (p.y - E[2]) ** 2;
+      tmp[o + 1] = p.x; tmp[o + 2] = y; tmp[o + 3] = p.y; tmp[o + 4] = p.r; tmp[o + 5] = a; tmp[o + 6] = this.cell.get(p.img) ?? 0;
+      order.push(n++);
+    }
+    order.sort((a, b) => tmp[b * 7] - tmp[a * 7]);
+    this.fill(this.smoke, order.length, (i, aP, aC) => { const o = order[i] * 7; aP.set([tmp[o + 1], tmp[o + 2], tmp[o + 3], tmp[o + 4]], i * 4); aC[i * 2] = tmp[o + 5]; aC[i * 2 + 1] = tmp[o + 6]; });
+    // éclairs de bouche, feu des explosions
+    const F = this.flashes.slice(0, 400), fc = this.cell.get(this.flash), xc = this.cell.get(this.fire);
+    this.fill(this.glow, F.length, (i, aP, aC) => {
+      const f = F[i], k = 1 - f.t / f.life;
+      aP.set([f.x, h(f.x, f.y) + f.alt, f.y, Math.max(0.8, f.r) * (0.6 + k * 0.6)], i * 4); aC[i * 2] = k; aC[i * 2 + 1] = f.r > 20 ? xc : fc;
+    });
+    // boulets en l'air, éclats de terre
+    const m4 = new THREE.Matrix4();
+    const B = this.balls.slice(0, 200);
+    B.forEach((b, i) => {
+      const k = b.t / b.dur, x = b.x0 + (b.x1 - b.x0) * k, y = b.y0 + (b.y1 - b.y0) * k;
+      this.ballMesh.setMatrixAt(i, m4.makeTranslation(x, h(x, y) + Math.sin(Math.PI * k) * b.h + 1, y));
+    });
+    this.ballMesh.count = B.length; this.ballMesh.instanceMatrix.needsUpdate = true;
+    const T = this.bits.slice(0, 1200);
+    T.forEach((b, i) => this.bitMesh.setMatrixAt(i, m4.makeTranslation(b.x, h(b.x, b.y) + b.alt, b.y)));
+    this.bitMesh.count = T.length; this.bitMesh.instanceMatrix.needsUpdate = true;
+    // mitraille : de courts traits qui filent à un mètre du sol
+    const S = this.streaks.slice(0, 1200), pos = this.streakGeo.attributes.position;
+    S.forEach((s, i) => {
+      const k = s.t / s.life, a = Math.max(0, k - 0.12), ax = s.x + (s.x1 - s.x) * a, ay = s.y + (s.y1 - s.y) * a, bx = s.x + (s.x1 - s.x) * k, by = s.y + (s.y1 - s.y) * k;
+      pos.array.set([ax, h(ax, ay) + 1, ay, bx, h(bx, by) + 1, by], i * 6);
+    });
+    pos.needsUpdate = true; this.streakGeo.setDrawRange(0, S.length * 2);
+  }
+  fill(mesh, n, set) {
+    const aP = mesh.geometry.attributes.aP, aC = mesh.geometry.attributes.aC;
+    for (let i = 0; i < n; i++) set(i, aP.array, aC.array);
+    mesh.count = n;
+    aP.needsUpdate = true; aC.needsUpdate = true;
+  }
   // ------------------------------------------------------------------ effets envoyés par le serveur
   // f : {k, x, y, x2, y2, n, u} ; unit : l'unité qui l'a produit (pour le front d'une salve) ; delay en s
   push(f, unit, delay = 0) { this.queue.push({ f, unit, at: this.t + delay }); }
@@ -250,84 +360,6 @@ export class Effects {
     }
     this.balls = still;
   }
-  // fumées et éclairs (au-dessus des unités)
-  draw(ctx, view) {
-    const z = view.z;
-    // de très près, la fumée s'éclaircit un peu : on voit encore les hommes au travers
-    const thin = clamp(1.25 - z / 16, 0.55, 1);
-    // opacité selon l'âge : apparaît vite, reste épaisse longtemps, s'efface à la fin
-    const fade = p => { const k = p.t / p.life; return p.a * (k < 0.05 ? k / 0.05 : 1 - Math.pow((k - 0.05) / 0.95, p.imgs === this.white ? 1.8 : 0.8)); };
-    // La fumée est douce : elle est peinte dans un canevas moins fin que l'écran (smoke pixels par pixel CSS), posé
-    // ensuite en une fois. Des centaines de bouffées coûtent alors bien moins à remplir.
-    const k = this.q?.smoke ?? 0.75, W = Math.ceil(view.vw * k), H = Math.ceil(view.vh * k);
-    const cv = this.smokeCv = this.smokeCv || canvas(W, H);
-    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
-    const g = cv.getContext('2d');
-    // seul le rectangle où il y a de la fumée est effacé puis posé (bb : en pixels CSS)
-    const bb = [1e9, 1e9, -1e9, -1e9], grow = (x0, y0, x1, y1) => { if (x0 < bb[0]) bb[0] = x0; if (y0 < bb[1]) bb[1] = y0; if (x1 > bb[2]) bb[2] = x1; if (y1 > bb[3]) bb[3] = y1; };
-    const old = this.smokeBB;
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    if (old) g.clearRect(old[0], old[1], old[2] - old[0], old[3] - old[1]);
-    g.setTransform(k, 0, 0, k, 0, 0);
-    let any = false;
-    // ombre de la fumée au sol (au sud-est), légère ; seulement en qualité Ultra
-    if ((this.q?.fx ?? 2) >= 3) {
-      for (const p of this.puffs) {
-        if (p.imgs !== this.white || p.alt > 30) continue;
-        const a = fade(p) * 0.18;
-        if (a <= 0.01) continue;
-        const [sx, sy] = view.toScreen(p.x + p.alt * 0.62 + 2, p.y + p.alt * 0.42 + 1.5), r = p.r * z;
-        if (sx < -r * 2 || sy < -r * 2 || sx > view.vw + r * 2 || sy > view.vh + r * 2) continue;
-        g.globalAlpha = a; g.drawImage(this.shade, sx - r, sy - r * TILT, r * 2, r * 2 * TILT); any = true;
-        grow(sx - r, sy - r * TILT, sx + r, sy + r * TILT);
-      }
-    }
-    for (const p of this.puffs) {
-      const a = fade(p) * (p.imgs === this.white ? thin : 1);
-      if (a <= 0.01) continue;
-      const [sx, sy] = view.toScreen(p.x, p.y), r = p.r * z;
-      if (sx < -r * 2 || sy < -r * 2 || sx > view.vw + r * 2 || sy > view.vh + r * 2) continue;
-      g.globalAlpha = a;
-      g.drawImage(p.img, sx - r, sy - r * 0.9 - p.alt * z, r * 2, r * 1.8); any = true;
-      grow(sx - r, sy - r * 0.9 - p.alt * z, sx + r, sy + r * 0.9 - p.alt * z);
-    }
-    g.globalAlpha = 1;
-    if (any) {
-      // rectangle en pixels du canevas de la fumée, borné à celui-ci
-      const x0 = Math.max(0, Math.floor(bb[0] * k) - 1), y0 = Math.max(0, Math.floor(bb[1] * k) - 1);
-      const x1 = Math.min(W, Math.ceil(bb[2] * k) + 1), y1 = Math.min(H, Math.ceil(bb[3] * k) + 1);
-      this.smokeBB = x1 > x0 && y1 > y0 ? [x0, y0, x1, y1] : null;
-      if (this.smokeBB) { ctx.imageSmoothingEnabled = true; ctx.drawImage(cv, x0, y0, x1 - x0, y1 - y0, x0 / k, y0 / k, (x1 - x0) / k, (y1 - y0) / k); }
-    } else this.smokeBB = null;
-    // éclats de terre
-    ctx.fillStyle = 'rgba(70,54,36,0.85)';
-    for (const b of this.bits) {
-      const [sx, sy] = view.toScreen(b.x, b.y), s = Math.max(1, Math.min(3, 0.18 * z));
-      ctx.fillRect(sx - s / 2, sy - b.alt * z - s / 2, s, s);
-    }
-    // boulets : ombre au sol et boulet en l'air
-    for (const b of this.balls) {
-      const k = b.t / b.dur, x = b.x0 + (b.x1 - b.x0) * k, y = b.y0 + (b.y1 - b.y0) * k, alt = Math.sin(Math.PI * k) * b.h + 1;
-      const [sx, sy] = view.toScreen(x, y), r = Math.max(1.4, 0.6 * z);
-      ctx.fillStyle = 'rgba(20,16,10,0.35)'; ctx.beginPath(); ctx.ellipse(sx, sy, r, r * 0.6, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#1b1a18'; ctx.beginPath(); ctx.arc(sx, sy - alt * z, r, 0, TAU); ctx.fill();
-    }
-    ctx.lineCap = 'round';
-    for (const s of this.streaks) {
-      const k = s.t / s.life, [ax, ay] = view.toScreen(s.x + (s.x1 - s.x) * Math.max(0, k - 0.12), s.y + (s.y1 - s.y) * Math.max(0, k - 0.12)), [bx, by] = view.toScreen(s.x + (s.x1 - s.x) * k, s.y + (s.y1 - s.y) * k);
-      ctx.strokeStyle = s.dark ? 'rgba(50,40,30,0.7)' : 'rgba(70,62,50,0.32)'; ctx.lineWidth = s.dark ? 1.6 : 0.8;
-      ctx.beginPath(); ctx.moveTo(ax, ay - z); ctx.lineTo(bx, by - z); ctx.stroke();
-    }
-    ctx.globalCompositeOperation = 'lighter';
-    for (const f of this.flashes) {
-      const k = 1 - f.t / f.life, [sx, sy] = view.toScreen(f.x, f.y), r = Math.max(3, f.r * z) * (0.6 + k * 0.6);
-      ctx.globalAlpha = k;
-      ctx.drawImage(f.r > 20 ? this.fire : this.flash, sx - r, sy - r - f.alt * z, r * 2, r * 2);
-    }
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-  }
-
   // ------------------------------------------------------------------ atmosphère (en coordonnées d'écran)
   // Couleur de la lumière (multipliée) : matin doré, midi neutre, couchant doré puis rose, nuit bleue (par brouillard :
   // grise) ; null à midi par beau temps
