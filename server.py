@@ -10,6 +10,7 @@ Aucune dépendance externe : Python 3.8+ suffit (Windows, Linux, macOS, Termux).
 """
 import argparse
 import gzip
+import ipaddress
 import json
 import math
 import mimetypes
@@ -426,11 +427,49 @@ class GzipCache:
 GZ = GzipCache()
 
 
+class Visites:
+    """Les appareils qui utilisent ce serveur, affichés dans son terminal (et recopiés par
+    web_launcher) : une ligne quand une IP arrive, ou revient après INACTIF secondes sans requête."""
+    INACTIF = 600
+
+    def __init__(self, nom, afficher=None):
+        self.nom = nom
+        self.afficher = afficher or (lambda texte: print(texte, flush=True))
+        self.verrou = threading.Lock()
+        self.vues = {}                      # ip -> dernière requête (time.monotonic)
+
+    def noter(self, ip):
+        try:
+            a = ipaddress.ip_address(str(ip).split("%")[0])
+            ip = str(getattr(a, "ipv4_mapped", None) or a)
+        except ValueError:
+            pass
+        maintenant = time.monotonic()
+        with self.verrou:
+            arrivee = maintenant - self.vues.get(ip, float("-inf")) > self.INACTIF
+            self.vues = {i: t for i, t in self.vues.items() if maintenant - t <= self.INACTIF}
+            self.vues[ip] = maintenant
+            if not arrivee:
+                return
+            actifs = sorted(self.vues)
+        self.afficher("  [connexion] %s  %-11s %s  ->  %d appareil(s) actif(s) : %s"
+                      % (time.strftime("%H:%M:%S"), self.nom, ip, len(actifs), ", ".join(actifs)))
+
+
+VISITES = Visites('Conquête')
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = 'Conquete/1.0'
 
     def log_message(self, fmt, *args):
         pass
+
+    def parse_request(self):
+        if not super().parse_request():
+            return False
+        VISITES.noter(self.client_address[0])
+        return True
 
     def _send(self, code, body, ctype='application/json; charset=utf-8', gz=None):
         self.send_response(code)

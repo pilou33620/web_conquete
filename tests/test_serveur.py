@@ -140,5 +140,20 @@ class Sauvegardes(unittest.TestCase):
         self.assertEqual([s['name'] for s in app.list_saves()], [server.AUTOSAVE])
 
 
+
+class Connexions(unittest.TestCase):
+    def test_une_ligne_par_appareil_qui_arrive(self):
+        lignes = []
+        v = server.Visites('Conquête', afficher=lignes.append)
+        v.noter('192.168.1.20')
+        v.noter('192.168.1.20')                                    # déjà vu : rien
+        v.noter('::ffff:192.168.1.21')
+        self.assertEqual(len(lignes), 2)
+        self.assertIn('[connexion]', lignes[1])
+        self.assertIn('2 appareil(s) actif(s) : 192.168.1.20, 192.168.1.21', lignes[1])
+        v.vues['192.168.1.20'] -= server.Visites.INACTIF + 1         # parti depuis 10 min
+        v.noter('192.168.1.20')                                    # revenu : affiché de nouveau
+        self.assertEqual(len(lignes), 3)
+
 if __name__ == '__main__':
     unittest.main()
