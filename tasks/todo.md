@@ -68,7 +68,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/troupes.js`
   - Taille : S
 
-- [ ] **T8 : batteries, servants, caissons, chariots**
+- [x] **T8 : batteries, servants, caissons, chariots**
   - Critères : pièces (fût, affût, roues), avant-trains et attelages, servants qui s'affairent selon leur rôle, recul
     au coup ; batterie attelée en colonne ; chariot de munitions.
   - Vérif : captures d'une batterie en batterie et attelée.

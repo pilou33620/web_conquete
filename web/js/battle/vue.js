@@ -104,7 +104,6 @@ export class BattleView {
     this.terrain?.dispose();
     this.relief?.dispose();
     this.troops?.dispose();
-    if (this.blocks) { this.blocks.geometry.dispose(); this.blocks.material.dispose(); }
     this.art.clear();
     this.fx.dispose();
     // (Safari ne garde qu'une poignée de contextes WebGL : on rend celui-ci tout de suite)
@@ -361,7 +360,6 @@ export class BattleView {
     this.detailBusy = this.relief.updateDetail(this.renderer, this, this.controls.busy() ? 0 : this.drawMs < 12 ? 2 : 1);
     const all = [...this.units.values()].filter(u => u.state !== 'hors'), vis = all.filter(u => this.onScreen(u));
     this.troops.update(all, this.colors || [], time, this.fx.t);
-    this.drawBlocks(vis.filter(u => !this.troops.handles(u)));
     this.renderer.render(this.scene, cam);
     mark('scene');
     // le calque 2D
@@ -376,29 +374,6 @@ export class BattleView {
     this.bannerRects = this.art.banners(ctx, view, vis, this.colors || [], { sel: this.sel, me: this.me, time });
     this.controls.drawOverlay(ctx, view, time);
     mark('fanions');
-  }
-  // régiments sans figurines 3D (pas encore) : un bloc à leurs couleurs, posé sur le relief et orienté
-  drawBlocks(list) {
-    if (!this.blocks || this.blocks.instanceMatrix.count < list.length) {
-      if (this.blocks) { this.scene.remove(this.blocks); this.blocks.geometry.dispose(); this.blocks.material.dispose(); }
-      this.blocks = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial(), Math.max(64, list.length * 2));
-      this.blocks.frustumCulled = false;
-      this.scene.add(this.blocks);
-    }
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
-    list.forEach((u, i) => {
-      const h = 2.2;
-      p.set(u.x, this.relief.heightAt(u.x, u.y) + h / 2, u.y);
-      q.setFromAxisAngle(up, Math.PI / 2 - u.dir);   // l'avant du bloc (+Z) vers (cos dir, sin dir)
-      sc.set(Math.max(2, u.w), h, Math.max(2, u.d));
-      this.blocks.setMatrixAt(i, m.compose(p, q, sc));
-      col.set(this.colors?.[u.side] || '#888');
-      if (u._ghost) col.multiplyScalar(0.55);
-      this.blocks.setColorAt(i, col);
-    });
-    this.blocks.count = list.length;
-    this.blocks.instanceMatrix.needsUpdate = true;
-    if (this.blocks.instanceColor) this.blocks.instanceColor.needsUpdate = true;
   }
   onScreen(u) {
     const [sx, sy, depth] = this.toScreen(u.x, u.y), m = Math.max(u.w, u.d) * this.cam.z + 80;

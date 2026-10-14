@@ -20,6 +20,8 @@ export const SCALE = 1.6;   // les figurines sont grandies : l'emprise du jeu (1
 const MAXU = 512;           // régiments au plus (largeur de la texture des régiments)
 
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', GOLD = '#d6b65a', LEATHER = '#2a1f16';
+const AFFUT = '#5f6b3e', BRONZE = '#b08a3e';   // affûts peints en vert olive, pièces de bronze
+const ROWS = 5;     // lignes de la texture des régiments (la 4e et la 5e : l'instant du dernier coup de chaque pièce)
 const ROBES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];   // robes des chevaux (bai, bai brun, alezan, noir pangaré)
 
 // coiffure selon l'époque et le type (comme la vue 2D d'avant)
@@ -64,7 +66,7 @@ export function layout(un, per = 1, scale = SCALE) {
         const u0 = (k - (p - 1) / 2) * (w / Math.max(1, p)), v0 = d / 2 - 5;
         push(u0, v0, 'canon', 0, 0, 100 + k);
         for (const [du, dv, role] of [[-1.6, 1.8, 1], [1.6, 1.4, 4], [-1.4, -1.3, 2], [1.5, -1.7, 0], [0.4, -3.4, 3], [-0.6, -5.5, 2]]) push(u0 + du, v0 + dv, 'servant', 0, role, 200 + k * 10 + role);
-        push(u0, -d / 2 + 10, 'caisson', 0, 0);
+        push(u0, -d / 2 + 10, 'caisson', 2, 0);   // le timon vers ses chevaux, derrière
         push(u0 - 0.9, -d / 2 + 5.5, 'attelage', 2, (k % 4) << 4); push(u0 + 0.9, -d / 2 + 5.5, 'attelage', 2, ((k + 1) % 4) << 4);
       }
     }
@@ -171,13 +173,14 @@ function hat(type, kind, dy = 0) {
     default: return [[cyl(0.21, 0.21, 0.025, 12, 0, 1.68, 0), '#3d2f22', 0, 0], [cyl(0.11, 0.12, 0.14, 10, 0, 1.76, 0), '#3d2f22', 0, 0]];
   }
 }
-// fantassin (et encadrement) : kind 'inf' | 'gren' | 'leger' | 'milice' | 'officier' | 'tambour' | 'drapeau'
+// fantassin (et encadrement, servants des pièces) : kind 'inf' | 'gren' | 'leger' | 'milice' | 'officier' | 'tambour' |
+// 'drapeau' | 'servant'
 function soldier(kind, year) {
   const trous = kind === 'milice' ? '#5a4c3c' : year >= 1830 ? '#8d929b' : WHITE;
   const officer = kind === 'officier' || kind === 'drapeau';
   const gaiter = year < 1845 && !officer ? '#1d1916' : trous;
   const facing = kind === 'milice' ? '#5a4632' : WHITE;
-  const armed = !officer && kind !== 'tambour';
+  const armed = !officer && kind !== 'tambour' && kind !== 'servant';
   const P = [];
   for (const [s, b] of [[1, 1], [-1, 2]]) {
     P.push([box(0.13, 0.42, 0.15, s * 0.09, 0.63, 0), trous, b, 0], [box(0.12, 0.42, 0.14, s * 0.09, 0.21, 0), gaiter, b, 0], [box(0.12, 0.06, 0.24, s * 0.09, 0.03, 0.04), '#15110d', b, 0]);
@@ -212,6 +215,31 @@ function flagCloth(rider = false) {
   if (rider) return assemble([[new THREE.PlaneGeometry(1.2, 0.85, 6, 2).rotateY(Math.PI / 2).translate(-0.3, 3.4, 0.08 - 0.6), shade(1), 4, 1],
     [box(0.04, 2.2, 0.04, -0.3, 2.75, 0.08), WOOD, 0, 0], [box(0.07, 0.1, 0.07, -0.3, 3.88, 0.08), GOLD, 0, 0]]);
   return assemble([[new THREE.PlaneGeometry(2, 1.4, 8, 3).rotateY(Math.PI / 2).translate(0.24, 2.85, 0.08 - 1), shade(1), 4, 1]]);
+}
+// pièce de campagne : fût de bronze, affût à flasques qui descend vers la crosse, deux roues ; la bouche vers +Z
+function gun() {
+  const P = [[cyl(0.11, 0.15, 2.1, 10, 0, 1.0, 0.55, Math.PI / 2), BRONZE, 0, 0], [cyl(0.17, 0.17, 0.12, 10, 0, 1.0, -0.5, Math.PI / 2), BRONZE, 0, 0]];
+  for (const s of [1, -1]) {
+    P.push([box(0.07, 0.32, 1.95, s * 0.17, 0.74, -0.4, -0.25), AFFUT, 0, 0]);
+    P.push([cyl(0.62, 0.62, 0.08, 14, s * 0.48, 0.62, 0.1, 0, Math.PI / 2), '#6a5a3a', 0, 0], [cyl(0.12, 0.12, 0.14, 8, s * 0.48, 0.62, 0.1, 0, Math.PI / 2), IRON, 0, 0]);
+  }
+  P.push([box(0.36, 0.12, 0.3, 0, 0.16, -1.4), AFFUT, 0, 0], [box(1.0, 0.1, 0.12, 0, 0.62, 0.1), IRON, 0, 0]);
+  return assemble(P);
+}
+// avant-train ou caisson à munitions (le timon vers +Z) ; wagon : chariot de munitions bâché, à quatre roues
+function caisson(wagon) {
+  const P = [];
+  const wheels = z => { for (const s of [1, -1]) P.push([cyl(0.58, 0.58, 0.08, 14, s * 0.55, 0.58, z, 0, Math.PI / 2), '#6a5a3a', 0, 0]); P.push([box(1.15, 0.1, 0.1, 0, 0.58, z), IRON, 0, 0]); };
+  if (wagon) {
+    P.push([box(1.0, 0.5, 2.4, 0, 1.05, 0), '#7a5a3a', 0, 0], [cyl(0.6, 0.6, 2.3, 10, 0, 1.3, 0, Math.PI / 2), '#e8e0c8', 0, 0]);
+    wheels(0.8); wheels(-0.8);
+    P.push([box(0.06, 0.06, 1.8, 0, 0.75, 2.0), WOOD, 0, 0]);
+  } else {
+    P.push([box(0.9, 0.55, 1.1, 0, 1.0, 0), AFFUT, 0, 0], [box(0.95, 0.06, 1.15, 0, 1.3, 0), '#4c5632', 0, 0]);
+    wheels(0);
+    P.push([box(0.06, 0.06, 2.0, 0, 0.72, 1.45), WOOD, 0, 0]);
+  }
+  return assemble(P);
 }
 // cheval (2,3 m de long, 1,55 m au garrot) ; rider : 'cav' (cavalier), 'colonel' (officier supérieur, général) ou rien
 // (cheval d'attelage, avec son collier)
@@ -283,7 +311,8 @@ const VERT_POSE = `
   vec4 u0 = texelFetch(uUnits, ivec2(ui, 0), 0);   // x, y, sens, opacité
   vec4 u1 = texelFetch(uUnits, ivec2(ui, 1), 0);   // allure (0 arrêt, 1 marche, 2 course), feu, début de la salve, durée
   vec4 u2 = texelFetch(uUnits, ivec2(ui, 2), 0);   // sens de la salve, front (m), tirailleurs
-  float P = aAnim.x, ph = aAnim.y, rank = aAnim.w;
+  vec4 u3 = texelFetch(uUnits, ivec2(ui, 3), 0), u4 = texelFetch(uUnits, ivec2(ui, 4), 0);   // dernier coup de chaque pièce
+  float P = aAnim.x, ph = aAnim.y, rank = aAnim.w, slotV = aSlot.y, crouch = 1.0;
   // pose : celle de la disposition (déroute, mêlée), sinon selon l'allure et la salve qui roule le long du front
   if (P == 0.0) {
     if (u1.x > 1.5) P = 2.0;
@@ -298,7 +327,28 @@ const VERT_POSE = `
   }
   float swing = 0.0, arm = 0.0, bob = 0.0, lean = 0.0, boneA = 0.0;
   vec2 pivot = vec2(0.86, 0.0);
-#ifdef HORSE
+#if defined(GUN)
+  // pièce : recul au départ du coup, puis on la remet en batterie
+  if (rank >= 100.0) {
+    int k = int(rank) - 100;
+    float t = uFxT - (k < 4 ? u3[k] : u4[k - 4]);
+    if (t >= 0.0 && t < 1.6) slotV -= (t < 0.06 ? t / 0.06 : 1.0 - (t - 0.06) / 1.54) * 1.4;
+  }
+#elif defined(CREW)
+  // servants (rang 200 + 10 × pièce + rôle) : écouvillon (1), boulet (2), pointeur accroupi (3), boutefeu (4)
+  if (rank >= 200.0) {
+    int k = int((rank - 200.0) / 10.0);
+    float role = mod(rank - 200.0, 10.0), t = uFxT - (k < 4 ? u3[k] : u4[k - 4]);
+    if (t < 6.0 || u1.y > 0.5) {
+      if (role == 1.0) arm = t > 0.4 && t < 3.5 ? 1.1 + sin(uTime * 3.0 + ph) * 0.35 : 0.0;
+      else if (role == 2.0) { arm = 0.7; swing = sin(uTime * 6.0 + ph) * 0.35; slotV += sin(uTime * 1.4 + ph) * 1.2; }
+      else if (role == 4.0) arm = t < 0.4 || t > 4.0 ? 1.7 : 0.3;
+    }
+    if (role == 3.0) crouch = 0.78;
+  } else if (u1.x > 0.5) swing = sin(uTime * 8.2 + ph) * 0.38;
+  boneA = aBone == 1.0 ? swing : aBone == 2.0 ? -swing : aBone == 3.0 ? arm : 0.0;
+  if (aBone == 3.0) pivot = vec2(1.4, 0.0);
+#elif defined(HORSE)
   // cheval : la pose de la disposition porte la robe (× 16) et, en déroute, le galop (2) ; sinon l'allure du régiment.
   // Au pas, les jambes vont par paires en diagonale ; au galop, l'une après l'autre, le cheval se soulève.
   float gait = mod(P, 4.0) > 1.5 ? 2.0 : u1.x;
@@ -315,7 +365,7 @@ const VERT_POSE = `
   if (aBone == 3.0) pivot = vec2(1.4, 0.0);
 #endif
   float fa = u0.z + aSlot.z, sa = sin(fa), ca = cos(fa);
-  vec2 fw = vec2(cos(u0.z), sin(u0.z)), base = u0.xy + fw * aSlot.y + vec2(-fw.y, fw.x) * aSlot.x;
+  vec2 fw = vec2(cos(u0.z), sin(u0.z)), base = u0.xy + fw * slotV + vec2(-fw.y, fw.x) * aSlot.x;
   vFade = u0.w;
 `;
 // tourne un vecteur de la figurine : membre (autour de son pivot), penché en avant, puis dans le sens de la figurine
@@ -332,8 +382,8 @@ export class Troops {
     this.index = new Map();     // id du régiment → colonne de la texture des régiments
     this.free = [];
     this.lays = new Map();      // id → {key, lay}
-    this.data = new Float32Array(MAXU * 3 * 4);
-    this.units = new THREE.DataTexture(this.data, MAXU, 3, THREE.RGBAFormat, THREE.FloatType);
+    this.data = new Float32Array(MAXU * ROWS * 4);
+    this.units = new THREE.DataTexture(this.data, MAXU, ROWS, THREE.RGBAFormat, THREE.FloatType);
     this.units.needsUpdate = true;
     const t = relief.t, hd = new Float32Array(t.fineW * t.fineH);
     for (let i = 0; i < hd.length; i++) hd[i] = (t.fine[i] - t.hmin) * relief.ex;
@@ -345,18 +395,21 @@ export class Troops {
     };
     this.kinds = new Map();     // sorte → {mesh, cap, n, slot, anim, coat}
     for (const k of ['inf', 'gren', 'leger', 'milice', 'officier', 'tambour', 'drapeau']) this.addKind(k, soldier(k, this.year));
-    for (const k of ['cav', 'colonel']) this.addKind(k, horse(k, this.year), null, true);
-    this.addKind('attelage', horse(null, this.year), null, true);
+    for (const k of ['cav', 'colonel']) this.addKind(k, horse(k, this.year), null, 'HORSE');
+    this.addKind('attelage', horse(null, this.year), null, 'HORSE');
+    this.addKind('servant', soldier('servant', this.year), null, 'CREW');
+    this.addKind('canon', gun(), null, 'GUN');
+    this.addKind('caisson', caisson(false), null, 'GUN');
+    this.addKind('chariot', caisson(true), null, 'GUN');
     this.pattern = flagPattern(this.year);
     this.addKind('etoffe', flagCloth(), this.pattern);
     this.addKind('fanion', flagCloth(true), this.pattern);
   }
-  // sortes de figurines dessinées ici (les autres régiments restent des blocs en attendant leurs modèles)
-  handles(un) { const c = clsOf(un); return c === 'inf' || c === 'cavalerie' || isGeneral(un); }
 
-  addKind(kind, geo, pattern = null, isHorse = false) {
+  // def : 'HORSE' (cheval), 'GUN' (pièce, voiture), 'CREW' (servant) : leur animation dans le vertex shader
+  addKind(kind, geo, pattern = null, def = null) {
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: pattern ? THREE.DoubleSide : THREE.FrontSide });
-    if (isHorse) mat.defines = { HORSE: '' };
+    if (def) mat.defines = { [def]: '' };
     mat.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, this.uni);
       if (pattern) sh.uniforms.uPattern = { value: pattern };
@@ -369,7 +422,7 @@ export class Troops {
           float k = 0.08 - transformed.z;
           transformed.x += sin(uTime * 4.2 - k * 2.0 + ph) * 0.12 * k;` : ''}
           ${turn('transformed', true)}
-          transformed.y += bob;
+          transformed.y = transformed.y * crouch + bob;
           transformed *= aAnim.z;
           transformed += vec3(base.x, hAt(base), base.y);`)
         .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart;');
@@ -380,7 +433,7 @@ export class Troops {
           if (vFade < 0.995 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > vFade) discard;`)
         .replace('#include <color_fragment>', pattern ? 'diffuseColor.rgb *= mix(vColor.rgb, vec3(0.95), texture2D(uPattern, vUv2).a * step(0.5, vPart));' : '#include <color_fragment>');
     };
-    mat.customProgramCacheKey = () => pattern ? 'troupes-etoffe' : isHorse ? 'troupes-cheval' : 'troupes';
+    mat.customProgramCacheKey = () => 'troupes-' + (pattern ? 'etoffe' : def || 'homme');
     const k = { geo, mat, mesh: null, cap: 0, n: 0, slot: null, anim: null, coat: null };
     this.kinds.set(kind, k);
     this.grow(k, 256);
@@ -403,7 +456,6 @@ export class Troops {
   // l'animation (s) ; fxT, horloge des effets (salves)
   update(list, colors, time, fxT) {
     this.uni.uTime.value = time; this.uni.uFxT.value = fxT;
-    list = list.filter(u => this.handles(u));
     // hommes par figurine : autant qu'il faut pour tenir dans le budget de la qualité (par paliers de 25 % : la
     // disposition ne change pas à chaque perte)
     const men = list.reduce((a, u) => a + Math.min(u.men || 0, 480), 0), budget = this.q.troupes ?? this.q.figures * 2;
@@ -428,6 +480,7 @@ export class Troops {
       D[row + o] = run ? 2 : march ? 1 : 0; D[row + o + 1] = un.state === 'feu' || un.state === 'recharge' ? 1 : 0;
       D[row + o + 2] = v ? v.t : -99; D[row + o + 3] = v ? v.dur : 1;
       D[2 * row + o] = v ? v.roll : 1; D[2 * row + o + 1] = Math.max(1, un.w); D[2 * row + o + 2] = un.form === 'tirailleurs' ? 1 : 0;
+      for (let q = 0; q < 8; q++) D[(3 + (q >> 2)) * row + o + (q & 3)] = un._shots?.[q] ?? -99;
     }
     for (const [id, i] of this.index) if (!seen.has(id)) { this.index.delete(id); this.lays.delete(id); this.free.push(i); dirty = true; }
     this.units.needsUpdate = true;
@@ -438,12 +491,13 @@ export class Troops {
     for (const k of this.kinds.values()) k.n = 0;
     const coat = new THREE.Color(), off = new THREE.Color();
     const FACE = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
-    const put = (kind, f, ui, carre) => {
+    // face : sens imposé (servants), sinon celui de la face du carré ou du demi-tour
+    const put = (kind, f, ui, carre, face = null) => {
       const k = this.kinds.get(kind);
       if (!k) return;
       if (k.n >= k.cap) this.grow(k, k.cap * 2);
       const n = k.n++, rank = f[5];
-      k.slot.set([f[0], f[1], carre && rank >= 0 ? FACE[f[3]] : f[3] === 2 ? Math.PI : 0, ui], n * 4);
+      k.slot.set([f[0], f[1], face ?? (carre && rank >= 0 ? FACE[f[3]] : f[3] === 2 ? Math.PI : 0), ui], n * 4);
       k.anim.set([f[4], f[6], scale, rank], n * 4);
       k.coat.set([coat.r, coat.g, coat.b], n * 3);
     };
@@ -454,7 +508,10 @@ export class Troops {
         coat.copy(off);
         if (f[2] === 'milice') coat.set('#7a6248');
         else if (f[2] === 'officier' || f[2] === 'drapeau' || f[2] === 'colonel') coat.multiplyScalar(0.8);
-        put(f[2], f, ui, carre);
+        else if (f[2] === 'servant') coat.multiplyScalar(0.6);   // habit sombre des artilleurs
+        // l'écouvillon et le pointeur se tournent vers la pièce
+        if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant', [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2);
+        else put(f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2], f, ui, carre);
         if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre); }
         else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre); }
       }
