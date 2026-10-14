@@ -8,8 +8,12 @@
 //
 // Options : --q (paramètres de banc.html, en plus de scen et start=1), --js (code lancé quand la bataille est prête ;
 // window.__btView est la vue), --wait (ms avant la capture, défaut 4000), --size (défaut 1400x800), --gpu (essayer la
-// carte graphique au lieu de SwiftShader). Les erreurs de la page sont recopiées dans le terminal ; code de sortie 1
-// s'il y en a eu.
+// carte graphique au lieu de SwiftShader).
+// Gestes, après --js (de vrais événements, comme une souris ou des doigts) :
+//   --drag x0,y0,x1,y1 (ou --drag js : les coordonnées sont lues dans window.__drag), --button left|right|middle,
+//   --hold (capture avant de relâcher : la flèche d'ordre est encore tracée) ;
+//   --pinch cx,cy,r0,r1,da : deux doigts autour de (cx, cy), écartés de r0 à r1 px, tournés de da radians.
+// Les erreurs de la page sont recopiées dans le terminal ; code de sortie 1 s'il y en a eu.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -76,6 +80,26 @@ try {
   console.log('WebGL 2 :', (await evalJs("!!document.createElement('canvas').getContext('webgl2')")) ? 'oui' : 'non');
   await sleep(wait);
   if (js) { const r = await evalJs(`(async () => { ${js.includes('return') ? js : 'return ' + js} })()`); if (r !== undefined) console.log('js →', JSON.stringify(r)); await sleep(1500); }
+  const drag = opt('--drag');
+  if (drag) {
+    const [x0, y0, x1, y1] = drag === 'js' ? await evalJs('window.__drag') : drag.split(',').map(Number);
+    const button = opt('--button') || 'left', buttons = { left: 1, right: 2, middle: 4 }[button];
+    await s('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x0, y: y0 });
+    await s('Input.dispatchMouseEvent', { type: 'mousePressed', x: x0, y: y0, button, buttons, clickCount: 1 });
+    for (let k = 1; k <= 12; k++) { await s('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x0 + (x1 - x0) * k / 12, y: y0 + (y1 - y0) * k / 12, button, buttons }); await sleep(40); }
+    if (!argv.includes('--hold')) await s('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x1, y: y1, button, buttons: 0, clickCount: 1 });
+    await sleep(2000);
+  }
+  const pinch = opt('--pinch');
+  if (pinch) {
+    const [cx, cy, r0, r1, da] = pinch.split(',').map(Number);
+    await s('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    const pts = k => { const r = r0 + (r1 - r0) * k, a = da * k; return [{ x: cx - Math.cos(a) * r, y: cy - Math.sin(a) * r, id: 1 }, { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, id: 2 }]; };
+    await s('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(0) });
+    for (let k = 1; k <= 15; k++) { await s('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(k / 15) }); await sleep(40); }
+    await s('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await sleep(2000);
+  }
   const shot = await s('Page.captureScreenshot', { format: 'png' });
   fs.writeFileSync(out, Buffer.from(shot.data, 'base64'));
   console.log(`Capture : ${out}`);

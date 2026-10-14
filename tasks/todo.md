@@ -30,7 +30,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/vue.js`, `web/js/battle/relief.js`, `web/js/battle/terrain.js`
   - Taille : M
 
-- [ ] **T4 : gestes, tracés au sol, mini-carte**
+- [x] **T4 : gestes, tracés au sol, mini-carte**
   - Critères : glisser déplace dans le repère de la caméra, pincer et molette zooment au point visé, deux doigts qui
     tournent et clic droit glissé pivotent, inertie, clavier ; sélection, cadre, tracé d'ordre (flèche, silhouettes),
     ligne d'arrivée, déploiement par glisser, ciblage ; portées, zone de déploiement, ralliement, objectif, ordres en

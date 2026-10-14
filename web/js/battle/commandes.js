@@ -5,8 +5,10 @@
 //    pendant le déploiement, la déplacer directement dans la zone
 //  unités sélectionnées : appui sur le sol pour y aller ; glisser depuis le sol pour fixer l'emplacement et
 //    l'orientation de la ligne d'arrivée ; appui sur un ennemi pour l'attaquer (ou le charger après « Charger »)
-//  un doigt ailleurs, deux doigts, molette, clic droit ou du milieu : déplacer et zoomer la vue
-import { clsOf, clamp, wrapAngle, TAU, TILT } from './formes.js';
+//  un doigt ailleurs ou clic du milieu : déplacer la vue ; deux doigts : zoomer, déplacer et pivoter (en tournant les
+//    doigts) ; molette : zoomer ; clic droit glissé : pivoter (clic droit sans glisser : ordre de marche ou d'attaque)
+import { clsOf, clamp, wrapAngle, TAU } from './formes.js';
+import { anchor } from './camera.js';
 
 const LONG_MS = 480;
 
@@ -44,7 +46,7 @@ export class Controls {
     window.removeEventListener('keyup', this.h.keyup);
   }
   pos(e) { const r = this.v.cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
-  busy() { return !!this.g && (this.g.mode === 'pinch' || this.g.mode === 'pan'); }
+  busy() { return !!this.g && (this.g.mode === 'pinch' || this.g.mode === 'pan' || this.g.mode === 'rotate'); }
   deploying() { return this.v.st?.phase === 'deploiement'; }
   mineSel() { return [...this.v.sel].map(id => this.v.units.get(id)).filter(u => u && u.side === this.v.me && !u._ghost && u.state !== 'hors'); }
 
@@ -60,7 +62,7 @@ export class Controls {
       clearTimeout(this.g?.longT);
       const [a, b] = [...this.pts.values()];
       const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
-      this.g = { mode: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: v.cam.z, w0: v.toWorld(cx, cy) };
+      this.g = { mode: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: v.cam.z, w0: v.toWorld(cx, cy), a0: Math.atan2(b.y - a.y, b.x - a.x), yaw0: v.cam.yaw || 0, rot: false };
       return;
     }
     if (this.pts.size > 2) return;
@@ -92,10 +94,14 @@ export class Controls {
     if (!g) return;
     if (g.mode === 'pinch') {
       const [a, b] = [...this.pts.values()];
-      const d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
-      v.cam.z = clamp(g.z0 * d / g.d0, v.minZ(), 6);
-      v.cam.x = g.w0[0] - (cx - v.vw / 2) / v.cam.z;
-      v.cam.y = g.w0[1] - (cy - v.vh / 2) / (v.cam.z * TILT);
+      const d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2, ang = Math.atan2(b.y - a.y, b.x - a.x);
+      v.cam.z = clamp(g.z0 * d / g.d0, v.minZ(), v.maxZ());
+      // la rotation ne s'engage qu'au-delà de 7° : un simple pincement ne fait pas tourner la vue ; la carte tourne
+      // ensuite avec les doigts
+      if (!g.rot && Math.abs(wrapAngle(ang - g.a0)) > 0.12) { g.rot = true; g.a0 = ang; g.yaw0 = v.cam.yaw || 0; }
+      if (g.rot) v.cam.yaw = g.yaw0 - wrapAngle(ang - g.a0);
+      // le point du terrain pris entre les doigts reste entre eux
+      anchor(v.cam, v, v.relief.heightAt, g.w0[0], g.w0[1], cx, cy);
       v.camAnim = null;
       v.clampCam();
       return;
@@ -107,7 +113,7 @@ export class Controls {
       clearTimeout(g.longT);
       const hitU = g.hit && v.units.get(g.hit), mine = hitU && hitU.side === v.me && !hitU._ghost;
       const sel = this.mineSel();
-      if (g.mode === 'rpending') g.mode = 'pan';
+      if (g.mode === 'rpending') g.mode = 'rotate';
       else if (g.shift && !g.touch) g.mode = 'box';
       else if (mine && hitU.state !== 'deroute') {
         if (!v.sel.has(hitU.id)) { v.sel.clear(); v.sel.add(hitU.id); v.ui.selChanged(); }
@@ -118,11 +124,12 @@ export class Controls {
         g.mode = 'order-line';
       } else g.mode = 'pan';
     }
-    if (g.mode === 'pan') {
-      v.cam.x -= (sx - px) / v.cam.z;
-      v.cam.y -= (sy - py) / (v.cam.z * TILT);
+    if (g.mode === 'rotate') {
+      v.cam.yaw = (v.cam.yaw || 0) + (sx - px) * 0.006;   // vers la droite : on regarde à droite
       v.camAnim = null;
-      v.clampCam();
+    }
+    if (g.mode === 'pan') {
+      v.panBy(px, py, sx, sy);
       const now = performance.now(), dtm = Math.max(1, now - (g.lt || now - 16));
       g.vel = [g.vel[0] * 0.6 + (sx - px) / dtm * 1000 * 0.4, g.vel[1] * 0.6 + (sy - py) / dtm * 1000 * 0.4];
       g.lt = now;
@@ -146,6 +153,7 @@ export class Controls {
     switch (g.mode) {
       case 'pending': this.tap(g); break;
       case 'rpending': this.rightTap(g); break;
+      case 'rotate': break;
       case 'pan': if (Math.hypot(...g.vel) > 120) this.inertia = { vx: g.vel[0], vy: g.vel[1] }; break;
       case 'box': this.boxSelect(g); break;
       case 'drag-unit': {
@@ -291,9 +299,8 @@ export class Controls {
     const v = this.v;
     if (this.inertia) {
       const iv = this.inertia;
-      v.cam.x -= iv.vx * dt / v.cam.z; v.cam.y -= iv.vy * dt / (v.cam.z * TILT);
+      v.panBy(0, 0, iv.vx * dt, iv.vy * dt);
       const k = Math.exp(-dt * 4.5); iv.vx *= k; iv.vy *= k;
-      v.clampCam();
       if (Math.hypot(iv.vx, iv.vy) < 20) this.inertia = null;
     }
     let kx = 0, ky = 0;
@@ -308,7 +315,7 @@ export class Controls {
       kx += g.x < m ? -1 : g.x > v.vw - m ? 1 : 0;
       ky += g.y < m + 50 ? -1 : g.y > v.vh - m - 100 ? 1 : 0;
     }
-    if (kx || ky) { v.cam.x += kx * 520 * dt / v.cam.z; v.cam.y += ky * 520 * dt / (v.cam.z * TILT); v.camAnim = null; v.clampCam(); }
+    if (kx || ky) { v.panBy(0, 0, -kx * 520 * dt, -ky * 520 * dt); v.camAnim = null; }
   }
 
   // ------------------------------------------------------------------ dessin des gestes (écran)
@@ -317,9 +324,9 @@ export class Controls {
     // échos d'un ordre
     this.pings = this.pings.filter(p => now - p.t < 700);
     for (const p of this.pings) {
-      const k = (now - p.t) / 700, [sx, sy] = v.toScreen(p.x, p.y);
+      const k = (now - p.t) / 700, r = (8 + k * 26) / v.cam.z;
       ctx.strokeStyle = p.col + (1 - k) + ')'; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.ellipse(sx, sy, 8 + k * 26, (8 + k * 26) * TILT, 0, 0, TAU); ctx.stroke();
+      v.groundPath(ctx, v.arc(p.x, p.y, r, 0, TAU), true); ctx.stroke();
     }
     if (!g) return;
     if (g.mode === 'box') {
@@ -342,25 +349,27 @@ export class Controls {
     const tgt = this.hover && v.units.get(this.hover);
     const enemy = tgt && tgt.side !== v.me;
     if (enemy) dest = [tgt.x, tgt.y];
-    // flèche courbe : elle part dans le sens où l'unité regarde, puis s'infléchit vers l'arrivée
+    // flèche courbe : elle part dans le sens où l'unité regarde, puis s'infléchit vers l'arrivée (courbe tracée sur le
+    // terrain, puis projetée sur le relief)
+    const dw = Math.hypot(dest[0] - from[0], dest[1] - from[1]);
+    const md = us.length === 1 ? us[0].dir : Math.atan2(dest[1] - from[1], dest[0] - from[0]);
+    const cw = [from[0] + Math.cos(md) * dw * 0.4, from[1] + Math.sin(md) * dw * 0.4];
+    const curve = Array.from({ length: 17 }, (_, i) => { const t = i / 16, a = (1 - t) * (1 - t), b = 2 * t * (1 - t), c = t * t; return [a * from[0] + b * cw[0] + c * dest[0], a * from[1] + b * cw[1] + c * dest[1]]; });
     const [ax, ay] = v.toScreen(from[0], from[1]), [bx, by] = v.toScreen(dest[0], dest[1]);
     const d = Math.hypot(bx - ax, by - ay);
-    const md = us.length === 1 ? us[0].dir : Math.atan2(by - ay, bx - ax);
-    const cx = ax + Math.cos(md) * d * 0.4, cy = ay + Math.sin(md) * d * 0.4 * TILT;
     const col = enemy ? (this.targeting === 'charge' || this.targeting === 'vcharge' ? '#ff7a5a' : '#ffae78') : '#ffe29a';
     if (g.mode !== 'drag-unit' && d > 12) {
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = 'rgba(20,14,8,0.55)'; ctx.lineWidth = 9;
-      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(cx, cy, bx, by); ctx.stroke();
-      ctx.strokeStyle = col; ctx.lineWidth = 5;
-      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(cx, cy, bx, by); ctx.stroke();
-      const ang = Math.atan2(by - cy, bx - cx);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      v.groundPath(ctx, curve);
+      ctx.strokeStyle = 'rgba(20,14,8,0.55)'; ctx.lineWidth = 9; ctx.stroke();
+      ctx.strokeStyle = col; ctx.lineWidth = 5; ctx.stroke();
+      const [cx, cy] = v.toScreen(curve[14][0], curve[14][1]), ang = Math.atan2(by - cy, bx - cx);
       ctx.fillStyle = col;
       ctx.beginPath(); ctx.moveTo(bx + Math.cos(ang) * 12, by + Math.sin(ang) * 12); ctx.lineTo(bx + Math.cos(ang + 2.4) * 14, by + Math.sin(ang + 2.4) * 14); ctx.lineTo(bx + Math.cos(ang - 2.4) * 14, by + Math.sin(ang - 2.4) * 14); ctx.closePath(); ctx.fill();
     }
     if (enemy) {
       ctx.strokeStyle = col; ctx.lineWidth = 3;
-      v.art.footprint(ctx, view, tgt.x, tgt.y, tgt.dir, tgt.w, tgt.d, 8); ctx.stroke();
+      v.footprint(ctx, tgt.x, tgt.y, tgt.dir, tgt.w, tgt.d, 8); ctx.stroke();
       ctx.font = '600 15px "EB Garamond", Georgia, serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff3d6';
       ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(12,24,40,0.8)';
       const label = this.targeting === 'charge' ? 'Charger !' : this.targeting === 'vcharge' ? 'Salve, puis baïonnette' : 'Attaquer';
@@ -378,11 +387,10 @@ export class Controls {
     });
     for (const gh of ghosts) {
       ctx.fillStyle = 'rgba(255,226,150,0.14)'; ctx.strokeStyle = 'rgba(255,226,150,0.9)'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
-      const pts = v.art.footprint(ctx, view, gh.x, gh.y, gh.dir, gh.w, gh.d, 2); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+      const pts = v.footprint(ctx, gh.x, gh.y, gh.dir, gh.w, gh.d, 2); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
       ctx.strokeStyle = '#ffe29a'; ctx.lineWidth = 3.5;   // le front
-      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); ctx.lineTo(pts[1][0], pts[1][1]); ctx.stroke();
+      v.groundPath(ctx, [pts[0], pts[1]]); ctx.stroke();
     }
-    v.art.draw(ctx, view, ghosts, time, v.colors || []);
   }
 }
 

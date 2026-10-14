@@ -261,6 +261,16 @@ export class BattleView {
     this.cam = from;
     this.camAnim = { from, to, t0: performance.now(), dur };
   }
+  // déplace la vue comme si le doigt passait de (px, py) à (sx, sy) : la carte suit le doigt, dans le repère de la
+  // caméra (de droite à gauche le long du front de l'écran, de haut en bas vers l'horizon, raccourci par l'inclinaison)
+  panBy(px, py, sx, sy) {
+    const yaw = this.cam.yaw || 0, s = 1 / this.cam.z;
+    const dx = (sx - px) * s, dy = (sy - py) * s / Math.max(0.35, Math.sin(this.fr().pitch));
+    this.cam.x += Math.sin(yaw) * dy - Math.cos(yaw) * dx;
+    this.cam.y += -Math.cos(yaw) * dy - Math.sin(yaw) * dx;
+    this.camAnim = null;
+    this.clampCam();
+  }
   // zoom vers un point de l'écran : le point du terrain sous le doigt y reste
   zoomAt(sx, sy, f) {
     const [wx, wy] = this.toWorld(sx, sy);

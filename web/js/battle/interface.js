@@ -641,9 +641,10 @@ export class BattleUI {
       g.restore();
     }
     g.globalAlpha = 1;
-    const [ax, ay] = v.toWorld(0, 0), [bx, by] = v.toWorld(v.vw, v.vh);
+    // la part du terrain que montre la vue : un trapèze (la caméra est inclinée et peut tourner)
+    const pts = [[0, 0], [v.vw, 0], [v.vw, v.vh], [0, v.vh]].map(([x, y]) => v.toWorld(x, y));
     g.strokeStyle = 'rgba(255,248,230,0.95)'; g.lineWidth = 1.5 * dpr;
-    g.strokeRect(ax * sx, ay * sy, (bx - ax) * sx, (by - ay) * sy);
+    g.beginPath(); pts.forEach(([x, y], k) => k ? g.lineTo(x * sx, y * sy) : g.moveTo(x * sx, y * sy)); g.closePath(); g.stroke();
   }
 }
 // nom court pour les cartes d'unités : abréviations d'état-major pour les mots longs
