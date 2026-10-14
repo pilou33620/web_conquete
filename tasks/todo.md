@@ -61,7 +61,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/troupes.js`, `web/js/battle/unites.js`, `web/js/battle/vue.js`, `tests/troupes.test.mjs`
   - Taille : M
 
-- [ ] **T7 : cavaliers, chevaux, état-major**
+- [x] **T7 : cavaliers, chevaux, état-major**
   - Critères : chevaux (robes variées) au pas et au galop, cavaliers, étendard, colonel à cheval, état-major du
     général.
   - Vérif : captures d'une cavalerie à l'arrêt et à la charge.

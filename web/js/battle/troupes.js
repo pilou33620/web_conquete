@@ -20,6 +20,7 @@ export const SCALE = 1.6;   // les figurines sont grandies : l'emprise du jeu (1
 const MAXU = 512;           // régiments au plus (largeur de la texture des régiments)
 
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', GOLD = '#d6b65a', LEATHER = '#2a1f16';
+const ROBES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];   // robes des chevaux (bai, bai brun, alezan, noir pangaré)
 
 // coiffure selon l'époque et le type (comme la vue 2D d'avant)
 export function headgear(kind, year) {
@@ -126,7 +127,8 @@ export function layout(un, per = 1, scale = SCALE) {
 
 // ------------------------------------------------------------------ modèles
 // Pièces assemblées en une géométrie : couleur par sommet, os (0 corps, 1 jambe gauche, 2 jambe droite, 3 bras et
-// fusil, 4 étoffe du drapeau), habit (1 : la couleur de l'instance, la couleur du sommet n'en donne que la nuance).
+// fusil, 4 étoffe du drapeau ; cheval : 1 et 2 jambes avant, 5 et 6 jambes arrière, 7 encolure, 8 bras du cavalier),
+// teinte (1 : l'habit, couleur de l'instance ; 2 : la robe du cheval ; la couleur du sommet n'en donne que la nuance).
 // Repère d'une figurine : +Z devant, +X à sa gauche, les pieds en 0, un homme mesure 1,75 m.
 function assemble(parts) {
   const pos = [], nor = [], col = [], bone = [], part = [], uv = [], idx = [];
@@ -157,8 +159,9 @@ const cyl = (rt, rb, h, n, x, y, z, rx = 0, rz = 0) => new THREE.CylinderGeometr
 // nuance d'habit (la couleur vient de l'instance) : le rouge du sommet porte la nuance
 const shade = k => new THREE.Color(k, k, k).getStyle();
 
-function hat(type, kind) {
+function hat(type, kind, dy = 0) {
   const plume = kind === 'gren' || kind === 'tambour' ? '#c83a2a' : kind === 'leger' ? '#4f8a3a' : '#f1ece0';
+  if (dy) return hat(type, kind).map(([g, ...r]) => [g.translate(0, dy, 0), ...r]);
   switch (type) {
     case 'tricorne': return [[cyl(0.2, 0.22, 0.08, 3, 0, 1.71, 0.01), HAT, 0, 0], [cyl(0.1, 0.11, 0.1, 8, 0, 1.74, 0), HAT, 0, 0]];
     case 'bicorne': return [[box(0.46, 0.15, 0.09, 0, 1.75, 0), HAT, 0, 0], [cyl(0.1, 0.11, 0.08, 8, 0, 1.71, 0), HAT, 0, 0], [box(0.05, 0.05, 0.02, 0.12, 1.77, 0.05), '#2f4fa0', 0, 0]];
@@ -203,10 +206,43 @@ function soldier(kind, year) {
   if (armed) P.push([box(0.05, 0.55, 0.07, 0.3, 1.05, 0.06), WOOD, 3, 0], [box(0.03, 0.95, 0.035, 0.3, 1.75, 0.06), IRON, 3, 0], [box(0.015, 0.38, 0.02, 0.3, 2.4, 0.06), '#b8bcc0', 3, 0]);
   return assemble(P);
 }
-// l'étoffe du drapeau, accrochée en haut de la hampe du porte-drapeau, flottant vers l'arrière
-function flagCloth() {
-  const g = new THREE.PlaneGeometry(2, 1.4, 8, 3).rotateY(Math.PI / 2).translate(0.24, 2.85, 0.08 - 1);
-  return assemble([[g, shade(1), 4, 1]]);
+// l'étoffe du drapeau, accrochée en haut de la hampe du porte-drapeau, flottant vers l'arrière ; l'étendard d'un
+// cavalier (fanion de l'état-major) a sa hampe avec lui
+function flagCloth(rider = false) {
+  if (rider) return assemble([[new THREE.PlaneGeometry(1.2, 0.85, 6, 2).rotateY(Math.PI / 2).translate(-0.3, 3.4, 0.08 - 0.6), shade(1), 4, 1],
+    [box(0.04, 2.2, 0.04, -0.3, 2.75, 0.08), WOOD, 0, 0], [box(0.07, 0.1, 0.07, -0.3, 3.88, 0.08), GOLD, 0, 0]]);
+  return assemble([[new THREE.PlaneGeometry(2, 1.4, 8, 3).rotateY(Math.PI / 2).translate(0.24, 2.85, 0.08 - 1), shade(1), 4, 1]]);
+}
+// cheval (2,3 m de long, 1,55 m au garrot) ; rider : 'cav' (cavalier), 'colonel' (officier supérieur, général) ou rien
+// (cheval d'attelage, avec son collier)
+function horse(rider, year) {
+  const P = [], R = (k, ...g) => [box(...g), shade(k), 0, 2];
+  P.push(R(1, 0.5, 0.58, 1.5, 0, 1.16, 0), R(0.95, 0.46, 0.5, 0.3, 0, 1.18, 0.78));          // corps, poitrail
+  P.push([box(0.26, 0.72, 0.36, 0, 1.62, 0.95, -0.55), shade(0.95), 7, 2]);                  // encolure
+  P.push([box(0.22, 0.24, 0.6, 0, 1.97, 1.22, 0.45), shade(0.9), 7, 2]);                     // tête
+  P.push([box(0.06, 0.62, 0.12, 0, 1.78, 0.86, -0.55), '#1a1410', 7, 0]);                    // crinière
+  for (const [x, z, b] of [[0.15, 0.6, 1], [-0.15, 0.6, 2], [0.15, -0.6, 5], [-0.15, -0.6, 6]]) {
+    P.push([box(0.13, 0.5, 0.18, x, 0.62, z), shade(0.9), b, 2], [box(0.09, 0.42, 0.1, x, 0.24, z), shade(0.7), b, 2], [box(0.11, 0.07, 0.13, x, 0.035, z), '#1a1410', b, 0]);
+  }
+  P.push([box(0.1, 0.65, 0.12, 0, 1.0, -0.83, 0.25), '#1a1410', 0, 0]);                      // queue
+  if (!rider) {
+    P.push([box(0.52, 0.14, 0.14, 0, 1.55, 0.74), '#3a2a1a', 0, 0], [box(0.52, 0.08, 1.2, 0, 1.3, -0.1), '#2a1e14', 0, 0]);   // collier, harnais
+    return assemble(P);
+  }
+  const col = rider === 'colonel', breeches = year >= 1830 ? '#8d929b' : '#e8dcc0';
+  P.push([box(0.62, 0.08, 0.66, 0, 1.47, -0.05), shade(0.85), 0, 1]);                        // tapis de selle
+  P.push([box(0.44, 0.14, 0.46, 0, 1.6, 0.12), breeches, 0, 0]);                             // cuisses
+  for (const s of [1, -1]) P.push([box(0.12, 0.52, 0.15, s * 0.3, 1.34, 0.3), '#15110d', 0, 0]);   // bottes
+  P.push([box(0.38, 0.58, 0.24, 0, 1.96, -0.02), shade(1), 0, 1]);                           // habit
+  P.push([box(0.06, 0.66, 0.03, 0, 1.94, 0.11, 0, 0, 0.5), col ? '#c9a24a' : WHITE, 0, 0]);  // baudrier (écharpe dorée d'un officier)
+  P.push([box(0.18, 0.21, 0.2, 0, 2.36, 0.01), SKIN, 0, 0]);
+  if (col) for (const s of [1, -1]) P.push([box(0.12, 0.04, 0.14, s * 0.21, 2.25, -0.02), GOLD, 0, 0]);
+  P.push(...hat(headgear(col ? 'officier' : 'cav', year), col ? 'officier' : 'cav', 0.795));
+  // bras gauche tenant les rênes ; bras droit (os 8, l'épaule en y = 2,2) et le sabre, levé à la charge
+  P.push([box(0.11, 0.45, 0.12, 0.25, 2.0, 0.14, -0.9), shade(0.9), 0, 1], [box(0.08, 0.09, 0.09, 0.25, 1.86, 0.32), SKIN, 0, 0]);
+  P.push([box(0.11, 0.56, 0.12, -0.26, 1.94, 0), shade(0.9), 8, 1], [box(0.08, 0.09, 0.09, -0.26, 1.62, 0), SKIN, 8, 0]);
+  P.push([box(0.035, 0.95, 0.02, -0.27, 2.14, 0.04), '#c8ccd0', 8, 0]);
+  return assemble(P);
 }
 // motif blanc de l'étoffe : croix des drapeaux d'ordonnance (avant 1790), losange ensuite
 function flagPattern(year) {
@@ -231,7 +267,8 @@ attribute float aBone, aPart;
 uniform sampler2D uUnits, uHeight;
 uniform vec3 uHgt;      // pas des altitudes (m), colonnes, lignes
 uniform float uTime, uFxT;
-varying float vFade;
+uniform vec3 uRobes[4];
+varying float vFade, vPart;
 float hAt(vec2 p) {
   vec2 f = clamp(p / uHgt.x - 0.5, vec2(0.0), uHgt.yz - 1.001);
   ivec2 i = ivec2(floor(f)); vec2 t = f - vec2(i);
@@ -259,14 +296,26 @@ const VERT_POSE = `
       P = cyc < 0.18 ? 1.0 : cyc < 0.62 ? 5.0 : 0.0;
     }
   }
-  float swing = 0.0, arm = 0.0, bob = 0.0, lean = 0.0;
+  float swing = 0.0, arm = 0.0, bob = 0.0, lean = 0.0, boneA = 0.0;
+  vec2 pivot = vec2(0.86, 0.0);
+#ifdef HORSE
+  // cheval : la pose de la disposition porte la robe (× 16) et, en déroute, le galop (2) ; sinon l'allure du régiment.
+  // Au pas, les jambes vont par paires en diagonale ; au galop, l'une après l'autre, le cheval se soulève.
+  float gait = mod(P, 4.0) > 1.5 ? 2.0 : u1.x;
+  float fq = gait > 1.5 ? 11.0 : 6.5, am = gait > 1.5 ? 0.65 : gait > 0.5 ? 0.32 : 0.0, t = uTime * fq + ph;
+  float aFL = sin(t) * am, aFR = sin(t + (gait > 1.5 ? 0.7 : 3.14)) * am, aHL = sin(t + (gait > 1.5 ? 2.2 : 3.14)) * am, aHR = sin(t + (gait > 1.5 ? 2.9 : 0.0)) * am;
+  boneA = aBone == 1.0 ? aFL : aBone == 2.0 ? aFR : aBone == 5.0 ? aHL : aBone == 6.0 ? aHR : aBone == 7.0 ? sin(t) * am * 0.3 : aBone == 8.0 && gait > 1.5 ? 1.2 : 0.0;
+  pivot = aBone == 1.0 || aBone == 2.0 ? vec2(0.85, 0.6) : aBone == 5.0 || aBone == 6.0 ? vec2(0.85, -0.6) : aBone == 7.0 ? vec2(1.4, 0.75) : vec2(2.2, 0.0);
+  bob = gait > 1.5 ? abs(sin(t)) * 0.12 : gait > 0.5 ? abs(sin(t * 2.0)) * 0.03 : 0.0;
+#else
   if (P == 3.0) { swing = sin(uTime * 8.2 + ph) * 0.38; bob = abs(sin(uTime * 8.2 + ph)) * 0.03; }
   else if (P == 2.0 || P == 7.0) { swing = sin(uTime * 13.0 + ph) * 0.65; bob = abs(sin(uTime * 13.0 + ph)) * 0.06; lean = 0.18; arm = P == 2.0 ? 1.25 : 0.35; }
   if (P == 1.0) arm = 1.55; else if (P == 5.0) arm = 0.45;
+  boneA = aBone == 1.0 ? swing : aBone == 2.0 ? -swing : aBone == 3.0 ? arm : 0.0;
+  if (aBone == 3.0) pivot = vec2(1.4, 0.0);
+#endif
   float fa = u0.z + aSlot.z, sa = sin(fa), ca = cos(fa);
   vec2 fw = vec2(cos(u0.z), sin(u0.z)), base = u0.xy + fw * aSlot.y + vec2(-fw.y, fw.x) * aSlot.x;
-  float boneA = aBone == 1.0 ? swing : aBone == 2.0 ? -swing : aBone == 3.0 ? arm : 0.0;
-  vec2 pivot = aBone == 3.0 ? vec2(1.4, 0.0) : vec2(0.86, 0.0);
   vFade = u0.w;
 `;
 // tourne un vecteur de la figurine : membre (autour de son pivot), penché en avant, puis dans le sens de la figurine
@@ -292,18 +341,22 @@ export class Troops {
     this.heights.needsUpdate = true;
     this.uni = {
       uUnits: { value: this.units }, uHeight: { value: this.heights }, uHgt: { value: new THREE.Vector3(t.fineStep, t.fineW, t.fineH) },
-      uTime: { value: 0 }, uFxT: { value: 0 },
+      uTime: { value: 0 }, uFxT: { value: 0 }, uRobes: { value: ROBES.map(c => new THREE.Color(c)) },
     };
     this.kinds = new Map();     // sorte → {mesh, cap, n, slot, anim, coat}
     for (const k of ['inf', 'gren', 'leger', 'milice', 'officier', 'tambour', 'drapeau']) this.addKind(k, soldier(k, this.year));
+    for (const k of ['cav', 'colonel']) this.addKind(k, horse(k, this.year), null, true);
+    this.addKind('attelage', horse(null, this.year), null, true);
     this.pattern = flagPattern(this.year);
     this.addKind('etoffe', flagCloth(), this.pattern);
+    this.addKind('fanion', flagCloth(true), this.pattern);
   }
   // sortes de figurines dessinées ici (les autres régiments restent des blocs en attendant leurs modèles)
-  handles(un) { return clsOf(un) === 'inf' && !isGeneral(un) && !isWagon(un); }
+  handles(un) { const c = clsOf(un); return c === 'inf' || c === 'cavalerie' || isGeneral(un); }
 
-  addKind(kind, geo, pattern = null) {
+  addKind(kind, geo, pattern = null, isHorse = false) {
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: pattern ? THREE.DoubleSide : THREE.FrontSide });
+    if (isHorse) mat.defines = { HORSE: '' };
     mat.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, this.uni);
       if (pattern) sh.uniforms.uPattern = { value: pattern };
@@ -319,15 +372,15 @@ export class Troops {
           transformed.y += bob;
           transformed *= aAnim.z;
           transformed += vec3(base.x, hAt(base), base.y);`)
-        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = mix(vColor.rgb, aCoat * color.r, aPart);');
+        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart;');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying float vFade;' + (pattern ? '\nuniform sampler2D uPattern; varying vec2 vUv2;' : ''))
+        .replace('#include <common>', '#include <common>\nvarying float vFade, vPart;' + (pattern ? '\nuniform sampler2D uPattern; varying vec2 vUv2;' : ''))
         // régiment deviné (plus en vue) : transparent en pointillés, sans tri
         .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
           if (vFade < 0.995 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > vFade) discard;`)
-        .replace('#include <color_fragment>', pattern ? 'diffuseColor.rgb *= mix(vColor.rgb, vec3(0.95), texture2D(uPattern, vUv2).a);' : '#include <color_fragment>');
+        .replace('#include <color_fragment>', pattern ? 'diffuseColor.rgb *= mix(vColor.rgb, vec3(0.95), texture2D(uPattern, vUv2).a * step(0.5, vPart));' : '#include <color_fragment>');
     };
-    mat.customProgramCacheKey = () => pattern ? 'troupes-etoffe' : 'troupes';
+    mat.customProgramCacheKey = () => pattern ? 'troupes-etoffe' : isHorse ? 'troupes-cheval' : 'troupes';
     const k = { geo, mat, mesh: null, cap: 0, n: 0, slot: null, anim: null, coat: null };
     this.kinds.set(kind, k);
     this.grow(k, 256);
@@ -400,9 +453,10 @@ export class Troops {
       for (const f of lay) {
         coat.copy(off);
         if (f[2] === 'milice') coat.set('#7a6248');
-        else if (f[2] === 'officier' || f[2] === 'drapeau') coat.multiplyScalar(0.8);
+        else if (f[2] === 'officier' || f[2] === 'drapeau' || f[2] === 'colonel') coat.multiplyScalar(0.8);
         put(f[2], f, ui, carre);
         if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre); }
+        else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre); }
       }
     }
     for (const k of this.kinds.values()) {

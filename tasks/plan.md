@@ -56,7 +56,7 @@ Détail, critères et vérifications : `tasks/todo.md`.
 
 ### Étape 2 : les troupes
 - [x] T6 : fantassins 3D instanciés et animés, dispositions reprises
-- [ ] T7 : cavaliers, chevaux, état-major
+- [x] T7 : cavaliers, chevaux, état-major
 - [ ] T8 : batteries, servants, caissons, chariots
 - [ ] T9 : fanions façon Ultimate General, médaillons
 - [ ] Point d'étape 2
