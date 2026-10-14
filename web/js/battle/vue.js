@@ -6,6 +6,7 @@ import * as THREE from '../../vendor/three/three.module.js';
 import { Terrain } from './terrain.js';
 import { Relief } from './relief.js';
 import { Troops } from './troupes.js';
+import { drawBanners } from './fanions.js';
 import { UnitArt } from './unites.js';
 import { Effects } from './effets.js';
 import { Controls } from './commandes.js';
@@ -45,7 +46,6 @@ export class BattleView {
     this.seq = 0;
     this.cam = { x: 1500, y: 1000, z: 0.5, yaw: 0 };   // cible au sol, zoom (px/m à la cible), cap (camera.js)
     this.camAnim = null;
-    this.figScale = 3;           // les silhouettes sont grandies (×3, un peu moins de très près) pour rester lisibles
     this.showCover = false;
     this.running = false;
     this.frameMs = [];
@@ -241,8 +241,6 @@ export class BattleView {
   fitZ() { return Math.min(this.vw / (this.W || 3000), this.vh / ((this.H || 2000) * 0.9)) * 0.95; }
   minZ() { return this.fitZ() * 0.7; }
   maxZ() { return this.q.maxZ; }
-  // grossissement des fanions selon le zoom (fanions de la vue 2D d'avant, unites.js)
-  figScaleAt(z) { return z <= 6 ? 3 : 3 * Math.pow(z / 6, -0.55); }
   // repère de la caméra pour l'état présent (recalculé seulement quand la caméra ou l'écran a changé)
   fr() {
     const c = this.cam, f = this._fr, yaw = c.yaw || 0;
@@ -254,6 +252,8 @@ export class BattleView {
   // terrain → écran ([sx, sy, profondeur]) et écran → terrain, sur le relief
   toScreen = (x, y) => project(this.fr(), x, y, this.relief.heightAt(x, y));
   toWorld(sx, sy) { return unproject(this.fr(), sx, sy, this.relief.heightAt); }
+  // point à dh m au-dessus du sol (fanions)
+  toScreenH(x, y, dh) { return project(this.fr(), x, y, this.relief.heightAt(x, y) + dh); }
   clampCam() { clampCam(this.cam, { W: this.W, H: this.H, minZ: this.minZ(), maxZ: this.maxZ() }); }
   // yaw : cap d'arrivée (sinon le cap ne change pas)
   moveCam(x, y, z, dur = 600, yaw = null) {
@@ -345,7 +345,6 @@ export class BattleView {
   draw(dt, time) {
     if (!this.terrain || !this.renderer) return;
     const ctx = this.ctx, dpr = this.dpr, z = this.cam.z, fr = this.fr();
-    this.figScale = this.figScaleAt(z);
     // mesure facultative, poste par poste (this.prof = {} pour l'activer)
     let tm = performance.now();
     const mark = k => { if (!this.prof) return; const n = performance.now(); this.prof[k] = (this.prof[k] || 0) + n - tm; tm = n; };
@@ -367,11 +366,11 @@ export class BattleView {
     ctx.clearRect(0, 0, this.vw, this.vh);
     this.drawGround(ctx, time);
     mark('sol');
-    const view = { toScreen: this.toScreen, z, figScale: this.figScale, vw: this.vw, vh: this.vh, dpr, fxT: this.fx.t };
+    const view = { toScreen: this.toScreen, z, vw: this.vw, vh: this.vh, dpr, fxT: this.fx.t };
     this.fx.draw(ctx, view);
     mark('effets');
     this.drawLabels(ctx);
-    this.bannerRects = this.art.banners(ctx, view, vis, this.colors || [], { sel: this.sel, me: this.me, time });
+    this.bannerRects = drawBanners(ctx, this, vis, this.colors || [], { sel: this.sel, me: this.me, time });
     this.controls.drawOverlay(ctx, view, time);
     mark('fanions');
   }

@@ -1,7 +1,6 @@
 // Vue tactique : petites figurines peintes (fantassin, cavalier, pièce, caisson) des cartes d'unités de la barre du
 // bas, en cache (par camp, type, sens, pose et taille en pixels physiques : nettes sur un écran Retina), bornées en
-// mémoire par la qualité ; fanions de taille constante au-dessus des régiments, aux couleurs du camp, avec l'effectif.
-// Les régiments du champ de bataille sont en 3D (troupes.js).
+// mémoire par la qualité. Les régiments du champ de bataille sont en 3D (troupes.js), leurs fanions dans fanions.js.
 import { clsOf, isLight, isGeneral, isWagon, genName, pieces, hash, clamp, TAU, TILT, OMBRE, mixHex } from './formes.js';
 
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', BRONZE = '#b08a3e', GOLD = '#d6b65a';
@@ -389,113 +388,5 @@ export class UnitArt {
       P.r('#3a2a1a', -0.72, -1.1, 0.12, 1.1); P.r('#3a2a1a', 0.6, -1.1, 0.12, 1.1);
       P.r(AFFUT, -0.6, -1.4, 1.2, 0.62); P.r(lite(AFFUT, 0.2), -0.6, -1.4, 1.2, 0.14);
     }
-  }
-
-  // ------------------------------------------------------------------ disposition des figurines
-  // Renvoie une liste [[u, v, kind, faceOffset, pose, rang, phase], …] en mètres dans le repère de l'unité : u le long
-  // du front, v vers l'avant ; rang : 0 pour le premier rang (il tire), −1 hors des rangs ; phase : décalage de
-  // l'animation. sp, sr : écartement des files et des rangs (m), selon la taille des figurines à l'écran et le sens
-  // du front ; per : hommes par figurine. Recalculée seulement quand l'effectif, la formation, l'état, les
-  // écartements ou le nombre d'hommes par figurine changent.
-  // ------------------------------------------------------------------ fanions (taille constante à l'écran)
-  // renvoie les rectangles des fanions (pour toucher une unité par son fanion)
-  banners(ctx, view, units, colors, opts) {
-    const out = [];
-    const list = units.filter(u => u.state !== 'hors').map(un => {
-      const [sx, sy] = view.toScreen(un.x, un.y);
-      // au-dessus des têtes et du drapeau du régiment
-      const lift = Math.max(un.d * 0.5 * view.z * TILT, 0) + Math.max(22, 1.8 * view.z * view.figScale * 2.3);
-      return { un, sx, sy, top: sy - lift };
-    }).sort((a, b) => a.sx - b.sx);
-    // évite que les fanions se chevauchent : on hisse un peu plus haut celui qui gêne
-    const placed = [];
-    for (const b of list) {
-      const gen = isGeneral(b.un), bw = gen ? 30 : 50, bh = gen ? 30 : 19;
-      let y = b.top;
-      for (let tries = 0; tries < 4; tries++) {
-        const hit = placed.find(p => Math.abs(p.x - b.sx) < (p.w + bw) / 2 + 2 && Math.abs(p.y - y) < (p.h + bh) / 2 + 2);
-        if (!hit) break;
-        y = hit.y - (hit.h + bh) / 2 - 3;
-      }
-      placed.push({ x: b.sx, y, w: bw, h: bh, b });
-    }
-    for (const p of placed) {
-      const { un, sx, sy } = p.b, col = colors[un.side] || '#777';
-      const sel = opts.sel.has(String(un.id)), mine = un.side === opts.me, ghost = un._ghost;
-      ctx.globalAlpha = ghost ? 0.55 : 1;
-      // hampe
-      ctx.strokeStyle = 'rgba(30,22,12,0.75)'; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.moveTo(sx, sy - 4); ctx.lineTo(sx, p.y + p.h / 2); ctx.stroke();
-      if (isGeneral(un)) {
-        this.medallion(ctx, sx, p.y, col, un, sel);
-      } else {
-        const x0 = sx - p.w / 2, y0 = p.y - p.h / 2, rout = un.state === 'deroute' && !ghost;
-        const wave = Math.sin(opts.time * (rout ? 7 : 3) + sx * 0.05) * (rout ? 2.4 : 1.2);
-        ctx.fillStyle = 'rgba(8,14,24,0.35)'; ctx.fillRect(x0 + 2, y0 + 2, p.w, p.h);
-        // en déroute : fanion décoloré et barré
-        ctx.fillStyle = rout ? lite(col, 0.45) : col;
-        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(x0 + p.w / 2, y0 + wave, x0 + p.w, y0); ctx.lineTo(x0 + p.w, y0 + p.h); ctx.quadraticCurveTo(x0 + p.w / 2, y0 + p.h + wave, x0, y0 + p.h); ctx.closePath(); ctx.fill();
-        if (rout) { ctx.save(); ctx.globalAlpha *= 0.55; ctx.fillStyle = '#6d6a64'; ctx.fill(); ctx.restore(); }
-        ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(x0, y0, 17, p.h);
-        ctx.strokeStyle = sel ? '#ffe39a' : mine ? 'rgba(230,201,127,0.9)' : 'rgba(255,255,255,0.45)'; ctx.lineWidth = sel ? 2.4 : 1;
-        ctx.stroke();
-        this.picto(ctx, clsOf(un), x0 + 8.5, p.y, '#fff8e6');
-        ctx.fillStyle = '#fff8e6'; ctx.font = (rout ? 'italic ' : '') + '600 13px "EB Garamond", Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(ghost ? '?' : un.men >= 1000 ? (un.men / 1000).toFixed(1).replace('.', ',') + 'k' : String(Math.round(un.men)), x0 + 17 + (p.w - 17) / 2, p.y + 1);
-        if (rout) {   // la barre
-          ctx.strokeStyle = '#ffe2c8'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.moveTo(x0 + 3, y0 + p.h - 3); ctx.lineTo(x0 + p.w - 3, y0 + 3); ctx.stroke();
-          ctx.strokeStyle = '#b8352a'; ctx.lineWidth = 1; ctx.stroke();
-        }
-        // moral : un liseré sous le fanion (vert → rouge) pour ses propres troupes
-        if (mine) {
-          const m = clamp((un.morale ?? 70) / 100, 0, 1);
-          ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(x0, y0 + p.h + 1, p.w, 3);
-          ctx.fillStyle = m > 0.5 ? '#8fcf6b' : m > 0.3 ? '#e6c45a' : '#e0604f'; ctx.fillRect(x0, y0 + p.h + 1, p.w * m, 3);
-        }
-      }
-      ctx.globalAlpha = 1;
-      out.push({ id: String(un.id), x0: sx - p.w / 2 - 4, y0: p.y - p.h / 2 - 4, x1: sx + p.w / 2 + 4, y1: sy });
-    }
-    return out;
-  }
-  medallion(ctx, x, y, col, un, sel) {
-    ctx.fillStyle = 'rgba(8,14,24,0.4)'; ctx.beginPath(); ctx.arc(x + 2, y + 2, 15, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#13233a'; ctx.beginPath(); ctx.arc(x, y, 15, 0, TAU); ctx.fill();
-    ctx.strokeStyle = sel ? '#ffe39a' : '#c8a253'; ctx.lineWidth = sel ? 3 : 2; ctx.stroke();
-    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 11, 0, TAU); ctx.fill();
-    // bicorne
-    ctx.fillStyle = '#16120e';
-    ctx.beginPath(); ctx.moveTo(x - 8, y + 2); ctx.quadraticCurveTo(x, y - 9, x + 8, y + 2); ctx.quadraticCurveTo(x, y - 1, x - 8, y + 2); ctx.fill();
-    ctx.fillStyle = '#e6c97f'; ctx.beginPath(); ctx.arc(x, y - 3, 1.6, 0, TAU); ctx.fill();
-    const name = (genName(un) || un.name || '').toUpperCase();
-    ctx.font = '600 10.5px "EB Garamond", Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const tw = ctx.measureText(name).width + 10;
-    ctx.fillStyle = 'rgba(19,35,58,0.9)'; ctx.fillRect(x - tw / 2, y + 17, tw, 13);
-    ctx.strokeStyle = 'rgba(200,162,83,0.7)'; ctx.lineWidth = 1; ctx.strokeRect(x - tw / 2, y + 17, tw, 13);
-    ctx.fillStyle = '#f1ead8'; ctx.fillText(name, x, y + 24);
-  }
-  // pictogramme du type : fusil, tête de cheval, canon
-  picto(ctx, cls, x, y, col) {
-    ctx.save(); ctx.translate(x, y); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
-    if (cls === 'cavalerie') {
-      // tête de cheval de profil
-      ctx.beginPath(); ctx.moveTo(-3.5, 6); ctx.lineTo(-3, -1); ctx.lineTo(-1.5, -5); ctx.lineTo(-0.5, -7); ctx.lineTo(0.5, -5.2); ctx.lineTo(4.5, -1.5);
-      ctx.lineTo(4, 0.5); ctx.lineTo(1, -0.5); ctx.lineTo(1.5, 6); ctx.closePath(); ctx.fill();
-    } else if (cls === 'artillerie') {
-      ctx.beginPath(); ctx.arc(-1, 2.5, 3.2, 0, TAU); ctx.stroke();
-      ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(-3.5, 0.5); ctx.lineTo(5, -3.5); ctx.stroke();
-    } else if (cls === 'chariot') {
-      ctx.beginPath(); ctx.arc(0, 1, 4.5, 0, TAU); ctx.moveTo(-4.5, 1); ctx.lineTo(4.5, 1); ctx.moveTo(0, -3.5); ctx.lineTo(0, 5.5); ctx.stroke();
-    } else if (cls === 'general') {
-      ctx.beginPath(); ctx.moveTo(-5, 1); ctx.quadraticCurveTo(0, -7, 5, 1); ctx.quadraticCurveTo(0, -2, -5, 1); ctx.fill();
-    } else {
-      // fantassin : shako, tête, habit, fusil à l'épaule
-      ctx.fillRect(-1.8, -7.5, 3.6, 2.6);
-      ctx.beginPath(); ctx.arc(0, -3.6, 1.5, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(-2.6, -1.8); ctx.lineTo(2.6, -1.8); ctx.lineTo(2.2, 6); ctx.lineTo(-2.2, 6); ctx.closePath(); ctx.fill();
-      ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(3.4, 5); ctx.lineTo(4.3, -8); ctx.stroke();
-    }
-    ctx.restore();
   }
 }

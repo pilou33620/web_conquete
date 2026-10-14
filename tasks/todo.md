@@ -75,7 +75,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/troupes.js`
   - Taille : S
 
-- [ ] **T9 : fanions façon Ultimate General**
+- [x] **T9 : fanions façon Ultimate General**
   - Critères : `fanions.js` : carré aux couleurs du camp avec pictogramme de l'arme, puis l'effectif sur fond sombre,
     hampe ; moral, déroute barrée, régiments devinés « ? » ; médaillon et nom des généraux ; les fanions ne se
     chevauchent pas ; toucher un fanion choisit le régiment.
@@ -83,7 +83,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/fanions.js`, `web/js/battle/unites.js`, `web/js/battle/vue.js`
   - Taille : S
 
-- [ ] **Point d'étape 2** : captures (de près, de loin), images par seconde relevées, commit, revue avec toi.
+- [x] **Point d’étape 2** : captures (de près, de loin), images par seconde relevées, commit, revue avec toi.
 
 ## Étape 3 : le feu et l'atmosphère
 

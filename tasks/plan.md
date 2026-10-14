@@ -58,8 +58,8 @@ Détail, critères et vérifications : `tasks/todo.md`.
 - [x] T6 : fantassins 3D instanciés et animés, dispositions reprises
 - [x] T7 : cavaliers, chevaux, état-major
 - [x] T8 : batteries, servants, caissons, chariots
-- [ ] T9 : fanions façon Ultimate General, médaillons
-- [ ] Point d'étape 2
+- [x] T9 : fanions façon Ultimate General, médaillons
+- [x] Point d’étape 2
 
 ### Étape 3 : le feu et l'atmosphère
 - [ ] T10 : fumées, éclairs, boulets, éclats, poussière en 3D
