@@ -5,6 +5,7 @@
 import * as THREE from '../../vendor/three/three.module.js';
 import { Terrain } from './terrain.js';
 import { Relief } from './relief.js';
+import { Troops } from './troupes.js';
 import { UnitArt } from './unites.js';
 import { Effects } from './effets.js';
 import { Controls } from './commandes.js';
@@ -70,6 +71,8 @@ export class BattleView {
     this.terrain = new Terrain(m, this.q, { flat: true });
     this.relief = new Relief(this.terrain, this.q);
     this.relief.setup(this.scene);
+    this.troops = new Troops(this.relief, this.q, m.year);
+    this.scene.add(this.troops.group);
     this.art.setYear(m.year);   // coiffures de l'époque
     this.W = this.terrain.W; this.H = this.terrain.H;
     this.cam = { x: this.W / 2, y: this.H / 2, z: this.fitZ(), yaw: 0 };
@@ -100,6 +103,7 @@ export class BattleView {
     this.ui.dispose();
     this.terrain?.dispose();
     this.relief?.dispose();
+    this.troops?.dispose();
     if (this.blocks) { this.blocks.geometry.dispose(); this.blocks.material.dispose(); }
     this.art.clear();
     this.fx.dispose();
@@ -114,6 +118,7 @@ export class BattleView {
     this.fx.setQuality(this.q);
     this.terrain?.setQuality(this.q);
     this.relief?.setQuality(this.q);
+    this.troops?.setQuality(this.q);
     this.resize();
     this.clampCam();
   }
@@ -354,8 +359,9 @@ export class BattleView {
     this.relief.update(this.scene, fr.dist, (deploy && this.showCover !== false) || this.showCover === true ? 0.42 + Math.sin(time * 2.2) * 0.1 : 0);
     // sol plus fin autour de la caméra : un bloc par image (aucun pendant un pincement), deux si l'image est vite faite
     this.detailBusy = this.relief.updateDetail(this.renderer, this, this.controls.busy() ? 0 : this.drawMs < 12 ? 2 : 1);
-    const vis = [...this.units.values()].filter(u => u.state !== 'hors' && this.onScreen(u));
-    this.drawBlocks(vis);
+    const all = [...this.units.values()].filter(u => u.state !== 'hors'), vis = all.filter(u => this.onScreen(u));
+    this.troops.update(all, this.colors || [], time, this.fx.t);
+    this.drawBlocks(vis.filter(u => !this.troops.handles(u)));
     this.renderer.render(this.scene, cam);
     mark('scene');
     // le calque 2D
@@ -371,7 +377,7 @@ export class BattleView {
     this.controls.drawOverlay(ctx, view, time);
     mark('fanions');
   }
-  // régiments : un bloc à leurs couleurs, posé sur le relief et orienté (en attendant les figurines 3D)
+  // régiments sans figurines 3D (pas encore) : un bloc à leurs couleurs, posé sur le relief et orienté
   drawBlocks(list) {
     if (!this.blocks || this.blocks.instanceMatrix.count < list.length) {
       if (this.blocks) { this.scene.remove(this.blocks); this.blocks.geometry.dispose(); this.blocks.material.dispose(); }

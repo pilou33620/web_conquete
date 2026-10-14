@@ -47,11 +47,11 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/relief.js`, `web/js/battle/terrain.js`, `web/js/battle/vue.js`
   - Taille : M
 
-- [ ] **Point d'étape 1** : captures envoyées, commit « Batailles en 3D, étape 1 », revue avec toi.
+- [x] **Point d’étape 1** : captures envoyées, commit « Batailles en 3D, étape 1 », revue avec toi.
 
 ## Étape 2 : les troupes
 
-- [ ] **T6 : fantassins 3D**
+- [x] **T6 : fantassins 3D**
   - Critères : `troupes.js` : modèle de fantassin (habit, culotte, guêtres, buffleteries, fusil, coiffure de
     l'époque), instancié ; texture de données des unités ; altitude lue dans le shader ; poses repos, marche, course,
     mise en joue, rechargement, déroute, salve qui roule ; ligne, colonne, carré, tirailleurs ; porte-drapeau,
