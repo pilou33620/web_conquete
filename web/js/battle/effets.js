@@ -42,37 +42,6 @@ function glowSprite(rgb) {
   g.fillStyle = gr; g.fillRect(0, 0, s, s);
   return cv;
 }
-// texture de brume : bruit doux qui se répète
-function fogTexture() {
-  const s = 256, cv = canvas(s, s), g = cv.getContext('2d');
-  for (let k = 0; k < 70; k++) {
-    const x = hash(k, 1, 77) * s, y = hash(k, 2, 77) * s, r = 30 + hash(k, 3, 77) * 70, a = 0.05 + hash(k, 4, 77) * 0.12;
-    for (const [dx, dy] of [[0, 0], [s, 0], [-s, 0], [0, s], [0, -s]]) {
-      const gr = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
-      gr.addColorStop(0, `rgba(235,238,240,${a})`); gr.addColorStop(1, 'rgba(235,238,240,0)');
-      g.fillStyle = gr; g.fillRect(x + dx - r, y + dy - r, r * 2, r * 2);
-    }
-  }
-  return cv;
-}
-// ombres des nuages : taches douces et périodiques (le motif couvre environ 1,5 km)
-function cloudTexture() {
-  const s = 256, cv = canvas(s, s), g = cv.getContext('2d'), img = g.createImageData(s, s), P = 8;
-  const pn = (x, y, p, seed) => {   // bruit périodique de période p cases
-    const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
-    const h = (i, j) => hash(((i % p) + p) % p, ((j % p) + p) % p, seed);
-    const a = h(ix, iy), b = h(ix + 1, iy), c = h(ix, iy + 1), d = h(ix + 1, iy + 1);
-    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
-  };
-  for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
-    const v = pn(x / s * P, y / s * P, P, 11) * 0.65 + pn(x / s * P * 2, y / s * P * 2, P * 2, 12) * 0.35;
-    const k = (y * s + x) * 4, a = clamp((v - 0.5) / 0.22, 0, 1);
-    img.data[k] = 22; img.data[k + 1] = 30; img.data[k + 2] = 44; img.data[k + 3] = a * a * (3 - 2 * a) * 255;
-  }
-  g.putImageData(img, 0, 0);
-  return cv;
-}
-
 export class Effects {
   // q : profil de qualité graphique (qualite.js) : nombre de fumées, richesse des effets (fx, 0 à 3)
   constructor(q) {
@@ -90,7 +59,6 @@ export class Effects {
     this.fire = glowSprite('255,190,90');
     this.flash = flashSprite();
     this.shade = glowSprite('0,0,0');
-    this.fog = null; this.clouds = null;
     this.rain = []; this.snow = [];
     this.bolt = null; this.flashT = 0; this.nextBolt = 4;
     this.t = 0;
@@ -375,31 +343,28 @@ export class Effects {
     if (tint && w === 'brouillard') tint = mix3(tint, [235, 238, 242], 0.6);
     return tint;
   }
-  // Au sol, sous les régiments : ombres des nuages et la plus grande part de la lumière du soir. Les régiments ne
-  // reçoivent ensuite que le reste (atmosphere) : au crépuscule, ils se détachent sur le terrain assombri.
-  ground(ctx, view, st, time) {
-    const vw = view.vw, vh = view.vh, w = st.weather || 'soleil', wind = st.wind || [1.5, 0.5], L = clamp(st.light ?? 1, 0, 1);
-    // ombres des nuages qui passent (ancrées au sol, poussées par le vent)
-    const cloudA = { soleil: 0.22, canicule: 0.14, nuages: 0.34, pluie: 0.3, orage: 0.38, tempete: 0.38 }[w] || 0;
-    if (cloudA && this.q?.clouds !== false) {
-      // le motif (un pixel = 6 m) est posé en quelques drawImage agrandis : bien moins coûteux qu'un remplissage
-      // par motif transformé
-      this.clouds = this.clouds || cloudTexture();
-      const T = this.clouds.width * 6, tw = T * view.z, th = tw * TILT;
-      const [ox, oy] = view.toScreen(time * (3 + wind[0] * 2.5), time * (1 + wind[1] * 2.5));
-      const i0 = Math.floor(-ox / tw), j0 = Math.floor(-oy / th);
-      ctx.globalAlpha = cloudA * L; ctx.imageSmoothingEnabled = true;
-      for (let j = j0; oy + j * th < vh; j++) for (let i = i0; ox + i * tw < vw; i++) ctx.drawImage(this.clouds, ox + i * tw, oy + j * th, tw + 1, th + 1);
-      ctx.globalAlpha = 1;
-    }
-    const t = this.tint(st);
-    if (t) {
-      // part du sol : t / t′, où t′ (la part de tout le monde) est la lumière à moitié adoucie
-      const t2 = mix3(t, [255, 255, 255], 0.55), g = t.map((c, i) => 255 * c / t2[i]);
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = `rgb(${g[0] | 0},${g[1] | 0},${g[2] | 0})`; ctx.fillRect(0, 0, vw, vh);
-      ctx.globalCompositeOperation = 'source-over';
-    }
+  // Lumière et ciel de la scène 3D pour l'état du ciel st ({weather, light, hour, wind}) et la saison : direction et
+  // couleur du soleil (à l'est le matin, au sud à midi, bas à l'ouest le soir ; plus haut l'été), lumière du ciel,
+  // couleur et portée de la brume, force des ombres des nuages, teinte de la fumée.
+  ciel(st, season) {
+    const w = st.weather || 'soleil', L = clamp(st.light ?? 1, 0, 1), h = st.hour ?? 12;
+    const emax = ({ ete: 62, printemps: 47, automne: 40, hiver: 26 }[season] ?? 45) * Math.PI / 180;
+    const el = Math.max(0.06, emax * Math.sin(Math.PI * clamp((h - 6) / 14, 0, 1))), az = (90 + (h - 6) * 15) * Math.PI / 180;
+    const t = (this.tint(st) || [255, 255, 255]).map(v => v / 255);
+    const wet = w === 'pluie' || w === 'orage' || w === 'tempete';
+    const dull = wet || w === 'brouillard' || w === 'nuages' || w === 'neige';
+    const sky = { soleil: [201, 216, 230], canicule: [218, 222, 226], nuages: [185, 195, 205], pluie: [155, 165, 176], orage: [138, 147, 160], tempete: [138, 147, 160], brouillard: [211, 215, 219], neige: [208, 214, 222] }[w] || [201, 216, 230];
+    const night = [38, 48, 78], k = 1 - L;
+    const fog = mix3(mix3(sky, sky.map((c, i) => c * t[i]), 0.7), night, k * 0.85).map(v => v / 255);
+    return {
+      sunDir: [Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)], sun: t,
+      sunI: ({ soleil: 2.4, canicule: 2.7, nuages: 1.4, neige: 1.1 }[w] ?? 0.7) * (0.25 + 0.75 * L),
+      hemiSky: mix3([0.87, 0.91, 0.95], t, 0.5), hemiGround: [0.36, 0.35, 0.23], hemiI: (dull ? 1.95 : 1.6) * (0.35 + 0.65 * L) + this.flashT * 3,
+      fog, fogNear: w === 'brouillard' ? 0.05 : wet ? 0.6 : 1, fogFar: w === 'brouillard' ? 0.15 : wet ? 0.6 : 1,
+      cloudA: ({ soleil: 0.22, canicule: 0.14, nuages: 0.34, pluie: 0.3, orage: 0.38, tempete: 0.38 }[w] || 0) * L * (this.q?.clouds !== false ? 1 : 0),
+      wind: st.wind || [1.5, 0.5],
+      smoke: mix3([1, 1, 1], t, 0.6).map(v => v * (0.45 + 0.55 * L)),
+    };
   }
   // st : {weather, light, hour (nombre), wind} ; view : caméra ; dt en s
   atmosphere(ctx, view, st, dt, time) {
@@ -407,45 +372,8 @@ export class Effects {
     const wind = st.wind || [1.5, 0.5];
     const wet = w === 'pluie' || w === 'orage' || w === 'tempete';
     const L = clamp(st.light ?? 1, 0, 1), h = st.hour ?? 12;
-    // brouillard, brume du matin
-    const mist = w === 'brouillard' ? 1 : (h < 9.5 && (w === 'soleil' || w === 'nuages')) ? 0.2 * clamp((9.5 - h) / 1.5, 0, 1) : w === 'pluie' || w === 'neige' ? 0.25 : 0;
-    if (mist > 0) {
-      this.fog = this.fog || fogTexture();
-      ctx.fillStyle = `rgba(226,230,234,${0.38 * mist})`; ctx.fillRect(0, 0, vw, vh);
-      const pat = ctx.createPattern(this.fog, 'repeat');
-      for (let layer = 0; layer < 2; layer++) {
-        const sc = (layer ? 3.2 : 2.2) * clamp(view.z, 0.4, 2), ox = (time * (6 + layer * 4) * (wind[0] >= 0 ? 1 : -1)) % (256 * sc), oy = layer * 90;
-        const [cx, cy] = view.toScreen(0, 0);
-        pat.setTransform(new DOMMatrix().translateSelf(cx * (layer ? 0.6 : 0.8) + ox, cy * 0.7 + oy).scaleSelf(sc, sc * 0.6));
-        ctx.globalAlpha = (layer ? 0.75 : 0.95) * mist;
-        ctx.fillStyle = pat; ctx.fillRect(0, 0, vw, vh);
-      }
-      ctx.globalAlpha = 1;
-    }
-    // brume de distance : le haut de l'écran est plus loin (vue cavalière) ; plus nette de près
+    // (brouillard, brume de distance et lumière de l'heure : dans la scène 3D, voir ciel)
     const k = clamp((1 - L) / 0.8, 0, 1);
-    const hz = clamp(0.24 - view.z * 0.05, 0.04, 0.2) * (w === 'brouillard' ? 0 : wet ? 1.3 : 1);
-    if (hz > 0.01) {
-      const hc = k > 0.2 ? [236, 170, 128] : h < 10 ? [246, 226, 190] : [214, 224, 236];
-      const gr = ctx.createLinearGradient(0, 0, 0, vh * 0.62);
-      gr.addColorStop(0, `rgba(${hc},${hz})`); gr.addColorStop(1, `rgba(${hc},0)`);
-      ctx.fillStyle = gr; ctx.fillRect(0, 0, vw, vh * 0.62);
-    }
-    // lumière (la part commune au sol et aux régiments ; le sol a déjà reçu la sienne : ground)
-    let tint = this.tint(st);
-    if (tint) {
-      tint = mix3(tint, [255, 255, 255], 0.55);
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = `rgb(${tint[0] | 0},${tint[1] | 0},${tint[2] | 0})`; ctx.fillRect(0, 0, vw, vh);
-      ctx.globalCompositeOperation = 'source-over';
-    }
-    // soleil bas (matin, soir) : une lueur chaude venue de l'ouest ou de l'est
-    const low = L < 0.95 ? Math.sin(Math.PI * Math.min(1, k * 1.2)) * 0.2 : h < 9.8 && w !== 'brouillard' && !wet ? 0.16 * clamp((9.8 - h) / 1.8, 0, 1) : 0;
-    if (low > 0.01) {
-      const east = h < 12, glow = ctx.createLinearGradient(east ? vw : 0, 0, east ? vw * 0.2 : vw * 0.8, vh * 0.3);
-      glow.addColorStop(0, `rgba(255,176,96,${low})`); glow.addColorStop(1, 'rgba(255,176,96,0)');
-      ctx.fillStyle = glow; ctx.fillRect(0, 0, vw, vh);
-    }
     // les bords de l'image un peu plus sombres ; davantage quand la nuit tombe
     const vk = (this.q?.fx ?? 2) >= 3 ? 0.16 : 0;
     if (vk || k > 0.05) {
@@ -453,7 +381,6 @@ export class Effects {
       vig.addColorStop(0, 'rgba(12,18,40,0)'); vig.addColorStop(1, `rgba(12,18,40,${Math.max(vk, 0.55 * k)})`);
       ctx.fillStyle = vig; ctx.fillRect(0, 0, vw, vh);
     }
-    if (wet) { ctx.fillStyle = 'rgba(30,40,58,0.16)'; ctx.fillRect(0, 0, vw, vh); }
     // pluie
     if (wet) {
       const n = Math.round((w === 'pluie' ? 240 : 380) * [0.5, 0.75, 1, 1.3][this.q?.fx ?? 2]), ang = clamp(wind[0] * 0.05, -0.5, 0.5);

@@ -95,14 +95,14 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/effets.js`, `web/js/battle/vue.js`
   - Taille : M
 
-- [ ] **T11 : lumière, ciel, brume, météo**
+- [x] **T11 : lumière, ciel, brume, météo**
   - Critères : soleil selon l'heure (direction, couleur), nuit bleue, ombres des nuages qui passent, brume de
     distance, brouillard, pluie, neige et orage sur le calque, voile de pluie.
   - Vérif : captures à 9 h, 13 h, 19 h, 21 h et par pluie, brouillard, neige.
   - Fichiers : `web/js/battle/effets.js`, `web/js/battle/relief.js`, `web/js/battle/vue.js`
   - Taille : M
 
-- [ ] **Point d'étape 3** : captures, commit, revue avec toi.
+- [x] **Point d’étape 3** : captures, commit, revue avec toi.
 
 ## Étape 4 : le décor
 

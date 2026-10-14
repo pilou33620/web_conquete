@@ -11,12 +11,30 @@
 //
 // Tués, chevaux et trous d'obus : de petits panneaux posés sur le relief (un lot par sorte), pas repeints dans le sol.
 import * as THREE from '../../vendor/three/three.module.js';
-import { clamp, canvas } from './formes.js';
+import { clamp, hash, canvas } from './formes.js';
 import { paintDecal } from './terrain.js';
 
 const STEP = 10, OUT = 2000, OUT_STEP = 125;   // maille dans le champ, prolongement au-delà, maille du prolongement
 const TS = 512, N = 4;                         // côté d'un bloc (px), blocs par côté d'un niveau de détail
 const LEVELS = [2, 4, 8, 16];                  // niveaux de détail possibles (px/m)
+
+// ombres des nuages : taches douces et périodiques (le motif couvre environ 1,5 km)
+function cloudTexture() {
+  const s = 256, cv = canvas(s, s), g = cv.getContext('2d'), img = g.createImageData(s, s), P = 8;
+  const pn = (x, y, p, seed) => {   // bruit périodique de période p cases
+    const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const h = (i, j) => hash(((i % p) + p) % p, ((j % p) + p) % p, seed);
+    const a = h(ix, iy), b = h(ix + 1, iy), c = h(ix, iy + 1), d = h(ix + 1, iy + 1);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  };
+  for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+    const v = pn(x / s * P, y / s * P, P, 11) * 0.65 + pn(x / s * P * 2, y / s * P * 2, P * 2, 12) * 0.35;
+    const k = (y * s + x) * 4, a = clamp((v - 0.5) / 0.22, 0, 1);
+    img.data[k] = 22; img.data[k + 1] = 30; img.data[k + 2] = 44; img.data[k + 3] = a * a * (3 - 2 * a) * 255;
+  }
+  g.putImageData(img, 0, 0);
+  return cv;
+}
 
 // abscisses du maillage : [−OUT, 0[ par OUT_STEP, [0, L] par STEP, ]L, L + OUT] par OUT_STEP
 function ticks(L) {
@@ -46,8 +64,12 @@ export class Relief {
     this.uni = {
       uOuter: { value: new THREE.Color() }, uSize: { value: new THREE.Vector2(this.W, this.H) },
       uCover: { value: this.cover }, uCoverA: { value: 0 },
+      uClouds: { value: null }, uCloudA: { value: 0 }, uCloudOff: { value: new THREE.Vector2() },
       uLv0: { value: null }, uLv1: { value: null }, uLv2: { value: null }, uLv3: { value: null }, uSpan: { value: new THREE.Vector4() }, uSlots: { value: Array.from({ length: N * N * 4 }, () => new THREE.Vector2(-1e4, -1e4)) },
     };
+    this.clouds = new THREE.CanvasTexture(cloudTexture());
+    this.clouds.wrapS = this.clouds.wrapT = THREE.RepeatWrapping;
+    this.uni.uClouds.value = this.clouds;
     this.scratch = canvas(TS, TS);
     this.scratchTex = new THREE.CanvasTexture(this.scratch);
     this.scratchTex.colorSpace = THREE.SRGBColorSpace;
@@ -100,6 +122,7 @@ export class Relief {
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', `#include <common>
           uniform vec3 uOuter; uniform vec2 uSize; uniform sampler2D uCover; uniform float uCoverA;
+          uniform sampler2D uClouds; uniform float uCloudA; uniform vec2 uCloudOff;
           // (quatre textures séparées : un tableau de textures se mêlait à uCover dans l'attribution des unités)
           uniform sampler2D uLv0, uLv1, uLv2, uLv3; uniform vec4 uSpan; uniform vec2 uSlots[${N * N * 4}];
           varying vec2 vWorld;
@@ -121,6 +144,8 @@ export class Relief {
           // couverts (déploiement) : bois, bâti, hauteurs (plus appuyés que sur la carte 2D : la lumière les adoucit)
           vec4 cv = texture(uCover, vMapUv);
           diffuseColor.rgb = mix(diffuseColor.rgb, cv.rgb, min(0.85, cv.a * uCoverA * 2.4));
+          // ombres des nuages qui passent, poussées par le vent (le motif se répète tous les 1 536 m)
+          diffuseColor.rgb *= 1.0 - texture(uClouds, (vWorld - uCloudOff) / 1536.0).a * uCloudA;
           // hors du champ : une herbe sans détail ; au bord, un liseré doré d'environ un pixel et demi
           vec2 m = min(vMapUv, 1.0 - vMapUv) * uSize;
           float e = min(m.x, m.y);
@@ -204,11 +229,17 @@ export class Relief {
     scene.fog = new THREE.Fog(sky, 1000, 8000);
     scene.add(this.group);
   }
-  // coverA : opacité du voile des couverts (0 : caché)
-  update(scene, dist, coverA = 0) {
-    scene.fog.near = dist * 0.8 + 600;
-    scene.fog.far = dist * 3 + 5000;
+  // coverA : opacité du voile des couverts (0 : caché) ; sky : lumière et ciel (Effects.ciel) ; time : horloge (s)
+  update(scene, dist, coverA = 0, sky = null, time = 0) {
     this.uni.uCoverA.value = coverA;
+    if (!sky) return;
+    this.sun.position.set(...sky.sunDir); this.sun.color.setRGB(...sky.sun); this.sun.intensity = sky.sunI;
+    this.hemi.color.setRGB(...sky.hemiSky); this.hemi.groundColor.setRGB(...sky.hemiGround); this.hemi.intensity = sky.hemiI;
+    scene.background.setRGB(...sky.fog); scene.fog.color.setRGB(...sky.fog);
+    scene.fog.near = (dist * 0.8 + 600) * sky.fogNear;
+    scene.fog.far = (dist * 3 + 5000) * sky.fogFar;
+    this.uni.uCloudA.value = sky.cloudA;
+    this.uni.uCloudOff.value.set(time * (3 + sky.wind[0] * 2.5), time * (1 + sky.wind[1] * 2.5));
   }
   // l'image entière a été repeinte (brèche) : renvoyée à la carte graphique, une fois par seconde au plus
   dirty() { this.isDirty = true; }
@@ -216,7 +247,7 @@ export class Relief {
     if (this.isDirty && now - (this.upT || 0) > 1000) { this.tex.needsUpdate = true; this.isDirty = false; this.upT = now; }
   }
   dispose() {
-    this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.tex.dispose(); this.cover.dispose(); this.scratchTex.dispose();
+    this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.tex.dispose(); this.cover.dispose(); this.scratchTex.dispose(); this.clouds.dispose();
     for (const l of this.levels) l?.tex.dispose();
     this.decals.dispose();
   }

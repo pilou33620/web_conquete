@@ -63,8 +63,8 @@ Détail, critères et vérifications : `tasks/todo.md`.
 
 ### Étape 3 : le feu et l'atmosphère
 - [x] T10 : fumées, éclairs, boulets, éclats, poussière en 3D
-- [ ] T11 : lumière de l'heure, ciel, brume, ombres des nuages, pluie, neige, orage
-- [ ] Point d'étape 3
+- [x] T11 : lumière de l'heure, ciel, brume, ombres des nuages, pluie, neige, orage
+- [x] Point d’étape 3
 
 ### Étape 4 : le décor
 - [ ] T12 : arbres instanciés
