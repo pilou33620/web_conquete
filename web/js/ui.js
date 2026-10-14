@@ -2,6 +2,7 @@ import { ICON, speedIcon, coat } from './icons.js';
 import { esc, clamp } from './battle/formes.js';
 import { fmtMen, unitCls } from './map.js';
 import { QUALITES, QUALITE_LABEL, QUALITE_AIDE, qualite, setQualite } from './battle/qualite.js';
+import { Tuto } from './tuto.js';
 
 // nombres à la française : virgule décimale et vrai signe moins (−)
 const minus = s => s.replace(/^-/, '−');
@@ -59,6 +60,7 @@ export class UI {
     try { this.trMode = localStorage.getItem('conquete.traverse') === '1'; } catch (e) { this.trMode = false; }
     map.trMode = this.trMode;
     this.$ = id => document.getElementById(id);
+    this.tuto = new Tuto(this);
     this.buildStatic();
     map.onTap = e => this.onTap(e);
     map.onContext = e => this.onContext(e);
@@ -166,6 +168,7 @@ export class UI {
     this.cmdSeq++;
     try { r = await this.api.post('/api/cmd', body); } catch (e) { r = { ok: false, msg: 'Serveur injoignable : ordre non transmis.' }; }
     this.cmdSeq++;   // avant et après l'ordre : un état demandé entre-temps est périmé (voir poll)
+    if (r.ok) this.tuto.signal(body.cmd);
     if (r.msg && (!r.ok || toastOk)) this.toast(r.msg, r.ok ? (r.pending ? '' : 'good') : 'bad');
     this.onRefresh && this.onRefresh();
     return r;
@@ -240,6 +243,7 @@ export class UI {
     const waitBt = (st.battles || []).find(b => b.mode === 'attente');
     if (waitBt && !st.over && (!this.modal || this.modal === 'bataille')) { if (this.modal !== 'bataille') this.openModal('bataille'); }
     else if (this.modal === 'bataille' && !waitBt) this.closeModal();
+    this.tuto.check();
   }
 
   battleModal() {
@@ -511,8 +515,9 @@ export class UI {
     this.checked.clear();
     this.panelSig = '';
     this.hideBubble();
-    if (!sel) { this.$('panel').hidden = true; return; }
+    if (!sel) { this.$('panel').hidden = true; this.tuto.check(); return; }
     this.renderPanel(true);
+    this.tuto.check();
   }
 
   armyById(id) { return this.st?.armies.find(a => a.id === id); }
@@ -698,6 +703,13 @@ export class UI {
       case 'modal': this.openModal(d.v); break;
       case 'close-modal': this.closeModal(); break;
       case 'close-panel': this.select(null); break;
+      case 'tuto-next': this.tuto.next(); break;
+      case 'tuto-skip': this.tuto.stop(); break;
+      case 'tuto-start':   // menu ☰ : tout le tutoriel, campagne et bulles de bataille
+        try { for (const k of ['conquete.bataille.aide', 'conquete.bataille.aide.vues']) localStorage.removeItem(k); } catch (e) { /* stockage indisponible */ }
+        this.closeModal();
+        this.tuto.start();
+        break;
       case 'goto': if (d.x) { if (this.modal) this.closeModal(); this.map.moveTo(+d.x, +d.y, Math.max(this.map.cam.z, 6)); } break;
       case 'center': {
         const p = this.selPos();
@@ -780,6 +792,7 @@ export class UI {
         try { localStorage.setItem('conquete.fog', this.map.fogOn ? '1' : '0'); } catch (e) { /* stockage indisponible */ }
         this.$('zb-fog').classList.toggle('on', this.map.fogOn);
         this.toast(this.map.fogOn ? 'Brouillard de guerre affiché.' : 'Brouillard de guerre masqué.');
+        this.tuto.signal('fog');
         break;
       }
       case 'stance': this.cmd({ cmd: 'stance', army: sel.id, value: d.v }); break;
@@ -1470,12 +1483,14 @@ export class UI {
     document.body.classList.toggle('modal-event', kind === 'event');   // une décision : rien ne doit masquer ses choix
     this.renderModal(true);
     if (kind === 'menu') this.refreshSaves();
+    this.tuto.check();
   }
   closeModal() {
     this.modal = null;
     this.$('modal').hidden = true;
     document.body.classList.remove('modal-open', 'modal-event');
     for (const b of this.$('rail').children) b.classList.remove('on');
+    this.tuto.check();
   }
 
   async refreshSaves() {
@@ -1738,6 +1753,7 @@ export class UI {
         <h3 class="section-t">Jouer depuis un autre appareil</h3>${this.netHtml(this.net)}
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Comment jouer</h3>
+        <div class="btns" style="margin:4px 0 8px"><button class="btn" data-act="tuto-start">Revoir le tutoriel</button></div>
         <ul class="small" style="padding-left:18px;margin:0">
           <li>Carte : glissez pour la déplacer (elle garde son élan), pincez ou utilisez les boutons + et − pour zoomer. Double appui : zoom avant ; appui à deux doigts : zoom arrière.</li>
           <li>Touchez une armée pour la sélectionner, puis touchez une destination : choisissez la route ou la marche à travers champs.</li>

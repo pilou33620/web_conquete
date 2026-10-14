@@ -1,6 +1,7 @@
 import { MapView } from './map.js';
 import { UI } from './ui.js';
 import { Bataille } from './battle/bataille.js';
+import { Tuto } from './tuto.js';
 
 const api = {
   get: u => fetch(u, { cache: 'no-store' }).then(r => r.json()),
@@ -72,6 +73,7 @@ function resetUI() {
   ui.st = null;
   ui.events = [];
   ui.overShown = false;
+  ui.tuto.i = -1; ui.tuto.hide();
   ui.select(null);
   ui.closeModal();
   map.selection = null;
@@ -133,7 +135,8 @@ async function boot() {
     map.moveTo(cap.x, cap.y, 7);
     startPolling();
     setTimeout(() => ui.select({ kind: 'node', id: cap.id }), 600);
-    ui.toast('Donnez vos ordres : ils s’exécutent tout de suite. Puis touchez « Tour suivant » en haut : les IA jouent, et c’est le mois suivant.');
+    if (Tuto.vu()) ui.toast('Donnez vos ordres : ils s’exécutent tout de suite. Puis touchez « Tour suivant » en haut : les IA jouent, et c’est le mois suivant.');
+    else ui.tuto.start();   // première partie sur cet appareil : le tutoriel guide les premiers pas
   };
   const focusCapital = async () => {
     let st;

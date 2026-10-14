@@ -6,7 +6,9 @@
 // HTML produit. Ce qui est vérifié :
 //  - tous les modules se chargent (imports et exports cohérents) ;
 //  - les ordres proposés dépendent de l'arme (doctrine.js), dans le panneau du régiment (interface.js) ;
-//  - la barre du tour : « Tour suivant », tour des IA, interruption (texte échappé), bataille en attente.
+//  - la barre du tour : « Tour suivant », tour des IA, interruption (texte échappé), bataille en attente ;
+//  - le tutoriel de la campagne (tuto.js) avance quand le joueur fait l'action demandée ; les bulles de situation
+//    de la bataille ne s'affichent qu'une fois.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync } from 'node:fs';
@@ -21,6 +23,7 @@ const charger = f => import(pathToFileURL(join(JS, f)).href);
 const { ordresHtml, arme } = await charger('battle/doctrine.js');
 const { UI } = await charger('ui.js');
 const { BattleUI } = await charger('battle/interface.js');
+const { Tuto } = await charger('tuto.js');
 
 // unités comme les envoie le serveur (units.py, to_client)
 const unite = (type, extra = {}) => ({
@@ -125,4 +128,88 @@ test('barre du tour : tour des IA, puis interruption', () => {
 test('barre du tour : bloquée tant qu’une bataille attend votre choix', () => {
   const h = barre({ phase: 'ordres' }, { battles: [{ id: 'b1', mode: 'attente' }] });
   assert.ok(h.includes('disabled'));
+});
+
+// ------------------------------------------------------------------ tutoriel de la campagne
+function campagne(tour = true) {
+  const ui = Object.create(UI.prototype);
+  for (const id of ['tuto', 'recap']) dom.ids[id] = element();
+  ui.$ = id => dom.ids[id];
+  ui.md = { nodes: [{ id: 0, name: 'Bordeaux', type: 'capitale', dept: '33', x: 10, y: 10 }] };
+  ui.rules = { factions: { 33: { name: 'Gironde' }, 24: { name: 'Dordogne' } } };
+  ui.map = { cam: { z: 4 }, moveTo() {} };
+  ui.st = {
+    me: { code: '33' }, nodes: { 0: { o: '33' } }, tour: { on: tour, phase: 'ordres' },
+    armies: [{ id: 'a1', o: '33', x: 12, y: 12, st: 'idle' }, { id: 'e1', o: '24', x: 30, y: 30, st: 'idle' }],
+  };
+  ui.sel = null; ui.modal = null;
+  ui.select = sel => { ui.sel = sel; ui.tuto.check(); };
+  ui.tuto = new Tuto(ui);
+  return ui;
+}
+const bulle = () => dom.ids.tuto.innerHTML;
+
+test('tutoriel : avance quand le joueur fait l’action, pas avant', () => {
+  localStorage.removeItem('conquete.tuto');
+  const ui = campagne();
+  assert.equal(Tuto.vu(), false);
+  ui.tuto.start();
+  assert.ok(bulle().includes('Bienvenue') && bulle().includes('tuto-next') && !dom.ids.tuto.hidden);
+  ui.tuto.next();
+  assert.ok(bulle().includes('vos armées') && !bulle().includes('tuto-next'), 'on attend le joueur : pas de « Suivant »');
+  ui.sel = { kind: 'army', id: 'e1' }; ui.tuto.check();
+  assert.equal(ui.tuto.i, 1, 'une armée ennemie ne compte pas');
+  ui.sel = { kind: 'army', id: 'a1' }; ui.tuto.check();
+  assert.equal(ui.tuto.i, 2, 'une de vos armées : étape suivante');
+  ui.tuto.signal('recruit');
+  assert.equal(ui.tuto.i, 2, 'un autre ordre ne compte pas');
+  ui.tuto.signal('move');
+  assert.ok(ui.tuto.i === 3 && bulle().includes('Bordeaux'));
+  assert.equal(ui.sel, null, 'l’armée est désélectionnée : toucher la ville la choisit');
+  ui.select({ kind: 'node', id: 0 });
+  assert.ok(ui.tuto.i === 4 && bulle().includes('tuto-next'), 'la ville : « Suivant » même sans rien lever');
+});
+
+test('tutoriel : une fenêtre ouverte cache la bulle ; « Passer » le ferme pour de bon', () => {
+  localStorage.removeItem('conquete.tuto');
+  const ui = campagne();
+  ui.tuto.start();
+  ui.modal = 'event'; ui.tuto.check();
+  assert.ok(dom.ids.tuto.hidden, 'une décision passe avant');
+  ui.modal = null; ui.tuto.check();
+  assert.ok(!dom.ids.tuto.hidden);
+  ui.tuto.stop();
+  assert.ok(dom.ids.tuto.hidden && Tuto.vu() && !ui.tuto.on);
+});
+
+test('tutoriel : en temps réel, pas d’étape « Tour suivant »', () => {
+  const textes = tour => {
+    const ui = campagne(tour), out = [];
+    ui.tuto.start();
+    while (ui.tuto.on) { out.push(bulle()); ui.tuto.i++; ui.tuto.check(); }
+    return out.join('|');
+  };
+  assert.ok(textes(true).includes('Tour suivant') && textes(true).includes('/ 15'));
+  assert.ok(!textes(false).includes('Tour suivant') && textes(false).includes('vitesses'));
+});
+
+test('bataille : la bulle de la cavalerie une seule fois', () => {
+  localStorage.removeItem('conquete.bataille.aide.vues');
+  const tip = element(); tip.hidden = true;
+  const ui = Object.create(BattleUI.prototype);
+  const cav = unite('cavalerie');
+  ui.$ = s => (s === '.bt-tip' ? tip : null);
+  ui.placeTip = () => {};
+  ui.v = { st: { phase: 'combat' }, sel: new Set(['cavalerie']), units: new Map([['cavalerie', cav]]), mine: () => [cav] };
+  ui.situ();
+  assert.ok(!tip.hidden && tip.innerHTML.includes('Charger !'));
+  tip.hidden = true;
+  ui.situ();
+  assert.ok(tip.hidden, 'déjà vue');
+  ui.v.st.phase = 'deploiement'; ui.v.units.set('x', unite('ligne', { state: 'deroute' }));
+  ui.v.mine = () => [cav, ui.v.units.get('x')];
+  ui.situ();
+  assert.ok(tip.hidden, 'rien pendant le déploiement');
+  ui.v.st.phase = 'combat'; ui.situ();
+  assert.ok(!tip.hidden && tip.innerHTML.includes('déroute'));
 });

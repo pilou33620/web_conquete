@@ -247,6 +247,19 @@ span.turn-why { padding: 8px 10px; }
 #bubble .seg.conduct { display: flex; }
 #bubble .seg.conduct button { flex: 1; }
 #bubble .bh { font-size: 12.5px; line-height: 1.25; color: var(--papier-2); opacity: .85; max-width: 250px; padding: 0 4px; }
+/* tutoriel de la campagne (tuto.js) : au-dessus de la carte et des panneaux, sous la bulle de marche, les messages
+   et les fenêtres ; caché pendant une bataille */
+#tuto { position: fixed; z-index: 29; padding: 12px 14px 10px; background: rgba(19,35,58,.97); border: 1px solid var(--laiton); border-radius: 10px;
+  box-shadow: 0 8px 26px var(--ombre); font-size: 15.5px; line-height: 1.35; animation: toast-in .3s ease-out; }
+#tuto p { margin: 0 0 8px; }
+#tuto .btns { display: flex; gap: 8px; justify-content: flex-end; min-height: 34px; }
+#tuto .btn { min-height: 38px; }
+#tuto::after { content: ""; position: absolute; left: calc(var(--ax, 50%) - 8px); bottom: -8px; width: 14px; height: 14px; background: var(--prusse);
+  border-right: 1px solid var(--laiton); border-bottom: 1px solid var(--laiton); transform: rotate(45deg); }
+#tuto.up::after { bottom: auto; top: -8px; transform: rotate(225deg); }
+#tuto.free::after { display: none; }
+body.en-bataille #tuto { display: none; }
+.tuto-n { position: absolute; left: 14px; bottom: 18px; font-size: 12.5px; color: var(--papier-2); }
 #tooltip { position: absolute; z-index: 50; background: var(--nuit); border: 1px solid var(--hair); border-radius: 6px; padding: 7px 10px; font-size: 14px;
   max-width: 300px; pointer-events: none; box-shadow: 0 4px 14px var(--ombre); }
 #tooltip table { border-collapse: collapse; width: 100%; }
@@ -470,7 +483,7 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
   table.grid th { font-size: 14.5px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .feed-item, .toast { animation: none; }
+  .feed-item, .toast, #tuto { animation: none; }
 }
 /* téléphones à l'horizontale : peu de hauteur, le rail et le zoom doivent tenir à l'écran */
 @media (max-height: 520px) and (min-width: 761px) {

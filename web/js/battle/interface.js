@@ -4,7 +4,7 @@
 import { ICON } from '../icons.js';
 import { QUALITES, QUALITE_LABEL, qualite, setQualite } from './qualite.js';
 import { clsOf, isGeneral, isLight, isWagon, genName, emprise, stars, fmt, esc, clamp, TYPE_LABEL, FORM_LABEL, FORM_HELP, FORMS, STATE_LABEL, SEASON_LABEL, WEATHER_LABEL, normSeason, TILT } from './formes.js';
-import { ORDER_LABEL, ordresHtml, aide as aideArme } from './doctrine.js';
+import { ORDER_LABEL, ordresHtml, aide as aideArme, arme } from './doctrine.js';
 
 const WX_ICON = {
   soleil: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
@@ -24,6 +24,18 @@ const I = {
   close: ICON.close, couvert: svg('<path d="M12 3 4 20h16z"/><path d="M8 14h8"/>'),
 };
 const speedSvg = n => { let p = '', x = (24 - (n * 7 - (n - 1) * 1.5)) / 2; for (let k = 0; k < n; k++) { p += `<path d="M${x} 3 L${x + 7} 10 L${x} 17z" fill="currentColor"/>`; x += 6; } return `<svg viewBox="0 0 24 20">${p}</svg>`; };
+
+// bulles de situation (situ) : déjà vues sur cet appareil ; « Revoir le tutoriel » (menu ☰ de la campagne) les remet
+const VUES = 'conquete.bataille.aide.vues';
+const SITU = {
+  deroute: 'Un de vos régiments est en déroute ! Il ne se reformera qu’auprès de votre général (le cercle doré), loin de l’ennemi : envoyez l’état-major à sa rencontre avant qu’il ne quitte le terrain.',
+  munitions: 'Un canon n’a plus de munitions : il se tait. Amenez-le à moins de 150 m du chariot de munitions : il s’y recomplète (le chariot aussi recomplète les régiments).',
+  'arme:ligne': 'Infanterie de ligne : feu à volonté, en salve (plus juste, plus lent) ou cesser. « Salve + baïonnette » lâche une volée à bout portant puis charge ; « Baïonnette ! » charge sans tirer. Touchez ensuite l’ennemi visé.',
+  'arme:grenadiers': 'Grenadiers : l’élite de l’infanterie. Une salve à bout portant puis la baïonnette (« Salve + baïonnette ») : ils tiennent mieux le corps à corps.',
+  'arme:tirailleurs': 'Tirailleurs : « Harceler » les fait tirer à bonne portée et reculer devant l’ennemi. Ils craignent la cavalerie : gardez-les près de la ligne ou à couvert.',
+  'arme:cavalerie': 'Cavalerie : elle ne tire pas, elle charge. « Charger ! » puis touchez l’ennemi : de flanc, sur les canons ou sur les fuyards. « Poursuivre » achève une troupe en déroute.',
+  'arme:artillerie': 'Artillerie : le boulet de loin, la mitraille de près (sous 150 m, elle fauche des files entières). « Contre-batterie » fait taire d’abord les canons ennemis.',
+};
 
 export class BattleUI {
   constructor(view) {
@@ -137,6 +149,7 @@ export class BattleUI {
     if (prev && prev.phase === 'deploiement' && st.phase === 'combat') { this.toast('La bataille est engagée !', 'good'); v.showCover = false; }
     this.renderDock();
     this.renderPanel();
+    this.situ();
   }
   // bandeau de l'accéléré : l'heure de bataille qui avance, et la journée de 8 h à la nuit (repère : la prise de
   // commandement des officiers)
@@ -266,7 +279,7 @@ export class BattleUI {
   }
 
   // ------------------------------------------------------------------ panneau de l'unité choisie
-  selChanged() { this.inspected = null; this.dockSig = ''; this.renderDock(); this.renderPanel(true); }
+  selChanged() { this.inspected = null; this.dockSig = ''; this.renderDock(); this.renderPanel(true); this.situ(); }
   inspect(id) { this.inspected = id; if (id) { this.v.sel.clear(); this.dockSig = ''; this.renderDock(); } this.renderPanel(true); }
   renderPanel(force = false) {
     const v = this.v, p = this.$('.bt-panel');
@@ -443,6 +456,7 @@ export class BattleUI {
       case 'retour': this.closeModal(); v.onExit && v.onExit(this.result); break;
       case 'tipnext': this.tipStep(this.tipI + 1); break;
       case 'tipskip': this.tipStep(99); break;
+      case 'tipok': this.$('.bt-tip').hidden = true; break;
     }
   }
   async resume() {
@@ -541,9 +555,14 @@ export class BattleUI {
     this.tipI = i;
     if (i >= steps.length) { tip.hidden = true; try { localStorage.setItem('conquete.bataille.aide', '1'); } catch (e) { /* tant pis */ } return; }
     const [sel, txt] = steps[i];
-    const anchor = this.$(sel) || this.el.querySelector(sel);
+    const anchor = this.$(sel);
     tip.innerHTML = `<p>${esc(txt)}</p><div class="bm-btns"><button class="bt-btn" data-a="tipskip">Passer</button><button class="bt-btn primary" data-a="tipnext">${i + 1 < steps.length ? 'Suivant' : 'Compris'}</button></div><span class="bt-tip-n">${i + 1} / ${steps.length}</span>`;
     tip.hidden = false;
+    this.placeTip(anchor);
+  }
+  // la bulle près de l'élément visé, la flèche pointée sur lui (au milieu de l'écran sans élément visible)
+  placeTip(anchor) {
+    const tip = this.$('.bt-tip');
     const r = anchor && !anchor.hidden ? anchor.getBoundingClientRect() : null, R = this.el.getBoundingClientRect();
     const tw = Math.min(330, R.width - 24);
     tip.style.width = tw + 'px';
@@ -556,6 +575,30 @@ export class BattleUI {
       else { tip.style.bottom = (R.bottom - r.top + 12) + 'px'; tip.style.top = ''; }
       tip.style.setProperty('--ax', clamp(r.left + r.width / 2 - R.left - x, 20, tw - 20) + 'px');
     } else { tip.style.left = (R.width - tw) / 2 + 'px'; tip.style.top = '30%'; tip.style.bottom = ''; }
+  }
+
+  // bulles de situation, une fois chacune sur cet appareil : la première déroute, le premier canon sans munitions, le
+  // premier régiment choisi de chaque arme (ses ordres propres) ; jamais par-dessus une autre bulle
+  situ() {
+    const v = this.v, tip = this.$('.bt-tip');
+    if (v.st?.phase !== 'combat' || v.st.accel || !tip.hidden) return;
+    let vues;
+    try { vues = JSON.parse(localStorage.getItem(VUES) || '[]'); } catch (e) { return; }
+    this.situVues = this.situVues || new Set();   // (si le stockage refuse d'écrire : une fois par bataille)
+    vues.push(...this.situVues);
+    const mine = v.mine(), sel = [...v.sel].map(id => v.units.get(id)).filter(Boolean);
+    const cas = [
+      ['deroute', '.bt-dock', mine.some(u => u.state === 'deroute')],
+      ['munitions', '.bt-dock', mine.some(u => clsOf(u) === 'artillerie' && u.ammo != null && u.ammo <= 0)],
+      sel.length === 1 && ['arme:' + arme(sel[0]), '.bt-panel', true],
+    ];
+    const c = cas.find(c => c && c[2] && SITU[c[0]] && !vues.includes(c[0]));
+    if (!c) return;
+    this.situVues.add(c[0]);
+    try { localStorage.setItem(VUES, JSON.stringify([...vues, c[0]])); } catch (e) { /* tant pis : elle reviendra */ }
+    tip.innerHTML = `<p>${esc(SITU[c[0]])}</p><div class="bm-btns"><button class="bt-btn primary" data-a="tipok">Compris</button></div>`;
+    tip.hidden = false;
+    this.placeTip(this.$(c[1]));
   }
 
   // ------------------------------------------------------------------ mini-carte

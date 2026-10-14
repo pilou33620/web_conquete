@@ -112,6 +112,10 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   un même lieu (assauts répétés, siège qui suit la bataille) n'arrête le temps qu'une fois en 4 jours, la même armée
   qu'une fois en 20 jours, la même proposition d'un camp qu'une fois en 45 jours. Les escarmouches lointaines entre
   autres camps et les partis d'éclaireurs ne comptent pas.
+- **Tutoriel** : à la première nouvelle partie sur un appareil, des bulles guident les premiers pas et attendent que
+  vous fassiez l'action demandée (choisir une armée, la faire marcher, ouvrir votre chef-lieu, finir votre tour…).
+  « Passer » le ferme ; menu ☰, « Revoir le tutoriel » le relance. En bataille, une bulle explique chaque arme la
+  première fois que vous la choisissez, et la première déroute ou le premier canon sans munitions.
 - **Récapitulatif du mois** : au début de chaque tour, une fiche discrète en haut à gauche résume le mois écoulé :
   revenus nets de chaque ressource, batailles (victoires et défaites), places prises et perdues, constructions
   terminées, régiments levés, découvertes et faits marquants (guerres, paix, traités, révoltes, nouvelle époque). Chaque
@@ -626,7 +630,7 @@ game/views.py        état envoyé au navigateur (brouillard de guerre), sauvega
 game/tactics/        batailles manuelles : carte de bataille (terrain.py), unités (units.py), simulation
                      (battle.py), IA de secours (ai.py), raccord avec la campagne (bridge.py)
 web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/ambient.js (animations
-                     de la carte), js/towns.js (dessin des villes), js/ui.js, js/main.js
+                     de la carte), js/towns.js (dessin des villes), js/ui.js, js/tuto.js (tutoriel), js/main.js
 web/js/battle/       vue de bataille : bataille.js (entrée et sortie depuis la campagne), vue.js (caméra,
                      boucle, interrogation du serveur), terrain.js (champ de bataille peint en tuiles),
                      textures.js (motifs du sol et silhouettes d'arbres), unites.js (figurines, chevaux,
@@ -655,7 +659,7 @@ node --test tests/                               # l'interface seule
 | `tests/test_bataille.py` | ordres propres à chaque arme (acceptés ou refusés), salve puis baïonnette, harcèlement, canons sans munitions, régiment anéanti, bataille jusqu'au bout et rechargement en plein combat |
 | `tests/test_campagne.py` | votre tour puis celui des IA, jours de marche, retraite une fois par tour, sièges, dettes et événements, prix du marché, sauvegarde (IA comprises) |
 | `tests/test_serveur.py` | un vrai serveur HTTP sur un port libre : requêtes mal formées, fichiers hors de `web/`, ordres pendant le tour des IA, sauvegardes (dossier temporaire, les vraies ne sont pas touchées) |
-| `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, boutons d'ordres par arme, panneau du régiment, barre du tour |
+| `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, boutons d'ordres par arme, panneau du régiment, barre du tour, tutoriel et bulles de bataille |
 
 **Essayer une nouvelle fonctionnalité sans jouer.** `tests/fabrique.py` fabrique une situation en une ligne : une
 partie (`partie('64', '1870')`), un ou plusieurs mois joués (`jouer_mois(g, 3)`), une bataille déjà engagée avec les
