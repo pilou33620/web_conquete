@@ -7,8 +7,12 @@
 // (instanceColor), le tronc est à part. En qualité basse, une partie des arbres des bois est omise.
 // Bâti (maisons et fermes à toit à deux pans, église et clocher, moulins, ponts, portes de ville) : une seule
 // géométrie fixe, couleurs par sommet ; murs enfoncés sous le sol au pied, pour ne jamais flotter sur une pente.
+// Enceintes et clôtures (remparts et bastions, murs de ville crénelés, murs de clôture, tranchées et gabions,
+// barricades, redoutes, haies, murets, clôtures de bois) : des bandes extrudées le long de leur tracé, qui suivent le
+// relief, coupées sur l'eau, aux portes et aux brèches (reconstruites à chaque brèche ouverte, avec leurs éboulis).
 import * as THREE from '../../vendor/three/three.module.js';
-import { hash, clamp } from './formes.js';
+import { hash, clamp, T } from './formes.js';
+import { resample, offsetPts } from './terrain.js';
 
 const ZONE = 750;
 const TRUNK = '#5a4430', BARE = '#7d6d5e';
@@ -87,6 +91,64 @@ function paint(g, c) {
   return g;
 }
 
+// bâtisseur de bandes extrudées et de petites pièces posées sur le relief (triangles sans index, couleur par face)
+class Builder {
+  constructor(heightAt) { this.h = heightAt; this.pos = []; this.col = []; }
+  tri(a, b, c, color) { this.pos.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) this.col.push(color.r, color.g, color.b); }
+  quad(a, b, c, d, color) { this.tri(a, b, c, color); this.tri(a, c, d, color); }
+  // bande le long de pts : section trapézoïdale (wb au pied, wt au sommet, haute de ht), enfoncée d'un mètre sous le
+  // sol ; bump : sommet irrégulier (haies) ; lift : la bande flotte à lift m (lisses d'une clôture)
+  ribbon(pts, wb, wt, ht, side, top, bump = 0, lift = 0) {
+    if (pts.length < 2) return;
+    const cs = new THREE.Color(side), ct = new THREE.Color(top), n = pts.length, N = [];
+    for (let i = 0; i < n; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+      N.push([-dy / l, dx / l]);
+    }
+    const at = (i, s, w, y) => [pts[i][0] + N[i][0] * s * w / 2, y, pts[i][1] + N[i][1] * s * w / 2];
+    const g = i => this.h(pts[i][0], pts[i][1]) + lift;
+    const H = i => g(i) + ht + (bump ? (hash(pts[i][0] | 0, pts[i][1] | 0, 17) - 0.5) * 2 * bump : 0);
+    const base = i => lift ? g(i) : g(i) - 1;
+    for (let i = 0; i < n - 1; i++) {
+      const j = i + 1;
+      const BL = [at(i, 1, wb, base(i)), at(j, 1, wb, base(j))], BR = [at(i, -1, wb, base(i)), at(j, -1, wb, base(j))];
+      const TL = [at(i, 1, wt, H(i)), at(j, 1, wt, H(j))], TR = [at(i, -1, wt, H(i)), at(j, -1, wt, H(j))];
+      this.quad(BL[0], TL[0], TL[1], BL[1], cs);
+      this.quad(BR[1], TR[1], TR[0], BR[0], cs);
+      this.quad(TL[0], TR[0], TR[1], TL[1], ct);
+    }
+    // bouts
+    for (const [i, s] of [[0, 1], [n - 1, -1]]) {
+      const bl = at(i, 1, wb, base(i)), br = at(i, -1, wb, base(i)), tl = at(i, 1, wt, H(i)), tr = at(i, -1, wt, H(i));
+      if (s > 0) this.quad(br, tr, tl, bl, cs); else this.quad(bl, tl, tr, br, cs);
+    }
+  }
+  // boîte (largeur w, hauteur ht, profondeur d) posée en (x, y), son centre à cy m au-dessus du sol
+  box(x, y, w, ht, d, cy, color) {
+    const g = new THREE.BoxGeometry(w, ht, d).rotateY(hash(x | 0, y | 0, 23) * 3).translate(x, this.h(x, y) + cy, y).toNonIndexed();
+    this.add(g, color);
+  }
+  cyl(x, y, r, ht, cy, color) { this.add(new THREE.CylinderGeometry(r, r, ht, 7).translate(x, this.h(x, y) + cy, y).toNonIndexed(), color); }
+  // dalle (polygone fermé) à ht m au-dessus du sol : la plate-forme d'un bastion
+  slab(pts, ht, color) {
+    const c = new THREE.Color(color), cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cy = pts.reduce((a, p) => a + p[1], 0) / pts.length, y = this.h(cx, cy) + ht;
+    for (let k = 0; k < pts.length; k++) { const a = pts[k], b = pts[(k + 1) % pts.length]; this.tri([cx, y, cy], [b[0], y, b[1]], [a[0], y, a[1]], c); }
+  }
+  add(g, color) {
+    const c = new THREE.Color(color), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { this.pos.push(p.getX(i), p.getY(i), p.getZ(i)); this.col.push(c.r, c.g, c.b); }
+    g.dispose();
+  }
+  geometry() {
+    if (!this.pos.length) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    g.computeVertexNormals();
+    return g;
+  }
+}
+
 export class Decor {
   // terrain : Terrain (treeGrid, palette) ; relief : Relief (altitudes) ; q : profil de qualité
   constructor(terrain, relief, q) {
@@ -95,6 +157,7 @@ export class Decor {
     this.disposables = [];
     this.trees();
     this.built();
+    this.walls();
   }
   trees() {
     const t = this.t, pal = t.pal, snow = pal.neige, fx = this.q.fx ?? 2;
@@ -213,6 +276,71 @@ export class Decor {
     this.disposables.push(geo, mat);
     this.group.add(new THREE.Mesh(geo, mat));
   }
+  // ------------------------------------------------------------------ enceintes, ouvrages, haies
+  walls() {
+    if (this.wallMesh) { this.group.remove(this.wallMesh); this.wallMesh.geometry.dispose(); }
+    const t = this.t, pal = t.pal, snow = pal.neige, B = new Builder(this.r.heightAt);
+    const small = w => { const xs = w.pts.map(p => p[0]), ys = w.pts.map(p => p[1]); return Math.max(...xs) - Math.min(...xs) < 160 && Math.max(...ys) - Math.min(...ys) < 160; };
+    const th = w => clamp(w.thick || (w.kind === 'mur' ? 6 : 16), 4, 24);
+    const breaches = t.walls.flatMap(w => (w.breach || []).map(b => [b[0], b[1], b[2] || 20]));
+    // trous dans les enceintes : brèches et portes de la ville
+    const holes = breaches.concat(t.gates.map(g => [g.x, g.y, 9]));
+    const cut = pts => { const out = []; let cur = []; for (const p of resample(pts, 3).concat([pts[pts.length - 1]])) { if (holes.some(([x, y, r]) => Math.hypot(p[0] - x, p[1] - y) < r)) { if (cur.length > 1) out.push(cur); cur = []; } else cur.push(p); } if (cur.length > 1) out.push(cur); return out; };
+    const stone = snow ? '#e4e4e0' : '#d3c6a2', grass = snow ? '#f2f3f3' : '#9aab6c', earth = snow ? '#d8d2c8' : '#9c7a4e';
+    const hasBar = t.t.includes(T.BARRICADE);
+    for (const w of t.walls) {
+      const fort = w.kind === 'rempart' || w.kind === 'bastion' || (w.kind === 'mur' && (w.thick || 0) >= 5);
+      if (fort) {
+        const W = th(w), parts = small(w) ? [w.pts] : t.splitDry(w.pts);
+        for (const p0 of parts) for (const pts of cut(p0)) {
+          if (w.kind === 'mur') {
+            // mur de ville : maçonnerie de 7 m, créneaux tous les 3 m
+            B.ribbon(pts, W * 0.95, W * 0.8, 7, stone, snow ? '#e8e8e4' : '#c9bb96');
+            for (const p of resample(pts, 3)) B.box(p[0], p[1], 1.2, 1.4, 1.2, 7.6, '#c2b48e');
+          } else {
+            // rempart : escarpe de pierre, terre-plein gazonné, parapet au milieu
+            B.ribbon(pts, W * 0.9, W * 0.62, 6, stone, grass);
+            B.ribbon(pts, Math.max(1.4, W * 0.12), Math.max(1, W * 0.1), 7.3, '#c2b48e', '#c2b48e');
+          }
+        }
+        if (w.kind === 'bastion' && small(w) && !breaches.length) B.slab(w.pts, 6, grass);
+      } else if (w.kind === 'mur') {
+        for (const pts of cut(w.pts)) B.ribbon(pts, 0.8, 0.7, 2, snow ? '#f0f0ee' : '#d4c7a5', '#bfb28f');
+      } else if (w.kind === 'barricade') {
+        if (small(w) && hasBar) { B.ribbon(w.pts.concat([w.pts[0]]), 5, 2.5, 1.8, earth, earth); continue; }   // redoute
+        for (const pts of t.splitDry(w.pts, hasBar)) {
+          if (pts.length < 2) continue;
+          const len = pts.reduce((a, p, k) => k ? a + Math.hypot(p[0] - pts[k - 1][0], p[1] - pts[k - 1][1]) : 0, 0);
+          if (len > 70) {
+            // tranchée de siège : parapet de terre rejetée, gabions sur la crête
+            B.ribbon(offsetPts(pts, -2), 4.5, 2, 1.4, earth, earth);
+            for (const [k, p] of resample(offsetPts(pts, -3.2), 2.6).entries()) B.cyl(p[0], p[1], 1.05, 1.2, 1.3, k % 2 ? '#a88452' : '#b8955f');
+          } else B.ribbon(pts, 1.4, 1.1, 1.7, snow ? '#8d8070' : '#6e5134', snow ? '#c9c1b5' : '#9a7650');   // charrettes et poutres
+        }
+      }
+    }
+    // éboulis des brèches
+    for (const [x, y, r] of breaches) for (let k = 0; k < 40; k++) {
+      const a = hash(k, 1, x) * Math.PI * 2, d = Math.sqrt(hash(k, 2, y)) * r * 1.05, sz = 1.2 + hash(k, 3, x) * 2.8;
+      B.box(x + Math.cos(a) * d, y + Math.sin(a) * d, sz, sz * 0.6, sz * 0.8, sz * 0.3, k % 3 ? stone : '#8f8168');
+    }
+    // haies, murets, clôtures de bois
+    const hedge = snow ? '#5e6a5c' : new THREE.Color(pal.arbres[0]).multiplyScalar(0.7).getStyle();
+    for (const f of t.fencePts) {
+      if (f.kind === 'haie') B.ribbon(f.pts, 1.7, 1.2, 2.1, hedge, snow ? '#e8ecee' : new THREE.Color(pal.arbres[1]).multiplyScalar(0.85).getStyle(), 0.5);
+      else if (f.kind === 'muret') B.ribbon(f.pts, 0.65, 0.55, 1, snow ? '#e6e6e2' : '#a39a84', snow ? '#f4f4f2' : '#b9b09a');
+      else {
+        for (const p of resample(f.pts, 2.5)) B.box(p[0], p[1], 0.14, 1.25, 0.14, 0.62, snow ? '#4e4034' : '#5a4430');
+        for (const y of [0.55, 1.0]) B.ribbon(f.pts, 0.08, 0.08, 0.08, '#8a6a46', '#8a6a46', 0, y);
+      }
+    }
+    const geo = B.geometry();
+    if (!geo) return;
+    if (!this.wallMat) { this.wallMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }); this.disposables.push(this.wallMat); }
+    this.wallMesh = new THREE.Mesh(geo, this.wallMat);
+    this.group.add(this.wallMesh);
+  }
   setQuality(q) { this.q = q; }
-  dispose() { for (const d of this.disposables) d.dispose(); for (const o of this.group.children) o.dispose?.(); }
+  dispose() {
+    this.wallMesh?.geometry.dispose(); for (const d of this.disposables) d.dispose(); for (const o of this.group.children) o.dispose?.(); }
 }

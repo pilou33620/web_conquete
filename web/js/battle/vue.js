@@ -157,7 +157,8 @@ export class BattleView {
     const prev = this.st;
     this.st = st;
     // brèches ouvertes au canon depuis le chargement de la carte
-    for (const b of (st.breaches || []).slice(this.nBreach || 0)) { this.terrain.addBreach(b); this.relief.invalidate(b[1], b[2], (b[3] || 20) + 40); }
+    for (const b of (st.breaches || []).slice(this.nBreach || 0)) { this.terrain.addBreach(b); this.relief.invalidate(b[1], b[2], (b[3] || 20) + 40); this.breached = true; }
+    if (this.breached) { this.breached = false; this.decor.walls(); }   // l'enceinte est reconstruite autour des brèches
     this.nBreach = Math.max(this.nBreach || 0, (st.breaches || []).length);
     this.seq = st.seq ?? this.seq;
     this.me = st.me ?? 0;

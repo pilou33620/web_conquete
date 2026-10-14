@@ -121,7 +121,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/decor.js`
   - Taille : S
 
-- [ ] **T14 : remparts, brèches, tranchées, haies**
+- [x] **T14 : remparts, brèches, tranchées, haies**
   - Critères : remparts et bastions en volume (escarpe, parapet), murs de ville crénelés, brèches ouvertes pendant la
     bataille (remparts reconstruits autour), tranchées et gabions, barricades, haies, murets, clôtures.
   - Vérif : captures de l'assaut avant et après une brèche ; bocage (haies).

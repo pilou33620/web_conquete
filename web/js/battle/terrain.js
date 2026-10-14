@@ -975,6 +975,21 @@ export class Terrain {
     g.lineJoin = 'round';
     each((w, pts) => { g.strokeStyle = snow ? '#aab4b8' : '#7f8f62'; g.lineWidth = th(w) * 1.7; strokePts(g, pts); }, true);
     each((w, pts) => { g.strokeStyle = snow ? '#c5ccd0' : '#6d7d55'; g.lineWidth = th(w) * 1.3; strokePts(g, pts); }, true);
+    // en 3D, remparts, parapets, gabions, barricades et portes sont en volume (decor.js) : ici le fossé et le glacis, la
+    // terre remuée et le fond des tranchées
+    if (this.flat) {
+      for (const w of this.walls) {
+        if (w.kind !== 'barricade' || (small(w) && hasBarCells(this))) continue;
+        for (const pts of this.splitDry(w.pts, hasBarCells(this))) {
+          if (pts.length < 2) continue;
+          g.lineCap = 'round'; g.lineJoin = 'round';
+          g.strokeStyle = snow ? 'rgba(150,140,128,0.5)' : 'rgba(120,92,58,0.45)'; g.lineWidth = 12; strokePts(g, pts);
+          g.strokeStyle = snow ? '#7d7468' : '#4d3b26'; g.lineWidth = 2.6; strokePts(g, offsetPts(pts, 2.2));
+        }
+      }
+      g.restore();
+      return;
+    }
     each((w, pts) => { g.strokeStyle = 'rgba(20,20,26,0.4)'; g.lineWidth = th(w) * 0.9; g.save(); g.translate(2.5, 2.5); strokePts(g, pts); g.restore(); });
     each((w, pts) => { g.strokeStyle = snow ? '#e4e4e0' : '#d3c6a2'; g.lineWidth = th(w) * 0.85; strokePts(g, pts); });
     for (const w of fort) if (w.kind === 'bastion' && small(w)) { g.fillStyle = snow ? '#eef0f0' : '#9aab6c'; fillPts(g, w.pts); }
@@ -1052,6 +1067,11 @@ export class Terrain {
     const pal = this.pal, snow = pal.neige, k = 1 / TILT;
     const shift = (pts, dx, dy) => pts.map(p => [p[0] + dx, p[1] + dy]);
     g.lineCap = 'round'; g.lineJoin = 'round';
+    // en 3D, haies, murets et clôtures sont en volume (decor.js) : ici leur pied assombri
+    if (this.flat) {
+      for (const f of this.fencePts) { g.strokeStyle = snow ? 'rgba(50,60,90,0.18)' : 'rgba(20,34,12,0.25)'; g.lineWidth = f.kind === 'haie' ? 3.2 : 1.4; strokePts(g, f.pts); }
+      return;
+    }
     for (const f of this.fencePts) {
       if (f.kind === 'haie') {
         // haie vive d'environ 2 m : ombre portée, pied sombre, buissons éclairés
@@ -1228,6 +1248,7 @@ export class Terrain {
   }
 }
 
+const hasBarCells = t => t._hasBar ?? (t._hasBar = t.t.includes(T.BARRICADE));
 function strokePts(g, pts) {
   g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
   for (let k = 1; k < pts.length; k++) g.lineTo(pts[k][0], pts[k][1]);
@@ -1238,14 +1259,14 @@ function fillPts(g, pts) {
   for (let k = 1; k < pts.length; k++) g.lineTo(pts[k][0], pts[k][1]);
   g.closePath(); g.fill();
 }
-function offsetPts(pts, d) {
+export function offsetPts(pts, d) {
   return pts.map((p, k) => {
     const a = pts[Math.max(0, k - 1)], b = pts[Math.min(pts.length - 1, k + 1)];
     const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
     return [p[0] - dy / l * d, p[1] + dx / l * d];
   });
 }
-function resample(pts, step) {
+export function resample(pts, step) {
   const out = [];
   for (let k = 1; k < pts.length; k++) {
     const [ax, ay] = pts[k - 1], [bx, by] = pts[k], L = Math.hypot(bx - ax, by - ay);
