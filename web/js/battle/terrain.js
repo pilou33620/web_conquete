@@ -69,8 +69,10 @@ function chaikin(pts, iters, closed) {
 }
 
 export class Terrain {
-  // q : profil de qualité graphique (qualite.js) : niveau de tuiles le plus fin, nombre de tuiles gardées
-  constructor(m, q) {
+  // q : profil de qualité graphique (qualite.js) : niveau de tuiles le plus fin, nombre de tuiles gardées ;
+  // flat : peinture pour la 3D (sans l'ombrage du relief ni les courbes de niveau : la lumière de la scène les remplace)
+  constructor(m, q, { flat = false } = {}) {
+    this.flat = flat;
     this.W = m.W || 3000; this.H = m.H || 2000; this.cell = m.cell || 20;
     this.cols = m.cols || Math.round(this.W / this.cell); this.rows = m.rows || Math.round(this.H / this.cell);
     const n = this.cols * this.rows, remap = cellRemap(m.types);
@@ -108,6 +110,13 @@ export class Terrain {
     const i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j, C = this.cols, h = this.h;
     const a = h[j * C + i], b = h[j * C + i + 1], c = h[(j + 1) * C + i], d = h[(j + 1) * C + i + 1];
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  }
+  // altitude adoucie (m) en (x, y) : interpolée entre les points tous les 5 m (prepShade)
+  fineAt(x, y) {
+    const st = this.fineStep, W = this.fineW, H = this.fineH;
+    const fx = clamp(x / st - 0.5, 0, W - 1.001), fy = clamp(y / st - 0.5, 0, H - 1.001);
+    const i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j, f = this.fine, k = j * W + i;
+    return (f[k] * (1 - u) + f[k + 1] * u) * (1 - v) + (f[k + W] * (1 - u) + f[k + W + 1] * u) * v;
   }
   prepare() {
     const { cols, rows, cell, t } = this;
@@ -329,6 +338,9 @@ export class Terrain {
         fine[y * W + x] = a / 5;
       }
     }
+    // altitudes adoucies (une valeur tous les 5 m) : le relief de la vue 3D et la hauteur des troupes
+    this.fine = fine; this.fineW = W; this.fineH = H; this.fineStep = cell / F;
+    if (this.flat) return;
     const dark = canvas(W, H), lite = canvas(W, H);
     const gd = dark.getContext('2d'), gl = lite.getContext('2d');
     const id = gd.createImageData(W, H), il = gl.createImageData(W, H);
@@ -664,17 +676,19 @@ export class Terrain {
       g.restore();
     }
     mark('routes');
-    // relief : ombres et lumières douces ; de loin seulement, de légères courbes de niveau
-    g.save();
-    g.imageSmoothingQuality = 'high';
-    g.drawImage(this.shadeDark, 0, 0, this.W, this.H);
-    g.drawImage(this.shadeLite, 0, 0, this.W, this.H);
-    g.restore();
-    if (s <= 1) {
-      g.strokeStyle = snow ? 'rgba(90,100,120,0.14)' : 'rgba(110,78,40,0.12)'; g.lineWidth = Math.max(0.6, 0.9 / s);
-      g.stroke(this.contours[0]);
-      g.strokeStyle = snow ? 'rgba(90,100,120,0.24)' : 'rgba(110,78,40,0.22)'; g.lineWidth = Math.max(1, 1.5 / s);
-      g.stroke(this.contours[1]);
+    // relief : ombres et lumières douces ; de loin seulement, de légères courbes de niveau (en 3D : la lumière de la scène)
+    if (!this.flat) {
+      g.save();
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(this.shadeDark, 0, 0, this.W, this.H);
+      g.drawImage(this.shadeLite, 0, 0, this.W, this.H);
+      g.restore();
+      if (s <= 1) {
+        g.strokeStyle = snow ? 'rgba(90,100,120,0.14)' : 'rgba(110,78,40,0.12)'; g.lineWidth = Math.max(0.6, 0.9 / s);
+        g.stroke(this.contours[0]);
+        g.strokeStyle = snow ? 'rgba(90,100,120,0.24)' : 'rgba(110,78,40,0.22)'; g.lineWidth = Math.max(1, 1.5 / s);
+        g.stroke(this.contours[1]);
+      }
     }
     mark('relief');
     // décalcomanies : tués, trous d'obus (seulement sur le sol découvert : bare), sous tout ce qui est debout

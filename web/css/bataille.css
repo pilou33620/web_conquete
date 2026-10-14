@@ -3,6 +3,7 @@
   -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 .bt-root.on { opacity: 1; }
 .bt-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.bt-3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
 .bt-canvas:active { cursor: grabbing; }
 .bt-canvas.bt-target { cursor: crosshair; }
 body.en-bataille #topbar, body.en-bataille #rail, body.en-bataille #panel, body.en-bataille #feed, body.en-bataille #zoombar,

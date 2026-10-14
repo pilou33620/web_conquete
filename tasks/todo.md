@@ -21,7 +21,7 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/camera.js`, `tests/camera.test.mjs`
   - Taille : S
 
-- [ ] **T3 : vue WebGL, relief, régiments en blocs, calque 2D**
+- [x] **T3 : vue WebGL, relief, régiments en blocs, calque 2D**
   - Critères : `vue.js` crée le moteur WebGL et le calque 2D ; le relief (altitudes adoucies de `terrain.js`) est
     texturé par l'image entière peinte à plat ; ciel et brume simples ; chaque régiment est un bloc à ses couleurs,
     posé sur le relief, orienté ; les fanions actuels et les noms s'affichent sur le calque ; interrogation du

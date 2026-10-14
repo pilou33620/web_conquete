@@ -1,12 +1,16 @@
-// Vue tactique : le canevas plein écran de la bataille. Caméra en vue cavalière, boucle d'animation, interrogation
-// du serveur (/api/tactic toutes les 120 ms) avec interpolation des positions, dessin du terrain, des unités,
-// des effets et de l'atmosphère. Les commandes (commandes.js) et l'interface (interface.js) s'y branchent.
+// Vue tactique : la bataille en 3D, plein écran. Deux canevas : la scène WebGL (Three.js) dessous, un calque 2D
+// dessus qui reçoit les gestes et porte les fanions, les tracés au sol (projetés sur le relief) et les gestes en
+// cours. Caméra orbitale (camera.js), boucle d'animation, interrogation du serveur (/api/tactic toutes les 120 ms)
+// avec interpolation des positions. Les commandes (commandes.js) et l'interface (interface.js) s'y branchent.
+import * as THREE from '../../vendor/three/three.module.js';
 import { Terrain } from './terrain.js';
+import { Relief } from './relief.js';
 import { UnitArt } from './unites.js';
 import { Effects } from './effets.js';
 import { Controls } from './commandes.js';
 import { BattleUI } from './interface.js';
-import { emprise, clsOf, isGeneral, clamp, wrapAngle, hash, TAU, TILT } from './formes.js';
+import { frameOf, project, unproject, anchor, clampCam, FOV } from './camera.js';
+import { emprise, clsOf, isGeneral, clamp, wrapAngle, TAU } from './formes.js';
 import { profil, onQualite, Mesure } from './qualite.js';
 
 const POLL_MS = 120;
@@ -17,12 +21,19 @@ export class BattleView {
     this.api = api;
     this.root = root;
     root.innerHTML = '';
-    this.cv = document.createElement('canvas');
-    this.cv.className = 'bt-canvas';
-    root.appendChild(this.cv);
-    this.ctx = this.cv.getContext('2d');
     // qualité graphique (qualite.js) : densité du canevas, détail du terrain, zoom maximal, caches
     this.q = profil();
+    this.glc = document.createElement('canvas');
+    this.glc.className = 'bt-3d';
+    this.cv = document.createElement('canvas');
+    this.cv.className = 'bt-canvas';
+    root.append(this.glc, this.cv);
+    this.ctx = this.cv.getContext('2d');
+    try {
+      this.renderer = new THREE.WebGLRenderer({ canvas: this.glc, antialias: this.q.dpr >= 2, powerPreference: 'high-performance' });
+    } catch (e) { console.error(e); this.renderer = null; }
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(FOV * 180 / Math.PI, 1, 1, 10000);
     this.mesure = new Mesure();
     this.art = new UnitArt(this.q);
     this.fx = new Effects(this.q);
@@ -31,7 +42,7 @@ export class BattleView {
     this.orders = new Map();     // derniers ordres donnés (affichés jusqu'à l'arrivée)
     this.st = null;
     this.seq = 0;
-    this.cam = { x: 1500, y: 1000, z: 0.5 };
+    this.cam = { x: 1500, y: 1000, z: 0.5, yaw: 0 };   // cible au sol, zoom (px/m à la cible), cap (camera.js)
     this.camAnim = null;
     this.figScale = 3;           // les silhouettes sont grandies (×3, un peu moins de très près) pour rester lisibles
     this.showCover = false;
@@ -53,12 +64,15 @@ export class BattleView {
     this.bid = bid;
     const m = await this.api.get(`/api/tactic_map?bid=${encodeURIComponent(bid)}`);
     if (!m || (!m.t && !m.W)) throw new Error('Carte de bataille indisponible');
+    if (!this.renderer) throw new Error('WebGL indisponible');
     this.map = m;
     this.nBreach = m.nbreach || 0;
-    this.terrain = new Terrain(m, this.q);
+    this.terrain = new Terrain(m, this.q, { flat: true });
+    this.relief = new Relief(this.terrain, this.q);
+    this.relief.setup(this.scene);
     this.art.setYear(m.year);   // coiffures de l'époque
     this.W = this.terrain.W; this.H = this.terrain.H;
-    this.cam = { x: this.W / 2, y: this.H / 2, z: this.fitZ() };
+    this.cam = { x: this.W / 2, y: this.H / 2, z: this.fitZ(), yaw: 0 };
     return m;
   }
   start() {
@@ -85,8 +99,12 @@ export class BattleView {
     this.controls.dispose();
     this.ui.dispose();
     this.terrain?.dispose();
+    this.relief?.dispose();
+    if (this.blocks) { this.blocks.geometry.dispose(); this.blocks.material.dispose(); }
     this.art.clear();
     this.fx.dispose();
+    // (Safari ne garde qu'une poignée de contextes WebGL : on rend celui-ci tout de suite)
+    this.renderer?.dispose(); this.renderer?.forceContextLoss();
     this.root.innerHTML = '';
   }
   // nouvelle qualité graphique (menu, bataille, ou mesure des images par seconde) : tout suit sans recharger
@@ -129,7 +147,7 @@ export class BattleView {
     const prev = this.st;
     this.st = st;
     // brèches ouvertes au canon depuis le chargement de la carte
-    for (const b of (st.breaches || []).slice(this.nBreach || 0)) this.terrain.addBreach(b);
+    for (const b of (st.breaches || []).slice(this.nBreach || 0)) { this.terrain.addBreach(b); this.relief.dirty(); }
     this.nBreach = Math.max(this.nBreach || 0, (st.breaches || []).length);
     this.seq = st.seq ?? this.seq;
     this.me = st.me ?? 0;
@@ -184,7 +202,7 @@ export class BattleView {
         this.fx.push(f, f.u != null ? this.units.get(String(f.u)) : this.nearest(f.x, f.y), k * gap);
       }
     }
-    if (this.fx.decals.length) { this.terrain.addDecals(this.fx.decals.splice(0)); }
+    if (this.fx.decals.length) { this.terrain.addDecals(this.fx.decals.splice(0)); this.relief.dirty(); }
     this.ui.update(st, prev);
   }
   // tués laissés au sol, dans l'emprise de l'unité
@@ -196,6 +214,7 @@ export class BattleView {
       out.push({ k: cav && q % 2 ? 'cheval' : 'mort', x: u.x + c * vv - s * uu, y: u.y + s * vv + c * uu, a: Math.random() * TAU, c: col });
     }
     this.terrain.addDecals(out);
+    this.relief.dirty();
   }
   nearest(x, y) {
     let best = null, bd = 40;
@@ -210,45 +229,48 @@ export class BattleView {
     const r = this.root.getBoundingClientRect();
     this.vw = r.width > 10 ? r.width : window.innerWidth; this.vh = r.height > 10 ? r.height : window.innerHeight;
     this.cv.width = Math.round(this.vw * dpr); this.cv.height = Math.round(this.vh * dpr);
+    this.renderer?.setPixelRatio(dpr);
+    this.renderer?.setSize(this.vw, this.vh, false);
     if (this.terrain) this.clampCam();
   }
-  fitZ() { return Math.min(this.vw / (this.W || 3000), this.vh / ((this.H || 2000) * TILT)) * 0.98; }
-  minZ() { return this.fitZ() * 0.85; }
+  // zoom qui montre tout le champ (vu de haut, il paraît un peu moins profond que large)
+  fitZ() { return Math.min(this.vw / (this.W || 3000), this.vh / ((this.H || 2000) * 0.9)) * 0.95; }
+  minZ() { return this.fitZ() * 0.7; }
   maxZ() { return this.q.maxZ; }
-  // grossissement des figurines : ×3 jusqu'au zoom 6 (comme avant), puis de moins en moins : de très près, elles
-  // grandissent encore à l'écran, moins vite que le terrain (un homme : 32 px au zoom 6, 47 au zoom 14, 56 au zoom 20)
+  // grossissement des fanions selon le zoom (fanions de la vue 2D d'avant, unites.js)
   figScaleAt(z) { return z <= 6 ? 3 : 3 * Math.pow(z / 6, -0.55); }
-  toScreen = (x, y) => [(x - this.cam.x) * this.cam.z + this.vw / 2, (y - this.cam.y) * this.cam.z * TILT + this.vh / 2];
-  toWorld(sx, sy) { return [(sx - this.vw / 2) / this.cam.z + this.cam.x, (sy - this.vh / 2) / (this.cam.z * TILT) + this.cam.y]; }
-  // la caméra peut dépasser un peu les bords : de quoi voir ce qui est sous la barre du haut, le bandeau du
-  // déploiement et la barre des unités
-  clampCam() {
-    const c = this.cam;
-    c.z = clamp(c.z, this.minZ(), this.maxZ());
-    const mx = this.vw / 2 / c.z, my = this.vh / 2 / (c.z * TILT);
-    const top = (this.st?.phase === 'deploiement' ? 230 : 110) / (c.z * TILT), bottom = 150 / (c.z * TILT), side = 70 / c.z;
-    c.x = mx * 2 >= this.W + side * 2 ? this.W / 2 : clamp(c.x, mx - side, this.W - mx + side);
-    c.y = my * 2 >= this.H + top + bottom ? this.H / 2 + (bottom - top) / 2 : clamp(c.y, my - top, this.H - my + bottom);
+  // repère de la caméra pour l'état présent (recalculé seulement quand la caméra ou l'écran a changé)
+  fr() {
+    const c = this.cam, f = this._fr, yaw = c.yaw || 0;
+    if (f && f.cx === c.x && f.cy === c.y && f.cz === c.z && f.cyaw === yaw && f.vw === this.vw && f.vh === this.vh) return f;
+    const n = frameOf(c, this, this.relief.heightAt);
+    n.cx = c.x; n.cy = c.y; n.cz = c.z; n.cyaw = yaw;
+    return (this._fr = n);
   }
-  moveCam(x, y, z, dur = 600) {
+  // terrain → écran ([sx, sy, profondeur]) et écran → terrain, sur le relief
+  toScreen = (x, y) => project(this.fr(), x, y, this.relief.heightAt(x, y));
+  toWorld(sx, sy) { return unproject(this.fr(), sx, sy, this.relief.heightAt); }
+  clampCam() { clampCam(this.cam, { W: this.W, H: this.H, minZ: this.minZ(), maxZ: this.maxZ() }); }
+  // yaw : cap d'arrivée (sinon le cap ne change pas)
+  moveCam(x, y, z, dur = 600, yaw = null) {
     // la cible est ramenée dans les bornes dès le départ : pas de saut à l'arrivée
-    const from = { ...this.cam };
-    this.cam = { x, y, z: clamp(z ?? from.z, this.minZ(), this.maxZ()) };
+    const from = { ...this.cam, yaw: this.cam.yaw || 0 };
+    this.cam = { x, y, z: clamp(z ?? from.z, this.minZ(), this.maxZ()), yaw: yaw ?? from.yaw };
     this.clampCam();
     const to = this.cam;
     this.cam = from;
     this.camAnim = { from, to, t0: performance.now(), dur };
   }
+  // zoom vers un point de l'écran : le point du terrain sous le doigt y reste
   zoomAt(sx, sy, f) {
     const [wx, wy] = this.toWorld(sx, sy);
     this.cam.z = clamp(this.cam.z * f, this.minZ(), this.maxZ());
-    this.cam.x = wx - (sx - this.vw / 2) / this.cam.z;
-    this.cam.y = wy - (sy - this.vh / 2) / (this.cam.z * TILT);
+    anchor(this.cam, this, this.relief.heightAt, wx, wy, sx, sy);
     this.camAnim = null;
     this.clampCam();
   }
-  // centre la caméra sur la zone de déploiement (ou sur ses troupes)
-  // cadre ses propres troupes, le regard tourné vers l'ennemi (ou, sans ennemi en vue, vers le centre du champ)
+  // cadre ses propres troupes, le regard tourné vers l'ennemi (ou, sans ennemi en vue, vers le centre du champ) ;
+  // sans troupe, la zone de déploiement
   focusMine(dur = 900) {
     const mine = [...this.units.values()].filter(u => u.side === this.me && !u._ghost && u.state !== 'hors');
     if (!mine.length) { const z = this.st?.zone; if (z) this.moveCam((z[0] + z[2]) / 2, (z[1] + z[3]) / 2, 0.8, dur); return; }
@@ -258,14 +280,12 @@ export class BattleView {
     const foe = [...this.units.values()].filter(u => u.side !== this.me && u.state !== 'hors');
     const tx = foe.length ? foe.reduce((a, u) => a + u.x, 0) / foe.length : this.W / 2;
     const ty = foe.length ? foe.reduce((a, u) => a + u.y, 0) / foe.length : this.H / 2;
+    const d = Math.hypot(tx - cx, ty - cy) || 1, fx = (tx - cx) / d, fy = (ty - cy) / d;
     // assez près pour distinguer les régiments, toutes ses troupes dans le cadre
-    const zz = clamp(Math.min(this.vw / (x1 - x0 + 500), (this.vh - 240) / ((y1 - y0 + 400) * TILT)), 0.6, 1.3);
-    const sw = this.vw / zz, sh = this.vh / (zz * TILT);
-    const d = Math.hypot(tx - cx, ty - cy) || 1;
-    // les troupes restent dans le cadre : le décalage vers l'ennemi est borné par la place libre
-    const fx = Math.max(0, sw / 2 - (x1 - x0) / 2 - 120), fy = Math.max(0, sh / 2 - (y1 - y0) / 2 - 160);
-    const x = cx + clamp((tx - cx) / d * sw * 0.3, -fx, fx), y = cy + clamp((ty - cy) / d * sh * 0.3, -fy, fy);
-    this.moveCam(x, y - (this.st?.phase === 'deploiement' ? 70 : 0) / (zz * TILT), zz, dur);
+    const zz = clamp(Math.min(this.vw, this.vh * 1.3) / (Math.hypot(x1 - x0, y1 - y0) + 500), 0.6, 1.3);
+    // les troupes dans le bas de l'image : la cible un peu en avant d'elles, vers l'ennemi
+    const ahead = Math.min(d * 0.35, this.vh / zz * 0.25);
+    this.moveCam(cx + fx * ahead, cy + fy * ahead, zz, dur, Math.atan2(fx, -fy));
   }
 
   // ------------------------------------------------------------------ boucle
@@ -278,7 +298,7 @@ export class BattleView {
     if (this.camAnim) {
       const a = this.camAnim, k = Math.min(1, (now - a.t0) / a.dur), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
       const lz = Math.log(a.from.z) + (Math.log(a.to.z) - Math.log(a.from.z)) * e;
-      this.cam = { x: a.from.x + (a.to.x - a.from.x) * e, y: a.from.y + (a.to.y - a.from.y) * e, z: Math.exp(lz) };
+      this.cam = { x: a.from.x + (a.to.x - a.from.x) * e, y: a.from.y + (a.to.y - a.from.y) * e, z: Math.exp(lz), yaw: a.from.yaw + wrapAngle(a.to.yaw - a.from.yaw) * e };
       if (k >= 1) { this.camAnim = null; this.clampCam(); }
     }
     this.controls.tick(dt);
@@ -296,60 +316,74 @@ export class BattleView {
     }
     const speed = this.st?.speed ?? 1;
     this.fx.update(speed === 0 ? dt * 0.15 : dt * Math.min(1.6, 0.8 + speed * 0.2), this.st?.wind);
+    this.relief?.tick(now);
     this.draw(dt, now / 1000);
     this.ui.frame(now);
     const ms = performance.now() - t0;
     this.frameMs.push(ms);
     this.drawMs = ms;
     // qualité automatique : on descend d'un cran si l'appareil peine (combat, sans geste ni tuiles en rafale)
-    const calme = this.st?.phase === 'combat' && !this.controls.busy() && !this.camAnim && !this.terrain?.busy;
+    const calme = this.st?.phase === 'combat' && !this.controls.busy() && !this.camAnim;
     this.mesure.image(dt * 1000, calme, now);
-    // une image rapide, sans geste en cours : on avance la peinture des tuiles voisines
-    if (ms < 7 && !this.controls.busy() && !this.camAnim && (this.idleN = (this.idleN || 0) + 1) % 3 === 0) this.terrain?.prefetch(); if (this.frameMs.length > 120) this.frameMs.shift();
+    if (this.frameMs.length > 120) this.frameMs.shift();
   }
 
   draw(dt, time) {
-    const ctx = this.ctx, dpr = this.dpr, cam = this.cam, z = cam.z;
-    if (!this.terrain) return;
+    if (!this.terrain || !this.renderer) return;
+    const ctx = this.ctx, dpr = this.dpr, z = this.cam.z, fr = this.fr();
     this.figScale = this.figScaleAt(z);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#0c1828';
-    ctx.fillRect(0, 0, this.vw, this.vh);
-    // monde : x → (x − cx)·z + vw/2 ; y → (y − cy)·z·TILT + vh/2
-    const world = () => ctx.setTransform(dpr * z, 0, 0, dpr * z * TILT, dpr * (this.vw / 2 - cam.x * z), dpr * (this.vh / 2 - cam.y * z * TILT));
-    world();
     // mesure facultative, poste par poste (this.prof = {} pour l'activer)
     let tm = performance.now();
     const mark = k => { if (!this.prof) return; const n = performance.now(); this.prof[k] = (this.prof[k] || 0) + n - tm; tm = n; };
-    const pinching = this.controls.busy();
-    this.terrain.draw(ctx, cam, this.vw, this.vh / TILT, dpr, pinching ? 0 : this.ui.entering ? 3 : 1);
-    // cadre du champ de bataille
-    ctx.strokeStyle = 'rgba(200,162,83,0.65)'; ctx.lineWidth = 2 / z; ctx.strokeRect(0, 0, this.W, this.H);
-    mark('terrain');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const view = { toScreen: this.toScreen, z, figScale: this.figScale, vw: this.vw, vh: this.vh, dpr, fxT: this.fx.t };
-    const hour = this.hourNum(), sky = { weather: this.st?.weather || this.map?.weather, light: this.st?.light ?? 1, hour, wind: this.st?.wind };
-    this.fx.ground(ctx, view, sky, time);   // ombres des nuages, lumière du soir sur le terrain
-    world();
-    this.drawGround(ctx, z, time);
-    mark('sol');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // la scène 3D
+    const cam = this.camera;
+    cam.aspect = this.vw / this.vh; cam.near = clamp(fr.dist * 0.02, 0.5, 50); cam.far = fr.dist * 6 + 9000;
+    cam.updateProjectionMatrix();
+    cam.position.set(fr.E[0], fr.E[1], fr.E[2]); cam.lookAt(fr.T[0], fr.T[1], fr.T[2]);
+    this.relief.update(this.scene, fr.dist);
     const vis = [...this.units.values()].filter(u => u.state !== 'hors' && this.onScreen(u));
-    this.art.draw(ctx, view, vis, time, this.colors || []);
-    mark('unites');
+    this.drawBlocks(vis);
+    this.renderer.render(this.scene, cam);
+    mark('scene');
+    // le calque 2D
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, this.vw, this.vh);
+    this.drawGround(ctx, time);
+    mark('sol');
+    const view = { toScreen: this.toScreen, z, figScale: this.figScale, vw: this.vw, vh: this.vh, dpr, fxT: this.fx.t };
     this.fx.draw(ctx, view);
     mark('effets');
-    this.fx.atmosphere(ctx, view, sky, dt, time);
-    mark('atmosphere');
-    this.drawOverSmoke(ctx, time);
     this.drawLabels(ctx);
     this.bannerRects = this.art.banners(ctx, view, vis, this.colors || [], { sel: this.sel, me: this.me, time });
     this.controls.drawOverlay(ctx, view, time);
     mark('fanions');
   }
+  // régiments : un bloc à leurs couleurs, posé sur le relief et orienté (en attendant les figurines 3D)
+  drawBlocks(list) {
+    if (!this.blocks || this.blocks.instanceMatrix.count < list.length) {
+      if (this.blocks) { this.scene.remove(this.blocks); this.blocks.geometry.dispose(); this.blocks.material.dispose(); }
+      this.blocks = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial(), Math.max(64, list.length * 2));
+      this.blocks.frustumCulled = false;
+      this.scene.add(this.blocks);
+    }
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
+    list.forEach((u, i) => {
+      const h = 2.2;
+      p.set(u.x, this.relief.heightAt(u.x, u.y) + h / 2, u.y);
+      q.setFromAxisAngle(up, Math.PI / 2 - u.dir);   // l'avant du bloc (+Z) vers (cos dir, sin dir)
+      sc.set(Math.max(2, u.w), h, Math.max(2, u.d));
+      this.blocks.setMatrixAt(i, m.compose(p, q, sc));
+      col.set(this.colors?.[u.side] || '#888');
+      if (u._ghost) col.multiplyScalar(0.55);
+      this.blocks.setColorAt(i, col);
+    });
+    this.blocks.count = list.length;
+    this.blocks.instanceMatrix.needsUpdate = true;
+    if (this.blocks.instanceColor) this.blocks.instanceColor.needsUpdate = true;
+  }
   onScreen(u) {
-    const [sx, sy] = this.toScreen(u.x, u.y), m = Math.max(u.w, u.d) * this.cam.z + 80;
-    return sx > -m && sy > -m && sx < this.vw + m && sy < this.vh + m;
+    const [sx, sy, depth] = this.toScreen(u.x, u.y), m = Math.max(u.w, u.d) * this.cam.z + 80;
+    return depth > 0 && sx > -m && sy > -m && sx < this.vw + m && sy < this.vh + m;
   }
   hourNum() {
     const c = this.st?.clock;
@@ -357,47 +391,68 @@ export class BattleView {
     const m = /(\d+)\s*h\s*(\d*)/.exec(this.st?.hour || '');
     return m ? +m[1] + (+m[2] || 0) / 60 : 12;
   }
-  // au sol (dans le repère du monde) : zone de déploiement, couverts, portées, empreintes, ordres en cours
-  drawGround(ctx, z, time) {
+  // tracé au sol : chaque segment est découpé (pas plus fin que nécessaire selon la distance de la caméra) et chaque
+  // point projeté sur le relief ; le chemin est laissé ouvert dans ctx (stroke ou fill ensuite)
+  groundPath(ctx, pts, closed = false) {
+    const step = clamp(this.fr().dist / 120, 2, 40);
+    ctx.beginPath();
+    const n = pts.length, last = closed ? n : n - 1;
+    let first = true;
+    const at = (x, y) => { const [sx, sy] = this.toScreen(x, y); if (first) { ctx.moveTo(sx, sy); first = false; } else ctx.lineTo(sx, sy); };
+    for (let k = 0; k < last; k++) {
+      const a = pts[k], b = pts[(k + 1) % n], m = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+      for (let q = 0; q < m; q++) at(a[0] + (b[0] - a[0]) * q / m, a[1] + (b[1] - a[1]) * q / m);
+    }
+    if (closed) ctx.closePath(); else if (n) at(pts[n - 1][0], pts[n - 1][1]);
+  }
+  // emprise d'un régiment (rectangle tourné, agrandi de pad m), tracée au sol
+  footprint(ctx, x, y, dir, w, d, pad = 0) {
+    const c = Math.cos(dir), s = Math.sin(dir), W = w / 2 + pad, D = d / 2 + pad;
+    const pts = [[-W, D], [W, D], [W, -D], [-W, -D]].map(([uu, vv]) => [x + c * vv - s * uu, y + s * vv + c * uu]);
+    this.groundPath(ctx, pts, true);
+    return pts;
+  }
+  arc(x, y, r, a0, a1) { const n = Math.max(8, Math.ceil(Math.abs(a1 - a0) * 12)), out = []; for (let k = 0; k <= n; k++) { const a = a0 + (a1 - a0) * k / n; out.push([x + Math.cos(a) * r, y + Math.sin(a) * r]); } return out; }
+  // au sol, sur le calque (projeté sur le relief) : zone de déploiement, portées, ralliement, ordres en cours, sélection,
+  // objectif, cible survolée
+  drawGround(ctx, time) {
     const st = this.st;
     const deploy = st?.phase === 'deploiement';
-    if ((deploy && this.showCover !== false) || this.showCover === true) {
-      ctx.save();
-      ctx.globalAlpha = 0.42 + Math.sin(time * 2.2) * 0.1;
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(this.terrain.coverImg, 0, 0, this.W, this.H);
-      ctx.restore();
-    }
     if (deploy && st.zone) {
       const [x0, y0, x1, y1] = st.zone;
-      ctx.fillStyle = 'rgba(230,201,127,0.12)'; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
-      ctx.setLineDash([14 / z, 9 / z]); ctx.lineDashOffset = -time * 20 / z;
-      ctx.strokeStyle = 'rgba(255,226,150,0.95)'; ctx.lineWidth = 2.4 / z; ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+      this.groundPath(ctx, [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], true);
+      ctx.fillStyle = 'rgba(230,201,127,0.12)'; ctx.fill();
+      ctx.setLineDash([14, 9]); ctx.lineDashOffset = -time * 20;
+      ctx.strokeStyle = 'rgba(255,226,150,0.95)'; ctx.lineWidth = 2.4; ctx.stroke();
       ctx.setLineDash([]);
     }
-    const art = this.art;
-    const proj = { toScreen: (x, y) => [x, y] };   // déjà dans le repère du monde
     // portées de l'unité sélectionnée (efficace et maximale), dans son champ de tir
     if (this.sel.size === 1) {
       const u = this.units.get([...this.sel][0]);
       if (u && u.range && u.range[0] > 0 && clsOf(u) !== 'general') {
         const arc = Math.PI / 3;
-        ctx.lineWidth = 1.6 / z;
+        ctx.lineWidth = 1.6;
         for (const [r, a] of [[u.range[1], 0.35], [u.range[0], 0.7], [u.range[2], 0.6]]) {
           if (!r) continue;
           ctx.strokeStyle = r === u.range[2] ? `rgba(240,120,90,${a})` : `rgba(255,236,170,${a})`;
-          ctx.setLineDash(r === u.range[1] ? [8 / z, 6 / z] : []);
-          ctx.beginPath(); ctx.moveTo(u.x, u.y); ctx.arc(u.x, u.y, r, u.dir - arc, u.dir + arc); ctx.closePath(); ctx.stroke();
+          ctx.setLineDash(r === u.range[1] ? [8, 6] : []);
+          this.groundPath(ctx, [[u.x, u.y], ...this.arc(u.x, u.y, r, u.dir - arc, u.dir + arc)], true); ctx.stroke();
           if (r === u.range[0]) { ctx.fillStyle = 'rgba(255,236,170,0.08)'; ctx.fill(); }
         }
         ctx.setLineDash([]);
       }
     }
-    // zone de ralliement : un voile doré au sol (son contour est tracé par-dessus la fumée : drawOverSmoke)
+    // zone de ralliement autour de mes états-majors : un voile doré, son contour en pointillés qui tournent
     const rz = this.rallyZone();
     if (rz) {
-      ctx.fillStyle = `rgba(255,226,150,${rz.picked ? 0.09 : 0.045})`;
-      for (const g of rz.gens) { ctx.beginPath(); ctx.arc(g.x, g.y, g.rally, 0, TAU); ctx.fill(); }
+      const pulse = 0.5 + 0.5 * Math.sin(time * 2.4);
+      ctx.setLineDash([10, 8]); ctx.lineDashOffset = -time * 12;
+      for (const g of rz.gens) {
+        this.groundPath(ctx, this.arc(g.x, g.y, g.rally, 0, TAU), true);
+        ctx.fillStyle = `rgba(255,226,150,${rz.picked ? 0.09 : 0.045})`; ctx.fill();
+        ctx.strokeStyle = `rgba(255,226,150,${rz.picked ? 0.6 + 0.3 * pulse : 0.45})`; ctx.lineWidth = rz.picked ? 2.2 : 1.4; ctx.stroke();
+      }
+      ctx.setLineDash([]); ctx.lineDashOffset = 0;
     }
     // ordres en cours de mes unités : trajet pointillé et emplacement d'arrivée
     for (const u of this.units.values()) {
@@ -406,41 +461,39 @@ export class BattleView {
       const selected = this.sel.has(u.id);
       const path = Array.isArray(u.path) && u.path.length ? u.path : null;
       if (o && o.kind === 'move' && o.x != null && Math.hypot(o.x - u.x, o.y - u.y) > 10) {
-        ctx.strokeStyle = selected ? 'rgba(255,230,160,0.9)' : 'rgba(255,230,160,0.45)'; ctx.lineWidth = (selected ? 2.2 : 1.4) / z;
-        ctx.setLineDash([6 / z, 6 / z]);
-        ctx.beginPath(); ctx.moveTo(u.x, u.y);
-        if (path) for (const p of path) ctx.lineTo(p[0], p[1]); else ctx.lineTo(o.x, o.y);
-        ctx.stroke(); ctx.setLineDash([]);
-        art.footprint(ctx, proj, o.x, o.y, o.dir ?? Math.atan2(o.y - u.y, o.x - u.x), u.w, u.d, 1);
-        ctx.stroke();
+        ctx.strokeStyle = selected ? 'rgba(255,230,160,0.9)' : 'rgba(255,230,160,0.45)'; ctx.lineWidth = selected ? 2.2 : 1.4;
+        ctx.setLineDash([6, 6]);
+        this.groundPath(ctx, [[u.x, u.y], ...(path || [[o.x, o.y]])]); ctx.stroke();
+        ctx.setLineDash([]);
+        this.footprint(ctx, o.x, o.y, o.dir ?? Math.atan2(o.y - u.y, o.x - u.x), u.w, u.d, 1); ctx.stroke();
       }
       const tgt = o && (o.kind === 'attack' || o.kind === 'charge') ? this.units.get(String(o.target)) : u.target != null && selected ? this.units.get(String(u.target)) : null;
       if (tgt) {
-        ctx.strokeStyle = o?.kind === 'charge' ? 'rgba(255,120,90,0.9)' : 'rgba(255,170,120,0.7)'; ctx.lineWidth = 2 / z;
-        ctx.beginPath(); ctx.moveTo(u.x, u.y); ctx.lineTo(tgt.x, tgt.y); ctx.stroke();
+        ctx.strokeStyle = o?.kind === 'charge' ? 'rgba(255,120,90,0.9)' : 'rgba(255,170,120,0.7)'; ctx.lineWidth = 2;
+        this.groundPath(ctx, [[u.x, u.y], [tgt.x, tgt.y]]); ctx.stroke();
       }
       if (selected) {
-        ctx.fillStyle = 'rgba(255,226,150,0.16)'; ctx.strokeStyle = 'rgba(255,226,150,0.95)'; ctx.lineWidth = 2 / z;
-        art.footprint(ctx, proj, u.x, u.y, u.dir, u.w, u.d, 4); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,226,150,0.16)'; ctx.strokeStyle = 'rgba(255,226,150,0.95)'; ctx.lineWidth = 2;
+        this.footprint(ctx, u.x, u.y, u.dir, u.w, u.d, 4); ctx.fill(); ctx.stroke();
         // l'avant : une flèche
         const c = Math.cos(u.dir), s = Math.sin(u.dir), f = u.d / 2 + 8;
-        ctx.fillStyle = 'rgba(255,226,150,0.95)';
-        ctx.beginPath(); ctx.moveTo(u.x + c * (f + 9), u.y + s * (f + 9)); ctx.lineTo(u.x + c * f - s * 6, u.y + s * f + c * 6); ctx.lineTo(u.x + c * f + s * 6, u.y + s * f - c * 6); ctx.closePath(); ctx.fill();
+        this.groundPath(ctx, [[u.x + c * (f + 9), u.y + s * (f + 9)], [u.x + c * f - s * 6, u.y + s * f + c * 6], [u.x + c * f + s * 6, u.y + s * f - c * 6]], true);
+        ctx.fillStyle = 'rgba(255,226,150,0.95)'; ctx.fill();
       }
     }
     // objectif d'un assaut : le cœur de la place (tenu hold_need secondes sans défenseur pour l'emporter)
     const obj = st?.objective || (this.map?.heart && this.map?.place ? this.map.heart : null);
     if (obj) {
       const r = 26, k = clamp((st?.hold || 0) / (st?.hold_need || 60), 0, 1);
-      ctx.lineWidth = 3 / z; ctx.strokeStyle = 'rgba(255,226,150,0.85)'; ctx.setLineDash([7 / z, 5 / z]);
-      ctx.beginPath(); ctx.arc(obj[0], obj[1], r + Math.sin(time * 2) * 2, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
-      if (k > 0) { ctx.strokeStyle = 'rgba(255,120,90,0.95)'; ctx.lineWidth = 5 / z; ctx.beginPath(); ctx.arc(obj[0], obj[1], r, -Math.PI / 2, -Math.PI / 2 + k * TAU); ctx.stroke(); }
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,226,150,0.85)'; ctx.setLineDash([7, 5]);
+      this.groundPath(ctx, this.arc(obj[0], obj[1], r + Math.sin(time * 2) * 2, 0, TAU), true); ctx.stroke(); ctx.setLineDash([]);
+      if (k > 0) { ctx.strokeStyle = 'rgba(255,120,90,0.95)'; ctx.lineWidth = 5; this.groundPath(ctx, this.arc(obj[0], obj[1], r, -Math.PI / 2, -Math.PI / 2 + k * TAU)); ctx.stroke(); }
     }
     // cible survolée ou désignée
     const hov = this.controls.hover && this.units.get(this.controls.hover);
     if (hov && hov.side !== this.me) {
-      ctx.strokeStyle = 'rgba(255,110,90,0.95)'; ctx.lineWidth = 2.2 / z;
-      art.footprint(ctx, proj, hov.x, hov.y, hov.dir, hov.w, hov.d, 6); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,110,90,0.95)'; ctx.lineWidth = 2.2;
+      this.footprint(ctx, hov.x, hov.y, hov.dir, hov.w, hov.d, 6); ctx.stroke();
     }
   }
   // ralliement : une troupe en déroute ne se reforme qu'auprès du général, loin de l'ennemi. Tant qu'une des miennes
@@ -450,37 +503,6 @@ export class BattleView {
     const routed = mine.filter(u => u.state === 'deroute');
     const gens = mine.filter(g => isGeneral(g) && g.rally);
     return routed.length && gens.length ? { gens, picked: routed.some(u => this.sel.has(u.id)) } : null;
-  }
-  // par-dessus la fumée et la brume : le contour des régiments choisis et leur destination, et celui de la zone de
-  // ralliement, restent lisibles
-  drawOverSmoke(ctx, time) {
-    const rz = this.rallyZone();
-    if (rz) {
-      const z = this.cam.z, pulse = 0.5 + 0.5 * Math.sin(time * 2.4);
-      ctx.strokeStyle = `rgba(255,226,150,${rz.picked ? 0.6 + 0.3 * pulse : 0.45})`;
-      ctx.lineWidth = rz.picked ? 2.2 : 1.4;
-      ctx.setLineDash([10, 8]); ctx.lineDashOffset = -time * 12;
-      for (const g of rz.gens) {
-        const [sx, sy] = this.toScreen(g.x, g.y);
-        ctx.beginPath(); ctx.ellipse(sx, sy, g.rally * z, g.rally * z * TILT, 0, 0, TAU); ctx.stroke();
-      }
-      ctx.setLineDash([]); ctx.lineDashOffset = 0;
-    }
-    if (!this.sel.size) return;
-    const proj = { toScreen: this.toScreen };
-    ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
-    for (const id of this.sel) {
-      const u = this.units.get(id);
-      if (!u || u._ghost) continue;
-      ctx.strokeStyle = 'rgba(255,226,150,0.8)';
-      this.art.footprint(ctx, proj, u.x, u.y, u.dir, u.w, u.d, 4); ctx.stroke();
-      const o = this.orders.get(id);
-      if (o && o.kind === 'move' && o.x != null && Math.hypot(o.x - u.x, o.y - u.y) > 10) {
-        ctx.strokeStyle = 'rgba(255,230,160,0.55)';
-        this.art.footprint(ctx, proj, o.x, o.y, o.dir ?? Math.atan2(o.y - u.y, o.x - u.x), u.w, u.d, 1); ctx.stroke();
-      }
-    }
-    ctx.setLineDash([]);
   }
   // cotes des sommets et nom de la place, à la manière des cartes d'état-major
   drawLabels(ctx) {
