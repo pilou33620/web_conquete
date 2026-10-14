@@ -408,17 +408,20 @@ tirés au sort. La bataille se joue comme une bataille commandée, puis « Retou
 ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
 
 #### Conduire une bataille
-- **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît en vue
-  cavalière, peint comme un paysage : herbe aux nuances multiples, blé doré, chaumes et labours selon la saison,
-  vignes en rangs, chemins de terre à ornières, haies, murets et clôtures, arbres et bois éclairés avec leur ombre,
-  fermes en volume, rivières avec berges et reflets, relief ombré. Chaque régiment est fait de nombreuses figurines
-  aux couleurs de son camp, en rangs serrés (trois rangs pour une ligne), avec porte-drapeau, tambours, officiers et
-  colonel à cheval ; les coiffures suivent l'époque (tricorne, bicorne, shako, képi, bonnet à poil). Les hommes
-  marchent au pas, mettent en joue l'un après l'autre quand la salve roule le long du front, puis rechargent ; la
-  fumée blanche reste et dérive avec le vent ; les pièces reculent au départ du coup et leurs servants s'affairent ;
-  les tués restent au sol. Au-dessus de chaque régiment, un fanion porte son effectif (barré et décoloré s'il est
-  en déroute) ; le général a son médaillon. Le temps, la saison et l'heure se voient : pluie, brouillard, neige,
-  orage, canicule, ombres des nuages, lumière dorée du matin, couchant puis nuit.
+- **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît **en 3D**,
+  la caméra tournée vers l'ennemi : relief en volume, sol peint comme un paysage (herbe aux nuances multiples, blé
+  doré, chaumes et labours selon la saison, vignes en rangs, chemins de terre à ornières, rivières avec berges et
+  reflets), arbres et bois en volume, fermes, villages, église et clocher, moulins, ponts, remparts et bastions,
+  tranchées, haies, murets et clôtures ; le soleil de l'heure porte leurs ombres. Chaque régiment est fait de
+  figurines 3D aux couleurs de son camp (un homme par figurine tant que la qualité graphique le permet), en rangs
+  serrés (trois rangs pour une ligne), avec porte-drapeau, tambours, officiers et colonel à cheval ; les coiffures
+  suivent l'époque (tricorne, bicorne, shako, képi, bonnet à poil). Les hommes marchent au pas, mettent en joue l'un
+  après l'autre quand la salve roule le long du front, puis rechargent ; les chevaux vont au pas ou au galop, sabre
+  au clair ; la fumée blanche s'amasse et dérive avec le vent ; les pièces reculent au départ du coup et leurs
+  servants s'affairent ; les tués restent au sol. Au-dessus de chaque régiment, un fanion à la manière d'Ultimate
+  General porte le pictogramme de son arme et son effectif (barré et pâli s'il est en déroute) ; le général a son
+  médaillon. Le temps, la saison et l'heure se voient : pluie, brouillard, neige, orage, ombres des nuages qui
+  passent, lumière dorée du matin, couchant puis nuit.
 - **Le déploiement.** Vos troupes sont dans la zone dorée : toute votre moitié du champ de bataille, sauf une bande
   neutre de 400 m au milieu. Devant une place, l'assaillant reste à 450 m de l'enceinte, le défenseur tient la place et
   250 m autour. L'ennemi se déploie plus en retrait (son assaillant à moins de 500 m de son bord, son défenseur sur le
@@ -460,20 +463,25 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
 - **Le canon.** La mitraille est terrible à bout portant : sous 150 m, la gerbe encore serrée fauche des files
   entières (à 50 m, elle tue plus que deux bataillons qui font feu). Aborder une batterie de face coûte très cher ;
   prenez-la de flanc, ou faites-la taire d'abord.
-- **La vue.** Pincer pour zoomer, glisser à deux doigts (ou d'un doigt sans régiment choisi) pour se déplacer ;
-  molette et clic droit ou du milieu à la souris ; flèches du clavier. La **mini-carte** (en bas à droite) se touche
-  pour s'y rendre ; dessous, la vitesse : pause, ×1, ×2, ×4 (espace, 1, 2, 4 au clavier).
+- **La vue.** Caméra libre : glisser (d'un doigt sans régiment choisi) pour se déplacer, pincer pour zoomer (de tout
+  le champ jusqu'au ras des troupes : la vue se couche en zoomant), **tourner deux doigts pour pivoter** ; à la
+  souris, molette pour zoomer, **clic droit glissé pour pivoter**, clic du milieu glissé pour se déplacer ; flèches
+  du clavier. La **mini-carte** (en bas à droite) montre la part de terrain vue et se touche pour s'y rendre ;
+  dessous, la vitesse : pause, ×1, ×2, ×4 (espace, 1, 2, 4 au clavier).
 - **En haut** : l'heure (et la nuit qui approche), le temps, le rapport de forces (l'ennemi : seulement ce que
   vous en voyez), le journal (repliable, et complet derrière son bouton), l'aide, **« Finir auto. »** (vos officiers
   achèvent la bataille en accéléré) et **« Décrocher »** (toute l'armée quitte le terrain), chacun avec confirmation.
 - **La fin.** Le récapitulatif donne victoire ou défaite, pertes des deux camps, prisonniers, expérience, et les
   pertes de chaque régiment ; « Retour à la carte » ramène la campagne, que vous relancez quand vous voulez.
 - **Qualité graphique** (menu ☰, section Affichage, ou fenêtre du journal de bataille) : **Basse** (appareils
-  anciens : image moins fine, peu de fumée), **Moyenne** (tablettes et téléphones modestes), **Haute** (iPad récent : écran Retina, terrain
-  détaillé jusqu'à 16 pixels par mètre, zoom très rapproché sur les figurines), **Ultra** (ordinateurs : plus de
-  figurines, de fumée et de mémoire). Au premier lancement, elle est choisie d'après l'appareil, puis baisse d'elle-
-  même d'un cran si la bataille saccade (moins de 26 images par seconde) ; un choix fait à la main est gardé tel
-  quel. Elle est enregistrée sur l'appareil et s'applique tout de suite, sans quitter la bataille.
+  anciens : image moins fine, 3 000 figurines, peu de fumée, bois allégés, sans ombres), **Moyenne** (tablettes et
+  téléphones modestes : ombres du décor, 6 000 figurines), **Haute** (iPad récent : écran Retina, sol détaillé
+  jusqu'à 16 pixels par mètre, 10 000 figurines, ombres des troupes), **Ultra** (ordinateurs : 20 000 figurines, plus
+  de fumée, ombres plus fines). Au-delà, chaque figurine compte plusieurs hommes. Au premier lancement, elle est
+  choisie d'après l'appareil, puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par
+  seconde) ; un choix fait à la main est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de
+  suite, sans quitter la bataille (l'anticrénelage, à la bataille suivante). Les batailles demandent **WebGL 2**
+  (iPadOS 15 et plus, tout navigateur récent) ; sans lui, un message le dit et vos officiers mènent la bataille.
 - Clavier : C charger, H tenir, F feu, R rallier, Échap désélectionner, Ctrl + A tout choisir, + et − zoom.
 
 ### Fleuves, gabares et blocus
@@ -631,14 +639,22 @@ game/tactics/        batailles manuelles : carte de bataille (terrain.py), unit�
                      (battle.py), IA de secours (ai.py), raccord avec la campagne (bridge.py)
 web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/ambient.js (animations
                      de la carte), js/towns.js (dessin des villes), js/ui.js, js/tuto.js (tutoriel), js/main.js
-web/js/battle/       vue de bataille : bataille.js (entrée et sortie depuis la campagne), vue.js (caméra,
-                     boucle, interrogation du serveur), terrain.js (champ de bataille peint en tuiles),
-                     textures.js (motifs du sol et silhouettes d'arbres), unites.js (figurines, chevaux,
-                     canons, drapeaux, fanions), effets.js (fumées, tirs, météo, lumière), qualite.js
-                     (qualité graphique), commandes.js (gestes et clavier), interface.js (barres,
-                     panneaux, récapitulatif), formes.js (constantes et outils communs), css/bataille.css ;
+web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et sortie depuis la campagne),
+                     vue.js (scène WebGL et calque 2D, boucle, interrogation du serveur, tracés au sol),
+                     camera.js (caméra orbitale, passage écran ↔ terrain), relief.js (relief, sol peint de
+                     plus en plus fin autour de la caméra, tués au sol, ciel, brume, ombres), terrain.js
+                     (peinture du sol, altitudes, données du décor), textures.js (motifs du sol), decor.js
+                     (arbres, bâti, remparts, haies en volume), troupes.js (figurines 3D animées sur la
+                     carte graphique, dispositions des rangs), fanions.js (fanions et médaillons),
+                     unites.js (figurines peintes des cartes d'unités), effets.js (fumées, tirs, lumière de
+                     l'heure, météo), qualite.js (qualité graphique), commandes.js (gestes et clavier),
+                     interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils
+                     communs), css/bataille.css ;
                      dev/maquette.mjs : serveur de maquette (node web/js/battle/dev/maquette.mjs, puis
-                     /js/battle/dev/banc.html?scen=…&season=…&weather=…&hour=…&year=…&start=1)
+                     /js/battle/dev/banc.html?scen=…&season=…&weather=…&hour=…&year=…&start=1) ;
+                     dev/capture.mjs : capture d'écran du banc par Chromium sans écran
+                     (node web/js/battle/dev/capture.mjs bocage /tmp/bocage.png --q "hour=18")
+web/vendor/three/    Three.js r186 (licence MIT), copié tel quel : le jeu marche hors ligne
 saves/               parties sauvegardées (JSON)
 tests/               bancs d'essai (voir « Tests » ci-dessous)
 ```
@@ -660,6 +676,8 @@ node --test tests/                               # l'interface seule
 | `tests/test_campagne.py` | votre tour puis celui des IA, jours de marche, retraite une fois par tour, sièges, dettes et événements, prix du marché, sauvegarde (IA comprises) |
 | `tests/test_serveur.py` | un vrai serveur HTTP sur un port libre : requêtes mal formées, fichiers hors de `web/`, ordres pendant le tour des IA, sauvegardes (dossier temporaire, les vraies ne sont pas touchées) |
 | `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, boutons d'ordres par arme, panneau du régiment, barre du tour, tutoriel et bulles de bataille |
+| `tests/camera.test.mjs` | caméra 3D des batailles : allers-retours écran ↔ terrain à 1 m et 1 pixel près sur une colline, à plusieurs caps et zooms ; bornes |
+| `tests/troupes.test.mjs` | dispositions des figurines : rangs de la ligne, plafond par régiment, carré à quatre faces, colonne, tirailleurs, déroute |
 
 **Essayer une nouvelle fonctionnalité sans jouer.** `tests/fabrique.py` fabrique une situation en une ligne : une
 partie (`partie('64', '1870')`), un ou plusieurs mois joués (`jouer_mois(g, 3)`), une bataille déjà engagée avec les

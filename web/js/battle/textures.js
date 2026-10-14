@@ -1,11 +1,9 @@
-// Vue tactique : motifs du terrain et silhouettes d'arbres, peints une fois par niveau de détail.
+// Vue tactique : motifs du terrain, peints une fois par niveau de détail.
 // Un motif est un petit canevas qui se répète sans joint (bruit périodique) : herbe aux nuances multiples, blé
 // doré strié, chaumes, labours, maïs, vigne en rangs, lande, marais, sable, roche, sous-bois, terre des chemins,
 // eau, pavés. Il est peint à la densité de la tuile (L pixels par mètre) : de loin, des nuances seulement ; de
 // près, brins d'herbe, épis, mottes, cailloux et fleurs. Les cultures ont leurs rangs le long de x : la tuile les
-// tourne dans le sens de la parcelle.
-// Les arbres sont des silhouettes éclairées (lumière du nord-ouest, comme le relief et les ombres) : touffes de
-// feuillage modelées, sapins étagés, pins parasols, arbres nus de l'hiver, buissons des haies.
+// tourne dans le sens de la parcelle. Aussi : l'ombre douce posée au pied des arbres et des maisons.
 import { hash, clamp, TAU, hexRgb, canvas } from './formes.js';
 
 // ------------------------------------------------------------------ bruit périodique
@@ -94,7 +92,7 @@ export function culture(season, r) {
 
 // ------------------------------------------------------------------ motifs
 // taille du motif : assez grande pour que la répétition ne se voie pas (128 à 64 m de côté selon le niveau)
-export const texSize = L => (L <= 1 ? 128 : L <= 4 ? 256 : 512);
+const texSize = L => (L <= 1 ? 128 : L <= 4 ? 256 : 512);
 
 // kind : nature du sol ; L : px/m ; pal : palette de la saison (terrain.js) ; season : printemps, ete…
 export function texture(kind, L, pal, season) {
@@ -279,80 +277,6 @@ function crop(kind, size, L, pal, season, S, n) {
 // ------------------------------------------------------------------ arbres
 // kind : 'feuillu' | 'buisson' | 'peuplier' | 'sapin' | 'parasol' | 'nu' ; col : couleur du feuillage ; px : rayon de la
 // couronne en pixels pour un arbre de 8 m de rayon (la tuile met à l'échelle) ; renvoie {cv, cx, cy, px} : le
-// centre de la couronne (cx, cy) dans le canevas. Les sapins ont leur pied en (cx, cy).
-export function treeSprite(kind, col, variant, px, snow) {
-  const seed = variant * 101 + kind.length * 7 + 3;
-  if (kind === 'sapin') return conifer(col, px, seed, snow);
-  // flat : hauteur de la couronne rapportée à sa largeur (pin parasol aplati, peuplier en fuseau)
-  const flat = kind === 'parasol' ? 0.5 : kind === 'peuplier' ? 2.1 : 0.92, spread = kind === 'peuplier' ? 0.5 : 1;
-  const S = Math.ceil(px * 2.5 + 4), SH = Math.ceil(S * Math.max(1, flat * 0.85)), cv = canvas(S, SH), g = cv.getContext('2d'), c = S / 2, cy = SH / 2;
-  const base = hexRgb(col);
-  if (kind === 'nu') {
-    // arbre d'hiver : charpente et ramilles en éventail, un voile de brindilles, la neige sur les branches
-    g.lineCap = 'round';
-    const branch = (x, y, a, l, w, d) => {
-      const x2 = x + Math.cos(a) * l, y2 = y + Math.sin(a) * l * flat;
-      g.lineWidth = Math.max(0.4, w); g.beginPath(); g.moveTo(x, y); g.lineTo(x2, y2); g.stroke();
-      if (d > 0) for (let q = 0; q < 2 + (d > 2 ? 1 : 0); q++) branch(x2, y2, a + (hash(d, q, seed + l | 0) - 0.5) * 1.4, l * 0.62, w * 0.62, d - 1);
-    };
-    g.fillStyle = 'rgba(140,122,104,0.12)'; g.beginPath(); g.ellipse(c, c - px * 0.15, px * 0.9, px * 0.8 * flat, 0, 0, TAU); g.fill();
-    g.strokeStyle = 'rgba(86,70,58,0.95)';
-    for (let q = 0; q < 7; q++) branch(c, c + px * 0.4, -Math.PI / 2 + (q - 3) * 0.42 + (hash(q, 1, seed) - 0.5) * 0.3, px * (0.36 + hash(q, 2, seed) * 0.12), px * 0.06, px > 12 ? 3 : 2);
-    if (snow) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(250,252,255,0.85)'; g.beginPath(); g.ellipse(c - px * 0.2, c - px * 0.45, px * 0.7, px * 0.35, -0.2, 0, TAU); g.fill(); }
-    return { cv, cx: c, cy: c, px };
-  }
-  // touffes de feuillage : des disques répartis dans la couronne, ceux du bas peints en dernier
-  const N = kind === 'buisson' ? 5 : px < 5 ? 4 : px < 12 ? 8 : 13 + variant * 2;
-  const blobs = [];
-  for (let k = 0; k < N; k++) {
-    const a = hash(k, 1, seed) * TAU, d = Math.sqrt(hash(k, 2, seed)) * 0.56 * px, r = (0.34 + hash(k, 3, seed) * 0.2) * px;
-    blobs.push({ x: c + Math.cos(a) * d * spread, y: cy + Math.sin(a) * d * flat, r });
-  }
-  blobs.sort((a, b) => a.y - b.y);
-  const dark = mul(base, 0.52), lite = mixc(mul(base, 1.25), [236, 236, 150], 0.22);
-  g.fillStyle = css(dark);
-  for (const b of blobs) { g.beginPath(); g.ellipse(b.x + px * 0.05, b.y + px * 0.07, b.r, b.r * flat, 0, 0, TAU); g.fill(); }
-  for (const b of blobs) {
-    g.fillStyle = css(base); g.beginPath(); g.ellipse(b.x - b.r * 0.1, b.y - b.r * 0.12 * flat, b.r * 0.84, b.r * 0.84 * flat, 0, 0, TAU); g.fill();
-    g.fillStyle = css(lite, 0.85); g.beginPath(); g.ellipse(b.x - b.r * 0.32, b.y - b.r * 0.36 * flat, b.r * 0.42, b.r * 0.42 * flat, 0, 0, TAU); g.fill();
-  }
-  g.globalCompositeOperation = 'source-atop';
-  // feuilles : petites taches sombres et claires, seulement sur le feuillage
-  if (px >= 9) {
-    const cnt = Math.min(6000, px * px * 0.5), r0 = Math.max(0.5, px * 0.016), r1 = Math.max(0.8, px * 0.04);
-    for (const [col2, a] of [[dark, 0.35], [lite, 0.4]]) {
-      g.fillStyle = css(col2, a); g.beginPath();
-      for (let k = 0; k < cnt; k++) { const x = c + (hash(k, 4, seed + a * 9 | 0) - 0.5) * 2.2 * px * spread, y = cy + (hash(k, 5, seed + a * 9 | 0) - 0.5) * 2.2 * px * flat, r = r0 + hash(k, 6, seed) * (r1 - r0); g.moveTo(x + r, y); g.arc(x, y, r, 0, TAU); }
-      g.fill();
-    }
-  }
-  // modelé d'ensemble : lumière en haut à gauche, ombre en bas à droite
-  const gr = g.createRadialGradient(c - px * 0.45 * spread, cy - px * 0.5 * flat, 0, c - px * 0.2 * spread, cy - px * 0.2 * flat, px * 1.7 * Math.max(1, flat * 0.8));
-  gr.addColorStop(0, 'rgba(255,250,215,0.28)'); gr.addColorStop(0.45, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(8,18,6,0.5)');
-  g.fillStyle = gr; g.fillRect(0, 0, S, SH);
-  if (snow) { g.fillStyle = 'rgba(248,250,253,0.8)'; for (const b of blobs) { g.beginPath(); g.ellipse(b.x - b.r * 0.25, b.y - b.r * 0.45 * flat, b.r * 0.5, b.r * 0.25, 0, 0, TAU); g.fill(); } }
-  g.globalCompositeOperation = 'source-over';
-  return { cv, cx: c, cy, px };
-}
-// sapin vu de biais : étages de branches en dents de scie, côté éclairé à gauche ; pied en (cx, cy)
-function conifer(col, px, seed, snow) {
-  const W = Math.ceil(px * 2.2 + 4), H = Math.ceil(px * 3.6 + 4), cv = canvas(W, H), g = cv.getContext('2d');
-  const cx = W / 2, cy = H - 2, base = hexRgb(col), dark = mul(base, 0.6), lite = mixc(mul(base, 1.3), [200, 230, 160], 0.15);
-  const tiers = px < 6 ? 3 : 5, top = cy - px * 3.4;
-  g.fillStyle = '#4a3828'; g.fillRect(cx - px * 0.07, cy - px * 0.5, px * 0.14, px * 0.5);
-  for (let q = 0; q < tiers; q++) {
-    const by = cy - px * 0.35 - q * (px * 2.9 / tiers), w = px * (0.95 - q * 0.62 / tiers), h = px * 3.0 / tiers * 1.55, ty = Math.max(top, by - h);
-    const teeth = px < 8 ? 3 : 6, edge = side => { const pts = []; for (let k = 0; k <= teeth; k++) { const f = k / teeth; pts.push([cx + side * w * f, ty + (by - ty) * f + (k % 2 ? -h * 0.12 : 0)]); } return pts; };
-    for (const [side, colr] of [[-1, base], [1, dark]]) {
-      g.fillStyle = css(colr); g.beginPath(); g.moveTo(cx, ty);
-      for (const p of edge(side)) g.lineTo(p[0], p[1]);
-      g.lineTo(cx, by - h * 0.12); g.closePath(); g.fill();
-    }
-    g.fillStyle = css(lite, 0.55); g.beginPath(); g.moveTo(cx, ty); g.lineTo(cx - w * 0.45, ty + (by - ty) * 0.6); g.lineTo(cx - w * 0.1, ty + (by - ty) * 0.55); g.closePath(); g.fill();
-    if (snow) { g.fillStyle = 'rgba(248,250,253,0.92)'; g.beginPath(); g.moveTo(cx, ty); g.lineTo(cx - w * 0.75, by - h * 0.18); g.lineTo(cx + w * 0.25, by - h * 0.3); g.closePath(); g.fill(); }
-  }
-  return { cv, cx, cy, px };
-}
 // ombre douce (ellipse floue), pour les arbres et les meules
 export function softShadow() {
   const s = 64, cv = canvas(s, s), g = cv.getContext('2d'), gr = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);

@@ -1,15 +1,14 @@
 // Vue tactique : petites figurines peintes (fantassin, cavalier, pièce, caisson) des cartes d'unités de la barre du
 // bas, en cache (par camp, type, sens, pose et taille en pixels physiques : nettes sur un écran Retina), bornées en
 // mémoire par la qualité. Les régiments du champ de bataille sont en 3D (troupes.js), leurs fanions dans fanions.js.
-import { clsOf, isLight, isGeneral, isWagon, genName, pieces, hash, clamp, TAU, TILT, OMBRE, mixHex } from './formes.js';
+import { TAU, TILT, OMBRE, mixHex } from './formes.js';
 
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', BRONZE = '#b08a3e', GOLD = '#d6b65a';
 const AFFUT = '#5f6b3e';   // affûts peints en vert olive
 const HORSES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];
 const dark = (c, k) => mixHex(c, '#000000', k), lite = (c, k) => mixHex(c, '#ffffff', k);
 
-// sens de la figurine à l'écran : 0 = vers le bas (de face), 1 = vers la droite, 2 = vers le haut (de dos), 3 = vers la gauche
-const facingOf = dir => { const c = Math.cos(dir), s = Math.sin(dir); return Math.abs(c) > Math.abs(s) * 0.9 ? (c > 0 ? 1 : 3) : (s > 0 ? 0 : 2); };
+// sens d'une figurine : 0 = de face, 1 = de profil vers la droite, 2 = de dos, 3 = de profil vers la gauche
 // poses de l'infanterie
 const STAND = 0, AIM = 1, RUN = 2, MARCH = 3, RELOAD = 5, ROUT = 7;
 // coiffure selon l'époque et le type

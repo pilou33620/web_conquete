@@ -3,7 +3,7 @@
 // d'unités groupées en bas, mini-carte et vitesses en bas à droite, bulles d'aide, confirmations et récapitulatif.
 import { ICON } from '../icons.js';
 import { QUALITES, QUALITE_LABEL, qualite, setQualite } from './qualite.js';
-import { clsOf, isGeneral, isLight, isWagon, genName, emprise, stars, fmt, esc, clamp, TYPE_LABEL, FORM_LABEL, FORM_HELP, FORMS, STATE_LABEL, SEASON_LABEL, WEATHER_LABEL, normSeason, TILT } from './formes.js';
+import { clsOf, isGeneral, isLight, isWagon, genName, emprise, stars, fmt, esc, clamp, TYPE_LABEL, FORM_LABEL, FORM_HELP, FORMS, STATE_LABEL, SEASON_LABEL, WEATHER_LABEL, normSeason } from './formes.js';
 import { ORDER_LABEL, ordresHtml, aide as aideArme, arme } from './doctrine.js';
 
 const WX_ICON = {

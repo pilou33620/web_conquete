@@ -8,7 +8,7 @@
 // épaisse qui grossit, monte et dérive avec le vent). Les troupes (troupes.js) lisent `un._volley` et `un._shots`
 // pour mettre les hommes en joue au même instant et faire reculer les pièces.
 import * as THREE from '../../vendor/three/three.module.js';
-import { clamp, hash, TAU, TILT, canvas } from './formes.js';
+import { clamp, hash, TAU, canvas } from './formes.js';
 
 // fumée en volume : des boules douces qui se recouvrent, éclairées en haut à gauche (lumière du nord-ouest)
 function puffSprite(rgb, shade, seed) {

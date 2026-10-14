@@ -69,7 +69,7 @@ export class BattleView {
     if (!this.renderer) throw new Error('WebGL indisponible');
     this.map = m;
     this.nBreach = m.nbreach || 0;
-    this.terrain = new Terrain(m, this.q, { flat: true });
+    this.terrain = new Terrain(m, this.q);
     this.relief = new Relief(this.terrain, this.q);
     this.relief.setup(this.scene);
     this.troops = new Troops(this.relief, this.q, m.year);
