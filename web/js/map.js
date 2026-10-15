@@ -2460,3 +2460,20 @@ export function fmtMen(n) {
   n = Math.round(n);
   return n >= 1000 ? `${Math.floor(n / 1000)} ${String(n % 1000).padStart(3, '0')}` : String(n);
 }
+
+// le temps en tours (1 tour = 1 mois) : « au prochain tour », « dans 3 tours »
+export function toursTxt(n) {
+  n = Math.round(n);
+  return n <= 0 ? 'ce tour-ci' : n === 1 ? 'au prochain tour' : `dans ${n} tours`;
+}
+
+// une part de tour (en tours, 0,2 = un régiment de 6 jours) : « ⅕ de tour », « 1 tour », « 2 tours ½ »
+const PARTS = [[1 / 6, '⅙'], [1 / 5, '⅕'], [1 / 4, '¼'], [1 / 3, '⅓'], [2 / 5, '⅖'], [1 / 2, '½'], [3 / 5, '⅗'], [2 / 3, '⅔'], [3 / 4, '¾'], [4 / 5, '⅘']];
+export function partTour(x) {
+  let whole = Math.floor(x + 1e-9);
+  let f = x - whole, part = '';
+  if (f >= 0.9) whole++;
+  else if (f >= 1 / 12 || !whole) part = PARTS.reduce((b, p) => Math.abs(p[0] - f) < Math.abs(b[0] - f) ? p : b)[1];
+  if (!whole) return part === '½' ? '½ tour' : `${part} de tour`;
+  return `${whole} ${whole > 1 ? 'tours' : 'tour'}${part ? ' ' + part : ''}`;
+}

@@ -177,6 +177,52 @@ class TourParTour(unittest.TestCase):
         self.assertFalse(a['rt'], 'nouveau tour : la retraite est de nouveau possible')
 
 
+def au(g, y, m, d=1):
+    """Place la partie à cette date, 0 h (sans jouer les jours qui précèdent)."""
+    import datetime
+    g.t = float(datetime.date(y, m, d).toordinal() - g.start_ord)
+
+
+class TempsEnTours(unittest.TestCase):
+    """1 tour = 1 mois. Une durée de N tours laisse au joueur N tours entiers, et finit pile au début d'un tour."""
+
+    def test_echeance_pendant_votre_tour(self):
+        g = partie()   # 4 mars 1790, votre premier tour
+        self.assertEqual(g.date_str(TT.deadline(g, 1)), '1er avril 1790', 'fin de ce tour')
+        self.assertEqual(g.date_str(TT.deadline(g, 4)), '1er juillet 1790')
+        au(g, 1790, 12)
+        self.assertEqual(g.date_str(TT.deadline(g, 2)), '1er février 1791')
+
+    def test_echeance_pendant_le_tour_des_ia(self):
+        g = partie()
+        TT.go(g)
+        au(g, 1790, 3, 20)   # au milieu du tour des IA de mars
+        self.assertEqual(g.date_str(TT.deadline(g, 1)), '1er mai 1790', "vous avez encore tout votre tour d'avril")
+
+    def test_tours_restants(self):
+        g = partie()
+        self.assertEqual(TT.tours_left(g, TT.deadline(g, 1)), 1)
+        self.assertEqual(TT.tours_left(g, TT.deadline(g, 3)), 3)
+        au(g, 1790, 4)
+        self.assertEqual(TT.tours_left(g, g.t + 12.5), 1, 'fini pendant ce tour des IA : vu au prochain tour')
+        self.assertEqual(TT.tours_left(g, g.t + 40), 2)
+        self.assertEqual(TT.tours_left(g, g.t), 0)
+
+    def test_debut_de_tour_suivant(self):
+        g = partie()
+        au(g, 1790, 4, 12)
+        self.assertEqual(g.date_str(TT.turn_start_after(g, g.t)), '1er mai 1790')
+        au(g, 1790, 5)
+        self.assertEqual(g.date_str(TT.turn_start_after(g, g.t)), '1er mai 1790', 'déjà au début d\'un tour')
+
+    def test_un_tour_de_travail_quelle_que_soit_la_longueur_du_mois(self):
+        g = partie()
+        au(g, 1791, 2)
+        self.assertAlmostEqual(TT.work(g, 28), TT.TOUR_DAYS)
+        au(g, 1791, 3)
+        self.assertAlmostEqual(TT.work(g, 31), TT.TOUR_DAYS)
+
+
 class Regles(unittest.TestCase):
     def test_un_evenement_n_efface_pas_une_dette(self):
         class G:

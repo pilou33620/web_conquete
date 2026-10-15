@@ -43,7 +43,7 @@ Vérification commune à chaque tâche : `python3 tests/lancer.py` passe, puis u
 
 ## Partie 2 : les règles en tours
 
-- [ ] **T4 : aides de temps en tours et anciennes sauvegardes**
+- [x] **T4 : aides de temps en tours et anciennes sauvegardes**
   - `turns.work(g, dt)`, `turns.deadline(g, n)`, `turns.tours_left(g, until)`, `turns.tours(days)` (voir le plan,
     décision 4). `deadline` donne toujours n tours entiers au joueur, qu'on soit dans son tour ou dans celui des IA.
   - `toursTxt` dans `web/js/ui.js` : « au prochain tour », « dans N tours », « ⅕ de tour ».

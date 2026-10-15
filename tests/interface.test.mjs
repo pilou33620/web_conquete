@@ -127,6 +127,18 @@ test('barre du tour : tour des IA, puis interruption', () => {
   assert.ok(h.includes('Continuer') && h.includes('&lt;près&gt;'), 'raison affichée, échappée');
 });
 
+test('durées en tours', async () => {
+  const { toursTxt, partTour } = await charger('map.js');
+  assert.equal(toursTxt(1), 'au prochain tour');
+  assert.equal(toursTxt(3), 'dans 3 tours');
+  assert.equal(toursTxt(0), 'ce tour-ci');
+  assert.equal(partTour(6 / 30), '⅕ de tour');
+  assert.equal(partTour(0.5), '½ tour');
+  assert.equal(partTour(1), '1 tour');
+  assert.equal(partTour(32 / 30), '1 tour');
+  assert.equal(partTour(2.5), '2 tours ½');
+});
+
 test('barre du tour : bloquée tant qu’une bataille attend votre choix', () => {
   const h = barre({ phase: 'ordres' }, { battles: [{ id: 'b1', mode: 'attente' }] });
   assert.ok(h.includes('disabled'));

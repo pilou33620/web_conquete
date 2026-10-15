@@ -69,11 +69,12 @@ def migrate(g):
 
 
 # ================================================================== calendrier
-def month_end(g):
-    """Échéance du tour : le 1er du mois suivant, à 0 h (en jours depuis le début de la partie)."""
-    d = g.date()
-    nxt = datetime.date(d.year + (d.month == 12), d.month % 12 + 1, 1)
-    return float(nxt.toordinal() - g.start_ord)
+def month_end(g, t=None, k=1):
+    """Échéance du tour : le 1er du mois suivant (ou du k-ième mois après celui de t), à 0 h, en jours depuis le début de
+    la partie."""
+    d = g.date(t)
+    y, m = divmod(d.month - 1 + k, 12)
+    return float(datetime.date(d.year + y, m + 1, 1).toordinal() - g.start_ord)
 
 
 def month_days(g, end):
@@ -88,6 +89,37 @@ def phase(g):
     if tr['end'] is None:
         return 'ordres'
     return 'cours' if g.speed_idx else 'arret'
+
+
+# ================================================================== le temps en tours (SPEC-TOURS.md)
+TOUR_DAYS = 30.0   # jours de travail d'un tour, quelle que soit la longueur du mois (règle A : capacité par tour)
+
+
+def work(g, dt):
+    """Jours de travail d'un pas de dt jours : un mois entier en fait TOUR_DAYS, février comme mars."""
+    d = g.date()
+    return dt * TOUR_DAYS / calendar.monthrange(d.year, d.month)[1]
+
+
+def deadline(g, n):
+    """Échéance d'une durée de n tours (règle B) : le début d'un tour du joueur, qui garde n tours entiers. Pendant son
+    tour, ce tour compte (n = 1 : jusqu'à la fin du mois) ; ailleurs (tour des IA, temps réel), à partir du suivant."""
+    n = max(1, int(n))
+    return month_end(g, k=n if planning(g) else n + 1)
+
+
+def turn_start_after(g, t):
+    """Le début de tour (1er du mois, 0 h) à t ou juste après : ce qu'une échéance en jours devient en tours."""
+    start = month_end(g, t, 0)
+    return start if t <= start + 1e-6 else month_end(g, t)
+
+
+def tours_left(g, until):
+    """Dans combien de tours ce qui finit à `until` est fait (1 : au prochain tour ; 0 : déjà fait)."""
+    if until <= g.t + 1e-6:
+        return 0
+    a, b = g.date(), g.date(until - 1e-6)
+    return (b.year - a.year) * 12 + b.month - a.month + 1
 
 
 # ================================================================== le tour du joueur : tout s'exécute tout de suite
