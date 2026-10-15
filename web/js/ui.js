@@ -147,7 +147,7 @@ export class UI {
     const tour = this.st.tour && this.st.tour.on;
     if (e.key === ' ') {
       e.preventDefault();
-      if (tour) this.turnCmd(this.st.tour.phase === 'cours' ? 'stop' : 'go');   // tour par tour : tour suivant, arrêter, continuer
+      if (tour) { if (this.st.tour.phase !== 'cours') this.turnCmd('go'); }   // tour par tour : tour suivant, continuer
       else if (this.st.speed) { this.lastSpeed = this.st.speed; this.setSpeed(0); } else this.setSpeed(this.lastSpeed || 1);
     } else if (!tour && /^[1-9]$/.test(e.key) && +e.key < this.rules.speeds.length) this.setSpeed(+e.key);
     else if (e.key === 'Escape') {
@@ -177,7 +177,7 @@ export class UI {
     if (!tr || !tr.on || this.st.over) return;
     this.cmd({ cmd: 'tour', action: v }, false);
     // réponse immédiate à l'écran, sans attendre le prochain état du serveur
-    if (v === 'go') { tr.phase = 'cours'; tr.recap = null; } else if (tr.phase === 'cours') tr.phase = 'arret';
+    if (v === 'go') { tr.phase = 'cours'; tr.recap = null; }
     this.renderTurn();
   }
 
@@ -293,8 +293,7 @@ export class UI {
       tb.dataset.sig = sig;
       const off = this.st.over || held ? ' disabled' : '';
       if (tr.phase === 'cours') {
-        tb.innerHTML = `<div class="turn-run" title="Les IA jouent leur tour ${until}"><div class="turn-lbl">Tour des IA… <span>${until.replace(/ \d{4}$/, '')}</span></div><div class="bar"><i id="turn-bar"></i></div></div>
-          <button class="turn-stop" data-act="turn" data-v="stop" title="Arrêter le temps (espace)">${speedIcon(0)}<span>Arrêter</span></button>`;
+        tb.innerHTML = `<div class="turn-run" title="Les IA jouent leur tour ${until}"><div class="turn-lbl">Les IA jouent… <span>${until.replace(/ \d{4}$/, '')}</span></div><div class="bar"><i id="turn-bar"></i></div></div>`;
       } else if (tr.phase === 'arret') {
         const why = stop ? `<button class="turn-why k-${esc(stop.kind)}" data-act="turn-why" title="${esc(stop.text)}${stop.x != null || stop.sel ? ' — toucher pour voir' : ''}">${esc(stop.text)}${stop.more ? ` <span class="more">+${stop.more}</span>` : ''}</button>`
           : '<span class="turn-why muted">Tour des IA interrompu.</span>';
@@ -337,6 +336,7 @@ export class UI {
     for (const b of rc.battles) lines.push(line(ICON.swords, esc(b.text), b, b.win === true ? 'good' : b.win === false ? 'bad' : ''));
     if (rc.gained.length) lines.push(line(ICON.flag, `${rc.gained.length > 1 ? 'Places prises' : 'Place prise'} : ${places(rc.gained)}`, null, 'good'));
     if (rc.lost.length) lines.push(line(ICON.flag, `${rc.lost.length > 1 ? 'Places perdues' : 'Place perdue'} : ${places(rc.lost)}`, null, 'bad'));
+    for (const f of rc.foes || []) lines.push(line(ICON.swords, esc(f.text), f, 'bad'));
     for (const f of rc.facts) lines.push(line(ICON.seal, esc(f.text), f));
     for (const t of rc.techs) lines.push(line(ICON.tech, esc(t.text), t));
     for (const b of rc.built) lines.push(line(ICON.ville, esc(b.text), b));
@@ -1751,7 +1751,7 @@ export class UI {
           <li>Les routes sont rapides. À travers champs, l’armée peut se cacher dans les bois, landes, marais ou montagnes et tendre une embuscade (posture « Embuscade »), mais avance plus lentement, s’use et perd son ravitaillement.</li>
           <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite. Les remparts ont quatre niveaux (le quatrième, les bastions à la Vauban, après la technologie du même nom, dans le chef-lieu et les places fortes) ; ils coûtent un entretien et perdent un niveau quand la place est prise de force.</li>
           <li><b>Deux siècles</b> : la grande campagne part de 1700 (ou de 1790, 1813, 1870) et s’achève fin 1899 ; le plus prestigieux l’emporte. Les provinces deviennent départements en 1790 ; technologies et unités n’apparaissent qu’à leur époque. ${this.st.tour && this.st.tour.on ? '' : 'Vitesses ×10 et ×30 (touches 5 et 6) pour les années de paix : guerres, batailles et grandes propositions remettent en pause.'}</li>
-          <li><b>Tour par tour</b> : chaque tour est un mois. Pendant votre tour, vos ordres s’exécutent tout de suite : vos armées marchent sous vos yeux (dans la limite de leurs jours de marche du mois, ou jusqu’au contact de l’ennemi), les batailles et les assauts se livrent aussitôt, les achats sont payés. Touchez « Tour suivant » : les IA jouent leur tour d’un coup (une ou deux secondes), puis c’est de nouveau à vous, au 1er du mois suivant, avec le bilan du mois écoulé. Une bataille qui vous concerne, une armée ennemie sur vos terres, un siège ou une décision interrompent le tour des IA : touchez la raison affichée en haut pour la voir, puis « Continuer ».</li>
+          <li><b>Tour par tour</b> : chaque tour est un mois. Pendant votre tour, vos ordres s’exécutent tout de suite : vos armées marchent sous vos yeux (dans la limite de leurs jours de marche du mois, ou jusqu’au contact de l’ennemi), les batailles et les assauts se livrent aussitôt, les achats sont payés. Touchez « Tour suivant » : les IA jouent leur tour d’un coup (une ou deux secondes), puis c’est de nouveau à vous, au 1er du mois suivant, avec le bilan du mois écoulé. Le tour des IA ne s’arrête que si vous devez choisir : une IA vous attaque (livrer la bataille ou la laisser au général), ou une décision vous attend ; votre choix fait, il reprend tout seul. Le reste (armées ennemies sur vos terres, sièges, guerres, propositions) est dans le bilan du mois.</li>
           <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
           <li><b>Événements</b> : aux grandes dates (Grand Hiver, Révolution, Blocus continental, phylloxéra…) et au gré des imprévus, une fenêtre vous demande un choix ; chaque option affiche ses effets. Vos choix nourrissent l’« histoire » de votre prestige. Sans réponse en 30 jours, l’option la plus prudente s’applique.</li>
           <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes reçues à sa levée (affichées à côté de son nom) : après une découverte, réarmez les régiments démodés dans une de vos places (bouton « Réarmer », payé en armes, et en fer pour l’artillerie). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
@@ -1763,7 +1763,7 @@ export class UI {
           <li>La partie est sauvegardée automatiquement chaque mois ; elle reprend au redémarrage du serveur.</li>
           <li>La pluie mouille la poudre, la neige ferme les cols, l’hiver vide les greniers. Les récoltes arrivent en été et en automne.</li>
           <li>Prenez tous les chefs-lieux, ou obtenez la soumission des autres camps. Un camp dont le chef-lieu tombe signe un traité (places cédées, tribut, trêve de cinq ans) ; il n’est rayé de la carte que s’il est déjà écrasé, ou si le même vainqueur le fait plier deux fois en 25 ans. Vous aussi.</li>
-          <li>Raccourcis : ${this.st.tour && this.st.tour.on ? 'espace pour le tour suivant (ou arrêter et continuer le tour des IA)' : 'espace pour la pause, 1 à 6 pour la vitesse'}, Échap pour annuler.</li>
+          <li>Raccourcis : ${this.st.tour && this.st.tour.on ? 'espace pour le tour suivant (ou continuer le tour des IA)' : 'espace pour la pause, 1 à 6 pour la vitesse'}, Échap pour annuler.</li>
         </ul>
       </div></div>`;
     const tr = this.st.tour || {};
@@ -1774,7 +1774,7 @@ export class UI {
   turnSettings() {
     const tr = this.st.tour || {};
     return `<h3 class="section-t">Rythme du jeu</h3>${tr.on ? `
-        <p class="muted small" style="margin:0 0 6px">Tour par tour : vos ordres s’exécutent tout de suite pendant votre tour, puis « Tour suivant » : les IA jouent leur tour d’un coup, jusqu’au 1er du mois suivant ; une bataille, une invasion, un siège ou une décision interrompent leur tour.</p>` : `
+        <p class="muted small" style="margin:0 0 6px">Tour par tour : vos ordres s’exécutent tout de suite pendant votre tour, puis « Tour suivant » : les IA jouent leur tour d’un coup, jusqu’au 1er du mois suivant  ; il ne s’arrête que si une IA vous attaque ou si une décision vous attend.</p>` : `
         <p class="muted small" style="margin:0 0 6px">Temps réel avec pause : choisissez la vitesse en haut (espace pour la pause).</p>`}
         <p class="small" style="margin:10px 0 0"><b>Réglage avancé</b></p>
         <div class="btns" style="margin-top:4px"><button class="btn" data-act="turn-mode" data-v="${tr.on ? '0' : '1'}">${tr.on ? 'Jouer en temps réel (avec pause)' : 'Revenir au tour par tour'}</button></div>`;

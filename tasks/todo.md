@@ -14,7 +14,7 @@ Vérification commune à chaque tâche : `python3 tests/lancer.py` passe, puis u
   - Fichiers : `game/turns.py`, `server.py`, `web/js/ui.js`, `tests/test_campagne.py`, `tests/interface.test.mjs`
   - Taille : M
 
-- [ ] **T2 : arrêts seulement quand le joueur doit choisir, reprise automatique**
+- [x] **T2 : arrêts seulement quand le joueur doit choisir, reprise automatique**
   - Le tour des IA s'arrête seulement sur : une bataille où le joueur a une armée ou une place, une décision qui
     l'attend, la fin de la partie. Plus de bouton « Arrêter ».
   - Entrée d'une armée ennemie, siège contre lui, bataille voisine, guerre, proposition, nouvelle époque, traité :

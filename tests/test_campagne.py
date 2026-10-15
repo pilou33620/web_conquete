@@ -14,9 +14,27 @@ import json
 import unittest
 
 from fabrique import GEO, TT, armee, jouer_mois, partie
+from game import diplomacy as D
 from game import events as E
 from game import rules as R
 from game import views as V
+from game.tactics import bridge as TB
+
+
+def jouer_reste(g):
+    """Finit le tour des IA en cours ; renvoie le genre des arrêts rencontrés (acceptés d'office)."""
+    kinds = []
+    for _ in range(300):
+        if g.tour['end'] is None:
+            break
+        TT.advance(g, 0.1)
+        if g.tour['stop'] and not g.speed_idx:
+            kinds.append(g.tour['stop']['kind'])
+            for bt in list(g.battles.values()):
+                if bt.get('mode') == 'attente':
+                    TB.command(g, dict(sub='choose', bid=bt['id'], mode='auto'))
+            TT.go(g)
+    return kinds
 
 
 class TourParTour(unittest.TestCase):
@@ -54,6 +72,60 @@ class TourParTour(unittest.TestCase):
         self.assertNotIn('pace', g.tour)
         self.assertNotIn('pace', TT.view(g))
         self.assertFalse(TT.command(g, 'pace', 'lent')[0])
+
+    def test_une_attaque_contre_vous_arrete_le_tour_des_ia_puis_il_reprend(self):
+        g = partie()
+        a = armee(g)
+        b = armee(g, '24')
+        D.declare_war(g, '24', g.player, quiet=True)
+        b['x'], b['y'] = a['x'] + 1.0, a['y']   # au contact : la bataille s'engage au premier pas
+        g.order_move('24', b['id'], a['x'], a['y'])
+        TT.go(g)
+        for _ in range(50):
+            TT.advance(g, 0.1)
+            if g.tour['stop']:
+                break
+        self.assertEqual(g.tour['stop']['kind'], 'bataille')
+        bt = next(bt for bt in g.battles.values() if bt.get('mode') == 'attente')
+        self.assertTrue(TB.command(g, dict(sub='choose', bid=bt['id'], mode='auto'))['ok'])
+        TT.advance(g, 0.1)
+        st = g.tour['stop']
+        self.assertTrue(g.speed_idx or (st and st.get('sel') != ['battle', bt['id']]),
+                        'le choix fait, le tour des IA reprend tout seul (sans « Continuer »)')
+        self.assertEqual(set(jouer_reste(g)) - {'bataille'}, set(), "seules d'autres attaques l'arrêtent encore")
+        self.assertEqual(g.date().day, 1)
+
+    def test_une_decision_arrete_le_tour_des_ia_puis_il_reprend(self):
+        g = partie()
+        TT.go(g)
+        g.pending_ev.append(dict(id='e1', ev='essai', kind='hist', title='Les états généraux', text='', town=None,
+                                 base='', until=g.t + 30, date=g.date_str(),
+                                 choices=[dict(label='Oui', fx={}, desc=[])]))
+        TT.advance(g, 0.1)
+        self.assertEqual(g.tour['stop']['kind'], 'decision')
+        self.assertTrue(E.resolve(g, 'e1', 0)[0])
+        TT.advance(g, 0.1)
+        self.assertTrue(g.speed_idx or g.tour['stop']['kind'] != 'decision', 'la décision prise, le tour reprend seul')
+
+    def test_une_guerre_n_arrete_plus_le_tour_des_ia(self):
+        g = partie()
+        TT.go(g)
+        D.declare_war(g, '24', g.player)
+        kinds = jouer_reste(g)
+        self.assertNotIn('guerre', kinds)
+        self.assertTrue(any('guerre' in f['text'] for f in g.tour['recap']['facts']), 'la guerre est dans le récap')
+
+    def test_les_armees_ennemies_sur_vos_terres_sont_dans_le_recap(self):
+        g = partie()
+        b = armee(g, '24')
+        D.declare_war(g, '24', g.player, quiet=True)
+        cap = next(n for n in g.owned_nodes(g.player))
+        b['x'], b['y'] = g.node_xy(cap['id'])[0] + 3, g.node_xy(cap['id'])[1]
+        if g.geo.node_of_cell(b['x'], b['y']) != cap['id']:
+            b['x'], b['y'] = g.node_xy(cap['id'])
+        g.tour['acc'] = TT._new_acc(g)
+        foes = TT._recap(g)['foes']
+        self.assertEqual([f['id'] for f in foes], [b['id']])
 
     def test_plus_de_marche_plus_de_mouvement(self):
         g = partie()

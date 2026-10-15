@@ -10,18 +10,16 @@ Un tour = un mois, en deux temps :
    et décisions de gouvernement sont payés tout de suite ; les travaux, eux, avancent avec le temps.
 2. **Le tour des IA** (« Tour suivant ») : le mois est calculé d'un coup, aussi vite que possible (une ou deux
    secondes), par tranches de BUDGET secondes pour que le serveur réponde encore au navigateur : les IA marchent,
-   négocient et se battent, les travaux et les sièges avancent, les revenus tombent. Vos armées, qui ont déjà joué, restent en place (Game.paused). Tout s'arrête au 1er du mois suivant, à 0 h :
-   les batailles encore en cours sont réglées, les jours de marche sont rendus (begin_turn) et c'est de nouveau à vous.
+   négocient et se battent, les travaux et les sièges avancent, les revenus tombent. Vos armées, qui ont déjà joué,
+   restent en place (Game.paused). Tout s'arrête au 1er du mois suivant, à 0 h : les batailles encore en cours sont
+   réglées, les jours de marche sont rendus (begin_turn) et c'est de nouveau à vous.
 
-Le tour des IA s'interrompt aux moments clés pour laisser le joueur réagir, puis reprend avec « Continuer » :
-- une bataille commence et concerne ses armées ou ses places, ou se livre près de lui (à vue, à moins de 25 km) ;
-- une armée ennemie (150 hommes ou plus, et visible) entre sur ses terres ;
-- un siège ou un blocus commence sur une de ses places, ou par une de ses armées ;
-- une décision l'attend (événement historique ou local), une proposition importante (paix, alliance, soumission),
-  une déclaration de guerre ;
-- un grand moment arrête toujours le temps (nouvelle époque, traité, capitulation, fin de partie).
-Jamais deux fois pour la même bataille, le même siège ou la même décision, et un délai minimal (en jours de jeu)
-sépare deux interruptions du même genre.
+Le tour des IA ne s'interrompt que si le joueur doit choisir, comme dans Total War :
+- une bataille où il a une armée ou une place attend son choix (la livrer ou la laisser au général) ;
+- une décision l'attend (événement historique ou local) ;
+- la partie est finie.
+Le choix fait (bataille réglée, décision prise), le tour des IA reprend tout seul. Le reste (armée ennemie sur ses
+terres, siège, guerre, proposition, nouvelle époque, traité) n'arrête plus rien : c'est dans le récapitulatif.
 
 Pendant le tour des IA, le journal est relu pas à pas pour préparer le récapitulatif du mois (batailles, places prises
 ou perdues, constructions, découvertes, revenus), affiché au début du tour suivant.
@@ -40,15 +38,8 @@ MARCH_FRAC = 1.0       # part du mois qu'une armée peut marcher pendant le tour
 MARCH_STEP = 0.1       # jours : pas de la marche instantanée (rencontres examinées à chaque pas, contact à 2,6 km)
 RETREAT_DAYS = 4.0     # jours de marche d'une armée battue qui se replie, tout de suite, pendant le tour du joueur
 TRAIL_PTS = 90         # points gardés du trajet d'une marche, pour l'animer dans le navigateur
-# délai minimal, en jours de jeu, entre deux interruptions du même genre (0 : toujours)
-COOLDOWN = dict(bataille=1.5, siege=2.0, entree=4.0, diplo=1.0, guerre=0.0, decision=0.0, grand=0.0, fin=0.0)
-# la même armée ennemie n'interrompt pas deux fois en 20 jours (va-et-vient sur la frontière), ni la même proposition
-# du même camp en 45 jours (une IA lasse de la guerre propose la paix toutes les deux semaines)
-AGAIN = dict(a=20.0, p=45.0, l=4.0)   # l : un même lieu (assauts répétés, siège qui suit la bataille) pendant 4 jours
-ENTRY_MIN_MEN = 150   # un parti de moins de 150 hommes (éclaireurs, fourrageurs) n'arrête pas le temps
-NEAR_KM = 25.0        # une bataille entre d'autres camps interrompt si elle se livre à moins de 25 km de vous et à vue
-PRIORITY = ['fin', 'decision', 'guerre', 'grand', 'siege', 'bataille', 'entree', 'diplo']
-BIG_PROPOSALS = ('paix', 'alliance', 'soumission')
+FOE_MIN_MEN = 150     # récapitulatif : un parti de moins de 150 hommes (éclaireurs, fourrageurs) sur vos terres n'y est pas
+PRIORITY = ['fin', 'decision', 'bataille']
 MAX_ITEMS = 30        # par rubrique du récapitulatif
 _DIPLO = re.compile(r"guerre|paix|alliance|trêve|soumi|vassal|traité")   # pas les accords de commerce ni les échanges
 _BUILT = re.compile(r"^(Fin des travaux à |Magasin aux vivres construit à )|( terminées à | s'agrandit )")
@@ -56,7 +47,7 @@ _BUILT = re.compile(r"^(Fin des travaux à |Magasin aux vivres construit à )|( 
 
 def new_state(on=True):
     """État du tour par tour, enregistré dans la sauvegarde (Game.tour)."""
-    return dict(on=on, end=None, stop=None, last={}, seen=None, mem={}, acc=None, recap=None)
+    return dict(on=on, end=None, stop=None, seen=None, acc=None, recap=None)
 
 
 def migrate(g):
@@ -67,9 +58,10 @@ def migrate(g):
         tr = g.tour = new_state()
     for k, v in new_state().items():
         tr.setdefault(k, v)
-    if not isinstance(tr['seen'], dict) or set(tr['seen']) != {'bt', 'sg', 'inn', 'ev', 'pr', 'war'}:
+    if not isinstance(tr['seen'], dict) or set(tr['seen']) != {'bt', 'ev'}:
         tr['seen'] = None
-    tr.pop('pace', None)   # (ancien rythme du tour des IA : le mois se calcule maintenant d'un coup)
+    for k in ('pace', 'last', 'mem'):
+        tr.pop(k, None)   # (ancien rythme du tour des IA, anciennes interruptions : le mois se calcule d'un coup)
     if tr['end'] is not None and tr['end'] <= g.t - 1e-6:
         tr['end'] = None   # échéance dépassée (sauvegarde bricolée) : on attend les ordres
     for a in g.armies.values():
@@ -242,8 +234,6 @@ def command(g, action, value=None):
         return False, 'La partie est terminée.'
     if action == 'go':
         return go(g)
-    if action == 'stop':
-        return halt(g)
     return False, 'Commande inconnue.'
 
 
@@ -263,23 +253,18 @@ def go(g):
     return True, None
 
 
-def halt(g):
-    tr = g.tour
-    if tr['end'] is None or not g.speed_idx:
-        return True, None
-    g.speed_idx = 0
-    tr['stop'] = dict(kind='arret', text='Vous avez arrêté le temps.', x=None, y=None, date=g.date_str())
-    return True, None
-
-
 # ================================================================== déroulement
 def advance(g, real_dt):
     """Remplace Game.advance en mode tour : joue le mois aussi vite que possible, BUDGET secondes de calcul par appel
     (real_dt ne sert plus), et s'arrête pile à l'échéance ou sur une alerte."""
     from .engine import SUBSTEP
     tr = g.tour
-    if g.over or not g.speed_idx:
+    if g.over:
         return
+    if not g.speed_idx:
+        if tr['end'] is None or not _settled(g):
+            return
+        go(g)   # le choix est fait : le tour des IA reprend tout seul
     if tr['end'] is None:
         go(g)   # le temps lancé autrement que par « Fin du mois » (script, ancienne commande) : le mois se joue
     until = time.monotonic() + BUDGET
@@ -312,143 +297,66 @@ def finish(g):
 
 
 def watch(g, dt, seq0):
-    """Après chaque pas : relit le journal pour le récapitulatif et cherche une raison d'interrompre le tour."""
+    """Après chaque pas : relit le journal pour le récapitulatif, et arrête le tour des IA seulement si le joueur doit
+    choisir (bataille, décision) ou si la partie est finie."""
     tr = g.tour
     if tr['acc']:
         _accumulate(g, dt)
     old = tr['seen'] or _scan(g)
     cur = _scan(g)
     tr['seen'] = cur
-    cands = _candidates(g, old, cur, seq0)
-    stopped = not g.speed_idx   # un grand moment (époque, traité, décision…) a déjà arrêté le temps
+    cands = _candidates(g, old, cur)
     if g.over:
         cands.insert(0, dict(kind='fin', text=g.over.get('text', 'La partie est terminée.') if isinstance(g.over, dict)
                              else 'La partie est terminée.'))
-    if not cands and not stopped:
+    if not cands:
+        if not g.speed_idx:
+            g.speed_idx = 1   # un grand moment (époque, traité…) arrête le temps réel, pas le tour des IA : il va au récap
         return
-    # (une bataille du joueur arrête elle-même le temps, le temps de choisir : c'est elle, la raison)
-    if stopped and not any(c['kind'] in ('fin', 'decision', 'bataille') for c in cands):
-        # la raison d'un grand moment est la dernière nouvelle importante du journal
-        ev = next((e for e in reversed(g.events) if e['seq'] > seq0 and e.get('important')), None) \
-            or next((e for e in reversed(g.events) if e['seq'] > seq0), None)
-        cands.append(dict(kind='grand', text=ev['text'] if ev else 'Le temps s’arrête.',
-                          x=ev.get('x') if ev else None, y=ev.get('y') if ev else None))
     cands.sort(key=lambda c: PRIORITY.index(c['kind']))
     best = cands[0]
-    if not stopped and g.t - tr['last'].get(best['kind'], -1e9) < COOLDOWN[best['kind']]:
-        # trop tôt après une interruption du même genre : on cherche une autre raison, sinon on continue
-        best = next((c for c in cands if g.t - tr['last'].get(c['kind'], -1e9) >= COOLDOWN[c['kind']]), None)
-        if best is None:
-            return
-    tr['last'][best['kind']] = round(g.t, 3)
     g.speed_idx = 0
-    tr['stop'] = dict(kind=best['kind'], text=best['text'], x=best.get('x'), y=best.get('y'),
-                      sel=best.get('sel'), more=len(cands) - 1, date=g.date_str())
+    tr['stop'] = dict(kind=best['kind'], text=best['text'], x=best.get('x'), y=best.get('y'), sel=best.get('sel'),
+                      ev=best.get('ev'), more=len(cands) - 1, date=g.date_str())
     if tr['acc']:
         tr['acc']['stops'] += 1
 
 
+def _settled(g):
+    """La raison de l'arrêt a disparu (bataille réglée ou jouée, décision prise) : le tour des IA peut reprendre seul.
+    (Game.advance ne vient pas jusqu'ici tant qu'une bataille attend le joueur ou se livre sur le champ de bataille.)"""
+    st = g.tour['stop']
+    if not st or st['kind'] == 'fin':
+        return False   # (partie chargée en plein tour des IA : on attend « Continuer »)
+    if st['kind'] == 'decision':
+        return not any(x['id'] == st.get('ev') for x in g.pending_ev)
+    return True
+
+
 def _scan(g):
-    """Ce qui peut interrompre le tour, à cet instant (comparé d'un pas à l'autre)."""
-    p = g.player
-    sieges = []
-    for n in g.nodes:
-        s = n['siege']
-        if s and not s.get('occupy') and (n['owner'] == p or s['by'] == p):
-            sieges.append(f"{n['id']}:{s['by']}:{'b' if s.get('blocus') else 's'}")
-    inside = []
-    for a in g.armies.values():
-        o = a['owner']
-        if o == p or o not in g.factions or not g.at_war(o, p) or not a['regs']:
-            continue
-        nd = g.geo.node_of_cell(a['x'], a['y'])
-        if nd is not None and g.nodes[nd]['owner'] == p:
-            inside.append(a['id'])
-    return dict(bt=sorted(g.battles), sg=sieges, inn=inside, ev=[x['id'] for x in g.pending_ev],
-                pr=[x['id'] for x in g.proposals],
-                war=[c for c in g.factions if c != p and g.factions[c]['alive'] and g.at_war(c, p)])
+    """Ce qui peut interrompre le tour, à cet instant (comparé d'un pas à l'autre) : les batailles qui attendent le
+    choix du joueur, les décisions qui l'attendent."""
+    return dict(bt=sorted(b['id'] for b in g.battles.values() if b.get('mode') == 'attente'),
+                ev=[x['id'] for x in g.pending_ev])
 
 
-def _candidates(g, old, cur, seq0):
-    p = g.player
+def _candidates(g, old, cur):
     out = []
-    new = {}
-    for k in cur:
-        before = set(old.get(k, ()))
-        new[k] = [v for v in cur[k] if v not in before]
-    for pid in new['ev']:
+    for pid in cur['ev']:
         x = next((e for e in g.pending_ev if e['id'] == pid), None)
-        if x:
+        if x and pid not in old['ev']:
             xy = g.node_xy(x['town']) if x.get('town') is not None else (None, None)
             out.append(dict(kind='decision', text=f"Une décision vous attend : {x['title']}.", x=xy[0], y=xy[1],
-                            sel='event'))
-    for c in new['war']:
-        ev = next((e for e in reversed(g.events) if e['seq'] > seq0 and e['kind'] == 'diplo' and 'guerre' in e['text']
-                   and g.fname(c) in e['text']), None)
-        out.append(dict(kind='guerre', text=ev['text'] if ev else f"Vous voici en guerre avec {g.fname(c)} !"))
-    mem = g.tour['mem']
-    for k in list(mem):
-        if g.t - mem[k] > AGAIN[k[0]] or (k[0] == 'a' and k[2:] not in g.armies):
-            del mem[k]
-    for pid in new['pr']:
-        x = next((e for e in g.proposals if e['id'] == pid), None)
-        if x and x['action'] in BIG_PROPOSALS and f"p:{x['frm']}:{x['action']}" not in mem:
-            mem[f"p:{x['frm']}:{x['action']}"] = round(g.t, 2)
-            what = dict(paix='vous propose la paix', alliance='vous propose une alliance',
-                        soumission='exige votre soumission')[x['action']]
-            out.append(dict(kind='diplo', text=f"{g.fname(x['frm'])} {what}."))
-    for key in new['sg']:
-        nid, by, kind = key.split(':')
-        nid = int(nid)
-        gn = g.geo.nodes[nid]
-        if not _fresh_place(g, nid):
+                            sel='event', ev=pid))
+    for bid in cur['bt']:
+        bt = g.battles.get(bid)
+        if not bt or bid in old['bt']:
             continue
-        if by == p:
-            txt = f"Vos troupes {'bloquent' if kind == 'b' else 'assiègent'} {gn['name']}."
-        else:
-            txt = f"{'Blocus' if kind == 'b' else 'Siège'} {R.de(gn['name'])} par {g.fname(by)} !"
-        out.append(dict(kind='siege', text=txt, x=gn['x'], y=gn['y'], sel=['node', nid]))
-    if new['bt']:
-        vis = None
-        for bid in new['bt']:
-            bt = g.battles.get(bid)
-            if not bt:
-                continue
-            owners = [s['owner'] for s in bt['sides']]
-            # vos armées ou vos places ; les batailles de vos alliés et des autres, seulement près de vous et à vue
-            mine = p in owners or (bt['node'] is not None and g.nodes[bt['node']]['owner'] == p)
-            if not mine:
-                if vis is None:
-                    vis = g.vision_sources(p)[1]
-                if not _near(g, bt['x'], bt['y'], vis):
-                    continue
-            if not _fresh_place(g, bt['node'] if bt['node'] is not None else g.nearest_node(bt['x'], bt['y'])):
-                continue
-            kind = 'Embuscade' if bt.get('ambush') else ('Assaut' if bt['node'] is not None else 'Bataille')
-            txt = f"{kind} {g.place_name(bt['x'], bt['y'])} : {g.fname(owners[0])} attaque {g.fname(owners[1])}."
-            out.append(dict(kind='bataille', text=txt, x=bt['x'], y=bt['y'], sel=['battle', bid]))
-    fresh = [aid for aid in new['inn'] if 'a:' + aid not in mem and g.army_men(g.armies[aid]) >= ENTRY_MIN_MEN]
-    if fresh:
-        seen = g.visible_armies(p)[0]
-        for aid in fresh:
-            if aid not in seen:
-                # une armée cachée (embuscade, brouillard) ne se trahit pas : on la guettera au pas suivant
-                cur['inn'].remove(aid)
-                continue
-            mem['a:' + aid] = round(g.t, 2)
-            a = g.armies[aid]
-            out.append(dict(kind='entree', text=f"Une armée ennemie ({g.fname(a['owner'])}, {int(g.army_men(a))} hommes) "
-                            f"entre sur vos terres, {_where(g, a['x'], a['y'])}.", x=a['x'], y=a['y'], sel=['army', aid]))
+        owners = [s['owner'] for s in bt['sides']]
+        kind = 'Embuscade' if bt.get('ambush') else ('Assaut' if bt['node'] is not None else 'Bataille')
+        txt = f"{kind} {g.place_name(bt['x'], bt['y'])} : {g.fname(owners[0])} attaque {g.fname(owners[1])}."
+        out.append(dict(kind='bataille', text=txt, x=bt['x'], y=bt['y'], sel=['battle', bid]))
     return out
-
-
-def _fresh_place(g, nid):
-    """Un lieu n'interrompt qu'une fois en quelques jours : assauts répétés, siège qui suit la bataille."""
-    k = f'l:{nid}'
-    if k in g.tour['mem']:
-        return False
-    g.tour['mem'][k] = round(g.t, 2)
-    return True
 
 
 def _where(g, x, y):
@@ -456,14 +364,6 @@ def _where(g, x, y):
     w = g.place_name(x, y)
     return w if w.startswith('près') else 'à ' + g.geo.nodes[g.nearest_node(x, y)]['name']
 
-
-def _near(g, x, y, vis):
-    """Une bataille d'autres camps qui se livre à vue et près de vos places ou de vos armées."""
-    if not any((x - vx) ** 2 + (y - vy) ** 2 <= r * r for vx, vy, r in vis):
-        return False
-    pts = [g.node_xy(n['id']) for n in g.owned_nodes(g.player)]
-    pts += [(a['x'], a['y']) for a in g.armies.values() if a['owner'] == g.player]
-    return any((x - px) ** 2 + (y - py) ** 2 <= NEAR_KM * NEAR_KM for px, py in pts)
 
 
 # ================================================================== récapitulatif du mois
@@ -504,7 +404,7 @@ def _accumulate(g, dt):
         elif k == 'tech' and txt.startswith('Découverte'):
             lst, it = acc['techs'], _item(e)
         elif e.get('important') and (k in ('capitulation', 'epoque', 'revolte', 'fin', 'siege')
-                                     or (k == 'diplo' and _DIPLO.search(txt) and 'répondez' not in txt)
+                                     or (k == 'diplo' and _DIPLO.search(txt))
                                      or (k == 'evenement' and 'Une décision vous attend' not in txt)):
             lst, it = acc['facts'], _item(e)
         else:
@@ -525,10 +425,20 @@ def _recap(g):
     def places(ids):
         return [dict(id=i, name=g.geo.nodes[i]['name'], x=g.geo.nodes[i]['x'], y=g.geo.nodes[i]['y'])
                 for i in sorted(ids, key=lambda i: g.geo.nodes[i]['name'])][:MAX_ITEMS]
+    seen = g.visible_armies(p)[0]
+    foes = []   # armées ennemies (visibles) sur vos terres au début de votre tour
+    for a in g.armies.values():
+        o = a['owner']
+        if o == p or o not in g.factions or a['id'] not in seen or not g.at_war(o, p) or g.army_men(a) < FOE_MIN_MEN:
+            continue
+        nd = g.geo.node_of_cell(a['x'], a['y'])
+        if nd is not None and g.nodes[nd]['owner'] == p and len(foes) < MAX_ITEMS:
+            foes.append(dict(id=a['id'], x=a['x'], y=a['y'], text=f"Armée ennemie sur vos terres ({g.fname(o)}, "
+                             f"{int(g.army_men(a))} hommes), {_where(g, a['x'], a['y'])}."))
     d = g.date(g.t - 1)   # le mois qui s'achève
     return dict(id=f"{g.seed}-{acc['t0']}-{round(g.t, 3)}", title=f"Bilan {R.de(R.MONTHS[d.month - 1])} {d.year}",
                 period=f"du {acc['date0']} au {g.date_str()}", battles=acc['battles'], built=acc['built'],
-                techs=acc['techs'], facts=acc['facts'], levied=acc['levied'], gained=places(now - before),
+                techs=acc['techs'], facts=acc['facts'], foes=foes, levied=acc['levied'], gained=places(now - before),
                 lost=places(before - now), inc={r: round(v, 1) for r, v in acc['inc'].items()},
                 res={r: round(f['res'][r] - acc['res0'].get(r, 0), 1) for r in R.RESOURCES}, stops=acc['stops'])
 

@@ -121,7 +121,8 @@ test('barre du tour : votre tour', () => {
 });
 
 test('barre du tour : tour des IA, puis interruption', () => {
-  assert.ok(barre({ phase: 'cours' }).includes('Arrêter'));
+  const run = barre({ phase: 'cours' });
+  assert.ok(run.includes('Les IA jouent') && !run.includes('Arrêter'), 'le tour des IA se calcule d’un coup : rien à arrêter');
   const h = barre({ phase: 'arret', stop: { kind: 'bataille', text: 'Bataille <près> de Libourne', date: 'x', more: 0 } });
   assert.ok(h.includes('Continuer') && h.includes('&lt;près&gt;'), 'raison affichée, échappée');
 });

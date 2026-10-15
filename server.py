@@ -127,17 +127,15 @@ class App:
             if c == 'speed':
                 if g.over:
                     return dict(ok=False, msg='La partie est terminée.')
-                if g.tour['on']:   # tour par tour : « pause » arrête le mois en cours, le reste passe par « tour »
-                    if self._num(body.get('value', 0)):
-                        return dict(ok=False, msg='Tour par tour : touchez « Fin du mois » en haut.')
-                    return self._r(TT.halt(g))
+                if g.tour['on']:   # tour par tour : tout passe par « tour » (le tour des IA ne s'arrête pas à la main)
+                    return dict(ok=False, msg='Tour par tour : touchez « Tour suivant » en haut.')
                 v = max(0, min(len(R.SPEEDS) - 1, int(self._num(body.get('value', 0)))))
                 ok, why = TB.on_speed(g, v)   # une bataille attend le joueur : la campagne reste figée
                 if not ok:
                     return dict(ok=False, msg=why)
                 g.speed_idx = v
                 return dict(ok=True)
-            if c == 'tour':   # fin du mois, continuer, arrêter, temps réel (game/turns.py)
+            if c == 'tour':   # tour suivant, continuer, temps réel (game/turns.py)
                 if str(body.get('action')) == 'go':
                     ok, why = TB.on_speed(g, 1)   # pas de mois qui reprend tant qu'une bataille attend ou se livre
                     if not ok:
