@@ -150,7 +150,7 @@ captures restent mon outil de vérification interne. La taille des soldats est c
 ### 6d : sol
 - [x] T24 : couleurs du sol (blé or doux, teintes par parcelle, herbe variée)
 - [x] T25 : chemins larges et usés
-- [ ] T26 : cultures en relief près de la caméra
+- [x] T26 : cultures en relief près de la caméra
 - [ ] Point de contrôle B
 
 ### 6e : arbres et fin

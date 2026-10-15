@@ -265,7 +265,13 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
   - Fichiers : `web/js/battle/terrain.js`
   - Taille : S
 
-- [ ] **T26 : cultures en relief**
+- [x] **T26 : cultures en relief**
+  - Fait :
+    - Masque couleur et hauteur des cultures à 2,5 m par pixel (3,8 Mo), routes et chemins retirés.
+    - Couches d'épis sur une fenêtre du maillage du sol autour de la cible (60 à 260 m de rayon), un seul appel de dessin.
+    - 5 couches en Haute, 8 en Ultra, aucune en Basse et Moyenne ; rien au-delà de 420 m de distance de caméra.
+    - Blé à hauteur de genou des figurines ; ondulation au vent.
+  - Pas mesuré : le coût en pixels sur l'iPad (rendu logiciel ici).
   - Critères :
     - Masque de hauteur de végétation peint une fois.
     - Couches d'épis près de la caméra, couleur du sol, plus sombres en bas, ondulation au vent.

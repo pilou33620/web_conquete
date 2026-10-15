@@ -10,6 +10,11 @@
 // l'écran (sans quoi il scintillerait).
 //
 // Tués, chevaux et trous d'obus : de petits panneaux posés sur le relief (un lot par sorte), pas repeints dans le sol.
+//
+// Épis en relief (qualités Haute et Ultra) : autour de la cible de la caméra, une fenêtre du maillage du sol (mêmes
+// sommets, mêmes triangles) redessinée en couches empilées, en un seul appel (instances). Chaque couche ne garde que
+// les pieds de sa hauteur, d'après le masque des cultures de terrain.js (couleur, hauteur) : plus sombres en bas,
+// clairsemés en haut, ils ondulent au vent.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clamp, hash, canvas } from './formes.js';
 import { paintDecal } from './terrain.js';
@@ -17,6 +22,7 @@ import { paintDecal } from './terrain.js';
 const STEP = 10, OUT = 2000, OUT_STEP = 125;   // maille dans le champ, prolongement au-delà, maille du prolongement
 const TS = 512, N = 4;                         // côté d'un bloc (px), blocs par côté d'un niveau de détail
 const LEVELS = [2, 4, 8, 16];                  // niveaux de détail possibles (px/m)
+const HMAX = 1.3;                              // hauteur des épis les plus hauts (m : le maïs)
 
 // ombres des nuages : taches douces et périodiques (le motif couvre environ 1,5 km)
 function cloudTexture() {
@@ -77,6 +83,12 @@ export class Relief {
     this.setQuality(q);
     this.mesh = new THREE.Mesh(this.geometry(), this.material());
     this.group.add(this.mesh);
+    const cm = terrain.cropMask(HMAX);
+    this.crops = new THREE.DataTexture(cm.data, cm.w, cm.h);
+    this.crops.colorSpace = THREE.SRGBColorSpace; this.crops.minFilter = this.crops.magFilter = THREE.LinearFilter; this.crops.needsUpdate = true;
+    this.shells = new THREE.InstancedMesh(new THREE.BufferGeometry(), this.shellMaterial(), 8);
+    this.shells.count = 0; this.shells.frustumCulled = false; this.shells.receiveShadow = true;
+    this.group.add(this.shells);
     this.decals = new Decals(this);
     // lumière : ciel et sol (hémisphère), soleil
     this.hemi = new THREE.HemisphereLight('#dfe8f2', '#5b5a3a', 1.7);
@@ -91,6 +103,7 @@ export class Relief {
 
   geometry() {
     const xs = ticks(this.W), ys = ticks(this.H), nx = xs.length, ny = ys.length;
+    this.xs = xs; this.ys = ys;
     const pos = new Float32Array(nx * ny * 3), uv = new Float32Array(nx * ny * 2);
     for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
       const k = j * nx + i, x = xs[i], y = ys[j];
@@ -156,6 +169,68 @@ export class Relief {
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.70, 0.36), (1.0 - smoothstep(w * 0.5, w, abs(e))) * 0.8);`);
     };
     return m;
+  }
+
+  // couches d'épis : la couche k (instance) est soulevée de (k + 1) / n × HMAX ; un pied par case de 11 cm, gardé si la
+  // culture monte jusque-là, de moins en moins vers le haut ; tout s'efface au bord de la fenêtre
+  shellMaterial() {
+    Object.assign(this.uni, { uCrops: { value: this.crops }, uShellN: { value: 1 }, uShellC: { value: new THREE.Vector3() }, uWind: { value: new THREE.Vector2(1, 0) }, uTime: { value: 0 } });
+    const m = new THREE.MeshLambertMaterial();
+    m.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, this.uni);
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uShellN;\nvarying vec3 vW;\nvarying float vF;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          vF = (float(gl_InstanceID) + 1.0) / uShellN;
+          transformed.y += vF * ${HMAX.toFixed(2)};
+          vW = transformed;`);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', `#include <common>
+          uniform sampler2D uCrops; uniform vec2 uSize, uWind; uniform float uTime; uniform vec3 uShellC;
+          varying vec3 vW; varying float vF;
+          float hash12(vec2 p) { p = mod(p, 1024.0); vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }`)
+        .replace('#include <map_fragment>', `
+          vec4 crop = texture2D(uCrops, vW.xz / uSize);
+          float top = crop.a * ${HMAX.toFixed(2)}, rel = vF * ${HMAX.toFixed(2)} / max(top, 0.01);
+          float fade = 1.0 - smoothstep(uShellC.z * 0.55, uShellC.z, length(vW.xz - uShellC.xy));
+          float sway = sin(uTime * 1.7 + dot(vW.xz, uWind) * 0.35) * 0.12 * vF * vF;
+          float n = hash12(floor((vW.xz + uWind * sway) * 9.0));
+          if (rel > 1.0 || n < 1.0 - (0.8 - 0.65 * rel) * fade) discard;
+          diffuseColor.rgb = mix(crop.rgb, vec3(dot(crop.rgb, vec3(0.3, 0.59, 0.11))), 0.15) * (0.45 + 0.5 * rel) * (1.0 + 0.08 * sin(uTime * 1.2 - dot(vW.xz, uWind) * 0.06));`);
+    };
+    m.customProgramCacheKey = () => 'epis';
+    return m;
+  }
+  // fenêtre des épis autour de la cible (fr : camera.js), refaite quand la cible s'éloigne d'un quart de son rayon ;
+  // rien de loin (on ne les verrait pas) ni en qualité Basse ou Moyenne
+  cropsFollow(fr) {
+    const n = this.q.epis || 0, on = n > 0 && fr.dist < 420;
+    this.shells.count = on ? n : 0;
+    if (!on) return;
+    const R = clamp(fr.dist * 1.6, 60, 260), c = this.shellAt;
+    this.uni.uShellN.value = n; this.uni.uShellC.value.set(fr.T[0], fr.T[2], R);
+    if (c && Math.hypot(c[0] - fr.T[0], c[1] - fr.T[2]) < R * 0.25 && Math.abs(c[2] - R) < R * 0.25) return;
+    this.shellAt = [fr.T[0], fr.T[2], R];
+    const { xs, ys } = this, nx = xs.length, src = this.mesh.geometry.attributes, w = R * 1.3;
+    const i0 = xs.findIndex(x => x >= fr.T[0] - w), j0 = ys.findIndex(y => y >= fr.T[2] - w);
+    let i1 = xs.findIndex(x => x > fr.T[0] + w), j1 = ys.findIndex(y => y > fr.T[2] + w);
+    if (i1 < 0) i1 = nx; if (j1 < 0) j1 = ys.length;
+    const cw = i1 - i0, ch = j1 - j0;
+    if (i0 < 0 || j0 < 0 || cw < 2 || ch < 2) { this.shells.count = 0; return; }
+    const pos = new Float32Array(cw * ch * 3), nor = new Float32Array(cw * ch * 3), idx = new Uint32Array((cw - 1) * (ch - 1) * 6);
+    for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) {
+      const s = ((j0 + j) * nx + i0 + i) * 3, d = (j * cw + i) * 3;
+      for (let a = 0; a < 3; a++) { pos[d + a] = src.position.array[s + a]; nor[d + a] = src.normal.array[s + a]; }
+    }
+    let k = 0;
+    for (let j = 0; j < ch - 1; j++) for (let i = 0; i < cw - 1; i++) {
+      const a = j * cw + i, b = a + 1, cc = a + cw, d = cc + 1;
+      idx[k++] = a; idx[k++] = cc; idx[k++] = b; idx[k++] = b; idx[k++] = cc; idx[k++] = d;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
+    this.shells.geometry.dispose(); this.shells.geometry = g;
   }
 
   // ------------------------------------------------------------------ niveaux de détail du sol
@@ -241,6 +316,7 @@ export class Relief {
   }
   // le cadre des ombres suit la cible de la caméra (plus grand de loin), calé sur les texels pour ne pas scintiller
   follow(fr) {
+    this.cropsFollow(fr);
     if (!this.sun.castShadow) return;
     const S = clamp(fr.dist * 0.9, 70, 1400), sh = this.sun.shadow, c = sh.camera, step = 2 * S / sh.mapSize.x;
     const tx = Math.round(fr.T[0] / step) * step, tz = Math.round(fr.T[2] / step) * step, d = this.sunDir;
@@ -266,6 +342,7 @@ export class Relief {
     scene.fog.near = (dist * 0.8 + 600) * sky.fogNear;
     scene.fog.far = (dist * 3 + 5000) * sky.fogFar;
     this.uni.uCloudA.value = sky.cloudA;
+    this.uni.uTime.value = time; this.uni.uWind.value.set(...sky.wind).normalize();
     this.uni.uCloudOff.value.set(time * (3 + sky.wind[0] * 2.5), time * (1 + sky.wind[1] * 2.5));
   }
   // l'image entière a été repeinte (brèche) : renvoyée à la carte graphique, une fois par seconde au plus
@@ -275,6 +352,7 @@ export class Relief {
   }
   dispose() {
     this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.tex.dispose(); this.cover.dispose(); this.scratchTex.dispose(); this.clouds.dispose();
+    this.shells.geometry.dispose(); this.shells.material.dispose(); this.shells.dispose(); this.crops.dispose();
     for (const l of this.levels) l?.tex.dispose();
     this.decals.dispose();
   }

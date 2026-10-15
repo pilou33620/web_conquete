@@ -6,7 +6,7 @@
 // (treeGrid, ponts, portes, tracés adoucis). Aussi : altitudes adoucies (fineAt), cotes des sommets, couverts.
 // Motifs des sols : textures.js.
 import { T, cellRemap, normSeason, hash, clamp, TAU, OMBRE, mixHex, vnoise, canvas } from './formes.js';
-import { texture, softShadow, culture } from './textures.js';
+import { texture, softShadow, culture, EPIS } from './textures.js';
 import { profil } from './qualite.js';
 
 const BASE = 0.5;   // pixels par mètre de l'image entière
@@ -350,6 +350,29 @@ export class Terrain {
     }
     g.putImageData(img, 0, 0);
     this.nuances = cv;
+  }
+  // couleur et hauteur des cultures, pour les épis en relief (relief.js) : une image à `res` m par pixel, rgb la couleur
+  // des pieds, a leur hauteur (255 : hmax m) ; les routes et chemins qui traversent les champs en sont ôtés ; rien
+  // sous la neige
+  cropMask(hmax, res = 2.5) {
+    const w = Math.ceil(this.W / res), h = Math.ceil(this.H / res), out = new Uint8Array(w * h * 4);
+    if (this.pal.neige) return { data: out, w, h };
+    const col = canvas(w, h), hgt = canvas(w, h), gc = col.getContext('2d'), gh = hgt.getContext('2d');
+    for (const g of [gc, gh]) g.setTransform(1 / res, 0, 0, 1 / res, 0, 0);
+    for (const r of this.regions) {
+      const e = EPIS[r.tex];
+      if (!e || (r.type !== T.CHAMP && r.tex !== 'prairie')) continue;
+      gc.fillStyle = e[1] || mixHex(this.pal.pre[0], this.pal.herbeSec, 0.35);
+      if (r.tex === 'mais' && this.season === 'automne') gc.fillStyle = '#c4aa64';
+      gc.fill(r.path);
+      const v = Math.round(e[0] / hmax * 255); gh.fillStyle = `rgb(${v},${v},${v})`; gh.fill(r.path);
+    }
+    gh.lineCap = 'round'; gh.lineJoin = 'round'; gh.strokeStyle = '#000';
+    gh.lineWidth = 7; for (const p of this.pathPts) strokePts(gh, p);
+    gh.lineWidth = 12; for (const r of this.roadPts) strokePts(gh, r);
+    const c = gc.getImageData(0, 0, w, h).data, a = gh.getImageData(0, 0, w, h).data;
+    for (let i = 0; i < w * h; i++) { const k = i * 4; out[k] = c[k]; out[k + 1] = c[k + 1]; out[k + 2] = c[k + 2]; out[k + 3] = a[k]; }
+    return { data: out, w, h };
   }
   // cotes des sommets (comme sur les cartes d'état-major), écrites sur le calque par la vue
   prepPeaks() {
