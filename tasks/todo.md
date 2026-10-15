@@ -155,3 +155,114 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Taille : M
 
 - [x] **Point final** : /review (corrections commitées), bancs, captures des cinq scénarios ; reste l'essai sur l'iPad par toi.
+
+## Étape 6 : se rapprocher du rendu d'Ultimate General (SPEC-3D.md « Étape 6 », plan : décisions 7 à 13)
+
+Vérifications communes : `python3 tests/lancer.py` passe ; aucune erreur dans la console sur le scénario touché ;
+capture interne regardée (pas montrée) ; triangles relevés sur les trois vues types quand la tâche touche la charge.
+Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-distance (z = 4), au ras (z = 30).
+
+- [ ] **T18 : banc des modèles, relevé de départ**
+  - Critères :
+    - `troupes.js` exporte `model(kind, year, lod)`, qui renvoie la géométrie d'une sorte.
+    - `tests/modeles.test.mjs` vérifie pour chaque sorte : os dans la liste de la sorte, hauteur plausible, avant vers
+      +Z.
+    - Triangles des trois vues types relevés et notés ici.
+  - Vérif : `node --test tests/` ; relevé fait avec `capture.mjs --js`.
+  - Fichiers : `web/js/battle/troupes.js`, `tests/modeles.test.mjs`
+  - Taille : S
+
+- [ ] **T19 : fantassins arrondis et taille**
+  - Critères :
+    - `soldier()` en formes arrondies : basques, buffleteries croisées, guêtres, fusil à baïonnette.
+    - `hat()` : tricorne relevé, bicorne, shako, képi, bonnet à poil, chapeau rond.
+    - Mêmes os et pivots qu'avant.
+    - `SCALE` choisi sur captures.
+    - Le banc vérifie l'absence de pavés : aucune `BoxGeometry` pour le corps, la tête et les membres.
+  - Vérif : banc des modèles ; captures au ras et mi-distance (marche, salve) ; triangles relevés.
+  - Fichiers : `web/js/battle/troupes.js`, `tests/modeles.test.mjs`, `tests/troupes.test.mjs` (si la taille change les
+    écarts)
+  - Taille : M
+
+- [ ] **T20 : chevaux, cavaliers, canons, caissons arrondis**
+  - Critères : corps en capsule, encolure et tête galbées, jambes effilées (mêmes os 1, 2, 5, 6, 7, 8) ; cavalier
+    arrondi ; roues à rayons, fût galbé ; caisson et chariot bâché arrondis.
+  - Vérif : banc des modèles ; captures cavalerie au galop et batterie qui tire.
+  - Fichiers : `web/js/battle/troupes.js`, `tests/modeles.test.mjs`
+  - Taille : M
+
+- [ ] **T21 : version simple de loin**
+  - Critères :
+    - Chaque sorte a un modèle lointain (peu de sommets, mêmes os, même hauteur).
+    - Choix par régiment selon la hauteur à l'écran, avec une marge (fonction pure `lodOf` testée).
+    - Reconstruction limitée à quelques fois par seconde.
+    - Ombres portées pour les deux versions.
+  - Vérif : banc (`lodOf` : seuils, marge ; modèles proche et lointain avec les mêmes os et la même hauteur) ;
+    triangles des trois vues ≤ départ + 10 % ; capture à la distance de bascule.
+  - Fichiers : `web/js/battle/troupes.js`, `web/js/battle/vue.js`, `tests/modeles.test.mjs`
+  - Taille : M
+
+- [ ] **Point de contrôle A** : bancs, cinq scénarios sans erreur, charge relevée, commit.
+
+- [ ] **T22 : courbe filmique, soleil, ciel, ombres douces**
+  - Critères :
+    - Tone mapping et exposition réglés.
+    - Intensités de `ciel()` revues : ombres teintées, pas noires.
+    - `shadow.radius` pour des bords doux.
+    - Matin, soir, nuit, brouillard, pluie, neige, orage toujours justes.
+    - Fumées et éclairs encore lisibles.
+  - Vérif : captures aux heures et météos du banc ; bancs.
+  - Fichiers : `web/js/battle/vue.js`, `web/js/battle/effets.js`, `web/js/battle/relief.js`
+  - Taille : M
+
+- [ ] **T23 : ombres de contact**
+  - Critères : tache douce sous chaque figurine (soldat, cheval, canon, voiture) qui suit sa place et son pas ; partage
+    les tampons d'instances ; cachée pour un régiment deviné (pointillés) ; remplace l'ombre en bloc des régiments.
+  - Vérif : capture au ras et mi-distance ; triangles relevés.
+  - Fichiers : `web/js/battle/troupes.js`
+  - Taille : S
+
+- [ ] **T24 : couleurs du sol**
+  - Critères : blé or doux et plusieurs teintes par parcelle (mûr, vert, chaume, labour) ; herbe en taches de
+    plusieurs verts et coins secs ; saisons toujours distinctes.
+  - Vérif : captures bocage, vignes, landes, automne et hiver.
+  - Fichiers : `web/js/battle/terrain.js`, `web/js/battle/textures.js`
+  - Taille : M
+
+- [ ] **T25 : chemins larges et usés**
+  - Critères : chemins de terre plus larges, bords adoucis, ornières, herbe au milieu ; routes distinctes ; ponts et
+    gués toujours raccordés.
+  - Vérif : captures bocage et vignes, mi-distance et au ras.
+  - Fichiers : `web/js/battle/terrain.js`
+  - Taille : S
+
+- [ ] **T26 : cultures en relief**
+  - Critères :
+    - Masque de hauteur de végétation peint une fois.
+    - Couches d'épis près de la caméra, couleur du sol, plus sombres en bas, ondulation au vent.
+    - Nombre de couches selon la qualité (aucune en Basse), coupées de loin.
+    - Les soldats restent visibles : épis à hauteur de genou ou de taille.
+  - Vérif : captures au ras dans le blé et mi-distance ; triangles et durée d'image relevés.
+  - Fichiers : `web/js/battle/terrain.js`, `web/js/battle/relief.js`, `web/js/battle/qualite.js`, `web/js/battle/vue.js`
+  - Taille : M
+
+- [ ] **Point de contrôle B** : bancs, cinq scénarios sans erreur, charge relevée, commit.
+
+- [ ] **T27 : arbres touffus**
+  - Critères :
+    - Couronnes en touffes : normales lisses, plus sombres dedans et dessous, teintes variées.
+    - Bois au toit bosselé.
+    - Deux versions selon la zone.
+    - Même nombre d'arbres par qualité ; effacement près de la caméra toujours actif.
+  - Vérif : captures landes (vue d'ensemble) et bocage au ras ; triangles des trois vues ≤ départ + 10 %.
+  - Fichiers : `web/js/battle/decor.js`
+  - Taille : M
+
+- [ ] **T28 : vérification finale, README, revue**
+  - Critères : captures internes des trois vues comparées à tes trois images ; tableau des triangles ; README
+    (« La vue ») à jour ; spec et plan cochés ; /review et corrections.
+  - Vérif : bancs ; cinq scénarios sans erreur.
+  - Fichiers : `README.md`, `SPEC-3D.md`, `tasks/plan.md`, `tasks/todo.md`
+  - Taille : S
+
+- [ ] **Point final de l'étape 6** : tu essaies sur l'iPad.

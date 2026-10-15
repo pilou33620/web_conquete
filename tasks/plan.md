@@ -93,3 +93,82 @@ Détail, critères et vérifications : `tasks/todo.md`.
 ## Questions ouvertes
 
 - Aucune.
+
+---
+
+# Étape 6 : se rapprocher du rendu d'Ultimate General (SPEC-3D.md, « Étape 6 »)
+
+Validé le 15/10/2026 : tout enchaîner sans arrêt intermédiaire ni captures montrées (tu verras en jouant). Les
+captures restent mon outil de vérification interne. La taille des soldats est choisie par moi sur ces captures.
+
+## Décisions d'architecture
+
+7. **Modèles arrondis construits par le code.** `troupes.js` garde `assemble()` (couleur, os, teinte par sommet). Les
+   pavés deviennent des cylindres effilés, des sphères aplaties, des profils tournés (`LatheGeometry`) et des capsules
+   (`CapsuleGeometry`), qui ont des normales lisses. Les os et pivots ne changent pas, donc le shader d'animation reste
+   le même. Tricorne : un anneau dont le bord se relève entre trois pointes.
+8. **Deux versions par figurine.** Pour chaque sorte, un modèle proche (arrondi, détaillé) et un modèle lointain (peu de
+   sommets, mêmes os, même hauteur).
+   - Choix par régiment, selon la hauteur de la figurine à l'écran (px), avec une marge pour ne pas basculer sans cesse.
+   - Chaque version a ses propres `InstancedMesh` et tampons d'instances. Le changement de version d'un régiment
+     relance `rebuild`, au plus quelques fois par seconde.
+   - La vue d'ensemble n'utilise que le modèle lointain. C'est ce qui paie les modèles proches.
+9. **Ombres de contact.** Une tache douce au sol sous chaque figurine : un quadrilatère instancié qui partage les
+   tampons d'instances de sa sorte et le placement du shader (4 sommets par figurine).
+10. **Lumière.**
+    - Courbe filmique de Three.js (`NeutralToneMapping` ou `AgXToneMapping`, choisie sur captures) et intensités
+      revues dans `Effects.ciel()`.
+    - Ombres douces : `shadow.radius` du PCF de r186.
+    - Ciel plus fort par rapport au soleil, pour des ombres teintées au lieu de noires.
+    - Pas de passe d'après-rendu (mémoire de l'iPad).
+11. **Cultures en relief.**
+    - `terrain.js` peint une fois un masque « hauteur de végétation » sur tout le champ (2 m par pixel, un octet),
+      avec les mêmes contours de parcelles que la peinture du sol.
+    - Près de la caméra, des couches empilées du sol (« coquilles ») dessinent les épis : couleur prise dans la texture
+      du sol, plus sombre en bas, ondulation au vent.
+    - Nombre de couches par niveau de qualité (`epis` dans `qualite.js`) ; aucune en Basse.
+12. **Arbres touffus.**
+    - Couronne faite de 3 à 5 touffes d'icosaèdres (normales lisses), plus sombre dedans et dessous, teinte variée.
+    - Deux versions selon la zone (750 m) : touffes détaillées près de la caméra, touffe simple au loin.
+    - Le nombre d'arbres par qualité ne change pas.
+13. **Mesure de la charge.** `renderer.info.render.triangles`, lu par `--js` dans le banc de capture, sur trois vues
+    types du scénario bocage. Le relevé de départ est noté dans T18. Le critère est de rester sous le départ + 10 %.
+
+## Liste des tâches (étape 6)
+
+### 6a et 6b : figurines
+- [ ] T18 : banc des modèles, relevé de charge de départ
+- [ ] T19 : fantassins arrondis (toutes les sortes à pied) et taille
+- [ ] T20 : chevaux, cavaliers, canons, caissons arrondis
+- [ ] T21 : version simple de loin (choix par régiment)
+- [ ] Point de contrôle A (bancs, 5 scénarios sans erreur, charge ≤ départ + 10 %)
+
+### 6c : lumière et couleurs
+- [ ] T22 : courbe filmique, soleil et ciel, ombres douces
+- [ ] T23 : ombres de contact sous les figurines
+
+### 6d : sol
+- [ ] T24 : couleurs du sol (blé or doux, teintes par parcelle, herbe variée)
+- [ ] T25 : chemins larges et usés
+- [ ] T26 : cultures en relief près de la caméra
+- [ ] Point de contrôle B
+
+### 6e : arbres et fin
+- [ ] T27 : arbres touffus (deux versions par zone)
+- [ ] T28 : vérification finale, README, revue
+- [ ] Point final de l'étape 6
+
+## Risques et parades (étape 6)
+
+| Risque | Impact | Parade |
+|---|---|---|
+| Coquilles des épis trop chères sur l'iPad (pixels superposés, rejet de pixels) | Haut | Couches selon la qualité, rayon limité, coupées de loin et pendant les gestes ; Basse sans |
+| Bascule de version visible, ou `rebuild` trop fréquent | Moyen | Marge entre les seuils, choix par régiment, au plus quelques reconstructions par seconde |
+| La courbe filmique change toutes les couleurs (nuit, brouillard, neige, effets additifs) | Moyen | Captures heure par heure et météo par météo après T22 ; palettes revues en T24 |
+| Plus de sommets par figurine proche | Moyen | Modèle lointain plus léger qu'aujourd'hui ; relevé de charge à chaque tâche |
+| Allure jugée par moi seul, sans ton retour avant la fin | Moyen | Comparaison systématique avec tes trois images aux mêmes distances ; tu valides en jouant |
+| Captures lentes sur le Pi (rendu logiciel) | Bas | Petites tailles et peu de captures par tâche |
+
+## Questions ouvertes (étape 6)
+
+- Aucune bloquante. Taille des soldats et courbe filmique choisies sur captures internes.

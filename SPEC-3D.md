@@ -160,3 +160,90 @@ export class OrbitCam {
 ## Questions ouvertes
 
 - Aucune bloquante. Les hypothèses 1 à 4 ci-dessus sont à confirmer.
+
+## Étape 6 : se rapprocher du rendu d'Ultimate General
+
+### Pourquoi
+
+Les étapes 1 à 5 sont livrées. Comparées aux captures d'Ultimate General (trois images envoyées le 15/10/2026), il
+manque l'allure :
+
+- les soldats sont des assemblages de pavés, trapus (grandis ×1,6), éclairés à facettes ;
+- le blé est jaune vif et plat, les chemins sont de minces traits, l'herbe est uniforme ;
+- les arbres sont des boules à facettes ;
+- la lumière est dure (couleurs brutes, sans courbe filmique ; ombres presque noires).
+
+But : à distance de caméra égale, le joueur reconnaît le style d'Ultimate General.
+
+### Choix validés (questionnaire du 15/10/2026)
+
+- Soldats **arrondis, construits par le code**. Pas de modèles importés ni de chargeur glTF. Une **version simple de
+  loin** garde l'iPad fluide.
+- En plus des soldats : **champs et chemins**, **arbres**, **lumière et couleurs**.
+
+### Hypothèses (à corriger si besoin)
+
+1. **Soldats.** Corps, basques, membres et tête arrondis. Silhouette fine. Vrai tricorne à bords relevés (et bicorne,
+   shako, etc. selon l'année). Buffleteries blanches croisées, guêtres, fusil fin à baïonnette. Éclairage doux, sans
+   facettes visibles à mi-distance. Les mêmes animations qu'aujourd'hui.
+2. **Taille.** Les figurines seront moins grandies et plus fines. La taille finale sera choisie sur captures (entre ×1,25
+   et ×1,6) : la plus proche des images d'Ultimate General qui garde une ligne lisible de loin.
+3. **Chevaux, cavaliers, officiers, tambours, porte-drapeau, servants.** Même traitement que les soldats. Les canons et
+   caissons gagnent des roues à rayons et un fût plus galbé.
+4. **Version simple de loin.** Chaque figurine a deux modèles. On passe de l'un à l'autre selon la distance, sans saut
+   visible à l'écran. Les deux modèles ont les mêmes animations.
+5. **Champs.**
+   - Les cultures proches de la caméra (environ 300 m) ont un vrai relief (épis qui ondulent au vent) ; plus loin, la
+     peinture à sillons suffit.
+   - Couleurs : blé or doux plutôt que jaune vif, plusieurs teintes selon les parcelles (mûr, vert, chaume, labour).
+6. **Chemins.** Larges et usés, bords adoucis, ornières, herbe au milieu des chemins de terre. Une route se distingue
+   d'un chemin.
+7. **Herbe.** Taches de plusieurs verts et coins secs, plus fines de près.
+8. **Arbres.**
+   - Couronnes faites de plusieurs touffes arrondies : dessus éclairé, dessous sombre, teintes variées, pas de facettes
+     visibles.
+   - Bois au toit bosselé.
+   - Même nombre d'arbres par niveau de qualité.
+9. **Lumière et couleurs.**
+   - Courbe filmique, soleil plus doux, ombres teintées (bleutées le jour) au lieu de noires.
+   - Ombre de contact sous chaque soldat, cheval, canon et arbre ; légère brume de distance.
+   - Couleurs un peu moins saturées.
+   - L'heure, la nuit et la météo marchent comme avant.
+10. **Ce qui ne change pas.** Le moteur Python, les API, les règles, les commandes et gestes, l'interface, les noms des
+    niveaux de qualité, les petites figurines 2D des cartes d'unités.
+
+### Critères de réussite de l'étape 6
+
+1. **Captures côte à côte avec les images d'Ultimate General**, aux trois distances (vue d'ensemble comme l'image 2,
+   mi-distance comme l'image 1, au ras des troupes), en bocage, landes et vignes. Elles montrent :
+   - soldats arrondis sans pavés visibles à mi-distance ;
+   - blé en relief et de teintes variées ;
+   - chemins larges et usés ;
+   - arbres touffus ;
+   - lumière douce avec ombres de contact.
+
+   Tu juges l'allure sur ces captures.
+2. **Charge graphique.** En qualité Haute, le nombre de triangles dessinés par image (`renderer.info`) ne dépasse pas
+   celui d'aujourd'hui de plus de 10 %, sur les trois vues types du scénario bocage. La version simple de loin
+   finance les soldats arrondis et les touffes des arbres.
+3. **Aucune erreur** dans la console sur les cinq scénarios. Les animations restent visibles sur captures : marche,
+   salve, charge, déroute, galop, recul des pièces.
+4. **Tests.** `python3 tests/lancer.py` passe, avec un banc des modèles : chaque sommet a un os valide, et les deux
+   versions d'une figurine ont les mêmes os, la même hauteur et la même orientation.
+5. **iPad.** ≥ 30 images/s en qualité Haute sur un iPad de 2019, à vérifier par toi sur l'appareil.
+
+### Livraison de l'étape 6 (chaque sous-étape est jouable et commitée)
+
+1. **6a, fantassin arrondi** (prototype). Je te montre des captures à trois tailles pour valider l'allure avant de
+   généraliser. C'est le point d'arrêt.
+2. **6b, toutes les figurines.** Officiers, tambours, porte-drapeau, cavaliers et chevaux, servants, canons, caissons,
+   puis la version simple de loin.
+3. **6c, lumière et couleurs.**
+4. **6d, champs, chemins, herbe.**
+5. **6e, arbres.** Puis captures finales côte à côte, revue et README.
+
+### Questions ouvertes de l'étape 6
+
+- **Taille des soldats.** Tranchée sur les captures de 6a.
+- **Coût du blé en relief sur l'iPad.** Il est inconnu. S'il est trop cher, le relief est réservé aux qualités Haute et
+  Ultra, et les autres gardent la peinture à sillons.
