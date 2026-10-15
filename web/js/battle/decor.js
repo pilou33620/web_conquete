@@ -70,11 +70,14 @@ function merge(list) {
   return out;
 }
 
-// un arbre tout près de la caméra (au ras des troupes) s'efface en pointillés entre 35 et 15 m : il ne cache plus la vue
+// au ras des troupes, un arbre entre la caméra et sa cible s'efface en pointillés : il ne cache plus la vue (uNear :
+// distance de la cible, 60 m au plus, la vue d'ensemble n'est pas touchée)
+const NEAR = { value: 60 };
 function nearFade(mat) {
   mat.onBeforeCompile = sh => {
-    sh.fragmentShader = sh.fragmentShader.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
-      if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > smoothstep(15.0, 35.0, -vViewPosition.z)) discard;`);
+    sh.uniforms.uNear = NEAR;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNear;').replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+      if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > smoothstep(uNear * 0.5, uNear * 0.92, vViewPosition.z)) discard;`);
   };
   mat.customProgramCacheKey = () => 'decor-pres';
   return mat;
@@ -363,6 +366,8 @@ export class Decor {
     this.fenceMesh.castShadow = this.fenceMesh.receiveShadow = true;
     this.group.add(this.fenceMesh);
   }
+  // distance de la caméra à sa cible (m), à chaque image
+  near(dist) { NEAR.value = Math.min(60, dist); }
   setQuality(q) { this.q = q; }
   dispose() {
     this.wallMesh?.geometry.dispose(); this.fenceMesh?.geometry.dispose(); for (const d of this.disposables) d.dispose(); for (const o of this.group.children) o.dispose?.(); }

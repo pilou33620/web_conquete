@@ -75,8 +75,8 @@ Détail, critères et vérifications : `tasks/todo.md`.
 
 ### Étape 5 : finitions
 - [x] T16 : profils de qualité 3D, mesure automatique, message sans WebGL 2
-- [ ] T17 : nettoyage du code 2D, README, captures des cartes d'unités
-- [ ] Point final (/review, bancs, captures, essai sur l'iPad par toi)
+- [x] T17 : nettoyage du code 2D, README, captures des cartes d'unités
+- [x] Point final (/review, bancs, captures ; reste l'essai sur l'iPad)
 
 ## Risques et parades
 

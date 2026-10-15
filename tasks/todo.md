@@ -147,11 +147,11 @@ d'essai ; capture `node --experimental-websocket web/js/battle/dev/capture.mjs <
   - Fichiers : `web/js/battle/qualite.js`, `web/js/battle/vue.js`, `web/js/battle/bataille.js`, `web/js/ui.js`
   - Taille : M
 
-- [ ] **T17 : nettoyage, README, captures des cartes**
+- [x] **T17 : nettoyage, README, captures des cartes**
   - Critères : code 2D devenu inutile retiré (`terrain.js` dessin par tuiles, `unites.js` dessin du terrain,
     `dev/essai-terrain.html`) ; README à jour ; captures des cartes d'unités à côté des soldats 3D envoyées.
   - Vérif : bancs ; recherche des fonctions retirées sans appel restant.
   - Fichiers : `web/js/battle/terrain.js`, `web/js/battle/unites.js`, `web/js/battle/dev/essai-terrain.html`, `README.md`
   - Taille : M
 
-- [ ] **Point final** : /review, bancs, captures des cinq scénarios, essai sur l'iPad par toi, commit.
+- [x] **Point final** : /review (corrections commitées), bancs, captures des cinq scénarios ; reste l'essai sur l'iPad par toi.

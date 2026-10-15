@@ -380,6 +380,7 @@ export class BattleView {
     cam.updateProjectionMatrix();
     cam.position.set(fr.E[0], fr.E[1], fr.E[2]); cam.lookAt(fr.T[0], fr.T[1], fr.T[2]);
     this.relief.follow(fr);
+    this.decor.near(fr.dist);
     // de loin, les figurines ne font que quelques pixels : leurs ombres ne se voient plus et coûteraient autant que
     // les figurines elles-mêmes (écart entre 600 et 700 m : pas de bascule à chaque image)
     if (this.shadowLevel >= 2) this.troops.setShadows(this.troops.castShadow ? fr.dist < 700 : fr.dist < 600);
