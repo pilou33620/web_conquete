@@ -35,6 +35,8 @@ export class BattleView {
     try {
       this.renderer = new THREE.WebGLRenderer({ canvas: this.glc, antialias: !!this.q.aa, powerPreference: 'high-performance' });
     } catch (e) { console.error(e); this.renderer = null; }
+    // courbe filmique : les plein-soleil se tassent au lieu de brûler, les teintes restent (pas de passe d'après-rendu)
+    if (this.renderer) this.renderer.toneMapping = THREE.NeutralToneMapping;
     // contexte WebGL rendu par Safari (application remise au premier plan) : les niveaux de détail du sol sont repeints
     this.glc.addEventListener('webglcontextrestored', () => this.relief?.setQuality(this.q, true));
     this.scene = new THREE.Scene();

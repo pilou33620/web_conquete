@@ -218,9 +218,12 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
   - Fichiers : `web/js/battle/troupes.js`, `web/js/battle/vue.js`, `tests/modeles.test.mjs`
   - Taille : M
 
-- [ ] **Point de contrôle A** : bancs, cinq scénarios sans erreur, charge relevée, commit.
+- [x] **Point de contrôle A** : bancs, cinq scénarios sans erreur, charge relevée, commit.
 
-- [ ] **T22 : courbe filmique, soleil, ciel, ombres douces**
+- [x] **T22 : courbe filmique, soleil, ciel, ombres douces**
+  - Fait : `NeutralToneMapping` ; soleil un peu plus faible, ciel plus fort et bleuté (ombres teintées) ; PCF de
+    rayon 2,5. Captures midi, matin, soir, crépuscule, brouillard, neige.
+  - Vu en passant : dans les bois (landes, bocage), la canopée cache les régiments. Ajouté à T27.
   - Critères :
     - Tone mapping et exposition réglés.
     - Intensités de `ciel()` revues : ombres teintées, pas noires.
@@ -270,6 +273,8 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
     - Bois au toit bosselé.
     - Deux versions selon la zone.
     - Même nombre d'arbres par qualité ; effacement près de la caméra toujours actif.
+    - Troupes visibles dans les bois : sous l'emprise d'un régiment (avec une marge), la couronne s'efface et le tronc
+      reste.
   - Vérif : captures landes (vue d'ensemble) et bocage au ras ; triangles des trois vues ≤ départ + 10 %.
   - Fichiers : `web/js/battle/decor.js`
   - Taille : M

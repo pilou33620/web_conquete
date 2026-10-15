@@ -359,8 +359,9 @@ export class Effects {
     const fog = mix3(mix3(sky, sky.map((c, i) => c * t[i]), 0.7), night, k * 0.85).map(v => v / 255);
     return {
       sunDir: [Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)], sun: t,
-      sunI: ({ soleil: 2.4, canicule: 2.7, nuages: 1.4, neige: 1.1 }[w] ?? 0.7) * (0.25 + 0.75 * L),
-      hemiSky: mix3([0.87, 0.91, 0.95], t, 0.5), hemiGround: [0.36, 0.35, 0.23], hemiI: (dull ? 1.95 : 1.6) * (0.35 + 0.65 * L) + this.flashT * 3,
+      // le ciel éclaire fort, bleuté : les ombres restent lisibles et teintées au lieu de noires
+      sunI: ({ soleil: 2.2, canicule: 2.5, nuages: 1.3, neige: 1.05 }[w] ?? 0.7) * (0.25 + 0.75 * L),
+      hemiSky: mix3([0.8, 0.88, 1], t, 0.4), hemiGround: [0.42, 0.38, 0.26], hemiI: (dull ? 2.35 : 2.05) * (0.35 + 0.65 * L) + this.flashT * 3,
       fog, fogNear: w === 'brouillard' ? 0.05 : wet ? 0.6 : 1, fogFar: w === 'brouillard' ? 0.15 : wet ? 0.6 : 1,
       cloudA: ({ soleil: 0.22, canicule: 0.14, nuages: 0.34, pluie: 0.3, orage: 0.38, tempete: 0.38 }[w] || 0) * L * (this.q?.clouds !== false ? 1 : 0),
       wind: st.wind || [1.5, 0.5],

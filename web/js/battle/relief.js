@@ -236,7 +236,7 @@ export class Relief {
     if (level > 0) {
       const size = [0, 1024, 2048, 4096][level];
       if (this.sun.shadow.mapSize.x !== size) { this.sun.shadow.mapSize.set(size, size); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; }
-      this.sun.shadow.bias = -0.0004; this.sun.shadow.normalBias = 0.6;
+      this.sun.shadow.bias = -0.0004; this.sun.shadow.normalBias = 0.6; this.sun.shadow.radius = 2.5;   // bords doux (PCF)
     }
   }
   // le cadre des ombres suit la cible de la caméra (plus grand de loin), calé sur les texels pour ne pas scintiller
