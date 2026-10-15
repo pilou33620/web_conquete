@@ -145,7 +145,7 @@ captures restent mon outil de vérification interne. La taille des soldats est c
 
 ### 6c : lumière et couleurs
 - [x] T22 : courbe filmique, soleil et ciel, ombres douces
-- [ ] T23 : ombres de contact sous les figurines
+- [x] T23 : ombres de contact sous les figurines
 
 ### 6d : sol
 - [ ] T24 : couleurs du sol (blé or doux, teintes par parcelle, herbe variée)

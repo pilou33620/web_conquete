@@ -234,7 +234,10 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
   - Fichiers : `web/js/battle/vue.js`, `web/js/battle/effets.js`, `web/js/battle/relief.js`
   - Taille : M
 
-- [ ] **T23 : ombres de contact**
+- [x] **T23 : ombres de contact**
+  - Fait : tache douce sous chaque figurine, dans toutes les qualités ; l'ombre en bloc des régiments est retirée.
+    Fusil du modèle lointain épaissi (il ne restait que des points). Triangles : ensemble 4,25 M, mi-distance 3,06 M,
+    au ras 4,79 M (sous le départ).
   - Critères : tache douce sous chaque figurine (soldat, cheval, canon, voiture) qui suit sa place et son pas ; partage
     les tampons d'instances ; cachée pour un régiment deviné (pointillés) ; remplace l'ombre en bloc des régiments.
   - Vérif : capture au ras et mi-distance ; triangles relevés.

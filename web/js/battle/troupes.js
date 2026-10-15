@@ -25,6 +25,8 @@ const ROWS = 5;     // lignes de la texture des régiments (la 4e et la 5e : l'i
 // sortes de figurines et leur animation dans le vertex shader (null : homme à pied ; FLAG : étoffe d'un drapeau)
 const KINDS = { inf: null, gren: null, leger: null, milice: null, officier: null, tambour: null, drapeau: null, cav: 'HORSE', colonel: 'HORSE',
   attelage: 'HORSE', servant: 'CREW', canon: 'GUN', caisson: 'GUN', chariot: 'GUN', etoffe: 'FLAG', fanion: 'FLAG' };
+// tache d'ombre douce au sol sous chaque figurine (largeur, profondeur, décalage vers l'avant, en m avant l'échelle)
+const CONTACT = { FOOT: [0.8, 0.66, 0], CREW: [0.8, 0.66, 0], HORSE: [1.0, 2.5, 0], GUN: [1.7, 3.0, -0.3] };
 const ROBES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];   // robes des chevaux (bai, bai brun, alezan, noir pangaré)
 
 // coiffure selon l'époque et le type (comme la vue 2D d'avant)
@@ -382,7 +384,8 @@ function farSoldier(kind, year) {
     [box(0.36, 0.74, 0.22, 0, 1.09, 0), shade(1), 0, 1], [box(0.17, 0.2, 0.18, 0, 1.57, 0), SKIN, 0, 0], ...farHat(headgear(kind, year))];
   P.push([box(0.2, 0.36, 0.02, 0, 1.18, 0.115), armed ? WHITE : officer ? GOLD : shade(0.8), 0, armed || officer ? 0 : 1]);   // buffleteries ou écharpe
   for (const s of [1, -1]) P.push([box(0.1, 0.56, 0.11, s * 0.22, 1.13, 0), shade(0.9), 3, 1]);
-  if (armed) P.push([box(0.04, 1.75, 0.05, 0.25, 1.67, 0.05), IRON, 3, 0]);
+  // fusil et baïonnette, plus épais que nature pour faire un trait d'au moins un pixel de loin
+  if (armed) P.push([box(0.1, 1.4, 0.08, 0.25, 1.5, 0.05), '#4a3a2c', 3, 0], [box(0.06, 0.36, 0.06, 0.25, 2.38, 0.05), '#c8ccd0', 3, 0]);
   if (kind === 'tambour') P.push([cyl(0.15, 0.15, 0.22, 6, 0.18, 0.78, 0.13, 0, 1.2), '#e8dcc0', 0, 0]);
   if (kind === 'drapeau') P.push([box(0.045, 3.1, 0.045, 0.24, 2.05, 0.08), WOOD, 0, 0]);
   return assemble(P);
@@ -566,6 +569,8 @@ export class Troops {
     };
     this.kinds = new Map();     // sorte → {mesh, cap, n, slot, anim, coat}
     this.pattern = flagPattern(this.year);
+    this.soft = new THREE.CanvasTexture(relief.t.ombre);
+    this.contactMats = {};
     // chaque sorte en deux versions (« ~ » : de loin), sauf les drapeaux
     for (const [k, def] of Object.entries(KINDS)) {
       if (def === 'FLAG') { this.addKind(k, model(k, this.year), this.pattern); continue; }
@@ -574,11 +579,6 @@ export class Troops {
     }
     this.frustum = new THREE.Frustum(); this.sphere = new THREE.Sphere(); this.m4 = new THREE.Matrix4();
     this.built = -1; this.pending = false;
-    const soft = new THREE.CanvasTexture(relief.t.ombre);
-    this.blobs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ map: soft, color: '#000000', transparent: true, opacity: 0.32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }), MAXU);
-    this.blobs.count = 0; this.blobs.frustumCulled = false; this.blobs.renderOrder = 1;
-    this.group.add(this.blobs);
   }
 
   // def : 'HORSE' (cheval), 'GUN' (pièce, voiture), 'CREW' (servant) : leur animation dans le vertex shader
@@ -618,7 +618,14 @@ export class Troops {
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_HEAD).replace('#include <begin_vertex>', VERT_POSE + place);
     };
     depth.customProgramCacheKey = () => 'troupes-ombre-' + (pattern ? 'etoffe' : def || 'homme');
-    const k = { geo, mat, depth, mesh: null, cap: 0, n: 0, slot: null, anim: null, coat: null };
+    const k = { geo, mat, depth, mesh: null, cap: 0, n: 0, slot: null, anim: null, coat: null, contactGeo: null, contact: null };
+    // ombre de contact : un carré posé au sol sous la figurine, qui suit sa place et son pas (pas pour les drapeaux)
+    if (!pattern) {
+      const [cw, cd, cz] = CONTACT[def || 'FOOT'];
+      k.contactGeo = new THREE.PlaneGeometry(cw, cd).rotateX(-Math.PI / 2).translate(0, 0, cz);
+      for (const a of ['aBone', 'aPart']) k.contactGeo.setAttribute(a, new THREE.Float32BufferAttribute(new Float32Array(4), 1));
+      k.contactMat = this.contactMat(def);
+    }
     this.kinds.set(kind, k);
     this.grow(k, 256);
   }
@@ -635,6 +642,30 @@ export class Troops {
     k.mesh.count = 0; k.mesh.frustumCulled = false;
     k.mesh.customDepthMaterial = k.depth; k.mesh.castShadow = !!this.castShadow;
     this.group.add(k.mesh);
+    if (!k.contactGeo) return;
+    if (k.contact) { this.group.remove(k.contact); k.contact.dispose(); }
+    for (const a of ['aSlot', 'aAnim', 'aCoat']) k.contactGeo.setAttribute(a, k.geo.attributes[a]);   // les mêmes tampons
+    k.contact = new THREE.InstancedMesh(k.contactGeo, k.contactMat, cap);
+    k.contact.count = 0; k.contact.frustumCulled = false; k.contact.renderOrder = 1;
+    this.group.add(k.contact);
+  }
+  // matériau des ombres de contact, un par animation (le servant et la pièce se déplacent en tirant)
+  contactMat(def) {
+    if (this.contactMats[def]) return this.contactMats[def];
+    const m = new THREE.MeshBasicMaterial({ map: this.soft, color: '#000000', transparent: true, opacity: 0.65, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
+    if (def) m.defines = { [def]: '' };
+    m.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, this.uni);
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_HEAD).replace('#include <begin_vertex>', `${VERT_POSE}
+          vec3 transformed = position;
+          transformed = vec3(transformed.x * sa + transformed.z * ca, 0.0, -transformed.x * ca + transformed.z * sa) * aAnim.z;
+          transformed += vec3(base.x, hAt(base) + 0.06, base.y);`);
+      // un régiment deviné n'a pas d'ombre ; un régiment qui s'efface la perd avec lui
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vFade, vPart;')
+        .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.a *= step(0.5, vFade) * vFade;');
+    };
+    m.customProgramCacheKey = () => 'troupes-contact-' + (def || 'homme');
+    return (this.contactMats[def] = m);
   }
 
   // à chaque image : list, les régiments (hors combat exclus) ; colors, couleur de chaque camp ; time, horloge de
@@ -681,7 +712,6 @@ export class Troops {
     }
     for (const [id, i] of this.index) if (!seen.has(id)) { this.index.delete(id); this.lays.delete(id); this.free.push(i); dirty = true; }
     this.units.needsUpdate = true;
-    if (this.blobs.visible) this.drawBlobs(list);
     if (dirty || (this.pending && time - this.built > 0.2)) { this.rebuild(colors, scale); this.built = time; this.pending = false; }
   }
   // toutes les figurines, rangées par sorte
@@ -717,32 +747,21 @@ export class Troops {
     }
     for (const k of this.kinds.values()) {
       k.mesh.count = k.n;
+      if (k.contact) k.contact.count = k.n;
       for (const a of ['aSlot', 'aAnim', 'aCoat']) { const at = k.geo.attributes[a]; at.needsUpdate = true; at.clearUpdateRanges(); at.addUpdateRange(0, k.n * at.itemSize); }
     }
   }
-  // ombres portées des figurines (qualité Haute et Ultra) ; sinon une ombre douce sous chaque régiment (blobs)
+  // ombres portées des figurines (qualité Haute et Ultra) ; les ombres de contact restent dans tous les cas
   setShadows(on) {
-    if (this.castShadow === on && this.blobs.visible === !on) return;
+    if (this.castShadow === on) return;
     this.castShadow = on;
     for (const k of this.kinds.values()) k.mesh.castShadow = on;
-    this.blobs.visible = !on;
-  }
-  // ombre douce sous chaque régiment : un panneau sombre posé au sol, à la taille de son emprise
-  drawBlobs(list) {
-    const { m, q, p, s, up } = this.tmp || (this.tmp = { m: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), s: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0) });
-    let n = 0;
-    for (const un of list) {
-      if (n >= this.blobs.instanceMatrix.count || un.state === 'deroute') continue;
-      p.set(un.x, this.relief.heightAt(un.x, un.y) + 0.08, un.y);
-      q.setFromAxisAngle(up, Math.PI / 2 - un.dir);
-      this.blobs.setMatrixAt(n++, m.compose(p, q, s.set(Math.max(4, un.w) + 5, 1, Math.max(4, un.d) + 5)));
-    }
-    this.blobs.count = n; this.blobs.instanceMatrix.needsUpdate = true;
   }
   setQuality(q) { this.q = q; }
   dispose() {
-    this.blobs.geometry.dispose(); this.blobs.material.dispose(); this.blobs.material.map.dispose();
-    for (const k of this.kinds.values()) { k.geo.dispose(); k.mat.dispose(); k.depth.dispose(); k.mesh.dispose(); }
+    for (const k of this.kinds.values()) { k.geo.dispose(); k.mat.dispose(); k.depth.dispose(); k.mesh.dispose(); k.contactGeo?.dispose(); k.contact?.dispose(); }
+    for (const m of Object.values(this.contactMats)) m.dispose();
+    this.soft.dispose();
     this.units.dispose(); this.heights.dispose(); this.pattern.dispose();
   }
 }
