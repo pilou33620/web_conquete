@@ -24,6 +24,10 @@ terres, siège, guerre, proposition, nouvelle époque, traité) n'arrête plus r
 Pendant le tour des IA, le journal est relu pas à pas pour préparer le récapitulatif du mois (batailles, places prises
 ou perdues, constructions, découvertes, revenus), affiché au début du tour suivant.
 
+Le temps se compte en tours (SPEC-TOURS.md) : la production avance d'un tour de travail par mois (work), les durées
+finissent au début d'un tour du joueur et lui laissent des tours entiers (deadline), l'écran dit « au prochain tour »,
+« dans N tours » (tours_left, ready_in, eta).
+
 Le temps réel d'origine (vitesses ×½ à ×30) reste disponible : tour['on'] = False.
 """
 import calendar

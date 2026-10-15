@@ -70,8 +70,8 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
   dans `journalctl -u web_conquete` ou via `hostname -I` sur le Raspberry.
 - La partie est **sauvegardée automatiquement** au début de chaque mois de jeu (donc au début de chaque tour) ; après
   une coupure de courant ou un redémarrage, le Raspberry la reprend telle quelle (en pause).
-- Le tour par tour ménage le Raspberry : un mois demande environ 0,4 seconde de calcul sur un PC (guerres comprises),
-  soit 2 à 4 secondes sur un Raspberry Pi pour les 15 secondes que dure le mois à l'écran.
+- Le tour des IA se calcule d'un coup : environ 1 seconde sur un Raspberry Pi en début de partie, 2,5 secondes après
+  un an et demi de guerres (une cinquantaine d'armées).
 - Commandes utiles : `sudo systemctl status web_conquete`, `sudo systemctl restart web_conquete`,
   `journalctl -u web_conquete -f`.
 
@@ -85,33 +85,32 @@ puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
 Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War, en deux temps :
 
 1. **Votre tour** : la date ne bouge pas et chaque ordre s'exécute tout de suite. Une armée qui reçoit un ordre de
-   marche part aussitôt, sous vos yeux, jusqu'à épuiser ses jours de marche du mois ou rencontrer l'ennemi (une route
-   plus longue reprend d'elle-même au tour suivant). Une bataille ou un assaut se livre sur-le-champ ; achats,
+   marche part aussitôt, sous vos yeux, jusqu'au bout de sa marche du tour ou jusqu'à l'ennemi (une route plus longue
+   reprend d'elle-même au tour suivant ; la bulle de l'ordre annonce l'arrivée). Une bataille ou un assaut se livre
+   sur-le-champ ; une ville neutre assez faible se rallie aussitôt (l'armée finit là sa marche du tour) ; achats,
    constructions et recherches sont payés tout de suite.
-2. **Le tour des IA** : touchez **« Tour suivant »** en haut de l'écran (ou la barre d'espace). Le mois s'écoule en
-   accéléré : les IA marchent, négocient et se battent, travaux et sièges avancent, les revenus tombent. Vos armées,
-   qui ont déjà joué, restent en place. Tout s'arrête au **1er du mois suivant, à 0 h**, et c'est de nouveau à vous.
+2. **Le tour des IA** : touchez **« Tour suivant »** en haut de l'écran (ou la barre d'espace). Le mois est calculé
+   d'un coup, en une ou deux secondes : les IA marchent, négocient et se battent, travaux et sièges avancent, les revenus
+   tombent. Vos armées, qui ont déjà joué, restent en place. Tout le monde passe au **1er du mois suivant** en même
+   temps, et c'est de nouveau à vous, avec le récapitulatif du mois.
 
-- **Durée à l'écran** : 15 secondes par mois au rythme normal, quelle que soit la longueur du mois. Le bouton de rythme,
-  à côté de « Tour suivant » (ou le menu ☰, rubrique « Rythme du jeu », ou les touches 1 à 4), propose aussi
-  **Lent** (30 s), **Rapide** (8 s) et **Éclair** (4 s). Pendant le tour des IA, une barre montre sa progression et
-  **« Arrêter »** fige le temps à tout moment.
-- **Le tour des IA s'interrompt** aux moments clés, pour vous laisser réagir :
-  - une bataille commence avec vos armées ou devant une de vos places, ou se livre à vue à moins de 25 km de chez vous ;
-  - une armée ennemie (150 hommes ou plus, et visible) entre sur vos terres ;
-  - un siège ou un blocus commence contre une de vos places, ou par une de vos armées ;
-  - une décision vous attend : événement historique ou local, proposition de paix, d'alliance ou exigence de
-    soumission, déclaration de guerre ;
-  - une nouvelle époque, un traité, une capitulation arrêtent toujours le temps.
+- **Le tour des IA ne s'arrête que si vous devez choisir**, comme dans Total War :
+  - une IA attaque une de vos armées ou une de vos places : jouez la bataille ou laissez-la au général ;
+  - une décision vous attend (événement historique ou local) ;
+  - la partie est finie.
 
-  La raison s'affiche en haut : touchez-la pour centrer la carte et sélectionner la bataille, la place ou l'armée (ou
-  ouvrir la décision). Donnez vos ordres, puis **« Continuer »** : le tour des IA reprend là où il s'était arrêté et
-  s'achève toujours au 1er du mois suivant.
-- **Pas d'interruptions à répétition** : jamais deux fois pour la même bataille, le même siège ou la même décision ;
-  au moins 1,5 jour de jeu entre deux batailles, 2 jours entre deux sièges, 4 jours entre deux entrées d'armées ennemies ;
-  un même lieu (assauts répétés, siège qui suit la bataille) n'arrête le temps qu'une fois en 4 jours, la même armée
-  qu'une fois en 20 jours, la même proposition d'un camp qu'une fois en 45 jours. Les escarmouches lointaines entre
-  autres camps et les partis d'éclaireurs ne comptent pas.
+  Votre choix fait, le tour des IA reprend tout seul. Le reste (armées ennemies sur vos terres, sièges, guerres
+  déclarées, propositions, nouvelle époque, traités) est dans le récapitulatif du mois.
+- **Le temps se compte en tours** (un tour = un mois) :
+  - **Production** : chaque ville fait un tour de travail par tour (février comme mars), sa file avance dans l'ordre ;
+    le panneau dit quand chaque élément sera prêt (« au prochain tour », « dans 2 tours ») et le coût de chaque levée
+    en part de tour (« ⅕ de tour » : cinq régiments de ligne par tour).
+  - **Durées arrondies au tour**, qui finissent au début d'un de vos tours : technologies 1 à 3 tours, politique de
+    ville 1 tour, trêve après une paix 4 tours (traités : 2 à 5 ans), droit de passage 12 tours, proposition et
+    décision : à traiter pendant le tour qui suit, garde bourgeoise 2 tours, rapport d'espion au tour suivant (valable
+    deux tours), ralliement négocié au tour suivant.
+  - **Sièges** : « brèche dans N tours », « vivres pour N tours » en blocus.
+  - **Marche** : une jauge de mouvement par armée et l'arrivée estimée ; revenus, entretien et commerce par tour.
 - **Tutoriel** : à la première nouvelle partie sur un appareil, des bulles guident les premiers pas et attendent que
   vous fassiez l'action demandée (choisir une armée, la faire marcher, ouvrir votre chef-lieu, finir votre tour…).
   « Passer » le ferme ; menu ☰, « Revoir le tutoriel » le relance. En bataille, une bulle explique chaque arme la
@@ -121,7 +120,7 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   terminées, régiments levés, découvertes et faits marquants (guerres, paix, traités, révoltes, nouvelle époque). Chaque
   ligne centre la carte au bon endroit ; « Tout voir » déplie la liste, la croix la referme.
 - **Un seul joueur, plusieurs écrans** : l'iPad et le PC ouverts sur le même serveur voient et commandent le même tour.
-  « Tour suivant » touché sur l'un lance le mois sur les deux ; « Arrêter » sur l'iPad l'arrête aussi sur le PC.
+  « Tour suivant » touché sur l'un lance le tour des IA sur les deux.
 - **Sauvegardes** : on peut sauvegarder et recharger en plein mois (la partie reprend en pause, même échéance, même
   récapitulatif en cours). Les anciennes sauvegardes se chargent au tour par tour, en attente des ordres.
 - **Temps réel** : menu ☰, rubrique « Rythme du jeu », « Jouer en temps réel (avec pause) » rend les boutons de vitesse
@@ -621,13 +620,13 @@ ou sans brèche, batailles automatiques face aux commandées, résultats du mode
 
 Pendant l'usage d'un stylet (Apple Pencil, stylet Android ou Windows), la paume posée sur l'écran est ignorée.
 Sur grand écran tactile, les boutons et les cases sont agrandis automatiquement.
-Clavier : espace pour « Tour suivant », « Arrêter » ou « Continuer » (pour la pause en temps réel), 1 à 4 pour le
-rythme du mois (pour la vitesse en temps réel), Échap pour annuler, + et − pour zoomer.
+Clavier : espace pour « Tour suivant » ou « Continuer » (pour la pause en temps réel), 1 à 6 pour la vitesse en temps
+réel, Échap pour annuler, + et − pour zoomer.
 
 ## Organisation du code
 ```
 server.py            serveur HTTP local + boucle de simulation (10 pas par seconde)
-game/turns.py        tour par tour : échéance au 1er du mois, rythme, interruptions, récapitulatif du mois
+game/turns.py        tour par tour : tour des IA d'un coup, arrêts, temps en tours (work, deadline), récapitulatif
 game/geo.py          carte : projection, grilles de terrain, réseau routier, recherche de chemin A* (avec terres interdites)
 game/places.py       les 223 villes, villages et places fortes, routes royales
 raspberry/           installation en service sur Raspberry Pi
@@ -678,7 +677,7 @@ node --test tests/                               # l'interface seule
 | Fichier | Ce qu'il vérifie |
 |---|---|
 | `tests/test_bataille.py` | ordres propres à chaque arme (acceptés ou refusés), salve puis baïonnette, harcèlement, canons sans munitions, régiment anéanti, bataille jusqu'au bout et rechargement en plein combat |
-| `tests/test_campagne.py` | votre tour puis celui des IA, jours de marche, retraite une fois par tour, sièges, dettes et événements, prix du marché, sauvegarde (IA comprises) |
+| `tests/test_campagne.py` | votre tour puis celui des IA (d'un coup, arrêts, reprise), villes neutres, temps en tours (production, recherche, échéances, actions d'armée, sièges, arrivée), retraite une fois par tour, dettes et événements, prix du marché, sauvegarde (IA comprises) |
 | `tests/test_serveur.py` | un vrai serveur HTTP sur un port libre : requêtes mal formées, fichiers hors de `web/`, ordres pendant le tour des IA, sauvegardes (dossier temporaire, les vraies ne sont pas touchées) |
 | `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, boutons d'ordres par arme, panneau du régiment, barre du tour, tutoriel et bulles de bataille |
 | `tests/camera.test.mjs` | caméra 3D des batailles : allers-retours écran ↔ terrain à 1 m et 1 pixel près sur une colline, à plusieurs caps et zooms ; bornes |

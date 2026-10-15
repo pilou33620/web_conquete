@@ -11,7 +11,7 @@
 //    de la bataille ne s'affichent qu'une fois.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { installer, element } from './dom.mjs';
@@ -137,6 +137,18 @@ test('durées en tours', async () => {
   assert.equal(partTour(30), '1 tour');
   assert.equal(partTour(32), '1 tour');
   assert.equal(partTour(75), '2 tours ½');
+});
+
+test('campagne : plus aucune durée en jours à l’écran (tour par tour)', () => {
+  // relevé des textes de ui.js et map.js (la vitesse du temps réel et l'unité perU mises à part)
+  const motifs = [/\d j\b/, /\} j\b/, /' j\b/, /\/j\b/, /par jour/, /jours de marche/, /\d+ jours/, /\} jours/];
+  for (const f of ['ui.js', 'map.js']) {
+    const lignes = readFileSync(join(JS, f), 'utf8').split('\n');
+    lignes.forEach((l, i) => {
+      if (/^\s*\/\//.test(l) || /speeds\[i\]|perU|'par jour'/.test(l)) return;
+      for (const m of motifs) assert.ok(!m.test(l), `${f}:${i + 1} : ${l.trim().slice(0, 90)}`);
+    });
+  }
 });
 
 test('barre du tour : bloquée tant qu’une bataille attend votre choix', () => {

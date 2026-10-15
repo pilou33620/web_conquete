@@ -1,6 +1,6 @@
 import { ICON, speedIcon, coat } from './icons.js';
 import { esc, clamp } from './battle/formes.js';
-import { fmtMen, unitCls, toursTxt, partTour } from './map.js';
+import { fmtMen, unitCls, toursTxt, partTour, TOUR_DAYS } from './map.js';
 import { QUALITES, QUALITE_LABEL, QUALITE_AIDE, qualite, setQualite } from './battle/qualite.js';
 import { Tuto } from './tuto.js';
 
@@ -382,15 +382,19 @@ export class UI {
     }
   }
 
-  // spécialité phare d'une ville : nom, type et production par jour (avec les technologies du joueur s'il la tient)
+  // taux du moteur (par jour), montrés par tour en tour par tour (un tour = un mois, TOUR_DAYS jours), par jour en temps réel
+  per(v) { return this.st?.tour?.on ? v * TOUR_DAYS : v; }
+  get perU() { return this.st?.tour?.on ? '/tour' : '/j'; }
+
+  // spécialité phare d'une ville : nom, type et production par tour (avec les technologies du joueur s'il la tient)
   starLine([kind, label], own, capital) {
     const sp = this.rules.specialty[kind];
     if (!sp) return '';
     const k = (1 + (own && sp.boost ? (this.st.me.mods[sp.boost] || 0) : 0)) * (capital ? this.rules.specialty_capital : 1);
     const prod = ['livres', 'vivres', 'recrues', 'industrie', 'fer', 'bois'].filter(r => sp[r])
-      .map(r => { const v = sp[r] * k, lab = r === 'industrie' ? 'industrie' : this.rules.res_label[r].toLowerCase();
+      .map(r => { const v = this.per(sp[r] * k), lab = r === 'industrie' ? 'industrie' : this.rules.res_label[r].toLowerCase();
         return `+${fmt1(v)} ${r === 'livres' && v < 2 ? 'livre' : lab}`; }).join(', ');
-    return `<div class="star-line"><span class="star">★</span><div><b>${esc(label)}</b><div class="muted small">${esc(sp.label)} : ${prod} par jour (production de base)${own ? '' : ', pour qui tient la ville'}</div></div></div>`;
+    return `<div class="star-line"><span class="star">★</span><div><b>${esc(label)}</b><div class="muted small">${esc(sp.label)} : ${prod} ${this.perU} (production de base)${own ? '' : ', pour qui tient la ville'}</div></div></div>`;
   }
 
   // tendance de la population d'une place (trajectoire de l'époque) et, pour les vôtres, ce qui se passe ce mois-ci
@@ -441,7 +445,7 @@ export class UI {
   resTip(r) {
     const me = this.st.me;
     const lab = this.rules.res_label[r];
-    const rows = [[`Stock`, fmt(me.res[r])], [`Variation par jour`, (fmt1(me.income[r])[0] === '−' ? '' : '+') + fmt1(me.income[r])]];
+    const rows = [[`Stock`, fmt(me.res[r])], [`Variation ${this.st.tour?.on ? 'par tour' : 'par jour'}`, (fmt1(me.income[r])[0] === '−' ? '' : '+') + fmt1(this.per(me.income[r]))]];
     if (r === 'livres') {
       rows.push(['Solde des troupes', '−' + fmt1(me.upkeep.livres || 0)]);
       if (me.upkeep.forts) rows.push(['Entretien des remparts', '−' + fmt1(me.upkeep.forts)]);
@@ -449,11 +453,11 @@ export class UI {
       rows.push(['Commerce', '+' + fmt1(me.trade.livres || 0)]);
     }
     if (r === 'vivres') { rows.push(['Rations des troupes', '−' + fmt1(me.upkeep.vivres || 0)]); if (me.prisoner_upkeep) rows.push(['Prisonniers détenus', '−' + fmt1(me.prisoner_upkeep)]); rows.push(['Saison', this.rules.seasons[this.st.season]]); }
-    if (r === 'armes' || r === 'outils') rows.push(['Capacité industrielle', fmt1(me.cap) + ' /j']);
+    if (r === 'armes' || r === 'outils') rows.push(['Capacité industrielle', fmt1(this.per(me.cap)) + ' ' + this.perU]);
     if (r === 'outils') rows.push(['Bonus des outils', '+' + Math.round((me.tools_bonus - 1) * 100) + ' %']);
     if (r === 'fer' || r === 'bois') rows.push(['Consommés par les ateliers', 'oui']);
     const fl = me.floor && me.floor[r];
-    if (fl) rows.push([this.st.word === 'province' ? 'Minimum garanti de la province' : 'Minimum garanti du département', fmt1(fl.min) + ' /j' + (fl.add > 0.05 ? ` (+${fmt1(fl.add)} en ce moment)` : '')]);
+    if (fl) rows.push([this.st.word === 'province' ? 'Minimum garanti de la province' : 'Minimum garanti du département', fmt1(this.per(fl.min)) + ' ' + this.perU + (fl.add > 0.05 ? ` (+${fmt1(this.per(fl.add))} en ce moment)` : '')]);
     const help = {
       livres: 'Monnaie : solde, recrutement, recherches, constructions.',
       vivres: 'Nourrissent les troupes. Récoltes fortes en été et en automne, faibles en hiver.',
@@ -1040,7 +1044,7 @@ export class UI {
       <dt>Milice</dt><dd>${ns.m != null ? fmt(ns.m) + (ns.mm ? ' / ' + fmt(ns.mm) : '') : 'inconnue'}</dd>
       ${ns.gm != null ? `<dt>Garnison repérée</dt><dd>${fmt(ns.gm)} hommes</dd>` : ''}
       <dt>Fortifications</dt><dd title="${esc(this.fortName(ns.f))}">${pips(ns.f, Math.max(this.rules.fort.max, ns.f, ns.fx || 0))}</dd>
-      ${ns.f > 0 ? `<dt></dt><dd class="muted small">${esc(this.fortName(ns.f))}${own ? `, entretien ${fmt1(this.rules.fort.upkeep[ns.f])} livres /j` : ''}</dd>` : ''}
+      ${ns.f > 0 ? `<dt></dt><dd class="muted small">${esc(this.fortName(ns.f))}${own ? `, entretien ${fmt1(this.per(this.rules.fort.upkeep[ns.f]))} livres ${this.perU}` : ''}</dd>` : ''}
       ${ns.pop ? `<dt>Population</dt><dd>${fmt(ns.pop)} habitants</dd>` : ''}
       <dt>Agrandissement</dt><dd title="${esc(this.devName(gn.type, ns.d))}">${pips(ns.d)}</dd>
       <dt></dt><dd class="muted small">${esc(this.devName(gn.type, ns.d))}${own && ns.pc ? `, place pour ${fmt(ns.pc)}` : ''}</dd>
@@ -1130,7 +1134,7 @@ export class UI {
         const c = b.costs[l];
         const lab = k === 'fort' ? `${l + 1 === this.rules.fort.bastion ? 'Bastions à la Vauban' : b.name + ' niveau ' + (l + 1)}`
           : k === 'dev' ? `Agrandir : ${this.devName(gn.type, l + 1).toLowerCase()}` : `${b.name} niveau ${l + 1}`;
-        const up = k === 'fort' ? `, entretien ${fmt1(this.rules.fort.upkeep[l + 1])} livres /j` : '';
+        const up = k === 'fort' ? `, entretien ${fmt1(this.per(this.rules.fort.upkeep[l + 1]))} livres ${this.perU}` : '';
         h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'}${qDis || ` title="${esc(b.desc)}"`}>${lab}<small>${this.costHtml(c)}, ${partTour(b.days[l])}${up}</small></button>`;
       }
       h += `</div>`;
@@ -1182,8 +1186,8 @@ export class UI {
   // effets d'un niveau ; la production des bâtiments dépend de la taille de la place
   slotFx(gn, L) {
     const sk = this.rules.cities.size_k[gn.type];
-    const note = sk !== 1 && /\/j/.test(L.txt) ? ` (production ×${fmt1(sk)} ${gn.type === 'capitale' ? 'au chef-lieu' : gn.type === 'fort' ? 'dans une place forte' : 'dans un village'})` : '';
-    return L.txt + note + (L.up ? `, entretien ${fmt2(L.up)} livre /j` : '');
+    const note = sk !== 1 && /\/tour/.test(L.txt) ? ` (production ×${fmt1(sk)} ${gn.type === 'capitale' ? 'au chef-lieu' : gn.type === 'fort' ? 'dans une place forte' : 'dans un village'})` : '';
+    return L.txt + note + (L.up ? `, entretien ${fmt1(this.per(L.up))} livres ${this.perU}` : '');
   }
 
   slotBtn(gn, ns, k, chk, qFull, label) {
@@ -1301,7 +1305,7 @@ export class UI {
     // terres fermées : délai de grâce pour en sortir, ou contournement
     if (a.cl) h += `<div class="warnline">Sur les terres ${esc(de(a.cl[0]))}, sans droit de passage : ${a.cl[1] > 0
       ? `${a.cl[1] <= 1 ? 'jusqu’à la fin du tour' : `encore ${a.cl[1]} tours`} pour en sortir (itinéraire de sortie tracé), sinon incident diplomatique.`
-      : `délai de grâce écoulé, chaque jour ici fâche ${esc(a.cl[0])} (incident, voire la guerre).`}</div>`;
+      : `délai de grâce écoulé, rester ici fâche ${esc(a.cl[0])} (incident, voire la guerre).`}</div>`;
     else if (a.dt && a.st === 'move') h += `<div class="muted small">Détour : l’itinéraire contourne les terres ${esc(de(a.dt.join(' et ')))} (sans droit de passage).</div>`;
     if (own) {
       h += `<dl class="kv"><dt>Terrain</dt><dd>${terr}${a.h ? ', à couvert' : ''}</dd><dt>Ravitaillement</dt><dd>${Math.round(a.sup * 100)} %</dd>
@@ -1384,8 +1388,8 @@ export class UI {
       else h += btn('fortify', F.k === 'bar' ? 'Barricades et palissades' : 'Redoutes de campagne', `${F.b} bois, ${partTour(F.d)}`, F.why,
         F.k === 'bar' ? 'Fortification de fortune : presque un mur d’enceinte pour une place sans remparts, le temps qu’elle dure (environ trois tours, moins sous la pluie, en hiver ou sous le canon). Les sapeurs vont plus vite.'
           : 'Ouvrages de campagne devant les remparts : un petit bonus de défense, provisoire.');
-      h += Q.on ? `<button class="btn primary" data-act="army-act" data-v="camp" title="Le cantonnement cesse aussi dès que l’armée se met en marche.">✓ En quartiers : lever le camp<small>+${fmt1(Q.food)} vivres /j</small></button>`
-        : btn('quarters', 'Prendre ses quartiers', `+${fmt1(Q.food)} vivres /j`, Q.why, 'Renforts et moral plus rapides, ordre public en hausse ; l’armée mange davantage. Cesse dès qu’elle bouge.');
+      h += Q.on ? `<button class="btn primary" data-act="army-act" data-v="camp" title="Le cantonnement cesse aussi dès que l’armée se met en marche.">✓ En quartiers : lever le camp<small>+${fmt1(this.per(Q.food))} vivres ${this.perU}</small></button>`
+        : btn('quarters', 'Prendre ses quartiers', `+${fmt1(this.per(Q.food))} vivres ${this.perU}`, Q.why, 'Renforts et moral plus rapides, ordre public en hausse ; l’armée mange davantage. Cesse dès qu’elle bouge.');
       h += btn('garde', 'Armer les habitants', `+${fmt(G.add)} miliciens, ${G.armes} armes, ${G.t} tours`, G.why,
         `${this.rules.units.garde.name} : la milice de la place se renforce fortement pendant ${G.t} tours ; un peu moins de production.`);
       const gain = [`${fmt(Rq.g.vivres)} vivres`, `${fmt(Rq.g.recrues)} recrues`].concat(Rq.g.livres ? [`${fmt(Rq.g.livres)} livres`] : []).join(', ');
@@ -1600,7 +1604,7 @@ export class UI {
     const hegLine = !st.heg ? '' : `<p class="small" style="color:#ffcf85;margin:0 0 8px">${st.heg === st.me.code
       ? 'Vous dominez l’Aquitaine : les autres camps se méfient de vous et se liguent contre vous dès que vous êtes en guerre.'
       : `${esc(this.rules.factions[st.heg].name)} domine l’Aquitaine : les autres camps s’en méfient et entrent volontiers dans ses guerres, dans le camp adverse.`}</p>`;
-    const neuLine = neu ? `<div class="row" style="margin-bottom:8px"><span class="small">Vous détenez ${fmt(neu)} miliciens insurgés prisonniers${st.me.prisoner_upkeep ? `, nourris ${fmt1(st.me.prisoner_upkeep)} vivres /j pour tous vos prisonniers` : ''}.</span>${enrollBtn('neutre', neu, 'Enrôler')}</div>` : '';
+    const neuLine = neu ? `<div class="row" style="margin-bottom:8px"><span class="small">Vous détenez ${fmt(neu)} miliciens insurgés prisonniers${st.me.prisoner_upkeep ? `, nourris ${fmt1(this.per(st.me.prisoner_upkeep))} vivres ${this.perU} pour tous vos prisonniers` : ''}.</span>${enrollBtn('neutre', neu, 'Enrôler')}</div>` : '';
     // droits de passage : qui nous laisse passer, à qui nous laissons passer (sinon, terres fermées)
     const others = st.factions.filter(f => f.code !== me && f.alive);
     const nm = f => esc(this.rules.factions[f.code].name);
@@ -1638,7 +1642,7 @@ export class UI {
         <div class="btns"><button class="btn primary" data-act="trade-offer">Proposer l’échange</button></div>` : '<p class="muted">Aucun partenaire en paix.</p>'}
         <h3 class="section-t">Accords commerciaux</h3>
         ${trades.length ? trades.map(f => `<div class="row"><span class="chip ally">${this.rules.factions[f.code].name}</span><span class="muted small">Spécialité reçue : ${this.rules.res_label[this.rules.factions[f.code].specialty].toLowerCase()}</span></div>`).join('') +
-          `<p class="small">Gains par jour : ${Object.entries(me.trade).filter(([, v]) => v > 0.01).map(([k, v]) => `+${fmt1(v)} ${this.rules.res_label[k].toLowerCase()}`).join(', ') || 'aucun'}</p>`
+          `<p class="small">Gains ${this.st.tour?.on ? 'par tour' : 'par jour'} : ${Object.entries(me.trade).filter(([, v]) => v > 0.01).map(([k, v]) => `+${fmt1(this.per(v))} ${this.rules.res_label[k].toLowerCase()}`).join(', ') || 'aucun'}</p>`
           : '<p class="muted">Aucun accord. Proposez-en un depuis la Diplomatie.</p>'}
       </div></div>`;
     return [html, JSON.stringify([Object.values(st.market.prices).map(p => p.toFixed(2)), Object.values(me.res).map(Math.round), partners.map(f => f.code), trades.map(f => f.code)])];
@@ -1680,17 +1684,17 @@ export class UI {
         <input id="sl" class="slider" type="range" min="0" max="100" step="5" value="${s}" data-act="slider" data-live="slider">
         <div class="big-slider-labels"><span>Tout en outils</span><span id="slider-val">${s} % armes, ${100 - s} % outils</span><span>Tout en armes</span></div>
         <dl class="kv" style="margin-top:12px">
-          <dt>Capacité industrielle</dt><dd>${fmt1(me.cap)} /j</dd>
-          <dt>Armes fabriquées</dt><dd>+${fmt1(me.income.armes)} /j</dd>
-          <dt>Outils fabriqués</dt><dd>+${fmt1(me.income.outils)} /j</dd>
+          <dt>Capacité industrielle</dt><dd>${fmt1(this.per(me.cap))} ${this.perU}</dd>
+          <dt>Armes fabriquées</dt><dd>+${fmt1(this.per(me.income.armes))} ${this.perU}</dd>
+          <dt>Outils fabriqués</dt><dd>+${fmt1(this.per(me.income.outils))} ${this.perU}</dd>
           <dt>Couverture en outils</dt><dd>${Math.round(me.cov * 100)} %</dd>
           <dt>Bonus de production</dt><dd>+${Math.round((me.tools_bonus - 1) * 100)} %</dd>
           ${me.pop ? `<dt>Population de vos terres</dt><dd>${fmt(me.pop)} habitants</dd>${this.popYear(me.popy)}` : ''}
           <dt>Lassitude de la guerre</dt><dd style="${(me.weary || 0) >= 50 ? 'color:#ff9a85' : ''}">${me.weary || 0} %</dd>
-          <dt>Solde des troupes</dt><dd>${fmt1(me.upkeep.livres || 0)} livres /j</dd>
-          <dt>Entretien des remparts</dt><dd>${fmt1(me.upkeep.forts || 0)} livres /j</dd>
-          <dt>Rations des troupes</dt><dd>${fmt1(me.upkeep.vivres || 0)} vivres /j</dd>
-          ${nPr ? `<dt>Prisonniers détenus</dt><dd>${fmt(nPr)} (${fmt1(me.prisoner_upkeep || 0)} vivres /j)</dd>` : ''}
+          <dt>Solde des troupes</dt><dd>${fmt1(this.per(me.upkeep.livres || 0))} livres ${this.perU}</dd>
+          <dt>Entretien des remparts</dt><dd>${fmt1(this.per(me.upkeep.forts || 0))} livres ${this.perU}</dd>
+          <dt>Rations des troupes</dt><dd>${fmt1(this.per(me.upkeep.vivres || 0))} vivres ${this.perU}</dd>
+          ${nPr ? `<dt>Prisonniers détenus</dt><dd>${fmt(nPr)} (${fmt1(this.per(me.prisoner_upkeep || 0))} vivres ${this.perU})</dd>` : ''}
         </dl>
         ${(me.effects || []).length ? `<div class="muted small" style="margin-top:6px"><b>Effets des événements :</b> ${me.effects.map(esc).join(' · ')}</div>` : ''}
         <div class="bar"><i style="width:${Math.round(me.cov * 100)}%"></i></div>
@@ -1758,7 +1762,7 @@ export class UI {
           <li>Les routes sont rapides. À travers champs, l’armée peut se cacher dans les bois, landes, marais ou montagnes et tendre une embuscade (posture « Embuscade »), mais avance plus lentement, s’use et perd son ravitaillement.</li>
           <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite. Les remparts ont quatre niveaux (le quatrième, les bastions à la Vauban, après la technologie du même nom, dans le chef-lieu et les places fortes) ; ils coûtent un entretien et perdent un niveau quand la place est prise de force.</li>
           <li><b>Deux siècles</b> : la grande campagne part de 1700 (ou de 1790, 1813, 1870) et s’achève fin 1899 ; le plus prestigieux l’emporte. Les provinces deviennent départements en 1790 ; technologies et unités n’apparaissent qu’à leur époque. ${this.st.tour && this.st.tour.on ? '' : 'Vitesses ×10 et ×30 (touches 5 et 6) pour les années de paix : guerres, batailles et grandes propositions remettent en pause.'}</li>
-          <li><b>Tour par tour</b> : chaque tour est un mois. Pendant votre tour, vos ordres s’exécutent tout de suite : vos armées marchent sous vos yeux (dans la limite de leurs jours de marche du mois, ou jusqu’au contact de l’ennemi), les batailles et les assauts se livrent aussitôt, les achats sont payés. Touchez « Tour suivant » : les IA jouent leur tour d’un coup (une ou deux secondes), puis c’est de nouveau à vous, au 1er du mois suivant, avec le bilan du mois écoulé. Le tour des IA ne s’arrête que si vous devez choisir : une IA vous attaque (livrer la bataille ou la laisser au général), ou une décision vous attend ; votre choix fait, il reprend tout seul. Le reste (armées ennemies sur vos terres, sièges, guerres, propositions) est dans le bilan du mois.</li>
+          <li><b>Tour par tour</b> : chaque tour est un mois. Pendant votre tour, vos ordres s’exécutent tout de suite : vos armées marchent sous vos yeux (dans la limite de leur marche du tour, ou jusqu’au contact de l’ennemi), les batailles et les assauts se livrent aussitôt, les achats sont payés. Touchez « Tour suivant » : les IA jouent leur tour d’un coup (une ou deux secondes), puis c’est de nouveau à vous, au 1er du mois suivant, avec le bilan du mois écoulé. Le tour des IA ne s’arrête que si vous devez choisir : une IA vous attaque (livrer la bataille ou la laisser au général), ou une décision vous attend ; votre choix fait, il reprend tout seul. Le reste (armées ennemies sur vos terres, sièges, guerres, propositions) est dans le bilan du mois.</li>
           <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
           <li><b>Événements</b> : aux grandes dates (Grand Hiver, Révolution, Blocus continental, phylloxéra…) et au gré des imprévus, une fenêtre vous demande un choix ; chaque option affiche ses effets. Vos choix nourrissent l’« histoire » de votre prestige. Sans réponse avant la fin du tour suivant, l’option la plus prudente s’applique.</li>
           <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes reçues à sa levée (affichées à côté de son nom) : après une découverte, réarmez les régiments démodés dans une de vos places (bouton « Réarmer », payé en armes, et en fer pour l’artillerie). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>

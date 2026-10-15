@@ -117,7 +117,7 @@ Vérification commune à chaque tâche : `python3 tests/lancer.py` passe, puis u
   - Fichiers : `game/turns.py`, `game/views.py`, `server.py`, `web/js/ui.js`, `web/js/map.js`
   - Taille : M
 
-- [ ] **T11 : taux par tour, tutoriel, README, chasse aux derniers « jours »**
+- [x] **T11 : taux par tour, tutoriel, README, chasse aux derniers « jours »**
   - Revenus, entretien, production, commerce et vivres des quartiers affichés par tour ; bulles du tutoriel et aide
     en tours ; README (section tour par tour) ; doc en tête de `game/turns.py`.
   - Banc de l'interface : aucun texte des panneaux de campagne ne contient « jour » ou « N j ».

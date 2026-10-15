@@ -228,7 +228,7 @@ def _pct(v):
 
 def _years(days):
     y = round(days / 365)
-    return f"{y} an{'s' if y > 1 else ''}" if y >= 1 else f"{int(days)} jours"
+    return f"{y} an{'s' if y > 1 else ''}" if y >= 1 else R.pl(max(1, int(days / 30 + 0.5)), 'tour')
 
 
 def describe(g, code, fx, town=None):

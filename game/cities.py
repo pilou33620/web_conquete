@@ -135,13 +135,13 @@ def _n(x):
 
 
 def fx_text(fx, star=None):
-    """Effets d'un niveau, en clair."""
+    """Effets d'un niveau, en clair (production par tour : TOUR_DAYS jours)."""
     out = []
     for k in PROD:
         if fx.get(k):
-            out.append(f"+{_n(fx[k])} {FX_LABEL[k] if k != 'livres' or fx[k] < 2 else 'livres'} /j")
+            out.append(f"+{_n(fx[k] * TT.TOUR_DAYS)} {FX_LABEL[k] if k != 'livres' or fx[k] * TT.TOUR_DAYS < 2 else 'livres'} /tour")
     if fx.get('trade'):
-        out.append(f"+{_n(fx['trade'])} livre /j de commerce par eau")
+        out.append(f"+{_n(fx['trade'] * TT.TOUR_DAYS)} livres /tour de commerce par eau")
     if fx.get('spec'):
         out.append(f"spécialité +{round(fx['spec'] * 100)} %")
     if fx.get('stab'):
@@ -786,7 +786,7 @@ def describe_local(g, v):
         n = tours_of(v.get('days', 60))
         out.append(f"{TM_LABEL.get(k, k)} {R.de(name)} {_pct(x)} pendant {R.pl(n, 'tour')}")
     for k, x in (v.get('add') or {}).items():
-        out.append(f"+{_n(x)} {R.RES_LABEL.get(k, k).lower()} par jour à {name} (durable)")
+        out.append(f"+{_n(x * TT.TOUR_DAYS)} {R.RES_LABEL.get(k, k).lower()} par tour à {name} (durable)")
     return out
 
 
@@ -934,7 +934,7 @@ def node_view(g, n):
     tm = [e for e in n.get('tm') or () if e['until'] > g.t]
     if tm or n.get('bo'):
         d['tm'] = [f"{TM_LABEL.get(e['k'], e['k'])} {_pct(e['v'])} jusqu'au {g.date_str(e['until'])}" for e in tm] + \
-                  [f"+{_n(x)} {R.RES_LABEL.get(k, k).lower()} par jour ({'filon' if k == 'fer' else 'durable'})"
+                  [f"+{_n(x * TT.TOUR_DAYS)} {R.RES_LABEL.get(k, k).lower()} par tour ({'filon' if k == 'fer' else 'durable'})"
                    for k, x in (n.get('bo') or {}).items()]
     if any(p.get('kind') == 'ville' and p.get('town') == n['id'] for p in g.pending_ev):
         d['ev'] = 1

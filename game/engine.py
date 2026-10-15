@@ -645,7 +645,7 @@ class Game:
             a['des_why'] = None
         if season == 'printemps' and self.rng.random() < 0.35:
             self.flood_until = self.t + 10
-            self.log('meteo', 'Crue de la Garonne et de la Dordogne : les bacs sont ralentis pendant 10 jours.', important=True)
+            self.log('meteo', 'Crue de la Garonne et de la Dordogne : les bacs sont ralentis pendant un tiers de tour.', important=True)
         if self.factions[self.player]['alive']:
             f = self.factions[self.player]
             inc = f['income']
