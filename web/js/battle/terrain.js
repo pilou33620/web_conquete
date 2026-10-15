@@ -22,14 +22,14 @@ function b64(s) {
 // prairies (et herbe sèche), cultures (sous la neige en hiver), vignes, landes, sous-bois, feuillages, eau…
 export const PALETTES = {
   printemps: {
-    pre: ['#93c05c', '#88b955', '#9dc866', '#a5c86a'], herbeSec: '#b9c46c', champ: [['#b9c766', '#a9bd5c'], ['#a98b5e', '#977a52'], ['#e2d45e', '#d6c652'], ['#9fc25c', '#8fb350']],
+    pre: ['#8ab35a', '#7fa852', '#93ba60', '#98b963'], herbeSec: '#b3bc6a', champ: [['#b9c766', '#a9bd5c'], ['#a98b5e', '#977a52'], ['#e2d45e', '#d6c652'], ['#9fc25c', '#8fb350']],
     vigneSol: '#b5a27a', vigneRang: '#5d8f36', lande: '#a3a067', landeFleurs: ['#8f6a92', '#c9b648', '#6f7d48'], sousBois: '#4f7a38',
     arbres: ['#3d7a34', '#4b8a3b', '#5a9944'], arbreHi: 'rgba(170,215,110,0.55)', pins: ['#2f6136', '#3a6d3c'], marais: '#7fa37e', sable: '#e2d29c',
     roche: '#aaa491', rocheSombre: '#7d7867', eau: '#4f8cc6', eauBord: '#2f6297', eauHi: 'rgba(200,228,250,0.55)', route: '#d3be8f', routeBord: '#9c845a',
     chemin: '#c9b588', bati: '#c1b08e', toit: ['#b4513a', '#c0623e', '#a9472f'], ardoise: ['#5d6474', '#535a6a'], neige: 0,
   },
   ete: {
-    pre: ['#9cb456', '#91ab4f', '#a7bb60', '#98ad55'], herbeSec: '#c6b866', champ: [['#e6c56a', '#d8b65c'], ['#d9bd78', '#cbac66'], ['#c9a35c', '#b99352'], ['#b4b85e', '#a6aa54']],
+    pre: ['#8eab4c', '#7f9f45', '#9db657', '#86a24a'], herbeSec: '#bdb066', champ: [['#e6c56a', '#d8b65c'], ['#d9bd78', '#cbac66'], ['#c9a35c', '#b99352'], ['#b4b85e', '#a6aa54']],
     vigneSol: '#c4ab7c', vigneRang: '#4c7d2c', lande: '#ada060', landeFleurs: ['#9c6a8e', '#d8bf4a', '#857a48'], sousBois: '#46703a',
     arbres: ['#3f7a33', '#4c8a3a', '#5b9744'], arbreHi: 'rgba(160,200,100,0.5)', pins: ['#2b5a33', '#356638'], marais: '#87a37a', sable: '#ead7a0',
     roche: '#b2aa94', rocheSombre: '#857e6a', eau: '#4a88c2', eauBord: '#2c5e94', eauHi: 'rgba(210,235,250,0.55)', route: '#dcc89a', routeBord: '#a48a5c',
@@ -526,7 +526,7 @@ export class Terrain {
       const v = r.type, crop = v === T.CHAMP || v === T.VIGNE || r.tex === 'prairie';
       if (v === T.EAU || v === T.GUE || v === T.ROUTE || v === T.CHEMIN) continue;   // l'eau plus bas ; les routes sur l'herbe
       if (r.tex !== 'herbe' && r.tex !== 'neige') { g.fillStyle = this.pat(g, r.tex, s, crop ? r.angle : 0, r.off); g.fill(r.path); }
-      if (v === T.PRE) { g.globalAlpha = 0.08; g.fillStyle = pal.pre[r.tone]; g.fill(r.path); g.globalAlpha = 1; }
+      if (v === T.PRE) { g.globalAlpha = 0.16; g.fillStyle = pal.pre[r.tone]; g.fill(r.path); g.globalAlpha = 1; }
       else if (v === T.CHAMP) { g.globalAlpha = 0.04 + (r.tone >> 1) * 0.04; g.fillStyle = r.tone & 1 ? '#fff8dc' : '#281e0a'; g.fill(r.path); g.globalAlpha = 1; }
       if (crop && s >= 0.9) {
         g.strokeStyle = mixHex(pal.pre[1], pal.herbeSec, 0.3); g.globalAlpha = 0.75; g.lineWidth = v === T.VIGNE ? 1.1 : 1.6; g.stroke(r.path);

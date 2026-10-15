@@ -244,7 +244,12 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
   - Fichiers : `web/js/battle/troupes.js`
   - Taille : S
 
-- [ ] **T24 : couleurs du sol**
+- [x] **T24 : couleurs du sol**
+  - Fait :
+    - L'été mêle l'or à des verts : blé 34 %, chaume 14 %, avoine 14 %, maïs 12 %, blé vert 8 %, prairie 18 %. Avant, 66 % des
+      champs étaient jaunes.
+    - Blé plus profond ; herbe d'été plus verte ; printemps moins citron ; nuance d'une prairie à l'autre doublée.
+  - Vu en passant : les haies sont des règles lisses (orange à l'automne). Ajouté à T27.
   - Critères : blé or doux et plusieurs teintes par parcelle (mûr, vert, chaume, labour) ; herbe en taches de
     plusieurs verts et coins secs ; saisons toujours distinctes.
   - Vérif : captures bocage, vignes, landes, automne et hiver.
@@ -278,6 +283,7 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
     - Même nombre d'arbres par qualité ; effacement près de la caméra toujours actif.
     - Troupes visibles dans les bois : sous l'emprise d'un régiment (avec une marge), la couronne s'efface et le tronc
       reste.
+    - Haies buissonnantes (bord supérieur bosselé, teinte variée) au lieu de règles lisses.
   - Vérif : captures landes (vue d'ensemble) et bocage au ras ; triangles des trois vues ≤ départ + 10 %.
   - Fichiers : `web/js/battle/decor.js`
   - Taille : M

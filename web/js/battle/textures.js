@@ -79,7 +79,7 @@ const dot = (r0, r1, seed) => (p, x, y, k) => { const r = r0 + hash(k, 6, seed) 
 // [culture, poids] ; une parcelle tire sa culture d'après son numéro
 export const CULTURES = {
   printemps: [['bleVert', 38], ['avoine', 18], ['labour', 22], ['prairie', 22]],
-  ete: [['ble', 46], ['chaume', 20], ['mais', 14], ['prairie', 20]],
+  ete: [['ble', 34], ['chaume', 14], ['avoine', 14], ['mais', 12], ['bleVert', 8], ['prairie', 18]],   // l'or alterne avec des verts
   automne: [['labour', 40], ['chaume', 24], ['mais', 14], ['semis', 22]],
   hiver: [['labour', 60], ['chaume', 40]],
 };
@@ -224,10 +224,10 @@ function neigeDetails(g, size, L, S) {
 }
 // cultures : rangs le long de x
 const CROP = {
-  ble: { base: '#d8b35a', alt: '#bfa24e', rows: 0.3, band: 3.2 },
-  bleVert: { base: '#93b955', alt: '#b3c86a', rows: 0.22, band: 2.8 },
-  avoine: { base: '#b2c66c', alt: '#c8cc7e', rows: 0.22, band: 2.4 },
-  chaume: { base: '#d9c78f', alt: '#c7b278', rows: 0.24, band: 1.9 },
+  ble: { base: '#c9a54f', alt: '#a98a43', rows: 0.3, band: 3.2 },
+  bleVert: { base: '#86ab4e', alt: '#a3bd60', rows: 0.22, band: 2.8 },
+  avoine: { base: '#a7b865', alt: '#bdc274', rows: 0.22, band: 2.4 },
+  chaume: { base: '#cfbd88', alt: '#b9a571', rows: 0.24, band: 1.9 },
   semis: { base: '#8f6c48', alt: '#7c8c4a', rows: 0.7, band: 6 },
   labour: { base: '#8c6a47', alt: '#74573a', rows: 0.75, band: 9 },
   mais: { base: '#a0805a', alt: '#8e7050', rows: 0.8, band: 7 },
@@ -267,7 +267,7 @@ function crop(kind, size, L, pal, season, S, n) {
   }
   if (L >= 4 && (kind === 'ble' || kind === 'bleVert' || kind === 'avoine' || kind === 'chaume')) {
     // épis et tiges : marques courtes, claires au sommet, sombres entre les pieds
-    const lite = kind === 'ble' ? [246, 222, 146] : kind === 'chaume' ? [244, 232, 190] : mixc(base, [230, 240, 160], 0.4);
+    const lite = kind === 'ble' ? [236, 210, 138] : kind === 'chaume' ? [238, 226, 184] : mixc(base, [230, 240, 160], 0.4);
     const dark = mul(base, kind === 'chaume' ? 0.72 : 0.62), w = Math.max(0.6, 0.03 * L);
     strew(g, size, Math.min(12000, size * size / (L >= 8 ? 22 : 34)), S + 5, [{ stroke: css(dark, 0.5), w }, { stroke: css(lite, 0.6), w }, { stroke: css(mixc(lite, base, 0.5), 0.5), w }], blade(L, 0.06, kind === 'chaume' ? 0.1 : 0.18, S));
   }
