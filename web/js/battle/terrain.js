@@ -25,22 +25,22 @@ export const PALETTES = {
     pre: ['#8ab35a', '#7fa852', '#93ba60', '#98b963'], herbeSec: '#b3bc6a', champ: [['#b9c766', '#a9bd5c'], ['#a98b5e', '#977a52'], ['#e2d45e', '#d6c652'], ['#9fc25c', '#8fb350']],
     vigneSol: '#b5a27a', vigneRang: '#5d8f36', lande: '#a3a067', landeFleurs: ['#8f6a92', '#c9b648', '#6f7d48'], sousBois: '#4f7a38',
     arbres: ['#3d7a34', '#4b8a3b', '#5a9944'], arbreHi: 'rgba(170,215,110,0.55)', pins: ['#2f6136', '#3a6d3c'], marais: '#7fa37e', sable: '#e2d29c',
-    roche: '#aaa491', rocheSombre: '#7d7867', eau: '#4f8cc6', eauBord: '#2f6297', eauHi: 'rgba(200,228,250,0.55)', route: '#d3be8f', routeBord: '#9c845a',
-    chemin: '#c9b588', bati: '#c1b08e', toit: ['#b4513a', '#c0623e', '#a9472f'], ardoise: ['#5d6474', '#535a6a'], neige: 0,
+    roche: '#aaa491', rocheSombre: '#7d7867', eau: '#4f8cc6', eauBord: '#2f6297', eauHi: 'rgba(200,228,250,0.55)', route: '#c4a77e', routeBord: '#8f744c',
+    chemin: '#c0a375', bati: '#c1b08e', toit: ['#b4513a', '#c0623e', '#a9472f'], ardoise: ['#5d6474', '#535a6a'], neige: 0,
   },
   ete: {
     pre: ['#8eab4c', '#7f9f45', '#9db657', '#86a24a'], herbeSec: '#bdb066', champ: [['#e6c56a', '#d8b65c'], ['#d9bd78', '#cbac66'], ['#c9a35c', '#b99352'], ['#b4b85e', '#a6aa54']],
     vigneSol: '#c4ab7c', vigneRang: '#4c7d2c', lande: '#ada060', landeFleurs: ['#9c6a8e', '#d8bf4a', '#857a48'], sousBois: '#46703a',
     arbres: ['#3f7a33', '#4c8a3a', '#5b9744'], arbreHi: 'rgba(160,200,100,0.5)', pins: ['#2b5a33', '#356638'], marais: '#87a37a', sable: '#ead7a0',
-    roche: '#b2aa94', rocheSombre: '#857e6a', eau: '#4a88c2', eauBord: '#2c5e94', eauHi: 'rgba(210,235,250,0.55)', route: '#dcc89a', routeBord: '#a48a5c',
-    chemin: '#d3be90', bati: '#c9b893', toit: ['#b85a3c', '#c4643a', '#a94a2a'], ardoise: ['#5d6474', '#535a6a'], neige: 0,
+    roche: '#b2aa94', rocheSombre: '#857e6a', eau: '#4a88c2', eauBord: '#2c5e94', eauHi: 'rgba(210,235,250,0.55)', route: '#c8a878', routeBord: '#957650',
+    chemin: '#c8a671', bati: '#c9b893', toit: ['#b85a3c', '#c4643a', '#a94a2a'], ardoise: ['#5d6474', '#535a6a'], neige: 0,
   },
   automne: {
     pre: ['#8e9e58', '#859651', '#97a35e', '#8a9152'], herbeSec: '#ab9c5c', champ: [['#8c6a46', '#7c5c3c'], ['#a3825a', '#93744e'], ['#b89a64', '#a98b58'], ['#7f8a4c', '#717c44']],
     vigneSol: '#9e8460', vigneRang: '#a27a34', lande: '#93774f', landeFleurs: ['#a0522d', '#8a6a3a', '#6c6040'], sousBois: '#6a6234',
     arbres: ['#a8692a', '#c08a30', '#7c7a32', '#9a4a26'], arbreHi: 'rgba(240,200,110,0.45)', pins: ['#2f5a35', '#3a6439'], marais: '#7c8f6c', sable: '#dccb98',
-    roche: '#a39d8a', rocheSombre: '#77715f', eau: '#4a7fb4', eauBord: '#2b5788', eauHi: 'rgba(200,222,240,0.5)', route: '#c2ab7c', routeBord: '#8a724c',
-    chemin: '#b9a276', bati: '#b8a684', toit: ['#a94a2f', '#b85a3a', '#9a4229'], ardoise: ['#565d6c', '#4c5262'], neige: 0,
+    roche: '#a39d8a', rocheSombre: '#77715f', eau: '#4a7fb4', eauBord: '#2b5788', eauHi: 'rgba(200,222,240,0.5)', route: '#b89e70', routeBord: '#806642',
+    chemin: '#b39566', bati: '#b8a684', toit: ['#a94a2f', '#b85a3a', '#9a4229'], ardoise: ['#565d6c', '#4c5262'], neige: 0,
   },
   hiver: {
     pre: ['#e9edf0', '#e3e8ec', '#eef1f3', '#dfe5ea'], herbeSec: '#dfe5ea', champ: [['#e4e8ec', '#d3d9de'], ['#e8ebee', '#d8dde1'], ['#dde2e7', '#cdd3d9'], ['#e6eaee', '#d6dce1']],
@@ -581,20 +581,22 @@ export class Terrain {
       }
     }
     mark('eau');
-    // chemins de terre : bas-côtés foulés, ornières, herbe au milieu ; routes : chaussée de terre battue et de gravier
+    // chemins de terre : larges, bas-côtés foulés aux bords fondus, ornières, herbe au milieu ; routes : chaussée de
+    // terre battue et de gravier
     g.lineCap = 'round'; g.lineJoin = 'round';
-    const verge = snow ? 'rgba(150,150,150,0.25)' : 'rgba(110,98,48,0.24)', terre = this.pat(g, 'terre', s), route = this.pat(g, 'route', s);
-    for (const p of this.pathPts) { g.strokeStyle = verge; g.lineWidth = 6.5; strokePts(g, p); }
-    for (const r of this.roadPts) { g.strokeStyle = verge; g.lineWidth = 13; strokePts(g, r); }
-    for (const p of this.pathPts) { g.strokeStyle = 'rgba(90,70,40,0.3)'; g.lineWidth = 4.2; strokePts(g, p); }
-    for (const p of this.pathPts) { g.strokeStyle = terre; g.lineWidth = 3.6; strokePts(g, p); }
-    for (const r of this.roadPts) { g.strokeStyle = pal.routeBord; g.lineWidth = 9.4; strokePts(g, r); }
-    for (const r of this.roadPts) { g.strokeStyle = route; g.lineWidth = 8.4; strokePts(g, r); }
+    const verge = snow ? 'rgba(150,150,150,0.15)' : 'rgba(112,90,44,0.15)', terre = this.pat(g, 'terre', s), route = this.pat(g, 'route', s);
+    g.strokeStyle = verge;
+    for (const w of [9.5, 7.6]) for (const p of this.pathPts) { g.lineWidth = w; strokePts(g, p); }   // deux passes : un bord fondu
+    for (const w of [16, 13]) for (const r of this.roadPts) { g.lineWidth = w; strokePts(g, r); }
+    for (const p of this.pathPts) { g.strokeStyle = 'rgba(96,72,40,0.26)'; g.lineWidth = 5.8; strokePts(g, p); }
+    for (const p of this.pathPts) { g.strokeStyle = terre; g.lineWidth = 5; strokePts(g, p); }
+    for (const r of this.roadPts) { g.strokeStyle = pal.routeBord; g.lineWidth = 10.2; strokePts(g, r); }
+    for (const r of this.roadPts) { g.strokeStyle = route; g.lineWidth = 9.2; strokePts(g, r); }
     if (s >= 1.5) {
-      g.strokeStyle = snow ? 'rgba(110,100,90,0.4)' : 'rgba(104,80,48,0.34)'; g.lineWidth = 0.5;
-      for (const r of this.roadPts) { strokePts(g, offsetPts(r, -1.5)); strokePts(g, offsetPts(r, 1.5)); }
-      for (const p of this.pathPts) { strokePts(g, offsetPts(p, -0.8)); strokePts(g, offsetPts(p, 0.8)); }
-      g.strokeStyle = snow ? 'rgba(250,252,255,0.6)' : 'rgba(118,140,64,0.55)'; g.lineWidth = 0.45;
+      g.strokeStyle = snow ? 'rgba(110,100,90,0.4)' : 'rgba(96,70,40,0.4)'; g.lineWidth = 0.6;
+      for (const r of this.roadPts) { strokePts(g, offsetPts(r, -1.6)); strokePts(g, offsetPts(r, 1.6)); }
+      for (const p of this.pathPts) { strokePts(g, offsetPts(p, -1.2)); strokePts(g, offsetPts(p, 1.2)); }
+      g.strokeStyle = snow ? 'rgba(250,252,255,0.6)' : 'rgba(112,136,60,0.55)'; g.lineWidth = 0.9;
       for (const p of this.pathPts) strokePts(g, p);
       g.strokeStyle = 'rgba(255,250,232,0.14)'; g.lineWidth = 1.3;
       for (const r of this.roadPts) strokePts(g, r);

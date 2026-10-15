@@ -256,7 +256,9 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
   - Fichiers : `web/js/battle/terrain.js`, `web/js/battle/textures.js`
   - Taille : M
 
-- [ ] **T25 : chemins larges et usés**
+- [x] **T25 : chemins larges et usés**
+  - Fait : chemins de 5 m (3,6 avant), bas-côtés en deux passes (bord fondu), ornières plus écartées, herbe au milieu
+    plus visible ; routes de 9,2 m ; terre et chaussée plus ocres.
   - Critères : chemins de terre plus larges, bords adoucis, ornières, herbe au milieu ; routes distinctes ; ponts et
     gués toujours raccordés.
   - Vérif : captures bocage et vignes, mi-distance et au ras.
