@@ -86,7 +86,7 @@ Vérification commune à chaque tâche : `python3 tests/lancer.py` passe, puis u
   - Fichiers : `game/diplomacy.py`, `game/events.py`, `game/cities.py`, `game/rules.py`, `web/js/ui.js`
   - Taille : M
 
-- [ ] **T8 : actions d'armée et espions en tours**
+- [x] **T8 : actions d'armée et espions en tours**
   - Garde bourgeoise 2 tours (6 d'attente), réquisition 4 tours d'attente, contribution 3, ralliement négocié 1 tour
     (1 d'attente), grâce sur des terres fermées 1 tour, rapport d'espion au tour suivant et valable 2 tours.
   - Vérifier : banc `test_campagne.py` (un ralliement négocié lancé pendant le tour aboutit au tour suivant ; un

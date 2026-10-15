@@ -3481,8 +3481,8 @@ class Game:
         if f['res']['livres'] < cost:
             return False, "Livres insuffisantes."
         f['res']['livres'] -= cost
-        self.spies.append(dict(by=code, node=nid, kind=kind, done=round(self.t + R.SPY[kind]['days'], 3)))
-        return True, f"Un agent part pour {gn['name']} ({R.SPY[kind]['days']} jours)."
+        self.spies.append(dict(by=code, node=nid, kind=kind, done=TT.deadline(self, 1)))
+        return True, f"Un agent part pour {gn['name']} : son rapport au prochain tour."
 
     def update_spies(self):
         if not self.spies:
@@ -3514,7 +3514,7 @@ class Game:
             return
         if self.rng.random() < chance:
             if kind == 'espionner':
-                f.setdefault('intel', {})[str(nid)] = round(self.t + R.SPY_INTEL_DAYS, 2)
+                f.setdefault('intel', {})[str(nid)] = TT.deadline(self, R.SPY_INTEL_TOURS)
                 if code == self.player:
                     gm = sum(r['n'] for r in n['garrison'])
                     near = [a for a in self.armies.values() if a['owner'] == o and math.hypot(a['x'] - gn['x'], a['y'] - gn['y']) < 14]

@@ -1066,12 +1066,12 @@ export class UI {
       const fsn = st.factions.find(x => x.code === ns.o);
       const atWar = fsn && fsn.st === 'guerre';
       h += `<div class="section-t">Espionnage</div>`;
-      if (ns.spy) h += `<p class="small">${ICON.spy.replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Un agent est en route (${this.rules.spy[ns.spy.kind].label.toLowerCase()}), ${Math.max(0, Math.ceil(ns.spy.left * 24))} h restantes.</p>`;
+      if (ns.spy) h += `<p class="small">${ICON.spy.replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Un agent est en route (${this.rules.spy[ns.spy.kind].label.toLowerCase()}) : son rapport ${toursTxt(ns.spy.tn)}.</p>`;
       else {
         h += `<div class="btns">${Object.entries(this.rules.spy).map(([k, sp]) => {
           const ok = st.me.res.livres >= sp.cost && (k !== 'saboter' || (atWar && ns.f > 0));
-          return `<button class="btn" data-act="spy" data-v="${k}" ${ok ? '' : 'disabled'} title="${esc(sp.desc)}">${sp.label}<small>${sp.cost} livres, ${sp.days} j, ${Math.round(sp.chance * 100)} % de réussite</small></button>`;
-        }).join('')}</div><div class="muted small">Espionner révèle la garnison et les armées alentour pendant ${this.rules.spy_days} jours. Saboter (en guerre) ouvre une brèche dans les remparts. Un agent démasqué fâche ${this.st.word === 'province' ? 'la province visée' : 'le département visé'}.</div>`;
+          return `<button class="btn" data-act="spy" data-v="${k}" ${ok ? '' : 'disabled'} title="${esc(sp.desc)}">${sp.label}<small>${sp.cost} livres, rapport au prochain tour, ${Math.round(sp.chance * 100)} % de réussite</small></button>`;
+        }).join('')}</div><div class="muted small">Espionner révèle la garnison et les armées alentour pendant ${this.rules.spy_tours} tours. Saboter (en guerre) ouvre une brèche dans les remparts. Un agent démasqué fâche ${this.st.word === 'province' ? 'la province visée' : 'le département visé'}.</div>`;
       }
     }
     if (own) {
@@ -1293,7 +1293,7 @@ export class UI {
     if (a.fire) h += `<div class="warnline">Les gabares essuient le feu des canons ennemis sur la berge !</div>`;
     // terres fermées : délai de grâce pour en sortir, ou contournement
     if (a.cl) h += `<div class="warnline">Sur les terres ${esc(de(a.cl[0]))}, sans droit de passage : ${a.cl[1] > 0
-      ? `encore ${Math.ceil(a.cl[1])} j pour en sortir (itinéraire de sortie tracé), sinon incident diplomatique.`
+      ? `${a.cl[1] <= 1 ? 'jusqu’à la fin du tour' : `encore ${a.cl[1]} tours`} pour en sortir (itinéraire de sortie tracé), sinon incident diplomatique.`
       : `délai de grâce écoulé, chaque jour ici fâche ${esc(a.cl[0])} (incident, voire la guerre).`}</div>`;
     else if (a.dt && a.st === 'move') h += `<div class="muted small">Détour : l’itinéraire contourne les terres ${esc(de(a.dt.join(' et ')))} (sans droit de passage).</div>`;
     if (own) {
@@ -1359,7 +1359,7 @@ export class UI {
   worksHtml(ns) {
     let h = '';
     if (ns.bar != null) h += `<div class="muted small" style="margin:2px 0 6px">${ns.f > 0 ? 'Redoutes et ouvrages de campagne : un peu plus de défense' : 'Barricades et palissades : la place soutiendra un siège'}, solidité ${Math.round(ns.bar * 100)} % (s’use avec le temps, la pluie et le canon).</div>`;
-    if (ns.bw) h += `<div class="queue-item"><span>${ns.bw[2] === 'bar' ? 'Barricades et palissades' : 'Redoutes'} en chantier</span><span class="muted">${Math.ceil(ns.bw[1])} j</span><div class="bar"><i style="width:${Math.round(ns.bw[0] * 20) * 5}%"></i></div></div>`;
+    if (ns.bw) h += `<div class="queue-item"><span>${ns.bw[2] === 'bar' ? 'Barricades et palissades' : 'Redoutes'} en chantier</span><span class="muted">${partTour(ns.bw[1])}</span><div class="bar"><i style="width:${Math.round(ns.bw[0] * 20) * 5}%"></i></div></div>`;
     if (ns.gd) h += `<div class="muted small" style="margin:2px 0 6px">Habitants en armes : +${fmt(ns.gd[1])} miliciens jusqu’au ${esc(ns.gd[0])} (production réduite).</div>`;
     return h;
   }
@@ -1373,14 +1373,14 @@ export class UI {
     if (x.own) {
       const F = x.fort, Q = x.qrt, G = x.garde, Rq = x.req;
       let h = `<div class="section-t">Dans la place</div><div class="btns">`;
-      if (F.w) h += `<div class="queue-item" style="flex:1 1 100%"><span>${F.k === 'bar' ? 'Barricades et palissades' : 'Redoutes'} en chantier</span><span class="muted">${Math.ceil(F.w[0])} j</span><div class="bar"><i style="width:${Math.round((1 - F.w[0] / F.w[1]) * 20) * 5}%"></i></div></div>`;
-      else h += btn('fortify', F.k === 'bar' ? 'Barricades et palissades' : 'Redoutes de campagne', `${F.b} bois, ${fmt1(F.d)} j`, F.why,
-        F.k === 'bar' ? 'Fortification de fortune : presque un mur d’enceinte pour une place sans remparts, le temps qu’elle dure (environ trois mois, moins sous la pluie, en hiver ou sous le canon). Les sapeurs vont plus vite.'
+      if (F.w) h += `<div class="queue-item" style="flex:1 1 100%"><span>${F.k === 'bar' ? 'Barricades et palissades' : 'Redoutes'} en chantier</span><span class="muted">${partTour(F.w[0])}</span><div class="bar"><i style="width:${Math.round((1 - F.w[0] / F.w[1]) * 20) * 5}%"></i></div></div>`;
+      else h += btn('fortify', F.k === 'bar' ? 'Barricades et palissades' : 'Redoutes de campagne', `${F.b} bois, ${partTour(F.d)}`, F.why,
+        F.k === 'bar' ? 'Fortification de fortune : presque un mur d’enceinte pour une place sans remparts, le temps qu’elle dure (environ trois tours, moins sous la pluie, en hiver ou sous le canon). Les sapeurs vont plus vite.'
           : 'Ouvrages de campagne devant les remparts : un petit bonus de défense, provisoire.');
       h += Q.on ? `<button class="btn primary" data-act="army-act" data-v="camp" title="Le cantonnement cesse aussi dès que l’armée se met en marche.">✓ En quartiers : lever le camp<small>+${fmt1(Q.food)} vivres /j</small></button>`
         : btn('quarters', 'Prendre ses quartiers', `+${fmt1(Q.food)} vivres /j`, Q.why, 'Renforts et moral plus rapides, ordre public en hausse ; l’armée mange davantage. Cesse dès qu’elle bouge.');
-      h += btn('garde', 'Armer les habitants', `+${fmt(G.add)} miliciens, ${G.armes} armes, ${G.days} j`, G.why,
-        `${this.rules.units.garde.name} : la milice de la place se renforce fortement pendant ${G.days} jours ; un peu moins de production.`);
+      h += btn('garde', 'Armer les habitants', `+${fmt(G.add)} miliciens, ${G.armes} armes, ${G.t} tours`, G.why,
+        `${this.rules.units.garde.name} : la milice de la place se renforce fortement pendant ${G.t} tours ; un peu moins de production.`);
       const gain = [`${fmt(Rq.g.vivres)} vivres`, `${fmt(Rq.g.recrues)} recrues`].concat(Rq.g.livres ? [`${fmt(Rq.g.livres)} livres`] : []).join(', ');
       h += btn('req', 'Réquisitionner', `${gain} ; ordre public −${Rq.stab} %`, Rq.why, 'Prend tout de suite vivres, recrues et livres aux habitants ; l’ordre public baisse nettement.',
         ` data-confirm="${esc(`Réquisitionner ${this.md.nodes[a.n]?.name} (${gain}) ? L’ordre public baissera de ${Rq.stab} %.`)}"`);
@@ -1394,8 +1394,8 @@ export class UI {
     h += `<div class="btns">`;
     if (x.neg) {
       const N = x.neg;
-      if (N.w) h += `<div class="queue-item" style="flex:1 1 100%"><span>Pourparlers avec les notables</span><span class="muted">${Math.ceil(N.w[0])} j</span><div class="bar"><i style="width:${Math.round((1 - N.w[0] / N.w[1]) * 20) * 5}%"></i></div></div>`;
-      else h += btn('neg', 'Négocier le ralliement', `${fmt(N.p)} livres, ${N.d} j, refus ${Math.round(N.r * 100)} %`, N.why,
+      if (N.w != null) h += `<div class="queue-item" style="flex:1 1 100%"><span>Pourparlers avec les notables</span><span class="muted">réponse ${toursTxt(N.w)}</span></div>`;
+      else h += btn('neg', 'Négocier le ralliement', `${fmt(N.p)} livres, réponse au prochain tour, refus ${Math.round(N.r * 100)} %`, N.why,
         'Les notables rallient la place sans combat contre une somme, moindre si votre armée est imposante. Ils peuvent refuser (l’argent vous est alors rendu).');
     }
     if (x.ctb) {
@@ -1757,8 +1757,8 @@ export class UI {
           <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes reçues à sa levée (affichées à côté de son nom) : après une découverte, réarmez les régiments démodés dans une de vos places (bouton « Réarmer », payé en armes, et en fer pour l’artillerie). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
           <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>
           <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
-          <li><b>Frontières</b> : les terres d’un ${this.st?.word || 'département'} en paix vous sont fermées, sauf droit de passage (fenêtre Diplomatie) ou alliance. Vos armées les contournent ; sans détour possible, vous pouvez passer en force, ce qui revient à lui déclarer la guerre. Les gabares passent devant ses quais sans y débarquer. Une armée surprise sur des terres fermées (droit retiré, paix signée…) a cinq jours pour en sortir.</li>
-          <li><b>Espions</b> : depuis une place étrangère, espionnez (vision et garnison pendant 45 jours) ou sabotez ses remparts en temps de guerre. Le brouillard de guerre (bouton œil) montre ce que vous voyez réellement.</li>
+          <li><b>Frontières</b> : les terres d’un ${this.st?.word || 'département'} en paix vous sont fermées, sauf droit de passage (fenêtre Diplomatie) ou alliance. Vos armées les contournent ; sans détour possible, vous pouvez passer en force, ce qui revient à lui déclarer la guerre. Les gabares passent devant ses quais sans y débarquer. Une armée surprise sur des terres fermées (droit retiré, paix signée…) a jusqu’à la fin du tour pour en sortir.</li>
+          <li><b>Espions</b> : depuis une place étrangère, espionnez (vision et garnison pendant deux tours, rapport au tour suivant) ou sabotez ses remparts en temps de guerre. Le brouillard de guerre (bouton œil) montre ce que vous voyez réellement.</li>
           <li><b>Impôts</b> (fenêtre Production) : plus d’argent tout de suite, mais l’ordre public baisse ; une ville agitée sans garnison peut se révolter.</li>
           <li>La partie est sauvegardée automatiquement chaque mois ; elle reprend au redémarrage du serveur.</li>
           <li>La pluie mouille la poudre, la neige ferme les cols, l’hiver vide les greniers. Les récoltes arrivent en été et en automne.</li>

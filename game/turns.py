@@ -130,13 +130,20 @@ def deadline(g, n):
     """Échéance d'une durée de n tours (règle B) : le début d'un tour du joueur, qui garde n tours entiers. Pendant son
     tour, ce tour compte (n = 1 : jusqu'à la fin du mois) ; ailleurs (tour des IA, temps réel), à partir du suivant."""
     n = max(1, int(n))
-    return month_end(g, k=n if planning(g) else n + 1)
+    fresh = planning(g) or g.t <= month_end(g, k=0) + 1e-6   # (au début d'un tour, même au dernier pas des IA)
+    return month_end(g, k=n if fresh else n + 1)
 
 
 def turn_start_after(g, t):
     """Le début de tour (1er du mois, 0 h) à t ou juste après : ce qu'une échéance en jours devient en tours."""
     start = month_end(g, t, 0)
     return start if t <= start + 1e-6 else month_end(g, t)
+
+
+def part_tour(days):
+    """Une durée en jours de travail, en tours, pour les messages (comme partTour dans web/js/map.js)."""
+    x = days / TOUR_DAYS
+    return 'moins d\'un tour' if x < 0.9 else R.pl(max(1, int(x + 0.5)), 'tour')
 
 
 def tours_left(g, until):

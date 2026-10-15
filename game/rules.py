@@ -638,12 +638,12 @@ LOSER_STRAGGLE = 0.05
 
 # ------------------------------------------------------------------ espions, impôts, fleuves
 SPY = {
-    'espionner': dict(label='Espionner', cost=60, days=2, chance=0.8,
-                      desc='Révèle la garnison et les environs (14 km) pendant 45 jours.'),
-    'saboter': dict(label='Saboter les remparts', cost=150, days=3, chance=0.5,
+    'espionner': dict(label='Espionner', cost=60, chance=0.8,
+                      desc='Révèle la garnison et les environs (14 km) pendant deux tours.'),
+    'saboter': dict(label='Saboter les remparts', cost=150, chance=0.5,
                     desc='En guerre seulement : fait perdre un niveau de fortification à la place.'),
 }
-SPY_INTEL_DAYS = 45
+SPY_INTEL_TOURS = 2   # un rapport d'espion vaut pour deux tours
 WATER_SPEED = 30  # km par jour en gabare (avant courant et météo)
 SEA_SPEED = 55  # cabotage le long de la côte (les tempêtes immobilisent les navires)
 EMBARK_DAYS = 0.35  # chargement des gabares (hommes, chevaux, canons)

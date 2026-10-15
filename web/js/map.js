@@ -1944,7 +1944,7 @@ export class MapView {
     if (!last) { ctx.restore(); return; }
     this.flag(ctx, last[0], last[1], 22, a.tr ? '#f6efdc' : this.colors[a.o]);   // en traversant : halte, drapeau blanc
     // terres fermées : détour, ou sortie dans le délai de grâce
-    const note = a.cl ? `sortie des terres ${a.cl[1] > 0 ? `(${Math.ceil(a.cl[1])} j)` : '(délai écoulé)'}` : a.dt && a.dt.length ? `détour (terres fermées : ${a.dt.join(', ')})` : '';
+    const note = a.cl ? `sortie des terres ${a.cl[1] > 0 ? `(${a.cl[1] <= 1 ? 'ce tour' : a.cl[1] + ' tours'})` : '(délai écoulé)'}` : a.dt && a.dt.length ? `détour (terres fermées : ${a.dt.join(', ')})` : '';
     if (note) {
       ctx.font = 'italic 600 13px "EB Garamond", Georgia, serif';
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';

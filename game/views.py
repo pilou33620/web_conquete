@@ -136,7 +136,7 @@ def rules_payload():
                 weather=R.WEATHER, zones=R.ZONES, speeds=R.SPEEDS, res=R.RESOURCES, res_label=R.RES_LABEL,
                 difficulty={k: v['label'] for k, v in R.DIFFICULTY.items()}, neutral_color=R.NEUTRAL_COLOR,
                 seasons=R.SEASON_LABEL, traits=R.GENERAL_TRAITS, ranks=R.GENERAL_RANKS, formations=R.FORMATIONS,
-                formation_speed=R.FORMATION_SPEED, plans=R.PLANS, phases=R.PHASES, spy=R.SPY, spy_days=R.SPY_INTEL_DAYS,
+                formation_speed=R.FORMATION_SPEED, plans=R.PLANS, phases=R.PHASES, spy=R.SPY, spy_tours=R.SPY_INTEL_TOURS,
                 tax_labels=R.TAX_LABELS, water=dict(speed=R.WATER_SPEED, sea=R.SEA_SPEED, embark=R.EMBARK_DAYS,
                                                     quai=R.QUAI_LIVRES, blockade=R.BLOCKADE_K),
                 cities=CT.rules_payload())
@@ -266,7 +266,7 @@ def player_state(g, since=0):
             d['gm'] = round(sum(r['n'] for r in n['garrison']))
         spy = next((s for s in g.spies if s['by'] == p and s['node'] == n['id']), None)
         if spy:
-            d['spy'] = dict(kind=spy['kind'], left=round(spy['done'] - g.t, 1))
+            d['spy'] = dict(kind=spy['kind'], tn=TT.tours_left(g, spy['done']))
         AA.view_node(g, n, d, n['owner'] in side, lambda: g.intel_active(p, n['id']) or seen(gn['x'], gn['y']))
         nodes.append(d)
 
@@ -361,7 +361,7 @@ def player_state(g, since=0):
                 trade={k: round(v, 2) for k, v in me.get('_trade', {}).items()},
                 unit_costs={u: g.unit_cost(p, u) for u in R.UNITS}, unit_days={u: round(g.unit_days(p, u), 1) for u in R.UNITS},
                 floor=me.get('_floor', {}), tax=me.get('tax', 0.5), order=_order(g, p),
-                spies=[dict(node=s['node'], kind=s['kind'], left=round(s['done'] - g.t, 1)) for s in g.spies if s['by'] == p],
+                spies=[dict(node=s['node'], kind=s['kind'], tn=TT.tours_left(g, s['done'])) for s in g.spies if s['by'] == p],
                 has_port=has_port, famine=bool(me.get('famine')), banqueroute=bool(me.get('banqueroute')),
                 stats={k: int(v) for k, v in me['stats'].items()}, mods={k: round(v, 3) for k, v in me['mods'].items()},
                 prisoners={k: int(v) for k, v in me.get('prisoners', {}).items() if v > 0},

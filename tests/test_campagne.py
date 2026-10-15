@@ -337,6 +337,43 @@ class EcheancesEnTours(unittest.TestCase):
         self.assertEqual(g.date_str(g.factions[g.player]['truce']['24']), '1er mai 1790')
 
 
+class ActionsEnTours(unittest.TestCase):
+    def test_delai_d_attente_en_tours(self):
+        g = partie()   # 4 mars 1790
+        n = next(n for n in g.owned_nodes(g.player))
+        AA.set_cd(g, n, 'req', AA.REQ_CD)
+        self.assertEqual(AA.cd_left(g, n, 'req'), 4, 'quatre tours, celui-ci compris')
+        au(g, 1790, 7)
+        self.assertEqual(AA.cd_left(g, n, 'req'), 0, 'fini au début du 4e tour suivant')
+
+    def test_ralliement_negocie_au_tour_suivant(self):
+        g = partie()
+        a = armee(g)
+        nid = next(n['id'] for n in g.nodes if n['owner'] == R.NEUTRAL)
+        a['at_node'], a['path'], a['state'], a['hold'] = nid, [], 'idle', True   # halte devant ses portes
+        a['x'], a['y'] = g.node_xy(nid)
+        g.factions[g.player]['res']['livres'] = 1e5
+        ok, msg = AA.negotiate(g, g.player, a)
+        self.assertTrue(ok, msg)
+        self.assertIn('au prochain tour', msg)
+        g.nodes[nid]['aa']['ng']['risk'] = 0.0
+        jouer_mois(g)
+        self.assertEqual(g.nodes[nid]['owner'], g.player)
+
+    def test_espion_rapport_au_tour_suivant_valable_deux_tours(self):
+        g = partie()
+        nid = next(n['id'] for n in g.nodes if n['owner'] == '24')
+        g.factions[g.player]['res']['livres'] = 1e5
+        self.assertTrue(g.spy(g.player, nid, 'espionner')[0])
+        s = g.spies[-1]
+        self.assertEqual(g.date_str(s['done']), '1er avril 1790')
+        TT.go(g)
+        g.t = s['done'] + 1e-9   # le dernier pas du tour des IA, qui franchit minuit
+        g.rng.random = lambda: 0.0
+        g.update_spies()
+        self.assertEqual(g.date_str(g.factions[g.player]['intel'][str(nid)]), '1er juin 1790', 'avril et mai')
+
+
 class Regles(unittest.TestCase):
     def test_un_evenement_n_efface_pas_une_dette(self):
         class G:

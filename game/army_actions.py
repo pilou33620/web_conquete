@@ -21,7 +21,7 @@ BAR_DAYS = (2.0, 20.0)  # durée des travaux, au plus court et au plus long
 BAR_LEVEL = 0.8         # une place sans remparts barricadée vaut presque un mur d'enceinte (niveau 1)
 RED_LEVEL = 0.3         # redoutes devant des remparts : petit bonus
 RED_WORK = 0.6          # les redoutes demandent moins de travail
-BAR_WEAR = 1 / 90       # usure par jour : environ trois mois
+BAR_WEAR = 1 / 90       # usure par jour : environ trois tours
 BAR_WET = 1.5           # pluie, orage, neige, tempête
 BAR_WINTER = 1.3
 BAR_SIEGE = 1.6         # la brèche s'ouvre plus vite que dans des remparts
@@ -35,8 +35,8 @@ QRT_FOOD = 0.6          # vivres consommés en plus (part de l'entretien)
 QRT_STAB = 0.12         # ordre public visé en plus dans la place
 
 # ------------------------------------------------------------------ garde bourgeoise
-GARDE_DAYS = 60
-GARDE_CD = 180          # délai entre deux levées dans la même place
+GARDE_TOURS = 2
+GARDE_CD = 6            # délai entre deux levées dans la même place (tours)
 GARDE_MM = 0.6          # milice en plus : part de la milice ordinaire…
 GARDE_POP = 0.012       # … et des habitants
 GARDE_MAX = 900
@@ -44,17 +44,17 @@ GARDE_ARMES = 0.15      # armes par homme armé
 GARDE_PROD = 0.9        # production pendant que les bourgeois montent la garde
 
 # ------------------------------------------------------------------ réquisition
-REQ_CD = 120
+REQ_CD = 4               # tours
 REQ_STAB = 0.25
 REQ = dict(vivres=(30, 0.012, 900), recrues=(10, 0.003, 300), livres=(0, 0.004, 400))   # (fixe, par habitant, plafond)
 
 # ------------------------------------------------------------------ ralliement négocié
-NEG_DAYS = dict(village=2, fort=4, ville=3, capitale=5)
+NEG_TOURS = 1            # réponse des notables : au tour suivant
 NEG_BASE, NEG_POP, NEG_MIL = 40, 0.02, 1.0
-NEG_CD = 30             # après un refus, les notables ne reçoivent plus pendant un mois
+NEG_CD = 1              # après un refus, les notables ne reçoivent plus pendant un tour
 
 # ------------------------------------------------------------------ contribution
-CTB_CD = 90
+CTB_CD = 3               # tours
 CTB_MIN = 0.5           # rapport de forces minimal pour se faire payer
 CTB = dict(livres=(30, 0.01, 900), vivres=(20, 0.012, 600))
 CTB_REL_ALL = 5         # place indépendante : tous les départements s'en indignent…
@@ -88,11 +88,12 @@ def aa(n):
 
 
 def cd_left(g, n, k):
-    return max(0.0, node_aa(n).get('cd', {}).get(k, -1) - g.t)
+    """Tours d'attente qui restent avant de pouvoir recommencer (0 : c'est possible)."""
+    return TT.tours_left(g, node_aa(n).get('cd', {}).get(k, -1))
 
 
-def set_cd(g, n, k, days):
-    aa(n).setdefault('cd', {})[k] = round(g.t + days, 2)
+def set_cd(g, n, k, tours):
+    aa(n).setdefault('cd', {})[k] = TT.deadline(g, tours)
 
 
 def place(g, nid):
@@ -236,7 +237,7 @@ def fortify(g, code, a):
         return False, f"Il faut {bois} bois."
     g.factions[code]['res']['bois'] -= bois
     x['bw'] = dict(by=a['id'], code=code, kind=kind, left=days, total=days)
-    return True, f"La troupe élève des {works_name(n, kind)} à {place(g, nid)} ({days:.0f} j, {bois} bois)."
+    return True, f"La troupe élève des {works_name(n, kind)} à {place(g, nid)} ({TT.part_tour(days)}, {bois} bois)."
 
 
 def works_tick(g, n, x, dt):
@@ -256,7 +257,7 @@ def works_tick(g, n, x, dt):
     if w['code'] == g.player:
         txt = ("la place pourra soutenir un siège" if w['kind'] == 'bar' else "la défense en est un peu renforcée")
         g.log('armee', f"{works_name(n, w['kind']).capitalize()} achevées à {place(g, nid)} : {txt}, "
-                       f"le temps qu'elles durent (environ trois mois).", *g.node_xy(nid), who=w['code'], important=True)
+                       f"le temps qu'elles durent (environ trois tours).", *g.node_xy(nid), who=w['code'], important=True)
 
 
 def wear_tick(g, n, x, dt):
@@ -331,19 +332,19 @@ def garde(g, code, a):
         return False, "Les bourgeois sont déjà sous les armes."
     left = cd_left(g, n, 'garde')
     if left > 0:
-        return False, f"Les habitants ont rendu leurs armes il y a peu : encore {math.ceil(left)} jours."
+        return False, f"Les habitants ont rendu leurs armes il y a peu : encore {R.pl(left, 'tour')}."
     add, armes = garde_info(n)
     f = g.factions[code]
     if f['res']['armes'] < armes:
         return False, f"Il faut {armes} armes."
     f['res']['armes'] -= armes
-    aa(n)['gd'] = dict(until=round(g.t + GARDE_DAYS, 2), add=add)
+    aa(n)['gd'] = dict(until=TT.deadline(g, GARDE_TOURS), add=add)
     n['milice_max'] += add
     n['milice'] += add
     set_cd(g, n, 'garde', GARDE_CD)
     g._dirty_income = True
     gname = g.unit_name(code, 'garde')[0].lower()
-    return True, (f"{R.nb(add)} habitants de {place(g, nid)} prennent les armes ({gname}) pour {GARDE_DAYS} jours "
+    return True, (f"{R.nb(add)} habitants de {place(g, nid)} prennent les armes ({gname}) pour {GARDE_TOURS} tours "
                   f"({armes} armes). La production de la place baisse un peu.")
 
 
@@ -372,7 +373,7 @@ def requisition(g, code, a):
     n = g.nodes[nid]
     left = cd_left(g, n, 'req')
     if left > 0:
-        return False, f"La place a déjà été réquisitionnée : encore {math.ceil(left)} jours."
+        return False, f"La place a déjà été réquisitionnée : encore {R.pl(left, 'tour')}."
     gain = req_info(n)
     f = g.factions[code]
     f['res']['vivres'] += gain['vivres']
@@ -538,7 +539,7 @@ def force_passage(g, code, who):
 
 
 # ------------------------------------------------------------------ délai de grâce
-GRACE_DAYS = 5.0        # pour sortir de terres fermées où l'on se retrouve sans l'avoir voulu
+GRACE_TOURS = 1         # pour sortir de terres fermées où l'on se retrouve sans l'avoir voulu
 
 
 def land_tick(g, a, dt):
@@ -565,10 +566,10 @@ def land_tick(g, a, dt):
             return
     cl = a.get('cl')
     if not cl or cl['o'] != o:
-        cl = a['cl'] = dict(o=o, until=round(g.t + GRACE_DAYS, 2), rt=0.0)
+        cl = a['cl'] = dict(o=o, until=TT.deadline(g, GRACE_TOURS), rt=0.0)
         if code == g.player:
             g.log('armee', f"La {a['name']} se trouve sur les terres {R.de(g.fname(o))} sans droit de passage : "
-                           f"elle a {GRACE_DAYS:.0f} jours pour en sortir.", a['x'], a['y'], who=o, important=True)
+                           f"elle a jusqu'au {g.date_str(cl['until'])} pour en sortir.", a['x'], a['y'], who=o, important=True)
     if g.t >= cl['rt'] and not (a['state'] == 'move' and a.get('ex') == o):
         cl['rt'] = round(g.t + 1.0, 2)   # au plus une tentative par jour
         way_out(g, a, o)
@@ -711,7 +712,7 @@ def neg_info(g, a, nid):
         risk += 0.12   # elle préférerait se donner à son propre pays
     elif home == a['owner']:
         risk -= 0.06
-    return price, NEG_DAYS[gn['type']], round(clamp(risk, 0.05, 0.6), 2)
+    return price, round(clamp(risk, 0.05, 0.6), 2)
 
 
 def negotiate(g, code, a):
@@ -727,15 +728,15 @@ def negotiate(g, code, a):
         return False, "Les pourparlers sont déjà engagés."
     left = cd_left(g, n, 'neg')
     if left > 0:
-        return False, f"Les notables ne vous recevront pas avant {math.ceil(left)} jours."
-    price, days, risk = neg_info(g, a, nid)
+        return False, f"Les notables ne vous recevront pas avant {R.pl(left, 'tour')}."
+    price, risk = neg_info(g, a, nid)
     f = g.factions[code]
     if f['res']['livres'] < price:
         return False, f"Il faut {price} livres."
     f['res']['livres'] -= price
-    aa(n)['ng'] = dict(by=code, army=a['id'], left=days, total=days, price=price, risk=risk)
-    return True, (f"Pourparlers avec les notables {R.de(place(g, nid))} : {price} livres engagées, réponse dans "
-                  f"{days} jours (risque de refus {int(risk * 100)} %).")
+    aa(n)['ng'] = dict(by=code, army=a['id'], until=TT.deadline(g, NEG_TOURS), price=price, risk=risk)
+    return True, (f"Pourparlers avec les notables {R.de(place(g, nid))} : {price} livres engagées, réponse "
+                  f"au prochain tour (risque de refus {int(risk * 100)} %).")
 
 
 def neg_tick(g, n, x, dt):
@@ -753,8 +754,9 @@ def neg_tick(g, n, x, dt):
         if code == g.player:
             g.log('armee', f"Pourparlers rompus à {place(g, nid)} : vos livres vous sont rendues.", *g.node_xy(nid), who=code)
         return
-    ng['left'] -= dt
-    if ng['left'] > 0:
+    if 'until' not in ng:   # (sauvegarde d'avant les tours : jours restants)
+        ng['until'] = TT.turn_start_after(g, g.t + ng.pop('left', 0.0))
+    if g.t < ng['until'] - 1e-6:
         return
     del x['ng']
     if g.rng.random() < ng['risk']:
@@ -795,7 +797,7 @@ def contribution(g, code, a):
         return False, "La place est déjà investie." if s['by'] != code else "La place est en train de se rallier."
     left = cd_left(g, n, 'ctb')
     if left > 0:
-        return False, f"La place vient d'être rançonnée : encore {math.ceil(left)} jours."
+        return False, f"La place vient d'être rançonnée : encore {R.pl(left, 'tour')}."
     gain, ratio = ctb_info(g, a, nid)
     if ratio < CTB_MIN:
         return False, "Vos troupes ne font pas assez peur pour se faire payer."
@@ -1026,7 +1028,7 @@ def view_army(g, a, d, own):
         d['dt'] = [g.fname(o) for o in a['dt']]   # terres fermées contournées
     cl = a.get('cl')
     if cl:
-        d['cl'] = [g.fname(cl['o']), round(cl['until'] - g.t, 1)]   # sur des terres fermées : délai de grâce
+        d['cl'] = [g.fname(cl['o']), TT.tours_left(g, cl['until'])]   # sur des terres fermées : tours de grâce
     nid = a['at_node']
     if nid is None or a['state'] not in ('idle', 'siege') or a.get('boat') or a['battle']:
         return
@@ -1049,7 +1051,7 @@ def options(g, a, nid):
                 else f"Il faut {bois} bois" if res['bois'] < bois else '')
         add, armes = garde_info(n)
         gl = cd_left(g, n, 'garde')
-        gwhy = ("Déjà sous les armes" if 'gd' in x else f"Encore {math.ceil(gl)} j" if gl > 0
+        gwhy = ("Déjà sous les armes" if 'gd' in x else f"Encore {R.pl(gl, 'tour')}" if gl > 0
                 else f"Il faut {armes} armes" if res['armes'] < armes else '')
         rl = cd_left(g, n, 'req')
         rq = req_info(n)
@@ -1058,8 +1060,8 @@ def options(g, a, nid):
                     fort=dict(why=fwhy, k=kind, d=days, b=bois, s=round(cur, 2),
                               w=[round(w['left'], 1), round(w['total'], 1)] if w and w['by'] == a['id'] else None),
                     qrt=dict(on=bool(a.get('qrt')), why=why_s or '', food=round(food, 1)),
-                    garde=dict(why=gwhy, add=add, armes=armes, days=GARDE_DAYS),
-                    req=dict(why=why_s or (f"Encore {math.ceil(rl)} j" if rl > 0 else ''), g=rq,
+                    garde=dict(why=gwhy, add=add, armes=armes, t=GARDE_TOURS),
+                    req=dict(why=why_s or (f"Encore {R.pl(rl, 'tour')}" if rl > 0 else ''), g=rq,
                              stab=int(REQ_STAB * 100)))
     if g.friendly(code, n['owner']):
         return None
@@ -1074,16 +1076,16 @@ def options(g, a, nid):
         return out
     occ = bool(s and s.get('occupy'))
     if o == R.NEUTRAL and not s:
-        price, days, risk = neg_info(g, a, nid)
+        price, risk = neg_info(g, a, nid)
         ng = x.get('ng')
         nl = cd_left(g, n, 'neg')
-        out['neg'] = dict(why=("Pourparlers en cours" if ng else f"Pas reçus avant {math.ceil(nl)} j" if nl > 0
+        out['neg'] = dict(why=("Pourparlers en cours" if ng else f"Pas reçus avant {R.pl(nl, 'tour')}" if nl > 0
                                else f"Il faut {price} livres" if res['livres'] < price else ''),
-                          p=price, d=days, r=risk, w=[round(ng['left'], 1), ng['total']] if ng else None)
+                          p=price, r=risk, w=TT.tours_left(g, ng['until']) if ng and 'until' in ng else None)
     if not occ:
         gain, ratio = ctb_info(g, a, nid)
         cl = cd_left(g, n, 'ctb')
-        out['ctb'] = dict(why=(f"Encore {math.ceil(cl)} j" if cl > 0 else "Trop peu de troupes pour l'exiger"
+        out['ctb'] = dict(why=(f"Encore {R.pl(cl, 'tour')}" if cl > 0 else "Trop peu de troupes pour l'exiger"
                                if ratio < CTB_MIN else ''), g=gain, all=o == R.NEUTRAL)
         bl = bool(s and s.get('blocus'))
         if not bl:
