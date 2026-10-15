@@ -170,6 +170,24 @@ def march_left(g, a):
     return march_days(g) if a.get('mp') is None else max(0.0, a['mp'])
 
 
+def eta(g, a):
+    """Dans combien de tours l'armée arrive au bout de sa route (estimation : longueur du chemin et vitesse du moment ;
+    1 : au prochain tour), ou None sans route."""
+    if not a['path']:
+        return None
+    km, x, y = 0.0, a['x'], a['y']
+    for leg in a['path']:
+        if leg['kind'] == 'road':
+            km += g.geo.edges[leg['e']]['len'] - leg['pos']
+            x, y = g.node_xy(leg['to'])
+        else:
+            for px, py in leg['pts'][leg['i']:]:
+                km += math.hypot(px - x, py - y)
+                x, y = px, py
+    days = km / max(0.5, g.army_speed(a)) - (march_left(g, a) if planning(g) else 0.0)
+    return max(1, math.ceil(days / march_days(g) - 1e-6))
+
+
 def begin_turn(g):
     """Début du tour du joueur : les armées retrouvent tous leurs jours de marche, et celles qui avaient une longue
     route la reprennent là où elles s'étaient arrêtées."""

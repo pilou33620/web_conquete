@@ -147,6 +147,18 @@ class TourParTour(unittest.TestCase):
         jouer_mois(g)
         self.assertNotEqual(a['at_node'], foy, "au tour suivant, l'armée repart vers Bergerac")
 
+    def test_arrivee_annoncee(self):
+        g = partie()
+        a = armee(g)
+        a['mp'] = 1.0   # presque plus de marche ce tour
+        a['tr'] = True
+        self.assertTrue(g.order_move(g.player, a['id'], a['x'] + 40, a['y'] + 10)[0])
+        TT.settle(g)
+        self.assertTrue(a['path'])
+        self.assertEqual(TT.eta(g, a), 1, 'arrivée annoncée au prochain tour')
+        jouer_mois(g)   # au début du tour suivant, l'armée repart
+        self.assertFalse(a['path'], "elle est arrivée au tour annoncé")
+
     def test_plus_de_marche_plus_de_mouvement(self):
         g = partie()
         a = armee(g)

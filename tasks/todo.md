@@ -108,7 +108,7 @@ Vérification commune à chaque tâche : `python3 tests/lancer.py` passe, puis u
   - Fichiers : `game/views.py`, `game/army_actions.py`, `web/js/ui.js`, `tests/test_campagne.py`
   - Taille : S
 
-- [ ] **T10 : marche en tours**
+- [x] **T10 : marche en tours**
   - Jauge de mouvement dans le panneau d'armée (au lieu de « x / y jours », et plus de km/j) ; la bulle de l'ordre
     de marche annonce l'arrivée (« au prochain tour », « dans N tours », estimation) ; messages du serveur sans jours.
   - Vérifier : banc `test_campagne.py` (l'estimation pour un trajet de deux tours dit 2, à un tour près au plus) ;

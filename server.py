@@ -274,17 +274,16 @@ class App:
         used = TT.settle(g)
         a = g.armies.get(aid)
         if aid in used and a is not None:
-            full = TT.march_days(g)
             left = TT.march_left(g, a)
             if a['state'] == 'battle':
                 out['msg'] = 'Au contact de l’ennemi : la bataille s’engage.'
             elif a['path']:
-                out['msg'] = (f"En marche : {full - left:.0f} jours de marche employés sur {full:.0f}. "
-                              f"{'L’armée reprendra sa route au tour suivant.' if left <= 0.5 else ''}").strip()
+                eta = TT.eta(g, a)
+                out['msg'] = f"En marche : l’armée a fini sa marche du tour, arrivée {'au prochain tour' if eta == 1 else f'dans {eta} tours'} (estimation)."
             elif a['state'] == 'siege':
                 out['msg'] = 'Arrivée : le siège commence.'
             else:
-                out['msg'] = f"Arrivée à destination ({used[aid]:.0f} jours de marche, {left:.0f} restants)."
+                out['msg'] = 'Arrivée à destination' + (' : elle peut encore marcher ce tour.' if left > 0.5 else ', sa marche du tour est finie.')
         return out
 
     @staticmethod

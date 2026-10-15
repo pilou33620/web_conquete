@@ -306,6 +306,8 @@ def player_state(g, since=0):
             d['sp'] = round(g.army_speed(a), 1)
             if g.tour['on']:
                 d['mp'] = round(TT.march_left(g, a), 1)   # jours de marche qui restent ce tour
+                if a['path'] and a['state'] == 'move':
+                    d['eta'] = TT.eta(g, a)   # arrivée dans tant de tours (estimation)
                 if a.get('trail'):
                     d['trl'] = a['trail']   # trajet de la dernière marche, que le navigateur anime
                     d['tn'] = a.get('tn', 0)

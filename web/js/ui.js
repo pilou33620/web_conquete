@@ -651,8 +651,15 @@ export class UI {
     const cw = this.closedOnWay(army, tx, ty, trail);
     const closedTxt = (cw.target ? `<div class="bh warnline">Terres ${esc(de(this.rules.factions[cw.target].name))}, fermées : demandez un droit de passage (Diplomatie), ou passez en force (déclaration de guerre).</div>` : '')
       + (cw.way.length ? `<div class="bh">Détour : les terres ${esc(de(cw.way.map(c => this.rules.factions[c].name).join(' et ')))} sont fermées (sans droit de passage), l’itinéraire les contournera${cw.target ? '' : ' s’il le peut'}.</div>` : '');
+    // tour par tour : arrivée estimée à vol d'oiseau (un quart de plus pour les détours de la route)
+    const tr = this.st.tour;
+    let eta = '';
+    if (army && tr?.on && tr.march && army.sp && army.mp != null) {
+      const days = Math.hypot(tx - army.x, ty - army.y) * 1.25 / army.sp;
+      eta = `<div class="bh">${days <= army.mp ? 'Arrivée ce tour-ci' : `Arrivée ${toursTxt(Math.max(1, Math.ceil((days - army.mp) / tr.march - 1e-6)))}`} (estimation).</div>`;
+    }
     b.innerHTML = `<div class="bt">${esc(title)}</div>${this.trSeg(this.trMode, 'trmode')}
-      <div class="bh">${peace && !this.trMode && !cw.target ? 'En paix : on n’y entre qu’en traversant.' : TR_HELP[+this.trMode]}</div>${closedTxt}
+      <div class="bh">${peace && !this.trMode && !cw.target ? 'En paix : on n’y entre qu’en traversant.' : TR_HELP[+this.trMode]}</div>${closedTxt}${eta}
       ${withTrail ? `<button class="btn primary" data-act="go-trail">Suivre mon tracé</button>` : ''}
       <button class="btn ${withTrail ? '' : 'primary'}" data-act="go" data-mode="route" ${target}>Marcher par les routes</button>
       <button class="btn" data-act="go" data-mode="champs" ${target}>Marcher à travers champs</button>
@@ -1299,8 +1306,8 @@ export class UI {
     if (own) {
       h += `<dl class="kv"><dt>Terrain</dt><dd>${terr}${a.h ? ', à couvert' : ''}</dd><dt>Ravitaillement</dt><dd>${Math.round(a.sup * 100)} %</dd>
         ${a.dp ? `<dt></dt><dd class="muted small">Ravitaillée par le magasin de ${esc(a.dp)}</dd>` : ''}
-        <dt>Vitesse de marche</dt><dd>${fmt1(a.sp)} km/j${a.boat ? `, ${this.rules.water.speed} en gabare` : ''}</dd>
-        ${a.mp != null && st.tour?.march ? `<dt>Marche du tour</dt><dd title="Jours de marche qui restent à cette armée avant la fin de votre tour : elle avance tout de suite, sous vos yeux. Une route plus longue est reprise au tour suivant.">${fmt1(a.mp)} / ${fmt1(st.tour.march)} jours${a.mp <= 0.05 ? ' <span class="muted">(a joué)</span>' : ''}</dd>` : ''}</dl>`;
+        ${a.mp != null && st.tour?.march ? `<dt>Mouvement</dt><dd title="Ce qui reste de marche à cette armée pour ce tour : elle avance tout de suite, sous vos yeux. Une route plus longue est reprise au tour suivant."><span class="bar mp-bar"><i style="width:${Math.round(Math.min(1, a.mp / st.tour.march) * 100)}%"></i></span>${a.mp <= 0.05 ? ' <span class="muted">(a joué)</span>' : ''}</dd>` : ''}
+        ${a.eta ? `<dt>Arrivée</dt><dd>${toursTxt(a.eta)} <span class="muted">(estimation)</span></dd>` : ''}</dl>`;
       const wn = a.wn || [];
       if (a.sup < 0.35 && !wn.includes('faim')) h += `<div class="warnline">Ravitaillement épuisé : l’armée s’use. Revenez en territoire ami.</div>`;
       if (wn.includes('solde')) h += `<div class="warnline">Solde impayée : le moral chute et les soldats désertent.</div>`;

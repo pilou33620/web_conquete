@@ -147,6 +147,7 @@ span.turn-why { padding: 8px 10px; }
 .pips i { width: 10px; height: 10px; border: 1px solid var(--laiton); transform: rotate(45deg); display: inline-block; }
 .pips i.on { background: var(--laiton); }
 .bar { height: 6px; background: rgba(255,255,255,.12); border-radius: 3px; overflow: hidden; }
+.mp-bar { display: inline-block; width: 120px; vertical-align: middle; }   /* jauge de mouvement du tour */
 .bar > i { display: block; height: 100%; background: var(--laiton); border-radius: 3px; }
 .bar.green > i { background: var(--sauge); }
 .bar.red > i { background: var(--cire); }
