@@ -392,7 +392,7 @@ export class BattleView {
     // sol plus fin autour de la caméra : un bloc par image (aucun pendant un pincement), deux si l'image est vite faite
     this.detailBusy = this.relief.updateDetail(this.renderer, this, this.controls.busy() ? 0 : this.drawMs < 12 ? 2 : 1);
     const all = [...this.units.values()].filter(u => u.state !== 'hors'), vis = all.filter(u => this.onScreen(u));
-    this.troops.update(all, this.colors || [], time, this.fx.t);
+    this.troops.update(all, this.colors || [], time, this.fx.t, fr, cam);
     this.fx.render(fr, z);
     this.renderer.render(this.scene, cam);
     mark('scene');

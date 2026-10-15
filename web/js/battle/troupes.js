@@ -207,7 +207,7 @@ function hat(type, kind, dy = 0) {
     case 'shako': return [[lathe([[0.1, 1.66], [0.112, 1.8], [0.118, 1.88], [0, 1.88]], 12), HAT, 0, 0],
       ...both(new THREE.CylinderGeometry(0.125, 0.125, 0.01, 10, 1, true, -Math.PI / 2, Math.PI).scale(1, 1, 0.9).translate(0, 1.675, 0.02), HAT),
       [sph(0.022, 0.07, 0.022, 0, 1.94, 0.09, 6, 4), plume, 0, 0], [sph(0.022, 0.022, 0.01, 0, 1.84, 0.115, 6, 4), GOLD, 0, 0]];
-    case 'kepi': return [[lathe([[0.1, 1.655], [0.095, 1.73], [0.085, 1.79], [0, 1.79]], 10).rotateX(-0.12).translate(0, 0.2, 0.2), '#1f2a44', 0, 0],
+    case 'kepi': return [[lathe([[0.1, 1.655], [0.095, 1.73], [0.085, 1.79], [0, 1.79]], 10).translate(0, -1.655, 0).rotateX(-0.12).translate(0, 1.655, 0), '#1f2a44', 0, 0],
       ...both(new THREE.CylinderGeometry(0.11, 0.11, 0.01, 10, 1, true, -Math.PI / 2, Math.PI).scale(1, 1, 0.8).translate(0, 1.67, 0.03), HAT)];
     // bonnet à poil : haut et rond, plumet sur le côté
     case 'ourson': return [[lathe([[0.11, 1.63], [0.14, 1.72], [0.145, 1.86], [0.12, 1.98], [0.06, 2.03], [0, 2.04]], 10), '#1a1612', 0, 0],
@@ -359,8 +359,71 @@ function horse(rider, year) {
   P.push([seg([-0.25, 1.64, 0.04], [-0.25, 2.6, 0.04], 0.014, 0.008, 4), '#c8ccd0', 8, 0]);
   return assemble(P);
 }
-// géométrie d'une sorte de figurine
-export function model(kind, year) {
+// ------------------------------------------------------------------ versions de loin
+// Quand une figurine ne fait que quelques pixels à l'écran, les formes arrondies ne se voient plus : une version en
+// quelques boîtes, mêmes os, même hauteur, même coiffure en gros, au plus un tiers des sommets.
+function farHat(type, dy = 0) {
+  const P = (() => {
+    switch (type) {
+      case 'tricorne': return [[cyl(0.2, 0.22, 0.09, 3, 0, 1.71, 0.01), HAT]];
+      case 'bicorne': return [[box(0.48, 0.16, 0.09, 0, 1.725, 0), HAT]];
+      case 'shako': return [[cyl(0.115, 0.105, 0.22, 6, 0, 1.77, 0), HAT], [box(0.04, 0.13, 0.04, 0, 1.945, 0.08), '#f1ece0']];
+      case 'kepi': return [[cyl(0.095, 0.105, 0.135, 6, 0, 1.72, 0), '#1f2a44']];
+      case 'ourson': return [[cyl(0.14, 0.12, 0.41, 6, 0, 1.835, 0), '#1a1612']];
+      default: return [[cyl(0.2, 0.2, 0.02, 6, 0, 1.67, 0), '#3d2f22'], [cyl(0.1, 0.1, 0.14, 6, 0, 1.74, 0), '#3d2f22']];
+    }
+  })();
+  return P.map(([g, c]) => [g.translate(0, dy, 0), c, 0, 0]);
+}
+function farSoldier(kind, year) {
+  const trous = kind === 'milice' ? '#5a4c3c' : year >= 1830 ? '#8d929b' : WHITE;
+  const officer = kind === 'officier' || kind === 'drapeau', armed = !officer && kind !== 'tambour' && kind !== 'servant';
+  const P = [[box(0.13, 0.86, 0.14, 0.085, 0.43, 0), trous, 1, 0], [box(0.13, 0.86, 0.14, -0.085, 0.43, 0), trous, 2, 0],
+    [box(0.36, 0.74, 0.22, 0, 1.09, 0), shade(1), 0, 1], [box(0.17, 0.2, 0.18, 0, 1.57, 0), SKIN, 0, 0], ...farHat(headgear(kind, year))];
+  P.push([box(0.2, 0.36, 0.02, 0, 1.18, 0.115), armed ? WHITE : officer ? GOLD : shade(0.8), 0, armed || officer ? 0 : 1]);   // buffleteries ou écharpe
+  for (const s of [1, -1]) P.push([box(0.1, 0.56, 0.11, s * 0.22, 1.13, 0), shade(0.9), 3, 1]);
+  if (armed) P.push([box(0.04, 1.75, 0.05, 0.25, 1.67, 0.05), IRON, 3, 0]);
+  if (kind === 'tambour') P.push([cyl(0.15, 0.15, 0.22, 6, 0.18, 0.78, 0.13, 0, 1.2), '#e8dcc0', 0, 0]);
+  if (kind === 'drapeau') P.push([box(0.045, 3.1, 0.045, 0.24, 2.05, 0.08), WOOD, 0, 0]);
+  return assemble(P);
+}
+function farHorse(rider, year) {
+  const R = (k, g, b = 0) => [g, shade(k), b, 2];
+  const P = [R(1, box(0.46, 0.55, 1.6, 0, 1.16, 0)), R(0.95, box(0.22, 0.65, 0.3, 0, 1.58, 0.88, 0.5), 7), R(0.9, box(0.2, 0.22, 0.5, 0, 1.8, 1.22, 0.6), 7),
+    [box(0.08, 0.6, 0.1, 0, 1.0, -0.85, 0.3), '#1a1410', 0, 0]];
+  for (const [x, z, b] of [[0.15, 0.6, 1], [-0.15, 0.6, 2], [0.15, -0.6, 5], [-0.15, -0.6, 6]]) P.push(R(0.85, box(0.12, 0.9, 0.14, x, 0.45, z), b));
+  if (!rider) return assemble(P);
+  const col = rider === 'colonel', breeches = year >= 1830 ? '#8d929b' : '#e8dcc0';
+  P.push([box(0.6, 0.08, 0.6, 0, 1.46, 0), shade(0.85), 0, 1], [box(0.5, 0.14, 0.4, 0, 1.56, 0.12), breeches, 0, 0],
+    [box(0.36, 0.66, 0.22, 0, 1.92, 0), shade(1), 0, 1], [box(0.17, 0.2, 0.18, 0, 2.345, 0), SKIN, 0, 0], ...farHat(headgear(col ? 'officier' : 'cav', year), 0.775),
+    [box(0.1, 0.45, 0.11, 0.22, 2.0, 0.14, -0.9), shade(0.9), 0, 1], [box(0.1, 0.52, 0.11, -0.22, 1.92, 0), shade(0.9), 8, 1],
+    [box(0.03, 0.95, 0.03, -0.25, 2.12, 0.04), '#c8ccd0', 8, 0]);
+  return assemble(P);
+}
+function farGun() {
+  const P = [[cyl(0.12, 0.15, 2.1, 6, 0, 1.0, 0.52, Math.PI / 2), BRONZE, 0, 0], [box(0.4, 0.3, 1.95, 0, 0.74, -0.4, -0.25), AFFUT, 0, 0], [box(0.36, 0.12, 0.3, 0, 0.16, -1.4), AFFUT, 0, 0]];
+  for (const s of [1, -1]) P.push([cyl(0.62, 0.62, 0.08, 8, s * 0.48, 0.62, 0.1, 0, Math.PI / 2), '#6a5a3a', 0, 0]);
+  return assemble(P);
+}
+function farCaisson(wagon) {
+  const P = [];
+  const wheels = z => { for (const s of [1, -1]) P.push([cyl(0.58, 0.58, 0.08, 8, s * 0.55, 0.58, z, 0, Math.PI / 2), '#6a5a3a', 0, 0]); };
+  if (wagon) { P.push([box(1.0, 0.5, 2.4, 0, 1.05, 0), '#7a5a3a', 0, 0], [cyl(0.6, 0.6, 2.3, 6, 0, 1.3, 0, Math.PI / 2), '#e8e0c8', 0, 0], [box(0.06, 0.06, 1.8, 0, 0.75, 2.0), WOOD, 0, 0]); wheels(0.8); wheels(-0.8); }
+  else { P.push([box(0.9, 0.5, 1.1, 0, 0.98, 0), AFFUT, 0, 0], [box(0.92, 0.12, 1.12, 0, 1.31, 0), '#4c5632', 0, 0], [box(0.06, 0.06, 2.0, 0, 0.72, 1.45), WOOD, 0, 0]); wheels(0); }
+  return assemble(P);
+}
+
+// géométrie d'une sorte de figurine ; lod : 1 de près (formes arrondies), 0 de loin (quelques boîtes)
+export function model(kind, year, lod = 1) {
+  if (!lod) switch (kind) {
+    case 'cav': case 'colonel': return farHorse(kind, year);
+    case 'attelage': return farHorse(null, year);
+    case 'canon': return farGun();
+    case 'caisson': return farCaisson(false);
+    case 'chariot': return farCaisson(true);
+    case 'etoffe': case 'fanion': break;
+    default: return farSoldier(kind, year);
+  }
   switch (kind) {
     case 'cav': case 'colonel': return horse(kind, year);
     case 'attelage': return horse(null, year);
@@ -474,6 +537,14 @@ const turn = (v, isPos) => `
   ${v}.yz = pitch(${v}.yz, vec2(0.0), lean);
   ${v} = vec3(${v}.x * sa + ${v}.z * ca, ${v}.y, -${v}.x * ca + ${v}.z * sa);`;
 
+// version d'un régiment : 0 hors champ (rien à dessiner), 1 de loin, 2 de près. px : hauteur d'une figurine à l'écran
+// (px CSS) ; entre les deux seuils, il garde sa version (pas de bascule à chaque image)
+const NEAR_ON = 18, NEAR_OFF = 14;
+export function lodOf(px, prev, visible) {
+  if (!visible) return 0;
+  return px > (prev === 2 ? NEAR_OFF : NEAR_ON) ? 2 : 1;
+}
+
 export class Troops {
   // relief : Relief (altitudes) ; q : profil de qualité ; year : année de la bataille (coiffures, uniformes)
   constructor(relief, q, year) {
@@ -495,7 +566,14 @@ export class Troops {
     };
     this.kinds = new Map();     // sorte → {mesh, cap, n, slot, anim, coat}
     this.pattern = flagPattern(this.year);
-    for (const [k, def] of Object.entries(KINDS)) this.addKind(k, model(k, this.year), def === 'FLAG' ? this.pattern : null, def === 'FLAG' ? null : def);
+    // chaque sorte en deux versions (« ~ » : de loin), sauf les drapeaux
+    for (const [k, def] of Object.entries(KINDS)) {
+      if (def === 'FLAG') { this.addKind(k, model(k, this.year), this.pattern); continue; }
+      this.addKind(k, model(k, this.year, 1), null, def);
+      this.addKind(k + '~', model(k, this.year, 0), null, def);
+    }
+    this.frustum = new THREE.Frustum(); this.sphere = new THREE.Sphere(); this.m4 = new THREE.Matrix4();
+    this.built = -1; this.pending = false;
     const soft = new THREE.CanvasTexture(relief.t.ombre);
     this.blobs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ map: soft, color: '#000000', transparent: true, opacity: 0.32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }), MAXU);
@@ -560,8 +638,9 @@ export class Troops {
   }
 
   // à chaque image : list, les régiments (hors combat exclus) ; colors, couleur de chaque camp ; time, horloge de
-  // l'animation (s) ; fxT, horloge des effets (salves)
-  update(list, colors, time, fxT) {
+  // l'animation (s) ; fxT, horloge des effets (salves) ; fr, camera : la vue (camera.js, caméra de Three.js), pour la
+  // version de chaque régiment
+  update(list, colors, time, fxT, fr = null, camera = null) {
     this.uni.uTime.value = time; this.uni.uFxT.value = fxT;
     // hommes par figurine : autant qu'il faut pour tenir dans le budget de la qualité (par paliers de 25 % : la
     // disposition ne change pas à chaque perte)
@@ -570,6 +649,7 @@ export class Troops {
     const scale = SCALE * clamp(Math.sqrt(per), 1, 1.4);
     let dirty = this.per !== per;
     this.per = per;
+    if (camera) { camera.updateMatrixWorld(); this.frustum.setFromProjectionMatrix(this.m4.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); }
     const seen = new Set();
     for (const un of list) {
       const id = String(un.id);
@@ -577,8 +657,18 @@ export class Troops {
       let i = this.index.get(id);
       if (i === undefined) { i = this.free.pop() ?? this.index.size; if (i >= MAXU) continue; this.index.set(id, i); dirty = true; }
       const key = `${un.form}|${un.state}|${Math.round((un.men || 0) / 8)}|${un.w | 0}|${un.d | 0}|${un.type}|${per}|${colors[un.side]}`;
-      const e = this.lays.get(id);
-      if (!e || e.key !== key) { this.lays.set(id, { key, lay: layout(un, per, scale), un }); dirty = true; } else e.un = un;
+      let e = this.lays.get(id);
+      if (!e || e.key !== key) { this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: e?.lod ?? 0 }); dirty = true; } else e.un = un;
+      // version : un régiment qui entre dans le champ est dessiné tout de suite ; les autres changements attendent la
+      // prochaine reconstruction (au plus cinq par seconde). La sphère, élargie avec la distance, le fait entrer avant
+      // qu'il n'atteigne le bord de l'image.
+      let lod = 2;
+      if (fr && camera) {
+        const h = this.relief.heightAt(un.x, un.y), d = Math.max(1, Math.hypot(un.x - fr.E[0], h - fr.E[1], un.y - fr.E[2]));
+        this.sphere.center.set(un.x, h + 1.5, un.y); this.sphere.radius = Math.hypot(un.w || 10, un.d || 10) / 2 + 15 + d * 0.15;
+        lod = lodOf(1.75 * scale * fr.k / d, e.lod, this.frustum.intersectsSphere(this.sphere));
+      }
+      if (lod !== e.lod) { if (!e.lod) dirty = true; else this.pending = true; e.lod = lod; }
       // régiment : position, sens, opacité ; allure, feu, salve ; front, tirailleurs
       const moving = un.to && un.from && Math.hypot(un.to.x - un.from.x, un.to.y - un.from.y) > 0.3;
       const run = un.state === 'charge' || un.state === 'deroute', march = un.state === 'marche' || (moving && !run);
@@ -592,7 +682,7 @@ export class Troops {
     for (const [id, i] of this.index) if (!seen.has(id)) { this.index.delete(id); this.lays.delete(id); this.free.push(i); dirty = true; }
     this.units.needsUpdate = true;
     if (this.blobs.visible) this.drawBlobs(list);
-    if (dirty) this.rebuild(colors, scale);
+    if (dirty || (this.pending && time - this.built > 0.2)) { this.rebuild(colors, scale); this.built = time; this.pending = false; }
   }
   // toutes les figurines, rangées par sorte
   rebuild(colors, scale) {
@@ -609,8 +699,9 @@ export class Troops {
       A[o] = f[4]; A[o + 1] = f[6]; A[o + 2] = scale; A[o + 3] = rank;
       C[n * 3] = coat.r; C[n * 3 + 1] = coat.g; C[n * 3 + 2] = coat.b;
     };
-    for (const [id, { lay, un }] of this.lays) {
-      const ui = this.index.get(id), carre = un.form === 'carre';
+    for (const [id, { lay, un, lod }] of this.lays) {
+      if (!lod) continue;
+      const ui = this.index.get(id), carre = un.form === 'carre', far = lod === 1 ? '~' : '';
       off.set(colors[un.side] || '#888');
       for (const f of lay) {
         coat.copy(off);
@@ -618,8 +709,8 @@ export class Troops {
         else if (f[2] === 'officier' || f[2] === 'drapeau' || f[2] === 'colonel') coat.multiplyScalar(0.8);
         else if (f[2] === 'servant') coat.multiplyScalar(0.6);   // habit sombre des artilleurs
         // l'écouvillon et le pointeur se tournent vers la pièce
-        if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant', [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2);
-        else put(f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2], f, ui, carre);
+        if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant' + far, [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2);
+        else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre);
         if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre); }
         else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre); }
       }

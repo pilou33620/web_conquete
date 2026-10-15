@@ -6,7 +6,7 @@
 // de soldats. Ici on mesure chaque sorte.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { model } from '../web/js/battle/troupes.js';
+import { model, lodOf } from '../web/js/battle/troupes.js';
 
 // os permis par sorte (0 corps, 1-2 jambes, 3 bras et fusil, 4 étoffe ; cheval : 1-2 et 5-6 jambes, 7 encolure,
 // 8 bras du cavalier) et hauteur attendue (m, avant l'échelle des figurines ; sans les bras, le fusil ni le sabre)
@@ -65,4 +65,25 @@ test('hommes et chevaux sont arrondis : des centaines de directions de normales 
     for (let i = 0; i < n.count; i++) dirs.add([n.getX(i), n.getY(i), n.getZ(i)].map(c => Math.round(c * 10)).join());
     assert.ok(dirs.size >= 100, `${kind} : ${dirs.size} directions de normales`);
   }
+});
+
+test('version de loin : mêmes os, même hauteur, pieds au sol, au plus un tiers des sommets', () => {
+  for (const kind of Object.keys(SORTES)) {
+    const near = stats(model(kind, 1790, 1)), far = stats(model(kind, 1790, 0));
+    assert.deepEqual([...far.bones].sort(), [...near.bones].sort(), `${kind} : os`);
+    assert.ok(Math.abs(far.y1 - near.y1) / near.y1 < 0.05, `${kind} : ${far.y1.toFixed(2)} m de loin, ${near.y1.toFixed(2)} m de près`);
+    assert.ok(Math.abs(far.y0) < 0.03, `${kind} : pieds en y = ${far.y0.toFixed(3)}`);
+    assert.ok(far.n * 3 <= near.n, `${kind} : ${far.n} sommets de loin, ${near.n} de près`);
+  }
+});
+
+test('choix de la version : hors champ, de loin, de près, avec une marge contre les bascules', () => {
+  assert.equal(lodOf(40, 2, false), 0, 'hors champ : rien');
+  assert.equal(lodOf(40, 0, true), 2);
+  assert.equal(lodOf(10, 2, true), 1);
+  // entre les deux seuils, la version reste celle d'avant
+  const mid = 16;
+  assert.equal(lodOf(mid, 2, true), 2);
+  assert.equal(lodOf(mid, 1, true), 1);
+  assert.equal(lodOf(mid, 0, true), 1, 'en rentrant dans le champ, de loin');
 });

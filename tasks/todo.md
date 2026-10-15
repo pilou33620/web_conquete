@@ -164,7 +164,9 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
 
 - [x] **T18 : banc des modèles, relevé de départ**
   - Relevé de départ (Haute, 1400×800), en triangles par image et appels de dessin : ensemble 5 652 856 / 136 ;
-    mi-distance 6 632 688 / 96 ; au ras 6 632 688 / 96.
+    mi-distance 6 632 688 / 96 ; au ras 6 038 575 / 86.
+  - Mesure refaite en attendant trois images dessinées après chaque déplacement de la caméra : le Pi n'en dessine
+    qu'une toutes les 2 à 4 s.
   - L'essentiel vient des figurines : toutes sont dessinées, même hors champ. De près s'ajoute la passe d'ombre des
     troupes.
   - Critères :
@@ -179,7 +181,8 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
 - [x] **T19 : fantassins arrondis et taille**
   - Fait : environ 900 sommets par homme à pied (676 avant). Taille gardée à ×1,6 : à ×1,35, la ligne est trop maigre
     à mi-distance, et Ultimate General grandit aussi ses soldats (environ un tiers de maison).
-  - Triangles : ensemble 5,6 M ; mi-distance et au ras 13,5 M (×2 avant la version de loin, T21).
+  - Triangles : ensemble 5,6 M ; mi-distance 13,5 M (×2 avant la version de loin, T21 ; mesure de T18 encore
+    imprécise).
   - Critères :
     - `soldier()` en formes arrondies : basques, buffleteries croisées, guêtres, fusil à baïonnette.
     - `hat()` : tricorne relevé, bicorne, shako, képi, bonnet à poil, chapeau rond.
@@ -199,7 +202,12 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
   - Fichiers : `web/js/battle/troupes.js`, `tests/modeles.test.mjs`
   - Taille : M
 
-- [ ] **T21 : version simple de loin**
+- [x] **T21 : version simple de loin**
+  - Fait :
+    - Modèle lointain en boîtes (environ 280 sommets pour un fantassin, contre 1 070 de près).
+    - Version choisie par régiment : de près au-dessus de 18 px de haut, de loin au-dessous de 14 px.
+    - Les régiments hors champ ne sont plus dessinés (sphère élargie avec la distance).
+    - Triangles : ensemble 4,17 M (−26 %), mi-distance 2,97 M (−55 %), au ras 4,71 M (−22 %).
   - Critères :
     - Chaque sorte a un modèle lointain (peu de sommets, mêmes os, même hauteur).
     - Choix par régiment selon la hauteur à l'écran, avec une marge (fonction pure `lodOf` testée).
