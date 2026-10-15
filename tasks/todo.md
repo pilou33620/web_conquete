@@ -77,7 +77,7 @@ Vérification commune à chaque tâche : `python3 tests/lancer.py` passe, puis u
   - Fichiers : `game/rules.py`, `game/engine.py`, `game/cities.py`, `game/views.py`, `web/js/ui.js`
   - Taille : M
 
-- [ ] **T7 : trêves, droits de passage, propositions, décisions et événements en tours**
+- [x] **T7 : trêves, droits de passage, propositions, décisions et événements en tours**
   - Trêve 4 tours, traités 24/36/60 tours, droit de passage 12 tours, proposition 1 tour, décision 1 tour, effets
     d'événements locaux 1 à 4 tours, tous par `deadline`. Écran : « encore N tours » ou la date du tour de fin.
   - Vérifier : banc `test_campagne.py` (une proposition reçue pendant le tour des IA est encore là pendant tout le

@@ -10,6 +10,7 @@ faction['passage'] = {bénéficiaire: échéance}.
 import math
 
 from . import rules as R
+from . import turns as TT
 from .geo import TERRAIN
 
 # ------------------------------------------------------------------ fortification de fortune
@@ -68,7 +69,7 @@ BLOC_STARVE = 25        # jours de famine avant la reddition
 BLOC_MIN = 0.5          # rapport de forces pour investir la place
 
 # ------------------------------------------------------------------ passage
-PASSAGE_DAYS = 365
+PASSAGE_TOURS = 12   # droit de passage accordé (tours)
 INCIDENT_CD = 60        # au-delà du délai de grâce : un incident par armée et par département, au plus tous les deux mois
 INCIDENT_REL = 10
 NOTICE_CD = 60
@@ -636,10 +637,11 @@ def may_stay(g, a, o):
     return o in g.factions and not closed_to(g, a['owner'], o)
 
 
-def grant_passage(g, grantor, grantee, days=PASSAGE_DAYS):
-    g.factions[grantor].setdefault('passage', {})[grantee] = round(g.t + days, 2)
+def grant_passage(g, grantor, grantee, tours=PASSAGE_TOURS):
+    until = TT.deadline(g, tours)
+    g.factions[grantor].setdefault('passage', {})[grantee] = until
     g.log('diplo', f"{g.fname(grantor)} accorde le droit de passage à {g.fname(grantee)} jusqu'au "
-                   f"{g.date_str(g.t + days)}.", who=grantor, important=g.player in (grantor, grantee))
+                   f"{g.date_str(until)}.", who=grantor, important=g.player in (grantor, grantee))
 
 
 def revoke_passage(g, grantor, grantee):

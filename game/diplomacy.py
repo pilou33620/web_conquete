@@ -1,5 +1,6 @@
 """Diplomatie et commerce entre départements."""
 from . import rules as R
+from . import turns as TT
 from . import army_actions as AA
 
 BASE_VALUE = dict(livres=1.0, **R.MARKET_BASE)
@@ -88,7 +89,7 @@ def declare_war(game, a, b, quiet=False):
 def make_peace(game, a, b):
     game.set_status(a, b, 'paix')
     game.factions[a]['last_war'] = game.factions[b]['last_war'] = game.t
-    until = game.t + 120
+    until = TT.deadline(game, R.PEACE_TRUCE)
     game.factions[a]['truce'][b] = until
     game.factions[b]['truce'][a] = until
     for x, y in ((a, b), (b, a)):
@@ -111,7 +112,7 @@ def make_peace(game, a, b):
                 if ar['state'] == 'move':
                     ar['state'] = 'idle'
             ar['grace'] = game.t + 2
-    game.log('diplo', f"Paix signée entre {game.fname(a)} et {game.fname(b)} (trêve de 120 jours).", who=a, important=True)
+    game.log('diplo', f"Paix signée entre {game.fname(a)} et {game.fname(b)} (trêve de {R.PEACE_TRUCE} tours).", who=a, important=True)
 
 
 def held(game, a, b):
@@ -313,12 +314,12 @@ def act(game, frm, to, action, amount=0, give=None, get=None):
         return False, "Personne n'a de prisonniers à échanger."
     if to == game.player:
         game.proposals.append(dict(id=game.nid('p'), frm=frm, action=action, amount=amount, give=give, get=get,
-                                   expires=game.t + R.PROPOSAL_DAYS, date=game.date_str()))
+                                   expires=TT.deadline(game, R.PROPOSAL_TOURS), date=game.date_str()))
         what = dict(paix='propose la paix', alliance='propose une alliance', commerce='propose un accord commercial',
                     echange='propose un échange', prisonniers='propose un échange de prisonniers',
                     passage='demande le droit de passage sur vos terres',
                     soumission='exige votre soumission').get(action, 'vous fait une proposition')
-        game.log('diplo', f"{game.fname(frm)} {what} : répondez dans les {R.PROPOSAL_DAYS} jours.", who=frm, important=True)
+        game.log('diplo', f"{game.fname(frm)} {what} : répondez pendant votre tour.", who=frm, important=True)
         if action in ('paix', 'alliance', 'soumission'):
             game.alert_pause()   # le commerce et les échanges n'arrêtent pas les années de paix
         return None, "Proposition envoyée."

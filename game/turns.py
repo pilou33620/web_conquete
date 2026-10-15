@@ -67,6 +67,19 @@ def migrate(g):
         tr['end'] = None   # échéance dépassée (sauvegarde bricolée) : on attend les ordres
     for a in g.armies.values():
         a.setdefault('mp', None)
+    # échéances d'avant les tours (en plein milieu d'un mois) : ramenées au début du tour suivant
+    up = lambda t: turn_start_after(g, t)
+    for f in g.factions.values():
+        for d in (f['truce'], f.get('passage') or {}):
+            for k in d:
+                d[k] = up(d[k])
+    for x in g.proposals:
+        x['expires'] = up(x['expires'])
+    for x in g.pending_ev:
+        x['until'] = up(x['until'])
+    for n in g.nodes:
+        for e in n.get('tm') or ():
+            e['until'] = up(e['until'])
 
 
 # ================================================================== calendrier

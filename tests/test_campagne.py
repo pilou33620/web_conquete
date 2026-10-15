@@ -15,6 +15,7 @@ import unittest
 
 from fabrique import GEO, TT, armee, jouer_mois, partie
 from game import diplomacy as D
+from game import army_actions as AA
 from game import cities as CT
 from game import events as E
 from game import rules as R
@@ -298,6 +299,42 @@ class RechercheEtPolitiques(unittest.TestCase):
         self.assertLess(CT.policy_w(g, n), 1.0)
         au(g, 1790, 6)
         self.assertEqual(CT.policy_w(g, n), 1.0, 'les 18 jours (jusqu\'au 3 mai) finis au début du tour suivant')
+
+
+class EcheancesEnTours(unittest.TestCase):
+    """Règle B : trêves, droits de passage, propositions, décisions et effets d'événements en tours entiers."""
+
+    def test_treve_de_quatre_tours(self):
+        g = partie()   # 4 mars 1790, votre tour
+        D.declare_war(g, g.player, '24', quiet=True)
+        D.make_peace(g, g.player, '24')
+        self.assertEqual(g.date_str(g.factions[g.player]['truce']['24']), '1er juillet 1790')
+
+    def test_droit_de_passage_de_douze_tours(self):
+        g = partie()
+        AA.grant_passage(g, '24', g.player)
+        self.assertEqual(g.date_str(g.factions['24']['passage'][g.player]), '1er mars 1791')
+
+    def test_proposition_recue_pendant_le_tour_des_ia(self):
+        g = partie()
+        TT.go(g)
+        au(g, 1790, 3, 20)
+        n = len(g.proposals)
+        D.act(g, '24', g.player, 'commerce')
+        self.assertEqual(len(g.proposals), n + 1)
+        self.assertEqual(g.date_str(g.proposals[-1]['expires']), '1er mai 1790', 'tout votre tour d\'avril pour répondre')
+
+    def test_decision_d_un_tour(self):
+        g = partie()
+        E.fire(g, g.player, dict(id='essai', title='Essai', text='', choices=[dict(label='Oui', fx={}),
+                                                                             dict(label='Non', fx={})]), 'hist')
+        self.assertEqual(g.date_str(g.pending_ev[-1]['until']), '1er avril 1790')
+
+    def test_anciennes_echeances_ramenees_au_debut_d_un_tour(self):
+        g = partie()
+        g.factions[g.player]['truce']['24'] = g.t + 50.5   # 23 avril 1790 et des poussières
+        TT.migrate(g)
+        self.assertEqual(g.date_str(g.factions[g.player]['truce']['24']), '1er mai 1790')
 
 
 class Regles(unittest.TestCase):

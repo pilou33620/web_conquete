@@ -378,7 +378,7 @@ def player_state(g, since=0):
                 year=g.date().year, scenario=g.scenario, era=dict(id=era['id'], name=era['name'], desc=era['desc']),
                 names={c: g.faction_name(c) for c in g.factions}, word=g.dept_word(), heg=g.hegemon(),
                 pending=[dict(id=x['id'], title=x['title'], text=x['text'], base=x['base'], date=x['date'],
-                              left=max(0, int(x['until'] - g.t)), town=x.get('town'), kind=x.get('kind'),
+                              tn=TT.tours_left(g, x['until']), town=x.get('town'), kind=x.get('kind'),
                               choices=[dict(label=c['label'], desc=c['desc'], ok=EV.affordable(g, p, c['fx']))
                                        for c in x['choices']]) for x in g.pending_ev],
                 weather={z: dict(kind=w['kind'], left=w['left']) for z, w in g.weather.items()},

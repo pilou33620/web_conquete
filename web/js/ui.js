@@ -468,11 +468,11 @@ export class UI {
 
   renderProposals() {
     const box = this.$('proposals');
-    const sig = this.st.proposals.map(p => p.id).join(',') + '|' + (this.st.pending || []).map(p => p.id + ':' + p.left).join(',');
+    const sig = this.st.proposals.map(p => p.id).join(',') + '|' + (this.st.pending || []).map(p => p.id + ':' + p.tn).join(',');
     if (box.dataset.sig === sig) return;
     box.dataset.sig = sig;
     box.innerHTML = (this.st.pending || []).map(p => `<div class="sheet proposal" style="border-left-color:var(--laiton)"><div class="pt">${esc(p.title)}</div>
-        <p>Une décision vous attend (${p.left} j).</p><div class="btns"><button class="btn primary" data-act="modal" data-v="event">Décider</button></div></div>`).join('') + this.st.proposals.map(p => {
+        <p>Une décision vous attend (${p.tn <= 1 ? 'avant la fin du tour' : `d’ici ${p.tn} tours`}).</p><div class="btns"><button class="btn primary" data-act="modal" data-v="event">Décider</button></div></div>`).join('') + this.st.proposals.map(p => {
       const f = this.rules.factions[p.frm];
       let detail = '';
       if (p.action === 'echange') detail = `Il offre ${fmt(p.give[1])} ${this.rules.res_label[p.give[0]].toLowerCase()} contre ${fmt(p.get[1])} ${this.rules.res_label[p.get[0]].toLowerCase()}.`;
@@ -1458,8 +1458,8 @@ export class UI {
       ${p.town != null && this.md.nodes[p.town] ? `<div class="btns" style="margin-top:0"><button class="btn" data-act="selnode-modal" data-node="${p.town}">Voir ${esc(this.md.nodes[p.town].name)} sur la carte</button></div>` : ''}
       <div class="ev-choices">${p.choices.map((c, i) => `<button class="btn ${i === 0 ? 'primary' : ''} ev-choice" data-act="evchoice" data-id="${p.id}" data-v="${i}" ${c.ok ? '' : 'disabled title="Vous n’en avez pas les moyens"'}>
         <b>${esc(c.label)}</b><small>${c.desc.map(esc).join(' · ')}</small></button>`).join('')}</div>
-      <p class="muted small">Sans réponse d’ici ${p.left} jours, la dernière option s’appliquera.</p>`;
-    return [html, JSON.stringify([p.id, all.length, p.left, p.choices.map(c => c.ok)])];
+      <p class="muted small">Sans réponse ${p.tn <= 1 ? 'avant la fin du tour' : `d’ici ${p.tn} tours`}, la dernière option s’appliquera.</p>`;
+    return [html, JSON.stringify([p.id, all.length, p.tn, p.choices.map(c => c.ok)])];
   }
 
   // ------------------------------------------------------------------ fenêtres
@@ -1753,7 +1753,7 @@ export class UI {
           <li><b>Deux siècles</b> : la grande campagne part de 1700 (ou de 1790, 1813, 1870) et s’achève fin 1899 ; le plus prestigieux l’emporte. Les provinces deviennent départements en 1790 ; technologies et unités n’apparaissent qu’à leur époque. ${this.st.tour && this.st.tour.on ? '' : 'Vitesses ×10 et ×30 (touches 5 et 6) pour les années de paix : guerres, batailles et grandes propositions remettent en pause.'}</li>
           <li><b>Tour par tour</b> : chaque tour est un mois. Pendant votre tour, vos ordres s’exécutent tout de suite : vos armées marchent sous vos yeux (dans la limite de leurs jours de marche du mois, ou jusqu’au contact de l’ennemi), les batailles et les assauts se livrent aussitôt, les achats sont payés. Touchez « Tour suivant » : les IA jouent leur tour d’un coup (une ou deux secondes), puis c’est de nouveau à vous, au 1er du mois suivant, avec le bilan du mois écoulé. Le tour des IA ne s’arrête que si vous devez choisir : une IA vous attaque (livrer la bataille ou la laisser au général), ou une décision vous attend ; votre choix fait, il reprend tout seul. Le reste (armées ennemies sur vos terres, sièges, guerres, propositions) est dans le bilan du mois.</li>
           <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
-          <li><b>Événements</b> : aux grandes dates (Grand Hiver, Révolution, Blocus continental, phylloxéra…) et au gré des imprévus, une fenêtre vous demande un choix ; chaque option affiche ses effets. Vos choix nourrissent l’« histoire » de votre prestige. Sans réponse en 30 jours, l’option la plus prudente s’applique.</li>
+          <li><b>Événements</b> : aux grandes dates (Grand Hiver, Révolution, Blocus continental, phylloxéra…) et au gré des imprévus, une fenêtre vous demande un choix ; chaque option affiche ses effets. Vos choix nourrissent l’« histoire » de votre prestige. Sans réponse avant la fin du tour suivant, l’option la plus prudente s’applique.</li>
           <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes reçues à sa levée (affichées à côté de son nom) : après une découverte, réarmez les régiments démodés dans une de vos places (bouton « Réarmer », payé en armes, et en fer pour l’artillerie). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
           <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>
           <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>

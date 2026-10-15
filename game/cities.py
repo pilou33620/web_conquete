@@ -732,7 +732,7 @@ def fire(g, code, n):
         EV.apply(g, code, choices[i][1])
         return True
     g.pending_ev.append(dict(id=g.nid('e'), ev=ev['id'], kind='ville', title=title, text=text, town=nid,
-                             base=base, until=g.t + EV.ANSWER_DAYS, date=g.date_str(),
+                             base=base, until=TT.deadline(g, EV.ANSWER_TOURS), date=g.date_str(),
                              choices=[dict(label=c['label'], fx=fx, desc=EV.describe(g, code, fx, nid)) for c, fx in choices]))
     g.log('evenement', f"{title}. {text}" + (f" ({base})" if base else '') + " Une décision vous attend.",
           gn['x'], gn['y'], who=code, important=True)
@@ -748,6 +748,11 @@ def local_ok(g, code, v):
     return not v.get('troops') or _troops(g, n, code)
 
 
+def tours_of(days):
+    """Durée d'un effet d'événement local, écrite en jours dans LOCAL_EVENTS : en tours entiers (30 à 120 jours → 1 à 4)."""
+    return max(1, int(days / 30 + 0.5))
+
+
 def apply_local(g, code, v):
     n = g.nodes[v['nid']]
     if n['owner'] != code:
@@ -757,7 +762,7 @@ def apply_local(g, code, v):
     if v.get('stab'):
         n['stab'] = max(0.0, min(1.0, n['stab'] + v['stab']))
     for k, x in (v.get('tm') or {}).items():
-        n.setdefault('tm', []).append(dict(k=k, v=x, until=g.t + v.get('days', 60)))
+        n.setdefault('tm', []).append(dict(k=k, v=x, until=TT.deadline(g, tours_of(v.get('days', 60)))))
     for k, x in (v.get('add') or {}).items():
         bo = n.setdefault('bo', {})
         bo[k] = round(bo.get(k, 0) + x, 3)
@@ -778,8 +783,8 @@ def describe_local(g, v):
     if v.get('stab'):
         out.append(f"ordre public {R.de(name)} {_pct(v['stab'])}")
     for k, x in (v.get('tm') or {}).items():
-        d = v.get('days', 60)
-        out.append(f"{TM_LABEL.get(k, k)} {R.de(name)} {_pct(x)} pendant {f'{round(d / 30)} mois' if d >= 60 else f'{d} jours'}")
+        n = tours_of(v.get('days', 60))
+        out.append(f"{TM_LABEL.get(k, k)} {R.de(name)} {_pct(x)} pendant {R.pl(n, 'tour')}")
     for k, x in (v.get('add') or {}).items():
         out.append(f"+{_n(x)} {R.RES_LABEL.get(k, k).lower()} par jour à {name} (durable)")
     return out

@@ -3101,7 +3101,7 @@ class Game:
         lf['res']['livres'] -= pay
         wf['res']['livres'] += pay
         D.make_peace(self, winner, loser)
-        until = self.t + R.TREATY_TRUCE
+        until = TT.deadline(self, R.TREATY_TRUCE)
         lf['truce'][winner] = wf['truce'][loser] = until
         lf.setdefault('treaties', {})[winner] = self.t  # le même vainqueur n'accorde pas deux traités en 25 ans
         lf['weary'] = max(0.0, lf.get('weary', 0) - 40)
@@ -3110,7 +3110,7 @@ class Game:
         others = [o for o, f in self.factions.items() if f['alive'] and o not in (loser, winner) and self.at_war(o, loser)]
         for o in others:
             D.make_peace(self, o, loser)
-            until = self.t + R.TREATY_CONGRESS
+            until = TT.deadline(self, R.TREATY_CONGRESS)
             lf['truce'][o] = self.factions[o]['truce'][loser] = max(until, lf['truce'].get(o, 0))
         self._dirty_income = True
         cede = f"cède {R.pl(ceded, 'place')} à {self.fname(winner)} et lui verse" if ceded else f"verse à {self.fname(winner)}"
@@ -3152,7 +3152,7 @@ class Game:
                 if o != code:
                     self.set_status(code, o, 'paix')
                     f['rel'][o] = 0
-            until = self.t + 3 * 365   # l'ancien maître, épuisé, laisse faire... pour un temps
+            until = TT.deadline(self, 36)   # (trois ans) l'ancien maître, épuisé, laisse faire... pour un temps
             for o in {o for o, _ in freed}:
                 f['truce'][o] = self.factions[o]['truce'][code] = until
                 f['rel'][o] = self.factions[o]['rel'][code] = -40

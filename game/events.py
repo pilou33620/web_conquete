@@ -21,9 +21,10 @@ Effets (dictionnaire fx) :
 import datetime
 
 from . import rules as R
+from . import turns as TT
 
 ALL = None
-ANSWER_DAYS = 30
+ANSWER_TOURS = 1   # une décision attend jusqu'à la fin du tour qui suit (turns.deadline)
 RANDOM_GAP = (240, 540)   # jours entre deux événements aléatoires pour un même camp
 
 # (clé, nom) des modificateurs qui peuvent apparaître dans un effet
@@ -392,7 +393,7 @@ def fire(g, code, ev, kind):
             g.log('evenement', f"{title} : {g.fname(code)} choisit « {choices[i]['label'].lower()} ».", gn['x'], gn['y'], who=code)
         return
     g.pending_ev.append(dict(id=g.nid('e'), ev=ev['id'], kind=kind, title=title, text=text, town=town,
-                             base=base_txt, until=g.t + ANSWER_DAYS, date=g.date_str(),
+                             base=base_txt, until=TT.deadline(g, ANSWER_TOURS), date=g.date_str(),
                              choices=[dict(label=c['label'], fx=c['fx'], desc=describe(g, code, c['fx'], town))
                                       for c in choices]))
     g.log('evenement', f"{title}. {text}" + (f" ({base_txt})" if base_txt else '') + " Une décision vous attend.",
