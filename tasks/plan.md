@@ -137,7 +137,7 @@ captures restent mon outil de vérification interne. La taille des soldats est c
 ## Liste des tâches (étape 6)
 
 ### 6a et 6b : figurines
-- [ ] T18 : banc des modèles, relevé de charge de départ
+- [x] T18 : banc des modèles, relevé de charge de départ
 - [ ] T19 : fantassins arrondis (toutes les sortes à pied) et taille
 - [ ] T20 : chevaux, cavaliers, canons, caissons arrondis
 - [ ] T21 : version simple de loin (choix par régiment)

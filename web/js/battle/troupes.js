@@ -22,6 +22,9 @@ const MAXU = 512;           // régiments au plus (largeur de la texture des ré
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', GOLD = '#d6b65a', LEATHER = '#2a1f16';
 const AFFUT = '#5f6b3e', BRONZE = '#b08a3e';   // affûts peints en vert olive, pièces de bronze
 const ROWS = 5;     // lignes de la texture des régiments (la 4e et la 5e : l'instant du dernier coup de chaque pièce)
+// sortes de figurines et leur animation dans le vertex shader (null : homme à pied ; FLAG : étoffe d'un drapeau)
+const KINDS = { inf: null, gren: null, leger: null, milice: null, officier: null, tambour: null, drapeau: null, cav: 'HORSE', colonel: 'HORSE',
+  attelage: 'HORSE', servant: 'CREW', canon: 'GUN', caisson: 'GUN', chariot: 'GUN', etoffe: 'FLAG', fanion: 'FLAG' };
 const ROBES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];   // robes des chevaux (bai, bai brun, alezan, noir pangaré)
 
 // coiffure selon l'époque et le type (comme la vue 2D d'avant)
@@ -272,6 +275,19 @@ function horse(rider, year) {
   P.push([box(0.035, 0.95, 0.02, -0.27, 2.14, 0.04), '#c8ccd0', 8, 0]);
   return assemble(P);
 }
+// géométrie d'une sorte de figurine
+export function model(kind, year) {
+  switch (kind) {
+    case 'cav': case 'colonel': return horse(kind, year);
+    case 'attelage': return horse(null, year);
+    case 'canon': return gun();
+    case 'caisson': return caisson(false);
+    case 'chariot': return caisson(true);
+    case 'etoffe': return flagCloth();
+    case 'fanion': return flagCloth(true);
+    default: return soldier(kind, year);
+  }
+}
 // motif blanc de l'étoffe : croix des drapeaux d'ordonnance (avant 1790), losange ensuite
 function flagPattern(year) {
   const cv = document.createElement('canvas'); cv.width = 64; cv.height = 48;
@@ -394,16 +410,8 @@ export class Troops {
       uTime: { value: 0 }, uFxT: { value: 0 }, uRobes: { value: ROBES.map(c => new THREE.Color(c)) },
     };
     this.kinds = new Map();     // sorte → {mesh, cap, n, slot, anim, coat}
-    for (const k of ['inf', 'gren', 'leger', 'milice', 'officier', 'tambour', 'drapeau']) this.addKind(k, soldier(k, this.year));
-    for (const k of ['cav', 'colonel']) this.addKind(k, horse(k, this.year), null, 'HORSE');
-    this.addKind('attelage', horse(null, this.year), null, 'HORSE');
-    this.addKind('servant', soldier('servant', this.year), null, 'CREW');
-    this.addKind('canon', gun(), null, 'GUN');
-    this.addKind('caisson', caisson(false), null, 'GUN');
-    this.addKind('chariot', caisson(true), null, 'GUN');
     this.pattern = flagPattern(this.year);
-    this.addKind('etoffe', flagCloth(), this.pattern);
-    this.addKind('fanion', flagCloth(true), this.pattern);
+    for (const [k, def] of Object.entries(KINDS)) this.addKind(k, model(k, this.year), def === 'FLAG' ? this.pattern : null, def === 'FLAG' ? null : def);
     const soft = new THREE.CanvasTexture(relief.t.ombre);
     this.blobs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ map: soft, color: '#000000', transparent: true, opacity: 0.32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }), MAXU);

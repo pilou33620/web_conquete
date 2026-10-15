@@ -162,7 +162,11 @@ Vérifications communes : `python3 tests/lancer.py` passe ; aucune erreur dans l
 capture interne regardée (pas montrée) ; triangles relevés sur les trois vues types quand la tâche touche la charge.
 Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-distance (z = 4), au ras (z = 30).
 
-- [ ] **T18 : banc des modèles, relevé de départ**
+- [x] **T18 : banc des modèles, relevé de départ**
+  - Relevé de départ (Haute, 1400×800), en triangles par image et appels de dessin : ensemble 5 652 856 / 136 ;
+    mi-distance 6 632 688 / 96 ; au ras 6 632 688 / 96.
+  - L'essentiel vient des figurines : toutes sont dessinées, même hors champ. De près s'ajoute la passe d'ombre des
+    troupes.
   - Critères :
     - `troupes.js` exporte `model(kind, year, lod)`, qui renvoie la géométrie d'une sorte.
     - `tests/modeles.test.mjs` vérifie pour chaque sorte : os dans la liste de la sorte, hauteur plausible, avant vers

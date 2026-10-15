@@ -1,0 +1,60 @@
+// Banc des modèles 3D des figurines (web/js/battle/troupes.js, model) : node --test tests/
+//
+// POURQUOI CE BANC EXISTE. Les figurines sont construites par le code et animées par le vertex shader d'après l'« os »
+// de chaque sommet (jambes, bras et fusil, encolure, étoffe du drapeau). Un sommet rattaché au mauvais os, une
+// figurine tournée à l'envers ou deux fois trop grande ne font rien planter : ils se voient mal au milieu de milliers
+// de soldats. Ici on mesure chaque sorte.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { model } from '../web/js/battle/troupes.js';
+
+// os permis par sorte (0 corps, 1-2 jambes, 3 bras et fusil, 4 étoffe ; cheval : 1-2 et 5-6 jambes, 7 encolure,
+// 8 bras du cavalier) et hauteur attendue (m, avant l'échelle des figurines ; sans les bras, le fusil ni le sabre)
+const FOOT = [0, 1, 2, 3], HORSE = [0, 1, 2, 5, 6, 7];
+const SORTES = {
+  inf: [FOOT, 1.7, 2.0], gren: [FOOT, 1.9, 2.3], leger: [FOOT, 1.7, 2.1], milice: [FOOT, 1.7, 2.0], servant: [FOOT, 1.7, 2.0],
+  officier: [FOOT, 1.7, 2.0], tambour: [FOOT, 1.7, 2.0], drapeau: [FOOT, 3.4, 3.9],
+  cav: [[...HORSE, 8], 2.3, 2.9], colonel: [[...HORSE, 8], 2.3, 2.9], attelage: [HORSE, 1.8, 2.3],
+  canon: [[0], 1.0, 1.5], caisson: [[0], 1.1, 1.6], chariot: [[0], 1.7, 2.2],
+};
+
+const stats = g => {
+  const p = g.attributes.position, b = g.attributes.aBone;
+  let y0 = Infinity, y1 = -Infinity;
+  const bones = new Set();
+  for (let i = 0; i < p.count; i++) {
+    const bone = b.getX(i);
+    bones.add(bone); y0 = Math.min(y0, p.getY(i));
+    if (bone !== 3 && bone !== 8) y1 = Math.max(y1, p.getY(i));
+  }
+  return { y0, y1, bones, n: p.count };
+};
+
+for (const [kind, [bones, hmin, hmax]] of Object.entries(SORTES)) {
+  test(`${kind} : os de la sorte, pieds au sol, hauteur plausible`, () => {
+    const s = stats(model(kind, 1790));
+    for (const b of s.bones) assert.ok(bones.includes(b), `os ${b} inattendu`);
+    assert.ok(Math.abs(s.y0) < 0.03, `pieds en y = ${s.y0.toFixed(3)}`);
+    assert.ok(s.y1 >= hmin && s.y1 <= hmax, `hauteur ${s.y1.toFixed(2)} m`);
+  });
+}
+
+test('les figurines regardent vers +Z : pieds, tête du cheval et bouche du canon devant', () => {
+  // les sommets du bas (les pieds) d'un fantassin dépassent vers l'avant
+  const g = model('inf', 1790), p = g.attributes.position;
+  let z = 0, n = 0;
+  for (let i = 0; i < p.count; i++) if (p.getY(i) < 0.06) { z += p.getZ(i); n++; }
+  assert.ok(z / n > 0.01, `pieds en z moyen ${(z / n).toFixed(3)}`);
+  // cheval et canon : plus longs devant que derrière
+  for (const kind of ['attelage', 'canon']) {
+    const q = model(kind, 1790).attributes.position;
+    let z0 = Infinity, z1 = -Infinity;
+    for (let i = 0; i < q.count; i++) { z0 = Math.min(z0, q.getZ(i)); z1 = Math.max(z1, q.getZ(i)); }
+    assert.ok(z1 > -z0, `${kind} : de ${z0.toFixed(2)} à ${z1.toFixed(2)}`);
+  }
+});
+
+test('les coiffures suivent l’époque (tricorne, bicorne, shako : la figurine grandit)', () => {
+  const h = y => stats(model('inf', y)).y1;
+  assert.ok(h(1830) > h(1790) + 0.05, 'le shako est plus haut que le tricorne');
+});
