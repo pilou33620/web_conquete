@@ -176,7 +176,10 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
   - Fichiers : `web/js/battle/troupes.js`, `tests/modeles.test.mjs`
   - Taille : S
 
-- [ ] **T19 : fantassins arrondis et taille**
+- [x] **T19 : fantassins arrondis et taille**
+  - Fait : environ 900 sommets par homme à pied (676 avant). Taille gardée à ×1,6 : à ×1,35, la ligne est trop maigre
+    à mi-distance, et Ultimate General grandit aussi ses soldats (environ un tiers de maison).
+  - Triangles : ensemble 5,6 M ; mi-distance et au ras 13,5 M (×2 avant la version de loin, T21).
   - Critères :
     - `soldier()` en formes arrondies : basques, buffleteries croisées, guêtres, fusil à baïonnette.
     - `hat()` : tricorne relevé, bicorne, shako, képi, bonnet à poil, chapeau rond.

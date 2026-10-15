@@ -58,3 +58,11 @@ test('les coiffures suivent l’époque (tricorne, bicorne, shako : la figurine 
   const h = y => stats(model('inf', y)).y1;
   assert.ok(h(1830) > h(1790) + 0.05, 'le shako est plus haut que le tricorne');
 });
+
+test('les hommes à pied sont arrondis : des centaines de directions de normales (des pavés en ont quelques dizaines)', () => {
+  for (const kind of ['inf', 'gren', 'leger', 'milice', 'servant', 'officier', 'tambour', 'drapeau']) {
+    const n = model(kind, 1790).attributes.normal, dirs = new Set();
+    for (let i = 0; i < n.count; i++) dirs.add([n.getX(i), n.getY(i), n.getZ(i)].map(c => Math.round(c * 10)).join());
+    assert.ok(dirs.size >= 100, `${kind} : ${dirs.size} directions de normales`);
+  }
+});
