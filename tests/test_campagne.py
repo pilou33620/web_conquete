@@ -127,6 +127,24 @@ class TourParTour(unittest.TestCase):
         foes = TT._recap(g)['foes']
         self.assertEqual([f['id'] for f in foes], [b['id']])
 
+    def test_une_ville_neutre_se_rallie_pendant_votre_tour(self):
+        g = partie()
+        a = armee(g)
+        D.declare_war(g, g.player, '24', quiet=True)
+        ids = {gn['name']: i for i, gn in enumerate(g.geo.nodes)}
+        foy, berg = ids['Sainte-Foy-la-Grande'], ids['Bergerac']
+        self.assertEqual(g.nodes[foy]['owner'], R.NEUTRAL)
+        d0 = g.date_str()
+        self.assertTrue(g.order_move(g.player, a['id'], *g.node_xy(berg))[0])
+        TT.settle(g)
+        self.assertEqual(a['at_node'], foy, "en chemin vers Bergerac, l'armée s'arrête à Sainte-Foy…")
+        self.assertEqual(g.nodes[foy]['owner'], g.player, '… qui se rallie tout de suite')
+        self.assertEqual(g.date_str(), d0)
+        self.assertEqual(TT.march_left(g, a), 0.0, "prendre une ville finit la marche du tour")
+        self.assertTrue(a['path'], 'la route vers Bergerac est gardée')
+        jouer_mois(g)
+        self.assertNotEqual(a['at_node'], foy, "au tour suivant, l'armée repart vers Bergerac")
+
     def test_plus_de_marche_plus_de_mouvement(self):
         g = partie()
         a = armee(g)
@@ -145,6 +163,7 @@ class TourParTour(unittest.TestCase):
     def test_retraite_une_fois_par_tour(self):
         g = partie()
         a = armee(g)
+        a['tr'] = True   # traverse sans rallier les places neutres : elle reste loin de chez elle
         g.order_move(g.player, a['id'], a['x'] + 40, a['y'] + 10)   # loin de chez elle (une retraite a où aller)
         TT.settle(g)
         self.assertTrue(g.order_retreat(g.player, a['id'])[0])

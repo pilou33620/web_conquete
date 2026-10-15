@@ -2055,6 +2055,14 @@ class Game:
                 self.log('siege', f"{gn['name']} est déjà investie par {self.fname(n['siege']['by'])}.", gn['x'], gn['y'])
             return True
         if o == R.NEUTRAL and (mine > 3 * defense or (n['siege'] and n['siege'].get('occupy') and n['siege']['by'] == code)):
+            if code == self.player and TT.planning(self):
+                # tour du joueur : la place se rallie tout de suite, et l'armée finit là sa marche du tour (comme une
+                # prise de ville dans Total War) ; elle reprend sa route au tour suivant
+                self.log('capture', f"{gn['name']} se rallie à {self.fname(code)}.", gn['x'], gn['y'], who=code,
+                         important=True)
+                self.capture(nid, code, peaceful=True)
+                a['took'] = True
+                return True
             if not n['siege']:
                 n['siege'] = dict(by=code, dmg=0.0, since=self.t, occupy=True)
                 if code == self.player:

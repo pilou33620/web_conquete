@@ -27,7 +27,7 @@ Vérification commune à chaque tâche : `python3 tests/lancer.py` passe, puis u
     `tests/test_campagne.py`
   - Taille : M
 
-- [ ] **T3 : ville neutre prise tout de suite pendant le tour du joueur**
+- [x] **T3 : ville neutre prise tout de suite pendant le tour du joueur**
   - Pendant le tour du joueur, une armée assez forte qui arrive devant une ville neutre la rallie tout de suite : la
     ville est à lui, la date ne bouge pas, l'armée n'a plus de marche ce tour (et garde son chemin pour le tour
     suivant).

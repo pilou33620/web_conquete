@@ -162,8 +162,8 @@ def march_now(g, a, days=None):
             TB.army_tick(g, a, used, hot)   # la marche fatigue les hommes comme pendant le tour des IA
             g.update_hidden()
             g.detect_contacts(only=aid)
-            if aid in g.armies and a['state'] == 'battle':
-                fought = True   # attaquer ou être arrêté au contact termine la marche du tour
+            if aid in g.armies and (a['state'] == 'battle' or a.pop('took', False)):
+                fought = True   # attaquer, être arrêté au contact ou rallier une place termine la marche du tour
                 break
     finally:
         g.restore_clock(t0)
