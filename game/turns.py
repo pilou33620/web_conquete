@@ -28,6 +28,7 @@ Le temps réel d'origine (vitesses ×½ à ×30) reste disponible : tour['on'] =
 """
 import calendar
 import datetime
+import math
 import re
 import time
 
@@ -96,9 +97,20 @@ TOUR_DAYS = 30.0   # jours de travail d'un tour, quelle que soit la longueur du 
 
 
 def work(g, dt):
-    """Jours de travail d'un pas de dt jours : un mois entier en fait TOUR_DAYS, février comme mars."""
-    d = g.date()
+    """Jours de travail du pas de dt jours qui vient de s'écouler (g.t est à sa fin) : un mois entier en fait TOUR_DAYS,
+    février comme mars. (Le dernier pas du mois franchit minuit : il compte dans le mois où il a commencé.)"""
+    d = g.date(g.t - dt)
     return dt * TOUR_DAYS / calendar.monthrange(d.year, d.month)[1]
+
+
+def ready_in(g, work_left):
+    """Dans combien de tours est prêt ce qui demande encore work_left jours de travail, à la capacité d'un tour par
+    mois (1 : au prochain tour ; 0 : rien à faire). Le tour en cours n'a plus que ce qui reste du mois."""
+    if work_left <= 1e-6:
+        return 0
+    d = g.date()
+    cap = (month_end(g) - g.t) * TOUR_DAYS / calendar.monthrange(d.year, d.month)[1]
+    return 1 if work_left <= cap + 1e-6 else 1 + math.ceil((work_left - cap) / TOUR_DAYS - 1e-6)
 
 
 def deadline(g, n):

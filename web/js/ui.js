@@ -1,6 +1,6 @@
 import { ICON, speedIcon, coat } from './icons.js';
 import { esc, clamp } from './battle/formes.js';
-import { fmtMen, unitCls } from './map.js';
+import { fmtMen, unitCls, toursTxt, partTour } from './map.js';
 import { QUALITES, QUALITE_LABEL, QUALITE_AIDE, qualite, setQualite } from './battle/qualite.js';
 import { Tuto } from './tuto.js';
 
@@ -1056,7 +1056,7 @@ export class UI {
       h += `<div class="row" style="margin-top:8px"><span class="chip ${fs.st === 'guerre' ? 'war' : fs.st === 'alliance' ? 'ally' : ''}">${STATUS[fs.st]}</span>
         ${fs.st === 'paix' ? '<span class="muted small">Déclarez la guerre (Diplomatie) pour attaquer.</span>' : ''}</div>`;
     }
-    if (ns.o === 'neutre') h += `<p class="muted small">Village indépendant : envoyez une armée nettement plus forte que sa milice pour le rallier en quelques jours, sinon il faudra combattre.</p>`;
+    if (ns.o === 'neutre') h += `<p class="muted small">Village indépendant : envoyez une armée nettement plus forte que sa milice : il se rallie aussitôt (sa marche du tour s’arrête là), sinon il faudra combattre.</p>`;
     if (!own) {
       // renseignement
       if (ns.intel) {
@@ -1096,7 +1096,7 @@ export class UI {
           const c = st.me.unit_costs[u] || {};
           return `<button class="btn unit-card" data-act="recruit" data-v="${u}" ${this.canPay(c) && !ns.sg && !qFull ? '' : 'disabled'} title="${qFull ? fullT : esc(U[u].name + (U[u].desc ? ' : ' + U[u].desc : ''))}">
             ${ICON[u] || ICON.ligne}<span class="un">${U[u].short} <span class="muted" style="font-weight:400">(${U[u].men})</span></span>
-            <span class="uc">${this.costHtml(c)}, ${st.me.unit_days[u] ?? '?'} j</span></button>`;
+            <span class="uc">${this.costHtml(c)}, ${st.me.unit_days[u] != null ? partTour(st.me.unit_days[u]) : '?'}</span></button>`;
         }).join('')}</div>`;
         // armes encore à découvrir (technologie manquante) : une ligne discrète
         const later = this.rules.unit_order.filter(u => !ru.includes(u) && U[u]?.req && !st.me.techs.includes(U[u].req) && rw[u]);
@@ -1124,7 +1124,7 @@ export class UI {
         const lab = k === 'fort' ? `${l + 1 === this.rules.fort.bastion ? 'Bastions à la Vauban' : b.name + ' niveau ' + (l + 1)}`
           : k === 'dev' ? `Agrandir : ${this.devName(gn.type, l + 1).toLowerCase()}` : `${b.name} niveau ${l + 1}`;
         const up = k === 'fort' ? `, entretien ${fmt1(this.rules.fort.upkeep[l + 1])} livres /j` : '';
-        h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'}${qDis || ` title="${esc(b.desc)}"`}>${lab}<small>${this.costHtml(c)}, ${b.days[l]} j${up}</small></button>`;
+        h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'}${qDis || ` title="${esc(b.desc)}"`}>${lab}<small>${this.costHtml(c)}, ${partTour(b.days[l])}${up}</small></button>`;
       }
       h += `</div>`;
       h += this.cityHtml(id, gn, ns, queue, qFull);   // emplacements et politique de la ville
@@ -1133,7 +1133,7 @@ export class UI {
           const lab = q.kind === 'unit' ? this.rules.units[q.what]?.name || q.what
             : q.kind === 'slot' && this.rules.cities?.chains[q.what] ? this.slotName(gn, q.what, q.lvl || 1) : this.rules.build[q.what]?.name || q.what;
           const pct = i === 0 ? Math.round((1 - q.left / q.total) * 20) * 5 : 0;   // par pas de 5 % : moins de redessins
-          return `<div class="queue-item"><span>${lab}</span><span class="muted">${i === 0 ? Math.ceil(q.left) + ' j' : 'en attente'}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`;
+          return `<div class="queue-item"><span>${lab}</span><span class="muted">${q.tn == null ? 'en attente (place assiégée)' : 'prêt ' + toursTxt(q.tn)}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`;
         }).join('');
       }
     }
@@ -1184,7 +1184,7 @@ export class UI {
     const ok = !chk.why && !qFull && !ns.sg && this.canPay(L.cost);
     const why = chk.why || (qFull ? 'File de production pleine' : ns.sg ? 'Place assiégée' : !this.canPay(L.cost) ? 'Ressources insuffisantes' : '');
     return `<button class="btn slot-opt" data-act="slot-build" data-v="${k}" ${ok ? '' : 'disabled'}><b>${esc(label)}</b>
-      <small>${this.costHtml(L.cost)}, ${L.days} j</small><small>${esc(this.slotFx(gn, L))}</small>${why ? `<small class="why">${esc(why)}</small>` : ''}</button>`;
+      <small>${this.costHtml(L.cost)}, ${partTour(L.days)}</small><small>${esc(this.slotFx(gn, L))}</small>${why ? `<small class="why">${esc(why)}</small>` : ''}</button>`;
   }
 
   cityHtml(id, gn, ns, queue, qFull) {

@@ -53,7 +53,7 @@ Vérification commune à chaque tâche : `python3 tests/lancer.py` passe, puis u
   - Fichiers : `game/turns.py`, `web/js/ui.js`, `tests/test_campagne.py`, `tests/interface.test.mjs`
   - Taille : S
 
-- [ ] **T5 : production à capacité par tour**
+- [x] **T5 : production à capacité par tour**
   - La file d'une ville avance de `work(dt)` (30 jours de travail par tour) ; le surplus d'un élément terminé passe
     au suivant.
   - Le panneau de ville dit pour chaque élément de la file « prêt au prochain tour » / « dans N tours » / « en

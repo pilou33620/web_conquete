@@ -1153,12 +1153,17 @@ class Game:
         return True, f"{b['name']} lancées à {gn['name']}."
 
     def update_queues(self, dt):
+        w0 = TT.work(self, dt)   # capacité par tour : un mois de travail, quelle que soit sa longueur
         for n in self.nodes:
             if not n['queue'] or n['siege'] or n['owner'] == R.NEUTRAL:
                 continue
-            q = n['queue'][0]
-            q['left'] -= dt
-            if q['left'] <= 0:
+            w = w0
+            while w > 1e-9 and n['queue']:
+                q = n['queue'][0]
+                q['left'] -= w
+                if q['left'] > 1e-6:
+                    break
+                w = max(0.0, -q['left'])   # le surplus passe à l'élément suivant de la file
                 n['queue'].pop(0)
                 gn = self.geo.nodes[n['id']]
                 if q['kind'] == 'unit':

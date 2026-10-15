@@ -132,11 +132,11 @@ test('durées en tours', async () => {
   assert.equal(toursTxt(1), 'au prochain tour');
   assert.equal(toursTxt(3), 'dans 3 tours');
   assert.equal(toursTxt(0), 'ce tour-ci');
-  assert.equal(partTour(6 / 30), '⅕ de tour');
-  assert.equal(partTour(0.5), '½ tour');
-  assert.equal(partTour(1), '1 tour');
-  assert.equal(partTour(32 / 30), '1 tour');
-  assert.equal(partTour(2.5), '2 tours ½');
+  assert.equal(partTour(6), '⅕ de tour', 'un régiment de 6 jours');
+  assert.equal(partTour(15), '½ tour');
+  assert.equal(partTour(30), '1 tour');
+  assert.equal(partTour(32), '1 tour');
+  assert.equal(partTour(75), '2 tours ½');
 });
 
 test('barre du tour : bloquée tant qu’une bataille attend votre choix', () => {

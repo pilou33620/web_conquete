@@ -2467,9 +2467,12 @@ export function toursTxt(n) {
   return n <= 0 ? 'ce tour-ci' : n === 1 ? 'au prochain tour' : `dans ${n} tours`;
 }
 
-// une part de tour (en tours, 0,2 = un régiment de 6 jours) : « ⅕ de tour », « 1 tour », « 2 tours ½ »
+// une durée en jours de travail, en part de tour (un tour = TOUR_DAYS jours de travail, game/turns.py) :
+// « ⅕ de tour » (un régiment de 6 jours), « 1 tour », « 2 tours ½ »
+export const TOUR_DAYS = 30;
 const PARTS = [[1 / 6, '⅙'], [1 / 5, '⅕'], [1 / 4, '¼'], [1 / 3, '⅓'], [2 / 5, '⅖'], [1 / 2, '½'], [3 / 5, '⅗'], [2 / 3, '⅔'], [3 / 4, '¾'], [4 / 5, '⅘']];
-export function partTour(x) {
+export function partTour(days) {
+  const x = days / TOUR_DAYS;
   let whole = Math.floor(x + 1e-9);
   let f = x - whole, part = '';
   if (f >= 0.9) whole++;

@@ -217,10 +217,50 @@ class TempsEnTours(unittest.TestCase):
 
     def test_un_tour_de_travail_quelle_que_soit_la_longueur_du_mois(self):
         g = partie()
-        au(g, 1791, 2)
-        self.assertAlmostEqual(TT.work(g, 28), TT.TOUR_DAYS)
         au(g, 1791, 3)
-        self.assertAlmostEqual(TT.work(g, 31), TT.TOUR_DAYS)
+        self.assertAlmostEqual(TT.work(g, 28), TT.TOUR_DAYS, 'le mois de février qui vient de passer')
+        au(g, 1791, 4)
+        self.assertAlmostEqual(TT.work(g, 31), TT.TOUR_DAYS, 'le mois de mars')
+
+
+class Production(unittest.TestCase):
+    """Règle A : une ville fait un mois de travail par tour ; sa file avance dans l'ordre, le surplus passe au suivant."""
+
+    def lever(self, g, k, days=6.0):
+        n = next(n for n in g.owned_nodes(g.player) if n['id'] == g.capital_of(g.player))
+        n['queue'] = [dict(kind='unit', what='ligne', left=days, total=days) for _ in range(k)]
+        return n
+
+    def test_cinq_regiments_d_un_cinquieme_de_tour(self):
+        g = partie()
+        jouer_mois(g)   # 1er avril : un tour entier devant soi
+        n = self.lever(g, 5)
+        self.assertEqual([TT.ready_in(g, 6.0 * (i + 1)) for i in range(5)], [1] * 5, 'tous annoncés au prochain tour')
+        g0 = len(n['garrison'])
+        jouer_mois(g)
+        self.assertEqual(n['queue'], [])
+        self.assertEqual(len(n['garrison']) - g0, 5)
+
+    def test_le_surplus_passe_au_suivant(self):
+        g = partie()
+        jouer_mois(g)
+        n = self.lever(g, 29, days=1.01)   # 29,3 jours de travail : un tour, sans rien perdre entre deux éléments
+        jouer_mois(g)
+        self.assertEqual(n['queue'], [])
+
+    def test_premier_tour_entame(self):
+        g = partie()   # 4 mars : il ne reste que 28 jours de mars
+        n = self.lever(g, 5)
+        self.assertEqual([TT.ready_in(g, 6.0 * (i + 1)) for i in range(5)], [1, 1, 1, 1, 2])
+        jouer_mois(g)
+        self.assertEqual(len(n['queue']), 1, 'le cinquième est pour le tour suivant, comme annoncé')
+        jouer_mois(g)
+        self.assertEqual(n['queue'], [])
+
+    def test_deux_chantiers_de_24_jours(self):
+        g = partie()
+        self.lever(g, 2, days=24.0)
+        self.assertEqual([TT.ready_in(g, 24.0), TT.ready_in(g, 48.0)], [1, 2])
 
 
 class Regles(unittest.TestCase):

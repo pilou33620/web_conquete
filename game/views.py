@@ -250,8 +250,11 @@ def player_state(g, since=0):
                         d['ru'].append(u)
                     else:
                         d['rw'][u] = why.rstrip('.')
-                d['q'] = [dict(kind=q['kind'], what=q['what'], left=round(q['left'], 1), total=round(q['total'], 1),
-                               lvl=q.get('lvl')) for q in n['queue']]
+                d['q'], cum = [], 0.0
+                for q in n['queue']:
+                    cum += q['left']   # la file avance dans l'ordre : chaque élément attend ceux d'avant
+                    d['q'].append(dict(kind=q['kind'], what=q['what'], left=round(q['left'], 1), total=round(q['total'], 1),
+                                       lvl=q.get('lvl'), tn=None if n['siege'] else TT.ready_in(g, cum)))
                 d.update(CT.node_view(g, n))   # emplacements, politique, événement en attente
         elif g.intel_active(p, n['id']):
             d['m'] = round(n['milice'])
