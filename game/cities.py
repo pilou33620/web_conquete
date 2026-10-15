@@ -5,7 +5,7 @@ agrandissement. Chacun accueille une chaîne de bâtiments (trois niveaux au plu
 comme les remparts. Fortifications et agrandissements restent hors emplacements ; le magasin aux vivres en occupe un.
 
 Politique : une orientation par place (Équilibre par défaut), avec un bonus et une contrepartie ; un changement
-prend effet peu à peu, en POLICY_DAYS jours.
+prend effet peu à peu, en POLICY_TOURS tour (au début du tour suivant).
 
 Événements locaux : incendie, fièvre, disette, brigands, foire, crue, réfugiés, filon, émeute. Ils ne touchent que
 la ville concernée. Pour le joueur, ils passent par les décisions de events.py (fenêtre de choix, pause) ;
@@ -13,17 +13,19 @@ les IA choisissent aussitôt.
 
 Données d'une place (dans game.nodes) :
   slots  {chaîne: niveau}       niveau 0 = premier niveau en chantier ; l'ordre est celui des emplacements
-  pol    {k, p, t, o}           politique, précédente, début du changement, camp qui l'a choisie
+  pol    {k, p, t, u, o}        politique, précédente, début et fin du changement, camp qui l'a choisie
   tm     [{k, v, until}]        effets passagers d'un événement (production de la ville)
   bo     {ressource: par jour}  effets durables d'un événement (un filon)
   evt    date du dernier événement local
 """
 from . import rules as R
 from . import events as EV
+from . import turns as TT
 
 SLOTS = dict(village=1, fort=1, ville=3, capitale=5)   # +1 par niveau d'agrandissement
 PROD = ('livres', 'vivres', 'recrues', 'industrie', 'fer', 'bois')
-POLICY_DAYS = 18          # transition d'une politique à l'autre
+POLICY_TOURS = 1          # transition d'une politique à l'autre
+POLICY_OLD_DAYS = 18      # (sauvegardes d'avant les tours : transition en jours)
 EV_RATE = 1 / 85          # chance quotidienne d'un événement local, pour un camp (un tous les deux à trois mois)
 CITY_GAP = 240            # une même place n'a pas deux événements à moins de huit mois d'écart
 SIZE_COST = dict(village=0.5, fort=0.6, ville=1.0, capitale=1.8)   # coûts et gains des événements selon la taille
@@ -362,7 +364,8 @@ def policy_w(g, n):
     p = n.get('pol')
     if not p:
         return 1.0
-    return max(0.0, min(1.0, (g.t - p['t']) / POLICY_DAYS))
+    u = p.get('u') or TT.turn_start_after(g, p['t'] + POLICY_OLD_DAYS)
+    return max(0.0, min(1.0, (g.t - p['t']) / max(1e-6, u - p['t'])))
 
 
 def pfx(g, n):
@@ -477,7 +480,7 @@ def set_policy(g, code, nid, k, same_type=False):
             else f"{what[0].upper() + what[1:]} suivent déjà la politique « {lab} »."
     if not changed:
         return True, f"{g.geo.nodes[nid]['name']} suit déjà la politique « {lab} »."
-    return True, f"{g.geo.nodes[nid]['name']} : politique « {lab} », en place d'ici {POLICY_DAYS} jours."
+    return True, f"{g.geo.nodes[nid]['name']} : politique « {lab} », en place au prochain tour."
 
 
 def _set_policy(g, n, k):
@@ -487,7 +490,7 @@ def _set_policy(g, n, k):
         return False
     # en pleine transition, on repart de la politique qui dominait encore
     prev = cur if not p or policy_w(g, n) >= 0.5 else p.get('p', 'equilibre')
-    n['pol'] = dict(k=k, p=prev, t=g.t, o=n['owner'])
+    n['pol'] = dict(k=k, p=prev, t=g.t, u=TT.deadline(g, POLICY_TOURS), o=n['owner'])
     g._dirty_income = True
     return True
 
@@ -502,14 +505,18 @@ def daily(g, d):
         tick(g)
 
 
+def college_k(g, code):
+    """Jours de recherche gagnés chaque jour grâce aux collèges (au plus 0,15)."""
+    return min(0.15, sum(bfx(n).get('research', 0) for n in g.owned_nodes(code) if n.get('slots')))
+
+
 def research(g):
     """Les collèges forment des savants : les recherches en cours avancent un peu plus vite (au plus +15 %)."""
     for code, f in g.factions.items():
         if not f['alive']:
             continue
-        k = sum(bfx(n).get('research', 0) for n in g.owned_nodes(code) if n.get('slots'))
+        k = college_k(g, code)
         if k > 0:
-            k = min(0.15, k)
             for cur in f['research'].values():
                 if cur:
                     cur['left'] -= k
@@ -917,7 +924,8 @@ def node_view(g, n):
     d = dict(sl=[[k, v] for k, v in slots(n).items()], sn=slot_count(g, n))
     p = n.get('pol')
     if p and p.get('o') == n['owner'] and (p['k'] != 'equilibre' or policy_w(g, n) < 1):
-        d['pol'] = [p['k'], p.get('p', 'equilibre'), round(policy_w(g, n), 2)]
+        d['pol'] = [p['k'], p.get('p', 'equilibre'), round(policy_w(g, n), 2),
+                    TT.tours_left(g, p.get('u') or TT.turn_start_after(g, p['t'] + POLICY_OLD_DAYS))]
     tm = [e for e in n.get('tm') or () if e['until'] > g.t]
     if tm or n.get('bo'):
         d['tm'] = [f"{TM_LABEL.get(e['k'], e['k'])} {_pct(e['v'])} jusqu'au {g.date_str(e['until'])}" for e in tm] + \
@@ -934,7 +942,7 @@ def rules_payload():
         chains[k] = dict(name=c['name'], icon=c['icon'], desc=c['desc'], where=c.get('where'),
                          levels=[dict(name=L['name'], cost=L['cost'], days=L['days'], dev=L.get('dev', 0),
                                       tech=L.get('tech'), up=L.get('up', 0), txt=fx_text(L['fx'])) for L in c['levels']])
-    return dict(slots=SLOTS, size_k=SIZE_K, chains=chains, order=CHAIN_ORDER, policy_days=POLICY_DAYS,
+    return dict(slots=SLOTS, size_k=SIZE_K, chains=chains, order=CHAIN_ORDER,
                 spec_names={k: dict(names=v[0], tech=v[1]) for k, v in SPEC_NAMES.items()},
                 policies={k: dict(label=p['label'], pro=p['pro'], con=p['con']) for k, p in POLICIES.items()},
                 policy_order=POLICY_ORDER, tech_names={t['id']: t['name'] for t in R.TECH.values()})

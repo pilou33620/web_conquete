@@ -15,6 +15,7 @@ import unittest
 
 from fabrique import GEO, TT, armee, jouer_mois, partie
 from game import diplomacy as D
+from game import cities as CT
 from game import events as E
 from game import rules as R
 from game import views as V
@@ -261,6 +262,42 @@ class Production(unittest.TestCase):
         g = partie()
         self.lever(g, 2, days=24.0)
         self.assertEqual([TT.ready_in(g, 24.0), TT.ready_in(g, 48.0)], [1, 2])
+
+
+class RechercheEtPolitiques(unittest.TestCase):
+    def test_technologies_en_tours_entiers(self):
+        for t in R.TECH.values():
+            self.assertIn(t['days'], (30, 60, 90), t['id'])
+
+    def test_une_technologie_d_un_tour_est_decouverte_au_tour_suivant(self):
+        g = partie()
+        jouer_mois(g)   # 1er avril
+        f = g.factions[g.player]
+        f['res']['livres'] = 1e5
+        t = next(t for t in R.TECH.values() if t['days'] == 30 and t['id'] not in f['techs'] and not f['research'][t['branch']]
+                 and all(r in f['techs'] for r in t['req']) and R.TECH_YEAR.get(t['id'], 0) <= g.date().year
+                 and {x[0]: x[5] for x in R.TECHS}[t['id']] == 42)
+        self.assertTrue(g.research(g.player, t['id'])[0])
+        jouer_mois(g)
+        self.assertIn(t['id'], f['techs'], '42 jours devenus un tour : découverte au tour suivant')
+
+    def test_politique_en_place_au_prochain_tour(self):
+        g = partie()
+        n = next(n for n in g.owned_nodes(g.player))
+        k = next(k for k in CT.POLICIES if k != 'equilibre')
+        self.assertTrue(CT.set_policy(g, g.player, n['id'], k)[0])
+        self.assertEqual(n['pol']['u'], TT.deadline(g, 1))
+        jouer_mois(g)
+        self.assertEqual(CT.policy_w(g, n), 1.0)
+
+    def test_ancienne_politique_en_jours(self):
+        g = partie()
+        n = next(n for n in g.owned_nodes(g.player))
+        au(g, 1790, 4, 20)
+        n['pol'] = dict(k='equilibre', p='equilibre', t=g.t - 5, o=g.player)   # sauvegarde d'avant les tours
+        self.assertLess(CT.policy_w(g, n), 1.0)
+        au(g, 1790, 6)
+        self.assertEqual(CT.policy_w(g, n), 1.0, 'les 18 jours (jusqu\'au 3 mai) finis au début du tour suivant')
 
 
 class Regles(unittest.TestCase):

@@ -353,8 +353,9 @@ def player_state(g, since=0):
     tb, cov = g.tools_bonus(p)
     mine = dict(code=p, res={k: round(v, 1) for k, v in me['res'].items()},
                 income={k: round(v, 2) for k, v in me['income'].items()}, slider=me['slider'],
-                research={b: (dict(tech=v['tech'], left=round(v['left'], 1), total=v['total']) if v else None)
-                          for b, v in me['research'].items()},
+                research={b: (dict(tech=v['tech'], left=round(v['left'], 1), total=v['total'],
+                                   tn=TT.ready_in(g, v['left'] / (1 + g.mod(p, 'research_speed') + CT.college_k(g, p))))
+                              if v else None) for b, v in me['research'].items()},
                 techs=me['techs'], cov=round(cov, 2), tools_bonus=round(tb, 3), cap=round(me.get('_cap', 0), 2),
                 upkeep={k: round(v, 2) for k, v in me.get('_upkeep', {}).items()},
                 trade={k: round(v, 2) for k, v in me.get('_trade', {}).items()},

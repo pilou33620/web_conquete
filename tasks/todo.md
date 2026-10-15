@@ -66,7 +66,7 @@ Vérification commune à chaque tâche : `python3 tests/lancer.py` passe, puis u
     `tests/test_campagne.py`
   - Taille : M
 
-- [ ] **T6 : recherche et politiques de ville en tours**
+- [x] **T6 : recherche et politiques de ville en tours**
   - Technologies : 1 à 3 tours (arrondi de 28 à 84 jours), recherche qui avance de `work(dt)` ; les bonus et
     collèges réduisent toujours le temps ; « prête au prochain tour / dans N tours ».
   - Politique de ville : 1 tour.

@@ -291,7 +291,9 @@ TECHS = [
     ('greffe', 'agricole', 'Vignes greffées sur plants américains', 'Après le phylloxéra, le vignoble renaît : revenus du vin +30 %.', 1125, 56, ['chais'], dict(vin=0.30)),
     ('conserves', 'agricole', 'Conserves d’Appert', 'Vivres en bocaux : les armées s’épuisent 40 % moins vite loin de chez elles.', 1000, 56, ['pomme_de_terre'], dict(supply_drain=-0.40)),
 ]
-TECH = {t[0]: dict(id=t[0], branch=t[1], name=t[2], desc=t[3], cost=t[4], days=t[5], req=t[6], fx=t[7]) for t in TECHS}
+# durée en jours de travail, arrondie au tour (30 jours de travail ; SPEC-TOURS.md, règle B) : 28 à 84 jours → 1 à 3 tours
+TECH = {t[0]: dict(id=t[0], branch=t[1], name=t[2], desc=t[3], cost=t[4], days=30 * max(1, int(t[5] / 30 + 0.5)), req=t[6],
+                   fx=t[7]) for t in TECHS}
 BRANCHES = ['militaire', 'civil', 'industriel', 'agricole']
 
 # ------------------------------------------------------------------ saisons & météo

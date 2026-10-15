@@ -857,7 +857,7 @@ class Game:
             # recherche
             for b, cur in f['research'].items():
                 if cur:
-                    cur['left'] -= dt * (1 + self.mod(code, 'research_speed'))
+                    cur['left'] -= TT.work(self, dt) * (1 + self.mod(code, 'research_speed'))
                     if cur['left'] <= 0:
                         f['research'][b] = None
                         f['techs'].append(cur['tech'])

@@ -1228,7 +1228,7 @@ export class UI {
     const P = C.policies[pk];
     h += `<div class="section-t">Politique de la ville</div><div class="seg wrap">${C.policy_order.map(k => `<button class="${k === pk ? 'on' : ''}" data-act="policy" data-v="${k}" title="${esc(C.policies[k].pro + (C.policies[k].con ? ' ; ' + C.policies[k].con : ''))}">${esc(C.policies[k].label)}</button>`).join('')}</div>`;
     h += `<div class="tac-desc" style="margin-top:4px">${esc(P.pro)}${P.con ? `. En contrepartie : ${esc(P.con)}` : ''}.</div>`;
-    if (w < 1) h += `<div class="muted small">Transition depuis « ${esc(C.policies[prev].label)} » : ${Math.round(w * 100)} % (${C.policy_days} jours en tout)</div><div class="bar"><i style="width:${Math.round(w * 100)}%"></i></div>`;
+    if (w < 1) h += `<div class="muted small">Transition depuis « ${esc(C.policies[prev].label)} » : ${Math.round(w * 100)} %, en place ${toursTxt(ns.pol[3])}</div><div class="bar"><i style="width:${Math.round(w * 100)}%"></i></div>`;
     const plural = { village: 'tous mes villages', fort: 'toutes mes places fortes', ville: 'toutes mes villes' }[gn.type];
     if (plural) h += `<div style="margin-top:4px"><button class="linkish small" data-act="policy-all" data-v="${pk}">Appliquer « ${esc(P.label)} » à ${plural}</button></div>`;
     if (ns.tm) h += `<div class="muted small" style="margin-top:6px">Effets en cours : ${ns.tm.map(esc).join(' ; ')}.</div>`;
@@ -1525,7 +1525,7 @@ export class UI {
       const depth = t => t.req.length ? 1 + Math.max(...t.req.map(r => depth(this.rules.techs.find(x => x.id === r)))) : 0;
       const techs = this.rules.techs.filter(t => t.branch === br).sort((a, b) => depth(a) - depth(b) || a.cost - b.cost);
       const curT = cur ? this.rules.techs.find(t => t.id === cur.tech) : null;
-      const head = curT ? `En cours : ${curT.name}, ${Math.ceil(cur.left)} j<div class="bar green" style="margin-top:4px"><i style="width:${Math.round((1 - cur.left / cur.total) * 100)}%"></i></div>` : 'Aucune recherche en cours.';
+      const head = curT ? `En cours : ${curT.name}, prête ${toursTxt(cur.tn)}<div class="bar green" style="margin-top:4px"><i style="width:${Math.round((1 - cur.left / cur.total) * 100)}%"></i></div>` : 'Aucune recherche en cours.';
       const cards = techs.map(t => {
         const done = me.techs.includes(t.id);
         const running = cur && cur.tech === t.id;
@@ -1536,7 +1536,7 @@ export class UI {
         else if (running) foot = '<span>En cours…</span>';
         else if (t.year > (this.st.year || 0)) foot = `<span class="muted">Pas encore inventée : vers ${t.year}${t.req.length ? ' ; requiert ' + reqNames : ''}</span>`;
         else if (!ready) foot = `<span class="muted">Requiert : ${reqNames}</span>`;
-        else foot = `<span>${fmt(t.cost)} livres, ${t.days} j</span><button class="btn" data-act="research" data-v="${t.id}" ${cur || me.res.livres < t.cost ? 'disabled' : ''}>Rechercher</button>`;
+        else foot = `<span>${fmt(t.cost)} livres, ${partTour(t.days)}</span><button class="btn" data-act="research" data-v="${t.id}" ${cur || me.res.livres < t.cost ? 'disabled' : ''}>Rechercher</button>`;
         return `<div class="tech ${done ? 'done' : running ? 'running' : !ready ? 'locked' : ''}"><div class="tn">${t.name}</div><div class="td">${t.desc}</div><div class="tc">${foot}</div></div>`;
       }).join('');
       return `<div class="tech-col"><h3>${BRANCH_LABEL[br]}</h3><div class="cur">${head}</div>${cards}</div>`;
