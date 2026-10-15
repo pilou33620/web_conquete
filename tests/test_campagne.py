@@ -35,6 +35,26 @@ class TourParTour(unittest.TestCase):
             if n.get('siege'):
                 self.assertLessEqual(n['siege']['since'], g.t + 1e-6)
 
+    def test_le_tour_des_ia_se_joue_d_un_coup(self):
+        g = partie()
+        TT.go(g)
+        for n in range(1, 200):
+            TT.advance(g, 0.1)   # un appel de la boucle du serveur (toutes les 0,1 s)
+            if g.tour['stop']:
+                TT.go(g)
+            if g.tour['end'] is None:
+                break
+        self.assertEqual(g.date().day, 1)
+        self.assertLess(n, 30, "le mois des IA se calcule aussi vite que possible, pas au rythme de 15 s")
+
+    def test_plus_de_rythme(self):
+        g = partie()
+        g.tour['pace'] = 'lent'   # ancienne sauvegarde
+        TT.migrate(g)
+        self.assertNotIn('pace', g.tour)
+        self.assertNotIn('pace', TT.view(g))
+        self.assertFalse(TT.command(g, 'pace', 'lent')[0])
+
     def test_plus_de_marche_plus_de_mouvement(self):
         g = partie()
         a = armee(g)

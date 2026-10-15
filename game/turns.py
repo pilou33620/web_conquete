@@ -8,9 +8,9 @@ Un tour = un mois, en deux temps :
    la reprend d'elle-même au tour suivant. Une bataille qu'elle déclenche se livre sur-le-champ (jouée sur le champ de
    bataille, ou réglée par le général : resolve_battle_now), un assaut aussi. Les achats, constructions, recherches
    et décisions de gouvernement sont payés tout de suite ; les travaux, eux, avancent avec le temps.
-2. **Le tour des IA** (« Tour suivant ») : le mois s'écoule en accéléré sous vos yeux (15 secondes réelles environ au
-   rythme normal) : les IA marchent, négocient et se battent, les travaux et les sièges avancent, les revenus
-   tombent. Vos armées, qui ont déjà joué, restent en place (Game.paused). Tout s'arrête au 1er du mois suivant, à 0 h :
+2. **Le tour des IA** (« Tour suivant ») : le mois est calculé d'un coup, aussi vite que possible (une ou deux
+   secondes), par tranches de BUDGET secondes pour que le serveur réponde encore au navigateur : les IA marchent,
+   négocient et se battent, les travaux et les sièges avancent, les revenus tombent. Vos armées, qui ont déjà joué, restent en place (Game.paused). Tout s'arrête au 1er du mois suivant, à 0 h :
    les batailles encore en cours sont réglées, les jours de marche sont rendus (begin_turn) et c'est de nouveau à vous.
 
 Le tour des IA s'interrompt aux moments clés pour laisser le joueur réagir, puis reprend avec « Continuer » :
@@ -31,17 +31,15 @@ Le temps réel d'origine (vitesses ×½ à ×30) reste disponible : tour['on'] =
 import calendar
 import datetime
 import re
+import time
 
 from . import rules as R
 
-# rythmes : secondes réelles pour jouer un mois entier (le mois de février dure aussi longtemps que les autres)
-PACES = [('lent', 'Lent', 30), ('normal', 'Normal', 15), ('rapide', 'Rapide', 8), ('eclair', 'Éclair', 4)]
+BUDGET = 0.25         # secondes de calcul du tour des IA par appel (la boucle du serveur appelle toutes les 0,1 s)
 MARCH_FRAC = 1.0       # part du mois qu'une armée peut marcher pendant le tour du joueur (1 : tout le mois, comme les IA)
 MARCH_STEP = 0.1       # jours : pas de la marche instantanée (rencontres examinées à chaque pas, contact à 2,6 km)
 RETREAT_DAYS = 4.0     # jours de marche d'une armée battue qui se replie, tout de suite, pendant le tour du joueur
 TRAIL_PTS = 90         # points gardés du trajet d'une marche, pour l'animer dans le navigateur
-PACE_SEC = {k: s for k, _, s in PACES}
-DEFAULT_PACE = 'normal'
 # délai minimal, en jours de jeu, entre deux interruptions du même genre (0 : toujours)
 COOLDOWN = dict(bataille=1.5, siege=2.0, entree=4.0, diplo=1.0, guerre=0.0, decision=0.0, grand=0.0, fin=0.0)
 # la même armée ennemie n'interrompt pas deux fois en 20 jours (va-et-vient sur la frontière), ni la même proposition
@@ -58,7 +56,7 @@ _BUILT = re.compile(r"^(Fin des travaux à |Magasin aux vivres construit à )|( 
 
 def new_state(on=True):
     """État du tour par tour, enregistré dans la sauvegarde (Game.tour)."""
-    return dict(on=on, pace=DEFAULT_PACE, end=None, stop=None, last={}, seen=None, mem={}, acc=None, recap=None)
+    return dict(on=on, end=None, stop=None, last={}, seen=None, mem={}, acc=None, recap=None)
 
 
 def migrate(g):
@@ -71,8 +69,7 @@ def migrate(g):
         tr.setdefault(k, v)
     if not isinstance(tr['seen'], dict) or set(tr['seen']) != {'bt', 'sg', 'inn', 'ev', 'pr', 'war'}:
         tr['seen'] = None
-    if tr['pace'] not in PACE_SEC:
-        tr['pace'] = DEFAULT_PACE
+    tr.pop('pace', None)   # (ancien rythme du tour des IA : le mois se calcule maintenant d'un coup)
     if tr['end'] is not None and tr['end'] <= g.t - 1e-6:
         tr['end'] = None   # échéance dépassée (sauvegarde bricolée) : on attend les ordres
     for a in g.armies.values():
@@ -91,12 +88,6 @@ def month_days(g, end):
     """Longueur du mois qui s'achève à l'échéance."""
     d = g.date(end - 1)
     return calendar.monthrange(d.year, d.month)[1]
-
-
-def rate(g):
-    """Jours de jeu par seconde réelle : un mois entier dure PACE_SEC secondes, quelle que soit sa longueur."""
-    tr = g.tour
-    return month_days(g, tr['end']) / PACE_SEC.get(tr['pace'], PACE_SEC[DEFAULT_PACE])
 
 
 def phase(g):
@@ -247,11 +238,6 @@ def command(g, action, value=None):
                       'Temps réel : choisissez une vitesse en haut. Le jeu est en pause.')
     if not tr['on']:
         return False, 'La partie se joue en temps réel (menu ☰, réglages avancés).'
-    if action == 'pace':
-        if value not in PACE_SEC:
-            return False, 'Rythme inconnu.'
-        tr['pace'] = value
-        return True, None
     if g.over:
         return False, 'La partie est terminée.'
     if action == 'go':
@@ -288,30 +274,28 @@ def halt(g):
 
 # ================================================================== déroulement
 def advance(g, real_dt):
-    """Remplace Game.advance en mode tour : avance au rythme du tour, s'arrête pile à l'échéance ou sur une alerte."""
+    """Remplace Game.advance en mode tour : joue le mois aussi vite que possible, BUDGET secondes de calcul par appel
+    (real_dt ne sert plus), et s'arrête pile à l'échéance ou sur une alerte."""
     from .engine import SUBSTEP
     tr = g.tour
     if g.over or not g.speed_idx:
         return
     if tr['end'] is None:
         go(g)   # le temps lancé autrement que par « Fin du mois » (script, ancienne commande) : le mois se joue
-    rt = rate(g)
-    days = rt * real_dt
-    while days > 1e-9 and not g.over and g.speed_idx:
-        sub = SUBSTEP if (g.battles or rt < 6) else SUBSTEP * 2
+    until = time.monotonic() + BUDGET
+    while not g.over and g.speed_idx and time.monotonic() < until:
+        sub = SUBSTEP if g.battles else SUBSTEP * 2
         rem = tr['end'] - g.t
         seq0 = g.seq
-        if rem <= min(sub, days) + 1e-6:
+        if rem <= sub + 1e-6:
             # dernier pas : on franchit minuit pour que le 1er du mois se joue (revenus, bilan, sauvegarde)…
             g.step(max(rem, 0.0) + 1e-9)
             g.t = tr['end']   # … et l'on s'arrête pile au 1er, à 0 h
             watch(g, rem, seq0)
             finish(g)
             return
-        dt = min(sub, days)
-        g.step(dt)
-        days -= dt
-        watch(g, dt, seq0)
+        g.step(sub)
+        watch(g, sub, seq0)
 
 
 def finish(g):
@@ -553,11 +537,11 @@ def _recap(g):
 def view(g):
     tr = g.tour
     ph = phase(g)
-    out = dict(on=tr['on'], pace=tr['pace'], phase=ph, recap=tr['recap'], march=march_days(g) if tr['on'] else None)
+    out = dict(on=tr['on'], phase=ph, recap=tr['recap'], march=march_days(g) if tr['on'] else None)
     if not tr['on']:
         return out
     end = tr['end'] if tr['end'] is not None else month_end(g)
     n = month_days(g, end)
     out.update(end=g.date_str(end), prog=round(max(0.0, min(1.0, (g.t - (end - n)) / n)), 4),
-               stop=tr['stop'] if ph == 'arret' else None, sec=PACE_SEC[tr['pace']])
+               stop=tr['stop'] if ph == 'arret' else None)
     return out

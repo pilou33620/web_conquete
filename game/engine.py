@@ -14,6 +14,7 @@ from .tactics import bridge as TB
 from .geo import TERRAIN, T_LANDE, T_MARAIS, T_PLAINE
 
 SUBSTEP = 0.05  # jours
+ATTRITION_STEP = 0.25   # jours : pas de l'usure, des désertions et du ravitaillement des armées
 CONTACT_KM = 2.6
 AMBUSH_KM = 5.0
 BASE_DETECT = 2.5
@@ -462,7 +463,11 @@ class Game:
         self.update_sieges(dt)
         AA.tick(self, dt)
         self.update_battles(dt)
-        self.attrition(dt)
+        # l'usure varie de quelques millièmes par jour : réglée par quarts de jour (40 % du coût d'un mois sinon)
+        self._att_dt = getattr(self, '_att_dt', 0.0) + dt
+        if self._att_dt >= ATTRITION_STEP - 1e-9:
+            self.attrition(self._att_dt)
+            self._att_dt = 0.0
         for code, ai in self.ais.items():
             if not self.factions[code]['alive']:
                 continue

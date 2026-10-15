@@ -73,7 +73,9 @@ class App:
     def loop(self):
         last = time.monotonic()
         while True:
-            time.sleep(0.1)
+            g = self.game
+            # tour des IA en cours : il se calcule d'un coup, par tranches (turns.BUDGET), sans attendre entre elles
+            time.sleep(0.02 if g and g.tour['on'] and g.tour['end'] is not None and g.speed_idx else 0.1)
             now = time.monotonic()
             dt = min(0.3, now - last)
             last = now
@@ -135,7 +137,7 @@ class App:
                     return dict(ok=False, msg=why)
                 g.speed_idx = v
                 return dict(ok=True)
-            if c == 'tour':   # fin du mois, continuer, arrêter, rythme, temps réel (game/turns.py)
+            if c == 'tour':   # fin du mois, continuer, arrêter, temps réel (game/turns.py)
                 if str(body.get('action')) == 'go':
                     ok, why = TB.on_speed(g, 1)   # pas de mois qui reprend tant qu'une bataille attend ou se livre
                     if not ok:

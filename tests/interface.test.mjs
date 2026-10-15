@@ -107,8 +107,8 @@ function barre(tour, extra = {}) {
   dom.ids['tb-speed'] = element();
   ui.$ = id => dom.ids[id];
   ui.renderRecap = () => {};
-  ui.rules = { paces: [['lent', 'Lent', 30], ['normal', 'Normal', 15], ['rapide', 'Rapide', 8], ['eclair', 'Éclair', 4]] };
-  ui.st = { tour: { on: true, pace: 'normal', end: '1er avril 1790', ...tour }, battles: [], ...extra };
+  ui.rules = {};
+  ui.st = { tour: { on: true, end: '1er avril 1790', ...tour }, battles: [], ...extra };
   ui.renderTurn();
   return dom.ids['tb-turn'].innerHTML;
 }
@@ -117,6 +117,7 @@ test('barre du tour : votre tour', () => {
   const h = barre({ phase: 'ordres' });
   assert.ok(h.includes('Tour suivant') && h.includes('1er avril 1790'));
   assert.ok(!h.includes('disabled'));
+  assert.ok(!h.includes('turn-pace'), 'plus de rythme : le tour des IA se calcule d’un coup');
 });
 
 test('barre du tour : tour des IA, puis interruption', () => {

@@ -139,7 +139,7 @@ def rules_payload():
                 formation_speed=R.FORMATION_SPEED, plans=R.PLANS, phases=R.PHASES, spy=R.SPY, spy_days=R.SPY_INTEL_DAYS,
                 tax_labels=R.TAX_LABELS, water=dict(speed=R.WATER_SPEED, sea=R.SEA_SPEED, embark=R.EMBARK_DAYS,
                                                     quai=R.QUAI_LIVRES, blockade=R.BLOCKADE_K),
-                cities=CT.rules_payload(), paces=[list(p) for p in TT.PACES])
+                cities=CT.rules_payload())
 
 
 def _gen(g):

@@ -4,7 +4,7 @@ Vérification commune à chaque tâche : `python3 tests/lancer.py` passe, puis u
 
 ## Partie 1 : le tour des IA
 
-- [ ] **T1 : le tour des IA calculé d'un coup, sans rythme**
+- [x] **T1 : le tour des IA calculé d'un coup, sans rythme**
   - « Tour suivant » joue le mois par tranches d'environ 0,25 s de calcul, jusqu'au 1er du mois suivant.
   - Plus de rythme (Lent, Normal, Rapide, Éclair) : ni bouton, ni touches 1 à 4, ni réglage dans le menu. La barre
     du haut affiche « Les IA jouent… » et la progression. Une sauvegarde qui a un champ `pace` se charge.
