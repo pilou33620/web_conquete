@@ -207,6 +207,20 @@ def _seer(srcs, cell=20.0):
     return seen
 
 
+def _siege(g, n):
+    """Siège en cours, en tours : br, la brèche (assaut à 0,85) ; food, ce que tiennent encore les vivres d'un blocus."""
+    s = n['siege']
+    d = dict(by=s['by'], dmg=round(s['dmg'], 2), occ=bool(s.get('occupy')))
+    if s.get('blocus'):
+        d['food'] = TT.tours_left(g, s['since'] + s['food'])
+    elif not s.get('occupy'):
+        bes = g.besiegers(n)
+        rate = g.siege_rate(n, bes) if bes else 0.0
+        if rate > 0 and s['dmg'] < 0.85:
+            d['br'] = TT.tours_left(g, g.t + (0.85 - s['dmg']) / rate)
+    return d
+
+
 def player_state(g, since=0):
     if g._dirty_income:
         g.compute_income()
@@ -222,8 +236,7 @@ def player_state(g, since=0):
     for n in g.nodes:
         gn = g.geo.nodes[n['id']]
         d = dict(id=n['id'], o=n['owner'], f=n['fort'], d=n['dev'], s=round(n['stab'], 2), pop=int(round(n.get('pop', 0), -1)),
-                 sg=dict(by=n['siege']['by'], dmg=round(n['siege']['dmg'], 2), occ=bool(n['siege'].get('occupy')))
-                 if n['siege'] else None)
+                 sg=_siege(g, n) if n['siege'] else None)
         d['pt'] = [round(tr['rate'][n['id']] * 100, 1), tr['why'][n['id']]]   # tendance : % par an et sa raison
         if n['id'] in g._blockade:
             d['bk'] = 1

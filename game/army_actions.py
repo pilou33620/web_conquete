@@ -877,11 +877,11 @@ def blockade(g, code, a):
     if o == g.player:
         g.alert_pause()
         g.log('siege', f"Blocus {R.de(gn['name'])} par {g.fname(code)} : plus rien n'entre ni ne sort. "
-                       f"Ses réserves dureront environ {food} jours.", gn['x'], gn['y'], who=code, important=True)
+                       f"Ses réserves dureront environ {R.pl(TT.tours_left(g, g.t + food), 'tour')}.", gn['x'], gn['y'], who=code, important=True)
     elif code != g.player and o in g.factions:
         g.log('siege', f"Blocus {R.de(gn['name'])} par {g.fname(code)}.", gn['x'], gn['y'], who=code)
     return True, (f"Blocus {R.de(gn['name'])} : ni bombardement ni assaut, la place est coupée de tout. Ses réserves "
-                  f"tiendront environ {food} jours, puis la faim et les désertions la pousseront à se rendre.")
+                  f"tiendront environ {R.pl(TT.tours_left(g, g.t + food), 'tour')}, puis la faim et les désertions la pousseront à se rendre.")
 
 
 def bombard(g, code, a):
@@ -1092,9 +1092,9 @@ def options(g, a, nid):
             gn = g.geo.nodes[nid]
             food = BLOC_FOOD[gn['type']] + (BLOC_DEPOT if n.get('depot') else 0) + 4 * n['fort']
             out['blq'] = dict(why='' if ratio >= BLOC_MIN else "Trop peu de troupes pour investir la place",
-                              d=food + BLOC_STARVE, dp=bool(n.get('depot')))
+                              t=TT.tours_left(g, g.t + food + BLOC_STARVE), dp=bool(n.get('depot')))
         else:
-            out['bl'] = dict(food=max(0, int(s['food'] - (g.t - s['since']))), walled=walled(n))
+            out['bl'] = dict(food=TT.tours_left(g, s['since'] + s['food']), walled=walled(n))
     if a.get('hold') and a['state'] == 'idle':
         out['conq'] = 1
     return out

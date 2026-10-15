@@ -374,6 +374,38 @@ class ActionsEnTours(unittest.TestCase):
         self.assertEqual(g.date_str(g.factions[g.player]['intel'][str(nid)]), '1er juin 1790', 'avril et mai')
 
 
+class SiegesEnTours(unittest.TestCase):
+    """Règle C : vitesse des sièges inchangée, brèche et vivres annoncés en tours, et l'annonce est tenue."""
+
+    def assieger(self):
+        g = partie()
+        a = armee(g)
+        D.declare_war(g, g.player, '24', quiet=True)
+        nid = {gn['name']: i for i, gn in enumerate(g.geo.nodes)}['Bergerac']
+        n = g.nodes[nid]
+        a['at_node'], a['path'], a['state'] = nid, [], 'siege'
+        a['x'], a['y'] = g.node_xy(nid)
+        n['siege'] = dict(by=g.player, dmg=0.0, since=g.t)
+        return g, n
+
+    def test_breche_annoncee(self):
+        g, n = self.assieger()
+        sg = next(d for d in V.player_state(g)['nodes'] if d['id'] == n['id'])['sg']
+        self.assertGreaterEqual(sg['br'], 1)
+        for _ in range(sg['br']):
+            if n['siege'] is None or n['siege']['dmg'] >= 0.85:
+                break
+            jouer_mois(g)
+        self.assertTrue(n['siege'] is None or n['siege']['dmg'] >= 0.85 or n['owner'] == g.player,
+                        'brèche ouverte (ou place prise) au tour annoncé')
+
+    def test_blocus_en_tours(self):
+        g, n = self.assieger()
+        n['siege'].update(blocus=True, food=30, m0=100)
+        sg = next(d for d in V.player_state(g)['nodes'] if d['id'] == n['id'])['sg']
+        self.assertEqual(sg['food'], TT.tours_left(g, g.t + 30))
+
+
 class Regles(unittest.TestCase):
     def test_un_evenement_n_efface_pas_une_dette(self):
         class G:

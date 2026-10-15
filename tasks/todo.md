@@ -100,7 +100,7 @@ Vérification commune à chaque tâche : `python3 tests/lancer.py` passe, puis u
 
 ## Partie 3 : l'écran en tours
 
-- [ ] **T9 : sièges et blocus en tours**
+- [x] **T9 : sièges et blocus en tours**
   - « Brèche dans N tours » d'après la vitesse actuelle du siège, « la place tient encore N tours » en blocus,
     arrondis au tour supérieur ; ralliement des IA « en cours ». Vitesse des sièges inchangée.
   - Vérifier : banc `test_campagne.py` (l'annonce « brèche dans 1 tour » est tenue) ; banc de l'interface.

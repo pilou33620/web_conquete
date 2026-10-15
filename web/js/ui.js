@@ -1025,7 +1025,7 @@ export class UI {
     if (ns.sg) {
       const by = this.rules.factions[ns.sg.by]?.name || ns.sg.by;
       const occ = ns.sg.occ;
-      h += `<div class="p-state">${occ ? `Ralliement par ${by}` : ns.sg.bl ? `Bloquée par ${by}, la faim gagne` : `Assiégée par ${by}`} : ${Math.round(ns.sg.dmg * 100)} %</div><div class="bar red"><i style="width:${Math.round(ns.sg.dmg * 100)}%"></i></div>`;
+      h += `<div class="p-state">${occ ? `Ralliement par ${by}` : ns.sg.bl ? `Bloquée par ${by}, la faim gagne` : `Assiégée par ${by}`} : ${Math.round(ns.sg.dmg * 100)} %${ns.sg.br ? `, brèche ${toursTxt(ns.sg.br)}` : ''}${ns.sg.food ? `, vivres pour ${ns.sg.food > 1 ? ns.sg.food + ' tours' : 'ce tour'}` : ''}</div><div class="bar red"><i style="width:${Math.round(ns.sg.dmg * 100)}%"></i></div>`;
     }
     h += this.worksHtml(ns);
     const pips = (v, m = 3) => `<span class="pips">${Array.from({ length: m }, (_, i) => `<i class="${i < v ? 'on' : ''}"></i>`).join('')}</span>`;
@@ -1284,7 +1284,7 @@ export class UI {
     else if (a.st === 'battle') state = 'Engagée dans une bataille';
     else if (a.st === 'siege') {
       const ns = a.n != null ? st.nodes[a.n] : null;
-      state = ns?.sg?.bl ? `Bloque ${nodeName(a.n)} (${Math.round(ns.sg.dmg * 100)} %)` : ns && ns.o === 'neutre' ? `Rallie ${nodeName(a.n)} (${Math.round((ns.sg?.dmg || 0) * 100)} %)` : `Assiège ${nodeName(a.n)} (brèche ${Math.round((ns?.sg?.dmg || 0) * 100)} %)`;
+      state = ns?.sg?.bl ? `Bloque ${nodeName(a.n)} (${Math.round(ns.sg.dmg * 100)} %)` : ns && ns.o === 'neutre' ? `Rallie ${nodeName(a.n)} (${Math.round((ns.sg?.dmg || 0) * 100)} %)` : `Assiège ${nodeName(a.n)} (brèche ${ns?.sg?.br ? toursTxt(ns.sg.br) : Math.round((ns?.sg?.dmg || 0) * 100) + ' %'})`;
     }
     const cell = Math.floor(a.y) * this.md.W + Math.floor(a.x);
     const terr = a.boat && a.n == null ? (way && way.sea ? 'Océan' : 'Fleuve') : this.md.terrain_names[this.map.terrain[cell]];
@@ -1405,10 +1405,10 @@ export class UI {
         C.all ? 'Rançonner la place puis la laisser : tous les départements s’en indignent.' : 'Rançonner la place puis la laisser : son maître s’en souviendra.',
         ` data-confirm="${esc(`Rançonner ${this.md.nodes[a.n]?.name} (${txt}) ? ${C.all ? 'Tous les départements s’en indigneront.' : 'Les relations en pâtiront.'}`)}"`);
     }
-    if (x.blq) h += btn('blocus', 'Bloquer et affamer', `reddition en ${x.blq.d} j environ${x.blq.dp ? ' (magasin aux vivres)' : ''}`, x.blq.why,
+    if (x.blq) h += btn('blocus', 'Bloquer et affamer', `reddition ${toursTxt(x.blq.t)} environ${x.blq.dp ? ' (magasin aux vivres)' : ''}`, x.blq.why,
       'Investir la place sans bombardement ni assaut : remparts intacts, commerce et vivres coupés ; la faim et les désertions la poussent à se rendre.');
     if (x.bl) {
-      h += `<span class="muted small" style="flex:1 1 100%">Blocus : ${x.bl.food ? `réserves pour ${x.bl.food} j encore` : 'la famine sévit'}.</span>`;
+      h += `<span class="muted small" style="flex:1 1 100%">Blocus : ${x.bl.food ? `réserves pour ${x.bl.food > 1 ? x.bl.food + ' tours' : 'ce tour'} encore` : 'la famine sévit'}.</span>`;
       if (x.bl.walled) h += `<button class="btn" data-act="army-act" data-v="bombard" title="Ouvrir le feu : le blocus devient un siège qui bat les remparts.">Bombarder la place</button>`;
     }
     if (x.conq) h += `<button class="btn danger" data-act="army-act" data-v="conquer" title="Comme en marche de conquête : ralliement, siège ou assaut.">${x.o === 'neutre' ? 'Rallier ou attaquer' : 'Assiéger ou attaquer'}</button>`;

@@ -2110,13 +2110,28 @@ class Game:
                 n['siege'] = None
         a['state'] = 'idle'
 
+    def besiegers(self, n):
+        s = n['siege']
+        return [a for a in self.armies.values() if a['at_node'] == n['id'] and a['state'] == 'siege' and a['owner'] == s['by']]
+
+    def siege_rate(self, n, bes):
+        """Avancée de la brèche par jour (assaut à 0,85) : artillerie, sapeurs, remparts, général artilleur."""
+        by = n['siege']['by']
+        n_art = sum(1 for a in bes for r in a['regs'] if r['type'] == 'artillerie')
+        n_sap = sum(1 for a in bes for r in a['regs'] if r['type'] == 'sapeurs')
+        power_art = 1 + self.mod(by, 'art_power')
+        rate = (0.02 + 0.06 * n_art * power_art + R.SAPEUR_SIEGE * n_sap) / max(1, n['fort']) * AA.siege_k(n)
+        if any(self.gen_trait(a) == 'artilleur' for a in bes):
+            rate *= 1.4
+        return rate * (1 + self.mod(by, 'siege_speed'))
+
     def update_sieges(self, dt):
         for n in self.nodes:
             s = n['siege']
             if not s:
                 continue
             nid = n['id']
-            bes = [a for a in self.armies.values() if a['at_node'] == nid and a['state'] == 'siege' and a['owner'] == s['by']]
+            bes = self.besiegers(n)
             if not bes:
                 # assiégeants occupés à repousser une armée de secours : le siège est suspendu, pas levé
                 if not any(a['at_node'] == nid and a['owner'] == s['by'] and a['state'] == 'battle' for a in self.armies.values()):
@@ -2137,14 +2152,7 @@ class Game:
                     for a in bes:
                         a['state'] = 'move' if a['path'] else 'idle'
                 continue
-            n_art = sum(1 for a in bes for r in a['regs'] if r['type'] == 'artillerie')
-            n_sap = sum(1 for a in bes for r in a['regs'] if r['type'] == 'sapeurs')
-            power_art = 1 + self.mod(s['by'], 'art_power')
-            rate = (0.02 + 0.06 * n_art * power_art + R.SAPEUR_SIEGE * n_sap) / max(1, n['fort']) * AA.siege_k(n)
-            if any(self.gen_trait(a) == 'artilleur' for a in bes):
-                rate *= 1.4
-            rate *= 1 + self.mod(s['by'], 'siege_speed')
-            s['dmg'] = min(1.0, s['dmg'] + rate * dt)
+            s['dmg'] = min(1.0, s['dmg'] + self.siege_rate(n, bes) * dt)
             n['milice'] = max(0.0, n['milice'] - n['milice'] * 0.015 * dt)
             for r in n['garrison']:
                 r['morale'] = max(10, r['morale'] - 2 * dt)
