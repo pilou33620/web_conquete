@@ -6,7 +6,7 @@
 // pour que seules les zones vues soient envoyées à la carte graphique ; la couronne prend la couleur de l'arbre
 // (instanceColor), le tronc est à part. En qualité basse, une partie des arbres des bois est omise. La couronne est
 // faite de touffes arrondies (normales lisses), plus sombres dessous ; une zone proche de la caméra a des touffes plus
-// fines. Sous un régiment, la couronne s'efface (masque des clairières) : on voit les troupes dans les bois.
+// fines. Dans les bois, sous un régiment, la couronne s'efface (masque des clairières) : on voit les troupes.
 // Bâti (maisons et fermes à toit à deux pans, église et clocher, moulins, ponts, portes de ville) : une seule
 // géométrie fixe, couleurs par sommet ; murs enfoncés sous le sol au pied, pour ne jamais flotter sur une pente.
 // Enceintes et clôtures (remparts et bastions, murs de ville crénelés, murs de clôture, tranchées et gabions,
@@ -156,7 +156,8 @@ class Builder {
       const TL = [at(i, 1, wt, H(i)), at(j, 1, wt, H(j))], TR = [at(i, -1, wt, H(i)), at(j, -1, wt, H(j))];
       this.quad(BL[0], TL[0], TL[1], BL[1], cs);
       this.quad(BR[1], TR[1], TR[0], BR[0], cs);
-      this.quad(TL[0], TR[0], TR[1], TL[1], ct);
+      // (dessus d'une haie bosselée : une nuance par tronçon, vue de haut elle n'est pas d'un seul vert)
+      this.quad(TL[0], TR[0], TR[1], TL[1], bump ? ct.clone().multiplyScalar(0.84 + hash(pts[i][0] | 0, pts[i][1] | 0, 19) * 0.32) : ct);
     }
     // bouts
     for (const [i, s] of [[0, 1], [n - 1, -1]]) {
@@ -218,15 +219,17 @@ export class Decor {
       const deep = wood && isWood(c - 1) && isWood(c + 1) && isWood(c - W) && isWood(c + W);
       for (const tr of list) {
         if (wood && hash(tr.x | 0, tr.y | 0, 7) > keep) continue;
-        const key = `${Math.floor(tr.x / ZONE)},${Math.floor(tr.y / ZONE)}|${tr.kind}${deep && tr.kind !== 'nu' ? '|cime' : ''}`;
+        // (les arbres des bois à part : eux seuls s'effacent au-dessus des troupes, un arbre isolé garde sa couronne)
+        const key = `${Math.floor(tr.x / ZONE)},${Math.floor(tr.y / ZONE)}|${tr.kind}|${deep && tr.kind !== 'nu' ? 'cime' : ''}|${wood ? 'bois' : ''}`;
         let z = zones.get(key); if (!z) zones.set(key, z = []);
         z.push(tr);
       }
     });
     const geos = new Map(), lumps = [1, 3, 5, 5][fx];
-    const crownMat = clearable(nearFade(new THREE.MeshLambertMaterial({ vertexColors: true })), this.clearUni, 'decor-cime');
-    const crownDepth = clearable(new THREE.MeshDepthMaterial(), this.clearUni, 'decor-cime-ombre');
-    this.disposables.push(crownDepth);
+    const crownMat = nearFade(new THREE.MeshLambertMaterial({ vertexColors: true }));
+    const woodMat = clearable(nearFade(new THREE.MeshLambertMaterial({ vertexColors: true })), this.clearUni, 'decor-cime');
+    const woodDepth = clearable(new THREE.MeshDepthMaterial(), this.clearUni, 'decor-cime-ombre');
+    this.disposables.push(woodMat, woodDepth);
     const trunkMat = nearFade(new THREE.MeshLambertMaterial({ color: snow ? '#4a3c30' : TRUNK }));
     const bareMat = nearFade(new THREE.MeshLambertMaterial({ color: BARE }));
     this.disposables.push(crownMat, trunkMat, bareMat);
@@ -237,11 +240,13 @@ export class Decor {
       return geos.get(k);
     };
     for (const [key, list] of zones) {
-      const [zk, kind, cime] = key.split('|'), [zx, zy] = zk.split(',').map(Number);
+      const [zk, kind, cime, bois] = key.split('|'), [zx, zy] = zk.split(',').map(Number), cm = bois ? woodMat : crownMat;
       const [crown, trunk] = geo(kind, 0), fine = fx >= 2 && kind !== 'sapin' && kind !== 'meule' && kind !== 'nu' ? geo(kind, 1)[0] : null;
-      const mk = (geo, mat, tint) => {
-        const mesh = new THREE.InstancedMesh(geo, mat, list.length);
-        list.forEach((tr, i) => {
+      // like : un lot déjà placé dont on reprend les matrices et les teintes (la couronne fine d'une zone)
+      const mk = (g, mat, tint, like = null) => {
+        const mesh = new THREE.InstancedMesh(g, mat, list.length);
+        if (like) { mesh.instanceMatrix = like.instanceMatrix; mesh.instanceColor = like.instanceColor; }
+        else list.forEach((tr, i) => {
           p.set(tr.x, this.r.heightAt(tr.x, tr.y) - 0.1, tr.y);
           q.setFromAxisAngle(up, hash(tr.x | 0, tr.y | 0, 3) * Math.PI * 2);
           const r = tr.r * (0.92 + hash(tr.x | 0, tr.y | 0, 5) * 0.16);
@@ -250,7 +255,7 @@ export class Decor {
         });
         mesh.computeBoundingSphere();
         mesh.castShadow = true;
-        if (mat === crownMat) mesh.customDepthMaterial = crownDepth;
+        if (mat === woodMat) mesh.customDepthMaterial = woodDepth;
         this.group.add(mesh);
         return mesh;
       };
@@ -260,7 +265,7 @@ export class Decor {
         return c.multiplyScalar(0.86 + hash(tr.x | 0, tr.y | 0, 9) * 0.28);
       };
       if (crown) {
-        const far = mk(crown, crownMat, tint), near = fine && mk(fine, crownMat, tint);
+        const far = mk(crown, cm, tint), near = fine && mk(fine, cm, null, far);
         if (near) { near.visible = false; this.zones.push({ x: (zx + 0.5) * ZONE, y: (zy + 0.5) * ZONE, near, far, isNear: false }); }
       }
       if (trunk && !cime) mk(trunk, kind === 'nu' ? bareMat : trunkMat, null);
@@ -429,7 +434,8 @@ export class Decor {
     const t = this.t, pal = t.pal, snow = pal.neige, B = new Builder(this.r.heightAt);
     const hedge = snow ? '#5e6a5c' : new THREE.Color(pal.arbres[0]).multiplyScalar(0.7).getStyle();
     for (const f of t.fencePts) {
-      if (f.kind === 'haie') B.ribbon(resample(f.pts, 1.6), 1.8, 1.25, 2.1, hedge, snow ? '#e8ecee' : new THREE.Color(pal.arbres[1]).multiplyScalar(0.85).getStyle(), 0.45);   // bord bosselé tous les 1,6 m
+      // bord bosselé tous les 1,6 m (resample ne garde pas le dernier point : il est rajouté)
+      if (f.kind === 'haie') B.ribbon(resample(f.pts, 1.6).concat([f.pts[f.pts.length - 1]]), 1.8, 1.25, 2.1, hedge, snow ? '#e8ecee' : new THREE.Color(pal.arbres[1]).multiplyScalar(0.85).getStyle(), 0.45);
       else if (f.kind === 'muret') B.ribbon(f.pts, 0.65, 0.55, 1, snow ? '#e6e6e2' : '#a39a84', snow ? '#f4f4f2' : '#b9b09a');
       else {
         for (const p of resample(f.pts, 2.5)) B.box(p[0], p[1], 0.14, 1.25, 0.14, 0.62, snow ? '#4e4034' : '#5a4430');

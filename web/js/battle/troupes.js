@@ -3,8 +3,8 @@
 // tirailleurs par deux ; porte-drapeau (le drapeau flotte), tambours, officiers, colonel. Coiffures de l'époque
 // (tricorne, bicorne, shako, képi, bonnet à poil, chapeau rond des miliciens).
 //
-// Les figurines sont des modèles simples construits ici (boîtes et cylindres, couleurs par sommet), dessinés par lots
-// (un InstancedMesh par sorte). Chaque instance ne porte que sa place dans le régiment (u le long du front, v vers
+// Les figurines sont des modèles construits ici (formes arrondies de près, quelques boîtes de loin ; couleurs par
+// sommet), dessinés par lots (un InstancedMesh par sorte et par version). Chaque instance ne porte que sa place dans le régiment (u le long du front, v vers
 // l'avant), son sens, sa pose, sa phase et la couleur de son habit. La position, le sens et l'état de chaque régiment
 // sont dans une petite texture de données mise à jour à chaque image ; le vertex shader place la figurine, lit
 // l'altitude dans une texture du relief, anime les membres (attribut « os » de chaque sommet : jambes, bras et fusil)
@@ -166,8 +166,8 @@ const cyl = (rt, rb, h, n, x, y, z, rx = 0, rz = 0) => new THREE.CylinderGeometr
 // nuance d'habit (la couleur vient de l'instance) : le rouge du sommet porte la nuance
 const shade = k => new THREE.Color(k, k, k).getStyle();
 
-// sphère aplatie de rayons (rx, ry, rz) en (x, y, z) ; profil tourné autour de l'axe vertical ([rayon, y] du bas vers
-// le haut), aplati d'avant en arrière (sz)
+// sph : ellipsoïde de rayons (rx, ry, rz) centré en (x, y, z) ; lathe : profil tourné autour de l'axe vertical
+// ([rayon, y] du bas vers le haut), aplati d'avant en arrière (sz)
 const sph = (rx, ry, rz, x, y, z, w = 8, h = 6) => new THREE.SphereGeometry(1, w, h).scale(rx, ry, rz).translate(x, y, z);
 const lathe = (pts, n, sz = 1, x = 0, z = 0) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), n).scale(1, 1, sz).translate(x, 0, z);
 // l'autre face d'une surface sans épaisseur (bord de chapeau, basques) : triangles retournés, normales inversées
@@ -204,7 +204,7 @@ function hat(type, kind, dy = 0) {
     // tricorne : calotte basse, bord relevé entre trois pointes (une devant), cocarde
     case 'tricorne': return [[lathe([[0.1, 1.655], [0.1, 1.72], [0.08, 1.76], [0, 1.77]], 10), HAT, 0, 0], ...both(brim(0.098, 0.2, 1.665, 0.1, 3), HAT), cockade];
     // bicorne porté en bataille (pointes sur les côtés) : un croissant haut, cocarde sur le côté
-    case 'bicorne': return [[sph(0.25, 0.14, 0.075, 0, 1.665, 0, 12, 5).scale(1, 1, 1), HAT, 0, 0], [lathe([[0.1, 1.64], [0.1, 1.7], [0, 1.72]], 10), HAT, 0, 0],
+    case 'bicorne': return [[sph(0.25, 0.14, 0.075, 0, 1.665, 0, 12, 5), HAT, 0, 0], [lathe([[0.1, 1.64], [0.1, 1.7], [0, 1.72]], 10), HAT, 0, 0],
       [sph(0.035, 0.035, 0.015, 0.12, 1.74, 0.07, 6, 4), '#2f4fa0', 0, 0]];
     case 'shako': return [[lathe([[0.1, 1.66], [0.112, 1.8], [0.118, 1.88], [0, 1.88]], 12), HAT, 0, 0],
       ...both(new THREE.CylinderGeometry(0.125, 0.125, 0.01, 10, 1, true, -Math.PI / 2, Math.PI).scale(1, 1, 0.9).translate(0, 1.675, 0.02), HAT),
@@ -555,7 +555,7 @@ export class Troops {
     this.group = new THREE.Group();
     this.index = new Map();     // id du régiment → colonne de la texture des régiments
     this.free = [];
-    this.lays = new Map();      // id → {key, lay}
+    this.lays = new Map();      // id → {key, lay, un, lod}
     this.data = new Float32Array(MAXU * ROWS * 4);
     this.units = new THREE.DataTexture(this.data, MAXU, ROWS, THREE.RGBAFormat, THREE.FloatType);
     this.units.needsUpdate = true;
@@ -657,9 +657,9 @@ export class Troops {
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, this.uni);
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_HEAD).replace('#include <begin_vertex>', `${VERT_POSE}
-          vec3 transformed = position;
-          transformed = vec3(transformed.x * sa + transformed.z * ca, 0.0, -transformed.x * ca + transformed.z * sa) * aAnim.z;
-          transformed += vec3(base.x, hAt(base) + 0.06, base.y);`);
+          // chaque coin à l'altitude du sol sous lui : la tache épouse la pente (relief exagéré)
+          vec2 cp = base + vec2(position.x * sa + position.z * ca, -position.x * ca + position.z * sa) * aAnim.z;
+          vec3 transformed = vec3(cp.x, hAt(cp) + 0.06, cp.y);`);
       // un régiment deviné n'a pas d'ombre ; un régiment qui s'efface la perd avec lui
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vFade, vPart;')
         .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.a *= step(0.5, vFade) * vFade;');
@@ -695,7 +695,8 @@ export class Troops {
       // qu'il n'atteigne le bord de l'image.
       let lod = 2;
       if (fr && camera) {
-        const h = this.relief.heightAt(un.x, un.y), d = Math.max(1, Math.hypot(un.x - fr.E[0], h - fr.E[1], un.y - fr.E[2]));
+        // (distance au bout le plus proche : une longue ligne vue de biais passe en version proche par ce bout)
+        const h = this.relief.heightAt(un.x, un.y), d = Math.max(1, Math.hypot(un.x - fr.E[0], h - fr.E[1], un.y - fr.E[2]) - Math.hypot(un.w || 10, un.d || 10) / 2);
         this.sphere.center.set(un.x, h + 1.5, un.y); this.sphere.radius = Math.hypot(un.w || 10, un.d || 10) / 2 + 15 + d * 0.15;
         lod = lodOf(1.75 * scale * fr.k / d, e.lod, this.frustum.intersectsSphere(this.sphere));
       }
@@ -746,8 +747,10 @@ export class Troops {
       }
     }
     for (const k of this.kinds.values()) {
-      k.mesh.count = k.n;
-      if (k.contact) k.contact.count = k.n;
+      // une sorte vide n'est ni dessinée ni envoyée (une plage vide renverrait tout le tableau à la carte graphique)
+      k.mesh.count = k.n; k.mesh.visible = k.n > 0;
+      if (k.contact) { k.contact.count = k.n; k.contact.visible = k.n > 0; }
+      if (!k.n) continue;
       for (const a of ['aSlot', 'aAnim', 'aCoat']) { const at = k.geo.attributes[a]; at.needsUpdate = true; at.clearUpdateRanges(); at.addUpdateRange(0, k.n * at.itemSize); }
     }
   }

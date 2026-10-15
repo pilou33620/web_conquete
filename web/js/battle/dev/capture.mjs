@@ -31,7 +31,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // port 0 : le système en donne un libre (plusieurs captures peuvent tourner ensemble), que la maquette annonce
 const maq = spawn(process.execPath, [path.join(here, 'maquette.mjs'), '--port', '0'], { stdio: ['ignore', 'pipe', 'inherit'] });
-const port = await new Promise((ok, ko) => { maq.stdout.once('data', d => ok(+String(d).match(/127\.0\.0\.1:(\d+)/)[1])); maq.once('exit', () => ko(new Error('maquette arrêtée'))); });
+const port = await new Promise((ok, ko) => {
+  maq.stdout.once('data', d => { const m = String(d).match(/127\.0\.0\.1:(\d+)/); m ? ok(+m[1]) : ko(new Error('maquette : port inconnu')); });
+  maq.once('exit', () => ko(new Error('maquette arrêtée')));
+});
 
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'capture-'));
 const gl = argv.includes('--nogl') ? ['--disable-3d-apis'] : argv.includes('--gpu') ? ['--use-angle=gles', '--ignore-gpu-blocklist'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'];

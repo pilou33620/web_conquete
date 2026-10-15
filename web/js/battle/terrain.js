@@ -372,6 +372,7 @@ export class Terrain {
     gh.lineWidth = 12; for (const r of this.roadPts) strokePts(gh, r);
     const c = gc.getImageData(0, 0, w, h).data, a = gh.getImageData(0, 0, w, h).data;
     for (let i = 0; i < w * h; i++) { const k = i * 4; out[k] = c[k]; out[k + 1] = c[k + 1]; out[k + 2] = c[k + 2]; out[k + 3] = a[k]; }
+    col.width = col.height = hgt.width = hgt.height = 0;   // (Safari garde sinon la mémoire des canevas)
     return { data: out, w, h };
   }
   // cotes des sommets (comme sur les cartes d'état-major), écrites sur le calque par la vue

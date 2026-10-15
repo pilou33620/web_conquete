@@ -87,7 +87,7 @@ export class Relief {
     this.crops = new THREE.DataTexture(cm.data, cm.w, cm.h);
     this.crops.colorSpace = THREE.SRGBColorSpace; this.crops.minFilter = this.crops.magFilter = THREE.LinearFilter; this.crops.needsUpdate = true;
     this.shells = new THREE.InstancedMesh(new THREE.BufferGeometry(), this.shellMaterial(), 8);
-    this.shells.count = 0; this.shells.frustumCulled = false; this.shells.receiveShadow = true;
+    this.shells.visible = false; this.shells.frustumCulled = false; this.shells.receiveShadow = true;
     this.group.add(this.shells);
     this.decals = new Decals(this);
     // lumière : ciel et sol (hémisphère), soleil
@@ -192,7 +192,8 @@ export class Relief {
         .replace('#include <map_fragment>', `
           vec4 crop = texture2D(uCrops, vW.xz / uSize);
           float top = crop.a * ${HMAX.toFixed(2)}, rel = vF * ${HMAX.toFixed(2)} / max(top, 0.01);
-          float fade = 1.0 - smoothstep(uShellC.z * 0.55, uShellC.z, length(vW.xz - uShellC.xy));
+          // au bord de la fenêtre, et au-delà de 120 à 200 m de l'œil (un pied y fait moins d'un pixel : il scintillerait)
+          float fade = (1.0 - smoothstep(uShellC.z * 0.55, uShellC.z, length(vW.xz - uShellC.xy))) * (1.0 - smoothstep(120.0, 200.0, length(vViewPosition)));
           float sway = sin(uTime * 1.7 + dot(vW.xz, uWind) * 0.35) * 0.12 * vF * vF;
           float n = hash12(floor((vW.xz + uWind * sway) * 9.0));
           if (rel > 1.0 || n < 1.0 - (0.8 - 0.65 * rel) * fade) discard;
@@ -205,18 +206,21 @@ export class Relief {
   // rien de loin (on ne les verrait pas) ni en qualité Basse ou Moyenne
   cropsFollow(fr) {
     const n = this.q.epis || 0, on = n > 0 && fr.dist < 420;
-    this.shells.count = on ? n : 0;
+    this.shells.visible = on;   // (caché plutôt que vide : ni compilé ni dessiné en Basse et Moyenne)
     if (!on) return;
+    this.shells.count = n;
     const R = clamp(fr.dist * 1.6, 60, 260), c = this.shellAt;
     this.uni.uShellN.value = n; this.uni.uShellC.value.set(fr.T[0], fr.T[2], R);
-    if (c && Math.hypot(c[0] - fr.T[0], c[1] - fr.T[2]) < R * 0.25 && Math.abs(c[2] - R) < R * 0.25) return;
+    // la fenêtre (1,3 R) contient encore tout le cercle des épis : rien à refaire
+    if (c && Math.hypot(c[0] - fr.T[0], c[1] - fr.T[2]) + R <= c[2] * 1.3 && R >= c[2] * 0.75) return;
     this.shellAt = [fr.T[0], fr.T[2], R];
     const { xs, ys } = this, nx = xs.length, src = this.mesh.geometry.attributes, w = R * 1.3;
-    const i0 = xs.findIndex(x => x >= fr.T[0] - w), j0 = ys.findIndex(y => y >= fr.T[2] - w);
-    let i1 = xs.findIndex(x => x > fr.T[0] + w), j1 = ys.findIndex(y => y > fr.T[2] + w);
+    // (bornée au champ : au-delà, le masque des cultures étirerait sa dernière colonne sur l'herbe)
+    const i0 = xs.findIndex(x => x >= Math.max(0, fr.T[0] - w)), j0 = ys.findIndex(y => y >= Math.max(0, fr.T[2] - w));
+    let i1 = xs.findIndex(x => x > Math.min(this.W, fr.T[0] + w)), j1 = ys.findIndex(y => y > Math.min(this.H, fr.T[2] + w));
     if (i1 < 0) i1 = nx; if (j1 < 0) j1 = ys.length;
     const cw = i1 - i0, ch = j1 - j0;
-    if (i0 < 0 || j0 < 0 || cw < 2 || ch < 2) { this.shells.count = 0; return; }
+    if (i0 < 0 || j0 < 0 || cw < 2 || ch < 2) { this.shells.visible = false; return; }
     const pos = new Float32Array(cw * ch * 3), nor = new Float32Array(cw * ch * 3), idx = new Uint32Array((cw - 1) * (ch - 1) * 6);
     for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) {
       const s = ((j0 + j) * nx + i0 + i) * 3, d = (j * cw + i) * 3;
