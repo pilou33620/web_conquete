@@ -271,60 +271,92 @@ function flagCloth(rider = false) {
     [box(0.04, 2.2, 0.04, -0.3, 2.75, 0.08), WOOD, 0, 0], [box(0.07, 0.1, 0.07, -0.3, 3.88, 0.08), GOLD, 0, 0]]);
   return assemble([[new THREE.PlaneGeometry(2, 1.4, 8, 3).rotateY(Math.PI / 2).translate(0.24, 2.85, 0.08 - 1), shade(1), 4, 1]]);
 }
-// pièce de campagne : fût de bronze, affût à flasques qui descend vers la crosse, deux roues ; la bouche vers +Z
+// roue à rayons (le moyeu en (x, y, z), axe selon x)
+function wheel(P, r, x, y, z) {
+  P.push([new THREE.TorusGeometry(r - 0.03, 0.035, 4, 18).rotateY(Math.PI / 2).translate(x, y, z), '#6a5a3a', 0, 0]);
+  for (let k = 0; k < 4; k++) P.push([new THREE.BoxGeometry(0.03, r * 2 - 0.08, 0.035).rotateX(k * Math.PI / 4).translate(x, y, z), '#7a6844', 0, 0]);
+  P.push([new THREE.CylinderGeometry(0.09, 0.09, 0.16, 8).rotateZ(Math.PI / 2).translate(x, y, z), IRON, 0, 0]);
+}
+// pièce de campagne : fût de bronze galbé (bourrelet de bouche, culasse et bouton), affût à flasques qui descend vers
+// la crosse, deux roues à rayons ; la bouche vers +Z
 function gun() {
-  const P = [[cyl(0.11, 0.15, 2.1, 10, 0, 1.0, 0.55, Math.PI / 2), BRONZE, 0, 0], [cyl(0.17, 0.17, 0.12, 10, 0, 1.0, -0.5, Math.PI / 2), BRONZE, 0, 0]];
+  const barrel = [[0, -1.1], [0.07, -1.09], [0.08, -1.04], [0.16, -1.0], [0.165, -0.84], [0.145, -0.82], [0.14, 0.25], [0.125, 0.28],
+    [0.115, 0.95], [0.135, 1.0], [0.135, 1.06], [0.075, 1.07], [0.07, 1.0]];
+  const P = [[lathe(barrel, 12).rotateX(Math.PI / 2).translate(0, 1.0, 0.52), BRONZE, 0, 0],
+    [new THREE.CylinderGeometry(0.05, 0.05, 0.42, 6).rotateZ(Math.PI / 2).translate(0, 1.0, 0.25), BRONZE, 0, 0]];   // tourillons
   for (const s of [1, -1]) {
-    P.push([box(0.07, 0.32, 1.95, s * 0.17, 0.74, -0.4, -0.25), AFFUT, 0, 0]);
-    P.push([cyl(0.62, 0.62, 0.08, 14, s * 0.48, 0.62, 0.1, 0, Math.PI / 2), '#6a5a3a', 0, 0], [cyl(0.12, 0.12, 0.14, 8, s * 0.48, 0.62, 0.1, 0, Math.PI / 2), IRON, 0, 0]);
+    P.push([new THREE.BoxGeometry(0.07, 0.3, 1.95).rotateX(-0.25).translate(s * 0.17, 0.74, -0.4), AFFUT, 0, 0]);
+    wheel(P, 0.62, s * 0.48, 0.62, 0.1);
   }
-  P.push([box(0.36, 0.12, 0.3, 0, 0.16, -1.4), AFFUT, 0, 0], [box(1.0, 0.1, 0.12, 0, 0.62, 0.1), IRON, 0, 0]);
+  P.push([new THREE.BoxGeometry(0.36, 0.12, 0.3).translate(0, 0.16, -1.4), AFFUT, 0, 0], [new THREE.CylinderGeometry(0.05, 0.05, 1.0, 6).rotateZ(Math.PI / 2).translate(0, 0.62, 0.1), IRON, 0, 0]);
   return assemble(P);
 }
 // avant-train ou caisson à munitions (le timon vers +Z) ; wagon : chariot de munitions bâché, à quatre roues
 function caisson(wagon) {
   const P = [];
-  const wheels = z => { for (const s of [1, -1]) P.push([cyl(0.58, 0.58, 0.08, 14, s * 0.55, 0.58, z, 0, Math.PI / 2), '#6a5a3a', 0, 0]); P.push([box(1.15, 0.1, 0.1, 0, 0.58, z), IRON, 0, 0]); };
+  const wheels = z => { for (const s of [1, -1]) wheel(P, 0.58, s * 0.55, 0.58, z); P.push([new THREE.CylinderGeometry(0.045, 0.045, 1.15, 6).rotateZ(Math.PI / 2).translate(0, 0.58, z), IRON, 0, 0]); };
   if (wagon) {
-    P.push([box(1.0, 0.5, 2.4, 0, 1.05, 0), '#7a5a3a', 0, 0], [cyl(0.6, 0.6, 2.3, 10, 0, 1.3, 0, Math.PI / 2), '#e8e0c8', 0, 0]);
+    P.push([new THREE.BoxGeometry(1.0, 0.5, 2.4).translate(0, 1.05, 0), '#7a5a3a', 0, 0], [new THREE.CylinderGeometry(0.6, 0.6, 2.3, 12, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).translate(0, 1.3, 0), '#e8e0c8', 0, 0]);
     wheels(0.8); wheels(-0.8);
-    P.push([box(0.06, 0.06, 1.8, 0, 0.75, 2.0), WOOD, 0, 0]);
+    P.push([new THREE.CylinderGeometry(0.03, 0.03, 1.8, 5).rotateX(Math.PI / 2).translate(0, 0.75, 2.0), WOOD, 0, 0]);
   } else {
-    P.push([box(0.9, 0.55, 1.1, 0, 1.0, 0), AFFUT, 0, 0], [box(0.95, 0.06, 1.15, 0, 1.3, 0), '#4c5632', 0, 0]);
+    // coffre au couvercle bombé
+    P.push([new THREE.BoxGeometry(0.9, 0.5, 1.1).translate(0, 0.98, 0), AFFUT, 0, 0],
+      [new THREE.CylinderGeometry(0.46, 0.46, 1.12, 10, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.3, 1).translate(0, 1.23, 0), '#4c5632', 0, 0]);
     wheels(0);
-    P.push([box(0.06, 0.06, 2.0, 0, 0.72, 1.45), WOOD, 0, 0]);
+    P.push([new THREE.CylinderGeometry(0.03, 0.03, 2.0, 5).rotateX(Math.PI / 2).translate(0, 0.72, 1.45), WOOD, 0, 0]);
   }
   return assemble(P);
 }
-// cheval (2,3 m de long, 1,55 m au garrot) ; rider : 'cav' (cavalier), 'colonel' (officier supérieur, général) ou rien
-// (cheval d'attelage, avec son collier)
+// cheval (2,3 m de long, 1,55 m au garrot) en formes arrondies : corps en capsule, poitrail et croupe, encolure et tête
+// effilées, jambes fines ; rider : 'cav' (cavalier), 'colonel' (officier supérieur, général) ou rien (cheval
+// d'attelage, avec son collier). Os : 1 et 2 jambes avant (épaule en y = 0,85, z = 0,6), 5 et 6 arrière, 7 encolure,
+// 8 bras du cavalier
 function horse(rider, year) {
-  const P = [], R = (k, ...g) => [box(...g), shade(k), 0, 2];
-  P.push(R(1, 0.5, 0.58, 1.5, 0, 1.16, 0), R(0.95, 0.46, 0.5, 0.3, 0, 1.18, 0.78));          // corps, poitrail
-  P.push([box(0.26, 0.72, 0.36, 0, 1.62, 0.95, -0.55), shade(0.95), 7, 2]);                  // encolure
-  P.push([box(0.22, 0.24, 0.6, 0, 1.97, 1.22, 0.45), shade(0.9), 7, 2]);                     // tête
-  P.push([box(0.06, 0.62, 0.12, 0, 1.78, 0.86, -0.55), '#1a1410', 7, 0]);                    // crinière
-  for (const [x, z, b] of [[0.15, 0.6, 1], [-0.15, 0.6, 2], [0.15, -0.6, 5], [-0.15, -0.6, 6]]) {
-    P.push([box(0.13, 0.5, 0.18, x, 0.62, z), shade(0.9), b, 2], [box(0.09, 0.42, 0.1, x, 0.24, z), shade(0.7), b, 2], [box(0.11, 0.07, 0.13, x, 0.035, z), '#1a1410', b, 0]);
+  const P = [], R = (k, g, b = 0) => [g, shade(k), b, 2];
+  // un segment de cylindre effilé de a à b (points [x, y, z]), rayons ra puis rb
+  const seg = (a, b, ra, rb, n = 8) => {
+    const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), h = d.length();
+    const g = new THREE.CylinderGeometry(rb, ra, h, n, 1, true);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
+    return g.translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+  };
+  P.push(R(1, new THREE.CapsuleGeometry(0.3, 0.95, 4, 10).rotateX(Math.PI / 2).scale(0.82, 1, 1).translate(0, 1.16, -0.02)));   // corps
+  P.push(R(0.97, sph(0.25, 0.31, 0.27, 0, 1.2, 0.6)), R(1, sph(0.27, 0.3, 0.3, 0, 1.2, -0.55)));                                  // poitrail, croupe
+  P.push(R(0.95, seg([0, 1.28, 0.72], [0, 1.86, 1.0], 0.19, 0.11).scale(0.75, 1, 1), 7));                                          // encolure
+  P.push(R(0.9, seg([0, 1.93, 1.0], [0, 1.64, 1.4], 0.1, 0.065).scale(0.72, 1, 1), 7), R(0.88, sph(0.075, 0.1, 0.12, 0, 1.86, 1.1, 7, 5), 7),
+    R(0.85, sph(0.06, 0.065, 0.07, 0, 1.62, 1.42, 6, 4), 7));                                                                       // tête, ganache, naseaux
+  for (const s of [1, -1]) P.push(R(0.8, new THREE.ConeGeometry(0.03, 0.1, 4).translate(s * 0.05, 2.0, 0.98), 7));                // oreilles
+  P.push([seg([0, 1.42, 0.78], [0, 1.98, 0.98], 0.05, 0.035, 5).scale(0.5, 1, 1).translate(0, 0.03, -0.06), '#1a1410', 7, 0]);  // crinière
+  for (const [x, z, b, hind] of [[0.15, 0.6, 1, 0], [-0.15, 0.6, 2, 0], [0.15, -0.6, 5, 1], [-0.15, -0.6, 6, 1]]) {
+    P.push(R(0.92, seg([x, 1.0, z], [x, 0.5, z - hind * 0.06], hind ? 0.12 : 0.09, 0.055), b), R(0.75, seg([x, 0.5, z - hind * 0.06], [x, 0.1, z], 0.045, 0.04, 6), b),
+      [new THREE.CylinderGeometry(0.045, 0.055, 0.1, 6).translate(x, 0.05, z + 0.01), '#1a1410', b, 0]);
   }
-  P.push([box(0.1, 0.65, 0.12, 0, 1.0, -0.83, 0.25), '#1a1410', 0, 0]);                      // queue
+  P.push([seg([0, 1.3, -0.82], [0, 0.62, -0.98], 0.07, 0.03, 6), '#1a1410', 0, 0]);                                                 // queue
   if (!rider) {
-    P.push([box(0.52, 0.14, 0.14, 0, 1.55, 0.74), '#3a2a1a', 0, 0], [box(0.52, 0.08, 1.2, 0, 1.3, -0.1), '#2a1e14', 0, 0]);   // collier, harnais
+    // collier, sangle et dossière
+    P.push([new THREE.TorusGeometry(0.17, 0.055, 5, 12).rotateX(-0.5).scale(0.85, 1, 1).translate(0, 1.42, 0.8), '#3a2a1a', 0, 0],
+      [new THREE.TorusGeometry(0.29, 0.025, 4, 14).scale(0.86, 1.04, 1).translate(0, 1.15, 0.3), '#2a1e14', 0, 0],
+      [new THREE.BoxGeometry(0.1, 0.03, 1.0).translate(0, 1.47, -0.15), '#2a1e14', 0, 0]);
     return assemble(P);
   }
-  const col = rider === 'colonel', breeches = year >= 1830 ? '#8d929b' : '#e8dcc0';
-  P.push([box(0.62, 0.08, 0.66, 0, 1.47, -0.05), shade(0.85), 0, 1]);                        // tapis de selle
-  P.push([box(0.44, 0.14, 0.46, 0, 1.6, 0.12), breeches, 0, 0]);                             // cuisses
-  for (const s of [1, -1]) P.push([box(0.12, 0.52, 0.15, s * 0.3, 1.34, 0.3), '#15110d', 0, 0]);   // bottes
-  P.push([box(0.38, 0.58, 0.24, 0, 1.96, -0.02), shade(1), 0, 1]);                           // habit
-  P.push([box(0.06, 0.66, 0.03, 0, 1.94, 0.11, 0, 0, 0.5), col ? '#c9a24a' : WHITE, 0, 0]);  // baudrier (écharpe dorée d'un officier)
-  P.push([box(0.18, 0.21, 0.2, 0, 2.36, 0.01), SKIN, 0, 0]);
-  if (col) for (const s of [1, -1]) P.push([box(0.12, 0.04, 0.14, s * 0.21, 2.25, -0.02), GOLD, 0, 0]);
-  P.push(...hat(headgear(col ? 'officier' : 'cav', year), col ? 'officier' : 'cav', 0.795));
+  const col = rider === 'colonel', breeches = year >= 1830 ? '#8d929b' : '#e8dcc0', dy = 0.775;
+  P.push([new THREE.CylinderGeometry(0.315, 0.315, 0.55, 10, 1, true, Math.PI * 0.62, Math.PI * 0.76).rotateX(Math.PI / 2).scale(0.86, 1, 1).translate(0, 1.17, 0), shade(0.85), 0, 1]);   // tapis de selle
+  for (const s of [1, -1]) {
+    P.push([seg([s * 0.12, 1.58, -0.05], [s * 0.27, 1.42, 0.25], 0.08, 0.065), breeches, 0, 0]);                                 // cuisses
+    P.push([seg([s * 0.28, 1.45, 0.25], [s * 0.29, 1.02, 0.18], 0.06, 0.05, 6), '#15110d', 0, 0]);                              // bottes
+  }
+  P.push([lathe([[0.13, 1.56], [0.14, 1.7], [0.16, 2.0], [0.168, 2.11], [0.15, 2.2], [0.06, 2.255]], 10, 0.72), shade(1), 0, 1]);   // habit
+  P.push([new THREE.BoxGeometry(0.05, 0.6, 0.012).rotateZ(0.5).translate(0, 1.93, 0.12), col ? '#c9a24a' : WHITE, 0, 0]);         // baudrier (écharpe dorée d'un officier)
+  P.push([new THREE.CylinderGeometry(0.045, 0.05, 0.06, 6, 1, true).translate(0, 2.245, 0), SKIN, 0, 0], [sph(0.088, 0.105, 0.095, 0, 2.36, 0.005), SKIN, 0, 0]);
+  if (col) for (const s of [1, -1]) P.push([sph(0.07, 0.025, 0.06, s * 0.17, 2.215, 0, 6, 4), GOLD, 0, 0]);
+  P.push(...hat(headgear(col ? 'officier' : 'cav', year), col ? 'officier' : 'cav', dy));
   // bras gauche tenant les rênes ; bras droit (os 8, l'épaule en y = 2,2) et le sabre, levé à la charge
-  P.push([box(0.11, 0.45, 0.12, 0.25, 2.0, 0.14, -0.9), shade(0.9), 0, 1], [box(0.08, 0.09, 0.09, 0.25, 1.86, 0.32), SKIN, 0, 0]);
-  P.push([box(0.11, 0.56, 0.12, -0.26, 1.94, 0), shade(0.9), 8, 1], [box(0.08, 0.09, 0.09, -0.26, 1.62, 0), SKIN, 8, 0]);
-  P.push([box(0.035, 0.95, 0.02, -0.27, 2.14, 0.04), '#c8ccd0', 8, 0]);
+  P.push([sph(0.058, 0.06, 0.06, 0.19, 2.165, 0, 6, 4), shade(0.95), 0, 1], [seg([0.2, 2.16, 0], [0.22, 1.9, 0.3], 0.05, 0.044, 7), shade(0.9), 0, 1],
+    [sph(0.04, 0.045, 0.04, 0.22, 1.88, 0.33, 5, 4), SKIN, 0, 0]);
+  P.push([sph(0.058, 0.06, 0.06, -0.19, 2.165, 0, 6, 4), shade(0.95), 8, 1], [seg([-0.2, 2.17, 0], [-0.21, 1.66, 0], 0.052, 0.044, 7), shade(0.9), 8, 1],
+    [sph(0.04, 0.045, 0.04, -0.21, 1.63, 0, 5, 4), SKIN, 8, 0]);
+  P.push([seg([-0.25, 1.64, 0.04], [-0.25, 2.6, 0.04], 0.014, 0.008, 4), '#c8ccd0', 8, 0]);
   return assemble(P);
 }
 // géométrie d'une sorte de figurine

@@ -191,7 +191,8 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
     écarts)
   - Taille : M
 
-- [ ] **T20 : chevaux, cavaliers, canons, caissons arrondis**
+- [x] **T20 : chevaux, cavaliers, canons, caissons arrondis**
+  - Fait : cheval d'environ 760 sommets (1 360 avec son cavalier) ; canon d'environ 800 sommets, avec roues à rayons.
   - Critères : corps en capsule, encolure et tête galbées, jambes effilées (mêmes os 1, 2, 5, 6, 7, 8) ; cavalier
     arrondi ; roues à rayons, fût galbé ; caisson et chariot bâché arrondis.
   - Vérif : banc des modèles ; captures cavalerie au galop et batterie qui tire.

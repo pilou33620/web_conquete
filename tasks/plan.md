@@ -139,7 +139,7 @@ captures restent mon outil de vérification interne. La taille des soldats est c
 ### 6a et 6b : figurines
 - [x] T18 : banc des modèles, relevé de charge de départ
 - [x] T19 : fantassins arrondis (toutes les sortes à pied) et taille
-- [ ] T20 : chevaux, cavaliers, canons, caissons arrondis
+- [x] T20 : chevaux, cavaliers, canons, caissons arrondis
 - [ ] T21 : version simple de loin (choix par régiment)
 - [ ] Point de contrôle A (bancs, 5 scénarios sans erreur, charge ≤ départ + 10 %)
 
