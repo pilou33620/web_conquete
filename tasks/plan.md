@@ -1,174 +1,80 @@
-# Plan : batailles en 3D (SPEC-3D.md)
+# Plan : tour par tour à la Total War (SPEC-TOURS.md)
 
 ## Vue d'ensemble
 
-La vue de bataille passe d'un canevas 2D en vue cavalière à une scène Three.js : relief texturé par la peinture
-actuelle du sol, soldats 3D instanciés et animés sur la carte graphique, fumées en panneaux, décor en volume, caméra
-orbitale. Le serveur, les ordres et l'interface ne changent pas. Cinq étapes, chacune jouable et commitée.
+Trois parties, dans cet ordre : (1) le tour des IA calculé d'un coup, avec des arrêts seulement quand le joueur doit
+choisir ; (2) les villes neutres prises tout de suite pendant le tour du joueur ; (3) le temps compté en tours,
+d'abord dans les règles (production, recherche, échéances), puis à l'écran (sièges, marche, taux). Chaque tâche
+laisse le jeu jouable et passe `python3 tests/lancer.py`.
 
 ## Décisions d'architecture
 
-1. **On garde l'API de la vue** utilisée par `commandes.js` et `interface.js` : `cam.x`, `cam.y`, `cam.z`,
-   `moveCam`, `zoomAt`, `clampCam`, `toScreen`, `toWorld`, `unitAt`, `onScreen`, `mine`. `cam.z` garde son sens
-   (pixels CSS par mètre à la cible) et se convertit en distance de caméra ; on ajoute `cam.yaw` (cap). Ces deux
-   fichiers changent donc peu.
-2. **Deux canevas** : le WebGL dessous, un calque 2D dessus qui reçoit les gestes (`v.cv` reste le calque). Le calque
-   porte les fanions, les tracés au sol (projetés point par point, suivant le relief), les gestes, la pluie et la neige.
-3. **Sol** : `terrain.js` garde sa peinture, en mode « à plat » (sans arbres, maisons ni ombrage du relief, qui
-   passent en 3D). Le relief est découpé en tuiles ; chaque tuile reçoit une texture peinte dont la finesse suit la
-   distance à la caméra (mêmes niveaux et même budget mémoire que les tuiles 2D d'aujourd'hui), l'image entière en
-   secours. Tués, trous d'obus et brèches continuent d'être peints dans les textures.
-4. **Troupes** : un `InstancedMesh` par sorte de figure (fantassin, cheval, cavalier, canon, caisson, drapeau). Chaque
-   instance porte : numéro de l'unité, place dans l'unité (u, v), sens, pose, phase. Les positions et sens des unités
-   sont dans une petite texture de données mise à jour à chaque image ; le vertex shader place la figure, lit
-   l'altitude dans une texture du relief et anime les membres (attribut « os » par sommet). Coût par image :
-   proportionnel au nombre de régiments, pas d'hommes. Les dispositions (`layout`) sont reprises de `unites.js`.
-5. **Fumées** : quads instanciés tournés vers la caméra dans le shader, textures de bouffées déjà peintes par
-   `effets.js`, mélange alpha sans écriture de profondeur. La logique (file d'effets, salves qui roulent, vent) reste.
-6. **Lumière** : matériaux Lambert (légers sur iPad), soleil selon l'heure, ciel et brume selon la météo ; ombres des
-   nuages et voile des couverts (déploiement) ajoutés au shader du sol par `onBeforeCompile`. Ombres portées selon
-   la qualité.
-7. **Captures** : `dev/capture.mjs` pilote Chromium sans écran (protocole DevTools, `--experimental-websocket` de
-   Node 20) sur le banc d'essai ; c'est la vérification visuelle de chaque tâche.
+1. **La simulation reste continue, en jours.** Le tour des IA joue toujours le mois pas à pas (`g.step`) : on ne
+   change que sa vitesse (aussi vite que possible) et ses arrêts. Les IA jouent comme avant.
+2. **Le tour des IA par tranches de temps réel.** `turns.advance` calcule autant de pas qu'il peut en ~0,25 s par
+   appel (la boucle du serveur l'appelle toutes les 0,1 s) : le mois se joue en 1 à 2 s et le serveur continue de
+   répondre au navigateur pendant le calcul (la barre montre la progression). Le rythme (`PACES`) disparaît ; le champ
+   `pace` des anciennes sauvegardes est ignoré.
+3. **Les arrêts se décident en un seul endroit** (`turns.watch`) : on garde `bataille` (seulement si le joueur y a des
+   armées ou une place), `decision` et `fin`. Les grands moments qui arrêtent le temps d'eux-mêmes (`alert_pause`) ne
+   l'arrêtent plus en tour par tour. Après le choix (bataille ou décision), le tour des IA reprend tout seul.
+4. **Tout le temps « en tours » passe par trois aides de `game/turns.py`**, pour ne pas disperser la conversion :
+   - `work(g, dt)` : jours de travail d'un pas, `dt × 30 / longueur du mois` (règle A : un tour = 30 jours de travail,
+     février comme mars). Sert à la file de production, à la recherche, aux politiques de ville.
+   - `deadline(g, n)` : le début du n-ième tour du joueur à venir (le 1er d'un mois, 0 h). Pendant le tour du joueur,
+     `n` mois après aujourd'hui ; pendant le tour des IA, `n` mois après la fin du mois en cours (règle B : le joueur a
+     toujours n tours entiers). Sert aux trêves, droits de passage, propositions, décisions, gardes, délais d'attente…
+   - `tours_left(g, until)` et `tours(days)` : pour l'affichage (« dans 2 tours », « ⅕ de tour »).
+   Côté navigateur, une seule aide de texte (`toursTxt` dans `ui.js`) pour « au prochain tour / dans N tours ».
+5. **Les durées arrondies sont écrites en tours dans `rules.py`** (et `cities.py`, `army_actions.py`) puis converties
+   par `deadline` ou en jours de travail (× 30) : pas de table de conversion à part.
+6. **Anciennes sauvegardes** : au chargement, une échéance en plein milieu d'un mois est repoussée au début du tour
+   suivant (`turns.migrate`) ; les files de production gardent leurs jours restants (déjà des jours de travail).
+7. **Le temps réel garde les mêmes règles** : un tour y est un mois du calendrier, `work` et `deadline` y valent.
 
 ## Graphe des dépendances
 
 ```
-Three.js + capture ──┬── camera.js ──┬── vue.js 3D + relief (image entière) ──┬── commandes / mini-carte
-                     │               │                                         ├── tuiles de texture du sol
-                     │               │                                         ├── troupes (inf → cav → art) ── fanions
-                     │               │                                         ├── effets 3D ── lumière / météo
-                     │               │                                         └── décor (arbres, bâti, murs) ── ombres
-                     └───────────────┴───────────────────────────────────────────── qualité, nettoyage, README
+T1 tour des IA d'un coup ──► T2 arrêts réduits ──► (Point 1)
+T3 ville neutre prise tout de suite ─────────────► (Point 1)
+T4 aides de temps (work, deadline, tours_left) ──┬─► T5 production ──► T6 recherche et politiques
+                                                 ├─► T7 échéances diplomatiques et événements
+                                                 └─► T8 actions d'armée et espions ──► (Point 2)
+T9 sièges en tours, T10 marche en tours, T11 taux par tour + nettoyage des « jours » ──► (Point final)
 ```
+
+T1–T3 et T4 sont indépendants ; T5–T8 dépendent de T4 ; T9–T11 seulement de l'aide d'affichage (T4).
+
+## Risques
+
+| Risque | Impact | Parade |
+|---|---|---|
+| Un mois de fin de partie (beaucoup de guerres) dépasse 3 s sur le Raspberry | Moyen | T1 mesure un mois en 1790 et sur une sauvegarde avancée de `saves/` ; si trop lent, la barre de progression le rend supportable (pas de blocage du serveur) |
+| L'arrondi des technologies (28 à 84 j → 1 à 3 tours) change le rythme de recherche des IA comme du joueur | Faible | même règle pour tous ; T6 compare le nombre de technologies d'une IA après 24 mois, avant et après |
+| Une durée oubliée reste affichée en jours | Faible | T11 : le banc de l'interface cherche « jour » / « N j » dans les panneaux de campagne |
+| Une proposition ou une décision créée pendant le tour des IA expire avant que le joueur la voie | Moyen | `deadline` compte à partir du tour suivant ; banc dédié en T4 et T7 |
+| Les reprises automatiques (après une bataille ou une décision) relancent le mois alors que le joueur voulait regarder | Faible | la reprise n'a lieu que si le tour des IA était en cours (`tour['end']` non nul) |
 
 ## Liste des tâches
 
-Détail, critères et vérifications : `tasks/todo.md`.
+Le détail (critères, vérification, fichiers) est dans `tasks/todo.md`.
 
-### Étape 1 : la bataille se joue en 3D (régiments en blocs)
-- [x] T1 : Three.js copié, outil de capture
-- [x] T2 : caméra orbitale (maths pures) et ses bancs
-- [x] T3 : vue WebGL, relief texturé par l'image entière, régiments en blocs, calque 2D
-- [x] T4 : gestes, tracés au sol et mini-carte en 3D
-- [x] T5 : tuiles de texture du sol selon la distance, décalcomanies, brèches, voile des couverts
-- [x] Point d’étape 1 (captures envoyées, revue avec toi)
+### Partie 1 : le tour des IA
+- T1 : le tour des IA calculé d'un coup, sans rythme
+- T2 : arrêts seulement quand le joueur doit choisir, reprise automatique
+- T3 : ville neutre prise tout de suite pendant le tour du joueur
+- **Point 1** : tu joues trois tours
 
-### Étape 2 : les troupes
-- [x] T6 : fantassins 3D instanciés et animés, dispositions reprises
-- [x] T7 : cavaliers, chevaux, état-major
-- [x] T8 : batteries, servants, caissons, chariots
-- [x] T9 : fanions façon Ultimate General, médaillons
-- [x] Point d’étape 2
+### Partie 2 : les règles en tours
+- T4 : aides de temps en tours (`work`, `deadline`, `tours_left`) et anciennes sauvegardes
+- T5 : production à capacité par tour
+- T6 : recherche et politiques de ville en tours
+- T7 : trêves, droits de passage, propositions, décisions et événements en tours
+- T8 : actions d'armée et espions en tours
+- **Point 2** : tu vérifies une ville, les technologies et la diplomatie
 
-### Étape 3 : le feu et l'atmosphère
-- [x] T10 : fumées, éclairs, boulets, éclats, poussière en 3D
-- [x] T11 : lumière de l'heure, ciel, brume, ombres des nuages, pluie, neige, orage
-- [x] Point d’étape 3
-
-### Étape 4 : le décor
-- [x] T12 : arbres instanciés
-- [x] T13 : maisons, église, moulins, ponts, portes
-- [x] T14 : remparts, bastions, brèches, tranchées, barricades, haies, murets, clôtures
-- [x] T15 : ombres portées
-- [x] Point d’étape 4
-
-### Étape 5 : finitions
-- [x] T16 : profils de qualité 3D, mesure automatique, message sans WebGL 2
-- [x] T17 : nettoyage du code 2D, README, captures des cartes d'unités
-- [x] Point final (/review, bancs, captures ; reste l'essai sur l'iPad)
-
-## Risques et parades
-
-| Risque | Impact | Parade |
-|---|---|---|
-| Chromium sans écran sur le Pi (SwiftShader) trop lent ou sans WebGL 2 | Moyen : plus de captures | Vérifié dès T1 ; petite fenêtre, peu d'images ; à défaut, captures faites par toi |
-| Remplissage de pixels sur iPad (fumées superposées, Retina) | Haut | Densité plafonnée par la qualité, nombre de bouffées borné, fumée la plus fine coupée de loin |
-| Mémoire de Safari (textures du sol) | Haut | Budget de tuiles de `qualite.js` repris, `dispose()` systématique, image entière en secours |
-| Toucher juste un point du sol sur le relief | Moyen | `toWorld` par marche de rayon sur l'altitude, banc aller-retour à 1 m près |
-| Gros changement de `vue.js` qui casse `interface.js` | Moyen | API de la vue gardée (décision 1), bancs d'interface à chaque tâche |
-| Three.js (≈ 700 Ko) à charger sur l'iPad à chaque bataille | Bas | Chargé une fois par session (module ES en cache du navigateur) |
-| Fanions et tracés du calque 2D passent devant une colline | Bas | Voulu : ce sont des repères d'interface, comme dans Ultimate General |
-
-## Questions ouvertes
-
-- Aucune.
-
----
-
-# Étape 6 : se rapprocher du rendu d'Ultimate General (SPEC-3D.md, « Étape 6 »)
-
-Validé le 15/10/2026 : tout enchaîner sans arrêt intermédiaire ni captures montrées (tu verras en jouant). Les
-captures restent mon outil de vérification interne. La taille des soldats est choisie par moi sur ces captures.
-
-## Décisions d'architecture
-
-7. **Modèles arrondis construits par le code.** `troupes.js` garde `assemble()` (couleur, os, teinte par sommet). Les
-   pavés deviennent des cylindres effilés, des sphères aplaties, des profils tournés (`LatheGeometry`) et des capsules
-   (`CapsuleGeometry`), qui ont des normales lisses. Les os et pivots ne changent pas, donc le shader d'animation reste
-   le même. Tricorne : un anneau dont le bord se relève entre trois pointes.
-8. **Deux versions par figurine.** Pour chaque sorte, un modèle proche (arrondi, détaillé) et un modèle lointain (peu de
-   sommets, mêmes os, même hauteur).
-   - Choix par régiment, selon la hauteur de la figurine à l'écran (px), avec une marge pour ne pas basculer sans cesse.
-   - Chaque version a ses propres `InstancedMesh` et tampons d'instances. Le changement de version d'un régiment
-     relance `rebuild`, au plus quelques fois par seconde.
-   - La vue d'ensemble n'utilise que le modèle lointain. C'est ce qui paie les modèles proches.
-9. **Ombres de contact.** Une tache douce au sol sous chaque figurine : un quadrilatère instancié qui partage les
-   tampons d'instances de sa sorte et le placement du shader (4 sommets par figurine).
-10. **Lumière.**
-    - Courbe filmique de Three.js (`NeutralToneMapping` ou `AgXToneMapping`, choisie sur captures) et intensités
-      revues dans `Effects.ciel()`.
-    - Ombres douces : `shadow.radius` du PCF de r186.
-    - Ciel plus fort par rapport au soleil, pour des ombres teintées au lieu de noires.
-    - Pas de passe d'après-rendu (mémoire de l'iPad).
-11. **Cultures en relief.**
-    - `terrain.js` peint une fois un masque « hauteur de végétation » sur tout le champ (2 m par pixel, un octet),
-      avec les mêmes contours de parcelles que la peinture du sol.
-    - Près de la caméra, des couches empilées du sol (« coquilles ») dessinent les épis : couleur prise dans la texture
-      du sol, plus sombre en bas, ondulation au vent.
-    - Nombre de couches par niveau de qualité (`epis` dans `qualite.js`) ; aucune en Basse.
-12. **Arbres touffus.**
-    - Couronne faite de 3 à 5 touffes d'icosaèdres (normales lisses), plus sombre dedans et dessous, teinte variée.
-    - Deux versions selon la zone (750 m) : touffes détaillées près de la caméra, touffe simple au loin.
-    - Le nombre d'arbres par qualité ne change pas.
-13. **Mesure de la charge.** `renderer.info.render.triangles`, lu par `--js` dans le banc de capture, sur trois vues
-    types du scénario bocage. Le relevé de départ est noté dans T18. Le critère est de rester sous le départ + 10 %.
-
-## Liste des tâches (étape 6)
-
-### 6a et 6b : figurines
-- [x] T18 : banc des modèles, relevé de charge de départ
-- [x] T19 : fantassins arrondis (toutes les sortes à pied) et taille
-- [x] T20 : chevaux, cavaliers, canons, caissons arrondis
-- [x] T21 : version simple de loin (choix par régiment)
-- [x] Point de contrôle A (bancs, 5 scénarios sans erreur, charge ≤ départ + 10 %)
-
-### 6c : lumière et couleurs
-- [x] T22 : courbe filmique, soleil et ciel, ombres douces
-- [x] T23 : ombres de contact sous les figurines
-
-### 6d : sol
-- [x] T24 : couleurs du sol (blé or doux, teintes par parcelle, herbe variée)
-- [x] T25 : chemins larges et usés
-- [x] T26 : cultures en relief près de la caméra
-- [x] Point de contrôle B
-
-### 6e : arbres et fin
-- [x] T27 : arbres touffus (deux versions par zone)
-- [x] T28 : vérification finale, README, revue
-- [ ] Point final de l'étape 6
-
-## Risques et parades (étape 6)
-
-| Risque | Impact | Parade |
-|---|---|---|
-| Coquilles des épis trop chères sur l'iPad (pixels superposés, rejet de pixels) | Haut | Couches selon la qualité, rayon limité, coupées de loin et pendant les gestes ; Basse sans |
-| Bascule de version visible, ou `rebuild` trop fréquent | Moyen | Marge entre les seuils, choix par régiment, au plus quelques reconstructions par seconde |
-| La courbe filmique change toutes les couleurs (nuit, brouillard, neige, effets additifs) | Moyen | Captures heure par heure et météo par météo après T22 ; palettes revues en T24 |
-| Plus de sommets par figurine proche | Moyen | Modèle lointain plus léger qu'aujourd'hui ; relevé de charge à chaque tâche |
-| Allure jugée par moi seul, sans ton retour avant la fin | Moyen | Comparaison systématique avec tes trois images aux mêmes distances ; tu valides en jouant |
-| Captures lentes sur le Pi (rendu logiciel) | Bas | Petites tailles et peu de captures par tâche |
-
-## Questions ouvertes (étape 6)
-
-- Aucune bloquante. Taille des soldats et courbe filmique choisies sur captures internes.
+### Partie 3 : l'écran en tours
+- T9 : sièges et blocus en tours
+- T10 : marche en tours (jauge, estimation d'arrivée)
+- T11 : taux par tour, tutoriel, README, chasse aux derniers « jours »
+- **Point final** : /review, puis tu essaies sur l'iPad et le PC
