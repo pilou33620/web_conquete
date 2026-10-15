@@ -53,7 +53,7 @@ function proxy(req, res, raw, patch) {
   p.end(raw);
 }
 
-http.createServer(async (req, res) => {
+const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), q = Object.fromEntries(u.searchParams);
   if (u.pathname.startsWith('/__maquette/')) {
     const what = u.pathname.slice(12);
@@ -109,7 +109,7 @@ http.createServer(async (req, res) => {
   if (!full.startsWith(WEB) || !fs.existsSync(full) || !fs.statSync(full).isFile()) { res.writeHead(404); return res.end('Introuvable'); }
   res.writeHead(200, { 'Content-Type': TYPES[path.extname(full)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
   fs.createReadStream(full).pipe(res);
-}).listen(PORT, () => console.log(`Maquette de bataille : http://127.0.0.1:${PORT}/  (banc : /js/battle/dev/banc.html)${JEU ? `, jeu relayé sur le port ${JEU}` : ''}`));
+}).listen(PORT, () => console.log(`Maquette de bataille : http://127.0.0.1:${server.address().port}/  (banc : /js/battle/dev/banc.html)${JEU ? `, jeu relayé sur le port ${JEU}` : ''}`));
 
 // fin de partie : quand la vue a montré le récapitulatif et rendu la main, la bataille cesse d'être signalée
 export function _desarmer() { active = null; }

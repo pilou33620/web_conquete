@@ -27,11 +27,11 @@ const opt = k => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : null
 const scen = argv[0] || 'bocage', out = path.resolve(argv[1] || `/tmp/${scen}.png`);
 const [W, H] = (opt('--size') || '1400x800').split('x').map(Number);
 const wait = +(opt('--wait') || 4000), js = opt('--js'), extra = opt('--q') || '';
-const port = 8830 + Math.floor(Math.random() * 100);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const maq = spawn(process.execPath, [path.join(here, 'maquette.mjs'), '--port', String(port)], { stdio: ['ignore', 'pipe', 'inherit'] });
-await new Promise((ok, ko) => { maq.stdout.once('data', ok); maq.once('exit', () => ko(new Error('maquette arrêtée'))); });
+// port 0 : le système en donne un libre (plusieurs captures peuvent tourner ensemble), que la maquette annonce
+const maq = spawn(process.execPath, [path.join(here, 'maquette.mjs'), '--port', '0'], { stdio: ['ignore', 'pipe', 'inherit'] });
+const port = await new Promise((ok, ko) => { maq.stdout.once('data', d => ok(+String(d).match(/127\.0\.0\.1:(\d+)/)[1])); maq.once('exit', () => ko(new Error('maquette arrêtée'))); });
 
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'capture-'));
 const gl = argv.includes('--nogl') ? ['--disable-3d-apis'] : argv.includes('--gpu') ? ['--use-angle=gles', '--ignore-gpu-blocklist'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
@@ -60,7 +60,10 @@ const send = (method, params = {}, sessionId) => new Promise((ok, ko) => {
 });
 const done = code => {
   maq.kill();
-  chrome.once('exit', () => { fs.rmSync(profile, { recursive: true, force: true }); process.exit(code); });
+  chrome.once('exit', () => {
+    try { fs.rmSync(profile, { recursive: true, force: true }); } catch (e) { console.error('profil laissé :', profile); }   // (encore occupé quand le Pi est chargé)
+    process.exit(code);
+  });
   chrome.kill();
 };
 setTimeout(() => { console.error('Délai dépassé.'); done(2); }, +(opt('--timeout') || 300000));
