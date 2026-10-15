@@ -351,7 +351,7 @@ const VERT_POSE = `
 #elif defined(HORSE)
   // cheval : la pose de la disposition porte la robe (× 16) et, en déroute, le galop (2) ; sinon l'allure du régiment.
   // Au pas, les jambes vont par paires en diagonale ; au galop, l'une après l'autre, le cheval se soulève.
-  float gait = mod(P, 4.0) > 1.5 ? 2.0 : u1.x;
+  float gait = mod(aAnim.x, 4.0) > 1.5 ? 2.0 : u1.x;   // (aAnim.x : P a pu prendre la pose de marche des fantassins)
   float fq = gait > 1.5 ? 11.0 : 6.5, am = gait > 1.5 ? 0.65 : gait > 0.5 ? 0.32 : 0.0, t = uTime * fq + ph;
   float aFL = sin(t) * am, aFR = sin(t + (gait > 1.5 ? 0.7 : 3.14)) * am, aHL = sin(t + (gait > 1.5 ? 2.2 : 3.14)) * am, aHR = sin(t + (gait > 1.5 ? 2.9 : 0.0)) * am;
   boneA = aBone == 1.0 ? aFL : aBone == 2.0 ? aFR : aBone == 5.0 ? aHL : aBone == 6.0 ? aHR : aBone == 7.0 ? sin(t) * am * 0.3 : aBone == 8.0 && gait > 1.5 ? 1.2 : 0.0;
@@ -512,10 +512,10 @@ export class Troops {
       const k = this.kinds.get(kind);
       if (!k) return;
       if (k.n >= k.cap) this.grow(k, k.cap * 2);
-      const n = k.n++, rank = f[5];
-      k.slot.set([f[0], f[1], face ?? (carre && rank >= 0 ? FACE[f[3]] : f[3] === 2 ? Math.PI : 0), ui], n * 4);
-      k.anim.set([f[4], f[6], scale, rank], n * 4);
-      k.coat.set([coat.r, coat.g, coat.b], n * 3);
+      const n = k.n++, rank = f[5], o = n * 4, S = k.slot, A = k.anim, C = k.coat;
+      S[o] = f[0]; S[o + 1] = f[1]; S[o + 2] = face ?? (carre && rank >= 0 ? FACE[f[3]] : f[3] === 2 ? Math.PI : 0); S[o + 3] = ui;
+      A[o] = f[4]; A[o + 1] = f[6]; A[o + 2] = scale; A[o + 3] = rank;
+      C[n * 3] = coat.r; C[n * 3 + 1] = coat.g; C[n * 3 + 2] = coat.b;
     };
     for (const [id, { lay, un }] of this.lays) {
       const ui = this.index.get(id), carre = un.form === 'carre';
@@ -539,13 +539,14 @@ export class Troops {
   }
   // ombres portées des figurines (qualité Haute et Ultra) ; sinon une ombre douce sous chaque régiment (blobs)
   setShadows(on) {
+    if (this.castShadow === on && this.blobs.visible === !on) return;
     this.castShadow = on;
     for (const k of this.kinds.values()) k.mesh.castShadow = on;
     this.blobs.visible = !on;
   }
   // ombre douce sous chaque régiment : un panneau sombre posé au sol, à la taille de son emprise
   drawBlobs(list) {
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    const { m, q, p, s, up } = this.tmp || (this.tmp = { m: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), s: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0) });
     let n = 0;
     for (const un of list) {
       if (n >= this.blobs.instanceMatrix.count || un.state === 'deroute') continue;

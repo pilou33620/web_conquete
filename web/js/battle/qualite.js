@@ -24,7 +24,7 @@ const KEY = 'conquete.bataille.qualite';
 export const PROFILS = {
   basse: { dpr: 1, aa: false, level: 4, maxZ: 25, troupes: 3000, puffs: 420, fx: 0, ombres: 0, clouds: false, textures: 8e6, sprites: 6e6 },
   moyenne: { dpr: 1.5, aa: false, level: 8, maxZ: 32, troupes: 6000, puffs: 800, fx: 1, ombres: 1, clouds: true, textures: 20e6, sprites: 12e6 },
-  haute: { dpr: 2, aa: true, level: 16, maxZ: 40, troupes: 10000, puffs: 1400, fx: 2, ombres: 2, clouds: true, textures: 32e6, sprites: 24e6 },
+  haute: { dpr: 2, aa: false, level: 16, maxZ: 40, troupes: 10000, puffs: 1400, fx: 2, ombres: 2, clouds: true, textures: 32e6, sprites: 24e6 },
   ultra: { dpr: 2.5, aa: true, level: 16, maxZ: 45, troupes: 20000, puffs: 2400, fx: 3, ombres: 3, clouds: true, textures: 48e6, sprites: 48e6 },
 };
 

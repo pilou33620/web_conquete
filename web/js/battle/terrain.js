@@ -90,7 +90,6 @@ export class Terrain {
     this.season = normSeason(m.season);
     this.pal = PALETTES[this.season];
     this.setQuality(q);
-    this.decals = [];
     this.cache = new Map();      // motifs et silhouettes d'arbres (textures.js), bornés en mémoire par la qualité
     this.cacheBytes = 0;
     this.ombre = softShadow();
@@ -708,7 +707,7 @@ export class Terrain {
   }
 
   // ------------------------------------------------------------------ tuiles
-  setQuality(q) { this.q = q || profil(); this.trim(); }
+  setQuality(q) { this.q = q || profil(); if (this.cache) this.trim(); }   // (le constructeur l'appelle avant le cache)
   // brèche ouverte au canon pendant la bataille ([mur, x, y, rayon]) : l'image entière est repeinte autour d'elle
   // (relief.js repeint ses blocs, decor.js l'enceinte)
   addBreach([wi, x, y, r]) {
@@ -720,14 +719,8 @@ export class Terrain {
     this.base.getContext('2d').drawImage(cv, x0 * BASE, y0 * BASE);
     cv.width = cv.height = 0;
   }
-  // tués, chevaux, trous d'obus : gardés (relief.js les pose sur le relief) ; renvoie ceux qui tombent sur le sol
-  // découvert
-  addDecals(list) {
-    list = list.filter(d => this.bare(d.x, d.y));
-    this.decals.push(...list);
-    if (this.decals.length > 6000) this.decals.splice(0, this.decals.length - 6000);
-    return list;
-  }
+  // tués, chevaux, trous d'obus : ceux qui tombent sur le sol découvert (relief.js les pose sur le relief)
+  addDecals(list) { return list.filter(d => this.bare(d.x, d.y)); }
   dispose() {
     for (const e of this.cache.values()) { const cv = e.cv || e; cv.width = cv.height = 0; }
     this.cache.clear(); this.cacheBytes = 0;

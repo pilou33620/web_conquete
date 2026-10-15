@@ -159,8 +159,12 @@ export class Relief {
   }
 
   // ------------------------------------------------------------------ niveaux de détail du sol
-  setQuality(q) {
+  // force : tout repeindre (contexte WebGL rendu : les niveaux sont revenus vides) ; sinon seulement si le sol le plus
+  // fin permis change
+  setQuality(q, force = false) {
+    const same = this.levels && this.q.level === q.level;
     this.q = q;
+    if (same && !force) return;
     for (const l of this.levels || []) l?.tex.dispose();
     this.levels = LEVELS.map(L => L <= q.level ? { L, span: TS / L, slots: new Array(N * N).fill(null), tex: this.levelTex() } : null);
     this.levels.forEach((l, i) => { this.uni[`uLv${i}`].value = l ? l.tex : this.tex; });   // (niveau absent : jamais lu, uSpan = 0)

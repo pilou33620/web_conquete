@@ -35,6 +35,8 @@ export class BattleView {
     try {
       this.renderer = new THREE.WebGLRenderer({ canvas: this.glc, antialias: !!this.q.aa, powerPreference: 'high-performance' });
     } catch (e) { console.error(e); this.renderer = null; }
+    // contexte WebGL rendu par Safari (application remise au premier plan) : les niveaux de détail du sol sont repeints
+    this.glc.addEventListener('webglcontextrestored', () => this.relief?.setQuality(this.q, true));
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(FOV * 180 / Math.PI, 1, 1, 10000);
     this.mesure = new Mesure();
@@ -138,6 +140,7 @@ export class BattleView {
   // ombres portées selon la qualité (fx : 0 aucune, 1 le décor, 2 et 3 aussi les troupes)
   setShadows() {
     const level = this.q.ombres ?? this.q.fx ?? 2;
+    this.shadowLevel = level;
     this.relief.shadows(this.renderer, level);
     this.troops.setShadows(level >= 2);
     // (les matériaux déjà compilés doivent l'être de nouveau avec ou sans ombres)
@@ -377,6 +380,9 @@ export class BattleView {
     cam.updateProjectionMatrix();
     cam.position.set(fr.E[0], fr.E[1], fr.E[2]); cam.lookAt(fr.T[0], fr.T[1], fr.T[2]);
     this.relief.follow(fr);
+    // de loin, les figurines ne font que quelques pixels : leurs ombres ne se voient plus et coûteraient autant que
+    // les figurines elles-mêmes (écart entre 600 et 700 m : pas de bascule à chaque image)
+    if (this.shadowLevel >= 2) this.troops.setShadows(this.troops.castShadow ? fr.dist < 700 : fr.dist < 600);
     const deploy = this.st?.phase === 'deploiement';
     const hour = this.hourNum(), sky = { weather: this.st?.weather || this.map?.weather, light: this.st?.light ?? 1, hour, wind: this.st?.wind };
     const ciel = this.fx.ciel(sky, this.terrain.season);

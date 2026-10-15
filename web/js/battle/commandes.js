@@ -27,7 +27,7 @@ export class Controls {
     const cv = view.cv;
     this.h = {
       down: e => this.down(e), move: e => this.move(e), up: e => this.up(e), cancel: e => this.up(e, true),
-      wheel: e => { e.preventDefault(); const [sx, sy] = this.pos(e); this.v.zoomAt(sx, sy, Math.exp(-clamp(e.deltaY, -120, 120) * (e.ctrlKey ? 0.01 : 0.0022))); },
+      wheel: e => { e.preventDefault(); if (!this.v.relief) return; const [sx, sy] = this.pos(e); this.v.zoomAt(sx, sy, Math.exp(-clamp(e.deltaY, -120, 120) * (e.ctrlKey ? 0.01 : 0.0022))); },
       ctx: e => e.preventDefault(),
       key: e => this.key(e, true), keyup: e => this.keys.delete(e.key),
     };
@@ -53,6 +53,7 @@ export class Controls {
   // ------------------------------------------------------------------ pointeurs
   down(e) {
     const v = this.v;
+    if (!v.relief) return;   // (la carte se charge encore)
     v.cv.setPointerCapture?.(e.pointerId);
     const [sx, sy] = this.pos(e);
     this.pts.set(e.pointerId, { x: sx, y: sy });
@@ -79,6 +80,7 @@ export class Controls {
   }
   move(e) {
     const v = this.v, [sx, sy] = this.pos(e);
+    if (!v.relief) return;
     if (!this.pts.has(e.pointerId)) {
       // survol à la souris : désigne une cible
       if (e.pointerType === 'mouse') {

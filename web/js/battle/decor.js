@@ -70,6 +70,15 @@ function merge(list) {
   return out;
 }
 
+// un arbre tout près de la caméra (au ras des troupes) s'efface en pointillés entre 35 et 15 m : il ne cache plus la vue
+function nearFade(mat) {
+  mat.onBeforeCompile = sh => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+      if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > smoothstep(15.0, 35.0, -vViewPosition.z)) discard;`);
+  };
+  mat.customProgramCacheKey = () => 'decor-pres';
+  return mat;
+}
 // toit à deux pans (longueur L le long de x, largeur D, hauteur h), posé en y = 0 ; gables : seulement les pignons
 function gable(L, D, h, gables = false) {
   const x = L / 2, z = D / 2, v = [];
@@ -177,9 +186,9 @@ export class Decor {
       }
     });
     const geos = new Map(), detail = fx >= 2 ? 1 : 0;
-    const crownMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-    const trunkMat = new THREE.MeshLambertMaterial({ color: snow ? '#4a3c30' : TRUNK });
-    const bareMat = new THREE.MeshLambertMaterial({ color: BARE });
+    const crownMat = nearFade(new THREE.MeshLambertMaterial({ vertexColors: true }));
+    const trunkMat = nearFade(new THREE.MeshLambertMaterial({ color: snow ? '#4a3c30' : TRUNK }));
+    const bareMat = nearFade(new THREE.MeshLambertMaterial({ color: BARE }));
     this.disposables.push(crownMat, trunkMat, bareMat);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
     for (const [key, list] of zones) {
@@ -281,7 +290,7 @@ export class Decor {
   }
   // ------------------------------------------------------------------ enceintes, ouvrages, haies
   walls() {
-    if (this.wallMesh) { this.group.remove(this.wallMesh); this.wallMesh.geometry.dispose(); }
+    if (this.wallMesh) { this.group.remove(this.wallMesh); this.wallMesh.geometry.dispose(); this.wallMesh = null; }
     const t = this.t, pal = t.pal, snow = pal.neige, B = new Builder(this.r.heightAt);
     const small = w => { const xs = w.pts.map(p => p[0]), ys = w.pts.map(p => p[1]); return Math.max(...xs) - Math.min(...xs) < 160 && Math.max(...ys) - Math.min(...ys) < 160; };
     const th = w => clamp(w.thick || (w.kind === 'mur' ? 6 : 16), 4, 24);
@@ -327,7 +336,18 @@ export class Decor {
       const a = hash(k, 1, x) * Math.PI * 2, d = Math.sqrt(hash(k, 2, y)) * r * 1.05, sz = 1.2 + hash(k, 3, x) * 2.8;
       B.box(x + Math.cos(a) * d, y + Math.sin(a) * d, sz, sz * 0.6, sz * 0.8, sz * 0.3, k % 3 ? stone : '#8f8168');
     }
-    // haies, murets, clôtures de bois
+    // haies, murets, clôtures de bois : construites une fois, à part (une brèche ne touche pas ces clôtures)
+    const geo = B.geometry();
+    if (!this.wallMat) { this.wallMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }); this.disposables.push(this.wallMat); }
+    if (geo) {
+      this.wallMesh = new THREE.Mesh(geo, this.wallMat);
+      this.wallMesh.castShadow = this.wallMesh.receiveShadow = true;
+      this.group.add(this.wallMesh);
+    }
+    if (!this.fenceMesh) this.fences();
+  }
+  fences() {
+    const t = this.t, pal = t.pal, snow = pal.neige, B = new Builder(this.r.heightAt);
     const hedge = snow ? '#5e6a5c' : new THREE.Color(pal.arbres[0]).multiplyScalar(0.7).getStyle();
     for (const f of t.fencePts) {
       if (f.kind === 'haie') B.ribbon(f.pts, 1.7, 1.2, 2.1, hedge, snow ? '#e8ecee' : new THREE.Color(pal.arbres[1]).multiplyScalar(0.85).getStyle(), 0.5);
@@ -339,12 +359,11 @@ export class Decor {
     }
     const geo = B.geometry();
     if (!geo) return;
-    if (!this.wallMat) { this.wallMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }); this.disposables.push(this.wallMat); }
-    this.wallMesh = new THREE.Mesh(geo, this.wallMat);
-    this.wallMesh.castShadow = this.wallMesh.receiveShadow = true;
-    this.group.add(this.wallMesh);
+    this.fenceMesh = new THREE.Mesh(geo, this.wallMat);
+    this.fenceMesh.castShadow = this.fenceMesh.receiveShadow = true;
+    this.group.add(this.fenceMesh);
   }
   setQuality(q) { this.q = q; }
   dispose() {
-    this.wallMesh?.geometry.dispose(); for (const d of this.disposables) d.dispose(); for (const o of this.group.children) o.dispose?.(); }
+    this.wallMesh?.geometry.dispose(); this.fenceMesh?.geometry.dispose(); for (const d of this.disposables) d.dispose(); for (const o of this.group.children) o.dispose?.(); }
 }

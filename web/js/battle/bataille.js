@@ -11,7 +11,7 @@ const NO_GL = 'Cet appareil ne peut pas afficher les batailles en 3D (WebGL 2 in
 // WebGL 2, sans quoi la vue de bataille ne peut pas s'afficher
 let gl2 = null;
 function hasGL2() {
-  if (gl2 === null) try { gl2 = !!document.createElement('canvas').getContext('webgl2'); } catch (e) { gl2 = false; }
+  if (gl2 === null) try { const g = document.createElement('canvas').getContext('webgl2'); gl2 = !!g; g?.getExtension('WEBGL_lose_context')?.loseContext(); } catch (e) { gl2 = false; }
   return gl2;
 }
 
@@ -133,7 +133,8 @@ export class Bataille {
     }
     if (this.sansGL.has(bid)) return;
     this.sansGL.add(bid);
-    this.api.post('/api/cmd', { cmd: 'tac', sub: 'autofinish', bid }).catch(() => {});
+    // (serveur injoignable : on retentera à la prochaine interrogation de la campagne)
+    this.api.post('/api/cmd', { cmd: 'tac', sub: 'autofinish', bid }).then(r => { if (!r?.ok) this.sansGL.delete(bid); }, () => this.sansGL.delete(bid));
     this.onEnd && this.onEnd(null, bid, NO_GL);
   }
   // interrompt sans animation (nouvelle partie, erreur)

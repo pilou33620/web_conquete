@@ -141,31 +141,32 @@ export class Effects {
       order.push(n++);
     }
     order.sort((a, b) => tmp[b * 7] - tmp[a * 7]);
-    this.fill(this.smoke, order.length, (i, aP, aC) => { const o = order[i] * 7; aP.set([tmp[o + 1], tmp[o + 2], tmp[o + 3], tmp[o + 4]], i * 4); aC[i * 2] = tmp[o + 5]; aC[i * 2 + 1] = tmp[o + 6]; });
+    this.fill(this.smoke, order.length, (i, aP, aC) => { const o = order[i] * 7, j = i * 4; aP[j] = tmp[o + 1]; aP[j + 1] = tmp[o + 2]; aP[j + 2] = tmp[o + 3]; aP[j + 3] = tmp[o + 4]; aC[i * 2] = tmp[o + 5]; aC[i * 2 + 1] = tmp[o + 6]; });
     // éclairs de bouche, feu des explosions
-    const F = this.flashes.slice(0, 400), fc = this.cell.get(this.flash), xc = this.cell.get(this.fire);
-    this.fill(this.glow, F.length, (i, aP, aC) => {
-      const f = F[i], k = 1 - f.t / f.life;
-      aP.set([f.x, h(f.x, f.y) + f.alt, f.y, Math.max(0.8, f.r) * (0.6 + k * 0.6)], i * 4); aC[i * 2] = k; aC[i * 2 + 1] = f.r > 20 ? xc : fc;
+    const F = this.flashes, fc = this.cell.get(this.flash), xc = this.cell.get(this.fire);
+    this.fill(this.glow, Math.min(F.length, 400), (i, aP, aC) => {
+      const f = F[i], k = 1 - f.t / f.life, j = i * 4;
+      aP[j] = f.x; aP[j + 1] = h(f.x, f.y) + f.alt; aP[j + 2] = f.y; aP[j + 3] = Math.max(0.8, f.r) * (0.6 + k * 0.6); aC[i * 2] = k; aC[i * 2 + 1] = f.r > 20 ? xc : fc;
     });
     // boulets en l'air, éclats de terre
-    const m4 = new THREE.Matrix4();
-    const B = this.balls.slice(0, 200);
-    B.forEach((b, i) => {
-      const k = b.t / b.dur, x = b.x0 + (b.x1 - b.x0) * k, y = b.y0 + (b.y1 - b.y0) * k;
+    const m4 = this.m4 || (this.m4 = new THREE.Matrix4());
+    const nb = Math.min(this.balls.length, 200);
+    for (let i = 0; i < nb; i++) {
+      const b = this.balls[i], k = b.t / b.dur, x = b.x0 + (b.x1 - b.x0) * k, y = b.y0 + (b.y1 - b.y0) * k;
       this.ballMesh.setMatrixAt(i, m4.makeTranslation(x, h(x, y) + Math.sin(Math.PI * k) * b.h + 1, y));
-    });
-    this.ballMesh.count = B.length; this.ballMesh.instanceMatrix.needsUpdate = true;
-    const T = this.bits.slice(0, 1200);
-    T.forEach((b, i) => this.bitMesh.setMatrixAt(i, m4.makeTranslation(b.x, h(b.x, b.y) + b.alt, b.y)));
-    this.bitMesh.count = T.length; this.bitMesh.instanceMatrix.needsUpdate = true;
+    }
+    this.ballMesh.count = nb; this.ballMesh.instanceMatrix.needsUpdate = true;
+    const nt = Math.min(this.bits.length, 1200);
+    for (let i = 0; i < nt; i++) { const b = this.bits[i]; this.bitMesh.setMatrixAt(i, m4.makeTranslation(b.x, h(b.x, b.y) + b.alt, b.y)); }
+    this.bitMesh.count = nt; this.bitMesh.instanceMatrix.needsUpdate = true;
     // mitraille : de courts traits qui filent à un mètre du sol
-    const S = this.streaks.slice(0, 1200), pos = this.streakGeo.attributes.position;
-    S.forEach((s, i) => {
-      const k = s.t / s.life, a = Math.max(0, k - 0.12), ax = s.x + (s.x1 - s.x) * a, ay = s.y + (s.y1 - s.y) * a, bx = s.x + (s.x1 - s.x) * k, by = s.y + (s.y1 - s.y) * k;
-      pos.array.set([ax, h(ax, ay) + 1, ay, bx, h(bx, by) + 1, by], i * 6);
-    });
-    pos.needsUpdate = true; this.streakGeo.setDrawRange(0, S.length * 2);
+    const ns = Math.min(this.streaks.length, 1200), pa = this.streakGeo.attributes.position;
+    for (let i = 0; i < ns; i++) {
+      const s = this.streaks[i], k = s.t / s.life, a = Math.max(0, k - 0.12), o = i * 6, A = pa.array;
+      const ax = s.x + (s.x1 - s.x) * a, ay = s.y + (s.y1 - s.y) * a, bx = s.x + (s.x1 - s.x) * k, by = s.y + (s.y1 - s.y) * k;
+      A[o] = ax; A[o + 1] = h(ax, ay) + 1; A[o + 2] = ay; A[o + 3] = bx; A[o + 4] = h(bx, by) + 1; A[o + 5] = by;
+    }
+    pa.needsUpdate = true; this.streakGeo.setDrawRange(0, ns * 2);
   }
   fill(mesh, n, set) {
     const aP = mesh.geometry.attributes.aP, aC = mesh.geometry.attributes.aC;
