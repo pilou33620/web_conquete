@@ -655,12 +655,15 @@ export class UI {
     const cw = this.closedOnWay(army, tx, ty, trail);
     const closedTxt = (cw.target ? `<div class="bh warnline">Terres ${esc(de(this.rules.factions[cw.target].name))}, fermées : demandez un droit de passage (Diplomatie), ou passez en force (déclaration de guerre).</div>` : '')
       + (cw.way.length ? `<div class="bh">Détour : les terres ${esc(de(cw.way.map(c => this.rules.factions[c].name).join(' et ')))} sont fermées (sans droit de passage), l’itinéraire les contournera${cw.target ? '' : ' s’il le peut'}.</div>` : '');
-    // tour par tour : arrivée estimée à vol d'oiseau (un quart de plus pour les détours de la route)
-    const tr = this.st.tour;
-    let eta = '';
-    if (army && tr?.on && tr.march && army.sp && army.mp != null) {
-      const days = Math.hypot(tx - army.x, ty - army.y) * 1.25 / army.sp;
-      eta = `<div class="bh">${days <= army.mp ? 'Arrivée ce tour-ci' : `Arrivée ${toursTxt(Math.max(1, Math.ceil((days - army.mp) / tr.march - 1e-6)))}`} (estimation).</div>`;
+    // tour par tour : arrivée estimée par le serveur, sur l'itinéraire que prendrait l'ordre (par les routes)
+    const eta = army && this.st.tour?.on ? '<div class="bh" id="bubble-eta"></div>' : '';
+    if (eta) {
+      const seq = this.etaSeq = (this.etaSeq || 0) + 1;
+      const where = enemy ? { x: enemy.x, y: enemy.y } : hitNode ? { node: hitNode.id } : { x: e.x, y: e.y };
+      this.api.post('/api/cmd', { cmd: 'eta', army: army.id, mode: 'route', ...where }).then(r => {
+        const el = document.getElementById('bubble-eta');
+        if (el && seq === this.etaSeq && r.ok && r.tn != null) el.textContent = `Par les routes : arrivée ${r.tn ? toursTxt(r.tn) : 'ce tour-ci'} (estimation).`;
+      }).catch(() => { /* estimation indisponible : la bulle s'en passe */ });
     }
     b.innerHTML = `<div class="bt">${esc(title)}</div>${this.trSeg(this.trMode, 'trmode')}
       <div class="bh">${peace && !this.trMode && !cw.target ? 'En paix : on n’y entre qu’en traversant.' : TR_HELP[+this.trMode]}</div>${closedTxt}${eta}
@@ -1186,8 +1189,9 @@ export class UI {
   // effets d'un niveau ; la production des bâtiments dépend de la taille de la place
   slotFx(gn, L) {
     const sk = this.rules.cities.size_k[gn.type];
-    const note = sk !== 1 && /\/tour/.test(L.txt) ? ` (production ×${fmt1(sk)} ${gn.type === 'capitale' ? 'au chef-lieu' : gn.type === 'fort' ? 'dans une place forte' : 'dans un village'})` : '';
-    return L.txt + note + (L.up ? `, entretien ${fmt1(this.per(L.up))} livres ${this.perU}` : '');
+    const txt = this.st?.tour?.on ? L.txt : L.txtj || L.txt;   // (temps réel : txtj)
+    const note = sk !== 1 && /\/(tour|j)\b/.test(txt) ? ` (production ×${fmt1(sk)} ${gn.type === 'capitale' ? 'au chef-lieu' : gn.type === 'fort' ? 'dans une place forte' : 'dans un village'})` : '';
+    return txt + note + (L.up ? `, entretien ${fmt1(this.per(L.up))} livres ${this.perU}` : '');
   }
 
   slotBtn(gn, ns, k, chk, qFull, label) {

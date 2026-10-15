@@ -149,6 +149,11 @@ class App:
                 why = TT.lock_reason(g)   # tour par tour : les ordres de marche se donnent pendant son tour
                 if why:
                     return dict(ok=False, msg=why)
+            if c == 'eta':   # arrivée estimée d'une marche, sans donner l'ordre (bulle de l'ordre de marche)
+                x, y, node = body.get('x'), body.get('y'), body.get('node')
+                tn, why = TT.preview(g, p, a, None if x is None else self._num(x), None if y is None else self._num(y),
+                                     None if node is None else self._node(node), body.get('mode') or 'route')
+                return dict(ok=True, tn=tn, why=why)
             if c == 'move':
                 x, y = body.get('x'), body.get('y')
                 node = body.get('node')

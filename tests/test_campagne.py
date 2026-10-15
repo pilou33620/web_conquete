@@ -11,6 +11,7 @@ marche, retraite, dettes, sauvegarde des IA) ne se vérifie qu'au bout de plusie
 - l'état des IA (impôts, dépenses) n'était qu'à moitié sauvegardé.
 """
 import json
+import math
 import unittest
 
 from fabrique import GEO, TT, armee, jouer_mois, partie
@@ -190,6 +191,25 @@ class TourParTour(unittest.TestCase):
         self.assertTrue(g.order_move(g.player, a['id'], *g.node_xy(g.capital_of(g.player)))[0])
         TT.settle(g)
         self.assertFalse(a['path'], "au tour suivant, elle marche jusqu'au bout (pas arrêtée au premier pas)")
+
+    def test_premier_tour_entame_marche_reduite(self):
+        g = partie()   # 4 mars : 28 jours jusqu'au 1er avril
+        self.assertEqual(TT.march_days(g), 28.0)
+        jouer_mois(g)
+        self.assertEqual(TT.march_days(g), 30.0, 'avril, un tour entier')
+
+    def test_arrivee_estimee_sur_la_vraie_route(self):
+        g = partie()
+        a = armee(g)
+        far = max((n['id'] for n in g.nodes), key=lambda i: math.dist(g.node_xy(i), (a['x'], a['y'])))
+        near = min((n['id'] for n in g.nodes if n['id'] != a['at_node']), key=lambda i: math.dist(g.node_xy(i), (a['x'], a['y'])))
+        a['mp'] = 1.0
+        tn, msg = TT.preview(g, g.player, a['id'], None, None, far, 'route')
+        self.assertGreaterEqual(tn, 1, msg)
+        self.assertEqual((a['path'], a['mp']), ([], 1.0), "une estimation ne donne aucun ordre")
+        a['mp'] = None
+        self.assertEqual(TT.preview(g, g.player, a['id'], None, None, near, 'route')[0], 0, 'arrivée ce tour-ci')
+        self.assertIsNone(TT.preview(g, g.player, 'a999', 10, 10, None, 'route')[0])
 
     def test_plus_de_marche_plus_de_mouvement(self):
         g = partie()
@@ -451,6 +471,18 @@ class SiegesEnTours(unittest.TestCase):
         n['siege'].update(blocus=True, food=30, m0=100)
         sg = next(d for d in V.player_state(g)['nodes'] if d['id'] == n['id'])['sg']
         self.assertEqual(sg['food'], TT.tours_left(g, g.t + 30))
+
+
+class TempsReel(unittest.TestCase):
+    def test_effets_par_jour_en_temps_reel(self):
+        self.assertIn('/tour', CT.fx_text(dict(livres=0.1)))
+        self.assertIn('/j', CT.fx_text(dict(livres=0.1), per_day=True))
+        g = partie()
+        nid = g.capital_of(g.player)
+        v = dict(nid=nid, add=dict(fer=0.2))
+        self.assertIn('par tour', CT.describe_local(g, v)[0])
+        TT.command(g, 'mode', False)
+        self.assertIn('par jour', CT.describe_local(g, v)[0])
 
 
 class Regles(unittest.TestCase):

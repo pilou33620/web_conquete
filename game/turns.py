@@ -168,8 +168,9 @@ def planning(g):
 
 
 def march_days(g):
-    """Jours de marche d'une armée par tour."""
-    return round(month_days(g, month_end(g)) * MARCH_FRAC, 2)
+    """Jours de marche d'une armée par tour : le mois entier, ou ce qu'il en reste au premier tour d'une partie lancée en
+    cours de mois (le 4 mars, le 19 juillet)."""
+    return round(min(month_days(g, month_end(g)), month_end(g) - g.t) * MARCH_FRAC, 2)
 
 
 def march_left(g, a):
@@ -177,13 +178,14 @@ def march_left(g, a):
     return march_days(g) if a.get('mp') is None else max(0.0, a['mp'])
 
 
-def eta(g, a):
-    """Dans combien de tours l'armée arrive au bout de sa route (estimation : longueur du chemin et vitesse du moment ;
-    1 : au prochain tour), ou None sans route."""
-    if not a['path']:
+def eta(g, a, legs=None):
+    """Dans combien de tours l'armée arrive au bout de sa route, ou de `legs` (estimation : longueur du chemin et vitesse
+    du moment ; 0 : ce tour-ci, 1 : au prochain tour), ou None sans route."""
+    legs = a['path'] if legs is None else legs
+    if not legs:
         return None
     km, x, y = 0.0, a['x'], a['y']
-    for leg in a['path']:
+    for leg in legs:
         if leg['kind'] == 'road':
             km += g.geo.edges[leg['e']]['len'] - leg['pos']
             x, y = g.node_xy(leg['to'])
@@ -192,7 +194,31 @@ def eta(g, a):
                 km += math.hypot(px - x, py - y)
                 x, y = px, py
     days = km / max(0.5, g.army_speed(a)) - (march_left(g, a) if planning(g) else 0.0)
-    return max(1, math.ceil(days / march_days(g) - 1e-6))
+    return 0 if days <= 1e-6 else max(1, math.ceil(days / (month_days(g, month_end(g)) * MARCH_FRAC) - 1e-6))
+
+
+def preview(g, code, aid, x, y, node, mode):
+    """Arrivée estimée (en tours, 0 : ce tour-ci) si l'armée marchait là, sans lui donner d'ordre : même itinéraire que
+    l'ordre de marche (terres fermées contournées, sinon traversées en force). Renvoie (tours, None) ou (None, raison)."""
+    from . import army_actions as AA
+    a = g.armies.get(aid)
+    if not a or a['owner'] != code:
+        return None, 'Armée introuvable.'
+    if mode not in ('route', 'champs'):
+        return None, 'Itinéraire inconnu.'
+    if node is not None and not g.valid_node(node):
+        return None, 'Lieu inconnu.'
+    if node is None and not (x is not None and y is not None and math.isfinite(x) and math.isfinite(y)):
+        return None, 'Destination invalide.'
+    old = a['mode']
+    a['mode'] = mode
+    try:
+        legs, _, err = g.plan_legs(a, x, y, node, AA.closed_owners(g, code))
+        if legs is None:
+            legs, _, err = g.plan_legs(a, x, y, node, frozenset())
+    finally:
+        a['mode'] = old
+    return (None, err) if legs is None else (eta(g, a, legs), None)
 
 
 def begin_turn(g):

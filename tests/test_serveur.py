@@ -62,6 +62,15 @@ class Http(unittest.TestCase):
         self.assertEqual(st, 200, txt)
         return server.APP.game
 
+    def test_arrivee_estimee_sans_ordre(self):
+        g = self.nouvelle_partie()
+        a = next(a for a in g.armies.values() if a['owner'] == g.player)
+        r = self.cmd(dict(cmd='eta', army=a['id'], node=g.capital_of('24'), mode='route'))
+        self.assertTrue(r['ok'])
+        self.assertIsInstance(r['tn'], int)
+        self.assertEqual(a['path'], [], "rien n'est ordonné")
+        self.assertIsNone(self.cmd(dict(cmd='eta', army='a999', x=1, y=1))['tn'])
+
     def test_page_d_accueil(self):
         st, txt = self.req('GET', '/')
         self.assertEqual(st, 200)

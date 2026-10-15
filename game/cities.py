@@ -134,14 +134,15 @@ def _n(x):
     return f"{x:.2f}".rstrip('0').rstrip('.').replace('.', ',')
 
 
-def fx_text(fx, star=None):
-    """Effets d'un niveau, en clair (production par tour : TOUR_DAYS jours)."""
+def fx_text(fx, star=None, per_day=False):
+    """Effets d'un niveau, en clair : production par tour (TOUR_DAYS jours), ou par jour (temps réel)."""
     out = []
+    k_, u = (1, '/j') if per_day else (TT.TOUR_DAYS, '/tour')
     for k in PROD:
         if fx.get(k):
-            out.append(f"+{_n(fx[k] * TT.TOUR_DAYS)} {FX_LABEL[k] if k != 'livres' or fx[k] * TT.TOUR_DAYS < 2 else 'livres'} /tour")
+            out.append(f"+{_n(fx[k] * k_)} {FX_LABEL[k] if k != 'livres' or fx[k] * k_ < 2 else 'livres'} {u}")
     if fx.get('trade'):
-        out.append(f"+{_n(fx['trade'] * TT.TOUR_DAYS)} livres /tour de commerce par eau")
+        out.append(f"+{_n(fx['trade'] * k_)} livre{'s' if fx['trade'] * k_ >= 2 else ''} {u} de commerce par eau")
     if fx.get('spec'):
         out.append(f"spécialité +{round(fx['spec'] * 100)} %")
     if fx.get('stab'):
@@ -748,6 +749,15 @@ def local_ok(g, code, v):
     return not v.get('troops') or _troops(g, n, code)
 
 
+def per_k(g):
+    """Taux par jour du moteur, dits par tour en tour par tour (×TOUR_DAYS), par jour en temps réel."""
+    return TT.TOUR_DAYS if g.tour['on'] else 1
+
+
+def per_txt(g):
+    return 'par tour' if g.tour['on'] else 'par jour'
+
+
 def tours_of(days):
     """Durée d'un effet d'événement local, écrite en jours dans LOCAL_EVENTS : en tours entiers (30 à 120 jours → 1 à 4)."""
     return max(1, int(days / 30 + 0.5))
@@ -786,7 +796,7 @@ def describe_local(g, v):
         n = tours_of(v.get('days', 60))
         out.append(f"{TM_LABEL.get(k, k)} {R.de(name)} {_pct(x)} pendant {R.pl(n, 'tour')}")
     for k, x in (v.get('add') or {}).items():
-        out.append(f"+{_n(x * TT.TOUR_DAYS)} {R.RES_LABEL.get(k, k).lower()} par tour à {name} (durable)")
+        out.append(f"+{_n(x * per_k(g))} {R.RES_LABEL.get(k, k).lower()} {per_txt(g)} à {name} (durable)")
     return out
 
 
@@ -934,7 +944,7 @@ def node_view(g, n):
     tm = [e for e in n.get('tm') or () if e['until'] > g.t]
     if tm or n.get('bo'):
         d['tm'] = [f"{TM_LABEL.get(e['k'], e['k'])} {_pct(e['v'])} jusqu'au {g.date_str(e['until'])}" for e in tm] + \
-                  [f"+{_n(x * TT.TOUR_DAYS)} {R.RES_LABEL.get(k, k).lower()} par tour ({'filon' if k == 'fer' else 'durable'})"
+                  [f"+{_n(x * per_k(g))} {R.RES_LABEL.get(k, k).lower()} {per_txt(g)} ({'filon' if k == 'fer' else 'durable'})"
                    for k, x in (n.get('bo') or {}).items()]
     if any(p.get('kind') == 'ville' and p.get('town') == n['id'] for p in g.pending_ev):
         d['ev'] = 1
@@ -946,7 +956,8 @@ def rules_payload():
     for k, c in CHAINS.items():
         chains[k] = dict(name=c['name'], icon=c['icon'], desc=c['desc'], where=c.get('where'),
                          levels=[dict(name=L['name'], cost=L['cost'], days=L['days'], dev=L.get('dev', 0),
-                                      tech=L.get('tech'), up=L.get('up', 0), txt=fx_text(L['fx'])) for L in c['levels']])
+                                      tech=L.get('tech'), up=L.get('up', 0), txt=fx_text(L['fx']),
+                                      txtj=fx_text(L['fx'], per_day=True)) for L in c['levels']])
     return dict(slots=SLOTS, size_k=SIZE_K, chains=chains, order=CHAIN_ORDER,
                 spec_names={k: dict(names=v[0], tech=v[1]) for k, v in SPEC_NAMES.items()},
                 policies={k: dict(label=p['label'], pro=p['pro'], con=p['con']) for k, p in POLICIES.items()},

@@ -151,6 +151,16 @@ test('campagne : plus aucune durée en jours à l’écran (tour par tour)', () 
   }
 });
 
+test('effets des bâtiments : par tour, ou par jour en temps réel', () => {
+  const ui = Object.create(UI.prototype);
+  ui.rules = { cities: { size_k: { ville: 1 } } };
+  const L = { txt: '+3 livres /tour', txtj: '+0,1 livre /j', up: 0.01 };
+  ui.st = { tour: { on: true } };
+  assert.ok(ui.slotFx({ type: 'ville' }, L).includes('/tour') && !ui.slotFx({ type: 'ville' }, L).includes('/j'));
+  ui.st = { tour: { on: false } };
+  assert.ok(ui.slotFx({ type: 'ville' }, L).includes('/j') && !ui.slotFx({ type: 'ville' }, L).includes('/tour'));
+});
+
 test('barre du tour : bloquée tant qu’une bataille attend votre choix', () => {
   const h = barre({ phase: 'ordres' }, { battles: [{ id: 'b1', mode: 'attente' }] });
   assert.ok(h.includes('disabled'));
