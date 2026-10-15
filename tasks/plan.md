@@ -155,7 +155,7 @@ captures restent mon outil de vérification interne. La taille des soldats est c
 
 ### 6e : arbres et fin
 - [x] T27 : arbres touffus (deux versions par zone)
-- [ ] T28 : vérification finale, README, revue
+- [x] T28 : vérification finale, README, revue
 - [ ] Point final de l'étape 6
 
 ## Risques et parades (étape 6)

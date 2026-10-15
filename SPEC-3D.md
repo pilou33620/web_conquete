@@ -242,6 +242,11 @@ But : à distance de caméra égale, le joueur reconnaît le style d'Ultimate Ge
 4. **6d, champs, chemins, herbe.**
 5. **6e, arbres.** Puis captures finales côte à côte, revue et README.
 
+### État de l'étape 6
+
+Livrée le 15/10/2026 (T18 à T28, voir tasks/todo.md). Reste à juger par toi en jouant sur l'iPad : l'allure, et la
+fluidité en qualité Haute (épis en relief et touffes des arbres jamais mesurés sur un vrai processeur graphique).
+
 ### Questions ouvertes de l'étape 6
 
 - **Taille des soldats.** Tranchée sur les captures de 6a.

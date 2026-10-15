@@ -307,7 +307,22 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
   - Fichiers : `web/js/battle/decor.js`
   - Taille : M
 
-- [ ] **T28 : vérification finale, README, revue**
+- [x] **T28 : vérification finale, README, revue**
+  - Fait :
+    - Captures internes comparées aux trois images de référence (bocage été et automne, landes, au ras du blé).
+    - README à jour (« L'entrée », qualité graphique, banc des modèles).
+    - /review : aucun point critique ; cinq points importants corrigés :
+      - sortes vides envoyées à la carte graphique ;
+      - épis débordant hors du champ ;
+      - bout des haies perdu ;
+      - épis effacés au-delà de 200 m de l'œil et 4 couches en Haute ;
+      - canevas du masque libérés.
+    - Vu sur captures et corrigé : les arbres isolés perdaient leur couronne près des troupes ; seuls les bois
+      s'effacent désormais.
+  - Triangles finaux (bocage, Haute, départ → fin) :
+    - ensemble 5,65 → 4,66 M (−17 %) ;
+    - mi-distance 6,63 → 4,33 M (−35 %) ;
+    - au ras 6,04 → 5,38 M (−11 %).
   - Critères : captures internes des trois vues comparées à tes trois images ; tableau des triangles ; README
     (« La vue ») à jour ; spec et plan cochés ; /review et corrections.
   - Vérif : bancs ; cinq scénarios sans erreur.

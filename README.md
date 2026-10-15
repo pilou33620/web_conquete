@@ -410,12 +410,15 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
 #### Conduire une bataille
 - **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît **en 3D**,
   la caméra tournée vers l'ennemi : relief en volume, sol peint comme un paysage (herbe aux nuances multiples, blé
-  doré, chaumes et labours selon la saison, vignes en rangs, chemins de terre à ornières, rivières avec berges et
-  reflets), arbres et bois en volume, fermes, villages, église et clocher, moulins, ponts, remparts et bastions,
-  tranchées, haies, murets et clôtures ; le soleil de l'heure porte leurs ombres. Chaque régiment est fait de
-  figurines 3D aux couleurs de son camp (un homme par figurine tant que la qualité graphique le permet), en rangs
-  serrés (trois rangs pour une ligne), avec porte-drapeau, tambours, officiers et colonel à cheval ; les coiffures
-  suivent l'époque (tricorne, bicorne, shako, képi, bonnet à poil). Les hommes marchent au pas, mettent en joue l'un
+  doré mêlé de cultures vertes, chaumes et labours selon la saison, vignes en rangs, larges chemins de terre à
+  ornières, rivières avec berges et reflets) ; de près, le blé et les cultures montent en relief et ondulent au vent.
+  Arbres et bois aux couronnes touffues, fermes, villages, église et clocher, moulins, ponts, remparts et bastions,
+  tranchées, haies, murets et clôtures ; le soleil de l'heure porte leurs ombres, adoucies, et une lumière douce
+  éclaire le tout. Chaque régiment est fait de figurines 3D arrondies aux couleurs de son camp (un homme par
+  figurine tant que la qualité graphique le permet), en rangs serrés (trois rangs pour une ligne), avec
+  porte-drapeau, tambours, officiers et colonel à cheval ; les coiffures suivent l'époque (tricorne relevé, bicorne,
+  shako, képi, bonnet à poil), buffleteries blanches, havresac ; chaque homme a son ombre au sol. Dans un bois, la
+  couronne des arbres s'efface au-dessus d'un régiment : on voit ses hommes entre les troncs. Les hommes marchent au pas, mettent en joue l'un
   après l'autre quand la salve roule le long du front, puis rechargent ; les chevaux vont au pas ou au galop, sabre
   au clair ; la fumée blanche s'amasse et dérive avec le vent ; les pièces reculent au départ du coup et leurs
   servants s'affairent ; les tués restent au sol. Au-dessus de chaque régiment, un fanion à la manière d'Ultimate
@@ -477,7 +480,9 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   anciens : image moins fine, 3 000 figurines, peu de fumée, bois allégés, sans ombres), **Moyenne** (tablettes et
   téléphones modestes : ombres du décor, 6 000 figurines), **Haute** (iPad récent : écran Retina, sol détaillé
   jusqu'à 16 pixels par mètre, 10 000 figurines, ombres des troupes), **Ultra** (ordinateurs : 20 000 figurines, plus
-  de fumée, ombres plus fines). Au-delà, chaque figurine compte plusieurs hommes. Au premier lancement, elle est
+  de fumée, ombres plus fines). Au-delà, chaque figurine compte plusieurs hommes. En Haute et en Ultra, les cultures
+  proches de la caméra sont en relief ; de loin, les figurines passent à une version plus simple (on ne voit pas la
+  différence, l'appareil la sent). Au premier lancement, elle est
   choisie d'après l'appareil, puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par
   seconde) ; un choix fait à la main est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de
   suite, sans quitter la bataille (l'anticrénelage, à la bataille suivante). Les batailles demandent **WebGL 2**
@@ -678,6 +683,7 @@ node --test tests/                               # l'interface seule
 | `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, boutons d'ordres par arme, panneau du régiment, barre du tour, tutoriel et bulles de bataille |
 | `tests/camera.test.mjs` | caméra 3D des batailles : allers-retours écran ↔ terrain à 1 m et 1 pixel près sur une colline, à plusieurs caps et zooms ; bornes |
 | `tests/troupes.test.mjs` | dispositions des figurines : rangs de la ligne, plafond par régiment, carré à quatre faces, colonne, tirailleurs, déroute |
+| `tests/modeles.test.mjs` | modèles 3D des figurines : os de l'animation, pieds au sol, hauteur, tournés vers l'avant, formes arrondies, version de loin (mêmes os, même hauteur, un tiers des sommets), choix de la version selon la taille à l'écran |
 
 **Essayer une nouvelle fonctionnalité sans jouer.** `tests/fabrique.py` fabrique une situation en une ligne : une
 partie (`partie('64', '1870')`), un ou plusieurs mois joués (`jouer_mois(g, 3)`), une bataille déjà engagée avec les
