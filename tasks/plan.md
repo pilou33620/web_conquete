@@ -151,10 +151,10 @@ captures restent mon outil de vérification interne. La taille des soldats est c
 - [x] T24 : couleurs du sol (blé or doux, teintes par parcelle, herbe variée)
 - [x] T25 : chemins larges et usés
 - [x] T26 : cultures en relief près de la caméra
-- [ ] Point de contrôle B
+- [x] Point de contrôle B
 
 ### 6e : arbres et fin
-- [ ] T27 : arbres touffus (deux versions par zone)
+- [x] T27 : arbres touffus (deux versions par zone)
 - [ ] T28 : vérification finale, README, revue
 - [ ] Point final de l'étape 6
 

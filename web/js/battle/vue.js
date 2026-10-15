@@ -382,7 +382,7 @@ export class BattleView {
     cam.updateProjectionMatrix();
     cam.position.set(fr.E[0], fr.E[1], fr.E[2]); cam.lookAt(fr.T[0], fr.T[1], fr.T[2]);
     this.relief.follow(fr);
-    this.decor.near(fr.dist);
+    this.decor.near(fr.dist); this.decor.lod(fr);
     // de loin, les figurines ne font que quelques pixels : leurs ombres ne se voient plus et coûteraient autant que
     // les figurines elles-mêmes (écart entre 600 et 700 m : pas de bascule à chaque image)
     if (this.shadowLevel >= 2) this.troops.setShadows(this.troops.castShadow ? fr.dist < 700 : fr.dist < 600);
@@ -395,6 +395,7 @@ export class BattleView {
     this.detailBusy = this.relief.updateDetail(this.renderer, this, this.controls.busy() ? 0 : this.drawMs < 12 ? 2 : 1);
     const all = [...this.units.values()].filter(u => u.state !== 'hors'), vis = all.filter(u => this.onScreen(u));
     this.troops.update(all, this.colors || [], time, this.fx.t, fr, cam);
+    this.decor.clearings(all, performance.now());
     this.fx.render(fr, z);
     this.renderer.render(this.scene, cam);
     mark('scene');

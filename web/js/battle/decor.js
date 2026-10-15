@@ -4,7 +4,9 @@
 //
 // Arbres : un lot par sorte (feuillu, pin parasol, sapin, peuplier, buisson, arbre nu, meule) et par zone de 750 m,
 // pour que seules les zones vues soient envoyées à la carte graphique ; la couronne prend la couleur de l'arbre
-// (instanceColor), le tronc est à part. En qualité basse, une partie des arbres des bois est omise.
+// (instanceColor), le tronc est à part. En qualité basse, une partie des arbres des bois est omise. La couronne est
+// faite de touffes arrondies (normales lisses), plus sombres dessous ; une zone proche de la caméra a des touffes plus
+// fines. Sous un régiment, la couronne s'efface (masque des clairières) : on voit les troupes dans les bois.
 // Bâti (maisons et fermes à toit à deux pans, église et clocher, moulins, ponts, portes de ville) : une seule
 // géométrie fixe, couleurs par sommet ; murs enfoncés sous le sol au pied, pour ne jamais flotter sur une pente.
 // Enceintes et clôtures (remparts et bastions, murs de ville crénelés, murs de clôture, tranchées et gabions,
@@ -14,24 +16,35 @@ import * as THREE from '../../vendor/three/three.module.js';
 import { hash, clamp, T } from './formes.js';
 import { resample, offsetPts } from './terrain.js';
 
-const ZONE = 750;
+const ZONE = 750, CL = 4;   // côté d'une zone d'arbres ; pixel du masque des clairières (m)
+const NEAR_ON = 300, NEAR_OFF = 360;   // une zone à moins de 300 m de l'œil prend ses touffes fines (elle les garde jusqu'à 360 m)
 const TRUNK = '#5a4430', BARE = '#7d6d5e';
 
 // géométries d'une sorte d'arbre, pour un rayon de couronne de 1 (l'instance les met à l'échelle) : [couronne, tronc]
-function crownGeo(kind, detail) {
-  const ico = (sx, sy, sz, y, seed) => {
-    const g = new THREE.IcosahedronGeometry(1, detail), p = g.attributes.position, col = [];
+// detail : finesse de la touffe centrale (0 ou 1 ; les autres restent à 0 : la passe d'ombre les dessine aussi) ;
+// lumps : nombre de touffes d'un feuillu (1, 3 ou 5 selon la qualité)
+function crownGeo(kind, detail, lumps = 5) {
+  // une touffe : ellipsoïde bosselé de rayons (sx, sy, sz), centré en (cx, y, cz) ; normale de l'ellipsoïde (lisse :
+  // l'icosaèdre de Three.js n'a pas de sommets partagés) ; plus sombre dessous et vers le cœur de la couronne
+  const ico = (sx, sy, sz, y, seed, cx = 0, cz = 0, det = detail) => {
+    const g = new THREE.IcosahedronGeometry(1, det), p = g.attributes.position, nor = [], col = [];
     for (let i = 0; i < p.count; i++) {
-      // couronne bosselée, plus sombre dessous
-      const x = p.getX(i), yy = p.getY(i), z = p.getZ(i), k = 0.86 + 0.28 * hash((x * 7) | 0, (z * 7) | 0, seed + ((yy * 7) | 0));
-      p.setXYZ(i, x * sx * k, yy * sy * k + y, z * sz * k);
-      const c = 0.72 + 0.28 * (yy * 0.5 + 0.5) + (hash(i, 3, seed) - 0.5) * 0.12;
+      const x = p.getX(i), yy = p.getY(i), z = p.getZ(i), k = 0.88 + 0.24 * hash((x * 7) | 0, (z * 7) | 0, seed + ((yy * 7) | 0));
+      p.setXYZ(i, x * sx * k + cx, yy * sy * k + y, z * sz * k + cz);
+      const n = new THREE.Vector3(x / sx, yy / sy, z / sz).normalize();
+      nor.push(n.x, n.y, n.z);
+      const out = (x * cx + z * cz) > 0 || (!cx && !cz) ? 1 : 0.9;
+      const c = (0.62 + 0.38 * (yy * 0.5 + 0.5)) * out + (hash(i, 3, seed) - 0.5) * 0.1;
       col.push(c, c, c);
     }
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-    g.computeVertexNormals();
     return g;
   };
+  // couronne de feuillu : une touffe au cœur, d'autres autour et au sommet
+  const LUMPS = [[0.72, 0.62, 0.72, 1.5, 0, 0], [0.52, 0.48, 0.52, 1.42, 0.48, 0.12], [0.5, 0.46, 0.5, 1.36, -0.32, 0.42], [0.5, 0.46, 0.5, 1.46, -0.26, -0.44], [0.46, 0.42, 0.46, 2.0, 0.06, -0.04]];
+  const clump = (s, dy, seed, n = lumps) => n === 1 ? ico(s, 0.85 * s, s, 1.55 * s + dy, seed)
+    : merge(LUMPS.slice(0, n === 3 ? 3 : 5).map(([a, b, c, y, x, z], i) => ico(a * s * (n === 3 ? 1.12 : 1), b * s * (n === 3 ? 1.12 : 1), c * s * (n === 3 ? 1.12 : 1), y * s + dy, seed + i, x * s, z * s, i ? 0 : detail)));
   const shaded = (g, top = 1, bottom = 0.7) => {
     const p = g.attributes.position, col = [];
     let y0 = Infinity, y1 = -Infinity;
@@ -43,9 +56,9 @@ function crownGeo(kind, detail) {
   const trunk = (r0, r1, h) => new THREE.CylinderGeometry(r0, r1, h, 5).translate(0, h / 2, 0);
   switch (kind) {
     case 'sapin': return [merge([new THREE.ConeGeometry(0.75, 1.3, 7).translate(0, 1.15, 0), new THREE.ConeGeometry(0.6, 1.15, 7).translate(0, 1.8, 0), new THREE.ConeGeometry(0.42, 0.95, 7).translate(0, 2.45, 0)].map(g => shaded(g.toNonIndexed()))), trunk(0.07, 0.1, 0.8)];
-    case 'parasol': return [ico(1.15, 0.42, 1.15, 2.25, 31), trunk(0.06, 0.1, 2.1)];
-    case 'peuplier': return [ico(0.42, 2.1, 0.42, 2.6, 41), trunk(0.06, 0.09, 0.9)];
-    case 'buisson': return [ico(1, 0.75, 1, 0.6, 51), null];
+    case 'parasol': return [lumps === 1 ? ico(1.15, 0.42, 1.15, 2.25, 31) : merge([ico(0.85, 0.36, 0.85, 2.25, 31), ico(0.55, 0.3, 0.55, 2.2, 32, 0.55, 0.2, 0), ico(0.55, 0.3, 0.55, 2.3, 33, -0.45, -0.35, 0)]), trunk(0.06, 0.1, 2.1)];
+    case 'peuplier': return [lumps === 1 ? ico(0.42, 2.1, 0.42, 2.6, 41) : merge([ico(0.42, 1.3, 0.42, 2.2, 41), ico(0.36, 1.1, 0.36, 3.3, 42, 0.04, 0.05, 0), ico(0.3, 0.8, 0.3, 4.1, 43, 0, 0, 0)]), trunk(0.06, 0.09, 0.9)];
+    case 'buisson': return [lumps === 1 ? ico(1, 0.75, 1, 0.6, 51) : merge([ico(0.75, 0.6, 0.75, 0.55, 51), ico(0.55, 0.45, 0.55, 0.5, 52, 0.5, 0.2, 0), ico(0.5, 0.42, 0.5, 0.5, 53, -0.4, -0.35, 0)]), null];
     case 'meule': return [shaded(new THREE.SphereGeometry(1, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 1.3, 1).toNonIndexed(), 1, 0.75), null];
     case 'nu': {
       // arbre nu de l'hiver : le tronc et quelques branches
@@ -53,7 +66,7 @@ function crownGeo(kind, detail) {
       for (let k = 0; k < 5; k++) parts.push(new THREE.CylinderGeometry(0.025, 0.05, 1.1, 4).translate(0, 0.55, 0).rotateZ(0.75).rotateY(k * 1.26 + 0.3).translate(0, 1.1 + (k % 2) * 0.35, 0));
       return [null, merge(parts.map(g => g.toNonIndexed()))];
     }
-    default: return [ico(1, 0.85, 1, 1.55, 21), trunk(0.09, 0.13, 1)];
+    default: return [clump(1, 0, 21), trunk(0.09, 0.13, 1)];
   }
 }
 // géométries (sans index) réunies en une
@@ -80,6 +93,22 @@ function nearFade(mat) {
       if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > smoothstep(uNear * 0.5, uNear * 0.92, vViewPosition.z)) discard;`);
   };
   mat.customProgramCacheKey = () => 'decor-pres';
+  return mat;
+}
+// sous un régiment, la couronne rétrécit jusqu'à disparaître (le tronc reste) : uClear, masque des clairières, lu à
+// l'emplacement de l'arbre (sa translation d'instance) ; aussi pour la passe d'ombre
+function clearable(mat, uni, key) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    prev?.call(mat, sh, r);
+    Object.assign(sh.uniforms, uni);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform sampler2D uClear; uniform vec2 uField;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        #ifdef USE_INSTANCING
+          transformed *= 1.0 - texture2D(uClear, vec2(instanceMatrix[3][0], instanceMatrix[3][2]) / uField).r;
+        #endif`);
+  };
+  mat.customProgramCacheKey = () => key;
   return mat;
 }
 // toit à deux pans (longueur L le long de x, largeur D, hauteur h), posé en y = 0 ; gables : seulement les pignons
@@ -167,6 +196,12 @@ export class Decor {
     this.t = terrain; this.r = relief; this.q = q;
     this.group = new THREE.Group();
     this.disposables = [];
+    const cw = Math.ceil(terrain.W / CL), ch = Math.ceil(terrain.H / CL);
+    this.clear = new THREE.DataTexture(new Uint8Array(cw * ch), cw, ch, THREE.RedFormat, THREE.UnsignedByteType);
+    this.clear.unpackAlignment = 1; this.clear.minFilter = this.clear.magFilter = THREE.LinearFilter; this.clear.needsUpdate = true;
+    this.clearUni = { uClear: { value: this.clear }, uField: { value: new THREE.Vector2(terrain.W, terrain.H) } };
+    this.disposables.push(this.clear);
+    this.zones = [];   // [{x, y, near, far, isNear}] : les deux finesses de couronne de chaque lot
     this.trees();
     this.built();
     this.walls();
@@ -188,16 +223,22 @@ export class Decor {
         z.push(tr);
       }
     });
-    const geos = new Map(), detail = fx >= 2 ? 1 : 0;
-    const crownMat = nearFade(new THREE.MeshLambertMaterial({ vertexColors: true }));
+    const geos = new Map(), lumps = [1, 3, 5, 5][fx];
+    const crownMat = clearable(nearFade(new THREE.MeshLambertMaterial({ vertexColors: true })), this.clearUni, 'decor-cime');
+    const crownDepth = clearable(new THREE.MeshDepthMaterial(), this.clearUni, 'decor-cime-ombre');
+    this.disposables.push(crownDepth);
     const trunkMat = nearFade(new THREE.MeshLambertMaterial({ color: snow ? '#4a3c30' : TRUNK }));
     const bareMat = nearFade(new THREE.MeshLambertMaterial({ color: BARE }));
     this.disposables.push(crownMat, trunkMat, bareMat);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
+    const geo = (kind, detail) => {
+      const k = kind + detail;
+      if (!geos.has(k)) { const g = crownGeo(kind, detail, lumps); geos.set(k, g); this.disposables.push(...g.filter(Boolean)); }
+      return geos.get(k);
+    };
     for (const [key, list] of zones) {
-      const [, kind, cime] = key.split('|');
-      if (!geos.has(kind)) { const g = crownGeo(kind, detail); geos.set(kind, g); this.disposables.push(...g.filter(Boolean)); }
-      const [crown, trunk] = geos.get(kind);
+      const [zk, kind, cime] = key.split('|'), [zx, zy] = zk.split(',').map(Number);
+      const [crown, trunk] = geo(kind, 0), fine = fx >= 2 && kind !== 'sapin' && kind !== 'meule' && kind !== 'nu' ? geo(kind, 1)[0] : null;
       const mk = (geo, mat, tint) => {
         const mesh = new THREE.InstancedMesh(geo, mat, list.length);
         list.forEach((tr, i) => {
@@ -209,15 +250,50 @@ export class Decor {
         });
         mesh.computeBoundingSphere();
         mesh.castShadow = true;
+        if (mat === crownMat) mesh.customDepthMaterial = crownDepth;
         this.group.add(mesh);
+        return mesh;
       };
-      if (crown) mk(crown, crownMat, (tr, c) => {
+      const tint = (tr, c) => {
         c.set(kind === 'sapin' || kind === 'parasol' ? pal.pins[(tr.ci ?? 0) % pal.pins.length] : kind === 'meule' ? (snow ? '#e4e7ea' : '#c8a659') : pal.arbres[(tr.ci ?? 0) % pal.arbres.length]);
         if (snow && kind !== 'meule') c.lerp(new THREE.Color('#d8dde0'), 0.25);
-        return c.multiplyScalar(0.9 + hash(tr.x | 0, tr.y | 0, 9) * 0.2);
-      });
+        return c.multiplyScalar(0.86 + hash(tr.x | 0, tr.y | 0, 9) * 0.28);
+      };
+      if (crown) {
+        const far = mk(crown, crownMat, tint), near = fine && mk(fine, crownMat, tint);
+        if (near) { near.visible = false; this.zones.push({ x: (zx + 0.5) * ZONE, y: (zy + 0.5) * ZONE, near, far, isNear: false }); }
+      }
       if (trunk && !cime) mk(trunk, kind === 'nu' ? bareMat : trunkMat, null);
     }
+  }
+  // finesse des couronnes : les zones proches de l'œil (fr : camera.js) prennent leurs touffes fines
+  lod(fr) {
+    for (const z of this.zones) {
+      const d = Math.hypot(Math.max(0, Math.abs(fr.E[0] - z.x) - ZONE / 2), Math.max(0, Math.abs(fr.E[2] - z.y) - ZONE / 2), fr.E[1] - fr.T[1]);
+      const on = d < (z.isNear ? NEAR_OFF : NEAR_ON);
+      if (on !== z.isNear) { z.isNear = on; z.near.visible = on; z.far.visible = !on; }
+    }
+  }
+  // clairières : sous l'emprise de chaque régiment vu (et une marge), la couronne des arbres s'efface ; le masque (4 m
+  // par pixel) est refait trois fois par seconde au plus
+  clearings(list, now) {
+    if (now - (this.clearT || 0) < 300) return;
+    this.clearT = now;
+    const d = this.clear.image.data, w = this.clear.image.width, h = this.clear.image.height;
+    d.fill(0);
+    for (const un of list) {
+      if (un._ghost) continue;
+      const rout = un.state === 'deroute', hw = (Math.max(6, un.w || 0) / 2 + 8) * (rout ? 1.6 : 1), hd = (Math.max(6, un.d || 0) / 2 + 8) * (rout ? 2 : 1);
+      const ca = Math.cos(un.dir || 0), sa = Math.sin(un.dir || 0), R = Math.hypot(hw, hd);
+      const i0 = Math.max(0, Math.floor((un.x - R) / CL)), i1 = Math.min(w - 1, Math.ceil((un.x + R) / CL));
+      const j0 = Math.max(0, Math.floor((un.y - R) / CL)), j1 = Math.min(h - 1, Math.ceil((un.y + R) / CL));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        // dans le repère du régiment : le long du front, vers l'avant (son sens)
+        const dx = (i + 0.5) * CL - un.x, dy = (j + 0.5) * CL - un.y;
+        if (Math.abs(-dx * sa + dy * ca) <= hw && Math.abs(dx * ca + dy * sa) <= hd) d[j * w + i] = 255;
+      }
+    }
+    this.clear.needsUpdate = true;
   }
   // ------------------------------------------------------------------ bâti
   built() {
@@ -353,7 +429,7 @@ export class Decor {
     const t = this.t, pal = t.pal, snow = pal.neige, B = new Builder(this.r.heightAt);
     const hedge = snow ? '#5e6a5c' : new THREE.Color(pal.arbres[0]).multiplyScalar(0.7).getStyle();
     for (const f of t.fencePts) {
-      if (f.kind === 'haie') B.ribbon(f.pts, 1.7, 1.2, 2.1, hedge, snow ? '#e8ecee' : new THREE.Color(pal.arbres[1]).multiplyScalar(0.85).getStyle(), 0.5);
+      if (f.kind === 'haie') B.ribbon(resample(f.pts, 1.6), 1.8, 1.25, 2.1, hedge, snow ? '#e8ecee' : new THREE.Color(pal.arbres[1]).multiplyScalar(0.85).getStyle(), 0.45);   // bord bosselé tous les 1,6 m
       else if (f.kind === 'muret') B.ribbon(f.pts, 0.65, 0.55, 1, snow ? '#e6e6e2' : '#a39a84', snow ? '#f4f4f2' : '#b9b09a');
       else {
         for (const p of resample(f.pts, 2.5)) B.box(p[0], p[1], 0.14, 1.25, 0.14, 0.62, snow ? '#4e4034' : '#5a4430');

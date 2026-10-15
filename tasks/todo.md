@@ -281,9 +281,20 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
   - Fichiers : `web/js/battle/terrain.js`, `web/js/battle/relief.js`, `web/js/battle/qualite.js`, `web/js/battle/vue.js`
   - Taille : M
 
-- [ ] **Point de contrôle B** : bancs, cinq scénarios sans erreur, charge relevée, commit.
+- [x] **Point de contrôle B** : bancs, cinq scénarios sans erreur, charge relevée (avec T27), commit.
 
-- [ ] **T27 : arbres touffus**
+- [x] **T27 : arbres touffus**
+  - Fait :
+    - Couronnes en 5 touffes (3 en Moyenne, 1 en Basse) aux normales lisses, plus sombres dessous et vers le cœur.
+    - Zones à moins de 300 m de l'œil : touffe centrale plus fine.
+    - Sous un régiment vu, la couronne s'efface et le tronc reste (masque de 4 m par pixel, refait 3 fois par seconde
+      au plus, appliqué aussi à l'ombre portée).
+    - Haies au bord bosselé tous les 1,6 m.
+  - Triangles (bocage, Haute) :
+    - ensemble 4,66 M (−17 %) ;
+    - mi-distance 3,42 M (−48 %) ;
+    - au ras 5,46 M (−10 %).
+    - Avec des touffes fines partout, on était à 7,2 M au ras : corrigé.
   - Critères :
     - Couronnes en touffes : normales lisses, plus sombres dedans et dessous, teintes variées.
     - Bois au toit bosselé.
