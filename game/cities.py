@@ -490,7 +490,7 @@ def _set_policy(g, n, k):
         return False
     # en pleine transition, on repart de la politique qui dominait encore
     prev = cur if not p or policy_w(g, n) >= 0.5 else p.get('p', 'equilibre')
-    n['pol'] = dict(k=k, p=prev, t=g.t, u=TT.deadline(g, POLICY_TOURS), o=n['owner'])
+    n['pol'] = dict(k=k, p=prev, t=g.t, u=TT.deadline(g, POLICY_TOURS, n['owner']), o=n['owner'])
     g._dirty_income = True
     return True
 
@@ -762,7 +762,7 @@ def apply_local(g, code, v):
     if v.get('stab'):
         n['stab'] = max(0.0, min(1.0, n['stab'] + v['stab']))
     for k, x in (v.get('tm') or {}).items():
-        n.setdefault('tm', []).append(dict(k=k, v=x, until=TT.deadline(g, tours_of(v.get('days', 60)))))
+        n.setdefault('tm', []).append(dict(k=k, v=x, until=TT.deadline(g, tours_of(v.get('days', 60)), code)))
     for k, x in (v.get('add') or {}).items():
         bo = n.setdefault('bo', {})
         bo[k] = round(bo.get(k, 0) + x, 3)

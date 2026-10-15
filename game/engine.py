@@ -650,7 +650,8 @@ class Game:
             f = self.factions[self.player]
             inc = f['income']
             self.log('eco', f"Bilan {R.de(R.MONTHS[d.month - 2] if d.month > 1 else 'décembre')} : "
-                            f"{R.num(inc['livres'])} livres/j, {R.num(inc['vivres'])} vivres/j.", extra=dict(coins=True))
+                            f"{R.num(inc['livres'] * TT.TOUR_DAYS)} livres et {R.num(inc['vivres'] * TT.TOUR_DAYS)} vivres par tour.",
+                     extra=dict(coins=True))
 
     # ================================================================== économie
     def tools_bonus(self, code):
@@ -3109,7 +3110,7 @@ class Game:
         lf['res']['livres'] -= pay
         wf['res']['livres'] += pay
         D.make_peace(self, winner, loser)
-        until = TT.deadline(self, R.TREATY_TRUCE)
+        until = TT.deadline(self, R.TREATY_TRUCE, winner, loser)
         lf['truce'][winner] = wf['truce'][loser] = until
         lf.setdefault('treaties', {})[winner] = self.t  # le même vainqueur n'accorde pas deux traités en 25 ans
         lf['weary'] = max(0.0, lf.get('weary', 0) - 40)
@@ -3118,7 +3119,7 @@ class Game:
         others = [o for o, f in self.factions.items() if f['alive'] and o not in (loser, winner) and self.at_war(o, loser)]
         for o in others:
             D.make_peace(self, o, loser)
-            until = TT.deadline(self, R.TREATY_CONGRESS)
+            until = TT.deadline(self, R.TREATY_CONGRESS, o, loser)
             lf['truce'][o] = self.factions[o]['truce'][loser] = max(until, lf['truce'].get(o, 0))
         self._dirty_income = True
         cede = f"cède {R.pl(ceded, 'place')} à {self.fname(winner)} et lui verse" if ceded else f"verse à {self.fname(winner)}"
@@ -3160,7 +3161,7 @@ class Game:
                 if o != code:
                     self.set_status(code, o, 'paix')
                     f['rel'][o] = 0
-            until = TT.deadline(self, 36)   # (trois ans) l'ancien maître, épuisé, laisse faire... pour un temps
+            until = TT.deadline(self, 36, code, *{o for o, _ in freed})   # (trois ans) l'ancien maître, épuisé, laisse faire... pour un temps
             for o in {o for o, _ in freed}:
                 f['truce'][o] = self.factions[o]['truce'][code] = until
                 f['rel'][o] = self.factions[o]['rel'][code] = -40
@@ -3489,7 +3490,8 @@ class Game:
         if f['res']['livres'] < cost:
             return False, "Livres insuffisantes."
         f['res']['livres'] -= cost
-        self.spies.append(dict(by=code, node=nid, kind=kind, done=TT.deadline(self, 1)))
+        # rapport au tour suivant (une IA : en trois jours, comme avant)
+        self.spies.append(dict(by=code, node=nid, kind=kind, done=TT.deadline(self, 1) if code == self.player else self.t + 3.0))
         return True, f"Un agent part pour {gn['name']} : son rapport au prochain tour."
 
     def update_spies(self):
@@ -3522,7 +3524,7 @@ class Game:
             return
         if self.rng.random() < chance:
             if kind == 'espionner':
-                f.setdefault('intel', {})[str(nid)] = TT.deadline(self, R.SPY_INTEL_TOURS)
+                f.setdefault('intel', {})[str(nid)] = TT.deadline(self, R.SPY_INTEL_TOURS, code)
                 if code == self.player:
                     gm = sum(r['n'] for r in n['garrison'])
                     near = [a for a in self.armies.values() if a['owner'] == o and math.hypot(a['x'] - gn['x'], a['y'] - gn['y']) < 14]

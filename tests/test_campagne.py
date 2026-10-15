@@ -109,6 +109,22 @@ class TourParTour(unittest.TestCase):
         TT.advance(g, 0.1)
         self.assertTrue(g.speed_idx or g.tour['stop']['kind'] != 'decision', 'la décision prise, le tour reprend seul')
 
+    def test_deux_decisions_au_meme_moment(self):
+        g = partie()
+        TT.go(g)
+        for i in (1, 2):
+            g.pending_ev.append(dict(id=f'e{i}', ev='essai', kind='hist', title=f'Décision {i}', text='', town=None,
+                                     base='', until=g.t + 30, date=g.date_str(),
+                                     choices=[dict(label='Oui', fx={}, desc=[])]))
+        TT.advance(g, 0.1)
+        self.assertEqual(g.tour['stop']['ev'], 'e1')
+        E.resolve(g, 'e1', 0)
+        TT.advance(g, 0.1)
+        self.assertEqual((g.speed_idx, g.tour['stop']['ev']), (0, 'e2'), 'la seconde arrête aussi le tour')
+        E.resolve(g, 'e2', 0)
+        TT.advance(g, 0.1)
+        self.assertTrue(g.speed_idx or g.tour['stop']['kind'] != 'decision')
+
     def test_une_guerre_n_arrete_plus_le_tour_des_ia(self):
         g = partie()
         TT.go(g)
@@ -158,6 +174,22 @@ class TourParTour(unittest.TestCase):
         self.assertEqual(TT.eta(g, a), 1, 'arrivée annoncée au prochain tour')
         jouer_mois(g)   # au début du tour suivant, l'armée repart
         self.assertFalse(a['path'], "elle est arrivée au tour annoncé")
+
+    def test_rallier_apres_une_halte(self):
+        g = partie()
+        a = armee(g)
+        nid = min((n['id'] for n in g.nodes if n['owner'] == R.NEUTRAL), key=g.node_defense_power)   # la plus faible
+        a['at_node'], a['path'], a['state'], a['hold'] = nid, [], 'idle', True   # halte devant ses portes
+        a['x'], a['y'] = g.node_xy(nid)
+        ok, msg = AA.conquer(g, g.player, a)
+        self.assertTrue(ok, msg)
+        self.assertEqual(g.nodes[nid]['owner'], g.player, 'ralliée tout de suite, pendant votre tour')
+        self.assertIn('se rallie', msg)
+        jouer_mois(g)
+        a['tr'] = True   # retour chez soi, sans rallier d'autres places en chemin
+        self.assertTrue(g.order_move(g.player, a['id'], *g.node_xy(g.capital_of(g.player)))[0])
+        TT.settle(g)
+        self.assertFalse(a['path'], "au tour suivant, elle marche jusqu'au bout (pas arrêtée au premier pas)")
 
     def test_plus_de_marche_plus_de_mouvement(self):
         g = partie()
@@ -353,8 +385,11 @@ class ActionsEnTours(unittest.TestCase):
     def test_delai_d_attente_en_tours(self):
         g = partie()   # 4 mars 1790
         n = next(n for n in g.owned_nodes(g.player))
-        AA.set_cd(g, n, 'req', AA.REQ_CD)
+        AA.set_cd(g, n, 'req', AA.REQ_CD, g.player)
         self.assertEqual(AA.cd_left(g, n, 'req'), 4, 'quatre tours, celui-ci compris')
+        m = next(n for n in g.owned_nodes('24'))
+        AA.set_cd(g, m, 'req', AA.REQ_CD, '24')
+        self.assertAlmostEqual(m['aa']['cd']['req'], g.t + 120, msg="une IA garde son rythme d'avant (120 jours)")
         au(g, 1790, 7)
         self.assertEqual(AA.cd_left(g, n, 'req'), 0, 'fini au début du 4e tour suivant')
 

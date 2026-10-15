@@ -182,7 +182,7 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   l'Exposition de 1889 et l'affaire Dreyfus.
   - Chaque option affiche ses effets : ressources, ordre public, lassitude, population, régiments offerts, effets
     temporaires ou durables, et points d'**histoire** qui comptent dans le prestige.
-  - Les IA choisissent elles aussi. Sans réponse au bout de 30 jours, la dernière option, la plus prudente,
+  - Les IA choisissent elles aussi. Sans réponse avant la fin du tour suivant, la dernière option, la plus prudente,
     s'applique.
   - Les effets en cours sont rappelés dans la fenêtre Production, et le journal a un onglet « Histoire ».
 - **Imprévus** : tous les 8 à 18 mois environ, chaque camp connaît un événement aléatoire : récolte magnifique,
@@ -262,7 +262,7 @@ Chaque place a un niveau de fortification, dessiné sur la carte autour de la vi
 - Chaque niveau donne +40 de milice, +35 % de puissance aux défenseurs, les abrite derrière les murs et allonge le siège.
   Une ville tenue par un département et fortifiée (niveau 1 ou plus) ne se prend que par siège.
 - On monte d'un niveau dans le panneau de la ville (« Aménagements »). Le niveau 4 n'existe que dans les chefs-lieux
-  et les places fortes, après la technologie « Fortifications à la Vauban » (650 livres, 180 bois, 90 fer, 70 jours).
+  et les places fortes, après la technologie « Fortifications à la Vauban » (650 livres, 180 bois, 90 fer, 2 tours ⅓ de travail).
 - Pendant un siège, la brèche s'ouvre dans l'enceinte dessinée à mesure que l'artillerie travaille.
 - Une place prise par la force perd un niveau (remparts éventrés). Si le trésor est vide, faute d'entretien,
   les remparts les plus hauts se délabrent d'un niveau chaque mois. Le sabotage d'un espion retire aussi un niveau.
@@ -271,14 +271,14 @@ Chaque place a un niveau de fortification, dessiné sur la carte autour de la vi
 Le panneau d'une armée à l'arrêt propose des actions selon l'endroit où elle se tient.
 
 **Dans une de vos places :**
-- **Barricades et palissades** : quelques jours de travaux (plus vite avec beaucoup d'hommes ou des sapeurs), 40 à 90 bois.
+- **Barricades et palissades** : une part de tour de travaux (plus vite avec beaucoup d'hommes ou des sapeurs), 40 à 90 bois.
   Une place sans remparts vaut alors presque un mur d'enceinte (niveau 0,8) et soutient un siège au lieu d'être emportée
   d'emblée. L'ouvrage s'use en trois mois environ, plus vite sous la pluie, en hiver, et bien plus vite sous le canon.
   Devant des remparts, ce sont des **redoutes** : un petit bonus (+0,3 niveau). Pieux, gabions et redoutes sont dessinés sur la carte.
 - **Prendre ses quartiers** : renforts et moral plus rapides, ordre public en hausse, mais 60 % de vivres en plus pour
   l'armée. Le cantonnement cesse dès qu'elle se met en marche. Des tentes apparaissent autour de la place.
 - **Armer les habitants** : la milice gagne 60 % de son effectif et un peu plus selon la population (jusqu'à 900 hommes),
-  pour 60 jours, contre 0,15 arme par homme ; la production baisse de 10 %. Une fois tous les six mois par place.
+  pour 2 tours, contre 0,15 arme par homme ; la production baisse de 10 %. Une fois tous les six tours par place.
 - **Réquisitionner** : vivres, recrues et livres pris sur-le-champ selon la population (Bordeaux : 900 vivres, 300 recrues,
   400 livres ; un village : une quarantaine de vivres). L'ordre public perd 25 %. Une fois tous les quatre mois par place.
 
@@ -305,21 +305,21 @@ pointillé clair et le drapeau blanc le rappellent.
   est trop long ou impossible, contournent sinon, ou renoncent un mois à une destination refusée ; elles ne passent
   jamais en force. La fenêtre Diplomatie résume qui vous laisse passer et à qui vous laissez passer.
 - **Délai de grâce** : une armée qui se retrouve sur des terres fermées sans l'avoir voulu (droit retiré ou échu en
-  chemin, place qui change de mains, paix signée en territoire ennemi, retraite) a **5 jours** pour en sortir. Elle
+  chemin, place qui change de mains, paix signée en territoire ennemi, retraite) a **jusqu'à la fin du tour** pour en sortir. Elle
   reçoit d'elle-même un itinéraire de sortie (même destination par un détour, sinon les terres ouvertes les plus
   proches) et vous êtes prévenu. Au-delà, la relation baisse chaque jour, un **incident diplomatique** (−10 points au
   moins, tous les deux mois au plus) peut pousser le voisin à vous déclarer la guerre. Une retraite n'est jamais piégée :
   elle traverse s'il le faut, et le délai s'applique. Une armée qui part de terres fermées peut toujours en sortir.
 
 **Devant une place qui n'est pas à vous :**
-- **Négocier le ralliement** (place indépendante) : 2 à 5 jours de pourparlers, contre une somme qui dépend des habitants et
+- **Négocier le ralliement** (place indépendante) : réponse au tour suivant, contre une somme qui dépend des habitants et
   de la milice, réduite devant une armée imposante. Les notables peuvent refuser : l'argent revient, et ils ne vous
   recevront plus pendant un mois.
 - **Exiger une contribution** (indépendante, ou ennemie en guerre) : livres et vivres tout de suite, puis on laisse la place.
   Une place indépendante indigne tous les départements, une place ennemie fâche son maître. Une fois tous les trois mois par place.
 - **Bloquer et affamer** : ni bombardement ni assaut, les remparts restent intacts mais la place ne produit plus rien.
-  Ses réserves tiennent 18 à 35 jours, 40 de plus avec un magasin aux vivres. Puis la faim et les désertions minent la
-  garnison et la milice jusqu'à la reddition, environ 25 jours plus tard. Le blocus est dessiné comme un cordon en pointillé.
+  Ses réserves tiennent un tour environ, plus d'un tour de plus avec un magasin aux vivres. Puis la faim et les désertions
+  minent la garnison et la milice jusqu'à la reddition, un tour plus tard environ (le panneau dit combien de tours). Le blocus est dessiné comme un cordon en pointillé.
   On peut toujours bombarder ou donner l'assaut.
 
 Les IA s'en servent avec mesure. Elles barricadent les places menacées, arment les bourgeois face au danger et prennent
@@ -503,8 +503,8 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
 ### Brouillard de guerre et espions
 - Vous ne voyez que ce que voient vos villes, vos armées, vos alliés et vos espions : le reste de la carte est assombri
   (bouton œil pour l'afficher ou le masquer). Les armées ennemies hors de vue n'apparaissent pas.
-- Depuis une place étrangère : **Espionner** (60 livres, 2 jours) révèle sa garnison et les armées alentour pendant 45 jours ;
-  **Saboter** (150 livres, 3 jours, en guerre) fait perdre un niveau de remparts. Un agent démasqué fâche le département visé.
+- Depuis une place étrangère : **Espionner** (60 livres, rapport au tour suivant) révèle sa garnison et les armées alentour pendant deux tours ;
+  **Saboter** (150 livres, rapport au tour suivant, en guerre) fait perdre un niveau de remparts. Un agent démasqué fâche le département visé.
   Les IA sabotent aussi les places que leurs armées convoitent.
 
 ### Impôts et ordre public
@@ -518,7 +518,7 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
 Tout marche seul avec les réglages par défaut ; on intervient quand on veut, depuis le panneau de la ville.
 
 - **Emplacements** : village et place forte 1, ville 3, chef-lieu 5, plus 1 par agrandissement. Chacun accueille une
-  chaîne de bâtiments à trois niveaux, bâtie dans la file de la place comme les remparts (ressources et jours).
+  chaîne de bâtiments à trois niveaux, bâtie dans la file de la place comme les remparts (ressources et part de tour).
   Certains niveaux demandent un agrandissement, une technologie ou une spécialité. Remparts et agrandissements restent
   à part. Toucher un emplacement vide montre les chaînes possibles ; un emplacement occupé propose l'amélioration ou la
   démolition.
@@ -539,7 +539,7 @@ Tout marche seul avec les réglages par défaut ; on intervient quand on veut, d
   quelle : un magasin existant occupe un emplacement, et une place qui a plus de bâtiments que d'emplacements (ville
   réduite après un sac) garde tout, mais ne peut plus en bâtir de nouveaux.
 - **Politique de la ville** : une orientation par place, sans rien construire. Un changement prend effet peu à peu
-  (18 jours). Un bouton l'applique à toutes vos places du même type.
+  (au tour suivant). Un bouton l'applique à toutes vos places du même type.
 
 | Politique | Bonus | Contrepartie |
 |---|---|---|
@@ -556,7 +556,7 @@ Tout marche seul avec les réglages par défaut ; on intervient quand on veut, d
   garnison, laisser faire…) dont les effets ne touchent que la ville. Le jeu se met en pause, la fenêtre montre les
   coûts et effets et permet d'aller voir la ville ; un sceau rouge la signale sur la carte. Saisons, ordre public,
   bâtiments et politique pèsent sur les chances : un Hôtel-Dieu éloigne les fièvres, une Halle attire les foires, des
-  greniers préviennent les disettes. Sans réponse au bout de 30 jours, la dernière option s'applique.
+  greniers préviennent les disettes. Sans réponse avant la fin du tour suivant, la dernière option s'applique.
 - **IA** : elles jouent avec les mêmes règles. Elles bâtissent là où un bâtiment rapporte le plus pour son prix, selon
   leur personnalité (négoce girondin, forges du Périgord, grenier agenais…), choisissent la politique de leurs villes
   selon leurs besoins (fêtes si l'ordre vacille, recrutement et place d'armes en guerre, grenier quand la faim menace,

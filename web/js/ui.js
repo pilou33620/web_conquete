@@ -374,7 +374,7 @@ export class UI {
       const v = me.res[r], inc = me.income[r];
       this.$('res-' + r).textContent = fmt(v);
       const d = this.$('inc-' + r);
-      const iv = fmt1(inc);
+      const iv = fmt1(this.per(inc));
       d.textContent = (iv[0] === '−' ? '' : '+') + iv;
       d.classList.toggle('neg', iv[0] === '−');
       const warn = (r === 'vivres' && me.famine) || (r === 'livres' && me.banqueroute);
@@ -447,12 +447,12 @@ export class UI {
     const lab = this.rules.res_label[r];
     const rows = [[`Stock`, fmt(me.res[r])], [`Variation ${this.st.tour?.on ? 'par tour' : 'par jour'}`, (fmt1(me.income[r])[0] === '−' ? '' : '+') + fmt1(this.per(me.income[r]))]];
     if (r === 'livres') {
-      rows.push(['Solde des troupes', '−' + fmt1(me.upkeep.livres || 0)]);
-      if (me.upkeep.forts) rows.push(['Entretien des remparts', '−' + fmt1(me.upkeep.forts)]);
-      if (me.upkeep.batiments) rows.push(['Entretien des bâtiments', '−' + fmt1(me.upkeep.batiments)]);
-      rows.push(['Commerce', '+' + fmt1(me.trade.livres || 0)]);
+      rows.push(['Solde des troupes', '−' + fmt1(this.per(me.upkeep.livres || 0))]);
+      if (me.upkeep.forts) rows.push(['Entretien des remparts', '−' + fmt1(this.per(me.upkeep.forts))]);
+      if (me.upkeep.batiments) rows.push(['Entretien des bâtiments', '−' + fmt1(this.per(me.upkeep.batiments))]);
+      rows.push(['Commerce', '+' + fmt1(this.per(me.trade.livres || 0))]);
     }
-    if (r === 'vivres') { rows.push(['Rations des troupes', '−' + fmt1(me.upkeep.vivres || 0)]); if (me.prisoner_upkeep) rows.push(['Prisonniers détenus', '−' + fmt1(me.prisoner_upkeep)]); rows.push(['Saison', this.rules.seasons[this.st.season]]); }
+    if (r === 'vivres') { rows.push(['Rations des troupes', '−' + fmt1(this.per(me.upkeep.vivres || 0))]); if (me.prisoner_upkeep) rows.push(['Prisonniers détenus', '−' + fmt1(this.per(me.prisoner_upkeep))]); rows.push(['Saison', this.rules.seasons[this.st.season]]); }
     if (r === 'armes' || r === 'outils') rows.push(['Capacité industrielle', fmt1(this.per(me.cap)) + ' ' + this.perU]);
     if (r === 'outils') rows.push(['Bonus des outils', '+' + Math.round((me.tools_bonus - 1) * 100) + ' %']);
     if (r === 'fer' || r === 'bois') rows.push(['Consommés par les ateliers', 'oui']);

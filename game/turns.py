@@ -72,7 +72,7 @@ def migrate(g):
     for a in g.armies.values():
         a.setdefault('mp', None)
     # échéances d'avant les tours (en plein milieu d'un mois) : ramenées au début du tour suivant
-    up = lambda t: turn_start_after(g, t)
+    up = lambda t: t if t <= g.t else turn_start_after(g, t)   # (déjà échue : elle le reste)
     for f in g.factions.values():
         for d in (f['truce'], f.get('passage') or {}):
             for k in d:
@@ -130,10 +130,13 @@ def ready_in(g, work_left):
     return 1 if work_left <= cap + 1e-6 else 1 + math.ceil((work_left - cap) / TOUR_DAYS - 1e-6)
 
 
-def deadline(g, n):
+def deadline(g, n, *who):
     """Échéance d'une durée de n tours (règle B) : le début d'un tour du joueur, qui garde n tours entiers. Pendant son
-    tour, ce tour compte (n = 1 : jusqu'à la fin du mois) ; ailleurs (tour des IA, temps réel), à partir du suivant."""
+    tour, ce tour compte (n = 1 : jusqu'à la fin du mois) ; ailleurs (tour des IA, temps réel), à partir du suivant.
+    who : les camps concernés ; sans le joueur, n mois à partir de maintenant (les IA gardent leur rythme d'avant)."""
     n = max(1, int(n))
+    if who and g.player not in who:
+        return g.t + n * TOUR_DAYS
     fresh = planning(g) or g.t <= month_end(g, k=0) + 1e-6   # (au début d'un tour, même au dernier pas des IA)
     return month_end(g, k=n if fresh else n + 1)
 
@@ -228,6 +231,7 @@ def march_now(g, a, days=None):
     hot = {z: w['kind'] == 'canicule' for z, w in g.weather.items()}
     trail = [(a['x'], a['y'])]
     fought = False
+    a.pop('took', None)   # (une place ralliée plus tôt ne compte que pour la marche où elle l'a été)
     try:
         for _ in range(int(40 / MARCH_STEP)):
             if left <= 1e-6 or aid not in g.armies or a['state'] not in ('move', 'retreat') or not a['path']:
@@ -403,7 +407,8 @@ def watch(g, dt, seq0):
     best = cands[0]
     g.speed_idx = 0
     tr['stop'] = dict(kind=best['kind'], text=best['text'], x=best.get('x'), y=best.get('y'), sel=best.get('sel'),
-                      ev=best.get('ev'), more=len(cands) - 1, date=g.date_str())
+                      ev=best.get('ev'), next=[c['ev'] for c in cands[1:] if c['kind'] == 'decision'],
+                      more=len(cands) - 1, date=g.date_str())
     if tr['acc']:
         tr['acc']['stops'] += 1
 
@@ -412,10 +417,17 @@ def _settled(g):
     """La raison de l'arrêt a disparu (bataille réglée ou jouée, décision prise) : le tour des IA peut reprendre seul.
     (Game.advance ne vient pas jusqu'ici tant qu'une bataille attend le joueur ou se livre sur le champ de bataille.)"""
     st = g.tour['stop']
-    if not st or st['kind'] == 'fin':
+    if not st or st['kind'] == 'fin' or (st['kind'] == 'decision' and not st.get('ev')):
         return False   # (partie chargée en plein tour des IA : on attend « Continuer »)
     if st['kind'] == 'decision':
-        return not any(x['id'] == st.get('ev') for x in g.pending_ev)
+        if any(x['id'] == st['ev'] for x in g.pending_ev):
+            return False
+        nxt = [x for x in g.pending_ev if x['id'] in st.get('next', ())]
+        if nxt:   # d'autres décisions arrivées au même moment : le tour s'arrête aussi sur chacune
+            x = nxt[0]
+            st.update(ev=x['id'], text=f"Une décision vous attend : {x['title']}.", next=[y['id'] for y in nxt[1:]],
+                      more=len(nxt) - 1)
+            return False
     return True
 
 

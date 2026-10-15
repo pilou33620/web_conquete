@@ -92,8 +92,8 @@ def cd_left(g, n, k):
     return TT.tours_left(g, node_aa(n).get('cd', {}).get(k, -1))
 
 
-def set_cd(g, n, k, tours):
-    aa(n).setdefault('cd', {})[k] = TT.deadline(g, tours)
+def set_cd(g, n, k, tours, code):
+    aa(n).setdefault('cd', {})[k] = TT.deadline(g, tours, code)
 
 
 def place(g, nid):
@@ -338,10 +338,10 @@ def garde(g, code, a):
     if f['res']['armes'] < armes:
         return False, f"Il faut {armes} armes."
     f['res']['armes'] -= armes
-    aa(n)['gd'] = dict(until=TT.deadline(g, GARDE_TOURS), add=add)
+    aa(n)['gd'] = dict(until=TT.deadline(g, GARDE_TOURS, code), add=add)
     n['milice_max'] += add
     n['milice'] += add
-    set_cd(g, n, 'garde', GARDE_CD)
+    set_cd(g, n, 'garde', GARDE_CD, code)
     g._dirty_income = True
     gname = g.unit_name(code, 'garde')[0].lower()
     return True, (f"{R.nb(add)} habitants de {place(g, nid)} prennent les armes ({gname}) pour {GARDE_TOURS} tours "
@@ -380,7 +380,7 @@ def requisition(g, code, a):
     f['res']['livres'] += gain['livres']
     rec = int(g.add_recrues(code, gain['recrues']))
     n['stab'] = max(0.05, n['stab'] - REQ_STAB)
-    set_cd(g, n, 'req', REQ_CD)
+    set_cd(g, n, 'req', REQ_CD, code)
     got = [f"{gain['vivres']} vivres"] + ([f"{rec} recrues"] if rec else []) + \
         ([f"{gain['livres']} livres"] if gain['livres'] else [])
     return True, f"Réquisition à {place(g, nid)} : {', '.join(got)}. La population gronde (ordre public −{int(REQ_STAB * 100)} %)."
@@ -566,7 +566,8 @@ def land_tick(g, a, dt):
             return
     cl = a.get('cl')
     if not cl or cl['o'] != o:
-        cl = a['cl'] = dict(o=o, until=TT.deadline(g, GRACE_TOURS), rt=0.0)
+        # (une IA garde ses cinq jours d'avant)
+        cl = a['cl'] = dict(o=o, until=TT.deadline(g, GRACE_TOURS) if code == g.player else g.t + 5.0, rt=0.0)
         if code == g.player:
             g.log('armee', f"La {a['name']} se trouve sur les terres {R.de(g.fname(o))} sans droit de passage : "
                            f"elle a jusqu'au {g.date_str(cl['until'])} pour en sortir.", a['x'], a['y'], who=o, important=True)
@@ -639,7 +640,7 @@ def may_stay(g, a, o):
 
 
 def grant_passage(g, grantor, grantee, tours=PASSAGE_TOURS):
-    until = TT.deadline(g, tours)
+    until = TT.deadline(g, tours, grantor, grantee)
     g.factions[grantor].setdefault('passage', {})[grantee] = until
     g.log('diplo', f"{g.fname(grantor)} accorde le droit de passage à {g.fname(grantee)} jusqu'au "
                    f"{g.date_str(until)}.", who=grantor, important=g.player in (grantor, grantee))
@@ -761,7 +762,7 @@ def neg_tick(g, n, x, dt):
     del x['ng']
     if g.rng.random() < ng['risk']:
         f['res']['livres'] += ng['price']
-        set_cd(g, n, 'neg', NEG_CD)
+        set_cd(g, n, 'neg', NEG_CD, code)
         if code == g.player:
             g.log('armee', f"Les notables {R.de(place(g, nid))} refusent vos offres.", *g.node_xy(nid), who=code,
                   important=True)
@@ -818,7 +819,7 @@ def contribution(g, code, a):
         for c, fc in g.factions.items():
             if c != code and fc['alive']:
                 fc['rel'][code] = max(-100, fc['rel'][code] - CTB_REL_ALL - (CTB_REL_HOME if gn['dept'] == c else 0))
-    set_cd(g, n, 'ctb', CTB_CD)
+    set_cd(g, n, 'ctb', CTB_CD, code)
     # puis on laisse la place : siège levé, halte devant ses portes
     for b in g.armies.values():
         if b['at_node'] == nid and b['owner'] == code and b['state'] in ('idle', 'siege'):
@@ -976,6 +977,9 @@ def conquer(g, code, a):
     a['hold'] = False
     a['tr'] = False
     g.arrive_node(a, nid)
+    if a.pop('took', False):   # tour du joueur : la place s'est ralliée tout de suite, la marche du tour s'arrête là
+        a['mp'] = 0.0
+        return True, f"{place(g, nid)} se rallie à vous."
     return True, ("Ralliement en cours." if a['state'] == 'siege' and g.nodes[nid]['siege'] and
                   g.nodes[nid]['siege'].get('occupy') else "À l'attaque !")
 

@@ -28,7 +28,7 @@ function etapes(ui) {
     { txt: 'Fleuves : par les routes, vos armées embarquent d’elles-mêmes sur les gabares de la Garonne, de la Dordogne, de l’Adour… Tenir une place en aval coupe le commerce de l’amont (blocus).' },
     ...(tour ? [
       { at: '#tb-turn', txt: 'Vos ordres sont donnés. Touchez « Tour suivant » : les IA jouent le mois, puis c’est de nouveau à vous.', done: () => st.tour.phase !== 'ordres' },
-      { at: '#tb-turn', txt: 'Les IA jouent. Si le tour s’interrompt (bataille, ennemi sur vos terres, décision), touchez la raison affichée, puis « Continuer ».', done: () => st.tour.phase === 'ordres' },
+      { at: '#tb-turn', txt: 'Les IA jouent leur tour d’un coup. Si une IA vous attaque ou si une décision vous attend, faites votre choix : le tour reprend tout seul.', done: () => st.tour.phase === 'ordres' },
       { at: '#recap', txt: 'Le récapitulatif du mois : revenus, batailles, constructions. Touchez une ligne pour y aller.', need: () => !ui.$('recap').hidden },
     ] : [
       { at: '#tb-speed', txt: 'Temps réel : la pause et les vitesses sont ici (espace, touches 1 à 6).' },

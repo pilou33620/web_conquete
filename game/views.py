@@ -213,7 +213,7 @@ def _siege(g, n):
     d = dict(by=s['by'], dmg=round(s['dmg'], 2), occ=bool(s.get('occupy')))
     if s.get('blocus'):
         d['food'] = TT.tours_left(g, s['since'] + s['food'])
-    elif not s.get('occupy'):
+    elif not s.get('occupy') and g.player in (s['by'], n['owner']):   # (la force d'un siège étranger reste cachée)
         bes = g.besiegers(n)
         rate = g.siege_rate(n, bes) if bes else 0.0
         if rate > 0 and s['dmg'] < 0.85:

@@ -1,7 +1,7 @@
 """Événements historiques datés (1701-1898) et événements aléatoires, avec leurs choix.
 
 Chaque événement touche un ou plusieurs camps. Le joueur choisit dans une fenêtre (le jeu se met en pause) ;
-sans réponse au bout de 30 jours, la dernière option, la plus prudente, s'applique. L'IA choisit aussitôt.
+sans réponse avant la fin du tour suivant (ANSWER_TOURS), la dernière option, la plus prudente, s'applique. L'IA choisit aussitôt.
 
 Effets (dictionnaire fx) :
   res       {ressource: quantité}            ajout (ou retrait) immédiat

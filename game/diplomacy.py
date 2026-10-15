@@ -89,7 +89,7 @@ def declare_war(game, a, b, quiet=False):
 def make_peace(game, a, b):
     game.set_status(a, b, 'paix')
     game.factions[a]['last_war'] = game.factions[b]['last_war'] = game.t
-    until = TT.deadline(game, R.PEACE_TRUCE)
+    until = TT.deadline(game, R.PEACE_TRUCE, a, b)
     game.factions[a]['truce'][b] = until
     game.factions[b]['truce'][a] = until
     for x, y in ((a, b), (b, a)):
