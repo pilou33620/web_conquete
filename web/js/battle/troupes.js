@@ -329,10 +329,10 @@ function stocky(g, B) {
 }
 // l'étoffe du drapeau, accrochée en haut de la hampe du porte-drapeau, flottant vers l'arrière ; l'étendard d'un
 // cavalier (fanion de l'état-major) a sa hampe avec lui
-function flagCloth(rider = false) {
+function flagCloth(rider = false, rig = false) {
   if (rider) return assemble([[new THREE.PlaneGeometry(1.2, 0.85, 6, 2).rotateY(Math.PI / 2).translate(-0.3, 3.4, 0.08 - 0.6), shade(1), 4, 1],
     [box(0.04, 2.2, 0.04, -0.3, 2.75, 0.08), WOOD, 0, 0], [box(0.07, 0.1, 0.07, -0.3, 3.88, 0.08), GOLD, 0, 0]]);
-  return assemble([[new THREE.PlaneGeometry(2, 1.4, 8, 3).rotateY(Math.PI / 2).translate(0.24, 2.85, 0.08 - 1), shade(1), 4, 1]]);
+  return assemble([[new THREE.PlaneGeometry(2, 1.4, 8, 3).rotateY(Math.PI / 2).translate(0.24, 2.85, 0.08 - 1), shade(1), rig ? RIG_BONES.pole : 4, 1]]);
 }
 // roue à rayons (le moyeu en (x, y, z), axe selon x)
 function wheel(P, r, x, y, z) {
@@ -438,18 +438,27 @@ function farHat(type, dy = 0) {
   })();
   return P.map(([g, c]) => [g.translate(0, dy, 0), c, 0, 0]);
 }
-function farSoldier(kind, year) {
+function farSoldier(kind, year, rig = false) {
+  const B = rig ? RIG_BONES : OLD_BONES;
   const trous = kind === 'milice' ? '#5a4c3c' : year >= 1830 ? '#8d929b' : WHITE;
   const officer = kind === 'officier' || kind === 'drapeau', armed = !officer && kind !== 'tambour' && kind !== 'servant';
-  const P = [[box(0.13, 0.86, 0.14, 0.085, 0.43, 0), trous, 1, 0], [box(0.13, 0.86, 0.14, -0.085, 0.43, 0), trous, 2, 0],
-    [box(0.36, 0.74, 0.22, 0, 1.09, 0), shade(1), 0, 1], [box(0.17, 0.2, 0.18, 0, 1.57, 0), SKIN, 0, 0], ...farHat(headgear(kind, year))];
-  P.push([box(0.2, 0.36, 0.02, 0, 1.18, 0.115), armed ? WHITE : officer ? GOLD : shade(0.8), 0, armed || officer ? 0 : 1]);   // buffleteries ou écharpe
-  for (const s of [1, -1]) P.push([box(0.1, 0.56, 0.11, s * 0.22, 1.13, 0), shade(0.9), 3, 1]);
+  // jambes : un bloc coupé à mi-hauteur, le haut à la cuisse, le milieu au tibia, le bas au pied (le genou plie)
+  const P = [];
+  for (const [s, side] of [[1, 'L'], [-1, 'R']]) P.push([new THREE.BoxGeometry(0.13, 0.86, 0.14, 1, 2, 1).translate(s * 0.085, 0.43, 0), trous, y => y > 0.53 ? B['thigh' + side] : y > 0.09 ? B['shin' + side] : B['foot' + side], 0]);
+  P.push([box(0.36, 0.74, 0.22, 0, 1.09, 0), shade(1), y => y < 1.05 ? B.hips : B.chest, 1], [box(0.17, 0.2, 0.18, 0, 1.57, 0), SKIN, B.head, 0],
+    ...farHat(headgear(kind, year)).map(([g, c, , t]) => [g, c, B.head, t]));
+  P.push([box(0.2, 0.36, 0.02, 0, 1.18, 0.115), armed ? WHITE : officer ? GOLD : shade(0.8), B.chest, armed || officer ? 0 : 1]);   // buffleteries ou écharpe
+  for (const [s, side] of [[1, 'L'], [-1, 'R']]) {
+    const up = armed && side === 'L' ? B.carryUpper : B['upper' + side], fore = armed && side === 'L' ? B.carryFore : B['fore' + side];
+    P.push([box(0.1, 0.56, 0.11, s * 0.22, 1.13, 0), shade(0.9), y => y > 1.16 ? up : fore, 1]);
+  }
   // fusil et baïonnette, plus épais que nature pour faire un trait d'au moins un pixel de loin
-  if (armed) P.push([box(0.1, 1.4, 0.08, 0.25, 1.5, 0.05), '#4a3a2c', 3, 0], [box(0.06, 0.36, 0.06, 0.25, 2.38, 0.05), '#c8ccd0', 3, 0]);
-  if (kind === 'tambour') P.push([cyl(0.15, 0.15, 0.22, 6, 0.18, 0.78, 0.13, 0, 1.2), '#e8dcc0', 0, 0]);
-  if (kind === 'drapeau') P.push([box(0.045, 3.1, 0.045, 0.24, 2.05, 0.08), WOOD, 0, 0]);
-  return assemble(P);
+  if (armed) P.push([box(0.1, 1.4, 0.08, 0.25, 1.5, 0.05), '#4a3a2c', B.musket, 0], [box(0.06, 0.36, 0.06, 0.25, 2.38, 0.05), '#c8ccd0', B.musket, 0]);
+  if (kind === 'tambour') P.push([cyl(0.15, 0.15, 0.22, 6, 0.18, 0.78, 0.13, 0, 1.2), '#e8dcc0', B.hips, 0]);
+  if (kind === 'drapeau') P.push([box(0.045, 3.1, 0.045, 0.24, 2.05, 0.08), WOOD, B.pole, 0]);
+  const g = assemble(P);
+  if (rig) stocky(g, B);
+  return g;
 }
 function farHorse(rider, year) {
   const R = (k, g, b = 0) => [g, shade(k), b, 2];
@@ -487,7 +496,7 @@ export function model(kind, year, lod = 1, rig = false) {
     case 'caisson': return farCaisson(false);
     case 'chariot': return farCaisson(true);
     case 'etoffe': case 'fanion': break;
-    default: return farSoldier(kind, year);
+    default: return farSoldier(kind, year, rig);
   }
   switch (kind) {
     case 'cav': case 'colonel': return horse(kind, year);
@@ -495,7 +504,7 @@ export function model(kind, year, lod = 1, rig = false) {
     case 'canon': return gun();
     case 'caisson': return caisson(false);
     case 'chariot': return caisson(true);
-    case 'etoffe': return flagCloth();
+    case 'etoffe': return flagCloth(false, rig);
     case 'fanion': return flagCloth(true);
     default: return soldier(kind, year, rig);
   }
@@ -679,9 +688,10 @@ export class Troops {
     this.contactMats = {};
     // chaque sorte en deux versions (« ~ » : de loin), sauf les drapeaux
     for (const [k, def] of Object.entries(KINDS)) {
-      if (def === 'FLAG') { this.addKind(k, model(k, this.year), this.pattern); continue; }
+      // (l'étoffe du porte-drapeau suit sa hampe, au squelette ; le fanion d'un cavalier suit son cheval)
+      if (def === 'FLAG') { this.addKind(k, model(k, this.year, 1, k === 'etoffe'), this.pattern, k === 'etoffe' ? 'RIG' : null); continue; }
       this.addKind(k, model(k, this.year, 1, !def), null, def ?? 'RIG');
-      this.addKind(k + '~', model(k, this.year, 0), null, def);
+      this.addKind(k + '~', model(k, this.year, 0, !def), null, def ?? 'RIG');
     }
     this.frustum = new THREE.Frustum(); this.sphere = new THREE.Sphere(); this.m4 = new THREE.Matrix4();
     this.built = -1; this.pending = false;
@@ -712,15 +722,20 @@ export class Troops {
         .replace('#include <common>', '#include <common>\n' + VERT_HEAD + (pattern ? 'varying vec2 vUv2;' : ''))
         .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${VERT_POSE}\n${turn('objectNormal', false)}`)
         .replace('#include <begin_vertex>', (pattern ? 'vUv2 = uv;\n' : '') + place)
-        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart;');
+        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart;' +
+          // plus sombre vers les pieds : l'ombre des rangs, comme une occlusion ambiante (pas pour les étoffes)
+          (pattern ? '' : '\nvColor.rgb *= mix(0.62, 1.0, smoothstep(0.0, 1.5, position.y));'));
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying float vFade, vPart;' + (pattern ? '\nuniform sampler2D uPattern; varying vec2 vUv2;' : ''))
         // régiment deviné (plus en vue) : transparent en pointillés, sans tri
         .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
           if (vFade < 0.995 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > vFade) discard;`)
-        .replace('#include <color_fragment>', pattern ? 'diffuseColor.rgb *= mix(vColor.rgb, vec3(0.95), texture2D(uPattern, vUv2).a * step(0.5, vPart));' : '#include <color_fragment>');
+        .replace('#include <color_fragment>', pattern ? 'diffuseColor.rgb *= mix(vColor.rgb, vec3(0.95), texture2D(uPattern, vUv2).a * step(0.5, vPart));' : '#include <color_fragment>')
+        // lumière enveloppante : le côté à l'ombre n'est pas noir, le passage est doux (figurines arrondies du prototype)
+        .replace('#include <lights_lambert_pars_fragment>', THREE.ShaderChunk.lights_lambert_pars_fragment
+          .replace('float dotNL = saturate( dot( geometryNormal, directLight.direction ) );', 'float dotNL = saturate( dot( geometryNormal, directLight.direction ) * 0.6 + 0.4 );'));
     };
-    mat.customProgramCacheKey = () => 'troupes-' + (pattern ? 'etoffe' : def || 'homme');
+    mat.customProgramCacheKey = () => 'troupes-' + (pattern ? 'etoffe-' : '') + (def || 'homme');
     // passe d'ombre : la même mise en place des figurines
     const depth = new THREE.MeshDepthMaterial();
     depth.defines = defines;
@@ -728,7 +743,7 @@ export class Troops {
       Object.assign(sh.uniforms, this.uni);
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_HEAD).replace('#include <begin_vertex>', VERT_POSE + place);
     };
-    depth.customProgramCacheKey = () => 'troupes-ombre-' + (pattern ? 'etoffe' : def || 'homme');
+    depth.customProgramCacheKey = () => 'troupes-ombre-' + (pattern ? 'etoffe-' : '') + (def || 'homme');
     const k = { geo, mat, depth, mesh: new THREE.Mesh(geo, mat), cap: 0, n: 0, buf: {}, rig: def === 'RIG', contactGeo: null, contact: null };
     k.mesh.frustumCulled = false; k.mesh.customDepthMaterial = depth; k.mesh.castShadow = !!this.castShadow;
     this.group.add(k.mesh);
@@ -766,6 +781,11 @@ export class Troops {
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_HEAD).replace('#include <begin_vertex>', `${VERT_POSE}
           // chaque coin à l'altitude du sol sous lui : la tache épouse la pente (relief exagéré)
           vec2 cp = base + vec2(position.x * sa + position.z * ca, -position.x * ca + position.z * sa) * aAnim.z;
+          #if defined(RIG)
+            // au squelette, la tache suit les hanches (os 0) : un homme penché, un homme couché
+            vec2 hp = vec2(r0.y * 0.92 + r0.w, r2.y * 0.92 + r2.w) * aAnim.z;
+            cp += vec2(hp.x * sa + hp.y * ca, -hp.x * ca + hp.y * sa);
+          #endif
           vec3 transformed = vec3(cp.x, hAt(cp) + 0.06, cp.y);`);
       // un régiment deviné n'a pas d'ombre ; un régiment qui s'efface la perd avec lui
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vFade, vPart;')
@@ -853,10 +873,10 @@ export class Troops {
         else if (f[2] === 'officier' || f[2] === 'drapeau' || f[2] === 'colonel') coat.multiplyScalar(0.8);
         else if (f[2] === 'servant') coat.multiplyScalar(0.6);   // habit sombre des artilleurs
         // l'écouvillon et le pointeur se tournent vers la pièce
-        if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant' + far, [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2);
+        if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant' + far, [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2, e);
         else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre, null, e);
-        if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre); }
-        else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre); }
+        if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre, null, e); }
+        else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre, null, e); }
       }
       this.gestures(e, false);
     }

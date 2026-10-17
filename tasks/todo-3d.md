@@ -365,7 +365,10 @@ General sur un régiment qui tire.
     `tests/gestes.test.mjs` (nouveau), `tests/modeles.test.mjs`
   - Taille : M
 
-- [ ] **T30 : version de loin au squelette, ombres, lumière, proportions**
+- [x] **T30 : version de loin au squelette, ombres, lumière, proportions**
+  - Fait : version de loin au squelette (jambe en un bloc coupé à mi-hauteur : au plus un tiers des sommets) ; étoffe
+    du drapeau sur l'os de la hampe ; ombre au sol qui suit les hanches ; lumière enveloppante et ombre vers les pieds
+    pour toutes les troupes ; clés de cache des programmes distinctes par sorte. Triangles pas encore relevés (point 7a).
   - Critères :
     - La version de loin a les os du squelette (genou et coude) : mêmes gestes, même hauteur.
     - Passe d'ombre et ombres de contact suivent le squelette ; la tache suit les hanches, même couché.

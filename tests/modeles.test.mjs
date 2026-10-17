@@ -115,3 +115,27 @@ test('au plus 16 attributs par sommet (limite de WebGL), gestes compris', () => 
   assert.ok(slots <= 16, `${slots} emplacements : ${own.join(', ')}, ${Object.keys(INSTANCE_ATTRS).join(', ')}`);
   assert.ok('aGest' in INSTANCE_ATTRS && 'aMix' in INSTANCE_ATTRS, 'attributs des gestes');
 });
+
+test('au squelette, la version de loin a les mêmes os et la même hauteur que celle de près', () => {
+  const names = [...Object.keys(RIG), ...RIG_EXTRA], id = Object.fromEntries(names.map((k, i) => [k, i]));
+  const limbs = new Set(['upperL', 'foreL', 'upperR', 'foreR', 'musket', 'carryUpper', 'carryFore'].map(k => id[k]));
+  const rigStats = g => {
+    const p = g.attributes.position, b = g.attributes.aBone, bones = new Set();
+    let y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < p.count; i++) {
+      bones.add(b.getX(i)); y0 = Math.min(y0, p.getY(i));
+      if (!limbs.has(b.getX(i))) y1 = Math.max(y1, p.getY(i));
+    }
+    return { y0, y1, bones, n: p.count };
+  };
+  for (const kind of ['inf', 'gren', 'leger', 'milice', 'officier', 'tambour', 'drapeau']) {
+    const near = rigStats(model(kind, 1790, 1, true)), far = rigStats(model(kind, 1790, 0, true));
+    for (const b of far.bones) assert.ok(near.bones.has(b), `${kind} : os ${names[b]} de loin seulement`);
+    for (const k of ['thighL', 'shinL', 'chest', 'head']) assert.ok(far.bones.has(id[k]), `${kind} : pas d'os ${k} de loin`);
+    assert.ok(Math.abs(far.y1 - near.y1) / near.y1 < 0.05, `${kind} : ${far.y1.toFixed(2)} m de loin, ${near.y1.toFixed(2)} m de près`);
+    assert.ok(Math.abs(far.y0) < 0.03, `${kind} : pieds en y = ${far.y0.toFixed(3)}`);
+    assert.ok(far.n * 3 <= near.n, `${kind} : ${far.n} sommets de loin, ${near.n} de près`);
+  }
+  // l'étoffe du drapeau suit la hampe (os du fusil)
+  assert.deepEqual([...new Set(model('etoffe', 1790, 1, true).attributes.aBone.array)], [id.musket]);
+});

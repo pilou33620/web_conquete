@@ -253,7 +253,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 
 ### 7a : figurines animées
 - [x] T29 : squelette dans les vraies batailles (fantassins de près, gestes selon l'état)
-- [ ] T30 : version de loin au squelette, ombres, lumière et proportions du prototype
+- [x] T30 : version de loin au squelette, ombres, lumière et proportions du prototype
 - [ ] T31 : feu et recharge (salve qui roule, à genoux, tirailleurs), officiers, tambours, drapeau
 - [ ] T32 : variété par homme et fondus
 - [ ] T33 : servants des pièces au squelette
