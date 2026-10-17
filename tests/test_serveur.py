@@ -46,7 +46,7 @@ class Http(unittest.TestCase):
         """(statut, texte) ; body : dict (envoyé en JSON) ou bytes bruts."""
         c = http.client.HTTPConnection('127.0.0.1', self.port, timeout=30)
         data = json.dumps(body).encode() if isinstance(body, (dict, list, str)) else body
-        c.request(method, path, body=data, headers=headers or {})
+        c.request(method, path, body=data, headers={'Content-Type': 'application/json', **(headers or {})})
         r = c.getresponse()
         out = r.status, r.read().decode('utf-8', 'replace')
         c.close()
@@ -80,6 +80,17 @@ class Http(unittest.TestCase):
         for p in ('/../server.py', '/%2e%2e/server.py'):
             with self.subTest(chemin=p):
                 self.assertEqual(self.req('GET', p)[0], 404)
+
+    def test_autre_site_refuse(self):
+        self.nouvelle_partie()
+        avant = server.APP.game
+        # formulaire ou fetch « simple » d'un autre site (CSRF) : pas de JSON, refusé
+        st, _ = self.req('POST', '/api/new', dict(dept='33'), {'Content-Type': 'text/plain'})
+        self.assertEqual(st, 415)
+        self.assertIs(server.APP.game, avant, 'la partie en cours est intacte')
+        # DNS rebinding : nom inconnu refusé, IP Tailscale acceptée
+        self.assertEqual(self.req('GET', '/api/saves', headers={'Host': 'evil.example'})[0], 403)
+        self.assertEqual(self.req('GET', '/api/saves', headers={'Host': '100.80.111.121:8790'})[0], 200)
 
     def test_routes_supprimees(self):
         self.nouvelle_partie()

@@ -472,6 +472,9 @@ class Handler(BaseHTTPRequestHandler):
     def parse_request(self):
         if not super().parse_request():
             return False
+        if not hote_permis(self.headers.get('Host')):
+            self.send_error(403, "Nom d'hote refuse : utilisez l'adresse IP")
+            return False
         VISITES.noter(self.client_address[0])
         return True
 
@@ -498,7 +501,7 @@ class Handler(BaseHTTPRequestHandler):
             n = int(self.headers.get('Content-Length') or 0)
         except ValueError:
             return {}
-        if n <= 0:
+        if n <= 0 or n > 1_000_000:   # borne : un corps énorme saturerait la mémoire du Pi
             return {}
         try:
             body = json.loads(self.rfile.read(n).decode('utf-8'))
@@ -555,6 +558,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        # Exiger du JSON force une requête de contrôle CORS : un autre site ouvert sur le réseau ne peut pas écrire ici.
+        if self.headers.get_content_type() != 'application/json':
+            return self._json(dict(ok=False, msg='JSON attendu.'), 415)
         body = self._body()
         with APP.lock:
             if path == '/api/new':
@@ -584,6 +590,18 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/api/load':
                 return self._json(APP.load(body.get('name')))
         self._json(dict(ok=False, msg='Route inconnue.'), 404)
+
+
+def hote_permis(entete):
+    """Anti DNS rebinding : seulement une IP (réseau local, Tailscale 100.x), localhost ou le nom de la machine."""
+    hote = (entete or '').strip().lower()
+    hote = hote[1:].split(']', 1)[0] if hote.startswith('[') else hote.rsplit(':', 1)[0] if hote.count(':') == 1 else hote
+    try:
+        ipaddress.ip_address(hote)
+        return True
+    except ValueError:
+        nom = socket.gethostname().lower()
+        return hote in ('localhost', nom, nom + '.local')
 
 
 def lan_addresses():
