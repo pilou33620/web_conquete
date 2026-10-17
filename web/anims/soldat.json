@@ -1,0 +1,119 @@
+{
+ "fps": 24,
+ "bones": [
+  "hips",
+  "chest",
+  "head",
+  "upperL",
+  "foreL",
+  "upperR",
+  "foreR",
+  "thighL",
+  "shinL",
+  "footL",
+  "thighR",
+  "shinR",
+  "footR",
+  "musket",
+  "carryUpper",
+  "carryFore"
+ ],
+ "rows": 761,
+ "clips": {
+  "repos": {
+   "row": 0,
+   "n": 60,
+   "loop": 1
+  },
+  "parle": {
+   "row": 60,
+   "n": 70,
+   "loop": 1
+  },
+  "marche": {
+   "row": 130,
+   "n": 32,
+   "loop": 1
+  },
+  "pas": {
+   "row": 162,
+   "n": 32,
+   "loop": 1
+  },
+  "trot": {
+   "row": 194,
+   "n": 22,
+   "loop": 1
+  },
+  "course": {
+   "row": 216,
+   "n": 16,
+   "loop": 1
+  },
+  "joue": {
+   "row": 232,
+   "n": 60,
+   "loop": 1
+  },
+  "genou": {
+   "row": 292,
+   "n": 60,
+   "loop": 1
+  },
+  "recharge": {
+   "row": 352,
+   "n": 58,
+   "loop": 1
+  },
+  "charge": {
+   "row": 410,
+   "n": 16,
+   "loop": 1
+  },
+  "estoc": {
+   "row": 426,
+   "n": 22,
+   "loop": 1
+  },
+  "poussee": {
+   "row": 448,
+   "n": 64,
+   "loop": 1
+  },
+  "mort": {
+   "row": 512,
+   "n": 58,
+   "loop": 0
+  },
+  "touche": {
+   "row": 570,
+   "n": 9,
+   "loop": 0
+  },
+  "tete": {
+   "row": 579,
+   "n": 11,
+   "loop": 0
+  },
+  "projete": {
+   "row": 590,
+   "n": 21,
+   "loop": 0
+  },
+  "sabre": {
+   "row": 611,
+   "n": 37,
+   "loop": 0
+  },
+  "garde": {
+   "row": 648,
+   "n": 40,
+   "loop": 1
+  },
+  "combo": {
+   "row": 688,
+   "n": 73,
+   "loop": 0
+  }
+ }
+}

@@ -1,0 +1,7 @@
+soldat.bin et soldat.json sont calculés (web/js/battle/dev/cuire.mjs) à partir des animations de :
+
+  Universal Animation Library et Universal Animation Library 2 (versions Standard), par Quaternius
+  https://quaternius.com  ·  https://opengameart.org/content/universal-animation-library
+  Licence : CC0 1.0 Universal (domaine public), https://creativecommons.org/publicdomain/zero/1.0/
+
+Les gestes du fusil (en joue, à genoux, recharge, croisez la baïonnette, estoc) sont ajoutés par cuire.mjs.

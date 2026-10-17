@@ -28,6 +28,17 @@ const KINDS = { inf: null, gren: null, leger: null, milice: null, officier: null
 // tache d'ombre douce au sol sous chaque figurine (largeur, profondeur, décalage vers l'avant, en m avant l'échelle)
 const CONTACT = { FOOT: [0.8, 0.66, 0], CREW: [0.8, 0.66, 0], HORSE: [1.0, 2.5, 0], GUN: [1.7, 3.0, -0.3] };
 const ROBES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];   // robes des chevaux (bai, bai brun, alezan, noir pangaré)
+// os du squelette des animations Quaternius (CC0, dev/cuire.mjs) dans l'ordre de leur texture, puis ceux des gestes du
+// fusil (RIG_EXTRA) : le fusil, le bras et l'avant-bras gauches qui le portent
+export const RIG = { hips: 'DEF-hips', chest: 'DEF-spine.003', head: 'DEF-head', upperL: 'DEF-upper_arm.L', foreL: 'DEF-forearm.L',
+  upperR: 'DEF-upper_arm.R', foreR: 'DEF-forearm.R', thighL: 'DEF-thigh.L', shinL: 'DEF-shin.L', footL: 'DEF-foot.L',
+  thighR: 'DEF-thigh.R', shinR: 'DEF-shin.R', footR: 'DEF-foot.R' };
+export const RIG_EXTRA = ['musket', 'carryUpper', 'carryFore'];
+const RIG_BONES = Object.fromEntries([...Object.keys(RIG), ...RIG_EXTRA].map((k, i) => [k, i]));
+RIG_BONES.pole = RIG_BONES.musket;   // la hampe du drapeau, portée comme le fusil
+// les mêmes morceaux sur les os de toujours (0 corps, 1 et 2 jambes, 3 bras et fusil)
+const OLD_BONES = { hips: 0, chest: 0, head: 0, upperL: 3, foreL: 3, upperR: 3, foreR: 3, thighL: 1, shinL: 1, footL: 1, thighR: 2, shinR: 2, footR: 2,
+  musket: 3, carryUpper: 3, carryFore: 3, pole: 0 };
 
 // coiffure selon l'époque et le type (comme la vue 2D d'avant)
 export function headgear(kind, year) {
@@ -136,7 +147,8 @@ export function layout(un, per = 1, scale = SCALE) {
 // Pièces assemblées en une géométrie : couleur par sommet, os (0 corps, 1 jambe gauche, 2 jambe droite, 3 bras et
 // fusil, 4 étoffe du drapeau ; cheval : 1 et 2 jambes avant, 5 et 6 jambes arrière, 7 encolure, 8 bras du cavalier),
 // teinte (1 : l'habit, couleur de l'instance ; 2 : la robe du cheval ; la couleur du sommet n'en donne que la nuance).
-// Repère d'une figurine : +Z devant, +X à sa gauche, les pieds en 0, un homme mesure 1,75 m.
+// Repère d'une figurine : +Z devant, +X à sa gauche, les pieds en 0, un homme mesure 1,75 m. L'os peut être une fonction
+// de la hauteur du sommet (genou, coude, taille : le morceau se plie entre deux os).
 function assemble(parts) {
   const pos = [], nor = [], col = [], bone = [], part = [], uv = [], idx = [];
   for (const [g, color, b, tint] of parts) {
@@ -144,7 +156,7 @@ function assemble(parts) {
     const c = new THREE.Color(color);
     for (let i = 0; i < p.count; i++) {
       pos.push(p.getX(i), p.getY(i), p.getZ(i)); nor.push(n.getX(i), n.getY(i), n.getZ(i));
-      col.push(c.r, c.g, c.b); bone.push(b); part.push(tint); uv.push(t ? t.getX(i) : 0, t ? t.getY(i) : 0);
+      col.push(c.r, c.g, c.b); bone.push(typeof b === 'function' ? b(p.getY(i)) : b); part.push(tint); uv.push(t ? t.getX(i) : 0, t ? t.getY(i) : 0);
     }
     if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(base + g.index.getX(i));
     else for (let i = 0; i < p.count; i++) idx.push(base + i);
@@ -221,7 +233,11 @@ function hat(type, kind, dy = 0) {
 // fantassin (et encadrement, servants des pièces) : kind 'inf' | 'gren' | 'leger' | 'milice' | 'officier' | 'tambour' |
 // 'drapeau' | 'servant'. Formes arrondies (normales lisses) : jambes et bras effilés, habit en profil tourné aplati,
 // basques, tête ronde ; buffleteries, revers, giberne et havresac en plaques
-function soldier(kind, year) {
+// rig : os du squelette des animations (RIG) au lieu des quatre os de toujours
+function soldier(kind, year, rig = false) {
+  const B = rig ? RIG_BONES : OLD_BONES;
+  const leg = s => y => y > 0.53 ? B['thigh' + s] : y > 0.09 ? B['shin' + s] : B['foot' + s];
+  const torso = y => y < 1.05 ? B.hips : B.chest;
   const trous = kind === 'milice' ? '#5a4c3c' : year >= 1830 ? '#8d929b' : WHITE;
   const officer = kind === 'officier' || kind === 'drapeau';
   const gaiter = year < 1845 && !officer ? '#1d1916' : trous;
@@ -230,40 +246,46 @@ function soldier(kind, year) {
   const limb = (r0, r1, y0, y1, x, n = 7) => new THREE.CylinderGeometry(r0, r1, y1 - y0, n, 1, true).translate(x, (y0 + y1) / 2, 0);
   const P = [];
   // jambes (os 1 à gauche, 2 à droite ; la hanche en y = 0,86) : culotte, guêtre, soulier
-  for (const [s, b] of [[1, 1], [-1, 2]]) {
+  for (const [s, side] of [[1, 'L'], [-1, 'R']]) {
+    const b = leg(side);
     P.push([limb(0.07, 0.062, 0.46, 0.9, s * 0.085), trous, b, 0], [limb(0.058, 0.05, 0.05, 0.47, s * 0.085), gaiter, b, 0],
       [sph(0.052, 0.035, 0.115, s * 0.085, 0.035, 0.035, 6, 4), '#15110d', b, 0]);
   }
   // habit : du bas des hanches aux épaules, aplati d'avant en arrière ; basques derrière (les deux faces)
-  P.push([lathe([[0.135, 0.84], [0.15, 0.95], [0.142, 1.06], [0.162, 1.22], [0.172, 1.34], [0.15, 1.43], [0.06, 1.48]], 10, 0.72), shade(1), 0, 1]);
-  P.push(...both(new THREE.CylinderGeometry(0.14, 0.19, 0.4, 8, 1, true, Math.PI / 2, Math.PI).scale(1, 1, 0.75).translate(0, 0.7, -0.01), shade(0.8), 0, 1));
-  P.push([new THREE.BoxGeometry(0.28, 0.05, 0.015).translate(0, 0.52, -0.15), facing, 0, 0]);          // retroussis
-  P.push([new THREE.BoxGeometry(0.17, 0.4, 0.015).translate(0, 1.2, 0.118), facing, 0, 0]);           // revers
-  P.push([limb(0.045, 0.05, 1.44, 1.5, 0, 6), SKIN, 0, 0], [sph(0.088, 0.105, 0.095, 0, 1.585, 0.005), SKIN, 0, 0]);   // cou, tête
-  if (year < 1800) P.push([limb(0.022, 0.018, 1.42, 1.56, 0, 5).translate(0, 0, -0.09), '#3a2c20', 0, 0]);   // la queue
+  P.push([lathe([[0.135, 0.84], [0.15, 0.95], [0.142, 1.06], [0.162, 1.22], [0.172, 1.34], [0.15, 1.43], [0.06, 1.48]], 10, 0.72), shade(1), torso, 1]);
+  P.push(...both(new THREE.CylinderGeometry(0.14, 0.19, 0.4, 8, 1, true, Math.PI / 2, Math.PI).scale(1, 1, 0.75).translate(0, 0.7, -0.01), shade(0.8), B.hips, 1));
+  P.push([new THREE.BoxGeometry(0.28, 0.05, 0.015).translate(0, 0.52, -0.15), facing, B.hips, 0]);          // retroussis
+  P.push([new THREE.BoxGeometry(0.17, 0.4, 0.015).translate(0, 1.2, 0.118), facing, B.chest, 0]);           // revers
+  P.push([limb(0.045, 0.05, 1.44, 1.5, 0, 6), SKIN, B.head, 0], [sph(0.088, 0.105, 0.095, 0, 1.585, 0.005), SKIN, B.head, 0]);   // cou, tête
+  if (year < 1800) P.push([limb(0.022, 0.018, 1.42, 1.56, 0, 5).translate(0, 0, -0.09), '#3a2c20', B.head, 0]);   // la queue
   if (armed) {
-    for (const r of [0.5, -0.5]) P.push([new THREE.BoxGeometry(0.05, 0.62, 0.012).rotateZ(r).translate(0, 1.13, 0.125), WHITE, 0, 0]);   // buffleteries
-    P.push([sph(0.11, 0.07, 0.04, 0, 0.92, -0.135, 8, 4), LEATHER, 0, 0]);                                // giberne
+    for (const r of [0.5, -0.5]) P.push([new THREE.BoxGeometry(0.05, 0.62, 0.012).rotateZ(r).translate(0, 1.13, 0.125), WHITE, B.chest, 0]);   // buffleteries
+    P.push([sph(0.11, 0.07, 0.04, 0, 0.92, -0.135, 8, 4), LEATHER, B.hips, 0]);                                // giberne
     // havresac plat, la couverture roulée dessus
-    if (kind !== 'milice') P.push([new THREE.BoxGeometry(0.24, 0.25, 0.07).translate(0, 1.19, -0.16), '#6b5236', 0, 0],
-      [new THREE.CylinderGeometry(0.035, 0.035, 0.3, 6).rotateZ(Math.PI / 2).translate(0, 1.345, -0.15), '#9a9488', 0, 0]);
+    if (kind !== 'milice') P.push([new THREE.BoxGeometry(0.24, 0.25, 0.07).translate(0, 1.19, -0.16), '#6b5236', B.chest, 0],
+      [new THREE.CylinderGeometry(0.035, 0.035, 0.3, 6).rotateZ(Math.PI / 2).translate(0, 1.345, -0.15), '#9a9488', B.chest, 0]);
   }
   if (officer) {
-    P.push([limb(0.15, 0.15, 0.86, 0.92, 0, 10).scale(1, 1, 0.75), '#c9a24a', 0, 0]);                    // écharpe
-    for (const s of [1, -1]) P.push([sph(0.07, 0.025, 0.06, s * 0.17, 1.44, 0, 6, 4), GOLD, 0, 0]);       // épaulettes
-    if (kind === 'officier') P.push([limb(0.012, 0.008, 0.25, 1.0, 0, 4).rotateX(0.45).translate(0.2, 0.03, 0.2), '#c0c4c8', 0, 0]);   // épée
+    P.push([limb(0.15, 0.15, 0.86, 0.92, 0, 10).scale(1, 1, 0.75), '#c9a24a', B.hips, 0]);                    // écharpe
+    for (const s of [1, -1]) P.push([sph(0.07, 0.025, 0.06, s * 0.17, 1.44, 0, 6, 4), GOLD, B.chest, 0]);       // épaulettes
+    if (kind === 'officier') P.push([limb(0.012, 0.008, 0.25, 1.0, 0, 4).rotateX(0.45).translate(0.2, 0.03, 0.2), '#c0c4c8', B.hips, 0]);   // épée
   }
-  if (kind === 'tambour') P.push([new THREE.CylinderGeometry(0.15, 0.15, 0.22, 12).rotateZ(1.2).translate(0.18, 0.78, 0.13), '#e8dcc0', 0, 0],
-    [new THREE.CylinderGeometry(0.155, 0.155, 0.05, 12).rotateZ(1.2).translate(0.18, 0.78, 0.13), shade(0.9), 0, 1]);
-  if (kind === 'drapeau') P.push([limb(0.022, 0.022, 0.5, 3.6, 0.24, 5).translate(0, 0, 0.08), WOOD, 0, 0], [sph(0.045, 0.06, 0.045, 0.24, 3.64, 0.08, 6, 4), GOLD, 0, 0]);
-  P.push(...hat(headgear(kind, year), kind));
-  // bras (os 3, l'épaule en y = 1,40) : épaule, manche, parement, main ; le fusil dans la main gauche
-  for (const s of [1, -1]) {
-    P.push([sph(0.058, 0.06, 0.06, s * 0.19, 1.39, 0, 6, 4), shade(0.95), 3, 1], [limb(0.052, 0.044, 0.9, 1.4, s * 0.2), shade(0.9), 3, 1],
-      [limb(0.048, 0.05, 0.87, 0.94, s * 0.2), facing, 3, 0], [sph(0.04, 0.045, 0.04, s * 0.2, 0.84, 0, 5, 4), SKIN, 3, 0]);
+  if (kind === 'tambour') P.push([new THREE.CylinderGeometry(0.15, 0.15, 0.22, 12).rotateZ(1.2).translate(0.18, 0.78, 0.13), '#e8dcc0', B.hips, 0],
+    [new THREE.CylinderGeometry(0.155, 0.155, 0.05, 12).rotateZ(1.2).translate(0.18, 0.78, 0.13), shade(0.9), B.hips, 1]);
+  if (kind === 'drapeau') P.push([limb(0.022, 0.022, 0.5, 3.6, 0.24, 5).translate(0, 0, 0.08), WOOD, B.pole, 0], [sph(0.045, 0.06, 0.045, 0.24, 3.64, 0.08, 6, 4), GOLD, B.pole, 0]);
+  // le sabre tiré, dans la main droite, pour les gestes d'escrime des animations
+  if (rig && kind === 'officier') P.push([limb(0.004, 0.014, 0.02, 0.8, -0.21, 4).translate(0, 0, 0.03), '#c8ccd0', B.foreR, 0], [box(0.1, 0.02, 0.03, -0.21, 0.81, 0.03), GOLD, B.foreR, 0]);
+  P.push(...hat(headgear(kind, year), kind).map(([g, c, , t]) => [g, c, B.head, t]));
+  // bras (l'épaule en y = 1,40, le coude en 1,15) : épaule, manche, parement, main ; le fusil dans la main gauche (os à
+  // eux : voir RIG_EXTRA)
+  for (const [s, side] of [[1, 'L'], [-1, 'R']]) {
+    const b = armed && side === 'L' ? y => y > 1.16 ? B.carryUpper : B.carryFore : y => y > 1.16 ? B['upper' + side] : B['fore' + side];
+    P.push([sph(0.058, 0.06, 0.06, s * 0.19, 1.39, 0, 6, 4), shade(0.95), b, 1],
+      [new THREE.CylinderGeometry(0.052, 0.044, 0.5, 7, 2, true).translate(s * 0.2, 1.15, 0), shade(0.9), b, 1],
+      [limb(0.048, 0.05, 0.87, 0.94, s * 0.2), facing, b, 0], [sph(0.04, 0.045, 0.04, s * 0.2, 0.84, 0, 5, 4), SKIN, b, 0]);
   }
-  if (armed) P.push([new THREE.BoxGeometry(0.035, 0.5, 0.065).translate(0.235, 1.03, 0.05), WOOD, 3, 0],
-    [limb(0.012, 0.012, 1.28, 2.2, 0.235, 5).translate(0, 0, 0.055), IRON, 3, 0], [limb(0.003, 0.009, 2.2, 2.55, 0.235, 4).translate(0, 0, 0.055), '#b8bcc0', 3, 0]);
+  if (armed) P.push([new THREE.BoxGeometry(0.035, 0.5, 0.065).translate(0.235, 1.03, 0.05), WOOD, B.musket, 0],
+    [limb(0.012, 0.012, 1.28, 2.2, 0.235, 5).translate(0, 0, 0.055), IRON, B.musket, 0], [limb(0.003, 0.009, 2.2, 2.55, 0.235, 4).translate(0, 0, 0.055), '#b8bcc0', B.musket, 0]);
   return assemble(P);
 }
 // l'étoffe du drapeau, accrochée en haut de la hampe du porte-drapeau, flottant vers l'arrière ; l'étendard d'un
@@ -416,8 +438,9 @@ function farCaisson(wagon) {
   return assemble(P);
 }
 
-// géométrie d'une sorte de figurine ; lod : 1 de près (formes arrondies), 0 de loin (quelques boîtes)
-export function model(kind, year, lod = 1) {
+// géométrie d'une sorte de figurine ; lod : 1 de près (formes arrondies), 0 de loin (quelques boîtes) ; rig : fantassin
+// sur les os du squelette des animations (RIG)
+export function model(kind, year, lod = 1, rig = false) {
   if (!lod) switch (kind) {
     case 'cav': case 'colonel': return farHorse(kind, year);
     case 'attelage': return farHorse(null, year);
@@ -435,7 +458,7 @@ export function model(kind, year, lod = 1) {
     case 'chariot': return caisson(true);
     case 'etoffe': return flagCloth();
     case 'fanion': return flagCloth(true);
-    default: return soldier(kind, year);
+    default: return soldier(kind, year, rig);
   }
 }
 // motif blanc de l'étoffe : croix des drapeaux d'ordonnance (avant 1790), losange ensuite

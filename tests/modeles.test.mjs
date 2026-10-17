@@ -6,7 +6,8 @@
 // de soldats. Ici on mesure chaque sorte.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { model, lodOf } from '../web/js/battle/troupes.js';
+import fs from 'node:fs';
+import { model, lodOf, RIG, RIG_EXTRA } from '../web/js/battle/troupes.js';
 
 // os permis par sorte (0 corps, 1-2 jambes, 3 bras et fusil, 4 étoffe ; cheval : 1-2 et 5-6 jambes, 7 encolure,
 // 8 bras du cavalier) et hauteur attendue (m, avant l'échelle des figurines ; sans les bras, le fusil ni le sabre)
@@ -86,4 +87,22 @@ test('choix de la version : hors champ, de loin, de près, avec une marge contre
   assert.equal(lodOf(mid, 2, true), 2);
   assert.equal(lodOf(mid, 1, true), 1);
   assert.equal(lodOf(mid, 0, true), 1, 'en rentrant dans le champ, de loin');
+});
+
+test('essai des animations : fantassins sur les os du squelette, dans l’ordre de web/anims/soldat.json', () => {
+  const names = [...Object.keys(RIG), ...RIG_EXTRA], id = Object.fromEntries(names.map((k, i) => [k, i]));
+  const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
+  assert.deepEqual(meta.bones, names, 'relancer dev/cuire.mjs');
+  for (const kind of ['inf', 'gren', 'milice', 'officier', 'tambour', 'drapeau']) {
+    const g = model(kind, 1790, 1, true), p = g.attributes.position, b = g.attributes.aBone;
+    for (let i = 0; i < p.count; i++) {
+      const bone = b.getX(i), y = p.getY(i);
+      assert.ok(Number.isInteger(bone) && bone >= 0 && bone < names.length, `${kind} : os ${bone}`);
+      if (bone === id.thighL || bone === id.thighR) assert.ok(y > 0.53, `${kind} : cuisse sous le genou (y = ${y.toFixed(2)})`);
+      if (bone === id.shinL || bone === id.shinR) assert.ok(y <= 0.53 && y > 0.09, `${kind} : tibia en y = ${y.toFixed(2)}`);
+    }
+  }
+  // sans le squelette, les os de toujours
+  const old = new Set(model('inf', 1790).attributes.aBone.array);
+  assert.deepEqual([...old].sort(), [0, 1, 2, 3]);
 });

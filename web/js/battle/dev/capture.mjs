@@ -10,6 +10,8 @@
 // window.__btView est la vue), --wait (ms avant la capture, défaut 4000), --size (défaut 1400x800), --dpr (densité de pixels, défaut 1 ; 2 comme un écran Retina), --gpu (essayer la
 // carte graphique au lieu de SwiftShader), --nogl (sans WebGL : le message et la résolution automatique), --qualite basse|moyenne|haute|ultra (défaut haute, choisie « à la main » : la
 // mesure des images par seconde, très lente sans carte graphique, ne la fait pas descendre).
+// --page (une autre page de dev/, par exemple anims.html : elle reçoit --q seul et doit aussi mettre son titre à « pret ») ;
+// --frames n,dt : n images, en appelant window.__at(k × dt) avant chacune (out-000.png, out-001.png…).
 // Gestes, après --js (de vrais événements, comme une souris ou des doigts) :
 //   --drag x0,y0,x1,y1 (ou --drag js : les coordonnées sont lues dans window.__drag), --button left|right|middle,
 //   --hold (capture avant de relâcher : la flèche d'ordre est encore tracée) ;
@@ -78,8 +80,9 @@ try {
   await s('Runtime.enable'); await s('Log.enable'); await s('Page.enable');
   await s('Page.addScriptToEvaluateOnNewDocument', { source: `try { localStorage.setItem('conquete.bataille.qualite', '${opt('--qualite') || 'haute'}'); } catch (e) {}` });
   await s('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: +(opt('--dpr') || 1), mobile: false });
-  const q = new URLSearchParams(`scen=${scen}${/(^|&)start=/.test(extra) ? '' : '&start=1'}${extra ? '&' + extra : ''}`);   // (start=0 : déploiement)
-  await s('Page.navigate', { url: `http://127.0.0.1:${port}/js/battle/dev/banc.html?${q}` });
+  const page = opt('--page');
+  const q = page ? new URLSearchParams(extra) : new URLSearchParams(`scen=${scen}${/(^|&)start=/.test(extra) ? '' : '&start=1'}${extra ? '&' + extra : ''}`);   // (start=0 : déploiement)
+  await s('Page.navigate', { url: `http://127.0.0.1:${port}/js/battle/dev/${page || 'banc.html'}?${q}` });
   const evalJs = async expr => (await s('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true })).result?.value;
   for (let t = 0; (await evalJs('document.title')) !== 'pret'; t += 250) {
     if (t > 120000) throw new Error('le banc ne s’est pas ouvert');
@@ -108,9 +111,13 @@ try {
     await s('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await sleep(2000);
   }
-  const shot = await s('Page.captureScreenshot', { format: 'png' });
-  fs.writeFileSync(out, Buffer.from(shot.data, 'base64'));
-  console.log(`Capture : ${out}`);
+  const [nf, dt] = (opt('--frames') || '0,0').split(',').map(Number);
+  for (let k = 0; k < Math.max(1, nf); k++) {
+    if (nf) await evalJs(`window.__at(${k * dt})`);
+    const shot = await s('Page.captureScreenshot', { format: 'png' }), file = nf ? out.replace(/\.png$/, `-${String(k).padStart(3, '0')}.png`) : out;
+    fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
+  }
+  console.log(`Capture : ${out}${nf ? ` (${nf} images)` : ''}`);
 } catch (e) { errors.push('capture : ' + e.message); }
 for (const e of errors) console.error('ERREUR', e);
 done(errors.length ? 1 : 0);
