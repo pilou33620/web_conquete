@@ -172,3 +172,134 @@ captures restent mon outil de vérification interne. La taille des soldats est c
 ## Questions ouvertes (étape 6)
 
 - Aucune bloquante. Taille des soldats et courbe filmique choisies sur captures internes.
+
+# Étape 7 : animer les batailles et se rapprocher d'Ultimate General (SPEC-3D.md, « Étape 7 »)
+
+Spec validée le 17/10/2026. Six sous-étapes dans l'ordre 7a → 7b → 7c → 7d → 7e → 7f, chacune jouable, capturée,
+publiée sur la galerie (réseau local) et commitée. Le prototype (`dev/anims.html`, `dev/cuire.mjs`) sert de référence
+et de page d'essai.
+
+## Décisions d'architecture
+
+14. **Le geste de chaque homme est choisi par le processeur, joué par la carte graphique.**
+    - `gestes.js` (logique pure, testée sous Node) décide, pour chaque figurine, quelle animation jouer, depuis quel
+      instant et à quelle vitesse, ainsi que l'animation d'avant et l'instant du fondu.
+    - `troupes.js` écrit ces valeurs dans les attributs d'instance du régiment, seulement quand son activité change :
+      état, marche, conversion, salve, perte, nouvelle disposition. Il ne met à jour que la plage de ce régiment.
+    - Le vertex shader ne fait que lire la texture des animations et fondre deux poses (0,3 s), comme dans le prototype.
+    - Une salve s'écrit en une fois, avec une animation précalculée qui s'enchaîne d'elle-même : « en joue → feu →
+      recharge ». Une version à genoux sert au premier rang. Les tirailleurs ont un cycle « feu libre ».
+15. **Une seule horloge pour les gestes : celle des effets** (`fxT`). Les salves, la fumée et les gestes restent
+    ensemble. En accéléré, tout va plus vite ; en pause, tout ralentit avec les effets.
+16. **Place des attributs (16 au plus en WebGL).** Les figurines en utilisent déjà 13 avec `instanceMatrix`. On passe
+    d'`InstancedMesh` à `Mesh` sur une `InstancedBufferGeometry`, sans `instanceMatrix`, ce qui libère 4 emplacements.
+    `aBone` et `aPart` sont rangés dans un `vec2`, et `uv` n'est gardé que pour les étoffes. Les attributs d'instance
+    deviennent :
+    - `aSlot` (u, v, sens, régiment) ;
+    - `aAnim` (variété, taille, rang, sorte) ;
+    - `aClip` et `aPrev` (animation et animation d'avant) ;
+    - `aMove` (départ, instant, durée de la course à sa place) ;
+    - `aCoat`.
+17. **Identité des hommes.**
+    - Chaque figurine a un numéro stable dans son régiment.
+    - Sa variété est tirée une fois pour toutes, par un hachage du régiment et de ce numéro : place, sens, taille,
+      teinte, rythme, décalage d'horaire.
+    - D'une disposition à la suivante, `gestes.js` apparie les hommes en gardant l'ordre de lecture (rang, puis file) :
+      celui de gauche reste à gauche. Les morts sont retirés avant l'appariement.
+18. **Courir à sa place.** Le shader mène chaque homme de sa place de départ à sa place d'arrivée, en coordonnées du
+    régiment, entre deux instants. Il est au trot si le trajet dépasse 3 m, au pas sinon, tourné vers sa route, puis
+    face au front, avec un fondu. Une conversion (le cap du régiment change) ou un déplacement met en marche ceux qui
+    sont à l'arrêt.
+19. **Bâtiments : une grille et une liste lues par le shader.**
+    - `terrain.js` range les bâtiments dans une grille de 8 m. Chaque case garde au plus 4 bâtiments, chacun un
+      rectangle orienté.
+    - Le shader repousse une figurine hors du rectangle élargi de 0,5 m, vers le bord le plus proche.
+    - `gestes.js` a la même fonction en JavaScript pour le banc.
+    - Seulement maisons, église et moulins : pas les remparts.
+20. **Corps au sol : un lot à part, en coordonnées du monde.**
+    - Un homme tué quitte son régiment.
+    - Il rejoint le lot des corps de sa sorte, avec sa position, son sens et sa teinte au moment de sa mort. Il y joue
+      « mort », « touché à la tête » ou « projeté », puis garde la dernière image.
+    - Le lot est un anneau plafonné par la qualité. Le plus ancien redevient une tache peinte (`terrain.addDecals`).
+    - Le choix des tués (`gestes.js`) : sous la mousqueterie, surtout le premier rang ; sous un boulet, la file la plus
+      proche de sa trajectoire (événement `canon`, point de chute `x2`, `y2`).
+    - Un cheval tué : le cheval couché, une pose figée par le code.
+21. **Cavaliers au squelette.** Le cheval perd son cavalier. Le cavalier devient une figurine au squelette posée sur la
+    selle :
+    - jambes à califourchon, une pose précalculée par `cuire.mjs` ;
+    - même balancement que le cheval (même formule, mêmes données du régiment) ;
+    - au repos, les gestes des bras ;
+    - à la charge, le sabre levé ;
+    - en mêlée, des coups de sabre.
+    Le cheval se cabre au choc, par le code.
+22. **De loin, moins de figurines, plus grandes.**
+    - Pour chaque régiment, l'échelle des figurines et le nombre d'hommes par figurine suivent la distance à la caméra,
+      par paliers et avec une marge, comme `lodOf`.
+    - L'échelle va de ×1 à environ ×2. Le nombre de figurines baisse d'autant, pour que le régiment tienne dans son
+      emprise.
+    - La version de loin a les mêmes os et les mêmes gestes.
+
+## Graphe des dépendances
+
+```
+cuire.mjs (gestes précalculés) ──┐
+gestes.js (logique pure) ────────┼──> troupes.js : squelette, attributs, gestes (7a) ──┬──> tués, corps (7b)
+qualite.js (plafonds) ───────────┘                                                    ├──> places, bâtiments (7c) ──> mêlée, cavaliers (7d)
+                                                                                      └──> échelle de loin (7e)
+terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
+```
+
+## Liste des tâches (étape 7)
+
+### 7a : figurines animées
+- [ ] T29 : squelette dans les vraies batailles (fantassins de près, gestes selon l'état)
+- [ ] T30 : version de loin au squelette, ombres, lumière et proportions du prototype
+- [ ] T31 : feu et recharge (salve qui roule, à genoux, tirailleurs), officiers, tambours, drapeau
+- [ ] T32 : variété par homme et fondus
+- [ ] T33 : servants des pièces au squelette
+- [ ] Point de contrôle 7a (bancs, cinq scénarios, galerie, images/s sur l'iPad)
+
+### 7b : tués
+- [ ] T34 : les hommes tombent, corps en 3D au sol (anneau plafonné)
+- [ ] T35 : boulets qui couchent une file, chevaux morts
+- [ ] Point de contrôle 7b
+
+### 7c : places et bâtiments
+- [ ] T36 : hommes qui courent à leur place
+- [ ] T37 : conversion, marche et arrêt sans glissade
+- [ ] T38 : bâtiments (répulsion)
+- [ ] Point de contrôle 7c
+
+### 7d : mêlée et charges
+- [ ] T39 : mêlée (fronts qui se mêlent, estoc, poussée, sabres des officiers)
+- [ ] T40 : cavaliers au squelette, en selle
+- [ ] T41 : sabres des cavaliers, chevaux qui se cabrent
+- [ ] Point de contrôle 7d
+
+### 7e : vue de loin
+- [ ] T42 : échelle et nombre de figurines selon la distance
+- [ ] Point de contrôle 7e
+
+### 7f : scène
+- [ ] T43 : couleurs et lumière du terrain
+- [ ] T44 : fumée et effets à l'échelle des figurines
+- [ ] T45 : vérification finale, README, revue
+- [ ] Point final de l'étape 7
+
+## Risques et parades (étape 7)
+
+| Risque | Impact | Parade |
+|---|---|---|
+| Lectures de texture par sommet trop chères sur l'iPad (6 par sommet, 12 pendant un fondu) | Haut | Version de loin légère ; fondu limité à 0,3 s ; mesure sur l'iPad dès le point de contrôle 7a ; en Basse, pas de fondu |
+| Plus de 16 attributs par sommet : le shader ne compile pas | Haut | Décision 16, faite dès T29 ; banc qui compte les attributs de chaque sorte |
+| Mise à jour des attributs trop fréquente (salves, marches) | Moyen | Seulement la plage du régiment touché, seulement quand son activité change |
+| Les hommes de loin et de près ne font pas le même geste à la bascule | Moyen | Mêmes os, même texture, mêmes attributs : la bascule ne change que le modèle |
+| Corps trop nombreux sur une longue bataille | Moyen | Anneau plafonné par qualité, au-delà taches peintes ; plafond réglé sur l'iPad |
+| Cavalier et cheval désaccordés (balancement, cabrage) | Moyen | Même formule de balancement dans les deux shaders ; capture du galop et du choc |
+| Répulsion qui fait trembler les hommes au bord d'une maison | Bas | Repousser vers le bord le plus proche, sans rebond ; captures d'un régiment qui traverse un village |
+| Captures lentes sur le Pi (rendu logiciel) | Bas | Petites tailles, vidéos courtes, lancées en arrière-plan |
+
+## Questions ouvertes (étape 7)
+
+- Plafond des corps et coût des fondus : réglés sur l'iPad au point de contrôle 7a (puis 7b).
+- Agrandissement maximal de loin : environ ×2, tranché sur les captures de T42.

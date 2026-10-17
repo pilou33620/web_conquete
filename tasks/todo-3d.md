@@ -330,3 +330,258 @@ Vues types (bocage, `avance=300`, 1400×800, Haute) : ensemble (z = 0,6), mi-dis
   - Taille : S
 
 - [x] **Point final de l'étape 6** : tu essaies sur l'iPad.
+
+## Étape 7 : animer les batailles et se rapprocher d'Ultimate General (SPEC-3D.md « Étape 7 », plan : décisions 14 à 22)
+
+Vérifications communes :
+- `python3 tests/lancer.py` passe.
+- Aucune erreur dans la console sur les cinq scénarios du banc.
+- Captures (et vidéo si ça bouge) publiées sur la galerie du réseau local, à côté des captures de référence d'Ultimate
+  General.
+- Commit à chaque tâche.
+
+Vues types : celles de l'étape 6 (bocage, `avance=300`, 1400×800, Haute), plus une vue en plongée façon Ultimate
+General sur un régiment qui tire.
+
+### 7a : figurines animées
+
+- [ ] **T29 : squelette dans les vraies batailles**
+  - Critères :
+    - La texture des animations (`web/anims/soldat.*`) est chargée à l'entrée de la bataille. Si elle manque : une
+      erreur dans la console, et les hommes restent dans leur pose de référence.
+    - Fantassins de près au squelette (`model(kind, year, 1, true)`). Leurs gestes suivent l'état : repos, marche,
+      charge, déroute, ralliement (`gestes.js`, `gesture()`).
+    - Attributs réorganisés (décision 16). Un banc vérifie que chaque sorte en utilise au plus 16.
+    - L'ancienne animation par le code des fantassins de près est retirée. Chevaux, canons, drapeaux, servants et
+      version de loin ne changent pas encore.
+  - Vérif :
+    - banc `tests/gestes.test.mjs` (geste de chaque état, rang, formation) ;
+    - banc des modèles (attributs) ;
+    - captures au ras : un régiment qui marche, un qui charge, un en déroute.
+  - Fichiers : `web/js/battle/troupes.js`, `web/js/battle/gestes.js` (nouveau), `web/js/battle/vue.js`,
+    `tests/gestes.test.mjs` (nouveau), `tests/modeles.test.mjs`
+  - Taille : M
+
+- [ ] **T30 : version de loin au squelette, ombres, lumière, proportions**
+  - Critères :
+    - La version de loin a les os du squelette (genou et coude) : mêmes gestes, même hauteur.
+    - Passe d'ombre et ombres de contact suivent le squelette ; la tache suit les hanches, même couché.
+    - Le prototype passe dans le jeu, pour les troupes seulement :
+      - lumière enveloppante ;
+      - ombre plus sombre vers les pieds ;
+      - proportions trapues.
+    - Triangles des vues types relevés.
+  - Vérif :
+    - banc des modèles (mêmes os et même hauteur de près et de loin, pour toutes les sortes à pied) ;
+    - captures à la distance de bascule et en vue d'ensemble.
+  - Fichiers : `web/js/battle/troupes.js`, `tests/modeles.test.mjs`
+  - Taille : M
+
+- [ ] **T31 : feu et recharge, officiers, tambours, drapeau**
+  - Critères :
+    - `cuire.mjs` précalcule :
+      - « salve » et « salve à genoux » (en joue, feu, recharge, épaulé), qui s'enchaînent d'elles-mêmes ;
+      - « feu libre » pour les tirailleurs, en boucle ;
+      - « tambour » (les baguettes battent) ;
+      - « garde » de l'officier, sabre au clair.
+    - Une salve met chaque homme en joue au moment où le feu roule jusqu'à sa file (`un._volley`, horloge des effets).
+      En ligne à l'arrêt, le premier rang est à genoux.
+    - Officiers : ils parlent au repos, sont en garde au feu. Le porte-drapeau porte la hampe.
+  - Vérif :
+    - banc (geste d'une salve : instant de chaque file, rang à genoux) ;
+    - vidéo d'une salve qui roule, avec sa fumée.
+  - Fichiers : `web/js/battle/dev/cuire.mjs`, `web/anims/soldat.*`, `web/js/battle/gestes.js`,
+    `web/js/battle/troupes.js`, `tests/gestes.test.mjs`
+  - Taille : M
+
+- [ ] **T32 : variété par homme et fondus**
+  - Critères :
+    - Chaque homme a, tirés une fois pour toutes par hachage du régiment et de son numéro :
+      - sa place (±15 cm), son sens (±6°), sa taille (±5 %) ;
+      - sa teinte d'habit ;
+      - son rythme (±6 %) ;
+      - son décalage d'horaire, de quelques dixièmes de seconde.
+    - Chaque changement de geste se fait en fondu de 0,3 s. Jamais de saut de pose.
+    - En Basse : pas de fondu si la mesure de l'iPad le demande (réglage `fondu` dans `qualite.js`).
+  - Vérif :
+    - banc (variété reproductible, bornes respectées) ;
+    - vidéo d'un régiment qui s'arrête, met en joue et repart.
+  - Fichiers : `web/js/battle/gestes.js`, `web/js/battle/troupes.js`, `web/js/battle/qualite.js`,
+    `tests/gestes.test.mjs`
+  - Taille : M
+
+- [ ] **T33 : servants au squelette**
+  - Critères :
+    - `cuire.mjs` précalcule les gestes des servants, réglés sur le coup de leur pièce (`_shots`) :
+      - écouvillon (refouler) ;
+      - chargement du boulet ;
+      - pointeur accroupi ;
+      - boutefeu.
+    - Les servants gardent leur place autour de la pièce et leur habit sombre. L'animation par le code des servants est
+      retirée.
+  - Vérif : banc des modèles (servant au squelette) ; vidéo d'une batterie qui tire.
+  - Fichiers : `web/js/battle/dev/cuire.mjs`, `web/anims/soldat.*`, `web/js/battle/troupes.js`, `web/js/battle/gestes.js`
+  - Taille : M
+
+- [ ] **Point de contrôle 7a** : bancs, cinq scénarios sans erreur, galerie (captures et vidéos), commit. Tu mesures
+  les images par seconde sur l'iPad en Haute (objectif ≥ 30) ; on règle le fondu et la version de loin si besoin.
+
+### 7b : tués
+
+- [ ] **T34 : les hommes tombent, corps en 3D au sol**
+  - Critères :
+    - Quand un régiment perd des hommes, `gestes.js` (`chooseDead`) choisit les figurines qui tombent, surtout au
+      premier rang sous la mousqueterie.
+    - Elles rejoignent le lot des corps à l'endroit, dans le sens et avec la teinte de leur chute. Elles y jouent
+      « mort » ou « touché à la tête », puis restent couchées avec leur fusil.
+    - Anneau plafonné (`corps` dans `qualite.js` : 800, 1 500, 2 500, 4 000). Au-delà, le plus ancien devient une
+      tache peinte.
+    - Pas de corps dans un bâtiment ni sur l'eau (`terrain.bare`).
+    - Les taches « mort » d'aujourd'hui ne servent plus qu'au-delà du plafond.
+  - Vérif :
+    - banc (choix des tués, anneau : plafond, ordre de sortie) ;
+    - vidéo d'un échange de salves ;
+    - capture d'un champ après une heure de bataille (`avance=3600`).
+  - Fichiers : `web/js/battle/gestes.js`, `web/js/battle/troupes.js`, `web/js/battle/vue.js`,
+    `web/js/battle/qualite.js`, `tests/gestes.test.mjs`
+  - Taille : M
+
+- [ ] **T35 : boulets qui couchent une file, chevaux morts**
+  - Critères :
+    - Un boulet (événement `canon`) qui frappe un régiment tue d'abord la file la plus proche de sa trajectoire. Ces
+      hommes jouent « projeté ».
+    - Un cavalier tué : le cheval couché (pose figée par le code) et son cavalier tombé.
+    - Les attelages tués restent couchés aussi.
+  - Vérif : banc (file la plus proche d'une trajectoire) ; vidéo d'une batterie qui tire sur une ligne et sur de la
+    cavalerie.
+  - Fichiers : `web/js/battle/gestes.js`, `web/js/battle/troupes.js`, `web/js/battle/vue.js`, `tests/gestes.test.mjs`
+  - Taille : M
+
+- [ ] **Point de contrôle 7b** : bancs, cinq scénarios, galerie, commit ; tu règles le plafond des corps sur l'iPad.
+
+### 7c : places et bâtiments
+
+- [ ] **T36 : hommes qui courent à leur place**
+  - Critères :
+    - À chaque nouvelle disposition (formation, largeur, pertes, déroute, ralliement), `gestes.js` (`matchSlots`)
+      apparie les hommes en gardant l'ordre de lecture.
+    - Chacun va de son ancienne place à la nouvelle (décision 18) : au trot au-delà de 3 m, au pas sinon, tourné vers
+      sa route, puis face au front.
+    - Plus aucun saut de place.
+  - Vérif :
+    - banc (`matchSlots` : chaque homme une place, aucune place prise deux fois, ordre gardé, trajet total court) ;
+    - vidéo : ligne → colonne → carré → ligne.
+  - Fichiers : `web/js/battle/gestes.js`, `web/js/battle/troupes.js`, `tests/gestes.test.mjs`
+  - Taille : M
+
+- [ ] **T37 : conversion, marche et arrêt sans glissade**
+  - Critères :
+    - Quand le cap d'un régiment change ou qu'il se déplace, ses hommes à l'arrêt se mettent en marche, puis reprennent
+      leur geste à l'arrivée, en fondu.
+    - Plus de régiment qui tourne ou glisse d'un bloc avec des hommes immobiles.
+  - Vérif : banc (activité d'un régiment qui tourne) ; vidéo d'une conversion de 90°.
+  - Fichiers : `web/js/battle/gestes.js`, `web/js/battle/troupes.js`, `tests/gestes.test.mjs`
+  - Taille : S
+
+- [ ] **T38 : bâtiments**
+  - Critères :
+    - `terrain.js` prépare la grille des bâtiments (décision 19). Le shader repousse toute figurine debout hors des
+      maisons, de l'église et des moulins (marge de 0,5 m), vers le bord le plus proche. Les remparts ne sont pas
+      concernés.
+    - Un régiment qui traverse un village s'écoule autour des maisons.
+  - Vérif :
+    - banc (`pushOut` : un point dans une maison sort au plus court, un point dehors ne bouge pas, rectangle tourné) ;
+    - vidéo d'un régiment qui traverse le village du scénario bocage.
+  - Fichiers : `web/js/battle/terrain.js`, `web/js/battle/troupes.js`, `web/js/battle/gestes.js`,
+    `tests/gestes.test.mjs`
+  - Taille : M
+
+- [ ] **Point de contrôle 7c** : bancs, cinq scénarios, galerie, commit.
+
+### 7d : mêlée et charges
+
+- [ ] **T39 : mêlée**
+  - Critères :
+    - En mêlée, l'adversaire est le régiment ennemi en mêlée le plus proche (`gestes.js`). Les premiers rangs avancent
+      l'un dans l'autre sur le front de contact, sans traverser tout le régiment.
+    - Les hommes font des estocs et des poussées, chacun à son rythme, tournés vers l'ennemi. Les officiers donnent des
+      coups de sabre.
+    - Les tués tombent (7b).
+  - Vérif : banc (adversaire, profondeur de mêlée) ; vidéo d'une charge à la baïonnette qui finit en mêlée.
+  - Fichiers : `web/js/battle/gestes.js`, `web/js/battle/troupes.js`, `tests/gestes.test.mjs`
+  - Taille : M
+
+- [ ] **T40 : cavaliers au squelette, en selle**
+  - Critères :
+    - Le cheval est dessiné sans cavalier. Le cavalier est une figurine au squelette posée sur la selle : jambes à
+      califourchon (pose précalculée), habit, coiffure, sabre.
+    - Il suit le balancement du cheval (même formule).
+    - Mêmes règles pour le colonel et l'état-major ; le porte-étendard garde son étendard.
+  - Vérif : banc des modèles (cavalier : os, hauteur en selle) ; vidéo au pas et au galop.
+  - Fichiers : `web/js/battle/dev/cuire.mjs`, `web/anims/soldat.*`, `web/js/battle/troupes.js`,
+    `tests/modeles.test.mjs`
+  - Taille : M
+
+- [ ] **T41 : sabres des cavaliers, chevaux qui se cabrent**
+  - Critères :
+    - À la charge, sabre levé.
+    - En mêlée, coups de sabre (« assaut », « sabre »), chacun à son rythme.
+    - Au choc d'une charge, les chevaux du premier rang se cabrent un instant (par le code).
+  - Vérif : vidéo d'une charge de cavalerie sur une ligne.
+  - Fichiers : `web/js/battle/dev/cuire.mjs`, `web/anims/soldat.*`, `web/js/battle/troupes.js`, `web/js/battle/gestes.js`
+  - Taille : M
+
+- [ ] **Point de contrôle 7d** : bancs, cinq scénarios, galerie, commit.
+
+### 7e : vue de loin
+
+- [ ] **T42 : échelle et nombre de figurines selon la distance**
+  - Critères :
+    - Par régiment, `gestes.js` (`scaleAt`) donne l'échelle (×1 à environ ×2) et le nombre d'hommes par figurine selon
+      la distance à la caméra : par paliers, avec une marge, en restant dans l'emprise.
+    - À la vue d'ensemble du bocage, chaque soldat fait au moins 3 px de large et 8 px de haut, et un régiment se lit
+      comme un bloc d'hommes.
+    - L'agrandissement maximal est choisi sur captures.
+  - Vérif :
+    - banc (`scaleAt` croissante, bornée, avec marge) ;
+    - captures de la vue d'ensemble et de la mi-distance, à côté des captures de référence ;
+    - triangles relevés.
+  - Fichiers : `web/js/battle/gestes.js`, `web/js/battle/troupes.js`, `tests/gestes.test.mjs`
+  - Taille : M
+
+- [ ] **Point de contrôle 7e** : bancs, cinq scénarios, galerie, commit.
+
+### 7f : scène
+
+- [ ] **T43 : couleurs et lumière du terrain**
+  - Critères :
+    - Lumière chaude, couleurs un peu passées.
+    - Herbe en touffes de plusieurs verts, blés dorés, brume bleutée au loin.
+    - Captures comparées côte à côte aux captures de référence (bocage, landes, vignes).
+    - Heures, nuit et météo toujours justes.
+  - Vérif : captures des vues types à midi, matin, soir, brouillard, neige.
+  - Fichiers : `web/js/battle/terrain.js`, `web/js/battle/textures.js`, `web/js/battle/relief.js`
+  - Taille : M
+
+- [ ] **T44 : fumée et effets à l'échelle des figurines**
+  - Critères :
+    - Bouffées à l'échelle des figurines (rayon selon leur échelle).
+    - Une salve laisse un banc de fumée continu le long de la ligne, d'environ 2 à 3 hauteurs d'homme.
+    - Éclairs de bouche, poussière des charges, gerbes de terre lisibles.
+    - Le nombre de fumées reste borné par la qualité.
+  - Vérif : vidéo d'un échange de salves ; captures de la vue d'ensemble pendant un combat.
+  - Fichiers : `web/js/battle/effets.js`, `web/js/battle/vue.js`
+  - Taille : S
+
+- [ ] **T45 : vérification finale, README, revue**
+  - Critères :
+    - Critères 1 à 18 de la spec vérifiés sur captures et vidéos.
+    - README à jour : animations, tués, bâtiments, crédit Quaternius (CC0).
+    - /review fait et ses corrections commitées.
+    - Galerie finale.
+  - Vérif : `python3 tests/lancer.py` ; cinq scénarios et une bataille de campagne sans erreur.
+  - Fichiers : `README.md`, `SPEC-3D.md` (état de l'étape 7)
+  - Taille : S
+
+- [ ] **Point final de l'étape 7** : tu essaies sur l'iPad (images par seconde en Haute) et tu juges l'allure en
+  jouant.
