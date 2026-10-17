@@ -252,7 +252,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 ## Liste des tâches (étape 7)
 
 ### 7a : figurines animées
-- [ ] T29 : squelette dans les vraies batailles (fantassins de près, gestes selon l'état)
+- [x] T29 : squelette dans les vraies batailles (fantassins de près, gestes selon l'état)
 - [ ] T30 : version de loin au squelette, ombres, lumière et proportions du prototype
 - [ ] T31 : feu et recharge (salve qui roule, à genoux, tirailleurs), officiers, tambours, drapeau
 - [ ] T32 : variété par homme et fondus

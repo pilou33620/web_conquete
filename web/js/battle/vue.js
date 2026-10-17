@@ -5,7 +5,7 @@
 import * as THREE from '../../vendor/three/three.module.js';
 import { Terrain } from './terrain.js';
 import { Relief } from './relief.js';
-import { Troops } from './troupes.js';
+import { Troops, loadAnims } from './troupes.js';
 import { Decor } from './decor.js';
 import { drawBanners } from './fanions.js';
 import { UnitArt } from './unites.js';
@@ -76,7 +76,7 @@ export class BattleView {
     this.terrain = new Terrain(m, this.q);
     this.relief = new Relief(this.terrain, this.q);
     this.relief.setup(this.scene);
-    this.troops = new Troops(this.relief, this.q, m.year);
+    this.troops = new Troops(this.relief, this.q, m.year, await loadAnims());
     this.scene.add(this.troops.group);
     this.fx.attach(this.scene, this.relief.heightAt);
     this.decor = new Decor(this.terrain, this.relief, this.q);

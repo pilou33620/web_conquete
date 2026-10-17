@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { model, lodOf, RIG, RIG_EXTRA } from '../web/js/battle/troupes.js';
+import { model, lodOf, RIG, RIG_EXTRA, INSTANCE_ATTRS } from '../web/js/battle/troupes.js';
 
 // os permis par sorte (0 corps, 1-2 jambes, 3 bras et fusil, 4 étoffe ; cheval : 1-2 et 5-6 jambes, 7 encolure,
 // 8 bras du cavalier) et hauteur attendue (m, avant l'échelle des figurines ; sans les bras, le fusil ni le sabre)
@@ -105,4 +105,13 @@ test('essai des animations : fantassins sur les os du squelette, dans l’ordre 
   // sans le squelette, les os de toujours
   const old = new Set(model('inf', 1790).attributes.aBone.array);
   assert.deepEqual([...old].sort(), [0, 1, 2, 3]);
+});
+
+test('au plus 16 attributs par sommet (limite de WebGL), gestes compris', () => {
+  // attributs lus par le shader des figurines au squelette : ceux du modèle (sans uv, lu par les seules étoffes), puis
+  // un emplacement par attribut d'instance (au plus 4 nombres chacun)
+  const g = model('inf', 1790, 1, true), own = Object.keys(g.attributes).filter(a => a !== 'uv');
+  const slots = own.length + Object.values(INSTANCE_ATTRS).reduce((a, n) => a + Math.ceil(n / 4), 0);
+  assert.ok(slots <= 16, `${slots} emplacements : ${own.join(', ')}, ${Object.keys(INSTANCE_ATTRS).join(', ')}`);
+  assert.ok('aGest' in INSTANCE_ATTRS && 'aMix' in INSTANCE_ATTRS, 'attributs des gestes');
 });

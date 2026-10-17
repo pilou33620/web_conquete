@@ -7,12 +7,18 @@
 // sommet), dessinés par lots (un InstancedMesh par sorte et par version). Chaque instance ne porte que sa place dans le régiment (u le long du front, v vers
 // l'avant), son sens, sa pose, sa phase et la couleur de son habit. La position, le sens et l'état de chaque régiment
 // sont dans une petite texture de données mise à jour à chaque image ; le vertex shader place la figurine, lit
-// l'altitude dans une texture du relief, anime les membres (attribut « os » de chaque sommet : jambes, bras et fusil)
-// et fait rouler la salve le long du front. Le travail de chaque image est donc proportionnel au nombre de régiments.
+// l'altitude dans une texture du relief, anime les membres (attribut « os » de chaque sommet) et fait rouler la salve
+// le long du front. Le travail de chaque image est donc proportionnel au nombre de régiments.
+//
+// Les hommes à pied sont au squelette des animations précalculées (Quaternius, CC0 : dev/cuire.mjs, web/anims/) :
+// chaque os suit sa matrice, lue dans la texture des animations au geste choisi par gestes.js (attributs aGest et
+// aMix, réécrits quand l'activité du régiment change), avec un fondu entre deux gestes. Chevaux, pièces, drapeaux et
+// servants gardent l'animation par le code.
 // Les dispositions (layout) ne sont recalculées que quand un régiment change de forme, d'effectif (par 8 hommes) ou
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp } from './formes.js';
+import { activity, gesture } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
 const { AIM, RUN, ROUT } = POSES;
@@ -22,12 +28,16 @@ const MAXU = 512;           // régiments au plus (largeur de la texture des ré
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', GOLD = '#d6b65a', LEATHER = '#2a1f16';
 const AFFUT = '#5f6b3e', BRONZE = '#b08a3e';   // affûts peints en vert olive, pièces de bronze
 const ROWS = 5;     // lignes de la texture des régiments (la 4e et la 5e : l'instant du dernier coup de chaque pièce)
-// sortes de figurines et leur animation dans le vertex shader (null : homme à pied ; FLAG : étoffe d'un drapeau)
+// sortes de figurines et leur animation dans le vertex shader (null : homme à pied, au squelette de près ; FLAG :
+// étoffe d'un drapeau)
 const KINDS = { inf: null, gren: null, leger: null, milice: null, officier: null, tambour: null, drapeau: null, cav: 'HORSE', colonel: 'HORSE',
   attelage: 'HORSE', servant: 'CREW', canon: 'GUN', caisson: 'GUN', chariot: 'GUN', etoffe: 'FLAG', fanion: 'FLAG' };
 // tache d'ombre douce au sol sous chaque figurine (largeur, profondeur, décalage vers l'avant, en m avant l'échelle)
 const CONTACT = { FOOT: [0.8, 0.66, 0], CREW: [0.8, 0.66, 0], HORSE: [1.0, 2.5, 0], GUN: [1.7, 3.0, -0.3] };
 const ROBES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];   // robes des chevaux (bai, bai brun, alezan, noir pangaré)
+// attributs de chaque figurine (nombres par figurine) : place, pose, habit ; geste (aGest : geste et son début, geste
+// d'avant et son début ; aMix : instant du fondu, vitesse, vitesse d'avant)
+export const INSTANCE_ATTRS = { aSlot: 4, aAnim: 4, aCoat: 3, aGest: 4, aMix: 4 };
 // os du squelette des animations Quaternius (CC0, dev/cuire.mjs) dans l'ordre de leur texture, puis ceux des gestes du
 // fusil (RIG_EXTRA) : le fusil, le bras et l'avant-bras gauches qui le portent
 export const RIG = { hips: 'DEF-hips', chest: 'DEF-spine.003', head: 'DEF-head', upperL: 'DEF-upper_arm.L', foreL: 'DEF-forearm.L',
@@ -48,6 +58,20 @@ export function headgear(kind, year) {
   if (year < 1795) return 'tricorne';
   if (year < 1806) return kind === 'leger' ? 'shako' : 'bicorne';
   return year < 1860 ? 'shako' : 'kepi';
+}
+
+// animations précalculées (web/anims/soldat.*, dev/cuire.mjs) : { meta, data } ; null si elles manquent (les hommes
+// restent alors dans leur pose de référence)
+export async function loadAnims() {
+  try {
+    const [meta, buf] = await Promise.all([fetch(new URL('../../anims/soldat.json', import.meta.url)).then(r => r.json()),
+      fetch(new URL('../../anims/soldat.bin', import.meta.url)).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })]);
+    if (buf.byteLength !== meta.rows * meta.bones.length * 12 * 2) throw new Error('taille inattendue');
+    return { meta, data: new Uint16Array(buf) };
+  } catch (e) {
+    console.error('animations des troupes introuvables (web/anims/soldat.*) :', e);
+    return null;
+  }
 }
 
 // ------------------------------------------------------------------ dispositions
@@ -509,6 +533,23 @@ float hAt(vec2 p) {
   return mix(mix(a, b, t.x), mix(c, d, t.x), t.y);
 }
 vec2 pitch(vec2 yz, vec2 o, float a) { vec2 q = yz - o; return o + vec2(q.x * cos(a) - q.y * sin(a), q.x * sin(a) + q.y * cos(a)); }
+#if defined(RIG)
+attribute vec4 aGest;   // geste et son début, geste d'avant et son début (horloge des effets)
+attribute vec4 aMix;    // instant du fondu, vitesse, vitesse d'avant
+uniform sampler2D uAnim;
+uniform vec4 uClips[NCLIP];   // chaque geste : première ligne de la texture, images, en boucle
+uniform float uFps;
+vec4 R(int b, int f, int k) { return texelFetch(uAnim, ivec2(b * 3 + k, f), 0); }
+// les trois lignes de la matrice de l'os b, dans le geste id commencé à t0 et joué à la vitesse sp
+void bone(float id, float t0, float sp, int b, out vec4 r0, out vec4 r1, out vec4 r2) {
+  vec4 c = uClips[int(id)];
+  float n = c.y, fr = max(uFxT - t0, 0.0) * sp * uFps;
+  fr = c.z > 0.5 ? mod(fr, n) : min(fr, n - 1.0);
+  int f0 = int(c.x) + int(fr), f1 = int(c.x) + int(c.z > 0.5 ? mod(fr + 1.0, n) : min(fr + 1.0, n - 1.0));
+  float a = fract(fr);
+  r0 = mix(R(b, f0, 0), R(b, f1, 0), a); r1 = mix(R(b, f0, 1), R(b, f1, 1), a); r2 = mix(R(b, f0, 2), R(b, f1, 2), a);
+}
+#endif
 `;
 const VERT_POSE = `
   int ui = int(aSlot.w);
@@ -561,6 +602,18 @@ const VERT_POSE = `
   boneA = aBone == 1.0 ? aFL : aBone == 2.0 ? aFR : aBone == 5.0 ? aHL : aBone == 6.0 ? aHR : aBone == 7.0 ? sin(t) * am * 0.3 : aBone == 8.0 && gait > 1.5 ? 1.2 : 0.0;
   pivot = aBone == 1.0 || aBone == 2.0 ? vec2(0.85, 0.6) : aBone == 5.0 || aBone == 6.0 ? vec2(0.85, -0.6) : aBone == 7.0 ? vec2(1.4, 0.75) : vec2(2.2, 0.0);
   bob = gait > 1.5 ? abs(sin(t)) * 0.12 : gait > 0.5 ? abs(sin(t * 2.0)) * 0.03 : 0.0;
+#elif defined(RIG)
+  // homme au squelette : la matrice de son os dans son geste, fondue avec celle du geste d'avant pendant 0,3 s
+  int bi = int(aBone + 0.5);
+  vec4 r0, r1, r2;
+  bone(aGest.x, aGest.y, aMix.y, bi, r0, r1, r2);
+  float bw = clamp((uFxT - aMix.x) / 0.3, 0.0, 1.0);
+  if (bw < 1.0) {
+    vec4 p0, p1, p2;
+    bone(aGest.z, aGest.w, aMix.z, bi, p0, p1, p2);
+    bw = smoothstep(0.0, 1.0, bw);
+    r0 = mix(p0, r0, bw); r1 = mix(p1, r1, bw); r2 = mix(p2, r2, bw);
+  }
 #else
   if (P == 3.0) { swing = sin(uTime * 8.2 + ph) * 0.38; bob = abs(sin(uTime * 8.2 + ph)) * 0.03; }
   else if (P == 2.0 || P == 7.0) { swing = sin(uTime * 13.0 + ph) * 0.65; bob = abs(sin(uTime * 13.0 + ph)) * 0.06; lean = 0.18; arm = P == 2.0 ? 1.25 : 0.35; }
@@ -572,10 +625,15 @@ const VERT_POSE = `
   vec2 fw = vec2(cos(u0.z), sin(u0.z)), base = u0.xy + fw * slotV + vec2(-fw.y, fw.x) * aSlot.x;
   vFade = u0.w;
 `;
-// tourne un vecteur de la figurine : membre (autour de son pivot), penché en avant, puis dans le sens de la figurine
+// tourne un vecteur de la figurine : membre (sa matrice au squelette, sinon autour de son pivot), penché en avant, puis
+// dans le sens de la figurine
 const turn = (v, isPos) => `
+#if defined(RIG)
+  ${v} = ${isPos ? `vec3(dot(r0, vec4(${v}, 1.0)), dot(r1, vec4(${v}, 1.0)), dot(r2, vec4(${v}, 1.0)))` : `vec3(dot(r0.xyz, ${v}), dot(r1.xyz, ${v}), dot(r2.xyz, ${v}))`};
+#else
   ${v}.yz = pitch(${v}.yz, ${isPos ? 'pivot' : 'vec2(0.0)'}, boneA);
   ${v}.yz = pitch(${v}.yz, vec2(0.0), lean);
+#endif
   ${v} = vec3(${v}.x * sa + ${v}.z * ca, ${v}.y, -${v}.x * ca + ${v}.z * sa);`;
 
 // version d'un régiment : 0 hors champ (rien à dessiner), 1 de loin, 2 de près. px : hauteur d'une figurine à l'écran
@@ -587,8 +645,9 @@ export function lodOf(px, prev, visible) {
 }
 
 export class Troops {
-  // relief : Relief (altitudes) ; q : profil de qualité ; year : année de la bataille (coiffures, uniformes)
-  constructor(relief, q, year) {
+  // relief : Relief (altitudes) ; q : profil de qualité ; year : année de la bataille (coiffures, uniformes) ; anims :
+  // animations précalculées (loadAnims), null si elles manquent
+  constructor(relief, q, year, anims = null) {
     this.relief = relief; this.q = q; this.year = year || 1800;
     this.group = new THREE.Group();
     this.index = new Map();     // id du régiment → colonne de la texture des régiments
@@ -601,9 +660,18 @@ export class Troops {
     for (let i = 0; i < hd.length; i++) hd[i] = (t.fine[i] - t.hmin) * relief.ex;
     this.heights = new THREE.DataTexture(hd, t.fineW, t.fineH, THREE.RedFormat, THREE.FloatType);
     this.heights.needsUpdate = true;
+    // sans animations : une seule image, chaque os à sa place (matrice identité), pour tous les gestes
+    const nb = Object.keys(RIG).length + RIG_EXTRA.length;
+    const meta = anims?.meta ?? { fps: 24, rows: 1, clips: Object.fromEntries(['repos', 'parle', 'marche', 'trot', 'course', 'charge', 'joue', 'recharge', 'estoc'].map(c => [c, { row: 0, n: 1, loop: 1 }])) };
+    const data = anims?.data ?? Uint16Array.from({ length: nb * 12 }, (_, i) => [0, 5, 10].includes(i % 12) ? 0x3c00 : 0);
+    this.anim = new THREE.DataTexture(data, nb * 3, meta.rows, THREE.RGBAFormat, THREE.HalfFloatType);
+    this.anim.needsUpdate = true;
+    this.clipId = new Map(Object.keys(meta.clips).map((c, i) => [c, i]));
+    this.clipLoop = Object.values(meta.clips).map(c => c.loop);
     this.uni = {
       uUnits: { value: this.units }, uHeight: { value: this.heights }, uHgt: { value: new THREE.Vector3(t.fineStep, t.fineW, t.fineH) },
       uTime: { value: 0 }, uFxT: { value: 0 }, uRobes: { value: ROBES.map(c => new THREE.Color(c)) },
+      uAnim: { value: this.anim }, uFps: { value: meta.fps }, uClips: { value: Object.values(meta.clips).map(c => new THREE.Vector4(c.row, c.n, c.loop, 0)) },
     };
     this.kinds = new Map();     // sorte → {mesh, cap, n, slot, anim, coat}
     this.pattern = flagPattern(this.year);
@@ -612,17 +680,22 @@ export class Troops {
     // chaque sorte en deux versions (« ~ » : de loin), sauf les drapeaux
     for (const [k, def] of Object.entries(KINDS)) {
       if (def === 'FLAG') { this.addKind(k, model(k, this.year), this.pattern); continue; }
-      this.addKind(k, model(k, this.year, 1), null, def);
+      this.addKind(k, model(k, this.year, 1, !def), null, def ?? 'RIG');
       this.addKind(k + '~', model(k, this.year, 0), null, def);
     }
     this.frustum = new THREE.Frustum(); this.sphere = new THREE.Sphere(); this.m4 = new THREE.Matrix4();
     this.built = -1; this.pending = false;
   }
 
-  // def : 'HORSE' (cheval), 'GUN' (pièce, voiture), 'CREW' (servant) : leur animation dans le vertex shader
-  addKind(kind, geo, pattern = null, def = null) {
+  // def : 'RIG' (homme au squelette), 'HORSE' (cheval), 'GUN' (pièce, voiture), 'CREW' (servant) : leur animation dans
+  // le vertex shader
+  addKind(kind, model, pattern = null, def = null) {
+    // géométrie instanciée sans matrice par figurine (attributs : INSTANCE_ATTRS ; WebGL n'en permet que 16)
+    const geo = new THREE.InstancedBufferGeometry().copy(model);
+    model.dispose();
+    const defines = def ? { [def]: '', NCLIP: this.uni.uClips.value.length } : {};
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: pattern ? THREE.DoubleSide : THREE.FrontSide });
-    if (def) mat.defines = { [def]: '' };
+    mat.defines = defines;
     const place = `vec3 transformed = position;
           ${pattern ? `
           // l'étoffe ondule, d'autant plus loin de la hampe
@@ -650,48 +723,44 @@ export class Troops {
     mat.customProgramCacheKey = () => 'troupes-' + (pattern ? 'etoffe' : def || 'homme');
     // passe d'ombre : la même mise en place des figurines
     const depth = new THREE.MeshDepthMaterial();
-    if (def) depth.defines = { [def]: '' };
+    depth.defines = defines;
     depth.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, this.uni);
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_HEAD).replace('#include <begin_vertex>', VERT_POSE + place);
     };
     depth.customProgramCacheKey = () => 'troupes-ombre-' + (pattern ? 'etoffe' : def || 'homme');
-    const k = { geo, mat, depth, mesh: null, cap: 0, n: 0, slot: null, anim: null, coat: null, contactGeo: null, contact: null };
+    const k = { geo, mat, depth, mesh: new THREE.Mesh(geo, mat), cap: 0, n: 0, buf: {}, rig: def === 'RIG', contactGeo: null, contact: null };
+    k.mesh.frustumCulled = false; k.mesh.customDepthMaterial = depth; k.mesh.castShadow = !!this.castShadow;
+    this.group.add(k.mesh);
     // ombre de contact : un carré posé au sol sous la figurine, qui suit sa place et son pas (pas pour les drapeaux)
     if (!pattern) {
-      const [cw, cd, cz] = CONTACT[def || 'FOOT'];
-      k.contactGeo = new THREE.PlaneGeometry(cw, cd).rotateX(-Math.PI / 2).translate(0, 0, cz);
+      const [cw, cd, cz] = CONTACT[def] ?? CONTACT.FOOT;
+      k.contactGeo = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(cw, cd).rotateX(-Math.PI / 2).translate(0, 0, cz));
       for (const a of ['aBone', 'aPart']) k.contactGeo.setAttribute(a, new THREE.Float32BufferAttribute(new Float32Array(4), 1));
-      k.contactMat = this.contactMat(def);
+      k.contact = new THREE.Mesh(k.contactGeo, this.contactMat(def));
+      k.contact.frustumCulled = false; k.contact.renderOrder = 1;
+      this.group.add(k.contact);
     }
     this.kinds.set(kind, k);
     this.grow(k, 256);
   }
+  // tampons des figurines d'une sorte, agrandis en gardant leur contenu
   grow(k, cap) {
-    if (k.mesh) { this.group.remove(k.mesh); k.mesh.dispose(); }
-    const slot = new Float32Array(cap * 4), anim = new Float32Array(cap * 4), coat = new Float32Array(cap * 3);
-    if (k.slot) { slot.set(k.slot); anim.set(k.anim); coat.set(k.coat); }
-    k.slot = slot; k.anim = anim; k.coat = coat; k.cap = cap;
-    for (const a of ['aSlot', 'aAnim', 'aCoat']) k.geo.deleteAttribute(a);
-    k.geo.setAttribute('aSlot', new THREE.InstancedBufferAttribute(slot, 4).setUsage(THREE.DynamicDrawUsage));
-    k.geo.setAttribute('aAnim', new THREE.InstancedBufferAttribute(anim, 4).setUsage(THREE.DynamicDrawUsage));
-    k.geo.setAttribute('aCoat', new THREE.InstancedBufferAttribute(coat, 3).setUsage(THREE.DynamicDrawUsage));
-    k.mesh = new THREE.InstancedMesh(k.geo, k.mat, cap);
-    k.mesh.count = 0; k.mesh.frustumCulled = false;
-    k.mesh.customDepthMaterial = k.depth; k.mesh.castShadow = !!this.castShadow;
-    this.group.add(k.mesh);
-    if (!k.contactGeo) return;
-    if (k.contact) { this.group.remove(k.contact); k.contact.dispose(); }
-    for (const a of ['aSlot', 'aAnim', 'aCoat']) k.contactGeo.setAttribute(a, k.geo.attributes[a]);   // les mêmes tampons
-    k.contact = new THREE.InstancedMesh(k.contactGeo, k.contactMat, cap);
-    k.contact.count = 0; k.contact.frustumCulled = false; k.contact.renderOrder = 1;
-    this.group.add(k.contact);
+    for (const [a, w] of Object.entries(INSTANCE_ATTRS)) {
+      const b = new Float32Array(cap * w);
+      if (k.buf[a]) b.set(k.buf[a]);
+      k.buf[a] = b;
+      k.geo.deleteAttribute(a);
+      k.geo.setAttribute(a, new THREE.InstancedBufferAttribute(b, w).setUsage(THREE.DynamicDrawUsage));
+      k.contactGeo?.setAttribute(a, k.geo.attributes[a]);   // les mêmes tampons
+    }
+    k.cap = cap;
   }
   // matériau des ombres de contact, un par animation (le servant et la pièce se déplacent en tirant)
   contactMat(def) {
     if (this.contactMats[def]) return this.contactMats[def];
     const m = new THREE.MeshBasicMaterial({ map: this.soft, color: '#000000', transparent: true, opacity: 0.65, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
-    if (def) m.defines = { [def]: '' };
+    if (def) m.defines = { [def]: '', NCLIP: this.uni.uClips.value.length };
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, this.uni);
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_HEAD).replace('#include <begin_vertex>', `${VERT_POSE}
@@ -727,7 +796,7 @@ export class Troops {
       if (i === undefined) { i = this.free.pop() ?? this.index.size; if (i >= MAXU) continue; this.index.set(id, i); dirty = true; }
       const key = `${un.form}|${un.state}|${Math.round((un.men || 0) / 8)}|${un.w | 0}|${un.d | 0}|${un.type}|${per}|${colors[un.side]}`;
       let e = this.lays.get(id);
-      if (!e || e.key !== key) { this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: e?.lod ?? 0 }); dirty = true; } else e.un = un;
+      if (!e || e.key !== key) { this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: e?.lod ?? 0, act: e?.act, actT: e?.actT }); dirty = true; } else e.un = un;
       // version : un régiment qui entre dans le champ est dessiné tout de suite ; les autres changements attendent la
       // prochaine reconstruction (au plus cinq par seconde). La sphère, élargie avec la distance, le fait entrer avant
       // qu'il n'atteigne le bord de l'image.
@@ -742,6 +811,9 @@ export class Troops {
       // régiment : position, sens, opacité ; allure, feu, salve ; front, tirailleurs
       const moving = un.to && un.from && Math.hypot(un.to.x - un.from.x, un.to.y - un.from.y) > 0.3;
       const run = un.state === 'charge' || un.state === 'deroute', march = un.state === 'marche' || (moving && !run);
+      // geste des hommes au squelette : réécrit quand l'activité du régiment change (sans reconstruire)
+      const act = activity(un, moving);
+      if (e.act !== act) { e.act = act; e.actT = fxT; if (e.figs && !dirty) this.gestures(e, true); }
       const v = un._volley, o = i * 4, D = this.data, row = MAXU * 4;
       D[o] = un.x; D[o + 1] = un.y; D[o + 2] = un.dir; D[o + 3] = un._ghost ? 0.4 : un._fade ?? 1;
       D[row + o] = run ? 2 : march ? 1 : 0; D[row + o + 1] = un.state === 'feu' || un.state === 'recharge' ? 1 : 0;
@@ -759,16 +831,19 @@ export class Troops {
     const coat = new THREE.Color(), off = new THREE.Color();
     const FACE = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
     // face : sens imposé (servants), sinon celui de la face du carré ou du demi-tour
-    const put = (kind, f, ui, carre, face = null) => {
+    const put = (kind, f, ui, carre, face = null, e = null) => {
       const k = this.kinds.get(kind);
       if (!k) return;
       if (k.n >= k.cap) this.grow(k, k.cap * 2);
-      const n = k.n++, rank = f[5], o = n * 4, S = k.slot, A = k.anim, C = k.coat;
+      const n = k.n++, rank = f[5], o = n * 4, { aSlot: S, aAnim: A, aCoat: C } = k.buf;
+      if (k.rig) e.figs.push([k, n, f]);
       S[o] = f[0]; S[o + 1] = f[1]; S[o + 2] = face ?? (carre && rank >= 0 ? FACE[f[3]] : f[3] === 2 ? Math.PI : 0); S[o + 3] = ui;
       A[o] = f[4]; A[o + 1] = f[6]; A[o + 2] = scale; A[o + 3] = rank;
       C[n * 3] = coat.r; C[n * 3 + 1] = coat.g; C[n * 3 + 2] = coat.b;
     };
-    for (const [id, { lay, un, lod }] of this.lays) {
+    for (const [id, e] of this.lays) {
+      const { lay, un, lod } = e;
+      e.figs = [];
       if (!lod) continue;
       const ui = this.index.get(id), carre = un.form === 'carre', far = lod === 1 ? '~' : '';
       off.set(colors[un.side] || '#888');
@@ -779,17 +854,32 @@ export class Troops {
         else if (f[2] === 'servant') coat.multiplyScalar(0.6);   // habit sombre des artilleurs
         // l'écouvillon et le pointeur se tournent vers la pièce
         if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant' + far, [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2);
-        else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre);
+        else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre, null, e);
         if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre); }
         else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre); }
       }
+      this.gestures(e, false);
     }
     for (const k of this.kinds.values()) {
       // une sorte vide n'est ni dessinée ni envoyée (une plage vide renverrait tout le tableau à la carte graphique)
-      k.mesh.count = k.n; k.mesh.visible = k.n > 0;
-      if (k.contact) { k.contact.count = k.n; k.contact.visible = k.n > 0; }
+      k.geo.instanceCount = k.n; k.mesh.visible = k.n > 0;
+      if (k.contact) { k.contactGeo.instanceCount = k.n; k.contact.visible = k.n > 0; }
       if (!k.n) continue;
-      for (const a of ['aSlot', 'aAnim', 'aCoat']) { const at = k.geo.attributes[a]; at.needsUpdate = true; at.clearUpdateRanges(); at.addUpdateRange(0, k.n * at.itemSize); }
+      for (const a of Object.keys(INSTANCE_ATTRS)) { const at = k.geo.attributes[a]; at.needsUpdate = true; at.clearUpdateRanges(); at.addUpdateRange(0, k.n * at.itemSize); }
+    }
+  }
+  // gestes des hommes au squelette d'un régiment (aGest, aMix), selon son activité ; chacun garde sa phase dans les
+  // gestes en boucle. part : n'envoyer que leurs plages (sans reconstruction)
+  gestures(e, part) {
+    const span = new Map();
+    for (const [k, n, f] of e.figs) {
+      const c = this.clipId.get(gesture(e.act, f[2])) ?? 0, t0 = (e.actT ?? 0) - (this.clipLoop[c] ? f[6] : 0);
+      k.buf.aGest.set([c, t0, c, t0], n * 4); k.buf.aMix.set([-99, 1, 1, 0], n * 4);
+      if (part) { const r = span.get(k); span.set(k, r ? [Math.min(r[0], n), Math.max(r[1], n)] : [n, n]); }
+    }
+    for (const [k, [a, b]] of span) for (const name of ['aGest', 'aMix']) {
+      const at = k.geo.attributes[name];
+      at.addUpdateRange(a * 4, (b - a + 1) * 4); at.needsUpdate = true;
     }
   }
   // ombres portées des figurines (qualité Haute et Ultra) ; les ombres de contact restent dans tous les cas
@@ -800,9 +890,9 @@ export class Troops {
   }
   setQuality(q) { this.q = q; }
   dispose() {
-    for (const k of this.kinds.values()) { k.geo.dispose(); k.mat.dispose(); k.depth.dispose(); k.mesh.dispose(); k.contactGeo?.dispose(); k.contact?.dispose(); }
+    for (const k of this.kinds.values()) { k.geo.dispose(); k.mat.dispose(); k.depth.dispose(); k.contactGeo?.dispose(); }
     for (const m of Object.values(this.contactMats)) m.dispose();
     this.soft.dispose();
-    this.units.dispose(); this.heights.dispose(); this.pattern.dispose();
+    this.units.dispose(); this.heights.dispose(); this.pattern.dispose(); this.anim.dispose();
   }
 }

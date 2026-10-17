@@ -345,7 +345,10 @@ General sur un régiment qui tire.
 
 ### 7a : figurines animées
 
-- [ ] **T29 : squelette dans les vraies batailles**
+- [x] **T29 : squelette dans les vraies batailles**
+  - Fait : fantassins de près au squelette dans les vraies batailles (`Mesh` sur `InstancedBufferGeometry`, 11 attributs
+    lus) ; gestes selon l'activité (`gestes.js`), réécrits pour le seul régiment dont l'activité change ; fondu prêt dans
+    le shader. Seuls les attributs lus comptent : `uv` et `aBone`/`aPart` n'ont pas eu à être rangés ensemble.
   - Critères :
     - La texture des animations (`web/anims/soldat.*`) est chargée à l'entrée de la bataille. Si elle manque : une
       erreur dans la console, et les hommes restent dans leur pose de référence.
