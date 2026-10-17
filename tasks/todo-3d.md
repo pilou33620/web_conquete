@@ -566,6 +566,24 @@ General sur un régiment qui tire.
   - Fichiers : `web/js/battle/terrain.js`, `web/js/battle/textures.js`, `web/js/battle/relief.js`
   - Taille : M
 
+- [ ] **T46 : herbe et végétation en relief** (demande du 17/10/2026)
+  - Critères :
+    - Les prés ont une herbe en relief près de la caméra :
+      - mêmes couches empilées que les blés (T26), le masque de végétation étendu à l'herbe ;
+      - brins plus fins et plus serrés, plusieurs verts, coins secs, quelques fleurs ;
+      - ondulation au vent.
+    - Les landes et les friches ont leur propre relief, plus bas et plus touffu.
+    - Plus loin, la texture du sol montre des touffes et des coins secs (pas d'aplat).
+    - Les pieds des soldats sont un peu dans l'herbe.
+    - Le nombre de couches suit la qualité (`epis`) ; aucune en Basse.
+  - Vérif :
+    - captures au ras, à mi-distance et en plongée façon Ultimate General (bocage, landes), à côté des captures de
+      référence ;
+    - images par seconde relevées.
+  - Fichiers : `web/js/battle/terrain.js`, `web/js/battle/textures.js`, `web/js/battle/relief.js`,
+    `web/js/battle/qualite.js`
+  - Taille : M
+
 - [ ] **T44 : fumée et effets à l'échelle des figurines**
   - Critères :
     - Bouffées à l'échelle des figurines (rayon selon leur échelle).

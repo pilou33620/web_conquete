@@ -403,6 +403,13 @@ vivent : ils marchent, tirent, rechargent, tombent, courent à leur place et se 
     - herbe en touffes de plusieurs verts ;
     - blés dorés ;
     - brume bleutée au loin.
+
+    **Végétation en relief, carte réaliste** (demande du 17/10/2026 : « la végétation est plate ») :
+    - les prés ont une vraie herbe en relief près de la caméra, comme les blés aujourd'hui : brins qui ondulent au
+      vent, touffes plus hautes, quelques fleurs ;
+    - plus loin, une texture d'herbe plus riche (touffes, coins secs, ombres) ;
+    - les landes (bruyère, ajoncs) et les friches ont leur relief à elles ;
+    - les pieds des soldats sont un peu dans l'herbe, comme dans Ultimate General.
 16. **Fumée à l'échelle des figurines :**
     - les bouffées d'une salve se fondent en un banc continu le long de la ligne, d'environ 2 à 3 hauteurs d'homme ;
     - éclairs de bouche, poussière des charges, gerbes de terre des boulets.
@@ -525,3 +532,5 @@ export function gesture(state, rank, form) {
   maisons, l'église et les moulins, pas les murs d'enceinte. Les hommes passent par les brèches et les portes, comme le
   moteur le décide.
 - **Agrandissement de loin :** environ ×2 au plus, à trancher sur les captures de 7e.
+- **Coût de l'herbe en relief sur l'iPad :** comme les blés, réservée aux qualités qui le supportent (`epis` dans
+  `qualite.js`), mesurée au point final.
