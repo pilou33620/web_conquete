@@ -252,3 +252,276 @@ fluidité en qualité Haute (épis en relief et touffes des arbres jamais mesur�
 - **Taille des soldats.** Tranchée sur les captures de 6a.
 - **Coût du blé en relief sur l'iPad.** Il est inconnu. S'il est trop cher, le relief est réservé aux qualités Haute et
   Ultra, et les autres gardent la peinture à sillons.
+
+## Étape 7 : animer les batailles et se rapprocher d'Ultimate General
+
+### Pourquoi
+
+Après l'étape 6, la bataille ne ressemble toujours pas assez à Ultimate General : American Revolution. Comparée aux
+dix captures officielles du jeu (page Steam, 17/10/2026), elle pèche sur cinq points :
+
+- les hommes sont figés : même pose pour tous, bras de rechargement à peine baissé, aucun geste de mêlée ;
+- les tués s'évaporent par paquets de 8, puis une tache peinte apparaît au sol ;
+- un changement de formation fait sauter les hommes à leur nouvelle place ; une conversion fait tourner le régiment
+  d'un bloc, comme sur un plateau ;
+- de loin, les régiments ne sont plus que de minces traits ;
+- les soldats sont posés dans les maisons et traversent leurs murs.
+
+Le prototype (`web/js/battle/dev/anims.html`, commits du 17/10/2026) a validé la méthode. Les animations libres de
+droits de Quaternius (Universal Animation Library 1 et 2, CC0) sont précalculées par `dev/cuire.mjs` sur les os de
+nos figurines (`web/anims/soldat.bin`, 285 Ko). Les gestes du fusil (en joue, à genoux, recharge, baïonnette croisée,
+estoc) sont posés par cinématique inverse. Le prototype ajoute aussi :
+
+- une lumière enveloppante et une ombre plus sombre vers les pieds ;
+- une teinte d'habit propre à chaque homme ;
+- des rangs lâches ;
+- un fondu entre deux gestes ;
+- des proportions trapues (tête et chapeau plus forts, buste plus large).
+
+But : à distance de caméra égale, les captures d'une bataille se lisent comme celles d'Ultimate General. Les régiments
+vivent : ils marchent, tirent, rechargent, tombent, courent à leur place et se battent au corps à corps.
+
+### Choix validés (questionnaires du 17/10/2026)
+
+- **Les quatre familles d'animations :**
+  - chute des tués, avec des corps en 3D qui restent au sol ;
+  - hommes qui courent à leur place ;
+  - feu, recharge et vie au repos ;
+  - mêlée et charges.
+- **En plus :** la vue de loin, les couleurs et la lumière, la fumée et les effets, et des troupes qui ne traversent plus
+  les bâtiments (demande du 17/10/2026).
+- **Animations libres de droits (CC0)**, précalculées. Pas de chargeur glTF dans le jeu. Rien n'est repris d'Ultimate
+  General : ses fichiers appartiennent à Game-Labs.
+- **Qui est animé :**
+  - les fantassins : infanterie, grenadiers, légers, miliciens, officiers, tambours, porte-drapeau ;
+  - les servants des pièces ;
+  - les cavaliers.
+  Les chevaux gardent l'animation par le code, car la bibliothèque n'a que des humains.
+- **Corps au sol :** ils restent toute la bataille, dans la limite d'un plafond par qualité. Au-delà, les plus anciens
+  redeviennent les taches peintes d'aujourd'hui.
+- **De loin, les figurines grossissent** (jusqu'à environ ×2), et le régiment reste un bloc d'hommes lisible.
+- **Ordre :** 7a, 7b, 7c, 7d, 7e, puis 7f (tableau ci-dessous). Chaque sous-étape est jouable, capturée et commitée.
+
+### Découpage
+
+| Sous-étape | Contenu | Dépend de |
+|---|---|---|
+| 7a `figurines-animees` | les animations précalculées dans les vraies batailles, gestes selon l'état, variété, fondus, lumière et proportions des troupes, servants des pièces | — |
+| 7b `tues` | les hommes tombent un par un ; corps en 3D au sol ; un boulet couche une file | 7a |
+| 7c `places` | les hommes courent à leur place (formation, conversion, pertes, déroute, ralliement) et contournent les bâtiments | 7a |
+| 7d `melee` | mêlée et charges : estoc, poussée, rangs qui se mêlent ; cavaliers au squelette, sabres | 7a, 7c |
+| 7e `vue-de-loin` | figurines grossies avec la distance, version de loin animée | 7a |
+| 7f `scene` | couleurs et lumière du terrain, fumée et effets à l'échelle des figurines | — |
+
+### Ce que voit le joueur (critères d'acceptation)
+
+**7a, figurines animées**
+
+1. **Gestes selon l'état du régiment :**
+
+   | État | Geste |
+   |---|---|
+   | repos | repos (les officiers parlent) |
+   | marche | marche au pas |
+   | charge | charge, baïonnette croisée |
+   | feu | en joue (le 1er rang d'une ligne à l'arrêt met genou à terre), au rythme de la salve qui roule le long du front |
+   | recharge | recharge (baguette) |
+   | déroute | course éperdue |
+   | ralliement | trot vers le général, puis repos |
+
+   Les tirailleurs tirent et rechargent chacun à son rythme.
+2. **Pas de clones.** Chaque homme a :
+   - sa place, à ±15 cm de celle du rang ;
+   - son sens, à ±6° ;
+   - sa taille, à ±5 % ;
+   - sa teinte d'habit ;
+   - son rythme, à ±6 % ;
+   - ses horaires : il s'arrête, épaule et recharge quelques dixièmes de seconde avant ou après ses voisins.
+
+   Tout cela est tiré une fois pour toutes par homme : rien ne saute quand le régiment change de forme.
+3. **Fondu de 0,3 s entre deux gestes** : jamais de saut de pose.
+4. **Lumière et allure du prototype :**
+   - lumière enveloppante ;
+   - ombre plus sombre vers les pieds ;
+   - proportions trapues, pour la version de près comme pour la version de loin.
+5. **Servants :** gestes au squelette, réglés sur le coup de leur pièce comme aujourd'hui (écouvillon, chargement du
+   boulet, pointeur accroupi, boutefeu). Le tambour bat la caisse, le porte-drapeau porte la hampe.
+
+**7b, tués**
+
+6. Quand un régiment perd des hommes, autant de figurines qu'il le faut tombent (mort, touché à la tête, projeté) :
+   - sous la mousqueterie, surtout le premier rang ;
+   - sous un boulet, une file, le long de sa trajectoire.
+   Les autres resserrent les rangs (en marchant, avec 7c).
+7. **Les corps restent couchés en 3D** pendant toute la bataille, avec leur fusil, à l'endroit et dans le sens où ils
+   sont tombés :
+   - plafond : Basse 800, Moyenne 1 500, Haute 2 500, Ultra 4 000 (à régler sur l'iPad) ;
+   - au-delà, les plus anciens redeviennent des taches peintes ;
+   - jamais de corps dans l'emprise d'un bâtiment ni sur l'eau.
+   Un cavalier tué tombe de sa selle ; son cheval mort reste couché.
+
+**7c, places**
+
+8. **À chaque nouvelle disposition**, chaque homme court à sa nouvelle place, au trot ou au pas selon la distance, puis
+   se tourne face au front. Les nouvelles dispositions viennent :
+   - d'une formation (ligne, colonne, carré, tirailleurs) ;
+   - d'un front plus large ou plus étroit ;
+   - des pertes ;
+   - d'une déroute ou d'un ralliement.
+
+   Les hommes gardent leur identité : celui de gauche reste à gauche si c'est possible.
+9. **Conversion :** quand le régiment tourne sur place, ses hommes marchent pendant qu'il tourne. Plus de glissade.
+10. **Bâtiments :** aucune figurine debout dans l'emprise d'une maison, d'une église ou d'un moulin (marge de 0,5 m).
+    - Un homme dont la place tombe dans un bâtiment est repoussé dehors, au plus court.
+    - Un régiment qui traverse un village s'écoule autour des maisons.
+    - Le moteur, lui, laisse toujours les régiments occuper les villages : c'est une règle du jeu (couvert, ralliement).
+
+**7d, mêlée et charges**
+
+11. **Mêlée :**
+    - les premiers rangs des deux régiments avancent l'un dans l'autre et se mêlent sur le front de contact ;
+    - les hommes y font des estocs et des poussées, face à l'ennemi ;
+    - les officiers frappent du sabre ;
+    - les blessés tombent (7b).
+12. **Cavaliers :** chaque cavalier est une figurine au squelette, assise sur le cheval actuel.
+    - Sabre au clair à la charge, coups de sabre en mêlée.
+    - Le cheval se cabre au choc (animation par le code).
+    - Les dragons à pied gardent les gestes des fantassins.
+
+**7e, vue de loin**
+
+13. **Plus la caméra s'éloigne, plus les figurines grossissent** (jusqu'à environ ×2). Elles sont alors moins nombreuses,
+    chacune comptant plusieurs hommes, et restent dans l'emprise du régiment. Vu de loin, un régiment reste un bloc
+    d'hommes distincts. À la vue d'ensemble du scénario bocage, chaque soldat fait au moins 3 px de large et 8 px de
+    haut.
+14. La version de loin a les mêmes os et les mêmes gestes : une ligne lointaine marche, tire et tombe.
+
+**7f, scène**
+
+15. **Couleurs et lumière du terrain** se rapprochent des captures de référence :
+    - lumière chaude, couleurs un peu passées ;
+    - herbe en touffes de plusieurs verts ;
+    - blés dorés ;
+    - brume bleutée au loin.
+16. **Fumée à l'échelle des figurines :**
+    - les bouffées d'une salve se fondent en un banc continu le long de la ligne, d'environ 2 à 3 hauteurs d'homme ;
+    - éclairs de bouche, poussière des charges, gerbes de terre des boulets.
+
+**Partout**
+
+17. **Performances :** ≥ 30 images/s en qualité Haute sur l'iPad de 2019, avec 20 régiments et la fumée d'un combat
+    (comme le critère 10 du début). La qualité automatique descend si l'appareil peine.
+18. **Rien de cassé :**
+    - aucune erreur dans la console sur les cinq scénarios du banc ni dans une bataille lancée depuis la campagne ;
+    - commandes, interface et parties sauvegardées inchangées.
+
+### Tech stack
+
+Celui des étapes 1 à 6 : JavaScript en modules ES, Three.js r186 copié dans `web/vendor/three/`, WebGL 2, aucun outil
+de construction. Les animations sont un fichier précalculé (`web/anims/soldat.bin`, demi-flottants) lu dans une
+texture ; le vertex shader place chaque os. Aucune nouvelle dépendance, aucun changement côté Python.
+
+### Commandes
+
+```bash
+python3 tests/lancer.py                                   # tous les bancs (Python + interface)
+node --test tests/                                        # l'interface seule
+node web/js/battle/dev/cuire.mjs UAL1.glb UAL2.glb        # recalculer web/anims/soldat.* (bibliothèques Quaternius, versions Standard)
+node web/js/battle/dev/maquette.mjs --port 8816           # bataille simulée ; puis /js/battle/dev/banc.html?scen=bocage&start=1
+node web/js/battle/dev/capture.mjs bocage /tmp/b.png --q "avance=300" --js "…"     # capture du banc
+node web/js/battle/dev/capture.mjs x /tmp/f.png --page banc.html --frames 180,0.1  # suite d'images → vidéo (ffmpeg)
+./lancer.sh                                               # jouer (http://127.0.0.1:8790)
+```
+
+### Structure
+
+```
+web/js/battle/troupes.js     ADAPTÉ : figurines au squelette (RIG) pour fantassins, servants et cavaliers, de près et de
+                             loin ; texture des animations ; gestes selon l'état ; variété par homme ; fondu ;
+                             place de chaque homme (départ, arrivée, instant) ; répulsion des bâtiments ; échelle selon
+                             la distance ; corps au sol (lot à part, plafonné)
+web/js/battle/gestes.js      NOUVEAU : logique pure, sans Three.js (testée sous Node) : geste selon l'état et le rang,
+                             variété par homme, appariement des places d'une disposition à l'autre, choix des tués,
+                             anneau des corps, échelle selon la distance
+web/js/battle/dev/cuire.mjs  ADAPTÉ : gestes des servants, du tambour, du cavalier en selle (sabre)
+web/anims/soldat.bin, .json  RECALCULÉS ; LICENCE.txt (Quaternius, CC0)
+web/js/battle/vue.js         ADAPTÉ : pertes → tués (7b) au lieu des taches ; boulets → files couchées
+web/js/battle/terrain.js     ADAPTÉ : carte de répulsion des bâtiments (texture) ; couleurs du sol (7f)
+web/js/battle/relief.js      ADAPTÉ : lumière, brume, étalonnage des couleurs (7f)
+web/js/battle/effets.js      ADAPTÉ : bouffées à l'échelle des figurines, bancs de fumée continus (7f)
+web/js/battle/qualite.js     ADAPTÉ : plafond des corps, fondu en Basse ou non
+web/js/battle/dev/anims.html GARDÉ : page d'essai des gestes
+tests/gestes.test.mjs        NOUVEAU : bancs de la logique pure
+tests/modeles.test.mjs       ADAPTÉ : os de toutes les sortes au squelette, de près et de loin
+README.md                    « Vue de bataille » (animations, tués, bâtiments) et crédit Quaternius (CC0)
+```
+
+### Style de code
+
+Celui du code existant : français, commentaires qui disent le pourquoi, fonctions courtes, constantes en majuscules,
+mémoire GPU libérée à la sortie. La logique qui ne dessine rien va dans `gestes.js`, testable sans navigateur :
+
+```js
+// geste d'un homme selon l'état de son régiment et sa place (rang 0 : le premier) ; le feu d'une ligne à l'arrêt met le
+// premier rang à genoux
+export function gesture(state, rank, form) {
+  if (state === 'feu') return rank === 0 && form === 'ligne' ? 'genou' : 'joue';
+  return GESTE[state] ?? 'repos';
+}
+```
+
+### Stratégie de test
+
+- **Bancs Node** (`tests/gestes.test.mjs`, `tests/modeles.test.mjs`) :
+  - geste de chaque état ;
+  - variété reproductible (même homme, même tirage) ;
+  - appariement des places : chaque homme a une place, aucune place n'est prise deux fois, le trajet total est court,
+    l'ordre gauche-droite est gardé ;
+  - choix des tués (premier rang sous la mousqueterie, une file sous un boulet) ;
+  - anneau des corps (plafond, les plus anciens sortent d'abord) ;
+  - échelle selon la distance (croissante, bornée) ;
+  - répulsion (un point dans une maison sort au plus court, un point dehors ne bouge pas) ;
+  - os valides et identiques de près et de loin pour chaque sorte.
+- **Captures et vidéos** (`dev/capture.mjs`, `--frames`, ffmpeg), pour chaque sous-étape, sur les cinq scénarios du banc :
+  - de près, à mi-distance et en vue d'ensemble ;
+  - comparées côte à côte aux captures de référence d'Ultimate General ;
+  - publiées sur la page de la galerie, sur le réseau local.
+- **Essai à la main** sur l'iPad (images par seconde) et le PC, à la fin de 7a puis de l'étape.
+
+### Limites
+
+- **Toujours :**
+  - lancer `python3 tests/lancer.py` avant chaque commit ;
+  - borner par la qualité (figurines, corps, fondus) ;
+  - libérer la mémoire GPU à la sortie ;
+  - tirer la variété par homme de façon reproductible ;
+  - garder le moteur et les API tels quels.
+- **Demander d'abord :**
+  - toute dépendance nouvelle ;
+  - tout changement du moteur Python ou des règles (par exemple interdire les villages aux régiments) ;
+  - un changement de l'interface hors du champ de bataille ;
+  - descendre l'objectif de 30 images/s.
+- **Jamais :**
+  - utiliser des fichiers d'Ultimate General ;
+  - charger quoi que ce soit depuis Internet pendant le jeu ;
+  - modifier `web/vendor/` ;
+  - casser une partie sauvegardée.
+
+### Critères de réussite de l'étape 7
+
+1. Les critères 1 à 18 se voient sur les captures et les vidéos de chaque sous-étape, et tu les valides.
+2. `python3 tests/lancer.py` passe, avec les nouveaux bancs.
+3. Aucune erreur dans la console sur les cinq scénarios et dans une bataille de campagne.
+4. ≥ 30 images/s en qualité Haute sur l'iPad de 2019 (à vérifier par toi), mesurées à la fin de 7a et à la fin de
+   l'étape.
+5. Le README décrit les animations, les tués, les bâtiments et crédite Quaternius (CC0).
+
+### Questions ouvertes de l'étape 7
+
+- **Plafond des corps par qualité :** les valeurs ci-dessus sont des points de départ, à régler sur l'iPad.
+- **Coût des fondus et des corps sur l'iPad :** inconnu tant que l'iPad n'a rien mesuré. S'ils sont trop chers, la
+  qualité Basse s'en passe (sans fondu, moins de corps).
+- **Remparts :** les défenseurs se tiennent sur les remparts (comme dans Ultimate General). La répulsion ne vise que les
+  maisons, l'église et les moulins, pas les murs d'enceinte. Les hommes passent par les brèches et les portes, comme le
+  moteur le décide.
+- **Agrandissement de loin :** environ ×2 au plus, à trancher sur les captures de 7e.
