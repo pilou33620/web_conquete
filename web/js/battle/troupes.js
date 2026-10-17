@@ -286,7 +286,22 @@ function soldier(kind, year, rig = false) {
   }
   if (armed) P.push([new THREE.BoxGeometry(0.035, 0.5, 0.065).translate(0.235, 1.03, 0.05), WOOD, B.musket, 0],
     [limb(0.012, 0.012, 1.28, 2.2, 0.235, 5).translate(0, 0, 0.055), IRON, B.musket, 0], [limb(0.003, 0.009, 2.2, 2.55, 0.235, 4).translate(0, 0, 0.055), '#b8bcc0', B.musket, 0]);
-  return assemble(P);
+  const g = assemble(P);
+  if (rig) stocky(g, B);
+  return g;
+}
+// allure d'Ultimate General (essai des animations) : tête et coiffure plus fortes, buste plus large, les bras écartés
+// d'autant (vu d'en haut, la silhouette se lit mieux)
+function stocky(g, B) {
+  const p = g.attributes.position, n = g.attributes.normal, b = g.attributes.aBone;
+  const arms = [B.upperL, B.foreL, B.upperR, B.foreR, B.carryUpper, B.carryFore];
+  for (let i = 0; i < p.count; i++) {
+    const bone = b.getX(i), x = p.getX(i);
+    if (bone === B.head) p.setXYZ(i, x * 1.25, 1.44 + (p.getY(i) - 1.44) * 1.25, p.getZ(i) * 1.25);
+    else if (bone === B.hips || bone === B.chest) { p.setX(i, x * 1.1); n.setX(i, n.getX(i) / 1.1); }
+    else if (arms.includes(bone)) p.setX(i, x + Math.sign(x) * 0.017);
+  }
+  g.normalizeNormals();
 }
 // l'étoffe du drapeau, accrochée en haut de la hampe du porte-drapeau, flottant vers l'arrière ; l'étendard d'un
 // cavalier (fanion de l'état-major) a sa hampe avec lui

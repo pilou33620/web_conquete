@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Essai des animations</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #bcd0dc; font: 13px/1.2 Georgia, serif; touch-action: none; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #c9d2cc; font: 13px/1.2 Georgia, serif; touch-action: none; }
   canvas { display: block; }
   .lab { position: absolute; transform: translate(-50%, -100%); color: #fff; background: rgba(20, 28, 40, 0.75); padding: 2px 6px; border-radius: 3px; white-space: nowrap; pointer-events: none; }
   #info { position: absolute; left: 10px; top: 8px; color: #1d2430; background: rgba(255, 255, 255, 0.7); padding: 6px 10px; border-radius: 4px; }
@@ -15,79 +15,136 @@
 <div id="info">Essai : animations Quaternius (CC0) sur nos figurines. Glisser pour tourner, molette ou pincer pour zoomer.<br><span id="phase"></span></div>
 <script type="module">
 // Page d'essai des animations précalculées (dev/cuire.mjs) : chaque os de la figurine suit la matrice de son os dans la
-// texture des animations (gestes du fusil compris).
+// texture des animations (gestes du fusil compris), avec un fondu entre deux gestes. Les hommes ne sont pas des clones :
+// place, sens, taille, teinte, rythme et horaires varient de l'un à l'autre.
 //   anims.html?t=9.5 : arrête l'horloge à 9,5 s ; cat=0 : sans le catalogue ; window.__at(t) dessine l'instant t
-//   (captures image par image)
+//   (captures image par image, dans l'ordre)
 import * as THREE from '../../../vendor/three/three.module.js';
 import { model } from '../troupes.js';
 import { hash } from '../formes.js';
+import { Effects } from '../effets.js';
 
 const q = new URLSearchParams(location.search);
 const meta = await fetch('../../../anims/soldat.json').then(r => r.json());
 const half = new Uint16Array(await fetch('../../../anims/soldat.bin').then(r => r.arrayBuffer()));
-const NB = meta.bones.length, B = Object.fromEntries(meta.bones.map((b, i) => [b, i]));
-const tex = new THREE.DataTexture(half, NB * 3, meta.rows, THREE.RGBAFormat, THREE.HalfFloatType);
+const tex = new THREE.DataTexture(half, meta.bones.length * 3, meta.rows, THREE.RGBAFormat, THREE.HalfFloatType);
 tex.needsUpdate = true;
+const dur = c => meta.clips[c].n / meta.fps;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#bcd0dc'); scene.fog = new THREE.Fog('#bcd0dc', 60, 160);
-scene.add(new THREE.HemisphereLight('#dfe8f0', '#5d5a3c', 1.4));
-const sun = new THREE.DirectionalLight('#fff3dc', 2.2); sun.position.set(-30, 50, -20); scene.add(sun);
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#7f9150' }));
-scene.add(ground);
+scene.background = new THREE.Color('#c9d2cc'); scene.fog = new THREE.Fog('#c9d2cc', 45, 170);
+scene.add(new THREE.HemisphereLight('#dbe6f0', '#5a5236', 1.25));
+const sun = new THREE.DirectionalLight('#ffe7c2', 2.6);
+sun.position.set(-26, 40, -18); sun.target.position.set(0, 0, 10); scene.add(sun, sun.target);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005;
+Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 140 });
+
+// sol : taches d'herbe de plusieurs verts et coins secs, puis des brins fins (le motif se raccorde sur ses bords)
+function grass() {
+  const S = 512, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d'), pal = ['#7d9150', '#62773c', '#8c9c57', '#a49b5e', '#56692f', '#738a45'];
+  g.fillStyle = '#6d8243'; g.fillRect(0, 0, S, S);
+  for (let k = 0; k < 220; k++) {
+    const x = hash(k, 1, 7) * S, y = hash(k, 2, 7) * S, r = 12 + hash(k, 3, 7) * 70, c = pal[k % pal.length];
+    for (const dx of [-S, 0, S]) for (const dy of [-S, 0, S]) {
+      const gr = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+      gr.addColorStop(0, c + '99'); gr.addColorStop(1, c + '00');
+      g.fillStyle = gr; g.fillRect(x + dx - r, y + dy - r, 2 * r, 2 * r);
+    }
+  }
+  for (let k = 0; k < 14000; k++) {
+    g.fillStyle = hash(k, 6, 9) < 0.55 ? 'rgba(38,58,22,0.35)' : 'rgba(196,192,128,0.28)';
+    g.fillRect(hash(k, 4, 9) * S, hash(k, 5, 9) * S, 1, 2 + hash(k, 7, 9) * 3);
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(36, 36); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: grass() }));
+ground.receiveShadow = true; scene.add(ground);
 
 // ------------------------------------------------------------------ matériau des figurines animées
+const HEAD = `
+  attribute vec4 iPos;    // x, z, cap, taille
+  attribute vec4 iClip;   // l'animation : première ligne, images, en boucle, début
+  attribute vec4 iPrev;   // l'animation d'avant (fondu)
+  attribute vec4 iMisc;   // vitesse, début du fondu, vitesse d'avant
+  attribute vec3 iCoat;
+  attribute float aBone, aPart;
+  uniform sampler2D uAnim; uniform float uTime, uFps;
+  vec4 R(int b, int f, int k) { return texelFetch(uAnim, ivec2(b * 3 + k, f), 0); }
+  // les trois lignes de la matrice de l'os b dans l'animation clip, jouée à la vitesse sp
+  void bone(vec4 clip, float sp, int b, out vec4 r0, out vec4 r1, out vec4 r2) {
+    float n = clip.y, fr = max(uTime - clip.w, 0.0) * sp * uFps;
+    fr = clip.z > 0.5 ? mod(fr, n) : min(fr, n - 1.0);
+    int f0 = int(clip.x) + int(fr), f1 = int(clip.x) + int(clip.z > 0.5 ? mod(fr + 1.0, n) : min(fr + 1.0, n - 1.0));
+    float a = fract(fr);
+    r0 = mix(R(b, f0, 0), R(b, f1, 0), a); r1 = mix(R(b, f0, 1), R(b, f1, 1), a); r2 = mix(R(b, f0, 2), R(b, f1, 2), a);
+  }`;
+const POSE = `
+  int b = int(aBone + 0.5);
+  vec4 r0, r1, r2;
+  bone(iClip, iMisc.x, b, r0, r1, r2);
+  float bw = clamp((uTime - iMisc.y) / 0.3, 0.0, 1.0);
+  if (bw < 1.0) {
+    vec4 p0, p1, p2;
+    bone(iPrev, iMisc.z, b, p0, p1, p2);
+    bw = smoothstep(0.0, 1.0, bw);
+    r0 = mix(p0, r0, bw); r1 = mix(p1, r1, bw); r2 = mix(p2, r2, bw);
+  }
+  float sa = sin(iPos.z), ca = cos(iPos.z);`;
+const PLACE = `vec3 transformed = vec3(dot(r0, vec4(position, 1.0)), dot(r1, vec4(position, 1.0)), dot(r2, vec4(position, 1.0))) * iPos.w;
+  transformed = vec3(transformed.x * ca + transformed.z * sa, transformed.y, -transformed.x * sa + transformed.z * ca) + vec3(iPos.x, 0.0, iPos.y);`;
 const uni = { uAnim: { value: tex }, uTime: { value: 0 }, uFps: { value: meta.fps } };
 const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
 mat.onBeforeCompile = sh => {
   Object.assign(sh.uniforms, uni);
   sh.vertexShader = sh.vertexShader
-    .replace('#include <common>', `#include <common>
-      attribute vec4 iPos;    // x, z, cap, taille
-      attribute vec4 iClip;   // première ligne, images, en boucle, début
-      attribute vec4 iMisc;   // vitesse
-      attribute vec3 iCoat;
-      attribute float aBone, aPart;
-      uniform sampler2D uAnim; uniform float uTime, uFps;
-      vec4 R(int b, int f, int k) { return texelFetch(uAnim, ivec2(b * 3 + k, f), 0); }`)
+    .replace('#include <common>', '#include <common>\n' + HEAD)
     .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
-      float n = iClip.y, fr = max(uTime - iClip.w, 0.0) * iMisc.x * uFps;
-      fr = iClip.z > 0.5 ? mod(fr, n) : min(fr, n - 1.0);
-      int f0 = int(iClip.x) + int(fr), f1 = int(iClip.x) + int(iClip.z > 0.5 ? mod(fr + 1.0, n) : min(fr + 1.0, n - 1.0));
-      int b = int(aBone + 0.5);
-      float ff = fract(fr);
-      vec4 r0 = mix(R(b, f0, 0), R(b, f1, 0), ff), r1 = mix(R(b, f0, 1), R(b, f1, 1), ff), r2 = mix(R(b, f0, 2), R(b, f1, 2), ff);
-      float sa = sin(iPos.z), ca = cos(iPos.z);
+      ${POSE}
       objectNormal = vec3(dot(r0.xyz, objectNormal), dot(r1.xyz, objectNormal), dot(r2.xyz, objectNormal));
       objectNormal = vec3(objectNormal.x * ca + objectNormal.z * sa, objectNormal.y, -objectNormal.x * sa + objectNormal.z * ca);`)
-    .replace('#include <begin_vertex>', `vec3 transformed = position;
-      transformed = vec3(dot(r0, vec4(transformed, 1.0)), dot(r1, vec4(transformed, 1.0)), dot(r2, vec4(transformed, 1.0))) * iPos.w;
-      transformed = vec3(transformed.x * ca + transformed.z * sa, transformed.y, -transformed.x * sa + transformed.z * ca) + vec3(iPos.x, 0.0, iPos.y);`)
-    .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = mix(vColor.rgb, iCoat * color.r, aPart);');
+    .replace('#include <begin_vertex>', PLACE)
+    // l'habit à la teinte de l'homme ; plus sombre vers les pieds (l'ombre des rangs, comme une occlusion ambiante)
+    .replace('#include <color_vertex>', `#include <color_vertex>
+      vColor.rgb = mix(vColor.rgb, iCoat * color.r, aPart) * mix(0.58, 1.0, smoothstep(0.0, 1.5, position.y));`);
+  // lumière enveloppante : le côté à l'ombre n'est pas noir, le passage est doux
+  sh.fragmentShader = sh.fragmentShader.replace('#include <lights_lambert_pars_fragment>', THREE.ShaderChunk.lights_lambert_pars_fragment
+    .replace('float dotNL = saturate( dot( geometryNormal, directLight.direction ) );', 'float dotNL = saturate( dot( geometryNormal, directLight.direction ) * 0.6 + 0.4 );'));
 };
 mat.customProgramCacheKey = () => 'anims-essai';
+const depth = new THREE.MeshDepthMaterial();
+depth.onBeforeCompile = sh => {
+  Object.assign(sh.uniforms, uni);
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + HEAD).replace('#include <begin_vertex>', POSE + PLACE);
+};
+depth.customProgramCacheKey = () => 'anims-essai-ombre';
 
-// un lot de figurines d'une sorte ; set(i, …) range la figurine i
-function batch(kind, n) {
+// un lot de figurines d'une sorte ; set(i, …) range la figurine i (prev : l'animation d'avant et l'instant du changement)
+function batch(kind, n, seed) {
   const g = model(kind, 1780, 1, true), A = {};
-  for (const [k, w] of [['iPos', 4], ['iClip', 4], ['iMisc', 4], ['iCoat', 3]]) g.setAttribute(k, A[k] = new THREE.InstancedBufferAttribute(new Float32Array(n * w), w).setUsage(THREE.DynamicDrawUsage));
+  for (const [k, w] of [['iPos', 4], ['iClip', 4], ['iPrev', 4], ['iMisc', 4], ['iCoat', 3]]) g.setAttribute(k, A[k] = new THREE.InstancedBufferAttribute(new Float32Array(n * w), w).setUsage(THREE.DynamicDrawUsage));
   const mesh = new THREE.InstancedMesh(g, mat, n);
-  mesh.frustumCulled = false; scene.add(mesh);
+  mesh.frustumCulled = false; mesh.castShadow = true; mesh.customDepthMaterial = depth; scene.add(mesh);
   const coat = new THREE.Color();
   return {
-    set(i, x, z, cap, clip, t0, { speed = 1, size = 1, color = '#b0362c' } = {}) {
-      const c = meta.clips[clip];
-      A.iPos.setXYZW(i, x, z, cap, size); A.iClip.setXYZW(i, c.row, c.n, c.loop, t0); A.iMisc.setXYZW(i, speed, 0, 0, 0);
-      coat.set(color); A.iCoat.setXYZ(i, coat.r, coat.g, coat.b);
+    set(i, x, z, cap, clip, t0, { speed = 1, size = 1, color = '#a8342b', prev = null } = {}) {
+      const c = meta.clips[clip], p = meta.clips[prev?.clip ?? clip];
+      A.iPos.setXYZW(i, x, z, cap, size); A.iClip.setXYZW(i, c.row, c.n, c.loop, t0);
+      A.iPrev.setXYZW(i, p.row, p.n, p.loop, prev?.t0 ?? t0); A.iMisc.setXYZW(i, speed, prev ? prev.at : -99, prev?.speed ?? speed, 0);
+      // pas deux habits tout à fait pareils (teinte, saturation, clarté)
+      coat.set(color).offsetHSL((hash(i, 13, seed) - 0.5) * 0.02, (hash(i, 14, seed) - 0.5) * 0.14, (hash(i, 15, seed) - 0.5) * 0.08);
+      A.iCoat.setXYZ(i, coat.r, coat.g, coat.b);
     },
     done() { for (const a of Object.values(A)) a.needsUpdate = true; },
   };
 }
-const dur = c => meta.clips[c].n / meta.fps;
 
 // ------------------------------------------------------------------ le catalogue : une animation par figurine
 // [étiquette, sorte, animation] ; les animations sans boucle sont rejouées
@@ -96,13 +153,13 @@ const CAT = [['Repos', 'inf', 'repos'], ['Parle', 'officier', 'parle'], ['Marche
   ['Recharge', 'inf', 'recharge'], ['Poussée', 'inf', 'poussee'], ['Estoc', 'inf', 'estoc'], ['Touché', 'inf', 'touche'],
   ['Projeté', 'inf', 'projete'], ['Mort', 'inf', 'mort'], ['Sabre', 'officier', 'sabre'], ['Assaut', 'officier', 'combo']];
 if (q.get('cat') === '0') CAT.length = 0;
-const cat = { inf: batch('inf', Math.max(1, CAT.length)), officier: batch('officier', Math.max(1, CAT.length)) };
+const cat = { inf: batch('inf', Math.max(1, CAT.length), 1), officier: batch('officier', Math.max(1, CAT.length), 2) };
 const labels = CAT.map(([l], i) => {
   const d = document.createElement('div'); d.className = 'lab'; d.textContent = l; document.body.appendChild(d);
-  return { d, p: new THREE.Vector3((i - (CAT.length - 1) / 2) * 2.4, 2.3, 0) };
+  return { d, p: new THREE.Vector3((i - (CAT.length - 1) / 2) * 2.4, 2.5, 0) };
 });
 function catalogue(t) {
-  for (const k of Object.values(cat)) for (let i = 0; i < CAT.length; i++) k.set(i, 0, -999, 0, 'repos', 0);
+  for (const k of Object.values(cat)) for (let i = 0; i < Math.max(1, CAT.length); i++) k.set(i, 0, -999, 0, 'repos', 0);
   CAT.forEach(([, kind, clip], i) => {
     const loop = meta.clips[clip].loop, p = dur(clip) + 1.2;
     cat[kind].set(i, labels[i].p.x, 0, Math.PI, clip, loop ? 0 : Math.floor(t / p) * p);
@@ -110,33 +167,74 @@ function catalogue(t) {
   for (const k of Object.values(cat)) k.done();
 }
 
-// ------------------------------------------------------------------ la compagnie : marche, halte, en joue, salve
-// reçue (des hommes tombent et restent au sol), recharge, charge ; une boucle de 18 s, calculée à partir de t seul
-const RANKS = 3, FILES = 20, SP = 0.78, SR = 1.15, Z0 = 24, VM = 1.15, VC = 4.2;
-const co = batch('inf', RANKS * FILES);
-const zAt = t => Z0 - VM * Math.min(t, 6) - (t > 13 ? VC * (t - 13) : 0);   // le front avance vers la caméra (−z)
+// ------------------------------------------------------------------ la compagnie : marche, halte, en joue, feu,
+// salve reçue (des hommes tombent et restent au sol), recharge, charge. Une boucle de 18 s, calculée à partir de t seul ;
+// chaque homme a son emploi du temps (à quelques dixièmes de seconde des autres)
+const RANKS = 3, FILES = 20, SP = 0.8, SR = 1.2, Z0 = 24, VM = 1.15, VC = 4.2, LOOP = 18, VOLLEY = 9.05;
+const co = batch('inf', RANKS * FILES, 3);
+const men = [];
+for (let r = 0; r < RANKS; r++) for (let k = 0; k < FILES; k++) {
+  const i = r * FILES + k, j = n => hash(i, n, 3);
+  const halt = 6 + j(2) * 0.5, go = 13 + j(6) * 0.35, vc = VC * (0.92 + j(7) * 0.16);
+  // [instant, animation, début de l'animation]
+  const S = [[0, 'marche', -j(1) * 0.35], [halt, 'repos', halt - j(3) * 2]];
+  if (r < 2) {
+    const aim = 7 + j(4) * 0.6, re = VOLLEY + 0.25 + j(5) * 0.9;
+    S.push([aim, r === 0 ? 'genou' : 'joue', aim], [re, 'recharge', re], [re + 2.4, 'repos', re + 2.4]);
+  }
+  S.push([go, 'charge', go - j(8) * 0.3]);
+  S.sort((a, b) => a[0] - b[0]);
+  const h = j(9), tHit = h > 0.9 ? 9.6 + j(12) * 2 : 99, tDie = h < 0.14 ? 9.4 + j(11) * 2.5 : 99;
+  if (tHit < 99) {
+    const was = S.filter(s => s[0] <= tHit).pop();
+    S.push([tHit, 'touche', tHit], [tHit + dur('touche') - 0.1, was[1], was[2]]);
+    S.sort((a, b) => a[0] - b[0]);
+  }
+  if (tDie < 99) { while (S.at(-1)[0] >= tDie) S.pop(); S.push([tDie, 'mort', tDie]); }
+  men.push({
+    i, S, tDie, size: 1.1 * (0.95 + j(10) * 0.1), speed: 0.94 + j(13) * 0.12,
+    x: (k - (FILES - 1) / 2) * SP + (r & 1) * SP / 2 + (j(14) - 0.5) * 0.3, dz: r * SR + (j(15) - 0.5) * 0.3, cap: Math.PI + (j(16) - 0.5) * 0.22,
+    z: t => Z0 - VM * Math.min(t, halt) - (t > go ? vc * (t - go) : 0),
+  });
+}
+const front = t => Z0 - VM * Math.min(t, 6.2);
 function company(T) {
-  const t = T % 18;
-  for (let r = 0; r < RANKS; r++) for (let k = 0; k < FILES; k++) {
-    const i = r * FILES + k, h = hash(i, 7, 3), x = (k - (FILES - 1) / 2) * SP + (r & 1) * SP / 2 + (hash(i, 2, 5) - 0.5) * 0.1;
-    const dz = r * SR + (hash(i, 4, 5) - 0.5) * 0.1, ph = (hash(i, 9, 1) - 0.5) * 0.08;
-    const tDie = h < 0.14 ? 9.4 + hash(i, 11, 2) * 2.5 : 99, tHit = h > 0.9 ? 9.6 + hash(i, 12, 2) * 2 : 99;
-    let clip = 'repos', t0 = ph;
-    if (t >= tDie) { clip = 'mort'; t0 = tDie; }
-    else if (t < 6) clip = 'marche';
-    else if (t >= 13) clip = 'charge';
-    else if (t >= tHit && t < tHit + dur('touche')) { clip = 'touche'; t0 = tHit; }
-    else if (t >= 7.2 && t < 9.3 && r < 2) clip = r === 0 ? 'genou' : 'joue';
-    else if (t >= 9.3 && t < 13 && r < 2) { clip = 'recharge'; t0 = 9.3 + ph * 4; }
-    co.set(i, x, zAt(Math.min(t, tDie)) + dz, Math.PI, clip, t0 + T - t, { size: 1.1 });
+  const t = T % LOOP, off = T - t;
+  for (const m of men) {
+    let k = 0;
+    while (k < m.S.length - 1 && m.S[k + 1][0] <= t) k++;
+    const [, clip, t0] = m.S[k], p = m.S[k - 1];
+    const prev = p && { clip: p[1], t0: p[2] + off, at: m.S[k][0] + off, speed: meta.clips[p[1]].loop ? m.speed : 1 };
+    co.set(m.i, m.x, m.z(Math.min(t, m.tDie)) + m.dz, m.cap, clip, t0 + off, { size: m.size, speed: meta.clips[clip].loop ? m.speed : 1, prev });
   }
   co.done();
-  document.getElementById('phase').textContent = t < 6 ? 'Marche au pas' : t < 7.2 ? 'Halte' : t < 9.3 ? 'En joue (1er rang à genoux)' : t < 13 ? 'Salve reçue : des hommes tombent ; on recharge' : 'Charge à la baïonnette';
+  document.getElementById('phase').textContent = t < 6 ? 'Marche au pas' : t < 7 ? 'Halte' : t < VOLLEY ? 'En joue (1er rang à genoux)' : t < 13 ? 'Feu ! Salve reçue : des hommes tombent ; on recharge' : 'Charge à la baïonnette';
+}
+
+// ------------------------------------------------------------------ fumée des salves (effets.js, comme en bataille)
+// notre salve, puis celle de l'ennemi, 40 m devant (hors de vue, sa fumée arrive avec le vent)
+const SHOTS = [[VOLLEY, () => ({ x: 0, y: front(VOLLEY), dir: -Math.PI / 2, w: FILES * SP, d: 2, form: 'ligne' })],
+  [9.35, () => ({ x: 2, y: front(9) - 40, dir: Math.PI / 2, w: FILES * SP, d: 2, form: 'ligne' })]];
+let fx = null, fxT = 0;
+function effects(T) {
+  const t = T % LOOP;
+  if (!fx || t < fxT) {
+    if (fx) { for (const m of fx.meshes || []) scene.remove(m); fx.dispose(); }
+    fx = new Effects({ puffs: 1400, fx: 2 }); fx.attach(scene, () => 0); fxT = 0;
+  }
+  for (const [at, un] of SHOTS) if (fxT <= at && at < t) fx.push({ k: 'salve' }, un(), at - fxT);
+  for (let s = fxT; s < t; s += 0.05) {
+    fx.update(Math.min(0.05, t - s), [1.2, -0.6]);
+    // shortcut: bouffées réduites à la main (les nôtres font 1,9 m, celles du jeu sont faites pour des figurines ×1,6
+    // vues de loin) ; à revoir en les intégrant
+    for (const p of fx.puffs) if (!p.small) { p.r *= 0.5; p.grow *= 0.5; p.small = true; }
+  }
+  fxT = t;
 }
 
 // ------------------------------------------------------------------ caméra (glisser : tourner ; molette, pincer : zoom)
 const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 400);
-const cam = { yaw: 0.35, pitch: 0.42, dist: 34, target: new THREE.Vector3(0, 0.8, 8) };
+const cam = { yaw: 0.75, pitch: 0.5, dist: 30, target: new THREE.Vector3(0, 0.8, 12) };   // en plongée, comme Ultimate General
 const ptrs = new Map();
 let pinch0 = 0;
 addEventListener('pointerdown', e => ptrs.set(e.pointerId, e));
@@ -157,12 +255,14 @@ addEventListener('wheel', e => { cam.dist = THREE.MathUtils.clamp(cam.dist * Mat
 function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 
-const v = new THREE.Vector3();
+const v = new THREE.Vector3(), cw = camera.matrixWorld.elements;
 function draw(t) {
   uni.uTime.value = t;
-  catalogue(t); company(t);
+  catalogue(t); company(t); effects(t);
   camera.position.set(cam.target.x - Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist, cam.target.y + Math.sin(cam.pitch) * cam.dist, cam.target.z - Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist);
-  camera.lookAt(cam.target);
+  camera.lookAt(cam.target); camera.updateMatrixWorld();
+  // la fumée se tourne vers la caméra (repère de effets.js : E l'œil, R la droite, U le haut)
+  fx.render({ E: camera.position.toArray(), R: [cw[0], cw[1], cw[2]], U: [cw[4], cw[5], cw[6]] }, 8);
   renderer.render(scene, camera);
   for (const { d, p } of labels) {
     v.copy(p).project(camera);
@@ -171,7 +271,7 @@ function draw(t) {
   }
 }
 const frozen = q.has('t') ? +q.get('t') : null;
-window.__cam = cam;
+window.__cam = cam; window.__fx = () => fx;
 window.__at = t => { window.__frozen = t; draw(t); };
 renderer.setAnimationLoop(() => draw(window.__frozen ?? frozen ?? performance.now() / 1000));
 document.title = 'pret';
