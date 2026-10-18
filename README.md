@@ -147,7 +147,7 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
 - **Époques** : Grand Siècle finissant (1700), Lumières (1715), Révolution (1789), Consulat et Empire (1804), Restauration
   (1815), IIe République et Second Empire (1848), IIIe République (1870). Le passage d'une époque à l'autre est annoncé
   et met le jeu en pause.
-- **Technologies datées** : 73 technologies, de la baïonnette à douille (1700) au canon de 75 (1897) ; chacune ne se
+- **Technologies datées** : 94 technologies, de la baïonnette à douille (1700) au canon de 75 (1897) ; chacune ne se
   recherche qu'une fois inventée (la machine à vapeur vers 1820, les chemins de fer vers 1841, le Chassepot vers 1866…).
 - **Armement par époque** : chaque régiment garde les armes reçues à sa levée, affichées à côté de son nom.
   - Infanterie : mousquet et piques (×0,85), fusil à silex (×1), fusil 1777 (×1,10), fusil à percussion (×1,22, ne
@@ -344,6 +344,9 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   - **Sapeurs du génie** : peu combatifs, mais ils accélèrent les sièges et jettent des ponts (plus d'attente au bac).
   - **Garde nationale** : milice bon marché, levée même dans un village ; elle ne quitte pas sa ville mais la défend
     avec ardeur (+30 %).
+  - **Mitrailleuses** (batterie de six pièces de Reffye, après la technologie « Mitrailleuse de Reffye », 1866) : un feu
+    roulant à 1 200 m (2 000 au plus), redoutable contre l'infanterie à découvert, faible contre les canons et sans
+    effet sur les remparts ; ses munitions fondent vite. Armement fixe : elle ne se réarme pas.
 - **Magasin aux vivres** (150 livres, 60 bois, un emplacement de la ville) : les armées en campagne à moins de 30 km restent ravitaillées, en puisant
   dans vos vivres. Pris par l'ennemi, il est pillé.
 - **Moral et désertions** : trésor vide (solde impayée) ou vivres épuisés, le moral chute et les soldats désertent.
@@ -441,7 +444,16 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   file, les hommes sont projetés ; les chevaux s'abattent, leur cavalier à côté) et **restent au sol toute la
   bataille** (jusqu'à un plafond selon la qualité, les plus anciens deviennent des taches au sol). Les troupes
   **contournent les bâtiments** au lieu de les traverser. La fumée blanche des salves forme un banc le long de la
-  ligne, s'amasse et dérive avec le vent. Au-dessus de chaque régiment, un fanion à la manière d'Ultimate
+  ligne, s'amasse et dérive avec le vent ; avec la poudre B (le fusil Lebel, et les pièces d'un camp qui a la
+  technologie), plus que l'éclair et un voile à peine visible. Les armes suivent l'époque et la génération de chaque
+  régiment : avant la baïonnette, un homme sur cinq porte la pique, au centre du bataillon (dressée, croisée à la
+  charge et en carré) ; chaque génération d'artillerie a sa pièce (long fût de bronze sur affût de bois, Gribeauval
+  vert olive, Valée et La Hitte à flèche, de Bange en acier, canon de 75 et son bouclier, dont seul le tube recule) ;
+  la mitrailleuse de Reffye crépite, un servant à la manivelle. Les porte-drapeau portent les **vrais drapeaux de
+  l'époque** : d'ordonnance aux couleurs de chaque régiment (jusqu'en 1790), modèles 1791, de l'an II, 1804 et 1812,
+  drapeau blanc fleurdelisé de la Restauration, tricolore au coq puis à l'aigle, « RF » ; avec le haut de hampe (fer
+  de lance, aigle, coq) et la cravate de leur temps. Tous les camps étant français, c'est le fanion au-dessus du
+  régiment qui dit à qui il est. Au-dessus de chaque régiment, un fanion à la manière d'Ultimate
   General porte le pictogramme de son arme et son effectif (barré et pâli s'il est en déroute) ; le général a son
   médaillon. Le temps, la saison et l'heure se voient : pluie, brouillard, neige, orage, ombres des nuages qui
   passent, lumière dorée du matin, couchant puis nuit.
@@ -596,10 +608,25 @@ Tout marche seul avec les réglages par défaut ; on intervient quand on veut, d
 - **Minimum garanti** : tant qu'un département tient son chef-lieu, il produit au moins 20 livres, 16 vivres, 9 fer,
   9 bois et 8 recrues par jour, modulés par ses traits (Périgord +40 % de fer, Landes +30 % de bois, Agenais +35 % de vivres…).
   Les vivres minimum suivent les saisons. Au-delà, il faut des villages, des forges, du commerce.
-- 51 technologies en quatre branches : militaire (feu de rang, feu de peloton, ordre mixte de Guibert, cuirassiers,
-  artillerie à cheval, génie…), civile (gendarmerie, cadastre, poste aux chevaux, écoles centrales, caisse d'escompte…),
-  industrielle (poudreries, forges au coke, pièces interchangeables, draperies, chantiers de gabares…)
-  et agricole (maïs, foires agricoles, gemmage, transhumance, greniers publics, conserves d'Appert…).
+- 94 technologies en quatre branches : militaire (feu de rang, feu de peloton, ordre mixte de Guibert, cuirassiers,
+  artillerie à cheval, génie…), civile et sociale (gendarmerie, cadastre, poste aux chevaux, écoles centrales, caisse
+  d'escompte…), industrielle (poudreries, forges au coke, pièces interchangeables, draperies, chantiers de gabares…)
+  et agricole (maïs, foires agricoles, gemmage, transhumance, greniers publics, conserves d'Appert…). Certaines ont un
+  effet à elles (SPEC-TECH.md) :
+  - militaire : **aérostiers** (1794 : en bataille, le ballon du général voit tout ennemi à 1 500 m), **retranchements**
+    (1860 : l'infanterie arrêtée depuis cinq minutes perd 25 % de moins au feu), **dynamite** (1867 : une brèche de plus
+    à l'assaut), **mélinite** (1885 : le couvert protège moitié moins de votre artillerie), chemins de fer militaires
+    (1859 : les armées prendront le train, avec les voies ferrées de la carte) ;
+  - civile et sociale : **vaccine** (1800 : épidémies moitié moins meurtrières), **caisse d'épargne** (1819 : le trésor
+    rapporte 2 % l'an), **éclairage au gaz** (1830 : villes +5 % de livres), **photographie** (1839 : l'expérience et
+    l'armement des armées ennemies repérées), **suffrage universel** (1848 : lassitude de la guerre ×0,75), **secours
+    mutuels** (1852 : révoltes moitié moins probables), **Croix-Rouge** (1864 : un quart des pertes d'une bataille
+    rejoint ses régiments), **téléphone** (1879 : le bilan du tour annonce les armées ennemies qui arrivent au tour
+    suivant), **syndicats** (1884 : industrie +10 %, mais une ville à l'ordre bas fait grève en janvier) ;
+  - industrielle : **bateau à vapeur** (1818 : on remonte les fleuves aussi vite qu'on les descend), **ciment** (1817 :
+    constructions −15 % de coût et de délai), phares de Fresnel (1823) ;
+  - agricole : **sucre de betterave** (1812 : le Blocus ne coûte plus rien aux ports), charrue Dombasle (1820),
+    moissonneuses (1855), **bouillie bordelaise** (1885 : le phylloxéra et le mildiou de 1882 frappent moitié moins).
 - **Population et agrandissement** : chaque place a ses habitants (estimations de 1790 : Bordeaux 110 000, Bayonne
   13 000, Agen 11 000, Pau 9 000…). Sa production suit sa population. « Agrandir » la ville (3 niveaux : premiers
   faubourgs, nouveaux quartiers, grande ville ; pour un village : village agrandi, gros bourg, bourg prospère) ouvre
@@ -622,6 +649,12 @@ météo, terrain, place, fortification et canons du rempart, forces des deux cam
 heure, vainqueur, pertes, prisonniers, prise de la place. `python3 outils/bilan.py` (option `--depuis AAAA-MM-JJ`) en
 tire des tableaux : taux de prise des places selon leur fortification, temps pour ouvrir une brèche, places prises avec
 ou sans brèche, batailles automatiques face aux commandées, résultats du mode Bataille.
+
+**Banc d'équilibre de la campagne** : `python3 outils/simuler.py --parties 6 --epoque 1790 --annees 30 --proc 2` fait
+jouer des campagnes aux IA seules (le camp du joueur compris), sur des graines fixes, et donne pour chacune les guerres
+et leur durée, les places de chaque camp, l'écart entre le premier et le dernier, les camps en vie, les technologies, le
+trésor et les hommes sous les armes. Environ 20 s de calcul par année et par partie sur le Raspberry Pi ; la mesure
+d'avant et d'après les nouvelles technologies est dans `tasks/equilibre-reference.md`.
 
 ## Commandes (souris, doigt ou stylet)
 

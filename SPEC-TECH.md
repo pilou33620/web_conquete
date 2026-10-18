@@ -291,6 +291,20 @@ export const drapeau = year => DRAPEAUX.find(([fin]) => year <= fin);
 8. `python3 tests/lancer.py` passe ; aucune erreur sur les scénarios du banc ; images par seconde sur l'iPad au moins
    celles de l'étape 7.
 
+## État (18/10/2026, phases 0 et 1)
+
+Construit en `/build auto` (T51 à T68, un commit par tâche), suivi d'une revue complète et de ses corrections.
+- **Phase 0** : faite. Le banc d'équilibre (`outils/simuler.py`) est écrit. Avant et après, 1790 à 1820 : toutes les
+  mesures restent dans ±25 % (`tasks/equilibre-reference.md`). Une sauvegarde d'avant le chantier se joue un an sans
+  erreur.
+- **Phase 1** : faite : poudre sans fumée, piquiers, une pièce par génération, Reffye, vrais drapeaux. Captures dans la
+  galerie (port 8799, section « Technologies »).
+- **Reste à faire** : ton avis sur la galerie et l'essai sur l'iPad (images par seconde). Ensuite, la spec de la
+  phase 2 (la carte qui change, le train).
+- **Écarts à la spec, acceptés le 18/10** (`tasks/plan-tech.md`) : les mutuelles rendent les révoltes moitié moins
+  probables ; Fresnel donne commerce +10 % ; un événement « mildiou » apparaît en 1882 ; le ciment réduit aussi les prix
+  affichés. Une grève ne descend pas l'industrie sous 10 % (les ateliers sont « presque arrêtés »).
+
 ## Questions ouvertes
 
 Spec validée le 18/10/2026 (questionnaire) ; prochaine étape : le plan.
