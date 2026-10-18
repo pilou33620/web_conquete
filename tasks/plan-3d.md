@@ -281,7 +281,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 - [ ] Point de contrôle 7e
 
 ### 7f : scène
-- [ ] T43 : couleurs et lumière du terrain
+- [x] T43 : couleurs et lumière du terrain
 - [ ] T46 : herbe et végétation en relief (demande du 17/10/2026)
 - [ ] T44 : fumée et effets à l'échelle des figurines
 - [ ] T45 : vérification finale, README, revue

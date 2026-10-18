@@ -617,7 +617,11 @@ General sur un régiment qui tire.
 
 ### 7f : scène
 
-- [ ] **T43 : couleurs et lumière du terrain**
+- [x] **T43 : couleurs et lumière du terrain**
+  - Fait : soleil un peu doré par beau temps (moins quand le jour baisse ; nuit, pluie, brouillard inchangés), lumière
+    du sol plus chaude ; prés du printemps et de l'été plus olive, un peu moins saturés. Comparé à la capture de
+    référence (bataille dans les blés) : l'écart principal reste le sol en aplats (T46) ; la caméra d'Ultimate General
+    est aussi plus couchée à mi-distance (hors spec : à voir avec toi).
   - Critères :
     - Lumière chaude, couleurs un peu passées.
     - Herbe en touffes de plusieurs verts, blés dorés, brume bleutée au loin.
