@@ -82,19 +82,20 @@ export function emprise(u) {
   }
 }
 
-// nombre d'étoiles d'expérience (0 à 5)
 // uniformes français d'époque (SPEC-3D.md, étape 8) : habit et culotte selon l'année de la bataille, l'arme et le
 // régiment (dragons en vert de 1760 à 1860) ; le camp, lui, se lit aux revers (troupes.js, CAMP). Gris-blanc sous
-// Louis XIV, bleu national puis impérial, capote bleu foncé et pantalon garance en 1870 ; artillerie bleu foncé
+// Louis XIV, bleu national puis impérial, capote bleu foncé en 1870 ; pantalon garance dès 1829 ; artillerie bleu foncé
+// (culotte bleue comprise, après 1760)
 export function uniform(year, cls, name = '', kind = '') {
   const y = year || 1790, capote = y >= 1860;
   if (kind === 'milice') return { coat: '#7a6248', trous: '#5a4c3c' };
-  const trous = capote ? '#9e2b28' : cls === 'cavalerie' ? '#e8dcc0' : y < 1760 ? '#d9d3c3' : '#f3efe4';
-  if (cls === 'artillerie') return { coat: '#1f2946', trous: capote ? '#1f2946' : trous };
+  const trous = y >= 1829 ? '#9e2b28' : cls === 'cavalerie' ? '#e8dcc0' : y < 1760 ? '#d9d3c3' : '#f3efe4';
+  if (cls === 'artillerie') return { coat: '#1f2946', trous: y >= 1760 ? '#1f2946' : trous };
   if (cls === 'cavalerie' && !capote && y >= 1760 && /dragon/i.test(name)) return { coat: '#2f5b3d', trous };
   return { coat: y < 1760 ? '#d9d3c3' : y < 1805 ? '#2b3d7a' : !capote ? '#25366c' : '#2b3552', trous };
 }
 
+// nombre d'étoiles d'expérience (0 à 5)
 export const stars = xp => Math.max(0, Math.min(5, Math.round((xp || 0) / 20)));
 // nombres à la française
 export const fmt = n => (Math.round(n) || 0).toLocaleString('fr-FR').replace(/^-/, '−');

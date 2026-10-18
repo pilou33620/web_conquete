@@ -423,11 +423,14 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   en relief et ondulent au vent.
   Arbres et bois aux couronnes touffues, fermes, villages, église et clocher, moulins, ponts, remparts et bastions,
   tranchées, haies, murets et clôtures ; le soleil de l'heure porte leurs ombres, adoucies, et une lumière douce
-  éclaire le tout. Chaque régiment est fait de figurines 3D arrondies aux couleurs de son camp (un homme par
-  figurine tant que la qualité graphique le permet), en rangs serrés (trois rangs pour une ligne), avec
-  porte-drapeau, tambours, officiers et colonel à cheval ; les coiffures suivent l'époque (tricorne relevé, bicorne,
-  shako, képi, bonnet à poil), buffleteries blanches, havresac ; chaque homme a son ombre au sol. Dans un bois, la
-  couronne des arbres s'efface au-dessus d'un régiment : on voit ses hommes entre les troncs. Les hommes sont
+  éclaire le tout. Chaque régiment est fait de figurines 3D arrondies (un homme par figurine tant que la qualité
+  graphique le permet) en uniforme français de l'époque : justaucorps gris-blanc sous Louis XIV, habit bleu national
+  puis impérial, capote bleu foncé et pantalon garance en 1870, artillerie en bleu foncé. Son camp se lit à ses revers,
+  son collet et ses parements, de loin à son plastron et à sa ceinture, et à ses drapeaux et fanions. Il se tient en
+  rangs serrés (trois rangs pour une ligne), avec porte-drapeau, tambours, officiers et colonel à cheval ; les
+  coiffures suivent l'époque (tricorne relevé, bicorne, shako, képi, bonnet à poil), buffleteries blanches,
+  havresac ; chaque homme a son ombre au sol. Dans un bois, la couronne des arbres s'efface au-dessus d'un régiment :
+  on voit ses hommes entre les troncs. Les hommes sont
   **animés**, chacun avec son allure et son temps de retard : ils marchent au pas, mettent en joue l'un après
   l'autre quand la salve roule le long du front (le premier rang à genoux), puis rechargent à la baguette ; quand la
   formation change, chacun court à sa nouvelle place ; en mêlée, les premiers rangs avancent baïonnette en avant

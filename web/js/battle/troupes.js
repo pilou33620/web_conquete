@@ -28,7 +28,8 @@ const DEAD = MAXU - 1;      // sa dernière colonne : les corps au sol (un régi
 
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', GOLD = '#d6b65a', LEATHER = '#2a1f16';
 // teinte d'une pièce (assemble) : 0 sa couleur, 1 l'habit (aCoat), 2 la robe du cheval, CAMP la couleur du camp (aFace :
-// revers, collet, parements, tapis de selle ; de loin, le plastron), qui distingue des camps tous en uniforme français
+// revers, retroussis, collet, parements, tapis de selle, cercle du tambour ; de loin, le plastron et la ceinture), qui
+// distingue des camps tous en uniforme français
 const CAMP = 3;
 const AFFUT = '#5f6b3e', BRONZE = '#b08a3e';   // affûts peints en vert olive, pièces de bronze
 const ROWS = 5;     // lignes de la texture des régiments (la 4e et la 5e : l'instant du dernier coup de chaque pièce)
@@ -50,11 +51,13 @@ const pushOf = (kind, def) => PUSH[/^(cavalier|chef|fanion)/.test(kind) ? 'HORSE
 const RIDER = 9;                 // pose (aAnim.x) du cavalier en selle : le shader lui donne le balancement de son cheval
 // variété de la figurine i d'un régiment (gestes.js), tirée une fois par disposition
 const varOf = (e, i, seed) => (e.vars ??= [])[i] ??= variety(seed, e.ids?.[i] ?? i);
-// graine d'un régiment (variété de ses hommes) ; habit d'une figurine (c : la couleur du camp, modifiée)
+// graine d'un régiment (variété de ses hommes)
 const seedOf = id => [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7);
 // (l'habit : l'uniforme français de l'époque et de l'arme, formes.uniform ; un peu plus sombre pour les officiers)
+const COATS = new Map();   // (couleur d'un habit, lue une fois : rebuild en peint des milliers)
 function coatOf(kind, c, un, year) {
-  c.set(uniform(year, clsOf(un), un.name, kind).coat);
+  const hex = uniform(year, clsOf(un), un.name, kind).coat;
+  c.copy(COATS.get(hex) ?? COATS.set(hex, new THREE.Color(hex)).get(hex));
   if (kind === 'officier' || kind === 'drapeau' || kind === 'colonel' || kind === 'chef') c.multiplyScalar(0.8);
   return c;
 }
@@ -306,7 +309,7 @@ function soldier(kind, year, rig = false) {
   const fz = kind === 'milice' ? 0 : CAMP;   // (la milice en habits civils : son foulard seul porte la couleur du camp)
   if (year < 1860) P.push([new THREE.BoxGeometry(0.28, 0.05, 0.015).translate(0, 0.52, -0.15), facing, B.hips, fz],   // retroussis
     [new THREE.BoxGeometry(0.17, 0.4, 0.015).translate(0, 1.2, 0.118), facing, B.chest, fz]);                    // revers (pas sur la capote de 1870)
-  P.push([limb(0.07, 0.075, 1.405, 1.455, 0, 8), WHITE, B.chest, CAMP]);                                          // collet (foulard)
+  P.push([limb(0.075, 0.095, 1.44, 1.5, 0, 8), WHITE, B.chest, CAMP]);                                            // collet (foulard), au-dessus des épaules
   P.push([limb(0.045, 0.05, 1.44, 1.5, 0, 6), SKIN, B.head, 0], [sph(0.088, 0.105, 0.095, 0, 1.585, 0.005), SKIN, B.head, 0]);   // cou, tête
   if (year < 1800) P.push([limb(0.022, 0.018, 1.42, 1.56, 0, 5).translate(0, 0, -0.09), '#3a2c20', B.head, 0]);   // la queue
   if (armed) {
@@ -323,7 +326,7 @@ function soldier(kind, year, rig = false) {
     if (kind === 'officier') P.push([limb(0.012, 0.008, 0.25, 1.0, 0, 4).rotateX(0.45).translate(0.2, 0.03, 0.2), '#c0c4c8', B.hips, 0]);   // épée
   }
   if (kind === 'tambour') P.push([new THREE.CylinderGeometry(0.15, 0.15, 0.22, 12).rotateZ(1.2).translate(0.18, 0.78, 0.13), '#e8dcc0', B.hips, 0],
-    [new THREE.CylinderGeometry(0.155, 0.155, 0.05, 12).rotateZ(1.2).translate(0.18, 0.78, 0.13), shade(0.9), B.hips, 1]);
+    [new THREE.CylinderGeometry(0.155, 0.155, 0.05, 12).rotateZ(1.2).translate(0.18, 0.78, 0.13), shade(0.9), B.hips, CAMP]);   // caisse cerclée aux couleurs du camp
   if (kind === 'drapeau') P.push([limb(0.022, 0.022, 0.5, 3.6, 0.24, 5).translate(0, 0, 0.08), WOOD, B.pole, 0], [sph(0.045, 0.06, 0.045, 0.24, 3.64, 0.08, 6, 4), GOLD, B.pole, 0]);
   // le sabre tiré, dans la main droite, pour les gestes d'escrime des animations
   if (rig && (kind === 'officier' || rider)) P.push([limb(0.004, 0.014, 0.02, 0.8, -0.21, 4).translate(0, 0, 0.03), '#c8ccd0', B.foreR, 0], [box(0.1, 0.02, 0.03, -0.21, 0.81, 0.03), GOLD, B.foreR, 0]);
@@ -542,7 +545,7 @@ attribute vec4 aSlot;   // u, v, sens (ajouté à celui du régiment), numéro d
 attribute vec4 aAnim;   // pose, phase, échelle, rang
 attribute vec4 aMove;   // course à sa place : départ (u, v), début, durée (négative : au pas ; 0 : aucune)
 attribute vec3 aCoat;   // couleur de l'habit
-attribute vec3 aFace;   // couleur du camp (revers, collet, parements, tapis de selle ; de loin, le plastron)
+attribute vec3 aFace;   // couleur du camp (pièces de teinte CAMP)
 attribute float aBone, aPart;
 uniform sampler2D uUnits, uHeight;
 uniform vec3 uHgt;      // pas des altitudes (m), colonnes, lignes
@@ -972,7 +975,7 @@ export class Troops {
       k.buf.aMove.set(mv ?? STILL, o);
       const c = w ? tint : coat;
       C[n * 3] = c.r; C[n * 3 + 1] = c.g; C[n * 3 + 2] = c.b;
-      k.buf.aFace.set([off.r, off.g, off.b], n * 3);
+      const F = k.buf.aFace; F[n * 3] = off.r; F[n * 3 + 1] = off.g; F[n * 3 + 2] = off.b;
     };
     for (const [id, e] of this.lays) {
       const { lay, un, lod } = e;

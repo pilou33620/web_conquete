@@ -147,14 +147,14 @@ test('étape 8 : chaque homme porte la couleur de son camp (revers, collet, pare
   const tints = g => new Set(g.attributes.aPart.array);
   for (const kind of ['inf', 'gren', 'leger', 'milice', 'officier', 'tambour', 'drapeau', 'servant', 'cavalier', 'chef'])
     for (const year of [1700, 1790, 1813, 1870])
-      for (const lod of [1, 2]) assert.ok(tints(model(kind, year, lod, true)).has(3), `${kind} ${year} ${lod === 2 ? 'de près' : 'de loin'}`);
-  for (const kind of ['cav', 'colonel']) assert.ok(tints(model(kind, 1790, 2, true)).has(3), `${kind} : tapis de selle`);
+      for (const lod of [0, 1]) assert.ok(tints(model(kind, year, lod, true)).has(3), `${kind} ${year} ${lod ? 'de près' : 'de loin'}`);   // (model : 0 de loin, 1 de près)
+  for (const kind of ['cav', 'colonel']) for (const lod of [0, 1]) assert.ok(tints(model(kind, 1790, lod, true)).has(3), `${kind} : tapis de selle`);
   assert.ok('aFace' in INSTANCE_ATTRS, 'la couleur du camp, par figurine');
 });
 
 test('étape 8 : la capote de 1870 n’a ni revers ni retroussis (collet et parements seulement)', () => {
   const faces = g => g.attributes.aPart.array.filter(t => t === 3).length;
-  assert.ok(faces(model('inf', 1870, 2, true)) < faces(model('inf', 1813, 2, true)));
+  assert.ok(faces(model('inf', 1870, 1, true)) < faces(model('inf', 1813, 1, true)));
 });
 
 test('étape 8 : uniformes français d’époque (palette)', () => {
@@ -175,6 +175,12 @@ test('étape 8 : uniformes français d’époque (palette)', () => {
   assert.ok(blue(uniform(1870, 'cavalerie', '1er dragons', 'cav').coat), '1870 : dragons comme l’infanterie');
   assert.ok(blue(uniform(1790, 'cavalerie', '3e hussards', 'cav').coat), 'hussards comme l’infanterie');
   assert.equal(uniform(1790, 'inf', '', 'milice').coat, '#7a6248', 'la milice, en habits civils');
+  // années limites : Louis XIV jusqu'en 1759, l'habit bleu dès 1760, la capote en 1860, le pantalon garance dès 1829
+  assert.ok(light(uniform(1759, 'inf', '', 'inf').coat) && blue(uniform(1760, 'inf', '', 'inf').coat));
+  assert.ok(!red(uniform(1828, 'inf', '', 'inf').trous) && red(uniform(1829, 'inf', '', 'inf').trous));
+  assert.notEqual(uniform(1859, 'inf', '', 'inf').coat, uniform(1860, 'inf', '', 'inf').coat, 'la capote en 1860');
+  assert.ok(!(rgb(uniform(1700, 'cavalerie', '1er dragons', 'cav').coat)[1] > rgb(uniform(1700, 'cavalerie', '1er dragons', 'cav').coat)[0]), 'pas de dragons verts en 1700');
+  assert.ok(blue(uniform(1790, 'artillerie', '', 'servant').trous), 'artillerie : culotte bleue');
 });
 
 test('étape 8 : deux camps, le même habit, des revers différents (figurines et corps)', () => {
@@ -184,18 +190,27 @@ test('étape 8 : deux camps, le même habit, des revers différents (figurines e
   const tr = new Troops({ t, ex: 1, heightAt: () => 0 }, { troupes: 10000, corps: 2500, fx: 2 }, 1790, null);
   const colors = ['#b8352a', '#3f6fb5'];
   const un = (id, side) => ({ id, side, type: 'ligne', name: `${id}e de ligne`, form: 'ligne', state: 'repos', men: 120, men0: 120, x: 500 + id * 200, y: 500, dir: 0, w: 60, d: 6 });
-  tr.update([un(1, 0), un(2, 1)], colors, 0, 0);
+  const cav = { id: 3, side: 0, type: 'cavalerie', name: '1er dragons', form: 'ligne', state: 'repos', men: 60, men0: 60, x: 300, y: 800, dir: 0, w: 40, d: 6 };
+  tr.update([un(1, 0), un(2, 1), cav], colors, 0, 0);
   for (const e of tr.lays.values()) e.lod = 2;
   tr.rebuild(colors, 1.6);
   const k = tr.kinds.get('inf'), side = i => tr.index.get('1') === k.buf.aSlot[i * 4 + 3] ? 0 : 1;
-  const mean = (a, s) => { let n = 0; const m = [0, 0, 0]; for (let i = 0; i < k.n; i++) if (side(i) === s) { n++; for (let c = 0; c < 3; c++) m[c] += a[i * 3 + c] / 1; } return m.map(x => x / n); };
+  const mean = (a, s) => { let n = 0; const m = [0, 0, 0]; for (let i = 0; i < k.n; i++) if (side(i) === s) { n++; for (let c = 0; c < 3; c++) m[c] += a[i * 3 + c]; } return m.map(x => x / n); };
   const c0 = mean(k.buf.aCoat, 0), c1 = mean(k.buf.aCoat, 1);
   assert.ok(c0[2] > c0[0] && c1[2] > c1[0], 'habit bleu des deux côtés en 1790');
   assert.ok(Math.abs(c0[2] - c1[2]) < 0.05 && Math.abs(c0[0] - c1[0]) < 0.05, 'le même habit');
   const f0 = mean(k.buf.aFace, 0), f1 = mean(k.buf.aFace, 1);
   assert.ok(f0[0] > f0[2] && f1[2] > f1[0], 'revers rouges d’un côté, bleus de l’autre');
+  // le cavalier : l'habit vert des dragons (pas la couleur du camp) ; son cheval : le tapis à la couleur du camp
+  const rider = tr.kinds.get('cavalier'), horse = tr.kinds.get('cav');
+  assert.ok(rider.n > 0 && rider.buf.aCoat[1] > rider.buf.aCoat[0] && rider.buf.aCoat[1] > rider.buf.aCoat[2], 'cavalier en vert');
+  assert.ok(horse.buf.aFace[0] > horse.buf.aFace[2], 'tapis rouge (Gironde)');
   tr.kill({ ...un(1, 0), men: 120 }, 10, () => true, colors[0]);
   assert.ok(tr.dead.length && tr.dead.every(b => b.coat[2] > b.coat[0] && b.face[0] > b.face[2]), 'les corps gardent l’habit et les revers de leur camp');
+  for (const b of tr.dead) b.lod = 2;
+  tr.rebuild(colors, 1.6);
+  const n = k.n - 1;   // (les corps à la suite des vivants)
+  assert.ok(k.buf.aFace[n * 3] > k.buf.aFace[n * 3 + 2] && k.buf.aCoat[n * 3 + 2] > k.buf.aCoat[n * 3], 'corps redessinés : revers du camp, habit bleu');
 });
 
 test('tampons agrandis en pleine bataille : toutes les figurines sont dessinées, pas seulement celles du premier rendu', () => {

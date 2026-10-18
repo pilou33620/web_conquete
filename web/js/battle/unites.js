@@ -1,5 +1,5 @@
 // Vue tactique : petites figurines peintes (fantassin, cavalier, pièce, caisson) des cartes d'unités de la barre du
-// bas, en cache (par camp, type, sens, pose et taille en pixels physiques : nettes sur un écran Retina), bornées en
+// bas, en cache (par camp, habit, type, sens, pose et taille en pixels physiques : nettes sur un écran Retina), bornées en
 // mémoire par la qualité. Les régiments du champ de bataille sont en 3D (troupes.js), leurs fanions dans fanions.js.
 import { TAU, TILT, OMBRE, mixHex, uniform } from './formes.js';
 
@@ -129,9 +129,9 @@ export class UnitArt {
       P.r(coatD, 0.35, -8.0, 0.75, 3.0);
     } else {
       P.p(coat, -bw / 2, -8.2, bw / 2, -8.2, bw / 2 + 0.25, -4.4, -bw / 2 - 0.25, -4.4);
-      if (!milice && !back) { P.p(facing, -bw / 2 - 0.25, -4.4, -bw / 2 + 0.35, -4.4, -bw / 2 + 0.1, -5.4); P.p(facing, bw / 2 + 0.25, -4.4, bw / 2 - 0.35, -4.4, bw / 2 - 0.1, -5.4); }
+      if (!milice && !back && year < 1860) { P.p(facing, -bw / 2 - 0.25, -4.4, -bw / 2 + 0.35, -4.4, -bw / 2 + 0.1, -5.4); P.p(facing, bw / 2 + 0.25, -4.4, bw / 2 - 0.35, -4.4, bw / 2 - 0.1, -5.4); }
       P.r(coatD, bw / 2 - 0.7, -8.0, 0.75, 3.6);
-      if (back && !milice) P.p(facing, -0.9, -5.2, 0.9, -5.2, 0.6, -4.2, -0.6, -4.2);   // retroussis des basques
+      if (back && !milice && year < 1860) P.p(facing, -0.9, -5.2, 0.9, -5.2, 0.6, -4.2, -0.6, -4.2);   // retroussis (pas sur la capote de 1870)
     }
     // revers du plastron, buffleteries, giberne, sac
     if (!milice && !servant) {
@@ -326,7 +326,7 @@ export class UnitArt {
     const prof = face === 1, back = face === 2, year = this.year;
     const coat = colonel ? dark(color, 0.1) : color;
     if (prof) {
-      P.l('#f1ece0', 0.13, 0, -1.66, 0.22, -1.32); P.l('#17120e', 0.12, 0.22, -1.32, 0.12, -0.98);   // culotte, botte
+      P.l(uniform(year, 'cavalerie', '', 'cavalier').trous, 0.13, 0, -1.66, 0.22, -1.32); P.l('#17120e', 0.12, 0.22, -1.32, 0.12, -0.98);   // culotte, botte
       P.p(coat, -0.2, -2.45, 0.2, -2.45, 0.24, -1.68, -0.24, -1.68);
       P.r(dark(coat, 0.35), 0.06, -2.4, 0.14, 0.7);
       if (!colonel) P.l(WHITE, 0.05, -0.18, -2.4, 0.18, -1.75);
