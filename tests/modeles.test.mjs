@@ -142,6 +142,20 @@ test('au squelette, la version de loin a les mêmes os et la même hauteur que c
   assert.deepEqual([...new Set(model('etoffe', 1790, 1, true).attributes.aBone.array)], [id.musket]);
 });
 
+test('étape 8 : chaque homme porte la couleur de son camp (revers, collet, parements ; de loin, le plastron), chaque cheval sur son tapis', () => {
+  const tints = g => new Set(g.attributes.aPart.array);
+  for (const kind of ['inf', 'gren', 'leger', 'milice', 'officier', 'tambour', 'drapeau', 'servant', 'cavalier', 'chef'])
+    for (const year of [1700, 1790, 1813, 1870])
+      for (const lod of [1, 2]) assert.ok(tints(model(kind, year, lod, true)).has(3), `${kind} ${year} ${lod === 2 ? 'de près' : 'de loin'}`);
+  for (const kind of ['cav', 'colonel']) assert.ok(tints(model(kind, 1790, 2, true)).has(3), `${kind} : tapis de selle`);
+  assert.ok('aFace' in INSTANCE_ATTRS, 'la couleur du camp, par figurine');
+});
+
+test('étape 8 : la capote de 1870 n’a ni revers ni retroussis (collet et parements seulement)', () => {
+  const faces = g => g.attributes.aPart.array.filter(t => t === 3).length;
+  assert.ok(faces(model('inf', 1870, 2, true)) < faces(model('inf', 1813, 2, true)));
+});
+
 test('tampons agrandis en pleine bataille : toutes les figurines sont dessinées, pas seulement celles du premier rendu', () => {
   // (Three retient au premier rendu le nombre d'instances d'une InstancedBufferGeometry et n'en dessine jamais plus,
   // sauf si la géométrie est libérée : son WebGLGeometries l'oublie alors, three.module.js r186)

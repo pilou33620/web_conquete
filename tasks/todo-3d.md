@@ -714,7 +714,10 @@ General sur un régiment qui tire.
 
 ## Étape 8 : uniformes français d'époque (SPEC-3D.md « Étape 8 » ; plan : décisions 23 à 25)
 
-- [ ] **T47 : la couleur du camp sur les revers**
+- [x] **T47 : la couleur du camp sur les revers**
+  - Fait : teinte `CAMP` (3) dans les modèles et le shader, attribut `aFace` (13 attributs au plus) : revers,
+    retroussis (pas sur la capote de 1870), collet (le foulard de la milice), parements, tapis de selle ; de loin, le
+    plastron et le collet (l'écharpe d'or des officiers gardée). Les corps gardent la couleur de leur camp.
   - Teinte 3 dans `assemble` et le shader (`aFace`, couleur du camp par figurine) ; revers, retroussis, collet et
     parements (homme de près, servant, cavalier), tapis de selle, plastron de la version de loin. L'habit reste à la
     couleur du camp : rien ne change encore à l'œil, sauf les revers.

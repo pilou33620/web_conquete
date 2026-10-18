@@ -27,6 +27,9 @@ const MAXU = 512;           // régiments au plus (largeur de la texture des ré
 const DEAD = MAXU - 1;      // sa dernière colonne : les corps au sol (un régiment fictif à l'origine, de sens 0)
 
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', GOLD = '#d6b65a', LEATHER = '#2a1f16';
+// teinte d'une pièce (assemble) : 0 sa couleur, 1 l'habit (aCoat), 2 la robe du cheval, CAMP la couleur du camp (aFace :
+// revers, collet, parements, tapis de selle ; de loin, le plastron), qui distingue des camps tous en uniforme français
+const CAMP = 3;
 const AFFUT = '#5f6b3e', BRONZE = '#b08a3e';   // affûts peints en vert olive, pièces de bronze
 const ROWS = 5;     // lignes de la texture des régiments (la 4e et la 5e : l'instant du dernier coup de chaque pièce)
 // sortes de figurines et leur animation dans le vertex shader (null : homme à pied, au squelette de près ; FLAG :
@@ -57,7 +60,7 @@ function coatOf(kind, c) {
 }
 // attributs de chaque figurine (nombres par figurine) : place, pose, habit ; geste (aGest : geste et son début, geste
 // d'avant et son début ; aMix : instant du fondu, vitesse, vitesse d'avant) ; course à sa place (aMove)
-export const INSTANCE_ATTRS = { aSlot: 4, aAnim: 4, aCoat: 3, aGest: 4, aMix: 4, aMove: 4 };
+export const INSTANCE_ATTRS = { aSlot: 4, aAnim: 4, aCoat: 3, aFace: 3, aGest: 4, aMix: 4, aMove: 4 };
 // os du squelette des animations Quaternius (CC0, dev/cuire.mjs) dans l'ordre de leur texture, puis ceux des gestes du
 // fusil (RIG_EXTRA) : le fusil, le bras et l'avant-bras gauches qui le portent
 export const RIG = { hips: 'DEF-hips', chest: 'DEF-spine.003', head: 'DEF-head', upperL: 'DEF-upper_arm.L', foreL: 'DEF-forearm.L',
@@ -298,8 +301,10 @@ function soldier(kind, year, rig = false) {
   // habit : du bas des hanches aux épaules, aplati d'avant en arrière ; basques derrière (les deux faces)
   P.push([lathe([[0.135, 0.84], [0.15, 0.95], [0.142, 1.06], [0.162, 1.22], [0.172, 1.34], [0.15, 1.43], [0.06, 1.48]], 10, 0.72), shade(1), torso, 1]);
   P.push(...both(new THREE.CylinderGeometry(0.14, 0.19, 0.4, 8, 1, true, Math.PI / 2, Math.PI).scale(1, 1, 0.75).translate(0, 0.7, -0.01), shade(0.8), B.hips, 1));
-  P.push([new THREE.BoxGeometry(0.28, 0.05, 0.015).translate(0, 0.52, -0.15), facing, B.hips, 0]);          // retroussis
-  P.push([new THREE.BoxGeometry(0.17, 0.4, 0.015).translate(0, 1.2, 0.118), facing, B.chest, 0]);           // revers
+  const fz = kind === 'milice' ? 0 : CAMP;   // (la milice en habits civils : son foulard seul porte la couleur du camp)
+  if (year < 1860) P.push([new THREE.BoxGeometry(0.28, 0.05, 0.015).translate(0, 0.52, -0.15), facing, B.hips, fz],   // retroussis
+    [new THREE.BoxGeometry(0.17, 0.4, 0.015).translate(0, 1.2, 0.118), facing, B.chest, fz]);                    // revers (pas sur la capote de 1870)
+  P.push([limb(0.07, 0.075, 1.405, 1.455, 0, 8), WHITE, B.chest, CAMP]);                                          // collet (foulard)
   P.push([limb(0.045, 0.05, 1.44, 1.5, 0, 6), SKIN, B.head, 0], [sph(0.088, 0.105, 0.095, 0, 1.585, 0.005), SKIN, B.head, 0]);   // cou, tête
   if (year < 1800) P.push([limb(0.022, 0.018, 1.42, 1.56, 0, 5).translate(0, 0, -0.09), '#3a2c20', B.head, 0]);   // la queue
   if (armed) {
@@ -327,7 +332,7 @@ function soldier(kind, year, rig = false) {
     const b = armed && side === 'L' ? y => y > 1.16 ? B.carryUpper : B.carryFore : y => y > 1.16 ? B['upper' + side] : B['fore' + side];
     P.push([sph(0.058, 0.06, 0.06, s * 0.19, 1.39, 0, 6, 4), shade(0.95), b, 1],
       [new THREE.CylinderGeometry(0.052, 0.044, 0.5, 7, 2, true).translate(s * 0.2, 1.15, 0), shade(0.9), b, 1],
-      [limb(0.048, 0.05, 0.87, 0.94, s * 0.2), facing, b, 0], [sph(0.04, 0.045, 0.04, s * 0.2, 0.84, 0, 5, 4), SKIN, b, 0]);
+      [limb(0.048, 0.05, 0.87, 0.94, s * 0.2), facing, b, fz], [sph(0.04, 0.045, 0.04, s * 0.2, 0.84, 0, 5, 4), SKIN, b, 0]);   // parement
   }
   if (armed) P.push([new THREE.BoxGeometry(0.035, 0.5, 0.065).translate(0.235, 1.03, 0.05), WOOD, B.musket, 0],
     [limb(0.012, 0.012, 1.28, 2.2, 0.235, 5).translate(0, 0, 0.055), IRON, B.musket, 0], [limb(0.003, 0.009, 2.2, 2.55, 0.235, 4).translate(0, 0, 0.055), '#b8bcc0', B.musket, 0]);
@@ -425,7 +430,7 @@ function horse(rider, year) {
     return assemble(P);
   }
   // cheval de selle : le tapis, à la couleur du camp ; le cavalier est une figurine à part, au squelette (cavalier, chef)
-  P.push([new THREE.CylinderGeometry(0.315, 0.315, 0.55, 10, 1, true, Math.PI * 0.62, Math.PI * 0.76).rotateX(Math.PI / 2).scale(0.86, 1, 1).translate(0, 1.17, 0), shade(0.85), 0, 1]);   // tapis de selle
+  P.push([new THREE.CylinderGeometry(0.315, 0.315, 0.55, 10, 1, true, Math.PI * 0.62, Math.PI * 0.76).rotateX(Math.PI / 2).scale(0.86, 1, 1).translate(0, 1.17, 0), shade(0.85), 0, CAMP]);   // tapis de selle
   return assemble(P);
 }
 // ------------------------------------------------------------------ versions de loin
@@ -453,7 +458,10 @@ function farSoldier(kind, year, rig = false) {
   for (const [s, side] of [[1, 'L'], [-1, 'R']]) P.push([new THREE.BoxGeometry(0.13, 0.86, 0.14, 1, 2, 1).translate(s * 0.085, 0.43, 0), trous, y => y > 0.53 ? B['thigh' + side] : y > 0.09 ? B['shin' + side] : B['foot' + side], 0]);
   P.push([box(0.36, 0.74, 0.22, 0, 1.09, 0), shade(1), y => y < 1.05 ? B.hips : B.chest, 1], [box(0.17, 0.2, 0.18, 0, 1.57, 0), SKIN, B.head, 0],
     ...farHat(headgear(kind, year)).map(([g, c, , t]) => [g, c, B.head, t]));
-  P.push([box(0.2, 0.36, 0.02, 0, 1.18, 0.115), armed || rider ? WHITE : officer ? GOLD : shade(0.8), B.chest, armed || officer || rider ? 0 : 1]);   // buffleteries, baudrier ou écharpe
+  // le plastron à la couleur du camp (de loin, les revers ne font plus qu'un pixel), l'écharpe d'or des officiers ;
+  // le collet pour tous
+  P.push([box(0.2, 0.36, 0.02, 0, 1.18, 0.115), officer ? GOLD : WHITE, B.chest, officer ? 0 : CAMP],
+    [box(0.19, 0.05, 0.2, 0, 1.45, 0), WHITE, B.chest, CAMP]);
   for (const [s, side] of [[1, 'L'], [-1, 'R']]) {
     const up = armed && side === 'L' ? B.carryUpper : B['upper' + side], fore = armed && side === 'L' ? B.carryFore : B['fore' + side];
     P.push([box(0.1, 0.56, 0.11, s * 0.22, 1.13, 0), shade(0.9), y => y > 1.16 ? up : fore, 1]);
@@ -472,7 +480,7 @@ function farHorse(rider, year) {
   const P = [R(1, box(0.46, 0.55, 1.6, 0, 1.16, 0)), R(0.95, box(0.22, 0.65, 0.3, 0, 1.58, 0.88, 0.5), 7), R(0.9, box(0.2, 0.22, 0.5, 0, 1.8, 1.22, 0.6), 7),
     [box(0.08, 0.6, 0.1, 0, 1.0, -0.85, 0.3), '#1a1410', 0, 0]];
   for (const [x, z, b] of [[0.15, 0.6, 1], [-0.15, 0.6, 2], [0.15, -0.6, 5], [-0.15, -0.6, 6]]) P.push(R(0.85, box(0.12, 0.9, 0.14, x, 0.45, z), b));
-  if (rider) P.push([box(0.6, 0.08, 0.6, 0, 1.46, 0), shade(0.85), 0, 1]);   // tapis de selle (le cavalier est à part)
+  if (rider) P.push([box(0.6, 0.08, 0.6, 0, 1.46, 0), shade(0.85), 0, CAMP]);   // tapis de selle (le cavalier est à part)
   return assemble(P);
 }
 function farGun() {
@@ -531,6 +539,7 @@ attribute vec4 aSlot;   // u, v, sens (ajouté à celui du régiment), numéro d
 attribute vec4 aAnim;   // pose, phase, échelle, rang
 attribute vec4 aMove;   // course à sa place : départ (u, v), début, durée (négative : au pas ; 0 : aucune)
 attribute vec3 aCoat;   // couleur de l'habit
+attribute vec3 aFace;   // couleur du camp (revers, collet, parements, tapis de selle ; de loin, le plastron)
 attribute float aBone, aPart;
 uniform sampler2D uUnits, uHeight;
 uniform vec3 uHgt;      // pas des altitudes (m), colonnes, lignes
@@ -782,7 +791,7 @@ export class Troops {
         .replace('#include <common>', '#include <common>\n' + VERT_HEAD + (pattern ? 'varying vec2 vUv2;' : ''))
         .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${VERT_POSE}\n${turn('objectNormal', false)}`)
         .replace('#include <begin_vertex>', (pattern ? 'vUv2 = uv;\n' : '') + place)
-        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart;' +
+        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 2.5 ? aFace * color.r : aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart;' +
           // plus sombre vers les pieds : l'ombre des rangs, comme une occlusion ambiante (pas pour les étoffes)
           (pattern ? '' : '\nvColor.rgb *= mix(0.62, 1.0, smoothstep(0.0, 1.5, position.y));'));
       sh.fragmentShader = sh.fragmentShader
@@ -960,6 +969,7 @@ export class Troops {
       k.buf.aMove.set(mv ?? STILL, o);
       const c = w ? tint : coat;
       C[n * 3] = c.r; C[n * 3 + 1] = c.g; C[n * 3 + 2] = c.b;
+      k.buf.aFace.set([off.r, off.g, off.b], n * 3);
     };
     for (const [id, e] of this.lays) {
       const { lay, un, lod } = e;
@@ -989,7 +999,7 @@ export class Troops {
       if (!k) continue;
       if (k.n >= k.cap) this.grow(k, k.cap * 2);
       const n = k.n++, o = n * 4, c = this.clipId.get(b.clip) ?? 0;
-      k.buf.aSlot.set([b.y, b.x, b.a, DEAD], o); k.buf.aAnim.set([b.horse ? b.pose : 0, 0, scale * b.size, b.horse ? -9 : 0], o); k.buf.aCoat.set(b.coat, n * 3);
+      k.buf.aSlot.set([b.y, b.x, b.a, DEAD], o); k.buf.aAnim.set([b.horse ? b.pose : 0, 0, scale * b.size, b.horse ? -9 : 0], o); k.buf.aCoat.set(b.coat, n * 3); k.buf.aFace.set(b.face ?? b.coat, n * 3);
       k.buf.aGest.set([c, b.t, c, b.t], o); k.buf.aMix.set([-99, 1, 1, 0], o); k.buf.aMove.set(STILL, o);
     }
     for (const k of this.kinds.values()) {
@@ -1036,6 +1046,7 @@ export class Troops {
     if (k < 1) return [];
     e.lost -= k;
     const seed = seedOf(id), c = Math.cos(un.dir), s = Math.sin(un.dir), col = new THREE.Color(), out = [], figs = cand.map(([f]) => f);
+    const fc = new THREE.Color(color), face = [fc.r, fc.g, fc.b];   // (la couleur de son camp : ses revers)
     const ball = line ? chooseLine(figs, Math.min(k, BALL), ...line) : [], rest = cand.map((_, j) => j).filter(j => !ball.includes(j));
     const shot = chooseDead(rest.map(j => figs[j]), k - ball.length, seed + Math.round((this.fxT ?? 0) * 10)).map(r => rest[r]);
     for (const j of [...ball, ...shot]) {
@@ -1046,11 +1057,11 @@ export class Troops {
       coatOf(f[2], col.set(color)).offsetHSL(v.hue, v.sat, v.light);
       const horse = f[2] === 'cav', cap = this.q.corps ?? 2500, gone = pushRing(this.dead, cap, { kind: f[2], horse, pose: f[4], clip: hit ? 'projete' : 'mort',
         x, y, a: un.dir + (f[3] === 2 ? Math.PI : 0) + v.da + (hash(i, 23, seed) - 0.5) * 1.2,
-        t: (this.fxT ?? 0) + (hit ? 0 : hash(i, 29, seed) * 1.5), size: v.size, coat: [col.r, col.g, col.b], c: color, lod: 2 });
+        t: (this.fxT ?? 0) + (hit ? 0 : hash(i, 29, seed) * 1.5), size: v.size, coat: [col.r, col.g, col.b], face, c: color, lod: 2 });
       // son cavalier, tombé à 1,2 m sur le côté
       const rx = x - s * 1.2, ry = y + c * 1.2;
       if (horse && bare(rx, ry)) gone.push(...pushRing(this.dead, cap, { kind: 'cavalier', clip: 'mort', x: rx, y: ry,
-        a: un.dir + (hash(i, 37, seed) - 0.5) * 2, t: (this.fxT ?? 0) + 0.3, size: v.size, coat: [col.r, col.g, col.b], c: color, lod: 2 }));
+        a: un.dir + (hash(i, 37, seed) - 0.5) * 2, t: (this.fxT ?? 0) + 0.3, size: v.size, coat: [col.r, col.g, col.b], face, c: color, lod: 2 }));
       for (const old of gone) out.push({ k: old.horse ? 'cheval' : 'mort', x: old.x, y: old.y, a: old.a, c: old.c });
     }
     this.pending = true;   // (redessinés à la prochaine reconstruction, au plus cinq par seconde)
