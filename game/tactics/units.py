@@ -24,6 +24,10 @@ INF_RANGE = [(80, 150), (100, 200), (120, 230), (130, 250), (300, 600), (500, 12
 ART_RANGE = [(500, 900, 250), (600, 1000, 260), (700, 1100, 280), (800, 1200, 300), (1400, 2500, 330),
              (1800, 3000, 360), (2200, 3500, 400)]
 CAV_RANGE = (30, 60)
+# batterie de mitrailleuses (Reffye, 1866 ; SPEC-TECH.md) : six pièces (les servants d'une batterie de huit, pièce pour
+# pièce : pieces() vaut aussi pour elle), un feu roulant de 25 canons ; ni boulet, ni mitraille
+MIT_RANGE = (1200, 2000)
+MIT_RELOAD = 12          # une gerbe de 25 balles toutes les 12 s de bataille (les munitions fondent)
 # rechargement entre deux salves (s de bataille) : cadence d'un feu soutenu en bataille (une salve par minute environ
 # pour le fusil à silex, une volée par minute pour les canons lisses), pas celle de l'exercice ; le chargement par la
 # culasse change tout
@@ -42,6 +46,7 @@ TYPE = {
     'milice': dict(melee=0.6, fire=0.6, speed=1.1, steady=0.8),
     'cavalerie': dict(melee=1.6, fire=0.4, speed=2.5, steady=1.1),
     'artillerie': dict(melee=0.35, fire=1.0, speed=1.5, steady=1.0),
+    'mitrailleuses': dict(melee=0.3, fire=1.0, speed=1.5, steady=1.0),
     'general': dict(melee=0.8, fire=0.2, speed=3.0, steady=1.5),
     'chariot': dict(melee=0.2, fire=0.0, speed=1.3, steady=0.7),
 }
@@ -72,6 +77,8 @@ def ranges(reg):
     typ = reg['type'] if isinstance(reg, dict) else reg.type
     arm = (reg.get('arm') if isinstance(reg, dict) else reg.arm) or 0
     cls = cls_of(typ)
+    if typ == 'mitrailleuses':
+        return MIT_RANGE[0], MIT_RANGE[1], None
     if cls == 'artillerie':
         e, m, g = ART_RANGE[max(0, min(arm, len(ART_RANGE) - 1))]
         return e, m, g
@@ -82,7 +89,9 @@ def ranges(reg):
 
 
 def reload_time(u):
-    if u.cls == 'artillerie':
+    if u.type == 'mitrailleuses':
+        base = MIT_RELOAD
+    elif u.cls == 'artillerie':
         base = ART_RELOAD[max(0, min(u.arm, len(ART_RELOAD) - 1))]
     elif u.cls == 'inf':
         base = INF_RELOAD[max(0, min(u.arm, len(INF_RELOAD) - 1))]

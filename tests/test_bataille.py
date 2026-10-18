@@ -202,5 +202,55 @@ class TechnologiesEnBataille(unittest.TestCase):
         self.assertEqual(tb.spec['entrench'], [0.0, 0.0])
 
 
+class MitrailleusesEnBataille(unittest.TestCase):
+    """SPEC-TECH.md : six pièces de Reffye, 1 200 et 2 000 m, feu roulant ; redoutables contre l'infanterie à découvert,
+    faibles contre les pièces et les remparts."""
+
+    def pertes(self, typ, cible_cls, distance=1000, secondes=240):
+        import math
+        tb, mes = bataille(mes={typ: 1}, epoque='1870', seed=2)
+        u = mes[typ]
+        cible = ennemi(tb, u)
+        if cible_cls == 'artillerie':   # (la cible fabriquée : une batterie de huit pièces, ou une ligne de 300 hommes)
+            cible.type, cible.cls, cible.form, cible.men = 'artillerie', 'artillerie', 'batterie', 120.0
+        else:
+            cible.type, cible.cls, cible.form, cible.men = 'ligne', 'inf', 'ligne', 300.0
+        cible.men0 = cible.men
+        tb.ai_sides = []
+        for x in tb.units:
+            if x is not u:
+                x.fire_mode = 'hold'
+                x.ctrl = 'joueur'
+        for da in (0.0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2):
+            a = u.dir + da
+            cible.x, cible.y, cible.dir = u.x + math.cos(a) * distance, u.y + math.sin(a) * distance, a + math.pi
+            tb._update_vision()
+            if cible.id in tb.seen_by[u.side] and tb.los_units(u, cible):
+                break
+        else:
+            raise AssertionError('pas de vue dégagée à cette distance')
+        avant, munitions = cible.men, u.ammo
+        avancer(tb, secondes)
+        return avant - cible.men, munitions - u.ammo, u
+
+    def test_six_pieces_et_leurs_portees(self):
+        tb, mes = bataille(mes={'mitrailleuses': 1}, epoque='1870')
+        u = mes['mitrailleuses']
+        self.assertEqual(u.cls, 'artillerie')
+        self.assertEqual(BT.U.pieces(u), 6)
+        self.assertEqual(BT.U.ranges(u), (1200, 2000, None))
+
+    def test_contre_une_ligne_plus_que_les_canons(self):
+        m, mun_m, _ = self.pertes('mitrailleuses', 'inf')
+        c, mun_c, _ = self.pertes('artillerie', 'inf')
+        self.assertGreater(m, c, 'contre une ligne en plaine, à 1 000 m')
+        self.assertGreater(mun_m, mun_c, 'les munitions fondent plus vite')
+
+    def test_contre_une_batterie_moins_que_les_canons(self):
+        m, _, _ = self.pertes('mitrailleuses', 'artillerie')
+        c, _, _ = self.pertes('artillerie', 'artillerie')
+        self.assertLess(m, c)
+
+
 if __name__ == '__main__':
     unittest.main()

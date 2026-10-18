@@ -174,6 +174,8 @@ AI_DEPLOY_ATT = 500.0    # zones de l'IA : l'assaillant à moins de 500 m de son
 AI_DEPLOY_DEF_FRAC = 0.65   # … le défenseur sur le devant de sa zone (65 % de sa profondeur)…
 AI_DEPLOY_DEF = 120.0    # … et dans une place, à 120 m de l'enceinte au plus
 P_MITRAILLE = 0.56       # … à mitraille, jusqu'à 30 % de la portée de mitraille (puis de moins en moins : grape_k)
+P_REFFYE = 0.13          # mitrailleuse : touchés par pièce et par gerbe, à portée efficace, sur une ligne à découvert…
+REFFYE_VS_PIECE = 0.25   # … bien moins contre des pièces (servants abrités derrière leurs affûts)
 GRAPE_CLOSE = 150.0      # … et bien davantage à bout portant : sous 150 m, ×1,5 à 100 m…
 GRAPE_POINT = 1.6        # … ×1,6 dès 90 m (aussi le feu de défense d'une batterie abordée de face)
 P_RECEPTION = 0.035      # feu de défense à bout portant contre une charge, par homme du front
@@ -1748,7 +1750,7 @@ class TacticalBattle:
             mx = min(mx, e * 1.3)
         hu = self.height_at(u.x, u.y)
         tg = self._pick_target(u, mx * 1.15)
-        if not tg and self._bombard(u, e, mx):
+        if not tg and u.type != 'mitrailleuses' and self._bombard(u, e, mx):
             return
         if not tg:
             if u.state in ('feu', 'recharge'):
@@ -1778,7 +1780,17 @@ class TacticalBattle:
         cov = self._fire_cover(tg, u)
         pr = 1.0 if d <= e else max(0.2, 1 - 0.8 * (d - e) / max(1.0, mx_eff - e))
         tk = U.TYPE.get(u.type, U.TYPE['ligne'])['fire']
-        if u.cls == 'artillerie':
+        if u.type == 'mitrailleuses':
+            # feu roulant : une gerbe de balles sur une bande étroite, comme une salve ; ni boulet, ni mitraille
+            cas = U.pieces(u) * P_REFFYE * pr * VUL_FIRE.get(tg.form, 1.0) * (1 - cov)
+            if tg.cls == 'artillerie':
+                cas *= REFFYE_VS_PIECE
+            if tg.cls == 'general':
+                cas *= 0.3
+            cas *= fat_k * mor_k * xp_k * self._wx_k(u) * self.light ** 0.5
+            kind = 'salve'
+            u.ammo -= 1
+        elif u.cls == 'artillerie':
             pcs = U.pieces(u)
             mult = R.ARMS['artillerie'][min(u.arm, len(R.ARMS['artillerie']) - 1)][2]
             if tr == 'artilleur':
