@@ -548,7 +548,10 @@ General sur un régiment qui tire.
 
 ### 7d : mêlée et charges
 
-- [ ] **T39 : mêlée**
+- [x] **T39 : mêlée**
+  - Fait : `foeOf` (adversaire : l'ennemi en mêlée le plus proche) ; `scrum` : les premiers rangs avancent vers lui
+    (3 / 1,8 / 0,8 m) et se tournent vers lui, les deux fronts se mêlent ; estoc ou poussée selon l'homme ; les
+    officiers font de l'escrime (« escrime », Sword_Regular_Combo en boucle). 29 animations, 564 Ko.
   - Critères :
     - En mêlée, l'adversaire est le régiment ennemi en mêlée le plus proche (`gestes.js`). Les premiers rangs avancent
       l'un dans l'autre sur le front de contact, sans traverser tout le régiment.

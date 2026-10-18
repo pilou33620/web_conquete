@@ -18,7 +18,7 @@
   "carryUpper",
   "carryFore"
  ],
- "rows": 1432,
+ "rows": 1504,
  "clips": {
   "repos": {
    "row": 0,
@@ -115,48 +115,53 @@
    "n": 73,
    "loop": 0
   },
-  "salve": {
+  "escrime": {
    "row": 761,
+   "n": 72,
+   "loop": 1
+  },
+  "salve": {
+   "row": 833,
    "n": 104,
    "loop": 0
   },
   "salve-genou": {
-   "row": 865,
+   "row": 937,
    "n": 104,
    "loop": 0
   },
   "feu-libre": {
-   "row": 969,
+   "row": 1041,
    "n": 106,
    "loop": 1
   },
   "tambour": {
-   "row": 1075,
+   "row": 1147,
    "n": 60,
    "loop": 1
   },
   "tambour-marche": {
-   "row": 1135,
+   "row": 1207,
    "n": 32,
    "loop": 1
   },
   "refouler": {
-   "row": 1167,
+   "row": 1239,
    "n": 60,
    "loop": 1
   },
   "pointer": {
-   "row": 1227,
+   "row": 1299,
    "n": 60,
    "loop": 1
   },
   "boutefeu": {
-   "row": 1287,
+   "row": 1359,
    "n": 49,
    "loop": 0
   },
   "porter": {
-   "row": 1336,
+   "row": 1408,
    "n": 96,
    "loop": 1
   }

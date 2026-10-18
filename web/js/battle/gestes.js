@@ -39,7 +39,10 @@ export function pick({ act, actT, now, kind, rank, u, w, form, phase, volley, mo
   const loop = name => [name, actT - phase];
   if (kind === 'servant') return serve(act, rank, now, shots, moving, loop);
   if (kind === 'tambour') return loop(act === 'marche' || act === 'charge' || act === 'ralliement' ? 'tambour-marche' : act === 'deroute' ? 'course' : 'tambour');
-  if (kind === 'officier' && (act === 'feu' || act === 'recharge' || act === 'melee')) return loop('garde');
+  if (kind === 'officier' && act === 'melee') return loop('escrime');
+  if (kind === 'officier' && (act === 'feu' || act === 'recharge')) return loop('garde');
+  // mêlée : estoc ou poussée selon l'homme, chacun à son rythme
+  if (act === 'melee' && kind !== 'drapeau') return loop(Math.floor(phase * 2) % 2 ? 'estoc' : 'poussee');
   // (une salve tirée à l'arrêt se joue même si l'état n'est pas « feu » : la maquette tire sans changer d'état)
   const tir = act === 'feu' || act === 'recharge' || (act === 'repos' && firing(volley, now));
   if (kind === 'officier' || kind === 'drapeau' || !tir) return loop(gesture(act, kind));
@@ -141,4 +144,24 @@ export function pushOut(x, y, rects, margin) {
     x = b.x + nu * ca - nv * sa; y = b.y + nu * sa + nv * ca;
   }
   return [x, y];
+}
+
+// en mêlée, l'adversaire d'un régiment : le régiment ennemi en mêlée le plus proche (à moins de max m), ou null (le
+// serveur ne donne la cible qu'à son propre camp)
+export function foeOf(un, units, max = 120) {
+  let best = null, bd = max;
+  for (const e of units) {
+    if (e.side === un.side || e.state !== 'melee') continue;
+    const d = Math.hypot(e.x - un.x, e.y - un.y);
+    if (d < bd) { bd = d; best = e; }
+  }
+  return best;
+}
+
+// mêlée : un homme de rang rank avance vers l'ennemi (dir : sa direction dans le repère du régiment, [du, dv] unitaire)
+// et se tourne vers lui ; les premiers rangs se mêlent sur le front de contact sans traverser le régiment. r : son
+// hasard (0 à 1). Renvoie [décalage u, décalage v, sens]
+export function scrum(rank, dir, r) {
+  const push = (rank === 0 ? 3 : rank === 1 ? 1.8 : rank === 2 ? 0.8 : 0) * (0.7 + 0.6 * r);
+  return [dir[0] * push, dir[1] * push, Math.atan2(dir[0], dir[1]) + (r - 0.5) * 0.6];
 }

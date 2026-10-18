@@ -18,7 +18,7 @@
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp } from './formes.js';
-import { activity, moves, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing, matchSlots } from './gestes.js';
+import { activity, moves, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing, matchSlots, foeOf, scrum } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
 const { AIM, RUN, ROUT } = POSES;
@@ -875,6 +875,7 @@ export class Troops {
       if (!e || e.key !== key) {
         const old = e;
         this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: old?.lod ?? 0, act: old?.act, actT: old?.actT, volT: old?.volT, vol: old?.vol, shotT: old?.shotT, shots: old?.shots, moving: old?.moving, fire: old?.fire, prev: old?.prev, switchT: old?.switchT });
+        if (un.state === 'melee') this.scrum(e, un, list);
         if (old) this.relay(old, e);
         dirty = true;
       } else e.un = un;
@@ -939,7 +940,7 @@ export class Troops {
       if (k.n >= k.cap) this.grow(k, k.cap * 2);
       const n = k.n++, rank = f[5], o = n * 4, { aSlot: S, aAnim: A, aCoat: C } = k.buf, w = k.rig && v;
       if (k.rig) e.figs.push([k, n, f, v]);
-      S[o] = f[0] + (w ? v.du : 0); S[o + 1] = f[1] + (w ? v.dv : 0); S[o + 2] = (face ?? (carre && rank >= 0 ? FACE[f[3]] : f[3] === 2 ? Math.PI : 0)) + (w ? v.da : 0); S[o + 3] = ui;
+      S[o] = f[0] + (w ? v.du : 0); S[o + 1] = f[1] + (w ? v.dv : 0); S[o + 2] = (face ?? f[7] ?? (carre && rank >= 0 ? FACE[f[3]] : f[3] === 2 ? Math.PI : 0)) + (w ? v.da : 0); S[o + 3] = ui;
       A[o] = f[4]; A[o + 1] = f[6]; A[o + 2] = scale * (w ? v.size : 1); A[o + 3] = rank;
       if (w) tint.copy(coat).offsetHSL(v.hue, v.sat, v.light);
       if (k.rig) k.buf.aMove.set(mv ?? STILL, o);
@@ -1028,6 +1029,19 @@ export class Troops {
     }
     this.deadNew = true;
     return out;
+  }
+  // mêlée : les premiers rangs avancent vers l'adversaire et se tournent vers lui (gestes.js, foeOf, scrum : le sens
+  // de chacun dans f[7])
+  scrum(e, un, list) {
+    const foe = foeOf(un, list);
+    if (!foe) return;
+    const c = Math.cos(un.dir), s = Math.sin(un.dir), dx = foe.x - un.x, dy = foe.y - un.y, l = Math.hypot(dx, dy) || 1;
+    const dir = [(-s * dx + c * dy) / l, (c * dx + s * dy) / l], seed = seedOf(String(un.id));
+    e.lay.forEach((f, i) => {
+      if (!FOOT.includes(f[2])) return;
+      const [a, b, face] = scrum(f[5], dir, hash(i, 31, seed));
+      f[0] += a; f[1] += b; f[7] = face;
+    });
   }
   // nouvelle disposition e d'un régiment (old : la précédente) : chaque homme garde son numéro (gestes.js, matchSlots :
   // même sorte, dans l'ordre de lecture, sans les tués), donc sa variété ; les hommes à pied courent de là où ils sont

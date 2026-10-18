@@ -271,7 +271,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 - [x] Point de contrôle 7c
 
 ### 7d : mêlée et charges
-- [ ] T39 : mêlée (fronts qui se mêlent, estoc, poussée, sabres des officiers)
+- [x] T39 : mêlée (fronts qui se mêlent, estoc, poussée, sabres des officiers)
 - [ ] T40 : cavaliers au squelette, en selle
 - [ ] T41 : sabres des cavaliers, chevaux qui se cabrent
 - [ ] Point de contrôle 7d

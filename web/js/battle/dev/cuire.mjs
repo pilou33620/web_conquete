@@ -126,7 +126,7 @@ const CLIPS = {
   estoc: { src: 'Punch_Jab', loop: 1, len: 0.9, hold: THRUST }, poussee: { src: 'Push_Loop', loop: 1, hold: BAYONET },
   mort: { src: 'Death01', loop: 0 }, touche: { src: 'Hit_Chest', loop: 0 }, tete: { src: 'Hit_Head', loop: 0 },
   projete: { src: 'Hit_Knockback', loop: 0 }, sabre: { src: 'Sword_Attack', loop: 0 }, garde: { src: 'Sword_Idle', loop: 1 },
-  combo: { src: 'Sword_Regular_Combo', loop: 0 },
+  combo: { src: 'Sword_Regular_Combo', loop: 0 }, escrime: { src: 'Sword_Regular_Combo', loop: 1 },
   salve: { src: 'Idle_Loop', loop: 0, len: 4.3, hold: seq(SALVE) },
   'salve-genou': { src: 'Idle_Loop', loop: 0, len: 4.3, hold: seq(SALVE_GENOU), legs: ['Fixing_Kneeling', 24] },
   'feu-libre': { src: 'Idle_Loop', loop: 1, len: 4.4, hold: seq([[0.5, REST], [0.6, AIM], [0.25, FIRE], [0.35, AIM], [2.4, RELOAD], [0.3, REST]]) },

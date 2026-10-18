@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves, pushOut } from '../web/js/battle/gestes.js';
+import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves, pushOut, foeOf, scrum } from '../web/js/battle/gestes.js';
 
 const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
 
@@ -217,4 +217,27 @@ test('bâtiments : un homme pris dans une maison en sort au plus court ; dehors,
   // la même maison tournée d'un quart de tour : ses 10 m vont maintenant du nord au sud
   const [x, y] = pushOut(100, 50 + 4, [{ ...maison[0], a: Math.PI / 2 }], 0.5);
   assert.ok(Math.abs(x - 100) < 1e-9 && Math.abs(y - 55.5) < 1e-9, `${x}, ${y}`);
+});
+
+test('en mêlée, l’adversaire est le régiment ennemi en mêlée le plus proche', () => {
+  const nous = { id: 1, side: 0, x: 0, y: 0, state: 'melee' };
+  const units = [nous, { id: 2, side: 1, x: 30, y: 0, state: 'melee' }, { id: 3, side: 1, x: 10, y: 0, state: 'feu' },
+    { id: 4, side: 0, x: 5, y: 0, state: 'melee' }, { id: 5, side: 1, x: 300, y: 0, state: 'melee' }];
+  assert.equal(foeOf(nous, units).id, 2);
+  assert.equal(foeOf({ ...nous, x: 600 }, units), null, 'trop loin');
+});
+
+test('mêlée : les premiers rangs avancent vers l’ennemi et se tournent vers lui', () => {
+  const vers = [1, 0];   // l'ennemi sur la gauche du front (u > 0)
+  const [a0] = scrum(0, vers, 0.5), [a1] = scrum(1, vers, 0.5), [a3, b3] = scrum(3, vers, 0.5);
+  assert.ok(a0 > a1 && a1 > 0, `premier rang ${a0}, deuxième ${a1}`);
+  assert.equal(a3, 0); assert.equal(b3, 0);
+  assert.ok(Math.abs(scrum(0, vers, 0.5)[2] - Math.PI / 2) < 1e-9, 'tourné vers l’ennemi');
+});
+
+test('mêlée : estoc ou poussée selon l’homme, escrime pour les officiers', () => {
+  const g = new Set([0.2, 1.1, 2.3, 3.7, 4.1, 5.9].map(phase => pick(homme({ act: 'melee', phase }))[0]));
+  assert.deepEqual([...g].sort(), ['estoc', 'poussee']);
+  assert.equal(pick(homme({ act: 'melee', kind: 'officier' }))[0], 'escrime');
+  assert.ok(meta.clips.escrime, 'escrime précalculée');
 });
