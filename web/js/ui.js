@@ -240,6 +240,10 @@ export class UI {
     const waitBt = (st.battles || []).find(b => b.mode === 'attente');
     if (waitBt && !st.over && (!this.modal || this.modal === 'bataille')) { if (this.modal !== 'bataille') this.openModal('bataille'); }
     else if (this.modal === 'bataille' && !waitBt) this.closeModal();
+    // une de vos armées est arrivée devant une place : à vous de choisir (une fenêtre à la fois, après les batailles)
+    const asked = !waitBt && (st.armies || []).find(a => a.ask);
+    if (asked && !st.over && (!this.modal || this.modal === 'arrivee')) { if (this.modal !== 'arrivee') this.openModal('arrivee'); }
+    else if (this.modal === 'arrivee' && !asked) this.closeModal();
     this.tuto.check();
   }
 
@@ -255,6 +259,29 @@ export class UI {
         <button class="btn ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="auto"><b>Résolution automatique</b><small>Le général décide ; la bataille se joue avec la campagne</small></button></div>
       <p class="muted small">La campagne reste en pause tant que vous n’avez pas choisi. Réglage dans le menu ☰.</p>`;
     return [html, b.id];
+  }
+
+  // devant une place : assaut (à la main ou automatique), rallier, négocier, assiéger, bloquer, contribution, attendre
+  arriveeModal() {
+    const a = (this.st.armies || []).find(x => x.ask);
+    if (!a) return ['<p class="muted">Aucune armée n’attend vos ordres.</p>', 'none'];
+    const name = this.md.nodes[a.ask.n]?.name || '';
+    const L = {
+      manuel: ['Commander la bataille', 'L’assaut : disposez et menez vos troupes sur le champ de bataille'],
+      auto: ['Résolution automatique', 'L’assaut, réglé par le général'],
+      rallier: ['Rallier', 'La place se rallie sans combat'],
+      negocier: ['Négocier le ralliement', 'Pourparlers avec les notables, réponse au prochain tour'],
+      assieger: ['Assiéger', 'Le siège bat les remparts à chaque tour ; l’assaut part de lui-même à la brèche'],
+      bloquer: ['Bloquer et affamer', 'Remparts intacts, vivres coupés : la faim la pousse à se rendre'],
+      contribution: ['Exiger une contribution', 'Rançonner la place puis la laisser'],
+      attendre: ['Attendre devant la place', 'Halte : les actions restent dans le panneau de l’armée'],
+    };
+    const btns = Object.entries(a.ask.c).filter(([k]) => L[k]).map(([k, why]) =>
+      `<button class="btn ${k === 'manuel' ? 'primary ' : ''}ev-choice" data-act="arrive" data-id="${esc(a.id)}" data-v="${k}"${why ? ' disabled' : ''}><b>${L[k][0]}</b><small>${esc(why || L[k][1])}</small></button>`).join('');
+    const html = `<h2 class="m-title" id="m-title">Devant ${esc(name)}</h2>
+      <p class="m-sub">La ${esc(a.name)} est arrivée devant la place. Que fait-elle ?</p>
+      <div class="ev-choices">${btns}</div>`;
+    return [html, `${a.id}|${JSON.stringify(a.ask)}`];
   }
 
   onEvent(ev, initial) {
@@ -287,7 +314,8 @@ export class UI {
     const nextTurn = esc(tr.end || '');
     const stop = tr.stop;
     // une bataille attend le choix du joueur, ou se livre sur le champ de bataille : le mois ne reprend pas
-    const held = (this.st.tac && this.st.tac.phase !== 'fin') || (this.st.battles || []).some(b => b.mode === 'attente');
+    const held = (this.st.tac && this.st.tac.phase !== 'fin') || (this.st.battles || []).some(b => b.mode === 'attente') ||
+      (this.st.armies || []).some(a => a.ask);
     const sig = [tr.phase, tr.end, stop ? stop.text + stop.date + stop.more : '', !!this.st.over, held].join('|');
     if (sig !== tb.dataset.sig) {
       tb.dataset.sig = sig;
@@ -868,6 +896,11 @@ export class UI {
         break;
       }
       case 'load': this.onLoad && this.onLoad(d.v); break;
+      case 'arrive':
+        this.cmd({ cmd: 'arrive', army: d.id, value: d.v }).then(r => {
+          if (r && r.ok) { this.closeModal(); if (r.bid && this.onTactic) this.onTactic(r.bid); }
+        });
+        break;
       case 'tac-choose':
         this.cmd({ cmd: 'tac', sub: 'choose', bid: d.id, mode: d.v }, d.v === 'auto').then(r => {
           if (r && r.ok) { this.closeModal(); if (d.v === 'manuel' && this.onTactic) this.onTactic(r.bid); }
@@ -1517,7 +1550,7 @@ export class UI {
     if (!force && ae && card.contains(ae) && (/^(SELECT|TEXTAREA)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !['range', 'checkbox'].includes(ae.type)))) return;
     const fn = { tech: this.techModal, diplo: this.diploModal, commerce: this.commerceModal, production: this.prodModal,
                  journal: this.journalModal, menu: this.menuModal, fin: this.endModal, event: this.eventModal,
-                 bataille: this.battleModal }[k];
+                 bataille: this.battleModal, arrivee: this.arriveeModal }[k];
     const [html, sig] = fn.call(this);
     if (!force && sig === this.modalSig) return;
     this.modalSig = sig;

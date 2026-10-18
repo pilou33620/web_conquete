@@ -145,7 +145,7 @@ class App:
                 return TB.command(g, body)   # batailles tactiques (choix, déploiement, ordres, vitesse…)
             if c in ('retreat', 'split', 'merge', 'split_type', 'garrison', 'move', 'path') and TB.army_locked(g, a):
                 return dict(ok=False, msg='Cette armée se bat sur le champ de bataille : donnez-y vos ordres.')
-            if c in ('move', 'path', 'assault'):
+            if c in ('move', 'path', 'assault', 'arrive'):
                 why = TT.lock_reason(g)   # tour par tour : les ordres de marche se donnent pendant son tour
                 if why:
                     return dict(ok=False, msg=why)
@@ -184,6 +184,14 @@ class App:
                 res = g.order_retreat(p, a)
                 TT.settle(g)
                 return self._r(res)
+            if c == 'arrive':   # devant une place : le choix du joueur (fenêtre d'arrivée)
+                ar = g.armies.get(a) if isinstance(a, str) else None
+                res = AA.choose(g, p, ar, str(body.get('value')))
+                out = self._r(res)
+                if out.get('ok') and ar and ar.get('battle') in g.tactical:
+                    out['bid'] = ar['battle']   # « Commander la bataille » : le champ de bataille s'ouvre
+                TT.settle(g)   # après un choix sans combat, l'armée reprend sa route
+                return out
             if c == 'assault':
                 res = g.assault(p, a)
                 TT.settle(g)   # l'assaut se livre tout de suite : une bataille s'engage
@@ -282,6 +290,8 @@ class App:
             left = TT.march_left(g, a)
             if a['state'] == 'battle':
                 out['msg'] = 'Au contact de l’ennemi : la bataille s’engage.'
+            elif a.get('ask'):
+                out['msg'] = f"Devant {AA.place(g, a['ask']['node'])} : à vous de choisir."
             elif a['path']:
                 eta = TT.eta(g, a)
                 out['msg'] = f"En marche : l’armée a fini sa marche du tour, arrivée {'au prochain tour' if eta == 1 else f'dans {eta} tours'} (estimation)."

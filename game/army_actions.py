@@ -1137,6 +1137,8 @@ def view_army(g, a, d, own):
         d['tr'] = 1
     if a.get('hold'):
         d['hold'] = 1
+    if a.get('ask'):
+        d['ask'] = dict(n=a['ask']['node'], c=ask_choices(g, a))   # fenêtre d'arrivée devant une place (ui.js)
     if a.get('dt') and a['path']:
         d['dt'] = [g.fname(o) for o in a['dt']]   # terres fermées contournées
     cl = a.get('cl')

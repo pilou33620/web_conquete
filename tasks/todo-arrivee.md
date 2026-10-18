@@ -44,7 +44,11 @@
 
 ## Phase 2 : l'écran
 
-- [ ] **T3 : état envoyé, commande du serveur, fenêtre « arrivée »**
+- [x] **T3 : état envoyé, commande du serveur, fenêtre « arrivée »**
+  - Fait : `view_army` envoie `ask` (ville, choix permis et raisons) ; commande `arrive` (identifiant d'armée
+    vérifié, `bid` renvoyé pour « Commander la bataille », marches reprises) ; message de l'ordre de marche « Devant X :
+    à vous de choisir » ; `ui.arriveeModal` (choix permis, les autres grisés avec leur raison), ouverte d'elle-même
+    après les batailles en attente ; « Tour suivant » grisé tant qu'une armée attend. Bancs serveur et interface.
   - `views.player_state` envoie les choix en attente (armée, ville, options permises et leur raison) ; la commande
     `arrive` du serveur transmet le choix (armée du joueur, valeur connue, sinon refus).
   - La fenêtre s'ouvre d'elle-même (une à la fois, comme celle des batailles), titre « Devant <ville> » ; les options

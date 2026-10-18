@@ -107,6 +107,27 @@ class Http(unittest.TestCase):
         st, txt = self.req('POST', '/api/cmd', b'{}', {'Content-Length': 'abc'})
         self.assertIn(st, (200, 400, 404), 'une taille illisible reçoit une réponse')
 
+    def test_arrivee_devant_une_ville(self):
+        # (évolution du 18/10/2026) : l'armée s'arrête devant la ville, l'état envoie le choix, la commande le transmet
+        g = self.nouvelle_partie()
+        a = next(x for x in g.armies.values() if x['owner'] == g.player)
+        mer = {gn['name']: i for i, gn in enumerate(g.geo.nodes)}['Mérignac']
+        r = self.cmd(dict(cmd='move', army=a['id'], node=mer, mode='route'))
+        self.assertTrue(r['ok'], r)
+        self.assertIn('choisir', r['msg'])
+        st = json.loads(self.req('GET', '/api/state?since=0')[1])
+        d = next(x for x in st['armies'] if x['id'] == a['id'])
+        self.assertEqual(d['ask']['n'], mer)
+        self.assertEqual(d['ask']['c']['manuel'], '', 'l’assaut est toujours permis')
+        b = next(x for x in g.armies.values() if x['owner'] != g.player)
+        for body in (dict(cmd='arrive', army=a['id'], value='piller'), dict(cmd='arrive', army=b['id'], value='attendre'),
+                     dict(cmd='arrive', army=[], value={}), dict(cmd='arrive', army=a['id'])):
+            with self.subTest(body=body):
+                self.assertFalse(self.cmd(body)['ok'])
+        self.assertFalse(self.cmd(dict(cmd='turn', action='go'))['ok'], '« Tour suivant » attend le choix')
+        self.assertTrue(self.cmd(dict(cmd='arrive', army=a['id'], value='attendre'))['ok'])
+        self.assertNotIn('ask', a)
+
     def test_pas_d_ordre_de_marche_pendant_le_tour_des_ia(self):
         g = self.nouvelle_partie()
         a = next(x for x in g.armies.values() if x['owner'] == g.player)
