@@ -170,10 +170,10 @@ export function scrum(rank, dir, r) {
   return [dir[0] * push, dir[1] * push, Math.atan2(dir[0], dir[1]) + (r - 0.5) * 0.6];
 }
 
-// de loin, les figurines d'un régiment grossissent par paliers (×1 à ×2) pour faire au moins FIG_PX px de haut à
+// de loin, les figurines d'un régiment grossissent par paliers (×1 à ×3) pour faire au moins FIG_PX px de haut à
 // l'écran ; elles sont alors moins nombreuses (k² hommes par figurine en plus). px : hauteur d'une figurine sans
 // agrandissement ; prev : palier d'avant, gardé tant qu'il donne de 85 % à 125 % de la hauteur voulue (pas de bascule)
-const PALIERS = [1, 1.25, 1.6, 2], FIG_PX = 12;
+const PALIERS = [1, 1.25, 1.6, 2, 2.5, 3], FIG_PX = 12;
 export function scaleAt(px, prev = 1) {
   const k = PALIERS.find(p => px * p >= FIG_PX) ?? PALIERS.at(-1);
   return k !== prev && PALIERS.includes(prev) && px * prev >= FIG_PX * 0.85 && px * prev <= FIG_PX * 1.25 ? prev : k;

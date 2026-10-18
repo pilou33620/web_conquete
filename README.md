@@ -489,7 +489,7 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   jusqu'à 16 pixels par mètre, 10 000 figurines, ombres des troupes), **Ultra** (ordinateurs : 20 000 figurines, plus
   de fumée, ombres plus fines). Au-delà, chaque figurine compte plusieurs hommes. En Haute et en Ultra, les cultures
   proches de la caméra sont en relief ; de loin, les figurines passent à une version plus simple (on ne voit pas la
-  différence, l'appareil la sent), et elles grandissent (jusqu'à deux fois) en se faisant moins nombreuses, à la
+  différence, l'appareil la sent), et elles grandissent (jusqu'à trois fois) en se faisant moins nombreuses, à la
   manière d'Ultimate General, pour que les rangs restent lisibles ; la fumée grandit avec elles. Les tués restent
   au sol jusqu'à 800 (Basse), 1 500, 2 500 ou 4 000 (Ultra). Au premier lancement, elle est
   choisie d'après l'appareil, puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par

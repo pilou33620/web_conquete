@@ -291,9 +291,9 @@ test('cavaliers en mêlée : coups de sabre, chacun à son rythme', () => {
   assert.ok(meta.clips['selle-combo'], 'selle-combo précalculée');
 });
 
-test('de loin, les figurines grossissent par paliers (×1 à ×2), avec une marge', () => {
+test('de loin, les figurines grossissent par paliers (×1 à ×3), avec une marge', () => {
   assert.equal(scaleAt(40, 1), 1, 'de près : taille vraie');
-  assert.equal(scaleAt(2, 1), 2, 'très loin : ×2 au plus');
+  assert.equal(scaleAt(2, 1), 3, 'très loin : ×3 au plus');
   let prev = 1;
   for (let px = 40; px > 1; px *= 0.9) { const k = scaleAt(px, prev); assert.ok(k >= prev, `${px.toFixed(1)} px : ${k} après ${prev}`); prev = k; }
   // près du seuil, le palier d'avant tient encore (de 85 % à 125 % de la hauteur voulue)
@@ -301,8 +301,8 @@ test('de loin, les figurines grossissent par paliers (×1 à ×2), avec une marg
   assert.equal(scaleAt(9, 1), 1.6);
   assert.equal(scaleAt(9, 1.25), 1.25);
   // en se rapprochant, les paliers redescendent jusqu'à la taille vraie
-  assert.equal(scaleAt(40, 2), 1, 'revenu près après ×2');
-  prev = 2;
+  assert.equal(scaleAt(40, 3), 1, 'revenu près après ×3');
+  prev = 3;
   for (let px = 1.5; px < 40; px *= 1.1) { const k = scaleAt(px, prev); assert.ok(k <= prev, `${px.toFixed(1)} px : ${k} après ${prev}`); prev = k; }
   assert.equal(prev, 1);
 });

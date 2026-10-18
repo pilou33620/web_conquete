@@ -242,7 +242,7 @@ et de page d'essai.
 22. **De loin, moins de figurines, plus grandes.**
     - Pour chaque régiment, l'échelle des figurines et le nombre d'hommes par figurine suivent la distance à la caméra,
       par paliers et avec une marge, comme `lodOf`.
-    - L'échelle va de ×1 à environ ×2. Le nombre de figurines baisse d'autant, pour que le régiment tienne dans son
+    - L'échelle va de ×1 à ×3 (×2 d'abord ; ×3 à l'essai, à ta demande, le 18/10/2026). Le nombre de figurines baisse d'autant, pour que le régiment tienne dans son
       emprise.
     - La version de loin a les mêmes os et les mêmes gestes.
 
@@ -310,4 +310,4 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 ## Questions ouvertes (étape 7)
 
 - Plafond des corps et coût des fondus : réglés sur l'iPad au point de contrôle 7a (puis 7b).
-- Agrandissement maximal de loin : environ ×2, tranché sur les captures de T42.
+- Agrandissement maximal de loin : ×2 sur les captures de T42, puis ×3 à l'essai (18/10/2026 : environ 6 à 7 px en vue d'ensemble).
