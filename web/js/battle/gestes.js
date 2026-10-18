@@ -1,6 +1,7 @@
 // Vue tactique : les gestes des hommes. Logique pure, sans Three.js (bancs : tests/gestes.test.mjs). Les animations
 // sont précalculées (dev/cuire.mjs, web/anims/soldat.*) ; troupes.js écrit dans les attributs de chaque figurine le
 // geste choisi ici, et le vertex shader le joue.
+import { hash } from './formes.js';
 
 // geste d'un homme du rang selon l'activité de son régiment
 const GESTE = { repos: 'repos', marche: 'marche', charge: 'charge', deroute: 'course', ralliement: 'trot', feu: 'joue', recharge: 'recharge', melee: 'estoc' };
@@ -46,4 +47,21 @@ export function pick({ act, actT, now, kind, rank, u, w, form, phase, volley, mo
     return [genou ? 'salve-genou' : 'salve', at - SALVE_FEU];
   }
   return loop(act === 'recharge' ? 'recharge' : genou ? 'genou' : 'joue');
+}
+
+// variété d'un homme, tirée une fois pour toutes (seed : son régiment ; i : son numéro) : place (m, le long du front et
+// vers l'avant), sens (rad), taille, nuance de l'habit (teinte, saturation, clarté), rythme dans les gestes en boucle,
+// délai (s) avant de changer de geste : les hommes ne sont pas des clones
+export function variety(seed, i) {
+  const r = k => hash(i, k, seed), c = k => r(k) - 0.5;
+  return { du: c(1) * 0.3, dv: c(2) * 0.3, da: c(3) * 0.2, size: 0.95 + r(4) * 0.1, hue: c(5) * 0.02, sat: c(6) * 0.14,
+    light: c(7) * 0.08, speed: 0.94 + r(8) * 0.12, delay: r(9) * 0.4 };
+}
+
+// attributs d'un homme : aGest (geste, son début, geste d'avant, son début) et aMix (instant du fondu, vitesses du geste
+// et du geste d'avant). cur, prev : [numéro du geste, début] (prev null : pas de fondu) ; switchT : instant du
+// changement, retardé du délai de l'homme ; v : sa variété ; loopOf(numéro) : geste en boucle (joué à son rythme)
+export function rows(cur, prev, switchT, v, loopOf) {
+  const sp = id => (loopOf(id) ? v.speed : 1), p = prev ?? cur;
+  return [[cur[0], cur[1], p[0], p[1]], [prev ? switchT + v.delay : -99, sp(cur[0]), sp(p[0]), 0]];
 }

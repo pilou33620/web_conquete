@@ -405,7 +405,10 @@ General sur un régiment qui tire.
     `web/js/battle/troupes.js`, `tests/gestes.test.mjs`
   - Taille : M
 
-- [ ] **T32 : variété par homme et fondus**
+- [x] **T32 : variété par homme et fondus**
+  - Fait : `variety()` (place, sens, taille, nuance, rythme, délai) tirée une fois par homme ; `rows()` écrit le geste
+    et le geste d'avant, recalculé depuis l'activité précédente du régiment (pas de mémoire par homme) ; fondu au délai
+    de chacun. Le réglage `fondu` de la qualité Basse n'est pas ajouté : seulement si la mesure de l'iPad le demande.
   - Critères :
     - Chaque homme a, tirés une fois pour toutes par hachage du régiment et de son numéro :
       - sa place (±15 cm), son sens (±6°), sa taille (±5 %) ;

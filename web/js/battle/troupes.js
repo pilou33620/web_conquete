@@ -18,7 +18,7 @@
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp } from './formes.js';
-import { activity, pick, firing } from './gestes.js';
+import { activity, pick, firing, variety, rows } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
 const { AIM, RUN, ROUT } = POSES;
@@ -676,6 +676,7 @@ export class Troops {
     this.anim = new THREE.DataTexture(data, nb * 3, meta.rows, THREE.RGBAFormat, THREE.HalfFloatType);
     this.anim.needsUpdate = true;
     this.clipId = new Map(Object.keys(meta.clips).map((c, i) => [c, i]));
+    this.clipLoop = Object.values(meta.clips).map(c => c.loop);
     this.uni = {
       uUnits: { value: this.units }, uHeight: { value: this.heights }, uHgt: { value: new THREE.Vector3(t.fineStep, t.fineW, t.fineH) },
       uTime: { value: 0 }, uFxT: { value: 0 }, uRobes: { value: ROBES.map(c => new THREE.Color(c)) },
@@ -815,7 +816,7 @@ export class Troops {
       if (i === undefined) { i = this.free.pop() ?? this.index.size; if (i >= MAXU) continue; this.index.set(id, i); dirty = true; }
       const key = `${un.form}|${un.state}|${Math.round((un.men || 0) / 8)}|${un.w | 0}|${un.d | 0}|${un.type}|${per}|${colors[un.side]}`;
       let e = this.lays.get(id);
-      if (!e || e.key !== key) { this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: e?.lod ?? 0, act: e?.act, actT: e?.actT, volT: e?.volT, moving: e?.moving, fire: e?.fire }); dirty = true; } else e.un = un;
+      if (!e || e.key !== key) { this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: e?.lod ?? 0, act: e?.act, actT: e?.actT, volT: e?.volT, vol: e?.vol, moving: e?.moving, fire: e?.fire, prev: e?.prev, switchT: e?.switchT }); dirty = true; } else e.un = un;
       // version : un régiment qui entre dans le champ est dessiné tout de suite ; les autres changements attendent la
       // prochaine reconstruction (au plus cinq par seconde). La sphère, élargie avec la distance, le fait entrer avant
       // qu'il n'atteigne le bord de l'image.
@@ -834,8 +835,11 @@ export class Troops {
       // finit (sans reconstruire)
       const act = activity(un, moving), volT = un._volley?.t;
       if (e.act !== act || e.volT !== volT || (e.fire && !firing(un._volley, fxT))) {
+        // ce qu'il faisait jusque-là : le geste d'avant de chacun, pour le fondu
+        e.prev = e.act === undefined ? null : { act: e.act, actT: e.actT, volley: e.vol, moving: e.moving, now: fxT };
+        e.switchT = fxT;
         if (e.act !== act) { e.act = act; e.actT = fxT; }
-        e.volT = volT; e.moving = moving; e.fire = firing(un._volley, fxT);
+        e.volT = volT; e.vol = un._volley; e.moving = moving; e.fire = firing(un._volley, fxT);
         if (e.figs && !dirty) this.gestures(e, true);
       }
       const v = un._volley, o = i * 4, D = this.data, row = MAXU * 4;
@@ -852,34 +856,39 @@ export class Troops {
   // toutes les figurines, rangées par sorte
   rebuild(colors, scale) {
     for (const k of this.kinds.values()) k.n = 0;
-    const coat = new THREE.Color(), off = new THREE.Color();
+    const coat = new THREE.Color(), off = new THREE.Color(), tint = new THREE.Color();
     const FACE = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
     // face : sens imposé (servants), sinon celui de la face du carré ou du demi-tour
-    const put = (kind, f, ui, carre, face = null, e = null) => {
+    // v : variété de l'homme (gestes.js) pour les figurines au squelette : place, sens, taille, nuance de l'habit
+    const put = (kind, f, ui, carre, face = null, e = null, v = null) => {
       const k = this.kinds.get(kind);
       if (!k) return;
       if (k.n >= k.cap) this.grow(k, k.cap * 2);
-      const n = k.n++, rank = f[5], o = n * 4, { aSlot: S, aAnim: A, aCoat: C } = k.buf;
-      if (k.rig) e.figs.push([k, n, f]);
-      S[o] = f[0]; S[o + 1] = f[1]; S[o + 2] = face ?? (carre && rank >= 0 ? FACE[f[3]] : f[3] === 2 ? Math.PI : 0); S[o + 3] = ui;
-      A[o] = f[4]; A[o + 1] = f[6]; A[o + 2] = scale; A[o + 3] = rank;
-      C[n * 3] = coat.r; C[n * 3 + 1] = coat.g; C[n * 3 + 2] = coat.b;
+      const n = k.n++, rank = f[5], o = n * 4, { aSlot: S, aAnim: A, aCoat: C } = k.buf, w = k.rig && v;
+      if (k.rig) e.figs.push([k, n, f, v]);
+      S[o] = f[0] + (w ? v.du : 0); S[o + 1] = f[1] + (w ? v.dv : 0); S[o + 2] = (face ?? (carre && rank >= 0 ? FACE[f[3]] : f[3] === 2 ? Math.PI : 0)) + (w ? v.da : 0); S[o + 3] = ui;
+      A[o] = f[4]; A[o + 1] = f[6]; A[o + 2] = scale * (w ? v.size : 1); A[o + 3] = rank;
+      if (w) tint.copy(coat).offsetHSL(v.hue, v.sat, v.light);
+      const c = w ? tint : coat;
+      C[n * 3] = c.r; C[n * 3 + 1] = c.g; C[n * 3 + 2] = c.b;
     };
     for (const [id, e] of this.lays) {
       const { lay, un, lod } = e;
       e.figs = [];
       if (!lod) continue;
       const ui = this.index.get(id), carre = un.form === 'carre', far = lod === 1 ? '~' : '';
+      const seed = [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7);
       off.set(colors[un.side] || '#888');
-      for (const f of lay) {
+      for (const [i, f] of lay.entries()) {
+        const v = variety(seed, i);
         coat.copy(off);
         if (f[2] === 'milice') coat.set('#7a6248');
         else if (f[2] === 'officier' || f[2] === 'drapeau' || f[2] === 'colonel') coat.multiplyScalar(0.8);
         else if (f[2] === 'servant') coat.multiplyScalar(0.6);   // habit sombre des artilleurs
         // l'écouvillon et le pointeur se tournent vers la pièce
-        if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant' + far, [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2, e);
-        else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre, null, e);
-        if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre, null, e); }
+        if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant' + far, [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2, e, v);
+        else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre, null, e, v);
+        if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre, null, e, v); }
         else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre, null, e); }
       }
       this.gestures(e, false);
@@ -895,10 +904,13 @@ export class Troops {
   // gestes des hommes au squelette d'un régiment (aGest, aMix), selon son activité, leur rang, leur place le long du
   // front et sa dernière salve (gestes.js, pick). part : n'envoyer que leurs plages (sans reconstruction)
   gestures(e, part) {
-    const span = new Map(), un = e.un, base = { act: e.act, actT: e.actT ?? 0, now: this.fxT ?? 0, w: Math.max(1, un.w), form: un.form, volley: un._volley, moving: e.moving };
-    for (const [k, n, f] of e.figs) {
-      const [name, t0] = pick({ ...base, kind: f[2], rank: f[5], u: f[0], phase: f[6] }), c = this.clipId.get(name) ?? 0;
-      k.buf.aGest.set([c, t0, c, t0], n * 4); k.buf.aMix.set([-99, 1, 1, 0], n * 4);
+    const span = new Map(), un = e.un, shape = { w: Math.max(1, un.w), form: un.form };
+    const base = { ...shape, act: e.act, actT: e.actT ?? 0, now: this.fxT ?? 0, volley: un._volley, moving: e.moving }, prev = e.prev && { ...shape, ...e.prev };
+    const id = ([name, t0]) => [this.clipId.get(name) ?? 0, t0], loop = c => this.clipLoop[c];
+    for (const [k, n, f, v] of e.figs) {
+      const man = { kind: f[2], rank: f[5], u: f[0], phase: f[6] };
+      const [g, m] = rows(id(pick({ ...base, ...man })), prev && id(pick({ ...prev, ...man })), e.switchT ?? 0, v, loop);
+      k.buf.aGest.set(g, n * 4); k.buf.aMix.set(m, n * 4);
       if (part) { const r = span.get(k); span.set(k, r ? [Math.min(r[0], n), Math.max(r[1], n)] : [n, n]); }
     }
     for (const [k, [a, b]] of span) for (const name of ['aGest', 'aMix']) {

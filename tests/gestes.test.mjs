@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE } from '../web/js/battle/gestes.js';
+import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, variety, rows } from '../web/js/battle/gestes.js';
 
 const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
 
@@ -91,4 +91,28 @@ test('officiers en garde au feu, tambours qui battent la caisse', () => {
 
 test('les gestes de la salve existent dans le fichier précalculé', () => {
   for (const c of ['salve', 'salve-genou', 'feu-libre', 'tambour', 'tambour-marche', 'garde']) assert.ok(meta.clips[c], c);
+});
+
+test('chaque homme a sa variété, toujours la même, dans les bornes', () => {
+  assert.deepEqual(variety(7, 12), variety(7, 12));
+  assert.notDeepEqual(variety(7, 12), variety(7, 13));
+  assert.notDeepEqual(variety(7, 12), variety(8, 12));
+  for (let i = 0; i < 500; i++) {
+    const v = variety(3, i);
+    assert.ok(Math.abs(v.du) <= 0.15 && Math.abs(v.dv) <= 0.15, 'place à ±15 cm');
+    assert.ok(Math.abs(v.da) <= 6 * Math.PI / 180, 'sens à ±6°');
+    assert.ok(v.size >= 0.95 && v.size <= 1.05, 'taille à ±5 %');
+    assert.ok(v.speed >= 0.94 && v.speed <= 1.06, 'rythme à ±6 %');
+    assert.ok(v.delay >= 0 && v.delay <= 0.4, 'délai de quelques dixièmes de seconde');
+  }
+});
+
+test('attributs du geste : fondu depuis le geste d’avant, au délai de l’homme ; son rythme dans les boucles', () => {
+  const v = { speed: 1.05, delay: 0.2 }, loop = id => id === 1;
+  // geste 1 (en boucle) depuis le geste 2 (une salve), changement à 10 s
+  assert.deepEqual(rows([1, 9], [2, 4], 10, v, loop), [[1, 9, 2, 4], [10.2, 1.05, 1, 0]]);
+  // geste 2 (sans boucle) : joué à sa vitesse propre
+  assert.deepEqual(rows([2, 9], [1, 4], 10, v, loop)[1], [10.2, 1, 1.05, 0]);
+  // sans geste d'avant : pas de fondu
+  assert.deepEqual(rows([1, 9], null, 10, v, loop), [[1, 9, 1, 9], [-99, 1.05, 1.05, 0]]);
 });
