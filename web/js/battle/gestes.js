@@ -71,14 +71,15 @@ export function pick({ act, actT, now, kind, rank, u, w, form, phase, volley, mo
 }
 
 // servants d'une pièce (rang 200 + 10 × pièce + rôle : 1 écouvillon, 2 porteur, 3 pointeur, 4 boutefeu, 0 chef de
-// pièce) : ils s'affairent SERVICE s après le dernier coup de leur pièce (shots : instant du dernier coup de chaque
+// pièce, 6 manivelle de la mitrailleuse) : ils s'affairent SERVICE s après le dernier coup de leur pièce (shots : instant du dernier coup de chaque
 // pièce, effets.js), le boutefeu touche la lumière à l'instant du coup ; en route, ils marchent
 export const BOUTEFEU_FEU = 0.3;
-const SERVICE = 8;
+const SERVICE = 8, MANIVELLE = 2;
 function serve(act, rank, now, shots, moving, loop) {
   if (rank < 200 || moving || (act !== 'repos' && act !== 'feu' && act !== 'recharge')) return loop(gesture(act, 'inf'));
   const k = Math.floor((rank - 200) / 10), role = (rank - 200) % 10, shot = shots?.[k] ?? -99;
   if (role === 4) return ['boutefeu', shot - BOUTEFEU_FEU];
+  if (role === 6) return loop(now - shot <= MANIVELLE ? 'recharge' : 'repos');   // la manivelle de la mitrailleuse, pendant la gerbe
   if (role === 3) return loop('pointer');
   if (act !== 'feu' && act !== 'recharge' && now - shot > SERVICE) return loop('repos');
   return loop(role === 1 ? 'refouler' : role === 2 ? 'porter' : 'parle');

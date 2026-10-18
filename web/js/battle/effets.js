@@ -182,7 +182,7 @@ export class Effects {
   push(f, unit, delay = 0) { this.queue.push({ f, unit, at: this.t + delay }); }
   spawn(f, un) {
     const k = f.k;
-    if (k === 'salve') this.volley(f, un);
+    if (k === 'salve') { if (un?.type === 'mitrailleuses') this.crackle(f, un); else this.volley(f, un); }
     else if (k === 'canon' || k === 'mitraille') this.cannon(f, un, k === 'mitraille');
     else if (k === 'impact') {
       // choc d'une charge (moteur, n = hommes qui chargent) ou point de chute (maquette) : poussière, une fois
@@ -238,6 +238,22 @@ export class Effects {
         }
         this.addPuff(this.white, px + c * 1.5, py + s * 1.5, 1.5 * sc, (4 + Math.random() * 2.5) * sc, 1.2 + Math.random() * 0.8, 0.72 + Math.random() * 0.2, life * (0.7 + Math.random() * 0.5), c * sp + (Math.random() - 0.5) * 2, s * sp + (Math.random() - 0.5) * 2, 0.08 + Math.random() * 0.12);
       }, at: this.t + at });
+    }
+  }
+  // mitrailleuse : chaque pièce crache sa gerbe en crépitant (une rafale de petits éclairs à la bouche) ; un filet de
+  // fumée, presque rien sans fumée. Les servants suivent (_shots : la manivelle tourne)
+  crackle(f, un) {
+    const p = pieces(un), w = un.w || 40, fc = Math.cos(un.dir), fs = Math.sin(un.dir), sc = un._figScale ?? 1;
+    const clean = smokeless(un, this.marks), front = (un.d || 30) / 2 - 3;
+    un._shots = un._shots || {};
+    for (let q = 0; q < p; q++) {
+      const u = p > 1 ? (q - (p - 1) / 2) * (w / p) : 0, px = un.x + fc * front - fs * u, py = un.y + fs * front + fc * u;
+      const t0 = q * 0.1 + Math.random() * 0.1;
+      this.queue.push({ fn: () => { un._shots[q] = this.t; }, at: this.t + t0 });
+      for (let k = 0; k < 10; k++) this.queue.push({ fn: () => {
+        this.flashes.push({ x: px + fc * 1.6, y: py + fs * 1.6, alt: sc, r: (1.2 + Math.random() * 0.6) * sc, t: 0, life: 0.05 });
+        if (k % 3 === 0) this.addPuff(clean ? this.haze : this.white, px + fc * 2, py + fs * 2, sc, (clean ? 1.5 : 2.2) * sc, 1.4, clean ? 0.1 : 0.35, clean ? 2 : 8, fc * 6, fs * 6, 0.15);
+      }, at: this.t + t0 + k * 0.14 });
     }
   }
   cannon(f, un, grape) {

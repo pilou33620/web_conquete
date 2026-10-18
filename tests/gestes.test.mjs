@@ -350,3 +350,15 @@ test('piquiers : pique dressée, croisée à la charge, en mêlée et en carré 
   assert.equal(g('repos', 'carre'), 'joue', 'en carré, pique croisée vers l’extérieur');
   assert.equal(g('deroute'), 'course');
 });
+
+test('mitrailleuse : quatre servants, dont un qui tourne la manivelle pendant la gerbe', async () => {
+  const { layout } = await import('../web/js/battle/troupes.js');
+  const un = { id: 'm1', type: 'mitrailleuses', cls: 'artillerie', men: 90, men0: 90, form: 'batterie', state: 'feu', w: 60, d: 30 };
+  const lay = layout(un), servants = lay.filter(f => f[2] === 'servant');
+  assert.equal(lay.filter(f => f[2] === 'canon').length, 6, 'six pièces');
+  assert.equal(servants.length, 24, 'quatre par pièce');
+  const crank = servants.find(f => f[5] === 206);
+  const g = now => pick({ act: 'feu', actT: 0, now, kind: 'servant', rank: crank[5], u: 0, w: 60, form: 'batterie', phase: 0.2, volley: null, moving: false, shots: { 0: 10 } })[0];
+  assert.equal(g(11), 'recharge', 'la manivelle tourne');
+  assert.equal(g(20), 'repos');
+});

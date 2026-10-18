@@ -60,8 +60,9 @@ export const normSeason = s => (s === 'été' ? 'ete' : SEASON_LABEL[s] ? s : 'p
 // pièces d'une batterie : 8 au complet, moins avec les pertes
 // modèle de pièce d'une batterie selon sa génération d'armes (rules.ARMS['artillerie'] ; SPEC-TECH.md)
 const GUN_MODELS = ['ancien', 'ancien', 'gribeauval', 'valee', 'lahitte', 'bange', '75'];
-export const gunModel = u => GUN_MODELS[clamp(u.arm ?? 0, 0, GUN_MODELS.length - 1)];
-export const pieces = u => u.pieces != null ? Math.max(1, Math.min(8, Math.round(u.pieces))) : Math.max(1, Math.min(8, Math.round(8 * (u.men || 0) / Math.max(1, u.men0 || u.men || 1))));
+export const gunModel = u => u.type === 'mitrailleuses' ? 'reffye' : GUN_MODELS[clamp(u.arm ?? 0, 0, GUN_MODELS.length - 1)];
+// pièces d'une batterie (le serveur les envoie ; sinon d'après ses pertes) : huit canons, ou six mitrailleuses
+export const pieces = u => { const full = u.type === 'mitrailleuses' ? 6 : 8; return u.pieces != null ? Math.max(1, Math.min(full, Math.round(u.pieces))) : Math.max(1, Math.min(full, Math.round(full * (u.men || 0) / Math.max(1, u.men0 || u.men || 1)))); };
 
 // emprise au sol (m) : largeur du front × profondeur (contrat § 4) ; elle rétrécit avec les pertes
 export function emprise(u) {

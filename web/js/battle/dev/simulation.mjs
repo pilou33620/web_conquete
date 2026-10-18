@@ -325,33 +325,34 @@ function genMap(scen, seed) {
 const ARM_YEARS = { inf: [1703, 1777, 1840, 1849, 1866, 1874, 1886], artillerie: [1732, 1765, 1827, 1858, 1877, 1897] };
 export const armOf = (cls, year) => (ARM_YEARS[cls] || ARM_YEARS.inf).filter(y => year >= y).length;
 const ORD = n => n === 1 ? '1er' : n + 'e';
-const RANGES = { inf: [120, 230], legere: [130, 250], cavalerie: [30, 30], artillerie: [700, 1100, 300], general: [0, 0] };
+const RANGES = { inf: [120, 230], legere: [130, 250], cavalerie: [30, 30], artillerie: [700, 1100, 300], mitrailleuses: [1200, 2000], general: [0, 0] };
 function mkUnit(id, side, type, name, men, x, y, dir, extra = {}) {
-  const cls = type === 'cavalerie' ? 'cavalerie' : type === 'artillerie' ? 'artillerie' : type === 'general' ? 'general' : 'inf';
+  const cls = type === 'cavalerie' ? 'cavalerie' : type === 'artillerie' || type === 'mitrailleuses' ? 'artillerie' : type === 'general' ? 'general' : 'inf';
   const light = type === 'legere' || type === 'chasseurs';
   const form = cls === 'artillerie' ? 'batterie' : light ? 'tirailleurs' : 'ligne';
   const ammo0 = cls === 'artillerie' ? 120 : cls === 'cavalerie' ? 20 : 60;
-  const range = (RANGES[light ? 'legere' : cls] || RANGES.inf).slice();
+  const range = (RANGES[type === 'mitrailleuses' ? type : light ? 'legere' : cls] || RANGES.inf).slice();
   const u = { id, side, owner: side ? '24' : '33', type, cls, light, name, men, men0: men, x, y, dir, form, state: 'repos',
     morale: 70 + Math.round(hash(id.length, side, men) * 25), fat: Math.round(hash(men, 3) * 25), xp: Math.round(hash(men, 7, id.length) * 90),
     ammo: ammo0, ammo0, range, seen: false, target: null, fire: 'free', reload: 0, order: null, ...extra };
   if (type === 'milice') { u.morale = 50; u.xp = 5; }
   return u;
 }
-function genUnits(scen, map, R) {
+function genUnits(scen, map, R, opts = {}) {
   const units = [], t = map._t;
   const at = (x, y) => t[clamp(Math.floor(y / CELL), 0, ROWS - 1) * COLS + clamp(Math.floor(x / CELL), 0, COLS - 1)];
   const free = (x, y) => ![T.EAU, T.MUR, T.BATI].includes(at(x, y));
   // camp du joueur (0, assaillant) à l'ouest ; l'ennemi en face, ou dans la place
-  const mine = [['ligne', 8], ['legere', 3], ['grenadiers', 1], ['cavalerie', 3], ['artillerie', 3], ['general', 1]];
+  // ?mit=1 : une batterie de mitrailleuses de plus de chaque côté (SPEC-TECH.md)
+  const mine = [['ligne', 8], ['legere', 3], ['grenadiers', 1], ['cavalerie', 3], ['artillerie', 3], ['general', 1], ...(opts.mit ? [['mitrailleuses', 1]] : [])];
   const theirs = scen === 'assaut'
     ? [['milice', 5], ['ligne', 5], ['artillerie', 3], ['grenadiers', 1], ['cavalerie', 1], ['general', 1]]
-    : [['ligne', 7], ['legere', 3], ['chasseurs', 1], ['cavalerie', 3], ['artillerie', 3], ['general', 1]];
+    : [['ligne', 7], ['legere', 3], ['chasseurs', 1], ['cavalerie', 3], ['artillerie', 3], ['general', 1], ...(opts.mit ? [['mitrailleuses', 1]] : [])];
   let n = 0;
   const names = { ligne: k => `${ORD(k)} de ligne`, legere: k => `${ORD(k)} léger`, grenadiers: () => 'Grenadiers réunis', chasseurs: k => `${ORD(k)} chasseurs basques`,
-    cavalerie: k => [`${ORD(k)} hussards`, `${ORD(k)} dragons`, `${ORD(k)} chasseurs à cheval`][k % 3], artillerie: k => `Batterie ${['Lamarque', 'Duroc', 'Sénarmont', 'Drouot'][k % 4]}`,
+    cavalerie: k => [`${ORD(k)} hussards`, `${ORD(k)} dragons`, `${ORD(k)} chasseurs à cheval`][k % 3], artillerie: k => `Batterie ${['Lamarque', 'Duroc', 'Sénarmont', 'Drouot'][k % 4]}`, mitrailleuses: k => `Mitrailleuses ${['Reffye', 'Meudon'][k % 2]}`,
     general: () => 'État-major', milice: k => `Milice ${['de la ville', 'du faubourg', 'des quais', 'de Saint-Romain', 'bourgeoise'][k % 5]}` };
-  const MEN = { ligne: 600, legere: 420, grenadiers: 380, chasseurs: 300, cavalerie: 300, artillerie: 160, general: 30, milice: 250 };
+  const MEN = { ligne: 600, legere: 420, grenadiers: 380, chasseurs: 300, cavalerie: 300, artillerie: 160, mitrailleuses: 90, general: 30, milice: 250 };
   const zone = [80, 160, 520, 1840];
   // ordre de bataille : tirailleurs devant, première et seconde lignes, batteries dans les intervalles,
   // cavalerie aux ailes, général en arrière au centre (côté ennemi : en miroir, vers l'est)
@@ -360,7 +361,7 @@ function genUnits(scen, map, R) {
     const X = x => side === 0 ? x : 2550 - (x - 80) * 0.9;
     const slots = { skirm: [], front: [], second: [], art: [], cav: [], gen: [] };
     for (const [type, cnt] of list) for (let q = 0; q < cnt; q++) {
-      const k = type === 'legere' || type === 'chasseurs' ? 'skirm' : type === 'artillerie' ? 'art' : type === 'cavalerie' ? 'cav' : type === 'general' ? 'gen' : 'front';
+      const k = type === 'legere' || type === 'chasseurs' ? 'skirm' : type === 'artillerie' || type === 'mitrailleuses' ? 'art' : type === 'cavalerie' ? 'cav' : type === 'general' ? 'gen' : 'front';
       slots[k].push([type, q]);
     }
     while (slots.front.length > 5) slots.second.unshift(slots.front.pop());
@@ -411,7 +412,7 @@ export class MockBattle {
     const mk = String(opts.marks || '').split(';').map(l => l.split(',').filter(Boolean));
     this.map.marks = [mk[0], mk[1] ?? mk[0]];
     this.R = rng(this.seed + 1);
-    const g = genUnits(this.scen, this.map, this.R);
+    const g = genUnits(this.scen, this.map, this.R, opts);
     this.units = g.units; this.zone = g.zone;
     for (const u of this.units) u.arm = opts.arm != null && opts.arm !== '' ? +opts.arm : armOf(u.cls, this.map.year);
     this.phase = 'deploiement';
@@ -669,7 +670,12 @@ export class MockBattle {
     u.dir = u.dir + wrapAngle(Math.atan2(e.y - u.y, e.x - u.x) - u.dir) * 0.6;
     const cover = [T.BOIS, T.FORET, T.BATI, T.MUR].includes(this.cellAt(e.x, e.y)) ? 0.45 : this.cellAt(e.x, e.y) === T.VIGNE ? 0.75 : 1;
     let loss = 0;
-    if (cls === 'artillerie') {
+    if (u.type === 'mitrailleuses') {
+      // le feu roulant de la mitrailleuse : une gerbe (le client la fait crépiter), comme une salve
+      loss = 0.6 * pieces(u) * (e.form === 'tirailleurs' ? 0.4 : 1) * cover * (0.6 + this.R() * 0.8);
+      this.addFx({ k: 'salve', x: Math.round(u.x), y: Math.round(u.y), x2: Math.round(e.x), y2: Math.round(e.y), n: pieces(u), u: u.id });
+      u.reload = 12;
+    } else if (cls === 'artillerie') {
       const grape = u.range[2] && d < u.range[2];
       const p = pieces(u);
       loss = (grape ? 4.5 : 1.2) * p * (e.form === 'colonne' || e.form === 'carre' ? 1.5 : e.form === 'tirailleurs' ? 0.4 : 1) * cover * (0.6 + this.R() * 0.8);

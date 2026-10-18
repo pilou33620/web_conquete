@@ -103,6 +103,11 @@ export async function loadAnims() {
   }
 }
 
+// servants d'une pièce en batterie : [u, v, rôle] (gestes.js, serve : 0 chef de pièce, 1 écouvillon, 2 porteur, 3 pointeur,
+// 4 boutefeu, 6 manivelle) ; quatre à la mitrailleuse, dont celui qui tourne la manivelle (à droite de la culasse)
+const GUN_CREW = [[-1.6, 1.8, 1], [1.6, 1.4, 4], [-1.4, -1.3, 2], [1.5, -1.7, 0], [0.4, -3.4, 3], [-0.6, -5.5, 2]];
+const MIT_CREW = [[0.9, -0.9, 6], [-0.9, -1.0, 3], [-1.5, -2.2, 2], [1.4, -3.2, 0]];
+
 // ------------------------------------------------------------------ dispositions
 // Figurines d'un régiment : [u, v, sorte, face, pose, rang, phase]. u le long du front (vers la droite), v vers
 // l'avant, en m depuis le centre ; face : face du carré (0 devant, 1 à droite, 2 derrière, 3 à gauche) ou 2 (demi-tour) ;
@@ -134,7 +139,7 @@ export function layout(un, per = 1, scale = SCALE) {
       for (let k = 0; k < p; k++) {
         const u0 = (k - (p - 1) / 2) * (w / Math.max(1, p)), v0 = d / 2 - 5;
         push(u0, v0, 'canon', 0, 0, 100 + k);
-        for (const [du, dv, role] of [[-1.6, 1.8, 1], [1.6, 1.4, 4], [-1.4, -1.3, 2], [1.5, -1.7, 0], [0.4, -3.4, 3], [-0.6, -5.5, 2]]) push(u0 + du, v0 + dv, 'servant', 0, role, 200 + k * 10 + role);
+        for (const [du, dv, role] of un.type === 'mitrailleuses' ? MIT_CREW : GUN_CREW) push(u0 + du, v0 + dv, 'servant', 0, role, 200 + k * 10 + role);
         push(u0, -d / 2 + 10, 'caisson', 2, 0);   // le timon vers ses chevaux, derrière
         push(u0 - 0.9, -d / 2 + 5.5, 'attelage', 2, (k % 4) << 4); push(u0 + 0.9, -d / 2 + 5.5, 'attelage', 2, ((k + 1) % 4) << 4);
       }
@@ -388,10 +393,25 @@ const GUNS = {
   lahitte: { L: 1.05, r: 0.85, tube: '#9c7a38', aff: AFFUT, lid: '#4c5632', fleche: true },   // bronze rayé, plus fin
   bange: { L: 1.15, r: 0.8, tube: ACIER_T, aff: ACIER, lid: '#44484c', fleche: true, culasse: true },
   75: { L: 1.35, r: 0.55, tube: ACIER_T, aff: ACIER, lid: '#44484c', fleche: true, culasse: true, bouclier: true, frein: true },
+  reffye: { L: 0.8, r: 0.9, tube: BRONZE, aff: AFFUT, lid: '#4c5632', reffye: true },   // mitrailleuse de Reffye (1866)
 };
+// mitrailleuse de Reffye : un fût de bronze qui enferme 25 canons (leurs bouches en faisceau), la culasse et son
+// mécanisme, la manivelle à droite, sur un affût de campagne à flasques
+function reffye() {
+  const P = [[new THREE.CylinderGeometry(0.15, 0.17, 1.3, 12).rotateX(Math.PI / 2).translate(0, 1.0, 0.45), BRONZE, 0, 0],
+    [new THREE.CylinderGeometry(0.13, 0.13, 0.04, 12).rotateX(Math.PI / 2).translate(0, 1.0, 1.11), '#2a2622', 0, 0],   // les bouches
+    [new THREE.BoxGeometry(0.34, 0.3, 0.32).translate(0, 1.0, -0.36), BRONZE, 0, 0],                                     // culasse
+    [new THREE.CylinderGeometry(0.025, 0.025, 0.22, 5).rotateZ(Math.PI / 2).translate(0.28, 1.0, -0.38), IRON, 0, 0],    // axe…
+    [new THREE.BoxGeometry(0.04, 0.2, 0.04).translate(0.4, 0.92, -0.38), IRON, 0, 0],                                   // … et manivelle
+    [new THREE.CylinderGeometry(0.05, 0.05, 0.42, 6).rotateZ(Math.PI / 2).translate(0, 1.0, 0.2), BRONZE, 0, 0]];
+  for (const s of [1, -1]) { P.push([new THREE.BoxGeometry(0.07, 0.3, 1.95).rotateX(-0.25).translate(s * 0.17, 0.74, -0.4), AFFUT, 0, 0]); wheel(P, 0.62, s * 0.48, 0.62, 0.1); }
+  P.push([new THREE.BoxGeometry(0.36, 0.12, 0.3).translate(0, 0.16, -1.4), AFFUT, 0, 0], [new THREE.CylinderGeometry(0.05, 0.05, 1.0, 6).rotateZ(Math.PI / 2).translate(0, 0.62, 0.1), IRON, 0, 0]);
+  return assemble(P);
+}
 // pièce de campagne : fût galbé (bourrelet de bouche, culasse et bouton), affût (deux flasques qui descendent vers la
 // crosse, ou une flèche), deux roues à rayons ; la bouche vers +Z
 function gun(v = 'gribeauval') {
+  if (v === 'reffye') return reffye();
   const G = GUNS[v] ?? GUNS.gribeauval;
   const barrel = [[0, -1.1], [0.07, -1.09], [0.08, -1.04], [0.16, -1.0], [0.165, -0.84], [0.145, -0.82], [0.14, 0.25], [0.125, 0.28],
     [0.115, 0.95], [0.135, 1.0], [0.135, 1.06], [0.075, 1.07], [0.07, 1.0]].map(([r, y]) => [r * G.r, y * G.L]);
@@ -520,7 +540,7 @@ function farHorse(rider, year) {
 }
 function farGun(v = 'gribeauval') {
   const G = GUNS[v] ?? GUNS.gribeauval;
-  const P = [[cyl(0.12 * G.r, 0.15 * G.r, 2.1 * G.L, 6, 0, 1.0, 0.52, Math.PI / 2), G.tube, 0, 0], [box(G.fleche ? 0.2 : 0.4, 0.3, 1.95, 0, 0.74, -0.4, -0.25), G.aff, 0, 0], [box(0.36, 0.12, 0.3, 0, 0.16, -1.4), G.aff, 0, 0]];
+  const P = [[cyl(G.reffye ? 0.17 : 0.12 * G.r, G.reffye ? 0.17 : 0.15 * G.r, 2.1 * G.L, 6, 0, 1.0, G.reffye ? 0.3 : 0.52, Math.PI / 2), G.tube, 0, 0], [box(G.fleche ? 0.2 : 0.4, 0.3, 1.95, 0, 0.74, -0.4, -0.25), G.aff, 0, 0], [box(0.36, 0.12, 0.3, 0, 0.16, -1.4), G.aff, 0, 0]];
   if (G.bouclier) P.push([box(1.3, 1.0, 0.04, 0, 1.15, 0.3), ACIER, 0, 0]);
   for (const s of [1, -1]) P.push([cyl(0.62, 0.62, 0.08, 8, s * 0.48, 0.62, 0.1, 0, Math.PI / 2), '#6a5a3a', 0, 0]);
   return assemble(P);

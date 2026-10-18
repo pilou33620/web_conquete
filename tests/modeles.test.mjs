@@ -232,10 +232,11 @@ test('une pièce par génération d’artillerie, de près et de loin (SPEC-TECH
   assert.deepEqual([0, 1, 2, 3, 4, 5, 6].map(arm => gunModel({ cls: 'artillerie', arm })),
     ['ancien', 'ancien', 'gribeauval', 'valee', 'lahitte', 'bange', '75']);
   assert.equal(gunModel({ cls: 'artillerie' }), 'ancien', 'sans arme connue : la plus ancienne');
+  assert.equal(gunModel({ type: 'mitrailleuses', cls: 'artillerie', arm: 4 }), 'reffye');
   const box = g => { g.computeBoundingBox(); return g.boundingBox; };
   const sig = g => [g.attributes.position.count, [...new Set(Array.from(g.attributes.color.array, x => x.toFixed(3)))].join()].join('|');
   const seen = new Set();
-  for (const v of ['ancien', 'gribeauval', 'valee', 'lahitte', 'bange', '75']) {
+  for (const v of ['ancien', 'gribeauval', 'valee', 'lahitte', 'bange', '75', 'reffye']) {
     for (const lod of [1, 0]) {
       const g = model('canon', 1790, lod, false, v);
       assert.ok(g.attributes.position.count > 0, `${v} ${lod}`);
