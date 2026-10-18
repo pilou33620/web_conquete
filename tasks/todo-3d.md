@@ -589,7 +589,8 @@ General sur un régiment qui tire.
   - Fichiers : `web/js/battle/dev/cuire.mjs`, `web/anims/soldat.*`, `web/js/battle/troupes.js`, `web/js/battle/gestes.js`
   - Taille : M
 
-- [ ] **Point de contrôle 7d** : bancs, cinq scénarios, galerie, commit.
+- [x] **Point de contrôle 7d** (18/10/2026) : bancs (« Tout passe. ») ; cinq scénarios ouverts sans erreur après dix
+  minutes de bataille simulée ; galerie (`captures-3d/animations/etape7d/`).
 
 ### 7e : vue de loin
 

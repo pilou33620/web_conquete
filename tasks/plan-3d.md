@@ -274,7 +274,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 - [x] T39 : mêlée (fronts qui se mêlent, estoc, poussée, sabres des officiers)
 - [x] T40 : cavaliers au squelette, en selle
 - [x] T41 : sabres des cavaliers, chevaux qui se cabrent
-- [ ] Point de contrôle 7d
+- [x] Point de contrôle 7d
 
 ### 7e : vue de loin
 - [x] T42 : échelle et nombre de figurines selon la distance
