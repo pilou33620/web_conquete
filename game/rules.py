@@ -225,7 +225,7 @@ TECHS = [
     ('minie', 'militaire', 'Fusil rayé (balle Minié)', 'Le canon rayé porte à 400 mètres : armement ×1,40, tirailleurs +10 % à couvert.', 1375, 63, ['percussion'], dict(legere_cover=0.10)),
     ('lahitte', 'militaire', 'Canons rayés La Hitte', 'Obus oblongs, tir précis à 3 km : artillerie ×1,55.', 1375, 63, ['valee'], dict()),
     ('chassepot', 'militaire', 'Fusil Chassepot', 'Chargement par la culasse, 1 200 mètres : armement ×1,70. On tire couché, cinq coups à la minute.', 1625, 70, ['minie'], dict(ligne_fire=0.10)),
-    ('mitrailleuse', 'militaire', 'Mitrailleuse de Reffye', '25 canons tournés à la manivelle : la ligne fusille +10 %, le carré +30 %.', 1250, 56, ['lahitte'], dict(ligne_fire=0.10, carre_fire=0.30)),
+    ('mitrailleuse', 'militaire', 'Mitrailleuse de Reffye', '25 canons tournés à la manivelle : on peut lever des batteries de mitrailleuses, feu roulant à 1 200 mètres, redoutable contre l’infanterie à découvert.', 1250, 56, ['lahitte'], dict()),
     ('service_mil', 'militaire', 'Service militaire obligatoire', 'Loi de 1872 : chaque classe passe sous les drapeaux. Recrues +25 %, recrutement −15 % de livres, moral +5.', 1375, 63, ['levee'], dict(recrues=0.25, recruit_cost=-0.15, morale=5)),
     ('gras', 'militaire', 'Fusil Gras (cartouche métallique)', "La douille de laiton ne s'enraye plus : armement ×1,82.", 1500, 63, ['chassepot'], dict()),
     ('debange', 'militaire', 'Canons de Bange', 'Acier et culasse étanche : artillerie ×1,85, les sièges avancent 25 % plus vite.', 1750, 70, ['lahitte'], dict(siege_speed=0.25)),
@@ -242,6 +242,11 @@ TECHS = [
     ('cuirassiers', 'militaire', 'Cuirassiers et carabiniers', 'Cavalerie lourde cuirassée : cavalerie +20 % pendant la charge.', 875, 49, ['hussards'], dict(cav_charge=0.20)),
     ('art_cheval', 'militaire', 'Artillerie à cheval', 'Batteries montées : artillerie +10 %, plus rapide, et efficace jusque dans la charge (+30 %).', 1000, 56, ['gribeauval'], dict(art_power=0.10, art_speed=0.20, art_charge=0.30)),
     ('genie', 'militaire', 'Corps du génie et sapeurs', 'Tranchées et mines : les sièges avancent 40 % plus vite.', 875, 49, ['vauban'], dict(siege_speed=0.40)),
+    ('aerostiers', 'militaire', 'Aérostiers (Fleurus)', "Un ballon captif au-dessus de l'état-major : en bataille, tout ennemi à 1 500 mètres du général est vu ; vision +3 km.", 875, 49, ['genie'], dict(balloon=1500, vision=3)),
+    ('retranchements', 'militaire', 'Retranchements de campagne', "La pelle avant le fusil : en bataille, l'infanterie arrêtée depuis cinq minutes se retranche et perd 25 % d'hommes de moins sous le feu.", 1250, 56, ['genie'], dict(entrench=0.25)),
+    ('dynamite', 'militaire', 'Dynamite (Nobel)', "Les sapeurs font sauter les murs : à l'assaut, une brèche de plus ; les sièges avancent 20 % plus vite.", 1250, 56, ['genie'], dict(breach=1, siege_speed=0.20)),
+    ('melinite', 'militaire', 'Obus à la mélinite', "L'obus explosif perce murs et abris : le couvert protège moitié moins des pièces de ce camp.", 1625, 70, ['dynamite', 'debange'], dict(shell=0.5)),
+    ('rail_militaire', 'militaire', 'Chemins de fer militaires', "Les régiments voyagent en wagons : les armées prendront le train sur les lignes de leur camp (avec les voies ferrées de la carte).", 1375, 63, ['chemins_fer'], dict(rail_troops=1)),
 
     ('ponts_chaussees', 'civil', 'Corps des Ponts et Chaussées', 'Routes entretenues : +15 % de vitesse sur route.', 500, 35, [], dict(road_speed=0.15)),
     ('ponts', 'civil', 'Ponts de pierre', 'Plus de bac : les fleuves se franchissent sans délai.', 750, 42, ['ponts_chaussees'], dict(bridges=1)),
@@ -260,6 +265,15 @@ TECHS = [
     ('telegraphe', 'civil', 'Télégraphe électrique', 'Les nouvelles vont à la vitesse de l’éclair : vision des villes +15 km, des armées +4 km.', 1125, 56, ['chappe'], dict(node_vision=15, vision=4)),
     ('ferry', 'civil', 'Écoles de Jules Ferry', 'École gratuite, laïque et obligatoire : recherches +20 %, ordre public +5 %, recrues +5 %.', 1375, 63, ['ecoles'], dict(research_speed=0.20, order=0.05, recrues=0.05)),
     ('hygiene', 'civil', 'Hygiène pastorienne', 'Vaccins, eau saine, asepsie : usure des armées −30 %, pertes −10 %.', 1250, 56, ['larrey'], dict(attrition=-0.30, casualties=-0.10)),
+    ('vaccine', 'civil', 'Vaccine (Jenner)', 'La vaccination contre la variole : usure des armées −15 %, les épidémies (choléra, fièvres) tuent moitié moins.', 750, 42, [], dict(attrition=-0.15, epidemics=-0.5)),
+    ('caisse_epargne', 'civil', "Caisse d'épargne", "L'épargne des humbles à l'abri : le trésor rapporte 2 % l'an.", 875, 49, ['escompte'], dict(interest=0.02)),
+    ('gaz', 'civil', 'Éclairage au gaz', 'Réverbères et ateliers ouverts le soir : ordre public +6 %, les villes produisent 5 % de livres de plus.', 1000, 56, ['vapeur'], dict(order=0.06, city_livres=0.05)),
+    ('photographie', 'civil', 'Photographie', "Daguerréotypes et reconnaissances : les armées ennemies repérées montrent l'expérience et l'armement de leurs régiments.", 1000, 56, ['ecoles'], dict(intel=1)),
+    ('suffrage', 'civil', 'Suffrage universel', 'Chaque homme vote : la lassitude de la guerre monte 25 % moins vite, ordre public +5 %.', 1125, 56, ['codecivil'], dict(weariness=-0.25, order=0.05)),
+    ('mutuelles', 'civil', 'Sociétés de secours mutuels', 'On cotise pour les malades et les veuves : les places mal assimilées se révoltent moitié moins, recrues +5 %.', 1000, 49, ['suffrage'], dict(revolt=-0.5, recrues=0.05)),
+    ('croix_rouge', 'civil', 'Croix-Rouge (convention de Genève)', "Les blessés sont soignés des deux côtés : un quart des pertes d'une bataille rejoint ses régiments ; pertes −5 %.", 1250, 56, ['larrey'], dict(wounded=0.25, casualties=-0.05)),
+    ('telephone', 'civil', 'Téléphone', "Le fil parle : vision des villes +10 km, les armées ennemies sont annoncées un tour avant d'entrer chez vous.", 1375, 63, ['telegraphe'], dict(node_vision=10, alert=1)),
+    ('syndicats', 'civil', 'Syndicats (loi de 1884)', "Les ouvriers s'organisent : industrie +10 %, mais une ville à l'ordre bas peut faire grève (un mois d'industrie perdu, une fois l'an).", 1375, 63, ['mutuelles'], dict(industrie=0.10, strikes=1)),
 
     ('hauts_fourneaux', 'industriel', 'Hauts fourneaux', 'Production de fer +30 %.', 500, 35, [], dict(fer=0.30)),
     ('manufactures', 'industriel', 'Manufactures royales', 'Capacité industrielle +25 %.', 625, 42, [], dict(industrie=0.25)),
@@ -274,6 +288,9 @@ TECHS = [
     ('acier', 'industriel', 'Acier Bessemer et Martin', 'Convertisseurs et fours Martin : fer +30 %, armes +20 %.', 1375, 63, ['coke'], dict(fer=0.30, armes_eff=0.20)),
     ('electricite', 'industriel', 'Électricité', 'Dynamos et moteurs : capacité industrielle +30 %.', 1625, 70, ['vapeur'], dict(industrie=0.30)),
     ('gabares', 'industriel', 'Chantiers de gabares', 'Gabares et couraux plus grands : transport fluvial +15 %, ports +10 %.', 625, 35, [], dict(river_speed=0.15, port=0.10)),
+    ('vapeur_fluviale', 'industriel', 'Bateau à vapeur', "Les vapeurs à roues de la Garonne (1818) : on remonte les fleuves aussi vite qu'on les descend, ports +10 %.", 1000, 56, ['vapeur'], dict(upstream=1, port=0.10)),
+    ('ciment', 'industriel', 'Ciment (Vicat)', 'Le ciment hydraulique de Louis Vicat : constructions −15 % de coût et de délai.', 875, 49, ['manufactures'], dict(build_cost=-0.15)),
+    ('fresnel', 'industriel', 'Phares à lentille de Fresnel', "Cordouan reçoit la lentille d'Augustin Fresnel en 1823 : commerce +10 %, ports +15 %.", 750, 42, ['gabares'], dict(trade=0.10, port=0.15)),
 
     ('assolement', 'agricole', 'Assolement sans jachère', 'Vivres +20 %.', 375, 28, [], dict(vivres=0.20)),
     ('pomme_de_terre', 'agricole', 'Pomme de terre (Parmentier)', "L'hiver ne vide plus les greniers.", 500, 35, [], dict(winter_food=0.30)),
@@ -291,6 +308,10 @@ TECHS = [
     ('landes1857', 'agricole', 'Assainissement des Landes (loi de 1857)', 'Les communes plantent et drainent la lande : landes et marais +40 %, bois +20 %.', 1125, 56, ['drainage', 'pins'], dict(lande_prod=0.40, bois=0.20)),
     ('greffe', 'agricole', 'Vignes greffées sur plants américains', 'Après le phylloxéra, le vignoble renaît : revenus du vin +30 %.', 1125, 56, ['chais'], dict(vin=0.30)),
     ('conserves', 'agricole', 'Conserves d’Appert', 'Vivres en bocaux : les armées s’épuisent 40 % moins vite loin de chez elles.', 1000, 56, ['pomme_de_terre'], dict(supply_drain=-0.40)),
+    ('betterave', 'agricole', 'Sucre de betterave', 'Le sucre ne vient plus des îles : vivres +5 %, le Blocus continental ne coûte plus rien aux ports.', 625, 35, ['assolement'], dict(vivres=0.05, blockade=-1.0)),
+    ('dombasle', 'agricole', 'Charrue Dombasle', 'Le soc de fer de Mathieu de Dombasle : vivres +10 %.', 750, 42, ['assolement'], dict(vivres=0.10)),
+    ('moissonneuses', 'agricole', 'Moissonneuses et batteuses à vapeur', 'Les machines aux champs : vivres +15 %, recrues +10 % (les bras libérés).', 1250, 56, ['dombasle', 'vapeur'], dict(vivres=0.15, recrues=0.10)),
+    ('bouillie', 'agricole', 'Bouillie bordelaise (Millardet)', 'Sulfate de cuivre et chaux, trouvés à Bordeaux : vin +15 %, le phylloxéra et le mildiou frappent moitié moins.', 1125, 56, ['greffe'], dict(vin=0.15, vine_blight=-0.5)),
 ]
 # durée en jours de travail, arrondie au tour (30 jours de travail ; SPEC-TOURS.md, règle B) : 28 à 84 jours → 1 à 3 tours
 TECH = {t[0]: dict(id=t[0], branch=t[1], name=t[2], desc=t[3], cost=t[4], days=30 * max(1, int(t[5] / 30 + 0.5)), req=t[6],
@@ -560,7 +581,16 @@ TECH_YEAR = dict(
     canal=1838, poste=1700, valliere=1732, etat_major=1818, valee=1827, percussion=1840, minie=1849, lahitte=1858,
     chassepot=1866, mitrailleuse=1866, service_mil=1872, gras=1874, debange=1877, lebel=1886, canon75=1897,
     chemins_fer=1841, telegraphe=1850, ferry=1881, hygiene=1885, acier=1860, electricite=1882, engrais_chim=1850,
-    landes1857=1857, greffe=1880)
+    landes1857=1857, greffe=1880,
+    # SPEC-TECH.md : Fleurus 1794 ; tranchées de la guerre de Sécession, 1860 ; Nobel 1867 ; mélinite 1885 ; transport des
+    # troupes par le rail (Italie) 1859 ; Jenner 1800 ; caisse d'épargne de Bordeaux 1819 ; gaz à Bordeaux vers 1830 ;
+    # Daguerre 1839 ; suffrage 1848 ; décret sur les mutuelles 1852 ; Genève 1864 ; téléphone 1879 ; loi Waldeck-Rousseau
+    # 1884 ; premier vapeur de la Garonne 1818 ; Vicat 1817 ; Cordouan 1823 ; Delessert 1812 ; Dombasle 1820 ;
+    # moissonneuses en France vers 1855 ; Millardet 1885
+    aerostiers=1794, retranchements=1860, dynamite=1867, melinite=1885, rail_militaire=1859, vaccine=1800,
+    caisse_epargne=1819, gaz=1830, photographie=1839, suffrage=1848, mutuelles=1852, croix_rouge=1864, telephone=1879,
+    syndicats=1884, vapeur_fluviale=1818, ciment=1817, fresnel=1823, betterave=1812, dombasle=1820, moissonneuses=1855,
+    bouillie=1885)
 # unités apparues en cours de route (la milice bourgeoise et les miquelets existent dès 1700 sous d'autres noms)
 UNIT_YEAR = dict()
 

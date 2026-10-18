@@ -21,7 +21,7 @@ const de = n => /^Le /.test(n) ? 'du ' + n.slice(3) : /^Les /.test(n) ? 'des ' +
 const STATUS = { paix: 'En paix', guerre: 'En guerre', alliance: 'Alliés', self: 'Vous' };
 const TYPE_LABEL = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' };
 const RES_ORDER = ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'];
-const BRANCH_LABEL = { militaire: 'Militaire', civil: 'Civil', industriel: 'Industriel', agricole: 'Agricole' };
+const BRANCH_LABEL = { militaire: 'Militaire', civil: 'Civil et social', industriel: 'Industriel', agricole: 'Agricole' };
 const ACTION_LABEL = { paix: 'propose la paix', alliance: 'propose une alliance', commerce: 'propose un accord commercial', echange: 'propose un échange', prisonniers: 'propose un échange de prisonniers', passage: 'demande le droit de passage sur vos terres' };
 // conduite d'une marche : conquérir en chemin ou traverser (le dernier choix est gardé)
 const TR_HELP = ['Rallie ou attaque les places indépendantes et ennemies sur la route.',
@@ -1591,7 +1591,7 @@ export class UI {
       }).join('');
       return `<div class="tech-col"><h3>${BRANCH_LABEL[br]}</h3><div class="cur">${head}</div>${cards}</div>`;
     }).join('');
-    const html = `<h2 class="m-title" id="m-title">Technologies</h2><p class="m-sub">Une recherche à la fois par branche. Le militaire gagne les batailles, le civil fait marcher l’État, l’industriel forge armes et outils, l’agricole remplit les greniers.</p><div class="tech-cols">${cols}</div>`;
+    const html = `<h2 class="m-title" id="m-title">Technologies</h2><p class="m-sub">Une recherche à la fois par branche. Le militaire gagne les batailles, le civil et social fait marcher l’État et la société, l’industriel forge armes et outils, l’agricole remplit les greniers.</p><div class="tech-cols">${cols}</div>`;
     return [html, JSON.stringify([me.techs, Object.values(me.research).map(r => r && Math.ceil(r.left)), Math.floor(me.res.livres / 25)])];
   }
 

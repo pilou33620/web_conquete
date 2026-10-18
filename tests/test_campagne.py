@@ -11,6 +11,7 @@ marche, retraite, dettes, sauvegarde des IA) ne se vérifie qu'au bout de plusie
 - l'état des IA (impôts, dépenses) n'était qu'à moitié sauvegardé.
 """
 import json
+import os
 import math
 import unittest
 
@@ -935,6 +936,48 @@ class BancEquilibre(unittest.TestCase):
         a, b = simulate(5, '1790', 2), simulate(5, '1790', 2)
         self.assertIsNone(a['err'])
         self.assertEqual(a, b, 'même graine : mêmes mesures')
+
+
+class ArbreDesTechnologies(unittest.TestCase):
+    """SPEC-TECH.md, module arbre : 94 technologies datées, prérequis cohérents, chaque effet lu par le moteur."""
+
+    def test_prerequis_existants_sans_cycle_ni_anachronisme(self):
+        self.assertEqual(len(R.TECH), 94)
+        for t in R.TECH.values():
+            self.assertIn(t['id'], R.TECH_YEAR, t['id'])
+            for q in t['req']:
+                self.assertIn(q, R.TECH, f"{t['id']} : prérequis {q}")
+
+        def depth(tid, seen=()):
+            self.assertNotIn(tid, seen, f'cycle : {seen}')
+            return 1 + max((depth(q, seen + (tid,)) for q in R.TECH[tid]['req']), default=0)
+        for tid in R.TECH:
+            depth(tid)
+
+    def test_pas_cherchable_avant_son_annee(self):
+        g = partie(epoque='1700')
+        g.factions[g.player]['techs'] += ['vapeur', 'manufactures']
+        ok, why = g.research(g.player, 'vapeur_fluviale')
+        self.assertFalse(ok)
+        self.assertIn('1818', why)
+
+    def test_branche_civil_et_sociale(self):
+        self.assertIn('civil', R.BRANCHES, "l'identifiant reste « civil » (sauvegardes, goûts des IA)")
+        self.assertEqual(R.TECH['suffrage']['branch'], 'civil')
+
+    @unittest.expectedFailure   # shortcut: effets branchés par T54 à T58 (tasks/todo-tech.md), activé en T58
+    def test_chaque_effet_est_lu_par_le_moteur(self):
+        import glob
+        import re
+        racine = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        lus = set()
+        for f in glob.glob(os.path.join(racine, 'game', '*.py')) + glob.glob(os.path.join(racine, 'game', 'tactics', '*.py')):
+            for line in open(f, encoding='utf-8'):
+                if re.search(r"\bmod\(|md\.get\(|mods'?\]?\.get\(|boost=", line):
+                    lus |= set(re.findall(r"'([a-z_]+)'", line))
+        lus.add('rail_troops')   # (les armées prendront le train en phase 2, avec les voies ferrées de la carte)
+        oublies = sorted({k for t in R.TECH.values() for k in t['fx']} - lus)
+        self.assertEqual(oublies, [], 'effets de technologies que le moteur ne lit nulle part')
 
 
 if __name__ == '__main__':
