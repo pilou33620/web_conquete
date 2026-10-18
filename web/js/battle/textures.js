@@ -223,7 +223,8 @@ function neigeDetails(g, size, L, S) {
   if (L >= 8) strew(g, size, Math.round(size * size / 260), S + 1, [{ fill: 'rgba(255,255,255,0.95)' }, { fill: 'rgba(190,206,228,0.5)' }], dot(0.015 * L, 0.03 * L, S));
 }
 // épis en relief (relief.js) : hauteur (m) et couleur des pieds de chaque culture ; le reste est à ras du sol
-export const EPIS = { ble: [1.0, '#c9a54f'], avoine: [0.85, '#a7b865'], bleVert: [0.6, '#86ab4e'], mais: [1.3, '#4c762e'], chaume: [0.2, '#cfbd88'], prairie: [0.4, null] };
+export const EPIS = { ble: [1.0, '#c9a54f'], avoine: [0.85, '#a7b865'], bleVert: [0.6, '#86ab4e'], mais: [1.3, '#4c762e'], chaume: [0.2, '#cfbd88'], prairie: [0.4, null],
+  herbe: [0.35, null], lande: [0.4, null] };   // (prés et landes : couleur prise dans la palette de la saison)
 // cultures : rangs le long de x
 const CROP = {
   ble: { base: '#c9a54f', alt: '#a98a43', rows: 0.3, band: 3.2 },

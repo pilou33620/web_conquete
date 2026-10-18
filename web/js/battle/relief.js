@@ -171,8 +171,9 @@ export class Relief {
     return m;
   }
 
-  // couches d'épis : la couche k (instance) est soulevée de (k + 1) / n × HMAX ; un pied par case de 11 cm, gardé si la
-  // culture monte jusque-là, de moins en moins vers le haut ; tout s'efface au bord de la fenêtre
+  // couches d'épis : la couche k (instance) est soulevée de ((k + 1) / n)² × HMAX (plus serrées près du sol : l'herbe
+  // des prés y a les siennes) ; un pied par case de 11 cm (6 cm pour l'herbe basse), gardé si la culture monte
+  // jusque-là, de moins en moins vers le haut ; tout s'efface au bord de la fenêtre
   shellMaterial() {
     Object.assign(this.uni, { uCrops: { value: this.crops }, uShellN: { value: 1 }, uShellC: { value: new THREE.Vector3() }, uWind: { value: new THREE.Vector2(1, 0) }, uTime: { value: 0 } });
     const m = new THREE.MeshLambertMaterial();
@@ -181,7 +182,7 @@ export class Relief {
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nuniform float uShellN;\nvarying vec3 vW;\nvarying float vF;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
-          vF = (float(gl_InstanceID) + 1.0) / uShellN;
+          vF = (float(gl_InstanceID) + 1.0) / uShellN; vF *= vF;
           transformed.y += vF * ${HMAX.toFixed(2)};
           vW = transformed;`);
       sh.fragmentShader = sh.fragmentShader
@@ -195,9 +196,13 @@ export class Relief {
           // au bord de la fenêtre, et au-delà de 120 à 200 m de l'œil (un pied y fait moins d'un pixel : il scintillerait)
           float fade = (1.0 - smoothstep(uShellC.z * 0.55, uShellC.z, length(vW.xz - uShellC.xy))) * (1.0 - smoothstep(120.0, 200.0, length(vViewPosition)));
           float sway = sin(uTime * 1.7 + dot(vW.xz, uWind) * 0.35) * 0.12 * vF * vF;
-          float n = hash12(floor((vW.xz + uWind * sway) * 9.0));
+          float grid = top < 0.5 ? 16.0 : 9.0, n = hash12(floor((vW.xz + uWind * sway) * grid));
           if (rel > 1.0 || n < 1.0 - (0.8 - 0.65 * rel) * fade) discard;
-          diffuseColor.rgb = mix(crop.rgb, vec3(dot(crop.rgb, vec3(0.3, 0.59, 0.11))), 0.15) * (0.45 + 0.5 * rel) * (1.0 + 0.08 * sin(uTime * 1.2 - dot(vW.xz, uWind) * 0.06));`);
+          diffuseColor.rgb = mix(crop.rgb, vec3(dot(crop.rgb, vec3(0.3, 0.59, 0.11))), 0.15) * (0.45 + 0.5 * rel) * (1.0 + 0.08 * sin(uTime * 1.2 - dot(vW.xz, uWind) * 0.06));
+          // l'herbe basse (prés, landes) : des brins secs, et quelques fleurs, blanches ou jaunes, au bout des brins
+          float fl = hash12(floor(vW.xz * grid) + 31.7);
+          if (top < 0.5 && fl < 0.12) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.72, 0.42) * (0.6 + 0.4 * rel), 0.6);
+          if (top < 0.4 && rel > 0.75 && fl > 0.99) diffuseColor.rgb = fl > 0.995 ? vec3(0.95, 0.93, 0.86) : vec3(0.92, 0.78, 0.3);`);
     };
     m.customProgramCacheKey = () => 'epis';
     return m;

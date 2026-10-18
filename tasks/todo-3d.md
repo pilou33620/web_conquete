@@ -631,7 +631,11 @@ General sur un régiment qui tire.
   - Fichiers : `web/js/battle/terrain.js`, `web/js/battle/textures.js`, `web/js/battle/relief.js`
   - Taille : M
 
-- [ ] **T46 : herbe et végétation en relief** (demande du 17/10/2026)
+- [x] **T46 : herbe et végétation en relief** (demande du 17/10/2026)
+  - Fait : le masque des épis prend aussi les prés (herbe, 35 cm, vert propre à chaque parcelle) et les landes (40 cm) ;
+    couches resserrées près du sol (hauteur en carré du rang : 8, 33, 73, 130 cm en Haute), brins plus fins pour
+    l'herbe basse (6 cm), brins secs et fleurs ; les pieds des soldats sont dans l'herbe. Même nombre de couches
+    (`epis`) : coût inchangé ; aucune en Basse. Plus loin, le motif du sol n'a pas été retouché.
   - Critères :
     - Les prés ont une herbe en relief près de la caméra :
       - mêmes couches empilées que les blés (T26), le masque de végétation étendu à l'herbe ;

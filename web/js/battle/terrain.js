@@ -360,9 +360,10 @@ export class Terrain {
     const col = canvas(w, h), hgt = canvas(w, h), gc = col.getContext('2d'), gh = hgt.getContext('2d');
     for (const g of [gc, gh]) g.setTransform(1 / res, 0, 0, 1 / res, 0, 0);
     for (const r of this.regions) {
+      // champs, prés (herbe ou prairie de fauche) et landes ; pas les routes et chemins, qui ont aussi le motif d'herbe
       const e = EPIS[r.tex];
-      if (!e || (r.type !== T.CHAMP && r.tex !== 'prairie')) continue;
-      gc.fillStyle = e[1] || mixHex(this.pal.pre[0], this.pal.herbeSec, 0.35);
+      if (!e || (r.type !== T.CHAMP && r.type !== T.PRE && r.type !== T.LANDE)) continue;
+      gc.fillStyle = e[1] || (r.type === T.LANDE ? this.pal.lande : mixHex(this.pal.pre[r.tone ?? 0], this.pal.herbeSec, 0.15 + 0.35 * hash(r.parcel, 11, 7)));
       if (r.tex === 'mais' && this.season === 'automne') gc.fillStyle = '#c4aa64';
       gc.fill(r.path);
       const v = Math.round(e[0] / hmax * 255); gh.fillStyle = `rgb(${v},${v},${v})`; gh.fill(r.path);
