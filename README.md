@@ -410,17 +410,25 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
 - **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît **en 3D**,
   la caméra tournée vers l'ennemi : relief en volume, sol peint comme un paysage (herbe aux nuances multiples, blé
   doré mêlé de cultures vertes, chaumes et labours selon la saison, vignes en rangs, larges chemins de terre à
-  ornières, rivières avec berges et reflets) ; de près, le blé et les cultures montent en relief et ondulent au vent.
+  ornières, rivières avec berges et reflets) ; de près, le blé, les cultures, l'herbe des prés et des landes montent
+  en relief et ondulent au vent.
   Arbres et bois aux couronnes touffues, fermes, villages, église et clocher, moulins, ponts, remparts et bastions,
   tranchées, haies, murets et clôtures ; le soleil de l'heure porte leurs ombres, adoucies, et une lumière douce
   éclaire le tout. Chaque régiment est fait de figurines 3D arrondies aux couleurs de son camp (un homme par
   figurine tant que la qualité graphique le permet), en rangs serrés (trois rangs pour une ligne), avec
   porte-drapeau, tambours, officiers et colonel à cheval ; les coiffures suivent l'époque (tricorne relevé, bicorne,
   shako, képi, bonnet à poil), buffleteries blanches, havresac ; chaque homme a son ombre au sol. Dans un bois, la
-  couronne des arbres s'efface au-dessus d'un régiment : on voit ses hommes entre les troncs. Les hommes marchent au pas, mettent en joue l'un
-  après l'autre quand la salve roule le long du front, puis rechargent ; les chevaux vont au pas ou au galop, sabre
-  au clair ; la fumée blanche s'amasse et dérive avec le vent ; les pièces reculent au départ du coup et leurs
-  servants s'affairent ; les tués restent au sol. Au-dessus de chaque régiment, un fanion à la manière d'Ultimate
+  couronne des arbres s'efface au-dessus d'un régiment : on voit ses hommes entre les troncs. Les hommes sont
+  **animés**, chacun avec son allure et son temps de retard : ils marchent au pas, mettent en joue l'un après
+  l'autre quand la salve roule le long du front (le premier rang à genoux), puis rechargent à la baguette ; quand la
+  formation change, chacun court à sa nouvelle place ; en mêlée, les premiers rangs avancent baïonnette en avant
+  vers l'ennemi le plus proche. Les cavaliers sont en selle, sabre au clair, au pas, au trot ou au galop ; au choc,
+  les chevaux du premier rang se cabrent et les cavaliers frappent. Les servants écouvillonnent, chargent, pointent
+  et mettent le boutefeu ; la pièce recule au départ du coup. Les tués tombent selon le coup (un boulet fauche une
+  file, les hommes sont projetés ; les chevaux s'abattent, leur cavalier à côté) et **restent au sol toute la
+  bataille** (jusqu'à un plafond selon la qualité, les plus anciens deviennent des taches au sol). Les troupes
+  **contournent les bâtiments** au lieu de les traverser. La fumée blanche des salves forme un banc le long de la
+  ligne, s'amasse et dérive avec le vent. Au-dessus de chaque régiment, un fanion à la manière d'Ultimate
   General porte le pictogramme de son arme et son effectif (barré et pâli s'il est en déroute) ; le général a son
   médaillon. Le temps, la saison et l'heure se voient : pluie, brouillard, neige, orage, ombres des nuages qui
   passent, lumière dorée du matin, couchant puis nuit.
@@ -481,7 +489,9 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   jusqu'à 16 pixels par mètre, 10 000 figurines, ombres des troupes), **Ultra** (ordinateurs : 20 000 figurines, plus
   de fumée, ombres plus fines). Au-delà, chaque figurine compte plusieurs hommes. En Haute et en Ultra, les cultures
   proches de la caméra sont en relief ; de loin, les figurines passent à une version plus simple (on ne voit pas la
-  différence, l'appareil la sent). Au premier lancement, elle est
+  différence, l'appareil la sent), et elles grandissent (jusqu'à deux fois) en se faisant moins nombreuses, à la
+  manière d'Ultimate General, pour que les rangs restent lisibles ; la fumée grandit avec elles. Les tués restent
+  au sol jusqu'à 800 (Basse), 1 500, 2 500 ou 4 000 (Ultra). Au premier lancement, elle est
   choisie d'après l'appareil, puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par
   seconde) ; un choix fait à la main est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de
   suite, sans quitter la bataille (l'anticrénelage, à la bataille suivante). Les batailles demandent **WebGL 2**
@@ -649,7 +659,9 @@ web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et 
                      plus en plus fin autour de la caméra, tués au sol, ciel, brume, ombres), terrain.js
                      (peinture du sol, altitudes, données du décor), textures.js (motifs du sol), decor.js
                      (arbres, bâti, remparts, haies en volume), troupes.js (figurines 3D animées sur la
-                     carte graphique, dispositions des rangs), fanions.js (fanions et médaillons),
+                     carte graphique, dispositions des rangs, tués au sol), gestes.js (le geste de chaque homme,
+                     sa place, les tués, l'échelle de loin : logique pure, testée),
+                     fanions.js (fanions et médaillons),
                      unites.js (figurines peintes des cartes d'unités), effets.js (fumées, tirs, lumière de
                      l'heure, météo), qualite.js (qualité graphique), commandes.js (gestes et clavier),
                      interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils
@@ -657,7 +669,10 @@ web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et 
                      dev/maquette.mjs : serveur de maquette (node web/js/battle/dev/maquette.mjs, puis
                      /js/battle/dev/banc.html?scen=…&season=…&weather=…&hour=…&year=…&start=1) ;
                      dev/capture.mjs : capture d'écran du banc par Chromium sans écran
-                     (node web/js/battle/dev/capture.mjs bocage /tmp/bocage.png --q "hour=18")
+                     (node web/js/battle/dev/capture.mjs bocage /tmp/bocage.png --q "hour=18") ;
+                     dev/cuire.mjs : précalcule les animations sur le squelette de nos figurines (à relancer
+                     seulement si on change les gestes) ; dev/anims.html : page d'essai des animations
+web/anims/           animations précalculées des soldats (soldat.bin, soldat.json) et leur licence
 web/vendor/three/    Three.js r186 (licence MIT), copié tel quel : le jeu marche hors ligne
 saves/               parties sauvegardées (JSON)
 tests/               bancs d'essai (voir « Tests » ci-dessous)
@@ -665,11 +680,11 @@ tests/               bancs d'essai (voir « Tests » ci-dessous)
 
 ## Tests
 
-Des bancs d'essai vérifient en une vingtaine de secondes ce qui demanderait des heures de jeu : batailles, campagne,
+Des bancs d'essai vérifient en moins d'une minute ce qui demanderait des heures de jeu : batailles, campagne,
 serveur et interface. Aucune bibliothèque à installer (Python standard, et Node pour l'interface, facultatif).
 
 ```bash
-python3 tests/lancer.py                          # tout (environ 20 s sur un Raspberry Pi)
+python3 tests/lancer.py                          # tout (environ 40 s sur un Raspberry Pi)
 python3 tests/test_bataille.py                   # un seul banc Python
 node --test tests/                               # l'interface seule
 ```
@@ -682,6 +697,7 @@ node --test tests/                               # l'interface seule
 | `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, boutons d'ordres par arme, panneau du régiment, barre du tour, tutoriel et bulles de bataille |
 | `tests/camera.test.mjs` | caméra 3D des batailles : allers-retours écran ↔ terrain à 1 m et 1 pixel près sur une colline, à plusieurs caps et zooms ; bornes |
 | `tests/troupes.test.mjs` | dispositions des figurines : rangs de la ligne, plafond par régiment, carré à quatre faces, colonne, tirailleurs, déroute |
+| `tests/gestes.test.mjs` | animations des batailles : geste de chaque homme (salve qui roule, recharge, servants, mêlée, charge), allure propre à chacun, place gardée d'une formation à l'autre, tués (ligne d'un boulet, plafond des corps), contour des bâtiments, échelle des figurines de loin |
 | `tests/modeles.test.mjs` | modèles 3D des figurines : os de l'animation, pieds au sol, hauteur, tournés vers l'avant, formes arrondies, version de loin (mêmes os, même hauteur, un tiers des sommets), choix de la version selon la taille à l'écran |
 
 **Essayer une nouvelle fonctionnalité sans jouer.** `tests/fabrique.py` fabrique une situation en une ligne : une
@@ -691,6 +707,8 @@ secondes de bataille (`avancer(tb, 60)`). Les batailles sont tirées avec une gr
 bataille. Les essais n'écrivent pas dans `logs/batailles.jsonl` (`WEB_CONQUETE_NOLOG=1`).
 
 ## Sources des données
+Animations des soldats : [Universal Animation Library](https://quaternius.com/) 1 et 2 de Quaternius (CC0, domaine
+public), retouchées et précalculées sur nos figurines (`web/anims/LICENCE.txt`).
 Contours des départements et des communes : [france-geojson](https://github.com/gregoiredavid/france-geojson) (données IGN, Licence Ouverte).
 Population des communes : INSEE via [@etalab/decoupage-administratif](https://github.com/etalab/decoupage-administratif).
 Fleuves et lacs : [Natural Earth](https://www.naturalearthdata.com/) (domaine public), complétés à la main pour l'Isle, la Vézère,

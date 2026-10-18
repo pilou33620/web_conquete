@@ -614,7 +614,8 @@ General sur un régiment qui tire.
   - Fichiers : `web/js/battle/gestes.js`, `web/js/battle/troupes.js`, `tests/gestes.test.mjs`
   - Taille : M
 
-- [ ] **Point de contrôle 7e** : bancs, cinq scénarios, galerie, commit.
+- [x] **Point de contrôle 7e** (18/10/2026, avec 7f) : bancs (« Tout passe. ») ; cinq scénarios ouverts sans erreur
+  après dix minutes de bataille simulée ; galerie (`captures-3d/animations/etape7e/` et `etape7f/`).
 
 ### 7f : scène
 
@@ -671,7 +672,28 @@ General sur un régiment qui tire.
   - Fichiers : `web/js/battle/effets.js`, `web/js/battle/vue.js`
   - Taille : S
 
-- [ ] **T45 : vérification finale, README, revue**
+- [x] **T45 : vérification finale, README, revue**
+  - Fait (18/10/2026) : README (animations, tués, contour des bâtiments, vue de loin, crédit Quaternius CC0, bancs) ;
+    état de l'étape dans SPEC-3D.md ; galerie 7e et 7f ; `tasks/reste-a-faire-etape7.md` mis à jour.
+  - Revue complète (deux relecteurs, cinq axes, 45 mutations des bancs). Corrigé :
+    - tampons agrandis en pleine bataille : Three ne dessinait plus que le nombre de figurines du premier rendu
+      (cavaliers ou corps manquants après un zoom) ;
+    - le choc d'une charge n'était jamais vu dans une vraie bataille (le serveur l'avance et la met en mêlée dans le
+      même pas) ; fuyards arrêtés et ralliement : au repos, plus de course sur place ;
+    - le cavalier avait la marque des fantassins en joue : au choc d'une charge à la baïonnette, la moitié du premier
+      rang se serait cabrée ;
+    - corps : plus de doublons (tués tirés parmi les déjà tombés), pertes de l'artillerie comptées à ses servants,
+      pertes en attente gardées d'une disposition à l'autre, plafond qui suit la baisse de qualité, cavalier tombé
+      jamais sur l'eau ;
+    - reconstructions groupées (cinq par seconde au plus) et allégées ; cavalier sans décalage sur sa selle, sans
+      ombre en double ; personne ne court quand seul le nombre d'hommes par figurine change ;
+    - appariement file par file (ligne → colonne : plus personne ne change de côté) ;
+    - canons du vrai serveur : une bouche à feu par pièce (le serveur met les pertes dans `n`) ; trou d'obus à sa
+      taille vraie ; animations chargées en même temps que la carte ; brins et fleurs qui ploient ensemble ;
+    - grille des bâtiments : une case pleine est signalée (`console.warn`) ; banc du vrai chemin.
+    - Nouveaux bancs : 92 au total (JS). Laissés de côté, avec leurs raisons : `tasks/reste-a-faire-etape7.md`.
+  - Vérifié : `python3 tests/lancer.py` ; cinq scénarios après dix minutes ; chocs de cavalerie et d'infanterie ; une
+    vraie bataille du mode Bataille (serveur Python), menée jusqu'au bout par les officiers, sans erreur.
   - Critères :
     - Critères 1 à 18 de la spec vérifiés sur captures et vidéos.
     - README à jour : animations, tués, bâtiments, crédit Quaternius (CC0).

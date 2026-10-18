@@ -40,6 +40,9 @@ const FOOT = Object.keys(KINDS).filter(k => KINDS[k] === null);   // les hommes 
 const DIES = [...FOOT, 'cav'];   // qui peut tomber (un cavalier tué : son cheval couché, lui avec)
 const BALL = 6;                  // hommes couchés au plus par un boulet
 const STILL = [0, 0, 0, 0];      // aucune course à sa place (aMove)
+const RIDER = 9;                 // pose (aAnim.x) du cavalier en selle : le shader lui donne le balancement de son cheval
+// variété de la figurine i d'un régiment (gestes.js), tirée une fois par disposition
+const varOf = (e, i, seed) => (e.vars ??= [])[i] ??= variety(seed, e.ids?.[i] ?? i);
 // graine d'un régiment (variété de ses hommes) ; habit d'une figurine (c : la couleur du camp, modifiée)
 const seedOf = id => [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7);
 function coatOf(kind, c) {
@@ -635,9 +638,9 @@ const VERT_POSE = `
     bw = smoothstep(0.0, 1.0, bw);
     r0 = mix(p0, r0, bw); r1 = mix(p1, r1, bw); r2 = mix(p2, r2, bw);
   }
-  // cavalier (aAnim.x = 1) : le balancement de son cheval (même formule que les chevaux, même phase), et il se cabre
-  // avec lui au choc
-  if (P > 0.5 && P < 1.5) {
+  // cavalier (aAnim.x = 9, RIDER) : le balancement de son cheval (même formule que les chevaux, même phase), et il se
+  // cabre avec lui au choc
+  if (P > 8.5) {
     float t = uTime * (u1.x > 1.5 ? 11.0 : 6.5) + ph, ri = uFxT - u2.w;
     bob = u1.x > 1.5 ? abs(sin(t)) * 0.12 : u1.x > 0.5 ? abs(sin(t * 2.0)) * 0.03 : 0.0;
     if (rank == 0.0 && ri > 0.0 && ri < 1.2) { float rr = sin(3.14159 * ri / 1.2) * 0.55; lean = -rr; bob += 0.6 * sin(rr); }
@@ -797,8 +800,9 @@ export class Troops {
     const k = { geo, mat, depth, mesh: new THREE.Mesh(geo, mat), cap: 0, n: 0, buf: {}, rig: def === 'RIG', contactGeo: null, contact: null };
     k.mesh.frustumCulled = false; k.mesh.customDepthMaterial = depth; k.mesh.castShadow = !!this.castShadow;
     this.group.add(k.mesh);
-    // ombre de contact : un carré posé au sol sous la figurine, qui suit sa place et son pas (pas pour les drapeaux)
-    if (!pattern) {
+    // ombre de contact : un carré posé au sol sous la figurine, qui suit sa place et son pas (pas pour les drapeaux, ni
+    // pour les cavaliers : leur cheval a la sienne)
+    if (!pattern && !/^(cavalier|chef)/.test(kind)) {
       const [cw, cd, cz] = CONTACT[def] ?? CONTACT.FOOT;
       k.contactGeo = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(cw, cd).rotateX(-Math.PI / 2).translate(0, 0, cz));
       for (const a of ['aBone', 'aPart']) k.contactGeo.setAttribute(a, new THREE.Float32BufferAttribute(new Float32Array(4), 1));
@@ -811,6 +815,8 @@ export class Troops {
   }
   // tampons des figurines d'une sorte, agrandis en gardant leur contenu
   grow(k, cap) {
+    // (Three borne les instances dessinées au nombre vu au premier rendu : dispose() l'oublie et libère les anciens tampons)
+    k.geo.dispose(); k.contactGeo?.dispose();
     for (const [a, w] of Object.entries(INSTANCE_ATTRS)) {
       const b = new Float32Array(cap * w);
       if (k.buf[a]) b.set(k.buf[a]);
@@ -878,10 +884,13 @@ export class Troops {
       const key = `${un.form}|${un.state}|${Math.round((un.men || 0) / 8)}|${un.w | 0}|${un.d | 0}|${un.type}|${per}|${k}|${colors[un.side]}`;
       if (!e || e.key !== key) {
         const old = e;
-        this.lays.set(id, e = { key, k, per: per * k * k, scale: scale * k, lay: layout(un, per * k * k, scale * k), un, lod: old?.lod ?? 0, act: old?.act, actT: old?.actT, impactT: old?.impactT, volT: old?.volT, vol: old?.vol, shotT: old?.shotT, shots: old?.shots, moving: old?.moving, fire: old?.fire, prev: old?.prev, switchT: old?.switchT });
+        // (lost : les pertes pas encore tombées, en figurines de la nouvelle disposition)
+        this.lays.set(id, e = { key, k, per: per * k * k, scale: scale * k, lay: layout(un, per * k * k, scale * k), un, lod: old?.lod ?? 0, act: old?.act, actT: old?.actT, impactT: old?.impactT, volT: old?.volT, vol: old?.vol, shotT: old?.shotT, shots: old?.shots, moving: old?.moving, fire: old?.fire, prev: old?.prev, switchT: old?.switchT, lost: (old?.lost ?? 0) * (old?.per ?? 1) / (per * k * k) });
         if (un.state === 'melee') this.scrum(e, un, list);
         if (old) this.relay(old, e);
-        dirty = true;
+        // un nouveau régiment est dessiné tout de suite ; une disposition qui change (pertes, palier de la vue de loin)
+        // attend la prochaine reconstruction : au plus cinq par seconde
+        if (old) this.pending = true; else dirty = true;
       } else e.un = un;
       un._figScale = e.scale / SCALE;   // (effets.js : la fumée de ses salves à l'échelle de ses figurines)
       // version : un régiment qui entre dans le champ est dessiné tout de suite ; les autres changements attendent la
@@ -921,7 +930,6 @@ export class Troops {
         if (lod !== b.lod) { b.lod = lod; this.pending = true; }
       }
     }
-    if (this.deadNew) { this.deadNew = false; dirty = true; }
     this.units.needsUpdate = true;
     if (dirty || (this.pending && time - this.built > 0.2)) { this.rebuild(colors, scale); this.built = time; this.pending = false; }
   }
@@ -932,7 +940,7 @@ export class Troops {
     const FACE = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
     // face : sens imposé (servants), sinon celui de la face du carré ou du demi-tour
     // v : variété de l'homme (gestes.js) pour les figurines au squelette : place, sens, taille, nuance de l'habit
-    // mv : sa course à sa place (aMove), ou rien ; pose : celle de la disposition, sinon imposée (cavalier : 1)
+    // mv : sa course à sa place (aMove), ou rien ; pose : celle de la disposition, sinon imposée (cavalier : RIDER)
     const put = (kind, f, ui, carre, face = null, e = null, v = null, mv = null, pose = f[4]) => {
       const k = this.kinds.get(kind);
       if (!k) return;
@@ -954,13 +962,14 @@ export class Troops {
       off.set(colors[un.side] || '#888');
       for (const [i, f] of lay.entries()) {
         if (e.dead?.has(i)) continue;   // tombé (kill) : il est parmi les corps
-        const v = variety(seed, e.ids?.[i] ?? i), mv = e.moves?.[i];
+        const v = varOf(e, i, seed), mv = e.moves?.[i];
         coatOf(f[2], coat.copy(off));
         // l'écouvillon et le pointeur se tournent vers la pièce
         if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant' + far, [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2, e, v, mv);
         else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre, null, e, v, mv);
-        // son cavalier, en selle (même place, même phase : il suit le balancement du cheval)
-        if (f[2] === 'cav' || f[2] === 'colonel') put((f[2] === 'cav' ? 'cavalier' : 'chef') + far, f, ui, carre, null, e, v, null, 1);
+        // son cavalier, en selle (même place, même phase : il suit le balancement du cheval ; ni décalage, ni sens, ni
+        // taille à lui : il est sur la selle)
+        if (f[2] === 'cav' || f[2] === 'colonel') put((f[2] === 'cav' ? 'cavalier' : 'chef') + far, f, ui, carre, null, e, { ...v, du: 0, dv: 0, da: 0, size: 1 }, null, RIDER);
         if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre, null, e, v, mv); }
         else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre, null, e); }
       }
@@ -990,9 +999,11 @@ export class Troops {
     const span = new Map(), un = e.un, shape = { w: Math.max(1, un.w), form: un.form };
     const base = { ...shape, act: e.act, actT: e.actT ?? 0, now: this.fxT ?? 0, volley: un._volley, shots: un._shots, moving: e.moving }, prev = e.prev && { ...shape, ...e.prev };
     const id = ([name, t0]) => [this.clipId.get(name) ?? 0, t0], loop = c => this.clipLoop[c];
+    // (l'homme est écrit dans les deux mêmes objets : pas de copie par homme)
+    const man = (o, kind, f) => { o.kind = kind; o.rank = f[5]; o.u = f[0]; o.phase = f[6]; return o; };
     for (const [k, n, f, v, kind] of e.figs) {
-      const man = { kind: kind === 'etoffe' ? f[2] : kind, rank: f[5], u: f[0], phase: f[6] };
-      const [g, m] = rows(id(pick({ ...base, ...man })), prev && id(pick({ ...prev, ...man })), e.switchT ?? 0, v, loop);
+      const kd = kind === 'etoffe' ? f[2] : kind;
+      const [g, m] = rows(id(pick(man(base, kd, f))), prev && id(pick(man(prev, kd, f))), e.switchT ?? 0, v, loop);
       k.buf.aGest.set(g, n * 4); k.buf.aMix.set(m, n * 4);
       if (part) { const r = span.get(k); span.set(k, r ? [Math.min(r[0], n), Math.max(r[1], n)] : [n, n]); }
     }
@@ -1010,31 +1021,32 @@ export class Troops {
   kill(un, n, bare, color, line = null) {
     const id = String(un.id), e = this.lays.get(id);
     if (!e || !this.per) return [];
-    e.lost = (e.lost ?? 0) + n / (e.per ?? this.per);
-    const cand = e.lay.map((f, i) => [f, i]).filter(([f]) => DIES.includes(f[2])), k = Math.min(Math.floor(e.lost), cand.length);
+    // (déjà tombés : exclus ; hommes par figurine : au moins effectif / figurines, car une batterie a un nombre fixe de
+    // servants qui comptent chacun plusieurs hommes)
+    const cand = e.lay.map((f, i) => [f, i]).filter(([f, i]) => DIES.includes(f[2]) && !e.dead?.has(i));
+    e.lost = (e.lost ?? 0) + n / Math.max(e.per ?? this.per, (un.men || 0) / Math.max(1, cand.length));
+    const k = Math.min(Math.floor(e.lost), cand.length);
     if (k < 1) return [];
     e.lost -= k;
     const seed = seedOf(id), c = Math.cos(un.dir), s = Math.sin(un.dir), col = new THREE.Color(), out = [], figs = cand.map(([f]) => f);
     const ball = line ? chooseLine(figs, Math.min(k, BALL), ...line) : [], rest = cand.map((_, j) => j).filter(j => !ball.includes(j));
     const shot = chooseDead(rest.map(j => figs[j]), k - ball.length, seed + Math.round((this.fxT ?? 0) * 10)).map(r => rest[r]);
     for (const j of [...ball, ...shot]) {
-      const [f, i] = cand[j], v = variety(seed, e.ids?.[i] ?? i), uu = f[0] + v.du, vv = f[1] + v.dv, hit = ball.includes(j);
+      const [f, i] = cand[j], v = varOf(e, i, seed), uu = f[0] + v.du, vv = f[1] + v.dv, hit = ball.includes(j);
       (e.dead ??= new Set()).add(i);
       const x = un.x + c * vv - s * uu, y = un.y + s * vv + c * uu;
       if (!bare(x, y)) continue;
       coatOf(f[2], col.set(color)).offsetHSL(v.hue, v.sat, v.light);
-      const horse = f[2] === 'cav', old = pushRing(this.dead, this.q.corps ?? 2500, { kind: f[2], horse, pose: f[4], clip: hit ? 'projete' : 'mort',
+      const horse = f[2] === 'cav', cap = this.q.corps ?? 2500, gone = pushRing(this.dead, cap, { kind: f[2], horse, pose: f[4], clip: hit ? 'projete' : 'mort',
         x, y, a: un.dir + (f[3] === 2 ? Math.PI : 0) + v.da + (hash(i, 23, seed) - 0.5) * 1.2,
         t: (this.fxT ?? 0) + (hit ? 0 : hash(i, 29, seed) * 1.5), size: v.size, coat: [col.r, col.g, col.b], c: color, lod: 2 });
-      if (old) out.push({ k: old.horse ? 'cheval' : 'mort', x: old.x, y: old.y, a: old.a, c: old.c });
-      if (horse) {
-        // son cavalier, tombé à 1,2 m sur le côté
-        const rx = x - s * 1.2, ry = y + c * 1.2, gone = pushRing(this.dead, this.q.corps ?? 2500, { kind: 'cavalier', clip: 'mort', x: rx, y: ry,
-          a: un.dir + (hash(i, 37, seed) - 0.5) * 2, t: (this.fxT ?? 0) + 0.3, size: v.size, coat: [col.r, col.g, col.b], c: color, lod: 2 });
-        if (gone) out.push({ k: gone.horse ? 'cheval' : 'mort', x: gone.x, y: gone.y, a: gone.a, c: gone.c });
-      }
+      // son cavalier, tombé à 1,2 m sur le côté
+      const rx = x - s * 1.2, ry = y + c * 1.2;
+      if (horse && bare(rx, ry)) gone.push(...pushRing(this.dead, cap, { kind: 'cavalier', clip: 'mort', x: rx, y: ry,
+        a: un.dir + (hash(i, 37, seed) - 0.5) * 2, t: (this.fxT ?? 0) + 0.3, size: v.size, coat: [col.r, col.g, col.b], c: color, lod: 2 }));
+      for (const old of gone) out.push({ k: old.horse ? 'cheval' : 'mort', x: old.x, y: old.y, a: old.a, c: old.c });
     }
-    this.deadNew = true;
+    this.pending = true;   // (redessinés à la prochaine reconstruction, au plus cinq par seconde)
     return out;
   }
   // mêlée : les premiers rangs avancent vers l'adversaire et se tournent vers lui (gestes.js, foeOf, scrum : le sens
@@ -1066,8 +1078,9 @@ export class Troops {
       const g = old.lay[i], mv = old.moves?.[i], at = [g[0] + v.du, g[1] + v.dv];
       if (mv) { const t = clamp((now - mv[2]) / Math.abs(mv[3]), 0, 1); at[0] = mv[0] + (at[0] - mv[0]) * t; at[1] = mv[1] + (at[1] - mv[1]) * t; }
       const d = Math.hypot(f[0] + v.du - at[0], f[1] + v.dv - at[1]);
-      // (un changement de palier de la vue de loin n'est qu'un changement d'échelle : personne ne court)
-      if (d > 0.3 && old.k === e.k) e.moves[j] = [at[0], at[1], now + v.delay, d > 3 ? d / 3 : -d / 1.4];
+      // (un autre palier de la vue de loin ou un autre nombre d'hommes par figurine (qualité) ne change que l'échelle
+      // et l'effectif des figurines : personne ne court)
+      if (d > 0.3 && old.per === e.per) e.moves[j] = [at[0], at[1], now + v.delay, d > 3 ? d / 3 : -d / 1.4];
     });
   }
   // ombres portées des figurines (qualité Haute et Ultra) ; les ombres de contact restent dans tous les cas

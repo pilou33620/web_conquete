@@ -6,7 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves, pushOut, foeOf, scrum, scaleAt } from '../web/js/battle/gestes.js';
+import { Terrain } from '../web/js/battle/terrain.js';
+import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, serving, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves, pushOut, foeOf, scrum, scaleAt } from '../web/js/battle/gestes.js';
 
 const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
 
@@ -20,12 +21,18 @@ test('le geste suit l’état du régiment', () => {
   assert.equal(gesture('recharge', 'inf'), 'recharge');
 });
 
-test('un régiment qui se déplace marche, sauf s’il charge ou fuit', () => {
+test('un régiment qui se déplace marche, sauf s’il charge, fuit ou se bat ; arrêté, un fuyard se repose', () => {
   assert.equal(activity({ state: 'repos' }, true), 'marche');
   assert.equal(activity({ state: 'feu' }, true), 'marche');
   assert.equal(activity({ state: 'charge' }, true), 'charge');
   assert.equal(activity({ state: 'deroute' }, true), 'deroute');
   assert.equal(activity({ state: 'repos' }, false), 'repos');
+  // le choc : le serveur fait avancer la charge et la met en mêlée dans le même pas (les chevaux se cabrent)
+  assert.equal(activity({ state: 'melee' }, true), 'melee');
+  // le régiment se reforme sur place (60 s), les fuyards arrêtés ne courent pas sur place
+  assert.equal(activity({ state: 'ralliement' }, false), 'repos');
+  assert.equal(activity({ state: 'deroute' }, false), 'repos');
+  assert.equal(activity({ state: 'ralliement' }, true), 'ralliement');
 });
 
 test('officiers, tambours et porte-drapeau ne mettent jamais en joue', () => {
@@ -67,6 +74,22 @@ test('sans salve récente : en joue au feu, la baguette à la recharge', () => {
   assert.equal(pick(homme({ act: 'recharge' }))[0], 'recharge');
   // une salve finie ne compte plus
   assert.equal(pick(homme({ now: 11 + SALVE_DUREE + 0.1, volley: { t: 10, roll: 1, dur: 1 } }))[0], 'joue');
+});
+
+test('la salve dure jusqu’à la fin de la recharge du dernier homme, puis le feu reprend', () => {
+  const volley = { t: 10, roll: 1, dur: 1 };
+  assert.equal(pick(homme({ now: 10 + 1 + SALVE_DUREE - 0.3, volley }))[0], 'salve', 'le dernier homme recharge encore');
+  assert.equal(pick(homme({ now: 10 + 1 + SALVE_DUREE + 0.3, volley }))[0], 'joue');
+});
+
+test('le porte-drapeau ne se bat pas en mêlée', () => {
+  assert.equal(pick(homme({ kind: 'drapeau', act: 'melee' }))[0], 'repos');
+});
+
+test('une batterie reste en action quelques secondes après le coup d’une de ses pièces', () => {
+  assert.equal(serving({ 1: 9 }, 10), true);
+  assert.equal(serving({ 1: 9 }, 17.1), false);
+  assert.equal(serving(undefined, 0), false);
 });
 
 test('une salve tirée depuis le repos se joue aussi (la maquette tire sans passer à l’état feu)', () => {
@@ -157,13 +180,16 @@ test('les tués : autant que demandé, chacun une fois, surtout au premier rang'
   assert.equal(chooseDead(ligne, 100, 1).length, ligne.length, 'pas plus que de figurines');
 });
 
-test('l’anneau des corps : plafonné, le plus ancien sort le premier', () => {
+test('les corps au sol : plafonnés, les plus anciens sortent les premiers, tous ceux de trop si le plafond baisse', () => {
   const ring = [];
-  assert.equal(pushRing(ring, 3, 'a'), null);
+  assert.deepEqual(pushRing(ring, 3, 'a'), []);
   pushRing(ring, 3, 'b'); pushRing(ring, 3, 'c');
-  assert.equal(pushRing(ring, 3, 'd'), 'a');
-  assert.equal(pushRing(ring, 3, 'e'), 'b');
-  assert.deepEqual([...ring].sort(), ['c', 'd', 'e']);
+  assert.deepEqual(pushRing(ring, 3, 'd'), ['a']);
+  assert.deepEqual(pushRing(ring, 3, 'e'), ['b']);
+  assert.deepEqual(ring, ['c', 'd', 'e']);
+  // la qualité descend (plafond 2) : les plus anciens sortent tous à la chute suivante
+  assert.deepEqual(pushRing(ring, 2, 'f'), ['c', 'd']);
+  assert.deepEqual(ring, ['e', 'f']);
 });
 
 test('un boulet couche la file la plus proche de sa trajectoire', () => {
@@ -193,9 +219,17 @@ test('après des pertes : les tués sont exclus, les nouveaux venus n’ont pas 
   const m = matchSlots(ligne, moins, new Set([3, 25]));
   assert.ok(!m.includes(3) && !m.includes(25), 'pas de tué');
   assert.equal(new Set(m.filter(i => i >= 0)).size, m.filter(i => i >= 0).length);
-  // une colonne plus nombreuse que la ligne d'avant : les figurines de trop n'ont pas d'ancien (-1)
+  // une figurine de plus que la ligne d'avant : celle de trop n'a pas d'ancien (-1)
   const plus = [...ligne, [30, 0, 'inf', 0, 0, 0]];
   assert.equal(matchSlots(ligne, plus).filter(i => i < 0).length, 1);
+});
+
+test('d’une ligne à une colonne : personne ne change de côté', () => {
+  // les 60 hommes de la ligne (20 files sur 3 rangs, centre à u = 9,5) en colonne de 4 files sur 15 rangs
+  const col = Array.from({ length: 60 }, (_, k) => [(k % 4) * 1.5 - 2.25, -Math.floor(k / 4), 'inf', 0, 0, Math.floor(k / 4)]);
+  const m = matchSlots(ligne, col);
+  assert.equal(m.filter(i => i >= 0).length, 60);
+  for (const [j, i] of m.entries()) assert.equal(Math.sign(col[j][0]), Math.sign(ligne[i][0] - 9.5), `homme ${i} : de u = ${ligne[i][0]} à ${col[j][0]}`);
 });
 
 test('un régiment qui tourne sur place marche aussi (pas de glissade)', () => {
@@ -262,7 +296,27 @@ test('de loin, les figurines grossissent par paliers (×1 à ×2), avec une marg
   assert.equal(scaleAt(2, 1), 2, 'très loin : ×2 au plus');
   let prev = 1;
   for (let px = 40; px > 1; px *= 0.9) { const k = scaleAt(px, prev); assert.ok(k >= prev, `${px.toFixed(1)} px : ${k} après ${prev}`); prev = k; }
-  // juste sous le seuil, le palier d'avant tient encore
+  // près du seuil, le palier d'avant tient encore (de 85 % à 125 % de la hauteur voulue)
   assert.equal(scaleAt(11, 1), 1);
-  assert.equal(scaleAt(11, 1.25), 1.25);
+  assert.equal(scaleAt(9, 1), 1.6);
+  assert.equal(scaleAt(9, 1.25), 1.25);
+  // en se rapprochant, les paliers redescendent jusqu'à la taille vraie
+  assert.equal(scaleAt(40, 2), 1, 'revenu près après ×2');
+  prev = 2;
+  for (let px = 1.5; px < 40; px *= 1.1) { const k = scaleAt(px, prev); assert.ok(k <= prev, `${px.toFixed(1)} px : ${k} après ${prev}`); prev = k; }
+  assert.equal(prev, 1);
+});
+
+test('la grille des bâtiments (terrain.js) range chaque maison dans les cases qu’elle touche, et prévient si une case déborde', () => {
+  const grid = B => Terrain.prototype.buildingGrid.call({ buildings: B });
+  const g = grid([{ x: 100, y: 100, w: 10, h: 8, a: 0 }, { x: 140, y: 100, w: 10, h: 8, a: 0 }]);
+  const at = (x, y) => [...g.cells.slice(((Math.floor((y - g.y0) / g.cell)) * g.cols + Math.floor((x - g.x0) / g.cell)) * 4).slice(0, 4)].filter(Boolean);
+  assert.deepEqual(at(100, 100), [1]);
+  assert.deepEqual(at(140, 100), [2]);
+  assert.deepEqual(at(120, 100), []);
+  // cinq maisons serrées : la case du milieu déborde, et on le dit
+  const warn = console.warn, said = [];
+  console.warn = m => said.push(m);
+  try { grid([0, 1, 2, 3, 4].map(k => ({ x: 100 + k, y: 100, w: 4, h: 4, a: 0 }))); } finally { console.warn = warn; }
+  assert.equal(said.length, 1);
 });

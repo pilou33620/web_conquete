@@ -644,16 +644,21 @@ export class Terrain {
     const x0 = Math.min(...B.map(b => b.x - R(b))), y0 = Math.min(...B.map(b => b.y - R(b)));
     const cols = Math.ceil((Math.max(...B.map(b => b.x + R(b))) - x0) / cell) + 1, rows = Math.ceil((Math.max(...B.map(b => b.y + R(b))) - y0) / cell) + 1;
     const cells = new Float32Array(cols * rows * 4), rects = new Float32Array(B.length * 8);
+    let full = 0;
     B.forEach((b, i) => {
       rects.set([b.x, b.y, b.a || 0, 0], i * 4); rects.set([b.w / 2 + margin, b.h / 2 + margin, 0, 0], (B.length + i) * 4);
       const r = R(b);
       for (let cy = Math.floor((b.y - r - y0) / cell); cy <= Math.floor((b.y + r - y0) / cell); cy++) {
         for (let cx = Math.floor((b.x - r - x0) / cell); cx <= Math.floor((b.x + r - x0) / cell); cx++) {
           const o = (cy * cols + cx) * 4;
-          for (let k = 0; k < 4; k++) if (!cells[o + k]) { cells[o + k] = i + 1; break; }
+          let k = 0;
+          while (k < 4 && cells[o + k]) k++;
+          if (k < 4) cells[o + k] = i + 1; else full++;
         }
       }
     });
+    // shortcut: 4 bâtiments au plus par case (un texel RGBA) ; le cinquième se traverse. Deux textures si ça arrive
+    if (full) console.warn(`bâtiments : ${full} cases de ${cell} m déjà pleines, des troupes pourront traverser un bâtiment`);
     return { cell, x0, y0, cols, rows, cells, rects, n: B.length };
   }
   // Le sol est-il découvert en (x, y) ? Ni bois, ni eau, ni bâti, ni dans l'emprise d'une maison : les tués et les

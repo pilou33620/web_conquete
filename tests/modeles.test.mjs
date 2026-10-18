@@ -7,7 +7,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { model, lodOf, RIG, RIG_EXTRA, INSTANCE_ATTRS } from '../web/js/battle/troupes.js';
+import * as THREE from '../web/vendor/three/three.module.js';
+import { model, lodOf, RIG, RIG_EXTRA, INSTANCE_ATTRS, Troops } from '../web/js/battle/troupes.js';
 
 // os permis par sorte (0 corps, 1-2 jambes, 3 bras et fusil, 4 étoffe ; cheval : 1-2 et 5-6 jambes, 7 encolure,
 // 8 bras du cavalier) et hauteur attendue (m, avant l'échelle des figurines ; sans les bras, le fusil ni le sabre)
@@ -139,4 +140,18 @@ test('au squelette, la version de loin a les mêmes os et la même hauteur que c
   }
   // l'étoffe du drapeau suit la hampe (os du fusil)
   assert.deepEqual([...new Set(model('etoffe', 1790, 1, true).attributes.aBone.array)], [id.musket]);
+});
+
+test('tampons agrandis en pleine bataille : toutes les figurines sont dessinées, pas seulement celles du premier rendu', () => {
+  // (Three retient au premier rendu le nombre d'instances d'une InstancedBufferGeometry et n'en dessine jamais plus,
+  // sauf si la géométrie est libérée : son WebGLGeometries l'oublie alors, three.module.js r186)
+  const geo = new THREE.InstancedBufferGeometry(), k = { geo, buf: {}, contactGeo: null };
+  Troops.prototype.grow.call(null, k, 256);
+  k.buf.aSlot[4] = 7;
+  let freed = 0;
+  geo.addEventListener('dispose', () => freed++);
+  Troops.prototype.grow.call(null, k, 512);
+  assert.equal(freed, 1, 'géométrie libérée');
+  assert.equal(geo.attributes.aSlot.count, 512);
+  assert.equal(k.buf.aSlot[4], 7, 'contenu gardé');
 });

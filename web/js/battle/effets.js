@@ -8,7 +8,7 @@
 // épaisse qui grossit, monte et dérive avec le vent). Les troupes (troupes.js) lisent `un._volley` et `un._shots`
 // pour mettre les hommes en joue au même instant et faire reculer les pièces.
 import * as THREE from '../../vendor/three/three.module.js';
-import { clamp, hash, TAU, canvas } from './formes.js';
+import { clamp, hash, TAU, canvas, pieces } from './formes.js';
 
 // fumée en volume : des boules douces qui se recouvrent, éclairées en haut à gauche (lumière du nord-ouest)
 function puffSprite(rgb, shade, seed) {
@@ -234,8 +234,9 @@ export class Effects {
   }
   cannon(f, un, grape) {
     const dx = (f.x2 ?? f.x + 1) - f.x, dy = (f.y2 ?? f.y) - f.y, d = Math.hypot(dx, dy) || 1, c = dx / d, s = dy / d;
-    // une bouche à feu par pièce, réparties sur le front de la batterie
-    const p = clamp(f.n || 1, 1, 8), fx = this.q?.fx ?? 2;
+    // une bouche à feu par pièce, réparties sur le front de la batterie comme dans sa disposition (troupes.js) ; sans
+    // la batterie, n (la maquette y met le nombre de pièces ; le serveur, les pertes infligées)
+    const p = un ? pieces(un) : clamp(f.n || 1, 1, 8), fx = this.q?.fx ?? 2;
     const w = un ? un.w : 60, ux = un ? un.x : f.x, uy = un ? un.y : f.y;
     const fc = un ? Math.cos(un.dir) : c, fs = un ? Math.sin(un.dir) : s;
     const sc = un?._figScale ?? 1;   // (échelle des figurines de la batterie : sa fumée la suit)
@@ -269,7 +270,8 @@ export class Effects {
     for (let q = 0; q < 2 * k + 2; q++) this.addPuff(this.dust, x + (Math.random() - 0.5) * 10 * sc, y + (Math.random() - 0.5) * 6 * sc, sc, (2.5 + Math.random() * 2.5) * sc, 3, 0.55, 2.5 + Math.random() * 2, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 3, 3);
     const nb = [2, 4, 6, 8][this.q?.fx ?? 2] * k;
     for (let q = 0; q < nb; q++) { const a = Math.random() * TAU, v = (2 + Math.random() * 6) * sc; this.bits.push({ x, y, alt: 0.5, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.7, valt: (4 + Math.random() * 6) * Math.sqrt(sc), t: 0, life: 2 }); }
-    if (Math.random() < 0.6) this.decals.push({ k: 'trou', x, y, r: (1.4 + Math.random() * 1.2 * k) * sc, a: Math.random() * 3 });
+    // (le trou reste : à sa taille vraie, pas à l'échelle des figurines du moment)
+    if (Math.random() < 0.6) this.decals.push({ k: 'trou', x, y, r: 1.4 + Math.random() * 1.2 * k, a: Math.random() * 3 });
   }
   explosion(x, y) {
     this.flashes.push({ x, y, alt: 2, r: 26, t: 0, life: 0.5 });
@@ -362,7 +364,7 @@ export class Effects {
     const fog = mix3(mix3(sky, sky.map((c, i) => c * t[i]), 0.7), night, k * 0.85).map(v => v / 255);
     return {
       // par beau temps, un soleil un peu doré (comme Ultimate General), d'autant moins que le jour baisse
-      sunDir: [Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)], sun: dull || wet ? t : mix3(t, [1, 0.93, 0.8], 0.3 * L),
+      sunDir: [Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)], sun: dull ? t : mix3(t, [1, 0.93, 0.8], 0.3 * L),
       // le ciel éclaire fort, bleuté : les ombres restent lisibles et teintées au lieu de noires
       sunI: ({ soleil: 2.2, canicule: 2.5, nuages: 1.3, neige: 1.05 }[w] ?? 0.7) * (0.25 + 0.75 * L),
       hemiSky: mix3([0.8, 0.88, 1], t, 0.4), hemiGround: [0.46, 0.4, 0.27], hemiI: (dull ? 2.35 : 2.05) * (0.35 + 0.65 * L) + this.flashT * 3,

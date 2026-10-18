@@ -1,4 +1,4 @@
-# Étape 7 : ce qui reste à faire (point du 17/10/2026)
+# Étape 7 : où on en est et ce qui reste (point du 18/10/2026)
 
 But de l'étape : que les batailles se lisent comme celles d'Ultimate General : American Revolution. Les régiments
 marchent, tirent, rechargent, tombent, courent à leur place et se battent au corps à corps ; la vue de loin, le
@@ -11,43 +11,22 @@ Documents de référence :
 
 Ce fichier ne les remplace pas : il dit où on en est, comment reprendre, et ce qu'on a appris en route.
 
-## Où on en est
+## Où on en est (18/10/2026)
 
 Mode choisi par toi : `/build auto` sur tout le plan, avec une revue complète (`/review`) obligatoire à la fin.
-
-**Faites et commitées :**
+**Tout le plan est fait (T29 à T46), revue comprise.** Il reste ton essai sur l'iPad et tes décisions (plus bas).
 
 | Quoi | Commit |
 |---|---|
 | Prototype, page d'essai `dev/anims.html` (v1 et v2, validée) | `cf95d28`, `3ef8e13` |
 | Spec de l'étape 7, plan, ajout de l'herbe (T46) | `4606c39`, `f5c9ba1`, `4f2b020` |
-| T29 : fantassins de près au squelette dans les vraies batailles | `d861bcf` |
-| T30 : version de loin au squelette, étoffe sur la hampe, ombre au sol qui suit les hanches, lumière enveloppante, ombre vers les pieds | `670feae` |
-| T31 : salve qui roule, premier rang à genoux, tirailleurs, tambours, officiers en garde | `24a696e` |
-| T32 : chaque homme différent (place, sens, taille, teinte, rythme, délai), fondus entre les gestes | `029c6a5` |
-| T33 : servants des pièces au squelette (refouler, porter, pointer, boutefeu) | `db1dd47` |
-| T34 : les hommes tombent, les corps restent couchés en 3D (anneau plafonné) | `5883e59` |
-| T35 : un boulet couche une file, chevaux tués couchés sur le flanc | `aee9cff` |
-| T36 : les hommes courent à leur place (identité gardée, tués exclus) | `48de304` |
-| T37 : conversion sans glissade | `801eb2f` |
-| T38 : les troupes ne traversent plus les bâtiments | `9ddeb0d` |
-
-T30 : captures de près et à mi-distance regardées, sans erreur. Seuls les triangles des vues types n'ont pas été
-relevés : à faire au point de contrôle 7a.
-
-**Restent, dans l'ordre :**
-
-| Tâche | Sous-étape | En deux mots |
-|---|---|---|
-| Point 7a | | fait le 18/10/2026, sauf **ta mesure des images par seconde sur l'iPad** (voir `todo-3d.md`) |
-| T39 | 7d | mêlée (fronts qui se mêlent, estoc, poussée) |
-| T40 | 7d | cavaliers au squelette, en selle |
-| T41 | 7d | sabres des cavaliers, chevaux qui se cabrent |
-| T42 | 7e | figurines plus grandes et moins nombreuses de loin (`scaleAt`) |
-| T43 | 7f | couleurs et lumière du terrain |
-| T46 | 7f | herbe et végétation en relief (demande du 17/10/2026) |
-| T44 | 7f | fumée à l'échelle des figurines (aujourd'hui faite pour des figurines ×1,6 vues de loin) |
-| T45 | 7f | vérification finale, README (crédit Quaternius), **/review obligatoire** |
+| 7a : T29 à T33 (fantassins, version de loin, salve, variété, servants), point 7a | `d861bcf` … `697ff73` |
+| 7b : T34, T35 (tués, corps au sol, boulet), point 7b | `5883e59`, `aee9cff`, `d5ba68a` |
+| 7c : T36 à T38 (course à sa place, conversion, bâtiments), point 7c | `48de304`, `801eb2f`, `9ddeb0d`, `96bb6a4` |
+| 7d : T39 à T41 (mêlée, cavaliers, choc), point 7d | `3dd93b9`, `a408a77`, `923c83a`, `68158a8` |
+| 7e : T42 (figurines plus grandes de loin) | `15226c9` |
+| 7f : T43 (lumière), T46 (herbe), T44 (fumée à l'échelle) | `a520172`, `ab541a1`, `8f264bb` |
+| T45 : README, revue et ses corrections, galerie, état de la spec | voir `git log` |
 
 ## Reprendre
 
@@ -117,11 +96,39 @@ node web/js/battle/dev/cuire.mjs ~/.cache/conquete-dev/ual/"Animation Library[St
   `defines`, sinon Three.js sert à une sorte le programme compilé pour une autre.
 - **`put()` dans `rebuild`** doit recevoir le régiment `e` pour toute figurine au squelette (étoffe et servants
   compris) : ses gestes s'écrivent par régiment.
-- **Fumée dans la page d'essai :** les bouffées d'`effets.js` sont réduites de moitié à la main (`shortcut:` dans
-  `anims.html`). La vraie mise à l'échelle est l'objet de T44.
+- **Salves en capture :** l'horloge des effets avance trop lentement sur le Pi, la file des événements du serveur
+  s'accumule et déborde le plafond des bouffées. Pour voir une salve seule : vider `v.fx.queue` et `v.fx.puffs`,
+  tirer, puis neutraliser `v.fx.push`, et avancer l'horloge avec `v.fx.update(0.25, …)`.
+- **Vraie bataille en capture :** `~/.cache/conquete-dev/campagne.mjs` (hors dépôt) lance le serveur Python sur un
+  port libre, avec ses sauvegardes dans un dossier temporaire (ta sauvegarde automatique n'est pas touchée), ouvre
+  une bataille du mode Bataille et la confie aux officiers (`autofinish`).
+- **`console.warn` compte comme une erreur** dans `capture.mjs` : la grille des bâtiments s'en sert pour signaler une
+  case pleine.
 
 ## Décisions qui t'attendent
 
-- Plafond des corps au sol par qualité (800 / 1 500 / 2 500 / 4 000 proposés), réglé sur l'iPad au point 7b.
-- Agrandissement maximal des figurines de loin (environ ×2), sur les captures de T42.
-- Coût de l'herbe et des fondus sur l'iPad : mesures aux points 7a et final.
+- **Images par seconde sur l'iPad 2019, en Haute** (critère 17) : jamais mesurées sur un vrai processeur graphique.
+  La qualité baisse d'elle-même si la bataille saccade ; les corps au sol suivent désormais cette baisse.
+- **Plafond des corps au sol** par qualité (800 / 1 500 / 2 500 / 4 000), à régler sur l'iPad.
+- **Vue d'ensemble :** avec ×2, un soldat fait 3,4 à 4,5 px de haut au zoom de la vue d'ensemble ; la spec en
+  demande 8. Il faudrait environ ×4 (constante `PALIERS` de `gestes.js`) : à juger sur les captures de 7e.
+- **Caméra :** celle d'Ultimate General est plus couchée à mi-distance (hors spec).
+- **Hauteur du blé en Haute :** depuis l'herbe (T46), les couches sont resserrées près du sol (8, 33, 73, 130 cm) ;
+  le blé (1 m) ne montre plus que sa couche de 73 cm. Choix : 5 couches en Haute (un quart de coût en plus) ou un
+  espacement moins serré (l'herbe perd une couche). À juger sur capture.
+
+## Points de la revue laissés de côté (et pourquoi)
+
+La revue du 18/10/2026 (deux relecteurs, 92 bancs, 45 mutations) a été corrigée pour tout ce qui était critique ou
+requis. Restent, facultatifs :
+- **Coût des reconstructions** : elles sont groupées (cinq par seconde au plus, au lieu d'une à chaque perte) et
+  allégées (variété en cache, pas de copie par homme) ; une reconstruction de 9 740 figurines prend encore environ
+  60 ms sur le Pi, contre 70 avant (mesures sous Node, bruitées par des captures en cours). Le vrai remède
+  (corps dans des lots à part, mise à jour par régiment) est un chantier : seulement si l'iPad saccade.
+- **`troupes.js`** fait 1 100 lignes (modèles, shader et état) : en sortir les modèles (`modeles.js`) si on y retouche.
+- **Recul du coup de feu** : l'étape « feu » des salves (0,25 s) est plus courte que le fondu (0,3 s), le recul ne
+  monte qu'à 20 % ; il faudrait un fondu par étape dans `cuire.mjs` et recalculer les animations.
+- **Herbe de loin** : brins de 6 cm jusqu'à 120-200 m, scintillement possible sur l'iPad.
+- **Cavalerie et attelages** ne courent pas à leur nouvelle place (ils sautent) ; les chevaux ne sont repoussés des
+  maisons que par leur centre, les pièces jamais.
+- **Gerbes de terre** à l'échelle de la batterie qui tire, pas de la cible.

@@ -12,9 +12,13 @@ const CADRE = { repos: 'repos', marche: 'marche', charge: 'course', deroute: 'co
 // alors, au lieu de glisser
 export const moves = un => !!(un.from && un.to) && (Math.hypot(un.to.x - un.from.x, un.to.y - un.from.y) > 0.3 || Math.abs(wrapAngle(un.to.dir - un.from.dir)) > 0.05);
 
-// activité d'un régiment : son état, ou la marche s'il se déplace sans charger ni fuir
+// activité d'un régiment : son état, ou la marche s'il se déplace sans charger ni se battre (le serveur fait avancer
+// une charge et la met en mêlée dans le même pas : c'est le choc) ; fuyards arrêtés et régiment qui se reforme sur
+// place (ralliement : 60 s sans bouger) : au repos
 export function activity(un, moving) {
-  return moving && un.state !== 'charge' && un.state !== 'deroute' && un.state !== 'ralliement' ? 'marche' : un.state;
+  const s = un.state;
+  if (s === 'deroute' || s === 'ralliement') return moving ? s : 'repos';
+  return moving && s !== 'charge' && s !== 'melee' ? 'marche' : s;
 }
 
 // geste d'une figurine (kind : sorte de troupes.js) pour une activité
@@ -99,31 +103,30 @@ export function chooseDead(figs, k, seed) {
   return figs.map((f, i) => [Math.pow(hash(i, 17, seed) || 1e-9, 1 / weight(f[5])), i]).sort((a, b) => b[0] - a[0]).slice(0, k).map(([, i]) => i);
 }
 
-// anneau de taille cap : ajoute item ; renvoie celui qu'il remplace (le plus ancien) une fois plein, sinon null
+// file de cap éléments au plus : ajoute item ; renvoie les plus anciens qui en sortent (tous ceux de trop si cap a
+// baissé : la qualité est descendue)
 export function pushRing(ring, cap, item) {
-  if (ring.length < cap) { ring.push(item); return null; }
-  ring.pos = ring.pos ?? 0;
-  const old = ring[ring.pos];
-  ring[ring.pos] = item; ring.pos = (ring.pos + 1) % cap;
-  return old;
+  ring.push(item);
+  return ring.splice(0, Math.max(0, ring.length - cap));
+}
+
+// distance du point (px, py) au segment de (ax, ay) à (bx, by)
+export function segDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, t = Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(px - ax - t * dx, py - ay - t * dy);
 }
 
 // les k figurines les plus proches de la trajectoire d'un boulet, du point a au point b ([u, v] dans le repère du
 // régiment) : il couche une file
 export function chooseLine(figs, k, a, b) {
-  const [dx, dy] = [b[0] - a[0], b[1] - a[1]], l2 = dx * dx + dy * dy || 1;
-  const dist = f => {
-    const t = Math.min(1, Math.max(0, ((f[0] - a[0]) * dx + (f[1] - a[1]) * dy) / l2));
-    return Math.hypot(f[0] - a[0] - t * dx, f[1] - a[1] - t * dy);
-  };
-  return figs.map((f, i) => [dist(f), i]).sort((p, q) => p[0] - q[0]).slice(0, k).map(([, i]) => i);
+  return figs.map((f, i) => [segDist(f[0], f[1], a[0], a[1], b[0], b[1]), i]).sort((p, q) => p[0] - q[0]).slice(0, k).map(([, i]) => i);
 }
 
 // d'une disposition à la suivante (figurines [u, v, sorte, …, rang]) : pour chaque nouvelle figurine, l'ancienne qui
-// prend sa place, ou -1. Même sorte, dans l'ordre de lecture (rang, puis de gauche à droite) : celui de gauche reste à
-// gauche ; skip : anciennes à écarter (les tués)
+// prend sa place, ou -1. Même sorte, file par file de gauche à droite (puis par rang) : celui de gauche reste à gauche,
+// même quand le nombre de rangs change (ligne → colonne) ; skip : anciennes à écarter (les tués)
 export function matchSlots(old, next, skip = new Set()) {
-  const order = figs => (a, b) => figs[a][5] - figs[b][5] || figs[a][0] - figs[b][0];
+  const order = figs => (a, b) => figs[a][0] - figs[b][0] || figs[a][5] - figs[b][5];
   const A = {}, B = {}, m = next.map(() => -1);
   old.forEach((f, i) => { if (!skip.has(i)) (A[f[2]] ??= []).push(i); });
   next.forEach((f, j) => (B[f[2]] ??= []).push(j));

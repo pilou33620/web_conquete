@@ -523,6 +523,19 @@ export function gesture(state, rank, form) {
    l'étape.
 5. Le README décrit les animations, les tués, les bâtiments et crédite Quaternius (CC0).
 
+### État de l'étape 7
+
+Livrée le 18/10/2026 (T29 à T46, voir `tasks/todo-3d.md`), revue complète faite et corrigée ; où on en est et ce qui
+reste : `tasks/reste-a-faire-etape7.md`. Galerie : `captures-3d/animations/` (hors dépôt).
+- **Vus sur les captures :** critères 1 à 12, 14 à 16.
+- **Bancs :** `python3 tests/lancer.py` passe, avec les bancs des gestes, des modèles et de la grille des bâtiments.
+- **Rien de cassé (18) :** aucune erreur dans la console sur les cinq scénarios après dix minutes de bataille, ni
+  dans une vraie bataille du mode Bataille (serveur Python), menée par les officiers.
+- **Pas atteint :** critère 13, au zoom de la vue d'ensemble (un soldat y fait 3,4 à 4,5 px de haut avec ×2, et non 8) :
+  à trancher avec toi.
+- **Pas mesuré :** critère 17 (images par seconde sur l'iPad 2019, en Haute).
+- **À toi :** valider l'allure en jouant (critère 1 des critères de réussite).
+
 ### Questions ouvertes de l'étape 7
 
 - **Plafond des corps par qualité :** les valeurs ci-dessus sont des points de départ, à régler sur l'iPad.

@@ -15,14 +15,9 @@ import { BattleUI } from './interface.js';
 import { frameOf, project, unproject, anchor, clampCam, FOV } from './camera.js';
 import { emprise, clsOf, isGeneral, clamp, wrapAngle, TAU } from './formes.js';
 import { profil, onQualite, Mesure } from './qualite.js';
+import { segDist } from './gestes.js';
 
 const POLL_MS = 120;
-
-// distance du point (px, py) au segment de (ax, ay) à (bx, by)
-function segDist(px, py, ax, ay, bx, by) {
-  const dx = bx - ax, dy = by - ay, t = Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
-  return Math.hypot(px - ax - t * dx, py - ay - t * dy);
-}
 
 export class BattleView {
   // api : {get(url), post(url, body)} ; root : élément qui recevra la vue
@@ -74,7 +69,8 @@ export class BattleView {
   // ------------------------------------------------------------------ ouverture et fermeture
   async load(bid) {
     this.bid = bid;
-    const m = await this.api.get(`/api/tactic_map?bid=${encodeURIComponent(bid)}`);
+    // (les animations des troupes arrivent en même temps que la carte ; loadAnims ne lève jamais)
+    const [m, anims] = await Promise.all([this.api.get(`/api/tactic_map?bid=${encodeURIComponent(bid)}`), loadAnims()]);
     if (!m || (!m.t && !m.W)) throw new Error('Carte de bataille indisponible');
     if (!this.renderer) throw new Error('WebGL indisponible');
     this.map = m;
@@ -82,7 +78,7 @@ export class BattleView {
     this.terrain = new Terrain(m, this.q);
     this.relief = new Relief(this.terrain, this.q);
     this.relief.setup(this.scene);
-    this.troops = new Troops(this.relief, this.q, m.year, await loadAnims());
+    this.troops = new Troops(this.relief, this.q, m.year, anims);
     this.scene.add(this.troops.group);
     this.fx.attach(this.scene, this.relief.heightAt);
     this.decor = new Decor(this.terrain, this.relief, this.q);
@@ -246,9 +242,9 @@ export class BattleView {
     if (this.fx.decals.length) this.relief.decals.add(this.terrain.addDecals(this.fx.decals.splice(0)));
     this.ui.update(st, prev);
   }
-  // tués laissés au sol, dans l'emprise de l'unité
-  // ils tombent en 3D (troupes.js, kill) ; un boulet de ce relevé qui a traversé le régiment couche la file sur sa
-  // trajectoire (repère du régiment : u le long du front, v vers l'avant) ; les corps sortis de l'anneau sont peints
+  // tués laissés au sol, dans l'emprise de l'unité : ils tombent en 3D (troupes.js, kill) ; un boulet de ce relevé
+  // qui a traversé le régiment couche la file sur sa trajectoire (repère du régiment : u le long du front, v vers
+  // l'avant) ; les corps sortis de l'anneau sont peints
   casualties(u, n) {
     const c = Math.cos(u.dir), s = Math.sin(u.dir), loc = (x, y) => [-s * (x - u.x) + c * (y - u.y), c * (x - u.x) + s * (y - u.y)];
     const ball = (this.balls || []).find(f => segDist(u.x, u.y, f.x, f.y, f.x2, f.y2) < Math.hypot(u.w, u.d) / 2);

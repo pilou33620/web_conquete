@@ -185,7 +185,9 @@ et de page d'essai.
     - `gestes.js` (logique pure, testée sous Node) décide, pour chaque figurine, quelle animation jouer, depuis quel
       instant et à quelle vitesse, ainsi que l'animation d'avant et l'instant du fondu.
     - `troupes.js` écrit ces valeurs dans les attributs d'instance du régiment, seulement quand son activité change :
-      état, marche, conversion, salve, perte, nouvelle disposition. Il ne met à jour que la plage de ce régiment.
+      état, marche, conversion, salve. Il ne met à jour que la plage de ce régiment. Une perte ou une nouvelle
+      disposition attend la prochaine reconstruction de toutes les figurines (au plus cinq par seconde, revue du
+      18/10/2026) ; seul un régiment qui apparaît est dessiné tout de suite.
     - Le vertex shader ne fait que lire la texture des animations et fondre deux poses (0,3 s), comme dans le prototype.
     - Une salve s'écrit en une fois, avec une animation précalculée qui s'enchaîne d'elle-même : « en joue → feu →
       recharge ». Une version à genoux sert au premier rang. Les tirailleurs ont un cycle « feu libre ».
@@ -204,8 +206,10 @@ et de page d'essai.
     - Chaque figurine a un numéro stable dans son régiment.
     - Sa variété est tirée une fois pour toutes, par un hachage du régiment et de ce numéro : place, sens, taille,
       teinte, rythme, décalage d'horaire.
-    - D'une disposition à la suivante, `gestes.js` apparie les hommes en gardant l'ordre de lecture (rang, puis file) :
-      celui de gauche reste à gauche. Les morts sont retirés avant l'appariement.
+    - D'une disposition à la suivante, `gestes.js` apparie les hommes file par file, de gauche à droite (puis par
+      rang) : celui de gauche reste à gauche, même quand le nombre de rangs change (ligne → colonne ; l'ordre « rang,
+      puis file » d'abord retenu faisait changer de côté un homme sur cinq, revue du 18/10/2026). Les morts sont
+      retirés avant l'appariement.
 18. **Courir à sa place.** Le shader mène chaque homme de sa place de départ à sa place d'arrivée, en coordonnées du
     régiment, entre deux instants. Il est au trot si le trajet dépasse 3 m, au pas sinon, tourné vers sa route, puis
     face au front, avec un fondu. Une conversion (le cap du régiment change) ou un déplacement met en marche ceux qui
@@ -216,11 +220,14 @@ et de page d'essai.
     - Le shader repousse une figurine hors du rectangle élargi de 0,5 m, vers le bord le plus proche.
     - `gestes.js` a la même fonction en JavaScript pour le banc.
     - Seulement maisons, église et moulins : pas les remparts.
-20. **Corps au sol : un lot à part, en coordonnées du monde.**
+20. **Corps au sol, en coordonnées du monde.**
     - Un homme tué quitte son régiment.
-    - Il rejoint le lot des corps de sa sorte, avec sa position, son sens et sa teinte au moment de sa mort. Il y joue
-      « mort », « touché à la tête » ou « projeté », puis garde la dernière image.
-    - Le lot est un anneau plafonné par la qualité. Le plus ancien redevient une tache peinte (`terrain.addDecals`).
+    - Il rejoint les corps, avec sa position, son sens et sa teinte au moment de sa mort. Il y joue « mort », « touché
+      à la tête » ou « projeté », puis garde la dernière image.
+    - Fait ainsi : les corps sont rangés dans le lot de leur sorte, à la suite des vivants, rattachés à un régiment
+      fictif immobile (`DEAD`) ; pas de lot à part.
+    - Les corps forment une file plafonnée par la qualité. Les plus anciens redeviennent des taches peintes
+      (`terrain.addDecals`), tous ceux de trop d'un coup si la qualité baisse.
     - Le choix des tués (`gestes.js`) : sous la mousqueterie, surtout le premier rang ; sous un boulet, la file la plus
       proche de sa trajectoire (événement `canon`, point de chute `x2`, `y2`).
     - Un cheval tué : le cheval couché, une pose figée par le code.
@@ -278,14 +285,14 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 
 ### 7e : vue de loin
 - [x] T42 : échelle et nombre de figurines selon la distance
-- [ ] Point de contrôle 7e
+- [x] Point de contrôle 7e (agrandissement de loin : ×2 donne 3,4 à 4,5 px en vue d'ensemble, à trancher avec toi)
 
 ### 7f : scène
 - [x] T43 : couleurs et lumière du terrain
 - [x] T46 : herbe et végétation en relief (demande du 17/10/2026)
 - [x] T44 : fumée et effets à l'échelle des figurines
-- [ ] T45 : vérification finale, README, revue
-- [ ] Point final de l'étape 7
+- [x] T45 : vérification finale, README, revue
+- [ ] Point final de l'étape 7 (ton essai sur l'iPad)
 
 ## Risques et parades (étape 7)
 
