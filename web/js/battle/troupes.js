@@ -18,7 +18,7 @@
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp } from './formes.js';
-import { activity, moves, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing, matchSlots, foeOf, scrum } from './gestes.js';
+import { activity, moves, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing, matchSlots, foeOf, scrum, scaleAt } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
 const { AIM, RUN, ROUT } = POSES;
@@ -864,25 +864,28 @@ export class Troops {
       seen.add(id);
       let i = this.index.get(id);
       if (i === undefined) { i = this.free.pop() ?? this.index.size; if (i >= DEAD) continue; this.index.set(id, i); dirty = true; }
-      const key = `${un.form}|${un.state}|${Math.round((un.men || 0) / 8)}|${un.w | 0}|${un.d | 0}|${un.type}|${per}|${colors[un.side]}`;
+      // distance (au bout le plus proche : une longue ligne vue de biais passe en version proche par ce bout) et hauteur
+      // d'une figurine à l'écran ; la sphère, élargie avec la distance, fait entrer le régiment avant le bord de l'image
+      let px = Infinity, vis = true;
+      if (fr && camera) {
+        const h = this.relief.heightAt(un.x, un.y), d = Math.max(1, Math.hypot(un.x - fr.E[0], h - fr.E[1], un.y - fr.E[2]) - Math.hypot(un.w || 10, un.d || 10) / 2);
+        this.sphere.center.set(un.x, h + 1.5, un.y); this.sphere.radius = Math.hypot(un.w || 10, un.d || 10) / 2 + 15 + d * 0.15;
+        vis = this.frustum.intersectsSphere(this.sphere); px = 1.75 * scale * fr.k / d;
+      }
+      // de loin, des figurines plus grandes (×k) et moins nombreuses (k² fois plus d'hommes chacune : gestes.js, scaleAt)
       let e = this.lays.get(id);
+      const k = px === Infinity ? 1 : scaleAt(px, e?.k ?? 1);
+      const key = `${un.form}|${un.state}|${Math.round((un.men || 0) / 8)}|${un.w | 0}|${un.d | 0}|${un.type}|${per}|${k}|${colors[un.side]}`;
       if (!e || e.key !== key) {
         const old = e;
-        this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: old?.lod ?? 0, act: old?.act, actT: old?.actT, impactT: old?.impactT, volT: old?.volT, vol: old?.vol, shotT: old?.shotT, shots: old?.shots, moving: old?.moving, fire: old?.fire, prev: old?.prev, switchT: old?.switchT });
+        this.lays.set(id, e = { key, k, per: per * k * k, scale: scale * k, lay: layout(un, per * k * k, scale * k), un, lod: old?.lod ?? 0, act: old?.act, actT: old?.actT, impactT: old?.impactT, volT: old?.volT, vol: old?.vol, shotT: old?.shotT, shots: old?.shots, moving: old?.moving, fire: old?.fire, prev: old?.prev, switchT: old?.switchT });
         if (un.state === 'melee') this.scrum(e, un, list);
         if (old) this.relay(old, e);
         dirty = true;
       } else e.un = un;
       // version : un régiment qui entre dans le champ est dessiné tout de suite ; les autres changements attendent la
-      // prochaine reconstruction (au plus cinq par seconde). La sphère, élargie avec la distance, le fait entrer avant
-      // qu'il n'atteigne le bord de l'image.
-      let lod = 2;
-      if (fr && camera) {
-        // (distance au bout le plus proche : une longue ligne vue de biais passe en version proche par ce bout)
-        const h = this.relief.heightAt(un.x, un.y), d = Math.max(1, Math.hypot(un.x - fr.E[0], h - fr.E[1], un.y - fr.E[2]) - Math.hypot(un.w || 10, un.d || 10) / 2);
-        this.sphere.center.set(un.x, h + 1.5, un.y); this.sphere.radius = Math.hypot(un.w || 10, un.d || 10) / 2 + 15 + d * 0.15;
-        lod = lodOf(1.75 * scale * fr.k / d, e.lod, this.frustum.intersectsSphere(this.sphere));
-      }
+      // prochaine reconstruction (au plus cinq par seconde)
+      const lod = fr && camera ? lodOf(px * k, e.lod, vis) : 2;
       if (lod !== e.lod) { if (!e.lod) dirty = true; else this.pending = true; e.lod = lod; }
       // régiment : position, sens, opacité ; allure, feu, salve ; front, tirailleurs
       const moving = moves(un);
@@ -936,7 +939,7 @@ export class Troops {
       const n = k.n++, rank = f[5], o = n * 4, { aSlot: S, aAnim: A, aCoat: C } = k.buf, w = k.rig && v;
       if (k.rig) e.figs.push([k, n, f, v, kind.replace('~', '')]);
       S[o] = f[0] + (w ? v.du : 0); S[o + 1] = f[1] + (w ? v.dv : 0); S[o + 2] = (face ?? f[7] ?? (carre && rank >= 0 ? FACE[f[3]] : f[3] === 2 ? Math.PI : 0)) + (w ? v.da : 0); S[o + 3] = ui;
-      A[o] = pose; A[o + 1] = f[6]; A[o + 2] = scale * (w ? v.size : 1); A[o + 3] = rank;
+      A[o] = pose; A[o + 1] = f[6]; A[o + 2] = (e?.scale ?? scale) * (w ? v.size : 1); A[o + 3] = rank;
       if (w) tint.copy(coat).offsetHSL(v.hue, v.sat, v.light);
       if (k.rig) k.buf.aMove.set(mv ?? STILL, o);
       const c = w ? tint : coat;
@@ -1006,7 +1009,7 @@ export class Troops {
   kill(un, n, bare, color, line = null) {
     const id = String(un.id), e = this.lays.get(id);
     if (!e || !this.per) return [];
-    e.lost = (e.lost ?? 0) + n / this.per;
+    e.lost = (e.lost ?? 0) + n / (e.per ?? this.per);
     const cand = e.lay.map((f, i) => [f, i]).filter(([f]) => DIES.includes(f[2])), k = Math.min(Math.floor(e.lost), cand.length);
     if (k < 1) return [];
     e.lost -= k;
@@ -1062,7 +1065,8 @@ export class Troops {
       const g = old.lay[i], mv = old.moves?.[i], at = [g[0] + v.du, g[1] + v.dv];
       if (mv) { const t = clamp((now - mv[2]) / Math.abs(mv[3]), 0, 1); at[0] = mv[0] + (at[0] - mv[0]) * t; at[1] = mv[1] + (at[1] - mv[1]) * t; }
       const d = Math.hypot(f[0] + v.du - at[0], f[1] + v.dv - at[1]);
-      if (d > 0.3) e.moves[j] = [at[0], at[1], now + v.delay, d > 3 ? d / 3 : -d / 1.4];
+      // (un changement de palier de la vue de loin n'est qu'un changement d'échelle : personne ne court)
+      if (d > 0.3 && old.k === e.k) e.moves[j] = [at[0], at[1], now + v.delay, d > 3 ? d / 3 : -d / 1.4];
     });
   }
   // ombres portées des figurines (qualité Haute et Ultra) ; les ombres de contact restent dans tous les cas

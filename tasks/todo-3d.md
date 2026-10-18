@@ -593,7 +593,13 @@ General sur un régiment qui tire.
 
 ### 7e : vue de loin
 
-- [ ] **T42 : échelle et nombre de figurines selon la distance**
+- [x] **T42 : échelle et nombre de figurines selon la distance**
+  - Fait : `scaleAt` (paliers ×1 / 1,25 / 1,6 / 2, pour au moins 12 px de haut, marge contre les bascules) ; par
+    régiment, k² fois plus d'hommes par figurine à l'échelle k (`e.per`, `e.scale`) ; un changement de palier ne fait
+    courir personne. Triangles : ensemble (zoom 0,8) 4,27 M, mi-distance (zoom 2,5) 3,89 M.
+  - Écart à la spec : à la vue d'ensemble (zoom 0,6 à 0,8), un soldat fait 3,4 à 4,5 px de haut avec ×2 (8 px demandés,
+    il faudrait environ ×4) ; 11 px à mi-distance. Le maximum ×2 est celui que tu as choisi : à trancher avec toi
+    (constante `PALIERS` de `gestes.js`).
   - Critères :
     - Par régiment, `gestes.js` (`scaleAt`) donne l'échelle (×1 à environ ×2) et le nombre d'hommes par figurine selon
       la distance à la caméra : par paliers, avec une marge, en restant dans l'emprise.

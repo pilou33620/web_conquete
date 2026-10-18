@@ -277,7 +277,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 - [ ] Point de contrôle 7d
 
 ### 7e : vue de loin
-- [ ] T42 : échelle et nombre de figurines selon la distance
+- [x] T42 : échelle et nombre de figurines selon la distance
 - [ ] Point de contrôle 7e
 
 ### 7f : scène

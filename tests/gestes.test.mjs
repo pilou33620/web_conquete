@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves, pushOut, foeOf, scrum } from '../web/js/battle/gestes.js';
+import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves, pushOut, foeOf, scrum, scaleAt } from '../web/js/battle/gestes.js';
 
 const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
 
@@ -255,4 +255,14 @@ test('cavaliers en mêlée : coups de sabre, chacun à son rythme', () => {
   const a = pick(homme({ kind: 'cavalier', act: 'melee', phase: 0.4 })), b = pick(homme({ kind: 'cavalier', act: 'melee', phase: 2.2 }));
   assert.equal(a[0], 'selle-combo'); assert.notEqual(a[1], b[1]);
   assert.ok(meta.clips['selle-combo'], 'selle-combo précalculée');
+});
+
+test('de loin, les figurines grossissent par paliers (×1 à ×2), avec une marge', () => {
+  assert.equal(scaleAt(40, 1), 1, 'de près : taille vraie');
+  assert.equal(scaleAt(2, 1), 2, 'très loin : ×2 au plus');
+  let prev = 1;
+  for (let px = 40; px > 1; px *= 0.9) { const k = scaleAt(px, prev); assert.ok(k >= prev, `${px.toFixed(1)} px : ${k} après ${prev}`); prev = k; }
+  // juste sous le seuil, le palier d'avant tient encore
+  assert.equal(scaleAt(11, 1), 1);
+  assert.equal(scaleAt(11, 1.25), 1.25);
 });
