@@ -498,7 +498,11 @@ General sur un régiment qui tire.
 
 ### 7c : places et bâtiments
 
-- [ ] **T36 : hommes qui courent à leur place**
+- [x] **T36 : hommes qui courent à leur place**
+  - Fait : `matchSlots` (même sorte, ordre de lecture, sans les tués) ; chaque homme garde son numéro (`e.ids`), donc
+    sa variété ; `relay()` donne à chaque homme à pied sa course (`aMove` : départ, début à son délai, durée ; au trot
+    au-delà de 3 m, au pas sinon) ; le shader fait glisser sa place, joue « trot » ou « pas » tourné vers sa route.
+    Les tués ne sont plus dessinés debout (`e.dead`) : la limite vue en T34 est levée.
   - Critères :
     - À chaque nouvelle disposition (formation, largeur, pertes, déroute, ralliement), `gestes.js` (`matchSlots`)
       apparie les hommes en gardant l'ordre de lecture.

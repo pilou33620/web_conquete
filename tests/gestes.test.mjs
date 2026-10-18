@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing, chooseLine } from '../web/js/battle/gestes.js';
+import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing, chooseLine, matchSlots } from '../web/js/battle/gestes.js';
 
 const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
 
@@ -174,4 +174,26 @@ test('un boulet couche la file la plus proche de sa trajectoire', () => {
   // de biais : les plus proches d'abord
   const e = chooseLine(ligne, 2, [0, 10], [10, -10]);
   for (const i of e) assert.ok(Math.abs(ligne[i][0] - (5 - ligne[i][1] / 2)) < 1.5, `figurine ${i}`);
+});
+
+test('d’une disposition à l’autre : chaque homme une place, aucune prise deux fois, l’ordre gardé', () => {
+  // la même ligne : chacun garde sa place
+  assert.deepEqual(matchSlots(ligne, ligne), ligne.map((_, i) => i));
+  // la ligne s'élargit (un mètre de plus entre les files) : celui de gauche reste à gauche
+  const large = ligne.map(f => [f[0] * 1.5, ...f.slice(1)]);
+  const m = matchSlots(ligne, large);
+  assert.equal(new Set(m).size, m.length);
+  for (let j = 1; j < 20; j++) assert.ok(ligne[m[j]][0] > ligne[m[j - 1]][0], 'ordre gardé dans le rang');
+  // l'officier reste officier
+  assert.equal(ligne[m[ligne.length - 1]][2], 'officier');
+});
+
+test('après des pertes : les tués sont exclus, les nouveaux venus n’ont pas d’ancien', () => {
+  const moins = ligne.filter((f, i) => i !== 0 && i !== 1);
+  const m = matchSlots(ligne, moins, new Set([3, 25]));
+  assert.ok(!m.includes(3) && !m.includes(25), 'pas de tué');
+  assert.equal(new Set(m.filter(i => i >= 0)).size, m.filter(i => i >= 0).length);
+  // une colonne plus nombreuse que la ligne d'avant : les figurines de trop n'ont pas d'ancien (-1)
+  const plus = [...ligne, [30, 0, 'inf', 0, 0, 0]];
+  assert.equal(matchSlots(ligne, plus).filter(i => i < 0).length, 1);
 });

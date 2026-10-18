@@ -110,3 +110,18 @@ export function chooseLine(figs, k, a, b) {
   };
   return figs.map((f, i) => [dist(f), i]).sort((p, q) => p[0] - q[0]).slice(0, k).map(([, i]) => i);
 }
+
+// d'une disposition à la suivante (figurines [u, v, sorte, …, rang]) : pour chaque nouvelle figurine, l'ancienne qui
+// prend sa place, ou -1. Même sorte, dans l'ordre de lecture (rang, puis de gauche à droite) : celui de gauche reste à
+// gauche ; skip : anciennes à écarter (les tués)
+export function matchSlots(old, next, skip = new Set()) {
+  const order = figs => (a, b) => figs[a][5] - figs[b][5] || figs[a][0] - figs[b][0];
+  const A = {}, B = {}, m = next.map(() => -1);
+  old.forEach((f, i) => { if (!skip.has(i)) (A[f[2]] ??= []).push(i); });
+  next.forEach((f, j) => (B[f[2]] ??= []).push(j));
+  for (const [kind, js] of Object.entries(B)) {
+    const is = (A[kind] ?? []).sort(order(old));
+    js.sort(order(next)).forEach((j, n) => { if (n < is.length) m[j] = is[n]; });
+  }
+  return m;
+}

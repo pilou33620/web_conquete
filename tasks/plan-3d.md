@@ -265,7 +265,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 - [x] Point de contrôle 7b (plafond des corps sur l'iPad : en attente de toi)
 
 ### 7c : places et bâtiments
-- [ ] T36 : hommes qui courent à leur place
+- [x] T36 : hommes qui courent à leur place
 - [ ] T37 : conversion, marche et arrêt sans glissade
 - [ ] T38 : bâtiments (répulsion)
 - [ ] Point de contrôle 7c

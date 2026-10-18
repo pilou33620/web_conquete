@@ -18,7 +18,7 @@
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp } from './formes.js';
-import { activity, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing } from './gestes.js';
+import { activity, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing, matchSlots } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
 const { AIM, RUN, ROUT } = POSES;
@@ -39,6 +39,7 @@ const ROBES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];   // robes des cheva
 const FOOT = Object.keys(KINDS).filter(k => KINDS[k] === null);   // les hommes à pied, au squelette
 const DIES = [...FOOT, 'cav'];   // qui peut tomber (un cavalier tué : son cheval couché, lui avec)
 const BALL = 6;                  // hommes couchés au plus par un boulet
+const STILL = [0, 0, 0, 0];      // aucune course à sa place (aMove)
 // graine d'un régiment (variété de ses hommes) ; habit d'une figurine (c : la couleur du camp, modifiée)
 const seedOf = id => [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7);
 function coatOf(kind, c) {
@@ -48,8 +49,8 @@ function coatOf(kind, c) {
   return c;
 }
 // attributs de chaque figurine (nombres par figurine) : place, pose, habit ; geste (aGest : geste et son début, geste
-// d'avant et son début ; aMix : instant du fondu, vitesse, vitesse d'avant)
-export const INSTANCE_ATTRS = { aSlot: 4, aAnim: 4, aCoat: 3, aGest: 4, aMix: 4 };
+// d'avant et son début ; aMix : instant du fondu, vitesse, vitesse d'avant) ; course à sa place (aMove)
+export const INSTANCE_ATTRS = { aSlot: 4, aAnim: 4, aCoat: 3, aGest: 4, aMix: 4, aMove: 4 };
 // os du squelette des animations Quaternius (CC0, dev/cuire.mjs) dans l'ordre de leur texture, puis ceux des gestes du
 // fusil (RIG_EXTRA) : le fusil, le bras et l'avant-bras gauches qui le portent
 export const RIG = { hips: 'DEF-hips', chest: 'DEF-spine.003', head: 'DEF-head', upperL: 'DEF-upper_arm.L', foreL: 'DEF-forearm.L',
@@ -557,6 +558,8 @@ vec2 pitch(vec2 yz, vec2 o, float a) { vec2 q = yz - o; return o + vec2(q.x * co
 #if defined(RIG)
 attribute vec4 aGest;   // geste et son début, geste d'avant et son début (horloge des effets)
 attribute vec4 aMix;    // instant du fondu, vitesse, vitesse d'avant
+attribute vec4 aMove;   // course à sa place : départ (u, v), début, durée (négative : au pas ; 0 : aucune)
+uniform float uTrot, uPas;   // gestes de la course (trot, pas)
 uniform sampler2D uAnim;
 uniform vec4 uClips[NCLIP];   // chaque geste : première ligne de la texture, images, en boucle
 uniform float uFps;
@@ -578,7 +581,7 @@ const VERT_POSE = `
   vec4 u1 = texelFetch(uUnits, ivec2(ui, 1), 0);   // allure (0 arrêt, 1 marche, 2 course), feu, début de la salve, durée
   vec4 u2 = texelFetch(uUnits, ivec2(ui, 2), 0);   // sens de la salve, front (m), tirailleurs
   vec4 u3 = texelFetch(uUnits, ivec2(ui, 3), 0), u4 = texelFetch(uUnits, ivec2(ui, 4), 0);   // dernier coup de chaque pièce
-  float P = aAnim.x, ph = aAnim.y, rank = aAnim.w, slotV = aSlot.y;
+  float P = aAnim.x, ph = aAnim.y, rank = aAnim.w, slotV = aSlot.y, slotX = aSlot.x, face = aSlot.z;
   // pose : celle de la disposition (déroute, mêlée), sinon selon l'allure et la salve qui roule le long du front
   if (P == 0.0) {
     if (u1.x > 1.5) P = 2.0;
@@ -622,6 +625,21 @@ const VERT_POSE = `
     bw = smoothstep(0.0, 1.0, bw);
     r0 = mix(p0, r0, bw); r1 = mix(p1, r1, bw); r2 = mix(p2, r2, bw);
   }
+  // course à sa place (nouvelle disposition) : sa place glisse du départ à l'arrivée ; en chemin il court (ou marche),
+  // tourné vers sa route, puis reprend son geste face au front
+  if (aMove.w != 0.0) {
+    float dur = abs(aMove.w), mt = clamp((uFxT - aMove.z) / dur, 0.0, 1.0);
+    vec2 d = aSlot.xy - aMove.xy;
+    slotX = mix(aMove.x, aSlot.x, mt); slotV = mix(aMove.y, aSlot.y, mt);
+    float run = smoothstep(0.0, 0.1, uFxT - aMove.z) * (1.0 - smoothstep(dur - 0.15, dur + 0.15, uFxT - aMove.z));
+    if (run > 0.0) {
+      vec4 q0, q1, q2;
+      bone(aMove.w > 0.0 ? uTrot : uPas, aMove.z, 1.0, bi, q0, q1, q2);
+      r0 = mix(r0, q0, run); r1 = mix(r1, q1, run); r2 = mix(r2, q2, run);
+      // (dans le repère du régiment, u vers la gauche, v devant : la route fait l'angle atan(du, dv) avec le front)
+      face += (mod(atan(d.x, d.y) - face + 3.14159265, 6.28318531) - 3.14159265) * run;
+    }
+  }
 #else
   if (P == 3.0) { swing = sin(uTime * 8.2 + ph) * 0.38; bob = abs(sin(uTime * 8.2 + ph)) * 0.03; }
   else if (P == 2.0 || P == 7.0) { swing = sin(uTime * 13.0 + ph) * 0.65; bob = abs(sin(uTime * 13.0 + ph)) * 0.06; lean = 0.18; arm = P == 2.0 ? 1.25 : 0.35; }
@@ -629,8 +647,8 @@ const VERT_POSE = `
   boneA = aBone == 1.0 ? swing : aBone == 2.0 ? -swing : aBone == 3.0 ? arm : 0.0;
   if (aBone == 3.0) pivot = vec2(1.4, 0.0);
 #endif
-  float fa = u0.z + aSlot.z, sa = sin(fa), ca = cos(fa);
-  vec2 fw = vec2(cos(u0.z), sin(u0.z)), base = u0.xy + fw * slotV + vec2(-fw.y, fw.x) * aSlot.x;
+  float fa = u0.z + face, sa = sin(fa), ca = cos(fa);
+  vec2 fw = vec2(cos(u0.z), sin(u0.z)), base = u0.xy + fw * slotV + vec2(-fw.y, fw.x) * slotX;
   vFade = u0.w;
 `;
 // tourne un vecteur de la figurine : membre (sa matrice au squelette, sinon autour de son pivot), penché en avant, puis
@@ -683,7 +701,7 @@ export class Troops {
     this.uni = {
       uUnits: { value: this.units }, uHeight: { value: this.heights }, uHgt: { value: new THREE.Vector3(t.fineStep, t.fineW, t.fineH) },
       uTime: { value: 0 }, uFxT: { value: 0 }, uRobes: { value: ROBES.map(c => new THREE.Color(c)) },
-      uAnim: { value: this.anim }, uFps: { value: meta.fps }, uClips: { value: Object.values(meta.clips).map(c => new THREE.Vector4(c.row, c.n, c.loop, 0)) },
+      uAnim: { value: this.anim }, uFps: { value: meta.fps }, uTrot: { value: this.clipId.get('trot') ?? 0 }, uPas: { value: this.clipId.get('pas') ?? 0 }, uClips: { value: Object.values(meta.clips).map(c => new THREE.Vector4(c.row, c.n, c.loop, 0)) },
     };
     this.kinds = new Map();     // sorte → {mesh, cap, n, slot, anim, coat}
     this.pattern = flagPattern(this.year);
@@ -820,7 +838,12 @@ export class Troops {
       if (i === undefined) { i = this.free.pop() ?? this.index.size; if (i >= DEAD) continue; this.index.set(id, i); dirty = true; }
       const key = `${un.form}|${un.state}|${Math.round((un.men || 0) / 8)}|${un.w | 0}|${un.d | 0}|${un.type}|${per}|${colors[un.side]}`;
       let e = this.lays.get(id);
-      if (!e || e.key !== key) { this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: e?.lod ?? 0, act: e?.act, actT: e?.actT, volT: e?.volT, vol: e?.vol, shotT: e?.shotT, shots: e?.shots, moving: e?.moving, fire: e?.fire, prev: e?.prev, switchT: e?.switchT }); dirty = true; } else e.un = un;
+      if (!e || e.key !== key) {
+        const old = e;
+        this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: old?.lod ?? 0, act: old?.act, actT: old?.actT, volT: old?.volT, vol: old?.vol, shotT: old?.shotT, shots: old?.shots, moving: old?.moving, fire: old?.fire, prev: old?.prev, switchT: old?.switchT });
+        if (old) this.relay(old, e);
+        dirty = true;
+      } else e.un = un;
       // version : un régiment qui entre dans le champ est dessiné tout de suite ; les autres changements attendent la
       // prochaine reconstruction (au plus cinq par seconde). La sphère, élargie avec la distance, le fait entrer avant
       // qu'il n'atteigne le bord de l'image.
@@ -875,7 +898,8 @@ export class Troops {
     const FACE = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
     // face : sens imposé (servants), sinon celui de la face du carré ou du demi-tour
     // v : variété de l'homme (gestes.js) pour les figurines au squelette : place, sens, taille, nuance de l'habit
-    const put = (kind, f, ui, carre, face = null, e = null, v = null) => {
+    // mv : sa course à sa place (aMove), ou rien
+    const put = (kind, f, ui, carre, face = null, e = null, v = null, mv = null) => {
       const k = this.kinds.get(kind);
       if (!k) return;
       if (k.n >= k.cap) this.grow(k, k.cap * 2);
@@ -884,6 +908,7 @@ export class Troops {
       S[o] = f[0] + (w ? v.du : 0); S[o + 1] = f[1] + (w ? v.dv : 0); S[o + 2] = (face ?? (carre && rank >= 0 ? FACE[f[3]] : f[3] === 2 ? Math.PI : 0)) + (w ? v.da : 0); S[o + 3] = ui;
       A[o] = f[4]; A[o + 1] = f[6]; A[o + 2] = scale * (w ? v.size : 1); A[o + 3] = rank;
       if (w) tint.copy(coat).offsetHSL(v.hue, v.sat, v.light);
+      if (k.rig) k.buf.aMove.set(mv ?? STILL, o);
       const c = w ? tint : coat;
       C[n * 3] = c.r; C[n * 3 + 1] = c.g; C[n * 3 + 2] = c.b;
     };
@@ -894,12 +919,13 @@ export class Troops {
       const ui = this.index.get(id), carre = un.form === 'carre', far = lod === 1 ? '~' : '', seed = seedOf(id);
       off.set(colors[un.side] || '#888');
       for (const [i, f] of lay.entries()) {
-        const v = variety(seed, i);
+        if (e.dead?.has(i)) continue;   // tombé (kill) : il est parmi les corps
+        const v = variety(seed, e.ids?.[i] ?? i), mv = e.moves?.[i];
         coatOf(f[2], coat.copy(off));
         // l'écouvillon et le pointeur se tournent vers la pièce
-        if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant' + far, [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2, e, v);
-        else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre, null, e, v);
-        if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre, null, e, v); }
+        if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant' + far, [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2, e, v, mv);
+        else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre, null, e, v, mv);
+        if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre, null, e, v, mv); }
         else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre, null, e); }
       }
       this.gestures(e, false);
@@ -912,7 +938,7 @@ export class Troops {
       if (k.n >= k.cap) this.grow(k, k.cap * 2);
       const n = k.n++, o = n * 4, c = this.clipId.get(b.clip) ?? 0;
       k.buf.aSlot.set([b.y, b.x, b.a, DEAD], o); k.buf.aAnim.set([b.horse ? b.pose : 0, 0, scale * b.size, b.horse ? -9 : 0], o); k.buf.aCoat.set(b.coat, n * 3);
-      k.buf.aGest.set([c, b.t, c, b.t], o); k.buf.aMix.set([-99, 1, 1, 0], o);
+      k.buf.aGest.set([c, b.t, c, b.t], o); k.buf.aMix.set([-99, 1, 1, 0], o); k.buf.aMove.set(STILL, o);
     }
     for (const k of this.kinds.values()) {
       // une sorte vide n'est ni dessinée ni envoyée (une plage vide renverrait tout le tableau à la carte graphique)
@@ -956,7 +982,8 @@ export class Troops {
     const ball = line ? chooseLine(figs, Math.min(k, BALL), ...line) : [], rest = cand.map((_, j) => j).filter(j => !ball.includes(j));
     const shot = chooseDead(rest.map(j => figs[j]), k - ball.length, seed + Math.round((this.fxT ?? 0) * 10)).map(r => rest[r]);
     for (const j of [...ball, ...shot]) {
-      const [f, i] = cand[j], v = variety(seed, i), uu = f[0] + v.du, vv = f[1] + v.dv, hit = ball.includes(j);
+      const [f, i] = cand[j], v = variety(seed, e.ids?.[i] ?? i), uu = f[0] + v.du, vv = f[1] + v.dv, hit = ball.includes(j);
+      (e.dead ??= new Set()).add(i);
       const x = un.x + c * vv - s * uu, y = un.y + s * vv + c * uu;
       if (!bare(x, y)) continue;
       coatOf(f[2], col.set(color)).offsetHSL(v.hue, v.sat, v.light);
@@ -967,6 +994,25 @@ export class Troops {
     }
     this.deadNew = true;
     return out;
+  }
+  // nouvelle disposition e d'un régiment (old : la précédente) : chaque homme garde son numéro (gestes.js, matchSlots :
+  // même sorte, dans l'ordre de lecture, sans les tués), donc sa variété ; les hommes à pied courent de là où ils sont
+  // jusqu'à leur nouvelle place (au trot au-delà de 3 m, au pas sinon), chacun à son délai
+  relay(old, e) {
+    const now = this.fxT ?? 0, seed = seedOf(String(e.un.id)), m = matchSlots(old.lay, e.lay, old.dead);
+    let next = old.lay.reduce((a, _, i) => Math.max(a, old.ids?.[i] ?? i), -1) + 1;
+    e.ids = []; e.moves = [];
+    m.forEach((i, j) => {
+      if (i < 0) { e.ids[j] = next++; return; }
+      const id = old.ids?.[i] ?? i, v = variety(seed, id), f = e.lay[j];
+      e.ids[j] = id;
+      if (!FOOT.includes(f[2])) return;
+      // là où il est : sur sa place d'avant, ou en chemin vers elle
+      const g = old.lay[i], mv = old.moves?.[i], at = [g[0] + v.du, g[1] + v.dv];
+      if (mv) { const t = clamp((now - mv[2]) / Math.abs(mv[3]), 0, 1); at[0] = mv[0] + (at[0] - mv[0]) * t; at[1] = mv[1] + (at[1] - mv[1]) * t; }
+      const d = Math.hypot(f[0] + v.du - at[0], f[1] + v.dv - at[1]);
+      if (d > 0.3) e.moves[j] = [at[0], at[1], now + v.delay, d > 3 ? d / 3 : -d / 1.4];
+    });
   }
   // ombres portées des figurines (qualité Haute et Ultra) ; les ombres de contact restent dans tous les cas
   setShadows(on) {
