@@ -927,5 +927,15 @@ class Sauvegarde(unittest.TestCase):
         self.assertEqual(d1['ai_state'], d2['ai_state'])
 
 
+class BancEquilibre(unittest.TestCase):
+    """outils/simuler.py : des parties jouées par les IA seules, pour mesurer l'équilibre (SPEC-TECH.md)."""
+
+    def test_meme_graine_meme_partie(self):
+        from outils.simuler import simulate
+        a, b = simulate(5, '1790', 2), simulate(5, '1790', 2)
+        self.assertIsNone(a['err'])
+        self.assertEqual(a, b, 'même graine : mêmes mesures')
+
+
 if __name__ == '__main__':
     unittest.main()

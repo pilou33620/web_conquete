@@ -9,10 +9,10 @@ du banc d'essai et capture `node web/js/battle/dev/capture.mjs <scénario> <fich
 - [ ] **T51 : banc d'équilibre et mesure de référence**
   - Critères : `outils/simuler.py --parties N --de 1700 --a 1800 --graine G` joue des campagnes aux IA seules, sans
     joueur. Il rend les erreurs, le nombre et la durée moyenne des guerres, les places de chaque camp à la fin,
-    l'écart entre le premier et le dernier, et les technologies trouvées par camp. La référence (20 parties, 1700 à
-    1800, et 20 parties, 1790 à 1870) est notée dans `tasks/equilibre-reference.md`.
-  - Vérif : deux lancers avec la même graine donnent le même résultat ; un petit banc (`test_campagne.py`) joue une
-    partie de deux ans par la même fonction.
+    l'écart entre le premier et le dernier, et les technologies trouvées par camp. La référence (6 parties depuis 1700 et
+    6 depuis 1790, 30 ans chacune : environ 20 s de calcul par an et par partie sur le Pi) est notée dans `tasks/equilibre-reference.md`.
+  - Vérif : deux lancers avec la même graine donnent le même résultat ; un petit banc (`test_campagne.py`) joue deux
+    fois deux mois par la même fonction et compare.
   - Fichiers : `outils/simuler.py`, `tests/test_campagne.py`, `tasks/equilibre-reference.md`
   - Taille : M
 
