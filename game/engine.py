@@ -421,7 +421,10 @@ class Game:
             m[k] = m.get(k, 0) + v
         for e in f.get('tmods', []):
             if e['until'] > self.t:
-                m[e['k']] = m.get(e['k'], 0) + e['v']
+                v = e['v']
+                if v < 0 and e.get('ev') in EV.ATTENUE:   # (blocus, phylloxéra… atténués par les technologies du camp)
+                    v *= max(0.0, 1 + m.get(EV.ATTENUE[e['ev']], 0))
+                m[e['k']] = m.get(e['k'], 0) + v
         if code != self.player:
             d = R.DIFFICULTY[self.difficulty]
             m['ai_income'] = d['ai_income'] - 1
@@ -544,6 +547,8 @@ class Game:
             if f['res']['livres'] > 0:
                 f['res']['livres'] *= 1 + self.mod(code, 'interest') / 12   # caisse d'épargne : tant l'an, au mois
             mine = self.owned_nodes(code)
+            if d.month == 1 and self.mod(code, 'strikes'):
+                self.strikes(code, mine)
             if d.month in (9, 10):
                 vin = sum(1 for n in mine if 'vin' in self.geo.nodes[n['id']]['spec'])
                 vin += sum(R.VIN_KINDS.get((self.geo.nodes[n['id']].get('star') or [''])[0], 0) for n in mine)
@@ -562,7 +567,7 @@ class Game:
                 gn = self.geo.nodes[n['id']]
                 if gn['type'] == 'capitale' or n['garrison'] or n['id'] in held or n['siege']:
                     continue
-                if n['stab'] < 0.45 and self.rng.random() < (0.45 - n['stab']) * 0.5:
+                if n['stab'] < 0.45 and self.rng.random() < (0.45 - n['stab']) * 0.5 * (1 + self.mod(code, 'revolt')):
                     home = gn['dept']
                     back = home != code and home in self.factions and self.factions[home]['alive']
                     n['owner'] = home if back else R.NEUTRAL
@@ -624,6 +629,8 @@ class Game:
             delta = (R.WEARY_PER_WAR * wars + f.get('_lost_m', 0.0) * R.WEARY_PER_LOSS) if wars else -R.WEARY_PEACE
             # surextension : tenir des pays qui ne vous aiment pas épuise
             delta += R.WEARY_PER_UNRULY * sum(1 for n in self.nodes if n['owner'] == code and n.get('assim', 1.0) < 0.5)
+            if delta > 0:
+                delta *= 1 + self.mod(code, 'weariness')   # suffrage universel
             f['weary'] = max(0.0, min(100.0, before + delta))
             f['_lost_m'] = 0.0
             if code == self.player and any(before < s_ <= f['weary'] for s_ in (60, 80)):
@@ -676,6 +683,17 @@ class Game:
             st = c[1][nid] = (gn, {k: base.get(k, 0) for k in PROD_KEYS}, nid in self.geo.ports and gn['type'] != 'fort',
                               ter in (T_LANDE, T_MARAIS), TERRAIN[ter][0] in ('Montagne', 'Collines', 'Haute montagne'))
         return st
+
+    def strikes(self, code, mine):
+        """Syndicats : en janvier, chaque ville à l'ordre bas fait grève et perd un tour d'industrie."""
+        for n in mine:
+            gn = self.geo.nodes[n['id']]
+            if gn['type'] in ('ville', 'capitale') and n['stab'] < R.STRIKE_STAB:
+                n.setdefault('tm', []).append(dict(k='industrie', v=-1.0, until=TT.deadline(self, 1, code)))
+                self._dirty_income = True
+                if code == self.player:
+                    self.log('revolte', f"Grève à {gn['name']} (ordre public {int(n['stab'] * 100)} %) : les ateliers "
+                                        f"s'arrêtent pour un tour.", gn['x'], gn['y'], important=True)
 
     def node_output(self, n, code):
         gn, b0, quai, lande, mont = self.node_static(n['id'])

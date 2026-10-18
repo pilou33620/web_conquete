@@ -1029,5 +1029,94 @@ class EffetsEconomiques(unittest.TestCase):
         self.assertLess(g.water_speed(e, bas, estimate=True, code='24'), g.water_speed(e, haut, estimate=True, code='24'))
 
 
+class EffetsSurLaSociete(unittest.TestCase):
+    """SPEC-TECH.md : vaccine, betterave, bouillie (et le mildiou), suffrage, mutuelles, syndicats."""
+
+    def pop(self, g, code):
+        return sum(n.get('pop', 0) for n in g.owned_nodes(code))
+
+    def test_la_vaccine_divise_par_deux_le_cholera(self):
+        a, b = partie(), avec(partie(), '33', 'vaccine')
+        p0 = self.pop(a, '33')
+        for g in (a, b):
+            E.fire(g, '33', E.HIST_BY_ID['cholera'], 'hist')
+        self.assertAlmostEqual((p0 - self.pop(b, '33')) / (p0 - self.pop(a, '33')), 0.5, places=6)
+
+    def test_la_fievre_d_une_ville_aussi(self):
+        a, b = partie(), avec(partie(), '33', 'vaccine')
+        ev = next(e for e in CT.LOCAL if e['id'] == 'epidemie')
+        nid = next(n['id'] for n in a.nodes if n['owner'] == '33' and a.geo.nodes[n['id']]['type'] == 'capitale')
+        p0 = a.nodes[nid]['pop']
+        for g in (a, b):
+            CT.fire(g, '33', g.nodes[nid], ev)
+        self.assertAlmostEqual((p0 - b.nodes[nid]['pop']) / (p0 - a.nodes[nid]['pop']), 0.5, places=6)
+
+    def test_la_betterave_trouvee_apres_le_blocus_le_leve(self):
+        g = partie()
+        sans = g.mod('33', 'port')
+        E.fire(g, '33', E.HIST_BY_ID['blocus'], 'hist')
+        g.recompute_mods('33')
+        self.assertAlmostEqual(g.mod('33', 'port'), sans - 0.4)
+        avec(g, '33', 'betterave')
+        self.assertAlmostEqual(g.mod('33', 'port'), sans, msg='le blocus ne coûte plus rien aux ports')
+
+    def test_un_ancien_effet_sans_etiquette_reste_entier(self):
+        g = partie()
+        sans = g.mod('33', 'port')
+        g.factions['33'].setdefault('tmods', []).append(dict(k='port', v=-0.4, until=g.t + 999))
+        avec(g, '33', 'betterave')
+        self.assertAlmostEqual(g.mod('33', 'port'), sans - 0.4)
+
+    def test_le_mildiou_frappe_les_vignes_et_la_bouillie_l_attenue(self):
+        g = partie()
+        sans = g.mod('33', 'vin')
+        E.fire(g, '33', E.HIST_BY_ID['mildiou'], 'hist')
+        g.recompute_mods('33')
+        self.assertLess(g.mod('33', 'vin'), sans)
+        coup = sans - g.mod('33', 'vin')
+        avec(g, '33', 'bouillie')
+        self.assertAlmostEqual(sans + 0.15 - g.mod('33', 'vin'), coup / 2)
+
+    def test_le_suffrage_ralentit_la_lassitude(self):
+        import datetime
+        res = []
+        for techs in ((), ('suffrage',)):
+            g = avec(partie(seed=2), '33', *techs)
+            D.declare_war(g, '33', '24')
+            avant = g.factions['33'].get('weary', 0.0)
+            g.monthly(datetime.date(1790, 4, 1))
+            res.append(g.factions['33']['weary'] - avant)
+        self.assertGreater(res[0], 0)
+        self.assertAlmostEqual(res[1], res[0] * 0.75)
+
+    def test_les_mutuelles_calment_les_revoltes(self):
+        import datetime
+        revoltes = []
+        for techs in ((), ('mutuelles',)):
+            g = avec(partie(seed=6), '24', *techs)
+            places = [n for n in g.nodes if n['owner'] == '24' and g.geo.nodes[n['id']]['type'] != 'capitale']
+            for n in places:
+                n['stab'], n['garrison'] = 0.05, []
+            for a_ in [a_ for a_ in g.armies.values() if a_['owner'] == '24']:
+                a_['at_node'] = None
+            g.monthly(datetime.date(1790, 4, 1))
+            revoltes.append({n['id'] for n in places if n['owner'] != '24'})
+        self.assertTrue(revoltes[1] <= revoltes[0])
+        self.assertLess(len(revoltes[1]), len(revoltes[0]))
+
+    def test_greve_dans_une_ville_a_l_ordre_bas(self):
+        import datetime
+        g = avec(partie(), '33', 'syndicats')
+        villes = [n for n in g.nodes if n['owner'] == '33' and g.geo.nodes[n['id']]['type'] in ('ville', 'capitale')]
+        basse, haute = villes[0], villes[1] if len(villes) > 1 else None
+        basse['stab'] = 0.3
+        if haute:
+            haute['stab'] = 0.9
+        g.monthly(datetime.date(1791, 1, 1))
+        self.assertTrue(any(t['k'] == 'industrie' and t['v'] <= -1 for t in basse.get('tm', [])))
+        if haute:
+            self.assertFalse(any(t['k'] == 'industrie' for t in haute.get('tm', [])))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -174,6 +174,11 @@ HIST = [
          base=dict(tmod=dict(vin=-0.5), days=12 * 365),
          choices=[dict(label='Arracher et replanter en plants américains', fx=dict(res=dict(livres=-500), tmod=dict(vin=0.3), days=12 * 365), ai=2),
                   dict(label='Sulfure de carbone et prières', fx=dict(stab=-0.05), ai=1)]),
+    dict(id='mildiou', date=(1882, 6, 1), who=ALL, title='Le mildiou',
+         text="Après le phylloxéra, un champignon venu d'Amérique dessèche les feuilles des vignes {de_chef}.",
+         base=dict(tmod=dict(vin=-0.25), days=6 * 365),
+         choices=[dict(label='Sulfater les vignes au cuivre', fx=dict(res=dict(livres=-300), tmod=dict(vin=0.15), days=6 * 365), ai=2),
+                  dict(label='Attendre une meilleure année', fx=dict(stab=-0.03), ai=1)]),
     dict(id='expo1889', date=(1889, 5, 6), who=ALL, title="L'Exposition universelle de 1889",
          text="La tour de M. Eiffel domine le Champ-de-Mars. Chaque région y montre ce qu'elle a de meilleur.",
          choices=[dict(label='Exposer vos produits à Paris', fx=dict(res=dict(livres=-300), glory=4, tmod=dict(trade=0.15), days=5 * 365), ai=2),
@@ -307,7 +312,7 @@ def apply(g, code, fx, town=None):
     if fx.get('tmod'):
         until = g.t + fx.get('days', 365)
         for k, v in fx['tmod'].items():
-            f.setdefault('tmods', []).append(dict(k=k, v=v, until=until))
+            f.setdefault('tmods', []).append(dict(k=k, v=v, until=until, **({'ev': fx['ev']} if fx.get('ev') else {})))
     for k, v in (fx.get('pmod') or {}).items():
         em = f.setdefault('emods', {})
         em[k] = em.get(k, 0) + v
@@ -367,6 +372,25 @@ def tick(g, d):
             fire(g, code, g.rng.choices(pool, [e['w'] for e in pool])[0], 'rand')
 
 
+# événements qu'une technologie atténue (SPEC-TECH.md) : la clé d'effet du camp (−0,5 : moitié moins)
+ATTENUE = dict(cholera='epidemics', epidemie='epidemics', blocus='blockade', phylloxera='vine_blight', mildiou='vine_blight')
+
+
+def soften(g, code, ev, fx):
+    """L'effet d'un événement pour ce camp : ses pertes de population atténuées par ses technologies, ses effets
+    temporaires étiquetés (Game.recompute_mods les atténue, même pour une technologie trouvée après)."""
+    if ev not in ATTENUE:
+        return fx
+    k = max(0.0, 1 + g.mod(code, ATTENUE[ev]))
+    fx = dict(fx, ev=ev)
+    for p in ('pop', 'town_pop'):
+        if fx.get(p, 0) < 0:
+            fx[p] *= k
+    if fx.get('ville', {}).get('pop', 0) < 0:
+        fx['ville'] = dict(fx['ville'], pop=fx['ville']['pop'] * k)
+    return fx
+
+
 def fire(g, code, ev, kind):
     town = None
     if kind == 'rand':
@@ -377,10 +401,11 @@ def fire(g, code, ev, kind):
     title = _fill(g, code, ev['title'], town)
     text = _fill(g, code, ev['text'], town)
     gn = g.geo.nodes[town if town is not None else g.capital_of(code)]
-    if ev.get('base'):
-        apply(g, code, ev['base'], town)
-    choices = ev.get('choices') or []
-    base_txt = ', '.join(describe(g, code, ev['base'], town)) if ev.get('base') else ''
+    base = soften(g, code, ev['id'], ev['base']) if ev.get('base') else None
+    if base:
+        apply(g, code, base, town)
+    choices = [dict(c, fx=soften(g, code, ev['id'], c['fx'])) for c in ev.get('choices') or []]
+    base_txt = ', '.join(describe(g, code, base, town)) if base else ''
     if not choices:
         if code == g.player:
             g.log('evenement', f"{title} : {text} ({base_txt}).", gn['x'], gn['y'], who=code, important=True)

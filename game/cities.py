@@ -702,19 +702,21 @@ def weights(g, n):
     return out
 
 
-def fire(g, code, n):
-    ev_w = weights(g, n)
-    if not ev_w:
-        return False
-    ev = g.rng.choices([e for e, _ in ev_w], [w for _, w in ev_w])[0]
+def fire(g, code, n, ev=None):
+    if ev is None:
+        ev_w = weights(g, n)
+        if not ev_w:
+            return False
+        ev = g.rng.choices([e for e, _ in ev_w], [w for _, w in ev_w])[0]
     nid = n['id']
     gn = g.geo.nodes[nid]
     n['evt'] = g.t
     k = SIZE_COST[gn['type']]
     title, text = _fill(g, nid, ev['title']), _fill(g, nid, ev['text'])
-    if ev.get('base'):
-        apply_local(g, code, dict(ev['base'], nid=nid))
-    base = ', '.join(describe_local(g, dict(ev['base'], nid=nid))) if ev.get('base') else ''
+    b0 = EV.soften(g, code, ev['id'], dict(ev['base'], nid=nid)) if ev.get('base') else None
+    if b0:
+        apply_local(g, code, b0)
+    base = ', '.join(describe_local(g, b0)) if b0 else ''
     choices = []
     for c in ev['choices']:
         fx = dict(ville=dict(c.get('v', {}), nid=nid))
@@ -722,7 +724,7 @@ def fire(g, code, n):
             fx['ville']['troops'] = True
         if c.get('res'):
             fx['res'] = {r: round(q * k) for r, q in c['res'].items()}
-        choices.append((c, fx))
+        choices.append((c, EV.soften(g, code, ev['id'], fx)))
     stats(g).setdefault('quoi', {}).setdefault(ev['id'], 0)
     stats(g)['quoi'][ev['id']] += 1
     if code != g.player:

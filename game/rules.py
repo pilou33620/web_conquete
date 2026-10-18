@@ -422,6 +422,7 @@ ASSIM_YEARS = 25
 WEARY_PER_WAR = 3.0          # par mois et par guerre
 WEARY_PER_LOSS = 1 / 150     # par homme perdu
 WEARY_PEACE = 5.0            # baisse mensuelle en paix
+STRIKE_STAB = 0.5            # syndicats : sous cet ordre public, une ville fait grève en janvier (un tour sans industrie)
 
 # croissance séculaire de l'économie, par rapport à 1790 : la production d'une place n'en suit que la racine
 POP_ERA = [(1700, 0.72), (1790, 1.0), (1850, 1.3), (1900, 1.6)]
