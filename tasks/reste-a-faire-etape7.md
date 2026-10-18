@@ -111,8 +111,8 @@ node web/js/battle/dev/cuire.mjs ~/.cache/conquete-dev/ual/"Animation Library[St
   La qualité baisse d'elle-même si la bataille saccade ; les corps au sol suivent désormais cette baisse.
 - **Plafond des corps au sol** par qualité (800 / 1 500 / 2 500 / 4 000), à régler sur l'iPad.
 - **Vue d'ensemble :** avec ×2, un soldat faisait 3,4 à 4,5 px de haut au zoom de la vue d'ensemble (la spec en
-  demande 8). Essai ×3 en cours (constante `PALIERS` de `gestes.js`) : environ 6 à 7 px ; à valider sur la galerie
-  (« Essai ×3 ») et sur l'iPad, ou revenir à ×2 en retirant les paliers 2,5 et 3.
+  demande 8). ×3 essayé et retenu le 18/10/2026 (constante `PALIERS` de `gestes.js`) : environ 6 à 7 px. Reste à
+  le voir sur l'iPad ; pour revenir à ×2, retirer les paliers 2,5 et 3.
 - **Caméra :** celle d'Ultimate General est plus couchée à mi-distance (hors spec).
 - **Hauteur du blé en Haute :** depuis l'herbe (T46), les couches sont resserrées près du sol (8, 33, 73, 130 cm) ;
   le blé (1 m) ne montre plus que sa couche de 73 cm. Choix : 5 couches en Haute (un quart de coût en plus) ou un

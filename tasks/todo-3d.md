@@ -602,7 +602,7 @@ General sur un régiment qui tire.
     il faudrait environ ×4) ; 11 px à mi-distance. Le maximum ×2 est celui que tu as choisi : à trancher avec toi
     (constante `PALIERS` de `gestes.js`).
   - Essai ×3 à ta demande (18/10/2026, paliers 2,5 et 3 en plus) : environ 6 à 7 px en vue d'ensemble, rangs plus
-    aérés ; triangles 4,07 M (ensemble) et 3,74 M (mi-distance).
+    aérés ; triangles 4,07 M (ensemble) et 3,74 M (mi-distance). Retenu par toi le même jour.
   - Critères :
     - Par régiment, `gestes.js` (`scaleAt`) donne l'échelle (×1 à environ ×2) et le nombre d'hommes par figurine selon
       la distance à la caméra : par paliers, avec une marge, en restant dans l'emprise.

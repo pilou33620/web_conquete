@@ -532,7 +532,7 @@ reste : `tasks/reste-a-faire-etape7.md`. Galerie : `captures-3d/animations/` (ho
 - **Rien de cassé (18) :** aucune erreur dans la console sur les cinq scénarios après dix minutes de bataille, ni
   dans une vraie bataille du mode Bataille (serveur Python), menée par les officiers.
 - **Critère 13, vue d'ensemble :** avec ×2, un soldat y faisait 3,4 à 4,5 px de haut, et non 8. À ta demande, essai à
-  ×3 (18/10/2026) : environ 6 à 7 px, des rangs plus aérés mais lisibles (galerie, « Essai ×3 ») ; à valider.
+  ×3 (18/10/2026) : environ 6 à 7 px, des rangs plus aérés mais lisibles (galerie, « Essai ×3 ») ; ×3 retenu.
 - **Pas mesuré :** critère 17 (images par seconde sur l'iPad 2019, en Haute).
 - **À toi :** valider l'allure en jouant (critère 1 des critères de réussite).
 
@@ -544,6 +544,6 @@ reste : `tasks/reste-a-faire-etape7.md`. Galerie : `captures-3d/animations/` (ho
 - **Remparts :** les défenseurs se tiennent sur les remparts (comme dans Ultimate General). La répulsion ne vise que les
   maisons, l'église et les moulins, pas les murs d'enceinte. Les hommes passent par les brèches et les portes, comme le
   moteur le décide.
-- **Agrandissement de loin :** ×2 au plus d'abord, ×3 à l'essai depuis le 18/10/2026 (critère 13).
+- **Agrandissement de loin :** ×2 au plus d'abord, puis ×3, retenu par toi le 18/10/2026 (critère 13).
 - **Coût de l'herbe en relief sur l'iPad :** comme les blés, réservée aux qualités qui le supportent (`epis` dans
   `qualite.js`), mesurée au point final.
