@@ -248,3 +248,10 @@ test('une pièce par génération d’artillerie, de près et de loin (SPEC-TECH
   const b75 = box(model('canon', 1790, 1, false, '75')), bg = box(model('canon', 1790, 1, false, 'gribeauval'));
   assert.ok(b75.max.y > bg.max.y, 'le bouclier du 75 dépasse le tube');
 });
+
+test('le canon de 75 : son tube recule seul sur le frein (os 1), l’affût et le bouclier restent (os 2)', () => {
+  const bones = v => [...new Set(model('canon', 1790, 1, false, v).attributes.aBone.array)].sort();
+  assert.deepEqual(bones('75'), [1, 2]);
+  assert.deepEqual(bones('gribeauval'), [0], 'les autres pièces reculent tout entières');
+  assert.deepEqual(bones('bange'), [0]);
+});

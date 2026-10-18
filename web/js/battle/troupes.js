@@ -395,10 +395,11 @@ function gun(v = 'gribeauval') {
   const G = GUNS[v] ?? GUNS.gribeauval;
   const barrel = [[0, -1.1], [0.07, -1.09], [0.08, -1.04], [0.16, -1.0], [0.165, -0.84], [0.145, -0.82], [0.14, 0.25], [0.125, 0.28],
     [0.115, 0.95], [0.135, 1.0], [0.135, 1.06], [0.075, 1.07], [0.07, 1.0]].map(([r, y]) => [r * G.r, y * G.L]);
-  const P = [[lathe(barrel, 12).rotateX(Math.PI / 2).translate(0, 1.0, 0.52), G.tube, 0, 0],
+  const tb = G.frein ? 1 : 0;   // canon de 75 : son tube (os 1) recule seul sur le frein, le reste (os 2) ne bouge pas
+  const P = [[lathe(barrel, 12).rotateX(Math.PI / 2).translate(0, 1.0, 0.52), G.tube, tb, 0],
     [new THREE.CylinderGeometry(0.05, 0.05, 0.42, 6).rotateZ(Math.PI / 2).translate(0, 1.0, 0.25), G.tube, 0, 0]];   // tourillons
   if (G.orne) for (const z of [-0.2, 0.55]) P.push([new THREE.CylinderGeometry(0.17 * G.r, 0.17 * G.r, 0.05, 12).rotateX(Math.PI / 2).translate(0, 1.0, 0.52 + z * G.L), G.tube, 0, 0]);   // renforts moulurés
-  if (G.culasse) P.push([new THREE.BoxGeometry(0.2, 0.2, 0.16).translate(0, 1.0, 0.52 - 1.12 * G.L), ACIER, 0, 0]);
+  if (G.culasse) P.push([new THREE.BoxGeometry(0.2, 0.2, 0.16).translate(0, 1.0, 0.52 - 1.12 * G.L), ACIER, tb, 0]);
   if (G.frein) P.push([new THREE.CylinderGeometry(0.075, 0.075, 1.3, 8).rotateX(Math.PI / 2).translate(0, 0.86, 0.75), ACIER, 0, 0]);   // le frein sous le tube
   if (G.bouclier) P.push([new THREE.BoxGeometry(1.3, 1.0, 0.03).translate(0, 1.15, 0.3), ACIER, 0, 0]);
   for (const s of [1, -1]) {
@@ -408,6 +409,7 @@ function gun(v = 'gribeauval') {
   if (G.fleche) P.push([new THREE.BoxGeometry(0.18, 0.2, 2.1).rotateX(-0.22).translate(0, 0.68, -0.5), G.aff, 0, 0],   // flèche unique
     [new THREE.BoxGeometry(0.62, 0.16, 0.3).translate(0, 0.82, 0.12), G.aff, 0, 0]);
   P.push([new THREE.BoxGeometry(0.36, 0.12, 0.3).translate(0, 0.16, -1.4), G.aff, 0, 0], [new THREE.CylinderGeometry(0.05, 0.05, 1.0, 6).rotateZ(Math.PI / 2).translate(0, 0.62, 0.1), IRON, 0, 0]);
+  if (G.frein) for (const p of P) if (p[2] !== 1) p[2] = 2;
   return assemble(P);
 }
 // avant-train ou caisson à munitions (le timon vers +Z) ; wagon : chariot de munitions bâché, à quatre roues
@@ -665,11 +667,14 @@ const VERT_POSE = `
   float swing = 0.0, arm = 0.0, bob = 0.0, lean = 0.0, boneA = 0.0;
   vec2 pivot = vec2(0.86, 0.0);
 #if defined(GUN)
-  // pièce : recul au départ du coup, puis on la remet en batterie
+  // pièce : recul au départ du coup, puis on la remet en batterie ; le canon de 75 ne bouge pas (os 2), son tube (os 1)
+  // glisse sur le frein et revient seul, vite (tir rapide)
+  float gunRecoil = 0.0;
   if (rank >= 100.0) {
     int k = int(rank) - 100;
     float t = uFxT - (k < 4 ? u3[k] : u4[k - 4]);
-    if (t >= 0.0 && t < 1.6) slotV -= (t < 0.06 ? t / 0.06 : 1.0 - (t - 0.06) / 1.54) * 1.4;
+    if (aBone < 0.5) { if (t >= 0.0 && t < 1.6) slotV -= (t < 0.06 ? t / 0.06 : 1.0 - (t - 0.06) / 1.54) * 1.4; }
+    else if (aBone < 1.5 && t >= 0.0 && t < 0.5) gunRecoil = (t < 0.04 ? t / 0.04 : 1.0 - (t - 0.04) / 0.46) * 0.9;
   }
 #elif defined(HORSE)
   // cheval : la pose de la disposition porte la robe (× 16) et, en déroute, le galop (2) ; sinon l'allure du régiment.
@@ -812,6 +817,9 @@ export class Troops {
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: pattern ? THREE.DoubleSide : THREE.FrontSide });
     mat.defines = defines;
     const place = `vec3 transformed = position;
+#if defined(GUN)
+          transformed.z -= gunRecoil;
+#endif
           ${pattern ? `
           // l'étoffe ondule, d'autant plus loin de la hampe
           float k = 0.08 - transformed.z;

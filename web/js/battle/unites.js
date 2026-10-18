@@ -5,6 +5,9 @@ import { TAU, TILT, OMBRE, mixHex, uniform } from './formes.js';
 
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', BRONZE = '#b08a3e', GOLD = '#d6b65a';
 const AFFUT = '#5f6b3e';   // affûts peints en vert olive
+// la pièce de chaque génération (formes.gunModel), comme en 3D : [fût, affût, longueur, épaisseur du fût, bouclier]
+const CARD_GUNS = { ancien: ['#b08a3e', '#7d5c38', 1.25, 0.38], gribeauval: ['#b08a3e', AFFUT, 1, 0.34], valee: ['#b08a3e', AFFUT, 1, 0.34],
+  lahitte: ['#9c7a38', AFFUT, 1.05, 0.29], bange: ['#36393d', '#4f5458', 1.15, 0.27], 75: ['#36393d', '#4f5458', 1.35, 0.19, true] };
 const HORSES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];
 const dark = (c, k) => mixHex(c, '#000000', k), lite = (c, k) => mixHex(c, '#ffffff', k);
 
@@ -62,7 +65,7 @@ export class UnitArt {
     let sp = this.sprites.get(key);
     if (sp) { this.sprites.delete(key); this.sprites.set(key, sp); return sp; }   // le plus récemment servi passe en fin de file
     const h = Math.pow(1.08, hb);
-    const wide = kind === 'cav' || kind === 'colonel' || kind === 'canon' || kind === 'caisson' || kind === 'attelage';
+    const wide = kind === 'cav' || kind === 'colonel' || kind.startsWith('canon') || kind === 'caisson' || kind === 'attelage';
     // marge à droite et en bas pour l'ombre portée (vers le sud-est)
     const W = Math.ceil(h * (wide ? 2.4 : 1.25)), HH = Math.ceil(h * (wide ? 1.9 : 1.62));
     const cv = document.createElement('canvas');
@@ -72,7 +75,7 @@ export class UnitArt {
     g.translate(ax, ay);   // origine : les pieds
     const u = h / 10;
     if (kind === 'cav' || kind === 'colonel' || kind === 'attelage') this.horse(g, u, color, face, pose, kind, coat);
-    else if (kind === 'canon') this.gun(g, u, face);
+    else if (kind.startsWith('canon')) this.gun(g, u, face, kind.split('.')[1]);   // « canon.75 » : son modèle
     else if (kind === 'caisson') this.limber(g, u, face, pose);
     else this.soldier(g, u, kind, color, face, pose, coat);
     sp = { cv, ax, ay, h };
@@ -355,16 +358,18 @@ export class UnitArt {
     } else P.r(dark(color, 0.2), hx - 0.13, -2.86, 0.26, 0.2);
   }
   // pièce d'artillerie : roues à rais, affût olive, tube de bronze éclairé
-  gun(g, u, face) {
+  gun(g, u, face, v = 'gribeauval') {
     const m = u * 10 / 1.75, P = pen(g, m);
+    const [TUBE, AFF, L, R, shield] = CARD_GUNS[v] ?? CARD_GUNS.gribeauval, x1 = -0.55 + 2.1 * L;
     g.fillStyle = 'rgba(16,14,8,0.24)'; g.beginPath(); g.ellipse(0.5 * m, 0.15 * m, 1.9 * m, 0.4 * m, 0.15, 0, TAU); g.fill();
     if (face === 1 || face === 3) {
       g.save(); g.scale(face === 3 ? -1 : 1, 1);
-      P.l(AFFUT, 0.24, 0.1, -0.75, -2.1, -0.08);            // flèche de l'affût
-      P.l(dark(AFFUT, 0.3), 0.1, 0.1, -0.68, -2.1, -0.02);
-      P.l(BRONZE, 0.34, -0.55, -1.02, 1.55, -1.1);         // tube
-      P.l(lite(BRONZE, 0.35), 0.08, -0.5, -1.12, 1.5, -1.19);
-      P.e(dark(BRONZE, 0.3), 1.6, -1.1, 0.07, 0.18);
+      P.l(AFF, 0.24, 0.1, -0.75, -2.1, -0.08);            // flèche de l'affût
+      P.l(dark(AFF, 0.3), 0.1, 0.1, -0.68, -2.1, -0.02);
+      P.l(TUBE, R, -0.55, -1.02, x1, -1.1);               // tube
+      P.l(lite(TUBE, 0.35), R * 0.24, -0.5, -1.12, x1 - 0.05, -1.19);
+      P.e(dark(TUBE, 0.3), x1 + 0.05, -1.1, 0.07, R * 0.53);
+      if (shield) { P.l('#4f5458', 0.14, 0.42, -0.3, 0.3, -1.75); P.l(lite('#4f5458', 0.2), 0.05, 0.36, -0.35, 0.25, -1.7); }   // bouclier du 75
       // roue : jante, rais, moyeu
       g.strokeStyle = '#3a2a1a'; g.lineWidth = Math.max(0.6, 0.09 * m);
       g.beginPath(); g.arc(0, -0.66 * m, 0.64 * m, 0, TAU); g.stroke();
@@ -374,9 +379,10 @@ export class UnitArt {
       g.restore();
     } else {
       P.r('#3a2a1a', -0.78, -1.3, 0.14, 1.3); P.r('#3a2a1a', 0.64, -1.3, 0.14, 1.3);
-      P.r(AFFUT, -0.62, -0.95, 1.24, 0.3);
-      if (face === 0) { P.e(BRONZE, 0, -1.06, 0.24, 0.24); P.e(IRON, 0, -1.06, 0.11, 0.11); }
-      else { P.e(BRONZE, 0, -1.08, 0.22, 0.5); P.l(AFFUT, 0.22, 0, -0.95, 0, -0.2); }
+      P.r(AFF, -0.62, -0.95, 1.24, 0.3);
+      if (shield && face === 0) P.r('#4f5458', -0.75, -1.75, 1.5, 1.2);
+      else if (face === 0) { P.e(TUBE, 0, -1.06, 0.24 * R / 0.34, 0.24 * R / 0.34); P.e(IRON, 0, -1.06, 0.11, 0.11); }
+      else { P.e(TUBE, 0, -1.08, 0.22, 0.5); P.l(AFF, 0.22, 0, -0.95, 0, -0.2); }
     }
   }
   // avant-train (pose 0) ou caisson à munitions (pose 1)
