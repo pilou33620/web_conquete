@@ -1016,6 +1016,10 @@ export class UI {
     return Object.entries(cost).map(([k, v]) => `<span title="${this.rules.res_label[k]}" style="white-space:nowrap">${fmt(v)} ${this.rules.res_label[k].toLowerCase()}</span>`).join(', ');
   }
 
+  // prix et délai d'une construction pour vous : le ciment les réduit (même calcul que Game.build_cost)
+  buildK() { return 1 + (this.st.me.mods?.build_cost || 0); }
+  buildCost(cost) { const k = this.buildK(); return Object.fromEntries(Object.entries(cost).map(([r, v]) => [r, Math.ceil(v * k)])); }
+
   canPay(cost) {
     const r = this.st.me.res;
     return Object.entries(cost).every(([k, v]) => (r[k] || 0) >= v);
@@ -1169,11 +1173,11 @@ export class UI {
             : `<button class="btn" disabled>${k === 'dev' ? this.devName(gn.type, lvl) + ' : agrandissement maximal' : b.name + ' au maximum'}</button>`;
           continue;
         }
-        const c = b.costs[l];
+        const c = this.buildCost(b.costs[l]);
         const lab = k === 'fort' ? `${l + 1 === this.rules.fort.bastion ? 'Bastions à la Vauban' : b.name + ' niveau ' + (l + 1)}`
           : k === 'dev' ? `Agrandir : ${this.devName(gn.type, l + 1).toLowerCase()}` : `${b.name} niveau ${l + 1}`;
         const up = k === 'fort' ? `, entretien ${fmt1(this.per(this.rules.fort.upkeep[l + 1]))} livres ${this.perU}` : '';
-        h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'}${qDis || ` title="${esc(b.desc)}"`}>${lab}<small>${this.costHtml(c)}, ${partTour(b.days[l])}${up}</small></button>`;
+        h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'}${qDis || ` title="${esc(b.desc)}"`}>${lab}<small>${this.costHtml(c)}, ${partTour(b.days[l] * this.buildK())}${up}</small></button>`;
       }
       h += `</div>`;
       h += this.cityHtml(id, gn, ns, queue, qFull);   // emplacements et politique de la ville
@@ -1230,11 +1234,11 @@ export class UI {
   }
 
   slotBtn(gn, ns, k, chk, qFull, label) {
-    const L = this.rules.cities.chains[k].levels[chk.lvl - 1];
-    const ok = !chk.why && !qFull && !ns.sg && this.canPay(L.cost);
-    const why = chk.why || (qFull ? 'File de production pleine' : ns.sg ? 'Place assiégée' : !this.canPay(L.cost) ? 'Ressources insuffisantes' : '');
+    const L = this.rules.cities.chains[k].levels[chk.lvl - 1], cost = this.buildCost(L.cost);
+    const ok = !chk.why && !qFull && !ns.sg && this.canPay(cost);
+    const why = chk.why || (qFull ? 'File de production pleine' : ns.sg ? 'Place assiégée' : !this.canPay(cost) ? 'Ressources insuffisantes' : '');
     return `<button class="btn slot-opt" data-act="slot-build" data-v="${k}" ${ok ? '' : 'disabled'}><b>${esc(label)}</b>
-      <small>${this.costHtml(L.cost)}, ${partTour(L.days)}</small><small>${esc(this.slotFx(gn, L))}</small>${why ? `<small class="why">${esc(why)}</small>` : ''}</button>`;
+      <small>${this.costHtml(cost)}, ${partTour(L.days * this.buildK())}</small><small>${esc(this.slotFx(gn, L))}</small>${why ? `<small class="why">${esc(why)}</small>` : ''}</button>`;
   }
 
   cityHtml(id, gn, ns, queue, qFull) {

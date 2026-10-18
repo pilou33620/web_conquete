@@ -461,7 +461,7 @@ class AI:
         for _, n in cands:
             if built >= (1 if wars else 2) or budget < 150:
                 break
-            cost = R.BUILD['dev']['cost'](n['dev'])
+            cost = g.build_cost(self.code, R.BUILD['dev']['cost'](n['dev']))
             extra = self.provide(cost, budget)
             if extra is None:
                 continue
@@ -518,7 +518,7 @@ class AI:
         for _, n in cands:
             if built >= 2 or budget < 150:
                 break
-            cost = R.BUILD['fort']['cost'](n['fort'])
+            cost = g.build_cost(self.code, R.BUILD['fort']['cost'](n['fort']))
             extra = self.provide(cost, budget)
             if extra is None:
                 continue

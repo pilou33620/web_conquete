@@ -980,5 +980,54 @@ class ArbreDesTechnologies(unittest.TestCase):
         self.assertEqual(oublies, [], 'effets de technologies que le moteur ne lit nulle part')
 
 
+def avec(g, code, *techs):
+    """Donne ces technologies au camp et recalcule ses effets."""
+    g.factions[code]['techs'] += [t for t in techs if t not in g.factions[code]['techs']]
+    g.recompute_mods(code)
+    return g
+
+
+class EffetsEconomiques(unittest.TestCase):
+    """SPEC-TECH.md : caisse d'épargne, éclairage au gaz, ciment, bateau à vapeur, Fresnel."""
+
+    def test_le_tresor_rapporte_deux_pour_cent_l_an(self):
+        import datetime
+        a, b = partie(seed=4), avec(partie(seed=4), '33', 'caisse_epargne')
+        for g in (a, b):
+            g.factions['33']['res']['livres'] = 12000.0
+            g.monthly(datetime.date(1790, 4, 1))
+        self.assertAlmostEqual(b.factions['33']['res']['livres'] - a.factions['33']['res']['livres'], 20.0, places=3)
+
+    def test_le_gaz_eclaire_les_villes_pas_les_villages(self):
+        a, b = partie(), avec(partie(), '33', 'gaz')
+        ville = next(n for n in a.nodes if n['owner'] == '33' and a.geo.nodes[n['id']]['type'] == 'capitale')
+        village = next(n for n in a.nodes if a.geo.nodes[n['id']]['type'] == 'village')
+        village['owner'] = b.nodes[village['id']]['owner'] = '33'
+        k = b.node_output(b.nodes[ville['id']], '33')['livres'] / a.node_output(ville, '33')['livres']
+        self.assertAlmostEqual(k, 1.05, places=6)
+        self.assertEqual(b.node_output(b.nodes[village['id']], '33'), a.node_output(village, '33'))
+
+    def test_le_ciment_construit_moins_cher_et_plus_vite(self):
+        a, b = partie(), avec(partie(), '33', 'ciment')
+        nid = next(n['id'] for n in a.nodes if n['owner'] == '33' and a.geo.nodes[n['id']]['type'] == 'capitale')
+        res = []
+        for g in (a, b):
+            g.factions['33']['res'].update(livres=5000, bois=500, fer=500, outils=500)
+            avant = dict(g.factions['33']['res'])
+            ok, why = g.build('33', nid, 'dev')
+            self.assertTrue(ok, why)
+            res.append((avant['livres'] - g.factions['33']['res']['livres'], g.nodes[nid]['queue'][-1]['total']))
+        self.assertEqual(res[1][0], math.ceil(res[0][0] * 0.85))
+        self.assertAlmostEqual(res[1][1], res[0][1] * 0.85)
+
+    def test_le_vapeur_remonte_aussi_vite_qu_il_descend(self):
+        g = avec(partie(), '33', 'vapeur_fluviale')
+        e = next(e for e in g.geo.edges if e.get('kind') == 'water' and not e['sea'] and e['down'] is not None)
+        haut = e['a'] if e['down'] == e['b'] else e['b']   # (on part de l'amont : on descend)
+        bas = e['down']
+        self.assertAlmostEqual(g.water_speed(e, bas, estimate=True, code='33'), g.water_speed(e, haut, estimate=True, code='33'))
+        self.assertLess(g.water_speed(e, bas, estimate=True, code='24'), g.water_speed(e, haut, estimate=True, code='24'))
+
+
 if __name__ == '__main__':
     unittest.main()

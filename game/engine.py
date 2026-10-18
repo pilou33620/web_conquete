@@ -541,6 +541,8 @@ class Game:
         for code, f in self.factions.items():
             if not f['alive']:
                 continue
+            if f['res']['livres'] > 0:
+                f['res']['livres'] *= 1 + self.mod(code, 'interest') / 12   # caisse d'épargne : tant l'an, au mois
             mine = self.owned_nodes(code)
             if d.month in (9, 10):
                 vin = sum(1 for n in mine if 'vin' in self.geo.nodes[n['id']]['spec'])
@@ -702,6 +704,8 @@ class Game:
             out['livres'] += R.QUAI_LIVRES
             trade += R.QUAI_LIVRES
         trade = CT.node_extra(self, n, code, out, trade)   # bâtiments, politique, événements de la ville
+        if gn['type'] in ('ville', 'capitale'):
+            out['livres'] *= 1 + self.mod(code, 'city_livres')   # éclairage au gaz : les villes travaillent le soir
         if n['id'] in self._blockade:
             out['livres'] -= trade * (1 - R.BLOCKADE_K)
         mult = self.pop_factor(n) * max(0.3, n['stab']) * (0.7 + 0.3 * self.assim(n))
@@ -1122,6 +1126,14 @@ class Game:
         n['queue'].append(dict(kind='unit', what=typ, left=days, total=days))
         return True, f"{self.unit_name(code, typ)[0]} en formation à {gn['name']}."
 
+    def build_cost(self, code, cost):
+        """Prix d'une construction pour ce camp (le ciment le réduit) ; l'interface fait le même calcul (ui.js, buildK)."""
+        k = 1 + self.mod(code, 'build_cost')
+        return {r: math.ceil(v * k) for r, v in cost.items()}
+
+    def build_days(self, code, days):
+        return days * (1 + self.mod(code, 'build_cost'))
+
     def build(self, code, nid, what):
         n = self.nodes[nid]
         gn = self.geo.nodes[nid]
@@ -1141,11 +1153,11 @@ class Game:
             return False, "Niveau maximal atteint."
         if len(n['queue']) >= 4:
             return False, "File de production pleine."
-        cost = b['cost'](lvl + pending)
+        cost = self.build_cost(code, b['cost'](lvl + pending))
         if not self.can_pay(code, cost):
             return False, "Ressources insuffisantes."
         self.pay(code, cost)
-        days = b['days'](lvl + pending)
+        days = self.build_days(code, b['days'](lvl + pending))
         n['queue'].append(dict(kind='build', what=what, left=days, total=days))
         if what == 'fort' and lvl + pending + 1 == R.BASTION_LEVEL:
             return True, f"Bastions à la Vauban lancés à {gn['name']}."
@@ -1405,9 +1417,9 @@ class Game:
     def water_speed(self, e, frm, x=None, y=None, estimate=False, code=None):
         """Vitesse des gabares (km/j) : courant, crues, basses eaux d'été, tempêtes sur la côte."""
         k = 1 + (self.mod(code, 'river_speed') if code else 0)
-        return k * self._water_speed(e, frm, x, y, estimate)
+        return k * self._water_speed(e, frm, x, y, estimate, bool(code and self.mod(code, 'upstream')))
 
-    def _water_speed(self, e, frm, x=None, y=None, estimate=False):
+    def _water_speed(self, e, frm, x=None, y=None, estimate=False, steam=False):
         way = self.geo.ways[e['way']]
         if e['sea']:
             sp = R.SEA_SPEED
@@ -1417,7 +1429,7 @@ class Game:
             return sp
         sp = R.WATER_SPEED
         if e['down'] is not None and frm is not None:
-            downstream = (e['down'] != frm)
+            downstream = (e['down'] != frm) or steam   # le bateau à vapeur remonte aussi vite qu'il descend
             flood = self.t < self.flood_until
             if downstream:
                 sp *= 1.25 * (1.2 if flood else 1.0)

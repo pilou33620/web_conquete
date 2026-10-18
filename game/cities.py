@@ -248,10 +248,11 @@ def slot_build(g, code, nid, chain):
     if len(n['queue']) >= 4:
         return False, "File de production pleine."
     L = CHAINS[chain]['levels'][lvl - 1]
-    if not g.can_pay(code, L['cost']):
+    cost, days = g.build_cost(code, L['cost']), g.build_days(code, L['days'])
+    if not g.can_pay(code, cost):
         return False, "Ressources insuffisantes."
-    g.pay(code, L['cost'])
-    n['queue'].append(dict(kind='slot', what=chain, lvl=lvl, left=L['days'], total=L['days']))
+    g.pay(code, cost)
+    n['queue'].append(dict(kind='slot', what=chain, lvl=lvl, left=days, total=days))
     if lvl == 1:
         slots(n)[chain] = 0   # l'emplacement est pris dès le début du chantier
     name = level_name(g, nid, chain, lvl)
@@ -865,7 +866,7 @@ def ai_build(ai, budget, wars):
                 continue
             if mult is None:
                 mult = g.pop_factor(n) * max(0.3, n['stab']) * (0.7 + 0.3 * g.assim(n))
-            cost = CHAINS[chain]['levels'][lvl - 1]['cost']
+            cost = g.build_cost(code, CHAINS[chain]['levels'][lvl - 1]['cost'])
             price = sum(v * (1 if k == 'livres' else 1.6) for k, v in cost.items())
             val = _ai_value(g, ai, n, chain, lvl, mult) * g.assim(n)
             if val > 0:
