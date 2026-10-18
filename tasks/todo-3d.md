@@ -543,7 +543,8 @@ General sur un régiment qui tire.
     `tests/gestes.test.mjs`
   - Taille : M
 
-- [ ] **Point de contrôle 7c** : bancs, cinq scénarios, galerie, commit.
+- [x] **Point de contrôle 7c** (18/10/2026) : bancs (« Tout passe. ») ; cinq scénarios ouverts sans erreur après dix
+  minutes de bataille simulée ; galerie (`captures-3d/animations/etape7c/`).
 
 ### 7d : mêlée et charges
 

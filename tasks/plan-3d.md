@@ -268,7 +268,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 - [x] T36 : hommes qui courent à leur place
 - [x] T37 : conversion, marche et arrêt sans glissade
 - [x] T38 : bâtiments (répulsion)
-- [ ] Point de contrôle 7c
+- [x] Point de contrôle 7c
 
 ### 7d : mêlée et charges
 - [ ] T39 : mêlée (fronts qui se mêlent, estoc, poussée, sabres des officiers)

@@ -28,6 +28,9 @@ Mode choisi par toi : `/build auto` sur tout le plan, avec une revue complète (
 | T33 : servants des pièces au squelette (refouler, porter, pointer, boutefeu) | `db1dd47` |
 | T34 : les hommes tombent, les corps restent couchés en 3D (anneau plafonné) | `5883e59` |
 | T35 : un boulet couche une file, chevaux tués couchés sur le flanc | `aee9cff` |
+| T36 : les hommes courent à leur place (identité gardée, tués exclus) | `48de304` |
+| T37 : conversion sans glissade | `801eb2f` |
+| T38 : les troupes ne traversent plus les bâtiments | `9ddeb0d` |
 
 T30 : captures de près et à mi-distance regardées, sans erreur. Seuls les triangles des vues types n'ont pas été
 relevés : à faire au point de contrôle 7a.
@@ -37,9 +40,6 @@ relevés : à faire au point de contrôle 7a.
 | Tâche | Sous-étape | En deux mots |
 |---|---|---|
 | Point 7a | | fait le 18/10/2026, sauf **ta mesure des images par seconde sur l'iPad** (voir `todo-3d.md`) |
-| T36 | 7c | hommes qui courent à leur place (`matchSlots`, attribut `aMove`) |
-| T37 | 7c | conversion et marche sans glissade |
-| T38 | 7c | bâtiments : grille de 8 m lue par le shader, `pushOut` testé |
 | T39 | 7d | mêlée (fronts qui se mêlent, estoc, poussée) |
 | T40 | 7d | cavaliers au squelette, en selle |
 | T41 | 7d | sabres des cavaliers, chevaux qui se cabrent |
