@@ -81,6 +81,7 @@ export class BattleView {
     this.troops = new Troops(this.relief, this.q, m.year, anims);
     this.scene.add(this.troops.group);
     this.fx.attach(this.scene, this.relief.heightAt);
+    this.fx.marks = m.marks || [[], []];   // (poudre sans fumée de chaque camp)
     this.decor = new Decor(this.terrain, this.relief, this.q);
     this.scene.add(this.decor.group);
     this.setShadows();

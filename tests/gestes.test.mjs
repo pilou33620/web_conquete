@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { Terrain } from '../web/js/battle/terrain.js';
-import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, serving, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves, pushOut, foeOf, scrum, scaleAt } from '../web/js/battle/gestes.js';
+import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, serving, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves, pushOut, foeOf, scrum, scaleAt, smokeless } from '../web/js/battle/gestes.js';
 
 const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
 
@@ -326,4 +326,15 @@ test('la grille des bâtiments (terrain.js) range chaque maison dans les cases q
   console.warn = m => said.push(m);
   try { grid([0, 1, 2, 3, 4].map(k => ({ x: 100 + k, y: 100, w: 4, h: 4, a: 0 }))); } finally { console.warn = warn; }
   assert.equal(said.length, 1);
+});
+
+test('poudre sans fumée : le Lebel, et les pièces du camp qui a la poudre B (SPEC-TECH.md)', () => {
+  const marks = [['sans_fumee'], []];
+  assert.equal(smokeless({ side: 1, cls: 'inf', arm: 7 }, marks), true, 'fusil Lebel');
+  assert.equal(smokeless({ side: 0, cls: 'inf', arm: 6 }, marks), false, 'fusil Gras : poudre noire, même dans un camp en avance');
+  assert.equal(smokeless({ side: 0, cls: 'artillerie', arm: 5 }, marks), true);
+  assert.equal(smokeless({ side: 1, cls: 'artillerie', arm: 6 }, marks), false, 'le camp sans la poudre B');
+  assert.equal(smokeless({ side: 0, type: 'mitrailleuses', cls: 'artillerie' }, marks), true);
+  assert.equal(smokeless({ side: 0, type: 'ligne', arm: 7 }), true, 'sans marques ni classe');
+  assert.equal(smokeless({ side: 0, cls: 'artillerie' }), false);
 });

@@ -1,7 +1,7 @@
 // Vue tactique : les gestes des hommes. Logique pure, sans Three.js (bancs : tests/gestes.test.mjs). Les animations
 // sont précalculées (dev/cuire.mjs, web/anims/soldat.*) ; troupes.js écrit dans les attributs de chaque figurine le
 // geste choisi ici, et le vertex shader le joue.
-import { hash, wrapAngle } from './formes.js';
+import { hash, wrapAngle, clsOf } from './formes.js';
 
 // geste d'un homme du rang selon l'activité de son régiment
 const GESTE = { repos: 'repos', marche: 'marche', charge: 'charge', deroute: 'course', ralliement: 'trot', feu: 'joue', recharge: 'recharge', melee: 'estoc' };
@@ -177,4 +177,11 @@ const PALIERS = [1, 1.25, 1.6, 2, 2.5, 3], FIG_PX = 12;
 export function scaleAt(px, prev = 1) {
   const k = PALIERS.find(p => px * p >= FIG_PX) ?? PALIERS.at(-1);
   return k !== prev && PALIERS.includes(prev) && px * prev >= FIG_PX * 0.85 && px * prev <= FIG_PX * 1.25 ? prev : k;
+}
+
+// poudre sans fumée (poudre B de Vieille, 1886 ; SPEC-TECH.md) : l'infanterie la reçoit avec son fusil Lebel (arme 7),
+// l'artillerie et les mitrailleuses dès que leur camp la fabrique (marque « sans_fumee », rules.VISUALS)
+export function smokeless(un, marks) {
+  if (clsOf(un) === 'artillerie') return !!marks?.[un.side]?.includes('sans_fumee');
+  return clsOf(un) === 'inf' && (un.arm ?? 0) >= 7;
 }

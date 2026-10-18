@@ -9,6 +9,7 @@
 // pour mettre les hommes en joue au même instant et faire reculer les pièces.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clamp, hash, TAU, canvas, pieces } from './formes.js';
+import { smokeless } from './gestes.js';
 
 // fumée en volume : des boules douces qui se recouvrent, éclairées en haut à gauche (lumière du nord-ouest)
 function puffSprite(rgb, shade, seed) {
@@ -56,6 +57,8 @@ export class Effects {
     this.white = [0, 1, 2, 3].map(k => puffSprite('246,244,238', 0.78, 31 + k));
     this.grey = [0, 1].map(k => puffSprite('132,126,118', 0.7, 51 + k));
     this.dust = [0, 1].map(k => puffSprite('184,158,114', 0.75, 71 + k));
+    this.haze = [puffSprite('206,214,224', 0.7, 91)];   // poudre sans fumée : un voile bleuté qui se dissipe vite
+    this.marks = [[], []];   // marques visibles de chaque camp (rules.VISUALS ; la vue les reçoit avec la carte)
     this.fire = glowSprite('255,190,90');
     this.flash = flashSprite();
     this.shade = glowSprite('0,0,0');
@@ -74,7 +77,7 @@ export class Effects {
   // heightAt : altitude du relief (m) ; les images des bouffées et des éclairs vont dans un atlas de 4 × 3 cases
   attach(scene, heightAt) {
     this.heightAt = heightAt;
-    const sprites = [...this.white, ...this.grey, ...this.dust, this.fire, this.flash], C = 128;
+    const sprites = [...this.white, ...this.grey, ...this.dust, this.fire, this.flash, ...this.haze], C = 128;
     const at = canvas(4 * C, 3 * C), g = at.getContext('2d');
     this.cell = new Map();
     sprites.forEach((cv, i) => { g.drawImage(cv, (i % 4) * C, ((i / 4) | 0) * C, C, C); this.cell.set(cv, i); });
@@ -221,6 +224,7 @@ export class Effects {
     if (near > n * 4) n = Math.min(n, 3);
     // (sc : échelle des figurines du régiment, troupes.js : de loin, elles grossissent, et leur fumée avec elles)
     const life = [16, 26, 34, 44][fx], sk = un?.form === 'tirailleurs', sc = un?._figScale ?? 1;
+    const clean = !!un && smokeless(un, this.marks);
     for (let q = 0; q < n; q++) {
       const u = ((q + 0.2 + Math.random() * 0.6) / n - 0.5) * w;
       const at = sk ? Math.random() * 1.6 : (roll > 0 ? u / w + 0.5 : 0.5 - u / w) * dur + Math.random() * 0.05;
@@ -228,6 +232,10 @@ export class Effects {
       this.queue.push({ fn: () => {
         this.flashes.push({ x: px + c * 1.2, y: py + s * 1.2, alt: 1.6 * sc, r: (2.2 + Math.random()) * sc, t: 0, life: 0.09 + Math.random() * 0.05 });
         const sp = 4 + Math.random() * 4;
+        if (clean) {   // poudre B : l'éclair seul, et un voile à peine visible, un homme sur trois
+          if (q % 3 === 0) this.addPuff(this.haze, px + c * 1.5, py + s * 1.5, 1.5 * sc, 2.5 * sc, 1.6, 0.14, 3 + Math.random() * 2, c * sp, s * sp, 0.1);
+          return;
+        }
         this.addPuff(this.white, px + c * 1.5, py + s * 1.5, 1.5 * sc, (4 + Math.random() * 2.5) * sc, 1.2 + Math.random() * 0.8, 0.72 + Math.random() * 0.2, life * (0.7 + Math.random() * 0.5), c * sp + (Math.random() - 0.5) * 2, s * sp + (Math.random() - 0.5) * 2, 0.08 + Math.random() * 0.12);
       }, at: this.t + at });
     }
@@ -240,6 +248,7 @@ export class Effects {
     const w = un ? un.w : 60, ux = un ? un.x : f.x, uy = un ? un.y : f.y;
     const fc = un ? Math.cos(un.dir) : c, fs = un ? Math.sin(un.dir) : s;
     const sc = un?._figScale ?? 1;   // (échelle des figurines de la batterie : sa fumée la suit)
+    const clean = !!un && smokeless(un, this.marks);
     if (un) un._shots = un._shots || {};
     for (let q = 0; q < p; q++) {
       const u = p > 1 ? (q - (p - 1) / 2) * (w / p) : 0;
@@ -249,7 +258,8 @@ export class Effects {
         if (un) un._shots[q] = this.t;
         this.flashes.push({ x: px + fc * 3.5, y: py + fs * 3.5, alt: sc, r: (grape ? 7 : 6) * sc, t: 0, life: 0.2 });
         // la bouffée : poussée en avant, épaisse, qui s'élargit ; la poussière du souffle au ras du sol
-        for (let k = 0; k < 3 + fx; k++) this.addPuff(this.white, px + fc * (4 + k * 4), py + fs * (4 + k * 4), (1.5 + k * 0.3) * sc, (3.5 + k * 1.2) * sc, 1.4, 0.7, [18, 28, 36, 46][fx] * (0.7 + Math.random() * 0.4), fc * (16 - k * 3) + (Math.random() - 0.5) * 3, fs * (16 - k * 3) + (Math.random() - 0.5) * 3, 0.25);
+        if (clean) this.addPuff(this.haze, px + fc * 5, py + fs * 5, 1.5 * sc, 4 * sc, 1.8, 0.18, 4 + Math.random() * 2, fc * 10, fs * 10, 0.2);
+        else for (let k = 0; k < 3 + fx; k++) this.addPuff(this.white, px + fc * (4 + k * 4), py + fs * (4 + k * 4), (1.5 + k * 0.3) * sc, (3.5 + k * 1.2) * sc, 1.4, 0.7, [18, 28, 36, 46][fx] * (0.7 + Math.random() * 0.4), fc * (16 - k * 3) + (Math.random() - 0.5) * 3, fs * (16 - k * 3) + (Math.random() - 0.5) * 3, 0.25);
         if (fx >= 1) for (let k = 0; k < 4; k++) { const a = Math.random() * TAU; this.addPuff(this.dust, px + Math.cos(a) * 2, py + Math.sin(a) * 2, 0.3 * sc, 2.5 * sc, 2.5, 0.35, 2.5, Math.cos(a) * 5 + fc * 3, Math.sin(a) * 5 + fs * 3, 0.4); }
         if (grape) {
           for (let k = 0; k < 14; k++) {
