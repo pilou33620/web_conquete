@@ -4,7 +4,8 @@ fixes, pour comparer l'équilibre avant et après un changement de règles (SPEC
 
 Usage :  python3 outils/simuler.py --parties 3 --epoque 1790 --annees 30 --graine 1 --proc 3
 
-Mesures, par partie puis en moyenne : erreurs, guerres déclarées et leur durée (mois), places de chaque camp à la fin
+Mesures, par partie puis en moyenne : erreurs (ou « fin » : le camp du joueur rayé de la carte arrête la partie),
+guerres déclarées et leur durée (mois), places de chaque camp à la fin
 et écart entre le premier et le dernier, camps encore en vie, technologies trouvées, trésor et hommes sous les armes.
 Environ 20 s de calcul par année de jeu et par partie sur le Raspberry Pi : --proc en joue plusieurs à la fois.
 """
@@ -25,8 +26,8 @@ def play_month(g):
     from game import turns as TT
     TT.go(g)
     for _ in range(3000):
-        if g.tour['end'] is None:
-            return
+        if g.tour['end'] is None or g.over:
+            return   # (partie finie : le camp du joueur rayé de la carte, ou 1900)
         for x in list(g.pending_ev):
             ok = [i for i, c in enumerate(x['choices']) if E.affordable(g, g.player, c['fx'])]
             E.resolve(g, x['id'], ok[0] if ok else len(x['choices']) - 1, auto=True)
@@ -60,6 +61,8 @@ def simulate(seed, epoque='1790', mois=12, joueur='33'):
         war_months += sum(now.values())
         before = now
     places = {c: sum(1 for n in g.nodes if n['owner'] == c) for c in codes}
+    if err is None and g.over:
+        err = 'fin : ' + (g.over.get('text', '') if isinstance(g.over, dict) else 'partie terminée')   # (pas une erreur)
     return dict(seed=seed, epoque=epoque, date=g.date_str(), err=err, guerres=starts,
                 duree=round(war_months / starts, 1) if starts else 0.0, places=places,
                 ecart=max(places.values()) - min(places.values()),
@@ -96,7 +99,7 @@ def main():
               f"{r['techs']:>6} {r['tresor']:>7} {r['hommes']:>7}  {tail}")
     print(f"moyenne {'':<18} {mean(rows, 'guerres'):>8} {mean(rows, 'duree'):>6} {mean(rows, 'ecart'):>6} "
           f"{mean(rows, 'vivants'):>8} {mean(rows, 'techs'):>6} {mean(rows, 'tresor'):>7} {mean(rows, 'hommes'):>7}  "
-          f"erreurs : {sum(1 for r in rows if r['err'])}")
+          f"erreurs : {sum(1 for r in rows if r['err'] and not r['err'].startswith('fin'))}")
 
 
 if __name__ == '__main__':
