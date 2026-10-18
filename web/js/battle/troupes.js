@@ -18,12 +18,13 @@
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp } from './formes.js';
-import { activity, pick, firing, serving, variety, rows } from './gestes.js';
+import { activity, pick, firing, serving, variety, rows, chooseDead, pushRing } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
 const { AIM, RUN, ROUT } = POSES;
 export const SCALE = 1.6;   // les figurines sont grandies : l'emprise du jeu (1,2 m par file) se lit épaule contre épaule
 const MAXU = 512;           // régiments au plus (largeur de la texture des régiments)
+const DEAD = MAXU - 1;      // sa dernière colonne : les corps au sol (un régiment fictif à l'origine, de sens 0)
 
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', GOLD = '#d6b65a', LEATHER = '#2a1f16';
 const AFFUT = '#5f6b3e', BRONZE = '#b08a3e';   // affûts peints en vert olive, pièces de bronze
@@ -35,6 +36,15 @@ const KINDS = { inf: null, gren: null, leger: null, milice: null, officier: null
 // tache d'ombre douce au sol sous chaque figurine (largeur, profondeur, décalage vers l'avant, en m avant l'échelle)
 const CONTACT = { FOOT: [0.8, 0.66, 0], HORSE: [1.0, 2.5, 0], GUN: [1.7, 3.0, -0.3] };
 const ROBES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];   // robes des chevaux (bai, bai brun, alezan, noir pangaré)
+const FOOT = Object.keys(KINDS).filter(k => KINDS[k] === null);   // les hommes à pied, au squelette
+// graine d'un régiment (variété de ses hommes) ; habit d'une figurine (c : la couleur du camp, modifiée)
+const seedOf = id => [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7);
+function coatOf(kind, c) {
+  if (kind === 'milice') c.set('#7a6248');
+  else if (kind === 'officier' || kind === 'drapeau' || kind === 'colonel') c.multiplyScalar(0.8);
+  else if (kind === 'servant') c.multiplyScalar(0.6);   // habit sombre des artilleurs
+  return c;
+}
 // attributs de chaque figurine (nombres par figurine) : place, pose, habit ; geste (aGest : geste et son début, geste
 // d'avant et son début ; aMix : instant du fondu, vitesse, vitesse d'avant)
 export const INSTANCE_ATTRS = { aSlot: 4, aAnim: 4, aCoat: 3, aGest: 4, aMix: 4 };
@@ -681,6 +691,8 @@ export class Troops {
     }
     this.frustum = new THREE.Frustum(); this.sphere = new THREE.Sphere(); this.m4 = new THREE.Matrix4();
     this.built = -1; this.pending = false;
+    this.dead = [];             // corps au sol (anneau plafonné par la qualité) : {kind, x, y, a, t, size, coat, c, lod}
+    this.data[DEAD * 4 + 3] = 1;
   }
 
   // def : 'RIG' (homme au squelette), 'HORSE' (cheval), 'GUN' (pièce, voiture) : leur animation dans le vertex shader
@@ -798,7 +810,7 @@ export class Troops {
       const id = String(un.id);
       seen.add(id);
       let i = this.index.get(id);
-      if (i === undefined) { i = this.free.pop() ?? this.index.size; if (i >= MAXU) continue; this.index.set(id, i); dirty = true; }
+      if (i === undefined) { i = this.free.pop() ?? this.index.size; if (i >= DEAD) continue; this.index.set(id, i); dirty = true; }
       const key = `${un.form}|${un.state}|${Math.round((un.men || 0) / 8)}|${un.w | 0}|${un.d | 0}|${un.type}|${per}|${colors[un.side]}`;
       let e = this.lays.get(id);
       if (!e || e.key !== key) { this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: e?.lod ?? 0, act: e?.act, actT: e?.actT, volT: e?.volT, vol: e?.vol, shotT: e?.shotT, shots: e?.shots, moving: e?.moving, fire: e?.fire, prev: e?.prev, switchT: e?.switchT }); dirty = true; } else e.un = un;
@@ -836,6 +848,16 @@ export class Troops {
       for (let q = 0; q < 8; q++) D[(3 + (q >> 2)) * row + o + (q & 3)] = un._shots?.[q] ?? -99;
     }
     for (const [id, i] of this.index) if (!seen.has(id)) { this.index.delete(id); this.lays.delete(id); this.free.push(i); dirty = true; }
+    // corps : version de près ou de loin selon la distance, rien hors champ (revu deux fois par seconde)
+    if (this.dead.length && fr && camera && time - (this.deadT ?? -9) > 0.5) {
+      this.deadT = time;
+      for (const b of this.dead) {
+        this.sphere.center.set(b.x, this.relief.heightAt(b.x, b.y), b.y); this.sphere.radius = 3;
+        const lod = lodOf(1.75 * scale * fr.k / Math.max(1, Math.hypot(b.x - fr.E[0], this.sphere.center.y - fr.E[1], b.y - fr.E[2])), b.lod, this.frustum.intersectsSphere(this.sphere));
+        if (lod !== b.lod) { b.lod = lod; this.pending = true; }
+      }
+    }
+    if (this.deadNew) { this.deadNew = false; dirty = true; }
     this.units.needsUpdate = true;
     if (dirty || (this.pending && time - this.built > 0.2)) { this.rebuild(colors, scale); this.built = time; this.pending = false; }
   }
@@ -862,15 +884,11 @@ export class Troops {
       const { lay, un, lod } = e;
       e.figs = [];
       if (!lod) continue;
-      const ui = this.index.get(id), carre = un.form === 'carre', far = lod === 1 ? '~' : '';
-      const seed = [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7);
+      const ui = this.index.get(id), carre = un.form === 'carre', far = lod === 1 ? '~' : '', seed = seedOf(id);
       off.set(colors[un.side] || '#888');
       for (const [i, f] of lay.entries()) {
         const v = variety(seed, i);
-        coat.copy(off);
-        if (f[2] === 'milice') coat.set('#7a6248');
-        else if (f[2] === 'officier' || f[2] === 'drapeau' || f[2] === 'colonel') coat.multiplyScalar(0.8);
-        else if (f[2] === 'servant') coat.multiplyScalar(0.6);   // habit sombre des artilleurs
+        coatOf(f[2], coat.copy(off));
         // l'écouvillon et le pointeur se tournent vers la pièce
         if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant' + far, [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2, e, v);
         else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre, null, e, v);
@@ -878,6 +896,16 @@ export class Troops {
         else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre, null, e); }
       }
       this.gestures(e, false);
+    }
+    // les corps : « mort » joué depuis l'instant de la chute, puis sa dernière image (couché)
+    const mort = this.clipId.get('mort') ?? 0;
+    for (const b of this.dead) {
+      const k = b.lod && this.kinds.get(b.kind + (b.lod === 1 ? '~' : ''));
+      if (!k) continue;
+      if (k.n >= k.cap) this.grow(k, k.cap * 2);
+      const n = k.n++, o = n * 4;
+      k.buf.aSlot.set([b.y, b.x, b.a, DEAD], o); k.buf.aAnim.set([0, 0, scale * b.size, 0], o); k.buf.aCoat.set(b.coat, n * 3);
+      k.buf.aGest.set([mort, b.t, mort, b.t], o); k.buf.aMix.set([-99, 1, 1, 0], o);
     }
     for (const k of this.kinds.values()) {
       // une sorte vide n'est ni dessinée ni envoyée (une plage vide renverrait tout le tableau à la carte graphique)
@@ -903,6 +931,30 @@ export class Troops {
       const at = k.geo.attributes[name];
       at.addUpdateRange(a * 4, (b - a + 1) * 4); at.needsUpdate = true;
     }
+  }
+  // un régiment perd n hommes : autant de figurines tombent (gestes.js, chooseDead : surtout au premier rang) et
+  // deviennent des corps à l'endroit et dans le sens de leur chute, étalées sur 1,5 s. bare(x, y) : sol où un corps peut
+  // reposer (ni bâtiment ni eau) ; color : couleur du camp. Renvoie les corps sortis de l'anneau (plafond de la qualité),
+  // à repeindre en taches au sol
+  kill(un, n, bare, color) {
+    const id = String(un.id), e = this.lays.get(id);
+    if (!e || !this.per) return [];
+    e.lost = (e.lost ?? 0) + n / this.per;
+    const cand = e.lay.map((f, i) => [f, i]).filter(([f]) => FOOT.includes(f[2])), k = Math.min(Math.floor(e.lost), cand.length);
+    if (k < 1) return [];
+    e.lost -= k;
+    const seed = seedOf(id), c = Math.cos(un.dir), s = Math.sin(un.dir), col = new THREE.Color(), out = [];
+    for (const j of chooseDead(cand.map(([f]) => f), k, seed + Math.round((this.fxT ?? 0) * 10))) {
+      const [f, i] = cand[j], v = variety(seed, i), uu = f[0] + v.du, vv = f[1] + v.dv;
+      const x = un.x + c * vv - s * uu, y = un.y + s * vv + c * uu;
+      if (!bare(x, y)) continue;
+      coatOf(f[2], col.set(color)).offsetHSL(v.hue, v.sat, v.light);
+      const old = pushRing(this.dead, this.q.corps ?? 2500, { kind: f[2], x, y, a: un.dir + (f[3] === 2 ? Math.PI : 0) + v.da + (hash(i, 23, seed) - 0.5) * 1.2,
+        t: (this.fxT ?? 0) + hash(i, 29, seed) * 1.5, size: v.size, coat: [col.r, col.g, col.b], c: color, lod: 2 });
+      if (old) out.push({ k: 'mort', x: old.x, y: old.y, a: old.a, c: old.c });
+    }
+    this.deadNew = true;
+    return out;
   }
   // ombres portées des figurines (qualité Haute et Ultra) ; les ombres de contact restent dans tous les cas
   setShadows(on) {

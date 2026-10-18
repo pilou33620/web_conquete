@@ -451,7 +451,13 @@ General sur un régiment qui tire.
 
 ### 7b : tués
 
-- [ ] **T34 : les hommes tombent, corps en 3D au sol**
+- [x] **T34 : les hommes tombent, corps en 3D au sol**
+  - Fait : `chooseDead` (tirage pondéré, surtout le premier rang) et `pushRing` (anneau) dans `gestes.js` ;
+    `troupes.kill()` : les tombés jouent « mort » (étalés sur 1,5 s) puis restent couchés, dessinés dans les lots des
+    hommes (régiment fictif `DEAD` à l'origine), de près ou de loin selon la distance, rien hors champ ; au-delà du
+    plafond (`corps` dans `qualite.js`), les plus anciens sont repeints en taches. Cavaliers : taches comme avant (T35).
+    Limite vue : tant qu'un régiment reste en place, un vivant peut se tenir sur un corps (la disposition se resserre
+    par le bout) ; T36 fera prendre leur place aux vivants.
   - Critères :
     - Quand un régiment perd des hommes, `gestes.js` (`chooseDead`) choisit les figurines qui tombent, surtout au
       premier rang sous la mousqueterie.

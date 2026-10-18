@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows } from '../web/js/battle/gestes.js';
+import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing } from '../web/js/battle/gestes.js';
 
 const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
 
@@ -141,4 +141,27 @@ test('une batterie qui se déplace : ses servants marchent', () => {
 
 test('les gestes des servants existent dans le fichier précalculé', () => {
   for (const c of ['refouler', 'porter', 'pointer', 'boutefeu']) assert.ok(meta.clips[c], c);
+});
+
+// une ligne de trois rangs de 20 files, puis l'encadrement (rang négatif) ; une figurine : [u, v, sorte, …, rang]
+const ligne = [...[0, 1, 2].flatMap(r => Array.from({ length: 20 }, (_, k) => [k, -r, 'inf', 0, 0, r])), [0, -4, 'officier', 0, 0, -1]];
+
+test('les tués : autant que demandé, chacun une fois, surtout au premier rang', () => {
+  const d = chooseDead(ligne, 12, 5);
+  assert.equal(d.length, 12);
+  assert.equal(new Set(d).size, 12);
+  assert.deepEqual(chooseDead(ligne, 12, 5), d, 'le même tirage pour la même graine');
+  let front = 0, all = 0;
+  for (let seed = 0; seed < 50; seed++) for (const i of chooseDead(ligne, 6, seed)) { all++; if (ligne[i][5] === 0) front++; }
+  assert.ok(front / all > 0.45, `${front} sur ${all} au premier rang`);
+  assert.equal(chooseDead(ligne, 100, 1).length, ligne.length, 'pas plus que de figurines');
+});
+
+test('l’anneau des corps : plafonné, le plus ancien sort le premier', () => {
+  const ring = [];
+  assert.equal(pushRing(ring, 3, 'a'), null);
+  pushRing(ring, 3, 'b'); pushRing(ring, 3, 'c');
+  assert.equal(pushRing(ring, 3, 'd'), 'a');
+  assert.equal(pushRing(ring, 3, 'e'), 'b');
+  assert.deepEqual([...ring].sort(), ['c', 'd', 'e']);
 });

@@ -239,14 +239,16 @@ export class BattleView {
     this.ui.update(st, prev);
   }
   // tués laissés au sol, dans l'emprise de l'unité
+  // (les hommes à pied tombent en 3D : troupes.js, kill ; les corps sortis de son anneau, et les cavaliers, sont peints)
   casualties(u, n) {
     const c = Math.cos(u.dir), s = Math.sin(u.dir), col = this.colors[u.side] || '#666', cav = clsOf(u) === 'cavalerie';
-    const k = Math.min(14, Math.ceil(n / 5)), out = [];
-    for (let q = 0; q < k; q++) {
+    let out = [];
+    if (!cav && clsOf(u) !== 'general') out = this.troops.kill(u, n, (x, y) => this.terrain.bare(x, y), col);
+    else for (let q = 0, k = Math.min(14, Math.ceil(n / 5)); q < k; q++) {
       const uu = (Math.random() - 0.5) * u.w, vv = (Math.random() - 0.5) * u.d - (u.state === 'marche' ? 4 : 0);
       out.push({ k: cav && q % 2 ? 'cheval' : 'mort', x: u.x + c * vv - s * uu, y: u.y + s * vv + c * uu, a: Math.random() * TAU, c: col });
     }
-    this.relief.decals.add(this.terrain.addDecals(out));
+    if (out.length) this.relief.decals.add(this.terrain.addDecals(out));
   }
   nearest(x, y) {
     let best = null, bd = 40;

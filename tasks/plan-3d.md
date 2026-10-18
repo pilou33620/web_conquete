@@ -260,7 +260,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 - [x] Point de contrôle 7a (bancs, cinq scénarios, galerie ; images/s sur l'iPad : en attente de toi)
 
 ### 7b : tués
-- [ ] T34 : les hommes tombent, corps en 3D au sol (anneau plafonné)
+- [x] T34 : les hommes tombent, corps en 3D au sol (anneau plafonné)
 - [ ] T35 : boulets qui couchent une file, chevaux morts
 - [ ] Point de contrôle 7b
 

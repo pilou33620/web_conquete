@@ -82,3 +82,20 @@ export function rows(cur, prev, switchT, v, loopOf) {
   const sp = id => (loopOf(id) ? v.speed : 1), p = prev ?? cur;
   return [[cur[0], cur[1], p[0], p[1]], [prev ? switchT + v.delay : -99, sp(cur[0]), sp(p[0]), 0]];
 }
+
+// les k figurines qui tombent quand le régiment perd des hommes (figs : sa disposition, [u, v, sorte, …, rang]) : sous
+// la mousqueterie, surtout le premier rang, puis le deuxième ; l'encadrement plus rarement. Tirage pondéré sans remise
+// (la plus forte clé hash^(1/poids)), le même pour la même graine
+export function chooseDead(figs, k, seed) {
+  const weight = r => (r === 0 ? 3 : r === 1 ? 2 : r > 1 ? 1 : 0.5);
+  return figs.map((f, i) => [Math.pow(hash(i, 17, seed) || 1e-9, 1 / weight(f[5])), i]).sort((a, b) => b[0] - a[0]).slice(0, k).map(([, i]) => i);
+}
+
+// anneau de taille cap : ajoute item ; renvoie celui qu'il remplace (le plus ancien) une fois plein, sinon null
+export function pushRing(ring, cap, item) {
+  if (ring.length < cap) { ring.push(item); return null; }
+  ring.pos = ring.pos ?? 0;
+  const old = ring[ring.pos];
+  ring[ring.pos] = item; ring.pos = (ring.pos + 1) % cap;
+  return old;
+}
