@@ -18,7 +18,7 @@
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp } from './formes.js';
-import { activity, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing, matchSlots } from './gestes.js';
+import { activity, moves, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing, matchSlots } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
 const { AIM, RUN, ROUT } = POSES;
@@ -856,7 +856,7 @@ export class Troops {
       }
       if (lod !== e.lod) { if (!e.lod) dirty = true; else this.pending = true; e.lod = lod; }
       // régiment : position, sens, opacité ; allure, feu, salve ; front, tirailleurs
-      const moving = un.to && un.from && Math.hypot(un.to.x - un.from.x, un.to.y - un.from.y) > 0.3;
+      const moving = moves(un);
       const run = un.state === 'charge' || un.state === 'deroute', march = un.state === 'marche' || (moving && !run);
       // geste des hommes au squelette : réécrit quand l'activité du régiment change, qu'il tire une salve ou qu'elle
       // finit (sans reconstruire)

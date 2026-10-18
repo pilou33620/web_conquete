@@ -266,7 +266,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 
 ### 7c : places et bâtiments
 - [x] T36 : hommes qui courent à leur place
-- [ ] T37 : conversion, marche et arrêt sans glissade
+- [x] T37 : conversion, marche et arrêt sans glissade
 - [ ] T38 : bâtiments (répulsion)
 - [ ] Point de contrôle 7c
 

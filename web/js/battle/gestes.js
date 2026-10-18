@@ -1,12 +1,16 @@
 // Vue tactique : les gestes des hommes. Logique pure, sans Three.js (bancs : tests/gestes.test.mjs). Les animations
 // sont précalculées (dev/cuire.mjs, web/anims/soldat.*) ; troupes.js écrit dans les attributs de chaque figurine le
 // geste choisi ici, et le vertex shader le joue.
-import { hash } from './formes.js';
+import { hash, wrapAngle } from './formes.js';
 
 // geste d'un homme du rang selon l'activité de son régiment
 const GESTE = { repos: 'repos', marche: 'marche', charge: 'charge', deroute: 'course', ralliement: 'trot', feu: 'joue', recharge: 'recharge', melee: 'estoc' };
 // officiers, tambours, porte-drapeau : ni fusil en joue ni baïonnette
 const CADRE = { repos: 'repos', marche: 'marche', charge: 'course', deroute: 'course', ralliement: 'trot', feu: 'repos', recharge: 'repos', melee: 'repos' };
+
+// un régiment se déplace-t-il vers sa position suivante, ou tourne-t-il sur place (conversion) ? Ses hommes marchent
+// alors, au lieu de glisser
+export const moves = un => !!(un.from && un.to) && (Math.hypot(un.to.x - un.from.x, un.to.y - un.from.y) > 0.3 || Math.abs(wrapAngle(un.to.dir - un.from.dir)) > 0.05);
 
 // activité d'un régiment : son état, ou la marche s'il se déplace sans charger ni fuir
 export function activity(un, moving) {

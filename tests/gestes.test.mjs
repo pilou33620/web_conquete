@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing, chooseLine, matchSlots } from '../web/js/battle/gestes.js';
+import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves } from '../web/js/battle/gestes.js';
 
 const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
 
@@ -196,4 +196,14 @@ test('après des pertes : les tués sont exclus, les nouveaux venus n’ont pas 
   // une colonne plus nombreuse que la ligne d'avant : les figurines de trop n'ont pas d'ancien (-1)
   const plus = [...ligne, [30, 0, 'inf', 0, 0, 0]];
   assert.equal(matchSlots(ligne, plus).filter(i => i < 0).length, 1);
+});
+
+test('un régiment qui tourne sur place marche aussi (pas de glissade)', () => {
+  const at = (x, y, dir) => ({ x, y, dir });
+  assert.equal(moves({ from: at(0, 0, 0), to: at(0, 0, 0.5) }), true, 'conversion');
+  assert.equal(moves({ from: at(0, 0, 0), to: at(5, 0, 0) }), true, 'marche');
+  assert.equal(moves({ from: at(0, 0, 0), to: at(0.1, 0, 0.01) }), false, 'immobile');
+  assert.equal(moves({ from: at(0, 0, 3.1), to: at(0, 0, -3.1) }), true, 'de part et d’autre de ±π');
+  assert.equal(moves({ from: at(0, 0, 3.13), to: at(0, 0, -3.13) }), false);
+  assert.equal(moves({}), false, 'sans positions');
 });

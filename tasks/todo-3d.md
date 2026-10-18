@@ -515,7 +515,9 @@ General sur un régiment qui tire.
   - Fichiers : `web/js/battle/gestes.js`, `web/js/battle/troupes.js`, `tests/gestes.test.mjs`
   - Taille : M
 
-- [ ] **T37 : conversion, marche et arrêt sans glissade**
+- [x] **T37 : conversion, marche et arrêt sans glissade**
+  - Fait : `moves()` (gestes.js) compte aussi la rotation sur place (au-delà de 0,05 rad entre deux relevés) : en
+    conversion, les hommes marchent (et les chevaux) ; à l'arrêt, ils reprennent leur geste en fondu.
   - Critères :
     - Quand le cap d'un régiment change ou qu'il se déplace, ses hommes à l'arrêt se mettent en marche, puis reprennent
       leur geste à l'arrivée, en fondu.
