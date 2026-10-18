@@ -736,4 +736,9 @@ General sur un régiment qui tire.
 - [x] **Point de contrôle 8a** (18/10/2026) : bancs ; captures 1700, 1790, 1813, 1870, de près et de loin.
 - [x] **T49 : les figurines des cartes d'unités** (`unites.js`, `interface.js`) : même uniforme, revers du camp.
   - Fait : `UnitArt.sprite(…, coat)` : l'habit d'époque de l'arme, revers et tapis à la couleur du camp.
-- [ ] **T50 : README, revue (/review), galerie** ; point final : ton avis.
+- [x] **T50 : README, revue (/review), galerie** (18/10/2026)
+  - Revue : collet caché dans l'habit (agrandi), banc « de loin » qui ne testait pas la version de loin (réparé),
+    reconstruction ralentie de 45 % (couleurs lues une fois), cartes 2D accordées à la 3D, garance dès 1829.
+  - Les dragons n'existaient que dans la maquette : à ta demande, de 1760 à 1860, le serveur nomme la cavalerie tour
+    à tour dragons, chasseurs à cheval et hussards (`game/tactics/units.py`, `unit_name`).
+- [ ] **Point final de l'étape 8** : ton avis en jouant.

@@ -77,6 +77,17 @@ class OrdresParArme(unittest.TestCase):
         self.assertEqual(L.men, 0)
 
 
+class NomsDesRegiments(unittest.TestCase):
+    def test_la_cavalerie_a_ses_dragons_de_1760_a_1860(self):
+        # (étape 8 : les dragons portent l'habit vert ; il en faut dans les vraies batailles, pas seulement la maquette)
+        tb, _ = bataille(dict(cavalerie=3), epoque='1790')
+        noms = sorted(x.name for x in tb.units if x.owner == '33' and x.type == 'cavalerie')
+        self.assertEqual(noms, ['1er dragons', '2e ch. à cheval', '3e hussards'])
+        for ep in ('1700', '1870'):
+            tb, _ = bataille(dict(cavalerie=1), epoque=ep)
+            self.assertTrue(all('Cavalerie' in x.name for x in tb.units if x.owner == '33' and x.type == 'cavalerie'), ep)
+
+
 class BatailleEntiere(unittest.TestCase):
     def test_jusqu_au_bout_puis_rechargement(self):
         tb, u = bataille(dict(ligne=2, cavalerie=1, artillerie=1))

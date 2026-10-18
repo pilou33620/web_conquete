@@ -238,14 +238,21 @@ class Unit:
         return out
 
 
+# de 1760 à 1860, les régiments de cavalerie sont tour à tour dragons (habit vert : web/js/battle/formes.js, uniform),
+# chasseurs à cheval et hussards
+CAV_NAMES = ('dragons', 'ch. à cheval', 'hussards')
+
+
 def unit_name(g, owner, typ, idx):
-    """Nom affiché : « 3e Ligne », « Milice d'Agen »…"""
+    """Nom affiché : « 3e Ligne », « 1er dragons », « Milice d'Agen »…"""
     if typ == 'general':
         return 'État-major'
     if g is not None and owner in getattr(g, 'factions', {}):
         short = g.unit_name(owner, typ)[1]
     else:
         short = R.UNITS[typ]['short'] if typ in R.UNITS else 'Milice'
+    if typ == 'cavalerie' and g is not None and 1760 <= g.date().year < 1860:
+        short = CAV_NAMES[(idx - 1) % len(CAV_NAMES)]
     return f"{idx}{'er' if idx == 1 else 'e'} {short}"
 
 

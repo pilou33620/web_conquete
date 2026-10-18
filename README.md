@@ -425,7 +425,8 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   tranchées, haies, murets et clôtures ; le soleil de l'heure porte leurs ombres, adoucies, et une lumière douce
   éclaire le tout. Chaque régiment est fait de figurines 3D arrondies (un homme par figurine tant que la qualité
   graphique le permet) en uniforme français de l'époque : justaucorps gris-blanc sous Louis XIV, habit bleu national
-  puis impérial, capote bleu foncé et pantalon garance en 1870, artillerie en bleu foncé. Son camp se lit à ses revers,
+  puis impérial, capote bleu foncé et pantalon garance en 1870, artillerie en bleu foncé, dragons en habit vert (de
+  1760 à 1860, la cavalerie compte dragons, chasseurs à cheval et hussards). Son camp se lit à ses revers,
   son collet et ses parements, de loin à son plastron et à sa ceinture, et à ses drapeaux et fanions. Il se tient en
   rangs serrés (trois rangs pour une ligne), avec porte-drapeau, tambours, officiers et colonel à cheval ; les
   coiffures suivent l'époque (tricorne relevé, bicorne, shako, képi, bonnet à poil), buffleteries blanches,
