@@ -261,7 +261,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 
 ### 7b : tués
 - [x] T34 : les hommes tombent, corps en 3D au sol (anneau plafonné)
-- [ ] T35 : boulets qui couchent une file, chevaux morts
+- [x] T35 : boulets qui couchent une file, chevaux morts
 - [ ] Point de contrôle 7b
 
 ### 7c : places et bâtiments

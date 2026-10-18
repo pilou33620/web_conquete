@@ -475,7 +475,11 @@ General sur un régiment qui tire.
     `web/js/battle/qualite.js`, `tests/gestes.test.mjs`
   - Taille : M
 
-- [ ] **T35 : boulets qui couchent une file, chevaux morts**
+- [x] **T35 : boulets qui couchent une file, chevaux morts**
+  - Fait : `chooseLine` (les plus proches de la trajectoire) ; la vue garde les boulets du relevé (`balls`) : une perte
+    sur leur trajectoire couche au plus 6 hommes de la file (« projeté »), le reste tombe comme sous la mousqueterie.
+    Cavaliers tués : le cheval couché sur le flanc par le shader (rang −9), avec sa robe et son cavalier ; toutes les
+    pertes passent par `kill()`.
   - Critères :
     - Un boulet (événement `canon`) qui frappe un régiment tue d'abord la file la plus proche de sa trajectoire. Ces
       hommes jouent « projeté ».

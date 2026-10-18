@@ -18,7 +18,7 @@
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp } from './formes.js';
-import { activity, pick, firing, serving, variety, rows, chooseDead, pushRing } from './gestes.js';
+import { activity, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
 const { AIM, RUN, ROUT } = POSES;
@@ -37,6 +37,8 @@ const KINDS = { inf: null, gren: null, leger: null, milice: null, officier: null
 const CONTACT = { FOOT: [0.8, 0.66, 0], HORSE: [1.0, 2.5, 0], GUN: [1.7, 3.0, -0.3] };
 const ROBES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];   // robes des chevaux (bai, bai brun, alezan, noir pangaré)
 const FOOT = Object.keys(KINDS).filter(k => KINDS[k] === null);   // les hommes à pied, au squelette
+const DIES = [...FOOT, 'cav'];   // qui peut tomber (un cavalier tué : son cheval couché, lui avec)
+const BALL = 6;                  // hommes couchés au plus par un boulet
 // graine d'un régiment (variété de ses hommes) ; habit d'une figurine (c : la couleur du camp, modifiée)
 const seedOf = id => [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7);
 function coatOf(kind, c) {
@@ -607,6 +609,7 @@ const VERT_POSE = `
   boneA = aBone == 1.0 ? aFL : aBone == 2.0 ? aFR : aBone == 5.0 ? aHL : aBone == 6.0 ? aHR : aBone == 7.0 ? sin(t) * am * 0.3 : aBone == 8.0 && gait > 1.5 ? 1.2 : 0.0;
   pivot = aBone == 1.0 || aBone == 2.0 ? vec2(0.85, 0.6) : aBone == 5.0 || aBone == 6.0 ? vec2(0.85, -0.6) : aBone == 7.0 ? vec2(1.4, 0.75) : vec2(2.2, 0.0);
   bob = gait > 1.5 ? abs(sin(t)) * 0.12 : gait > 0.5 ? abs(sin(t * 2.0)) * 0.03 : 0.0;
+  if (rank < -8.0) { boneA = 0.0; bob = 0.0; }   // cheval tué (rang −9 : voir kill)
 #elif defined(RIG)
   // homme au squelette : la matrice de son os dans son geste, fondue avec celle du geste d'avant pendant 0,3 s
   int bi = int(aBone + 0.5);
@@ -638,6 +641,10 @@ const turn = (v, isPos) => `
 #else
   ${v}.yz = pitch(${v}.yz, ${isPos ? 'pivot' : 'vec2(0.0)'}, boneA);
   ${v}.yz = pitch(${v}.yz, vec2(0.0), lean);
+#endif
+#if defined(HORSE)
+  // cheval tué : couché sur le flanc, un quart de tour autour de sa longueur
+  if (rank < -8.0) ${v} = vec3(-${v}.y${isPos ? ' + 1.0' : ''}, ${v}.x${isPos ? ' + 0.32' : ''}, ${v}.z);
 #endif
   ${v} = vec3(${v}.x * sa + ${v}.z * ca, ${v}.y, -${v}.x * ca + ${v}.z * sa);`;
 
@@ -897,15 +904,15 @@ export class Troops {
       }
       this.gestures(e, false);
     }
-    // les corps : « mort » joué depuis l'instant de la chute, puis sa dernière image (couché)
-    const mort = this.clipId.get('mort') ?? 0;
+    // les corps : leur geste (« mort », « projeté ») joué depuis l'instant de la chute, puis sa dernière image (couché) ;
+    // un cheval tué, couché par le shader (rang −9), garde sa robe
     for (const b of this.dead) {
       const k = b.lod && this.kinds.get(b.kind + (b.lod === 1 ? '~' : ''));
       if (!k) continue;
       if (k.n >= k.cap) this.grow(k, k.cap * 2);
-      const n = k.n++, o = n * 4;
-      k.buf.aSlot.set([b.y, b.x, b.a, DEAD], o); k.buf.aAnim.set([0, 0, scale * b.size, 0], o); k.buf.aCoat.set(b.coat, n * 3);
-      k.buf.aGest.set([mort, b.t, mort, b.t], o); k.buf.aMix.set([-99, 1, 1, 0], o);
+      const n = k.n++, o = n * 4, c = this.clipId.get(b.clip) ?? 0;
+      k.buf.aSlot.set([b.y, b.x, b.a, DEAD], o); k.buf.aAnim.set([b.horse ? b.pose : 0, 0, scale * b.size, b.horse ? -9 : 0], o); k.buf.aCoat.set(b.coat, n * 3);
+      k.buf.aGest.set([c, b.t, c, b.t], o); k.buf.aMix.set([-99, 1, 1, 0], o);
     }
     for (const k of this.kinds.values()) {
       // une sorte vide n'est ni dessinée ni envoyée (une plage vide renverrait tout le tableau à la carte graphique)
@@ -932,26 +939,31 @@ export class Troops {
       at.addUpdateRange(a * 4, (b - a + 1) * 4); at.needsUpdate = true;
     }
   }
-  // un régiment perd n hommes : autant de figurines tombent (gestes.js, chooseDead : surtout au premier rang) et
-  // deviennent des corps à l'endroit et dans le sens de leur chute, étalées sur 1,5 s. bare(x, y) : sol où un corps peut
-  // reposer (ni bâtiment ni eau) ; color : couleur du camp. Renvoie les corps sortis de l'anneau (plafond de la qualité),
-  // à repeindre en taches au sol
-  kill(un, n, bare, color) {
+  // un régiment perd n hommes : autant de figurines tombent et deviennent des corps à l'endroit et dans le sens de leur
+  // chute, étalées sur 1,5 s : sous la mousqueterie, surtout le premier rang (« mort ») ; un boulet (line : sa
+  // trajectoire [[u, v], [u, v]] dans le repère du régiment) couche au plus BALL hommes de la file qu'il traverse
+  // (« projeté »), les autres pertes du relevé tombent comme sous la mousqueterie. Un cavalier tué :
+  // son cheval couché. bare(x, y) : sol où un corps peut reposer (ni bâtiment ni eau) ; color : couleur du camp.
+  // Renvoie les corps sortis de l'anneau (plafond de la qualité), à repeindre en taches au sol
+  kill(un, n, bare, color, line = null) {
     const id = String(un.id), e = this.lays.get(id);
     if (!e || !this.per) return [];
     e.lost = (e.lost ?? 0) + n / this.per;
-    const cand = e.lay.map((f, i) => [f, i]).filter(([f]) => FOOT.includes(f[2])), k = Math.min(Math.floor(e.lost), cand.length);
+    const cand = e.lay.map((f, i) => [f, i]).filter(([f]) => DIES.includes(f[2])), k = Math.min(Math.floor(e.lost), cand.length);
     if (k < 1) return [];
     e.lost -= k;
-    const seed = seedOf(id), c = Math.cos(un.dir), s = Math.sin(un.dir), col = new THREE.Color(), out = [];
-    for (const j of chooseDead(cand.map(([f]) => f), k, seed + Math.round((this.fxT ?? 0) * 10))) {
-      const [f, i] = cand[j], v = variety(seed, i), uu = f[0] + v.du, vv = f[1] + v.dv;
+    const seed = seedOf(id), c = Math.cos(un.dir), s = Math.sin(un.dir), col = new THREE.Color(), out = [], figs = cand.map(([f]) => f);
+    const ball = line ? chooseLine(figs, Math.min(k, BALL), ...line) : [], rest = cand.map((_, j) => j).filter(j => !ball.includes(j));
+    const shot = chooseDead(rest.map(j => figs[j]), k - ball.length, seed + Math.round((this.fxT ?? 0) * 10)).map(r => rest[r]);
+    for (const j of [...ball, ...shot]) {
+      const [f, i] = cand[j], v = variety(seed, i), uu = f[0] + v.du, vv = f[1] + v.dv, hit = ball.includes(j);
       const x = un.x + c * vv - s * uu, y = un.y + s * vv + c * uu;
       if (!bare(x, y)) continue;
       coatOf(f[2], col.set(color)).offsetHSL(v.hue, v.sat, v.light);
-      const old = pushRing(this.dead, this.q.corps ?? 2500, { kind: f[2], x, y, a: un.dir + (f[3] === 2 ? Math.PI : 0) + v.da + (hash(i, 23, seed) - 0.5) * 1.2,
-        t: (this.fxT ?? 0) + hash(i, 29, seed) * 1.5, size: v.size, coat: [col.r, col.g, col.b], c: color, lod: 2 });
-      if (old) out.push({ k: 'mort', x: old.x, y: old.y, a: old.a, c: old.c });
+      const horse = f[2] === 'cav', old = pushRing(this.dead, this.q.corps ?? 2500, { kind: f[2], horse, pose: f[4], clip: hit ? 'projete' : 'mort',
+        x, y, a: un.dir + (f[3] === 2 ? Math.PI : 0) + v.da + (hash(i, 23, seed) - 0.5) * 1.2,
+        t: (this.fxT ?? 0) + (hit ? 0 : hash(i, 29, seed) * 1.5), size: v.size, coat: [col.r, col.g, col.b], c: color, lod: 2 });
+      if (old) out.push({ k: old.horse ? 'cheval' : 'mort', x: old.x, y: old.y, a: old.a, c: old.c });
     }
     this.deadNew = true;
     return out;

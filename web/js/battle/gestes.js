@@ -99,3 +99,14 @@ export function pushRing(ring, cap, item) {
   ring[ring.pos] = item; ring.pos = (ring.pos + 1) % cap;
   return old;
 }
+
+// les k figurines les plus proches de la trajectoire d'un boulet, du point a au point b ([u, v] dans le repère du
+// régiment) : il couche une file
+export function chooseLine(figs, k, a, b) {
+  const [dx, dy] = [b[0] - a[0], b[1] - a[1]], l2 = dx * dx + dy * dy || 1;
+  const dist = f => {
+    const t = Math.min(1, Math.max(0, ((f[0] - a[0]) * dx + (f[1] - a[1]) * dy) / l2));
+    return Math.hypot(f[0] - a[0] - t * dx, f[1] - a[1] - t * dy);
+  };
+  return figs.map((f, i) => [dist(f), i]).sort((p, q) => p[0] - q[0]).slice(0, k).map(([, i]) => i);
+}

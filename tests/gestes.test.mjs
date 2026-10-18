@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing } from '../web/js/battle/gestes.js';
+import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing, chooseLine } from '../web/js/battle/gestes.js';
 
 const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
 
@@ -164,4 +164,14 @@ test('l’anneau des corps : plafonné, le plus ancien sort le premier', () => {
   assert.equal(pushRing(ring, 3, 'd'), 'a');
   assert.equal(pushRing(ring, 3, 'e'), 'b');
   assert.deepEqual([...ring].sort(), ['c', 'd', 'e']);
+});
+
+test('un boulet couche la file la plus proche de sa trajectoire', () => {
+  // boulet venu de l'avant qui traverse le front à u = 5 (repère du régiment : u le long du front, v vers l'avant)
+  const d = chooseLine(ligne, 3, [5.2, 30], [4.8, -30]);
+  assert.equal(d.length, 3);
+  for (const i of d) assert.equal(ligne[i][0], 5, `figurine ${i} en u = ${ligne[i][0]}`);
+  // de biais : les plus proches d'abord
+  const e = chooseLine(ligne, 2, [0, 10], [10, -10]);
+  for (const i of e) assert.ok(Math.abs(ligne[i][0] - (5 - ligne[i][1] / 2)) < 1.5, `figurine ${i}`);
 });
