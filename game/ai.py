@@ -113,6 +113,8 @@ class AI:
         lv = {cls: self.g.arm_level(self.code, cls) for cls in R.ARMS}
         gap = men = 0
         for r in regs:
+            if R.UNITS[r['type']]['arm_name']:
+                continue   # (armement fixe : la mitrailleuse ne se réarme pas)
             d = lv.get(R.UNITS[r['type']]['cls'], 0) - r.get('arm', 0)
             if d > 0:
                 gap = max(gap, d)

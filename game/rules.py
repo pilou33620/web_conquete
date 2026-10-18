@@ -281,7 +281,7 @@ TECHS = [
     ('mutuelles', 'civil', 'Sociétés de secours mutuels', 'On cotise pour les malades et les veuves : les places mal assimilées se révoltent moitié moins, recrues +5 %.', 1000, 49, ['suffrage'], dict(revolt=-0.5, recrues=0.05)),
     ('croix_rouge', 'civil', 'Croix-Rouge (convention de Genève)', "Les blessés sont soignés des deux côtés : un quart des pertes d'une bataille rejoint ses régiments ; pertes −5 %.", 1250, 56, ['larrey'], dict(wounded=0.25, casualties=-0.05)),
     ('telephone', 'civil', 'Téléphone', "Le fil parle : vision des villes +10 km, les armées ennemies sont annoncées un tour avant d'entrer chez vous.", 1375, 63, ['telegraphe'], dict(node_vision=10, alert=1)),
-    ('syndicats', 'civil', 'Syndicats (loi de 1884)', "Les ouvriers s'organisent : industrie +10 %, mais une ville à l'ordre bas peut faire grève (un mois d'industrie perdu, une fois l'an).", 1375, 63, ['mutuelles'], dict(industrie=0.10, strikes=1)),
+    ('syndicats', 'civil', 'Syndicats (loi de 1884)', "Les ouvriers s'organisent : industrie +10 %, mais une ville à l'ordre bas peut faire grève (en janvier, ses ateliers presque arrêtés pendant un tour).", 1375, 63, ['mutuelles'], dict(industrie=0.10, strikes=1)),
 
     ('hauts_fourneaux', 'industriel', 'Hauts fourneaux', 'Production de fer +30 %.', 500, 35, [], dict(fer=0.30)),
     ('manufactures', 'industriel', 'Manufactures royales', 'Capacité industrielle +25 %.', 625, 42, [], dict(industrie=0.25)),

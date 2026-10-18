@@ -1059,6 +1059,7 @@ class EffetsSurLaSociete(unittest.TestCase):
         self.assertAlmostEqual(g.mod('33', 'port'), sans - 0.4)
         avec(g, '33', 'betterave')
         self.assertAlmostEqual(g.mod('33', 'port'), sans, msg='le blocus ne coûte plus rien aux ports')
+        self.assertFalse(any('ort' in x for x in V._effects(g, g.factions['33'])), 'le panneau ne le montre plus')
 
     def test_un_ancien_effet_sans_etiquette_reste_entier(self):
         g = partie()
@@ -1185,6 +1186,29 @@ class ApresLaBataille(unittest.TestCase):
         for r in a1['regs']:
             self.assertLessEqual(r['n'], r['max'])
             self.assertNotIn('wnd', r)
+
+    def test_les_blesses_d_une_garnison_lui_reviennent(self):
+        g = avec(partie(seed=3), '33', 'croix_rouge')
+        D.declare_war(g, '33', '24')
+        cap = g.capital_of('33')
+        g.nodes[cap]['garrison'] = [g.new_reg('ligne', code='33'), g.new_reg('ligne', code='33')]
+        e = armee(g, '24')
+        e['x'], e['y'], e['at_node'], e['path'], e['state'] = *g.node_xy(cap), None, [], 'idle'
+        for a_ in [a_ for a_ in g.armies.values() if a_['owner'] == '33']:
+            a_['x'], a_['y'], a_['at_node'] = a_['x'] + 200, a_['y'], None   # (la garnison seule)
+        g.start_battle([e], [], *g.node_xy(cap), node=cap)
+        bt = next(iter(g.battles.values()))
+        bt['mode'] = 'auto'
+        g.resolve_battle_now(bt)
+        for n in g.nodes:
+            for r in n['garrison']:
+                self.assertNotIn('wnd', r, 'les blessés soignés sont rendus à la fin de la bataille')
+
+    def test_une_mitrailleuse_n_attire_pas_l_ia_au_reamement(self):
+        g = avec(partie(epoque='1870'), '33', 'mitrailleuse', 'debange')
+        r = g.new_reg('mitrailleuses', code='33')
+        r['arm'] = 0
+        self.assertEqual(g.ais['24'].__class__(g, '33').arm_gap([r]), (0, 0))
 
     def test_la_dynamite_ouvre_une_breche_de_plus(self):
         g = avec(partie(), '24', 'dynamite')

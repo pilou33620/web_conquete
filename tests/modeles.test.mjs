@@ -253,6 +253,7 @@ test('une pièce par génération d’artillerie, de près et de loin (SPEC-TECH
 test('le canon de 75 : son tube recule seul sur le frein (os 1), l’affût et le bouclier restent (os 2)', () => {
   const bones = v => [...new Set(model('canon', 1790, 1, false, v).attributes.aBone.array)].sort();
   assert.deepEqual(bones('75'), [1, 2]);
+  assert.deepEqual([...new Set(model('canon', 1790, 0, false, '75').attributes.aBone.array)].sort(), [1, 2], 'de loin aussi');
   assert.deepEqual(bones('gribeauval'), [0], 'les autres pièces reculent tout entières');
   assert.deepEqual(bones('bange'), [0]);
 });

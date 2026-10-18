@@ -376,6 +376,15 @@ def tick(g, d):
 ATTENUE = dict(cholera='epidemics', epidemie='epidemics', blocus='blockade', phylloxera='vine_blight', mildiou='vine_blight')
 
 
+def tmod_value(e, mods):
+    """Valeur d'un effet temporaire pour un camp de ces effets (mods) : atténuée par ses technologies si son événement
+    est de ceux d'ATTENUE (Game.recompute_mods, et le panneau des effets)."""
+    v = e['v']
+    if v < 0 and e.get('ev') in ATTENUE:
+        v *= max(0.0, 1 + mods.get(ATTENUE[e['ev']], 0))
+    return v
+
+
 def soften(g, code, ev, fx):
     """L'effet d'un événement pour ce camp : ses pertes de population atténuées par ses technologies, ses effets
     temporaires étiquetés (Game.recompute_mods les atténue, même pour une technologie trouvée après)."""

@@ -194,6 +194,25 @@ class TechnologiesEnBataille(unittest.TestCase):
         self.assertAlmostEqual(tb._entrench_k(foe, art), 1 - 0.25 * 0.5)
         self.assertAlmostEqual(tb._fire_cover(foe, mes['ligne']), tb._cover_vs(foe, mes['ligne']), msg='pas pour les fusils')
 
+    def test_une_charge_defait_le_retranchement(self):
+        tb, mes = bataille()
+        u, foe = mes['ligne'], ennemi(tb, mes['ligne'], 'inf')
+        face_a_face(tb, u, foe, 150)
+        u.still_t = -999.0
+        ok, why = ordre(tb, u, 'charge', target=foe.id)
+        self.assertTrue(ok, why)
+        avancer(tb, 5)
+        self.assertGreater(u.still_t, tb.clock - 10, 'qui charge ne reste pas enterré')
+
+    def test_la_melinite_ne_sert_pas_aux_mitrailleuses(self):
+        tb, mes = bataille(mes={'mitrailleuses': 1}, epoque='1870')
+        m, foe = mes['mitrailleuses'], ennemi(tb, mes['mitrailleuses'])
+        tb.spec['shell'] = [0.5, 0.5]
+        tb.spec['entrench'] = [0.25, 0.25]
+        foe.still_t, foe.cls = tb.clock - 400, 'inf'
+        self.assertEqual(tb._fire_cover(foe, m), tb._cover_vs(foe, m))
+        self.assertAlmostEqual(tb._entrench_k(foe, m), 0.75)
+
     def test_marques_et_effets_dans_la_spec(self):
         from unittest import mock
         with mock.patch.dict(R.TECH_YEAR, aerostiers=1700, genie=1700):

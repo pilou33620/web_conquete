@@ -421,10 +421,8 @@ class Game:
             m[k] = m.get(k, 0) + v
         for e in f.get('tmods', []):
             if e['until'] > self.t:
-                v = e['v']
-                if v < 0 and e.get('ev') in EV.ATTENUE:   # (blocus, phylloxéra… atténués par les technologies du camp)
-                    v *= max(0.0, 1 + m.get(EV.ATTENUE[e['ev']], 0))
-                m[e['k']] = m.get(e['k'], 0) + v
+                # (blocus, phylloxéra… atténués par les technologies du camp)
+                m[e['k']] = m.get(e['k'], 0) + EV.tmod_value(e, m)
         if code != self.player:
             d = R.DIFFICULTY[self.difficulty]
             m['ai_income'] = d['ai_income'] - 1
@@ -693,7 +691,7 @@ class Game:
                 self._dirty_income = True
                 if code == self.player:
                     self.log('revolte', f"Grève à {gn['name']} (ordre public {int(n['stab'] * 100)} %) : les ateliers "
-                                        f"s'arrêtent pour un tour.", gn['x'], gn['y'], important=True)
+                                        f"sont presque arrêtés pour un tour.", gn['x'], gn['y'], important=True)
 
     def node_output(self, n, code):
         gn, b0, quai, lande, mont = self.node_static(n['id'])
@@ -2838,8 +2836,9 @@ class Game:
             else:
                 loss = min(obj['n'], d)
                 obj['n'] -= loss
-                if side['owner'] in self.factions:   # Croix-Rouge : une part des blessés rejoindra le régiment (end_battle)
-                    obj['wnd'] = obj.get('wnd', 0.0) + loss * self.mod(side['owner'], 'wounded')
+                o = a['owner'] if a is not None else side['owner']   # (un régiment allié : la Croix-Rouge de son camp)
+                if o in self.factions:   # Croix-Rouge : une part des blessés rejoindra le régiment (end_battle)
+                    obj['wnd'] = obj.get('wnd', 0.0) + loss * self.mod(o, 'wounded')
                 k = 230 if a is not None else 150
                 if a is not None:
                     if a.get('pl') == 'tenir':
@@ -2890,7 +2889,8 @@ class Game:
         loser = 1 - winner
         W, L = bt['sides'][winner], bt['sides'][loser]
         for si in (0, 1):   # Croix-Rouge : les blessés soignés reviennent aux régiments (wnd, compté pendant la bataille)
-            for _, r, _ in self.side_units(bt, si):
+            nd = bt['sides'][si]['node']
+            for r in [r for _, r, _ in self.side_units(bt, si)] + (self.nodes[nd]['garrison'] if nd is not None else []):
                 if 'wnd' in r:
                     r['n'] = min(r['max'], r['n'] + r.pop('wnd'))
         caught = 0.0   # hommes rattrapés pendant la poursuite

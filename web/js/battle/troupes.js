@@ -543,6 +543,7 @@ function farGun(v = 'gribeauval') {
   const P = [[cyl(G.reffye ? 0.17 : 0.12 * G.r, G.reffye ? 0.17 : 0.15 * G.r, 2.1 * G.L, 6, 0, 1.0, G.reffye ? 0.3 : 0.52, Math.PI / 2), G.tube, 0, 0], [box(G.fleche ? 0.2 : 0.4, 0.3, 1.95, 0, 0.74, -0.4, -0.25), G.aff, 0, 0], [box(0.36, 0.12, 0.3, 0, 0.16, -1.4), G.aff, 0, 0]];
   if (G.bouclier) P.push([box(1.3, 1.0, 0.04, 0, 1.15, 0.3), ACIER, 0, 0]);
   for (const s of [1, -1]) P.push([cyl(0.62, 0.62, 0.08, 8, s * 0.48, 0.62, 0.1, 0, Math.PI / 2), '#6a5a3a', 0, 0]);
+  if (G.frein) P.forEach((p, i) => { p[2] = i === 0 ? 1 : 2; });   // (de loin aussi, le tube du 75 recule seul)
   return assemble(P);
 }
 function farCaisson(wagon, v = 'gribeauval') {

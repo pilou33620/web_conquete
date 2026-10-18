@@ -151,7 +151,9 @@ def _effects(g, f):
     out = []
     for e in f.get('tmods', []):
         if e['until'] > g.t:
-            v = e['v']
+            v = EV.tmod_value(e, f['mods'])
+            if not v:
+                continue   # (entièrement levé par une technologie : le blocus avec la betterave)
             val = f"{'+' if v > 0 else '−'}{abs(v)}" if e['k'] in EV.ABS_MODS else EV._pct(v)
             out.append(f"{EV.MOD_LABEL.get(e['k'], e['k'])} {val} jusqu'au {g.date_str(e['until'])}")
     for k, v in f.get('emods', {}).items():

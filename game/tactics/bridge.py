@@ -396,7 +396,7 @@ def finish(g, tb):
             continue
         reg['n'] = max(0.0, r_['men'])
         if u.owner in g.factions and g.mod(u.owner, 'wounded'):   # Croix-Rouge : rendus par end_battle
-            reg['wnd'] = max(0.0, r_['lost']) * g.mod(u.owner, 'wounded')
+            reg['wnd'] = max(0.0, r_['lost'] - r_.get('captured', 0)) * g.mod(u.owner, 'wounded')   # (pas les prisonniers)
         reg['morale'] = max(5.0, min(100.0, r_['morale']))
         gain = r_['xp'] - (8 if u.side == winner else 0)   # end_battle donne +8 aux vainqueurs
         reg['xp'] = min(100.0, reg['xp'] + max(0.0, gain))

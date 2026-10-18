@@ -1409,6 +1409,7 @@ class TacticalBattle:
             return
         if u.order and u.order.get('kind') == 'retreat':
             if u.busy <= 0:
+                u.still_t = self.clock
                 self._flee(u, self._speed(u) * dt, self.costs(move_class(u), u.side))
                 u.state = 'marche'
                 if self.off_map(u.side, u.x, u.y):
@@ -1844,7 +1845,7 @@ class TacticalBattle:
     def _fire_cover(self, tg, shooter):
         """Couvert de la cible sous le feu : l'obus à la mélinite de l'artillerie le perce à moitié."""
         cov = self._cover_vs(tg, shooter)
-        if shooter.cls == 'artillerie':
+        if shooter.cls == 'artillerie' and shooter.type != 'mitrailleuses':   # (des obus : pas les mitrailleuses)
             cov *= 1 - self.spec.get('shell', [0, 0])[shooter.side]
         return cov
 
@@ -1854,7 +1855,7 @@ class TacticalBattle:
         k = self.spec.get('entrench', [0, 0])[tg.side]
         if not k or tg.cls != 'inf' or self.clock - tg.still_t < ENTRENCH_T:
             return 1.0
-        if shooter.cls == 'artillerie':
+        if shooter.cls == 'artillerie' and shooter.type != 'mitrailleuses':
             k *= 1 - self.spec.get('shell', [0, 0])[shooter.side]
         return 1 - k
 
@@ -1954,6 +1955,7 @@ class TacticalBattle:
         full = ELAN_M['cav' if cav else 'inf']
         u.charge_v = min(full, u.charge_v * (0.5 + 0.5 * brake) + step * brake * slope)
         u.x, u.y, u.dir = nx, ny, b
+        u.still_t = self.clock   # (qui charge sort de ses retranchements)
         self._fatigue(u, dt, 'run')
         wt, dtg = U.footprint(tg)
         wu, _ = U.footprint(u)
@@ -2006,7 +2008,11 @@ class TacticalBattle:
             ((tg.cls == 'inf' and tg.form in ('ligne', 'colonne', 'tirailleurs')) or
              (tg.cls == 'artillerie' and tg.form == 'batterie'))
         if ready:
-            if tg.cls == 'artillerie':
+            if tg.type == 'mitrailleuses':
+                # la mitrailleuse : plusieurs gerbes à bout portant, sans mitraille
+                vol = U.pieces(tg) * P_REFFYE * 3 * (0.6 + 0.4 * tg.morale / 100)
+                kind = 'salve'
+            elif tg.cls == 'artillerie':
                 # deux décharges de mitraille à bout portant pendant que la charge arrive (la gerbe serrée : ×2,2) ;
                 # aborder une batterie de face coûte très cher, la prendre de flanc ou de dos ne coûte rien
                 vol = U.pieces(tg) * P_MITRAILLE * GRAPE_POINT * 1.4 * (0.6 + 0.4 * tg.morale / 100)
@@ -2170,7 +2176,7 @@ class TacticalBattle:
                     for u, s in ((a, -1), (b, 1)):
                         nx, ny = u.x + s * dx / d * push, u.y + s * dy / d * push
                         if 0 <= nx < W and 0 <= ny < H and self._passable_u(u, nx, ny):
-                            u.x, u.y = nx, ny
+                            u.x, u.y, u.still_t = nx, ny, self.clock
                 continue
             for x, y in ((a, b), (b, a)):
                 if y.state == 'deroute' and x.valid and x.state != 'melee':
