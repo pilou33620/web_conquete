@@ -2081,8 +2081,12 @@ class Game:
             if code == self.player or o == self.player:
                 if o == self.player:
                     self.alert_pause()
-                self.log('siege', f"Siège {R.de(gn['name'])} par {self.fname(code)}.", gn['x'], gn['y'], who=code,
-                         important=True)
+                txt = f"Siège {R.de(gn['name'])} par {self.fname(code)}."
+                if code == self.player and TT.planning(self):
+                    # (votre tour : pas de bataille avant la brèche, au tour des IA, sauf assaut ordonné)
+                    txt = (f"{gn['name']} a des remparts : siège commencé. « Donner l’assaut » pour l’attaquer tout de "
+                           f"suite ; sinon l’assaut partira de lui-même à la brèche.")
+                self.log('siege', txt, gn['x'], gn['y'], who=code, important=True)
             return True
         if n['siege'] and n['siege']['by'] == code and not a['assault']:
             a['state'] = 'siege'

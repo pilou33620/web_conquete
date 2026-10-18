@@ -88,7 +88,9 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
    marche part aussitôt, sous vos yeux, jusqu'au bout de sa marche du tour ou jusqu'à l'ennemi (une route plus longue
    reprend d'elle-même au tour suivant ; la bulle de l'ordre annonce l'arrivée). Une bataille ou un assaut se livre
    sur-le-champ ; une ville neutre assez faible se rallie aussitôt (l'armée finit là sa marche du tour) ; achats,
-   constructions et recherches sont payés tout de suite.
+   constructions et recherches sont payés tout de suite. Devant une place à remparts, l'armée l'assiège :
+   **« Donner l'assaut »** l'attaque tout de suite, sinon l'assaut part de lui-même à la brèche, pendant le tour des IA.
+   En conduite « Traverser », elle fait halte devant une place ennemie sans l'attaquer.
 2. **Le tour des IA** : touchez **« Tour suivant »** en haut de l'écran (ou la barre d'espace). Le mois est calculé
    d'un coup, en une ou deux secondes : les IA marchent, négocient et se battent, travaux et sièges avancent, les revenus
    tombent. Vos armées, qui ont déjà joué, restent en place. Tout le monde passe au **1er du mois suivant** en même

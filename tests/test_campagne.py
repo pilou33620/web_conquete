@@ -466,6 +466,27 @@ class SiegesEnTours(unittest.TestCase):
         self.assertTrue(n['siege'] is None or n['siege']['dmg'] >= 0.85 or n['owner'] == g.player,
                         'brèche ouverte (ou place prise) au tour annoncé')
 
+    def test_place_a_remparts_pendant_votre_tour(self):
+        # (rapport du 18/10/2026 : « en plein tour, il ne propose pas la bataille, en fin de tour oui ») : la place à
+        # remparts est assiégée, pas attaquée, et la bulle dit comment l'attaquer tout de suite ; l'assaut demandé
+        # pendant le tour attend aussitôt le choix du joueur
+        g = partie()
+        a = armee(g)
+        D.declare_war(g, g.player, '24', quiet=True)
+        nid = {gn['name']: i for i, gn in enumerate(g.geo.nodes)}['Bergerac']
+        self.assertTrue(AA.walled(g.nodes[nid]))
+        x, y = g.node_xy(nid)
+        a['x'], a['y'], a['at_node'], a['edge'], a['tr'] = x + 3, y, None, None, False
+        self.assertTrue(g.order_move(g.player, a['id'], x, y)[0])
+        TT.settle(g)
+        self.assertEqual(a['state'], 'siege')
+        self.assertFalse(g.battles)
+        self.assertIn('Donner l’assaut', g.events[-1]['text'])
+        self.assertTrue(g.events[-1]['important'], 'annoncé en bulle')
+        self.assertTrue(g.assault(g.player, a['id'])[0])
+        TT.settle(g)
+        self.assertEqual([bt.get('mode') for bt in g.battles.values()], ['attente'], 'la fenêtre « Commander la bataille »')
+
     def test_blocus_en_tours(self):
         g, n = self.assieger()
         n['siege'].update(blocus=True, food=30, m0=100)
