@@ -311,3 +311,34 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 
 - Plafond des corps et coût des fondus : réglés sur l'iPad au point de contrôle 7a (puis 7b).
 - Agrandissement maximal de loin : ×2 sur les captures de T42, puis ×3, retenu le 18/10/2026 (environ 6 à 7 px en vue d'ensemble).
+
+---
+
+## Étape 8 : uniformes français d'époque (SPEC-3D.md, « Étape 8 », validée le 18/10/2026)
+
+### Décisions d'architecture
+
+23. **Une seule palette**, dans `formes.js` (constantes communes) : `uniform(year, cls, name, kind)` donne l'habit et
+    la culotte selon l'époque et l'arme (artillerie, dragons reconnus à leur nom). Les figurines 3D (`troupes.js`) et
+    celles des cartes (`unites.js`) la lisent.
+24. **La couleur du camp devient une pièce à part** : `assemble` connaît déjà les teintes 0 (fixe), 1 (habit, `aCoat`)
+    et 2 (robe des chevaux) ; la teinte 3 prend la couleur du camp, d'un nouvel attribut d'instance `aFace` (3 nombres,
+    13 attributs au plus : sous la limite de 16, un banc la garde). Revers, retroussis, collet, parements, tapis de
+    selle et, de loin, le plastron sont en teinte 3. L'habit (`aCoat`) prend l'uniforme, avec la variété de chaque homme.
+25. **Les corps au sol** gardent leur habit et leur couleur de camp (`kill` les note, `rebuild` les écrit).
+
+### Tâches
+
+- [ ] T47 : la couleur du camp sur les revers (teinte 3, `aFace`), d'abord avec l'habit encore à la couleur du camp
+- [ ] T48 : l'habit d'époque (palette, culotte garance en 1870, artillerie, dragons), corps compris
+- [ ] Point de contrôle 8a : captures des quatre époques, de près et de loin ; bancs
+- [ ] T49 : les figurines des cartes d'unités
+- [ ] T50 : README, revue, galerie
+
+### Risques
+
+| Risque | Impact | Parade |
+|---|---|---|
+| Les deux camps se confondent de loin | Haut | plastron à la couleur du camp sur la version de loin ; captures de loin au point 8a |
+| Un attribut de plus | Bas | 13 au plus ; le banc du budget d'attributs |
+| Nuances peu fidèles | Moyen | réglées sur les captures, comparées à des planches anciennes |

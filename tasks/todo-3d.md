@@ -711,3 +711,22 @@ General sur un régiment qui tire.
 
 - [ ] **Point final de l'étape 7** : tu essaies sur l'iPad (images par seconde en Haute) et tu juges l'allure en
   jouant.
+
+## Étape 8 : uniformes français d'époque (SPEC-3D.md « Étape 8 » ; plan : décisions 23 à 25)
+
+- [ ] **T47 : la couleur du camp sur les revers**
+  - Teinte 3 dans `assemble` et le shader (`aFace`, couleur du camp par figurine) ; revers, retroussis, collet et
+    parements (homme de près, servant, cavalier), tapis de selle, plastron de la version de loin. L'habit reste à la
+    couleur du camp : rien ne change encore à l'œil, sauf les revers.
+  - Vérif : `tests/modeles.test.mjs` (chaque modèle d'homme a sa pièce teinte 3 ; budget d'attributs) ; une capture.
+  - Fichiers : `web/js/battle/troupes.js`, `tests/modeles.test.mjs` — Taille : M
+- [ ] **T48 : l'habit d'époque**
+  - `formes.uniform` (tableau de la spec) ; `rebuild` et `kill` : habit = uniforme (variété comprise), revers = camp ;
+    culotte garance en 1870 ; milice et officiers comme dit la spec.
+  - Vérif : banc de la palette (1700 gris-blanc, 1790 et 1813 bleu, 1870 garance, artillerie bleu foncé, dragons verts,
+    milice brune) ; deux camps : même habit, revers différents ; captures des quatre époques.
+  - Fichiers : `web/js/battle/formes.js`, `web/js/battle/troupes.js`, `web/js/battle/vue.js`, `tests/modeles.test.mjs`
+  - Taille : M
+- [ ] **Point de contrôle 8a** : bancs ; captures 1700, 1790, 1813, 1870, de près et de loin.
+- [ ] **T49 : les figurines des cartes d'unités** (`unites.js`, `interface.js`) : même uniforme, revers du camp.
+- [ ] **T50 : README, revue (/review), galerie** ; point final : ton avis.

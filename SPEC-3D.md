@@ -547,3 +547,68 @@ reste : `tasks/reste-a-faire-etape7.md`. Galerie : `captures-3d/animations/` (ho
 - **Agrandissement de loin :** ×2 au plus d'abord, puis ×3, retenu par toi le 18/10/2026 (critère 13).
 - **Coût de l'herbe en relief sur l'iPad :** comme les blés, réservée aux qualités qui le supportent (`epis` dans
   `qualite.js`), mesurée au point final.
+
+---
+
+## Étape 8 : uniformes français d'époque (demande du 18/10/2026)
+
+### Objectif
+
+« Je ne veux pas du rouge, je veux la couleur d'époque des Français. » Aujourd'hui, l'habit de chaque figurine prend la
+couleur de son camp (rouge pour la Gironde) : les troupes ont l'air britanniques. Tous les camps sont français : chacun
+porte l'uniforme français de l'époque de la partie, et **son camp se lit à ses revers** (comme les couleurs distinctives
+des vrais régiments), à ses drapeaux et à ses fanions.
+
+Choix du joueur (questionnaire du 18/10/2026) : uniformes d'époque fidèles ; revers à la couleur du camp ; artillerie et
+dragons aux couleurs de leur arme ; partout (figurines 3D et petites figurines des cartes d'unités).
+
+| Époque | Infanterie (et garde nationale, sapeurs, cavalerie autre que les dragons) | Culotte ou pantalon | Artillerie | Dragons |
+|---|---|---|---|---|
+| 1700 | justaucorps gris-blanc | gris-blanc | bleu foncé | comme l'infanterie |
+| 1790 | habit bleu national | blanche | bleu foncé | habit vert |
+| 1813 | habit bleu impérial | blanche | bleu foncé | habit vert |
+| 1870 | capote bleu foncé | garance (rouge) | bleu foncé | comme l'infanterie |
+
+- **Couleur du camp** : revers, retroussis, collet et parements ; drapeaux, fanions et tapis de selle (comme aujourd'hui).
+  La capote de 1870 n'a pas de revers : collet et parements seulement.
+- **De loin** (version simplifiée), un plastron à la couleur du camp, pour que les deux camps restent lisibles quand les
+  revers ne font plus qu'un pixel.
+- **Inchangés** : la milice (habits civils bruns) ; les officiers (même habit, un peu plus sombre, avec l'or) ; la
+  variété de teinte de chaque homme ; les coiffures de l'époque ; les pions des armées sur la carte de campagne (ils
+  restent à la couleur du camp : c'est ainsi qu'on sait à qui ils sont).
+- Les nuances exactes se règlent sur les captures (une par époque), comparées à des planches d'uniformes.
+
+### Fichiers touchés
+
+```
+web/js/battle/troupes.js → couleur d'habit selon l'époque, l'arme et le régiment (au lieu du camp) ; revers, collet,
+                           parements et plastron de loin peints à la couleur du camp (une pièce de plus par modèle,
+                           lue par le shader) ; pantalon garance en 1870 ; les corps au sol suivent
+web/js/battle/unites.js  → les figurines des cartes d'unités : même habit, revers à la couleur du camp
+web/js/battle/vue.js     → l'époque et le nom du régiment (dragons) passés aux troupes et aux cartes
+tests/modeles.test.mjs   → bancs ; README.md → la description des batailles
+```
+
+### Stratégie de test
+
+- `tests/modeles.test.mjs` : la palette (bleu en 1790 et 1813, gris-blanc en 1700, pantalon garance en 1870, artillerie
+  bleu foncé, dragons verts en 1790 et 1813, milice inchangée) ; chaque modèle d'homme a sa pièce « couleur du camp » ;
+  deux régiments de camps différents ont le même habit et des revers différents.
+- Captures : une bataille par époque (bocage, 1700, 1790, 1813, 1870), de près et de loin ; une carte d'unités.
+- `python3 tests/lancer.py`.
+
+### Limites
+
+- **Toujours** : garder la variété par homme et le budget d'attributs (16 au plus) ; les deux camps lisibles de loin.
+- **Demander d'abord** : toucher aux pions de la carte de campagne ; ajouter des uniformes par régiment.
+- **Jamais** : utiliser des images d'uniformes sous droits (les couleurs viennent de planches anciennes, du domaine
+  public, ou de la connaissance générale).
+
+### Critères de réussite
+
+1. Aucune figurine d'infanterie rouge : l'habit est celui de l'époque (tableau ci-dessus).
+2. De près, les deux camps se distinguent à leurs revers ; de loin, au plastron et aux fanions.
+3. Artillerie en bleu foncé, dragons en vert (1790, 1813), pantalon garance en 1870.
+4. Les cartes d'unités montrent le même uniforme.
+5. Les corps au sol gardent l'uniforme et les revers de leur camp.
+6. `python3 tests/lancer.py` passe ; aucune erreur sur les cinq scénarios.
