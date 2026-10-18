@@ -18,9 +18,27 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tests'))
 
 
+def play_month(g):
+    """Un « Tour suivant » ; les décisions qui attendent le joueur (événements), c'est son IA qui les prend : le premier
+    choix qu'il peut payer, comme les IA."""
+    from game import events as E
+    from game import turns as TT
+    TT.go(g)
+    for _ in range(3000):
+        if g.tour['end'] is None:
+            return
+        for x in list(g.pending_ev):
+            ok = [i for i, c in enumerate(x['choices']) if E.affordable(g, g.player, c['fx'])]
+            E.resolve(g, x['id'], ok[0] if ok else len(x['choices']) - 1, auto=True)
+        TT.advance(g, 1.0)
+        if g.tour['stop']:
+            TT.go(g)
+    raise AssertionError('le tour des IA ne finit pas')
+
+
 def simulate(seed, epoque='1790', mois=12, joueur='33'):
     """Une partie de `mois` tours jouée par les IA seules ; rend ses mesures (un dict)."""
-    from fabrique import partie, jouer_mois   # (charge la carte et coupe le journal des batailles)
+    from fabrique import partie   # (charge la carte et coupe le journal des batailles)
     from game.ai import AI
     g = partie(joueur, epoque, seed=seed)
     g.ais[g.player] = AI(g, g.player)   # le camp du joueur joué par une IA, comme les autres
@@ -31,7 +49,7 @@ def simulate(seed, epoque='1790', mois=12, joueur='33'):
     err = None
     for _ in range(mois):
         try:
-            jouer_mois(g)
+            play_month(g)
         except Exception:   # une erreur est une mesure : la partie s'arrête là, le banc continue
             err = traceback.format_exc(limit=3).strip().splitlines()[-1]
             break
