@@ -321,7 +321,9 @@ def player_state(g, since=0):
                                        ('faim', me.get('famine'))) if on]
             d['dp'] = g.geo.nodes[a['depot']]['name'] if a.get('depot') is not None else None
         else:
-            d['regs'] = [[None, r['type'], round(r['n']), r['max'], 0, 0] for r in a['regs']]
+            # (la photographie montre aussi l'expérience et l'arme de chaque régiment ; le moral reste caché)
+            d['regs'] = [[None, r['type'], round(r['n']), r['max'], round(r['xp']), 0, r.get('arm')] if g.mod(p, 'intel')
+                         else [None, r['type'], round(r['n']), r['max'], 0, 0] for r in a['regs']]
         AA.view_army(g, a, d, a['owner'] == p)   # quartiers, traversée, actions possibles sur place
         armies.append(d)
 

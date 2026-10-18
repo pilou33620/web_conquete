@@ -544,6 +544,28 @@ def _accumulate(g, dt):
     acc['seq'] = g.seq
 
 
+def incoming(g, p):
+    """Téléphone : armées ennemies vues, pas encore chez vous, dont la route entre sur vos terres d'ici au prochain tour."""
+    if not g.mod(p, 'alert'):
+        return []
+    seen = g.visible_armies(p)[0]
+    out = []
+    for a in g.armies.values():
+        o = a['owner']
+        if o == p or o not in g.factions or a['id'] not in seen or not g.at_war(o, p) or g.army_men(a) < FOE_MIN_MEN:
+            continue
+        here = g.geo.node_of_cell(a['x'], a['y'])
+        if here is not None and g.nodes[here]['owner'] == p:
+            continue   # (déjà sur vos terres : le bilan le dit autrement)
+        for k, leg in enumerate(a['path']):
+            nd = leg['to'] if leg['kind'] == 'road' else g.geo.node_of_cell(*leg['pts'][-1])
+            if nd is not None and g.nodes[nd]['owner'] == p:
+                if (eta(g, a, a['path'][:k + 1]) or 0) <= 1:
+                    out.append(a)
+                break
+    return out
+
+
 def _recap(g):
     acc = g.tour.get('acc')
     if not acc:
@@ -565,6 +587,9 @@ def _recap(g):
         if nd is not None and g.nodes[nd]['owner'] == p and len(foes) < MAX_ITEMS:
             foes.append(dict(id=a['id'], x=a['x'], y=a['y'], text=f"Armée ennemie sur vos terres ({g.fname(o)}, "
                              f"{int(g.army_men(a))} hommes), {_where(g, a['x'], a['y'])}."))
+    for a in incoming(g, p)[:max(0, MAX_ITEMS - len(foes))]:
+        foes.append(dict(id=a['id'], x=a['x'], y=a['y'], text=f"Le téléphone annonce une armée ennemie en route vers vos "
+                         f"terres ({g.fname(a['owner'])}, {int(g.army_men(a))} hommes) : elle arrivera au prochain tour."))
     d = g.date(g.t - 1)   # le mois qui s'achève
     return dict(id=f"{g.seed}-{acc['t0']}-{round(g.t, 3)}", title=f"Bilan {R.de(R.MONTHS[d.month - 1])} {d.year}",
                 period=f"du {acc['date0']} au {g.date_str()}", battles=acc['battles'], built=acc['built'],

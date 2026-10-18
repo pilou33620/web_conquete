@@ -1118,5 +1118,48 @@ class EffetsSurLaSociete(unittest.TestCase):
             self.assertFalse(any(t['k'] == 'industrie' for t in haute.get('tm', [])))
 
 
+class Renseignement(unittest.TestCase):
+    """SPEC-TECH.md : photographie, téléphone."""
+
+    def ennemi_en_vue(self, g):
+        a = armee(g, '24')
+        cap = g.geo.nodes[g.capital_of('33')]
+        a['x'], a['y'] = cap['x'] + 3, cap['y'] + 3
+        return a
+
+    def regs_vus(self, g, a):
+        return next(d for d in V.player_state(g)['armies'] if d['id'] == a['id'])['regs']
+
+    def test_la_photographie_montre_l_experience_et_l_arme(self):
+        g = partie()
+        a = self.ennemi_en_vue(g)
+        a['regs'][0]['xp'] = 40
+        sans = self.regs_vus(g, a)[0]
+        self.assertEqual(sans[4], 0)
+        self.assertEqual(len(sans), 6, "sans photographie : ni l'expérience, ni l'arme")
+        avec(g, '33', 'photographie')
+        vu = self.regs_vus(g, a)[0]
+        self.assertEqual(vu[4], 40)
+        self.assertEqual(vu[6], a['regs'][0].get('arm'))
+        self.assertEqual(vu[5], 0, 'le moral reste caché')
+
+    def test_le_telephone_annonce_l_armee_qui_arrive(self):
+        res = []
+        for techs in ((), ('telephone',)):
+            g = avec(partie(), '33', *techs)
+            D.declare_war(g, '24', '33')
+            a = armee(g, '24')
+            cap = g.geo.nodes[g.capital_of('33')]
+            dehors = min((n for n in g.geo.nodes if g.nodes[n['id']]['owner'] != '33'),
+                         key=lambda n: abs(math.hypot(n['x'] - cap['x'], n['y'] - cap['y']) - 30))   # (à 30 km)
+            a['x'], a['y'], a['at_node'] = dehors['x'], dehors['y'], dehors['id']
+            ok, why = g.order_move('24', a['id'], node=g.capital_of('33'))
+            self.assertTrue(ok, why)
+            self.assertLessEqual(TT.eta(g, a), 1)
+            res.append([x['id'] for x in TT.incoming(g, '33')])
+        self.assertEqual(res[0], [], 'sans téléphone, rien')
+        self.assertIn(armee(partie(), '24')['id'], res[1])
+
+
 if __name__ == '__main__':
     unittest.main()
