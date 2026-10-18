@@ -150,5 +150,57 @@ class DynamiteALAssaut(unittest.TestCase):
         self.assertEqual(len(self.breches(1860)), 1)
 
 
+class TechnologiesEnBataille(unittest.TestCase):
+    """SPEC-TECH.md : ballon des aérostiers, retranchements, obus à la mélinite."""
+
+    def test_le_ballon_voit_a_1500_metres_du_general(self):
+        tb, mes = bataille()
+        gen = next(u for u in tb.units if u.side == mes['ligne'].side and u.cls == 'general')
+        foe = ennemi(tb, mes['ligne'], 'inf')
+        tb.weather = 'brouillard'
+        foe.x, foe.y = gen.x + 1200, gen.y
+        for u in tb.units:
+            if u.side == gen.side and u is not gen:
+                u.x, u.y = gen.x - 3000, gen.y   # (personne d'autre pour voir)
+        tb._update_vision()
+        self.assertNotIn(foe.id, tb.seen_by[gen.side], 'dans le brouillard, à 1 200 m, on ne le voit pas')
+        tb.spec['balloon'] = [1500, 1500]
+        tb._update_vision()
+        self.assertIn(foe.id, tb.seen_by[gen.side], 'le ballon, si')
+        gen.wounded = True
+        tb._update_vision()
+        self.assertNotIn(foe.id, tb.seen_by[gen.side], "général blessé : plus d'observateur")
+
+    def test_l_infanterie_arretee_se_retranche(self):
+        tb, mes = bataille()
+        u, foe = mes['ligne'], ennemi(tb, mes['ligne'], 'inf')
+        tb.spec['entrench'] = [0.25, 0.25]
+        u.still_t = tb.clock - 400
+        self.assertAlmostEqual(tb._entrench_k(u, foe), 0.75)
+        u.still_t = tb.clock - 100
+        self.assertEqual(tb._entrench_k(u, foe), 1.0, 'arrêtée depuis moins de cinq minutes')
+        u.still_t = tb.clock - 400
+        tb.spec['entrench'] = [0.0, 0.0]
+        self.assertEqual(tb._entrench_k(u, foe), 1.0, 'sans la technologie')
+
+    def test_la_melinite_perce_le_couvert(self):
+        tb, mes = bataille()
+        art, foe = mes['artillerie'], ennemi(tb, mes['artillerie'], 'inf')
+        tb.spec['entrench'] = [0.25, 0.25]
+        foe.still_t = tb.clock - 400
+        cov = tb._cover_vs(foe, art)
+        tb.spec['shell'] = [0.5, 0.5]
+        self.assertAlmostEqual(tb._fire_cover(foe, art), cov * 0.5)
+        self.assertAlmostEqual(tb._entrench_k(foe, art), 1 - 0.25 * 0.5)
+        self.assertAlmostEqual(tb._fire_cover(foe, mes['ligne']), tb._cover_vs(foe, mes['ligne']), msg='pas pour les fusils')
+
+    def test_marques_et_effets_dans_la_spec(self):
+        from unittest import mock
+        with mock.patch.dict(R.TECH_YEAR, aerostiers=1700, genie=1700):
+            tb, _ = bataille(epoque='1790')
+        self.assertEqual(tb.spec['balloon'], [1500, 1500])
+        self.assertEqual(tb.spec['entrench'], [0.0, 0.0])
+
+
 if __name__ == '__main__':
     unittest.main()

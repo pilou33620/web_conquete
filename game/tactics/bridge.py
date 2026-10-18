@@ -214,7 +214,11 @@ def make_spec(g, bt):
                 colors=[R.FACTIONS[o]['color'] if o in R.FACTIONS else R.NEUTRAL_COLOR for o in owners],
                 me=me, difficulty=g.difficulty, title=f"{kind} {gname}", place_name=gname, date=g.date_str(),
                 fm_swift=[min(0.5, g.mod(o, 'fm_swift')) if o in g.factions else 0.0 for o in owners],
-                art_cheval=['art_cheval' in t for t in techs], marks=[R.marks(t) for t in techs], ambush=bt['ambush'], surprise=bt['surprise'],
+                art_cheval=['art_cheval' in t for t in techs], marks=[R.marks(t) for t in techs],
+                # SPEC-TECH.md : ballon (portée de vue du général), retranchements, obus à la mélinite
+                balloon=[g.mod(o, 'balloon') if o in g.factions else 0 for o in owners],
+                entrench=[g.mod(o, 'entrench') if o in g.factions else 0.0 for o in owners],
+                shell=[g.mod(o, 'shell') if o in g.factions else 0.0 for o in owners], ambush=bt['ambush'], surprise=bt['surprise'],
                 plans=[_side_plan(g, bt, si) for si in (0, 1)])
 
 

@@ -126,7 +126,7 @@ SLOTS = ('id', 'side', 'owner', 'type', 'cls', 'light', 'name', 'men', 'men0', '
          'morale0', 'fat', 'ammo', 'ammo0', 'arm', 'x', 'y', 'dir', 'form', 'state', 'order', 'seen', 'target',
          'path', 'goal', 'reload', 'busy', 'next_form', 'fire_mode', 'fired_t', 'melee_with', 'rally_t', 'lost',
          'killed', 'captured', 'fought', 'army', 'src', 'nid', 'gen', 'ctrl', 'charge_v', 'spotted_t', 'stuck',
-         'rout_seen', 'hit_t', 'wounded', 'group', 'gname', 'halt', 'shot', 'prio')
+         'rout_seen', 'hit_t', 'wounded', 'group', 'gname', 'halt', 'shot', 'prio', 'still_t')
 
 
 class Unit:
@@ -151,6 +151,7 @@ class Unit:
         self.next_form = None
         self.fire_mode = 'free'
         self.fired_t = -999.0
+        self.still_t = 0.0      # dernier instant où elle a bougé (retranchements)
         self.melee_with = None
         self.rally_t = 0.0
         self.lost = 0.0

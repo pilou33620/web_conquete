@@ -965,7 +965,6 @@ class ArbreDesTechnologies(unittest.TestCase):
         self.assertIn('civil', R.BRANCHES, "l'identifiant reste « civil » (sauvegardes, goûts des IA)")
         self.assertEqual(R.TECH['suffrage']['branch'], 'civil')
 
-    @unittest.expectedFailure   # shortcut: effets branchés par T54 à T58 (tasks/todo-tech.md), activé en T58
     def test_chaque_effet_est_lu_par_le_moteur(self):
         import glob
         import re
@@ -975,6 +974,7 @@ class ArbreDesTechnologies(unittest.TestCase):
             for line in open(f, encoding='utf-8'):
                 if re.search(r"\bmod\(|md\.get\(|mods'?\]?\.get\(|boost=", line):
                     lus |= set(re.findall(r"'([a-z_]+)'", line))
+        lus |= set(E.ATTENUE.values())   # (lus par events.soften et recompute_mods, par la table)
         lus.add('rail_troops')   # (les armées prendront le train en phase 2, avec les voies ferrées de la carte)
         oublies = sorted({k for t in R.TECH.values() for k in t['fx']} - lus)
         self.assertEqual(oublies, [], 'effets de technologies que le moteur ne lit nulle part')

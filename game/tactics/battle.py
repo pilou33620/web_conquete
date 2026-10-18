@@ -212,6 +212,7 @@ VOLLEY_POWER = 1.25      # … la volée groupée touche un quart de plus…
 VOLLEY_RELOAD = 1.15     # … mais on attend l'ordre : le rechargement est plus long
 VOLLEY_CHARGE_AT = 0.6   # « salve puis baïonnette » : on tire à 60 % de la portée efficace, puis on charge
 VOLLEY_WAIT = 30.0       # … et l'on charge quand même si la volée n'est pas partie 30 s après être arrivé à portée
+ENTRENCH_T = 300.0       # retranchements : cinq minutes à l'arrêt pour s'enterrer (technologie, SPEC-TECH.md)
 HARASS_NEAR = 0.8        # harcèlement : on recule devant l'ennemi qui s'approche à moins de 80 % de la portée efficace…
 HARASS_FAR = 1.05        # … et l'on s'avance s'il reste au-delà (jamais plus près que 90 % de la portée efficace)
 HARASS_EVERY = 6.0       # le tirailleur réfléchit toutes les 6 s
@@ -1332,9 +1333,14 @@ class TacticalBattle:
         for side in (0, 1):
             mine = [o for o in self.units if o.side == side and o.alive and o.state != 'hors']
             seen = set()
+            bal = self.spec.get('balloon', [0, 0])[side]   # aérostiers : le ballon captif de l'état-major voit tout
+            obs = [o for o in mine if o.cls == 'general' and not o.wounded] if bal else []
             eclaireur = self.trait(side) == 'eclaireur'
             for e in self.units:
                 if e.side == side or not e.alive:
+                    continue
+                if any((o.x - e.x) ** 2 + (o.y - e.y) ** 2 <= bal * bal for o in obs):
+                    seen.add(e.id)
                     continue
                 recent = self.clock - e.fired_t < 60
                 ce = self.cell(e.x, e.y)
@@ -1520,6 +1526,7 @@ class TacticalBattle:
         return base * (1 - 0.35 * u.fat / 100)
 
     def _move(self, u, dt, rout=False):
+        u.still_t = self.clock
         cost = self.costs(move_class(u), u.side)
         run = bool(u.goal and u.goal[3])
         sp = self._speed(u, run=run, rout=rout)
@@ -1768,7 +1775,7 @@ class TacticalBattle:
         fat_k = 1 - 0.3 * u.fat / 100
         mor_k = 0.6 + 0.4 * u.morale / 100
         xp_k = 0.8 + u.xp / 250
-        cov = self._cover_vs(tg, u)
+        cov = self._fire_cover(tg, u)
         pr = 1.0 if d <= e else max(0.2, 1 - 0.8 * (d - e) / max(1.0, mx_eff - e))
         tk = U.TYPE.get(u.type, U.TYPE['ligne'])['fire']
         if u.cls == 'artillerie':
@@ -1811,6 +1818,7 @@ class TacticalBattle:
         u.state = 'feu' if not moving else u.state
         u.fought += u.reload
         self._fatigue(u, u.reload, 'feu')
+        cas *= self._entrench_k(tg, u)
         self.emit(kind, u.x, u.y, tg.x, tg.y, n=cas, src=u.id)
         if kind == 'canon' and u.side == 0 and self.in_place(tg.x, tg.y, 0.0):
             # les boulets tirés sur les défenseurs de la place frappent aussi son rempart
@@ -1820,6 +1828,23 @@ class TacticalBattle:
         self._damage(tg, cas, u, kind)
         if u.ammo < 1:
             self.log(f"{u.name} n'a plus de munitions !", u.side)
+
+    def _fire_cover(self, tg, shooter):
+        """Couvert de la cible sous le feu : l'obus à la mélinite de l'artillerie le perce à moitié."""
+        cov = self._cover_vs(tg, shooter)
+        if shooter.cls == 'artillerie':
+            cov *= 1 - self.spec.get('shell', [0, 0])[shooter.side]
+        return cov
+
+    def _entrench_k(self, tg, shooter):
+        """Retranchements : l'infanterie arrêtée depuis ENTRENCH_T s'est enterrée et perd moins d'hommes au feu (moitié
+        moins d'abri contre les obus à la mélinite)."""
+        k = self.spec.get('entrench', [0, 0])[tg.side]
+        if not k or tg.cls != 'inf' or self.clock - tg.still_t < ENTRENCH_T:
+            return 1.0
+        if shooter.cls == 'artillerie':
+            k *= 1 - self.spec.get('shell', [0, 0])[shooter.side]
+        return 1 - k
 
     def _cover_vs(self, tg, shooter):
         """Couvert de la cible face à ce tireur : sa case, et un mur ou une barricade juste devant elle."""
