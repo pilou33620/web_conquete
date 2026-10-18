@@ -26,6 +26,8 @@ Mode choisi par toi : `/build auto` sur tout le plan, avec une revue complète (
 | T31 : salve qui roule, premier rang à genoux, tirailleurs, tambours, officiers en garde | `24a696e` |
 | T32 : chaque homme différent (place, sens, taille, teinte, rythme, délai), fondus entre les gestes | `029c6a5` |
 | T33 : servants des pièces au squelette (refouler, porter, pointer, boutefeu) | `db1dd47` |
+| T34 : les hommes tombent, les corps restent couchés en 3D (anneau plafonné) | `5883e59` |
+| T35 : un boulet couche une file, chevaux tués couchés sur le flanc | `aee9cff` |
 
 T30 : captures de près et à mi-distance regardées, sans erreur. Seuls les triangles des vues types n'ont pas été
 relevés : à faire au point de contrôle 7a.
@@ -35,8 +37,6 @@ relevés : à faire au point de contrôle 7a.
 | Tâche | Sous-étape | En deux mots |
 |---|---|---|
 | Point 7a | | fait le 18/10/2026, sauf **ta mesure des images par seconde sur l'iPad** (voir `todo-3d.md`) |
-| T34 | 7b | les hommes tombent ; corps en 3D au sol (anneau plafonné par qualité), au-delà, taches peintes |
-| T35 | 7b | boulet qui couche une file (événement `canon`, `x2`/`y2`), chevaux morts |
 | T36 | 7c | hommes qui courent à leur place (`matchSlots`, attribut `aMove`) |
 | T37 | 7c | conversion et marche sans glissade |
 | T38 | 7c | bâtiments : grille de 8 m lue par le shader, `pushOut` testé |

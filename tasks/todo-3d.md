@@ -490,7 +490,11 @@ General sur un régiment qui tire.
   - Fichiers : `web/js/battle/gestes.js`, `web/js/battle/troupes.js`, `web/js/battle/vue.js`, `tests/gestes.test.mjs`
   - Taille : M
 
-- [ ] **Point de contrôle 7b** : bancs, cinq scénarios, galerie, commit ; tu règles le plafond des corps sur l'iPad.
+- [x] **Point de contrôle 7b** (18/10/2026) : bancs (« Tout passe. ») ; cinq scénarios ouverts sans erreur après
+  dix minutes de bataille simulée (`avance=600` : les pertes passent par `kill()`) ; galerie
+  (`captures-3d/animations/etape7b/`).
+  - **En attente de toi** : régler le plafond des corps sur l'iPad (`corps` dans `qualite.js` : 800 / 1 500 / 2 500 /
+    4 000).
 
 ### 7c : places et bâtiments
 
