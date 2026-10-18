@@ -286,3 +286,10 @@ Commandes, style, structure, limites : celles de la spec ci-dessus.
 2. **Après un assaut gagné en chemin** : l'armée **s'arrête là** (une bataille finit la marche du tour) ; elle repart
    vers sa cible au tour suivant.
 3. Les hypothèses 1 à 4 sont retenues.
+
+### État (18/10/2026)
+
+Faite (T1 à T4, `tasks/todo-arrivee.md`) : bancs du moteur (`ArriveeDevantUneVille`, un par choix, le rapport de
+bout en bout), du serveur et de l'interface ; essai sur le vrai serveur dans Chromium (Guyenne 1700 : fenêtre devant
+Villenave-d'Ornon, « Rallier », fenêtre devant Léognan, « Commander la bataille » ouvre le déploiement de l'assaut,
+sans erreur dans la console).

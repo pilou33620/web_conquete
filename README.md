@@ -86,11 +86,17 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
 
 1. **Votre tour** : la date ne bouge pas et chaque ordre s'exécute tout de suite. Une armée qui reçoit un ordre de
    marche part aussitôt, sous vos yeux, jusqu'au bout de sa marche du tour ou jusqu'à l'ennemi (une route plus longue
-   reprend d'elle-même au tour suivant ; la bulle de l'ordre annonce l'arrivée). Une bataille ou un assaut se livre
-   sur-le-champ ; une ville neutre assez faible se rallie aussitôt (l'armée finit là sa marche du tour) ; achats,
-   constructions et recherches sont payés tout de suite. Devant une place à remparts, l'armée l'assiège :
-   **« Donner l'assaut »** l'attaque tout de suite, sinon l'assaut part de lui-même à la brèche, pendant le tour des IA.
-   En conduite « Traverser », elle fait halte devant une place ennemie sans l'attaquer.
+   reprend d'elle-même au tour suivant ; la bulle de l'ordre annonce l'arrivée). Une bataille contre une armée se
+   livre sur-le-champ ; achats, constructions et recherches sont payés tout de suite.
+   **Devant une ville qui n'est pas à vous** (sa destination, ou une ville sur sa route), l'armée s'arrête et une
+   fenêtre vous demande quoi faire, quel que soit le réglage des batailles : **commander la bataille** ou la
+   **résolution automatique** (l'assaut tout de suite, même contre des remparts : vos canons y ouvrent des brèches),
+   **rallier** (ville neutre, armée au moins trois fois plus forte que sa défense), **négocier** le ralliement,
+   **assiéger** (place à remparts : l'assaut part de lui-même à la brèche, pendant le tour des IA), **bloquer et
+   affamer**, **exiger une contribution**, ou **attendre** devant la place (« Rallier ou attaquer », dans le panneau
+   de l'armée, rouvre la fenêtre). Après un choix sans combat, l'armée reprend sa route avec la marche qui lui reste ;
+   après un assaut, elle s'arrête là. « Tour suivant » attend votre choix. En conduite « Traverser », elle passe les
+   villes de sa route sans s'arrêter : seule sa destination demande.
 2. **Le tour des IA** : touchez **« Tour suivant »** en haut de l'écran (ou la barre d'espace). Le mois est calculé
    d'un coup, en une ou deux secondes : les IA marchent, négocient et se battent, travaux et sièges avancent, les revenus
    tombent. Vos armées, qui ont déjà joué, restent en place. Tout le monde passe au **1er du mois suivant** en même
