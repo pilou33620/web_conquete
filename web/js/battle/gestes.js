@@ -38,6 +38,7 @@ export const firing = (volley, now) => !!volley && now <= volley.t + volley.dur 
 export function pick({ act, actT, now, kind, rank, u, w, form, phase, volley, moving, shots }) {
   const loop = name => [name, actT - phase];
   if (kind === 'servant') return serve(act, rank, now, shots, moving, loop);
+  if (kind === 'cavalier' || kind === 'chef') return loop(act === 'charge' || act === 'melee' ? 'selle-sabre' : 'selle');
   if (kind === 'tambour') return loop(act === 'marche' || act === 'charge' || act === 'ralliement' ? 'tambour-marche' : act === 'deroute' ? 'course' : 'tambour');
   if (kind === 'officier' && act === 'melee') return loop('escrime');
   if (kind === 'officier' && (act === 'feu' || act === 'recharge')) return loop('garde');

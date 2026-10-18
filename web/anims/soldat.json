@@ -18,7 +18,7 @@
   "carryUpper",
   "carryFore"
  ],
- "rows": 1504,
+ "rows": 1624,
  "clips": {
   "repos": {
    "row": 0,
@@ -145,23 +145,33 @@
    "n": 32,
    "loop": 1
   },
-  "refouler": {
+  "selle": {
    "row": 1239,
    "n": 60,
    "loop": 1
   },
-  "pointer": {
+  "selle-sabre": {
    "row": 1299,
    "n": 60,
    "loop": 1
   },
-  "boutefeu": {
+  "refouler": {
    "row": 1359,
+   "n": 60,
+   "loop": 1
+  },
+  "pointer": {
+   "row": 1419,
+   "n": 60,
+   "loop": 1
+  },
+  "boutefeu": {
+   "row": 1479,
    "n": 49,
    "loop": 0
   },
   "porter": {
-   "row": 1408,
+   "row": 1528,
    "n": 96,
    "loop": 1
   }

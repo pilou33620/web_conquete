@@ -562,7 +562,11 @@ General sur un régiment qui tire.
   - Fichiers : `web/js/battle/gestes.js`, `web/js/battle/troupes.js`, `tests/gestes.test.mjs`
   - Taille : M
 
-- [ ] **T40 : cavaliers au squelette, en selle**
+- [x] **T40 : cavaliers au squelette, en selle**
+  - Fait : le cheval n'a plus que sa selle ; cavaliers au squelette (`cavalier`, `chef` : culotte claire, bottes,
+    baudrier ou écharpe, sabre en main), posés sur chaque cheval de selle (même place, teinte, variété) ; gestes « selle »
+    (à califourchon par cinématique inverse, rênes, sabre tenu) et « selle-sabre » (charge) ; balancement du cheval
+    dans le shader ; un cavalier tué tombe à côté de son cheval couché. 31 animations, 609 Ko.
   - Critères :
     - Le cheval est dessiné sans cavalier. Le cavalier est une figurine au squelette posée sur la selle : jambes à
       califourchon (pose précalculée), habit, coiffure, sabre.

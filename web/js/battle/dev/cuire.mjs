@@ -30,16 +30,21 @@ const SH = { L: P(0.2, 1.4, 0), R: P(-0.2, 1.4, 0) }, ELBOW = 1.15, HAND = 0.84,
 const place = (a0, d0, a1, d1) => new Matrix4().makeTranslation(a1.x, a1.y, a1.z)
   .multiply(new Matrix4().makeRotationFromQuaternion(new Quaternion().setFromUnitVectors(d0, d1.clone().normalize())))
   .multiply(new Matrix4().makeTranslation(-a0.x, -a0.y, -a0.z));
-// bras à deux os de l'épaule sh à la main hand (tendu au plus), le coude vers pole → [bras, avant-bras]
-function arm(side, sh, hand, pole) {
-  const L1 = SH.L.y - ELBOW, L2 = ELBOW - HAND, v = hand.clone().sub(sh), d = Math.min(v.length(), (L1 + L2) * 0.999);
+// membre à deux os, vertical dans la pose de référence (de r0 au milieu r1 puis au bout r2), porté de root jusqu'à end
+// (tendu au plus), le milieu vers pole → [os du haut, os du bas]
+function limb2(r0, r1, r2, root, end, pole) {
+  const L1 = r0.y - r1.y, L2 = r1.y - r2.y, v = end.clone().sub(root), d = Math.min(v.length(), (L1 + L2) * 0.999);
   v.normalize();
   const a = (L1 * L1 - L2 * L2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
   const p = pole.clone().addScaledVector(v, -pole.dot(v)).normalize();
-  const elbow = sh.clone().addScaledVector(v, a).addScaledVector(p, h), wrist = sh.clone().addScaledVector(v, d);
-  const s0 = SH[side], e0 = P(s0.x, ELBOW, s0.z);
-  return [place(s0, DOWN, sh, elbow.clone().sub(sh)), place(e0, DOWN, elbow, wrist.clone().sub(elbow))];
+  const mid = root.clone().addScaledVector(v, a).addScaledVector(p, h), tip = root.clone().addScaledVector(v, d);
+  return [place(r0, DOWN, root, mid.clone().sub(root)), place(r1, DOWN, mid, tip.clone().sub(mid))];
 }
+// bras de l'épaule sh à la main hand, le coude vers pole → [bras, avant-bras]
+const arm = (side, sh, hand, pole) => limb2(SH[side], P(SH[side].x, ELBOW, 0), P(SH[side].x, HAND, 0), sh, hand, pole);
+// jambe de la hanche (repère de la figurine : hanche en y = 0,93, genou 0,53, cheville 0,10) au pied foot, le genou
+// vers pole → [cuisse, tibia] (le pied suit le tibia)
+const leg = (side, hip, foot, pole) => { const x = side === 'L' ? 0.085 : -0.085; return limb2(P(x, 0.93, 0), P(x, 0.53, 0), P(x, 0.1, 0), hip, foot, pole); };
 // le fusil : crosse en butt, canon vers dir ; main gauche à kl m de la crosse le long du fusil, main droite à kr m (ou
 // au point kr)
 function hold(M, butt, dir, kl, kr, poleL = P(0.5, -1, -0.2), poleR = P(-1, -0.6, -0.3)) {
@@ -91,6 +96,18 @@ const seq = steps => (M, t) => {
   w = w * w * (3 - 2 * w);
   for (const k of Object.keys(M)) M[k].elements = B[k].elements.map((b, j) => b * (1 - w) + A[k].elements[j] * w);
 };
+// en selle : à califourchon (les pieds aux étriers, le long des flancs), la main gauche aux rênes, le sabre tenu droit
+// dans la droite ; SABRE_HAUT : levé en avant (la charge). LIFT : le corps entier posé sur le dos du cheval
+const SADDLE = M => {
+  for (const [side, x] of [['L', 1], ['R', -1]]) {
+    [M['thigh' + side], M['shin' + side]] = leg(side, P(x * 0.085, 0.93, 0).applyMatrix4(M.hips), P(x * 0.3, 0.38, 0.22), P(x * 0.3, 0.2, 1));
+    M['foot' + side] = M['shin' + side].clone();
+  }
+  [M.upperL, M.foreL] = arm('L', SH.L.clone().applyMatrix4(M.chest), P(0.1, 0.98, 0.36), P(0.5, -1, -0.2));
+  [M.upperR, M.foreR] = arm('R', SH.R.clone().applyMatrix4(M.chest), P(-0.22, 1.25, 0.24), P(-0.3, -1, 0.2));
+};
+const SABRE_HAUT = M => { SADDLE(M); [M.upperR, M.foreR] = arm('R', SH.R.clone().applyMatrix4(M.chest), P(-0.24, 1.85, 0.3), P(-1, -0.2, -0.5)); };
+const LIFT = () => new Matrix4().makeTranslation(0, 0.7, -0.05);
 // salve : épauler, viser, le coup (à SALVE_FEU s, gestes.js), recharger, l'arme sur l'épaule ; à genoux, le premier rang
 // garde l'arme en main pendant que les autres rechargent
 const SALVE = [[0.35, REST], [0.35, AIM], [0.25, FIRE], [0.45, AIM], [2.4, RELOAD], [0.5, REST]];
@@ -131,6 +148,7 @@ const CLIPS = {
   'salve-genou': { src: 'Idle_Loop', loop: 0, len: 4.3, hold: seq(SALVE_GENOU), legs: ['Fixing_Kneeling', 24] },
   'feu-libre': { src: 'Idle_Loop', loop: 1, len: 4.4, hold: seq([[0.5, REST], [0.6, AIM], [0.25, FIRE], [0.35, AIM], [2.4, RELOAD], [0.3, REST]]) },
   tambour: { src: 'Idle_Loop', loop: 1, hold: drum(2.5, 5) }, 'tambour-marche': { src: 'Walk_Formal_Loop', loop: 1, hold: drum(4 / 3, 2) },
+  selle: { src: 'Idle_Loop', loop: 1, hold: SADDLE, path: LIFT }, 'selle-sabre': { src: 'Idle_Loop', loop: 1, hold: SABRE_HAUT, path: LIFT },
   refouler: { src: 'Idle_Loop', loop: 1, hold: RAMMER }, pointer: { src: 'Idle_Loop', loop: 1, hold: LAY, legs: ['Fixing_Kneeling', 24] },
   boutefeu: { src: 'Idle_Loop', loop: 0, len: 2.0, hold: LINSTOCK_ARM }, porter: { src: 'Walk_Carry_Loop', loop: 1, len: 4, path: SHUTTLE },
 };

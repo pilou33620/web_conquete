@@ -241,3 +241,12 @@ test('mêlée : estoc ou poussée selon l’homme, escrime pour les officiers', 
   assert.equal(pick(homme({ act: 'melee', kind: 'officier' }))[0], 'escrime');
   assert.ok(meta.clips.escrime, 'escrime précalculée');
 });
+
+test('cavaliers : en selle, sabre levé à la charge', () => {
+  for (const kind of ['cavalier', 'chef']) {
+    assert.equal(pick(homme({ kind, act: 'repos' }))[0], 'selle');
+    assert.equal(pick(homme({ kind, act: 'marche' }))[0], 'selle');
+    assert.equal(pick(homme({ kind, act: 'charge' }))[0], 'selle-sabre');
+  }
+  for (const c of ['selle', 'selle-sabre']) assert.ok(meta.clips[c], c);
+});

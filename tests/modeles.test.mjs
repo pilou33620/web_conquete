@@ -15,7 +15,8 @@ const FOOT = [0, 1, 2, 3], HORSE = [0, 1, 2, 5, 6, 7];
 const SORTES = {
   inf: [FOOT, 1.7, 2.0], gren: [FOOT, 1.9, 2.3], leger: [FOOT, 1.7, 2.1], milice: [FOOT, 1.7, 2.0], servant: [FOOT, 1.7, 2.0],
   officier: [FOOT, 1.7, 2.0], tambour: [FOOT, 1.7, 2.0], drapeau: [FOOT, 3.4, 3.9],
-  cav: [[...HORSE, 8], 2.3, 2.9], colonel: [[...HORSE, 8], 2.3, 2.9], attelage: [HORSE, 1.8, 2.3],
+  // (le cavalier est une figurine à part, au squelette : le cheval n'a que sa selle)
+  cav: [HORSE, 1.8, 2.3], colonel: [HORSE, 1.8, 2.3], attelage: [HORSE, 1.8, 2.3],
   canon: [[0], 1.0, 1.5], caisson: [[0], 1.1, 1.6], chariot: [[0], 1.7, 2.2],
 };
 
@@ -93,7 +94,7 @@ test('essai des animations : fantassins sur les os du squelette, dans l’ordre 
   const names = [...Object.keys(RIG), ...RIG_EXTRA], id = Object.fromEntries(names.map((k, i) => [k, i]));
   const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
   assert.deepEqual(meta.bones, names, 'relancer dev/cuire.mjs');
-  for (const kind of ['inf', 'gren', 'milice', 'officier', 'tambour', 'drapeau']) {
+  for (const kind of ['inf', 'gren', 'milice', 'officier', 'tambour', 'drapeau', 'servant', 'cavalier', 'chef']) {
     const g = model(kind, 1790, 1, true), p = g.attributes.position, b = g.attributes.aBone;
     for (let i = 0; i < p.count; i++) {
       const bone = b.getX(i), y = p.getY(i);
@@ -128,7 +129,7 @@ test('au squelette, la version de loin a les mêmes os et la même hauteur que c
     }
     return { y0, y1, bones, n: p.count };
   };
-  for (const kind of ['inf', 'gren', 'leger', 'milice', 'officier', 'tambour', 'drapeau']) {
+  for (const kind of ['inf', 'gren', 'leger', 'milice', 'officier', 'tambour', 'drapeau', 'cavalier', 'chef']) {
     const near = rigStats(model(kind, 1790, 1, true)), far = rigStats(model(kind, 1790, 0, true));
     for (const b of far.bones) assert.ok(near.bones.has(b), `${kind} : os ${names[b]} de loin seulement`);
     for (const k of ['thighL', 'shinL', 'chest', 'head']) assert.ok(far.bones.has(id[k]), `${kind} : pas d'os ${k} de loin`);
