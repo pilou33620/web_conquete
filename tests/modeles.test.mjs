@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import * as THREE from '../web/vendor/three/three.module.js';
 import { model, lodOf, RIG, RIG_EXTRA, INSTANCE_ATTRS, Troops } from '../web/js/battle/troupes.js';
+import { uniform } from '../web/js/battle/formes.js';
 
 // os permis par sorte (0 corps, 1-2 jambes, 3 bras et fusil, 4 étoffe ; cheval : 1-2 et 5-6 jambes, 7 encolure,
 // 8 bras du cavalier) et hauteur attendue (m, avant l'échelle des figurines ; sans les bras, le fusil ni le sabre)
@@ -154,6 +155,47 @@ test('étape 8 : chaque homme porte la couleur de son camp (revers, collet, pare
 test('étape 8 : la capote de 1870 n’a ni revers ni retroussis (collet et parements seulement)', () => {
   const faces = g => g.attributes.aPart.array.filter(t => t === 3).length;
   assert.ok(faces(model('inf', 1870, 2, true)) < faces(model('inf', 1813, 2, true)));
+});
+
+test('étape 8 : uniformes français d’époque (palette)', () => {
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const blue = h => { const [r, g, b] = rgb(h); return b > r && b >= g; };
+  const red = h => { const [r, g, b] = rgb(h); return r > 1.5 * g && r > 1.5 * b; };
+  const light = h => rgb(h).every(c => c > 190);
+  assert.ok(light(uniform(1700, 'inf', '1er Ligne', 'inf').coat), '1700 : justaucorps gris-blanc');
+  for (const y of [1790, 1813, 1870]) assert.ok(blue(uniform(y, 'inf', '1er Ligne', 'inf').coat), `${y} : bleu`);
+  assert.ok(red(uniform(1870, 'inf', '1er Ligne', 'inf').trous), '1870 : pantalon garance');
+  assert.ok(light(uniform(1813, 'inf', '1er Ligne', 'inf').trous), '1813 : culotte blanche');
+  for (const y of [1700, 1790, 1813, 1870]) {
+    const art = rgb(uniform(y, 'artillerie', '1re Batterie', 'servant').coat);
+    assert.ok(art[2] > art[0] && art.reduce((a, c) => a + c) < 240, `${y} : artillerie bleu foncé`);
+    for (const k of ['inf', 'gren', 'leger', 'officier', 'tambour', 'drapeau']) assert.ok(!red(uniform(y, 'inf', '', k).coat), `${y} ${k} : pas rouge`);
+  }
+  for (const y of [1790, 1813]) { const [r, g, b] = rgb(uniform(y, 'cavalerie', '1er dragons', 'cav').coat); assert.ok(g > r && g > b, `${y} : dragons verts`); }
+  assert.ok(blue(uniform(1870, 'cavalerie', '1er dragons', 'cav').coat), '1870 : dragons comme l’infanterie');
+  assert.ok(blue(uniform(1790, 'cavalerie', '3e hussards', 'cav').coat), 'hussards comme l’infanterie');
+  assert.equal(uniform(1790, 'inf', '', 'milice').coat, '#7a6248', 'la milice, en habits civils');
+});
+
+test('étape 8 : deux camps, le même habit, des revers différents (figurines et corps)', () => {
+  const ctx = new Proxy({}, { get: (o, k) => k in o ? o[k] : () => ({ addColorStop() {} }), set: (o, k, v) => (o[k] = v, true) });
+  globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) };
+  const t = { fineW: 4, fineH: 4, fine: new Float32Array(16), hmin: 0, W: 4000, H: 4000, buildingGrid: () => null, ombre: { width: 8, height: 8 } };
+  const tr = new Troops({ t, ex: 1, heightAt: () => 0 }, { troupes: 10000, corps: 2500, fx: 2 }, 1790, null);
+  const colors = ['#b8352a', '#3f6fb5'];
+  const un = (id, side) => ({ id, side, type: 'ligne', name: `${id}e de ligne`, form: 'ligne', state: 'repos', men: 120, men0: 120, x: 500 + id * 200, y: 500, dir: 0, w: 60, d: 6 });
+  tr.update([un(1, 0), un(2, 1)], colors, 0, 0);
+  for (const e of tr.lays.values()) e.lod = 2;
+  tr.rebuild(colors, 1.6);
+  const k = tr.kinds.get('inf'), side = i => tr.index.get('1') === k.buf.aSlot[i * 4 + 3] ? 0 : 1;
+  const mean = (a, s) => { let n = 0; const m = [0, 0, 0]; for (let i = 0; i < k.n; i++) if (side(i) === s) { n++; for (let c = 0; c < 3; c++) m[c] += a[i * 3 + c] / 1; } return m.map(x => x / n); };
+  const c0 = mean(k.buf.aCoat, 0), c1 = mean(k.buf.aCoat, 1);
+  assert.ok(c0[2] > c0[0] && c1[2] > c1[0], 'habit bleu des deux côtés en 1790');
+  assert.ok(Math.abs(c0[2] - c1[2]) < 0.05 && Math.abs(c0[0] - c1[0]) < 0.05, 'le même habit');
+  const f0 = mean(k.buf.aFace, 0), f1 = mean(k.buf.aFace, 1);
+  assert.ok(f0[0] > f0[2] && f1[2] > f1[0], 'revers rouges d’un côté, bleus de l’autre');
+  tr.kill({ ...un(1, 0), men: 120 }, 10, () => true, colors[0]);
+  assert.ok(tr.dead.length && tr.dead.every(b => b.coat[2] > b.coat[0] && b.face[0] > b.face[2]), 'les corps gardent l’habit et les revers de leur camp');
 });
 
 test('tampons agrandis en pleine bataille : toutes les figurines sont dessinées, pas seulement celles du premier rendu', () => {

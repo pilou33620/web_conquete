@@ -17,7 +17,7 @@
 // Les dispositions (layout) ne sont recalculées que quand un régiment change de forme, d'effectif (par 8 hommes) ou
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
-import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp } from './formes.js';
+import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp, uniform } from './formes.js';
 import { activity, moves, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing, matchSlots, foeOf, scrum, scaleAt } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
@@ -52,12 +52,14 @@ const RIDER = 9;                 // pose (aAnim.x) du cavalier en selle : le sha
 const varOf = (e, i, seed) => (e.vars ??= [])[i] ??= variety(seed, e.ids?.[i] ?? i);
 // graine d'un régiment (variété de ses hommes) ; habit d'une figurine (c : la couleur du camp, modifiée)
 const seedOf = id => [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7);
-function coatOf(kind, c) {
-  if (kind === 'milice') c.set('#7a6248');
-  else if (kind === 'officier' || kind === 'drapeau' || kind === 'colonel' || kind === 'chef') c.multiplyScalar(0.8);
-  else if (kind === 'servant') c.multiplyScalar(0.6);   // habit sombre des artilleurs
+// (l'habit : l'uniforme français de l'époque et de l'arme, formes.uniform ; un peu plus sombre pour les officiers)
+function coatOf(kind, c, un, year) {
+  c.set(uniform(year, clsOf(un), un.name, kind).coat);
+  if (kind === 'officier' || kind === 'drapeau' || kind === 'colonel' || kind === 'chef') c.multiplyScalar(0.8);
   return c;
 }
+// la culotte (ou le pantalon) d'une sorte de figurine à cette époque, peinte dans son modèle
+const breeches = (kind, year) => uniform(year, kind === 'servant' ? 'artillerie' : kind === 'cavalier' || kind === 'chef' ? 'cavalerie' : 'inf', '', kind).trous;
 // attributs de chaque figurine (nombres par figurine) : place, pose, habit ; geste (aGest : geste et son début, geste
 // d'avant et son début ; aMix : instant du fondu, vitesse, vitesse d'avant) ; course à sa place (aMove)
 export const INSTANCE_ATTRS = { aSlot: 4, aAnim: 4, aCoat: 3, aFace: 3, aGest: 4, aMix: 4, aMove: 4 };
@@ -286,7 +288,7 @@ function soldier(kind, year, rig = false) {
   const leg = s => y => y > 0.53 ? B['thigh' + s] : y > 0.09 ? B['shin' + s] : B['foot' + s];
   const torso = y => y < 1.05 ? B.hips : B.chest;
   const rider = kind === 'cavalier' || kind === 'chef', officer = kind === 'officier' || kind === 'drapeau' || kind === 'chef';
-  const trous = kind === 'milice' ? '#5a4c3c' : year >= 1830 ? '#8d929b' : rider ? '#e8dcc0' : WHITE;
+  const trous = breeches(kind, year);
   const gaiter = rider ? '#15110d' : year < 1845 && !officer ? '#1d1916' : trous;   // (les cavaliers : bottes)
   const facing = kind === 'milice' ? '#5a4632' : WHITE;
   const armed = !officer && !rider && kind !== 'tambour' && kind !== 'servant';
@@ -451,17 +453,18 @@ function farHat(type, dy = 0) {
 }
 function farSoldier(kind, year, rig = false) {
   const B = rig ? RIG_BONES : OLD_BONES, rider = kind === 'cavalier' || kind === 'chef';
-  const trous = kind === 'milice' ? '#5a4c3c' : year >= 1830 ? '#8d929b' : rider ? '#e8dcc0' : WHITE;
+  const trous = breeches(kind, year);
   const officer = kind === 'officier' || kind === 'drapeau' || kind === 'chef', armed = !officer && !rider && kind !== 'tambour' && kind !== 'servant';
   // jambes : un bloc coupé à mi-hauteur, le haut à la cuisse, le milieu au tibia, le bas au pied (le genou plie)
   const P = [];
   for (const [s, side] of [[1, 'L'], [-1, 'R']]) P.push([new THREE.BoxGeometry(0.13, 0.86, 0.14, 1, 2, 1).translate(s * 0.085, 0.43, 0), trous, y => y > 0.53 ? B['thigh' + side] : y > 0.09 ? B['shin' + side] : B['foot' + side], 0]);
   P.push([box(0.36, 0.74, 0.22, 0, 1.09, 0), shade(1), y => y < 1.05 ? B.hips : B.chest, 1], [box(0.17, 0.2, 0.18, 0, 1.57, 0), SKIN, B.head, 0],
     ...farHat(headgear(kind, year)).map(([g, c, , t]) => [g, c, B.head, t]));
-  // le plastron à la couleur du camp (de loin, les revers ne font plus qu'un pixel), l'écharpe d'or des officiers ;
-  // le collet pour tous
+  // le plastron à la couleur du camp (de loin, les revers ne font plus qu'un pixel), l'écharpe d'or des officiers ; une
+  // ceinture à la couleur du camp tout autour de la taille : un régiment vu de dos (le nôtre, d'ordinaire) se lit aussi
+  // bien que de face
   P.push([box(0.2, 0.36, 0.02, 0, 1.18, 0.115), officer ? GOLD : WHITE, B.chest, officer ? 0 : CAMP],
-    [box(0.19, 0.05, 0.2, 0, 1.45, 0), WHITE, B.chest, CAMP]);
+    [box(0.38, 0.1, 0.24, 0, 0.92, 0), WHITE, B.hips, CAMP]);
   for (const [s, side] of [[1, 'L'], [-1, 'R']]) {
     const up = armed && side === 'L' ? B.carryUpper : B['upper' + side], fore = armed && side === 'L' ? B.carryFore : B['fore' + side];
     P.push([box(0.1, 0.56, 0.11, s * 0.22, 1.13, 0), shade(0.9), y => y > 1.16 ? up : fore, 1]);
@@ -980,7 +983,7 @@ export class Troops {
       for (const [i, f] of lay.entries()) {
         if (e.dead?.has(i)) continue;   // tombé (kill) : il est parmi les corps
         const v = varOf(e, i, seed), mv = e.moves?.[i];
-        coatOf(f[2], coat.copy(off));
+        coatOf(f[2], coat, un, this.year);
         // l'écouvillon et le pointeur se tournent vers la pièce
         if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant' + far, [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2, e, v, mv);
         else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre, null, e, v, mv);
@@ -1054,7 +1057,7 @@ export class Troops {
       (e.dead ??= new Set()).add(i);
       const x = un.x + c * vv - s * uu, y = un.y + s * vv + c * uu;
       if (!bare(x, y)) continue;
-      coatOf(f[2], col.set(color)).offsetHSL(v.hue, v.sat, v.light);
+      coatOf(f[2], col, un, this.year).offsetHSL(v.hue, v.sat, v.light);
       const horse = f[2] === 'cav', cap = this.q.corps ?? 2500, gone = pushRing(this.dead, cap, { kind: f[2], horse, pose: f[4], clip: hit ? 'projete' : 'mort',
         x, y, a: un.dir + (f[3] === 2 ? Math.PI : 0) + v.da + (hash(i, 23, seed) - 0.5) * 1.2,
         t: (this.fxT ?? 0) + (hit ? 0 : hash(i, 29, seed) * 1.5), size: v.size, coat: [col.r, col.g, col.b], face, c: color, lod: 2 });
