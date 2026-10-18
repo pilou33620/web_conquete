@@ -723,13 +723,17 @@ General sur un régiment qui tire.
     couleur du camp : rien ne change encore à l'œil, sauf les revers.
   - Vérif : `tests/modeles.test.mjs` (chaque modèle d'homme a sa pièce teinte 3 ; budget d'attributs) ; une capture.
   - Fichiers : `web/js/battle/troupes.js`, `tests/modeles.test.mjs` — Taille : M
-- [ ] **T48 : l'habit d'époque**
+- [x] **T48 : l'habit d'époque**
+  - Fait : `formes.uniform` (tableau de la spec) ; `coatOf` et la culotte des modèles la lisent ; corps compris. Au
+    point 8a, de loin et de dos (nos lignes, vues de derrière) le plastron ne se voyait pas : une ceinture à la couleur
+    du camp tout autour de la taille, sur la version de loin.
   - `formes.uniform` (tableau de la spec) ; `rebuild` et `kill` : habit = uniforme (variété comprise), revers = camp ;
     culotte garance en 1870 ; milice et officiers comme dit la spec.
   - Vérif : banc de la palette (1700 gris-blanc, 1790 et 1813 bleu, 1870 garance, artillerie bleu foncé, dragons verts,
     milice brune) ; deux camps : même habit, revers différents ; captures des quatre époques.
   - Fichiers : `web/js/battle/formes.js`, `web/js/battle/troupes.js`, `web/js/battle/vue.js`, `tests/modeles.test.mjs`
   - Taille : M
-- [ ] **Point de contrôle 8a** : bancs ; captures 1700, 1790, 1813, 1870, de près et de loin.
-- [ ] **T49 : les figurines des cartes d'unités** (`unites.js`, `interface.js`) : même uniforme, revers du camp.
+- [x] **Point de contrôle 8a** (18/10/2026) : bancs ; captures 1700, 1790, 1813, 1870, de près et de loin.
+- [x] **T49 : les figurines des cartes d'unités** (`unites.js`, `interface.js`) : même uniforme, revers du camp.
+  - Fait : `UnitArt.sprite(…, coat)` : l'habit d'époque de l'arme, revers et tapis à la couleur du camp.
 - [ ] **T50 : README, revue (/review), galerie** ; point final : ton avis.

@@ -1,7 +1,7 @@
 // Vue tactique : petites figurines peintes (fantassin, cavalier, pièce, caisson) des cartes d'unités de la barre du
 // bas, en cache (par camp, type, sens, pose et taille en pixels physiques : nettes sur un écran Retina), bornées en
 // mémoire par la qualité. Les régiments du champ de bataille sont en 3D (troupes.js), leurs fanions dans fanions.js.
-import { TAU, TILT, OMBRE, mixHex } from './formes.js';
+import { TAU, TILT, OMBRE, mixHex, uniform } from './formes.js';
 
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', BRONZE = '#b08a3e', GOLD = '#d6b65a';
 const AFFUT = '#5f6b3e';   // affûts peints en vert olive
@@ -55,9 +55,10 @@ export class UnitArt {
   // kind : 'inf' | 'gren' | 'leger' | 'milice' | 'officier' | 'tambour' | 'drapeau' | 'servant' | 'cav' | 'colonel'
   //        | 'attelage' | 'canon' | 'caisson' ; H : hauteur d'un homme en pixels du canevas visé ; renvoie {cv, ax, ay, h} :
   // le canevas, l'ancre (les pieds) et la hauteur d'homme pour laquelle il est peint
-  sprite(kind, color, face, H, pose = 0) {
+  // color : la couleur du camp (revers, tapis de selle, plumet) ; coat : l'habit (l'uniforme d'époque, formes.uniform)
+  sprite(kind, color, face, H, pose = 0, coat = null) {
     const hb = Math.max(4, Math.round(Math.log(H) / Math.log(1.08)));
-    const key = `${kind}|${color}|${face}|${hb}|${pose}`;
+    const key = `${kind}|${color}|${coat}|${face}|${hb}|${pose}`;
     let sp = this.sprites.get(key);
     if (sp) { this.sprites.delete(key); this.sprites.set(key, sp); return sp; }   // le plus récemment servi passe en fin de file
     const h = Math.pow(1.08, hb);
@@ -70,10 +71,10 @@ export class UnitArt {
     const ax = Math.round(W * (wide ? 0.44 : 0.36)), ay = Math.round(HH - h * (wide ? 0.2 : 0.22));
     g.translate(ax, ay);   // origine : les pieds
     const u = h / 10;
-    if (kind === 'cav' || kind === 'colonel' || kind === 'attelage') this.horse(g, u, color, face, pose, kind);
+    if (kind === 'cav' || kind === 'colonel' || kind === 'attelage') this.horse(g, u, color, face, pose, kind, coat);
     else if (kind === 'canon') this.gun(g, u, face);
     else if (kind === 'caisson') this.limber(g, u, face, pose);
-    else this.soldier(g, u, kind, color, face, pose);
+    else this.soldier(g, u, kind, color, face, pose, coat);
     sp = { cv, ax, ay, h };
     this.sprites.set(key, sp);
     this.bytes += W * HH * 4;
@@ -86,14 +87,15 @@ export class UnitArt {
     g.fillStyle = 'rgba(16,14,8,0.26)';
     g.beginPath(); g.ellipse(Math.cos(a) * len * u * 0.5, Math.sin(a) * len * u * 0.5, len * u * 0.55, wid * u, a, 0, TAU); g.fill();
   }
-  soldier(g, u, kind, color, face, pose) {
+  soldier(g, u, kind, color, face, pose, coatIn = null) {
     const P = pen(g, u), year = this.year;
     const milice = kind === 'milice', officer = kind === 'officier' || kind === 'drapeau', drum = kind === 'tambour', servant = kind === 'servant';
-    const coat = milice ? '#7a6248' : officer ? dark(color, 0.1) : color;
+    const U = uniform(year, servant ? 'artillerie' : 'inf', '', kind), base = coatIn ?? U.coat;
+    const coat = milice ? U.coat : officer ? dark(base, 0.1) : base;
     const coatD = dark(coat, 0.35), coatL = lite(coat, 0.16);
-    const trous = milice ? '#5a4c3c' : year >= 1830 ? '#8d929b' : WHITE, trousD = dark(trous, 0.2);
+    const trous = U.trous, trousD = dark(trous, 0.2);
     const gaiter = year < 1845 && !officer ? '#1d1916' : '#2a2420';
-    const facing = milice ? '#5a4632' : WHITE;
+    const facing = milice ? '#5a4632' : color;   // (les revers à la couleur du camp, comme en 3D)
     const prof = face === 1 || face === 3, back = face === 2;
     const fine = u >= 1.1;   // assez grand pour les petits détails
     this.shadow(g, u, 7, 1.1);
@@ -261,7 +263,8 @@ export class UnitArt {
   }
   // cheval (et son cavalier) : pose & 3 = allure (0 au pas arrêté, 1 au pas, 2 au galop), (pose >> 2) & 3 = phase
   // de l'allure, pose >> 4 = robe
-  horse(g, u, color, face, pose, kind) {
+  horse(g, u, color, face, pose, kind, coat = null) {
+    const rc = coat ?? uniform(this.year, 'cavalerie', '', kind).coat;   // (l'habit du cavalier)
     const m = u * 10 / 1.75;   // pixels par mètre (l'homme debout mesure 1,75 m)
     const hc = HORSES[(pose >> 4) % HORSES.length], hd = dark(hc, 0.35), hl = lite(hc, 0.18);
     const gait = pose & 3, ph = (pose >> 2) & 3, harness = kind === 'attelage', colonel = kind === 'colonel';
@@ -302,7 +305,7 @@ export class UnitArt {
       } else {
         // tapis de selle aux couleurs du camp, bordé de blanc
         P.p(color, -0.5, -1.62, 0.35, -1.62, 0.45, -1.05, -0.6, -1.05); P.l(WHITE, 0.05, 0.45, -1.05, -0.6, -1.05);
-        this.rider(P, color, 1, gait === 2, colonel);
+        this.rider(P, rc, 1, gait === 2, colonel);
       }
       g.restore();
     } else {
@@ -314,7 +317,7 @@ export class UnitArt {
       P.e(hc, 0, -1.25, 0.44, 0.52);
       if (back) { P.l(hd, 0.16, 0, -1.4, 0.05, -0.75); P.e(hl, -0.15, -1.45, 0.18, 0.2); }
       else { P.e(hc, 0, -1.62, 0.17, 0.4); P.e(hd, 0, -1.3, 0.12, 0.08); P.e(hl, -0.08, -1.75, 0.07, 0.18); }
-      if (!harness) { P.r(color, -0.48, -1.62, 0.96, 0.4); this.rider(P, color, face, gait === 2, colonel); }
+      if (!harness) { P.r(color, -0.48, -1.62, 0.96, 0.4); this.rider(P, rc, face, gait === 2, colonel); }
       g.restore();
     }
   }

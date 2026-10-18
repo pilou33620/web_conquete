@@ -3,7 +3,7 @@
 // d'unités groupées en bas, mini-carte et vitesses en bas à droite, bulles d'aide, confirmations et récapitulatif.
 import { ICON } from '../icons.js';
 import { QUALITES, QUALITE_LABEL, qualite, setQualite } from './qualite.js';
-import { clsOf, isGeneral, isLight, isWagon, genName, emprise, stars, fmt, esc, clamp, TYPE_LABEL, FORM_LABEL, FORM_HELP, FORMS, STATE_LABEL, SEASON_LABEL, WEATHER_LABEL, normSeason } from './formes.js';
+import { clsOf, isGeneral, isLight, isWagon, genName, emprise, stars, fmt, esc, clamp, TYPE_LABEL, FORM_LABEL, FORM_HELP, FORMS, STATE_LABEL, SEASON_LABEL, WEATHER_LABEL, normSeason, uniform } from './formes.js';
 import { ORDER_LABEL, ordresHtml, aide as aideArme, arme } from './doctrine.js';
 
 const WX_ICON = {
@@ -256,9 +256,11 @@ export class BattleUI {
     g.clearRect(0, 0, cv.width, cv.height);
     const kind = isGeneral(u) || cls === 'cavalerie' ? 'cav' : cls === 'artillerie' ? 'canon' : isWagon(u) ? 'caisson' : u.type === 'grenadiers' || u.type === 'garde' ? 'gren' : u.type === 'milice' ? 'milice' : isLight(u) ? 'leger' : 'inf';
     const H = kind === 'cav' ? 34 : kind === 'canon' || kind === 'caisson' ? 38 : 50;
-    const sp = this.v.art.sprite(kind, col, kind === 'inf' || kind === 'gren' || kind === 'leger' || kind === 'milice' ? 0 : 1, H, 0);
+    // (l'habit : l'uniforme d'époque de son arme, dragons compris ; la couleur du camp aux revers)
+    const coat = uniform(this.v.art.year, cls, u.name, kind === 'milice' ? 'milice' : '').coat;
+    const sp = this.v.art.sprite(kind, col, kind === 'inf' || kind === 'gren' || kind === 'leger' || kind === 'milice' ? 0 : 1, H, 0, coat);
     const sc = H / sp.h;
-    if (kind === 'canon') { const s2 = this.v.art.sprite('inf', col, 0, 40, 0); g.drawImage(s2.cv, 34 - s2.ax * (40 / s2.h), 60 - s2.ay * (40 / s2.h), s2.cv.width * 40 / s2.h, s2.cv.height * 40 / s2.h); }
+    if (kind === 'canon') { const s2 = this.v.art.sprite('servant', col, 0, 40, 0, coat); g.drawImage(s2.cv, 34 - s2.ax * (40 / s2.h), 60 - s2.ay * (40 / s2.h), s2.cv.width * 40 / s2.h, s2.cv.height * 40 / s2.h); }
     g.drawImage(sp.cv, 28 - sp.ax * sc, 60 - sp.ay * sc, sp.cv.width * sc, sp.cv.height * sc);
   }
   bindDock() {
