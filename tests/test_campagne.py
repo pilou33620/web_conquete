@@ -157,12 +157,9 @@ class TourParTour(unittest.TestCase):
         self.assertTrue(g.order_move(g.player, a['id'], *g.node_xy(berg))[0])
         TT.settle(g)
         self.assertEqual(a['at_node'], foy, "en chemin vers Bergerac, l'armée s'arrête à Sainte-Foy…")
-        self.assertEqual(g.nodes[foy]['owner'], g.player, '… qui se rallie tout de suite')
+        self.assertEqual(a['ask']['node'], foy, '… et attend le choix du joueur (évolution du 18/10/2026)')
         self.assertEqual(g.date_str(), d0)
-        self.assertEqual(TT.march_left(g, a), 0.0, "prendre une ville finit la marche du tour")
-        self.assertTrue(a['path'], 'la route vers Bergerac est gardée')
-        jouer_mois(g)
-        self.assertNotEqual(a['at_node'], foy, "au tour suivant, l'armée repart vers Bergerac")
+        self.assertTrue(a['ask']['path'], 'la route vers Bergerac est gardée')
 
     def test_arrivee_annoncee(self):
         g = partie()
@@ -184,8 +181,8 @@ class TourParTour(unittest.TestCase):
         a['x'], a['y'] = g.node_xy(nid)
         ok, msg = AA.conquer(g, g.player, a)
         self.assertTrue(ok, msg)
-        self.assertEqual(g.nodes[nid]['owner'], g.player, 'ralliée tout de suite, pendant votre tour')
-        self.assertIn('se rallie', msg)
+        self.assertEqual(a['ask']['node'], nid, '« Rallier ou attaquer » rouvre le choix (évolution du 18/10/2026)')
+        self.assertTrue(AA.choose(g, g.player, a, 'attendre')[0])
         jouer_mois(g)
         a['tr'] = True   # retour chez soi, sans rallier d'autres places en chemin
         self.assertTrue(g.order_move(g.player, a['id'], *g.node_xy(g.capital_of(g.player)))[0])
@@ -479,19 +476,100 @@ class SiegesEnTours(unittest.TestCase):
         a['x'], a['y'], a['at_node'], a['edge'], a['tr'] = x + 3, y, None, None, False
         self.assertTrue(g.order_move(g.player, a['id'], x, y)[0])
         TT.settle(g)
-        self.assertEqual(a['state'], 'siege')
+        # (évolution du 18/10/2026 : à l'arrivée, le joueur choisit ; « Assiéger » mène au siège, voir T2)
+        self.assertEqual(a['ask']['node'], nid)
         self.assertFalse(g.battles)
-        self.assertIn('Donner l’assaut', g.events[-1]['text'])
-        self.assertTrue(g.events[-1]['important'], 'annoncé en bulle')
-        self.assertTrue(g.assault(g.player, a['id'])[0])
-        TT.settle(g)
-        self.assertEqual([bt.get('mode') for bt in g.battles.values()], ['attente'], 'la fenêtre « Commander la bataille »')
+        self.assertIsNone(g.nodes[nid]['siege'])
 
     def test_blocus_en_tours(self):
         g, n = self.assieger()
         n['siege'].update(blocus=True, food=30, m0=100)
         sg = next(d for d in V.player_state(g)['nodes'] if d['id'] == n['id'])['sg']
         self.assertEqual(sg['food'], TT.tours_left(g, g.t + 30))
+
+
+class ArriveeDevantUneVille(unittest.TestCase):
+    """Évolution du 18/10/2026 (SPEC-TOURS.md) : une armée du joueur qui arrive devant une ville qui n'est pas à lui
+    (sa cible, ou une ville en chemin) s'arrête, et le joueur choisit, toujours."""
+
+    def setUp(self):
+        self.g = partie('33', '1700')
+        self.idx = {gn['name']: i for i, gn in enumerate(self.g.geo.nodes)}
+
+    def detachements(self, n=3):
+        """L'armée de Bordeaux scindée en n détachements (le rapport du joueur)."""
+        g = self.g
+        a = armee(g)
+        ids = [a['id']]
+        for r in [x['id'] for x in a['regs']][:n - 1]:
+            ok, aid = g.split(g.player, a['id'], [r])
+            self.assertTrue(ok, aid)
+            ids.append(aid)
+        return [g.armies[i] for i in ids]
+
+    def marcher(self, a, nom, tr=None):
+        g = self.g
+        ok, msg = g.order_move(g.player, a['id'], None, None, self.idx[nom], 'route', tr, False)
+        self.assertTrue(ok, msg)
+        TT.settle(g)
+
+    def test_le_cas_du_rapport(self):
+        # Bordeaux scindée en trois, une marche par détachement, dans les deux ordres : chaque arrivée devant une ville
+        # attend le choix du joueur, même en chemin (Léognan d'abord : Villenave-d'Ornon est sur la route)
+        for ordre in (['Mérignac', 'Cestas', 'Léognan'], ['Léognan', 'Cestas', 'Mérignac']):
+            self.setUp()
+            g = self.g
+            d0 = g.date_str()
+            for a, nom in zip(self.detachements(), ordre):
+                self.marcher(a, nom)
+                self.assertTrue(a.get('ask'), f"{a['name']} vers {nom} : un choix attend")
+                nid = a['ask']['node']
+                self.assertEqual((a['at_node'], a['state']), (nid, 'idle'))
+                self.assertNotEqual(g.nodes[nid]['owner'], g.player, "la ville ne se rallie pas d'elle-même")
+                self.assertFalse(g.battles, 'aucune bataille sans le choix du joueur')
+            self.assertEqual(g.date_str(), d0)
+        a = g.armies[next(x for x in g.armies if g.armies[x].get('ask', {}).get('node') == self.idx["Villenave-d'Ornon"])]
+        self.assertTrue(a['ask']['path'], 'la route vers Léognan est mise de côté')
+        self.assertGreater(TT.march_left(g, a), 0, 'la marche qui reste est gardée')
+
+    def test_traverser_en_chemin_la_cible_demande(self):
+        a = self.detachements(1)[0]
+        self.marcher(a, 'Léognan', tr=True)
+        self.assertEqual(a['ask']['node'], self.idx['Léognan'], "Villenave-d'Ornon traversée ; Léognan, la cible, demande")
+
+    def test_meme_en_resolution_automatique(self):
+        self.g.settings['battles'] = 'auto'
+        a = self.detachements(1)[0]
+        self.marcher(a, 'Mérignac')
+        self.assertTrue(a.get('ask'))
+        self.assertFalse(self.g.battles)
+
+    def test_attendre(self):
+        g = self.g
+        a = self.detachements(1)[0]
+        self.marcher(a, 'Mérignac')
+        ok, why = TB.on_speed(g, 1)
+        self.assertFalse(ok, '« Tour suivant » attend le choix')
+        self.assertIn('Mérignac', why)
+        ok, msg = AA.choose(g, g.player, a, 'attendre')
+        self.assertTrue(ok, msg)
+        self.assertFalse(a.get('ask'))
+        self.assertEqual((a['state'], a['hold']), ('idle', True), 'halte devant la place, actions dans le panneau')
+        self.assertTrue(TB.on_speed(g, 1)[0])
+        jouer_mois(g)
+        self.assertEqual(a['at_node'], self.idx['Mérignac'], "elle n'a pas bougé")
+        self.assertNotEqual(g.nodes[self.idx['Mérignac']]['owner'], g.player)
+
+    def test_une_ia_fait_comme_avant(self):
+        g = self.g
+        D.declare_war(g, '24', g.player, quiet=True)
+        b = armee(g, '24')
+        nid = self.idx['Libourne']
+        b['at_node'], b['path'], b['state'], b['tr'], b['hold'] = None, [], 'move', False, False
+        b['x'], b['y'] = g.node_xy(nid)
+        g.arrive_node(b, nid)
+        self.assertFalse(b.get('ask'))
+        self.assertIn(b['state'], ('siege', 'battle'))
 
 
 class TempsReel(unittest.TestCase):

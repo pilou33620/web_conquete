@@ -2020,7 +2020,7 @@ class Game:
         for a in list(self.armies.values()):
             AA.land_tick(self, a, dt)
 
-    def arrive_node(self, a, nid):
+    def arrive_node(self, a, nid, ask=True):
         """Retourne True si l'armée doit s'arrêter (combat, siège...)."""
         n = self.nodes[nid]
         code = a['owner']
@@ -2032,7 +2032,8 @@ class Game:
             if not a['path']:
                 a['state'] = 'idle' if a['state'] != 'retreat' else 'idle'
             return False
-        stop = AA.arrive(self, a, nid)   # chez un voisin en paix, ou en traversant : on passe, ou l'on fait halte
+        fled = a['state'] == 'retreat'
+        stop = AA.arrive(self, a, nid, ask)   # chez un voisin en paix, ou en traversant : on passe, ou l'on fait halte
         if stop is not None:
             return stop
         if a['state'] == 'retreat':
@@ -2059,6 +2060,9 @@ class Game:
             a['state'] = 'idle'
             if code == self.player:
                 self.log('siege', f"{gn['name']} est déjà investie par {self.fname(n['siege']['by'])}.", gn['x'], gn['y'])
+            return True
+        if ask and not fled and not (n['siege'] and n['siege']['by'] == code) and AA.asks(self, a):
+            AA.pose(self, a, nid)   # le joueur choisit : assaut, ralliement, siège… (army_actions)
             return True
         if o == R.NEUTRAL and (mine > 3 * defense or (n['siege'] and n['siege'].get('occupy') and n['siege']['by'] == code)):
             if code == self.player and TT.planning(self):
@@ -2385,8 +2389,9 @@ class Game:
                 a['state'] = 'idle'
                 continue
             # armée restée sur une place hostile sans siège (relève battue, siège levé...) : on reprend comme à l'arrivée
+            # (sans fenêtre de choix : ce n'est pas une arrivée en marche)
             a['state'] = 'idle'
-            self.arrive_node(a, nid)
+            self.arrive_node(a, nid, ask=False)
             if a['state'] == 'siege' or a['battle']:
                 battle_nodes.update(bt['node'] for bt in self.battles.values() if bt['node'] is not None)
 

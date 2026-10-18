@@ -505,6 +505,9 @@ def map_view(g, bid):
 def on_speed(g, v):
     """Le joueur reprend la campagne : on oublie la bataille terminée. Refus si la campagne est figée."""
     ensure(g)
+    a = AA.asking(g) if v > 0 else None
+    if a:
+        return False, f"La {a['name']} attend vos ordres devant {AA.place(g, a['ask']['node'])}."
     if v > 0 and frozen(g):
         return False, ("Une bataille attend vos ordres : commandez-la ou laissez la résolution automatique."
                        if waiting(g) else "Une bataille est en cours sur le champ de bataille.")

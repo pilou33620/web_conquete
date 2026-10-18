@@ -2,7 +2,12 @@
 
 ## Phase 1 : le moteur
 
-- [ ] **T1 : l'arrivée pose le choix ; « Attendre » ; « Tour suivant » attend**
+- [x] **T1 : l'arrivée pose le choix ; « Attendre » ; « Tour suivant » attend**
+  - Fait : `army_actions.pose` (chemin et cible mis de côté dans `a['ask']`, halte, pause en temps réel), `asking`,
+    `choose` (« attendre ») ; `engine.arrive_node(..., ask=True)` pose le choix pour le joueur (contrôle périodique :
+    `ask=False`) ; `bridge.on_speed` refuse « Tour suivant » ; « Rallier ou attaquer » rouvre le choix. Bancs
+    `ArriveeDevantUneVille` (cas du rapport dans les deux ordres, Traverser, réglage automatique, attendre, IA) ; les
+    deux bancs de l'ancien comportement réduits à leur partie choix (complétés en T2).
   - Une armée du joueur qui arrive en marche devant une ville qui n'est pas à lui (cible ou en chemin) s'arrête, son
     chemin mis de côté, et porte un choix en attente ; quel que soit le réglage des batailles.
   - Inchangés : ville alliée, voisin en paix, retraite, « Traverser » en chemin (la cible demande), place investie par

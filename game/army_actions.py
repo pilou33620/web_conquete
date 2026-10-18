@@ -439,9 +439,9 @@ def route_level(g, a):
     return 1 if a.get('tr') and a['state'] != 'retreat' else 0
 
 
-def arrive(g, a, nid):
+def arrive(g, a, nid, ask=True):
     """Arrivée d'une armée sur une place ni à elle ni alliée. None : comme avant (rallier, assiéger, combattre) ;
-    False : elle passe son chemin ; True : elle s'arrête devant la place, sans l'attaquer."""
+    False : elle passe son chemin ; True : elle s'arrête devant la place, sans l'attaquer (le joueur choisit, si ask)."""
     n = g.nodes[nid]
     o, code = n['owner'], a['owner']
     war = o != R.NEUTRAL and g.at_war(code, o)
@@ -462,6 +462,9 @@ def arrive(g, a, nid):
         return None if war else False   # une place ennemie tenue barre la route ; les neutres se traversent
     if n['siege'] and n['siege']['by'] == code:
         return None                     # nos troupes l'investissent déjà : on se joint à elles
+    if ask and asks(g, a):
+        pose(g, a, nid)                 # sa cible, en conduite « Traverser » : le joueur choisit
+        return True
     a['path'] = []
     a['state'] = 'idle'
     if not a.get('hold'):
@@ -470,6 +473,39 @@ def arrive(g, a, nid):
             g.log('armee', f"La {a['name']} fait halte devant {place(g, nid)} (négociez, rançonnez, bloquez ou attaquez).",
                   *g.node_xy(nid), who=code)
     return True
+
+
+# ================================================================== arrivée devant une place : le joueur choisit
+# (SPEC-TOURS.md, évolution du 18/10/2026) : l'armée s'arrête, son chemin mis de côté (a['ask']), et une fenêtre
+# propose l'assaut (à la main ou automatique), rallier, négocier, assiéger ou bloquer, la contribution, ou d'attendre
+def asks(g, a):
+    """Cette armée demande-t-elle au joueur ce qu'elle doit faire devant une place ? (les siennes, pas les IA)"""
+    return a['owner'] == g.player and g.player not in getattr(g, 'ais', {}) and not g.over
+
+
+def pose(g, a, nid):
+    a['ask'] = dict(node=nid, path=a['path'], target=a.get('target'))
+    a['path'] = []
+    a['state'] = 'idle'
+    a['hold'] = True
+    if not TT.planning(g):
+        g.speed_idx = 0   # temps réel : la campagne attend le choix
+
+
+def asking(g):
+    """La première armée du joueur qui attend son choix devant une place, ou None."""
+    return next((a for a in g.armies.values() if a.get('ask') and a['owner'] == g.player), None)
+
+
+def choose(g, code, a, what):
+    """Le choix du joueur devant la place (fenêtre d'arrivée)."""
+    k = a.get('ask') if a and a['owner'] == code else None
+    if not k:
+        return False, "Cette armée n'attend pas d'ordre devant une place."
+    if what == 'attendre':
+        a.pop('ask')
+        return True, f"La {a['name']} attend devant {place(g, k['node'])}."
+    return False, "Choix inconnu."
 
 
 def crossed(g, path, target, owners, skip=None):
@@ -977,6 +1013,8 @@ def conquer(g, code, a):
     a['hold'] = False
     a['tr'] = False
     g.arrive_node(a, nid)
+    if a.get('ask'):
+        return True, f"Devant {place(g, nid)} : à vous de choisir."
     if a.pop('took', False):   # tour du joueur : la place s'est ralliée tout de suite, la marche du tour s'arrête là
         a['mp'] = 0.0
         return True, f"{place(g, nid)} se rallie à vous."
