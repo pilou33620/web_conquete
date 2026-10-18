@@ -618,6 +618,10 @@ const VERT_POSE = `
   boneA = aBone == 1.0 ? aFL : aBone == 2.0 ? aFR : aBone == 5.0 ? aHL : aBone == 6.0 ? aHR : aBone == 7.0 ? sin(t) * am * 0.3 : aBone == 8.0 && gait > 1.5 ? 1.2 : 0.0;
   pivot = aBone == 1.0 || aBone == 2.0 ? vec2(0.85, 0.6) : aBone == 5.0 || aBone == 6.0 ? vec2(0.85, -0.6) : aBone == 7.0 ? vec2(1.4, 0.75) : vec2(2.2, 0.0);
   bob = gait > 1.5 ? abs(sin(t)) * 0.12 : gait > 0.5 ? abs(sin(t * 2.0)) * 0.03 : 0.0;
+  // au choc d'une charge (u2.w : son instant), les chevaux du premier rang se cabrent un instant, sur leurs sabots
+  // arrière (l'avant se lève, l'arrière reste au sol)
+  float ri = uFxT - u2.w;
+  if (rank == 0.0 && ri > 0.0 && ri < 1.2) { float rr = sin(3.14159 * ri / 1.2) * 0.55; lean = -rr; bob += 0.6 * sin(rr); boneA = aBone == 1.0 || aBone == 2.0 ? 0.9 * rr : boneA; }
   if (rank < -8.0) { boneA = 0.0; bob = 0.0; }   // cheval tué (rang −9 : voir kill)
 #elif defined(RIG)
   // homme au squelette : la matrice de son os dans son geste, fondue avec celle du geste d'avant pendant 0,3 s
@@ -631,10 +635,12 @@ const VERT_POSE = `
     bw = smoothstep(0.0, 1.0, bw);
     r0 = mix(p0, r0, bw); r1 = mix(p1, r1, bw); r2 = mix(p2, r2, bw);
   }
-  // cavalier (aAnim.x = 1) : le balancement de son cheval (même formule que les chevaux, même phase)
+  // cavalier (aAnim.x = 1) : le balancement de son cheval (même formule que les chevaux, même phase), et il se cabre
+  // avec lui au choc
   if (P > 0.5 && P < 1.5) {
-    float t = uTime * (u1.x > 1.5 ? 11.0 : 6.5) + ph;
+    float t = uTime * (u1.x > 1.5 ? 11.0 : 6.5) + ph, ri = uFxT - u2.w;
     bob = u1.x > 1.5 ? abs(sin(t)) * 0.12 : u1.x > 0.5 ? abs(sin(t * 2.0)) * 0.03 : 0.0;
+    if (rank == 0.0 && ri > 0.0 && ri < 1.2) { float rr = sin(3.14159 * ri / 1.2) * 0.55; lean = -rr; bob += 0.6 * sin(rr); }
   }
   // course à sa place (nouvelle disposition) : sa place glisse du départ à l'arrivée ; en chemin il court (ou marche),
   // tourné vers sa route, puis reprend son geste face au front
@@ -670,6 +676,7 @@ const VERT_POSE = `
 const turn = (v, isPos) => `
 #if defined(RIG)
   ${v} = ${isPos ? `vec3(dot(r0, vec4(${v}, 1.0)), dot(r1, vec4(${v}, 1.0)), dot(r2, vec4(${v}, 1.0)))` : `vec3(dot(r0.xyz, ${v}), dot(r1.xyz, ${v}), dot(r2.xyz, ${v}))`};
+  ${v}.yz = pitch(${v}.yz, vec2(0.0), lean);   // (un cavalier qui se cabre avec son cheval)
 #else
   ${v}.yz = pitch(${v}.yz, ${isPos ? 'pivot' : 'vec2(0.0)'}, boneA);
   ${v}.yz = pitch(${v}.yz, vec2(0.0), lean);
@@ -861,7 +868,7 @@ export class Troops {
       let e = this.lays.get(id);
       if (!e || e.key !== key) {
         const old = e;
-        this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: old?.lod ?? 0, act: old?.act, actT: old?.actT, volT: old?.volT, vol: old?.vol, shotT: old?.shotT, shots: old?.shots, moving: old?.moving, fire: old?.fire, prev: old?.prev, switchT: old?.switchT });
+        this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: old?.lod ?? 0, act: old?.act, actT: old?.actT, impactT: old?.impactT, volT: old?.volT, vol: old?.vol, shotT: old?.shotT, shots: old?.shots, moving: old?.moving, fire: old?.fire, prev: old?.prev, switchT: old?.switchT });
         if (un.state === 'melee') this.scrum(e, un, list);
         if (old) this.relay(old, e);
         dirty = true;
@@ -888,7 +895,7 @@ export class Troops {
         // ce qu'il faisait jusque-là : le geste d'avant de chacun, pour le fondu
         e.prev = e.act === undefined ? null : { act: e.act, actT: e.actT, volley: e.vol, shots: e.shots, moving: e.moving, now: fxT };
         e.switchT = fxT;
-        if (e.act !== act) { e.act = act; e.actT = fxT; }
+        if (e.act !== act) { if (e.act === 'charge' && act === 'melee') e.impactT = fxT; e.act = act; e.actT = fxT; }
         e.volT = volT; e.vol = un._volley; e.shotT = shotT; e.shots = { ...un._shots }; e.moving = moving; e.fire = busy;
         if (e.figs && !dirty) this.gestures(e, true);
       }
@@ -897,6 +904,7 @@ export class Troops {
       D[row + o] = run ? 2 : march ? 1 : 0; D[row + o + 1] = un.state === 'feu' || un.state === 'recharge' ? 1 : 0;
       D[row + o + 2] = v ? v.t : -99; D[row + o + 3] = v ? v.dur : 1;
       D[2 * row + o] = v ? v.roll : 1; D[2 * row + o + 1] = Math.max(1, un.w); D[2 * row + o + 2] = un.form === 'tirailleurs' ? 1 : 0;
+      D[2 * row + o + 3] = e.impactT ?? -99;   // choc de sa charge (les chevaux se cabrent)
       for (let q = 0; q < 8; q++) D[(3 + (q >> 2)) * row + o + (q & 3)] = un._shots?.[q] ?? -99;
     }
     for (const [id, i] of this.index) if (!seen.has(id)) { this.index.delete(id); this.lays.delete(id); this.free.push(i); dirty = true; }

@@ -250,3 +250,9 @@ test('cavaliers : en selle, sabre levé à la charge', () => {
   }
   for (const c of ['selle', 'selle-sabre']) assert.ok(meta.clips[c], c);
 });
+
+test('cavaliers en mêlée : coups de sabre, chacun à son rythme', () => {
+  const a = pick(homme({ kind: 'cavalier', act: 'melee', phase: 0.4 })), b = pick(homme({ kind: 'cavalier', act: 'melee', phase: 2.2 }));
+  assert.equal(a[0], 'selle-combo'); assert.notEqual(a[1], b[1]);
+  assert.ok(meta.clips['selle-combo'], 'selle-combo précalculée');
+});

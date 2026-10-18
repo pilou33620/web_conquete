@@ -577,7 +577,10 @@ General sur un régiment qui tire.
     `tests/modeles.test.mjs`
   - Taille : M
 
-- [ ] **T41 : sabres des cavaliers, chevaux qui se cabrent**
+- [x] **T41 : sabres des cavaliers, chevaux qui se cabrent**
+  - Fait : « selle-combo » (coups de sabre de la bibliothèque, hanches clouées à la selle, jambes à califourchon) en
+    mêlée ; au passage de la charge à la mêlée, l'instant du choc (u2.w) fait cabrer 1,2 s les chevaux du premier rang
+    et leurs cavaliers. 32 animations, 636 Ko.
   - Critères :
     - À la charge, sabre levé.
     - En mêlée, coups de sabre (« assaut », « sabre »), chacun à son rythme.

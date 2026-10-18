@@ -96,16 +96,19 @@ const seq = steps => (M, t) => {
   w = w * w * (3 - 2 * w);
   for (const k of Object.keys(M)) M[k].elements = B[k].elements.map((b, j) => b * (1 - w) + A[k].elements[j] * w);
 };
-// en selle : à califourchon (les pieds aux étriers, le long des flancs), la main gauche aux rênes, le sabre tenu droit
-// dans la droite ; SABRE_HAUT : levé en avant (la charge). LIFT : le corps entier posé sur le dos du cheval
-const SADDLE = M => {
+// en selle (SEAT) : à califourchon (les pieds aux étriers, le long des flancs), la main gauche aux rênes ; SADDLE : le
+// sabre tenu droit dans la droite ; SABRE_HAUT : levé en avant (la charge). LIFT : le corps entier sur le dos du cheval
+const SEAT = M => {
+  // les hanches clouées à la selle : le haut du corps revient d'autant (un coup de sabre ne fait pas descendre de cheval)
+  const d = P(0, 0.92, 0).sub(P(0, 0.92, 0).applyMatrix4(M.hips)), T = new Matrix4().makeTranslation(d.x, d.y, d.z);
+  for (const b of ['hips', 'chest', 'head', 'upperL', 'foreL', 'upperR', 'foreR']) M[b].premultiply(T);
   for (const [side, x] of [['L', 1], ['R', -1]]) {
     [M['thigh' + side], M['shin' + side]] = leg(side, P(x * 0.085, 0.93, 0).applyMatrix4(M.hips), P(x * 0.3, 0.38, 0.22), P(x * 0.3, 0.2, 1));
     M['foot' + side] = M['shin' + side].clone();
   }
   [M.upperL, M.foreL] = arm('L', SH.L.clone().applyMatrix4(M.chest), P(0.1, 0.98, 0.36), P(0.5, -1, -0.2));
-  [M.upperR, M.foreR] = arm('R', SH.R.clone().applyMatrix4(M.chest), P(-0.22, 1.25, 0.24), P(-0.3, -1, 0.2));
 };
+const SADDLE = M => { SEAT(M); [M.upperR, M.foreR] = arm('R', SH.R.clone().applyMatrix4(M.chest), P(-0.22, 1.25, 0.24), P(-0.3, -1, 0.2)); };
 const SABRE_HAUT = M => { SADDLE(M); [M.upperR, M.foreR] = arm('R', SH.R.clone().applyMatrix4(M.chest), P(-0.24, 1.85, 0.3), P(-1, -0.2, -0.5)); };
 const LIFT = () => new Matrix4().makeTranslation(0, 0.7, -0.05);
 // salve : épauler, viser, le coup (à SALVE_FEU s, gestes.js), recharger, l'arme sur l'épaule ; à genoux, le premier rang
@@ -149,6 +152,7 @@ const CLIPS = {
   'feu-libre': { src: 'Idle_Loop', loop: 1, len: 4.4, hold: seq([[0.5, REST], [0.6, AIM], [0.25, FIRE], [0.35, AIM], [2.4, RELOAD], [0.3, REST]]) },
   tambour: { src: 'Idle_Loop', loop: 1, hold: drum(2.5, 5) }, 'tambour-marche': { src: 'Walk_Formal_Loop', loop: 1, hold: drum(4 / 3, 2) },
   selle: { src: 'Idle_Loop', loop: 1, hold: SADDLE, path: LIFT }, 'selle-sabre': { src: 'Idle_Loop', loop: 1, hold: SABRE_HAUT, path: LIFT },
+  'selle-combo': { src: 'Sword_Regular_Combo', loop: 1, hold: SEAT, path: LIFT },
   refouler: { src: 'Idle_Loop', loop: 1, hold: RAMMER }, pointer: { src: 'Idle_Loop', loop: 1, hold: LAY, legs: ['Fixing_Kneeling', 24] },
   boutefeu: { src: 'Idle_Loop', loop: 0, len: 2.0, hold: LINSTOCK_ARM }, porter: { src: 'Walk_Carry_Loop', loop: 1, len: 4, path: SHUTTLE },
 };
