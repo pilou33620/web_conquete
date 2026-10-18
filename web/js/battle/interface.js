@@ -34,6 +34,7 @@ const SITU = {
   'arme:grenadiers': 'Grenadiers : l’élite de l’infanterie. Une salve à bout portant puis la baïonnette (« Salve + baïonnette ») : ils tiennent mieux le corps à corps.',
   'arme:tirailleurs': 'Tirailleurs : « Harceler » les fait tirer à bonne portée et reculer devant l’ennemi. Ils craignent la cavalerie : gardez-les près de la ligne ou à couvert.',
   'arme:cavalerie': 'Cavalerie : elle ne tire pas, elle charge. « Charger ! » puis touchez l’ennemi : de flanc, sur les canons ou sur les fuyards. « Poursuivre » achève une troupe en déroute.',
+  'arme:mitrailleuses': 'Mitrailleuses : un feu roulant à 1 200 m, redoutable contre l’infanterie à découvert, faible contre les canons et sans effet sur les remparts.',
   'arme:artillerie': 'Artillerie : le boulet de loin, la mitraille de près (sous 150 m, elle fauche des files entières). « Contre-batterie » fait taire d’abord les canons ennemis.',
 };
 

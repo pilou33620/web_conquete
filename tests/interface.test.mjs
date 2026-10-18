@@ -266,3 +266,11 @@ test('bataille : la bulle de la cavalerie une seule fois', () => {
   ui.v.st.phase = 'combat'; ui.situ();
   assert.ok(!tip.hidden && tip.innerHTML.includes('déroute'));
 });
+
+test('mitrailleuses : leur arme, sans choix de projectile (SPEC-TECH.md)', () => {
+  const m = { id: 'm', side: 0, type: 'mitrailleuses', cls: 'artillerie', form: 'batterie', men: 90, men0: 90 };
+  assert.equal(arme(m), 'mitrailleuses');
+  const html = ordres([m]);
+  assert.ok(!a(html, 'shot'), 'ni boulet ni mitraille');
+  assert.ok(a(html, 'fire'), 'mais le feu');
+});

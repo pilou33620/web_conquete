@@ -19,7 +19,7 @@ export function arme(u) {
   if (isWagon(u)) return 'chariot';
   const c = clsOf(u);
   if (c === 'cavalerie') return 'cavalerie';
-  if (c === 'artillerie') return 'artillerie';
+  if (c === 'artillerie') return u.type === 'mitrailleuses' ? 'mitrailleuses' : 'artillerie';
   if (u.type === 'sapeurs') return 'sapeurs';
   if (isLight(u)) return 'tirailleurs';
   if (u.type === 'grenadiers') return 'grenadiers';
@@ -34,6 +34,7 @@ const ACTIONS = {
   sapeurs: ['feu', 'couvert', 'tenir'],
   cavalerie: ['charge', 'poursuite', 'allure', 'tenir'],
   artillerie: ['projectile', 'contrebatterie', 'feu', 'tenir'],
+  mitrailleuses: ['contrebatterie', 'feu', 'tenir'],   // (ni boulet ni mitraille : un feu roulant)
   etat_major: ['tenir'],
   chariot: [],
 };
@@ -45,6 +46,7 @@ const AIDE = {
   sapeurs: 'Peu faits pour le combat en rase campagne : à couvert, derrière les troupes de ligne.',
   cavalerie: 'La cavalerie vit de la charge : sur le flanc, sur les canons, sur les fuyards. Elle ne tire guère.',
   artillerie: 'Boulet de loin, mitraille de près (portée de mitraille affichée en éventail) ; la contre-batterie réduit d’abord les canons ennemis.',
+  mitrailleuses: 'Les mitrailleuses de Reffye fauchent l’infanterie à découvert jusqu’à 1 200 m ; elles ne peuvent rien contre les remparts et peu contre les canons. Leurs munitions fondent vite : gardez le chariot près d’elles.',
   etat_major: 'Le général rallie les fuyards à son contact et soutient le moral des troupes proches.',
   chariot: 'Les munitions de l’armée : à garder à l’abri, près des régiments.',
 };

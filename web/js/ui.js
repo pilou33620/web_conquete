@@ -1030,7 +1030,7 @@ export class UI {
     const need = {}, arm = this.st.me.arm || {};
     for (const r of regs) {
       const cls = this.rules.units[r[1]]?.cls;
-      if (r[6] == null || !this.rules.rearm[cls] || r[6] >= arm[cls]) continue;
+      if (r[6] == null || !this.rules.rearm[cls] || r[6] >= arm[cls] || this.rules.units[r[1]]?.arm_name) continue;
       for (const [k, v] of Object.entries(this.rules.rearm[cls])) need[k] = (need[k] || 0) + v * r[3];
     }
     const out = Object.entries(need).map(([k, v]) => [k, Math.round(v)]);
@@ -1046,8 +1046,9 @@ export class UI {
 
   regRow(r, owner, check) {
     const u = this.rules.units[r[1]] || { short: r[1] };
-    const arms = r[6] != null && this.rules.arms[u.cls] ? this.rules.arms[u.cls][r[6]] : null;
-    const old = arms && owner === this.st.me.code && r[6] < (this.st.me.arm || {})[u.cls];
+    // (armement fixe, la pièce de Reffye : son nom, jamais démodé)
+    const arms = u.arm_name ? [null, u.arm_name] : r[6] != null && this.rules.arms[u.cls] ? this.rules.arms[u.cls][r[6]] : null;
+    const old = arms && !u.arm_name && owner === this.st.me.code && r[6] < (this.st.me.arm || {})[u.cls];
     const armTxt = arms ? `<span class="small" style="font-weight:400;color:${old ? '#ff9a85' : 'var(--muted, #9a9483)'}" title="${old ? 'Armes démodées : réarmez ce régiment dans une de vos places' : 'Armement'}"> · ${esc(arms[1])}${old ? ' (démodé)' : ''}</span>` : '';
     const frac = r[2] / r[3];
     const stars = r[4] >= 60 ? '★★★' : r[4] >= 30 ? '★★' : r[4] >= 10 ? '★' : '';

@@ -58,7 +58,7 @@ function banner(ctx, p, col, un, { sel, mine, ghost }) {
   ctx.fillStyle = 'rgba(6,10,16,0.35)'; ctx.fillRect(x0 + 1.5, y0 + 1.5, w, h);   // ombre
   ctx.fillStyle = rout ? 'rgba(70,66,60,0.88)' : 'rgba(28,30,34,0.86)'; ctx.fillRect(x0, y0, w, h);
   ctx.fillStyle = rout ? lite(col, 0.45) : col; ctx.fillRect(x0, y0, SQ, h);
-  picto(ctx, clsOf(un), x0 + SQ / 2, y0 + h / 2, '#fff8ec');
+  picto(ctx, un.type === 'mitrailleuses' ? 'mitrailleuses' : clsOf(un), x0 + SQ / 2, y0 + h / 2, '#fff8ec');
   ctx.fillStyle = '#ffffff'; ctx.font = NUM; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(ghost ? '?' : men(un), x0 + SQ + (w - SQ) / 2, y0 + h / 2 + 0.5);
   ctx.strokeStyle = sel ? '#ffd98a' : mine ? 'rgba(230,201,127,0.7)' : 'rgba(255,255,255,0.28)'; ctx.lineWidth = sel ? 2.2 : 1;
@@ -95,7 +95,8 @@ function medallion(ctx, x, y, col, un, sel) {
   ctx.fillStyle = '#f1ead8'; ctx.fillText(name, x, y + 26);
 }
 
-// pictogramme de l'arme : fusil (en biais, baïonnette au canon), tête de cheval, canon, roue, bicorne
+// pictogramme de l'arme : fusil (en biais, baïonnette au canon), tête de cheval, canon, faisceau de la mitrailleuse,
+// roue, bicorne
 export function picto(ctx, cls, x, y, col) {
   ctx.save(); ctx.translate(x, y); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineCap = 'round';
   if (cls === 'cavalerie') {
@@ -104,6 +105,11 @@ export function picto(ctx, cls, x, y, col) {
   } else if (cls === 'artillerie') {
     ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(-1.5, 3, 3.2, 0, TAU); ctx.stroke();
     ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(-4, 1); ctx.lineTo(5.5, -3.5); ctx.stroke();
+  } else if (cls === 'mitrailleuses') {
+    ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(-1.5, 3, 3.2, 0, TAU); ctx.stroke();
+    ctx.lineWidth = 1.1; ctx.beginPath();
+    for (const d of [-1.6, 0, 1.6]) { ctx.moveTo(-4, 1 + d); ctx.lineTo(5.5, -3.5 + d); }
+    ctx.stroke();
   } else if (cls === 'chariot') {
     ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(0, 1, 4.5, 0, TAU); ctx.moveTo(-4.5, 1); ctx.lineTo(4.5, 1); ctx.moveTo(0, -3.5); ctx.lineTo(0, 5.5); ctx.stroke();
   } else if (cls === 'general') {

@@ -36,6 +36,7 @@ export const ICON = {
   legere: S('<circle cx="10" cy="6" r="2.2"/><path d="M10 9v6l-3 6M10 15l3 6"/><path d="M5 13 18 5"/><path d="M8.5 4.2 13 2.5"/>'),
   cavalerie: S('<path d="M5 20l1.5-6.5L5 9.5l3-3.5 2.5 1.5H15l3.5 3-1 3 .5 6.5"/><path d="M8.5 6V3.5"/><path d="M11 13h5"/>'),
   artillerie: S('<path d="M3.5 10.5 17 6.5l1 3.5L5 14.5z"/><circle cx="9" cy="17" r="3.4"/><path d="M9 13.6V20.4M5.6 17h6.8"/><path d="M12 17h8"/>'),
+  mitrailleuses: S('<path d="M3.5 9.5 17 5.5M3.5 11.5 17.5 7.5M4 13.5l14-4"/><circle cx="9" cy="17" r="3.4"/><path d="M9 13.6V20.4M5.6 17h6.8"/><path d="M12 17h8"/><path d="M3 9v5"/>'),
   grenadiers: S('<circle cx="12" cy="15.5" r="5.5"/><path d="M10.4 10.3V8.6h3.2v1.7"/><path d="M12 8.6c-2-1-2.6-3-1-5.6.5 1.5 2.6 2 2.4 3.8-.1.8-.6 1.4-1.4 1.8z"/><path d="M9.3 14.2a3 3 0 0 1 2-1.9" stroke-width="1.1"/>'),
   chasseurs: S('<path d="M7 8c0-2.4 2.3-3.7 5-3.7s5 1.3 5 3.7c-2 .7-8 .7-10 0z"/><path d="M12 4.3V2.8"/><path d="M2.5 21l5.5-8.5 3.5 4.5 2.8-3.5L21.5 21z"/><path d="M19.5 11 17 21" stroke-width="1.3"/>'),
   sapeurs: S('<path d="M4.5 4.5 19.5 19.5"/><path d="M6.3 3.2C4.4 3.5 3.1 5 2.8 7L6 9.5 9 6.5z"/><path d="M19.5 4.5 10.5 13.5"/><path d="M17.8 2.8l3.4 3.4"/><path d="M10.5 13.5 7 13l-3.2 3.2.9 4.1 4.1.9L12 18z"/>'),

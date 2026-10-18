@@ -23,7 +23,7 @@ export function cellRemap(types) {
   return map;
 }
 
-export const CLS_OF_TYPE = { cavalerie: 'cavalerie', artillerie: 'artillerie', general: 'general', etat_major: 'general', chariot: 'chariot' };
+export const CLS_OF_TYPE = { cavalerie: 'cavalerie', artillerie: 'artillerie', mitrailleuses: 'artillerie', general: 'general', etat_major: 'general', chariot: 'chariot' };
 export const clsOf = u => u.cls || CLS_OF_TYPE[u.type] || 'inf';
 export const isLight = u => u.light ?? (u.type === 'legere' || u.type === 'chasseurs');
 export const isGeneral = u => u.type === 'general' || u.cls === 'general' || u.cls === 'etat_major';
@@ -33,7 +33,7 @@ export const genName = u => (u.gen && typeof u.gen === 'object' ? u.gen.name : u
 
 export const TYPE_LABEL = {
   ligne: 'Infanterie de ligne', legere: 'Infanterie légère', grenadiers: 'Grenadiers', chasseurs: 'Chasseurs',
-  sapeurs: 'Sapeurs', garde: 'Garde nationale', cavalerie: 'Cavalerie', artillerie: 'Artillerie', milice: 'Milice',
+  sapeurs: 'Sapeurs', garde: 'Garde nationale', cavalerie: 'Cavalerie', artillerie: 'Artillerie', mitrailleuses: 'Mitrailleuses', milice: 'Milice',
   general: 'État-major', chariot: 'Chariot de munitions',
 };
 export const FORM_LABEL = { ligne: 'Ligne', colonne: 'Colonne', carre: 'Carré', tirailleurs: 'Tirailleurs', batterie: 'En batterie', attelee: 'Attelée' };
