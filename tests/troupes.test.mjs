@@ -74,3 +74,17 @@ test('déroute : éparpillés bien au-delà de l’emprise, dos à l’ennemi, e
 test('la disposition est la même d’une image à l’autre (pas de figurines qui sautent)', () => {
   assert.deepEqual(layout(reg(), 1), layout(reg(), 1));
 });
+
+test('piquiers (arme 0, avant la baïonnette) : un homme sur cinq, au centre, sur toute la profondeur (SPEC-TECH.md)', () => {
+  const lay = layout(reg({ arm: 0 }), 1), k = kinds(lay);
+  const hommes = k.inf + k.piquier + k.drapeau;
+  assert.equal(hommes, 450);
+  assert.ok(Math.abs(k.piquier / hommes - 0.2) < 0.04, `${k.piquier} piquiers sur ${hommes}`);
+  const piq = lay.filter(f => f[2] === 'piquier');
+  assert.ok(piq.every(f => Math.abs(f[0]) < 180 * 0.12), 'au centre du front');
+  assert.deepEqual([...new Set(piq.map(f => f[5]))].sort(), [0, 1, 2], 'dans chaque rang');
+  assert.equal(kinds(layout(reg({ arm: 1 }), 1)).piquier, undefined, 'fusil et baïonnette : plus de piquiers');
+  assert.equal(kinds(layout(reg({ arm: 0, type: 'legere', light: true, form: 'tirailleurs' }), 1)).piquier, undefined, 'les troupes légères n’en ont pas');
+  const carre = kinds(layout(reg({ arm: 0, form: 'carre', w: 40, d: 40 }), 1));
+  assert.ok(carre.piquier > 0 && Math.abs(carre.piquier / (carre.inf + carre.piquier) - 0.2) < 0.05, 'en carré aussi');
+});

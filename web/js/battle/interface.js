@@ -255,11 +255,11 @@ export class BattleUI {
     if (!u) return;
     const g = cv.getContext('2d'), col = this.v.colors[u.side] || '#888', cls = clsOf(u);
     g.clearRect(0, 0, cv.width, cv.height);
-    const kind = isGeneral(u) || cls === 'cavalerie' ? 'cav' : cls === 'artillerie' ? 'canon' : isWagon(u) ? 'caisson' : u.type === 'grenadiers' || u.type === 'garde' ? 'gren' : u.type === 'milice' ? 'milice' : isLight(u) ? 'leger' : 'inf';
+    const kind = isGeneral(u) || cls === 'cavalerie' ? 'cav' : cls === 'artillerie' ? 'canon' : isWagon(u) ? 'caisson' : u.type === 'grenadiers' || u.type === 'garde' ? 'gren' : u.type === 'milice' ? 'milice' : isLight(u) ? 'leger' : u.arm === 0 ? 'piquier' : 'inf';
     const H = kind === 'cav' ? 34 : kind === 'canon' || kind === 'caisson' ? 38 : 50;
     // (l'habit : l'uniforme d'époque de son arme, dragons compris ; la couleur du camp aux revers)
     const coat = uniform(this.v.art.year, cls, u.name, kind === 'milice' ? 'milice' : '').coat;
-    const sp = this.v.art.sprite(kind, col, kind === 'inf' || kind === 'gren' || kind === 'leger' || kind === 'milice' ? 0 : 1, H, 0, coat);
+    const sp = this.v.art.sprite(kind, col, kind === 'inf' || kind === 'gren' || kind === 'leger' || kind === 'milice' || kind === 'piquier' ? 0 : 1, H, 0, coat);
     const sc = H / sp.h;
     if (kind === 'canon') { const s2 = this.v.art.sprite('servant', col, 0, 40, 0, coat); g.drawImage(s2.cv, 34 - s2.ax * (40 / s2.h), 60 - s2.ay * (40 / s2.h), s2.cv.width * 40 / s2.h, s2.cv.height * 40 / s2.h); }
     g.drawImage(sp.cv, 28 - sp.ax * sc, 60 - sp.ay * sc, sp.cv.width * sc, sp.cv.height * sc);

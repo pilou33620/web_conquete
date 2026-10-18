@@ -46,6 +46,14 @@ export function pick({ act, actT, now, kind, rank, u, w, form, phase, volley, mo
   if (kind === 'tambour') return loop(act === 'marche' || act === 'charge' || act === 'ralliement' ? 'tambour-marche' : act === 'deroute' ? 'course' : 'tambour');
   if (kind === 'officier' && act === 'melee') return loop('escrime');
   if (kind === 'officier' && (act === 'feu' || act === 'recharge')) return loop('garde');
+  // piquiers (avant la baïonnette) : la pique dressée, comme la hampe du drapeau ; croisée (le geste du fusil) à la
+  // charge, en mêlée et en carré, face à l'extérieur ; ils ne tirent pas
+  if (kind === 'piquier') {
+    if (act === 'melee') return loop(Math.floor(phase * 2) % 2 ? 'estoc' : 'poussee');
+    if (act === 'charge') return loop('charge');
+    if (form === 'carre' && act !== 'marche' && act !== 'deroute') return loop('joue');
+    return loop(gesture(act, 'drapeau'));
+  }
   // mêlée : estoc ou poussée selon l'homme, chacun à son rythme
   if (act === 'melee' && kind !== 'drapeau') return loop(Math.floor(phase * 2) % 2 ? 'estoc' : 'poussee');
   // (une salve tirée à l'arrêt se joue même si l'état n'est pas « feu » : la maquette tire sans changer d'état)

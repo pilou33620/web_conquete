@@ -35,7 +35,7 @@ const AFFUT = '#5f6b3e', BRONZE = '#b08a3e';   // affûts peints en vert olive, 
 const ROWS = 5;     // lignes de la texture des régiments (la 4e et la 5e : l'instant du dernier coup de chaque pièce)
 // sortes de figurines et leur animation dans le vertex shader (null : homme à pied, au squelette de près ; FLAG :
 // étoffe d'un drapeau)
-const KINDS = { inf: null, gren: null, leger: null, milice: null, officier: null, tambour: null, drapeau: null, cavalier: null, chef: null, cav: 'HORSE', colonel: 'HORSE',
+const KINDS = { inf: null, gren: null, leger: null, milice: null, piquier: null, officier: null, tambour: null, drapeau: null, cavalier: null, chef: null, cav: 'HORSE', colonel: 'HORSE',
   attelage: 'HORSE', servant: null, canon: 'GUN', caisson: 'GUN', chariot: 'GUN', etoffe: 'FLAG', fanion: 'FLAG' };
 // tache d'ombre douce au sol sous chaque figurine (largeur, profondeur, décalage vers l'avant, en m avant l'échelle)
 const CONTACT = { FOOT: [0.8, 0.66, 0], HORSE: [1.0, 2.5, 0], GUN: [1.7, 3.0, -0.3] };
@@ -56,7 +56,8 @@ const seedOf = id => [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0
 // (l'habit : l'uniforme français de l'époque et de l'arme, formes.uniform ; un peu plus sombre pour les officiers)
 const COATS = new Map();   // (couleur d'un habit, lue une fois : rebuild en peint des milliers)
 function coatOf(kind, c, un, year) {
-  const hex = uniform(year, clsOf(un), un.name, kind).coat;
+  // (le piquier d'une milice garde ses habits civils)
+  const hex = uniform(year, clsOf(un), un.name, kind === 'piquier' && un.type === 'milice' ? 'milice' : kind).coat;
   c.copy(COATS.get(hex) ?? COATS.set(hex, new THREE.Color(hex)).get(hex));
   if (kind === 'officier' || kind === 'drapeau' || kind === 'colonel' || kind === 'chef') c.multiplyScalar(0.8);
   return c;
@@ -142,13 +143,15 @@ export function layout(un, per = 1, scale = SCALE) {
     const cav = cls === 'cavalerie';
     const kind = cav ? 'cav' : un.type === 'grenadiers' || un.type === 'garde' ? 'gren' : un.type === 'milice' ? 'milice' : isLight(un) ? 'leger' : 'inf';
     const n = clamp(Math.round((un.men || 0) / per), 4, cav ? 160 : 480);
+    // piquiers : l'infanterie armée « mousquet et piques » (arme 0), vers 1700 un homme sur cinq, au centre du bataillon
+    const pike = !cav && un.arm === 0 && (kind === 'inf' || kind === 'milice');
     if (un.form === 'carre' && !cav) {
       // carré : trois rangs par face, tournés vers l'extérieur ; drapeau, tambours et officiers au milieu
       const ranks = n > 60 ? 3 : 2, per4 = Math.max(2, Math.round(n / 4 / ranks)), s = w / 2;
       for (let f = 0; f < 4; f++) for (let r = 0; r < ranks; r++) for (let k = 0; k < per4; k++) {
         const t = (k + 0.5) / per4 * 2 - 1, e = s - r * Math.min(sp, sr);
         const [u0, v0] = [[t * e, e], [e, -t * e], [-t * e, -e], [-e, t * e]][f];
-        push(u0, v0, kind, f, 0, r);
+        push(u0, v0, pike && k % 5 === 2 ? 'piquier' : kind, f, 0, r);
       }
       push(0, 0, 'drapeau', 0, 0, -2); push(-2, -1.5, 'tambour'); push(2, 1, 'officier'); push(-1.5, 2, 'officier');
     } else if (un.form === 'tirailleurs' && !cav) {
@@ -169,7 +172,8 @@ export function layout(un, per = 1, scale = SCALE) {
       for (let r = 0; r < ranks; r++) for (let k = 0; k < files && out.length < n; k++) {
         // les rangs de derrière décalés d'une demi-file : on voit les hommes entre les épaules du rang de devant
         const jit = cav ? 0.3 : 0.12, stag = cav || col ? 0 : (r & 1) * 0.5 * du;
-        push((k + 0.5) * du - w / 2 + stag + (rnd(r * 300 + k) - 0.5) * du * jit, v0 - r * dv + (rnd(r * 300 + k + 7) - 0.5) * dv * jit, kind, 0, cav ? ((r * 3 + k) % 4) << 4 : 0, r);
+        const kd = pike && Math.abs(k + 0.5 - files / 2) < files * 0.1 ? 'piquier' : kind;
+        push((k + 0.5) * du - w / 2 + stag + (rnd(r * 300 + k) - 0.5) * du * jit, v0 - r * dv + (rnd(r * 300 + k + 7) - 0.5) * dv * jit, kd, 0, cav ? ((r * 3 + k) % 4) << 4 : 0, r);
       }
       const rear = v0 - ranks * dv;
       if (cav) {
@@ -339,7 +343,10 @@ function soldier(kind, year, rig = false) {
       [new THREE.CylinderGeometry(0.052, 0.044, 0.5, 7, 2, true).translate(s * 0.2, 1.15, 0), shade(0.9), b, 1],
       [limb(0.048, 0.05, 0.87, 0.94, s * 0.2), facing, b, fz], [sph(0.04, 0.045, 0.04, s * 0.2, 0.84, 0, 5, 4), SKIN, b, 0]);   // parement
   }
-  if (armed) P.push([new THREE.BoxGeometry(0.035, 0.5, 0.065).translate(0.235, 1.03, 0.05), WOOD, B.musket, 0],
+  // la pique (près de cinq mètres), portée par l'os du fusil comme la hampe du drapeau
+  if (kind === 'piquier') P.push([limb(0.018, 0.015, 0.3, 4.9, 0.235, 5).translate(0, 0, 0.055), WOOD, B.musket, 0],
+    [limb(0.003, 0.022, 4.9, 5.15, 0.235, 4).translate(0, 0, 0.055), '#b8bcc0', B.musket, 0]);
+  else if (armed) P.push([new THREE.BoxGeometry(0.035, 0.5, 0.065).translate(0.235, 1.03, 0.05), WOOD, B.musket, 0],
     [limb(0.012, 0.012, 1.28, 2.2, 0.235, 5).translate(0, 0, 0.055), IRON, B.musket, 0], [limb(0.003, 0.009, 2.2, 2.55, 0.235, 4).translate(0, 0, 0.055), '#b8bcc0', B.musket, 0]);
   const g = assemble(P);
   if (rig) stocky(g, B);
@@ -473,7 +480,8 @@ function farSoldier(kind, year, rig = false) {
     P.push([box(0.1, 0.56, 0.11, s * 0.22, 1.13, 0), shade(0.9), y => y > 1.16 ? up : fore, 1]);
   }
   // fusil et baïonnette, plus épais que nature pour faire un trait d'au moins un pixel de loin
-  if (armed) P.push([box(0.1, 1.4, 0.08, 0.25, 1.5, 0.05), '#4a3a2c', B.musket, 0], [box(0.06, 0.36, 0.06, 0.25, 2.38, 0.05), '#c8ccd0', B.musket, 0]);
+  if (kind === 'piquier') P.push([box(0.07, 4.6, 0.07, 0.25, 2.6, 0.05), '#4a3a2c', B.musket, 0], [box(0.06, 0.3, 0.06, 0.25, 5.05, 0.05), '#c8ccd0', B.musket, 0]);
+  else if (armed) P.push([box(0.1, 1.4, 0.08, 0.25, 1.5, 0.05), '#4a3a2c', B.musket, 0], [box(0.06, 0.36, 0.06, 0.25, 2.38, 0.05), '#c8ccd0', B.musket, 0]);
   if (kind === 'tambour') P.push([cyl(0.15, 0.15, 0.22, 6, 0.18, 0.78, 0.13, 0, 1.2), '#e8dcc0', B.hips, 0]);
   if (kind === 'drapeau') P.push([box(0.045, 3.1, 0.045, 0.24, 2.05, 0.08), WOOD, B.pole, 0]);
   if (rig && rider) P.push([box(0.03, 0.8, 0.03, -0.21, 0.42, 0.03), '#c8ccd0', B.foreR, 0]);   // le sabre, dans la main droite

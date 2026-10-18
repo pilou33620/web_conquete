@@ -96,7 +96,7 @@ test('essai des animations : fantassins sur les os du squelette, dans l’ordre 
   const names = [...Object.keys(RIG), ...RIG_EXTRA], id = Object.fromEntries(names.map((k, i) => [k, i]));
   const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
   assert.deepEqual(meta.bones, names, 'relancer dev/cuire.mjs');
-  for (const kind of ['inf', 'gren', 'milice', 'officier', 'tambour', 'drapeau', 'servant', 'cavalier', 'chef']) {
+  for (const kind of ['inf', 'gren', 'milice', 'piquier', 'officier', 'tambour', 'drapeau', 'servant', 'cavalier', 'chef']) {
     const g = model(kind, 1790, 1, true), p = g.attributes.position, b = g.attributes.aBone;
     for (let i = 0; i < p.count; i++) {
       const bone = b.getX(i), y = p.getY(i);
@@ -131,7 +131,7 @@ test('au squelette, la version de loin a les mêmes os et la même hauteur que c
     }
     return { y0, y1, bones, n: p.count };
   };
-  for (const kind of ['inf', 'gren', 'leger', 'milice', 'officier', 'tambour', 'drapeau', 'cavalier', 'chef']) {
+  for (const kind of ['inf', 'gren', 'leger', 'milice', 'piquier', 'officier', 'tambour', 'drapeau', 'cavalier', 'chef']) {
     const near = rigStats(model(kind, 1790, 1, true)), far = rigStats(model(kind, 1790, 0, true));
     for (const b of far.bones) assert.ok(near.bones.has(b), `${kind} : os ${names[b]} de loin seulement`);
     for (const k of ['thighL', 'shinL', 'chest', 'head']) assert.ok(far.bones.has(id[k]), `${kind} : pas d'os ${k} de loin`);

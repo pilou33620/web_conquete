@@ -338,3 +338,15 @@ test('poudre sans fumée : le Lebel, et les pièces du camp qui a la poudre B (S
   assert.equal(smokeless({ side: 0, type: 'ligne', arm: 7 }), true, 'sans marques ni classe');
   assert.equal(smokeless({ side: 0, cls: 'artillerie' }), false);
 });
+
+test('piquiers : pique dressée, croisée à la charge, en mêlée et en carré ; ils ne tirent pas', () => {
+  const g = (act, form = 'ligne', extra = {}) => pick({ act, actT: 0, now: 1, kind: 'piquier', rank: 0, u: 0, w: 100, form, phase: 0.3, volley: null, moving: false, ...extra })[0];
+  assert.equal(g('repos'), 'repos');
+  assert.equal(g('marche'), 'marche');
+  assert.equal(g('feu'), 'repos', 'pendant le feu de la ligne, pique dressée');
+  assert.equal(g('repos', 'ligne', { volley: { t: 0.5, roll: 1, dur: 1 } }), 'repos', 'ni pendant la salve');
+  assert.equal(g('charge'), 'charge', 'pique croisée');
+  assert.ok(['estoc', 'poussee'].includes(g('melee')));
+  assert.equal(g('repos', 'carre'), 'joue', 'en carré, pique croisée vers l’extérieur');
+  assert.equal(g('deroute'), 'course');
+});

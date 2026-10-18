@@ -163,9 +163,11 @@ export class UnitArt {
       P.l(WOOD, 0.22, dx - 0.4, -6.6, dx - 0.1, -5.7); P.l(WOOD, 0.22, dx + 0.6, -6.8, dx + 0.25, -5.8);
     }
     // bras et fusil selon la pose
-    const musket = !officer && !drum && !servant && pose !== ROUT;
+    const musket = !officer && !drum && !servant && kind !== 'piquier' && pose !== ROUT;
     const brown = '#4a3420', steel = '#cfd3d8', sw = 0.42;
     const arm = (x1, y1, x2, y2) => { P.l(coat, 0.85, x1, y1, x2, y2); P.e(SKIN, x2, y2, 0.32, 0.32); };
+    // le piquier : sa pique dressée, qui dépasse du cadre (près de cinq mètres)
+    if (kind === 'piquier' && pose !== ROUT) { const px = prof ? 0.9 : 1.4; P.l(brown, 0.3, px, -0.4, px - 0.2, -13.6); P.l(steel, 0.22, px - 0.2, -13.6, px - 0.25, -14.8); }
     if (prof) {
       if (pose === AIM) {
         arm(0.2, -7.9, 1.9, -8.0); arm(-0.4, -7.8, 0.3, -7.2);
