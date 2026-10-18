@@ -129,3 +129,16 @@ export function matchSlots(old, next, skip = new Set()) {
   }
   return m;
 }
+
+// un homme pris dans un bâtiment (rectangles orientés {x, y, w, h, a}, élargis de margin) en sort par le bord le plus
+// proche ; dehors, il ne bouge pas. Le shader des troupes fait de même (troupes.js, pushOut)
+export function pushOut(x, y, rects, margin) {
+  for (const b of rects) {
+    const ca = Math.cos(b.a || 0), sa = Math.sin(b.a || 0), dx = x - b.x, dy = y - b.y;
+    const u = dx * ca + dy * sa, v = -dx * sa + dy * ca, hu = b.w / 2 + margin, hv = b.h / 2 + margin;
+    if (Math.abs(u) >= hu || Math.abs(v) >= hv) continue;
+    const [nu, nv] = hu - Math.abs(u) < hv - Math.abs(v) ? [Math.sign(u || 1) * hu, v] : [u, Math.sign(v || 1) * hv];
+    x = b.x + nu * ca - nv * sa; y = b.y + nu * sa + nv * ca;
+  }
+  return [x, y];
+}

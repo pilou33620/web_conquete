@@ -633,6 +633,28 @@ export class Terrain {
     this.paintStanding(g, x0, y0, wm, hm);
     mark('debout');
   }
+  // bâtiments rangés pour le shader des troupes, qui en repousse les hommes et les chevaux (troupes.js, pushOut) : une
+  // grille de cell m sur leur emprise, au plus 4 bâtiments par case (numéro + 1 ; 0 : aucun) ; rects, deux lignes :
+  // centre et angle, puis demi-côtés élargis de margin. null sans bâtiment
+  buildingGrid(cell = 8, margin = 0.5) {
+    const B = this.buildings;
+    if (!B.length) return null;
+    const R = b => Math.hypot(b.w, b.h) / 2 + margin;
+    const x0 = Math.min(...B.map(b => b.x - R(b))), y0 = Math.min(...B.map(b => b.y - R(b)));
+    const cols = Math.ceil((Math.max(...B.map(b => b.x + R(b))) - x0) / cell) + 1, rows = Math.ceil((Math.max(...B.map(b => b.y + R(b))) - y0) / cell) + 1;
+    const cells = new Float32Array(cols * rows * 4), rects = new Float32Array(B.length * 8);
+    B.forEach((b, i) => {
+      rects.set([b.x, b.y, b.a || 0, 0], i * 4); rects.set([b.w / 2 + margin, b.h / 2 + margin, 0, 0], (B.length + i) * 4);
+      const r = R(b);
+      for (let cy = Math.floor((b.y - r - y0) / cell); cy <= Math.floor((b.y + r - y0) / cell); cy++) {
+        for (let cx = Math.floor((b.x - r - x0) / cell); cx <= Math.floor((b.x + r - x0) / cell); cx++) {
+          const o = (cy * cols + cx) * 4;
+          for (let k = 0; k < 4; k++) if (!cells[o + k]) { cells[o + k] = i + 1; break; }
+        }
+      }
+    });
+    return { cell, x0, y0, cols, rows, cells, rects, n: B.length };
+  }
   // Le sol est-il découvert en (x, y) ? Ni bois, ni eau, ni bâti, ni dans l'emprise d'une maison : les tués et les
   // trous d'obus ne se posent que là
   bare(x, y) {

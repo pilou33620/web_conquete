@@ -526,7 +526,11 @@ General sur un régiment qui tire.
   - Fichiers : `web/js/battle/gestes.js`, `web/js/battle/troupes.js`, `tests/gestes.test.mjs`
   - Taille : S
 
-- [ ] **T38 : bâtiments**
+- [x] **T38 : bâtiments**
+  - Fait : `terrain.buildingGrid()` (grille de 8 m sur l'emprise des bâtiments, 4 par case) ; le shader des hommes et
+    des chevaux (`pushOut`, jumeau de `gestes.js`) les repousse hors des maisons, fermes, église et moulins (marge
+    0,5 m), vers le bord le plus proche ; ombres comprises. Capture : une ligne posée en travers d'un village longe
+    les façades.
   - Critères :
     - `terrain.js` prépare la grille des bâtiments (décision 19). Le shader repousse toute figurine debout hors des
       maisons, de l'église et des moulins (marge de 0,5 m), vers le bord le plus proche. Les remparts ne sont pas

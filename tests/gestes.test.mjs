@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves } from '../web/js/battle/gestes.js';
+import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves, pushOut } from '../web/js/battle/gestes.js';
 
 const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
 
@@ -206,4 +206,15 @@ test('un régiment qui tourne sur place marche aussi (pas de glissade)', () => {
   assert.equal(moves({ from: at(0, 0, 3.1), to: at(0, 0, -3.1) }), true, 'de part et d’autre de ±π');
   assert.equal(moves({ from: at(0, 0, 3.13), to: at(0, 0, -3.13) }), false);
   assert.equal(moves({}), false, 'sans positions');
+});
+
+test('bâtiments : un homme pris dans une maison en sort au plus court ; dehors, il ne bouge pas', () => {
+  // maison de 10 × 6 m centrée en (100, 50), marge 0,5 m
+  const maison = [{ x: 100, y: 50, w: 10, h: 6, a: 0 }];
+  assert.deepEqual(pushOut(100 + 4, 50, maison, 0.5), [105.5, 50], 'par le petit côté le plus proche');
+  assert.deepEqual(pushOut(100, 50 - 2.5, maison, 0.5), [100, 46.5], 'par le grand côté');
+  assert.deepEqual(pushOut(120, 50, maison, 0.5), [120, 50], 'dehors');
+  // la même maison tournée d'un quart de tour : ses 10 m vont maintenant du nord au sud
+  const [x, y] = pushOut(100, 50 + 4, [{ ...maison[0], a: Math.PI / 2 }], 0.5);
+  assert.ok(Math.abs(x - 100) < 1e-9 && Math.abs(y - 55.5) < 1e-9, `${x}, ${y}`);
 });

@@ -555,6 +555,30 @@ float hAt(vec2 p) {
   return mix(mix(a, b, t.x), mix(c, d, t.x), t.y);
 }
 vec2 pitch(vec2 yz, vec2 o, float a) { vec2 q = yz - o; return o + vec2(q.x * cos(a) - q.y * sin(a), q.x * sin(a) + q.y * cos(a)); }
+#if defined(RIG) || defined(HORSE)
+// bâtiments (terrain.js, buildingGrid) : un homme ou un cheval dont la place tombe dans une maison en sort par le bord le
+// plus proche (comme gestes.js, pushOut)
+uniform sampler2D uBGrid, uBRect;
+uniform vec4 uBox;      // origine de la grille (x, y), pas (0 : aucun bâtiment), colonnes
+uniform vec2 uBDim;     // lignes de la grille, bâtiments
+vec2 pushOut(vec2 p) {
+  ivec2 c = ivec2(floor((p - uBox.xy) / max(uBox.z, 1.0)));
+  if (uBox.z <= 0.0 || c.x < 0 || c.y < 0 || c.x >= int(uBox.w) || c.y >= int(uBDim.x)) return p;
+  vec4 ids = texelFetch(uBGrid, c, 0);
+  for (int k = 0; k < 4; k++) {
+    int i = int(ids[k]) - 1;
+    if (i < 0) break;
+    vec4 a = texelFetch(uBRect, ivec2(i, 0), 0), h = texelFetch(uBRect, ivec2(i, 1), 0);
+    float ca = cos(a.z), sa = sin(a.z);
+    vec2 d = p - a.xy;
+    float u = d.x * ca + d.y * sa, v = -d.x * sa + d.y * ca;
+    if (abs(u) >= h.x || abs(v) >= h.y) continue;
+    if (h.x - abs(u) < h.y - abs(v)) u = sign(u + 1e-6) * h.x; else v = sign(v + 1e-6) * h.y;
+    p = a.xy + vec2(u * ca - v * sa, u * sa + v * ca);
+  }
+  return p;
+}
+#endif
 #if defined(RIG)
 attribute vec4 aGest;   // geste et son début, geste d'avant et son début (horloge des effets)
 attribute vec4 aMix;    // instant du fondu, vitesse, vitesse d'avant
@@ -649,6 +673,9 @@ const VERT_POSE = `
 #endif
   float fa = u0.z + face, sa = sin(fa), ca = cos(fa);
   vec2 fw = vec2(cos(u0.z), sin(u0.z)), base = u0.xy + fw * slotV + vec2(-fw.y, fw.x) * slotX;
+#if defined(RIG) || defined(HORSE)
+  base = pushOut(base);
+#endif
   vFade = u0.w;
 `;
 // tourne un vecteur de la figurine : membre (sa matrice au squelette, sinon autour de son pivot), penché en avant, puis
@@ -696,11 +723,18 @@ export class Troops {
     const data = anims?.data ?? Uint16Array.from({ length: nb * 12 }, (_, i) => [0, 5, 10].includes(i % 12) ? 0x3c00 : 0);
     this.anim = new THREE.DataTexture(data, nb * 3, meta.rows, THREE.RGBAFormat, THREE.HalfFloatType);
     this.anim.needsUpdate = true;
+    // bâtiments, pour en repousser les hommes et les chevaux (shader : pushOut)
+    const bg = relief.t.buildingGrid?.();
+    const tex = (d, w, h) => Object.assign(new THREE.DataTexture(d, w, h, THREE.RGBAFormat, THREE.FloatType), { needsUpdate: true });
+    this.bgrid = bg ? tex(bg.cells, bg.cols, bg.rows) : tex(new Float32Array(4), 1, 1);
+    this.brect = bg ? tex(bg.rects, bg.n, 2) : tex(new Float32Array(8), 1, 2);
     this.clipId = new Map(Object.keys(meta.clips).map((c, i) => [c, i]));
     this.clipLoop = Object.values(meta.clips).map(c => c.loop);
     this.uni = {
       uUnits: { value: this.units }, uHeight: { value: this.heights }, uHgt: { value: new THREE.Vector3(t.fineStep, t.fineW, t.fineH) },
       uTime: { value: 0 }, uFxT: { value: 0 }, uRobes: { value: ROBES.map(c => new THREE.Color(c)) },
+      uBGrid: { value: this.bgrid }, uBRect: { value: this.brect }, uBox: { value: new THREE.Vector4(bg?.x0 ?? 0, bg?.y0 ?? 0, bg?.cell ?? 0, bg?.cols ?? 1) },
+      uBDim: { value: new THREE.Vector2(bg?.rows ?? 1, bg?.n ?? 1) },
       uAnim: { value: this.anim }, uFps: { value: meta.fps }, uTrot: { value: this.clipId.get('trot') ?? 0 }, uPas: { value: this.clipId.get('pas') ?? 0 }, uClips: { value: Object.values(meta.clips).map(c => new THREE.Vector4(c.row, c.n, c.loop, 0)) },
     };
     this.kinds = new Map();     // sorte → {mesh, cap, n, slot, anim, coat}
@@ -1025,6 +1059,6 @@ export class Troops {
     for (const k of this.kinds.values()) { k.geo.dispose(); k.mat.dispose(); k.depth.dispose(); k.contactGeo?.dispose(); }
     for (const m of Object.values(this.contactMats)) m.dispose();
     this.soft.dispose();
-    this.units.dispose(); this.heights.dispose(); this.pattern.dispose(); this.anim.dispose();
+    this.units.dispose(); this.heights.dispose(); this.pattern.dispose(); this.anim.dispose(); this.bgrid.dispose(); this.brect.dispose();
   }
 }
