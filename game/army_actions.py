@@ -125,8 +125,15 @@ def breach(n):
     return s['dmg'] if s and not s.get('blocus') else 0.0
 
 
-def fort_eff(g, n):
-    return (n['fort'] + works_level(n)) * (1 - breach(n))
+BREACH_STEP = 1 / 2.4   # une brèche de plus sur la carte de la bataille (tactics/terrain.py, _walls) : autant de murs en moins
+
+
+def fort_eff(g, n, att=None):
+    """Remparts moins la brèche, et ouvrages de fortune ; att : l'assaillant, dont la dynamite ouvre une brèche de plus."""
+    b = breach(n)
+    if att in g.factions:
+        b = min(1.0, b + BREACH_STEP * g.mod(att, 'breach'))
+    return (n['fort'] + works_level(n)) * (1 - b)
 
 
 def walled(n):

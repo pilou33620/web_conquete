@@ -2649,7 +2649,7 @@ class Game:
                 fb, wall = 1.0, 1.0
                 if node is not None:
                     o = node['owner']
-                    fort_eff = AA.fort_eff(self, node)
+                    fort_eff = AA.fort_eff(self, node, bt['sides'][1 - si]['owner'])
                     fb = 1 + 0.35 * fort_eff + (self.mod(o, 'fort_bonus') if o != R.NEUTRAL else 0)
                     wall = 1.0 / (1 + 0.55 * fort_eff)  # les remparts abritent les défenseurs
                 for owner, r, a in units:
@@ -2838,6 +2838,8 @@ class Game:
             else:
                 loss = min(obj['n'], d)
                 obj['n'] -= loss
+                if side['owner'] in self.factions:   # Croix-Rouge : une part des blessés rejoindra le régiment (end_battle)
+                    obj['wnd'] = obj.get('wnd', 0.0) + loss * self.mod(side['owner'], 'wounded')
                 k = 230 if a is not None else 150
                 if a is not None:
                     if a.get('pl') == 'tenir':
@@ -2887,6 +2889,10 @@ class Game:
         prisonniers (ceux du champ de bataille pour une bataille commandée), lassitude et bilan des deux camps, journal."""
         loser = 1 - winner
         W, L = bt['sides'][winner], bt['sides'][loser]
+        for si in (0, 1):   # Croix-Rouge : les blessés soignés reviennent aux régiments (wnd, compté pendant la bataille)
+            for _, r, _ in self.side_units(bt, si):
+                if 'wnd' in r:
+                    r['n'] = min(r['max'], r['n'] + r.pop('wnd'))
         caught = 0.0   # hommes rattrapés pendant la poursuite
         gname = self.place_name(bt['x'], bt['y'])
         has_cav = any(r['type'] == 'cavalerie' for _, r, _ in self.side_units(bt, winner))

@@ -200,7 +200,9 @@ def make_spec(g, bt):
     if bt['node'] is not None:
         n = g.nodes[bt['node']]
         gn = g.geo.nodes[bt['node']]
+        att = bt['sides'][0]['owner']   # (la dynamite de l'assaillant : une brèche de plus, tactics/terrain.py)
         place = dict(nid=bt['node'], name=gn['name'], type=gn['type'], fort=n['fort'], dmg=AA.breach(n),
+                     dyn=int(g.mod(att, 'breach')) if att in g.factions else 0,
                      bar=(n.get('aa') or {}).get('bar', 0.0), pop=int(n.get('pop', gn['pop0'])), x=gn['x'], y=gn['y'],
                      battle=True)
     techs = [g.factions[o]['techs'] if o in g.factions else [] for o in owners]
@@ -389,6 +391,8 @@ def finish(g, tb):
         if reg is None:
             continue
         reg['n'] = max(0.0, r_['men'])
+        if u.owner in g.factions and g.mod(u.owner, 'wounded'):   # Croix-Rouge : rendus par end_battle
+            reg['wnd'] = max(0.0, r_['lost']) * g.mod(u.owner, 'wounded')
         reg['morale'] = max(5.0, min(100.0, r_['morale']))
         gain = r_['xp'] - (8 if u.side == winner else 0)   # end_battle donne +8 aux vainqueurs
         reg['xp'] = min(100.0, reg['xp'] + max(0.0, gain))

@@ -1161,5 +1161,37 @@ class Renseignement(unittest.TestCase):
         self.assertIn(armee(partie(), '24')['id'], res[1])
 
 
+class ApresLaBataille(unittest.TestCase):
+    """SPEC-TECH.md : Croix-Rouge (blessés qui reviennent), dynamite (une brèche de plus à l'assaut)."""
+
+    def combat(self, *techs, emods=None):
+        g = partie(seed=3)
+        g.factions['33']['emods'] = dict(emods or {})
+        avec(g, '33', *techs)
+        D.declare_war(g, '33', '24')
+        a, e = armee(g, '33'), armee(g, '24')
+        e['x'], e['y'], e['at_node'], e['path'], e['state'] = a['x'] + 0.5, a['y'], None, [], 'idle'
+        a['tac_auto'] = True
+        g.start_battle([e], [a], (a['x'] + e['x']) / 2, a['y'])
+        bt = next(iter(g.battles.values()))
+        bt['mode'] = 'auto'
+        g.resolve_battle_now(bt)
+        return g, a, sum(r['n'] for r in a['regs'])
+
+    def test_la_croix_rouge_rend_un_quart_des_blesses(self):
+        g0, a0, sans = self.combat(emods=dict(casualties=-0.05))   # (les mêmes pertes, sans les blessés qui reviennent)
+        g1, a1, avec_cr = self.combat('croix_rouge')
+        self.assertGreater(avec_cr, sans, 'les blessés soignés reviennent aux régiments')
+        for r in a1['regs']:
+            self.assertLessEqual(r['n'], r['max'])
+            self.assertNotIn('wnd', r)
+
+    def test_la_dynamite_ouvre_une_breche_de_plus(self):
+        g = avec(partie(), '24', 'dynamite')
+        n = g.nodes[g.capital_of('33')]
+        self.assertAlmostEqual(AA.fort_eff(g, n, '24'), AA.fort_eff(g, n) * (1 - AA.BREACH_STEP))
+        self.assertEqual(AA.fort_eff(g, n, '47'), AA.fort_eff(g, n), 'sans dynamite, rien ne change')
+
+
 if __name__ == '__main__':
     unittest.main()

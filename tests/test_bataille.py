@@ -133,5 +133,22 @@ class MarquesVisibles(unittest.TestCase):
         self.assertGreater(mes['ligne'].arm, 0, 'en 1870, la ligne a mieux que le mousquet')
 
 
+class DynamiteALAssaut(unittest.TestCase):
+    """SPEC-TECH.md : à l'assaut, la dynamite de l'assaillant ouvre une brèche de plus dans les remparts."""
+
+    def breches(self, annee_dynamite):
+        from unittest import mock
+        from game.tactics import skirmish as S
+        with mock.patch.dict(R.TECH_YEAR, dynamite=annee_dynamite):   # (en 1870, dynamite connue ou non)
+            g, bid = S.new(GEO, dict(me='33', foe='24', era='1870', kind='forteresse', role='att', seed=3,
+                                     units=dict(ligne=2, artillerie=1)))
+        self.assertIsNotNone(g, bid)
+        return [b for w in g.tactical[bid].map_view()['walls'] for b in w['breach']]
+
+    def test_une_place_intacte_a_une_breche_avec_la_dynamite(self):
+        self.assertEqual(self.breches(1867), [], 'place intacte, pas de dynamite : pas de brèche')
+        self.assertEqual(len(self.breches(1860)), 1)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -799,9 +799,11 @@ def _walls(m, pl, pos, R, fort, rng, t, streets, att_a):
     wall = dict(pts=[[round(x), round(y)] for x, y in pts], kind=kind, breach=[], thick=round(thick))
     # brèches du siège, du côté de l'assaillant
     dmg = pl.get('dmg', 0.0) if pl.get('battle') else 0.0
-    if dmg >= 0.12:
-        nbr = 1 + int(dmg * 2.4)
-        for k in range(min(3, nbr)):
+    dyn = pl.get('dyn', 0) if pl.get('battle') else 0   # la dynamite de l'assaillant : une brèche de plus
+    if dmg >= 0.12 or dyn:
+        nbr = (1 + int(dmg * 2.4) if dmg >= 0.12 else 0) + dyn
+        dmg = max(dmg, 0.12)
+        for k in range(min(3 + dyn, nbr)):
             a = att_a + (k - (nbr - 1) / 2) * 0.55 + rng.uniform(-0.15, 0.15)
             r0 = radius(a) + thick / 2
             bx, by = px + math.cos(a) * r0, py + math.sin(a) * r0
