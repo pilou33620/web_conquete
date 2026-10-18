@@ -424,7 +424,11 @@ General sur un régiment qui tire.
     `tests/gestes.test.mjs`
   - Taille : M
 
-- [ ] **T33 : servants au squelette**
+- [x] **T33 : servants au squelette**
+  - Fait : gestes précalculés « refouler », « porter » (aller-retour vers la pièce, déplacement du corps entier dans
+    le geste : option `path` de `cuire.mjs`), « pointer » (à genoux), « boutefeu » (abaissé à l'instant du coup) ; le
+    chef de pièce donne ses ordres. Servants en action 8 s après le dernier coup de leur pièce. L'ancienne animation des
+    servants est retirée. 28 animations, 537 Ko.
   - Critères :
     - `cuire.mjs` précalcule les gestes des servants, réglés sur le coup de leur pièce (`_shots`) :
       - écouvillon (refouler) ;

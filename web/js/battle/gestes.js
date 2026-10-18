@@ -31,8 +31,9 @@ export const firing = (volley, now) => !!volley && now <= volley.t + volley.dur 
 // now : l'instant ; rank : son rang (0 le premier) ; u : sa place le long du front de largeur w ; phase : son décalage
 // (s) dans les gestes en boucle ; volley : la dernière salve du régiment (effets.js : t, roll, dur) ; moving : le
 // régiment se déplace
-export function pick({ act, actT, now, kind, rank, u, w, form, phase, volley, moving }) {
+export function pick({ act, actT, now, kind, rank, u, w, form, phase, volley, moving, shots }) {
   const loop = name => [name, actT - phase];
+  if (kind === 'servant') return serve(act, rank, now, shots, moving, loop);
   if (kind === 'tambour') return loop(act === 'marche' || act === 'charge' || act === 'ralliement' ? 'tambour-marche' : act === 'deroute' ? 'course' : 'tambour');
   if (kind === 'officier' && (act === 'feu' || act === 'recharge' || act === 'melee')) return loop('garde');
   // (une salve tirée à l'arrêt se joue même si l'état n'est pas « feu » : la maquette tire sans changer d'état)
@@ -48,6 +49,22 @@ export function pick({ act, actT, now, kind, rank, u, w, form, phase, volley, mo
   }
   return loop(act === 'recharge' ? 'recharge' : genou ? 'genou' : 'joue');
 }
+
+// servants d'une pièce (rang 200 + 10 × pièce + rôle : 1 écouvillon, 2 porteur, 3 pointeur, 4 boutefeu, 0 chef de
+// pièce) : ils s'affairent SERVICE s après le dernier coup de leur pièce (shots : instant du dernier coup de chaque
+// pièce, effets.js), le boutefeu touche la lumière à l'instant du coup ; en route, ils marchent
+export const BOUTEFEU_FEU = 0.3;
+const SERVICE = 8;
+function serve(act, rank, now, shots, moving, loop) {
+  if (rank < 200 || moving || (act !== 'repos' && act !== 'feu' && act !== 'recharge')) return loop(gesture(act, 'inf'));
+  const k = Math.floor((rank - 200) / 10), role = (rank - 200) % 10, shot = shots?.[k] ?? -99;
+  if (role === 4) return ['boutefeu', shot - BOUTEFEU_FEU];
+  if (role === 3) return loop('pointer');
+  if (act !== 'feu' && act !== 'recharge' && now - shot > SERVICE) return loop('repos');
+  return loop(role === 1 ? 'refouler' : role === 2 ? 'porter' : 'parle');
+}
+// une pièce de la batterie est-elle encore en action à l'instant now ?
+export const serving = (shots, now) => Object.values(shots || {}).some(t => now - t <= SERVICE);
 
 // variété d'un homme, tirée une fois pour toutes (seed : son régiment ; i : son numéro) : place (m, le long du front et
 // vers l'avant), sens (rad), taille, nuance de l'habit (teinte, saturation, clarté), rythme dans les gestes en boucle,

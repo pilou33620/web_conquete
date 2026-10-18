@@ -19,7 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Matrix4, Quaternion, Vector3, DataUtils } from '../../../vendor/three/three.core.js';
 import { RIG, RIG_EXTRA } from '../troupes.js';
-import { SALVE_FEU } from '../gestes.js';
+import { SALVE_FEU, BOUTEFEU_FEU } from '../gestes.js';
 
 const FPS = 24;
 // ------------------------------------------------------------------ gestes du fusil
@@ -97,8 +97,27 @@ const SALVE = [[0.35, REST], [0.35, AIM], [0.25, FIRE], [0.45, AIM], [2.4, RELOA
 const SALVE_GENOU = [[0.35, REST], [0.35, AIM], [0.25, FIRE], [0.45, AIM], [2.9, REST]];
 if (SALVE[0][0] + SALVE[1][0] !== SALVE_FEU || SALVE_GENOU[0][0] + SALVE_GENOU[1][0] !== SALVE_FEU) throw new Error('instant du coup');
 
-// nom chez nous → animation de la bibliothèque (src), en boucle, durée (len, sinon celle de src), geste du fusil
-// (hold), jambes d'une autre animation à l'image donnée (legs)
+// servants des pièces (sans fusil : leurs deux bras sont à eux)
+const hands = (M, l, r, poleR = P(-1, -0.6, -0.3)) => {
+  [M.upperL, M.foreL] = arm('L', SH.L.clone().applyMatrix4(M.chest), l, P(0.5, -1, -0.2));
+  [M.upperR, M.foreR] = arm('R', SH.R.clone().applyMatrix4(M.chest), r, poleR);
+};
+// refouler : les deux mains poussent l'écouvillon dans le canon, deux fois par boucle du repos (2,5 s)
+const RAMMER = (M, t) => { const k = 0.25 * (0.5 - 0.5 * Math.cos(4 * Math.PI * t / 2.5)); hands(M, inChest(M, 0.06, 1.12, 0.32 + k), inChest(M, -0.1, 1.1, 0.18 + k)); };
+// pointer : à genoux, les mains sur la flèche de l'affût, qui corrigent un peu la hausse
+const LAY = (M, t) => { const k = 0.03 * Math.sin(2 * Math.PI * t / 2.5); hands(M, P(0.12, 0.5, 0.48 + k), P(-0.12, 0.5, 0.48 - k)); };
+// boutefeu : levé, abaissé sur la lumière à BOUTEFEU_FEU s (le coup part), relevé ; la main gauche reste le long du corps
+const LINSTOCK = [[0, -0.3, 1.8, 0.1], [BOUTEFEU_FEU, -0.25, 0.95, 0.5], [0.6, -0.25, 0.95, 0.5], [1.4, -0.3, 1.8, 0.1], [2.0, -0.3, 1.8, 0.1]];
+const LINSTOCK_ARM = (M, t) => { [M.upperR, M.foreR] = arm('R', SH.R.clone().applyMatrix4(M.chest), key(LINSTOCK, t), P(-1, -0.3, -0.5)); };
+// porter : aller-retour de 2,4 m vers la pièce (devant soi), demi-tour au bout ; un aller par boucle de l'animation
+// « marcher en portant » (2 s)
+const SHUTTLE = t => {
+  const back = t >= 2, z = back ? 1.2 - 1.2 * (t - 2) : -1.2 + 1.2 * t;
+  return new Matrix4().makeTranslation(0, 0, z).multiply(new Matrix4().makeRotationY(back ? Math.PI : 0));
+};
+
+// nom chez nous → animation de la bibliothèque (src), en boucle, durée (len, sinon celle de src), geste du fusil ou des
+// mains (hold), jambes d'une autre animation à l'image donnée (legs), déplacement du corps entier (path)
 const CLIPS = {
   repos: { src: 'Idle_Loop', loop: 1 }, parle: { src: 'Idle_Talking_Loop', loop: 1 }, marche: { src: 'Walk_Formal_Loop', loop: 1 },
   pas: { src: 'Walk_Loop', loop: 1 }, trot: { src: 'Jog_Fwd_Loop', loop: 1 }, course: { src: 'Sprint_Loop', loop: 1 },
@@ -112,6 +131,8 @@ const CLIPS = {
   'salve-genou': { src: 'Idle_Loop', loop: 0, len: 4.3, hold: seq(SALVE_GENOU), legs: ['Fixing_Kneeling', 24] },
   'feu-libre': { src: 'Idle_Loop', loop: 1, len: 4.4, hold: seq([[0.5, REST], [0.6, AIM], [0.25, FIRE], [0.35, AIM], [2.4, RELOAD], [0.3, REST]]) },
   tambour: { src: 'Idle_Loop', loop: 1, hold: drum(2.5, 5) }, 'tambour-marche': { src: 'Walk_Formal_Loop', loop: 1, hold: drum(4 / 3, 2) },
+  refouler: { src: 'Idle_Loop', loop: 1, hold: RAMMER }, pointer: { src: 'Idle_Loop', loop: 1, hold: LAY, legs: ['Fixing_Kneeling', 24] },
+  boutefeu: { src: 'Idle_Loop', loop: 0, len: 2.0, hold: LINSTOCK_ARM }, porter: { src: 'Walk_Carry_Loop', loop: 1, len: 4, path: SHUTTLE },
 };
 
 const UE = { 'DEF-hips': 'pelvis', 'DEF-spine.003': 'spine_03', 'DEF-head': 'Head', 'DEF-upper_arm.L': 'upperarm_l', 'DEF-forearm.L': 'lowerarm_l',
@@ -200,7 +221,7 @@ function source(src) {
 }
 const UPPER = ['hips', 'chest', 'head', 'upperL', 'foreL', 'upperR', 'foreR'], HIP = P(0, 0.92, 0);
 const NAMES = [...K, ...RIG_EXTRA], rows = [], clips = {};
-for (const [name, { src, loop, len, hold: gesture, legs }] of Object.entries(CLIPS)) {
+for (const [name, { src, loop, len, hold: gesture, legs, path }] of Object.entries(CLIPS)) {
   const S = source(src), dur = len ?? S.dur;
   const n = loop ? Math.max(1, Math.round(dur * FPS)) : Math.floor(dur * FPS) + 1;
   const kneel = legs && source(legs[0]).at(legs[1] / FPS);
@@ -214,6 +235,7 @@ for (const [name, { src, loop, len, hold: gesture, legs }] of Object.entries(CLI
     }
     for (const b of RIG_EXTRA) M[b] = M.chest.clone();   // le fusil porté contre la poitrine
     gesture?.(M, t);
+    if (path) { const X = path(t); for (const b of NAMES) M[b].premultiply(X); }
     const row = [];
     for (const b of NAMES) {
       const e = M[b].elements;   // (colonnes) : on écrit les trois premières lignes

@@ -12,13 +12,13 @@
 //
 // Les hommes à pied sont au squelette des animations précalculées (Quaternius, CC0 : dev/cuire.mjs, web/anims/) :
 // chaque os suit sa matrice, lue dans la texture des animations au geste choisi par gestes.js (attributs aGest et
-// aMix, réécrits quand l'activité du régiment change), avec un fondu entre deux gestes. Chevaux, pièces, drapeaux et
-// servants gardent l'animation par le code.
+// aMix, réécrits quand l'activité du régiment change), avec un fondu entre deux gestes. Chevaux, pièces et fanions
+// gardent l'animation par le code.
 // Les dispositions (layout) ne sont recalculées que quand un régiment change de forme, d'effectif (par 8 hommes) ou
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp } from './formes.js';
-import { activity, pick, firing, variety, rows } from './gestes.js';
+import { activity, pick, firing, serving, variety, rows } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
 const { AIM, RUN, ROUT } = POSES;
@@ -31,9 +31,9 @@ const ROWS = 5;     // lignes de la texture des régiments (la 4e et la 5e : l'i
 // sortes de figurines et leur animation dans le vertex shader (null : homme à pied, au squelette de près ; FLAG :
 // étoffe d'un drapeau)
 const KINDS = { inf: null, gren: null, leger: null, milice: null, officier: null, tambour: null, drapeau: null, cav: 'HORSE', colonel: 'HORSE',
-  attelage: 'HORSE', servant: 'CREW', canon: 'GUN', caisson: 'GUN', chariot: 'GUN', etoffe: 'FLAG', fanion: 'FLAG' };
+  attelage: 'HORSE', servant: null, canon: 'GUN', caisson: 'GUN', chariot: 'GUN', etoffe: 'FLAG', fanion: 'FLAG' };
 // tache d'ombre douce au sol sous chaque figurine (largeur, profondeur, décalage vers l'avant, en m avant l'échelle)
-const CONTACT = { FOOT: [0.8, 0.66, 0], CREW: [0.8, 0.66, 0], HORSE: [1.0, 2.5, 0], GUN: [1.7, 3.0, -0.3] };
+const CONTACT = { FOOT: [0.8, 0.66, 0], HORSE: [1.0, 2.5, 0], GUN: [1.7, 3.0, -0.3] };
 const ROBES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];   // robes des chevaux (bai, bai brun, alezan, noir pangaré)
 // attributs de chaque figurine (nombres par figurine) : place, pose, habit ; geste (aGest : geste et son début, geste
 // d'avant et son début ; aMix : instant du fondu, vitesse, vitesse d'avant)
@@ -566,7 +566,7 @@ const VERT_POSE = `
   vec4 u1 = texelFetch(uUnits, ivec2(ui, 1), 0);   // allure (0 arrêt, 1 marche, 2 course), feu, début de la salve, durée
   vec4 u2 = texelFetch(uUnits, ivec2(ui, 2), 0);   // sens de la salve, front (m), tirailleurs
   vec4 u3 = texelFetch(uUnits, ivec2(ui, 3), 0), u4 = texelFetch(uUnits, ivec2(ui, 4), 0);   // dernier coup de chaque pièce
-  float P = aAnim.x, ph = aAnim.y, rank = aAnim.w, slotV = aSlot.y, crouch = 1.0;
+  float P = aAnim.x, ph = aAnim.y, rank = aAnim.w, slotV = aSlot.y;
   // pose : celle de la disposition (déroute, mêlée), sinon selon l'allure et la salve qui roule le long du front
   if (P == 0.0) {
     if (u1.x > 1.5) P = 2.0;
@@ -588,20 +588,6 @@ const VERT_POSE = `
     float t = uFxT - (k < 4 ? u3[k] : u4[k - 4]);
     if (t >= 0.0 && t < 1.6) slotV -= (t < 0.06 ? t / 0.06 : 1.0 - (t - 0.06) / 1.54) * 1.4;
   }
-#elif defined(CREW)
-  // servants (rang 200 + 10 × pièce + rôle) : écouvillon (1), boulet (2), pointeur accroupi (3), boutefeu (4)
-  if (rank >= 200.0) {
-    int k = int((rank - 200.0) / 10.0);
-    float role = mod(rank - 200.0, 10.0), t = uFxT - (k < 4 ? u3[k] : u4[k - 4]);
-    if (t < 6.0 || u1.y > 0.5) {
-      if (role == 1.0) arm = t > 0.4 && t < 3.5 ? 1.1 + sin(uTime * 3.0 + ph) * 0.35 : 0.0;
-      else if (role == 2.0) { arm = 0.7; swing = sin(uTime * 6.0 + ph) * 0.35; slotV += sin(uTime * 1.4 + ph) * 1.2; }
-      else if (role == 4.0) arm = t < 0.4 || t > 4.0 ? 1.7 : 0.3;
-    }
-    if (role == 3.0) crouch = 0.78;
-  } else if (u1.x > 0.5) swing = sin(uTime * 8.2 + ph) * 0.38;
-  boneA = aBone == 1.0 ? swing : aBone == 2.0 ? -swing : aBone == 3.0 ? arm : 0.0;
-  if (aBone == 3.0) pivot = vec2(1.4, 0.0);
 #elif defined(HORSE)
   // cheval : la pose de la disposition porte la robe (× 16) et, en déroute, le galop (2) ; sinon l'allure du régiment.
   // Au pas, les jambes vont par paires en diagonale ; au galop, l'une après l'autre, le cheval se soulève.
@@ -697,8 +683,7 @@ export class Troops {
     this.built = -1; this.pending = false;
   }
 
-  // def : 'RIG' (homme au squelette), 'HORSE' (cheval), 'GUN' (pièce, voiture), 'CREW' (servant) : leur animation dans
-  // le vertex shader
+  // def : 'RIG' (homme au squelette), 'HORSE' (cheval), 'GUN' (pièce, voiture) : leur animation dans le vertex shader
   addKind(kind, model, pattern = null, def = null) {
     // géométrie instanciée sans matrice par figurine (attributs : INSTANCE_ATTRS ; WebGL n'en permet que 16)
     const geo = new THREE.InstancedBufferGeometry().copy(model);
@@ -712,7 +697,7 @@ export class Troops {
           float k = 0.08 - transformed.z;
           transformed.x += sin(uTime * 4.2 - k * 2.0 + ph) * 0.12 * k;` : ''}
           ${turn('transformed', true)}
-          transformed.y = transformed.y * crouch + bob;
+          transformed.y += bob;
           transformed *= aAnim.z;
           transformed += vec3(base.x, hAt(base), base.y);`;
     mat.onBeforeCompile = sh => {
@@ -816,7 +801,7 @@ export class Troops {
       if (i === undefined) { i = this.free.pop() ?? this.index.size; if (i >= MAXU) continue; this.index.set(id, i); dirty = true; }
       const key = `${un.form}|${un.state}|${Math.round((un.men || 0) / 8)}|${un.w | 0}|${un.d | 0}|${un.type}|${per}|${colors[un.side]}`;
       let e = this.lays.get(id);
-      if (!e || e.key !== key) { this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: e?.lod ?? 0, act: e?.act, actT: e?.actT, volT: e?.volT, vol: e?.vol, moving: e?.moving, fire: e?.fire, prev: e?.prev, switchT: e?.switchT }); dirty = true; } else e.un = un;
+      if (!e || e.key !== key) { this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: e?.lod ?? 0, act: e?.act, actT: e?.actT, volT: e?.volT, vol: e?.vol, shotT: e?.shotT, shots: e?.shots, moving: e?.moving, fire: e?.fire, prev: e?.prev, switchT: e?.switchT }); dirty = true; } else e.un = un;
       // version : un régiment qui entre dans le champ est dessiné tout de suite ; les autres changements attendent la
       // prochaine reconstruction (au plus cinq par seconde). La sphère, élargie avec la distance, le fait entrer avant
       // qu'il n'atteigne le bord de l'image.
@@ -833,13 +818,14 @@ export class Troops {
       const run = un.state === 'charge' || un.state === 'deroute', march = un.state === 'marche' || (moving && !run);
       // geste des hommes au squelette : réécrit quand l'activité du régiment change, qu'il tire une salve ou qu'elle
       // finit (sans reconstruire)
-      const act = activity(un, moving), volT = un._volley?.t;
-      if (e.act !== act || e.volT !== volT || (e.fire && !firing(un._volley, fxT))) {
+      const act = activity(un, moving), volT = un._volley?.t, shotT = Math.max(-99, ...Object.values(un._shots || {}));
+      const busy = firing(un._volley, fxT) || serving(un._shots, fxT);
+      if (e.act !== act || e.volT !== volT || e.shotT !== shotT || (e.fire && !busy)) {
         // ce qu'il faisait jusque-là : le geste d'avant de chacun, pour le fondu
-        e.prev = e.act === undefined ? null : { act: e.act, actT: e.actT, volley: e.vol, moving: e.moving, now: fxT };
+        e.prev = e.act === undefined ? null : { act: e.act, actT: e.actT, volley: e.vol, shots: e.shots, moving: e.moving, now: fxT };
         e.switchT = fxT;
         if (e.act !== act) { e.act = act; e.actT = fxT; }
-        e.volT = volT; e.vol = un._volley; e.moving = moving; e.fire = firing(un._volley, fxT);
+        e.volT = volT; e.vol = un._volley; e.shotT = shotT; e.shots = { ...un._shots }; e.moving = moving; e.fire = busy;
         if (e.figs && !dirty) this.gestures(e, true);
       }
       const v = un._volley, o = i * 4, D = this.data, row = MAXU * 4;
@@ -905,7 +891,7 @@ export class Troops {
   // front et sa dernière salve (gestes.js, pick). part : n'envoyer que leurs plages (sans reconstruction)
   gestures(e, part) {
     const span = new Map(), un = e.un, shape = { w: Math.max(1, un.w), form: un.form };
-    const base = { ...shape, act: e.act, actT: e.actT ?? 0, now: this.fxT ?? 0, volley: un._volley, moving: e.moving }, prev = e.prev && { ...shape, ...e.prev };
+    const base = { ...shape, act: e.act, actT: e.actT ?? 0, now: this.fxT ?? 0, volley: un._volley, shots: un._shots, moving: e.moving }, prev = e.prev && { ...shape, ...e.prev };
     const id = ([name, t0]) => [this.clipId.get(name) ?? 0, t0], loop = c => this.clipLoop[c];
     for (const [k, n, f, v] of e.figs) {
       const man = { kind: f[2], rank: f[5], u: f[0], phase: f[6] };

@@ -18,7 +18,7 @@
   "carryUpper",
   "carryFore"
  ],
- "rows": 1167,
+ "rows": 1432,
  "clips": {
   "repos": {
    "row": 0,
@@ -138,6 +138,26 @@
   "tambour-marche": {
    "row": 1135,
    "n": 32,
+   "loop": 1
+  },
+  "refouler": {
+   "row": 1167,
+   "n": 60,
+   "loop": 1
+  },
+  "pointer": {
+   "row": 1227,
+   "n": 60,
+   "loop": 1
+  },
+  "boutefeu": {
+   "row": 1287,
+   "n": 49,
+   "loop": 0
+  },
+  "porter": {
+   "row": 1336,
+   "n": 96,
    "loop": 1
   }
  }

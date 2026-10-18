@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, variety, rows } from '../web/js/battle/gestes.js';
+import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, variety, rows } from '../web/js/battle/gestes.js';
 
 const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
 
@@ -115,4 +115,30 @@ test('attributs du geste : fondu depuis le geste d’avant, au délai de l’hom
   assert.deepEqual(rows([2, 9], [1, 4], 10, v, loop)[1], [10.2, 1, 1.05, 0]);
   // sans geste d'avant : pas de fondu
   assert.deepEqual(rows([1, 9], null, 10, v, loop), [[1, 9, 1, 9], [-99, 1.05, 1.05, 0]]);
+});
+
+// un servant de la pièce 1 (rang 200 + 10 × pièce + rôle : 1 écouvillon, 2 porteur, 3 pointeur, 4 boutefeu, 0 chef)
+const servant = (role, o) => homme({ kind: 'servant', act: 'repos', rank: 210 + role, form: 'batterie', ...o });
+
+test('les servants s’affairent quand leur pièce vient de tirer, se reposent sinon', () => {
+  const shots = { 1: 9 };
+  assert.equal(pick(servant(1, { shots }))[0], 'refouler');
+  assert.equal(pick(servant(2, { shots }))[0], 'porter');
+  assert.equal(pick(servant(0, { shots }))[0], 'parle');
+  assert.equal(pick(servant(1, { shots, now: 30 }))[0], 'repos');
+  assert.equal(pick(servant(1, { shots: { 0: 9 } }))[0], 'repos', 'une autre pièce a tiré');
+  // le pointeur reste accroupi derrière sa pièce
+  assert.equal(pick(servant(3, { now: 30 }))[0], 'pointer');
+});
+
+test('le boutefeu touche la lumière au moment du coup de sa pièce', () => {
+  assert.deepEqual(pick(servant(4, { shots: { 1: 9 } })), ['boutefeu', 9 - BOUTEFEU_FEU]);
+});
+
+test('une batterie qui se déplace : ses servants marchent', () => {
+  assert.equal(pick(servant(1, { act: 'marche', shots: { 1: 9 } }))[0], 'marche');
+});
+
+test('les gestes des servants existent dans le fichier précalculé', () => {
+  for (const c of ['refouler', 'porter', 'pointer', 'boutefeu']) assert.ok(meta.clips[c], c);
 });

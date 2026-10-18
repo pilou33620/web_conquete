@@ -256,7 +256,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 - [x] T30 : version de loin au squelette, ombres, lumière et proportions du prototype
 - [x] T31 : feu et recharge (salve qui roule, à genoux, tirailleurs), officiers, tambours, drapeau
 - [x] T32 : variété par homme et fondus
-- [ ] T33 : servants des pièces au squelette
+- [x] T33 : servants des pièces au squelette
 - [ ] Point de contrôle 7a (bancs, cinq scénarios, galerie, images/s sur l'iPad)
 
 ### 7b : tués
