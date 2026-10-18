@@ -130,6 +130,8 @@ requis. Restent, facultatifs :
 - **Recul du coup de feu** : l'étape « feu » des salves (0,25 s) est plus courte que le fondu (0,3 s), le recul ne
   monte qu'à 20 % ; il faudrait un fondu par étape dans `cuire.mjs` et recalculer les animations.
 - **Herbe de loin** : brins de 6 cm jusqu'à 120-200 m, scintillement possible sur l'iPad.
-- **Cavalerie et attelages** ne courent pas à leur nouvelle place (ils sautent) ; les chevaux ne sont repoussés des
-  maisons que par leur centre, les pièces jamais.
+- **Cavalerie et attelages** ne courent pas à leur nouvelle place (ils sautent).
+- **Bâtiments, de loin :** chevaux et pièces sont repoussés de tout leur long tant que cette longueur tient dans la
+  portée de la grille (3,5 m) ; de loin, grossis jusqu'à ×3, ils peuvent encore mordre un peu sur un mur (à peine
+  visible à cette distance). Le remède : une portée plus grande, au prix de cases plus pleines.
 - **Gerbes de terre** à l'échelle de la batterie qui tire, pas de la cible.

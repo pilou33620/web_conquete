@@ -637,10 +637,14 @@ export class Terrain {
   // bâtiments rangés pour le shader des troupes, qui en repousse les hommes et les chevaux (troupes.js, pushOut) : une
   // grille de cell m sur leur emprise, au plus 4 bâtiments par case (numéro + 1 ; 0 : aucun) ; rects, deux lignes :
   // centre et angle, puis demi-côtés élargis de margin. null sans bâtiment
-  buildingGrid(cell = 8, margin = 0.5) {
+  // reach : un cheval ou une pièce est repoussé de tout son long (troupes.js, uPush) : chaque bâtiment est rangé dans
+  // les cases jusqu'à reach m de plus (sur 24 cartes du serveur, aucune case n'y dépasse 4 bâtiments).
+  // shortcut: de loin (figurines ×2 à ×3), un cheval ou une pièce plus long que reach peut mordre un peu sur un mur ;
+  // agrandir reach si ça se voit (des cases plus pleines)
+  buildingGrid(cell = 8, margin = 0.5, reach = 3.5) {
     const B = this.buildings;
     if (!B.length) return null;
-    const R = b => Math.hypot(b.w, b.h) / 2 + margin;
+    const R = b => Math.hypot(b.w, b.h) / 2 + margin + reach;
     const x0 = Math.min(...B.map(b => b.x - R(b))), y0 = Math.min(...B.map(b => b.y - R(b)));
     const cols = Math.ceil((Math.max(...B.map(b => b.x + R(b))) - x0) / cell) + 1, rows = Math.ceil((Math.max(...B.map(b => b.y + R(b))) - y0) / cell) + 1;
     const cells = new Float32Array(cols * rows * 4), rects = new Float32Array(B.length * 8);

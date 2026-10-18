@@ -531,6 +531,10 @@ General sur un régiment qui tire.
     des chevaux (`pushOut`, jumeau de `gestes.js`) les repousse hors des maisons, fermes, église et moulins (marge
     0,5 m), vers le bord le plus proche ; ombres comprises. Capture : une ligne posée en travers d'un village longe
     les façades.
+  - Complété le 18/10/2026 (à ta demande) : chevaux, cavaliers, fanions, pièces et avant-trains sont repoussés de
+    tout leur long (le milieu du corps, avec sa demi-longueur de marge, mesurées sur les modèles), et plus seulement
+    par leur centre ; les bâtiments sont rangés dans la grille jusqu'à 3,5 m de plus (sur 24 cartes du serveur et les
+    cinq scénarios, aucune case n'y dépasse 4 bâtiments). Captures : cavalerie et batterie posées dans un village.
   - Critères :
     - `terrain.js` prépare la grille des bâtiments (décision 19). Le shader repousse toute figurine debout hors des
       maisons, de l'église et des moulins (marge de 0,5 m), vers le bord le plus proche. Les remparts ne sont pas

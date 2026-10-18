@@ -40,6 +40,10 @@ const FOOT = Object.keys(KINDS).filter(k => KINDS[k] === null);   // les hommes 
 const DIES = [...FOOT, 'cav'];   // qui peut tomber (un cavalier tué : son cheval couché, lui avec)
 const BALL = 6;                  // hommes couchés au plus par un boulet
 const STILL = [0, 0, 0, 0];      // aucune course à sa place (aMove)
+// bâtiments : milieu du corps en avant de sa place et demi-longueur, en m avant l'échelle (mesurés sur les modèles) ;
+// un homme : sa place. Le cavalier et le fanion d'un régiment monté suivent leur cheval ; une pièce compte son avant-train
+const PUSH = { HORSE: [0.24, 1.25], GUN: [0.75, 2.15] };
+const pushOf = (kind, def) => PUSH[/^(cavalier|chef|fanion)/.test(kind) ? 'HORSE' : def] ?? [0, 0];
 const RIDER = 9;                 // pose (aAnim.x) du cavalier en selle : le shader lui donne le balancement de son cheval
 // variété de la figurine i d'un régiment (gestes.js), tirée une fois par disposition
 const varOf = (e, i, seed) => (e.vars ??= [])[i] ??= variety(seed, e.ids?.[i] ?? i);
@@ -540,20 +544,20 @@ float hAt(vec2 p) {
   return mix(mix(a, b, t.x), mix(c, d, t.x), t.y);
 }
 vec2 pitch(vec2 yz, vec2 o, float a) { vec2 q = yz - o; return o + vec2(q.x * cos(a) - q.y * sin(a), q.x * sin(a) + q.y * cos(a)); }
-#if defined(RIG) || defined(HORSE)
-// bâtiments (terrain.js, buildingGrid) : un homme ou un cheval dont la place tombe dans une maison en sort par le bord le
-// plus proche (comme gestes.js, pushOut)
+// bâtiments (terrain.js, buildingGrid) : une figurine dont le corps (le cercle de rayon r autour de p) mord sur une
+// maison en sort par le bord le plus proche (comme gestes.js, pushOut)
 uniform sampler2D uBGrid, uBRect;
 uniform vec4 uBox;      // origine de la grille (x, y), pas (0 : aucun bâtiment), colonnes
 uniform vec2 uBDim;     // lignes de la grille, bâtiments
-vec2 pushOut(vec2 p) {
+uniform vec2 uPush;     // sa sorte : milieu du corps en avant de sa place, demi-longueur (PUSH)
+vec2 pushOut(vec2 p, float r) {
   ivec2 c = ivec2(floor((p - uBox.xy) / max(uBox.z, 1.0)));
   if (uBox.z <= 0.0 || c.x < 0 || c.y < 0 || c.x >= int(uBox.w) || c.y >= int(uBDim.x)) return p;
   vec4 ids = texelFetch(uBGrid, c, 0);
   for (int k = 0; k < 4; k++) {
     int i = int(ids[k]) - 1;
     if (i < 0) break;
-    vec4 a = texelFetch(uBRect, ivec2(i, 0), 0), h = texelFetch(uBRect, ivec2(i, 1), 0);
+    vec4 a = texelFetch(uBRect, ivec2(i, 0), 0), h = texelFetch(uBRect, ivec2(i, 1), 0) + r;
     float ca = cos(a.z), sa = sin(a.z);
     vec2 d = p - a.xy;
     float u = d.x * ca + d.y * sa, v = -d.x * sa + d.y * ca;
@@ -563,7 +567,6 @@ vec2 pushOut(vec2 p) {
   }
   return p;
 }
-#endif
 #if defined(RIG)
 attribute vec4 aGest;   // geste et son début, geste d'avant et son début (horloge des effets)
 attribute vec4 aMix;    // instant du fondu, vitesse, vitesse d'avant
@@ -669,9 +672,9 @@ const VERT_POSE = `
 #endif
   float fa = u0.z + face, sa = sin(fa), ca = cos(fa);
   vec2 fw = vec2(cos(u0.z), sin(u0.z)), base = u0.xy + fw * slotV + vec2(-fw.y, fw.x) * slotX;
-#if defined(RIG) || defined(HORSE)
-  base = pushOut(base);
-#endif
+  // (un homme : sa place ; un cheval et son cavalier, une pièce et son avant-train : tout leur long)
+  vec2 mid = base + vec2(ca, sa) * uPush.x * aAnim.z;
+  base += pushOut(mid, uPush.y * aAnim.z) - mid;
   vFade = u0.w;
 `;
 // tourne un vecteur de la figurine : membre (sa matrice au squelette, sinon autour de son pivot), penché en avant, puis
@@ -768,8 +771,9 @@ export class Troops {
           transformed.y += bob;
           transformed *= aAnim.z;
           transformed += vec3(base.x, hAt(base), base.y);`;
+    const push = { value: new THREE.Vector2(...pushOf(kind, def)) };
     mat.onBeforeCompile = sh => {
-      Object.assign(sh.uniforms, this.uni);
+      Object.assign(sh.uniforms, this.uni, { uPush: push });
       if (pattern) sh.uniforms.uPattern = { value: pattern };
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\n' + VERT_HEAD + (pattern ? 'varying vec2 vUv2;' : ''))
@@ -793,7 +797,7 @@ export class Troops {
     const depth = new THREE.MeshDepthMaterial();
     depth.defines = defines;
     depth.onBeforeCompile = sh => {
-      Object.assign(sh.uniforms, this.uni);
+      Object.assign(sh.uniforms, this.uni, { uPush: push });
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_HEAD).replace('#include <begin_vertex>', VERT_POSE + place);
     };
     depth.customProgramCacheKey = () => 'troupes-ombre-' + (pattern ? 'etoffe-' : '') + (def || 'homme');
@@ -833,7 +837,7 @@ export class Troops {
     const m = new THREE.MeshBasicMaterial({ map: this.soft, color: '#000000', transparent: true, opacity: 0.65, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
     if (def) m.defines = { [def]: '', NCLIP: this.uni.uClips.value.length };
     m.onBeforeCompile = sh => {
-      Object.assign(sh.uniforms, this.uni);
+      Object.assign(sh.uniforms, this.uni, { uPush: { value: new THREE.Vector2(...pushOf('', def)) } });
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_HEAD).replace('#include <begin_vertex>', `${VERT_POSE}
           // chaque coin à l'altitude du sol sous lui : la tache épouse la pente (relief exagéré)
           vec2 cp = base + vec2(position.x * sa + position.z * ca, -position.x * ca + position.z * sa) * aAnim.z;
