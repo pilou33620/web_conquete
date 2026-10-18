@@ -187,3 +187,102 @@ def march_left(g, a):
 
 Aucune. Inventaire complet des durées en jours (80 éléments, fichiers et lignes) : fait avant la spec, repris dans
 le plan.
+
+---
+
+# Évolution du 18/10/2026 : à l'arrivée devant une ville, le joueur choisit
+
+## Objectif
+
+Rapport du joueur : « je scinde mon armée en trois, chaque détachement va attaquer une ville ; pendant mon tour, il ne
+me propose pas de faire les batailles, à la main ou en automatique ; à la fin du tour, oui ». Cause : une ville neutre
+faible rencontrée **en chemin** se rallie d'elle-même et **termine la marche du tour** (point 3 ci-dessus) ; le
+détachement n'atteint sa cible qu'au tour suivant, et la bataille s'engage alors. Une place à remparts, elle, est
+assiégée sans bataille (point 4).
+
+Ce que veut le joueur : **décider lui-même, à chaque ville**. Quand une de ses armées arrive devant une ville qui
+n'est pas à lui (sa cible, ou une ville rencontrée en chemin), la marche s'arrête et **une fenêtre de choix s'ouvre
+toujours**, quel que soit le réglage des batailles :
+
+| Choix | Quand il est proposé | Ce qu'il fait |
+|---|---|---|
+| **Commander la bataille** | toujours | assaut tout de suite, joué sur le champ de bataille (même une place à remparts : les canons y ouvrent des brèches, sinon on escalade, comme aujourd'hui) |
+| **Résolution automatique** | toujours | le même assaut, réglé par le général |
+| **Rallier** | ville neutre, armée au moins 3 fois plus forte que sa défense | la ville se rallie sans combat |
+| **Négocier le ralliement** | ville neutre (comme aujourd'hui) | pourparlers payés, réponse au tour suivant |
+| **Assiéger** / **Bloquer et affamer** | place à remparts (assiéger) ; toute place (bloquer, comme aujourd'hui) | le siège bat les murs à chaque tour des IA, l'assaut part de lui-même à la brèche ; le blocus affame |
+| **Exiger une contribution** | comme aujourd'hui (une fois par place et par tour) | rançonne la place, puis la laisse |
+| **Attendre devant la place** | toujours | l'armée fait halte ; les actions restent dans son panneau (comme la halte d'aujourd'hui) |
+
+Ce qui ne change pas : les batailles contre une **armée** (contact en marche, attaque d'une IA) ; une ville d'un
+voisin **en paix** (on passe, ou halte) ; une ville **déjà investie** par un autre camp, ou où une bataille se livre ;
+une armée **en retraite** ; la conduite **« Traverser »** pour les villes rencontrées en chemin (traversées sans
+fenêtre ; la cible, elle, demande) ; les **IA**, qui décident seules comme aujourd'hui ; la bataille d'assaut
+elle-même (déploiement, brèches, escalade).
+
+### Hypothèses (à corriger maintenant, sinon je les retiens)
+
+1. La fenêtre s'ouvre pendant le tour du joueur, au moment où l'armée arrive : tout de suite après l'ordre, ou au
+   début du tour suivant pour une marche qui reprend. Pendant le tour des IA, ses armées ne bougent pas (inchangé).
+   En **temps réel** (réglage avancé), la même fenêtre s'ouvre et le temps s'arrête comme pour une bataille en attente.
+2. Tant que la fenêtre attend, les autres armées du joueur peuvent recevoir des ordres, mais « Tour suivant » attend
+   le choix (comme une bataille en attente aujourd'hui).
+3. Deux armées arrivent devant deux villes : une fenêtre à la fois, l'une après l'autre.
+4. Après « Commander la bataille » ou « Résolution automatique », la deuxième fenêtre d'aujourd'hui (« Commander /
+   Automatique ») ne s'ouvre pas : le choix est déjà fait.
+
+## Fichiers touchés
+
+```
+game/army_actions.py → arrivée devant une ville du joueur : halte et choix en attente ; les choix (assaut manuel ou
+                       automatique, rallier, et les actions existantes : négocier, contribution, blocus, siège)
+game/engine.py       → l'arrivée passe par ce choix pour le joueur (cible ou en chemin) ; assaut depuis la halte
+game/turns.py        → un choix en attente arrête la marche et fige « Tour suivant », comme une bataille en attente
+game/views.py        → le choix en attente envoyé au navigateur, avec les options permises et leur raison
+server.py            → commande du choix
+game/tactics/bridge.py → bataille démarrée avec son mode déjà choisi (manuel ou automatique)
+web/js/ui.js         → la fenêtre de choix (comme celle des batailles), ouverte d'elle-même
+tests/test_campagne.py, tests/interface.test.mjs → bancs ; README.md → section tour par tour
+```
+
+Commandes, style, structure, limites : celles de la spec ci-dessus.
+
+## Stratégie de test
+
+- `tests/test_campagne.py` :
+  - le cas du rapport : Guyenne 1700, trois détachements sur Mérignac, Cestas et Léognan (dans les deux ordres) :
+    chaque arrivée devant une ville ouvre un choix pendant le tour, y compris Villenave-d'Ornon en chemin ;
+  - chaque choix fait ce qu'il dit : assaut manuel (bataille en mode manuel, sans deuxième fenêtre), assaut
+    automatique (réglé sur-le-champ), rallier (ville au joueur), siège sur une place à remparts, blocus, contribution,
+    attendre (halte, actions dans le panneau) ;
+  - « Rallier » n'est pas proposé quand l'armée est trop faible ; « Assiéger » pas sur une ville sans remparts ;
+  - réglage « toujours automatique » : la fenêtre s'ouvre quand même ;
+  - conduite « Traverser » : pas de fenêtre en chemin, une fenêtre à la cible ;
+  - « Tour suivant » refusé tant qu'un choix attend ; une ancienne sauvegarde se charge.
+- `tests/interface.test.mjs` : la fenêtre s'ouvre d'elle-même quand l'état annonce un choix en attente, et ne montre
+  que les options permises.
+- À la main : la partie du rapport (Bordeaux scindée en trois).
+
+## Limites
+
+- **Demander d'abord :** changer la puissance des assauts ou la vitesse des sièges ; faire jouer les IA autrement.
+- **Jamais :** casser une sauvegarde ; ouvrir une fenêtre pour une ville d'un voisin en paix.
+
+## Critères de réussite
+
+1. Pendant son tour, chaque arrivée d'une armée du joueur devant une ville qui n'est pas à lui (cible ou en chemin,
+   sauf « Traverser » en chemin) ouvre la fenêtre de choix, quel que soit le réglage des batailles.
+2. « Commander la bataille » ouvre le champ de bataille de l'assaut, même devant une place à remparts ; « Résolution
+   automatique » règle l'assaut sur-le-champ.
+3. Chaque autre choix fait ce qu'il annonce ; seuls les choix permis sont proposés, les autres sont absents.
+4. Le cas du rapport (Bordeaux scindée en trois) ne laisse plus aucune bataille pour la fin du tour sans que le
+   joueur l'ait choisi.
+5. `python3 tests/lancer.py` passe ; les anciennes sauvegardes se chargent.
+
+## Décisions (validées le 18/10/2026)
+
+1. **Après un choix sans combat en chemin** (rallier, contribution, négocier) : l'armée **reprend sa route** vers sa
+   cible avec la marche qui lui reste ce tour ; la fenêtre s'ouvrira à la ville suivante.
+2. **Après un assaut gagné en chemin** : l'armée **s'arrête là** (une bataille finit la marche du tour) ; elle repart
+   vers sa cible au tour suivant.
+3. Les hypothèses 1 à 4 sont retenues.
