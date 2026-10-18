@@ -193,10 +193,11 @@ export class Relief {
         .replace('#include <map_fragment>', `
           vec4 crop = texture2D(uCrops, vW.xz / uSize);
           float top = crop.a * ${HMAX.toFixed(2)}, rel = vF * ${HMAX.toFixed(2)} / max(top, 0.01);
-          // au bord de la fenêtre, et au-delà de 120 à 200 m de l'œil (un pied y fait moins d'un pixel : il scintillerait)
-          float fade = (1.0 - smoothstep(uShellC.z * 0.55, uShellC.z, length(vW.xz - uShellC.xy))) * (1.0 - smoothstep(120.0, 200.0, length(vViewPosition)));
+          float grid = top < 0.5 ? 16.0 : 9.0, far = 9.0 / grid;
+          // au bord de la fenêtre, et au-delà de 120 à 200 m de l'œil pour un pied de 11 cm, plus près pour les brins
+          // d'herbe de 6 cm (un pied y fait moins d'un pixel : il scintillerait)
+          float fade = (1.0 - smoothstep(uShellC.z * 0.55, uShellC.z, length(vW.xz - uShellC.xy))) * (1.0 - smoothstep(120.0 * far, 200.0 * far, length(vViewPosition)));
           float sway = sin(uTime * 1.7 + dot(vW.xz, uWind) * 0.35) * 0.12 * vF * vF;
-          float grid = top < 0.5 ? 16.0 : 9.0;
           vec2 cell = floor((vW.xz + uWind * sway) * grid);   // (la même case pour le brin et sa couleur : ils ploient ensemble)
           float n = hash12(cell);
           if (rel > 1.0 || n < 1.0 - (0.8 - 0.65 * rel) * fade) discard;

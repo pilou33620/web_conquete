@@ -529,6 +529,7 @@ function flagPattern(year) {
 const VERT_HEAD = `
 attribute vec4 aSlot;   // u, v, sens (ajouté à celui du régiment), numéro du régiment
 attribute vec4 aAnim;   // pose, phase, échelle, rang
+attribute vec4 aMove;   // course à sa place : départ (u, v), début, durée (négative : au pas ; 0 : aucune)
 attribute vec3 aCoat;   // couleur de l'habit
 attribute float aBone, aPart;
 uniform sampler2D uUnits, uHeight;
@@ -570,7 +571,6 @@ vec2 pushOut(vec2 p, float r) {
 #if defined(RIG)
 attribute vec4 aGest;   // geste et son début, geste d'avant et son début (horloge des effets)
 attribute vec4 aMix;    // instant du fondu, vitesse, vitesse d'avant
-attribute vec4 aMove;   // course à sa place : départ (u, v), début, durée (négative : au pas ; 0 : aucune)
 uniform float uTrot, uPas;   // gestes de la course (trot, pas)
 uniform sampler2D uAnim;
 uniform vec4 uClips[NCLIP];   // chaque geste : première ligne de la texture, images, en boucle
@@ -606,6 +606,17 @@ const VERT_POSE = `
       P = cyc < 0.18 ? 1.0 : cyc < 0.62 ? 5.0 : 0.0;
     }
   }
+  // course à sa place (nouvelle disposition) : sa place glisse du départ à l'arrivée ; en chemin il court (ou marche),
+  // tourné vers sa route, puis reprend sa place face au front. Hommes, chevaux et leurs cavaliers, pièces
+  float run = 0.0, runGait = aMove.w > 0.0 ? 2.0 : 1.0;   // (allure en chemin : trot ou galop, sinon le pas)
+  if (aMove.w != 0.0) {
+    float dur = abs(aMove.w), mt = clamp((uFxT - aMove.z) / dur, 0.0, 1.0);
+    vec2 d = aSlot.xy - aMove.xy;
+    slotX = mix(aMove.x, aSlot.x, mt); slotV = mix(aMove.y, aSlot.y, mt);
+    run = smoothstep(0.0, 0.1, uFxT - aMove.z) * (1.0 - smoothstep(dur - 0.15, dur + 0.15, uFxT - aMove.z));
+    // (dans le repère du régiment, u vers la gauche, v devant : la route fait l'angle atan(du, dv) avec le front)
+    if (run > 0.0) face += (mod(atan(d.x, d.y) - face + 3.14159265, 6.28318531) - 3.14159265) * run;
+  }
   float swing = 0.0, arm = 0.0, bob = 0.0, lean = 0.0, boneA = 0.0;
   vec2 pivot = vec2(0.86, 0.0);
 #if defined(GUN)
@@ -618,7 +629,7 @@ const VERT_POSE = `
 #elif defined(HORSE)
   // cheval : la pose de la disposition porte la robe (× 16) et, en déroute, le galop (2) ; sinon l'allure du régiment.
   // Au pas, les jambes vont par paires en diagonale ; au galop, l'une après l'autre, le cheval se soulève.
-  float gait = mod(aAnim.x, 4.0) > 1.5 ? 2.0 : u1.x;   // (aAnim.x : P a pu prendre la pose de marche des fantassins)
+  float gait = run > 0.5 ? runGait : mod(aAnim.x, 4.0) > 1.5 ? 2.0 : u1.x;   // (aAnim.x : P a pu prendre la pose de marche des fantassins)
   float fq = gait > 1.5 ? 11.0 : 6.5, am = gait > 1.5 ? 0.65 : gait > 0.5 ? 0.32 : 0.0, t = uTime * fq + ph;
   float aFL = sin(t) * am, aFR = sin(t + (gait > 1.5 ? 0.7 : 3.14)) * am, aHL = sin(t + (gait > 1.5 ? 2.2 : 3.14)) * am, aHR = sin(t + (gait > 1.5 ? 2.9 : 0.0)) * am;
   boneA = aBone == 1.0 ? aFL : aBone == 2.0 ? aFR : aBone == 5.0 ? aHL : aBone == 6.0 ? aHR : aBone == 7.0 ? sin(t) * am * 0.3 : aBone == 8.0 && gait > 1.5 ? 1.2 : 0.0;
@@ -644,24 +655,16 @@ const VERT_POSE = `
   // cavalier (aAnim.x = 9, RIDER) : le balancement de son cheval (même formule que les chevaux, même phase), et il se
   // cabre avec lui au choc
   if (P > 8.5) {
-    float t = uTime * (u1.x > 1.5 ? 11.0 : 6.5) + ph, ri = uFxT - u2.w;
-    bob = u1.x > 1.5 ? abs(sin(t)) * 0.12 : u1.x > 0.5 ? abs(sin(t * 2.0)) * 0.03 : 0.0;
+    float g = run > 0.5 ? runGait : u1.x;   // (l'allure de son cheval, course à sa place comprise)
+    float t = uTime * (g > 1.5 ? 11.0 : 6.5) + ph, ri = uFxT - u2.w;
+    bob = g > 1.5 ? abs(sin(t)) * 0.12 : g > 0.5 ? abs(sin(t * 2.0)) * 0.03 : 0.0;
     if (rank == 0.0 && ri > 0.0 && ri < 1.2) { float rr = sin(3.14159 * ri / 1.2) * 0.55; lean = -rr; bob += 0.6 * sin(rr); }
   }
-  // course à sa place (nouvelle disposition) : sa place glisse du départ à l'arrivée ; en chemin il court (ou marche),
-  // tourné vers sa route, puis reprend son geste face au front
-  if (aMove.w != 0.0) {
-    float dur = abs(aMove.w), mt = clamp((uFxT - aMove.z) / dur, 0.0, 1.0);
-    vec2 d = aSlot.xy - aMove.xy;
-    slotX = mix(aMove.x, aSlot.x, mt); slotV = mix(aMove.y, aSlot.y, mt);
-    float run = smoothstep(0.0, 0.1, uFxT - aMove.z) * (1.0 - smoothstep(dur - 0.15, dur + 0.15, uFxT - aMove.z));
-    if (run > 0.0) {
-      vec4 q0, q1, q2;
-      bone(aMove.w > 0.0 ? uTrot : uPas, aMove.z, 1.0, bi, q0, q1, q2);
-      r0 = mix(r0, q0, run); r1 = mix(r1, q1, run); r2 = mix(r2, q2, run);
-      // (dans le repère du régiment, u vers la gauche, v devant : la route fait l'angle atan(du, dv) avec le front)
-      face += (mod(atan(d.x, d.y) - face + 3.14159265, 6.28318531) - 3.14159265) * run;
-    }
+  // en course à sa place, un homme à pied trotte ou marche (le cavalier, lui, reste en selle)
+  if (run > 0.0 && P < 8.5) {
+    vec4 q0, q1, q2;
+    bone(aMove.w > 0.0 ? uTrot : uPas, aMove.z, 1.0, bi, q0, q1, q2);
+    r0 = mix(r0, q0, run); r1 = mix(r1, q1, run); r2 = mix(r2, q2, run);
   }
 #else
   if (P == 3.0) { swing = sin(uTime * 8.2 + ph) * 0.38; bob = abs(sin(uTime * 8.2 + ph)) * 0.03; }
@@ -954,7 +957,7 @@ export class Troops {
       S[o] = f[0] + (w ? v.du : 0); S[o + 1] = f[1] + (w ? v.dv : 0); S[o + 2] = (face ?? f[7] ?? (carre && rank >= 0 ? FACE[f[3]] : f[3] === 2 ? Math.PI : 0)) + (w ? v.da : 0); S[o + 3] = ui;
       A[o] = pose; A[o + 1] = f[6]; A[o + 2] = (e?.scale ?? scale) * (w ? v.size : 1); A[o + 3] = rank;
       if (w) tint.copy(coat).offsetHSL(v.hue, v.sat, v.light);
-      if (k.rig) k.buf.aMove.set(mv ?? STILL, o);
+      k.buf.aMove.set(mv ?? STILL, o);
       const c = w ? tint : coat;
       C[n * 3] = c.r; C[n * 3 + 1] = c.g; C[n * 3 + 2] = c.b;
     };
@@ -973,9 +976,9 @@ export class Troops {
         else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre, null, e, v, mv);
         // son cavalier, en selle (même place, même phase : il suit le balancement du cheval ; ni décalage, ni sens, ni
         // taille à lui : il est sur la selle)
-        if (f[2] === 'cav' || f[2] === 'colonel') put((f[2] === 'cav' ? 'cavalier' : 'chef') + far, f, ui, carre, null, e, { ...v, du: 0, dv: 0, da: 0, size: 1 }, null, RIDER);
+        if (f[2] === 'cav' || f[2] === 'colonel') put((f[2] === 'cav' ? 'cavalier' : 'chef') + far, f, ui, carre, null, e, { ...v, du: 0, dv: 0, da: 0, size: 1 }, mv, RIDER);
         if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre, null, e, v, mv); }
-        else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre, null, e); }
+        else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre, null, e, null, mv); }
       }
       this.gestures(e, false);
     }
@@ -1067,8 +1070,8 @@ export class Troops {
     });
   }
   // nouvelle disposition e d'un régiment (old : la précédente) : chaque homme garde son numéro (gestes.js, matchSlots :
-  // même sorte, dans l'ordre de lecture, sans les tués), donc sa variété ; les hommes à pied courent de là où ils sont
-  // jusqu'à leur nouvelle place (au trot au-delà de 3 m, au pas sinon), chacun à son délai
+  // même sorte, file par file, sans les tués), donc sa variété ; chacun (hommes, chevaux et leurs cavaliers, pièces)
+  // court de là où il est jusqu'à sa nouvelle place (au trot ou au galop au-delà de 3 m, au pas sinon), à son délai
   relay(old, e) {
     const now = this.fxT ?? 0, seed = seedOf(String(e.un.id)), m = matchSlots(old.lay, e.lay, old.dead);
     let next = old.lay.reduce((a, _, i) => Math.max(a, old.ids?.[i] ?? i), -1) + 1;
@@ -1077,7 +1080,6 @@ export class Troops {
       if (i < 0) { e.ids[j] = next++; return; }
       const id = old.ids?.[i] ?? i, v = variety(seed, id), f = e.lay[j];
       e.ids[j] = id;
-      if (!FOOT.includes(f[2])) return;
       // là où il est : sur sa place d'avant, ou en chemin vers elle
       const g = old.lay[i], mv = old.moves?.[i], at = [g[0] + v.du, g[1] + v.dv];
       if (mv) { const t = clamp((now - mv[2]) / Math.abs(mv[3]), 0, 1); at[0] = mv[0] + (at[0] - mv[0]) * t; at[1] = mv[1] + (at[1] - mv[1]) * t; }

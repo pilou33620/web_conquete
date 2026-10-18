@@ -19,7 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Matrix4, Quaternion, Vector3, DataUtils } from '../../../vendor/three/three.core.js';
 import { RIG, RIG_EXTRA } from '../troupes.js';
-import { SALVE_FEU, BOUTEFEU_FEU } from '../gestes.js';
+import { SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU } from '../gestes.js';
 
 const FPS = 24;
 // ------------------------------------------------------------------ gestes du fusil
@@ -81,7 +81,8 @@ const drum = (L, n) => (M, t) => {
   [M.upperL, M.foreL] = arm('L', SH.L.clone().applyMatrix4(M.chest), hit(0), P(0.5, -1, -0.2));
   [M.upperR, M.foreR] = arm('R', SH.R.clone().applyMatrix4(M.chest), hit(1), P(-1, -0.6, -0.3));
 };
-// geste en plusieurs temps : [[durée, geste], …] ; d'un temps au suivant, fondu de TR s (le temps de lever l'arme)
+// geste en plusieurs temps : [[durée, geste, fondu], …] ; d'un temps au suivant, fondu de TR s (le temps de lever
+// l'arme), ou du sien (0 : le coup de feu, sec : le recul monte d'un coup puis retombe)
 const TR = 0.3, REST = () => {};
 const copy = M => Object.fromEntries(Object.entries(M).map(([k, m]) => [k, m.clone()]));
 const seq = steps => (M, t) => {
@@ -89,7 +90,8 @@ const seq = steps => (M, t) => {
   while (i < steps.length - 1 && t >= t0 + steps[i][0]) t0 += steps[i++][0];
   const A = copy(M);
   steps[i][1](A, t - t0);
-  let w = i > 0 && t - t0 < TR ? (t - t0) / TR : 1;
+  const tr = steps[i][2] ?? TR;
+  let w = i > 0 && t - t0 < tr ? (t - t0) / tr : 1;
   if (w >= 1) { Object.assign(M, A); return; }
   const B = copy(M);
   steps[i - 1][1](B, steps[i - 1][0]);
@@ -113,9 +115,11 @@ const SABRE_HAUT = M => { SADDLE(M); [M.upperR, M.foreR] = arm('R', SH.R.clone()
 const LIFT = () => new Matrix4().makeTranslation(0, 0.7, -0.05);
 // salve : épauler, viser, le coup (à SALVE_FEU s, gestes.js), recharger, l'arme sur l'épaule ; à genoux, le premier rang
 // garde l'arme en main pendant que les autres rechargent
-const SALVE = [[0.35, REST], [0.35, AIM], [0.25, FIRE], [0.45, AIM], [2.4, RELOAD], [0.5, REST]];
-const SALVE_GENOU = [[0.35, REST], [0.35, AIM], [0.25, FIRE], [0.45, AIM], [2.9, REST]];
+const SALVE = [[0.35, REST], [0.35, AIM], [0.25, FIRE, 0], [0.45, AIM], [2.4, RELOAD], [0.5, REST]];
+const SALVE_GENOU = [[0.35, REST], [0.35, AIM], [0.25, FIRE, 0], [0.45, AIM], [2.9, REST]];
 if (SALVE[0][0] + SALVE[1][0] !== SALVE_FEU || SALVE_GENOU[0][0] + SALVE_GENOU[1][0] !== SALVE_FEU) throw new Error('instant du coup');
+const dur = st => st.reduce((a, x) => a + x[0], 0);
+if (Math.abs(dur(SALVE) - SALVE_DUREE) > 1e-9 || Math.abs(dur(SALVE_GENOU) - SALVE_DUREE) > 1e-9) throw new Error('durée de la salve');
 
 // servants des pièces (sans fusil : leurs deux bras sont à eux)
 const hands = (M, l, r, poleR = P(-1, -0.6, -0.3)) => {
@@ -147,9 +151,9 @@ const CLIPS = {
   mort: { src: 'Death01', loop: 0 }, touche: { src: 'Hit_Chest', loop: 0 }, tete: { src: 'Hit_Head', loop: 0 },
   projete: { src: 'Hit_Knockback', loop: 0 }, sabre: { src: 'Sword_Attack', loop: 0 }, garde: { src: 'Sword_Idle', loop: 1 },
   combo: { src: 'Sword_Regular_Combo', loop: 0 }, escrime: { src: 'Sword_Regular_Combo', loop: 1 },
-  salve: { src: 'Idle_Loop', loop: 0, len: 4.3, hold: seq(SALVE) },
-  'salve-genou': { src: 'Idle_Loop', loop: 0, len: 4.3, hold: seq(SALVE_GENOU), legs: ['Fixing_Kneeling', 24] },
-  'feu-libre': { src: 'Idle_Loop', loop: 1, len: 4.4, hold: seq([[0.5, REST], [0.6, AIM], [0.25, FIRE], [0.35, AIM], [2.4, RELOAD], [0.3, REST]]) },
+  salve: { src: 'Idle_Loop', loop: 0, len: SALVE_DUREE, hold: seq(SALVE) },
+  'salve-genou': { src: 'Idle_Loop', loop: 0, len: SALVE_DUREE, hold: seq(SALVE_GENOU), legs: ['Fixing_Kneeling', 24] },
+  'feu-libre': { src: 'Idle_Loop', loop: 1, len: 4.4, hold: seq([[0.5, REST], [0.6, AIM], [0.25, FIRE, 0], [0.35, AIM], [2.4, RELOAD], [0.3, REST]]) },
   tambour: { src: 'Idle_Loop', loop: 1, hold: drum(2.5, 5) }, 'tambour-marche': { src: 'Walk_Formal_Loop', loop: 1, hold: drum(4 / 3, 2) },
   selle: { src: 'Idle_Loop', loop: 1, hold: SADDLE, path: LIFT }, 'selle-sabre': { src: 'Idle_Loop', loop: 1, hold: SABRE_HAUT, path: LIFT },
   'selle-combo': { src: 'Sword_Regular_Combo', loop: 1, hold: SEAT, path: LIFT },

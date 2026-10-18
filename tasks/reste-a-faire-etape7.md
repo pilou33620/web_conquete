@@ -118,6 +118,15 @@ node web/js/battle/dev/cuire.mjs ~/.cache/conquete-dev/ual/"Animation Library[St
   le blé (1 m) ne montre plus que sa couche de 73 cm. Choix : 5 couches en Haute (un quart de coût en plus) ou un
   espacement moins serré (l'herbe perd une couche). À juger sur capture.
 
+## Défauts corrigés le 18/10/2026 (à ta demande)
+
+- **Recul du coup de feu** : un fondu par étape dans `cuire.mjs` (le coup de feu, sec : le recul monte d'un coup) ;
+  animations recalculées (seules salve, salve à genoux et feu libre changent).
+- **Herbe de loin** : les brins de 6 cm s'effacent plus près (de 67 à 112 m), à proportion de leur taille.
+- **Cavalerie et attelages** : chevaux, cavaliers, fanions et pièces courent à leur nouvelle place comme les hommes
+  (la course est commune à toutes les sortes dans le shader).
+- **Bâtiments** : chevaux, cavaliers, fanions et pièces repoussés de tout leur long.
+
 ## Points de la revue laissés de côté (et pourquoi)
 
 La revue du 18/10/2026 (deux relecteurs, 92 bancs, 45 mutations) a été corrigée pour tout ce qui était critique ou
@@ -127,10 +136,6 @@ requis. Restent, facultatifs :
   60 ms sur le Pi, contre 70 avant (mesures sous Node, bruitées par des captures en cours). Le vrai remède
   (corps dans des lots à part, mise à jour par régiment) est un chantier : seulement si l'iPad saccade.
 - **`troupes.js`** fait 1 100 lignes (modèles, shader et état) : en sortir les modèles (`modeles.js`) si on y retouche.
-- **Recul du coup de feu** : l'étape « feu » des salves (0,25 s) est plus courte que le fondu (0,3 s), le recul ne
-  monte qu'à 20 % ; il faudrait un fondu par étape dans `cuire.mjs` et recalculer les animations.
-- **Herbe de loin** : brins de 6 cm jusqu'à 120-200 m, scintillement possible sur l'iPad.
-- **Cavalerie et attelages** ne courent pas à leur nouvelle place (ils sautent).
 - **Bâtiments, de loin :** chevaux et pièces sont repoussés de tout leur long tant que cette longueur tient dans la
   portée de la grille (3,5 m) ; de loin, grossis jusqu'à ×3, ils peuvent encore mordre un peu sur un mur (à peine
   visible à cette distance). Le remède : une portée plus grande, au prix de cases plus pleines.
