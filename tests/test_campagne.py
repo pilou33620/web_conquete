@@ -805,6 +805,58 @@ class ArriveeDevantUneVille(unittest.TestCase):
         self.assertTrue(ok, bid)
         self.assertTrue(g.armies[bid].get('hold'))
 
+    # ---------------------------------------------------------------- chasse aux bugs du 18/10/2026
+    def test_un_autre_prend_la_ville_d_assaut_l_armee_qui_attendait_repart(self):
+        g = self.g
+        a, b = self.detachements(2)
+        self.marcher(a, 'Léognan')                    # (arrêtée devant Villenave-d'Ornon)
+        self.marcher(b, "Villenave-d'Ornon")
+        for r in b['regs']:
+            r['n'] *= 4
+        self.assertTrue(AA.choose(g, g.player, b, 'auto')[0])
+        TT.settle(g)   # (comme le serveur après la commande)
+        self.assertEqual(g.nodes[self.idx["Villenave-d'Ornon"]]['owner'], g.player)
+        self.assertEqual(a['ask']['node'], self.idx['Léognan'], 'la ville prise, elle reprend sa route tout de suite')
+
+    def test_la_place_prise_les_assiegeants_sont_liberes(self):
+        g = self.g
+        a, b = self.detachements(2)
+        self.marcher(a, 'Mérignac')
+        self.assertTrue(AA.choose(g, g.player, a, 'bloquer')[0])
+        for r in b['regs']:
+            r['n'] *= 10   # (assez forte pour la rallier en arrivant)
+        self.marcher(b, 'Mérignac')
+        self.assertEqual(g.nodes[self.idx['Mérignac']]['owner'], g.player)
+        self.assertEqual(a['state'], 'idle', 'plus de siège devant sa propre ville')
+
+    def test_retraite_d_une_bataille_qui_ne_vous_concerne_plus(self):
+        g = self.g
+        ally, foe = '24', '47'
+        g.set_status(g.player, ally, 'alliance'); g.set_status(ally, foe, 'guerre'); g.set_status(g.player, foe, 'guerre')
+        city = g.capital_of(ally)
+        a = armee(g)
+        a['x'], a['y'], a['at_node'], a['state'], a['path'] = *g.node_xy(city), city, 'idle', []
+        e = armee(g, foe)
+        e['x'], e['y'] = g.node_xy(city)
+        g.start_battle([e], [], *g.node_xy(city), node=city)
+        bt = next(iter(g.battles.values()))
+        self.assertEqual(bt['mode'], 'attente')
+        self.assertTrue(g.order_retreat(g.player, a['id'])[0])
+        self.assertFalse(TB.involves_player(g, bt))
+        self.assertEqual(bt['mode'], 'auto', 'elle se règle sans vous : la campagne n’attend plus')
+
+    def test_recharger_ne_decale_pas_les_echeances_entre_ia(self):
+        g = self.g
+        mine = next(n for n in g.nodes if n['owner'] == g.player)
+        other = next(n for n in g.nodes if n['owner'] not in (g.player, R.NEUTRAL))
+        for n in (mine, other):
+            n['tm'] = [dict(until=g.t + 37.1)]
+        g.factions['24']['truce']['47'] = g.t + 41.3   # (une trêve entre IA)
+        TT.migrate(g)
+        self.assertAlmostEqual(other['tm'][0]['until'], g.t + 37.1, msg='ville d’une IA : son échéance ne bouge pas')
+        self.assertAlmostEqual(g.factions['24']['truce']['47'], g.t + 41.3)
+        self.assertEqual(mine['tm'][0]['until'], TT.turn_start_after(g, g.t + 37.1), 'les vôtres : au début d’un tour')
+
     def test_choix_inconnu(self):
         g = self.g
         a = self.devant('Mérignac')

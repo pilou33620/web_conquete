@@ -3023,6 +3023,8 @@ class Game:
                     r['n'] *= 0.9
                 a['battle'] = None
                 self.retreat(a)
+                if bt and bt.get('mode') == 'attente' and not TB.involves_player(self, bt):
+                    bt['mode'] = 'auto'   # (elle ne le concerne plus : la campagne ne l'attend plus)
                 if bt and (not bt['sides'][0]['armies'] and bt['sides'][0]['node'] is None):
                     self.end_battle(bt, 1)
                 elif bt and (not bt['sides'][1]['armies'] and bt['sides'][1]['node'] is None):
@@ -3052,6 +3054,9 @@ class Game:
         n['garrison'] = []
         n['queue'] = []
         n['siege'] = None
+        for b in self.armies.values():   # (ses assiégeants ne restent pas en siège devant une place qui n'en est plus)
+            if b['at_node'] == nid and b['state'] == 'siege':
+                b['state'] = 'move' if b['path'] else 'idle'
         if not peaceful and n['dev'] > 0 and old != R.NEUTRAL and self.rng.random() < 0.35:
             n['dev'] -= 1
             n['milice_max'] = max(20.0, n['milice_max'] - R.NODE_BASE[gn['type']]['milice'] * 0.15)

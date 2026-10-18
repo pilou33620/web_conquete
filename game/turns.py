@@ -73,16 +73,18 @@ def migrate(g):
         a.setdefault('mp', None)
     # échéances d'avant les tours (en plein milieu d'un mois) : ramenées au début du tour suivant
     up = lambda t: t if t <= g.t else turn_start_after(g, t)   # (déjà échue : elle le reste)
-    for f in g.factions.values():
+    # (celles entre IA gardent leur rythme, n mois à partir de leur début : voir deadline)
+    for code, f in g.factions.items():
         for d in (f['truce'], f.get('passage') or {}):
             for k in d:
-                d[k] = up(d[k])
+                if g.player in (code, k):
+                    d[k] = up(d[k])
     for x in g.proposals:
         x['expires'] = up(x['expires'])
     for x in g.pending_ev:
         x['until'] = up(x['until'])
     for n in g.nodes:
-        for e in n.get('tm') or ():
+        for e in (n.get('tm') or ()) if n['owner'] == g.player else ():
             e['until'] = up(e['until'])
 
 
@@ -302,7 +304,9 @@ def settle(g):
     out = {}
     if not planning(g):
         return out
+    from . import army_actions as AA
     from .tactics import bridge as TB
+    AA.asking(g)   # (choix devant une place devenus caducs : levés ; la place prise, l'armée reprend sa route)
     for a in list(g.armies.values()):
         if a['owner'] == g.player and a['state'] == 'move' and a['path'] and march_left(g, a) > 1e-6:
             if TB.frozen(g):
