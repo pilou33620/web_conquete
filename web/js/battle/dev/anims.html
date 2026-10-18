@@ -20,7 +20,7 @@
 //   anims.html?t=9.5 : arrête l'horloge à 9,5 s ; cat=0 : sans le catalogue ; window.__at(t) dessine l'instant t
 //   (captures image par image, dans l'ordre)
 import * as THREE from '../../../vendor/three/three.module.js';
-import { model } from '../troupes.js';
+import { model, SCALE } from '../troupes.js';
 import { hash } from '../formes.js';
 import { Effects } from '../effets.js';
 
@@ -213,8 +213,9 @@ function company(T) {
 
 // ------------------------------------------------------------------ fumée des salves (effets.js, comme en bataille)
 // notre salve, puis celle de l'ennemi, 40 m devant (hors de vue, sa fumée arrive avec le vent)
-const SHOTS = [[VOLLEY, () => ({ x: 0, y: front(VOLLEY), dir: -Math.PI / 2, w: FILES * SP, d: 2, form: 'ligne' })],
-  [9.35, () => ({ x: 2, y: front(9) - 40, dir: Math.PI / 2, w: FILES * SP, d: 2, form: 'ligne' })]];
+// (_figScale : nos figurines sont à leur taille réelle, celles du jeu grandies de SCALE ; la fumée suit, effets.js)
+const SHOTS = [[VOLLEY, () => ({ x: 0, y: front(VOLLEY), dir: -Math.PI / 2, w: FILES * SP, d: 2, form: 'ligne', _figScale: 1 / SCALE })],
+  [9.35, () => ({ x: 2, y: front(9) - 40, dir: Math.PI / 2, w: FILES * SP, d: 2, form: 'ligne', _figScale: 1 / SCALE })]];
 let fx = null, fxT = 0;
 function effects(T) {
   const t = T % LOOP;
@@ -225,9 +226,6 @@ function effects(T) {
   for (const [at, un] of SHOTS) if (fxT <= at && at < t) fx.push({ k: 'salve' }, un(), at - fxT);
   for (let s = fxT; s < t; s += 0.05) {
     fx.update(Math.min(0.05, t - s), [1.2, -0.6]);
-    // shortcut: bouffées réduites à la main (les nôtres font 1,9 m, celles du jeu sont faites pour des figurines ×1,6
-    // vues de loin) ; à revoir en les intégrant
-    for (const p of fx.puffs) if (!p.small) { p.r *= 0.5; p.grow *= 0.5; p.small = true; }
   }
   fxT = t;
 }

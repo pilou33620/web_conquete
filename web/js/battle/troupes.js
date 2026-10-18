@@ -883,6 +883,7 @@ export class Troops {
         if (old) this.relay(old, e);
         dirty = true;
       } else e.un = un;
+      un._figScale = e.scale / SCALE;   // (effets.js : la fumée de ses salves à l'échelle de ses figurines)
       // version : un régiment qui entre dans le champ est dessiné tout de suite ; les autres changements attendent la
       // prochaine reconstruction (au plus cinq par seconde)
       const lod = fr && camera ? lodOf(px * k, e.lod, vis) : 2;

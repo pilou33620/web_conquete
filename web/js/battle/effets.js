@@ -184,8 +184,9 @@ export class Effects {
     else if (k === 'impact') {
       // choc d'une charge (moteur, n = hommes qui chargent) ou point de chute (maquette) : poussière, une fois
       if (this.balls.some(b => Math.hypot(b.x1 - f.x, b.y1 - f.y) < 40)) return;
-      if (f.n > 20) { for (let q = 0; q < 10; q++) { const a = q / 10 * TAU; this.addPuff(this.dust, f.x + Math.cos(a) * 14, f.y + Math.sin(a) * 9, 1, 4, 3, 0.45, 2.5, Math.cos(a) * 6, Math.sin(a) * 4, 1); } }
-      else this.burst(f.x, f.y, 1);
+      const sc = un?._figScale ?? 1;
+      if (f.n > 20) { for (let q = 0; q < 10; q++) { const a = q / 10 * TAU; this.addPuff(this.dust, f.x + Math.cos(a) * 14 * sc, f.y + Math.sin(a) * 9 * sc, sc, 4 * sc, 3, 0.45, 2.5, Math.cos(a) * 6, Math.sin(a) * 4, 1); } }
+      else this.burst(f.x, f.y, 1, sc);
     }
     else if (k === 'explosion') this.explosion(f.x, f.y);
     else if (k === 'charge') { for (let q = 0; q < 6; q++) this.addPuff(this.dust, f.x + (Math.random() - 0.5) * 30, f.y + (Math.random() - 0.5) * 12, 0, 4, 2, 0.35, 3); }
@@ -218,15 +219,16 @@ export class Effects {
     let near = 0;
     for (const p of this.puffs) if (p.imgs === this.white && (p.x - x) ** 2 + (p.y - y) ** 2 < R2) near++;
     if (near > n * 4) n = Math.min(n, 3);
-    const life = [16, 26, 34, 44][fx], sk = un?.form === 'tirailleurs';
+    // (sc : échelle des figurines du régiment, troupes.js : de loin, elles grossissent, et leur fumée avec elles)
+    const life = [16, 26, 34, 44][fx], sk = un?.form === 'tirailleurs', sc = un?._figScale ?? 1;
     for (let q = 0; q < n; q++) {
       const u = ((q + 0.2 + Math.random() * 0.6) / n - 0.5) * w;
       const at = sk ? Math.random() * 1.6 : (roll > 0 ? u / w + 0.5 : 0.5 - u / w) * dur + Math.random() * 0.05;
       const fwd = front + Math.random() * 2, px = x + c * fwd - s * u, py = y + s * fwd + c * u;
       this.queue.push({ fn: () => {
-        this.flashes.push({ x: px + c * 1.2, y: py + s * 1.2, alt: 1.6, r: 2.2 + Math.random(), t: 0, life: 0.09 + Math.random() * 0.05 });
+        this.flashes.push({ x: px + c * 1.2, y: py + s * 1.2, alt: 1.6 * sc, r: (2.2 + Math.random()) * sc, t: 0, life: 0.09 + Math.random() * 0.05 });
         const sp = 4 + Math.random() * 4;
-        this.addPuff(this.white, px + c * 1.5, py + s * 1.5, 1.5, 4 + Math.random() * 2.5, 1.2 + Math.random() * 0.8, 0.72 + Math.random() * 0.2, life * (0.7 + Math.random() * 0.5), c * sp + (Math.random() - 0.5) * 2, s * sp + (Math.random() - 0.5) * 2, 0.08 + Math.random() * 0.12);
+        this.addPuff(this.white, px + c * 1.5, py + s * 1.5, 1.5 * sc, (4 + Math.random() * 2.5) * sc, 1.2 + Math.random() * 0.8, 0.72 + Math.random() * 0.2, life * (0.7 + Math.random() * 0.5), c * sp + (Math.random() - 0.5) * 2, s * sp + (Math.random() - 0.5) * 2, 0.08 + Math.random() * 0.12);
       }, at: this.t + at });
     }
   }
@@ -236,6 +238,7 @@ export class Effects {
     const p = clamp(f.n || 1, 1, 8), fx = this.q?.fx ?? 2;
     const w = un ? un.w : 60, ux = un ? un.x : f.x, uy = un ? un.y : f.y;
     const fc = un ? Math.cos(un.dir) : c, fs = un ? Math.sin(un.dir) : s;
+    const sc = un?._figScale ?? 1;   // (échelle des figurines de la batterie : sa fumée la suit)
     if (un) un._shots = un._shots || {};
     for (let q = 0; q < p; q++) {
       const u = p > 1 ? (q - (p - 1) / 2) * (w / p) : 0;
@@ -243,30 +246,30 @@ export class Effects {
       const at = q * 0.18 + Math.random() * 0.12;
       this.queue.push({ fn: () => {
         if (un) un._shots[q] = this.t;
-        this.flashes.push({ x: px + fc * 3.5, y: py + fs * 3.5, alt: 1, r: grape ? 7 : 6, t: 0, life: 0.2 });
+        this.flashes.push({ x: px + fc * 3.5, y: py + fs * 3.5, alt: sc, r: (grape ? 7 : 6) * sc, t: 0, life: 0.2 });
         // la bouffée : poussée en avant, épaisse, qui s'élargit ; la poussière du souffle au ras du sol
-        for (let k = 0; k < 3 + fx; k++) this.addPuff(this.white, px + fc * (4 + k * 4), py + fs * (4 + k * 4), 1.5 + k * 0.3, 3.5 + k * 1.2, 1.4, 0.7, [18, 28, 36, 46][fx] * (0.7 + Math.random() * 0.4), fc * (16 - k * 3) + (Math.random() - 0.5) * 3, fs * (16 - k * 3) + (Math.random() - 0.5) * 3, 0.25);
-        if (fx >= 1) for (let k = 0; k < 4; k++) { const a = Math.random() * TAU; this.addPuff(this.dust, px + Math.cos(a) * 2, py + Math.sin(a) * 2, 0.3, 2.5, 2.5, 0.35, 2.5, Math.cos(a) * 5 + fc * 3, Math.sin(a) * 5 + fs * 3, 0.4); }
+        for (let k = 0; k < 3 + fx; k++) this.addPuff(this.white, px + fc * (4 + k * 4), py + fs * (4 + k * 4), (1.5 + k * 0.3) * sc, (3.5 + k * 1.2) * sc, 1.4, 0.7, [18, 28, 36, 46][fx] * (0.7 + Math.random() * 0.4), fc * (16 - k * 3) + (Math.random() - 0.5) * 3, fs * (16 - k * 3) + (Math.random() - 0.5) * 3, 0.25);
+        if (fx >= 1) for (let k = 0; k < 4; k++) { const a = Math.random() * TAU; this.addPuff(this.dust, px + Math.cos(a) * 2, py + Math.sin(a) * 2, 0.3 * sc, 2.5 * sc, 2.5, 0.35, 2.5, Math.cos(a) * 5 + fc * 3, Math.sin(a) * 5 + fs * 3, 0.4); }
         if (grape) {
           for (let k = 0; k < 14; k++) {
             const a = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.28, L = d * (0.75 + Math.random() * 0.35);
             this.streaks.push({ x: px, y: py, x1: px + Math.cos(a) * L, y1: py + Math.sin(a) * L, t: 0, life: 0.28 });
           }
-          for (let k = 0; k < 5; k++) this.queue.push({ fn: () => this.burst(f.x2 + (Math.random() - 0.5) * 40, f.y2 + (Math.random() - 0.5) * 25, 0.5), at: this.t + 0.25 });
+          for (let k = 0; k < 5; k++) this.queue.push({ fn: () => this.burst(f.x2 + (Math.random() - 0.5) * 40, f.y2 + (Math.random() - 0.5) * 25, 0.5, sc), at: this.t + 0.25 });
         } else {
           const tx = (f.x2 ?? f.x) + (Math.random() - 0.5) * 30, ty = (f.y2 ?? f.y) + (Math.random() - 0.5) * 20;
           const dd = Math.hypot(tx - px, ty - py);
-          this.balls.push({ x0: px, y0: py, x1: tx, y1: ty, t: 0, dur: clamp(dd / 900, 0.35, 1.6), h: dd * 0.04, bounce: 2 });
+          this.balls.push({ x0: px, y0: py, x1: tx, y1: ty, t: 0, dur: clamp(dd / 900, 0.35, 1.6), h: dd * 0.04, bounce: 2, sc });
         }
       }, at: this.t + at });
     }
   }
   // point de chute : gerbe de terre (éclats qui retombent), poussière, trou
-  burst(x, y, k = 1) {
-    for (let q = 0; q < 2 * k + 2; q++) this.addPuff(this.dust, x + (Math.random() - 0.5) * 10, y + (Math.random() - 0.5) * 6, 1, 2.5 + Math.random() * 2.5, 3, 0.55, 2.5 + Math.random() * 2, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 3, 3);
+  burst(x, y, k = 1, sc = 1) {
+    for (let q = 0; q < 2 * k + 2; q++) this.addPuff(this.dust, x + (Math.random() - 0.5) * 10 * sc, y + (Math.random() - 0.5) * 6 * sc, sc, (2.5 + Math.random() * 2.5) * sc, 3, 0.55, 2.5 + Math.random() * 2, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 3, 3);
     const nb = [2, 4, 6, 8][this.q?.fx ?? 2] * k;
-    for (let q = 0; q < nb; q++) { const a = Math.random() * TAU, v = 2 + Math.random() * 6; this.bits.push({ x, y, alt: 0.5, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.7, valt: 4 + Math.random() * 6, t: 0, life: 2 }); }
-    if (Math.random() < 0.6) this.decals.push({ k: 'trou', x, y, r: 1.4 + Math.random() * 1.2 * k, a: Math.random() * 3 });
+    for (let q = 0; q < nb; q++) { const a = Math.random() * TAU, v = (2 + Math.random() * 6) * sc; this.bits.push({ x, y, alt: 0.5, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.7, valt: (4 + Math.random() * 6) * Math.sqrt(sc), t: 0, life: 2 }); }
+    if (Math.random() < 0.6) this.decals.push({ k: 'trou', x, y, r: (1.4 + Math.random() * 1.2 * k) * sc, a: Math.random() * 3 });
   }
   explosion(x, y) {
     this.flashes.push({ x, y, alt: 2, r: 26, t: 0, life: 0.5 });
@@ -277,10 +280,10 @@ export class Effects {
     this.decals.push({ k: 'trou', x, y, r: 6, a: 0 });
   }
   // poussière sous les sabots d'une charge, fumée d'un village en feu…
-  trail(x, y, dir, w) {
+  trail(x, y, dir, w, sc = 1) {
     if (Math.random() > [0.25, 0.4, 0.55, 0.7][this.q?.fx ?? 2]) return;
     const c = Math.cos(dir), s = Math.sin(dir), u = (Math.random() - 0.5) * w;
-    this.addPuff(this.dust, x - c * 8 - s * u, y - s * 8 + c * u, 0.5, 2 + Math.random() * 2, 2.5, 0.4, 2 + Math.random() * 1.5, -c * 2, -s * 2, 0.5);
+    this.addPuff(this.dust, x - c * 8 * sc - s * u, y - s * 8 * sc + c * u, 0.5 * sc, (2 + Math.random() * 2) * sc, 2.5, 0.4, 2 + Math.random() * 1.5, -c * 2, -s * 2, 0.5);
   }
 
   // ------------------------------------------------------------------ animation
@@ -321,10 +324,10 @@ export class Effects {
     for (const b of this.balls) {
       b.t += dt;
       if (b.t < b.dur) { still.push(b); continue; }
-      this.burst(b.x1, b.y1, 0.8);
+      this.burst(b.x1, b.y1, 0.8, b.sc);
       if (b.bounce > 0) {   // ricochet : repart plus bas, plus court
         const dx = b.x1 - b.x0, dy = b.y1 - b.y0;
-        still.push({ x0: b.x1, y0: b.y1, x1: b.x1 + dx * 0.22, y1: b.y1 + dy * 0.22, t: 0, dur: b.dur * 0.35, h: b.h * 0.18, bounce: b.bounce - 1 });
+        still.push({ x0: b.x1, y0: b.y1, x1: b.x1 + dx * 0.22, y1: b.y1 + dy * 0.22, t: 0, dur: b.dur * 0.35, h: b.h * 0.18, bounce: b.bounce - 1, sc: b.sc });
       }
     }
     this.balls = still;

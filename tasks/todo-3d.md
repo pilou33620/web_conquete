@@ -654,7 +654,14 @@ General sur un régiment qui tire.
     `web/js/battle/qualite.js`
   - Taille : M
 
-- [ ] **T44 : fumée et effets à l'échelle des figurines**
+- [x] **T44 : fumée et effets à l'échelle des figurines**
+  - Fait : chaque régiment porte l'échelle de ses figurines (`un._figScale`, troupes.js : qualité × palier de loin) ;
+    les salves, les coups de canon (éclairs, bouffées, poussière du souffle), les gerbes de terre des boulets et de la
+    mitraille (l'échelle de la batterie suit le boulet et ses ricochets), le choc des charges et la poussière des sabots
+    la suivent. Le nombre de bouffées reste celui de la qualité. Captures : de près un banc continu le long de la
+    ligne, haut de 2 à 3 figurines ; de loin (×2) le même banc, à l'échelle des figurines.
+  - Limite des captures sur le Pi : l'horloge des effets avance trop lentement, la file des événements du serveur
+    s'accumule ; pour voir une salve seule, vider `v.fx.queue` et `v.fx.puffs` et neutraliser `v.fx.push` après le tir.
   - Critères :
     - Bouffées à l'échelle des figurines (rayon selon leur échelle).
     - Une salve laisse un banc de fumée continu le long de la ligne, d'environ 2 à 3 hauteurs d'homme.

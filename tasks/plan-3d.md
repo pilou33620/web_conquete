@@ -283,7 +283,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 ### 7f : scène
 - [x] T43 : couleurs et lumière du terrain
 - [x] T46 : herbe et végétation en relief (demande du 17/10/2026)
-- [ ] T44 : fumée et effets à l'échelle des figurines
+- [x] T44 : fumée et effets à l'échelle des figurines
 - [ ] T45 : vérification finale, README, revue
 - [ ] Point final de l'étape 7
 
