@@ -177,7 +177,7 @@ class Game:
         need = {}
         for r in regs:
             cls = R.UNITS[r['type']]['cls']
-            if cls in R.ARMS and r.get('arm', 0) < self.arm_level(code, cls):
+            if cls in R.ARMS and not R.UNITS[r['type']]['arm_name'] and r.get('arm', 0) < self.arm_level(code, cls):
                 for k, v in R.REARM[cls].items():
                     need[k] = need.get(k, 0) + v * r['max']
         return {k: int(round(v)) for k, v in need.items()}
@@ -208,7 +208,7 @@ class Game:
         cnt = 0
         for r in regs:
             cls = R.UNITS[r['type']]['cls']
-            if cls in R.ARMS and r.get('arm', 0) < self.arm_level(code, cls):
+            if cls in R.ARMS and not R.UNITS[r['type']]['arm_name'] and r.get('arm', 0) < self.arm_level(code, cls):
                 r['arm'] = self.arm_level(code, cls)
                 r['xp'] *= 0.85   # il faut réapprendre à tirer
                 cnt += 1
@@ -2003,7 +2003,7 @@ class Game:
                     if r['type'] == 'cavalerie' and tname in ('Forêt', 'Marais'):
                         mult *= 0.85
                         break
-                if any(r['type'] == 'artillerie' for r in a['regs']) and tname in ('Forêt', 'Marais', 'Montagne', 'Haute montagne', 'Dunes'):
+                if any(self.arm_class(r['type']) == 'artillerie' for r in a['regs']) and tname in ('Forêt', 'Marais', 'Montagne', 'Haute montagne', 'Dunes'):
                     mult *= 0.6
                 if tname in ('Montagne', 'Haute montagne', 'Collines'):
                     mult *= 1 + self.mod(a['owner'], 'mountain')
@@ -2645,7 +2645,7 @@ class Game:
                 side['armies'] = [aid for aid in side['armies'] if aid in self.armies and self.armies[aid]['regs']]
                 units = self.side_units(bt, si)
                 node = self.nodes[side['node']] if side['node'] is not None else None
-                protected = any(r['type'] != 'artillerie' for _, r, _ in units) or (node is not None and node['milice'] > 0)
+                protected = any(self.arm_class(r['type']) != 'artillerie' for _, r, _ in units) or (node is not None and node['milice'] > 0)
                 fb, wall = 1.0, 1.0
                 if node is not None:
                     o = node['owner']

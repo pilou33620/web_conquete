@@ -92,8 +92,10 @@ du banc d'essai et capture `node web/js/battle/dev/capture.mjs <scénario> <fich
   - Critères : type `mitrailleuses` (classe `artillerie`, `req='mitrailleuse'`, villes et chefs-lieux) ; les tests
     littéraux `type == 'artillerie'` passent par la classe (D6) ; coût, délai, réarmement, noms ; les IA en lèvent
     (MIX).
-  - Vérif : `grep -n "== 'artillerie'" game/` ne laisse que des tests de classe ; bancs : levée refusée sans la
-    technologie, permise avec ; une armée qui en a assiège, se ravitaille, recule, est sauvegardée et rechargée.
+  - Vérif : relevé des tests `type == 'artillerie'` : ceux qui parlent des canons (sièges, fonderie, Gribeauval,
+    général artilleur) restent, ceux qui parlent d'une pièce sur roues (terrain, armée sans soutien, embuscade)
+    passent par la classe ; bancs : levée refusée sans la technologie, permise avec ; pas de réarmement ; pas de
+    brèche ; une armée qui en a est sauvegardée, rechargée et joue un mois.
   - Fichiers : `game/rules.py`, `game/engine.py`, `game/ai.py`, `game/army_actions.py`, `tests/test_campagne.py`
   - Taille : M
 

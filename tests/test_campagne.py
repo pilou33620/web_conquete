@@ -1193,5 +1193,46 @@ class ApresLaBataille(unittest.TestCase):
         self.assertEqual(AA.fort_eff(g, n, '47'), AA.fort_eff(g, n), 'sans dynamite, rien ne change')
 
 
+class Mitrailleuses(unittest.TestCase):
+    """SPEC-TECH.md : la batterie de mitrailleuses, levée avec la technologie, de la classe de l'artillerie."""
+
+    def ville(self, g, code='33'):
+        return next(n['id'] for n in g.nodes if n['owner'] == code and g.geo.nodes[n['id']]['type'] == 'capitale')
+
+    def test_levee_avec_la_technologie_seulement(self):
+        g = partie(epoque='1870')
+        g.factions['33']['techs'].remove('mitrailleuse') if 'mitrailleuse' in g.factions['33']['techs'] else None
+        ok, why = g.can_recruit('33', self.ville(g), 'mitrailleuses')
+        self.assertFalse(ok)
+        self.assertIn('Mitrailleuse', why)
+        avec(g, '33', 'mitrailleuse')
+        self.assertTrue(g.can_recruit('33', self.ville(g), 'mitrailleuses')[0])
+        self.assertEqual(R.UNITS['mitrailleuses']['cls'], 'artillerie')
+
+    def test_pas_de_reamement_pour_une_mitrailleuse(self):
+        g = avec(partie(epoque='1870'), '33', 'mitrailleuse', 'debange')
+        r = g.new_reg('mitrailleuses', code='33')
+        r['arm'] = 0
+        self.assertEqual(g.rearm_cost('33', [r]), {}, 'la pièce de Reffye ne se réarme pas en canons')
+
+    def test_une_armee_de_mitrailleuses_se_sauvegarde(self):
+        g = avec(partie(epoque='1870'), '33', 'mitrailleuse')
+        a = armee(g)
+        a['regs'].append(g.new_reg('mitrailleuses', code='33'))
+        g2 = V.from_dict(GEO, json.loads(json.dumps(V.to_dict(g))))
+        self.assertIn('mitrailleuses', [r['type'] for r in g2.armies[a['id']]['regs']])
+        jouer_mois(g2)
+
+    def test_les_mitrailleuses_n_ouvrent_pas_de_breche(self):
+        g = partie(epoque='1870')
+        a = armee(g)
+        n = g.nodes[g.capital_of('24')]
+        n['siege'] = dict(by='33', dmg=0.0)
+        a['regs'] = [g.new_reg('ligne', code='33')]
+        sans = g.siege_rate(n, [a])
+        a['regs'] += [g.new_reg('mitrailleuses', code='33') for _ in range(3)]
+        self.assertEqual(g.siege_rate(n, [a]), sans, 'les sièges ne comptent que les canons')
+
+
 if __name__ == '__main__':
     unittest.main()

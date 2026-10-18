@@ -72,6 +72,13 @@ UNITS = {
                                'Montagne': 1.6, 'Haute montagne': 1.7},
                       where=('64',), desc='Infanterie légère des montagnes : redoutable en relief, s’use peu dans les cols. '
                                           'Levée seulement en Pays basque et en Béarn.'),
+    'mitrailleuses': dict(name='Mitrailleuses (batterie de Reffye)', short='Mitrailleuses', men=90, speed=16, power=2.2,
+                          cost=dict(livres=320, armes=70, fer=40, bois=20, recrues=90), days=24, upkeep_v=0.7, upkeep_l=2.0,
+                          terrain={'Plaine': 1.3, 'Collines': 1.15, 'Vignoble': 1.0, 'Forêt': 0.5, 'Marais': 0.5,
+                                   'Montagne': 0.6, 'Haute montagne': 0.4, 'Lande': 0.9},
+                          req='mitrailleuse', arm_name='Reffye',
+                          desc='Six mitrailleuses de Reffye : un feu roulant à 1 200 mètres, redoutable contre l’infanterie '
+                               'à découvert, mais impuissant contre les remparts.'),
     'sapeurs': dict(name='Sapeurs du génie', short='Sapeurs', men=150, speed=20, power=0.55,
                     cost=dict(livres=200, armes=20, outils=30, recrues=150), days=16, upkeep_v=0.6, upkeep_l=1.3,
                     terrain={'Plaine': 1.0, 'Forêt': 0.9, 'Marais': 0.9, 'Montagne': 0.9},
@@ -83,10 +90,10 @@ UNITS = {
                   desc='Milice citoyenne bon marché, levée même dans un village : elle ne quitte pas sa ville, '
                        'mais la défend avec ardeur (+30 %).'),
 }
-UNIT_ORDER = ['ligne', 'legere', 'grenadiers', 'chasseurs', 'cavalerie', 'artillerie', 'sapeurs', 'garde']
-UNIT_CLS = {'cavalerie': 'cavalerie', 'artillerie': 'artillerie'}   # tout le reste est de l'infanterie
+UNIT_ORDER = ['ligne', 'legere', 'grenadiers', 'chasseurs', 'cavalerie', 'artillerie', 'mitrailleuses', 'sapeurs', 'garde']
+UNIT_CLS = {'cavalerie': 'cavalerie', 'artillerie': 'artillerie', 'mitrailleuses': 'artillerie'}   # tout le reste est de l'infanterie
 LIGHT_UNITS = ('legere', 'chasseurs')
-READY = {'grenadiers': 'prêts', 'chasseurs': 'prêts', 'sapeurs': 'prêts'}   # les autres noms sont féminins
+READY = {'grenadiers': 'prêts', 'chasseurs': 'prêts', 'sapeurs': 'prêts', 'mitrailleuses': 'prêtes'}   # les autres noms sont féminins
 for _k, _u in UNITS.items():
     _u.setdefault('ready', READY.get(_k, 'prête'))
     _u.setdefault('cls', UNIT_CLS.get(_k, 'inf'))
@@ -94,6 +101,7 @@ for _k, _u in UNITS.items():
     _u.setdefault('garrison_only', False)
     _u.setdefault('req', None)
     _u.setdefault('desc', '')
+    _u.setdefault('arm_name', None)   # armement fixe (pas de réarmement) : la pièce de Reffye
 UNITS['ligne']['desc'] = 'Le gros de l’armée : feu de ligne, colonne d’assaut ou carré.'
 UNITS['legere']['desc'] = 'Voltigeurs : rapides, à l’aise en forêt, en lande et en marais, tendent des embuscades.'
 UNITS['cavalerie']['desc'] = 'Dragons et hussards : charge en terrain ouvert, poursuite, éclairage.'

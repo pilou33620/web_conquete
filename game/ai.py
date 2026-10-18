@@ -163,7 +163,7 @@ class AI:
             return False
         room = self.arms_room()
         lv = {cls: g.arm_level(code, cls) for cls in R.ARMS}
-        old = [r for r in regs if r.get('arm', 0) < lv.get(R.UNITS[r['type']]['cls'], 0)]
+        old = [r for r in regs if r.get('arm', 0) < lv.get(R.UNITS[r['type']]['cls'], 0) and not R.UNITS[r['type']]['arm_name']]
         old.sort(key=lambda r: r.get('arm', 0) - lv[R.UNITS[r['type']]['cls']])
         pick, tot = [], {}
         for r in old:
@@ -590,6 +590,8 @@ class AI:
         if f['income']['livres'] < 0.5 and f['res']['livres'] < 400:
             return
         typ = self.rng.choice(MIX[code])
+        if typ == 'artillerie' and 'mitrailleuse' in f['techs'] and self.rng.random() < 0.35:
+            typ = 'mitrailleuses'   # (avant la technologie, le tirage ne change pas)
         cost = g.unit_cost(code, typ)
         reserve = dict(cost)
         reserve['livres'] = cost['livres'] + 60
@@ -779,7 +781,7 @@ class AI:
         # embuscade
         n_legere = sum(1 for r in a['regs'] if r['type'] == 'legere')
         amb_chance = 0.12 + (0.25 if code == '40' else 0) + 0.08 * n_legere
-        if wars and self.rng.random() < amb_chance and not any(r['type'] == 'artillerie' for r in a['regs']):
+        if wars and self.rng.random() < amb_chance and not any(R.UNITS[r['type']]['cls'] == 'artillerie' for r in a['regs']):
             if self.try_ambush(a, wars):
                 return
         # conquête / expansion, sinon ralliement au front
