@@ -174,12 +174,12 @@ test('barre du tour : bloquée tant qu’une armée attend votre choix devant un
 test('fenêtre d’arrivée devant une ville : les choix permis, les autres grisés avec leur raison', () => {
   const ui = Object.create(UI.prototype);
   ui.md = { nodes: [{ id: 0, name: '<Mérignac>' }] };
-  ui.st = { armies: [{ id: 'a1', name: '1re Armée', ask: { n: 0, c: { manuel: '', auto: '', rallier: 'Armée trop faible', attendre: '' } } }] };
+  ui.st = { armies: [{ id: 'a1', name: '1re Armée', ask: { n: 0, c: { manuel: '', auto: '', rallier: 'Armée trop faible <b>', attendre: '' } } }] };
   const [h] = ui.arriveeModal();
   assert.ok(h.includes('Devant &lt;Mérignac&gt;'), 'nom échappé');
   for (const v of ['manuel', 'auto', 'rallier', 'attendre']) assert.ok(h.includes(`data-act="arrive" data-id="a1" data-v="${v}"`), v);
   assert.ok(h.includes('Commander la bataille') && h.includes('Résolution automatique'));
-  assert.ok(/data-v="rallier" disabled/.test(h) && h.includes('Armée trop faible'), 'rallier grisé, avec sa raison');
+  assert.ok(/data-v="rallier" disabled/.test(h) && h.includes('Armée trop faible &lt;b&gt;'), 'rallier grisé, avec sa raison (échappée)');
   assert.ok(!h.includes('data-v="assieger"'), 'un choix absent n’est pas proposé');
 });
 

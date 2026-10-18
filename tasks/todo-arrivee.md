@@ -59,7 +59,16 @@
   - Fichiers : `game/views.py`, `server.py`, `web/js/ui.js`, `tests/test_serveur.py`, `tests/interface.test.mjs`
   - Taille : M
 
-- [ ] **T4 : README, essai sur le vrai serveur, revue**
+- [x] **T4 : README, essai sur le vrai serveur, revue**
+  - Fait : README, état dans SPEC-TOURS.md ; essai sur le vrai serveur (Chromium) sans erreur ; /review (un
+    relecteur, 15 mutations). Corrigé après la revue : choix périmé levé (`ask_alive`, la place passée au joueur : la
+    route reprend) ; pas de choix pendant le tour des IA ; « Négocier » garde l'armée devant la place ; après un
+    assaut en chemin, la route est gardée (elle repart au tour suivant) ; un assaut rejoint la bataille déjà engagée
+    devant la place, « Commander » refusé avant tout changement si une autre bataille se livre ; « Rallier ou
+    attaquer » pendant le choix garde la route ; « Assiéger » assiège sans rallier ni changer la conduite
+    (`engine.begin_siege`) ; un détachement d'une armée en halte reste en halte ; une seule règle des trois fois la
+    défense (`AA.strong`) ; banc serveur « Tour suivant » réparé (`cmd='tour'`) ; défaut antérieur trouvé en route :
+    une réponse de pourparlers due au 1er du mois glissait d'un tour (reliquat de `AA.tick`, réglé à la fin du tour).
   - README (section tour par tour) ; état dans SPEC-TOURS.md.
   - Essai : le vrai serveur (sauvegardes à part), Guyenne 1700, Bordeaux scindée en trois, une marche par détachement :
     la fenêtre s'ouvre à chaque ville, sans erreur dans la console (Chromium sans écran).
@@ -67,4 +76,4 @@
   - Fichiers : `README.md`, `SPEC-TOURS.md`
   - Taille : S
 
-- [ ] **Point de contrôle final** : critères de réussite 1 à 5 de la spec ; revue faite et corrigée.
+- [x] **Point de contrôle final** (18/10/2026) : critères de réussite 1 à 5 de la spec ; revue faite et corrigée.

@@ -94,9 +94,10 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
    **rallier** (ville neutre, armée au moins trois fois plus forte que sa défense), **négocier** le ralliement,
    **assiéger** (place à remparts : l'assaut part de lui-même à la brèche, pendant le tour des IA), **bloquer et
    affamer**, **exiger une contribution**, ou **attendre** devant la place (« Rallier ou attaquer », dans le panneau
-   de l'armée, rouvre la fenêtre). Après un choix sans combat, l'armée reprend sa route avec la marche qui lui reste ;
-   après un assaut, elle s'arrête là. « Tour suivant » attend votre choix. En conduite « Traverser », elle passe les
-   villes de sa route sans s'arrêter : seule sa destination demande.
+   de l'armée, rouvre la fenêtre). Après « Rallier » ou une contribution, l'armée reprend sa route avec la marche qui
+   lui reste ; après des pourparlers, un blocus ou un siège, elle reste devant la place ; après un assaut gagné, elle
+   repart vers sa cible au tour suivant. « Tour suivant » attend votre choix. En conduite « Traverser », elle passe
+   les villes neutres de sa route sans s'arrêter ; une place ennemie sur sa route, comme sa destination, demande.
 2. **Le tour des IA** : touchez **« Tour suivant »** en haut de l'écran (ou la barre d'espace). Le mois est calculé
    d'un coup, en une ou deux secondes : les IA marchent, négocient et se battent, travaux et sièges avancent, les revenus
    tombent. Vos armées, qui ont déjà joué, restent en place. Tout le monde passe au **1er du mois suivant** en même

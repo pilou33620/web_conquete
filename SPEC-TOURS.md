@@ -216,8 +216,8 @@ toujours**, quel que soit le réglage des batailles :
 
 Ce qui ne change pas : les batailles contre une **armée** (contact en marche, attaque d'une IA) ; une ville d'un
 voisin **en paix** (on passe, ou halte) ; une ville **déjà investie** par un autre camp, ou où une bataille se livre ;
-une armée **en retraite** ; la conduite **« Traverser »** pour les villes rencontrées en chemin (traversées sans
-fenêtre ; la cible, elle, demande) ; les **IA**, qui décident seules comme aujourd'hui ; la bataille d'assaut
+une armée **en retraite** ; la conduite **« Traverser »** pour les villes neutres rencontrées en chemin (traversées
+sans fenêtre ; une place ennemie sur la route, comme la cible, demande) ; les **IA**, qui décident seules comme aujourd'hui ; la bataille d'assaut
 elle-même (déploiement, brèches, escalade).
 
 ### Hypothèses (à corriger maintenant, sinon je les retiens)
@@ -225,8 +225,11 @@ elle-même (déploiement, brèches, escalade).
 1. La fenêtre s'ouvre pendant le tour du joueur, au moment où l'armée arrive : tout de suite après l'ordre, ou au
    début du tour suivant pour une marche qui reprend. Pendant le tour des IA, ses armées ne bougent pas (inchangé).
    En **temps réel** (réglage avancé), la même fenêtre s'ouvre et le temps s'arrête comme pour une bataille en attente.
-2. Tant que la fenêtre attend, les autres armées du joueur peuvent recevoir des ordres, mais « Tour suivant » attend
-   le choix (comme une bataille en attente aujourd'hui).
+2. Tant que la fenêtre attend, elle reste au premier plan (comme celle des batailles) et « Tour suivant » attend le
+   choix. Pour donner d'abord d'autres ordres : « Attendre » (l'armée reste en halte ; sa route vers la cible est
+   abandonnée, un nouvel ordre de marche la reprend ; « Rallier ou attaquer » rouvre la fenêtre). Revue du
+   18/10/2026 : pas de choix pendant le tour des IA (il bloquerait la partie) ; un choix périmé (armée repartie, place
+   passée à un autre ou au joueur, paix signée) est levé.
 3. Deux armées arrivent devant deux villes : une fenêtre à la fois, l'une après l'autre.
 4. Après « Commander la bataille » ou « Résolution automatique », la deuxième fenêtre d'aujourd'hui (« Commander /
    Automatique ») ne s'ouvre pas : le choix est déjà fait.
@@ -281,8 +284,10 @@ Commandes, style, structure, limites : celles de la spec ci-dessus.
 
 ## Décisions (validées le 18/10/2026)
 
-1. **Après un choix sans combat en chemin** (rallier, contribution, négocier) : l'armée **reprend sa route** vers sa
-   cible avec la marche qui lui reste ce tour ; la fenêtre s'ouvrira à la ville suivante.
+1. **Après un choix sans combat en chemin** (rallier, contribution) : l'armée **reprend sa route** vers sa cible avec
+   la marche qui lui reste ce tour ; la fenêtre s'ouvrira à la ville suivante. **Négocier** (comme bloquer) : elle
+   **reste devant la place**, car les pourparlers exigent sa présence (revue du 18/10/2026 : repartie, ils étaient
+   rompus).
 2. **Après un assaut gagné en chemin** : l'armée **s'arrête là** (une bataille finit la marche du tour) ; elle repart
    vers sa cible au tour suivant.
 3. Les hypothèses 1 à 4 sont retenues.

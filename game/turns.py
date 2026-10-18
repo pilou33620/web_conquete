@@ -400,7 +400,9 @@ def advance(g, real_dt):
 
 
 def finish(g):
+    from . import army_actions as AA
     tr = g.tour
+    AA.tick(g, 0.0, flush=True)
     g.speed_idx = 0
     tr['recap'] = _recap(g)
     tr.update(end=None, stop=None, acc=None)

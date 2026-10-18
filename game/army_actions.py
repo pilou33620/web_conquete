@@ -179,9 +179,11 @@ def on_capture(g, nid):
 
 
 # ================================================================== tic
-def tick(g, dt):
+def tick(g, dt, flush=False):
+    """(par quarts de jour ; flush : le reste aussi, à la fin du tour des IA, pour que ce qui est dû au 1er du mois s'y
+    règle, comme une réponse de pourparlers annoncée « au prochain tour »)"""
     g._aa_dt = getattr(g, '_aa_dt', 0.0) + dt
-    if g._aa_dt < 0.25:
+    if g._aa_dt < 0.25 and not (flush and g._aa_dt > 0):
         return
     dt, g._aa_dt = g._aa_dt, 0.0
     quarters_tick(g, dt)
@@ -479,8 +481,10 @@ def arrive(g, a, nid, ask=True):
 # (SPEC-TOURS.md, évolution du 18/10/2026) : l'armée s'arrête, son chemin mis de côté (a['ask']), et une fenêtre
 # propose l'assaut (à la main ou automatique), rallier, négocier, assiéger ou bloquer, la contribution, ou d'attendre
 def asks(g, a):
-    """Cette armée demande-t-elle au joueur ce qu'elle doit faire devant une place ? (les siennes, pas les IA)"""
-    return a['owner'] == g.player and g.player not in getattr(g, 'ais', {}) and not g.over
+    """Cette armée demande-t-elle au joueur ce qu'elle doit faire devant une place ? Les siennes, pas les IA ; et pas
+    pendant le tour des IA (le mois ne s'arrête pas pour ça : une fenêtre y bloquerait la partie)."""
+    return (a['owner'] == g.player and g.player not in getattr(g, 'ais', {}) and not g.over
+            and not (g.tour['on'] and g.tour['end'] is not None))
 
 
 def pose(g, a, nid):
@@ -492,9 +496,25 @@ def pose(g, a, nid):
         g.speed_idx = 0   # temps réel : la campagne attend le choix
 
 
+def ask_alive(g, a):
+    """Le choix en attente de cette armée, s'il vaut encore ; sinon il est levé (elle est repartie, en retraite ou au
+    combat, la place a changé de mains, la paix est signée). La place passée au joueur : elle reprend sa route."""
+    k = a.get('ask')
+    if not k:
+        return None
+    code, o = a['owner'], g.nodes[k['node']]['owner']
+    here = a['at_node'] == k['node'] and a['state'] == 'idle' and not a['battle']
+    if here and not g.friendly(code, o) and (o == R.NEUTRAL or g.at_war(code, o)):
+        return k
+    a.pop('ask')
+    if here and g.friendly(code, o):
+        resume(g, a, k)
+    return None
+
+
 def asking(g):
-    """La première armée du joueur qui attend son choix devant une place, ou None."""
-    return next((a for a in g.armies.values() if a.get('ask') and a['owner'] == g.player), None)
+    """La première armée du joueur qui attend son choix devant une place, ou None (les choix périmés sont levés)."""
+    return next(iter([a for a in g.armies.values() if a['owner'] == g.player and ask_alive(g, a)]), None)
 
 
 def strong(g, a, nid):
@@ -533,7 +553,7 @@ def resume(g, a, k):
 
 def choose(g, code, a, what):
     """Le choix du joueur devant la place (fenêtre d'arrivée)."""
-    k = a.get('ask') if a and a['owner'] == code else None
+    k = ask_alive(g, a) if a and a['owner'] == code else None
     if not k:
         return False, "Cette armée n'attend pas d'ordre devant une place."
     why = ask_choices(g, a).get(what)
@@ -550,11 +570,20 @@ def choose(g, code, a, what):
         # l'assaut tout de suite, même sur une place à remparts (les canons y ouvrent des brèches) ; le mode est déjà
         # choisi : pas de seconde fenêtre. Une bataille finit la marche du tour
         from .tactics import bridge as TB
+        bt = next((b for b in g.battles.values() if b['node'] == nid), None)
+        if bt and not (g.friendly(code, bt['sides'][0]['owner']) and g.hostile(code, bt['sides'][1]['owner'])):
+            return False, f"Une bataille se livre déjà devant {place(g, nid)}."
+        if what == 'manuel' and not bt and g.tactical:
+            return False, "Une autre bataille est déjà en cours."
         a.pop('ask')
         a['hold'] = False
         a['assault'] = True
+        a['path'], a['target'] = k['path'], k['target']   # (vainqueur, elle repart vers sa cible au tour suivant)
         if TT.planning(g):
             a['mp'] = 0.0
+        if bt:   # un assaut se livre déjà devant la place : on le rejoint, comme en marche (engine.arrive_node)
+            g.join_battle(a, bt, 0)
+            return True, f"La {a['name']} rejoint l'assaut {R.de(gn['name'])}."
         g.start_battle([a], [], gx=gn['x'], gy=gn['y'], node=nid)
         bt = g.battles[a['battle']]
         bt['mode'] = 'attente'
@@ -565,16 +594,17 @@ def choose(g, code, a, what):
         g.log('capture', f"{gn['name']} se rallie à {g.fname(code)}.", gn['x'], gn['y'], who=code, important=True)
         g.capture(nid, code, peaceful=True)
         resume(g, a, k)
+        asking(g)   # (les autres armées devant la place : leur choix tombe, elles reprennent leur route)
         return True, f"{gn['name']} se rallie à vous."
     if what == 'assieger':
         a.pop('ask')
-        a['hold'] = a['tr'] = False
-        g.arrive_node(a, nid, ask=False)   # le siège d'une place à remparts, comme en marche de conquête
+        a['hold'] = False
+        g.begin_siege(a, nid)
         return True, f"Le siège {R.de(gn['name'])} commence."
     ok, msg = dict(negocier=negotiate, contribution=contribution, bloquer=blockade)[what](g, code, a)
     if ok:
         a.pop('ask')
-        if what != 'bloquer':
+        if what == 'contribution':   # (pourparlers et blocus exigent l'armée devant la place)
             resume(g, a, k)
     return ok, msg
 
@@ -1081,6 +1111,8 @@ def conquer(g, code, a):
     o = g.nodes[nid]['owner']
     if o != R.NEUTRAL and not g.at_war(code, o):
         return False, f"{place(g, nid)} appartient à {g.fname(o)} (en paix). Déclarez la guerre d'abord."
+    if ask_alive(g, a):
+        return True, f"Devant {place(g, nid)} : à vous de choisir."
     a['hold'] = False
     a['tr'] = False
     g.arrive_node(a, nid)
@@ -1137,7 +1169,7 @@ def view_army(g, a, d, own):
         d['tr'] = 1
     if a.get('hold'):
         d['hold'] = 1
-    if a.get('ask'):
+    if ask_alive(g, a):
         d['ask'] = dict(n=a['ask']['node'], c=ask_choices(g, a))   # fenêtre d'arrivée devant une place (ui.js)
     if a.get('dt') and a['path']:
         d['dt'] = [g.fname(o) for o in a['dt']]   # terres fermées contournées

@@ -124,7 +124,9 @@ class Http(unittest.TestCase):
                      dict(cmd='arrive', army=[], value={}), dict(cmd='arrive', army=a['id'])):
             with self.subTest(body=body):
                 self.assertFalse(self.cmd(body)['ok'])
-        self.assertFalse(self.cmd(dict(cmd='turn', action='go'))['ok'], '« Tour suivant » attend le choix')
+        r = self.cmd(dict(cmd='tour', action='go'))
+        self.assertFalse(r['ok'], '« Tour suivant » attend le choix')
+        self.assertIn('Mérignac', r['msg'])
         self.assertTrue(self.cmd(dict(cmd='arrive', army=a['id'], value='attendre'))['ok'])
         self.assertNotIn('ask', a)
 

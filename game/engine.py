@@ -2054,7 +2054,6 @@ class Game:
         if defense < 1:
             self.capture(nid, code)
             return False if a['path'] else True
-        mine = self.army_power(a, TERRAIN[self.geo.terrain_at(gn['x'], gn['y'])][0])
         if n['siege'] and n['siege']['by'] != code:
             a['path'] = []
             a['state'] = 'idle'
@@ -2064,7 +2063,7 @@ class Game:
         if ask and not fled and not (n['siege'] and n['siege']['by'] == code) and AA.asks(self, a):
             AA.pose(self, a, nid)   # le joueur choisit : assaut, ralliement, siège… (army_actions)
             return True
-        if o == R.NEUTRAL and (mine > 3 * defense or (n['siege'] and n['siege'].get('occupy') and n['siege']['by'] == code)):
+        if o == R.NEUTRAL and (AA.strong(self, a, nid) or (n['siege'] and n['siege'].get('occupy') and n['siege']['by'] == code)):
             if code == self.player and TT.planning(self):
                 # tour du joueur : la place se rallie tout de suite, et l'armée finit là sa marche du tour (comme une
                 # prise de ville dans Total War) ; elle reprend sa route au tour suivant
@@ -2080,23 +2079,29 @@ class Game:
             a['state'] = 'siege'
             return True
         if AA.walled(n) and not a['assault'] and n['siege'] is None and (o != R.NEUTRAL or n['fort'] >= 2):
-            n['siege'] = dict(by=code, dmg=0.0, since=self.t)
-            a['state'] = 'siege'
-            if code == self.player or o == self.player:
-                if o == self.player:
-                    self.alert_pause()
-                txt = f"Siège {R.de(gn['name'])} par {self.fname(code)}."
-                if code == self.player and TT.planning(self):
-                    # (votre tour : pas de bataille avant la brèche, au tour des IA, sauf assaut ordonné)
-                    txt = (f"{gn['name']} a des remparts : siège commencé. « Donner l’assaut » pour l’attaquer tout de "
-                           f"suite ; sinon l’assaut partira de lui-même à la brèche.")
-                self.log('siege', txt, gn['x'], gn['y'], who=code, important=True)
+            self.begin_siege(a, nid)
             return True
         if n['siege'] and n['siege']['by'] == code and not a['assault']:
             a['state'] = 'siege'
             return True
         self.start_battle([a], [], gx=gn['x'], gy=gn['y'], node=nid)
         return True
+
+    def begin_siege(self, a, nid):
+        """L'armée met le siège devant une place à remparts (journal ; alerte si la place est au joueur)."""
+        n, gn, code = self.nodes[nid], self.geo.nodes[nid], a['owner']
+        o = n['owner']
+        n['siege'] = dict(by=code, dmg=0.0, since=self.t)
+        a['state'] = 'siege'
+        if code == self.player or o == self.player:
+            if o == self.player:
+                self.alert_pause()
+            txt = f"Siège {R.de(gn['name'])} par {self.fname(code)}."
+            if code == self.player and TT.planning(self):
+                # (votre tour : pas de bataille avant la brèche, au tour des IA, sauf assaut ordonné)
+                txt = (f"{gn['name']} a des remparts : siège commencé. « Donner l’assaut » pour l’attaquer tout de "
+                       f"suite ; sinon l’assaut partira de lui-même à la brèche.")
+            self.log('siege', txt, gn['x'], gn['y'], who=code, important=True)
 
     def cross_pos(self, e, frm):
         """Distance (km, le long de la route) entre le nœud de départ et le passage du fleuve."""
@@ -3661,6 +3666,7 @@ class Game:
         b['supply'] = a['supply']
         b['mp'] = a.get('mp')
         b['rx'] = a.get('rx', True)
+        b['hold'] = a.get('hold', False)   # (détachée d'une armée en halte devant une place : en halte aussi)
         if a['state'] == 'siege':
             b['state'] = 'siege'
         return True, b['id']
