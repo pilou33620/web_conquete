@@ -17,8 +17,8 @@
 // Les dispositions (layout) ne sont recalculées que quand un régiment change de forme, d'effectif (par 8 hommes) ou
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
-import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp, uniform, gunModel } from './formes.js';
-import { activity, moves, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing, matchSlots, foeOf, scrum, scaleAt } from './gestes.js';
+import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp, uniform, gunModel, TAU } from './formes.js';
+import { activity, moves, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing, matchSlots, foeOf, scrum, scaleAt, drapeau, ordonnance } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
 const { AIM, RUN, ROUT } = POSES;
@@ -336,7 +336,7 @@ function soldier(kind, year, rig = false) {
   }
   if (kind === 'tambour') P.push([new THREE.CylinderGeometry(0.15, 0.15, 0.22, 12).rotateZ(1.2).translate(0.18, 0.78, 0.13), '#e8dcc0', B.hips, 0],
     [new THREE.CylinderGeometry(0.155, 0.155, 0.05, 12).rotateZ(1.2).translate(0.18, 0.78, 0.13), shade(0.9), B.hips, CAMP]);   // caisse cerclée aux couleurs du camp
-  if (kind === 'drapeau') P.push([limb(0.022, 0.022, 0.5, 3.6, 0.24, 5).translate(0, 0, 0.08), WOOD, B.pole, 0], [sph(0.045, 0.06, 0.045, 0.24, 3.64, 0.08, 6, 4), GOLD, B.pole, 0]);
+  if (kind === 'drapeau') { const d = drapeau(year); P.push([limb(0.022, 0.022, 0.5, 3.6, 0.24, 5).translate(0, 0, 0.08), WOOD, B.pole, 0]); finial(P, d.top, d.cravate, 0.24, 3.6, 0.08, B.pole); }
   // le sabre tiré, dans la main droite, pour les gestes d'escrime des animations
   if (rig && (kind === 'officier' || rider)) P.push([limb(0.004, 0.014, 0.02, 0.8, -0.21, 4).translate(0, 0, 0.03), '#c8ccd0', B.foreR, 0], [box(0.1, 0.02, 0.03, -0.21, 0.81, 0.03), GOLD, B.foreR, 0]);
   P.push(...hat(headgear(kind, year), kind).map(([g, c, , t]) => [g, c, B.head, t]));
@@ -524,7 +524,7 @@ function farSoldier(kind, year, rig = false) {
   if (kind === 'piquier') P.push([box(0.07, 4.6, 0.07, 0.25, 2.6, 0.05), '#4a3a2c', B.musket, 0], [box(0.06, 0.3, 0.06, 0.25, 5.05, 0.05), '#c8ccd0', B.musket, 0]);
   else if (armed) P.push([box(0.1, 1.4, 0.08, 0.25, 1.5, 0.05), '#4a3a2c', B.musket, 0], [box(0.06, 0.36, 0.06, 0.25, 2.38, 0.05), '#c8ccd0', B.musket, 0]);
   if (kind === 'tambour') P.push([cyl(0.15, 0.15, 0.22, 6, 0.18, 0.78, 0.13, 0, 1.2), '#e8dcc0', B.hips, 0]);
-  if (kind === 'drapeau') P.push([box(0.045, 3.1, 0.045, 0.24, 2.05, 0.08), WOOD, B.pole, 0]);
+  if (kind === 'drapeau') P.push([box(0.045, 3.1, 0.045, 0.24, 2.05, 0.08), WOOD, B.pole, 0], [box(0.07, 0.2, 0.07, 0.24, 3.7, 0.08), GOLD, B.pole, 0]);   // (et le haut de la hampe)
   if (rig && rider) P.push([box(0.03, 0.8, 0.03, -0.21, 0.42, 0.03), '#c8ccd0', B.foreR, 0]);   // le sabre, dans la main droite
   const g = assemble(P);
   if (rig) stocky(g, B);
@@ -577,16 +577,49 @@ export function model(kind, year, lod = 1, rig = false, v = 'gribeauval') {
     default: return soldier(kind, year, rig);
   }
 }
-// motif blanc de l'étoffe : croix des drapeaux d'ordonnance (avant 1790), losange ensuite
-function flagPattern(year) {
-  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 48;
-  const g = cv.getContext('2d');
-  g.fillStyle = '#fff';
-  if (year < 1790) { g.fillRect(27, 0, 10, 48); g.fillRect(0, 19, 64, 10); }
-  else { g.beginPath(); g.moveTo(32, 4); g.lineTo(58, 24); g.lineTo(32, 44); g.lineTo(6, 24); g.closePath(); g.fill(); }
-  g.strokeStyle = 'rgba(214,182,90,1)'; g.lineWidth = 3; g.strokeRect(1.5, 1.5, 61, 45);
+// planche des drapeaux de la bataille : une case de 64 × 48 par régiment (FLAG_COLS × FLAG_ROWS), peinte la première
+// fois qu'il paraît, d'après le modèle de l'année (gestes.drapeau) ; la hampe à gauche (u = 0)
+const FLAG_COLS = 16, FLAG_ROWS = 16, FW = 64, FH = 48;
+const BLEU = '#1f3a8a', ROUGE = '#c0262d', BLANC = '#f2efe6', OR = '#d6b65a';
+function flagSheet() {
+  const cv = document.createElement('canvas'); cv.width = FLAG_COLS * FW; cv.height = FLAG_ROWS * FH;
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
   return t;
+}
+function paintFlag(g, x, y, model, name) {
+  g.save(); g.translate(x, y);
+  const r = (c, a, b, w, h) => { g.fillStyle = c; g.fillRect(a, b, w, h); };
+  const bands = (cs, vert = true) => cs.forEach((c, k) => vert ? r(c, k * FW / cs.length, 0, FW / cs.length + 0.5, FH) : r(c, 0, k * FH / cs.length, FW, FH / cs.length + 0.5));
+  const diamond = c => { g.fillStyle = c; g.beginPath(); g.moveTo(FW / 2, 1); g.lineTo(FW - 1, FH / 2); g.lineTo(FW / 2, FH - 1); g.lineTo(1, FH / 2); g.closePath(); g.fill(); };
+  const gold = () => { g.fillStyle = OR; for (const dy of [-6, 0, 6]) g.fillRect(FW / 2 - 9, FH / 2 + dy - 1, 18, 2); };   // inscriptions dorées
+  if (model === 'ordonnance' || model === 'm1791') {
+    const [a, b] = ordonnance(name);
+    r(a, 0, 0, FW / 2, FH / 2); r(b, FW / 2, 0, FW / 2, FH / 2); r(b, 0, FH / 2, FW / 2, FH / 2); r(a, FW / 2, FH / 2, FW / 2, FH / 2);
+    r(BLANC, FW / 2 - 5, 0, 10, FH); r(BLANC, 0, FH / 2 - 5, FW, 10);
+    if (model === 'm1791') { r(BLEU, 0, 0, 9, 17); r(BLANC, 9, 0, 9, 17); r(ROUGE, 18, 0, 9, 17); }   // le canton tricolore
+  } else if (model === 'an2') { bands([BLEU, BLANC, ROUGE]); diamond(BLANC); gold(); }
+  else if (model === 'm1804') {
+    r(BLEU, 0, 0, FW / 2, FH / 2); r(ROUGE, FW / 2, 0, FW / 2, FH / 2); r(ROUGE, 0, FH / 2, FW / 2, FH / 2); r(BLEU, FW / 2, FH / 2, FW / 2, FH / 2);
+    diamond(BLANC); gold();
+  } else if (model === 'm1812') { bands([BLEU, BLANC, ROUGE]); gold(); }
+  else if (model === 'lys') {
+    r(BLANC, 0, 0, FW, FH);
+    g.fillStyle = OR;
+    for (const [a, b] of [[12, 10], [52, 10], [12, 38], [52, 38], [32, 6], [32, 42]]) { g.beginPath(); g.arc(a, b, 2.2, 0, TAU); g.fill(); g.fillRect(a - 0.7, b, 1.4, 4); }   // fleurs de lys
+    g.fillStyle = BLEU; g.beginPath(); g.ellipse(FW / 2, FH / 2, 8, 10, 0, 0, TAU); g.fill();   // l'écu de France
+    g.fillStyle = OR; for (const [a, b] of [[-3, -3], [3, -3], [0, 3]]) { g.beginPath(); g.arc(FW / 2 + a, FH / 2 + b, 1.6, 0, TAU); g.fill(); }
+  } else if (model === 'ville') { const [a, b] = ordonnance(name + ' ville'); bands([a, b === a ? BLANC : b], false); }
+  else { bands([BLEU, BLANC, ROUGE]); if (model === 'rf') { g.fillStyle = OR; g.font = 'bold 16px serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('RF', FW / 2, FH / 2 + 1); } }
+  if (model !== 'ordonnance' && model !== 'ville') { g.strokeStyle = OR; g.lineWidth = 2; g.strokeRect(1, 1, FW - 2, FH - 2); }   // la frange d'or
+  g.restore();
+}
+// haut de la hampe (fer de lance, pique, aigle, coq) et sa cravate, au sommet (x, y, z) de la hampe, sur l'os b
+function finial(P, top, cravate, x, y, z, b) {
+  if (top === 'aigle') P.push([box(0.09, 0.05, 0.09, x, y + 0.03, z), GOLD, b, 0], [sph(0.035, 0.05, 0.04, x, y + 0.1, z, 6, 4), GOLD, b, 0], [box(0.02, 0.09, 0.2, x, y + 0.13, z), GOLD, b, 0]);
+  else if (top === 'coq') P.push([sph(0.04, 0.045, 0.055, x, y + 0.07, z, 6, 4), GOLD, b, 0], [box(0.02, 0.08, 0.04, x, y + 0.13, z + 0.04), GOLD, b, 0], [box(0.02, 0.07, 0.05, x, y + 0.09, z - 0.06), GOLD, b, 0]);
+  else P.push([new THREE.CylinderGeometry(0, 0.035, 0.2, 6).translate(x, y + 0.1, z), top === 'pique' ? '#b8bcc0' : GOLD, b, 0]);
+  if (cravate === 'blanche') P.push([box(0.04, 0.4, 0.01, x, y - 0.22, z - 0.03), WHITE, b, 0]);
+  else if (cravate) ['#1f3a8a', WHITE, '#c0262d'].forEach((c, k) => P.push([box(0.025, 0.4, 0.01, x, y - 0.22, z - 0.06 + k * 0.03), c, b, 0]));
 }
 
 // ------------------------------------------------------------------ shader commun
@@ -811,7 +844,8 @@ export class Troops {
       uAnim: { value: this.anim }, uFps: { value: meta.fps }, uTrot: { value: this.clipId.get('trot') ?? 0 }, uPas: { value: this.clipId.get('pas') ?? 0 }, uClips: { value: Object.values(meta.clips).map(c => new THREE.Vector4(c.row, c.n, c.loop, 0)) },
     };
     this.kinds = new Map();     // sorte → {mesh, cap, n, slot, anim, coat}
-    this.pattern = flagPattern(this.year);
+    this.pattern = flagSheet();   // (les étoffes des drapeaux : une case par régiment, flagCell)
+    this.flagIds = new Map();
     this.soft = new THREE.CanvasTexture(relief.t.ombre);
     this.contactMats = {};
     // chaque sorte en deux versions (« ~ » : de loin), sauf les drapeaux
@@ -855,7 +889,8 @@ export class Troops {
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\n' + VERT_HEAD + (pattern ? 'varying vec2 vUv2;' : ''))
         .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${VERT_POSE}\n${turn('objectNormal', false)}`)
-        .replace('#include <begin_vertex>', (pattern ? 'vUv2 = uv;\n' : '') + place)
+        // (l'étoffe : sa case de la planche des drapeaux, dont le numéro est dans aFace.x)
+        .replace('#include <begin_vertex>', (pattern ? `vUv2 = (vec2(mod(aFace.x, ${FLAG_COLS}.0), ${FLAG_ROWS - 1}.0 - floor(aFace.x / ${FLAG_COLS}.0)) + uv) / vec2(${FLAG_COLS}.0, ${FLAG_ROWS}.0);\n` : '') + place)
         .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 2.5 ? aFace * color.r : aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart;' +
           // plus sombre vers les pieds : l'ombre des rangs, comme une occlusion ambiante (pas pour les étoffes)
           (pattern ? '' : '\nvColor.rgb *= mix(0.62, 1.0, smoothstep(0.0, 1.5, position.y));'));
@@ -864,7 +899,7 @@ export class Troops {
         // régiment deviné (plus en vue) : transparent en pointillés, sans tri
         .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
           if (vFade < 0.995 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > vFade) discard;`)
-        .replace('#include <color_fragment>', pattern ? 'diffuseColor.rgb *= mix(vColor.rgb, vec3(0.95), texture2D(uPattern, vUv2).a * step(0.5, vPart));' : '#include <color_fragment>')
+        .replace('#include <color_fragment>', pattern ? 'diffuseColor.rgb *= mix(vColor.rgb, texture2D(uPattern, vUv2).rgb, step(0.5, vPart));' : '#include <color_fragment>')
         // lumière enveloppante : le côté à l'ombre n'est pas noir, le passage est doux (figurines arrondies du prototype)
         .replace('#include <lights_lambert_pars_fragment>', THREE.ShaderChunk.lights_lambert_pars_fragment
           .replace('float dotNL = saturate( dot( geometryNormal, directLight.direction ) );', 'float dotNL = saturate( dot( geometryNormal, directLight.direction ) * 0.6 + 0.4 );'));
@@ -893,6 +928,17 @@ export class Troops {
     }
     this.kinds.set(kind, k);
     this.grow(k, 256);
+  }
+  // case du drapeau d'un régiment dans la planche, peinte la première fois (au-delà de 256 régiments, les cases resservent)
+  flagCell(un) {
+    let k = this.flagIds.get(un.id);
+    if (k != null) return k;
+    k = this.flagIds.size % (FLAG_COLS * FLAG_ROWS);
+    this.flagIds.set(un.id, k);
+    const d = drapeau(this.year, un.type === 'milice' || un.type === 'garde');
+    paintFlag(this.pattern.image.getContext('2d'), (k % FLAG_COLS) * FW, Math.floor(k / FLAG_COLS) * FH, d.model, un.name || un.id);
+    this.pattern.needsUpdate = true;
+    return k;
   }
   // une pièce ou un caisson d'un modèle (« canon.75~ » : le canon de 75, de loin), créé la première fois qu'il sert :
   // seules les générations présentes dans la bataille ont leurs sortes
@@ -1025,12 +1071,12 @@ export class Troops {
   // toutes les figurines, rangées par sorte
   rebuild(colors, scale) {
     for (const k of this.kinds.values()) k.n = 0;
-    const coat = new THREE.Color(), off = new THREE.Color(), tint = new THREE.Color();
+    const coat = new THREE.Color(), off = new THREE.Color(), tint = new THREE.Color(), cell = new THREE.Color();
     const FACE = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
     // face : sens imposé (servants), sinon celui de la face du carré ou du demi-tour
     // v : variété de l'homme (gestes.js) pour les figurines au squelette : place, sens, taille, nuance de l'habit
     // mv : sa course à sa place (aMove), ou rien ; pose : celle de la disposition, sinon imposée (cavalier : RIDER)
-    const put = (kind, f, ui, carre, face = null, e = null, v = null, mv = null, pose = f[4]) => {
+    const put = (kind, f, ui, carre, face = null, e = null, v = null, mv = null, pose = f[4], fc = off) => {
       const k = this.kinds.get(kind) ?? this.gunKind(kind);
       if (!k) return;
       if (k.n >= k.cap) this.grow(k, k.cap * 2);
@@ -1042,7 +1088,7 @@ export class Troops {
       k.buf.aMove.set(mv ?? STILL, o);
       const c = w ? tint : coat;
       C[n * 3] = c.r; C[n * 3 + 1] = c.g; C[n * 3 + 2] = c.b;
-      const F = k.buf.aFace; F[n * 3] = off.r; F[n * 3 + 1] = off.g; F[n * 3 + 2] = off.b;
+      const F = k.buf.aFace; F[n * 3] = fc.r; F[n * 3 + 1] = fc.g; F[n * 3 + 2] = fc.b;
     };
     for (const [id, e] of this.lays) {
       const { lay, un, lod } = e;
@@ -1060,8 +1106,8 @@ export class Troops {
         // son cavalier, en selle (même place, même phase : il suit le balancement du cheval ; ni décalage, ni sens, ni
         // taille à lui : il est sur la selle)
         if (f[2] === 'cav' || f[2] === 'colonel') put((f[2] === 'cav' ? 'cavalier' : 'chef') + far, f, ui, carre, null, e, { ...v, du: 0, dv: 0, da: 0, size: 1 }, mv, RIDER);
-        if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre, null, e, v, mv); }
-        else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre, null, e, null, mv); }
+        if (f[2] === 'drapeau') { coat.copy(off); put('etoffe', f, ui, carre, null, e, v, mv, f[4], cell.setRGB(this.flagCell(un), 0, 0)); }
+        else if (f[5] === -3) { coat.copy(off); put('fanion', f, ui, carre, null, e, null, mv, f[4], cell.setRGB(this.flagCell(un), 0, 0)); }
       }
       this.gestures(e, false);
     }

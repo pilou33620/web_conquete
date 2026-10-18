@@ -194,3 +194,26 @@ export function smokeless(un, marks) {
   if (clsOf(un) === 'artillerie') return !!marks?.[un.side]?.includes('sans_fumee');
   return clsOf(un) === 'inf' && (un.arm ?? 0) >= 7;
 }
+
+// vrais drapeaux d'époque (SPEC-TECH.md) : [dernière année, modèle de l'étoffe, haut de la hampe, cravate]. Ordonnance
+// (croix blanche, quartiers du régiment) jusqu'en 1790 ; modèle 1791 (canton tricolore) ; an II (tricolore, losange
+// blanc) ; 1804 (losange blanc, coins bleus et rouges) ; 1812 (trois bandes) jusqu'aux Cent-Jours ; drapeau blanc
+// fleurdelisé de la Restauration ; tricolore au coq (monarchie de Juillet), à l'aigle (Second Empire) ; « RF » ensuite
+const DRAPEAUX = [[1790, 'ordonnance', 'lance', ''], [1793, 'm1791', 'lance', 'tricolore'], [1803, 'an2', 'pique', 'tricolore'],
+  [1812, 'm1804', 'aigle', 'tricolore'], [1815, 'm1812', 'aigle', 'tricolore'], [1830, 'lys', 'lance', 'blanche'],
+  [1852, 'tricolore', 'coq', 'tricolore'], [1870, 'tricolore', 'aigle', 'tricolore'], [Infinity, 'rf', 'lance', 'tricolore']];
+// milice : le drapeau de sa ville avant la Révolution, puis le tricolore (le blanc sous la Restauration)
+export function drapeau(year, milice = false) {
+  const [, model, top, cravate] = DRAPEAUX.find(([fin]) => year <= fin);
+  if (!milice) return { model, top, cravate };
+  return { model: year <= 1790 ? 'ville' : model === 'lys' ? 'lys' : 'tricolore', top, cravate };
+}
+// quartiers d'un drapeau d'ordonnance : deux couleurs tirées du nom du régiment, parmi celles des régiments du roi
+// (rouge, bleu, vert, violet, feuille-morte, isabelle, noir, aurore, gris de lin)
+const QUARTIERS = ['#a8272b', '#1f3a7a', '#2f6b3a', '#5a2d6e', '#7a5530', '#c9a43a', '#24211f', '#d07a2a', '#9a8fa8'];
+export function ordonnance(name) {
+  let h = 2166136261;
+  for (const ch of String(name)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  const a = (h >>> 0) % QUARTIERS.length, b = ((h >>> 8) % (QUARTIERS.length - 1) + a + 1) % QUARTIERS.length;
+  return (h >>> 16) % 3 ? [QUARTIERS[a], QUARTIERS[b]] : [QUARTIERS[a], QUARTIERS[a]];   // un sur trois : quatre quartiers pareils
+}

@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { Terrain } from '../web/js/battle/terrain.js';
-import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, serving, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves, pushOut, foeOf, scrum, scaleAt, smokeless } from '../web/js/battle/gestes.js';
+import { gesture, activity, pick, SALVE_FEU, SALVE_DUREE, BOUTEFEU_FEU, serving, variety, rows, chooseDead, pushRing, chooseLine, matchSlots, moves, pushOut, foeOf, scrum, scaleAt, smokeless, drapeau, ordonnance } from '../web/js/battle/gestes.js';
 
 const meta = JSON.parse(fs.readFileSync(new URL('../web/anims/soldat.json', import.meta.url)));
 
@@ -361,4 +361,34 @@ test('mitrailleuse : quatre servants, dont un qui tourne la manivelle pendant la
   const g = now => pick({ act: 'feu', actT: 0, now, kind: 'servant', rank: crank[5], u: 0, w: 60, form: 'batterie', phase: 0.2, volley: null, moving: false, shots: { 0: 10 } })[0];
   assert.equal(g(11), 'recharge', 'la manivelle tourne');
   assert.equal(g(20), 'repos');
+});
+
+test('vrais drapeaux d’époque : le modèle de l’année, le haut de la hampe, la cravate (SPEC-TECH.md)', () => {
+  const d = (y, m) => { const x = drapeau(y, m); return `${x.model}/${x.top}/${x.cravate}`; };
+  assert.equal(d(1700), 'ordonnance/lance/');
+  assert.equal(d(1790), 'ordonnance/lance/');
+  assert.equal(d(1791), 'm1791/lance/tricolore');
+  assert.equal(d(1794), 'an2/pique/tricolore');
+  assert.equal(d(1804), 'm1804/aigle/tricolore');
+  assert.equal(d(1812), 'm1804/aigle/tricolore');
+  assert.equal(d(1813), 'm1812/aigle/tricolore');
+  assert.equal(d(1815), 'm1812/aigle/tricolore', 'les Cent-Jours');
+  assert.equal(d(1816), 'lys/lance/blanche');
+  assert.equal(d(1830), 'lys/lance/blanche');
+  assert.equal(d(1831), 'tricolore/coq/tricolore');
+  assert.equal(d(1853), 'tricolore/aigle/tricolore');
+  assert.equal(d(1871), 'rf/lance/tricolore');
+  assert.equal(d(1890), 'rf/lance/tricolore');
+  assert.equal(drapeau(1750, true).model, 'ville', 'la milice : le drapeau de sa ville');
+  assert.equal(drapeau(1793, true).model, 'tricolore');
+  assert.equal(drapeau(1820, true).model, 'lys');
+});
+
+test('drapeaux d’ordonnance : les quartiers de chaque régiment, tirés de son nom, toujours les mêmes', () => {
+  const a = ordonnance('12e Ligne'), b = ordonnance('12e Ligne');
+  assert.deepEqual(a, b);
+  assert.equal(a.length, 2);
+  for (const c of a) assert.match(c, /^#[0-9a-f]{6}$/);
+  const all = new Set(['1er', '2e', '3e', '4e', '5e', '6e', '7e', '8e', '9e', '10e'].map(n => ordonnance(`${n} Ligne`).join()));
+  assert.ok(all.size >= 5, 'des régiments différents ont des couleurs différentes');
 });
