@@ -18,7 +18,7 @@
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp } from './formes.js';
-import { activity, gesture } from './gestes.js';
+import { activity, pick, firing } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
 const { AIM, RUN, ROUT } = POSES;
@@ -676,7 +676,6 @@ export class Troops {
     this.anim = new THREE.DataTexture(data, nb * 3, meta.rows, THREE.RGBAFormat, THREE.HalfFloatType);
     this.anim.needsUpdate = true;
     this.clipId = new Map(Object.keys(meta.clips).map((c, i) => [c, i]));
-    this.clipLoop = Object.values(meta.clips).map(c => c.loop);
     this.uni = {
       uUnits: { value: this.units }, uHeight: { value: this.heights }, uHgt: { value: new THREE.Vector3(t.fineStep, t.fineW, t.fineH) },
       uTime: { value: 0 }, uFxT: { value: 0 }, uRobes: { value: ROBES.map(c => new THREE.Color(c)) },
@@ -799,7 +798,7 @@ export class Troops {
   // l'animation (s) ; fxT, horloge des effets (salves) ; fr, camera : la vue (camera.js, caméra de Three.js), pour la
   // version de chaque régiment
   update(list, colors, time, fxT, fr = null, camera = null) {
-    this.uni.uTime.value = time; this.uni.uFxT.value = fxT;
+    this.uni.uTime.value = time; this.uni.uFxT.value = fxT; this.fxT = fxT;
     // hommes par figurine : autant qu'il faut pour tenir dans le budget de la qualité (par paliers de 25 % : la
     // disposition ne change pas à chaque perte)
     const men = list.reduce((a, u) => a + Math.min(u.men || 0, 480), 0), budget = this.q.troupes ?? 10000;
@@ -816,7 +815,7 @@ export class Troops {
       if (i === undefined) { i = this.free.pop() ?? this.index.size; if (i >= MAXU) continue; this.index.set(id, i); dirty = true; }
       const key = `${un.form}|${un.state}|${Math.round((un.men || 0) / 8)}|${un.w | 0}|${un.d | 0}|${un.type}|${per}|${colors[un.side]}`;
       let e = this.lays.get(id);
-      if (!e || e.key !== key) { this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: e?.lod ?? 0, act: e?.act, actT: e?.actT }); dirty = true; } else e.un = un;
+      if (!e || e.key !== key) { this.lays.set(id, e = { key, lay: layout(un, per, scale), un, lod: e?.lod ?? 0, act: e?.act, actT: e?.actT, volT: e?.volT, moving: e?.moving, fire: e?.fire }); dirty = true; } else e.un = un;
       // version : un régiment qui entre dans le champ est dessiné tout de suite ; les autres changements attendent la
       // prochaine reconstruction (au plus cinq par seconde). La sphère, élargie avec la distance, le fait entrer avant
       // qu'il n'atteigne le bord de l'image.
@@ -831,9 +830,14 @@ export class Troops {
       // régiment : position, sens, opacité ; allure, feu, salve ; front, tirailleurs
       const moving = un.to && un.from && Math.hypot(un.to.x - un.from.x, un.to.y - un.from.y) > 0.3;
       const run = un.state === 'charge' || un.state === 'deroute', march = un.state === 'marche' || (moving && !run);
-      // geste des hommes au squelette : réécrit quand l'activité du régiment change (sans reconstruire)
-      const act = activity(un, moving);
-      if (e.act !== act) { e.act = act; e.actT = fxT; if (e.figs && !dirty) this.gestures(e, true); }
+      // geste des hommes au squelette : réécrit quand l'activité du régiment change, qu'il tire une salve ou qu'elle
+      // finit (sans reconstruire)
+      const act = activity(un, moving), volT = un._volley?.t;
+      if (e.act !== act || e.volT !== volT || (e.fire && !firing(un._volley, fxT))) {
+        if (e.act !== act) { e.act = act; e.actT = fxT; }
+        e.volT = volT; e.moving = moving; e.fire = firing(un._volley, fxT);
+        if (e.figs && !dirty) this.gestures(e, true);
+      }
       const v = un._volley, o = i * 4, D = this.data, row = MAXU * 4;
       D[o] = un.x; D[o + 1] = un.y; D[o + 2] = un.dir; D[o + 3] = un._ghost ? 0.4 : un._fade ?? 1;
       D[row + o] = run ? 2 : march ? 1 : 0; D[row + o + 1] = un.state === 'feu' || un.state === 'recharge' ? 1 : 0;
@@ -888,12 +892,12 @@ export class Troops {
       for (const a of Object.keys(INSTANCE_ATTRS)) { const at = k.geo.attributes[a]; at.needsUpdate = true; at.clearUpdateRanges(); at.addUpdateRange(0, k.n * at.itemSize); }
     }
   }
-  // gestes des hommes au squelette d'un régiment (aGest, aMix), selon son activité ; chacun garde sa phase dans les
-  // gestes en boucle. part : n'envoyer que leurs plages (sans reconstruction)
+  // gestes des hommes au squelette d'un régiment (aGest, aMix), selon son activité, leur rang, leur place le long du
+  // front et sa dernière salve (gestes.js, pick). part : n'envoyer que leurs plages (sans reconstruction)
   gestures(e, part) {
-    const span = new Map();
+    const span = new Map(), un = e.un, base = { act: e.act, actT: e.actT ?? 0, now: this.fxT ?? 0, w: Math.max(1, un.w), form: un.form, volley: un._volley, moving: e.moving };
     for (const [k, n, f] of e.figs) {
-      const c = this.clipId.get(gesture(e.act, f[2])) ?? 0, t0 = (e.actT ?? 0) - (this.clipLoop[c] ? f[6] : 0);
+      const [name, t0] = pick({ ...base, kind: f[2], rank: f[5], u: f[0], phase: f[6] }), c = this.clipId.get(name) ?? 0;
       k.buf.aGest.set([c, t0, c, t0], n * 4); k.buf.aMix.set([-99, 1, 1, 0], n * 4);
       if (part) { const r = span.get(k); span.set(k, r ? [Math.min(r[0], n), Math.max(r[1], n)] : [n, n]); }
     }

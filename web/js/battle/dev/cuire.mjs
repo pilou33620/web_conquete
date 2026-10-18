@@ -19,6 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Matrix4, Quaternion, Vector3, DataUtils } from '../../../vendor/three/three.core.js';
 import { RIG, RIG_EXTRA } from '../troupes.js';
+import { SALVE_FEU } from '../gestes.js';
 
 const FPS = 24;
 // ------------------------------------------------------------------ gestes du fusil
@@ -66,6 +67,35 @@ const key = (K, t) => {
 const RELOAD = (M, t) => hold(M, P(0.08, 0.02, 0.3), P(0, 1, -0.07), 1.0, key(RAM, t % 2.4));
 // estoc : on pousse la baïonnette en avant, puis on la ramène
 const THRUST = (M, t) => hold(M, inChest(M, -0.08, 1.05, 0.3 * Math.sin(Math.PI * Math.min(1, (t % 0.9) / 0.6))), P(0.05, 0.15, 1), 0.48, 0.1);
+// le coup part : la crosse recule dans l'épaule, le canon se relève, puis revient en joue
+const FIRE = (M, t) => { const k = Math.max(0, 1 - t / 0.25); hold(M, inChest(M, -0.12, 1.36, 0.08 - 0.05 * k), P(0.04, -0.02 + 0.25 * k, 1), 0.5, 0.17); };
+// tambour : les baguettes battent la caisse portée à la ceinture, n coups de chaque main par boucle de L s (la boucle
+// se raccorde)
+const drum = (L, n) => (M, t) => {
+  const hit = k => P(0.12 - k * 0.08, 0.95 + 0.12 * Math.max(0, Math.sin(2 * Math.PI * n * t / L + k * Math.PI)), 0.26).applyMatrix4(M.hips);
+  [M.upperL, M.foreL] = arm('L', SH.L.clone().applyMatrix4(M.chest), hit(0), P(0.5, -1, -0.2));
+  [M.upperR, M.foreR] = arm('R', SH.R.clone().applyMatrix4(M.chest), hit(1), P(-1, -0.6, -0.3));
+};
+// geste en plusieurs temps : [[durée, geste], …] ; d'un temps au suivant, fondu de TR s (le temps de lever l'arme)
+const TR = 0.3, REST = () => {};
+const copy = M => Object.fromEntries(Object.entries(M).map(([k, m]) => [k, m.clone()]));
+const seq = steps => (M, t) => {
+  let i = 0, t0 = 0;
+  while (i < steps.length - 1 && t >= t0 + steps[i][0]) t0 += steps[i++][0];
+  const A = copy(M);
+  steps[i][1](A, t - t0);
+  let w = i > 0 && t - t0 < TR ? (t - t0) / TR : 1;
+  if (w >= 1) { Object.assign(M, A); return; }
+  const B = copy(M);
+  steps[i - 1][1](B, steps[i - 1][0]);
+  w = w * w * (3 - 2 * w);
+  for (const k of Object.keys(M)) M[k].elements = B[k].elements.map((b, j) => b * (1 - w) + A[k].elements[j] * w);
+};
+// salve : épauler, viser, le coup (à SALVE_FEU s, gestes.js), recharger, l'arme sur l'épaule ; à genoux, le premier rang
+// garde l'arme en main pendant que les autres rechargent
+const SALVE = [[0.35, REST], [0.35, AIM], [0.25, FIRE], [0.45, AIM], [2.4, RELOAD], [0.5, REST]];
+const SALVE_GENOU = [[0.35, REST], [0.35, AIM], [0.25, FIRE], [0.45, AIM], [2.9, REST]];
+if (SALVE[0][0] + SALVE[1][0] !== SALVE_FEU || SALVE_GENOU[0][0] + SALVE_GENOU[1][0] !== SALVE_FEU) throw new Error('instant du coup');
 
 // nom chez nous → animation de la bibliothèque (src), en boucle, durée (len, sinon celle de src), geste du fusil
 // (hold), jambes d'une autre animation à l'image donnée (legs)
@@ -78,6 +108,10 @@ const CLIPS = {
   mort: { src: 'Death01', loop: 0 }, touche: { src: 'Hit_Chest', loop: 0 }, tete: { src: 'Hit_Head', loop: 0 },
   projete: { src: 'Hit_Knockback', loop: 0 }, sabre: { src: 'Sword_Attack', loop: 0 }, garde: { src: 'Sword_Idle', loop: 1 },
   combo: { src: 'Sword_Regular_Combo', loop: 0 },
+  salve: { src: 'Idle_Loop', loop: 0, len: 4.3, hold: seq(SALVE) },
+  'salve-genou': { src: 'Idle_Loop', loop: 0, len: 4.3, hold: seq(SALVE_GENOU), legs: ['Fixing_Kneeling', 24] },
+  'feu-libre': { src: 'Idle_Loop', loop: 1, len: 4.4, hold: seq([[0.5, REST], [0.6, AIM], [0.25, FIRE], [0.35, AIM], [2.4, RELOAD], [0.3, REST]]) },
+  tambour: { src: 'Idle_Loop', loop: 1, hold: drum(2.5, 5) }, 'tambour-marche': { src: 'Walk_Formal_Loop', loop: 1, hold: drum(4 / 3, 2) },
 };
 
 const UE = { 'DEF-hips': 'pelvis', 'DEF-spine.003': 'spine_03', 'DEF-head': 'Head', 'DEF-upper_arm.L': 'upperarm_l', 'DEF-forearm.L': 'lowerarm_l',
@@ -172,7 +206,7 @@ for (const [name, { src, loop, len, hold: gesture, legs }] of Object.entries(CLI
   const kneel = legs && source(legs[0]).at(legs[1] / FPS);
   clips[name] = { row: rows.length, n, loop };
   for (let k = 0; k < n; k++) {
-    const t = Math.min(k / FPS, dur), M = S.at(loop ? t % S.dur : Math.min(t, S.dur));
+    const t = Math.min(k / FPS, dur), M = S.at(loop || gesture ? t % S.dur : Math.min(t, S.dur));
     if (kneel) {
       // le haut du corps descend avec les hanches ; les jambes sont celles de l'autre animation
       const d = HIP.clone().applyMatrix4(kneel.hips).sub(HIP.clone().applyMatrix4(M.hips)), T = new Matrix4().makeTranslation(d.x, d.y, d.z);

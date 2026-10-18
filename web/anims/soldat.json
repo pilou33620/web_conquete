@@ -18,7 +18,7 @@
   "carryUpper",
   "carryFore"
  ],
- "rows": 761,
+ "rows": 1167,
  "clips": {
   "repos": {
    "row": 0,
@@ -114,6 +114,31 @@
    "row": 688,
    "n": 73,
    "loop": 0
+  },
+  "salve": {
+   "row": 761,
+   "n": 104,
+   "loop": 0
+  },
+  "salve-genou": {
+   "row": 865,
+   "n": 104,
+   "loop": 0
+  },
+  "feu-libre": {
+   "row": 969,
+   "n": 106,
+   "loop": 1
+  },
+  "tambour": {
+   "row": 1075,
+   "n": 60,
+   "loop": 1
+  },
+  "tambour-marche": {
+   "row": 1135,
+   "n": 32,
+   "loop": 1
   }
  }
 }

@@ -383,7 +383,12 @@ General sur un régiment qui tire.
   - Fichiers : `web/js/battle/troupes.js`, `tests/modeles.test.mjs`
   - Taille : M
 
-- [ ] **T31 : feu et recharge, officiers, tambours, drapeau**
+- [x] **T31 : feu et recharge, officiers, tambours, drapeau**
+  - Fait : gestes en plusieurs temps précalculés (« salve », « salve-genou », « feu-libre », « tambour »,
+    « tambour-marche ») ; `pick()` choisit le geste de chaque homme (rang, place le long du front, salve qui roule,
+    premier rang à genoux en ligne à l'arrêt, troisième rang sans tirer, officier en garde) selon l'instant ; une salve
+    tirée depuis le repos se joue aussi (la maquette tire sans passer à l'état « feu ») ; gestes réécrits à chaque
+    salve et à sa fin. 24 animations, 438 Ko.
   - Critères :
     - `cuire.mjs` précalcule :
       - « salve » et « salve à genoux » (en joue, feu, recharge, épaulé), qui s'enchaînent d'elles-mêmes ;
