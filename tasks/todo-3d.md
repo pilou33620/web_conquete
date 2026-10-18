@@ -441,8 +441,13 @@ General sur un régiment qui tire.
   - Fichiers : `web/js/battle/dev/cuire.mjs`, `web/anims/soldat.*`, `web/js/battle/troupes.js`, `web/js/battle/gestes.js`
   - Taille : M
 
-- [ ] **Point de contrôle 7a** : bancs, cinq scénarios sans erreur, galerie (captures et vidéos), commit. Tu mesures
-  les images par seconde sur l'iPad en Haute (objectif ≥ 30) ; on règle le fondu et la version de loin si besoin.
+- [x] **Point de contrôle 7a** (18/10/2026) : bancs (« Tout passe. ») ; cinq scénarios ouverts sans erreur ; galerie
+  du réseau local (`captures-3d/animations/etape7a/`). Triangles et appels de dessin (bocage, `avance=300`, Haute,
+  1400×800, caméra sur le centre de nos troupes) : ensemble 5,00 M / 188 ; mi-distance 4,60 M / 142 ; au ras
+  5,22 M / 137. C'est sous le départ de l'étape 6 (5,65 / 6,63 / 6,04 M), au-dessus de l'après-T23 (4,25 / 3,06 /
+  4,79 M) ; les appels augmentent avec les versions au squelette.
+  - **En attente de toi** : images par seconde sur l'iPad en Haute (objectif ≥ 30). Si elles manquent, réglage
+    `fondu` en Basse et version de loin plus légère.
 
 ### 7b : tués
 

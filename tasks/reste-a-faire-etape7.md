@@ -22,7 +22,10 @@ Mode choisi par toi : `/build auto` sur tout le plan, avec une revue complète (
 | Prototype, page d'essai `dev/anims.html` (v1 et v2, validée) | `cf95d28`, `3ef8e13` |
 | Spec de l'étape 7, plan, ajout de l'herbe (T46) | `4606c39`, `f5c9ba1`, `4f2b020` |
 | T29 : fantassins de près au squelette dans les vraies batailles | `d861bcf` |
-| T30 : version de loin au squelette, étoffe sur la hampe, ombre au sol qui suit les hanches, lumière enveloppante, ombre vers les pieds | commit « T30 », juste après ce point |
+| T30 : version de loin au squelette, étoffe sur la hampe, ombre au sol qui suit les hanches, lumière enveloppante, ombre vers les pieds | `670feae` |
+| T31 : salve qui roule, premier rang à genoux, tirailleurs, tambours, officiers en garde | `24a696e` |
+| T32 : chaque homme différent (place, sens, taille, teinte, rythme, délai), fondus entre les gestes | `029c6a5` |
+| T33 : servants des pièces au squelette (refouler, porter, pointer, boutefeu) | `db1dd47` |
 
 T30 : captures de près et à mi-distance regardées, sans erreur. Seuls les triangles des vues types n'ont pas été
 relevés : à faire au point de contrôle 7a.
@@ -31,10 +34,7 @@ relevés : à faire au point de contrôle 7a.
 
 | Tâche | Sous-étape | En deux mots |
 |---|---|---|
-| T31 | 7a | salve qui roule file par file (`un._volley`), premier rang à genoux, « feu libre » des tirailleurs, tambour qui bat, officier en garde |
-| T32 | 7a | variété par homme (place, sens, taille, teinte, rythme, horaires) et fondus écrits dans `aMix` |
-| T33 | 7a | servants des pièces au squelette (écouvillon, boulet, pointeur, boutefeu), réglés sur `_shots` |
-| Point 7a | | bancs, cinq scénarios, galerie ; **tu mesures les images par seconde sur l'iPad** |
+| Point 7a | | fait le 18/10/2026, sauf **ta mesure des images par seconde sur l'iPad** (voir `todo-3d.md`) |
 | T34 | 7b | les hommes tombent ; corps en 3D au sol (anneau plafonné par qualité), au-delà, taches peintes |
 | T35 | 7b | boulet qui couche une file (événement `canon`, `x2`/`y2`), chevaux morts |
 | T36 | 7c | hommes qui courent à leur place (`matchSlots`, attribut `aMove`) |

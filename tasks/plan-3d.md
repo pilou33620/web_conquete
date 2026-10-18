@@ -257,7 +257,7 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 - [x] T31 : feu et recharge (salve qui roule, à genoux, tirailleurs), officiers, tambours, drapeau
 - [x] T32 : variété par homme et fondus
 - [x] T33 : servants des pièces au squelette
-- [ ] Point de contrôle 7a (bancs, cinq scénarios, galerie, images/s sur l'iPad)
+- [x] Point de contrôle 7a (bancs, cinq scénarios, galerie ; images/s sur l'iPad : en attente de toi)
 
 ### 7b : tués
 - [ ] T34 : les hommes tombent, corps en 3D au sol (anneau plafonné)
