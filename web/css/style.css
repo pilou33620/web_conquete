@@ -331,6 +331,9 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 #start { position: absolute; inset: 0; z-index: 45; display: grid; grid-template-columns: minmax(320px, 470px) 1fr; pointer-events: none; }
 .start-side { pointer-events: auto; background: linear-gradient(90deg, rgba(12,24,40,.97), rgba(19,35,58,.93)); border-right: 1px solid var(--laiton);
   padding: calc(26px + var(--safe-t)) 26px calc(22px + var(--safe-b)); overflow-y: auto; touch-action: pan-y; display: flex; flex-direction: column; gap: 14px; }
+/* (le panneau défile quand il est plus haut que l'écran : sans ceci, ses rangées de boutons à overflow caché, onglets
+   Campagne / Bataille compris, s'écrasaient à 2 px) */
+.start-side > * { flex-shrink: 0; }
 .cartouche { text-align: left; border-bottom: 1px solid var(--hair); padding-bottom: 14px; }
 .cartouche h1 { font-family: var(--f-titre); font-weight: normal; font-size: 54px; line-height: .95; margin: 0; letter-spacing: .5px; }
 .cartouche h1 em { font-style: italic; color: var(--laiton-clair); }
