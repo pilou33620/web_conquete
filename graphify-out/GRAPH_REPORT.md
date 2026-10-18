@@ -1,22 +1,23 @@
 # Graph Report - web_conquete  (2026-10-18)
 
 ## Corpus Check
-- 76 files · ~303,393 words
+- 78 files · ~310,164 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 8 file(s) not represented in the graph (top: (none) 2, .bat 2, .css 2)
 
 ## Summary
-- 2568 nodes · 6182 edges · 126 communities (87 shown, 39 thin omitted)
-- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 197 edges (avg confidence: 0.88)
+- 2650 nodes · 6361 edges · 122 communities (82 shown, 40 thin omitted)
+- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 228 edges (avg confidence: 0.89)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `08782e52`
+- Built from commit: `df847f25`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - esc
+- AI
 - troupes.js
 - Controls
 - turns.py
@@ -41,7 +42,7 @@
 - vue.js
 - fabrique.py
 - Relief
-- ui.js
+- qualite.js
 - _think_field
 - _d2
 - terrain.py
@@ -50,7 +51,7 @@
 - skirmish.py
 - .grow_population
 - _bayonets
-- Tutoriel de campagne en 15 bulles qui attendent l'action
+- interface.test.mjs
 - test_serveur.py
 - cities.py
 - diplomacy.py
@@ -59,14 +60,14 @@
 - terrain.js
 - formes.js
 - GeoMap
-- UnitArt
+- unites.js
 - bilan.py
 - TownArt
 - capture.mjs
-- ai_step
+- place
 - cuire.mjs
 - _note
-- interface.test.mjs
+- ArriveeDevantUneVille
 - closed_to
 - battle_log.py
 - modeles.test.mjs
@@ -76,31 +77,31 @@
 - bfx
 - slots
 - Http
-- App
-- place
+- ui.js
+- Décisions d'architecture
 - land_tick
-- month_end
+- engine.py
 - README web_conquete (Conquête : Aquitaine 1700-1899)
-- .action
+- UI
 - Spec : tour par tour à la Total War (tour des IA d'un coup, villes prises pendant le tour, le temps en tours)
 - _decide_withdraw
 - fanions.js
-- UI
 - Liste des tâches (étape 7)
-- contribution
-- engine.py
+- choose
+- jouer_mois
+- geo.py
 - check
 - fire
 - node_view
-- main.js
-- Tuto
+- Tâches : batailles en 3D (SPEC-3D.md, plan : tasks/plan.md)
 - ai_policies
 - canvas
-- AI
-- game/ai.py
+- .constructor
+- test_campagne.py
 - views.py
-- migrate
-- .armyById
+- Visites
+- au
+- .armyPanel
 - icon-180.png (app icon, 180px)
 - lancer.sh
 - Événements historiques à choix (une trentaine, 1701-1898)
@@ -108,48 +109,44 @@
 - Saisons et météo (trois zones)
 - Terrain, marche à travers champs et embuscades
 - Unités, intendance et prisonniers
-- Sauvegardes
+- EcheancesEnTours
 - college_k
 - events.py
 - .enter
-- .constructor
-- settle
+- Bancs d'essai (tests/lancer.py, fabrique.py)
+- .test_un_evenement_n_efface_pas_une_dette
 - waterways.py
-- .rebuild
-- Unit
+- Liste des tâches (étape 6)
+- BattleMap
 - Troops
-- works_level
-- Service systemd web_conquete sur Raspberry Pi (iPad comme écran)
-- unites.js
-- Étape 7 : où on en est et ce qui reste (point du 18/10/2026)
+- .clampCam
 - suivre.js
-- footprint
 - .cropMask
 - Décision 9 : ombres de contact instanciées sous chaque figurine
 
 ## God Nodes (most connected - your core abstractions)
-1. `Game` - 191 edges
+1. `Game` - 192 edges
 2. `TacticalBattle` - 113 edges
 3. `clamp()` - 104 edges
-4. `UI` - 95 edges
+4. `UI` - 96 edges
 5. `MapView` - 77 edges
 6. `AI` - 54 edges
-7. `esc()` - 49 edges
-8. `BattleUI` - 46 edges
-9. `partie()` - 44 edges
+7. `esc()` - 50 edges
+8. `partie()` - 46 edges
+9. `BattleUI` - 46 edges
 10. `BattleView` - 41 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `État (18/10/2026)` --references--> `ArriveeDevantUneVille`  [INFERRED]
+  SPEC-TOURS.md → tests/test_campagne.py
 - `Étape 2 : les troupes` --references--> `layout()`  [INFERRED]
   tasks/todo-3d.md → web/js/battle/troupes.js
-- `Arbres en touffes arrondies, bois au toit bosselé` --conceptually_related_to--> `crownGeo()`  [INFERRED]
-  SPEC-3D.md → web/js/battle/decor.js
-- `7d : mêlée et charges` --references--> `foeOf()`  [INFERRED]
-  tasks/todo-3d.md → web/js/battle/gestes.js
-- `7e : vue de loin` --references--> `scaleAt()`  [INFERRED]
-  tasks/todo-3d.md → web/js/battle/gestes.js
-- `Décisions d'architecture` --references--> `layout()`  [INFERRED]
-  tasks/plan-3d.md → web/js/battle/troupes.js
+- `Phase 2 : l'écran` --references--> `arrive()`  [INFERRED]
+  tasks/todo-arrivee.md → game/army_actions.py
+- `Décisions d'architecture` --references--> `negotiate()`  [INFERRED]
+  tasks/plan-arrivee.md → game/army_actions.py
+- `Décisions d'architecture` --references--> `contribution()`  [INFERRED]
+  tasks/plan-arrivee.md → game/army_actions.py
 
 ## Import Cycles
 - None detected.
@@ -161,23 +158,19 @@
 - **Pages de développement du mode Bataille** — web_js_battle_dev_banc_banc, web_js_battle_dev_banc_bataille [INFERRED 0.75]
 - **Tutoriel interactif de campagne** — spec_interactive_tutorial, spec_tutorial_steps_as_data, spec_tutorial_per_device, web_index_tuto_bubble, web_js_tuto, web_js_ui [INFERRED 0.85]
 
-## Communities (126 total, 39 thin omitted)
+## Communities (122 total, 40 thin omitted)
 
 ### Community 0 - "esc"
-Cohesion: 0.18
-Nodes (6): esc(), coat(), partTour(), toursTxt(), fmt(), fmt1()
+Cohesion: 0.15
+Nodes (5): esc(), partTour(), toursTxt(), fmt(), fmt1()
 
 ### Community 2 - "troupes.js"
-Cohesion: 0.12
-Nodes (40): Soldats arrondis construits par le code (sans glTF), tricorne relevé, Troupes en InstancedMesh animées dans le vertex shader (texture de données), Décision 7 : modèles arrondis par le code (LatheGeometry, CapsuleGeometry, mêmes os), T19 : fantassins arrondis et taille (×1,6 gardé), T20 : chevaux, cavaliers, canons, caissons arrondis, T6 : fantassins 3D, T7 : cavaliers, chevaux, état-major, T8 : batteries, servants, caissons, chariots (+32 more)
+Cohesion: 0.11
+Nodes (41): Soldats arrondis construits par le code (sans glTF), tricorne relevé, Troupes en InstancedMesh animées dans le vertex shader (texture de données), Décision 7 : modèles arrondis par le code (LatheGeometry, CapsuleGeometry, mêmes os), T19 : fantassins arrondis et taille (×1,6 gardé), T20 : chevaux, cavaliers, canons, caissons arrondis, T6 : fantassins 3D, T7 : cavaliers, chevaux, état-major, T8 : batteries, servants, caissons, chariots (+33 more)
 
 ### Community 4 - "turns.py"
-Cohesion: 0.10
-Nodes (17): _accumulate(), advance(), begin_turn(), _candidates(), command(), finish(), go(), _item() (+9 more)
-
-### Community 5 - "BattleView"
-Cohesion: 0.12
-Nodes (4): Décisions d'architecture, Pièges rencontrés, profil(), BattleView
+Cohesion: 0.05
+Nodes (35): _accumulate(), advance(), begin_turn(), _candidates(), command(), deadline(), eta(), finish() (+27 more)
 
 ### Community 6 - "bridge.py"
 Cohesion: 0.05
@@ -185,39 +178,43 @@ Nodes (30): army_locked(), army_tick(), _att_angle(), auto_battle_tick(), battle
 
 ### Community 7 - "MapView"
 Cohesion: 0.10
-Nodes (3): fmtMen(), MapView, roundRect()
+Nodes (3): b64(), MapView, roundRect()
 
 ### Community 10 - "BattleUI"
-Cohesion: 0.12
-Nodes (4): fmt(), stars(), BattleUI, speedSvg()
+Cohesion: 0.10
+Nodes (6): fmt(), BattleUI, hourOf(), short(), speedSvg(), svg()
 
 ### Community 14 - "server.py"
 Cohesion: 0.08
 Nodes (14): auto_update(), version(), banner(), _git(), _git_env(), GzipCache, is_headless(), is_raspberry() (+6 more)
 
+### Community 15 - "Ambient"
+Cohesion: 0.14
+Nodes (5): along(), Ambient, frac(), polyline(), T
+
 ### Community 17 - "map.js"
-Cohesion: 0.11
-Nodes (18): Commandes souris, doigt et stylet, CLS_ORDER, darken(), LEVELS, lighten(), mix(), PARTS, PLAYABLE (+10 more)
+Cohesion: 0.10
+Nodes (20): Commandes souris, doigt et stylet, Interface web (HTML/CSS/JS, rendu canvas de la carte), CLS_ORDER, darken(), fmtMen(), LEVELS, lighten(), mix() (+12 more)
 
 ### Community 18 - "Terrain"
-Cohesion: 0.13
-Nodes (6): Décisions d'architecture, mixHex(), rgbStr(), offsetPts(), strokePts(), Terrain
+Cohesion: 0.10
+Nodes (6): Décisions d'architecture, vnoise(), chaikin(), offsetPts(), strokePts(), Terrain
 
 ### Community 19 - "math"
 Cohesion: 0.11
 Nodes (19): _at(), _best_depth(), _cover_spot(), _deploy_field(), _deploy_place_att(), _deploy_place_def(), _flank_fire_spot(), _gun_spot() (+11 more)
 
 ### Community 23 - "army_actions.py"
-Cohesion: 0.11
-Nodes (11): cell_mask(), closed_msg(), extra_food(), force_passage(), force_question(), migrate(), names_of(), route_level() (+3 more)
+Cohesion: 0.08
+Nodes (18): blockade_tick(), bombard(), breach(), cell_mask(), closed_msg(), defenders(), extra_food(), force_passage() (+10 more)
 
 ### Community 24 - "units.py"
-Cohesion: 0.21
-Nodes (6): ammo0_of(), cls_of(), from_reg(), general(), ranges(), unit_name()
+Cohesion: 0.10
+Nodes (11): ammo0_of(), cls_of(), footprint(), from_reg(), general(), milice(), pieces(), ranges() (+3 more)
 
 ### Community 25 - "partie"
-Cohesion: 0.06
-Nodes (15): armee(), jouer_mois(), partie(), ActionsEnTours, au(), EcheancesEnTours, jouer_reste(), Production (+7 more)
+Cohesion: 0.15
+Nodes (5): armee(), partie(), ActionsEnTours, jouer_reste(), TourParTour
 
 ### Community 26 - "decor.js"
 Cohesion: 0.10
@@ -228,20 +225,20 @@ Cohesion: 0.08
 Nodes (26): battles, get(), here, JEU, json(), proxy(), server, TYPES (+18 more)
 
 ### Community 28 - "vue.js"
-Cohesion: 0.12
-Nodes (27): Vue de bataille 3D web/js/battle (Three.js), Repère : x→X, y (sud)→Z, altitude→Y, 1 m = 1 unité, toWorld par marche de rayon sur l'altitude, Fumées en quads instanciés face à la caméra, Deux canevas : WebGL dessous, calque 2D dessus (fanions, gestes, tracés, pluie), T10 : fumées, éclairs, boulets, éclats, poussière, T15 : ombres portées, T2 : caméra orbitale et ses bancs (+19 more)
+Cohesion: 0.17
+Nodes (21): L'entrée : champ de bataille en 3D (sol peint, blé en relief, figurines, fanions), Vue de bataille 3D web/js/battle (Three.js), Repère : x→X, y (sud)→Z, altitude→Y, 1 m = 1 unité, toWorld par marche de rayon sur l'altitude, T2 : caméra orbitale et ses bancs, T4 : gestes, tracés au sol, mini-carte, cams, vp (+13 more)
 
 ### Community 29 - "fabrique.py"
-Cohesion: 0.13
-Nodes (9): Bancs d'essai (tests/lancer.py, fabrique.py), avancer(), bataille(), ennemi(), face_a_face(), kind(), ordre(), BatailleEntiere (+1 more)
+Cohesion: 0.14
+Nodes (8): avancer(), bataille(), ennemi(), face_a_face(), kind(), ordre(), BatailleEntiere, OrdresParArme
 
 ### Community 30 - "Relief"
 Cohesion: 0.12
 Nodes (5): cloudTexture(), Decals, Relief, ticks(), paintDecal()
 
-### Community 31 - "ui.js"
-Cohesion: 0.08
-Nodes (27): Résolution automatique des batailles, Objectif ≥ 30 images/s sur iPad 2019 en qualité Haute, T16 : qualité, mesure, sans WebGL 2, appareil(), devine(), ecoutes, lire(), Mesure (+19 more)
+### Community 31 - "qualite.js"
+Cohesion: 0.12
+Nodes (14): Résolution automatique des batailles, Objectif ≥ 30 images/s sur iPad 2019 en qualité Haute, T16 : qualité, mesure, sans WebGL 2, appareil(), devine(), ecoutes, lire(), onQualite() (+6 more)
 
 ### Community 32 - "_think_field"
 Cohesion: 0.12
@@ -252,44 +249,40 @@ Cohesion: 0.13
 Nodes (15): _apply(), _art_target(), _artillery(), _cav_near(), _d2(), _fetch(), _form(), _goto() (+7 more)
 
 ### Community 34 - "terrain.py"
-Cohesion: 0.06
-Nodes (32): ball_k(), grape_k(), _add_bridge(), _barricades(), BattleMap, bfs(), blur(), cell_of() (+24 more)
+Cohesion: 0.09
+Nodes (27): _add_bridge(), _barricades(), bfs(), blur(), cell_of(), center_of(), _clip_poly(), _densify() (+19 more)
 
 ### Community 35 - "Effects"
-Cohesion: 0.11
-Nodes (12): Lumière douce : courbe filmique, ombres teintées, ombres de contact, Décision 10 : NeutralToneMapping, ombres PCF douces, ciel plus fort, sans post-traitement, Tâches : batailles en 3D (SPEC-3D.md, plan : tasks/plan.md), Étape 1 : la bataille se joue en 3D (régiments en blocs), Étape 2 : les troupes, Étape 3 : le feu et l'atmosphère, Étape 4 : le décor, Étape 5 : finitions (+4 more)
+Cohesion: 0.17
+Nodes (5): Lumière douce : courbe filmique, ombres teintées, ombres de contact, Décision 10 : NeutralToneMapping, ombres PCF douces, ciel plus fort, sans post-traitement, T22 : courbe filmique, soleil, ciel, ombres douces, Effects, mix3()
 
 ### Community 36 - "tactics/ai.py"
 Cohesion: 0.16
 Nodes (15): _adopt(), _adopt_unit(), _announced(), _cat(), _choose_plan(), _counter_charge(), deploy(), _groups() (+7 more)
 
 ### Community 37 - "skirmish.py"
-Cohesion: 0.15
+Cohesion: 0.14
 Nodes (12): _count(), _foe_units(), _fort(), _local(), new(), _open_ground(), options(), _pick_season() (+4 more)
 
 ### Community 39 - "_bayonets"
 Cohesion: 0.11
 Nodes (13): _ang(), _bayonets(), _cav_target(), _cavalry(), _charge_ok(), _foe(), _gun_front(), _gun_zones() (+5 more)
 
-### Community 40 - "Tutoriel de campagne en 15 bulles qui attendent l'action"
-Cohesion: 0.15
-Nodes (14): Mode Bataille sans campagne (skirmish.py), Brouillard de guerre et espions, Récapitulatif du mois, Temps réel avec pause (réglage avancé), Spec : tutoriel interactif (campagne et bataille), Bulles de bataille déclenchées par la situation (une fois chacune), Tutoriel de campagne en 15 bulles qui attendent l'action, Barre supérieure (date, vitesse, tour, ressources, menu) (+6 more)
-
-### Community 41 - "test_serveur.py"
-Cohesion: 0.11
-Nodes (3): hote_permis(), Visites, Connexions
+### Community 40 - "interface.test.mjs"
+Cohesion: 0.05
+Nodes (36): installer.sh script, Sauvegarde automatique au début de chaque mois (saves/), Brouillard de guerre et espions, Récapitulatif du mois, Service systemd web_conquete sur Raspberry Pi (iPad comme écran), Temps réel avec pause (réglage avancé), Tutoriel à bulles (premiers pas, armes en bataille), Spec : tutoriel interactif (campagne et bataille) (+28 more)
 
 ### Community 42 - "cities.py"
-Cohesion: 0.11
-Nodes (9): _fill(), _hilly(), local_ok(), prestige(), _river(), _troops(), upkeep(), _w_crue() (+1 more)
+Cohesion: 0.10
+Nodes (13): _fill(), _hilly(), local_ok(), prestige(), _river(), _troops(), upkeep(), _w_crue() (+5 more)
 
 ### Community 43 - "diplomacy.py"
 Cohesion: 0.19
 Nodes (13): act(), ai_evaluate(), answer(), apply(), declare_war(), exchange_prisoners(), held(), lost_nodes() (+5 more)
 
 ### Community 45 - "rules.py"
-Cohesion: 0.09
-Nodes (13): de(), nb(), num(), pl(), pop_curve(), _rural(), _town(), Journal des batailles logs/batailles.jsonl et outils/bilan.py (+5 more)
+Cohesion: 0.11
+Nodes (9): de(), nb(), num(), pl(), pop_curve(), _rural(), _town(), Généraux, formations et plans de bataille (3 phases) (+1 more)
 
 ### Community 46 - "textures.js"
 Cohesion: 0.26
@@ -297,31 +290,35 @@ Nodes (20): Couleurs du sol : blé or doux, teintes par parcelle, herbe variée,
 
 ### Community 47 - "terrain.js"
 Cohesion: 0.14
-Nodes (16): Sol peint par terrain.js posé sur le relief 3D, Chemins larges et usés (ornières, herbe au milieu), Tuiles de texture du sol selon la distance à la caméra, Lumière Lambert, soleil selon l'heure, onBeforeCompile du sol, T11 : lumière, ciel, brume, météo, T25 : chemins larges et usés, T5 : tuiles de texture du sol, décalcomanies, brèches, couverts, cellRemap() (+8 more)
+Nodes (17): Sol peint par terrain.js posé sur le relief 3D, Chemins larges et usés (ornières, herbe au milieu), Tuiles de texture du sol selon la distance à la caméra, Lumière Lambert, soleil selon l'heure, onBeforeCompile du sol, Deux canevas : WebGL dessous, calque 2D dessus (fanions, gestes, tracés, pluie), T11 : lumière, ciel, brume, météo, T25 : chemins larges et usés, T3 : vue WebGL, relief, régiments en blocs, calque 2D (+9 more)
 
 ### Community 48 - "formes.js"
-Cohesion: 0.12
-Nodes (32): ACTIONS, actionsOf(), aide, arme(), armeOf(), FIRE_MODES, ORDER_LABEL, ordresHtml() (+24 more)
+Cohesion: 0.13
+Nodes (31): ACTIONS, actionsOf(), aide, arme(), armeOf(), FIRE_MODES, ORDER_LABEL, ordresHtml() (+23 more)
 
-### Community 51 - "UnitArt"
-Cohesion: 0.25
-Nodes (5): dark(), headgear(), lite(), pen(), UnitArt
+### Community 50 - "GeoMap"
+Cohesion: 0.06
+Nodes (3): GeoMap, App, Handler
+
+### Community 51 - "unites.js"
+Cohesion: 0.20
+Nodes (8): OMBRE, TILT, dark(), headgear(), HORSES, lite(), pen(), UnitArt
 
 ### Community 52 - "bilan.py"
-Cohesion: 0.28
-Nodes (8): load(), main(), mean(), mean100(), num(), pct(), ratio(), table()
+Cohesion: 0.19
+Nodes (12): load(), main(), mean(), mean100(), num(), pct(), ratio(), table() (+4 more)
 
 ### Community 53 - "TownArt"
 Cohesion: 0.21
 Nodes (4): Carte vivante : villes en vue cavalière et animations d'ambiance, shade(), STYLE, TownArt
 
 ### Community 54 - "capture.mjs"
-Cohesion: 0.11
-Nodes (13): Charge graphique : triangles ≤ départ + 10 % (renderer.info), Décision 13 : mesure des triangles (renderer.info) sur trois vues types bocage, T18 : banc des modèles, relevé de charge de départ, argv, chrome, errors, here, js (+5 more)
+Cohesion: 0.10
+Nodes (13): Capture d'écran par Chromium sans écran (dev/capture.mjs), Banc d'essai simulé (dev/maquette.mjs, banc.html, cinq scénarios), Stratégie de test 3D (bancs Node, captures, essai à la main), argv, chrome, errors, here, js (+5 more)
 
-### Community 55 - "ai_step"
-Cohesion: 0.22
-Nodes (11): aa(), ai_step(), cd_left(), command(), garde(), garde_info(), own_place(), quarters() (+3 more)
+### Community 55 - "place"
+Cohesion: 0.13
+Nodes (23): aa(), ai_step(), command(), end_garde(), fortify(), garde(), garde_info(), neg_tick() (+15 more)
 
 ### Community 56 - "cuire.mjs"
 Cohesion: 0.07
@@ -330,10 +327,6 @@ Nodes (46): AIM(), arm(), BAYONET(), BUTT, CLIPS, copy(), DOWN, drum() (+38 more
 ### Community 57 - "_note"
 Cohesion: 0.18
 Nodes (12): _aim_breach(), _breaches(), _foe_est(), _heavy(), _hour(), _note(), _roles_update(), _set_phase() (+4 more)
-
-### Community 58 - "interface.test.mjs"
-Cohesion: 0.17
-Nodes (7): element(), installer(), barre(), campagne(), dom, JS, panneau()
 
 ### Community 59 - "closed_to"
 Cohesion: 0.14
@@ -345,19 +338,15 @@ Nodes (6): campaign_end(), _regs(), skirmish_end(), snapshot(), tactical(), writ
 
 ### Community 62 - "modeles.test.mjs"
 Cohesion: 0.11
-Nodes (14): Capture d'écran par Chromium sans écran (dev/capture.mjs), Version simple de loin (deux modèles par figurine, mêmes animations), Banc d'essai simulé (dev/maquette.mjs, banc.html, cinq scénarios), Stratégie de test 3D (bancs Node, captures, essai à la main), Décision 8 : deux versions par figurine, choix par régiment selon la hauteur à l'écran, T21 : version simple de loin (seuils 18/14 px, régiments hors champ non dessinés), FOOT, HORSE (+6 more)
+Nodes (14): Version simple de loin (deux modèles par figurine, mêmes animations), Charge graphique : triangles ≤ départ + 10 % (renderer.info), Décision 13 : mesure des triangles (renderer.info) sur trois vues types bocage, Décision 8 : deux versions par figurine, choix par régiment selon la hauteur à l'écran, T18 : banc des modèles, relevé de charge de départ, T21 : version simple de loin (seuils 18/14 px, régiments hors champ non dessinés), FOOT, HORSE (+6 more)
 
 ### Community 63 - "gestes.js"
-Cohesion: 0.09
-Nodes (37): 7a : figurines animées, 7b : tués, 7c : places et bâtiments, 7d : mêlée et charges, 7e : vue de loin, 7f : scène, Étape 7 : animer les batailles et se rapprocher d'Ultimate General (SPEC-3D.md « Étape 7 », plan : décisions 14 à 22), homme() (+29 more)
-
-### Community 64 - "clamp"
-Cohesion: 0.24
-Nodes (4): along(), polyline(), T, clamp()
+Cohesion: 0.11
+Nodes (33): 7a : figurines animées, 7b : tués, 7c : places et bâtiments, 7e : vue de loin, homme(), ligne, meta, servant() (+25 more)
 
 ### Community 65 - "options"
-Cohesion: 0.19
-Nodes (12): clamp(), ctb_info(), end_garde(), force_ratio(), fortify_info(), neg_info(), negotiate(), node_aa() (+4 more)
+Cohesion: 0.18
+Nodes (11): ai_siege(), blockade(), cd_left(), clamp(), contribution(), ctb_info(), force_ratio(), foreign_place() (+3 more)
 
 ### Community 66 - "bfx"
 Cohesion: 0.24
@@ -367,25 +356,29 @@ Nodes (9): _add(), bfx(), growth_k(), node_extra(), pfx(), stab_bonus(), train_k
 Cohesion: 0.21
 Nodes (8): demolish(), finish(), level_name(), migrate(), _milice(), slot_build(), slots(), sync()
 
-### Community 70 - "place"
-Cohesion: 0.23
-Nodes (10): arrive(), fortify(), neg_tick(), passage_tick(), place(), quarters_tick(), tick(), wear_tick() (+2 more)
+### Community 69 - "ui.js"
+Cohesion: 0.13
+Nodes (15): coat(), ICON, speedIcon(), ACTION_LABEL, BRANCH_LABEL, fmt2(), hab(), minus() (+7 more)
+
+### Community 70 - "Décisions d'architecture"
+Cohesion: 0.13
+Nodes (13): arrive(), asks(), Décisions d'architecture, Graphe des dépendances, Liste des tâches, Phase 1 : le moteur, Phase 2 : l'écran, Plan : choisir à l'arrivée devant une ville (SPEC-TOURS.md, « Évolution du 18/10/2026 ») (+5 more)
 
 ### Community 71 - "land_tick"
 Cohesion: 0.17
 Nodes (6): crossed(), incident(), land_owner(), land_tick(), trespassed(), way_out()
 
-### Community 72 - "month_end"
-Cohesion: 0.14
-Nodes (9): eta(), march_days(), month_days(), month_end(), phase(), preview(), ready_in(), view() (+1 more)
+### Community 72 - "engine.py"
+Cohesion: 0.12
+Nodes (8): ordinal(), ball_k(), grape_k(), Mode Bataille sans campagne (skirmish.py), Finir automatiquement (IA des officiers en accéléré), Batailles manuelles en temps réel avec pause (game/tactics), Impôts, ordre public et révoltes, Écran d'accueil #start et chargement
 
 ### Community 73 - "README web_conquete (Conquête : Aquitaine 1700-1899)"
-Cohesion: 0.16
-Nodes (17): README web_conquete (Conquête : Aquitaine 1700-1899), Cinq départements / provinces d'Aquitaine, Économie : ressources, minimum garanti, spécialités, INSEE via @etalab/decoupage-administratif, france-geojson (IGN, Licence Ouverte), Natural Earth (fleuves et lacs), Population historique sur deux siècles, Serveur Python local (server.py, boucle de simulation 10 pas/s) (+9 more)
+Cohesion: 0.10
+Nodes (25): README web_conquete (Conquête : Aquitaine 1700-1899), Technologies datées et armement par époque (réarmement), Cinq départements / provinces d'Aquitaine, Économie : ressources, minimum garanti, spécialités, Époques et départs 1700/1790/1813/1870, INSEE via @etalab/decoupage-administratif, france-geojson (IGN, Licence Ouverte), Natural Earth (fleuves et lacs) (+17 more)
 
 ### Community 75 - "Spec : tour par tour à la Total War (tour des IA d'un coup, villes prises pendant le tour, le temps en tours)"
-Cohesion: 0.15
-Nodes (12): Boundaries, Code Style, Commandes, Critères de réussite, Décisions prises, Le temps en tours, Objectif, Questions ouvertes (+4 more)
+Cohesion: 0.09
+Nodes (21): Boundaries, Code Style, Commandes, Critères de réussite, Critères de réussite, Décisions prises, Décisions (validées le 18/10/2026), Fichiers touchés (+13 more)
 
 ### Community 76 - "_decide_withdraw"
 Cohesion: 0.20
@@ -393,59 +386,63 @@ Nodes (5): _body(), _decide_withdraw(), _history(), _stalled(), _tenacity()
 
 ### Community 77 - "fanions.js"
 Cohesion: 0.29
-Nodes (11): L'entrée : champ de bataille en 3D (sol peint, blé en relief, figurines, fanions), Style Ultimate General : American Revolution (référence visuelle), T9 : fanions façon Ultimate General, LIFT(), banner(), drawBanners(), lite(), medallion() (+3 more)
+Nodes (10): LIFT(), banner(), drawBanners(), lite(), medallion(), men(), picto(), genName() (+2 more)
 
 ### Community 79 - "Liste des tâches (étape 7)"
 Cohesion: 0.09
 Nodes (22): 7a : figurines animées, 7b : tués, 7c : places et bâtiments, 7d : mêlée et charges, 7e : vue de loin, 7f : scène, Graphe des dépendances, Graphe des dépendances (+14 more)
 
-### Community 80 - "contribution"
-Cohesion: 0.20
-Nodes (7): ai_siege(), blockade(), blockade_tick(), conquer(), contribution(), defenders(), foreign_place()
+### Community 80 - "choose"
+Cohesion: 0.14
+Nodes (12): ask_alive(), ask_choices(), asking(), choose(), conquer(), pose(), resume(), strong() (+4 more)
 
-### Community 82 - "engine.py"
-Cohesion: 0.09
-Nodes (10): ordinal(), fbm(), _h(), _seg_inter(), vnoise(), Recherche de chemin A* avec terres interdites, Diplomatie et commerce, Cache de carte game/data/map_cache.json (+2 more)
+### Community 81 - "jouer_mois"
+Cohesion: 0.18
+Nodes (3): jouer_mois(), Production, RechercheEtPolitiques
+
+### Community 82 - "geo.py"
+Cohesion: 0.15
+Nodes (8): fbm(), _h(), _seg_inter(), slugify(), vnoise(), Recherche de chemin A* avec terres interdites, Diplomatie et commerce, Cache de carte game/data/map_cache.json
 
 ### Community 83 - "check"
-Cohesion: 0.22
-Nodes (5): ai_build(), _ai_value(), check(), fits(), level_tech()
+Cohesion: 0.20
+Nodes (6): ai_build(), _ai_value(), check(), fits(), level_tech(), slot_count()
 
 ### Community 84 - "fire"
 Cohesion: 0.29
 Nodes (5): apply_local(), fire(), stats(), tick(), tours_of()
 
 ### Community 85 - "node_view"
-Cohesion: 0.21
-Nodes (9): describe_local(), fx_text(), _n(), node_view(), _pct(), per_k(), per_txt(), rules_payload() (+1 more)
+Cohesion: 0.24
+Nodes (8): describe_local(), fx_text(), _n(), node_view(), _pct(), per_k(), per_txt(), rules_payload()
 
-### Community 88 - "main.js"
-Cohesion: 0.42
-Nodes (9): Interface web (HTML/CSS/JS, rendu canvas de la carte), announceUpdate(), api, boot(), checkVersion(), poll(), resetUI(), showStart() (+1 more)
-
-### Community 89 - "Tuto"
-Cohesion: 0.23
-Nodes (5): Tutoriel à bulles (premiers pas, armes en bataille), Étapes du tutoriel en données (ETAPES, comme tipStep), etapes(), placer(), Tuto
+### Community 89 - "Tâches : batailles en 3D (SPEC-3D.md, plan : tasks/plan.md)"
+Cohesion: 0.17
+Nodes (11): 7d : mêlée et charges, 7f : scène, Tâches : batailles en 3D (SPEC-3D.md, plan : tasks/plan.md), Étape 1 : la bataille se joue en 3D (régiments en blocs), Étape 2 : les troupes, Étape 3 : le feu et l'atmosphère, Étape 4 : le décor, Étape 5 : finitions (+3 more)
 
 ### Community 90 - "ai_policies"
 Cohesion: 0.25
 Nodes (5): ai_policies(), policy_w(), set_policy(), _set_policy(), _trading()
 
 ### Community 91 - "canvas"
-Cohesion: 0.23
-Nodes (6): flashSprite(), glowSprite(), puffSprite(), canvas(), vnoise(), culture()
+Cohesion: 0.46
+Nodes (6): Fumées en quads instanciés face à la caméra, T10 : fumées, éclairs, boulets, éclats, poussière, flashSprite(), glowSprite(), puffSprite(), canvas()
 
-### Community 93 - "game/ai.py"
-Cohesion: 0.33
-Nodes (4): Politique de la ville, Emplacements et chaînes de bâtiments des villes, IA des départements (mêmes règles, ne thésaurisent plus), Événements locaux des villes
+### Community 92 - ".constructor"
+Cohesion: 0.20
+Nodes (4): T15 : ombres portées, Mesure, profil(), loadAnims()
+
+### Community 93 - "test_campagne.py"
+Cohesion: 0.22
+Nodes (3): Sauvegarde, SiegesEnTours, TempsReel
 
 ### Community 95 - "views.py"
 Cohesion: 0.13
 Nodes (12): _effects(), from_dict(), _gen(), _legs(), migrate(), _order(), player_state(), _popy() (+4 more)
 
-### Community 98 - "migrate"
-Cohesion: 0.33
-Nodes (3): migrate(), new_state(), turn_start_after()
+### Community 96 - "Visites"
+Cohesion: 0.22
+Nodes (3): hote_permis(), Visites, Connexions
 
 ### Community 100 - "icon-180.png (app icon, 180px)"
 Cohesion: 1.00
@@ -456,48 +453,28 @@ Cohesion: 0.40
 Nodes (3): college_k(), daily(), research()
 
 ### Community 110 - "events.py"
-Cohesion: 0.21
+Cohesion: 0.23
 Nodes (11): affordable(), apply(), describe(), expire(), _fill(), fire(), _ord(), _pct() (+3 more)
 
 ### Community 111 - ".enter"
 Cohesion: 0.26
 Nodes (5): Bataille, ensureStyle(), hasGL2(), wait(), waitFor()
 
-### Community 113 - "settle"
-Cohesion: 0.20
-Nodes (6): deadline(), march_left(), march_now(), planning(), resolve_autos(), settle()
-
 ### Community 114 - "waterways.py"
 Cohesion: 0.24
 Nodes (7): build(), add(), downstream(), piece(), _cut(), _project(), _seglen()
 
-### Community 115 - ".rebuild"
-Cohesion: 0.20
-Nodes (10): 6a et 6b : figurines, 6c : lumière et couleurs, 6d : sol, 6e : arbres et fin, Décisions d'architecture, Liste des tâches (étape 6), Questions ouvertes (étape 6), Risques et parades (étape 6) (+2 more)
-
-### Community 116 - "Unit"
-Cohesion: 0.20
-Nodes (3): milice(), Unit, wagon()
+### Community 115 - "Liste des tâches (étape 6)"
+Cohesion: 0.22
+Nodes (9): 6a et 6b : figurines, 6c : lumière et couleurs, 6d : sol, 6e : arbres et fin, Décisions d'architecture, Liste des tâches (étape 6), Questions ouvertes (étape 6), Risques et parades (étape 6) (+1 more)
 
 ### Community 117 - "Troops"
-Cohesion: 0.31
-Nodes (3): flagPattern(), Troops, turn()
-
-### Community 118 - "works_level"
 Cohesion: 0.22
-Nodes (6): bombard(), breach(), fort_eff(), siege_k(), walled(), works_level()
+Nodes (5): flagPattern(), pushOf(), seedOf(), Troops, turn()
 
-### Community 119 - "Service systemd web_conquete sur Raspberry Pi (iPad comme écran)"
-Cohesion: 0.29
-Nodes (4): installer.sh script, Sauvegarde automatique au début de chaque mois (saves/), Service systemd web_conquete sur Raspberry Pi (iPad comme écran), Méta d'application web iOS/Android et manifest (plein écran)
-
-### Community 120 - "unites.js"
-Cohesion: 0.33
-Nodes (6): Étape 6 : se rapprocher du rendu d'Ultimate General, Figurines 2D des cartes d'unités gardées (icônes d'interface), T17 : nettoyage du code 2D, README, captures des cartes, OMBRE, TILT, HORSES
-
-### Community 121 - "Étape 7 : où on en est et ce qui reste (point du 18/10/2026)"
-Cohesion: 0.29
-Nodes (6): Comment c'est fait (décisions 14 à 22 du plan, en bref), Décisions qui t'attendent, Où on en est (18/10/2026), Points de la revue laissés de côté (et pourquoi), Reprendre, Étape 7 : où on en est et ce qui reste (point du 18/10/2026)
+### Community 121 - ".clampCam"
+Cohesion: 0.20
+Nodes (7): Comment c'est fait (décisions 14 à 22 du plan, en bref), Décisions qui t'attendent, Où on en est (18/10/2026), Pièges rencontrés, Points de la revue laissés de côté (et pourquoi), Reprendre, Étape 7 : où on en est et ce qui reste (point du 18/10/2026)
 
 ### Community 122 - "suivre.js"
 Cohesion: 0.29
@@ -517,24 +494,24 @@ Nodes (3): Décision 9 : ombres de contact instanciées sous chaque figurine, T2
 
 ## Knowledge Gaps
 - **16 isolated node(s):** `Événements historiques à choix (une trentaine, 1701-1898)`, `Classe Bataille (bataille.js)`, `Banc d'essai de la bataille (banc.html)`, `Saisons et météo (trois zones)`, `Terrain, marche à travers champs et embuscades` (+11 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 728 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **39 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 754 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **40 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Game` connect `Game` to `skirmish.py`, `.grow_population`, `App`, `.plan_legs`, `test_serveur.py`, `.log`, `Sauvegardes`, `.arrive_node`, `server.py`, `.mod`, `.arm_level`, `engine.py`, `.update_battles`, `partie`, `AI`, `fabrique.py`, `views.py`?**
-  _High betweenness centrality (0.196) - this node is a cross-community bridge._
+- **Why does `Game` connect `Game` to `AI`, `skirmish.py`, `.grow_population`, `engine.py`, `.move_army`, `test_serveur.py`, `.log`, `.choose_tactics`, `.__init__`, `server.py`, `.mod`, `GeoMap`, `.update_battles`, `.owned_nodes`, `partie`, `fabrique.py`, `views.py`?**
+  _High betweenness centrality (0.185) - this node is a cross-community bridge._
 - **Are the 4 inferred relationships involving `Game` (e.g. with `AI` and `from_dict()`) actually correct?**
   _`Game` has 4 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `Événements historiques à choix (une trentaine, 1701-1898)`, `Classe Bataille (bataille.js)`, `Banc d'essai de la bataille (banc.html)` to the rest of the system?**
   _16 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `.spend` be split into smaller, more focused modules?**
-  _Cohesion score 0.09782608695652174 - nodes in this community are weakly interconnected._
-- **Why does `Bancs d'essai (tests/lancer.py, fabrique.py)` connect `fabrique.py` to `README web_conquete (Conquête : Aquitaine 1700-1899)`, `test_serveur.py`, `partie`, `interface.test.mjs`, `vue.js`, `modeles.test.mjs`?**
-  _High betweenness centrality (0.156) - this node is a cross-community bridge._
+- **Should `AI` be split into smaller, more focused modules?**
+  _Cohesion score 0.05570611261668172 - nodes in this community are weakly interconnected._
+- **Why does `TacticalBattle` connect `TacticalBattle` to `bridge.py`, `engine.py`, `.cell`, `.order`, `._update_unit`, `._fire`, `.log`, `.trait`, `._rally_k`, `.step`?**
+  _High betweenness centrality (0.146) - this node is a cross-community bridge._
 - **Should `troupes.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.1173054587688734 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.11295681063122924 - nodes in this community are weakly interconnected._
 
 ### Low-confidence Hints
 _AMBIGUOUS edges — the extractor was unsure. Verify before acting on these._
