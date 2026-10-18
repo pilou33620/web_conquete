@@ -226,3 +226,25 @@ test('tampons agrandis en pleine bataille : toutes les figurines sont dessinées
   assert.equal(geo.attributes.aSlot.count, 512);
   assert.equal(k.buf.aSlot[4], 7, 'contenu gardé');
 });
+
+test('une pièce par génération d’artillerie, de près et de loin (SPEC-TECH.md)', async () => {
+  const { gunModel } = await import('../web/js/battle/formes.js');
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6].map(arm => gunModel({ cls: 'artillerie', arm })),
+    ['ancien', 'ancien', 'gribeauval', 'valee', 'lahitte', 'bange', '75']);
+  assert.equal(gunModel({ cls: 'artillerie' }), 'ancien', 'sans arme connue : la plus ancienne');
+  const box = g => { g.computeBoundingBox(); return g.boundingBox; };
+  const sig = g => [g.attributes.position.count, [...new Set(Array.from(g.attributes.color.array, x => x.toFixed(3)))].join()].join('|');
+  const seen = new Set();
+  for (const v of ['ancien', 'gribeauval', 'valee', 'lahitte', 'bange', '75']) {
+    for (const lod of [1, 0]) {
+      const g = model('canon', 1790, lod, false, v);
+      assert.ok(g.attributes.position.count > 0, `${v} ${lod}`);
+      if (lod) { assert.ok(!seen.has(sig(g)), `${v} : une pièce à elle`); seen.add(sig(g)); }
+    }
+    assert.ok(model('caisson', 1790, 1, false, v).attributes.position.count > 0);
+  }
+  const L = v => { const b = box(model('canon', 1790, 1, false, v)); return b.max.z - b.min.z; };
+  assert.ok(L('ancien') > L('gribeauval'), 'le long fût de bronze d’avant Gribeauval');
+  const b75 = box(model('canon', 1790, 1, false, '75')), bg = box(model('canon', 1790, 1, false, 'gribeauval'));
+  assert.ok(b75.max.y > bg.max.y, 'le bouclier du 75 dépasse le tube');
+});

@@ -17,7 +17,7 @@
 // Les dispositions (layout) ne sont recalculées que quand un régiment change de forme, d'effectif (par 8 hommes) ou
 // d'état.
 import * as THREE from '../../vendor/three/three.module.js';
-import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp, uniform } from './formes.js';
+import { clsOf, isLight, isGeneral, isWagon, pieces, hash, clamp, uniform, gunModel } from './formes.js';
 import { activity, moves, pick, firing, serving, variety, rows, chooseDead, chooseLine, pushRing, matchSlots, foeOf, scrum, scaleAt } from './gestes.js';
 
 export const POSES = { STAND: 0, AIM: 1, RUN: 2, MARCH: 3, RELOAD: 5, ROUT: 7 };
@@ -378,22 +378,41 @@ function wheel(P, r, x, y, z) {
   for (let k = 0; k < 4; k++) P.push([new THREE.BoxGeometry(0.03, r * 2 - 0.08, 0.035).rotateX(k * Math.PI / 4).translate(x, y, z), '#7a6844', 0, 0]);
   P.push([new THREE.CylinderGeometry(0.09, 0.09, 0.16, 8).rotateZ(Math.PI / 2).translate(x, y, z), IRON, 0, 0]);
 }
-// pièce de campagne : fût de bronze galbé (bourrelet de bouche, culasse et bouton), affût à flasques qui descend vers
-// la crosse, deux roues à rayons ; la bouche vers +Z
-function gun() {
+// les pièces, d'une génération à l'autre : fût (longueur, rayon, métal), affût (couleur, deux flasques ou flèche unique),
+// bouclier et frein du canon de 75 ; avant-trains et caissons de la même couleur
+const NATUREL = '#7d5c38', ACIER = '#4f5458', ACIER_T = '#36393d';
+const GUNS = {
+  ancien: { L: 1.3, r: 1.1, tube: BRONZE, aff: NATUREL, lid: '#6a4c2e', orne: true },   // canons de bronze, système Vallière
+  gribeauval: { L: 1, r: 1, tube: BRONZE, aff: AFFUT, lid: '#4c5632' },
+  valee: { L: 1, r: 1, tube: BRONZE, aff: AFFUT, lid: '#4c5632', fleche: true },
+  lahitte: { L: 1.05, r: 0.85, tube: '#9c7a38', aff: AFFUT, lid: '#4c5632', fleche: true },   // bronze rayé, plus fin
+  bange: { L: 1.15, r: 0.8, tube: ACIER_T, aff: ACIER, lid: '#44484c', fleche: true, culasse: true },
+  75: { L: 1.35, r: 0.55, tube: ACIER_T, aff: ACIER, lid: '#44484c', fleche: true, culasse: true, bouclier: true, frein: true },
+};
+// pièce de campagne : fût galbé (bourrelet de bouche, culasse et bouton), affût (deux flasques qui descendent vers la
+// crosse, ou une flèche), deux roues à rayons ; la bouche vers +Z
+function gun(v = 'gribeauval') {
+  const G = GUNS[v] ?? GUNS.gribeauval;
   const barrel = [[0, -1.1], [0.07, -1.09], [0.08, -1.04], [0.16, -1.0], [0.165, -0.84], [0.145, -0.82], [0.14, 0.25], [0.125, 0.28],
-    [0.115, 0.95], [0.135, 1.0], [0.135, 1.06], [0.075, 1.07], [0.07, 1.0]];
-  const P = [[lathe(barrel, 12).rotateX(Math.PI / 2).translate(0, 1.0, 0.52), BRONZE, 0, 0],
-    [new THREE.CylinderGeometry(0.05, 0.05, 0.42, 6).rotateZ(Math.PI / 2).translate(0, 1.0, 0.25), BRONZE, 0, 0]];   // tourillons
+    [0.115, 0.95], [0.135, 1.0], [0.135, 1.06], [0.075, 1.07], [0.07, 1.0]].map(([r, y]) => [r * G.r, y * G.L]);
+  const P = [[lathe(barrel, 12).rotateX(Math.PI / 2).translate(0, 1.0, 0.52), G.tube, 0, 0],
+    [new THREE.CylinderGeometry(0.05, 0.05, 0.42, 6).rotateZ(Math.PI / 2).translate(0, 1.0, 0.25), G.tube, 0, 0]];   // tourillons
+  if (G.orne) for (const z of [-0.2, 0.55]) P.push([new THREE.CylinderGeometry(0.17 * G.r, 0.17 * G.r, 0.05, 12).rotateX(Math.PI / 2).translate(0, 1.0, 0.52 + z * G.L), G.tube, 0, 0]);   // renforts moulurés
+  if (G.culasse) P.push([new THREE.BoxGeometry(0.2, 0.2, 0.16).translate(0, 1.0, 0.52 - 1.12 * G.L), ACIER, 0, 0]);
+  if (G.frein) P.push([new THREE.CylinderGeometry(0.075, 0.075, 1.3, 8).rotateX(Math.PI / 2).translate(0, 0.86, 0.75), ACIER, 0, 0]);   // le frein sous le tube
+  if (G.bouclier) P.push([new THREE.BoxGeometry(1.3, 1.0, 0.03).translate(0, 1.15, 0.3), ACIER, 0, 0]);
   for (const s of [1, -1]) {
-    P.push([new THREE.BoxGeometry(0.07, 0.3, 1.95).rotateX(-0.25).translate(s * 0.17, 0.74, -0.4), AFFUT, 0, 0]);
-    wheel(P, 0.62, s * 0.48, 0.62, 0.1);
+    if (!G.fleche) P.push([new THREE.BoxGeometry(0.07, 0.3, 1.95).rotateX(-0.25).translate(s * 0.17, 0.74, -0.4), G.aff, 0, 0]);
+    wheel(P, G.bouclier ? 0.66 : 0.62, s * 0.48, G.bouclier ? 0.66 : 0.62, 0.1);
   }
-  P.push([new THREE.BoxGeometry(0.36, 0.12, 0.3).translate(0, 0.16, -1.4), AFFUT, 0, 0], [new THREE.CylinderGeometry(0.05, 0.05, 1.0, 6).rotateZ(Math.PI / 2).translate(0, 0.62, 0.1), IRON, 0, 0]);
+  if (G.fleche) P.push([new THREE.BoxGeometry(0.18, 0.2, 2.1).rotateX(-0.22).translate(0, 0.68, -0.5), G.aff, 0, 0],   // flèche unique
+    [new THREE.BoxGeometry(0.62, 0.16, 0.3).translate(0, 0.82, 0.12), G.aff, 0, 0]);
+  P.push([new THREE.BoxGeometry(0.36, 0.12, 0.3).translate(0, 0.16, -1.4), G.aff, 0, 0], [new THREE.CylinderGeometry(0.05, 0.05, 1.0, 6).rotateZ(Math.PI / 2).translate(0, 0.62, 0.1), IRON, 0, 0]);
   return assemble(P);
 }
 // avant-train ou caisson à munitions (le timon vers +Z) ; wagon : chariot de munitions bâché, à quatre roues
-function caisson(wagon) {
+function caisson(wagon, v = 'gribeauval') {
+  const G = GUNS[v] ?? GUNS.gribeauval;
   const P = [];
   const wheels = z => { for (const s of [1, -1]) wheel(P, 0.58, s * 0.55, 0.58, z); P.push([new THREE.CylinderGeometry(0.045, 0.045, 1.15, 6).rotateZ(Math.PI / 2).translate(0, 0.58, z), IRON, 0, 0]); };
   if (wagon) {
@@ -402,8 +421,8 @@ function caisson(wagon) {
     P.push([new THREE.CylinderGeometry(0.03, 0.03, 1.8, 5).rotateX(Math.PI / 2).translate(0, 0.75, 2.0), WOOD, 0, 0]);
   } else {
     // coffre au couvercle bombé
-    P.push([new THREE.BoxGeometry(0.9, 0.5, 1.1).translate(0, 0.98, 0), AFFUT, 0, 0],
-      [new THREE.CylinderGeometry(0.46, 0.46, 1.12, 10, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.3, 1).translate(0, 1.23, 0), '#4c5632', 0, 0]);
+    P.push([new THREE.BoxGeometry(0.9, 0.5, 1.1).translate(0, 0.98, 0), G.aff, 0, 0],
+      [new THREE.CylinderGeometry(0.46, 0.46, 1.12, 10, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.3, 1).translate(0, 1.23, 0), G.lid, 0, 0]);
     wheels(0);
     P.push([new THREE.CylinderGeometry(0.03, 0.03, 2.0, 5).rotateX(Math.PI / 2).translate(0, 0.72, 1.45), WOOD, 0, 0]);
   }
@@ -497,27 +516,30 @@ function farHorse(rider, year) {
   if (rider) P.push([box(0.6, 0.08, 0.6, 0, 1.46, 0), shade(0.85), 0, CAMP]);   // tapis de selle (le cavalier est à part)
   return assemble(P);
 }
-function farGun() {
-  const P = [[cyl(0.12, 0.15, 2.1, 6, 0, 1.0, 0.52, Math.PI / 2), BRONZE, 0, 0], [box(0.4, 0.3, 1.95, 0, 0.74, -0.4, -0.25), AFFUT, 0, 0], [box(0.36, 0.12, 0.3, 0, 0.16, -1.4), AFFUT, 0, 0]];
+function farGun(v = 'gribeauval') {
+  const G = GUNS[v] ?? GUNS.gribeauval;
+  const P = [[cyl(0.12 * G.r, 0.15 * G.r, 2.1 * G.L, 6, 0, 1.0, 0.52, Math.PI / 2), G.tube, 0, 0], [box(G.fleche ? 0.2 : 0.4, 0.3, 1.95, 0, 0.74, -0.4, -0.25), G.aff, 0, 0], [box(0.36, 0.12, 0.3, 0, 0.16, -1.4), G.aff, 0, 0]];
+  if (G.bouclier) P.push([box(1.3, 1.0, 0.04, 0, 1.15, 0.3), ACIER, 0, 0]);
   for (const s of [1, -1]) P.push([cyl(0.62, 0.62, 0.08, 8, s * 0.48, 0.62, 0.1, 0, Math.PI / 2), '#6a5a3a', 0, 0]);
   return assemble(P);
 }
-function farCaisson(wagon) {
+function farCaisson(wagon, v = 'gribeauval') {
+  const G = GUNS[v] ?? GUNS.gribeauval;
   const P = [];
   const wheels = z => { for (const s of [1, -1]) P.push([cyl(0.58, 0.58, 0.08, 8, s * 0.55, 0.58, z, 0, Math.PI / 2), '#6a5a3a', 0, 0]); };
   if (wagon) { P.push([box(1.0, 0.5, 2.4, 0, 1.05, 0), '#7a5a3a', 0, 0], [cyl(0.6, 0.6, 2.3, 6, 0, 1.3, 0, Math.PI / 2), '#e8e0c8', 0, 0], [box(0.06, 0.06, 1.8, 0, 0.75, 2.0), WOOD, 0, 0]); wheels(0.8); wheels(-0.8); }
-  else { P.push([box(0.9, 0.5, 1.1, 0, 0.98, 0), AFFUT, 0, 0], [box(0.92, 0.12, 1.12, 0, 1.31, 0), '#4c5632', 0, 0], [box(0.06, 0.06, 2.0, 0, 0.72, 1.45), WOOD, 0, 0]); wheels(0); }
+  else { P.push([box(0.9, 0.5, 1.1, 0, 0.98, 0), G.aff, 0, 0], [box(0.92, 0.12, 1.12, 0, 1.31, 0), G.lid, 0, 0], [box(0.06, 0.06, 2.0, 0, 0.72, 1.45), WOOD, 0, 0]); wheels(0); }
   return assemble(P);
 }
 
 // géométrie d'une sorte de figurine ; lod : 1 de près (formes arrondies), 0 de loin (quelques boîtes) ; rig : fantassin
-// sur les os du squelette des animations (RIG)
-export function model(kind, year, lod = 1, rig = false) {
+// sur les os du squelette des animations (RIG) ; v : modèle d'une pièce et de son caisson (formes.gunModel)
+export function model(kind, year, lod = 1, rig = false, v = 'gribeauval') {
   if (!lod) switch (kind) {
     case 'cav': case 'colonel': return farHorse(kind, year);
     case 'attelage': return farHorse(null, year);
-    case 'canon': return farGun();
-    case 'caisson': return farCaisson(false);
+    case 'canon': return farGun(v);
+    case 'caisson': return farCaisson(false, v);
     case 'chariot': return farCaisson(true);
     case 'etoffe': case 'fanion': break;
     default: return farSoldier(kind, year, rig);
@@ -525,8 +547,8 @@ export function model(kind, year, lod = 1, rig = false) {
   switch (kind) {
     case 'cav': case 'colonel': return horse(kind, year);
     case 'attelage': return horse(null, year);
-    case 'canon': return gun();
-    case 'caisson': return caisson(false);
+    case 'canon': return gun(v);
+    case 'caisson': return caisson(false, v);
     case 'chariot': return caisson(true);
     case 'etoffe': return flagCloth(false, rig);
     case 'fanion': return flagCloth(true);
@@ -769,6 +791,7 @@ export class Troops {
     this.contactMats = {};
     // chaque sorte en deux versions (« ~ » : de loin), sauf les drapeaux
     for (const [k, def] of Object.entries(KINDS)) {
+      if (k === 'canon' || k === 'caisson') continue;   // (une sorte par modèle de pièce, créée à la demande : gunKind)
       // (l'étoffe du porte-drapeau suit sa hampe, au squelette ; le fanion d'un cavalier suit son cheval)
       if (def === 'FLAG') { this.addKind(k, model(k, this.year, 1, k === 'etoffe'), this.pattern, k === 'etoffe' ? 'RIG' : null); continue; }
       this.addKind(k, model(k, this.year, 1, !def), null, def ?? 'RIG');
@@ -842,6 +865,14 @@ export class Troops {
     }
     this.kinds.set(kind, k);
     this.grow(k, 256);
+  }
+  // une pièce ou un caisson d'un modèle (« canon.75~ » : le canon de 75, de loin), créé la première fois qu'il sert :
+  // seules les générations présentes dans la bataille ont leurs sortes
+  gunKind(kind) {
+    const [base, v] = kind.replace('~', '').split('.');
+    if (!v || !GUNS[v]) return null;
+    this.addKind(kind, model(base, this.year, kind.endsWith('~') ? 0 : 1, false, v), null, KINDS[base]);
+    return this.kinds.get(kind);
   }
   // tampons des figurines d'une sorte, agrandis en gardant leur contenu
   grow(k, cap) {
@@ -972,7 +1003,7 @@ export class Troops {
     // v : variété de l'homme (gestes.js) pour les figurines au squelette : place, sens, taille, nuance de l'habit
     // mv : sa course à sa place (aMove), ou rien ; pose : celle de la disposition, sinon imposée (cavalier : RIDER)
     const put = (kind, f, ui, carre, face = null, e = null, v = null, mv = null, pose = f[4]) => {
-      const k = this.kinds.get(kind);
+      const k = this.kinds.get(kind) ?? this.gunKind(kind);
       if (!k) return;
       if (k.n >= k.cap) this.grow(k, k.cap * 2);
       const n = k.n++, rank = f[5], o = n * 4, { aSlot: S, aAnim: A, aCoat: C } = k.buf, w = k.rig && v;
@@ -997,7 +1028,7 @@ export class Troops {
         coatOf(f[2], coat, un, this.year);
         // l'écouvillon et le pointeur se tournent vers la pièce
         if (f[2] === 'servant' && (f[4] === 1 || f[4] === 3) && f[5] >= 200) put('servant' + far, [f[0], f[1], 'servant', 9, 0, f[5], f[6]], ui, false, f[0] < (Math.floor((f[5] - 200) / 10) - (pieces(un) - 1) / 2) * (un.w / Math.max(1, pieces(un))) ? Math.PI / 2 : -Math.PI / 2, e, v, mv);
-        else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2]) + far, f, ui, carre, null, e, v, mv);
+        else put((f[2] === 'caisson' && f[4] === 1 ? 'chariot' : f[2] === 'canon' || f[2] === 'caisson' ? `${f[2]}.${gunModel(un)}` : f[2]) + far, f, ui, carre, null, e, v, mv);
         // son cavalier, en selle (même place, même phase : il suit le balancement du cheval ; ni décalage, ni sens, ni
         // taille à lui : il est sur la selle)
         if (f[2] === 'cav' || f[2] === 'colonel') put((f[2] === 'cav' ? 'cavalier' : 'chef') + far, f, ui, carre, null, e, { ...v, du: 0, dv: 0, da: 0, size: 1 }, mv, RIDER);
