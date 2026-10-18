@@ -23,7 +23,11 @@
   - Fichiers : `game/engine.py`, `game/army_actions.py`, `game/tactics/bridge.py`, `tests/test_campagne.py`
   - Taille : M
 
-- [ ] **T2 : les autres choix**
+- [x] **T2 : les autres choix**
+  - Fait : `army_actions.ask_choices` (choix permis et raisons, d'après la fiche de la place), `choose` (assaut au
+    mode déjà choisi via `start_battle` + `bridge.command`, rallier, assiéger par `arrive_node(ask=False)`, négocier,
+    contribution, bloquer), `resume` (la route reprend après un choix sans combat). Bancs : un par choix, refus (trop
+    faible, sans remparts, choix inconnu), le rapport de bout en bout ; mutation « trois fois la défense » détectée.
   - Commander la bataille : assaut démarré (même place à remparts), bataille en mode manuel sans seconde fenêtre.
   - Résolution automatique : assaut réglé sur-le-champ ; l'armée s'arrête là (une bataille finit la marche).
   - Rallier (ville neutre, armée au moins 3 fois plus forte) ; négocier ; contribution : l'armée reprend sa route avec
@@ -35,7 +39,7 @@
   - Fichiers : `game/army_actions.py`, `game/engine.py`, `game/tactics/bridge.py`, `tests/test_campagne.py`
   - Taille : M
 
-- [ ] **Point de contrôle 1** : bancs ; le cas du rapport joué au banc de bout en bout (chaque détachement choisit,
+- [x] **Point de contrôle 1** (18/10/2026, `test_le_rapport_de_bout_en_bout`) : bancs ; le cas du rapport joué au banc de bout en bout (chaque détachement choisit,
   plus aucune bataille laissée pour la fin du tour).
 
 ## Phase 2 : l'écran

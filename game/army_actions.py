@@ -497,15 +497,86 @@ def asking(g):
     return next((a for a in g.armies.values() if a.get('ask') and a['owner'] == g.player), None)
 
 
+def strong(g, a, nid):
+    """Assez forte pour qu'une place neutre se rallie sans combat (trois fois sa défense, comme engine.arrive_node)."""
+    gn = g.geo.nodes[nid]
+    return g.army_power(a, TERRAIN[g.geo.terrain_at(gn['x'], gn['y'])][0]) > 3 * g.node_defense_power(nid)
+
+
+def ask_choices(g, a):
+    """Les choix de la fenêtre d'arrivée : {choix: '' s'il est permis, sinon la raison}. L'assaut (à la main ou
+    automatique) et l'attente le sont toujours ; les autres selon la place, comme dans le panneau de l'armée."""
+    nid = a['ask']['node']
+    n = g.nodes[nid]
+    neutral = n['owner'] == R.NEUTRAL
+    x = options(g, a, nid) or {}
+    out = dict(manuel='', auto='')
+    if neutral:
+        out['rallier'] = '' if strong(g, a, nid) else "Armée trop faible : il faut trois fois la défense de la place"
+    if 'neg' in x:
+        out['negocier'] = x['neg']['why']
+    if walled(n) and (not neutral or n['fort'] >= 2):
+        out['assieger'] = ''
+    if 'blq' in x:
+        out['bloquer'] = x['blq']['why']
+    if 'ctb' in x:
+        out['contribution'] = x['ctb']['why']
+    out['attendre'] = ''
+    return out
+
+
+def resume(g, a, k):
+    """Après un choix sans combat : l'armée reprend sa route avec la marche qui lui reste (turns.settle la fait partir)."""
+    if k['path'] and a['id'] in g.armies and a['state'] == 'idle':
+        a['path'], a['target'], a['state'], a['hold'] = k['path'], k['target'], 'move', False
+
+
 def choose(g, code, a, what):
     """Le choix du joueur devant la place (fenêtre d'arrivée)."""
     k = a.get('ask') if a and a['owner'] == code else None
     if not k:
         return False, "Cette armée n'attend pas d'ordre devant une place."
+    why = ask_choices(g, a).get(what)
+    if why is None:
+        return False, "Choix inconnu."
+    if why:
+        return False, why
+    nid = k['node']
+    gn = g.geo.nodes[nid]
     if what == 'attendre':
         a.pop('ask')
-        return True, f"La {a['name']} attend devant {place(g, k['node'])}."
-    return False, "Choix inconnu."
+        return True, f"La {a['name']} attend devant {place(g, nid)}."
+    if what in ('manuel', 'auto'):
+        # l'assaut tout de suite, même sur une place à remparts (les canons y ouvrent des brèches) ; le mode est déjà
+        # choisi : pas de seconde fenêtre. Une bataille finit la marche du tour
+        from .tactics import bridge as TB
+        a.pop('ask')
+        a['hold'] = False
+        a['assault'] = True
+        if TT.planning(g):
+            a['mp'] = 0.0
+        g.start_battle([a], [], gx=gn['x'], gy=gn['y'], node=nid)
+        bt = g.battles[a['battle']]
+        bt['mode'] = 'attente'
+        r = TB.command(g, dict(sub='choose', bid=bt['id'], mode=what))
+        return r['ok'], r['msg']
+    if what == 'rallier':
+        a.pop('ask')
+        g.log('capture', f"{gn['name']} se rallie à {g.fname(code)}.", gn['x'], gn['y'], who=code, important=True)
+        g.capture(nid, code, peaceful=True)
+        resume(g, a, k)
+        return True, f"{gn['name']} se rallie à vous."
+    if what == 'assieger':
+        a.pop('ask')
+        a['hold'] = a['tr'] = False
+        g.arrive_node(a, nid, ask=False)   # le siège d'une place à remparts, comme en marche de conquête
+        return True, f"Le siège {R.de(gn['name'])} commence."
+    ok, msg = dict(negocier=negotiate, contribution=contribution, bloquer=blockade)[what](g, code, a)
+    if ok:
+        a.pop('ask')
+        if what != 'bloquer':
+            resume(g, a, k)
+    return ok, msg
 
 
 def crossed(g, path, target, owners, skip=None):

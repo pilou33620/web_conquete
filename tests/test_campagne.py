@@ -182,7 +182,9 @@ class TourParTour(unittest.TestCase):
         ok, msg = AA.conquer(g, g.player, a)
         self.assertTrue(ok, msg)
         self.assertEqual(a['ask']['node'], nid, '« Rallier ou attaquer » rouvre le choix (évolution du 18/10/2026)')
-        self.assertTrue(AA.choose(g, g.player, a, 'attendre')[0])
+        ok, msg = AA.choose(g, g.player, a, 'rallier')
+        self.assertTrue(ok, msg)
+        self.assertEqual(g.nodes[nid]['owner'], g.player, 'ralliée tout de suite, pendant votre tour')
         jouer_mois(g)
         a['tr'] = True   # retour chez soi, sans rallier d'autres places en chemin
         self.assertTrue(g.order_move(g.player, a['id'], *g.node_xy(g.capital_of(g.player)))[0])
@@ -476,10 +478,17 @@ class SiegesEnTours(unittest.TestCase):
         a['x'], a['y'], a['at_node'], a['edge'], a['tr'] = x + 3, y, None, None, False
         self.assertTrue(g.order_move(g.player, a['id'], x, y)[0])
         TT.settle(g)
-        # (évolution du 18/10/2026 : à l'arrivée, le joueur choisit ; « Assiéger » mène au siège, voir T2)
+        # (évolution du 18/10/2026 : à l'arrivée, le joueur choisit ; ici, « Assiéger »)
         self.assertEqual(a['ask']['node'], nid)
+        ok, msg = AA.choose(g, g.player, a, 'assieger')
+        self.assertTrue(ok, msg)
+        self.assertEqual(a['state'], 'siege')
         self.assertFalse(g.battles)
-        self.assertIsNone(g.nodes[nid]['siege'])
+        self.assertIn('Donner l’assaut', g.events[-1]['text'])
+        self.assertTrue(g.events[-1]['important'], 'annoncé en bulle')
+        self.assertTrue(g.assault(g.player, a['id'])[0])
+        TT.settle(g)
+        self.assertEqual([bt.get('mode') for bt in g.battles.values()], ['attente'], 'la fenêtre « Commander la bataille »')
 
     def test_blocus_en_tours(self):
         g, n = self.assieger()
@@ -559,6 +568,111 @@ class ArriveeDevantUneVille(unittest.TestCase):
         jouer_mois(g)
         self.assertEqual(a['at_node'], self.idx['Mérignac'], "elle n'a pas bougé")
         self.assertNotEqual(g.nodes[self.idx['Mérignac']]['owner'], g.player)
+
+    # ---------------------------------------------------------------- les choix (T2)
+    def devant(self, nom, n=1):
+        """Un détachement (toute l'armée de Bordeaux si n = 1) arrêté devant sa première ville en marchant vers nom."""
+        a = self.detachements(n)[0]
+        self.g.factions[self.g.player]['res']['livres'] = 1e5
+        self.marcher(a, nom)
+        self.assertTrue(a.get('ask'))
+        return a
+
+    def test_commander_la_bataille(self):
+        g = self.g
+        a = self.devant('Mérignac')
+        ok, msg = AA.choose(g, g.player, a, 'manuel')
+        self.assertTrue(ok, msg)
+        bt = g.battles[a['battle']]
+        self.assertNotEqual(bt.get('mode'), 'attente', 'pas de seconde fenêtre : le choix est fait')
+        self.assertTrue(g.tactical, 'le champ de bataille de l’assaut')
+        self.assertFalse(a.get('ask'))
+
+    def test_resolution_automatique(self):
+        g = self.g
+        a = self.devant('Mérignac')
+        ok, msg = AA.choose(g, g.player, a, 'auto')
+        self.assertTrue(ok, msg)
+        TT.settle(g)
+        self.assertFalse(g.battles, 'réglée sur-le-champ')
+        if a['id'] in g.armies:
+            self.assertEqual(TT.march_left(g, a), 0.0, 'une bataille finit la marche du tour')
+            self.assertFalse(a['path'])
+
+    def test_rallier_puis_reprendre_la_route(self):
+        g = self.g
+        a = self.devant('Léognan')
+        vil = self.idx["Villenave-d'Ornon"]
+        self.assertEqual(a['ask']['node'], vil)
+        ok, msg = AA.choose(g, g.player, a, 'rallier')
+        self.assertTrue(ok, msg)
+        self.assertEqual(g.nodes[vil]['owner'], g.player)
+        TT.settle(g)
+        self.assertEqual(a['ask']['node'], self.idx['Léognan'], 'elle reprend sa route jusqu’à Léognan, qui demande à son tour')
+
+    def test_rallier_refuse_si_l_armee_est_trop_faible(self):
+        g = self.g
+        a = self.devant('Mérignac')
+        for r in a['regs']:
+            r['n'] = 5
+        ok, msg = AA.choose(g, g.player, a, 'rallier')
+        self.assertFalse(ok)
+        self.assertIn('trop faible', msg)
+        self.assertTrue(a.get('ask'), 'le choix reste ouvert')
+
+    def test_assieger_seulement_une_place_a_remparts(self):
+        g = self.g
+        a = self.devant('Mérignac')
+        self.assertFalse(AA.walled(g.nodes[self.idx['Mérignac']]))
+        self.assertFalse(AA.choose(g, g.player, a, 'assieger')[0])
+        self.assertNotIn('assieger', AA.ask_choices(g, a))
+
+    def test_bloquer(self):
+        g = self.g
+        a = self.devant('Mérignac')
+        ok, msg = AA.choose(g, g.player, a, 'bloquer')
+        self.assertTrue(ok, msg)
+        self.assertTrue(g.nodes[self.idx['Mérignac']]['siege'].get('blocus'))
+        self.assertEqual(a['state'], 'siege')
+
+    def test_contribution_puis_reprendre_la_route(self):
+        g = self.g
+        a = self.devant('Léognan')
+        ok, msg = AA.choose(g, g.player, a, 'contribution')
+        self.assertTrue(ok, msg)
+        TT.settle(g)
+        self.assertEqual(a['ask']['node'], self.idx['Léognan'])
+
+    def test_negocier_puis_reprendre_la_route(self):
+        g = self.g
+        a = self.devant('Léognan')
+        ok, msg = AA.choose(g, g.player, a, 'negocier')
+        self.assertTrue(ok, msg)
+        self.assertIn('au prochain tour', msg)
+        TT.settle(g)
+        self.assertEqual(a['ask']['node'], self.idx['Léognan'])
+
+    def test_le_rapport_de_bout_en_bout(self):
+        # chaque détachement choisit à chaque ville (ici : rallier quand c'est permis, sinon l'assaut automatique) ;
+        # à la fin, plus rien n'attend, « Tour suivant » part, et aucune bataille n'a été engagée sans choix
+        g = self.g
+        for a, nom in zip(self.detachements(), ['Léognan', 'Cestas', 'Mérignac']):
+            self.marcher(a, nom)
+            for _ in range(10):
+                if not a.get('ask'):
+                    break
+                self.assertFalse(any(bt.get('mode') == 'attente' for bt in g.battles.values()))
+                ok, msg = AA.choose(g, g.player, a, 'rallier' if AA.ask_choices(g, a).get('rallier') == '' else 'auto')
+                self.assertTrue(ok, msg)
+                TT.settle(g)
+        self.assertIsNone(AA.asking(g))
+        self.assertTrue(TB.on_speed(g, 1)[0])
+
+    def test_choix_inconnu(self):
+        g = self.g
+        a = self.devant('Mérignac')
+        self.assertFalse(AA.choose(g, g.player, a, 'piller')[0])
+        self.assertTrue(a.get('ask'))
 
     def test_une_ia_fait_comme_avant(self):
         g = self.g
