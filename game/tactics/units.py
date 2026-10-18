@@ -212,7 +212,7 @@ class Unit:
         out = dict(id=self.id, side=self.side, type=self.type, cls=self.cls, name=self.name, men=int(round(self.men)),
                    men0=int(round(self.men0)), x=round(self.x, 1), y=round(self.y, 1), dir=round(self.dir, 3),
                    form=self.form, state=self.state, morale=int(round(self.morale)), fat=int(round(self.fat)),
-                   xp=int(round(self.xp)), ammo=round(self.ammo, 1), ammo0=self.ammo0,
+                   xp=int(round(self.xp)), ammo=round(self.ammo, 1), ammo0=self.ammo0, arm=self.arm,
                    range=[e, m] + ([g] if g else []), w=round(w, 1), d=round(d, 1), owner=self.owner,
                    group=self.group, gname=self.gname)
         if self.cls == 'artillerie':

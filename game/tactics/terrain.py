@@ -191,6 +191,7 @@ class BattleMap:
                     fences=[dict(kind=k, pts=[r2(p) for p in pts]) for k, pts in self.fences],
                     heart=list(self.heart) if self.heart else None,
                     seed=spec['seed'], season=spec['season'], weather=spec['weather'], year=spec.get('year'),
+                    marks=spec.get('marks', [[], []]),
                     camp=dict(x=spec['cx'], y=spec['cy']), region=self.region,
                     types=TYPE_NAMES, labels=TYPE_LABEL)
 

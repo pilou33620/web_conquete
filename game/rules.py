@@ -297,6 +297,18 @@ TECH = {t[0]: dict(id=t[0], branch=t[1], name=t[2], desc=t[3], cost=t[4], days=3
                    fx=t[7]) for t in TECHS}
 BRANCHES = ['militaire', 'civil', 'industriel', 'agricole']
 
+# marques visibles (SPEC-TECH.md, module visuels) : la technologie du camp qui les fait apparaître ; la bataille et la
+# carte lisent cette table au lieu de comparer des années partout
+VISUALS = dict(
+    sans_fumee=dict(tech='lebel'),      # poudre B : l'artillerie et les mitrailleuses du camp tirent sans fumée
+    reffye=dict(tech='mitrailleuse'),
+)
+
+
+def marks(techs):
+    """Marques visibles d'un camp qui a ces technologies."""
+    return [k for k, v in VISUALS.items() if v['tech'] in techs]
+
 # ------------------------------------------------------------------ saisons & météo
 SEASONS = ['hiver', 'hiver', 'printemps', 'printemps', 'printemps', 'été', 'été', 'été', 'automne', 'automne', 'automne', 'hiver']
 SEASON_LABEL = {'printemps': 'Printemps', 'été': 'Été', 'automne': 'Automne', 'hiver': 'Hiver'}

@@ -13,6 +13,7 @@ import json
 import unittest
 
 from fabrique import BT, GEO, avancer, bataille, ennemi, face_a_face, kind, ordre
+from game import rules as R
 
 
 class OrdresParArme(unittest.TestCase):
@@ -108,6 +109,28 @@ class BatailleEntiere(unittest.TestCase):
         avancer(tb2, 20)   # la bataille reprend sans erreur
         self.assertIn(tb2.phase, ('combat', 'fin'))
         self.assertEqual(BT.DT, 2.0)
+
+
+class MarquesVisibles(unittest.TestCase):
+    """SPEC-TECH.md, module visuels : la bataille reçoit les marques de chaque camp et l'arme de chaque régiment."""
+
+    def test_marques_d_un_camp(self):
+        self.assertIn('sans_fumee', R.marks(['lebel', 'gras']))
+        self.assertNotIn('sans_fumee', R.marks(['gras']))
+        self.assertEqual(R.marks([]), [])
+
+    def test_la_spec_porte_les_marques_des_deux_camps(self):
+        tb, _ = bataille(epoque='1870')
+        self.assertEqual(len(tb.spec['marks']), 2)
+        self.assertIn('reffye', tb.spec['marks'][0], 'en 1870, la mitrailleuse est connue (techs_before 1866)')
+        self.assertNotIn('sans_fumee', tb.spec['marks'][0], 'pas encore de poudre B en 1870')
+        self.assertEqual(tb.map_view()['marks'], tb.spec['marks'], 'le client les lit avec la carte')
+
+    def test_la_vue_porte_l_arme_de_chaque_unite(self):
+        tb, mes = bataille(epoque='1870')
+        vue = {u['id']: u for u in tb.view(me=0)['units']}
+        self.assertEqual(vue[mes['ligne'].id]['arm'], mes['ligne'].arm)
+        self.assertGreater(mes['ligne'].arm, 0, 'en 1870, la ligne a mieux que le mousquet')
 
 
 if __name__ == '__main__':

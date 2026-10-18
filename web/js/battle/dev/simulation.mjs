@@ -321,6 +321,9 @@ function genMap(scen, seed) {
 }
 
 // ------------------------------------------------------------------ unités
+// génération d'armes d'une année (rules.ARMS, dates de rules.TECH_YEAR) : fusils, puis canons
+const ARM_YEARS = { inf: [1703, 1777, 1840, 1849, 1866, 1874, 1886], artillerie: [1732, 1765, 1827, 1858, 1877, 1897] };
+export const armOf = (cls, year) => (ARM_YEARS[cls] || ARM_YEARS.inf).filter(y => year >= y).length;
 const ORD = n => n === 1 ? '1er' : n + 'e';
 const RANGES = { inf: [120, 230], legere: [130, 250], cavalerie: [30, 30], artillerie: [700, 1100, 300], general: [0, 0] };
 function mkUnit(id, side, type, name, men, x, y, dir, extra = {}) {
@@ -403,9 +406,14 @@ export class MockBattle {
     this.weather = opts.weather || parts[2] || S.weather;
     this.map.season = this.season; this.map.weather = this.weather;
     if (+opts.year) this.map.year = +opts.year;
+    // marques visibles de chaque camp (rules.VISUALS) : ?marks=sans_fumee,reffye (les deux camps), ou les deux listes
+    // séparées par « ; » ; arme de chaque régiment : celle de l'année, ou ?arm= pour tous
+    const mk = String(opts.marks || '').split(';').map(l => l.split(',').filter(Boolean));
+    this.map.marks = [mk[0], mk[1] ?? mk[0]];
     this.R = rng(this.seed + 1);
     const g = genUnits(this.scen, this.map, this.R);
     this.units = g.units; this.zone = g.zone;
+    for (const u of this.units) u.arm = opts.arm != null && opts.arm !== '' ? +opts.arm : armOf(u.cls, this.map.year);
     this.phase = 'deploiement';
     this.speed = 0;
     this.clock = ((+opts.hour || +parts[3] || 8) - 8) * 3600;
@@ -729,7 +737,7 @@ export class MockBattle {
       const [w, d] = emprise(u);
       return { id: u.id, side: u.side, type: u.type, cls: u.cls, light: u.light, name: u.name, men: u.men, men0: u.men0,
         x: Math.round(u.x * 10) / 10, y: Math.round(u.y * 10) / 10, dir: Math.round(u.dir * 1000) / 1000, form: u.form, state: u.state,
-        morale: Math.round(u.morale), fat: Math.round(u.fat), xp: u.xp, ammo: u.ammo, ammo0: u.ammo0, range: u.range,
+        morale: Math.round(u.morale), fat: Math.round(u.fat), xp: u.xp, ammo: u.ammo, ammo0: u.ammo0, range: u.range, arm: u.arm,
         w: Math.round(w), d: Math.round(d), target: u.target, seen: u.side === 0 ? this.units.some(e => e.side === 1 && Math.hypot(e.x - u.x, e.y - u.y) < 900) : true,
         fire: u.fire, order: u.order ? u.order.kind : undefined,   // comme le vrai serveur : le nom de l'ordre seulement
         ...(u.cls === 'artillerie' ? { shot: u.shot || 'auto', prio: u.prio || null } : {}) };
