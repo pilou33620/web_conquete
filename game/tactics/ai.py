@@ -2592,6 +2592,8 @@ def _artillery(b, side, mem, L, us, foes, sit, want, busy):
         if u.state in ('deroute', 'ralliement', 'melee'):
             continue
         e, mx, g = b.ranges(u)
+        if u.type == 'mitrailleuses':
+            mx = e   # (au-delà de sa portée efficace, la gerbe se perd : la batterie se place et tire à 1 200 m)
         p = mem['post'].get(u.id)
         c = gslot.get(u.id)
         fixed = plan in ('place', 'assaut') or (mem.get('mode') == 'poste' and ph in ('attente', 'combat'))
