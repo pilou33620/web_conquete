@@ -82,6 +82,7 @@ function resetUI() {
   document.getElementById('proposals').innerHTML = '';
   document.getElementById('proposals').dataset.sig = '';
   document.getElementById('feed').dataset.sig = '';
+  document.getElementById('feed').innerHTML = '';   // (sans quoi le fil de la partie d'avant reste affiché)
 }
 
 async function showStart(info) {
@@ -157,7 +158,10 @@ async function boot() {
     startPolling();
   };
   ui.onNewGame = async () => {
-    try { await api.post('/api/cmd', { cmd: 'speed', value: 0 }); } catch (e) { return ui.toast('Serveur injoignable : impossible de quitter la partie.', 'bad'); }
+    // (en temps réel, la partie quittée s'arrête ; au tour par tour, elle ne bouge déjà plus pendant votre tour)
+    if (!ui.st?.tour?.on) {
+      try { await api.post('/api/cmd', { cmd: 'speed', value: 0 }); } catch (e) { return ui.toast('Serveur injoignable : impossible de quitter la partie.', 'bad'); }
+    }
     resetUI();
     showStart();
   };

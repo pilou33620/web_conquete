@@ -513,7 +513,7 @@ class Game:
             EV.tick(self, d)
             EV.expire(self)
         CT.daily(self, d)   # emplacements, collèges, événements locaux
-        if d.day == 1:
+        if d.day == 1 and int(self.t) > 0:   # (pas au premier jour de la partie : aucun mois n'a encore été joué)
             self.grow_population()
             self.monthly(d)
         for f in self.factions.values():

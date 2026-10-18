@@ -536,10 +536,12 @@ export class UI {
 
   // ------------------------------------------------------------------ sélection
   select(sel) {
-    if (!sel || !this.sel || sel.kind !== this.sel.kind || sel.id !== this.sel.id) this.stopTargeting();
+    const changed = !sel || !this.sel || sel.kind !== this.sel.kind || sel.id !== this.sel.id;
+    if (changed) this.stopTargeting();
     this.sel = sel;
     this.map.selection = sel;
     this.checked.clear();
+    if (changed) this.$('panel').scrollTop = 0;   // (une autre sélection s'ouvre en haut, son nom visible)
     this.panelSig = '';
     this.hideBubble();
     if (!sel) { this.$('panel').hidden = true; this.tuto.check(); return; }

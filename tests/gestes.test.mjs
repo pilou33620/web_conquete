@@ -308,13 +308,20 @@ test('de loin, les figurines grossissent par paliers (×1 à ×3), avec une marg
 });
 
 test('la grille des bâtiments (terrain.js) range chaque maison dans les cases qu’elle touche, et prévient si une case déborde', () => {
-  const grid = B => Terrain.prototype.buildingGrid.call({ buildings: B });
+  const grid = B => Object.assign(Object.create(Terrain.prototype), { buildings: B }).buildingGrid();
   const g = grid([{ x: 100, y: 100, w: 10, h: 8, a: 0 }, { x: 140, y: 100, w: 10, h: 8, a: 0 }]);
   const at = (x, y) => [...g.cells.slice(((Math.floor((y - g.y0) / g.cell)) * g.cols + Math.floor((x - g.x0) / g.cell)) * 4).slice(0, 4)].filter(Boolean);
   assert.deepEqual(at(100, 100), [1]);
   assert.deepEqual(at(140, 100), [2]);
   assert.deepEqual(at(120, 100), []);
-  // cinq maisons serrées : la case du milieu déborde, et on le dit
+  // un bourg serré : la portée raccourcit d'abord (aucune case pleine, aucun avertissement)…
+  const warn0 = console.warn, said0 = [];
+  console.warn = m => said0.push(m);
+  let g0;
+  try { g0 = grid([0, 1, 2, 3, 4].map(k => ({ x: 100 + k * 3, y: 100, w: 4, h: 4, a: 0 }))); } finally { console.warn = warn0; }
+  assert.equal(said0.length, 0);
+  assert.deepEqual([...new Set(g0.cells)].filter(Boolean).sort(), [1, 2, 3, 4, 5], 'chaque maison est dans la grille');
+  // … mais cinq maisons l'une sur l'autre débordent même sans portée, et on le dit
   const warn = console.warn, said = [];
   console.warn = m => said.push(m);
   try { grid([0, 1, 2, 3, 4].map(k => ({ x: 100 + k, y: 100, w: 4, h: 4, a: 0 }))); } finally { console.warn = warn; }

@@ -648,9 +648,10 @@ export class BattleUI {
   }
 }
 // nom court pour les cartes d'unités : abréviations d'état-major pour les mots longs
-const ABBR = [[/^Chariot de munitions.*/i, 'Munitions'], [/^Batterie /, 'Bie '], [/ de ligne$/, ' ligne'], [/chasseurs à cheval/i, 'ch. à cheval'], [/grenadiers?/i, 'Gren.'],
+const ABBR = [[/^Batterie /, 'Bie '], [/ de ligne$/, ' ligne'], [/chasseurs à cheval/i, 'ch. à cheval'], [/grenadiers?/i, 'Gren.'],
   [/cavalerie/i, 'Cav.'], [/artillerie/i, 'Art.'], [/chasseurs?/i, 'Chass.'], [/voltigeurs?/i, 'Volt.'], [/Miquelets?/, 'Miq.'],
   [/Sapeurs?/, 'Sap.'], [/Garde nationale/, 'Garde nat.'], [/Territoriale/, 'Territ.'], [/réunis$/, 'réun.']];
-const short = n => ABBR.reduce((t, [re, by]) => (t.length > 11 ? t.replace(re, by) : t), String(n || ''));
+// (les munitions, toujours : « Munitions » ne tient pas sur la carte)
+const short = n => ABBR.reduce((t, [re, by]) => (t.length > 11 ? t.replace(re, by) : t), String(n || '').replace(/^(chariot de )?munitions?\b.*/i, 'Munit.'));
 // heure de bataille (secondes depuis 8 h) écrite comme le serveur : « 20 h 30 »
 const hourOf = c => { const m = Math.floor(480 + c / 60); return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };

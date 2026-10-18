@@ -596,9 +596,11 @@ export class MapView {
       const dd = Math.hypot(sx - x, sy - y);
       if (dd < r && (!best || dd < best.d)) best = { kind: 'army', id: a.id, d: dd, a };
     }
-    if (best && (best.a.st === 'move' || best.a.st === 'retreat') && best.a.n == null) {
-      // une armée de passage posée sur une ville ne doit pas la rendre inaccessible : le cœur de l'icône reste à la ville
+    if (best) {
+      // une armée (de passage, ou rangée sous sa ville) ne doit pas rendre une autre place inaccessible : le cœur de
+      // l'icône d'une place reste à la place (Villenave-d'Ornon sous l'armée de Bordeaux)
       for (const n of this.nodes) {
+        if (n.id === best.a.n && best.a.st !== 'move' && best.a.st !== 'retreat') continue;
         const [x, y] = this.toScreen(n.x, n.y);
         if (Math.hypot(sx - x, sy - y) < this.nodeSize(n) * 0.4) return { kind: 'node', id: n.id, d: 0 };
       }

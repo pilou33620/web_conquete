@@ -661,6 +661,9 @@ export class Terrain {
         }
       }
     });
+    // un bourg serré remplit des cases : la portée raccourcit (chevaux et pièces repoussés de moins loin) plutôt qu'un
+    // bâtiment ne se laisse traverser
+    if (full && reach > 0) return this.buildingGrid(cell, margin, reach > 1 ? reach / 2 : 0);
     // shortcut: 4 bâtiments au plus par case (un texel RGBA) ; le cinquième se traverse. Deux textures si ça arrive
     if (full) console.warn(`bâtiments : ${full} cases de ${cell} m déjà pleines, des troupes pourront traverser un bâtiment`);
     return { cell, x0, y0, cols, rows, cells, rects, n: B.length };

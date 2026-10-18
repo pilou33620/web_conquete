@@ -162,7 +162,8 @@ body.en-bataille #proposals, body.en-bataille #bubble { opacity: 0; pointer-even
 .bt-uc { position: relative; width: 78px; height: 82px; flex: none; text-align: left; padding: 0; border-radius: 7px; border: 1px solid var(--hair, rgba(200,162,83,.45));
   background: linear-gradient(rgba(27,49,80,.95), rgba(19,35,58,.95)); overflow: hidden; }
 .bt-uc canvas { position: absolute; left: 1px; top: 3px; width: 28px; height: 32px; }
-.bt-uc .uc-n { position: absolute; left: 29px; right: 3px; top: 3px; font-size: 12px; line-height: 1.05; max-height: 2.1em; overflow: hidden; }
+.bt-uc .uc-n { position: absolute; left: 29px; right: 3px; top: 3px; font-size: 12px; line-height: 1.05; max-height: 2.1em; overflow: hidden;
+  overflow-wrap: anywhere; }   /* (un nom d'un seul mot trop long, « Bordenave », passe à la ligne au lieu d'être coupé) */
 .bt-uc .uc-m { position: absolute; left: 30px; top: 30px; font-weight: 600; font-size: 16.5px; line-height: 1; }
 .bt-uc .uc-x { position: absolute; left: 3px; top: 50px; font-size: 9px; letter-spacing: -0.5px; }
 .bt-uc .uc-r { position: absolute; right: 3px; top: 50px; font-size: 9.5px; color: var(--papier-2, #c9c0a8); }
