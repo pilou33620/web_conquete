@@ -541,6 +541,7 @@ class Game:
 
     def monthly(self, d):
         season = self.season()
+        RL.sabotage(self)   # armées ennemies posées sur une voie ferrée
         for code, f in self.factions.items():
             if not f['alive']:
                 continue

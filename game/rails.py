@@ -199,3 +199,37 @@ def rail_edges(g, code):
     if code not in g.factions or not g.mod(code, 'rail_troops'):
         return frozenset()
     return frozenset(eid for sid, sec in sections(g.geo).items() if usable(g, code, sid) for eid in sec['edges'])
+
+
+# ------------------------------------------------------------------ sabotage
+def _on_section(g, a):
+    """Tronçons sur la route desquels cette armée se tient (sur une de leurs arêtes, ou dans une de leurs places)."""
+    secs = sections(g.geo).values()
+    if a.get('edge'):
+        return [s for s in secs if a['edge']['e'] in s['edges']]
+    if a['at_node'] is not None:
+        n = a['at_node']
+        return [s for s in secs if any(n in (g.geo.edges[eid]['a'], g.geo.edges[eid]['b']) for eid in s['edges'])]
+    return []
+
+
+def sabotage(g):
+    """Fin du mois (Game.monthly) : une armée en guerre avec le camp d'une ville d'un tronçon ouvert, posée sur sa route,
+    le coupe pour RAIL_CUT_TOURS ; personne ne s'en sert plus jusque-là (il se répare de lui-même)."""
+    from . import turns as TT
+    for a in list(g.armies.values()):
+        code = a['owner']
+        if code not in g.factions or a.get('boat') or a.get('rail') or a['state'] in ('retreat',):
+            continue
+        for sec in _on_section(g, a):
+            st = g.rails.get(sec['id'])
+            if not open_(g, sec['id']):
+                continue
+            foes = {g.nodes[sec['a']]['owner'], g.nodes[sec['b']]['owner']}
+            if not any(o in g.factions and g.at_war(code, o) for o in foes):
+                continue
+            st['cut'] = TT.deadline(g, R.RAIL_CUT_TOURS)
+            na, nb = g.geo.nodes[sec['a']], g.geo.nodes[sec['b']]
+            for who in {code} | {o for o in foes if o in g.factions}:
+                g.log('rail', f"{g.fname(code)} coupe la voie ferrée {na['name']}–{nb['name']} : plus de train pendant "
+                              f"{R.RAIL_CUT_TOURS} tours.", a['x'], a['y'], who=who, important=g.player == who)

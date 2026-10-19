@@ -1419,6 +1419,35 @@ class VoiesFerrees(unittest.TestCase):
             t += 0.05
         self.assertFalse(a.get('rail'), 'à pied jusqu’au bout')
 
+    def test_une_armee_ennemie_coupe_la_ligne_trois_tours(self):
+        import datetime
+        from game import rails as RL
+        g, a = self.ligne_ouverte('rail_militaire')
+        sid = self.troncon(g, 'Bordeaux', 'Langon')
+        village = next(n for eid in RL.sections(GEO)[sid]['edges'] for n in (GEO.edges[eid]['a'], GEO.edges[eid]['b'])
+                       if GEO.nodes[n]['type'] == 'village')
+        e = armee(g, '24')
+        e['x'], e['y'], e['at_node'], e['edge'], e['path'], e['state'] = *g.node_xy(village), village, None, [], 'idle'
+        g.monthly(datetime.date(1870, 9, 1))
+        self.assertTrue(RL.usable(g, '33', sid), 'en paix, on ne coupe rien')
+        D.declare_war(g, '24', '33')
+        g.monthly(datetime.date(1870, 10, 1))
+        self.assertFalse(RL.usable(g, '33', sid), 'coupée')
+        self.assertFalse(any(l.get('rail') and l['e'] in RL.sections(GEO)[sid]['edges']
+                             for l in (g.order_move('33', a['id'], node=GEO.by_name['Agen']) and a['path'])))
+        g.t = g.rails[sid]['cut'] + 0.1
+        self.assertTrue(RL.usable(g, '33', sid), 'réparée au bout de trois tours')
+
+    def test_on_ne_coupe_pas_sa_propre_ligne(self):
+        import datetime
+        from game import rails as RL
+        g, a = self.ligne_ouverte('rail_militaire')
+        sid = self.troncon(g, 'Bordeaux', 'Langon')
+        n = RL.sections(GEO)[sid]['b']
+        a['x'], a['y'], a['at_node'] = *g.node_xy(n), n
+        g.monthly(datetime.date(1870, 10, 1))
+        self.assertTrue(RL.usable(g, '33', sid))
+
     def test_un_chantier_se_sauvegarde(self):
         from game import rails as RL
         g = avec(partie(epoque='1870'), '33', 'chemins_fer')
