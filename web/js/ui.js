@@ -151,7 +151,7 @@ export class UI {
       else if (this.st.speed) { this.lastSpeed = this.st.speed; this.setSpeed(0); } else this.setSpeed(this.lastSpeed || 1);
     } else if (!tour && /^[1-9]$/.test(e.key) && +e.key < this.rules.speeds.length) this.setSpeed(+e.key);
     else if (e.key === 'Escape') {
-      if (!this.$('modal').hidden) this.closeModal();
+      if (!this.$('modal').hidden) this.dismissModal();
       else if (this.targeting) this.stopTargeting();
       else if (!this.$('bubble').hidden) this.hideBubble();
       else this.select(null);
@@ -733,7 +733,7 @@ export class UI {
       }
       case 'recap-more': this.recapOpen = !this.recapOpen; this.renderRecap(); break;
       case 'modal': this.openModal(d.v); break;
-      case 'close-modal': this.closeModal(); break;
+      case 'close-modal': this.dismissModal(); break;
       case 'close-panel': this.select(null); break;
       case 'tuto-next': this.tuto.next(); break;
       case 'tuto-skip': this.tuto.stop(); break;
@@ -830,7 +830,11 @@ export class UI {
       case 'stance': this.cmd({ cmd: 'stance', army: sel.id, value: d.v }); break;
       case 'retreat': this.cmd({ cmd: 'retreat', army: sel.id }); break;
       case 'assault': this.cmd({ cmd: 'assault', army: sel.id }); break;
-      case 'garrison': this.cmd({ cmd: 'garrison', army: sel.id }).then(r => { if (r.ok) this.select({ kind: 'node', id: this.armyById(sel.id)?.n ?? +d.node }); }); break;
+      case 'garrison': this.cmd({ cmd: 'garrison', army: sel.id }).then(r => {
+        if (!r.ok) return;
+        this.select({ kind: 'node', id: this.armyById(sel.id)?.n ?? +d.node });
+        this.$('p-garnison')?.scrollIntoView({ block: 'start' });   // le bouton pour en ressortir, bas du panneau
+      }); break;
       case 'split': {
         const regs = [...this.checked];
         this.cmd({ cmd: 'split', army: sel.id, regs }, false).then(r => { if (r.ok) { this.toast('Armée scindée.', 'good'); this.select({ kind: 'army', id: r.id }); } });
@@ -1133,8 +1137,8 @@ export class UI {
       const here = st.armies.filter(a => a.o === me && a.n === id && a.st === 'idle');
       if (ns.g && ns.g.length) {
         const mobile = ns.g.some(r => !this.rules.units[r[1]]?.garrison_only), garde = ns.g.length > 1 && !ns.g.every(r => !this.rules.units[r[1]]?.garrison_only);
-        h += `<div class="section-t">Garnison</div><div class="reg-list">${ns.g.map(r => this.regRow(r, me, true)).join('')}</div>` + (mobile
-          ? `<div class="btns"><button class="btn primary" data-act="form">Former une armée</button>
+        h += `<div class="section-t" id="p-garnison">Garnison</div><div class="reg-list">${ns.g.map(r => this.regRow(r, me, true)).join('')}</div>` + (mobile
+          ? `<div class="btns"><button class="btn primary" data-act="form">Sortir de la garnison (former une armée)</button>
           ${here.map(a => `<button class="btn" data-act="form" data-into="${a.id}">Renforcer ${esc(a.name)}</button>`).join('')}${ns.sg ? '' : this.rearmBtn(ns.g, id)}</div>
           <div class="muted small" style="margin-top:4px">Cochez des régiments, sinon toute la garnison part${garde ? ` (sauf ${/^[aeiouéh]/i.test(this.rules.units.garde.name) ? 'l’' : 'la '}${esc(this.rules.units.garde.name.toLowerCase())})` : ''}.</div>`
           : `<div class="btns">${ns.sg ? '' : this.rearmBtn(ns.g, id)}</div><div class="muted small" style="margin-top:4px">${esc(this.rules.units.garde.name)} : elle défend la ville mais n’en sort pas.</div>`);
@@ -1549,6 +1553,12 @@ export class UI {
     this.renderModal(true);
     if (kind === 'menu') this.refreshSaves();
     this.tuto.check();
+  }
+  // fermée à la main, la fenêtre d'arrivée vaut « Attendre » : sinon le choix toujours posé la rouvrirait aussitôt
+  dismissModal() {
+    const a = this.modal === 'arrivee' && (this.st.armies || []).find(x => x.ask);
+    this.closeModal();
+    if (a) this.cmd({ cmd: 'arrive', army: a.id, value: 'attendre' });
   }
   closeModal() {
     this.modal = null;

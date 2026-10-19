@@ -3738,7 +3738,8 @@ class Game:
             return False, "L'armée doit être au repos dans une de vos villes."
         self.nodes[a['at_node']]['garrison'] += a['regs']
         del self.armies[aid]
-        return True, "Régiments placés en garnison."
+        return True, ("Régiments placés en garnison. Pour les en sortir : panneau de la ville, section Garnison, "
+                      "« Sortir de la garnison ».")
 
     def split(self, code, aid, reg_ids):
         a = self.armies.get(aid)
