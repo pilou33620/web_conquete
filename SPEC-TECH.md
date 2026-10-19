@@ -501,11 +501,17 @@ README.md
 6. Le bonus de +30 % sur toutes les routes a disparu. Le banc d'équilibre reste dans ±25 %.
 7. `python3 tests/lancer.py` passe, et une sauvegarde d'avant la phase 2 se joue un an.
 
-## Questions ouvertes (phase 2)
+## Réponses du 19/10/2026 (spec de la phase 2 validée)
 
-1. **Lignes partagées** : un tronçon dont une ville est à vous et l'autre à un allié peut-il se construire ? Je propose
-   non : les deux à vous.
-2. **Sabotage** : peut-on détruire une ligne ennemie (une armée qui reste sur un tronçon le coupe pendant quelques
-   tours) ? Je propose de le garder pour plus tard.
-3. **Lignes hors carte** (vers Paris, Toulouse, Limoges) : on les dessine jusqu'au bord de la carte, sans effet
-   au-delà ?
+1. **Lignes partagées** : non, les deux villes d'un tronçon doivent être à vous. On roule pourtant sur les lignes des
+   alliés.
+2. **Sabotage, dès 2a** :
+   - une armée en guerre avec le camp d'un tronçon, qui finit son tour sur la route de ce tronçon, le coupe ;
+   - la ligne coupée ne sert plus à personne pendant 3 tours, puis elle est réparée d'elle-même ;
+   - un convoi en route sur le tronçon coupé descend du train et finit à pied ;
+   - le bilan du tour le dit aux deux camps ;
+   - les IA coupent les lignes ennemies qu'elles traversent en guerre, et se méfient de celles qui sont coupées.
+3. **Lignes hors carte** : dessinées jusqu'au bord de la carte. Les trains y entrent et en sortent, sans effet au-delà.
+
+Ajouts aux critères de réussite de 2a : une armée qui finit son tour sur un tronçon ennemi le coupe pour 3 tours ;
+plus personne n'y roule ; il est réparé ensuite.
