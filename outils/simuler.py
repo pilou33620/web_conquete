@@ -6,7 +6,7 @@ Usage :  python3 outils/simuler.py --parties 3 --epoque 1790 --annees 30 --grain
 
 Mesures, par partie puis en moyenne : erreurs (ou « fin » : le camp du joueur rayé de la carte arrête la partie),
 guerres déclarées et leur durée (mois), places de chaque camp à la fin
-et écart entre le premier et le dernier, camps encore en vie, technologies trouvées, trésor et hommes sous les armes.
+et écart entre le premier et le dernier, camps encore en vie, technologies trouvées, trésor, hommes sous les armes et tronçons de voie ferrée ouverts.
 Environ 20 s de calcul par année de jeu et par partie sur le Raspberry Pi : --proc en joue plusieurs à la fois.
 """
 import argparse
@@ -69,7 +69,8 @@ def simulate(seed, epoque='1790', mois=12, joueur='33'):
                 vivants=sum(1 for c in codes if g.factions[c]['alive']),
                 techs=round(sum(len(g.factions[c]['techs']) for c in codes) / len(codes), 1),
                 tresor=round(sum(g.factions[c]['res']['livres'] for c in codes) / len(codes)),
-                hommes=round(sum(g.army_men(a) for a in g.armies.values()) / len(codes)))
+                hommes=round(sum(g.army_men(a) for a in g.armies.values()) / len(codes)),
+                lignes=sum(1 for st in getattr(g, 'rails', {}).values() if st.get('done')))   # tronçons de voie ferrée ouverts
 
 
 def _run(args):
@@ -92,13 +93,14 @@ def main():
     with Pool(max(1, a.proc)) as pool:
         rows = pool.map(_run, jobs)
     print(f"{a.parties} parties depuis {a.epoque}, {a.annees} ans, graines {a.graine} à {a.graine + a.parties - 1}")
-    print('graine  fin                 guerres  durée  écart  vivants  techs  trésor  hommes  places / erreur')
+    print('graine  fin                 guerres  durée  écart  vivants  techs  trésor  hommes  rails  places / erreur')
     for r in rows:
         tail = r['err'] or ' '.join(f"{c}:{n}" for c, n in r['places'].items())
         print(f"{r['seed']:>6}  {r['date']:<18} {r['guerres']:>8} {r['duree']:>6} {r['ecart']:>6} {r['vivants']:>8} "
-              f"{r['techs']:>6} {r['tresor']:>7} {r['hommes']:>7}  {tail}")
+              f"{r['techs']:>6} {r['tresor']:>7} {r['hommes']:>7} {r['lignes']:>6}  {tail}")
     print(f"moyenne {'':<18} {mean(rows, 'guerres'):>8} {mean(rows, 'duree'):>6} {mean(rows, 'ecart'):>6} "
-          f"{mean(rows, 'vivants'):>8} {mean(rows, 'techs'):>6} {mean(rows, 'tresor'):>7} {mean(rows, 'hommes'):>7}  "
+          f"{mean(rows, 'vivants'):>8} {mean(rows, 'techs'):>6} {mean(rows, 'tresor'):>7} {mean(rows, 'hommes'):>7} "
+          f"{mean(rows, 'lignes'):>6}  "
           f"erreurs : {sum(1 for r in rows if r['err'] and not r['err'].startswith('fin'))}")
 
 
