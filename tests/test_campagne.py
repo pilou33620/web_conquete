@@ -1355,6 +1355,70 @@ class VoiesFerrees(unittest.TestCase):
         g = avec(partie(epoque='1870'), '33', 'chemins_fer')
         self.assertEqual(g.mod('33', 'road_speed'), sum(R.TECH[t]['fx'].get('road_speed', 0) for t in g.factions['33']['techs']))
 
+    def ligne_ouverte(self, *techs, owner_b='33'):
+        """Une partie où Bordeaux–Langon–La Réole est ouverte et à soi, et une armée à Bordeaux."""
+        g = partie(epoque='1870')
+        g.factions['33']['techs'] = [t for t in g.factions['33']['techs'] if t != 'rail_militaire']   # (déjà là en 1870)
+        avec(g, '33', 'chemins_fer', *techs)
+        from game import rails as RL
+        for x, y in (('Bordeaux', 'Langon'), ('Langon', 'La Réole'), ('La Réole', 'Marmande'), ('Marmande', 'Tonneins'),
+                     ('Tonneins', 'Aiguillon'), ('Aiguillon', 'Agen')):
+            sid = self.troncon(g, x, y)
+            g.rails[sid] = dict(done=True, cut=None)
+            for eid in RL.sections(GEO)[sid]['edges']:   # (les villages traversés aussi : pas de halte en route)
+                for n in (GEO.edges[eid]['a'], GEO.edges[eid]['b']):
+                    g.nodes[n]['owner'] = '33'
+        g.nodes[GEO.by_name['La Réole']]['owner'] = owner_b
+        a = armee(g)
+        a['x'], a['y'], a['at_node'], a['edge'], a['path'], a['state'] = *g.node_xy(GEO.by_name['Bordeaux']), GEO.by_name['Bordeaux'], None, [], 'idle'
+        return g, a
+
+    def duree(self, g, a, cible='Agen'):
+        ok, why = g.order_move(a['owner'], a['id'], node=GEO.by_name[cible])
+        self.assertTrue(ok, why)
+        t = 0.0
+        while a['path'] and t < 60:
+            g.move_army(a, 0.05)
+            t += 0.05
+        self.assertEqual(a['at_node'], GEO.by_name[cible])
+        return t, a
+
+    def test_le_train_va_plus_vite_que_la_marche(self):
+        g, a = self.ligne_ouverte()
+        a_pied, _ = self.duree(g, a)
+        g, a = self.ligne_ouverte('rail_militaire')
+        g.order_move('33', a['id'], node=GEO.by_name['Agen'])
+        self.assertTrue(any(l.get('rail') for l in a['path']), 'le trajet prend le train')
+        eta = TT.eta(g, a)
+        moral = [r['morale'] for r in a['regs']]
+        en_train, a = self.duree(g, a)
+        self.assertLess(en_train, a_pied * 0.6, f'{en_train:.2f} j en train, {a_pied:.2f} j à pied')
+        self.assertGreater(en_train, R.RAIL_EMBARK, 'une journée pour embarquer')
+        self.assertFalse(a.get('rail'))
+        self.assertEqual([r['morale'] for r in a['regs']], [m - 5 for m in moral], 'un peu désorganisée à la descente')
+        self.assertIsNotNone(eta)
+
+    def test_pas_de_train_sur_la_ligne_d_un_ennemi(self):
+        g, a = self.ligne_ouverte('rail_militaire', owner_b='24')
+        g.set_status('33', '24', 'paix')
+        g.order_move('33', a['id'], node=GEO.by_name['Langon'])
+        self.assertTrue(any(l.get('rail') for l in a['path']), 'Bordeaux–Langon est à nous')
+        g.order_move('33', a['id'], node=GEO.by_name['La Réole'])
+        self.assertFalse(any(l.get('rail') and l['to'] == GEO.by_name['La Réole'] for l in a['path']),
+                         'Langon–La Réole : La Réole est au Périgord')
+
+    def test_une_ligne_perdue_en_route_fait_descendre(self):
+        g, a = self.ligne_ouverte('rail_militaire')
+        g.order_move('33', a['id'], node=GEO.by_name['Agen'])
+        g.move_army(a, R.RAIL_EMBARK + 0.02)
+        self.assertTrue(a.get('rail'))
+        g.nodes[GEO.by_name['Marmande']]['owner'] = '24'
+        t, a = 0.0, a
+        while a['path'] and t < 30:
+            g.move_army(a, 0.05)
+            t += 0.05
+        self.assertFalse(a.get('rail'), 'à pied jusqu’au bout')
+
     def test_un_chantier_se_sauvegarde(self):
         from game import rails as RL
         g = avec(partie(epoque='1870'), '33', 'chemins_fer')

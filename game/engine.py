@@ -1467,16 +1467,20 @@ class Game:
             sp *= 0.5 + 0.5 * self.wx(x, y)['move']
         return sp
 
-    def road_route(self, code, start_nodes, goal, speed=22.0, boat=False, tr=0, block=None, afloat=False):
+    def road_route(self, code, start_nodes, goal, speed=22.0, boat=False, tr=0, block=None, afloat=False, rail=False,
+                   modes=None):
         """Plus court chemin par les routes et les voies d'eau.
         start_nodes : dict nœud -> coût initial. Retourne (coût, [nœuds], [arêtes]).
         L'état « à bord » est suivi : embarquer et débarquer prennent du temps.
         block : propriétaires dont les terres sont fermées (None : places traversables selon passable_node).
         Leurs places ne se franchissent qu'à bord, devant le quai, sans y débarquer ni embarquer ; partie de
-        l'une d'elles, une armée peut d'abord sortir par les routes de ce même département."""
+        l'une d'elles, une armée peut d'abord sortir par les routes de ce même département.
+        rail : l'armée est déjà dans un train. modes : liste remplie avec le mode de chaque arête du chemin (0 à pied,
+        1 à bord, 2 en train : « Chemins de fer militaires », sur les tronçons utilisables ; monter coûte RAIL_EMBARK)."""
         if block is not None and self.nodes[goal]['owner'] in block:
             return None
-        b0 = 1 if boat else 0
+        b0 = 1 if boat else 2 if rail else 0
+        rails = RL.rail_edges(self, code)
         dist = {}
         prev = {}
         pq = []
@@ -1506,7 +1510,7 @@ class Game:
                 v = e['b'] if e['a'] == u else e['a']
                 water = e.get('kind') == 'water'
                 if block is not None:
-                    if ub and b and not water:
+                    if ub and b == 1 and not water:
                         continue   # à bord devant des terres fermées : pas de débarquement
                     ov = self.nodes[v]['owner']
                     if ov in block and not water and not (ov == ou and (u in start_nodes or ub)):
@@ -1515,25 +1519,35 @@ class Game:
                     continue
                 nb = 1 if water else 0
                 nd = d + self.edge_cost(code, e, u, speed)
-                if water and not b:
+                if water and b != 1:
                     nd += R.EMBARK_DAYS * 22.0
-                elif b and not water:
+                elif b == 1 and not water:
                     nd += R.DISEMBARK_DAYS * 22.0
                 if nd < dist.get((v, nb), 1e18):
                     dist[(v, nb)] = nd
                     prev[(v, nb)] = ((u, b), eid)
                     heapq.heappush(pq, (nd, v, nb))
+                if eid in rails:   # en train : le même tronçon, bien plus vite, après l'embarquement en gare
+                    nd = d + e['len'] * 22.0 / R.RAIL_SPEED + (0.0 if b == 2 else R.RAIL_EMBARK * 22.0) \
+                        + (R.DISEMBARK_DAYS * 22.0 if b == 1 else 0.0)
+                    if nd < dist.get((v, 2), 1e18):
+                        dist[(v, 2)] = nd
+                        prev[(v, 2)] = ((u, b), eid)
+                        heapq.heappush(pq, (nd, v, 2))
         if best_goal is None:
             return None
-        nodes, eids = [best_goal[0]], []
+        nodes, eids, ms = [best_goal[0]], [], []
         cur = best_goal
         while cur in prev:
             p, eid = prev[cur]
             eids.append(eid)
+            ms.append(cur[1])
             nodes.append(p[0])
             cur = p
         nodes.reverse()
         eids.reverse()
+        if modes is not None:
+            modes[:] = ms[::-1]
         return dist[best_goal], nodes, eids
 
     def nearest_node(self, x, y, pred=None, maxd=1e9):
@@ -1587,8 +1601,9 @@ class Game:
                 return None
             legs.append(dict(kind='off', pts=[list(p) for p in pts], i=1))
             starts = {near: 0.0}
+        modes = []
         r = self.road_route(code, starts, goal, self.army_speed(a), bool(a.get('boat')), tr, block,
-                            afloat=afloat)
+                            afloat=afloat, rail=bool(a.get('rail')), modes=modes)
         if not r:
             return None
         _, nodes, eids = r
@@ -1597,12 +1612,14 @@ class Game:
             frm, pos = a['edge']['frm'], a['edge']['pos']
             to = e['b'] if e['a'] == frm else e['a']
             first = nodes[0]
+            # (dans un train, il finit le tronçon en train s'il le peut encore)
+            on = {'rail': True} if a.get('rail') and e['id'] in RL.rail_edges(self, code) else {}
             if first == to:
-                legs.append(dict(kind='road', e=e['id'], frm=frm, to=to, pos=pos))
+                legs.append(dict(kind='road', e=e['id'], frm=frm, to=to, pos=pos, **on))
             else:
-                legs.append(dict(kind='road', e=e['id'], frm=to, to=frm, pos=e['len'] - pos))
-        for u, v, eid in zip(nodes, nodes[1:], eids):
-            legs.append(dict(kind='road', e=eid, frm=u, to=v, pos=0.0))
+                legs.append(dict(kind='road', e=e['id'], frm=to, to=frm, pos=e['len'] - pos, **on))
+        for u, v, eid, m in zip(nodes, nodes[1:], eids, modes):
+            legs.append(dict(kind='road', e=eid, frm=u, to=v, pos=0.0, **({'rail': True} if m == 2 else {})))
         return legs
 
     def boat_prefix(self, a):
@@ -1891,6 +1908,15 @@ class Game:
     def marching(self, a):
         return a['state'] in ('move', 'retreat') and not self.paused(a)
 
+    def rail_switch(self, a, on):
+        """Monter dans le train (une journée en gare) ou en descendre (moral −5 : l'armée se reforme sur le quai)."""
+        a['rail'] = on
+        if on:
+            a['emb'] = R.RAIL_EMBARK
+        else:
+            for r in a['regs']:
+                r['morale'] = max(0.0, r['morale'] - 5)
+
     def move_army(self, a, dt):
         """Fait marcher une armée pendant dt jours. Renvoie ce qu'il reste de ce temps (armée arrivée ou arrêtée)."""
         season = self.season()
@@ -1912,6 +1938,12 @@ class Game:
                 a['emb'] = R.EMBARK_DAYS if is_water else R.DISEMBARK_DAYS
                 if a['at_node'] is not None and 'port' in self.geo.nodes[a['at_node']]['spec']:
                     a['emb'] *= 0.6
+            # le train : on monte en gare (une journée), on descend un peu désorganisé ; un tronçon devenu inutilisable
+            # en route (coupé, pris) fait finir à pied
+            if leg.get('rail') and leg['e'] not in RL.rail_edges(self, a['owner']):
+                leg.pop('rail')
+            if bool(leg.get('rail')) != bool(a.get('rail')):
+                self.rail_switch(a, bool(leg.get('rail')))
             if a.get('emb', 0) > 0:
                 use = min(budget, a['emb'])
                 a['emb'] -= use
@@ -1951,8 +1983,10 @@ class Game:
                     * (1 + self.mod(a['owner'], 'road_speed'))
                 if self.wx(a['x'], a['y']) is R.WEATHER['neige'] and self.zone_of(a['x'], a['y']) == 'montagne':
                     sp *= 0.6
+                if a.get('rail'):
+                    sp = R.RAIL_SPEED   # (le train passe les fleuves sur ses ponts)
                 zone_end = e['len']
-                if e['rrank'] == 1 and not self.mod(a['owner'], 'bridges') and not self.has_sapeurs(a):
+                if e['rrank'] == 1 and not self.mod(a['owner'], 'bridges') and not self.has_sapeurs(a) and not a.get('rail'):
                     if e['ferry']:
                         sp *= 0.35  # bac sur l'estuaire : toute la traversée est lente
                     else:
@@ -2043,6 +2077,8 @@ class Game:
         if not a['path'] and a.get('boat') and a['at_node'] is not None:
             a['boat'] = False
             a['emb'] = 0.0
+        if not a['path'] and a.get('rail'):
+            self.rail_switch(a, False)   # terminus
         if not a['path'] and a['state'] in ('move', 'retreat'):
             a['state'] = 'idle' if a['state'] != 'battle' else a['state']
             if a['ai'] and a['ai'].get('then') == 'embuscade':

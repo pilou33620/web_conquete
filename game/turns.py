@@ -186,16 +186,22 @@ def eta(g, a, legs=None):
     legs = a['path'] if legs is None else legs
     if not legs:
         return None
-    km, x, y = 0.0, a['x'], a['y']
+    km, rail, x, y = 0.0, 0.0, a['x'], a['y']   # (rail : jours de train, embarquements compris)
+    on = bool(a.get('rail'))
     for leg in legs:
         if leg['kind'] == 'road':
-            km += g.geo.edges[leg['e']]['len'] - leg['pos']
+            k = g.geo.edges[leg['e']]['len'] - leg['pos']
+            if leg.get('rail'):
+                rail += k / R.RAIL_SPEED + (0.0 if on else R.RAIL_EMBARK)
+            else:
+                km += k
+            on = bool(leg.get('rail'))
             x, y = g.node_xy(leg['to'])
         else:
             for px, py in leg['pts'][leg['i']:]:
                 km += math.hypot(px - x, py - y)
                 x, y = px, py
-    days = km / max(0.5, g.army_speed(a)) - (march_left(g, a) if planning(g) else 0.0)
+    days = km / max(0.5, g.army_speed(a)) + rail - (march_left(g, a) if planning(g) else 0.0)
     return 0 if days <= 1e-6 else max(1, math.ceil(days / (month_days(g, month_end(g)) * MARCH_FRAC) - 1e-6))
 
 

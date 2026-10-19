@@ -191,3 +191,11 @@ def near_station(g, code, x, y):
         if (gn['x'] - x) ** 2 + (gn['y'] - y) ** 2 <= r2 and any(usable(g, code, sid) for sid in sids):
             return True
     return False
+
+
+# ------------------------------------------------------------------ le train
+def rail_edges(g, code):
+    """Arêtes où ce camp peut prendre le train (« Chemins de fer militaires », tronçons utilisables), sinon vide."""
+    if code not in g.factions or not g.mod(code, 'rail_troops'):
+        return frozenset()
+    return frozenset(eid for sid, sec in sections(g.geo).items() if usable(g, code, sid) for eid in sec['edges'])
