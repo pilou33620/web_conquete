@@ -1333,6 +1333,28 @@ class VoiesFerrees(unittest.TestCase):
         self.assertTrue(g.rails[lt]['done'])
         self.assertNotIn('left', g.rails[lt])
 
+    def test_une_ligne_ouverte_dope_ses_villes_et_ravitaille(self):
+        from game import rails as RL
+        a = avec(partie(epoque='1870'), '33', 'chemins_fer')
+        b = avec(partie(epoque='1870'), '33', 'chemins_fer')
+        lt = self.troncon(b, 'Bordeaux', 'La Teste-de-Buch')
+        b.rails[lt] = dict(done=True, cut=None)
+        bx = GEO.by_name['Bordeaux']
+        oa, ob = a.node_output(a.nodes[bx], '33'), b.node_output(b.nodes[bx], '33')
+        self.assertAlmostEqual(ob['industrie'] / oa['industrie'], 1 + R.RAIL_TOWN_BONUS)
+        self.assertAlmostEqual(ob['livres'] / oa['livres'], 1 + R.RAIL_TOWN_BONUS)
+        gn = GEO.nodes[bx]
+        self.assertTrue(RL.near_station(b, '33', gn['x'] + 10, gn['y']))
+        self.assertFalse(RL.near_station(a, '33', gn['x'] + 10, gn['y']), 'sans ligne, pas de gare')
+        self.assertFalse(RL.near_station(b, '24', gn['x'] + 10, gn['y']), 'la gare d’un ennemi ne sert pas')
+        b.rails[lt]['cut'] = b.t + 99
+        self.assertFalse(RL.near_station(b, '33', gn['x'] + 10, gn['y']), 'ligne coupée')
+
+    def test_les_chemins_de_fer_ne_pressent_plus_toutes_les_routes(self):
+        self.assertEqual(R.TECH['chemins_fer']['fx'], {})
+        g = avec(partie(epoque='1870'), '33', 'chemins_fer')
+        self.assertEqual(g.mod('33', 'road_speed'), sum(R.TECH[t]['fx'].get('road_speed', 0) for t in g.factions['33']['techs']))
+
     def test_un_chantier_se_sauvegarde(self):
         from game import rails as RL
         g = avec(partie(epoque='1870'), '33', 'chemins_fer')

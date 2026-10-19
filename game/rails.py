@@ -146,3 +146,48 @@ def tick(g, w):
             a, b = g.geo.nodes[sec['a']], g.geo.nodes[sec['b']]
             g.log('rail', f"La voie ferrée {a['name']}–{b['name']} est ouverte : les deux villes gagnent en industrie et "
                           f"en commerce.", (a['x'] + b['x']) / 2, (a['y'] + b['y']) / 2, who=code, important=code == g.player)
+
+
+# ------------------------------------------------------------------ ce que les lignes rapportent
+_BY_TOWN = {}
+
+
+def by_town(geo):
+    """{ville: [tronçons qui la desservent]}"""
+    if id(geo) not in _BY_TOWN:
+        out = {}
+        for sid, sec in sections(geo).items():
+            out.setdefault(sec['a'], []).append(sid)
+            out.setdefault(sec['b'], []).append(sid)
+        _BY_TOWN[id(geo)] = out
+    return _BY_TOWN[id(geo)]
+
+
+def open_(g, sid):
+    """Achevé et pas coupé."""
+    st = g.rails.get(sid)
+    return bool(st and st.get('done') and not (st.get('cut') and g.t < st['cut']))
+
+
+def usable(g, code, sid):
+    """Ce camp peut-il s'en servir ? Ouvert, et ses deux villes à lui ou à un allié."""
+    if not open_(g, sid):
+        return False
+    sec = sections(g.geo)[sid]
+    return g.friendly(code, g.nodes[sec['a']]['owner']) and g.friendly(code, g.nodes[sec['b']]['owner'])
+
+
+def town_bonus(g, nid):
+    """Industrie et commerce en plus pour une ville desservie par des tronçons ouverts (à qui qu'ils soient)."""
+    k = sum(1 for sid in by_town(g.geo).get(nid, ()) if open_(g, sid))
+    return min(R.RAIL_TOWN_MAX, R.RAIL_TOWN_BONUS * k)
+
+
+def near_station(g, code, x, y):
+    """Une gare utilisable par ce camp est-elle à moins de RAIL_STATION_KM ?"""
+    r2 = R.RAIL_STATION_KM ** 2
+    for nid, sids in by_town(g.geo).items():
+        gn = g.geo.nodes[nid]
+        if (gn['x'] - x) ** 2 + (gn['y'] - y) ** 2 <= r2 and any(usable(g, code, sid) for sid in sids):
+            return True
+    return False

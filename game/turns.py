@@ -533,7 +533,7 @@ def _accumulate(g, dt):
             continue
         elif k == 'tech' and txt.startswith('Découverte'):
             lst, it = acc['techs'], _item(e)
-        elif e.get('important') and (k in ('capitulation', 'epoque', 'revolte', 'fin', 'siege')
+        elif e.get('important') and (k in ('capitulation', 'epoque', 'revolte', 'fin', 'siege', 'rail')
                                      or (k == 'diplo' and _DIPLO.search(txt))
                                      or (k == 'evenement' and 'Une décision vous attend' not in txt)):
             lst, it = acc['facts'], _item(e)

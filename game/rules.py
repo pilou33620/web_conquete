@@ -269,7 +269,7 @@ TECHS = [
     ('canal', 'civil', 'Balisage de la Garonne et canaux', 'Chenaux balisés, chemins de halage : gabares +25 % plus rapides, ports +10 %.', 875, 49, ['ponts_chaussees'], dict(river_speed=0.25, port=0.10)),
     ('ecoles', 'civil', 'Écoles centrales', 'Savants et ingénieurs formés : toutes les recherches 25 % plus rapides.', 1000, 56, ['codecivil'], dict(research_speed=0.25)),
     ('escompte', 'civil', "Caisse d'escompte", 'Crédit aux négociants : meilleurs prix au marché, commerce +10 %.', 750, 42, ['diplomates'], dict(market=0.08, trade=0.10)),
-    ('chemins_fer', 'civil', 'Chemins de fer', 'Bordeaux–La Teste en 1841, puis Paris : +30 % sur route, les armées s’épuisent 30 % moins vite loin de chez elles.', 1500, 70, ['ponts'], dict(road_speed=0.30, supply_drain=-0.30)),
+    ('chemins_fer', 'civil', 'Chemins de fer', 'Bordeaux–La Teste en 1841, puis Paris : on peut construire des voies ferrées sur les tracés historiques (panneau des villes). Chaque ligne ouverte dope l’industrie et le commerce de ses villes, et ravitaille les armées proches de ses gares.', 1500, 70, ['ponts'], dict()),
     ('telegraphe', 'civil', 'Télégraphe électrique', 'Les nouvelles vont à la vitesse de l’éclair : vision des villes +15 km, des armées +4 km.', 1125, 56, ['chappe'], dict(node_vision=15, vision=4)),
     ('ferry', 'civil', 'Écoles de Jules Ferry', 'École gratuite, laïque et obligatoire : recherches +20 %, ordre public +5 %, recrues +5 %.', 1375, 63, ['ecoles'], dict(research_speed=0.20, order=0.05, recrues=0.05)),
     ('hygiene', 'civil', 'Hygiène pastorienne', 'Vaccins, eau saine, asepsie : usure des armées −30 %, pertes −10 %.', 1250, 56, ['larrey'], dict(attrition=-0.30, casualties=-0.10)),

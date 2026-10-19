@@ -724,6 +724,10 @@ class Game:
         trade = CT.node_extra(self, n, code, out, trade)   # bâtiments, politique, événements de la ville
         if gn['type'] in ('ville', 'capitale'):
             out['livres'] *= 1 + self.mod(code, 'city_livres')   # éclairage au gaz : les villes travaillent le soir
+        rb = RL.town_bonus(self, n['id'])   # voies ferrées ouvertes : industrie et commerce
+        if rb:
+            out['industrie'] *= 1 + rb
+            out['livres'] *= 1 + rb
         if n['id'] in self._blockade:
             out['livres'] -= trade * (1 - R.BLOCKADE_K)
         mult = self.pop_factor(n) * max(0.3, n['stab']) * (0.7 + 0.3 * self.assim(n))
@@ -3381,8 +3385,9 @@ class Game:
                 a['supply'] = min(1.0, a['supply'] + 0.15 * dt)
             else:
                 k = 1.8 if season == 'hiver' else (0.6 if season in ('été', 'automne') else 1.0)
+                near = R.RAIL_STATION_DRAIN if RL.near_station(self, code, a['x'], a['y']) else 0.0   # une gare proche
                 a['supply'] = max(0.0, a['supply'] - 0.035 * k * dt * (0.5 if logi else 1.0)
-                                  * max(0.2, 1 + self.mod(code, 'supply_drain')))
+                                  * max(0.2, 1 + self.mod(code, 'supply_drain') + near))
             rate = 0.0
             if not a['onroad'] and a['at_node'] is None:
                 ter = self.geo.terrain_at(a['x'], a['y'])
