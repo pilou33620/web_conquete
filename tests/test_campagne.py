@@ -1448,6 +1448,18 @@ class VoiesFerrees(unittest.TestCase):
         g.monthly(datetime.date(1870, 10, 1))
         self.assertTrue(RL.usable(g, '33', sid))
 
+    def test_une_ia_lance_un_troncon(self):
+        from game import rails as RL
+        g = avec(partie(epoque='1870'), '24', 'chemins_fer')
+        ai = g.ais['24']
+        for D_ in [o for o in g.factions if o != '24' and g.at_war('24', o)]:
+            g.set_status('24', D_, 'paix')
+        g.factions['24']['res'].update(livres=20000, fer=3000, bois=3000)
+        if not any(RL.openable(g, '24', sid)[0] for sid in RL.sections(GEO)):
+            self.skipTest('pas de tronçon ouvrable pour le Périgord à cette date')
+        ai.build_rails(15000, [])
+        self.assertEqual(len(RL.works(g, '24')), 1)
+
     def test_un_chantier_se_sauvegarde(self):
         from game import rails as RL
         g = avec(partie(epoque='1870'), '33', 'chemins_fer')

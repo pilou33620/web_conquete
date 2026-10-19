@@ -4,6 +4,7 @@ import random
 
 from . import rules as R
 from . import cities as CT
+from . import rails as RL
 from . import diplomacy as D
 from . import army_actions as AA
 
@@ -361,9 +362,25 @@ class AI:
         budget -= self.stock_up(budget, res)
         budget = self.expand_towns(budget, wars)
         budget = self.fortify_frontier(budget, wars, res)
+        budget = self.build_rails(budget, wars)
         budget = CT.ai_build(self, budget, wars)   # bâtiments d'emplacement
         if not wars and excess > 1500:
             self.gift(excess)
+
+    def build_rails(self, budget, wars):
+        """Voies ferrées : en paix, un tronçon à la fois depuis le chef-lieu, les lignes les plus anciennes d'abord."""
+        g, code = self.g, self.code
+        if wars or 'chemins_fer' not in self.f['techs'] or RL.works(g, code):
+            return budget
+        cands = [sid for sid in RL.sections(g.geo) if RL.openable(g, code, sid)[0]]
+        for sid in sorted(cands, key=lambda s: (RL.sections(g.geo)[s]['year'], RL.sections(g.geo)[s]['km'])):
+            price, _ = RL.cost(g, code, sid)
+            extra = self.provide(price, budget)
+            if extra is None:
+                continue
+            if RL.start(g, code, sid)[0]:
+                return budget - price.get('livres', 0) - extra
+        return budget
 
     def menaced(self, wars):
         """Un danger à nos portes : une guerre, ou une frontière avec plus fort que soi ou avec un voisin hostile."""
