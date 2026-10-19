@@ -185,3 +185,107 @@ du banc d'essai et capture `node web/js/battle/dev/capture.mjs <scénario> <fich
   - Vérif : tous les bancs ; essai sur l'iPad ; ton avis sur la galerie.
   - Fichiers : `README.md`, `SPEC-TECH.md`, `tasks/todo-tech.md`
   - Taille : S
+
+## Phase 2a : le train (plan : tasks/plan-tech.md, « Phase 2a »)
+
+- [ ] **T69 : lignes et tronçons**
+  - Critères :
+    - `rules.RAIL_LINES` reprend le tableau vérifié de la spec ;
+    - `rails.sections(geo)` donne les tronçons (route la plus courte, routes royales d'abord) et les sorties vers le
+      bord.
+  - Vérif : banc : chaque ville existe et chaque tronçon a une route ; tous les tronçons font plus de 3 km ; pas de
+    doublon.
+  - Fichiers : `game/rules.py`, `game/rails.py`, `tests/test_campagne.py`
+  - Taille : S
+
+- [ ] **T70 : chantiers de tronçons**
+  - Critères :
+    - un tronçon est ouvrable si le camp a la technologie, tient les deux villes, et que l'une est son chef-lieu ou
+      touche son réseau achevé ;
+    - le chantier (`kind='rail'`) se paie et se met dans la file ;
+    - il avance plus vite avec plus d'industrie, puis s'achève ;
+    - `g.rails` est sauvegardé ;
+    - la commande `rail_build` arrive au serveur.
+  - Vérif : bancs : refus sans la technologie ou hors du réseau ; prix payé ; plus vite avec plus d'industrie ;
+    achèvement ; sauvegarde et rechargement en plein chantier.
+  - Fichiers : `game/rails.py`, `game/engine.py`, `game/views.py`, `server.py`, `tests/test_campagne.py`
+  - Taille : M
+
+- [ ] **T71 : effets des lignes**
+  - Critères :
+    - les villes desservies gagnent +5 % d'industrie et de commerce par tronçon, jusqu'à +15 % ;
+    - une armée près d'une gare de son camp s'use 30 % moins vite ;
+    - « Chemins de fer » perd son effet sur toutes les routes ;
+    - le bilan du tour dit les tronçons ouverts.
+  - Vérif : bancs pour chaque effet ; une vieille sauvegarde avec la technologie se charge sans le bonus.
+  - Fichiers : `game/rails.py`, `game/engine.py`, `game/rules.py`, `game/turns.py`, `tests/test_campagne.py`
+  - Taille : M
+
+- [ ] **T72 : le train**
+  - Critères :
+    - avec « Chemins de fer militaires », l'itinéraire prend le train sur les tronçons utilisables (les siens, ceux
+      des alliés) ;
+    - une journée d'embarquement, puis environ 130 km par jour ;
+    - à la descente, moral −5 ;
+    - un tronçon perdu en route fait finir à pied ;
+    - l'arrivée estimée (`eta`) en tient compte.
+  - Vérif : bancs :
+    - trajet plus court en temps par le train ;
+    - à pied sans la technologie, sur une ligne ennemie, ou sur une ligne d'allié refusée ;
+    - une ville prise fait passer la ligne au vainqueur ;
+    - gabare puis train ;
+    - tous les bancs de marche existants passent.
+  - Fichiers : `game/engine.py`, `game/turns.py`, `game/rails.py`, `tests/test_campagne.py`
+  - Taille : M
+
+- [ ] **T73 : sabotage**
+  - Critères : une armée en guerre qui finit son mois sur la route d'un tronçon ennemi le coupe pour 3 tours ;
+    personne n'y roule plus ; un convoi en route descend ; le tronçon est réparé ensuite ; le journal le dit aux deux
+    camps.
+  - Vérif : bancs : coupé, inutilisable, réparé au bout de 3 tours ; pas de coupure en paix ni sur sa propre ligne.
+  - Fichiers : `game/rails.py`, `game/engine.py`, `tests/test_campagne.py`
+  - Taille : S
+
+- [ ] **T74 : les IA construisent**
+  - Critères : en paix et avec de quoi payer, une IA lance des tronçons depuis son chef-lieu, les plus anciens du
+    tableau d'abord.
+  - Vérif : banc : une IA avec la technologie et un trésor lance un tronçon en un tour ; le banc d'équilibre montre
+    des lignes achevées après 1841.
+  - Fichiers : `game/ai.py`, `tests/test_campagne.py`
+  - Taille : S
+
+- [ ] **Point 2a-1** : tous les bancs ; banc d'équilibre, 6 parties depuis 1790 et 6 depuis 1813, sur 40 ans, avant et
+  après : mesures dans ±25 % ; au moins une ligne achevée par partie après 1841 ; vieille sauvegarde jouée un an.
+
+- [ ] **T75 : interface**
+  - Critères :
+    - la section « Voie ferrée » du panneau de la ville (tronçons ouvrables, prix, durée, bouton, avancement) ;
+    - le libellé de l'élément de file ;
+    - les tronçons dans la carte statique, leur état dans l'état du joueur.
+  - Vérif : bancs d'interface (section affichée avec la technologie, absente sans) ; capture du panneau.
+  - Fichiers : `web/js/ui.js`, `game/views.py`, `game/geo.py` ou `server.py` (carte statique), `tests/interface.test.mjs`
+  - Taille : M
+
+- [ ] **T76 : la carte : rails, chantiers, gares, trajets en train**
+  - Critères :
+    - rails le long des routes ; pointillés et traverses qui avancent pendant un chantier ; gares dans les villes
+      desservies ; sorties vers le bord ; tronçon coupé barré ;
+    - trait de rail pour la partie en train d'un ordre ;
+    - convoi dessiné pour une armée en train.
+  - Vérif : captures de la carte en 1845, 1860 et 1880 (partie fabriquée avec des lignes achevées) ; images par
+    seconde de la carte inchangées sur le Pi.
+  - Fichiers : `web/js/map.js`
+  - Taille : M
+
+- [ ] **T77 : trains animés**
+  - Critères : locomotive à panache et wagons qui vont et viennent sur les tronçons achevés, seulement à l'écran et au
+    bon zoom ; ils entrent et sortent par le bord de la carte.
+  - Vérif : capture et vidéo courte.
+  - Fichiers : `web/js/ambient.js`
+  - Taille : S
+
+- [ ] **T78 : revue, README, galerie, état**
+  - Critères : `/review` de 2a et ses corrections ; README ; galerie « Le train » ; état noté dans la spec ; graphe
+    mis à jour.
+  - Fichiers : `README.md`, `SPEC-TECH.md`, `tasks/todo-tech.md`, `graphify-out/`
+  - Taille : S

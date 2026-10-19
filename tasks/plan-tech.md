@@ -138,3 +138,76 @@ si tu préfères voir le rendu plus tôt.
 - Les cinq écarts ci-dessus sont acceptés (mildiou compris).
 - Ordre : phase 0, puis phase 1.
 - Construction : `/build auto` sur tout le plan, revue complète (`/review`) obligatoire à la fin (T68).
+
+---
+
+# Phase 2a : le train (sous-module `carte-rail`, SPEC-TECH.md « Phase 2 », validée le 19/10/2026)
+
+Tâches : `tasks/todo-tech.md`, T69 à T78.
+
+## Décisions d'architecture
+
+- **D11. `rules.RAIL_LINES` et `game/rails.py`.** Les lignes vérifiées sont dans une table : nom, villes, années,
+  sorties vers le bord. Leurs tronçons (d'une ville à la suivante) sont calculés une fois au chargement de la carte.
+  Chacun est la route la plus courte entre ses deux villes, les routes royales d'abord : `id`, villes `a` et `b`,
+  arêtes `edges`, `km`, `line`, `year`. Toute la logique des rails vit dans `rails.py` (ouvrable, chantier,
+  utilisable, effets, sabotage), et le moteur l'appelle aux bons endroits.
+- **D12. L'état : `g.rails = {id: dict(done, cut)}`**, sauvegardé (`views.SAVE_KEYS`). L'avancement d'un chantier est
+  un élément `kind='rail'` dans la file d'une des deux villes, comme une construction : la file reste plafonnée à 4.
+  `update_queues` avance cet élément de `w × k_industrie(camp)`.
+- **D13. Une ligne n'appartient à personne.** Un camp peut se servir d'un tronçon s'il est achevé, pas coupé, et si
+  ses deux villes sont à lui ou à un allié. Prendre une ville prend donc ses rails, sans rien stocker de plus.
+  L'ensemble des arêtes utilisables par un camp est mémorisé pour le pas de jeu en cours.
+- **D14. Le train dans l'itinéraire : un troisième état de `road_route`.** Il existe déjà à pied (0) et à bord (1) ; on
+  ajoute en train (2). Sur une arête utilisable et avec `rail_troops`, le coût vaut `km × 22 / RAIL_SPEED`. Monter
+  coûte `RAIL_EMBARK × 22`, comme l'embarquement des gabares. Les étapes en train portent `rail: True`.
+  `move_army` copie le modèle des gabares :
+  - un drapeau `a['rail']` et un délai `a['emb']` à la montée ;
+  - la vitesse `RAIL_SPEED` ;
+  - à la descente, moral −5 et pas de fatigue ;
+  - si le tronçon devient inutilisable en route (coupé ou pris), l'armée descend et finit à pied.
+
+  `turns.eta` apprend la vitesse du train. Les IA prennent le train sans code à elles, puisque tout passe par
+  `road_route`.
+- **D15. Effets d'un tronçon achevé, quel que soit son propriétaire du moment** :
+  - dans `node_output`, chaque ville desservie gagne +5 % d'industrie et +5 % de livres de commerce par tronçon,
+    jusqu'à +15 % ;
+  - dans `attrition`, une armée à moins de 30 km d'une gare utilisable par son camp s'use 30 % moins vite ;
+  - la technologie « Chemins de fer » perd son effet sur toutes les routes (`fx` vide).
+- **D16. Sabotage dans `Game.monthly`**, qui sert au tour par tour comme au temps réel :
+  - une armée en guerre, posée (`edge` ou `at_node`) sur la route d'un tronçon utilisable par un ennemi, le coupe
+    pour `RAIL_CUT_TOURS` (3) ;
+  - un tronçon coupé ne sert à personne, puis il est réparé de lui-même ;
+  - un journal pour les deux camps, repris dans le bilan du tour.
+- **D17. Le navigateur.**
+  - Les tronçons (villes, arêtes, km, ligne, année, sorties vers le bord) partent avec la carte statique (`/api/map`).
+  - Leur état part avec `player_state` : `rails=[[id, 'fait'|'chantier'|'coupe', avancement]]`.
+  - `map.js` dessine les rails à chaque image (option B : quelques dizaines d'arêtes, sans toucher au cache des tuiles),
+    le long des courbes des routes (`edgePoint`), avec les gares, les sorties vers le bord, les tronçons en chantier
+    en pointillés et les trajets en train.
+  - `ambient.js` fait rouler les trains sur les tronçons achevés.
+
+## Graphe des dépendances
+
+```
+T69 tronçons ── T70 chantiers ──┬── T71 effets des lignes
+                                ├── T72 le train ── T73 sabotage
+                                └── T74 IA (chantiers)
+                                         └── point 2a-1 (bancs, équilibre 1790 et 1813)
+T70 ── T75 interface ── T76 carte (rails, gares, trajets) ── T77 trains animés ── T78 revue
+```
+
+## Risques et parades
+
+| Risque | Impact | Parade |
+|---|---|---|
+| Le troisième état de `road_route` casse les marches, les gabares ou les retraites | Haut | Tous les bancs de campagne existants ; bancs dédiés (gabare puis train, retraite en train, armée arrêtée par un siège) ; le train ne s'active qu'avec `rail_troops` |
+| Le train déséquilibre la guerre (invasions trop rapides) | Haut | `RAIL_SPEED` et l'embarquement dans `rules.py` ; lignes coupées par l'ennemi ; banc d'équilibre avant et après |
+| Retirer le +30 % sur toutes les routes ralentit les camps d'après 1841 | Moyen | Banc d'équilibre (1813 et 1790 sur 40 ans) ; les lignes le rendent là où elles passent |
+| Calculer les arêtes utilisables à chaque itinéraire coûte cher sur le Pi | Moyen | Mémorisé par camp pour le pas de jeu, recalculé quand un tronçon ou une ville change |
+| Rails dessinés de travers par rapport aux armées (courbes du client) | Faible | Dessin avec `edgePoint`, comme les routes ; positions d'armée avec `pointFrom` |
+| Sauvegardes : chemins de fer déjà trouvés, pas de `g.rails` | Faible | Défaut au chargement ; banc de chargement d'une sauvegarde d'avant |
+
+## Questions ouvertes
+
+- Aucune : la spec et ses réponses tranchent tout. Les valeurs chiffrées (prix, vitesse, bonus) se règlent au banc.

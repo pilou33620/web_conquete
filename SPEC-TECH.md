@@ -377,25 +377,45 @@ règles. 2b à 2d ne changent que le rendu.
 9. **Les sauvegardes d'avant la phase 2** se chargent sans rails. Un camp qui avait déjà la technologie peut lancer ses
    chantiers ; son bonus de +30 % sur les routes disparaît (changement d'effet : `recompute_mods` au chargement).
 
-## Lignes historiques (tracés et années à vérifier pendant le plan)
+## Lignes historiques (vérifiées le 19/10/2026 sur les articles « Ligne de… » de Wikipédia)
 
-| Ligne | Villes (dans l'ordre) | Année |
-|---|---|---|
-| Bordeaux–La Teste | Bordeaux, La Teste-de-Buch | 1841 |
-| Bordeaux–Paris | Bordeaux, Libourne, Coutras (puis vers Angoulême, hors carte) | 1852 |
-| Bordeaux–Bayonne | Bordeaux, Morcenx, Dax, Bayonne | 1855 |
-| Ligne du Midi | Bordeaux, Langon, La Réole, Marmande, Tonneins, Aiguillon, Agen (puis vers Toulouse) | 1856 |
-| Morcenx–Mont-de-Marsan | Morcenx, Mont-de-Marsan, Aire-sur-l'Adour | 1857 |
-| Coutras–Périgueux | Coutras, Montpon, Mussidan, Périgueux | 1857 |
-| Périgueux–Brive, –Limoges | Périgueux, Terrasson ; Périgueux, Thiviers | 1860 |
-| Dax–Pau | Dax, Orthez, Pau | 1863 |
-| Agen–Périgueux | Agen, Villeneuve-sur-Lot, Fumel, Sarlat (embranchement), Périgueux | 1863 |
-| Bayonne–Irun | Bayonne, Biarritz, Saint-Jean-de-Luz, Hendaye | 1864 |
-| Langon–Bazas | Langon, Bazas | 1866 |
-| Médoc | Bordeaux, Lesparre-Médoc | 1868 |
-| Libourne–Bergerac | Libourne, Bergerac, Lalinde | 1875 |
-| Pau–Oloron | Pau, Oloron-Sainte-Marie | 1883 |
-| Embranchements tardifs | Saint-André-de-Cubzac–Blaye, Morcenx–Mimizan, Dax–Peyrehorade, Agen–Nérac, Orthez–Salies-de-Béarn, Bayonne–Hasparren | 1880-1890 |
+Seules les villes de la carte sont nommées. « → bord » : la ligne continue hors de la carte, dessinée jusqu'au bord,
+sans effet.
+
+| Ligne | Villes (dans l'ordre) | Années | Confiance |
+|---|---|---|---|
+| Bordeaux–La Teste | Bordeaux, La Teste-de-Buch | 1841 | sûr |
+| Paris–Bordeaux | Bordeaux, Libourne, Coutras → bord (Angoulême) | 1852 | sûr |
+| Bordeaux–Bayonne (Midi) | Bordeaux, Morcenx, Dax, Bayonne | 1854 (Dax), 1855 (Bayonne) | sûr |
+| Bordeaux–Sète (Midi) | Bordeaux, Langon, La Réole, Marmande, Tonneins, Aiguillon, Agen → bord (Toulouse) | 1855, 1856 (Agen) | sûr |
+| Morcenx–Tarbes | Morcenx, Mont-de-Marsan, Aire-sur-l'Adour → bord (Tarbes) | 1857, 1859 (Aire) | sûr |
+| Coutras–Périgueux | Coutras, Montpon, Mussidan, Périgueux | 1857 | sûr |
+| Périgueux–Brive | Périgueux, Terrasson → bord (Brive) | 1860 | sûr |
+| Périgueux–Limoges | Périgueux, Thiviers → bord (Limoges) | 1861 | sûr |
+| Toulouse–Bayonne | Pau, Orthez, Peyrehorade, Bayonne ; Pau → bord (Tarbes) | 1863, 1864 (Bayonne) | 1864 probable |
+| Puyoô–Dax | Orthez, Dax | 1863 | sûr |
+| Agen–Périgueux | Agen, Fumel, Périgueux | 1863 | sûr |
+| Bayonne–Irun | Bayonne, Biarritz, Saint-Jean-de-Luz, Hendaye → bord (Irun) | 1864 | sûr |
+| Langon–Bazas | Langon, Bazas | 1866 | sûr |
+| Penne–Villeneuve–Tonneins | Fumel, Villeneuve-sur-Lot (1869), Sainte-Livrade, Tonneins (1894) | 1869, 1894 | sûr |
+| Libourne–Le Buisson | Libourne, Bergerac (1875), Lalinde (1879) | 1875, 1879 | sûr |
+| Médoc | Bordeaux, Lesparre-Médoc | 1873 | sûr |
+| Saint-Mariens–Blaye | Blaye → bord (Saint-Mariens) | 1873 | sûr |
+| Port-Sainte-Marie–Condom | Aiguillon, Nérac | 1880 | sûr |
+| La Cave–Ribérac | Périgueux, Ribérac | 1881 | sûr |
+| Le Buisson–Sarlat | Lalinde, Sarlat | 1882 | sûr |
+| Angoulême–Nontron–Thiviers | Nontron, Thiviers ; Nontron → bord (Angoulême) | 1883, 1892 | sûr |
+| Pau–Oloron | Pau, Oloron-Sainte-Marie | 1883 | sûr |
+| Puyoô–Mauléon | Orthez, Salies-de-Béarn, Mauléon | 1884, 1887 | sûr |
+| Marmande–Angoulême | Marmande, Miramont, Bergerac, Mussidan, Ribérac | 1886, 1888, 1890 | sûr |
+| Saintes–Bordeaux | Bordeaux, Saint-André-de-Cubzac → bord (Saintes) | 1886 | probable |
+| Saint-André–Blaye | Saint-André-de-Cubzac, Blaye | 1889 | probable |
+| Labouheyre–Mimizan | Morcenx, Mimizan (par Labouheyre, sur Bordeaux–Bayonne) | 1889 | sûr |
+| Nérac–Mont-de-Marsan | Nérac, Mont-de-Marsan | 1890, 1897 | sûr |
+| Marmande–Mont-de-Marsan | Marmande, Casteljaloux, Mont-de-Marsan | 1882 à 1893 | sûr |
+| Dax–Mont-de-Marsan | Mont-de-Marsan, Saint-Sever, Dax | 1891, 1899 | sûr |
+
+Sans train avant 1900 : Biscarrosse, Capbreton, Soustons, Hasparren.
 
 ## Sous-module `carte-rail` (2a) : ce que voit le joueur
 
