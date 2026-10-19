@@ -603,6 +603,53 @@ TECH_YEAR = dict(
 # unités apparues en cours de route (la milice bourgeoise et les miquelets existent dès 1700 sous d'autres noms)
 UNIT_YEAR = dict()
 
+# ------------------------------------------------------------------ voies ferrées (SPEC-TECH.md, phase 2a)
+# Lignes historiques, vérifiées le 19/10/2026 sur les articles « Ligne de… » de Wikipédia : (nom, villes de la carte
+# dans l'ordre avec l'année où la ligne les atteint, sorties vers le bord [(ville, vers, direction)]). Chaque tronçon va
+# d'une ville à la suivante, par la route la plus courte (game/rails.py) ; l'année ne sert qu'à l'ordre (les IA, le
+# panneau) : un camp en avance construit plus tôt.
+RAIL_LINES = [
+    ('Bordeaux–La Teste', [('Bordeaux', 0), ('La Teste-de-Buch', 1841)], []),
+    ('Paris–Bordeaux', [('Bordeaux', 0), ('Libourne', 1852), ('Coutras', 1852)], [('Coutras', 'Angoulême', 'N')]),
+    ('Bordeaux–Bayonne', [('Bordeaux', 0), ('Morcenx', 1854), ('Dax', 1854), ('Bayonne', 1855)], []),
+    ('Bordeaux–Sète', [('Bordeaux', 0), ('Langon', 1855), ('La Réole', 1855), ('Marmande', 1855), ('Tonneins', 1855),
+                       ('Aiguillon', 1856), ('Agen', 1856)], [('Agen', 'Toulouse', 'E')]),
+    ('Morcenx–Tarbes', [('Morcenx', 0), ('Mont-de-Marsan', 1857), ("Aire-sur-l'Adour", 1859)], [("Aire-sur-l'Adour", 'Tarbes', 'SE')]),
+    ('Coutras–Périgueux', [('Coutras', 0), ('Montpon', 1857), ('Mussidan', 1857), ('Périgueux', 1857)], []),
+    ('Périgueux–Brive', [('Périgueux', 0), ('Terrasson', 1860)], [('Terrasson', 'Brive', 'E')]),
+    ('Périgueux–Limoges', [('Périgueux', 0), ('Thiviers', 1861)], [('Thiviers', 'Limoges', 'NE')]),
+    ('Toulouse–Bayonne', [('Pau', 0), ('Orthez', 1863), ('Peyrehorade', 1864), ('Bayonne', 1864)], [('Pau', 'Tarbes', 'E')]),
+    ('Puyoô–Dax', [('Orthez', 0), ('Dax', 1863)], []),
+    ('Agen–Périgueux', [('Agen', 0), ('Fumel', 1863), ('Périgueux', 1863)], []),
+    ('Bayonne–Irun', [('Bayonne', 0), ('Biarritz', 1864), ('Saint-Jean-de-Luz', 1864), ('Hendaye', 1864)], [('Hendaye', 'Irun', 'S')]),
+    ('Langon–Bazas', [('Langon', 0), ('Bazas', 1866)], []),
+    ('Penne–Villeneuve–Tonneins', [('Fumel', 0), ('Villeneuve-sur-Lot', 1869), ('Sainte-Livrade', 1894), ('Tonneins', 1894)], []),
+    ('Médoc', [('Bordeaux', 0), ('Lesparre-Médoc', 1873)], []),
+    ('Libourne–Le Buisson', [('Libourne', 0), ('Bergerac', 1875), ('Lalinde', 1879)], []),
+    ('Port-Sainte-Marie–Condom', [('Aiguillon', 0), ('Nérac', 1880)], []),
+    ('La Cave–Ribérac', [('Périgueux', 0), ('Ribérac', 1881)], []),
+    ('Le Buisson–Sarlat', [('Lalinde', 0), ('Sarlat', 1882)], []),
+    ('Pau–Oloron', [('Pau', 0), ('Oloron-Sainte-Marie', 1883)], []),
+    ('Puyoô–Mauléon', [('Orthez', 0), ('Salies-de-Béarn', 1884), ('Mauléon', 1887)], []),
+    ('Marmande–Angoulême', [('Marmande', 0), ('Miramont', 1886), ('Bergerac', 1886), ('Mussidan', 1888), ('Ribérac', 1890)], []),
+    ('Saintes–Bordeaux', [('Bordeaux', 0), ('Saint-André-de-Cubzac', 1886)], [('Saint-André-de-Cubzac', 'Saintes', 'N')]),
+    ('Saint-André–Blaye', [('Saint-André-de-Cubzac', 0), ('Blaye', 1889)], [('Blaye', 'Saint-Mariens', 'NE')]),
+    ('Labouheyre–Mimizan', [('Morcenx', 0), ('Mimizan', 1889)], []),   # (par Labouheyre, sur Bordeaux–Bayonne : approché)
+    ('Marmande–Mont-de-Marsan', [('Marmande', 0), ('Casteljaloux', 1891), ('Mont-de-Marsan', 1893)], []),
+    ('Thiviers–Nontron', [('Thiviers', 0), ('Nontron', 1892)], [('Nontron', 'Angoulême', 'N')]),
+    ('Nérac–Mont-de-Marsan', [('Nérac', 0), ('Mont-de-Marsan', 1897)], []),
+    ('Dax–Mont-de-Marsan', [('Mont-de-Marsan', 0), ('Saint-Sever', 1891), ('Dax', 1899)], []),
+]
+RAIL_KM_COST = dict(livres=30, fer=8, bois=6)   # prix d'un km de voie
+RAIL_KM_DAYS = 4.0          # jours de travail par km, à industrie moyenne (× 0,5 à 2 selon l'industrie du camp)
+RAIL_SPEED = 130.0          # km par jour en train (chemins de fer militaires)
+RAIL_EMBARK = 1.0           # jours pour embarquer en gare
+RAIL_TOWN_BONUS = 0.05      # industrie et commerce d'une ville desservie, par tronçon…
+RAIL_TOWN_MAX = 0.15        # … jusqu'à ce plafond
+RAIL_STATION_KM = 30.0      # une armée à moins de cette distance d'une gare de son camp s'use moins vite…
+RAIL_STATION_DRAIN = -0.30  # … de tant
+RAIL_CUT_TOURS = 3          # tours pendant lesquels un tronçon coupé ne sert à personne
+
 # ------------------------------------------------------------------ armement
 # Chaque régiment garde les armes reçues à sa levée ; il faut le réarmer pour profiter d'un nouveau fusil.
 # (technologie, nom, multiplicateur de puissance)

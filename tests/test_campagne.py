@@ -1258,5 +1258,35 @@ class Mitrailleuses(unittest.TestCase):
         self.assertEqual(g.siege_rate(n, [a]), sans, 'les sièges ne comptent que les canons')
 
 
+class VoiesFerrees(unittest.TestCase):
+    """SPEC-TECH.md, phase 2a : les lignes historiques, leurs tronçons, leurs chantiers, le train."""
+
+    def test_les_troncons_des_lignes_historiques(self):
+        from game import rails as RL
+        secs = RL.sections(GEO)
+        self.assertGreaterEqual(len(secs), 50)
+        paires = set()
+        for s_ in secs.values():
+            self.assertTrue(s_['edges'], f"{s_['line']} : une route entre les deux villes")
+            self.assertGreater(s_['km'], 3)
+            a, b = GEO.nodes[s_['a']], GEO.nodes[s_['b']]
+            self.assertIn(a['type'], ('capitale', 'ville', 'fort'))
+            self.assertIn(b['type'], ('capitale', 'ville', 'fort'))
+            p_ = frozenset((s_['a'], s_['b']))
+            self.assertNotIn(p_, paires, f"{a['name']}–{b['name']} en double")
+            paires.add(p_)
+            # la route va bien de a à b, arête après arête
+            n = s_['a']
+            for eid in s_['edges']:
+                e = GEO.edges[eid]
+                self.assertNotEqual(e.get('kind'), 'water')
+                n = e['b'] if e['a'] == n else e['a']
+            self.assertEqual(n, s_['b'])
+        byname = {(GEO.nodes[x['a']]['name'], GEO.nodes[x['b']]['name']) for x in secs.values()}
+        self.assertIn(('Bordeaux', 'La Teste-de-Buch'), byname)
+        self.assertTrue(all(any(x['a'] == GEO.by_name[t] or x['b'] == GEO.by_name[t] for x in secs.values())
+                            for t, _ in RL.exits()), 'chaque sortie vers le bord part d’une ville desservie')
+
+
 if __name__ == '__main__':
     unittest.main()
