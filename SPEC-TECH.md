@@ -15,7 +15,7 @@ commencer.
 | `visuels` | Table `rules.VISUALS` : quelle technologie ou quelle année déclenche quelle marque visible ; marques de chaque camp et arme de chaque régiment envoyées à la bataille | — | 0 |
 | `arbre` | Branche « civil et social », 21 nouvelles technologies et leurs effets nouveaux, mitrailleuse devenue unité | — | 0 |
 | `bataille-armes` | Piquiers, poudre noire puis sans fumée, modèles de canons, batterie de mitrailleuses, vrais drapeaux d'époque | `visuels`, `arbre` | 1 |
-| `carte-epoque` | Rails et trains (les armées les prennent), Chappe, vapeurs, usines, pins, vignes, drapeaux des villes | `visuels`, `arbre` | 2 |
+| `carte-epoque` | Rails et trains (les armées les prennent), Chappe, vapeurs, usines, pins, vignes, drapeaux des villes ; découpé en `carte-rail`, `carte-industrie`, `carte-paysage`, `carte-allure` (section « Phase 2 ») | `visuels`, `arbre` | 2 |
 | `decouvertes` | Mise en scène sur la carte, fenêtre « gravure », frise, bandeau des IA | `carte-epoque` | 3 |
 | `bataille-decor` | Voie ferrée, télégraphe, usines, cultures, ambulances, ballons, retranchements dans le décor | `bataille-armes`, `carte-epoque` | 4 |
 
@@ -315,3 +315,197 @@ Spec validée le 18/10/2026 (questionnaire) ; prochaine étape : le plan.
 3. ~~Drapeaux de 1700 à 1790~~ : réglé le 18/10, chaque régiment a ses quartiers, tirés des couleurs historiques.
 4. **Ordre des phases suivantes** : on refait un point après la phase 1 (galerie et iPad) avant d'écrire la spec de la
    phase 2.
+
+---
+
+# Phase 2 : la carte qui change avec les siècles (module `carte-epoque`)
+
+Spec écrite le 19/10/2026, après les phases 0 et 1. Choix du questionnaire du même jour, plus les choix du 18/10
+(monde mixte, les armées prennent le train dès la phase 2).
+
+## Découpage (sous-modules, dans cet ordre)
+
+| Sous-module | Ce qu'il fait | Dépend de |
+|---|---|---|
+| `carte-rail` (2a) | Chantiers de voies ferrées par tronçon, trains sur la carte, gares, armées qui prennent le train, rails qui dopent l'industrie | `visuels`, `arbre` |
+| `carte-industrie` (2b) | Tours Chappe puis poteaux télégraphiques, bateaux à vapeur, cheminées d'usines, lueur des forges, réverbères au gaz | `visuels` |
+| `carte-paysage` (2c) | Les pins gagnent les Landes, les marais rétrécissent, les vignes brunissent puis renaissent, les cultures changent | `visuels` |
+| `carte-allure` (2d) | Drapeaux d'époque sur les villes, passants de l'époque, style de la carte (Cassini, état-major) | `visuels`, `bataille-armes` (table des drapeaux) |
+
+Chaque sous-module a son plan, sa construction, sa galerie et sa revue. 2a vient d'abord : c'est le seul qui change les
+règles. 2b à 2d ne changent que le rendu.
+
+## Choix validés (questionnaire du 19/10/2026)
+
+- **Chantiers payés, tronçon par tronçon** : d'une ville à la suivante sur les tracés historiques. Chaque tronçon se
+  paie (livres, fer, bois) et avance doucement.
+- **L'industrie et les rails se nourrissent** : l'industrie du camp fait avancer les chantiers plus vite, et chaque
+  tronçon achevé dope l'industrie et le commerce des villes qu'il dessert.
+- **Le train** : environ six fois plus vite qu'à pied sur une ligne achevée, et une journée pour embarquer en gare. On
+  roule sur ses lignes et sur celles des alliés. Une ligne prise passe à l'ennemi, qui s'en sert s'il a la technologie.
+  Les IA s'en servent aussi.
+- **Le bonus de « Chemins de fer » passe sur les lignes** : la technologie ne donne plus +30 % sur toutes les routes.
+  Elle ouvre les chantiers, et le gain ne vaut que là où il y a des rails.
+- **Toute la carte** (2a à 2d), dans l'ordre : le train, puis télégraphes et usines, puis le paysage, puis l'allure.
+
+## Hypothèses (à corriger maintenant si besoin)
+
+1. **Les lignes historiques donnent l'ordre, pas la date.** Une fois la technologie trouvée, tous les tronçons du
+   tableau ci-dessous sont ouvrables. Leur année historique sert seulement à les présenter (et à guider les IA). Un
+   camp en avance peut donc avoir Bordeaux–Bayonne avant 1855.
+2. **Un tronçon s'ouvre si** :
+   - ses deux villes sont à vous ;
+   - l'une d'elles est votre chef-lieu ou touche déjà une ligne achevée de votre camp : le réseau part du chef-lieu ;
+   - il ne se construit qu'un chantier à la fois par tronçon, lancé depuis la file d'une des deux villes.
+3. **Un tronçon suit la route la plus courte** entre ses deux villes : les routes royales d'abord, villages compris.
+   Les rails sont dessinés le long de cette route, légèrement décalés.
+4. **Une ligne n'appartient à personne** : elle est sur la carte. Un camp s'en sert si les deux villes du tronçon sont
+   à lui ou à un allié. Prendre une ville prend donc les rails qui y mènent.
+5. **Prix et durée de départ**, à régler au banc :
+   - 30 livres, 8 fer et 6 bois par km ;
+   - 4 jours de travail par km, à vitesse d'industrie moyenne.
+
+   Un tronçon de 30 km coûte donc environ 900 livres, 240 fer et 180 bois, et demande 4 tours.
+6. **Vitesse des chantiers** : × (0,5 à 2) selon l'industrie du camp, comparée à celle d'un camp moyen de son époque.
+7. **Gain d'un tronçon achevé** : +5 % d'industrie et +5 % de livres de commerce pour chaque ville qu'il dessert, jusqu'à
+   +15 % par ville. Une armée à moins de 30 km d'une gare de son camp s'use 30 % moins vite (l'ancien effet
+   « ravitaillement » de la technologie).
+8. **Le train** :
+   - 130 km par jour sur un tronçon utilisable, avec « Chemins de fer militaires » ;
+   - une journée d'embarquement au début d'un trajet en train ;
+   - l'armée est désorganisée à la descente : moral −5, la fatigue de la marche en moins.
+9. **Les sauvegardes d'avant la phase 2** se chargent sans rails. Un camp qui avait déjà la technologie peut lancer ses
+   chantiers ; son bonus de +30 % sur les routes disparaît (changement d'effet : `recompute_mods` au chargement).
+
+## Lignes historiques (tracés et années à vérifier pendant le plan)
+
+| Ligne | Villes (dans l'ordre) | Année |
+|---|---|---|
+| Bordeaux–La Teste | Bordeaux, La Teste-de-Buch | 1841 |
+| Bordeaux–Paris | Bordeaux, Libourne, Coutras (puis vers Angoulême, hors carte) | 1852 |
+| Bordeaux–Bayonne | Bordeaux, Morcenx, Dax, Bayonne | 1855 |
+| Ligne du Midi | Bordeaux, Langon, La Réole, Marmande, Tonneins, Aiguillon, Agen (puis vers Toulouse) | 1856 |
+| Morcenx–Mont-de-Marsan | Morcenx, Mont-de-Marsan, Aire-sur-l'Adour | 1857 |
+| Coutras–Périgueux | Coutras, Montpon, Mussidan, Périgueux | 1857 |
+| Périgueux–Brive, –Limoges | Périgueux, Terrasson ; Périgueux, Thiviers | 1860 |
+| Dax–Pau | Dax, Orthez, Pau | 1863 |
+| Agen–Périgueux | Agen, Villeneuve-sur-Lot, Fumel, Sarlat (embranchement), Périgueux | 1863 |
+| Bayonne–Irun | Bayonne, Biarritz, Saint-Jean-de-Luz, Hendaye | 1864 |
+| Langon–Bazas | Langon, Bazas | 1866 |
+| Médoc | Bordeaux, Lesparre-Médoc | 1868 |
+| Libourne–Bergerac | Libourne, Bergerac, Lalinde | 1875 |
+| Pau–Oloron | Pau, Oloron-Sainte-Marie | 1883 |
+| Embranchements tardifs | Saint-André-de-Cubzac–Blaye, Morcenx–Mimizan, Dax–Peyrehorade, Agen–Nérac, Orthez–Salies-de-Béarn, Bayonne–Hasparren | 1880-1890 |
+
+## Sous-module `carte-rail` (2a) : ce que voit le joueur
+
+- **Panneau de la ville** : une section « Voie ferrée ». Elle liste les tronçons ouvrables depuis cette ville (vers
+  quelle ville, longueur, prix, durée), lance un chantier et montre son avancement. Le chantier prend une place dans la
+  file de la ville, comme une construction.
+- **Sur la carte** :
+  - un tronçon en chantier se dessine en pointillés, avec des traverses qui avancent selon les travaux ;
+  - un tronçon achevé se dessine comme une voie ferrée (deux rails et des traverses) le long de sa route ;
+  - une petite gare apparaît dans chaque ville desservie ;
+  - des trains animés roulent sur les lignes (une locomotive à panache, quelques wagons), comme les charrettes
+    aujourd'hui. Ils roulent sur toutes les lignes achevées, à qui qu'elles soient.
+- **Le train** : un ordre de marche qui passe par des tronçons utilisables prend le train de lui-même, avec
+  l'embarquement en gare au début. Le tracé de l'ordre montre la partie en train (trait de rail) et la durée. Une armée
+  dans un train se dessine en convoi sur la ligne.
+- **Le bilan du tour** dit les tronçons achevés (« La ligne Bordeaux–Libourne est ouverte : Libourne +5 %
+  d'industrie »).
+- **Les IA** lancent des chantiers (en paix d'abord, en commençant par les lignes les plus anciennes du tableau) et
+  font prendre le train à leurs armées.
+
+## Sous-modules 2b à 2d : ce que voit le joueur (détaillés dans leur plan)
+
+Tout se déclenche par `rules.VISUALS` : la technologie du camp qui tient la place, ou l'année.
+
+- **2b, télégraphes, vapeurs, usines**
+  - Tours Chappe aux bras mobiles sur les hauteurs, entre les villes d'un camp qui a `chappe`. Avec `telegraphe`, des
+    poteaux et un fil le long des voies ferrées et des routes royales.
+  - Bateaux à vapeur à roues parmi les gabares, sur les fleuves d'un camp qui a `vapeur_fluviale`.
+  - Cheminées d'usine qui fument dans les villes qui ont une Fabrique, ou dans toutes les villes d'un camp qui a
+    `vapeur`.
+  - Lueur rouge des forges la nuit (`hauts_fourneaux`, `coke`), réverbères au gaz dans les villes la nuit (`gaz`).
+- **2c, paysage**
+  - Les Landes rases et leurs bergers sur échasses laissent peu à peu place aux pins : semis avec `pins`, puis forêt
+    avec `landes1857`, cases converties au fil des années. Pots de résine avec `gemmage`.
+  - Les marais rétrécissent avec `drainage`.
+  - Les vignes brunissent au phylloxéra (l'événement de 1875) puis renaissent en rangs avec `greffe`.
+  - Champs plus variés avec `assolement`, maïs en Chalosse et en Béarn avec `mais`, moissonneuses l'été avec
+    `moissonneuses`.
+- **2d, allure**
+  - Drapeau d'époque au-dessus de chaque ville : la table des drapeaux de la phase 1, côté carte.
+  - Passants sur les routes coiffés du tricorne, puis du bicorne, puis du haut-de-forme.
+  - Style de la carte au choix dans les options (« d'époque » par défaut) : façon Cassini au XVIIIe (tons sépia,
+    hachures), façon état-major au XIXe (couleurs plus franches).
+
+## Fichiers touchés (2a)
+
+```
+game/rules.py            RAIL_LINES (tracés historiques), prix et durées, vitesse du train ; chemins_fer sans bonus de route
+game/rails.py            NOUVEAU : tronçons (route la plus courte entre deux villes), ouvrables, chantiers, achèvement,
+                         utilisables par un camp, effets sur les villes ; état dans g.rails (sauvegardé)
+game/engine.py           file des villes (chantier de tronçon), vitesse et itinéraire des armées (train, embarquement),
+                         ravitaillement près des gares, effets sur l'industrie et le commerce
+game/ai.py               chantiers des IA, trains des armées
+game/views.py            tronçons (achevés, en chantier, ouvrables) envoyés au navigateur ; sauvegardes
+game/turns.py            bilan : tronçons ouverts
+web/js/map.js            voies ferrées, chantiers, gares, convois en train, tracé d'ordre en train
+web/js/ambient.js        trains animés et leur panache
+web/js/ui.js             section « Voie ferrée » du panneau de la ville
+tests/test_campagne.py   bancs ; outils/simuler.py inchangé (mesure avant et après)
+README.md
+```
+
+## Stratégie de test (2a)
+
+- **Bancs Python** :
+  - les tronçons du tableau existent : chaque ville est sur la carte et une route relie les deux bouts ;
+  - un tronçon s'ouvre seulement avec la technologie, les deux villes à soi, et un lien au chef-lieu ou au réseau ;
+  - un chantier se paie, avance plus vite avec plus d'industrie, puis s'achève, et les villes desservies gagnent leur
+    bonus ;
+  - une armée avec `rail_militaire` met moins de temps par le train qu'à pied, embarquement compris ; sans la
+    technologie, ou sur la ligne d'un ennemi, elle marche ;
+  - une ville prise fait passer les rails qui y mènent au vainqueur ;
+  - une sauvegarde d'avant la phase 2 se charge et se joue un an ;
+  - les IA lancent des chantiers et prennent le train.
+- **Banc d'équilibre** (`outils/simuler.py`) : 6 parties depuis 1790 et 6 depuis 1813, sur 40 ans, avant et après. Les
+  mesures doivent rester dans ±25 %, et il faut au moins une ligne achevée par partie après 1841.
+- **Bancs d'interface** : la section « Voie ferrée » du panneau, et le tracé d'un ordre en train.
+- **Captures** de la carte en 1840, 1860 et 1880 (rails, gares, trains), et vidéo d'un train qui roule.
+
+## Limites (2a), en plus de celles des phases 0 et 1
+
+- **Toujours** :
+  - tester les changements d'itinéraire sur les bancs de campagne existants (marches, sièges, retraites, gabares) ;
+  - garder le tracé des routes tel quel ;
+  - ne dessiner les rails que pour les tuiles de la carte touchées par un tronçon qui change.
+- **Demander d'abord** :
+  - changer la carte géographique (`game/data/geo.json`) ;
+  - ajouter un tronçon qui ne suit pas une route existante ;
+  - un prix ou une vitesse qui s'écarte de plus du double des valeurs ci-dessus.
+- **Jamais** : casser une partie sauvegardée ; un tracé inventé présenté comme historique (une ligne douteuse est
+  marquée « approximative » dans le tableau).
+
+## Critères de réussite (2a)
+
+1. Après « Chemins de fer », le panneau d'une ville propose les tronçons qui en partent. Un chantier lancé se paie,
+   avance tour après tour (plus vite avec plus d'industrie), puis s'achève.
+2. La voie ferrée se dessine sur la carte : pointillés pendant le chantier, rails ensuite. Les gares et les trains
+   animés apparaissent.
+3. Les villes desservies gagnent de l'industrie et du commerce, et le bilan du tour le dit.
+4. Avec « Chemins de fer militaires », une armée prend le train sur ses lignes et celles des alliés, environ six fois
+   plus vite qu'à pied, embarquement compris. Une ligne prise passe au vainqueur.
+5. Les IA construisent des lignes et s'en servent.
+6. Le bonus de +30 % sur toutes les routes a disparu. Le banc d'équilibre reste dans ±25 %.
+7. `python3 tests/lancer.py` passe, et une sauvegarde d'avant la phase 2 se joue un an.
+
+## Questions ouvertes (phase 2)
+
+1. **Lignes partagées** : un tronçon dont une ville est à vous et l'autre à un allié peut-il se construire ? Je propose
+   non : les deux à vous.
+2. **Sabotage** : peut-on détruire une ligne ennemie (une armée qui reste sur un tronçon le coupe pendant quelques
+   tours) ? Je propose de le garder pour plus tard.
+3. **Lignes hors carte** (vers Paris, Toulouse, Limoges) : on les dessine jusqu'au bord de la carte, sans effet
+   au-delà ?
