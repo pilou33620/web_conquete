@@ -523,6 +523,24 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   (iPadOS 15 et plus, tout navigateur récent) ; sans lui, un message le dit et vos officiers mènent la bataille.
 - Clavier : C charger, H tenir, F feu, R rallier, Échap désélectionner, Ctrl + A tout choisir, + et − zoom.
 
+### Voies ferrées et trains
+- Avec la technologie « Chemins de fer » (vers 1841), le panneau d'une ville propose les **tronçons** de voie ferrée
+  qui en partent, sur les **tracés historiques** : 29 lignes vérifiées, de Bordeaux–La Teste (1841) à Dax–Mont-de-Marsan
+  (1899). Un tronçon va d'une ville à la suivante, par la route la plus courte.
+- Un tronçon s'ouvre si ses deux villes sont à vous et si l'une est votre chef-lieu ou touche déjà votre réseau. Il se
+  **paie** (30 livres, 8 fer et 6 bois par km ; le ciment réduit le prix) et avance à part de la file de la ville, plus
+  vite si votre industrie est forte (× 0,5 à 2). Deux chantiers au plus à la fois.
+- Une ligne ouverte **dope** ses villes : +5 % d'industrie et de livres par tronçon, jusqu'à +15 %. Une armée à moins
+  de 30 km d'une gare de son camp s'use 30 % moins vite. La technologie n'accélère plus toutes les routes.
+- Avec « Chemins de fer militaires » (vers 1859), les armées **prennent le train** sur leurs lignes et celles de leurs
+  alliés : une journée pour embarquer en gare, puis 130 km par jour ; elles descendent un peu désorganisées (moral −5).
+  L'ordre de marche le montre (trait de rail), l'armée roule en convoi. Les IA construisent et prennent le train aussi.
+- Une ligne n'est à personne : on s'en sert si ses deux villes sont à soi ou à un allié ; prendre une ville prend ses
+  rails. Une armée en guerre qui finit son mois sur une ligne ennemie la **coupe** pour trois tours (croix rouge sur la
+  carte) ; un convoi en route descend et finit à pied.
+- Sur la carte : voies (trait noir à tirets blancs), chantiers en pointillés, gares, lignes qui sortent vers Paris,
+  Toulouse, Limoges ou l'Espagne, et des trains qui vont et viennent avec leur panache.
+
 ### Fleuves, gabares et blocus
 - La Garonne et l'estuaire de la Gironde, la Dordogne, l'Isle, le Lot, la Baïse, la Midouze et l'Adour sont
   **navigables**, et un cabotage relie l'estuaire, le bassin d'Arcachon, Capbreton, Bayonne, Biarritz,
