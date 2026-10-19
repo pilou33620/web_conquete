@@ -61,3 +61,88 @@ def sections(geo):
 def exits():
     """Sorties des lignes vers le bord de la carte : [(ville, (vers, direction))] (dessinées seulement)."""
     return [(t, (to, d)) for _, _, ex in R.RAIL_LINES for t, to, d in ex]
+
+
+# ------------------------------------------------------------------ réseau et chantiers
+RAIL_MAX_WORKS = 2   # chantiers de voie ferrée menés en même temps par un camp
+
+
+def _owned(g, code, sec):
+    return g.nodes[sec['a']]['owner'] == code and g.nodes[sec['b']]['owner'] == code
+
+
+def network(g, code):
+    """Villes reliées au réseau de ce camp : son chef-lieu, et les villes des tronçons achevés qu'il tient en entier."""
+    out = {g.capital_of(code)}
+    for sid, st in g.rails.items():
+        sec = sections(g.geo).get(sid)
+        if sec and st.get('done') and _owned(g, code, sec):
+            out |= {sec['a'], sec['b']}
+    return out
+
+
+def works(g, code):
+    return [sid for sid, st in g.rails.items() if not st.get('done') and st.get('by') == code]
+
+
+def openable(g, code, sid):
+    """(possible, raison) : ce camp peut-il ouvrir le chantier de ce tronçon ?"""
+    sec = sections(g.geo).get(sid)
+    if sec is None:
+        return False, "Tronçon inconnu."
+    if 'chemins_fer' not in g.factions[code]['techs']:
+        return False, "Technologie requise : Chemins de fer."
+    if sid in g.rails:
+        return False, "Voie déjà construite." if g.rails[sid].get('done') else "Chantier déjà en cours."
+    if not _owned(g, code, sec):
+        return False, "Les deux villes doivent être à vous."
+    if not {sec['a'], sec['b']} & network(g, code):
+        return False, "Le réseau part de votre chef-lieu : reliez d'abord l'une des deux villes."
+    if len(works(g, code)) >= RAIL_MAX_WORKS:
+        return False, f"Déjà {RAIL_MAX_WORKS} chantiers de voie ferrée en cours."
+    return True, ''
+
+
+def cost(g, code, sid):
+    """Prix et durée (jours de travail à industrie moyenne) d'un tronçon pour ce camp : le ciment les réduit aussi."""
+    km = sections(g.geo)[sid]['km']
+    return g.build_cost(code, {r: v * km for r, v in R.RAIL_KM_COST.items()}), g.build_days(code, km * R.RAIL_KM_DAYS)
+
+
+def start(g, code, sid):
+    ok, why = openable(g, code, sid)
+    if not ok:
+        return False, why
+    price, days = cost(g, code, sid)
+    if not g.can_pay(code, price):
+        return False, "Ressources insuffisantes."
+    g.pay(code, price)
+    g.rails[sid] = dict(done=False, cut=None, by=code, left=days, total=days)
+    sec = sections(g.geo)[sid]
+    return True, f"Chantier de la voie {g.geo.nodes[sec['a']]['name']}–{g.geo.nodes[sec['b']]['name']} lancé."
+
+
+def industry_k(g, code):
+    """Vitesse des chantiers : l'industrie du camp comparée à celle des camps en vie (× 0,5 à 2)."""
+    alive = [f['income'].get('industrie', 0.0) for f in g.factions.values() if f['alive']]
+    mean = sum(alive) / max(1, len(alive))
+    return max(0.5, min(2.0, g.factions[code]['income'].get('industrie', 0.0) / max(1e-6, mean)))
+
+
+def tick(g, w):
+    """Fait avancer les chantiers de w jours de travail (Game.update_queues) ; un chantier dont une ville est perdue ou
+    assiégée attend."""
+    for sid, st in g.rails.items():
+        if st.get('done'):
+            continue
+        sec, code = sections(g.geo)[sid], st['by']
+        if code not in g.factions or not g.factions[code]['alive'] or not _owned(g, code, sec) \
+                or g.nodes[sec['a']]['siege'] or g.nodes[sec['b']]['siege']:
+            continue
+        st['left'] -= w * industry_k(g, code)
+        if st['left'] <= 1e-6:
+            g.rails[sid] = dict(done=True, cut=None)
+            g._dirty_income = True
+            a, b = g.geo.nodes[sec['a']], g.geo.nodes[sec['b']]
+            g.log('rail', f"La voie ferrée {a['name']}–{b['name']} est ouverte : les deux villes gagnent en industrie et "
+                          f"en commerce.", (a['x'] + b['x']) / 2, (a['y'] + b['y']) / 2, who=code, important=code == g.player)

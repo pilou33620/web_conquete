@@ -533,5 +533,9 @@ README.md
    - les IA coupent les lignes ennemies qu'elles traversent en guerre, et se méfient de celles qui sont coupées.
 3. **Lignes hors carte** : dessinées jusqu'au bord de la carte. Les trains y entrent et en sortent, sans effet au-delà.
 
+**Écart trouvé au plan (19/10/2026)** : un tronçon long (jusqu'à 110 km) demande une quinzaine de tours. Mis dans la
+file d'une ville, il bloquerait les levées pendant des années. Les chantiers de voie ferrée avancent donc à part, en
+parallèle de la file (deux au plus par camp), et le panneau de la ville les montre dans sa section « Voie ferrée ».
+
 Ajouts aux critères de réussite de 2a : une armée qui finit son tour sur un tronçon ennemi le coupe pour 3 tours ;
 plus personne n'y roule ; il est réparé ensuite.

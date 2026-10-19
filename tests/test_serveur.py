@@ -71,6 +71,12 @@ class Http(unittest.TestCase):
         self.assertEqual(a['path'], [], "rien n'est ordonné")
         self.assertIsNone(self.cmd(dict(cmd='eta', army='a999', x=1, y=1))['tn'])
 
+    def test_chantier_de_voie_ferree(self):
+        g = self.nouvelle_partie()
+        r = self.cmd(dict(cmd='rail_build', node=g.capital_of('33'), section='0-5'))
+        self.assertFalse(r['ok'], 'sans la technologie')
+        self.assertFalse(self.cmd(dict(cmd='rail_build', node=g.capital_of('33'), section=['x']))['ok'])
+
     def test_page_d_accueil(self):
         st, txt = self.req('GET', '/')
         self.assertEqual(st, 200)

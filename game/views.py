@@ -14,9 +14,9 @@ from .tactics import units as TU
 
 SAVE_KEYS = ['player', 'difficulty', 'seed', 't', 'uid', 'seq', 'events', 'proposals', 'armies', 'battles', 'over',
              'flood_until', 'market', 'weather', 'factions', 'nodes', '_ai_clock', 'spies', 'scenario', 'start_ord',
-             'era_id', 'pending_ev', 'ev_done', 'tour']
+             'era_id', 'pending_ev', 'ev_done', 'tour', 'rails']
 DEFAULTS = dict(spies=list, scenario=lambda: '1790', start_ord=lambda: datetime.date(1790, 3, 4).toordinal(),
-                era_id=lambda: None, pending_ev=list, ev_done=lambda: None, tour=lambda: None)
+                era_id=lambda: None, pending_ev=list, ev_done=lambda: None, tour=lambda: None, rails=dict)
 
 
 def to_dict(g):

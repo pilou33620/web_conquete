@@ -39,6 +39,7 @@ from game import cities as CT  # noqa: E402
 from game import diplomacy as D  # noqa: E402
 from game import events as EV  # noqa: E402
 from game import rules as R  # noqa: E402
+from game import rails as RL  # noqa: E402
 from game import turns as TT  # noqa: E402
 from game import views as V  # noqa: E402
 from game.engine import Game  # noqa: E402
@@ -220,6 +221,9 @@ class App:
                 return self._r(g.recruit(p, self._node(body['node']), body.get('unit')))
             if c == 'build':
                 return self._r(g.build(p, self._node(body['node']), body.get('what')))
+            if c == 'rail_build':   # voie ferrée (game/rails.py)
+                return self._r(RL.start(g, p, str(body.get('section'))) if isinstance(body.get('section'), str)
+                               else (False, 'Tronçon inconnu.'))
             # villes : emplacements et politique (game/cities.py)
             if c == 'slot_build':
                 return self._r(CT.slot_build(g, p, self._node(body['node']), str(body.get('chain'))))

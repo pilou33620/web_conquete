@@ -9,6 +9,7 @@ from . import events as EV
 from . import army_actions as AA
 from . import battle_log as BL
 from . import cities as CT
+from . import rails as RL
 from . import turns as TT
 from .tactics import bridge as TB
 from .geo import TERRAIN, T_LANDE, T_MARAIS, T_PLAINE
@@ -120,6 +121,7 @@ class Game:
         TB.ensure(self)        # batailles tactiques : réglage, bataille en cours
         self.pending_ev = []   # décisions qui attendent le joueur
         self.tour = TT.new_state()   # tour par tour, mois par mois (game/turns.py)
+        self.rails = {}        # voies ferrées : {tronçon: dict(done, cut[, by, left, total])} (game/rails.py)
         self.ev_done = []      # événements datés déjà passés
         if self.scenario == '1790':
             self.log('info', f"4 mars 1790 : l'Assemblée crée les départements. Vous gouvernez {self.fname(player)}.",
@@ -1183,6 +1185,7 @@ class Game:
 
     def update_queues(self, dt):
         w0 = TT.work(self, dt)   # capacité par tour : un mois de travail, quelle que soit sa longueur
+        RL.tick(self, w0)   # chantiers des voies ferrées, menés à part (game/rails.py)
         for n in self.nodes:
             if not n['queue'] or n['siege'] or n['owner'] == R.NEUTRAL:
                 continue

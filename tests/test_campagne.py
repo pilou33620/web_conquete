@@ -1287,6 +1287,63 @@ class VoiesFerrees(unittest.TestCase):
         self.assertTrue(all(any(x['a'] == GEO.by_name[t] or x['b'] == GEO.by_name[t] for x in secs.values())
                             for t, _ in RL.exits()), 'chaque sortie vers le bord part d’une ville desservie')
 
+    def troncon(self, g, a, b):
+        from game import rails as RL
+        ia, ib = GEO.by_name[a], GEO.by_name[b]
+        return RL.sections(GEO)[f'{min(ia, ib)}-{max(ia, ib)}']['id']
+
+    def test_un_chantier_s_ouvre_depuis_le_chef_lieu(self):
+        from game import rails as RL
+        g = partie(epoque='1870')
+        g.factions['33']['techs'] = [t for t in g.factions['33']['techs'] if t != 'chemins_fer']
+        lt = self.troncon(g, 'Bordeaux', 'La Teste-de-Buch')
+        g.nodes[GEO.by_name['La Teste-de-Buch']]['owner'] = '33'
+        self.assertFalse(RL.openable(g, '33', lt)[0], 'sans la technologie')
+        avec(g, '33', 'chemins_fer')
+        ok, why = RL.openable(g, '33', lt)
+        self.assertTrue(ok, why)
+        loin = self.troncon(g, 'Libourne', 'Coutras')
+        for t in ('Libourne', 'Coutras'):
+            g.nodes[GEO.by_name[t]]['owner'] = '33'
+        self.assertFalse(RL.openable(g, '33', loin)[0], 'pas relié au chef-lieu ni au réseau')
+        g.factions['33']['res'].update(livres=99999, fer=9999, bois=9999)
+        avant = dict(g.factions['33']['res'])
+        ok, why = RL.start(g, '33', lt)
+        self.assertTrue(ok, why)
+        km = RL.sections(GEO)[lt]['km']
+        self.assertEqual(avant['livres'] - g.factions['33']['res']['livres'], math.ceil(km * R.RAIL_KM_COST['livres'] * (1 + g.mod('33', 'build_cost'))))
+        self.assertFalse(RL.start(g, '33', lt)[0], 'un seul chantier par tronçon')
+
+    def test_le_chantier_avance_plus_vite_avec_l_industrie_puis_s_acheve(self):
+        from game import rails as RL
+        res = []
+        for ind in (5.0, 80.0):
+            g = avec(partie(epoque='1870'), '33', 'chemins_fer')
+            g.nodes[GEO.by_name['La Teste-de-Buch']]['owner'] = '33'
+            g.factions['33']['res'].update(livres=99999, fer=9999, bois=9999)
+            lt = self.troncon(g, 'Bordeaux', 'La Teste-de-Buch')
+            RL.start(g, '33', lt)
+            g.factions['33']['income']['industrie'] = ind
+            left0 = g.rails[lt]['left']
+            RL.tick(g, 30.0)
+            res.append(left0 - g.rails[lt]['left'])
+        self.assertGreater(res[1], res[0])
+        g.rails[lt]['left'] = 0.5
+        RL.tick(g, 30.0)
+        self.assertTrue(g.rails[lt]['done'])
+        self.assertNotIn('left', g.rails[lt])
+
+    def test_un_chantier_se_sauvegarde(self):
+        from game import rails as RL
+        g = avec(partie(epoque='1870'), '33', 'chemins_fer')
+        g.nodes[GEO.by_name['La Teste-de-Buch']]['owner'] = '33'
+        g.factions['33']['res'].update(livres=99999, fer=9999, bois=9999)
+        lt = self.troncon(g, 'Bordeaux', 'La Teste-de-Buch')
+        RL.start(g, '33', lt)
+        g2 = V.from_dict(GEO, json.loads(json.dumps(V.to_dict(g))))
+        self.assertEqual(g2.rails, g.rails)
+        self.assertEqual(V.from_dict(GEO, {k: v for k, v in json.loads(json.dumps(V.to_dict(g))).items() if k != 'rails'}).rails, {})
+
 
 if __name__ == '__main__':
     unittest.main()
