@@ -59,7 +59,7 @@ def migrate(g):
     for a in g.armies.values():
         if not a.get('gen'):
             a['gen'] = g.new_general(a['owner'])
-        for k, v in dict(fm='ligne', pl='frontal', fm_t=-9.0, tac_auto=True, landing=False, boat=False, emb=0.0,
+        for k, v in dict(fm='ligne', pl='frontal', fm_t=-9.0, tac_auto=True, landing=False, boat=False, rail=False, emb=0.0,
                          rx=True, des=0.0, depot=None).items():
             a.setdefault(k, v)
         for r in a['regs']:
@@ -174,7 +174,7 @@ def _legs(a):
     out = []
     for leg in a['path']:
         if leg['kind'] == 'road':
-            out.append(dict(e=leg['e'], frm=leg['frm'], to=leg['to'], pos=round(leg['pos'], 2)))
+            out.append(dict(e=leg['e'], frm=leg['frm'], to=leg['to'], pos=round(leg['pos'], 2), **({'r': 1} if leg.get('rail') else {})))
         else:
             out.append(dict(pts=[[round(p[0], 2), round(p[1], 2)] for p in leg['pts'][max(0, leg['i'] - 1):]]))
     return out
@@ -295,6 +295,8 @@ def player_state(g, since=0):
                  gen=_gen(a.get('gen')), fm=a.get('fm', 'ligne'))
         if a.get('boat'):
             d['boat'] = 1
+        if a.get('rail'):
+            d['rail'] = 1   # dans un train
         if a['edge']:
             e = g.geo.edges[a['edge']['e']]
             d['e'] = [e['id'], a['edge']['frm'], round(a['edge']['pos'] / e['len'], 4)]

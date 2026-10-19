@@ -6,7 +6,7 @@
 //   node web/js/battle/dev/capture.mjs vignes /tmp/v.png --q "season=automne&hour=18&avance=600" --wait 6000 \
 //        --js "__btView.moveCam(1500, 1000, 3)" --size 1280x800
 //
-// Options : --q (paramètres de banc.html, en plus de scen et start=1 ; start=0 pour le déploiement), --js (code lancé quand la bataille est prête ;
+// Options : --url (capturer une page d'un jeu déjà lancé, sans maquette), --q (paramètres de banc.html, en plus de scen et start=1 ; start=0 pour le déploiement), --js (code lancé quand la bataille est prête ;
 // window.__btView est la vue), --wait (ms avant la capture, défaut 4000), --size (défaut 1400x800), --dpr (densité de pixels, défaut 1 ; 2 comme un écran Retina), --gpu (essayer la
 // carte graphique au lieu de SwiftShader), --nogl (sans WebGL : le message et la résolution automatique), --qualite basse|moyenne|haute|ultra (défaut haute, choisie « à la main » : la
 // mesure des images par seconde, très lente sans carte graphique, ne la fait pas descendre).
@@ -31,9 +31,11 @@ const [W, H] = (opt('--size') || '1400x800').split('x').map(Number);
 const wait = +(opt('--wait') || 4000), js = opt('--js'), extra = opt('--q') || '';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// port 0 : le système en donne un libre (plusieurs captures peuvent tourner ensemble), que la maquette annonce
-const maq = spawn(process.execPath, [path.join(here, 'maquette.mjs'), '--port', '0'], { stdio: ['ignore', 'pipe', 'inherit'] });
-const port = await new Promise((ok, ko) => {
+// port 0 : le système en donne un libre (plusieurs captures peuvent tourner ensemble), que la maquette annonce ; --url :
+// une page quelconque d'un jeu déjà lancé (la carte de campagne, par exemple), sans maquette
+const url = opt('--url');
+const maq = url ? { kill() {} } : spawn(process.execPath, [path.join(here, 'maquette.mjs'), '--port', '0'], { stdio: ['ignore', 'pipe', 'inherit'] });
+const port = url ? 0 : await new Promise((ok, ko) => {
   maq.stdout.once('data', d => { const m = String(d).match(/127\.0\.0\.1:(\d+)/); m ? ok(+m[1]) : ko(new Error('maquette : port inconnu')); });
   maq.once('exit', () => ko(new Error('maquette arrêtée')));
 });
@@ -82,9 +84,9 @@ try {
   await s('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: +(opt('--dpr') || 1), mobile: false });
   const page = opt('--page');
   const q = page ? new URLSearchParams(extra) : new URLSearchParams(`scen=${scen}${/(^|&)start=/.test(extra) ? '' : '&start=1'}${extra ? '&' + extra : ''}`);   // (start=0 : déploiement)
-  await s('Page.navigate', { url: `http://127.0.0.1:${port}/js/battle/dev/${page || 'banc.html'}?${q}` });
+  await s('Page.navigate', { url: url || `http://127.0.0.1:${port}/js/battle/dev/${page || 'banc.html'}?${q}` });
   const evalJs = async expr => (await s('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true })).result?.value;
-  for (let t = 0; (await evalJs('document.title')) !== 'pret'; t += 250) {
+  for (let t = 0; !url && (await evalJs('document.title')) !== 'pret'; t += 250) {
     if (t > 120000) throw new Error('le banc ne s’est pas ouvert');
     await sleep(250);
   }

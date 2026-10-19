@@ -1451,6 +1451,7 @@ export class MapView {
     const st = this.state || this.preview;
     this.ambient.under(ctx, dt, time, this.state);
     if (!this.state) { this.drawNodes(ctx, time, st); this.ambient.over(ctx, dt, time, null); this.drawGesture(ctx); return; }
+    this.drawRails(ctx, st);
     this.drawNodes(ctx, time, st);
     this.drawPaths(ctx);
     this.drawArmies(ctx, time);
@@ -1904,6 +1905,73 @@ export class MapView {
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 0.8; ctx.stroke();
   }
 
+  // ------------------------------------------------------------------ voies ferrées (SPEC-TECH.md, phase 2a)
+  // tracé d'un tronçon, de sa ville a à sa ville b, le long des courbes des routes (calculé une fois)
+  railLine(sec) {
+    this.railPts = this.railPts || new Map();
+    let pts = this.railPts.get(sec[0]);
+    if (pts) return pts;
+    pts = [];
+    let n = sec[1];
+    for (const eid of sec[3]) {
+      const e = this.edges[eid];
+      for (let k = pts.length ? 1 : 0; k <= 12; k++) pts.push(this.pointFrom(e, n, k / 12));
+      n = e.a === n ? e.b : e.a;
+    }
+    this.railPts.set(sec[0], pts);
+    return pts;
+  }
+  // voie ferrée de carte : trait sombre, tirets clairs dedans ; un chantier : la part faite, puis des pointillés ; une
+  // voie coupée : une croix rouge au milieu ; les gares ; les sorties vers le bord de la carte
+  drawRails(ctx, st) {
+    const R = st && st.rails, secs = this.m.rails && this.m.rails.sections;
+    if (!R || !secs || !R.state.length) return;
+    const z = this.cam.z, w = clamp(z * 0.9, 2, 5), state = new Map(R.state.map(x => [x[0], x]));
+    const byId = this.railSecs || (this.railSecs = new Map(secs.map(s => [s[0], s])));
+    const stroke = (pts, part) => {
+      if (pts.length < 2) return;
+      ctx.beginPath(); pts.forEach((p, i) => { const q = this.toScreen(p[0], p[1]); i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
+      if (part === 'plan') { ctx.setLineDash([2, 5]); ctx.strokeStyle = 'rgba(42,36,32,0.75)'; ctx.lineWidth = Math.max(1, w * 0.45); ctx.stroke(); ctx.setLineDash([]); return; }
+      ctx.strokeStyle = '#2a2420'; ctx.lineWidth = w; ctx.stroke();
+      ctx.setLineDash([w * 2, w * 2]); ctx.strokeStyle = '#efe6d0'; ctx.lineWidth = w * 0.5; ctx.stroke(); ctx.setLineDash([]);
+    };
+    const served = new Set();
+    ctx.save(); ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
+    for (const [sid, kind, prog] of R.state) {
+      const sec = byId.get(sid);
+      if (!sec) continue;
+      const pts = this.railLine(sec);
+      if (kind === 'chantier') {
+        const k = Math.max(1, Math.round(prog * (pts.length - 1)));
+        stroke(pts.slice(0, k + 1)); stroke(pts.slice(k), 'plan');
+        continue;
+      }
+      stroke(pts);
+      served.add(sec[1]); served.add(sec[2]);
+      if (kind === 'coupe') {
+        const m = pts[pts.length >> 1], q = this.toScreen(m[0], m[1]), r = w * 2.2;
+        ctx.strokeStyle = '#d23a2a'; ctx.lineWidth = Math.max(2, w * 0.8);
+        ctx.beginPath(); ctx.moveTo(q[0] - r, q[1] - r); ctx.lineTo(q[0] + r, q[1] + r); ctx.moveTo(q[0] + r, q[1] - r); ctx.lineTo(q[0] - r, q[1] + r); ctx.stroke();
+      }
+    }
+    // sorties vers le bord : droit vers le bord de la carte, dans la direction de la ville suivante (hors carte)
+    const DIR = { N: [0, -1], S: [0, 1], E: [1, 0], O: [-1, 0], NE: [0.7, -0.7], SE: [0.7, 0.7], NO: [-0.7, -0.7], SO: [-0.7, 0.7] };
+    for (const [nid, , dir] of this.m.rails.exits) {
+      if (!served.has(nid)) continue;
+      const n = this.nodes[nid], [dx, dy] = DIR[dir] || DIR.N;
+      const tx = dx > 0 ? (this.W - n.x) / dx : dx < 0 ? -n.x / dx : Infinity, ty = dy > 0 ? (this.H - n.y) / dy : dy < 0 ? -n.y / dy : Infinity;
+      const t = Math.min(tx, ty);
+      stroke([[n.x, n.y], [n.x + dx * t, n.y + dy * t]]);
+    }
+    // gares : un petit bâtiment à côté de chaque ville desservie
+    if (z >= 1.6) for (const nid of served) {
+      const n = this.nodes[nid], [x, y] = this.toScreen(n.x, n.y), s = clamp(z * 1.6, 6, 12);
+      ctx.fillStyle = '#7a3b2a'; ctx.fillRect(x + s * 0.9, y - s * 0.2, s * 1.3, s * 0.7);
+      ctx.fillStyle = '#4a2a1e'; ctx.beginPath(); ctx.moveTo(x + s * 0.8, y - s * 0.2); ctx.lineTo(x + s * 1.55, y - s * 0.7); ctx.lineTo(x + s * 2.3, y - s * 0.2); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   drawPaths(ctx) {
     const sel = this.selection;
     if (!sel || sel.kind !== 'army') return;
@@ -1920,7 +1988,7 @@ export class MapView {
       let water = false, add = [];
       if (leg.e != null) {
         const e = this.edges[leg.e];
-        water = !!e.water;
+        water = e.water ? true : leg.r ? 'rail' : false;   // (en train : un trait de rail)
         const f0 = leg.pos / Math.max(0.01, e.len), nseg = water ? 48 : 14;
         for (let k = 1; k <= nseg; k++) add.push(this.pointFrom(e, leg.frm, f0 + (1 - f0) * k / nseg));
       } else if (leg.pts) add = leg.pts.slice(1);
@@ -1938,8 +2006,8 @@ export class MapView {
       const sp = sg.pts.map(p => this.toScreen(p[0], p[1]));
       ctx.beginPath(); sp.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
       ctx.strokeStyle = 'rgba(19,35,58,0.7)'; ctx.lineWidth = 6; ctx.stroke();
-      ctx.setLineDash(sg.water ? [4, 6] : a.tr ? [2, 7] : [9, 7]);
-      ctx.strokeStyle = sg.water ? '#bfe6ff' : a.tr ? '#f6efdc' : a.md === 'champs' ? '#bfe39a' : '#f1d58a'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.setLineDash(sg.water === 'rail' ? [14, 4] : sg.water ? [4, 6] : a.tr ? [2, 7] : [9, 7]);
+      ctx.strokeStyle = sg.water === 'rail' ? '#f3f0ea' : sg.water ? '#bfe6ff' : a.tr ? '#f6efdc' : a.md === 'champs' ? '#bfe39a' : '#f1d58a'; ctx.lineWidth = 3; ctx.stroke();
       ctx.setLineDash([]);
       last = sp[sp.length - 1];
     }
@@ -1973,7 +2041,8 @@ export class MapView {
       ctx.save();
       ctx.translate(x, y);
       if (a.h) ctx.globalAlpha = 0.62;
-      if (a.boat && a.n == null) this.drawBoat(ctx, a, d, col, sel, time);
+      if (a.rail && a.n == null) this.drawTrain(ctx, a, d, col, sel, time);
+      else if (a.boat && a.n == null) this.drawBoat(ctx, a, d, col, sel, time);
       else if (detailed) this.drawFormation(ctx, a, d, col, sel, time);
       else this.drawToken(ctx, a, d, col, sel, time);
       ctx.restore();
@@ -2170,6 +2239,31 @@ export class MapView {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('!', x, y + 0.5);
     ctx.restore();
+  }
+
+  // une armée dans un train : la locomotive et son panache, des wagons aux couleurs du camp, l'effectif
+  drawTrain(ctx, a, d, col, sel, time) {
+    const s = clamp(this.cam.z * 2.4, 22, 54), n = clamp(Math.ceil(a.regs.length / 2), 1, 4);
+    ctx.save();
+    ctx.rotate(Math.cos(d.head) < 0 ? d.head + Math.PI : d.head);
+    const dir = Math.cos(d.head) < 0 ? -1 : 1;
+    if (sel) { ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5; ctx.strokeRect(-s * 0.4 * (n + 1) / 2 - 3, -s * 0.22, s * 0.4 * (n + 1) + 6, s * 0.44); }
+    for (let k = 0; k <= n; k++) {
+      const x = (k - n / 2) * s * 0.42 * -dir;
+      ctx.fillStyle = k === 0 ? '#2a2420' : col;
+      ctx.fillRect(x - s * 0.19, -s * 0.15, s * 0.38, s * 0.3);
+      ctx.strokeStyle = '#1a1612'; ctx.lineWidth = 1; ctx.strokeRect(x - s * 0.19, -s * 0.15, s * 0.38, s * 0.3);
+      if (k === 0) {   // cheminée et panache
+        ctx.fillStyle = '#1a1612'; ctx.fillRect(x + s * 0.08 * dir - s * 0.04, -s * 0.28, s * 0.08, s * 0.14);
+        for (let q = 0; q < 3; q++) { ctx.fillStyle = `rgba(236,232,224,${0.55 - q * 0.15})`; ctx.beginPath(); ctx.arc(x - (q + 1) * s * 0.14 * dir, -s * (0.34 + q * 0.06) + Math.sin(time * 3 + q) * 2, s * (0.07 + q * 0.03), 0, Math.PI * 2); ctx.fill(); }
+      }
+    }
+    ctx.restore();
+    ctx.font = `700 ${clamp(s * 0.36, 12, 17)}px "EB Garamond", Georgia, serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.strokeStyle = 'rgba(14,20,30,.85)'; ctx.lineWidth = 3;
+    const txt = fmtMen(a.men);
+    ctx.strokeText(txt, 0, s * 0.3); ctx.fillStyle = '#fffaf0'; ctx.fillText(txt, 0, s * 0.3);
   }
 
   drawBoat(ctx, a, d, col, sel, time) {
