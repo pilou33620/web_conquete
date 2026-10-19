@@ -1913,7 +1913,9 @@ class Game:
         """Monter dans le train (une journée en gare) ou en descendre (moral −5 : l'armée se reforme sur le quai)."""
         a['rail'] = on
         if on:
-            a['emb'] = R.RAIL_EMBARK
+            a['emb'] = a.get('emb', 0.0) + R.RAIL_EMBARK   # (après le débarquement d'une gabare, s'il y en a un)
+        elif a.get('emb', 0.0) > 0:
+            a['emb'] = 0.0   # (descendu avant le départ : pas de voyage, pas de désordre)
         else:
             for r in a['regs']:
                 r['morale'] = max(0.0, r['morale'] - 5)
@@ -1924,12 +1926,15 @@ class Game:
         if a['state'] not in ('move', 'retreat') or not a['path']:
             if a['state'] in ('move', 'retreat') and not a['path']:
                 a['state'] = 'idle'
+            if not a['path'] and a.get('rail'):
+                self.rail_switch(a, False)   # trajet annulé ailleurs (bataille, diplomatie, IA) : on descend du train
             return dt
         budget = dt
         base = self.army_speed(a)
         if a['state'] == 'retreat':
             base *= 1.15
         wx = self.wx(a['x'], a['y'])
+        rails = None
         while budget > 1e-9 and a['path']:
             leg = a['path'][0]
             is_water = leg['kind'] == 'road' and self.geo.edges[leg['e']].get('kind') == 'water'
@@ -1941,8 +1946,11 @@ class Game:
                     a['emb'] *= 0.6
             # le train : on monte en gare (une journée), on descend un peu désorganisé ; un tronçon devenu inutilisable
             # en route (coupé, pris) fait finir à pied
-            if leg.get('rail') and leg['e'] not in RL.rail_edges(self, a['owner']):
-                leg.pop('rail')
+            if leg.get('rail'):
+                if rails is None:
+                    rails = RL.rail_edges(self, a['owner'])   # (une fois par appel : tout le pas se joue sur le même réseau)
+                if leg['e'] not in rails:
+                    leg.pop('rail')
             if bool(leg.get('rail')) != bool(a.get('rail')):
                 self.rail_switch(a, bool(leg.get('rail')))
             if a.get('emb', 0) > 0:

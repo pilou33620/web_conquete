@@ -446,11 +446,12 @@ export class Ambient {
     }
     for (const [nid, , dir] of secs.exits) if (served.has(nid)) lines.push([`x${nid}`, mp.railExit(nid, dir)]);
     for (const [key, pts] of lines) {
-      const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-      if (Math.max(...xs) < x0 || Math.min(...xs) > x1 || Math.max(...ys) < y0 || Math.min(...ys) > y1) continue;
-      const cum = [0];
-      for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
-      const L = cum[cum.length - 1], h = hash(key.length, key.charCodeAt(0), key.charCodeAt(key.length - 1));
+      const b = pts.box || [Math.min(pts[0][0], pts[1][0]), Math.min(pts[0][1], pts[1][1]), Math.max(pts[0][0], pts[1][0]), Math.max(pts[0][1], pts[1][1])];
+      if (b[2] < x0 || b[0] > x1 || b[3] < y0 || b[1] > y1) continue;
+      const cum = pts.cum || [0, Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1])];   // (une sortie : deux points)
+      let kh = 0;
+      for (let i = 0; i < key.length; i++) kh = (kh * 31 + key.charCodeAt(i)) | 0;
+      const L = cum[cum.length - 1], h = hash(kh, key.length, 7);   // (chaque voie a son propre horaire)
       // aller (0 à 1), halte en gare, retour, halte : 0,6 km par seconde
       const u = frac(time / (L / 0.6 * 2.4) + h) * 2.4;
       if (u > 2.3 || (u > 1 && u < 1.2)) continue;

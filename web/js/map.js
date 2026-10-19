@@ -1919,6 +1919,12 @@ export class MapView {
       for (let k = pts.length ? 1 : 0; k <= 12; k++) pts.push(this.pointFrom(e, n, k / 12));
       n = e.a === n ? e.b : e.a;
     }
+    // (emprise et longueurs cumulées, calculées une fois : la carte ne dessine que les voies à l'écran, les trains s'en
+    // servent pour avancer)
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    pts.box = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    pts.cum = [0];
+    for (let i = 1; i < pts.length; i++) pts.cum.push(pts.cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
     this.railPts.set(sec[0], pts);
     return pts;
   }
@@ -1935,7 +1941,9 @@ export class MapView {
   drawRails(ctx, st) {
     const R = st && st.rails, secs = this.m.rails && this.m.rails.sections;
     if (!R || !secs || !R.state.length) return;
-    const z = this.cam.z, w = clamp(z * 0.9, 2, 5), state = new Map(R.state.map(x => [x[0], x]));
+    const z = this.cam.z, w = clamp(z * 0.9, 2, 5);
+    const [vx0, vy0] = this.toWorld(-40, -40), [vx1, vy1] = this.toWorld(this.vw + 40, this.vh + 40);
+    const seen = b => !(b[2] < vx0 || b[0] > vx1 || b[3] < vy0 || b[1] > vy1);
     const byId = this.railSecs || (this.railSecs = new Map(secs.map(s => [s[0], s])));
     const stroke = (pts, part) => {
       if (pts.length < 2) return;
@@ -1950,13 +1958,14 @@ export class MapView {
       const sec = byId.get(sid);
       if (!sec) continue;
       const pts = this.railLine(sec);
+      served.add(sec[1]); served.add(sec[2]);   // (gares et sorties : même hors de l'écran, elles en dépendent)
+      if (!seen(pts.box)) continue;
       if (kind === 'chantier') {
         const k = Math.max(1, Math.round(prog * (pts.length - 1)));
         stroke(pts.slice(0, k + 1)); stroke(pts.slice(k), 'plan');
         continue;
       }
       stroke(pts);
-      served.add(sec[1]); served.add(sec[2]);
       if (kind === 'coupe') {
         const m = pts[pts.length >> 1], q = this.toScreen(m[0], m[1]), r = w * 2.2;
         ctx.strokeStyle = '#d23a2a'; ctx.lineWidth = Math.max(2, w * 0.8);
@@ -1991,7 +2000,7 @@ export class MapView {
       if (leg.e != null) {
         const e = this.edges[leg.e];
         water = e.water ? true : leg.r ? 'rail' : false;   // (en train : un trait de rail)
-        const f0 = leg.pos / Math.max(0.01, e.len), nseg = water ? 48 : 14;
+        const f0 = leg.pos / Math.max(0.01, e.len), nseg = water === true ? 48 : 14;
         for (let k = 1; k <= nseg; k++) add.push(this.pointFrom(e, leg.frm, f0 + (1 - f0) * k / nseg));
       } else if (leg.pts) add = leg.pts.slice(1);
       if (water !== cur.water) {

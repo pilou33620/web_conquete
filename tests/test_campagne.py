@@ -1460,6 +1460,52 @@ class VoiesFerrees(unittest.TestCase):
         ai.build_rails(15000, [])
         self.assertEqual(len(RL.works(g, '24')), 1)
 
+    def test_un_trajet_annule_fait_descendre_du_train(self):
+        g, a = self.ligne_ouverte('rail_militaire')
+        g.order_move('33', a['id'], node=GEO.by_name['Agen'])
+        g.move_army(a, R.RAIL_EMBARK + 0.3)
+        self.assertTrue(a.get('rail'))
+        a['path'], a['state'] = [], 'idle'   # (comme une bataille, la diplomatie ou une IA qui annule l'ordre)
+        g.move_army(a, 0.1)
+        self.assertFalse(a.get('rail'), 'à l’arrêt, plus dans le train')
+        g.order_move('33', a['id'], node=GEO.by_name['Agen'])
+        g.move_army(a, 0.5)
+        self.assertGreater(a.get('emb', 0), 0, 'il faut réembarquer')
+
+    def test_un_chantier_abandonne_libere_le_troncon(self):
+        from game import rails as RL
+        g = avec(partie(epoque='1870'), '33', 'chemins_fer')
+        avec(g, '40', 'chemins_fer')
+        lt = self.troncon(g, 'Bordeaux', 'La Teste-de-Buch')
+        g.nodes[GEO.by_name['La Teste-de-Buch']]['owner'] = '33'
+        g.factions['33']['res'].update(livres=99999, fer=9999, bois=9999)
+        RL.start(g, '33', lt)
+        for t in ('Bordeaux', 'La Teste-de-Buch'):
+            g.nodes[GEO.by_name[t]]['owner'] = '40'
+        RL.tick(g, 1.0)
+        self.assertNotIn(lt, g.rails, 'les deux villes prises : le chantier est abandonné')
+        self.assertEqual(RL.works(g, '33'), [])
+
+    def test_une_armee_chez_elle_ne_coupe_pas_sa_ligne(self):
+        import datetime
+        from game import rails as RL
+        g, a = self.ligne_ouverte('rail_militaire', owner_b='24')
+        D.declare_war(g, '24', '33')
+        sid = self.troncon(g, 'Langon', 'La Réole')
+        n = GEO.by_name['Langon']
+        a['x'], a['y'], a['at_node'] = *g.node_xy(n), n
+        g.monthly(datetime.date(1870, 10, 1))
+        self.assertFalse(g.rails[sid].get('cut'), 'dans sa propre ville, on ne coupe pas la voie')
+
+    def test_de_la_gabare_au_train_les_deux_attentes(self):
+        g, a = self.ligne_ouverte('rail_militaire')
+        a['boat'], a['emb'] = True, 0.0
+        g.rail_switch(a, True)
+        self.assertAlmostEqual(a['emb'], R.RAIL_EMBARK)
+        a['emb'] = R.DISEMBARK_DAYS
+        g.rail_switch(a, True)
+        self.assertAlmostEqual(a['emb'], R.DISEMBARK_DAYS + R.RAIL_EMBARK, msg='débarquer, puis embarquer')
+
     def test_un_chantier_se_sauvegarde(self):
         from game import rails as RL
         g = avec(partie(epoque='1870'), '33', 'chemins_fer')

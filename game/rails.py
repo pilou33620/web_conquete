@@ -132,13 +132,16 @@ def industry_k(g, code):
 def tick(g, w):
     """Fait avancer les chantiers de w jours de travail (Game.update_queues) ; un chantier dont une ville est perdue ou
     assiégée attend."""
-    for sid, st in g.rails.items():
+    for sid, st in list(g.rails.items()):
         if st.get('done'):
             continue
         sec, code = sections(g.geo)[sid], st['by']
-        if code not in g.factions or not g.factions[code]['alive'] or not _owned(g, code, sec) \
-                or g.nodes[sec['a']]['siege'] or g.nodes[sec['b']]['siege']:
+        if code not in g.factions or not g.factions[code]['alive'] \
+                or code not in (g.nodes[sec['a']]['owner'], g.nodes[sec['b']]['owner']):
+            del g.rails[sid]   # le camp a disparu, ou les deux villes sont prises : chantier abandonné, tronçon libéré
             continue
+        if not _owned(g, code, sec) or g.nodes[sec['a']]['siege'] or g.nodes[sec['b']]['siege']:
+            continue   # une ville perdue ou assiégée : le chantier attend
         st['left'] -= w * industry_k(g, code)
         if st['left'] <= 1e-6:
             g.rails[sid] = dict(done=True, cut=None)
@@ -221,6 +224,8 @@ def sabotage(g):
         code = a['owner']
         if code not in g.factions or a.get('boat') or a.get('rail') or a['state'] in ('retreat',):
             continue
+        if a['at_node'] is not None and g.friendly(code, g.nodes[a['at_node']]['owner']):
+            continue   # chez soi ou chez un allié : on ne coupe pas les voies qui en partent
         for sec in _on_section(g, a):
             st = g.rails.get(sec['id'])
             if not open_(g, sec['id']):
