@@ -233,3 +233,30 @@ def sabotage(g):
             for who in {code} | {o for o in foes if o in g.factions}:
                 g.log('rail', f"{g.fname(code)} coupe la voie ferrée {na['name']}–{nb['name']} : plus de train pendant "
                               f"{R.RAIL_CUT_TOURS} tours.", a['x'], a['y'], who=who, important=g.player == who)
+
+
+# ------------------------------------------------------------------ pour le navigateur
+def client_payload(geo):
+    """Avec la carte (statique) : les tronçons [id, a, b, arêtes, km, ligne, année] et les sorties [ville, vers, direction]."""
+    return dict(sections=[[s['id'], s['a'], s['b'], s['edges'], s['km'], s['line'], s['year']] for s in sections(geo).values()],
+                exits=[[geo.by_name[t], to, d] for t, (to, d) in exits()])
+
+
+def player_view(g, p):
+    """Avec l'état du joueur : chaque tronçon [id, 'fait' | 'coupe' | 'chantier', avancement, camp du chantier], les
+    tronçons qu'il peut ouvrir [id, prix, tours estimés à son industrie] et ses chantiers en cours."""
+    from . import turns as TT
+    state = []
+    for sid, st in g.rails.items():
+        if st.get('done'):
+            state.append([sid, 'fait' if open_(g, sid) else 'coupe', 1.0, None])
+        else:
+            state.append([sid, 'chantier', round(1 - st['left'] / max(1e-6, st['total']), 3), st.get('by')])
+    opens = []
+    if p in g.factions:
+        k = industry_k(g, p)
+        for sid in sections(g.geo):
+            if openable(g, p, sid)[0]:
+                price, days = cost(g, p, sid)
+                opens.append([sid, price, round(days / k / TT.TOUR_DAYS, 1)])
+    return dict(state=state, open=opens, works=len(works(g, p)) if p in g.factions else 0, max=RAIL_MAX_WORKS)

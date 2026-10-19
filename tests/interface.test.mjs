@@ -274,3 +274,18 @@ test('mitrailleuses : leur arme, sans choix de projectile (SPEC-TECH.md)', () =>
   assert.ok(!a(html, 'shot'), 'ni boulet ni mitraille');
   assert.ok(a(html, 'fire'), 'mais le feu');
 });
+
+test('voie ferrée : la section du panneau de la ville (SPEC-TECH.md, phase 2a)', () => {
+  const ui = Object.create(UI.prototype);
+  ui.md = { nodes: [{ name: 'Bordeaux' }, { name: 'Langon' }, { name: 'La Teste' }, { name: 'Libourne' }],
+    rails: { sections: [['0-1', 0, 1, [3], 41, 'Bordeaux–Sète', 1855], ['0-2', 0, 2, [4], 50, 'Bordeaux–La Teste', 1841], ['0-3', 0, 3, [5], 30, 'Paris–Bordeaux', 1852]] } };
+  ui.rules = { res_label: { livres: 'Livres', fer: 'Fer', bois: 'Bois' } };
+  ui.st = { me: { code: '33', res: { livres: 5000, fer: 900, bois: 900 } }, names: {},
+    rails: { state: [['0-2', 'fait', 1, null], ['0-1', 'chantier', 0.4, '33']], open: [['0-3', { livres: 900, fer: 240, bois: 180 }, 3.5]], works: 1, max: 2 } };
+  const h = ui.railHtml(0);
+  assert.ok(h.includes('Voie ferrée') && h.includes('voie ouverte') && h.includes('width:40%'));
+  assert.ok(h.includes('data-act="rail-build" data-v="0-3"') && h.includes('environ 4 tours'));
+  assert.equal(ui.railHtml(9), '', 'une ville sans ligne : pas de section');
+  ui.st.rails = null;
+  assert.equal(ui.railHtml(0), '');
+});

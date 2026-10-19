@@ -62,7 +62,8 @@ class App:
         self.port = 8790
         self.lan = False
         self.ips = []
-        payload = dict(map=self.geo.client_payload(), rules=V.rules_payload(), skirmish=SK.options(self.geo),
+        payload = dict(map=dict(self.geo.client_payload(), rails=RL.client_payload(self.geo)), rules=V.rules_payload(),
+                       skirmish=SK.options(self.geo),
                        ver=UPDATE['version'])
         raw = json.dumps(payload, ensure_ascii=False, separators=(',', ':'), default=str).encode('utf-8')
         self.static_raw = raw

@@ -76,6 +76,9 @@ class Http(unittest.TestCase):
         r = self.cmd(dict(cmd='rail_build', node=g.capital_of('33'), section='0-5'))
         self.assertFalse(r['ok'], 'sans la technologie')
         self.assertFalse(self.cmd(dict(cmd='rail_build', node=g.capital_of('33'), section=['x']))['ok'])
+        st, txt = self.req('GET', '/api/map')
+        self.assertIn('"rails"', txt[:10 ** 9])
+        self.assertGreater(len(json.loads(txt)['map']['rails']['sections']), 50)
 
     def test_page_d_accueil(self):
         st, txt = self.req('GET', '/')

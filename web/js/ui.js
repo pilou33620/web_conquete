@@ -289,7 +289,7 @@ export class UI {
     if (this.events.length > 600) this.events.splice(0, 100);
     if (initial) return;
     if (ev.coins) this.map.spawnCoins(this.st.me.code);
-    const toastKinds = ['tech', 'eco', 'meteo', 'fin', 'info', 'diplo', 'revolte', 'siege', 'armee', 'espion'];
+    const toastKinds = ['tech', 'eco', 'meteo', 'fin', 'info', 'diplo', 'revolte', 'siege', 'armee', 'espion', 'rail'];
     if (ev.important && toastKinds.includes(ev.kind)) this.toast(ev.text, ev.kind === 'diplo' && /guerre/.test(ev.text) ? 'bad' : '');
   }
 
@@ -858,6 +858,7 @@ export class UI {
         this.renderPanel(true);
         break;
       }
+      case 'rail-build': this.cmd({ cmd: 'rail_build', node: sel.id, section: d.v }).then(r => { if (r.ok) this.renderPanel(true); }); break;
       case 'slot-build': this.cmd({ cmd: 'slot_build', node: sel.id, chain: d.v }).then(r => { if (r.ok) { this.slotSel = null; this.renderPanel(true); } }); break;
       case 'slot-demolish': {
         const ns = this.st.nodes[sel.id], s = (ns.sl || []).find(x => x[0] === d.v);
@@ -1181,6 +1182,7 @@ export class UI {
         h += `<button class="btn" data-act="build" data-v="${k}" ${this.canPay(c) ? '' : 'disabled'}${qDis || ` title="${esc(b.desc)}"`}>${lab}<small>${this.costHtml(c)}, ${partTour(b.days[l] * this.buildK())}${up}</small></button>`;
       }
       h += `</div>`;
+      h += this.railHtml(id);   // voie ferrée (game/rails.py)
       h += this.cityHtml(id, gn, ns, queue, qFull);   // emplacements et politique de la ville
       if (queue.length) {
         h += `<div class="section-t">En préparation${qFull ? ' <span class="muted small">(file pleine)</span>' : ''}</div>` + queue.map((q, i) => {
@@ -1232,6 +1234,26 @@ export class UI {
     const txt = this.st?.tour?.on ? L.txt : L.txtj || L.txt;   // (temps réel : txtj)
     const note = sk !== 1 && /\/(tour|j)\b/.test(txt) ? ` (production ×${fmt1(sk)} ${gn.type === 'capitale' ? 'au chef-lieu' : gn.type === 'fort' ? 'dans une place forte' : 'dans un village'})` : '';
     return txt + note + (L.up ? `, entretien ${fmt1(this.per(L.up))} livres ${this.perU}` : '');
+  }
+
+  // section « Voie ferrée » du panneau d'une ville : les tronçons qui en partent, ouverts, coupés, en chantier, ou à
+  // lancer (SPEC-TECH.md, phase 2a)
+  railHtml(id) {
+    const R = this.st.rails, secs = (this.md.rails?.sections || []).filter(s => s[1] === id || s[2] === id);
+    if (!R || !secs.length) return '';
+    const st = new Map(R.state.map(x => [x[0], x])), op = new Map(R.open.map(x => [x[0], x]));
+    const rows = secs.map(([sid, a, b, , km, line]) => {
+      const to = this.md.nodes[a === id ? b : a].name, s = st.get(sid), o = op.get(sid);
+      const lab = `Vers ${esc(to)} <span class="muted small">(${fmt(km)} km, ${esc(line)})</span>`;
+      if (s && s[1] === 'fait') return `<div class="rail">${lab} : voie ouverte</div>`;
+      if (s && s[1] === 'coupe') return `<div class="rail">${lab} : <span style="color:#ff9a85">voie coupée</span></div>`;
+      if (s) return `<div class="rail">${lab} : chantier${s[3] && s[3] !== this.st.me.code ? ` (${esc(this.st.names?.[s[3]] || s[3])})` : ''}
+        <div class="bar green" style="margin-top:3px"><i style="width:${Math.round(s[2] * 100)}%"></i></div></div>`;
+      if (o) return `<button class="btn" data-act="rail-build" data-v="${sid}" ${this.canPay(o[1]) ? '' : 'disabled'}>${lab}<small>${this.costHtml(o[1])}, environ ${fmt(Math.ceil(o[2]))} tour${o[2] > 1 ? 's' : ''}</small></button>`;
+      return '';
+    }).filter(Boolean);
+    if (!rows.length) return '';
+    return `<div class="section-t">Voie ferrée <span class="muted small">(${R.works} / ${R.max} chantiers)</span></div><div class="build">${rows.join('')}</div>`;
   }
 
   slotBtn(gn, ns, k, chk, qFull, label) {
@@ -1754,7 +1776,7 @@ export class UI {
 
   journalModal() {
     const f = this.journalFilter || 'all';
-    const groups = { all: null, battle: ['battle', 'battle_end', 'siege', 'capture', 'capitulation', 'revolte', 'espion'], diplo: ['diplo', 'espion'], eco: ['eco', 'tech', 'meteo', 'armee'], hist: ['evenement', 'epoque', 'info'] };
+    const groups = { all: null, battle: ['battle', 'battle_end', 'siege', 'capture', 'capitulation', 'revolte', 'espion'], diplo: ['diplo', 'espion'], eco: ['eco', 'tech', 'meteo', 'armee', 'rail'], hist: ['evenement', 'epoque', 'info'] };
     const evs = this.events.filter(e => !groups[f] || groups[f].includes(e.kind)).slice(-250).reverse();
     const tabs = [['all', 'Tout'], ['battle', 'Guerre'], ['diplo', 'Diplomatie'], ['eco', 'Économie'], ['hist', 'Histoire']].map(([k, l]) =>
       `<button class="btn ${k === f ? 'primary' : ''}" data-act="jtab" data-v="${k}">${l}</button>`).join('');

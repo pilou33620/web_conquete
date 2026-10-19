@@ -4,6 +4,7 @@ import math
 import random
 
 from . import rules as R
+from . import rails as RL
 from . import events as EV
 from . import army_actions as AA
 from . import cities as CT
@@ -407,7 +408,7 @@ def player_state(g, since=0):
                                 get=x['get'], date=x['date']) for x in g.proposals],
                 market=dict(prices=g.market, spread=[1.15, 0.85] if has_port else [1.4, 0.6]),
                 tac=TB.tac_view(g), settings=dict(g.settings),
-                flood=g.t < g.flood_until, tour=TT.view(g), vis=[[round(x, 1), round(y, 1), round(r, 1)] for x, y, r in srcs])
+                flood=g.t < g.flood_until, tour=TT.view(g), rails=RL.player_view(g, p), vis=[[round(x, 1), round(y, 1), round(r, 1)] for x, y, r in srcs])
 
 
 def _popy(g, p):
