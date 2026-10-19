@@ -539,3 +539,29 @@ parallèle de la file (deux au plus par camp), et le panneau de la ville les mon
 
 Ajouts aux critères de réussite de 2a : une armée qui finit son tour sur un tronçon ennemi le coupe pour 3 tours ;
 plus personne n'y roule ; il est réparé ensuite.
+
+## État (19/10/2026, phase 2a)
+
+Construit en `/build auto` (T69 à T77, un commit par tâche), suivi d'une revue complète et de ses corrections (T78).
+- **Le train** : fait. Il comprend :
+  - les chantiers par tronçon et le bonus des villes desservies ;
+  - les armées qui prennent le train ;
+  - le sabotage et les lignes hors carte ;
+  - les IA qui construisent leurs lignes et s'en servent ;
+  - la section « Voie ferrée » du panneau de la ville ;
+  - sur la carte, les rails, les gares et les trains animés.
+- **Équilibre** : toutes les mesures restent dans ±25 %, de 1813 à 1853 et de 1870 à 1895. Il y a de 27 à 49 tronçons
+  par partie (`tasks/equilibre-reference.md`). Deux mesures sont près de la limite en 1870 : la durée des guerres
+  (+23 %) et le trésor (+20 %). Elles sont à surveiller. Le banc ne part pas de 1790 : une partie qui commence en 1790
+  n'atteint jamais 1841.
+- **Vieille sauvegarde** : une sauvegarde faite avant le train (1870) se charge et se joue un an sans erreur. Les IA y
+  ouvrent 9 chantiers, dont 5 sont achevés.
+- **Galerie** : une section « Le train » (port 8799), avec cinq vues d'une partie fabriquée en 1873 :
+  - la carte ;
+  - les trains ;
+  - un chantier ;
+  - une ligne coupée ;
+  - le panneau d'une ville.
+- **Reste à faire** :
+  - ton avis sur la galerie et l'essai sur l'iPad (la carte avec les trains, les batailles de la phase 1) ;
+  - ensuite, le plan de 2b : télégraphes, vapeur, usines.

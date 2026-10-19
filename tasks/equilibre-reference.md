@@ -40,3 +40,48 @@ Guerres 8,3, durée 4,2 mois, écart 96, camps en vie 3,5, technologies 12,3.
   moyennes, pas les parties une à une.
 - Une vieille sauvegarde (faite avec le code d'avant, juin 1790) se charge avec le nouveau code et se joue un an sans
   erreur.
+
+# Phase 2a : avant et après le train (19/10/2026)
+
+- **Avant** : le code d'avant les voies ferrées (commit `eeabfe5`, avant T69).
+- **Après** : le train joué par les IA (commit `c6136ee`, T74), donc avant les corrections de la revue de 2a.
+
+Commande : `python3 outils/simuler.py --parties 6 --epoque 1870 --annees 25 --graine 1 --proc 2` (de même pour 1813
+sur 40 ans). Une partie lancée en 1790 n'atteint jamais 1841, l'année des voies ferrées : les bancs partent donc de
+1813 et de 1870.
+
+## 1870 à 1895
+
+| Moyenne des 6 parties | Avant | Après | Écart |
+|---|---|---|---|
+| Guerres déclarées | 8,8 | 8,5 | −3 % |
+| Durée moyenne d'une guerre (mois) | 3,1 | 3,8 | +23 % |
+| Écart de places entre le premier et le dernier camp | 81,7 | 77,2 | −6 % |
+| Camps encore en vie | 4,0 | 4,0 | 0 % |
+| Technologies par camp | 92,3 | 92,5 | 0 % |
+| Trésor moyen (livres) | 440 379 | 528 650 | +20 % |
+| Hommes sous les armes par camp | 18 402 | 19 319 | +5 % |
+| Tronçons de voie ferrée construits | 0 | 40,5 | |
+
+## 1813 à 1853
+
+| Moyenne des 6 parties | Avant | Après | Écart |
+|---|---|---|---|
+| Guerres déclarées | 11,0 | 12,5 | +14 % |
+| Durée moyenne d'une guerre (mois) | 3,9 | 3,8 | −3 % |
+| Écart de places entre le premier et le dernier camp | 114,8 | 105,2 | −8 % |
+| Camps encore en vie | 3,3 | 3,5 | +6 % |
+| Technologies par camp | 68,1 | 68,5 | +1 % |
+| Trésor moyen (livres) | 423 816 | 394 146 | −7 % |
+| Hommes sous les armes par camp | 15 443 | 16 083 | +4 % |
+| Tronçons de voie ferrée construits | 0 | 36,8 | |
+
+Toutes les mesures restent dans ±25 % et chaque partie construit des lignes (de 27 à 49 tronçons) : **le point 2a-1
+est franchi.** Deux mesures sont proches de la limite :
+- la durée des guerres de 1870 (+23 %) ;
+- le trésor de 1870 (+20 %).
+
+Elles restent à surveiller. Leur cause n'a pas été cherchée : ce peut être le bonus des villes reliées, le train, ou
+le hasard, car six parties suffisent à faire bouger une moyenne de 20 %.
+
+Aucune partie n'a planté. La partie 1 de 1813 s'arrête le 22 mai 1853 parce qu'il ne reste plus qu'un camp.

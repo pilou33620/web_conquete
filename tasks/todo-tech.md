@@ -188,7 +188,7 @@ du banc d'essai et capture `node web/js/battle/dev/capture.mjs <scénario> <fich
 
 ## Phase 2a : le train (plan : tasks/plan-tech.md, « Phase 2a »)
 
-- [ ] **T69 : lignes et tronçons**
+- [x] **T69 : lignes et tronçons**
   - Critères :
     - `rules.RAIL_LINES` reprend le tableau vérifié de la spec ;
     - `rails.sections(geo)` donne les tronçons (route la plus courte, routes royales d'abord) et les sorties vers le
@@ -198,7 +198,7 @@ du banc d'essai et capture `node web/js/battle/dev/capture.mjs <scénario> <fich
   - Fichiers : `game/rules.py`, `game/rails.py`, `tests/test_campagne.py`
   - Taille : S
 
-- [ ] **T70 : chantiers de tronçons**
+- [x] **T70 : chantiers de tronçons**
   - Critères :
     - un tronçon est ouvrable si le camp a la technologie, tient les deux villes, et que l'une est son chef-lieu ou
       touche son réseau achevé ;
@@ -211,7 +211,7 @@ du banc d'essai et capture `node web/js/battle/dev/capture.mjs <scénario> <fich
   - Fichiers : `game/rails.py`, `game/engine.py`, `game/views.py`, `server.py`, `tests/test_campagne.py`
   - Taille : M
 
-- [ ] **T71 : effets des lignes**
+- [x] **T71 : effets des lignes**
   - Critères :
     - les villes desservies gagnent +5 % d'industrie et de commerce par tronçon, jusqu'à +15 % ;
     - une armée près d'une gare de son camp s'use 30 % moins vite ;
@@ -221,7 +221,7 @@ du banc d'essai et capture `node web/js/battle/dev/capture.mjs <scénario> <fich
   - Fichiers : `game/rails.py`, `game/engine.py`, `game/rules.py`, `game/turns.py`, `tests/test_campagne.py`
   - Taille : M
 
-- [ ] **T72 : le train**
+- [x] **T72 : le train**
   - Critères :
     - avec « Chemins de fer militaires », l'itinéraire prend le train sur les tronçons utilisables (les siens, ceux
       des alliés) ;
@@ -238,7 +238,7 @@ du banc d'essai et capture `node web/js/battle/dev/capture.mjs <scénario> <fich
   - Fichiers : `game/engine.py`, `game/turns.py`, `game/rails.py`, `tests/test_campagne.py`
   - Taille : M
 
-- [ ] **T73 : sabotage**
+- [x] **T73 : sabotage**
   - Critères : une armée en guerre qui finit son mois sur la route d'un tronçon ennemi le coupe pour 3 tours ;
     personne n'y roule plus ; un convoi en route descend ; le tronçon est réparé ensuite ; le journal le dit aux deux
     camps.
@@ -246,7 +246,7 @@ du banc d'essai et capture `node web/js/battle/dev/capture.mjs <scénario> <fich
   - Fichiers : `game/rails.py`, `game/engine.py`, `tests/test_campagne.py`
   - Taille : S
 
-- [ ] **T74 : les IA construisent**
+- [x] **T74 : les IA construisent**
   - Critères : en paix et avec de quoi payer, une IA lance des tronçons depuis son chef-lieu, les plus anciens du
     tableau d'abord.
   - Vérif : banc : une IA avec la technologie et un trésor lance un tronçon en un tour ; le banc d'équilibre montre
@@ -254,10 +254,10 @@ du banc d'essai et capture `node web/js/battle/dev/capture.mjs <scénario> <fich
   - Fichiers : `game/ai.py`, `tests/test_campagne.py`
   - Taille : S
 
-- [ ] **Point 2a-1** : tous les bancs ; banc d'équilibre, 6 parties depuis 1790 et 6 depuis 1813, sur 40 ans, avant et
+- [x] **Point 2a-1** : tous les bancs ; banc d'équilibre, 6 parties depuis 1790 et 6 depuis 1813, sur 40 ans, avant et
   après : mesures dans ±25 % ; au moins une ligne achevée par partie après 1841 ; vieille sauvegarde jouée un an.
 
-- [ ] **T75 : interface**
+- [x] **T75 : interface**
   - Critères :
     - la section « Voie ferrée » du panneau de la ville (tronçons ouvrables, prix, durée, bouton, avancement) ;
     - le libellé de l'élément de file ;
@@ -266,7 +266,7 @@ du banc d'essai et capture `node web/js/battle/dev/capture.mjs <scénario> <fich
   - Fichiers : `web/js/ui.js`, `game/views.py`, `game/geo.py` ou `server.py` (carte statique), `tests/interface.test.mjs`
   - Taille : M
 
-- [ ] **T76 : la carte : rails, chantiers, gares, trajets en train**
+- [x] **T76 : la carte : rails, chantiers, gares, trajets en train**
   - Critères :
     - rails le long des routes ; pointillés et traverses qui avancent pendant un chantier ; gares dans les villes
       desservies ; sorties vers le bord ; tronçon coupé barré ;
@@ -277,14 +277,14 @@ du banc d'essai et capture `node web/js/battle/dev/capture.mjs <scénario> <fich
   - Fichiers : `web/js/map.js`
   - Taille : M
 
-- [ ] **T77 : trains animés**
+- [x] **T77 : trains animés**
   - Critères : locomotive à panache et wagons qui vont et viennent sur les tronçons achevés, seulement à l'écran et au
     bon zoom ; ils entrent et sortent par le bord de la carte.
   - Vérif : capture et vidéo courte.
   - Fichiers : `web/js/ambient.js`
   - Taille : S
 
-- [ ] **T78 : revue, README, galerie, état**
+- [x] **T78 : revue, README, galerie, état**
   - Critères : `/review` de 2a et ses corrections ; README ; galerie « Le train » ; état noté dans la spec ; graphe
     mis à jour.
   - Fichiers : `README.md`, `SPEC-TECH.md`, `tasks/todo-tech.md`, `graphify-out/`
