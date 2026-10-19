@@ -431,6 +431,54 @@ export class Ambient {
     }
   }
 
+  // trains : sur chaque voie ouverte (et ses sorties vers le bord), un convoi va et vient, locomotive et panache devant
+  drawTrains(ctx, time, st) {   // (appelé par la carte après les voies, pour rouler dessus)
+    const mp = this.map, R = st && st.rails, secs = mp.m.rails;
+    if (!this.on || mp.cam.z < 3.5 || !R || !secs) return;
+    const [x0, y0, x1, y1] = this.view(40), s = clamp(mp.cam.z * 1.1, 10, 24);   // (plus large que le trait de la voie)
+    const byId = mp.railSecs || (mp.railSecs = new Map(secs.sections.map(x => [x[0], x])));
+    const lines = [], served = new Set();
+    for (const [sid, kind] of R.state) {
+      if (kind !== 'fait') continue;
+      const sec = byId.get(sid);
+      if (!sec) continue;
+      lines.push([sid, mp.railLine(sec)]); served.add(sec[1]); served.add(sec[2]);
+    }
+    for (const [nid, , dir] of secs.exits) if (served.has(nid)) lines.push([`x${nid}`, mp.railExit(nid, dir)]);
+    for (const [key, pts] of lines) {
+      const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+      if (Math.max(...xs) < x0 || Math.min(...xs) > x1 || Math.max(...ys) < y0 || Math.min(...ys) > y1) continue;
+      const cum = [0];
+      for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+      const L = cum[cum.length - 1], h = hash(key.length, key.charCodeAt(0), key.charCodeAt(key.length - 1));
+      // aller (0 à 1), halte en gare, retour, halte : 0,6 km par seconde
+      const u = frac(time / (L / 0.6 * 2.4) + h) * 2.4;
+      if (u > 2.3 || (u > 1 && u < 1.2)) continue;
+      const back = u > 1, f = back ? 1 - (u - 1.2) / 1.1 : u;
+      const at = d => {   // point et direction à la distance d le long de la voie
+        d = clamp(d, 0, L);
+        let i = 1;
+        while (i < cum.length - 1 && cum[i] < d) i++;
+        const k = (d - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1e-9), p = pts[i - 1], q = pts[i];
+        return [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k, Math.atan2(q[1] - p[1], q[0] - p[0]) + (back ? Math.PI : 0)];
+      };
+      const head = f * L, gap = s * 1.05 / mp.cam.z;
+      for (let w = 3; w >= 0; w--) {   // wagons derrière, la locomotive en dernier (dessus)
+        const [x, y, a] = at(back ? head + w * gap : head - w * gap), [sx, sy] = this.scr(x, y);
+        ctx.save(); ctx.translate(sx, sy); ctx.rotate(a);
+        ctx.fillStyle = w ? ['#8a3a28', '#4a5a72', '#6e5a30'][w - 1] : '#1a1814';
+        ctx.fillRect(-s * 0.48, -s * 0.24, s * 0.96, s * 0.48);
+        ctx.strokeStyle = '#f2ece0'; ctx.lineWidth = 1; ctx.strokeRect(-s * 0.48, -s * 0.24, s * 0.96, s * 0.48);
+        ctx.restore();
+        if (!w) for (let q = 0; q < 3; q++) {   // le panache, qui traîne derrière et monte
+          const [px, py] = this.scr(...at(back ? head + (q + 0.5) * gap : head - (q + 0.5) * gap).slice(0, 2));
+          ctx.fillStyle = `rgba(238,234,226,${0.5 - q * 0.13})`;
+          ctx.beginPath(); ctx.arc(px, py - s * (0.5 + q * 0.2), s * (0.2 + q * 0.1), 0, TAU); ctx.fill();
+        }
+      }
+    }
+  }
+
   horse(ctx, s, time, rider) {
     const leg = Math.sin(time * 6) * s * 0.08;
     ctx.fillStyle = 'rgba(30,24,14,0.25)'; ctx.beginPath(); ctx.ellipse(0, 0, s * 0.32, s * 0.06, 0, 0, TAU); ctx.fill();

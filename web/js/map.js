@@ -1452,6 +1452,7 @@ export class MapView {
     this.ambient.under(ctx, dt, time, this.state);
     if (!this.state) { this.drawNodes(ctx, time, st); this.ambient.over(ctx, dt, time, null); this.drawGesture(ctx); return; }
     this.drawRails(ctx, st);
+    this.ambient.drawTrains(ctx, time, st);
     this.drawNodes(ctx, time, st);
     this.drawPaths(ctx);
     this.drawArmies(ctx, time);
@@ -1921,6 +1922,14 @@ export class MapView {
     this.railPts.set(sec[0], pts);
     return pts;
   }
+  // sortie d'une ligne vers le bord : droit vers le bord de la carte, dans la direction de la ville suivante (hors carte)
+  railExit(nid, dir) {
+    const DIR = { N: [0, -1], S: [0, 1], E: [1, 0], O: [-1, 0], NE: [0.7, -0.7], SE: [0.7, 0.7], NO: [-0.7, -0.7], SO: [-0.7, 0.7] };
+    const n = this.nodes[nid], [dx, dy] = DIR[dir] || DIR.N;
+    const tx = dx > 0 ? (this.W - n.x) / dx : dx < 0 ? -n.x / dx : Infinity, ty = dy > 0 ? (this.H - n.y) / dy : dy < 0 ? -n.y / dy : Infinity;
+    const t = Math.min(tx, ty);
+    return [[n.x, n.y], [n.x + dx * t, n.y + dy * t]];
+  }
   // voie ferrée de carte : trait sombre, tirets clairs dedans ; un chantier : la part faite, puis des pointillés ; une
   // voie coupée : une croix rouge au milieu ; les gares ; les sorties vers le bord de la carte
   drawRails(ctx, st) {
@@ -1954,20 +1963,13 @@ export class MapView {
         ctx.beginPath(); ctx.moveTo(q[0] - r, q[1] - r); ctx.lineTo(q[0] + r, q[1] + r); ctx.moveTo(q[0] + r, q[1] - r); ctx.lineTo(q[0] - r, q[1] + r); ctx.stroke();
       }
     }
-    // sorties vers le bord : droit vers le bord de la carte, dans la direction de la ville suivante (hors carte)
-    const DIR = { N: [0, -1], S: [0, 1], E: [1, 0], O: [-1, 0], NE: [0.7, -0.7], SE: [0.7, 0.7], NO: [-0.7, -0.7], SO: [-0.7, 0.7] };
-    for (const [nid, , dir] of this.m.rails.exits) {
-      if (!served.has(nid)) continue;
-      const n = this.nodes[nid], [dx, dy] = DIR[dir] || DIR.N;
-      const tx = dx > 0 ? (this.W - n.x) / dx : dx < 0 ? -n.x / dx : Infinity, ty = dy > 0 ? (this.H - n.y) / dy : dy < 0 ? -n.y / dy : Infinity;
-      const t = Math.min(tx, ty);
-      stroke([[n.x, n.y], [n.x + dx * t, n.y + dy * t]]);
-    }
+    for (const [nid, , dir] of this.m.rails.exits) if (served.has(nid)) stroke(this.railExit(nid, dir));
     // gares : un petit bâtiment à côté de chaque ville desservie
     if (z >= 1.6) for (const nid of served) {
       const n = this.nodes[nid], [x, y] = this.toScreen(n.x, n.y), s = clamp(z * 1.6, 6, 12);
-      ctx.fillStyle = '#7a3b2a'; ctx.fillRect(x + s * 0.9, y - s * 0.2, s * 1.3, s * 0.7);
-      ctx.fillStyle = '#4a2a1e'; ctx.beginPath(); ctx.moveTo(x + s * 0.8, y - s * 0.2); ctx.lineTo(x + s * 1.55, y - s * 0.7); ctx.lineTo(x + s * 2.3, y - s * 0.2); ctx.closePath(); ctx.fill();
+      const gx = x - s * 2.6, gy = y + s * 0.6;   // (en bas à gauche : l'effectif de la ville est à droite)
+      ctx.fillStyle = '#7a3b2a'; ctx.fillRect(gx, gy, s * 1.3, s * 0.7);
+      ctx.fillStyle = '#4a2a1e'; ctx.beginPath(); ctx.moveTo(gx - s * 0.1, gy); ctx.lineTo(gx + s * 0.65, gy - s * 0.5); ctx.lineTo(gx + s * 1.4, gy); ctx.closePath(); ctx.fill();
     }
     ctx.restore();
   }
