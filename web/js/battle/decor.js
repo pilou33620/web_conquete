@@ -7,13 +7,17 @@
 // (instanceColor), le tronc est à part. En qualité basse, une partie des arbres des bois est omise. La couronne est
 // faite de touffes arrondies (normales lisses), plus sombres dessous ; une zone proche de la caméra a des touffes plus
 // fines. Dans les bois, sous un régiment, la couronne s'efface (masque des clairières) : on voit les troupes.
+// Étape 9d : dans les bois, les couronnes sont plus larges (plus encore quand la qualité éclaircit les bois) et se
+// touchent : une canopée continue au toit bosselé ; leur teinte suit un bruit à grande échelle (un bois a des nappes
+// plus jaunes ou plus bleues), avec quelques arbres plus clairs ou plus sombres. Le feuillage (feuillage) a une
+// lumière enveloppante, laisse passer le soleil à contre-jour, et se balance au vent.
 // Bâti (maisons et fermes à toit à deux pans, église et clocher, moulins, ponts, portes de ville) : une seule
 // géométrie fixe, couleurs par sommet ; murs enfoncés sous le sol au pied, pour ne jamais flotter sur une pente.
 // Enceintes et clôtures (remparts et bastions, murs de ville crénelés, murs de clôture, tranchées et gabions,
 // barricades, redoutes, haies, murets, clôtures de bois) : des bandes extrudées le long de leur tracé, qui suivent le
 // relief, coupées sur l'eau, aux portes et aux brèches (reconstruites à chaque brèche ouverte, avec leurs éboulis).
 import * as THREE from '../../vendor/three/three.module.js';
-import { hash, clamp, T } from './formes.js';
+import { hash, clamp, T, vnoise } from './formes.js';
 import { resample, offsetPts } from './terrain.js';
 
 const ZONE = 750, CL = 4;   // côté d'une zone d'arbres ; pixel du masque des clairières (m)
@@ -93,6 +97,45 @@ function nearFade(mat) {
       if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > smoothstep(uNear * 0.5, uNear * 0.92, vViewPosition.z)) discard;`);
   };
   mat.customProgramCacheKey = () => 'decor-pres';
+  return mat;
+}
+// feuillage : lumière enveloppante (le côté à l'ombre d'une couronne n'est pas noir), soleil qui traverse les feuilles
+// quand on le regarde à contre-jour, balancement au vent (plus fort vers le haut de la couronne, d'autant plus que le
+// vent souffle ; uni : uTime, uWind, uWindK de relief.js)
+function feuillage(mat, uni) {
+  const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey;
+  mat.onBeforeCompile = (sh, r) => {
+    prev?.call(mat, sh, r);
+    Object.assign(sh.uniforms, { uTime: uni.uTime, uWind: uni.uWind, uWindK: uni.uWindK });
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime, uWindK; uniform vec2 uWind; varying vec3 vLeaf;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vLeaf = position * 4.5;
+        #ifdef USE_INSTANCING
+          vec3 ip = instanceMatrix[3].xyz;
+          vLeaf += ip * 0.37;
+          float ph = dot(ip.xz, vec2(0.071, 0.113));
+          float sway = (sin(uTime * 1.3 + ph) + 0.45 * sin(uTime * 2.7 + ph * 1.9)) * uWindK * 0.035 * max(position.y - 0.7, 0.0);
+          // le vent de la scène, ramené dans le repère de l'arbre (tourné et mis à l'échelle par son instance)
+          mat3 imv = mat3(instanceMatrix);
+          transformed += transpose(imv) * vec3(uWind.x, 0.0, uWind.y) / dot(imv[0], imv[0]) * sway * length(imv[0]);
+        #endif`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+        varying vec3 vLeaf;
+        float lhash(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+        float lnoise(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mix(lhash(i), lhash(i + vec3(1, 0, 0)), f.x), mix(lhash(i + vec3(0, 1, 0)), lhash(i + vec3(1, 1, 0)), f.x), f.y),
+                     mix(mix(lhash(i + vec3(0, 0, 1)), lhash(i + vec3(1, 0, 1)), f.x), mix(lhash(i + vec3(0, 1, 1)), lhash(i + vec3(1, 1, 1)), f.x), f.y), f.z); }`)
+      // grappes de feuilles : des creux plus sombres entre des touffes plus claires (deux octaves de bruit)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        float lf = lnoise(vLeaf) * 0.6 + lnoise(vLeaf * 2.7) * 0.4;
+        diffuseColor.rgb *= 0.35 + 1.1 * smoothstep(0.2, 0.8, lf);`)
+      .replace('#include <lights_lambert_pars_fragment>', THREE.ShaderChunk.lights_lambert_pars_fragment
+      .replace('float dotNL = saturate( dot( geometryNormal, directLight.direction ) );', 'float dotNL = saturate( dot( geometryNormal, directLight.direction ) * 0.8 + 0.2 );')
+      .replace('reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );',
+        'reflectedLight.directDiffuse += (irradiance + directLight.color * 0.3 * pow(saturate(-dot(geometryViewDir, directLight.direction)), 3.0)) * BRDF_Lambert( material.diffuseColor );'));
+  };
+  mat.customProgramCacheKey = () => key.call(mat) + '|feuillage';
   return mat;
 }
 // sous un régiment, la couronne rétrécit jusqu'à disparaître (le tronc reste) : uClear, masque des clairières, lu à
@@ -227,8 +270,8 @@ export class Decor {
     });
     const geos = new Map(), lumps = [1, 3, 5, 5][fx];
     // (nuages et collines : ombrage de relief.js)
-    const crownMat = this.r.ombrage(nearFade(new THREE.MeshLambertMaterial({ vertexColors: true })));
-    const woodMat = this.r.ombrage(clearable(nearFade(new THREE.MeshLambertMaterial({ vertexColors: true })), this.clearUni, 'decor-cime'));
+    const crownMat = this.r.ombrage(feuillage(nearFade(new THREE.MeshLambertMaterial({ vertexColors: true })), this.r.uni));
+    const woodMat = this.r.ombrage(feuillage(clearable(nearFade(new THREE.MeshLambertMaterial({ vertexColors: true })), this.clearUni, 'decor-cime'), this.r.uni));
     const woodDepth = clearable(new THREE.MeshDepthMaterial(), this.clearUni, 'decor-cime-ombre');
     this.disposables.push(woodMat, woodDepth);
     const trunkMat = this.r.ombrage(nearFade(new THREE.MeshLambertMaterial({ color: snow ? '#4a3c30' : TRUNK })));
@@ -242,6 +285,8 @@ export class Decor {
     };
     for (const [key, list] of zones) {
       const [zk, kind, cime, bois] = key.split('|'), [zx, zy] = zk.split(',').map(Number), cm = bois ? woodMat : crownMat;
+      // dans les bois, des couronnes qui se touchent : plus larges, d'autant plus que la qualité a ôté des arbres
+      const big = bois && kind !== 'buisson' && kind !== 'nu' ? 1.2 / Math.sqrt(keep) : 1;
       const [crown, trunk] = geo(kind, 0), fine = fx >= 2 && kind !== 'sapin' && kind !== 'meule' && kind !== 'nu' ? geo(kind, 1)[0] : null;
       // like : un lot déjà placé dont on reprend les matrices et les teintes (la couronne fine d'une zone)
       const mk = (g, mat, tint, like = null) => {
@@ -250,7 +295,7 @@ export class Decor {
         else list.forEach((tr, i) => {
           p.set(tr.x, this.r.heightAt(tr.x, tr.y) - 0.1, tr.y);
           q.setFromAxisAngle(up, hash(tr.x | 0, tr.y | 0, 3) * Math.PI * 2);
-          const r = tr.r * (0.92 + hash(tr.x | 0, tr.y | 0, 5) * 0.16);
+          const r = tr.r * (0.92 + hash(tr.x | 0, tr.y | 0, 5) * 0.16) * big;
           mesh.setMatrixAt(i, m.compose(p, q, s.set(r, r, r)));
           if (tint) mesh.setColorAt(i, tint(tr, col));
         });
@@ -263,7 +308,14 @@ export class Decor {
       const tint = (tr, c) => {
         c.set(kind === 'sapin' || kind === 'parasol' ? pal.pins[(tr.ci ?? 0) % pal.pins.length] : kind === 'meule' ? (snow ? '#e4e7ea' : '#c8a659') : pal.arbres[(tr.ci ?? 0) % pal.arbres.length]);
         if (snow && kind !== 'meule') c.lerp(new THREE.Color('#d8dde0'), 0.25);
-        return c.multiplyScalar(0.86 + hash(tr.x | 0, tr.y | 0, 9) * 0.28);
+        if (kind !== 'meule' && !snow) {
+          // nappes : plus jaune ou plus bleu selon un bruit de 300 m ; un arbre sur dix plus clair, un sur dix plus sombre
+          const n = vnoise(tr.x / 300, tr.y / 300, 61) - 0.5, o = hash(tr.x | 0, tr.y | 0, 11);
+          c.r *= 1 + n * 0.3; c.b *= 1 - n * 0.35;
+          if (o < 0.1) c.lerp(new THREE.Color('#9fbf5a'), 0.35); else if (o > 0.9) c.multiplyScalar(0.72);
+        }
+        // (dans les bois, un peu plus sombre : vu de haut, un bois est une masse)
+        return c.multiplyScalar((0.86 + hash(tr.x | 0, tr.y | 0, 9) * 0.28) * (bois ? 0.82 : 1));
       };
       if (crown) {
         const far = mk(crown, cm, tint), near = fine && mk(fine, cm, null, far);

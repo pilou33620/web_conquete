@@ -73,6 +73,13 @@ soleil passe de 2,2 à 2,85 et le ciel de 2,05 à 1,5 (heures.js). Sous un ciel 
 toujours. Limite : les normales ne sont pas plus fines que les altitudes du moteur (une case de 20 m, affinée à 5 m) ;
 talus et chemins creux demanderaient des altitudes plus fines côté serveur.
 
+**Livré** : 9d (`decor.js` feuillage, `terrain.js` woodMask, `relief.js` sous-bois). Sous-bois sombre (masque des bois
+à 4 m) ; couronnes des bois ×1,2 (÷ √ de la part gardée en Basse et Moyenne, qui ôtent des arbres) ; teinte selon un
+bruit de 300 m, un arbre sur dix plus clair, un sur dix plus sombre ; feuillage : lumière enveloppante, translucidité à
+contre-jour, grappes de feuilles (bruit 3D dans le shader), balancement au vent selon sa force. Pas fait : les
+imposteurs d'arbres (A5.2 ; le nombre d'arbres actuel passe, à revoir avec 9k si l'iPad peine), et le traitement des
+haies (A5.6 : elles restent des bandes extrudées).
+
 ## Ce qui ne change pas
 
 Le moteur Python et ses API, les règles, les commandes et les gestes, l'interface, les noms des niveaux de qualité, les

@@ -29,6 +29,9 @@
 // le soleil est bas (horizon vu dans huit directions). L'ombre des collines et celle des nuages (plus grandes et plus
 // douces qu'avant) ne retiennent que la lumière directe du soleil, et tombent aussi sur les troupes, les arbres et
 // les maisons (ombrage, appelé par troupes.js et decor.js).
+//
+// Bois (étape 9d) : sous les bois et forêts, le sol s'assombrit (masque des bois de terrain.js) : entre les couronnes
+// et à la lisière, on voit un sous-bois sombre et continu, et vu de haut un bois est une masse sombre.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clamp, hash, canvas } from './formes.js';
 import { paintDecal } from './terrain.js';
@@ -197,7 +200,12 @@ export class Relief {
       uMean: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0.2, 0.2, 0.2)) }, uForce: { value: FORCE.slice() }, uSolK: { value: 0 },
       uFine: { value: null }, uFineUV: { value: new THREE.Vector4() }, uAO: { value: 0.9 },
       uHor1: { value: null }, uHor2: { value: null }, uHorUV: { value: new THREE.Vector4() }, uHorOn: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+      uBois: { value: null }, uWindK: { value: 1 },
     };
+    const wm = terrain.woodMask();
+    this.bois = new THREE.DataTexture(wm.data, wm.w, wm.h, THREE.RedFormat, THREE.UnsignedByteType);
+    this.bois.unpackAlignment = 1; this.bois.minFilter = this.bois.magFilter = THREE.LinearFilter; this.bois.needsUpdate = true;
+    this.uni.uBois.value = this.bois;
     this.prepRelief();
     // masques des sols photo (terrain.js) ; la photo arrive plus tard (setSols)
     const sm = terrain.solMask();
@@ -275,7 +283,7 @@ export class Relief {
           uniform vec3 uOuter; uniform vec2 uSize; uniform sampler2D uCover; uniform float uCoverA;
           // (quatre textures séparées : un tableau de textures se mêlait à uCover dans l'attribution des unités)
           uniform sampler2D uLv0, uLv1, uLv2, uLv3; uniform vec4 uSpan; uniform vec2 uSlots[${N * N * 4}];
-          uniform sampler2D uFine; uniform vec4 uFineUV; uniform float uAO;
+          uniform sampler2D uFine, uBois; uniform vec4 uFineUV; uniform float uAO;
           varying vec2 vWorld; varying vec3 vNw;
           vec3 gNf; float gAO = 1.0;   // normale fine du sol (scène) et occlusion ambiante
           // un niveau de détail en p (m) : sa couleur, et ok = 1 si le bloc de p y est peint
@@ -315,6 +323,8 @@ export class Relief {
           #ifdef SOLS
           ${SOLS_MIX}
           #endif
+          // sous-bois : sombre et un peu plus vert, jusqu'au bord du bois
+          diffuseColor.rgb *= mix(vec3(1.0), vec3(0.5, 0.56, 0.5), smoothstep(0.25, 0.85, texture(uBois, vWorld / uSize).r));
           // couverts (déploiement) : bois, bâti, hauteurs (plus appuyés que sur la carte 2D : la lumière les adoucit)
           vec4 cv = texture(uCover, vMapUv);
           diffuseColor.rgb = mix(diffuseColor.rgb, cv.rgb, min(0.85, cv.a * uCoverA * 2.4));
@@ -562,6 +572,7 @@ export class Relief {
     scene.fog.far = (dist * 3 + 5000) * sky.fogFar;
     this.uni.uCloudA.value = sky.cloudA;
     this.uni.uTime.value = time; this.uni.uWind.value.set(...sky.wind).normalize();
+    this.uni.uWindK.value = clamp(Math.hypot(...sky.wind) / 3.5, 0.35, 1.6);   // (le balancement des arbres)
     this.uni.uCloudOff.value.set(time * (3 + sky.wind[0] * 2.5), time * (1 + sky.wind[1] * 2.5));
   }
   // l'image entière a été repeinte (brèche) : renvoyée à la carte graphique, une fois par seconde au plus
@@ -575,6 +586,7 @@ export class Relief {
     for (const l of this.levels) l?.tex.dispose();
     for (const t of this.masks) t.dispose();
     for (const t of this.hor) t.dispose();
+    this.bois.dispose();
     this.fine.dispose();
     this.sols?.dispose(); this.disposed = true;
     this.decals.dispose();

@@ -429,6 +429,18 @@ export class Terrain {
     }
     return { a, b, w, h, neige: !!pal.neige, seed: S };
   }
+  // Masque des bois (relief.js : le sous-bois sombre) : une image à `res` m par pixel, 255 sous les bois et forêts,
+  // aux mêmes contours que la peinture
+  woodMask(res = 4) {
+    const w = Math.ceil(this.W / res), h = Math.ceil(this.H / res), cv = canvas(w, h), g = cv.getContext('2d', { willReadFrequently: true });
+    g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+    g.setTransform(1 / res, 0, 0, 1 / res, 0, 0); g.fillStyle = '#fff';
+    for (const r of this.regions) if (r.type === T.BOIS || r.type === T.FORET) g.fill(r.path);
+    const d = g.getImageData(0, 0, w, h).data, out = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) out[i] = d[i * 4];
+    cv.width = cv.height = 0;
+    return { data: out, w, h };
+  }
   // cotes des sommets (comme sur les cartes d'état-major), écrites sur le calque par la vue
   prepPeaks() {
     const { cols, rows, cell, h } = this;

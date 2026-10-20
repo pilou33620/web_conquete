@@ -527,7 +527,9 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   puis la roche sur les pentes ; photos de 512 px en Basse et Moyenne, de 1024 px avec un pavage aléatoire qui en
   cache la répétition en Haute et Ultra. Le **relief se lit** : le soleil l'emporte sur la lumière du ciel par temps
   clair, les pentes accrochent la lumière, les fonds de vallée sont plus sombres, et quand le soleil est bas les
-  collines portent leur ombre, comme les nuages, sur le sol, les troupes et les arbres. Au premier lancement, elle est
+  collines portent leur ombre, comme les nuages, sur le sol, les troupes et les arbres. Les **bois** sont des masses
+  sombres : sous-bois assombri, couronnes qui se touchent, grappes de feuilles, nuances d'un bout à l'autre du bois,
+  soleil qui traverse le feuillage à contre-jour, arbres qui se balancent au vent. Au premier lancement, elle est
   choisie d'après l'appareil, puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par
   seconde) ; un choix fait à la main est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de
   suite, sans quitter la bataille (l'anticrénelage, à la bataille suivante). Les batailles demandent **WebGL 2**
