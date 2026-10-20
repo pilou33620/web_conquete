@@ -2446,6 +2446,8 @@ class TacticalBattle:
             if not mine and (seen is None or u.id not in seen) and self.phase != 'fin':
                 continue
             units.append(u.view(mine, u.seen))
+            if u.cls == 'inf' and self.spec.get('entrench', [0, 0])[u.side] and self.clock - u.still_t >= ENTRENCH_T:
+                units[-1]['dug'] = 1   # retranchée : le client dessine sa tranchée et ses gabions (SPEC-SUITE J)
             if mine and u.cls == 'general' and u.alive:
                 units[-1]['rally'] = round(self.rally_radius(u))   # (zone où il rallie les fuyards)
         sides = []

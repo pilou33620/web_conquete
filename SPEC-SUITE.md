@@ -497,6 +497,15 @@ Ce qui change la carte (voie ferrée, cultures, ponts) passe par la version du g
 n'est que du décor. Fichiers : `game/tactics/terrain.py` (version suivante), `decor.js`, `terrain.js`, `troupes.js`
 (ambulances), `effets.js` (ballon).
 
+**Livré le 20/10/2026** (`epoque3d.js` ; marques `rail` et `ambulances` dans `rules.VISUALS` ; le ballon dans la carte
+envoyée, `dug` dans la vue des unités retranchées, `battle.py`). Poteaux télégraphiques et voie ferrée (ballast,
+traverses, rails, à partir de 1845) le long de la grand-route ; trois cheminées d'usine au loin, hors du champ ;
+ambulances derrière chaque état-major (dès 1797 ; à croix rouge avec la convention de Genève) ; ballon captif
+au-dessus de l'état-major d'un camp qui a les aérostiers ; parapet de terre devant l'infanterie retranchée. Écarts :
+la voie et les poteaux sont du décor (les cases de la carte ne changent pas : pas besoin d'un générateur v3) et
+peuvent passer sous un bosquet ; pas de cultures de l'époque (maïs, vignes palissées, pins en lignes) ni de meules
+en plus de celles qui existent, ni de ponts de pierre à la place des gués : ils demandent le générateur (avec F9).
+
 ---
 
 ## Partie K : vérifications et dettes

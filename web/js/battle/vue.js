@@ -21,6 +21,7 @@ import { Herbe } from './herbe.js';
 import { ApresRendu } from './apres.js';
 import { Ciel } from './ciel.js';
 import { champDeVision, OEIL } from './visibilite.js';
+import { DecorEpoque } from './epoque3d.js';
 import { segDist } from './gestes.js';
 
 const POLL_MS = 120;
@@ -103,6 +104,8 @@ export class BattleView {
     this.fx.marks = m.marks || [[], []];   // (poudre sans fumée de chaque camp)
     this.decor = new Decor(this.terrain, this.relief, this.q);
     this.scene.add(this.decor.group);
+    this.epoque3d = new DecorEpoque(this.terrain, this.relief, m);   // le décor de l'époque (epoque3d.js)
+    this.scene.add(this.epoque3d.group);
     this.setShadows();
     this.art.setYear(m.year);   // coiffures de l'époque
     this.W = this.terrain.W; this.H = this.terrain.H;
@@ -136,7 +139,7 @@ export class BattleView {
     this.relief?.dispose(); this.ciel?.dispose(); this.losTex?.dispose();
     this.piet?.dispose(); this.ombreR?.dispose(); this.herbe?.dispose();
     this.troops?.dispose();
-    this.decor?.dispose();
+    this.decor?.dispose(); this.epoque3d?.dispose();
     this.art.clear();
     this.fx.dispose();
     // (Safari ne garde qu'une poignée de contextes WebGL : on rend celui-ci tout de suite)
@@ -463,6 +466,7 @@ export class BattleView {
     const all = [...this.units.values()].filter(u => u.state !== 'hors'), vis = all.filter(u => this.onScreen(u));
     this.troops.update(all, this.colors || [], time, this.fx.t, fr, cam);
     this.decor.clearings(all, performance.now());
+    this.epoque3d?.update(all);
     this.fx.render(fr, z);
     this.piet?.render();
     this.sendPiet();

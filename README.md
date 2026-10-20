@@ -537,6 +537,9 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   rangs de feuillage touffu, d'où dépassent des arbres têtards ; les creux du terrain sont plus verts et plus sombres.
   Au fil des pertes, des débris jonchent le sol (chapeaux, fusils, havresacs, roues brisées près des pièces), et la
   boue laissée par les troupes est gardée avec la bataille : une bataille rechargée retrouve ses traces.
+  Le décor suit l'époque et les technologies des deux camps : poteaux télégraphiques et voie ferrée le long de la
+  grand-route, cheminées d'usine à l'horizon, ambulances à l'arrière (à croix rouge après la convention de Genève),
+  ballon captif au-dessus de l'état-major des aérostiers, parapet de terre devant l'infanterie retranchée.
 - **En haut** : l'heure (et la nuit qui approche), le temps, le rapport de forces (l'ennemi : seulement ce que
   vous en voyez), le journal (repliable, et complet derrière son bouton), l'aide, **« Finir auto. »** (vos officiers
   achèvent la bataille en accéléré) et **« Décrocher »** (toute l'armée quitte le terrain), chacun avec confirmation.
@@ -790,7 +793,7 @@ web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et 
                      heures.js (table des heures : lumière, brume et étalonnage de 5 h à 22 h ; logique pure,
                      testée), horizon.js (normales fines, occlusion et horizons du relief, calculés une fois
                      par bataille ; logique pure, testée), apres.js (après-rendu : brume, ACES, LUT d'étalonnage, vignettage, FXAA, halo,
-                     maquette), ciel.js (le ciel : dégradé, soleil, nuages), visibilite.js (ligne de vue ; logique pure, testée), herbe.js (touffes d'herbe en relief), pietinement.js (la boue laissée par les troupes), sols.js (sols photo : chargement des huit sols), qualite.js (qualité
+                     maquette), ciel.js (le ciel : dégradé, soleil, nuages), visibilite.js (ligne de vue ; logique pure, testée), epoque3d.js (le décor de l'époque), herbe.js (touffes d'herbe en relief), pietinement.js (la boue laissée par les troupes), sols.js (sols photo : chargement des huit sols), qualite.js (qualité
                      graphique), commandes.js (gestes et clavier),
                      interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils
                      communs), css/bataille.css ;

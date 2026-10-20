@@ -204,7 +204,7 @@ class BattleMap:
                     fences=[dict(kind=k, pts=[r2(p) for p in pts]) for k, pts in self.fences],
                     heart=list(self.heart) if self.heart else None,
                     seed=spec['seed'], season=spec['season'], weather=spec['weather'], year=spec.get('year'),
-                    marks=spec.get('marks', [[], []]),
+                    marks=spec.get('marks', [[], []]), balloon=spec.get('balloon', [0, 0]),   # (le ballon captif : SPEC-SUITE J)
                     camp=dict(x=spec['cx'], y=spec['cy']), region=self.region,
                     types=TYPE_NAMES, labels=TYPE_LABEL)
 

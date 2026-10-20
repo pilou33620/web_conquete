@@ -347,6 +347,9 @@ VISUALS = dict(
     mais=dict(tech='mais'),                # maïs en Chalosse et en Béarn
     assolement=dict(tech='assolement'),    # champs plus variés
     moissonneuses=dict(tech='moissonneuses'),
+    # le décor des batailles selon l'époque (SPEC-SUITE, partie J)
+    rail=dict(tech='chemins_fer'),         # une voie ferrée près du champ de bataille
+    ambulances=dict(tech='croix_rouge'),   # ambulances à croix rouge (avant : celles de Larrey, sans croix)
 )
 
 
