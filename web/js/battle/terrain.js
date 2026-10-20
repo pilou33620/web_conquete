@@ -58,7 +58,7 @@ export const PALETTES = {
 const CULT = { ble: { sec: 1 }, chaume: { sec: 1 }, avoine: { pre: 0.5, sec: 0.5 }, bleVert: { pre: 0.7, sec: 0.3 }, mais: { pre: 0.4, terre: 0.6 },
   labour: { terre: 1 }, semis: { terre: 0.85, pre: 0.15 }, prairie: { pre: 0.5, sec: 0.5 } };
 export function solParts(v, tex) {
-  return v === T.CHAMP ? CULT[tex] || { sec: 1 } : v === T.PRE ? (tex === 'prairie' ? CULT.prairie : { pre: 1 })
+  return v === T.CHAMP ? CULT[tex] || { sec: 1 } : v === T.PRE ? (tex === 'prairie' ? CULT.prairie : { pre: 1 }) : v === T.VERGER ? { pre: 0.8, sec: 0.2 }
     : v === T.VIGNE ? { terre: 0.85, pre: 0.15 } : v === T.LANDE ? { lande: 1 } : v === T.MARAIS ? { pre: 0.7, terre: 0.3 }
     : v === T.SABLE ? { sable: 1 } : v === T.ROCHE ? { roche: 1 } : v === T.BOIS || v === T.FORET ? { terre: 0.6, sec: 0.4 }
     : v === T.EAU ? {} : v === T.GUE ? { sable: 0.6, terre: 0.4 } : v === T.BARRICADE ? { terre: 1 }
@@ -166,7 +166,7 @@ export class Terrain {
       parcel[j * cols + i] = bi;
     }
     // régions : composantes connexes d'un même type (et d'une même parcelle pour les cultures et prés)
-    const crop = v => v === T.CHAMP || v === T.VIGNE || v === T.PRE;
+    const crop = v => v === T.CHAMP || v === T.VIGNE || v === T.PRE || v === T.VERGER;
     const label = new Int32Array(cols * rows).fill(-1);
     this.regions = [];
     const stack = [];
@@ -189,7 +189,7 @@ export class Terrain {
       this.regions.push(reg);
     }
     this.label = label;
-    const jitterOf = v => (v === T.CHAMP || v === T.VIGNE || v === T.PRE ? 2 : v === T.ROUTE || v === T.CHEMIN || v === T.BATI || v === T.MUR || v === T.BRECHE || v === T.PORTE || v === T.BARRICADE ? 0 : 5);
+    const jitterOf = v => (v === T.CHAMP || v === T.VIGNE || v === T.PRE || v === T.VERGER ? 2 : v === T.ROUTE || v === T.CHEMIN || v === T.BATI || v === T.MUR || v === T.BRECHE || v === T.PORTE || v === T.BARRICADE ? 0 : 5);
     const snow = this.pal.neige;
     for (const [id, reg] of this.regions.entries()) {
       reg.path = this.regionPath(id, jitterOf(reg.type), reg.box);
@@ -208,7 +208,7 @@ export class Terrain {
       // motif du sol : culture de la saison pour les champs, pré ou prairie de fauche, etc.
       const v = reg.type;
       reg.tex = v === T.CHAMP ? culture(this.season, hash(reg.parcel, 6, S))
-        : v === T.PRE ? (snow ? 'neige' : hash(reg.parcel, 7, S) < 0.22 ? 'prairie' : 'herbe')
+        : v === T.PRE || v === T.VERGER ? (snow ? 'neige' : v === T.PRE && hash(reg.parcel, 7, S) < 0.22 ? 'prairie' : 'herbe')
         : v === T.VIGNE ? 'vigne' : v === T.LANDE ? 'lande' : v === T.MARAIS ? 'marais' : v === T.SABLE ? 'sable' : v === T.ROCHE ? 'roche'
         : v === T.BOIS || v === T.FORET ? 'sousBois' : v === T.ROUTE || v === T.CHEMIN ? (snow ? 'neige' : 'herbe')
         : v === T.BARRICADE ? 'terre' : v === T.EAU || v === T.GUE ? 'eau' : 'cour';
@@ -219,7 +219,7 @@ export class Terrain {
     // motifs dont cette carte se sert (préparés d'avance dans le temps libre : warm)
     this.kinds = [...new Set([snow ? 'neige' : 'herbe', 'terre', 'route', 'eau', ...this.regions.map(r => r.tex)])];
     // ordre de peinture : les sols d'abord, l'eau et le bâti ensuite
-    const ORDER = [T.PRE, T.LANDE, T.SABLE, T.ROCHE, T.CHAMP, T.VIGNE, T.MARAIS, T.BOIS, T.FORET, T.ROUTE, T.CHEMIN, T.BATI, T.MUR, T.BRECHE, T.PORTE, T.BARRICADE, T.GUE, T.EAU];
+    const ORDER = [T.PRE, T.VERGER, T.LANDE, T.SABLE, T.ROCHE, T.CHAMP, T.VIGNE, T.MARAIS, T.BOIS, T.FORET, T.ROUTE, T.CHEMIN, T.BATI, T.MUR, T.BRECHE, T.PORTE, T.BARRICADE, T.GUE, T.EAU];
     this.regions.sort((a, b) => ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
     this.prepTrees();
     this.prepFine();
@@ -290,6 +290,11 @@ export class Terrain {
       if (v === T.FORET) { n = 7; r0 = 5; r1 = 8.5; }
       else if (v === T.BOIS) { n = 5; r0 = 4.5; r1 = 7.5; }
       else if ((v === T.PRE || v === T.CHAMP) && h(1) < 0.025) n = 1;
+      else if (v === T.VERGER) {
+        // verger : des fruitiers bas en rangs, tous les 10 m (deux par case, quelques manques)
+        for (const [dx, dy] of [[0.25, 0.25], [0.75, 0.75]]) if (h(60 + dx * 4) > 0.1)
+          list.push({ x: (i + dx) * cell + (h(61 + dx * 4) - 0.5) * 1.5, y: (j + dy) * cell + (h(62 + dx * 4) - 0.5) * 1.5, r: 2.1 + h(63 + dx * 4) * 0.8, ci: (h(64 + dx * 4) * 4) | 0, kind: snow ? 'nu' : 'feuillu' });
+      }
       else if (v === T.LANDE && h(2) < 0.12) { n = 1; r0 = 3; r1 = 5; }
       for (let k = 0; k < n; k++) {
         if (v === T.BOIS && h(10 + k) < 0.18) continue;   // clairières
@@ -380,7 +385,7 @@ export class Terrain {
     const range = Math.max(1, this.hmax - this.hmin);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const c = ((y / F) | 0) * cols + ((x / F) | 0), v = t[c];
-      const k = v === T.PRE || v === T.LANDE ? 1 : v === T.CHAMP || v === T.VIGNE || v === T.MARAIS ? 0.45 : 0;
+      const k = v === T.PRE || v === T.LANDE || v === T.VERGER ? 1 : v === T.CHAMP || v === T.VIGNE || v === T.MARAIS ? 0.45 : 0;
       if (!k) continue;
       const e = (vnoise(x / 9, y / 9, S + 50) - 0.5) * 1.3 + (vnoise(x / 2.5, y / 2.5, S + 51) - 0.5) * 0.5 + (0.5 - (h[c] - this.hmin) / range) * 0.4;
       const q = (y * W + x) * 4, col = snow ? [186, 200, 222] : e > 0 ? [52, 86, 26] : [214, 196, 110];
@@ -401,7 +406,7 @@ export class Terrain {
     for (const r of this.regions) {
       // champs, prés (herbe ou prairie de fauche) et landes ; pas les routes et chemins, qui ont aussi le motif d'herbe
       const e = EPIS[r.tex];
-      if (!e || (r.type !== T.CHAMP && r.type !== T.PRE && r.type !== T.LANDE)) continue;
+      if (!e || (r.type !== T.CHAMP && r.type !== T.PRE && r.type !== T.LANDE && r.type !== T.VERGER)) continue;
       gc.fillStyle = e[1] || (r.type === T.LANDE ? this.pal.lande : mixHex(this.pal.pre[r.tone ?? 0], this.pal.herbeSec, 0.15 + 0.35 * hash(r.parcel, 11, 7)));
       if (r.tex === 'mais' && this.season === 'automne') gc.fillStyle = '#c4aa64';
       gc.fill(r.path);
@@ -564,7 +569,7 @@ export class Terrain {
       let col = null, a = 0;
       if (v === T.BOIS || v === T.FORET) { col = [70, 170, 70]; a = v === T.FORET ? 170 : 140; }
       else if (v === T.BATI || v === T.MUR || v === T.PORTE || v === T.BRECHE) { col = [90, 140, 230]; a = 170; }
-      else if (v === T.VIGNE || v === T.MARAIS) { col = [150, 200, 120]; a = 60; }
+      else if (v === T.VIGNE || v === T.MARAIS || v === T.VERGER) { col = [150, 200, 120]; a = 60; }
       else {
         // hauteur : plus haute que ses alentours (à 160 m) d'au moins 10 % du relief
         let m = 0, n = 0;
@@ -641,7 +646,7 @@ export class Terrain {
       const v = r.type, crop = v === T.CHAMP || v === T.VIGNE || r.tex === 'prairie';
       if (v === T.EAU || v === T.GUE || v === T.ROUTE || v === T.CHEMIN) continue;   // l'eau plus bas ; les routes sur l'herbe
       if (r.tex !== 'herbe' && r.tex !== 'neige') { g.fillStyle = this.pat(g, r.tex, s, crop ? r.angle : 0, r.off); g.fill(r.path); }
-      if (v === T.PRE) { g.globalAlpha = 0.16; g.fillStyle = pal.pre[r.tone]; g.fill(r.path); g.globalAlpha = 1; }
+      if (v === T.PRE || v === T.VERGER) { g.globalAlpha = 0.16; g.fillStyle = pal.pre[r.tone]; g.fill(r.path); g.globalAlpha = 1; }
       else if (v === T.CHAMP) { g.globalAlpha = 0.04 + (r.tone >> 1) * 0.04; g.fillStyle = r.tone & 1 ? '#fff8dc' : '#281e0a'; g.fill(r.path); g.globalAlpha = 1; }
       if (crop && s >= 0.9) {
         g.strokeStyle = mixHex(pal.pre[1], pal.herbeSec, 0.3); g.globalAlpha = 0.75; g.lineWidth = v === T.VIGNE ? 1.1 : 1.6; g.stroke(r.path);

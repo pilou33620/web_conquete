@@ -396,6 +396,11 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   bataille, de 8 h au crépuscule : une bataille rangée de 3 à 6 heures dure une dizaine à une vingtaine de minutes)
   sur une carte de 3 × 2 km tirée du terrain de la campagne : relief, bois, champs, vignes, haies, clôtures et
   murets, routes, rivières avec gués et ponts, fermes, et la ville avec ses remparts, ses portes et la brèche du siège.
+  Le paysage est composé comme une vraie campagne : des parcelles aux formes variées qui suivent les routes et les
+  courbes de niveau, des **vergers** autour des maisons (couvert léger, ils ralentissent un peu et gênent un peu la
+  vue ; jamais sur le glacis d'une place forte), des prés le long de l'eau, pas de labours sur les pentes fortes, des
+  bois aux lisières découpées avec leurs clairières, des bosquets, des haies au bord des parcelles et des chemins qui
+  les longent jusqu'aux fermes et aux hameaux.
   Chaque régiment a son expérience, son endurance, la portée de ses armes et ses munitions (un chariot par armée les
   recomplète) ; les bois cachent les troupes, la nuit arrête le combat.
 - **« Finir automatiquement »** confie la suite à vos officiers : la vraie bataille continue, avec les mêmes règles,
@@ -786,6 +791,7 @@ node --test tests/                               # l'interface seule
 |---|---|
 | `tests/test_bataille.py` | ordres propres à chaque arme (acceptés ou refusés), salve puis baïonnette, harcèlement, canons sans munitions, régiment anéanti, bataille jusqu'au bout et rechargement en plein combat |
 | `tests/test_campagne.py` | votre tour puis celui des IA (d'un coup, arrêts, reprise), villes neutres, temps en tours (production, recherche, échéances, actions d'armée, sièges, arrivée), retraite une fois par tour, dettes et événements, prix du marché, sauvegarde (IA comprises) |
+| `tests/test_cartes.py` | cartes de bataille : même graine, même carte ; plus de parcelles en quadrillage (moins de 30 % de bords en longues droites) ; vergers près des maisons, jamais sur le glacis ; moins d'une demi-seconde par carte |
 | `tests/test_serveur.py` | un vrai serveur HTTP sur un port libre : requêtes mal formées, fichiers hors de `web/`, ordres pendant le tour des IA, sauvegardes (dossier temporaire, les vraies ne sont pas touchées) |
 | `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, boutons d'ordres par arme, panneau du régiment, barre du tour, tutoriel et bulles de bataille |
 | `tests/camera.test.mjs` | caméra 3D des batailles : allers-retours écran ↔ terrain à 1 m et 1 pixel près sur une colline, à plusieurs caps et zooms ; bornes |

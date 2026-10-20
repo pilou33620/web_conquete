@@ -1,4 +1,4 @@
-# Spec : des champs de bataille composés comme ceux d'Ultimate General (à valider)
+# Spec : des champs de bataille composés comme ceux d'Ultimate General
 
 ## Pourquoi
 
@@ -16,6 +16,14 @@ cela se voit :
 
 Choix déjà faits (20/10/2026) : on garde des cartes **générées** (pas le vrai terrain de l'IGN, pas de cartes
 dessinées à la main), mais mieux composées.
+
+## Choix validés (20/10/2026)
+
+- La spec telle quelle.
+- **Un vrai type « verger »** (19ᵉ type de case, ajouté à la fin : les numéros des autres ne changent pas, les
+  sauvegardes restent valables) : couvert 0,2, gêne la vue (opacité 14, jusqu'à 5 m), coût de marche 1,2 (infanterie),
+  1,1 (légère), 1,6 (cavalerie), 1,8 (artillerie), freinage 0,9 et 0,75 au contact.
+- **Glacis dégagé** : pas de verger à moins de 300 m de l'enceinte d'une place forte.
 
 ## Ce qui ne change pas
 
@@ -98,7 +106,16 @@ les auréoles en déplacent les poids selon la place.
   changement des effets du terrain sur le jeu.
 - **Jamais** : casser une partie sauvegardée.
 
-## Questions ouvertes
+## Livré (C-a à C-d en une fois)
 
-- Faut-il un vrai type « verger » (couvert léger, ralentit un peu) ou des prés semés d'arbres suffisent-ils ?
-- Les places fortes gardent-elles leur glacis dégagé (pas de vergers à moins de 300 m de l'enceinte) ? Je propose oui.
+`game/tactics/terrain.py` : `_ilots` (C1), `_terroir` (C2, après la pose des fermes et du village), `_bois_details`
+(C3), haies sur les bords d'îlots et `_path_on_edges` (plus court chemin qui préfère les bords d'îlots), hameaux (C4).
+Le tracé des routes de campagne est calculé avant les parcelles (leurs sillons les suivent). Navigateur : le verger
+(formes.js, terrain.js : herbe, fruitiers en rangs tous les 10 m, couvert léger au déploiement).
+
+Mesures sur 24 cartes de villages : bords de parcelles en longues droites alignées (5 cases ou plus) de 76 % à 16 % ;
+génération de 95 à 185 ms en moyenne (220 ms au plus) ; parts : champs 32,8 → 28,2 %, prés 20,1 → 22,8 %, vergers
+2 %, bois 8,2 → 9,5 %, le reste à moins d'un point. Équilibre, 40 batailles isolées menées par les officiers des deux
+camps (mêmes graines) : victoires 13 / 26 / 1 indécise avant, 15 / 24 / 1 après (5 points, deux batailles : dans le
+bruit) ; pertes moyennes 13,7 / 11,7 % avant, 14,8 / 14,1 % après. Pas fait : les rangs d'arbres le long des chemins
+creux (C3.3).

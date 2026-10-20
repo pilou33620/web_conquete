@@ -4,7 +4,7 @@
 // Types de case, dans l'ordre du contrat (§ 3). Si le serveur envoie `types: {PRE: 0, …}`, cette table est remplacée.
 // BARRICADE (17) : ouvrages de fortune, ajoutés par le moteur.
 export const CELL_NAMES = ['PRE', 'CHAMP', 'VIGNE', 'LANDE', 'BOIS', 'FORET', 'MARAIS', 'EAU', 'GUE', 'ROUTE', 'CHEMIN',
-  'BATI', 'MUR', 'BRECHE', 'PORTE', 'SABLE', 'ROCHE', 'BARRICADE'];
+  'BATI', 'MUR', 'BRECHE', 'PORTE', 'SABLE', 'ROCHE', 'BARRICADE', 'VERGER'];   // (VERGER : SPEC-CARTES.md)
 export const T = Object.fromEntries(CELL_NAMES.map((k, i) => [k, i]));
 
 // table de correspondance : code reçu → code du client (identité, sauf si le serveur a numéroté autrement).

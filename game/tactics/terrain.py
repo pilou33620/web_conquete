@@ -2,7 +2,13 @@
 
 Construite à partir des cases de campagne autour de la bataille (terrain, rivières, routes, places proches),
 puis enrichie de bruit procédural déterministe (graine) : bosquets, haies, champs en lanières, vignes en rangs,
-fermes, chemins, ruisseaux, mares, relief. Une place forte ou une ville occupe le centre quand la bataille s'y livre,
+fermes, chemins, ruisseaux, mares, relief.
+
+Composée comme les cartes d'Ultimate General (SPEC-CARTES.md) : les parcelles sont des îlots aux formes variées
+(cellules de Voronoï), coupés en lanières dans le sens de la route voisine ou des courbes de niveau ; le terroir
+s'organise autour des maisons (vergers, petits champs), le long de l'eau (prés) et selon la pente (pas de labours sur
+les pentes fortes) ; les bois ont des lisières découpées, des clairières, et des bosquets parsèment les champs ; les
+haies suivent les bords des îlots, les chemins des fermes les longent. Une place forte ou une ville occupe le centre quand la bataille s'y livre,
 avec ses rues, son enceinte, ses portes, la brèche du siège et ses barricades.
 
 Coordonnées en mètres : x vers l'est (0 à 3 000), y vers le sud (0 à 2 000), comme la carte de campagne.
@@ -21,10 +27,12 @@ COLS, ROWS = W // CELL, H // CELL
 N = COLS * ROWS
 
 # Types de case (ordre du contrat) ; BARRICADE est un ajout (ouvrages de fortune : muret franchissable lentement)
+# VERGER est le dernier venu (SPEC-CARTES.md) : prés plantés d'arbres fruitiers autour des maisons, couvert léger ; ajouté
+# à la fin, les numéros des autres ne changent pas (sauvegardes)
 (T_PRE, T_CHAMP, T_VIGNE_T, T_LANDE_T, T_BOIS, T_FORET_T, T_MARAIS_T, T_EAU, T_GUE, T_ROUTE, T_CHEMIN, T_BATI, T_MUR,
- T_BRECHE, T_PORTE, T_SABLE, T_ROCHE, T_BARRICADE) = range(18)
+ T_BRECHE, T_PORTE, T_SABLE, T_ROCHE, T_BARRICADE, T_VERGER) = range(19)
 TYPE_NAMES = ['PRE', 'CHAMP', 'VIGNE', 'LANDE', 'BOIS', 'FORET', 'MARAIS', 'EAU', 'GUE', 'ROUTE', 'CHEMIN', 'BATI',
-              'MUR', 'BRECHE', 'PORTE', 'SABLE', 'ROCHE', 'BARRICADE']
+              'MUR', 'BRECHE', 'PORTE', 'SABLE', 'ROCHE', 'BARRICADE', 'VERGER']
 # Éléments linéaires (couche à part, `f`) : bordent champs et chemins, donnent un couvert léger à moyen
 F_NONE, F_CLOTURE, F_HAIE, F_MURET = range(4)
 FEAT_NAMES = ['', 'cloture', 'haie', 'muret']
@@ -33,7 +41,8 @@ FENCE = {T_PLAINE: 0.22, T_COLLINES: 0.30, T_VIGNE: 0.32, T_MONTAGNE: 0.30, T_HA
          T_MARAIS: 0.12, T_FORET: 0.05, T_DUNES: 0.0}
 STONY = ('24', '64')   # pays de pierre : murets plutôt que clôtures
 TYPE_LABEL = ['Prairie', 'Champs', 'Vignes', 'Lande', 'Bois', 'Forêt', 'Marais', 'Eau', 'Gué', 'Route', 'Chemin',
-              'Maisons', 'Rempart', 'Brèche', 'Porte', 'Sable', 'Rochers', 'Barricade']
+              'Maisons', 'Rempart', 'Brèche', 'Porte', 'Sable', 'Rochers', 'Barricade', 'Verger']
+CULTIVE = (T_CHAMP, T_PRE, T_VIGNE_T, T_LANDE_T)   # ce que le terroir peut réattribuer (C2)
 
 # amplitude du relief (m) selon le terrain de campagne
 AMP = {T_OCEAN: 0, G_EAU: 0, T_PLAINE: 7, T_FORET: 14, T_LANDE: 4, T_MARAIS: 1, T_COLLINES: 38, T_MONTAGNE: 66,
@@ -410,13 +419,31 @@ def generate(geo, spec):
             _stamp(m, [p, p], r['w'] / 2 + 12, ford)
             r.setdefault('fords', []).append([round(p[0]), round(p[1])])
 
+    # ---------------------------------------------------------- tracé des routes de campagne (à moins de 2 km) : avant les
+    # parcelles, dont les sillons les suivent (posées sur la carte plus bas)
+    for e in geo.edges:
+        if e.get('kind') == 'water' or e.get('ferry'):
+            continue
+        A, B = geo.nodes[e['a']], geo.nodes[e['b']]
+        if _seg_dist(cx, cy, A['x'], A['y'], B['x'], B['y']) > 2.0:
+            continue
+        pa, pb = to_m(A['x'], A['y']), to_m(B['x'], B['y'])
+        dense = _densify([pa, pb], 50.0)
+        dense = _meander(dense, rng, 18, 700)
+        for part in _clip_poly(dense, 100):
+            m.roads.append(dict(pts=part, kind='royale' if e.get('royal') else 'route'))
+    if not m.roads:
+        pts = _meander(_densify(_random_crossing(rng), 50.0), rng, 40, 500)
+        m.roads.append(dict(pts=pts, kind='chemin'))
+
     # ---------------------------------------------------------- couvert : bois, marais, parcelles
     nw = noise(rng, 13, 3, 0.55)
+    nlis = noise(rng, 3, 1)   # (lisières découpées : le seuil des bois bousculé de près, C3)
+    ilot, strip = _ilots(seed, hf, m.roads, main)
+    m.ilot, m.strip = ilot, strip
     year = spec.get('year', 1790)
     nwet = noise(rng, 9, 2)
     crops_extra = DEPT_CROPS.get(dept, [])
-    BS = 8 + rng.randrange(4)
-    shifts = [rng.randrange(BS) for _ in range(ROWS // BS + 2)]
     bocage = BOCAGE.get(dept, 0.1) * (1.4 if main in (T_COLLINES, T_PLAINE) else 0.6)
     if main == T_LANDE:
         bocage *= 0.3
@@ -425,8 +452,6 @@ def generate(geo, spec):
     fence_p = FENCE.get(main, 0.2)
     wall_kind = F_MURET if dept in STONY or main in (T_MONTAGNE, T_HAUTE, T_VIGNE) else F_CLOTURE
     for j in range(ROWS):
-        bj = j // BS
-        sh = shifts[bj]
         base = j * COLS
         for i in range(COLS):
             c = base + i
@@ -438,7 +463,7 @@ def generate(geo, spec):
                 wthr += 0.12   # avant la loi de 1857, la lande rase domine : les pins sont encore rares
             if dwat[c] <= 2 and b != T_MARAIS:
                 wthr += 0.05
-            v = nw[c]
+            v = nw[c] + (nlis[c] - 0.5) * 0.12
             if v > wthr:
                 dense = b in (T_FORET, T_MONTAGNE) and v > wthr + 0.18
                 t[c] = T_FORET_T if dense else T_BOIS
@@ -450,30 +475,26 @@ def generate(geo, spec):
             if b in (T_MONTAGNE, T_HAUTE) and hf[c] > 0.86 * amp[c] + 3:
                 t[c] = T_ROCHE
                 continue
-            # parcelle : bloc décalé d'une rangée à l'autre, découpé en lanières
-            ii = i + sh
-            bi = ii // BS
-            horiz = _hash(bi, bj, seed) < 0.5
-            off = (j % BS) if horiz else (ii % BS)
-            sw = 2 + int(_hash(bi, bj + 999, seed) * 3)
-            si = off // sw
+            # parcelle : la lanière de son îlot (C1), sa culture tirée d'après son numéro
             crops = CROPS.get(b, CROPS[T_PLAINE]) + crops_extra
             tot = sum(w for _, w in crops)
-            x = _hash(bi * 7 + si, bj * 13 + 5, seed) * tot
+            x = _hash(strip[c], 5, seed) * tot
             for ty, w in crops:
                 x -= w
                 if x <= 0:
                     break
             t[c] = ty
-            # haies au bord des blocs (bocage)
-            if ty in (T_CHAMP, T_PRE, T_VIGNE_T, T_LANDE_T) and ((ii % BS) == 0 or (j % BS) == 0) \
-                    and _hash(i, j, seed + 7) > 0.12:   # (des trouées, des barrières ouvertes)
-                hv = _hash(bi * 3 + (ii % BS == 0), bj * 5 + 11, seed)
+            # haies et clôtures sur les bords des îlots (C4) : tout un bord a le même sort (les deux îlots qu'il sépare)
+            il = ilot[c]
+            other = ilot[c + 1] if i < COLS - 1 and ilot[c + 1] != il else (ilot[c + COLS] if j < ROWS - 1 and ilot[c + COLS] != il else -1)
+            if other >= 0 and ty in CULTIVE and _hash(i, j, seed + 7) > 0.12:   # (des trouées, des barrières ouvertes)
+                a, bb = min(il, other), max(il, other)
+                hv = _hash(a, bb + 11, seed)
                 if hv < bocage and ty != T_VIGNE_T:
                     hedge_cells.append(c)
                     feat[c] = F_HAIE
                 elif hv < bocage + fence_p:
-                    feat[c] = wall_kind if (ty == T_VIGNE_T or _hash(bi, bj, seed + 3) < 0.7) else \
+                    feat[c] = wall_kind if (ty == T_VIGNE_T or _hash(a, bb, seed + 3) < 0.7) else \
                         (F_CLOTURE if wall_kind == F_MURET else F_MURET)
 
     # mares
@@ -483,25 +504,13 @@ def generate(geo, spec):
             if t[c] in (T_PRE, T_LANDE_T, T_CHAMP, T_MARAIS_T):
                 t[c] = T_EAU
 
-    # ---------------------------------------------------------- routes de campagne (à moins de 2 km)
+    _bois_details(rng, t)
+
+    # ---------------------------------------------------------- routes de campagne : tracées plus haut, posées ici
     road_cells = set()
-    for e in geo.edges:
-        if e.get('kind') == 'water' or e.get('ferry'):
-            continue
-        A, B = geo.nodes[e['a']], geo.nodes[e['b']]
-        if _seg_dist(cx, cy, A['x'], A['y'], B['x'], B['y']) > 2.0:
-            continue
-        pa, pb = to_m(A['x'], A['y']), to_m(B['x'], B['y'])
-        dense = _densify([pa, pb], 50.0)
-        dense = _meander(dense, rng, 18, 700)
-        for part in _clip_poly(dense, 100):
-            kind = 'royale' if e.get('royal') else 'route'
-            m.roads.append(dict(pts=part, kind=kind))
-            for c in _poly_cells(part):
-                road_cells.add(c)
-    if not m.roads:
-        pts = _meander(_densify(_random_crossing(rng), 50.0), rng, 40, 500)
-        m.roads.append(dict(pts=pts, kind='chemin'))
+    for r in m.roads:
+        for c in _poly_cells(r['pts']):
+            road_cells.add(c)
     for r in m.roads:
         cells = _poly_cells(r['pts'])
         wet_run = []
@@ -538,6 +547,7 @@ def generate(geo, spec):
     # ---------------------------------------------------------- fermes, moulin, chemins
     _farms(m, rng, FARMS.get(main, 3), t, hf, main)
     _mill(m, rng, t, hf, main)
+    _terroir(m, seed, t, hf, dwat, biome, dept)
 
     # ---------------------------------------------------------- altitude finale
     hb = m.h
@@ -552,6 +562,7 @@ def generate(geo, spec):
         tc = t[c]
         if tc in (T_ROUTE, T_CHEMIN, T_EAU, T_GUE, T_BATI, T_MUR, T_BRECHE, T_PORTE, T_BARRICADE, T_BOIS, T_FORET_T):
             feat[c] = F_NONE
+    m.ilot = m.strip = None   # (seulement pour la génération)
     if bocage > 0.12:
         for c in range(COLS, N - COLS):
             if t[c] == T_CHEMIN and _hash(c, 17, seed) < bocage:
@@ -883,10 +894,30 @@ def _farms(m, rng, n, t, hf, main):
         m.buildings.append(dict(x=round(x + CELL * fw - 6), y=round(y + 4), w=12, h=8, a=round(1.5708 - a, 2),
                                 kind='ferme'))
         _path_to_road(m, rng, x, y, t)
+        # hameau (C4) : une fois sur quatre, une ou deux maisons de plus autour de la ferme, sur son chemin
+        if rng.random() < 0.25:
+            for _ in range(1 + (rng.random() < 0.5)):
+                a2 = rng.random() * 6.283
+                hx, hy = x + math.cos(a2) * rng.uniform(60, 100), y + math.sin(a2) * rng.uniform(60, 100)
+                hc = cell_of(hx, hy)
+                if hc < 0 or t[hc] not in CULTIVE:
+                    continue
+                t[hc] = T_BATI
+                m.buildings.append(dict(x=round(hx), y=round(hy), w=round(rng.uniform(12, 18)), h=round(rng.uniform(8, 11)),
+                                        a=round(a2, 2), kind='maison'))
 
 
 def _path_to_road(m, rng, x, y, t):
-    """Chemin de la ferme à la route (ou au chemin) la plus proche."""
+    """Chemin de la ferme à la route (ou au chemin) la plus proche : il longe les bords des parcelles (C4), comme les
+    chemins de terre qui séparent les champs, au lieu de les couper en biais."""
+    if getattr(m, 'ilot', None):
+        pts = _path_on_edges(m, x, y + CELL * 1.5, t)
+        if pts:
+            for c in _poly_cells(pts):
+                if t[c] not in (T_ROUTE, T_BATI, T_GUE):
+                    t[c] = T_CHEMIN
+            m.roads.append(dict(pts=pts, kind='chemin'))
+            return
     best = None
     for r in m.roads:
         for p in r['pts'][::2]:
@@ -936,3 +967,213 @@ def _mill(m, rng, t, hf, main):
             t[best] = T_BATI
             x, y = center_of(best)
             m.buildings.append(dict(x=round(x), y=round(y), w=9, h=9, a=0, kind='moulin', water=False))
+
+
+# ====================================================================== composition (SPEC-CARTES.md)
+def _ilots(seed, hf, roads, main):
+    """C1. Îlots : la cellule de Voronoï d'un germe (germes à 9 cases, environ 180 m ; 12 en lande, 7 dans les vignes),
+    coupée en lanières de 2 à 5 cases dans le sens des sillons : celui de la route ou du chemin le plus proche (à moins
+    de 250 m), sinon les courbes de niveau, sinon un angle au hasard ; une lanière sur trois est recoupée en travers.
+    Renvoie, pour chaque case, le numéro de son îlot et celui de sa lanière (deux cases d'une même lanière ont le même)."""
+    S = 12 if main in (T_LANDE, T_DUNES) else (7 if main == T_VIGNE else 9)
+    gw, gh = COLS // S + 2, ROWS // S + 2
+    germs = []
+    for b in range(gh):
+        for a in range(gw):
+            germs.append(((a + 0.15 + _hash(a, b, seed + 31) * 0.7) * S, (b + 0.15 + _hash(a, b, seed + 32) * 0.7) * S))
+    # (points des routes, tous les 40 m, avec leur direction)
+    rp = []
+    for r in roads:
+        d = _densify(r['pts'], 40.0)
+        for k in range(1, len(d)):
+            (x0, y0), (x1, y1) = d[k - 1], d[k]
+            rp.append(((x0 + x1) / 2, (y0 + y1) / 2, math.atan2(y1 - y0, x1 - x0)))
+    ang, sw = [], []
+    for k, (gx, gy) in enumerate(germs):
+        x, y = gx * CELL, gy * CELL
+        best = None
+        for px, py, a in rp:
+            dd = (px - x) ** 2 + (py - y) ** 2
+            if best is None or dd < best[0]:
+                best = (dd, a)
+        if best and best[0] < 250 ** 2:
+            a = best[1]
+        else:
+            i, j = min(COLS - 3, max(2, int(gx))), min(ROWS - 3, max(2, int(gy)))
+            gx_, gy_ = (hf[j * COLS + i + 2] - hf[j * COLS + i - 2]) / 80.0, (hf[(j + 2) * COLS + i] - hf[(j - 2) * COLS + i]) / 80.0
+            # (sur une pente, les sillons suivent les courbes de niveau : perpendiculaires à la pente)
+            a = math.atan2(gy_, gx_) + math.pi / 2 if math.hypot(gx_, gy_) > 0.03 else _hash(k, 77, seed) * math.pi
+        ang.append((math.cos(a), math.sin(a)))
+        sw.append(2 + int(_hash(k, 78, seed) * 3.99))
+    ilot = [0] * N
+    strip = [0] * N
+    for j in range(ROWS):
+        b0 = int(j / S)
+        for i in range(COLS):
+            a0 = int(i / S)
+            best, bk = 1e18, 0
+            for b in (b0 - 1, b0, b0 + 1):
+                if b < 0 or b >= gh:
+                    continue
+                for a in (a0 - 1, a0, a0 + 1):
+                    if a < 0 or a >= gw:
+                        continue
+                    k = b * gw + a
+                    gx, gy = germs[k]
+                    dd = (gx - i - 0.5) ** 2 + (gy - j - 0.5) ** 2
+                    if dd < best:
+                        best, bk = dd, k
+            gx, gy = germs[bk]
+            ca, sa = ang[bk]
+            u = (i + 0.5 - gx) * ca + (j + 0.5 - gy) * sa
+            v = -(i + 0.5 - gx) * sa + (j + 0.5 - gy) * ca
+            si = int(math.floor(v / sw[bk]))
+            sub = int(math.floor(u / (6 + int(_hash(bk, si + 300, seed) * 5)))) if _hash(bk, si + 200, seed) < 0.33 else 0
+            c = j * COLS + i
+            ilot[c] = bk
+            strip[c] = bk * 4096 + (si + 64) * 32 + (sub + 16)
+    return ilot, strip
+
+
+def _bois_details(rng, t):
+    """C3. Clairières dans les grands bois (plus de 30 hectares : une ou deux, en pré) ; bosquets dans les champs."""
+    seen = bytearray(N)
+    for c0 in range(N):
+        if seen[c0] or t[c0] not in (T_BOIS, T_FORET_T):
+            continue
+        comp, q = [], [c0]
+        seen[c0] = 1
+        while q:
+            c = q.pop()
+            comp.append(c)
+            i = c % COLS
+            for nc in ((c + 1) if i < COLS - 1 else -1, (c - 1) if i > 0 else -1, c + COLS, c - COLS):
+                if 0 <= nc < N and not seen[nc] and t[nc] in (T_BOIS, T_FORET_T):
+                    seen[nc] = 1
+                    q.append(nc)
+        if len(comp) < 750:
+            continue
+        inside = set(comp)
+        for _ in range(1 + (len(comp) > 2000)):
+            ci = comp[rng.randrange(len(comp))]
+            r = 2 + rng.randrange(3)
+            x0, y0 = ci % COLS, ci // COLS
+            for dj in range(-r, r + 1):
+                for di in range(-r, r + 1):
+                    if di * di + dj * dj <= r * r + rng.random() * 2:
+                        cc = (y0 + dj) * COLS + x0 + di
+                        if cc in inside:
+                            t[cc] = T_PRE
+    for _ in range(5 + rng.randrange(6)):
+        c = rng.randrange(N)
+        if t[c] not in (T_CHAMP, T_PRE):
+            continue
+        for _ in range(2 + rng.randrange(5)):
+            t[c] = T_BOIS
+            i = c % COLS
+            nc = c + (1, -1, COLS, -COLS)[rng.randrange(4)]
+            if 0 <= nc < N and abs(nc % COLS - i) <= 1 and t[nc] in (T_CHAMP, T_PRE):
+                c = nc
+
+
+def _terroir(m, seed, t, hf, dwat, biome, dept):
+    """C2. Le terroir : chaque lanière cultivée est réattribuée selon sa place. Près des maisons, des vergers ; le long de
+    l'eau, des prés ; sur les pentes fortes, pas de labours (prés, landes ; vignes sur les coteaux exposés au sud dans le
+    Bordelais) ; loin des maisons, des prés plutôt que des champs. Le glacis d'une place forte reste dégagé : pas de
+    verger à moins de 300 m de l'enceinte."""
+    strip = m.strip
+    bati = [c for c in range(N) if t[c] == T_BATI]
+    dh = bfs(bati, 32) if bati else bytearray([255]) * N
+    glacis = None
+    if m.place and m.place.get('fort', 0) >= 1:
+        glacis = (m.place['x'], m.place['y'], m.town_r + 300.0)
+    groups = {}
+    for c in range(N):
+        if t[c] in CULTIVE:
+            groups.setdefault(strip[c], []).append(c)
+    for key, cells in groups.items():
+        n = len(cells)
+        mh = sum(dh[c] for c in cells) / n
+        mw = sum(dwat[c] for c in cells) / n
+        # pente moyenne (m par m) et exposition (vers le sud : l'altitude baisse quand y croît)
+        sl, south = 0.0, 0.0
+        for c in cells:
+            i, j = c % COLS, c // COLS
+            if 0 < i < COLS - 1 and 0 < j < ROWS - 1:
+                gx = (hf[c + 1] - hf[c - 1]) / (2 * CELL)
+                gy = (hf[c + COLS] - hf[c - COLS]) / (2 * CELL)
+                sl += math.hypot(gx, gy)
+                south -= gy
+        sl /= n
+        south /= n
+        cur = t[cells[0]]
+        new = cur
+        r1, r2 = _hash(key, 401, seed), _hash(key, 402, seed)
+        lande = biome[cells[0]] in (T_LANDE, T_DUNES)
+        if mh <= 6 and r1 < (0.25 if lande else 0.5):
+            new = T_VERGER
+        elif mw <= 4 and cur in (T_CHAMP, T_VIGNE_T) and r1 < 0.75:
+            new = T_PRE
+        elif sl > 0.12 and cur == T_CHAMP:
+            new = T_VIGNE_T if dept == '33' and south > 0.03 and r2 < 0.6 else (T_LANDE_T if lande or r2 < 0.3 else T_PRE)
+        elif mh >= 30 and cur == T_CHAMP and r2 < 0.12:
+            new = T_LANDE_T if lande else T_PRE
+        if new != cur:
+            for c in cells:
+                # (glacis : la part de la lanière qui y entre reste ce qu'elle était)
+                if new == T_VERGER and glacis:
+                    x, y = center_of(c)
+                    if math.hypot(x - glacis[0], y - glacis[1]) < glacis[2]:
+                        continue
+                t[c] = new
+
+
+def _path_on_edges(m, x, y, t, maxd=45):
+    """Plus court chemin (en cases) d'un point à la route ou au chemin le plus proche, moins coûteux sur les bords des
+    îlots : le chemin longe les champs. None si rien à moins de maxd cases, ou si l'eau barre le passage."""
+    import heapq
+    ilot = m.ilot
+    start = cell_of(x, y)
+    if start < 0:
+        return None
+    goal = (T_ROUTE, T_CHEMIN)
+    dist = {start: 0.0}
+    prev = {}
+    q = [(0.0, start)]
+    end = None
+    while q:
+        d, c = heapq.heappop(q)
+        if d > dist.get(c, 1e18):
+            continue
+        if t[c] in goal and c != start:
+            end = c
+            break
+        if d > maxd * 2.5:
+            break
+        i = c % COLS
+        for nc in ((c + 1) if i < COLS - 1 else -1, (c - 1) if i > 0 else -1, c + COLS, c - COLS):
+            if not (0 <= nc < N):
+                continue
+            tn = t[nc]
+            if tn in (T_EAU, T_MUR, T_PORTE, T_BRECHE, T_BARRICADE) or (tn == T_BATI and nc != start):
+                continue
+            ni = nc % COLS
+            edge = (ni < COLS - 1 and ilot[nc + 1] != ilot[nc]) or (ni > 0 and ilot[nc - 1] != ilot[nc]) or \
+                (nc + COLS < N and ilot[nc + COLS] != ilot[nc]) or (nc - COLS >= 0 and ilot[nc - COLS] != ilot[nc])
+            w = 1.0 if edge else 2.6
+            if tn == T_GUE:
+                w += 4.0
+            nd = d + w
+            if nd < dist.get(nc, 1e18):
+                dist[nc] = nd
+                prev[nc] = c
+                heapq.heappush(q, (nd, nc))
+    if end is None:
+        return None
+    path = [end]
+    while path[-1] != start:
+        path.append(prev[path[-1]])
+    path.reverse()
+    if len(path) < 3:
+        return None
+    return [center_of(c) for c in path]

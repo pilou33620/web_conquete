@@ -122,7 +122,7 @@ from . import terrain as TR
 from . import units as U
 from .terrain import (COLS, ROWS, CELL, N, W, H, T_PRE, T_CHAMP, T_VIGNE_T, T_LANDE_T, T_BOIS, T_FORET_T, T_MARAIS_T,
                       T_EAU, T_GUE, T_ROUTE, T_CHEMIN, T_BATI, T_MUR, T_BRECHE, T_PORTE, T_SABLE, T_ROCHE,
-                      T_BARRICADE)
+                      T_BARRICADE, T_VERGER)
 
 DT = 2.0                 # pas de simulation (s de bataille)
 TIME_K = 18.0            # s de bataille par s réelle, à ×1 (une bataille de 3 à 6 h dure 10 à 20 min à ×1)
@@ -134,16 +134,17 @@ DUSK = {'printemps': 19.5, 'été': 20.5, 'ete': 20.5, 'automne': 18.0, 'hiver':
 X = None   # infranchissable
 # coût de marche par classe de mouvement (1 = prairie), dans l'ordre des types de case
 COST = {
-    #        PRE  CHAMP VIGNE LANDE BOIS FORET MARAIS EAU GUE  ROUTE CHEMIN BATI MUR BRECHE PORTE SABLE ROCHE BARRIC.
-    'inf':   [1.0, 1.15, 1.5, 1.25, 1.7, 2.6, 3.0, X, 3.0, 0.85, 0.95, 2.2, X, 2.5, 1.2, 1.8, 4.0, 3.5],
-    'light': [1.0, 1.1, 1.3, 1.1, 1.2, 1.8, 2.2, X, 2.5, 0.85, 0.95, 1.8, X, 2.2, 1.2, 1.6, 3.0, 3.0],
-    'cav':   [1.0, 1.2, 2.2, 1.4, 2.6, 5.0, 5.0, X, 2.5, 0.8, 0.9, 3.0, X, 4.0, 1.3, 2.0, X, 6.0],
-    'art':   [1.0, 1.3, 2.6, 1.5, 3.2, X, X, X, 4.0, 0.7, 0.9, 3.0, X, 6.0, 1.2, 3.0, X, X],
+    #        PRE  CHAMP VIGNE LANDE BOIS FORET MARAIS EAU GUE  ROUTE CHEMIN BATI MUR BRECHE PORTE SABLE ROCHE BARRIC. VERGER
+    'inf':   [1.0, 1.15, 1.5, 1.25, 1.7, 2.6, 3.0, X, 3.0, 0.85, 0.95, 2.2, X, 2.5, 1.2, 1.8, 4.0, 3.5, 1.2],
+    'light': [1.0, 1.1, 1.3, 1.1, 1.2, 1.8, 2.2, X, 2.5, 0.85, 0.95, 1.8, X, 2.2, 1.2, 1.6, 3.0, 3.0, 1.1],
+    'cav':   [1.0, 1.2, 2.2, 1.4, 2.6, 5.0, 5.0, X, 2.5, 0.8, 0.9, 3.0, X, 4.0, 1.3, 2.0, X, 6.0, 1.6],
+    'art':   [1.0, 1.3, 2.6, 1.5, 3.2, X, X, X, 4.0, 0.7, 0.9, 3.0, X, 6.0, 1.2, 3.0, X, X, 1.8],
 }
-COVER = [0.0, 0.05, 0.15, 0.1, 0.35, 0.5, 0.1, 0.0, 0.0, 0.0, 0.05, 0.55, 0.7, 0.35, 0.5, 0.05, 0.4, 0.5]
-OPACITY = [0, 0, 0, 0, 34, 60, 0, 0, 0, 0, 0, 50, 100, 0, 100, 0, 0, 0]   # en centièmes, cumulés le long du regard
+# (verger, le dernier : couvert léger, les fruitiers gênent un peu la vue jusqu'à 5 m ; SPEC-CARTES.md)
+COVER = [0.0, 0.05, 0.15, 0.1, 0.35, 0.5, 0.1, 0.0, 0.0, 0.0, 0.05, 0.55, 0.7, 0.35, 0.5, 0.05, 0.4, 0.5, 0.2]
+OPACITY = [0, 0, 0, 0, 34, 60, 0, 0, 0, 0, 0, 50, 100, 0, 100, 0, 0, 0, 14]   # en centièmes, cumulés le long du regard
 # hauteur (m) de ce qui bouche la vue sur la case : un regard qui passe au-dessus n'est pas gêné
-TOP = [0, 0, 0, 0, 12, 16, 0, 0, 0, 0, 0, 8, 7, 0, 7, 0, 0, 0]
+TOP = [0, 0, 0, 0, 12, 16, 0, 0, 0, 0, 0, 8, 7, 0, 7, 0, 0, 0, 5]
 WOODS = (T_BOIS, T_FORET_T)
 # éléments linéaires (couche f) : aucun, clôture, haie, muret
 FCOVER = [0.0, 0.12, 0.25, 0.35]
@@ -154,9 +155,9 @@ EYE = 2.5                # hauteur d'un fantassin, pour la vue (m)
 HEIGHT = dict(inf=2.5, artillerie=3.0, cavalerie=3.5, general=3.5, chariot=3.0)   # canons : officiers à cheval, caissons
 # élan d'une charge : il se gagne en courant (mètres pour un plein élan), se perd en terrain difficile et en montée
 ELAN_M = dict(cav=110.0, inf=45.0)
-BRAKE_CAV = {T_BOIS: 0.45, T_FORET_T: 0.3, T_MARAIS_T: 0.35, T_VIGNE_T: 0.5, T_BATI: 0.4, T_ROCHE: 0.25,
+BRAKE_CAV = {T_BOIS: 0.45, T_FORET_T: 0.3, T_MARAIS_T: 0.35, T_VIGNE_T: 0.5, T_BATI: 0.4, T_ROCHE: 0.25, T_VERGER: 0.75,
              T_SABLE: 0.7, T_LANDE_T: 0.9, T_MUR: 0.3, T_PORTE: 0.3, T_BRECHE: 0.4, T_BARRICADE: 0.4, T_GUE: 0.6}
-BRAKE_INF = {T_BOIS: 0.85, T_FORET_T: 0.7, T_MARAIS_T: 0.6, T_VIGNE_T: 0.85, T_BATI: 0.8, T_ROCHE: 0.55,
+BRAKE_INF = {T_BOIS: 0.85, T_FORET_T: 0.7, T_MARAIS_T: 0.6, T_VIGNE_T: 0.85, T_BATI: 0.8, T_ROCHE: 0.55, T_VERGER: 0.9,
              T_SABLE: 0.8, T_MUR: 0.5, T_PORTE: 0.5, T_BRECHE: 0.7, T_BARRICADE: 0.7, T_GUE: 0.7}
 # ---- équilibre du combat (voir « Règles de combat » dans l'aide-mémoire) ----
 P_FUSIL = 0.0065         # touchés par homme qui tire et par salve, à portée efficace (avant arme, expérience, moral…)
