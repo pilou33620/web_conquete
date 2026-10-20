@@ -113,6 +113,10 @@ les auréoles en déplacent les poids selon la place.
 Le tracé des routes de campagne est calculé avant les parcelles (leurs sillons les suivent). Navigateur : le verger
 (formes.js, terrain.js : herbe, fruitiers en rangs tous les 10 m, couvert léger au déploiement).
 
+Sauvegardes : une sauvegarde n'enregistre que la description d'une bataille en cours, sa carte est refabriquée au
+chargement. Chaque nouvelle bataille porte donc la version du générateur (`carte: 2`, bridge.make_spec) ; une bataille
+sans version est refabriquée par l'ancien générateur, figé dans `terrain_v1.py` : elle garde la carte de son début.
+
 Mesures sur 24 cartes de villages : bords de parcelles en longues droites alignées (5 cases ou plus) de 76 % à 16 % ;
 génération de 95 à 185 ms en moyenne (220 ms au plus) ; parts : champs 32,8 → 28,2 %, prés 20,1 → 22,8 %, vergers
 2 %, bois 8,2 → 9,5 %, le reste à moins d'un point. Équilibre, 40 batailles isolées menées par les officiers des deux

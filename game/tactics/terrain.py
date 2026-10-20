@@ -22,6 +22,10 @@ import random
 from ..geo import (T_OCEAN, T_EAU as G_EAU, T_PLAINE, T_FORET, T_LANDE, T_MARAIS, T_COLLINES, T_MONTAGNE, T_HAUTE,
                    T_DUNES, T_VIGNE)
 
+# version du générateur : écrite dans la description de chaque nouvelle bataille (bridge.make_spec). Une bataille sans
+# version (ancienne sauvegarde) est refabriquée par le générateur d'avant (terrain_v1.py, figé) : même carte qu'au début
+VERSION = 2
+
 W, H, CELL = 3000, 2000, 20
 COLS, ROWS = W // CELL, H // CELL
 N = COLS * ROWS
@@ -316,6 +320,9 @@ def _poly_cells(pts):
 # ====================================================================== génération
 def generate(geo, spec):
     """Carte de la bataille décrite par spec (voir bridge.make_spec) ; déterministe pour une graine donnée."""
+    if spec.get('carte', 1) < VERSION:
+        from . import terrain_v1
+        return terrain_v1.generate(geo, spec)
     seed = int(spec['seed']) & 0x7FFFFFFF
     rng = random.Random(seed)
     m = BattleMap()

@@ -19,6 +19,7 @@ from .. import army_actions as AA
 from .. import turns as TT
 from . import units as U
 from . import ai as AI
+from . import terrain as TR
 from .battle import TacticalBattle
 
 SETTINGS = ('demander', 'auto', 'auto_petites')
@@ -219,7 +220,8 @@ def make_spec(g, bt):
                 balloon=[g.mod(o, 'balloon') if o in g.factions else 0 for o in owners],
                 entrench=[g.mod(o, 'entrench') if o in g.factions else 0.0 for o in owners],
                 shell=[g.mod(o, 'shell') if o in g.factions else 0.0 for o in owners], ambush=bt['ambush'], surprise=bt['surprise'],
-                plans=[_side_plan(g, bt, si) for si in (0, 1)])
+                plans=[_side_plan(g, bt, si) for si in (0, 1)],
+                carte=TR.VERSION)   # (version du générateur de la carte : une sauvegarde la refabrique à l'identique)
 
 
 def _side_plan(g, bt, si):

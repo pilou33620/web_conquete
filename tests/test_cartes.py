@@ -21,7 +21,7 @@ CROP = {TR.T_CHAMP, TR.T_PRE, TR.T_VIGNE_T, TR.T_LANDE_T, TR.T_VERGER}
 
 
 def carte(k, n, place=None):
-    spec = dict(seed=500 + k * 31, cx=n['x'] + 0.6, cy=n['y'] + 0.4, season='ete', weather='soleil', year=1790, place=place)
+    spec = dict(seed=500 + k * 31, cx=n['x'] + 0.6, cy=n['y'] + 0.4, season='ete', weather='soleil', year=1790, place=place, carte=TR.VERSION)
     return TR.generate(GEO, spec)
 
 
@@ -77,13 +77,21 @@ class Cartes(unittest.TestCase):
         n = next(g for g in GEO.nodes if g['type'] in ('ville', 'fort'))
         pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=2, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'], y=n['y'], battle=True)
         for k in range(3):
-            spec = dict(seed=900 + k, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.0)
+            spec = dict(seed=900 + k, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.0, carte=TR.VERSION)
             m = TR.generate(GEO, spec)
             px, py, r = m.place['x'], m.place['y'], m.town_r + 300
             for c in range(TR.N):
                 if m.t[c] == TR.T_VERGER:
                     x, y = TR.center_of(c)
                     self.assertGreater(math.hypot(x - px, y - py), r - TR.CELL, 'pas de verger sur le glacis')
+
+    def test_ancienne_sauvegarde_meme_carte(self):
+        # une bataille en cours d'une sauvegarde d'avant la version 2 (pas de « carte ») garde la carte de son début
+        from game.tactics import terrain_v1 as V1
+        n = VILLAGES[0]
+        spec = dict(seed=77, cx=n['x'] + 0.6, cy=n['y'] + 0.4, season='ete', weather='soleil', year=1790, place=None)
+        self.assertEqual(bytes(TR.generate(GEO, dict(spec)).t), bytes(V1.generate(GEO, dict(spec)).t))
+        self.assertNotEqual(bytes(TR.generate(GEO, dict(spec, carte=TR.VERSION)).t), bytes(V1.generate(GEO, dict(spec)).t))
 
     def test_vite(self):
         t0 = time.perf_counter()
