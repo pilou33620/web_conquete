@@ -3,6 +3,9 @@ import { esc, clamp } from './battle/formes.js';
 import { fmtMen, unitCls, toursTxt, partTour, TOUR_DAYS } from './map.js';
 import { QUALITES, QUALITE_LABEL, QUALITE_AIDE, qualite, setQualite } from './battle/qualite.js';
 import { Tuto } from './tuto.js';
+import { UnitArt } from './battle/unites.js';
+import { profil } from './battle/qualite.js';
+import { figureKind, drawPortrait } from './portraits.js';
 
 // nombres à la française : virgule décimale et vrai signe moins (−)
 const minus = s => s.replace(/^-/, '−');
@@ -723,6 +726,12 @@ export class UI {
       case 'speed': this.setSpeed(+d.v); break;
       case 'turn': this.turnCmd(d.v); break;
       case 'turn-why': this.turnWhy(); break;
+      case 'regcard': {
+        // (comme la case à cocher de la liste : le régiment est pris ou laissé pour « Scinder la sélection »)
+        if (this.checked.has(d.reg)) this.checked.delete(d.reg); else this.checked.add(d.reg);
+        this.renderPanel(true);
+        break;
+      }
       case 'turn-mode': this.cmd({ cmd: 'tour', action: 'mode', value: d.v === '1' }); break;
       case 'recap-close': {
         const rc = this.st.tour && this.st.tour.recap;
@@ -1006,6 +1015,7 @@ export class UI {
     this.panelSig = sig;
     const scroll = p.scrollTop;
     p.innerHTML = `<button class="icon-btn close" data-act="close-panel" aria-label="Fermer">${ICON.close}</button>` + html;
+    this.drawCards(p);
     p.scrollTop = scroll;
     p.hidden = false;
   }
@@ -1047,6 +1057,31 @@ export class UI {
     if (!cost) return '';
     const ok = cost.every(([k, v]) => (this.st.me.res[k] || 0) >= v);
     return `<button class="btn" data-act="rearm"${node != null ? ` data-node="${node}"` : ''} ${ok ? '' : 'disabled'} title="Remettre les armes du moment aux régiments démodés">Réarmer<small>${cost.map(([k, v]) => `${fmt(v)} ${k}`).join(', ')}</small></button>`;
+  }
+
+  // régiments en cartes portrait, à la manière d'Ultimate General (portraits.js) : figure de l'arme à l'uniforme de
+  // l'époque, effectif, expérience, effectif et moral en barres ; un appui coche ou décoche le régiment (scinder…)
+  cardsHtml(regs, owner, check) {
+    return `<div class="cards" role="group" aria-label="Régiments">${regs.map(r => {
+      const u = this.rules.units[r[1]] || {}, frac = Math.max(0, Math.min(1, r[2] / Math.max(1, r[3])));
+      const stars = r[4] >= 60 ? 3 : r[4] >= 30 ? 2 : r[4] >= 10 ? 1 : 0, can = check && !u.garrison_only;
+      return `<button class="cu ${can && this.checked.has(r[0]) ? 'on' : ''}" ${can ? `data-act="regcard" data-reg="${r[0]}"` : 'tabindex="-1"'} title="${esc(u.name || r[1])}">
+        <canvas data-fig="${esc(r[1])}|${r[6] ?? 1}|${esc(owner)}" width="100" height="160"></canvas>
+        <span class="cu-n">${esc(u.short || r[1])}</span><span class="cu-m">${fmt(r[2])}</span>${stars ? `<span class="cu-x">${'★'.repeat(stars)}</span>` : ''}
+        <span class="cu-b"><i style="width:${Math.round(frac * 100)}%"></i><i class="mor" style="width:${Math.max(0, Math.min(100, r[5]))}%"></i></span></button>`;
+    }).join('')}</div>`;
+  }
+  // dessine les portraits des cartes d'un panneau
+  drawCards(root) {
+    const cvs = root.querySelectorAll('.cards canvas[data-fig]');
+    if (!cvs.length) return;
+    if (!this.cardArt) this.cardArt = new UnitArt(profil());
+    const art = this.cardArt, year = this.st?.year || 1790;
+    if (art.year !== year) { art.year = year; art.sprites.clear(); }
+    for (const cv of cvs) {
+      const [type, arm, owner] = cv.dataset.fig.split('|'), u = this.rules.units[type] || {}, cls = unitCls(this.rules, type);
+      drawPortrait(cv, art, figureKind({ cls, type, light: !!u.light, arm: +arm }), this.map.colors[owner] || '#888', cls, u.name || '');
+    }
   }
 
   regRow(r, owner, check) {
@@ -1387,7 +1422,7 @@ export class UI {
       if (wn.includes('solde')) h += `<div class="warnline">Solde impayée : le moral chute et les soldats désertent.</div>`;
       if (wn.includes('faim')) h += `<div class="warnline">Vivres épuisés : le moral chute et les soldats désertent.</div>`;
       if (a.des > 0) h += `<div class="warnline">Déserteurs ce mois-ci : ${fmt(a.des)}</div>`;
-      h += `<div class="reg-list">${a.regs.map(r => this.regRow(r, me, true)).join('')}</div>`;
+      h += this.cardsHtml(a.regs, me, true) + `<div class="reg-list">${a.regs.map(r => this.regRow(r, me, true)).join('')}</div>`;
       const canAct = a.st !== 'battle';
       if (!canAct) this.fightMemo = { army: a.id, name: a.name, x: a.x, y: a.y, seq: this.events.length ? this.events[this.events.length - 1].seq : 0, mine: [] };
       else if (this.fightMemo?.army === a.id) { this.toastBattleEnd(this.fightMemo); this.fightMemo = null; }   // sortie de bataille : son issue
@@ -1425,7 +1460,7 @@ export class UI {
       const fs = st.factions.find(x => x.code === a.o);
       const fmL = this.rules.formations[a.fm || 'ligne'].label;
       h += `<div class="row"><span class="chip ${fs?.st === 'guerre' ? 'war' : fs?.st === 'alliance' ? 'ally' : ''}">${STATUS[fs?.st] || ''}</span><span class="muted small">Terrain : ${terr}, en ${fmL.toLowerCase()}</span></div>
-        <div class="reg-list">${a.regs.map(r => this.regRow(r, a.o, false)).join('')}</div>`;
+        ${this.cardsHtml(a.regs, a.o, false)}<div class="reg-list">${a.regs.map(r => this.regRow(r, a.o, false)).join('')}</div>`;
     }
     h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
     const sig = JSON.stringify([id, a.st, a.sk, a.md, a.h, a.n, Math.round(a.sup * 20), a.regs.map(r => [r[0], r[2], Math.round(r[5] / 5), r[6]]), st.me.arm, (this.rearmCost(a.regs) || []).map(([k, v]) => st.me.res[k] >= v),

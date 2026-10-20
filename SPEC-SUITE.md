@@ -290,6 +290,12 @@ la barre du haut garde les ressources.
 **Test.** `interface.test.mjs` : les cartes d'une armée choisie existent, une par régiment ; aucun texte ne sort de son
 cadre à 768 px de large (iPad en portrait).
 
+**Livré le 20/10/2026** (`portraits.js`, `ui.js` cardsHtml et drawCards, `style.css`) : les régiments de l'armée
+choisie en cartes portrait dans son panneau (au-dessus de la liste détaillée, qui reste pour les armes, munitions et
+endurance) ; un appui coche le régiment comme la case de la liste. Le dessin des portraits est sorti de
+`interface.js` dans `portraits.js`, partagé par la bataille et la campagne. La date passe en bas à droite au-delà de
+1 100 px de large. Écart : le bouton « Tour suivant » reste en haut (il est l'action la plus fréquente).
+
 ### G2. Les portraits des généraux
 
 Un médaillon rond au-dessus de chaque armée qui a un général, avec son nom sur une plaque (comme « WASHINGTON » dans

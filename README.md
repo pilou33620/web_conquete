@@ -240,7 +240,9 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   houppiers ronds, mer turquoise et rivage à la tranche brune, fleuves vert-de-gris, chemins de terre claire. L'hiver
   la couvre de givre (et de neige en montagne), l'automne roussit les prés. Villes et forts portent leur nom sur une plaque
   d'ardoise au liseré du camp, les eaux ont leur nom gravé, les armées une plaque et un fanion. L'interface est en
-  ardoise, comme celle des batailles.
+  ardoise, comme celle des batailles ; les régiments d'une armée y paraissent en **cartes portrait** (la figure de
+  leur arme à l'uniforme de l'époque, effectif, expérience, effectif et moral en barres ; un appui les coche pour
+  scinder l'armée), et sur un grand écran la date se lit en bas à droite.
 - Villes et villages sont dessinés en vue cavalière : maisons, église à clocher, grande église des villes, cathédrale et
   hôtel de ville des chefs-lieux, citadelle des places fortes. Chaque pays a ses couleurs (pierre blonde et tuiles du
   Bordelais, toits bruns du Périgord, colombages des Landes, brique de l'Agenais, murs blancs et ardoise du Béarn),
@@ -806,6 +808,7 @@ node --test tests/                               # l'interface seule
 | `tests/camera.test.mjs` | caméra 3D des batailles : allers-retours écran ↔ terrain à 1 m et 1 pixel près sur une colline, à plusieurs caps et zooms ; bornes |
 | `tests/troupes.test.mjs` | dispositions des figurines : rangs de la ligne, plafond par régiment, carré à quatre faces, colonne, tirailleurs, déroute |
 | `tests/gestes.test.mjs` | animations des batailles : geste de chaque homme (salve qui roule, recharge, servants, mêlée, charge), allure propre à chacun, place gardée d'une formation à l'autre, tués (ligne d'un boulet, plafond des corps), contour des bâtiments, échelle des figurines de loin |
+| `tests/portraits.test.mjs` | portraits des régiments : la même figure en bataille et en campagne (piquiers avant la baïonnette, pièce de son époque, cavalier pour le général) |
 | `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte ; zénith bleu par beau temps et pâle sous les nuages, brume des vallées seulement le matin, voile épaissi par le brouillard |
 | `tests/horizon.test.mjs` | relief et lumière : horizon plat en plaine, haut du côté d'une colline et bas de l'autre, occlusion au pied d'une colline, normales qui penchent vers l'extérieur |
 | `tests/pietinement.test.mjs` | piétinement : rien au repos ni sous un général, un tiers de boue au passage d'un régiment de ligne, plus sous la cavalerie et l'artillerie, double sous la pluie, mêlée sur place |

@@ -3,8 +3,9 @@
 // d'unités groupées en bas, mini-carte et vitesses en bas à droite, bulles d'aide, confirmations et récapitulatif.
 import { ICON } from '../icons.js';
 import { QUALITES, QUALITE_LABEL, qualite, setQualite } from './qualite.js';
-import { clsOf, isGeneral, isLight, isWagon, genName, emprise, stars, fmt, esc, clamp, TYPE_LABEL, FORM_LABEL, FORM_HELP, FORMS, STATE_LABEL, SEASON_LABEL, WEATHER_LABEL, normSeason, uniform, gunModel } from './formes.js';
+import { clsOf, isGeneral, isLight, isWagon, genName, emprise, stars, fmt, esc, clamp, TYPE_LABEL, FORM_LABEL, FORM_HELP, FORMS, STATE_LABEL, SEASON_LABEL, WEATHER_LABEL, normSeason } from './formes.js';
 import { ORDER_LABEL, ordresHtml, aide as aideArme, arme } from './doctrine.js';
+import { figureKind, drawPortrait } from '../portraits.js';
 
 const WX_ICON = {
   soleil: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
@@ -259,19 +260,10 @@ export class BattleUI {
   // 56 × 64, mis à l'échelle de la hauteur du canevas (calée en bas, centrée ; en portrait, les côtés sont rognés)
   figure(cv, u) {
     if (!u) return;
-    const g = cv.getContext('2d'), col = this.v.colors[u.side] || '#888', cls = clsOf(u);
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.clearRect(0, 0, cv.width, cv.height);
-    const k = cv.height / 64 * (cv.height > cv.width * 1.3 ? 1.12 : 1);
-    g.setTransform(k, 0, 0, k, (cv.width - 56 * k) / 2, cv.height - 64 * k);
-    const kind = isGeneral(u) || cls === 'cavalerie' ? 'cav' : cls === 'artillerie' ? `canon.${gunModel(u)}` : isWagon(u) ? 'caisson' : u.type === 'grenadiers' || u.type === 'garde' ? 'gren' : u.type === 'milice' ? 'milice' : isLight(u) ? 'leger' : u.arm === 0 ? 'piquier' : 'inf';
-    const H = kind === 'cav' ? 34 : kind.startsWith('canon') || kind === 'caisson' ? 38 : 50;
-    // (l'habit : l'uniforme d'époque de son arme, dragons compris ; la couleur du camp aux revers)
-    const coat = uniform(this.v.art.year, cls, u.name, kind === 'milice' ? 'milice' : '').coat;
-    const sp = this.v.art.sprite(kind, col, kind === 'inf' || kind === 'gren' || kind === 'leger' || kind === 'milice' || kind === 'piquier' ? 0 : 1, H, 0, coat);
-    const sc = H / sp.h;
-    if (kind.startsWith('canon')) { const s2 = this.v.art.sprite('servant', col, 0, 40, 0, coat); g.drawImage(s2.cv, 34 - s2.ax * (40 / s2.h), 60 - s2.ay * (40 / s2.h), s2.cv.width * 40 / s2.h, s2.cv.height * 40 / s2.h); }
-    g.drawImage(sp.cv, 28 - sp.ax * sc, 60 - sp.ay * sc, sp.cv.width * sc, sp.cv.height * sc);
+    const cls = clsOf(u);
+    // (portraits.js : le même dessin que les cartes de la campagne)
+    const kind = figureKind({ cls, type: u.type, light: isLight(u), arm: u.arm ?? 1, general: isGeneral(u), wagon: isWagon(u) });
+    drawPortrait(cv, this.v.art, kind, this.v.colors[u.side] || '#888', cls, u.name);
   }
   bindDock() {
     const dock = this.$('.bt-dock');
