@@ -1,4 +1,4 @@
-# Spec : tout ce qui reste à faire (point du 20/10/2026)
+# Spec : tout ce qui reste à faire (point du 20/10/2026, validée le même jour)
 
 ## Pourquoi
 
@@ -48,6 +48,11 @@ servent seulement de référence pour juger « côte à côte ».
 | D5 | Les **gravures** de la fenêtre de découverte (phase 3) : 75 à 95 images du domaine public (Wikimedia Commons), ou des vignettes animées dessinées par le code ? | Vignettes animées par le code (une dizaine de familles) d'abord, gravures ensuite seulement pour les découvertes majeures (une vingtaine), avec ton accord image par image. | Chaque image demande un téléchargement et une licence vérifiée ; les vignettes n'en demandent aucune. |
 | D6 | **Enregistrer la boue** du piétinement avec la bataille demande de toucher au moteur Python (une nouvelle donnée dans la sauvegarde). D'accord ? | Oui : une image réduite (PNG de 256 × 171) envoyée par le navigateur toutes les 30 s de bataille, gardée avec la bataille, ignorée par les anciennes sauvegardes. | La spec de l'étape 9 met « tout changement du moteur » dans « demander d'abord ». |
 | D7 | L'**ordre** des chantiers. | Celui de la section « Livraison » plus bas : ce qui se voit le plus d'abord, ce qui est bloqué quand il est débloqué. | — |
+
+**Décisions prises le 20/10/2026** (« tu peux tout faire toi ») : D1 à D7 comme proposé. Les téléchargements passent
+par ton Chrome (Claude in Chrome) quand mon navigateur est refusé ; la vue inclinée commence par une maquette ; le
+style UGAR reste la base des époques ; portraits peints par le code ; vignettes animées d'abord ; la boue est
+enregistrée avec la bataille ; l'ordre est celui de la section « Livraison ».
 
 ## Hypothèses (à corriger maintenant si besoin)
 
