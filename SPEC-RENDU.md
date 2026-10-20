@@ -63,6 +63,16 @@ photo rehaussé avec la distance (ses mipmaps l'aplatissent). Reste de A1 pour p
 verts), le triplanaire des pentes raides, la neige comme 9ᵉ sol (aujourd'hui, la matière s'efface à 30 % sous la
 neige), la variation à grande échelle propre aux sols (les « nuances » peintes de terrain.js en tiennent lieu).
 
+**Livré** : 9c (`horizon.js`, `relief.js` ombrage et prepRelief). Normales à 2,5 m et occlusion (part du ciel vue)
+dans une texture en demi-flottants ; horizons dans huit directions sur une grille de 5 m, jusqu'à 600 m (environ
+0,3 s au chargement sur un PC). L'ombre des collines et celle des nuages (motif de 2,4 km, bords plus doux) ne
+retiennent que la lumière directe, et tombent aussi sur les troupes, les arbres, les maisons, les haies, les épis et
+les tués (`ombrage`, un même bout de shader ; la position dans la scène est retrouvée depuis vViewPosition).
+Constat en le réglant : la lumière du ciel pesait autant que le soleil, d'où l'éclairage plat ; par temps clair, le
+soleil passe de 2,2 à 2,85 et le ciel de 2,05 à 1,5 (heures.js). Sous un ciel couvert, la lumière diffuse domine
+toujours. Limite : les normales ne sont pas plus fines que les altitudes du moteur (une case de 20 m, affinée à 5 m) ;
+talus et chemins creux demanderaient des altitudes plus fines côté serveur.
+
 ## Ce qui ne change pas
 
 Le moteur Python et ses API, les règles, les commandes et les gestes, l'interface, les noms des niveaux de qualité, les

@@ -525,7 +525,9 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   sols photographiés** (pré, herbe sèche, lande, terre, chemin, route empierrée, sable, roche ; CC0, ambientCG) :
   touffes, mottes et cailloux qui accrochent la lumière, mêlés par leur hauteur à la frontière de deux sols, la terre
   puis la roche sur les pentes ; photos de 512 px en Basse et Moyenne, de 1024 px avec un pavage aléatoire qui en
-  cache la répétition en Haute et Ultra. Au premier lancement, elle est
+  cache la répétition en Haute et Ultra. Le **relief se lit** : le soleil l'emporte sur la lumière du ciel par temps
+  clair, les pentes accrochent la lumière, les fonds de vallée sont plus sombres, et quand le soleil est bas les
+  collines portent leur ombre, comme les nuages, sur le sol, les troupes et les arbres. Au premier lancement, elle est
   choisie d'après l'appareil, puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par
   seconde) ; un choix fait à la main est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de
   suite, sans quitter la bataille (l'anticrénelage, à la bataille suivante). Les batailles demandent **WebGL 2**
@@ -737,7 +739,8 @@ web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et 
                      fanions.js (fanions et médaillons),
                      unites.js (figurines peintes des cartes d'unités), effets.js (fumées, tirs, météo),
                      heures.js (table des heures : lumière, brume et étalonnage de 5 h à 22 h ; logique pure,
-                     testée), apres.js (après-rendu : ACES, LUT d'étalonnage, vignettage, FXAA, halo,
+                     testée), horizon.js (normales fines, occlusion et horizons du relief, calculés une fois
+                     par bataille ; logique pure, testée), apres.js (après-rendu : ACES, LUT d'étalonnage, vignettage, FXAA, halo,
                      maquette), sols.js (sols photo : chargement des huit sols), qualite.js (qualité
                      graphique), commandes.js (gestes et clavier),
                      interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils
@@ -776,6 +779,7 @@ node --test tests/                               # l'interface seule
 | `tests/troupes.test.mjs` | dispositions des figurines : rangs de la ligne, plafond par régiment, carré à quatre faces, colonne, tirailleurs, déroute |
 | `tests/gestes.test.mjs` | animations des batailles : geste de chaque homme (salve qui roule, recharge, servants, mêlée, charge), allure propre à chacun, place gardée d'une formation à l'autre, tués (ligne d'un boulet, plafond des corps), contour des bâtiments, échelle des figurines de loin |
 | `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte |
+| `tests/horizon.test.mjs` | relief et lumière : horizon plat en plaine, haut du côté d'une colline et bas de l'autre, occlusion au pied d'une colline, normales qui penchent vers l'extérieur |
 | `tests/sols.test.mjs` | sols photo : huit sols, parts de chaque sorte de terrain et de chaque culture (elles font 1, 0 sous l'eau), images et licence présentes, après-rendu et sols qui montent avec la qualité |
 | `tests/modeles.test.mjs` | modèles 3D des figurines : os de l'animation, pieds au sol, hauteur, tournés vers l'avant, formes arrondies, version de loin (mêmes os, même hauteur, un tiers des sommets), choix de la version selon la taille à l'écran |
 

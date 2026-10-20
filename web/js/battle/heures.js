@@ -39,9 +39,9 @@ const NOON_FOG = [201, 216, 230];
 // Météo : ciel (brume), force du soleil, ombres des nuages, et retouches de l'étalonnage (ajoutées, sauf sat et
 // contrast multipliés)
 export const METEO = {
-  soleil: { sky: [201, 216, 230], sunI: 2.2, cloud: 0.22 },
-  canicule: { sky: [218, 222, 226], sunI: 2.5, cloud: 0.14, g: { temp: 0.25, sat: 0.95, lift: [0.015, 0.01, 0], gain: [0.02, 0.01, -0.02] } },
-  nuages: { sky: [185, 195, 205], sunI: 1.3, cloud: 0.34, g: { temp: -0.12, sat: 0.92, contrast: 0.97 } },
+  soleil: { sky: [201, 216, 230], sunI: 2.85, cloud: 0.22 },
+  canicule: { sky: [218, 222, 226], sunI: 3.2, cloud: 0.14, g: { temp: 0.25, sat: 0.95, lift: [0.015, 0.01, 0], gain: [0.02, 0.01, -0.02] } },
+  nuages: { sky: [185, 195, 205], sunI: 1.5, cloud: 0.34, g: { temp: -0.12, sat: 0.92, contrast: 0.97 } },
   pluie: { sky: [155, 165, 176], sunI: 0.7, cloud: 0.3, g: { temp: -0.28, sat: 0.8, contrast: 0.95, vig: 0.12, lift: [0, 0.005, 0.015] } },
   orage: { sky: [138, 147, 160], sunI: 0.7, cloud: 0.38, g: { expo: -0.06, temp: -0.32, sat: 0.76, vig: 0.18, lift: [0, 0.005, 0.02] } },
   tempete: { sky: [138, 147, 160], sunI: 0.7, cloud: 0.38, g: { expo: -0.06, temp: -0.32, sat: 0.76, vig: 0.18, lift: [0, 0.005, 0.02] } },
@@ -142,9 +142,11 @@ export function ambiance(st, season, { flash = 0, clouds = true } = {}) {
   return {
     he, sunDir: [Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)], sun,
     sunI: M.sunI * row.sunI,
-    // le ciel éclaire fort, bleuté : les ombres restent lisibles et teintées au lieu de noires
+    // le ciel éclaire, bleuté : les ombres restent teintées au lieu de noires ; par temps clair, le soleil l'emporte
+    // nettement (sinon le relief, les nuages et l'ombre des collines ne se lisent pas), sous un ciel couvert c'est
+    // la lumière diffuse
     hemiSky: dull ? lerp3(row.sky, [0.86, 0.88, 0.9], 0.4) : row.sky, hemiGround: [0.46, 0.4, 0.27],
-    hemiI: (dull ? 2.35 : 2.05) * row.skyI + flash * 3,
+    hemiI: (dull ? 2.15 : 1.5) * row.skyI + flash * 3,
     fog, fogNear: w === 'brouillard' ? 0.05 : wet ? 0.6 : 1, fogFar: w === 'brouillard' ? 0.15 : wet ? 0.6 : 1,
     cloudA: M.cloud * L * (clouds ? 1 : 0),
     wind: st.wind || [1.5, 0.5],

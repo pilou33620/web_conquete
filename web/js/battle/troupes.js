@@ -906,6 +906,7 @@ export class Troops {
           .replace('float dotNL = saturate( dot( geometryNormal, directLight.direction ) );', 'float dotNL = saturate( dot( geometryNormal, directLight.direction ) * 0.6 + 0.4 );'));
     };
     mat.customProgramCacheKey = () => 'troupes-' + (pattern ? 'etoffe-' : '') + (def || 'homme');
+    this.relief.ombrage?.(mat);   // nuages et collines (relief.js ; le relief des bancs d'essai n'en a pas)
     // passe d'ombre : la même mise en place des figurines
     const depth = new THREE.MeshDepthMaterial();
     depth.defines = defines;

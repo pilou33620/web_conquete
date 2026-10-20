@@ -226,12 +226,13 @@ export class Decor {
       }
     });
     const geos = new Map(), lumps = [1, 3, 5, 5][fx];
-    const crownMat = nearFade(new THREE.MeshLambertMaterial({ vertexColors: true }));
-    const woodMat = clearable(nearFade(new THREE.MeshLambertMaterial({ vertexColors: true })), this.clearUni, 'decor-cime');
+    // (nuages et collines : ombrage de relief.js)
+    const crownMat = this.r.ombrage(nearFade(new THREE.MeshLambertMaterial({ vertexColors: true })));
+    const woodMat = this.r.ombrage(clearable(nearFade(new THREE.MeshLambertMaterial({ vertexColors: true })), this.clearUni, 'decor-cime'));
     const woodDepth = clearable(new THREE.MeshDepthMaterial(), this.clearUni, 'decor-cime-ombre');
     this.disposables.push(woodMat, woodDepth);
-    const trunkMat = nearFade(new THREE.MeshLambertMaterial({ color: snow ? '#4a3c30' : TRUNK }));
-    const bareMat = nearFade(new THREE.MeshLambertMaterial({ color: BARE }));
+    const trunkMat = this.r.ombrage(nearFade(new THREE.MeshLambertMaterial({ color: snow ? '#4a3c30' : TRUNK })));
+    const bareMat = this.r.ombrage(nearFade(new THREE.MeshLambertMaterial({ color: BARE })));
     this.disposables.push(crownMat, trunkMat, bareMat);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
     const geo = (kind, detail) => {
@@ -366,7 +367,7 @@ export class Decor {
     }
     if (!P.length) return;
     const geo = merge(P.map(([g, c]) => { const n = g.index ? g.toNonIndexed() : g; if (n !== g) g.dispose(); return paint(n, c); }));
-    const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const mat = this.r.ombrage(new THREE.MeshLambertMaterial({ vertexColors: true }));
     this.disposables.push(geo, mat);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = mesh.receiveShadow = true;
@@ -422,7 +423,7 @@ export class Decor {
     }
     // haies, murets, clôtures de bois : construites une fois, à part (une brèche ne touche pas ces clôtures)
     const geo = B.geometry();
-    if (!this.wallMat) { this.wallMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }); this.disposables.push(this.wallMat); }
+    if (!this.wallMat) { this.wallMat = this.r.ombrage(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })); this.disposables.push(this.wallMat); }
     if (geo) {
       this.wallMesh = new THREE.Mesh(geo, this.wallMat);
       this.wallMesh.castShadow = this.wallMesh.receiveShadow = true;
