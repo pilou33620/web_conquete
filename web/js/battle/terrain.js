@@ -920,6 +920,25 @@ export function paintDecal(g, d, s) {
     g.fillStyle = 'rgba(122,98,64,0.18)'; el(0, 0, r * 1.35, r * 1.1);
     g.fillStyle = 'rgba(84,62,38,0.26)'; el(0, 0, r, r * 0.8);
     g.fillStyle = 'rgba(42,30,18,0.24)'; el(r * 0.12, r * 0.1, r * 0.5, r * 0.4);
+  } else if (d.k === 'chapeau') {
+    // débris (SPEC-SUITE F8) : un chapeau tombé, sa cocarde
+    g.fillStyle = 'rgba(30,20,15,0.25)'; el(0.06, 0.05, 0.32, 0.22);
+    g.fillStyle = '#1f1b18'; el(0, 0, 0.3, 0.2);
+    g.fillStyle = '#c9b06a'; el(0.12, -0.05, 0.05, 0.05);
+  } else if (d.k === 'fusil') {
+    g.strokeStyle = 'rgba(30,20,15,0.3)'; g.lineWidth = 0.12; g.lineCap = 'round'; g.beginPath(); g.moveTo(-0.7, 0.06); g.lineTo(0.75, 0.06); g.stroke();
+    g.strokeStyle = '#4a3420'; g.lineWidth = 0.09; g.beginPath(); g.moveTo(-0.72, 0); g.lineTo(0.2, 0); g.stroke();
+    g.strokeStyle = '#7d7f80'; g.lineWidth = 0.05; g.beginPath(); g.moveTo(0.2, 0); g.lineTo(0.78, 0); g.stroke();
+  } else if (d.k === 'sac') {
+    g.fillStyle = 'rgba(30,20,15,0.25)'; g.fillRect(-0.2, -0.13, 0.46, 0.34);
+    g.fillStyle = '#7a5e3c'; g.fillRect(-0.24, -0.17, 0.44, 0.32);
+    g.fillStyle = '#e4ddcc'; g.fillRect(-0.24, -0.04, 0.44, 0.04);
+  } else if (d.k === 'roue') {
+    // roue brisée près d'une pièce : jante ouverte, quelques rayons
+    g.strokeStyle = '#4a3420'; g.lineWidth = 0.1; g.beginPath(); g.arc(0, 0, 0.6, 0.6, TAU - 0.4); g.stroke();
+    g.lineWidth = 0.06; g.beginPath();
+    for (let k = 0; k < 5; k++) { const a = 1 + k * 1.05; g.moveTo(0, 0); g.lineTo(Math.cos(a) * 0.6, Math.sin(a) * 0.6); }
+    g.stroke(); g.fillStyle = '#2c2c2a'; el(0, 0, 0.1, 0.1);
   } else if (d.k === 'cheval') {
     g.fillStyle = 'rgba(30,20,15,0.25)'; g.fillRect(-1.3 + 0.3, -0.5 + 0.3, 2.6, 1.0);
     g.fillStyle = d.c2 || '#5a3e26'; el(0, 0, 1.3, 0.5);

@@ -3,8 +3,9 @@
 // tache douce à la forme de sa formation, plus fort pour la cavalerie et l'artillerie, deux fois plus fort sous la
 // pluie ; chaque trou d'obus y laisse une tache de terre retournée. relief.js la lit : le sol y tourne à la boue,
 // les épis s'y couchent, la neige s'y efface.
-// La carte est dessinée cinq fois par seconde (un quad instancié par régiment, en mélange additif) ; elle n'est pas
-// enregistrée : une bataille rechargée repart d'un sol neuf.
+// La carte est dessinée cinq fois par seconde (un quad instancié par régiment, en mélange additif). Elle est
+// enregistrée avec la bataille (SPEC-SUITE F8) : une image réduite de 256 px de large, envoyée au serveur de temps en
+// temps (exporter) et redessinée dans la carte au rechargement (importer).
 import * as THREE from '../../vendor/three/three.module.js';
 import { clsOf, clamp } from './formes.js';
 
@@ -116,7 +117,53 @@ export class Pietinement {
   }
   // contexte WebGL rendu par Safari : la carte est vide, elle repart de zéro
   reset() { this.fresh = true; }
-  dispose() { this.rt.dispose(); this.mesh.geometry.dispose(); this.mat.dispose(); this.mesh.dispose(); }
+  // copie la texture src dans la cible dst (un triangle plein écran ; la boue est dans le rouge)
+  copy(src, dst) {
+    if (!this.copyMat) {
+      this.copyMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, depthTest: false, depthWrite: false, uniforms: { tSrc: { value: null } },
+        vertexShader: 'precision highp float; in vec3 position; out vec2 vUv; void main() { vUv = position.xy * 0.5 + 0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+        fragmentShader: 'precision highp float; uniform sampler2D tSrc; in vec2 vUv; out vec4 outColor; void main() { float m = clamp(texture(tSrc, vUv).r, 0.0, 1.0); outColor = vec4(m, m, m, 1.0); }' });
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
+      this.copyMesh = new THREE.Mesh(g, this.copyMat); this.copyMesh.frustumCulled = false;
+      this.copyScene = new THREE.Scene(); this.copyScene.add(this.copyMesh);
+      this.copyCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    }
+    this.copyMat.uniforms.tSrc.value = src;
+    const r = this.r, prev = r.getRenderTarget();
+    r.setRenderTarget(dst); r.render(this.copyScene, this.copyCam); r.setRenderTarget(prev);
+  }
+  // la carte réduite (256 px de large, la boue en gris) en image PNG, pour l'enregistrer avec la bataille
+  exporter() {
+    const w = 256, h = Math.max(1, Math.round(256 * this.H / this.W));
+    if (!this.small) this.small = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false });
+    this.copy(this.rt.texture, this.small);
+    const px = new Uint8Array(w * h * 4);
+    this.r.readRenderTargetPixels(this.small, 0, 0, w, h, px);
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const g = cv.getContext('2d'), img = g.createImageData(w, h);
+    // (les lignes restent dans l'ordre de la carte : importer relit l'image sans la retourner)
+    for (let i = 0; i < w * h; i++) { const m = px[i * 4]; img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = m; img.data[i * 4 + 3] = 255; }
+    g.putImageData(img, 0, 0);
+    return cv.toDataURL('image/png');
+  }
+  // redessine une carte enregistrée (exporter) ; rien si l'image est illisible
+  importer(url) {
+    if (typeof url !== 'string' || !url.startsWith('data:image/png;base64,')) return Promise.resolve(false);
+    return new Promise(res => {
+      const img = new Image();
+      img.onload = () => {
+        const tex = new THREE.Texture(img); tex.flipY = false; tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
+        this.fresh = false;
+        this.copy(tex, this.rt);
+        tex.dispose();
+        res(true);
+      };
+      img.onerror = () => res(false);
+      img.src = url;
+    });
+  }
+  dispose() { this.rt.dispose(); this.small?.dispose(); this.copyMat?.dispose(); this.copyMesh?.geometry.dispose(); this.mesh.geometry.dispose(); this.mat.dispose(); this.mesh.dispose(); }
 }
 
 // Ombre de régiment (étape 9h) : une tache large et très douce sous chaque formation, redessinée à chaque image dans

@@ -152,6 +152,12 @@ FCOST = [0.0, 0.15, 0.4, 0.3]
 FOPAC = [0, 0, 15, 0]
 FTOP = [0, 0, 2.8, 0]    # une haie (talus compris) cache ce qui est à hauteur d'homme, pas ce qu'on voit de plus haut
 EYE = 2.5                # hauteur d'un fantassin, pour la vue (m)
+PIET_MAX = 200000        # taille au plus de l'image de la boue (data URL PNG, SPEC-SUITE F8)
+
+
+def valid_piet(v):
+    """Image de la boue envoyée par le navigateur : une data URL PNG de taille raisonnable."""
+    return isinstance(v, str) and v.startswith('data:image/png;base64,') and len(v) <= PIET_MAX
 HEIGHT = dict(inf=2.5, artillerie=3.0, cavalerie=3.5, general=3.5, chariot=3.0)   # canons : officiers à cheval, caissons
 # élan d'une charge : il se gagne en courant (mètres pour un plein élan), se perd en terrain difficile et en montée
 ELAN_M = dict(cav=110.0, inf=45.0)
@@ -321,6 +327,7 @@ class TacticalBattle:
         self.pound = {}                      # coups encaissés par secteur de l'enceinte (canons de l'assaillant)
         self.breaches = []                   # brèches ouvertes pendant la bataille : [mur, x, y, rayon]
         self.breach_t = []                   # … et quand : [heure de bataille (s), secteur] (journal des batailles)
+        self.piet = None                     # la boue laissée par les troupes (image PNG du navigateur, SPEC-SUITE F8)
         rng = random.Random(spec['seed'] ^ 0x5A5A)
         self.rng = rng
         wa = rng.random() * 6.283
@@ -2512,6 +2519,8 @@ class TacticalBattle:
     def map_view(self):
         d = self.map.to_client(self.spec)
         d['nbreach'] = len(self.breaches)   # (déjà dans les remparts envoyés : le client ne les rajoute pas)
+        if getattr(self, 'piet', None):
+            d['piet'] = self.piet   # la boue laissée par les troupes (SPEC-SUITE F8), redessinée au rechargement
         return d
 
     # ================================================================== sauvegarde
@@ -2522,7 +2531,8 @@ class TacticalBattle:
                     ai_mem=self.ai_mem, result=self.result, pound=self.pound, breaches=self.breaches,
                     breach_t=self.breach_t,
                     accel=self.accel, accel_ids=self.accel_ids, accel_t=self.accel_t,
-                    end=[getattr(self, 'winner', None), getattr(self, 'disengage', None), getattr(self, 'why', None)])
+                    end=[getattr(self, 'winner', None), getattr(self, 'disengage', None), getattr(self, 'why', None)],
+                    piet=getattr(self, 'piet', None))
 
     @classmethod
     def from_dict(cls, geo, d):
@@ -2540,6 +2550,7 @@ class TacticalBattle:
         tb._acc = d.get('acc', 0.0)
         tb.ai_mem = d.get('ai_mem') or {}
         tb.result = d.get('result')
+        tb.piet = d.get('piet') if valid_piet(d.get('piet')) else None   # (anciennes sauvegardes : un sol neuf)
         tb.accel = bool(d.get('accel'))   # (anciennes sauvegardes : pas d'accéléré)
         tb.accel_ids = list(d.get('accel_ids') or [])
         tb.accel_t = d.get('accel_t', 0.0)

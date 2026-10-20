@@ -90,6 +90,8 @@ export class BattleView {
     this.ciel = new Ciel(this.relief, this.q);
     this.scene.add(this.ciel.mesh);
     this.piet = new Pietinement(this.renderer, this.terrain.W, this.terrain.H, this.q);
+    if (m.piet) this.piet.importer(m.piet);   // la boue d'avant (bataille rechargée)
+    this.pietSent = 0;
     this.relief.uni.uPiet.value = this.piet.texture;
     this.ombreR = new OmbreRegiments(this.renderer, this.terrain.W, this.terrain.H);
     this.herbe = new Herbe(this.relief, this.q);
@@ -286,7 +288,23 @@ export class BattleView {
     const c = Math.cos(u.dir), s = Math.sin(u.dir), loc = (x, y) => [-s * (x - u.x) + c * (y - u.y), c * (x - u.x) + s * (y - u.y)];
     const ball = (this.balls || []).find(f => segDist(u.x, u.y, f.x, f.y, f.x2, f.y2) < Math.hypot(u.w, u.d) / 2);
     const out = this.troops.kill(u, n, (x, y) => this.terrain.bare(x, y), this.colors[u.side] || '#666', ball && [loc(ball.x, ball.y), loc(ball.x2, ball.y2)]);
+    // débris au fil des pertes (SPEC-SUITE F8) : chapeaux, fusils, havresacs près des tués, roues brisées près des pièces
+    const art = clsOf(u) === 'artillerie';
+    for (const d of out.slice()) {
+      if (d.k !== 'mort' || Math.random() > (art ? 0.2 : 0.3)) continue;
+      const a = Math.random() * TAU, r = 0.8 + Math.random() * 2.5;
+      out.push({ k: art && Math.random() < 0.5 ? 'roue' : ['chapeau', 'fusil', 'sac'][(Math.random() * 3) | 0], x: d.x + Math.cos(a) * r, y: d.y + Math.sin(a) * r, a: Math.random() * TAU });
+    }
     if (out.length) this.relief.decals.add(this.terrain.addDecals(out));
+  }
+  // la boue, envoyée au serveur toutes les 30 s de bataille environ (gardée avec la sauvegarde)
+  sendPiet() {
+    const c = this.st?.clock;
+    if (c == null || !this.piet || this.st?.phase !== 'combat' || c - (this.pietSent || 0) < 30) return;
+    this.pietSent = c;
+    let png = null;
+    try { png = this.piet.exporter(); } catch (e) { return; }
+    this.api.post('/api/cmd', { cmd: 'tac', sub: 'piet', bid: this.bid, png }).catch(() => {});
   }
   nearest(x, y) {
     let best = null, bd = 40;
@@ -447,6 +465,7 @@ export class BattleView {
     this.decor.clearings(all, performance.now());
     this.fx.render(fr, z);
     this.piet?.render();
+    this.sendPiet();
     this.ombreR?.render(all);
     if (this.post.actif) { cam.updateMatrixWorld(); this.post.setBrume(ciel, this.relief.fogLin, cam); }
     this.post.render(this.scene, cam, ciel.grade, time, fr.dist);

@@ -524,6 +524,8 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   bâti et vergers, la même règle que le moteur, haies mises à part). La fumée des canons, plus grise, monte au-dessus
   de celle des fusils. Baïonnettes, cuivres et bronze des pièces renvoient le soleil ; les haies du bocage sont des
   rangs de feuillage touffu, d'où dépassent des arbres têtards ; les creux du terrain sont plus verts et plus sombres.
+  Au fil des pertes, des débris jonchent le sol (chapeaux, fusils, havresacs, roues brisées près des pièces), et la
+  boue laissée par les troupes est gardée avec la bataille : une bataille rechargée retrouve ses traces.
 - **En haut** : l'heure (et la nuit qui approche), le temps, le rapport de forces (l'ennemi : seulement ce que
   vous en voyez), le journal (repliable, et complet derrière son bouton), l'aide, **« Finir auto. »** (vos officiers
   achèvent la bataille en accéléré) et **« Décrocher »** (toute l'armée quitte le terrain), chacun avec confirmation.

@@ -20,7 +20,7 @@ from .. import turns as TT
 from . import units as U
 from . import ai as AI
 from . import terrain as TR
-from .battle import TacticalBattle
+from .battle import TacticalBattle, valid_piet
 
 SETTINGS = ('demander', 'auto', 'auto_petites')
 SMALL_MEN = 600            # escarmouche : moins de 600 hommes en tout…
@@ -614,6 +614,13 @@ def command(g, body):
     if sub == 'resume':
         ok, msg = tb.resume()
         return dict(ok=ok, msg=msg)
+    if sub == 'piet':
+        # la boue laissée par les troupes, gardée avec la bataille (SPEC-SUITE F8) : rien d'autre ne la lit
+        png = body.get('png')
+        if not valid_piet(png):
+            return dict(ok=False, msg='Image invalide.')
+        tb.piet = png
+        return dict(ok=True)
     return dict(ok=False, msg='Commande de bataille inconnue.')
 
 

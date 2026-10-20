@@ -111,6 +111,25 @@ class BatailleEntiere(unittest.TestCase):
         self.assertEqual(BT.DT, 2.0)
 
 
+class BoueEnregistree(unittest.TestCase):
+    """La boue laissée par les troupes (SPEC-SUITE F8) : le navigateur l'envoie, la sauvegarde la garde."""
+    PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg=='
+
+    def test_la_boue_suit_la_sauvegarde(self):
+        tb, u = bataille()
+        self.assertTrue(BT.valid_piet(self.PNG))
+        self.assertFalse(BT.valid_piet('data:text/html;base64,AAAA'))
+        self.assertFalse(BT.valid_piet('data:image/png;base64,' + 'A' * BT.PIET_MAX))
+        tb.piet = self.PNG
+        tb2 = type(tb).from_dict(GEO, json.loads(json.dumps(tb.to_dict())))
+        self.assertEqual(tb2.piet, self.PNG)
+        self.assertEqual(tb2.map_view()['piet'], self.PNG)
+        old = tb.to_dict()
+        old.pop('piet')
+        self.assertIsNone(type(tb).from_dict(GEO, json.loads(json.dumps(old))).piet, 'ancienne sauvegarde : un sol neuf')
+        self.assertNotIn('piet', type(tb).from_dict(GEO, json.loads(json.dumps(old))).map_view())
+
+
 class MarquesVisibles(unittest.TestCase):
     """SPEC-TECH.md, module visuels : la bataille reçoit les marques de chaque camp et l'arme de chaque régiment."""
 

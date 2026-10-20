@@ -279,6 +279,15 @@ contre-jour), et un arbre têtard tous les 50 m environ.
 Fichiers : `pietinement.js`, `effets.js`, `vue.js` ; pour D6, `game/tactics/battle.py` et la route de sauvegarde du
 serveur, plus un test Python (une ancienne sauvegarde sans boue se charge).
 
+**Livré le 20/10/2026** (`pietinement.js` exporter et importer, `vue.js` sendPiet et casualties, `terrain.js`
+paintDecal, `battle.py` piet et valid_piet, `bridge.py` sous-commande `piet`, test `BoueEnregistree`) : la boue est
+envoyée au serveur toutes les 30 s de bataille (PNG de 256 px de large, 2 à 30 Ko), gardée dans la sauvegarde avec la
+bataille et redessinée au rechargement ; une ancienne sauvegarde repart d'un sol neuf. Débris au fil des pertes :
+chapeaux, fusils, havresacs près des tués, roues brisées près des pièces (panneaux posés comme les corps). Écarts : pas
+d'ornières (la carte de piétinement a 3 m par pixel : deux traits de roue n'y tiennent pas) ; pas de boue luisante
+sous la pluie (Lambert n'a pas de reflet ; à faire avec un terme spéculaire comme l'eau) ; pas de gerbe de terre en
+plus autour des trous d'obus (la tache de terre de 9e en tient lieu).
+
 ### F9. Les rangs d'arbres le long des chemins creux (SPEC-CARTES, C3.3)
 
 Le générateur de cartes de bataille plante des rangs d'arbres le long de certains chemins creux. Comme pour le verger,
