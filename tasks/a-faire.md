@@ -1,6 +1,7 @@
 # À faire : le rendu d'Ultimate General (point du 20/10/2026)
 
 Specs : `SPEC-RENDU.md` (étape 9, parties A à D) et `SPEC-CARTES.md`. Tout ce qui est coché est poussé sur `main`.
+**Tout ce qui reste, partie par partie (avec les décisions D1 à D7 à prendre et l'ordre de livraison) : `SPEC-SUITE.md`.**
 
 ## Fait le 20/10/2026
 
