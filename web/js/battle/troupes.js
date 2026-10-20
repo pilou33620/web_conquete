@@ -217,14 +217,21 @@ export function layout(un, per = 1, scale = SCALE) {
 // teinte (1 : l'habit, couleur de l'instance ; 2 : la robe du cheval ; la couleur du sommet n'en donne que la nuance).
 // Repère d'une figurine : +Z devant, +X à sa gauche, les pieds en 0, un homme mesure 1,75 m. L'os peut être une fonction
 // de la hauteur du sommet (genou, coude, taille : le morceau se plie entre deux os).
+// pièces de métal (or des épaulettes et des aigles, bronze et acier des pièces, lames, baïonnettes) : leur couleur les
+// désigne ; elles prennent un reflet du soleil (SPEC-SUITE F2)
+const METAL = new Set([GOLD, BRONZE, '#b8bcc0', '#c8ccd0', '#4f5458', '#36393d', '#9c7a38'].map(c => c.toLowerCase()));
 function assemble(parts) {
-  const pos = [], nor = [], col = [], bone = [], part = [], uv = [], idx = [];
+  const pos = [], nor = [], col = [], bone = [], part = [], uv = [], idx = [], metal = [];
   for (const [g, color, b, tint] of parts) {
     const p = g.attributes.position, n = g.attributes.normal, t = g.attributes.uv, base = pos.length / 3;
-    const c = new THREE.Color(color);
+    const c = new THREE.Color(color), m = typeof color === 'string' && METAL.has(color.toLowerCase()) ? 1 : 0;
     for (let i = 0; i < p.count; i++) {
-      pos.push(p.getX(i), p.getY(i), p.getZ(i)); nor.push(n.getX(i), n.getY(i), n.getZ(i));
-      col.push(c.r, c.g, c.b); bone.push(typeof b === 'function' ? b(p.getY(i)) : b); part.push(tint); uv.push(t ? t.getX(i) : 0, t ? t.getY(i) : 0);
+      // occlusion simple, une fois par modèle : ce qui regarde vers le bas (sous les bras, le chapeau, l'affût) est
+      // plus sombre
+      const ny = n.getY(i), ao = 0.74 + 0.26 * Math.min(1, Math.max(0, (ny + 0.6) / 1.1));
+      pos.push(p.getX(i), p.getY(i), p.getZ(i)); nor.push(n.getX(i), ny, n.getZ(i));
+      col.push(c.r * ao, c.g * ao, c.b * ao); bone.push(typeof b === 'function' ? b(p.getY(i)) : b); part.push(tint); uv.push(t ? t.getX(i) : 0, t ? t.getY(i) : 0);
+      metal.push(m);
     }
     if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(base + g.index.getX(i));
     else for (let i = 0; i < p.count; i++) idx.push(base + i);
@@ -237,6 +244,7 @@ function assemble(parts) {
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setAttribute('aBone', new THREE.Float32BufferAttribute(bone, 1));
   g.setAttribute('aPart', new THREE.Float32BufferAttribute(part, 1));
+  g.setAttribute('aMetal', new THREE.Float32BufferAttribute(metal, 1));
   g.setIndex(idx);
   return g;
 }
@@ -686,12 +694,12 @@ attribute vec4 aAnim;   // pose, phase, échelle, rang
 attribute vec4 aMove;   // course à sa place : départ (u, v), début, durée (négative : au pas ; 0 : aucune)
 attribute vec3 aCoat;   // couleur de l'habit
 attribute vec3 aFace;   // couleur du camp (pièces de teinte CAMP)
-attribute float aBone, aPart;
+attribute float aBone, aPart, aMetal;
 uniform sampler2D uUnits, uHeight;
 uniform vec3 uHgt;      // pas des altitudes (m), colonnes, lignes
 uniform float uTime, uFxT;
 uniform vec3 uRobes[4];
-varying float vFade, vPart;
+varying float vFade, vPart, vMetal;
 float hAt(vec2 p) {
   vec2 f = clamp(p / uHgt.x - 0.5, vec2(0.0), uHgt.yz - 1.001);
   ivec2 i = ivec2(floor(f)); vec2 t = f - vec2(i);
@@ -991,11 +999,11 @@ export class Troops {
         .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${VERT_POSE}\n${turn('objectNormal', false)}`)
         // (l'étoffe : sa case de la planche des drapeaux, dont le numéro est dans aFace.x)
         .replace('#include <begin_vertex>', (pattern ? `vUv2 = (vec2(mod(aFace.x, ${FLAG_COLS}.0), ${FLAG_ROWS - 1}.0 - floor(aFace.x / ${FLAG_COLS}.0)) + uv) / vec2(${FLAG_COLS}.0, ${FLAG_ROWS}.0);\n` : '') + place)
-        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 2.5 ? aFace * color.r : aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart;' +
+        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 2.5 ? aFace * color.r : aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart; vMetal = aMetal;' +
           // plus sombre vers les pieds : l'ombre des rangs, comme une occlusion ambiante (pas pour les étoffes)
           (pattern ? '' : '\nvColor.rgb *= mix(0.62, 1.0, smoothstep(0.0, 1.5, position.y));'));
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying float vFade, vPart;' + (pattern ? '\nuniform sampler2D uPattern; varying vec2 vUv2;' : ''))
+        .replace('#include <common>', '#include <common>\nvarying float vFade, vPart, vMetal;' + (pattern ? '\nuniform sampler2D uPattern; varying vec2 vUv2;' : ''))
         // régiment deviné (plus en vue) : transparent en pointillés, sans tri
         .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
           if (vFade < 0.995 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > vFade) discard;`)
@@ -1008,7 +1016,9 @@ export class Troops {
           .replace('reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );',
             `reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );
             float rimK = pow(1.0 - saturate(dot(geometryNormal, geometryViewDir)), 3.0) * (0.25 + 0.75 * saturate(-dot(geometryViewDir, directLight.direction)));
-            reflectedLight.directDiffuse += directLight.color * rimK * (0.12 + 0.5 * material.diffuseColor);`));
+            reflectedLight.directDiffuse += directLight.color * rimK * (0.12 + 0.5 * material.diffuseColor);
+            // reflet du soleil sur le métal (baïonnettes, cuivres, bronze) : il court le long d'une ligne quand le soleil est bas
+            if (vMetal > 0.5) reflectedLight.directDiffuse += directLight.color * pow(saturate(dot(geometryNormal, normalize(directLight.direction + geometryViewDir))), 48.0) * 1.8;`));
     };
     mat.customProgramCacheKey = () => 'troupes-' + (pattern ? 'etoffe-' : '') + (def || 'homme');
     this.relief.ombrage?.(mat);   // nuages et collines (relief.js ; le relief des bancs d'essai n'en a pas)

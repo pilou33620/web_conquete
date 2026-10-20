@@ -481,19 +481,43 @@ export class Decor {
       this.wallMesh.castShadow = this.wallMesh.receiveShadow = true;
       this.group.add(this.wallMesh);
     }
-    if (!this.fenceMesh) this.fences();
+    if (!this.fencesDone) { this.fencesDone = true; this.fences(); }
   }
   fences() {
-    const t = this.t, pal = t.pal, snow = pal.neige, B = new Builder(this.r.heightAt);
+    const t = this.t, pal = t.pal, snow = pal.neige, B = new Builder(this.r.heightAt), BH = new Builder(this.r.heightAt);
     const hedge = snow ? '#5e6a5c' : new THREE.Color(pal.arbres[0]).multiplyScalar(0.7).getStyle();
+    const tones = snow ? ['#d9dee0', '#c9d0d0'] : [pal.arbres[0], pal.arbres[1], pal.arbres[2] || pal.arbres[0]].map(c => new THREE.Color(c).multiplyScalar(0.8).getStyle());
+    const fx = this.q.fx ?? 2, h = this.r.heightAt;
     for (const f of t.fencePts) {
       // bord bosselé tous les 1,6 m (resample ne garde pas le dernier point : il est rajouté)
-      if (f.kind === 'haie') B.ribbon(resample(f.pts, 1.6).concat([f.pts[f.pts.length - 1]]), 1.8, 1.25, 2.1, hedge, snow ? '#e8ecee' : new THREE.Color(pal.arbres[1]).multiplyScalar(0.85).getStyle(), 0.45);
+      if (f.kind === 'haie') {
+        BH.ribbon(resample(f.pts, 1.6).concat([f.pts[f.pts.length - 1]]), 1.8, 1.25, 2.1, hedge, snow ? '#e8ecee' : new THREE.Color(pal.arbres[1]).multiplyScalar(0.85).getStyle(), 0.45);
+        // (SPEC-SUITE F7) des touffes de feuillage sur la bande, comme les couronnes des bois, et de loin en loin un
+        // arbre têtard qui dépasse ; en Moyenne et au-delà
+        if (fx < 1) continue;
+        for (const [k, q] of resample(f.pts, fx >= 2 ? 2.2 : 3.4).entries()) {
+          const hx = hash(q[0] | 0, q[1] | 0, 41), r = 0.75 + hx * 0.45, y = h(q[0], q[1]) + 1.55 + hx * 0.4;
+          BH.add(new THREE.IcosahedronGeometry(r, 0).scale(1, 0.8, 1).rotateY(hx * 6).translate(q[0], y, q[1]), tones[k % tones.length]);
+          if (hash(q[0] | 0, q[1] | 0, 43) < 0.045) {
+            B.cyl(q[0], q[1], 0.16, 3.2, 1.6, '#5a4430');
+            BH.add(new THREE.IcosahedronGeometry(1.5, 1).scale(1, 0.85, 1).translate(q[0], h(q[0], q[1]) + 3.7, q[1]), tones[(k + 1) % tones.length]);
+          }
+        }
+      }
       else if (f.kind === 'muret') B.ribbon(f.pts, 0.65, 0.55, 1, snow ? '#e6e6e2' : '#a39a84', snow ? '#f4f4f2' : '#b9b09a');
       else {
         for (const p of resample(f.pts, 2.5)) B.box(p[0], p[1], 0.14, 1.25, 0.14, 0.62, snow ? '#4e4034' : '#5a4430');
         for (const y of [0.55, 1.0]) B.ribbon(f.pts, 0.08, 0.08, 0.08, '#8a6a46', '#8a6a46', 0, y);
       }
+    }
+    const hg = BH.geometry();
+    if (hg) {
+      // les haies : un feuillage (lumière enveloppante, grappes de feuilles, contre-jour), pas une pierre peinte en vert
+      this.hedgeMat = this.r.ombrage(feuillage(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), this.r.uni));
+      this.disposables.push(this.hedgeMat);
+      this.hedgeMesh = new THREE.Mesh(hg, this.hedgeMat);
+      this.hedgeMesh.castShadow = this.hedgeMesh.receiveShadow = true;
+      this.group.add(this.hedgeMesh);
     }
     const geo = B.geometry();
     if (!geo) return;
@@ -505,5 +529,5 @@ export class Decor {
   near(dist) { NEAR.value = Math.min(60, dist); }
   setQuality(q) { this.q = q; }
   dispose() {
-    this.wallMesh?.geometry.dispose(); this.fenceMesh?.geometry.dispose(); for (const d of this.disposables) d.dispose(); for (const o of this.group.children) o.dispose?.(); }
+    this.wallMesh?.geometry.dispose(); this.fenceMesh?.geometry.dispose(); this.hedgeMesh?.geometry.dispose(); for (const d of this.disposables) d.dispose(); for (const o of this.group.children) o.dispose?.(); }
 }

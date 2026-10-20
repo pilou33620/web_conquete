@@ -202,6 +202,12 @@ bleu du zénith doit passer en linéaire, sinon l'ACES le blanchit.
 - Fichiers : `relief.js`, `sols.js`. Attention à la limite des 16 textures : ranger avant d'ajouter (voir SPEC-RENDU,
   « Contrainte apparue »).
 
+**F2 et F3 livrés le 20/10/2026** (`troupes.js` assemble et lumière des figurines, `relief.js`) : les pièces de
+métal (or, bronze, acier, lames et baïonnettes, reconnues à leur couleur) prennent un reflet du soleil, ombres
+comprises ; une occlusion simple par sommet assombrit ce qui regarde vers le bas ; au sol, les creux (là où
+l'occlusion de 9c voit moins de ciel) sont plus verts et plus sombres. Écarts : pas de vraie occlusion calculée par
+rayons, ni de triplanaire, ni de neige en 9ᵉ sol (le sol a 15 textures sur 16 ; à reprendre si une place se libère).
+
 ### F4. L'atlas d'uniformes (9i ; B2)
 
 **Ce que verra le joueur.** De près : boutons, galons, revers, parements, épaulettes, buffleteries croisées, giberne,
@@ -256,6 +262,10 @@ de la fumée selon la profondeur, ni d'éclairs qui éclairent le sol (à repren
 
 Les haies du bocage cessent d'être des bandes extrudées : des touffes de feuillage serrées (le shader `feuillage` des
 bois), pied sombre, teintes variées, quelques arbres têtards qui dépassent. Fichiers : `decor.js`, `terrain.js`.
+
+**Livré le 20/10/2026** (`decor.js` fences) : sur la bande de la haie, des touffes de feuillage tous les 2,2 m
+(3,4 m en Moyenne, aucune en Basse), au shader des couronnes des bois (lumière enveloppante, grappes de feuilles,
+contre-jour), et un arbre têtard tous les 50 m environ.
 
 ### F8. Les traces de la bataille : la fin de A4
 

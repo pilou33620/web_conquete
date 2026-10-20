@@ -522,7 +522,8 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   régiments ennemis au contact, une **ligne de front** ondule au sol, à la couleur de chaque camp de son côté ; le
   bouton **« Ligne de vue »** du panneau d'un régiment (touche V) assombrit tout ce qu'il ne voit pas (crêtes, bois,
   bâti et vergers, la même règle que le moteur, haies mises à part). La fumée des canons, plus grise, monte au-dessus
-  de celle des fusils.
+  de celle des fusils. Baïonnettes, cuivres et bronze des pièces renvoient le soleil ; les haies du bocage sont des
+  rangs de feuillage touffu, d'où dépassent des arbres têtards ; les creux du terrain sont plus verts et plus sombres.
 - **En haut** : l'heure (et la nuit qui approche), le temps, le rapport de forces (l'ennemi : seulement ce que
   vous en voyez), le journal (repliable, et complet derrière son bouton), l'aide, **« Finir auto. »** (vos officiers
   achèvent la bataille en accéléré) et **« Décrocher »** (toute l'armée quitte le terrain), chacun avec confirmation.

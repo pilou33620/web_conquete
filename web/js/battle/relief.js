@@ -367,6 +367,8 @@ export class Relief {
           diffuseColor.rgb = mix(diffuseColor.rgb, mix(diffuseColor.rgb * vec3(0.55, 0.46, 0.34), vec3(0.11, 0.08, 0.05), 0.35), smoothstep(0.0, 1.0, pt) * 0.88);
           // ombre des régiments (pietinement.js, OmbreRegiments) : le bloc pose sur le sol
           diffuseColor.rgb *= 1.0 - 0.32 * clamp(texture(uOmbreR, clamp(vWorld / uSize, 0.0, 1.0)).r, 0.0, 1.0);
+          // creux (SPEC-SUITE F3) : là où le sol voit moins de ciel, l'herbe est plus humide, plus verte et plus sombre
+          diffuseColor.rgb *= mix(vec3(1.0), vec3(0.86, 0.95, 0.8), clamp((1.0 - gAO) * 1.4, 0.0, 0.6));
           // sous-bois : sombre et un peu plus vert, jusqu'au bord du bois
           diffuseColor.rgb *= mix(vec3(1.0), vec3(0.5, 0.56, 0.5), smoothstep(0.25, 0.85, gBois));
           // couverts (déploiement) : bois, bâti, hauteurs (plus appuyés que sur la carte 2D : la lumière les adoucit)
