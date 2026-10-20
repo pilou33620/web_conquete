@@ -1633,26 +1633,22 @@ class Game:
         return [dict(kind='road', e=e['id'], frm=frm, to=to, pos=pos)]
 
     def edge_xy(self, e, frm, pos):
-        """Position (x, y) à `pos` km du nœud `frm` le long d'une arête (route droite ou voie d'eau)."""
-        if e.get('kind') == 'water':
-            pts = e['pts']
-            cum = self.geo.water_cum[e['id']]
-            L = e['len']
-            s = pos if frm == e['a'] else L - pos
-            s = max(0.0, min(L, s))
-            lo, hi = 0, len(cum) - 1
-            while hi - lo > 1:
-                mid = (lo + hi) // 2
-                if cum[mid] <= s:
-                    lo = mid
-                else:
-                    hi = mid
-            seg = cum[hi] - cum[lo] or 1e-9
-            f = (s - cum[lo]) / seg
-            return pts[lo][0] + (pts[hi][0] - pts[lo][0]) * f, pts[lo][1] + (pts[hi][1] - pts[lo][1]) * f
-        A, B = self.node_xy(frm), self.node_xy(e['b'] if e['a'] == frm else e['a'])
-        f = pos / e['len']
-        return A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f
+        """Position (x, y) à `pos` km du nœud `frm` le long d'une arête (tracé de la route ou voie d'eau)."""
+        pts = e['pts']
+        cum = self.geo.edge_cum[e['id']]
+        L = e['len']
+        s = pos if frm == e['a'] else L - pos
+        s = max(0.0, min(L, s))
+        lo, hi = 0, len(cum) - 1
+        while hi - lo > 1:
+            mid = (lo + hi) // 2
+            if cum[mid] <= s:
+                lo = mid
+            else:
+                hi = mid
+        seg = cum[hi] - cum[lo] or 1e-9
+        f = (s - cum[lo]) / seg
+        return pts[lo][0] + (pts[hi][0] - pts[lo][0]) * f, pts[lo][1] + (pts[hi][1] - pts[lo][1]) * f
 
     def order_move(self, code, aid, x=None, y=None, node=None, mode=None, tr=None, force=False):
         """tr : traverser (True) ou conquérir en chemin (False), None pour garder le choix de l'armée ;

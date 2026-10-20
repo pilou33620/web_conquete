@@ -186,14 +186,14 @@ def build(geo):
         e['id'] = base + i
         edges.append(e)
     geo.ways = ways
-    # cumul des longueurs pour placer les gabares le long des arêtes
-    geo.water_cum = {}
-    for e in keep:
+    # cumul des longueurs pour placer gabares et armées le long des arêtes (voies d'eau et tracés des routes)
+    geo.edge_cum = {}
+    for e in edges:
         cum = [0.0]
         for p, q in zip(e['pts'], e['pts'][1:]):
             cum.append(cum[-1] + math.dist(p, q))
         k = e['len'] / cum[-1] if cum[-1] > 0 else 1.0
-        geo.water_cum[e['id']] = [c * k for c in cum]
+        geo.edge_cum[e['id']] = [c * k for c in cum]
     # quais : lieux desservis par une voie d'eau ; et, pour le blocus, les lieux à franchir pour gagner la mer
     geo.ports = {}
     for w in ways.values():

@@ -531,30 +531,131 @@ class GeoMap:
         for r in self.src['rivers']:
             if r['rank'] <= 2:
                 rivers.append((r['name'], r['rank'], [self.xy(lat, lon) for lon, lat in r['pts']]))
+
+        def crossing(path):
+            best = None
+            for p1, p2 in zip(path, path[1:]):
+                for name, rank, pts in rivers:
+                    for p, q in zip(pts, pts[1:]):
+                        it = _seg_inter(p1, p2, p, q)
+                        if it and (best is None or rank < best[1]):
+                            best = (name, rank, it[1])
+            return best
+
         edges = []
         self.road = bytearray(self.W * self.H)
+        cost = {False: self._road_costs(0.4), True: self._road_costs(0.0)}   # routes royales : tirées au cordeau
         for eid, ((a, b), info) in enumerate(sorted(pairs.items())):
             d = math.dist(P[a], P[b])
             e = dict(id=eid, a=a, b=b, len=round(d * 1.12, 2), royal=info['royal'], ferry=info['ferry'],
                      river=None, rrank=0, cx=None, cy=None)
-            best = None
-            for name, rank, pts in rivers:
-                for p, q in zip(pts, pts[1:]):
-                    it = _seg_inter(P[a], P[b], p, q)
-                    if it and (best is None or rank < best[1]):
-                        best = (name, rank, it[1])
+            # le jeu (rivière à franchir, longueur) reste celui de la ligne droite ; seul le tracé dessiné change
+            best = crossing([P[a], P[b]])
+            path = [P[a], P[b]] if info['ferry'] else self._road_path(P[a], P[b], cost[info['royal']])
             if info['ferry']:
                 e['river'], e['rrank'] = 'Gironde', 1
                 e['cx'], e['cy'] = round((P[a][0] + P[b][0]) / 2, 2), round((P[a][1] + P[b][1]) / 2, 2)
             elif best:
                 e['river'], e['rrank'] = best[0], best[1]
                 e['cx'], e['cy'] = round(best[2][0], 2), round(best[2][1], 2)
+            # le pont dessiné, là où le tracé franchit l'eau (cx, cy : le passage pour les règles)
+            if info['ferry']:
+                e['bx'], e['by'] = e['cx'], e['cy']
+            elif best and (on := crossing(path)):
+                e['bx'], e['by'] = round(on[2][0], 2), round(on[2][1], 2)
+            e['pts'] = [[round(x, 2), round(y, 2)] for x, y in path]
             edges.append(e)
 
             def setroad(c):
                 self.road[c] = 1
-            self._raster_line([P[a], P[b]], setroad, 0.3)
+            self._raster_line(path, setroad, 0.3)
         self.edges = edges
+
+    def _road_costs(self, wobble):
+        """Coût d'une cellule pour tracer une route : le relief, l'eau à éviter (on ne la franchit qu'une fois, sur un
+        pont), les berges, et un bruit doux pour que les routes ondulent au lieu d'aller à la règle."""
+        W, N = self.W, self.W * self.H
+        near = self._bfs([c for c in range(N) if self.river[c] >= 2], 2)
+        terr = {T_PLAINE: 1.0, T_VIGNE: 1.0, T_LANDE: 1.1, T_FORET: 1.3, T_COLLINES: 1.5, T_DUNES: 2.0,
+                T_MARAIS: 2.5, T_MONTAGNE: 2.4, T_HAUTE: 4.0}
+        cost = [0.0] * N
+        for c in range(N):
+            i, j = c % W, c // W
+            t = self.terrain[c]
+            k = terr.get(t, 40.0) if self.dept[c] and self.dept_codes[self.dept[c] - 1] in PLAYABLE else 40.0
+            k += (25.0, 10.0, 3.0)[3 - self.river[c]] if self.river[c] else (1.5, 0.4, 0.0)[near[c] - 1] if near[c] <= 2 else 0.0
+            cost[c] = k * (1 - wobble / 2 + wobble * vnoise(i / 7, j / 7, 91))
+        return cost
+
+    def _road_path(self, A, B, cost):
+        """Tracé d'une route de A à B : A* sur la grille (coûts de _road_costs), puis simplifié et lissé."""
+        W, H = self.W, self.H
+        si, sj, gi, gj = int(A[0]), int(A[1]), int(B[0]), int(B[1])
+        m = max(6, int(0.35 * math.dist(A, B)))
+        i0, i1 = max(0, min(si, gi) - m), min(W - 1, max(si, gi) + m)
+        j0, j1 = max(0, min(sj, gj) - m), min(H - 1, max(sj, gj) + m)
+        start, goal = sj * W + si, gj * W + gi
+        g = {start: 0.0}
+        prev = {}
+        pq = [(0.0, start)]
+        while pq:
+            f, c = heapq.heappop(pq)
+            if c == goal:
+                break
+            i, j = c % W, c // W
+            for di, dj, s in ((1, 0, 1), (-1, 0, 1), (0, 1, 1), (0, -1, 1),
+                              (1, 1, 1.414), (1, -1, 1.414), (-1, 1, 1.414), (-1, -1, 1.414)):
+                ni, nj = i + di, j + dj
+                if not (i0 <= ni <= i1 and j0 <= nj <= j1):
+                    continue
+                n = nj * W + ni
+                k = cost[n] if n != goal else 1.0
+                if di and dj:    # en diagonale, on ne se glisse pas entre deux cases d'un fleuve
+                    k = max(k, cost[j * W + ni], cost[nj * W + i])
+                ng = g[c] + s * k
+                if ng < g.get(n, 1e18):
+                    g[n] = ng
+                    prev[n] = c
+                    heapq.heappush(pq, (ng + 0.85 * math.hypot(gi - ni, gj - nj), n))
+        if goal not in prev and goal != start:
+            return [A, B]
+        cells = [goal]
+        while cells[-1] != start:
+            cells.append(prev[cells[-1]])
+        cells.reverse()
+        pts = [A] + [(c % W + 0.5, c // W + 0.5) for c in cells[1:-1]] + [B]
+
+        def along(p, q):    # coût d'un segment droit, échantillonné tous les 0,25 km
+            n = max(1, int(math.dist(p, q) / 0.25))
+            return sum(cost[self.cell(p[0] + (q[0] - p[0]) * (s + 0.5) / n, p[1] + (q[1] - p[1]) * (s + 0.5) / n)]
+                       for s in range(n)) * math.dist(p, q) / n
+        seg = [along(p, q) for p, q in zip(pts, pts[1:])]
+        # corde tendue : du point i, on va en ligne droite au point le plus loin qui ne coûte guère plus que le
+        # chemin de la grille ; les routes perdent ainsi les angles à 45° et 90° de la grille
+        out, i = [pts[0]], 0
+        while i < len(pts) - 1:
+            k, run = i + 1, seg[i]
+            for j in range(i + 2, len(pts)):
+                run += seg[j - 1]
+                if along(pts[i], pts[j]) <= 1.01 * run + 0.1:
+                    k = j
+            out.append(pts[k])
+            i = k
+        pts = out
+
+        def wet(line):    # échantillons sur un fleuve : le lissage ne doit pas en ajouter
+            n = [0]
+
+            def f(c):
+                n[0] += self.river[c] >= 2
+            self._raster_line(line, f, 0.3)
+            return n[0]
+        smooth = pts
+        for _ in range(3):    # Chaikin : coins arrondis, extrémités fixes
+            smooth = [smooth[0]] + [q for p, r in zip(smooth, smooth[1:])
+                                    for q in ((0.75 * p[0] + 0.25 * r[0], 0.75 * p[1] + 0.25 * r[1]),
+                                              (0.25 * p[0] + 0.75 * r[0], 0.25 * p[1] + 0.75 * r[1]))][1:-1] + [smooth[-1]]
+        return smooth if wet(smooth) <= wet(pts) else pts
 
     def _ensure_connected(self, pairs, P):
         n = len(P)

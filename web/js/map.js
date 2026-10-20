@@ -121,20 +121,25 @@ export class MapView {
 
   // ------------------------------------------------------------------ préparation
   prepEdges() {
+    // chaque arête est une polyligne : voie d'eau le long du fleuve ou de la côte, route le long de son tracé
     for (const e of this.edges) {
       const A = this.nodes[e.a], B = this.nodes[e.b];
       e.A = [A.x, A.y]; e.B = [B.x, B.y];
-      if (e.kind === 'water') {
-        // voie d'eau : polyligne le long du fleuve ou de la côte
-        e.water = true;
-        e.cum = [0];
-        for (let i = 1; i < e.pts.length; i++) e.cum.push(e.cum[i - 1] + Math.hypot(e.pts[i][0] - e.pts[i - 1][0], e.pts[i][1] - e.pts[i - 1][1]));
-        e.C = [(A.x + B.x) / 2, (A.y + B.y) / 2];
-        continue;
+      e.water = e.kind === 'water';
+      e.cum = [0];
+      for (let i = 1; i < e.pts.length; i++) e.cum.push(e.cum[i - 1] + Math.hypot(e.pts[i][0] - e.pts[i - 1][0], e.pts[i][1] - e.pts[i - 1][1]));
+      const xs = e.pts.map(q => q[0]), ys = e.pts.map(q => q[1]);
+      e.box = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+      if (e.water) continue;
+      e.path = new Path2D();
+      e.pts.forEach((q, k) => k ? e.path.lineTo(q[0], q[1]) : e.path.moveTo(q[0], q[1]));
+      if (e.bx != null) {    // le pont suit le segment du tracé qui franchit l'eau
+        let best = 1e9;
+        for (let i = 1; i < e.pts.length; i++) {
+          const [p, q] = [e.pts[i - 1], e.pts[i]], d = Math.hypot((p[0] + q[0]) / 2 - e.bx, (p[1] + q[1]) / 2 - e.by);
+          if (d < best) { best = d; e.bang = Math.atan2(q[1] - p[1], q[0] - p[0]); }
+        }
       }
-      const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1;
-      const off = e.rrank ? 0 : (hash(e.a, e.b, 5) - 0.5) * 0.16 * L;
-      e.C = [(A.x + B.x) / 2 - dy / L * off, (A.y + B.y) / 2 + dx / L * off];
     }
     // voies navigables découpées en tronçons avec leur emprise : chaque tuile ne trace que ce qui la traverse
     this.wayPaths = [];
@@ -148,7 +153,7 @@ export class MapView {
       }
     }
   }
-  waterSeg(e, t) {
+  polySeg(e, t) {
     const total = e.cum[e.cum.length - 1] || 1, s = clamp(t, 0, 1) * total;
     let i = 1;
     while (i < e.cum.length - 1 && e.cum[i] < s) i++;
@@ -156,15 +161,8 @@ export class MapView {
     const p = e.pts[i - 1], q = e.pts[i];
     return [[p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f], [q[0] - p[0], q[1] - p[1]]];
   }
-  edgePoint(e, t) {
-    if (e.water) return this.waterSeg(e, t)[0];
-    const u = 1 - t;
-    return [u * u * e.A[0] + 2 * u * t * e.C[0] + t * t * e.B[0], u * u * e.A[1] + 2 * u * t * e.C[1] + t * t * e.B[1]];
-  }
-  edgeTangent(e, t) {
-    if (e.water) return this.waterSeg(e, t)[1];
-    return [2 * (1 - t) * (e.C[0] - e.A[0]) + 2 * t * (e.B[0] - e.C[0]), 2 * (1 - t) * (e.C[1] - e.A[1]) + 2 * t * (e.B[1] - e.C[1])];
-  }
+  edgePoint(e, t) { return this.polySeg(e, t)[0]; }
+  edgeTangent(e, t) { return this.polySeg(e, t)[1]; }
   pointFrom(e, frm, f) { return this.edgePoint(e, frm === e.a ? f : 1 - f); }
 
   buildBases() {
@@ -1065,13 +1063,9 @@ export class MapView {
   }
 
   drawRoads(g, L, x0, y0, span) {
-    const vis = e => {
-      const minx = Math.min(e.A[0], e.B[0], e.C[0]), maxx = Math.max(e.A[0], e.B[0], e.C[0]);
-      const miny = Math.min(e.A[1], e.B[1], e.C[1]), maxy = Math.max(e.A[1], e.B[1], e.C[1]);
-      return maxx > x0 - 1 && minx < x0 + span + 1 && maxy > y0 - 1 && miny < y0 + span + 1;
-    };
+    const vis = ({ box: b }) => b[2] > x0 - 1 && b[0] < x0 + span + 1 && b[3] > y0 - 1 && b[1] < y0 + span + 1;
     const es = this.edges.filter(e => !e.water && vis(e));
-    g.lineCap = 'round';
+    g.lineCap = 'round'; g.lineJoin = 'round';
     for (const pass of [0, 1]) {
       for (const e of es) {
         const royal = e.royal;
@@ -1081,23 +1075,18 @@ export class MapView {
         else { g.strokeStyle = royal ? '#e2b48a' : '#d4a97f'; g.lineWidth = w; }
         g.globalAlpha = royal || L >= 8 ? 1 : 0.6;
         if (e.ferry) { g.setLineDash([w * 2, w * 1.6]); } else g.setLineDash([]);
-        g.beginPath();
-        g.moveTo(e.A[0], e.A[1]);
-        g.quadraticCurveTo(e.C[0], e.C[1], e.B[0], e.B[1]);
-        g.stroke();
+        g.stroke(e.path);
       }
     }
     g.setLineDash([]);
     g.globalAlpha = 1;
     // ponts et bacs
     for (const e of es) {
-      if (e.cx == null) continue;
-      const dx = e.B[0] - e.A[0], dy = e.B[1] - e.A[1], Ld = Math.hypot(dx, dy) || 1;
-      const ux = dx / Ld, uy = dy / Ld;
+      if (e.bx == null) continue;
       const len = Math.max(e.rrank === 1 ? 1.2 : 0.8, 7 / L), wid = Math.max(0.5, 3.2 / L);
       g.save();
-      g.translate(e.cx, e.cy);
-      g.rotate(Math.atan2(uy, ux));
+      g.translate(e.bx, e.by);
+      g.rotate(e.bang);
       if (e.ferry) {
         g.fillStyle = '#6b4a2e';
         g.beginPath(); g.ellipse(0, 0, len * 0.45, wid * 0.4, 0, 0, Math.PI * 2); g.fill();
