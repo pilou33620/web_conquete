@@ -1,3 +1,70 @@
+# À faire : le rendu d'Ultimate General (point du 20/10/2026)
+
+Specs : `SPEC-RENDU.md` (étape 9, parties A à D) et `SPEC-CARTES.md`. Tout ce qui est coché est poussé sur `main`.
+
+## Fait le 20/10/2026
+
+- [x] 9a l'image (heures, après-rendu) `ab67ed2` ; 9b les sols `221f9e8` ; 9c le relief `f960c54` ; 9d les bois `8c09442` ;
+  9e le piétinement `b8ea6e0`.
+- [x] Caméra en biais `6a232ec` ; interface de bataille en ardoise `0e74063` ; 9h en partie (liseré de lumière, ombre de
+  régiment) `3620899`.
+- [x] Régiments en bandes denses, parcelles arrondies, couleurs vives `ae8b2a3` ; fumée en bancs `ccee138`.
+- [x] Le panneau « Bataille seule » ne remonte plus quand on ajoute une unité `b552391` ; herbe en volume (9f) `eb96ca5`.
+- [x] Cheval animé Quaternius (CC0) (9j) `8584bd4`.
+- [x] Cartes de bataille composées comme celles d'UGAR, le verger, le glacis dégagé `6c4bc0c` ; une bataille en cours
+  d'une ancienne sauvegarde garde sa carte (`terrain_v1.py`, à ne jamais modifier) `c8e88b9`.
+- [x] Carte de campagne à la manière d'UGAR (relief ombré, saisons, côtes, forêts, plaques, interface en ardoise) `810efca`.
+
+## Bloqué : il me faut tes deux téléchargements (dans le dossier Téléchargements)
+
+- [ ] **Les soldats** : [Universal Base Characters](https://quaternius.itch.io/universal-base-characters) de Quaternius
+  (CC0), fichier `Universal Base Characters[Standard].zip` (122 Mo) : « Download Now », puis « No thanks, just take me
+  to the downloads ». Itch.io refuse le téléchargement depuis mon navigateur (« invalid key »). Autre solution : tu
+  m'autorises à passer par ton Chrome (Claude in Chrome).
+  - Ensuite : allégés dans Blender (`outils/` du bloc-notes de travail), habillés des uniformes d'époque, posés sur
+    notre squelette d'animation, cuits comme le cheval (`web/js/battle/dev/cheval.mjs`).
+- [ ] **Le canon** : [Napoleonic Era Cannon](https://sketchfab.com/3d-models/none-4f8d69ba311745dda220dbde960d5fc6) de
+  MenOfMena (CC-BY), en glTF. Sketchfab demande un compte connecté.
+  - Ensuite : allégé, intégré aux pièces d'artillerie, auteur crédité dans `LICENCE.txt`.
+- [ ] (Au choix) le cheval de henry_7 (CC-BY, Sketchfab), si le cheval Quaternius ne suffit pas de près.
+
+## Ce qui reste du rendu des batailles (SPEC-RENDU)
+
+- [ ] **9g l'atmosphère** : brouillard selon la hauteur, ciel et horizon (bien visibles avec la nouvelle caméra), eau (A6, A7).
+- [ ] **9h la fin** : reflets du métal (baïonnettes, canons), occlusion calculée par sommet.
+- [ ] **9i l'atlas d'uniformes** : coordonnées de texture et atlas peint par le code (boutons, galons, buffleteries).
+- [ ] **9k la foule** : imposteurs animés de loin, budgets relevés (B3, B5) ; imposteurs d'arbres (A5.2) si l'iPad peine.
+- [ ] **9l la lisibilité** : lignes de front, mode ligne de vue (B7).
+- [ ] Sol (A1) : courbure (creux plus verts), triplanaire des pentes raides, neige comme 9ᵉ sol.
+- [ ] Haies (A5.6) : un vrai feuillage au lieu de bandes extrudées.
+- [ ] Piétinement (A4) : enregistrer la boue avec la bataille ; ornières des pièces ; débris (chapeaux, fusils, roues) ;
+  boue luisante sous la pluie.
+- [ ] Cartes de bataille (SPEC-CARTES C3.3) : les rangs d'arbres le long des chemins creux.
+
+## Ce qui reste de la carte de campagne (SPEC-RENDU, partie D)
+
+- [ ] La vue 3D inclinée comme UGAR (gros chantier : la carte est aujourd'hui un canevas 2D en tuiles).
+- [ ] Les portraits des généraux sur la carte, à côté de leur armée.
+- [ ] Des figurines pour les armées en marche (aujourd'hui des blocs vus de dessus).
+- [ ] Le panneau de la date et des vitesses en bas à droite, et des cartes de régiment en portrait, comme en bataille.
+- [ ] À accorder avec la phase 2d plus bas (« le style de la carte selon l'époque : gravure, lithographie, état-major ») :
+  le style UGAR devient la base, les époques le feraient varier.
+
+## À vérifier par toi
+
+- [ ] Sur l'iPad, en qualité **Haute** (la qualité automatique peut redescendre en Basse) : images par seconde en
+  bataille avec l'herbe, le cheval et la fumée.
+- [ ] Sur le Raspberry Pi : le temps de chargement de la carte de campagne (le relief est peint au chargement et à chaque
+  changement de saison, 0,1 s sur un PC, peut-être 1 s sur le Pi).
+- [ ] Ton avis sur la ressemblance avec UGAR : batailles, carte de campagne, interface.
+
+## Connu, sans rapport avec ce chantier
+
+- [ ] Deux tests de campagne échouent déjà sur `main` : `test_deux_decisions_au_meme_moment` et
+  `test_une_decision_arrete_le_tour_des_ia_puis_il_reprend` (`tests/test_campagne.py`).
+
+---
+
 # À faire : technologies et rendu selon l'époque (point du 19/10/2026)
 
 Le détail des tâches est dans `tasks/todo-tech.md`, la spec dans `SPEC-TECH.md`, le plan dans `tasks/plan-tech.md`.
