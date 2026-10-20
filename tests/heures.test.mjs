@@ -51,8 +51,11 @@ test('l’étalonnage reste dans [0, 1] et la LUT est complète, à toute heure 
 
 test('midi au soleil : verts tirés vers le jaune, ombres bleutées ; la nuit, une image froide', () => {
   const midi = etalonnage(13, 'soleil');
-  const herbe = grade(0.3, 0.55, 0.2, midi);
-  assert.ok(herbe[0] / herbe[1] > 0.3 / 0.55, 'le vert tire vers le jaune');
+  // (UGAR : des verts vifs, saturés, avec une pointe de jaune : plus vifs que la couleur d'origine, plus jaunes que le
+  // même étalonnage sans virage)
+  const herbe = grade(0.3, 0.55, 0.2, midi), sansVirage = grade(0.3, 0.55, 0.2, { ...midi, vert: 0 });
+  assert.ok(herbe[0] / herbe[1] > sansVirage[0] / sansVirage[1], 'le vert tire vers le jaune');
+  assert.ok(herbe[1] - herbe[2] > 0.55 - 0.2, 'l’herbe est plus vive');
   const ombre = grade(0.05, 0.05, 0.05, midi);
   assert.ok(ombre[2] > ombre[0], 'les ombres sont bleutées');
   const nuit = grade(0.5, 0.5, 0.5, etalonnage(21.5, 'soleil'));

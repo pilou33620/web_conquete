@@ -172,7 +172,9 @@ export function layout(un, per = 1, scale = SCALE) {
       const ranks = cav ? (col ? Math.max(2, Math.round(n / Math.max(2, Math.round(w / sp)))) : 2)
         : col ? Math.max(3, Math.ceil(n / Math.max(4, Math.round(w / sp)))) : n >= 36 ? 3 : 2;
       const files = Math.max(1, Math.ceil(n / ranks));
-      const du = w / files, dv = cav ? sr * 2.4 : Math.min(d / ranks, sr);
+      // (de loin, figurines grandies : les rangs gardent un écart à leur taille, la ligne se lit comme une bande épaisse,
+      // un peu plus profonde que l'emprise du moteur)
+      const du = w / files, dv = cav ? sr * 2.4 : Math.max(Math.min(d / ranks, sr), sr * 0.55);
       const v0 = d / 2 - dv * 0.5;
       for (let r = 0; r < ranks; r++) for (let k = 0; k < files && out.length < n; k++) {
         // les rangs de derrière décalés d'une demi-file : on voit les hommes entre les épaules du rang de devant
@@ -1021,14 +1023,16 @@ export class Troops {
         this.sphere.center.set(un.x, h + 1.5, un.y); this.sphere.radius = Math.hypot(un.w || 10, un.d || 10) / 2 + 15 + d * 0.15;
         vis = this.frustum.intersectsSphere(this.sphere); px = 1.75 * scale * fr.k / d;
       }
-      // de loin, des figurines plus grandes (×k) et moins nombreuses (k² fois plus d'hommes chacune : gestes.js, scaleAt)
+      // de loin, des figurines plus grandes (×k) et k fois moins nombreuses (gestes.js, scaleAt) : le front reste garni
+      // et les rangs se recouvrent, le régiment se lit comme une bande pleine, comme chez Ultimate General (avec k²,
+      // il ne restait qu'un tiers du front à ×3 : des lignes maigres et trouées)
       let e = this.lays.get(id);
       const k = px === Infinity ? 1 : scaleAt(px, e?.k ?? 1);
       const key = `${un.form}|${un.state}|${Math.round((un.men || 0) / 8)}|${un.w | 0}|${un.d | 0}|${un.type}|${per}|${k}|${colors[un.side]}`;
       if (!e || e.key !== key) {
         const old = e;
         // (lost : les pertes pas encore tombées, en figurines de la nouvelle disposition)
-        this.lays.set(id, e = { key, k, per: per * k * k, scale: scale * k, lay: layout(un, per * k * k, scale * k), un, lod: old?.lod ?? 0, act: old?.act, actT: old?.actT, impactT: old?.impactT, volT: old?.volT, vol: old?.vol, shotT: old?.shotT, shots: old?.shots, moving: old?.moving, fire: old?.fire, prev: old?.prev, switchT: old?.switchT, lost: (old?.lost ?? 0) * (old?.per ?? 1) / (per * k * k) });
+        this.lays.set(id, e = { key, k, per: per * k, scale: scale * k, lay: layout(un, per * k, scale * k), un, lod: old?.lod ?? 0, act: old?.act, actT: old?.actT, impactT: old?.impactT, volT: old?.volT, vol: old?.vol, shotT: old?.shotT, shots: old?.shots, moving: old?.moving, fire: old?.fire, prev: old?.prev, switchT: old?.switchT, lost: (old?.lost ?? 0) * (old?.per ?? 1) / (per * k) });
         if (un.state === 'melee') this.scrum(e, un, list);
         if (old) this.relay(old, e);
         // un nouveau régiment est dessiné tout de suite ; une disposition qui change (pertes, palier de la vue de loin)

@@ -180,7 +180,7 @@ export function scrum(rank, dir, r) {
 }
 
 // de loin, les figurines d'un régiment grossissent par paliers (×1 à ×3) pour faire au moins FIG_PX px de haut à
-// l'écran ; elles sont alors moins nombreuses (k² hommes par figurine en plus). px : hauteur d'une figurine sans
+// l'écran ; elles sont alors k fois moins nombreuses (troupes.js : le front reste garni). px : hauteur d'une figurine sans
 // agrandissement ; prev : palier d'avant, gardé tant qu'il donne de 85 % à 125 % de la hauteur voulue (pas de bascule)
 const PALIERS = [1, 1.25, 1.6, 2, 2.5, 3], FIG_PX = 12;
 export function scaleAt(px, prev = 1) {

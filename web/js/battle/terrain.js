@@ -65,6 +65,28 @@ export function solParts(v, tex) {
     : v === T.ROUTE || v === T.CHEMIN ? null : { chemin: 0.8, pre: 0.2 };   // cours des maisons, pied des murs
 }
 
+// Douglas-Peucker sur une boucle fermée : les sommets à moins de tol m de la droite de leurs voisins gardés sont ôtés
+function simplify(pts, tol) {
+  const n = pts.length;
+  if (n < 5) return pts;
+  // (on coupe la boucle au sommet le plus éloigné du premier : deux chaînes ouvertes)
+  let far = 0, fd = -1;
+  for (let i = 1; i < n; i++) { const d = Math.hypot(pts[i][0] - pts[0][0], pts[i][1] - pts[0][1]); if (d > fd) { fd = d; far = i; } }
+  const keep = new Uint8Array(n); keep[0] = keep[far] = 1;
+  const run = (a, b) => {   // indices de a à b (b peut dépasser n : on tourne)
+    let best = -1, bi = -1;
+    const A = pts[a % n], B = pts[b % n], L = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1;
+    for (let i = a + 1; i < b; i++) {
+      const P = pts[i % n], d = Math.abs((B[0] - A[0]) * (A[1] - P[1]) - (A[0] - P[0]) * (B[1] - A[1])) / L;
+      if (d > best) { best = d; bi = i; }
+    }
+    if (best > tol) { keep[bi % n] = 1; run(a, bi); run(bi, b); }
+  };
+  run(0, far); run(far, n);
+  const out = pts.filter((p, i) => keep[i]);
+  return out.length >= 3 ? out : pts;
+}
+
 // Chaikin : adoucit une ligne brisée (fermée ou non)
 function chaikin(pts, iters, closed) {
   for (let it = 0; it < iters; it++) {
@@ -240,7 +262,10 @@ export class Terrain {
           cur = nl.pop();
         }
         if (loop.length < 3) { l = next.get(start); continue; }
-        const pts = chaikin(loop.map(pos), jit ? 3 : 1, true);
+        // parcelles (champs, vignes, prés) : le contour en escalier des cases de 20 m est d'abord ramené à des droites
+        // (à 10 m près), puis arrondi : des champs aux bords droits ou doucement courbes, comme les parcelles peintes
+        // d'Ultimate General, au lieu de marches
+        const pts = chaikin(jit === 2 ? simplify(loop.map(pos), 10) : loop.map(pos), jit ? 3 : 1, true);
         path.moveTo(pts[0][0], pts[0][1]);
         for (let k = 1; k < pts.length; k++) path.lineTo(pts[k][0], pts[k][1]);
         path.closePath();
