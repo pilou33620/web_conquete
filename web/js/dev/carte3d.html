@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Carte en vue inclinée (maquette)</title>
+<style>
+  /* maquette de la vue inclinée de la campagne (SPEC-SUITE G4) : à juger, et à mesurer sur l'iPad */
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #141618; font-family: "EB Garamond", Georgia, serif; }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #stats { position: fixed; left: 12px; bottom: 12px; padding: 6px 12px; color: #eeebe2; font-size: 14px; border-radius: 3px;
+    background: linear-gradient(rgba(50,54,57,.94), rgba(27,30,32,.94)); border: 1px solid rgba(140,146,150,.38); }
+  #aide { position: fixed; left: 12px; top: 12px; max-width: 420px; padding: 8px 12px; color: #eeebe2; font-size: 14px; border-radius: 3px;
+    background: linear-gradient(rgba(50,54,57,.94), rgba(27,30,32,.94)); border: 1px solid rgba(140,146,150,.38); }
+  .c3-plaque { position: fixed; left: 0; top: 0; pointer-events: none; padding: 1px 7px; font-size: 12px; font-weight: 600; color: #eeebe2;
+    background: rgba(30,33,36,.88); border: 1px solid rgba(150,150,140,.45); border-radius: 3px; white-space: nowrap; }
+  .c3-plaque.cap { color: #f0d48a; font-size: 13.5px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="aide"><b>Maquette : la carte de campagne en vue inclinée.</b> Glisser pour se déplacer, molette pour zoomer
+  (la vue se couche en zoomant), clic droit glissé pour pivoter. Ce n'est pas encore le jeu : villes et armées ne se
+  touchent pas.</div>
+<div id="stats"></div>
+<script type="module">
+  import { Carte3D } from '../carte3d.js';
+  const season = new URLSearchParams(location.search).get('saison') || 'printemps';
+  const payload = await fetch('/api/map').then(r => r.json());
+  const c3 = new Carte3D(document.getElementById('c'), payload, season);
+  c3.onStats = t => { document.getElementById('stats').textContent = t; };
+  window.__c3 = c3;
+</script>
+</body>
+</html>

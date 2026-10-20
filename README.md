@@ -257,6 +257,9 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   vignette animée (une locomotive qui passe, un canon qui tire, des épis au vent, une tour Chappe qui bat des bras…).
   Le panneau des technologies s'ouvre sur la frise de vos découvertes. Celles des autres camps qui se voient (rail,
   télégraphe, usines, pins…) sont annoncées par un bandeau et un éclat sur leur chef-lieu.
+- **Maquette de la vue inclinée** (comme Ultimate General) : la page `/js/dev/carte3d.html` montre la carte de
+  campagne en relief, forêts et villes debout, caméra qui se couche en zoomant. Ce n'est pas encore le jeu (rien ne
+  s'y touche) : elle sert à juger l'allure et à mesurer les images par seconde sur l'iPad.
 - Villes et villages sont dessinés en vue cavalière : maisons, église à clocher, grande église des villes, cathédrale et
   hôtel de ville des chefs-lieux, citadelle des places fortes. Chaque pays a ses couleurs (pierre blonde et tuiles du
   Bordelais, toits bruns du Périgord, colombages des Landes, brique de l'Agenais, murs blancs et ardoise du Béarn),

@@ -379,6 +379,15 @@ reste disponible (option, et repli si WebGL 2 manque).
 **Fini quand.** La maquette tourne à 30 images par seconde sur l'iPad en Haute ; tu juges la ressemblance sur
 captures.
 
+**Maquette livrée le 20/10/2026** (`carte3d.js`, page `js/dev/carte3d.html`, servie par le jeu : ouvrir
+`http://<le serveur>/js/dev/carte3d.html`, et `?saison=hiver` pour l'hiver). Relief en volume (un sommet par demi-km,
+relief ×1,1), texturé par la peinture des terres de la carte 2D (mêmes couleurs, relief ombré et saisons) agrandie à
+8 px par km, avec fleuves, étangs et routes peints dessus ; 35 000 houppiers instanciés dans les forêts et les landes ;
+les places dessinées par `towns.js` debout sur des panneaux ; plaques d'ardoise des villes ; mer et brume lointaine ;
+caméra qui se couche en zoomant. Environ 1,4 million de triangles, 15 appels de dessin ; moins d'une milliseconde par
+image sur le PC de développement. **À mesurer sur l'iPad** (compteur en bas à gauche) avant de décider la suite :
+clics (lancer de rayon), armées en figurines, brouillard de guerre, territoires, et l'option dans le menu Affichage.
+
 ### G5. Le temps de chargement sur le Raspberry Pi
 
 `paintLand` prend 0,1 s sur un PC, peut-être 1 s sur le Pi, au chargement et à chaque changement de saison. Si c'est
