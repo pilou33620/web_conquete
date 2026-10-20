@@ -1,12 +1,14 @@
 // Vue tactique : caméra orbitale de la bataille en 3D (maths pures, sans Three.js : banc tests/camera.test.mjs).
 // L'état est celui de la vue 2D d'avant, plus le cap : {x, y} la cible au sol (m), z le zoom (pixels CSS par mètre à la
 // cible), yaw le cap (0 = regard vers le nord, positif = vers l'est). La distance de l'œil se déduit du zoom, et
-// l'inclinaison de la distance : de haut quand on voit tout le champ, presque à l'horizontale au ras des troupes.
+// l'inclinaison de la distance : en biais (50°) quand on voit tout le champ, presque à l'horizontale au ras des troupes.
 // Repère 3D (celui de Three.js) : X = x du jeu, Y = altitude, Z = y du jeu (vers le sud) ; un mètre = une unité.
 import { clamp } from './formes.js';
 
-export const FOV = 32 * Math.PI / 180;   // champ vertical
-const P0 = 0.30, D0 = 20, P1 = 1.10, D1 = 3000;   // inclinaison (rad) au ras des troupes (20 m) et de très haut (3 km)
+// Comme Ultimate General : un champ assez ouvert (la perspective se sent : les rangs proches sont plus grands que les
+// lointains) et une vue en biais même de loin, où l'on voit le champ s'enfoncer vers l'horizon et la brume
+export const FOV = 40 * Math.PI / 180;   // champ vertical
+const P0 = 0.26, D0 = 20, P1 = 0.88, D1 = 3000;   // inclinaison (rad) au ras des troupes (20 m) et de très haut (3 km)
 const CLEAR = 2;                                   // l'œil reste au moins à 2 m au-dessus du sol
 
 const focal = vp => vp.vh / 2 / Math.tan(FOV / 2);

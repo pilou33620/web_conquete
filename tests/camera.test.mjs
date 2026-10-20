@@ -17,7 +17,8 @@ for (const yaw of [0, 1.1, 2.6, -2]) for (const z of [0.45, 1.5, 6, 20]) cams.pu
 
 test('l’inclinaison suit le zoom : de haut de loin, presque à l’horizontale de près', () => {
   assert.ok(pitchAt(3000) > pitchAt(300) && pitchAt(300) > pitchAt(30));
-  assert.ok(pitchAt(3000) > 0.9 && pitchAt(3000) < 1.3, 'vue d’ensemble entre 50° et 75°');
+  // (comme Ultimate General : en biais même de loin, le champ s'enfonce vers l'horizon)
+  assert.ok(pitchAt(3000) > 0.75 && pitchAt(3000) < 1.0, 'vue d’ensemble entre 43° et 57°');
   assert.ok(pitchAt(20) > 0.2 && pitchAt(20) < 0.45, 'au ras des troupes entre 12° et 25°');
 });
 
