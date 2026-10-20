@@ -532,7 +532,9 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   soleil qui traverse le feuillage à contre-jour, arbres qui se balancent au vent. Le **sol garde la trace** de la
   bataille : là où passent les troupes (la cavalerie et l'artillerie plus que l'infanterie, deux fois plus sous la
   pluie) et autour des trous d'obus, il tourne à la boue, les épis se couchent et la neige s'efface (la trace n'est
-  pas enregistrée : une bataille rechargée repart d'un sol neuf). Au premier lancement, elle est
+  pas enregistrée : une bataille rechargée repart d'un sol neuf). La caméra regarde le champ en biais (50° de loin),
+  et l'interface reprend l'allure d'Ultimate General : panneaux d'ardoise, bandeau fin avec l'année et l'heure, cartes
+  d'unités en portrait sous des onglets à la couleur du camp, mini-carte encadrée. Au premier lancement, elle est
   choisie d'après l'appareil, puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par
   seconde) ; un choix fait à la main est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de
   suite, sans quitter la bataille (l'anticrénelage, à la bataille suivante). Les batailles demandent **WebGL 2**

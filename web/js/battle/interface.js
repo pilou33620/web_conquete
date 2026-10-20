@@ -47,6 +47,7 @@ export class BattleUI {
       <header class="bt-top">
         <div class="bt-place"><div class="bt-name"></div><div class="bt-when"></div></div>
         <div class="bt-gauge" title="Rapport de forces (hommes valides)"><div class="bt-g-l"></div><div class="bt-g-bar"><i class="a"></i><i class="b"></i></div><div class="bt-g-r"></div></div>
+        <div class="bt-clock" title="Année et heure de la bataille"></div>
         <div class="bt-acts">
           <button class="bt-ib" data-a="journal" aria-label="Journal de la bataille" title="Journal">${I.journal}</button>
           <button class="bt-ib" data-a="aide" aria-label="Aide" title="Aide">${I.aide}</button>
@@ -119,6 +120,9 @@ export class BattleUI {
     const left = st.dusk != null && st.clock != null ? st.dusk - st.clock : null;
     const dusk = left != null && left < 5400 && left > 0 ? ` · <span class="bt-dusk">nuit dans ${Math.max(1, Math.round(left / 60))} min</span>` : '';
     this.$('.bt-when').innerHTML = `<span class="bt-wx">${svg(WX_ICON[wx] || WX_ICON.soleil)}</span>${esc(st.hour || '')} · ${esc(WEATHER_LABEL[wx] || wx)} · ${esc(SEASON_LABEL[season] || '')}${dusk}`;
+    // horloge, à la manière d'Ultimate General : l'année en grand, l'heure dessous
+    const year = st.year || v.map?.year;
+    this.$('.bt-clock').innerHTML = `${year ? `<b>${esc(year)}</b>` : ''}<span>${esc(st.hour || '')}</span>`;
     // jauge du rapport de forces
     const a = side[me]?.men ?? 0, b = side[foe]?.men ?? 0, tot = a + b || 1;
     const ga = this.$('.bt-g-bar .a'), gb = this.$('.bt-g-bar .b');
@@ -230,7 +234,8 @@ export class BattleUI {
     this.dockSig = sig;
     const dock = this.$('.bt-dock');
     const scroll = dock.scrollLeft;
-    dock.innerHTML = gs.map(g => `<div class="bt-grp"><button class="bt-gl" data-a="selgroup" data-k="${esc(g.k)}">${esc(g.label)}</button><div class="bt-cards">${g.us.map(u => this.cardHtml(u)).join('')}</div></div>`).join('');
+    const side = v.colors[v.me] || '#2f5f9c';
+    dock.innerHTML = gs.map(g => `<div class="bt-grp" style="--side:${esc(side)}"><button class="bt-gl" data-a="selgroup" data-k="${esc(g.k)}">${esc(g.label)}</button><div class="bt-cards">${g.us.map(u => this.cardHtml(u)).join('')}</div></div>`).join('');
     dock.scrollLeft = scroll;
     this.dockArrows();
     for (const c of dock.querySelectorAll('canvas[data-fig]')) this.figure(c, v.units.get(c.dataset.fig));
@@ -241,7 +246,7 @@ export class BattleUI {
     const st = u.state === 'deroute' ? 'rout' : u.state === 'charge' || u.state === 'melee' ? 'fight' : u.state === 'feu' ? 'fire' : '';
     const range = u.range && u.range[0] ? `${fmt(u.range[0])} m` : '';
     return `<button class="bt-uc ${sel ? 'on' : ''} ${st} ${u.busy ? 'busy' : ''}" data-a="selunit" data-id="${esc(u.id)}" title="${esc(u.name)} — ${esc(TYPE_LABEL[u.type] || u.type)}">
-      <canvas data-fig="${esc(u.id)}" width="56" height="64"></canvas>
+      <canvas data-fig="${esc(u.id)}" width="100" height="160"></canvas>
       <span class="uc-n">${esc(short(isGeneral(u) && genName(u) ? genName(u) : u.name))}</span>
       <span class="uc-m">${fmt(u.men)}</span>
       <span class="uc-x">${'★'.repeat(stars(u.xp))}<i>${'★'.repeat(5 - stars(u.xp))}</i></span>
@@ -250,11 +255,15 @@ export class BattleUI {
       ${u.state === 'deroute' ? '<span class="uc-s">Déroute</span>' : ''}
     </button>`;
   }
-  // petite figure du type de soldat, sur la carte d'unité
+  // figure du type de soldat, sur la carte d'unité (en portrait) ou dans le panneau : dessinée dans un repère de
+  // 56 × 64, mis à l'échelle de la hauteur du canevas (calée en bas, centrée ; en portrait, les côtés sont rognés)
   figure(cv, u) {
     if (!u) return;
     const g = cv.getContext('2d'), col = this.v.colors[u.side] || '#888', cls = clsOf(u);
+    g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, cv.width, cv.height);
+    const k = cv.height / 64 * (cv.height > cv.width * 1.3 ? 1.12 : 1);
+    g.setTransform(k, 0, 0, k, (cv.width - 56 * k) / 2, cv.height - 64 * k);
     const kind = isGeneral(u) || cls === 'cavalerie' ? 'cav' : cls === 'artillerie' ? `canon.${gunModel(u)}` : isWagon(u) ? 'caisson' : u.type === 'grenadiers' || u.type === 'garde' ? 'gren' : u.type === 'milice' ? 'milice' : isLight(u) ? 'leger' : u.arm === 0 ? 'piquier' : 'inf';
     const H = kind === 'cav' ? 34 : kind.startsWith('canon') || kind === 'caisson' ? 38 : 50;
     // (l'habit : l'uniforme d'époque de son arme, dragons compris ; la couleur du camp aux revers)
