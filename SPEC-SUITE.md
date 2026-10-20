@@ -227,6 +227,13 @@ uniforme de chaque époque a sa case ; le canal du camp est rempli).
 
 **Fini quand.** À 5 m, on lit les boutons et les buffleteries ; à la vue d'ensemble, rien ne scintille.
 
+**Livré en partie le 20/10/2026, autrement que prévu** (`troupes.js` : DETAIL, attribut `aDetail`) : plutôt qu'un atlas
+peint au chargement, les détails sont peints dans le shader des figurines de près, d'après les coordonnées de texture
+que leurs pièces ont déjà : boutons dorés en deux rangs sur les revers, visage (yeux, sourcils, bouche, ombre du nez)
+sur la tête. Ni texture ni triangle en plus. Les revers, parements, buffleteries, giberne, havresac, épaulettes et
+cocardes existaient déjà en volume (étapes 7 et 8). Reste : galons, plis peints, usure de la boue au fil de la
+bataille, robes des chevaux à balzanes, drapeaux régimentaires peints (à reprendre avec les soldats téléchargés, E1).
+
 ### F5. La foule de loin (9k ; B3, B5, A5.2)
 
 1. **Imposteurs animés** : chaque geste principal (marche, en joue, recharge, course, repos) rendu au chargement sous

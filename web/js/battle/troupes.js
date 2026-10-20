@@ -221,8 +221,8 @@ export function layout(un, per = 1, scale = SCALE) {
 // désigne ; elles prennent un reflet du soleil (SPEC-SUITE F2)
 const METAL = new Set([GOLD, BRONZE, '#b8bcc0', '#c8ccd0', '#4f5458', '#36393d', '#9c7a38'].map(c => c.toLowerCase()));
 function assemble(parts) {
-  const pos = [], nor = [], col = [], bone = [], part = [], uv = [], idx = [], metal = [];
-  for (const [g, color, b, tint] of parts) {
+  const pos = [], nor = [], col = [], bone = [], part = [], uv = [], idx = [], metal = [], detail = [];
+  for (const [g, color, b, tint, det = 0] of parts) {
     const p = g.attributes.position, n = g.attributes.normal, t = g.attributes.uv, base = pos.length / 3;
     const c = new THREE.Color(color), m = typeof color === 'string' && METAL.has(color.toLowerCase()) ? 1 : 0;
     for (let i = 0; i < p.count; i++) {
@@ -231,7 +231,7 @@ function assemble(parts) {
       const ny = n.getY(i), ao = 0.74 + 0.26 * Math.min(1, Math.max(0, (ny + 0.6) / 1.1));
       pos.push(p.getX(i), p.getY(i), p.getZ(i)); nor.push(n.getX(i), ny, n.getZ(i));
       col.push(c.r * ao, c.g * ao, c.b * ao); bone.push(typeof b === 'function' ? b(p.getY(i)) : b); part.push(tint); uv.push(t ? t.getX(i) : 0, t ? t.getY(i) : 0);
-      metal.push(m);
+      metal.push(m); detail.push(det);
     }
     if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(base + g.index.getX(i));
     else for (let i = 0; i < p.count; i++) idx.push(base + i);
@@ -245,6 +245,7 @@ function assemble(parts) {
   g.setAttribute('aBone', new THREE.Float32BufferAttribute(bone, 1));
   g.setAttribute('aPart', new THREE.Float32BufferAttribute(part, 1));
   g.setAttribute('aMetal', new THREE.Float32BufferAttribute(metal, 1));
+  g.setAttribute('aDetail', new THREE.Float32BufferAttribute(detail, 1));   // détails peints (SPEC-SUITE F4) : DETAIL
   g.setIndex(idx);
   return g;
 }
@@ -306,6 +307,25 @@ function hat(type, kind, dy = 0) {
     default: return [[lathe([[0.105, 1.66], [0.1, 1.76], [0.085, 1.8], [0, 1.81]], 10), '#3d2f22', 0, 0], ...both(brim(0.1, 0.21, 1.67, -0.02, 0), '#3d2f22')];
   }
 }
+// détails peints dans le shader (SPEC-SUITE F4), d'après les coordonnées de texture des pièces : pas de texture,
+// pas un triangle de plus. Boutons dorés en deux rangs sur les revers ; visage (yeux, sourcils, bouche) sur la tête,
+// dont l'avant (+z) est en u = 0,25 sur la sphère de Three.js. Seules les figurines de près en ont (aDetail).
+const DETAIL = { boutons: 1, visage: 2 };
+const DETAIL_GLSL = `
+  if (vDetail > 0.5 && vDetail < 1.5) {
+    vec2 q = vec2(abs(vUvD.x - 0.5) - 0.3, fract(vUvD.y * 5.0) - 0.5);
+    float d = length(q * vec2(2.4, 1.0));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.7, 0.34), 1.0 - smoothstep(0.13, 0.19, d));
+  } else if (vDetail > 1.5) {
+    vec2 f = vec2((vUvD.x - 0.25) * 6.2832, vUvD.y - 0.5);
+    float eye = min(length((f - vec2(-0.33, 0.07)) * vec2(1.0, 1.6)), length((f - vec2(0.33, 0.07)) * vec2(1.0, 1.6)));
+    float brow = min(length((f - vec2(-0.33, 0.15)) * vec2(0.7, 4.0)), length((f - vec2(0.33, 0.15)) * vec2(0.7, 4.0)));
+    float mouth = length((f - vec2(0.0, -0.17)) * vec2(0.8, 4.0));
+    float nose = length((f - vec2(0.05, -0.02)) * vec2(2.0, 1.2));
+    diffuseColor.rgb *= 1.0 - 0.75 * (1.0 - smoothstep(0.07, 0.1, eye)) - 0.45 * (1.0 - smoothstep(0.12, 0.16, brow));
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.72, 0.5, 0.45), 1.0 - smoothstep(0.12, 0.16, mouth));
+    diffuseColor.rgb *= 1.0 - 0.12 * (1.0 - smoothstep(0.06, 0.1, nose));
+  }`;
 // fantassin (et encadrement, servants des pièces, cavaliers pour la selle) : kind 'inf' | 'gren' | 'leger' | 'milice' |
 // 'officier' | 'tambour' | 'drapeau' | 'servant' | 'cavalier' | 'chef' (officier supérieur à cheval). Formes arrondies (normales lisses) : jambes et bras effilés, habit en profil tourné aplati,
 // basques, tête ronde ; buffleteries, revers, giberne et havresac en plaques
@@ -332,9 +352,9 @@ function soldier(kind, year, rig = false) {
   P.push(...both(new THREE.CylinderGeometry(0.14, 0.19, 0.4, 8, 1, true, Math.PI / 2, Math.PI).scale(1, 1, 0.75).translate(0, 0.7, -0.01), shade(0.8), B.hips, 1));
   const fz = kind === 'milice' ? 0 : CAMP;   // (la milice en habits civils : son foulard seul porte la couleur du camp)
   if (year < 1860) P.push([new THREE.BoxGeometry(0.28, 0.05, 0.015).translate(0, 0.52, -0.15), facing, B.hips, fz],   // retroussis
-    [new THREE.BoxGeometry(0.17, 0.4, 0.015).translate(0, 1.2, 0.118), facing, B.chest, fz]);                    // revers (pas sur la capote de 1870)
+    [new THREE.BoxGeometry(0.17, 0.4, 0.015).translate(0, 1.2, 0.118), facing, B.chest, fz, DETAIL.boutons]);   // revers (pas sur la capote de 1870)
   P.push([limb(0.075, 0.095, 1.44, 1.5, 0, 8), WHITE, B.chest, CAMP]);                                            // collet (foulard), au-dessus des épaules
-  P.push([limb(0.045, 0.05, 1.44, 1.5, 0, 6), SKIN, B.head, 0], [sph(0.088, 0.105, 0.095, 0, 1.585, 0.005), SKIN, B.head, 0]);   // cou, tête
+  P.push([limb(0.045, 0.05, 1.44, 1.5, 0, 6), SKIN, B.head, 0], [sph(0.088, 0.105, 0.095, 0, 1.585, 0.005, 12, 8), SKIN, B.head, 0, DETAIL.visage]);   // cou, tête (et son visage peint)
   if (year < 1800) P.push([limb(0.022, 0.018, 1.42, 1.56, 0, 5).translate(0, 0, -0.09), '#3a2c20', B.head, 0]);   // la queue
   if (armed) {
     for (const r of [0.5, -0.5]) P.push([new THREE.BoxGeometry(0.05, 0.62, 0.012).rotateZ(r).translate(0, 1.13, 0.125), WHITE, B.chest, 0]);   // buffleteries
@@ -694,7 +714,8 @@ attribute vec4 aAnim;   // pose, phase, échelle, rang
 attribute vec4 aMove;   // course à sa place : départ (u, v), début, durée (négative : au pas ; 0 : aucune)
 attribute vec3 aCoat;   // couleur de l'habit
 attribute vec3 aFace;   // couleur du camp (pièces de teinte CAMP)
-attribute float aBone, aPart, aMetal;
+attribute float aBone, aPart, aMetal, aDetail;
+varying float vDetail; varying vec2 vUvD;
 uniform sampler2D uUnits, uHeight;
 uniform vec3 uHgt;      // pas des altitudes (m), colonnes, lignes
 uniform float uTime, uFxT;
@@ -999,15 +1020,15 @@ export class Troops {
         .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${VERT_POSE}\n${turn('objectNormal', false)}`)
         // (l'étoffe : sa case de la planche des drapeaux, dont le numéro est dans aFace.x)
         .replace('#include <begin_vertex>', (pattern ? `vUv2 = (vec2(mod(aFace.x, ${FLAG_COLS}.0), ${FLAG_ROWS - 1}.0 - floor(aFace.x / ${FLAG_COLS}.0)) + uv) / vec2(${FLAG_COLS}.0, ${FLAG_ROWS}.0);\n` : '') + place)
-        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 2.5 ? aFace * color.r : aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart; vMetal = aMetal;' +
+        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 2.5 ? aFace * color.r : aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart; vMetal = aMetal; vDetail = aDetail; vUvD = uv;' +
           // plus sombre vers les pieds : l'ombre des rangs, comme une occlusion ambiante (pas pour les étoffes)
           (pattern ? '' : '\nvColor.rgb *= mix(0.62, 1.0, smoothstep(0.0, 1.5, position.y));'));
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying float vFade, vPart, vMetal;' + (pattern ? '\nuniform sampler2D uPattern; varying vec2 vUv2;' : ''))
+        .replace('#include <common>', '#include <common>\nvarying float vFade, vPart, vMetal, vDetail; varying vec2 vUvD;' + (pattern ? '\nuniform sampler2D uPattern; varying vec2 vUv2;' : ''))
         // régiment deviné (plus en vue) : transparent en pointillés, sans tri
         .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
           if (vFade < 0.995 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > vFade) discard;`)
-        .replace('#include <color_fragment>', pattern ? 'diffuseColor.rgb *= mix(vColor.rgb, texture2D(uPattern, vUv2).rgb, step(0.5, vPart));' : '#include <color_fragment>')
+        .replace('#include <color_fragment>', pattern ? 'diffuseColor.rgb *= mix(vColor.rgb, texture2D(uPattern, vUv2).rgb, step(0.5, vPart));' : '#include <color_fragment>\n' + DETAIL_GLSL)
         // lumière enveloppante : le côté à l'ombre n'est pas noir, le passage est doux (figurines arrondies du prototype)
         .replace('#include <lights_lambert_pars_fragment>', THREE.ShaderChunk.lights_lambert_pars_fragment
           .replace('float dotNL = saturate( dot( geometryNormal, directLight.direction ) );', 'float dotNL = saturate( dot( geometryNormal, directLight.direction ) * 0.6 + 0.4 );')

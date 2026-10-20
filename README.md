@@ -533,7 +533,8 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   régiments ennemis au contact, une **ligne de front** ondule au sol, à la couleur de chaque camp de son côté ; le
   bouton **« Ligne de vue »** du panneau d'un régiment (touche V) assombrit tout ce qu'il ne voit pas (crêtes, bois,
   bâti et vergers, la même règle que le moteur, haies mises à part). La fumée des canons, plus grise, monte au-dessus
-  de celle des fusils. Baïonnettes, cuivres et bronze des pièces renvoient le soleil ; les haies du bocage sont des
+  de celle des fusils. De près, les revers portent leurs boutons dorés et les visages leurs yeux et sourcils ;
+  baïonnettes, cuivres et bronze des pièces renvoient le soleil ; les haies du bocage sont des
   rangs de feuillage touffu, d'où dépassent des arbres têtards ; les creux du terrain sont plus verts et plus sombres.
   Au fil des pertes, des débris jonchent le sol (chapeaux, fusils, havresacs, roues brisées près des pièces), et la
   boue laissée par les troupes est gardée avec la bataille : une bataille rechargée retrouve ses traces.
