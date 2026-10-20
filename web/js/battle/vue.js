@@ -425,6 +425,8 @@ export class BattleView {
     const ciel = this.fx.ciel(sky, this.terrain.season);
     this.relief.update(this.scene, fr.dist, (deploy && this.showCover !== false) || this.showCover === true ? 0.42 + Math.sin(time * 2.2) * 0.1 : 0, ciel, time);
     this.fx.uni?.uTint.value.setRGB(...ciel.smoke);
+    // (la fumée : claire et teintée par le soleil de son côté, bleutée du côté de l'ombre)
+    if (this.fx.uni) { this.fx.uni.uSunDir.value.set(...ciel.sunDir).normalize(); this.fx.uni.uSunCol.value.setRGB(...ciel.sun); this.fx.uni.uShadeCol.value.setRGB(...ciel.hemiSky).multiplyScalar(0.62); }
     // sol plus fin autour de la caméra : un bloc par image (aucun pendant un pincement), deux si l'image est vite faite
     this.detailBusy = this.relief.updateDetail(this.renderer, this, this.controls.busy() ? 0 : this.drawMs < 12 ? 2 : 1);
     const all = [...this.units.values()].filter(u => u.state !== 'hors'), vis = all.filter(u => this.onScreen(u));

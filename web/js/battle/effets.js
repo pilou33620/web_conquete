@@ -7,6 +7,9 @@
 // Une salve roule le long du front : chaque file fait feu à son tour (éclair, puis une bouffée de fumée blanche
 // épaisse qui grossit, monte et dérive avec le vent). Les troupes (troupes.js) lisent `un._volley` et `un._shots`
 // pour mettre les hommes en joue au même instant et faire reculer les pièces.
+// Fumée à la manière d'Ultimate General : des bouffées plus grosses et plus durables, qui s'étalent en largeur en
+// vieillissant et se fondent en bancs le long des lignes ; chacune est ombrée comme une boule (claire et dorée du côté
+// du soleil, plus sombre et bleutée à l'ombre) et s'estompe là où elle touche le sol, au lieu d'y laisser une arête.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clamp, hash, TAU, canvas, pieces } from './formes.js';
 import { smokeless } from './gestes.js';
@@ -84,8 +87,9 @@ export class Effects {
     sprites.forEach((cv, i) => { g.drawImage(cv, (i % 4) * C, ((i / 4) | 0) * C, C, C); this.cell.set(cv, i); });
     this.atlas = new THREE.CanvasTexture(at);
     this.atlas.colorSpace = THREE.SRGBColorSpace; this.atlas.flipY = false;
-    this.uni = { uRight: { value: new THREE.Vector3(1, 0, 0) }, uUp: { value: new THREE.Vector3(0, 1, 0) }, uTint: { value: new THREE.Color(1, 1, 1) } };
-    this.smoke = this.billboards(false, 2600);
+    this.uni = { uRight: { value: new THREE.Vector3(1, 0, 0) }, uUp: { value: new THREE.Vector3(0, 1, 0) }, uTint: { value: new THREE.Color(1, 1, 1) },
+      uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 0.95, 0.85) }, uShadeCol: { value: new THREE.Color(0.55, 0.6, 0.7) } };
+    this.smoke = this.billboards(false, 3400);
     this.glow = this.billboards(true, 400);
     const dark = new THREE.MeshLambertMaterial({ color: '#1b1a18' });
     this.ballMesh = this.instanced(new THREE.SphereGeometry(0.28, 8, 6), dark, 200);
@@ -102,21 +106,35 @@ export class Effects {
     m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     return m;
   }
-  // panneaux tournés vers la caméra : aP (x, altitude, y, rayon), aC (opacité, case de l'atlas)
+  // panneaux tournés vers la caméra : aP (x, altitude, y, rayon), aC (opacité, case de l'atlas, étalement en largeur,
+  // altitude du sol au pied)
   billboards(additive, cap) {
     const geo = new THREE.PlaneGeometry(1, 1);
     geo.setAttribute('aP', new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage));
-    geo.setAttribute('aC', new THREE.InstancedBufferAttribute(new Float32Array(cap * 2), 2).setUsage(THREE.DynamicDrawUsage));
+    geo.setAttribute('aC', new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage));
     const mat = new THREE.MeshBasicMaterial({ map: this.atlas, transparent: true, depthWrite: false, fog: !additive, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
     mat.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, this.uni);
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec4 aP; attribute vec2 aC; uniform vec3 uRight, uUp; varying float vAlpha;')
-        .replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv = (vec2(mod(aC.y, 4.0), floor(aC.y / 4.0)) + vec2(uv.x, 1.0 - uv.y)) / vec2(4.0, 3.0);\nvAlpha = aC.x;')
-        .replace('#include <begin_vertex>', 'vec3 transformed = aP.xyz + (uRight * position.x + uUp * position.y) * aP.w * 2.0;');
+        .replace('#include <common>', '#include <common>\nattribute vec4 aP; attribute vec4 aC; uniform vec3 uRight, uUp; varying float vAlpha, vY, vGround, vR; varying vec2 vQ;')
+        .replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv = (vec2(mod(aC.y, 4.0), floor(aC.y / 4.0)) + vec2(uv.x, 1.0 - uv.y)) / vec2(4.0, 3.0);\nvAlpha = aC.x; vQ = position.xy * 2.0;')
+        .replace('#include <begin_vertex>', `vec3 transformed = aP.xyz + (uRight * position.x * max(aC.z, 1.0) + uUp * position.y) * aP.w * 2.0;
+          vY = transformed.y; vGround = aC.w; vR = aP.w;`);
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform vec3 uTint; varying float vAlpha;')
-        .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.a *= vAlpha;\ndiffuseColor.rgb *= uTint;');
+        .replace('#include <common>', `#include <common>
+          uniform vec3 uTint, uSunDir, uSunCol, uShadeCol, uRight, uUp; varying float vAlpha, vY, vGround, vR; varying vec2 vQ;`)
+        .replace('#include <map_fragment>', `#include <map_fragment>
+          diffuseColor.a *= vAlpha;
+          ${additive ? 'diffuseColor.rgb *= uTint;' : `
+          // ombrée comme une boule : la normale sur le panneau (vQ de −1 à 1), vers la caméra au centre
+          vec3 fwd = normalize(cross(uRight, uUp));   // (vers la caméra)
+          vec3 nb = normalize(uRight * vQ.x + uUp * vQ.y + fwd * sqrt(max(0.0, 1.0 - dot(vQ, vQ) * 0.7)));
+          float li = clamp(dot(nb, uSunDir) * 0.5 + 0.55, 0.0, 1.0);
+          diffuseColor.rgb *= mix(uShadeCol, uSunCol, li) * uTint * 1.15;
+          // du volume : le dessous d'une bouffée plus sombre, son sommet plus clair
+          diffuseColor.rgb *= mix(0.78, 1.06, smoothstep(-1.0, 0.8, vQ.y));
+          // fondue dans le sol : s'efface là où elle le touche
+          diffuseColor.a *= smoothstep(-0.2, vR * 0.45, vY - vGround);`}`);
     };
     mat.customProgramCacheKey = () => 'effets-' + additive;
     const m = new THREE.InstancedMesh(geo, mat, cap);
@@ -134,23 +152,25 @@ export class Effects {
     // opacité selon l'âge : apparaît vite, reste épaisse longtemps, s'efface à la fin
     const fade = p => { const k = p.t / p.life; return p.a * (k < 0.05 ? k / 0.05 : 1 - Math.pow((k - 0.05) / 0.95, p.imgs === this.white ? 1.8 : 0.8)); };
     // fumées, poussières : du plus loin au plus près (le mélange des transparences est alors juste)
-    const P = this.puffs, n0 = Math.min(P.length, 2600), tmp = this.tmp = this.tmp?.length >= n0 * 7 ? this.tmp : new Float64Array(n0 * 7 + 700);
+    const P = this.puffs, n0 = Math.min(P.length, 3400), tmp = this.tmp = this.tmp?.length >= n0 * 9 ? this.tmp : new Float64Array(n0 * 9 + 900);
     const order = [];
     for (let i = 0, n = 0; i < P.length && n < n0; i++) {
       const p = P[i], a = fade(p) * (p.imgs === this.white ? thin : 1);
       if (a <= 0.01) continue;
-      const y = h(p.x, p.y) + p.alt + p.r * 0.7, o = n * 7;
+      const g = h(p.x, p.y), y = g + p.alt + p.r * 0.7, o = n * 9;
       tmp[o] = (p.x - E[0]) ** 2 + (y - E[1]) ** 2 + (p.y - E[2]) ** 2;
       tmp[o + 1] = p.x; tmp[o + 2] = y; tmp[o + 3] = p.y; tmp[o + 4] = p.r; tmp[o + 5] = a; tmp[o + 6] = this.cell.get(p.img) ?? 0;
+      // (la fumée des salves s'étale en largeur en vieillissant : les bouffées se fondent en un banc)
+      tmp[o + 7] = p.imgs === this.white ? 1 + 0.6 * Math.min(1, p.t / p.life * 1.6) : 1; tmp[o + 8] = g;
       order.push(n++);
     }
-    order.sort((a, b) => tmp[b * 7] - tmp[a * 7]);
-    this.fill(this.smoke, order.length, (i, aP, aC) => { const o = order[i] * 7, j = i * 4; aP[j] = tmp[o + 1]; aP[j + 1] = tmp[o + 2]; aP[j + 2] = tmp[o + 3]; aP[j + 3] = tmp[o + 4]; aC[i * 2] = tmp[o + 5]; aC[i * 2 + 1] = tmp[o + 6]; });
+    order.sort((a, b) => tmp[b * 9] - tmp[a * 9]);
+    this.fill(this.smoke, order.length, (i, aP, aC) => { const o = order[i] * 9, j = i * 4; aP[j] = tmp[o + 1]; aP[j + 1] = tmp[o + 2]; aP[j + 2] = tmp[o + 3]; aP[j + 3] = tmp[o + 4]; aC[j] = tmp[o + 5]; aC[j + 1] = tmp[o + 6]; aC[j + 2] = tmp[o + 7]; aC[j + 3] = tmp[o + 8]; });
     // éclairs de bouche, feu des explosions
     const F = this.flashes, fc = this.cell.get(this.flash), xc = this.cell.get(this.fire);
     this.fill(this.glow, Math.min(F.length, 400), (i, aP, aC) => {
       const f = F[i], k = 1 - f.t / f.life, j = i * 4;
-      aP[j] = f.x; aP[j + 1] = h(f.x, f.y) + f.alt; aP[j + 2] = f.y; aP[j + 3] = Math.max(0.8, f.r) * (0.6 + k * 0.6); aC[i * 2] = k; aC[i * 2 + 1] = f.r > 20 ? xc : fc;
+      aP[j] = f.x; aP[j + 1] = h(f.x, f.y) + f.alt; aP[j + 2] = f.y; aP[j + 3] = Math.max(0.8, f.r) * (0.6 + k * 0.6); aC[j] = k; aC[j + 1] = f.r > 20 ? xc : fc; aC[j + 2] = 1; aC[j + 3] = -1e4;
     });
     // boulets en l'air, éclats de terre
     const m4 = this.m4 || (this.m4 = new THREE.Matrix4());
@@ -222,9 +242,9 @@ export class Effects {
     const R2 = Math.max(40, w * 0.6) ** 2;
     let near = 0;
     for (const p of this.puffs) if (p.imgs === this.white && (p.x - x) ** 2 + (p.y - y) ** 2 < R2) near++;
-    if (near > n * 4) n = Math.min(n, 3);
+    if (near > n * 6) n = Math.min(n, 3);
     // (sc : échelle des figurines du régiment, troupes.js : de loin, elles grossissent, et leur fumée avec elles)
-    const life = [16, 26, 34, 44][fx], sk = un?.form === 'tirailleurs', sc = un?._figScale ?? 1;
+    const life = [22, 36, 48, 60][fx], sk = un?.form === 'tirailleurs', sc = un?._figScale ?? 1;
     const clean = !!un && smokeless(un, this.marks);
     for (let q = 0; q < n; q++) {
       const u = ((q + 0.2 + Math.random() * 0.6) / n - 0.5) * w;
@@ -237,7 +257,7 @@ export class Effects {
           if (q % 3 === 0) this.addPuff(this.haze, px + c * 1.5, py + s * 1.5, 1.5 * sc, 2.5 * sc, 1.6, 0.14, 3 + Math.random() * 2, c * sp, s * sp, 0.1);
           return;
         }
-        this.addPuff(this.white, px + c * 1.5, py + s * 1.5, 1.5 * sc, (4 + Math.random() * 2.5) * sc, 1.2 + Math.random() * 0.8, 0.72 + Math.random() * 0.2, life * (0.7 + Math.random() * 0.5), c * sp + (Math.random() - 0.5) * 2, s * sp + (Math.random() - 0.5) * 2, 0.08 + Math.random() * 0.12);
+        this.addPuff(this.white, px + c * 1.5, py + s * 1.5, 1.5 * sc, (5 + Math.random() * 3) * sc, 1.5 + Math.random() * 0.9, 0.78 + Math.random() * 0.17, life * (0.7 + Math.random() * 0.5), c * sp + (Math.random() - 0.5) * 2, s * sp + (Math.random() - 0.5) * 2, 0.08 + Math.random() * 0.12);
       }, at: this.t + at });
     }
   }
@@ -276,7 +296,7 @@ export class Effects {
         this.flashes.push({ x: px + fc * 3.5, y: py + fs * 3.5, alt: sc, r: (grape ? 7 : 6) * sc, t: 0, life: 0.2 });
         // la bouffée : poussée en avant, épaisse, qui s'élargit ; la poussière du souffle au ras du sol
         if (clean) this.addPuff(this.haze, px + fc * 5, py + fs * 5, 1.5 * sc, 4 * sc, 1.8, 0.18, 4 + Math.random() * 2, fc * 10, fs * 10, 0.2);
-        else for (let k = 0; k < 3 + fx; k++) this.addPuff(this.white, px + fc * (4 + k * 4), py + fs * (4 + k * 4), (1.5 + k * 0.3) * sc, (3.5 + k * 1.2) * sc, 1.4, 0.7, [18, 28, 36, 46][fx] * (0.7 + Math.random() * 0.4), fc * (16 - k * 3) + (Math.random() - 0.5) * 3, fs * (16 - k * 3) + (Math.random() - 0.5) * 3, 0.25);
+        else for (let k = 0; k < 4 + fx; k++) this.addPuff(this.white, px + fc * (4 + k * 4), py + fs * (4 + k * 4), (1.8 + k * 0.5) * sc, (4.5 + k * 1.5) * sc, 1.8, 0.78, [26, 40, 52, 64][fx] * (0.7 + Math.random() * 0.4), fc * (16 - k * 3) + (Math.random() - 0.5) * 3, fs * (16 - k * 3) + (Math.random() - 0.5) * 3, 0.25);
         if (fx >= 1) for (let k = 0; k < 4; k++) { const a = Math.random() * TAU; this.addPuff(this.dust, px + Math.cos(a) * 2, py + Math.sin(a) * 2, 0.3 * sc, 2.5 * sc, 2.5, 0.35, 2.5, Math.cos(a) * 5 + fc * 3, Math.sin(a) * 5 + fs * 3, 0.4); }
         if (grape) {
           for (let k = 0; k < 14; k++) {
