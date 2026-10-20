@@ -10,27 +10,27 @@ import { clamp } from './formes.js';
 // du ciel (hémisphère) et skyI sa force ; fog : couleur de la brume et du fond (0 à 255, par beau temps) ;
 // g : étalonnage (voir grade)
 export const HEURES = [
-  { he: 5, sun: [0.55, 0.52, 0.66], sunI: 0.22, sky: [0.5, 0.58, 0.85], skyI: 0.5, fog: [64, 74, 104],
+  { he: 5, zen: [26, 34, 66], sun: [0.55, 0.52, 0.66], sunI: 0.22, sky: [0.5, 0.58, 0.85], skyI: 0.5, fog: [64, 74, 104],
     g: { expo: 1.0, temp: -0.5, sat: 0.7, vert: 0.4, contrast: 0.96, lift: [0.0, 0.01, 0.04], gain: [0.96, 0.98, 1.04], vig: 0.3 } },
-  { he: 6.5, sun: [1.0, 0.64, 0.4], sunI: 0.72, sky: [0.86, 0.8, 0.86], skyI: 0.82, fog: [212, 190, 174],
+  { he: 6.5, zen: [118, 138, 188], sun: [1.0, 0.64, 0.4], sunI: 0.72, sky: [0.86, 0.8, 0.86], skyI: 0.82, fog: [212, 190, 174],
     g: { expo: 1.02, temp: 0.75, sat: 0.86, vert: 0.45, contrast: 0.95, lift: [0.025, 0.018, 0.03], gain: [1.05, 1.0, 0.92], vig: 0.2 } },
-  { he: 8, sun: [1.0, 0.86, 0.67], sunI: 0.95, sky: [0.84, 0.88, 0.97], skyI: 0.95, fog: [212, 212, 208],
+  { he: 8, zen: [104, 146, 206], sun: [1.0, 0.86, 0.67], sunI: 0.95, sky: [0.84, 0.88, 0.97], skyI: 0.95, fog: [212, 212, 208],
     g: { expo: 1.02, temp: 0.45, sat: 1.22, vert: 0.3, contrast: 1.1, lift: [0.012, 0.012, 0.03], gain: [1.04, 1.0, 0.93], vig: 0.16 } },
-  { he: 10, sun: [1.0, 0.93, 0.82], sunI: 1.0, sky: [0.8, 0.88, 1.0], skyI: 1.0, fog: [202, 214, 228],
+  { he: 10, zen: [86, 138, 208], sun: [1.0, 0.93, 0.82], sunI: 1.0, sky: [0.8, 0.88, 1.0], skyI: 1.0, fog: [202, 214, 228],
     g: { expo: 1.02, temp: 0.3, sat: 1.34, vert: 0.25, contrast: 1.18, lift: [0.006, 0.008, 0.026], gain: [1.03, 1.0, 0.95], vig: 0.15 } },
-  { he: 13, sun: [1.0, 0.95, 0.87], sunI: 1.0, sky: [0.8, 0.88, 1.0], skyI: 1.0, fog: [201, 216, 230],
+  { he: 13, zen: [80, 132, 206], sun: [1.0, 0.95, 0.87], sunI: 1.0, sky: [0.8, 0.88, 1.0], skyI: 1.0, fog: [201, 216, 230],
     g: { expo: 1.0, temp: 0.24, sat: 1.36, vert: 0.25, contrast: 1.2, lift: [0.004, 0.008, 0.026], gain: [1.03, 1.0, 0.96], vig: 0.15 } },
-  { he: 16, sun: [1.0, 0.92, 0.79], sunI: 1.0, sky: [0.81, 0.87, 0.99], skyI: 1.0, fog: [206, 213, 222],
+  { he: 16, zen: [88, 138, 204], sun: [1.0, 0.92, 0.79], sunI: 1.0, sky: [0.81, 0.87, 0.99], skyI: 1.0, fog: [206, 213, 222],
     g: { expo: 1.02, temp: 0.34, sat: 1.34, vert: 0.25, contrast: 1.18, lift: [0.008, 0.008, 0.026], gain: [1.04, 1.0, 0.94], vig: 0.15 } },
-  { he: 17.5, sun: [1.0, 0.84, 0.6], sunI: 0.95, sky: [0.84, 0.85, 0.94], skyI: 0.95, fog: [216, 206, 194],
+  { he: 17.5, zen: [106, 136, 194], sun: [1.0, 0.84, 0.6], sunI: 0.95, sky: [0.84, 0.85, 0.94], skyI: 0.95, fog: [216, 206, 194],
     g: { expo: 1.03, temp: 0.6, sat: 1.28, vert: 0.3, contrast: 1.15, lift: [0.014, 0.01, 0.03], gain: [1.06, 1.0, 0.9], vig: 0.18 } },
-  { he: 19, sun: [1.0, 0.6, 0.33], sunI: 0.68, sky: [0.84, 0.72, 0.76], skyI: 0.78, fog: [222, 170, 146],
+  { he: 19, zen: [118, 116, 168], sun: [1.0, 0.6, 0.33], sunI: 0.68, sky: [0.84, 0.72, 0.76], skyI: 0.78, fog: [222, 170, 146],
     g: { expo: 1.05, temp: 0.85, sat: 1.18, vert: 0.35, contrast: 1.1, lift: [0.02, 0.01, 0.04], gain: [1.08, 0.98, 0.86], vig: 0.24 } },
-  { he: 20, sun: [0.86, 0.46, 0.46], sunI: 0.34, sky: [0.52, 0.52, 0.76], skyI: 0.6, fog: [118, 100, 128],
+  { he: 20, zen: [58, 58, 108], sun: [0.86, 0.46, 0.46], sunI: 0.34, sky: [0.52, 0.52, 0.76], skyI: 0.6, fog: [118, 100, 128],
     g: { expo: 1.06, temp: 0.05, sat: 0.78, vert: 0.45, contrast: 0.98, lift: [0.01, 0.01, 0.05], gain: [1.03, 0.97, 0.98], vig: 0.32 } },
-  { he: 21, sun: [0.42, 0.48, 0.74], sunI: 0.12, sky: [0.36, 0.43, 0.72], skyI: 0.42, fog: [38, 48, 78],
+  { he: 21, zen: [16, 22, 44], sun: [0.42, 0.48, 0.74], sunI: 0.12, sky: [0.36, 0.43, 0.72], skyI: 0.42, fog: [38, 48, 78],
     g: { expo: 1.1, temp: -0.6, sat: 0.55, vert: 0.5, contrast: 0.95, lift: [0.0, 0.012, 0.05], gain: [0.94, 0.98, 1.06], vig: 0.42 } },
-  { he: 22, sun: [0.42, 0.48, 0.74], sunI: 0.1, sky: [0.34, 0.41, 0.7], skyI: 0.4, fog: [34, 44, 72],
+  { he: 22, zen: [12, 18, 38], sun: [0.42, 0.48, 0.74], sunI: 0.1, sky: [0.34, 0.41, 0.7], skyI: 0.4, fog: [34, 44, 72],
     g: { expo: 1.1, temp: -0.6, sat: 0.52, vert: 0.5, contrast: 0.95, lift: [0.0, 0.012, 0.05], gain: [0.94, 0.98, 1.06], vig: 0.45 } },
 ];
 // la brume à midi par beau temps : la couleur du ciel de chaque météo y est ramenée à l'heure
@@ -72,7 +72,7 @@ export function ligne(he) {
   for (let i = 1; i < T.length; i++) {
     if (he <= T[i].he) {
       const a = T[i - 1], b = T[i], t = (he - a.he) / (b.he - a.he);
-      return { he, sun: lerp3(a.sun, b.sun, t), sunI: lerp(a.sunI, b.sunI, t), sky: lerp3(a.sky, b.sky, t), skyI: lerp(a.skyI, b.skyI, t), fog: lerp3(a.fog, b.fog, t), g: lerpG(a.g, b.g, t) };
+      return { he, sun: lerp3(a.sun, b.sun, t), sunI: lerp(a.sunI, b.sunI, t), sky: lerp3(a.sky, b.sky, t), skyI: lerp(a.skyI, b.skyI, t), fog: lerp3(a.fog, b.fog, t), zen: lerp3(a.zen, b.zen, t), g: lerpG(a.g, b.g, t) };
     }
   }
   return T[T.length - 1];
@@ -139,6 +139,16 @@ export function ambiance(st, season, { flash = 0, clouds = true } = {}) {
   const lum = (row.sun[0] + row.sun[1] + row.sun[2]) / 3;
   const sun = dull ? lerp3(row.sun, [lum, lum, lum], 0.5) : row.sun;
   const fog = M.sky.map((c, i) => clamp(c * row.fog[i] / NOON_FOG[i], 0, 255) / 255);
+  // ciel au zénith : bleu franc par beau temps, presque la couleur de la brume sous un ciel couvert
+  // (la table est en sRGB : le bleu passe en linéaire, sinon l'ACES de l'après-rendu le blanchit)
+  const zenL = row.zen.map(c => Math.pow(c / 255, 2.2) * 1.6);
+  const zen = lerp3(zenL, fog, w === 'brouillard' ? 0.9 : dull ? 0.65 : w === 'canicule' ? 0.25 : 0);
+  // perspective aérienne (apres.js) : un voile léger qui s'épaissit avec la distance, plus dense au ras du sol
+  // ([densité par m au niveau le plus bas du champ, hauteur d'échelle en m]) ; et la brume des vallées du petit matin,
+  // très basse, qui se lève vers 9 h
+  const matin = clamp((9 - he) / 2.5, 0, 1) * (he < 20 ? 1 : 0);
+  const voile = [w === 'brouillard' ? 0.0022 : wet ? 0.0005 : w === 'nuages' || w === 'neige' ? 0.00026 : 0.00016, w === 'brouillard' ? 140 : 320];
+  const vallee = [(w === 'brouillard' ? 0.01 : 0.0035) * Math.max(matin, w === 'brouillard' ? 1 : wet ? 0.3 : 0), w === 'brouillard' ? 45 : 22];
   return {
     he, sunDir: [Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)], sun,
     sunI: M.sunI * row.sunI,
@@ -147,7 +157,7 @@ export function ambiance(st, season, { flash = 0, clouds = true } = {}) {
     // la lumière diffuse
     hemiSky: dull ? lerp3(row.sky, [0.86, 0.88, 0.9], 0.4) : row.sky, hemiGround: [0.46, 0.4, 0.27],
     hemiI: (dull ? 2.15 : 1.5) * row.skyI + flash * 3,
-    fog, fogNear: w === 'brouillard' ? 0.05 : wet ? 0.6 : 1, fogFar: w === 'brouillard' ? 0.15 : wet ? 0.6 : 1,
+    fog, zen, voile, vallee, fogNear: w === 'brouillard' ? 0.05 : wet ? 0.6 : 1, fogFar: w === 'brouillard' ? 0.15 : wet ? 0.6 : 1,
     cloudA: M.cloud * L * (clouds ? 1 : 0),
     wind: st.wind || [1.5, 0.5],
     smoke: lerp3([1, 1, 1], sun, 0.6).map(v => v * (0.45 + 0.55 * L)),

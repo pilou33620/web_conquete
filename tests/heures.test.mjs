@@ -76,3 +76,19 @@ test('ambiance : soleil bas et doré le soir, plus haut l’été, brume du temp
   assert.ok(ambiance({ weather: 'pluie', hour: 13 }, 'ete').fog[0] < midi.fog[0]);
   assert.equal(ambiance({ weather: 'pluie', hour: 13 }, 'ete', { clouds: false }).cloudA, 0);
 });
+
+test('ciel et brume (SPEC-SUITE F1) : zénith bleu par beau temps, voile partout, brume des vallées le matin', () => {
+  const midi = ambiance({ weather: 'soleil', light: 1, hour: 13 }, 'ete');
+  for (const he of [5, 7, 13, 19, 21]) {
+    const a = ambiance({ weather: 'soleil', light: he > 19 ? 0.2 : 1, hour: he }, 'ete');
+    assert.equal(a.zen.length, 3);
+    assert.ok(a.zen.every(v => v >= 0 && v < 2), `zénith borné à ${he} h`);
+    assert.ok(a.voile[0] > 0 && a.voile[1] > 0 && a.vallee[1] > 0);
+  }
+  assert.ok(midi.zen[2] > midi.zen[0] * 2, 'le zénith de midi est bleu');
+  const couvert = ambiance({ weather: 'nuages', light: 1, hour: 13 }, 'ete');
+  assert.ok(Math.abs(couvert.zen[2] - couvert.zen[0]) < Math.abs(midi.zen[2] - midi.zen[0]), 'sous les nuages, le ciel pâlit');
+  assert.ok(ambiance({ weather: 'soleil', hour: 6.5 }, 'ete').vallee[0] > 0, 'brume des vallées au petit matin');
+  assert.equal(midi.vallee[0], 0, 'pas de brume des vallées à midi');
+  assert.ok(ambiance({ weather: 'brouillard', hour: 13 }, 'ete').voile[0] > midi.voile[0] * 5, 'le brouillard épaissit le voile');
+});

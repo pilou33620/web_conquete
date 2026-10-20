@@ -19,6 +19,7 @@ import { chargerSols } from './sols.js';
 import { Pietinement, OmbreRegiments } from './pietinement.js';
 import { Herbe } from './herbe.js';
 import { ApresRendu } from './apres.js';
+import { Ciel } from './ciel.js';
 import { segDist } from './gestes.js';
 
 const POLL_MS = 120;
@@ -85,6 +86,8 @@ export class BattleView {
     this.relief = new Relief(this.terrain, this.q);
     this.relief.setSols(sols);
     this.relief.setup(this.scene);
+    this.ciel = new Ciel(this.relief, this.q);
+    this.scene.add(this.ciel.mesh);
     this.piet = new Pietinement(this.renderer, this.terrain.W, this.terrain.H, this.q);
     this.relief.uni.uPiet.value = this.piet.texture;
     this.ombreR = new OmbreRegiments(this.renderer, this.terrain.W, this.terrain.H);
@@ -127,7 +130,7 @@ export class BattleView {
     this.controls.dispose();
     this.ui.dispose();
     this.terrain?.dispose();
-    this.relief?.dispose();
+    this.relief?.dispose(); this.ciel?.dispose();
     this.piet?.dispose(); this.ombreR?.dispose(); this.herbe?.dispose();
     this.troops?.dispose();
     this.decor?.dispose();
@@ -148,6 +151,7 @@ export class BattleView {
     if (this.relief?.sols && this.relief.sols.n !== solPx(this.q)) this.reloadSols();
     this.troops?.setQuality(this.q);
     this.post?.setQuality(this.q);
+    this.ciel?.setQuality(this.q);
     this.herbe?.setQuality(this.q);
     // le décor dépend de la richesse des effets (bois allégés, arbres plus simples) : reconstruit s'il en change
     if (this.decor && this.decor.q.fx !== this.q.fx) {
@@ -428,6 +432,8 @@ export class BattleView {
     const deploy = this.st?.phase === 'deploiement';
     const hour = this.hourNum(), sky = { weather: this.st?.weather || this.map?.weather, light: this.st?.light ?? 1, hour, wind: this.st?.wind };
     const ciel = this.fx.ciel(sky, this.terrain.season);
+    this.relief.postFog = this.post.actif;
+    this.ciel.update(ciel, cam);
     this.relief.update(this.scene, fr.dist, (deploy && this.showCover !== false) || this.showCover === true ? 0.42 + Math.sin(time * 2.2) * 0.1 : 0, ciel, time);
     this.fx.uni?.uTint.value.setRGB(...ciel.smoke);
     // (la fumée : claire et teintée par le soleil de son côté, bleutée du côté de l'ombre)
@@ -440,6 +446,7 @@ export class BattleView {
     this.fx.render(fr, z);
     this.piet?.render();
     this.ombreR?.render(all);
+    if (this.post.actif) { cam.updateMatrixWorld(); this.post.setBrume(ciel, this.relief.fogLin, cam); }
     this.post.render(this.scene, cam, ciel.grade, time, fr.dist);
     mark('scene');
     // le calque 2D

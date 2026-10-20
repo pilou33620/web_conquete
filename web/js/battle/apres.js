@@ -7,6 +7,10 @@
 //   étalonnage par une LUT 3D de 32³ calculée depuis la table des heures (heures.js), recalculée quand l'heure ou la
 //   météo la changent à l'œil ;
 //   vignettage (plus fort sous la pluie, la neige et la nuit), grain très léger (casse les aplats et les bandes).
+// Avant tout cela, la brume (SPEC-SUITE, F1) : la profondeur de l'image redonne la position de chaque point ; un voile
+// qui s'épaissit avec la distance et vers le bas (perspective aérienne), la brume basse des vallées du petit matin,
+// éclaircis du côté du soleil. Le ciel (ciel.js, profondeur au fond) n'en reçoit pas : il a déjà la couleur de
+// l'horizon.
 // En qualité Basse, ou si la carte ne sait pas rendre dans une texture flottante, pas d'après-rendu : le rendu direct
 // d'avant, avec le tone mapping ACES de Three.js (même courbe, même exposition) et sans LUT.
 import * as THREE from '../../vendor/three/three.module.js';
@@ -59,8 +63,26 @@ const FINAL = `
   precision highp sampler3D;
   uniform sampler2D tScene, tBloom; uniform sampler3D tLut;
   uniform vec2 uPx; uniform float uExpo, uVig, uBloom, uGrain, uTime, uTilt, uTiltY;
+  uniform sampler2D tDepth; uniform mat4 uInvProj, uCamWorld; uniform vec3 uCamPos, uFogCol, uSunDir, uSunCol;
+  uniform vec2 uLin, uVoile, uVallee;
   in vec2 vUv; out vec4 outColor;
   ${ACES}
+  // une couche de brume de densité k·exp(−y/H) (y : hauteur dans la scène), intégrée le long du rayon
+  float couche(vec2 kh, float y0, float y1, float L) {
+    float dy = y1 - y0;
+    return abs(dy) > 0.5 ? kh.x * kh.y * (exp(-max(y0, 0.0) / kh.y) - exp(-max(y1, 0.0) / kh.y)) / dy * L : kh.x * exp(-max(y1, 0.0) / kh.y) * L;
+  }
+  vec3 brume(vec3 c) {
+    float d = texture(tDepth, vUv).r;
+    if (d >= 1.0) return c;
+    vec4 vp = uInvProj * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); vp /= vp.w;
+    vec3 wp = (uCamWorld * vec4(vp.xyz, 1.0)).xyz, rd = wp - uCamPos;
+    float L = length(rd); rd /= L;
+    float lin = clamp((L - uLin.x) / max(uLin.y - uLin.x, 1.0), 0.0, 1.0);
+    float f = max(lin * lin * (3.0 - 2.0 * lin), 1.0 - exp(-couche(uVoile, uCamPos.y, wp.y, L) - couche(uVallee, uCamPos.y, wp.y, L)));
+    vec3 fc = uFogCol + uSunCol * pow(max(dot(rd, uSunDir), 0.0), 6.0) * 0.3;
+    return mix(c, fc, clamp(f, 0.0, 1.0));
+  }
   float luma(vec3 c) { c = c / (1.0 + c); return dot(c, vec3(0.299, 0.587, 0.114)); }
   #ifdef FXAA
   // FXAA de Timothy Lottes (version « console », 9 lectures), sur la luminance d'une image déjà tassée
@@ -97,6 +119,9 @@ const FINAL = `
       }
       c = mix(c, s / 9.0, clamp(coc * 1.5, 0.0, 1.0));
     }
+    #endif
+    #ifdef BRUME
+    c = brume(c);
     #endif
     #ifdef BLOOM
     c += texture(tBloom, vUv).rgb * uBloom / max(uExpo, 0.01);
@@ -142,6 +167,10 @@ export class ApresRendu {
       tScene: { value: null }, tBloom: { value: null }, tLut: { value: this.lutTex }, uPx: { value: new THREE.Vector2() },
       uExpo: { value: 1 }, uVig: { value: 0.15 }, uBloom: { value: 0.35 }, uGrain: { value: 0.012 }, uTime: { value: 0 },
       uTilt: { value: 0 }, uTiltY: { value: 0.35 },
+      tDepth: { value: null }, uInvProj: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() },
+      uCamPos: { value: new THREE.Vector3() }, uFogCol: { value: new THREE.Color() }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+      uSunCol: { value: new THREE.Color() }, uLin: { value: new THREE.Vector2(1e6, 2e6) }, uVoile: { value: new THREE.Vector2(0, 100) },
+      uVallee: { value: new THREE.Vector2(0, 20) },
     };
     this.bright = pass(BRIGHT, { tSrc: { value: null }, uPx: { value: new THREE.Vector2() }, uExpo: this.uni.uExpo });
     this.blur = pass(BLUR, { tSrc: { value: null }, uDir: { value: new THREE.Vector2() } });
@@ -162,6 +191,7 @@ export class ApresRendu {
     if (n === 2) defines.FXAA = 1;
     if (n >= 2) defines.BLOOM = 1;
     if (n >= 3) defines.TILT = 1;
+    defines.BRUME = 1;
     this.fin = pass(FINAL, this.uni, defines);
     this.cibles();
   }
@@ -173,11 +203,14 @@ export class ApresRendu {
     this.cibles();
   }
   cibles() {
+    this.rt?.depthTexture?.dispose();
     for (const t of [this.rt, this.ha, this.hb]) t?.dispose();
     this.rt = this.ha = this.hb = null;
     if (!this.actif) return;
     const o = { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false };
     this.rt = new THREE.WebGLRenderTarget(this.w, this.h, { ...o, depthBuffer: true, samples: this.niveau >= 3 ? 4 : 0 });
+    this.rt.depthTexture = new THREE.DepthTexture(this.w, this.h);
+    this.uni.tDepth.value = this.rt.depthTexture;
     if (this.niveau >= 2) {
       const hw = Math.max(1, this.w >> 1), hh = Math.max(1, this.h >> 1);
       this.ha = new THREE.WebGLRenderTarget(hw, hh, { ...o, depthBuffer: false });
@@ -194,6 +227,14 @@ export class ApresRendu {
     this.lutKey = key;
     this.lutTex.image.data.set(lut(G, LUT_N));
     this.lutTex.needsUpdate = true;
+  }
+  // la brume : amb (heures.js, ambiance) et sa portée lin [début, fin] (m) ; la caméra de l'image
+  setBrume(amb, lin, camera) {
+    const u = this.uni;
+    u.uFogCol.value.setRGB(...amb.fog); u.uSunDir.value.set(...amb.sunDir).normalize(); u.uSunCol.value.setRGB(...amb.sun);
+    u.uLin.value.set(lin[0], lin[1]); u.uVoile.value.set(...amb.voile); u.uVallee.value.set(...amb.vallee);
+    u.uInvProj.value.copy(camera.projectionMatrixInverse); u.uCamWorld.value.copy(camera.matrixWorld);
+    u.uCamPos.value.setFromMatrixPosition(camera.matrixWorld);
   }
   // G : étalonnage ; time : horloge (s) ; dist : distance de la caméra à sa cible (m), pour la maquette
   render(scene, camera, G, time = 0, dist = 1000) {
@@ -230,6 +271,7 @@ export class ApresRendu {
     this.r.render(this.sc, this.cam);
   }
   dispose() {
+    this.rt?.depthTexture?.dispose();
     for (const t of [this.rt, this.ha, this.hb]) t?.dispose();
     this.fin?.dispose(); this.bright.dispose(); this.blur.dispose();
     this.quad.geometry.dispose(); this.lutTex.dispose();

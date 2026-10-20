@@ -70,7 +70,9 @@ const OMBRE_LUM = `
 // GLSL des sols photo (voir en tête) : déclarations, puis le mélange (dans map_fragment), puis les normales
 const SOLS_DECL = `
   uniform sampler2DArray uSolA, uSolN; uniform sampler2D uMask; uniform vec3 uMean[8]; uniform float uForce[8]; uniform float uSolK, uMaskPx;
+  uniform vec2 uWind; uniform float uTime; uniform vec3 uEauHor, uEauZen, uEauSun;
   vec3 solNrm = vec3(0.0, 0.0, 1.0);
+  float gEau = 0.0; vec3 gEauRefl = vec3(0.0);   // part d'eau du point, et ce que l'eau reflète (ciel, soleil)
   float shash(vec2 p) { p = mod(p, 1024.0); vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
   float snoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
     return mix(mix(shash(i), shash(i + vec2(1.0, 0.0)), f.x), mix(shash(i + vec2(0.0, 1.0)), shash(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -146,6 +148,29 @@ const SOLS_MIX = `
     d = clamp(mix(vec3(dot(d, vec3(0.3, 0.59, 0.11))), d, 0.5), 0.35, 1.8);
     diffuseColor.rgb *= mix(vec3(1.0), d, force);
     solNrm = normalize(mix(vec3(0.0, 0.0, 1.0), nrm, kN * min(force * 1.5, 1.0)));
+    // l'eau (SPEC-SUITE, F1) : là où aucun sol n'est mélangé, dans le champ. Vaguelettes qui défilent au vent (deux
+    // bruits), reflet du ciel qui croît vers l'horizon (Fresnel), éclat du soleil, écume claire le long des berges
+    gEau = (1.0 - smoothstep(0.03, 0.3, tot)) * step(0.0, min(min(vWorld.x, vWorld.y), min(uSize.x - vWorld.x, uSize.y - vWorld.y)));
+    if (gEau > 0.001) {
+      vec2 fl = uWind * uTime, q1 = vWorld * 0.35 - fl * 0.6, q2 = vWorld * 0.9 + fl.yx * 0.9;
+      float n0 = snoise(q1) + 0.5 * snoise(q2);
+      float nx = snoise(q1 + vec2(0.3, 0.0)) + 0.5 * snoise(q2 + vec2(0.3, 0.0)) - n0;
+      float ny = snoise(q1 + vec2(0.0, 0.3)) + 0.5 * snoise(q2 + vec2(0.0, 0.3)) - n0;
+      vec3 wn = normalize(vec3(-nx * 0.7, -ny * 0.7, 1.0));
+      solNrm = normalize(mix(solNrm, wn, gEau));
+      vec3 Nw = normalize(vec3(wn.x, wn.z, -wn.y));
+      vec3 wpe = transpose(mat3(viewMatrix)) * (-vViewPosition - viewMatrix[3].xyz), V = normalize(cameraPosition - wpe);
+      float fres = 0.03 + 0.97 * pow(1.0 - max(dot(Nw, V), 0.0), 5.0);
+      vec3 R = reflect(-V, Nw);
+      vec3 ciel = mix(uEauHor, uEauZen, smoothstep(0.0, 0.5, R.y));
+      float gl = pow(max(dot(R, uSunDir), 0.0), 180.0);
+      // (une eau plate reçoit tout le ciel : sans cela elle sort bleu clair ; on la veut sombre, vert-de-gris)
+      vec3 eauC = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.6) * vec3(0.3, 0.38, 0.36);
+      diffuseColor.rgb = mix(diffuseColor.rgb, eauC, gEau);
+      float bord = smoothstep(0.2, 0.5, gEau) * (1.0 - smoothstep(0.55, 0.9, gEau));
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.84, 0.82), bord * 0.4 * smoothstep(0.45, 0.75, snoise(vWorld * 1.3 + fl)));
+      gEauRefl = gEau * (ciel * vec3(0.72, 0.9, 0.86) * fres * 0.7 + uEauSun * gl * 2.0);
+    }
   }`;
 // normales de la photo, dans le repère du sol (u le long de x, v vers −z : l'image a son haut en v = 0)
 const SOLS_NRM = `
@@ -213,6 +238,7 @@ export class Relief {
       uMean: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0.2, 0.2, 0.2)) }, uForce: { value: FORCE.slice() }, uSolK: { value: 0 },
       uFine: { value: null }, uFineUV: { value: new THREE.Vector4() }, uAO: { value: 0.9 },
       uHor: { value: null }, uHorUV: { value: new THREE.Vector4() }, uHorOn: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+      uEauHor: { value: new THREE.Color() }, uEauZen: { value: new THREE.Color() }, uEauSun: { value: new THREE.Color() },
       uWindK: { value: 1 }, uPiet: { value: null }, uOmbreR: { value: null }, uHgt: { value: null }, uHgtUV: { value: new THREE.Vector4() },
     };
     // (la carte de piétinement arrive avec la vue : setPiet ; d'ici là, un sol neuf)
@@ -315,6 +341,10 @@ export class Relief {
         // l'occlusion ne retient que la lumière du ciel
         .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
           reflectedLight.indirectDiffuse *= mix(1.0, gAO * gAO, uAO);`)
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+          #ifdef SOLS
+          totalEmissiveRadiance += gEauRefl;
+          #endif`)
         .replace('#include <map_fragment>', `#include <map_fragment>
           // niveaux de détail, du plus grossier au plus fin : chacun recouvre le précédent là où il est peint, et
           // seulement s'il n'est pas plus fin que l'écran (texels par pixel : texels/m × m/pixel)
@@ -596,9 +626,14 @@ export class Relief {
     this.sun.position.copy(this.sunDir).multiplyScalar(2500).add(this.sun.target.position); this.sun.color.setRGB(...sky.sun); this.sun.intensity = sky.sunI;
     this.hemi.color.setRGB(...sky.hemiSky); this.hemi.groundColor.setRGB(...sky.hemiGround); this.hemi.intensity = sky.hemiI;
     scene.background.setRGB(...sky.fog); scene.fog.color.setRGB(...sky.fog);
-    scene.fog.near = (dist * 0.8 + 600) * sky.fogNear;
-    scene.fog.far = (dist * 3 + 5000) * sky.fogFar;
+    // portée de la brume (m) : le champ reste net, le prolongement s'y perd. Avec l'après-rendu, c'est lui qui la
+    // dessine (perspective aérienne, brume des vallées) : celle de Three.js est repoussée hors de vue
+    this.fogLin = [(dist * 0.8 + 600) * sky.fogNear, (dist * 3 + 5000) * sky.fogFar];
+    scene.fog.near = this.postFog ? 1e7 : this.fogLin[0];
+    scene.fog.far = this.postFog ? 2e7 : this.fogLin[1];
     this.uni.uCloudA.value = sky.cloudA;
+    this.uni.uEauHor.value.setRGB(...sky.fog); this.uni.uEauZen.value.setRGB(...(sky.zen || sky.fog));
+    this.uni.uEauSun.value.setRGB(...sky.sun).multiplyScalar(sky.sunI);
     this.uni.uTime.value = time; this.uni.uWind.value.set(...sky.wind).normalize();
     this.uni.uWindK.value = clamp(Math.hypot(...sky.wind) / 3.5, 0.35, 1.6);   // (le balancement des arbres)
     this.uni.uCloudOff.value.set(time * (3 + sky.wind[0] * 2.5), time * (1 + sky.wind[1] * 2.5));

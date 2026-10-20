@@ -177,6 +177,13 @@ et Ultra : tout.
 **Fini quand.** À la vue d'ensemble, la profondeur des captures d'UGAR (perspective aérienne) se retrouve, et le ciel
 n'a plus d'arête nette à l'horizon.
 
+**Livré le 20/10/2026** (`ciel.js`, brume dans `apres.js`, eau dans `relief.js`, colonnes `zen`, `voile`,
+`vallee` de `heures.js`). La brume est calculée dans l'après-rendu, depuis la profondeur de l'image (Moyenne et
+au-delà) ; en Basse, la brume de Three.js reste. L'eau est repérée dans le shader du sol (aucun sol photo n'y est
+mélangé) : pas de texture en plus. Écart : pas de couleur selon la profondeur de l'eau (le masque ne la donne pas), et
+la pluie ne fait pas encore luire le sol (avec F8). Trouvé en le réglant : les couleurs de la table sont en sRGB ; le
+bleu du zénith doit passer en linéaire, sinon l'ACES le blanchit.
+
 ### F2. Le métal et l'occlusion des figurines (fin de 9h ; B1)
 
 - **Reflets** sur les baïonnettes, plaques de shako, cuivres, fûts de bronze : un terme spéculaire sur les seules pièces

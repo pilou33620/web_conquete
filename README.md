@@ -529,7 +529,11 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   au sol jusqu'à 800 (Basse), 1 500, 2 500 ou 4 000 (Ultra). À partir de Moyenne, l'image passe par un
   **après-rendu** à la manière d'Ultimate General : courbe filmique ACES, étalonnage propre à l'heure et au temps
   (matin doré et brumeux, midi chaud aux verts tirés vers le jaune, couchant orangé, nuit bleue, pluie grise),
-  vignettage ; en Haute s'y ajoutent l'anticrénelage FXAA et un léger halo des plein-soleil ; en Ultra,
+  vignettage, et la **brume** : un voile qui pâlit les lointains (plus dense au ras du sol, éclairci du côté du
+  soleil), la brume basse des vallées au petit matin, épaisse par temps de brouillard. Au-dessus de l'horizon, un
+  **ciel** : bleu au zénith, clair à l'horizon, halo du soleil, couchant coloré et bancs de nuages qui défilent au
+  vent (leurs ombres passent sur le champ). L'**eau** des rivières et des étangs est vert-de-gris, ridée par le vent,
+  avec le reflet du ciel qui grandit vers l'horizon, l'éclat du soleil et une écume claire aux berges ; en Haute s'y ajoutent l'anticrénelage FXAA et un léger halo des plein-soleil ; en Ultra,
   l'anticrénelage matériel et, à ras des troupes, une profondeur de champ « maquette » (le haut et le bas de l'image
   se floutent). Le sol garde sa peinture (couleurs de la saison et des parcelles) mais prend la **matière de huit
   sols photographiés** (pré, herbe sèche, lande, terre, chemin, route empierrée, sable, roche ; CC0, ambientCG) :
@@ -761,8 +765,8 @@ web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et 
                      unites.js (figurines peintes des cartes d'unités), effets.js (fumées, tirs, météo),
                      heures.js (table des heures : lumière, brume et étalonnage de 5 h à 22 h ; logique pure,
                      testée), horizon.js (normales fines, occlusion et horizons du relief, calculés une fois
-                     par bataille ; logique pure, testée), apres.js (après-rendu : ACES, LUT d'étalonnage, vignettage, FXAA, halo,
-                     maquette), herbe.js (touffes d'herbe en relief), pietinement.js (la boue laissée par les troupes), sols.js (sols photo : chargement des huit sols), qualite.js (qualité
+                     par bataille ; logique pure, testée), apres.js (après-rendu : brume, ACES, LUT d'étalonnage, vignettage, FXAA, halo,
+                     maquette), ciel.js (le ciel : dégradé, soleil, nuages), herbe.js (touffes d'herbe en relief), pietinement.js (la boue laissée par les troupes), sols.js (sols photo : chargement des huit sols), qualite.js (qualité
                      graphique), commandes.js (gestes et clavier),
                      interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils
                      communs), css/bataille.css ;
@@ -802,7 +806,7 @@ node --test tests/                               # l'interface seule
 | `tests/camera.test.mjs` | caméra 3D des batailles : allers-retours écran ↔ terrain à 1 m et 1 pixel près sur une colline, à plusieurs caps et zooms ; bornes |
 | `tests/troupes.test.mjs` | dispositions des figurines : rangs de la ligne, plafond par régiment, carré à quatre faces, colonne, tirailleurs, déroute |
 | `tests/gestes.test.mjs` | animations des batailles : geste de chaque homme (salve qui roule, recharge, servants, mêlée, charge), allure propre à chacun, place gardée d'une formation à l'autre, tués (ligne d'un boulet, plafond des corps), contour des bâtiments, échelle des figurines de loin |
-| `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte |
+| `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte ; zénith bleu par beau temps et pâle sous les nuages, brume des vallées seulement le matin, voile épaissi par le brouillard |
 | `tests/horizon.test.mjs` | relief et lumière : horizon plat en plaine, haut du côté d'une colline et bas de l'autre, occlusion au pied d'une colline, normales qui penchent vers l'extérieur |
 | `tests/pietinement.test.mjs` | piétinement : rien au repos ni sous un général, un tiers de boue au passage d'un régiment de ligne, plus sous la cavalerie et l'artillerie, double sous la pluie, mêlée sur place |
 | `tests/cheval.test.mjs` | cheval précalculé : gestes attendus par le shader, quatre os et des poids qui font 1 par sommet, maillage léger, dos à hauteur de selle |
