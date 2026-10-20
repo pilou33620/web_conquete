@@ -60,6 +60,7 @@ export class Effects {
     this.decals = [];     // à peindre au sol par la vue (trous, débris)
     this.white = [0, 1, 2, 3].map(k => puffSprite('246,244,238', 0.78, 31 + k));
     this.grey = [0, 1].map(k => puffSprite('132,126,118', 0.7, 51 + k));
+    this.canon = [puffSprite('214,210,202', 0.72, 41)];   // fumée de canon : plus grise que celle des fusils (la 12e case de l'atlas)
     this.dust = [0, 1].map(k => puffSprite('184,158,114', 0.75, 71 + k));
     this.haze = [puffSprite('206,214,224', 0.7, 91)];   // poudre sans fumée : un voile bleuté qui se dissipe vite
     this.marks = [[], []];   // marques visibles de chaque camp (rules.VISUALS ; la vue les reçoit avec la carte)
@@ -81,7 +82,7 @@ export class Effects {
   // heightAt : altitude du relief (m) ; les images des bouffées et des éclairs vont dans un atlas de 4 × 3 cases
   attach(scene, heightAt) {
     this.heightAt = heightAt;
-    const sprites = [...this.white, ...this.grey, ...this.dust, this.fire, this.flash, ...this.haze], C = 128;
+    const sprites = [...this.white, ...this.grey, ...this.dust, this.fire, this.flash, ...this.haze, ...this.canon], C = 128;
     const at = canvas(4 * C, 3 * C), g = at.getContext('2d');
     this.cell = new Map();
     sprites.forEach((cv, i) => { g.drawImage(cv, (i % 4) * C, ((i / 4) | 0) * C, C, C); this.cell.set(cv, i); });
@@ -296,7 +297,8 @@ export class Effects {
         this.flashes.push({ x: px + fc * 3.5, y: py + fs * 3.5, alt: sc, r: (grape ? 7 : 6) * sc, t: 0, life: 0.2 });
         // la bouffée : poussée en avant, épaisse, qui s'élargit ; la poussière du souffle au ras du sol
         if (clean) this.addPuff(this.haze, px + fc * 5, py + fs * 5, 1.5 * sc, 4 * sc, 1.8, 0.18, 4 + Math.random() * 2, fc * 10, fs * 10, 0.2);
-        else for (let k = 0; k < 4 + fx; k++) this.addPuff(this.white, px + fc * (4 + k * 4), py + fs * (4 + k * 4), (1.8 + k * 0.5) * sc, (4.5 + k * 1.5) * sc, 1.8, 0.78, [26, 40, 52, 64][fx] * (0.7 + Math.random() * 0.4), fc * (16 - k * 3) + (Math.random() - 0.5) * 3, fs * (16 - k * 3) + (Math.random() - 0.5) * 3, 0.25);
+        // (une bouffée sur deux, grise, monte plus haut : la fumée de canon s'élève au-dessus de celle des fusils)
+        else for (let k = 0; k < 4 + fx; k++) this.addPuff(k % 2 ? this.canon : this.white, px + fc * (4 + k * 4), py + fs * (4 + k * 4), (1.8 + k * 0.5) * sc, (4.5 + k * 1.5) * sc, 1.8, 0.78, [26, 40, 52, 64][fx] * (0.7 + Math.random() * 0.4), fc * (16 - k * 3) + (Math.random() - 0.5) * 3, fs * (16 - k * 3) + (Math.random() - 0.5) * 3, k % 2 ? 0.7 : 0.25);
         if (fx >= 1) for (let k = 0; k < 4; k++) { const a = Math.random() * TAU; this.addPuff(this.dust, px + Math.cos(a) * 2, py + Math.sin(a) * 2, 0.3 * sc, 2.5 * sc, 2.5, 0.35, 2.5, Math.cos(a) * 5 + fc * 3, Math.sin(a) * 5 + fs * 3, 0.4); }
         if (grape) {
           for (let k = 0; k < 14; k++) {

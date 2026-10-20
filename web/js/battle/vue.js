@@ -20,6 +20,7 @@ import { Pietinement, OmbreRegiments } from './pietinement.js';
 import { Herbe } from './herbe.js';
 import { ApresRendu } from './apres.js';
 import { Ciel } from './ciel.js';
+import { champDeVision, OEIL } from './visibilite.js';
 import { segDist } from './gestes.js';
 
 const POLL_MS = 120;
@@ -130,7 +131,7 @@ export class BattleView {
     this.controls.dispose();
     this.ui.dispose();
     this.terrain?.dispose();
-    this.relief?.dispose(); this.ciel?.dispose();
+    this.relief?.dispose(); this.ciel?.dispose(); this.losTex?.dispose();
     this.piet?.dispose(); this.ombreR?.dispose(); this.herbe?.dispose();
     this.troops?.dispose();
     this.decor?.dispose();
@@ -434,7 +435,8 @@ export class BattleView {
     const ciel = this.fx.ciel(sky, this.terrain.season);
     this.relief.postFog = this.post.actif;
     this.ciel.update(ciel, cam);
-    this.relief.update(this.scene, fr.dist, (deploy && this.showCover !== false) || this.showCover === true ? 0.42 + Math.sin(time * 2.2) * 0.1 : 0, ciel, time);
+    const los = this.updateLos();
+    this.relief.update(this.scene, fr.dist, los ? 0.42 : (deploy && this.showCover !== false) || this.showCover === true ? 0.42 + Math.sin(time * 2.2) * 0.1 : 0, ciel, time);
     this.fx.uni?.uTint.value.setRGB(...ciel.smoke);
     // (la fumée : claire et teintée par le soleil de son côté, bleutée du côté de l'ombre)
     if (this.fx.uni) { this.fx.uni.uSunDir.value.set(...ciel.sunDir).normalize(); this.fx.uni.uSunCol.value.setRGB(...ciel.sun); this.fx.uni.uShadeCol.value.setRGB(...ciel.hemiSky).multiplyScalar(0.62); }
@@ -460,6 +462,30 @@ export class BattleView {
     this.bannerRects = drawBanners(ctx, this, vis, this.colors || [], { sel: this.sel, me: this.me, time });
     this.controls.drawOverlay(ctx, view, time);
     mark('fanions');
+  }
+  // ligne de vue (SPEC-SUITE F6, visibilite.js) : avec une seule unité choisie, ce qu'elle voit reste clair et le reste
+  // s'assombrit. Le voile passe par la texture des couverts du sol (pas de texture en plus : le sol en a 15 sur 16) ;
+  // recalculé quand l'unité change de case
+  setLos(on) { this.losOn = !!on; if (!on) this.losKey = ''; }
+  updateLos() {
+    const r = this.relief, u = this.losOn && this.sel.size === 1 ? this.units.get([...this.sel][0]) : null;
+    if (!u || !this.terrain) { if (r.uni.uCover.value !== r.cover) r.uni.uCover.value = r.cover; return false; }
+    const t = this.terrain, i = clamp(Math.floor(u.x / t.cell), 0, t.cols - 1), j = clamp(Math.floor(u.y / t.cell), 0, t.rows - 1), c0 = j * t.cols + i;
+    const cls = clsOf(u), eye = cls === 'cavalerie' || cls === 'general' ? 3.5 : cls === 'artillerie' ? 3 : OEIL, key = `${u.id}|${c0}`;
+    if (key !== this.losKey) {
+      this.losKey = key;
+      const vu = champDeVision(t, c0, eye, Math.ceil(1600 / t.cell));
+      if (!this.losCv) {
+        this.losCv = document.createElement('canvas'); this.losCv.width = t.cols; this.losCv.height = t.rows;
+        this.losTex = new THREE.CanvasTexture(this.losCv); this.losTex.flipY = false; this.losTex.colorSpace = THREE.SRGBColorSpace;
+      }
+      const g = this.losCv.getContext('2d'), img = g.createImageData(t.cols, t.rows);
+      for (let k = 0; k < vu.length; k++) if (!vu[k]) { img.data[k * 4] = 12; img.data[k * 4 + 1] = 14; img.data[k * 4 + 2] = 20; img.data[k * 4 + 3] = 190; }
+      g.putImageData(img, 0, 0);
+      this.losTex.needsUpdate = true;
+    }
+    r.uni.uCover.value = this.losTex;
+    return true;
   }
   onScreen(u) {
     const [sx, sy, depth] = this.toScreen(u.x, u.y), m = Math.max(u.w, u.d) * this.cam.z + 80;
@@ -553,13 +579,42 @@ export class BattleView {
         this.groundPath(ctx, [[u.x, u.y], [tgt.x, tgt.y]]); ctx.stroke();
       }
       if (selected) {
-        ctx.fillStyle = 'rgba(255,226,150,0.16)'; ctx.strokeStyle = 'rgba(255,226,150,0.95)'; ctx.lineWidth = 2;
+        // un anneau lumineux à la forme de la formation (halo large et doux, puis le trait)
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(255,226,150,0.22)'; ctx.lineWidth = 9;
+        this.footprint(ctx, u.x, u.y, u.dir, u.w, u.d, 7); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,226,150,0.12)'; ctx.strokeStyle = 'rgba(255,236,170,0.95)'; ctx.lineWidth = 2;
         this.footprint(ctx, u.x, u.y, u.dir, u.w, u.d, 4); ctx.fill(); ctx.stroke();
         // l'avant : une flèche
         const c = Math.cos(u.dir), s = Math.sin(u.dir), f = u.d / 2 + 8;
         this.groundPath(ctx, [[u.x + c * (f + 9), u.y + s * (f + 9)], [u.x + c * f - s * 6, u.y + s * f + c * 6], [u.x + c * f + s * 6, u.y + s * f - c * 6]], true);
         ctx.fillStyle = 'rgba(255,226,150,0.95)'; ctx.fill();
       }
+    }
+    // lignes de front (à la manière d'UGAR) : entre deux régiments ennemis au contact (feu, recharge, mêlée, charge), un ruban
+    // qui ondule au sol, à la couleur de chaque camp de son côté
+    const seen = new Set();
+    ctx.lineCap = 'round';
+    for (const u of this.units.values()) {
+      if (u._ghost || u.target == null || !(u.state === 'feu' || u.state === 'recharge' || u.state === 'melee' || u.state === 'charge')) continue;
+      const t = this.units.get(String(u.target));
+      if (!t || t.side === u.side || t._ghost || t.state === 'hors') continue;
+      const key = String(u.id) < String(t.id) ? `${u.id}|${t.id}` : `${t.id}|${u.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const dx = t.x - u.x, dy = t.y - u.y, L = Math.hypot(dx, dy);
+      if (L > 320 || L < 1) continue;
+      const nx = dx / L, ny = dy / L, half = Math.max(u.w || 40, t.w || 40) * 0.55, mx = (u.x + t.x) / 2, my = (u.y + t.y) / 2;
+      for (const [side, off] of [[u.side, -3], [t.side, 3]]) {
+        const pts = [];
+        for (let k = 0; k <= 16; k++) {
+          const s = -half + 2 * half * k / 16, w = off + Math.sin(s * 0.07 + time * 2.2) * 2.5 * Math.sin(Math.PI * k / 16);
+          pts.push([mx - ny * s + nx * w, my + nx * s + ny * w]);
+        }
+        ctx.strokeStyle = this.colors?.[side] || '#ccc'; ctx.globalAlpha = 0.85; ctx.lineWidth = 3.2;
+        this.groundPath(ctx, pts); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
     }
     // objectif d'un assaut : le cœur de la place (tenu hold_need secondes sans défenseur pour l'emporter)
     const obj = st?.objective || (this.map?.heart && this.map?.place ? this.map.heart : null);

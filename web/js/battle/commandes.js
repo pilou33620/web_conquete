@@ -294,6 +294,7 @@ export class Controls {
     else if (k === 'h' || k === 'H') v.ui.act('hold');
     else if (k === 'f' || k === 'F') v.ui.act('fire');
     else if (k === 'r' || k === 'R') v.ui.act('rally');
+    else if (k === 'v' || k === 'V') { v.setLos(!v.losOn); v.ui.renderPanel(true); }
     else if (k === '+' || k === '=') v.zoomAt(v.vw / 2, v.vh / 2, 1.25);
     else if (k === '-') v.zoomAt(v.vw / 2, v.vh / 2, 0.8);
   }

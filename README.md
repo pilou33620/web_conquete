@@ -515,6 +515,11 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   souris, molette pour zoomer, **clic droit glissé pour pivoter**, clic du milieu glissé pour se déplacer ; flèches
   du clavier. La **mini-carte** (en bas à droite) montre la part de terrain vue et se touche pour s'y rendre ;
   dessous, la vitesse : pause, ×1, ×2, ×4 (espace, 1, 2, 4 au clavier).
+- **Lire la bataille**, comme dans Ultimate General : le régiment choisi est cerné d'un anneau lumineux ; entre deux
+  régiments ennemis au contact, une **ligne de front** ondule au sol, à la couleur de chaque camp de son côté ; le
+  bouton **« Ligne de vue »** du panneau d'un régiment (touche V) assombrit tout ce qu'il ne voit pas (crêtes, bois,
+  bâti et vergers, la même règle que le moteur, haies mises à part). La fumée des canons, plus grise, monte au-dessus
+  de celle des fusils.
 - **En haut** : l'heure (et la nuit qui approche), le temps, le rapport de forces (l'ennemi : seulement ce que
   vous en voyez), le journal (repliable, et complet derrière son bouton), l'aide, **« Finir auto. »** (vos officiers
   achèvent la bataille en accéléré) et **« Décrocher »** (toute l'armée quitte le terrain), chacun avec confirmation.
@@ -768,7 +773,7 @@ web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et 
                      heures.js (table des heures : lumière, brume et étalonnage de 5 h à 22 h ; logique pure,
                      testée), horizon.js (normales fines, occlusion et horizons du relief, calculés une fois
                      par bataille ; logique pure, testée), apres.js (après-rendu : brume, ACES, LUT d'étalonnage, vignettage, FXAA, halo,
-                     maquette), ciel.js (le ciel : dégradé, soleil, nuages), herbe.js (touffes d'herbe en relief), pietinement.js (la boue laissée par les troupes), sols.js (sols photo : chargement des huit sols), qualite.js (qualité
+                     maquette), ciel.js (le ciel : dégradé, soleil, nuages), visibilite.js (ligne de vue ; logique pure, testée), herbe.js (touffes d'herbe en relief), pietinement.js (la boue laissée par les troupes), sols.js (sols photo : chargement des huit sols), qualite.js (qualité
                      graphique), commandes.js (gestes et clavier),
                      interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils
                      communs), css/bataille.css ;
@@ -808,6 +813,7 @@ node --test tests/                               # l'interface seule
 | `tests/camera.test.mjs` | caméra 3D des batailles : allers-retours écran ↔ terrain à 1 m et 1 pixel près sur une colline, à plusieurs caps et zooms ; bornes |
 | `tests/troupes.test.mjs` | dispositions des figurines : rangs de la ligne, plafond par régiment, carré à quatre faces, colonne, tirailleurs, déroute |
 | `tests/gestes.test.mjs` | animations des batailles : geste de chaque homme (salve qui roule, recharge, servants, mêlée, charge), allure propre à chacun, place gardée d'une formation à l'autre, tués (ligne d'un boulet, plafond des corps), contour des bâtiments, échelle des figurines de loin |
+| `tests/visibilite.test.mjs` | ligne de vue du navigateur : rase campagne vue, crête et bois épais qui bouchent, lisière qui voit dehors, la même dans les deux sens, champ de vision borné |
 | `tests/portraits.test.mjs` | portraits des régiments : la même figure en bataille et en campagne (piquiers avant la baïonnette, pièce de son époque, cavalier pour le général) |
 | `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte ; zénith bleu par beau temps et pâle sous les nuages, brume des vallées seulement le matin, voile épaissi par le brouillard |
 | `tests/horizon.test.mjs` | relief et lumière : horizon plat en plaine, haut du côté d'une colline et bas de l'autre, occlusion au pied d'une colline, normales qui penchent vers l'extérieur |

@@ -333,6 +333,8 @@ export class BattleUI {
       h += `<div class="bp-row bp-btns">${o.btns}
         <button class="bt-btn" data-a="rally" ${anyRout ? '' : 'disabled'}>Rallier</button>
         <button class="bt-btn danger" data-a="retreat">Retraite</button></div>`;
+      // ligne de vue (une seule unité choisie) : ce qu'elle voit reste clair, le reste s'assombrit (touche V)
+      if (us.length === 1) h += `<div class="bp-row bp-btns"><button class="bt-btn ${v.losOn ? 'on' : ''}" data-a="los" title="Ce que voit ce régiment (touche V)">Ligne de vue</button></div>`;
       const tip = aideArme(us);
       if (tip) h += `<p class="bp-help">${esc(tip)}</p>`;
       if (anyRout) h += `<p class="bp-help">${esc(this.rallyHint(us.filter(x => x.state === 'deroute')))}</p>`;
@@ -430,6 +432,7 @@ export class BattleUI {
       case 'form': this.act('form', { f: b.dataset.f }); break;
       case 'rot': this.act('rot', { r: +b.dataset.r }); break;
       case 'fire': case 'shot': this.act(a, { m: b.dataset.m }); break;
+      case 'los': v.setLos(!v.losOn); this.renderPanel(true); break;
       case 'hold': case 'rally': case 'charge': case 'counter': case 'harass': case 'cover': case 'pursue': case 'gait': case 'vcharge': this.act(a); break;
       case 'retreat': this.confirm('Retraite', 'Les régiments choisis quittent le champ de bataille par votre bord. Ils reviennent en campagne avec leurs hommes.', 'Ordonner la retraite', () => this.act('retreat'), true); break;
       case 'untarget': v.controls.setTargeting(null); break;

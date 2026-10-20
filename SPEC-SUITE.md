@@ -245,6 +245,13 @@ seconde sur l'iPad en Haute.
 - **Fumée** : fondu selon la profondeur là où elle coupe le sol (passe d'après-rendu), éclairs de bouche qui éclairent
   un instant le sol et les hommes proches, fumée de canon plus grise et plus haute que celle de la mousqueterie.
 
+**Livré le 20/10/2026** (`visibilite.js`, `vue.js` drawGround et updateLos, bouton du panneau et touche V,
+`effets.js`) : lignes de front entre régiments ennemis au contact (feu, recharge, mêlée, charge ; pas avec un ennemi
+qu'on ne voit plus), anneau lumineux du régiment choisi, mode ligne de vue (calculé en 3 ms sur un PC, recalculé quand
+le régiment change de case, passé au sol par la texture des couverts : aucune texture en plus), fumée de canon plus
+grise qui monte plus haut. Écarts : les haies ne comptent pas dans la ligne de vue du navigateur ; pas encore de fondu
+de la fumée selon la profondeur, ni d'éclairs qui éclairent le sol (à reprendre avec F8).
+
 ### F7. Les haies (A5.6)
 
 Les haies du bocage cessent d'être des bandes extrudées : des touffes de feuillage serrées (le shader `feuillage` des
