@@ -889,13 +889,19 @@ class Game:
                     if cur['left'] <= 0:
                         f['research'][b] = None
                         f['techs'].append(cur['tech'])
+                        f.setdefault('tech_dates', {})[cur['tech']] = [self.date_str(), round(self.t, 2)]   # (la frise des découvertes)
                         self.recompute_mods(code)
                         if code == self.player:
                             arm = next((R.ARMS[c][i][1] for c in R.ARMS for i in range(len(R.ARMS[c]))
                                         if R.ARMS[c][i][0] == cur['tech']), None)
                             self.log('tech', f"Découverte : {R.TECH[cur['tech']]['name']}." +
                                      (f" Nouvel armement ({arm}) pour les régiments levés désormais ; réarmez les anciens "
-                                      f"dans vos places (bouton « Réarmer »)." if arm else ''), important=True)
+                                      f"dans vos places (bouton « Réarmer »)." if arm else ''), important=True,
+                                     extra=dict(tech=cur['tech']))
+                        elif cur['tech'] in R.NOTABLE_TECHS:
+                            # une découverte d'une IA qui se voit (sur la carte, en bataille) : un bandeau, sans arrêter le jeu
+                            self.log('tech_ia', f"{self.faction_name(code)} découvre : {R.TECH[cur['tech']]['name']}.",
+                                     who=code, extra=dict(tech=cur['tech']))
         # milice et stabilité (l'ordre public tend vers une cible : impôts, famine, banqueroute, garnison) :
         # évolutions lentes, calculées par paquets d'un quart de jour pour ménager les petites machines
         self._slow_dt = getattr(self, '_slow_dt', 0.0) + dt

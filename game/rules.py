@@ -350,6 +350,10 @@ VISUALS = dict(
 )
 
 
+# découvertes des IA annoncées au joueur (un bandeau) : ce qui se voit sur la carte ou en bataille
+NOTABLE_TECHS = {v['tech'] for v in VISUALS.values()} | {'chemins_fer', 'rail_militaire'}
+
+
 def marks(techs):
     """Marques visibles d'un camp qui a ces technologies."""
     return [k for k, v in VISUALS.items() if v['tech'] in techs]

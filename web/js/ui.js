@@ -6,6 +6,7 @@ import { Tuto } from './tuto.js';
 import { UnitArt } from './battle/unites.js';
 import { profil } from './battle/qualite.js';
 import { figureKind, drawPortrait } from './portraits.js';
+import { Decouvertes } from './decouvertes.js';
 
 // nombres à la française : virgule décimale et vrai signe moins (−)
 const minus = s => s.replace(/^-/, '−');
@@ -44,6 +45,7 @@ export class UI {
     this.st = null;
     this.sel = null;
     this.checked = new Set();
+    this.decouv = new Decouvertes(this);   // fenêtre et mise en scène des découvertes (decouvertes.js)
     this.targeting = null;
     this.modal = null;
     this.events = [];
@@ -291,6 +293,8 @@ export class UI {
     this.events.push(ev);
     if (this.events.length > 600) this.events.splice(0, 100);
     if (initial) return;
+    this.decouv.onEvent(ev, initial);
+    if (ev.kind === 'tech_ia') this.toast(ev.text);   // (une découverte d'une IA : un bandeau, le jeu continue)
     if (ev.coins) this.map.spawnCoins(this.st.me.code);
     const toastKinds = ['tech', 'eco', 'meteo', 'fin', 'info', 'diplo', 'revolte', 'siege', 'armee', 'espion', 'rail'];
     if (ev.important && toastKinds.includes(ev.kind)) this.toast(ev.text, ev.kind === 'diplo' && /guerre/.test(ev.text) ? 'bad' : '');
@@ -743,6 +747,7 @@ export class UI {
       case 'recap-more': this.recapOpen = !this.recapOpen; this.renderRecap(); break;
       case 'modal': this.openModal(d.v); break;
       case 'close-modal': this.dismissModal(); break;
+      case 'open-tech': this.openModal('tech'); break;
       case 'close-panel': this.select(null); break;
       case 'tuto-next': this.tuto.next(); break;
       case 'tuto-skip': this.tuto.stop(); break;
@@ -1624,7 +1629,7 @@ export class UI {
     if (!force && ae && card.contains(ae) && (/^(SELECT|TEXTAREA)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !['range', 'checkbox'].includes(ae.type)))) return;
     const fn = { tech: this.techModal, diplo: this.diploModal, commerce: this.commerceModal, production: this.prodModal,
                  journal: this.journalModal, menu: this.menuModal, fin: this.endModal, event: this.eventModal,
-                 bataille: this.battleModal, arrivee: this.arriveeModal }[k];
+                 bataille: this.battleModal, arrivee: this.arriveeModal, decouverte: () => this.decouv.html() }[k];
     const [html, sig] = fn.call(this);
     if (!force && sig === this.modalSig) return;
     this.modalSig = sig;
@@ -1637,6 +1642,7 @@ export class UI {
     for (const [id, v] of Object.entries(vals)) { const i = document.getElementById(id); if (i && i.type !== 'range') i.value = v; }
     card.scrollTop = scroll;
     for (const b of this.$('rail').children) b.classList.toggle('on', b.dataset.v === k);
+    if (k === 'decouverte') this.decouv.anime();
   }
 
   techModal() {
@@ -1663,7 +1669,7 @@ export class UI {
       }).join('');
       return `<div class="tech-col"><h3>${BRANCH_LABEL[br]}</h3><div class="cur">${head}</div>${cards}</div>`;
     }).join('');
-    const html = `<h2 class="m-title" id="m-title">Technologies</h2><p class="m-sub">Une recherche à la fois par branche. Le militaire gagne les batailles, le civil et social fait marcher l’État et la société, l’industriel forge armes et outils, l’agricole remplit les greniers.</p><div class="tech-cols">${cols}</div>`;
+    const html = `<h2 class="m-title" id="m-title">Technologies</h2><p class="m-sub">Une recherche à la fois par branche. Le militaire gagne les batailles, le civil et social fait marcher l’État et la société, l’industriel forge armes et outils, l’agricole remplit les greniers.</p>${this.decouv.frise()}<div class="tech-cols">${cols}</div>`;
     return [html, JSON.stringify([me.techs, Object.values(me.research).map(r => r && Math.ceil(r.left)), Math.floor(me.res.livres / 25)])];
   }
 
@@ -1821,7 +1827,7 @@ export class UI {
 
   journalModal() {
     const f = this.journalFilter || 'all';
-    const groups = { all: null, battle: ['battle', 'battle_end', 'siege', 'capture', 'capitulation', 'revolte', 'espion'], diplo: ['diplo', 'espion'], eco: ['eco', 'tech', 'meteo', 'armee', 'rail'], hist: ['evenement', 'epoque', 'info'] };
+    const groups = { all: null, battle: ['battle', 'battle_end', 'siege', 'capture', 'capitulation', 'revolte', 'espion'], diplo: ['diplo', 'espion'], eco: ['eco', 'tech', 'tech_ia', 'meteo', 'armee', 'rail'], hist: ['evenement', 'epoque', 'info'] };
     const evs = this.events.filter(e => !groups[f] || groups[f].includes(e.kind)).slice(-250).reverse();
     const tabs = [['all', 'Tout'], ['battle', 'Guerre'], ['diplo', 'Diplomatie'], ['eco', 'Économie'], ['hist', 'Histoire']].map(([k, l]) =>
       `<button class="btn ${k === f ? 'primary' : ''}" data-act="jtab" data-v="${k}">${l}</button>`).join('');

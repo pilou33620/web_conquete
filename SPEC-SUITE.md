@@ -465,6 +465,17 @@ changement du moteur, à confirmer au plan).
 scène se lance pour une technologie « de carte », la frise la montre ; une découverte d'IA donne un bandeau et rien
 d'autre.
 
+**Livré le 20/10/2026** (`decouvertes.js`, `ui.js`, `map.js` éclats, `engine.py` : date de chaque découverte
+`tech_dates` et annonce `tech_ia`, `views.py`, `rules.NOTABLE_TECHS` ; tests `Decouvertes` et
+`decouvertes.test.mjs`). Pour une technologie qui se voit sur la carte, la caméra va au chef-lieu, un éclat d'or s'y
+ouvre, puis la fenêtre paraît ; sinon la fenêtre paraît tout de suite (jamais par-dessus une autre fenêtre). La
+fenêtre porte un ruban rouge « Découverte », le nom, la branche, la date, l'année d'invention, ce que la technologie
+change et une vignette animée par le code (neuf familles : vapeur, canon, moisson, vigne, télégraphe, forge, phare,
+médecine, livre). La frise de vos découvertes datées ouvre le panneau des technologies. Les découvertes marquantes des
+IA (celles qui se voient sur la carte, le rail) arrivent en bandeau avec un éclat sur leur chef-lieu, sans arrêter le
+jeu ; elles vont au journal (rubrique Économie). Écart : pas de citation d'époque (on n'en invente pas ; des citations
+vérifiées pourront s'ajouter) ; pas de gravures (D5 : vignettes d'abord).
+
 ---
 
 ## Partie J : le décor des batailles selon l'époque (SPEC-TECH, phase 4)

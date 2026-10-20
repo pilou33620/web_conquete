@@ -379,7 +379,7 @@ def player_state(g, since=0):
                 research={b: (dict(tech=v['tech'], left=round(v['left'], 1), total=v['total'],
                                    tn=TT.ready_in(g, v['left'] / (1 + g.mod(p, 'research_speed') + CT.college_k(g, p))))
                               if v else None) for b, v in me['research'].items()},
-                techs=me['techs'], cov=round(cov, 2), tools_bonus=round(tb, 3), cap=round(me.get('_cap', 0), 2),
+                techs=me['techs'], tech_dates=me.get('tech_dates', {}), cov=round(cov, 2), tools_bonus=round(tb, 3), cap=round(me.get('_cap', 0), 2),
                 upkeep={k: round(v, 2) for k, v in me.get('_upkeep', {}).items()},
                 trade={k: round(v, 2) for k, v in me.get('_trade', {}).items()},
                 unit_costs={u: g.unit_cost(p, u) for u in R.UNITS}, unit_days={u: round(g.unit_days(p, u), 1) for u in R.UNITS},

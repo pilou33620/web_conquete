@@ -1640,6 +1640,20 @@ export class MapView {
     this.drawArmies(ctx, time);
     this.drawBattles(ctx, dt, time);
     this.drawParticles(ctx, dt);
+    // éclats d'or des découvertes (decouvertes.js) : trois anneaux qui s'ouvrent sur le chef-lieu
+    if (this.flashes?.length) {
+      const nowMs = performance.now();
+      this.flashes = this.flashes.filter(f => nowMs - f.t0 < 2600);
+      for (const f of this.flashes) {
+        const [x, y] = this.toScreen(f.x, f.y), age = (nowMs - f.t0) / 2600;
+        for (let k = 0; k < 3; k++) {
+          const u = Math.max(0, Math.min(1, age * 1.4 - k * 0.18));
+          if (u <= 0 || u >= 1) continue;
+          ctx.strokeStyle = `rgba(243,217,142,${0.9 * (1 - u)})`; ctx.lineWidth = 3 * (1 - u) + 1;
+          ctx.beginPath(); ctx.arc(x, y, 12 + u * 90, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
+    }
     this.ambient.over(ctx, dt, time, st);
     this.drawWeather(ctx, dt, time);
     this.drawVignette(ctx);

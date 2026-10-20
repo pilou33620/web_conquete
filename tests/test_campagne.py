@@ -1518,5 +1518,29 @@ class VoiesFerrees(unittest.TestCase):
         self.assertEqual(V.from_dict(GEO, {k: v for k, v in json.loads(json.dumps(V.to_dict(g))).items() if k != 'rails'}).rails, {})
 
 
+
+class Decouvertes(unittest.TestCase):
+    """La fenêtre et la frise des découvertes (SPEC-SUITE I) : chaque découverte est datée, celles du joueur portent
+    leur technologie, les découvertes marquantes des IA sont annoncées."""
+    def test_decouvertes_datees_et_annoncees(self):
+        g = partie('33', '1790')
+        me, ia = g.factions['33'], g.factions['24']
+        for f, tech in ((me, 'assolement'), (ia, 'pins')):
+            f['techs'] = [t for t in f['techs'] if t != tech]
+            f['research'] = {b: None for b in f['research']}
+            f['research'][R.TECH[tech]['branch']] = dict(tech=tech, left=0.001, total=10)
+        seq0 = g.seq
+        jouer_mois(g)
+        evs = [e for e in g.events if e['seq'] > seq0]
+        mine = [e for e in evs if e['kind'] == 'tech' and e.get('tech') == 'assolement']
+        theirs = [e for e in evs if e['kind'] == 'tech_ia' and e.get('tech') == 'pins']
+        self.assertTrue(mine, 'ma découverte porte sa technologie')
+        self.assertTrue(theirs and theirs[0]['who'] == '24', 'la découverte de l’IA est annoncée')
+        self.assertIn('assolement', me['tech_dates'])
+        date, t = me['tech_dates']['assolement']
+        self.assertIn('1790', date)
+        self.assertEqual(V.player_state(g)['me']['tech_dates']['assolement'][0], date)
+
+
 if __name__ == '__main__':
     unittest.main()

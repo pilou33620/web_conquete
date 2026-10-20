@@ -252,6 +252,11 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   jusqu'aux plants greffés, le maïs pousse en Chalosse et en Béarn. Le drapeau des clochers suit l'époque (blanc du
   roi, tricolore, blanc de la Restauration), bordé de la couleur du maître de la place, et les passants changent de
   chapeau (tricorne, bicorne, haut-de-forme).
+- **Chaque découverte a sa mise en scène** : si elle se voit sur la carte, la caméra va à votre chef-lieu et un éclat
+  d'or s'y ouvre ; puis une fenêtre à ruban rouge présente la technologie, sa date et ce qu'elle change, avec une
+  vignette animée (une locomotive qui passe, un canon qui tire, des épis au vent, une tour Chappe qui bat des bras…).
+  Le panneau des technologies s'ouvre sur la frise de vos découvertes. Celles des autres camps qui se voient (rail,
+  télégraphe, usines, pins…) sont annoncées par un bandeau et un éclat sur leur chef-lieu.
 - Villes et villages sont dessinés en vue cavalière : maisons, église à clocher, grande église des villes, cathédrale et
   hôtel de ville des chefs-lieux, citadelle des places fortes. Chaque pays a ses couleurs (pierre blonde et tuiles du
   Bordelais, toits bruns du Périgord, colombages des Landes, brique de l'Agenais, murs blancs et ardoise du Béarn),
@@ -826,6 +831,7 @@ node --test tests/                               # l'interface seule
 | `tests/troupes.test.mjs` | dispositions des figurines : rangs de la ligne, plafond par régiment, carré à quatre faces, colonne, tirailleurs, déroute |
 | `tests/gestes.test.mjs` | animations des batailles : geste de chaque homme (salve qui roule, recharge, servants, mêlée, charge), allure propre à chacun, place gardée d'une formation à l'autre, tués (ligne d'un boulet, plafond des corps), contour des bâtiments, échelle des figurines de loin |
 | `tests/visibilite.test.mjs` | ligne de vue du navigateur : rase campagne vue, crête et bois épais qui bouchent, lisière qui voit dehors, la même dans les deux sens, champ de vision borné |
+| `tests/decouvertes.test.mjs` | découvertes : chaque technologie a sa famille de vignette animée |
 | `tests/epoque.test.mjs` | la carte selon l'époque : drapeau de chaque période, chapeaux des passants, phylloxéra de 1875 aux plants greffés |
 | `tests/portraits.test.mjs` | portraits des régiments : la même figure en bataille et en campagne (piquiers avant la baïonnette, pièce de son époque, cavalier pour le général) |
 | `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte ; zénith bleu par beau temps et pâle sous les nuages, brume des vallées seulement le matin, voile épaissi par le brouillard |
