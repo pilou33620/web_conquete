@@ -541,6 +541,9 @@ en plus de celles qui existent, ni de ponts de pierre à la place des gués : il
   - `test_une_decision_arrete_le_tour_des_ia_puis_il_reprend` (`tests/test_campagne.py`).
   À examiner à part : soit le test, soit le tour par tour a dérivé.
 
+**Les deux tests de campagne** (20/10/2026) : ce n'était pas le jeu mais les tests, qui lisaient `stop['kind']`
+quand le tour avait repris et que l'arrêt était vide ; corrigés comme le test voisin, toute la suite passe.
+
 ## Livraison (ordre proposé)
 
 | Ordre | Étape | Contenu | Dépend de | Effet |

@@ -29,40 +29,40 @@ Specs : `SPEC-RENDU.md` (étape 9, parties A à D) et `SPEC-CARTES.md`. Tout ce 
   - Ensuite : allégé, intégré aux pièces d'artillerie, auteur crédité dans `LICENCE.txt`.
 - [ ] (Au choix) le cheval de henry_7 (CC-BY, Sketchfab), si le cheval Quaternius ne suffit pas de près.
 
-## Ce qui reste du rendu des batailles (SPEC-RENDU)
+## Fait le 20/10/2026, d'après SPEC-SUITE.md (décisions D1 à D7 validées : « tu peux tout faire toi »)
 
-- [ ] **9g l'atmosphère** : brouillard selon la hauteur, ciel et horizon (bien visibles avec la nouvelle caméra), eau (A6, A7).
-- [ ] **9h la fin** : reflets du métal (baïonnettes, canons), occlusion calculée par sommet.
-- [ ] **9i l'atlas d'uniformes** : coordonnées de texture et atlas peint par le code (boutons, galons, buffleteries).
-- [ ] **9k la foule** : imposteurs animés de loin, budgets relevés (B3, B5) ; imposteurs d'arbres (A5.2) si l'iPad peine.
-- [ ] **9l la lisibilité** : lignes de front, mode ligne de vue (B7).
-- [ ] Sol (A1) : courbure (creux plus verts), triplanaire des pentes raides, neige comme 9ᵉ sol.
-- [ ] Haies (A5.6) : un vrai feuillage au lieu de bandes extrudées.
-- [ ] Piétinement (A4) : enregistrer la boue avec la bataille ; ornières des pièces ; débris (chapeaux, fusils, roues) ;
-  boue luisante sous la pluie.
-- [ ] Cartes de bataille (SPEC-CARTES C3.3) : les rangs d'arbres le long des chemins creux.
+- [x] F1 ciel, brume (voile des lointains, brume des vallées), eau `d180095`
+- [x] G1 cartes portrait des régiments sur la carte, date en bas à droite `9453979`
+- [x] F6 lignes de front, ligne de vue (touche V), anneau de sélection, fumée de canon `599e8ce`
+- [x] G2, G3 généraux en médaillon, armées en figurines sur la carte `69390cc`
+- [x] F2, F3, F7 reflets du métal, creux plus verts, haies en feuillage `e3dc39b`
+- [x] F8 la boue gardée avec la bataille, débris au sol `a4ff9ff`
+- [x] H la carte qui change avec les siècles (télégraphes, usines, vapeurs, pins, phylloxéra, drapeaux, passants) `f7eaf86`
+- [x] I les découvertes mises en scène (éclat, fenêtre, vignette animée, frise, bandeau des IA) `17a3a93`
+- [x] J le décor des batailles selon l'époque (rail, télégraphe, usines, ambulances, ballon, retranchements) `c616e25`
+- [x] F9 rangs d'arbres le long des chemins creux `c13870f`
+- [x] F4 en partie : boutons et visages peints de près `91a1e0e`
+- [x] G4 maquette de la vue inclinée (`/js/dev/carte3d.html`) `1052600`
+- [x] Les deux tests de campagne en échec : c'étaient les tests (ils lisaient un arrêt vide) ; corrigés, tout passe.
 
-## Ce qui reste de la carte de campagne (SPEC-RENDU, partie D)
+## Ce qui reste
 
-- [ ] La vue 3D inclinée comme UGAR (gros chantier : la carte est aujourd'hui un canevas 2D en tuiles).
-- [ ] Les portraits des généraux sur la carte, à côté de leur armée.
-- [ ] Des figurines pour les armées en marche (aujourd'hui des blocs vus de dessus).
-- [ ] Le panneau de la date et des vitesses en bas à droite, et des cartes de régiment en portrait, comme en bataille.
-- [ ] À accorder avec la phase 2d plus bas (« le style de la carte selon l'époque : gravure, lithographie, état-major ») :
-  le style UGAR devient la base, les époques le feraient varier.
+- [ ] **E1, E2 : soldats et canon téléchargés**, toujours bloqués : ton Chrome n'était pas connecté (extension Claude
+  in Chrome) et le téléchargement direct a été refusé. Télécharge les deux fichiers dans Téléchargements, ou connecte
+  l'extension, et je les intègre.
+- [ ] **F5 : la foule de loin** (imposteurs animés, budgets relevés) : d'abord mesurer sur l'iPad ce que coûtent les
+  figurines d'aujourd'hui en Haute.
+- [ ] **G4 : la suite de la vue inclinée** (clics, armées, brouillard, territoires, option du menu), si la maquette
+  te plaît et tient sur l'iPad.
+- [ ] Les écarts notés dans SPEC-SUITE.md, partie par partie (style « d'époque » en option, cultures de l'époque en
+  bataille, boue luisante sous la pluie, ornières, galons et usure des uniformes…).
 
 ## À vérifier par toi
 
-- [ ] Sur l'iPad, en qualité **Haute** (la qualité automatique peut redescendre en Basse) : images par seconde en
-  bataille avec l'herbe, le cheval et la fumée.
-- [ ] Sur le Raspberry Pi : le temps de chargement de la carte de campagne (le relief est peint au chargement et à chaque
-  changement de saison, 0,1 s sur un PC, peut-être 1 s sur le Pi).
-- [ ] Ton avis sur la ressemblance avec UGAR : batailles, carte de campagne, interface.
-
-## Connu, sans rapport avec ce chantier
-
-- [ ] Deux tests de campagne échouent déjà sur `main` : `test_deux_decisions_au_meme_moment` et
-  `test_une_decision_arrete_le_tour_des_ia_puis_il_reprend` (`tests/test_campagne.py`).
+- [ ] Sur l'iPad, en qualité **Haute** : images par seconde en bataille (ciel, brume, haies, herbe, cheval, fumée).
+- [ ] La maquette `/js/dev/carte3d.html` sur l'iPad : le compteur en bas à gauche.
+- [ ] Sur le Raspberry Pi : le chargement de la carte de campagne.
+- [ ] Ton avis sur la ressemblance avec UGAR.
 
 ---
 
@@ -125,21 +125,21 @@ Les phases 0 (règles), 1 (batailles) et 2a (le train) sont écrites, revues et 
 
 ## 4. La suite (chaque morceau passera par spec, plan et ton accord avant le code)
 
-- [ ] **Phase 2b : l'industrie sur la carte.**
+- [x] **Phase 2b : l'industrie sur la carte.** (fait le 20/10, SPEC-SUITE H)
   - Télégraphes : poteaux et fils le long des routes.
   - Bateaux à vapeur sur les fleuves.
   - Usines et cheminées dans les villes industrielles.
-- [ ] **Phase 2c : le paysage.**
+- [x] **Phase 2c : le paysage.** (fait le 20/10, SPEC-SUITE H)
   - Les champs, les canaux et les forêts changent avec l'agriculture et l'industrie.
-- [ ] **Phase 2d : l'allure de la carte.**
+- [x] **Phase 2d : l'allure de la carte.** (fait le 20/10, SPEC-SUITE H ; le style d'époque complet reste en option à faire)
   - Les drapeaux d'époque sur les villes.
   - Les passants et les voitures selon le siècle.
   - Le style de la carte (gravure, puis lithographie, puis carte d'état-major).
-- [ ] **Phase 3 : les découvertes.**
+- [x] **Phase 3 : les découvertes.** (fait le 20/10, SPEC-SUITE I)
   - Une mise en scène sur la carte quand une technologie est trouvée.
   - La fenêtre « gravure ».
   - La frise des découvertes.
   - Le bandeau qui annonce les découvertes des IA.
-- [ ] **Phase 4 : le décor des batailles.**
+- [x] **Phase 4 : le décor des batailles.** (fait le 20/10, SPEC-SUITE J)
   - Les retranchements et les ballons d'observation visibles.
   - Les voies ferrées, les poteaux télégraphiques et les usines sur le terrain de bataille, selon l'année.
