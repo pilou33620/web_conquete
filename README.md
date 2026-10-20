@@ -246,6 +246,12 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   **médaillon** : un portrait peint par le jeu, au visage tiré de son nom, coiffé selon l'époque (tricorne et perruque
   poudrée, puis bicorne à cocarde, puis képi). De près, les régiments sont de **petites figurines debout** en rangs,
   à l'uniforme de l'époque, comme les armées d'Ultimate General.
+- **La carte change avec les siècles**, camp par camp, selon ses technologies : tours Chappe aux bras mobiles, puis
+  poteaux télégraphiques le long des routes royales ; cheminées d'usine qui fument, lueur des forges ; vapeurs à roues
+  sur les fleuves ; la forêt de pins gagne la lande, les marais drainés s'assèchent, le phylloxéra roussit les vignes
+  jusqu'aux plants greffés, le maïs pousse en Chalosse et en Béarn. Le drapeau des clochers suit l'époque (blanc du
+  roi, tricolore, blanc de la Restauration), bordé de la couleur du maître de la place, et les passants changent de
+  chapeau (tricorne, bicorne, haut-de-forme).
 - Villes et villages sont dessinés en vue cavalière : maisons, église à clocher, grande église des villes, cathédrale et
   hôtel de ville des chefs-lieux, citadelle des places fortes. Chaque pays a ses couleurs (pierre blonde et tuiles du
   Bordelais, toits bruns du Périgord, colombages des Landes, brique de l'Agenais, murs blancs et ardoise du Béarn),
@@ -820,6 +826,7 @@ node --test tests/                               # l'interface seule
 | `tests/troupes.test.mjs` | dispositions des figurines : rangs de la ligne, plafond par régiment, carré à quatre faces, colonne, tirailleurs, déroute |
 | `tests/gestes.test.mjs` | animations des batailles : geste de chaque homme (salve qui roule, recharge, servants, mêlée, charge), allure propre à chacun, place gardée d'une formation à l'autre, tués (ligne d'un boulet, plafond des corps), contour des bâtiments, échelle des figurines de loin |
 | `tests/visibilite.test.mjs` | ligne de vue du navigateur : rase campagne vue, crête et bois épais qui bouchent, lisière qui voit dehors, la même dans les deux sens, champ de vision borné |
+| `tests/epoque.test.mjs` | la carte selon l'époque : drapeau de chaque période, chapeaux des passants, phylloxéra de 1875 aux plants greffés |
 | `tests/portraits.test.mjs` | portraits des régiments : la même figure en bataille et en campagne (piquiers avant la baïonnette, pièce de son époque, cavalier pour le général) |
 | `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte ; zénith bleu par beau temps et pâle sous les nuages, brume des vallées seulement le matin, voile épaissi par le brouillard |
 | `tests/horizon.test.mjs` | relief et lumière : horizon plat en plaine, haut du côté d'une colline et bas de l'autre, occlusion au pied d'une colline, normales qui penchent vers l'extérieur |

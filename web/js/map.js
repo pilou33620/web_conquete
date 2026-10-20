@@ -6,6 +6,7 @@ import { UnitArt } from './battle/unites.js';
 import { profil } from './battle/qualite.js';
 import { uniform } from './battle/formes.js';
 import { figureKind, portraitGeneral } from './portraits.js';
+import { Epoque, phylloxera } from './epoque.js';
 const TILE = 256;
 function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
@@ -117,6 +118,7 @@ export class MapView {
     this.colors = {};
     for (const [c, f] of Object.entries(this.rules.factions)) this.colors[c] = f.color;
     this.colors.neutre = this.rules.neutral_color;
+    this.epoque = new Epoque(this);   // la carte selon l'époque (epoque.js)
     this.playable = new Uint8Array(this.W * this.H);
     for (let c = 0; c < this.W * this.H; c++) {
       const d = this.dept[c];
@@ -869,6 +871,8 @@ export class MapView {
       this.owners = st.nodes.map(n => n.o);
       this.rebuildTerritory();
     }
+    // ce que les technologies de chaque camp ont changé au paysage est peint dans les tuiles (epoque.js)
+    if (this.epoque.update(st)) this.invalidateTiles();
     // pertes en bataille -> chiffres flottants
     const prevB = new Map((prev?.battles || []).map(b => [b.id, b]));
     for (const b of st.battles) {
@@ -1007,6 +1011,7 @@ export class MapView {
       }
       this.frontiers.push({ code: codes[ci], path });
     }
+    this.cellFac = idx; this.facCodes = codes;   // (le camp qui tient chaque case : le paysage de son époque, epoque.js)
     this.paintTerritory(idx, fields, codes);
   }
 
@@ -1313,14 +1318,16 @@ export class MapView {
             if (big) circle(trees.hi, x - r * 0.4, y - r * 0.44, r * 0.26);
           }
         } else if (t === T.LANDE) {
-          if (big) for (let k = 0; k < 4; k++) circle(shrubs[k & 1], i + h(k + 1), j + h(k + 6), 0.09 + h(k + 11) * 0.05);
-          if (h(20) < 0.35) {
-            const x = i + h(21), y = j + h(22), r = 0.22 * treeSc;
+          // (epoque.js) les semis de pins, puis la loi de 1857, font de la lande rase une forêt de pins
+          const mk = this.epoque.at(i, j), np = mk?.has('landes1857') ? 4 : mk?.has('pins') ? 2 : 1, pp = mk?.has('landes1857') ? 0.95 : mk?.has('pins') ? 0.7 : 0.35;
+          if (big && np === 1) for (let k = 0; k < 4; k++) circle(shrubs[k & 1], i + h(k + 1), j + h(k + 6), 0.09 + h(k + 11) * 0.05);
+          for (let k = 0; k < np; k++) if (h(20 + k * 5) < pp) {
+            const x = i + h(21 + k * 5), y = j + h(22 + k * 5), r = 0.22 * treeSc;
             trees.sh.moveTo(x + r * 1.4, y + r * 0.5); trees.sh.ellipse(x + r * 0.4, y + r * 0.5, r, r * 0.6, 0, 0, Math.PI * 2);
             circle(pines, x, y, r);
           }
         } else if (t === T.MARAIS) {
-          if (h(1) < 0.6) {
+          if (h(1) < (this.epoque.at(i, j)?.has('drainage') ? 0.2 : 0.6)) {   // drainés, les marais n'ont plus que quelques mares
             const x = i + h(2), y = j + h(3);
             pools.moveTo(x + 0.34, y); pools.ellipse(x, y, 0.34, 0.16, h(4) * 0.6, 0, Math.PI * 2);
           }
@@ -1346,8 +1353,11 @@ export class MapView {
           const n = 2;
           for (let k = 0; k < n; k++) {
             if (h(60 + k) < 0.25) continue;
+            // (epoque.js) maïs de Chalosse et du Béarn, prairies et cultures variées de l'assolement
+            const mk = this.epoque.at(i, j), dc = this.deptCodes[this.dept[c] - 1];
+            const extra = mk?.has('mais') && (dc === '40' || dc === '64') && h(72 + k) < 0.5 ? 5 : mk?.has('assolement') && h(73 + k) < 0.35 ? 6 + ((h(74 + k) * 2) | 0) : -1;
             fields.push([i + h(61 + k * 4), j + h(62 + k * 4), 0.45 + h(63 + k * 4) * 0.35, 0.3 + h(64 + k * 4) * 0.25,
-                         this.fieldAngle[c], (h(70 + k) * 5) | 0]);
+                         this.fieldAngle[c], extra >= 0 ? extra : (h(70 + k) * 5) | 0]);
           }
         } else if (t === T.PLAINE && h(50) < 0.05) {
           const x = i + h(51), y = j + h(52), r = 0.2 * treeSc;
@@ -1358,7 +1368,7 @@ export class MapView {
     }
     // parcelles
     const fcol = this.season === 'hiver' ? ['#b9b39c', '#a89c80', '#c4c2b4', '#9c8a6c', '#cfcbbd']
-      : ['#cfb563', '#bb9e55', '#9ea24f', '#ad8656', '#d8c47c'];
+      : ['#cfb563', '#bb9e55', '#9ea24f', '#ad8656', '#d8c47c', '#a9b84e', '#8ea65a', '#c7a46c'];   // (5 : maïs ; 6, 7 : luzerne, betterave)
     for (const [x, y, w, hgt, ang, ci] of fields) {
       g.save();
       g.translate(x, y); g.rotate(ang);
@@ -1431,7 +1441,7 @@ export class MapView {
       pmin = Math.min(pmin, p); pmax = Math.max(pmax, p); qmin = Math.min(qmin, q); qmax = Math.max(qmax, q);
     }
     const tones = ['rgba(122,156,64,0.34)', 'rgba(168,156,92,0.3)', 'rgba(108,146,58,0.3)', 'rgba(176,170,104,0.26)', 'rgba(136,164,70,0.22)'];
-    const plots = tones.map(() => new Path2D());
+    const plots = tones.map(() => new Path2D()), brown = new Path2D();
     const rows = new Path2D();
     const sp = Math.max(0.085, 2.4 / L), half = S * 0.5 - Math.max(0.025, 0.8 / L);
     const P = (cx, cy, u, v) => [cx + u * ca - v * sa, cy + u * sa + v * ca];
@@ -1446,7 +1456,8 @@ export class MapView {
         // vers la lisière, les parcelles rapetissent : le vignoble se fond dans la campagne
         const edge = clamp((m - 0.5) / 0.3, 0.45, 1);
         const hw = half * (0.72 + h(3) * 0.3) * edge, hh = half * (0.72 + h(4) * 0.3) * edge;
-        const pl = plots[(h(5) * tones.length) | 0];
+        // (epoque.js) de 1875 aux plants greffés, le phylloxéra roussit les parcelles
+        const pl = phylloxera(this.epoque.year, this.epoque.at(clamp(Math.floor(cx), 0, this.W - 1), clamp(Math.floor(cy), 0, this.H - 1))) && h(8) < 0.7 ? brown : plots[(h(5) * tones.length) | 0];
         const c0 = P(cx, cy, -hw, -hh);
         pl.moveTo(c0[0], c0[1]);
         for (const [u, v] of [[hw, -hh], [hw, hh], [-hw, hh]]) { const c = P(cx, cy, u, v); pl.lineTo(c[0], c[1]); }
@@ -1461,6 +1472,7 @@ export class MapView {
       }
     }
     plots.forEach((pl, k) => { g.fillStyle = tones[k]; g.fill(pl); });
+    g.fillStyle = 'rgba(150,104,56,0.42)'; g.fill(brown);
     if (L >= 8) {
       g.lineCap = 'round';
       g.strokeStyle = 'rgba(58,92,34,0.5)'; g.lineWidth = Math.max(0.03, 0.9 / L);
@@ -1622,6 +1634,7 @@ export class MapView {
     if (!this.state) { this.drawNodes(ctx, time, st); this.ambient.over(ctx, dt, time, null); this.drawVignette(ctx); this.drawGesture(ctx); return; }
     this.drawRails(ctx, st);
     this.ambient.drawTrains(ctx, time, st);
+    this.epoque.draw(ctx, time, st);
     this.drawNodes(ctx, time, st);
     this.drawPaths(ctx);
     this.drawArmies(ctx, time);
@@ -1729,6 +1742,7 @@ export class MapView {
   }
 
   drawSeasonTint(ctx) {
+    this.epoque.teinte(ctx);
     const tint = { hiver: 'rgba(214,228,248,0.17)', automne: 'rgba(222,140,60,0.07)', 'été': 'rgba(255,232,140,0.05)' }[this.season];
     if (tint) {
       const [x0, y0] = this.toScreen(0, 0), [x1, y1] = this.toScreen(this.W, this.H);
@@ -2081,6 +2095,9 @@ export class MapView {
     ctx.beginPath(); ctx.moveTo(x, y - h);
     ctx.quadraticCurveTo(x + w * 0.5, y - h + a, x + w, y - h * 0.82 + b);
     ctx.quadraticCurveTo(x + w * 0.5, y - h * 0.64 + a, x, y - h * 0.62);
+    ctx.closePath();
+    // (epoque.js) le drapeau de l'époque, bordé de la couleur du maître de la place
+    if (this.state && h >= 9) { this.epoque.etoffe(ctx, x, y - h, w, h * 0.38, col); return; }
     ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 0.8; ctx.stroke();
   }

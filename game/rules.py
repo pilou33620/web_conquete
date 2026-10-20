@@ -331,6 +331,22 @@ BRANCHES = ['militaire', 'civil', 'industriel', 'agricole']
 VISUALS = dict(
     sans_fumee=dict(tech='lebel'),      # poudre B : l'artillerie et les mitrailleuses du camp tirent sans fumée
     reffye=dict(tech='mitrailleuse'),
+    # la carte selon l'époque (SPEC-SUITE, partie H) : ce que la carte de campagne dessine chez le camp qui les a
+    chappe=dict(tech='chappe'),            # tours Chappe aux bras mobiles près des villes
+    telegraphe=dict(tech='telegraphe'),    # poteaux et fil le long des routes royales et des voies ferrées
+    usines=dict(tech='vapeur'),            # cheminées d'usine qui fument dans les villes
+    vapeurs=dict(tech='vapeur_fluviale'),  # vapeurs à roues parmi les gabares
+    forges=dict(tech='hauts_fourneaux'),   # lueur rouge des forges
+    gaz=dict(tech='gaz'),                  # réverbères des villes
+    fresnel=dict(tech='fresnel'),          # faisceau de Cordouan plus long
+    pins=dict(tech='pins'),                # les pins gagnent la lande
+    landes1857=dict(tech='landes1857'),    # la forêt de pins des Landes
+    gemmage=dict(tech='gemmage'),          # pots de résine
+    drainage=dict(tech='drainage'),        # les marais rétrécissent
+    greffe=dict(tech='greffe'),            # vignes replantées en rangs après le phylloxéra
+    mais=dict(tech='mais'),                # maïs en Chalosse et en Béarn
+    assolement=dict(tech='assolement'),    # champs plus variés
+    moissonneuses=dict(tech='moissonneuses'),
 )
 
 

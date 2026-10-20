@@ -419,6 +419,22 @@ Fichiers : `map.js` (`paintLand` et `decorate` lisent une couche « époque » e
 - **Teinte d'époque** sur le style UGAR (D3) : un peu plus sépia et des écritures plus anciennes au XVIIIe, des
   couleurs plus franches au XIXe. Le style « d'époque » complet (Cassini, état-major) devient une option d'affichage.
 
+**Livré le 20/10/2026** (`epoque.js` ; `rules.VISUALS` étendue et envoyée par camp, `mk` de l'état ; `map.js`
+decorate, vineyards, flag ; `ambient.js` passants, bateaux, phare ; test `epoque.test.mjs`) :
+- 2b : tours Chappe aux bras mobiles près des villes (jusqu'au télégraphe électrique), puis poteaux et fil le long des
+  routes royales tenues par des camps qui l'ont ; cheminées d'usine qui fument derrière les villes ; lueur des forges
+  dans les places du fer ; vapeurs à roues parmi les gabares ; faisceau de Cordouan plus long avec la lentille de Fresnel ;
+- 2c : les pins gagnent la lande (semis, puis la loi de 1857), les marais drainés perdent leurs mares, le phylloxéra
+  roussit les vignes de 1875 aux plants greffés, maïs en Chalosse et en Béarn, champs plus variés avec l'assolement ;
+  les tuiles sont repeintes quand ces marques ou les maîtres des cases changent ;
+- 2d : le drapeau de l'époque au clocher (blanc du roi, tricolore, blanc de la Restauration, tricolore), bordé de la
+  couleur du maître de la place ; passants au tricorne, au bicorne, puis au haut-de-forme ; teinte un peu sépia avant 1790.
+
+Écarts : pas de nuit sur la carte de campagne, donc pas de réverbères (gaz) ni de forges plus vives la nuit ; pas de
+pots de résine ni de moissonneuses en mouvement (trop petits à l'échelle de la carte) ; pas encore de remparts démolis
+ni de boulevards (les villes gardent leur dessin). Le style « d'époque » complet (Cassini, état-major) reste à faire,
+en option d'affichage (D3).
+
 ---
 
 ## Partie I : les découvertes (SPEC-TECH, phase 3)

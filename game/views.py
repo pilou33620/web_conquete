@@ -368,6 +368,7 @@ def player_state(g, since=0):
                          truce=g.date_str(me['truce'][code]) if code in me['truce'] else None,
                          wars=[o for o in g.factions if o != code and g.at_war(code, o)],
                          cap_owner=g.nodes[g.capital_of(code)]['owner'], techs=len(f['techs']),
+                         mk=R.marks(f['techs']),   # marques visibles sur la carte (rules.VISUALS ; SPEC-SUITE H)
                          pr=int(f.get('prisoners', {}).get(p, 0)) if code != p else 0,
                          prestige=g.prestige(code), weary=int(f.get('weary', 0)), **AA.view_passage(g, p, code)))
 

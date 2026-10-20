@@ -276,7 +276,11 @@ export class Ambient {
     if (sx < -200 || sy < -200 || sx > this.map.vw + 200 || sy > this.map.vh + 200) return;
     const s = clamp(z * 1.8, 13, 40);
     // faisceau tournant
-    const a = time * 0.8, len = clamp(z * 7, 40, 170), top = sy - s * 0.95;
+    // (epoque.js) la lentille de Fresnel porte le faisceau plus loin, chez le camp qui tient la place la plus proche
+    const mp = this.map, st = mp.state;
+    if (this.lightNode == null) { let bd = 1e9; for (const n of mp.nodes) { const d = Math.hypot(n.x - L.x, n.y - L.y); if (d < bd) { bd = d; this.lightNode = n.id; } } }
+    const far = st && mp.epoque?.of(st.nodes[this.lightNode]?.o)?.has('fresnel') ? 1.7 : 1;
+    const a = time * 0.8, len = clamp(z * 7, 40, 170) * far, top = sy - s * 0.95;
     ctx.save();
     for (const k of [0, Math.PI]) {
       const dx = Math.cos(a + k), dy = Math.sin(a + k) * 0.55;
@@ -523,6 +527,7 @@ export class Ambient {
     ctx.fillStyle = load < 0.5 ? '#8b3a2a' : '#5a6a3a'; ctx.fillRect(-s * 0.05, -s * 0.36, s * 0.1, s * 0.19);
     ctx.fillStyle = '#e8d2b0'; ctx.beginPath(); ctx.arc(0, -s * 0.41, s * 0.05, 0, TAU); ctx.fill();
     ctx.fillStyle = '#d9c9a0'; ctx.beginPath(); ctx.arc(-s * 0.08, -s * 0.33, s * 0.07, 0, TAU); ctx.fill();   // baluchon
+    this.map.epoque?.coiffe(ctx, s);   // tricorne, bicorne ou haut-de-forme selon l'époque
   }
 
   drawBoats(ctx, time, st) {
@@ -536,7 +541,9 @@ export class Ambient {
       const head = back ? a + Math.PI : a;
       const [sx, sy] = this.scr(x, y);
       const size = b.sea ? clamp(z * 2, 16, 46) : clamp(z * 1.3, 11, 30);
-      this.sailboat(ctx, sx, sy, size, head, time + b.ph, b.sea, this.wind(x, y, st));
+      // (epoque.js) sur les fleuves d'un camp qui a les vapeurs, un bateau sur deux est un vapeur à roues
+      if (!b.sea && this.map.epoque?.vapeur(x, y, b.ph * 1000)) this.map.epoque.steamer(ctx, sx, sy, size * 1.1, head, time + b.ph);
+      else this.sailboat(ctx, sx, sy, size, head, time + b.ph, b.sea, this.wind(x, y, st));
     }
     // barques de pêche au large, qui dansent sur la houle
     if (z >= 4.5) {
