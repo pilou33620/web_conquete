@@ -915,6 +915,29 @@ class Regles(unittest.TestCase):
         self.assertEqual(g.market, R.MARKET_BASE)
 
 
+class TraceDesRoutes(unittest.TestCase):
+    def test_les_routes_ne_suivent_pas_les_fleuves(self):
+        """Bug vu sur la carte : Bordeaux–Cadillac, tirée droit, roulait sur la Garonne en la franchissant plusieurs
+        fois. Le tracé contourne l'eau et ne la franchit pas plus souvent que la ligne droite (hors des villes
+        bâties sur la rive)."""
+        from game.geo import _seg_inter
+        rivers = [[GEO.xy(la, lo) for lo, la in r['pts']] for r in GEO.src['rivers'] if r['rank'] <= 2]
+
+        def crossings(path, A, B):
+            return sum(1 for p1, p2 in zip(path, path[1:]) for pts in rivers for p, q in zip(pts, pts[1:])
+                       if (it := _seg_inter(p1, p2, p, q)) and min(math.dist(it[1], A), math.dist(it[1], B)) > 0.6)
+        for e in GEO.edges:
+            if e.get('kind') == 'water':
+                continue
+            A, B = (GEO.nodes[e['a']]['x'], GEO.nodes[e['a']]['y']), (GEO.nodes[e['b']]['x'], GEO.nodes[e['b']]['y'])
+            with self.subTest(route=(GEO.nodes[e['a']]['name'], GEO.nodes[e['b']]['name'])):
+                self.assertLess(math.dist(e['pts'][0], A) + math.dist(e['pts'][-1], B), 0.02)
+                self.assertLessEqual(crossings(e['pts'], A, B), max(1, crossings([A, B], A, B)))
+                self.assertLess(sum(math.dist(p, q) for p, q in zip(e['pts'], e['pts'][1:])), 2.2 * math.dist(A, B) + 1)
+        bc = next(e for e in GEO.edges if {GEO.nodes[e['a']]['name'], GEO.nodes[e['b']]['name']} == {'Bordeaux', 'Cadillac'})
+        self.assertEqual(crossings(bc['pts'], bc['pts'][0], bc['pts'][-1]), 1)
+
+
 class Sauvegarde(unittest.TestCase):
     def test_aller_retour(self):
         g = partie()

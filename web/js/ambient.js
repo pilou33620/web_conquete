@@ -130,7 +130,7 @@ export class Ambient {
     this.travellers = [];
     mp.edges.forEach((e, ei) => {
       if (e.water || e.ferry) return;
-      const len = Math.hypot(e.B[0] - e.A[0], e.B[1] - e.A[1]);
+      const len = e.cum[e.cum.length - 1];
       if (len < 3) return;
       const n = (e.royal ? 1 : 0) + (hash(ei, 1, 96) < (e.royal ? 0.6 : 0.4) ? 1 : 0);
       for (let k = 0; k < n; k++) {
