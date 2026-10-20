@@ -321,6 +321,11 @@ figurines en vue cavalière :
 Peintes dans un atlas au chargement depuis les mêmes figures que les cartes portrait, aux couleurs de l'époque et du
 camp. Elles marchent (balancement) quand l'armée bouge.
 
+**G2 et G3 livrés le 20/10/2026** (`portraits.js` portraitGeneral et traitsGeneral, `map.js` medallion, figArt et
+drawFormation) : médaillon du général à droite du jeton (zoom moyen) et à gauche de la formation (de près, pour ne pas
+cacher le nom de la place) ; de près, les régiments en figurines debout de l'imagier des cartes (unites.js), rangées
+sur leur emprise teintée, triées de loin en près. Écart : les figurines ne marchent pas encore (pas de balancement).
+
 ### G4. La vue inclinée (selon D2)
 
 **Ce que verra le joueur.** La carte vue en biais comme dans UGAR : relief en volume, horizon brumeux au loin, forêts

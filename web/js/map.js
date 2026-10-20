@@ -2,6 +2,10 @@
 import { Ambient } from './ambient.js';
 import { clamp, hexRgb } from './battle/formes.js';
 import { TownArt } from './towns.js';
+import { UnitArt } from './battle/unites.js';
+import { profil } from './battle/qualite.js';
+import { uniform } from './battle/formes.js';
+import { figureKind, portraitGeneral } from './portraits.js';
 const TILE = 256;
 function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
@@ -2283,6 +2287,21 @@ export class MapView {
       ctx.strokeStyle = 'rgba(255,120,80,' + (0.5 + 0.5 * Math.sin(time * 8)) + ')';
       ctx.lineWidth = 2; roundRect(ctx, -w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 7); ctx.stroke();
     }
+    // le général : son portrait en médaillon, à droite de la plaque (à partir d'un zoom moyen)
+    if (a.gen && this.cam.z >= 2.6) this.medallion(ctx, a, col, w / 2 + 15, -3, 15);
+  }
+  // médaillon du général d'une armée (portraits.js), centré en (x, y), de rayon r
+  medallion(ctx, a, col, x, y, r) {
+    const cv = portraitGeneral(a.gen.name, this.state?.year || 1790, col);
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(x + 1.5, y + 2, r, 0, Math.PI * 2); ctx.fill();
+    ctx.drawImage(cv, x - r, y - r, 2 * r, 2 * r);
+  }
+  // l'imagier des figurines (unites.js) : les mêmes que les cartes de régiment, à l'uniforme de l'année
+  figArt() {
+    if (!this.art) this.art = new UnitArt(profil());
+    const y = this.state?.year || 1790;
+    if (this.art.year !== y) { this.art.year = y; this.art.sprites.clear(); }
+    return this.art;
   }
 
   formationLayout(a, bw, bd, gap) {
@@ -2358,6 +2377,7 @@ export class MapView {
     }
     const fighting = a.st === 'battle';
     const labels = [];
+    const figs = [];   // figurines debout (G3), placées dans le repère tourné, dessinées ensuite droites
     blocks.forEach((b, k) => {
       const r = b.r, sc = b.scale || 1;
       const jx = fighting ? (Math.sin(time * 9 + k * 1.7) * 0.8) : 0;
@@ -2368,9 +2388,18 @@ export class MapView {
       ctx.scale(sc, sc);
       ctx.translate(-bw / 2, -bd / 2);
       const uc = unitCls(this.rules, r[1]);
-      if (uc === 'artillerie') this.drawGuns(ctx, bw, bd, col, frac);
-      else if (uc === 'cavalerie') this.drawHorse(ctx, bw, bd, col, frac);
-      else this.drawFoot(ctx, bw, bd, col, frac, unitLight(this.rules, r[1]) || a.fm === 'tirailleurs', r[1] === 'grenadiers');
+      // l'emprise au sol, en ombre légère ; dessus, les hommes en figurines debout, rangées sur l'emprise
+      ctx.fillStyle = 'rgba(20,24,16,.22)'; ctx.fillRect(1.5, 2, bw, bd);
+      ctx.fillStyle = col; ctx.globalAlpha *= 0.28; ctx.fillRect(0, 0, bw, bd); ctx.globalAlpha /= 0.28;
+      const light = unitLight(this.rules, r[1]) || a.fm === 'tirailleurs';
+      const kind = figureKind({ cls: uc, type: r[1], light, arm: r[6] ?? 1 });
+      const per = uc === 'artillerie' ? Math.max(1, Math.round(3 * frac)) : Math.max(2, Math.round((uc === 'cavalerie' ? bw / 11 : bw / 7) * (light ? 1 : 2) * frac));
+      const rows = uc === 'artillerie' || uc === 'cavalerie' || light ? 1 : 2, cols = Math.ceil(per / rows), m = ctx.getTransform();
+      for (let q = 0; q < per; q++) {
+        const i = q % cols, j = (q / cols) | 0;
+        const lx = bw * (i + 0.5) / cols + (light ? (hash(k, q, 3) - 0.5) * bw / cols * 0.6 : 0), ly = bd * (rows === 1 ? 0.55 : 0.3 + 0.45 * j);
+        figs.push({ x: (m.a * lx + m.c * ly + m.e) / this.dpr, y: (m.b * lx + m.d * ly + m.f) / this.dpr, kind, cls: uc, name: this.rules.units[r[1]]?.name || '' });
+      }
       if (fighting && Math.random() < 0.18) {
         ctx.fillStyle = 'rgba(255,226,140,0.95)';
         ctx.beginPath(); ctx.arc(Math.random() * bw, -2, Math.max(1.5, bw * 0.05), 0, Math.PI * 2); ctx.fill();
@@ -2381,6 +2410,18 @@ export class MapView {
       if (sc === 1) labels.push([b.x + jx, b.y - bd / 2 - 3 - cy, r[2]]);
     });
     ctx.restore();
+    // les figurines, debout face à l'écran, des plus lointaines aux plus proches
+    if (figs.length) {
+      const art = this.figArt(), H = clamp(bw * 0.36, 9, 24), m0 = ctx.getTransform();
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      figs.sort((p, q) => p.y - q.y);
+      for (const f of figs) {
+        const h = f.kind === 'cav' ? H * 0.95 : f.kind.startsWith('canon') ? H * 0.85 : H;
+        const sp = art.sprite(f.kind, col, f.kind === 'cav' || f.kind.startsWith('canon') ? 1 : 0, Math.round(h), 0, uniform(art.year, f.cls, f.name).coat), sc = h / sp.h;
+        ctx.drawImage(sp.cv, f.x - sp.ax * sc, f.y - sp.ay * sc, sp.cv.width * sc, sp.cv.height * sc);
+      }
+      ctx.setTransform(m0);
+    }
     // chiffres au-dessus des blocs (non tournés)
     ctx.font = `700 ${clamp(bw * 0.42, 10, 16)}px "EB Garamond", Georgia, serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
@@ -2396,6 +2437,16 @@ export class MapView {
       ctx.strokeText(String(n), X, Y - 4);
       ctx.fillStyle = '#fff6dc';
       ctx.fillText(String(n), X, Y - 4);
+    }
+    // le général en médaillon, à gauche de la formation (au-dessus, il cacherait le nom de la place)
+    if (a.gen) {
+      let left = 0, y0 = 1e9, y1 = -1e9;
+      for (const b of blocks) {
+        const X = b.x * ca - (b.y - cy) * sa, Y = b.x * sa + (b.y - cy) * ca;
+        left = Math.min(left, X - rad * (b.scale || 1)); y0 = Math.min(y0, Y); y1 = Math.max(y1, Y);
+      }
+      const r = clamp(bw * 0.38, 13, 22);
+      this.medallion(ctx, a, col, left - r - 6, (y0 + y1) / 2, r);
     }
     if (z >= 7 && (sel || a.o === this.state.me.code)) {
       const gen = a.gen ? ` · ${a.gen.name}` : '';

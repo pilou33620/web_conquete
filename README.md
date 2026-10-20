@@ -242,7 +242,10 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   d'ardoise au liseré du camp, les eaux ont leur nom gravé, les armées une plaque et un fanion. L'interface est en
   ardoise, comme celle des batailles ; les régiments d'une armée y paraissent en **cartes portrait** (la figure de
   leur arme à l'uniforme de l'époque, effectif, expérience, effectif et moral en barres ; un appui les coche pour
-  scinder l'armée), et sur un grand écran la date se lit en bas à droite.
+  scinder l'armée), et sur un grand écran la date se lit en bas à droite. Le général d'une armée y paraît en
+  **médaillon** : un portrait peint par le jeu, au visage tiré de son nom, coiffé selon l'époque (tricorne et perruque
+  poudrée, puis bicorne à cocarde, puis képi). De près, les régiments sont de **petites figurines debout** en rangs,
+  à l'uniforme de l'époque, comme les armées d'Ultimate General.
 - Villes et villages sont dessinés en vue cavalière : maisons, église à clocher, grande église des villes, cathédrale et
   hôtel de ville des chefs-lieux, citadelle des places fortes. Chaque pays a ses couleurs (pierre blonde et tuiles du
   Bordelais, toits bruns du Périgord, colombages des Landes, brique de l'Agenais, murs blancs et ardoise du Béarn),
