@@ -15,14 +15,109 @@
 // sommets, mêmes triangles) redessinée en couches empilées, en un seul appel (instances). Chaque couche ne garde que
 // les pieds de sa hauteur, d'après le masque des cultures de terrain.js (couleur, hauteur) : plus sombres en bas,
 // clairsemés en haut, ils ondulent au vent.
+//
+// Sols photo (étape 9b, sols.js) : sur la peinture, la matière de huit sols CC0, selon les masques de terrain.js
+// (solMask). En chaque point, les deux sols qui y ont la plus grande part sont lus et mêlés par leur hauteur (l'herbe
+// déborde en touffes sur le chemin, la terre paraît entre les mottes) ; le bord des masques est bousculé de quelques
+// mètres par un bruit. La photo divisée par sa couleur moyenne module la peinture (la couleur reste celle de la
+// saison et de la parcelle) et ses normales font accrocher la lumière. Deux échelles : 4,5 m de près, 23 m de loin
+// (Moyenne et plus) ; de près, en Haute et Ultra, un pavage hexagonal aléatoire (Heitz et Neyret) efface la
+// répétition. Sur les pentes, la terre puis la roche remplacent l'herbe. Sous la neige, la matière s'efface presque.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clamp, hash, canvas } from './formes.js';
 import { paintDecal } from './terrain.js';
+import { FORCE } from './sols.js';
 
 const STEP = 10, OUT = 2000, OUT_STEP = 125;   // maille dans le champ, prolongement au-delà, maille du prolongement
 const TS = 512, N = 4;                         // côté d'un bloc (px), blocs par côté d'un niveau de détail
 const LEVELS = [2, 4, 8, 16];                  // niveaux de détail possibles (px/m)
 const HMAX = 1.3;                              // hauteur des épis les plus hauts (m : le maïs)
+const SOL_PRES = 4.5, SOL_LOIN = 23;           // côté de la photo d'un sol, de près et de loin (m)
+
+// GLSL des sols photo (voir en tête) : déclarations, puis le mélange (dans map_fragment), puis les normales
+const SOLS_DECL = `
+  uniform sampler2DArray uSolA, uSolN; uniform sampler2D uMask1, uMask2; uniform vec3 uMean[8]; uniform float uForce[8]; uniform float uSolK;
+  varying vec3 vNw;
+  vec3 solNrm = vec3(0.0, 0.0, 1.0);
+  float shash(vec2 p) { p = mod(p, 1024.0); vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+  float snoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(shash(i), shash(i + vec2(1.0, 0.0)), f.x), mix(shash(i + vec2(0.0, 1.0)), shash(i + vec2(1.0, 1.0)), f.x), f.y); }
+  // un sol lu une fois ou, en Haute et Ultra, en pavage hexagonal : trois lectures tournées et décalées au hasard,
+  // fondues entre les sommets de la cellule (forme de Mikkelsen)
+  void solLit(vec2 uv, float layer, vec2 dx, vec2 dy, out vec4 col, out vec3 nrm) {
+  #ifdef SOLS_HEX
+    vec2 sk = mat2(1.0, -0.57735027, 0.0, 1.15470054) * (uv * 1.6);
+    vec2 b = floor(sk); vec3 t = vec3(fract(sk), 0.0); t.z = 1.0 - t.x - t.y;
+    float s = step(0.0, -t.z), s2 = 2.0 * s - 1.0;
+    vec3 w = max(vec3(-t.z * s2, s - t.y * s2, s - t.x * s2), 0.0);
+    w = w * w * w; w = w * w; w /= dot(w, vec3(1.0));
+    vec2 v0 = b + vec2(s, s), v1 = b + vec2(s, 1.0 - s), v2 = b + vec2(1.0 - s, s);
+    col = vec4(0.0); nrm = vec3(0.0);
+    for (int k = 0; k < 3; k++) {
+      vec2 vv = k == 0 ? v0 : k == 1 ? v1 : v2;
+      float a = shash(vv) * 6.2831853, ca = cos(a), sa = sin(a);
+      mat2 R = mat2(ca, sa, -sa, ca);
+      vec2 u = R * uv + vec2(shash(vv + 7.1), shash(vv + 13.3)) * 9.0;
+      vec4 c = textureGrad(uSolA, vec3(u, layer), R * dx, R * dy);
+      vec3 n = textureGrad(uSolN, vec3(u, layer), R * dx, R * dy).xyz * 2.0 - 1.0;
+      n.xy = transpose(R) * n.xy;
+      float wk = k == 0 ? w.x : k == 1 ? w.y : w.z;
+      col += c * wk; nrm += n * wk;
+    }
+  #else
+    col = textureGrad(uSolA, vec3(uv, layer), dx, dy);
+    nrm = textureGrad(uSolN, vec3(uv, layer), dx, dy).xyz * 2.0 - 1.0;
+  #endif
+  }`;
+const SOLS_MIX = `
+  {
+    // parts des huit sols, au bord bousculé de ±2,5 m
+    vec2 jit = (vec2(snoise(vWorld * 0.25), snoise(vWorld * 0.25 + 31.7)) - 0.5) * 5.0;
+    vec4 m1 = texture(uMask1, (vWorld + jit) / uSize), m2 = texture(uMask2, (vWorld + jit) / uSize);
+    float w[8];
+    w[0] = m1.r; w[1] = m1.g; w[2] = m1.b; w[3] = m1.a; w[4] = m2.r; w[5] = m2.g; w[6] = m2.b; w[7] = m2.a;
+    float tot = 0.0;
+    for (int i = 0; i < 8; i++) tot += w[i];
+    // pentes : la terre au-delà de 15° environ, la roche au-delà de 25°
+    float sl = 1.0 - normalize(vNw).y, kt = smoothstep(0.04, 0.1, sl), kr = smoothstep(0.1, 0.2, sl);
+    for (int i = 0; i < 8; i++) w[i] *= 1.0 - kt;
+    w[3] += kt * (1.0 - kr) * tot; w[7] += kt * kr * tot;
+    // les deux plus grandes parts
+    int i1 = 0, i2 = 1; float a1 = -1.0, a2 = -1.0;
+    for (int i = 0; i < 8; i++) {
+      if (w[i] > a1) { a2 = a1; i2 = i1; a1 = w[i]; i1 = i; } else if (w[i] > a2) { a2 = w[i]; i2 = i; }
+    }
+    vec2 uvN = vWorld / ${SOL_PRES.toFixed(1)}, dx = dFdx(uvN), dy = dFdy(uvN);
+    vec4 cA, cB; vec3 nA, nB;
+    solLit(uvN, float(i1), dx, dy, cA, nA);
+    solLit(uvN, float(i2), dx, dy, cB, nB);
+    // mélange par la hauteur : à part égale, le plus haut des deux l'emporte
+    float hA = cA.a + a1 * 1.4, hB = cB.a + a2 * 1.4, ma = max(hA, hB) - 0.22;
+    float bA = max(hA - ma, 0.0), bB = max(hB - ma, 0.0), kA = bA / (bA + bB + 1e-4);
+    vec3 det = mix(cB.rgb / uMean[i2], cA.rgb / uMean[i1], kA);
+    vec3 nrm = normalize(mix(nB, nA, kA) + vec3(0.0, 0.0, 1e-3));
+    float force = mix(uForce[i2], uForce[i1], kA) * uSolK * min(tot * 1.5, 1.0);
+    // de près, la photo ; elle s'efface quand un pixel couvre plus d'un mètre (elle ne ferait plus que scintiller).
+    // Ses petites mipmaps en ont moyenné le grain : son contraste est rehaussé à mesure qu'on s'éloigne
+    float kN = 1.0 - smoothstep(0.6, 1.6, mpp);
+    vec3 d = mix(vec3(1.0), 1.0 + (det - 1.0) * mix(1.3, 2.6, smoothstep(0.04, 0.5, mpp)), kN);
+  #ifdef SOLS_FAR
+    // de loin, la même photo à 23 m, tournée : des nappes de matière, jusqu'à 10 m par pixel
+    vec2 uvF = mat2(0.8, 0.6, -0.6, 0.8) * vWorld / ${SOL_LOIN.toFixed(1)};
+    vec3 far = mix(texture(uSolA, vec3(uvF, float(i2))).rgb / uMean[i2], texture(uSolA, vec3(uvF, float(i1))).rgb / uMean[i1], kA);
+    d *= mix(vec3(1.0), 1.0 + (far - 1.0) * 1.4, 1.0 - smoothstep(4.0, 10.0, mpp));
+  #endif
+    // la teinte reste celle de la peinture : la photo n'apporte que la moitié de la sienne
+    d = clamp(mix(vec3(dot(d, vec3(0.3, 0.59, 0.11))), d, 0.5), 0.35, 1.8);
+    diffuseColor.rgb *= mix(vec3(1.0), d, force);
+    solNrm = normalize(mix(vec3(0.0, 0.0, 1.0), nrm, kN * min(force * 1.5, 1.0)));
+  }`;
+// normales de la photo, dans le repère du sol (u le long de x, v vers −z : l'image a son haut en v = 0)
+const SOLS_NRM = `
+  {
+    vec3 N = normalize(vNw), Tt = normalize(vec3(1.0, 0.0, 0.0) - N * N.x), B = cross(N, Tt);
+    normal = normalize(mat3(viewMatrix) * (Tt * solNrm.x + B * solNrm.y + N * solNrm.z));
+  }`;
 
 // ombres des nuages : taches douces et périodiques (le motif couvre environ 1,5 km)
 function cloudTexture() {
@@ -72,7 +167,19 @@ export class Relief {
       uCover: { value: this.cover }, uCoverA: { value: 0 },
       uClouds: { value: null }, uCloudA: { value: 0 }, uCloudOff: { value: new THREE.Vector2() },
       uLv0: { value: null }, uLv1: { value: null }, uLv2: { value: null }, uLv3: { value: null }, uSpan: { value: new THREE.Vector4() }, uSlots: { value: Array.from({ length: N * N * 4 }, () => new THREE.Vector2(-1e4, -1e4)) },
+      uSolA: { value: null }, uSolN: { value: null }, uMask1: { value: null }, uMask2: { value: null },
+      uMean: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0.2, 0.2, 0.2)) }, uForce: { value: FORCE.slice() }, uSolK: { value: 0 },
     };
+    // masques des sols photo (terrain.js) ; la photo arrive plus tard (setSols)
+    const sm = terrain.solMask();
+    this.masks = [sm.a, sm.b].map(d => {
+      const t = new THREE.DataTexture(d, sm.w, sm.h);
+      t.minFilter = t.magFilter = THREE.LinearFilter; t.needsUpdate = true;
+      return t;
+    });
+    this.uni.uMask1.value = this.masks[0]; this.uni.uMask2.value = this.masks[1];
+    this.neige = sm.neige;
+    this.sols = null;
     this.clouds = new THREE.CanvasTexture(cloudTexture());
     this.clouds.wrapS = this.clouds.wrapT = THREE.RepeatWrapping;
     this.uni.uClouds.value = this.clouds;
@@ -132,8 +239,8 @@ export class Relief {
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, this.uni);
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec2 vWorld;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWorld = position.xz;');
+        .replace('#include <common>', '#include <common>\nvarying vec2 vWorld;\n#ifdef SOLS\nvarying vec3 vNw;\n#endif')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWorld = position.xz;\n#ifdef SOLS\nvNw = normal;\n#endif');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', `#include <common>
           uniform vec3 uOuter; uniform vec2 uSize; uniform sampler2D uCover; uniform float uCoverA;
@@ -148,7 +255,14 @@ export class Relief {
             vec2 b = floor(p / span), s = mod(b, ${N}.0);
             ok = all(equal(uSlots[base + int(s.x) + ${N} * int(s.y)], b)) ? 1.0 : 0.0;
             return texture(t, fract(p / (span * ${N}.0)));
-          }`)
+          }
+          #ifdef SOLS
+          ${SOLS_DECL}
+          #endif`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          #ifdef SOLS
+          ${SOLS_NRM}
+          #endif`)
         .replace('#include <map_fragment>', `#include <map_fragment>
           // niveaux de détail, du plus grossier au plus fin : chacun recouvre le précédent là où il est peint, et
           // seulement s'il n'est pas plus fin que l'écran (texels par pixel : texels/m × m/pixel)
@@ -156,6 +270,9 @@ export class Relief {
           vec4 c;
           ${LEVELS.map((L, i) => `c = lvl(uLv${i}, uSpan[${i}], ${i * N * N}, vWorld, ok);
           diffuseColor.rgb = mix(diffuseColor.rgb, c.rgb, ok * (1.0 - smoothstep(1.2, 2.2, ${TS}.0 / max(uSpan[${i}], 1e-3) * mpp)));`).join('\n          ')}
+          #ifdef SOLS
+          ${SOLS_MIX}
+          #endif
           // couverts (déploiement) : bois, bâti, hauteurs (plus appuyés que sur la carte 2D : la lumière les adoucit)
           vec4 cv = texture(uCover, vMapUv);
           diffuseColor.rgb = mix(diffuseColor.rgb, cv.rgb, min(0.85, cv.a * uCoverA * 2.4));
@@ -168,7 +285,22 @@ export class Relief {
           float w = fwidth(e) * 1.5;
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.70, 0.36), (1.0 - smoothstep(w * 0.5, w, abs(e))) * 0.8);`);
     };
+    m.customProgramCacheKey = () => `sol|${Object.keys(m.defines || {}).join(',')}`;
+    this.solMat = m;
     return m;
+  }
+  // sols photo chargés (sols.js) ou null ; la qualité dit combien d'échelles et si le pavage est hexagonal
+  setSols(sols) {
+    if (sols !== this.sols) this.sols?.dispose();
+    this.sols = sols;
+    const m = this.solMat, n = this.q.sols ?? 3, defines = {};
+    if (sols && n > 0) { defines.SOLS = 1; if (n >= 2) defines.SOLS_FAR = 1; if (n >= 3) defines.SOLS_HEX = 1; }
+    if (sols) {
+      this.uni.uSolA.value = sols.albedo; this.uni.uSolN.value = sols.normales;
+      sols.mean.forEach((v, i) => this.uni.uMean.value[i].copy(v));
+    }
+    this.uni.uSolK.value = this.neige ? 0.3 : 1;
+    if (Object.keys(defines).join() !== Object.keys(m.defines || {}).join()) { m.defines = defines; m.needsUpdate = true; }
   }
 
   // couches d'épis : la couche k (instance) est soulevée de ((k + 1) / n)² × HMAX (plus serrées près du sol : l'herbe
@@ -251,6 +383,7 @@ export class Relief {
   setQuality(q, force = false) {
     const same = this.levels && this.q.level === q.level;
     this.q = q;
+    if (this.solMat) this.setSols(this.sols);
     if (same && !force) return;
     for (const l of this.levels || []) l?.tex.dispose();
     this.levels = LEVELS.map(L => L <= q.level ? { L, span: TS / L, slots: new Array(N * N).fill(null), tex: this.levelTex() } : null);
@@ -366,6 +499,8 @@ export class Relief {
     this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.tex.dispose(); this.cover.dispose(); this.scratchTex.dispose(); this.clouds.dispose();
     this.shells.geometry.dispose(); this.shells.material.dispose(); this.shells.dispose(); this.crops.dispose();
     for (const l of this.levels) l?.tex.dispose();
+    for (const t of this.masks) t.dispose();
+    this.sols?.dispose(); this.disposed = true;
     this.decals.dispose();
   }
 }

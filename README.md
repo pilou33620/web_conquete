@@ -521,7 +521,11 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   (matin doré et brumeux, midi chaud aux verts tirés vers le jaune, couchant orangé, nuit bleue, pluie grise),
   vignettage ; en Haute s'y ajoutent l'anticrénelage FXAA et un léger halo des plein-soleil ; en Ultra,
   l'anticrénelage matériel et, à ras des troupes, une profondeur de champ « maquette » (le haut et le bas de l'image
-  se floutent). Au premier lancement, elle est
+  se floutent). Le sol garde sa peinture (couleurs de la saison et des parcelles) mais prend la **matière de huit
+  sols photographiés** (pré, herbe sèche, lande, terre, chemin, route empierrée, sable, roche ; CC0, ambientCG) :
+  touffes, mottes et cailloux qui accrochent la lumière, mêlés par leur hauteur à la frontière de deux sols, la terre
+  puis la roche sur les pentes ; photos de 512 px en Basse et Moyenne, de 1024 px avec un pavage aléatoire qui en
+  cache la répétition en Haute et Ultra. Au premier lancement, elle est
   choisie d'après l'appareil, puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par
   seconde) ; un choix fait à la main est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de
   suite, sans quitter la bataille (l'anticrénelage, à la bataille suivante). Les batailles demandent **WebGL 2**
@@ -734,7 +738,8 @@ web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et 
                      unites.js (figurines peintes des cartes d'unités), effets.js (fumées, tirs, météo),
                      heures.js (table des heures : lumière, brume et étalonnage de 5 h à 22 h ; logique pure,
                      testée), apres.js (après-rendu : ACES, LUT d'étalonnage, vignettage, FXAA, halo,
-                     maquette), qualite.js (qualité graphique), commandes.js (gestes et clavier),
+                     maquette), sols.js (sols photo : chargement des huit sols), qualite.js (qualité
+                     graphique), commandes.js (gestes et clavier),
                      interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils
                      communs), css/bataille.css ;
                      dev/maquette.mjs : serveur de maquette (node web/js/battle/dev/maquette.mjs, puis
@@ -744,6 +749,7 @@ web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et 
                      dev/cuire.mjs : précalcule les animations sur le squelette de nos figurines (à relancer
                      seulement si on change les gestes) ; dev/anims.html : page d'essai des animations
 web/anims/           animations précalculées des soldats (soldat.bin, soldat.json) et leur licence
+web/textures/sols/   les huit sols photo (couleur, normales, hauteur ; 6,4 Mo) et leur licence (CC0, ambientCG)
 web/vendor/three/    Three.js r186 (licence MIT), copié tel quel : le jeu marche hors ligne
 saves/               parties sauvegardées (JSON)
 tests/               bancs d'essai (voir « Tests » ci-dessous)
@@ -770,6 +776,7 @@ node --test tests/                               # l'interface seule
 | `tests/troupes.test.mjs` | dispositions des figurines : rangs de la ligne, plafond par régiment, carré à quatre faces, colonne, tirailleurs, déroute |
 | `tests/gestes.test.mjs` | animations des batailles : geste de chaque homme (salve qui roule, recharge, servants, mêlée, charge), allure propre à chacun, place gardée d'une formation à l'autre, tués (ligne d'un boulet, plafond des corps), contour des bâtiments, échelle des figurines de loin |
 | `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte |
+| `tests/sols.test.mjs` | sols photo : huit sols, parts de chaque sorte de terrain et de chaque culture (elles font 1, 0 sous l'eau), images et licence présentes, après-rendu et sols qui montent avec la qualité |
 | `tests/modeles.test.mjs` | modèles 3D des figurines : os de l'animation, pieds au sol, hauteur, tournés vers l'avant, formes arrondies, version de loin (mêmes os, même hauteur, un tiers des sommets), choix de la version selon la taille à l'écran |
 
 **Essayer une nouvelle fonctionnalité sans jouer.** `tests/fabrique.py` fabrique une situation en une ligne : une

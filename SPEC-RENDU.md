@@ -54,6 +54,15 @@ vignettage ; Haute aussi FXAA et halo ; Ultra aussi MSAA (4 échantillons) et ma
 présent dès Moyenne. Réglage d'après les captures Steam : plus saturé et plus chaud qu'imaginé au départ (les verts
 d'UGAR tirent vers le jaune, ils ne sont pas « passés »).
 
+**Livré** : 9b (`sols.js`, `terrain.js` solMask et solParts, `relief.js`, `web/textures/sols/`, 6,4 Mo). Écart
+volontaire avec A1 : la peinture n'est pas remplacée par les masques, elle reste la couleur (saisons, parcelles,
+routes, eau, mini-carte, et tout ce qui est peint par-dessus) ; la photo, divisée par sa couleur moyenne, en module la
+matière et donne les normales. Ainsi rien des étapes 6 à 8 n'est perdu et la mini-carte reste cohérente. Seuls les
+deux sols dominants de chaque point sont lus (une texture en tableau, lecture par numéro de couche). Contraste de la
+photo rehaussé avec la distance (ses mipmaps l'aplatissent). Reste de A1 pour plus tard : la courbure (creux plus
+verts), le triplanaire des pentes raides, la neige comme 9ᵉ sol (aujourd'hui, la matière s'efface à 30 % sous la
+neige), la variation à grande échelle propre aux sols (les « nuances » peintes de terrain.js en tiennent lieu).
+
 ## Ce qui ne change pas
 
 Le moteur Python et ses API, les règles, les commandes et les gestes, l'interface, les noms des niveaux de qualité, les

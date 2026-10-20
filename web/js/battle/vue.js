@@ -14,7 +14,8 @@ import { Controls } from './commandes.js';
 import { BattleUI } from './interface.js';
 import { frameOf, project, unproject, anchor, clampCam, FOV } from './camera.js';
 import { emprise, clsOf, isGeneral, clamp, wrapAngle, TAU } from './formes.js';
-import { profil, onQualite, Mesure } from './qualite.js';
+import { profil, onQualite, Mesure, solPx } from './qualite.js';
+import { chargerSols } from './sols.js';
 import { ApresRendu } from './apres.js';
 import { segDist } from './gestes.js';
 
@@ -41,7 +42,7 @@ export class BattleView {
     // en Basse, rendu direct avec le même ACES
     if (this.renderer) { this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.post = new ApresRendu(this.renderer); this.post.setQuality(this.q); }
     // contexte WebGL rendu par Safari (application remise au premier plan) : les niveaux de détail du sol sont repeints
-    this.glc.addEventListener('webglcontextrestored', () => this.relief?.setQuality(this.q, true));
+    this.glc.addEventListener('webglcontextrestored', () => { this.relief?.setQuality(this.q, true); this.reloadSols(); });
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(FOV * 180 / Math.PI, 1, 1, 10000);
     this.mesure = new Mesure();
@@ -72,13 +73,15 @@ export class BattleView {
   async load(bid) {
     this.bid = bid;
     // (les animations des troupes arrivent en même temps que la carte ; loadAnims ne lève jamais)
-    const [m, anims] = await Promise.all([this.api.get(`/api/tactic_map?bid=${encodeURIComponent(bid)}`), loadAnims()]);
+    // (les sols photo aussi : sans eux, le sol reste peint seul)
+    const [m, anims, sols] = await Promise.all([this.api.get(`/api/tactic_map?bid=${encodeURIComponent(bid)}`), loadAnims(), chargerSols(solPx(this.q))]);
     if (!m || (!m.t && !m.W)) throw new Error('Carte de bataille indisponible');
     if (!this.renderer) throw new Error('WebGL indisponible');
     this.map = m;
     this.nBreach = m.nbreach || 0;
     this.terrain = new Terrain(m, this.q);
     this.relief = new Relief(this.terrain, this.q);
+    this.relief.setSols(sols);
     this.relief.setup(this.scene);
     this.troops = new Troops(this.relief, this.q, m.year, anims);
     this.scene.add(this.troops.group);
@@ -133,6 +136,7 @@ export class BattleView {
     this.fx.setQuality(this.q);
     this.terrain?.setQuality(this.q);
     this.relief?.setQuality(this.q);
+    if (this.relief?.sols && this.relief.sols.n !== solPx(this.q)) this.reloadSols();
     this.troops?.setQuality(this.q);
     this.post?.setQuality(this.q);
     // le décor dépend de la richesse des effets (bois allégés, arbres plus simples) : reconstruit s'il en change
@@ -144,6 +148,14 @@ export class BattleView {
     if (this.relief) this.setShadows();
     this.resize();
     this.clampCam();
+  }
+
+  // sols photo rechargés (autre taille selon la qualité, ou contexte WebGL perdu puis rendu par Safari)
+  async reloadSols() {
+    if (!this.relief) return;
+    const r = this.relief, sols = await chargerSols(solPx(this.q));
+    if (r !== this.relief || r.disposed) { sols?.dispose(); return; }
+    r.setSols(sols);
   }
 
   // ombres portées selon la qualité (fx : 0 aucune, 1 le décor, 2 et 3 aussi les troupes)

@@ -8,8 +8,10 @@
 import { T, cellRemap, normSeason, hash, clamp, TAU, OMBRE, mixHex, vnoise, canvas } from './formes.js';
 import { texture, softShadow, culture, EPIS } from './textures.js';
 import { profil } from './qualite.js';
+import { SOLS } from './sols.js';
 
 const BASE = 0.5;   // pixels par mètre de l'image entière
+const SOL = Object.fromEntries(SOLS.map((k, i) => [k, i]));   // numéro de chaque sol photo (sols.js)
 
 function b64(s) {
   if (!s) return null;
@@ -50,6 +52,18 @@ export const PALETTES = {
     chemin: '#dedbd2', bati: '#d8d8d4', toit: ['#e9ecef', '#dfe3e6', '#f0f2f4'], ardoise: ['#d5dade', '#cdd2d6'], neige: 1,
   },
 };
+
+// Parts des sols photo (sols.js) sous une région de type v et de motif tex : {pre: 0.5, sec: 0.5}… (elles font 1 ;
+// {} sous l'eau : pas de matière). null pour les routes et chemins : ils sont tracés à part (solMask).
+const CULT = { ble: { sec: 1 }, chaume: { sec: 1 }, avoine: { pre: 0.5, sec: 0.5 }, bleVert: { pre: 0.7, sec: 0.3 }, mais: { pre: 0.4, terre: 0.6 },
+  labour: { terre: 1 }, semis: { terre: 0.85, pre: 0.15 }, prairie: { pre: 0.5, sec: 0.5 } };
+export function solParts(v, tex) {
+  return v === T.CHAMP ? CULT[tex] || { sec: 1 } : v === T.PRE ? (tex === 'prairie' ? CULT.prairie : { pre: 1 })
+    : v === T.VIGNE ? { terre: 0.85, pre: 0.15 } : v === T.LANDE ? { lande: 1 } : v === T.MARAIS ? { pre: 0.7, terre: 0.3 }
+    : v === T.SABLE ? { sable: 1 } : v === T.ROCHE ? { roche: 1 } : v === T.BOIS || v === T.FORET ? { terre: 0.6, sec: 0.4 }
+    : v === T.EAU ? {} : v === T.GUE ? { sable: 0.6, terre: 0.4 } : v === T.BARRICADE ? { terre: 1 }
+    : v === T.ROUTE || v === T.CHEMIN ? null : { chemin: 0.8, pre: 0.2 };   // cours des maisons, pied des murs
+}
 
 // Chaikin : adoucit une ligne brisée (fermée ou non)
 function chaikin(pts, iters, closed) {
@@ -375,6 +389,45 @@ export class Terrain {
     for (let i = 0; i < w * h; i++) { const k = i * 4; out[k] = c[k]; out[k + 1] = c[k + 1]; out[k + 2] = c[k + 2]; out[k + 3] = a[k]; }
     col.width = col.height = hgt.width = hgt.height = 0;   // (Safari garde sinon la mémoire des canevas)
     return { data: out, w, h };
+  }
+  // Masques des sols photo (sols.js, relief.js) : une image à `res` m par pixel, huit canaux (deux textures RGBA :
+  // pré, herbe sèche, lande, terre ; chemin, route, sable, roche), la part de chaque sol en chaque point. Peints
+  // comme le sol (mêmes contours de parcelles, mêmes tracés de routes) sur trois canevas opaques de trois canaux
+  // chacun : chaque région écrit ses huit parts à la fois (les parts d'avant sont remplacées, ou mêlées par la
+  // transparence), si bien qu'elles font toujours 1, sauf sous l'eau (0 : pas de matière).
+  solMask(res = 2) {
+    const w = Math.ceil(this.W / res), h = Math.ceil(this.H / res), S = this.seed, pal = this.pal;
+    const cvs = [0, 1, 2].map(() => canvas(w, h)), gs = cvs.map(c => c.getContext('2d', { willReadFrequently: true }));
+    // parts des huit sols → trois couleurs (le neuvième canal ne sert pas)
+    const cols = p => [0, 1, 2].map(k => `rgb(${[0, 1, 2].map(q => Math.round((p[k * 3 + q] || 0) * 255)).join(',')})`);
+    const P = (o) => { const p = new Array(8).fill(0); for (const [k, v] of Object.entries(o)) p[SOL[k]] = v; return cols(p); };
+    const each = (c, f) => gs.forEach((g, k) => { g.fillStyle = g.strokeStyle = c[k]; f(g); });
+    for (const g of gs) { g.setTransform(1 / res, 0, 0, 1 / res, 0, 0); g.lineCap = 'round'; g.lineJoin = 'round'; }
+    each(P({ pre: 1 }), g => g.fillRect(-50, -50, this.W + 100, this.H + 100));
+    for (const r of this.regions) {
+      const v = r.type, p = solParts(v, r.tex);
+      if (!p) continue;
+      each(P(p), g => g.fill(r.path));
+      // tournière : une bordure d'herbe autour des champs et des vignes
+      if (v === T.CHAMP || v === T.VIGNE) { each(P({ pre: 0.7, sec: 0.3 }), g => { g.globalAlpha = 0.8; g.lineWidth = 3; g.stroke(r.path); g.globalAlpha = 1; }); }
+    }
+    // rivières : berges de terre, puis l'eau sans matière
+    for (const rv of this.riverPts) {
+      each(P({ terre: 0.5, pre: 0.5 }), g => { g.lineWidth = rv.w + 26; strokePts(g, rv.pts); });
+      each(P({}), g => { g.lineWidth = rv.w + 8; strokePts(g, rv.pts); });
+    }
+    // chemins (bas-côtés foulés, terre battue), routes (empierrées)
+    each(P({ chemin: 1 }), g => { g.globalAlpha = 0.45; g.lineWidth = 9; for (const q of this.pathPts) strokePts(g, q); g.globalAlpha = 1; g.lineWidth = 5; for (const q of this.pathPts) strokePts(g, q); });
+    each(P({ chemin: 1 }), g => { g.globalAlpha = 0.5; g.lineWidth = 15; for (const q of this.roadPts) strokePts(g, q); g.globalAlpha = 1; });
+    each(P({ route: 0.75, chemin: 0.25 }), g => { g.lineWidth = 9.5; for (const q of this.roadPts) strokePts(g, q); });
+    const d = gs.map(g => g.getImageData(0, 0, w, h).data);
+    for (const c of cvs) c.width = c.height = 0;
+    const a = new Uint8Array(w * h * 4), b = new Uint8Array(w * h * 4);
+    for (let i = 0, k = 0; i < w * h; i++, k += 4) {
+      a[k] = d[0][k]; a[k + 1] = d[0][k + 1]; a[k + 2] = d[0][k + 2]; a[k + 3] = d[1][k];
+      b[k] = d[1][k + 1]; b[k + 1] = d[1][k + 2]; b[k + 2] = d[2][k]; b[k + 3] = d[2][k + 1];
+    }
+    return { a, b, w, h, neige: !!pal.neige, seed: S };
   }
   // cotes des sommets (comme sur les cartes d'état-major), écrites sur le calque par la vue
   prepPeaks() {
