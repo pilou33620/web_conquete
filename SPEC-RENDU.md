@@ -80,6 +80,12 @@ contre-jour, grappes de feuilles (bruit 3D dans le shader), balancement au vent 
 imposteurs d'arbres (A5.2 ; le nombre d'arbres actuel passe, à revoir avec 9k si l'iPad peine), et le traitement des
 haies (A5.6 : elles restent des bandes extrudées).
 
+**Livré** : 9e (`pietinement.js`). Carte de 3 m par pixel (2 m en Ultra), en demi-flottants si possible, dessinée cinq
+fois par seconde de bataille au plus ; le dépôt suit le temps de la bataille (marche de l'horloge du serveur : pause,
+×2, accéléré). Boue sur la peinture, épis couchés, neige effacée ; tache de terre autour des trous d'obus. Pas fait :
+l'enregistrement de la carte avec la bataille, la boue luisante sous la pluie (Lambert n'a pas de reflet), les
+ornières des pièces et les débris (chapeaux, fusils, roues) ; l'herbe instanciée de 9f n'existe pas encore.
+
 ## Ce qui ne change pas
 
 Le moteur Python et ses API, les règles, les commandes et les gestes, l'interface, les noms des niveaux de qualité, les

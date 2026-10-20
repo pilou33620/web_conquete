@@ -16,6 +16,7 @@ import { frameOf, project, unproject, anchor, clampCam, FOV } from './camera.js'
 import { emprise, clsOf, isGeneral, clamp, wrapAngle, TAU } from './formes.js';
 import { profil, onQualite, Mesure, solPx } from './qualite.js';
 import { chargerSols } from './sols.js';
+import { Pietinement } from './pietinement.js';
 import { ApresRendu } from './apres.js';
 import { segDist } from './gestes.js';
 
@@ -42,7 +43,7 @@ export class BattleView {
     // en Basse, rendu direct avec le même ACES
     if (this.renderer) { this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.post = new ApresRendu(this.renderer); this.post.setQuality(this.q); }
     // contexte WebGL rendu par Safari (application remise au premier plan) : les niveaux de détail du sol sont repeints
-    this.glc.addEventListener('webglcontextrestored', () => { this.relief?.setQuality(this.q, true); this.reloadSols(); });
+    this.glc.addEventListener('webglcontextrestored', () => { this.relief?.setQuality(this.q, true); this.reloadSols(); this.piet?.reset(); });
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(FOV * 180 / Math.PI, 1, 1, 10000);
     this.mesure = new Mesure();
@@ -83,6 +84,8 @@ export class BattleView {
     this.relief = new Relief(this.terrain, this.q);
     this.relief.setSols(sols);
     this.relief.setup(this.scene);
+    this.piet = new Pietinement(this.renderer, this.terrain.W, this.terrain.H, this.q);
+    this.relief.uni.uPiet.value = this.piet.texture;
     this.troops = new Troops(this.relief, this.q, m.year, anims);
     this.scene.add(this.troops.group);
     this.fx.attach(this.scene, this.relief.heightAt);
@@ -120,6 +123,7 @@ export class BattleView {
     this.ui.dispose();
     this.terrain?.dispose();
     this.relief?.dispose();
+    this.piet?.dispose();
     this.troops?.dispose();
     this.decor?.dispose();
     this.art.clear();
@@ -194,6 +198,8 @@ export class BattleView {
   apply(st) {
     const now = performance.now();
     if (this.lastSnap) this.pollGap = this.pollGap * 0.7 + clamp(now - this.lastSnap, 60, 600) * 0.3;
+    // secondes de bataille par seconde réelle (le piétinement suit le temps de la bataille : pause, ×2, accéléré)
+    if (this.lastSnap && this.st && st.clock != null && this.st.clock != null) this.clockRate = clamp((st.clock - this.st.clock) / Math.max(0.03, (now - this.lastSnap) / 1000), 0, 400);
     this.lastSnap = now;
     const prev = this.st;
     this.st = st;
@@ -256,7 +262,10 @@ export class BattleView {
         this.fx.push(f, f.u != null ? this.units.get(String(f.u)) : this.nearest(f.x, f.y), k * gap);
       }
     }
-    if (this.fx.decals.length) this.relief.decals.add(this.terrain.addDecals(this.fx.decals.splice(0)));
+    if (this.fx.decals.length) {
+      for (const d of this.fx.decals) if (d.k === 'trou') this.piet?.stamp(d.x, d.y, d.r || 2.6);
+      this.relief.decals.add(this.terrain.addDecals(this.fx.decals.splice(0)));
+    }
     this.ui.update(st, prev);
   }
   // tués laissés au sol, dans l'emprise de l'unité : ils tombent en 3D (troupes.js, kill) ; un boulet de ce relevé
@@ -378,6 +387,8 @@ export class BattleView {
       if (u.state === 'charge' && clsOf(u) === 'cavalerie' && !u._ghost && Math.hypot(u.to.x - u.from.x, u.to.y - u.from.y) > 2) this.fx.trail(u.x, u.y, u.dir, u.w, u._figScale);
     }
     const speed = this.st?.speed ?? 1;
+    const w = this.st?.weather || this.map?.weather;
+    this.piet?.update(this.units.values(), this.pollGap / 1000, w === 'pluie' || w === 'orage' || w === 'tempete', dt, this.clockRate ?? 18 * speed);
     this.fx.update(speed === 0 ? dt * 0.15 : dt * Math.min(1.6, 0.8 + speed * 0.2), this.st?.wind);
     this.relief?.tick(now);
     this.draw(dt, now / 1000);
@@ -418,6 +429,7 @@ export class BattleView {
     this.troops.update(all, this.colors || [], time, this.fx.t, fr, cam);
     this.decor.clearings(all, performance.now());
     this.fx.render(fr, z);
+    this.piet?.render();
     this.post.render(this.scene, cam, ciel.grade, time, fr.dist);
     mark('scene');
     // le calque 2D

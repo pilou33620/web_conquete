@@ -32,6 +32,9 @@
 //
 // Bois (étape 9d) : sous les bois et forêts, le sol s'assombrit (masque des bois de terrain.js) : entre les couronnes
 // et à la lisière, on voit un sous-bois sombre et continu, et vu de haut un bois est une masse sombre.
+//
+// Piétinement (étape 9e, pietinement.js) : là où les troupes sont passées, le sol tourne à la boue, les épis se
+// couchent, la neige s'efface.
 import * as THREE from '../../vendor/three/three.module.js';
 import { clamp, hash, canvas } from './formes.js';
 import { paintDecal } from './terrain.js';
@@ -200,8 +203,11 @@ export class Relief {
       uMean: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0.2, 0.2, 0.2)) }, uForce: { value: FORCE.slice() }, uSolK: { value: 0 },
       uFine: { value: null }, uFineUV: { value: new THREE.Vector4() }, uAO: { value: 0.9 },
       uHor1: { value: null }, uHor2: { value: null }, uHorUV: { value: new THREE.Vector4() }, uHorOn: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
-      uBois: { value: null }, uWindK: { value: 1 },
+      uBois: { value: null }, uWindK: { value: 1 }, uPiet: { value: null },
     };
+    // (la carte de piétinement arrive avec la vue : setPiet ; d'ici là, un sol neuf)
+    this.noPiet = new THREE.DataTexture(new Uint8Array(4), 1, 1); this.noPiet.needsUpdate = true;
+    this.uni.uPiet.value = this.noPiet;
     const wm = terrain.woodMask();
     this.bois = new THREE.DataTexture(wm.data, wm.w, wm.h, THREE.RedFormat, THREE.UnsignedByteType);
     this.bois.unpackAlignment = 1; this.bois.minFilter = this.bois.magFilter = THREE.LinearFilter; this.bois.needsUpdate = true;
@@ -283,7 +289,7 @@ export class Relief {
           uniform vec3 uOuter; uniform vec2 uSize; uniform sampler2D uCover; uniform float uCoverA;
           // (quatre textures séparées : un tableau de textures se mêlait à uCover dans l'attribution des unités)
           uniform sampler2D uLv0, uLv1, uLv2, uLv3; uniform vec4 uSpan; uniform vec2 uSlots[${N * N * 4}];
-          uniform sampler2D uFine, uBois; uniform vec4 uFineUV; uniform float uAO;
+          uniform sampler2D uFine, uBois, uPiet; uniform vec4 uFineUV; uniform float uAO;
           varying vec2 vWorld; varying vec3 vNw;
           vec3 gNf; float gAO = 1.0;   // normale fine du sol (scène) et occlusion ambiante
           // un niveau de détail en p (m) : sa couleur, et ok = 1 si le bloc de p y est peint
@@ -323,6 +329,9 @@ export class Relief {
           #ifdef SOLS
           ${SOLS_MIX}
           #endif
+          // piétinement : la peinture tourne à la boue brune (la photo garde son grain), sur la neige aussi
+          float pt = clamp(texture(uPiet, clamp(vWorld / uSize, 0.0, 1.0)).r, 0.0, 1.0) * step(0.0, min(min(vWorld.x, vWorld.y), min(uSize.x - vWorld.x, uSize.y - vWorld.y)));
+          diffuseColor.rgb = mix(diffuseColor.rgb, mix(diffuseColor.rgb * vec3(0.55, 0.46, 0.34), vec3(0.11, 0.08, 0.05), 0.35), smoothstep(0.0, 1.0, pt) * 0.88);
           // sous-bois : sombre et un peu plus vert, jusqu'au bord du bois
           diffuseColor.rgb *= mix(vec3(1.0), vec3(0.5, 0.56, 0.5), smoothstep(0.25, 0.85, texture(uBois, vWorld / uSize).r));
           // couverts (déploiement) : bois, bâti, hauteurs (plus appuyés que sur la carte 2D : la lumière les adoucit)
@@ -402,12 +411,13 @@ export class Relief {
           vW = transformed;`);
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', `#include <common>
-          uniform sampler2D uCrops; uniform vec2 uSize, uWind; uniform float uTime; uniform vec3 uShellC;
+          uniform sampler2D uCrops, uPiet; uniform vec2 uSize, uWind; uniform float uTime; uniform vec3 uShellC;
           varying vec3 vW; varying float vF;
           float hash12(vec2 p) { p = mod(p, 1024.0); vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }`)
         .replace('#include <map_fragment>', `
           vec4 crop = texture2D(uCrops, vW.xz / uSize);
-          float top = crop.a * ${HMAX.toFixed(2)}, rel = vF * ${HMAX.toFixed(2)} / max(top, 0.01);
+          // (couchés là où les troupes sont passées)
+          float top = crop.a * ${HMAX.toFixed(2)} * (1.0 - 0.85 * clamp(texture2D(uPiet, vW.xz / uSize).r, 0.0, 1.0)), rel = vF * ${HMAX.toFixed(2)} / max(top, 0.01);
           float grid = top < 0.5 ? 16.0 : 9.0, far = 9.0 / grid;
           // au bord de la fenêtre, et au-delà de 120 à 200 m de l'œil pour un pied de 11 cm, plus près pour les brins
           // d'herbe de 6 cm (un pied y fait moins d'un pixel : il scintillerait)
@@ -586,7 +596,7 @@ export class Relief {
     for (const l of this.levels) l?.tex.dispose();
     for (const t of this.masks) t.dispose();
     for (const t of this.hor) t.dispose();
-    this.bois.dispose();
+    this.bois.dispose(); this.noPiet.dispose();
     this.fine.dispose();
     this.sols?.dispose(); this.disposed = true;
     this.decals.dispose();

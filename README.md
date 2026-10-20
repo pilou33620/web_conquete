@@ -529,7 +529,10 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   clair, les pentes accrochent la lumière, les fonds de vallée sont plus sombres, et quand le soleil est bas les
   collines portent leur ombre, comme les nuages, sur le sol, les troupes et les arbres. Les **bois** sont des masses
   sombres : sous-bois assombri, couronnes qui se touchent, grappes de feuilles, nuances d'un bout à l'autre du bois,
-  soleil qui traverse le feuillage à contre-jour, arbres qui se balancent au vent. Au premier lancement, elle est
+  soleil qui traverse le feuillage à contre-jour, arbres qui se balancent au vent. Le **sol garde la trace** de la
+  bataille : là où passent les troupes (la cavalerie et l'artillerie plus que l'infanterie, deux fois plus sous la
+  pluie) et autour des trous d'obus, il tourne à la boue, les épis se couchent et la neige s'efface (la trace n'est
+  pas enregistrée : une bataille rechargée repart d'un sol neuf). Au premier lancement, elle est
   choisie d'après l'appareil, puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par
   seconde) ; un choix fait à la main est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de
   suite, sans quitter la bataille (l'anticrénelage, à la bataille suivante). Les batailles demandent **WebGL 2**
@@ -743,7 +746,7 @@ web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et 
                      heures.js (table des heures : lumière, brume et étalonnage de 5 h à 22 h ; logique pure,
                      testée), horizon.js (normales fines, occlusion et horizons du relief, calculés une fois
                      par bataille ; logique pure, testée), apres.js (après-rendu : ACES, LUT d'étalonnage, vignettage, FXAA, halo,
-                     maquette), sols.js (sols photo : chargement des huit sols), qualite.js (qualité
+                     maquette), pietinement.js (la boue laissée par les troupes), sols.js (sols photo : chargement des huit sols), qualite.js (qualité
                      graphique), commandes.js (gestes et clavier),
                      interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils
                      communs), css/bataille.css ;
@@ -782,6 +785,7 @@ node --test tests/                               # l'interface seule
 | `tests/gestes.test.mjs` | animations des batailles : geste de chaque homme (salve qui roule, recharge, servants, mêlée, charge), allure propre à chacun, place gardée d'une formation à l'autre, tués (ligne d'un boulet, plafond des corps), contour des bâtiments, échelle des figurines de loin |
 | `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte |
 | `tests/horizon.test.mjs` | relief et lumière : horizon plat en plaine, haut du côté d'une colline et bas de l'autre, occlusion au pied d'une colline, normales qui penchent vers l'extérieur |
+| `tests/pietinement.test.mjs` | piétinement : rien au repos ni sous un général, un tiers de boue au passage d'un régiment de ligne, plus sous la cavalerie et l'artillerie, double sous la pluie, mêlée sur place |
 | `tests/sols.test.mjs` | sols photo : huit sols, parts de chaque sorte de terrain et de chaque culture (elles font 1, 0 sous l'eau), images et licence présentes, après-rendu et sols qui montent avec la qualité |
 | `tests/modeles.test.mjs` | modèles 3D des figurines : os de l'animation, pieds au sol, hauteur, tournés vers l'avant, formes arrondies, version de loin (mêmes os, même hauteur, un tiers des sommets), choix de la version selon la taille à l'écran |
 
