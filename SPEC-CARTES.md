@@ -121,5 +121,5 @@ Mesures sur 24 cartes de villages : bords de parcelles en longues droites align�
 génération de 95 à 185 ms en moyenne (220 ms au plus) ; parts : champs 32,8 → 28,2 %, prés 20,1 → 22,8 %, vergers
 2 %, bois 8,2 → 9,5 %, le reste à moins d'un point. Équilibre, 40 batailles isolées menées par les officiers des deux
 camps (mêmes graines) : victoires 13 / 26 / 1 indécise avant, 15 / 24 / 1 après (5 points, deux batailles : dans le
-bruit) ; pertes moyennes 13,7 / 11,7 % avant, 14,8 / 14,1 % après. Pas fait : les rangs d'arbres le long des chemins
-creux (C3.3).
+bruit) ; pertes moyennes 13,7 / 11,7 % avant, 14,8 / 14,1 % après. Les rangs d'arbres le long des chemins
+creux (C3.3) sont venus ensuite, posés par le navigateur (SPEC-SUITE F9).

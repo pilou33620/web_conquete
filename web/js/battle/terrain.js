@@ -226,6 +226,7 @@ export class Terrain {
     this.prepNuances();
     this.prepPeaks();
     this.prepPaths();
+    this.prepLaneTrees();
     this.prepCover();
   }
   // contour d'une région : arêtes des cases au bord, chaînées en boucles, un peu bousculées puis adoucies
@@ -335,6 +336,22 @@ export class Terrain {
       if (v !== T.PRE && v !== T.MARAIS && v !== T.CHAMP && v !== T.LANDE) continue;
       this.addTree({ x: p[0], y: p[1], r: 2.4 + hash(k, 91, S) * 1.2, ci: (hash(k, 92, S) * 4) | 0, kind: snow ? 'nu' : 'peuplier' });
     }
+  }
+  // rangs d'arbres le long des chemins creux (SPEC-CARTES C3.3, SPEC-SUITE F9) : un chemin sur deux, d'un côté ou des
+  // deux, un chêne tous les 11 m environ, seulement sur prés, champs, landes et vergers. Du décor : les règles (couvert,
+  // vue) restent celles des cases, comme pour les arbres isolés
+  prepLaneTrees() {
+    const S = this.seed, snow = this.pal.neige, ok = new Set([T.PRE, T.CHAMP, T.LANDE, T.VERGER]);
+    (this.lanePts || []).forEach((pts, li) => {
+      if (pts.length < 3 || hash(li, 101, S) > 0.5) return;
+      const sides = hash(li, 102, S) < 0.4 ? [-1, 1] : [hash(li, 103, S) < 0.5 ? -1 : 1];
+      for (const side of sides) for (const [k, p] of resample(offsetPts(pts, side * 5.5), 11).entries()) {
+        if (hash(k, li * 7 + side, S + 104) < 0.18) continue;   // quelques manques
+        if (!ok.has(this.at(p[0], p[1]))) continue;
+        this.addTree({ x: p[0] + (hash(k, li, S + 105) - 0.5) * 1.5, y: p[1] + (hash(k, li, S + 106) - 0.5) * 1.5,
+                       r: 2.8 + hash(k, li, S + 107) * 1.6, ci: (hash(k, li, S + 108) * 4) | 0, kind: snow ? 'nu' : 'feuillu' });
+      }
+    });
   }
   addTree(tr) {
     const i = Math.floor(tr.x / this.cell), j = Math.floor(tr.y / this.cell);

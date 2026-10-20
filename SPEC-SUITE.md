@@ -294,6 +294,12 @@ Le générateur de cartes de bataille plante des rangs d'arbres le long de certa
 la carte change : le générateur passe en version 3, et la version 2 est figée dans un `terrain_v2.py` à ne jamais
 modifier, pour que les batailles en cours des sauvegardes gardent leur carte. Test : `tests/test_cartes.py` étendu.
 
+**Livré le 20/10/2026, autrement que prévu** (`terrain.js` prepLaneTrees) : les rangs d'arbres sont posés par le
+navigateur, comme les arbres isolés, les arbres des haies et les peupliers des berges : un chemin sur deux, d'un côté
+ou des deux, un chêne tous les 11 m environ, sur prés, champs, landes et vergers. Ils ne changent pas les cases : le
+générateur reste en version 2, aucune sauvegarde n'est touchée, et il n'a pas fallu de `terrain_v2.py`. Comme les
+autres arbres hors des bois, ils sont du décor : le couvert et la vue restent ceux des cases.
+
 ---
 
 ## Partie G : la carte de campagne (reste de SPEC-RENDU, partie D)
