@@ -25,12 +25,13 @@ const KEY = 'conquete.bataille.qualite';
 // textures : octets des motifs du sol ; sprites : octets des figurines des cartes d'unités ; post : après-rendu
 // (apres.js : 0 rendu direct, 1 étalonnage et vignettage, 2 aussi FXAA et halo, 3 aussi anticrénelage matériel et
 // profondeur de champ façon maquette) ; sols : sols photo (sols.js, relief.js : 1 une échelle en 512 px, 2 deux
-// échelles, 3 en 1024 px avec le pavage hexagonal)
+// échelles, 3 en 1024 px avec le pavage hexagonal) ; herbe : touffes d'herbe en relief (herbe.js : 0 aucune,
+// 2 jusqu'à 70 m, 3 jusqu'à 95 m de la vue)
 export const PROFILS = {
-  basse: { corps: 800, dpr: 1, aa: false, level: 4, maxZ: 25, troupes: 3000, puffs: 520, fx: 0, ombres: 0, clouds: false, epis: 0, textures: 8e6, sprites: 6e6, post: 0, sols: 1 },
-  moyenne: { corps: 1500, dpr: 1.5, aa: false, level: 8, maxZ: 32, troupes: 6000, puffs: 1100, fx: 1, ombres: 1, clouds: true, epis: 0, textures: 20e6, sprites: 12e6, post: 1, sols: 2 },
-  haute: { corps: 2500, dpr: 2, aa: false, level: 16, maxZ: 40, troupes: 10000, puffs: 2000, fx: 2, ombres: 2, clouds: true, epis: 4, textures: 32e6, sprites: 24e6, post: 2, sols: 3 },
-  ultra: { corps: 4000, dpr: 2.5, aa: true, level: 16, maxZ: 45, troupes: 20000, puffs: 3200, fx: 3, ombres: 3, clouds: true, epis: 8, textures: 48e6, sprites: 48e6, post: 3, sols: 3 },
+  basse: { corps: 800, dpr: 1, aa: false, level: 4, maxZ: 25, troupes: 3000, puffs: 520, fx: 0, ombres: 0, clouds: false, epis: 0, textures: 8e6, sprites: 6e6, post: 0, sols: 1, herbe: 0 },
+  moyenne: { corps: 1500, dpr: 1.5, aa: false, level: 8, maxZ: 32, troupes: 6000, puffs: 1100, fx: 1, ombres: 1, clouds: true, epis: 0, textures: 20e6, sprites: 12e6, post: 1, sols: 2, herbe: 0 },
+  haute: { corps: 2500, dpr: 2, aa: false, level: 16, maxZ: 40, troupes: 10000, puffs: 2000, fx: 2, ombres: 2, clouds: true, epis: 4, textures: 32e6, sprites: 24e6, post: 2, sols: 3, herbe: 2 },
+  ultra: { corps: 4000, dpr: 2.5, aa: true, level: 16, maxZ: 45, troupes: 20000, puffs: 3200, fx: 3, ombres: 3, clouds: true, epis: 8, textures: 48e6, sprites: 48e6, post: 3, sols: 3, herbe: 3 },
 };
 
 // appareil : iPad (y compris ceux qui se disent Macintosh), iPhone, Android, ordinateur

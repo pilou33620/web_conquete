@@ -17,6 +17,7 @@ import { emprise, clsOf, isGeneral, clamp, wrapAngle, TAU } from './formes.js';
 import { profil, onQualite, Mesure, solPx } from './qualite.js';
 import { chargerSols } from './sols.js';
 import { Pietinement, OmbreRegiments } from './pietinement.js';
+import { Herbe } from './herbe.js';
 import { ApresRendu } from './apres.js';
 import { segDist } from './gestes.js';
 
@@ -87,6 +88,8 @@ export class BattleView {
     this.piet = new Pietinement(this.renderer, this.terrain.W, this.terrain.H, this.q);
     this.relief.uni.uPiet.value = this.piet.texture;
     this.ombreR = new OmbreRegiments(this.renderer, this.terrain.W, this.terrain.H);
+    this.herbe = new Herbe(this.relief, this.q);
+    this.scene.add(this.herbe.mesh);
     this.relief.uni.uOmbreR.value = this.ombreR.texture;
     this.troops = new Troops(this.relief, this.q, m.year, anims);
     this.scene.add(this.troops.group);
@@ -125,7 +128,7 @@ export class BattleView {
     this.ui.dispose();
     this.terrain?.dispose();
     this.relief?.dispose();
-    this.piet?.dispose(); this.ombreR?.dispose();
+    this.piet?.dispose(); this.ombreR?.dispose(); this.herbe?.dispose();
     this.troops?.dispose();
     this.decor?.dispose();
     this.art.clear();
@@ -145,6 +148,7 @@ export class BattleView {
     if (this.relief?.sols && this.relief.sols.n !== solPx(this.q)) this.reloadSols();
     this.troops?.setQuality(this.q);
     this.post?.setQuality(this.q);
+    this.herbe?.setQuality(this.q);
     // le décor dépend de la richesse des effets (bois allégés, arbres plus simples) : reconstruit s'il en change
     if (this.decor && this.decor.q.fx !== this.q.fx) {
       this.scene.remove(this.decor.group); this.decor.dispose();
@@ -416,6 +420,7 @@ export class BattleView {
     cam.updateProjectionMatrix();
     cam.position.set(fr.E[0], fr.E[1], fr.E[2]); cam.lookAt(fr.T[0], fr.T[1], fr.T[2]);
     this.relief.follow(fr);
+    this.herbe?.follow(fr);
     this.decor.near(fr.dist); this.decor.lod(fr);
     // de loin, les figurines ne font que quelques pixels : leurs ombres ne se voient plus et coûteraient autant que
     // les figurines elles-mêmes (écart entre 600 et 700 m : pas de bascule à chaque image)

@@ -213,7 +213,7 @@ export class Relief {
       uMean: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0.2, 0.2, 0.2)) }, uForce: { value: FORCE.slice() }, uSolK: { value: 0 },
       uFine: { value: null }, uFineUV: { value: new THREE.Vector4() }, uAO: { value: 0.9 },
       uHor: { value: null }, uHorUV: { value: new THREE.Vector4() }, uHorOn: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
-      uWindK: { value: 1 }, uPiet: { value: null }, uOmbreR: { value: null },
+      uWindK: { value: 1 }, uPiet: { value: null }, uOmbreR: { value: null }, uHgt: { value: null }, uHgtUV: { value: new THREE.Vector4() },
     };
     // (la carte de piétinement arrive avec la vue : setPiet ; d'ici là, un sol neuf)
     this.noPiet = new THREE.DataTexture(new Uint8Array(4), 1, 1); this.noPiet.needsUpdate = true;
@@ -392,6 +392,12 @@ export class Relief {
     this.fine = tex(half, nm.nx, nm.ny, THREE.HalfFloatType);
     this.uni.uFine.value = this.fine;
     this.uni.uFineUV.value.set(1 / (nm.nx * nm.G), 1 / (nm.ny * nm.G), 0.5 / nm.nx, 0.5 / nm.ny);
+    // altitudes à 2,5 m, pour l'herbe en relief (herbe.js) : le sol n'en lit pas (il a déjà 15 textures sur 16)
+    const hg = new Uint16Array(nm.nx * nm.ny);
+    for (let j = 0; j < nm.ny; j++) for (let i = 0; i < nm.nx; i++) hg[j * nm.nx + i] = THREE.DataUtils.toHalfFloat(this.heightAt(i * nm.G, j * nm.G));
+    this.hgt = new THREE.DataTexture(hg, nm.nx, nm.ny, THREE.RedFormat, THREE.HalfFloatType);
+    this.hgt.minFilter = this.hgt.magFilter = THREE.LinearFilter; this.hgt.needsUpdate = true;
+    this.uni.uHgt.value = this.hgt; this.uni.uHgtUV.value.copy(this.uni.uFineUV.value);
   }
   // sols photo chargés (sols.js) ou null ; la qualité dit combien d'échelles et si le pavage est hexagonal
   setSols(sols) {
@@ -609,7 +615,7 @@ export class Relief {
     this.masks.dispose();
     this.hor.dispose();
     this.noPiet.dispose();
-    this.fine.dispose();
+    this.fine.dispose(); this.hgt.dispose();
     this.sols?.dispose(); this.disposed = true;
     this.decals.dispose();
   }
