@@ -903,7 +903,13 @@ export class Troops {
         .replace('#include <color_fragment>', pattern ? 'diffuseColor.rgb *= mix(vColor.rgb, texture2D(uPattern, vUv2).rgb, step(0.5, vPart));' : '#include <color_fragment>')
         // lumière enveloppante : le côté à l'ombre n'est pas noir, le passage est doux (figurines arrondies du prototype)
         .replace('#include <lights_lambert_pars_fragment>', THREE.ShaderChunk.lights_lambert_pars_fragment
-          .replace('float dotNL = saturate( dot( geometryNormal, directLight.direction ) );', 'float dotNL = saturate( dot( geometryNormal, directLight.direction ) * 0.6 + 0.4 );'));
+          .replace('float dotNL = saturate( dot( geometryNormal, directLight.direction ) );', 'float dotNL = saturate( dot( geometryNormal, directLight.direction ) * 0.6 + 0.4 );')
+          // liseré de lumière (étape 9h) : sur le bord des silhouettes, d'autant plus que le soleil est derrière elles ; c'est
+          // ce qui détache les rangs du sol chez Ultimate General, le matin et le soir surtout
+          .replace('reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );',
+            `reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );
+            float rimK = pow(1.0 - saturate(dot(geometryNormal, geometryViewDir)), 3.0) * (0.25 + 0.75 * saturate(-dot(geometryViewDir, directLight.direction)));
+            reflectedLight.directDiffuse += directLight.color * rimK * (0.12 + 0.5 * material.diffuseColor);`));
     };
     mat.customProgramCacheKey = () => 'troupes-' + (pattern ? 'etoffe-' : '') + (def || 'homme');
     this.relief.ombrage?.(mat);   // nuages et collines (relief.js ; le relief des bancs d'essai n'en a pas)

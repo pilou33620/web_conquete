@@ -118,3 +118,40 @@ export class Pietinement {
   reset() { this.fresh = true; }
   dispose() { this.rt.dispose(); this.mesh.geometry.dispose(); this.mat.dispose(); this.mesh.dispose(); }
 }
+
+// Ombre de régiment (étape 9h) : une tache large et très douce sous chaque formation, redessinée à chaque image dans
+// une petite texture du champ (6 m par pixel) ; relief.js en assombrit le sol. À la vue d'ensemble, le bloc « pose » sur
+// le sol au lieu de flotter.
+export class OmbreRegiments {
+  constructor(renderer, W, H) {
+    this.r = renderer;
+    this.rt = new THREE.WebGLRenderTarget(Math.ceil(W / 6), Math.ceil(H / 6), { depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false });
+    this.cam = new THREE.OrthographicCamera(0, W, H, 0, -1, 1);
+    const geo = new THREE.PlaneGeometry(1, 1);
+    this.k = new THREE.InstancedBufferAttribute(new Float32Array(CAP), 1);
+    geo.setAttribute('aK', this.k);
+    const frag = FRAG.replace('a *= 0.45 + 1.1 * n(vW * 0.12) * n(vW * 0.37 + 7.0);', 'a = a * a;');
+    this.mat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: VERT, fragmentShader: frag, transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.mesh = new THREE.InstancedMesh(geo, this.mat, CAP);
+    this.mesh.frustumCulled = false; this.mesh.count = 0;
+    this.scene = new THREE.Scene(); this.scene.add(this.mesh);
+    this.m = new THREE.Matrix4(); this.qt = new THREE.Quaternion(); this.p = new THREE.Vector3(); this.s = new THREE.Vector3(); this.z = new THREE.Vector3(0, 0, 1);
+  }
+  get texture() { return this.rt.texture; }
+  // units : les régiments vus (x, y, dir, w, d, _fade) ; dessine leurs ombres (avant le rendu de la scène)
+  render(units) {
+    let n = 0;
+    for (const u of units) {
+      if (n >= CAP || u.state === 'hors' || (u.men || 0) <= 0) continue;
+      this.p.set(u.x, u.y, 0); this.qt.setFromAxisAngle(this.z, u.dir || 0); this.s.set((u.d || 10) + 10, (u.w || 20) + 10, 1);
+      this.mesh.setMatrixAt(n, this.m.compose(this.p, this.qt, this.s));
+      this.k.array[n++] = 0.55 * (u._fade ?? 1);
+    }
+    this.mesh.count = n; this.k.needsUpdate = true; this.mesh.instanceMatrix.needsUpdate = true;
+    const r = this.r, prev = r.getRenderTarget(), c = r.getClearColor(new THREE.Color()), a = r.getClearAlpha();
+    r.setRenderTarget(this.rt); r.setClearColor(0x000000, 0); r.clear();
+    if (n) r.render(this.scene, this.cam);
+    r.setClearColor(c, a); r.setRenderTarget(prev);
+  }
+  dispose() { this.rt.dispose(); this.mesh.geometry.dispose(); this.mat.dispose(); this.mesh.dispose(); }
+}

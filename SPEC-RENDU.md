@@ -86,6 +86,14 @@ fois par seconde de bataille au plus ; le dépôt suit le temps de la bataille (
 l'enregistrement de la carte avec la bataille, la boue luisante sous la pluie (Lambert n'a pas de reflet), les
 ornières des pièces et les débris (chapeaux, fusils, roues) ; l'herbe instanciée de 9f n'existe pas encore.
 
+**Livré, hors de l'ordre de la spec (demande du 20/10 : « tout comme UGAR »)** : la caméra en biais (champ de 40°,
+50° d'inclinaison de loin), l'interface de bataille à la manière d'UGAR (ardoise, cartes en portrait sous des onglets à
+la couleur du camp, bandeau fin avec l'année et l'heure, mini-carte encadrée), puis 9h en partie : liseré de lumière
+sur les figurines (plus fort à contre-jour) et ombre de régiment (pietinement.js, OmbreRegiments). Pas fait de 9h : les
+reflets du métal, l'occlusion par sommet calculée. Contrainte apparue : le shader du sol touchait la limite de 16
+textures (iPad compris) ; horizons et masques des sols sont rangés deux par deux côte à côte, et le masque des bois
+dans le quatrième canal des normales fines.
+
 ## Ce qui ne change pas
 
 Le moteur Python et ses API, les règles, les commandes et les gestes, l'interface, les noms des niveaux de qualité, les

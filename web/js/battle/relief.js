@@ -50,13 +50,13 @@ const NUAGE = 2400;                            // période du motif des ombres d
 
 // GLSL de l'ombrage commun (ombrage) : nuages et collines, sur la lumière directe ; wp : point dans la scène
 const OMBRE_DECL = `
-  uniform sampler2D uClouds, uHor1, uHor2; uniform float uCloudA, uHorOn; uniform vec2 uCloudOff; uniform vec3 uSunDir; uniform vec4 uHorUV;
+  uniform sampler2D uClouds, uHor; uniform float uCloudA, uHorOn; uniform vec2 uCloudOff; uniform vec3 uSunDir; uniform vec4 uHorUV;
   float ombreCiel(vec3 wp) {
     float c = 1.0 - texture(uClouds, (wp.xz - uCloudOff) / ${NUAGE.toFixed(1)}).a * min(uCloudA * 1.9, 0.85);
     vec2 uv = wp.xz * uHorUV.xy + uHorUV.zw;
-    if (uHorOn < 0.5 || any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return c;
+    if (uHorOn < 0.5 || any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(0.5, 1.0)))) return c;
     // l'horizon dans la direction du soleil, entre les deux directions voisines des huit
-    vec4 a = texture(uHor1, uv), b = texture(uHor2, uv);
+    vec4 a = texture(uHor, uv), b = texture(uHor, uv + vec2(0.5, 0.0));   // (directions 0 à 3, puis 4 à 7)
     float f = mod(atan(uSunDir.z, uSunDir.x) / 0.78539816 + 8.0, 8.0), t = fract(f);
     int k = int(floor(f));
     float h0 = k == 0 ? a.r : k == 1 ? a.g : k == 2 ? a.b : k == 3 ? a.a : k == 4 ? b.r : k == 5 ? b.g : k == 6 ? b.b : b.a;
@@ -69,7 +69,7 @@ const OMBRE_LUM = `
 
 // GLSL des sols photo (voir en tête) : déclarations, puis le mélange (dans map_fragment), puis les normales
 const SOLS_DECL = `
-  uniform sampler2DArray uSolA, uSolN; uniform sampler2D uMask1, uMask2; uniform vec3 uMean[8]; uniform float uForce[8]; uniform float uSolK;
+  uniform sampler2DArray uSolA, uSolN; uniform sampler2D uMask; uniform vec3 uMean[8]; uniform float uForce[8]; uniform float uSolK, uMaskPx;
   vec3 solNrm = vec3(0.0, 0.0, 1.0);
   float shash(vec2 p) { p = mod(p, 1024.0); vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
   float snoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -105,7 +105,10 @@ const SOLS_MIX = `
   {
     // parts des huit sols, au bord bousculé de ±2,5 m
     vec2 jit = (vec2(snoise(vWorld * 0.25), snoise(vWorld * 0.25 + 31.7)) - 0.5) * 5.0;
-    vec4 m1 = texture(uMask1, (vWorld + jit) / uSize), m2 = texture(uMask2, (vWorld + jit) / uSize);
+    // (les deux masques côte à côte dans une texture : quatre premiers sols à gauche, quatre derniers à droite)
+    vec2 mu = clamp((vWorld + jit) / uSize, 0.0, 1.0) * vec2(0.5, 1.0);
+    mu.x = clamp(mu.x, uMaskPx, 0.5 - uMaskPx);
+    vec4 m1 = texture(uMask, mu), m2 = texture(uMask, mu + vec2(0.5, 0.0));
     float w[8];
     w[0] = m1.r; w[1] = m1.g; w[2] = m1.b; w[3] = m1.a; w[4] = m2.r; w[5] = m2.g; w[6] = m2.b; w[7] = m2.a;
     float tot = 0.0;
@@ -169,6 +172,13 @@ function cloudTexture() {
   return cv;
 }
 
+// deux images RGBA de w × h côte à côte (a à gauche, b à droite)
+function sideBySide(a, b, w, h) {
+  const out = new Uint8Array(w * h * 8);
+  for (let j = 0; j < h; j++) { out.set(a.subarray(j * w * 4, (j + 1) * w * 4), j * w * 8); out.set(b.subarray(j * w * 4, (j + 1) * w * 4), j * w * 8 + w * 4); }
+  return out;
+}
+
 // abscisses du maillage : [−OUT, 0[ par OUT_STEP, [0, L] par STEP, ]L, L + OUT] par OUT_STEP
 function ticks(L) {
   const out = [];
@@ -199,28 +209,21 @@ export class Relief {
       uCover: { value: this.cover }, uCoverA: { value: 0 },
       uClouds: { value: null }, uCloudA: { value: 0 }, uCloudOff: { value: new THREE.Vector2() },
       uLv0: { value: null }, uLv1: { value: null }, uLv2: { value: null }, uLv3: { value: null }, uSpan: { value: new THREE.Vector4() }, uSlots: { value: Array.from({ length: N * N * 4 }, () => new THREE.Vector2(-1e4, -1e4)) },
-      uSolA: { value: null }, uSolN: { value: null }, uMask1: { value: null }, uMask2: { value: null },
+      uSolA: { value: null }, uSolN: { value: null }, uMask: { value: null }, uMaskPx: { value: 0 },
       uMean: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0.2, 0.2, 0.2)) }, uForce: { value: FORCE.slice() }, uSolK: { value: 0 },
       uFine: { value: null }, uFineUV: { value: new THREE.Vector4() }, uAO: { value: 0.9 },
-      uHor1: { value: null }, uHor2: { value: null }, uHorUV: { value: new THREE.Vector4() }, uHorOn: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
-      uBois: { value: null }, uWindK: { value: 1 }, uPiet: { value: null },
+      uHor: { value: null }, uHorUV: { value: new THREE.Vector4() }, uHorOn: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+      uWindK: { value: 1 }, uPiet: { value: null }, uOmbreR: { value: null },
     };
     // (la carte de piétinement arrive avec la vue : setPiet ; d'ici là, un sol neuf)
     this.noPiet = new THREE.DataTexture(new Uint8Array(4), 1, 1); this.noPiet.needsUpdate = true;
-    this.uni.uPiet.value = this.noPiet;
-    const wm = terrain.woodMask();
-    this.bois = new THREE.DataTexture(wm.data, wm.w, wm.h, THREE.RedFormat, THREE.UnsignedByteType);
-    this.bois.unpackAlignment = 1; this.bois.minFilter = this.bois.magFilter = THREE.LinearFilter; this.bois.needsUpdate = true;
-    this.uni.uBois.value = this.bois;
+    this.uni.uPiet.value = this.noPiet; this.uni.uOmbreR.value = this.noPiet;
     this.prepRelief();
     // masques des sols photo (terrain.js) ; la photo arrive plus tard (setSols)
     const sm = terrain.solMask();
-    this.masks = [sm.a, sm.b].map(d => {
-      const t = new THREE.DataTexture(d, sm.w, sm.h);
-      t.minFilter = t.magFilter = THREE.LinearFilter; t.needsUpdate = true;
-      return t;
-    });
-    this.uni.uMask1.value = this.masks[0]; this.uni.uMask2.value = this.masks[1];
+    this.masks = new THREE.DataTexture(sideBySide(sm.a, sm.b, sm.w, sm.h), sm.w * 2, sm.h);
+    this.masks.minFilter = this.masks.magFilter = THREE.LinearFilter; this.masks.needsUpdate = true;
+    this.uni.uMask.value = this.masks; this.uni.uMaskPx.value = 0.5 / (sm.w * 2);
     this.neige = sm.neige;
     this.sols = null;
     this.clouds = new THREE.CanvasTexture(cloudTexture());
@@ -289,9 +292,9 @@ export class Relief {
           uniform vec3 uOuter; uniform vec2 uSize; uniform sampler2D uCover; uniform float uCoverA;
           // (quatre textures séparées : un tableau de textures se mêlait à uCover dans l'attribution des unités)
           uniform sampler2D uLv0, uLv1, uLv2, uLv3; uniform vec4 uSpan; uniform vec2 uSlots[${N * N * 4}];
-          uniform sampler2D uFine, uBois, uPiet; uniform vec4 uFineUV; uniform float uAO;
+          uniform sampler2D uFine, uPiet, uOmbreR; uniform vec4 uFineUV; uniform float uAO;
           varying vec2 vWorld; varying vec3 vNw;
-          vec3 gNf; float gAO = 1.0;   // normale fine du sol (scène) et occlusion ambiante
+          vec3 gNf; float gAO = 1.0, gBois = 0.0;   // normale fine du sol (scène), occlusion ambiante, sous les bois
           // un niveau de détail en p (m) : sa couleur, et ok = 1 si le bloc de p y est peint
           vec4 lvl(sampler2D t, float span, int base, vec2 p, out float ok) {
             ok = 0.0;
@@ -322,7 +325,7 @@ export class Relief {
           vec2 fuv = vWorld * uFineUV.xy + uFineUV.zw;
           if (all(greaterThanEqual(fuv, vec2(0.0))) && all(lessThanEqual(fuv, vec2(1.0)))) {
             vec4 fn = texture(uFine, fuv);
-            gNf = normalize(vec3(fn.x, sqrt(max(0.0, 1.0 - fn.x * fn.x - fn.y * fn.y)), fn.y)); gAO = fn.z;
+            gNf = normalize(vec3(fn.x, sqrt(max(0.0, 1.0 - fn.x * fn.x - fn.y * fn.y)), fn.y)); gAO = fn.z; gBois = fn.w;
           }
           ${LEVELS.map((L, i) => `c = lvl(uLv${i}, uSpan[${i}], ${i * N * N}, vWorld, ok);
           diffuseColor.rgb = mix(diffuseColor.rgb, c.rgb, ok * (1.0 - smoothstep(1.2, 2.2, ${TS}.0 / max(uSpan[${i}], 1e-3) * mpp)));`).join('\n          ')}
@@ -332,8 +335,10 @@ export class Relief {
           // piétinement : la peinture tourne à la boue brune (la photo garde son grain), sur la neige aussi
           float pt = clamp(texture(uPiet, clamp(vWorld / uSize, 0.0, 1.0)).r, 0.0, 1.0) * step(0.0, min(min(vWorld.x, vWorld.y), min(uSize.x - vWorld.x, uSize.y - vWorld.y)));
           diffuseColor.rgb = mix(diffuseColor.rgb, mix(diffuseColor.rgb * vec3(0.55, 0.46, 0.34), vec3(0.11, 0.08, 0.05), 0.35), smoothstep(0.0, 1.0, pt) * 0.88);
+          // ombre des régiments (pietinement.js, OmbreRegiments) : le bloc pose sur le sol
+          diffuseColor.rgb *= 1.0 - 0.32 * clamp(texture(uOmbreR, clamp(vWorld / uSize, 0.0, 1.0)).r, 0.0, 1.0);
           // sous-bois : sombre et un peu plus vert, jusqu'au bord du bois
-          diffuseColor.rgb *= mix(vec3(1.0), vec3(0.5, 0.56, 0.5), smoothstep(0.25, 0.85, texture(uBois, vWorld / uSize).r));
+          diffuseColor.rgb *= mix(vec3(1.0), vec3(0.5, 0.56, 0.5), smoothstep(0.25, 0.85, gBois));
           // couverts (déploiement) : bois, bâti, hauteurs (plus appuyés que sur la carte 2D : la lumière les adoucit)
           vec4 cv = texture(uCover, vMapUv);
           diffuseColor.rgb = mix(diffuseColor.rgb, cv.rgb, min(0.85, cv.a * uCoverA * 2.4));
@@ -352,7 +357,7 @@ export class Relief {
   // nuages et collines sur la lumière directe d'un matériau Lambert (sol, épis, tués, troupes, arbres, maisons)
   ombrage(mat) {
     const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey;
-    const u = { uClouds: this.uni.uClouds, uCloudA: this.uni.uCloudA, uCloudOff: this.uni.uCloudOff, uHor1: this.uni.uHor1, uHor2: this.uni.uHor2,
+    const u = { uClouds: this.uni.uClouds, uCloudA: this.uni.uCloudA, uCloudOff: this.uni.uCloudOff, uHor: this.uni.uHor,
       uHorUV: this.uni.uHorUV, uHorOn: this.uni.uHorOn, uSunDir: this.uni.uSunDir };
     mat.onBeforeCompile = (sh, r) => {
       prev?.call(mat, sh, r);
@@ -371,11 +376,18 @@ export class Relief {
       t.minFilter = t.magFilter = THREE.LinearFilter; t.needsUpdate = true;
       return t;
     };
-    this.hor = [tex(hz.a, hz.nx, hz.ny), tex(hz.b, hz.nx, hz.ny)];
-    this.uni.uHor1.value = this.hor[0]; this.uni.uHor2.value = this.hor[1];
-    // (le point i de la grille, en i G m, est au centre du texel i)
-    this.uni.uHorUV.value.set(1 / (hz.nx * hz.G), 1 / (hz.ny * hz.G), 0.5 / hz.nx, 0.5 / hz.ny);
+    // (une seule texture : la limite est de 16 textures par shader, sur l'iPad comme ailleurs)
+    this.hor = tex(sideBySide(hz.a, hz.b, hz.nx, hz.ny), hz.nx * 2, hz.ny);
+    this.uni.uHor.value = this.hor;
+    // (le point i de la grille, en i G m, est au centre du texel i de la moitié gauche)
+    this.uni.uHorUV.value.set(1 / (2 * hz.nx * hz.G), 1 / (hz.ny * hz.G), 0.5 / (2 * hz.nx), 0.5 / hz.ny);
     const nm = normales(this.heightAt, this.W, this.H, hz, 2.5), half = new Uint16Array(nm.data.length);
+    // le masque des bois (terrain.js) dans le quatrième canal
+    const wm = this.t.woodMask(4);
+    for (let j = 0; j < nm.ny; j++) for (let i = 0; i < nm.nx; i++) {
+      const wi = Math.min(wm.w - 1, Math.floor(i * nm.G / 4)), wj = Math.min(wm.h - 1, Math.floor(j * nm.G / 4));
+      nm.data[(j * nm.nx + i) * 4 + 3] = wm.data[wj * wm.w + wi] / 255;
+    }
     for (let i = 0; i < half.length; i++) half[i] = THREE.DataUtils.toHalfFloat(nm.data[i]);
     this.fine = tex(half, nm.nx, nm.ny, THREE.HalfFloatType);
     this.uni.uFine.value = this.fine;
@@ -594,9 +606,9 @@ export class Relief {
     this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.tex.dispose(); this.cover.dispose(); this.scratchTex.dispose(); this.clouds.dispose();
     this.shells.geometry.dispose(); this.shells.material.dispose(); this.shells.dispose(); this.crops.dispose();
     for (const l of this.levels) l?.tex.dispose();
-    for (const t of this.masks) t.dispose();
-    for (const t of this.hor) t.dispose();
-    this.bois.dispose(); this.noPiet.dispose();
+    this.masks.dispose();
+    this.hor.dispose();
+    this.noPiet.dispose();
     this.fine.dispose();
     this.sols?.dispose(); this.disposed = true;
     this.decals.dispose();

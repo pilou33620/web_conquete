@@ -16,7 +16,7 @@ import { frameOf, project, unproject, anchor, clampCam, FOV } from './camera.js'
 import { emprise, clsOf, isGeneral, clamp, wrapAngle, TAU } from './formes.js';
 import { profil, onQualite, Mesure, solPx } from './qualite.js';
 import { chargerSols } from './sols.js';
-import { Pietinement } from './pietinement.js';
+import { Pietinement, OmbreRegiments } from './pietinement.js';
 import { ApresRendu } from './apres.js';
 import { segDist } from './gestes.js';
 
@@ -86,6 +86,8 @@ export class BattleView {
     this.relief.setup(this.scene);
     this.piet = new Pietinement(this.renderer, this.terrain.W, this.terrain.H, this.q);
     this.relief.uni.uPiet.value = this.piet.texture;
+    this.ombreR = new OmbreRegiments(this.renderer, this.terrain.W, this.terrain.H);
+    this.relief.uni.uOmbreR.value = this.ombreR.texture;
     this.troops = new Troops(this.relief, this.q, m.year, anims);
     this.scene.add(this.troops.group);
     this.fx.attach(this.scene, this.relief.heightAt);
@@ -123,7 +125,7 @@ export class BattleView {
     this.ui.dispose();
     this.terrain?.dispose();
     this.relief?.dispose();
-    this.piet?.dispose();
+    this.piet?.dispose(); this.ombreR?.dispose();
     this.troops?.dispose();
     this.decor?.dispose();
     this.art.clear();
@@ -430,6 +432,7 @@ export class BattleView {
     this.decor.clearings(all, performance.now());
     this.fx.render(fr, z);
     this.piet?.render();
+    this.ombreR?.render(all);
     this.post.render(this.scene, cam, ciel.grade, time, fr.dist);
     mark('scene');
     // le calque 2D
