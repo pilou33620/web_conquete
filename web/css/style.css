@@ -1,16 +1,17 @@
 :root {
-  --prusse: #13233a;
-  --prusse-2: #1b3150;
-  --nuit: #0c1828;
+  /* ardoise, comme l'interface d'Ultimate General */
+  --prusse: #24272a;
+  --prusse-2: #34393d;
+  --nuit: #141618;
   --laiton: #c8a253;
   --laiton-clair: #e6c97f;
   --papier: #f1ead8;
   --papier-2: #c9c0a8;
   --cire: #b8352a;
   --sauge: #7fae6b;
-  --ombre: rgba(4, 10, 20, 0.55);
-  --panel: rgba(19, 35, 58, 0.94);
-  --hair: rgba(200, 162, 83, 0.45);
+  --ombre: rgba(0, 0, 0, 0.55);
+  --panel: rgba(36, 39, 42, 0.95);
+  --hair: rgba(178, 168, 140, 0.38);
   --f-titre: "IM Fell English", "Iowan Old Style", Georgia, serif;
   --f-texte: "EB Garamond", "Iowan Old Style", Georgia, "Times New Roman", serif;
   --safe-t: env(safe-area-inset-top, 0px);
@@ -19,7 +20,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: #2f5c95; color: var(--papier);
+html, body { margin: 0; height: 100%; overflow: hidden; background: #1f5c6c; color: var(--papier);
   font-family: var(--f-texte); font-size: 16px; line-height: 1.35; -webkit-font-smoothing: antialiased;
   font-variant-numeric: lining-nums tabular-nums; touch-action: none; -webkit-user-select: none; user-select: none; }
 button, input, select { font: inherit; color: inherit; }
@@ -46,7 +47,7 @@ button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 /* ------------------------------------------------------------- barre du haut */
 #topbar { position: absolute; left: 0; right: 0; top: 0; padding-top: var(--safe-t); min-height: var(--tb-h);
   display: flex; align-items: center; gap: 14px; padding-left: 12px; padding-right: 10px;
-  background: linear-gradient(var(--panel), rgba(19, 35, 58, 0.88)); border-bottom: 1px solid var(--hair);
+  background: linear-gradient(var(--panel), rgba(36, 39, 42, 0.88)); border-bottom: 1px solid var(--hair);
   box-shadow: 0 2px 14px var(--ombre); z-index: 20; }
 .tb-faction { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .tb-faction .coat { width: 30px; height: 36px; flex: none; }
@@ -248,7 +249,7 @@ span.turn-why { padding: 8px 10px; }
 #bubble .bh { font-size: 12.5px; line-height: 1.25; color: var(--papier-2); opacity: .85; max-width: 250px; padding: 0 4px; }
 /* tutoriel de la campagne (tuto.js) : au-dessus de la carte et des panneaux, sous la bulle de marche, les messages
    et les fenêtres ; caché pendant une bataille */
-#tuto { position: fixed; z-index: 29; padding: 12px 14px 10px; background: rgba(19,35,58,.97); border: 1px solid var(--laiton); border-radius: 10px;
+#tuto { position: fixed; z-index: 29; padding: 12px 14px 10px; background: rgba(36,39,42,.97); border: 1px solid var(--laiton); border-radius: 10px;
   box-shadow: 0 8px 26px var(--ombre); font-size: 15.5px; line-height: 1.35; animation: toast-in .3s ease-out; }
 #tuto p { margin: 0 0 8px; }
 #tuto .btns { display: flex; gap: 8px; justify-content: flex-end; min-height: 34px; }
@@ -276,7 +277,7 @@ body.modal-open #proposals { z-index: 36; top: auto; bottom: calc(12px + var(--s
 .proposal p { margin: 4px 0 8px; font-size: 15px; }
 
 /* ------------------------------------------------------------- fenêtres */
-#modal { position: absolute; inset: 0; z-index: 35; background: rgba(6, 12, 22, 0.55); display: grid; place-items: center; padding: 16px; }
+#modal { position: absolute; inset: 0; z-index: 35; background: rgba(8, 9, 10, 0.55); display: grid; place-items: center; padding: 16px; }
 .modal-card { position: relative; width: min(1060px, 100%); max-height: calc(100% - 20px); overflow-y: auto; background: var(--panel); border: 1px solid var(--laiton);
   border-radius: 10px; box-shadow: 0 14px 40px var(--ombre); padding: 20px 22px; touch-action: pan-y; overscroll-behavior: contain; }
 .modal-card > .close { position: absolute; top: 12px; right: 12px; }
@@ -320,7 +321,7 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 .tbl-wrap td.small { min-width: 110px; }
 .tbl-wrap { overflow-x: auto; touch-action: pan-x pan-y; overscroll-behavior-x: contain; max-width: 100%;
   /* ombre à droite tant qu'il reste des colonnes à faire défiler */
-  background: linear-gradient(to left, rgba(19,35,58,1) 35%, rgba(19,35,58,0)) right / 26px 100% no-repeat local,
+  background: linear-gradient(to left, rgba(36,39,42,1) 35%, rgba(36,39,42,0)) right / 26px 100% no-repeat local,
     linear-gradient(to left, rgba(200,162,83,.32), rgba(200,162,83,0)) right / 14px 100% no-repeat scroll; }
 .journal .ev { display: grid; grid-template-columns: 120px 1fr; gap: 10px; padding: 4px 0; border-bottom: 1px solid rgba(200,162,83,.15); font-size: 15px; }
 .journal .ev .when { color: var(--papier-2); font-size: 14px; }
@@ -330,7 +331,7 @@ table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
 
 /* ------------------------------------------------------------- écran de départ */
 #start { position: absolute; inset: 0; z-index: 45; display: grid; grid-template-columns: minmax(320px, 470px) 1fr; pointer-events: none; }
-.start-side { pointer-events: auto; background: linear-gradient(90deg, rgba(12,24,40,.97), rgba(19,35,58,.93)); border-right: 1px solid var(--laiton);
+.start-side { pointer-events: auto; background: linear-gradient(90deg, rgba(20,22,24,.97), rgba(36,39,42,.93)); border-right: 1px solid var(--laiton);
   padding: calc(26px + var(--safe-t)) 26px calc(22px + var(--safe-b)); overflow-y: auto; touch-action: pan-y; display: flex; flex-direction: column; gap: 14px; }
 /* (le panneau défile quand il est plus haut que l'écran : sans ceci, ses rangées de boutons à overflow caché, onglets
    Campagne / Bataille compris, s'écrasaient à 2 px) */

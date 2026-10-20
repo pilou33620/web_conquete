@@ -345,6 +345,29 @@ avec ACES et sans LUT.
 
 ---
 
+## Partie D : la carte de campagne
+
+Demandée le 2026-10-20 avec le reste (« remplacer tout le design »). La carte reste dessinée en 2D (canevas, tuiles),
+vue de dessus : passer en 3D inclinée comme UGAR serait un autre chantier. On reprend ce qui fait son allure, d'après
+les captures de la page Steam (référence seulement, rien n'en est repris).
+
+- **Terres** (`map.js`, `paintLand`) : herbe olive et dorée, sous-bois sombre, landes ocre. Une altitude lissée d'après
+  le terrain (plaines, coteaux, montagnes) donne un **relief ombré** par un soleil du nord-ouest ; coteaux plus secs,
+  fonds plus verts. Couche peinte à 2 pixels par km, repeinte quand la saison change : **givre** en plaine et **neige**
+  en montagne l'hiver, prés roussis l'automne (0,1 s sur un PC).
+- **Côtes et eaux** : mer turquoise, claire sur les hauts-fonds ; liseré d'écume et **tranche de terre brune** sous le
+  rivage (les terres ont de l'épaisseur) ; fleuves vert-de-gris entre des berges brunes ; étangs et estuaire de même.
+- **Forêts** : futaies denses de houppiers ronds, ombre portée au sud-est, côté éclairé au nord-ouest, quelques arbres
+  roux ; enneigées l'hiver.
+- **Routes** : minces chemins de terre claire. **Champs** : blés et chaumes ocre.
+- **Noms** : villes et forts sur une **plaque d'ardoise** en capitales, liseré aux couleurs du camp ; villages en
+  capitales sans plaque ; noms des eaux gravés (Océan Atlantique, Golfe de Gascogne, fleuves, étangs, estuaire).
+- **Armées** (vue éloignée) : plaque d'ardoise à l'effectif, liseré et **fanion** du camp qui flotte.
+- **Territoires** plus discrets (remplissage et frontières allégés), **vignettage** aux bords de l'écran.
+- **Interface** : thème ardoise (variables de `style.css`), comme l'interface de bataille.
+
+Pas fait : la vue 3D inclinée, les portraits des généraux sur la carte, les figurines 3D des armées en marche.
+
 ## Budget : ce que chaque technique coûte, par qualité
 
 | Technique | Basse | Moyenne | Haute | Ultra | Coût principal |

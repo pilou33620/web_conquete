@@ -236,6 +236,11 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   ralliez-les avec une armée nettement plus forte que leur milice pour gagner des revenus.
 - **Victoire** : tous les chefs-lieux vous appartiennent, ou appartiennent à un département qui s'est soumis à vous.
   **Défaite** : votre chef-lieu tombe. Un département qui perd son chef-lieu capitule et ses villes passent au vainqueur.
+- La carte prend l'allure de celle d'Ultimate General : herbe olive et dorée, relief ombré, futaies denses de
+  houppiers ronds, mer turquoise et rivage à la tranche brune, fleuves vert-de-gris, chemins de terre claire. L'hiver
+  la couvre de givre (et de neige en montagne), l'automne roussit les prés. Villes et forts portent leur nom sur une plaque
+  d'ardoise au liseré du camp, les eaux ont leur nom gravé, les armées une plaque et un fanion. L'interface est en
+  ardoise, comme celle des batailles.
 - Villes et villages sont dessinés en vue cavalière : maisons, église à clocher, grande église des villes, cathédrale et
   hôtel de ville des chefs-lieux, citadelle des places fortes. Chaque pays a ses couleurs (pierre blonde et tuiles du
   Bordelais, toits bruns du Périgord, colombages des Landes, brique de l'Agenais, murs blancs et ardoise du Béarn),
