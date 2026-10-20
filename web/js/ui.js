@@ -1903,7 +1903,16 @@ export class UI {
     this.renderStart();
   }
 
+  // l'écran de départ est redessiné à chaque choix (un régiment de plus, une option…) : le panneau garde son défilement
+  // au lieu de remonter en haut, tant qu'on reste dans le même onglet (Campagne ou Bataille)
   renderStart() {
+    const root = this.$('start'), sel = '.start-side, .scroll', same = this.startDrawn === this.startMode;
+    const keep = same ? [...root.querySelectorAll(sel)].map(e => e.scrollTop) : [];
+    this.drawStart();
+    this.startDrawn = this.startMode;
+    root.querySelectorAll(sel).forEach((e, i) => { if (keep[i]) e.scrollTop = keep[i]; });
+  }
+  drawStart() {
     if (this.startMode === 'bataille' && this.skOpts) return this.renderSkirmish();
     const info = this.startInfo || { saves: [], running: false };
     const scs = this.rules.scenarios || {};
