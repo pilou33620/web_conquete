@@ -10,6 +10,7 @@
 import * as THREE from '../../vendor/three/three.module.js';
 import { clamp, hash, TAU, canvas, pieces } from './formes.js';
 import { smokeless } from './gestes.js';
+import { ambiance } from './heures.js';
 
 // fumée en volume : des boules douces qui se recouvrent, éclairées en haut à gauche (lumière du nord-ouest)
 function puffSprite(rgb, shade, seed) {
@@ -360,45 +361,11 @@ export class Effects {
     }
     this.balls = still;
   }
-  // ------------------------------------------------------------------ atmosphère (en coordonnées d'écran)
-  // Couleur de la lumière (multipliée) : matin doré, midi neutre, couchant doré puis rose, nuit bleue (par brouillard :
-  // grise) ; null à midi par beau temps
-  tint(st) {
-    const w = st.weather || 'soleil', L = clamp(st.light ?? 1, 0, 1), h = st.hour ?? 12, k = clamp((1 - L) / 0.8, 0, 1);
-    let tint = null;
-    if (L < 0.97) {
-      tint = k < 0.35 ? mix3([255, 255, 255], [255, 216, 164], k / 0.35)
-        : k < 0.65 ? mix3([255, 216, 164], [240, 172, 146], (k - 0.35) / 0.3)
-        : mix3([240, 172, 146], [74, 84, 142], (k - 0.65) / 0.35);
-    } else if (h < 9.8 && w !== 'brouillard') tint = mix3([255, 228, 188], [255, 255, 255], clamp((h - 8) / 1.8, 0, 1));
-    else if (w === 'canicule') tint = [255, 232, 196];
-    if (tint && w === 'brouillard') tint = mix3(tint, [235, 238, 242], 0.6);
-    return tint;
-  }
-  // Lumière et ciel de la scène 3D pour l'état du ciel st ({weather, light, hour, wind}) et la saison : direction et
-  // couleur du soleil (à l'est le matin, au sud à midi, bas à l'ouest le soir ; plus haut l'été), lumière du ciel,
-  // couleur et portée de la brume, force des ombres des nuages, teinte de la fumée.
+  // ------------------------------------------------------------------ atmosphère
+  // Lumière et ciel de la scène 3D pour l'état du ciel st ({weather, light, hour, wind}) et la saison, d'après la
+  // table des heures (heures.js), avec l'éclair d'orage en cours
   ciel(st, season) {
-    const w = st.weather || 'soleil', L = clamp(st.light ?? 1, 0, 1), h = st.hour ?? 12;
-    const emax = ({ ete: 62, printemps: 47, automne: 40, hiver: 26 }[season] ?? 45) * Math.PI / 180;
-    const el = Math.max(0.06, emax * Math.sin(Math.PI * clamp((h - 6) / 14, 0, 1))), az = (90 + (h - 6) * 15) * Math.PI / 180;
-    const t = (this.tint(st) || [255, 255, 255]).map(v => v / 255);
-    const wet = w === 'pluie' || w === 'orage' || w === 'tempete';
-    const dull = wet || w === 'brouillard' || w === 'nuages' || w === 'neige';
-    const sky = { soleil: [201, 216, 230], canicule: [218, 222, 226], nuages: [185, 195, 205], pluie: [155, 165, 176], orage: [138, 147, 160], tempete: [138, 147, 160], brouillard: [211, 215, 219], neige: [208, 214, 222] }[w] || [201, 216, 230];
-    const night = [38, 48, 78], k = 1 - L;
-    const fog = mix3(mix3(sky, sky.map((c, i) => c * t[i]), 0.7), night, k * 0.85).map(v => v / 255);
-    return {
-      // par beau temps, un soleil un peu doré (comme Ultimate General), d'autant moins que le jour baisse
-      sunDir: [Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)], sun: dull ? t : mix3(t, [1, 0.93, 0.8], 0.3 * L),
-      // le ciel éclaire fort, bleuté : les ombres restent lisibles et teintées au lieu de noires
-      sunI: ({ soleil: 2.2, canicule: 2.5, nuages: 1.3, neige: 1.05 }[w] ?? 0.7) * (0.25 + 0.75 * L),
-      hemiSky: mix3([0.8, 0.88, 1], t, 0.4), hemiGround: [0.46, 0.4, 0.27], hemiI: (dull ? 2.35 : 2.05) * (0.35 + 0.65 * L) + this.flashT * 3,
-      fog, fogNear: w === 'brouillard' ? 0.05 : wet ? 0.6 : 1, fogFar: w === 'brouillard' ? 0.15 : wet ? 0.6 : 1,
-      cloudA: ({ soleil: 0.22, canicule: 0.14, nuages: 0.34, pluie: 0.3, orage: 0.38, tempete: 0.38 }[w] || 0) * L * (this.q?.clouds !== false ? 1 : 0),
-      wind: st.wind || [1.5, 0.5],
-      smoke: mix3([1, 1, 1], t, 0.6).map(v => v * (0.45 + 0.55 * L)),
-    };
+    return ambiance(st, season, { flash: Math.max(0, this.flashT), clouds: this.q?.clouds !== false });
   }
   // st : {weather, light, hour (nombre), wind} ; view : caméra ; dt en s
   atmosphere(ctx, view, st, dt, time) {
@@ -408,9 +375,10 @@ export class Effects {
     const L = clamp(st.light ?? 1, 0, 1), h = st.hour ?? 12;
     // (brouillard, brume de distance et lumière de l'heure : dans la scène 3D, voir ciel)
     const k = clamp((1 - L) / 0.8, 0, 1);
-    // les bords de l'image un peu plus sombres ; davantage quand la nuit tombe
+    // les bords de l'image un peu plus sombres ; davantage quand la nuit tombe (avec l'après-rendu, c'est lui qui
+    // assombrit les bords, selon la table des heures)
     const vk = (this.q?.fx ?? 2) >= 3 ? 0.16 : 0;
-    if (vk || k > 0.05) {
+    if (!view.post && (vk || k > 0.05)) {
       const vig = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.35, vw / 2, vh / 2, Math.hypot(vw, vh) * 0.62);
       vig.addColorStop(0, 'rgba(12,18,40,0)'); vig.addColorStop(1, `rgba(12,18,40,${Math.max(vk, 0.55 * k)})`);
       ctx.fillStyle = vig; ctx.fillRect(0, 0, vw, vh);
@@ -474,4 +442,3 @@ export class Effects {
     }
   }
 }
-function mix3(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }

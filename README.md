@@ -516,7 +516,12 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   proches de la caméra sont en relief ; de loin, les figurines passent à une version plus simple (on ne voit pas la
   différence, l'appareil la sent), et elles grandissent (jusqu'à trois fois) en se faisant moins nombreuses, à la
   manière d'Ultimate General, pour que les rangs restent lisibles ; la fumée grandit avec elles. Les tués restent
-  au sol jusqu'à 800 (Basse), 1 500, 2 500 ou 4 000 (Ultra). Au premier lancement, elle est
+  au sol jusqu'à 800 (Basse), 1 500, 2 500 ou 4 000 (Ultra). À partir de Moyenne, l'image passe par un
+  **après-rendu** à la manière d'Ultimate General : courbe filmique ACES, étalonnage propre à l'heure et au temps
+  (matin doré et brumeux, midi chaud aux verts tirés vers le jaune, couchant orangé, nuit bleue, pluie grise),
+  vignettage ; en Haute s'y ajoutent l'anticrénelage FXAA et un léger halo des plein-soleil ; en Ultra,
+  l'anticrénelage matériel et, à ras des troupes, une profondeur de champ « maquette » (le haut et le bas de l'image
+  se floutent). Au premier lancement, elle est
   choisie d'après l'appareil, puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par
   seconde) ; un choix fait à la main est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de
   suite, sans quitter la bataille (l'anticrénelage, à la bataille suivante). Les batailles demandent **WebGL 2**
@@ -726,8 +731,10 @@ web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et 
                      carte graphique, dispositions des rangs, tués au sol), gestes.js (le geste de chaque homme,
                      sa place, les tués, l'échelle de loin : logique pure, testée),
                      fanions.js (fanions et médaillons),
-                     unites.js (figurines peintes des cartes d'unités), effets.js (fumées, tirs, lumière de
-                     l'heure, météo), qualite.js (qualité graphique), commandes.js (gestes et clavier),
+                     unites.js (figurines peintes des cartes d'unités), effets.js (fumées, tirs, météo),
+                     heures.js (table des heures : lumière, brume et étalonnage de 5 h à 22 h ; logique pure,
+                     testée), apres.js (après-rendu : ACES, LUT d'étalonnage, vignettage, FXAA, halo,
+                     maquette), qualite.js (qualité graphique), commandes.js (gestes et clavier),
                      interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils
                      communs), css/bataille.css ;
                      dev/maquette.mjs : serveur de maquette (node web/js/battle/dev/maquette.mjs, puis
@@ -762,6 +769,7 @@ node --test tests/                               # l'interface seule
 | `tests/camera.test.mjs` | caméra 3D des batailles : allers-retours écran ↔ terrain à 1 m et 1 pixel près sur une colline, à plusieurs caps et zooms ; bornes |
 | `tests/troupes.test.mjs` | dispositions des figurines : rangs de la ligne, plafond par régiment, carré à quatre faces, colonne, tirailleurs, déroute |
 | `tests/gestes.test.mjs` | animations des batailles : geste de chaque homme (salve qui roule, recharge, servants, mêlée, charge), allure propre à chacun, place gardée d'une formation à l'autre, tués (ligne d'un boulet, plafond des corps), contour des bâtiments, échelle des figurines de loin |
+| `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte |
 | `tests/modeles.test.mjs` | modèles 3D des figurines : os de l'animation, pieds au sol, hauteur, tournés vers l'avant, formes arrondies, version de loin (mêmes os, même hauteur, un tiers des sommets), choix de la version selon la taille à l'écran |
 
 **Essayer une nouvelle fonctionnalité sans jouer.** `tests/fabrique.py` fabrique une situation en une ligne : une

@@ -15,6 +15,7 @@ import { BattleUI } from './interface.js';
 import { frameOf, project, unproject, anchor, clampCam, FOV } from './camera.js';
 import { emprise, clsOf, isGeneral, clamp, wrapAngle, TAU } from './formes.js';
 import { profil, onQualite, Mesure } from './qualite.js';
+import { ApresRendu } from './apres.js';
 import { segDist } from './gestes.js';
 
 const POLL_MS = 120;
@@ -36,8 +37,9 @@ export class BattleView {
     try {
       this.renderer = new THREE.WebGLRenderer({ canvas: this.glc, antialias: !!this.q.aa, powerPreference: 'high-performance' });
     } catch (e) { console.error(e); this.renderer = null; }
-    // courbe filmique : les plein-soleil se tassent au lieu de brûler, les teintes restent (pas de passe d'après-rendu)
-    if (this.renderer) this.renderer.toneMapping = THREE.NeutralToneMapping;
+    // après-rendu (apres.js) : tone mapping ACES, étalonnage de l'heure, vignettage, FXAA, halo, selon la qualité ;
+    // en Basse, rendu direct avec le même ACES
+    if (this.renderer) { this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.post = new ApresRendu(this.renderer); this.post.setQuality(this.q); }
     // contexte WebGL rendu par Safari (application remise au premier plan) : les niveaux de détail du sol sont repeints
     this.glc.addEventListener('webglcontextrestored', () => this.relief?.setQuality(this.q, true));
     this.scene = new THREE.Scene();
@@ -120,6 +122,7 @@ export class BattleView {
     this.art.clear();
     this.fx.dispose();
     // (Safari ne garde qu'une poignée de contextes WebGL : on rend celui-ci tout de suite)
+    this.post?.dispose();
     this.renderer?.dispose(); this.renderer?.forceContextLoss();
     this.root.innerHTML = '';
   }
@@ -131,6 +134,7 @@ export class BattleView {
     this.terrain?.setQuality(this.q);
     this.relief?.setQuality(this.q);
     this.troops?.setQuality(this.q);
+    this.post?.setQuality(this.q);
     // le décor dépend de la richesse des effets (bois allégés, arbres plus simples) : reconstruit s'il en change
     if (this.decor && this.decor.q.fx !== this.q.fx) {
       this.scene.remove(this.decor.group); this.decor.dispose();
@@ -267,6 +271,7 @@ export class BattleView {
     this.cv.width = Math.round(this.vw * dpr); this.cv.height = Math.round(this.vh * dpr);
     this.renderer?.setPixelRatio(dpr);
     this.renderer?.setSize(this.vw, this.vh, false);
+    this.post?.setSize(this.vw * dpr, this.vh * dpr);
     if (this.terrain) this.clampCam();
   }
   // zoom qui montre tout le champ (vu de haut, il paraît un peu moins profond que large)
@@ -401,14 +406,14 @@ export class BattleView {
     this.troops.update(all, this.colors || [], time, this.fx.t, fr, cam);
     this.decor.clearings(all, performance.now());
     this.fx.render(fr, z);
-    this.renderer.render(this.scene, cam);
+    this.post.render(this.scene, cam, ciel.grade, time, fr.dist);
     mark('scene');
     // le calque 2D
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, this.vw, this.vh);
     this.drawGround(ctx, time);
     mark('sol');
-    const view = { toScreen: this.toScreen, z, vw: this.vw, vh: this.vh, dpr, fxT: this.fx.t };
+    const view = { toScreen: this.toScreen, z, vw: this.vw, vh: this.vh, dpr, fxT: this.fx.t, post: this.post.actif };
     this.fx.atmosphere(ctx, view, sky, dt, time);   // pluie, neige, éclairs, nuit
     this.drawLabels(ctx);
     this.bannerRects = drawBanners(ctx, this, vis, this.colors || [], { sel: this.sel, me: this.me, time });

@@ -45,6 +45,15 @@ Rien n'est repris d'UGAR : ses textures, modèles, sons et réglages appartienne
 | D4 | Une **passe d'après-rendu** (rendu dans une texture flottante, puis une passe plein écran) ? Ta spec dit « pas d'addons ». | Oui, écrite à la main (environ 150 lignes), sans `EffectComposer`. | Étalonnage, vignettage, anticrénelage FXAA et léger bloom dans une seule passe. |
 | D5 | Les **captures de référence** : les 10 captures Steam du 17/10, plus des captures que tu prends toi-même dans UGAR (même heure, même météo, mêmes distances) ? | Oui : 3 vues × 3 heures × 2 météos. | Pour régler les LUT et juger « côte à côte ». |
 
+**Décisions prises le 20/10/2026** : D1 oui (textures CC0 d'ambientCG et Poly Haven), D2 oui (atlas peint par le
+code), D3 cheval animé CC0 d'abord (allures par le code en repli), D4 oui (passe écrite à la main), D5 : les captures
+officielles de la page Steam servent de référence en attendant les tiennes. Ordre : 9a puis 9b.
+
+**Livré** : 9a (`heures.js`, `apres.js`). Niveaux d'après-rendu : Basse rendu direct avec ACES ; Moyenne LUT et
+vignettage ; Haute aussi FXAA et halo ; Ultra aussi MSAA (4 échantillons) et maquette à moins de 260 m. Le grain est
+présent dès Moyenne. Réglage d'après les captures Steam : plus saturé et plus chaud qu'imaginé au départ (les verts
+d'UGAR tirent vers le jaune, ils ne sont pas « passés »).
+
 ## Ce qui ne change pas
 
 Le moteur Python et ses API, les règles, les commandes et les gestes, l'interface, les noms des niveaux de qualité, les
