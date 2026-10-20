@@ -529,7 +529,9 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   clair, les pentes accrochent la lumière, les fonds de vallée sont plus sombres, et quand le soleil est bas les
   collines portent leur ombre, comme les nuages, sur le sol, les troupes et les arbres. Les **bois** sont des masses
   sombres : sous-bois assombri, couronnes qui se touchent, grappes de feuilles, nuances d'un bout à l'autre du bois,
-  soleil qui traverse le feuillage à contre-jour, arbres qui se balancent au vent. En Haute et Ultra, les prés et les
+  soleil qui traverse le feuillage à contre-jour, arbres qui se balancent au vent. Les **chevaux** sont de vrais modèles
+  animés (Quaternius, CC0) : au repos ils broutent ou s'ébrouent, ils vont au pas et au galop, tombent quand ils sont
+  tués ; de loin, une version simplifiée. En Haute et Ultra, les prés et les
   landes ont de l'**herbe en relief** autour de la vue (des touffes de brins qui prennent la couleur du sol, ondulent
   au vent et se couchent là où les troupes passent). Le **sol garde la trace** de la
   bataille : là où passent les troupes (la cavalerie et l'artillerie plus que l'infanterie, deux fois plus sous la
@@ -759,8 +761,10 @@ web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et 
                      dev/capture.mjs : capture d'écran du banc par Chromium sans écran
                      (node web/js/battle/dev/capture.mjs bocage /tmp/bocage.png --q "hour=18") ;
                      dev/cuire.mjs : précalcule les animations sur le squelette de nos figurines (à relancer
-                     seulement si on change les gestes) ; dev/anims.html : page d'essai des animations
-web/anims/           animations précalculées des soldats (soldat.bin, soldat.json) et leur licence
+                     seulement si on change les gestes) ; dev/cheval.mjs : précalcule le cheval de Quaternius
+                     (node web/js/battle/dev/cheval.mjs Horse.gltf) ; dev/anims.html : page d'essai des animations
+web/anims/           animations précalculées des soldats (soldat.bin, soldat.json), cheval animé de Quaternius
+                     (cheval.bin, cheval.json : maillage et gestes, CC0) et leur licence
 web/textures/sols/   les huit sols photo (couleur, normales, hauteur ; 6,4 Mo) et leur licence (CC0, ambientCG)
 web/vendor/three/    Three.js r186 (licence MIT), copié tel quel : le jeu marche hors ligne
 saves/               parties sauvegardées (JSON)
@@ -790,6 +794,7 @@ node --test tests/                               # l'interface seule
 | `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte |
 | `tests/horizon.test.mjs` | relief et lumière : horizon plat en plaine, haut du côté d'une colline et bas de l'autre, occlusion au pied d'une colline, normales qui penchent vers l'extérieur |
 | `tests/pietinement.test.mjs` | piétinement : rien au repos ni sous un général, un tiers de boue au passage d'un régiment de ligne, plus sous la cavalerie et l'artillerie, double sous la pluie, mêlée sur place |
+| `tests/cheval.test.mjs` | cheval précalculé : gestes attendus par le shader, quatre os et des poids qui font 1 par sommet, maillage léger, dos à hauteur de selle |
 | `tests/herbe.test.mjs` | herbe en relief : rien en Basse et Moyenne, au plus 60 000 touffes en Haute et 120 000 en Ultra |
 | `tests/sols.test.mjs` | sols photo : huit sols, parts de chaque sorte de terrain et de chaque culture (elles font 1, 0 sous l'eau), images et licence présentes, après-rendu et sols qui montent avec la qualité |
 | `tests/modeles.test.mjs` | modèles 3D des figurines : os de l'animation, pieds au sol, hauteur, tournés vers l'avant, formes arrondies, version de loin (mêmes os, même hauteur, un tiers des sommets), choix de la version selon la taille à l'écran |

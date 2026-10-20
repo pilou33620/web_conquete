@@ -5,3 +5,11 @@ soldat.bin et soldat.json sont calculés (web/js/battle/dev/cuire.mjs) à partir
   Licence : CC0 1.0 Universal (domaine public), https://creativecommons.org/publicdomain/zero/1.0/
 
 Les gestes du fusil (en joue, à genoux, recharge, croisez la baïonnette, estoc) sont ajoutés par cuire.mjs.
+
+cheval.bin et cheval.json sont calculés (web/js/battle/dev/cheval.mjs) à partir du cheval animé de :
+
+  Ultimate Animated Animal Pack (fichier Horse.gltf), par Quaternius
+  https://quaternius.com/packs/ultimateanimatedanimals.html
+  Licence : CC0 1.0 Universal (domaine public), https://creativecommons.org/publicdomain/zero/1.0/
+
+Le tapis de selle et le collier d'attelage sont ajoutés par le jeu (troupes.js).

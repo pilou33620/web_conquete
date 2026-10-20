@@ -67,12 +67,16 @@ export class Herbe {
           float d = length(p - uGO) / uR, edge = 1.0 - smoothstep(0.65, 1.0, d);
           float s = smoothstep(0.25, 0.6, g) * edge * (1.0 - 0.85 * pt) * (0.7 + 0.6 * hh(wc + 5.1));
           if (hh(wc + 9.7) > g * 1.15 + 0.05) s = 0.0;   // (les touffes se raréfient là où le pré cède la place)
+          // près de l'œil, à peu près à leur taille vraie (elles ne cachent pas les jambes des hommes et des chevaux) ;
+          // plus loin, plus hautes, sans quoi on ne les verrait plus
+          float hg = texture2D(uHgt, p * uHgtUV.xy + uHgtUV.zw).r;
+          s *= mix(0.5, 1.0, smoothstep(15.0, 90.0, distance(vec3(p.x, hg, p.y), cameraPosition)));
           float a = hh(wc + 3.3) * 6.2831853, ca = cos(a), sa = sin(a);
           vec3 transformed = vec3(ca * position.x - sa * position.z, position.y, sa * position.x + ca * position.z) * s;
           // le vent : la pointe ploie, par vagues qui traversent le pré
           float wave = sin(uTime * 1.6 + dot(p, uWind) * 0.22) * 0.5 + sin(uTime * 2.9 + dot(p, uWind.yx) * 0.5) * 0.2;
           transformed.xz += uWind * (wave * 0.6 + 0.4) * uWindK * 0.16 * uv.y * uv.y * s;
-          transformed += vec3(p.x, texture2D(uHgt, p * uHgtUV.xy + uHgtUV.zw).r - 0.02, p.y);
+          transformed += vec3(p.x, hg - 0.02, p.y);
           // la couleur du sol peint sous le pied, plus sombre au pied, plus claire et plus jaune à la pointe
           vec3 base = texture2D(uBase, clamp(fuv, 0.0, 1.0)).rgb;
           vTip = uv.y;

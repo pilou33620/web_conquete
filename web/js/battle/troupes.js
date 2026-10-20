@@ -38,7 +38,7 @@ const ROWS = 5;     // lignes de la texture des régiments (la 4e et la 5e : l'i
 const KINDS = { inf: null, gren: null, leger: null, milice: null, piquier: null, officier: null, tambour: null, drapeau: null, cavalier: null, chef: null, cav: 'HORSE', colonel: 'HORSE',
   attelage: 'HORSE', servant: null, canon: 'GUN', caisson: 'GUN', chariot: 'GUN', etoffe: 'FLAG', fanion: 'FLAG' };
 // tache d'ombre douce au sol sous chaque figurine (largeur, profondeur, décalage vers l'avant, en m avant l'échelle)
-const CONTACT = { FOOT: [0.8, 0.66, 0], HORSE: [1.0, 2.5, 0], GUN: [1.7, 3.0, -0.3] };
+const CONTACT = { FOOT: [0.8, 0.66, 0], HORSE: [1.0, 2.5, 0], CHEVAL: [1.0, 2.5, 0], GUN: [1.7, 3.0, -0.3] };
 const ROBES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];   // robes des chevaux (bai, bai brun, alezan, noir pangaré)
 const FOOT = Object.keys(KINDS).filter(k => KINDS[k] === null);   // les hommes à pied, au squelette
 const DIES = [...FOOT, 'cav'];   // qui peut tomber (un cavalier tué : son cheval couché, lui avec)
@@ -46,7 +46,7 @@ const BALL = 6;                  // hommes couchés au plus par un boulet
 const STILL = [0, 0, 0, 0];      // aucune course à sa place (aMove)
 // bâtiments : milieu du corps en avant de sa place et demi-longueur, en m avant l'échelle (mesurés sur les modèles) ;
 // un homme : sa place. Le cavalier et le fanion d'un régiment monté suivent leur cheval ; une pièce compte son avant-train
-const PUSH = { HORSE: [0.24, 1.25], GUN: [0.75, 2.15] };
+const PUSH = { HORSE: [0.24, 1.25], CHEVAL: [0.24, 1.25], GUN: [0.75, 2.15] };
 const pushOf = (kind, def) => PUSH[/^(cavalier|chef|fanion)/.test(kind) ? 'HORSE' : def] ?? [0, 0];
 const RIDER = 9;                 // pose (aAnim.x) du cavalier en selle : le shader lui donne le balancement de son cheval
 // variété de la figurine i d'un régiment (gestes.js), tirée une fois par disposition
@@ -91,17 +91,22 @@ export function headgear(kind, year) {
 
 // animations précalculées (web/anims/soldat.*, dev/cuire.mjs) : { meta, data } ; null si elles manquent (les hommes
 // restent alors dans leur pose de référence)
-export async function loadAnims() {
-  try {
-    const [meta, buf] = await Promise.all([fetch(new URL('../../anims/soldat.json', import.meta.url)).then(r => r.json()),
-      fetch(new URL('../../anims/soldat.bin', import.meta.url)).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })]);
-    if (buf.byteLength !== meta.rows * meta.bones.length * 12 * 2) throw new Error('taille inattendue');
-    return { meta, data: new Uint16Array(buf) };
-  } catch (e) {
-    console.error('animations des troupes introuvables (web/anims/soldat.*) :', e);
-    return null;
-  }
+async function loadBaked(name) {
+  const [meta, buf] = await Promise.all([fetch(new URL(`../../anims/${name}.json`, import.meta.url)).then(r => r.json()),
+    fetch(new URL(`../../anims/${name}.bin`, import.meta.url)).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })]);
+  if (buf.byteLength !== meta.rows * meta.bones.length * 12 * 2) throw new Error('taille inattendue');
+  return { meta, data: new Uint16Array(buf) };
 }
+// animations des fantassins (soldat.*) et cheval de Quaternius (cheval.* : son maillage et ses gestes) ; sans le cheval,
+// les chevaux faits par le code
+export async function loadAnims() {
+  let a = null;
+  try { a = await loadBaked('soldat'); } catch (e) { console.error('animations des troupes introuvables (web/anims/soldat.*) :', e); return null; }
+  try { a.cheval = await loadBaked('cheval'); } catch (e) { console.warn('cheval animé introuvable (web/anims/cheval.*) : chevaux faits par le code', e); }
+  return a;
+}
+// gestes du cheval, dans l'ordre de uHClips (le shader les appelle par leur rang)
+const HCLIPS = ['repos', 'repos2', 'broute', 'pas', 'galop', 'mort', 'ruade', 'touche'];
 
 // servants d'une pièce en batterie : [u, v, rôle] (gestes.js, serve : 0 chef de pièce, 1 écouvillon, 2 porteur, 3 pointeur,
 // 4 boutefeu, 6 manivelle) ; quatre à la mitrailleuse, dont celui qui tourne la manivelle (à droite de la culasse)
@@ -488,6 +493,53 @@ function horse(rider, year) {
   P.push([new THREE.CylinderGeometry(0.315, 0.315, 0.55, 10, 1, true, Math.PI * 0.62, Math.PI * 0.76).rotateX(Math.PI / 2).scale(0.86, 1, 1).translate(0, 1.17, 0), shade(0.85), 0, CAMP]);   // tapis de selle
   return assemble(P);
 }
+// Le cheval de Quaternius (web/anims/cheval.json, dev/cheval.mjs) : son maillage dans son repère d'origine, quatre os et
+// quatre poids par sommet (aJoints, aWeights) ; robe teintée par l'instance (sorte 2, la nuance dans la couleur), crins,
+// sabots, yeux de couleur fixe. rider : le tapis de selle à la couleur du camp ; sinon (attelage) le collier. Ces pièces
+// faites ici, à nos mesures, sont ramenées dans le repère du maillage et suivent un os du dos ou de l'encolure.
+const b64 = (s, T) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new T(u.buffer); };
+function chevalModel(rider, ch) {
+  const m = ch.meta.mesh, n = m.n, pos = b64(m.pos, Float32Array), nor = b64(m.nor, Float32Array), jo = b64(m.j, Uint8Array), we = b64(m.w, Float32Array), mt = b64(m.m, Uint8Array);
+  const idx = Array.from(b64(m.idx, Uint16Array)), mats = ch.meta.mats;
+  const P = Array.from(pos), N = Array.from(nor), C = [], J = Array.from(jo), W = Array.from(we), T = [];
+  for (let i = 0; i < n; i++) {
+    const [kind, v] = mats[mt[i]][1];
+    if (kind === 2) { C.push(v, v, v); T.push(2); }
+    else { const c = new THREE.Color(kind === 3 ? '#1d1712' : v); C.push(c.r, c.g, c.b); T.push(0); }
+  }
+  // pièces faites ici : [géométrie à nos mesures, couleur, sorte, os]
+  const inv = new THREE.Matrix4().fromArray(ch.meta.fix).invert(), bone = name => ch.meta.bones.indexOf(name), os = name => ch.meta.os[bone(name)];
+  const parts = [];
+  if (rider) {
+    const t = os('Torso2');
+    parts.push([new THREE.CylinderGeometry(0.33, 0.33, 0.6, 10, 1, true, Math.PI * 0.62, Math.PI * 0.76).rotateX(Math.PI / 2).scale(0.92, 1, 1).translate(0, t[1] + 0.02, t[2] - 0.02), shade(0.85), CAMP, bone('Torso2')]);
+  } else {
+    const k = os('Neck2');
+    parts.push([new THREE.TorusGeometry(0.17, 0.05, 5, 12).rotateX(-0.7).scale(0.85, 1, 1).translate(0, k[1] - 0.05, k[2] - 0.05), '#3a2a1a', 0, bone('Neck1')],
+      [new THREE.TorusGeometry(0.31, 0.025, 4, 14).scale(0.9, 1.04, 1).translate(0, os('Torso3')[1], os('Torso3')[2] + 0.05), '#2a1e14', 0, bone('Torso3')]);
+  }
+  for (const [g0, color, tint, b] of parts) {
+    const g = g0.index ? g0.toNonIndexed() : g0, p = g.attributes.position, q = g.attributes.normal, base = P.length / 3, c = new THREE.Color(color);
+    const v = new THREE.Vector3(), nm = new THREE.Matrix3().getNormalMatrix(inv);
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i).applyMatrix4(inv); P.push(v.x, v.y, v.z);
+      v.fromBufferAttribute(q, i).applyMatrix3(nm).normalize(); N.push(v.x, v.y, v.z);
+      C.push(c.r, c.g, c.b); T.push(tint); J.push(b, 0, 0, 0); W.push(1, 0, 0, 0); idx.push(base + i);
+    }
+    g.dispose(); if (g !== g0) g0.dispose();
+  }
+  const nv = P.length / 3, g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(nv * 2), 2));
+  g.setAttribute('aBone', new THREE.Float32BufferAttribute(new Float32Array(nv), 1));
+  g.setAttribute('aPart', new THREE.Float32BufferAttribute(T, 1));
+  g.setAttribute('aJoints', new THREE.Float32BufferAttribute(J, 4));
+  g.setAttribute('aWeights', new THREE.Float32BufferAttribute(W, 4));
+  g.setIndex(idx);
+  return g;
+}
 // ------------------------------------------------------------------ versions de loin
 // Quand une figurine ne fait que quelques pixels à l'écran, les formes arrondies ne se voient plus : une version en
 // quelques boîtes, mêmes os, même hauteur, même coiffure en gros, au plus un tiers des sommets.
@@ -671,6 +723,30 @@ vec2 pushOut(vec2 p, float r) {
   }
   return p;
 }
+#if defined(CHEVAL)
+// cheval de Quaternius : quatre os par sommet ; uHAnim, une ligne par image, trois texels (lignes de la matrice de peau)
+// par os ; uHClips, chaque geste (HCLIPS) : première ligne, images, en boucle
+attribute vec4 aJoints, aWeights;
+uniform sampler2D uHAnim;
+uniform vec4 uHClips[8];
+uniform float uHFps;
+vec4 HR(int b, int f, int k) { return texelFetch(uHAnim, ivec2(b * 3 + k, f), 0); }
+// matrice de peau du sommet (somme des os pondérée) dans le geste c, à l'image fr (fractionnaire)
+void hskin(int c, float fr, out vec4 r0, out vec4 r1, out vec4 r2) {
+  vec4 cl = uHClips[c];
+  float n = cl.y;
+  fr = cl.z > 0.5 ? mod(fr, n) : clamp(fr, 0.0, n - 1.0);
+  int f0 = int(cl.x) + int(fr), f1 = int(cl.x) + int(cl.z > 0.5 ? mod(fr + 1.0, n) : min(fr + 1.0, n - 1.0));
+  float a = fract(fr);
+  r0 = vec4(0.0); r1 = vec4(0.0); r2 = vec4(0.0);
+  for (int i = 0; i < 4; i++) {
+    float w = aWeights[i];
+    if (w <= 0.0) continue;
+    int b = int(aJoints[i] + 0.5);
+    r0 += mix(HR(b, f0, 0), HR(b, f1, 0), a) * w; r1 += mix(HR(b, f0, 1), HR(b, f1, 1), a) * w; r2 += mix(HR(b, f0, 2), HR(b, f1, 2), a) * w;
+  }
+}
+#endif
 #if defined(RIG)
 attribute vec4 aGest;   // geste et son début, geste d'avant et son début (horloge des effets)
 attribute vec4 aMix;    // instant du fondu, vitesse, vitesse d'avant
@@ -746,6 +822,20 @@ const VERT_POSE = `
   float ri = uFxT - u2.w;
   if (rank == 0.0 && ri > 0.0 && ri < 1.2) { float rr = sin(3.14159 * ri / 1.2) * 0.55; lean = -rr; bob += 0.6 * sin(rr); boneA = aBone == 1.0 || aBone == 2.0 ? 0.9 * rr : boneA; }
   if (rank < -8.0) { boneA = 0.0; bob = 0.0; }   // cheval tué (rang −9 : voir kill)
+#elif defined(CHEVAL)
+  // cheval de Quaternius : l'allure du régiment choisit le geste (au repos, l'un des trois : repos, repos2, broute,
+  // d'après sa phase), joué au rythme des chevaux faits par le code (même phase : le cavalier balance avec lui)
+  float gait = run > 0.5 ? runGait : mod(aAnim.x, 4.0) > 1.5 ? 2.0 : u1.x;
+  float fq = gait > 1.5 ? 11.0 : 6.5, t = uTime * fq + ph, pick = fract(ph * 0.37);
+  int hc = gait > 1.5 ? 4 : gait > 0.5 ? 3 : pick < 0.2 ? 2 : pick < 0.6 ? 0 : 1;
+  float hf = gait > 0.5 ? fract(t / 6.2831853) * uHClips[hc].y : (uTime + ph * 3.0) * uHFps;
+  // au choc d'une charge, le premier rang se cabre (comme les chevaux faits par le code)
+  float ri = uFxT - u2.w;
+  if (rank == 0.0 && ri > 0.0 && ri < 1.2) { float rr = sin(3.14159 * ri / 1.2) * 0.55; lean = -rr; bob += 0.6 * sin(rr); }
+  // cheval tué (rang −9 : voir kill) : couché, la dernière image de sa chute
+  if (rank < -8.0) { hc = 5; hf = 999.0; lean = 0.0; bob = 0.0; }
+  vec4 r0, r1, r2;
+  hskin(hc, hf, r0, r1, r2);
 #elif defined(RIG)
   // homme au squelette : la matrice de son os dans son geste, fondue avec celle du geste d'avant pendant 0,3 s
   int bi = int(aBone + 0.5);
@@ -789,7 +879,7 @@ const VERT_POSE = `
 // tourne un vecteur de la figurine : membre (sa matrice au squelette, sinon autour de son pivot), penché en avant, puis
 // dans le sens de la figurine
 const turn = (v, isPos) => `
-#if defined(RIG)
+#if defined(RIG) || defined(CHEVAL)
   ${v} = ${isPos ? `vec3(dot(r0, vec4(${v}, 1.0)), dot(r1, vec4(${v}, 1.0)), dot(r2, vec4(${v}, 1.0)))` : `vec3(dot(r0.xyz, ${v}), dot(r1.xyz, ${v}), dot(r2.xyz, ${v}))`};
   ${v}.yz = pitch(${v}.yz, vec2(0.0), lean);   // (un cavalier qui se cabre avec son cheval)
 #else
@@ -837,6 +927,9 @@ export class Troops {
     const tex = (d, w, h) => Object.assign(new THREE.DataTexture(d, w, h, THREE.RGBAFormat, THREE.FloatType), { needsUpdate: true });
     this.bgrid = bg ? tex(bg.cells, bg.cols, bg.rows) : tex(new Float32Array(4), 1, 1);
     this.brect = bg ? tex(bg.rects, bg.n, 2) : tex(new Float32Array(8), 1, 2);
+    // cheval de Quaternius (sans lui, les chevaux faits par le code)
+    const ch = anims?.cheval;
+    this.cheval = ch ? Object.assign(new THREE.DataTexture(ch.data, ch.meta.bones.length * 3, ch.meta.rows, THREE.RGBAFormat, THREE.HalfFloatType), { needsUpdate: true }) : null;
     this.clipId = new Map(Object.keys(meta.clips).map((c, i) => [c, i]));
     this.clipLoop = Object.values(meta.clips).map(c => c.loop);
     this.uni = {
@@ -844,6 +937,8 @@ export class Troops {
       uTime: { value: 0 }, uFxT: { value: 0 }, uRobes: { value: ROBES.map(c => new THREE.Color(c)) },
       uBGrid: { value: this.bgrid }, uBRect: { value: this.brect }, uBox: { value: new THREE.Vector4(bg?.x0 ?? 0, bg?.y0 ?? 0, bg?.cell ?? 0, bg?.cols ?? 1) },
       uBDim: { value: new THREE.Vector2(bg?.rows ?? 1, bg?.n ?? 1) },
+      uHAnim: { value: this.cheval }, uHFps: { value: ch?.meta.fps ?? 24 },
+      uHClips: { value: HCLIPS.map(c => { const k = ch?.meta.clips[c] ?? { row: 0, n: 1, loop: 1 }; return new THREE.Vector4(k.row, k.n, k.loop, 0); }) },
       uAnim: { value: this.anim }, uFps: { value: meta.fps }, uTrot: { value: this.clipId.get('trot') ?? 0 }, uPas: { value: this.clipId.get('pas') ?? 0 }, uClips: { value: Object.values(meta.clips).map(c => new THREE.Vector4(c.row, c.n, c.loop, 0)) },
     };
     this.kinds = new Map();     // sorte → {mesh, cap, n, slot, anim, coat}
@@ -856,7 +951,9 @@ export class Troops {
       if (k === 'canon' || k === 'caisson') continue;   // (une sorte par modèle de pièce, créée à la demande : gunKind)
       // (l'étoffe du porte-drapeau suit sa hampe, au squelette ; le fanion d'un cavalier suit son cheval)
       if (def === 'FLAG') { this.addKind(k, model(k, this.year, 1, k === 'etoffe'), this.pattern, k === 'etoffe' ? 'RIG' : null); continue; }
-      this.addKind(k, model(k, this.year, 1, !def), null, def ?? 'RIG');
+      // (chevaux de près : celui de Quaternius s'il est là)
+      if (def === 'HORSE' && ch) this.addKind(k, chevalModel(k !== 'attelage', ch), null, 'CHEVAL');
+      else this.addKind(k, model(k, this.year, 1, !def), null, def ?? 'RIG');
       this.addKind(k + '~', model(k, this.year, 0, !def), null, def ?? 'RIG');
     }
     this.frustum = new THREE.Frustum(); this.sphere = new THREE.Sphere(); this.m4 = new THREE.Matrix4();
@@ -932,7 +1029,8 @@ export class Troops {
       const [cw, cd, cz] = CONTACT[def] ?? CONTACT.FOOT;
       k.contactGeo = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(cw, cd).rotateX(-Math.PI / 2).translate(0, 0, cz));
       for (const a of ['aBone', 'aPart']) k.contactGeo.setAttribute(a, new THREE.Float32BufferAttribute(new Float32Array(4), 1));
-      k.contact = new THREE.Mesh(k.contactGeo, this.contactMat(def));
+      // (le cheval de Quaternius a l'ombre des chevaux faits par le code : la tache n'a pas d'os)
+      k.contact = new THREE.Mesh(k.contactGeo, this.contactMat(def === 'CHEVAL' ? 'HORSE' : def));
       k.contact.frustumCulled = false; k.contact.renderOrder = 1;
       this.group.add(k.contact);
     }
@@ -1242,6 +1340,6 @@ export class Troops {
     for (const k of this.kinds.values()) { k.geo.dispose(); k.mat.dispose(); k.depth.dispose(); k.contactGeo?.dispose(); }
     for (const m of Object.values(this.contactMats)) m.dispose();
     this.soft.dispose();
-    this.units.dispose(); this.heights.dispose(); this.pattern.dispose(); this.anim.dispose(); this.bgrid.dispose(); this.brect.dispose();
+    this.units.dispose(); this.heights.dispose(); this.pattern.dispose(); this.anim.dispose(); this.cheval?.dispose(); this.bgrid.dispose(); this.brect.dispose();
   }
 }
