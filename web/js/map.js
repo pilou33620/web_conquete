@@ -1,5 +1,5 @@
 // Rendu de la carte illustrée de l'Aquitaine (canvas 2D, coordonnées monde en km)
-import { Ambient } from './ambient.js';
+import { Ambient, locomotive, voiture } from './ambient.js';
 import { clamp, hexRgb } from './battle/formes.js';
 import { TownArt } from './towns.js';
 import { UnitArt } from './battle/unites.js';
@@ -2630,15 +2630,11 @@ export class MapView {
     ctx.rotate(Math.cos(d.head) < 0 ? d.head + Math.PI : d.head);
     const dir = Math.cos(d.head) < 0 ? -1 : 1;
     if (sel) { ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5; ctx.strokeRect(-s * 0.4 * (n + 1) / 2 - 3, -s * 0.22, s * 0.4 * (n + 1) + 6, s * 0.44); }
-    for (let k = 0; k <= n; k++) {
-      const x = (k - n / 2) * s * 0.42 * -dir;
-      ctx.fillStyle = k === 0 ? '#2a2420' : col;
-      ctx.fillRect(x - s * 0.19, -s * 0.15, s * 0.38, s * 0.3);
-      ctx.strokeStyle = '#1a1612'; ctx.lineWidth = 1; ctx.strokeRect(x - s * 0.19, -s * 0.15, s * 0.38, s * 0.3);
-      if (k === 0) {   // cheminée et panache
-        ctx.fillStyle = '#1a1612'; ctx.fillRect(x + s * 0.08 * dir - s * 0.04, -s * 0.28, s * 0.08, s * 0.14);
-        for (let q = 0; q < 3; q++) { ctx.fillStyle = `rgba(236,232,224,${0.55 - q * 0.15})`; ctx.beginPath(); ctx.arc(x - (q + 1) * s * 0.14 * dir, -s * (0.34 + q * 0.06) + Math.sin(time * 3 + q) * 2, s * (0.07 + q * 0.03), 0, Math.PI * 2); ctx.fill(); }
-      }
+    for (let k = n; k >= 0; k--) {   // de profil : la locomotive devant, des wagons aux couleurs du camp
+      ctx.save(); ctx.translate((k - n / 2) * s * 0.42 * -dir, s * 0.12); ctx.scale(dir, 1);
+      if (k) voiture(ctx, s * 0.4, col); else locomotive(ctx, s * 0.4, time);
+      ctx.restore();
+      if (!k) for (let q = 0; q < 3; q++) { ctx.fillStyle = `rgba(236,232,224,${0.55 - q * 0.15})`; ctx.beginPath(); ctx.arc((n / 2 * s * 0.42 + s * 0.15 - (q + 1) * s * 0.14) * dir, -s * (0.2 + q * 0.06) + Math.sin(time * 3 + q) * 2, s * (0.07 + q * 0.03), 0, Math.PI * 2); ctx.fill(); }
     }
     ctx.restore();
     ctx.font = `700 ${clamp(s * 0.36, 12, 17)}px "EB Garamond", Georgia, serif`;
