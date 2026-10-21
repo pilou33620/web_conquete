@@ -4,7 +4,15 @@
 // la partie : une borne décalée d'un an mettrait le tricolore sous Louis XIV ou laisserait les vignes saines en 1880.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { drapeauEpoque, coiffeEpoque, phylloxera } from '../web/js/epoque.js';
+import { drapeauEpoque, coiffeEpoque, phylloxera, styleCarte } from '../web/js/epoque.js';
+
+test('la carte d\'époque : Cassini, puis l\'état-major', () => {
+  assert.equal(styleCarte('ugar', 1790), null);
+  assert.equal(styleCarte('epoque', 1790), 'cassini');
+  assert.equal(styleCarte('epoque', 1817), 'cassini');
+  assert.equal(styleCarte('epoque', 1818), 'etatmajor');
+  assert.equal(styleCarte('epoque', 1890), 'etatmajor');
+});
 
 test('le drapeau de chaque époque', () => {
   assert.equal(drapeauEpoque(1700), 'roi');

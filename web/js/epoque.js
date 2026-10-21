@@ -24,6 +24,9 @@ export function coiffeEpoque(year) {
 }
 // le phylloxéra frappe de 1875 jusqu'aux plants greffés
 export const phylloxera = (year, mk) => year >= 1875 && !(mk && mk.has('greffe'));
+// le style « d'époque » de la carte (SPEC-SUITE H3) : la carte de Cassini (achevée en 1815), puis celle de l'état-major,
+// levée à partir de 1818 ; null pour les couleurs d'Ultimate General
+export const styleCarte = (style, year) => style !== 'epoque' ? null : year < 1818 ? 'cassini' : 'etatmajor';
 
 export class Epoque {
   constructor(map) {

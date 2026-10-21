@@ -270,6 +270,9 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   printemps et à l'automne), mouettes, gabares sur les fleuves et navires du cabotage, barques de pêche, courant des
   fleuves, écume et reflets sur l'océan, charrettes, cavaliers et colporteurs sur les routes, vaches et moutons, bergers
   landais sur leurs échasses, phare de Cordouan. Menu ☰, rubrique « Affichage », pour couper ces animations.
+- **Carte d'époque** (menu ☰, Affichage, « Style de la carte ») : à la place des couleurs d'Ultimate General, la
+  carte gravée de Cassini jusqu'en 1817 (papier, hachures, bois en petits arbres, lignes d'eau le long des côtes,
+  noms à l'encre), puis la carte d'état-major aquarellée (bois vert-jaune, vignes lie-de-vin, grandes routes ocre).
 
 ### Armées et terrain
 - Infanterie de ligne, infanterie légère (voltigeurs), cavalerie, artillerie. Chaque régiment a ses effectifs, son moral et son expérience.

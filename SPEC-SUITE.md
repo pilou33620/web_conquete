@@ -471,8 +471,14 @@ decorate, vineyards, flag ; `ambient.js` passants, bateaux, phare ; test `epoque
 
 Écarts : pas de nuit sur la carte de campagne, donc pas de réverbères (gaz) ni de forges plus vives la nuit ; pas de
 pots de résine ni de moissonneuses en mouvement (trop petits à l'échelle de la carte) ; pas encore de remparts démolis
-ni de boulevards (les villes gardent leur dessin). Le style « d'époque » complet (Cassini, état-major) reste à faire,
-en option d'affichage (D3).
+ni de boulevards (les villes gardent leur dessin).
+
+Livré le 21/10 : le style « d'époque » complet, en option (menu ☰, Affichage, « Carte d'époque » ; D3). Jusqu'en 1817
+c'est la carte de Cassini : papier, bois en petits arbres cernés d'encre, relief en hachures et lavis de bistre, côtes
+ourlées de lignes d'eau, rivières à l'encre bleue, routes en double trait, limites en trait-point, villages en
+italique, villes soulignées d'un filet aux couleurs du camp, brouillard en lavis de sépia. À partir de 1818, la carte
+d'état-major, aux couleurs de ses minutes au 1/40 000 (bois vert-jaune, vignes lie-de-vin, eaux bleues, grandes routes
+ocre). Les saisons ne changent pas la gravure. Le réglage est gardé sur l'appareil (`conquete.carte.style`).
 
 ---
 

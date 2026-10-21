@@ -16,15 +16,16 @@ Specs : `SPEC-RENDU.md` (étape 9, parties A à D) et `SPEC-CARTES.md`. Tout ce 
   d'une ancienne sauvegarde garde sa carte (`terrain_v1.py`, à ne jamais modifier) `c8e88b9`.
 - [x] Carte de campagne à la manière d'UGAR (relief ombré, saisons, côtes, forêts, plaques, interface en ardoise) `810efca`.
 
-## Bloqué : il me faut tes deux téléchargements (dans le dossier Téléchargements)
+## Les téléchargements (fait le 21/10/2026)
 
-- [ ] **Les soldats** : [Universal Base Characters](https://quaternius.itch.io/universal-base-characters) de Quaternius
+- [x] **Les soldats** `acc9455` : le corps d'homme, allégé et cuit (`web/js/battle/dev/corps.mjs`), pour les fantassins
+  vus de près. Fichier d'origine : [Universal Base Characters](https://quaternius.itch.io/universal-base-characters) de Quaternius
   (CC0), fichier `Universal Base Characters[Standard].zip` (122 Mo) : « Download Now », puis « No thanks, just take me
   to the downloads ». Itch.io refuse le téléchargement depuis mon navigateur (« invalid key »). Autre solution : tu
   m'autorises à passer par ton Chrome (Claude in Chrome).
   - Ensuite : allégés dans Blender (`outils/` du bloc-notes de travail), habillés des uniformes d'époque, posés sur
     notre squelette d'animation, cuits comme le cheval (`web/js/battle/dev/cheval.mjs`).
-- [ ] **Le canon** : [Napoleonic Era Cannon](https://sketchfab.com/3d-models/none-4f8d69ba311745dda220dbde960d5fc6) de
+- [x] ~~**Le canon**~~ : abandonné (« oublie »), le canon reste procédural. [Napoleonic Era Cannon](https://sketchfab.com/3d-models/none-4f8d69ba311745dda220dbde960d5fc6) de
   MenOfMena (CC-BY), en glTF. Sketchfab demande un compte connecté.
   - Ensuite : allégé, intégré aux pièces d'artillerie, auteur crédité dans `LICENCE.txt`.
 - [ ] (Au choix) le cheval de henry_7 (CC-BY, Sketchfab), si le cheval Quaternius ne suffit pas de près.
@@ -45,17 +46,20 @@ Specs : `SPEC-RENDU.md` (étape 9, parties A à D) et `SPEC-CARTES.md`. Tout ce 
 - [x] G4 maquette de la vue inclinée (`/js/dev/carte3d.html`) `1052600`
 - [x] Les deux tests de campagne en échec : c'étaient les tests (ils lisaient un arrêt vide) ; corrigés, tout passe.
 
+## Fait le 21/10/2026
+
+- [x] Uniformes qui s'usent (boue qui monte en 3 h de combat), habits et boue mouillés qui luisent sous la pluie `ff8ba9a`
+- [x] Cultures de l'époque en bataille : maïs (Chalosse, Béarn), vigne « en foule » avant les plants greffés, pins
+  des Landes plantés en lignes `40cd322`
+- [x] Style « carte d'époque » en option (menu ☰, Affichage) : Cassini jusqu'en 1817, état-major ensuite
+
 ## Ce qui reste
 
-- [ ] **E1, E2 : soldats et canon téléchargés**, toujours bloqués : ton Chrome n'était pas connecté (extension Claude
-  in Chrome) et le téléchargement direct a été refusé. Télécharge les deux fichiers dans Téléchargements, ou connecte
-  l'extension, et je les intègre.
 - [ ] **F5 : la foule de loin** (imposteurs animés, budgets relevés) : d'abord mesurer sur l'iPad ce que coûtent les
   figurines d'aujourd'hui en Haute.
 - [ ] **G4 : la suite de la vue inclinée** (clics, armées, brouillard, territoires, option du menu), si la maquette
   te plaît et tient sur l'iPad.
-- [ ] Les écarts notés dans SPEC-SUITE.md, partie par partie (style « d'époque » en option, cultures de l'époque en
-  bataille, boue luisante sous la pluie, ornières, galons et usure des uniformes…).
+- [ ] Les écarts notés dans SPEC-SUITE.md, partie par partie (ornières, galons, épaulettes…).
 
 ## À vérifier par toi
 
