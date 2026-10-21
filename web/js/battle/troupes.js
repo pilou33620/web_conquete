@@ -103,6 +103,8 @@ export async function loadAnims() {
   let a = null;
   try { a = await loadBaked('soldat'); } catch (e) { console.error('animations des troupes introuvables (web/anims/soldat.*) :', e); return null; }
   try { a.cheval = await loadBaked('cheval'); } catch (e) { console.warn('cheval animé introuvable (web/anims/cheval.*) : chevaux faits par le code', e); }
+  // corps de Quaternius des fantassins de près (dev/corps.mjs) ; sans lui, les corps faits par le code
+  try { a.corps = await fetch(new URL('../../anims/corps.json', import.meta.url)).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }); } catch (e) { console.warn('corps des fantassins introuvable (web/anims/corps.json) : corps faits par le code', e); }
   return a;
 }
 // gestes du cheval, dans l'ordre de uHClips (le shader les appelle par leur rang)
@@ -244,8 +246,9 @@ function assemble(parts) {
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setAttribute('aBone', new THREE.Float32BufferAttribute(bone, 1));
   g.setAttribute('aPart', new THREE.Float32BufferAttribute(part, 1));
-  g.setAttribute('aMetal', new THREE.Float32BufferAttribute(metal, 1));
-  g.setAttribute('aDetail', new THREE.Float32BufferAttribute(detail, 1));   // détails peints (SPEC-SUITE F4) : DETAIL
+  // métal (reflet du soleil) et détail peint (SPEC-SUITE F4 : DETAIL) dans un seul attribut, métal + 2 × détail : WebGL
+  // n'en permet que 16, et les fantassins au corps de Quaternius en ont déjà 16 avec leurs quatre os
+  g.setAttribute('aFx', new THREE.Float32BufferAttribute(metal.map((m, i) => m + 2 * detail[i]), 1));
   g.setIndex(idx);
   return g;
 }
@@ -309,7 +312,7 @@ function hat(type, kind, dy = 0) {
 }
 // détails peints dans le shader (SPEC-SUITE F4), d'après les coordonnées de texture des pièces : pas de texture,
 // pas un triangle de plus. Boutons dorés en deux rangs sur les revers ; visage (yeux, sourcils, bouche) sur la tête,
-// dont l'avant (+z) est en u = 0,25 sur la sphère de Three.js. Seules les figurines de près en ont (aDetail).
+// dont l'avant (+z) est en u = 0,25 sur la sphère de Three.js. Seules les figurines de près en ont (aFx).
 const DETAIL = { boutons: 1, visage: 2 };
 const DETAIL_GLSL = `
   if (vDetail > 0.5 && vDetail < 1.5) {
@@ -330,8 +333,14 @@ const DETAIL_GLSL = `
 // 'officier' | 'tambour' | 'drapeau' | 'servant' | 'cavalier' | 'chef' (officier supérieur à cheval). Formes arrondies (normales lisses) : jambes et bras effilés, habit en profil tourné aplati,
 // basques, tête ronde ; buffleteries, revers, giberne et havresac en plaques
 // rig : os du squelette des animations (RIG) au lieu des quatre os de toujours
+// corps de Quaternius (Universal Base Characters, CC0 ; dev/corps.mjs), posé par Troops quand il est chargé : les
+// fantassins de près l'ont à la place des jambes, du torse, de la tête et des bras faits par le code
+let CORPS = null;
+export function setCorps(c) { CORPS = c && c.pos ? c : null; }
 function soldier(kind, year, rig = false) {
   const B = rig ? RIG_BONES : OLD_BONES;
+  const body = rig && CORPS;   // (les pièces d'uniforme gardées sont recalées sur sa poitrine, plus bombée)
+  const fwd = body ? CORPS.front + 0.006 - 0.118 : 0;
   const leg = s => y => y > 0.53 ? B['thigh' + s] : y > 0.09 ? B['shin' + s] : B['foot' + s];
   const torso = y => y < 1.05 ? B.hips : B.chest;
   const rider = kind === 'cavalier' || kind === 'chef', officer = kind === 'officier' || kind === 'drapeau' || kind === 'chef';
@@ -342,28 +351,28 @@ function soldier(kind, year, rig = false) {
   const limb = (r0, r1, y0, y1, x, n = 7) => new THREE.CylinderGeometry(r0, r1, y1 - y0, n, 1, true).translate(x, (y0 + y1) / 2, 0);
   const P = [];
   // jambes (os 1 à gauche, 2 à droite ; la hanche en y = 0,86) : culotte, guêtre, soulier
-  for (const [s, side] of [[1, 'L'], [-1, 'R']]) {
+  if (!body) for (const [s, side] of [[1, 'L'], [-1, 'R']]) {
     const b = leg(side);
     P.push([limb(0.07, 0.062, 0.46, 0.9, s * 0.085), trous, b, 0], [limb(0.058, 0.05, 0.05, 0.47, s * 0.085), gaiter, b, 0],
       [sph(0.052, 0.035, 0.115, s * 0.085, 0.035, 0.035, 6, 4), '#15110d', b, 0]);
   }
   // habit : du bas des hanches aux épaules, aplati d'avant en arrière ; basques derrière (les deux faces)
-  P.push([lathe([[0.135, 0.84], [0.15, 0.95], [0.142, 1.06], [0.162, 1.22], [0.172, 1.34], [0.15, 1.43], [0.06, 1.48]], 10, 0.72), shade(1), torso, 1]);
+  if (!body) P.push([lathe([[0.135, 0.84], [0.15, 0.95], [0.142, 1.06], [0.162, 1.22], [0.172, 1.34], [0.15, 1.43], [0.06, 1.48]], 10, 0.72), shade(1), torso, 1]);
   P.push(...both(new THREE.CylinderGeometry(0.14, 0.19, 0.4, 8, 1, true, Math.PI / 2, Math.PI).scale(1, 1, 0.75).translate(0, 0.7, -0.01), shade(0.8), B.hips, 1));
   const fz = kind === 'milice' ? 0 : CAMP;   // (la milice en habits civils : son foulard seul porte la couleur du camp)
   if (year < 1860) P.push([new THREE.BoxGeometry(0.28, 0.05, 0.015).translate(0, 0.52, -0.15), facing, B.hips, fz],   // retroussis
-    [new THREE.BoxGeometry(0.17, 0.4, 0.015).translate(0, 1.2, 0.118), facing, B.chest, fz, DETAIL.boutons]);   // revers (pas sur la capote de 1870)
+    [new THREE.BoxGeometry(0.17, 0.4, 0.015).translate(0, 1.2, 0.118 + fwd), facing, B.chest, fz, DETAIL.boutons]);   // revers (pas sur la capote de 1870)
   P.push([limb(0.075, 0.095, 1.44, 1.5, 0, 8), WHITE, B.chest, CAMP]);                                            // collet (foulard), au-dessus des épaules
-  P.push([limb(0.045, 0.05, 1.44, 1.5, 0, 6), SKIN, B.head, 0], [sph(0.088, 0.105, 0.095, 0, 1.585, 0.005, 12, 8), SKIN, B.head, 0, DETAIL.visage]);   // cou, tête (et son visage peint)
+  if (!body) P.push([limb(0.045, 0.05, 1.44, 1.5, 0, 6), SKIN, B.head, 0], [sph(0.088, 0.105, 0.095, 0, 1.585, 0.005, 12, 8), SKIN, B.head, 0, DETAIL.visage]);   // cou, tête (et son visage peint)
   if (year < 1800) P.push([limb(0.022, 0.018, 1.42, 1.56, 0, 5).translate(0, 0, -0.09), '#3a2c20', B.head, 0]);   // la queue
   if (armed) {
-    for (const r of [0.5, -0.5]) P.push([new THREE.BoxGeometry(0.05, 0.62, 0.012).rotateZ(r).translate(0, 1.13, 0.125), WHITE, B.chest, 0]);   // buffleteries
+    for (const r of [0.5, -0.5]) P.push([new THREE.BoxGeometry(0.05, 0.62, 0.012).rotateZ(r).translate(0, 1.13, 0.125 + fwd), WHITE, B.chest, 0]);   // buffleteries
     P.push([sph(0.11, 0.07, 0.04, 0, 0.92, -0.135, 8, 4), LEATHER, B.hips, 0]);                                // giberne
     // havresac plat, la couverture roulée dessus
     if (kind !== 'milice') P.push([new THREE.BoxGeometry(0.24, 0.25, 0.07).translate(0, 1.19, -0.16), '#6b5236', B.chest, 0],
       [new THREE.CylinderGeometry(0.035, 0.035, 0.3, 6).rotateZ(Math.PI / 2).translate(0, 1.345, -0.15), '#9a9488', B.chest, 0]);
   }
-  if (kind === 'cavalier') P.push([new THREE.BoxGeometry(0.05, 0.62, 0.012).rotateZ(0.5).translate(0, 1.13, 0.125), WHITE, B.chest, 0]);   // baudrier
+  if (kind === 'cavalier') P.push([new THREE.BoxGeometry(0.05, 0.62, 0.012).rotateZ(0.5).translate(0, 1.13, 0.125 + fwd), WHITE, B.chest, 0]);   // baudrier
   if (officer) {
     P.push([limb(0.15, 0.15, 0.86, 0.92, 0, 10).scale(1, 1, 0.75), '#c9a24a', B.hips, 0]);                    // écharpe
     for (const s of [1, -1]) P.push([sph(0.07, 0.025, 0.06, s * 0.17, 1.44, 0, 6, 4), GOLD, B.chest, 0]);       // épaulettes
@@ -379,7 +388,7 @@ function soldier(kind, year, rig = false) {
   // eux : voir RIG_EXTRA)
   for (const [s, side] of [[1, 'L'], [-1, 'R']]) {
     const b = armed && side === 'L' ? y => y > 1.16 ? B.carryUpper : B.carryFore : y => y > 1.16 ? B['upper' + side] : B['fore' + side];
-    P.push([sph(0.058, 0.06, 0.06, s * 0.19, 1.39, 0, 6, 4), shade(0.95), b, 1],
+    if (!body) P.push([sph(0.058, 0.06, 0.06, s * 0.19, 1.39, 0, 6, 4), shade(0.95), b, 1],
       [new THREE.CylinderGeometry(0.052, 0.044, 0.5, 7, 2, true).translate(s * 0.2, 1.15, 0), shade(0.9), b, 1],
       [limb(0.048, 0.05, 0.87, 0.94, s * 0.2), facing, b, fz], [sph(0.04, 0.045, 0.04, s * 0.2, 0.84, 0, 5, 4), SKIN, b, 0]);   // parement
   }
@@ -390,10 +399,44 @@ function soldier(kind, year, rig = false) {
     [limb(0.012, 0.012, 1.28, 2.2, 0.235, 5).translate(0, 0, 0.055), IRON, B.musket, 0], [limb(0.003, 0.009, 2.2, 2.55, 0.235, 4).translate(0, 0, 0.055), '#b8bcc0', B.musket, 0]);
   const g = assemble(P);
   if (rig) stocky(g, B);
+  if (body) return withBody(g, armed, { trous, gaiter, facing, fz });
   return g;
 }
 // allure d'Ultimate General (essai des animations) : tête et coiffure plus fortes, buste plus large, les bras écartés
 // d'autant (vu d'en haut, la silhouette se lit mieux)
+// ajoute le corps de Quaternius (CORPS) aux pièces d'uniforme d'un fantassin (g, os rigides : aBone) : une seule
+// géométrie à quatre os par sommet (aJoints, aWeights ; une pièce rigide : son os, de poids 1). Zones du corps : peau,
+// habit (teinté par l'habit de l'instance, aPart 1), culotte, guêtres, souliers, parements (couleur du camp). Le bras
+// gauche d'un homme armé suit les os du fusil porté (carryUpper, carryFore), comme celui fait par le code.
+function withBody(g, armed, { trous, gaiter, facing, fz }) {
+  const C = CORPS, nb = C.pos.length / 3, np = g.attributes.position.count;
+  const zc = [SKIN, shade(1), trous, gaiter, '#15110d', facing].map(c => new THREE.Color(c)), zp = [0, 1, 0, 0, 0, fz];
+  const remap = j => (armed && j === RIG_BONES.upperL ? RIG_BONES.carryUpper : armed && j === RIG_BONES.foreL ? RIG_BONES.carryFore : j);
+  const cat = (name, n, part) => {
+    const a = g.attributes[name], out = new Float32Array((np + nb) * n);
+    for (let i = 0; i < np; i++) for (let q = 0; q < n; q++) out[i * n + q] = a ? a.array[i * n + q] : 0;
+    for (let i = 0; i < nb; i++) for (let q = 0; q < n; q++) out[(np + i) * n + q] = part(i, q);
+    return new THREE.Float32BufferAttribute(out, n);
+  };
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', cat('position', 3, (i, q) => C.pos[i * 3 + q]));
+  out.setAttribute('normal', cat('normal', 3, (i, q) => C.nor[i * 3 + q]));
+  out.setAttribute('color', cat('color', 3, (i, q) => { const c = zc[C.zone[i]]; return q === 0 ? c.r : q === 1 ? c.g : c.b; }));
+  out.setAttribute('uv', cat('uv', 2, () => 0));
+  out.setAttribute('aBone', cat('aBone', 1, i => remap(C.joints[i * 4])));
+  out.setAttribute('aPart', cat('aPart', 1, i => zp[C.zone[i]]));
+  out.setAttribute('aFx', cat('aFx', 1, () => 0));
+  // (les pièces rigides : leur os seul)
+  const bones = g.attributes.aBone, J = new Float32Array((np + nb) * 4), Wt = new Float32Array((np + nb) * 4);
+  for (let i = 0; i < np; i++) { J[i * 4] = bones.getX(i); Wt[i * 4] = 1; }
+  for (let i = 0; i < nb; i++) for (let q = 0; q < 4; q++) { J[(np + i) * 4 + q] = remap(C.joints[i * 4 + q]); Wt[(np + i) * 4 + q] = C.weights[i * 4 + q]; }
+  out.setAttribute('aJoints', new THREE.Float32BufferAttribute(J, 4));
+  out.setAttribute('aWeights', new THREE.Float32BufferAttribute(Wt, 4));
+  const idx = [...g.index.array, ...C.index.map(k => k + np)];
+  out.setIndex(idx);
+  g.dispose();
+  return out;
+}
 function stocky(g, B) {
   const p = g.attributes.position, n = g.attributes.normal, b = g.attributes.aBone;
   const arms = [B.upperL, B.foreL, B.upperR, B.foreR, B.carryUpper, B.carryFore];
@@ -714,7 +757,7 @@ attribute vec4 aAnim;   // pose, phase, échelle, rang
 attribute vec4 aMove;   // course à sa place : départ (u, v), début, durée (négative : au pas ; 0 : aucune)
 attribute vec3 aCoat;   // couleur de l'habit
 attribute vec3 aFace;   // couleur du camp (pièces de teinte CAMP)
-attribute float aBone, aPart, aMetal, aDetail;
+attribute float aBone, aPart, aFx;
 varying float vDetail; varying vec2 vUvD;
 uniform sampler2D uUnits, uHeight;
 uniform vec3 uHgt;      // pas des altitudes (m), colonnes, lignes
@@ -777,6 +820,9 @@ void hskin(int c, float fr, out vec4 r0, out vec4 r1, out vec4 r2) {
 }
 #endif
 #if defined(RIG)
+#if defined(CORPS)
+attribute vec4 aJoints, aWeights;   // corps de Quaternius : quatre os par sommet (withBody)
+#endif
 attribute vec4 aGest;   // geste et son début, geste d'avant et son début (horloge des effets)
 attribute vec4 aMix;    // instant du fondu, vitesse, vitesse d'avant
 uniform float uTrot, uPas;   // gestes de la course (trot, pas)
@@ -866,16 +912,34 @@ const VERT_POSE = `
   vec4 r0, r1, r2;
   hskin(hc, hf, r0, r1, r2);
 #elif defined(RIG)
-  // homme au squelette : la matrice de son os dans son geste, fondue avec celle du geste d'avant pendant 0,3 s
-  int bi = int(aBone + 0.5);
-  vec4 r0, r1, r2;
-  bone(aGest.x, aGest.y, aMix.y, bi, r0, r1, r2);
-  float bw = clamp((uFxT - aMix.x) / 0.3, 0.0, 1.0);
-  if (bw < 1.0) {
-    vec4 p0, p1, p2;
-    bone(aGest.z, aGest.w, aMix.z, bi, p0, p1, p2);
-    bw = smoothstep(0.0, 1.0, bw);
-    r0 = mix(p0, r0, bw); r1 = mix(p1, r1, bw); r2 = mix(p2, r2, bw);
+  // homme au squelette : la matrice de son os dans son geste, fondue avec celle du geste d'avant pendant 0,3 s ; avec
+  // le corps de Quaternius (CORPS), la somme pondérée de ses quatre os
+  vec4 r0 = vec4(0.0), r1 = vec4(0.0), r2 = vec4(0.0);
+  float bw0 = clamp((uFxT - aMix.x) / 0.3, 0.0, 1.0), bw = smoothstep(0.0, 1.0, bw0);
+#if defined(CORPS)
+  for (int k = 0; k < 4; k++) {
+    float wk = aWeights[k];
+    if (wk <= 0.0) continue;
+    int bi = int(aJoints[k] + 0.5);
+#else
+  {
+    float wk = 1.0;
+    int bi = int(aBone + 0.5);
+#endif
+    vec4 a0, a1, a2;
+    bone(aGest.x, aGest.y, aMix.y, bi, a0, a1, a2);
+    if (bw0 < 1.0) {
+      vec4 p0, p1, p2;
+      bone(aGest.z, aGest.w, aMix.z, bi, p0, p1, p2);
+      a0 = mix(p0, a0, bw); a1 = mix(p1, a1, bw); a2 = mix(p2, a2, bw);
+    }
+    // en course à sa place, un homme à pied trotte ou marche (le cavalier, lui, reste en selle)
+    if (run > 0.0 && P < 8.5) {
+      vec4 q0, q1, q2;
+      bone(aMove.w > 0.0 ? uTrot : uPas, aMove.z, 1.0, bi, q0, q1, q2);
+      a0 = mix(a0, q0, run); a1 = mix(a1, q1, run); a2 = mix(a2, q2, run);
+    }
+    r0 += a0 * wk; r1 += a1 * wk; r2 += a2 * wk;
   }
   // cavalier (aAnim.x = 9, RIDER) : le balancement de son cheval (même formule que les chevaux, même phase), et il se
   // cabre avec lui au choc
@@ -884,12 +948,6 @@ const VERT_POSE = `
     float t = uTime * (g > 1.5 ? 11.0 : 6.5) + ph, ri = uFxT - u2.w;
     bob = g > 1.5 ? abs(sin(t)) * 0.12 : g > 0.5 ? abs(sin(t * 2.0)) * 0.03 : 0.0;
     if (rank == 0.0 && ri > 0.0 && ri < 1.2) { float rr = sin(3.14159 * ri / 1.2) * 0.55; lean = -rr; bob += 0.6 * sin(rr); }
-  }
-  // en course à sa place, un homme à pied trotte ou marche (le cavalier, lui, reste en selle)
-  if (run > 0.0 && P < 8.5) {
-    vec4 q0, q1, q2;
-    bone(aMove.w > 0.0 ? uTrot : uPas, aMove.z, 1.0, bi, q0, q1, q2);
-    r0 = mix(r0, q0, run); r1 = mix(r1, q1, run); r2 = mix(r2, q2, run);
   }
 #else
   if (P == 3.0) { swing = sin(uTime * 8.2 + ph) * 0.38; bob = abs(sin(uTime * 8.2 + ph)) * 0.03; }
@@ -975,6 +1033,7 @@ export class Troops {
     this.flagIds = new Map();
     this.soft = new THREE.CanvasTexture(relief.t.ombre);
     this.contactMats = {};
+    setCorps(anims?.corps);   // (le corps de Quaternius des fantassins de près, s'il est chargé)
     // chaque sorte en deux versions (« ~ » : de loin), sauf les drapeaux
     for (const [k, def] of Object.entries(KINDS)) {
       if (k === 'canon' || k === 'caisson') continue;   // (une sorte par modèle de pièce, créée à la demande : gunKind)
@@ -997,6 +1056,7 @@ export class Troops {
     const geo = new THREE.InstancedBufferGeometry().copy(model);
     model.dispose();
     const defines = def ? { [def]: '', NCLIP: this.uni.uClips.value.length } : {};
+    if (def === 'RIG' && geo.attributes.aJoints) defines.CORPS = '';   // (le corps de Quaternius : withBody)
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: pattern ? THREE.DoubleSide : THREE.FrontSide });
     mat.defines = defines;
     const place = `vec3 transformed = position;
@@ -1020,7 +1080,7 @@ export class Troops {
         .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${VERT_POSE}\n${turn('objectNormal', false)}`)
         // (l'étoffe : sa case de la planche des drapeaux, dont le numéro est dans aFace.x)
         .replace('#include <begin_vertex>', (pattern ? `vUv2 = (vec2(mod(aFace.x, ${FLAG_COLS}.0), ${FLAG_ROWS - 1}.0 - floor(aFace.x / ${FLAG_COLS}.0)) + uv) / vec2(${FLAG_COLS}.0, ${FLAG_ROWS}.0);\n` : '') + place)
-        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 2.5 ? aFace * color.r : aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart; vMetal = aMetal; vDetail = aDetail; vUvD = uv;' +
+        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 2.5 ? aFace * color.r : aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart; vMetal = mod(aFx, 2.0); vDetail = floor(aFx * 0.5); vUvD = uv;' +
           // plus sombre vers les pieds : l'ombre des rangs, comme une occlusion ambiante (pas pour les étoffes)
           (pattern ? '' : '\nvColor.rgb *= mix(0.62, 1.0, smoothstep(0.0, 1.5, position.y));'));
       sh.fragmentShader = sh.fragmentShader

@@ -536,7 +536,8 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   régiments ennemis au contact, une **ligne de front** ondule au sol, à la couleur de chaque camp de son côté ; le
   bouton **« Ligne de vue »** du panneau d'un régiment (touche V) assombrit tout ce qu'il ne voit pas (crêtes, bois,
   bâti et vergers, la même règle que le moteur, haies mises à part). La fumée des canons, plus grise, monte au-dessus
-  de celle des fusils. De près, les revers portent leurs boutons dorés et les visages leurs yeux et sourcils ;
+  de celle des fusils. De près, les fantassins ont le corps modelé des personnages de Quaternius (CC0), habillé de
+  l'uniforme de l'époque ; les revers portent leurs boutons dorés et les visages leurs yeux et sourcils ;
   baïonnettes, cuivres et bronze des pièces renvoient le soleil ; les haies du bocage sont des
   rangs de feuillage touffu, d'où dépassent des arbres têtards ; les creux du terrain sont plus verts et plus sombres.
   Au fil des pertes, des débris jonchent le sol (chapeaux, fusils, havresacs, roues brisées près des pièces), et la
@@ -857,7 +858,9 @@ bataille. Les essais n'écrivent pas dans `logs/batailles.jsonl` (`WEB_CONQUETE_
 
 ## Sources des données
 Animations des soldats : [Universal Animation Library](https://quaternius.com/) 1 et 2 de Quaternius (CC0, domaine
-public), retouchées et précalculées sur nos figurines (`web/anims/LICENCE.txt`).
+public), retouchées et précalculées sur nos figurines (`web/anims/LICENCE.txt`). Corps des fantassins de près :
+[Universal Base Characters](https://quaternius.itch.io/universal-base-characters) de Quaternius (CC0), allégé et
+posé sur nos os par `web/js/battle/dev/corps.mjs`.
 Contours des départements et des communes : [france-geojson](https://github.com/gregoiredavid/france-geojson) (données IGN, Licence Ouverte).
 Population des communes : INSEE via [@etalab/decoupage-administratif](https://github.com/etalab/decoupage-administratif).
 Fleuves et lacs : [Natural Earth](https://www.naturalearthdata.com/) (domaine public), complétés à la main pour l'Isle, la Vézère,

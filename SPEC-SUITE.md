@@ -111,7 +111,19 @@ silhouettes construites par le code. Mêmes gestes qu'aujourd'hui, mêmes unifor
 **Fini quand.** À 10 m, côte à côte avec une capture d'UGAR, on ne voit plus « une figurine de code ». Les images par
 seconde de l'iPad en Haute ne baissent pas de plus de 10 %.
 
+**Livré le 21/10/2026** (`dev/corps.mjs`, `web/anims/corps.json`, `troupes.js` withBody et variante CORPS du shader).
+Sans Blender : l'allègement se fait dans l'outil, par regroupement des sommets sur une grille de 5,2 cm (12 566 → 1 791
+triangles). Le corps est posé bras baissés comme notre pose de référence, ramené à nos mesures (hanche à 0,93 m),
+ses 65 os ramenés à nos 13 (et le bras gauche des hommes armés aux os du fusil porté), quatre os par sommet ; zones
+peau, habit (teinté par l'instance), culotte, guêtres, souliers, parements (couleur du camp). Les pièces d'uniforme
+du code (revers, buffleteries, collet, basques, giberne, havresac, coiffure, queue, fusil) restent, recalées sur sa
+poitrine. Seules les figurines de près l'ont ; de loin, les figurines simples ne changent pas. Écart : la tête n'a pas
+de visage peint (le shader de F4 lit les coordonnées de texture de la sphère faite par le code). Contrainte trouvée :
+WebGL n'admet que 16 attributs par sommet ; métal et détail peint sont rangés dans un seul (aFx).
+
 ### E2. Le canon (« Napoleonic Era Cannon », MenOfMena, CC-BY)
+
+**Abandonné le 21/10/2026** (à ta demande) : les pièces restent celles construites par le code.
 
 **Ce que verra le joueur.** De près, une pièce de bronze aux formes justes : tourillons, renforts, flasques et roues à
 rayons.
