@@ -307,6 +307,11 @@ d'ornières (la carte de piétinement a 3 m par pixel : deux traits de roue n'y 
 sous la pluie (Lambert n'a pas de reflet ; à faire avec un terme spéculaire comme l'eau) ; pas de gerbe de terre en
 plus autour des trous d'obus (la tache de terre de 9e en tient lieu).
 
+**Complété le 21/10/2026** : la boue luit sous la pluie (`relief.js`, gBoueRefl : plus sombre, flaques qui
+reflètent le ciel et le soleil, en fondu de 20 s quand la pluie commence) ; les uniformes s'usent (`troupes.js`,
+uUsure et uMouille : la boue monte sur le bas des jambes en trois heures de combat, plus haut chez les uns que chez les
+autres ; les habits foncent sous la pluie, pas le métal).
+
 ### F9. Les rangs d'arbres le long des chemins creux (SPEC-CARTES, C3.3)
 
 Le générateur de cartes de bataille plante des rangs d'arbres le long de certains chemins creux. Comme pour le verger,

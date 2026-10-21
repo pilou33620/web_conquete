@@ -467,6 +467,11 @@ export class BattleView {
     this.troops.update(all, this.colors || [], time, this.fx.t, fr, cam);
     this.decor.clearings(all, performance.now());
     this.epoque3d?.update(all);
+    // usure des uniformes (boue qui monte en 3 h de combat) ; sous la pluie, habits et boue mouillés (fondu de 20 s)
+    const wetNow = /pluie|orage|tempete/.test(sky.weather || '') ? 1 : 0, mo = this.relief.uni.uMouille;
+    mo.value += (wetNow - mo.value) * Math.min(1, dt / 20);
+    this.troops.uni.uMouille.value = mo.value;
+    this.troops.uni.uUsure.value = this.st?.phase === 'deploiement' ? 0 : Math.min(1, (this.st?.clock || 0) / 10800 + mo.value * 0.25);
     this.fx.render(fr, z);
     this.piet?.render();
     this.sendPiet();

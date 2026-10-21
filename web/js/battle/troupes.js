@@ -315,6 +315,9 @@ function hat(type, kind, dy = 0) {
 // dont l'avant (+z) est en u = 0,25 sur la sphère de Three.js. Seules les figurines de près en ont (aFx).
 const DETAIL = { boutons: 1, visage: 2 };
 const DETAIL_GLSL = `
+  // usure : boue sur le bas des jambes et des basques (plus haut chez les uns que chez les autres), habits mouillés
+  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.52, 0.44, 0.33) + vec3(0.04, 0.03, 0.02), uUsure * 0.8 * (1.0 - smoothstep(0.1, 0.65, vUsY)));
+  diffuseColor.rgb *= 1.0 - 0.22 * uMouille * step(vMetal, 0.5);
   if (vDetail > 0.5 && vDetail < 1.5) {
     vec2 q = vec2(abs(vUvD.x - 0.5) - 0.3, fract(vUvD.y * 5.0) - 0.5);
     float d = length(q * vec2(2.4, 1.0));
@@ -758,7 +761,7 @@ attribute vec4 aMove;   // course à sa place : départ (u, v), début, durée (
 attribute vec3 aCoat;   // couleur de l'habit
 attribute vec3 aFace;   // couleur du camp (pièces de teinte CAMP)
 attribute float aBone, aPart, aFx;
-varying float vDetail; varying vec2 vUvD;
+varying float vDetail; varying vec2 vUvD; varying float vUsY;
 uniform sampler2D uUnits, uHeight;
 uniform vec3 uHgt;      // pas des altitudes (m), colonnes, lignes
 uniform float uTime, uFxT;
@@ -1022,6 +1025,9 @@ export class Troops {
     this.uni = {
       uUnits: { value: this.units }, uHeight: { value: this.heights }, uHgt: { value: new THREE.Vector3(t.fineStep, t.fineW, t.fineH) },
       uTime: { value: 0 }, uFxT: { value: 0 }, uRobes: { value: ROBES.map(c => new THREE.Color(c)) },
+      // l'usure (SPEC-SUITE F4) : la boue monte sur les guêtres et les culottes au fil de la bataille (0 à 1), les habits
+      // foncent sous la pluie (0 à 1) ; vue.js les règle d'après l'horloge et le temps
+      uUsure: { value: 0 }, uMouille: { value: 0 },
       uBGrid: { value: this.bgrid }, uBRect: { value: this.brect }, uBox: { value: new THREE.Vector4(bg?.x0 ?? 0, bg?.y0 ?? 0, bg?.cell ?? 0, bg?.cols ?? 1) },
       uBDim: { value: new THREE.Vector2(bg?.rows ?? 1, bg?.n ?? 1) },
       uHAnim: { value: this.cheval }, uHFps: { value: ch?.meta.fps ?? 24 },
@@ -1080,11 +1086,11 @@ export class Troops {
         .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${VERT_POSE}\n${turn('objectNormal', false)}`)
         // (l'étoffe : sa case de la planche des drapeaux, dont le numéro est dans aFace.x)
         .replace('#include <begin_vertex>', (pattern ? `vUv2 = (vec2(mod(aFace.x, ${FLAG_COLS}.0), ${FLAG_ROWS - 1}.0 - floor(aFace.x / ${FLAG_COLS}.0)) + uv) / vec2(${FLAG_COLS}.0, ${FLAG_ROWS}.0);\n` : '') + place)
-        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 2.5 ? aFace * color.r : aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart; vMetal = mod(aFx, 2.0); vDetail = floor(aFx * 0.5); vUvD = uv;' +
+        .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.rgb = aPart > 2.5 ? aFace * color.r : aPart > 1.5 ? uRobes[int(aAnim.x / 16.0) % 4] * color.r : mix(vColor.rgb, aCoat * color.r, aPart);\nvPart = aPart; vMetal = mod(aFx, 2.0); vDetail = floor(aFx * 0.5); vUvD = uv; vUsY = position.y + fract(aSlot.w * 0.618) * 0.25;' +
           // plus sombre vers les pieds : l'ombre des rangs, comme une occlusion ambiante (pas pour les étoffes)
           (pattern ? '' : '\nvColor.rgb *= mix(0.62, 1.0, smoothstep(0.0, 1.5, position.y));'));
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying float vFade, vPart, vMetal, vDetail; varying vec2 vUvD;' + (pattern ? '\nuniform sampler2D uPattern; varying vec2 vUv2;' : ''))
+        .replace('#include <common>', '#include <common>\nvarying float vFade, vPart, vMetal, vDetail, vUsY; varying vec2 vUvD; uniform float uUsure, uMouille;' + (pattern ? '\nuniform sampler2D uPattern; varying vec2 vUv2;' : ''))
         // régiment deviné (plus en vue) : transparent en pointillés, sans tri
         .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
           if (vFade < 0.995 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > vFade) discard;`)

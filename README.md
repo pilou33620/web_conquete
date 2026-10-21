@@ -540,7 +540,8 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   l'uniforme de l'époque ; les revers portent leurs boutons dorés et les visages leurs yeux et sourcils ;
   baïonnettes, cuivres et bronze des pièces renvoient le soleil ; les haies du bocage sont des
   rangs de feuillage touffu, d'où dépassent des arbres têtards ; les creux du terrain sont plus verts et plus sombres.
-  Au fil des pertes, des débris jonchent le sol (chapeaux, fusils, havresacs, roues brisées près des pièces), et la
+  Au fil de la bataille, la boue monte sur les guêtres et les culottes ; sous la pluie, les habits foncent et la boue
+  foulée luit, ses flaques reflétant le ciel. Au fil des pertes, des débris jonchent le sol (chapeaux, fusils, havresacs, roues brisées près des pièces), et la
   boue laissée par les troupes est gardée avec la bataille : une bataille rechargée retrouve ses traces.
   Le décor suit l'époque et les technologies des deux camps : poteaux télégraphiques et voie ferrée le long de la
   grand-route, cheminées d'usine à l'horizon, ambulances à l'arrière (à croix rouge après la convention de Genève),

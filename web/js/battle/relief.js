@@ -70,7 +70,7 @@ const OMBRE_LUM = `
 // GLSL des sols photo (voir en tête) : déclarations, puis le mélange (dans map_fragment), puis les normales
 const SOLS_DECL = `
   uniform sampler2DArray uSolA, uSolN; uniform sampler2D uMask; uniform vec3 uMean[8]; uniform float uForce[8]; uniform float uSolK, uMaskPx;
-  uniform vec2 uWind; uniform float uTime; uniform vec3 uEauHor, uEauZen, uEauSun;
+  uniform vec2 uWind; uniform float uTime;
   vec3 solNrm = vec3(0.0, 0.0, 1.0);
   float gEau = 0.0; vec3 gEauRefl = vec3(0.0);   // part d'eau du point, et ce que l'eau reflète (ciel, soleil)
   float shash(vec2 p) { p = mod(p, 1024.0); vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
@@ -238,7 +238,7 @@ export class Relief {
       uMean: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0.2, 0.2, 0.2)) }, uForce: { value: FORCE.slice() }, uSolK: { value: 0 },
       uFine: { value: null }, uFineUV: { value: new THREE.Vector4() }, uAO: { value: 0.9 },
       uHor: { value: null }, uHorUV: { value: new THREE.Vector4() }, uHorOn: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
-      uEauHor: { value: new THREE.Color() }, uEauZen: { value: new THREE.Color() }, uEauSun: { value: new THREE.Color() },
+      uEauHor: { value: new THREE.Color() }, uEauZen: { value: new THREE.Color() }, uEauSun: { value: new THREE.Color() }, uMouille: { value: 0 },
       uWindK: { value: 1 }, uPiet: { value: null }, uOmbreR: { value: null }, uHgt: { value: null }, uHgtUV: { value: new THREE.Vector4() },
     };
     // (la carte de piétinement arrive avec la vue : setPiet ; d'ici là, un sol neuf)
@@ -319,6 +319,8 @@ export class Relief {
           // (quatre textures séparées : un tableau de textures se mêlait à uCover dans l'attribution des unités)
           uniform sampler2D uLv0, uLv1, uLv2, uLv3; uniform vec4 uSpan; uniform vec2 uSlots[${N * N * 4}];
           uniform sampler2D uFine, uPiet, uOmbreR; uniform vec4 uFineUV; uniform float uAO;
+          uniform vec3 uEauHor, uEauZen, uEauSun; uniform float uMouille;   // (le ciel que reflètent l'eau et la boue mouillée)
+          vec3 gBoueRefl = vec3(0.0);
           varying vec2 vWorld; varying vec3 vNw;
           vec3 gNf; float gAO = 1.0, gBois = 0.0;   // normale fine du sol (scène), occlusion ambiante, sous les bois
           // un niveau de détail en p (m) : sa couleur, et ok = 1 si le bloc de p y est peint
@@ -344,7 +346,8 @@ export class Relief {
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
           #ifdef SOLS
           totalEmissiveRadiance += gEauRefl;
-          #endif`)
+          #endif
+          totalEmissiveRadiance += gBoueRefl;`)
         .replace('#include <map_fragment>', `#include <map_fragment>
           // niveaux de détail, du plus grossier au plus fin : chacun recouvre le précédent là où il est peint, et
           // seulement s'il n'est pas plus fin que l'écran (texels par pixel : texels/m × m/pixel)
@@ -365,6 +368,14 @@ export class Relief {
           // piétinement : la peinture tourne à la boue brune (la photo garde son grain), sur la neige aussi
           float pt = clamp(texture(uPiet, clamp(vWorld / uSize, 0.0, 1.0)).r, 0.0, 1.0) * step(0.0, min(min(vWorld.x, vWorld.y), min(uSize.x - vWorld.x, uSize.y - vWorld.y)));
           diffuseColor.rgb = mix(diffuseColor.rgb, mix(diffuseColor.rgb * vec3(0.55, 0.46, 0.34), vec3(0.11, 0.08, 0.05), 0.35), smoothstep(0.0, 1.0, pt) * 0.88);
+          // sous la pluie (SPEC-SUITE F8), la boue foulée luit : plus sombre, des flaques qui reflètent le ciel et le soleil
+          if (uMouille > 0.01 && pt > 0.05) {
+            float wet = smoothstep(0.15, 0.8, pt) * uMouille, flaque = smoothstep(0.45, 0.75, fract(sin(dot(floor(vWorld * 0.7), vec2(12.9898, 78.233))) * 43758.5453) * 0.6 + pt * 0.5);
+            diffuseColor.rgb *= 1.0 - 0.3 * wet;
+            vec3 wpb = transpose(mat3(viewMatrix)) * (-vViewPosition - viewMatrix[3].xyz), Vb = normalize(cameraPosition - wpb), Rb = reflect(-Vb, vec3(0.0, 1.0, 0.0));
+            float fb = 0.02 + 0.98 * pow(1.0 - max(Vb.y, 0.0), 5.0);
+            gBoueRefl = wet * (0.35 + 0.65 * flaque) * (mix(uEauHor, uEauZen, smoothstep(0.0, 0.5, Rb.y)) * fb * 0.6 + uEauSun * pow(max(dot(Rb, uSunDir), 0.0), 120.0) * 1.5);
+          }
           // ombre des régiments (pietinement.js, OmbreRegiments) : le bloc pose sur le sol
           diffuseColor.rgb *= 1.0 - 0.32 * clamp(texture(uOmbreR, clamp(vWorld / uSize, 0.0, 1.0)).r, 0.0, 1.0);
           // creux (SPEC-SUITE F3) : là où le sol voit moins de ciel, l'herbe est plus humide, plus verte et plus sombre
