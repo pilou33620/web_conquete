@@ -141,7 +141,12 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   - **1700** : la grande campagne, jusqu'à la fin de 1899 ;
   - **1790** : la Révolution, avec les techniques connues vers 1778 (fusil 1777, système Gribeauval…) ;
   - **1813** : la fin de l'Empire, avec les technologies d'époque déjà acquises ;
-  - **1870** : la guerre de 1870, avec le Chassepot, les canons rayés et la mitrailleuse.
+  - **1870** : la guerre de 1870, avec le Chassepot, les canons rayés, la mitrailleuse, et les voies ferrées déjà
+    ouvertes (Bordeaux–Bayonne, Bordeaux–Sète, Paris–Bordeaux… : 30 tronçons ouverts avant 1870).
+- **La carte de l'accueil suit le départ choisi** : un bouton 1700, 1790, 1813 ou 1870 montre aussitôt le paysage de
+  l'année (tours Chappe, poteaux télégraphiques, usines, forêt de pins des Landes, voies ferrées et leurs trains,
+  drapeaux, style de carte d'époque si l'option est prise) et ce qui est déjà acquis (nombre de technologies, les plus
+  visibles, tronçons de voie ferrée ouverts).
 - **Provinces puis départements** : avant le 4 mars 1790, les cinq camps sont la **Guyenne**, le **Périgord**,
   les **Landes de Gascogne**, l'**Agenais** et le **Béarn et Pays basque**. À cette date, ils deviennent les cinq départements.
 - **Époques** : Grand Siècle finissant (1700), Lumières (1715), Révolution (1789), Consulat et Empire (1804), Restauration

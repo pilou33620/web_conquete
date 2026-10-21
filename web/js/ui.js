@@ -7,6 +7,7 @@ import { UnitArt } from './battle/unites.js';
 import { profil } from './battle/qualite.js';
 import { figureKind, drawPortrait } from './portraits.js';
 import { Decouvertes } from './decouvertes.js';
+import { startTechs, startRails } from './epoque.js';
 
 // nombres à la française : virgule décimale et vrai signe moins (−)
 const minus = s => s.replace(/^-/, '−');
@@ -955,7 +956,7 @@ export class UI {
       // écran de départ
       case 'pick-dept': this.pickDept(d.v); break;
       case 'pick-diff': this.startDiff = d.v; this.renderStart(); break;
-      case 'pick-scen': this.startScen = d.v; this.renderStart(); break;
+      case 'pick-scen': this.startScen = d.v; this.map.showPreview(d.v); this.renderStart(); break;
       case 'start-game': this.onStartGame && this.onStartGame(this.startDept, this.startDiff, this.startScen); break;
       case 'resume': this.onResume && this.onResume(); break;
       case 'start-mode': this.startMode = d.v; this.map.highlightDept = d.v === 'bataille' ? this.sk.me : this.startDept; this.skMark(); this.renderStart(); break;
@@ -1979,6 +1980,7 @@ export class UI {
       <div class="cartouche"><h1>Conquête</h1><div class="campaign">${esc(sc.title)}</div><p><b>${esc(sc.campaign || '')}.</b> ${esc(sc.intro)}</p></div>
       ${this.modeTabs()}
       <div class="row"><span class="lab">Début</span><span class="seg">${scenBtns}</span></div>
+      ${this.startEraHtml(sc)}
       ${info.running ? '<button class="btn primary" data-act="resume">Reprendre la partie en cours</button>' : ''}
       <div class="dept-list">${cards}</div>
       <div class="row"><span class="lab">Difficulté</span><span class="seg">${diffs}</span></div>
@@ -1990,6 +1992,17 @@ export class UI {
       </div></div>`;
     const det = this.$('start').querySelector('details.ver-line');
     if (det) det.addEventListener('toggle', () => { this.verOpen = det.open; });   // reste ouvert d'un rendu à l'autre
+  }
+
+  // ce que l'époque choisie donne au départ : techniques déjà connues (les plus récentes de celles qui se voient), voies
+  // ferrées déjà ouvertes ; la carte derrière les montre déjà (map.showPreview)
+  startEraHtml(sc) {
+    const known = startTechs(this.rules, sc);
+    if (!known.size) return '<p class="muted small start-era">Aucune technologie au départ : tout est à découvrir.</p>';
+    const seen = new Set([...Object.values(this.rules.visuals || {}).map(v => v.tech), 'chemins_fer', 'rail_militaire']);
+    const top = (this.rules.techs || []).filter(t => known.has(t.id) && seen.has(t.id)).sort((a, b) => b.year - a.year).slice(0, 4).map(t => t.name);
+    const rails = startRails(this.map.m.rails, sc.year).length;
+    return `<p class="muted small start-era">Déjà acquis : <b>${known.size} technologies</b>${top.length ? `, dont ${esc(top.join(', '))}` : ''}${rails ? ` ; <b>${rails} tronçons de voie ferrée</b> ouverts` : ''}. La carte les montre déjà.</p>`;
   }
 
   // ------------------------------------------------------------------ mode Bataille (écran de départ)

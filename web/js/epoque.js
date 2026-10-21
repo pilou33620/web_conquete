@@ -26,6 +26,14 @@ export function coiffeEpoque(year) {
 export const phylloxera = (year, mk) => year >= 1875 && !(mk && mk.has('greffe'));
 // le style « d'époque » de la carte (SPEC-SUITE H3) : la carte de Cassini (achevée en 1815), puis celle de l'état-major,
 // levée à partir de 1818 ; null pour les couleurs d'Ultimate General
+// ce qu'un camp sait déjà au début d'un scénario (game/engine.py : les techniques d'avant sc.techs_before)
+export function startTechs(rules, sc) {
+  return new Set(sc && sc.techs_before ? (rules.techs || []).filter(t => t.year <= sc.techs_before).map(t => t.id) : []);
+}
+// les tronçons de voie ferrée ouverts avant l'année de départ (game/engine.py) ; rails : payload de game/rails.py
+export function startRails(rails, year) {
+  return (rails?.sections || []).filter(s => s[6] > 0 && s[6] < year).map(s => s[0]);
+}
 export const styleCarte = (style, year) => style !== 'epoque' ? null : year < 1818 ? 'cassini' : 'etatmajor';
 
 export class Epoque {

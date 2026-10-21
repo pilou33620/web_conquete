@@ -122,6 +122,11 @@ class Game:
         self.pending_ev = []   # décisions qui attendent le joueur
         self.tour = TT.new_state()   # tour par tour, mois par mois (game/turns.py)
         self.rails = {}        # voies ferrées : {tronçon: dict(done, cut[, by, left, total])} (game/rails.py)
+        # une partie qui commence tard trouve ouvertes les lignes de son époque (en 1870 : Bordeaux–Bayonne, –Sète…)
+        if sc.get('techs_before'):
+            for sid, sec in RL.sections(self.geo).items():
+                if 0 < sec['year'] < sc['date'][0]:
+                    self.rails[sid] = dict(done=True, cut=None)
         self.ev_done = []      # événements datés déjà passés
         if self.scenario == '1790':
             self.log('info', f"4 mars 1790 : l'Assemblée crée les départements. Vous gouvernez {self.fname(player)}.",

@@ -480,6 +480,11 @@ italique, villes soulignées d'un filet aux couleurs du camp, brouillard en lavi
 d'état-major, aux couleurs de ses minutes au 1/40 000 (bois vert-jaune, vignes lie-de-vin, eaux bleues, grandes routes
 ocre). Les saisons ne changent pas la gravure. Le réglage est gardé sur l'appareil (`conquete.carte.style`).
 
+Livré le 21/10 aussi : l'écran d'accueil montre la carte de l'époque de départ choisie (map.showPreview(scénario) :
+marques des technologies d'avant `techs_before`, voies ferrées ouvertes avant l'année, drapeau, style d'époque) et
+résume ce qui est déjà acquis ; une partie qui commence en 1870 trouve ouvertes les voies ferrées d'avant 1870
+(engine.py). Écart : les villes ne reçoivent pas encore de bâtiments ni d'agrandissements d'époque au départ.
+
 ---
 
 ## Partie I : les découvertes (SPEC-TECH, phase 3)

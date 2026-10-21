@@ -1283,6 +1283,13 @@ class Mitrailleuses(unittest.TestCase):
         self.assertEqual(g.siege_rate(n, [a]), sans, 'les sièges ne comptent que les canons')
 
 
+def sans_rails(g):
+    """Une partie de 1870 sans ses voies ferrées d'origine : pour suivre un chantier depuis le début."""
+    g.rails.clear()
+    g.compute_income()
+    return g
+
+
 class VoiesFerrees(unittest.TestCase):
     """SPEC-TECH.md, phase 2a : les lignes historiques, leurs tronçons, leurs chantiers, le train."""
 
@@ -1319,7 +1326,7 @@ class VoiesFerrees(unittest.TestCase):
 
     def test_un_chantier_s_ouvre_depuis_le_chef_lieu(self):
         from game import rails as RL
-        g = partie(epoque='1870')
+        g = sans_rails(partie(epoque='1870'))
         g.factions['33']['techs'] = [t for t in g.factions['33']['techs'] if t != 'chemins_fer']
         lt = self.troncon(g, 'Bordeaux', 'La Teste-de-Buch')
         g.nodes[GEO.by_name['La Teste-de-Buch']]['owner'] = '33'
@@ -1343,7 +1350,7 @@ class VoiesFerrees(unittest.TestCase):
         from game import rails as RL
         res = []
         for ind in (5.0, 80.0):
-            g = avec(partie(epoque='1870'), '33', 'chemins_fer')
+            g = avec(sans_rails(partie(epoque='1870')), '33', 'chemins_fer')
             g.nodes[GEO.by_name['La Teste-de-Buch']]['owner'] = '33'
             g.factions['33']['res'].update(livres=99999, fer=9999, bois=9999)
             lt = self.troncon(g, 'Bordeaux', 'La Teste-de-Buch')
@@ -1360,8 +1367,8 @@ class VoiesFerrees(unittest.TestCase):
 
     def test_une_ligne_ouverte_dope_ses_villes_et_ravitaille(self):
         from game import rails as RL
-        a = avec(partie(epoque='1870'), '33', 'chemins_fer')
-        b = avec(partie(epoque='1870'), '33', 'chemins_fer')
+        a = avec(sans_rails(partie(epoque='1870')), '33', 'chemins_fer')
+        b = avec(sans_rails(partie(epoque='1870')), '33', 'chemins_fer')
         lt = self.troncon(b, 'Bordeaux', 'La Teste-de-Buch')
         b.rails[lt] = dict(done=True, cut=None)
         bx = GEO.by_name['Bordeaux']
@@ -1377,12 +1384,12 @@ class VoiesFerrees(unittest.TestCase):
 
     def test_les_chemins_de_fer_ne_pressent_plus_toutes_les_routes(self):
         self.assertEqual(R.TECH['chemins_fer']['fx'], {})
-        g = avec(partie(epoque='1870'), '33', 'chemins_fer')
+        g = avec(sans_rails(partie(epoque='1870')), '33', 'chemins_fer')
         self.assertEqual(g.mod('33', 'road_speed'), sum(R.TECH[t]['fx'].get('road_speed', 0) for t in g.factions['33']['techs']))
 
     def ligne_ouverte(self, *techs, owner_b='33'):
         """Une partie où Bordeaux–Langon–La Réole est ouverte et à soi, et une armée à Bordeaux."""
-        g = partie(epoque='1870')
+        g = sans_rails(partie(epoque='1870'))
         g.factions['33']['techs'] = [t for t in g.factions['33']['techs'] if t != 'rail_militaire']   # (déjà là en 1870)
         avec(g, '33', 'chemins_fer', *techs)
         from game import rails as RL
@@ -1475,7 +1482,7 @@ class VoiesFerrees(unittest.TestCase):
 
     def test_une_ia_lance_un_troncon(self):
         from game import rails as RL
-        g = avec(partie(epoque='1870'), '24', 'chemins_fer')
+        g = avec(sans_rails(partie(epoque='1870')), '24', 'chemins_fer')
         ai = g.ais['24']
         for D_ in [o for o in g.factions if o != '24' and g.at_war('24', o)]:
             g.set_status('24', D_, 'paix')
@@ -1499,7 +1506,7 @@ class VoiesFerrees(unittest.TestCase):
 
     def test_un_chantier_abandonne_libere_le_troncon(self):
         from game import rails as RL
-        g = avec(partie(epoque='1870'), '33', 'chemins_fer')
+        g = avec(sans_rails(partie(epoque='1870')), '33', 'chemins_fer')
         avec(g, '40', 'chemins_fer')
         lt = self.troncon(g, 'Bordeaux', 'La Teste-de-Buch')
         g.nodes[GEO.by_name['La Teste-de-Buch']]['owner'] = '33'
@@ -1533,7 +1540,7 @@ class VoiesFerrees(unittest.TestCase):
 
     def test_un_chantier_se_sauvegarde(self):
         from game import rails as RL
-        g = avec(partie(epoque='1870'), '33', 'chemins_fer')
+        g = avec(sans_rails(partie(epoque='1870')), '33', 'chemins_fer')
         g.nodes[GEO.by_name['La Teste-de-Buch']]['owner'] = '33'
         g.factions['33']['res'].update(livres=99999, fer=9999, bois=9999)
         lt = self.troncon(g, 'Bordeaux', 'La Teste-de-Buch')
@@ -1542,6 +1549,22 @@ class VoiesFerrees(unittest.TestCase):
         self.assertEqual(g2.rails, g.rails)
         self.assertEqual(V.from_dict(GEO, {k: v for k, v in json.loads(json.dumps(V.to_dict(g))).items() if k != 'rails'}).rails, {})
 
+
+
+class DepartSelonLEpoque(unittest.TestCase):
+    """Une partie qui commence tard (1813, 1870) part avec les techniques de son époque et, en 1870, les voies ferrées
+    déjà ouvertes : sans quoi la carte de 1870 n'aurait pas un rail."""
+    def test_voies_ferrees_et_techniques_du_depart(self):
+        from game import rails as RL
+        for ep in ('1700', '1790', '1813'):
+            self.assertEqual(partie('33', ep).rails, {}, ep)
+        g = partie('33', '1870')
+        secs = RL.sections(GEO)
+        opened = {sid for sid, st in g.rails.items() if st['done']}
+        self.assertEqual(opened, {sid for sid, s in secs.items() if 0 < s['year'] < 1870})
+        self.assertIn('chemins_fer', g.factions['33']['techs'])
+        self.assertIn('telegraphe', R.marks(g.factions['24']['techs']))
+        self.assertEqual(V.rules_payload()['scenarios']['1870']['techs_before'], 1866)
 
 
 class Decouvertes(unittest.TestCase):

@@ -125,7 +125,7 @@ def rules_payload():
     for k, sc in R.SCENARIOS.items():
         d = datetime.date(*sc['date'])
         dept = d >= datetime.date(*R.DEPT_DATE)
-        scen[k] = dict(title=sc['title'], campaign=sc['campaign'], intro=sc['intro'], year=d.year,
+        scen[k] = dict(title=sc['title'], campaign=sc['campaign'], intro=sc['intro'], year=d.year, techs_before=sc.get('techs_before'),
                        word='département' if dept else 'province',
                        names={c: (f['name'] if dept else R.PROVINCES[c]['name']) for c, f in R.FACTIONS.items()})
     techs = [dict(t, year=R.TECH_YEAR.get(t['id'], 0)) for t in R.TECH.values()]

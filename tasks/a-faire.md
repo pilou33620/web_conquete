@@ -51,7 +51,9 @@ Specs : `SPEC-RENDU.md` (étape 9, parties A à D) et `SPEC-CARTES.md`. Tout ce 
 - [x] Uniformes qui s'usent (boue qui monte en 3 h de combat), habits et boue mouillés qui luisent sous la pluie `ff8ba9a`
 - [x] Cultures de l'époque en bataille : maïs (Chalosse, Béarn), vigne « en foule » avant les plants greffés, pins
   des Landes plantés en lignes `40cd322`
-- [x] Style « carte d'époque » en option (menu ☰, Affichage) : Cassini jusqu'en 1817, état-major ensuite
+- [x] Style « carte d'époque » en option (menu ☰, Affichage) : Cassini jusqu'en 1817, état-major ensuite `86ad431`
+- [x] L'accueil montre la carte de l'époque choisie (technologies déjà acquises, voies ferrées, trains) ; une partie
+  de 1870 commence avec ses 30 tronçons de voie ferrée ouverts
 
 ## Ce qui reste
 

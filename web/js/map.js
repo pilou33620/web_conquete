@@ -6,7 +6,7 @@ import { UnitArt } from './battle/unites.js';
 import { profil } from './battle/qualite.js';
 import { uniform } from './battle/formes.js';
 import { figureKind, portraitGeneral } from './portraits.js';
-import { Epoque, phylloxera, styleCarte } from './epoque.js';
+import { Epoque, phylloxera, styleCarte, startTechs, startRails } from './epoque.js';
 const TILE = 256;
 function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
@@ -503,15 +503,25 @@ export class MapView {
     ctx.fillStyle = this.vig.gr; ctx.fillRect(0, 0, w, h);
   }
 
-  showPreview() {
-    // état initial (avant le choix du département) : chefs-lieux et villes à leur département
+  showPreview(scen) {
+    // état initial (avant le choix du département) : chefs-lieux et villes à leur département, dans le paysage de
+    // l'époque choisie (scen : clé de rules.scenarios) : ce qu'y ont changé les technologies déjà connues, les voies
+    // ferrées déjà ouvertes, le drapeau et le style de carte de l'année
+    if (scen) this.previewScen = scen;
+    const sc = this.rules.scenarios?.[this.previewScen || this.rules.scenario_order?.[0]] || {};
+    const known = startTechs(this.rules, sc), year = sc.year || 1790;
+    const mk = Object.entries(this.rules.visuals || {}).filter(([, v]) => known.has(v.tech)).map(([k]) => k);
     this.state = null;
     this.disp.clear();
     this.preview = { nodes: this.nodes.map(n => ({ id: n.id, o: (n.type === 'capitale' || n.type === 'ville') ? n.dept : 'neutre', f: n.fort, d: 0 })),
-                     me: { code: null }, armies: [], battles: [] };
+                     me: { code: null }, armies: [], battles: [], year,
+                     factions: Object.keys(this.rules.factions).map(code => ({ code, mk })),
+                     rails: { state: startRails(this.m.rails, year).map(sid => [sid, 'fait', 1, null]) } };
     this.owners = this.preview.nodes.map(n => n.o);
     this.ownersKey = '';
     this.rebuildTerritory();
+    if (this.epoque.update(this.preview)) this.invalidateTiles();
+    if (this.styleEra() !== this.era) this.repaint();
   }
 
   // ------------------------------------------------------------------ caméra
@@ -1709,7 +1719,11 @@ export class MapView {
     const st = this.state || this.preview;
     this.ambient.under(ctx, dt, time, this.state);
     this.drawWaterNames(ctx);
-    if (!this.state) { this.drawNodes(ctx, time, st); this.ambient.over(ctx, dt, time, null); this.drawVignette(ctx); this.drawGesture(ctx); return; }
+    if (!this.state) {
+      // (l'écran de départ : la carte de l'époque choisie, voies ferrées et trains compris)
+      this.drawRails(ctx, st); this.ambient.drawTrains(ctx, time, st); this.epoque.draw(ctx, time, st);
+      this.drawNodes(ctx, time, st); this.ambient.over(ctx, dt, time, null); this.drawVignette(ctx); this.drawGesture(ctx); return;
+    }
     this.drawRails(ctx, st);
     this.ambient.drawTrains(ctx, time, st);
     this.epoque.draw(ctx, time, st);
