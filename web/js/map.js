@@ -569,10 +569,10 @@ export class MapView {
     const cx = this.W / 2 - (left / 2) / z, cy = this.H / 2 - (top / 2) / z + 4;
     this.moveTo(cx, cy, z, instant);
   }
-  moveTo(x, y, z, instant = false) {
+  moveTo(x, y, z, instant = false, dur = 650) {
     z = clamp(z ?? this.cam.z, this.minZoom(), 26);
     if (instant) { this.cam = { x, y, z }; this.camAnim = null; return; }
-    this.camAnim = { from: { ...this.cam }, to: { x, y, z }, t0: performance.now(), dur: 650 };
+    this.camAnim = { from: { ...this.cam }, to: { x, y, z }, t0: performance.now(), dur };
   }
   toScreen(x, y) { return [(x - this.cam.x) * this.cam.z + this.vw / 2, (y - this.cam.y) * this.cam.z + this.vh / 2]; }
   toWorld(sx, sy) { return [(sx - this.vw / 2) / this.cam.z + this.cam.x, (sy - this.vh / 2) / this.cam.z + this.cam.y]; }

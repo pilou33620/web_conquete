@@ -2,6 +2,7 @@ import { MapView } from './map.js';
 import { UI } from './ui.js';
 import { Bataille } from './battle/bataille.js';
 import { Tuto } from './tuto.js';
+import { intro } from './intro.js';
 
 const api = {
   get: u => fetch(u, { cache: 'no-store' }).then(r => r.json()),
@@ -188,6 +189,7 @@ async function boot() {
     return;
   }
   document.getElementById('loading').hidden = true;
+  await intro(map, payload.map.nodes);
   await showStart(info);
   announceUpdate(info.update);
 }
