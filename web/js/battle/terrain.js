@@ -106,6 +106,10 @@ export class Terrain {
   // q : profil de qualité graphique (qualite.js) : mémoire laissée aux motifs des sols
   constructor(m, q) {
     this.W = m.W || 3000; this.H = m.H || 2000; this.cell = m.cell || 20;
+    // l'époque (SPEC-SUITE J) : l'année et les marques des deux camps (rules.VISUALS) choisissent les cultures
+    this.year = m.year || 1790; this.marks = m.marks || [[], []];
+    const mk = k => this.marks.some(l => (l || []).includes(k));
+    this.epoque = { mais: mk('mais') && /\((40|64)\)/.test(m.region || ''), foule: !mk('greffe') && this.year < 1885, pinsLignes: mk('landes1857') || this.year >= 1860 };
     this.cols = m.cols || Math.round(this.W / this.cell); this.rows = m.rows || Math.round(this.H / this.cell);
     const n = this.cols * this.rows, remap = cellRemap(m.types);
     const tr = b64(m.t), hr = b64(m.h);
@@ -207,9 +211,11 @@ export class Terrain {
       reg.tone = (hash(reg.parcel, 5, S) * 4) | 0;
       // motif du sol : culture de la saison pour les champs, pré ou prairie de fauche, etc.
       const v = reg.type;
-      reg.tex = v === T.CHAMP ? culture(this.season, hash(reg.parcel, 6, S))
+      // (maïs de Chalosse et du Béarn : la moitié des champs l'été et l'automne ; vigne en foule avant les plants greffés)
+      const maize = this.epoque.mais && (this.season === 'ete' || this.season === 'automne') && hash(reg.parcel, 16, S) < 0.5;
+      reg.tex = v === T.CHAMP ? (maize ? 'mais' : culture(this.season, hash(reg.parcel, 6, S)))
         : v === T.PRE || v === T.VERGER ? (snow ? 'neige' : v === T.PRE && hash(reg.parcel, 7, S) < 0.22 ? 'prairie' : 'herbe')
-        : v === T.VIGNE ? 'vigne' : v === T.LANDE ? 'lande' : v === T.MARAIS ? 'marais' : v === T.SABLE ? 'sable' : v === T.ROCHE ? 'roche'
+        : v === T.VIGNE ? (this.epoque.foule ? 'vigneFoule' : 'vigne') : v === T.LANDE ? 'lande' : v === T.MARAIS ? 'marais' : v === T.SABLE ? 'sable' : v === T.ROCHE ? 'roche'
         : v === T.BOIS || v === T.FORET ? 'sousBois' : v === T.ROUTE || v === T.CHEMIN ? (snow ? 'neige' : 'herbe')
         : v === T.BARRICADE ? 'terre' : v === T.EAU || v === T.GUE ? 'eau' : 'cour';
       // décalage du motif d'une parcelle à l'autre : la répétition ne s'aligne pas
@@ -301,7 +307,9 @@ export class Terrain {
         if (v === T.BOIS && h(10 + k) < 0.18) continue;   // clairières
         // dans les bois, le pied un peu plus au sud : la couronne, peinte au-dessus du pied, couvre alors la case
         const r = r0 + h(22 + k * 3) * (r1 - r0);
-        const x = (i + 0.08 + h(20 + k * 3) * 0.84) * cell, y = (j + 0.08 + h(21 + k * 3) * 0.84) * cell + (wood(v) ? r * 0.7 : 0);
+        let x = (i + 0.08 + h(20 + k * 3) * 0.84) * cell, y = (j + 0.08 + h(21 + k * 3) * 0.84) * cell + (wood(v) ? r * 0.7 : 0);
+        // après la loi de 1857, les pins des Landes sont semés en lignes : rangs tous les 6,7 m, un peu de jeu
+        if (wood(v) && this.epoque.pinsLignes && this.landesLike()) { x = (i + ((k % 3) + 0.5) / 3) * cell + (h(20 + k * 3) - 0.5) * 1.2; y = (j + ((((k / 3) | 0) % 3) + 0.5) / 3) * cell + (h(21 + k * 3) - 0.5) * 1.2; }
         // pins dans les landes et en montagne ; feuillus ailleurs (en hiver, ils sont nus)
         const kind = v === T.LANDE || (wood(v) && this.landesLike() && h(40 + k) < 0.85) ? 'parasol'
           : wood(v) && montagne && this.h[c] > 30 && h(40 + k) < 0.8 ? 'sapin' : snow ? 'nu' : 'feuillu';

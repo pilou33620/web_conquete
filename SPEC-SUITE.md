@@ -545,6 +545,11 @@ la voie et les poteaux sont du décor (les cases de la carte ne changent pas : p
 peuvent passer sous un bosquet ; pas de cultures de l'époque (maïs, vignes palissées, pins en lignes) ni de meules
 en plus de celles qui existent, ni de ponts de pierre à la place des gués : ils demandent le générateur (avec F9).
 
+**Cultures de l'époque, 21/10/2026** (`terrain.js` epoque, `textures.js` vigneFoule) : vigne « en foule » (ceps épars
+et serrés, sans rangs) avant les plants greffés et 1885, en rangs palissés ensuite ; maïs dans la moitié des champs
+l'été et l'automne dans les Landes et les Basses-Pyrénées chez un camp qui a la technologie ; pins des Landes semés
+en lignes (rangs de 6,7 m) avec la loi de 1857 ou après 1860. Rien ne change les cases de la carte.
+
 ---
 
 ## Partie K : vérifications et dettes

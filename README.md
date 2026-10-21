@@ -545,7 +545,10 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   boue laissée par les troupes est gardée avec la bataille : une bataille rechargée retrouve ses traces.
   Le décor suit l'époque et les technologies des deux camps : poteaux télégraphiques et voie ferrée le long de la
   grand-route, cheminées d'usine à l'horizon, ambulances à l'arrière (à croix rouge après la convention de Genève),
-  ballon captif au-dessus de l'état-major des aérostiers, parapet de terre devant l'infanterie retranchée.
+  ballon captif au-dessus de l'état-major des aérostiers, parapet de terre devant l'infanterie retranchée. Les
+  cultures aussi : vignes « en foule » (ceps épars, sans rangs) jusqu'aux plants greffés, puis en rangs palissés ;
+  maïs dans la moitié des champs de Chalosse et du Béarn l'été et l'automne ; pins des Landes semés en lignes après
+  la loi de 1857.
 - **En haut** : l'heure (et la nuit qui approche), le temps, le rapport de forces (l'ennemi : seulement ce que
   vous en voyez), le journal (repliable, et complet derrière son bouton), l'aide, **« Finir auto. »** (vos officiers
   achèvent la bataille en accéléré) et **« Décrocher »** (toute l'armée quitte le terrain), chacun avec confirmation.

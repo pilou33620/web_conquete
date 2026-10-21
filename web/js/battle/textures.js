@@ -125,6 +125,22 @@ export function texture(kind, L, pal, season) {
     }
     case 'ble': case 'bleVert': case 'avoine': case 'chaume': case 'semis': case 'labour': case 'mais':
       return crop(kind, size, L, pal, season, S, n);
+    case 'vigneFoule': {
+      // la vigne « en foule » d'avant le phylloxéra (SPEC-SUITE J) : des ceps plantés serrés et sans ordre, provignés
+      const soil = hexRgb(pal.vigneSol), leaf = hexRgb(pal.vigneRang), v = n([[8, 0.05], [1.5, 0.06], [0.3, 0.06]]);
+      const cv = paintBase(size, soil, v), g = cv.getContext('2d');
+      if (snow) return cv;
+      // (de loin, les ceps ne feraient qu'un point : un voile de feuillage, moucheté)
+      if (L < 4) { g.fillStyle = css(leaf, 0.62); g.fillRect(0, 0, size, size); }
+      const count = Math.min(16000, Math.round(size * size / (L * L) * (L < 4 ? 0.4 : 0.95)));
+      for (let k = 0; k < count; k++) {
+        const x = hash(k, 11, S) * size, y = hash(k, 12, S) * size, rr = (0.28 + hash(k, 13, S) * 0.2) * L;
+        const c = season === 'automne' ? mixc(leaf, [205, 160, 60], hash(k, 14, S) * 0.6) : mixc(leaf, mul(leaf, 0.8), hash(k, 14, S));
+        g.fillStyle = css(mul(soil, 0.7), 0.6); g.beginPath(); g.arc(x + rr * 0.3, y + rr * 0.35, rr, 0, TAU); g.fill();
+        g.fillStyle = css(c); g.beginPath(); g.arc(x, y, rr * 0.85, 0, TAU); g.fill();
+      }
+      return cv;
+    }
     case 'vigne': {
       const soil = hexRgb(pal.vigneSol), v = n([[8, 0.05], [1.5, 0.06], [0.3, 0.06]]);
       const cv = paintBase(size, soil, v), g = cv.getContext('2d');
