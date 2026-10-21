@@ -1722,7 +1722,12 @@ export class MapView {
     if (!this.state) {
       // (l'écran de départ : la carte de l'époque choisie, voies ferrées et trains compris)
       this.drawRails(ctx, st); this.ambient.drawTrains(ctx, time, st); this.epoque.draw(ctx, time, st);
-      this.drawNodes(ctx, time, st); this.ambient.over(ctx, dt, time, null); this.drawVignette(ctx); this.drawGesture(ctx); return;
+      this.drawNodes(ctx, time, st); this.drawBattles(ctx, dt, time); this.drawParticles(ctx, dt);   // (la bataille de la cinématique, intro.js)
+      for (const t of st.tokens || []) {
+        const [x, y] = this.toScreen(t.x, t.y);
+        ctx.save(); ctx.translate(x, y); this.drawToken(ctx, t, t, this.colors[t.o] || '#999', false, time); ctx.restore();
+      }
+      this.ambient.over(ctx, dt, time, null); this.drawVignette(ctx); this.drawGesture(ctx); return;
     }
     this.drawRails(ctx, st);
     this.ambient.drawTrains(ctx, time, st);
@@ -2729,7 +2734,7 @@ export class MapView {
 
   drawBattles(ctx, dt, time) {
     const z = this.cam.z;
-    for (const b of this.state.battles) {
+    for (const b of (this.state || this.preview).battles) {
       const [x, y] = this.toScreen(b.x, b.y);
       if (x < -100 || y < -100 || x > this.vw + 100 || y > this.vh + 100) continue;
       // fumée

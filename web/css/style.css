@@ -585,18 +585,21 @@ body.modal-event #proposals { display: none; }   /* une décision à prendre : l
 
 /* ------------------------------------------------------------- cinématique d'ouverture (intro.js) */
 #intro { position: absolute; inset: 0; z-index: 55; cursor: pointer; display: grid; place-items: center;
-  background: radial-gradient(ellipse at center, rgba(20,22,24,0) 35%, rgba(20,22,24,.75) 100%);
-  animation: in-ouvre 1.6s ease-out both; transition: opacity .5s; }
+  background: radial-gradient(ellipse at center, rgba(20,22,24,0) 35%, rgba(20,22,24,.75) 100%); transition: opacity .5s; }
 #intro.sortie { opacity: 0; pointer-events: none; }
-@keyframes in-ouvre { from { background-color: var(--nuit); } to { background-color: transparent; } }
+/* noir : l'ouverture, puis le fondu qui cache le passage de 1700 à 1870 */
+.in-noir { position: absolute; inset: 0; background: var(--nuit); opacity: 0; animation: in-ouvre 1.4s ease-out both, in-fondu 1s ease-in-out 4s both; }
+@keyframes in-ouvre { from { opacity: 1; } }
+@keyframes in-fondu { 50% { opacity: 1; } }
 .in-bande { position: absolute; left: 0; right: 0; top: 0; height: 11vh; background: #000; animation: in-bande 1.2s ease-out both; }
 .in-bande.bas { top: auto; bottom: 0; }
 @keyframes in-bande { from { height: 50vh; } }
 .in-carton, .in-titre { grid-area: 1 / 1; margin: 0 16px; text-align: center; opacity: 0; text-shadow: 0 2px 12px #000, 0 0 3px #000; }
-.in-carton { font-family: var(--f-texte); font-style: italic; font-size: clamp(20px, 3.4vw, 34px); color: var(--papier);
-  animation: in-carton 2.6s ease-in-out var(--d) both; }
-@keyframes in-carton { 0% { opacity: 0; transform: translateY(8px); } 20%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+.in-carton { align-self: end; margin-bottom: calc(11vh + 36px); font-family: var(--f-texte); font-style: italic;
+  font-size: clamp(18px, 2.8vw, 28px); color: var(--papier); animation: in-carton 3.4s ease-in-out var(--d) both; }
+.in-carton b { font-family: var(--f-titre); font-style: normal; font-weight: 400; font-size: 1.5em; color: var(--laiton-clair); }
+@keyframes in-carton { 0% { opacity: 0; transform: translateY(8px); } 15%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 .in-titre { font-family: var(--f-titre); font-weight: 400; font-size: clamp(56px, 12vw, 132px); color: var(--laiton-clair); letter-spacing: .06em;
-  animation: in-titre 1.8s ease-out 8.2s both; }
+  animation: in-titre 1.8s ease-out 9.2s both; }
 @keyframes in-titre { from { opacity: 0; transform: scale(1.15); letter-spacing: .3em; } to { opacity: 1; transform: none; } }
 .in-passer { position: absolute; right: 16px; bottom: calc(11vh + 10px); font-size: 14px; color: var(--papier-2); opacity: .7; }
