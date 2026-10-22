@@ -323,3 +323,11 @@ test('voie ferrée : la section du panneau de la ville (SPEC-TECH.md, phase 2a)'
   ui.st.rails = null;
   assert.equal(ui.railHtml(0), '');
 });
+
+test('valeurs : la portée de justesse (demi-justesse D50 de l’arme), dans la fiche et dans le tableau', () => {
+  const s = { ...VLIGNE, jus: 180 };
+  const h = panneau([unite('ligne', { stats: s })], { phase: 'combat' }, { showVals: true });
+  assert.ok(h.includes('Portée de justesse') && h.includes('>180 m<'), 'la ligne de la fiche');
+  assert.ok(h.includes('bout portant'), 'la bulle de la Précision dit qu’elle vaut à bout portant');
+  assert.ok(valeursTable([['Ligne', s]]).includes('<td>180 m</td>'), 'une colonne du tableau');
+});

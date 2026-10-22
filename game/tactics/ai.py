@@ -44,7 +44,9 @@ prudent → harcèlement plus tôt, audacieux → contre-offensive plus tôt)
   contre un village, sans attendre de brèche), diversion (une vraie seconde attaque contre un village), enfants perdus
   (les légers) en tête, puis les colonnes deux par deux, quand les défenseurs sont usés, puis le cœur : on charge à la
   baïonnette ceux qui le tiennent encore (cavaliers compris ; une charge arrêtée court est relancée), on fusille les
-  autres ; les fuyards ralliés retournent à l'assaut en cours ; nouvelle vague si l'assaut est repoussé ou si tout
+  autres ; la brèche emportée, un bataillon d'assaut s'y loge (ordre « tenir », gabions et sacs à terre :
+  battle.LOGEMENT_K) et la garde même si l'assaut reflue, la garnison l'en chasse à la baïonnette (_lodge,
+  _breach_counter) ; les fuyards ralliés retournent à l'assaut en cours ; nouvelle vague si l'assaut est repoussé ou si tout
   piétine, après un vrai regroupement ; repoussé sans plus de vague : la place est investie (les batteries battent toujours le mur), un
   dernier assaut si une brèche neuve s'ouvre ou si la garnison est épuisée, sinon on se retire dans les lignes au bout
   de 30 min (1 h si les batteries peuvent encore ouvrir une brèche ; à la tombée de la nuit au plus tard) ;
@@ -131,6 +133,9 @@ Pendant la bataille
   (l'ennemi a perdu plus d'hommes que nous, à l'aune de l'échange ordinaire où l'assaillant perd 20 % de plus ; rapport
   de forces vu favorable ; ennemi en déroute ou ébranlé ; réserves fraîches) ou qu'on tient une bonne position en
   défense (crête, haies, murets, bois, bâti) ; sans rien de tout cela, on décroche 3 % plus tôt.
+- Reprise en cours de bataille (« Finir automatiquement », _adopt) : chacun garde sa place ; en défense, les réglages
+  du déploiement reviennent d'après la situation (_adopt_def) : écran de tirailleurs et batteries des ailes en feux
+  croisés si l'ennemi est encore à plus de 900 m, contre-pente, feu de salve.
 
 Niveaux (battle.difficulty ; spec['ai_levels'] = [niveau du camp 0, du camp 1] et spec['ai_tweak'] pour les essais).
 Ils ne changent que la qualité des décisions, jamais les dégâts :
@@ -162,7 +167,7 @@ Ils ne changent que la qualité des décisions, jamais les dégâts :
   attendaient la vague suivante. Corrigé : 4 places prises sur 24 au banc à trois graines, 4 sur les 8 où la brèche
   est abordable et l'assaillant nettement plus nombreux, aucune contre une garnison presque aussi forte que lui ; la
   graine 2 a une place cernée d'eau, où les colonnes n'abordent pas.
-  Ni attaque à l'aube, ni escalade de diversion, ni logement dans la brèche, ni redoutes tenues, ni cavalerie hors du
+  Ni attaque à l'aube, ni escalade de diversion, ni redoutes tenues, ni cavalerie hors du
   village, ni choix de cibles propre aux canons du rempart : spécifiés, pas réalisés.)
   (L'ordre oblique a été retiré, et les essais d'aile refusée, d'attaque concentrée de flanc au bout de l'aile ennemie
   et de contre-batterie d'abord n'ont pas été gardés : sur 96 batailles chacun, ils faisaient perdre l'assaillant plus
@@ -876,9 +881,11 @@ def _reverse_slope(b, side, mem, L, line, fd):
                 break
         if not spot:
             continue
-        b.deploy(side, [u.id], spot[0], spot[1], fd, 'ligne')
+        if b.phase == 'deploiement':
+            b.deploy(side, [u.id], spot[0], spot[1], fd, 'ligne')
+            spot = (u.x, u.y)
         crest[u.id] = [round(x0, 1), round(y0, 1)]
-        mem['post'][u.id] = [round(u.x, 1), round(u.y, 1), round(fd, 3)]
+        mem['post'][u.id] = [round(spot[0], 1), round(spot[1], 1), round(fd, 3)]   # (en plein combat, il s'y porte)
     if crest:
         _note(b, mem, f"la ligne attend à l'abri derrière la crête ({len(crest)} bataillon"
                       f"{'s' if len(crest) > 1 else ''}).")
@@ -1285,6 +1292,46 @@ def _adopt(b, side, mem, L, lname, us):
     mem['width'] = round(max(200.0, 2 * max([abs(v) for k, v in mem['lat'].items()
                                                if mem['role'].get(k) == 'ligne'] or [100.0]) + 120))
     _note(b, mem, f"l'IA reprend le commandement : {PLAN_LABEL[plan]}.")
+    if side == 1 and not pl:
+        _adopt_def(b, side, mem, L, us, plan)
+
+
+def _adopt_def(b, side, mem, L, us, plan):
+    """« Finir automatiquement » en défense, la bataille engagée : les réglages du déploiement d'après la situation
+    présente, sans redéployer personne (les troupes s'y portent) : écran de tirailleurs, contre-pente, feu de salve,
+    feux croisés ; l'écran et les batteries des ailes seulement si l'ennemi est encore loin."""
+    roles, fd, ax, ay = mem['role'], mem['fd'], mem['ax'], mem['ay']
+    era = mem['era']
+    line = [u for u in us if roles.get(u.id) == 'ligne' and u.valid]
+    if not line:
+        return
+    dl = sum(_rel(u.x, u.y, ax, ay, fd)[0] for u in line) / len(line)   # (profondeur de la ligne)
+    far = not any(e.valid and e.cls in ('inf', 'cavalerie') and any(_d2(e.x, e.y, u.x, u.y) < 900 ** 2 for u in line)
+                  for e in b.visible_enemies(side))
+    if L['screen']:
+        for u in us:
+            if roles.get(u.id) != 'avant' or not u.valid:
+                continue
+            dep, lat = _rel(u.x, u.y, ax, ay, fd)
+            d = min(550.0, max(150.0, 1.6 * b.ranges(u)[0])) if era else 110.0   # (comme au déploiement)
+            if far and dep < dl + d - 50:
+                x0, y0 = _clamp(*_at(ax, ay, fd, dl + d, lat))
+                if L['terrain']:
+                    x0, y0 = _cover_spot(b, side, x0, y0, fd, 90 * L['r_k'])
+                mem['post'][u.id] = [round(x0, 1), round(y0, 1), round(fd, 3)]
+            mem.setdefault('scr', {})[u.id] = [0, 0]   # (_screen le replie aussitôt si l'ennemi est trop près)
+    if plan == 'tenir' and L['cp'] and era == 1:
+        _reverse_slope(b, side, mem, L, line, fd)
+    if plan != 'harcelement' and L['volley_def'] and era < 2:
+        b.order(side, [u.id for u in line if u.cls == 'inf'], 'fire', mode='volley')
+    arts = sorted((u for u in us if roles.get(u.id) == 'art' and u.valid), key=lambda u: mem['lat'].get(u.id, 0.0))
+    if plan == 'tenir' and L['xfire'] and len(arts) >= 2 and far:
+        # feux croisés : les batteries des ailes au bout de la ligne, pour prendre l'assaut d'écharpe
+        lats = [mem['lat'].get(u.id, 0.0) for u in line]
+        for u, lat in ((arts[0], min(lats)), (arts[-1], max(lats))):
+            mem['post'][u.id] = [round(c, 1) for c in _clamp(*_at(ax, ay, fd, dl - 20, lat))] + [round(fd, 3)]
+            mem['lat'][u.id] = round(lat, 1)
+        _note(b, mem, "les batteries des ailes se portent au bout de la ligne pour croiser leurs feux.")
 
 
 def _adopt_unit(mem, u):
@@ -2923,9 +2970,14 @@ def _breach_counter(b, side, mem, L, us, sit, busy):
     """Contre-attaque dans la brèche (D3) : l'assaillant qui y flotte est rejeté à la baïonnette par la réserve, la
     coupure et les flancs de la brèche, qui rentrent ensuite à leur poste sans poursuivre. Difficile : tous ensemble."""
     roles = mem['role']
+    pl = b.place_info()
     for q in mem.get('breach') or []:
-        tg = [e for e in sit['seen'] if e.cls == 'inf' and _d2(e.x, e.y, q[0], q[1]) < 70 ** 2 and
-              (e.morale < 60 or e.men < 0.75 * e.men0 or e.state == 'melee')]
+        # (et celui qui s'arrête au débouché pour s'y loger : on l'en chasse avant qu'il se retranche)
+        r_q = math.hypot(q[0] - pl['x'], q[1] - pl['y'])
+        tg = [e for e in sit['seen'] if e.cls == 'inf' and (
+              (_d2(e.x, e.y, q[0], q[1]) < 70 ** 2 and (e.morale < 60 or e.men < 0.75 * e.men0 or e.state == 'melee')) or
+              (_d2(e.x, e.y, q[0], q[1]) < 110 ** 2 and e.state in ('repos', 'feu', 'recharge') and
+               math.hypot(e.x - pl['x'], e.y - pl['y']) < r_q + 10))]   # (en deçà du mur)
         if not tg:
             continue
         e = min(tg, key=lambda f: f.morale)
@@ -3299,14 +3351,26 @@ def _think_place_att(b, side, mem, L, us, foes, sit, want, busy):
                 b.withdraw(side)
                 _note(b, mem, why)
                 return
+    lg = _lodge(b, side, mem, L, us, sit, assault, walled, ph)
     t_go = mem.get('t_go', 0)
     rank = {u.id: k for k, u in enumerate(sorted([u for u in us if roles.get(u.id) == 'assaut'], key=_quality,
                                                  reverse=True))}
     # (le plus proche du cœur s'y tient, les autres nettoient les maisons alentour)
-    keep = min([u for u in assault if u.valid] or [None], key=lambda v: v and _d2(v.x, v.y, heart[0], heart[1]))
+    keep = min([u for u in assault if u.valid and u.id != lg] or [None],
+               key=lambda v: v and _d2(v.x, v.y, heart[0], heart[1]))
     for u in us:
         r = roles.get(u.id)
         p = mem['post'].get(u.id)
+        if u.id == lg:
+            # le logement tient la brèche, retranché (ordre « tenir »), quoi qu'il arrive à l'assaut
+            x, y = mem['lodge'][1], mem['lodge'][2]
+            if _d2(u.x, u.y, x, y) < 25 ** 2 and u.state not in ('melee', 'charge'):
+                if not (u.order and u.order.get('kind') == 'hold') and not u.path:
+                    b.order(side, [u.id], 'hold')
+                busy.add(u.id)   # (il ne sort pas charger : il garde ce qui est pris)
+            else:
+                want[u.id] = [x, y, fd, 'ligne', False]
+            continue
         if r in ('assaut', 'vague2'):
             # deux colonnes de front par brèche (un passage étroit), les suivantes une minute après
             lag = 60 * (rank.get(u.id, 0) // 2) if r == 'assaut' else 150
@@ -3384,6 +3448,40 @@ def _think_place_att(b, side, mem, L, us, foes, sit, want, busy):
             if not mem['notes'].get('coeur'):
                 mem['notes']['coeur'] = 1
                 _note(b, mem, f"{u.name} atteint le cœur de la place.")
+
+
+def _lodge(b, side, mem, L, us, sit, assault, walled, ph):
+    """Logement dans la brèche (normal, difficile ; à la Vauban) : la brèche emportée — des nôtres au débouché, plus un
+    défenseur dessus —, un bataillon d'assaut s'y loge et s'y retranche derrière des gabions et des sacs à terre
+    (battle.LOGEMENT_K, après battle.ENTRENCH_T à l'arrêt) pendant que les autres poussent vers le cœur ; il garde la
+    brèche si l'assaut reflue. Perdu (en déroute), on en loge un autre quand la brèche est de nouveau à nous. → id du
+    logement ou None."""
+    lg = mem.get('lodge')
+    lodged = b.spec.setdefault('logement', [])
+    if lg:
+        u = b.unit(lg[0])
+        if u is not None and u.valid and mem['role'].get(u.id) in ('assaut', 'vague2'):
+            return u.id
+        mem['lodge'] = None
+        if lg[0] in lodged:
+            lodged.remove(lg[0])
+        _note(b, mem, "le logement de la brèche est perdu.")
+    if not walled or L['n'] < 1 or ph != 'assaut':
+        return None
+    bin_ = mem['bin']
+    near = [u for u in assault if u.valid and u.state not in ('melee', 'charge') and u.busy <= 0 and
+            _d2(u.x, u.y, bin_[0], bin_[1]) < 80 ** 2]
+    if len([u for u in assault if u.valid]) < 2 or not near or \
+            any(e.valid and e.cls in ('inf', 'cavalerie') and _d2(e.x, e.y, bin_[0], bin_[1]) < 80 ** 2
+                for e in sit['seen']):
+        return None
+    u = min(near, key=lambda v: _d2(v.x, v.y, bin_[0], bin_[1]))
+    mem['lodge'] = [u.id, bin_[0], bin_[1]]
+    lodged.append(u.id)
+    _stat(mem, 'logement')
+    _note(b, mem, f"la brèche est emportée : {u.name} s'y loge et se retranche (gabions, sacs à terre), les autres "
+                  f"poussent vers le cœur.")
+    return u.id
 
 
 def _wave(mem, us):

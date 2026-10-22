@@ -955,7 +955,7 @@ class Sauvegarde(unittest.TestCase):
 
 class CompleterLesRangs(unittest.TestCase):
     """« Compléter les rangs » : les conscrits du dépôt rejoignent l'armée dans une de nos villes, en 1 tour (2 au-delà
-    de 30 % de pertes) ; ils diluent l'expérience des anciens ; un régiment anéanti ne revient pas."""
+    de 30 % de pertes) ; ils diluent l'expérience des anciens ; un régiment anéanti ne revient pas tout seul."""
 
     def prete(self, g, a, part, code=None):
         code = code or g.player
@@ -971,10 +971,17 @@ class CompleterLesRangs(unittest.TestCase):
     def plein(self, a):
         return sum(r['n'] for r in a['regs']) / sum(r['max'] for r in a['regs'])
 
+    def pied(self, a):
+        """Cavalerie et artillerie au complet : seules les pertes de l'infanterie comptent (pas de remontes)."""
+        for r in a['regs']:
+            if AA.monte(r):
+                r['n'] = r['max']
+
     def test_un_tour_si_peu_de_pertes(self):
         g = partie()
         a = armee(g)
         nid = self.prete(g, a, 0.8)
+        self.pied(a)
         rg = AA.options(g, a, nid)['rg']
         self.assertEqual((rg['t'], rg['why']), (1, ''))
         ok, msg = AA.command(g, g.player, a['id'], 'rangs')
@@ -990,6 +997,7 @@ class CompleterLesRangs(unittest.TestCase):
         g = partie()
         a = armee(g)
         nid = self.prete(g, a, 0.5)
+        self.pied(a)
         o = AA.options(g, a, nid)
         self.assertEqual(o['rg']['t'], 2)
         self.assertEqual(o['garde']['armes'], AA.garde_info(g.nodes[nid])[1], 'le prix de la garde ne prend pas celui des renforts')
@@ -1085,6 +1093,7 @@ class CompleterLesRangs(unittest.TestCase):
         g = partie()
         a = armee(g)
         self.prete(g, a, 0.8)
+        self.pied(a)
         d = next(d for d in V.player_state(g)['armies'] if d['id'] == a['id'])
         self.assertEqual(d['ax']['rg']['why'], '')
         self.assertTrue(AA.command(g, g.player, a['id'], 'rangs')[0])
@@ -1771,6 +1780,105 @@ class ValeursEnCampagne(unittest.TestCase):
         neuf = next(r for r in n['garrison'] if r['id'] not in ids)
         d2 = next(x for x in V.player_state(g)['nodes'] if x['id'] == cap)
         self.assertEqual(next(r[10] for r in d2['g'] if r[0] == neuf['id']), d['rs']['ligne'])
+
+
+class RemontesEtRegimentsReleves(unittest.TestCase):
+    """Remontes : cavalerie et attelages attendent leurs chevaux un tour de plus. Régiments anéantis : relevés sous leur
+    numéro autour d'un cadre du dépôt, pendant environ un mois après leur perte."""
+    prete, plein = CompleterLesRangs.prete, CompleterLesRangs.plein
+
+    def test_remontes_un_tour_de_plus(self):
+        g = partie()
+        a = armee(g)
+        nid = self.prete(g, a, 0.8)
+        rg = AA.options(g, a, nid)['rg']
+        self.assertEqual((rg['t'], rg['rm']), (2, 1))
+        ok, msg = AA.command(g, g.player, a['id'], 'rangs')
+        self.assertIn('remontes', msg)
+        jouer_mois(g)
+        for r in a['regs']:
+            if AA.monte(r):
+                self.assertLess(r['n'], r['max'] - 5, 'les chevaux ne sont pas encore là')
+            else:
+                self.assertAlmostEqual(r['n'], r['max'], delta=1, msg="l'infanterie n'attend pas")
+        self.assertTrue(a['rg'])
+        jouer_mois(g)
+        self.assertFalse(a['rg'])
+        self.assertAlmostEqual(self.plein(a), 1.0, delta=0.01)
+        a['rg'] = dict(node=nid, until=g.t, men=0, t0=g.t)   # renforts d'une ancienne sauvegarde (sans 'ui'), arrivés
+        AA.tick(g, 2.0)
+        self.assertFalse(a['rg'])
+
+    def test_renfort_passif_plus_lent_a_cheval(self):
+        g = partie()
+        cav, inf = g.new_reg('cavalerie', 100), g.new_reg('ligne', 150)
+        g.replenish(g.player, [cav, inf], 1.0, 0.04)
+        self.assertAlmostEqual((cav['n'] - 100) / cav['max'], R.REPL_MONTE * (inf['n'] - 150) / inf['max'])
+
+    def test_releve_sous_son_numero(self):
+        g = partie()
+        a = armee(g)
+        p = g.player
+        nid = self.prete(g, a, 1.0)
+        g.factions[p]['res']['livres'] = 1e4
+        r = a['regs'][1]
+        rid, typ = r['id'], r['type']
+        self.assertIn('Aucun régiment', AA.relever_why(g, p, a))
+        r['n'] = 2.0
+        g.prune(a)
+        self.assertEqual(len(a['regs']), 2)
+        self.assertEqual(a['morts'], [[1, typ, rid, g.t]])
+        rv = AA.options(g, a, nid)['rv']
+        self.assertEqual((rv['why'], rv['regs']), ('', [[1, typ]]))
+        self.assertEqual(rv['cost']['livres'], g.unit_cost(p, typ)['livres'])
+        av = g.factions[p]['res']['livres']
+        g2 = V.from_dict(GEO, json.loads(json.dumps(V.to_dict(g))))   # la sauvegarde garde les régiments à relever
+        self.assertEqual(g2.armies[a['id']]['morts'], a['morts'])
+        ok, msg = AA.command(g, p, a['id'], 'relever')
+        self.assertTrue(ok, msg)
+        self.assertIn('1er ', msg)
+        self.assertAlmostEqual(g.factions[p]['res']['livres'], av - rv['cost']['livres'])
+        neuf = a['regs'][1]
+        self.assertEqual((neuf['id'], neuf['type']), (rid, typ), 'même rang, même numéro')
+        self.assertAlmostEqual(neuf['n'], AA.RNG_CADRE * neuf['max'])
+        self.assertEqual(neuf['xp'], R.UNITS[typ].get('xp0', 0))
+        self.assertTrue(a['rg'], 'les recrues arrivent comme pour compléter les rangs')
+        self.assertNotIn('morts', a)
+        jouer_mois(g, 2)
+        self.assertAlmostEqual(neuf['n'], neuf['max'], delta=1)
+
+    def test_refus_et_oubli(self):
+        g = partie()
+        a = armee(g)
+        p = g.player
+        self.prete(g, a, 1.0)
+        ro = [[r['id'], r['type']] for r in a['regs']]
+        a['regs'].pop()
+        g.bury(a, ro)
+        g.bury(a, ro)
+        self.assertEqual(len(a['morts']), 1, 'noté une seule fois')
+        g.factions[p]['res']['livres'] = 0
+        self.assertIn('Il faut', AA.relever_why(g, p, a))
+        g.factions[p]['res']['livres'] = 1e4
+        a['at_node'] = None
+        self.assertIn("à l'arrêt", AA.relever_why(g, p, a))
+        self.prete(g, a, 1.0)
+        self.assertEqual(AA.relever_why(g, p, a), '')
+        a['morts'][0][3] = g.t - AA.MORTS_JOURS - 1
+        self.assertIn('Aucun régiment', AA.relever_why(g, p, a), 'trop ancien : oublié')
+
+    def test_bataille_note_les_regiments_perdus(self):
+        g = partie()
+        a, b = armee(g, '24'), armee(g, '40')
+        a['state'] = b['state'] = 'idle'
+        g.start_battle([a], [b], a['x'], a['y'])
+        bt = g.battles[a['battle']]
+        self.assertEqual(len(a['ro']), len(a['regs']))
+        lost = a['regs'].pop(0)   # (le bilan d'une bataille commandée les retire avant end_battle : bridge.finish)
+        g.end_battle(bt, 1)
+        self.assertIn(a['id'], g.armies)
+        self.assertIn([0, lost['type'], lost['id']], [m[:3] for m in a.get('morts', [])])
+        self.assertNotIn('ro', a)
 
 
 if __name__ == '__main__':

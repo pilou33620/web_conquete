@@ -59,16 +59,18 @@ Reste à faire :
   - avec le goulet, la prise d'assaut coûte plus cher mais devient rare (1 sur 12 en rôle « att ») : les places
     prises le sont surtout par reddition ; à surveiller sur plus de graines ;
   - certaines brèches sont franchies en quelques minutes (1700, graine 2) : la garnison ne les garnit pas assez vite ;
-  - au village barricadé, l'assaillant à deux contre un l'emporte en une heure à peu de frais ; le logement dans la
-    brèche (A4) aiderait à garder ce qui est pris.
-- **En rase campagne, l'assaillant gagne encore peu** : 3 batailles sur 8, et aucune en 1870. Il faut vérifier sur
-  plus de graines (`--graines 3`), parce qu'une seule graine fait beaucoup bouger les chiffres.
-- **« Finir automatiquement »** : l'armée du joueur reprise en cours de route n'a pas les réglages du déploiement
-  (écran de tirailleurs, contre-pente, salve, feux croisés).
+  - au village barricadé, l'assaillant à deux contre un l'emporte en une heure à peu de frais.
+- **En rase campagne, l'assaillant gagne peu** : 1 bataille sur 24 (`--lieux bataille --graines 3`), et aucune en 1870.
+  Il en gagnait 4 avant que les technologies de combat ne jouent dans les batailles commandées : le feu de rang et le
+  feu de peloton servent surtout la troupe en ligne, donc le défenseur (c'est assez juste historiquement). Essai
+  écarté : faire aller l'assaillant jusqu'à 20 % de pertes réelles et serrer la position par bonds en 1870
+  n'apportait aucune victoire de plus, et allongeait les batailles (334 min au lieu de 207, calcul +60 %). Pistes : un
+  assaillant qui choisit mieux son point d'attaque, et des batailles d'essai où l'assaillant est nettement plus fort.
+- **« Finir automatiquement »** : fait, en défense (_adopt_def : écran, contre-pente, salve, feux croisés).
+- **Logement dans la brèche** : fait (_lodge ; battle.LOGEMENT_K, spec['logement']).
 - **Laissé de côté :**
   - la batterie de réserve ;
   - les enfants perdus pris dans un bataillon de ligne faute de légers ;
-  - le logement dans la brèche ;
   - les redoutes tenues ;
   - la cavalerie postée hors du village ;
   - le choix de cibles propre aux canons du rempart ;
@@ -963,22 +965,18 @@ Les assauts sur une brèche praticable réussissaient souvent, à un prix très 
 - Pertes par arme dans le banc d'équilibre : non vérifiées une à une. Seuls le total et la durée l'ont été.
 
 ### Valeurs chiffrées (game/tactics/stats.py, web/js/valeurs.js)
-- La « Précision » affichée est celle à bout portant. La chute avec la distance, propre à chaque arme, n'apparaît pas :
-  un fusil rayé est noté 1,18 fois un silex, mais il fait 2,28 fois plus de pertes à 80 m. Il faut le dire dans la
-  bulle d'aide, par exemple avec la demi-justesse D50 dans l'aide de la Portée.
-- Les technologies de combat ne sont pas comptées dans les batailles commandées : Feu de rang, Ordre mixte,
-  Cuirassiers, Artillerie à cheval, inf_power, all_power. Elles ne servent qu'à la résolution automatique, et donc
-  ne figurent pas dans les valeurs. Il faut les faire passer bridge → spec → battle.py, puis les lire dans stats.py.
-- stats.py recopie des chiffres de battle.py : 0,8 + xp/250, l'élan 2,2, les traits de général. battle.py devrait
-  plutôt appeler stats.xp_k et stats.ELAN, pour éviter que les deux dérivent.
+- Fait : la « Portée de justesse » (demi-justesse D50) sur la fiche ; les technologies de combat passent dans les
+  batailles commandées (spec['tech'], stats.TECH_MODS) et sur la fiche, en bataille comme en campagne ; battle.py
+  appelle stats.xp_k et stats.ELAN.
+- Restent : les traits de général écrits en double (battle.py et stats.py) ; le +30 % du carré contre la cavalerie et
+  la mitraille de l'artillerie à cheval absents de la fiche ; legere_cover et mountain pas passés à la bataille.
 - Les étoiles d'expérience ne se comptent pas de la même façon : xp/20 en bataille (0 à 5), et 10/30/60 en campagne (0 à 3).
 
 ### Compléter les rangs
-- Laissés de côté exprès :
-  - remontes plus lentes pour la cavalerie et l'artillerie ;
-  - coût en livres ;
-  - ligne « rangs complétés » dans le bilan du mois ;
-  - recréation des régiments anéantis.
+- Fait : remontes (un tour de plus pour la cavalerie et l'artillerie qui ont perdu plus de 10 %, renfort au repos
+  deux fois moins vite) ; « Relever le régiment anéanti » (40 jours, coût d'une levée, sous son numéro).
+- Laissés de côté : coût en livres des remontes ; ligne « rangs complétés » dans le bilan du mois ; régiments d'une
+  armée fusionnée ou entièrement anéantie ; le nouveau bouton n'a pas été vu dans le navigateur.
 - Aucun bouton dans le récapitulatif de fin de bataille : le bouton est dans le panneau de l'armée survivante.
 - Le cas « armée affaiblie hors de ses places » n'a pas été vu dans le navigateur.
 - « Arrêter les renforts » écrit deux messages un peu redondants dans le journal.

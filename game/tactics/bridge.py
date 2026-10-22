@@ -217,6 +217,8 @@ def make_spec(g, bt):
                 me=me, difficulty=g.difficulty, title=f"{kind} {gname}", place_name=gname, date=g.date_str(),
                 fm_swift=[min(0.5, g.mod(o, 'fm_swift')) if o in g.factions else 0.0 for o in owners],
                 art_cheval=['art_cheval' in t for t in techs], marks=[R.marks(t) for t in techs],
+                # technologies de combat (feu de rang, ordre mixte, cuirassiers… : stats.TECH_MODS), appliquées par battle.py
+                tech=[{k: g.mod(o, k) for k in ST.TECH_MODS if g.mod(o, k)} if o in g.factions else {} for o in owners],
                 # SPEC-TECH.md : ballon (portée de vue du général), retranchements, obus à la mélinite
                 balloon=[g.mod(o, 'balloon') if o in g.factions else 0 for o in owners],
                 entrench=[g.mod(o, 'entrench') if o in g.factions else 0.0 for o in owners],

@@ -383,7 +383,7 @@ class ValeursChiffrees(unittest.TestCase):
                     self.assertEqual('chg' in s, cls in ('inf', 'cavalerie'))
                     self.assertEqual('car' in s, cls == 'inf')
                     for k, v in s.items():
-                        if k not in ('por', 'mun'):
+                        if k not in ('por', 'jus', 'mun'):
                             self.assertEqual(v[1], 0, k)   # une recrue : aucun bonus d'expérience
                     v = self.ST.stats(typ, arm, 100, 'audacieux')
                     self.assertEqual(v['dis'][1], 0)
@@ -395,7 +395,7 @@ class ValeursChiffrees(unittest.TestCase):
         with mock.patch.object(self.tb, 'trait', return_value='audacieux'):
             self.assertGreater(self.ST.of_unit(self.l, self.tb)['mel'][2], 0)
         with mock.patch.object(self.tb, 'trait', return_value=None):   # le général blessé : plus rien
-            self.assertTrue(all(v[2] == 0 for k, v in self.ST.of_unit(self.l, self.tb).items() if k not in ('por', 'mun')))
+            self.assertTrue(all(v[2] == 0 for k, v in self.ST.of_unit(self.l, self.tb).items() if k not in ('por', 'jus', 'mun')))
 
     def test_la_vue_de_bataille(self):
         from game.tactics import bridge as TB
@@ -974,6 +974,157 @@ class VillageBarricade(unittest.TestCase):
         self.assertIsNotNone(tb.objective())
         tb.autofinish()
         self.assertEqual((tb.ai_mem['s0']['plan'], tb.ai_mem['s1']['plan']), ('assaut', 'place'))
+
+
+class TechnologiesDeCombat(unittest.TestCase):
+    """Feu de rang, ordre mixte, cuirassiers, artillerie à cheval, toutes armes… : la spec de la bataille les porte
+    (bridge.make_spec), le moteur les applique comme la résolution automatique, et la fiche les compte."""
+
+    def setUp(self):
+        from game.tactics import stats as ST
+        from game.tactics import units as U
+        self.ST, self.U = ST, U
+        self.tb, u = bataille()
+        self.l = u['ligne']
+        self.c = ennemi(self.tb, self.l, 'inf')
+        face_a_face(self.tb, self.l, self.c, 80)
+
+    tir = ValeursChiffrees.tir
+
+    def tech(self, **md):
+        self.tb.spec['tech'] = [md, {}] if self.l.side == 0 else [{}, md]
+
+    def test_la_spec_porte_les_technologies(self):
+        md = self.tb.tech(self.l.side)
+        self.assertTrue(set(md) <= set(self.ST.TECH_MODS))
+        self.assertGreater(md.get('ligne_fire', 0), 0, 'en 1790, le feu de rang est connu')
+        del self.tb.spec['tech']
+        self.assertEqual(self.tb.tech(0), {}, 'une ancienne sauvegarde : rien')
+
+    def test_le_feu_de_rang_et_toutes_armes_au_tir(self):
+        self.tech()
+        p0 = self.tir(50)
+        self.tech(ligne_fire=0.22, all_power=0.08, inf_power=0.05)
+        self.assertAlmostEqual(self.tir(50) / p0, 1.22 * 1.13, delta=0.02)
+        f = lambda **md: sum(self.ST.stats('ligne', 1, 50, mods=md)['pre'][:2])
+        self.assertAlmostEqual(f(ligne_fire=0.22, all_power=0.08, inf_power=0.05) / f(), 1.22 * 1.13, delta=0.03)
+
+    def test_la_melee_et_la_charge(self):
+        l, c = self.l, self.c
+        l.fat, l.morale, l.form = 0.0, 80.0, 'ligne'
+        self.tech()
+        k0 = self.tb._melee_k(l, c)
+        self.tech(all_power=0.08, cav_power=0.15)
+        self.assertAlmostEqual(self.tb._melee_k(l, c) / k0, 1.08, places=6, msg="l'infanterie : pas les hussards")
+        s = lambda typ, **md: self.ST.stats(typ, 1, 0, mods=md)
+        self.assertAlmostEqual(s('cavalerie', cav_charge=0.2)['chg'][0] / s('cavalerie')['chg'][0], 1.2, delta=0.04)
+        self.assertAlmostEqual(s('ligne', colonne_charge=0.15)['chg'][0] / s('ligne')['chg'][0], 1.15, delta=0.04)
+        self.assertEqual(s('ligne', cav_charge=0.2)['chg'], s('ligne')['chg'])
+
+    def test_les_cuirassiers_au_choc(self):
+        from unittest import mock
+        cav = next(u for u in self.tb.units if u.side == self.l.side and u.cls == 'cavalerie')
+
+        def choc(**md):
+            self.tech(**md)
+            cav.fat, cav.morale, cav.charge_v, cav.state = 0.0, 90.0, 999.0, 'charge'
+            self.c.busy, self.c.men, self.c.morale, self.c.state = 5.0, 500.0, 90.0, 'repos'   # pris en manœuvre
+            cav.x, cav.y = self.c.x + 10, self.c.y
+            with mock.patch.object(self.tb, '_damage') as dmg:
+                self.tb._impact(cav, self.c)
+            return next(a[1] for a, _ in dmg.call_args_list if a[0] is self.c)
+
+        self.assertAlmostEqual(choc(cav_charge=0.2) / choc(), 1.2, places=6)
+
+    def test_la_portee_de_justesse(self):
+        j = lambda arm: self.ST.stats('ligne', arm, 0)['jus']
+        self.assertEqual((j(1), j(4)), (self.U.INF_D50[1], self.U.INF_D50[4]))
+        u = self.U.Unit(type='ligne', cls='inf', arm=4)
+        self.assertAlmostEqual(self.U.precision(u, j(4)), 0.5, places=3)
+        self.assertNotIn('jus', self.ST.stats('artillerie', 2, 0), 'les canons : boulet et mitraille, pas cette courbe')
+        self.assertIn('jus', self.ST.stats('mitrailleuses', 0, 0))
+
+
+class IAFinirAutomatiquementEtLogement(unittest.TestCase):
+    """« Finir automatiquement » en défense reprend les réglages du déploiement ; le logement dans la brèche."""
+
+    def test_finir_automatiquement_en_defense(self):
+        from fabrique import S
+        from game.tactics import ai
+        g, bid = S.new(GEO, dict(me='33', foe='24', era='1813', seed=1, role='def',
+                                 units=dict(ligne=3, legere=1, artillerie=2)))
+        tb = g.tactical[bid]
+        tb.start()
+        z = tb.ai_zone(0)
+        for k, u in enumerate(u for u in tb.units if u.side == 0):   # (l'assaillant au fond de sa zone, loin)
+            u.x, u.y = (z[0] + z[2]) / 2 + 40 * k, (z[1] + z[3]) / 2
+        mes = [u for u in tb.units if u.side == 1 and u.alive]
+        line = [u for u in mes if u.cls == 'inf' and not u.light]
+        light = next(u for u in mes if u.light)
+        light.x, light.y = line[0].x + 30, line[0].y   # (le joueur avait ramené ses tirailleurs dans la ligne)
+        tb._update_vision()
+        tb.autofinish()
+        ai.think(tb, 1, 2.0)
+        mem = tb.ai_mem['s1']
+        self.assertTrue(all(u.fire_mode == 'volley' for u in line))
+        self.assertIn(light.id, mem['scr'])
+        p = mem['post'][light.id]
+        self.assertGreater(ai._rel(p[0], p[1], light.x, light.y, mem['fd'])[0], 80)   # l'écran repart en avant
+        if mem['plan'] == 'tenir':
+            arts = [u for u in mes if u.cls == 'artillerie']
+            lats = sorted(mem['lat'][u.id] for u in arts)
+            ll = [mem['lat'][u.id] for u in line]
+            self.assertEqual((lats[0], lats[-1]), (round(min(ll), 1), round(max(ll), 1)))   # feux croisés
+        # contre-pente en plein combat : le bataillon vu de l'ennemi garde sa place sur la crête et s'en va attendre
+        # derrière (son poste), sans être redéployé
+        from unittest import mock
+        u = line[0]
+        x0, y0 = u.x, u.y
+        with mock.patch.object(ai, '_hidden', lambda b, s, x, y: (x, y) != (x0, y0)), \
+                mock.patch.object(tb, 'height_at', lambda x, y: 10.0 if (x, y) == (x0, y0) else 0.0):
+            ai._reverse_slope(tb, 1, mem, ai.LEVELS['normal'], [u], mem['fd'])
+        self.assertEqual((u.x, u.y), (x0, y0))
+        self.assertEqual(mem['crest'][u.id], [round(x0, 1), round(y0, 1)])
+        self.assertLess(ai._rel(*mem['post'][u.id][:2], x0, y0, mem['fd'])[0], -10)
+
+    def test_logement_dans_la_breche(self):
+        tb, pense, ai, math = IAPlaces.place(self)
+        mem = tb.ai_mem['s0']
+        mem.update(phase='assaut', t_phase=tb.clock - 400, t_go=tb.clock - 1000, n_assault=1)
+        bx, by = mem['bin']
+        ass = [v for v in tb.units if v.side == 0 and mem['role'].get(v.id) == 'assaut' and v.valid]
+        for k, v in enumerate(ass[:2]):
+            v.x, v.y, v.morale, v.state, v.path, v.goal = bx + 30 * k, by, 90.0, 'repos', [], None
+        for v in tb.units:   # (plus un défenseur sur la brèche)
+            if v.side == 1 and math.hypot(v.x - bx, v.y - by) < 120:
+                v.x, v.y = mem['heart']
+        tb._update_vision()
+        pense(0)
+        u = tb.unit(mem['lodge'][0])
+        self.assertEqual(u, ass[0])
+        self.assertIn(u.id, tb.spec['logement'])
+        self.assertEqual(kind(u), 'hold')
+        self.assertTrue(any("s'y loge" in n[1] for n in mem['journal']))
+        # retranché : gabions et sacs à terre au bout de ENTRENCH_T à l'arrêt
+        u.still_t = tb.clock - BT.ENTRENCH_T - 1
+        self.assertAlmostEqual(tb._entrench_k(u, ass[1]), 1 - BT.LOGEMENT_K)
+        # la garnison l'en chasse : il s'est arrêté au débouché, on le rejette à la baïonnette
+        md = tb.ai_mem['s1']
+        q = [round(c) for c in ai._at(bx, by, mem['fd'], -20)] + [round(mem['fd'] + math.pi, 3)]
+        md.setdefault('breach', []).append(q)
+        u.state, u.morale = 'feu', 90.0
+        res = next(v for v in tb.units if v.side == 1 and md['role'].get(v.id) == 'res' and v.cls == 'inf')
+        res.x, res.y, res.morale, res.state, res.men = bx - math.cos(mem['fd']) * 90, \
+            by - math.sin(mem['fd']) * 90, 90.0, 'repos', 2 * u.men
+        tb._update_vision()
+        pense(1)
+        self.assertEqual((res.state, res.target), ('charge', u.id))
+        # en déroute, le logement est perdu
+        u.state = 'deroute'
+        pense(0)
+        self.assertIsNone(mem['lodge'])
+        self.assertNotIn(u.id, tb.spec['logement'])
+
 
 if __name__ == '__main__':
     unittest.main()

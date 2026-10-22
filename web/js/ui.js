@@ -1469,7 +1469,7 @@ export class UI {
         if (a.st === 'siege' || a.st === 'move') h += `<button class="btn" data-act="retreat">Se replier</button>`;
         h += `</div>` + this.placeActsHtml(a);
         const mx = a.regs.reduce((s, r) => s + r[3], 0);
-        if (!a.ax?.own && mx && a.regs.reduce((s, r) => s + r[3] - r[2], 0) / mx >= 0.1) h += `<div class="muted small">Pour compléter ses rangs (1 à 2 tours), ramenez-la dans une de vos villes.</div>`;
+        if (!a.ax?.own && mx && a.regs.reduce((s, r) => s + r[3] - r[2], 0) / mx >= 0.1) h += `<div class="muted small">Pour compléter ses rangs (1 à 3 tours), ramenez-la dans une de vos villes.</div>`;
         // détacher une arme entière
         const cls = r => unitCls(this.rules, r[1]);
         const kinds = [...new Set(a.regs.map(cls))];
@@ -1524,9 +1524,13 @@ export class UI {
         : btn('quarters', 'Prendre ses quartiers', `+${fmt1(this.per(Q.food))} vivres ${this.perU}`, Q.why, 'Renforts et moral plus rapides, ordre public en hausse ; l’armée mange davantage. Cesse dès qu’elle bouge.');
       const Rg = x.rg;
       h += Rg.w != null ? `<div class="queue-item" style="flex:1 1 100%"><span>Renforts en route</span><span class="muted">au complet ${toursTxt(Rg.w)}</span></div><button class="btn" data-act="army-act" data-v="rangs_stop">Arrêter les renforts</button>`
-        : btn('rangs', 'Compléter les rangs', `${fmt(Rg.men)} recrues, ${fmt(Rg.armes)} armes, ${Rg.t > 1 ? '2 tours' : '1 tour'}`, Rg.why,
-          'Les conscrits du dépôt rejoignent les régiments : 1 tour, 2 si les pertes passent 30 %. L’armée doit rester dans la place ; les recrues diluent l’expérience des vétérans. Un régiment anéanti ne revient pas : levez-en un neuf.')
+        : btn('rangs', 'Compléter les rangs', `${fmt(Rg.men)} recrues, ${fmt(Rg.armes)} armes, ${Rg.t > 1 ? Rg.t + ' tours' : '1 tour'}${Rg.rm ? ' (remontes)' : ''}`, Rg.why,
+          'Les conscrits du dépôt rejoignent les régiments : 1 tour, 2 si les pertes passent 30 %. Remontes : la cavalerie et l’artillerie qui ont perdu plus de 10 % de leurs chevaux attendent un tour de plus (l’infanterie arrive à l’heure), et se refont deux fois moins vite au repos. L’armée doit rester dans la place ; les recrues diluent l’expérience des vétérans.')
           .replace('class="btn"', !Rg.why && Rg.men > 0.1 * a.regs.reduce((s, r) => s + r[3], 0) ? 'class="btn primary"' : 'class="btn"');
+      const Rv = x.rv;   // régiments anéantis depuis peu : on les relève sous leur numéro
+      if (Rv && Rg.w == null) h += btn('relever', `Relever ${Rv.regs.length > 1 ? Rv.regs.length + ' régiments anéantis' : 'le régiment anéanti'}`,
+        Rv.regs.map(r => this.rules.units[r[1]]?.short || r[1]).join(', ') + ' — ' + Object.entries(Rv.cost).map(([k, v]) => `${fmt(v)} ${k}`).join(', ') + ', puis les recrues',
+        Rv.why, 'Le dépôt envoie un cadre d’officiers et de sous-officiers ; le régiment reprend son nom et son numéro, avec des conscrits sans expérience. Se paie comme une levée ; les recrues arrivent ensuite comme pour « Compléter les rangs ». Possible pendant un mois environ après sa perte.');
       h += btn('garde', 'Armer les habitants', `+${fmt(G.add)} miliciens, ${G.armes} armes, ${G.t} tours`, G.why,
         `${this.rules.units.garde.name} : la milice de la place se renforce fortement pendant ${G.t} tours ; un peu moins de production.`);
       const gain = [`${fmt(Rq.g.vivres)} vivres`, `${fmt(Rq.g.recrues)} recrues`].concat(Rq.g.livres ? [`${fmt(Rq.g.livres)} livres`] : []).join(', ');

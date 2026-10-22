@@ -1091,7 +1091,8 @@ class Game:
         top = 100 + self.mod(code, 'morale')
         for reg in regs:
             if reg['n'] < reg['max']:
-                self.reinforce(code, reg, min(reg['max'] - reg['n'], reg['max'] * rate * dt))
+                k = R.REPL_MONTE if AA.monte(reg) else 1.0
+                self.reinforce(code, reg, min(reg['max'] - reg['n'], reg['max'] * rate * k * dt))
             reg['morale'] = min(top, reg['morale'] + 6 * dt)
 
     def reinforce(self, code, reg, add):
@@ -1104,6 +1105,23 @@ class Game:
         reg['xp'] = (reg['xp'] * reg['n'] + R.UNITS[reg['type']].get('xp0', 0) * add) / (reg['n'] + add)
         reg['n'] += add
         return True
+
+    def prune(self, a):
+        """Retire de l'armée les régiments réduits à rien (moins de 5 hommes), en gardant leur souvenir (bury)."""
+        if any(r['n'] < 5 for r in a['regs']):
+            ro = [[r['id'], r['type']] for r in a['regs']]
+            a['regs'] = [r for r in a['regs'] if r['n'] >= 5]
+            self.bury(a, ro)
+
+    def bury(self, a, ro):
+        """Régiments de la liste ro ([id, type], dans l'ordre de l'armée) qui n'y sont plus : on note leur rang, donc leur
+        numéro, pour pouvoir les relever (army_actions.relever) ; les plus anciens sont oubliés."""
+        ids = {r['id'] for r in a['regs']}
+        old = [m for m in a.get('morts') or [] if m[3] > self.t - AA.MORTS_JOURS and m[2] not in ids]
+        seen = {m[2] for m in old}
+        a['morts'] = old + [[i, typ, rid, self.t] for i, (rid, typ) in enumerate(ro) if rid not in ids and rid not in seen]
+        if not a['morts']:
+            del a['morts']
 
     def all_regs(self, code):
         for n in self.nodes:
@@ -2412,6 +2430,7 @@ class Game:
             return
         side['armies'].append(a['id'])
         side['men0'] += self.army_men(a)
+        a['ro'] = [[r['id'], r['type']] for r in a['regs']]
         a['state'] = 'battle'
         a['battle'] = bt['id']
         if a['owner'] != self.player or a.get('tac_auto', True):
@@ -2515,6 +2534,7 @@ class Game:
             for a in lst:
                 a['state'] = 'battle'
                 a['battle'] = bid
+                a['ro'] = [[r['id'], r['type']] for r in a['regs']]   # ordre de bataille, pour les régiments anéantis (bury)
                 a['path'] = [] if a in de or ambush else a['path']
                 side['men0'] += self.army_men(a)
             if side['node'] is not None:
@@ -2952,6 +2972,10 @@ class Game:
         prisonniers (ceux du champ de bataille pour une bataille commandée), lassitude et bilan des deux camps, journal."""
         loser = 1 - winner
         W, L = bt['sides'][winner], bt['sides'][loser]
+        for aid in W['armies'] + L['armies']:   # régiments restés sur le champ de bataille (bataille commandée ou non)
+            a = self.armies.get(aid)
+            if a and 'ro' in a:
+                self.bury(a, a.pop('ro'))
         for si in (0, 1):   # Croix-Rouge : les blessés soignés reviennent aux régiments (wnd, compté pendant la bataille)
             nd = bt['sides'][si]['node']
             for r in [r for _, r, _ in self.side_units(bt, si)] + (self.nodes[nd]['garrison'] if nd is not None else []):
@@ -3007,7 +3031,7 @@ class Game:
                     if gone > 0:
                         a['des'] = a.get('des', 0.0) + gone
                         a['des_why'] = a.get('des_why') or 'traînards de la retraite'
-                    a['regs'] = [r for r in a['regs'] if r['n'] >= 5]
+                    self.prune(a)
                     if not a['regs']:
                         del self.armies[aid]
                         continue
@@ -3492,7 +3516,7 @@ class Game:
             if rate > 0:
                 for r in a['regs']:
                     r['n'] -= r['n'] * rate * dt
-            a['regs'] = [r for r in a['regs'] if r['n'] >= 5]
+            self.prune(a)
             if a['state'] == 'idle' and not (unpaid or hungry):
                 if friendly_land:
                     top = 100 + self.mod(code, 'morale')

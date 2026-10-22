@@ -125,6 +125,7 @@ import random
 import time
 
 from .. import rules as R
+from . import stats as ST   # (xp_k, ELAN, technologies : les mêmes chiffres que la fiche)
 from . import terrain as TR
 from . import units as U
 from .terrain import (COLS, ROWS, CELL, N, W, H, T_PRE, T_CHAMP, T_VIGNE_T, T_LANDE_T, T_BOIS, T_FORET_T, T_MARAIS_T,
@@ -236,6 +237,7 @@ VOLLEY_RELOAD = 1.15     # … mais on attend l'ordre : le rechargement est plus
 VOLLEY_CHARGE_AT = 0.6   # « salve puis baïonnette » : on tire à 60 % de la portée efficace, puis on charge
 VOLLEY_WAIT = 30.0       # … et l'on charge quand même si la volée n'est pas partie 30 s après être arrivé à portée
 ENTRENCH_T = 300.0       # retranchements : cinq minutes à l'arrêt pour s'enterrer (technologie, SPEC-TECH.md)
+LOGEMENT_K = 0.3         # logement dans une brèche (spec['logement'] : ids, posés par l'IA) : gabions, sacs à terre
 HARASS_NEAR = 0.8        # harcèlement : on recule devant l'ennemi qui s'approche à moins de 80 % de la portée efficace…
 HARASS_FAR = 1.05        # … et l'on s'avance s'il reste au-delà (jamais plus près que 90 % de la portée efficace)
 HARASS_EVERY = 6.0       # le tirailleur réfléchit toutes les 6 s
@@ -807,6 +809,10 @@ class TacticalBattle:
                 if (g.x - u.x) ** 2 + (g.y - u.y) ** 2 <= rr * rr:
                     return g
         return None
+
+    def tech(self, side):
+        """Technologies de combat du camp (stats.TECH_MODS → valeur, venues de la campagne ; {} sans elles)."""
+        return (self.spec.get('tech') or ({}, {}))[side]
 
     def trait(self, side):
         if not hasattr(self, '_traits'):
@@ -1843,7 +1849,7 @@ class TacticalBattle:
         tr = self.trait(u.side)
         fat_k = 1 - 0.3 * u.fat / 100
         mor_k = 0.6 + 0.4 * u.morale / 100
-        xp_k = 0.8 + u.xp / 250
+        xp_k = ST.xp_k(u.xp)
         cov = self._fire_cover(tg, u)
         pr = U.precision(u, d)
         tk = U.TYPE.get(u.type, U.TYPE['ligne'])['fire']
@@ -1891,6 +1897,16 @@ class TacticalBattle:
             u.ammo -= 1
             if volley:
                 cas *= VOLLEY_POWER
+        # technologies de l'armée, comme en résolution automatique (engine.reg_power, phases) : toutes armes, l'arme ;
+        # feu de rang et de peloton en ligne ; feu de peloton du carré sur les escadrons ; artillerie à cheval à mitraille
+        md = self.tech(u.side)
+        cas *= ST.power_k(md, u.cls)
+        if u.cls == 'inf' and u.form == 'ligne':
+            cas *= 1 + md.get('ligne_fire', 0.0)
+        elif u.cls == 'inf' and u.form == 'carre' and tg.cls == 'cavalerie':
+            cas *= 1 + md.get('carre_fire', 0.0)
+        elif kind == 'mitraille':
+            cas *= 1 + md.get('art_charge', 0.0)
         u.ammo = max(0.0, u.ammo)
         u.reload = U.reload_time(u) * (VOLLEY_RELOAD if volley else 1.0)
         u.fired_t = self.clock
@@ -1921,6 +1937,8 @@ class TacticalBattle:
         """Retranchements : l'infanterie arrêtée depuis ENTRENCH_T s'est enterrée et perd moins d'hommes au feu (moitié
         moins d'abri contre les obus à la mélinite)."""
         k = self.spec.get('entrench', [0, 0])[tg.side]
+        if tg.id in (self.spec.get('logement') or ()):
+            k = max(k, LOGEMENT_K)
         if not k or tg.cls != 'inf' or self.clock - tg.still_t < ENTRENCH_T:
             return 1.0
         if shooter.cls == 'artillerie' and shooter.type != 'mitrailleuses':
@@ -2035,7 +2053,9 @@ class TacticalBattle:
         ordre, de face, reçoit la charge par un feu à bout portant et, si elle tient, la repousse ; prise de flanc, de
         dos, en désordre, en tirailleurs ou en pleine manœuvre, elle est culbutée."""
         cav = a.cls == 'cavalerie'
-        mom = 2.2 if cav else 1.0
+        mom = ST.ELAN['cavalerie' if cav else 'inf']
+        if cav or a.form == 'colonne':
+            mom *= ST.charge_k(self.tech(a.side), a.cls)   # cuirassiers ; ordre mixte (la colonne)
         mom *= 1 - a.fat / (120 if cav else 150)   # des chevaux essoufflés chargent mal
         elan = min(1.0, max(0.0, a.charge_v) / ELAN_M['cav' if cav else 'inf'])
         a.charge_v = 0.0
@@ -2058,7 +2078,7 @@ class TacticalBattle:
         if tg.state == 'deroute':
             # (des chevaux essoufflés, une charge sans élan ramassent moins de fuyards)
             frac = CAPTURE['choc_cav'] if cav else CAPTURE['choc_inf']
-            self._capture(a, tg, frac * min(1.0, mom / (2.2 if cav else 1.0)))
+            self._capture(a, tg, frac * min(1.0, mom / ST.ELAN['cavalerie' if cav else 'inf']))
             a.state = 'repos'
             return
         if cav and tg.form == 'carre' and tg.busy <= 0:
@@ -2084,12 +2104,14 @@ class TacticalBattle:
             elif tg.cls == 'artillerie':
                 # deux décharges de mitraille à bout portant pendant que la charge arrive (la gerbe serrée : ×2,2) ;
                 # aborder une batterie de face coûte très cher, la prendre de flanc ou de dos ne coûte rien
-                vol = U.pieces(tg) * P_MITRAILLE * GRAPE_POINT * 1.4 * (0.6 + 0.4 * tg.morale / 100)
+                vol = U.pieces(tg) * P_MITRAILLE * GRAPE_POINT * 1.4 * (0.6 + 0.4 * tg.morale / 100) * \
+                    (1 + self.tech(tg.side).get('art_charge', 0.0))
                 kind = 'mitraille'
             else:
                 vol = tg.men * U.FRONT.get(tg.form, 1.0) * P_RECEPTION * (0.5 + 0.5 * tg.morale / 100) * \
-                    (0.8 + tg.xp / 250) * self._wx_k(tg)
+                    ST.xp_k(tg.xp) * self._wx_k(tg)
                 kind = 'salve'
+            vol *= ST.power_k(self.tech(tg.side), tg.cls)
             vol *= (VUL_FIRE if tg.cls == 'inf' else VUL_GRAPE).get(a.form, 1.0)
             tg.ammo = max(0.0, tg.ammo - 1)
             tg.reload = max(tg.reload, U.reload_time(tg))
@@ -2116,6 +2138,7 @@ class TacticalBattle:
         if formed:
             vul *= 0.4
         cas = a.men * CHOC * mom * flank * vul * U.TYPE.get(a.type, U.TYPE['ligne'])['melee'] * (0.5 + a.morale / 200)
+        cas *= ST.power_k(self.tech(a.side), a.cls)
         self._damage(tg, cas, a, 'impact')
         shock = 6 * mom * flank * (1.3 if cav and tg.form in ('ligne', 'tirailleurs') else 1.0)
         tg.morale = max(0.0, tg.morale - shock * (0.5 if formed else 1.0))
@@ -2146,7 +2169,7 @@ class TacticalBattle:
 
     def _melee_k(self, u, foe):
         k = U.TYPE.get(u.type, U.TYPE['ligne'])['melee']
-        k *= (0.5 + u.morale / 200) * (0.8 + u.xp / 250) * (1 - u.fat / 250)
+        k *= (0.5 + u.morale / 200) * ST.xp_k(u.xp) * (1 - u.fat / 250) * ST.power_k(self.tech(u.side), u.cls)
         if u.form == 'carre' and foe.cls == 'cavalerie':
             k *= 2.5
         elif u.form == 'tirailleurs':
@@ -2545,7 +2568,8 @@ class TacticalBattle:
             if not mine and (seen is None or u.id not in seen) and self.phase != 'fin':
                 continue
             units.append(u.view(mine, u.seen))
-            if u.cls == 'inf' and self.spec.get('entrench', [0, 0])[u.side] and self.clock - u.still_t >= ENTRENCH_T:
+            if u.cls == 'inf' and (self.spec.get('entrench', [0, 0])[u.side] or
+                                   u.id in (self.spec.get('logement') or ())) and self.clock - u.still_t >= ENTRENCH_T:
                 units[-1]['dug'] = 1   # retranchée : le client dessine sa tranchée et ses gabions (SPEC-SUITE J)
             if mine and u.cls == 'general' and u.alive:
                 units[-1]['rally'] = round(self.rally_radius(u))   # (zone où il rallie les fuyards)

@@ -5,15 +5,16 @@ import { esc, fmt } from './battle/formes.js';
 export const VALEURS = [   // clé, nom, abrégé, aide
   ['mel', 'Mêlée', 'Mêl.', 'Corps à corps : pertes infligées à la baïonnette ou au sabre. La même valeur frappe et tient (le moral se partage au rapport des forces). 40 : une ligne aguerrie.'],
   ['chg', 'Charge', 'Ch.', 'Choc de la charge à plein élan (110 m de galop, 45 m de course à pied). L’expérience n’y fait rien ; les chevaux essoufflés, le terrain et le flanc, si.'],
-  ['pre', 'Précision', 'Préc.', 'Justesse du tir, par homme (par pièce pour les canons) : l’arme et l’expérience. La distance, la fumée et la pluie la font baisser.'],
+  ['pre', 'Précision', 'Préc.', 'Justesse du tir à bout portant, par homme (par pièce pour les canons) : l’arme, l’expérience, les technologies de l’armée (feu de rang : en ligne). La distance (voir la Portée de justesse), la fumée et la pluie la font baisser.'],
   ['rec', 'Rechargement', 'Rech.', 'Secondes entre deux salves, troupe fraîche (fatigue : jusqu’à +25 %, salve ordonnée : +15 %).'],
   ['por', 'Portée', 'Portée', 'Portée efficace / maximale (mitraille), en mètres.'],
+  ['jus', 'Portée de justesse', 'Just.', 'Distance où la Précision tombe de moitié (fumée, peur, hausse mal réglée) ; deux fois plus loin, elle n’en garde qu’un cinquième. Le fusil rayé y gagne bien plus que sa Précision ne le dit : à 80 m, il touche deux fois plus qu’un silex.'],
   ['mun', 'Munitions', 'Mun.', 'Dotation : cartouches par homme, coups par pièce.'],
   ['vit', 'Vitesse', 'Vit.', 'Au pas, en m/s, sur prairie (ligne ×0,8, colonne ×1,1, carré ×0,4).'],
   ['dis', 'Discipline', 'Disc.', 'Tenue sous le feu : le moral perdu à chaque homme tombé est divisé d’autant. Le général tout proche aide encore.'],
   ['car', 'Former le carré', 'Carré', 'Secondes pour former le carré devant la cavalerie (l’expérience et l’ordre mixte l’abrègent).'],
 ];
-const SANS_BARRE = new Set(['rec', 'por', 'mun', 'vit', 'car']);
+const SANS_BARRE = new Set(['rec', 'por', 'jus', 'mun', 'vit', 'car']);
 const num = (x, d = 0) => d ? x.toFixed(d).replace('.', ',').replace(/^-/, '−') : fmt(x);
 const sg = (x, d) => (x > 0 ? '+' : '−') + num(Math.abs(x), d);
 
@@ -21,6 +22,7 @@ const sg = (x, d) => (x > 0 ? '+' : '−') + num(Math.abs(x), d);
 export function valeur(k, v) {
   if (k === 'por') return `${fmt(v[0])} / ${fmt(v[1])} m${v[2] ? ` · mitr. ${fmt(v[2])}` : ''}`;
   if (k === 'mun') return fmt(v);
+  if (k === 'jus') return `${fmt(v)} m`;
   const d = k === 'vit' ? 1 : 0, u = k === 'rec' || k === 'car' ? ' s' : '';
   return `${num(v[0] + v[1] + v[2], d)}${u}${v[1] ? `<small class="vl-x" title="Expérience">${sg(v[1], d)}</small>` : ''}${v[2] ? `<small class="vl-g" title="Général">${sg(v[2], d)}</small>` : ''}`;
 }
