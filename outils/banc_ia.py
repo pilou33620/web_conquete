@@ -3,6 +3,8 @@
 en un tableau court (pour comparer avant et après un changement de game/tactics/ai.py sans lire les journaux).
 
 Usage :  python3 outils/banc_ia.py [--graines 2] [--proc 4] [--epoques 1700,1790,1813,1870] [--lieux bataille,forteresse]
+         [--tweak '{"normal": {"cav_opp": false}}']   (réglages d'essai : spec['ai_tweak'], pour les comparaisons A/B)
+         [--journal 12]   (les 12 dernières notes du journal de chaque camp sous sa ligne, à filtrer avec grep)
 
 Par bataille : époque, lieu, camp du joueur (att : il attaque), vainqueur (A assaillant, D défenseur, - aucun), raison,
 durée (min de bataille), pertes de chaque camp (% des hommes), temps de calcul (s), et les grands moments notés par
@@ -10,6 +12,7 @@ l'IA (ai_mem[...]['journal']) comptés par famille : contre-attaques, charges, t
 « Figée » : la bataille va au bout du temps sans que personne ne perde 10 %.
 """
 import argparse
+import json
 import os
 import sys
 import time
@@ -26,7 +29,8 @@ FAMILLES = [('ctr', ('contre-attaque', 'retour offensif', 'contre-charge')), ('c
 
 
 def une(args):
-    epoque, lieu, role, graine = args
+    epoque, lieu, role, graine, tweak, nj = args
+    args = args[:4]
     from fabrique import GEO
     from game.tactics import skirmish as S
     mes = dict(TROUPES)
@@ -37,6 +41,11 @@ def une(args):
     if g is None:
         return dict(err=bid, cle=args)
     tb = g.tactical[bid]
+    if tweak:
+        from game.tactics import ai
+        tb.spec['ai_tweak'] = json.loads(tweak)
+        for s in tb.ai_sides:   # (les réglages du déploiement comptent aussi)
+            ai.deploy(tb, s)
     t0 = time.process_time()
     try:
         tb.autofinish()
@@ -50,7 +59,9 @@ def une(args):
     pertes = [100 * r['lost'][s] / max(1, r['men0'][s]) for s in (0, 1)]
     return dict(cle=args, w='AD'[r['winner']] if r['winner'] in (0, 1) else '-', why=str(r['why'] or '')[:28],
                 min=tb.clock / 60, pa=pertes[0], pd=pertes[1], cpu=cpu, cnt=cnt,
-                figee=r['winner'] not in (0, 1) and max(pertes) < 10)
+                figee=r['winner'] not in (0, 1) and max(pertes) < 10,
+                jr=[f"  s{k[1:]} {n[1]}" for k, m in sorted(tb.ai_mem.items()) if isinstance(m, dict)
+                    for n in m.get('journal', [])[-nj:]] if nj else [])
 
 
 def main():
@@ -59,8 +70,10 @@ def main():
     ap.add_argument('--proc', type=int, default=4)
     ap.add_argument('--epoques', default='1700,1790,1813,1870')
     ap.add_argument('--lieux', default='bataille,forteresse')
+    ap.add_argument('--tweak', default='')
+    ap.add_argument('--journal', type=int, default=0)
     a = ap.parse_args()
-    jobs = [(e, l, r, s) for e in a.epoques.split(',') for l in a.lieux.split(',') for r in ('att', 'def')
+    jobs = [(e, l, r, s, a.tweak, a.journal) for e in a.epoques.split(',') for l in a.lieux.split(',') for r in ('att', 'def')
             for s in range(1, a.graines + 1)]
     with Pool(a.proc) as p:
         res = p.map(une, jobs)
@@ -73,6 +86,8 @@ def main():
             continue
         print(f"{e:6} {l:10} {ro:4} {s:2}  {r['w']} {r['why']:28} {r['min']:5.0f} {r['pa']:5.0f} {r['pd']:5.0f} "
               f"{r['cpu']:5.1f}  " + ' '.join(f"{r['cnt'][k]:3}" for k, _ in FAMILLES) + ('  FIGÉE' if r['figee'] else ''))
+        for t in r['jr']:
+            print(t)
     ok = [r for r in res if 'err' not in r]
     if ok:
         n = len(ok)

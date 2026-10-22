@@ -2,45 +2,49 @@
 
 Ce fichier rassemble ce qui reste à faire après le chantier « réalisme des batailles » (octobre 2026).
 Précision au tir, valeurs chiffrées et « Compléter les rangs » sont faits et sur `main`.
-L'IA de bataille a été conçue, mais pas réalisée.
+L'IA de bataille aussi (voir ses restes ci-dessous).
 
-## 1. IA de bataille (game/tactics/ai.py) : à réaliser
+## 1. IA de bataille (game/tactics/ai.py) : réalisée, avec des restes
 
-Ce que le joueur veut : finir avec des batailles « binaires », où l'IA attaquée se met en défense et ne bouge plus.
+Les trois volets sont faits (défense en rase campagne, attaque en rase campagne, places). On les mesure avec
+`python3 outils/banc_ia.py --graines 1 --proc 4`, à comparer avec tasks/banc-ia-reference.md.
 
-Les trois volets à réaliser, dans cet ordre, en vérifiant après chacun :
+| Mesure | Référence | Après |
+|---|---|---|
+| Victoires de l'assaillant / du défenseur | 2 / 14 | 3 / 13 |
+| Durée moyenne | 413 min | 250 min |
+| Batailles de places allées jusqu'à la nuit | 7 sur 8 | 0 sur 8 |
+| Pertes moyennes (assaillant / défenseur) | 17 % / 20 % | 21 % / 22 % |
+| Calcul moyen (max) | 6,0 s (14,7 s) | 3,8 s (6,5 s) |
+| Contre-attaques notées | 76 | 202 |
+| Tirailleurs notés | 0 | 44 |
+| Assauts notés | 141 | 359 |
+| Brèches notées | 29 | 194 |
 
-1. **Défense en rase campagne.**
-   - Contre-attaques locales à la baïonnette dès qu'un bataillon assaillant flotte.
-   - Charges de cavalerie sur les troupes désorganisées.
-   - Tirailleurs envoyés en avant pour harceler.
-   - « Retour offensif » quand l'attaque s'essouffle.
-   - Contre-pente, réserves engagées au moment décisif, arrière-garde…
-2. **Attaque en rase campagne.**
-   - Préparation d'artillerie et grande batterie.
-   - Colonnes couvertes par des tirailleurs.
-   - Fixation au centre et débordement, ordre oblique.
-   - Exploitation et poursuite par la cavalerie.
-   - En 1870 : la ligne de tirailleurs avance par bonds.
-3. **Attaque et défense des places.**
-   - Côté assaillant : batterie de brèche, enfants perdus, escalade de diversion, assaut à l'aube.
-   - Côté défenseur : retranchement derrière la brèche, contre-attaque dans la brèche, sorties contre les batteries de siège, combats de rue.
+Reste à faire :
+- **Une place n'est jamais prise au banc (0 sur 8).** La spécification visait 30 à 50 %. Le défenseur perd jusqu'à
+  54 % de ses hommes, mais sa réserve et sa cavalerie gardent le cœur de la place. Il faut régler les taux d'assaut
+  (dégâts au corps à corps dans la brèche, tenue du cœur), par niveau, et essayer au banc un village barricadé.
+- **Bouton « Battre en brèche » pour le joueur.** Le nouvel ordre 'bombard' (x, y) du moteur existe (battle.py),
+  mais l'interface ne l'offre pas encore (web/js/battle/doctrine.js, commandes.js).
+- **En rase campagne, l'assaillant gagne encore peu** : 3 batailles sur 8, et aucune en 1870. Il faut vérifier sur
+  plus de graines (`--graines 3`), parce qu'une seule graine fait beaucoup bouger les chiffres.
+- **« Finir automatiquement »** : l'armée du joueur reprise en cours de route n'a pas les réglages du déploiement
+  (écran de tirailleurs, contre-pente, salve, feux croisés).
+- **Laissé de côté :**
+  - la batterie de réserve ;
+  - les enfants perdus pris dans un bataillon de ligne faute de légers ;
+  - le logement dans la brèche ;
+  - les redoutes tenues ;
+  - la cavalerie postée hors du village ;
+  - le choix de cibles propre aux canons du rempart ;
+  - le bonus de contre-batterie pendant la préparation.
+- **Non vérifié :** la campagne simulée (outils/simuler.py).
 
-Une première réalisation a été interrompue en cours de route. Elle n'est ni vérifiée ni terminée, et elle est
-gardée sur la branche `wip-batailles-realisme` (game/tactics/ai.py). On peut s'en inspirer, mais pas la fusionner
-telle quelle : un test levait `NameError: _rearguard` à ce moment-là.
+Le premier jet de l'IA (branches `wip-batailles-realisme` et `wip-ia-bataille`) est dépassé : ces branches peuvent
+être supprimées.
 
-Pour la vérifier une fois réalisée :
-- tests/test_bataille.py, avec de nouveaux tests à la fin du fichier ;
-- des simulations IA contre IA. Ce qu'il faut constater :
-  - les batailles ne se figent plus ;
-  - la défense contre-attaque quand l'assaillant flotte ;
-  - ce n'est pas toujours le même camp qui gagne ;
-  - les pertes restent plausibles ;
-  - le temps de calcul reste raisonnable sur le Raspberry Pi.
-- les chiffres avant et après.
-
-Les spécifications complètes, rédigées par les agents de conception, suivent.
+Pour mémoire, les spécifications complètes rédigées par les agents de conception :
 
 
 ---

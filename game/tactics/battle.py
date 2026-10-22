@@ -56,7 +56,9 @@ Ordres (renvoient (ok, msg)) :
   battle.deploy(side, ids, x, y, dir=None, form=None)    pendant le déploiement : place les unités côte à côte
                                                           autour de (x, y), front tourné vers dir, dans la zone.
   battle.order(side, ids, kind, **params)                 kind : 'move' (x, y, dir?, run?), 'attack' (target),
-        'charge' (target), 'hold', 'fire' (mode='free'|'hold'), 'form' (form), 'rally', 'retreat'.
+        'charge' (target), 'hold', 'fire' (mode='free'|'hold'), 'form' (form), 'rally', 'retreat',
+        'bombard' (x, y) : batterie de brèche (canons de l'assaillant, place à enceinte) : elle bat le rempart au plus
+        près de (x, y) et ne tire sur l'ennemi qu'à portée de mitraille.
         Plusieurs unités en 'move' gardent leur disposition relative autour du point. L'IA ne commande que les unités
         qu'elle contrôle (u.ctrl == 'ia') : battle.ai_units(side).
   battle.withdraw(side)                                   tout le camp décroche (fin de bataille).
@@ -1139,6 +1141,18 @@ class TacticalBattle:
             for u in us:
                 self._retreat(u)
             return True, "Retraite !"
+        if kind == 'bombard':
+            pl = self.map.place
+            if side != 0 or not pl or not pl.get('battle') or \
+                    not any(w.get('kind') != 'barricade' for w in self.map.walls or []):
+                return False, "Il n'y a pas de rempart à battre ici."
+            us = [u for u in us if u.cls == 'artillerie' and u.type != 'mitrailleuses']
+            if not us:
+                return False, "Seuls les canons battent un rempart."
+            for u in us:
+                u.order = dict(kind='bombard', x=round(float(p['x'])), y=round(float(p['y'])))
+                u.target = None
+            return True, "Batterie de brèche : on bat le rempart."
         return False, "Ordre inconnu."
 
     def withdraw(self, side):
@@ -1665,24 +1679,26 @@ class TacticalBattle:
         return best
 
     # ================================================================== brèches ouvertes au canon
-    def _wall_target(self, u, mx):
-        """Point de l'enceinte d'une place le plus proche du canon, à portée : (mur, x, y, distance) ou None."""
+    def _wall_target(self, u, mx, aim=None):
+        """Point de l'enceinte d'une place le plus proche du canon (ou, avec aim, du point visé), à portée :
+        (mur, x, y, distance) ou None."""
         pl = self.map.place
         if u.side != 0 or u.cls != 'artillerie' or not pl or not pl.get('battle'):
             return None
-        best, bd = None, mx
+        best, bv = None, 1e18
         for wi, w in enumerate(self.map.walls):
             if w.get('kind') == 'barricade':
                 continue
             for x, y in w['pts']:
                 d = math.hypot(x - u.x, y - u.y)
-                if d < bd:
-                    best, bd = (wi, x, y, d), d
+                v = d if aim is None else math.hypot(x - aim[0], y - aim[1])
+                if d < mx and v < bv:
+                    best, bv = (wi, x, y, d), v
         return best
 
-    def _bombard(self, u, e, mx):
+    def _bombard(self, u, e, mx, aim=None):
         """Canon de l'assaillant sans cible : il bat le rempart à portée. Vrai s'il s'en occupe."""
-        wt = self._wall_target(u, mx)
+        wt = self._wall_target(u, mx, aim)
         if not wt:
             return False
         wi, x, y, d = wt
@@ -1763,9 +1779,15 @@ class TacticalBattle:
             # feu à volonté : l'infanterie attend que l'ennemi soit à bonne portée (on ménage les cartouches)
             mx = min(mx, e * 1.3)
         hu = self.height_at(u.x, u.y)
-        tg = self._pick_target(u, mx * 1.15)
-        if not tg and u.type != 'mitrailleuses' and self._bombard(u, e, mx):
-            return
+        if u.order and u.order.get('kind') == 'bombard':
+            # batterie de brèche : elle ne se détourne du rempart que pour se défendre à mitraille
+            tg = self._pick_target(u, grape)
+            if not tg and self._bombard(u, e, mx, (u.order['x'], u.order['y'])):
+                return
+        else:
+            tg = self._pick_target(u, mx * 1.15)
+            if not tg and u.type != 'mitrailleuses' and self._bombard(u, e, mx):
+                return
         if not tg:
             if u.state in ('feu', 'recharge'):
                 u.state = 'repos'

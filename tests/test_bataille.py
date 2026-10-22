@@ -425,5 +425,433 @@ class JustesseDuFeu(unittest.TestCase):
                 self.assertGreater(p[1], 2 * p[2])             # deux fois plus juste à 30 m qu'à 90 % de la portée efficace
 
 
+class DefenseVivante(unittest.TestCase):
+    """Le défenseur en rase campagne (l'IA, camp 1, au niveau normal) : contre-attaques locales sur l'assaillant qui
+    flotte, cavalerie sur les troupes désorganisées, écran de tirailleurs, retour offensif, arrière-garde."""
+
+    def defense(self, era='1813', seed=1):
+        import math
+        from fabrique import S
+        from game.tactics import ai
+        g, bid = S.new(GEO, dict(me='33', foe='24', era=era, units=dict(ligne=2, legere=1, cavalerie=1), seed=seed,
+                                 role='att'))
+        tb = g.tactical[bid]
+        tb.start()
+        mem = tb.ai_mem['s1']
+        mem['plan'], mem['mode'] = 'tenir', 'poste'
+        mes = [u for u in tb.units if u.side == 0 and u.alive]
+        z = tb.ai_zone(0)
+        for k, u in enumerate(mes):   # (le joueur au fond de sa zone, loin de tout)
+            u.x, u.y = (z[0] + z[2]) / 2 + 40 * k, (z[1] + z[3]) / 2
+        tb._update_vision()
+
+        def pense():
+            mem['next'] = mem['rnext'] = 0.0
+            ai.think(tb, 1, 2.0)
+
+        def a_moi(cls, light=False):
+            return next(u for u in mes if u.cls == cls and bool(u.light) == light)
+
+        def a_lui(role):
+            return next(u for u in tb.units if u.side == 1 and mem['role'].get(u.id) == role and u.valid)
+        return tb, mem, pense, a_moi, a_lui, math
+
+    def test_contre_attaque_sur_un_bataillon_ebranle(self):
+        tb, mem, pense, a_moi, a_lui, _ = self.defense()
+        u, e = a_lui('ligne'), a_moi('inf')
+        u.morale, e.men = 80.0, u.men
+        face_a_face(tb, u, e, 140)
+        e.morale = 85.0
+        pense()
+        self.assertNotEqual(u.state, 'charge')   # une ligne fraîche, munitions pleines : on la fusille
+        e.morale = 38.0
+        pense()
+        self.assertEqual((u.state, u.target), ('charge', e.id))
+        self.assertTrue(any('contre-attaque' in n[1] for n in mem['journal']))
+        e.state = 'deroute'
+        pense()
+        p = mem['post'][u.id]
+        self.assertEqual(u.order.get('kind'), 'move')   # pas de poursuite : il reprend sa place
+        self.assertLess(abs(u.goal[0] - p[0]) + abs(u.goal[1] - p[1]), 1.0)
+
+    def test_1870_contre_attaque_courte(self):
+        tb, mem, pense, a_moi, a_lui, _ = self.defense('1870')
+        u, e = a_lui('ligne'), a_moi('inf')
+        u.morale, e.men = 80.0, u.men
+        face_a_face(tb, u, e, 150)
+        e.morale = 45.0
+        pense()
+        self.assertNotEqual(u.state, 'charge')   # trop loin pour sortir de son couvert sous le fusil rayé
+        u.busy = 0.0   # (il a fini de se déployer en tirailleurs)
+        face_a_face(tb, u, e, 90)
+        e.morale, e.men = 35.0, round(0.45 * e.men0)   # ébranlé et décimé, à bout portant
+        pense()
+        self.assertEqual((u.state, u.target), ('charge', e.id))
+
+    def test_cavalerie_sur_troupe_en_marche(self):
+        for era, form, charge in (('1813', 'ligne', True), ('1813', 'carre', False), ('1870', 'ligne', False)):
+            with self.subTest(epoque=era, formation=form):
+                tb, mem, pense, a_moi, a_lui, math = self.defense(era)
+                c, e = a_lui('cav'), a_moi('inf')
+                face_a_face(tb, c, e, 300)
+                e.state, e.form, e.morale = 'marche', form, 80.0
+                e.dir = math.atan2(c.y - e.y, c.x - e.x) + math.pi / 2   # elle prête le flanc
+                pense()
+                self.assertEqual(c.state == 'charge' and c.target == e.id, charge)
+
+    def test_cavalerie_sur_colonne_qui_charge(self):
+        tb, mem, pense, a_moi, a_lui, math = self.defense()
+        c, u, e = a_lui('cav'), a_lui('ligne'), a_moi('inf')
+        face_a_face(tb, u, e, 160)
+        if math.hypot(c.x - e.x, c.y - e.y) > 450:
+            c.x, c.y = e.x + (c.x - e.x) * 400 / math.hypot(c.x - e.x, c.y - e.y), \
+                e.y + (c.y - e.y) * 400 / math.hypot(c.x - e.x, c.y - e.y)
+            tb._update_vision()
+        tb.order(0, [e.id], 'charge', target=u.id, who='any')
+        pense()
+        self.assertEqual((c.state, c.target), ('charge', e.id))
+
+    def test_ecran_de_tirailleurs(self):
+        tb, mem, pense, a_moi, a_lui, math = self.defense(seed=4)   # (une graine où l'IA a des légers)
+        from game.tactics import ai
+        lt, e = a_lui('avant'), a_moi('inf')
+        p = mem['post'][lt.id]
+        self.assertGreaterEqual(ai._rel(p[0], p[1], mem['ax'], mem['ay'], mem['fd'])[0], 1.4 * tb.ranges(lt)[0])
+        lt.x, lt.y = p[0], p[1]
+        e.form = 'ligne'
+        face_a_face(tb, lt, e, 150)
+        pense()
+        self.assertEqual(mem['scr'][lt.id][0], 1)   # il recule d'un palier
+        z = tb.ai_zone(0)
+        e.x, e.y = (z[0] + z[2]) / 2, (z[1] + z[3]) / 2
+        tb._update_vision()
+        mem['phase'] = 'combat'
+        tb.clock += 160
+        pense()
+        self.assertEqual(mem['scr'][lt.id][0], 0)   # l'assaut a reflué : il revient
+
+    def test_retour_offensif_et_arret(self):
+        tb, mem, pense, a_moi, a_lui, _ = self.defense()
+        mes = [u for u in tb.units if u.side == 0 and u.alive and u.cls in ('inf', 'cavalerie')]
+        u = a_lui('ligne')
+        for k, e in enumerate(mes):   # (en vue, à 400 m : l'assaut est venu, puis il a reflué)
+            face_a_face(tb, u, e, 400 + 30 * k)
+            e.morale, e.men = 50.0, round(0.6 * e.men0)
+        mes[0].state = 'deroute'
+        mem.update(phase='combat', pressed=1, near_t=tb.clock - 400, t_contact=0)
+        pense()
+        self.assertEqual(mem['plan'], 'frontal')
+        self.assertIn('ro', mem)
+        for v in tb.units:
+            if v.side == 1 and v.cls in ('inf', 'cavalerie', 'artillerie'):
+                v.men = round(v.men * 0.9)
+        pense()
+        self.assertEqual((mem['plan'], mem['mode']), ('tenir', 'poste'))
+        self.assertNotIn('ro', mem)
+
+    def test_arriere_garde(self):
+        tb, mem, pense, a_moi, a_lui, _ = self.defense()
+        tb.withdraw(1)
+        pense()
+        rg = list(mem.get('rg') or [])
+        self.assertTrue(1 <= len(rg) <= 3)
+        self.assertTrue(all(tb.unit(i).order.get('kind') != 'retreat' for i in rg))
+        tb.clock += 620
+        pense()
+        self.assertTrue(all(tb.unit(i).order.get('kind') == 'retreat' for i in rg))
+
+    def test_memoire_json(self):
+        from fabrique import S
+        for era in ('1700', '1790', '1813', '1870'):
+            with self.subTest(epoque=era):
+                g, bid = S.new(GEO, dict(me='33', foe='24', era=era, units=dict(ligne=2, legere=1, cavalerie=1),
+                                         seed=1, role='att'))
+                tb = g.tactical[bid]
+                tb.autofinish()
+                tb.run_to_end()
+                json.dumps(tb.ai_mem)
+
+
+
+class IAAttaqueRaseCampagne(unittest.TestCase):
+    """L'assaillant en rase campagne (l'IA, camp 0, troupes tirées au sort) : ordre selon l'époque, ligne hors du feu du Chassepot, point de
+    rupture et grande batterie, masse jetée sur le point, poursuite par la cavalerie, bonds par moitiés en 1870."""
+
+    def attaque(self, era='1813', units=None, lvl='normal'):
+        import math
+        from fabrique import S
+        from game.tactics import ai
+        g, bid = S.new(GEO, dict(me='33', foe='24', era=era, seed=1, role='def',
+                                 units=units or dict(ligne=3, legere=1, cavalerie=2, artillerie=2)))
+        tb = g.tactical[bid]
+        tb.spec['ai_levels'] = [lvl, 'normal']
+        ai.deploy(tb, 0)
+        tb.start()
+        mem = tb.ai_mem['s0']
+        lui = [u for u in tb.units if u.side == 1 and u.alive]
+        z = tb.ai_zone(1)
+        for k, u in enumerate(lui):   # (le défenseur au fond de sa zone, loin de tout)
+            u.x, u.y = (z[0] + z[2]) / 2 + 40 * k, (z[1] + z[3]) / 2
+        tb._update_vision()
+
+        def pense(n=1):
+            for _ in range(n):
+                mem['next'] = mem['rnext'] = 0.0
+                ai.think(tb, 0, 2.0)
+
+        def a_moi(role):
+            return next(u for u in tb.units if u.side == 0 and mem['role'].get(u.id) == role and u.valid)
+
+        def a_lui(cls, light=False):
+            return next(u for u in lui if u.cls == cls and bool(u.light) == light)
+        return tb, mem, pense, a_moi, a_lui, ai, math
+
+    def test_pas_d_ordre_disperse_avant_le_fusil_raye(self):
+        for era, forme in (('1790', 'ligne'), ('1870', 'tirailleurs')):
+            with self.subTest(epoque=era):
+                tb, mem, pense, a_moi, a_lui, ai, _ = self.attaque(era)
+                u = a_moi('ligne')
+                mem['vu'] = {}
+                self.assertEqual(ai._march_form(tb, mem, ai.LEVELS['normal'], u, u.x, u.y, 300.0), forme)
+                self.assertEqual(ai._march_form(tb, mem, ai.LEVELS['normal'], u, u.x, u.y, 250.0, True),
+                                 'ligne' if era == '1790' else 'tirailleurs')   # (la défense garde ses règles)
+
+    def test_la_ligne_attend_hors_du_chassepot(self):
+        tb, mem, pense, a_moi, a_lui, ai, _ = self.attaque('1870')
+        e = a_lui('inf')
+        u = a_moi('ligne')
+        face_a_face(tb, u, e, 900)
+        pense(6)
+        e_fo = tb.ranges(e)[0]
+        self.assertEqual(mem['e_fo'], e_fo)
+        d = ai._rel(e.x, e.y, mem['ax'], mem['ay'], mem['fd'])[0]
+        self.assertGreater(d, 1.3 * e_fo)   # (la ligne attend la préparation hors de portée du fusil ennemi)
+        self.assertIn(mem['phase'], ('marche', 'prepa'))
+
+    def test_point_de_rupture_et_grande_batterie(self):
+        tb, mem, pense, a_moi, a_lui, ai, math = self.attaque('1813')
+        e = a_lui('inf')
+        face_a_face(tb, a_moi('ligne'), e, 600)
+        mem['phase'], mem['t_phase'] = 'prepa', tb.clock
+        pense()
+        self.assertTrue(mem.get('pt') and mem.get('pt_id'))
+        self.assertEqual(tb.unit(mem['pt_id']).cls, 'inf')
+        self.assertTrue(any('point de rupture' in n[1] for n in mem['journal']))
+        # le feu des batteries s'y concentre (poids pt_k sur les cibles à moins de 260 m du point)
+        g = next(o for o in tb.units if o.side == 1 and o.cls == 'artillerie')
+        e, e2 = [o for o in tb.units if o.side == 0 and o.cls == 'inf'][:2]   # (le canon du camp 1 sur deux cibles)
+        for k, v in enumerate((e, e2)):
+            face_a_face(tb, g, v, 300)
+            v.x, v.y = v.x + (k - 0.5) * 600 * math.sin(g.dir), v.y - (k - 0.5) * 600 * math.cos(g.dir)
+        if not (tb.los_units(g, e) and tb.los_units(g, e2)):
+            self.skipTest('pas de vue sur les deux cibles avec cette graine')
+        for v in (e, e2):
+            mem['pt'] = [v.x, v.y]
+            self.assertIs(ai._art_target(tb, g, [e, e2], [], mem, 9e9, 9e9, 0, 50.0), v)
+
+    def test_la_masse_se_jette_sur_le_point(self):
+        tb, mem, pense, a_moi, a_lui, ai, _ = self.attaque('1813', dict(ligne=4, grenadiers=1, cavalerie=1,
+                                                                         artillerie=1))
+        res = [u for u in tb.units if u.side == 0 and mem['role'].get(u.id) == 'res']
+        self.assertTrue(res)
+        e = a_lui('inf')
+        face_a_face(tb, a_moi('ligne'), e, 300)
+        e.morale = 60.0
+        mem.update(phase='combat', t_phase=tb.clock - 400, pt=[e.x, e.y], pt_id=e.id, t_contact=0)
+        pense()
+        masse = [u for u in tb.units if u.side == 0 and mem['role'].get(u.id) == 'masse']
+        self.assertTrue(masse)
+        self.assertTrue(any('assaut de la masse' in n[1] for n in mem['journal']))
+        if len(res) >= 3:
+            self.assertTrue(any(mem['role'].get(u.id) == 'res' for u in res))   # (un bataillon gardé pour les trous)
+        json.dumps(tb.ai_mem)
+
+    def test_la_cavalerie_poursuit(self):
+        tb, mem, pense, a_moi, a_lui, ai, _ = self.attaque('1813')
+        c = a_moi('cav')
+        e = a_lui('inf')
+        face_a_face(tb, c, e, 450)
+        e.state, e.morale = 'deroute', 10.0
+        c.morale, c.fat = 90.0, 0.0
+        pense()
+        self.assertIn(c.id, mem.get('pours', {}))
+        self.assertEqual(c.state, 'charge')
+        cavs = [u for u in tb.units if u.side == 0 and u.cls == 'cavalerie' and u.state == 'charge']
+        self.assertLessEqual(len(cavs), max(1, sum(1 for u in tb.units if u.side == 0 and u.cls == 'cavalerie') // 2))
+
+    def test_bonds_par_moities_en_1870(self):
+        tb, mem, pense, a_moi, a_lui, ai, math = self.attaque('1870', lvl='difficile')
+        L = ai.LEVELS['difficile']
+        x0, y0 = mem['ax'], mem['ay']
+        ai._advance(tb, mem, L, [], 500.0, L['bound_feu'])
+        self.assertAlmostEqual(math.hypot(mem['ax'] - x0, mem['ay'] - y0), L['bound_feu'], delta=2)
+        h = mem['half']
+        tb.clock += 200
+        ai._advance(tb, mem, L, [], 500.0, L['bound_feu'])
+        self.assertEqual(mem['half'], -h)   # (l'autre moitié bondit à son tour)
+
+
+class IAPlaces(unittest.TestCase):
+    """Attaque et défense des places (IA contre IA, troupes tirées au sort) : batterie de brèche, regroupement qui
+    dure, place investie puis abandonnée, coupure et contre-attaque dans la brèche, sorties, combats de rue."""
+
+    def place(self, role='att', lvl='normal'):
+        import math
+        from fabrique import S
+        from game.tactics import ai
+        g, bid = S.new(GEO, dict(me='33', foe='24', era='1790', kind='forteresse', role=role, seed=1,
+                                 units=dict(ligne=4, legere=1, cavalerie=1, artillerie=2)))
+        self.assertIsNotNone(g, bid)
+        tb = g.tactical[bid]
+        tb.spec['ai_levels'] = [lvl, lvl]
+        tb.autofinish()   # (IA des deux côtés ; le combat commence)
+
+        def pense(side, n=1):
+            for _ in range(n):
+                m = tb.ai_mem[f's{side}']
+                m['next'] = m['rnext'] = 0.0
+                ai.think(tb, side, 2.0)
+        return tb, pense, ai, math
+
+    def test_ordre_bombard(self):
+        tb, pense, ai, math = self.place()
+        art = next(u for u in tb.units if u.side == 0 and u.cls == 'artillerie' and u.type != 'mitrailleuses')
+        inf = next(u for u in tb.units if u.side == 0 and u.cls == 'inf')
+        art.ctrl = inf.ctrl = 'joueur'   # (l'IA ne les commande plus ; en accéléré, l'ordre passe par who='any')
+        pl = tb.place_info()
+        self.assertFalse(tb.order(0, [inf.id], 'bombard', who='any', x=pl['x'], y=pl['y'])[0])
+        # la batterie à bonne portée du rempart : elle bat ce pan, et lui seul
+        w = next(w for w in tb.map.walls if w.get('kind') != 'barricade')
+        ax, ay = min(w['pts'], key=lambda q: math.hypot(q[0] - art.x, q[1] - art.y))
+        a = math.atan2(ay - pl['y'], ax - pl['x'])
+        e = tb.ranges(art)[0]
+        art.x, art.y = ax + math.cos(a) * 0.7 * e, ay + math.sin(a) * 0.7 * e
+        art.dir, art.form, art.path, art.goal, art.reload = a + math.pi, 'batterie', [], None, 0.0
+        self.assertTrue(tb.order(0, [art.id], 'bombard', who='any', x=ax, y=ay)[0])
+        before = {k: v for k, v in tb.pound.items()}
+        avancer(tb, 300)
+        self.assertEqual(kind(art), 'bombard')
+        k = str(int((math.atan2(ay - pl['y'], ax - pl['x']) % (2 * math.pi)) / (2 * math.pi) * BT.BREACH_SECT))
+        self.assertNotEqual(tb.pound.get(k, 0.0), before.get(k, 0.0))   # (son pan, à terre ou entamé)
+        self.assertGreater(art.fired_t, 0)
+        tc, _ = bataille()
+        self.assertFalse(ordre(tc, next(u for u in tc.units if u.cls == 'artillerie' and u.ctrl == 'joueur'),
+                               'bombard', x=100, y=100)[0])
+
+    def test_batterie_de_breche_et_garde(self):
+        tb, pense, ai, math = self.place()
+        mem = tb.ai_mem['s0']
+        self.assertTrue(mem['batter'])
+        self.assertTrue(any(r == 'garde' for r in mem['role'].values()))
+        for uid in mem['batter']:
+            tb.unit(uid).x, tb.unit(uid).y = mem['post'][uid][:2]
+            tb.unit(uid).form = 'batterie'
+        pense(0)
+        self.assertTrue(all(kind(tb.unit(uid)) == 'bombard' for uid in mem['batter']))
+        self.assertTrue(any('batterie de brèche' in n[1] for n in mem['journal']))
+
+    def test_regroupement_dure_puis_place_investie_puis_retraite(self):
+        tb, pense, ai, math = self.place()
+        mem = tb.ai_mem['s0']
+        mem.update(phase='assaut', t_phase=tb.clock - 400, t_breach=10, waves=0, n_assault=10 ** 6)
+        pense(0)
+        self.assertEqual(mem['phase'], 'regroupe')
+        mem['t_phase'] -= 300
+        pense(0)
+        self.assertEqual(mem['phase'], 'regroupe')   # (une vieille brèche ne relance plus l'assaut au bout de 2 min)
+        mem.update(phase='assaut', t_phase=tb.clock - 400, waves=1, n_assault=10 ** 6)
+        pense(0)
+        self.assertEqual(mem['phase'], 'investi')
+        mem.update(t_phase=tb.clock - 1900, bonus=1, extra=1)
+        pense(0)
+        self.assertTrue(tb.withdrawing[0])
+        self.assertTrue(any("se retire dans les lignes" in n[1] for n in mem['journal']))
+        json.dumps(tb.ai_mem)
+
+    def test_coupure_et_contre_attaque_dans_la_breche(self):
+        tb, pense, ai, math = self.place('def')
+        mem = tb.ai_mem['s1']
+        n0 = sum(1 for r in mem['role'].values() if r == 'coupure')
+        pl = tb.place_info()
+        a = mem['fd']
+        q = [round(pl['x'] + math.cos(a) * (mem['r_in'] - 30)), round(pl['y'] + math.sin(a) * (mem['r_in'] - 30)),
+             round(a, 3)]
+        mem['breach'].append(q)
+        pense(1)
+        self.assertEqual(sum(1 for r in mem['role'].values() if r == 'coupure'), n0 + 1)
+        # un assaillant ébranlé dans la brèche : on le rejette à la baïonnette
+        e = next(u for u in tb.units if u.side == 0 and u.cls == 'inf' and u.valid)
+        e.x, e.y, e.morale, e.path, e.goal = q[0], q[1], 45.0, [], None
+        for u in tb.units:
+            if u.side == 1 and mem['role'].get(u.id) in ('coupure', 'breche', 'res'):
+                u.x, u.y = q[0] - math.cos(a) * 90, q[1] - math.sin(a) * 90
+                u.morale, u.state = 90.0, 'repos'
+        tb._update_vision()
+        pense(1)
+        self.assertTrue(any('dans la brèche' in n[1] for n in mem['journal']))
+
+    def test_sortie_contre_une_batterie_isolee(self):
+        tb, pense, ai, math = self.place('def')
+        mem = tb.ai_mem['s1']
+        pl = tb.place_info()
+        a = mem['fd']
+        cav = next(u for u in tb.units if u.side == 1 and mem['role'].get(u.id) == 'cav')
+        cav.morale, cav.fat = 90.0, 0.0
+        z = tb.ai_zone(0)
+        g = None
+        for u in tb.units:
+            if u.side != 0:
+                continue
+            if u.cls == 'artillerie' and g is None:
+                g = u
+                d = mem['r_in'] + 500
+                u.x, u.y, u.form, u.dir = pl['x'] + math.cos(a) * d, pl['y'] + math.sin(a) * d, 'batterie', a + math.pi
+            else:   # (les autres loin derrière : la batterie est isolée)
+                u.x, u.y = (z[0] + z[2]) / 2 + math.cos(a) * 1500, (z[1] + z[3]) / 2 + math.sin(a) * 1500
+                u.x, u.y = min(max(u.x, 20), BT.W - 20), min(max(u.y, 20), BT.H - 20)
+            u.path, u.goal = [], None
+        tb._update_vision()
+        if g.id not in tb.seen_by[1]:
+            self.skipTest('batterie invisible depuis la place avec cette graine')
+        pense(1)
+        self.assertIn(cav.id, mem.get('sortie', {}))
+        self.assertTrue(any('sortie de la garnison' in n[1] for n in mem['journal']))
+        st = mem['sortie'][cav.id]
+        cav.x, cav.y, cav.path, cav.goal = st[3], st[4], [], None
+        tb._update_vision()
+        pense(1)
+        self.assertEqual(mem['sortie'][cav.id][0], 'charger')
+        self.assertEqual(cav.state, 'charge')
+        json.dumps(tb.ai_mem)
+
+    def test_niveaux_facile_et_difficile(self):
+        for lvl in ('facile', 'difficile'):
+            for role in ('att', 'def'):   # (l'IA du joueur garde ACCEL_LEVEL : l'autre camp joue à ce niveau)
+                tb, pense, ai, math = self.place(role, lvl)
+                avancer(tb, 2400)
+                json.dumps(tb.ai_mem)
+
+    def test_combats_de_rue(self):
+        tb, pense, ai, math = self.place('def')
+        mem = tb.ai_mem['s1']
+        if not mem.get('ilots'):
+            self.skipTest('pas de maisons à tenir dans cette place')
+        pl = tb.place_info()
+        a = mem['fd']
+        # 400 hommes dans la place, depuis plus d'une minute
+        es = [u for u in tb.units if u.side == 0 and u.cls == 'inf' and u.valid][:2]
+        for k, e in enumerate(es):
+            e.x, e.y = pl['x'] + math.cos(a) * (mem['r_in'] - 60) + 20 * k, pl['y'] + math.sin(a) * (mem['r_in'] - 60)
+            e.path, e.goal = [], None
+        tb._update_vision()
+        pense(1)
+        tb.clock += 90
+        pense(1)
+        il = [k for k, r in mem['role'].items() if r == 'ilot']
+        self.assertTrue(il)
+        self.assertLessEqual(len(il), ai.LEVELS['normal']['ilots'])
+        self.assertTrue(any('tient les maisons' in n[1] for n in mem['journal']))
+
+
 if __name__ == '__main__':
     unittest.main()
