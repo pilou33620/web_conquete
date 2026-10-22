@@ -853,5 +853,26 @@ class IAPlaces(unittest.TestCase):
         self.assertTrue(any('tient les maisons' in n[1] for n in mem['journal']))
 
 
+    def test_l_assaut_chasse_a_la_baionnette_les_gardiens_du_coeur(self):
+        # au cœur de la place, l'assaillant ne se contente pas de fusiller : il charge ceux qui le tiennent encore,
+        # cavaliers compris, et relance une charge arrêtée court
+        tb, pense, ai, math = self.place()
+        mem = tb.ai_mem['s0']
+        mem.update(phase='assaut', t_phase=tb.clock - 400, t_go=tb.clock - 1000, n_assault=1)
+        hx, hy = mem['heart']
+        u = next(v for v in tb.units if v.side == 0 and mem['role'].get(v.id) == 'assaut' and v.valid)
+        cav = next(v for v in tb.units if v.side == 1 and v.cls == 'cavalerie' and v.valid)
+        for v in tb.units:
+            if v.side == 1 and v is not cav:
+                v.state = 'hors'
+        cav.x, cav.y, cav.state, cav.path, cav.goal = hx + 50, hy, 'repos', [], None
+        u.x, u.y, u.morale, u.state, u.path, u.goal = hx, hy, 90.0, 'repos', [], None
+        tb._update_vision()
+        pense(0)
+        self.assertEqual((u.state, u.target), ('charge', cav.id))
+        u.state = 'repos'   # (la charge s'est arrêtée court ; l'ordre est resté)
+        pense(0)
+        self.assertEqual(u.state, 'charge')
+
 if __name__ == '__main__':
     unittest.main()

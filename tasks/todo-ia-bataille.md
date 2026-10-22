@@ -9,22 +9,37 @@ L'IA de bataille aussi (voir ses restes ci-dessous).
 Les trois volets sont faits (défense en rase campagne, attaque en rase campagne, places). On les mesure avec
 `python3 outils/banc_ia.py --graines 1 --proc 4`, à comparer avec tasks/banc-ia-reference.md.
 
-| Mesure | Référence | Après |
-|---|---|---|
-| Victoires de l'assaillant / du défenseur | 2 / 14 | 3 / 13 |
-| Durée moyenne | 413 min | 250 min |
-| Batailles de places allées jusqu'à la nuit | 7 sur 8 | 0 sur 8 |
-| Pertes moyennes (assaillant / défenseur) | 17 % / 20 % | 21 % / 22 % |
-| Calcul moyen (max) | 6,0 s (14,7 s) | 3,8 s (6,5 s) |
-| Contre-attaques notées | 76 | 202 |
-| Tirailleurs notés | 0 | 44 |
-| Assauts notés | 141 | 359 |
-| Brèches notées | 29 | 194 |
+| Mesure | Référence | Après | Après l'assaut du cœur |
+|---|---|---|---|
+| Victoires de l'assaillant / du défenseur | 2 / 14 | 3 / 13 | 5 / 11 |
+| Places prises | 0 sur 8 | 0 sur 8 | 2 sur 8 |
+| Durée moyenne | 413 min | 250 min | 222 min |
+| Batailles de places allées jusqu'à la nuit | 7 sur 8 | 0 sur 8 | 0 sur 8 |
+| Pertes moyennes (assaillant / défenseur) | 17 % / 20 % | 21 % / 22 % | 21 % / 20 % |
+| Calcul moyen (max) | 6,0 s (14,7 s) | 3,8 s (6,5 s) | 3,5 s (6,8 s) |
+| Contre-attaques notées | 76 | 202 | 172 |
+| Tirailleurs notés | 0 | 44 | 44 |
+| Assauts notés | 141 | 359 | 322 |
+| Brèches notées | 29 | 194 | 152 |
+
+Banc des places seul (`python3 outils/banc_ia.py --lieux forteresse --graines 3 --proc 4`, 24 batailles) : avant
+l'assaut du cœur, 0 place prise, pertes 24 % / 24 %, durée moyenne 279 min ; après, 4 prises (1700, 1790, 1813 ; en
+1 h 30 à 3 h, l'assaillant perdant 11 à 22 %, la garnison 16 à 34 %), pertes 23 % / 22 %, durée 247 min.
 
 Reste à faire :
-- **Une place n'est jamais prise au banc (0 sur 8).** La spécification visait 30 à 50 %. Le défenseur perd jusqu'à
-  54 % de ses hommes, mais sa réserve et sa cavalerie gardent le cœur de la place. Il faut régler les taux d'assaut
-  (dégâts au corps à corps dans la brèche, tenue du cœur), par niveau, et essayer au banc un village barricadé.
+- **Places : 4 prises sur 24 au banc des places (17 %), la spécification visait 30 à 50 %.** La cause des 0 sur 24
+  était dans l'IA, pas dans le moteur : arrivées au cœur, les colonnes fusillaient les maisons sans y entrer,
+  ignoraient les cavaliers de la garnison qui le gardaient (un seul défenseur debout à moins de HEART_FREE suffit à le
+  tenir), ne relançaient pas une charge arrêtée court (l'ordre restait « charge », l'IA croyait la charge en cours), et
+  les fuyards ralliés attendaient la vague suivante pendant que l'assaut s'éteignait. Restent :
+  - la graine 2 (8 batailles sur 24) : la place est cernée d'eau (centre et abords à 65 et 175 m de l'anneau dans
+    l'eau, sur tout le tour) ; les colonnes restent à leur poste, chemin introuvable. À voir dans terrain.py (une place
+    de forteresse doit être abordable) ;
+  - rôle « def » (l'IA attaque avec l'armée tirée au sort, à peine plus nombreuse que la garnison du joueur) : aucune
+    prise, ce qui est juste, mais la brèche tombe vite (10 min) devant une garnison fraîche ;
+  - en 1870 : aucune prise ; les colonnes arrivent au cœur sans cartouches et sous 50 de moral ;
+  - les victoires sont parfois bon marché (1813, graine 3 : 16 % de pertes de chaque côté en 1 h 30) ;
+  - essayer au banc un village barricadé ; le logement dans la brèche (A4) aiderait à garder ce qui est pris.
 - **En rase campagne, l'assaillant gagne encore peu** : 3 batailles sur 8, et aucune en 1870. Il faut vérifier sur
   plus de graines (`--graines 3`), parce qu'une seule graine fait beaucoup bouger les chiffres.
 - **« Finir automatiquement »** : l'armée du joueur reprise en cours de route n'a pas les réglages du déploiement

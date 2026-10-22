@@ -42,9 +42,10 @@ prudent → harcèlement plus tôt, audacieux → contre-offensive plus tôt)
 - harcelement : escarmouche à longue portée (canons, légers), puis retraite (quand on est nettement inférieur) ;
 - assaut : assaut d'une place (une heure de canonnade sur la brèche (40 min en facile, 70 en difficile ; moitié moins
   contre un village, sans attendre de brèche), diversion (une vraie seconde attaque contre un village), enfants perdus
-  (les légers) en tête, puis les colonnes deux par deux, quand les défenseurs sont usés, puis le cœur, dont on nettoie
-  les maisons ; nouvelle vague, avec les troupes ralliées, si la première est repoussée ou si tout piétine, après un
-  vrai regroupement ; repoussé sans plus de vague : la place est investie (les batteries battent toujours le mur), un
+  (les légers) en tête, puis les colonnes deux par deux, quand les défenseurs sont usés, puis le cœur : on charge à la
+  baïonnette ceux qui le tiennent encore (cavaliers compris ; une charge arrêtée court est relancée), on fusille les
+  autres ; les fuyards ralliés retournent à l'assaut en cours ; nouvelle vague si l'assaut est repoussé ou si tout
+  piétine, après un vrai regroupement ; repoussé sans plus de vague : la place est investie (les batteries battent toujours le mur), un
   dernier assaut si une brèche neuve s'ouvre ou si la garnison est épuisée, sinon on se retire dans les lignes au bout
   de 30 min (1 h si les batteries peuvent encore ouvrir une brèche ; à la tombée de la nuit au plus tard) ;
 - place : défense d'une place (brèche neuve : flanquée et retranchée ; contre-attaque à la baïonnette dans la brèche,
@@ -156,7 +157,11 @@ Ils ne changent que la qualité des décisions, jamais les dégâts :
   (Places : les clés batter, forlorn, div_lead, bonus_wave, garde, sortie, b_counter, coupure, breach_volley et ilots de
   LEVELS ; facile n'a ni enfants perdus, ni brèche neuve, ni garde, ni sortie, ni coupure, ni îlots. Banc à une graine :
   avant ce volet, 4 assauts de place sur 8 allaient jusqu'à la nuit ; après, aucun : tous décidés en 2 h 30 à 6 h,
-  mais l'assaillant n'emporte toujours pas la place (le cœur reste tenu par la réserve et la cavalerie de la garnison).
+  mais l'assaillant n'emportait jamais la place : dans le cœur, ses colonnes fusillaient les maisons sans y entrer,
+  ignoraient les cavaliers qui le gardaient, ne relançaient pas une charge arrêtée court, et ses fuyards ralliés
+  attendaient la vague suivante. Corrigé : 4 places prises sur 24 au banc à trois graines, 4 sur les 8 où la brèche
+  est abordable et l'assaillant nettement plus nombreux, aucune contre une garnison presque aussi forte que lui ; la
+  graine 2 a une place cernée d'eau, où les colonnes n'abordent pas.
   Ni attaque à l'aube, ni escalade de diversion, ni logement dans la brèche, ni redoutes tenues, ni cavalerie hors du
   village, ni choix de cibles propre aux canons du rempart : spécifiés, pas réalisés.)
   (L'ordre oblique a été retiré, et les essais d'aile refusée, d'attaque concentrée de flanc au bout de l'aile ennemie
@@ -3250,9 +3255,13 @@ def _think_place_att(b, side, mem, L, us, foes, sit, want, busy):
             ph = 'assaut'
             t = 0.0
     if ph == 'assaut':
-        # assaut repoussé, ou assaut général décidé quand tout piétine (_decide_withdraw) : on se regroupe sous les
-        # canons, et les troupes ralliées depuis (en réserve ou encore à se reformer) repartent avec la vague suivante
-        # (ASSAULT_WAVES au plus) ; plus de vague : on investit la place
+        # les fuyards ralliés au pied de la brèche y retournent sans attendre (Badajoz, Saint-Sébastien) ; assaut
+        # repoussé, ou assaut général décidé quand tout piétine (_decide_withdraw) : on se regroupe sous les canons, et
+        # les troupes ralliées depuis repartent avec la vague suivante (ASSAULT_WAVES au plus) ; plus de vague : on
+        # investit la place
+        _wave(mem, us)
+        assault = [u for u in us if roles.get(u.id) in ('assaut', 'vague2')]
+        a_men = sum(u.men for u in assault if u.valid)
         ga = mem.get('general_assault')
         wave = a_men < 0.35 * mem.get('n_assault', a_men or 1) and sit['ratio'] > 0.9
         left = L['n'] >= 1 and mem.get('waves', 0) < L.get('waves', ASSAULT_WAVES)
@@ -3308,12 +3317,21 @@ def _think_place_att(b, side, mem, L, us, foes, sit, want, busy):
             d_c = math.hypot(u.x - px, u.y - py)
             if d_c < r_in - 20:
                 # dans la place : on nettoie les maisons autour du cœur (le réduit tombe quand plus personne ne le tient)
-                hold = [e for e in sit['seen'] if e.cls in ('inf', 'artillerie') and e.valid and
-                        _d2(e.x, e.y, heart[0], heart[1]) < 200 ** 2]
-                if hold and u.valid and u.state not in ('melee', 'charge') and u.busy <= 0 and u is not keep:
-                    e = min(hold, key=lambda f: _d2(f.x, f.y, u.x, u.y))
-                    if u.target != e.id or (u.order or {}).get('kind') != 'attack':
-                        b.order(side, [u.id], 'attack', target=e.id)
+                # (tous ceux qui le gardent, cavaliers compris : un seul défenseur debout près du réduit suffit à le
+                # tenir ; et le feu seul ne chasse personne des maisons : de près, on y entre à la baïonnette)
+                hold = [e for e in sit['seen'] if e.cls in ('inf', 'artillerie', 'cavalerie') and e.valid and
+                        _d2(e.x, e.y, heart[0], heart[1]) < BT.HEART_FREE ** 2]
+                e = min(hold, key=lambda f: _d2(f.x, f.y, u.x, u.y)) if hold else None
+                bold = e is not None and (u.morale >= 60 or (u.morale >= 50 and e.morale < 40))
+                close = bold and _d2(e.x, e.y, u.x, u.y) < 130 ** 2
+                if e and u.valid and u.state not in ('melee', 'charge') and u.busy <= 0 and (u is not keep or close):
+                    if bold and not close:
+                        want[u.id] = [e.x, e.y, fd, 'colonne', False]   # on marche sur eux, pour la baïonnette
+                        continue
+                    kind = 'charge' if close else 'attack'
+                    # (une charge arrêtée court laisse son ordre : on la relance)
+                    if close or u.target != e.id or (u.order or {}).get('kind') != kind:
+                        b.order(side, [u.id], kind, target=e.id)
                     busy.add(u.id)
                     _note_once(b, mem, 'rues', f"combat de rue : {u.name} attaque les maisons autour du cœur de la "
                                                f"place.", 1800)
