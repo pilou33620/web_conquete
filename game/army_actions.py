@@ -2,7 +2,7 @@
 devant une place étrangère : traversée et droit de passage, ralliement négocié, contribution, blocus.
 
 L'état propre à une place est rangé dans n['aa'] (travaux, solidité des barricades, garde, négociation, délais) ;
-celui d'une armée dans a['tr'] (traverser), a['hold'] (halte devant une place), a['qrt'] (quartiers),
+celui d'une armée dans a['tr'] (traverser), a['hold'] (halte devant une place), a['qrt'] (quartiers), a['rg'] (rangs à compléter),
 a['cl'] (sur des terres fermées : délai de grâce), a['ex'] (terres fermées dont son itinéraire la fait sortir),
 a['dt'] (terres fermées que son itinéraire contourne) ; les droits de passage dans
 faction['passage'] = {bénéficiaire: échéance}.
@@ -30,9 +30,13 @@ BAR_REDO = 0.7          # on peut relever un ouvrage usé sous ce seuil
 BAR_MIN = 0.25          # en dessous, l'ouvrage n'arrête plus personne (plus de siège)
 
 # ------------------------------------------------------------------ quartiers
-QRT_REPL = 0.03         # renforts en plus par jour (part de l'effectif)
+QRT_REPL = 0.01         # renforts en plus par jour (part de l'effectif) : les quartiers sont surtout repos et ordre
 QRT_FOOD = 0.6          # vivres consommés en plus (part de l'entretien)
 QRT_STAB = 0.12         # ordre public visé en plus dans la place
+
+# ------------------------------------------------------------------ compléter les rangs
+RNG_LOURD = 0.30        # au-delà de 30 % de pertes, deux tours : une classe ne se lève ni ne s'instruit en un mois
+RNG_MIN = 0.02          # en dessous, les rangs sont au complet
 
 # ------------------------------------------------------------------ garde bourgeoise
 GARDE_TOURS = 2
@@ -105,7 +109,7 @@ def migrate(g):
     for f in g.factions.values():
         f.setdefault('passage', {})
     for a in g.armies.values():
-        for k in ('tr', 'hold', 'qrt'):
+        for k in ('tr', 'hold', 'qrt', 'rg'):
             a.setdefault(k, False)
         a.pop('trx', None)   # ancien passage forcé « quitte à provoquer un incident »
 
@@ -194,6 +198,7 @@ def tick(g, dt, flush=False):
         return
     dt, g._aa_dt = g._aa_dt, 0.0
     quarters_tick(g, dt)
+    rangs_tick(g, dt)
     for n in g.nodes:
         x = n.get('aa')
         if not x:
@@ -324,6 +329,107 @@ def quarters_tick(g, dt):
         if not (f.get('banqueroute') or f.get('famine')):
             g.replenish(code, a['regs'], dt, QRT_REPL)
     g._aa_qn = qn
+
+
+# ================================================================== 2 bis. compléter les rangs
+def rangs_info(g, a):
+    """(hommes à lever, armes, tours) pour remettre au complet les régiments présents."""
+    need = sum(r['max'] - r['n'] for r in a['regs'])
+    mx = sum(r['max'] for r in a['regs']) or 1
+    return need, math.ceil(need * R.REPL_ARMES), 1 if need / mx <= RNG_LOURD else 2
+
+
+def rangs_place(g, code, a):
+    """(place, raison) : à l'arrêt dans une de nos villes, ou un village qui a un magasin ; trésor en état."""
+    nid, why = own_place(g, code, a)
+    if why:
+        return None, why
+    if g.geo.nodes[nid]['type'] == 'village' and not g.nodes[nid].get('depot'):
+        return None, "Il faut une ville ou un magasin : les conscrits se rassemblent au dépôt."
+    f = g.factions[code]
+    if f.get('banqueroute') or f.get('famine'):
+        return None, "Le trésor ne peut lever ni habiller de recrues."
+    return nid, ''
+
+
+def rangs_why(g, code, a):
+    _, why = rangs_place(g, code, a)
+    if why:
+        return why
+    if a.get('rg'):
+        return "Les renforts sont déjà en route."
+    need, armes, _ = rangs_info(g, a)
+    if need < RNG_MIN * (sum(r['max'] for r in a['regs']) or 1):
+        return "Les rangs sont au complet."
+    res = g.factions[code]['res']
+    if res['recrues'] < need or res['armes'] < armes:
+        return f"Il faut {int(need)} recrues et {armes} armes."
+    return ''
+
+
+def rangs_ok(g, a):
+    """(ok, raison) : les renforts peuvent-ils continuer d'arriver ?"""
+    if a['id'] not in g.armies:
+        return False, "l'armée n'est plus"
+    nid, why = rangs_place(g, a['owner'], a)
+    if why:
+        return False, why[0].lower() + why[1:].rstrip('.')
+    if nid != a['rg']['node']:
+        return False, "l'armée a changé de place"
+    return True, ''
+
+
+def rangs(g, code, a, on):
+    if not on:
+        if not a.get('rg'):
+            return False, "Aucun renfort n'est en route."
+        rangs_stop(g, a, "ordre de l'état-major")
+        return True, "Les renforts sont arrêtés."
+    why = rangs_why(g, code, a)
+    if why:
+        return False, why
+    nid = a['at_node']
+    need, armes, tours = rangs_info(g, a)
+    a['rg'] = dict(node=nid, until=TT.deadline(g, tours, code), men=need, t0=g.t)
+    when = 'au prochain tour' if tours == 1 else 'dans 2 tours'
+    return True, (f"La {a['name']} complète ses rangs à {place(g, nid)} : {int(need)} recrues et {armes} armes, "
+                  f"au complet {when}. Elle doit rester sur place.")
+
+
+def rangs_stop(g, a, why):
+    nid = a['rg']['node']
+    a['rg'] = False
+    if a['owner'] == g.player:
+        g.log('armee', f"Les renforts destinés à la {a['name']} s'arrêtent à {place(g, nid)} : {why}. "
+                       f"Les hommes déjà arrivés restent dans les rangs.", *g.node_xy(nid), who=a['owner'])
+
+
+def rangs_tick(g, dt):
+    """Les détachements du dépôt arrivent au fil des jours ; le dernier pas, à l'échéance, comble tout."""
+    for a in list(g.armies.values()):
+        rg = a.get('rg')
+        if not rg:
+            continue
+        ok, why = rangs_ok(g, a)
+        if not ok:
+            rangs_stop(g, a, why)
+            continue
+        code = a['owner']
+        k = 1.0 if rg['until'] <= g.t + 1e-6 else min(1.0, dt / max(dt, rg['until'] - g.t + dt))
+        full = True
+        for r in a['regs']:
+            if r['n'] < r['max']:
+                g.reinforce(code, r, (r['max'] - r['n']) * k)
+                full = full and r['n'] >= r['max'] - 1e-6
+        if k < 1:
+            continue
+        a['rg'] = False
+        if code == g.player:
+            nm = place(g, rg['node'])
+            got = int(round(rg['men'] - sum(r['max'] - r['n'] for r in a['regs'])))
+            g.log('armee', f"La {a['name']} a complété ses rangs à {nm} (+{max(0, got)} hommes, l'expérience des "
+                           f"anciens diluée)." if full else f"Rangs incomplets à {nm} : il manque des recrues ou des armes.",
+                  *g.node_xy(rg['node']), who=code, important=True)
 
 
 # ================================================================== 3. garde bourgeoise
@@ -1142,6 +1248,8 @@ def command(g, code, aid, what):
         return False, "Armée introuvable."
     if what in ('quarters', 'camp'):
         return quarters(g, code, a, what == 'quarters')
+    if what in ('rangs', 'rangs_stop'):
+        return rangs(g, code, a, what == 'rangs')
     fn = ACTIONS.get(what)
     if not fn:
         return False, "Action inconnue."
@@ -1176,6 +1284,8 @@ def view_army(g, a, d, own):
         d['tr'] = 1
     if a.get('hold'):
         d['hold'] = 1
+    if a.get('rg') and rangs_ok(g, a)[0]:
+        d['rg'] = [TT.tours_left(g, a['rg']['until']), round(sum(r['max'] - r['n'] for r in a['regs']))]
     if ask_alive(g, a):
         d['ask'] = dict(n=a['ask']['node'], c=ask_choices(g, a))   # fenêtre d'arrivée devant une place (ui.js)
     if a.get('dt') and a['path']:
@@ -1210,10 +1320,14 @@ def options(g, a, nid):
         rl = cd_left(g, n, 'req')
         rq = req_info(n)
         food = sum(R.UNITS[r['type']]['upkeep_v'] * r['n'] / 100 for r in a['regs']) * QRT_FOOD * (1 + g.mod(code, 'upkeep'))
+        need, rarmes, tours = rangs_info(g, a)
+        rg = a.get('rg')
         return dict(own=1,
                     fort=dict(why=fwhy, k=kind, d=days, b=bois, s=round(cur, 2),
                               w=[round(w['left'], 1), round(w['total'], 1)] if w and w['by'] == a['id'] else None),
                     qrt=dict(on=bool(a.get('qrt')), why=why_s or '', food=round(food, 1)),
+                    rg=dict(why='' if rg else rangs_why(g, code, a), t=tours, men=int(need), armes=rarmes,
+                            w=TT.tours_left(g, rg['until']) if rg else None),
                     garde=dict(why=gwhy, add=add, armes=armes, t=GARDE_TOURS),
                     req=dict(why=why_s or (f"Encore {R.pl(rl, 'tour')}" if rl > 0 else ''), g=rq,
                              stab=int(REQ_STAB * 100)))
@@ -1313,6 +1427,8 @@ def ai_step(ai):
                 quarters(g, code, a, False)
         elif tired and not n['siege'] and res['vivres'] > 300 and not f.get('famine') and f['income']['vivres'] > -3:
             quarters(g, code, a, True)
+        if tired and men < 0.9 * mx and not a.get('rg'):
+            rangs(g, code, a, True)   # (la commande fait elle-même les contrôles)
     # disette : on réquisitionne la plus grosse place tranquille où campe une armée
     if f.get('famine') or (res['vivres'] < 100 and f['income']['vivres'] < 0):
         cands = [(g.nodes[a['at_node']].get('pop', 0), a) for a in g.armies.values()

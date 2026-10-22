@@ -349,6 +349,16 @@ table.grid th { text-align: left; font-weight: 600; color: var(--laiton-clair); 
 table.grid td { padding: 5px 6px; border-bottom: 1px solid rgba(200,162,83,.15); vertical-align: middle; }
 table.grid tr.click { cursor: pointer; }
 table.grid tr.click:hover td { background: rgba(255,255,255,.04); }
+/* valeurs chiffrées des régiments (valeurs.js) : tableau comparatif, à la manière d'Empire: Total War */
+.vl-d { margin: 6px 0 4px; }
+.vl-d summary { cursor: pointer; color: var(--laiton-clair); font-size: 14.5px; }
+.vl-w { overflow-x: auto; }   /* sur téléphone, le tableau défile, pas la page */
+table.grid.vl-tab { font-size: 13.5px; }
+table.grid.vl-tab th { font-size: 13px; padding: 3px 5px; cursor: help; }
+table.grid.vl-tab td { padding: 3px 5px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+table.grid.vl-tab td:first-child, table.grid.vl-tab th:first-child { text-align: left; }
+.vl-x { color: var(--laiton-clair, #e3c27a); font-size: 11px; margin-left: 2px; }
+.vl-g { color: #8fcf6b; font-size: 11px; margin-left: 2px; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .slider { width: 100%; accent-color: var(--laiton); }
 .big-slider-labels { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; font-size: 14.5px; color: var(--papier-2); }

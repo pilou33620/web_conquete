@@ -121,6 +121,15 @@ body.en-bataille #proposals, body.en-bataille #bubble { opacity: 0; pointer-even
 .bp-note { font-size: 12.5px; color: var(--papier-2, #c9c0a8); margin-bottom: 4px; }
 .bp-kv dd { margin: 0; text-align: right; display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
 .bp-kv small { color: var(--papier-2, #c9c0a8); font-size: 12.5px; }
+/* valeurs chiffrées du régiment (valeurs.js), à la manière d'Empire: Total War */
+.vl { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; align-items: center; font-size: 13px; margin: 2px 0 6px; }
+.vl-n { color: var(--papier-2, #c9c0a8); cursor: help; }
+.vl-b { display: flex; height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden; }
+.vl-b i { display: block; height: 100%; background: var(--papier, #e8dfc6); }
+.vl-b i.x { background: var(--laiton, #c8a253); }
+.vl-b i.g { background: #8fcf6b; }
+.vl-v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bp-vl { background: none; border: 0; padding: 0 0 0 6px; color: var(--laiton-clair, #e3c27a); font: inherit; text-decoration: underline dotted; cursor: pointer; }
 .bp-stars, .uc-x { color: var(--laiton-clair, #e6c97f); letter-spacing: 1px; }
 .bp-stars i, .uc-x i { font-style: normal; color: rgba(230,201,127,.25); }
 .bp-bar { flex: 1; max-width: 150px; height: 7px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden; display: block; }

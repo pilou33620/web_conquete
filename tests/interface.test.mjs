@@ -78,8 +78,8 @@ test('sélection mêlée : seulement les ordres communs', () => {
 });
 
 // ------------------------------------------------------------------ panneau du régiment (bataille)
-function panneau(us, st = { phase: 'combat' }) {
-  const ui = Object.create(BattleUI.prototype);
+function panneau(us, st = { phase: 'combat' }, reglages = {}) {
+  const ui = Object.assign(Object.create(BattleUI.prototype), reglages);
   const p = element();
   ui.$ = () => p;
   ui.el = element();
@@ -98,6 +98,31 @@ test('panneau : ordres de la cavalerie, nom échappé', () => {
 test('panneau : pas d’ordres de combat pendant le déploiement', () => {
   const h = panneau([unite('ligne')], { phase: 'deploiement' });
   assert.ok(h.includes('Pivoter') && !a(h, 'vcharge'));
+});
+
+// valeurs chiffrées (valeurs.js, game/tactics/stats.py), à la manière d'Empire: Total War
+const { valeursTable } = await charger('valeurs.js');
+const VLIGNE = { mel: [32, 8, 0], chg: [15, 0, 0], pre: [32, 8, 0], rec: [68, -8, 0], por: [120, 230, null], mun: 60, vit: [1.2, 0, 0], dis: [40, 0, 0], car: [60, -12, 0] };
+
+test('panneau : valeurs du régiment, repliées par défaut', () => {
+  const ferme = panneau([unite('ligne', { stats: VLIGNE })]);
+  assert.ok(a(ferme, 'valeurs') && ferme.includes('>Valeurs</button>') && !ferme.includes('Mêlée'), 'le bouton seulement');
+  const h = panneau([unite('ligne', { stats: VLIGNE })], { phase: 'combat' }, { showVals: true });
+  for (const x of ['Mêlée', '40', '+8', '60 s', '−8', '1,2', 'Discipline', '120 / 230 m', 'aria-expanded="true"']) assert.ok(h.includes(x), x);
+  assert.ok(!h.includes('mitr.'), 'pas de mitraille pour un fusil');
+  assert.ok(!panneau([unite('ligne')], { phase: 'combat' }, { showVals: true }).includes('class="vl"'), 'sans valeurs (ennemi, ancien serveur) : rien');
+});
+
+test('tableau des valeurs (campagne) : « — » quand l’arme n’a pas la valeur, noms échappés', () => {
+  const h = valeursTable([['<i>Ligne</i>', VLIGNE], ['Artillerie', { mel: [11, 0, 0], pre: [37, 0, 0], rec: [94, 0, 0], por: [700, 1100, 280], mun: 120, vit: [1.5, 0, 0], dis: [40, 0, 5] }]]);
+  assert.ok(h.includes('&lt;i&gt;Ligne') && !h.includes('<i>Ligne'));
+  const art = h.split('<tr>').find(r => r.includes('Artillerie'));
+  const cells = art.match(/<td[^>]*>(.*?)<\/td>/g);
+  assert.equal(cells.length, 9, 'Troupe et huit colonnes (pas les munitions)');
+  assert.equal(cells.at(-1), '<td>—</td>', 'pas de carré pour les canons');
+  assert.equal(cells[2], '<td>—</td>', 'pas de charge pour les canons');
+  assert.ok(/<td title="700 \/ 1.100 m · mitr\. 280">700 m<\/td>/.test(art), 'la portée efficace, le reste dans la bulle');
+  assert.ok(art.includes('45<small class="vl-g"'), 'le général à part');
 });
 
 // ------------------------------------------------------------------ barre du tour (campagne)

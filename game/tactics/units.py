@@ -4,6 +4,7 @@ Chiffres de référence (contrat, § 2 et § 4) :
 - dotation d'un plein de munitions : infanterie 60 cartouches par homme, artillerie 120 coups par pièce
   (8 pièces par batterie), cavalerie 20 (pistolets, carabines) ;
 - portées (efficace / maximale / mitraille), dérivées du type et de la génération d'armes `arm` : ranges(reg) ;
+- justesse du feu : precision(u, d), moitié à D50 ;
 - vitesses au pas sur prairie (m/s de bataille) : infanterie 1,2, légère 1,4, cavalerie 2,5 (galop 7),
   artillerie attelée 1,5 ;
 - cadence d'un feu soutenu : une salve par minute environ pour le fusil à silex, une volée toutes les 80 à 100 s pour
@@ -21,6 +22,11 @@ ART_MEN = 120                  # servants d'une batterie complète
 
 # portées (m) par génération d'armes (rules.ARMS)
 INF_RANGE = [(80, 150), (100, 200), (120, 230), (130, 250), (300, 600), (500, 1200), (550, 1300), (600, 1500)]
+# justesse du feu en bataille (pas au tir à la cible) : elle baisse dès les premiers mètres, de moitié à D50 mètres
+# (fumée, peur, hausse mal réglée, balle lente qui passe au-dessus des têtes), puis comme 1/d² : precision()
+INF_D50 = [55, 70, 80, 85, 180, 360, 400, 450]   # par génération d'armes (rules.ARMS), comme INF_RANGE
+MIT_D50 = 1000           # mitrailleuse : gerbe étroite, tout se perd si la hausse est fausse
+CAV_D50 = 45             # mousquetons et pistolets des cavaliers
 ART_RANGE = [(500, 900, 250), (600, 1000, 260), (700, 1100, 280), (800, 1200, 300), (1400, 2500, 330),
              (1800, 3000, 360), (2200, 3500, 400)]
 CAV_RANGE = (30, 60)
@@ -86,6 +92,17 @@ def ranges(reg):
         return CAV_RANGE[0], CAV_RANGE[1], None
     e, m = INF_RANGE[max(0, min(arm, len(INF_RANGE) - 1))]
     return e, m, None
+
+
+def precision(u, d):
+    """Part des coups qui portent à d mètres, rapportée au bout portant (1 à 0 m, moitié à D50)."""
+    if u.type == 'mitrailleuses':
+        h = MIT_D50
+    elif u.cls == 'inf':
+        h = INF_D50[max(0, min(u.arm, len(INF_D50) - 1))]
+    else:
+        h = CAV_D50
+    return 1 / (1 + (d / h) ** 2)
 
 
 def reload_time(u):

@@ -1088,17 +1088,22 @@ class Game:
         return (600 + 70 * self.factions[code].get('_nn', 1)) * (1 + self.mod(code, 'granary'))
 
     def replenish(self, code, regs, dt, rate):
-        f = self.factions[code]
         top = 100 + self.mod(code, 'morale')
         for reg in regs:
             if reg['n'] < reg['max']:
-                add = min(reg['max'] - reg['n'], reg['max'] * rate * dt)
-                need_r, need_a = add, add * 0.13
-                if f['res']['recrues'] >= need_r and f['res']['armes'] >= need_a:
-                    f['res']['recrues'] -= need_r
-                    f['res']['armes'] -= need_a
-                    reg['n'] += add
+                self.reinforce(code, reg, min(reg['max'] - reg['n'], reg['max'] * rate * dt))
             reg['morale'] = min(top, reg['morale'] + 6 * dt)
+
+    def reinforce(self, code, reg, add):
+        """Verse add recrues au régiment s'il y a de quoi les armer ; les conscrits diluent l'expérience des anciens."""
+        r = self.factions[code]['res']
+        if add <= 0 or r['recrues'] < add or r['armes'] < add * R.REPL_ARMES:
+            return False
+        r['recrues'] -= add
+        r['armes'] -= add * R.REPL_ARMES
+        reg['xp'] = (reg['xp'] * reg['n'] + R.UNITS[reg['type']].get('xp0', 0) * add) / (reg['n'] + add)
+        reg['n'] += add
+        return True
 
     def all_regs(self, code):
         for n in self.nodes:
@@ -3494,7 +3499,7 @@ class Game:
                     for r in a['regs']:
                         r['morale'] = min(top, r['morale'] + 5 * dt)
                     if a['at_node'] is not None and self.geo.nodes[a['at_node']]['type'] != 'village':
-                        self.replenish(code, a['regs'], dt, 0.02)
+                        self.replenish(code, a['regs'], dt, R.REPL_ARMY)
                 else:
                     for r in a['regs']:
                         r['morale'] = max(r['morale'], min(90, r['morale'] + 1.5 * dt))

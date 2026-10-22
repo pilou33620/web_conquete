@@ -953,6 +953,148 @@ class Sauvegarde(unittest.TestCase):
         self.assertEqual(d1['ai_state'], d2['ai_state'])
 
 
+class CompleterLesRangs(unittest.TestCase):
+    """« Compléter les rangs » : les conscrits du dépôt rejoignent l'armée dans une de nos villes, en 1 tour (2 au-delà
+    de 30 % de pertes) ; ils diluent l'expérience des anciens ; un régiment anéanti ne revient pas."""
+
+    def prete(self, g, a, part, code=None):
+        code = code or g.player
+        nid = next(n['id'] for n in g.owned_nodes(code) if g.geo.nodes[n['id']]['type'] != 'village' and not n['siege'])
+        a['at_node'], a['path'], a['state'] = nid, [], 'idle'
+        a['x'], a['y'] = g.node_xy(nid)
+        res = g.factions[code]['res']
+        res['recrues'], res['armes'] = 1e4, 1e4
+        for r in a['regs']:
+            r['n'] = part * r['max']
+        return nid
+
+    def plein(self, a):
+        return sum(r['n'] for r in a['regs']) / sum(r['max'] for r in a['regs'])
+
+    def test_un_tour_si_peu_de_pertes(self):
+        g = partie()
+        a = armee(g)
+        nid = self.prete(g, a, 0.8)
+        rg = AA.options(g, a, nid)['rg']
+        self.assertEqual((rg['t'], rg['why']), (1, ''))
+        ok, msg = AA.command(g, g.player, a['id'], 'rangs')
+        self.assertTrue(ok, msg)
+        self.assertIn('au prochain tour', msg)
+        jouer_mois(g)
+        self.assertFalse(a['rg'])
+        for r in a['regs']:
+            self.assertAlmostEqual(r['n'], r['max'], delta=1)
+        self.assertAlmostEqual(g.factions[g.player]['res']['recrues'], 1e4 - rg['men'], delta=0.05 * rg['men'])
+
+    def test_deux_tours_si_lourdes_pertes(self):
+        g = partie()
+        a = armee(g)
+        nid = self.prete(g, a, 0.5)
+        o = AA.options(g, a, nid)
+        self.assertEqual(o['rg']['t'], 2)
+        self.assertEqual(o['garde']['armes'], AA.garde_info(g.nodes[nid])[1], 'le prix de la garde ne prend pas celui des renforts')
+        self.assertEqual(o['rg']['armes'], AA.rangs_info(g, a)[1])
+        self.assertTrue(AA.command(g, g.player, a['id'], 'rangs')[0])
+        jouer_mois(g)
+        self.assertTrue(0.6 < self.plein(a) < 0.98, self.plein(a))
+        self.assertTrue(a['rg'], 'à moitié refaite')
+        jouer_mois(g)
+        self.assertFalse(a['rg'])
+        self.assertAlmostEqual(self.plein(a), 1.0, delta=0.01)
+
+    def test_experience_diluee(self):
+        g = partie()
+        a = armee(g)
+        self.prete(g, a, 1.0)
+        r = next(r for r in a['regs'] if r['type'] == 'ligne')
+        r['n'], r['xp'] = 150.0, 60.0
+        self.assertTrue(AA.command(g, g.player, a['id'], 'rangs')[0])
+        jouer_mois(g)
+        self.assertAlmostEqual(r['n'], 300, delta=1)
+        self.assertAlmostEqual(r['xp'], 30, delta=3)
+        reg = dict(type='ligne', n=100.0, max=300, xp=60.0)   # le renfort ordinaire (replenish) dilue de même
+        self.assertTrue(g.reinforce(g.player, reg, 100))
+        self.assertAlmostEqual(reg['xp'], 30.0)
+        g.factions[g.player]['res']['recrues'] = 0
+        self.assertFalse(g.reinforce(g.player, reg, 10), 'sans recrues, rien')
+
+    def test_refus(self):
+        g = partie()
+        a = armee(g)
+        p = g.player
+        nid = self.prete(g, a, 0.7)
+        why = lambda: AA.rangs_why(g, p, a)
+        a['at_node'] = None
+        self.assertIn("à l'arrêt dans une de vos places", why())
+        vil = next((n for n in g.nodes if g.geo.nodes[n['id']]['type'] == 'village' and not n.get('depot')))
+        vil['owner'], vil['siege'] = p, None
+        a['at_node'] = vil['id']
+        self.assertIn('Il faut une ville ou un magasin', why())
+        a['at_node'] = nid
+        g.nodes[nid]['siege'] = dict(by='24', dmg=0.0)
+        self.assertIn('assiégée', why())
+        g.nodes[nid]['siege'] = None
+        g.factions[p]['res']['recrues'] = 0
+        self.assertIn('Il faut', why())
+        self.assertFalse(AA.command(g, p, a['id'], 'rangs')[0])
+        g.factions[p]['res']['recrues'] = 1e4
+        self.assertEqual(why(), '')
+        self.assertTrue(AA.command(g, p, a['id'], 'rangs')[0])
+        self.assertIn('déjà en route', why())
+        for r in a['regs']:
+            r['n'] = r['max']
+        a['rg'] = False
+        self.assertIn('au complet', why())
+
+    def test_annule_si_l_armee_part(self):
+        g = partie()
+        a = armee(g)
+        nid = self.prete(g, a, 0.5)
+        self.assertTrue(AA.command(g, g.player, a['id'], 'rangs')[0])
+        AA.tick(g, 5.0)
+        avant = g.army_men(a)
+        self.assertGreater(avant, 0.5 * sum(r['max'] for r in a['regs']) + 1, 'des hommes sont déjà arrivés')
+        autre = next(n['id'] for n in g.owned_nodes(g.player) if n['id'] != nid)
+        g.order_move(g.player, a['id'], node=autre)
+        TT.settle(g)
+        AA.tick(g, 1.0)
+        self.assertFalse(a['rg'])
+        self.assertGreaterEqual(g.army_men(a), avant - 5, 'les hommes arrivés restent')
+        self.assertTrue(any("s'arrêtent" in e['text'] for e in g.events[-5:]))
+
+    def test_regiment_aneanti_pas_recree(self):
+        g = partie()
+        a = armee(g)
+        self.prete(g, a, 0.8)
+        a['regs'].pop()
+        nb = len(a['regs'])
+        self.assertTrue(AA.command(g, g.player, a['id'], 'rangs')[0])
+        jouer_mois(g)
+        self.assertEqual(len(a['regs']), nb)
+
+    def test_ia_complete_ses_rangs(self):
+        g = partie()
+        ai = g.ais['24']
+        a = armee(g, '24')
+        self.prete(g, a, 0.6, code='24')
+        ai.wars = lambda: []
+        AA.ai_step(ai)
+        self.assertTrue(a['rg'])
+
+    def test_vue(self):
+        g = partie()
+        a = armee(g)
+        self.prete(g, a, 0.8)
+        d = next(d for d in V.player_state(g)['armies'] if d['id'] == a['id'])
+        self.assertEqual(d['ax']['rg']['why'], '')
+        self.assertTrue(AA.command(g, g.player, a['id'], 'rangs')[0])
+        d = next(d for d in V.player_state(g)['armies'] if d['id'] == a['id'])
+        self.assertEqual(d['rg'][0], 1)
+        self.assertEqual(d['ax']['rg']['w'], 1)
+        g2 = V.from_dict(GEO, json.loads(json.dumps(V.to_dict(g))))   # la sauvegarde garde les renforts en route
+        self.assertEqual(g2.armies[a['id']]['rg']['node'], a['rg']['node'])
+
+
 class BancEquilibre(unittest.TestCase):
     """outils/simuler.py : des parties jouées par les IA seules, pour mesurer l'équilibre (SPEC-TECH.md)."""
 
@@ -1588,6 +1730,47 @@ class Decouvertes(unittest.TestCase):
         date, t = me['tech_dates']['assolement']
         self.assertIn('1790', date)
         self.assertEqual(V.player_state(g)['me']['tech_dates']['assolement'][0], date)
+
+
+
+class ValeursEnCampagne(unittest.TestCase):
+    """Les valeurs chiffrées des régiments (game/tactics/stats.py) : celles de mes armées, de mes garnisons et des
+    troupes à lever ; rien pour l'ennemi (le brouillard), même photographié ou espionné."""
+
+    def test_mes_regiments_et_leur_general(self):
+        g = partie()
+        a = armee(g)
+        a['gen'] = dict(a.get('gen') or dict(name='Essai', lvl=1, xp=0.0), trait='inspirant')
+        d = next(d for d in V.player_state(g)['armies'] if d['id'] == a['id'])
+        self.assertTrue(all('mel' in r[10] for r in d['regs']))
+        self.assertTrue(all(r[10]['dis'][2] > 0 for r in d['regs']), 'un général inspirant tient ses hommes')
+        cap = next(n for n in V.player_state(g)['nodes'] if n['id'] == g.capital_of(g.player))
+        self.assertTrue(cap['g'] and all('mel' in r[10] and r[10]['dis'][2] == 0 for r in cap['g']), 'garnison sans général')
+        json.dumps(d)
+
+    def test_rien_pour_l_ennemi(self):
+        g = partie()
+        a = Renseignement().ennemi_en_vue(g)
+        avec(g, '33', 'photographie')
+        d = next(d for d in V.player_state(g)['armies'] if d['id'] == a['id'])
+        self.assertTrue(d['regs'] and all(len(r) < 11 for r in d['regs']))
+        n = next(n for n in g.nodes if n['owner'] == '24' and n['garrison'])
+        g.factions['33']['intel'][str(n['id'])] = g.t + 100
+        dn = next(x for x in V.player_state(g)['nodes'] if x['id'] == n['id'])
+        self.assertTrue(dn.get('g') and all(len(r) < 11 for r in dn['g']))
+
+    def test_les_troupes_a_lever_sont_celles_qui_sortent(self):
+        g = partie()
+        jouer_mois(g)
+        cap = g.capital_of(g.player)
+        d = next(n for n in V.player_state(g)['nodes'] if n['id'] == cap)
+        self.assertEqual(set(d['rs']), set(d['ru']))
+        n = Production().lever(g, 1, days=1.0)
+        ids = {r['id'] for r in n['garrison']}
+        jouer_mois(g)
+        neuf = next(r for r in n['garrison'] if r['id'] not in ids)
+        d2 = next(x for x in V.player_state(g)['nodes'] if x['id'] == cap)
+        self.assertEqual(next(r[10] for r in d2['g'] if r[0] == neuf['id']), d['rs']['ligne'])
 
 
 if __name__ == '__main__':

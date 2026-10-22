@@ -305,5 +305,125 @@ class MitrailleusesEnBataille(unittest.TestCase):
         self.assertLess(m, c)
 
 
+
+class ValeursChiffrees(unittest.TestCase):
+    """Les valeurs chiffrées de la fiche du régiment (game/tactics/stats.py), à la manière d'Empire: Total War : les
+    chiffres disent la vérité. Deux fois plus en Précision ou en Mêlée, deux fois plus de pertes infligées, sur le
+    moteur lui-même (_fire, _melee_k), le tir ramené au bout portant par la courbe de distance propre à chaque arme."""
+
+    def setUp(self):
+        from game.tactics import stats as ST
+        from game.tactics import units as U
+        self.ST, self.U = ST, U
+        self.tb, u = bataille()
+        self.l = u['ligne']
+        self.c = ennemi(self.tb, self.l, 'inf')
+        face_a_face(self.tb, self.l, self.c, 80)
+
+    def tir(self, xp, typ='ligne', arm=1):
+        l, c = self.l, self.c
+        l.xp, l.type, l.arm = xp, typ, arm
+        l.fat, l.reload, l.state, l.ammo, l.morale, l.form = 0.0, 0.0, 'repos', 60.0, 80.0, 'ligne'
+        l.target, l.order, l.fire_mode = c.id, dict(kind='attack', target=c.id), 'free'
+        c.men, c.state, c.morale = 500.0, 'repos', 80.0
+        self.tb._fire(l, 2.0)
+        # la Précision affichée vaut au bout portant : on y ramène le tir (la demi-justesse D50 change avec l'arme)
+        return (500.0 - c.men) / self.U.precision(l, self.tb.dist(l, c))
+
+    def pre(self, xp, typ='ligne', arm=1):
+        v = self.ST.stats(typ, arm, xp)['pre']
+        return v[0] + v[1]
+
+    def test_la_precision_dit_vrai(self):
+        p0 = self.tir(0)
+        self.assertGreater(p0, 0, 'la ligne doit tirer')
+        for (xa, ta, aa), (xb, tb_, ab) in [((100, 'ligne', 1), (0, 'ligne', 1)), ((0, 'legere', 1), (0, 'ligne', 1)),
+                                            ((0, 'ligne', 4), (0, 'ligne', 1))]:
+            with self.subTest(a=(xa, ta, aa), b=(xb, tb_, ab)):
+                vrai = self.tir(xa, ta, aa) / self.tir(xb, tb_, ab)
+                k = self.ST.xp_k   # (rapport des totaux non arrondis)
+                fa = self.ST.K * self.U.TYPE[ta]['fire'] * R.ARMS['inf'][aa][2] ** 0.5 * k(xa)
+                fb = self.ST.K * self.U.TYPE[tb_]['fire'] * R.ARMS['inf'][ab][2] ** 0.5 * k(xb)
+                self.assertAlmostEqual(vrai, fa / fb, delta=0.02 * fa / fb)
+                self.assertAlmostEqual(self.pre(xa, ta, aa) / self.pre(xb, tb_, ab), fa / fb, delta=0.04 * fa / fb)
+
+    def test_la_melee_dit_vrai(self):
+        l, c = self.l, self.c
+        l.fat, l.morale, l.form = 0.0, 80.0, 'ligne'
+        l.type, l.xp = 'ligne', 0
+        k0 = self.tb._melee_k(l, c)
+        l.type, l.xp = 'grenadiers', 100
+        k1 = self.tb._melee_k(l, c)
+        m = lambda typ, xp: sum(self.ST.stats(typ, 1, xp)['mel'][:2])
+        self.assertAlmostEqual(k1 / k0, 2.25, places=3)
+        self.assertAlmostEqual(m('grenadiers', 100) / m('ligne', 0), 2.25, delta=0.05)
+
+    def test_le_rechargement_est_celui_du_moteur(self):
+        for typ in self.U.TYPE:
+            cls = self.U.cls_of(typ)
+            for arm in range(8):
+                s = self.ST.stats(typ, arm, 50)
+                if 'rec' not in s:
+                    continue
+                with self.subTest(typ=typ, arm=arm):
+                    u = self.U.Unit(type=typ, cls=cls, arm=arm, xp=50)
+                    self.assertEqual(sum(s['rec']), round(self.U.reload_time(u)))
+
+    def test_toutes_les_armes(self):
+        for typ in self.U.TYPE:
+            cls = self.U.cls_of(typ)
+            for arm in range(8):
+                with self.subTest(typ=typ, arm=arm):
+                    s = self.ST.stats(typ, arm, 0)
+                    for k in ('mel', 'vit', 'dis'):
+                        self.assertIn(k, s)
+                    tire = typ not in ('general', 'chariot')
+                    for k in ('pre', 'rec', 'por', 'mun'):
+                        self.assertEqual(k in s, tire, k)
+                    self.assertEqual('chg' in s, cls in ('inf', 'cavalerie'))
+                    self.assertEqual('car' in s, cls == 'inf')
+                    for k, v in s.items():
+                        if k not in ('por', 'mun'):
+                            self.assertEqual(v[1], 0, k)   # une recrue : aucun bonus d'expérience
+                    v = self.ST.stats(typ, arm, 100, 'audacieux')
+                    self.assertEqual(v['dis'][1], 0)
+                    if 'chg' in v:
+                        self.assertEqual(v['chg'][1], 0)
+                    if typ != 'chariot':   # (le chariot : 8 % de 10, l'arrondi l'efface)
+                        self.assertGreater(v['mel'][2], 0)
+        from unittest import mock
+        with mock.patch.object(self.tb, 'trait', return_value='audacieux'):
+            self.assertGreater(self.ST.of_unit(self.l, self.tb)['mel'][2], 0)
+        with mock.patch.object(self.tb, 'trait', return_value=None):   # le général blessé : plus rien
+            self.assertTrue(all(v[2] == 0 for k, v in self.ST.of_unit(self.l, self.tb).items() if k not in ('por', 'mun')))
+
+    def test_la_vue_de_bataille(self):
+        from game.tactics import bridge as TB
+        from fabrique import S
+        g, bid = S.new(GEO, dict(me='33', foe='24', era='1790', units=dict(ligne=1, cavalerie=1), seed=1))
+        tb = g.tactical[bid]
+        tb.start()
+        v = TB.battle_view(g, bid)
+        mes = [d for d in v['units'] if d['side'] == tb.me]
+        autres = [d for d in v['units'] if d['side'] != tb.me]
+        self.assertTrue(mes and all('stats' in d and 'mel' in d['stats'] for d in mes))
+        self.assertTrue(all('stats' not in d for d in autres))
+        json.dumps(v)   # (le serveur l'envoie tel quel)
+
+
+class JustesseDuFeu(unittest.TestCase):
+    """Le feu est d'autant plus juste qu'on est près : à 90 % de la portée efficace, bien moins qu'à 30 m."""
+
+    def test_plus_juste_de_pres_pour_chaque_arme(self):
+        U = BT.U
+        for arm, (e, mx) in enumerate(U.INF_RANGE):
+            u = U.Unit(type='ligne', cls='inf', arm=arm)
+            with self.subTest(arme=R.ARMS['inf'][arm][1]):
+                p = [U.precision(u, d) for d in (0, 30, 0.9 * e, e, 1.3 * e, mx)]
+                self.assertEqual(p[0], 1.0)
+                self.assertEqual(p, sorted(p, reverse=True))   # toujours moins juste en s'éloignant
+                self.assertGreater(p[1], 2 * p[2])             # deux fois plus juste à 30 m qu'à 90 % de la portée efficace
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -764,8 +764,8 @@ class AI:
             g.to_garrison(code, a['id'])
             return
         self.rearm_here(a)
-        if a.get('qrt') and (men < 0.8 * mx or not self.wars()):
-            return   # en quartiers : on se refait avant de repartir
+        if a.get('rg') or (a.get('qrt') and (men < 0.8 * mx or not self.wars())):
+            return   # renforts en route, ou en quartiers : on se refait avant de repartir
         if men < 0.45 * mx or a['supply'] < 0.25:
             home = self.home_node(a)
             if home is not None and home != a['at_node']:

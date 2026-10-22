@@ -12,10 +12,12 @@ le budget de bridge.tick, une dizaine de secondes à l'écran ; 3 à 4 fois plus
 RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MELEE_*, FORMED… ci-dessous)
 ==================================================================================================================
 - Feu soutenu : une salve par minute environ (units.INF_RELOAD, ART_RELOAD) ; 60 cartouches durent une heure de feu.
-  Fusillade : P_FUSIL par homme du front et par salve, à portée efficace. Boulet : P_BOULET par pièce, de moins en moins
-  juste avec la distance (ball_k : moitié à la portée efficace). Mitraille : P_MITRAILLE par pièce, la gerbe s'ouvre
-  au-delà de 30 % de sa portée (grape_k : effet en 1/distance) ; terrible à bout portant (sous GRAPE_CLOSE = 150 m :
-  ×1,5 à 100 m, ×GRAPE_POINT = 1,6 dès 90 m). L'ordre dispersé (tirailleurs) prend nettement moins au
+  Fusillade : P_FUSIL par homme du front et par salve à bout portant, de moins en moins juste avec la distance
+  (units.precision : moitié à D50, de 55 m au mousquet à 360 m au Chassepot ; à 90 % de la portée efficace, deux à
+  trois fois moins qu'à 30 m). Boulet : P_BOULET par pièce, de moins en moins juste avec la distance (ball_k : moitié
+  à la portée efficace). Mitraille : P_MITRAILLE par pièce, la gerbe s'ouvre au-delà de 30 % de sa portée (grape_k :
+  effet en 1/distance) ; terrible à bout portant (sous GRAPE_CLOSE = 150 m : ×1,5 à 100 m, ×GRAPE_POINT = 1,6 dès
+  90 m). L'ordre dispersé (tirailleurs) prend nettement moins au
   canon (×0,35 au boulet, ×0,55 à la mitraille), un peu moins au fusil (×0,8).
 - Charge : l'élan (charge_v, mètres de course utile ; plein élan en 110 m pour la cavalerie, 45 m pour l'infanterie)
   se gagne en courant et se perd en terrain difficile (bois, rochers, marais, vignes, maisons, murs : BRAKE_*), aux
@@ -166,7 +168,8 @@ BRAKE_CAV = {T_BOIS: 0.45, T_FORET_T: 0.3, T_MARAIS_T: 0.35, T_VIGNE_T: 0.5, T_B
 BRAKE_INF = {T_BOIS: 0.85, T_FORET_T: 0.7, T_MARAIS_T: 0.6, T_VIGNE_T: 0.85, T_BATI: 0.8, T_ROCHE: 0.55, T_VERGER: 0.9,
              T_SABLE: 0.8, T_MUR: 0.5, T_PORTE: 0.5, T_BRECHE: 0.7, T_BARRICADE: 0.7, T_GUE: 0.7}
 # ---- équilibre du combat (voir « Règles de combat » dans l'aide-mémoire) ----
-P_FUSIL = 0.0065         # touchés par homme qui tire et par salve, à portée efficace (avant arme, expérience, moral…)
+P_FUSIL = 0.014          # touchés par homme qui tire et par salve, à bout portant (× precision(d) : moitié à D50 ;
+                         # avant arme, expérience, moral…)
 P_BOULET = 0.26          # touchés par pièce et par coup de boulet à courte distance, sur une ligne à découvert
 # les canons de l'assaillant battent le rempart d'une place : un pan s'effondre après BREACH_PTS coups de pièce (pondérés
 # par l'armement et la distance) par niveau de fortification, dans un des BREACH_SECT secteurs de l'enceinte
@@ -181,7 +184,8 @@ AI_DEPLOY_ATT = 500.0    # zones de l'IA : l'assaillant à moins de 500 m de son
 AI_DEPLOY_DEF_FRAC = 0.65   # … le défenseur sur le devant de sa zone (65 % de sa profondeur)…
 AI_DEPLOY_DEF = 120.0    # … et dans une place, à 120 m de l'enceinte au plus
 P_MITRAILLE = 0.56       # … à mitraille, jusqu'à 30 % de la portée de mitraille (puis de moins en moins : grape_k)
-P_REFFYE = 0.13          # mitrailleuse : touchés par pièce et par gerbe, à portée efficace, sur une ligne à découvert…
+P_REFFYE = 0.32          # mitrailleuse : touchés par pièce et par gerbe, à bout portant (0,13 à 1 200 m, là où l'IA la
+                         # place, comme avant), sur une ligne à découvert…
 REFFYE_VS_PIECE = 0.25   # … bien moins contre des pièces (servants abrités derrière leurs affûts)
 GRAPE_CLOSE = 150.0      # … et bien davantage à bout portant : sous 150 m, ×1,5 à 100 m…
 GRAPE_POINT = 1.6        # … ×1,6 dès 90 m (aussi le feu de défense d'une batterie abordée de face)
@@ -1180,8 +1184,8 @@ class TacticalBattle:
             u.state = 'marche' if u.path else 'repos'
 
     def _approach(self, u, tg):
-        """Se porter à portée de tir de la cible : on s'arrête dès qu'elle est à bonne portée (au feu plein), sans
-        aller au contact."""
+        """Se porter à portée de tir de la cible : on s'arrête dès qu'elle est à bonne portée (90 % de la
+        portée efficace : la distance d'ouverture du feu des règlements), sans aller au contact."""
         e, mx, g = U.ranges(u)
         d = self.dist(u, tg)
         want = e * 0.9
@@ -1788,7 +1792,7 @@ class TacticalBattle:
         mor_k = 0.6 + 0.4 * u.morale / 100
         xp_k = 0.8 + u.xp / 250
         cov = self._fire_cover(tg, u)
-        pr = 1.0 if d <= e else max(0.2, 1 - 0.8 * (d - e) / max(1.0, mx_eff - e))
+        pr = U.precision(u, d)
         tk = U.TYPE.get(u.type, U.TYPE['ligne'])['fire']
         if u.type == 'mitrailleuses':
             # feu roulant : une gerbe de balles sur une bande étroite, comme une salve ; ni boulet, ni mitraille
@@ -2018,8 +2022,9 @@ class TacticalBattle:
              (tg.cls == 'artillerie' and tg.form == 'batterie'))
         if ready:
             if tg.type == 'mitrailleuses':
-                # la mitrailleuse : plusieurs gerbes à bout portant, sans mitraille
-                vol = U.pieces(tg) * P_REFFYE * 3 * (0.6 + 0.4 * tg.morale / 100)
+                # la mitrailleuse : trois gerbes à bout portant, sans mitraille (si serrées qu'elles ne fauchent qu'une
+                # file ou deux)
+                vol = U.pieces(tg) * P_REFFYE * 1.2 * (0.6 + 0.4 * tg.morale / 100)
                 kind = 'salve'
             elif tg.cls == 'artillerie':
                 # deux décharges de mitraille à bout portant pendant que la charge arrive (la gerbe serrée : ×2,2) ;

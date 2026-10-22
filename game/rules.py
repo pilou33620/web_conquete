@@ -47,6 +47,8 @@ NEUTRAL = 'neutre'
 NEUTRAL_COLOR = '#8d8a7a'
 
 # ------------------------------------------------------------------ unités
+REPL_ARMES = 0.13   # armes par recrue versée dans un régiment (renforts)
+REPL_ARMY = 0.005   # renfort passif d'une armée au repos en ville, par jour : convalescents, traînards, petits détachements
 UNITS = {
     'ligne': dict(name='Infanterie de ligne', short='Ligne', men=300, speed=22, power=1.0,
                   cost=dict(livres=150, armes=40, recrues=300), days=12, upkeep_v=0.6, upkeep_l=1.0,

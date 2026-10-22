@@ -257,6 +257,9 @@ def march_now(g, a, days=None):
     date de la campagne ne bouge pas, mais délais de grâce, saisons et rencontres s'écoulent comme pendant la marche.
     Renvoie le nombre de jours de marche employés."""
     from .tactics import bridge as TB
+    from . import army_actions as AA
+    if a.get('rg'):
+        AA.rangs_stop(g, a, "l'armée s'est mise en marche")
     aid = a['id']
     mp0 = march_left(g, a)
     left = mp0 if days is None else days

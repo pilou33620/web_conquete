@@ -6,6 +6,7 @@ import { Tuto } from './tuto.js';
 import { UnitArt } from './battle/unites.js';
 import { profil } from './battle/qualite.js';
 import { figureKind, drawPortrait } from './portraits.js';
+import { valeursTable } from './valeurs.js';
 import { Decouvertes } from './decouvertes.js';
 import { startTechs, startRails } from './epoque.js';
 
@@ -1028,6 +1029,7 @@ export class UI {
     const scroll = p.scrollTop;
     p.innerHTML = `<button class="icon-btn close" data-act="close-panel" aria-label="Fermer">${ICON.close}</button>` + html;
     this.drawCards(p);
+    for (const d of p.querySelectorAll('details.vl-d')) d.addEventListener('toggle', () => { this.vlOpen = d.open; });   // reste ouvert d'un rendu à l'autre
     p.scrollTop = scroll;
     p.hidden = false;
   }
@@ -1069,6 +1071,16 @@ export class UI {
     if (!cost) return '';
     const ok = cost.every(([k, v]) => (this.st.me.res[k] || 0) >= v);
     return `<button class="btn" data-act="rearm"${node != null ? ` data-node="${node}"` : ''} ${ok ? '' : 'disabled'} title="Remettre les armes du moment aux régiments démodés">Réarmer<small>${cost.map(([k, v]) => `${fmt(v)} ${k}`).join(', ')}</small></button>`;
+  }
+
+  // valeurs chiffrées (valeurs.js, calculées par game/tactics/stats.py) : un tableau replié sous les régiments
+  valeursDetails(rows, titre) {
+    return rows.length ? `<details class="vl-d" ${this.vlOpen ? 'open' : ''}><summary>${esc(titre)}</summary><div class="vl-w">${valeursTable(rows)}</div></details>` : '';
+  }
+
+  // lignes du tableau des valeurs : nom court et chevrons de campagne (10, 30, 60 d'expérience)
+  valeursRegs(regs) {
+    return regs.filter(r => r[10]).map(r => [(this.rules.units[r[1]]?.short || r[1]) + (r[4] >= 10 ? ' ' + '★'.repeat(r[4] >= 60 ? 3 : r[4] >= 30 ? 2 : 1) : ''), r[10]]);
   }
 
   // régiments en cartes portrait, à la manière d'Ultimate General (portraits.js) : figure de l'arme à l'uniforme de
@@ -1184,7 +1196,7 @@ export class UI {
       const here = st.armies.filter(a => a.o === me && a.n === id && a.st === 'idle');
       if (ns.g && ns.g.length) {
         const mobile = ns.g.some(r => !this.rules.units[r[1]]?.garrison_only), garde = ns.g.length > 1 && !ns.g.every(r => !this.rules.units[r[1]]?.garrison_only);
-        h += `<div class="section-t" id="p-garnison">Garnison</div><div class="reg-list">${ns.g.map(r => this.regRow(r, me, true)).join('')}</div>` + (mobile
+        h += `<div class="section-t" id="p-garnison">Garnison</div><div class="reg-list">${ns.g.map(r => this.regRow(r, me, true)).join('')}</div>` + this.valeursDetails(this.valeursRegs(ns.g), 'Valeurs des régiments (en bataille)') + (mobile
           ? `<div class="btns"><button class="btn primary" data-act="form">Sortir de la garnison (former une armée)</button>
           ${here.map(a => `<button class="btn" data-act="form" data-into="${a.id}">Renforcer ${esc(a.name)}</button>`).join('')}${ns.sg ? '' : this.rearmBtn(ns.g, id)}</div>
           <div class="muted small" style="margin-top:4px">Cochez des régiments, sinon toute la garnison part${garde ? ` (sauf ${/^[aeiouéh]/i.test(this.rules.units.garde.name) ? 'l’' : 'la '}${esc(this.rules.units.garde.name.toLowerCase())})` : ''}.</div>`
@@ -1203,7 +1215,7 @@ export class UI {
           return `<button class="btn unit-card" data-act="recruit" data-v="${u}" ${this.canPay(c) && !ns.sg && !qFull ? '' : 'disabled'} title="${qFull ? fullT : esc(U[u].name + (U[u].desc ? ' : ' + U[u].desc : ''))}">
             ${ICON[u] || ICON.ligne}<span class="un">${U[u].short} <span class="muted" style="font-weight:400">(${U[u].men})</span></span>
             <span class="uc">${this.costHtml(c)}, ${st.me.unit_days[u] != null ? partTour(st.me.unit_days[u]) : '?'}</span></button>`;
-        }).join('')}</div>`;
+        }).join('')}</div>` + this.valeursDetails(ru.filter(u => U[u] && ns.rs?.[u]).map(u => [U[u].short, ns.rs[u]]), 'Valeurs des troupes à lever (en bataille)');
         // armes encore à découvrir (technologie manquante) : une ligne discrète
         const later = this.rules.unit_order.filter(u => !ru.includes(u) && U[u]?.req && !st.me.techs.includes(U[u].req) && rw[u]);
         if (later.length) h += `<div class="muted small" style="margin-top:4px">Plus tard : ${later.map(u => `<span title="${esc(U[u].desc || '')}">${esc(U[u].short)} (${esc(rw[u])})</span>`).join(', ')}.</div>`;
@@ -1406,7 +1418,7 @@ export class UI {
       return l.to != null ? nodeName(l.to) : null;
     };
     const way = a.e ? this.md.edges[a.e[0]] : null;
-    if (a.st === 'idle') state = a.sk === 'embuscade' ? (a.h ? 'En embuscade, invisible' : 'En embuscade, mais repérée') : a.hold && a.n != null ? `Halte devant ${nodeName(a.n)}` : a.qr && a.n != null ? `En quartiers à ${nodeName(a.n)}` : a.n != null ? `Au repos à ${nodeName(a.n)}` : 'Au repos en rase campagne';
+    if (a.st === 'idle') state = a.sk === 'embuscade' ? (a.h ? 'En embuscade, invisible' : 'En embuscade, mais repérée') : a.hold && a.n != null ? `Halte devant ${nodeName(a.n)}` : a.rg && a.n != null ? `Complète ses rangs à ${nodeName(a.n)}` : a.qr && a.n != null ? `En quartiers à ${nodeName(a.n)}` : a.n != null ? `Au repos à ${nodeName(a.n)}` : 'Au repos en rase campagne';
     else if (a.st === 'move') state = a.boat ? `${a.emb ? 'Embarque sur les gabares' : 'En gabare'}${way && way.water ? ` (${way.sea ? 'cabotage' : way.way})` : ''}${lastNode() ? ' vers ' + lastNode() : ''}` : `En marche ${lastNode() ? 'vers ' + lastNode() : 'à travers champs'}`;
     else if (a.st === 'retreat') state = `En retraite ${lastNode() ? 'vers ' + lastNode() : ''}`;
     else if (a.st === 'battle') state = 'Engagée dans une bataille';
@@ -1435,6 +1447,7 @@ export class UI {
       if (wn.includes('faim')) h += `<div class="warnline">Vivres épuisés : le moral chute et les soldats désertent.</div>`;
       if (a.des > 0) h += `<div class="warnline">Déserteurs ce mois-ci : ${fmt(a.des)}</div>`;
       h += this.cardsHtml(a.regs, me, true) + `<div class="reg-list">${a.regs.map(r => this.regRow(r, me, true)).join('')}</div>`;
+      h += this.valeursDetails(this.valeursRegs(a.regs), 'Valeurs des régiments (en bataille)');
       const canAct = a.st !== 'battle';
       if (!canAct) this.fightMemo = { army: a.id, name: a.name, x: a.x, y: a.y, seq: this.events.length ? this.events[this.events.length - 1].seq : 0, mine: [] };
       else if (this.fightMemo?.army === a.id) { this.toastBattleEnd(this.fightMemo); this.fightMemo = null; }   // sortie de bataille : son issue
@@ -1455,6 +1468,8 @@ export class UI {
         if (a.st === 'siege') h += `<button class="btn danger" data-act="assault">Donner l’assaut</button>`;
         if (a.st === 'siege' || a.st === 'move') h += `<button class="btn" data-act="retreat">Se replier</button>`;
         h += `</div>` + this.placeActsHtml(a);
+        const mx = a.regs.reduce((s, r) => s + r[3], 0);
+        if (!a.ax?.own && mx && a.regs.reduce((s, r) => s + r[3] - r[2], 0) / mx >= 0.1) h += `<div class="muted small">Pour compléter ses rangs (1 à 2 tours), ramenez-la dans une de vos villes.</div>`;
         // détacher une arme entière
         const cls = r => unitCls(this.rules, r[1]);
         const kinds = [...new Set(a.regs.map(cls))];
@@ -1477,7 +1492,7 @@ export class UI {
     h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
     const sig = JSON.stringify([id, a.st, a.sk, a.md, a.h, a.n, Math.round(a.sup * 20), a.regs.map(r => [r[0], r[2], Math.round(r[5] / 5), r[6]]), st.me.arm, (this.rearmCost(a.regs) || []).map(([k, v]) => st.me.res[k] >= v),
       lastNode(), st.armies.filter(b => b.o === me && Math.hypot(b.x - a.x, b.y - a.y) < 3).length, a.n != null ? st.nodes[a.n].sg : null,
-      a.fm, a.pl, a.auto, a.gen, a.boat, !!a.emb, a.fire, a.e && a.e[0], a.dp, a.wn, a.des, a.rx, a.tr, a.hold, a.qr, a.ax,
+      a.fm, a.pl, a.auto, a.gen, a.boat, !!a.emb, a.fire, a.e && a.e[0], a.dp, a.wn, a.des, a.rx, a.tr, a.hold, a.qr, a.ax, a.rg,
       a.cl && [a.cl[0], Math.ceil(a.cl[1])], a.dt,
       a.n != null ? [st.nodes[a.n].o, st.nodes[a.n].bar] : null]);
     return [h, sig];
@@ -1507,6 +1522,11 @@ export class UI {
           : 'Ouvrages de campagne devant les remparts : un petit bonus de défense, provisoire.');
       h += Q.on ? `<button class="btn primary" data-act="army-act" data-v="camp" title="Le cantonnement cesse aussi dès que l’armée se met en marche.">✓ En quartiers : lever le camp<small>+${fmt1(this.per(Q.food))} vivres ${this.perU}</small></button>`
         : btn('quarters', 'Prendre ses quartiers', `+${fmt1(this.per(Q.food))} vivres ${this.perU}`, Q.why, 'Renforts et moral plus rapides, ordre public en hausse ; l’armée mange davantage. Cesse dès qu’elle bouge.');
+      const Rg = x.rg;
+      h += Rg.w != null ? `<div class="queue-item" style="flex:1 1 100%"><span>Renforts en route</span><span class="muted">au complet ${toursTxt(Rg.w)}</span></div><button class="btn" data-act="army-act" data-v="rangs_stop">Arrêter les renforts</button>`
+        : btn('rangs', 'Compléter les rangs', `${fmt(Rg.men)} recrues, ${fmt(Rg.armes)} armes, ${Rg.t > 1 ? '2 tours' : '1 tour'}`, Rg.why,
+          'Les conscrits du dépôt rejoignent les régiments : 1 tour, 2 si les pertes passent 30 %. L’armée doit rester dans la place ; les recrues diluent l’expérience des vétérans. Un régiment anéanti ne revient pas : levez-en un neuf.')
+          .replace('class="btn"', !Rg.why && Rg.men > 0.1 * a.regs.reduce((s, r) => s + r[3], 0) ? 'class="btn primary"' : 'class="btn"');
       h += btn('garde', 'Armer les habitants', `+${fmt(G.add)} miliciens, ${G.armes} armes, ${G.t} tours`, G.why,
         `${this.rules.units.garde.name} : la milice de la place se renforce fortement pendant ${G.t} tours ; un peu moins de production.`);
       const gain = [`${fmt(Rq.g.vivres)} vivres`, `${fmt(Rq.g.recrues)} recrues`].concat(Rq.g.livres ? [`${fmt(Rq.g.livres)} livres`] : []).join(', ');

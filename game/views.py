@@ -12,6 +12,7 @@ from . import turns as TT
 from .engine import Game
 from .tactics import bridge as TB
 from .tactics import units as TU
+from .tactics import stats as ST
 
 SAVE_KEYS = ['player', 'difficulty', 'seed', 't', 'uid', 'seq', 'events', 'proposals', 'armies', 'battles', 'over',
              'flood_until', 'market', 'weather', 'factions', 'nodes', '_ai_clock', 'spies', 'scenario', 'start_ord',
@@ -164,10 +165,11 @@ def _effects(g, f):
     return out
 
 
-def _reg(r):
-    # … munitions (%), fatigue, portée efficace (m)
+def _reg(r, trait=None, swift=0.0):
+    # … munitions (%), fatigue, portée efficace (m), valeurs chiffrées (stats.py)
     return [r['id'], r['type'], round(r['n']), r['max'], round(r['xp']), round(r['morale']), r.get('arm'),
-            round(r.get('ammo', 100.0)), round(r.get('fat', 0.0)), TU.ranges(r)[0]]
+            round(r.get('ammo', 100.0)), round(r.get('fat', 0.0)), TU.ranges(r)[0],
+            ST.stats(r['type'], r.get('arm') or 0, r['xp'], trait, False, swift)]
 
 
 def _legs(a):
@@ -250,7 +252,7 @@ def player_state(g, since=0):
         if n['owner'] in side:
             d['m'] = round(n['milice'])
             d['mm'] = round(n['milice_max'] * (1 + g.mod(n['owner'], 'milice')))
-            d['g'] = [_reg(r) for r in n['garrison']]
+            d['g'] = [_reg(r, None, min(0.5, g.mod(n['owner'], 'fm_swift'))) for r in n['garrison']]   # (pas de général)
             if n['owner'] == p:
                 d['fx'] = g.fort_max(p, n['id'])
                 d['pc'] = int(round(g.pop_cap(n), -1))
@@ -266,6 +268,10 @@ def player_state(g, since=0):
                         d['ru'].append(u)
                     else:
                         d['rw'][u] = why.rstrip('.')
+                # valeurs des troupes à lever : celles du régiment qui sortira d'ici (engine.new_reg + train_xp)
+                d['rs'] = {u: ST.stats(u, g.arm_level(p, R.UNITS[u]['cls']) if R.UNITS[u]['cls'] in R.ARMS else 0,
+                                       R.UNITS[u].get('xp0', 0) + CT.train_xp(g, n), swift=min(0.5, g.mod(p, 'fm_swift')))
+                           for u in d['ru']}
                 d['q'], cum = [], 0.0
                 for q in n['queue']:
                     cum += q['left']   # la file avance dans l'ordre : chaque élément attend ceux d'avant
@@ -301,7 +307,8 @@ def player_state(g, since=0):
             e = g.geo.edges[a['edge']['e']]
             d['e'] = [e['id'], a['edge']['frm'], round(a['edge']['pos'] / e['len'], 4)]
         if a['owner'] == p:
-            d['regs'] = [_reg(r) for r in a['regs']]
+            tr, sw = (a.get('gen') or {}).get('trait'), min(0.5, g.mod(a['owner'], 'fm_swift'))
+            d['regs'] = [_reg(r, tr, sw) for r in a['regs']]
             d['md'] = a['mode']
             d['sup'] = round(a['supply'], 2)
             d['path'] = _legs(a)

@@ -19,6 +19,7 @@ from .. import army_actions as AA
 from .. import turns as TT
 from . import units as U
 from . import ai as AI
+from . import stats as ST
 from . import terrain as TR
 from .battle import TacticalBattle, valid_piet
 
@@ -502,7 +503,12 @@ def battle_view(g, bid, since=0):
     tb = find(g, bid)
     if not tb:
         return None
-    return tb.view(tb.me, since)
+    v = tb.view(tb.me, since)
+    for d in v['units']:   # valeurs chiffrées de mes troupes (stats.py) ; l'ennemi reste dans le brouillard
+        u = tb.by_id.get(d['id'])
+        if u is not None and (tb.me is None or u.side == tb.me):
+            d['stats'] = ST.of_unit(u, tb)
+    return v
 
 
 def map_view(g, bid):

@@ -6,6 +6,7 @@ import { QUALITES, QUALITE_LABEL, qualite, setQualite } from './qualite.js';
 import { clsOf, isGeneral, isLight, isWagon, genName, emprise, stars, fmt, esc, clamp, TYPE_LABEL, FORM_LABEL, FORM_HELP, FORMS, STATE_LABEL, SEASON_LABEL, WEATHER_LABEL, normSeason } from './formes.js';
 import { ORDER_LABEL, ordresHtml, aide as aideArme, arme } from './doctrine.js';
 import { figureKind, drawPortrait } from '../portraits.js';
+import { valeursHtml } from '../valeurs.js';
 
 const WX_ICON = {
   soleil: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
@@ -93,6 +94,8 @@ export class BattleUI {
     this.entering = false;
     // fil des événements replié ou non (gardé sur cet appareil)
     try { this.feedOff = localStorage.getItem('conquete.bataille.fil') === '0'; } catch (e) { this.feedOff = false; }
+    // valeurs chiffrées du régiment repliées par défaut (le panneau est déjà haut sur un téléphone)
+    try { this.showVals = localStorage.getItem('conquete.bataille.valeurs') === '1'; } catch (e) { this.showVals = false; }
     this.unseen = 0;
     this.setFeed(!this.feedOff);
     el.addEventListener('click', e => this.click(e));
@@ -310,12 +313,12 @@ export class BattleUI {
         <dl class="bp-kv two">
           <dt>Hommes</dt><dd>${fmt(u.men)} <small>/ ${fmt(u.men0 || u.men)}</small></dd>
           <dt>Expérience</dt><dd class="bp-stars">${'★'.repeat(stars(u.xp))}<i>${'★'.repeat(5 - stars(u.xp))}</i></dd>
-          <dt>Moral</dt><dd><span class="bp-bar mor"><i style="width:${clamp(u.morale ?? 0, 0, 100)}%"></i></span></dd>
+          <dt>Moral</dt><dd><span class="bp-bar mor"><i style="width:${clamp(u.morale ?? 0, 0, 100)}%"></i></span> <small>${Math.round(u.morale ?? 0)}</small></dd>
           <dt>Endurance</dt><dd><span class="bp-bar end"><i style="width:${clamp(100 - (u.fat ?? 0), 0, 100)}%"></i></span></dd>
           <dt>Munitions</dt><dd><span class="bp-bar amm"><i style="width:${this.ammoFrac(u) * 100}%"></i></span></dd>
           <dt>Portée</dt><dd>${u.range ? fmt(u.range[0]) + ' m' : '—'}</dd>
         </dl>
-        <div class="bp-note">${am} · ${rg}</div>`;
+        <div class="bp-note">${am} · ${rg}<button class="bp-vl ${this.showVals ? 'on' : ''}" data-a="valeurs" aria-expanded="${!!this.showVals}">Valeurs</button></div>${this.showVals ? valeursHtml(u.stats) : ''}`;
     }
     // formations communes (pas pendant l'accéléré : ce sont vos officiers qui commandent)
     const forms = cls === 'mix' || v.st?.accel ? [] : FORMS[cls] || [];
@@ -433,6 +436,10 @@ export class BattleUI {
       case 'rot': this.act('rot', { r: +b.dataset.r }); break;
       case 'fire': case 'shot': this.act(a, { m: b.dataset.m }); break;
       case 'los': v.setLos(!v.losOn); this.renderPanel(true); break;
+      case 'valeurs':
+        this.showVals = !this.showVals;
+        try { localStorage.setItem('conquete.bataille.valeurs', this.showVals ? '1' : '0'); } catch (e) { /* tant pis */ }
+        this.renderPanel(true); break;
       case 'hold': case 'rally': case 'charge': case 'counter': case 'harass': case 'cover': case 'pursue': case 'gait': case 'vcharge': this.act(a); break;
       case 'retreat': this.confirm('Retraite', 'Les régiments choisis quittent le champ de bataille par votre bord. Ils reviennent en campagne avec leurs hommes.', 'Ordonner la retraite', () => this.act('retreat'), true); break;
       case 'untarget': v.controls.setTargeting(null); break;
