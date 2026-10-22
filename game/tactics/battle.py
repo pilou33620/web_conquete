@@ -29,7 +29,8 @@ RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MEL
   charge essouffle les chevaux (CHARGE_FAT), qui chargent ensuite moins bien.
 - Mêlée : peu de pertes (MELEE_K), décidée au moral (MELEE_MOR par seconde, partagé selon les forces) ; le plus faible
   cède du terrain sous GIVE_WAY (repli de 100 m, sans fuir) ; à plusieurs contre un, les forces s'additionnent, sauf
-  dans un passage étroit (brèche, rue, maison, mur : NARROW) où la pression ne dépasse pas MELEE_MOR.
+  dans un passage étroit (brèche, rue, maison, mur : NARROW) où la pression ne dépasse pas MELEE_MOR. La brèche est
+  un goulet (BRECHE_*) : l'assaillant n'y engage pas plus de 180 hommes en mêlée, s'y bat à ×0,8 et y prend ×1,4 au feu.
 - Moral : pertes (surtout brutales, de flanc, de dos ; pas de surprise pour une troupe qui se retire en ordre),
   déroutes voisines (ROUT_MOR, seulement pour les troupes déjà ébranlées : pas de déroute en chaîne), munitions,
   fatigue ; remonte au calme (MOR_REC), plus vite près du général. Déroute sous 25 : la troupe fuit vers son bord.
@@ -45,6 +46,8 @@ RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MEL
 - Vue : symétrique (si je te vois, tu me vois) ; une troupe en lisière d'un bois ou de maisons voit et se voit ; bois,
   bâti, murs et haies ne cachent que ce qui est sous leur faîte (une haie ne cache rien à qui la domine).
 - Place : l'assaillant l'emporte en tenant le cœur 6 min (HEART_*) ; à l'échelle ou sur une barricade, il se bat mal.
+  Reddition (SURR_*) : une brèche ouverte depuis 20 min, une heure sous le canon, 30 % de pertes, un moral moyen sous 55
+  et l'assaillant deux fois plus nombreux en ligne : la garnison capitule et elle est prisonnière (la place est prise).
 
 ==================================================================================================================
 AIDE-MÉMOIRE POUR L'ÉQUIPE IA (game/tactics/ai.py)
@@ -216,6 +219,11 @@ RALLY_REC, RALLY_REC_PLACE, RALLY_REC_ALONE = 0.1, 0.08, 0.04
 # assaut d'une place : l'assaillant l'emporte s'il tient le cœur (au moins HEART_MEN hommes en état de combattre à
 # moins de HEART_R) sans défenseur en état de combattre à moins de HEART_FREE, pendant HEART_HOLD secondes de suite
 HEART_R, HEART_MEN, HEART_FREE, HEART_HOLD = 90.0, 150.0, 160.0, 360.0
+# reddition d'une place (l'usage des sièges, de Vauban à Strasbourg 1870 : la brèche praticable, la garnison peut se
+# rendre) : brèche ouverte depuis SURR_BREACH_T, sous le canon depuis SURR_POUND_T, la garnison a perdu SURR_LOSS de ses
+# hommes, son moral moyen (fuyards compris ; sous FORMED, une troupe est ébranlée) est sous SURR_MOR, et l'assaillant
+# en état de combattre est SURR_RATIO fois plus nombreux : elle capitule, prisonnière (ni en rase campagne, ni sans brèche)
+SURR_BREACH_T, SURR_POUND_T, SURR_LOSS, SURR_MOR, SURR_RATIO = 1200.0, 3600.0, 0.3, 55.0, 2.0
 CAPTURE = dict(contact_cav=0.004, contact_inf=0.0007,  # part des fuyards rattrapés par pas de 2 s au contact
                choc_cav=0.03, choc_inf=0.02,            # … par une charge sur des fuyards
                rupture_cav=0.04, melee_cav=0.03)        # … quand la cavalerie rompt une troupe (choc, mêlée)
@@ -243,6 +251,11 @@ ACCEL_BUSY = "Vos officiers mènent la bataille : reprenez le commandement pour 
 FCOST_K = dict(inf=1.0, light=0.6, cav=2.0, art=2.5)
 WALLISH = {T_MUR: 0.65, T_PORTE: 0.65, T_BRECHE: 0.4, T_BARRICADE: 0.5}
 NARROW = (T_BATI, T_MUR, T_PORTE, T_BRECHE, T_BARRICADE)
+# la brèche est un goulet (l'assaillant sur la brèche ou à une case de ses bords) : on n'y engage pas plus de
+# BRECHE_FRONT hommes en mêlée (48 m de décombres : 60 files sur trois rangs), qui s'y battent mal (×BRECHE_MELEE : on
+# grimpe sur les éboulis, sous les chevaux de frise) et y prennent les feux croisés des flancs (×BRECHE_FEU) : à
+# Badajoz (1812), les colonnes d'assaut y perdirent près d'un homme sur trois
+BRECHE_FRONT, BRECHE_MELEE, BRECHE_FEU = 180.0, 0.8, 1.4
 OFFROAD = tuple(k for k in range(18) if k not in (T_ROUTE, T_CHEMIN))
 VIEW = {'soleil': 2000, 'nuages': 1800, 'canicule': 1800, 'brouillard': 250, 'pluie': 600, 'orage': 500,
         'neige': 800, 'tempete': 700}
@@ -318,6 +331,7 @@ class TacticalBattle:
         self.withdrawing = [False, False]
         self.withdraw_t = [0.0, 0.0]
         self.hold_t = 0.0
+        self.siege_t = None                  # heure du premier coup des canons de l'assaillant sur le rempart
         self.prisoners = [0.0, 0.0]          # hommes de ce camp faits prisonniers
         self.ai_mem = {}                     # mémoire de l'IA (types JSON seulement : enregistrée avec la bataille)
         self.accel = False                   # « Finir automatiquement » : les officiers jouent la suite en accéléré…
@@ -1741,6 +1755,8 @@ class TacticalBattle:
         k = str(int((a % (2 * math.pi)) / (2 * math.pi) * BREACH_SECT) % BREACH_SECT)
         if self.pound.get(k, 0.0) < 0:
             return   # ce pan est déjà à terre
+        if self.siege_t is None:
+            self.siege_t = self.clock
         mult = R.ARMS['artillerie'][min(u.arm, len(R.ARMS['artillerie']) - 1)][2]
         dk = 1.0 if d <= e else max(0.3, 1 - 0.7 * (d - e) / max(1.0, mx - e))
         self.pound[k] = self.pound.get(k, 0.0) + U.pieces(u) * mult * dk
@@ -1888,6 +1904,8 @@ class TacticalBattle:
             wt = self._wall_target(u, mx)
             if wt:
                 self._pound(u, *wt, e, mx)
+        if self._in_breach(tg):
+            cas *= BRECHE_FEU   # (les feux croisés des flancs de la brèche)
         self._damage(tg, cas, u, kind)
         if u.ammo < 1:
             self.log(f"{u.name} n'a plus de munitions !", u.side)
@@ -2142,9 +2160,24 @@ class TacticalBattle:
             k *= 1.5   # derrière un mur, une barricade, une haie épaisse
         if foe.cls == 'cavalerie' and tt in (T_BOIS, T_FORET_T, T_MARAIS_T, T_VIGNE_T):
             k *= 1.4
+        if self._in_breach(u):
+            k *= BRECHE_MELEE
         if self.trait(u.side) == 'audacieux':
             k *= 1.08
         return k
+
+    def _in_breach(self, u):
+        """L'assaillant sur une brèche ou à une case de ses bords (BRECHE_*)."""
+        if u.side != 0 or not self.map.place:
+            return False
+        i, j = int(u.x // CELL), int(u.y // CELL)
+        t = self.t
+        return any(t[jj * COLS + ii] == T_BRECHE for jj in range(max(0, j - 1), min(ROWS, j + 2))
+                   for ii in range(max(0, i - 1), min(COLS, i + 2)))
+
+    def _melee_men(self, u):
+        """Hommes engagés en mêlée : pas plus de BRECHE_FRONT de front dans une brèche."""
+        return min(u.men, BRECHE_FRONT) if self._in_breach(u) else u.men
 
     def _end_melee(self, u):
         f = self.by_id.get(u.melee_with)
@@ -2167,13 +2200,13 @@ class TacticalBattle:
             if not f or not f.alive or f.state != 'melee':
                 self._end_melee(u)   # (l'adversaire a fui, cédé du terrain ou s'est dégagé)
                 continue
-            ku = self._melee_k(u, f) * u.men
+            ku = self._melee_k(u, f) * self._melee_men(u)
             fights.append((u, f, ku))
             press[f.id] = press.get(f.id, 0.0) + ku
         for u, f, ku in fights:
             if u.state != 'melee' or f.state != 'melee':
                 continue
-            kf = self._melee_k(f, u) * f.men
+            kf = self._melee_k(f, u) * self._melee_men(f)
             tot = press.get(f.id, ku)
             self._damage(f, MELEE_K * ku * dt, u, 'melee')
             # la mêlée se décide surtout au moral : le plus faible plie le premier ; à plusieurs contre un, la pression
@@ -2365,6 +2398,8 @@ class TacticalBattle:
             self.hold_t = self.hold_t + DT if att >= HEART_MEN and not dfd else 0.0
             if self.hold_t >= HEART_HOLD:
                 res = (0, False, "L'assaillant tient le cœur de la place.")
+            elif self._surrender():
+                res = (0, False, "La garnison capitule : la brèche est ouverte, elle se rend prisonnière.")
         for s in (0, 1):
             if self.withdrawing[s] and self.clock - self.withdraw_t[s] > 1800 and v[s]:
                 # une demi-heure après l'ordre de décrocher, l'arrière-garde a filé
@@ -2385,6 +2420,27 @@ class TacticalBattle:
                 res = (1, True, "La nuit tombe : l'assaillant n'a pas emporté la décision et se retire.")
         if res:
             self.finish(*res)
+
+    def _surrender(self):
+        """La garnison d'une place battue en brèche capitule (SURR_*) : elle est prisonnière."""
+        if not self.breach_t or self.siege_t is None or self.clock - self.breach_t[0][0] < SURR_BREACH_T or \
+                self.clock - self.siege_t < SURR_POUND_T:
+            return False
+        gar = [u for u in self.units if u.side == 1 and u.cls not in ('general', 'chariot')]
+        men0 = sum(u.men0 for u in gar)
+        here = [u for u in gar if u.state != 'hors' and u.men > 0]   # (les fuyards encore là comptent au moral)
+        men = sum(u.men for u in here if u.valid)
+        if not men or sum(u.men0 - u.men for u in gar) < SURR_LOSS * men0 or \
+                sum(u.morale * u.men for u in here) >= SURR_MOR * sum(u.men for u in here) or \
+                self.strength(0) < SURR_RATIO * men:
+            return False
+        for u in self.units:
+            if u.side == 1 and u.men > 0 and u.cls != 'general':
+                u.captured += u.men
+                self.prisoners[1] += u.men
+                u.men = 0.0
+                u.state = 'hors'
+        return True
 
     def finish(self, winner, disengage, why):
         if self.phase == 'fin':
@@ -2572,7 +2628,7 @@ class TacticalBattle:
     def to_dict(self):
         return dict(spec=self.spec, units=[u.to_dict() for u in self.units], phase=self.phase, clock=self.clock,
                     speed=self.speed, seq=self.seq, logs=[list(x) for x in self.logs[-60:]], ai_sides=self.ai_sides,
-                    withdrawing=self.withdrawing, withdraw_t=self.withdraw_t, hold_t=self.hold_t, prisoners=self.prisoners, acc=self._acc,
+                    withdrawing=self.withdrawing, withdraw_t=self.withdraw_t, hold_t=self.hold_t, siege_t=self.siege_t, prisoners=self.prisoners, acc=self._acc,
                     ai_mem=self.ai_mem, result=self.result, pound=self.pound, breaches=self.breaches,
                     breach_t=self.breach_t,
                     accel=self.accel, accel_ids=self.accel_ids, accel_t=self.accel_t,
@@ -2591,6 +2647,7 @@ class TacticalBattle:
         tb.withdrawing = d.get('withdrawing', [False, False])
         tb.withdraw_t = d.get('withdraw_t', [0.0, 0.0])
         tb.hold_t = d.get('hold_t', 0.0)
+        tb.siege_t = d.get('siege_t')
         tb.prisoners = d.get('prisoners', [0.0, 0.0])
         tb._acc = d.get('acc', 0.0)
         tb.ai_mem = d.get('ai_mem') or {}

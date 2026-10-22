@@ -14,9 +14,10 @@ from .. import rules as R
 from ..geo import T_EAU, T_HAUTE, PLAYABLE
 from . import bridge as TB
 from .. import battle_log as BL
+from .. import army_actions as AA
 
 MAX_UNITS = 10
-KINDS = ('bataille', 'forteresse')
+KINDS = ('bataille', 'forteresse', 'village')   # (village : sans remparts, barricadé ; au banc, pas dans l'écran)
 SEASONS = ('printemps', 'été', 'automne', 'hiver')
 SEASON_MONTH = {'printemps': 4, 'été': 7, 'automne': 10, 'hiver': 1}
 # une place intacte (ni siège ni brèche : l'escalade) se prend à un contre deux : à ses
@@ -133,11 +134,12 @@ def new(geo, body):
     era = body.get('era') if body.get('era') in R.SCENARIOS else '1790'
     kind = body.get('kind') if body.get('kind') in KINDS else 'bataille'
     attack = body.get('role') != 'def'
+    place = kind in ('forteresse', 'village')   # (village : une place sans remparts, barricadée)
     rng = random.Random(body.get('seed'))   # (graine : bancs d'essai reproductibles ; sans graine, au hasard)
     foe = body.get('foe')
     if foe not in R.FACTIONS or foe == me:
         foe = rng.choice([c for c in R.FACTIONS if c != me])
-    allowed = {t for t in units_for(era, garrison=kind == 'forteresse' and not attack) if _local(t, me)}
+    allowed = {t for t in units_for(era, garrison=place and not attack) if _local(t, me)}
     mine, msg = _count(body.get('units'), allowed)
     if mine is None:
         return None, msg
@@ -169,6 +171,11 @@ def new(geo, body):
         if nid is None or _fort(geo.nodes[nid]) < 1:
             nid = rng.choice([n['id'] for n in geo.nodes if _fort(n) >= 1 and n['dept'] in PLAYABLE])
         bx, by = geo.nodes[nid]['x'], geo.nodes[nid]['y']
+    elif kind == 'village':
+        if nid is None or _fort(geo.nodes[nid]) >= 1:
+            nid = rng.choice([n['id'] for n in geo.nodes if n['type'] == 'village' and _fort(n) < 1
+                              and n['dept'] in PLAYABLE])
+        bx, by = geo.nodes[nid]['x'], geo.nodes[nid]['y']
     else:
         if nid is None:
             nid = rng.choice([n['id'] for n in geo.nodes if n['dept'] in PLAYABLE])
@@ -179,20 +186,22 @@ def new(geo, body):
     att_code, def_code = (me, foe) if attack else (foe, me)
     if attack:
         att_types = mine
-        if kind == 'forteresse':   # les renforts de l'assaillant d'une place
+        if place:   # les renforts de l'assaillant d'une place
             ok = units_for(era)
             att_types = mine + [t if t in ok else 'ligne' for t in ASSAULT_BONUS]
-        def_types = _foe_units(rng, era, foe, GARRISON_UNITS if kind == 'forteresse' else len(mine), False)
+        def_types = _foe_units(rng, era, foe, GARRISON_UNITS if place else len(mine), False)
     else:
         def_types = mine
-        att_types = _foe_units(rng, era, foe, ASSAULT_UNITS if kind == 'forteresse' else len(mine), kind == 'forteresse')
+        att_types = _foe_units(rng, era, foe, ASSAULT_UNITS if place else len(mine), place)
     ax, ay = _open_ground(geo, rng, bx, by, 1.2, 2.0)
     att = g.create_army(att_code, ax, ay, [g.new_reg(t, code=att_code) for t in att_types])
     sides = [dict(owner=att_code, armies=[att['id']], node=None)]
-    if kind == 'forteresse':
+    if place:
         n = g.nodes[nid]
         n['owner'] = def_code
-        n['fort'] = max(1, _fort(geo.nodes[nid]))
+        n['fort'] = max(1, _fort(geo.nodes[nid])) if kind == 'forteresse' else 0
+        if kind == 'village':
+            n['aa'] = dict(bar=AA.BAR_LEVEL)   # barricades et palissades dressées
         n['garrison'] = []
         n['milice'] = float(min(n['milice_max'], 150 + 40 * n['fort']))
         n['siege'] = None   # la place est intacte : l'assaillant arrive devant ses remparts

@@ -26,6 +26,22 @@ Banc des places seul (`python3 outils/banc_ia.py --lieux forteresse --graines 3 
 l'assaut du cœur, 0 place prise, pertes 24 % / 24 %, durée moyenne 279 min ; après, 4 prises (1700, 1790, 1813 ; en
 1 h 30 à 3 h, l'assaillant perdant 11 à 22 %, la garnison 16 à 34 %), pertes 23 % / 22 %, durée 247 min.
 
+Règles du moteur ajoutées ensuite (battle.py, pour le joueur comme pour l'IA) :
+- **Reddition d'une place** (SURR_*, _surrender) : brèche ouverte depuis 20 min, une heure sous le canon, 30 % de
+  pertes, moral moyen de la garnison (fuyards compris) sous 55, assaillant en état de combattre deux fois plus
+  nombreux : « La garnison capitule… », elle est prisonnière, la place est prise en campagne (bridge.finish).
+- **La brèche est un goulet** (BRECHE_*, _in_breach) : sur la brèche et à une case de ses bords, l'assaillant n'engage
+  que 180 hommes en mêlée, s'y bat à ×0,8 et prend ×1,4 au feu.
+- **Village barricadé** : skirmish.KINDS a un lieu 'village' (sans remparts, barricades au niveau BAR_LEVEL), au banc
+  (`--lieux village`) mais pas dans l'écran du mode Bataille (ui.js ne propose que bataille et forteresse).
+
+Banc des places (24 batailles) : avant, 6 prises (toutes d'assaut), pertes 24 % / 21 %, 190 min ; avec la reddition
+seule, 8 prises dont 3 redditions (une en 1870) ; avec le goulet en plus, 4 prises (3 redditions : 1700, 1790, 1870 ;
+1 assaut, 1700, 26 % / 26 % en 3 h 30), pertes 26 % / 27 % (la garnison rendue compte pour 100 %), 189 min. Banc des
+villages (16 batailles) : pas d'erreur ni de bataille figée ; l'assaillant attaque toujours les barricades et la
+garnison tient les maisons ; rôle « att » : 8 prises sur 8 en 1 h à 1 h 30 (6 à 14 % de pertes) ; rôle « def » :
+1 prise sur 8.
+
 Reste à faire :
 - **Places : 6 prises sur 24 au banc des places (25 %), la spécification visait 30 à 50 %.** La cause des 0 sur 24
   était dans l'IA, pas dans le moteur : arrivées au cœur, les colonnes fusillaient les maisons sans y entrer,
@@ -38,9 +54,13 @@ Reste à faire :
   l'assaillant est en force. Restent :
   - rôle « def » (l'IA attaque avec l'armée tirée au sort, à peine plus nombreuse que la garnison du joueur) : aucune
     prise, ce qui est juste, mais la brèche tombe vite (10 min) devant une garnison fraîche ;
-  - en 1870 : aucune prise ; les colonnes arrivent au cœur sans cartouches et sous 50 de moral ;
-  - les victoires sont parfois bon marché (1813, graine 3 : 16 % de pertes de chaque côté en 1 h 30) ;
-  - essayer au banc un village barricadé ; le logement dans la brèche (A4) aiderait à garder ce qui est pris.
+  - en 1870 : l'assaut ne prend toujours rien (les colonnes arrivent au cœur sans cartouches et sous 50 de moral) ;
+    la place tombe par reddition (1 fois sur 3) ;
+  - avec le goulet, la prise d'assaut coûte plus cher mais devient rare (1 sur 12 en rôle « att ») : les places
+    prises le sont surtout par reddition ; à surveiller sur plus de graines ;
+  - certaines brèches sont franchies en quelques minutes (1700, graine 2) : la garnison ne les garnit pas assez vite ;
+  - au village barricadé, l'assaillant à deux contre un l'emporte en une heure à peu de frais ; le logement dans la
+    brèche (A4) aiderait à garder ce qui est pris.
 - **En rase campagne, l'assaillant gagne encore peu** : 3 batailles sur 8, et aucune en 1870. Il faut vérifier sur
   plus de graines (`--graines 3`), parce qu'une seule graine fait beaucoup bouger les chiffres.
 - **« Finir automatiquement »** : l'armée du joueur reprise en cours de route n'a pas les réglages du déploiement

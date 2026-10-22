@@ -3,6 +3,7 @@
 en un tableau court (pour comparer avant et après un changement de game/tactics/ai.py sans lire les journaux).
 
 Usage :  python3 outils/banc_ia.py [--graines 2] [--proc 4] [--epoques 1700,1790,1813,1870] [--lieux bataille,forteresse]
+         (lieux : bataille, forteresse, village : un village sans remparts, barricadé)
          [--tweak '{"normal": {"cav_opp": false}}']   (réglages d'essai : spec['ai_tweak'], pour les comparaisons A/B)
          [--journal 12]   (les 12 dernières notes du journal de chaque camp sous sa ligne, à filtrer avec grep)
 

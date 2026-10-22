@@ -895,5 +895,85 @@ class PlaceAuMilieuDeLEau(unittest.TestCase):
         a, r = math.atan2(u.y - pl['y'], u.x - pl['x']), pl['r'] + 80
         self.assertIsNotNone(tb.path_cost(u.x, u.y, pl['x'] + math.cos(a) * r, pl['y'] + math.sin(a) * r, 'inf', 0))
 
+
+class RedditionDUnePlace(unittest.TestCase):
+    """Une garnison battue en brèche, éprouvée et débordée capitule sans assaut (SURR_*) : elle est prisonnière et la
+    place est prise sur la carte de campagne ; une garnison encore solide tient."""
+
+    def test_la_garnison_capitule_et_la_place_est_prise(self):
+        from fabrique import S
+        from game.tactics import bridge as TB
+        g, bid = S.new(GEO, dict(me='33', foe='24', era='1870', kind='forteresse', role='att', seed=1,
+                                 units=dict(ligne=4, artillerie=2)))
+        tb = g.tactical[bid]
+        tb.autofinish()
+        gar = [u for u in tb.units if u.side == 1 and u.cls not in ('general', 'chariot')]
+        tb.clock, tb.siege_t, tb.breach_t = 4000.0, 0.0, [[1000, '0']]
+        for u in gar:
+            u.men, u.morale = u.men0 * 0.4, 80.0
+        tb._check_end()
+        self.assertNotEqual(tb.phase, 'fin')   # (moral encore ferme : elle tient)
+        for u in gar:
+            u.morale = 40.0
+        tb._check_end()
+        self.assertEqual((tb.phase, tb.winner), ('fin', 0))
+        self.assertTrue(tb.why.startswith('La garnison capitule'))
+        self.assertTrue(all(u.men == 0 for u in gar))
+        self.assertGreaterEqual(tb.result['prisoners'][1], 0.4 * sum(u.men0 for u in gar) - 1)
+        # la campagne : la place change de mains
+        de = next(a for a in g.armies.values() if a.get('at_node') is not None)
+        att = next(a for a in g.armies.values() if a is not de)
+        nid = de['at_node']
+        g.battles[bid] = dict(id=bid, x=att['x'], y=att['y'], node=nid, ambush=False, surprise=False, recent=[0.0, 0.0],
+                              sides=[dict(owner=att['owner'], armies=[att['id']], men0=1.0, lost=0.0, node=None),
+                                     dict(owner=de['owner'], armies=[de['id']], men0=1.0, lost=0.0, node=nid)])
+        TB.finish(g, tb)
+        self.assertEqual(g.nodes[nid]['owner'], att['owner'])
+        self.assertNotIn(de['id'], g.armies)   # (la garnison prisonnière ne revient pas)
+
+
+class LaBrecheEstUnGoulet(unittest.TestCase):
+    """Sur une brèche et à une case de ses bords, l'assaillant n'engage que BRECHE_FRONT hommes en mêlée, s'y bat moins
+    bien et prend les feux croisés ; pas le défenseur, ni l'assaillant à deux cases."""
+
+    def test_front_etroit_et_feux_croises(self):
+        from fabrique import S
+        from game.tactics.terrain import CELL, COLS, T_BRECHE, T_MUR
+        g, bid = S.new(GEO, dict(me='33', foe='24', era='1813', kind='forteresse', role='att', seed=1,
+                                 units=dict(ligne=2)))
+        tb = g.tactical[bid]
+        a = next(u for u in tb.units if u.side == 0 and u.cls == 'inf' and u.men > BT.BRECHE_FRONT)
+        d = next(u for u in tb.units if u.side == 1 and u.cls == 'inf')
+        c = tb.t.index(T_MUR)
+        x, y = (c % COLS + 0.5) * CELL, (c // COLS + 0.5) * CELL
+        a.x, a.y = x + CELL, y
+        k0 = tb._melee_k(a, d)
+        self.assertEqual(tb._melee_men(a), a.men)
+        tb.t[c] = T_BRECHE
+        self.assertTrue(tb._in_breach(a))
+        self.assertEqual(tb._melee_men(a), BT.BRECHE_FRONT)
+        self.assertAlmostEqual(tb._melee_k(a, d), k0 * BT.BRECHE_MELEE)
+        a.x = x + 2 * CELL
+        self.assertFalse(tb._in_breach(a))
+        d.x, d.y = x, y
+        self.assertFalse(tb._in_breach(d))
+
+
+class VillageBarricade(unittest.TestCase):
+    """Le lieu « village » du mode Bataille (et du banc) : un village sans remparts, barricadé, que l'IA attaque
+    (plan 'assaut') et défend (plan 'place')."""
+
+    def test_village_barricade_attaque_et_defendu(self):
+        from fabrique import S
+        from game.tactics.terrain import T_BARRICADE
+        g, bid = S.new(GEO, dict(me='33', foe='24', era='1813', kind='village', role='att', seed=1,
+                                 units=dict(ligne=2)))
+        tb = g.tactical[bid]
+        self.assertEqual((tb.map.place['type'], tb.place_info()['fort']), ('village', 0))
+        self.assertGreater(tb.t.count(T_BARRICADE), 10)
+        self.assertIsNotNone(tb.objective())
+        tb.autofinish()
+        self.assertEqual((tb.ai_mem['s0']['plan'], tb.ai_mem['s1']['plan']), ('assaut', 'place'))
+
 if __name__ == '__main__':
     unittest.main()
