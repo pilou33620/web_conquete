@@ -676,6 +676,52 @@ def _force_bridge(m, r, rng, t):
 
 
 # ---------------------------------------------------------------------- place
+def _mainland(t):
+    """La terre ferme : la plus grande étendue de cases sans eau d'un seul tenant."""
+    seen, best = bytearray(N), set()
+    for s in range(N):
+        if seen[s] or t[s] == T_EAU:
+            continue
+        comp, todo = {s}, [s]
+        seen[s] = 1
+        while todo:
+            c = todo.pop()
+            i = c % COLS
+            for nc in (c - COLS, c + COLS, c - 1 if i else -1, c + 1 if i < COLS - 1 else -1):
+                if 0 <= nc < N and not seen[nc] and t[nc] != T_EAU:
+                    seen[nc] = 1
+                    comp.add(nc)
+                    todo.append(nc)
+        if len(comp) > len(best):
+            best = comp
+    return best
+
+
+def _causeway(m, t, px, py, att_a, land):
+    """Chaussée et pont de la place à la terre ferme (land) : la traversée la plus courte, de préférence du côté de
+    l'assaillant. Renvoie ses cases (rues de la place : la porte s'y ouvre)."""
+    best, bv = None, 1e18
+    for c in land:
+        x, y = center_of(c)
+        d = math.hypot(x - px, y - py)
+        v = d * (1.5 - 0.5 * math.cos(math.atan2(y - py, x - px) - att_a))
+        if v < bv:
+            best, bv = (x, y), v
+    if best is None:
+        return set()
+    pts = [(px, py), best]
+    # (deux cases de large : une ligne en biais ne se touche que par les coins, et l'on n'y passerait pas)
+    cells = {k for c in _poly_cells(pts) for k in (c, c + 1, c + COLS) if 0 <= k < N}
+    wet = [c for c in _poly_cells(pts) if t[c] == T_EAU]
+    for c in cells:
+        if t[c] in (T_EAU, T_MARAIS_T, T_BOIS, T_FORET_T):
+            t[c] = T_ROUTE
+    if wet:
+        _add_bridge(m, wet, t)
+    m.roads.append(dict(pts=pts, kind='chemin'))
+    return cells
+
+
 def _town(m, pl, pos, rng, spec, t, road_cells):
     px, py = pos
     typ = pl['type']
@@ -708,6 +754,19 @@ def _town(m, pl, pos, rng, spec, t, road_cells):
             streets.add(c)
     rc = int(R // CELL) + 2
     ci, cj = int(px // CELL), int(py // CELL)
+    # la grille de campagne, trop grossière sur les côtes et l'estuaire, peut poser la place dans l'eau, coupée de la
+    # terre ferme : elle est bâtie au sec, remparts et glacis compris, et une chaussée et son pont l'y relient (côté de
+    # l'assaillant de préférence)
+    land = _mainland(t)
+    if cell_of(px, py) not in land:
+        dry = R + 130
+        for dj in range(-int(dry // CELL) - 1, int(dry // CELL) + 2):
+            for di in range(-int(dry // CELL) - 1, int(dry // CELL) + 2):
+                i, j = ci + di, cj + dj
+                if 0 <= i < COLS and 0 <= j < ROWS and t[j * COLS + i] == T_EAU and \
+                        math.hypot(*(a - b for a, b in zip(center_of(j * COLS + i), pos))) < dry:
+                    t[j * COLS + i] = T_PRE
+        streets |= _causeway(m, t, px, py, spec.get('att_angle', 0.0), land)
     bati = []
     for dj in range(-rc, rc + 1):
         for di in range(-rc, rc + 1):

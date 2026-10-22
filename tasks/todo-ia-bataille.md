@@ -27,14 +27,15 @@ l'assaut du cœur, 0 place prise, pertes 24 % / 24 %, durée moyenne 279 min ; a
 1 h 30 à 3 h, l'assaillant perdant 11 à 22 %, la garnison 16 à 34 %), pertes 23 % / 22 %, durée 247 min.
 
 Reste à faire :
-- **Places : 4 prises sur 24 au banc des places (17 %), la spécification visait 30 à 50 %.** La cause des 0 sur 24
+- **Places : 6 prises sur 24 au banc des places (25 %), la spécification visait 30 à 50 %.** La cause des 0 sur 24
   était dans l'IA, pas dans le moteur : arrivées au cœur, les colonnes fusillaient les maisons sans y entrer,
   ignoraient les cavaliers de la garnison qui le gardaient (un seul défenseur debout à moins de HEART_FREE suffit à le
   tenir), ne relançaient pas une charge arrêtée court (l'ordre restait « charge », l'IA croyait la charge en cours), et
-  les fuyards ralliés attendaient la vague suivante pendant que l'assaut s'éteignait. Restent :
-  - la graine 2 (8 batailles sur 24) : la place est cernée d'eau (centre et abords à 65 et 175 m de l'anneau dans
-    l'eau, sur tout le tour) ; les colonnes restent à leur poste, chemin introuvable. À voir dans terrain.py (une place
-    de forteresse doit être abordable) ;
+  les fuyards ralliés attendaient la vague suivante pendant que l'assaut s'éteignait. Fort Médoc (graine 2) était
+  posé dans l'estuaire par la carte de campagne, trop grossière : la place est maintenant bâtie au sec (remparts et
+  glacis compris), une chaussée et son pont la relient à la terre ferme (terrain.py, _mainland, _causeway), et
+  l'assaillant arrive par le bord le plus sec (battle.py, _zones). Fort Médoc se prend 2 fois sur 4 quand
+  l'assaillant est en force. Restent :
   - rôle « def » (l'IA attaque avec l'armée tirée au sort, à peine plus nombreuse que la garnison du joueur) : aucune
     prise, ce qui est juste, mais la brèche tombe vite (10 min) devant une garnison fraîche ;
   - en 1870 : aucune prise ; les colonnes arrivent au cœur sans cartouches et sous 50 de moral ;

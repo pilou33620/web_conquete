@@ -351,6 +351,9 @@ class TacticalBattle:
             e0 = 'E' if ca > 0 else 'O'
         else:
             e0 = 'S' if sa > 0 else 'N'
+        # un bord noyé (estuaire, côte : la carte de campagne est grossière) : l'assaillant arrive par le plus sec
+        if self._dry(self._edge_band(e0, 600)) < 0.4:
+            e0 = max('ONES', key=lambda e: (self._dry(self._edge_band(e, 600)), e == e0))
         opp = dict(E='O', O='E', N='S', S='N')
         self.edges = [e0, opp[e0]]
         # chaque camp se déploie librement dans sa moitié de la carte, sauf une bande neutre de 2 × DEPLOY_GAP au
@@ -381,6 +384,12 @@ class TacticalBattle:
                        d1[2] - (back if e0 == 'O' else 0), d1[3] - (back if e0 == 'N' else 0)])
         self.zones = z
         self.ai_zones = za
+
+    def _dry(self, box):
+        """Part de terre (sans eau) dans le rectangle box."""
+        cs = [j * COLS + i for j in range(int(box[1] // CELL), min(ROWS, int(box[3] // CELL)))
+              for i in range(int(box[0] // CELL), min(COLS, int(box[2] // CELL)))]
+        return sum(self.t[c] != T_EAU for c in cs) / max(1, len(cs))
 
     @staticmethod
     def _edge_band(e, depth):

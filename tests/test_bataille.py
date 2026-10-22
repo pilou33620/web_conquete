@@ -874,5 +874,26 @@ class IAPlaces(unittest.TestCase):
         pense(0)
         self.assertEqual(u.state, 'charge')
 
+
+class PlaceAuMilieuDeLEau(unittest.TestCase):
+    """Fort Médoc (graine 2) : la carte de campagne, grossière sur l'estuaire, posait la place dans l'eau, sans un
+    pont pour y aller ; l'assaillant se déployait sur l'eau. La place est bâtie au sec, reliée par une chaussée et
+    son pont, et l'assaillant arrive par le bord le plus sec."""
+
+    def test_on_va_au_pied_du_rempart_par_le_pont(self):
+        import math
+        from fabrique import GEO
+        from game.tactics import skirmish as S
+        g, bid = S.new(GEO, dict(me='33', foe='24', era='1790', kind='forteresse', role='def',
+                                 units=dict(ligne=2, artillerie=1), seed=2))
+        tb = g.tactical[bid]
+        pl = tb.map.place
+        self.assertEqual(pl['name'], 'Fort Médoc')
+        self.assertTrue(any(math.hypot(b['x'] - pl['x'], b['y'] - pl['y']) < pl['r'] + 300 for b in tb.map.bridges))   # (le pont de la chaussée)
+        self.assertGreater(tb._dry(tb.zone(0)), 0.3)
+        u = next(u for u in tb.units if u.side == 0 and u.cls == 'inf')
+        a, r = math.atan2(u.y - pl['y'], u.x - pl['x']), pl['r'] + 80
+        self.assertIsNotNone(tb.path_cost(u.x, u.y, pl['x'] + math.cos(a) * r, pl['y'] + math.sin(a) * r, 'inf', 0))
+
 if __name__ == '__main__':
     unittest.main()
