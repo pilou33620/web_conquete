@@ -25,8 +25,6 @@ Reste à faire :
 - **Une place n'est jamais prise au banc (0 sur 8).** La spécification visait 30 à 50 %. Le défenseur perd jusqu'à
   54 % de ses hommes, mais sa réserve et sa cavalerie gardent le cœur de la place. Il faut régler les taux d'assaut
   (dégâts au corps à corps dans la brèche, tenue du cœur), par niveau, et essayer au banc un village barricadé.
-- **Bouton « Battre en brèche » pour le joueur.** Le nouvel ordre 'bombard' (x, y) du moteur existe (battle.py),
-  mais l'interface ne l'offre pas encore (web/js/battle/doctrine.js, commandes.js).
 - **En rase campagne, l'assaillant gagne encore peu** : 3 batailles sur 8, et aucune en 1870. Il faut vérifier sur
   plus de graines (`--graines 3`), parce qu'une seule graine fait beaucoup bouger les chiffres.
 - **« Finir automatiquement »** : l'armée du joueur reprise en cours de route n'a pas les réglages du déploiement

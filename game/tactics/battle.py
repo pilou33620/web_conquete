@@ -1149,8 +1149,14 @@ class TacticalBattle:
             us = [u for u in us if u.cls == 'artillerie' and u.type != 'mitrailleuses']
             if not us:
                 return False, "Seuls les canons battent un rempart."
+            try:
+                x, y = float(p['x']), float(p['y'])
+            except (KeyError, TypeError, ValueError):
+                return False, "Touchez le rempart à battre."
+            if not (math.isfinite(x) and math.isfinite(y)):
+                return False, "Touchez le rempart à battre."
             for u in us:
-                u.order = dict(kind='bombard', x=round(float(p['x'])), y=round(float(p['y'])))
+                u.order = dict(kind='bombard', x=round(x), y=round(y))
                 u.target = None
             return True, "Batterie de brèche : on bat le rempart."
         return False, "Ordre inconnu."

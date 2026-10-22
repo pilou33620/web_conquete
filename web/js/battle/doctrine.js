@@ -3,14 +3,16 @@
 //  - les grenadiers : une salve à bout portant, puis la baïonnette ;
 //  - les voltigeurs et chasseurs harcèlent : ils tiraillent à portée efficace et se replient devant l'ennemi ;
 //  - la cavalerie vit de la charge (et de la poursuite des fuyards) : elle ne tire pas ;
-//  - l'artillerie choisit son projectile (boulet de loin, mitraille de près) et peut faire de la contre-batterie.
+//  - l'artillerie choisit son projectile (boulet de loin, mitraille de près) et peut faire de la contre-batterie ;
+//    devant une place, l'assaillant bat en brèche le point du rempart qu'il touche.
 // Le moteur (battle.py, TacticalBattle.order) applique ces ordres : fire (mode free|volley|hold), charge,
-// volley_charge, harass, cover, pursue, shot (mode auto|boulet|mitraille), counter (mode on|off), hold, rally, retreat.
+// volley_charge, harass, cover, pursue, shot (mode auto|boulet|mitraille), counter (mode on|off), bombard (x, y), hold,
+// rally, retreat.
 import { clsOf, isLight, isGeneral, isWagon, esc } from './formes.js';
 
 export const ORDER_LABEL = {
   move: 'En marche', attack: 'Attaque', charge: 'Charge', volley_charge: 'Salve puis baïonnette', harass: 'Harcèlement',
-  hold: 'Tient sa position', retreat: 'Retraite',
+  hold: 'Tient sa position', retreat: 'Retraite', bombard: 'Bat en brèche',
 };
 
 // l'arme d'une unité
@@ -33,7 +35,7 @@ const ACTIONS = {
   tirailleurs: ['feu', 'harceler', 'couvert', 'allure', 'tenir'],
   sapeurs: ['feu', 'couvert', 'tenir'],
   cavalerie: ['charge', 'poursuite', 'allure', 'tenir'],
-  artillerie: ['projectile', 'contrebatterie', 'feu', 'tenir'],
+  artillerie: ['projectile', 'contrebatterie', 'breche', 'feu', 'tenir'],
   mitrailleuses: ['contrebatterie', 'feu', 'tenir'],   // (ni boulet ni mitraille : un feu roulant)
   etat_major: ['tenir'],
   chariot: [],
@@ -116,6 +118,9 @@ export function ordresHtml(us, ctx) {
       }
       case 'contrebatterie':
         btns += b('counter', 'Contre-batterie', 'Les pièces visent d’abord l’artillerie ennemie.', '', all(u => u.prio === 'artillerie'));
+        break;
+      case 'breche':   // (seulement pour l'assaillant d'une place à enceinte : ctx.rempart)
+        if (ctx.rempart) btns += b('breche', 'Battre en brèche', 'Les pièces battent le rempart au point que vous touchez ensuite, pour y ouvrir une brèche ; elles ne tirent sur l’ennemi qu’à portée de mitraille.', '', ctx.targeting === 'breche' || all(u => u.order === 'bombard'));
         break;
       case 'tenir':
         btns += b('hold', 'Tenir', 'Tient la position.', '', all(u => u.order === 'hold'));

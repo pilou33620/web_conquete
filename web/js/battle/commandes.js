@@ -18,7 +18,8 @@ export class Controls {
     this.pts = new Map();
     this.g = null;
     this.hover = null;
-    this.targeting = null;    // 'charge' | 'vcharge' (salve puis baïonnette) | 'attack' : le prochain appui sur un ennemi donne cet ordre
+    this.targeting = null;    // 'charge' | 'vcharge' (salve puis baïonnette) | 'attack' : le prochain appui sur un ennemi donne cet ordre ;
+                              // 'breche' : le prochain appui sur le terrain désigne le point du rempart à battre
     this.run = false;         // les prochains déplacements se font au galop (cavalerie) ou au pas de course
     this.pings = [];
     this.inertia = null;
@@ -197,6 +198,7 @@ export class Controls {
       return;
     }
     const sel = this.mineSel();
+    if (this.targeting === 'breche' && sel.length) { this.order('bombard', { x: wx, y: wy }); this.ping(wx, wy, 'rgba(255,120,90,'); return; }
     if (hitU && hitU.side !== v.me) {
       if (sel.length && !this.deploying()) {
         this.order(this.targetKind(), { target: hitU.id });

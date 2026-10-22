@@ -71,6 +71,15 @@ test('ordres de l’artillerie', () => {
   assert.ok(!a(h, 'charge'));
 });
 
+test('battre en brèche : seulement pour l’assaillant d’une place à enceinte', () => {
+  const art = [unite('artillerie')];
+  assert.ok(!a(ordres(art), 'breche'));
+  const o = ordresHtml(art, { targeting: null, run: false, rempart: true });
+  assert.ok(a(o.btns, 'breche'));
+  assert.ok(!a(ordresHtml([unite('ligne')], { targeting: null, run: false, rempart: true }).btns, 'breche'));
+  assert.ok(ordresHtml([unite('artillerie', { order: 'bombard' })], { targeting: null, run: false, rempart: true }).btns.includes('class="bt-btn  on"'));
+});
+
 test('sélection mêlée : seulement les ordres communs', () => {
   const h = ordres([unite('ligne'), unite('cavalerie')]);
   assert.ok(a(h, 'hold'));

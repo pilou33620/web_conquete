@@ -331,7 +331,7 @@ export class BattleUI {
     } else {
       const anyRout = us.some(x => x.state === 'deroute');
       // les ordres dépendent de l'arme : tir à volonté ou en salve, baïonnette, harcèlement, charge, projectile…
-      const o = ordresHtml(us, { targeting: v.controls.targeting, run: v.controls.run });
+      const o = ordresHtml(us, { targeting: v.controls.targeting, run: v.controls.run, rempart: v.me === 0 && (v.terrain?.walls || []).some(w => w.kind !== 'barricade') });
       h += o.top;
       h += `<div class="bp-row bp-btns">${o.btns}
         <button class="bt-btn" data-a="rally" ${anyRout ? '' : 'disabled'}>Rallier</button>
@@ -372,7 +372,7 @@ export class BattleUI {
   targetingChanged(kind) {
     const h = this.$('.bt-target-hint');
     h.hidden = !kind;
-    if (kind) h.innerHTML = `${kind === 'vcharge' ? 'Touchez l’ennemi : salve, puis baïonnette' : "Touchez l'ennemi à charger"} <button class="bt-btn" data-a="untarget">Annuler</button>`;
+    if (kind) h.innerHTML = `${kind === 'breche' ? 'Touchez le rempart à battre en brèche' : kind === 'vcharge' ? 'Touchez l’ennemi : salve, puis baïonnette' : "Touchez l'ennemi à charger"} <button class="bt-btn" data-a="untarget">Annuler</button>`;
   }
   act(a, d = {}) {
     const v = this.v, c = v.controls, us = c.mineSel();
@@ -392,6 +392,7 @@ export class BattleUI {
     else if (a === 'pursue') c.order('pursue');
     else if (a === 'gait') { c.run = !c.run; this.toast(c.run ? 'Prochains déplacements : à marche forcée.' : 'Prochains déplacements : au pas.'); this.renderPanel(true); }
     else if (a === 'vcharge') c.setTargeting(c.targeting === 'vcharge' ? null : 'vcharge');
+    else if (a === 'breche') c.setTargeting(c.targeting === 'breche' ? null : 'breche');
     else if (a === 'hold') c.order('hold');
     else if (a === 'rally') c.order('rally');
     else if (a === 'retreat') c.order('retreat');
@@ -440,7 +441,7 @@ export class BattleUI {
         this.showVals = !this.showVals;
         try { localStorage.setItem('conquete.bataille.valeurs', this.showVals ? '1' : '0'); } catch (e) { /* tant pis */ }
         this.renderPanel(true); break;
-      case 'hold': case 'rally': case 'charge': case 'counter': case 'harass': case 'cover': case 'pursue': case 'gait': case 'vcharge': this.act(a); break;
+      case 'hold': case 'rally': case 'charge': case 'counter': case 'harass': case 'cover': case 'pursue': case 'gait': case 'vcharge': case 'breche': this.act(a); break;
       case 'retreat': this.confirm('Retraite', 'Les régiments choisis quittent le champ de bataille par votre bord. Ils reviennent en campagne avec leurs hommes.', 'Ordonner la retraite', () => this.act('retreat'), true); break;
       case 'untarget': v.controls.setTargeting(null); break;
       case 'engager': this.engage(); break;
