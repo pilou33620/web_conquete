@@ -1180,10 +1180,11 @@ class TacticalBattle:
             u.state = 'marche' if u.path else 'repos'
 
     def _approach(self, u, tg):
-        """Se porter à bonne portée de la cible (aux deux tiers de la portée efficace)."""
+        """Se porter à portée de tir de la cible : on s'arrête dès qu'elle est à bonne portée (au feu plein), sans
+        aller au contact."""
         e, mx, g = U.ranges(u)
         d = self.dist(u, tg)
-        want = e * 0.7
+        want = e * 0.9
         if u.cls == 'artillerie':
             # les canons tirent dès qu'ils portent : ils ne s'approchent que hors de portée
             want = mx * 0.95 if d > mx else d
@@ -1434,8 +1435,8 @@ class TacticalBattle:
             if tg and tg.alive and tg.state != 'hors' and tg.id in self.seen_by[u.side]:
                 e, mx, _ = U.ranges(u)
                 d = self.dist(u, tg)
-                if (d > e * 0.95 and not u.path) or (u.path and d < e * 0.75):
-                    if u.busy <= 0 and (not u.path or d < e * 0.75):
+                if (d > e * 0.95 and not u.path) or (u.path and d < e * 0.9):
+                    if u.busy <= 0 and (not u.path or d < e * 0.9):
                         self._approach(u, tg)
             elif u.path == [] and u.order.get('kind') == 'attack':
                 u.order = dict(kind='hold')

@@ -57,6 +57,21 @@ class OrdresParArme(unittest.TestCase):
         avancer(tb, 120, jusqua=lambda: kind(L) != 'volley_charge')
         self.assertEqual(kind(L), 'charge')
 
+    def test_attaquer_s_arrete_a_portee_de_tir(self):
+        from game.tactics import units as U
+        tb, u = bataille()
+        L = u['ligne']
+        cible = ennemi(tb, L)
+        e = U.ranges(L)[0]
+        face_a_face(tb, L, cible, e * 2.5)
+        for x in tb.units:   # (les ennemis restent sur place : on ne mesure que l'approche)
+            if x.side == cible.side:
+                x.ctrl = 'joueur'
+        self.assertTrue(ordre(tb, L, 'attack', target=cible.id)[0])
+        avancer(tb, 900, jusqua=lambda: not L.path and tb.dist(L, cible) < e)
+        self.assertLess(tb.dist(L, cible), e)            # à bonne portée, il fait feu…
+        self.assertGreater(tb.dist(L, cible), e * 0.8)   # … sans aller se coller à l'ennemi
+
     def test_harceler_passe_en_tirailleurs(self):
         tb, u = bataille(dict(legere=1))
         self.assertTrue(ordre(tb, u['legere'], 'harass')[0])
