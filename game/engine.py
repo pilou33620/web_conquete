@@ -108,7 +108,11 @@ class Game:
         sc = R.SCENARIOS[self.scenario]
         if sc.get('techs_before'):
             for f in self.factions.values():
-                f['techs'] = [t for t in R.TECH if R.TECH_YEAR[t] <= sc['techs_before']]
+                # avec leurs prérequis, même datés après (le gemmage de 1740 suppose les semis de pins)
+                known = {t for t in R.TECH if R.TECH_YEAR[t] <= sc['techs_before']}
+                while (missing := {q for t in known for q in R.TECH[t]['req']} - known):
+                    known |= missing
+                f['techs'] = [t for t in R.TECH if t in known]
         # (les techniques de l'époque d'abord : les premières troupes en ont les armes)
         for code in R.FACTIONS:
             cap = self.capital_of(code)
@@ -1275,8 +1279,6 @@ class Game:
             return False, "Technologie inconnue."
         if tech in f['techs']:
             return False, "Déjà connue."
-        if R.TECH_YEAR.get(tech, 0) > self.date().year:
-            return False, f"Pas encore inventée : disponible vers {R.TECH_YEAR[tech]}."
         if f['research'][t['branch']]:
             return False, "Une recherche est déjà en cours dans cette branche."
         if any(r not in f['techs'] for r in t['req']):

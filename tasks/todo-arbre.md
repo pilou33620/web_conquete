@@ -17,7 +17,7 @@ Vérifications communes à chaque tâche : `python3 tests/lancer.py` passe. Un c
     `tests/test_campagne.py`, `tests/decouvertes.test.mjs`
   - Taille : S
 
-- [ ] **A2 : recherche libre, prérequis entre branches, durée selon l'étage**
+- [x] **A2 : recherche libre, prérequis entre branches, durée selon l'étage**
   - Critères :
     - `research`, `ai.research` et la fenêtre ne lisent plus `TECH_YEAR` ;
     - `REQ_PLUS` est en place (la table de la spec) ;

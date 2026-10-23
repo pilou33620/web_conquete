@@ -28,7 +28,10 @@ export const phylloxera = (year, mk) => year >= 1875 && !(mk && mk.has('greffe')
 // levée à partir de 1818 ; null pour les couleurs d'Ultimate General
 // ce qu'un camp sait déjà au début d'un scénario (game/engine.py : les techniques d'avant sc.techs_before)
 export function startTechs(rules, sc) {
-  return new Set(sc && sc.techs_before ? (rules.techs || []).filter(t => t.year <= sc.techs_before).map(t => t.id) : []);
+  const techs = rules.techs || [], known = new Set(sc && sc.techs_before ? techs.filter(t => t.year <= sc.techs_before).map(t => t.id) : []);
+  // avec leurs prérequis, même datés après (comme le serveur)
+  for (let n = -1; n !== known.size;) { n = known.size; for (const t of techs) if (known.has(t.id)) t.req.forEach(q => known.add(q)); }
+  return known;
 }
 // les tronçons de voie ferrée ouverts avant l'année de départ (game/engine.py) ; rails : payload de game/rails.py
 export function startRails(rails, year) {

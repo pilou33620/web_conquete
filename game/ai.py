@@ -573,9 +573,8 @@ class AI:
         for b in sorted(R.BRANCHES, key=lambda b: (b not in taste, self.rng.random())):
             if f['research'][b]:
                 continue
-            year = g.date().year
             avail = [t for t in R.TECH.values() if t['branch'] == b and t['id'] not in f['techs']
-                     and all(q in f['techs'] for q in t['req']) and R.TECH_YEAR.get(t['id'], 0) <= year]
+                     and all(q in f['techs'] for q in t['req'])]
             if not avail:
                 continue
             # un nouveau fusil ou un nouveau canon passe avant tout : une armée démodée est une armée battue

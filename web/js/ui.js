@@ -1704,12 +1704,11 @@ export class UI {
       const cards = techs.map(t => {
         const done = me.techs.includes(t.id);
         const running = cur && cur.tech === t.id;
-        const ready = t.req.every(r => me.techs.includes(r)) && !(t.year > (this.st.year || 0));
+        const ready = t.req.every(r => me.techs.includes(r));
         const reqNames = t.req.map(r => this.rules.techs.find(x => x.id === r).name).join(', ');
         let foot = '';
         if (done) foot = '<span class="muted">Acquise</span>';
         else if (running) foot = '<span>En cours…</span>';
-        else if (t.year > (this.st.year || 0)) foot = `<span class="muted">Pas encore inventée : vers ${t.year}${t.req.length ? ' ; requiert ' + reqNames : ''}</span>`;
         else if (!ready) foot = `<span class="muted">Requiert : ${reqNames}</span>`;
         else foot = `<span>${fmt(t.cost)} livres, ${partTour(t.days)}</span><button class="btn" data-act="research" data-v="${t.id}" ${cur || me.res.livres < t.cost ? 'disabled' : ''}>Rechercher</button>`;
         return `<div class="tech ${done ? 'done' : running ? 'running' : !ready ? 'locked' : ''}"><div class="tn">${t.name}</div><div class="td">${t.desc}</div><div class="tc">${foot}</div></div>`;

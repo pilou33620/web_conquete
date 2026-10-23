@@ -334,19 +334,19 @@ class Production(unittest.TestCase):
 class RechercheEtPolitiques(unittest.TestCase):
     def test_technologies_en_tours_entiers(self):
         for t in R.TECH.values():
-            self.assertIn(t['days'], (30, 60, 90), t['id'])
+            self.assertTrue(t['days'] >= 30 and t['days'] % 30 == 0, t['id'])
 
     def test_une_technologie_d_un_tour_est_decouverte_au_tour_suivant(self):
         g = partie()
         jouer_mois(g)   # 1er avril
         f = g.factions[g.player]
         f['res']['livres'] = 1e5
-        t = next(t for t in R.TECH.values() if t['days'] == 30 and t['id'] not in f['techs'] and not f['research'][t['branch']]
-                 and all(r in f['techs'] for r in t['req']) and R.TECH_YEAR.get(t['id'], 0) <= g.date().year
-                 and {x[0]: x[5] for x in R.TECHS}[t['id']] == 42)
+        t = next(t for t in R.TECH.values() if t['id'] not in f['techs'] and not f['research'][t['branch']]
+                 and all(r in f['techs'] for r in t['req']))
         self.assertTrue(g.research(g.player, t['id'])[0])
+        f['research'][t['branch']].update(left=30, total=30)   # (les vraies durées se comptent en années)
         jouer_mois(g)
-        self.assertIn(t['id'], f['techs'], '42 jours devenus un tour : découverte au tour suivant')
+        self.assertIn(t['id'], f['techs'], 'un tour de travail : découverte au tour suivant')
 
     def test_politique_en_place_au_prochain_tour(self):
         g = partie()
@@ -1130,12 +1130,33 @@ class ArbreDesTechnologies(unittest.TestCase):
         for tid in R.TECH:
             depth(tid)
 
-    def test_pas_cherchable_avant_son_annee(self):
+    def test_recherche_libre_seuls_les_prerequis_comptent(self):
         g = partie(epoque='1700')
-        g.factions[g.player]['techs'] += ['vapeur', 'manufactures']
-        ok, why = g.research(g.player, 'vapeur_fluviale')
-        self.assertFalse(ok)
-        self.assertIn('1818', why)
+        f = g.factions[g.player]
+        f['res']['livres'] = 1e5
+        self.assertFalse(g.research(g.player, 'lebel')[0], 'sans le fusil Gras ni la dynamite')
+        f['techs'] += ['gras', 'dynamite']
+        self.assertTrue(g.research(g.player, 'lebel')[0], 'en 1700 si les prérequis y sont (SPEC-ARBRE.md)')
+
+    def test_prerequis_ajoutes_jamais_plus_recents(self):
+        for t, qs in R.REQ_PLUS.items():
+            for q in qs:
+                self.assertIn(q, R.TECH[t]['req'])
+                self.assertLessEqual(R.TECH_YEAR[q], R.TECH_YEAR[t], f'{t} ← {q}')
+
+    def test_chaque_branche_dure_190_ans(self):
+        for b in R.BRANCHES:
+            jours = sum(t['days'] for t in R.TECH.values() if t['branch'] == b)
+            self.assertAlmostEqual(jours / 360, R.BRANCH_YEARS, delta=1.5, msg=b)   # (arrondis au tour)
+        self.assertLess(R.TECH['baionnette']['days'], R.TECH['lebel']['days'], 'plus loin dans l’arbre, plus long')
+
+    def test_departs_avec_les_prerequis_de_leurs_technologies(self):
+        for ep in ('1790', '1813', '1870'):
+            g = partie(epoque=ep)
+            for c, f in g.factions.items():
+                for t in f['techs']:
+                    for q in R.TECH[t]['req']:
+                        self.assertIn(q, f['techs'], f'{ep} {c} : {t} sans {q}')
 
     def test_branche_civil_et_sociale(self):
         self.assertIn('civil', R.BRANCHES, "l'identifiant reste « civil » (sauvegardes, goûts des IA)")

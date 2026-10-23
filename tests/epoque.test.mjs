@@ -39,9 +39,11 @@ test('le phylloxéra frappe de 1875 aux plants greffés', () => {
 });
 
 test('ce que donne l’époque de départ : techniques et voies ferrées', () => {
-  const rules = { techs: [{ id: 'chappe', year: 1794 }, { id: 'chemins_fer', year: 1830 }, { id: 'lebel', year: 1886 }] };
+  const rules = { techs: [{ id: 'chappe', year: 1794, req: [] }, { id: 'chemins_fer', year: 1830, req: [] }, { id: 'lebel', year: 1886, req: [] },
+    { id: 'gemmage', year: 1740, req: ['pins'] }, { id: 'pins', year: 1787, req: [] }] };
   assert.deepEqual([...startTechs(rules, { techs_before: null })], []);
-  assert.deepEqual([...startTechs(rules, { techs_before: 1866 })], ['chappe', 'chemins_fer']);
+  assert.deepEqual([...startTechs(rules, { techs_before: 1866 })].sort(), ['chappe', 'chemins_fer', 'gemmage', 'pins']);
+  assert.ok(startTechs(rules, { techs_before: 1750 }).has('pins'), 'avec les prérequis, même datés après');
   const rails = { sections: [['1-2', 1, 2, [], 10, 'A', 1841], ['2-3', 2, 3, [], 10, 'A', 1870], ['3-4', 3, 4, [], 10, 'B', 1894]] };
   assert.deepEqual(startRails(rails, 1813), []);
   assert.deepEqual(startRails(rails, 1870), ['1-2']);

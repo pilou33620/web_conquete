@@ -335,6 +335,35 @@ for _t in TECH.values():
     if _t['branch'] == 'militaire':
         _t['branch'] = 'infanterie' if _t['id'] in MILITAIRE_INF else 'artillerie'
 BRANCHES = ['infanterie', 'artillerie', 'civil', 'industriel', 'agricole']
+# recherche libre (SPEC-ARBRE.md) : plus de date, mais l'arme suit l'industrie et la science ; aucun de ces prérequis
+# n'est plus récent que la technologie qui le demande (les départs 1790, 1813 et 1870 restent cohérents)
+REQ_PLUS = dict(
+    percussion=['poudreries'], chassepot=['outillage'], gras=['acier'], lebel=['dynamite'], gribeauval=['fonderie'],
+    lahitte=['coke'], mitrailleuse=['pieces'], debange=['acier'], dynamite=['acier'], chemins_fer=['vapeur'],
+    vapeur=['coke'], acier=['vapeur'], outillage=['pieces'], electricite=['telegraphe'], service_mil=['chemins_fer'],
+    retranchements=['minie'], prefectures=['ponts_chaussees'], gendarmerie=['ponts_chaussees'], pins=['ponts_chaussees'],
+    canal=['ponts'], larrey=['ecoles'], vaccine=['ecoles'], hygiene=['vaccine'], pomme_de_terre=['assolement'],
+    engrais_chim=['vapeur'], greffe=['engrais_chim'])
+for _k, _v in REQ_PLUS.items():
+    TECH[_k]['req'] = TECH[_k]['req'] + _v
+
+
+def _etage(t, seen=()):
+    """Plus longue chaîne de prérequis, toutes branches comprises (0 : sans prérequis)."""
+    assert t not in seen, f'cycle de prérequis : {seen + (t,)}'
+    return 1 + max(_etage(q, seen + (t,)) for q in TECH[t]['req']) if TECH[t]['req'] else 0
+
+
+# durée selon l'étage : une branche cherchée sans arrêt, sans bonus, dure BRANCH_YEARS ans (de 1700 à 1890 environ),
+# chaque technologie au prorata de (1 + étage) ; arrondie au tour (30 jours de travail, 12 tours par an)
+BRANCH_YEARS = 190
+for _t in TECH.values():
+    _t['etage'] = _etage(_t['id'])
+for _b in BRANCHES:
+    _ts = [t for t in TECH.values() if t['branch'] == _b]
+    _sum = sum(1 + t['etage'] for t in _ts)
+    for _t in _ts:
+        _t['days'] = 30 * max(1, round(BRANCH_YEARS * 12 * (1 + _t['etage']) / _sum))
 # goût de recherche des IA (personality['tech']) → branches préférées
 TASTE_BRANCHES = dict(militaire=('infanterie', 'artillerie'))
 
