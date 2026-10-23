@@ -851,6 +851,7 @@ node --test tests/*.mjs                         # l'interface seule
 | `tests/visibilite.test.mjs` | ligne de vue du navigateur : rase campagne vue, crête et bois épais qui bouchent, lisière qui voit dehors, la même dans les deux sens, champ de vision borné |
 | `tests/decouvertes.test.mjs` | découvertes : chaque technologie a sa famille de vignette animée |
 | `tests/epoque.test.mjs` | la carte selon l'époque : drapeau de chaque période, chapeaux des passants, phylloxéra de 1875 aux plants greffés |
+| `tests/secours.test.mjs` | tuiles de secours de la carte : un niveau de zoom auquel il manque une tuile est sauté en entier (plus de bandes noires) |
 | `tests/frontieres.test.mjs` | frontières de la carte de campagne : les segments des carrés marchants raboutés en lignes continues, sans perdre ni doubler un point, puis découpés en morceaux qui se recouvrent |
 | `tests/portraits.test.mjs` | portraits des régiments : la même figure en bataille et en campagne (piquiers avant la baïonnette, pièce de son époque, cavalier pour le général) |
 | `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte ; zénith bleu par beau temps et pâle sous les nuages, brume des vallées seulement le matin, voile épaissi par le brouillard |

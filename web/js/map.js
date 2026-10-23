@@ -1198,13 +1198,15 @@ export class MapView {
       const so = TILE / Lo;
       const i0 = Math.floor(x0 / so), i1 = Math.floor((x0 + span - 1e-6) / so), j0 = Math.floor(y0 / so), j1 = Math.floor((y0 + span - 1e-6) / so);
       if ((i1 - i0 + 1) * (j1 - j0 + 1) > 16) continue;
+      // (toutes les tuiles de ce niveau, ou aucune : une seule qui manque laissait un trou noir dans la carte)
       const parts = [];
-      for (let j = j0; j <= j1 && parts; j++) for (let i = i0; i <= i1; i++) {
+      let all = true;
+      for (let j = j0; j <= j1 && all; j++) for (let i = i0; i <= i1; i++) {
         const t = this.getTile(Lo, i, j, Lo === LEVELS[0]);
-        if (!t) { parts.length = 0; break; }
+        if (!t) { all = false; break; }
         parts.push([t, i, j]);
       }
-      if (!parts.length) continue;
+      if (!all) continue;
       ctx.save();
       ctx.beginPath(); ctx.rect(ox + x0 * z, oy + y0 * z, span * z + 0.6, span * z + 0.6); ctx.clip();
       for (const [t, i, j] of parts) ctx.drawImage(t, ox + i * so * z, oy + j * so * z, so * z + 0.6, so * z + 0.6);
