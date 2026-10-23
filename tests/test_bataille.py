@@ -1001,6 +1001,24 @@ class TechnologiesDeCombat(unittest.TestCase):
         del self.tb.spec['tech']
         self.assertEqual(self.tb.tech(0), {}, 'une ancienne sauvegarde : rien')
 
+    def test_un_regiment_sans_feu_de_rang(self):
+        # SPEC-ARBRE.md : la spec porte les effets propres des régiments en retard (umd), la bataille les préfère
+        self.tech(ligne_fire=0.22)
+        p_avec = self.tir(50)
+        self.tb.spec['umd'] = {self.l.id: {}}
+        self.assertAlmostEqual(p_avec / self.tir(50), 1.22, delta=0.02)
+        self.assertEqual(self.tb.tech_of(self.c), self.tb.tech(self.c.side), 'les autres gardent ceux du camp')
+
+    def test_la_spec_porte_les_regiments_en_retard(self):
+        g, bt = bataille_de_campagne(epoque='1790')
+        a = next(g.armies[aid] for s in bt['sides'] for aid in s['armies'] if g.armies[aid]['owner'] == g.player)
+        r = next(r for r in a['regs'] if R.UNITS[r['type']]['cls'] == 'inf')
+        r['man'] = []
+        from game.tactics import bridge
+        spec = bridge.make_spec(g, bt)
+        self.assertEqual(list(spec['umd']), [r['id']], 'seul le régiment qui n’a rien appris')
+        self.assertLess(spec['umd'][r['id']].get('ligne_fire', 0), spec['tech'][[s['owner'] for s in bt['sides']].index(g.player)]['ligne_fire'])
+
     def test_le_feu_de_rang_et_toutes_armes_au_tir(self):
         self.tech()
         p0 = self.tir(50)

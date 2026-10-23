@@ -236,8 +236,26 @@ def make_spec(g, bt):
                 balloon=[g.mod(o, 'balloon') if o in g.factions else 0 for o in owners],
                 entrench=[g.mod(o, 'entrench') if o in g.factions else 0.0 for o in owners],
                 shell=[g.mod(o, 'shell') if o in g.factions else 0.0 for o in owners], ambush=bt['ambush'], surprise=bt['surprise'],
+                # SPEC-ARBRE.md : les régiments qui n'ont pas tout appris (manœuvres, armes) ont leurs propres effets
+                umd=_umd(g, bt),
                 plans=[_side_plan(g, bt, si) for si in (0, 1)],
                 carte=TR.VERSION)   # (version du générateur de la carte : une sauvegarde la refabrique à l'identique)
+
+
+def _umd(g, bt):
+    """Effets de technologie des régiments en retard sur leur camp (engine.reg_lag) : id → effets, comme spec['tech']
+    plus entrench et shell."""
+    out = {}
+    for si, side in enumerate(bt['sides']):
+        regs = [(o, r) for o, r, _ in g.side_units(bt, si)]
+        if side['node'] is not None:
+            n = g.nodes[side['node']]
+            regs += [(n['owner'], r) for r in n['garrison']]
+        for o, r in regs:
+            if g.reg_lag(o, r):
+                md = g.reg_mods(o, r)
+                out[r['id']] = {k: md[k] for k in (*ST.TECH_MODS, 'entrench', 'shell') if md.get(k)}
+    return out
 
 
 def _side_plan(g, bt, si):

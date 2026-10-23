@@ -1423,7 +1423,7 @@ class Game:
         """Une batterie du rempart, comme un régiment (pour la bataille commandée et le calcul de puissance)."""
         men = float(R.UNITS['artillerie']['men'])
         return dict(id=f"c{n['id']}-{i + 1}", type='artillerie', n=men, max=men, xp=30.0, morale=75.0, ammo=100.0,
-                    fat=0.0, arm=self.arm_level(n['owner'], 'artillerie'))
+                    fat=0.0, arm=self.arm_level(n['owner'], 'artillerie'), man=self.known_man(n['owner'], 'artillerie'))
 
     def fort_guns_power(self, n, tname, wx_fire=1.0):
         k = self.fort_guns(n)

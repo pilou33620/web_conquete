@@ -816,6 +816,17 @@ class TacticalBattle:
         """Technologies de combat du camp (stats.TECH_MODS → valeur, venues de la campagne ; {} sans elles)."""
         return (self.spec.get('tech') or ({}, {}))[side]
 
+    def tech_of(self, u):
+        """Technologies de combat de cette unité : celles de son régiment s'il n'a pas tout appris (SPEC-ARBRE.md,
+        bridge._umd), sinon celles de son camp."""
+        m = (self.spec.get('umd') or {}).get(u.id)
+        return self.tech(u.side) if m is None else m
+
+    def ufx(self, u, k):
+        """Retranchements, mélinite… de cette unité (spec[k] par camp, ou ceux de son régiment)."""
+        m = (self.spec.get('umd') or {}).get(u.id)
+        return self.spec.get(k, [0, 0])[u.side] if m is None else m.get(k, 0.0)
+
     def trait(self, side):
         if not hasattr(self, '_traits'):
             self._refresh_gens()
@@ -1896,7 +1907,7 @@ class TacticalBattle:
                 cas *= VOLLEY_POWER
         # technologies de l'armée, comme en résolution automatique (engine.reg_power, phases) : toutes armes, l'arme ;
         # feu de rang et de peloton en ligne ; feu de peloton du carré sur les escadrons ; artillerie à cheval à mitraille
-        md = self.tech(u.side)
+        md = self.tech_of(u)
         cas *= ST.power_k(md, u.cls)
         if u.cls == 'artillerie' and self.t[self.cell(u.x, u.y)] in WOODS:
             cas *= CAMO_FIRE_K   # (les troncs gênent le tir des canons camouflés)
@@ -1929,19 +1940,19 @@ class TacticalBattle:
         """Couvert de la cible sous le feu : l'obus à la mélinite de l'artillerie le perce à moitié."""
         cov = self._cover_vs(tg, shooter)
         if shooter.cls == 'artillerie' and shooter.type != 'mitrailleuses':   # (des obus : pas les mitrailleuses)
-            cov *= 1 - self.spec.get('shell', [0, 0])[shooter.side]
+            cov *= 1 - self.ufx(shooter, 'shell')
         return cov
 
     def _entrench_k(self, tg, shooter):
         """Retranchements : l'infanterie arrêtée depuis ENTRENCH_T s'est enterrée et perd moins d'hommes au feu (moitié
         moins d'abri contre les obus à la mélinite)."""
-        k = self.spec.get('entrench', [0, 0])[tg.side]
+        k = self.ufx(tg, 'entrench')
         if tg.id in (self.spec.get('logement') or ()):
             k = max(k, LOGEMENT_K)
         if not k or tg.cls != 'inf' or self.clock - tg.still_t < ENTRENCH_T:
             return 1.0
         if shooter.cls == 'artillerie' and shooter.type != 'mitrailleuses':
-            k *= 1 - self.spec.get('shell', [0, 0])[shooter.side]
+            k *= 1 - self.ufx(shooter, 'shell')
         return 1 - k
 
     def _cover_vs(self, tg, shooter):
@@ -2054,7 +2065,7 @@ class TacticalBattle:
         cav = a.cls == 'cavalerie'
         mom = ST.ELAN['cavalerie' if cav else 'inf']
         if cav or a.form == 'colonne':
-            mom *= ST.charge_k(self.tech(a.side), a.cls)   # cuirassiers ; ordre mixte (la colonne)
+            mom *= ST.charge_k(self.tech_of(a), a.cls)   # cuirassiers ; ordre mixte (la colonne)
         mom *= 1 - a.fat / (120 if cav else 150)   # des chevaux essoufflés chargent mal
         elan = min(1.0, max(0.0, a.charge_v) / ELAN_M['cav' if cav else 'inf'])
         a.charge_v = 0.0
@@ -2104,13 +2115,13 @@ class TacticalBattle:
                 # deux décharges de mitraille à bout portant pendant que la charge arrive (la gerbe serrée : ×2,2) ;
                 # aborder une batterie de face coûte très cher, la prendre de flanc ou de dos ne coûte rien
                 vol = U.pieces(tg) * P_MITRAILLE * GRAPE_POINT * 1.4 * (0.6 + 0.4 * tg.morale / 100) * \
-                    (1 + self.tech(tg.side).get('art_charge', 0.0))
+                    (1 + self.tech_of(tg).get('art_charge', 0.0))
                 kind = 'mitraille'
             else:
                 vol = tg.men * U.FRONT.get(tg.form, 1.0) * P_RECEPTION * (0.5 + 0.5 * tg.morale / 100) * \
                     ST.xp_k(tg.xp) * self._wx_k(tg)
                 kind = 'salve'
-            vol *= ST.power_k(self.tech(tg.side), tg.cls)
+            vol *= ST.power_k(self.tech_of(tg), tg.cls)
             vol *= (VUL_FIRE if tg.cls == 'inf' else VUL_GRAPE).get(a.form, 1.0)
             tg.ammo = max(0.0, tg.ammo - 1)
             tg.reload = max(tg.reload, U.reload_time(tg))
@@ -2137,7 +2148,7 @@ class TacticalBattle:
         if formed:
             vul *= 0.4
         cas = a.men * CHOC * mom * flank * vul * U.TYPE.get(a.type, U.TYPE['ligne'])['melee'] * (0.5 + a.morale / 200)
-        cas *= ST.power_k(self.tech(a.side), a.cls)
+        cas *= ST.power_k(self.tech_of(a), a.cls)
         self._damage(tg, cas, a, 'impact')
         shock = 6 * mom * flank * (1.3 if cav and tg.form in ('ligne', 'tirailleurs') else 1.0)
         tg.morale = max(0.0, tg.morale - shock * (0.5 if formed else 1.0))
@@ -2168,7 +2179,7 @@ class TacticalBattle:
 
     def _melee_k(self, u, foe):
         k = U.TYPE.get(u.type, U.TYPE['ligne'])['melee']
-        k *= (0.5 + u.morale / 200) * ST.xp_k(u.xp) * (1 - u.fat / 250) * ST.power_k(self.tech(u.side), u.cls)
+        k *= (0.5 + u.morale / 200) * ST.xp_k(u.xp) * (1 - u.fat / 250) * ST.power_k(self.tech_of(u), u.cls)
         if u.form == 'carre' and foe.cls == 'cavalerie':
             k *= 2.5
         elif u.form == 'tirailleurs':
@@ -2540,7 +2551,7 @@ class TacticalBattle:
             if not mine and (seen is None or u.id not in seen) and self.phase != 'fin':
                 continue
             units.append(u.view(mine, u.seen))
-            if u.cls == 'inf' and (self.spec.get('entrench', [0, 0])[u.side] or
+            if u.cls == 'inf' and (self.ufx(u, 'entrench') or
                                    u.id in (self.spec.get('logement') or ())) and self.clock - u.still_t >= ENTRENCH_T:
                 units[-1]['dug'] = 1   # retranchée : le client dessine sa tranchée et ses gabions (SPEC-SUITE J)
             if mine and u.cls == 'general' and u.alive:

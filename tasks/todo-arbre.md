@@ -59,7 +59,7 @@ Vérifications communes à chaque tâche : `python3 tests/lancer.py` passe. Un c
   - Fichiers : `game/rules.py`, `game/engine.py`, `game/views.py`, `tests/test_campagne.py`
   - Taille : M
 
-- [ ] **A5 : manœuvres par régiment en bataille tactique**
+- [x] **A5 : manœuvres par régiment en bataille tactique**
   - Critères :
     - `make_spec` donne `md` à chaque unité ; `battle.tech_of(u)` remplace `tech(side)` partout où l'effet est de
       régiment ;
