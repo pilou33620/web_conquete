@@ -78,9 +78,12 @@ export function chainSegments(segs) {
   return path;
 }
 
-// toile de travail des tuiles, si le navigateur sait dessiner hors écran (Safari avant 16.4 : non)
+// toile de travail des tuiles, si le navigateur sait dessiner hors écran (Safari avant 16.4 : non). Tuiles et
+// toiles sources restent en mémoire ordinaire (CPU) : sur PC, la carte graphique débordée perdait les tuiles
+// peintes chez elle, gardées ensuite vides (rectangles noirs) ; l'image du processeur, elle, ne se perd pas
+const CPU = { willReadFrequently: true };
 function offscreenTile() {
-  try { const c = new OffscreenCanvas(TILE, TILE); return c.getContext('2d') ? c : null; } catch (e) { return null; }
+  try { const c = new OffscreenCanvas(TILE, TILE); return c.getContext('2d', CPU) ? c : null; } catch (e) { return null; }
 }
 function freeTile(t) { if (t.close) t.close(); else t.width = t.height = 0; }
 
@@ -133,6 +136,7 @@ export class MapView {
     this.tiles = new Map();       // tuiles détaillées, de la moins récemment vue à la plus récente
     this.baseTiles = new Map();   // tuiles du niveau le plus bas : jamais évincées, elles servent de fond de secours
     this.tileLimit = 160;
+    this.tileGen = 0;             // génération des territoires peints dans les tuiles
     this.frameNo = 0;
     this.curL = 0;                // niveau affiché (figé pendant un pincement ou un zoom animé)
     this.zoomT = 0;               // dernier changement de zoom
@@ -272,7 +276,8 @@ export class MapView {
       dsm[j * W + i] = sum / n;
     }
     this.oceanDist = df;
-    const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+    // (en mémoire ordinaire, comme les tuiles qu'elles servent à peindre : voir offscreenTile)
+    const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d', CPU); return c; };
     this.oceanCanvas = mk(W, H);
     this.oceanDsm = dsm;
     this.paintOcean();
@@ -291,7 +296,7 @@ export class MapView {
     // grain de papier
     this.grain = document.createElement('canvas');
     this.grain.width = this.grain.height = 128;
-    const gctx = this.grain.getContext('2d');
+    const gctx = this.grain.getContext('2d', CPU);
     const gd = gctx.createImageData(128, 128);
     for (let k = 0; k < 128 * 128; k++) {
       const v = 205 + hash(k, 77) * 50;
@@ -523,12 +528,16 @@ export class MapView {
   drawVignette(ctx) {
     const w = this.vw, h = this.vh;
     if (!this.vig || this.vig.w !== w || this.vig.h !== h) {
+      // peint une fois dans une image à la taille de l'écran : recalculer le dégradé coûtait 8 ms par image
       // (sur une carte d'époque, des bords roussis de vieux papier)
-      const gr = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.38, w / 2, h / 2, Math.hypot(w, h) * 0.58);
+      const cv = document.createElement('canvas'), g = cv.getContext('2d');
+      cv.width = this.cv.width; cv.height = this.cv.height; g.scale(this.dpr, this.dpr);
+      const gr = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.38, w / 2, h / 2, Math.hypot(w, h) * 0.58);
       gr.addColorStop(0, this.era ? 'rgba(120,84,40,0)' : 'rgba(10,12,10,0)'); gr.addColorStop(1, this.era ? 'rgba(120,84,40,0.34)' : 'rgba(10,12,10,0.42)');
-      this.vig = { w, h, gr };
+      g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      this.vig = { w, h, cv };
     }
-    ctx.fillStyle = this.vig.gr; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(this.vig.cv, 0, 0, w, h);
   }
 
   showPreview(scen) {
@@ -1091,6 +1100,7 @@ export class MapView {
       }
       this.frontiers.push({ code: codes[ci], path: chainSegments(segs) });
     }
+    this.tileGen++;
     this.cellFac = idx; this.facCodes = codes;   // (le camp qui tient chaque case : le paysage de son époque, epoque.js)
     this.paintTerritory(idx, fields, codes);
   }
@@ -1101,7 +1111,7 @@ export class MapView {
     const W = this.W, H = this.H, R = 3, FW = W * R, FH = H * R;
     const cv = this.fillCanvas;
     if (cv.width !== FW || cv.height !== FH) { cv.width = FW; cv.height = FH; }
-    const fctx = cv.getContext('2d');
+    const fctx = cv.getContext('2d', CPU);
     const img = fctx.createImageData(FW, FH), data = img.data;
     const cols = codes.map(c => hexRgb(this.colors[c]));
     const pl = this.playable;
@@ -1143,17 +1153,19 @@ export class MapView {
     const key = `${L}:${tx}:${ty}`;
     if (L === LEVELS[0]) {
       let b = this.baseTiles.get(key);
-      if (!b && allowRender) { b = this.renderTile(L, tx, ty); this.baseTiles.set(key, b); }
+      if (allowRender && (!b || b.gen !== this.tileGen)) { if (b) freeTile(b); b = this.renderTile(L, tx, ty); this.baseTiles.set(key, b); }
       return b || null;
     }
     let t = this.tiles.get(key);
-    if (t) {
+    // (une tuile d'avant le dernier changement de camp reste affichée tant que la neuve n'est pas peinte)
+    if (t && (t.gen === this.tileGen || !allowRender)) {
       // vue à l'instant : elle passe en fin de file (la plus récente)
       this.tiles.delete(key); this.tiles.set(key, t);
       t.seen = this.frameNo;
       return t;
     }
     if (!allowRender) return null;
+    if (t) { this.tiles.delete(key); freeTile(t); }
     t = this.renderTile(L, tx, ty);
     t.seen = this.frameNo;
     this.tiles.set(key, t);
@@ -1212,7 +1224,7 @@ export class MapView {
     if (this.tileCv === undefined) this.tileCv = offscreenTile();
     const cv = this.tileCv || document.createElement('canvas');
     cv.width = cv.height = TILE;   // (vide la toile et remet l'état du contexte à zéro)
-    const g = cv.getContext('2d');
+    const g = cv.getContext('2d', CPU);
     const span = TILE / L, x0 = tx * span, y0 = ty * span;
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = 'high';
@@ -1337,7 +1349,24 @@ export class MapView {
     g.restore();
     // routes
     this.drawRoads(g, L, x0, y0, span);
-    return this.tileCv ? cv.transferToImageBitmap() : cv;
+    // territoires, puis frontières (au zoom de ce niveau)
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    this.drawSub(g, this.fillCanvas, x0, y0, span, 3);
+    W();
+    const z = L * 0.88 / this.dpr;   // (le zoom moyen auquel s'affiche ce niveau : voir level)
+    g.lineCap = 'round'; g.lineJoin = 'round'; g.setLineDash([]);
+    for (const fr of this.frontiers) {
+      const col = this.colors[fr.code];
+      g.strokeStyle = col;
+      g.globalAlpha = 0.16; g.lineWidth = Math.max(1.4, 11 / z); g.stroke(fr.path);
+      g.globalAlpha = 0.35; g.lineWidth = Math.max(0.7, 5.5 / z); g.stroke(fr.path);
+      g.globalAlpha = 0.95; g.lineWidth = Math.max(0.25, 2.4 / z); g.stroke(fr.path);
+      g.strokeStyle = lighten(col, 0.6); g.globalAlpha = 0.7; g.lineWidth = Math.max(0.08, 0.8 / z); g.stroke(fr.path);
+      g.globalAlpha = 1;
+    }
+    const t = this.tileCv ? cv.transferToImageBitmap() : cv;
+    t.gen = this.tileGen;
+    return t;
   }
 
   drawRoads(g, L, x0, y0, span) {
@@ -1688,7 +1717,7 @@ export class MapView {
     this.tileLimit = clamp(Math.ceil(nVis * 1.6) + 24, 160, 320);
     // tuiles à peindre, du centre vers les bords, dans un budget de temps par image (au moins une)
     const missing = [];
-    for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) if (!this.getTile(L, tx, ty, false)) missing.push([tx, ty]);
+    for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) if (this.getTile(L, tx, ty, false)?.gen !== this.tileGen) missing.push([tx, ty]);
     if (missing.length) {
       const cx = (wx0 + wx1) / 2 / span - 0.5, cy = (wy0 + wy1) / 2 / span - 0.5;
       missing.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy));
@@ -1705,7 +1734,9 @@ export class MapView {
     }
     // feuille de carte
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.fillRect(ox + 6, oy + 8, this.W * z, this.H * z);
+    // (seules ses deux bandes dépassent de la carte opaque : la peindre entière coûtait un plein écran par image)
+    ctx.fillRect(ox + this.W * z, oy + 8, 6, this.H * z);
+    ctx.fillRect(ox + 6, oy + this.H * z, this.W * z - 6, 8);
     ctx.save();
     ctx.beginPath(); ctx.rect(ox, oy, this.W * z, this.H * z); ctx.clip();
     for (let ty = ty0; ty <= ty1; ty++) {
@@ -1722,9 +1753,8 @@ export class MapView {
     ctx.strokeStyle = 'rgba(150,142,116,0.3)'; ctx.lineWidth = 1;
     ctx.strokeRect(ox - 8, oy - 8, this.W * z + 16, this.H * z + 16);
     // territoires
+    // (le voile et les frontières sont peints dans les tuiles : retracés à chaque image, ils en coûtaient le tiers)
     ctx.save();
-    ctx.globalAlpha = 1;
-    ctx.drawImage(this.fillCanvas, ox, oy, this.W * z, this.H * z);
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     if (this.highlightDept && this.deptPaths[this.highlightDept]) {
@@ -1734,15 +1764,6 @@ export class MapView {
       ctx.globalAlpha = 1;
       ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.6, 4 / z);
       ctx.stroke(this.deptPaths[this.highlightDept]);
-    }
-    for (const fr of this.frontiers) {
-      const col = this.colors[fr.code];
-      ctx.strokeStyle = col;
-      ctx.globalAlpha = 0.16; ctx.lineWidth = Math.max(1.4, 11 / z); ctx.stroke(fr.path);
-      ctx.globalAlpha = 0.35; ctx.lineWidth = Math.max(0.7, 5.5 / z); ctx.stroke(fr.path);
-      ctx.globalAlpha = 0.95; ctx.lineWidth = Math.max(0.25, 2.4 / z); ctx.stroke(fr.path);
-      ctx.strokeStyle = lighten(col, 0.6); ctx.globalAlpha = 0.7; ctx.lineWidth = Math.max(0.08, 0.8 / z); ctx.stroke(fr.path);
-      ctx.globalAlpha = 1;
     }
     ctx.restore();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
