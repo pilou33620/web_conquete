@@ -110,16 +110,17 @@ class AI:
         self.stock_arms()
 
     def arm_gap(self, regs):
-        """(plus grand retard en générations d'armes, hommes à réarmer) d'un groupe de régiments."""
-        lv = {cls: self.g.arm_level(self.code, cls) for cls in R.ARMS}
+        """(plus grand retard : générations d'armes, au moins 1 s'il manque des manœuvres ; hommes à moderniser) d'un
+        groupe de régiments (ceux déjà à l'exercice ne comptent pas)."""
+        g, code = self.g, self.code
+        lv = {cls: g.arm_level(code, cls) for cls in R.ARMS}
         gap = men = 0
         for r in regs:
-            if R.UNITS[r['type']]['arm_name']:
-                continue   # (armement fixe : la mitrailleuse ne se réarme pas)
-            d = lv.get(R.UNITS[r['type']]['cls'], 0) - r.get('arm', 0)
-            if d > 0:
-                gap = max(gap, d)
-                men += r['max']
+            if r.get('drill') or not g.reg_lag(code, r):
+                continue
+            d = 0 if R.UNITS[r['type']]['arm_name'] else lv.get(R.UNITS[r['type']]['cls'], 0) - r.get('arm', 0)
+            gap = max(gap, d, 1)
+            men += r['max']
         return gap, men
 
     def arms_floor(self):
@@ -145,7 +146,10 @@ class AI:
     def arm_supply(self, cost):
         """Réunir de quoi payer ce réarmement sans descendre sous le plancher, en achetant au marché ce qui manque."""
         g, r, floor = self.g, self.f['res'], self.arms_floor()
-        if not cost or any(v > self.arms_room().get(k, 0) for k, v in cost.items()):
+        if not cost or cost.get('livres', 0) > self.arms_purse():   # (les manœuvres se paient en livres)
+            return False
+        cost = {k: v for k, v in cost.items() if k != 'livres'}
+        if any(v > self.arms_room().get(k, 0) for k, v in cost.items()):
             return False
         for k, v in cost.items():
             short = v + floor[k] - r[k]
@@ -157,11 +161,11 @@ class AI:
         """Réarmer une armée au repos dans une de nos places, ou une garnison. Si l'arsenal ne suffit pas pour tous,
         l'armée détache ses régiments les plus démodés, les réarme et les reprend aussitôt."""
         g, code = self.g, self.code
-        cost = g.rearm_cost(code, regs)
+        cost = g.modernize_cost(code, regs)
         if not cost:
             return False
         if self.arm_supply(cost):
-            return (g.rearm(code, army_id=ident) if kind == 'army' else g.rearm(code, nid=ident))[0]
+            return (g.modernize(code, army_id=ident) if kind == 'army' else g.modernize(code, nid=ident))[0]
         if kind != 'army':
             return False
         room = self.arms_room()
@@ -175,14 +179,14 @@ class AI:
                 pick.append(r)
                 for k, v in add.items():
                     tot[k] = tot.get(k, 0) + v
-        if not pick or len(pick) == len(regs) or not self.arm_supply(g.rearm_cost(code, pick)):
+        if not pick or len(pick) == len(regs) or not self.arm_supply(g.modernize_cost(code, pick)):
             return False
         a = g.armies[ident]
         gen = a.get('gen')
         ok, bid = g.split(code, ident, [r['id'] for r in pick])
         if not ok:
             return False
-        done = g.rearm(code, army_id=bid)[0]
+        done = g.modernize(code, army_id=bid)[0]
         g.merge(code, ident, bid)
         a['gen'] = gen                  # le détachement n'a duré qu'un instant : ni nouveau général ni nouveau numéro
         self.f['army_count'] -= 1
@@ -192,7 +196,7 @@ class AI:
         """Faire provision au marché des armes qui manquent pour réarmer tout le monde, si le trésor le permet
         (le fer des canons s'achète au moment du réarmement : en magasin, l'atelier le consommerait)."""
         g, code, r = self.g, self.code, self.f['res']
-        need = g.rearm_cost(code, list(g.all_regs(code))).get('armes', 0)
+        need = g.modernize_cost(code, list(g.all_regs(code))).get('armes', 0)
         short = need + self.arms_floor()['armes'] - r['armes']
         p = g.market['armes']
         if short >= 20 and p <= 1.35 * 3.5:
@@ -222,8 +226,8 @@ class AI:
         if a['at_node'] is not None and g.nodes[a['at_node']]['owner'] == code:
             return False    # déjà dans une de nos places : l'arsenal y a donné ce qu'il pouvait
         # le détour n'en vaut la peine que si l'arsenal peut réarmer une bonne part de l'armée
-        cost, room = g.rearm_cost(code, a['regs']), self.arms_room()
-        if any(v > 0 and room.get(k, 0) < 0.4 * v for k, v in cost.items()):
+        cost, room = g.modernize_cost(code, a['regs']), self.arms_room()
+        if any(v > 0 and room.get(k, 0) < 0.4 * v for k, v in cost.items() if k != 'livres'):
             return False
         x, y = a['x'], a['y']
         if wars:
@@ -764,6 +768,8 @@ class AI:
             g.to_garrison(code, a['id'])
             return
         self.rearm_here(a)
+        if any(r.get('drill') for r in a['regs']):
+            return   # à l'exercice (armes, manœuvres) : partir l'interromprait
         if a.get('rg') or (a.get('qrt') and (men < 0.8 * mx or not self.wars())):
             return   # renforts en route, ou en quartiers : on se refait avant de repartir
         if men < 0.45 * mx or a['supply'] < 0.25:

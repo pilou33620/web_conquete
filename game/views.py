@@ -142,9 +142,9 @@ def rules_payload():
     techs = [dict(t, year=R.TECH_YEAR.get(t['id'], 0)) for t in R.TECH.values()]
     return dict(factions=R.FACTIONS, units=R.UNITS, unit_order=R.UNIT_ORDER, techs=techs, fort=fort,
                 scenarios=scen, scenario_order=list(R.SCENARIOS), eras=R.ERAS, unit_year=R.UNIT_YEAR,
-                fast_speed=R.FAST_SPEED, arms={c: [[t, nm, k] for t, nm, k in l] for c, l in R.ARMS.items()}, rearm=R.REARM,
+                fast_speed=R.FAST_SPEED, arms={c: [[t, nm, k] for t, nm, k in l] for c, l in R.ARMS.items()},
                 specialty=R.SPECIALTY, specialty_capital=R.SPECIALTY_CAPITAL, dev=dev,
-                branches=R.BRANCHES, visuals=R.VISUALS, build=build, node_base=R.NODE_BASE, spec={k: v['label'] for k, v in R.SPEC.items()},
+                branches=R.BRANCHES, man_days=R.MAN_DAYS, visuals=R.VISUALS, build=build, node_base=R.NODE_BASE, spec={k: v['label'] for k, v in R.SPEC.items()},
                 weather=R.WEATHER, zones=R.ZONES, speeds=R.SPEEDS, res=R.RESOURCES, res_label=R.RES_LABEL,
                 difficulty={k: v['label'] for k, v in R.DIFFICULTY.items()}, neutral_color=R.NEUTRAL_COLOR,
                 seasons=R.SEASON_LABEL, traits=R.GENERAL_TRAITS, ranks=R.GENERAL_RANKS, formations=R.FORMATIONS,
@@ -175,17 +175,45 @@ def _effects(g, f):
     return out
 
 
+def _modern(g, code, regs):
+    """« Moderniser » (SPEC-ARBRE.md) : prix, ce qui change (armes : [de, vers, régiments], manœuvres : [nom,
+    régiments]) et jours d'exercice qui restent ; None si rien à faire."""
+    arms, man, n = {}, {}, 0
+    for r in regs:
+        lag = [] if r.get('drill') else g.reg_lag(code, r)
+        if not lag:
+            continue
+        n += 1
+        cls = R.UNITS[r['type']]['cls']
+        if any(t not in R.MANEUVERS for t in lag):
+            k = (R.ARMS[cls][r.get('arm', 0)][1], R.ARMS[cls][g.arm_level(code, cls)][1])
+            arms[k] = arms.get(k, 0) + 1
+        for t in lag:
+            if t in R.MANEUVERS:
+                man[t] = man.get(t, 0) + 1
+    left = max((r['drill']['t'] - g.t for r in regs if r.get('drill')), default=0.0)
+    if not n and left <= 0:
+        return None
+    return dict(c=g.modernize_cost(code, regs), n=n, arms=[[a, b, c] for (a, b), c in arms.items()],
+                man=[[R.TECH[t]['name'], c] for t, c in man.items()], dr=math.ceil(max(0.0, left)))
+
+
 def _tech(g, code, r):
     """Technologies de combat d'un régiment, comme en bataille (bridge.make_spec) : la fiche les compte."""
     md = g.reg_mods(code, r)
     return {k: md[k] for k in ST.TECH_MODS if md.get(k)}
 
 
-def _reg(r, trait=None, swift=0.0, mods=None):
+def _lag(g, code, r):
+    """2 : à l'exercice ; 1 : à moderniser (armes ou manœuvres) ; 0 : à jour."""
+    return 2 if r.get('drill') else 1 if g.reg_lag(code, r) else 0
+
+
+def _reg(r, trait=None, swift=0.0, mods=None, lag=0):
     # … munitions (%), fatigue, portée efficace (m), valeurs chiffrées (stats.py)
     return [r['id'], r['type'], round(r['n']), r['max'], round(r['xp']), round(r['morale']), r.get('arm'),
             round(r.get('ammo', 100.0)), round(r.get('fat', 0.0)), TU.ranges(r)[0],
-            ST.stats(r['type'], r.get('arm') or 0, r['xp'], trait, False, swift, mods), r.get('man', [])]
+            ST.stats(r['type'], r.get('arm') or 0, r['xp'], trait, False, swift, mods), r.get('man', []), lag]
 
 
 def _legs(a):
@@ -268,8 +296,9 @@ def player_state(g, since=0):
         if n['owner'] in side:
             d['m'] = round(n['milice'])
             d['mm'] = round(n['milice_max'] * (1 + g.mod(n['owner'], 'milice')))
-            d['g'] = [_reg(r, None, min(0.5, g.mod(n['owner'], 'fm_swift')), _tech(g, n['owner'], r))   # (pas de général)
+            d['g'] = [_reg(r, None, min(0.5, g.mod(n['owner'], 'fm_swift')), _tech(g, n['owner'], r), _lag(g, n['owner'], r))
                       for r in n['garrison']]   # (pas de général)
+            d['gmz'] = _modern(g, n['owner'], n['garrison'])
             if n['owner'] == p:
                 d['fx'] = g.fort_max(p, n['id'])
                 d['pc'] = int(round(g.pop_cap(n), -1))
@@ -326,7 +355,8 @@ def player_state(g, since=0):
             d['e'] = [e['id'], a['edge']['frm'], round(a['edge']['pos'] / e['len'], 4)]
         if a['owner'] == p:
             tr, sw = (a.get('gen') or {}).get('trait'), min(0.5, g.mod(a['owner'], 'fm_swift'))
-            d['regs'] = [_reg(r, tr, sw, _tech(g, a['owner'], r)) for r in a['regs']]
+            d['regs'] = [_reg(r, tr, sw, _tech(g, a['owner'], r), _lag(g, a['owner'], r)) for r in a['regs']]
+            d['mz'] = _modern(g, p, a['regs'])
             d['md'] = a['mode']
             d['sup'] = round(a['supply'], 2)
             d['path'] = _legs(a)

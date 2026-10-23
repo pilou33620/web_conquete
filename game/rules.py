@@ -735,7 +735,7 @@ MANEUVERS = dict(tir_rang='inf', feu_peloton='inf', ordre_mixte='inf', retranche
 REG_KEYS = frozenset(('all_power', 'inf_power', 'art_power', 'cav_power', 'ligne_fire', 'carre_fire', 'colonne_charge',
                       'cav_charge', 'art_charge', 'legere_cover', 'entrench', 'shell', 'art_speed'))
 MAN_COST = 0.1    # livres par homme et par manœuvre apprise
-MAN_DAYS = 10     # jours d'exercice dans la place (armes et manœuvres)
+MAN_DAYS = 10     # jours d'exercice dans la place (armes et manœuvres) : un tiers de tour, comme le dit engine.modernize
 # noms des troupes selon l'époque : (année de début, technologie requise ou None, nom, nom court)
 UNIT_NAMES = {
     'ligne': [(1700, None, 'Mousquetaires et piquiers', 'Piquiers'), (1700, 'baionnette', 'Infanterie de ligne', 'Ligne')],

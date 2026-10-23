@@ -1071,23 +1071,17 @@ export class UI {
     return Object.entries(cost).every(([k, v]) => (r[k] || 0) >= v);
   }
 
-  // coût pour remettre les armes du moment à ces régiments (null s'ils sont à jour)
-  rearmCost(regs) {
-    const need = {}, arm = this.st.me.arm || {};
-    for (const r of regs) {
-      const cls = this.rules.units[r[1]]?.cls;
-      if (r[6] == null || !this.rules.rearm[cls] || r[6] >= arm[cls] || this.rules.units[r[1]]?.arm_name) continue;
-      for (const [k, v] of Object.entries(this.rules.rearm[cls])) need[k] = (need[k] || 0) + v * r[3];
-    }
-    const out = Object.entries(need).map(([k, v]) => [k, Math.round(v)]);
-    return out.length ? out : null;
-  }
-
-  rearmBtn(regs, node) {
-    const cost = this.rearmCost(regs);
-    if (!cost) return '';
+  // « Moderniser » (SPEC-ARBRE.md) : mz = { c: prix, n: régiments, arms: [[de, vers, n]], man: [[manœuvre, n]], dr: jours
+  // d'exercice qui restent } (game/views.py, _modern)
+  modernBtn(mz, node) {
+    if (!mz) return '';
+    const drill = mz.dr ? `<div class="muted small">À l’exercice dans la place : encore ${partTour(mz.dr)}. Partir l’interrompt.</div>` : '';
+    if (!mz.n) return drill;
+    const cost = Object.entries(mz.c);
     const ok = cost.every(([k, v]) => (this.st.me.res[k] || 0) >= v);
-    return `<button class="btn" data-act="rearm"${node != null ? ` data-node="${node}"` : ''} ${ok ? '' : 'disabled'} title="Remettre les armes du moment aux régiments démodés">Réarmer<small>${cost.map(([k, v]) => `${fmt(v)} ${k}`).join(', ')}</small></button>`;
+    const what = [...mz.arms.map(([a, b, n]) => `${n} rég. : ${a} → ${b}`), ...mz.man.map(([m, n]) => `${n} rég. : ${m}`)].join(' ; ');
+    return `<button class="btn" data-act="rearm"${node != null ? ` data-node="${node}"` : ''} ${ok ? '' : 'disabled'} title="${esc(`${what}. ${partTour(this.rules.man_days)} d’exercice dans la place.`)}">Moderniser<small>${cost.map(([k, v]) => `${fmt(v)} ${k}`).join(', ')}</small></button>${drill}
+      <div class="muted small mz-what">${esc(what)}</div>`;
   }
 
   // valeurs chiffrées (valeurs.js, calculées par game/tactics/stats.py) : un tableau replié sous les régiments
@@ -1129,8 +1123,12 @@ export class UI {
     const u = this.rules.units[r[1]] || { short: r[1] };
     // (armement fixe, la pièce de Reffye : son nom, jamais démodé)
     const arms = u.arm_name ? [null, u.arm_name] : r[6] != null && this.rules.arms[u.cls] ? this.rules.arms[u.cls][r[6]] : null;
-    const old = arms && !u.arm_name && owner === this.st.me.code && r[6] < (this.st.me.arm || {})[u.cls];
-    const armTxt = arms ? `<span class="small" style="font-weight:400;color:${old ? '#ff9a85' : 'var(--muted, #9a9483)'}" title="${old ? 'Armes démodées : réarmez ce régiment dans une de vos places' : 'Armement'}"> · ${esc(arms[1])}${old ? ' (démodé)' : ''}</span>` : '';
+    const mine = owner === this.st.me.code, lag = mine ? r[12] : 0;
+    const man = (mine ? r[11] : Array.isArray(r[7]) ? r[7] : null) || [];
+    const manNames = man.map(t => this.rules.techs.find(x => x.id === t)?.name || t).join(', ');
+    const tip = (arms ? 'Armement' : '') + (manNames ? `${arms ? ' ; m' : 'M'}anœuvres : ${manNames}` : '') +
+      (lag === 1 ? '. À moderniser (armes ou manœuvres) dans une de vos places' : lag === 2 ? '. À l’exercice dans la place' : '');
+    const armTxt = arms || man.length ? `<span class="small" style="font-weight:400;color:${lag === 1 ? '#ff9a85' : 'var(--muted, #9a9483)'}" title="${esc(tip)}"> · ${arms ? esc(arms[1]) : ''}${man.length ? `${arms ? ', ' : ''}${man.length} manœuvre${man.length > 1 ? 's' : ''}` : ''}${lag === 1 ? ' (à moderniser)' : lag === 2 ? ' (à l’exercice)' : ''}</span>` : '';
     const frac = r[2] / r[3];
     const stars = r[4] >= 60 ? '★★★' : r[4] >= 30 ? '★★' : r[4] >= 10 ? '★' : '';
     const fixed = check && u.garrison_only;
@@ -1215,9 +1213,9 @@ export class UI {
         const mobile = ns.g.some(r => !this.rules.units[r[1]]?.garrison_only), garde = ns.g.length > 1 && !ns.g.every(r => !this.rules.units[r[1]]?.garrison_only);
         h += `<div class="section-t" id="p-garnison">Garnison</div><div class="reg-list">${ns.g.map(r => this.regRow(r, me, true)).join('')}</div>` + this.valeursDetails(this.valeursRegs(ns.g), 'Valeurs des régiments (en bataille)') + (mobile
           ? `<div class="btns"><button class="btn primary" data-act="form">Sortir de la garnison (former une armée)</button>
-          ${here.map(a => `<button class="btn" data-act="form" data-into="${a.id}">Renforcer ${esc(a.name)}</button>`).join('')}${ns.sg ? '' : this.rearmBtn(ns.g, id)}</div>
+          ${here.map(a => `<button class="btn" data-act="form" data-into="${a.id}">Renforcer ${esc(a.name)}</button>`).join('')}${ns.sg ? '' : this.modernBtn(ns.gmz, id)}</div>
           <div class="muted small" style="margin-top:4px">Cochez des régiments, sinon toute la garnison part${garde ? ` (sauf ${/^[aeiouéh]/i.test(this.rules.units.garde.name) ? 'l’' : 'la '}${esc(this.rules.units.garde.name.toLowerCase())})` : ''}.</div>`
-          : `<div class="btns">${ns.sg ? '' : this.rearmBtn(ns.g, id)}</div><div class="muted small" style="margin-top:4px">${esc(this.rules.units.garde.name)} : elle défend la ville mais n’en sort pas.</div>`);
+          : `<div class="btns">${ns.sg ? '' : this.modernBtn(ns.gmz, id)}</div><div class="muted small" style="margin-top:4px">${esc(this.rules.units.garde.name)} : elle défend la ville mais n’en sort pas.</div>`);
       }
       // ru : armes qu'on peut lever ici (coût mis à part) ; rw : raison pour les autres
       const U = this.rules.units;
@@ -1481,7 +1479,7 @@ export class UI {
         const near = st.armies.filter(b => b.o === me && b.id !== a.id && Math.hypot(b.x - a.x, b.y - a.y) < 3 && b.st !== 'battle');
         for (const b of near) h += `<button class="btn" data-act="merge" data-other="${b.id}">Réunir ${esc(b.name)}</button>`;
         if (a.n != null && st.nodes[a.n].o === me && a.st === 'idle') h += `<button class="btn" data-act="garrison" data-node="${a.n}">Mettre en garnison</button>`;
-        if (a.n != null && st.nodes[a.n].o === me && a.st === 'idle' && !st.nodes[a.n].sg) h += this.rearmBtn(a.regs);
+        if (a.n != null && st.nodes[a.n].o === me && a.st === 'idle' && !st.nodes[a.n].sg) h += this.modernBtn(a.mz);
         if (a.st === 'siege') h += `<button class="btn danger" data-act="assault">Donner l’assaut</button>`;
         if (a.st === 'siege' || a.st === 'move') h += `<button class="btn" data-act="retreat">Se replier</button>`;
         h += `</div>` + this.placeActsHtml(a);
@@ -1507,7 +1505,7 @@ export class UI {
         ${this.cardsHtml(a.regs, a.o, false)}<div class="reg-list">${a.regs.map(r => this.regRow(r, a.o, false)).join('')}</div>`;
     }
     h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
-    const sig = JSON.stringify([id, a.st, a.sk, a.md, a.h, a.n, Math.round(a.sup * 20), a.regs.map(r => [r[0], r[2], Math.round(r[5] / 5), r[6]]), st.me.arm, (this.rearmCost(a.regs) || []).map(([k, v]) => st.me.res[k] >= v),
+    const sig = JSON.stringify([id, a.st, a.sk, a.md, a.h, a.n, Math.round(a.sup * 20), a.regs.map(r => [r[0], r[2], Math.round(r[5] / 5), r[6]]), st.me.arm, a.mz, Object.entries(a.mz?.c || {}).map(([k, v]) => st.me.res[k] >= v),
       lastNode(), st.armies.filter(b => b.o === me && Math.hypot(b.x - a.x, b.y - a.y) < 3).length, a.n != null ? st.nodes[a.n].sg : null,
       a.fm, a.pl, a.auto, a.gen, a.boat, !!a.emb, a.fire, a.e && a.e[0], a.dp, a.wn, a.des, a.rx, a.tr, a.hold, a.qr, a.ax, a.rg,
       a.cl && [a.cl[0], Math.ceil(a.cl[1])], a.dt,
@@ -1917,7 +1915,7 @@ export class UI {
           <li><b>Tour par tour</b> : chaque tour est un mois. Pendant votre tour, vos ordres s’exécutent tout de suite : vos armées marchent sous vos yeux (dans la limite de leur marche du tour, ou jusqu’au contact de l’ennemi), les batailles et les assauts se livrent aussitôt, les achats sont payés. Touchez « Tour suivant » : les IA jouent leur tour d’un coup (une ou deux secondes), puis c’est de nouveau à vous, au 1er du mois suivant, avec le bilan du mois écoulé. Le tour des IA ne s’arrête que si vous devez choisir : une IA vous attaque (livrer la bataille ou la laisser au général), ou une décision vous attend ; votre choix fait, il reprend tout seul. Le reste (armées ennemies sur vos terres, sièges, guerres, propositions) est dans le bilan du mois.</li>
           <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
           <li><b>Événements</b> : aux grandes dates (Grand Hiver, Révolution, Blocus continental, phylloxéra…) et au gré des imprévus, une fenêtre vous demande un choix ; chaque option affiche ses effets. Vos choix nourrissent l’« histoire » de votre prestige. Sans réponse avant la fin du tour suivant, l’option la plus prudente s’applique.</li>
-          <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes reçues à sa levée (affichées à côté de son nom) : après une découverte, réarmez les régiments démodés dans une de vos places (bouton « Réarmer », payé en armes, et en fer pour l’artillerie). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
+          <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes et les manœuvres (feu de rang, ordre mixte, cuirassiers…) reçues à sa levée, affichées à côté de son nom : après une découverte, modernisez les régiments en retard dans une de vos places (bouton « Moderniser » : armes, fer pour l’artillerie, et livres pour les manœuvres ; un tiers de tour d’exercice, que l’armée perd si elle part avant). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
           <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>
           <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
           <li><b>Frontières</b> : les terres d’un ${this.st?.word || 'département'} en paix vous sont fermées, sauf droit de passage (fenêtre Diplomatie) ou alliance. Vos armées les contournent ; sans détour possible, vous pouvez passer en force, ce qui revient à lui déclarer la guerre. Les gabares passent devant ses quais sans y débarquer. Une armée surprise sur des terres fermées (droit retiré, paix signée…) a jusqu’à la fin du tour pour en sortir.</li>

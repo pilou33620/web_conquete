@@ -248,8 +248,8 @@ class App:
                 return self._r(EV.resolve(g, str(body.get('id')), int(self._num(body.get('choice', -1)))))
             if c == 'rearm':
                 node = body.get('node')
-                return self._r(g.rearm(p, army_id=a if node is None else None,
-                                       nid=None if node is None else self._node(node)))
+                return self._r(g.modernize(p, army_id=a if node is None else None,
+                                         nid=None if node is None else self._node(node)))
             if c == 'reflex':
                 ar = g.armies.get(a)
                 if ar and ar['owner'] == p:

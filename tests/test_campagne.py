@@ -1455,7 +1455,7 @@ class Mitrailleuses(unittest.TestCase):
         g = avec(partie(epoque='1870'), '33', 'mitrailleuse', 'debange')
         r = g.new_reg('mitrailleuses', code='33')
         r['arm'] = 0
-        self.assertEqual(g.rearm_cost('33', [r]), {}, 'la pièce de Reffye ne se réarme pas en canons')
+        self.assertEqual(g.modernize_cost('33', [r]), {}, 'la pièce de Reffye ne se réarme pas en canons')
 
     def test_une_armee_de_mitrailleuses_se_sauvegarde(self):
         g = avec(partie(epoque='1870'), '33', 'mitrailleuse')
@@ -1983,3 +1983,98 @@ class ManoeuvresParRegiment(unittest.TestCase):
         r = self.g.new_reg('garde', code=self.g.player)
         r['man'] = []
         self.assertEqual(self.g.reg_lag(self.g.player, r), [])
+
+
+class Moderniser(unittest.TestCase):
+    """SPEC-ARBRE.md : le bouton « Moderniser » (armes et manœuvres, prix, dix jours d'exercice, annulé en partant)."""
+
+    def setUp(self):
+        self.g = g = partie(epoque='1790')
+        self.f = g.factions[g.player]
+        self.f['res'].update(livres=1e5, armes=1e4, fer=1e4)
+        self.a = a = armee(g)
+        if a['at_node'] is None or g.nodes[a['at_node']]['owner'] != g.player:
+            a['at_node'] = g.capital_of(g.player)
+        a['state'] = 'idle'
+        self.r = next(r for r in a['regs'] if r['type'] == 'ligne')
+        for r in a['regs']:
+            r.pop('drill', None)
+
+    def jours(self, n):
+        for _ in range(n):
+            self.g.step(1.0)
+
+    def test_prix_armes_et_manoeuvres(self):
+        g, r = self.g, self.r
+        r['arm'] -= 1
+        r['man'].remove('tir_rang')
+        cost = g.modernize_cost(g.player, [r])
+        self.assertEqual(cost, dict(armes=round(R.REARM['inf']['armes'] * r['max']), livres=round(R.MAN_COST * r['max'])))
+
+    def test_dix_jours_puis_les_armes_et_les_manoeuvres(self):
+        g, r = self.g, self.r
+        r['arm'] -= 1
+        r['man'].remove('tir_rang')
+        xp, livres = r['xp'], self.f['res']['livres']
+        ok, msg = g.modernize(g.player, army_id=self.a['id'])
+        self.assertTrue(ok, msg)
+        self.assertLess(self.f['res']['livres'], livres)
+        self.assertEqual(g.modernize_cost(g.player, [r]), {}, 'à l’exercice : on ne paie pas deux fois')
+        self.jours(R.MAN_DAYS - 2)
+        self.assertNotIn('tir_rang', r['man'])
+        self.jours(3)
+        self.assertNotIn('drill', r)
+        self.assertIn('tir_rang', r['man'])
+        self.assertEqual(r['arm'], g.arm_level(g.player, 'inf'))
+        self.assertAlmostEqual(r['xp'], xp * 0.85, delta=1.0)
+        self.assertEqual(g.reg_lag(g.player, r), [])
+
+    def test_les_manoeuvres_seules_ne_coutent_pas_d_experience(self):
+        g, r = self.g, self.r
+        r['man'].remove('tir_rang')
+        xp = r['xp']
+        self.assertTrue(g.modernize(g.player, army_id=self.a['id'])[0])
+        self.jours(R.MAN_DAYS + 1)
+        self.assertIn('tir_rang', r['man'])
+        self.assertGreaterEqual(r['xp'], xp - 0.5)
+
+    def test_partir_interrompt_l_exercice(self):
+        g, r = self.g, self.r
+        r['man'].remove('tir_rang')
+        self.assertTrue(g.modernize(g.player, army_id=self.a['id'])[0])
+        far = next(n for n in g.owned_nodes(g.player) if n['id'] != self.a['at_node'])
+        self.assertTrue(g.order_move(g.player, self.a['id'], node=far['id'])[0])
+        self.jours(R.MAN_DAYS + 1)
+        self.assertNotIn('drill', r)
+        self.assertNotIn('tir_rang', r['man'], 'parti avant la fin : rien appris')
+
+    def test_une_garnison_se_modernise(self):
+        g = self.g
+        n = next(n for n in g.owned_nodes(g.player) if n['garrison'] and not n['siege']
+                 and any(not R.UNITS[r['type']]['garrison_only'] and R.UNITS[r['type']]['cls'] == 'inf' for r in n['garrison']))
+        r = next(r for r in n['garrison'] if not R.UNITS[r['type']]['garrison_only'] and R.UNITS[r['type']]['cls'] == 'inf')
+        r['man'] = []
+        self.assertTrue(g.modernize(g.player, nid=n['id'])[0])
+        self.jours(R.MAN_DAYS + 1)
+        self.assertEqual(g.reg_lag(g.player, r), [])
+
+    def test_la_vue_dit_quoi_et_combien(self):
+        g, r = self.g, self.r
+        r['man'].remove('tir_rang')
+        d = next(d for d in V.player_state(g)['armies'] if d['id'] == self.a['id'])
+        self.assertEqual(d['mz']['n'], 1)
+        self.assertEqual(d['mz']['man'], [[R.TECH['tir_rang']['name'], 1]])
+        self.assertEqual(next(x for x in d['regs'] if x[0] == r['id'])[12], 1, 'à moderniser')
+
+    def test_une_ia_modernise_ses_armees(self):
+        g = partie(epoque='1790', seed=2)
+        code = '24'
+        f = g.factions[code]
+        f['res'].update(livres=max(f['res']['livres'], 8000))
+        avec(g, code, 'voltigeurs')
+        inf = [r for a in g.armies.values() if a['owner'] == code for r in a['regs']
+               if R.UNITS[r['type']]['cls'] == 'inf' and not R.UNITS[r['type']]['garrison_only']]
+        self.assertTrue(inf and all('voltigeurs' not in r['man'] for r in inf))
+        jouer_mois(g, 3)
+        appris = [r for a in g.armies.values() if a['owner'] == code for r in a['regs'] if 'voltigeurs' in r.get('man', [])]
+        self.assertTrue(appris, 'en trois mois, l’IA a modernisé au moins une armée')

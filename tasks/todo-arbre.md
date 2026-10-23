@@ -71,7 +71,7 @@ Vérifications communes à chaque tâche : `python3 tests/lancer.py` passe. Un c
   - Fichiers : `game/tactics/bridge.py`, `game/tactics/battle.py`, `game/tactics/units.py`, `tests/test_bataille.py`
   - Taille : M
 
-- [ ] **A6 : le bouton « Moderniser » et l'IA**
+- [x] **A6 : le bouton « Moderniser » et l'IA**
   - Critères :
     - `modernize_cost` et `modernize` : armes et manœuvres, 0,1 livre par homme et par manœuvre, 10 jours (D6) ;
     - une marche annule l'entraînement ; en tour par tour, l'armée perd 10 jours de marche ;
