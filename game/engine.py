@@ -154,6 +154,7 @@ class Game:
                    xp=float(u.get('xp0', 0)), morale=80.0 + u.get('morale0', 0), ammo=100.0, fat=0.0)
         if u['cls'] in R.ARMS:
             reg['arm'] = self.arm_level(code, u['cls']) if code else 0   # les armes du moment, gardées jusqu'au réarmement
+        reg['man'] = self.known_man(code, u['cls'])   # et les manœuvres du moment
         return reg
 
     # ------------------------------------------------------------------ armement et noms d'époque
@@ -168,6 +169,36 @@ class Game:
 
     def arm_k(self, code, cls, level=None):
         return R.ARMS[cls][self.arm_level(code, cls) if level is None else min(level, len(R.ARMS[cls]) - 1)][2]
+
+    def known_man(self, code, cls):
+        """Manœuvres de cette classe de troupe que le camp connaît."""
+        techs = self.factions[code]['techs'] if code in self.factions else ()
+        return [t for t, c in R.MANEUVERS.items() if c == cls and t in techs]
+
+    def reg_lag(self, code, r):
+        """Technologies du camp qui ne servent pas encore à ce régiment : manœuvres pas apprises, armes plus récentes
+        que les siennes. (La Garde nationale a toujours celles de son camp, comme la milice.)"""
+        u = R.UNITS.get(r['type'])
+        if code not in self.factions or not u or u['garrison_only']:
+            return []
+        techs, cls, man = self.factions[code]['techs'], u['cls'], r.get('man', ())
+        lag = [t for t, c in R.MANEUVERS.items() if c == cls and t in techs and t not in man]
+        if cls in R.ARMS and not u['arm_name']:
+            lag += [t for i, (t, _, _) in enumerate(R.ARMS[cls]) if t in techs and i > r.get('arm', 0)]
+        return lag
+
+    def reg_mods(self, code, r):
+        """Effets de technologie de ce régiment : ceux du camp, moins les effets de régiment (R.REG_KEYS) de ce qui ne
+        lui sert pas encore (reg_lag)."""
+        md = self.factions[code]['mods'] if code in self.factions else {}
+        out = md
+        for t in self.reg_lag(code, r):
+            for k, v in R.TECH[t]['fx'].items():
+                if k in R.REG_KEYS:
+                    if out is md:
+                        out = dict(md)
+                    out[k] = out.get(k, 0.0) - v
+        return out
 
     def milice_k(self, code):
         """La milice se rééquipe à l'arsenal de sa ville : elle a toujours les armes de son camp."""
@@ -1307,7 +1338,7 @@ class Game:
         return sum(r['n'] for r in a['regs'])
 
     def army_speed(self, a):
-        sp = min(R.UNITS[r['type']]['speed'] * (1 + (self.mod(a['owner'], 'art_speed') if r['type'] == 'artillerie' else 0))
+        sp = min(R.UNITS[r['type']]['speed'] * (1 + (self.reg_mods(a['owner'], r).get('art_speed', 0.0) if r['type'] == 'artillerie' else 0))
                  for r in a['regs']) if a['regs'] else 20
         if a['supply'] < 0.35:
             sp *= 0.9
@@ -1348,7 +1379,7 @@ class Game:
 
     def reg_power(self, code, r, tname, wx_fire=1.0, cover=False, a=None):
         u = R.UNITS[r['type']]
-        md = self.factions[code]['mods']   # comme self.mod(code, …), sans l'appel
+        md = self.reg_mods(code, r)   # ce que le régiment a appris (SPEC-ARBRE.md)
         p = r['n'] * u['power'] * u['terrain'].get(tname, 1.0)
         k = 1 + md.get('all_power', 0.0)
         cls = u['cls']
@@ -2243,10 +2274,9 @@ class Game:
     def siege_rate(self, n, bes):
         """Avancée de la brèche par jour (assaut à 0,85) : artillerie, sapeurs, remparts, général artilleur."""
         by = n['siege']['by']
-        n_art = sum(1 for a in bes for r in a['regs'] if r['type'] == 'artillerie')
+        art = sum(1 + self.reg_mods(by, r).get('art_power', 0.0) for a in bes for r in a['regs'] if r['type'] == 'artillerie')
         n_sap = sum(1 for a in bes for r in a['regs'] if r['type'] == 'sapeurs')
-        power_art = 1 + self.mod(by, 'art_power')
-        rate = (0.02 + 0.06 * n_art * power_art + R.SAPEUR_SIEGE * n_sap) / max(1, n['fort']) * AA.siege_k(n)
+        rate = (0.02 + 0.06 * art + R.SAPEUR_SIEGE * n_sap) / max(1, n['fort']) * AA.siege_k(n)
         if any(self.gen_trait(a) == 'artilleur' for a in bes):
             rate *= 1.4
         return rate * (1 + self.mod(by, 'siege_speed'))
@@ -2740,18 +2770,19 @@ class Game:
                     cls = self.arm_class(r['type'])
                     fm, pl, tr = a.get('fm', 'ligne'), a.get('pl', 'frontal'), self.gen_trait(a)
                     rp = self.reg_power(owner, r, bt['terrain'], wxf, bt['cover'], a)
+                    rm = self.reg_mods(owner, r)
                     rp *= (0.75 + 0.25 * a['supply']) * R.PHASE_W[phase][cls] * fb
                     if cls == 'inf':
                         if fm == 'ligne':
-                            rp *= 1.2 + self.mod(owner, 'ligne_fire') if phase == 'fusillade' else 1.05
+                            rp *= 1.2 + rm.get('ligne_fire', 0.0) if phase == 'fusillade' else 1.05
                         elif fm == 'colonne':
-                            rp *= 1.25 + self.mod(owner, 'colonne_charge') if phase == 'charge' else 0.85
+                            rp *= 1.25 + rm.get('colonne_charge', 0.0) if phase == 'charge' else 0.85
                         elif fm == 'carre':
-                            rp *= 0.9 * (1 + (0.6 + self.mod(owner, 'carre_fire')) * cav_share[1 - si])
+                            rp *= 0.9 * (1 + (0.6 + rm.get('carre_fire', 0.0)) * cav_share[1 - si])
                         elif fm == 'tirailleurs' and bt['cover']:
                             rp *= 1.15
                     elif phase == 'charge':
-                        rp *= 1 + self.mod(owner, 'cav_charge' if cls == 'cavalerie' else 'art_charge')
+                        rp *= 1 + rm.get('cav_charge' if cls == 'cavalerie' else 'art_charge', 0.0)
                     if pl == 'artillerie':
                         if cls == 'artillerie' and phase != 'charge':
                             rp *= 1.4

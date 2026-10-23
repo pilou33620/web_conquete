@@ -1190,7 +1190,7 @@ class ArbreDesTechnologies(unittest.TestCase):
         lus = set()
         for f in glob.glob(os.path.join(racine, 'game', '*.py')) + glob.glob(os.path.join(racine, 'game', 'tactics', '*.py')):
             for line in open(f, encoding='utf-8'):
-                if re.search(r"\bmod\(|md\.get\(|mods'?\]?\.get\(|boost=", line):
+                if re.search(r"\bmod\(|md\.get\(|mods'?\]?\.get\(|boost=|reg_mods\(|\brm\.get\(", line):
                     lus |= set(re.findall(r"'([a-z_]+)'", line))
         lus |= set(E.ATTENUE.values())   # (lus par events.soften et recompute_mods, par la table)
         lus.add('rail_troops')   # (les armées prendront le train en phase 2, avec les voies ferrées de la carte)
@@ -1925,3 +1925,61 @@ class RemontesEtRegimentsReleves(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ManoeuvresParRegiment(unittest.TestCase):
+    """SPEC-ARBRE.md, module moderniser : une manœuvre ou une arme nouvelle ne sert qu'aux régiments qui l'ont."""
+
+    def setUp(self):
+        self.g = partie(epoque='1790')
+        self.f = self.g.factions[self.g.player]
+        self.ligne = self.g.new_reg('ligne', code=self.g.player)
+
+    def test_un_regiment_leve_a_les_manoeuvres_de_son_camp(self):
+        self.assertIn('tir_rang', self.f['techs'])
+        self.assertEqual(set(self.ligne['man']), {t for t, c in R.MANEUVERS.items() if c == 'inf' and t in self.f['techs']})
+        self.assertEqual(self.g.reg_lag(self.g.player, self.ligne), [])
+
+    def test_sans_feu_de_rang_pas_de_bonus(self):
+        g, r = self.g, self.ligne
+        avec = g.reg_mods(g.player, r).get('ligne_fire', 0)
+        r['man'] = [t for t in r['man'] if t != 'tir_rang']
+        sans = g.reg_mods(g.player, r).get('ligne_fire', 0)
+        self.assertAlmostEqual(avec - sans, R.TECH['tir_rang']['fx']['ligne_fire'])
+        self.assertIn('tir_rang', g.reg_lag(g.player, r))
+
+    def test_une_arme_plus_recente_ne_sert_pas_au_vieux_fusil(self):
+        g, r = self.g, self.ligne
+        self.f['techs'] += ['percussion', 'minie', 'chassepot']
+        g.recompute_mods(g.player)
+        self.assertLess(r['arm'], 5)
+        self.assertAlmostEqual(g.reg_mods(g.player, r).get('ligne_fire', 0) + R.TECH['chassepot']['fx']['ligne_fire'],
+                               self.f['mods'].get('ligne_fire', 0), msg='le +10 % du Chassepot est pour les Chassepot')
+        r['arm'] = g.arm_level(g.player, 'inf')
+        self.assertAlmostEqual(g.reg_mods(g.player, r).get('ligne_fire', 0), self.f['mods'].get('ligne_fire', 0))
+
+    def test_la_resolution_automatique_compte_les_manoeuvres(self):
+        g = self.g
+        self.f['techs'].append('voltigeurs')
+        g.recompute_mods(g.player)
+        leg = g.new_reg('legere', code=g.player)
+        self.assertIn('voltigeurs', leg['man'])
+        p_avec = g.reg_power(g.player, leg, 'Forêt', cover=True)
+        leg['man'].remove('voltigeurs')
+        self.assertLess(g.reg_power(g.player, leg, 'Forêt', cover=True), p_avec, 'couvert des voltigeurs : appris ou pas')
+
+    def test_une_sauvegarde_d_avant_garde_ses_manoeuvres(self):
+        g = self.g
+        d = json.loads(json.dumps(V.to_dict(g)))
+        for a in d['armies'].values():
+            for r in a['regs']:
+                r.pop('man', None)
+        g2 = V.from_dict(GEO, d)
+        for a in g2.armies.values():
+            for r in a['regs']:
+                self.assertFalse(set(g2.reg_lag(a['owner'], r)) & set(R.MANEUVERS), 'les manœuvres connues sont données')
+
+    def test_la_garde_nationale_a_toujours_celles_de_son_camp(self):
+        r = self.g.new_reg('garde', code=self.g.player)
+        r['man'] = []
+        self.assertEqual(self.g.reg_lag(self.g.player, r), [])

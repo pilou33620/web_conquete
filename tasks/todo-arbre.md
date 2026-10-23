@@ -46,7 +46,7 @@ Vérifications communes à chaque tâche : `python3 tests/lancer.py` passe. Un c
     `tests/interface.test.mjs`
   - Taille : M
 
-- [ ] **A4 : manœuvres par régiment (règles, résolution automatique, fiches)**
+- [x] **A4 : manœuvres par régiment (règles, résolution automatique, fiches)**
   - Critères :
     - `MANEUVERS`, `REG_KEYS` et `engine.reg_mods` (D4) ;
     - les nouveaux régiments, la milice et les régiments migrés ont les manœuvres de leur camp (D2) ;

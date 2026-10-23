@@ -73,11 +73,15 @@ def migrate(g):
             cls = R.UNITS[r['type']]['cls']
             if cls in R.ARMS and 'arm' not in r:
                 r['arm'] = g.arm_level(a['owner'], cls)   # anciennes sauvegardes : armes du moment
+            if 'man' not in r:
+                r['man'] = g.known_man(a['owner'], cls)   # avant SPEC-ARBRE : les manœuvres du camp
     for n in g.nodes:
         for r in n['garrison']:
             cls = R.UNITS[r['type']]['cls']
             if cls in R.ARMS and 'arm' not in r:
                 r['arm'] = g.arm_level(n['owner'], cls)
+            if 'man' not in r:
+                r['man'] = g.known_man(n['owner'], cls)
     AA.migrate(g)   # actions d'armée : droits de passage, quartiers, traversée
     CT.migrate(g)   # emplacements : un magasin aux vivres existant en occupe un
     TB.migrate(g)   # munitions, fatigue, mode des batailles
@@ -171,16 +175,17 @@ def _effects(g, f):
     return out
 
 
-def _tech(g, code):
-    """Technologies de combat d'un camp, comme en bataille (bridge.make_spec) : la fiche les compte."""
-    return {k: g.mod(code, k) for k in ST.TECH_MODS if g.mod(code, k)}
+def _tech(g, code, r):
+    """Technologies de combat d'un régiment, comme en bataille (bridge.make_spec) : la fiche les compte."""
+    md = g.reg_mods(code, r)
+    return {k: md[k] for k in ST.TECH_MODS if md.get(k)}
 
 
 def _reg(r, trait=None, swift=0.0, mods=None):
     # … munitions (%), fatigue, portée efficace (m), valeurs chiffrées (stats.py)
     return [r['id'], r['type'], round(r['n']), r['max'], round(r['xp']), round(r['morale']), r.get('arm'),
             round(r.get('ammo', 100.0)), round(r.get('fat', 0.0)), TU.ranges(r)[0],
-            ST.stats(r['type'], r.get('arm') or 0, r['xp'], trait, False, swift, mods)]
+            ST.stats(r['type'], r.get('arm') or 0, r['xp'], trait, False, swift, mods), r.get('man', [])]
 
 
 def _legs(a):
@@ -263,7 +268,7 @@ def player_state(g, since=0):
         if n['owner'] in side:
             d['m'] = round(n['milice'])
             d['mm'] = round(n['milice_max'] * (1 + g.mod(n['owner'], 'milice')))
-            d['g'] = [_reg(r, None, min(0.5, g.mod(n['owner'], 'fm_swift')), _tech(g, n['owner']))   # (pas de général)
+            d['g'] = [_reg(r, None, min(0.5, g.mod(n['owner'], 'fm_swift')), _tech(g, n['owner'], r))   # (pas de général)
                       for r in n['garrison']]   # (pas de général)
             if n['owner'] == p:
                 d['fx'] = g.fort_max(p, n['id'])
@@ -283,7 +288,7 @@ def player_state(g, since=0):
                 # valeurs des troupes à lever : celles du régiment qui sortira d'ici (engine.new_reg + train_xp)
                 d['rs'] = {u: ST.stats(u, g.arm_level(p, R.UNITS[u]['cls']) if R.UNITS[u]['cls'] in R.ARMS else 0,
                                        R.UNITS[u].get('xp0', 0) + CT.train_xp(g, n), swift=min(0.5, g.mod(p, 'fm_swift')),
-                                       mods=_tech(g, p))
+                                       mods=_tech(g, p, dict(type=u, arm=99, man=R.MANEUVERS)))   # (levé avec tout)
                            for u in d['ru']}
                 d['q'], cum = [], 0.0
                 for q in n['queue']:
@@ -321,7 +326,7 @@ def player_state(g, since=0):
             d['e'] = [e['id'], a['edge']['frm'], round(a['edge']['pos'] / e['len'], 4)]
         if a['owner'] == p:
             tr, sw = (a.get('gen') or {}).get('trait'), min(0.5, g.mod(a['owner'], 'fm_swift'))
-            d['regs'] = [_reg(r, tr, sw, _tech(g, a['owner'])) for r in a['regs']]
+            d['regs'] = [_reg(r, tr, sw, _tech(g, a['owner'], r)) for r in a['regs']]
             d['md'] = a['mode']
             d['sup'] = round(a['supply'], 2)
             d['path'] = _legs(a)
@@ -346,8 +351,8 @@ def player_state(g, since=0):
                                        ('faim', me.get('famine'))) if on]
             d['dp'] = g.geo.nodes[a['depot']]['name'] if a.get('depot') is not None else None
         else:
-            # (la photographie montre aussi l'expérience et l'arme de chaque régiment ; le moral reste caché)
-            d['regs'] = [[None, r['type'], round(r['n']), r['max'], round(r['xp']), 0, r.get('arm')] if g.mod(p, 'intel')
+            # (la photographie montre aussi l'expérience, l'arme et les manœuvres de chaque régiment ; le moral reste caché)
+            d['regs'] = [[None, r['type'], round(r['n']), r['max'], round(r['xp']), 0, r.get('arm'), r.get('man', [])] if g.mod(p, 'intel')
                          else [None, r['type'], round(r['n']), r['max'], 0, 0] for r in a['regs']]
         AA.view_army(g, a, d, a['owner'] == p)   # quartiers, traversée, actions possibles sur place
         armies.append(d)

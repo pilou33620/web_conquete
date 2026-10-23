@@ -726,6 +726,16 @@ ARMS = {
                    ('canon75', 'canon de 75', 2.30)],
 }
 REARM = dict(inf=dict(armes=0.12), artillerie=dict(armes=0.25, fer=0.25))   # par homme du régiment
+# manœuvres apprises par régiment (SPEC-ARBRE.md, « Moderniser ») : technologie → classe de troupe qui l'apprend.
+# Les autres technologies (levée, divisions, génie…) jouent pour tout le camp dès leur découverte.
+MANEUVERS = dict(tir_rang='inf', feu_peloton='inf', ordre_mixte='inf', retranchements='inf', voltigeurs='inf',
+                 hussards='cavalerie', cuirassiers='cavalerie', art_cheval='artillerie', melinite='artillerie')
+# effets « de régiment » : ceux d'une manœuvre non apprise, ou d'une arme plus récente que la sienne, ne jouent pas
+# pour lui (vision, embuscades, pluie, sièges, coûts… restent au camp)
+REG_KEYS = frozenset(('all_power', 'inf_power', 'art_power', 'cav_power', 'ligne_fire', 'carre_fire', 'colonne_charge',
+                      'cav_charge', 'art_charge', 'legere_cover', 'entrench', 'shell', 'art_speed'))
+MAN_COST = 0.1    # livres par homme et par manœuvre apprise
+MAN_DAYS = 10     # jours d'exercice dans la place (armes et manœuvres)
 # noms des troupes selon l'époque : (année de début, technologie requise ou None, nom, nom court)
 UNIT_NAMES = {
     'ligne': [(1700, None, 'Mousquetaires et piquiers', 'Piquiers'), (1700, 'baionnette', 'Infanterie de ligne', 'Ligne')],
