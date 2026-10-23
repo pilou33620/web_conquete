@@ -51,9 +51,9 @@ def une(args):
             ai.deploy(tb, s)
     t0 = time.process_time()
     try:
+        from game.tactics import orders as OR
+        tb.spec['orders'] = [None, None]   # (sans --ordres : l'IA à sa guise des deux côtés)
         if ordres:
-            from game.tactics import orders as OR
-            tb.spec['orders'] = [None, None]
             tb.spec['orders'][tb.me] = OR.clean(tb, tb.me, json.loads(ordres))
         tb.autofinish()
         if ordres:

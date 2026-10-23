@@ -127,7 +127,7 @@ class Http(unittest.TestCase):
         st = json.loads(self.req('GET', '/api/state?since=0')[1])
         d = next(x for x in st['armies'] if x['id'] == a['id'])
         self.assertEqual(d['ask']['n'], mer)
-        self.assertEqual(d['ask']['c']['manuel'], '', 'l’assaut est toujours permis')
+        self.assertEqual(d['ask']['c']['ordres'], '', 'l’assaut est toujours permis')
         b = next(x for x in g.armies.values() if x['owner'] != g.player)
         for body in (dict(cmd='arrive', army=a['id'], value='piller'), dict(cmd='arrive', army=b['id'], value='attendre'),
                      dict(cmd='arrive', army=[], value={}), dict(cmd='arrive', army=a['id'])):

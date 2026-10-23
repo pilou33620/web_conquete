@@ -613,3 +613,9 @@ body.modal-event #proposals { display: none; }   /* une décision à prendre : l
   animation: in-titre 1.8s ease-out 9.2s both; }
 @keyframes in-titre { from { opacity: 0; transform: scale(1.15); letter-spacing: .3em; } to { opacity: 1; transform: none; } }
 .in-passer { position: absolute; right: 16px; bottom: calc(11vh + 10px); font-size: 14px; color: var(--papier-2); opacity: .7; }
+/* le plan de la position ennemie, dans la fenêtre de bataille (plan.js) */
+.bt-plan { margin: 10px 0 0; }
+.bt-plan canvas { display: block; width: 100%; max-width: 480px; aspect-ratio: 3 / 2; margin: 0 auto; border-radius: 3px; background: #1d2226;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 0 0 3px rgba(200,162,83,.35); }
+.bt-plan figcaption { text-align: center; margin-top: 5px; }
+.bt-plan canvas.tall { aspect-ratio: 2 / 3; max-width: 230px; }

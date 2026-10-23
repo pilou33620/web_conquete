@@ -3,8 +3,8 @@
 Le joueur choisit son camp, l'époque, jusqu'à MAX_UNITS régiments, le type de bataille (rase campagne ou place forte,
 en attaquant ou en défenseur), et au besoin le lieu, la saison et la météo ; le reste est tiré au sort. Une petite
 partie jetable (engine.Game) fournit les armes et les noms d'époque, les généraux et la carte : la bataille passe ensuite
-par bridge.create et se joue comme une bataille de campagne commandée. Elle n'est jamais enregistrée et ne touche pas
-à la campagne en cours (server.App.skirmish, à côté de App.game).
+par bridge.create_orders et se joue comme une bataille de campagne (« Donner mes ordres »). Elle n'est jamais
+enregistrée et ne touche pas à la campagne en cours (server.App.skirmish, à côté de App.game).
 """
 import datetime
 import math
@@ -214,7 +214,7 @@ def new(geo, body):
         nid = None
     bid = f'esc{rng.randrange(1 << 30)}'
     bt = dict(id=bid, x=bx, y=by, node=nid, ambush=False, surprise=False, sides=sides)
-    tb = TB.create(g, bt, manual=True)
+    tb = TB.create_orders(g, bt)
     tb.spec['skirmish'] = True
     tb.spec['sk'] = dict(kind=kind, role='att' if attack else 'def', me=me, foe=foe, era=era,
                          place=bool(body.get('place')), season=bool(body.get('season') in SEASONS),
@@ -232,10 +232,7 @@ def owns(g, bid):
 def tick(g, dt):
     """Comme bridge.tick, sans campagne à prévenir : la bataille finie reste à lire (tac_done) jusqu'à « close »."""
     for tb in list(g.tactical.values()):
-        if tb.accel:
-            tb.run_for(TB.ACCEL_BUDGET)
-        else:
-            tb.advance(dt)
+        TB.advance(tb, dt)
         if tb.phase == 'fin':
             TB.finish(g, tb)   # (aucune bataille de campagne derrière : elle passe seulement dans tac_done)
             BL.skirmish_end(tb)

@@ -2558,7 +2558,7 @@ class Game:
                     self.choose_tactics(a, bt, si)
         self.battles[bid] = bt
         bt['log0'] = BL.snapshot(self, bt)   # forces au début, pour le journal des batailles (logs/)
-        TB.on_battle_start(self, bt)   # bataille du joueur : elle attend son choix (manuel ou automatique)
+        TB.on_battle_start(self, bt)   # bataille du joueur : elle attend son choix (sur ordres ou automatique)
         gname = self.place_name(gx, gy)
         if code_a == self.player or code_d == self.player or self.player in (code_a, code_d):
             self.alert_pause()

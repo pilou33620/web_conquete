@@ -2,12 +2,29 @@
 // vos officiers livrent selon ces ordres (bandeau, caméra qui suit l'action, moment décisif). Les choix, ce qui les
 // verrouille, l'avis du général et le rapport des éclaireurs viennent du serveur (game/tactics/orders.py) ; à chaque
 // choix, le serveur redéploie vos troupes et la vue les montre à leur nouvelle place. Le récapitulatif de fin reste
-// celui de interface.js (avec les pertes par arme et ce qui a décidé la journée).
-import { esc, clamp } from './formes.js';
+// celui de interface.js (avec les pertes par arme et ce qui a décidé la journée). Sur la carte : les flèches de la
+// manœuvre pendant les ordres ; pendant le film, des étiquettes là où il se passe quelque chose (charge, carré,
+// déroute, mêlée) et, sur la barre de la journée, un repère par grand moment : le toucher y emmène la caméra.
+import { esc, clamp, clsOf } from './formes.js';
 
 const TOP = 1.2;         // inclinaison de la vue de dessus (rad ; 1,57 serait la verticale)
 const CAM_EVERY = 2600;  // la caméra du film cherche l'action toutes les 2,6 s
 const ACTIVE = { melee: 3, charge: 3, feu: 1, recharge: 1, deroute: 1.5 };
+// les flèches au sol, par sorte (orders.arrows) : couleur, épaisseur (m à l'écran), pointillés, pointe
+const ARROW = {
+  main: ['255,214,120', 7, null, true], fix: ['255,226,150', 3.5, [10, 8], true], feint: ['255,160,90', 4, [10, 7], true],
+  raid: ['150,200,255', 4.5, [12, 7], true], hidden: ['140,215,130', 6, [3, 7], true], counter: ['255,120,95', 5, null, true],
+  fire: ['255,120,95', 1.6, [4, 6], false],
+};
+// les étiquettes du film : ce qui change chez un régiment visible
+// (par ordre d'importance : une seule étiquette par relevé)
+const EVENTS = [
+  [(u, p) => u.state === 'deroute' && p.state !== 'deroute', (u, me) => u.side === me ? 'En déroute' : 'L’ennemi plie'],
+  [(u, p) => u.state === 'charge' && p.state !== 'charge' && clsOf(u) === 'cavalerie', (u, me) => u.side === me ? 'Charge !' : 'Charge ennemie'],
+  [(u, p) => u.form === 'carre' && p.form !== 'carre', () => 'Carré !'],
+  [(u, p) => u.state === 'melee' && p.state !== 'melee', () => 'Mêlée'],
+];
+const LABEL_MS = 3800, LABEL_GAP = 900;
 const TRAIT = { audacieux: 'audacieux', prudent: 'prudent', cavalier: 'cavalier', artilleur: 'artilleur', montagnard: 'montagnard', eclaireur: 'éclaireur', inspirant: 'inspirant', logisticien: 'logisticien' };
 
 export class Ordres {
@@ -16,19 +33,23 @@ export class Ordres {
     this.tab = 'man';
     this.data = null; this.o = null;
     this.camAuto = true;
+    this.prev = new Map();      // dernier état vu de chaque régiment (étiquettes)
+    this.labels = [];           // étiquettes affichées : {x, y, text, mine, t, el}
+    this.moments = [];          // grands moments du film : {clock, x, y, text}
     const el = document.createElement('div');
     el.className = 'bo';
     el.innerHTML = `
       <section class="bo-panel" role="region" aria-label="Vos ordres" hidden></section>
       <div class="bo-hud" role="region" aria-label="La bataille menée par vos officiers" hidden>
         <div class="bo-cap" aria-live="polite"></div>
-        <div class="bo-row"><div class="bo-day" aria-hidden="true"><i></i></div><span class="bo-h"></span></div>
+        <div class="bo-row"><div class="bo-day"><i></i><span class="bo-marks"></span></div><span class="bo-h"></span></div>
         <div class="bo-hbtns">
-          <button class="bt-btn" data-o="fast" aria-pressed="false">×2</button>
+          <span class="bo-k" role="group" aria-label="Vitesse du film">${[1, 2, 4].map(k => `<button class="bt-btn" data-o="k" data-v="${k}" aria-pressed="false">×${k}</button>`).join('')}</span>
           <button class="bt-btn" data-o="cam"></button>
           <button class="bt-btn primary" data-o="skip">Passer ▸▸</button>
         </div>
       </div>
+      <div class="bo-labels" aria-hidden="true"></div>
       <div class="bo-ask" hidden><div class="bt-card bo-askcard" role="dialog" aria-modal="true" aria-labelledby="bo-askt"></div></div>`;
     ui.el.appendChild(el);
     this.el = el;
@@ -48,13 +69,12 @@ export class Ordres {
     if (!this.camSet && v.terrain && !this.ui.entering) {
       // vue de dessus sur tout le champ, vos troupes en bas de l'image
       this.camSet = true;
-      v.showCover = false;
       v.pitchOv = TOP;
       v.moveCam(v.W / 2, v.H / 2, v.fitZ() * (deploy ? 1.05 : 1.2), 1400, this.yaw());
     }
     this.$('.bo-panel').hidden = !deploy || !this.data;
     this.$('.bo-hud').hidden = !play;
-    if (play) this.hud(st);
+    if (play) { this.events(st); this.hud(st); }
     // le moment décisif : la bataille s'arrête et attend votre réponse
     const ask = this.$('.bo-ask');
     if (st.ask && play) {
@@ -143,36 +163,113 @@ export class Ordres {
   // ------------------------------------------------------------------ le film
   hud(st) {
     const notes = st.notes || [];
-    const cap = this.skipping ? 'Vos officiers achèvent la bataille…' : notes.length ? notes[notes.length - 1] : 'La bataille est engagée.';
+    const cap = this.skipping ? 'Vos officiers achèvent la bataille…' : performance.now() < (this.holdCam || 0) ? this.holdText
+      : notes.length ? notes[notes.length - 1] : 'La bataille est engagée.';
     const c = this.$('.bo-cap');
     if (c.textContent !== cap) c.textContent = cap;
     const dusk = Math.max(1, st.dusk || 1);
     this.$('.bo-day i').style.width = (clamp((st.clock || 0) / dusk, 0, 1) * 100).toFixed(1) + '%';
     this.$('.bo-h').textContent = st.hour || '';
-    const fast = this.$('[data-o="fast"]');
-    fast.classList.toggle('on', !!st.replay.fast);
-    fast.setAttribute('aria-pressed', String(!!st.replay.fast));
+    for (const b of this.el.querySelectorAll('[data-o="k"]')) {
+      const on = +b.dataset.v === (st.replay.k || 1);
+      b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+    }
     this.$('[data-o="cam"]').textContent = this.camAuto ? 'Caméra : suit l’action' : 'Caméra : vue d’ensemble';
   }
-  // la caméra cherche l'action : là où l'on se bat (mêlées et charges d'abord), assez près pour voir les régiments
-  frame(now) {
-    const v = this.v, st = v.st;
-    if (!this.on() || st?.phase !== 'combat' || !st.replay || v.controls.busy()) return;
-    if (now < (this.nextCam || 0)) return;
-    this.nextCam = now + CAM_EVERY;
-    if (!this.camAuto) return;
+  // ce qui vient de se passer : des étiquettes sur la carte (changements d'état des régiments visibles) et un repère
+  // sur la barre de la journée par grand moment raconté (le journal de vos officiers)
+  events(st) {
+    const v = this.v, now = performance.now();
+    let best = null;
+    for (const u of v.units.values()) {
+      const p = this.prev.get(u.id);
+      this.prev.set(u.id, { state: u.state, form: u.form });
+      if (!p || u._ghost || u.state === 'hors') continue;
+      const i = EVENTS.findIndex(([test]) => test(u, p));
+      if (i < 0 || (best && best.i <= i)) continue;
+      if (this.labels.some(l => Math.hypot(l.x - u.x, l.y - u.y) < 150 && now - l.t < LABEL_MS)) continue;
+      best = { i, u };
+    }
+    if (best && now - (this.lastLabel || 0) >= LABEL_GAP) {
+      const u = best.u;
+      this.lastLabel = now;
+      this.label(u.to?.x ?? u.x, u.to?.y ?? u.y, EVENTS[best.i][1](u, v.me), u.side === v.me);
+    }
+    const dusk = Math.max(1, st.dusk || 1);
+    for (const text of st.notes || []) {
+      if (this.moments.some(m => m.text === text)) continue;
+      const [x, y] = this.hot() || [v.cam.x, v.cam.y];
+      this.moments.push({ clock: st.clock || 0, x, y, text });
+      const b = document.createElement('button');
+      b.className = 'bo-mark'; b.dataset.o = 'moment'; b.dataset.i = this.moments.length - 1;
+      b.title = text; b.setAttribute('aria-label', text);
+      b.style.left = (clamp((st.clock || 0) / dusk, 0, 1) * 100).toFixed(1) + '%';
+      this.$('.bo-marks').appendChild(b);
+    }
+  }
+  label(x, y, text, mine) {
+    const el = document.createElement('div');
+    el.className = 'bo-label' + (mine ? ' mine' : '');
+    el.textContent = text;
+    this.$('.bo-labels').appendChild(el);
+    this.labels.push({ x, y, text, mine, t: performance.now(), el });
+    while (this.labels.length > 4) this.labels.shift().el.remove();
+  }
+  // là où l'on se bat (mêlées et charges d'abord) : [x, y, étendue] ou null
+  hot() {
     let sx = 0, sy = 0, sw = 0;
     const act = [];
-    for (const u of v.units.values()) {
+    for (const u of this.v.units.values()) {
       const w = ACTIVE[u.state] || 0;
       if (!w || u._ghost || u.state === 'hors') continue;
       sx += u.x * w; sy += u.y * w; sw += w; act.push(u);
     }
-    if (!sw) return;
+    if (!sw) return null;
     const cx = sx / sw, cy = sy / sw;
-    const spread = Math.max(...act.map(u => Math.hypot(u.x - cx, u.y - cy)), 200);
-    const z = clamp(Math.min(v.vw, v.vh) / (2 * spread + 500), v.fitZ() * 1.2, v.fitZ() * 3.2);
-    v.moveCam(cx, cy, z, 2200);
+    return [cx, cy, Math.max(...act.map(u => Math.hypot(u.x - cx, u.y - cy)), 200)];
+  }
+  // à chaque image : les étiquettes suivent la carte ; la caméra du film cherche l'action, assez près pour voir les
+  // régiments (pas pendant un geste, ni quelques secondes après un repère touché)
+  frame(now) {
+    const v = this.v, st = v.st;
+    this.labels = this.labels.filter(l => { const keep = now - l.t < LABEL_MS; if (!keep) l.el.remove(); return keep; });
+    for (const l of this.labels) {
+      const [sx, sy, depth] = v.toScreen(l.x, l.y), k = (now - l.t) / LABEL_MS;
+      l.el.style.transform = `translate(${sx.toFixed(0)}px, ${(sy - 34 - k * 14).toFixed(0)}px) translateX(-50%)`;
+      l.el.style.opacity = depth > 0 ? String(Math.min(1, (1 - k) * 3)) : '0';
+    }
+    if (!this.on() || st?.phase !== 'combat' || !st.replay || v.controls.busy() || now < (this.holdCam || 0)) return;
+    if (now < (this.nextCam || 0)) return;
+    this.nextCam = now + CAM_EVERY;
+    if (!this.camAuto) return;
+    const h = this.hot();
+    if (!h) return;
+    const z = clamp(Math.min(v.vw, v.vh) / (2 * h[2] + 500), v.fitZ() * 1.2, v.fitZ() * 3.2);
+    v.moveCam(h[0], h[1], z, 2200);
+  }
+  // pendant les ordres : les flèches de la manœuvre, au sol (lissées, projetées sur le relief), pointe à l'arrivée
+  drawGround(ctx, time) {
+    const v = this.v, arrows = this.data?.arrows;
+    if (!this.on() || v.st?.phase !== 'deploiement' || !arrows) return;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const a of arrows) {
+      const [rgb, w, dash, head] = ARROW[a.k] || ARROW.main;
+      const pts = smooth(a.pts);
+      const lw = Math.max(1.5, w * Math.min(1.4, v.cam.z * 2.2));
+      ctx.setLineDash(dash ? dash.map(d => d * lw / 3) : []);
+      ctx.lineDashOffset = dash ? -time * 18 : 0;
+      v.groundPath(ctx, pts);
+      ctx.strokeStyle = 'rgba(20,14,8,0.5)'; ctx.lineWidth = lw + 4; ctx.stroke();
+      ctx.strokeStyle = `rgba(${rgb},0.95)`; ctx.lineWidth = lw; ctx.stroke();
+      ctx.setLineDash([]);
+      if (!head || pts.length < 2) continue;
+      const [bx, by] = v.toScreen(...pts[pts.length - 1]), [cx, cy] = v.toScreen(...pts[Math.max(0, pts.length - 4)]);
+      const ang = Math.atan2(by - cy, bx - cx), r = lw * 2.4 + 6;
+      ctx.fillStyle = `rgba(${rgb},0.95)`;
+      ctx.beginPath(); ctx.moveTo(bx + Math.cos(ang) * r, by + Math.sin(ang) * r);
+      ctx.lineTo(bx + Math.cos(ang + 2.5) * r, by + Math.sin(ang + 2.5) * r); ctx.lineTo(bx + Math.cos(ang - 2.5) * r, by + Math.sin(ang - 2.5) * r);
+      ctx.closePath(); ctx.fill();
+    }
   }
 
   click(e) {
@@ -184,7 +281,16 @@ export class Ordres {
       case 'opt': this.choose(b.dataset.k, b.dataset.v); break;
       case 'engage': this.engage(); break;
       case 'cancel': this.cancel(); break;
-      case 'fast': v.cmd('replay', { fast: !v.st?.replay?.fast }); break;
+      case 'k': v.cmd('replay', { k: +b.dataset.v }); break;
+      case 'moment': {
+        // un grand moment : la caméra y va, le bandeau le raconte de nouveau, la caméra du film attend un peu
+        const m = this.moments[+b.dataset.i];
+        if (!m) break;
+        this.holdCam = performance.now() + 6000;
+        v.moveCam(m.x, m.y, Math.max(v.cam.z, v.fitZ() * 2), 900);
+        this.holdText = this.$('.bo-cap').textContent = m.text;
+        break;
+      }
       case 'cam':
         this.camAuto = !this.camAuto;
         if (!this.camAuto) v.moveCam(v.W / 2, v.H / 2, v.fitZ() * 1.2, 1200);
@@ -203,6 +309,21 @@ export class Ordres {
         break;
     }
   }
+}
+
+// tracé lissé (Chaikin, trois passes) : quelques points de passage deviennent une courbe
+function smooth(pts) {
+  let p = pts;
+  for (let k = 0; k < 3 && p.length > 2; k++) {
+    const q = [p[0]];
+    for (let i = 0; i < p.length - 1; i++) {
+      const [ax, ay] = p[i], [bx, by] = p[i + 1];
+      q.push([0.75 * ax + 0.25 * bx, 0.75 * ay + 0.25 * by], [0.25 * ax + 0.75 * bx, 0.25 * ay + 0.75 * by]);
+    }
+    q.push(p[p.length - 1]);
+    p = q;
+  }
+  return p;
 }
 
 const fmtN = n => (Math.round(n) || 0).toLocaleString('fr-FR');

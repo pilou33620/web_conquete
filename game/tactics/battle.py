@@ -1,12 +1,10 @@
-"""Simulation d'une bataille tactique en temps réel avec pause (TacticalBattle).
+"""Simulation d'une bataille tactique (TacticalBattle), livrée par l'IA des deux camps : celle du joueur suit ses
+ordres (« Donner mes ordres », orders.py).
 
-Le temps s'exprime en secondes de bataille (0 = 8 h du matin). Le serveur fait avancer la bataille par pas fixes
-de DT = 2 s de bataille ; à ×1, une seconde réelle vaut TIME_K = 18 s de bataille : une bataille rangée de 3 à 6 h
-dure 10 à 20 min à ×1 (×2 et ×4 pour accélérer). Les vitesses de marche restent celles du contrat (§ 4) : une ligne
-qui avance à 1 m/s parcourt 18 m par seconde réelle, sa propre largeur en 6 à 7 s. « Finir automatiquement » joue la
-suite avec les mêmes pas DT, IA contre IA, aussi vite que le serveur le permet (mode accéléré, voir l'aide-mémoire) :
-0,3 à 0,6 ms par pas sur un PC, une bataille complète en 2,5 s de calcul en médiane (6 s pour 9 sur 10), soit, avec
-le budget de bridge.tick, une dizaine de secondes à l'écran ; 3 à 4 fois plus sur un Raspberry Pi 4.
+Le temps s'exprime en secondes de bataille (0 = 8 h du matin, spec['h_off'] décale l'heure affichée). Le serveur fait
+avancer la bataille par pas fixes de DT = 2 s de bataille, à l'allure du film (bridge.REPLAY_RATE) ou aussi vite
+qu'il le peut (« Passer », « Finir automatiquement », bancs) : 0,3 à 0,6 ms par pas sur un PC, une bataille complète
+en 2,5 s de calcul en médiane (6 s pour 9 sur 10) ; 3 à 4 fois plus sur un Raspberry Pi 4.
 
 ==================================================================================================================
 RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MELEE_*, FORMED… ci-dessous)
@@ -110,11 +108,10 @@ prend s'il reste sans escorte à moins de 40 m d'un ennemi. Le général (type '
 « Finir automatiquement » : battle.autofinish() fait passer la bataille en mode accéléré (battle.accel) : les unités
 du joueur passent sous le contrôle de l'IA (son camp rejoint ai_sides, au niveau ACCEL_LEVEL = normal ; en plein combat,
 elle reprend la situation telle qu'elle est : mémoire absente → ai._adopt), et la suite se joue IA contre IA avec les
-mêmes règles et les mêmes pas DT qu'une bataille commandée. Le serveur avance une bataille accélérée par
-battle.run_for(budget) (bridge.tick : un budget de calcul par appel, pour rester réactif) ; battle.run_to_end() la
-joue d'un coup (essais, bancs). battle.resume() rend le commandement au joueur (en pause). Le mode accéléré est
-enregistré avec la bataille.
-Chiffres : DT = 2 s par pas, TIME_K = 18 s de bataille par seconde réelle à ×1, repérage toutes les 4 s, IA toutes
+mêmes règles et les mêmes pas DT. Le serveur avance une bataille accélérée par battle.run_for(budget) (bridge.tick :
+un budget de calcul par appel, pour rester réactif) ; battle.run_to_end() la joue d'un coup (essais, bancs). Le mode
+accéléré est enregistré avec la bataille (anciennes sauvegardes : une bataille commandée en cours s'y achève).
+Chiffres : DT = 2 s par pas, repérage toutes les 4 s, IA toutes
 les 2 s ; fin au crépuscule (DUSK) ; assaut gagné en tenant le cœur de la place 6 min (au moins 150 hommes à 90 m)
 sans défenseur à 160 m.
 ==================================================================================================================
@@ -134,7 +131,6 @@ from .terrain import (COLS, ROWS, CELL, N, W, H, T_PRE, T_CHAMP, T_VIGNE_T, T_LA
                       T_BARRICADE, T_VERGER)
 
 DT = 2.0                 # pas de simulation (s de bataille)
-TIME_K = 18.0            # s de bataille par s réelle, à ×1 (une bataille de 3 à 6 h dure 10 à 20 min à ×1)
 VIS_DT = 4.0             # mise à jour du repérage
 AI_DT = 2.0              # l'IA réfléchit toutes les 2 s de bataille
 START_H = 8.0
@@ -328,7 +324,6 @@ class TacticalBattle:
         self.by_id = {u.id: u for u in self.units}
         self.phase = 'deploiement'
         self.clock = 0.0
-        self.speed = 1
         self.seq = 0
         self.fx = []
         self.logs = []
@@ -342,11 +337,9 @@ class TacticalBattle:
         self.prisoners = [0.0, 0.0]          # hommes de ce camp faits prisonniers
         self.ai_mem = {}                     # mémoire de l'IA (types JSON seulement : enregistrée avec la bataille)
         self.accel = False                   # « Finir automatiquement » : les officiers jouent la suite en accéléré…
-        self.accel_ids = []                  # … avec ces unités du joueur (rendues s'il reprend le commandement)…
         self.accel_t = 0.0                   # … depuis cette heure de bataille
         self.replay = None                   # « Donner mes ordres » : la bataille défile, réglée par bridge (orders.py)…
         self.ask = None                      # … et s'arrête au moment décisif, en attendant la réponse du joueur
-        self._acc = 0.0
         self._vis_t = -99.0
         self._ai_t = -99.0
         self._cost_cache = {}
@@ -1324,19 +1317,6 @@ class TacticalBattle:
         return math.sqrt(best)
 
     # ================================================================== boucle
-    def advance(self, real_dt, speed=None):
-        """Avance d'un intervalle réel (s) à la vitesse tactique ; pas fixes de DT. Renvoie le nombre de pas."""
-        sp = self.speed if speed is None else speed
-        if self.phase != 'combat' or sp <= 0:
-            return 0
-        self._acc += real_dt * sp * TIME_K
-        n = 0
-        while self._acc >= DT and self.phase == 'combat' and n < 40:
-            self._acc -= DT
-            self.step(DT)
-            n += 1
-        return n
-
     def run_for(self, budget, until=None):
         """Bataille accélérée (« Finir automatiquement ») : des pas DT ordinaires, le même déroulé qu'à ×1, autant que
         le permet budget (secondes de calcul réelles ; au moins un pas), sans dépasser l'heure until (« Donner mes
@@ -2515,8 +2495,7 @@ class TacticalBattle:
         pour les essais). Pendant le déploiement, les officiers déploient le camp à leur idée, puis engagent la bataille ;
         en plein combat, l'IA reprend la situation telle qu'elle est (ai._adopt) : les charges et mêlées en cours
         continuent, les troupes que le joueur a envoyées en retraite poursuivent leur retraite (elles restent à lui),
-        celles à qui il avait fait cesser le feu le rouvrent, et un camp qui décroche continue de décrocher. Le joueur
-        peut reprendre le commandement (resume)."""
+        celles à qui il avait fait cesser le feu le rouvrent, et un camp qui décroche continue de décrocher."""
         if self.phase == 'fin':
             return False, "La bataille est terminée."
         if self.accel:
@@ -2527,7 +2506,6 @@ class TacticalBattle:
             lv = list(lv) if isinstance(lv, (list, tuple)) and len(lv) == 2 else [self.difficulty, self.difficulty]
             lv[me] = ACCEL_LEVEL   # (l'adversaire garde le sien : spec['ai_levels'], sinon la difficulté de la partie)
             self.spec['ai_levels'] = lv
-            took = []
             for u in self.units:
                 if u.side != me or u.ctrl != 'joueur':
                     continue
@@ -2535,8 +2513,6 @@ class TacticalBattle:
                     continue
                 u.ctrl = 'ia'
                 u.fire_mode = 'free'
-                took.append(u.id)
-            self.accel_ids = took
             if me not in self.ai_sides:
                 self.ai_sides.append(me)
             # l'IA n'a rien gardé du camp du joueur (bridge.default_deploy) : elle repart de son propre déploiement, ou
@@ -2551,29 +2527,6 @@ class TacticalBattle:
         self.accel_t = self.clock
         self.log("Vos officiers prennent le commandement : la bataille se poursuit en accéléré.", me)
         return True, "Vos officiers poursuivent la bataille."
-
-    def resume(self):
-        """Le joueur reprend le commandement pendant l'accéléré : ses unités repassent sous ses ordres (avec les chariots
-        pris à l'ennemi entre-temps), la bataille se met en pause pour qu'il voie où en sont les choses."""
-        if self.phase == 'fin':
-            return False, "La bataille est terminée."
-        if not self.accel:
-            return False, "Vous avez déjà le commandement."
-        me = self.me
-        self.accel = False
-        if me in (0, 1):
-            back = set(self.accel_ids)
-            owners = {self.by_id[i].owner for i in back if i in self.by_id and self.by_id[i].cls != 'chariot'}
-            for u in self.units:
-                if u.side == me and (u.id in back or (u.cls == 'chariot' and u.owner in owners)):
-                    u.ctrl = 'joueur'
-            if me in self.ai_sides:
-                self.ai_sides.remove(me)
-            self.ai_mem.pop(f's{me}', None)   # (si les officiers reprennent la main, ils repartiront de la situation)
-        self.accel_ids = []
-        self.speed = 0
-        self.log("Vous reprenez le commandement.", me)
-        return True, "Vous reprenez le commandement : la bataille est en pause."
 
     # ================================================================== vue client
     def view(self, me=None, since=0):
@@ -2609,7 +2562,7 @@ class TacticalBattle:
                 # moral apparent : celui des troupes qu'on voit (0 si l'on ne voit personne)
                 sides[-1]['morale'] = int(round(sum(u.morale * u.men for u in vis) / max(1.0, sum(u.men for u in vis))))
                 sides[-1]['seen'] = True
-        out = dict(bid=self.bid, seq=self.seq, phase=self.phase, speed=self.speed, clock=round(self.clock),
+        out = dict(bid=self.bid, seq=self.seq, phase=self.phase, clock=round(self.clock),
                    hour=fmt_hour(self.clock + self.spec.get('h_off', 0.0)), h_off=self.spec.get('h_off', 0.0), weather=self.weather, season=self.season, light=round(self.light, 2),
                    wind=self.wind, me=me, sides=sides, units=units, dusk=round(self.dusk),
                    title=self.spec.get('title'), place=self.spec.get('place_name'),
@@ -2682,11 +2635,11 @@ class TacticalBattle:
     # ================================================================== sauvegarde
     def to_dict(self):
         return dict(spec=self.spec, units=[u.to_dict() for u in self.units], phase=self.phase, clock=self.clock,
-                    speed=self.speed, seq=self.seq, logs=[list(x) for x in self.logs[-60:]], ai_sides=self.ai_sides,
-                    withdrawing=self.withdrawing, withdraw_t=self.withdraw_t, hold_t=self.hold_t, siege_t=self.siege_t, prisoners=self.prisoners, acc=self._acc,
+                    seq=self.seq, logs=[list(x) for x in self.logs[-60:]], ai_sides=self.ai_sides,
+                    withdrawing=self.withdrawing, withdraw_t=self.withdraw_t, hold_t=self.hold_t, siege_t=self.siege_t, prisoners=self.prisoners,
                     ai_mem=self.ai_mem, result=self.result, pound=self.pound, breaches=self.breaches,
                     breach_t=self.breach_t,
-                    accel=self.accel, accel_ids=self.accel_ids, accel_t=self.accel_t, replay=self.replay, ask=self.ask,
+                    accel=self.accel, accel_t=self.accel_t, replay=self.replay, ask=self.ask,
                     end=[getattr(self, 'winner', None), getattr(self, 'disengage', None), getattr(self, 'why', None)],
                     piet=getattr(self, 'piet', None))
 
@@ -2696,7 +2649,6 @@ class TacticalBattle:
         tb = cls(geo, d['spec'], units, d.get('ai_sides', (0, 1)))
         tb.phase = d.get('phase', 'combat')
         tb.clock = d.get('clock', 0.0)
-        tb.speed = d.get('speed', 1)
         tb.seq = d.get('seq', 0)
         tb.logs = [tuple(x) + (None,) * (4 - len(x)) for x in d.get('logs', [])]
         tb.withdrawing = d.get('withdrawing', [False, False])
@@ -2704,12 +2656,10 @@ class TacticalBattle:
         tb.hold_t = d.get('hold_t', 0.0)
         tb.siege_t = d.get('siege_t')
         tb.prisoners = d.get('prisoners', [0.0, 0.0])
-        tb._acc = d.get('acc', 0.0)
         tb.ai_mem = d.get('ai_mem') or {}
         tb.result = d.get('result')
         tb.piet = d.get('piet') if valid_piet(d.get('piet')) else None   # (anciennes sauvegardes : un sol neuf)
         tb.accel = bool(d.get('accel'))   # (anciennes sauvegardes : pas d'accéléré)
-        tb.accel_ids = list(d.get('accel_ids') or [])
         tb.accel_t = d.get('accel_t', 0.0)
         tb.replay = d.get('replay')
         tb.ask = d.get('ask')

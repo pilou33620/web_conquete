@@ -57,6 +57,15 @@ def bataille(mes=None, epoque='1790', joueur='33', ennemi='24', demarree=True, s
     g, bid = S.new(GEO, dict(me=joueur, foe=ennemi, era=epoque, units=mes, seed=seed))
     assert g is not None, bid   # (bid est alors le message d'erreur)
     tb = g.tactical[bid]
+    # (le jeu livre ses batailles sur ordres ; ces bancs du moteur commandent eux-mêmes chaque régiment du joueur)
+    me = tb.me
+    for u in tb.units:
+        if u.side == me:
+            u.ctrl = 'joueur'
+    tb.ai_sides = [1 - me]
+    tb.ai_mem.pop(f's{me}', None)
+    tb.spec.pop('mode', None)
+    tb.spec['orders'] = None
     if demarree:
         tb.start()
     unites = {}

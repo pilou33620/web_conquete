@@ -97,7 +97,6 @@ export class Bataille {
     if (gone()) return;
     this.suspendMap();
     view.ui.entering = false;
-    setTimeout(() => this.view === view && view.ui.tips(), 1800);
   }
   // retour à la campagne, avec le résultat (affiché par main.js / ui.js)
   async exit(result = null) {
@@ -133,8 +132,8 @@ export class Bataille {
     }
     if (this.sansGL.has(bid)) return;
     this.sansGL.add(bid);
-    // (serveur injoignable : on retentera à la prochaine interrogation de la campagne)
-    this.api.post('/api/cmd', { cmd: 'tac', sub: 'autofinish', bid }).then(r => { if (!r?.ok) this.sansGL.delete(bid); }, () => this.sansGL.delete(bid));
+    // ordres par défaut, bataille jouée au plus vite (serveur injoignable : on retentera à la prochaine interrogation)
+    this.api.post('/api/cmd', { cmd: 'tac', sub: 'orders', bid, orders: {}, go: true, skip: true }).then(r => { if (!r?.ok) this.sansGL.delete(bid); }, () => this.sansGL.delete(bid));
     this.onEnd && this.onEnd(null, bid, NO_GL);
   }
   // interrompt sans animation (nouvelle partie, erreur)

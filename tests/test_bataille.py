@@ -17,7 +17,7 @@ from game import rules as R
 
 
 class OrdresParArme(unittest.TestCase):
-    """Chaque arme a ses ordres (web/js/battle/doctrine.js) ; le moteur refuse ceux qui ne sont pas les siens."""
+    """Chaque arme a ses ordres (l'IA les donne par battle.order) ; le moteur refuse ceux qui ne sont pas les siens."""
 
     def test_ordres_acceptes_et_refuses(self):
         tb, u = bataille()
@@ -1127,6 +1127,11 @@ class IAFinirAutomatiquementEtLogement(unittest.TestCase):
 
 
 
+def TB_view(g, bid):
+    from game.tactics import bridge as TB
+    return TB.battle_view(g, bid, 0)
+
+
 class DonnerMesOrdres(unittest.TestCase):
     """« Donner mes ordres » (game/tactics/orders.py) : le joueur choisit ses ordres, ses officiers livrent la bataille
     selon eux, sous ses yeux, et s'arrêtent au moment décisif s'il l'a demandé."""
@@ -1175,6 +1180,34 @@ class DonnerMesOrdres(unittest.TestCase):
         res = tb.result_view(0)
         self.assertEqual([a[0] for a in res['arms']], ['Infanterie', 'Cavalerie', 'Artillerie'])
         self.assertIsInstance(res['decisive'], list)
+
+    def test_plan_fleches_et_vitesses(self):
+        from game.tactics import bridge as TB
+        g, bt = bataille_de_campagne('1813', attaque=True)
+        r = TB.command(g, dict(sub='preview', bid=bt['id']))
+        p = r['plan']
+        self.assertEqual(len(p['t']), p['cols'] * p['rows'])
+        self.assertTrue(any(u['s'] == p['me'] for u in p['units']), 'vos troupes sur le plan')
+        pre = g.tac_preview[bt['id']]
+        TB.command(g, dict(sub='choose', bid=bt['id'], mode='ordres'))
+        tb = g.tactical[bt['id']]
+        self.assertIs(tb, pre, 'la bataille du plan est celle des ordres')
+        r = TB.command(g, dict(sub='orders', bid=bt['id'], orders=dict(man='enveloppement', ruse='feinte', art='grande')))
+        kinds = {a['k'] for a in r['ordres']['arrows']}
+        self.assertTrue({'main', 'fix'} <= kinds, kinds)
+        self.assertFalse(TB.command(g, dict(sub='choose', bid=bt['id'], mode='manuel'))['ok'], 'plus de bataille commandée')
+        TB.command(g, dict(sub='orders', bid=bt['id'], orders={}, go=True))
+        self.assertTrue(TB.command(g, dict(sub='replay', bid=bt['id'], k=4))['ok'])
+        self.assertEqual(TB.battle_view(g, bt['id'], 0)['replay']['k'], 4)
+        for sub in ('deploy', 'order', 'speed', 'autofinish', 'resume', 'withdraw'):
+            self.assertFalse(TB.command(g, dict(sub=sub, bid=bt['id']))['ok'], sub)
+
+    def test_le_mode_bataille_se_livre_sur_ordres(self):
+        g, bid = S.new(GEO, dict(me='33', foe='24', era='1813', units=dict(ligne=2, cavalerie=1), seed=1))
+        tb = g.tactical[bid]
+        self.assertEqual(tb.spec['mode'], 'ordres')
+        self.assertTrue(all(u.ctrl == 'ia' for u in tb.units))
+        self.assertIn('ordres', TB_view(g, bid))
 
     def test_retour_a_la_fenetre_de_bataille(self):
         from game.tactics import bridge as TB

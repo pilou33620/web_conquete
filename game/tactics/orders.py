@@ -457,6 +457,83 @@ def advise(b, side, o):
     return dict(pros=P[:5], cons=C[:5], verdict=verdict)
 
 
+# ------------------------------------------------------------------ les flèches de la manœuvre, au sol
+def arrows(b, side, o):
+    """Les flèches de la manœuvre sur la carte de bataille (fenêtre des ordres), tirées du déploiement de l'IA du joueur
+    (ai_mem : l'ancre de sa ligne, son front, sa largeur) et du centre de la zone ennemie (connue du joueur) :
+    [{pts: [[x, y], …], k}], k : 'main' (l'effort), 'fix' (fixer, user), 'feint', 'raid' (la cavalerie), 'hidden'
+    (sous les bois), 'counter' (contre-attaque), 'fire' (le tir des canons). Le client lisse les tracés."""
+    mem = (getattr(b, 'ai_mem', None) or {}).get(f's{side}') or {}
+    if 'ax' not in mem or not o:
+        return []
+    ax, ay, fd, w2 = mem['ax'], mem['ay'], mem['fd'], mem.get('width', 600) / 2
+    c, s = math.cos(fd), math.sin(fd)
+
+    def at(dep, lat):
+        return [round(min(W - 20, max(20, ax + c * dep - s * lat))), round(min(H - 20, max(20, ay + s * dep + c * lat)))]
+
+    ez = b.ai_zone(1 - side)
+    D = max(300.0, min(1600.0, ((ez[0] + ez[2]) / 2 - ax) * c + ((ez[1] + ez[3]) / 2 - ay) * s - 150))
+    w, m = wing_sign(o), o.get('man')
+    out = []
+
+    def add(k, *pts):
+        out.append(dict(k=k, pts=[list(p) for p in pts]))
+
+    pl = b.place_info()
+    if pl:
+        hx, hy = b.objective() or (pl['x'], pl['y'])
+        if side == 0:
+            add('main', at(0, 0), [round(hx), round(hy)])
+        elif m == 'sorties':
+            add('counter', [round(hx), round(hy)], at(-400, 0))
+        return out
+    wide = (-0.6 * w2, 0.0, 0.6 * w2)
+    if side == 0:
+        if m == 'frontal':
+            for lat in wide:
+                add('main', at(0, lat), at(D, lat))
+        elif m == 'oblique':
+            add('main', at(0, w * 0.6 * w2), at(D, w * 0.8 * w2))
+            add('fix', at(0, 0), at(0.6 * D, 0))
+            add('fix', at(-160, -w * 0.6 * w2), at(-40, -w * 0.6 * w2))
+        elif m == 'percee':
+            add('main', at(0, 0), at(D, 0))
+            for lat in (-0.7 * w2, 0.7 * w2):
+                add('fix', at(0, lat), at(0.55 * D, lat))
+        elif m in ('enveloppement', 'double'):
+            for ww in ((w, -w) if m == 'double' else (w,)):
+                wood = mem.get('ord', {}).get('wood') if ww == w else None
+                mid = wood or at(0.45 * D, ww * (w2 + 450))
+                add('hidden' if wood else 'main', at(0, ww * w2), mid, at(0.9 * D, ww * (w2 + 380)), at(D, ww * (w2 + 80)))
+            add('fix', at(0, 0), at(0.55 * D, 0))
+        elif m == 'fixer':
+            for lat in wide:
+                add('fix', at(0, lat), at(0.55 * D, lat))
+            add('raid', at(-50, w * (w2 + 150)), at(0.5 * D, w * (w2 + 650)), at(D + 300, w * (w2 + 420)), at(D + 450, 0))
+        elif m == 'usure':
+            for lat in wide:
+                add('fix', at(0, lat), at(0.5 * D, lat))
+        if o.get('ruse') == 'feinte':
+            add('feint', at(0, -w * 0.75 * w2), at(0.85 * D, -w * 0.85 * w2))
+    else:
+        if m == 'contre':
+            for lat in wide:
+                add('main', at(0, lat), at(D, lat))
+        elif m == 'elastique':
+            add('counter', at(-200, w * 0.3 * w2), at(250, w * 0.3 * w2))
+        elif m == 'usure':
+            add('fix', at(0, 0), at(-500, 0))
+    if o.get('cav') == 'raid' and m != 'fixer':
+        add('raid', at(-70, w * (w2 + 110)), at(0.5 * D, w * (w2 + 600)), at(D + 350, w * (w2 + 300)))
+    if o.get('art') in ('grande', 'prepa') or m == 'percee':
+        lat = w * 0.7 * w2 if m == 'oblique' else 0.0
+        for u in b.units:
+            if u.side == side and u.cls == 'artillerie' and u.alive:
+                add('fire', [round(u.x), round(u.y)], at(D, lat))
+    return out
+
+
 # ------------------------------------------------------------------ ce que font les ordres dans l'IA
 def plan(b, side, pl):
     """Le plan de l'IA dicté par la manœuvre (None : l'IA choisit)."""

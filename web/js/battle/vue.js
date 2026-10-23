@@ -13,7 +13,7 @@ import { Effects } from './effets.js';
 import { Controls } from './commandes.js';
 import { BattleUI } from './interface.js';
 import { frameOf, project, unproject, anchor, clampCam, FOV } from './camera.js';
-import { emprise, clsOf, isGeneral, clamp, wrapAngle, TAU } from './formes.js';
+import { emprise, clsOf, clamp, wrapAngle, TAU } from './formes.js';
 import { profil, onQualite, Mesure, solPx } from './qualite.js';
 import { chargerSols } from './sols.js';
 import { Pietinement, OmbreRegiments } from './pietinement.js';
@@ -54,13 +54,11 @@ export class BattleView {
     this.art = new UnitArt(this.q);
     this.fx = new Effects(this.q);
     this.units = new Map();
-    this.sel = new Set();
-    this.orders = new Map();     // derniers ordres donnés (affichés jusqu'à l'arrivée)
+    this.sel = new Set();        // le régiment inspecté (interface.js, inspect) : anneau, portées, ligne de vue
     this.st = null;
     this.seq = 0;
     this.cam = { x: 1500, y: 1000, z: 0.5, yaw: 0 };   // cible au sol, zoom (px/m à la cible), cap (camera.js)
     this.camAnim = null;
-    this.showCover = false;
     this.running = false;
     this.frameMs = [];
     this.lastFrame = performance.now();
@@ -252,21 +250,14 @@ export class BattleView {
         u.x = cur.x; u.y = cur.y; u.dir = cur.dir;
       }
       u.lastSeen = now; u._ghost = false;
-      if (s.side === this.me) {
-        const o = this.orders.get(id);
-        // arrivé, en déroute, ou ordre refusé / remplacé côté serveur (après 1,5 s de marge) : la flèche disparaît
-        const same = o && (s.order === o.kind || (o.kind === 'volley_charge' && s.order === 'charge'));
-        if (o && ((o.kind === 'move' && Math.hypot(s.x - o.x, s.y - o.y) < 12) || s.state === 'deroute' || (!same && now - o.t > 1500))) this.orders.delete(id);
-      }
     }
     // ennemis qu'on ne voit plus : on garde leur dernière position connue un moment (« devinés »)
     for (const [id, u] of this.units) {
       if (seen.has(id)) continue;
-      if (u.side === this.me || u.state === 'hors') { this.units.delete(id); this.sel.delete(id); continue; }
+      if (u.side === this.me || u.state === 'hors') { this.units.delete(id); continue; }
       if (!u._ghost) { u._ghost = true; u.ghostT = now; u.to = { x: u.x, y: u.y, dir: u.dir }; u.from = u.to; }
       if (now - u.ghostT > 60000) this.units.delete(id);
     }
-    for (const id of [...this.sel]) { const u = this.units.get(id); if (!u || u.state === 'hors' || u.side !== this.me) this.sel.delete(id); }
     // effets depuis la dernière réponse, étalés sur l'intervalle selon leur instant
     const fxs = st.fx || [];
     if (fxs.length) {
@@ -451,13 +442,12 @@ export class BattleView {
     // de loin, les figurines ne font que quelques pixels : leurs ombres ne se voient plus et coûteraient autant que
     // les figurines elles-mêmes (écart entre 600 et 700 m : pas de bascule à chaque image)
     if (this.shadowLevel >= 2) this.troops.setShadows(this.troops.castShadow ? fr.dist < 700 : fr.dist < 600);
-    const deploy = this.st?.phase === 'deploiement';
     const hour = this.hourNum(), sky = { weather: this.st?.weather || this.map?.weather, light: this.st?.light ?? 1, hour, wind: this.st?.wind };
     const ciel = this.fx.ciel(sky, this.terrain.season);
     this.relief.postFog = this.post.actif;
     this.ciel.update(ciel, cam);
     const los = this.updateLos();
-    this.relief.update(this.scene, fr.dist, los ? 0.42 : (deploy && this.showCover !== false) || this.showCover === true ? 0.42 + Math.sin(time * 2.2) * 0.1 : 0, ciel, time);
+    this.relief.update(this.scene, fr.dist, los ? 0.42 : 0, ciel, time);
     this.fx.uni?.uTint.value.setRGB(...ciel.smoke);
     // (la fumée : claire et teintée par le soleil de son côté, bleutée du côté de l'ombre)
     if (this.fx.uni) { this.fx.uni.uSunDir.value.set(...ciel.sunDir).normalize(); this.fx.uni.uSunCol.value.setRGB(...ciel.sun); this.fx.uni.uShadeCol.value.setRGB(...ciel.hemiSky).multiplyScalar(0.62); }
@@ -488,7 +478,6 @@ export class BattleView {
     this.fx.atmosphere(ctx, view, sky, dt, time);   // pluie, neige, éclairs, nuit
     this.drawLabels(ctx);
     this.bannerRects = drawBanners(ctx, this, vis, this.colors || [], { sel: this.sel, me: this.me, time });
-    this.controls.drawOverlay(ctx, view, time);
     mark('fanions');
   }
   // ligne de vue (SPEC-SUITE F6, visibilite.js) : avec une seule unité choisie, ce qu'elle voit reste clair et le reste
@@ -547,20 +536,12 @@ export class BattleView {
     return pts;
   }
   arc(x, y, r, a0, a1) { const n = Math.max(8, Math.ceil(Math.abs(a1 - a0) * 12)), out = []; for (let k = 0; k <= n; k++) { const a = a0 + (a1 - a0) * k / n; out.push([x + Math.cos(a) * r, y + Math.sin(a) * r]); } return out; }
-  // au sol, sur le calque (projeté sur le relief) : zone de déploiement, portées, ralliement, ordres en cours, sélection,
-  // objectif, cible survolée
+  // au sol, sur le calque (projeté sur le relief) : flèches de la manœuvre (ordres.js), portées et anneau du régiment
+  // inspecté, lignes de front, objectif
   drawGround(ctx, time) {
     const st = this.st;
-    const deploy = st?.phase === 'deploiement';
-    if (deploy && st.zone) {
-      const [x0, y0, x1, y1] = st.zone;
-      this.groundPath(ctx, [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], true);
-      ctx.fillStyle = 'rgba(230,201,127,0.12)'; ctx.fill();
-      ctx.setLineDash([14, 9]); ctx.lineDashOffset = -time * 20;
-      ctx.strokeStyle = 'rgba(255,226,150,0.95)'; ctx.lineWidth = 2.4; ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    // portées de l'unité sélectionnée (efficace et maximale), dans son champ de tir
+    this.ui.ordres.drawGround(ctx, time);
+    // portées du régiment inspecté (efficace et maximale), dans son champ de tir
     if (this.sel.size === 1) {
       const u = this.units.get([...this.sel][0]);
       if (u && u.range && u.range[0] > 0 && clsOf(u) !== 'general') {
@@ -576,48 +557,15 @@ export class BattleView {
         ctx.setLineDash([]);
       }
     }
-    // zone de ralliement autour de mes états-majors : un voile doré, son contour en pointillés qui tournent
-    const rz = this.rallyZone();
-    if (rz) {
-      const pulse = 0.5 + 0.5 * Math.sin(time * 2.4);
-      ctx.setLineDash([10, 8]); ctx.lineDashOffset = -time * 12;
-      for (const g of rz.gens) {
-        this.groundPath(ctx, this.arc(g.x, g.y, g.rally, 0, TAU), true);
-        ctx.fillStyle = `rgba(255,226,150,${rz.picked ? 0.09 : 0.045})`; ctx.fill();
-        ctx.strokeStyle = `rgba(255,226,150,${rz.picked ? 0.6 + 0.3 * pulse : 0.45})`; ctx.lineWidth = rz.picked ? 2.2 : 1.4; ctx.stroke();
-      }
-      ctx.setLineDash([]); ctx.lineDashOffset = 0;
-    }
-    // ordres en cours de mes unités : trajet pointillé et emplacement d'arrivée
-    for (const u of this.units.values()) {
-      if (u.side !== this.me || u._ghost || u.state === 'hors') continue;
-      const o = this.orders.get(u.id);
-      const selected = this.sel.has(u.id);
-      const path = Array.isArray(u.path) && u.path.length ? u.path : null;
-      if (o && o.kind === 'move' && o.x != null && Math.hypot(o.x - u.x, o.y - u.y) > 10) {
-        ctx.strokeStyle = selected ? 'rgba(255,230,160,0.9)' : 'rgba(255,230,160,0.45)'; ctx.lineWidth = selected ? 2.2 : 1.4;
-        ctx.setLineDash([6, 6]);
-        this.groundPath(ctx, [[u.x, u.y], ...(path || [[o.x, o.y]])]); ctx.stroke();
-        ctx.setLineDash([]);
-        this.footprint(ctx, o.x, o.y, o.dir ?? Math.atan2(o.y - u.y, o.x - u.x), u.w, u.d, 1); ctx.stroke();
-      }
-      const tgt = o && (o.kind === 'attack' || o.kind === 'charge') ? this.units.get(String(o.target)) : u.target != null && selected ? this.units.get(String(u.target)) : null;
-      if (tgt) {
-        ctx.strokeStyle = o?.kind === 'charge' ? 'rgba(255,120,90,0.9)' : 'rgba(255,170,120,0.7)'; ctx.lineWidth = 2;
-        this.groundPath(ctx, [[u.x, u.y], [tgt.x, tgt.y]]); ctx.stroke();
-      }
-      if (selected) {
-        // un anneau lumineux à la forme de la formation (halo large et doux, puis le trait)
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = 'rgba(255,226,150,0.22)'; ctx.lineWidth = 9;
-        this.footprint(ctx, u.x, u.y, u.dir, u.w, u.d, 7); ctx.stroke();
-        ctx.fillStyle = 'rgba(255,226,150,0.12)'; ctx.strokeStyle = 'rgba(255,236,170,0.95)'; ctx.lineWidth = 2;
-        this.footprint(ctx, u.x, u.y, u.dir, u.w, u.d, 4); ctx.fill(); ctx.stroke();
-        // l'avant : une flèche
-        const c = Math.cos(u.dir), s = Math.sin(u.dir), f = u.d / 2 + 8;
-        this.groundPath(ctx, [[u.x + c * (f + 9), u.y + s * (f + 9)], [u.x + c * f - s * 6, u.y + s * f + c * 6], [u.x + c * f + s * 6, u.y + s * f - c * 6]], true);
-        ctx.fillStyle = 'rgba(255,226,150,0.95)'; ctx.fill();
-      }
+    // le régiment inspecté : un anneau lumineux à la forme de la formation (halo large et doux, puis le trait)
+    for (const id of this.sel) {
+      const u = this.units.get(id);
+      if (!u || u.state === 'hors') continue;
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(255,226,150,0.22)'; ctx.lineWidth = 9;
+      this.footprint(ctx, u.x, u.y, u.dir, u.w, u.d, 7); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,226,150,0.12)'; ctx.strokeStyle = 'rgba(255,236,170,0.95)'; ctx.lineWidth = 2;
+      this.footprint(ctx, u.x, u.y, u.dir, u.w, u.d, 4); ctx.fill(); ctx.stroke();
     }
     // lignes de front (à la manière d'UGAR) : entre deux régiments ennemis au contact (feu, recharge, mêlée, charge), un ruban
     // qui ondule au sol, à la couleur de chaque camp de son côté
@@ -652,20 +600,6 @@ export class BattleView {
       this.groundPath(ctx, this.arc(obj[0], obj[1], r + Math.sin(time * 2) * 2, 0, TAU), true); ctx.stroke(); ctx.setLineDash([]);
       if (k > 0) { ctx.strokeStyle = 'rgba(255,120,90,0.95)'; ctx.lineWidth = 5; this.groundPath(ctx, this.arc(obj[0], obj[1], r, -Math.PI / 2, -Math.PI / 2 + k * TAU)); ctx.stroke(); }
     }
-    // cible survolée ou désignée
-    const hov = this.controls.hover && this.units.get(this.controls.hover);
-    if (hov && hov.side !== this.me) {
-      ctx.strokeStyle = 'rgba(255,110,90,0.95)'; ctx.lineWidth = 2.2;
-      this.footprint(ctx, hov.x, hov.y, hov.dir, hov.w, hov.d, 6); ctx.stroke();
-    }
-  }
-  // ralliement : une troupe en déroute ne se reforme qu'auprès du général, loin de l'ennemi. Tant qu'une des miennes
-  // fuit, la zone de ralliement autour de mes états-majors est montrée (plus nettement si un fuyard est choisi)
-  rallyZone() {
-    const mine = [...this.units.values()].filter(u => u.side === this.me && !u._ghost && u.state !== 'hors');
-    const routed = mine.filter(u => u.state === 'deroute');
-    const gens = mine.filter(g => isGeneral(g) && g.rally);
-    return routed.length && gens.length ? { gens, picked: routed.some(u => this.sel.has(u.id)) } : null;
   }
   // cotes des sommets et nom de la place, à la manière des cartes d'état-major
   drawLabels(ctx) {

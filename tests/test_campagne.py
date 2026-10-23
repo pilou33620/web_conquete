@@ -581,10 +581,10 @@ class ArriveeDevantUneVille(unittest.TestCase):
         self.assertTrue(a.get('ask'))
         return a
 
-    def test_commander_la_bataille(self):
+    def test_donner_mes_ordres(self):
         g = self.g
         a = self.devant('Mérignac')
-        ok, msg = AA.choose(g, g.player, a, 'manuel')
+        ok, msg = AA.choose(g, g.player, a, 'ordres')
         self.assertTrue(ok, msg)
         bt = g.battles[a['battle']]
         self.assertNotEqual(bt.get('mode'), 'attente', 'pas de seconde fenêtre : le choix est fait')
@@ -754,7 +754,7 @@ class ArriveeDevantUneVille(unittest.TestCase):
         a, b = self.detachements(2)
         self.marcher(a, 'Mérignac')
         self.marcher(b, 'Mérignac')
-        self.assertTrue(AA.choose(g, g.player, a, 'manuel')[0])
+        self.assertTrue(AA.choose(g, g.player, a, 'ordres')[0])
         self.assertTrue(AA.choose(g, g.player, b, 'auto')[0])
         self.assertEqual(len(g.battles), 1, 'une seule bataille devant Mérignac')
         self.assertEqual(b['battle'], a['battle'])
@@ -764,8 +764,8 @@ class ArriveeDevantUneVille(unittest.TestCase):
         a, b = self.detachements(2)
         self.marcher(a, 'Mérignac')
         self.marcher(b, 'Léognan')   # (arrêtée à Villenave-d'Ornon)
-        self.assertTrue(AA.choose(g, g.player, a, 'manuel')[0])
-        ok, msg = AA.choose(g, g.player, b, 'manuel')
+        self.assertTrue(AA.choose(g, g.player, a, 'ordres')[0])
+        ok, msg = AA.choose(g, g.player, b, 'ordres')
         self.assertFalse(ok)
         self.assertIn('déjà en cours', msg)
         self.assertTrue(b.get('ask'), 'le choix reste ouvert')
@@ -775,7 +775,7 @@ class ArriveeDevantUneVille(unittest.TestCase):
         g = self.g
         g.settings['battles'] = 'auto'
         a = self.devant('Mérignac')
-        self.assertTrue(AA.choose(g, g.player, a, 'manuel')[0])
+        self.assertTrue(AA.choose(g, g.player, a, 'ordres')[0])
         self.assertTrue(g.tactical)
 
     def test_rallier_ou_attaquer_pendant_le_choix_garde_la_route(self):

@@ -9,6 +9,7 @@ import { figureKind, drawPortrait } from './portraits.js';
 import { valeursTable } from './valeurs.js';
 import { Decouvertes } from './decouvertes.js';
 import { startTechs, startRails } from './epoque.js';
+import { drawPlan } from './plan.js';
 
 // nombres à la française : virgule décimale et vrai signe moins (−)
 const minus = s => s.replace(/^-/, '−');
@@ -243,7 +244,7 @@ export class UI {
       if (this.modal !== 'event') this.openModal('event');
     }
     if (this.modal === 'event' && !(st.pending || []).length) this.closeModal();
-    // une bataille du joueur attend : la commander, ou la laisser au général (résolution automatique)
+    // une bataille du joueur attend : donner ses ordres, ou la laisser au général (résolution automatique)
     const waitBt = (st.battles || []).find(b => b.mode === 'attente');
     if (waitBt && !st.over && (!this.modal || this.modal === 'bataille')) { if (this.modal !== 'bataille') this.openModal('bataille'); }
     else if (this.modal === 'bataille' && !waitBt) this.closeModal();
@@ -260,13 +261,26 @@ export class UI {
     const nm = o => esc(this.st.names[o] || 'Les insurgés');
     const side = s => `<b>${nm(s.o)}</b> : ${fmt(s.men)} hommes${Object.entries(s.mix || {}).map(([k, v]) => ` · ${fmt(v)} ${k}`).join('')}`;
     const place = b.node != null && this.md.nodes[b.node] ? this.md.nodes[b.node].name : null;
+    // le plan de la position ennemie : la bataille se prépare sur le serveur à l'ouverture de la fenêtre (une fois)
+    this.plans = this.plans || {};
+    const plan = this.plans[b.id];
+    if (!plan && this.planReq !== b.id) {
+      this.planReq = b.id;
+      this.api.post('/api/cmd', { cmd: 'tac', sub: 'preview', bid: b.id }).then(r => {
+        this.plans[b.id] = r?.ok ? r.plan : { err: r?.msg || 'Plan indisponible.' };
+        if (this.modal === 'bataille') this.renderModal(true);
+      }, () => { this.planReq = null; });
+    }
+    const pcap = !plan ? 'Les éclaireurs reviennent…' : plan.err ? esc(plan.err) : plan.seen
+      ? 'Rapport des éclaireurs : la position ennemie (en haut), vos troupes (en bas).'
+      : 'Trop peu d’éclaireurs (cavaliers, légers) : la position ennemie est devinée (hachures).';
     const html = `<h2 class="m-title" id="m-title">${b.amb ? 'Embuscade' : b.node != null ? 'Assaut' : 'Bataille'}${place ? ' — ' + esc(place) : ''}</h2>
       <p class="m-sub">${esc(b.terrain)}${b.river ? ', rivière' : ''}. ${side(b.sides[0])} attaque ; ${side(b.sides[1])}.</p>
+      <figure class="bt-plan"><canvas role="img" aria-label="Plan de la bataille : la position ennemie"></canvas><figcaption class="muted small">${pcap}</figcaption></figure>
       <div class="ev-choices"><button class="btn primary ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="ordres"><b>Donner mes ordres</b><small>Votre plan, vos ruses ; vos officiers la livrent sous vos yeux, vue de dessus</small></button>
-        <button class="btn ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="manuel"><b>Commander la bataille</b><small>Disposez et menez vos troupes sur le champ de bataille</small></button>
         <button class="btn ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="auto"><b>Résolution automatique</b><small>Le général décide ; la bataille se joue avec la campagne</small></button></div>
       <p class="muted small">La campagne reste en pause tant que vous n’avez pas choisi. Réglage dans le menu ☰.</p>`;
-    return [html, b.id];
+    return [html, `${b.id}|${plan ? 1 : 0}`];
   }
 
   // devant une place : assaut (à la main ou automatique), rallier, négocier, assiéger, bloquer, contribution, attendre
@@ -276,7 +290,6 @@ export class UI {
     const name = this.md.nodes[a.ask.n]?.name || '';
     const L = {
       ordres: ['Donner mes ordres', 'L’assaut selon votre plan, livré par vos officiers sous vos yeux'],
-      manuel: ['Commander la bataille', 'L’assaut : disposez et menez vos troupes sur le champ de bataille'],
       auto: ['Résolution automatique', 'L’assaut, réglé par le général'],
       rallier: ['Rallier', 'La place se rallie sans combat'],
       negocier: ['Négocier le ralliement', 'Pourparlers avec les notables, réponse au prochain tour'],
@@ -755,8 +768,7 @@ export class UI {
       case 'close-panel': this.select(null); break;
       case 'tuto-next': this.tuto.next(); break;
       case 'tuto-skip': this.tuto.stop(); break;
-      case 'tuto-start':   // menu ☰ : tout le tutoriel, campagne et bulles de bataille
-        try { for (const k of ['conquete.bataille.aide', 'conquete.bataille.aide.vues']) localStorage.removeItem(k); } catch (e) { /* stockage indisponible */ }
+      case 'tuto-start':   // menu ☰ : tout le tutoriel de la campagne
         this.closeModal();
         this.tuto.start();
         break;
@@ -1595,7 +1607,7 @@ export class UI {
     const mineIn = b.sides.flatMap(s => s.o === me ? (s.tac || []) : []);
     const lastSeq = this.events.length ? this.events[this.events.length - 1].seq : 0;
     this.fightMemo = { id, x: b.x, y: b.y, seq: lastSeq, mine: b.sides.flatMap(s => s.o === me ? [...(s.armies || []), ...(s.tac || []).map(t => t.id)] : []) };
-    if (b.mode === 'manuel') h += `<div class="btns"><button class="btn primary" data-act="tactic" data-id="${b.id}">Commander la bataille</button></div>`;
+    if (b.mode === 'ordres') h += `<div class="btns"><button class="btn primary" data-act="tactic" data-id="${b.id}">Voir la bataille</button></div>`;
     else if (mineIn.length) h += `<p class="muted small">Touchez une de vos armées pour changer sa formation ou son plan pendant le combat.</p>`;
     return [h, JSON.stringify([b.phase, b.sides.map(s => [s.men, s.lost, s.mor, (s.tac || []).map(t => [t.fm, t.pl, t.reorg])])])];
   }
@@ -1676,6 +1688,8 @@ export class UI {
     card.scrollTop = scroll;
     for (const b of this.$('rail').children) b.classList.toggle('on', b.dataset.v === k);
     if (k === 'decouverte') this.decouv.anime();
+    const pl = k === 'bataille' && card.querySelector('.bt-plan canvas'), b = (this.st.battles || []).find(x => x.mode === 'attente');
+    if (pl && b && this.plans?.[b.id]?.t) drawPlan(pl, this.plans[b.id]);
   }
 
   techModal() {
@@ -1901,7 +1915,7 @@ export class UI {
         <p class="muted small" style="margin:4px 0 0">${qualite().auto ? 'Choisie d’après cet appareil ; elle baisse d’elle-même si la bataille saccade.' : QUALITE_AIDE[qualite().q]}</p>
         <h3 class="section-t">Batailles</h3><div class="seg wrap">${[['demander', 'Toujours demander'], ['auto_petites', 'Escarmouches automatiques'], ['auto', 'Toujours automatiques']].map(([k, l]) =>
           `<button class="${(this.st.settings || {}).battles === k ? 'on' : ''}" data-act="tac-set" data-v="${k}">${l}</button>`).join('')}</div>
-        <p class="muted small" style="margin:4px 0 0">Commander soi-même ses batailles, ou laisser le général les résoudre.</p>
+        <p class="muted small" style="margin:4px 0 0">Donner ses ordres et regarder ses officiers livrer la bataille, ou laisser le général la résoudre.</p>
         <h3 class="section-t">Jouer depuis un autre appareil</h3>${this.netHtml(this.net)}
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Comment jouer</h3>
