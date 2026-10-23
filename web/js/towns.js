@@ -3,6 +3,7 @@
 // murs blancs et ardoise du Béarn). Chaque place est peinte une fois dans une petite image mise en cache ;
 // à chaque image ne s'ajoutent que l'animation : drapeau au clocher, habitants qui vont et viennent, pigeons.
 import { clamp } from './battle/formes.js';
+import { Lot } from './lot.js';
 const TAU = Math.PI * 2;
 function hash(i, j, k = 0) {
   let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0;
@@ -288,8 +289,11 @@ export class TownArt {
     ctx.drawImage(sp.cv, -sp.W / 2 * k, -sp.H * 0.62 * k, sp.W * k, sp.H * k);
     const [px, py] = sp.meta.pole || [0, -s * 0.3];
     // drapeau du maître de la place, au sommet du clocher, de la tour ou du donjon
+    // drapeau, habitants et pigeons : mis en lot avec ceux des autres places, dessinés d'un coup après elles (lot.js)
+    const lot = mp.lot || (mp.lot = new Lot());
+    lot.m = ctx.getTransform();
     const neutral = owner === 'neutre';
-    mp.flag(ctx, px * k, py * k + 1, clamp(s * (n.type === 'village' ? 0.32 : 0.28), 7, 24), neutral ? '#e9e4d4' : col);
+    lot.next(); mp.flag(lot, px * k, py * k + 1, clamp(s * (n.type === 'village' ? 0.32 : 0.28), 7, 24), neutral ? '#e9e4d4' : col);
     const amb = mp.ambient;
     if (!amb || !amb.on) return;
     const z = mp.cam.z;
@@ -303,24 +307,26 @@ export class TownArt {
         const u = (time * sp2 + hash(n.id, i, 42)) % 2, f = u < 1 ? u : 2 - u;
         const x = x0 + (x1 - x0) * f, y = yy + (hash(n.id, i, 43) - 0.5) * s * 0.06;
         const step = Math.sin(time * 9 + i * 2) * fs * 0.35;
-        ctx.strokeStyle = DARK; ctx.lineWidth = Math.max(0.6, fs * 0.25); ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(x, y - fs); ctx.lineTo(x + step, y); ctx.moveTo(x, y - fs); ctx.lineTo(x - step, y); ctx.stroke();
-        ctx.fillStyle = ['#8b3a2a', '#2c3a5a', '#5a6a3a', '#7a5a2a'][(hash(n.id, i, 44) * 4) | 0];
-        ctx.fillRect(x - fs * 0.3, y - fs * 2, fs * 0.6, fs * 1.1);
-        ctx.fillStyle = '#e8d2b0'; ctx.beginPath(); ctx.arc(x, y - fs * 2.3, fs * 0.32, 0, TAU); ctx.fill();
+        lot.next();
+        lot.strokeStyle = DARK; lot.lineWidth = Math.max(0.6, fs * 0.25); lot.lineCap = 'round';
+        lot.beginPath(); lot.moveTo(x, y - fs); lot.lineTo(x + step, y); lot.moveTo(x, y - fs); lot.lineTo(x - step, y); lot.stroke();
+        lot.fillStyle = ['#8b3a2a', '#2c3a5a', '#5a6a3a', '#7a5a2a'][(hash(n.id, i, 44) * 4) | 0];
+        lot.fillRect(x - fs * 0.3, y - fs * 2, fs * 0.6, fs * 1.1);
+        lot.fillStyle = '#e8d2b0'; lot.beginPath(); lot.arc(x, y - fs * 2.3, fs * 0.32, 0, TAU); lot.fill();
       }
     }
     // pigeons qui tournent autour du clocher
     if (z >= 7 && n.type !== 'fort' && hash(n.id, 3, 45) < 0.6) {
       const cx = px * k, cy = py * k + s * 0.08, R = s * 0.22;
-      ctx.strokeStyle = 'rgba(40,40,44,0.8)'; ctx.lineWidth = 1;
-      ctx.beginPath();
+      lot.next();
+      lot.strokeStyle = 'rgba(40,40,44,0.8)'; lot.lineWidth = 1;
+      lot.beginPath();
       for (let i = 0; i < 3; i++) {
         const a = time * 0.9 + i * 2.1 + n.id;
         const bx = cx + Math.cos(a) * R, by = cy + Math.sin(a) * R * 0.35, w = clamp(s * 0.035, 1.5, 3), fl = Math.sin(time * 12 + i) * w * 0.5;
-        ctx.moveTo(bx - w, by - fl); ctx.quadraticCurveTo(bx - w * 0.4, by - w * 0.4, bx, by); ctx.quadraticCurveTo(bx + w * 0.4, by - w * 0.4, bx + w, by - fl);
+        lot.moveTo(bx - w, by - fl); lot.quadraticCurveTo(bx - w * 0.4, by - w * 0.4, bx, by); lot.quadraticCurveTo(bx + w * 0.4, by - w * 0.4, bx + w, by - fl);
       }
-      ctx.stroke();
+      lot.stroke();
     }
   }
 }

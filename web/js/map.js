@@ -2067,6 +2067,7 @@ export class MapView {
       const showLabel = n.type === 'capitale' || (n.type !== 'village' && z >= 2.3) || z >= 4.8 || sel;
       if (showLabel) labels.push([n, x, y, s, ns]);
     }
+    if (this.lot) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); this.lot.flush(ctx); ctx.restore(); }   // (habitants et pigeons : towns.js)
     // étiquettes (les plus importantes d'abord, sans chevauchement)
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
@@ -2351,13 +2352,18 @@ export class MapView {
     const m = ctx.getTransform();
     const ph = (this.now || 0) * 4.2 + m.e * 0.031 + m.f * 0.017, on = this.ambient?.on;
     const a = on ? Math.sin(ph) * h * 0.07 : 0, b = on ? Math.sin(ph - 1.4) * h * 0.06 : 0, w = h * (on ? 0.6 + Math.sin(ph * 0.5) * 0.03 : 0.62);
-    ctx.beginPath(); ctx.moveTo(x, y - h);
-    ctx.quadraticCurveTo(x + w * 0.5, y - h + a, x + w, y - h * 0.82 + b);
-    ctx.quadraticCurveTo(x + w * 0.5, y - h * 0.64 + a, x, y - h * 0.62);
-    ctx.closePath();
-    // (epoque.js) le drapeau de l'époque, bordé de la couleur du maître de la place
-    if (this.state && h >= 9) { this.epoque.etoffe(ctx, x, y - h, w, h * 0.38, col); return; }
-    ctx.fill();
+    const cloth = () => {
+      ctx.beginPath(); ctx.moveTo(x, y - h);
+      ctx.quadraticCurveTo(x + w * 0.5, y - h + a, x + w, y - h * 0.82 + b);
+      ctx.quadraticCurveTo(x + w * 0.5, y - h * 0.64 + a, x, y - h * 0.62);
+      ctx.closePath();
+    };
+    // (epoque.js) le drapeau de l'époque, bordé de la couleur du maître de la place. Ses deux bords, à l'abscisse
+    // x + w·t (courbes dont le point de contrôle est au milieu) : de quoi y peindre des bandes sans découpe (clip)
+    const q = (p0, p1, p2, t) => (1 - t) * (1 - t) * p0 + 2 * (1 - t) * t * p1 + t * t * p2;
+    const top = t => q(y - h, y - h + a, y - h * 0.82 + b, t), bot = t => q(y - h * 0.62, y - h * 0.64 + a, y - h * 0.82 + b, t);
+    if (this.state && h >= 9) { this.epoque.etoffe(ctx, x, y - h, w, h * 0.38, col, cloth, top, bot); return; }
+    cloth(); ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 0.8; ctx.stroke();
   }
 

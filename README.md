@@ -795,7 +795,7 @@ game/views.py        état envoyé au navigateur (brouillard de guerre), sauvega
 game/tactics/        batailles sur ordres : carte de bataille (terrain.py), unités (units.py), simulation
                      (battle.py), IA qui livre la bataille (ai.py), vos ordres et leurs flèches (orders.py), raccord avec la
                      campagne et plan de la position (bridge.py)
-web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/peintre.js (worker qui peint les tuiles de la carte), js/dev/banc.js (banc de la carte sur la machine du joueur : adresse terminée par #banc), js/ambient.js (animations
+web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/peintre.js (worker qui peint les tuiles de la carte), js/dev/banc.js (banc de la carte sur la machine du joueur : adresse terminée par #banc), js/lot.js (lot de dessins : les petites figures de la carte dessinées d'un coup), js/ambient.js (animations
                      de la carte), js/towns.js (dessin des villes), js/ui.js, js/plan.js (plan de la position dans la fenêtre de bataille),
                      js/tuto.js (tutoriel), js/main.js
 web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et sortie depuis la campagne),
@@ -851,6 +851,7 @@ node --test tests/*.mjs                         # l'interface seule
 | `tests/visibilite.test.mjs` | ligne de vue du navigateur : rase campagne vue, crête et bois épais qui bouchent, lisière qui voit dehors, la même dans les deux sens, champ de vision borné |
 | `tests/decouvertes.test.mjs` | découvertes : chaque technologie a sa famille de vignette animée |
 | `tests/epoque.test.mjs` | la carte selon l'époque : drapeau de chaque période, chapeaux des passants, phylloxéra de 1875 aux plants greffés |
+| `tests/lot.test.mjs` | lot de dessins de la carte (moulins, voyageurs, habitants, drapeaux) : un tracé par style et par rang, l'ordre de chaque figure gardé, points placés (miroir compris), aucune figure reliée à une autre |
 | `tests/secours.test.mjs` | tuiles de secours de la carte : un niveau de zoom auquel il manque une tuile est sauté en entier (plus de bandes noires) |
 | `tests/frontieres.test.mjs` | frontières de la carte de campagne : les segments des carrés marchants raboutés en lignes continues, sans perdre ni doubler un point, puis découpés en morceaux qui se recouvrent |
 | `tests/portraits.test.mjs` | portraits des régiments : la même figure en bataille et en campagne (piquiers avant la baïonnette, pièce de son époque, cavalier pour le général) |

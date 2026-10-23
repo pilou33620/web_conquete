@@ -4,6 +4,7 @@
 // phare de Cordouan. Purement décoratif : animé en temps réel (même partie en pause), sans lien avec la simulation,
 // et dessiné seulement pour ce qui est à l'écran, au zoom où on le distingue.
 import { clamp } from './battle/formes.js';
+import { Lot } from './lot.js';
 const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 const TAU = Math.PI * 2;
 const frac = v => v - Math.floor(v);
@@ -346,13 +347,14 @@ export class Ambient {
 
   drawMills(ctx, time, st) {
     const z = this.map.cam.z, [x0, y0, x1, y1] = this.view(40);
-    const s = clamp(z * 1.15, 10, 28);
+    const s = clamp(z * 1.15, 10, 28), lot = this.lot || (this.lot = new Lot());   // (tous les moulins d'un coup : lot.js)
     for (const m of this.mills) {
       if (m.x < x0 || m.x > x1 || m.y < y0 || m.y > y1) continue;
       const [sx, sy] = this.scr(m.x, m.y);
       const a = m.ph + time * m.sp * this.wind(m.x, m.y, st) * 1.4;
-      this.windmill(ctx, sx, sy, s, a);
+      lot.next(); this.windmill(lot, sx, sy, s, a);
     }
+    lot.flush(ctx);
   }
 
   windmill(ctx, sx, sy, s, a) {
@@ -452,7 +454,7 @@ export class Ambient {
 
   drawTravellers(ctx, time) {
     const mp = this.map, z = mp.cam.z, [x0, y0, x1, y1] = this.view(30);
-    const s = clamp(z * 0.95, 9, 22);
+    const s = clamp(z * 0.95, 9, 22), lot = this.lot || (this.lot = new Lot());
     for (const t of this.travellers) {
       const e = t.e;
       if (Math.max(e.A[0], e.B[0]) < x0 || Math.min(e.A[0], e.B[0]) > x1 || Math.max(e.A[1], e.B[1]) < y0 || Math.min(e.A[1], e.B[1]) > y1) continue;
@@ -467,14 +469,15 @@ export class Ambient {
       const tg = mp.edgeTangent(e, f);
       const dir = (tg[0] >= 0) !== ((u > 1) !== t.back) ? 1 : -1;
       const [sx, sy] = this.scr(x, y);
-      ctx.save();
-      ctx.translate(sx, sy);
-      ctx.scale(dir, 1);
-      if (t.kind === 'cart') this.cart(ctx, s, time, t.load);
-      else if (t.kind === 'rider') this.horse(ctx, s, time * 2.4, true);
-      else this.walker(ctx, s, time, t.load);
-      ctx.restore();
+      lot.next(); lot.save();
+      lot.translate(sx, sy);
+      lot.scale(dir, 1);
+      if (t.kind === 'cart') this.cart(lot, s, time, t.load);
+      else if (t.kind === 'rider') this.horse(lot, s, time * 2.4, true);
+      else this.walker(lot, s, time, t.load);
+      lot.restore();
     }
+    lot.flush(ctx);
   }
 
   // trains : sur chaque voie ouverte (et ses sorties vers le bord), un convoi va et vient, locomotive et panache devant

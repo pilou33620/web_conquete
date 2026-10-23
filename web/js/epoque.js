@@ -174,17 +174,22 @@ export class Epoque {
   }
   // le drapeau de l'époque, à la place du drapeau aux couleurs du maître (dont la couleur borde l'étoffe) ; path :
   // le contour de l'étoffe déjà tracé dans ctx
-  etoffe(ctx, x, y, w, h, col) {
+  // (cloth() : trace l'étoffe ; top et bot : ses bords haut et bas à l'abscisse x + w·t, pour des bandes qui la suivent
+  // sans découpe : un clip par drapeau coûtait cher à la carte graphique)
+  etoffe(ctx, x, y, w, h, col, cloth, top, bot) {
     const d = drapeauEpoque(this.year);
-    ctx.save(); ctx.clip();
-    if (d === 'tricolore') {
-      for (const [k, c] of [[0, '#2b4f9a'], [1, '#f4f1e8'], [2, '#c0392b']]) { ctx.fillStyle = c; ctx.fillRect(x + w * k / 3, y - 2, w / 3 + 0.5, h + 4); }
-    } else {
-      ctx.fillStyle = '#f4f1e8'; ctx.fillRect(x, y - 2, w + 1, h + 4);
+    const band = (u0, u1, c) => {
+      ctx.fillStyle = c; ctx.beginPath();
+      for (let i = 0; i <= 3; i++) { const t = u0 + (u1 - u0) * i / 3; ctx.lineTo(x + w * t, top(t)); }
+      for (let i = 3; i >= 0; i--) { const t = u0 + (u1 - u0) * i / 3; ctx.lineTo(x + w * t, bot(t)); }
+      ctx.closePath(); ctx.fill();
+    };
+    if (d === 'tricolore') { band(0, 1 / 3, '#2b4f9a'); band(1 / 3, 2 / 3, '#f4f1e8'); band(2 / 3, 1, '#c0392b'); }
+    else {
+      ctx.fillStyle = '#f4f1e8'; cloth(); ctx.fill();
       if (d === 'roi' && w > 9) { ctx.fillStyle = '#c9a43a'; for (const [u, v] of [[0.3, 0.3], [0.65, 0.55], [0.3, 0.8]]) { ctx.beginPath(); ctx.arc(x + w * u, y + h * v, Math.max(0.6, w * 0.06), 0, TAU); ctx.fill(); } }
     }
-    ctx.restore();
-    ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.2, h * 0.16); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.2, h * 0.16); cloth(); ctx.stroke();
   }
   // coiffure d'un passant (ambient.js walker), au-dessus de sa tête en (0, -s*0.41)
   coiffe(ctx, s) {
