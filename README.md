@@ -152,16 +152,30 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
 - **Époques** : Grand Siècle finissant (1700), Lumières (1715), Révolution (1789), Consulat et Empire (1804), Restauration
   (1815), IIe République et Second Empire (1848), IIIe République (1870). Le passage d'une époque à l'autre est annoncé
   et met le jeu en pause.
-- **Technologies datées** : 94 technologies, de la baïonnette à douille (1700) au canon de 75 (1897) ; chacune ne se
-  recherche qu'une fois inventée (la machine à vapeur vers 1820, les chemins de fer vers 1841, le Chassepot vers 1866…).
+- **Arbre des technologies** : 94 technologies, de la baïonnette à douille au canon de 75, en **cinq branches** :
+  infanterie et cavalerie, artillerie et génie, civil et social, industriel, agricole. Une recherche en cours par
+  branche (les deux branches militaires avancent en parallèle).
+  - **Recherche libre** : on n'attend plus la date d'invention, seuls les prérequis comptent. L'arme suit l'industrie et
+    la science : le Chassepot demande l'outillage standardisé, les canons de Bange l'acier, le Lebel la dynamite…
+  - **Plus loin dans l'arbre, plus long** : une branche cherchée sans arrêt dure environ 190 ans (de 1700 à 1890), de
+    3 ans pour la baïonnette à 20 ans pour le Lebel. Foncer sur les fusils donne le Lebel au XVIIIe siècle, mais
+    repousse tout le reste de la branche.
+  - La fenêtre Technologies montre un arbre par onglet : cases par étage, traits vers les prérequis, et une fiche avec
+    l'année historique et l'avance qu'on prendrait.
 - **Armement par époque** : chaque régiment garde les armes reçues à sa levée, affichées à côté de son nom.
   - Infanterie : mousquet et piques (×0,85), fusil à silex (×1), fusil 1777 (×1,10), fusil à percussion (×1,22, ne
     craint plus la pluie), fusil rayé Minié (×1,40), Chassepot (×1,70), fusil Gras (×1,82), Lebel (×2,05).
   - Artillerie : canons de bronze (×0,85), système Vallière (×0,95), Gribeauval (×1,15), Valée (×1,30), canons rayés
     La Hitte (×1,55), de Bange (×1,85), canon de 75 (×2,30).
-  - Après une découverte, les nouveaux régiments reçoivent les nouvelles armes ; les anciens se **réarment** dans une
-    de vos places, au repos et hors siège (bouton « Réarmer » : 0,12 arme par homme, 0,25 arme et 0,25 fer par
-    artilleur ; les soldats perdent un peu d'expérience à réapprendre). La milice prend toujours les armes de son camp.
+  - Après une découverte, les nouveaux régiments reçoivent les nouvelles armes et les nouvelles manœuvres ; les anciens
+    se **modernisent** dans une de vos places, au repos et hors siège (bouton « Moderniser ») :
+    - armes : 0,12 arme par homme, 0,25 arme et 0,25 fer par artilleur, et les soldats perdent un peu d'expérience ;
+    - **manœuvres** apprises par régiment (feu de rang, feu de peloton, ordre mixte, voltigeurs, retranchements,
+      hussards, cuirassiers, artillerie à cheval, obus à la mélinite) : 0,1 livre par homme et par manœuvre ;
+    - un tiers de tour d'exercice dans la place ; une armée qui part avant perd son exercice (sans remboursement).
+    Un régiment non modernisé ne profite pas de ce qu'il n'a pas appris. Ce qui relève de l'État (levée en masse,
+    divisions, état-major, génie, Vauban, rail…) sert à tout le camp dès la découverte. La milice et la Garde nationale
+    ont toujours les armes et les manœuvres de leur camp.
   - La cavalerie ne change pas d'armes : face aux fusils rayés, ses charges perdent peu à peu leur avantage.
 - **Noms d'époque** : mousquetaires et piquiers avant la baïonnette, miquelets (fusiliers de montagne) avant les chasseurs
   basques de 1792, milice bourgeoise puis Garde nationale (1789) puis armée territoriale (1872), voltigeurs puis
@@ -211,9 +225,10 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
 - **IA** : elles ne thésaurisent plus. Au-delà d'un trésor de guerre (une quarantaine de jours de revenu), elles
   allègent leurs impôts, agrandissent leurs villes, fortifient leurs frontières, cherchent dans toutes les branches,
   vendent leurs surplus d'armes et d'outils et font des présents aux voisins redoutés. En guerre, elles puisent dans
-  ce trésor pour lever des troupes. Elles généralisent aussi un nouvel armement en quelques jours : réarmement des
-  régiments les plus en retard d'abord, achat au marché du fer et des armes qui manquent, grandes armées réarmées par
-  fournées, crochet par la place amie la plus proche quand l'ennemi est loin.
+  ce trésor pour lever des troupes. Elles généralisent aussi un nouvel armement ou une nouvelle manœuvre en quelques
+  semaines : modernisation des régiments les plus en retard d'abord, achat au marché du fer et des armes qui manquent,
+  grandes armées modernisées par fournées, crochet par la place amie la plus proche quand l'ennemi est loin, et pas de
+  départ pendant l'exercice.
 - **Équilibre des puissances** : qui tient plus de 40 % des places de l'Aquitaine inquiète tout le monde. Les autres
   camps s'en méfient, s'allient plus volontiers et se joignent à ses guerres. Tenir beaucoup de pays mal assimilés
   accroît la lassitude (surextension). Enfin, un pays absorbé depuis plus de dix ans peut se soulever si son ancien

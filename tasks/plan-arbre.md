@@ -57,7 +57,7 @@ moteurs de combat : la résolution automatique, la bataille tactique et les fich
   - Pour les armées comme pour les garnisons. Le prix est payé au lancement.
   - Une armée qui reçoit un ordre de marche efface les `drill` de ses régiments (`army_actions`, là où la marche
     commence).
-  - En tour par tour, l'armée perd 10 jours de marche (`mp`).
+  - En tour par tour, un ordre de marche au même tour l'interrompt (pas de jours de marche retirés : voir la spec).
   - `rearm` et `rearm_cost` deviennent `modernize` et `modernize_cost` ; tous leurs appelants suivent (`ai.py`,
     `server.py`, commande `rearm` du client gardée comme alias jusqu'à A6).
 - **D7. La fenêtre en arbre reste dans `ui.techModal`.**

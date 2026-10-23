@@ -279,3 +279,15 @@ test('l’arbre des technologies : une case par technologie, un trait par prére
   assert.match(html, /data-act="research" data-v="b"/, 'la fiche de la case choisie a son bouton');
   assert.match(html, /100 ans d’avance/);
 });
+
+test('la ligne d’un régiment ennemi photographié montre ses manœuvres (position 7)', () => {
+  const ui = Object.create(UI.prototype);
+  ui.st = { me: { code: '33' } };
+  ui.rules = { units: { ligne: { short: 'Ligne', cls: 'inf', name: 'Ligne' } }, arms: { inf: [[null, 'mousquet', 0.85], ['b', 'fusil à silex', 1]] },
+    techs: [{ id: 'tir_rang', name: 'Feu de rang' }] };
+  ui.checked = new Set();
+  const html = ui.regRow([null, 'ligne', 300, 300, 20, 0, 1, ['tir_rang']], '24', false);
+  assert.match(html, /1 manœuvre/);
+  assert.match(html, /Feu de rang/);
+  assert.doesNotMatch(html, /à moderniser/, 'le retard d’un ennemi ne se voit pas');
+});

@@ -163,8 +163,9 @@ civiles…) reste national et immédiat, comme aujourd'hui.
   - les armes, comme aujourd'hui (0,12 arme par homme ; 0,25 arme et 0,25 fer par artilleur ; −15 % d'expérience) ;
   - plus **0,1 livre par homme et par manœuvre** (30 livres pour un régiment de ligne et une manœuvre). C'est une
     valeur de départ, réglée au banc.
-- Durée : **10 jours**. L'armée reste dans la place, sans pouvoir marcher ; en tour par tour, cela lui prend 10 de ses
-  30 jours de marche, donc jamais plus d'un tour. Elle se bat normalement si on l'attaque.
+- Durée : **10 jours** (un tiers de tour). L'armée reste dans la place ; en tour par tour, un ordre de marche donné
+  au même tour l'interrompt, donc elle y passe le tour (jamais plus). Elle se bat normalement si on l'attaque.
+  (Écart du 23/10 : la spec prévoyait de lui retirer 10 jours de marche ; l'annulation au départ suffit.)
 - Partir avant la fin annule l'entraînement, sans remboursement (la fenêtre de marche le dit). La place qui tombe
   l'annule aussi.
 - Une armée démodée porte une marque « À moderniser » dans sa liste et son panneau.

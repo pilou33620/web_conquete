@@ -57,7 +57,7 @@ export function arbreHtml(o) {
         `<i class="${me.techs.includes(q) ? 'ok' : ''}">← ${esc(byId.get(q).name)}</i>`).join('')}</span>` : ''}<span class="tp">${pied}</span></button>`;
   }).join('');
   const curT = cur && byId.get(cur.tech);
-  const head = curT ? `En cours : <b>${esc(curT.name)}</b>, prête ${o.toursTxt(cur.tn)}<div class="bar green"><i style="width:${Math.round((1 - cur.left / cur.total) * 100)}%"></i></div>`
+  const head = curT ? `En cours : <b>${esc(curT.name)}</b>, prête ${o.toursTxt(cur.tn)}${cur.tn >= 24 ? ` (environ ${Math.round(cur.tn / 12)} ans)` : ''}<div class="bar green"><i style="width:${Math.round((1 - cur.left / cur.total) * 100)}%"></i></div>`
     : 'Aucune recherche en cours dans cette branche.';
   return `<div class="arbre-cur">${head}</div>
     <div class="arbre" role="group" aria-label="Arbre : ${esc(labels[branch])}"><div class="arbre-in" style="width:${W}px;height:${H}px">

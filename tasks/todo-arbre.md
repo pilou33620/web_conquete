@@ -74,7 +74,7 @@ Vérifications communes à chaque tâche : `python3 tests/lancer.py` passe. Un c
 - [x] **A6 : le bouton « Moderniser » et l'IA**
   - Critères :
     - `modernize_cost` et `modernize` : armes et manœuvres, 0,1 livre par homme et par manœuvre, 10 jours (D6) ;
-    - une marche annule l'entraînement ; en tour par tour, l'armée perd 10 jours de marche ;
+    - une marche annule l'entraînement ;
     - le bouton dit ce qui change et combien ; la marque « À moderniser » apparaît ; l'aide est à jour ;
     - l'IA modernise et reste dans la place pendant l'entraînement.
   - Vérif :
