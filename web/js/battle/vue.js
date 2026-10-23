@@ -333,10 +333,10 @@ export class BattleView {
   maxZ() { return this.q.maxZ; }
   // repère de la caméra pour l'état présent (recalculé seulement quand la caméra ou l'écran a changé)
   fr() {
-    const c = this.cam, f = this._fr, yaw = c.yaw || 0;
-    if (f && f.cx === c.x && f.cy === c.y && f.cz === c.z && f.cyaw === yaw && f.vw === this.vw && f.vh === this.vh) return f;
-    const n = frameOf(c, this, this.relief.heightAt);
-    n.cx = c.x; n.cy = c.y; n.cz = c.z; n.cyaw = yaw;
+    const c = this.cam, f = this._fr, yaw = c.yaw || 0, pv = this.pitchOv ?? null;
+    if (f && f.cx === c.x && f.cy === c.y && f.cz === c.z && f.cyaw === yaw && f.cp === pv && f.vw === this.vw && f.vh === this.vh) return f;
+    const n = frameOf(c, this, this.relief.heightAt, pv);
+    n.cx = c.x; n.cy = c.y; n.cz = c.z; n.cyaw = yaw; n.cp = pv;
     return (this._fr = n);
   }
   // terrain → écran ([sx, sy, profondeur]) et écran → terrain, sur le relief
@@ -521,7 +521,7 @@ export class BattleView {
   }
   hourNum() {
     const c = this.st?.clock;
-    if (c != null) return 8 + c / 3600;
+    if (c != null) return 8 + (c + (this.st.h_off || 0)) / 3600;   // (h_off : « Donner mes ordres », l’heure de l’attaque)
     const m = /(\d+)\s*h\s*(\d*)/.exec(this.st?.hour || '');
     return m ? +m[1] + (+m[2] || 0) / 60 : 12;
   }

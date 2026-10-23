@@ -6,6 +6,8 @@ Usage :  python3 outils/banc_ia.py [--graines 2] [--proc 4] [--epoques 1700,1790
          (lieux : bataille, forteresse, village : un village sans remparts, barricadé)
          [--tweak '{"normal": {"cav_opp": false}}']   (réglages d'essai : spec['ai_tweak'], pour les comparaisons A/B)
          [--journal 12]   (les 12 dernières notes du journal de chaque camp sous sa ligne, à filtrer avec grep)
+         [--ordres '{"man": "enveloppement", "wing": "gauche", "ruse": "feinte"}']   (le camp du joueur mené selon ces
+         ordres, « Donner mes ordres » : game/tactics/orders.py ; les clés absentes gardent leur valeur par défaut)
 
 Par bataille : époque, lieu, camp du joueur (att : il attaque), vainqueur (A assaillant, D défenseur, - aucun), raison,
 durée (min de bataille), pertes de chaque camp (% des hommes), temps de calcul (s), et les grands moments notés par
@@ -30,7 +32,7 @@ FAMILLES = [('ctr', ('contre-attaque', 'retour offensif', 'contre-charge')), ('c
 
 
 def une(args):
-    epoque, lieu, role, graine, tweak, nj = args
+    epoque, lieu, role, graine, tweak, nj, ordres = args
     args = args[:4]
     from fabrique import GEO
     from game.tactics import skirmish as S
@@ -49,7 +51,13 @@ def une(args):
             ai.deploy(tb, s)
     t0 = time.process_time()
     try:
+        if ordres:
+            from game.tactics import orders as OR
+            tb.spec['orders'] = [None, None]
+            tb.spec['orders'][tb.me] = OR.clean(tb, tb.me, json.loads(ordres))
         tb.autofinish()
+        if ordres:
+            OR.setup(tb, tb.me, tb.spec['orders'][tb.me])
         tb.run_to_end()
     except Exception as e:   # (une erreur de l'IA est un résultat du banc, pas un plantage)
         return dict(err=f'{type(e).__name__}: {e}', cle=args)
@@ -73,8 +81,9 @@ def main():
     ap.add_argument('--lieux', default='bataille,forteresse')
     ap.add_argument('--tweak', default='')
     ap.add_argument('--journal', type=int, default=0)
+    ap.add_argument('--ordres', default='')
     a = ap.parse_args()
-    jobs = [(e, l, r, s, a.tweak, a.journal) for e in a.epoques.split(',') for l in a.lieux.split(',') for r in ('att', 'def')
+    jobs = [(e, l, r, s, a.tweak, a.journal, a.ordres) for e in a.epoques.split(',') for l in a.lieux.split(',') for r in ('att', 'def')
             for s in range(1, a.graines + 1)]
     with Pool(a.proc) as p:
         res = p.map(une, jobs)

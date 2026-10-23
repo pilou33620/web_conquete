@@ -7,6 +7,7 @@ import { clsOf, isGeneral, isLight, isWagon, genName, emprise, stars, fmt, esc, 
 import { ORDER_LABEL, ordresHtml, aide as aideArme, arme } from './doctrine.js';
 import { figureKind, drawPortrait } from '../portraits.js';
 import { valeursHtml } from '../valeurs.js';
+import { Ordres } from './ordres.js';
 
 const WX_ICON = {
   soleil: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
@@ -102,6 +103,7 @@ export class BattleUI {
     this.$('.bt-dock').addEventListener('scroll', () => this.dockArrows(), { passive: true });
     this.bindMini();
     this.bindDock();
+    this.ordres = new Ordres(this);   // « Donner mes ordres » : la fenêtre des ordres, puis le film de la bataille
   }
   dispose() { this.el.remove(); }
 
@@ -156,6 +158,7 @@ export class BattleUI {
     // fin
     if (st.phase === 'fin' && !this.recapShown && (st.result || prev?.phase !== 'fin')) { this.recapShown = true; setTimeout(() => this.recap(st.result || {}), 900); }
     if (prev && prev.phase === 'deploiement' && st.phase === 'combat') { this.toast('La bataille est engagée !', 'good'); v.showCover = false; }
+    this.ordres.update(st, prev);
     this.renderDock();
     this.renderPanel();
     this.situ();
@@ -172,6 +175,7 @@ export class BattleUI {
   }
   frame(now) {
     if (now - this.miniT > 100) { this.miniT = now; this.drawMini(); }
+    this.ordres.frame(now);
     // le journal s'efface peu à peu
     const box = this.$('.bt-feed');
     let changed = false;
@@ -318,7 +322,8 @@ export class BattleUI {
           <dt>Munitions</dt><dd><span class="bp-bar amm"><i style="width:${this.ammoFrac(u) * 100}%"></i></span></dd>
           <dt>Portée</dt><dd>${u.range ? fmt(u.range[0]) + ' m' : '—'}</dd>
         </dl>
-        <div class="bp-note">${am} · ${rg}<button class="bp-vl ${this.showVals ? 'on' : ''}" data-a="valeurs" aria-expanded="${!!this.showVals}">Valeurs</button></div>${this.showVals ? valeursHtml(u.stats) : ''}`;
+        <div class="bp-note">${am} · ${rg}<button class="bp-vl ${this.showVals ? 'on' : ''}" data-a="valeurs" aria-expanded="${!!this.showVals}">Valeurs</button></div>${this.showVals ? valeursHtml(u.stats) : ''}
+        ${u.camo ? '<p class="bp-help">Camouflée dans le bois : l’ennemi ne la voit qu’à moins de 250 m (500 m quand elle tire). En échange, les arbres gênent son tir (−35 %) et sa mise en batterie (plus longue de moitié).</p>' : ''}`;
     }
     // formations communes (pas pendant l'accéléré : ce sont vos officiers qui commandent)
     const forms = cls === 'mix' || v.st?.accel ? [] : FORMS[cls] || [];
@@ -536,6 +541,8 @@ export class BattleUI {
         <div><b>${fmt(pris[1])}</b><span>prisonniers faits${pris[0] ? ` <small>(${fmt(pris[0])} perdus)</small>` : ''}</span></div>
         <div><b>+${fmt(r.xp ?? 0)}</b><span>expérience</span></div>
       </div>
+      ${r.arms ? `<table class="br-arms"><thead><tr><th>Pertes</th><th>Vous</th><th>L’ennemi</th></tr></thead><tbody>${r.arms.map(([l, a, b]) => `<tr><td>${esc(l)}</td><td>${a ? '−' + fmt(a) : '—'}</td><td>${b ? '−' + fmt(b) : '—'}</td></tr>`).join('')}</tbody></table>` : ''}
+      ${r.decisive?.length ? `<div class="br-why"><b>Ce qui a décidé la journée</b>${r.decisive.map(t => `<p>${esc(t)}</p>`).join('')}</div>` : ''}
       <div class="br-units">${per.map(p => `<div><span>${esc(p.name)}</span><span>${p.lost ? '−' + fmt(p.lost) : '—'}</span><span>${Math.round(p.xp || 0) ? '+' + fmt(p.xp) + ' xp' : ''}</span></div>`).join('')}</div>
       <div class="bm-btns"><button class="bt-btn primary big" data-a="retour">${v.st?.skirmish ? 'Retour au menu' : 'Retour à la carte'}</button></div>`);
   }
@@ -551,6 +558,7 @@ export class BattleUI {
 
   // ------------------------------------------------------------------ bulles d'aide
   tips(force = false) {
+    if (this.ordres.on()) return;   // (les bulles parlent de commander : vos officiers commandent)
     let seen = false;
     try { seen = localStorage.getItem('conquete.bataille.aide') === '1'; } catch (e) { /* stockage indisponible */ }
     if (seen && !force) return;
@@ -596,7 +604,7 @@ export class BattleUI {
   // premier régiment choisi de chaque arme (ses ordres propres) ; jamais par-dessus une autre bulle
   situ() {
     const v = this.v, tip = this.$('.bt-tip');
-    if (v.st?.phase !== 'combat' || v.st.accel || !tip.hidden) return;
+    if (v.st?.phase !== 'combat' || v.st.accel || v.st.mode === 'ordres' || !tip.hidden) return;
     let vues;
     try { vues = JSON.parse(localStorage.getItem(VUES) || '[]'); } catch (e) { return; }
     this.situVues = this.situVues || new Set();   // (si le stockage refuse d'écrire : une fois par bataille)

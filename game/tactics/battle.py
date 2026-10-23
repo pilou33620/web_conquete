@@ -126,6 +126,7 @@ import time
 
 from .. import rules as R
 from . import stats as ST   # (xp_k, ELAN, technologies : les mêmes chiffres que la fiche)
+from . import orders as OR   # (« Donner mes ordres » : le moment décisif)
 from . import terrain as TR
 from . import units as U
 from .terrain import (COLS, ROWS, CELL, N, W, H, T_PRE, T_CHAMP, T_VIGNE_T, T_LANDE_T, T_BOIS, T_FORET_T, T_MARAIS_T,
@@ -154,6 +155,10 @@ OPACITY = [0, 0, 0, 0, 34, 60, 0, 0, 0, 0, 0, 50, 100, 0, 100, 0, 0, 0, 14]   # 
 # hauteur (m) de ce qui bouche la vue sur la case : un regard qui passe au-dessus n'est pas gêné
 TOP = [0, 0, 0, 0, 12, 16, 0, 0, 0, 0, 0, 8, 7, 0, 7, 0, 0, 0, 5]
 WOODS = (T_BOIS, T_FORET_T)
+# canons dans un bois (pas en forêt : les pièces n'y passent pas) : camouflés sous les branches, l'ennemi ne les voit
+# qu'à moins de CAMO_SEEN m, CAMO_FIRE quand ils tirent (la fumée monte entre les arbres) ; en échange, les troncs
+# gênent le pointage et ferment le champ de tir (tir ×CAMO_FIRE_K) et la mise en batterie est plus longue (×CAMO_SETUP)
+CAMO_SEEN, CAMO_FIRE, CAMO_FIRE_K, CAMO_SETUP = 250.0, 500.0, 0.65, 1.6
 # éléments linéaires (couche f) : aucun, clôture, haie, muret
 FCOVER = [0.0, 0.12, 0.25, 0.35]
 FCOST = [0.0, 0.15, 0.4, 0.3]
@@ -339,6 +344,8 @@ class TacticalBattle:
         self.accel = False                   # « Finir automatiquement » : les officiers jouent la suite en accéléré…
         self.accel_ids = []                  # … avec ces unités du joueur (rendues s'il reprend le commandement)…
         self.accel_t = 0.0                   # … depuis cette heure de bataille
+        self.replay = None                   # « Donner mes ordres » : la bataille défile, réglée par bridge (orders.py)…
+        self.ask = None                      # … et s'arrête au moment décisif, en attendant la réponse du joueur
         self._acc = 0.0
         self._vis_t = -99.0
         self._ai_t = -99.0
@@ -354,7 +361,9 @@ class TacticalBattle:
         self.rng = rng
         wa = rng.random() * 6.283
         self.wind = [round(math.cos(wa), 2), round(math.sin(wa), 2)]
-        self.dusk = (DUSK.get(self.season, 19.0) - START_H) * 3600
+        # (h_off : « Donner mes ordres », l'heure de l'attaque ; l'horloge part toujours de 0, l'heure affichée et le
+        # crépuscule glissent d'autant)
+        self.dusk = (DUSK.get(self.season, 19.0) - START_H) * 3600 - spec.get('h_off', 0.0)
         self.light = 1.0
         self._zones()
         self._wx_fire = 1.0
@@ -1265,6 +1274,8 @@ class TacticalBattle:
         k = 1 - 0.4 * u.xp / 100 - self.spec.get('fm_swift', [0, 0])[u.side]
         if u.cls == 'artillerie':
             k = 1 - (0.33 if self.spec.get('art_cheval', [0, 0])[u.side] else 0) - (0.2 if trait == 'artilleur' else 0)
+            if f == 'batterie' and self.t[self.cell(u.x, u.y)] in WOODS:
+                base *= CAMO_SETUP   # (mise en batterie entre les arbres)
         elif u.cls == 'cavalerie':
             base = 30
         u.next_form = f
@@ -1326,14 +1337,15 @@ class TacticalBattle:
             n += 1
         return n
 
-    def run_for(self, budget):
+    def run_for(self, budget, until=None):
         """Bataille accélérée (« Finir automatiquement ») : des pas DT ordinaires, le même déroulé qu'à ×1, autant que
-        le permet budget (secondes de calcul réelles ; au moins un pas). Renvoie le nombre de pas."""
-        if self.phase != 'combat':
+        le permet budget (secondes de calcul réelles ; au moins un pas), sans dépasser l'heure until (« Donner mes
+        ordres » : la bataille défile à l'allure du film) ni le moment décisif (ask). Renvoie le nombre de pas."""
+        if self.phase != 'combat' or self.ask:
             return 0
         t_end = time.perf_counter() + budget
         n = 0
-        while self.phase == 'combat':
+        while self.phase == 'combat' and not self.ask and (until is None or self.clock < until):
             self.step(DT)
             n += 1
             if time.perf_counter() >= t_end:
@@ -1347,6 +1359,8 @@ class TacticalBattle:
             self.start()
         n = 0
         while self.phase == 'combat':
+            if self.ask:
+                OR.answer(self, 'go')   # (essais, bancs : le moment décisif ne s'attend pas)
             self.step(DT)
             n += 1
         return n
@@ -1409,6 +1423,7 @@ class TacticalBattle:
                 recent = self.clock - e.fired_t < 60
                 ce = self.cell(e.x, e.y)
                 hidden = self.t[ce] in WOODS or (self.t[ce] == T_BATI and e.cls != 'general')
+                camo = e.cls == 'artillerie' and self.t[ce] in WOODS
                 near = (100 if e.light else 150) + (100 if eclaireur else 0)
                 he = self.h[ce]
                 for o in mine:
@@ -1418,6 +1433,8 @@ class TacticalBattle:
                         vr *= 1.2
                     if d2 > vr * vr:
                         continue
+                    if camo and d2 > (CAMO_FIRE if recent else CAMO_SEEN) ** 2:
+                        continue   # (canons camouflés dans un bois)
                     if recent:
                         seen.add(e.id)
                         break
@@ -1901,6 +1918,8 @@ class TacticalBattle:
         # feu de rang et de peloton en ligne ; feu de peloton du carré sur les escadrons ; artillerie à cheval à mitraille
         md = self.tech(u.side)
         cas *= ST.power_k(md, u.cls)
+        if u.cls == 'artillerie' and self.t[self.cell(u.x, u.y)] in WOODS:
+            cas *= CAMO_FIRE_K   # (les troncs gênent le tir des canons camouflés)
         if u.cls == 'inf' and u.form == 'ligne':
             cas *= 1 + md.get('ligne_fire', 0.0)
         elif u.cls == 'inf' and u.form == 'carre' and tg.cls == 'cavalerie':
@@ -2591,7 +2610,7 @@ class TacticalBattle:
                 sides[-1]['morale'] = int(round(sum(u.morale * u.men for u in vis) / max(1.0, sum(u.men for u in vis))))
                 sides[-1]['seen'] = True
         out = dict(bid=self.bid, seq=self.seq, phase=self.phase, speed=self.speed, clock=round(self.clock),
-                   hour=fmt_hour(self.clock), weather=self.weather, season=self.season, light=round(self.light, 2),
+                   hour=fmt_hour(self.clock + self.spec.get('h_off', 0.0)), h_off=self.spec.get('h_off', 0.0), weather=self.weather, season=self.season, light=round(self.light, 2),
                    wind=self.wind, me=me, sides=sides, units=units, dusk=round(self.dusk),
                    title=self.spec.get('title'), place=self.spec.get('place_name'),
                    skirmish=bool(self.spec.get('skirmish')),   # mode Bataille : « Retour au menu »
@@ -2621,7 +2640,8 @@ class TacticalBattle:
         won = r['winner'] == m
         title = ('Victoire' if won else 'Défaite') if not r['disengage'] else \
             ('L\'ennemi décroche' if won else 'Retraite')
-        lines = [r['why'], f"Bataille terminée à {fmt_hour(self.clock)}."]
+        h_off = self.spec.get('h_off', 0.0)
+        lines = [r['why'], f"Bataille terminée à {fmt_hour(self.clock + h_off)}."]
         if self.accel and me in (0, 1):
             lines.append(f"Vos officiers ont mené la bataille à partir de {fmt_hour(self.accel_t)}.")
         names = self.spec['names']
@@ -2637,9 +2657,20 @@ class TacticalBattle:
             gain = max(v['xp'], 8.0) if r['winner'] == m else v['xp']
             per.append(dict(id=k, name=u.name, lost=int(v['lost']), xp=round(gain)))
         xp = round(sum(p['xp'] for p in per) / len(per), 1) if per else 0
-        return dict(winner=r['winner'], won=won, disengage=r['disengage'], title=title, lines=lines,
+        out = dict(winner=r['winner'], won=won, disengage=r['disengage'], title=title, lines=lines,
                     losses=[[int(r['lost'][m]), int(r['lost'][1 - m])]],
                     prisoners=[int(r['prisoners'][m]), int(r['prisoners'][1 - m])], xp=xp, units=per)
+        if self.spec.get('mode') == 'ordres':
+            # « Donner mes ordres » : les pertes par arme des deux camps, et ce qui a décidé la journée (le journal de
+            # ses officiers)
+            out['arms'] = [[lab, *[int(sum(u.men0 - max(0.0, u.men) for u in self.units if u.side == s and u.cls == c))
+                                   for s in (m, 1 - m)]]
+                           for c, lab in (('inf', 'Infanterie'), ('cavalerie', 'Cavalerie'), ('artillerie', 'Artillerie'))]
+            j = (self.ai_mem.get(f's{m}') or {}).get('journal') or []
+            keys = ('feinte', 'masse', 'débordement', 'tournante', 'raid', 'brèche', 'contre-attaque', 'percée',
+                    'assaut général', 'presse', 'poursuite', 'décroche', 'fausse retraite', 'réserve', 'grande batterie')
+            out['decisive'] = [txt for t, txt in j if any(k in txt for k in keys)][-5:]
+        return out
 
     def map_view(self):
         d = self.map.to_client(self.spec)
@@ -2655,7 +2686,7 @@ class TacticalBattle:
                     withdrawing=self.withdrawing, withdraw_t=self.withdraw_t, hold_t=self.hold_t, siege_t=self.siege_t, prisoners=self.prisoners, acc=self._acc,
                     ai_mem=self.ai_mem, result=self.result, pound=self.pound, breaches=self.breaches,
                     breach_t=self.breach_t,
-                    accel=self.accel, accel_ids=self.accel_ids, accel_t=self.accel_t,
+                    accel=self.accel, accel_ids=self.accel_ids, accel_t=self.accel_t, replay=self.replay, ask=self.ask,
                     end=[getattr(self, 'winner', None), getattr(self, 'disengage', None), getattr(self, 'why', None)],
                     piet=getattr(self, 'piet', None))
 
@@ -2680,6 +2711,8 @@ class TacticalBattle:
         tb.accel = bool(d.get('accel'))   # (anciennes sauvegardes : pas d'accéléré)
         tb.accel_ids = list(d.get('accel_ids') or [])
         tb.accel_t = d.get('accel_t', 0.0)
+        tb.replay = d.get('replay')
+        tb.ask = d.get('ask')
         tb.pound = dict(d.get('pound') or {})
         tb.breach_t = [list(x) for x in d.get('breach_t') or []]
         for wi, x, y, r in d.get('breaches') or []:

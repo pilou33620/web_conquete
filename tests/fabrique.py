@@ -66,6 +66,39 @@ def bataille(mes=None, epoque='1790', joueur='33', ennemi='24', demarree=True, s
     return tb, unites
 
 
+def bataille_de_campagne(epoque='1813', attaque=True, seed=3):
+    """Une bataille de campagne en rase campagne qui attend le choix du joueur (« Donner mes ordres », commander,
+    automatique) : les deux armées de départ, doublées, se rencontrent loin de toute place. Renvoie (g, bt)."""
+    import copy
+    from game import diplomacy as D
+    g = partie(epoque=epoque, seed=seed)
+    a, b = armee(g), armee(g, '24')
+    best = None
+    for dx in range(-30, 31, 2):
+        for dy in range(-30, 31, 2):
+            x, y = a['x'] + dx, a['y'] + dy
+            if min((n['x'] - x) ** 2 + (n['y'] - y) ** 2 for n in g.geo.nodes) > 25 and g.geo.terrain_at(x, y) != 'eau':
+                d = dx * dx + dy * dy
+                if best is None or d < best[0]:
+                    best = (d, x, y)
+    for k in (a, b):
+        k['regs'] += [dict(copy.deepcopy(r), id=r['id'] + 'b') for r in k['regs']]
+        k['at_node'], k['state'] = None, 'idle'
+    a['x'], a['y'] = best[1], best[2]
+    b['x'], b['y'] = best[1] + 1.0, best[2]
+    D.declare_war(g, '24', g.player, quiet=True)
+    mover, target = (a, b) if attaque else (b, a)
+    g.order_move(mover['owner'], mover['id'], target['x'], target['y'])
+    TT.go(g)
+    for _ in range(80):
+        TT.advance(g, 0.1)
+        if g.tour['stop']:
+            break
+    bt = next(bt for bt in g.battles.values() if bt.get('mode') == 'attente')
+    assert bt['node'] is None
+    return g, bt
+
+
 def ennemi(tb, u, cls=None):
     """Un ennemi vivant de u (de l'arme cls si demandée : 'inf', 'cavalerie', 'artillerie')."""
     return next(e for e in tb.units if e.side != u.side and e.alive and e.state != 'hors' and (cls is None or e.cls == cls))

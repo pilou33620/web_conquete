@@ -415,8 +415,35 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
 
 ### Batailles manuelles
 - Quand une bataille concerne vos armées ou vos places (assauts compris), la campagne s'arrête et une fenêtre propose
-  **« Commander la bataille »** ou **« Résolution automatique »** (réglage dans le menu ☰ : toujours demander,
-  escarmouches automatiques, toujours automatiques). Les batailles entre IA se résolvent toujours seules.
+  **« Donner mes ordres »**, **« Commander la bataille »** ou **« Résolution automatique »** (réglage dans le menu ☰ :
+  toujours demander, escarmouches automatiques, toujours automatiques). Les batailles entre IA se résolvent toujours
+  seules.
+- **« Donner mes ordres »** (`game/tactics/orders.py`, `web/js/battle/ordres.js`) : le champ de bataille s'ouvre en 3D,
+  **vu de dessus**, et une fenêtre propose vos ordres en quatre onglets. **Manœuvre** : l'objectif de la journée
+  (battre son armée, la position clé, couper sa retraite, l'user), la manœuvre (en attaque : assaut frontal, ordre
+  oblique avant 1789, percée au centre après 1789, enveloppement d'une aile, double enveloppement avec un général de
+  division ou une nette supériorité, fixer et déborder avec assez de cavalerie, usure ; en défense : tenir, tenir puis
+  contre-attaquer, contre-pente de 1789 à 1849, défense avancée, contre-offensive, usure ; devant une place : assaut à
+  la brèche, pilonner d'abord, escalade sans attendre, ou défendre la place, sorties, tenir les murs) et l'aile
+  d'effort. **Les armes** : la marche de l'infanterie (colonnes, ligne, ordre mixte avec la technologie, ordre
+  dispersé), les légers (écran, couverts, avec la ligne), la cavalerie (aile, réserve, écran, raid sur les arrières),
+  l'artillerie (contre-batterie, préparation, grande batterie, appui jusqu'au bout). **Réserve et imprévus** : sa
+  taille, sa place, quand l'engager (quand l'ennemi plie, pour boucher les trous, ou **« Me demander »** : la bataille
+  s'arrête au moment décisif et vous dites « Maintenant ! » ou « Attendre un quart d'heure »), que faire si sa
+  cavalerie charge ou si sa réserve se montre. **Ruse et heure** : feinte, marche par le bois, feux de camp, faux
+  déserteurs (60 livres), fausse retraite ; l'heure de l'attaque (aube à 5 h 30, surprise mais fatigue ; matin ;
+  après-midi) ; l'attitude (prudent, équilibré, audacieux). Un choix impossible est grisé avec sa raison (époque,
+  général, terrain, cavalerie, livres). À chaque choix, vos troupes se redéploient sur la carte, et l'avis de votre
+  général (points forts, risques, estimation) tient compte de ce que vos éclaireurs savent de l'ennemi : son général
+  et son caractère, son intention probable (si vous avez assez de cavaliers et de légers), ses armes.
+  « Engager la bataille » : vos officiers la livrent selon vos ordres, avec les vraies règles, et elle **défile sous
+  vos yeux** en une vingtaine à une quarantaine de secondes (une escarmouche plus vite), la caméra suivant l'action ;
+  un bandeau raconte les grands gestes, « ×2 » accélère, « Passer » la finit au plus vite. Le récapitulatif ajoute
+  les pertes par arme et ce qui a décidé la journée. Banc : `python3 outils/banc_ia.py --ordres '{"man": "double"}'`.
+- **Canons camouflés.** Une batterie postée dans un bois (pas en forêt : les pièces n'y passent pas) ne se voit qu'à
+  moins de 250 m, 500 m quand elle tire (la fumée reste sous les arbres) ; en échange, les troncs gênent son tir
+  (−35 %) et sa mise en batterie est plus longue de moitié. Vaut pour vous comme pour l'ennemi, dans tous les modes ;
+  le panneau du régiment le rappelle.
 - La **résolution automatique** (et toute bataille entre IA) se joue sur la carte de campagne, en quelques heures à
   quelques jours, et finit comme une bataille que vos officiers mènent jusqu'au bout : en rase campagne, le camp dominé
   ou ébranlé décroche en bon ordre (passé environ 12 % de pertes face à un ennemi nettement plus fort, 19 % à forces
@@ -842,7 +869,7 @@ node --test tests/                               # l'interface seule
 
 | Fichier | Ce qu'il vérifie |
 |---|---|
-| `tests/test_bataille.py` | ordres propres à chaque arme (acceptés ou refusés), salve puis baïonnette, harcèlement, canons sans munitions, régiment anéanti, bataille jusqu'au bout et rechargement en plein combat |
+| `tests/test_bataille.py` | ordres propres à chaque arme (acceptés ou refusés), salve puis baïonnette, harcèlement, canons sans munitions, régiment anéanti, bataille jusqu'au bout et rechargement en plein combat ; « Donner mes ordres » de bout en bout (choix verrouillés, redéploiement, heure, moment décisif, récapitulatif), banc de quelques jeux d'ordres ; canons camouflés dans un bois |
 | `tests/test_campagne.py` | votre tour puis celui des IA (d'un coup, arrêts, reprise), villes neutres, temps en tours (production, recherche, échéances, actions d'armée, sièges, arrivée), retraite une fois par tour, dettes et événements, prix du marché, sauvegarde (IA comprises) |
 | `tests/test_cartes.py` | cartes de bataille : même graine, même carte ; plus de parcelles en quadrillage (moins de 30 % de bords en longues droites) ; vergers près des maisons, jamais sur le glacis ; moins d'une demi-seconde par carte |
 | `tests/test_serveur.py` | un vrai serveur HTTP sur un port libre : requêtes mal formées, fichiers hors de `web/`, ordres pendant le tour des IA, sauvegardes (dossier temporaire, les vraies ne sont pas touchées) |

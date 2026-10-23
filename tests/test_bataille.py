@@ -12,7 +12,7 @@ se vérifie en quelques secondes. Bugs déjà rattrapés, à ne pas revoir :
 import json
 import unittest
 
-from fabrique import BT, GEO, avancer, bataille, ennemi, face_a_face, kind, ordre
+from fabrique import BT, GEO, S, avancer, bataille, bataille_de_campagne, ennemi, face_a_face, kind, ordre
 from game import rules as R
 
 
@@ -1124,6 +1124,147 @@ class IAFinirAutomatiquementEtLogement(unittest.TestCase):
         pense(0)
         self.assertIsNone(mem['lodge'])
         self.assertNotIn(u.id, tb.spec['logement'])
+
+
+
+class DonnerMesOrdres(unittest.TestCase):
+    """« Donner mes ordres » (game/tactics/orders.py) : le joueur choisit ses ordres, ses officiers livrent la bataille
+    selon eux, sous ses yeux, et s'arrêtent au moment décisif s'il l'a demandé."""
+
+    def test_de_bout_en_bout(self):
+        from game.tactics import bridge as TB
+        g, bt = bataille_de_campagne('1813', attaque=True)
+        r = TB.command(g, dict(sub='choose', bid=bt['id'], mode='ordres'))
+        self.assertTrue(r['ok'], r)
+        tb = g.tactical[bt['id']]
+        self.assertEqual((tb.spec['mode'], tb.phase, tb.me), ('ordres', 'deploiement', 0))
+        v = TB.battle_view(g, bt['id'], 0)
+        o = v['ordres']
+        self.assertEqual([t for t, _ in o['tabs']], ['man', 'armes', 'res', 'ruse'])
+        keys = {gr['key'] for gr in o['groups']}
+        self.assertTrue({'obj', 'man', 'wing', 'inf', 'cav', 'art', 'res', 'resWhen', 'ruse', 'hour', 'mood'} <= keys)
+        self.assertIn('verdict', o['advice'])
+        # un choix verrouillé (l'ordre oblique en 1813) est refusé : la valeur par défaut reste
+        r = TB.command(g, dict(sub='orders', bid=bt['id'], orders=dict(man='oblique')))
+        self.assertTrue(r['ok'])
+        self.assertEqual(r['ordres']['orders']['man'], 'frontal')
+        # un ordre de commandement ordinaire est refusé : ses officiers commandent
+        self.assertFalse(TB.command(g, dict(sub='start', bid=bt['id']))['ok'])
+        want = dict(man='enveloppement', wing='gauche', resWhen='demande', hour='aube', cav='aile')
+        r = TB.command(g, dict(sub='orders', bid=bt['id'], orders=want, go=True))
+        self.assertTrue(r['ok'], r)
+        self.assertEqual((tb.phase, tb.spec['h_off']), ('combat', -2.5 * 3600))
+        self.assertTrue(tb.view(0)['hour'].startswith('5 h'))
+        mem = tb.ai_mem['s0']
+        self.assertEqual((mem['plan'], mem['flank']), ('debordement', -1))
+        self.assertTrue(all(mem['wing'][u.id] == -1 for u in tb.units if u.side == 0 and u.cls == 'cavalerie'))
+        asked = False
+        for _ in range(20000):
+            if bt['id'] not in g.tactical:
+                break
+            TB.tick(g, 0.1)
+            if tb.ask:
+                asked = True
+                self.assertIn('ask', TB.battle_view(g, bt['id'], 0))
+                n = tb.clock
+                TB.tick(g, 0.1)
+                self.assertEqual(tb.clock, n, 'la bataille attend la réponse')
+                self.assertTrue(TB.command(g, dict(sub='answer', bid=bt['id'], v='go'))['ok'])
+        self.assertNotIn(bt['id'], g.tactical, 'la bataille est finie et reportée en campagne')
+        self.assertTrue(asked, 'la réserve est partie au moment décisif, sur l’ordre du joueur')
+        res = tb.result_view(0)
+        self.assertEqual([a[0] for a in res['arms']], ['Infanterie', 'Cavalerie', 'Artillerie'])
+        self.assertIsInstance(res['decisive'], list)
+
+    def test_retour_a_la_fenetre_de_bataille(self):
+        from game.tactics import bridge as TB
+        g, bt = bataille_de_campagne('1790', attaque=False)
+        TB.command(g, dict(sub='choose', bid=bt['id'], mode='ordres'))
+        self.assertTrue(TB.command(g, dict(sub='cancel', bid=bt['id']))['ok'])
+        self.assertEqual((g.tactical, bt['mode']), ({}, 'attente'))
+
+    def test_la_cavalerie_et_la_reserve_suivent_les_ordres(self):
+        from game.tactics import bridge as TB
+        g, bt = bataille_de_campagne('1813', attaque=True)
+        TB.command(g, dict(sub='choose', bid=bt['id'], mode='ordres'))
+        tb = g.tactical[bt['id']]
+        cav = [u for u in tb.units if u.side == 0 and u.cls == 'cavalerie']
+        for c, w in (('aile', 1), ('reserve', 0)):
+            TB.command(g, dict(sub='orders', bid=bt['id'], orders=dict(cav=c, wing='droite', man='frontal')))
+            mem = tb.ai_mem['s0']
+            self.assertEqual({mem['wing'][u.id] for u in cav}, {w}, c)
+
+    def test_banc_des_ordres(self):
+        """Quelques jeux d'ordres joués jusqu'au bout, IA contre IA : pas d'erreur, une issue."""
+        from game.tactics import ai
+        from game.tactics import orders as OR
+        jeux = [('att', dict(man='double', cav='raid', leg='bois', ruse='bois', obj='retraite', vsCav='contre',
+                             hour='aube')),
+                ('att', dict(man='percee', art='grande', inf='mixte', vsRes='presser', ruse='feux', hour='midi')),
+                ('def', dict(man='contrepente', ruse='deserteurs', wing='gauche', obj='cle', vsRes='canons'))]
+        for role, o in jeux:
+            g, bid = S.new(GEO, dict(me='33', foe='24', era='1813', kind='bataille', role=role,
+                                     units=dict(ligne=4, legere=2, cavalerie=2, artillerie=2), seed=2))
+            tb = g.tactical[bid]
+            tb.spec['orders'] = [None, None]
+            tb.spec['orders'][tb.me] = OR.clean(tb, tb.me, o)
+            tb.autofinish()
+            OR.setup(tb, tb.me, tb.spec['orders'][tb.me])
+            if o.get('ruse') == 'deserteurs':
+                ai.shift_reserve(tb, 1 - tb.me, OR.wing_sign(o))
+            tb.run_to_end()
+            self.assertEqual(tb.phase, 'fin', o)
+            self.assertIn(tb.result['winner'], (0, 1, None))
+
+
+class CanonsCamoufles(unittest.TestCase):
+    """Des canons dans un bois : l'ennemi ne les voit qu'à moins de 250 m (500 m quand ils tirent) ; en échange, ils
+    tirent moins bien (×0,65) et se mettent en batterie plus lentement (×1,6)."""
+
+    def lisiere(self, tb):
+        """Une case de bois avec 400 m de prairie ou de champs à l'est."""
+        from game.tactics.terrain import COLS, ROWS, CELL, T_BOIS, T_PRE, T_CHAMP
+        for j in range(10, ROWS - 10):
+            for i in range(5, COLS - 25):
+                if tb.t[j * COLS + i] == T_BOIS and all(tb.t[j * COLS + i + k] in (T_PRE, T_CHAMP) and
+                                                        tb.h[j * COLS + i + k] <= tb.h[j * COLS + i] + 1
+                                                        for k in range(1, 21)):
+                    return (i + 0.5) * CELL, (j + 0.5) * CELL
+        raise AssertionError('pas de lisière dégagée sur cette carte')
+
+    def test_vus_de_pres_seulement(self):
+        for seed in (1, 2, 3, 4, 5):
+            tb, mes = bataille(dict(artillerie=1, ligne=1), epoque='1813', seed=seed)
+            try:
+                x, y = self.lisiere(tb)
+                break
+            except AssertionError:
+                continue
+        gun = mes['artillerie']
+        obs = ennemi(tb, gun)
+        for u in tb.units:   # (les autres loin de là)
+            if u is not gun and u is not obs:
+                u.x, u.y = 20.0 + 3 * (u.side * 2900), 20.0
+        gun.x, gun.y = x, y
+        def vu(d, tire):
+            obs.x, obs.y = x + d, y
+            gun.fired_t = tb.clock if tire else -1e9
+            tb._update_vision()
+            return gun.id in tb.seen_by[obs.side]
+        self.assertFalse(vu(300, False))
+        self.assertFalse(vu(600, True), 'la fumée sous les arbres ne trahit pas la batterie de loin')
+        self.assertTrue(vu(400, True))
+        self.assertTrue(vu(200, False) or vu(150, False))
+        # hors du bois, la même batterie qui tire se voit de loin
+        gun.x = x + 40
+        self.assertTrue(vu(600, True))
+        # mise en batterie plus lente entre les arbres
+        gun.x, gun.form, gun.busy = x, 'attelee', 0.0
+        tb._change_form(gun, 'batterie')
+        t_bois = gun.busy
+        gun.x, gun.form, gun.busy = x + 100, 'attelee', 0.0
+        tb._change_form(gun, 'batterie')
+        self.assertAlmostEqual(t_bois, gun.busy * BT.CAMO_SETUP, delta=0.5)
 
 
 if __name__ == '__main__':

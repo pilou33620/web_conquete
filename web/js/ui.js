@@ -262,7 +262,8 @@ export class UI {
     const place = b.node != null && this.md.nodes[b.node] ? this.md.nodes[b.node].name : null;
     const html = `<h2 class="m-title" id="m-title">${b.amb ? 'Embuscade' : b.node != null ? 'Assaut' : 'Bataille'}${place ? ' — ' + esc(place) : ''}</h2>
       <p class="m-sub">${esc(b.terrain)}${b.river ? ', rivière' : ''}. ${side(b.sides[0])} attaque ; ${side(b.sides[1])}.</p>
-      <div class="ev-choices"><button class="btn primary ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="manuel"><b>Commander la bataille</b><small>Disposez et menez vos troupes sur le champ de bataille</small></button>
+      <div class="ev-choices"><button class="btn primary ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="ordres"><b>Donner mes ordres</b><small>Votre plan, vos ruses ; vos officiers la livrent sous vos yeux, vue de dessus</small></button>
+        <button class="btn ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="manuel"><b>Commander la bataille</b><small>Disposez et menez vos troupes sur le champ de bataille</small></button>
         <button class="btn ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="auto"><b>Résolution automatique</b><small>Le général décide ; la bataille se joue avec la campagne</small></button></div>
       <p class="muted small">La campagne reste en pause tant que vous n’avez pas choisi. Réglage dans le menu ☰.</p>`;
     return [html, b.id];
@@ -274,6 +275,7 @@ export class UI {
     if (!a) return ['<p class="muted">Aucune armée n’attend vos ordres.</p>', 'none'];
     const name = this.md.nodes[a.ask.n]?.name || '';
     const L = {
+      ordres: ['Donner mes ordres', 'L’assaut selon votre plan, livré par vos officiers sous vos yeux'],
       manuel: ['Commander la bataille', 'L’assaut : disposez et menez vos troupes sur le champ de bataille'],
       auto: ['Résolution automatique', 'L’assaut, réglé par le général'],
       rallier: ['Rallier', 'La place se rallie sans combat'],
@@ -284,7 +286,7 @@ export class UI {
       attendre: ['Attendre devant la place', 'Halte : les actions restent dans le panneau de l’armée'],
     };
     const btns = Object.entries(a.ask.c).filter(([k]) => L[k]).map(([k, why]) =>
-      `<button class="btn ${k === 'manuel' ? 'primary ' : ''}ev-choice" data-act="arrive" data-id="${esc(a.id)}" data-v="${k}"${why ? ' disabled' : ''}><b>${L[k][0]}</b><small>${esc(why || L[k][1])}</small></button>`).join('');
+      `<button class="btn ${k === 'ordres' ? 'primary ' : ''}ev-choice" data-act="arrive" data-id="${esc(a.id)}" data-v="${k}"${why ? ' disabled' : ''}><b>${L[k][0]}</b><small>${esc(why || L[k][1])}</small></button>`).join('');
     const html = `<h2 class="m-title" id="m-title">Devant ${esc(name)}</h2>
       <p class="m-sub">La ${esc(a.name)} est arrivée devant la place. Que fait-elle ?</p>
       <div class="ev-choices">${btns}</div>`;
@@ -921,12 +923,12 @@ export class UI {
       case 'load': this.onLoad && this.onLoad(d.v); break;
       case 'arrive':
         this.cmd({ cmd: 'arrive', army: d.id, value: d.v }).then(r => {
-          if (r && r.ok) { this.closeModal(); if (r.bid && this.onTactic) this.onTactic(r.bid); }
+          if (r && r.ok) { this.closeModal(); if (r.bid && this.onTactic) this.onTactic(r.bid); }   // (à la main ou sur ordres)
         });
         break;
       case 'tac-choose':
         this.cmd({ cmd: 'tac', sub: 'choose', bid: d.id, mode: d.v }, d.v === 'auto').then(r => {
-          if (r && r.ok) { this.closeModal(); if (d.v === 'manuel' && this.onTactic) this.onTactic(r.bid); }
+          if (r && r.ok) { this.closeModal(); if (d.v !== 'auto' && this.onTactic) this.onTactic(r.bid); }
         });
         break;
       case 'tac-set':

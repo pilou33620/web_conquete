@@ -49,7 +49,9 @@ export class Controls {
   pos(e) { const r = this.v.cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
   busy() { return !!this.g && (this.g.mode === 'pinch' || this.g.mode === 'pan' || this.g.mode === 'rotate'); }
   deploying() { return this.v.st?.phase === 'deploiement'; }
-  mineSel() { return [...this.v.sel].map(id => this.v.units.get(id)).filter(u => u && u.side === this.v.me && !u._ghost && u.state !== 'hors'); }
+  // « Donner mes ordres » : vos officiers commandent ; on regarde, on inspecte, on ne donne pas d'ordre au régiment
+  locked() { return this.v.st?.mode === 'ordres'; }
+  mineSel() { if (this.locked()) return []; return [...this.v.sel].map(id => this.v.units.get(id)).filter(u => u && u.side === this.v.me && !u._ghost && u.state !== 'hors'); }
 
   // ------------------------------------------------------------------ pointeurs
   down(e) {
@@ -118,7 +120,7 @@ export class Controls {
       const sel = this.mineSel();
       if (g.mode === 'rpending') g.mode = 'rotate';
       else if (g.shift && !g.touch) g.mode = 'box';
-      else if (mine && hitU.state !== 'deroute') {
+      else if (mine && hitU.state !== 'deroute' && !this.locked()) {
         if (!v.sel.has(hitU.id)) { v.sel.clear(); v.sel.add(hitU.id); v.ui.selChanged(); }
         g.units = this.mineSel().map(u => u.id);
         g.mode = this.deploying() ? 'drag-unit' : 'order';
@@ -189,6 +191,7 @@ export class Controls {
     const dbl = this.lastTap && now - this.lastTap.t < 320 && Math.hypot(g.sx - this.lastTap.x, g.sy - this.lastTap.y) < 30;
     this.lastTap = { t: now, x: g.sx, y: g.sy };
     if (hitU && hitU.side === v.me && !hitU._ghost) {
+      if (this.locked()) { v.ui.inspect(hitU.id); return; }
       if (this.targeting) { this.setTargeting(null); }
       if (g.shift) { if (v.sel.has(hitU.id)) v.sel.delete(hitU.id); else v.sel.add(hitU.id); }
       else if (dbl) { v.moveCam(hitU.x, hitU.y, Math.max(v.cam.z, 1.6), 500); v.sel.clear(); v.sel.add(hitU.id); }

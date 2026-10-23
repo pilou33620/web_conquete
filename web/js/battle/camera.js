@@ -20,8 +20,9 @@ const norm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / 
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
 // repère de la caméra pour une image : œil E, cible T, axes F (regard), R (droite), U (haut), focale k (px)
-export function frameOf(cam, vp, heightAt) {
-  const dist = distOf(cam.z, vp), p = pitchAt(dist), yaw = cam.yaw || 0;
+// pitch : inclinaison imposée (la vue de dessus de « Donner mes ordres »), sinon celle de la distance
+export function frameOf(cam, vp, heightAt, pitch = null) {
+  const dist = distOf(cam.z, vp), p = pitch ?? pitchAt(dist), yaw = cam.yaw || 0;
   const T = [cam.x, heightAt(cam.x, cam.y), cam.y];
   const E = [cam.x - Math.sin(yaw) * Math.cos(p) * dist, T[1] + Math.sin(p) * dist, cam.y + Math.cos(yaw) * Math.cos(p) * dist];
   E[1] = Math.max(E[1], heightAt(E[0], E[2]) + CLEAR);   // derrière une colline, l'œil passe au-dessus

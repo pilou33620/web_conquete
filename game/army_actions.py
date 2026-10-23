@@ -705,13 +705,13 @@ def strong(g, a, nid):
 
 
 def ask_choices(g, a):
-    """Les choix de la fenêtre d'arrivée : {choix: '' s'il est permis, sinon la raison}. L'assaut (à la main ou
-    automatique) et l'attente le sont toujours ; les autres selon la place, comme dans le panneau de l'armée."""
+    """Les choix de la fenêtre d'arrivée : {choix: '' s'il est permis, sinon la raison}. L'assaut (à la main, sur
+    ordres ou automatique) et l'attente le sont toujours ; les autres selon la place, comme dans le panneau de l'armée."""
     nid = a['ask']['node']
     n = g.nodes[nid]
     neutral = n['owner'] == R.NEUTRAL
     x = options(g, a, nid) or {}
-    out = dict(manuel='', auto='')
+    out = dict(manuel='', ordres='', auto='')
     if neutral:
         out['rallier'] = '' if strong(g, a, nid) else "Armée trop faible : il faut trois fois la défense de la place"
     if 'neg' in x:
@@ -747,14 +747,14 @@ def choose(g, code, a, what):
     if what == 'attendre':
         a.pop('ask')
         return True, f"La {a['name']} attend devant {place(g, nid)}."
-    if what in ('manuel', 'auto'):
+    if what in ('manuel', 'ordres', 'auto'):
         # l'assaut tout de suite, même sur une place à remparts (les canons y ouvrent des brèches) ; le mode est déjà
         # choisi : pas de seconde fenêtre. Une bataille finit la marche du tour
         from .tactics import bridge as TB
         bt = next((b for b in g.battles.values() if b['node'] == nid), None)
         if bt and not (g.friendly(code, bt['sides'][0]['owner']) and g.hostile(code, bt['sides'][1]['owner'])):
             return False, f"Une bataille se livre déjà devant {place(g, nid)}."
-        if what == 'manuel' and not bt and g.tactical:
+        if what in ('manuel', 'ordres') and not bt and g.tactical:
             return False, "Une autre bataille est déjà en cours."
         a.pop('ask')
         a['hold'] = False

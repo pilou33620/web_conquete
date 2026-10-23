@@ -6,6 +6,9 @@
 - « Finir automatiquement » : la bataille jouée en accéléré par tick (budget de calcul ACCEL_BUDGET par appel),
   reprise du commandement (`resume`), et resolve_now pour la jouer d'un coup (essais, bancs) ;
 - munitions (`ammo`, 0–100 %) et fatigue (`fat`, 0–100) persistantes des régiments en campagne ;
+- « Donner mes ordres » (orders.py) : la bataille créée sans commandement, le joueur choisit ses ordres sur le champ
+  de bataille (ses troupes s'y redéploient à chaque choix), puis ses officiers la livrent sous ses yeux, vue de dessus,
+  à l'allure REPLAY_RATE (une trentaine de secondes), en s'arrêtant au moment décisif s'il l'a demandé ;
 - sauvegarde, chargement et migration ; vues pour /api/state, /api/tactic et /api/tactic_map ; commandes `tac`.
 
 Les crochets dans engine.py, views.py et server.py ne font qu'appeler ces fonctions.
@@ -19,11 +22,13 @@ from .. import army_actions as AA
 from .. import turns as TT
 from . import units as U
 from . import ai as AI
+from . import orders as OR
 from . import stats as ST
 from . import terrain as TR
-from .battle import TacticalBattle, valid_piet
+from .battle import TacticalBattle, valid_piet, ACCEL_FX
 
 SETTINGS = ('demander', 'auto', 'auto_petites')
+ACCEL_LEVEL_ORDERS = 'normal'   # « Donner mes ordres » : le niveau des officiers du joueur
 SMALL_MEN = 600            # escarmouche : moins de 600 hommes en tout…
 MILICE_COMPANY = 400       # la milice d'une place se bat par compagnies de 400 hommes au plus
 
@@ -35,6 +40,12 @@ AUTO_FAT = 40              # fatigue par jour de bataille automatique
 # « Finir automatiquement » : une bataille accélérée avance par pas DT ordinaires tant que dure ce budget de calcul, à
 # chaque appel de tick (toutes les 0,1 s, sous le verrou du serveur : les requêtes attendent au plus autant)
 ACCEL_BUDGET = 0.045
+# « Donner mes ordres » : secondes de bataille par seconde réelle (une escarmouche de 2 h défile en 18 s, une bataille
+# de 6 h en 40 s) ; au-delà de REPLAY_LONG secondes à l'écran, ou sur « ×2 », deux fois plus vite (quatre au-delà de
+# REPLAY_LONGER)
+REPLAY_RATE, REPLAY_LONG, REPLAY_LONGER = 400.0, 25.0, 40.0
+# le bandeau du film raconte les grands gestes, pas l'intendance
+DULL = ("s'abrite", 'ne voit rien', "change d'emplacement", 'recomplète', 'relève', 'premier contact')
 
 
 # ================================================================== état de la partie
@@ -313,6 +324,64 @@ def create(g, bt, manual=True):
     return tb
 
 
+def create_orders(g, bt):
+    """« Donner mes ordres » : la bataille sans commandement du joueur ; l'ennemi se déploie, puis le camp du joueur
+    selon les ordres par défaut (il les change ensuite : set_orders)."""
+    spec = make_spec(g, bt)
+    me = spec['me']
+    if me is None:
+        return None
+    spec['mode'] = 'ordres'
+    spec['orders'] = [None, None]
+    lv = [g.difficulty, g.difficulty]
+    lv[me] = ACCEL_LEVEL_ORDERS   # (ses officiers : une IA correcte, quelle que soit la difficulté de l'adversaire)
+    spec['ai_levels'] = lv
+    units = make_units(g, bt, manual=False)
+    tb = TacticalBattle(g.geo, spec, units, [0, 1])
+    default_deploy(tb, 1 - me)
+    spec['orders'][me] = OR.defaults(tb, me)
+    default_deploy(tb, me)
+    tb.warm()
+    return tb
+
+
+def _livres(g, tb):
+    o = tb.spec['owners'][tb.me]
+    return g.factions[o]['res']['livres'] if o in g.factions else None
+
+
+def orders_view(g, tb):
+    """La fenêtre des ordres : les choix (et ce qui les verrouille), les ordres en cours, l'avis, les éclaireurs."""
+    me = tb.me
+    o = OR.of(tb, me) or {}
+    return dict(groups=OR.groups(tb, me, _livres(g, tb)), tabs=OR.TABS, orders=o, advice=OR.advise(tb, me, o),
+                report=OR.report(tb, me), place=bool(tb.place_info()), side=me)
+
+
+def set_orders(g, tb, raw, go=False):
+    """Le joueur change ses ordres : ses troupes se redéploient selon eux ; go : la bataille commence."""
+    me = tb.me
+    if tb.phase != 'deploiement' or tb.spec.get('mode') != 'ordres':
+        return dict(ok=False, msg='La bataille est déjà engagée.')
+    o = OR.clean(tb, me, raw, _livres(g, tb))
+    tb.spec['orders'][me] = o
+    default_deploy(tb, me)
+    if not go:
+        return dict(ok=True, ordres=orders_view(g, tb))
+    if o.get('ruse') == 'deserteurs':
+        g.factions[tb.spec['owners'][me]]['res']['livres'] -= OR.FEINT_COST
+    ok, msg = tb.start()
+    if not ok:
+        return dict(ok=False, msg=msg)
+    OR.setup(tb, me, o)
+    if o.get('ruse') == 'deserteurs':
+        AI.shift_reserve(tb, 1 - me, OR.wing_sign(o), "des déserteurs annoncent l'attaque sur l'aile : la réserve "
+                                                       "et la cavalerie s'y portent.")
+    tb.replay = dict(real=0.0)
+    tb.log("Vos officiers engagent la bataille selon vos ordres.")
+    return dict(ok=True, msg='La bataille commence.')
+
+
 def default_deploy(tb, side):
     """Déploiement de départ (l'IA de secours, pour toutes les unités du camp, que le joueur retouchera)."""
     saved = {u.id: u.ctrl for u in tb.units if u.side == side}
@@ -345,10 +414,27 @@ def tick(g, real_dt):
             # paix signée ou place passée à un autre camp pendant la bataille : elle s'arrête sans vainqueur
             g.tactical.pop(bid, None)
             continue
-        n += tb.run_for(ACCEL_BUDGET) if tb.accel else tb.advance(real_dt)
+        if tb.replay is not None:
+            n += _replay_tick(tb, real_dt)
+        else:
+            n += tb.run_for(ACCEL_BUDGET) if tb.accel else tb.advance(real_dt)
         if tb.phase == 'fin':
             finish(g, tb)
     return n
+
+
+def _replay_tick(tb, real_dt):
+    """« Donner mes ordres » : la bataille avance à l'allure du film (ou au plus vite après « Passer »)."""
+    rp = tb.replay
+    if tb.phase != 'combat' or tb.ask:
+        return 0
+    rp['real'] = rp.get('real', 0.0) + real_dt
+    if rp.get('skip'):
+        return tb.run_for(ACCEL_BUDGET)
+    rate = REPLAY_RATE * (4 if rp['real'] > REPLAY_LONGER else 2 if rp.get('fast') or rp['real'] > REPLAY_LONG else 1)
+    # (un serveur qui peine ne prend pas plus d'une seconde de retard : le film ralentit plutôt que de sauter)
+    rp['until'] = min(max(rp.get('until', tb.clock), tb.clock) + real_dt * rate, tb.clock + rate)
+    return tb.run_for(ACCEL_BUDGET, rp['until'])
 
 
 def resolve_now(g, tb):
@@ -506,10 +592,23 @@ def battle_view(g, bid, since=0):
     if not tb:
         return None
     v = tb.view(tb.me, since)
+    if tb.spec.get('mode') == 'ordres':
+        v['mode'] = 'ordres'
+        if tb.phase == 'deploiement' and not since:
+            v['ordres'] = orders_view(g, tb)
+        if tb.replay is not None:
+            v['replay'] = dict(fast=bool(tb.replay.get('fast')), skip=bool(tb.replay.get('skip')))
+            if tb.ask and tb.ask.get('side') == tb.me:
+                v['ask'] = dict(text=tb.ask['text'], key=tb.ask['key'])
+            mem = tb.ai_mem.get(f's{tb.me}') or {}
+            v['notes'] = [txt for t, txt in (mem.get('journal') or [])[-12:] if not any(k in txt for k in DULL)][-4:]
+            v['fx'] = v['fx'][-ACCEL_FX:]   # (la bataille défile vite : les derniers effets suffisent)
     for d in v['units']:   # valeurs chiffrées de mes troupes (stats.py) ; l'ennemi reste dans le brouillard
         u = tb.by_id.get(d['id'])
         if u is not None and (tb.me is None or u.side == tb.me):
             d['stats'] = ST.of_unit(u, tb)
+            if u.cls == 'artillerie' and tb.is_wood(u.x, u.y):
+                d['camo'] = 1   # (canons camouflés dans un bois : le panneau du régiment le dit)
     return v
 
 
@@ -566,10 +665,19 @@ def command(g, body):
                 TT.settle(g)   # tour par tour : le général règle la bataille sur-le-champ, puis les marches suspendues reprennent
                 return dict(ok=True, msg='Le général a commandé la bataille.')
             return dict(ok=True, msg='Le général commande : résolution automatique.')
-        if mode != 'manuel':
+        if mode not in ('manuel', 'ordres'):
             return dict(ok=False, msg='Mode inconnu.')
         if g.tactical:
             return dict(ok=False, msg='Une autre bataille est déjà en cours.')
+        if mode == 'ordres':
+            tb = create_orders(g, bt)
+            if tb is None:
+                bt['mode'] = 'auto'
+                return dict(ok=False, msg="Vous n'avez pas de troupes dans cette bataille.")
+            bt['mode'] = 'manuel'
+            g.tactical[bt['id']] = tb
+            g.tac_done = {}
+            return dict(ok=True, msg='Donnez vos ordres.', bid=bt['id'])
         tb = create(g, bt, manual=True)
         if tb.me is None:
             bt['mode'] = 'auto'
@@ -587,6 +695,8 @@ def command(g, body):
     if not tb:
         return dict(ok=False, msg='Aucune bataille en cours.')
     me = tb.me
+    if tb.spec.get('mode') == 'ordres' and sub != 'piet':
+        return _orders_command(g, tb, sub, body)
     if sub == 'deploy':
         ok, msg = tb.deploy(me, list(body.get('units') or []), _num(body.get('x')), _num(body.get('y')),
                             None if body.get('dir') is None else _num(body.get('dir')), body.get('form'), who='joueur')
@@ -630,6 +740,35 @@ def command(g, body):
         tb.piet = png
         return dict(ok=True)
     return dict(ok=False, msg='Commande de bataille inconnue.')
+
+
+def _orders_command(g, tb, sub, body):
+    """Commandes d'une bataille « Donner mes ordres »."""
+    if sub == 'orders':
+        return set_orders(g, tb, body.get('orders'), bool(body.get('go')))
+    if sub == 'cancel':
+        # retour à la fenêtre de bataille : la bataille n'a pas commencé, on l'oublie
+        if tb.phase != 'deploiement':
+            return dict(ok=False, msg='La bataille est déjà engagée.')
+        g.tactical.pop(tb.bid, None)
+        bt = g.battles.get(tb.bid)
+        if bt:
+            bt['mode'] = 'attente'
+        return dict(ok=True)
+    if sub == 'answer':
+        ok = OR.answer(tb, 'go' if body.get('v') == 'go' else 'wait')
+        return dict(ok=ok, msg='' if ok else 'Aucune question en attente.')
+    if sub == 'replay':
+        if tb.replay is None:
+            return dict(ok=False, msg="La bataille n'est pas engagée.")
+        if 'fast' in body:
+            tb.replay['fast'] = bool(body.get('fast'))
+        if body.get('skip'):
+            tb.replay['skip'] = True
+            if tb.ask:
+                OR.answer(tb, 'go')
+        return dict(ok=True)
+    return dict(ok=False, msg='Vos officiers mènent cette bataille : vos ordres sont donnés.')
 
 
 def _num(v):
