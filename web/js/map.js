@@ -141,6 +141,7 @@ export class MapView {
     this.tileLimit = 160;
     this.tileGen = 0;             // génération des territoires peints dans les tuiles
     this.pool = [];               // canevas des tuiles évincées, à réutiliser
+    this.painters = [];           // workers qui peignent les tuiles détaillées (peintre.js)
     this.frameNo = 0;
     this.curL = 0;                // niveau affiché (figé pendant un pincement ou un zoom animé)
     this.zoomT = 0;               // dernier changement de zoom
@@ -190,6 +191,7 @@ export class MapView {
     this.fitAll(true);
     window.addEventListener('resize', () => this.resize());
     this.bindInput();
+    this.startPainters();
     requestAnimationFrame(t => this.frame(t));
   }
 
@@ -1101,9 +1103,10 @@ export class MapView {
           }
         }
       }
-      this.frontiers.push({ code: codes[ci], parts: lineChunks(chainSegments(segs)) });
+      const lines = chainSegments(segs);
+      this.frontiers.push({ code: codes[ci], lines, parts: lineChunks(lines) });
     }
-    this.tileGen++;
+    this.tileGen++; this.painterDirty = true;
     this.cellFac = idx; this.facCodes = codes;   // (le camp qui tient chaque case : le paysage de son époque, epoque.js)
     this.paintTerritory(idx, fields, codes);
   }
@@ -1156,7 +1159,7 @@ export class MapView {
     const key = `${L}:${tx}:${ty}`;
     if (L === LEVELS[0]) {
       let b = this.baseTiles.get(key);
-      if (allowRender && (!b || b.gen !== this.tileGen)) { if (b) this.pool.push(b); b = this.renderTile(L, tx, ty); this.baseTiles.set(key, b); }
+      if (allowRender && (!b || b.gen !== this.tileGen)) { if (b) this.freeTile(b); b = this.renderTile(L, tx, ty); this.baseTiles.set(key, b); }
       return b || null;
     }
     let t = this.tiles.get(key);
@@ -1168,23 +1171,85 @@ export class MapView {
       return t;
     }
     if (!allowRender) return null;
-    if (t) { this.tiles.delete(key); this.pool.push(t); }
-    t = this.renderTile(L, tx, ty);
-    t.seen = this.frameNo;
+    if (this.painters.some(w => w.ready)) { this.askTile(L, tx, ty, key); return t || null; }
+    return this.putTile(key, this.renderTile(L, tx, ty));
+  }
+
+  putTile(key, t) {
+    const old = this.tiles.get(key);
+    if (old) { this.tiles.delete(key); this.freeTile(old); }
+    t.seen = this.frameNo; t.gen = this.tileGen;
     this.tiles.set(key, t);
-    // les plus anciennes partent, jamais celles affichées à cette image. Leur canevas sert à la prochaine tuile :
-    // jamais détruit, il ne laisse ni tuiles blanches sur Safari (iPad), ni tuiles noires sur Chrome (PC), qui
-    // effaçait parfois un canevas détruit pendant qu'il s'affichait encore
-    for (const [k, old] of this.tiles) {
-      if (this.tiles.size <= this.tileLimit || old.seen === this.frameNo) break;
+    // les plus anciennes partent, jamais celles affichées à cette image
+    for (const [k, o] of this.tiles) {
+      if (this.tiles.size <= this.tileLimit || o.seen === this.frameNo) break;
       this.tiles.delete(k);
-      this.pool.push(old);
+      this.freeTile(o);
     }
     return t;
   }
 
+  // l'image d'un peintre est libérée ; un canevas sert à la prochaine tuile (jamais détruit : Safari sur iPad garde
+  // sinon sa mémoire et, passé sa limite, laisse des tuiles blanches)
+  freeTile(t) { if (t.close) t.close(); else this.pool.push(t); }
+
   invalidateTiles() {
-    for (const m of [this.tiles, this.baseTiles]) { this.pool.push(...m.values()); m.clear(); }
+    for (const m of [this.tiles, this.baseTiles]) { for (const t of m.values()) this.freeTile(t); m.clear(); }
+    this.tileGen++; this.painterDirty = true;
+  }
+
+  // ------------------------------------------------------------------ peintres
+  // Les tuiles détaillées sont peintes par le processeur, dans des workers (peintre.js) : peintes par la carte
+  // graphique, elles la débordaient à chaque zoom (8 images/s sur une Intel Iris Xe en 3440×1440). Celles du fond
+  // (niveau le plus bas) restent peintes ici, tout de suite, pour toujours avoir de quoi couvrir la carte.
+  startPainters() {
+    if (typeof Worker !== 'function' || typeof OffscreenCanvas !== 'function') return;
+    const init = {
+      W: this.W, H: this.H, terrain: this.terrain, dept: this.dept, deptCodes: this.deptCodes, hgt: this.hgt, fieldAngle: this.fieldAngle,
+      depts: this.depts, m: { waters: this.m.waters, rivers: this.m.rivers, y_spain: this.m.y_spain, ways: this.m.ways },
+      nodes: this.nodes.map(n => ({ x: n.x, y: n.y })), edges: this.edges.map(({ path, ...e }) => e), colors: this.colors,
+    };
+    this.asked = new Set();
+    const n = Math.min(3, Math.max(1, (navigator.hardwareConcurrency || 2) - 1));
+    for (let k = 0; k < n; k++) {
+      let w;
+      try { w = new Worker(new URL('./peintre.js', import.meta.url), { type: 'module' }); } catch (e) { return; }
+      w.busy = 0;
+      w.onmessage = ({ data: d }) => {
+        if (d.ready !== undefined) { w.ready = d.ready; return; }
+        w.busy--; this.asked.delete(d.key);
+        if (d.bmp && d.gen === this.tileGen) this.putTile(d.key, d.bmp);
+        else if (d.bmp) d.bmp.close();   // (peinte avant le dernier changement de la carte)
+      };
+      w.onerror = () => { w.ready = false; };
+      w.postMessage({ init });
+      this.painters.push(w);
+    }
+  }
+
+  askTile(L, tx, ty, key) {
+    if (this.asked.has(key)) return;
+    let w = null;
+    for (const c of this.painters) if (c.ready && c.busy < 2 && (!w || c.busy < w.busy)) w = c;
+    if (!w) return;
+    w.busy++; this.asked.add(key);
+    w.postMessage({ L, tx, ty, key });
+  }
+
+  // l'état de la carte qui se voit dans les tuiles, envoyé aux peintres quand il change
+  async syncPainters() {
+    this.painterDirty = false;
+    const gen = this.tileGen;
+    const imgs = await Promise.all([this.oceanCanvas, this.landCanvas, this.grain, this.fillCanvas].map(c => createImageBitmap(c)));
+    if (gen !== this.tileGen) return;   // (un nouveau changement est arrivé entre-temps : il enverra le sien)
+    const [oceanCanvas, landCanvas, grain, fillCanvas] = imgs;
+    const state = {
+      era: this.era, season: this.season, tileGen: gen, dpr: this.dpr, cellFac: this.cellFac, facCodes: this.facCodes,
+      frontiers: this.frontiers.map(f => ({ code: f.code, lines: f.lines })), year: this.epoque.year,
+      marks: Object.fromEntries(Object.entries(this.epoque.marks).map(([k, v]) => [k, [...v]])),
+      oceanCanvas, landCanvas, grain, fillCanvas,
+    };
+    for (const w of this.painters) w.postMessage({ state });
   }
 
   // portion manquante d'une tuile : on la recouvre avec les tuiles déjà prêtes d'un autre niveau
@@ -1225,8 +1290,9 @@ export class MapView {
   }
 
   renderTile(L, tx, ty) {
-    const cv = this.pool.pop() || Object.assign(document.createElement('canvas'), { width: TILE, height: TILE });
-    const g = cv.getContext('2d');
+    const cv = this.pool.pop() || (typeof document === 'undefined' ? new OffscreenCanvas(TILE, TILE)
+      : Object.assign(document.createElement('canvas'), { width: TILE, height: TILE }));
+    const g = cv.getContext('2d', this.tileCtx);
     g.save();   // (le canevas resservira : son état revient à zéro à la fin ; le fond opaque efface l'ancienne tuile)
     const span = TILE / L, x0 = tx * span, y0 = ty * span;
     g.imageSmoothingEnabled = true;
@@ -1736,6 +1802,7 @@ export class MapView {
     const nVis = Math.max(0, tx1 - tx0 + 1) * Math.max(0, ty1 - ty0 + 1);
     this.tileLimit = clamp(Math.ceil(nVis * 1.6) + 24, 160, 320);
     // tuiles à peindre, du centre vers les bords, dans un budget de temps par image (au moins une)
+    if (this.painterDirty && this.painters.length) this.syncPainters();
     const missing = [];
     for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) if (this.getTile(L, tx, ty, false)?.gen !== this.tileGen) missing.push([tx, ty]);
     if (missing.length) {
