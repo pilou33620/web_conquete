@@ -204,4 +204,7 @@ function announceUpdate(u) {
   try { localStorage.setItem('conquete-maj-vue', u.version); } catch (e) { /* tant pis */ }
 }
 
-boot().then(() => { window.__ui = ui; });
+boot().then(() => {
+  window.__ui = ui;
+  if (location.hash.includes('banc')) import('./dev/banc.js').then(b => b.banc(map));   // (banc de la carte, dev/banc.js)
+});

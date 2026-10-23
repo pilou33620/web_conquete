@@ -795,7 +795,7 @@ game/views.py        état envoyé au navigateur (brouillard de guerre), sauvega
 game/tactics/        batailles sur ordres : carte de bataille (terrain.py), unités (units.py), simulation
                      (battle.py), IA qui livre la bataille (ai.py), vos ordres et leurs flèches (orders.py), raccord avec la
                      campagne et plan de la position (bridge.py)
-web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/peintre.js (worker qui peint les tuiles de la carte), js/ambient.js (animations
+web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/peintre.js (worker qui peint les tuiles de la carte), js/dev/banc.js (banc de la carte sur la machine du joueur : adresse terminée par #banc), js/ambient.js (animations
                      de la carte), js/towns.js (dessin des villes), js/ui.js, js/plan.js (plan de la position dans la fenêtre de bataille),
                      js/tuto.js (tutoriel), js/main.js
 web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et sortie depuis la campagne),

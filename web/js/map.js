@@ -496,7 +496,7 @@ export class MapView {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     const spaced = t => t.toLocaleUpperCase('fr-FR').split('').join('\u200a');
     // la mer : de grandes capitales espacées, gravées dans l'eau
-    const fs = clamp(z * 5.5, 13, 34);
+    const fs = Math.round(clamp(z * 5.5, 13, 34));   // (taille entière : une taille neuve à chaque image de zoom oblige la carte graphique à redessiner les lettres)
     ctx.font = `italic 600 ${fs}px "EB Garamond", Georgia, serif`;
     for (const s of wn.sea) {
       const [x, y] = this.toScreen(s.x, s.y);
@@ -511,7 +511,7 @@ export class MapView {
       if (z < (r.rank === 1 ? 2.4 : r.rank === 2 ? 4.5 : 7.5)) continue;
       const [x, y] = this.toScreen(r.x, r.y);
       if (x < -100 || y < -40 || x > this.vw + 100 || y > this.vh + 40) continue;
-      const f = r.rank === 1 ? clamp(10 + z * 0.6, 12, 18) : clamp(9 + z * 0.45, 11, 15);
+      const f = Math.round(r.rank === 1 ? clamp(10 + z * 0.6, 12, 18) : clamp(9 + z * 0.45, 11, 15));
       ctx.font = `italic 600 ${f}px "EB Garamond", Georgia, serif`;
       ctx.save(); ctx.translate(x, y); ctx.rotate(r.a); ctx.translate(0, -f * 0.75);
       ctx.strokeStyle = halo; ctx.lineWidth = 3; ctx.strokeText(r.txt, 0, 0);
@@ -522,7 +522,7 @@ export class MapView {
       if (z < (l.big ? 3 : 5.5)) continue;
       const [x, y] = this.toScreen(l.x, l.y);
       if (x < -100 || y < -40 || x > this.vw + 100 || y > this.vh + 40) continue;
-      ctx.font = `italic 600 ${clamp(9 + z * 0.5, 11, 17)}px "EB Garamond", Georgia, serif`;
+      ctx.font = `italic 600 ${Math.round(clamp(9 + z * 0.5, 11, 17))}px "EB Garamond", Georgia, serif`;
       ctx.strokeStyle = halo; ctx.lineWidth = 3; ctx.strokeText(l.txt, x, y);
       ctx.fillStyle = ink; ctx.fillText(l.txt, x, y);
     }
@@ -2107,7 +2107,7 @@ export class MapView {
       const men = ns.m != null ? ns.m + (ns.g ? ns.g.reduce((a, r) => a + r[2], 0) : (ns.gm || 0)) : null;
       if (men != null && (z >= 3.2 || n.type === 'capitale')) {
         const txt = String(Math.round(men));
-        ctx.font = `600 ${fs - 2}px "EB Garamond", Georgia, serif`;
+        ctx.font = `600 ${Math.round(fs - 2)}px "EB Garamond", Georgia, serif`;
         const w = this.textW(ctx, txt) + 10;
         const bx = x + s * 0.5 + 2, by = y - s * 0.45;
         ctx.fillStyle = 'rgba(32,35,38,0.88)';
@@ -2699,7 +2699,7 @@ export class MapView {
       ctx.setTransform(m0);
     }
     // chiffres au-dessus des blocs (non tournés)
-    ctx.font = `700 ${clamp(bw * 0.42, 10, 16)}px "EB Garamond", Georgia, serif`;
+    ctx.font = `700 ${Math.round(clamp(bw * 0.42, 10, 16))}px "EB Garamond", Georgia, serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     const ca = Math.cos(d.head + Math.PI / 2), sa = Math.sin(d.head + Math.PI / 2);
     // bas de la formation à l'écran (blocs tournés et chiffres compris) : le nom de l'armée se place dessous
@@ -2737,7 +2737,7 @@ export class MapView {
   drawArmyLabels(ctx) {
     const z = this.cam.z;
     ctx.save();
-    ctx.font = `italic 500 ${clamp(z * 0.6 + 5, 11, 15)}px "EB Garamond", Georgia, serif`;
+    ctx.font = `italic 500 ${Math.round(clamp(z * 0.6 + 5, 11, 15))}px "EB Garamond", Georgia, serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     const fs = clamp(z * 0.6 + 5, 11, 15);
     for (const l of this.armyLabels) {
@@ -2778,7 +2778,7 @@ export class MapView {
       if (!k) for (let q = 0; q < 3; q++) { ctx.fillStyle = `rgba(236,232,224,${0.55 - q * 0.15})`; ctx.beginPath(); ctx.arc((n / 2 * s * 0.42 + s * 0.15 - (q + 1) * s * 0.14) * dir, -s * (0.2 + q * 0.06) + Math.sin(time * 3 + q) * 2, s * (0.07 + q * 0.03), 0, Math.PI * 2); ctx.fill(); }
     }
     ctx.restore();
-    ctx.font = `700 ${clamp(s * 0.36, 12, 17)}px "EB Garamond", Georgia, serif`;
+    ctx.font = `700 ${Math.round(clamp(s * 0.36, 12, 17))}px "EB Garamond", Georgia, serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.strokeStyle = 'rgba(14,20,30,.85)'; ctx.lineWidth = 3;
     const txt = fmtMen(a.men);
@@ -2812,7 +2812,7 @@ export class MapView {
       ctx.strokeStyle = lighten(col, 0.5); ctx.lineWidth = 1; ctx.stroke();
       ctx.restore();
     }
-    ctx.font = `700 ${clamp(s * 0.36, 12, 17)}px "EB Garamond", Georgia, serif`;
+    ctx.font = `700 ${Math.round(clamp(s * 0.36, 12, 17))}px "EB Garamond", Georgia, serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.strokeStyle = 'rgba(14,20,30,.85)'; ctx.lineWidth = 3;
     const txt = fmtMen(a.men);
@@ -2916,7 +2916,7 @@ export class MapView {
         ctx.beginPath(); ctx.arc(x, y, Math.max(1.5, z * 0.12), 0, Math.PI * 2); ctx.fill();
       } else if (p.type === 'num') {
         const [x, y] = this.toScreen(p.x, p.y);
-        ctx.font = `700 ${clamp(10 + z * 0.5, 13, 20)}px "EB Garamond", Georgia, serif`;
+        ctx.font = `700 ${Math.round(clamp(10 + z * 0.5, 13, 20))}px "EB Garamond", Georgia, serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.globalAlpha = 1 - k * k;
         ctx.strokeStyle = 'rgba(10,10,10,.85)'; ctx.lineWidth = 3;

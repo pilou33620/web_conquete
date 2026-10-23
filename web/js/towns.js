@@ -43,6 +43,17 @@ export class TownArt {
     const key = `${n.id}|${b}|${dev}|${winter ? 1 : 0}|${dpr}`;
     let sp = this.cache.get(key);
     if (sp) { this.cache.delete(key); this.cache.set(key, sp); return sp; }
+    // pendant un zoom, ou passé 6 places repeintes dans l'image, celle d'un palier voisin, agrandie ou réduite :
+    // repeindre chaque place à chaque palier de 9 % saccadait le zoom
+    const mp = this.map;
+    if (this.frame !== mp.frameNo) { this.frame = mp.frameNo; this.painted = 0; }
+    if (performance.now() - (mp.zoomT || 0) < 250 || this.painted >= 6) {
+      for (let d = 1; d <= 6; d++) for (const bb of [b - d, b + d]) {
+        const o = this.cache.get(`${n.id}|${bb}|${dev}|${winter ? 1 : 0}|${dpr}`);
+        if (o) return o;
+      }
+    }
+    this.painted++;
     const W = Math.ceil(S * 1.7), H = Math.ceil(S * 1.75);
     const cv = document.createElement('canvas');
     cv.width = Math.ceil(W * dpr); cv.height = Math.ceil(H * dpr);
