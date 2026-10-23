@@ -327,7 +327,16 @@ TECHS = [
 # durée en jours de travail, arrondie au tour (30 jours de travail ; SPEC-TOURS.md, règle B) : 28 à 84 jours → 1 à 3 tours
 TECH = {t[0]: dict(id=t[0], branch=t[1], name=t[2], desc=t[3], cost=t[4], days=30 * max(1, int(t[5] / 30 + 0.5)), req=t[6],
                    fx=t[7]) for t in TECHS}
-BRANCHES = ['militaire', 'civil', 'industriel', 'agricole']
+# la branche militaire en deux (SPEC-ARBRE.md) : infanterie et cavalerie d'un côté, artillerie et génie de l'autre
+MILITAIRE_INF = {'baionnette', 'fusil1777', 'percussion', 'minie', 'chassepot', 'gras', 'lebel', 'hussards', 'cuirassiers',
+                 'voltigeurs', 'tir_rang', 'feu_peloton', 'ordre_mixte', 'retranchements', 'levee', 'divisions',
+                 'etat_major', 'service_mil', 'rail_militaire'}
+for _t in TECH.values():
+    if _t['branch'] == 'militaire':
+        _t['branch'] = 'infanterie' if _t['id'] in MILITAIRE_INF else 'artillerie'
+BRANCHES = ['infanterie', 'artillerie', 'civil', 'industriel', 'agricole']
+# goût de recherche des IA (personality['tech']) → branches préférées
+TASTE_BRANCHES = dict(militaire=('infanterie', 'artillerie'))
 
 # marques visibles (SPEC-TECH.md, module visuels) : la technologie du camp qui les fait apparaître ; la bataille et la
 # carte lisent cette table au lieu de comparer des années partout

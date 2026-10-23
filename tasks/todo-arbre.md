@@ -2,7 +2,7 @@
 
 Vérifications communes à chaque tâche : `python3 tests/lancer.py` passe. Un commit par tâche, « Arbre, A? : … ».
 
-- [ ] **A1 : deux branches militaires**
+- [x] **A1 : deux branches militaires**
   - Critères :
     - `BRANCHES` a cinq branches et chaque technologie militaire va dans `infanterie` ou `artillerie` (D1).
     - Les libellés suivent : « Infanterie et cavalerie », « Artillerie et génie ».

@@ -44,6 +44,12 @@ def migrate(g):
     for f in g.factions.values():
         for k, v in dict(weary=0.0, prestige=0.0, treaties={}, last_war=0.0, refu=0.0).items():
             f.setdefault(k, v)
+        # avant SPEC-ARBRE : une seule branche militaire ; sa recherche en cours va dans la branche de sa technologie
+        old = f['research'].pop('militaire', None)
+        for b in R.BRANCHES:
+            f['research'].setdefault(b, None)
+        if old:
+            f['research'][R.TECH[old['tech']]['branch']] = old
         if not f['alive']:
             f.setdefault('dead_t', g.t)
     if g.ev_done is None:

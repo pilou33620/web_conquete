@@ -1141,6 +1141,27 @@ class ArbreDesTechnologies(unittest.TestCase):
         self.assertIn('civil', R.BRANCHES, "l'identifiant reste « civil » (sauvegardes, goûts des IA)")
         self.assertEqual(R.TECH['suffrage']['branch'], 'civil')
 
+    def test_deux_branches_militaires_en_parallele(self):
+        g = partie()
+        f = g.factions[g.player]
+        f['res']['livres'] = 1e5
+        f['techs'] = [t for t in f['techs'] if t not in ('baionnette', 'vauban')]
+        self.assertEqual((R.TECH['baionnette']['branch'], R.TECH['vauban']['branch']), ('infanterie', 'artillerie'))
+        self.assertTrue(g.research(g.player, 'baionnette')[0])
+        self.assertTrue(g.research(g.player, 'vauban')[0], 'artillerie et infanterie se cherchent en même temps')
+
+    def test_sauvegarde_d_une_recherche_militaire(self):
+        g = partie()
+        d = json.loads(json.dumps(V.to_dict(g)))
+        for f in d['factions'].values():
+            f['research'] = {b: None for b in ('militaire', 'civil', 'industriel', 'agricole')}
+        d['factions'][g.player]['research']['militaire'] = dict(tech='valliere', left=12.0, total=30)
+        g2 = V.from_dict(GEO, d)
+        r = g2.factions[g.player]['research']
+        self.assertEqual(set(r), set(R.BRANCHES))
+        self.assertEqual(r['artillerie']['tech'], 'valliere')
+        self.assertIsNone(r['infanterie'])
+
     def test_chaque_effet_est_lu_par_le_moteur(self):
         import glob
         import re

@@ -567,9 +567,10 @@ class AI:
         g, f = self.g, self.f
         busy = sum(1 for v in f['research'].values() if v)
         rich = f['res']['livres'] > self.reserve()   # un trésor plein fait chercher dans toutes les branches
-        if busy >= (4 if rich else 3 if f['res']['livres'] > 1200 else 2):
+        if busy >= (5 if rich else 3 if f['res']['livres'] > 1200 else 2):
             return
-        for b in sorted(R.BRANCHES, key=lambda b: (b != self.pers['tech'], self.rng.random())):
+        taste = R.TASTE_BRANCHES.get(self.pers['tech'], (self.pers['tech'],))
+        for b in sorted(R.BRANCHES, key=lambda b: (b not in taste, self.rng.random())):
             if f['research'][b]:
                 continue
             year = g.date().year

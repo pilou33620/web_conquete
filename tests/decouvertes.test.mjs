@@ -12,10 +12,10 @@ test('chaque technologie a une famille de vignette', () => {
   assert.equal(famille({ id: 'chappe', branch: 'civil' }), 'telegraphe');
   assert.equal(famille({ id: 'greffe', branch: 'agricole' }), 'vigne');
   assert.equal(famille({ id: 'assolement', branch: 'agricole' }), 'moisson');
-  assert.equal(famille({ id: 'lahitte', branch: 'militaire' }), 'canon');
+  assert.equal(famille({ id: 'lahitte', branch: 'artillerie' }), 'canon');
   assert.equal(famille({ id: 'coke', branch: 'industriel' }), 'forge');
   assert.equal(famille({ id: 'fresnel', branch: 'industriel' }), 'phare');
   assert.equal(famille({ id: 'vaccine', branch: 'civil' }), 'medecine');
   assert.equal(famille({ id: 'ecoles', branch: 'civil' }), 'livre');
-  for (const b of ['militaire', 'civil', 'industriel', 'agricole']) assert.ok(FAMS.includes(famille({ id: 'x', branch: b })));
+  for (const b of ['infanterie', 'artillerie', 'civil', 'industriel', 'agricole']) assert.ok(FAMS.includes(famille({ id: 'x', branch: b })));
 });

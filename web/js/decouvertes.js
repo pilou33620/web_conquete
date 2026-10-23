@@ -19,7 +19,7 @@ export function famille(t) {
   if (/vaccine|croix_rouge|larrey|hopit|quinine|medecine/.test(id)) return 'medecine';
   if (/hauts_fourneaux|coke|acier|fonderie|armureries|forge/.test(id)) return 'forge';
   if (/chais|greffe|bouillie|vin/.test(id)) return 'vigne';
-  if (t.branch === 'militaire') return 'canon';
+  if (t.branch === 'infanterie' || t.branch === 'artillerie') return 'canon';
   if (t.branch === 'agricole') return 'moisson';
   if (t.branch === 'industriel') return 'vapeur';
   return 'livre';
@@ -160,7 +160,7 @@ export class Decouvertes {
   html() {
     const t = this.techOf(this.tech);
     if (!t) return ['', ''];
-    const LAB = { militaire: 'Militaire', civil: 'Civil et social', industriel: 'Industriel', agricole: 'Agricole' };
+    const LAB = { infanterie: 'Infanterie et cavalerie', artillerie: 'Artillerie et génie', civil: 'Civil et social', industriel: 'Industriel', agricole: 'Agricole' };
     const d = this.ui.st.me.tech_dates?.[t.id];
     return [`<div class="disc"><div class="disc-rib">Découverte</div><h2 class="m-title" id="m-title">${esc(t.name)}</h2>
       <p class="m-sub">${esc(LAB[t.branch] || t.branch)}${d ? ` · ${esc(d[0])}` : ''}${t.year ? ` · inventée vers ${t.year}` : ''}</p>

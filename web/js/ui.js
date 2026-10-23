@@ -28,7 +28,7 @@ const de = n => /^Le /.test(n) ? 'du ' + n.slice(3) : /^Les /.test(n) ? 'des ' +
 const STATUS = { paix: 'En paix', guerre: 'En guerre', alliance: 'Alliés', self: 'Vous' };
 const TYPE_LABEL = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' };
 const RES_ORDER = ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'];
-const BRANCH_LABEL = { militaire: 'Militaire', civil: 'Civil et social', industriel: 'Industriel', agricole: 'Agricole' };
+const BRANCH_LABEL = { infanterie: 'Infanterie et cavalerie', artillerie: 'Artillerie et génie', civil: 'Civil et social', industriel: 'Industriel', agricole: 'Agricole' };
 const ACTION_LABEL = { paix: 'propose la paix', alliance: 'propose une alliance', commerce: 'propose un accord commercial', echange: 'propose un échange', prisonniers: 'propose un échange de prisonniers', passage: 'demande le droit de passage sur vos terres' };
 // conduite d'une marche : conquérir en chemin ou traverser (le dernier choix est gardé)
 const TR_HELP = ['Rallie ou attaque les places indépendantes et ennemies sur la route.',
@@ -1248,7 +1248,7 @@ export class UI {
           const vauban = k === 'fort' && top < this.rules.fort.bastion && this.rules.fort.bastion_types.includes(gn.type);
           const done = k === 'dev' ? this.devName(gn.type, l) : l === this.rules.fort.bastion ? 'Bastions à la Vauban' : `${b.name} niveau ${l}`;
           h += pend ? `<button class="btn" disabled>${esc(done)} : ${qState}</button>`
-            : vauban ? `<button class="btn" disabled title="Recherchez « Fortifications à la Vauban » (militaire)">Bastions à la Vauban<small>technologie Vauban requise</small></button>`
+            : vauban ? `<button class="btn" disabled title="Recherchez « Fortifications à la Vauban » (artillerie et génie)">Bastions à la Vauban<small>technologie Vauban requise</small></button>`
             : `<button class="btn" disabled>${k === 'dev' ? this.devName(gn.type, lvl) + ' : agrandissement maximal' : b.name + ' au maximum'}</button>`;
           continue;
         }
@@ -1716,7 +1716,7 @@ export class UI {
       }).join('');
       return `<div class="tech-col"><h3>${BRANCH_LABEL[br]}</h3><div class="cur">${head}</div>${cards}</div>`;
     }).join('');
-    const html = `<h2 class="m-title" id="m-title">Technologies</h2><p class="m-sub">Une recherche à la fois par branche. Le militaire gagne les batailles, le civil et social fait marcher l’État et la société, l’industriel forge armes et outils, l’agricole remplit les greniers.</p>${this.decouv.frise()}<div class="tech-cols">${cols}</div>`;
+    const html = `<h2 class="m-title" id="m-title">Technologies</h2><p class="m-sub">Une recherche à la fois par branche. L’infanterie et la cavalerie, l’artillerie et le génie gagnent les batailles, le civil et social fait marcher l’État et la société, l’industriel forge armes et outils, l’agricole remplit les greniers.</p>${this.decouv.frise()}<div class="tech-cols">${cols}</div>`;
     return [html, JSON.stringify([me.techs, Object.values(me.research).map(r => r && Math.ceil(r.left)), Math.floor(me.res.livres / 25)])];
   }
 
