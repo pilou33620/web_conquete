@@ -56,17 +56,18 @@ function boxBlur(f, W, H, r) {
 }
 const PLAYABLE = ['33', '24', '40', '47', '64'];
 
-// segments [[x, y, clé], [x, y, clé]] des carrés marchants, raboutés en lignes continues : des milliers de bouts
-// séparés, chacun à extrémités rondes, coûtaient la moitié du rendu de chaque image (4 traits par frontière)
+// segments [[x, y, clé], [x, y, clé]] des carrés marchants, raboutés en lignes continues ([[x, y], …]) : des
+// milliers de bouts séparés, chacun à extrémités rondes, coûtaient la moitié du rendu (4 traits par frontière)
 export function chainSegments(segs) {
-  const adj = new Map(), used = new Uint8Array(segs.length), path = new Path2D();
+  const adj = new Map(), used = new Uint8Array(segs.length), lines = [];
   segs.forEach(([p, q], s) => { for (const k of [p[2], q[2]]) { const l = adj.get(k); if (l) l.push(s); else adj.set(k, [s]); } });
   const walk = (s, from) => {
     let [p, q] = segs[s];
     if (p[2] !== from) [p, q] = [q, p];
-    path.moveTo(p[0], p[1]);
+    const line = [[p[0], p[1]]];
+    lines.push(line);
     for (;;) {
-      used[s] = 1; path.lineTo(q[0], q[1]);
+      used[s] = 1; line.push([q[0], q[1]]);
       s = adj.get(q[2]).find(t => !used[t]);
       if (s === undefined) return;
       q = segs[s][0][2] === q[2] ? segs[s][1] : segs[s][0];
@@ -75,17 +76,19 @@ export function chainSegments(segs) {
   // d'abord les lignes ouvertes (là où le tracé sort des départements jouables), puis les boucles
   for (const [k, l] of adj) if (l.length === 1 && !used[l[0]]) walk(l[0], k);
   for (let s = 0; s < segs.length; s++) if (!used[s]) walk(s, segs[s][0][2]);
-  return path;
+  return lines;
 }
-
-// toile de travail des tuiles, si le navigateur sait dessiner hors écran (Safari avant 16.4 : non). Tuiles et
-// toiles sources restent en mémoire ordinaire (CPU) : sur PC, la carte graphique débordée perdait les tuiles
-// peintes chez elle, gardées ensuite vides (rectangles noirs) ; l'image du processeur, elle, ne se perd pas
-const CPU = { willReadFrequently: true };
-function offscreenTile() {
-  try { const c = new OffscreenCanvas(TILE, TILE); return c.getContext('2d', CPU) ? c : null; } catch (e) { return null; }
+// les lignes en morceaux de 48 pas, avec leur emprise : chaque tuile ne trace que les morceaux qui la traversent
+export function lineChunks(lines) {
+  const out = [];
+  for (const l of lines) for (let a = 0; a < l.length - 1; a += 48) {
+    const pts = l.slice(a, a + 49), p = new Path2D();
+    pts.forEach(([x, y], k) => (k ? p.lineTo(x, y) : p.moveTo(x, y)));
+    const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
+    out.push({ p, box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] });
+  }
+  return out;
 }
-function freeTile(t) { if (t.close) t.close(); else t.width = t.height = 0; }
 
 function b64(s) {
   const bin = atob(s);
@@ -137,6 +140,7 @@ export class MapView {
     this.baseTiles = new Map();   // tuiles du niveau le plus bas : jamais évincées, elles servent de fond de secours
     this.tileLimit = 160;
     this.tileGen = 0;             // génération des territoires peints dans les tuiles
+    this.pool = [];               // canevas des tuiles évincées, à réutiliser
     this.frameNo = 0;
     this.curL = 0;                // niveau affiché (figé pendant un pincement ou un zoom animé)
     this.zoomT = 0;               // dernier changement de zoom
@@ -276,8 +280,7 @@ export class MapView {
       dsm[j * W + i] = sum / n;
     }
     this.oceanDist = df;
-    // (en mémoire ordinaire, comme les tuiles qu'elles servent à peindre : voir offscreenTile)
-    const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d', CPU); return c; };
+    const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
     this.oceanCanvas = mk(W, H);
     this.oceanDsm = dsm;
     this.paintOcean();
@@ -296,7 +299,7 @@ export class MapView {
     // grain de papier
     this.grain = document.createElement('canvas');
     this.grain.width = this.grain.height = 128;
-    const gctx = this.grain.getContext('2d', CPU);
+    const gctx = this.grain.getContext('2d');
     const gd = gctx.createImageData(128, 128);
     for (let k = 0; k < 128 * 128; k++) {
       const v = 205 + hash(k, 77) * 50;
@@ -1098,7 +1101,7 @@ export class MapView {
           }
         }
       }
-      this.frontiers.push({ code: codes[ci], path: chainSegments(segs) });
+      this.frontiers.push({ code: codes[ci], parts: lineChunks(chainSegments(segs)) });
     }
     this.tileGen++;
     this.cellFac = idx; this.facCodes = codes;   // (le camp qui tient chaque case : le paysage de son époque, epoque.js)
@@ -1111,7 +1114,7 @@ export class MapView {
     const W = this.W, H = this.H, R = 3, FW = W * R, FH = H * R;
     const cv = this.fillCanvas;
     if (cv.width !== FW || cv.height !== FH) { cv.width = FW; cv.height = FH; }
-    const fctx = cv.getContext('2d', CPU);
+    const fctx = cv.getContext('2d');
     const img = fctx.createImageData(FW, FH), data = img.data;
     const cols = codes.map(c => hexRgb(this.colors[c]));
     const pl = this.playable;
@@ -1153,7 +1156,7 @@ export class MapView {
     const key = `${L}:${tx}:${ty}`;
     if (L === LEVELS[0]) {
       let b = this.baseTiles.get(key);
-      if (allowRender && (!b || b.gen !== this.tileGen)) { if (b) freeTile(b); b = this.renderTile(L, tx, ty); this.baseTiles.set(key, b); }
+      if (allowRender && (!b || b.gen !== this.tileGen)) { if (b) this.pool.push(b); b = this.renderTile(L, tx, ty); this.baseTiles.set(key, b); }
       return b || null;
     }
     let t = this.tiles.get(key);
@@ -1165,22 +1168,23 @@ export class MapView {
       return t;
     }
     if (!allowRender) return null;
-    if (t) { this.tiles.delete(key); freeTile(t); }
+    if (t) { this.tiles.delete(key); this.pool.push(t); }
     t = this.renderTile(L, tx, ty);
     t.seen = this.frameNo;
     this.tiles.set(key, t);
-    // les plus anciennes partent, jamais celles affichées à cette image. Le canevas est vidé tout de suite :
-    // Safari (iPad) garde sinon leur mémoire et, passé sa limite, laisse des tuiles blanches
+    // les plus anciennes partent, jamais celles affichées à cette image. Leur canevas sert à la prochaine tuile :
+    // jamais détruit, il ne laisse ni tuiles blanches sur Safari (iPad), ni tuiles noires sur Chrome (PC), qui
+    // effaçait parfois un canevas détruit pendant qu'il s'affichait encore
     for (const [k, old] of this.tiles) {
       if (this.tiles.size <= this.tileLimit || old.seen === this.frameNo) break;
       this.tiles.delete(k);
-      freeTile(old);
+      this.pool.push(old);
     }
     return t;
   }
 
   invalidateTiles() {
-    for (const m of [this.tiles, this.baseTiles]) { for (const t of m.values()) freeTile(t); m.clear(); }
+    for (const m of [this.tiles, this.baseTiles]) { this.pool.push(...m.values()); m.clear(); }
   }
 
   // portion manquante d'une tuile : on la recouvre avec les tuiles déjà prêtes d'un autre niveau
@@ -1219,12 +1223,9 @@ export class MapView {
   }
 
   renderTile(L, tx, ty) {
-    // une seule toile de travail, dont chaque tuile est détachée en image (ImageBitmap) : avec des centaines de
-    // canevas vivants, Chrome finit par en perdre le contenu sur PC, et les tuiles s'affichent en noir
-    if (this.tileCv === undefined) this.tileCv = offscreenTile();
-    const cv = this.tileCv || document.createElement('canvas');
-    cv.width = cv.height = TILE;   // (vide la toile et remet l'état du contexte à zéro)
-    const g = cv.getContext('2d', CPU);
+    const cv = this.pool.pop() || Object.assign(document.createElement('canvas'), { width: TILE, height: TILE });
+    const g = cv.getContext('2d');
+    g.save();   // (le canevas resservira : son état revient à zéro à la fin ; le fond opaque efface l'ancienne tuile)
     const span = TILE / L, x0 = tx * span, y0 = ty * span;
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = 'high';
@@ -1355,18 +1356,21 @@ export class MapView {
     W();
     const z = L * 0.88 / this.dpr;   // (le zoom moyen auquel s'affiche ce niveau : voir level)
     g.lineCap = 'round'; g.lineJoin = 'round'; g.setLineDash([]);
+    const m = Math.max(1.4, 11 / z), bx0 = x0 - m, by0 = y0 - m, bx1 = x0 + span + m, by1 = y0 + span + m;
     for (const fr of this.frontiers) {
+      const path = new Path2D();
+      for (const c of fr.parts) if (c.box[0] < bx1 && c.box[2] > bx0 && c.box[1] < by1 && c.box[3] > by0) path.addPath(c.p);
       const col = this.colors[fr.code];
       g.strokeStyle = col;
-      g.globalAlpha = 0.16; g.lineWidth = Math.max(1.4, 11 / z); g.stroke(fr.path);
-      g.globalAlpha = 0.35; g.lineWidth = Math.max(0.7, 5.5 / z); g.stroke(fr.path);
-      g.globalAlpha = 0.95; g.lineWidth = Math.max(0.25, 2.4 / z); g.stroke(fr.path);
-      g.strokeStyle = lighten(col, 0.6); g.globalAlpha = 0.7; g.lineWidth = Math.max(0.08, 0.8 / z); g.stroke(fr.path);
+      g.globalAlpha = 0.16; g.lineWidth = Math.max(1.4, 11 / z); g.stroke(path);
+      g.globalAlpha = 0.35; g.lineWidth = Math.max(0.7, 5.5 / z); g.stroke(path);
+      g.globalAlpha = 0.95; g.lineWidth = Math.max(0.25, 2.4 / z); g.stroke(path);
+      g.strokeStyle = lighten(col, 0.6); g.globalAlpha = 0.7; g.lineWidth = Math.max(0.08, 0.8 / z); g.stroke(path);
       g.globalAlpha = 1;
     }
-    const t = this.tileCv ? cv.transferToImageBitmap() : cv;
-    t.gen = this.tileGen;
-    return t;
+    g.restore();
+    cv.gen = this.tileGen;
+    return cv;
   }
 
   drawRoads(g, L, x0, y0, span) {
@@ -1684,9 +1688,23 @@ export class MapView {
         d.head += dh * Math.min(1, dt * 5);
       }
     }
+    const t0 = performance.now();
     this.draw(dt, now / 1000);
     this.drawFog();
+    if (location.hash.includes('fps')) this.drawFps(t0, performance.now() - t0);
     requestAnimationFrame(t => this.frame(t));
+  }
+
+  // compteur (adresse terminée par #fps) : images par seconde et temps de dessin du processeur. Si le dessin est
+  // court et les images rares, c'est la carte graphique qui peine
+  drawFps(t0, ms) {
+    const f = this.fps || (this.fps = { t: t0, dt: 0.016, ms });
+    f.dt += ((t0 - f.t) / 1000 - f.dt) * 0.05; f.ms += (ms - f.ms) * 0.05; f.t = t0;
+    const ctx = this.ctx;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(this.vw - 310, 8, 302, 26);
+    ctx.fillStyle = '#f1ead8'; ctx.font = '600 14px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(`${(1 / f.dt).toFixed(0)} img/s · dessin ${f.ms.toFixed(1)} ms · ${this.tiles.size} tuiles`, this.vw - 302, 21);
   }
 
   draw(dt, time) {
@@ -1721,9 +1739,10 @@ export class MapView {
     if (missing.length) {
       const cx = (wx0 + wx1) / 2 / span - 0.5, cy = (wy0 + wy1) / 2 / span - 0.5;
       missing.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy));
-      for (const [tx, ty] of missing) {
+      // (6 au plus : la carte graphique les peint après coup, le chronomètre ne voit pas tout son travail)
+      for (const [k, [tx, ty]] of missing.entries()) {
         this.getTile(L, tx, ty, true);
-        if (performance.now() - now > 6) break;
+        if (performance.now() - now > 6 || k >= 5) break;
       }
     } else if (now - this.zoomT > 300 && this.tiles.size + 12 < this.tileLimit) {
       // tout est prêt : on prépare une tuile de la couronne autour de l'écran, pour les déplacements
