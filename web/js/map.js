@@ -616,6 +616,8 @@ export class MapView {
     if (instant) { this.cam = { x, y, z }; this.camAnim = null; return; }
     this.camAnim = { from: { ...this.cam }, to: { x, y, z }, t0: performance.now(), dur };
   }
+  // zoom en cours, ou fini depuis moins de 250 ms (zoomT : draw)
+  zooming() { return performance.now() - this.zoomT < 250; }
   toScreen(x, y) { return [(x - this.cam.x) * this.cam.z + this.vw / 2, (y - this.cam.y) * this.cam.z + this.vh / 2]; }
   toWorld(sx, sy) { return [(sx - this.vw / 2) / this.cam.z + this.cam.x, (sy - this.vh / 2) / this.cam.z + this.cam.y]; }
   clampCam() {

@@ -236,20 +236,20 @@ export class Ambient {
   // ------------------------------------------------------------------ sous les villes et les armées
   under(ctx, dt, time, st) {
     if (!this.on) return;
-    const z = this.map.cam.z;
-    if (z >= 3.5) this.drawFlows(ctx, time);
+    const z = this.map.cam.z, zoom = this.map.zooming();   // (pendant un zoom, les petites figures qui bougent attendent)
+    if (z >= 3.5 && !zoom) this.drawFlows(ctx, time);
     if (z >= 3) this.drawSea(ctx, time);
     this.drawLight(ctx, time);
     if (z >= 6.5) this.drawWaterMills(ctx, time);
     if (z >= 3.6) this.drawMills(ctx, time, st);
-    if (z >= 7) this.drawHerds(ctx, time);
-    if (z >= 5.5) this.drawTravellers(ctx, time);
+    if (z >= 7 && !zoom) this.drawHerds(ctx, time);
+    if (z >= 5.5 && !zoom) this.drawTravellers(ctx, time);
     if (z >= 3) this.drawBoats(ctx, time, st);
   }
 
   // ------------------------------------------------------------------ au-dessus de tout (fumées, oiseaux)
   over(ctx, dt, time, st) {
-    if (!this.on) return;
+    if (!this.on || this.map.zooming()) return;
     const z = this.map.cam.z;
     if (z >= 3.2) this.drawSmoke(ctx, time, st);
     if (z >= 4) this.drawGulls(ctx, time);

@@ -295,7 +295,7 @@ export class TownArt {
     const neutral = owner === 'neutre';
     lot.next(); mp.flag(lot, px * k, py * k + 1, clamp(s * (n.type === 'village' ? 0.32 : 0.28), 7, 24), neutral ? '#e9e4d4' : col);
     const amb = mp.ambient;
-    if (!amb || !amb.on) return;
+    if (!amb || !amb.on || mp.zooming?.()) return;   // (habitants et pigeons : pas pendant un zoom)
     const z = mp.cam.z;
     // habitants qui vont et viennent dans la rue, devant les maisons
     if (z >= 8 && n.type !== 'fort') {
