@@ -816,10 +816,6 @@ web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et 
                      film : étiquettes, repères, vitesses),
                      interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils
                      communs), css/bataille.css ;
-                     dev/maquette.mjs : serveur de maquette (node web/js/battle/dev/maquette.mjs, puis
-                     /js/battle/dev/banc.html?scen=…&season=…&weather=…&hour=…&year=…&start=1) ;
-                     dev/capture.mjs : capture d'écran du banc par Chromium sans écran
-                     (node web/js/battle/dev/capture.mjs bocage /tmp/bocage.png --q "hour=18") ;
                      dev/cuire.mjs : précalcule les animations sur le squelette de nos figurines (à relancer
                      seulement si on change les gestes) ; dev/cheval.mjs : précalcule le cheval de Quaternius
                      (node web/js/battle/dev/cheval.mjs Horse.gltf) ; dev/anims.html : page d'essai des animations
