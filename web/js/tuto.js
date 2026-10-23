@@ -20,7 +20,7 @@ function etapes(ui) {
     { txt: 'Touchez maintenant un lieu sur la carte, puis « Marcher par les routes ». Glisser depuis l’armée trace votre propre itinéraire.', need: () => selMine('army'), done: f => f.has('move') || f.has('path') },
     { txt: `Touchez votre chef-lieu, ${cap ? cap.name : ''}.`, go: cap && [cap.x, cap.y], unsel: true, need: () => !!cap && st.nodes[cap.id]?.o === me, done: () => selMine('node') },
     { at: '#panel', txt: 'Le panneau de la ville : bâtissez dans ses emplacements, levez des régiments, choisissez sa politique. Essayez : levez un régiment ou lancez une construction.', opt: true, need: () => ui.sel?.kind === 'node' && ui.sel.id === cap?.id, done: f => f.has('recruit') || f.has('build') || f.has('slot_build') },
-    { at: '#rail [data-v="tech"]', txt: 'Ouvrez les Technologies : vos savants y cherchent une découverte à la fois, des armes aux routes.', done: () => ui.modal === 'tech' },
+    { at: '#rail [data-v="tech"]', txt: 'Ouvrez les Technologies : vos savants y cherchent une découverte à la fois dans chaque branche, des armes aux routes.', done: () => ui.modal === 'tech' },
     { at: '#rail', txt: 'À côté : Diplomatie (paix, alliances, droits de passage), Commerce (le marché), Production et le Journal.' },
     { at: '#rail [data-v="production"]', txt: 'Ouvrez la Production : c’est là que se règlent les impôts.', done: () => ui.modal === 'production' },
     { at: '#rail', txt: 'Plus d’impôts, c’est plus d’argent tout de suite, mais l’ordre public baisse : une ville agitée sans garnison peut se révolter.' },

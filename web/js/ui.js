@@ -8,6 +8,7 @@ import { profil } from './battle/qualite.js';
 import { figureKind, drawPortrait } from './portraits.js';
 import { valeursTable } from './valeurs.js';
 import { Decouvertes } from './decouvertes.js';
+import { arbreHtml } from './arbre.js';
 import { startTechs, startRails } from './epoque.js';
 import { drawPlan } from './plan.js';
 
@@ -904,6 +905,8 @@ export class UI {
       case 'policy': this.cmd({ cmd: 'policy', node: sel.id, value: d.v }); break;
       case 'policy-all': this.cmd({ cmd: 'policy', node: sel.id, value: d.v, all: true }); break;
       case 'research': this.cmd({ cmd: 'research', tech: d.v }); break;
+      case 'techtab': this.techTab = d.v; this.modalSig = ''; this.renderModal(); break;
+      case 'techsel': this.techSel = d.v; this.modalSig = ''; this.renderModal(); break;
       case 'diplo': {
         const body = { cmd: 'diplo', to: d.to, action: d.v };
         const inp = document.getElementById(`amt-${d.v}-${d.to}`);
@@ -1693,30 +1696,13 @@ export class UI {
   }
 
   techModal() {
-    const me = this.st.me;
-    const cols = this.rules.branches.map(br => {
-      const cur = me.research[br];
-      // par étage de l'arbre (les prérequis d'abord), puis par coût
-      const depth = t => t.req.length ? 1 + Math.max(...t.req.map(r => depth(this.rules.techs.find(x => x.id === r)))) : 0;
-      const techs = this.rules.techs.filter(t => t.branch === br).sort((a, b) => depth(a) - depth(b) || a.cost - b.cost);
-      const curT = cur ? this.rules.techs.find(t => t.id === cur.tech) : null;
-      const head = curT ? `En cours : ${curT.name}, prête ${toursTxt(cur.tn)}<div class="bar green" style="margin-top:4px"><i style="width:${Math.round((1 - cur.left / cur.total) * 100)}%"></i></div>` : 'Aucune recherche en cours.';
-      const cards = techs.map(t => {
-        const done = me.techs.includes(t.id);
-        const running = cur && cur.tech === t.id;
-        const ready = t.req.every(r => me.techs.includes(r));
-        const reqNames = t.req.map(r => this.rules.techs.find(x => x.id === r).name).join(', ');
-        let foot = '';
-        if (done) foot = '<span class="muted">Acquise</span>';
-        else if (running) foot = '<span>En cours…</span>';
-        else if (!ready) foot = `<span class="muted">Requiert : ${reqNames}</span>`;
-        else foot = `<span>${fmt(t.cost)} livres, ${partTour(t.days)}</span><button class="btn" data-act="research" data-v="${t.id}" ${cur || me.res.livres < t.cost ? 'disabled' : ''}>Rechercher</button>`;
-        return `<div class="tech ${done ? 'done' : running ? 'running' : !ready ? 'locked' : ''}"><div class="tn">${t.name}</div><div class="td">${t.desc}</div><div class="tc">${foot}</div></div>`;
-      }).join('');
-      return `<div class="tech-col"><h3>${BRANCH_LABEL[br]}</h3><div class="cur">${head}</div>${cards}</div>`;
-    }).join('');
-    const html = `<h2 class="m-title" id="m-title">Technologies</h2><p class="m-sub">Une recherche à la fois par branche. L’infanterie et la cavalerie, l’artillerie et le génie gagnent les batailles, le civil et social fait marcher l’État et la société, l’industriel forge armes et outils, l’agricole remplit les greniers.</p>${this.decouv.frise()}<div class="tech-cols">${cols}</div>`;
-    return [html, JSON.stringify([me.techs, Object.values(me.research).map(r => r && Math.ceil(r.left)), Math.floor(me.res.livres / 25)])];
+    const me = this.st.me, brs = this.rules.branches;
+    const br = brs.includes(this.techTab) ? this.techTab : brs[0];
+    const tabs = brs.map(b => `<button class="btn ${b === br ? 'primary' : ''}" role="tab" aria-selected="${b === br}" data-act="techtab" data-v="${b}"
+      ${me.research[b] ? '' : 'title="Aucune recherche en cours"'}>${BRANCH_LABEL[b]}${me.research[b] ? '' : ' <span class="idle" aria-label="(libre)">•</span>'}</button>`).join('');
+    const html = `<h2 class="m-title" id="m-title">Technologies</h2><p class="m-sub">Une recherche à la fois par branche, sans attendre la date : seuls les prérequis comptent, et plus une technologie est loin dans l’arbre, plus elle est longue à trouver. Une arme ou une manœuvre nouvelle ne sert qu’aux régiments modernisés.</p>${this.decouv.frise()}
+      <div class="tabs" role="tablist">${tabs}</div>${arbreHtml({ techs: this.rules.techs, branch: br, labels: BRANCH_LABEL, me, year: this.st.year || 0, sel: this.techSel, toursTxt })}`;
+    return [html, JSON.stringify([me.techs, Object.values(me.research).map(r => r && Math.ceil(r.left)), Math.floor(me.res.livres / 25), br, this.techSel])];
   }
 
   diploModal() {

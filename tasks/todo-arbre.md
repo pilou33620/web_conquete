@@ -31,7 +31,7 @@ Vérifications communes à chaque tâche : `python3 tests/lancer.py` passe. Un c
   - Fichiers : `game/rules.py`, `game/engine.py`, `game/ai.py`, `web/js/ui.js`, `tests/test_campagne.py`
   - Taille : M
 
-- [ ] **A3 : la fenêtre en arbre**
+- [x] **A3 : la fenêtre en arbre**
   - Critères :
     - cinq onglets, avec la recherche en cours en tête ;
     - les cases par étage, et les traits des prérequis de la même branche ;

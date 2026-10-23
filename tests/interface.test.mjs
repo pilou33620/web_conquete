@@ -259,3 +259,23 @@ test('valeurs : la portée de justesse (demi-justesse D50 de l’arme), dans la 
   assert.ok(h.includes('bout portant'), 'la bulle de la Précision dit qu’elle vaut à bout portant');
   assert.ok(valeursTable([['Ligne', s]]).includes('<td>180 m</td>'), 'une colonne du tableau');
 });
+
+test('l’arbre des technologies : une case par technologie, un trait par prérequis de la même branche', async () => {
+  const { arbrePlace, arbreHtml } = await charger('arbre.js');
+  const T = (id, branch, req = [], cost = 100) => ({ id, branch, req, cost, days: 360, name: id, desc: '', year: 1800 });
+  const techs = [T('a', 'inf'), T('b', 'inf', ['a']), T('c', 'inf', ['a', 'x']), T('d', 'inf', ['b', 'c']), T('e', 'inf', [], 50),
+    T('x', 'ind')];
+  const P = arbrePlace(techs, 'inf');
+  assert.equal(P.cases.length, 5);
+  assert.deepEqual(P.traits.sort(), [['a', 'b'], ['a', 'c'], ['b', 'd'], ['c', 'd']], 'pas de trait vers une autre branche');
+  const at = Object.fromEntries(P.cases.map(c => [c.id, c]));
+  assert.deepEqual([at.a.col, at.b.col, at.c.col, at.d.col, at.e.col], [0, 1, 1, 2, 0]);
+  assert.equal(new Set(P.cases.map(c => `${c.col},${c.row}`)).size, 5, 'deux cases jamais au même endroit');
+  const me = { techs: ['a'], research: { inf: null }, res: { livres: 1000 }, tech_dates: {} };
+  const html = arbreHtml({ techs, branch: 'inf', labels: { inf: 'Inf', ind: 'Ind' }, me, year: 1700, sel: 'b', toursTxt: n => `${n}` });
+  assert.equal((html.match(/data-act="techsel"/g) || []).length, 5);
+  assert.equal((html.match(/<path /g) || []).length, 4);
+  assert.match(html, /← x/, 'le prérequis d’une autre branche est écrit dans la case');
+  assert.match(html, /data-act="research" data-v="b"/, 'la fiche de la case choisie a son bouton');
+  assert.match(html, /100 ans d’avance/);
+});

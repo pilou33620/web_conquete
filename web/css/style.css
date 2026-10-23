@@ -318,18 +318,36 @@ body.modal-open #proposals { z-index: 36; top: auto; bottom: calc(12px + var(--s
 .modal-card > .close { position: absolute; top: 12px; right: 12px; }
 .m-title { font-family: var(--f-titre); font-size: 30px; margin: 0 40px 2px 0; line-height: 1.05; }
 .m-sub { color: var(--papier-2); font-style: italic; margin: 0 0 14px; max-width: 70ch; }
-.tech-cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-.tech-col h3 { font-family: var(--f-titre); font-weight: normal; font-size: 21px; margin: 0 0 4px; color: var(--laiton-clair); }
-.tech-col .cur { font-size: 13.5px; color: var(--papier-2); margin-bottom: 8px; min-height: 2.6em; }
-.tech { border: 1px solid var(--hair); border-radius: 7px; padding: 8px 9px; margin-bottom: 7px; background: rgba(0,0,0,.15); }
-.tech .tn { font-weight: 600; font-size: 15.5px; line-height: 1.15; }
-.tech .td { font-size: 13.5px; color: var(--papier-2); margin: 3px 0 6px; }
-.tech .tc { font-size: 13px; display: flex; justify-content: space-between; gap: 6px; align-items: center; }
-.tech.done { border-color: var(--laiton); background: rgba(200,162,83,.13); }
-.tech.done .tn::before { content: "✓ "; color: var(--laiton-clair); }
-.tech.locked { opacity: .5; }
-.tech.running { border-color: var(--sauge); }
-.tech .btn { padding: 3px 9px; font-size: 13.5px; }
+/* l'arbre des technologies (web/js/arbre.js) */
+.arbre-cur { font-size: 14px; color: var(--papier-2); margin-bottom: 8px; max-width: 520px; }
+.arbre-cur .bar { margin-top: 4px; }
+.arbre { overflow-x: auto; padding: 4px 2px 10px; -webkit-overflow-scrolling: touch; scrollbar-color: var(--laiton) rgba(0,0,0,.25); }
+.arbre-in { position: relative; }
+.arbre-traits { position: absolute; inset: 0; pointer-events: none; }
+.arbre-traits path { fill: none; stroke: var(--hair); stroke-width: 1.6; }
+.arbre-traits path.ok { stroke: var(--laiton); }
+.tcase { position: absolute; width: 176px; height: 66px; display: flex; flex-direction: column; justify-content: space-between;
+  text-align: left; padding: 5px 8px; border: 1px solid var(--hair); border-radius: 7px; background: #23201a; color: inherit;
+  font: inherit; cursor: pointer; overflow: hidden; }
+.tcase .tn { font-weight: 600; font-size: 13.5px; line-height: 1.12; }
+.tcase .tx { font-size: 11px; color: #e0a07a; line-height: 1.1; }
+.tcase .tx i { font-style: normal; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcase .tx i.ok { color: var(--papier-2); }
+.tcase .tp { font-size: 11.5px; color: var(--papier-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcase.done { border-color: var(--laiton); background: #3a3121; }
+.tcase.done .tn::before { content: "✓ "; color: var(--laiton-clair); }
+.tcase.running { border-color: var(--sauge); box-shadow: 0 0 0 1px var(--sauge) inset; }
+.tcase.ready { border-color: var(--papier-2); }
+.tcase.locked { opacity: .55; }
+.tcase.sel { outline: 2px solid var(--laiton-clair); outline-offset: 1px; opacity: 1; }
+.tcase:focus-visible { outline: 2px solid var(--laiton-clair); }
+.tabs .idle { color: var(--sauge); }
+.tfiche { border-top: 1px solid var(--hair); margin-top: 6px; padding-top: 8px; max-width: 70ch; }
+.tfiche h3 { font-family: var(--f-titre); font-weight: normal; font-size: 21px; margin: 0 0 4px; color: var(--laiton-clair); }
+.tfiche p { margin: 0 0 6px; }
+.treq { list-style: none; padding: 0; margin: 0 0 8px; font-size: 14px; }
+.treq .ok { color: var(--sauge); }
+.treq .manque { color: #e0a07a; }
 .diplo-list { display: flex; flex-direction: column; gap: 10px; }
 .dcard { display: grid; grid-template-columns: 44px 1fr 330px; gap: 12px; padding: 12px; border: 1px solid var(--hair); border-radius: 8px; background: rgba(0,0,0,.14); }
 .dcard .coat { width: 40px; height: 48px; }
@@ -434,7 +452,6 @@ table.grid.vl-tab td:first-child, table.grid.vl-tab th:first-child { text-align:
 }
 @media (max-width: 1100px) {
   .res .d { display: none; }
-  .tech-cols { grid-template-columns: repeat(2, 1fr); }
   .dcard { grid-template-columns: 44px 1fr; }
   .dcard .dact { grid-column: span 2; }
 }
@@ -463,7 +480,7 @@ table.grid.vl-tab td:first-child, table.grid.vl-tab th:first-child { text-align:
   #proposals { right: 8px; left: 8px; width: auto; }
   #zoombar { top: auto; right: 8px; bottom: calc(66px + var(--safe-b) + 120px); }
   #panel:not([hidden]) ~ #zoombar { display: none; }
-  .tech-cols, .two { grid-template-columns: 1fr; }
+  .two { grid-template-columns: 1fr; }
   .modal-card { padding: 16px 14px; }
   .m-title { font-size: 25px; }
   #start { grid-template-columns: 1fr; grid-template-rows: 34% 1fr; }
