@@ -8,7 +8,7 @@ from . import rails as RL
 from . import diplomacy as D
 from . import army_actions as AA
 
-ARM_TECHS = {t for l in R.ARMS.values() for t, _, _ in l if t}
+AI_AHEAD = 5   # ans d'avance au plus sur l'histoire pour une recherche des IA (SPEC-ARBRE.md)
 from .geo import TERRAIN
 
 MIX = {
@@ -577,12 +577,14 @@ class AI:
         for b in sorted(R.BRANCHES, key=lambda b: (b not in taste, self.rng.random())):
             if f['research'][b]:
                 continue
+            # l'IA suit l'histoire (choix du 24/10/2026) : dans l'ordre des dates d'invention, et elle ne lance une
+            # recherche que pour la finir vers sa date (à AI_AHEAD ans près) ; le joueur, lui, peut foncer
+            year = g.date().year
             avail = [t for t in R.TECH.values() if t['branch'] == b and t['id'] not in f['techs']
-                     and all(q in f['techs'] for q in t['req'])]
+                     and all(q in f['techs'] for q in t['req']) and R.TECH_YEAR[t['id']] - t['days'] / 360 - AI_AHEAD <= year]
             if not avail:
                 continue
-            # un nouveau fusil ou un nouveau canon passe avant tout : une armée démodée est une armée battue
-            t = min(avail, key=lambda t: t['cost'] * (0.8 + 0.4 * self.rng.random()) * (0.4 if t['id'] in ARM_TECHS else 1))
+            t = min(avail, key=lambda t: R.TECH_YEAR[t['id']] + 8 * self.rng.random())
             if f['res']['livres'] > t['cost'] + 180:
                 g.research(self.code, t['id'])
                 return

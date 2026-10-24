@@ -97,7 +97,7 @@ Vérifications communes à chaque tâche : `python3 tests/lancer.py` passe. Un c
   - Fichiers : `outils/simuler.py`, `tasks/equilibre-reference.md`, `game/rules.py`, `game/ai.py`
   - Taille : M (dont environ 3 h de calcul sur le Pi)
 
-- [ ] **A8 : documentation et revue**
+- [x] **A8 : documentation et revue**
   - Critères :
     - `README.md` à jour : technologies, armement par époque, « Moderniser » ;
     - revue complète du chantier (/review), avec ses corrections ;

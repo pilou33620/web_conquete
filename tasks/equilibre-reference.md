@@ -85,3 +85,24 @@ Elles restent à surveiller. Leur cause n'a pas été cherchée : ce peut être 
 le hasard, car six parties suffisent à faire bouger une moyenne de 20 %.
 
 Aucune partie n'a planté. La partie 1 de 1813 s'arrête le 22 mai 1853 parce qu'il ne reste plus qu'un camp.
+
+## Arbre des technologies (SPEC-ARBRE, A7, 24/10/2026)
+
+Référence refaite le 24/10 sur le code d'avant le chantier (commit `98d9911`) : celle du 18/10 date d'avant le train.
+6 parties, 30 ans, graines 1 à 6. « Arbre » : commit `869df5e` (recherche libre, IA qui fonce encore sur les armes).
+
+| Moyenne | 1790 avant | 1790 arbre | 1700 avant | 1700 arbre |
+|---|---|---|---|---|
+| Guerres déclarées | 14,0 | 15,2 (+9 %) | 12,5 | 17,0 (+36 %) |
+| Durée d'une guerre (mois) | 3,8 | 3,6 | 3,9 | 3,9 |
+| Écart de places | 97,8 | 87,5 | 97,2 | 95,8 |
+| Camps en vie | 3,5 | 3,7 | 3,5 | 3,3 |
+| Technologies par camp | 54,0 | 47,6 | 16,2 | 23,1 (+43 %) |
+| Trésor (livres) | 76 288 | 75 433 | 45 248 | 38 367 |
+| Hommes par camp | 14 028 | 12 717 | 10 130 | 11 912 |
+
+Grandes armes trouvées par les IA (commit `869df5e`) : depuis 1700, la percussion vers 1720 (18 camps sur 30), alors
+que l'histoire la place en 1840. Banc long (2 parties, 1700 à 1890) : percussion vers 1725, Chassepot vers 1801.
+Choix du 24/10 : **l'IA suit l'ordre historique** (elle ne lance une recherche que pour la finir vers sa date, à
+5 ans près ; `ai.AI_AHEAD`), le joueur reste libre de foncer. Cette correction n'est pas encore mesurée : lancer
+`sh outils/banc_arbre.sh court` (environ 70 min sur le Pi), puis lire `/tmp/banc-arbre/resume.txt`.

@@ -2078,3 +2078,22 @@ class Moderniser(unittest.TestCase):
         jouer_mois(g, 3)
         appris = [r for a in g.armies.values() if a['owner'] == code for r in a['regs'] if 'voltigeurs' in r.get('man', [])]
         self.assertTrue(appris, 'en trois mois, l’IA a modernisé au moins une armée')
+
+
+class RechercheDesIA(unittest.TestCase):
+    """Choix du 24/10/2026 : l'IA cherche dans l'ordre des dates et finit vers la date historique (le joueur fonce)."""
+
+    def test_l_ia_ne_fonce_pas_sur_la_percussion(self):
+        from game import ai as AI
+        g = partie(epoque='1700')
+        code = '24'
+        f = g.factions[code]
+        f['res']['livres'] = 1e6
+        f['techs'] += ['baionnette', 'fusil1777', 'poudreries']
+        for _ in range(5):
+            g.ais[code].research()
+        cours = {v['tech'] for v in f['research'].values() if v}
+        self.assertTrue(cours, 'elle cherche')
+        self.assertNotIn('percussion', cours, 'la percussion (1840) ne se lance pas en 1700')
+        for t in cours:
+            self.assertLessEqual(R.TECH_YEAR[t] - R.TECH[t]['days'] / 360 - AI.AI_AHEAD, 1700, t)
