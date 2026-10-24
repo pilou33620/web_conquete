@@ -96,7 +96,8 @@ class TourParTour(unittest.TestCase):
         st = g.tour['stop']
         self.assertTrue(g.speed_idx or (st and st.get('sel') != ['battle', bt['id']]),
                         'le choix fait, le tour des IA reprend tout seul (sans « Continuer »)')
-        self.assertEqual(set(jouer_reste(g)) - {'bataille'}, set(), "seules d'autres attaques l'arrêtent encore")
+        # (un imprévu qui demande une décision peut aussi tomber ce mois-là, selon le tirage : il n'a rien à voir ici)
+        self.assertEqual(set(jouer_reste(g)) - {'bataille', 'decision'}, set(), "seules d'autres attaques l'arrêtent encore")
         self.assertEqual(g.date().day, 1)
 
     def test_une_decision_arrete_le_tour_des_ia_puis_il_reprend(self):
