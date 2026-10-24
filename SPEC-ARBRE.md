@@ -238,5 +238,6 @@ civiles…) reste national et immédiat, comme aujourd'hui.
 - A1 à A6 construits ; A8 : README, revue faite et corrigée.
 - A7 : premier banc mesuré (`tasks/equilibre-reference.md`, section « Arbre ») ; les IA trouvaient les armes un siècle
   trop tôt. Correction choisie le 24/10 : **les IA cherchent dans l'ordre historique** et finissent vers la date
-  (`ai.AI_AHEAD` = 5 ans) ; le joueur, lui, peut foncer. À mesurer : `sh outils/banc_arbre.sh court`.
+  (`ai.AI_AHEAD` = 5 ans) ; le joueur, lui, peut foncer. Mesuré le 24/10 : armes à leur époque, tout dans ±25 % sauf
+  le trésor des IA depuis 1700 (+28 %).
 - Vérifications : par scripts, lancés par toi (`sh tests/resume.sh`, `sh outils/banc_arbre.sh [court]`).

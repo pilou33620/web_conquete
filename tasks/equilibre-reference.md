@@ -106,3 +106,22 @@ que l'histoire la place en 1840. Banc long (2 parties, 1700 à 1890) : percussio
 Choix du 24/10 : **l'IA suit l'ordre historique** (elle ne lance une recherche que pour la finir vers sa date, à
 5 ans près ; `ai.AI_AHEAD`), le joueur reste libre de foncer. Cette correction n'est pas encore mesurée : lancer
 `sh outils/banc_arbre.sh court` (environ 70 min sur le Pi), puis lire `/tmp/banc-arbre/resume.txt`.
+
+### Après la correction de l'IA (commit `defbf0d` et suivants, 24/10/2026)
+
+6 parties, 30 ans. Graines 1 à 6 (`outils/banc_arbre.sh court`) et, depuis 1700, graines 7 à 12 en plus
+(`outils/banc_compare.sh 98d9911 1700 7`), parce qu'une partie compte de 8 à 22 guerres : 6 parties ne suffisent pas.
+
+| Moyenne | 1790 avant | 1790 après | 1700 avant (12 parties) | 1700 après (12 parties) |
+|---|---|---|---|---|
+| Guerres déclarées | 14,0 | 13,2 (−6 %) | 14,9 | 16,8 (+12 %) |
+| Durée d'une guerre (mois) | 3,8 | 3,6 | 3,7 | 3,9 |
+| Écart de places | 97,8 | 82,2 (−16 %) | 102,5 | 110,4 (+8 %) |
+| Camps en vie | 3,5 | 3,8 | 3,4 | 3,0 (−12 %) |
+| Technologies par camp | 54,0 | 47,8 (−11 %) | 16,4 | 16,5 |
+| Trésor (livres) | 76 288 | 72 787 | 35 497 | 45 599 (+28 %) |
+| Hommes par camp | 14 028 | 14 017 | 10 199 | 10 141 |
+
+Grandes armes : aucune IA ne les trouve avant leur époque (depuis 1700, ni Gribeauval ni la percussion avant 1730 ;
+depuis 1790, ni la percussion ni les canons rayés avant 1820). Tout est dans ±25 %, sauf le trésor depuis 1700
+(+28 %) : les recherches durent des années, les IA lancent moins souvent une recherche payée d'avance.

@@ -86,7 +86,7 @@ Vérifications communes à chaque tâche : `python3 tests/lancer.py` passe. Un c
     `web/js/ui.js`, tests
   - Taille : M
 
-- [ ] **A7 : banc d'équilibre et réglages**
+- [x] **A7 : banc d'équilibre et réglages**
   - Critères :
     - `outils/simuler.py` rend aussi l'année où chaque camp obtient Gribeauval, la percussion, les canons rayés et le
       Chassepot ;
