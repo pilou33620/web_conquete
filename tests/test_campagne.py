@@ -1993,10 +1993,11 @@ class ChampsDeBataille(unittest.TestCase):
         self.assertEqual((s['x'], s['y'], s['l']), (round(bt['x'], 2), round(bt['y'], 2), [320, 150]))
         self.assertEqual(s['o'], [x['owner'] for x in bt['sides']])
         st = V.player_state(g)
-        self.assertEqual(st['sites'], [[s['x'], s['y'], 0, 320, 150, *s['o']]], 'sa propre bataille : vue')
+        self.assertTrue(s['w'] == 1 and s['p'] >= int(320 * R.PRISON_LOSS), 'le vainqueur et ses prisonniers')
+        self.assertEqual(st['sites'], [[s['x'], s['y'], 0, 320, 150, *s['o'], 1, s['p']]], 'sa propre bataille : vue')
         lb = {f['code']: f.get('lb') for f in st['factions']}
-        self.assertEqual(lb[g.player], [0 if s['o'][1] != g.player else 1, 0])
-        self.assertEqual(lb[foe], [1, 0], 'le vainqueur')
+        self.assertEqual(lb[g.player], [0 if s['o'][1] != g.player else 1, 0, s['x'], s['y']], 'avec son lieu (estafettes)')
+        self.assertEqual(lb[foe], [1, 0, s['x'], s['y']], 'le vainqueur')
         self.assertTrue(all(lb[c] is None for c in lb if c not in s['o']), 'les autres camps : rien')
         # sauvegarde : gardés ; une ancienne sauvegarde n'en a pas
         d = json.loads(json.dumps(V.to_dict(g)))
@@ -2005,13 +2006,22 @@ class ChampsDeBataille(unittest.TestCase):
         self.assertEqual(g2.factions[foe]['lb'], g.factions[foe]['lb'])
         del d['sites']
         self.assertEqual(V.from_dict(GEO, d).sites, [])
+        # une ancienne sauvegarde : ni vainqueur, ni lieu de la dernière bataille
+        g3 = V.from_dict(GEO, d)
+        g3.sites = [dict(x=1.0, y=2.0, t=g3.t, l=[5, 5], o=s['o'])]
+        g3.factions[foe]['lb'] = [1, g3.t]
+        st3 = V.player_state(g3)
+        self.assertEqual(st3['sites'][0][7:], [None, 0])
+        self.assertEqual(next(f for f in st3['factions'] if f['code'] == foe)['lb'], [1, 0])
         # la bataille de deux autres camps : vue seulement à portée de vue
         g.sites.append(dict(x=-500.0, y=-500.0, t=g.t, l=[10, 10], o=['40', '47']))
         self.assertEqual(len(V.player_state(g)['sites']), 1, 'loin de tout regard : cachée')
         g.sites[-1]['x'], g.sites[-1]['y'] = s['x'], s['y']
         self.assertEqual(len(V.player_state(g)['sites']), 2, 'sous les yeux du joueur : vue')
         # passé un mois, plus de fête ; passé SITE_DAYS, plus de tombes (et oubliée à la bataille suivante)
-        g.t += V.LB_DAYS + 1
+        g.t += V.LB_DAYS - 1
+        self.assertTrue(any('lb' in f for f in V.player_state(g)['factions']), "un tour (30 jours) et le temps des estafettes")
+        g.t += 2
         st = V.player_state(g)
         self.assertTrue(all('lb' not in f for f in st['factions']))
         self.assertEqual(len(st['sites']), 2)
@@ -2019,6 +2029,25 @@ class ChampsDeBataille(unittest.TestCase):
         self.assertEqual(V.player_state(g)['sites'], [])
         g.end_battle(dict(bt, id='b2'), 0)
         self.assertEqual(len(g.sites), 1, 'les vieux champs de bataille sont oubliés')
+
+    def test_cholera_dans_les_villes(self):
+        """Le choléra de 1832 (événement daté) : trois mois d'épidémie dans les villes (lv, comme une épidémie locale), le
+        cordon sanitaire de la carte ; rien dans les villages, rien avant ni après."""
+        g = partie()
+        t0 = V.CHOLERA_T - g.start_ord
+        g.t = t0 + 5
+        g.ev_done = list(g.ev_done or []) + ['cholera']
+        for n in g.nodes:
+            n.pop('lev', None)
+        lv = {n['id']: n.get('lv') for n in V.player_state(g)['nodes']}
+        villes = [n['id'] for n in GEO.nodes if n['type'] in ('ville', 'capitale')]
+        self.assertTrue(villes and all(lv[i] == ['epidemie', 5] for i in villes))
+        self.assertTrue(all(lv[n['id']] is None for n in GEO.nodes if n['type'] == 'village'))
+        g.t = t0 + V.LEV_DAYS + 1
+        self.assertTrue(all(n.get('lv') is None for n in V.player_state(g)['nodes']), 'trois mois après : fini')
+        g.t, g.ev_done = t0 + 5, []
+        self.assertTrue(all(n.get('lv') is None for n in V.player_state(g)['nodes']), "l'événement n'a pas eu lieu")
+
 
 if __name__ == '__main__':
     unittest.main()

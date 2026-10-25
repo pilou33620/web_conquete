@@ -6,9 +6,9 @@ import { AMB, HEURES, LUM, Z, setHeure, zoneDe } from './ambiance.js';
 import { SPR, TAU, clamp, mod, sprite, surChemin } from './lib.js';
 import { rayonPlace } from './guerre.js';
 import { terre } from './terre.js';
-import { S as SU, etatVille, imageEnCache, resPour } from './villes.js';
+import { IC, S as SU, etatVille, imageEnCache, resPour } from './villes.js';
 
-sprite('fen', '255,214,140'); sprite('pluie', '64,74,88');
+sprite('fen', '255,214,140'); sprite('pluie', '64,74,88'); sprite('gaz', '226,236,255');
 const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
 export const TEINTE_HEURE = { matin: '#f6dcc6', soir: '#f2c9a2', nuit: '#5a6b9e' };
 const PLUIE = new Set(['pluie', 'orage', 'tempete']);
@@ -228,11 +228,14 @@ export class Ciel {
     const mp = this.map, st = mp.state, z = mp.cam.z, nuitV = AMB.heure === 'nuit', k = nuitV ? 1 : AMB.heure === 'soir' ? 0.55 : 0;
     monde(); ctx.globalCompositeOperation = 'lighter';
     if (k) {
+      // (les camps qui ont l'éclairage au gaz : leurs villes, plus blanches, ont des réverbères réguliers dans les rues)
+      if (this.gazSt !== st) { this.gazSt = st; this.gaz = new Set((st.factions || []).filter(f => f.mk?.includes('gaz')).map(f => f.code)); }
       for (const n of mp.nodes) {
         if (n.x < x0 - 3 || n.x > x1 + 3 || n.y < y0 - 3 || n.y > y1 + 3) continue;
-        const ns = st.nodes[n.id], R = rayonPlace(n, ns), Rh = Math.max(R * 1.8, (n.type === 'village' ? 5 : 9) / z);
-        ctx.globalAlpha = 0.3 * k; ctx.drawImage(SPR.lueur, n.x - Rh, n.y - Rh, Rh * 2, Rh * 2);
+        const ns = st.nodes[n.id], R = rayonPlace(n, ns), Rh = Math.max(R * 1.8, (n.type === 'village' ? 5 : 9) / z), gaz = n.type !== 'village' && this.gaz.has(ns.o);
+        ctx.globalAlpha = 0.3 * k; ctx.drawImage(gaz ? SPR.gaz : SPR.lueur, n.x - Rh, n.y - Rh, Rh * 2, Rh * 2);
         if (z >= Z.PLAN) { const f = this.fenetresDe(n, ns, R, Math.max(0.004, 0.8 / z)); if (f) { ctx.globalAlpha = 0.85 * k; ctx.fillStyle = '#ffd58a'; ctx.fill(f); } }
+        if (z >= Z.PLAN && gaz) { const f = this.reverberesDe(n, ns, Math.max(0.003, 0.7 / z)); if (f) { ctx.globalAlpha = 0.16 * k; ctx.fillStyle = '#c8d8ff'; ctx.fill(f[1]); ctx.globalAlpha = 0.9 * k; ctx.fillStyle = '#f4f8ff'; ctx.fill(f[0]); } }
       }
       const c = this.cordouan;
       if (c) {
@@ -264,6 +267,20 @@ export class Ciel {
     }
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }
+  // les réverbères au gaz d'une ville : un tous les 70 m le long des rues de son plan (carte/villes.js, V.rues), d'un
+  // seul tracé, et leur halo ; tant que le plan n'est pas peint, rien
+  reverberesDe(n, ns, r) {
+    const mp = this.map, p = imageEnCache(n, etatVille(n, ns, mp.state), resPour(mp.cam.z * mp.dpr / SU));
+    if (!p?.V?.rues) return null;
+    const k = 'g' + n.id;
+    let f = this.fenetres.get(k);
+    if (!f || f.V !== p.V || f.r !== r) {
+      const pts = reverberes(p.V, n.x, n.y), a = new Path2D(), b = new Path2D();
+      for (const [x, y] of pts) { a.moveTo(x + r, y); a.arc(x, y, r, 0, TAU); b.moveTo(x + r * 3, y); b.arc(x, y, r * 3, 0, TAU); }
+      f = { V: p.V, r, path: [a, b] }; this.fenetres.set(k, f);
+    }
+    return f.path;
+  }
   // les fenêtres éclairées d'une ville : celles de son plan (carte/villes.js, planCarte().lum), d'un seul tracé ;
   // tant que le plan n'est pas peint, rien que le halo
   fenetresDe(n, ns, R, r) {
@@ -278,4 +295,16 @@ export class Ciel {
     }
     return f.path;
   }
+}
+
+// les réverbères le long des rues d'un plan V (unités de l'intérieur, centre IC), en km autour de la place (x, y) : un
+// tous les 13 unités (70 m), au même endroit d'une nuit à l'autre ; seulement entre les maisons (les rues d'un plan en
+// damier passent aussi là où il n'a pas gardé d'îlot)
+export function reverberes(V, x, y) {
+  const out = [], bati = (u, v) => V.ilots.some(b => Math.abs(b.c[0] - u) < 24 && Math.abs(b.c[1] - v) < 24);
+  for (const r of V.rues) for (let i = 1; i < r.pts.length; i++) {
+    const [ax, ay] = r.pts[i - 1], [bx, by] = r.pts[i], l = Math.hypot(bx - ax, by - ay);
+    for (let d = 6.5; d < l; d += 13) { const u = ax + (bx - ax) * d / l, v = ay + (by - ay) * d / l; if (bati(u, v)) out.push([x + (u - IC[0]) / SU, y + (v - IC[1]) / SU]); }
+  }
+  return out;
 }

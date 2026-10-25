@@ -7,11 +7,12 @@ import { C, E, T, RR, PG, TAU, SPR, toile, avant, bat, caisson, cavalier, cheval
 import { AMB, LUM, U, Z, bivouac, nuit } from './ambiance.js';
 import { S as SU, IC, carteDe, etatVille, planDe } from './villes.js';
 import { LARG_RIVIERE } from './terre.js';
+import { Travaux } from './travaux.js';
 
 export const VENT = [0.004, -0.002];   // km/s : le vent d'ouest emporte les fumées vers l'est
 const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
 const pingpong = (s, L) => { const m = mod(s, 2 * L); return m < L ? m : 2 * L - m; };
-const versMonde = (x, y, a, lx, ly) => [x + (lx * Math.cos(a) - ly * Math.sin(a)) * U, y + (lx * Math.sin(a) + ly * Math.cos(a)) * U];
+export const versMonde = (x, y, a, lx, ly) => [x + (lx * Math.cos(a) - ly * Math.sin(a)) * U, y + (lx * Math.sin(a) + ly * Math.cos(a)) * U];
 const longueur = pts => { let l = 0; for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return l; };
 // le morceau [s0, s1] d'une polyligne
 function cheminEntre(pts, s0, s1) {
@@ -37,7 +38,7 @@ function curseur(pts) {
 const boite = pts => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const [x, y] of pts) { a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); } return [a - 0.1, b - 0.1, c + 0.1, d + 0.1]; };
 const FERME = [{ t: 'g', x: -6, y: -3, w: 12, h: 6, p: 'tuile', h2: 1 }];
 // la phase d'un pas, arrondie à un huitième (les figures en marche sont peintes une fois par phase : Guerre.tampon)
-const PHASES = 8, phase = p => p == null ? null : (Math.round(mod(p, TAU) / TAU * PHASES) % PHASES) * TAU / PHASES;
+export const PHASES = 8, phase = p => p == null ? null : (Math.round(mod(p, TAU) / TAU * PHASES) % PHASES) * TAU / PHASES;
 // la terre piétinée, d'un seul tracé : [[x, y, rx, ry, angle], …] (comme pietine de lib.js, une à une)
 function pietines(g, l, f) { if (!l.length) return; g.fillStyle = `rgba(105,80,45,${f})`; g.beginPath(); for (const [x, y, rx, ry, a] of l) { g.moveTo(x + Math.cos(a) * rx, y + Math.sin(a) * rx); g.ellipse(x, y, rx, ry, a, 0, TAU); } g.fill(); }
 // parcourt une polyligne de s0 à s1 par pas réguliers : fn(x, y, angle, s)
@@ -119,7 +120,7 @@ export function geoSiege(x, y, r, mouille, id = 0) {
     if (sec > best + 0.5) { best = sec; aT = a; }
   }
   const arc = (rr, a0, a1) => { const segs = []; let cur = []; for (let a = a0; a <= a1; a += 0.02) { const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr; if (mouille(px, py)) { if (cur.length > 1) segs.push(cur); cur = []; } else cur.push([px, py]); } if (cur.length > 1) segs.push(cur); return segs; };
-  const paralleles = [0.55, 0.9, 1.3].flatMap(d => arc(r + d, aT - 1.25, aT + 1.25));
+  const paralleles = [0.55, 0.9, 1.3].flatMap(d => arc(r + d, aT - 1.25, aT + 1.25).map(p => Object.assign(p, { d })));   // (d : sa distance aux murs)
   const boyaux = [-0.8, -0.3, 0.25, 0.75].map(da => { const pts = []; for (let k = 0; k <= 8; k++) { const rr = r + 1.45 - k * 0.12, a = aT + da + (k % 2 ? 0.05 : -0.05); pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); } return pts; }).filter(p => !p.some(q => mouille(...q)));
   const batteries = [-0.9, -0.45, 0, 0.45, 0.9].map((da, k) => { const a = aT + da; return { x: x + Math.cos(a) * (r + 0.9), y: y + Math.sin(a) * (r + 0.9), a: a + Math.PI, tir: -k * 1.3 }; }).filter(b => !mouille(b.x, b.y));
   const feux = Array.from({ length: 7 }, (_, k) => { const a = hash2(k, id, 61) * TAU, d = Math.sqrt(hash2(k, id + 2, 61)) * r * 0.7; return [x + Math.cos(a) * d, y + Math.sin(a) * d]; });
@@ -132,6 +133,19 @@ export function geoSiege(x, y, r, mouille, id = 0) {
     if (!mouille(px, py)) camp.push([px, py, q, w]);
   }
   return { x, y, r, aT, paralleles, boyaux, batteries, feux, camp, impacts: [] };
+}
+
+// (lot H) Les travaux avancent avec le siège (dmg, la brèche ; l'assaut à 0,85) : la première parallèle, la plus
+// éloignée, dès l'ouverture de la tranchée ; la deuxième au tiers, la troisième aux deux tiers ; les boyaux en zigzag
+// s'allongent vers les murs, la tête de sape (gabion farci, sapeurs) à leur bout. { paralleles, boyaux, tetes : [x, y, cap] }
+export const avanceeSiege = dmg => clamp((dmg || 0) / 0.85, 0, 1);
+export function travauxSiege(s, dmg) {
+  const p = avanceeSiege(dmg), kmax = 1 + Math.round(p * 7);
+  const boyaux = s.boyaux.map(b => b.slice(0, kmax + 1));
+  return {
+    p, paralleles: s.paralleles.filter(q => q.d >= 1.3 - p * 1.1), boyaux,
+    tetes: boyaux.map(b => { const [x1, y1] = b[b.length - 1], [x0, y0] = b[b.length - 2]; return [x1, y1, Math.atan2(y1 - y0, x1 - x0)]; }),
+  };
 }
 
 // ------------------------------------------------------------------ la densité de la vie (pour carte/vie.js)
@@ -148,7 +162,34 @@ export function densiteGuerre(x, y) {
 // Combien de jours on voit, après une bataille rangée (state.sites : x, y, âge, pertes et camps des deux côtés), les
 // charrettes de blessés, la terre piétinée, les tombes ; après la dernière bataille d'un camp (factions[].lb), la fête
 // de ses villes s'il l'a gagnée, le deuil s'il l'a perdue.
-export const JOURS = { blesses: 30, pietine: 60, tombes: 120, fete: 10, deuil: 30 };
+// (lot H) Les prisonniers marchent vers l'arrière du vainqueur 20 jours ; la nouvelle d'une bataille va à 60 km par
+// jour (NOUVELLE) : l'estafette galope vers la capitale du camp, chaque ville fête (ou pleure) à son arrivée ; en tour
+// par tour, la fête dure un tour (feteTour), sans quoi celle d'une bataille du tour des IA ne se verrait jamais.
+export const JOURS = { blesses: 30, pietine: 60, tombes: 120, fete: 10, feteTour: 30, deuil: 30, prisonniers: 20 };
+export const NOUVELLE = 60;
+// le temps (jours) que met la nouvelle d'une bataille en (bx, by) à la place n ; 0 sans lieu (ancienne sauvegarde)
+export const arriveeNouvelle = (n, bx, by) => bx == null ? 0 : Math.hypot(n.x - bx, n.y - by) / NOUVELLE;
+// les places en fête ou en deuil après la dernière bataille d'un camp (lb : [gagnée, âge, x, y]), là où la nouvelle
+// est arrivée : Map id → 'fete' | 'deuil'. vue(n) : la place se voit (celles du joueur, les autres à portée de vue)
+export function fetesDe(map, st, vue) {
+  const out = new Map(), duree = st.tour?.on ? JOURS.feteTour : JOURS.fete;
+  for (const f of st.factions || []) {
+    if (!f.lb) continue;
+    const [won, age, bx, by] = f.lb, D = won ? duree : JOURS.deuil;
+    for (const n of map.nodes) {
+      if (st.nodes[n.id].o !== f.code || !vue(n, f.code)) continue;
+      const t0 = arriveeNouvelle(n, bx, by), a = age + 0.5;   // (l'âge est arrondi au jour)
+      if (a >= t0 && a < t0 + D) out.set(n.id, won ? 'fete' : 'deuil');
+    }
+  }
+  return out;
+}
+// la capitale d'un camp (son chef-lieu s'il le tient, sinon sa ville la plus proche du chef-lieu) : id ou null
+export function capitaleDe(map, st, code) {
+  const c = map.nodes.find(n => n.type === 'capitale' && n.dept === code);
+  if (c && st.nodes[c.id]?.o === code) return c.id;
+  return c ? plusProche(map, st, c.x, c.y, (n, ns) => ns.o === code && n.type !== 'village') : null;
+}
 // le plus court chemin par les routes, de la place a à la place b (au plus max km) : la polyligne en km, ou null
 const VOISINS = new WeakMap();
 export function routeEntre(map, a, b, max = 60) {
@@ -185,6 +226,17 @@ export function ravitaillement(map, st, a) {
   if (!ami(maitreEn(map, st, a.x, a.y))) return null;
   return plusProche(map, st, a.x, a.y, (n, ns) => n.type !== 'village' && ami(ns.o) && !ns.sg);
 }
+// (lot H) combien de traînards et de déserteurs derrière une armée : en retraite (toute armée vue) ; pour celles du
+// joueur (moral des régiments : regs[5], désertions du mois : des, vivres : sup), le moral bas, les désertions, les
+// vivres coupés. De 0 à 20
+export function trainardsDe(a, mien, coupe) {
+  let n = a.st === 'retreat' ? 8 : 0;
+  if (mien) {
+    const h = a.regs.reduce((t, r) => t + (r[2] || 0), 0), m = h ? a.regs.reduce((t, r) => t + (r[5] || 0) * (r[2] || 0), 0) / h : 100;
+    n += clamp((50 - m) / 3, 0, 10) + Math.min(6, (a.des || 0) / 25) + (coupe ? 5 : 0) + ((a.sup ?? 1) < 0.35 ? 4 : 0);
+  }
+  return clamp(Math.round(n), 0, 20);
+}
 // les tombes d'un champ de bataille, d'autant plus nombreuses que les pertes sont lourdes : des rangées de tertres le
 // long d'un axe tiré du lieu (même champ, mêmes tombes). [[x, y, angle], …] en km
 export function tombes(x, y, pertes) {
@@ -212,18 +264,18 @@ export function fermesAutour(map, x, y) {
 
 // ------------------------------------------------------------------ petits dessins (unités de figure)
 const LCIV = tenue('fr', 'civil');
-const CIVILS = ['#7a6a4f', '#5d6b86', '#8a5a44', '#6e5c45', '#4f5a6a', '#9a4a3a'].map((h, i) => ({ L: Object.assign({}, LCIV, { tete: i % 2 ? 'coiffe' : 'rond' }), habit: h }));
-function marcheur(g, k, pas, bagage) { const c = CIVILS[k % CIVILS.length]; fantassin(g, c.L, { role: 'h', habit: c.habit }, { legs: pas, arme: 'aucun' }); if (bagage) C(g, '#b9a37a', -2.1, 0, 1.4); }
-function charrette(g, pas, boeufs, k) {
+export const CIVILS = ['#7a6a4f', '#5d6b86', '#8a5a44', '#6e5c45', '#4f5a6a', '#9a4a3a'].map((h, i) => ({ L: Object.assign({}, LCIV, { tete: i % 2 ? 'coiffe' : 'rond' }), habit: h }));
+export function marcheur(g, k, pas, bagage) { const c = CIVILS[k % CIVILS.length]; fantassin(g, c.L, { role: 'h', habit: c.habit }, { legs: pas, arme: 'aucun' }); if (bagage) C(g, '#b9a37a', -2.1, 0, 1.4); }
+export function charrette(g, pas, boeufs, k) {
   for (const x of [-4, 4]) { RR(g, '#3a2a1b', x - 2, -3.7, 4, 1, 0.4); RR(g, '#3a2a1b', x - 2, 2.7, 4, 1, 0.4); }
   T(g, '#5b4127', 0.6, 6, 0, 10, 0); RR(g, '#8a6a45', -6.5, -2.9, 13, 5.8, 0.6);
   RR(g, ['#b8a27a', '#d6ba5c', '#6b8fb5'][k % 3], -5.5, -2.2, 10, 4.4, 0.5);
   for (const y of boeufs ? [-2.4, 2.4] : [0]) { g.save(); g.translate(15, y); cheval(g, boeufs ? '#d2bf95' : '#6b4a2c', { gait: pas, bob: 0 }); g.restore(); }
 }
-function vache(g, x, y, a, robe) { E(g, 'rgba(20,32,12,.42)', x + 1, y + 1.3, 4.3, 1.9, a); E(g, robe, x, y, 4.3, 1.9, a); E(g, sombre(robe, 0.1), x + Math.cos(a) * 4.6, y + Math.sin(a) * 4.6, 1.4, 0.95, a); }
+export function vache(g, x, y, a, robe) { E(g, 'rgba(20,32,12,.42)', x + 1, y + 1.3, 4.3, 1.9, a); E(g, robe, x, y, 4.3, 1.9, a); E(g, sombre(robe, 0.1), x + Math.cos(a) * 4.6, y + Math.sin(a) * 4.6, 1.4, 0.95, a); }
 function tente(g, c = '#ece6d4') { RR(g, 'rgba(20,20,10,.3)', -2.2, -1.2, 6, 4.2, 0.4); PG(g, clair(c, 0.06), [-3, -2, 3, -2, 3, 0, -3, 0]); PG(g, sombre(c, 0.14), [-3, 0, 3, 0, 3, 2, -3, 2]); T(g, sombre(c, 0.3), 0.35, -3, 0, 3, 0); }
 function feuCamp(g, t, k) { C(g, '#5a5148', 0, 0, 1.8); C(g, '#2a211b', 0, 0, 1.3); const f = 1 + 0.25 * Math.sin(t * 9 + k); C(g, '#e2702a', 0, 0, 0.9 * f); C(g, '#ffd27a', 0, 0, 0.45 * f); }
-function flamme(g, x, y, r, t, k) { const f = 1 + 0.2 * Math.sin(t * 11 + k) + 0.1 * Math.sin(t * 23 + k * 2); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.9; g.drawImage(SPR.fl, x - r * f, y - r * 1.25 * f, r * 2 * f, r * 2.5 * f); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
+export function flamme(g, x, y, r, t, k) { const f = 1 + 0.2 * Math.sin(t * 11 + k) + 0.1 * Math.sin(t * 23 + k * 2); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.9; g.drawImage(SPR.fl, x - r * f, y - r * 1.25 * f, r * 2 * f, r * 2.5 * f); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
 // réfugiés : charrette chargée des meubles, familles à pied, bêtes poussées devant, brouette
 function refugie(g, sorte, pas, k) {
   if (sorte < 0.3) {
@@ -246,6 +298,8 @@ function debris(g, h) {
   else if (h < 0.6) { g.rotate(0.5); RR(g, '#7a5b3a', -6, -2.9, 12, 5.8, 0.6); RR(g, '#3a2a1b', 3, -3.7, 4, 1, 0.4); C(g, '#3a2a1b', -9, 3, 2.2); C(g, '#7a5b3a', -9, 3, 1.4); }
   else { RR(g, '#8a6a45', -1, -1, 2.4, 2, 0.4); C(g, '#1c1b1d', 3, 1, 1.1); T(g, '#5b4127', 0.5, -4, -2, 2, -3); }
 }
+// un gabion (panier d'osier rempli de terre), vu de dessus
+export function gabion(g, x, y) { C(g, '#5f4a2e', x + 0.3, y + 0.3, 1.25); C(g, '#9a7b4c', x, y, 1.15); C(g, '#6e5430', x, y, 0.6); }
 // un tertre frais et sa croix de bois ; f : de 0 (frais) à 1 (l'herbe repousse)
 function tombe(g, f) { E(g, 'rgba(20,32,12,.3)', 0.5, 0.6, 2.6, 1.3); E(g, mix2('#6d5338', '#77864b', f), 0, 0, 2.5, 1.15); T(g, '#3a2a1b', 0.8, 2.2, 0, 4.6, 0); T(g, '#b8925e', 0.5, 2.2, 0, 4.6, 0); T(g, '#b8925e', 0.5, 3.8, -1.2, 3.8, 1.2); }
 // charrette de blessés couchés sur la paille (hab : la couleur de leurs habits) ; l'ambulance, une voiture bâchée
@@ -399,7 +453,7 @@ export class Guerre {
       const marche = (a.st === 'move' || a.st === 'retreat') && time - (this.vu.get(a.id).t) < 1.5;
       // une armée du joueur en campagne : d'où vient son pain (null : coupée de ses vivres)
       const mien = a.o === st.me?.code && a.n == null, de = mien ? this.ravitDe(a) : null;
-      list.push({ d, a, back, L: longueur(back), compo: c, marche, enRoute: a.st === 'move' || a.st === 'retreat', mien, de, coupe: mien && de == null });
+      list.push({ d, a, back, L: longueur(back), compo: c, marche, enRoute: a.st === 'move' || a.st === 'retreat', mien, de, coupe: mien && de == null, tr: trainardsDe(a, a.o === st.me?.code, mien && de == null) });
     }
     for (const id of [...this.hist.keys()]) if (!seen.has(id)) { this.hist.delete(id); this.compos.delete(id); this.vu.delete(id); }   // disparue dans le brouillard : ses traces aussi
     this.prep = { n: mp.frameNo, list };
@@ -457,7 +511,7 @@ export class Guerre {
     if (z >= 6) for (const A of this.armeesDe(time)) this.traces(sc, g, A);
     if (z >= 6) for (const n of this.sieges0) {
       const ns = st.nodes[n.id], S = this.siegeDe(n, ns); if (!this.dans(sc, n.x, n.y, S.r + 3)) continue;
-      this.siegeSol(sc, g, S);
+      this.siegeSol(sc, g, S, ns.sg);
     }
     if (z >= 18) for (const b of st.battles) {
       const B = this.batailleDe(b); if (!this.dans(sc, B.x, B.y, 2)) continue;
@@ -649,16 +703,17 @@ export class Guerre {
     return false;
   }
   // tranchées : trois parallèles autour de la place, reliées par des boyaux en zigzag ; la terre remuée
-  siegeSol(sc, g, s) {
-    const z = sc.z;
+  siegeSol(sc, g, s, sg) {
+    const z = sc.z, W = this.travauxDe(s, sg);
     sc.monde(g); g.lineCap = 'round'; g.lineJoin = 'round';
-    const lignes = [...s.paralleles, ...s.boyaux];
+    const lignes = [...W.paralleles, ...W.boyaux];
     for (const p of lignes) { ligne(g, p); g.strokeStyle = '#6e5636'; g.lineWidth = Math.max(0.05, 3 / z); g.stroke(); }
     for (const p of lignes) { ligne(g, p); g.strokeStyle = '#b99a66'; g.lineWidth = Math.max(0.036, 2.2 / z); g.stroke(); }
     for (const p of lignes) { ligne(g, p); g.strokeStyle = '#4d3b26'; g.lineWidth = Math.max(0.012, 0.9 / z); g.stroke(); }
     for (const b of s.batteries) { const ca = Math.cos(b.a), sa = Math.sin(b.a); T(g, '#8f7449', Math.max(0.05, 3 / z), b.x + ca * 0.02 - sa * 0.06, b.y + sa * 0.02 + ca * 0.06, b.x + ca * 0.02 + sa * 0.06, b.y + sa * 0.02 - ca * 0.06); }
     if (z >= 18) pietines(g, Array.from({ length: 60 }, (_, k) => { const a = s.aT + (hash2(k, 1, 122) - 0.5) * 2.6, d = s.r + 0.3 + hash2(k, 2, 122) * 3; return [s.x + Math.cos(a) * d, s.y + Math.sin(a) * d, 0.08, 0.05, a]; }), 0.2);
   }
+  travauxDe(s, sg) { const k = Math.round(avanceeSiege(sg?.dmg) * 28); if (s.tw?.k !== k) s.tw = Object.assign(travauxSiege(s, sg?.dmg), { k }); return s.tw; }
   // le siège d'une place (appelé par drawNodes, par-dessus la ville) : camp, batteries qui tirent (d'autant plus
   // souvent que la brèche avance), incendies dans la place ; un blocus n'a que son camp
   siege(ctx, n, ns, time) {
@@ -681,10 +736,20 @@ export class Guerre {
           for (const o of [-0.02, 0, 0.02]) { const px = b.x + ca * 0.04 - sa * o, py = b.y + sa * 0.04 + ca * o; this.fumee(px, py, ca * 0.004, sa * 0.004, 0.01, 0.1, 9, 0.5); this.eclairs.push({ x: px, y: py, t0: t }); }
           const a = hash2(t * 10 | 0, 1, 123) * TAU, d = Math.sqrt(hash2(t * 10 | 0, 2, 123)) * s.r * 0.8; s.impacts.push({ x: s.x + Math.cos(a) * d, y: s.y + Math.sin(a) * d, t0: t + 1.3 });
         }
+        if (z >= 40 && this.dans(sc, b.x, b.y)) { this.figK(sc, g, ...versMonde(b.x, b.y, b.a, 6, 0), b.a); for (let k = 0; k < 7; k++) gabion(g, 0, (k - 3) * 2.6); }   // le parapet de gabions
         if (z >= 40 && this.dans(sc, b.x, b.y)) for (const o of [-6, 0, 6]) {
           const [px, py] = versMonde(b.x, b.y, b.a, -6, o); this.figK(sc, g, px, py, b.a); piece(g, L, { recul: Math.max(0, 2 - (t - b.tir) * 4) });
           if (z >= Z.VIE) { this.figK(sc, g, ...versMonde(b.x, b.y, b.a, -14, o + 2), b.a); fantassin(g, L, { role: 'h' }, { legs: null, arme: 'refouloir', ext: 0.5 + 0.5 * Math.sin(t * 2 + o) }); }
         }
+      }
+      // la tête de sape au bout de chaque boyau : le gabion farci roulé devant, les sapeurs qui creusent derrière
+      const W = this.travauxDe(s, sg), Ls = this.look(sg.by, 'sapeurs');
+      if (z >= Z.PLAN) for (const [x, y, a] of W.tetes) {
+        if (!this.dans(sc, x, y, 0.05)) continue;
+        if (z < Z.VIE) { sc.monde(g); C(g, '#5a4429', x, y, Math.max(0.006, 2.2 / z)); continue; }
+        this.figK(sc, g, x, y, a); C(g, '#4d3b26', 3, 0, 2.6); C(g, '#8a6d44', 3, 0, 2.2); for (let k = 0; k < 3; k++) T(g, '#6b5235', 0.3, 3 - 2, -1.5 + k * 1.5, 3 + 2, -1.5 + k * 1.5);
+        for (let k = 0; k < 4; k++) gabion(g, -2 - k * 2.4, (k % 2 ? 1 : -1) * 2.4);
+        for (let k = 0; k < 3; k++) { this.figK(sc, g, ...versMonde(x, y, a, -2.5 - k * 3, (k - 1) * 2.2), a); fantassin(g, Ls, { role: 'h' }, { legs: null, arme: 'hache', ext: mod(t * 1.1 + k * 0.37, 1) }); }
       }
       s.impacts = s.impacts.filter(m => { if (t < m.t0) return true; this.fumee(m.x, m.y, 0, 0, 0.02, 0.16, 9, 0.4, 'n'); this.eclairs.push({ x: m.x, y: m.y, t0: t }); return false; });
       // la ville brûle par endroits, d'autant plus que la brèche avance
@@ -771,6 +836,7 @@ export class Guerre {
     for (const b of st.battles) this.bataille(sc, g, b);
     this.pillages(sc, g, st);
     this.fetes(sc, g);
+    (this.travaux ||= new Travaux(this)).dessiner(sc, g);   // chantiers, produits, cordons, grands travaux, crue, feux (lot H)
     // les fumées
     const [wx, wy] = VENT, amort = Math.exp(-dt * 1.6);
     this.fx = this.fx.filter(f => (f.age += dt) < f.life);
@@ -794,8 +860,8 @@ export class Guerre {
   arriere() {
     const mp = this.map, st = mp.state;
     if (this.ar?.st === st) return this.ar;
-    const me = st.me?.code, ar = this.ar = { st, sites: [], fetes: new Map(), recrues: [], rv: new Map(), routes: new Map(), lx: new Map() };
-    for (const [x, y, age, l0, l1, o0, o1] of st.sites || []) {
+    const me = st.me?.code, ar = this.ar = { st, sites: [], fetes: new Map(), recrues: [], rv: new Map(), routes: new Map(), lx: new Map(), estafettes: [] };
+    for (const [x, y, age, l0, l1, o0, o1, w, pris] of st.sites || []) {
       const h = (x * 100 | 0) ^ (y * 37 | 0), S = { x, y, age, tombes: tombes(x, y, l0 + l1), convois: [],
         pt: Array.from({ length: 40 }, (_, k) => [x + (hash2(k, h, 153) - 0.5) * 2.2, y + (hash2(k, h, 154) - 0.5) * 1.1, 0.09, 0.05, hash2(k, h, 155) * 3]) };
       const dep = age < JOURS.blesses ? plusProche(mp, st, x, y, () => true) : null;
@@ -805,11 +871,21 @@ export class Guerre {
         const pts = [[x, y], ...r], L = longueur(pts);
         S.convois.push({ pts, L, o, bb: boite(pts), n: clamp(Math.round(L / 1.2 * clamp(l / 600, 0.3, 1) * (1 - age / JOURS.blesses)), 1, 24) });
       }
+      // les prisonniers du vainqueur (w), escortés vers sa ville la plus proche
+      const vq = w == null ? null : [o0, o1][w], v = vq != null && pris > 0 && age < JOURS.prisonniers ? plusProche(mp, st, x, y, (n, ns) => n.type !== 'village' && ns.o === vq && !ns.sg, 60) : null;
+      const rp = v != null && routeEntre(mp, plusProche(mp, st, x, y, () => true), v);
+      if (rp) { const pts = [[x, y], ...rp]; S.prison = { pts, L: longueur(pts), bb: boite(pts), o: vq, ov: [o1, o0][w], n: clamp(Math.round(pris / 60), 1, 8) }; }
       ar.sites.push(S);
     }
+    ar.fetes = fetesDe(mp, st, (n, code) => code === me || this.visible(n.x, n.y));
+    // les estafettes : de la bataille à la capitale du camp, tant que la nouvelle n'y est pas arrivée
     for (const f of st.factions || []) {
-      const k = !f.lb ? null : f.lb[0] ? (f.lb[1] < JOURS.fete ? 'fete' : null) : f.lb[1] < JOURS.deuil ? 'deuil' : null;
-      if (k) for (const n of mp.nodes) if (st.nodes[n.id].o === f.code && (f.code === me || this.visible(n.x, n.y))) ar.fetes.set(n.id, k);
+      const [, age, bx, by] = f.lb || [];
+      const cap = bx != null ? capitaleDe(mp, st, f.code) : null;
+      const T = cap == null ? 0 : arriveeNouvelle(mp.nodes[cap], bx, by);
+      if (cap == null || !(age + 0.5 < T)) continue;
+      const r = routeEntre(mp, plusProche(mp, st, bx, by, () => true), cap, 500);
+      if (r) { const pts = [[bx, by], ...r]; ar.estafettes.push({ pts, L: longueur(pts), k: (age + 0.5) / T, o: f.code }); }
     }
     for (const n of mp.nodes) {
       const ns = st.nodes[n.id];
@@ -823,13 +899,13 @@ export class Guerre {
   // le drapeau d'une place (towns.js) : 'fete', 'deuil' (en berne, crêpe noir) ou null
   fete(n) { return this.map.state ? this.arriere().fetes.get(n.id) || null : null; }
   ravitDe(a) { const ar = this.arriere(); if (!ar.rv.has(a.id)) ar.rv.set(a.id, ravitaillement(this.map, ar.st, a)); return ar.rv.get(a.id); }
-  // la grand-place et l'église d'une place, en km, d'après son plan (carte/villes.js)
+  // la grand-place, l'église et le port d'une place, en km, d'après son plan (carte/villes.js)
   lieu(n, ns) {
     const ar = this.arriere();
     let L = ar.lx.get(n.id);
     if (!L) {
       const V = planDe(carteDe(this.map.m), n, etatVille(n, ns, this.map.state)), at = l => l && [n.x + (l.x - IC[0]) / SU, n.y + (l.y - IC[1]) / SU];
-      L = { place: at(V.lieux.place) || [n.x, n.y] }; L.eglise = at(V.lieux.cathedrale || V.lieux.eglise) || L.place;
+      L = { place: at(V.lieux.place) || [n.x, n.y], port: n.spec?.includes('port') ? at(V.lieux.port) : null }; L.eglise = at(V.lieux.cathedrale || V.lieux.eglise) || L.place;
       ar.lx.set(n.id, L);
     }
     return L;
@@ -862,6 +938,30 @@ export class Guerre {
         this.figK(sc, g, p.x, p.y, p.a); blesses(g, pas + k, hab, k % 4 === 0);
       }
     }
+    // les prisonniers : par quatre, sans armes, dans leurs habits ; l'escorte du vainqueur sur les flancs, baïonnette
+    // au canon, un cavalier en tête
+    for (const S of ar.sites) {
+      const P = S.prison; if (!P || !vu(P.bb)) continue;
+      const Lp = this.look(P.ov, 'ligne'), Le = this.look(P.o, 'ligne'), Lc = this.look(P.o, 'cavalerie');
+      for (let k = 0; k < P.n; k++) {
+        const p = surChemin(P.pts, mod(t * 0.003 + k * P.L / P.n, P.L));
+        if (!this.dans(sc, p.x, p.y, 0.06) || !this.visible(p.x, p.y)) continue;
+        const q = phase(pas * 0.8);   // (le groupe, peint une fois par pas : seize prisonniers et leur escorte)
+        this.poser(sc, g, p.x, p.y, p.a, this.tampon(sc, `${Lp.cle}|${Le.cle}|pris|${q}`, 15, 10, gg => {
+          for (let r = 0; r < 4; r++) for (let i = 0; i < 4; i++) { gg.save(); gg.translate(-r * 3.2 + 1, (i - 1.5) * 2.6); fantassin(gg, Lp, { role: 'h' }, { legs: q + r + i, arme: 'aucun' }); gg.restore(); }
+          for (const [lx, ly] of [[2, -7], [-7, 7], [-12, -7]]) { gg.save(); gg.translate(lx + 1, ly); fantassin(gg, Le, { role: 'h' }, { legs: q + lx, arme: 'epaule' }); gg.restore(); }
+        }));
+        if (k === 0) { this.figK(sc, g, ...versMonde(p.x, p.y, p.a, 9, 0), p.a); cheval(g, Lc.chevaux[0], { gait: pas * 0.8, bob: 0 }); cavalier(g, Lc, { habit: Lc.habit }, { sabre: 0, bob: 0 }); }
+      }
+    }
+    // l'estafette porte la nouvelle de la bataille à la capitale de son camp, au galop
+    for (const E0 of ar.estafettes) {
+      const p = surChemin(E0.pts, Math.min(E0.L, E0.k * E0.L + mod(t * 0.03, 3)));
+      if (!this.dans(sc, p.x, p.y, 0.05) || !this.visible(p.x, p.y)) continue;
+      const Lc = this.look(E0.o, 'cavalerie');
+      if (Math.random() < 0.08) this.fumee(p.x - Math.cos(p.a) * 0.02, p.y - Math.sin(p.a) * 0.02, 0, 0, 0.004, 0.02, 2.5, 0.3);   // (la poussière du galop)
+      this.figK(sc, g, p.x, p.y, p.a); cheval(g, Lc.chevaux[1], { gait: t * 22, bob: 0 }); cavalier(g, Lc, { habit: Lc.habit }, { sabre: 0, bob: 0 });
+    }
     for (const A of list) {
       const a = A.a;
       if (a.st === 'battle' || a.st === 'siege') continue;
@@ -870,6 +970,21 @@ export class Guerre {
       if (R && vu(R.bb)) for (let k = 0; k < R.n; k++) {
         const plein = k % 2 === 0, p = surChemin(R.pts, mod((plein ? t : -t) * 0.0045 + k * R.L / R.n, R.L)), o = plein ? 0.012 : -0.012;
         if (this.dans(sc, p.x, p.y)) { this.figK(sc, g, p.x - Math.sin(p.a) * o, p.y + Math.cos(p.a) * o, p.a + (plein ? 0 : Math.PI)); fourgon(g, pas + k, plein, k); }
+      }
+      // les traînards sur la route derrière la queue : ils suivent à la traîne, d'autres se sont assis au bord du
+      // chemin ; les déserteurs, sans fusil, s'en vont à travers champs
+      if (A.tr && A.enRoute) {
+        const Lt = this.look(a.o, 'ligne'), h0 = A.compo.long, ih = [...String(a.id)].reduce((v, c) => (v * 31 + c.charCodeAt(0)) | 0, 7);
+        for (let k = 0; k < A.tr; k++) {
+          const h = hash2(ih, k, 160), s0 = h0 + 0.06 + h * 1.4 - mod(t * 0.0012 + h * 7, 0.12);
+          if (s0 > A.L) continue;
+          const p = surChemin(A.back, s0), sorte = k % 5, fa = p.a + Math.PI, nx = -Math.sin(fa), ny = Math.cos(fa);
+          const off = sorte === 4 ? 0.04 + mod(t * 0.002 + h * 5, 0.3) : sorte === 3 ? 0.028 : (hash2(ih, k, 161) - 0.5) * 0.02, sg = hash2(ih, k, 162) < 0.5 ? -1 : 1;
+          const x = p.x + nx * off * sg, y = p.y + ny * off * sg;
+          if (!this.dans(sc, x, y)) continue;
+          const q = sorte === 3 ? null : phase(pas * (sorte === 4 ? 0.9 : 0.5) + k), arme = sorte >= 3 ? 'aucun' : 'epaule';
+          this.poser(sc, g, x, y, sorte === 4 ? fa + sg * Math.PI / 2 : sorte === 3 ? fa + h * 6 : fa, this.tampon(sc, `${Lt.cle}|tr|${q}|${arme}`, 5, 5, gg => fantassin(gg, Lt, { role: 'h' }, { legs: q, arme })));
+        }
       }
       // en pays ennemi, les fourrageurs vont aux fermes et ramènent bêtes et foin
       const [hx, hy] = A.back[0];

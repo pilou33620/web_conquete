@@ -65,7 +65,7 @@ class Game:
         self.proposals = []
         self.armies = {}
         self.battles = {}
-        self.sites = []   # champs de bataille récents, pour la carte (blessés, tombes) : dict(x, y, t, l, o)
+        self.sites = []   # champs de bataille récents, pour la carte (blessés, tombes) : dict(x, y, t, l, o, w, p)
         self.spies = []
         self._blockade = set()
         self.over = None
@@ -3190,11 +3190,12 @@ class Game:
                 st = f_['stats']
                 st['won' if si == winner else 'lost'] += 1
                 st['killed'] += bt['sides'][1 - si]['lost']
-                f_['lb'] = [int(si == winner), round(self.t, 2)]   # dernière bataille, pour la carte (fêtes, deuil)
+                f_['lb'] = [int(si == winner), round(self.t, 2), round(bt['x'], 2), round(bt['y'], 2)]   # dernière bataille et son lieu, pour la carte (estafettes, fêtes, deuil)
         if bt['node'] is None:   # champ de bataille : la carte y montre blessés et tombes (décor seulement)
             self.sites = [x for x in self.sites if self.t - x['t'] < SITE_DAYS]
             self.sites.append(dict(x=round(bt['x'], 2), y=round(bt['y'], 2), t=round(self.t, 2),
-                                   l=[int(x['lost']) for x in bt['sides']], o=[x['owner'] for x in bt['sides']]))
+                                   l=[int(x['lost']) for x in bt['sides']], o=[x['owner'] for x in bt['sides']],
+                                   w=winner, p=int(max(0, prisoners))))   # (le vainqueur et ses prisonniers : la colonne vers l'arrière)
         if W['node'] is not None:
             # la place a tenu : le siège des vaincus est levé (pas celui d'un autre camp)
             n = self.nodes[W['node']]

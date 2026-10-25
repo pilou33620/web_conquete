@@ -4,7 +4,7 @@
 // workers (peintre.js) comme sur le fil principal. Ce qui change d'une tuile à l'autre vient d'une grille absolue :
 // pas de couture entre deux tuiles voisines.
 import { SOLS, BOIS, OMBRE, TAU, alea, bat, clamp, lerp, hx, mix, sombre, clair, toile } from './lib.js';
-import { AMB, zoneDe, enDisette } from './ambiance.js';
+import { AMB, zoneDe, enDisette, brule, FEU_MOIS } from './ambiance.js';
 
 export const TT = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 export const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -28,6 +28,7 @@ const PIN = [86, 112, 64], PIN_HEX = '#2f5a33';
 // ---------- les saisons
 const TEINTE_S = { printemps: [[100, 150, 64], .22], ete: [[198, 178, 104], .2], automne: [[150, 116, 68], .22], hiver: [[134, 130, 112], .34] };
 const VEGET = new Set([TT.PLAINE, TT.COLLINES, TT.VIGNE, TT.MARAIS, TT.LANDE, TT.MONTAGNE]);
+const CRUE_T = new Set([TT.PLAINE, TT.MARAIS, TT.VIGNE, TT.COLLINES, TT.LANDE]);
 const FEUILLUS_S = { printemps: [[86, 142, 62], .25], automne: [[130, 110, 52], .35], hiver: [[106, 96, 80], .55] };
 export const BOIS_S = { printemps: ['#4f8a3a', '#5e9a44', '#6aa64c', '#47803a', '#73ad55'], ete: BOIS, automne: ['#6f7a3a', '#8a7a34', '#5f6e32', '#7a6a3a', '#4f6a2c', '#7f6a30'], hiver: ['#8a7d6c', '#7f7262', '#948674', '#76695a', '#6a7058'] };
 export const boisSaison = h => { const P = BOIS_S[AMB.saison] || BOIS; return P[(h * P.length) | 0]; };
@@ -103,6 +104,15 @@ export class Terre {
     // pentes (différences centrées, par km), lues avec l'altitude d'une seule interpolation (altPente)
     const GX = this.GX = new Float32Array(W * H), GY = this.GY = new Float32Array(W * H);
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const k = j * W + i; GX[k] = (ALT[j * W + Math.min(W - 1, i + 1)] - ALT[j * W + Math.max(0, i - 1)]) / 2; GY[k] = (ALT[Math.min(H - 1, j + 1) * W + i] - ALT[Math.max(0, j - 1) * W + i]) / 2; }
+    // les prairies que la Garonne et la Dordogne noient au printemps : la distance au fleuve (km, au plus 3), par case
+    const CR = this.CRUE = new Float32Array(W * H).fill(3);
+    for (const r of map.m?.rivers || []) if (r.rank === 1 && /Garonne|Dordogne/.test(r.name || '')) for (let k = 1; k < r.pts.length; k++) {
+      const [ax, ay] = r.pts[k - 1], [bx, by] = r.pts[k], l2 = (bx - ax) ** 2 + (by - ay) ** 2 || 1e-9;
+      for (let j = Math.max(0, Math.floor(Math.min(ay, by) - 3)); j <= Math.min(H - 1, Math.ceil(Math.max(ay, by) + 3)); j++) for (let i = Math.max(0, Math.floor(Math.min(ax, bx) - 3)); i <= Math.min(W - 1, Math.ceil(Math.max(ax, bx) + 3)); i++) {
+        const u = clamp(((i + .5 - ax) * (bx - ax) + (j + .5 - ay) * (by - ay)) / l2, 0, 1), d = Math.hypot(i + .5 - ax - u * (bx - ax), j + .5 - ay - u * (by - ay));
+        if (d < CR[j * W + i]) CR[j * W + i] = d;
+      }
+    }
     this.DEPT = map.dept; this.codes = map.deptCodes || [];
     this.c3 = [0, 0, 0]; this.TO = null;
   }
@@ -121,6 +131,12 @@ export class Terre {
   // il neige là (météo de la zone, AMB) ; les limites des zones ondulent sur quelques kilomètres
   tombe(x, y) { return AMB.meteo[zoneDe(x + 6 * sn(y * .05) + 3 * sn(y * .17 + 1), y + 6 * sn(x * .045) + 3 * sn(x * .15 + 2))] === 'neige'; }
   neige(x, y) { return neigeAu(this.alt(x, y), x, y, AMB.saison, this.tombe(x, y)); }
+  // sous l'eau de la crue (a : l'altitude du point) : les prés bas au bord du fleuve, d'une lisière qui ondule
+  inonde(x, y, a = this.alt(x, y), d) {
+    if (!AMB.crue || a > .11) return false;
+    if (d == null) { const W = this.W, i = clamp(Math.floor(x - .5), 0, W - 2), j = clamp(Math.floor(y - .5), 0, this.H - 2), fx = clamp(x - .5 - i, 0, 1), fy = clamp(y - .5 - j, 0, 1), C = this.CRUE, k = j * W + i; d = lerp(lerp(C[k], C[k + 1], fx), lerp(C[k + W], C[k + W + 1], fx), fy); }
+    return d < .25 + 1.1 * bruitC(x * .9, y * .9, 3.3) * (1 - a * 6);
+  }
   // les couleurs d'une grille de n × n points ((gi + ½) × pas km) : pays, saison, neige, sable au bord de l'eau,
   // ombrage du relief. Écrites dans data (RVBA) ; le terrain de chaque point dans tg
   grille(gi0, gj0, n, pas, data, tg, blanc) {
@@ -129,7 +145,7 @@ export class Terre {
     const onde = pas < .05 ? (x, y) => this.terOndeFin(x, y) : (x, y) => this.terOnde(x, y);
     for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) { const x = (gi0 + i - .5) * pas, y = (gj0 + j - .5) * pas; to[j * m + i] = onde(x, y); }
     const sa = AMB.saison, neigeT = Object.values(AMB.meteo).includes('neige'), c = this.c3, hiver = sa === 'hiver';
-    const TS = TEINTE_S[sa], FS = FEUILLUS_S[sa];
+    const TS = TEINTE_S[sa], FS = FEUILLUS_S[sa], crue = AMB.crue, feux = AMB.mois >= FEU_MOIS[0] && AMB.mois <= FEU_MOIS[1];
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const x = (gi0 + i + .5) * pas, y = (gj0 + j + .5) * pas, q = (j + 1) * m + i + 1, t = to[q], o = (j * n + i) * 4;
       tg[j * n + i] = t; data[o + 3] = 255;
@@ -144,6 +160,10 @@ export class Terre {
       if (ts) { const [v, k] = ts; c[0] = lerp(c[0], v[0], k); c[1] = lerp(c[1], v[1], k); c[2] = lerp(c[2], v[2], k); }
       const W = this.W, i0 = clamp(Math.floor(x - .5), 0, W - 2), j0 = clamp(Math.floor(y - .5), 0, this.H - 2), fx = clamp(x - .5 - i0, 0, 1), fy = clamp(y - .5 - j0, 0, 1), q0 = j0 * W + i0;
       const bil = A => lerp(lerp(A[q0], A[q0 + 1], fx), lerp(A[q0 + W], A[q0 + W + 1], fx), fy), a = bil(this.ALT);
+      // la crue : les prés bas sous une eau trouble, l'herbe affleure ; l'été dans la pinède, les parcelles brûlées.
+      // (tg : ni parcelles ni arbres, detail les tire du terrain du point)
+      if (crue && CRUE_T.has(t) && this.inonde(x, y, a, bil(this.CRUE))) { const k2 = .72 + .2 * bruitC(x * 4.1, y * 4.1, 2.2); c[0] = lerp(c[0], 78, k2); c[1] = lerp(c[1], 124, k2); c[2] = lerp(c[2], 160, k2); tg[j * n + i] = TT.EAU; }
+      else if (feux && (pin || (t === TT.LANDE && this.pinede(x, y)))) { const b = brule(x, y); if (b > 0) { const nb = .85 + .3 * bruitC(x * 5, y * 5, 1.1); c[0] = lerp(c[0], 48 * nb, b); c[1] = lerp(c[1], 42 * nb, b); c[2] = lerp(c[2], 36 * nb, b); if (b === 1) tg[j * n + i] = TT.DUNES; } }
       const nn = neigeAu(a, x, y, sa, neigeT && this.tombe(x, y)) * (t === TT.FORET && a < .3 ? .45 : 1) * .78;   // sous les bois de plaine, moins de neige
       if (nn > 0) { c[0] = lerp(c[0], 236, nn); c[1] = lerp(c[1], 239, nn); c[2] = lerp(c[2], 239, nn); if (blanc) blanc[j * n + i] = nn; }
       const gx = bil(this.GX), gy = bil(this.GY);

@@ -271,7 +271,8 @@ def _siege(g, n):
 
 
 LEV_DAYS = 90   # un événement local reste visible sur la carte trois mois
-LB_DAYS = 30    # la dernière bataille d'un camp (fêtes, deuil dans ses villes) : un mois
+LB_DAYS = 40    # la dernière bataille d'un camp (fêtes, deuil dans ses villes) : un tour, plus le temps que la nouvelle arrive
+CHOLERA_T = datetime.date(*next(e['date'] for e in EV.HIST if e['id'] == 'cholera')).toordinal()
 
 
 def player_state(g, since=0):
@@ -286,6 +287,8 @@ def player_state(g, since=0):
 
     nodes = []
     tr = g._pop_curves()
+    cholera = round(g.t - (CHOLERA_T - g.start_ord))
+    cholera = cholera if 0 <= cholera < LEV_DAYS and 'cholera' in (g.ev_done or ()) else None
     for n in g.nodes:
         gn = g.geo.nodes[n['id']]
         d = dict(id=n['id'], o=n['owner'], f=n['fort'], d=n['dev'], s=round(n['stab'], 2), pop=int(round(n.get('pop', 0), -1)),
@@ -348,6 +351,8 @@ def player_state(g, since=0):
                     d['rp'] = dict(tn=q[0], c=q[1])   # réparations : tours et prix
         if n.get('lev') and g.t - n.get('evt', -1e9) < LEV_DAYS:
             d['lv'] = [n['lev'], round(g.t - n['evt'])]   # événement local récent et son âge en jours : la carte le montre
+        elif cholera is not None and gn['type'] in ('ville', 'capitale'):
+            d['lv'] = ['epidemie', cholera]   # le choléra de 1832 frappe toutes les villes : la carte le montre comme une épidémie
         AA.view_node(g, n, d, n['owner'] in side, lambda: g.intel_active(p, n['id']) or seen(gn['x'], gn['y']))
         nodes.append(d)
 
@@ -440,6 +445,8 @@ def player_state(g, since=0):
                          prestige=g.prestige(code), weary=int(f.get('weary', 0)), **AA.view_passage(g, p, code)))
         if f.get('lb') and g.t - f['lb'][1] < LB_DAYS:
             facs[-1]['lb'] = [f['lb'][0], round(g.t - f['lb'][1])]   # dernière bataille : gagnée ?, âge en jours
+            if len(f['lb']) > 3 and (code in side or seen(f['lb'][2], f['lb'][3])):
+                facs[-1]['lb'] += f['lb'][2:4]   # … et son lieu, d'où partent les estafettes (caché hors de vue)
 
     has_port = any('port' in g.geo.nodes[n['id']]['spec'] for n in g.owned_nodes(p))
     tb, cov = g.tools_bonus(p)
@@ -481,8 +488,9 @@ def player_state(g, since=0):
                 market=dict(prices=g.market, spread=[1.15, 0.85] if has_port else [1.4, 0.6]),
                 tac=TB.tac_view(g), settings=dict(g.settings),
                 flood=g.t < g.flood_until, tour=TT.view(g),
-                # champs de bataille récents vus du joueur : x, y, âge (jours), pertes et camps des deux côtés
-                sites=[[s['x'], s['y'], round(g.t - s['t']), *s['l'], *s['o']] for s in g.sites
+                # champs de bataille récents vus du joueur : x, y, âge (jours), pertes et camps des deux côtés, vainqueur (0, 1 ;
+                # None : ancienne sauvegarde), prisonniers
+                sites=[[s['x'], s['y'], round(g.t - s['t']), *s['l'], *s['o'], s.get('w'), s.get('p', 0)] for s in g.sites
                        if g.t - s['t'] < SITE_DAYS and (p in s['o'] or seen(s['x'], s['y']))], rails=RL.player_view(g, p), vis=[[round(x, 1), round(y, 1), round(r, 1)] for x, y, r in srcs])
 
 

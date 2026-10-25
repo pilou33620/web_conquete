@@ -419,3 +419,88 @@ Le ciel (`ciel.js`) :
   vue d'ensemble 4,0 / 3,9 → 4,3 / 3,8 ms (calques nouveaux 0,03 ms) ; z 26 Bordeaux 2,8 / 2,8 → 3,1 / 2,7 (0,05 à
   0,1 ms) ; z 110 champ de bataille, convoi et colonne 3,7–4,1 → 4,8–5,3 (+1,1) ; z 110 Bordeaux (recrues, fête,
   tombes) 3,3 → 4,1–4,5 (+0,8 à 1,2) ; z 110 armée coupée 3,2–3,3 → 3,1–3,6 ; z 320 Bordeaux 2,0 → 2,5, champ 2,0 → 2,2–2,4.
+
+## Livré — H (estafettes, prisonniers, traînards, chantiers, produits, gaz, crues, cordons, feux des Landes, grands travaux, sièges)
+
+- Serveur (décor seulement, aucune règle changée) : un champ de bataille garde son vainqueur et ses prisonniers
+  (`Game.sites[].w`, `.p` ; vue `sites = [x, y, âge, pertes 0, pertes 1, camp 0, camp 1, vainqueur, prisonniers]`,
+  vainqueur `None` pour une ancienne sauvegarde) ; la dernière bataille d'un camp garde son lieu
+  (`factions[].lb = [gagnée, date, x, y]`, vue `[gagnée, âge, x, y]`, le lieu seulement pour les camps du joueur et ses
+  alliés ou à portée de vue) ; `LB_DAYS` passe de 30 à 40 jours (un tour, plus le chemin de la nouvelle). Le choléra de
+  1832 (`events.cholera`) : pendant `LEV_DAYS` après le 1er avril 1832, les villes sans autre événement ont
+  `lv = ['epidemie', âge]` (vue seulement). Bancs : `test_campagne.ChampsDeBataille`.
+- `carte/guerre.js` :
+  - **estafettes** (`NOUVELLE` = 60 km par jour, `arriveeNouvelle`, `capitaleDe`) : un cavalier au galop, par les
+    routes, de la bataille à la capitale du camp (ou sa ville la plus proche du chef-lieu perdu), tant que la nouvelle
+    n'y est pas ; dans les cercles de vision ; dès `Z.VIE`. **Fêtes et deuil** (`fetesDe`) : chaque ville commence à
+    l'arrivée de la nouvelle (âge + ½ jour, l'âge étant arrondi) ; la fête dure 10 jours en temps réel, **un tour
+    (30 jours) en tour par tour** (`JOURS.feteTour`, décision du joueur), le deuil 30 jours ; sans lieu (ancienne
+    sauvegarde), tout de suite partout ;
+  - **prisonniers** : 20 jours, par groupes de seize (un pour 60 prisonniers, 8 au plus) dans les habits du vaincu,
+    sans armes, escortés par trois fantassins du vainqueur (un cavalier en tête), du champ de bataille à la ville du
+    vainqueur la plus proche, par les routes ; dans les cercles de vision ; dès `Z.VIE` ;
+  - **traînards et déserteurs** (`trainardsDe`, 0 à 20) : derrière toute armée en retraite ; pour celles du joueur,
+    moral moyen des régiments sous 50, désertions du mois (`des`), vivres coupés ou `sup` < 0,35. Sur la route, après
+    la queue de la colonne : des isolés qui suivent, des assis au bord du chemin, des déserteurs sans fusil qui s'en
+    vont à travers champs ; dès `Z.VIE`. (Le moral des armées étrangères est caché : rien sauf la retraite.)
+  - **travaux de siège** (`avanceeSiege`, `travauxSiege`) d'après `sg.dmg` (assaut à 0,85) : la première parallèle à
+    l'ouverture, la deuxième au tiers, la troisième aux deux tiers ; les boyaux s'allongent vers les murs ; dès
+    `Z.PLAN` un point à la tête de sape, dès `Z.VIE` le gabion farci, des gabions et trois sapeurs qui piochent ;
+    parapets de gabions devant les batteries dès z 40.
+- `carte/travaux.js` (nouveau, `Travaux`, appelé par `Guerre.dessus`, relevé une fois par état) :
+  - **faubourgs** : une place du joueur dont la file (`q`) a l'agrandissement (`build` `dev`) : six maisons le long de
+    la première route hors des murs, fondations, murs sous l'échafaudage et la charpente, finies, d'après
+    l'avancement (`etatMaison`) ; tas de pierres, stères ; dès z 40 ; ouvriers et charrette dès `Z.VIE`. Les maisons
+    finies du niveau suivant sont celles du plan (`d`, lot B) ;
+  - **réparations** (`build` `repar`) : échafaudages sur 2 à 10 maisons (selon `dg`), une grue à roue dont la flèche
+    tourne, dès z 40 ; maçons et charrettes de pierres sur deux routes dès `Z.VIE` ;
+  - **produits** (chaîne `specialite` ≥ 1 d'une place du joueur, produit d'après `star`, `PRODUIT`) : six par niveau
+    sur le quai du port (`lieu().port`), sinon devant la porte : barriques (vins, négoce), barriques de résine, tas de
+    sel, paniers de poisson, caisses, sacs de grain, ballots, claies de tabac, gueuses de fer, bêtes en enclos ; dès
+    z 40 ; une charrette chargée par niveau sur une route dès `Z.VIE` ;
+  - **cordon sanitaire** (`lv` `epidemie`, choléra compris, toute place non assiégée) : à chaque route, au pied des
+    murs, un drapeau jaune (taille fixe à l'écran) dès `Z.PLAN` et une lanterne la nuit ; la barrière rayée et deux
+    gardes dès `Z.VIE` ;
+  - **grands travaux** : voies ferrées en chantier (`rails.state` `chantier`, de tout camp, dans les cercles de
+    vision) : le remblai sur 1,2 km devant la partie posée dès z 40, terrassiers, brouettes, traverses et rails
+    empilés dès `Z.VIE`. Pour le joueur, d'après `me.tech_dates` : **Ponts et Chaussées**, 180 jours
+    (`GRANDS_TRAVAUX`) de chantiers tous les 5 km sur ses routes royales (tas de cailloux dès z 40 ; cantonniers et
+    rouleau dès `Z.VIE`), puis une borne par kilomètre (`Z.VIE`) ; **canal**, 240 jours de chantier tous les 4 km sur
+    la rive de la Garonne et de la Dordogne (terre remuée dès z 40, terrassiers dès `Z.VIE`), puis le chemin de halage
+    (dès z 40) et ses balises ;
+  - **routes coupées par la crue** : une fois par crue, là où une route passe plus de 240 m dans les prés noyés, loin
+    des places : l'eau sur la chaussée dès z 40, une charrette arrêtée devant dès `Z.VIE`. **Purement visuel** (la
+    crue du serveur ne ralentit que les bacs : couper les routes changerait la marche des armées) ;
+  - **feux des Landes** (`feuxDe`) : le panache noir de loin, les flammes sur la lisière dès z 10, la lueur (`LUM`,
+    aussi de jour).
+- Tuiles (`terre.js`, `ambiance.js`), dans `cleTuiles` : **crue** (`AMB.crue` : `flood` de l'état, ou printemps et
+  pluie ou orage sur la côte ou à l'intérieur) : les prés bas (altitude approchée < 0,11) à moins de 0,25 à 1,35 km de
+  la Garonne et de la Dordogne (`Terre.CRUE`, distance au fleuve par case, `inonde`) sous une eau trouble, sans
+  parcelles ni arbres ; **brûlis** (`feuDe`, `brule`, `FEU_K` = 7 km, `FEU_MOIS` juin à novembre) : un carré de 7 km
+  sur sept a son feu de l'année, allumé en juin, juillet ou août, de 0,5 à 1,6 km de rayon, noir sans arbres jusqu'en
+  novembre, dans la pinède (forêt et lande). `AMB.mois` vient de la date de l'état ; la clé change chaque mois de juin
+  à novembre (le fond et les tuiles se repeignent une fois par mois, comme au changement de saison).
+- `carte/ciel.js` : **gaz** (`factions[].mk` `gaz`) : la nuit, le halo des villes du camp plus blanc (sprite `gaz`) ;
+  dès `Z.PLAN`, des réverbères blancs tous les 70 m le long des rues du plan, entre les maisons seulement
+  (`reverberes`).
+- Bancs : `tests/travaux.test.mjs` (chantiers, produits, cordons, grands travaux, crue, réverbères, sur la vraie
+  carte), `guerre.test.mjs` (nouvelle et fêtes, estafettes, prisonniers, traînards, avancée du siège), `terre.test.mjs`
+  (crue, feux, clé des tuiles).
+- Écarts : estafettes, prisonniers et traînards seulement au plus près (`Z.VIE`), comme les blessés de G ; le moral
+  des armées étrangères est caché, leurs traînards ne se voient qu'en retraite ; les produits ne se voient que dans les
+  places du joueur (`sl` n'est envoyé que pour elles) ; les grands travaux des Ponts et Chaussées et du canal
+  seulement chez le joueur (`tech_dates`), la voie ferrée d'après son vrai chantier (`rails.state`) et non la date de
+  la découverte ; dessins répétés (ouvriers, piles de produits, maisons, échafaudages, groupes de prisonniers,
+  traînards) peints une fois par échelle et par pas (`Guerre.tampon`) : sans cela le lot coûtait 2,7 à 3,2 ms au zoom 110.
+- Mesures (1280 × 800, Chromium sans carte graphique, scène montée à la main, `integration/vie3/h3.cjs`, médiane de
+  120 images, avant → après, deux passes) : printemps (crue, chantiers, cordon, siège à 0,55, prisonniers, estafette,
+  traînards, voie en chantier, travaux du joueur) vue d'ensemble 4,6 / 4,2 → 4,7 / 4,8 ms (calques nouveaux 0,04 ms,
+  le reste dans le bruit) ; z 26 Bordeaux 2,7 / 2,7 → 3,1 / 2,8 ; z 110 Bordeaux 4,2 / 3,8 → 4,6 / 4,5 (+0,6) ; z 110
+  champ de bataille 4,7 / 4,3 → 5,3 / 5,1 (+0,7) ; z 110 siège 3,3 / 3,5 → 3,9 / 3,9 (+0,5) ; z 320 Bordeaux 2,9 / 2,9 →
+  3,3 / 3,4 (+0,45). Été (feux des Landes) : vue d'ensemble 4,7 / 4,2 → 4,6 / 3,9 (feux 0,1 ms) ; z 26 Landes 2,2 / 2,0 →
+  2,4 / 2,1 ; z 110 Landes 1,8 / 1,6 → 1,8 / 1,7 ; z 110 Bordeaux 4,9 / 4,4 → 5,5 / 5,4 (+0,8). Les tuiles ne coûtent
+  rien de plus par image ; le fond et les tuiles se repeignent quand la crue commence ou finit et une fois par mois
+  de juin à novembre.
+- Captures (`integration/vie3/`) : `h1-bordeaux-printemps-z260` (crue, faubourg en chantier, routes, tombes),
+  `h2-champ-prisonniers-z200` (prisonniers, blessés, tombes), `h3-siege-sape-z110` (deux parallèles, sapes),
+  `h4-landes-feu-z30` (feux, brûlis), `h5-bordeaux-gaz-nuit-z60` (réverbères au gaz).

@@ -22,7 +22,10 @@ export const AMB = {
   meteo: { cote: 'soleil', interieur: 'soleil', montagne: 'soleil' },   // rules.WEATHER, par zone
   yMont: 1e9, xCote: -1e9,
   disette: [],   // [x, y, r] (km) : campagnes en friche autour des places en famine (le joueur) ou en disette (lv)
+  mois: 2,       // 0 (janvier) à 11, lu dans la date de l'état
+  crue: false,   // la Garonne et la Dordogne débordent : crue de l'état (flood) ou pluie de printemps
 };
+const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 export const nuit = () => AMB.heure === 'nuit';
 export const bivouac = () => AMB.heure === 'soir' || AMB.heure === 'nuit';
 
@@ -44,14 +47,40 @@ export function majAmbiance(map, st) {
   AMB.saison = saisonDe(st.season);
   if (st.year) AMB.annee = st.year;
   for (const z of Object.keys(AMB.meteo)) AMB.meteo[z] = st.weather?.[z]?.kind || 'soleil';
+  const m = MOIS.findIndex(x => st.date?.includes(' ' + x + ' '));
+  if (m >= 0) AMB.mois = m;
+  AMB.crue = !!st.flood || (AMB.saison === 'printemps' && ['cote', 'interieur'].some(z => AMB.meteo[z] === 'pluie' || AMB.meteo[z] === 'orage'));
   const R = { village: 3, fort: 3, ville: 4.5, capitale: 6 };
   AMB.disette = (map?.nodes || []).filter(n => { const ns = st.nodes?.[n.id]; return ns && (ns.lv?.[0] === 'disette' || (st.me?.famine && ns.o === st.me.code)); })
     .map(n => [n.x, n.y, R[n.type] || 3]);
   return cleTuiles() !== avant;
 }
-// ce dont dépend la peinture des tuiles : la saison, et la neige tombée là où il neige
-export const cleTuiles = () => AMB.saison + ':' + Object.entries(AMB.meteo).filter(([, k]) => k === 'neige').map(([z]) => z).join(',') + ':' + AMB.disette.map(d => d[0] + ',' + d[1]).join(';');
+// ce dont dépend la peinture des tuiles : la saison, la neige tombée là où il neige, les friches, la crue, les brûlis
+export const cleTuiles = () => AMB.saison + ':' + Object.entries(AMB.meteo).filter(([, k]) => k === 'neige').map(([z]) => z).join(',') + ':' + AMB.disette.map(d => d[0] + ',' + d[1]).join(';')
+  + ':' + (AMB.crue ? 'crue' : '') + ':' + (AMB.mois >= FEU_MOIS[0] && AMB.mois <= FEU_MOIS[1] ? AMB.annee + '-' + AMB.mois : '');
 export const enDisette = (x, y) => AMB.disette.some(([px, py, r]) => (x - px) ** 2 + (y - py) ** 2 < r * r);
 
 // lumières de l'image : { x, y (km), r (km), a (0-1), jour (visible aussi de jour : incendies, éclairs), spr ('lueur' | 'fen') }
 export const LUM = [];
+
+// ------------------------------------------------------------------ les feux des Landes
+// L'été, la pinède brûle : sur une grille de FEU_K km, un carré sur sept a son feu de l'année, allumé en juin, juillet
+// ou août (mois tiré) ; la parcelle reste noire jusqu'en novembre. Mêmes feux pour la même année, partout (tuiles des
+// peintres et fumées de la carte). L'appelant vérifie la pinède (terre(map).pinede).
+export const FEU_K = 7, FEU_MOIS = [5, 10];
+const hash = (i, j, k) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+// le feu du carré (I, J) cette année : { x, y, r (km), m (mois) } ou null
+export function feuDe(I, J, annee) {
+  if (hash(I, J, annee * 7 + 3) > 1 / 7) return null;
+  return { x: (I + 0.3 + 0.4 * hash(I, J, annee * 7 + 4)) * FEU_K, y: (J + 0.3 + 0.4 * hash(I, J, annee * 7 + 5)) * FEU_K, r: 0.5 + 1.1 * hash(I, J, annee * 7 + 6), m: FEU_MOIS[0] + (hash(I, J, annee * 7 + 1) * 3 | 0) };
+}
+// brûlé (x, y) ce mois-ci : 1 au cœur, de 0 à 1 sur la lisière roussie, 0 hors du feu (ou avant qu'il ne prenne)
+export function brule(x, y, annee = AMB.annee, mois = AMB.mois) {
+  if (mois < FEU_MOIS[0] || mois > FEU_MOIS[1]) return 0;
+  const I = Math.floor(x / FEU_K), J = Math.floor(y / FEU_K), f = feuDe(I, J, annee);
+  if (!f || f.m > mois) return 0;
+  const dx = x - f.x, dy = y - f.y;
+  if (Math.abs(dx) > f.r * 1.6 || Math.abs(dy) > f.r * 1.6) return 0;
+  const a = Math.atan2(dy, dx), d = Math.hypot(dx, dy) / (f.r * (1 + 0.3 * Math.sin(a * 3 + I) + 0.15 * Math.sin(a * 7 + J)));
+  return d < 1 ? 1 : d < 1.15 ? (1.15 - d) / 0.15 : 0;
+}
