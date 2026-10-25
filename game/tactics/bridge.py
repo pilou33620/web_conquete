@@ -219,7 +219,7 @@ def make_spec(g, bt):
         place = dict(nid=bt['node'], name=gn['name'], type=gn['type'], fort=n['fort'], dmg=AA.breach(n),
                      dyn=int(g.mod(att, 'breach')) if att in g.factions else 0,
                      bar=(n.get('aa') or {}).get('bar', 0.0), pop=int(n.get('pop', gn['pop0'])), x=gn['x'], y=gn['y'],
-                     battle=True, d=n.get('dev', 0))
+                     battle=True, d=n.get('dev', 0), deg=round(n.get('deg', 0.0), 3))
     lieu = None   # (bataille rangée tout près d'un lieu : son état, pour dessiner la ville de son plan, terrain_ville)
     if place is None:
         d, nid = min((math.hypot(gn['x'] - bt['x'], gn['y'] - bt['y']), gn['id']) for gn in g.geo.nodes)
@@ -537,6 +537,11 @@ def finish(g, tb):
     # la poursuite et les prisonniers ont déjà eu lieu sur le champ de bataille : la campagne reprend ce décompte
     # (res['prisoners'][i] : hommes du camp i faits prisonniers) au lieu de recalculer les siens
     bt['tac'] = dict(prisoners=[int(res['prisoners'][0]), int(res['prisoners'][1])])
+    nd = next((s['node'] for s in bt['sides'] if s['node'] is not None), None)
+    if nd is not None:
+        # les maisons touchées, brûlées, en ruine restent après la bataille (les ruines d'avant y sont déjà comptées)
+        n, old = g.nodes[nd], g.nodes[nd].get('deg', 0.0)
+        g.damage_town(n, max(0.0, (tb.degats_ville() - old) / max(1e-6, 1 - old)))
     g.end_battle(bt, winner, disengage)
     # le mois s'était arrêté sur cette bataille : la raison affichée dit maintenant son issue
     tr = getattr(g, 'tour', None)

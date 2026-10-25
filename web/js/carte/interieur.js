@@ -64,7 +64,7 @@ export function ouvrirInterieur(o) {
   el.hidden = false; document.body.classList.add('vi-ouverte');
   sc.resize();
   const V = planDe(K, n, e), Pf = V.Pf;
-  const cle = cleVille(n, e) + `|${Math.round(e.dmg * 10)}|${e.lv}|${AMB.saison}|${KT}`;
+  const cle = cleVille(n, e) + `|${Math.round(e.dmg * 10)}|${Math.round(e.deg * 20)}|${e.lv}|${AMB.saison}|${KT}`;
   Object.assign(vue, { V, e, col: o.col, flag: o.flag, t0, peinte: 0 });
   sc.V = V; sc.fx = []; sc.vie = []; sc.etals = []; sc.feux = []; sc.fumees = []; sc.moulins = [];
   // la texture se peint par pas pendant les premières images (peindreInterieurPas), puis la vie s'y installe
@@ -79,7 +79,7 @@ export function ouvrirInterieur(o) {
   sc.z = Math.max(sc.zB()[0], Math.min(4, sc.cssW / (Pf.R * 2.7))); sc.cx = IC[0]; sc.cy = IC[1]; sc.vol = null; sc.suivi = null; sc.borner(); sc.marquer(null);
   el.querySelector('#vi-nom').textContent = n.name;
   el.querySelector('#vi-sous').textContent = `${TYPE_TXT[n.type] || n.type} · ${o.dept || n.dept} · ${e.annee}`;
-  const etat = [e.siege ? (e.blocus ? 'bloquée' : `assiégée, ${Math.round(e.dmg * 100)} % de dégâts`) : null, e.lv ? `${LV_TXT[e.lv] || e.lv} (il y a ${e.lvAge} jours)` : null, e.famine ? 'famine : moins de monde dans les rues' : null].filter(Boolean);
+  const etat = [e.siege ? (e.blocus ? 'bloquée' : `assiégée, ${Math.round(e.dmg * 100)} % de dégâts`) : null, e.deg >= .01 ? `${Math.round(e.deg * 100)} % de la ville en ruine` : null, e.lv ? `${LV_TXT[e.lv] || e.lv} (il y a ${e.lvAge} jours)` : null, e.famine ? 'famine : moins de monde dans les rues' : null].filter(Boolean);
   el.querySelector('#vi-lecture').innerHTML = [...lecture(Pf, V), ...(etat.length ? [['État', etat.join(' ; ')]] : [])].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
   sc.majVisites();
   if (!vue.raf) {

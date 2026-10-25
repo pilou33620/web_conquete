@@ -364,6 +364,7 @@ class AI:
         # en guerre, on garde davantage pour lever des troupes ; en paix, on bâtit
         budget = excess * (0.3 if wars else 0.6)
         budget -= self.stock_up(budget, res)
+        budget = self.repair_towns(budget)
         budget = self.expand_towns(budget, wars)
         budget = self.fortify_frontier(budget, wars, res)
         budget = self.build_rails(budget, wars)
@@ -457,6 +458,22 @@ class AI:
         for k, q in need.items():
             spent += self.buy(k, max(10, q + 5))
         return spent if g.can_pay(self.code, cost) else None
+
+    def repair_towns(self, budget):
+        """Rebâtir d'abord les places les plus abîmées (nodes[].deg), dès qu'il y a de quoi : elles produisent moins."""
+        g, code = self.g, self.code
+        cands = [n for n in g.owned_nodes(code) if n.get('deg', 0) >= 0.1 and not n['siege'] and len(n['queue']) < 3
+                 and not any(q['kind'] == 'build' and q['what'] == 'repar' for q in n['queue'])]
+        for n in sorted(cands, key=lambda n: -n['deg']):
+            q = g.repair_quote(code, n)
+            if not q or budget < q[1].get('livres', 0):
+                continue
+            extra = self.provide(q[1], budget)
+            if extra is None:
+                continue
+            if g.build(code, n['id'], 'repar')[0]:
+                budget -= q[1].get('livres', 0) + extra
+        return budget
 
     def expand_towns(self, budget, wars):
         """Agrandir les villes et les bourgs à spécialité dont la population touche aux murs : plus d'habitants,

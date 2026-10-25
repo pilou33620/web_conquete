@@ -205,6 +205,12 @@ FORT_MAX = 3
 # moitié (mal placés contre un assaut en masse, et les murs donnent déjà leur bonus) ; entiers en bataille commandée
 FORT_GUNS_AUTO = 0.5
 BASTION_LEVEL = 4
+# dégâts d'une ville (nodes[].deg, de 0 à 1 : part des maisons détruites) : batailles et bombardements des sièges
+DEG_PROD = 0.8            # une ville détruite ne produit plus que 20 % (production × (1 − 0,8 × dégâts))
+DEG_SIEGE = 0.3           # le bombardement d'un siège : 30 % de dégâts quand la brèche est complète (dmg 1)
+DEG_ASSAUT = 0.08         # une bataille réglée sans carte tactique dans une place : 8 % de dégâts
+REPAR_TOURS = 6           # réparer une ville entièrement détruite : 6 tours (au prorata, un tour au moins)
+REPAR_COST = dict(livres=420, bois=160)   # … et ce prix, au prorata des dégâts et de la taille (cities.SIZE_COST)
 BASTION_TYPES = ('capitale', 'fort')
 FORT_UPKEEP = [0.0, 0.3, 0.7, 1.2, 2.0]
 FORT_NAMES = ['Sans remparts', 'Mur d’enceinte', 'Remparts', 'Remparts bastionnés', 'Bastions à la Vauban']
@@ -217,6 +223,8 @@ BUILD = {
     'depot': dict(name='Magasin aux vivres', max=1, cost=lambda lvl: dict(livres=150, bois=60), days=lambda lvl: 12,
                   desc='Entrepôt et charrois : les armées en campagne à moins de 30 km restent ravitaillées, '
                        'en puisant dans vos vivres'),
+    'repar': dict(name='Réparations', max=1, cost=lambda lvl: dict(REPAR_COST), days=lambda lvl: 30.0 * REPAR_TOURS,
+                  desc='Relever les maisons brûlées et en ruine : la ville retrouve toute sa production'),
     'dev': dict(name='Agrandissement', max=3, cost=lambda lvl: dict(livres=100 * (lvl + 1), bois=50 * (lvl + 1), outils=15 * (lvl + 1)),
                 days=lambda lvl: 18 + 10 * lvl,
                 desc='Nouveaux faubourgs : la ville peut accueillir 10 % d’habitants de plus, qui viennent s’y installer '

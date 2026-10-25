@@ -1177,6 +1177,7 @@ export class UI {
       <dt>Agrandissement</dt><dd title="${esc(this.devName(gn.type, ns.d))}">${pips(ns.d)}</dd>
       <dt></dt><dd class="muted small">${esc(this.devName(gn.type, ns.d))}${own && ns.pc ? `, place pour ${fmt(ns.pc)}` : ''}</dd>
       ${own ? `<dt>Ordre public</dt><dd>${Math.round(ns.s * 100)} %</dd>` : ''}
+      ${ns.dg ? `<dt>Dégâts</dt><dd>${Math.round(ns.dg * 100)} % en ruine</dd><dt></dt><dd class="muted small">production −${Math.round(ns.dg * (this.rules.deg_prod ?? 0.8) * 100)} %</dd>` : ''}
       <dt>Terrain</dt><dd>${terr}</dd></dl>`;
     if (own && ns.s < 0.5) h += `<div class="warnline">Population agitée : ${ns.g && ns.g.length ? 'la garnison maintient l’ordre.' : 'sans garnison ni armée sur place, la ville peut se révolter. Baissez les impôts ou laissez-y un régiment.'}</div>`;
     if (ns.pop) h += this.popLines(ns, own);
@@ -1242,6 +1243,11 @@ export class UI {
         if (later.length) h += `<div class="muted small" style="margin-top:4px">Plus tard : ${later.map(u => `<span title="${esc(U[u].desc || '')}">${esc(U[u].short)} (${esc(rw[u])})</span>`).join(', ')}.</div>`;
       }
       h += `<div class="section-t">Aménagements</div><div class="btns">`;
+      if (ns.rp) {   // réparer la ville : en tours selon les dégâts (engine.repair_quote)
+        const pend = queue.some(q => q.kind === 'build' && q.what === 'repar');
+        h += pend ? `<button class="btn" disabled>Réparations : ${queue[0]?.kind === 'build' && queue[0]?.what === 'repar' ? 'en chantier' : 'en file d’attente'}</button>`
+          : `<button class="btn" data-act="build" data-v="repar" ${this.canPay(ns.rp.c) && !ns.sg && !qFull ? '' : 'disabled'} title="${esc(ns.sg ? 'On ne rebâtit pas une ville assiégée' : qFull ? fullT : this.rules.build.repar?.desc || '')}">Réparer la ville<small>${this.costHtml(ns.rp.c)}, ${ns.rp.tn} tour${ns.rp.tn > 1 ? 's' : ''}</small></button>`;
+      }
       for (const k of ['fort', 'dev'].filter(k => this.rules.build[k])) {   // le magasin aux vivres est dans les emplacements
         const b = this.rules.build[k];
         const lvl = k === 'fort' ? ns.f : ns.d;

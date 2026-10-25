@@ -812,6 +812,7 @@ class Game:
         if n['id'] in self._blockade:
             out['livres'] -= trade * (1 - R.BLOCKADE_K)
         mult = self.pop_factor(n) * max(0.3, n['stab']) * (0.7 + 0.3 * self.assim(n))
+        mult *= 1 - R.DEG_PROD * n.get('deg', 0.0)   # maisons en ruine : moins de bras et d'ateliers
         if n['siege']:
             mult = 0
         mult *= AA.output_k(self, n)   # bourgeois sous les armes
@@ -1273,6 +1274,8 @@ class Game:
             return False, "Cette ville ne vous appartient pas."
         if what == 'depot':
             return CT.slot_build(self, code, nid, 'depot')   # le magasin aux vivres occupe un emplacement
+        if what == 'repar':
+            return self.repair(code, nid)
         b = R.BUILD.get(what)
         if not b:
             return False, "Construction inconnue."
@@ -1296,6 +1299,43 @@ class Game:
         if what == 'dev':
             return True, f"Agrandissement de {gn['name']} lancé : {R.DEV_NAMES[gn['type']][lvl + pending + 1].lower()}."
         return True, f"{b['name']} lancées à {gn['name']}."
+
+    # ------------------------------------------------------------------ dégâts des villes
+    def damage_town(self, n, x):
+        """La ville prend x de dégâts de plus (0 à 1) : les nouveaux tombent sur ce qui reste debout."""
+        if x <= 0:
+            return
+        n['deg'] = round(min(1.0, 1 - (1 - n.get('deg', 0.0)) * (1 - x)), 4)
+        self._dirty_income = True
+
+    def repair_quote(self, code, n):
+        """Réparations de la ville : (tours, coût), ou None s'il n'y a rien à réparer."""
+        deg = n.get('deg', 0.0)
+        if deg < 0.02:
+            return None
+        k = deg * CT.SIZE_COST[self.geo.nodes[n['id']]['type']]
+        tours = max(1, math.ceil(deg * R.REPAR_TOURS - 1e-9))
+        return tours, self.build_cost(code, {r: v * k for r, v in R.REPAR_COST.items()})
+
+    def repair(self, code, nid):
+        n = self.nodes[nid]
+        gn = self.geo.nodes[nid]
+        q = self.repair_quote(code, n)
+        if not q:
+            return False, "Il n'y a rien à réparer."
+        if n['siege']:
+            return False, "On ne rebâtit pas une ville assiégée."
+        if any(x['kind'] == 'build' and x['what'] == 'repar' for x in n['queue']):
+            return False, "Les réparations sont déjà en chantier."
+        if len(n['queue']) >= 4:
+            return False, "File de production pleine."
+        tours, cost = q
+        if not self.can_pay(code, cost):
+            return False, "Ressources insuffisantes."
+        self.pay(code, cost)
+        days = TT.TOUR_DAYS * tours   # (un tour de travail par tour : la file n'en fait pas plus)
+        n['queue'].append(dict(kind='build', what='repar', left=days, total=days))
+        return True, f"Réparations lancées à {gn['name']} : {tours} tour{'s' if tours > 1 else ''}."
 
     def update_queues(self, dt):
         w0 = TT.work(self, dt)   # capacité par tour : un mois de travail, quelle que soit sa longueur
@@ -1326,6 +1366,12 @@ class Game:
                     if q['what'] == 'fort':
                         n['fort'] = min(R.BASTION_LEVEL, n['fort'] + 1)
                         n['milice_max'] += 40
+                    elif q['what'] == 'repar':
+                        n['deg'] = 0.0
+                        self._dirty_income = True
+                        if n['owner'] == self.player:
+                            self.log('eco', f"{gn['name']} est rebâtie : la ville retrouve toute sa production.", gn['x'], gn['y'])
+                        continue
                     elif q['what'] == 'depot':
                         n['depot'] = 1
                         if n['owner'] == self.player:
@@ -2348,7 +2394,9 @@ class Game:
                     for a in bes:
                         a['state'] = 'move' if a['path'] else 'idle'
                 continue
+            d0 = s['dmg']
             s['dmg'] = min(1.0, s['dmg'] + self.siege_rate(n, bes) * dt)
+            self.damage_town(n, (s['dmg'] - d0) * R.DEG_SIEGE)   # le bombardement touche aussi les maisons
             n['milice'] = max(0.0, n['milice'] - n['milice'] * 0.015 * dt)
             for r in n['garrison']:
                 r['morale'] = max(10, r['morale'] - 2 * dt)
@@ -3045,6 +3093,9 @@ class Game:
         prisonniers (ceux du champ de bataille pour une bataille commandée), lassitude et bilan des deux camps, journal."""
         loser = 1 - winner
         W, L = bt['sides'][winner], bt['sides'][loser]
+        nd = next((s['node'] for s in bt['sides'] if s['node'] is not None), None)
+        if nd is not None and 'tac' not in bt:
+            self.damage_town(self.nodes[nd], R.DEG_ASSAUT)   # (une bataille commandée a compté ses maisons : bridge.finish)
         for aid in W['armies'] + L['armies']:   # régiments restés sur le champ de bataille (bataille commandée ou non)
             a = self.armies.get(aid)
             if a and 'ro' in a:

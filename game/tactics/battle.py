@@ -379,6 +379,12 @@ class TacticalBattle:
         self.feu = {}                        # cases en feu : heure où le feu a pris
         self._feu_t = -99.0
         self.chaume = {TR.cell_of(b['x'], b['y']) for b in self.map.buildings if b.get('toit') == 'chaume'}
+        # la ville garde les ruines des combats passés (nodes[].deg) : autant de maisons en ruine dès le début
+        deg = (spec.get('place') or {}).get('deg', 0.0)
+        if deg:
+            for c in self.cases_ville():
+                if TR._hash(c, 7, spec['seed']) < deg:
+                    self.bati[c] = 3
         rng = random.Random(spec['seed'] ^ 0x5A5A)
         self.rng = rng
         wa = rng.random() * 6.283
@@ -483,6 +489,20 @@ class TacticalBattle:
         if pl and pl.get('battle') and self.map.heart:
             return tuple(self.map.heart)
         return None
+
+    def cases_ville(self):
+        """Les cases bâties de la place (dans son rayon et un peu au-delà : les faubourgs), sans les fermes du champ."""
+        pl = self.map.place
+        if not pl or not pl.get('battle'):
+            return []
+        r2, px, py = (pl['r'] * 1.25) ** 2, pl['x'], pl['y']
+        return [c for c in range(N) if self.t[c] == T_BATI and
+                (((c % COLS) + 0.5) * TR.CELL - px) ** 2 + (((c // COLS) + 0.5) * TR.CELL - py) ** 2 <= r2]
+
+    def degats_ville(self):
+        """Part de la place détruite : une ruine ou une maison en feu compte entière, une maison touchée pour un quart."""
+        cs = self.cases_ville()
+        return sum((0.0, 0.25, 1.0, 1.0)[self.bati[c]] for c in cs) / len(cs) if cs else 0.0
 
     def place_info(self):
         pl = self.map.place

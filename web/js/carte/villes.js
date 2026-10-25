@@ -69,7 +69,7 @@ export function etatVille(n, ns, st) {
   return {
     annee: st?.year || AMB.annee || 1789,
     f: ns?.f ?? n.fort ?? 0, pop: ns?.pop || n.pop0 || 700, d: ns?.d || 0, o: ns?.o,
-    dmg: sg && !sg.occ && !sg.bl ? sg.dmg || 0 : 0, siege: !!sg && !sg.occ, blocus: !!(sg?.bl || ns?.bk),
+    dmg: sg && !sg.occ && !sg.bl ? sg.dmg || 0 : 0, deg: ns?.dg || 0, siege: !!sg && !sg.occ, blocus: !!(sg?.bl || ns?.bk),
     lv: lv ? lv[0] : null, lvAge: lv ? lv[1] : 0,
     famine: !!(st?.me?.famine && ns?.o && ns.o === st.me.code),
   };
@@ -286,7 +286,9 @@ export function genererInterieur(K, Pf) {
 // une carte îlot → 'brule' | 'ruine' | 'creve', toujours la même pour un même état
 export function degats(V, e) {
   const out = new Map(), sd = V.Pf.sd, L = V.ilots.filter(b => b.role !== 'place' && b.role !== 'parvis' && b.role !== 'jardin');
-  if (e.dmg > .02) L.forEach((b, i) => { const h = hash2(i, sd, 91); if (h < e.dmg * .22) out.set(b, 'ruine'); else if (h < e.dmg * .6) out.set(b, 'creve'); });
+  // ruines : celles du siège en cours (sg.dmg), et celles qui restent des combats passés tant qu'on n'a pas rebâti (dg)
+  const pr = Math.max(e.dmg * .22, e.deg || 0), pc = Math.max(e.dmg * .6, Math.min(1, (e.deg || 0) * 1.4));
+  if (pr > .01) L.forEach((b, i) => { const h = hash2(i, sd, 91); if (h < pr) out.set(b, 'ruine'); else if (h < pc) out.set(b, 'creve'); });
   if (e.lv === 'incendie' && L.length) {
     const c = L[hash2(sd, 7, 92) * L.length | 0].c, nb = Math.max(2, Math.ceil(L.length * .16));
     for (const b of L.slice().sort((a, b) => Math.hypot(a.c[0] - c[0], a.c[1] - c[1]) - Math.hypot(b.c[0] - c[0], b.c[1] - c[1])).slice(0, nb)) out.set(b, 'brule');
@@ -479,7 +481,7 @@ export function planDe(K, n, e) {
   return V;
 }
 // ce qui change l'image sans changer le plan : dégâts du siège (par dixièmes), incendie
-const cleImage = (n, e) => cleVille(n, e) + `|${Math.round((e.dmg || 0) * 10)}|${e.lv === 'incendie' ? 1 : 0}`;
+const cleImage = (n, e) => cleVille(n, e) + `|${Math.round((e.dmg || 0) * 10)}|${Math.round((e.deg || 0) * 20)}|${e.lv === 'incendie' ? 1 : 0}`;
 export const RES = [.125, .25, .5, 1, 2];
 export function resPour(m) { for (const r of RES) if (r >= m * .8) return r; return RES[RES.length - 1]; }
 // l'image du plan si elle est déjà peinte (à cette résolution, sinon à la plus proche)

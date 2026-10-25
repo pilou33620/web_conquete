@@ -74,6 +74,22 @@ class Maisons(unittest.TestCase):
         self.assertTrue(any(tb.bati[cc] for cc in autour), 'la maison visée ou une voisine est touchée')
         self.assertTrue(any(e['k'] == 'canon' for e in tb.fx))
 
+    def test_les_ruines_restent_apres_la_bataille(self):
+        tb = place()
+        cs = tb.cases_ville()
+        self.assertTrue(cs)
+        self.assertEqual(tb.degats_ville(), 0.0)
+        for c in cs[: len(cs) // 2]:
+            tb.bati[c] = 3
+        self.assertAlmostEqual(tb.degats_ville(), (len(cs) // 2) / len(cs))
+        # la bataille suivante dans la même place commence avec ses ruines (nodes[].deg)
+        d = json.loads(json.dumps(tb.to_dict()))
+        d['spec']['place'] = dict(d['spec'].get('place') or {}, deg=0.5)
+        d['bati'] = []
+        tb2 = type(tb).from_dict(GEO, d)
+        part = sum(tb2.bati[c] == 3 for c in tb2.cases_ville()) / len(tb2.cases_ville())
+        self.assertAlmostEqual(part, 0.5, delta=0.1)
+
     def test_les_boulets_tombent_court_ou_long(self):
         tb = place()
         art = next(u for u in tb.units if u.cls == 'artillerie' and u.side == 0)

@@ -144,7 +144,7 @@ def rules_payload():
                 scenarios=scen, scenario_order=list(R.SCENARIOS), eras=R.ERAS, unit_year=R.UNIT_YEAR,
                 fast_speed=R.FAST_SPEED, arms={c: [[t, nm, k] for t, nm, k in l] for c, l in R.ARMS.items()},
                 specialty=R.SPECIALTY, specialty_capital=R.SPECIALTY_CAPITAL, dev=dev,
-                branches=R.BRANCHES, man_days=R.MAN_DAYS, visuals=R.VISUALS, build=build, node_base=R.NODE_BASE, spec={k: v['label'] for k, v in R.SPEC.items()},
+                branches=R.BRANCHES, man_days=R.MAN_DAYS, deg_prod=R.DEG_PROD, visuals=R.VISUALS, build=build, node_base=R.NODE_BASE, spec={k: v['label'] for k, v in R.SPEC.items()},
                 weather=R.WEATHER, zones=R.ZONES, speeds=R.SPEEDS, res=R.RESOURCES, res_label=R.RES_LABEL,
                 difficulty={k: v['label'] for k, v in R.DIFFICULTY.items()}, neutral_color=R.NEUTRAL_COLOR,
                 seasons=R.SEASON_LABEL, traits=R.GENERAL_TRAITS, ranks=R.GENERAL_RANKS, formations=R.FORMATIONS,
@@ -339,6 +339,12 @@ def player_state(g, since=0):
         spy = next((s for s in g.spies if s['by'] == p and s['node'] == n['id']), None)
         if spy:
             d['spy'] = dict(kind=spy['kind'], tn=TT.tours_left(g, spy['done']))
+        if n.get('deg', 0) >= 0.01:
+            d['dg'] = round(n['deg'], 2)   # dégâts de la ville (ruines visibles sur la carte, production réduite)
+            if n['owner'] == p:
+                q = g.repair_quote(p, n)
+                if q:
+                    d['rp'] = dict(tn=q[0], c=q[1])   # réparations : tours et prix
         if n.get('lev') and g.t - n.get('evt', -1e9) < LEV_DAYS:
             d['lv'] = [n['lev'], round(g.t - n['evt'])]   # événement local récent et son âge en jours : la carte le montre
         AA.view_node(g, n, d, n['owner'] in side, lambda: g.intel_active(p, n['id']) or seen(gn['x'], gn['y']))

@@ -359,6 +359,47 @@ class RechercheEtPolitiques(unittest.TestCase):
         jouer_mois(g)
         self.assertEqual(CT.policy_w(g, n), 1.0)
 
+    def test_ville_endommagee_produit_moins(self):
+        g = partie()
+        n = next(n for n in g.owned_nodes(g.player) if g.geo.nodes[n['id']]['type'] == 'capitale')
+        avant = g.node_output(n, g.player)['livres']
+        g.damage_town(n, 0.5)
+        self.assertAlmostEqual(g.node_output(n, g.player)['livres'], avant * (1 - R.DEG_PROD * 0.5), places=6)
+        g.damage_town(n, 0.5)
+        self.assertAlmostEqual(n['deg'], 0.75, 'les nouveaux dégâts tombent sur ce qui reste debout')
+        d = next(x for x in V.player_state(g)['nodes'] if x['id'] == n['id'])
+        self.assertEqual(d['dg'], 0.75)
+        self.assertEqual(d['rp']['tn'], 5, 'trois quarts de la ville : cinq tours de réparations')
+
+    def test_reparer_la_ville_en_tours(self):
+        g = partie()
+        n = next(n for n in g.owned_nodes(g.player) if g.geo.nodes[n['id']]['type'] == 'capitale')
+        self.assertFalse(g.build(g.player, n['id'], 'repar')[0], 'rien à réparer')
+        n['queue'] = []
+        g.damage_town(n, 0.4)
+        tours, cout = g.repair_quote(g.player, n)
+        self.assertEqual(tours, 3)
+        livres = g.factions[g.player]['res']['livres']
+        ok, msg = g.build(g.player, n['id'], 'repar')
+        self.assertTrue(ok, msg)
+        self.assertAlmostEqual(g.factions[g.player]['res']['livres'], livres - cout['livres'])
+        self.assertFalse(g.build(g.player, n['id'], 'repar')[0], 'déjà en chantier')
+        q = next(q for q in next(x for x in V.player_state(g)['nodes'] if x['id'] == n['id'])['q'] if q['what'] == 'repar')
+        self.assertIn(q['tn'], (tours, tours + 1), 'prête dans ses tours (le tour en cours ne compte que ce qui reste du mois)')
+        tours = q['tn']
+        jouer_mois(g, tours - 1)
+        self.assertGreater(n.get('deg', 0), 0, 'pas encore rebâtie')
+        jouer_mois(g, 1)
+        self.assertEqual(n.get('deg', 0), 0, 'rebâtie au bout de ses tours')
+
+    def test_pas_de_reparations_pendant_un_siege(self):
+        g = partie()
+        n = next(n for n in g.owned_nodes(g.player))
+        g.damage_town(n, 0.5 * R.DEG_SIEGE)   # (la moitié d'un bombardement complet)
+        self.assertAlmostEqual(n['deg'], 0.15)
+        n['siege'] = dict(by='24', dmg=0.5, since=g.t)
+        self.assertFalse(g.build(g.player, n['id'], 'repar')[0], 'on ne rebâtit pas une ville assiégée')
+
     def test_evenement_local_visible_sur_la_carte(self):
         g = partie()
         n = next(n for n in g.owned_nodes(g.player))
