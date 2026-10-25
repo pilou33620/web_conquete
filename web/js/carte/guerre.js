@@ -2,10 +2,11 @@
 // route et bivouacs des armées, traces de leur passage et villages pillés, réfugiés devant l'ennemi, sièges et
 // batailles. On ne dessine que ce que l'état montre : une armée cachée par le brouillard n'a ni colonne ni traces.
 // Les figures et la plupart des dessins viennent de la maquette (web/js/dev/carte/new.js et vivante.js).
-import { C, E, T, RR, PG, TAU, SPR, avant, caisson, cavalier, cheval, clair, clamp, distPoly, fantassin, lerp, ligne,
+import { C, E, T, RR, PG, TAU, SPR, toile, avant, caisson, cavalier, cheval, clair, clamp, distPoly, fantassin, lerp, ligne,
          mod, piece, pietine, sombre, surChemin, tenue } from './lib.js';
 import { LUM, U, Z, bivouac, nuit } from './ambiance.js';
 import { S as SU, carteDe, etatVille, planDe } from './villes.js';
+import { LARG_RIVIERE } from './terre.js';
 
 export const VENT = [0.004, -0.002];   // km/s : le vent d'ouest emporte les fumées vers l'est
 const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -24,6 +25,17 @@ function cheminEntre(pts, s0, s1) {
   }
   return out;
 }
+// un point d'une polyligne à l'abscisse s, pour des s croissants (un seul parcours) : { x, y, a }
+function curseur(pts) {
+  let i = 1, acc = 0;
+  return s => {
+    while (i < pts.length - 1 && acc + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]) < s) { acc += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); i++; }
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], l = Math.hypot(x1 - x0, y1 - y0) || 1e-9, k = clamp((s - acc) / l, 0, 1);
+    return { x: x0 + (x1 - x0) * k, y: y0 + (y1 - y0) * k, a: Math.atan2(y1 - y0, x1 - x0) };
+  };
+}
+// la phase d'un pas, arrondie à un huitième (les figures en marche sont peintes une fois par phase : Guerre.tampon)
+const PHASES = 8, phase = p => p == null ? null : (Math.round(mod(p, TAU) / TAU * PHASES) % PHASES) * TAU / PHASES;
 // parcourt une polyligne de s0 à s1 par pas réguliers : fn(x, y, angle, s)
 function parPas(pts, s0, s1, pas, fn) {
   let acc = 0, s = s0;
@@ -200,6 +212,7 @@ export class Guerre {
     this.hist = new Map();   // par armée : la route parcourue, du nœud de départ de son arête vers l'arrière
     this.compos = new Map();
     this.looks = new Map();
+    this.sprites = new Map(); // figures peintes d'avance, par tenue, pose et échelle (tampon)
     this.sieges = new Map();
     this.pilles = new Map(); // place → jour (state.t) où une armée ennemie est passée près d'elle
     this.batailles = new Map();
@@ -223,6 +236,23 @@ export class Guerre {
   }
   // place une figure : position en km, cap, puis dessin en unités de figure
   figK(sc, g, x, y, a, s = 1) { sc.fig(g, x, y, a); g.scale(U * s, U * s); g.lineCap = 'round'; }
+  // une figure (ou un rang, un escadron, un bataillon) peinte une fois dans un petit canevas à l'échelle de l'écran
+  // (par paliers de 2^¼), puis posée d'un drawImage tourné : des centaines de figures par image restent légères.
+  // bw, bh : demi-étendue en unités de figure ; dessin(g) dessine centré en 0
+  tampon(sc, cle, bw, bh, dessin) {
+    const b = Math.pow(2, Math.ceil(Math.log2(U * sc.z * sc.d) * 4) / 4);
+    if (b !== this.sprB) { this.sprB = b; this.sprites.clear(); }
+    let c = this.sprites.get(cle);
+    if (!c) {
+      c = toile(Math.ceil(2 * bw * b) + 2, Math.ceil(2 * bh * b) + 2);
+      const gg = c.getContext('2d'); gg.setTransform(b, 0, 0, b, c.width / 2, c.height / 2); gg.lineCap = 'round'; gg.lineJoin = 'round';
+      dessin(gg); c.b = b;
+      if (this.sprites.size > 600) this.sprites.delete(this.sprites.keys().next().value);
+      this.sprites.set(cle, c);
+    }
+    return c;
+  }
+  poser(sc, g, x, y, a, c) { this.figK(sc, g, x, y, a); g.drawImage(c, -c.width / 2 / c.b, -c.height / 2 / c.b, c.width / c.b, c.height / c.b); }
   dans(sc, x, y, m = 0) { return x > sc.x0 - m && x < sc.x1 + m && y > sc.y0 - m && y < sc.y1 + m; }
 
   look(code, type) {
@@ -231,7 +261,7 @@ export class Guerre {
     if (!L) {
       const col = this.map.colors[code] || '#8d8a7a';
       L = tenue('fr', TYPE_TENUE[type] || type);
-      L.habit = teinteHabit(type, col); L.chabraque = L.habit; L.col = col;
+      L.habit = teinteHabit(type, col); L.chabraque = L.habit; L.col = col; L.cle = k;
       if (L.habits) L.habits = L.habits.map(h => mix2(h, col));
       this.looks.set(k, L);
     }
@@ -378,24 +408,32 @@ export class Guerre {
   colonne(sc, g, A) {
     const t = sc.time, a = A.a, o = a.o, pas0 = A.marche ? t * 1.7 * TAU : null;
     const Lg = this.look(o, 'general'), Lart = this.look(o, 'artillerie'), col = Lg.col;
+    const sur = curseur(A.back);
     for (const e of A.compo.liste) {
       if (e.d > A.L) break;   // la queue est encore dans la place
-      const p = surChemin(A.back, e.d); if (!this.dans(sc, p.x, p.y, 0.1)) continue;
+      const p = sur(e.d); if (!this.dans(sc, p.x, p.y, 0.1)) continue;
       const fa = p.a + Math.PI, nx = -Math.sin(fa), ny = Math.cos(fa), pas = pas0;
       const leg = k => pas == null ? null : pas + k;
       const at = (off, f) => { this.figK(sc, g, p.x + nx * off * U, p.y + ny * off * U, fa); f(); };
       switch (e.k) {
-        case 'cav': { const L = this.look(o, e.t); for (const off of [-3.5, 3.5]) at(off, () => { cheval(g, L.chevaux[(e.r + (off > 0)) % 5], { gait: leg(off) == null ? null : leg(off) * 1.2, bob: 0 }); cavalier(g, L, { habit: L.habit }, { sabre: 0, bob: 0 }); }); break; }
+        case 'cav': {
+          const L = this.look(o, e.t), q = phase(pas), c = this.tampon(sc, `${L.cle}|cav|${e.r % 5}|${q}`, 9, 7, gg => { for (const off of [-3.5, 3.5]) { gg.save(); gg.translate(0, off); cheval(gg, L.chevaux[(e.r + (off > 0)) % 5], { gait: q == null ? null : (q + off) * 1.2, bob: 0 }); cavalier(gg, L, { habit: L.habit }, { sabre: 0, bob: 0 }); gg.restore(); } });
+          this.poser(sc, g, p.x, p.y, fa, c); break;
+        }
         case 'etat':
           at(0, () => { cheval(g, Lg.chevaux[0], { gait: leg(0), bob: 0 }); cavalier(g, Lg, { gen: e.gen }, { sabre: 0, bob: 0 }); });
           at(-8, () => { cheval(g, '#6b4a2c', { gait: leg(1), bob: 0 }); cavalier(g, Lg, { fanion: true }, { sabre: 0, bob: 0 }); });
           sc.monde(g); g.save(); g.translate(p.x - nx * 8 * U, p.y - ny * 8 * U); g.scale(U, U); drapeauCamp(g, col, 0, 0, t, 2, true); g.restore();
           break;
         case 'off': { const L = this.look(o, e.t); at(4.5, () => { cheval(g, '#8b6a47', { gait: leg(0), bob: 0 }); cavalier(g, L, { officier: true }, { sabre: 0, bob: 0 }); }); break; }
-        case 'tambours': { const L = this.look(o, e.t); for (const off of [-6, -2, 2, 6]) at(off, () => fantassin(g, L, { role: 'tambour', r: off }, { legs: leg(off), arme: 'tambour' })); break; }
+        case 'tambours': {
+          const L = this.look(o, e.t), q = phase(pas), c = this.tampon(sc, `${L.cle}|tambours|${q}|${Math.round(t * 6) % 3}`, 5, 9, gg => { for (const off of [-6, -2, 2, 6]) { gg.save(); gg.translate(0, off); fantassin(gg, L, { role: 'tambour', r: off + t }, { legs: q == null ? null : q + off, arme: 'tambour' }); gg.restore(); } });
+          this.poser(sc, g, p.x, p.y, fa, c); break;
+        }
         case 'rang': {
-          const L = this.look(o, e.t);
-          for (const off of [-6, -2, 2, 6]) at(off, () => fantassin(g, L, { role: e.drapeau && off === 2 ? 'drapeau' : 'h' }, { legs: leg(e.r * 0.35), arme: e.drapeau && off === 2 ? 'aucun' : 'epaule' }));
+          const L = this.look(o, e.t), q = phase(leg(e.r * 0.35));
+          if (e.drapeau) for (const off of [-6, -2, 2, 6]) at(off, () => fantassin(g, L, { role: off === 2 ? 'drapeau' : 'h' }, { legs: q, arme: off === 2 ? 'aucun' : 'epaule' }));
+          else this.poser(sc, g, p.x, p.y, fa, this.tampon(sc, `${L.cle}|rang|${q}`, 5, 9, gg => { for (const off of [-6, -2, 2, 6]) { gg.save(); gg.translate(0, off); fantassin(gg, L, { role: 'h' }, { legs: q, arme: 'epaule' }); gg.restore(); } }));
           if (e.drapeau) { sc.monde(g); g.save(); g.translate(p.x + nx * 2 * U, p.y + ny * 2 * U); g.scale(U, U); drapeauCamp(g, col, 0, 0, t, e.b, false); g.restore(); }
           break;
         }
@@ -480,8 +518,8 @@ export class Guerre {
   mouille(x, y) {
     const mp = this.map, i = x | 0, j = y | 0;
     if (i < 0 || j < 0 || i >= mp.W || j >= mp.H || mp.terrain[j * mp.W + i] <= 1) return true;
-    if (!this.rivs) this.rivs = (mp.m.rivers || []).filter(r => r.rank <= 3).map(r => { const xs = r.pts.map(p => p[0]), ys = r.pts.map(p => p[1]); return { pts: r.pts, bb: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] }; });
-    for (const r of this.rivs) if (x > r.bb[0] - 0.3 && x < r.bb[2] + 0.3 && y > r.bb[1] - 0.3 && y < r.bb[3] + 0.3 && distPoly(r.pts, x, y) < 0.2) return true;
+    if (!this.rivs) this.rivs = (mp.m.rivers || []).filter(r => r.rank <= 3).map(r => { const xs = r.pts.map(p => p[0]), ys = r.pts.map(p => p[1]); return { pts: r.pts, w: (LARG_RIVIERE[r.rank] || 0.06) / 2 + 0.06, bb: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] }; });
+    for (const r of this.rivs) if (x > r.bb[0] - 0.3 && x < r.bb[2] + 0.3 && y > r.bb[1] - 0.3 && y < r.bb[3] + 0.3 && distPoly(r.pts, x, y) < r.w) return true;
     return false;
   }
   // tranchées : trois parallèles autour de la place, reliées par des boyaux en zigzag ; la terre remuée
@@ -577,9 +615,15 @@ export class Guerre {
       }
       if (!vie || !this.dans(sc, x, y, 0.5)) continue;
       const tire = t - u.tir < 1.2, force = clamp(s.men / Math.max(1, s.men + s.lost), 0.35, 1);
-      if (u.k === 'bat') { const n = Math.round(22 * force); for (let r = 0; r < 2; r++) for (let i = 0; i < n; i++) { this.figK(sc, g, ...versMonde(x, y, face, -r * 2.8, (i - (n - 1) / 2) * 2.5), face); fantassin(g, L, { role: 'h' }, { legs: null, arme: ph === 'charge' ? 'baio' : ph === 'canonnade' ? 'epaule' : tire ? 'joue' : 'recharge', ext: ph === 'charge' ? 0.6 : t * 3 + i }); } }
+      if (u.k === 'bat') {
+        const n = Math.round(22 * force), arme = ph === 'charge' ? 'baio' : ph === 'canonnade' ? 'epaule' : tire ? 'joue' : 'recharge', q = arme === 'recharge' ? Math.floor(mod(t * 3, TAU) / TAU * 6) : 0;
+        this.poser(sc, g, x, y, face, this.tampon(sc, `${L.cle}|bat|${n}|${arme}|${q}`, 5, n * 1.25 + 3, gg => { for (let r = 0; r < 2; r++) for (let i = 0; i < n; i++) { gg.save(); gg.translate(-r * 2.8 + 1.4, (i - (n - 1) / 2) * 2.5); fantassin(gg, L, { role: 'h' }, { legs: null, arme, ext: arme === 'baio' ? 0.6 : q * TAU / 6 + i }); gg.restore(); } }));
+      }
       else if (u.k === 'canons') for (const o of [-6, 0, 6]) { this.figK(sc, g, ...versMonde(x, y, face, 0, o), face); piece(g, L, { recul: tire ? 2 : 0 }); }
-      else for (let r = 0; r < 2; r++) for (let i = 0; i < 10; i++) { this.figK(sc, g, ...versMonde(x, y, face, -r * 7, (i - 4.5) * 4.2), face); cheval(g, L.chevaux[(i + r) % 5], { gait: charge > 0.02 ? t * 14 + i : null, bob: 0 }); cavalier(g, L, { habit: L.habit }, { sabre: charge > 0.05 ? 1 : 0, bob: 0 }); }
+      else {
+        const q = charge > 0.02 ? phase(t * 14) : null, sabre = charge > 0.05 ? 1 : 0;
+        this.poser(sc, g, x, y, face, this.tampon(sc, `${L.cle}|esc|${q}|${sabre}`, 13, 23, gg => { for (let r = 0; r < 2; r++) for (let i = 0; i < 10; i++) { gg.save(); gg.translate(-r * 7 + 3.5, (i - 4.5) * 4.2); cheval(gg, L.chevaux[(i + r) % 5], { gait: q == null ? null : q + i, bob: 0 }); cavalier(gg, L, { habit: L.habit }, { sabre, bob: 0 }); gg.restore(); } }));
+      }
     }
     // les tombés, de chaque camp à proportion de ses pertes
     if (vie) {

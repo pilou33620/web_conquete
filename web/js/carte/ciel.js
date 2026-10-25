@@ -5,6 +5,7 @@
 import { AMB, HEURES, LUM, Z, setHeure, zoneDe } from './ambiance.js';
 import { SPR, TAU, clamp, mod, sprite, surChemin } from './lib.js';
 import { rayonPlace } from './guerre.js';
+import { terre } from './terre.js';
 import { S as SU, etatVille, imageEnCache, resPour } from './villes.js';
 
 sprite('fen', '255,214,140'); sprite('pluie', '64,74,88');
@@ -99,8 +100,7 @@ export class Ciel {
       const pas = Math.max(3, (wx1 - wx0) / 22);
       for (let y = Math.floor(wy0 / pas) * pas; y < wy1 + pas; y += pas) for (let x = Math.floor(wx0 / pas) * pas; x < wx1 + pas; x += pas) {
         if (kind(zoneDe(x, y)) !== 'brouillard' || this.eau(x, y) && hash2(x | 0, y | 0, 131) < 0.5) continue;
-        const t = mp.terrain[clamp(y | 0, 0, mp.H - 1) * mp.W + clamp(x | 0, 0, mp.W - 1)];
-        if (t === 8 || (t === 7 && hash2(x | 0, y | 0, 134) < 0.6)) continue;   // les sommets sortent de la brume
+        if (terre(mp).alt(x, y) > 0.3) continue;   // la brume reste dans les fonds, les coteaux et les sommets en sortent
         const h = hash2(x * 3 | 0, y * 3 | 0, 132), r = pas * (0.9 + h);
         ctx.globalAlpha = 0.3; ctx.drawImage(SPR.f, x - r + Math.sin(time * 0.015 + h * 9) * pas * 0.2, y - r * 0.7, r * 2, r * 1.4);
       }
@@ -199,12 +199,17 @@ export class Ciel {
       const rx = x0 - (eL ? Hf : 0), ry = y0 - (eT ? Hf : 0), rw = x1 + (eR ? Hf : 0) - rx, rh = y1 + (eB ? Hf : 0) - ry;
       const fade = (x, y) => Math.min(eL ? (x - x0 + Hf) / F : 1, eR ? (x1 + Hf - x) / F : 1, eT ? (y - y0 + Hf) / F : 1, eB ? (y1 + Hf - y) / F : 1);
       const P = [new Path2D(), new Path2D(), new Path2D(), new Path2D()], pool = this.pool[zn];
+      const cle = `${rx | 0},${ry | 0},${rw | 0},${rh | 0}`;
+      if (pool.cle !== cle) { if (pool.cle && pool.rh < rh * 0.8) for (const p of pool) { p.x = rx + Math.random() * rw; p.y = ry + Math.random() * rh; } pool.cle = cle; pool.rh = rh; }
       const want = Math.min(360, rw * rh / 1e5 * 55);
       while (pool.length < want) pool.push({ x: rx + Math.random() * rw, y: ry + Math.random() * rh, r: 1 + Math.random() * 2, ph: Math.random() * 6 });
       pool.length = Math.min(pool.length, Math.ceil(want));
       for (const p of pool) {
         p.y += 40 * dt; p.x += Math.sin(time + p.ph) * 12 * dt;
-        if (p.y > ry + rh) { p.y = ry - 4; p.x = rx + Math.random() * rw; }
+        // (la zone a bougé ou grandi, zoom ou déplacement : le flocon reprend une place au hasard, sinon tous ceux
+        // nés au bord d'une zone encore plate tomberaient ensemble, en rang)
+        if (p.x < rx - 30 || p.x > rx + rw + 30 || p.y < ry - 30 || p.y > ry + rh + 30) { p.x = rx + Math.random() * rw; p.y = ry + Math.random() * rh; }
+        else if (p.y > ry + rh) { p.y = ry - Math.random() * 20; p.x = rx + Math.random() * rw; }
         const b = Math.ceil(clamp(fade(p.x, p.y), 0, 1) * 4) - 1;
         if (b >= 0) { P[b].moveTo(p.x + p.r, p.y); P[b].arc(p.x, p.y, p.r, 0, TAU); }
       }
