@@ -70,7 +70,7 @@ export class Ciel {
 
   // ---------------------------------------------------------------- l'image
   dessiner(ctx, dt, time) {
-    const mp = this.map, st = mp.state, vivant = !mp.era;   // (le style « époque » n'a ni brume, ni heure, ni lumières)
+    const mp = this.map, st = mp.state, vivant = !mp.papierVu();   // (le style « époque » n'a ni brume, ni heure, ni lumières)
     if (!st) return;
     const z = mp.cam.z, d = mp.dpr, W = mp.vw * d, H = mp.vh * d;
     const [mx0, my0] = mp.toScreen(0, 0), [mx1, my1] = mp.toScreen(mp.W, mp.H);

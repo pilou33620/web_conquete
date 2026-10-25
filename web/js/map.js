@@ -20,6 +20,7 @@ function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`
 // niveaux de détail des tuiles (pixels par km) : une échelle fine, pour qu'une tuile ne soit jamais beaucoup
 // réduite à l'écran (sinon il en faut des centaines pour couvrir un grand écran d'iPad) ; jusqu'au zoom le plus près
 const LEVELS = [2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256];
+const PAPIER_L = 64, FONDU = [70, 100], PAPIER_MAX = 85;   // (fondu de la gravure dans la vue du ciel, en px d'écran par km)
 const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 // teintes du terrain (seules leurs clés servent encore : la carte vue du ciel est peinte par carte/terre.js)
 const TCOL = {
@@ -323,6 +324,9 @@ export class MapView {
 
   // style de carte en vigueur : null (Ultimate General), 'cassini' ou 'etatmajor' (d'après l'année de la partie)
   styleEra() { return styleCarte(this.style, this.epoque.year); }
+  // ce qui se voit à ce zoom : la carte d'époque de loin, le paysage vu du ciel au-delà de 64 px/km (la gravure
+  // agrandie y est floue) ; les tuiles de 96 px/km et plus sont toujours vues du ciel, celles de 64 s'y fondent
+  papierVu() { return this.era && this.cam.z * this.dpr <= PAPIER_MAX ? this.era : null; }
 
   setStyle(v) {
     this.style = v === 'epoque' ? 'epoque' : 'ugar';
@@ -481,7 +485,7 @@ export class MapView {
   }
 
   drawWaterNames(ctx) {
-    const z = this.cam.z, wn = this.waterNames, P = PAPIER[this.era];
+    const z = this.cam.z, wn = this.waterNames, P = PAPIER[this.papierVu()];
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     const spaced = t => t.toLocaleUpperCase('fr-FR').split('').join('\u200a');
@@ -1290,7 +1294,7 @@ export class MapView {
     const span = TILE / L, x0 = tx * span, y0 = ty * span;
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = 'high';
-    const P = PAPIER[this.era];
+    const P = L > PAPIER_L ? null : PAPIER[this.era];
     g.fillStyle = P ? rgb(P.mer) : EAU;
     g.fillRect(0, 0, TILE, TILE);
     const W = (px) => g.setTransform(L, 0, 0, L, -x0 * L, -y0 * L);
@@ -1436,7 +1440,7 @@ export class MapView {
 
   drawRoads(g, L, x0, y0, span) {
     const vis = ({ box: b }) => b[2] > x0 - 1 && b[0] < x0 + span + 1 && b[3] > y0 - 1 && b[1] < y0 + span + 1;
-    const es = this.edges.filter(e => !e.water && vis(e)), P = PAPIER[this.era];
+    const es = this.edges.filter(e => !e.water && vis(e)), P = L > PAPIER_L ? null : PAPIER[this.era];
     g.lineCap = 'round'; g.lineJoin = 'round';
     // vue du ciel : routes empierrées (carte/terre.js), les royales bordées d'arbres de près
     const larg = royal => P ? Math.max(royal ? 0.34 : 0.2, (royal ? 2.1 : 1.2) / L) : royal ? Math.max(0.07, 2.6 / L) : Math.max(0.04, 1.4 / L);
@@ -1752,6 +1756,17 @@ export class MapView {
         else this.drawFallback(ctx, L, tx, ty, ox, oy, z);
       }
     }
+    // carte d'époque : en zoomant au-delà de 64 px/km, la gravure s'efface peu à peu sur le paysage vu du ciel
+    const fondu = this.era && L > PAPIER_L ? 1 - clamp((z * dpr - FONDU[0]) / (FONDU[1] - FONDU[0]), 0, 1) : 0;
+    if (fondu > 0) {
+      const sp = TILE / PAPIER_L;
+      ctx.globalAlpha = fondu;
+      for (let ty = Math.floor(Math.max(0, wy0) / sp); ty * sp < Math.min(this.H, wy1); ty++) for (let tx = Math.floor(Math.max(0, wx0) / sp); tx * sp < Math.min(this.W, wx1); tx++) {
+        const t = this.getTile(PAPIER_L, tx, ty, true);
+        if (t) ctx.drawImage(t, ox + tx * sp * z, oy + ty * sp * z, sp * z + 0.6, sp * z + 0.6);
+      }
+      ctx.globalAlpha = 1;
+    }
     ctx.restore();
     ctx.strokeStyle = 'rgba(150,142,116,0.7)'; ctx.lineWidth = 1.5;
     ctx.strokeRect(ox - 4, oy - 4, this.W * z + 8, this.H * z + 8);
@@ -1947,7 +1962,7 @@ export class MapView {
       const [x, y] = this.toScreen(n.x, n.y);
       const s = this.nodeSize(n), ns = st.nodes[n.id];
       // (dès le plan des villes, la place couvre son vrai rayon : elle reste dessinée tant qu'un bout est à l'écran)
-      const rP = z >= Z.PLAN && !PAPIER[this.era] && x > -1e4 && x < this.vw + 1e4 && y > -1e4 && y < this.vh + 1e4 ? rayonMurs(this, n, ns) * z : 0, sc = Math.max(s, rP);
+      const rP = z >= Z.PLAN && !this.papierVu() && x > -1e4 && x < this.vw + 1e4 && y > -1e4 && y < this.vh + 1e4 ? rayonMurs(this, n, ns) * z : 0, sc = Math.max(s, rP);
       if (x < -sc - 80 || y < -sc - 40 || x > this.vw + sc + 80 || y > this.vh + sc + 40) continue;
       const col = this.colors[ns.o] || '#999';
       const sel = this.selection && this.selection.kind === 'node' && this.selection.id === n.id;
@@ -1996,7 +2011,7 @@ export class MapView {
     const prio = { capitale: 0, ville: 1, fort: 2, village: 3 };
     labels.sort((a, b) => prio[a[0].type] - prio[b[0].type]);
     const placed = [];
-    const P = PAPIER[this.era];
+    const P = PAPIER[this.papierVu()];
     for (const [n, x, y, s, ns, rP] of labels) {
       // (carte d'époque : les villages en italique bas-de-casse, comme les gravaient Cassini et l'état-major)
       const fs = this.labelFs(n), fc = Math.round(fs * 0.8), vil = P && n.type === 'village', name = vil ? n.name : n.name.toLocaleUpperCase('fr-FR');
@@ -2421,7 +2436,7 @@ export class MapView {
 
   drawArmies(ctx, time) {
     const z = this.cam.z, st = this.state;
-    const detailed = z >= 5.5, vie = z >= Z.VIE && !this.era;
+    const detailed = z >= 5.5, vie = z >= Z.VIE && !this.papierVu();
     // de près, les armées en colonne de route ou au bivouac (carte/guerre.js) ; le jeton et la formation restent
     // en dessous de Z.VIE, et leur place reste celle des clics
     if (detailed) this.guerreDe().armees(ctx, time, vie);

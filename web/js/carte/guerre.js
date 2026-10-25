@@ -352,7 +352,7 @@ export class Guerre {
   sol(ctx, time) {
     const mp = this.map, st = mp.state;
     ZONES.length = 0;
-    if (!st || mp.era) return;
+    if (!st || mp.papierVu()) return;
     const sc = this.scene(time), z = sc.z, g = ctx;
     // personne autour d'un siège ou d'une bataille, moins de monde devant l'ennemi (densiteGuerre)
     if (this.zst !== st) {   // (sièges et batailles : une fois par état reçu)
@@ -400,7 +400,7 @@ export class Guerre {
 
   // ---------------------------------------------------------------- les armées (à partir de Z.VIE)
   armees(ctx, time, vie = true) {
-    const mp = this.map, st = mp.state; if (!st || mp.era) return;
+    const mp = this.map, st = mp.state; if (!st || mp.papierVu()) return;
     const sc = this.scene(time), g = ctx, list = this.armeesDe(time);
     if (!vie) {
       // de loin, le soir et la nuit : quelques feux autour des armées au bivouac
@@ -550,7 +550,7 @@ export class Guerre {
   // le siège d'une place (appelé par drawNodes, par-dessus la ville) : camp, batteries qui tirent (d'autant plus
   // souvent que la brèche avance), incendies dans la place ; un blocus n'a que son camp
   siege(ctx, n, ns, time) {
-    const mp = this.map, sg = ns.sg; if (!sg || sg.occ || mp.era) return;
+    const mp = this.map, sg = ns.sg; if (!sg || sg.occ || mp.papierVu()) return;
     const sc = this.scene(time), z = sc.z, t = time, g = ctx; if (z < 6) return;   // (de loin, l'anneau de map.js suffit)
     const s = this.siegeDe(n, ns), noir = nuit();
     if (!this.dans(sc, s.x, s.y, s.r + 4)) return;
@@ -653,7 +653,7 @@ export class Guerre {
 
   // ---------------------------------------------------------------- par-dessus : batailles, pillages, fumées
   dessus(ctx, dt, time) {
-    const mp = this.map, st = mp.state; if (!st || mp.era) return;
+    const mp = this.map, st = mp.state; if (!st || mp.papierVu()) return;
     const sc = this.scene(time), g = ctx;
     ctx.save();
     for (const b of st.battles) this.bataille(sc, g, b);

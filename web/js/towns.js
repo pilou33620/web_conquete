@@ -285,7 +285,7 @@ export class TownArt {
   // ------------------------------------------------------------------ à chaque image
   draw(ctx, n, s, col, ns, time, owner) {
     const mp = this.map;
-    if (mp.m && mp.style !== 'epoque' && mp.cam.z >= Z.PLAN && this.plan(ctx, n, s, col, ns, owner)) return;
+    if (mp.m && !mp.papierVu() && mp.cam.z >= Z.PLAN && this.plan(ctx, n, s, col, ns, owner)) return;
     const dev = (ns && ns.d) || 0, winter = mp.season === 'hiver';
     const sp = this.sprite(n, s, dev, winter);
     const k = s / sp.S;
