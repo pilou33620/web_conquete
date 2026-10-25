@@ -87,7 +87,8 @@ export class Ciel {
     // 2) brouillard en nappes, brume du matin sur les fleuves
     monde();
     const brouillard = Object.entries(zones).some(([zn, zr]) => zr[2] > zr[0] && zr[3] > zr[1] && kind(zn) === 'brouillard');
-    if (vivant && (AMB.heure === 'matin' || brouillard)) {
+    // (de loin, le voile suffit : les nappes, des points de quelques pixels, coûteraient sans se voir)
+    if (vivant && z >= 4 && (AMB.heure === 'matin' || brouillard)) {
       for (const [x, y, h] of this.brume) {
         if (x < wx0 - 6 || x > wx1 + 6 || y < wy0 - 6 || y > wy1 + 6) continue;
         const bz = kind(zoneDe(x, y)) === 'brouillard';
@@ -96,7 +97,7 @@ export class Ciel {
         ctx.drawImage(SPR.f, x - r + Math.sin(time * 0.02 + h * 9) * 0.4, y - r * 0.7, r * 2, r * 1.4);
       }
     }
-    if (vivant && brouillard) {
+    if (vivant && brouillard && z >= 4) {
       const pas = Math.max(3, (wx1 - wx0) / 22);
       for (let y = Math.floor(wy0 / pas) * pas; y < wy1 + pas; y += pas) for (let x = Math.floor(wx0 / pas) * pas; x < wx1 + pas; x += pas) {
         if (kind(zoneDe(x, y)) !== 'brouillard' || this.eau(x, y) && hash2(x | 0, y | 0, 131) < 0.5) continue;
@@ -109,9 +110,12 @@ export class Ciel {
     // 3) les averses, qui passent avec le vent ; l'orage a ses éclairs, la tempête sa pluie couchée
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     for (const a of this.averses) {
-      const fort = kind(zoneDe(...this.posAverse(a, time, 'pluie'))), k2 = PLUIE.has(fort) ? fort : null;
+      let [px, py] = this.posAverse(a, time, 'pluie');
+      if (py < wy0 - 26 || py > wy1 + 26) continue;
+      const fort = kind(zoneDe(px, py)), k2 = PLUIE.has(fort) ? fort : null;
       if (!k2 || (k2 === 'pluie' && a.k % 3 === 0)) continue;   // (la pluie a moins d'averses que l'orage)
-      const [px, py] = this.posAverse(a, time, k2), sx = (px - mp.cam.x) * z * d + W / 2, sy = (py - mp.cam.y) * z * d + H / 2, rx = a.r * 1.4 * z * d, ry = a.r * z * d;
+      if (k2 === 'tempete') [px, py] = this.posAverse(a, time, k2);
+      const sx = (px - mp.cam.x) * z * d + W / 2, sy = (py - mp.cam.y) * z * d + H / 2, rx = a.r * 1.4 * z * d, ry = a.r * z * d;
       if (sx + rx < 0 || sx - rx > W || sy + ry < 0 || sy - ry > H) continue;
       ctx.globalAlpha = k2 === 'pluie' ? 0.5 : 0.72; ctx.drawImage(SPR.pluie, sx - rx, sy - ry, rx * 2, ry * 2); ctx.globalAlpha = 1;
       const n = clamp(Math.min(rx, W) * Math.min(ry, H) / (k2 === 'pluie' ? 700 : 450), 30, 700), dx = (k2 === 'tempete' ? -10 : -3) * d, dy = 11 * d;

@@ -3,7 +3,7 @@
 // batailles. On ne dessine que ce que l'état montre : une armée cachée par le brouillard n'a ni colonne ni traces.
 // Les figures et la plupart des dessins viennent de la maquette (web/js/dev/carte/new.js et vivante.js).
 import { C, E, T, RR, PG, TAU, SPR, toile, avant, caisson, cavalier, cheval, clair, clamp, distPoly, fantassin, lerp, ligne,
-         mod, piece, pietine, sombre, surChemin, tenue } from './lib.js';
+         mod, piece, sombre, surChemin, tenue } from './lib.js';
 import { LUM, U, Z, bivouac, nuit } from './ambiance.js';
 import { S as SU, carteDe, etatVille, planDe } from './villes.js';
 import { LARG_RIVIERE } from './terre.js';
@@ -36,6 +36,8 @@ function curseur(pts) {
 }
 // la phase d'un pas, arrondie à un huitième (les figures en marche sont peintes une fois par phase : Guerre.tampon)
 const PHASES = 8, phase = p => p == null ? null : (Math.round(mod(p, TAU) / TAU * PHASES) % PHASES) * TAU / PHASES;
+// la terre piétinée, d'un seul tracé : [[x, y, rx, ry, angle], …] (comme pietine de lib.js, une à une)
+function pietines(g, l, f) { if (!l.length) return; g.fillStyle = `rgba(105,80,45,${f})`; g.beginPath(); for (const [x, y, rx, ry, a] of l) { g.moveTo(x + Math.cos(a) * rx, y + Math.sin(a) * rx); g.ellipse(x, y, rx, ry, a, 0, TAU); } g.fill(); }
 // parcourt une polyligne de s0 à s1 par pas réguliers : fn(x, y, angle, s)
 function parPas(pts, s0, s1, pas, fn) {
   let acc = 0, s = s0;
@@ -300,8 +302,9 @@ export class Guerre {
       else back = [[d.x, d.y], ...h.back];
       head = back[0];
       let c = this.compos.get(a.id);
-      const key = a.regs.map(r => r[1] + r[2]).join() + !!a.gen;
-      if (!c || c.key !== key) { c = compoColonne(a.regs, t => unitCls(mp.rules, t), t => unitLight(mp.rules, t), a.gen); c.key = key; this.compos.set(a.id, c); }
+      const key = c && c.a === a ? c.key : a.regs.map(r => r[1] + r[2]).join() + !!a.gen;   // (une fois par état reçu)
+      if (c) c.a = a;
+      if (!c || c.key !== key) { c = compoColonne(a.regs, t => unitCls(mp.rules, t), t => unitLight(mp.rules, t), a.gen); c.key = key; c.a = a; this.compos.set(a.id, c); }
       // en marche, ou arrêtée sur la route (pause, halte) : on le voit au mouvement de la tête
       const v = this.vu.get(a.id);
       if (!v || Math.hypot(v.x - head[0], v.y - head[1]) > 0.003) this.vu.set(a.id, { x: head[0], y: head[1], t: time });
@@ -352,36 +355,47 @@ export class Guerre {
     if (!st || mp.era) return;
     const sc = this.scene(time), z = sc.z, g = ctx;
     // personne autour d'un siège ou d'une bataille, moins de monde devant l'ennemi (densiteGuerre)
-    for (const n of mp.nodes) { const ns = st.nodes[n.id]; if (ns.sg && !ns.sg.occ) ZONES.push({ x: n.x, y: n.y, r: rayonMurs(this.map, n, ns) + 4, d: 0.06 }); }
-    for (const b of st.battles) ZONES.push({ x: b.x, y: b.y, r: 5, d: 0.1 });
+    if (this.zst !== st) {   // (sièges et batailles : une fois par état reçu)
+      this.zst = st; this.zfixes = [];
+      for (const n of mp.nodes) { const ns = st.nodes[n.id]; if (ns.sg && !ns.sg.occ) this.zfixes.push({ x: n.x, y: n.y, r: rayonMurs(this.map, n, ns) + 4, d: 0.06 }); }
+      for (const b of st.battles) this.zfixes.push({ x: b.x, y: b.y, r: 5, d: 0.1 });
+      this.sieges0 = mp.nodes.filter(n => { const sg = st.nodes[n.id].sg; return sg && !sg.occ && !sg.bl; });
+    }
+    ZONES.push(...this.zfixes);
     for (const A of this.armeesDe(time)) if (A.enRoute && this.ennemiDuJoueur(A.a.o)) ZONES.push({ x: A.back[0][0], y: A.back[0][1], r: 12, d: 0.35 });
     g.save();
     if (z >= 6) for (const A of this.armeesDe(time)) this.traces(sc, g, A);
-    if (z >= 6) for (const n of mp.nodes) {
-      const ns = st.nodes[n.id]; if (!ns.sg || ns.sg.occ || ns.sg.bl) continue;
-      const S = this.siegeDe(n, ns); if (!this.dans(sc, n.x, n.y, S.r + 3)) continue;
+    if (z >= 6) for (const n of this.sieges0) {
+      const ns = st.nodes[n.id], S = this.siegeDe(n, ns); if (!this.dans(sc, n.x, n.y, S.r + 3)) continue;
       this.siegeSol(sc, g, S);
     }
     if (z >= 18) for (const b of st.battles) {
       const B = this.batailleDe(b); if (!this.dans(sc, B.x, B.y, 2)) continue;
-      sc.monde(g); for (let k = 0; k < 40; k++) pietine(g, B.x + B.ux * (hash2(k, 1, 106) - 0.5) * 2.2 + B.nx * (hash2(k, 2, 106) - 0.5) * 0.9, B.y + B.uy * (hash2(k, 1, 106) - 0.5) * 2.2 + B.ny * (hash2(k, 2, 106) - 0.5) * 0.9, 0.09, 0.05, B.a, 0.2);
+      sc.monde(g); pietines(g, Array.from({ length: 40 }, (_, k) => [B.x + B.ux * (hash2(k, 1, 106) - 0.5) * 2.2 + B.nx * (hash2(k, 2, 106) - 0.5) * 0.9, B.y + B.uy * (hash2(k, 1, 106) - 0.5) * 2.2 + B.ny * (hash2(k, 2, 106) - 0.5) * 0.9, 0.09, 0.05, B.a]), 0.2);
     }
     g.restore();
   }
   // derrière la queue de la colonne : la route défoncée, les champs piétinés, des débris derrière l'ennemi
   traces(sc, g, A) {
-    const z = sc.z, fin = Math.min(A.compo.long, A.L), tr = cheminEntre(A.back, fin, A.L);
+    // (la trace ne change qu'avec la route parcourue et la tête qui avance : refaite tous les 50 m)
+    const z = sc.z, fin = Math.min(A.compo.long, A.L), h = this.hist.get(A.a.id), cle = A.back.length + ':' + (A.L * 20 | 0);
+    if (!h.tr || h.trCle !== cle) { h.tr = cheminEntre(A.back, fin, A.L); h.trCle = cle; }
+    const tr = h.tr;
     if (tr.length < 2) return;
     sc.monde(g); g.lineCap = 'round'; g.lineJoin = 'round';
     ligne(g, tr); g.strokeStyle = 'rgba(112,84,48,.42)'; g.lineWidth = Math.max(0.07, 3 / z); g.stroke();
     if (z < 18) return;
-    const hostile = this.ennemiDuJoueur(A.a.o);
-    parPas(tr, 0, 1e9, 0.09, (x, y, a, s) => {
+    const hostile = this.ennemiDuJoueur(A.a.o), foule = [], restes = [];
+    // (un pas d'au moins 4 pixels : de loin, la terre piétinée n'est qu'un grain)
+    parPas(tr, 0, 1e9, Math.max(0.09, 4 / z), (x, y, a, s) => {
       if (!this.dans(sc, x, y)) return;
       const k = (s + fin) * 11 | 0, ca = Math.cos(a), sa = Math.sin(a);
-      for (const sg of [-1, 1]) { const o = 0.05 + hash2(k, sg, 104) * 0.12; pietine(g, x - sa * o * sg, y + ca * o * sg, 0.03 + hash2(k, 2, 104) * 0.03, 0.018, a, 0.22); }
-      if (hostile && z >= Z.VIE && k % 6 === 0) { this.figK(sc, g, x - sa * 0.02, y + ca * 0.02, a + hash2(k, 3, 104) * 3); debris(g, hash2(k, 4, 104)); sc.monde(g); }
+      for (const sg of [-1, 1]) { const o = 0.05 + hash2(k, sg, 104) * 0.12; foule.push([x - sa * o * sg, y + ca * o * sg, 0.03 + hash2(k, 2, 104) * 0.03, 0.018, a]); }
+      if (hostile && z >= Z.VIE && k % 6 === 0) restes.push([x - sa * 0.02, y + ca * 0.02, a + hash2(k, 3, 104) * 3, hash2(k, 4, 104)]);
     });
+    pietines(g, foule, 0.22);
+    for (const [x, y, a, h] of restes) { this.figK(sc, g, x, y, a); debris(g, h); }
+    sc.monde(g);
   }
 
   // ---------------------------------------------------------------- les armées (à partir de Z.VIE)
@@ -531,13 +545,14 @@ export class Guerre {
     for (const p of lignes) { ligne(g, p); g.strokeStyle = '#b99a66'; g.lineWidth = Math.max(0.036, 2.2 / z); g.stroke(); }
     for (const p of lignes) { ligne(g, p); g.strokeStyle = '#4d3b26'; g.lineWidth = Math.max(0.012, 0.9 / z); g.stroke(); }
     for (const b of s.batteries) { const ca = Math.cos(b.a), sa = Math.sin(b.a); T(g, '#8f7449', Math.max(0.05, 3 / z), b.x + ca * 0.02 - sa * 0.06, b.y + sa * 0.02 + ca * 0.06, b.x + ca * 0.02 + sa * 0.06, b.y + sa * 0.02 - ca * 0.06); }
-    if (z >= 18) for (let k = 0; k < 60; k++) { const a = s.aT + (hash2(k, 1, 122) - 0.5) * 2.6, d = s.r + 0.3 + hash2(k, 2, 122) * 3; pietine(g, s.x + Math.cos(a) * d, s.y + Math.sin(a) * d, 0.08, 0.05, a, 0.2); }
+    if (z >= 18) pietines(g, Array.from({ length: 60 }, (_, k) => { const a = s.aT + (hash2(k, 1, 122) - 0.5) * 2.6, d = s.r + 0.3 + hash2(k, 2, 122) * 3; return [s.x + Math.cos(a) * d, s.y + Math.sin(a) * d, 0.08, 0.05, a]; }), 0.2);
   }
   // le siège d'une place (appelé par drawNodes, par-dessus la ville) : camp, batteries qui tirent (d'autant plus
   // souvent que la brèche avance), incendies dans la place ; un blocus n'a que son camp
   siege(ctx, n, ns, time) {
     const mp = this.map, sg = ns.sg; if (!sg || sg.occ || mp.era) return;
-    const sc = this.scene(time), z = sc.z, t = time, g = ctx, s = this.siegeDe(n, ns), noir = nuit();
+    const sc = this.scene(time), z = sc.z, t = time, g = ctx; if (z < 6) return;   // (de loin, l'anneau de map.js suffit)
+    const s = this.siegeDe(n, ns), noir = nuit();
     if (!this.dans(sc, s.x, s.y, s.r + 4)) return;
     ctx.save();
     const L = this.look(sg.by, 'artillerie');
@@ -575,16 +590,16 @@ export class Guerre {
   // ---------------------------------------------------------------- les batailles
   // l'axe de la bataille : du camp 0 vers le camp 1 (d'après leurs armées), le front en travers
   batailleDe(b) {
+    // les troupes de chaque camp d'après leur effectif par arme ; serrées à mesure que la bataille s'engage
+    const key = b.sides.map(s => [s.mix?.inf, s.mix?.cavalerie, s.mix?.artillerie, s.mix?.milice].map(v => Math.round((v || 0) / 150)).join()).join('|');
+    const old = this.batailles.get(b.id);
+    if (old && old.key === key) { old.x = b.x; old.y = b.y; return old; }
     const mp = this.map, byId = new Map(mp.state.armies.map(a => [a.id, a]));
     const cen = b.sides.map(s => { const arr = s.armies.map(id => byId.get(id)).filter(Boolean); return arr.length ? [arr.reduce((t, a) => t + a.x, 0) / arr.length, arr.reduce((t, a) => t + a.y, 0) / arr.length] : null; });
     let th = cen[0] && cen[1] && Math.hypot(cen[1][0] - cen[0][0], cen[1][1] - cen[0][1]) > 0.05 ? Math.atan2(cen[1][1] - cen[0][1], cen[1][0] - cen[0][0]) : hash2(String(b.id).replace(/\D/g, '') | 0, 1, 95) * TAU;
-    const old = this.batailles.get(b.id);
     if (old) th = old.th;   // l'axe ne tourne plus une fois la bataille engagée
     const nx = Math.cos(th), ny = Math.sin(th), a = th - Math.PI / 2;
     const B = { id: b.id, th, x: b.x, y: b.y, a, ux: Math.cos(a), uy: Math.sin(a), nx, ny, unites: [], key: '' };
-    // les troupes de chaque camp d'après leur effectif par arme ; serrées à mesure que la bataille s'engage
-    const key = b.sides.map(s => [s.mix?.inf, s.mix?.cavalerie, s.mix?.artillerie, s.mix?.milice].map(v => Math.round((v || 0) / 150)).join()).join('|');
-    if (old && old.key === key) { Object.assign(old, { x: b.x, y: b.y }); return old; }
     B.key = key;
     b.sides.forEach((s, i) => {
       const sg = i ? 1 : -1, mx = s.mix || {}, inf = (mx.inf || 0) + (mx.milice || 0), nb = inf > 0 ? clamp(Math.round(inf / 450), 1, 6) : 0;
@@ -601,7 +616,7 @@ export class Guerre {
   bataille(sc, g, b) {
     const B = this.batailleDe(b), z = sc.z, t = sc.time, noir = nuit();
     if (!noir) { sc.monde(g); for (let k = 0; k < 12; k++) { const d = mod(t * 0.02 + k * 0.35, 4.2), r = Math.max(0.5 + d * 0.55, 7 / z), x = B.x + (hash2(k, 1, 105) - 0.5) * 1.6 + d * 0.9, y = B.y + (hash2(k, 2, 105) - 0.5) * 0.8 - d * 0.45; g.globalAlpha = 0.34 * (1 - d / 4.2); g.drawImage(SPR.f, x - r, y - r, 2 * r, 2 * r); } g.globalAlpha = 1; }
-    if (!this.dans(sc, B.x, B.y, 2.5)) return;
+    if (z < 18 || !this.dans(sc, B.x, B.y, 2.5)) return;   // (de loin, le nuage ; les salves se voient de près)
     const ph = b.phase || 'fusillade', ecart = ph === 'canonnade' ? 0.42 : ph === 'charge' ? 0.22 : 0.3, vie = z >= Z.VIE;
     for (const u of B.unites) {
       const s = b.sides[u.i], L = this.look(s.o, u.type);

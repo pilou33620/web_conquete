@@ -323,3 +323,43 @@ Le ciel (`ciel.js`) :
 - Temps (PC de développement ; un Raspberry Pi est quatre à cinq fois plus lent) : plan et pose de la ville 25 à
   65 ms (Bayonne 52, Bordeaux 61, Périgueux 59, un village 25), carte entière 0,22 à 0,33 s (version 3 : 0,20 à
   0,28 s).
+
+## Livré — D
+
+- `carte/guerre.js` : `compoColonne(regs, cls, leger, gen)` (de la tête à la queue : avant-garde de cavalerie, à
+  défaut les voltigeurs ; état-major ; un bataillon par régiment d'infanterie, une figure pour trois hommes, par rangs
+  de quatre, officier, tambours, drapeau ; trois pièces attelées pour 120 artilleurs ; un caisson par pièce ; un
+  chariot par 1 500 hommes ; arrière-garde), `geoSiege` (côté de la terre, parallèles, boyaux, cinq batteries, camp,
+  foyers), `Guerre` (`sol` sous les villes, `siege` dans `drawNodes`, `armees` dans `drawArmies`, `dessus` dans
+  `drawBattles`), `densiteGuerre` enregistrée dans `vie.js` par `ajouterDensite` (moins de monde devant l'ennemi).
+- `carte/ciel.js` : `Ciel` (`drawWeather`) : voiles par zone, averses (éclairs pour l'orage, pluie couchée pour la
+  tempête), brouillard en nappes dans les fonds (`terre(map).alt`), neige, canicule ; brume du matin ; voile de
+  l'heure en `multiply` ; `LUM` en `lighter`, fenêtres des villes (`planCarte().lum`), phare de Cordouan ;
+  sélecteur d'heure (quatre boutons `aria-pressed`, rangés à gauche du dernier bouton de `#zoombar`).
+- Écarts :
+  - `drawSeasonTint` n'a plus la teinte de saison (les tuiles de A portent les saisons) ; c'est là, seule de mes
+    fonctions appelée sous les villes, que se dessinent les traces, les tranchées et la terre piétinée.
+  - Le voile de l'heure couvre aussi les noms et les chiffres (dessinés avant, dans `drawNodes`) : de loin, il
+    s'allège (45 % à la vue d'ensemble) pour qu'ils restent lisibles. La nuit, les fumées des batailles cessent.
+  - Pas de vent dans l'état : un vent d'ouest fixe (`VENT`).
+  - La route parcourue est gardée par arêtes (tour par tour : `trl`) ; un saut (armée hors de vue, tour d'un autre
+    camp) l'efface, une armée sortie de l'état perd ses traces. Les villages pillés (ville sans remparts ou village
+    d'un camp en guerre avec l'armée, à moins de 3 km de sa trace) fument 4 jours de partie, et seulement dans les
+    cercles de vision.
+  - Une armée dans une place bivouaque au sud des murs du plan ; le clic reste où était le jeton. Une armée qui
+    assiège ou qui se bat n'a pas de colonne : le siège et la bataille la montrent.
+  - Siège : rayon des remparts = `V.rMur` × la forme de l'enceinte de `walls` (1,42 bastions, 1,62 demi-lunes) ;
+    l'anneau, les tentes des quartiers et le blocus en tiennent compte dès `Z.PLAN`. Blocus d'un port (`bk`) : un
+    anneau bleu de mer. Batteries et incendies à partir du zoom 6.
+  - Bataille : axe d'après les armées des deux camps, troupes d'après `mix`, lignes plus serrées de `canonnade` à
+    `charge`, tombés d'après `lost`. Au-delà de `Z.VIE`, les fumées et étincelles des particules laissent la place
+    aux salves ; les chiffres des pertes restent.
+  - Les rangs, cavaliers, tambours, bataillons et escadrons sont peints une fois par tenue, pose (huit phases du pas)
+    et échelle (paliers de 2^¼), puis posés d'un `drawImage` : la colonne au zoom 110 passe de 15 à 5 ms.
+  - Style « époque » : seulement les voiles, les averses et la neige ; ni guerre au sol, ni heure, ni lumières.
+  - `this.wx` et `this.flash` (constructeur, `setState`) ne servent plus.
+- Mesures (1280 × 800, Chromium sans carte graphique, ms de dessin par image ; météo brouillard / pluie / neige) :
+  calques de D (`drawWeather` + `drawSeasonTint` + `drawBattles`) 0,54 ms à la vue d'ensemble et 0,66 au zoom 26,
+  contre 0,35 et 0,23 avant ; image entière 5,0 / 4,6 ms (densité 1) et 5,2 / 5,5 (densité 2) contre 4,7 / 5,3 et
+  5,4 / 5,3 avant, dans le bruit. Avec une bataille, un siège et trois colonnes : zoom 110, colonne 4,8 ms (5,8 en
+  densité 2), bataille 2,7 (3,6), siège 3,0 (3,3) ; zoom 320, colonne 2,9 (3,1), bataille 2,0 (2,4), batterie 2,2.
