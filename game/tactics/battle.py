@@ -410,8 +410,11 @@ class TacticalBattle:
         if pl and pl.get('battle'):
             px, py, r = pl['x'], pl['y'], pl['r']
             d = dict(O=px, E=W - px, N=py, S=H - py)[e0] - r
-            z.append(self._edge_band(e0, max(500, d - DEPLOY_WALL)))
-            za.append(self._edge_band(e0, max(500, min(1400, d - DEPLOY_WALL))))
+            # (une place sur son plan, carte de version 4, peut s'approcher du bord : la bande de l'assaillant reste
+            # alors à 150 m de l'enceinte au moins, sur 200 m au moins)
+            b0 = max(200, min(500, d - 150)) if getattr(self.map, 'plan', None) else 500
+            z.append(self._edge_band(e0, max(b0, d - DEPLOY_WALL)))
+            za.append(self._edge_band(e0, max(b0, min(1400, d - DEPLOY_WALL))))
             for k, lst in ((DEPLOY_DEF, z), (AI_DEPLOY_DEF, za)):
                 r = pl['r'] + k
                 lst.append([max(0, pl['x'] - r), max(0, pl['y'] - r), min(W, pl['x'] + r), min(H, pl['y'] + r)])

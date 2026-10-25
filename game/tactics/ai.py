@@ -3350,7 +3350,7 @@ def _think_place_def(b, side, mem, L, us, foes, sit, want, busy):
         free = [q for q in ilots if (q[0], q[1]) not in held]
         cand = [u for u in us if roles.get(u.id) in ('mur', 'breche') and u.valid and u.cls == 'inf' and
                 u.id not in busy and mem['post'].get(u.id) and
-                _d2(mem['post'][u.id][0], mem['post'][u.id][1], cx, cy) < 300 ** 2 and
+                _d2(mem['post'][u.id][0], mem['post'][u.id][1], cx, cy) < max(300, 0.75 * r_in) ** 2 and   # (grande place)
                 not any(_d2(e.x, e.y, u.x, u.y) < 120 ** 2 for e in sit['seen'])]
         for u in sorted(cand, key=lambda v: _d2(v.x, v.y, cx, cy))[:L['ilots'] - n_il]:
             if not free:

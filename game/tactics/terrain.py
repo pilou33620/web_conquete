@@ -25,8 +25,9 @@ from ..geo import (T_OCEAN, T_EAU as G_EAU, T_PLAINE, T_FORET, T_LANDE, T_MARAIS
 # version du générateur : écrite dans la description de chaque nouvelle bataille (bridge.make_spec). Une bataille sans
 # version (ancienne sauvegarde) est refabriquée par le générateur d'avant (terrain_v1.py, figé) : même carte qu'au début.
 # Version 3 : villes en îlots, enceintes à tours ou tracé bastionné (SPEC-2D § 6) ; une carte de version 2 garde sa
-# place d'avant (_town_v2), le reste du générateur est commun
-VERSION = 3
+# place d'avant (_town_v2), le reste du générateur est commun. Version 4 : la place sur le plan de « Voir l'intérieur »
+# (terrain_ville.py ; une carte de version 3 garde la ville de _town) ; le client reçoit ce plan (to_client : plan)
+VERSION = 4
 
 W, H, CELL = 3000, 2000, 20
 COLS, ROWS = W // CELL, H // CELL
@@ -196,6 +197,7 @@ class BattleMap:
         self.demi_lunes = []    # [[b1, saillant, b2], …] devant les courtines
         self.batis = []         # un par bâtiment (groupe de cases bâties d'un seul tenant) : {kind, toit, x, y, c}
         self.kinds = {}         # (génération) case bâtie → nature du bâtiment
+        self.plan = None        # (version 4) le plan de la ville pour le client (terrain_ville.py)
 
     def to_client(self, spec):
         r2 = lambda p: [round(p[0], 1), round(p[1], 1)]
@@ -210,7 +212,7 @@ class BattleMap:
                     f=base64.b64encode(bytes(self.f)).decode(), feature_names=FEAT_NAMES,
                     fences=[dict(kind=k, pts=[r2(p) for p in pts]) for k, pts in self.fences],
                     heart=list(self.heart) if self.heart else None,
-                    town=self.town, bastions=self.bastions, demi_lunes=self.demi_lunes, batis=self.batis,
+                    town=self.town, bastions=self.bastions, demi_lunes=self.demi_lunes, batis=self.batis, plan=self.plan,
                     seed=spec['seed'], season=spec['season'], weather=spec['weather'], year=spec.get('year'),
                     marks=spec.get('marks', [[], []]), balloon=spec.get('balloon', [0, 0]),   # (le ballon captif : SPEC-SUITE J)
                     camp=dict(x=spec['cx'], y=spec['cy']), region=self.region,
@@ -231,8 +233,9 @@ def _densify(pts, step):
     return out
 
 
-def _meander(pts, rng, amp, wave):
-    """Méandres : décalage perpendiculaire lisse le long d'un tracé densifié."""
+def _meander(pts, rng, amp, wave, calme=None):
+    """Méandres : décalage perpendiculaire lisse le long d'un tracé densifié. calme ((x, y), r) : pas de méandre à
+    moins de r de ce point (la ville du plan : la rivière y suit son tracé de campagne), peu à peu sur 400 m."""
     if len(pts) < 3 or amp <= 0:
         return pts
     ph1, ph2 = rng.random() * 6.28, rng.random() * 6.28
@@ -248,6 +251,9 @@ def _meander(pts, rng, amp, wave):
         off = amp * (0.7 * math.sin(s / wave * 6.283 + ph1) + 0.3 * math.sin(s / w2 * 6.283 + ph2))
         # les extrémités restent en place (raccord aux villes)
         k_end = min(1.0, k / 4.0, (len(pts) - 1 - k) / 4.0)
+        if calme:
+            u = min(1.0, max(0.0, (math.hypot(x1 - calme[0][0], y1 - calme[0][1]) - calme[1]) / 400.0))
+            k_end *= u * u * (3 - 2 * u)
         out.append((x1 + nx * off * k_end, y1 + ny * off * k_end))
     out.append(pts[-1])
     return out
@@ -335,21 +341,61 @@ def generate(geo, spec):
     rng = random.Random(seed)
     m = BattleMap()
     cx, cy = spec['cx'], spec['cy']
+    carte = spec.get('carte', 1)
+
+    # ---------------------------------------------------------- la place, ou le lieu tout près d'une bataille rangée
+    pl = spec.get('place')
+    if pl is None:
+        best = None
+        for gn in geo.nodes:
+            d = math.hypot(gn['x'] - cx, gn['y'] - cy)
+            if d < 1.3 and (best is None or d < best[0]):
+                best = (d, gn)
+        if best:
+            gn = best[1]
+            pl = dict(nid=gn['id'], name=gn['name'], type=gn['type'], fort=0, dmg=0.0, bar=0.0, pop=gn['pop0'],
+                      x=gn['x'], y=gn['y'], battle=False)
+            lieu = spec.get('lieu') or {}
+            if lieu.get('nid') == gn['id']:   # (son état dans la partie : enceinte, taille, faubourgs)
+                pl.update(f=lieu.get('f', gn['fort']), pop=lieu.get('pop') or gn['pop0'], d=lieu.get('d', 0))
+            else:
+                pl['f'] = gn['fort']
+    # version 4 : la place sur son plan (celui de « Voir l'intérieur », terrain_ville.py) ; une place trop grande pour
+    # le champ réduit toute la carte (k)
+    L = None
+    if pl and carte >= 4:
+        from . import terrain_ville as TV
+        L = TV.preparer(geo, spec, pl, cx, cy)
+    k = L.k if L else 1.0
+    eau_plan = None
+    if L:
+        from .plan_ville import carte_de
+        eau_plan = carte_de(geo).eauK
 
     def to_m(xk, yk):
-        return ((xk - cx) * 1000.0 + W / 2, (yk - cy) * 1000.0 + H / 2)
+        return ((xk - cx) * 1000.0 * k + W / 2, (yk - cy) * 1000.0 * k + H / 2)
 
     # ---------------------------------------------------------- terrain de campagne sous chaque case
     jx, jy = noise(rng, 16, 2), noise(rng, 16, 2)
     gt, gW, gH = geo.terrain, geo.W, geo.H
     biome = bytearray(N)
     for j in range(ROWS):
-        yk0 = cy + ((j + 0.5) * CELL - H / 2) / 1000.0
+        yk0 = cy + ((j + 0.5) * CELL - H / 2) / (1000.0 * k)
         base = j * COLS
         for i in range(COLS):
             c = base + i
-            X = cx + ((i + 0.5) * CELL - W / 2) / 1000.0 + (jx[c] - 0.5) * 0.9
+            X = cx + ((i + 0.5) * CELL - W / 2) / (1000.0 * k) + (jx[c] - 0.5) * 0.9
             Y = yk0 + (jy[c] - 0.5) * 0.9
+            if L and math.hypot((i + 0.5) * CELL - L.pos[0], (j + 0.5) * CELL - L.pos[1]) < L.r_eau:
+                # (autour de la ville, la mer et les étangs du plan : sans le tremblé, le rivage lissé de l'intérieur)
+                X, Y = X - (jx[c] - 0.5) * 0.9, Y - (jy[c] - 0.5) * 0.9
+                ii, jj = int(X), int(Y)
+                b = gt[jj * gW + ii] if 0 <= ii < gW and 0 <= jj < gH else T_OCEAN
+                if eau_plan(X, Y) > 0.5:
+                    biome[c] = b if b in (T_OCEAN, G_EAU) else G_EAU
+                else:
+                    biome[c] = T_PLAINE if b in (T_OCEAN, G_EAU) else b
+                continue
             ii, jj = int(X), int(Y)
             biome[c] = gt[jj * gW + ii] if 0 <= ii < gW and 0 <= jj < gH else T_OCEAN
     m.biome = biome
@@ -391,7 +437,9 @@ def generate(geo, spec):
             continue
         w = RIVER_W.get(r['rank'], 22) * (0.75 if r['name'] in ('Adour', 'Lot', 'Isle') else 1.0)
         dense = _densify(sub, 40.0)
-        dense = _meander(dense, rng, 35 + w * 0.4, 520 + w * 2)
+        if L and r['name'] not in L.rivieres:   # (une rivière que le plan ne voit pas passe hors de la ville)
+            dense = TV.ecarter(dense, L.pos, L.r_ville + w / 2 + 40)
+        dense = _meander(dense, rng, 35 + w * 0.4, 520 + w * 2, calme=(L.pos, L.r_calme) if L else None)
         for part in _clip_poly(dense, 200):
             m.rivers.append(dict(w=round(w), pts=part, kind='riviere' if r['rank'] > 1 else 'fleuve', name=r['name'],
                                  rank=r['rank']))
@@ -403,7 +451,10 @@ def generate(geo, spec):
     if main not in (T_DUNES,) and rng.random() < (0.75 if not m.rivers else 0.35):
         for _ in range(1 if rng.random() < 0.7 else 2):
             pts = _random_crossing(rng)
-            pts = _meander(_densify(pts, 40.0), rng, 45, 300)
+            pts = _densify(pts, 40.0)
+            if L:
+                pts = TV.ecarter(pts, L.pos, L.r_ville + 40)
+            pts = _meander(pts, rng, 45, 300)
             m.rivers.append(dict(w=8, pts=pts, kind='ruisseau', name=None, rank=4))
             for c in _poly_cells(pts):
                 if t[c] != T_EAU:
@@ -436,15 +487,23 @@ def generate(geo, spec):
 
     # ---------------------------------------------------------- tracé des routes de campagne (à moins de 2 km) : avant les
     # parcelles, dont les sillons les suivent (posées sur la carte plus bas)
-    for e in geo.edges:
+    plan_routes = TV.routes(L, geo, pl['nid']) if L else {}
+    for ei, e in enumerate(geo.edges):
         if e.get('kind') == 'water' or e.get('ferry'):
             continue
         A, B = geo.nodes[e['a']], geo.nodes[e['b']]
-        if _seg_dist(cx, cy, A['x'], A['y'], B['x'], B['y']) > 2.0:
-            continue
-        pa, pb = to_m(A['x'], A['y']), to_m(B['x'], B['y'])
-        dense = _densify([pa, pb], 50.0)
-        dense = _meander(dense, rng, 18, 700)
+        if ei in plan_routes:   # (la route du plan, par ses rues et sa porte, puis tout droit vers l'autre lieu)
+            Q = B if e['a'] == pl['nid'] else A
+            pb = to_m(Q['x'], Q['y'])
+            loin = math.hypot(pb[0] - L.pos[0], pb[1] - L.pos[1]) * 0.85
+            head = [p for p in plan_routes[ei] if math.hypot(p[0] - L.pos[0], p[1] - L.pos[1]) < loin]
+            dense = head + _meander(_densify([head[-1], pb], 50.0), rng, 18, 700)[1:]
+        else:
+            if _seg_dist(cx, cy, A['x'], A['y'], B['x'], B['y']) > 2.0 / k:
+                continue
+            pa, pb = to_m(A['x'], A['y']), to_m(B['x'], B['y'])
+            dense = _densify([pa, pb], 50.0)
+            dense = _meander(dense, rng, 18, 700)
         for part in _clip_poly(dense, 100):
             m.roads.append(dict(pts=part, kind='royale' if e.get('royal') else 'route'))
     if not m.roads:
@@ -544,20 +603,11 @@ def generate(geo, spec):
             _force_bridge(m, r, rng, t)
 
     # ---------------------------------------------------------- place, ville ou village
-    pl = spec.get('place')
-    if pl is None:
-        # bataille rangée près d'un lieu : son village apparaît sur la carte
-        best = None
-        for gn in geo.nodes:
-            d = math.hypot(gn['x'] - cx, gn['y'] - cy)
-            if d < 1.3 and (best is None or d < best[0]):
-                best = (d, gn)
-        if best:
-            gn = best[1]
-            pl = dict(nid=gn['id'], name=gn['name'], type=gn['type'], fort=0, dmg=0.0, bar=0.0, pop=gn['pop0'],
-                      x=gn['x'], y=gn['y'], battle=False)
-    if pl:
-        (_town if spec.get('carte', 1) >= 3 else _town_v2)(m, pl, to_m(pl['x'], pl['y']), rng, spec, t, road_cells)
+    # (bataille rangée près d'un lieu : son village apparaît sur la carte ; pl est choisi plus haut)
+    if L:
+        TV.ville(m, pl, L, rng, spec, t, road_cells)
+    elif pl:
+        (_town if carte >= 3 else _town_v2)(m, pl, to_m(pl['x'], pl['y']), rng, spec, t, road_cells)
 
     # ---------------------------------------------------------- fermes, moulin, chemins
     _farms(m, rng, FARMS.get(main, 3), t, hf, main)
@@ -1150,9 +1200,12 @@ def _town(m, pl, pos, rng, spec, t, road_cells):
             _redoubts(m, pos, ext - 40, bar, rng, t, att_a)
 
 
-def _enceinte(m, pl, pos, R, fort, bast, poly, ravs, wall, inside, streets, rng, t, att_a):
+def _enceinte(m, pl, pos, R, fort, bast, poly, ravs, wall, inside, streets, rng, t, att_a, kind=None, tours=None,
+              principal=True):
     """Pose l'enceinte tracée par _town : murs (T_MUR), portes (T_PORTE) sur les routes et les rues qui la traversent,
-    glacis dégagé (140 m), brèches du siège du côté de l'assaillant ; le dessin (m.walls, m.bastions, m.demi_lunes)."""
+    glacis dégagé (140 m), brèches du siège du côté de l'assaillant ; le dessin (m.walls, m.bastions, m.demi_lunes).
+    Pour le plan des villes (terrain_ville) : kind et tours donnés ; une seconde enceinte (la citadelle, principal
+    faux) garde son tracé et ses demi-lunes dans son enregistrement."""
     px, py = pos
     gates = sorted(c for c in wall if c in streets)
     for c in wall:
@@ -1185,18 +1238,23 @@ def _enceinte(m, pl, pos, R, fort, bast, poly, ravs, wall, inside, streets, rng,
         if dg[c] <= 7 and t[c] in (T_BOIS, T_FORET_T, T_VIGNE_T, T_VERGER) and not inside(c):
             t[c] = T_PRE
     thick = CELL * (1 if fort <= 1 else 2) + 2
-    kind = 'bastion' if bast else ('mur' if fort == 1 else 'rempart')
+    kind = kind or ('bastion' if bast else ('mur' if fort == 1 else 'rempart'))
     trace = _densify(poly + poly[:1], 25.0)
     wpts = [[round(x), round(y)] for x, y in trace]
-    tours = []
-    if not bast:   # tours rondes du mur médiéval, tous les 50 m environ
-        tours = [[round(x), round(y)] for x, y in _densify(poly + poly[:1], 50.0)[:-1]]
+    if tours is None:
+        tours = []
+        if not bast:   # tours rondes du mur médiéval, tous les 50 m environ
+            tours = [[round(x), round(y)] for x, y in _densify(poly + poly[:1], 50.0)[:-1]]
     wall_rec = dict(pts=wpts, kind=kind, breach=[], thick=round(thick), tours=tours,
                     portes=[list(map(round, center_of(c))) for c in sorted(set(gates))],
                     fosse=22 if bast else 10)
     if bast:
-        m.bastions = [[round(x), round(y)] for x, y in poly]
-        m.demi_lunes = [[[round(x), round(y)] for x, y in rv] for rv in ravs]
+        trace_b = [[round(x), round(y)] for x, y in poly]
+        dl = [[[round(x), round(y)] for x, y in rv] for rv in ravs]
+        if principal:
+            m.bastions, m.demi_lunes = trace_b, dl
+        else:
+            wall_rec['bastions'], wall_rec['demi_lunes'] = trace_b, dl
     # brèches du siège, du côté de l'assaillant
     dmg = pl.get('dmg', 0.0) if pl.get('battle') else 0.0
     dyn = pl.get('dyn', 0) if pl.get('battle') else 0   # la dynamite de l'assaillant : une brèche de plus
@@ -1575,6 +1633,8 @@ def _mill(m, rng, t, hf, main):
             p = dense[rng.randrange(len(dense))]
             for dx, dy in ((r['w'] / 2 + 20, 0), (-r['w'] / 2 - 20, 0), (0, r['w'] / 2 + 20), (0, -r['w'] / 2 - 20)):
                 c = cell_of(p[0] + dx, p[1] + dy)
+                if m.plan and math.hypot(p[0] + dx - m.place['x'], p[1] + dy - m.place['y']) < m.town_r + 150:
+                    continue   # (version 4 : pas de moulin dans la ville ni sur son glacis)
                 if c >= 0 and t[c] in (T_PRE, T_CHAMP, T_LANDE_T, T_VIGNE_T):
                     t[c] = T_BATI
                     x, y = center_of(c)
@@ -1585,6 +1645,8 @@ def _mill(m, rng, t, hf, main):
         best = None
         for _ in range(60):
             c = rng.randrange(N)
+            if m.plan and math.hypot(*(a - b for a, b in zip(center_of(c), (m.place['x'], m.place['y'])))) < m.town_r + 150:
+                continue
             if t[c] in (T_CHAMP, T_PRE, T_VIGNE_T, T_LANDE_T) and 3 < c % COLS < COLS - 3:
                 if best is None or hf[c] > hf[best]:
                     best = c

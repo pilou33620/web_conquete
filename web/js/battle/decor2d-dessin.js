@@ -33,6 +33,9 @@ const PAL0 = {
   tuile: ['#bf5a40', '#8f3f2e', '#6e3024'], canal: ['#dc9066', '#b56a46', '#94533a'], ardoise: ['#8696a8', '#5a697b', '#46525f'],
   zinc: ['#b5bec2', '#8d979c', '#6d767b'], plomb: ['#9aa3a5', '#6f777a', '#555c5f'], chaume: ['#c8ab66', '#9c8446', '#7a6634'],
   pierre: ['#e2d8c0', '#b3a88f', '#8f876f'],   // (tour de moulin)
+  // les toits des pays (web/js/carte/villes.js) : la ville d'une bataille sur son plan a ceux de « Voir l'intérieur »
+  bordelais: ['#c7653f', '#9c4b30', '#7a3a26'], perigord: ['#8a5a3e', '#6b432e', '#4f3123'], lauze: ['#8a8478', '#6a655c', '#4f4b44'],
+  landes: ['#be6743', '#994f33', '#773c27'], agenais: ['#c25a33', '#9a4527', '#78351d'], bearn: ['#6a7282', '#4f5666', '#3c424e'], basque: ['#c04a32', '#973726', '#742a1c'],
 };
 const PALN = Object.fromEntries(Object.entries(PAL0).map(([k, P]) => [k, [mix(P[0], '#f4f6f8', .75), mix(P[1], '#dfe4e8', .7), P[2]]]));
 export let PAL = PAL0;

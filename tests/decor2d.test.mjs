@@ -235,3 +235,27 @@ test('couvents, hôtels, hôpitaux, casernes donnés case par case : un seul mod
   }
   assert.ok(jardins >= 4, 'des jardins dans les cœurs d\'îlot');
 });
+
+test('la ville sur son plan (map.plan) : maisons des îlots par parcelle, chacune au bâtiment de sa case', () => {
+  // un îlot du plan sur les cases bâties (18..22, 14..16), une église du plan sur (24..28, 14..16)
+  const tr = terrain();
+  const plan = { k: 1, c: [470, 350], style: 'bordelais', modele: 'ville', type: 'moyenne', murs: null, rues: [], place: null,
+    ilots: [[[[360, 280], [460, 280], [460, 340], [360, 340]], '', 0, 0, 123, 0]],
+    edifices: [{ cle: 'egliseRomane', kind: 'eglise', x: 530, y: 300, a: 0, s: 0.8 }] };
+  const d = new Decor2D(tr, { plan, place: { name: 'X', x: 470, y: 350, r: 200, type: 'ville' } }, Q);
+  const plans = d.batiments.filter(b => b.cle === 'ilot' && b.parcelles.some(p => p.key === 'bordelais'));
+  assert.ok(plans.length >= 1 && plans.flatMap(b => b.parcelles).length >= 10, 'des maisons le long des quatre côtés de l’îlot');
+  for (const b of plans) for (const c of b.cells) assert.equal(tr.t[c], T.BATI, 'une maison du plan est sur une case bâtie');
+  // pas de maisons d'un îlot déduit des cases par-dessus celles du plan
+  assert.ok(!d.batiments.some(b => b.cle === 'ilot' && !plans.includes(b) && b.cells.includes(cellule(19, 15))));
+  assert.ok(d.batiments.some(b => b.cle === 'egliseRomane' && b.cells.includes(cellule(26, 15))), 'l’église du plan, sur ses cases');
+  // l'état d'une case (le serveur) va au bâtiment de ses parcelles
+  const b = plans[0], c = b.cells[0];
+  d.bati([[c, 2]]);
+  assert.equal(b.etat, 2);
+  d.bati([[c, 3]]);
+  assert.equal(b.etat, 3);
+  const ctx = contexte();
+  d.update(1 / 60); d.sous(ctx, vue(420, 310, 6));
+  d.dispose();
+});

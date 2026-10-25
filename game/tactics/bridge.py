@@ -219,7 +219,13 @@ def make_spec(g, bt):
         place = dict(nid=bt['node'], name=gn['name'], type=gn['type'], fort=n['fort'], dmg=AA.breach(n),
                      dyn=int(g.mod(att, 'breach')) if att in g.factions else 0,
                      bar=(n.get('aa') or {}).get('bar', 0.0), pop=int(n.get('pop', gn['pop0'])), x=gn['x'], y=gn['y'],
-                     battle=True)
+                     battle=True, d=n.get('dev', 0))
+    lieu = None   # (bataille rangée tout près d'un lieu : son état, pour dessiner la ville de son plan, terrain_ville)
+    if place is None:
+        d, nid = min((math.hypot(gn['x'] - bt['x'], gn['y'] - bt['y']), gn['id']) for gn in g.geo.nodes)
+        if d < 1.3:
+            n = g.nodes[nid]
+            lieu = dict(nid=nid, f=n['fort'], pop=int(n.get('pop', g.geo.nodes[nid]['pop0'])), d=n.get('dev', 0))
     techs = [g.factions[o]['techs'] if o in g.factions else [] for o in owners]
     gname = g.place_name(bt['x'], bt['y'])
     kind = 'Embuscade' if bt['ambush'] else ('Assaut' if bt['node'] is not None else 'Bataille')
@@ -238,7 +244,7 @@ def make_spec(g, bt):
                 shell=[g.mod(o, 'shell') if o in g.factions else 0.0 for o in owners], ambush=bt['ambush'], surprise=bt['surprise'],
                 # SPEC-ARBRE.md : les régiments qui n'ont pas tout appris (manœuvres, armes) ont leurs propres effets
                 umd=_umd(g, bt),
-                plans=[_side_plan(g, bt, si) for si in (0, 1)],
+                plans=[_side_plan(g, bt, si) for si in (0, 1)], lieu=lieu,
                 carte=TR.VERSION)   # (version du générateur de la carte : une sauvegarde la refabrique à l'identique)
 
 

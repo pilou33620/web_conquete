@@ -61,17 +61,17 @@ FORTS = [n for n in GEO.nodes if n['type'] == 'fort'][:4] + [noeud('capitale', 1
 
 
 class Villes(unittest.TestCase):
-    def test_tailles_du_village_a_la_capitale(self):
-        r, nb = [], []
+    def test_la_ville_a_la_taille_de_son_plan(self):
+        # (version 4 : la taille est celle du plan de « Voir l'intérieur » ; le générateur d'avant faisait grandir le
+        # rayon du village à la capitale, ce que les vrais plans, réduits pour tenir sur le champ, ne promettent plus)
+        nb = []
         for typ in ('village', 'ville', 'capitale'):
             m = carte(noeud(typ, 2), battle=False)
             self.assertEqual(m.town['type'], typ)
-            r.append(m.town['r'])
-            nb.append(len(bati_en_ville(m)))
-        self.assertEqual(r, sorted(r), f'rayons {r}')
-        self.assertEqual(nb, sorted(nb), f'cases bâties {nb}')
-        self.assertLess(r[0], r[1])
-        self.assertLess(nb[1], nb[2])
+            self.assertTrue(m.plan and m.plan['ilots'], typ)
+            self.assertTrue(bati_en_ville(m), typ)
+            nb.append(len(m.plan['ilots']))
+        self.assertLess(nb[0], nb[2], f'îlots {nb}')
 
     def test_chaque_batiment_a_sa_nature_et_son_toit(self):
         for n, fort in ((noeud('village', 5), 0), (noeud('ville', 3), 1), (noeud('capitale', 1), 4), (FORTS[2], 2)):
@@ -87,8 +87,8 @@ class Villes(unittest.TestCase):
             self.assertTrue(all('toit' in b for b in d['buildings']))
             kinds = {b['kind'] for b in d['batis']}
             self.assertTrue(kinds & {'eglise', 'cathedrale'}, f"{n['name']} : une église")
-            if n['type'] == 'capitale':
-                self.assertTrue({'cathedrale', 'hotel', 'caserne', 'couvent', 'poudriere'} <= kinds, kinds)
+            if n['type'] == 'capitale':   # (version 4 : les édifices du plan ; ni poudrière, ni toujours la cathédrale)
+                self.assertTrue({'hotel', 'caserne', 'couvent'} <= kinds, kinds)
             self.assertEqual(d['town']['siecle'], 18)
 
     def test_place_forte_bastionnee(self):

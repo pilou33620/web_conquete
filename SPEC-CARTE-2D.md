@@ -274,3 +274,52 @@ Le ciel (`ciel.js`) :
 - `lib.js` : `toile()` rend null sous Node (les tests importent `map.js`, qui importe maintenant `lib.js`).
 - Pour C : `ambient.drawFlows` garde les largeurs de l'ancienne carte (0,75 × 0,3 km) ; les rivières sont plus fines
   (`LARG_RIVIERE`).
+
+## Livré — E (batailles sur le plan des villes)
+
+- `game/tactics/plan_ville.py` : `profilVille` et `genererInterieur` de `carte/villes.js` portés en Python (géométrie
+  seulement : îlots, rôles, rues, enceinte, citadelle, gare ; pas les métiers ni la peinture, qui ne changent pas les
+  îlots), avec l'état qui les change (année avant ou après 1860, `f`, `pop`, `d`). `game/tactics/jsmath.py` refait
+  l'arithmétique de V8 : `alea` (mulberry32), `hash2`, `hashS` (FNV-1a), entiers sur 32 bits, `Math.hypot` (Kahan),
+  `Math.round`, et `Math.sin`, `Math.cos`, `Math.atan2` de fdlibm (ceux de la libm du système diffèrent au dernier bit
+  une fois sur 20 à 6 ; avec eux, Domme changeait de grand-place). Comparaison avec Node (`tests/test_plan_ville.py`,
+  `tests/plan_ville_js.mjs`) : 223 places × 4 états (1789, 1870, f = 3, pop × 3 et d = 2), **0 plan différent**.
+- Carte de bataille, version 4 (`terrain_ville.py`) : une bataille à une place, ou une bataille rangée à moins de
+  1,3 km d'un lieu, se livre dans son plan, à l'échelle (1 unité = 1000 / 180 m) et dans le bon sens :
+  - enceinte du plan en `MUR` (cercle ou rectangle médiéval à tours tous les 200 m, tracé bastionné et demi-lunes dans
+    `bastions`/`demi_lunes`, citadelle avec son tracé dans son `walls[]`), portes là où passent les routes ; les
+    routes du plan arrivent par la rue maîtresse, la porte au milieu de la courtine et la demi-lune, puis suivent
+    l'axe des faubourgs jusqu'à l'autre lieu. Brèches, glacis, canons du rempart, chaussée d'une place dans l'eau :
+    comme avant (`_enceinte`, `_causeway`).
+  - îlots : maisons (`BATI`) sur une case le long des rues, cours et jardins (`PRE`) au milieu ; faubourgs sur leur
+    côté de la route ; édifices (église, cathédrale, couvent, hôpital, hôtel, caserne, halle, château, gare,
+    poudrière d'un fort) sur l'emprise de leur modèle ; rues (bandes entre les îlots et axes) en `ROUTE`, `CHEMIN` au
+    village ; grand-place, parvis, quais, ponts des rues maîtresses, cours plantés après 1860.
+  - mer et étangs autour de la ville d'après la campagne (`eauK`, sans le tremblé), rivières du plan sans méandres
+    près de la ville ; une rivière que le plan ne voit pas (points trop espacés dans les données) est écartée hors
+    de la ville.
+  - client : `to_client` envoie `plan` (îlots en mètres avec rôle, zone, graine de parcelles, côtés sur rue ; rues ;
+    édifices avec modèle, position, angle, échelle ; place ; état). `decor2d.js` (`preparerPlan`) dessine le sol de
+    la ville, chaque îlot comme `remplirIlot` (une maison par parcelle, `toitParcelle`, toits du pays) et les
+    édifices ; chaque parcelle va au bâtiment (groupe de cases bâties) de la case sous elle : touché, en feu, en
+    ruine se voient bâtiment par bâtiment.
+  - Une carte de version 3 garde la ville de `_town` (sauvegardes).
+- Écarts :
+  - **échelle réduite pour les grandes places** : à l'échelle de l'intérieur, Bayonne bastionnée fait 5 km de large et
+    Navarrenx 2,5 km, plus que le champ (3 × 2 km). Toute la carte (ville et campagne, pour que rivières et côtes
+    restent en place) est alors réduite (`plan.echelle`) : l'enceinte tient à 400 m du bord de l'assaillant (de tous
+    les bords près de l'eau, où il peut venir d'ailleurs) et dans le champ, à 600 m de rayon près d'une bataille
+    rangée. Bayonne : 0,35 ; Navarrenx : 0,66 ; Bordeaux (mur médiéval) : 0,57 ; un village : 1.
+  - les maisons sont à leur vraie taille (6 à 15 m de façade, 16 m de profondeur), pas à celle des parcelles de
+    l'intérieur (25 à 45 m) : même îlots, mêmes rues, mais plus de maisons par côté. Dans les plus petits îlots d'une
+    ville réduite, la grille de 20 m n'a parfois pas de case bâtie : l'îlot reste sans maison.
+  - `battle._zones` : sur une carte de version 4, la bande de l'assaillant reste à 150 m de l'enceinte (200 m de
+    profondeur au moins) au lieu de 500 m quoi qu'il arrive ; `ai.py` : les défenseurs des murs gagnent les maisons
+    jusqu'à 0,75 × le rayon de la place (et non 300 m) ; pas de moulin sur le glacis d'une carte de version 4.
+  - `bridge.make_spec` envoie `place.d` et, pour une bataille rangée, `lieu` (l'état du lieu tout proche).
+  - bancs mis à jour (le générateur d'avant y était supposé) : `test_villes` ne demande plus un rayon croissant du
+    village à la capitale (les plans réduits ne le promettent pas : on compare les îlots), ni poudrière ni cathédrale
+    à une capitale bastionnée (Périgueux perd la sienne sous sa citadelle, comme dans l'intérieur).
+- Temps (PC de développement ; un Raspberry Pi est quatre à cinq fois plus lent) : plan et pose de la ville 25 à
+  65 ms (Bayonne 52, Bordeaux 61, Périgueux 59, un village 25), carte entière 0,22 à 0,33 s (version 3 : 0,20 à
+  0,28 s).
