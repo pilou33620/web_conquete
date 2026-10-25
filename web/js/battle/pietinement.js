@@ -1,9 +1,10 @@
 // Vue tactique : le sol qui garde la trace de la bataille (étape 9e). Une carte de piétinement couvre tout le champ
 // (environ 3 m par pixel, 2 m en Ultra) : chaque régiment qui marche, charge ou se bat y dépose une tache douce à la
 // forme de sa formation, plus fort pour la cavalerie et l'artillerie, deux fois plus fort sous la pluie ; chaque trou
-// d'obus y laisse une tache de terre retournée. La carte est tenue en nombres (les petits dépôts de chaque pas ne se
-// perdent pas dans l'arrondi) et recopiée dans un canevas, de la terre foulée plus ou moins opaque, que Sol2D
-// (sol2d.js) pose sur le sol à chaque image.
+// d'obus y laisse un peu de terre retournée. La carte est tenue en nombres (les petits dépôts de chaque pas ne se
+// perdent pas dans l'arrondi) et recopiée dans un canevas, que Sol2D (sol2d.js) pose sur le sol à chaque image : une
+// usure brune légère (maquette, pietine : 0,15) dès qu'une troupe est passée, plus sombre seulement là où beaucoup de
+// régiments se sont battus longtemps (la carte s'y remplit de moins en moins vite).
 // Elle est enregistrée avec la bataille (SPEC-SUITE F8) : une image réduite de 256 px de large, la boue en gris (la
 // première ligne au nord), envoyée au serveur de temps en temps (exporter) et relue au rechargement (importer).
 import { clsOf, clamp, vnoise, canvas } from './formes.js';
@@ -20,10 +21,13 @@ export function depot(u, v, wet = false) {
   return base * (fight ? 0.6 : 1) * (cls === 'artillerie' || cls === 'chariot' ? 1 : men) * (wet ? 2 : 1);
 }
 
+const sm = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const STEP = 0.2;      // s entre deux dépôts
 const CAP = 256;       // impacts gardés pour le prochain dépôt
-const BOUE = [92, 68, 38], OPAC = 0.5;   // la terre foulée, et son opacité quand la boue est complète
-const sm = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const BOUE = [105, 80, 45];   // la terre foulée (maquette, pietine)
+const TROU = 0.25;            // un trou d'obus ne foule pas plus que l'usure légère
+// opacité de la terre foulée selon la boue (0 à 1) : 0,15 dès un passage (un tiers), jusqu'à 0,42 sous les combats longs
+export const opacite = m => 0.15 * sm(0, 0.25, m) + 0.27 * sm(0.7, 1, m);
 
 export class Pietinement {
   // W, H : taille du champ (m) ; q : profil de qualité (ultra : 2 m par pixel)
@@ -44,7 +48,7 @@ export class Pietinement {
     this.version = 0;   // change à chaque recopie (Sol2D n'a rien à faire sinon)
   }
   // un trou d'obus ou une explosion en (x, y), de rayon r m
-  stamp(x, y, r, k = 0.55) { if (this.stamps.length < CAP) this.stamps.push([x, y, r, k]); }
+  stamp(x, y, r, k = 0.15) { if (this.stamps.length < CAP) this.stamps.push([x, y, r, k]); }
   // units : les régiments (vue.js : x, y, dir, w, d, from, to) ; gap : intervalle entre deux relevés du serveur (s) ;
   // wet : pluie ; dt : temps écoulé (s) ; rate : secondes de bataille par seconde réelle (0 en pause)
   update(units, gap, wet, dt, rate) {
@@ -58,11 +62,12 @@ export class Pietinement {
       // le long du sens (dir) : la profondeur de la formation ; en travers : son front
       this.tache(u.x, u.y, u.dir || 0, (u.d || 10) + 6, (u.w || 20) + 6, depot(u, v, wet) * span);
     }
-    for (const [x, y, r, k] of this.stamps.splice(0)) this.tache(x, y, 0, r * 2.4, r * 2.4, k);
+    for (const [x, y, r, k] of this.stamps.splice(0)) this.tache(x, y, 0, r * 2, r * 2, k, TROU);
     this.peindre();
   }
-  // tache aux bords doux, à la forme d'un rectangle arrondi (sx le long de a, sy en travers), de force k
-  tache(x, y, a, sx, sy, k) {
+  // tache aux bords doux, à la forme d'un rectangle arrondi (sx le long de a, sy en travers), de force k ; la carte n'y
+  // dépasse pas top, et s'emplit d'autant moins vite qu'elle est pleine
+  tache(x, y, a, sx, sy, k, top = 1) {
     if (!(k > 0)) return;
     const { w, h, res, m, n } = this, ca = Math.cos(a), sa = Math.sin(a), R = Math.hypot(sx, sy) / 2;
     const i0 = clamp(Math.floor((x - R) / res), 0, w - 1), i1 = clamp(Math.ceil((x + R) / res), 0, w - 1);
@@ -74,12 +79,12 @@ export class Pietinement {
       const qu = Math.abs(dx * ca + dy * sa) / (sx / 2), qv = Math.abs(-dx * sa + dy * ca) / (sy / 2);
       if (qu >= 1 || qv >= 1) continue;
       const c = j * w + i;
-      m[c] = Math.min(1, m[c] + (1 - sm(0.55, 1, qu)) * (1 - sm(0.55, 1, qv)) * n[c] * k);
+      m[c] = Math.max(m[c], Math.min(top, m[c] + (1 - sm(0.55, 1, qu)) * (1 - sm(0.55, 1, qv)) * n[c] * k * (1 - 0.8 * m[c])));
     }
     const d = this.dirty;
     this.dirty = d ? [Math.min(d[0], i0), Math.min(d[1], j0), Math.max(d[2], i1), Math.max(d[3], j1)] : [i0, j0, i1, j1];
   }
-  // recopie les pixels changés dans le canevas (terre foulée, opaque selon la boue)
+  // recopie les pixels changés dans le canevas (terre foulée, opaque selon la boue : opacite)
   peindre() {
     const d = this.dirty;
     if (!d || !this.canvas) return;
@@ -88,7 +93,7 @@ export class Pietinement {
     const img = g.createImageData(iw, ih), px = img.data;
     for (let j = 0; j < ih; j++) for (let i = 0; i < iw; i++) {
       const q = (j * iw + i) * 4;
-      px[q] = BOUE[0]; px[q + 1] = BOUE[1]; px[q + 2] = BOUE[2]; px[q + 3] = this.m[(d[1] + j) * w + d[0] + i] * OPAC * 255;
+      px[q] = BOUE[0]; px[q + 1] = BOUE[1]; px[q + 2] = BOUE[2]; px[q + 3] = opacite(this.m[(d[1] + j) * w + d[0] + i]) * 255;
     }
     g.putImageData(img, d[0], d[1]);
     this.version++;

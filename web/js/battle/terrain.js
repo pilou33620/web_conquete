@@ -8,7 +8,7 @@
 // (treeGrid, ponts, portes, tracés adoucis). Aussi : altitudes adoucies (fineAt), cotes des sommets, couverts.
 // Motifs des sols : textures.js.
 import { T, cellRemap, normSeason, hash, clamp, TAU, OMBRE, mixHex, vnoise, canvas } from './formes.js';
-import { texture, culture, couleurs, mix, BOIS } from './textures.js';
+import { texture, culture, couleurs, mix, periode, BOIS } from './textures.js';
 import { profil } from './qualite.js';
 
 export const BASE = 0.5;   // pixels par mètre de l'image entière
@@ -52,28 +52,6 @@ export const PALETTES = {
     chemin: '#dedbd2', bati: '#d8d8d4', toit: ['#e9ecef', '#dfe3e6', '#f0f2f4'], ardoise: ['#d5dade', '#cdd2d6'], neige: 1,
   },
 };
-
-// Douglas-Peucker sur une boucle fermée : les sommets à moins de tol m de la droite de leurs voisins gardés sont ôtés
-function simplify(pts, tol) {
-  const n = pts.length;
-  if (n < 5) return pts;
-  // (on coupe la boucle au sommet le plus éloigné du premier : deux chaînes ouvertes)
-  let far = 0, fd = -1;
-  for (let i = 1; i < n; i++) { const d = Math.hypot(pts[i][0] - pts[0][0], pts[i][1] - pts[0][1]); if (d > fd) { fd = d; far = i; } }
-  const keep = new Uint8Array(n); keep[0] = keep[far] = 1;
-  const run = (a, b) => {   // indices de a à b (b peut dépasser n : on tourne)
-    let best = -1, bi = -1;
-    const A = pts[a % n], B = pts[b % n], L = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1;
-    for (let i = a + 1; i < b; i++) {
-      const P = pts[i % n], d = Math.abs((B[0] - A[0]) * (A[1] - P[1]) - (A[0] - P[0]) * (B[1] - A[1])) / L;
-      if (d > best) { best = d; bi = i; }
-    }
-    if (best > tol) { keep[bi % n] = 1; run(a, bi); run(bi, b); }
-  };
-  run(0, far); run(far, n);
-  const out = pts.filter((p, i) => keep[i]);
-  return out.length >= 3 ? out : pts;
-}
 
 // Chaikin : adoucit une ligne brisée (fermée ou non)
 function chaikin(pts, iters, closed) {
@@ -143,30 +121,16 @@ export class Terrain {
   }
   prepare() {
     const { cols, rows, cell, t } = this;
-    // parcelles : Voronoï sur une grille irrégulière (≈ 120 m), orientation des sillons qui varie doucement
-    const P = 6, pc = Math.ceil(cols / P) + 1, pr = Math.ceil(rows / P) + 1, S = this.seed;
-    const seeds = [];
-    for (let b = 0; b < pr; b++) for (let a = 0; a < pc; a++) seeds.push([(a + 0.1 + hash(a, b, S) * 0.8) * P, (b + 0.1 + hash(a, b, S + 1) * 0.8) * P]);
-    const parcel = new Int32Array(cols * rows);
-    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
-      const a0 = Math.floor(i / P), b0 = Math.floor(j / P);
-      let best = 1e9, bi = 0;
-      for (let b = b0 - 1; b <= b0 + 1; b++) for (let a = a0 - 1; a <= a0 + 1; a++) {
-        if (a < 0 || b < 0 || a >= pc || b >= pr) continue;
-        const k = b * pc + a, d = (seeds[k][0] - i - 0.5) ** 2 + (seeds[k][1] - j - 0.5) ** 2;
-        if (d < best) { best = d; bi = k; }
-      }
-      parcel[j * cols + i] = bi;
-    }
-    // régions : composantes connexes d'un même type (et d'une même parcelle pour les cultures et prés)
+    const S = this.seed;
+    // régions : composantes connexes d'un même type (les cultures, prés, vignes et vergers : en parcelles, prepParcelles)
     const crop = v => v === T.CHAMP || v === T.VIGNE || v === T.PRE || v === T.VERGER;
     const label = new Int32Array(cols * rows).fill(-1);
     this.regions = [];
     const stack = [];
     for (let c0 = 0; c0 < cols * rows; c0++) {
-      if (label[c0] >= 0) continue;
-      const v = t[c0], p = parcel[c0], id = this.regions.length;
-      const reg = { type: v, parcel: crop(v) ? p : -1, cells: [], box: [1e9, 1e9, -1e9, -1e9] };
+      if (label[c0] >= 0 || crop(t[c0])) continue;
+      const v = t[c0], id = this.regions.length;
+      const reg = { type: v, cells: [], box: [1e9, 1e9, -1e9, -1e9] };
       label[c0] = id; stack.push(c0);
       while (stack.length) {
         const c = stack.pop(), i = c % cols, j = (c / cols) | 0;
@@ -175,46 +139,29 @@ export class Terrain {
           const ii = i + di, jj = j + dj;
           if (ii < 0 || jj < 0 || ii >= cols || jj >= rows) continue;
           const cc = jj * cols + ii;
-          if (label[cc] >= 0 || t[cc] !== v || (reg.parcel >= 0 && parcel[cc] !== p)) continue;
+          if (label[cc] >= 0 || t[cc] !== v) continue;
           label[cc] = id; stack.push(cc);
         }
       }
       this.regions.push(reg);
     }
     this.label = label;
-    const jitterOf = v => (v === T.CHAMP || v === T.VIGNE || v === T.PRE || v === T.VERGER ? 2 : v === T.ROUTE || v === T.CHEMIN || v === T.BATI || v === T.MUR || v === T.BRECHE || v === T.PORTE || v === T.BARRICADE ? 0 : 5);
-    const snow = this.pal.neige;
+    const jitterOf = v => (v === T.ROUTE || v === T.CHEMIN || v === T.BATI || v === T.MUR || v === T.BRECHE || v === T.PORTE || v === T.BARRICADE ? 0 : 5);
     for (const [id, reg] of this.regions.entries()) {
       reg.path = this.regionPath(id, jitterOf(reg.type), reg.box);
-      const c = reg.cells[0], i = c % cols, j = (c / cols) | 0;
-      // orientation des sillons : le long de la lanière quand la parcelle est allongée (axe principal des cases),
-      // sinon un champ de direction lent, la moitié des parcelles tournées d'un quart
-      let mx = 0, my = 0, sxx = 0, syy = 0, sxy = 0;
-      for (const q of reg.cells) { mx += q % cols; my += (q / cols) | 0; }
-      mx /= reg.cells.length; my /= reg.cells.length;
-      for (const q of reg.cells) { const dx = q % cols - mx, dy = ((q / cols) | 0) - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
-      const tr = sxx + syy, l1 = tr / 2 + Math.sqrt(((sxx - syy) / 2) ** 2 + sxy * sxy), l2 = tr - l1;
-      const base = vnoise(i / 40, j / 40, S + 9) * Math.PI * 2;
-      reg.angle = reg.cells.length > 3 && (l1 - l2) > 0.45 * tr ? 0.5 * Math.atan2(2 * sxy, sxx - syy) + (hash(reg.parcel, 4, S) - 0.5) * 0.08
-        : base + (hash(reg.parcel, 3, S) < 0.4 ? Math.PI / 2 : 0) + (hash(reg.parcel, 4, S) - 0.5) * 0.5;
-      reg.tone = (hash(reg.parcel, 5, S) * 4) | 0;
-      // motif du sol : culture de la saison pour les champs, pré ou prairie de fauche, etc.
       const v = reg.type;
-      // (maïs de Chalosse et du Béarn : la moitié des champs l'été et l'automne ; vigne en foule avant les plants greffés)
-      const maize = this.epoque.mais && (this.season === 'ete' || this.season === 'automne') && hash(reg.parcel, 16, S) < 0.5;
-      reg.tex = v === T.CHAMP ? (maize ? 'mais' : culture(this.season, hash(reg.parcel, 6, S)))
-        : v === T.PRE || v === T.VERGER ? (v === T.PRE && hash(reg.parcel, 7, S) < 0.22 ? 'prairie' : 'pre')
-        : v === T.VIGNE ? (this.epoque.foule ? 'vigneFoule' : 'vigne') : v === T.LANDE ? 'lande' : v === T.MARAIS ? 'marais' : v === T.SABLE ? 'sable' : v === T.ROCHE ? 'roche'
+      reg.tex = v === T.LANDE ? 'lande' : v === T.MARAIS ? 'marais' : v === T.SABLE ? 'sable' : v === T.ROCHE ? 'roche'
         : v === T.BOIS || v === T.FORET ? 'sousBois' : v === T.ROUTE || v === T.CHEMIN ? 'herbe'
         : v === T.BARRICADE ? 'terre' : v === T.EAU || v === T.GUE ? 'eau' : 'cour';
-      // décalage du motif d'une parcelle à l'autre : la répétition ne s'aligne pas
+      // décalage du motif d'une région à l'autre : la répétition ne s'aligne pas
       reg.off = [hash(id, 8, S) * 97, hash(id, 9, S) * 97];
     }
-    this.byId = this.regions.slice();   // région d'après son numéro (label), avant le tri
+    this.prepClotures();
+    this.prepParcelles();
     // motifs dont cette carte se sert (préparés d'avance dans le temps libre : warm)
-    this.kinds = [...new Set(['herbe', 'eau', 'pave', ...this.regions.map(r => r.tex)])];
-    // ordre de peinture : les sols d'abord, l'eau et le bâti ensuite
-    const ORDER = [T.PRE, T.VERGER, T.LANDE, T.SABLE, T.ROCHE, T.CHAMP, T.VIGNE, T.MARAIS, T.BOIS, T.FORET, T.ROUTE, T.CHEMIN, T.BATI, T.MUR, T.BRECHE, T.PORTE, T.BARRICADE, T.GUE, T.EAU];
+    this.kinds = [...new Set(['herbe', 'eau', 'pave', ...this.regions.map(r => r.tex), ...this.parcelles.map(p => p.tex)])];
+    // ordre de peinture (après les parcelles) : les sols d'abord, l'eau et le bâti ensuite
+    const ORDER = [T.LANDE, T.SABLE, T.ROCHE, T.MARAIS, T.BOIS, T.FORET, T.ROUTE, T.CHEMIN, T.BATI, T.MUR, T.BRECHE, T.PORTE, T.BARRICADE, T.GUE, T.EAU];
     this.regions.sort((a, b) => ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
     this.prepTrees();
     this.prepFine();
@@ -227,6 +174,97 @@ export class Terrain {
     this.prepRoutes();
     this.prepOrnements();
     this.prepOmbrage();
+  }
+  // parcelles, comme dans Champs de Plaine : les cases des cultures, prés, vignes et vergers découpées en rectangles.
+  // Des blocs de 120 à 180 m sur 100 à 160 m (les rangs décalés d'une colonne à l'autre), recoupés en deux au meilleur
+  // endroit tant qu'ils mêlent les sols du moteur ; un grand rectangle d'un seul sol l'est une fois sur deux (des
+  // voisins qui tranchent). Chaque rectangle prend le sol qui y domine, sa culture, le sens de ses raies (le long du
+  // grand côté) ; parcelOf : la parcelle de chaque case
+  prepParcelles() {
+    const { cols, rows, cell, t } = this, S = this.seed, C1 = cols + 1, R1 = rows + 1;
+    const KL = [T.CHAMP, T.PRE, T.VIGNE, T.VERGER], NK = KL.length + 1;   // (le dernier : tout le reste)
+    const sum = new Int32Array(NK * C1 * R1);   // sommes cumulées, par sol
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      const k = KL.indexOf(t[j * cols + i]), kk = k < 0 ? NK - 1 : k;
+      for (let q = 0, o = 0; q < NK; q++, o += C1 * R1) sum[o + (j + 1) * C1 + i + 1] = (kk === q) + sum[o + j * C1 + i + 1] + sum[o + (j + 1) * C1 + i] - sum[o + j * C1 + i];
+    }
+    // [sol dominant, cases d'un autre sol] du rectangle de cases [i0, i1[ × [j0, j1[
+    const dom = (i0, j0, i1, j1) => {
+      let b = -1, bk = 0;
+      for (let q = 0, o = 0; q < NK; q++, o += C1 * R1) { const n = sum[o + j1 * C1 + i1] - sum[o + j0 * C1 + i1] - sum[o + j1 * C1 + i0] + sum[o + j0 * C1 + i0]; if (n > b) { b = n; bk = q; } }
+      return [bk, (i1 - i0) * (j1 - j0) - b];
+    };
+    const out = this.parcelles = [], of = this.parcelOf = new Int32Array(cols * rows).fill(-1);
+    const maize = this.epoque.mais && (this.season === 'ete' || this.season === 'automne');
+    const leaf = (i0, j0, i1, j1, k) => {
+      if (k === NK - 1) return;
+      const id = out.length, v = KL[k], h = q => hash(id, q, S);
+      // (au bord de la carte, la parcelle déborde : pas de tournière ni de liseré le long du cadre)
+      const x = i0 ? i0 * cell : -40, y = j0 ? j0 * cell : -40, x1 = i1 < cols ? i1 * cell : this.W + 40, y1 = j1 < rows ? j1 * cell : this.H + 40;
+      const w = x1 - x, hh = y1 - y, long = Math.max(w, hh) >= 1.4 * Math.min(w, hh);
+      out.push({
+        id, type: v, x, y, w, h: hh, box: [x, y, x1, y1],
+        tex: v === T.CHAMP ? (maize && h(16) < 0.5 ? 'mais' : culture(this.season, h(6))) : v === T.PRE ? (h(7) < 0.25 ? 'prairie' : 'pre')
+          : v === T.VIGNE ? (this.epoque.foule ? 'vigneFoule' : 'vigne') : 'pre',
+        // raies le long de x (0) ou de y : le long du grand côté, au hasard pour un carré
+        rot: (long ? hh > w : h(3) < 0.5) ? Math.PI / 2 : 0, off: (h(8) * 4) | 0, tone: (h(5) * 4) | 0,
+      });
+      for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) of[j * cols + i] = id;
+    };
+    const { V, H } = this.bordsClotures;
+    const split = (i0, j0, i1, j1, d) => {
+      const [k, bad] = dom(i0, j0, i1, j1);
+      // la coupe (deux cases au moins de chaque côté) qui laisse le moins de cases d'un autre sol, une haie ou une clôture
+      // qui la suit comptant pour un peu plus d'une demi-case ; prise si le rectangle mêle les sols, ou si une haie le
+      // traverse (aux trois cinquièmes au moins)
+      let bc = Infinity, cut = null, bh = 0;
+      const essai = (c, h, span, cv) => { if (c - 0.6 * h < bc) { bc = c - 0.6 * h; cut = cv; bh = h / span; } };
+      for (let i = i0 + 2; i <= i1 - 2; i++) { let h = 0; for (let j = j0; j < j1; j++) h += V[i * rows + j]; essai(dom(i0, j0, i, j1)[1] + dom(i, j0, i1, j1)[1], h, j1 - j0, [i, -1]); }
+      for (let j = j0 + 2; j <= j1 - 2; j++) { let h = 0; for (let i = i0; i < i1; i++) h += H[j * cols + i]; essai(dom(i0, j0, i1, j)[1] + dom(i0, j, i1, j1)[1], h, i1 - i0, [-1, j]); }
+      if (cut && ((bad > (i1 - i0) * (j1 - j0) * 0.12 && bc < bad * 0.8) || (bh >= 0.6 && bc <= bad))) {
+        if (cut[0] >= 0) { split(i0, j0, cut[0], j1, d + 1); split(cut[0], j0, i1, j1, d + 1); return; }
+        split(i0, j0, i1, cut[1], d + 1); split(i0, cut[1], i1, j1, d + 1); return;
+      }
+      if (k < NK - 1 && d < 2 && hash(i0 * 7 + j1, j0 * 7 + i1, S + 41) < 0.5) {
+        const f = 0.4 + hash(i0, j0, S + 42) * 0.2;
+        if (i1 - i0 >= 6 && i1 - i0 >= j1 - j0) { const c = Math.round(i0 + (i1 - i0) * f); leaf(i0, j0, c, j1, k); leaf(c, j0, i1, j1, k); return; }
+        if (j1 - j0 >= 6) { const c = Math.round(j0 + (j1 - j0) * f); leaf(i0, j0, i1, c, k); leaf(i0, c, i1, j1, k); return; }
+      }
+      leaf(i0, j0, i1, j1, k);
+    };
+    for (let i0 = 0, a = 0; i0 < cols; a++) {
+      const i1 = Math.min(cols, i0 + 6 + ((hash(a, 0, S + 43) * 4) | 0));
+      for (let j0 = 0, b = 0; j0 < rows; b++) {
+        const j1 = Math.min(rows, j0 + 5 + ((hash(a, b, S + 44) * 4) | 0));
+        split(i0, j0, i1 > cols - 3 ? cols : i1, j1 > rows - 3 ? rows : j1, 0);
+        j0 = j1 > rows - 3 ? rows : j1;
+      }
+      i0 = i1 > cols - 3 ? cols : i1;
+    }
+  }
+  // haies, murets et clôtures : le moteur les pose sur une rangée de cases, au bord d'un îlot ; on les dessine sur le
+  // bord des cases (du côté où le sol change), là où passe la limite des parcelles. bordsClotures : ces bords (V : x =
+  // i × 20 m à la ligne j ; H : y = j × 20 m à la colonne i), que prepParcelles suit de préférence
+  prepClotures() {
+    const { cols, rows, cell, t } = this, V = new Uint8Array((cols + 1) * rows), H = new Uint8Array((rows + 1) * cols);
+    const at = (i, j) => t[clamp(j, 0, rows - 1) * cols + clamp(i, 0, cols - 1)];
+    this.fences = this.fences.map(f => {
+      if (f.pts.length !== 2) return f;
+      const [[ax, ay], [bx, by]] = f.pts, vert = Math.abs(ax - bx) < 1, hor = Math.abs(ay - by) < 1;
+      if (vert === hor) return f;
+      const i = Math.floor(ax / cell), j = Math.floor(ay / cell), n = Math.round(Math.abs(vert ? by - ay : bx - ax) / cell);
+      const a = vert ? Math.min(j, Math.floor(by / cell)) : Math.min(i, Math.floor(bx / cell));
+      let plus = 0, moins = 0;
+      for (let q = a; q <= a + n; q++) {
+        const c = vert ? at(i, q) : at(q, j);
+        plus += (vert ? at(i + 1, q) : at(q, j + 1)) !== c; moins += (vert ? at(i - 1, q) : at(q, j - 1)) !== c;
+      }
+      const e = plus >= moins ? 1 : 0, o = (e - 0.5) * cell;   // (le bord des cases : + ou − une demi-case)
+      for (let q = a; q <= a + n; q++) if (vert) V[(i + e) * rows + clamp(q, 0, rows - 1)] = 1; else H[(j + e) * cols + clamp(q, 0, cols - 1)] = 1;
+      const lo = a * cell, hi = (a + n + 1) * cell;
+      return { ...f, pts: vert ? [[ax + o, lo], [ax + o, hi]] : [[lo, ay + o], [hi, ay + o]] };
+    });
+    this.bordsClotures = { V, H };
   }
   // contour d'une région : arêtes des cases au bord, chaînées en boucles, un peu bousculées puis adoucies
   regionPath(id, jit, box) {
@@ -262,10 +300,7 @@ export class Terrain {
           cur = nl.pop();
         }
         if (loop.length < 3) { l = next.get(start); continue; }
-        // parcelles (champs, vignes, prés) : le contour en escalier des cases de 20 m est d'abord ramené à des droites
-        // (à 10 m près), puis arrondi : des champs aux bords droits ou doucement courbes, comme les parcelles peintes
-        // d'Ultimate General, au lieu de marches
-        const pts = chaikin(jit === 2 ? simplify(loop.map(pos), 10) : loop.map(pos), jit ? 3 : 1, true);
+        const pts = chaikin(loop.map(pos), jit ? 3 : 1, true);
         path.moveTo(pts[0][0], pts[0][1]);
         for (let k = 1; k < pts.length; k++) path.lineTo(pts[k][0], pts[k][1]);
         path.closePath();
@@ -322,7 +357,7 @@ export class Terrain {
         }
       }
       // meules dans les chaumes, l'été et l'automne
-      if (v === T.CHAMP && this.byId[this.label[c]]?.tex === 'chaume' && h(70) < 0.07)
+      if (v === T.CHAMP && this.parcelles[this.parcelOf[c]]?.tex === 'chaume' && h(70) < 0.07)
         list.push({ x: (i + 0.2 + h(71) * 0.6) * cell, y: (j + 0.2 + h(72) * 0.6) * cell, r: 1.6 + h(73) * 0.6, kind: 'meule' });
       this.treeGrid[c] = list;
     }
@@ -604,8 +639,9 @@ export class Terrain {
     this.bornes = [];
     for (const r of this.routes) if (r.kind !== 'rue') for (const [k, p] of resample(offsetPts(r.pts, r.w / 2 + 1.6), 70).entries()) if (k) this.bornes.push(p);
     this.bottes = [];
-    if (!snow) for (const r of this.regions) if (r.tex === 'chaume' && hash(r.parcel, 17, S) < 0.75) for (const c of r.cells) {
-      if (hash(c, 18, S) > 0.1) continue;
+    if (!snow) for (let c = 0; c < this.t.length; c++) {
+      const p = this.parcelles[this.parcelOf[c]];
+      if (!p || p.tex !== 'chaume' || this.t[c] !== T.CHAMP || hash(p.id, 17, S) > 0.75 || hash(c, 18, S) > 0.1) continue;
       this.bottes.push([(c % this.cols + 0.2 + hash(c, 19, S) * 0.6) * this.cell, (((c / this.cols) | 0) + 0.2 + hash(c, 20, S) * 0.6) * this.cell, 2.3 + hash(c, 21, S) * 0.6]);
     }
   }
@@ -643,6 +679,22 @@ export class Terrain {
       cv.width = cv.height = 0;   // Safari garde sinon la mémoire
       this.cache.delete(k);
     }
+  }
+  // prépare un motif du sol qui manque au rectangle (x0, y0, wm, hm) à s px/m (Sol2D : une chose par image, pas de
+  // motif fait au milieu d'une tuile) ; avance : les motifs de toute la carte, tant que la mémoire le permet sans en
+  // chasser d'autres. Renvoie true si un motif a été fait
+  motif(x0, y0, wm, hm, s, avance = false) {
+    const vis = b => !(b[2] < x0 - 20 || b[0] > x0 + wm + 20 || b[3] < y0 - 20 || b[1] > y0 + hm + 20);
+    const kinds = avance ? this.kinds : new Set(['herbe', 'eau', 'pave', ...this.parcelles.filter(p => vis(p.box)).map(p => p.tex), ...this.regions.filter(r => vis(r.box)).map(r => r.tex)]);
+    const P = Math.max(4, Math.round(periode(s) * s));
+    for (const k of kinds) {
+      const key = `t|${k}|${s}`, e = this.cache.get(key);
+      if (e) { this.cache.delete(key); this.cache.set(key, e); continue; }   // (récemment servi : gardé)
+      if (avance && this.cacheBytes + P * P * 4 > this.q.textures) return false;
+      this.cached(key, () => texture(k, s, this.pal, this.season));
+      return true;
+    }
+    return false;
   }
   // motif d'un sol, peint à la densité de la tuile (s px/m), tourné de rot (radians) et décalé de off (m)
   pat(g, kind, s, rot = 0, off = null) {
@@ -682,24 +734,30 @@ export class Terrain {
     // l'herbe partout d'abord (sous les routes, entre les parcelles)
     g.fillStyle = this.pat(g, 'herbe', s);
     g.fillRect(x0 - 50, y0 - 50, wm + 100, hm + 100);
-    // sols : motif de la culture, raies dans le sens de la parcelle ; tournières et liseré clair autour des champs
+    // parcelles (maquette, parcelle) : motif de la culture, raies dans le sens de la parcelle, tournières au bout des
+    // raies, liseré clair ; l'herbe entre deux parcelles (1,2 m de chaque côté)
+    const pats = new Map(), pat = (kind, rot, o) => { const k = kind + rot + o; let p = pats.get(k); if (!p) pats.set(k, p = this.pat(g, kind, s, rot, OFFS[o])); return p; };
+    for (const p of this.parcelles) {
+      if (!vis(p.box)) continue;
+      const x = p.x + 1.2, y = p.y + 1.2, w = p.w - 2.4, h = p.h - 2.4;
+      g.fillStyle = pat(p.tex, p.rot, p.off); g.fillRect(x, y, w, h);
+      if (p.type === T.CHAMP && !snow) { g.globalAlpha = 0.03 + (p.tone >> 1) * 0.03; g.fillStyle = p.tone & 1 ? '#fff8dc' : '#281e0a'; g.fillRect(x, y, w, h); g.globalAlpha = 1; }
+      if (p.type === T.VERGER) continue;
+      const c = couleurs(p.tex, saison);
+      g.fillStyle = mix(c.base, c.raie || c.base, 0.5);
+      if (p.rot) { g.fillRect(x, y, w, 5); g.fillRect(x, y + h - 5, w, 5); } else { g.fillRect(x, y, 5, h); g.fillRect(x + w - 5, y, 5, h); }
+      if (s >= 1) { g.strokeStyle = snow ? 'rgba(255,255,255,.35)' : 'rgba(245,235,200,.3)'; g.lineWidth = 1.4; g.strokeRect(x + 0.7, y + 0.7, w - 1.4, h - 1.4); }
+    }
+    mark('parcelles');
+    // landes, bois, sables, cours… : motif du sol dans le contour de la région
     for (const r of this.regions) {
       if (!vis(r.box)) continue;
       const v = r.type;
       if (v === T.EAU || v === T.GUE || v === T.CHEMIN) continue;   // l'eau plus bas ; les chemins sur l'herbe
       if (v === T.ROUTE) { if (r.urb) { g.fillStyle = this.pat(g, 'pave', s); g.fill(r.path); } continue; }
-      const crop = v === T.CHAMP || v === T.VIGNE || v === T.PRE || v === T.VERGER;
-      g.fillStyle = this.pat(g, r.tex, s, crop ? r.angle : 0, r.off); g.fill(r.path);
-      // (bois, landes… : un trait du même motif couvre le liseré d'anticrénelage entre deux régions voisines)
-      if (!crop) { g.strokeStyle = g.fillStyle; g.lineWidth = 1.5 / s; g.stroke(r.path); }
-      if (v === T.CHAMP && !snow) { g.globalAlpha = 0.03 + (r.tone >> 1) * 0.03; g.fillStyle = r.tone & 1 ? '#fff8dc' : '#281e0a'; g.fill(r.path); g.globalAlpha = 1; }
-      if (v === T.CHAMP || v === T.VIGNE) {
-        const c = couleurs(r.tex, saison);
-        g.save(); g.clip(r.path);
-        g.strokeStyle = mix(c.base, c.raie || c.base, 0.5); g.lineWidth = 8; g.stroke(r.path);
-        g.strokeStyle = 'rgba(245,235,200,.3)'; g.lineWidth = 2.8; g.stroke(r.path);
-        g.restore();
-      }
+      g.fillStyle = this.pat(g, r.tex, s, 0, r.off); g.fill(r.path);
+      // (un trait du même motif couvre le liseré d'anticrénelage entre deux régions voisines)
+      g.strokeStyle = g.fillStyle; g.lineWidth = 1.5 / s; g.stroke(r.path);
     }
     mark('sols');
     g.drawImage(this.nuances, 0, 0, this.W, this.H);
@@ -910,6 +968,7 @@ export class Terrain {
 
 // ------------------------------------------------------------------ dessins de la maquette (vus de haut, en mètres)
 const LARGEUR = { royale: 11, route: 8, rue: 8 };   // chaussée (m), sans fossés
+const OFFS = [[0, 0], [23, 61], [51, 17], [77, 89]];   // décalages du motif d'une parcelle à l'autre (m)
 const OMB = 'rgba(20,32,12,.42)';                   // ombre portée des arbres, bottes, bornes
 function C(g, c, x, y, r) { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); }
 function E(g, c, x, y, rx, ry, r = 0) { g.fillStyle = c; g.beginPath(); g.ellipse(x, y, rx, ry, r, 0, TAU); g.fill(); }
@@ -981,15 +1040,16 @@ export function paintDecal(g, d, s) {
   const el = (x, y, rx, ry) => { g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, TAU); g.fill(); };
   g.save(); g.translate(d.x, d.y); g.rotate(d.a || 0);
   if (d.k === 'trou') {
-    // cratère (maquette) : terre noircie autour, mottes projetées, entonnoir sombre
-    const r = (d.r || 2.6) * 0.8, h = q => hash(d.x * 10 | 0, d.y * 10 | 0, q);
-    g.fillStyle = 'rgba(60,42,22,.22)'; el(0, 0, r * 2.2, r * 1.8);
-    for (let i = 0; i < 9; i++) {
-      const a = h(i) * TAU, e = r * (1.2 + h(i + 20) * 1.6);
-      g.fillStyle = h(i + 40) < 0.5 ? '#6d5338' : '#4f3b27'; el(Math.cos(a) * e, Math.sin(a) * e, 0.35 + h(i + 60) * 0.5, 0.35 + h(i + 60) * 0.5);
+    // cratère (maquette, cratere, en plus petit : un boulet creuse moins d'un mètre) : terre un peu noircie autour,
+    // quelques mottes, entonnoir sombre
+    const r = (d.r || 2.6) * 0.45, h = q => hash(d.x * 10 | 0, d.y * 10 | 0, q);
+    g.fillStyle = 'rgba(60,42,22,.14)'; el(0, 0, r * 2, r * 1.7);
+    for (let i = 0; i < 6; i++) {
+      const a = h(i) * TAU, e = r * (1.3 + h(i + 20) * 1.2), m = r * (0.12 + h(i + 60) * 0.2);
+      g.fillStyle = h(i + 40) < 0.5 ? '#7a5f42' : '#5e4730'; el(Math.cos(a) * e, Math.sin(a) * e, m, m);
     }
     g.fillStyle = '#5a4330'; el(0, 0, r, r);
-    g.fillStyle = '#3b2b1d'; el(0.3, 0.4, r * 0.55, r * 0.55);
+    g.fillStyle = '#3b2b1d'; el(r * 0.12, r * 0.15, r * 0.55, r * 0.55);
   } else if (d.k === 'chapeau') {
     // débris (SPEC-SUITE F8) : un chapeau tombé, sa cocarde
     g.fillStyle = 'rgba(30,20,15,0.25)'; el(0.06, 0.05, 0.32, 0.22);

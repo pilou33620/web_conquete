@@ -72,7 +72,7 @@ export function couleurs(kind, season) {
 // [culture, poids] ; une parcelle tire sa culture d'après son numéro
 export const CULTURES = {
   printemps: [['bleVert', 30], ['colza', 12], ['avoine', 14], ['labour', 18], ['prairie', 18], ['jachere', 8]],
-  ete: [['ble', 30], ['chaume', 16], ['avoine', 12], ['mais', 10], ['bleVert', 6], ['prairie', 14], ['friche', 6], ['jachere', 6]],
+  ete: [['ble', 26], ['chaume', 22], ['labour', 12], ['avoine', 8], ['mais', 8], ['colza', 8], ['friche', 8], ['jachere', 8]],
   automne: [['labour', 34], ['chaume', 22], ['mais', 12], ['semis', 18], ['colza', 8], ['friche', 6]],
   hiver: [['labour', 55], ['chaume', 35], ['friche', 10]],
 };

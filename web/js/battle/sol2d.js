@@ -1,18 +1,20 @@
 // Vue tactique : le sol à plat (SPEC-2D § 2, calque 1). La peinture du terrain (terrain.js) est découpée en tuiles de
-// 512 px, par niveau de zoom (1, 2, 4… pixels par mètre, jusqu'au plus fin que permet la qualité), peintes à la
+// 256 px, par niveau de zoom (1, 2, 4… pixels par mètre, jusqu'au plus fin que permet la qualité), peintes à la
 // demande et gardées tant que la mémoire le permet (les moins récemment vues partent d'abord, jamais une tuile à
 // l'écran). Une tuile qui manque est remplacée, le temps d'être peinte, par une tuile plus grossière ou par l'image
-// entière du terrain : pas de trou quand on glisse ou qu'on pince ; quelques tuiles seulement sont peintes par image.
+// entière du terrain : pas de trou quand on glisse ou qu'on pince. Une seule chose est faite par image (un motif du sol
+// ou une tuile, deux ou trois millisecondes) : d'abord les motifs qui manquent à la tuile, puis, de près, la tuile deux
+// fois plus grossière quand rien ne couvre l'endroit, puis la tuile fine ; le reste du temps, les motifs du niveau
+// sont préparés d'avance.
 // Tués, chevaux, débris et cratères sont peints une fois pour toutes dans les tuiles qu'ils touchent (et gardés pour
 // les tuiles peintes plus tard) ; le piétinement (pietinement.js) est posé par-dessus, d'un seul tracé.
 import { paintDecal, BASE } from './terrain.js';
 import { canvas } from './formes.js';
 import { profil } from './qualite.js';
 
-export const TS = 512;          // côté d'une tuile (px)
+export const TS = 256;          // côté d'une tuile (px)
 const MARGE = 3;                // m : un tué ou un cratère déborde de son centre
 const MAX_DECALS = 40000;       // gardés pour les tuiles à venir (au-delà, les plus anciens ne restent que peints)
-const BUDGET = 8;               // ms de peinture de tuiles par image (au moins une tuile)
 const FOND = '#4f7038';         // au-delà du champ
 
 export class Sol2D {
@@ -22,6 +24,7 @@ export class Sol2D {
     this.tiles = new Map();     // `L|i|j` → {cv, L, i, j, f} ; ordre : de la moins à la plus récemment vue
     this.spare = [];            // canevas libérés, repris pour la tuile suivante
     this.decals = [];
+    this.trous = new Set();     // cases de 8 m qui ont déjà leur cratère
     this.frame = 0;
     this.setQuality(q);
   }
@@ -57,28 +60,33 @@ export class Sol2D {
     if (!L) this.blit(ctx, t.base, BASE, x0, y0, x1, y1, X, Y);
     else {
       const span = TS / L, i0 = Math.floor(x0 / span), i1 = Math.ceil(x1 / span), j0 = Math.floor(y0 / span), j1 = Math.ceil(y1 / span);
-      // tuiles manquantes, les plus proches du centre d'abord, peintes tant que le budget le permet
-      const miss = [];
-      for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) if (!this.tiles.has(`${L}|${i}|${j}`)) miss.push([i, j, ((i + 0.5) * span - cam.x) ** 2 + ((j + 0.5) * span - cam.y) ** 2]);
-      miss.sort((a, b) => a[2] - b[2]);
-      const t0 = performance.now();
-      let n = 0;
-      for (const [i, j] of miss) { if (n && performance.now() - t0 > BUDGET) break; this.paintTile(L, i, j, f); n++; }
-      left = miss.length - n;
+      // tuiles manquantes, les plus proches du centre d'abord ; de près, la tuile deux fois plus grossière d'abord quand
+      // aucune ne couvre l'endroit (le temps de la tuile fine, mieux que l'image entière)
+      const miss = [], coarse = new Map();
+      for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) {
+        if (this.tiles.has(`${L}|${i}|${j}`)) continue;
+        const d = ((i + 0.5) * span - cam.x) ** 2 + ((j + 0.5) * span - cam.y) ** 2;
+        miss.push([L, i, j, d]);
+        if (L >= 4 && !this.repli(L, i * span, j * span)) coarse.set(`${i >> 1}|${j >> 1}`, [L / 2, i >> 1, j >> 1, d]);
+      }
+      const todo = [...coarse.values(), ...miss].sort((a, b) => (a[0] - b[0]) || (a[3] - b[3]));
+      left = todo.length;
+      if (todo.length) {
+        // une seule chose par image (un canevas accéléré ne peint qu'ensuite : un budget en temps serait trompé) : un
+        // motif qui manque à la tuile, sinon la tuile
+        const [P, i, j] = todo[0], ps = TS / P;
+        if (!this.t.motif?.(i * ps, j * ps, ps, ps, P)) { this.paintTile(P, i, j, f); left--; }
+      } else this.t.motif?.(0, 0, t.W, t.H, L, true);   // (rien à peindre : les motifs du niveau, d'avance)
       for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) {
         const key = `${L}|${i}|${j}`, e = this.tiles.get(key), a = i * span, b = j * span;
         if (e) { this.touch(key, e, f); ctx.drawImage(e.cv, X(a), Y(b), X(a + span) - X(a), Y(b + span) - Y(b)); continue; }
         // repli : la tuile plus grossière qui la couvre, sinon l'image entière
-        let done = false;
-        for (let P = L / 2; P >= 1 && !done; P /= 2) {
-          const ps = TS / P, pi = Math.floor(a / ps), pj = Math.floor(b / ps), pk = `${P}|${pi}|${pj}`, pe = this.tiles.get(pk);
-          if (!pe) continue;
+        const r = this.repli(L, a, b);
+        if (r) {
+          const [P, pi, pj, pk, pe] = r, ps = TS / P, sx = (a - pi * ps) * P, sy = (b - pj * ps) * P, sw = span * P;
           this.touch(pk, pe, f);
-          const sx = (a - pi * ps) * P, sy = (b - pj * ps) * P, sw = span * P;
           ctx.drawImage(pe.cv, sx, sy, sw, sw, X(a), Y(b), X(a + span) - X(a), Y(b + span) - Y(b));
-          done = true;
-        }
-        if (!done) this.blit(ctx, t.base, BASE, Math.max(0, a), Math.max(0, b), Math.min(t.W, a + span), Math.min(t.H, b + span), X, Y);
+        } else this.blit(ctx, t.base, BASE, Math.max(0, a), Math.max(0, b), Math.min(t.W, a + span), Math.min(t.H, b + span), X, Y);
       }
       this.trim();
     }
@@ -87,6 +95,14 @@ export class Sol2D {
     if (p && p.canvas && p.version) ctx.drawImage(p.canvas, X(0), Y(0), X(p.w * p.res) - X(0), Y(p.h * p.res) - Y(0));
     ctx.restore();
     return left;
+  }
+  // la tuile déjà peinte, plus grossière que le niveau L, qui couvre le point (a, b) : [P, i, j, clé, tuile] ou null
+  repli(L, a, b) {
+    for (let P = L / 2; P >= 1; P /= 2) {
+      const ps = TS / P, pi = Math.floor(a / ps), pj = Math.floor(b / ps), pk = `${P}|${pi}|${pj}`, pe = this.tiles.get(pk);
+      if (pe) return [P, pi, pj, pk, pe];
+    }
+    return null;
   }
   // une partie (x0…y1, en m) d'une image peinte à s px/m
   blit(ctx, img, s, x0, y0, x1, y1, X, Y) {
@@ -112,11 +128,14 @@ export class Sol2D {
       if (this.spare.length < 2) this.spare.push(e.cv); else e.cv.width = e.cv.height = 0;   // (Safari garde sinon la mémoire)
     }
   }
-  // tués, chevaux, débris, cratères ({x, y, k, …}, paintDecal) : ceux qui tombent sur le sol découvert sont peints
+  // tués, chevaux, débris, cratères ({x, y, k, …}, paintDecal) : ceux qui tombent sur le sol découvert (et les cratères
+  // là où il n'y en a pas déjà un) sont peints
   // dans les tuiles déjà faites et dans l'image entière (les cratères seulement : le reste n'y ferait pas un pixel) ;
   // renvoie ceux qui ont été posés
   stamp(list) {
-    const out = (list || []).filter(d => this.t.bare(d.x, d.y));
+    // (un cratère au plus tous les 8 m : sous un bombardement, le sol reste lisible)
+    const libre = d => { if (d.k !== 'trou') return true; const k = `${d.x >> 3}|${d.y >> 3}`; return !this.trous.has(k) && !!this.trous.add(k); };
+    const out = (list || []).filter(d => this.t.bare(d.x, d.y) && libre(d));
     if (!out.length) return out;
     for (const e of this.tiles.values()) {
       const span = TS / e.L, x0 = e.i * span, y0 = e.j * span;
@@ -144,6 +163,6 @@ export class Sol2D {
   dispose() {
     for (const e of this.tiles.values()) e.cv.width = e.cv.height = 0;
     for (const cv of this.spare) cv.width = cv.height = 0;
-    this.tiles.clear(); this.spare = []; this.decals = [];
+    this.tiles.clear(); this.spare = []; this.decals = []; this.trous.clear();
   }
 }

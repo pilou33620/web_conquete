@@ -71,13 +71,30 @@ test('une tuile qui manque : repli sur une tuile plus grossière, quelques tuile
   assert.ok(replis.length > 0, 'des morceaux de tuiles du niveau 2');
 });
 
+test('une seule chose par image : les motifs qui manquent, puis les tuiles grossières, puis les fines', () => {
+  const t = terrain(), sol = new Sol2D(t, { level: 16, textures: 32e6 });
+  let motifs = 2;   // deux motifs manquent à la première tuile
+  t.motif = (x0, y0, wm, hm, s, avance) => !avance && motifs > 0 && motifs--;
+  const g = () => fauxCanevas().getContext(), v = vue(1500, 1000, 8);
+  sol.draw(g(), v); sol.draw(g(), v);
+  assert.equal(t.painted, 0, 'les motifs d’abord, un par image');
+  let fines = 0;
+  for (let p = 0; sol.draw(g(), v);) {
+    assert.equal(t.painted, ++p, 'une tuile par image');
+    const L = [...sol.tiles.values()].map(e => e.L);
+    if (L.includes(8)) fines++; else assert.ok(L.every(l => l === 4), 'les tuiles deux fois plus grossières d’abord');
+  }
+  assert.ok(fines && [...sol.tiles.values()].filter(e => e.L === 8).length >= 20);
+});
+
 test('stamp peint dans les tuiles touchées et seulement celles-là ; gardé pour les tuiles à venir', () => {
   const t = terrain(), sol = new Sol2D(t, { level: 16, textures: 32e6 });
-  remplir(sol, vue(1500, 1000, 2));          // tuiles de 256 m
-  const d = { k: 'corps', x: 1536 + 1, y: 1024 + 100, c: '#336' };   // juste à droite du bord x = 1536
+  remplir(sol, vue(1500, 1000, 2));          // tuiles de TS / 2 m
+  const span = TS / 2, bi = 1536 / span, bj = Math.floor(1124 / span);
+  const d = { k: 'corps', x: 1536 + 1, y: 1124, c: '#336' };   // juste à droite du bord x = 1536
   sol.stamp([d]);
   const touchees = [...sol.tiles.values()].filter(e => e.cv.log.some(c => c[0] === 'translate' && c[1] === d.x));
-  assert.deepEqual(touchees.map(e => [e.i, e.j]).sort(), [[5, 4], [6, 4]], 'la tuile du point et sa voisine (le tué déborde)');
+  assert.deepEqual(touchees.map(e => [e.i, e.j]).sort(), [[bi - 1, bj], [bi, bj]], 'la tuile du point et sa voisine (le tué déborde)');
   // une tuile d'un autre niveau peinte plus tard reçoit le tué
   remplir(sol, vue(1540, 1124, 8));
   const fine = [...sol.tiles.values()].find(e => e.L === 8 && e.cv.zone[0] <= d.x && d.x < e.cv.zone[0] + TS / 8 && e.cv.zone[1] <= d.y && d.y < e.cv.zone[1] + TS / 8);
@@ -87,15 +104,19 @@ test('stamp peint dans les tuiles touchées et seulement celles-là ; gardé pou
   assert.ok(t.base.log.some(c => c[0] === 'translate' && c[1] === 200));
   t.bare = () => false;
   assert.equal(sol.stamp([{ k: 'trou', x: 300, y: 300 }]).length, 0);
+  t.bare = () => true;
+  assert.equal(sol.stamp([{ k: 'trou', x: 203, y: 201, r: 3 }, { k: 'trou', x: 212, y: 200, r: 3 }]).length, 1, 'un cratère tous les 8 m au plus');
 });
 
 test('invalidate : les tuiles du cercle seront repeintes, les autres restent', () => {
   const t = terrain(), sol = new Sol2D(t, { level: 16, textures: 32e6 });
   remplir(sol, vue(1500, 1000, 2));
   const avant = sol.tiles.size;
-  sol.invalidate(1600, 1100, 30);            // dans la tuile (6, 4)
+  const span = TS / 2, i = Math.floor(1600 / span), j = Math.floor(1100 / span), key = `2|${i}|${j}`;
+  assert.ok(sol.tiles.has(key));
+  sol.invalidate((i + 0.5) * span, (j + 0.5) * span, span / 4);   // au milieu d'une tuile
   assert.equal(sol.tiles.size, avant - 1);
-  assert.ok(!sol.tiles.has('2|6|4'));
+  assert.ok(!sol.tiles.has(key));
   const n = t.painted;
   remplir(sol, vue(1500, 1000, 2));
   assert.equal(t.painted, n + 1);
