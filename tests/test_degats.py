@@ -65,13 +65,45 @@ class Maisons(unittest.TestCase):
         art.x, art.y, art.dir = cible.x + 300, cible.y, math.pi
         art.form, art.shot, art.fire_mode, art.ammo, art.state, art.order = 'batterie', 'boulet', 'free', 50, 'repos', None
         tb._pick_target = lambda u, mx: cible   # (on ne teste que le boulet, pas le repérage)
-        for _ in range(30):
+        autour = [cc for cc in range(N) if tb.t[cc] == T_BATI and math.dist(center_of(cc), center_of(c)) < 80]
+        for _ in range(60):
             art.reload = 0.0
             tb._fire(art, BT.DT)
-            if tb.bati[c]:
+            if any(tb.bati[cc] for cc in autour):
                 break
-        self.assertGreater(tb.bati[c], 0)
+        self.assertTrue(any(tb.bati[cc] for cc in autour), 'la maison visée ou une voisine est touchée')
         self.assertTrue(any(e['k'] == 'canon' for e in tb.fx))
+
+    def test_les_boulets_tombent_court_ou_long(self):
+        tb = place()
+        art = next(u for u in tb.units if u.cls == 'artillerie' and u.side == 0)
+        x, y = center_of(maison(tb))
+        art.x, art.y = x + 400, y
+        pts = [tb._chute(art, x, y) for _ in range(400)]
+        axe = [px - x for px, _ in pts]
+        cote = [py - y for _, py in pts]
+        sd = lambda v: math.sqrt(sum(a * a for a in v) / len(v))
+        self.assertAlmostEqual(sd(axe), 15 + 0.07 * 400, delta=8)   # dans l'axe du tir…
+        self.assertAlmostEqual(sd(cote), 5 + 0.02 * 400, delta=4)   # … et moins de côté
+        tb2 = place()
+        art2 = next(u for u in tb2.units if u.cls == 'artillerie' and u.side == 0)
+        art2.x, art2.y = art.x, art.y
+        self.assertEqual(pts[:20], [tb2._chute(art2, x, y) for _ in range(20)], 'même graine, mêmes points de chute')
+
+    def test_les_coups_longs_tombent_dans_la_ville(self):
+        tb = place()
+        pl = tb.map.place
+        art = next(u for u in tb.units if u.cls == 'artillerie' and u.side == 0)
+        murs = [c for c in range(N) if tb.t[c] == T_MUR]
+        w = max(murs, key=lambda c: center_of(c)[0])   # le mur le plus à l'est
+        wx, wy = center_of(w)
+        a = math.atan2(wy - pl['y'], wx - pl['x'])
+        art.x, art.y = wx + math.cos(a) * 350, wy + math.sin(a) * 350   # dehors, face au mur
+        for _ in range(400):
+            tb._bati_hit(*tb._chute(art, wx, wy), art)
+        dedans = [c for c in range(N) if tb.bati[c] and math.dist(center_of(c), (pl['x'], pl['y'])) <
+                  math.dist((wx, wy), (pl['x'], pl['y']))]
+        self.assertTrue(dedans, 'des boulets trop longs passent le rempart et frappent les maisons derrière')
 
     def test_le_feu_gagne_puis_laisse_des_ruines(self):
         tb = place()

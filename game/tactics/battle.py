@@ -49,11 +49,12 @@ RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MEL
   Siège ou assaut d'une place à enceinte : l'artillerie du défenseur se déploie sur l'enceinte (la case de mur la plus
   proche, à REMPART_GAP de la batterie voisine, tournée vers le dehors), tire de là et n'en bouge plus (on_rampart).
 - Bâti (BATI_*, FEU_*, SPEC-2D § 5) : chaque case bâtie est intacte (0), touchée (1), en feu (2) ou en ruine (3). Un
-  boulet qui tombe dessus l'entame (BATI_TOUCHE) ou y met le feu (BATI_FEU, BATI_FEU_CHAUME, ×2 à l'obus) ; le feu
-  dure FEU_DUREE, gagne les cases bâties voisines (FEU_PROPAG), puis laisse une ruine. Couvert : BATI_COVER (en feu,
-  aucun ; la troupe qui s'y trouve en sort et perd FEU_MOR de moral) ; une ruine laisse mieux passer la vue
-  (RUINE_OPAC). Tout se tire de battle.rng : même graine, même incendie. Le client reçoit les changements
-  [case, état] dans `bati` de la vue (depuis since), l'état complet dans `bati` de la carte ; la sauvegarde les garde.
+  boulet qui tombe dessus (court ou long autour de sa cible, BOULET_* ; par-dessus le rempart s'il est trop long)
+  l'entame (BATI_TOUCHE) ou y met le feu (BATI_FEU, BATI_FEU_CHAUME, ×2 à l'obus) ; le feu dure FEU_DUREE, gagne les
+  cases bâties voisines (FEU_PROPAG), puis laisse une ruine. Couvert : BATI_COVER (en feu, aucun ; la troupe qui s'y
+  trouve en sort et perd FEU_MOR de moral) ; une ruine laisse mieux passer la vue (RUINE_OPAC). Tout se tire de
+  battle.rng : même graine, même incendie. Le client reçoit les changements [case, état] dans `bati` de la vue (depuis
+  since), l'état complet dans `bati` de la carte ; la sauvegarde les garde.
 
 ==================================================================================================================
 AIDE-MÉMOIRE POUR L'ÉQUIPE IA (game/tactics/ai.py)
@@ -173,6 +174,8 @@ FTOP = [0, 0, 2.8, 0]    # une haie (talus compris) cache ce qui est à hauteur 
 EYE = 2.5                # hauteur d'un fantassin, pour la vue (m)
 # bâti sous le canon (SPEC-2D § 5) : chaque case bâtie est 0 intacte, 1 touchée, 2 en feu, 3 en ruine
 BATI_COVER = (COVER[T_BATI], 0.45, 0.0, 0.3)   # en feu, elle ne couvre plus ; en ruine, moins qu'une maison
+BOULET_LONG = (15.0, 0.07, 90.0)   # dispersion d'un boulet dans l'axe du tir : 15 m + 7 % de la distance, 90 m au plus
+BOULET_COTE = (5.0, 0.02, 30.0)    # … et de côté : 5 m + 2 % de la distance, 30 m au plus
 BATI_TOUCHE = 0.5        # un boulet tombé sur une case bâtie intacte l'entame une fois sur deux…
 BATI_FEU = 0.06          # … et y met le feu (tuile, ardoise) six fois sur cent…
 BATI_FEU_CHAUME = 0.3    # … trente sur un toit de chaume (map.buildings, toit='chaume') ; ×2 à l'obus (mélinite)
@@ -1791,6 +1794,18 @@ class TacticalBattle:
         return best
 
     # ================================================================== maisons touchées, en feu, en ruine
+    def _chute(self, u, x, y):
+        """Où tombe le boulet de u tiré sur (x, y) : court ou long dans l'axe du tir (BOULET_LONG), un peu de côté
+        (BOULET_COTE), d'autant plus que la cible est loin. Tiré de battle.rng : même graine, mêmes points de chute."""
+        dx, dy = x - u.x, y - u.y
+        d = math.hypot(dx, dy)
+        if d < 1:
+            return x, y
+        ux, uy = dx / d, dy / d
+        a = self.rng.gauss(0.0, min(BOULET_LONG[2], BOULET_LONG[0] + BOULET_LONG[1] * d))
+        b = self.rng.gauss(0.0, min(BOULET_COTE[2], BOULET_COTE[0] + BOULET_COTE[1] * d))
+        return x + ux * a - uy * b, y + uy * a + ux * b
+
     def _bati_hit(self, x, y, u):
         """Un boulet de u tombe en (x, y) : la case bâtie s'entame ou prend feu (BATI_*)."""
         c = self.cell(x, y)
@@ -1877,6 +1892,7 @@ class TacticalBattle:
         u.state = 'feu'
         self._fatigue(u, u.reload, 'feu')
         self.emit('canon', u.x, u.y, x, y, n=0, src=u.id)
+        self._bati_hit(*self._chute(u, x, y), u)   # (un boulet trop long passe le rempart et tombe sur les maisons)
         self._pound(u, wi, x, y, d, e, mx)
         return True
 
@@ -2043,7 +2059,7 @@ class TacticalBattle:
         cas *= self._entrench_k(tg, u)
         self.emit(kind, u.x, u.y, tg.x, tg.y, n=cas, src=u.id)
         if kind == 'canon':
-            self._bati_hit(tg.x, tg.y, u)
+            self._bati_hit(*self._chute(u, tg.x, tg.y), u)
         if kind == 'canon' and u.side == 0 and self.in_place(tg.x, tg.y, 0.0):
             # les boulets tirés sur les défenseurs de la place frappent aussi son rempart
             wt = self._wall_target(u, mx)
