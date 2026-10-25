@@ -136,8 +136,8 @@ et l'assaut d'une place bastionnée (Pau) ont été joués jusqu'au bout dans Ch
   a plus de « au-dessus des têtes ». `view.toScreenH(u)` le donne.
 - **Gestes** : le clic droit ne pivote plus (il inspecte, comme le gauche) ; l'élan compte comme un geste pour la
   mesure des images par seconde.
-- **Ligne de vue** : un voile case par case (20 m), adouci par l'agrandissement, posé après le décor du dessus et avant
-  les effets.
+- **Ligne de vue** : un masque de 4 px par case de 20 m, flouté en deux passes (le bord fond sur deux cases), recalculé
+  seulement quand un régiment change de case ; posé après le décor du dessus et avant les effets.
 - **Boue** : seulement pendant le combat ; un déplacement plus rapide que 15 m par seconde de bataille est un saut
   (redéploiement, ennemi revu ailleurs) : pas de glissade ni de traînée.
 - **Qualité** : zoom le plus rapproché 12, 16, 24, 30 px/m ; sol au plus 8 px/m en Basse et Moyenne, 16 en Haute et
@@ -145,7 +145,8 @@ et l'assaut d'une place bastionnée (Pau) ont été joués jusqu'au bout dans Ch
 - **Sans WebGL** : `bataille.js` ne demande plus WebGL 2, la bataille s'ouvre partout.
 - `fx.ciel(...).ombre` n'est pas passé aux troupes : leurs ombres gardent la lumière fixe du nord-ouest.
 
-Reste à surveiller : les temps d'image n'ont été mesurés qu'en Chromium sans carte graphique (1280 × 800, densité 1 :
-11 à 16 ms par image en combat de près, 13 à 22 ms en vue d'ensemble) ; à fort zoom, une tuile du sol neuve coûte un
-à-coup (p90 jusqu'à 50 ms) ; quand des hommes sont sous les bois, les houppiers passent par une copie plein écran
-(5 à 7 ms).
+Reste à surveiller : les temps d'image n'ont été mesurés qu'en Chromium sans carte graphique. Le sol est peint en
+tuiles de 256 px, une seule chose par image (une texture ou une tuile) : 2 à 3 ms au 90e centile en défilant, 13 à 19 ms
+au pire. La canopée ne porte plus que les bois et les vergers (arbres isolés et haies au sol) ; ses trous passent par des
+masques, sans copie plein écran. En Haute à densité 2, l'image tient 7 à 11 ms à z6 ; à z2 elle reste à 53 à 86 ms,
+surtout à cause des troupes (15 à 25 ms) et des effets (21 à 35 ms), à mesurer sur un vrai appareil.
