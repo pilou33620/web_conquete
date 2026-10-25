@@ -58,7 +58,7 @@ function RR(g, c, x, y, w, h, r) { g.fillStyle = c; g.beginPath(); if (g.roundRe
 function PG(g, c, p) { g.fillStyle = c; g.beginPath(); g.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]); g.closePath(); g.fill(); }
 
 // ------------------------------------------------------------------ tenues
-// coiffure selon l'époque (comme unites.js et troupes.js, headgear) ; la cavalerie : casque à crinière
+// coiffure selon l'époque (comme unites.js) ; la cavalerie : casque à crinière
 export function coiffure(kind, year) {
   if (kind === 'milice') return 'rond';
   if (kind === 'officier') return year < 1815 ? 'bicorne' : year < 1860 ? 'shako' : 'kepi';

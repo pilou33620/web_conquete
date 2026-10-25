@@ -1,10 +1,10 @@
 // Vue tactique : gestes au doigt, à la souris et au clavier. Vos officiers commandent (« Donner mes ordres ») : les
 // gestes ne servent qu'à regarder.
-//  un doigt ou clic gauche glissé : déplacer la vue (avec élan) ; deux doigts : zoomer, déplacer et pivoter (en
-//    tournant les doigts) ; molette : zoomer ; clic droit glissé : pivoter
+//  un doigt ou un clic glissé : déplacer la vue (avec élan) ; deux doigts : zoomer et déplacer ; molette : zoomer
+//  (la vue est de dessus : elle ne pivote pas)
 //  appui sur un régiment : sa fiche (le vôtre ou l'ennemi) ; appui sur le sol : la refermer
 //  clavier : flèches ou ZQSD pour déplacer la vue, + et - pour zoomer, Échap pour refermer la fiche
-import { clamp, wrapAngle } from './formes.js';
+import { clamp } from './formes.js';
 import { anchor } from './camera.js';
 
 export class Controls {
@@ -18,7 +18,7 @@ export class Controls {
     const cv = view.cv;
     this.h = {
       down: e => this.down(e), move: e => this.move(e), up: e => this.up(e), cancel: e => this.up(e, true),
-      wheel: e => { e.preventDefault(); if (!this.v.relief) return; const [sx, sy] = this.pos(e); this.v.zoomAt(sx, sy, Math.exp(-clamp(e.deltaY, -120, 120) * (e.ctrlKey ? 0.01 : 0.0022))); },
+      wheel: e => { e.preventDefault(); if (!this.v.terrain) return; const [sx, sy] = this.pos(e); this.v.zoomAt(sx, sy, Math.exp(-clamp(e.deltaY, -120, 120) * (e.ctrlKey ? 0.01 : 0.0022))); },
       ctx: e => e.preventDefault(),
       key: e => this.key(e), keyup: e => this.keys.delete(e.key),
     };
@@ -36,12 +36,12 @@ export class Controls {
     window.removeEventListener('keyup', this.h.keyup);
   }
   pos(e) { const r = this.v.cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
-  busy() { return !!this.g && (this.g.mode === 'pinch' || this.g.mode === 'pan' || this.g.mode === 'rotate'); }
+  busy() { return !!this.g && (this.g.mode === 'pinch' || this.g.mode === 'pan') || !!this.inertia; }
 
   // ------------------------------------------------------------------ pointeurs
   down(e) {
     const v = this.v;
-    if (!v.relief) return;   // (la carte se charge encore)
+    if (!v.terrain) return;   // (la carte se charge encore)
     v.cv.setPointerCapture?.(e.pointerId);
     const [sx, sy] = this.pos(e);
     this.pts.set(e.pointerId, { x: sx, y: sy });
@@ -50,40 +50,33 @@ export class Controls {
     if (this.pts.size === 2) {
       const [a, b] = [...this.pts.values()];
       const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
-      this.g = { mode: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: v.cam.z, w0: v.toWorld(cx, cy), a0: Math.atan2(b.y - a.y, b.x - a.x), yaw0: v.cam.yaw || 0, rot: false };
+      this.g = { mode: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: v.cam.z, w0: v.toWorld(cx, cy) };
       return;
     }
     if (this.pts.size > 2) return;
-    this.g = { mode: e.button === 2 ? 'rpending' : e.button === 1 ? 'pan' : 'pending', sx, sy, x: sx, y: sy, touch: e.pointerType !== 'mouse', hit: v.unitAt(sx, sy, e.pointerType !== 'mouse' ? 16 : 6), vel: [0, 0] };
+    this.g = { mode: e.button === 1 ? 'pan' : 'pending', sx, sy, x: sx, y: sy, touch: e.pointerType !== 'mouse', hit: v.unitAt(sx, sy, e.pointerType !== 'mouse' ? 16 : 6), vel: [0, 0] };
   }
   move(e) {
     const v = this.v, [sx, sy] = this.pos(e);
-    if (!v.relief || !this.pts.has(e.pointerId)) return;
+    if (!v.terrain || !this.pts.has(e.pointerId)) return;
     const p = this.pts.get(e.pointerId), px = p.x, py = p.y;
     p.x = sx; p.y = sy;
     const g = this.g;
     if (!g) return;
     if (g.mode === 'pinch') {
       const [a, b] = [...this.pts.values()];
-      const d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2, ang = Math.atan2(b.y - a.y, b.x - a.x);
+      const d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
       v.cam.z = clamp(g.z0 * d / g.d0, v.minZ(), v.maxZ());
-      // la rotation ne s'engage qu'au-delà de 7° : un simple pincement ne fait pas tourner la vue
-      if (!g.rot && Math.abs(wrapAngle(ang - g.a0)) > 0.12) { g.rot = true; g.a0 = ang; g.yaw0 = v.cam.yaw || 0; }
-      if (g.rot) v.cam.yaw = g.yaw0 - wrapAngle(ang - g.a0);
       // le point du terrain pris entre les doigts reste entre eux
-      anchor(v.cam, v, v.relief.heightAt, g.w0[0], g.w0[1], cx, cy);
+      anchor(v.cam, v, g.w0[0], g.w0[1], cx, cy);
       v.camAnim = null;
       v.clampCam();
       return;
     }
     g.x = sx; g.y = sy;
-    if (g.mode === 'pending' || g.mode === 'rpending') {
+    if (g.mode === 'pending') {
       if (Math.hypot(sx - g.sx, sy - g.sy) < (g.touch ? 11 : 5)) return;
-      g.mode = g.mode === 'rpending' ? 'rotate' : 'pan';
-    }
-    if (g.mode === 'rotate') {
-      v.cam.yaw = (v.cam.yaw || 0) + (sx - px) * 0.006;   // vers la droite : on regarde à droite
-      v.camAnim = null;
+      g.mode = 'pan';
     }
     if (g.mode === 'pan') {
       v.panBy(px, py, sx, sy);

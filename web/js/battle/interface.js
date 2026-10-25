@@ -304,7 +304,7 @@ export class BattleUI {
       g.restore();
     }
     g.globalAlpha = 1;
-    // la part du terrain que montre la vue : un trapèze (la caméra est inclinée et peut tourner)
+    // la part du terrain que montre la vue (un rectangle : la vue est de dessus)
     const pts = [[0, 0], [v.vw, 0], [v.vw, v.vh], [0, v.vh]].map(([x, y]) => v.toWorld(x, y));
     g.strokeStyle = 'rgba(255,248,230,0.95)'; g.lineWidth = 1.5 * dpr;
     g.beginPath(); pts.forEach(([x, y], k) => k ? g.lineTo(x * sx, y * sy) : g.moveTo(x * sx, y * sy)); g.closePath(); g.stroke();

@@ -78,7 +78,7 @@ export function emprise(u) {
 }
 
 // uniformes français d'époque (SPEC-3D.md, étape 8) : habit et culotte selon l'année de la bataille, l'arme et le
-// régiment (dragons en vert de 1760 à 1860) ; le camp, lui, se lit aux revers (troupes.js, CAMP). Gris-blanc sous
+// régiment (dragons en vert de 1760 à 1860) ; le camp, lui, se lit aux revers. Gris-blanc sous
 // Louis XIV, bleu national puis impérial, capote bleu foncé en 1870 ; pantalon garance dès 1829 ; artillerie bleu foncé
 // (culotte bleue comprise, après 1760)
 export function uniform(year, cls, name = '', kind = '') {
@@ -125,4 +125,9 @@ export function wrapAngle(a) {
   while (a > Math.PI) a -= TAU;
   while (a <= -Math.PI) a += TAU;
   return a;
+}
+// distance du point (px, py) au segment de a à b
+export function segDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, t = Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(px - ax - t * dx, py - ay - t * dy);
 }

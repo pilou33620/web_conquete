@@ -1,6 +1,6 @@
 // Vue tactique : petites figurines peintes (fantassin, cavalier, pièce, caisson) des cartes d'unités de la barre du
 // bas, en cache (par camp, habit, type, sens, pose et taille en pixels physiques : nettes sur un écran Retina), bornées en
-// mémoire par la qualité. Les régiments du champ de bataille sont en 3D (troupes.js), leurs fanions dans fanions.js.
+// mémoire par la qualité. Les régiments du champ de bataille : troupes2d.js, leurs fanions : fanions.js.
 import { TAU, TILT, OMBRE, mixHex, uniform } from './formes.js';
 
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', BRONZE = '#b08a3e', GOLD = '#d6b65a';

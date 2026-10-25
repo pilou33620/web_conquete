@@ -1,24 +1,23 @@
 // Vue tactique : fanions au-dessus des régiments, à la manière d'Ultimate General, sur le calque 2D (taille constante
 // à l'écran) : un carré aux couleurs du camp portant le pictogramme de l'arme, puis l'effectif en blanc sur fond
-// sombre, au bout d'une hampe plantée juste au-dessus des têtes. Pour ses troupes, le moral en liseré sous le fanion ;
+// sombre, au bout d'une hampe plantée juste au-dessus du régiment (au bord nord de son emprise, vue de dessus). Pour ses troupes, le moral en liseré sous le fanion ;
 // en déroute, le fanion pâlit et se barre ; un régiment deviné (plus en vue) montre « ? ». Les généraux : un médaillon
 // rond et leur nom. Les fanions ne se chevauchent pas : celui qui gêne monte d'un cran.
 import { clsOf, isGeneral, genName, clamp, TAU, mixHex } from './formes.js';
 
 const SQ = 18, H = 18, PAD = 6;                 // carré du pictogramme, hauteur du fanion, marge du nombre (px)
-const LIFT = 4.6;                               // la hampe part à 4,6 m au-dessus du sol (au-dessus des drapeaux)
 const NUM = '700 12px "Helvetica Neue", Arial, sans-serif';
 const lite = (c, k) => mixHex(c, '#ffffff', k);
 const men = un => un.men >= 1000 ? (un.men / 1000).toFixed(1).replace('.', ',') + 'k' : String(Math.round(un.men));
 
-// view : {toScreenH(x, y, dh) → [sx, sy, profondeur], vw, vh} ; opts : {sel, me, time} ; renvoie les rectangles des
+// view : {toScreenH(un) → [sx, sy, profondeur] (le pied de la hampe), vw, vh} ; opts : {sel, me, time} ; renvoie les rectangles des
 // fanions (pour toucher un régiment par son fanion)
 export function drawBanners(ctx, view, units, colors, opts) {
   ctx.font = NUM;
   const list = [];
   for (const un of units) {
     if (un.state === 'hors') continue;
-    const [sx, sy, depth] = view.toScreenH(un.x, un.y, LIFT);
+    const [sx, sy, depth] = view.toScreenH(un);
     if (depth <= 0) continue;
     const gen = isGeneral(un), w = gen ? 32 : SQ + PAD * 2 + Math.max(16, ctx.measureText(un._ghost ? '?' : men(un)).width);
     list.push({ un, sx, sy, w, h: gen ? 32 : H, top: sy - (gen ? 44 : 30) });

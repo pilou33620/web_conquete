@@ -7,7 +7,6 @@
 // déroute, mêlée) et, sur la barre de la journée, un repère par grand moment : le toucher y emmène la caméra.
 import { esc, clamp, clsOf } from './formes.js';
 
-const TOP = 1.2;         // inclinaison de la vue de dessus (rad ; 1,57 serait la verticale)
 const CAM_EVERY = 2600;  // la caméra du film cherche l'action toutes les 2,6 s
 const ACTIVE = { melee: 3, charge: 3, feu: 1, recharge: 1, deroute: 1.5 };
 // les flèches au sol, par sorte (orders.arrows) : couleur, épaisseur (m à l'écran), pointillés, pointe
@@ -67,10 +66,9 @@ export class Ordres {
     if (st.ordres && !this.data) this.set(st.ordres);
     const deploy = st.phase === 'deploiement', play = st.phase === 'combat' && !!st.replay;
     if (!this.camSet && v.terrain && !this.ui.entering) {
-      // vue de dessus sur tout le champ, vos troupes en bas de l'image
+      // tout le champ
       this.camSet = true;
-      v.pitchOv = TOP;
-      v.moveCam(v.W / 2, v.H / 2, v.fitZ() * (deploy ? 1.05 : 1.2), 1400, this.yaw());
+      v.moveCam(v.W / 2, v.H / 2, v.fitZ() * (deploy ? 1.05 : 1.2), 1400);
     }
     this.$('.bo-panel').hidden = !deploy || !this.data;
     this.$('.bo-hud').hidden = !play;
@@ -86,14 +84,6 @@ export class Ordres {
         this.$('[data-o="go"]').focus();
       }
     } else if (!ask.hidden) { ask.hidden = true; this.askKey = null; }
-  }
-  // cap de la caméra : de vos troupes vers l'ennemi (vos troupes en bas de l'image)
-  yaw() {
-    const v = this.v, us = [...v.units.values()];
-    const c = side => { const s = us.filter(u => side ? u.side !== v.me : u.side === v.me); return s.length ? [s.reduce((a, u) => a + u.x, 0) / s.length, s.reduce((a, u) => a + u.y, 0) / s.length] : null; };
-    const a = c(0), b = c(1) || [v.W / 2, v.H / 2];   // (l'ennemi pas encore repéré : vers le centre du champ)
-    if (!a || Math.hypot(b[0] - a[0], b[1] - a[1]) < 50) return v.cam.yaw || 0;
-    return Math.atan2(b[0] - a[0], -(b[1] - a[1]));
   }
   set(d) {
     this.data = d;
@@ -247,7 +237,7 @@ export class Ordres {
     const z = clamp(Math.min(v.vw, v.vh) / (2 * h[2] + 500), v.fitZ() * 1.2, v.fitZ() * 3.2);
     v.moveCam(h[0], h[1], z, 2200);
   }
-  // pendant les ordres : les flèches de la manœuvre, au sol (lissées, projetées sur le relief), pointe à l'arrivée
+  // pendant les ordres : les flèches de la manœuvre, au sol (lissées), pointe à l'arrivée
   drawGround(ctx, time) {
     const v = this.v, arrows = this.data?.arrows;
     if (!this.on() || v.st?.phase !== 'deploiement' || !arrows) return;

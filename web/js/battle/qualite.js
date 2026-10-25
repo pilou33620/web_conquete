@@ -1,7 +1,8 @@
-// Vue tactique : réglage « Qualité graphique » des batailles en 3D (Basse, Moyenne, Haute, Ultra).
-// Chaque niveau fixe la finesse de l'image (densité de pixels, anticrénelage), le détail du sol, le zoom le plus
-// rapproché, le nombre de figurines et de fumées, la richesse du décor, les ombres, et la mémoire laissée aux caches
-// (Safari sur iPad ne donne qu'environ 384 Mo à l'ensemble des canevas d'une page).
+// Vue tactique : réglage « Qualité graphique » des batailles vues de dessus (Basse, Moyenne, Haute, Ultra).
+// Chaque niveau fixe la finesse de l'image (densité de pixels), le sol le plus fin et le zoom le plus rapproché, le
+// nombre de figures (au-delà, une figure compte plusieurs hommes), la fumée, le détail du décor, les ombres des troupes
+// et la mémoire laissée aux tuiles du sol et aux figures (Safari sur iPad ne donne qu'environ 384 Mo à l'ensemble des
+// canevas d'une page).
 // Au premier lancement, le niveau est choisi selon l'appareil, puis ajusté d'après les images par seconde
 // mesurées pendant la première bataille (on ne fait que descendre). Un choix fait à la main n'est plus touché.
 // Enregistré dans localStorage ('conquete.bataille.qualite' : « haute », ou « auto-haute » tant qu'il est automatique).
@@ -9,29 +10,23 @@
 export const QUALITES = ['basse', 'moyenne', 'haute', 'ultra'];
 export const QUALITE_LABEL = { basse: 'Basse', moyenne: 'Moyenne', haute: 'Haute', ultra: 'Ultra' };
 export const QUALITE_AIDE = {
-  basse: 'Pour les appareils anciens : image moins fine, peu de fumée, bois allégés, sans ombres.',
-  moyenne: 'Bon compromis pour les tablettes et téléphones modestes : ombres du décor, moins de figurines.',
-  haute: 'Écran Retina, sol détaillé, ombres des troupes (iPad récent).',
+  basse: 'Pour les appareils anciens : image moins fine, une figure pour plusieurs hommes, peu de fumée, décor allégé.',
+  moyenne: 'Bon compromis pour les tablettes et téléphones modestes : moins de figures, sans ombres des troupes.',
+  haute: 'Écran Retina, sol détaillé, un homme par figure, ombres des troupes (iPad récent).',
   ultra: 'Tout au maximum, pour les ordinateurs.',
 };
 const KEY = 'conquete.bataille.qualite';
 
-// dpr : densité maximale de l'image ; aa : anticrénelage (choisi à l'ouverture de la bataille) ; level : sol le plus
-// fin (pixels par mètre) ; maxZ : zoom le plus rapproché (pixels CSS par mètre) ; troupes : figurines au plus (au-delà,
-// chacune compte plusieurs hommes) ; puffs : fumées et poussières ; fx : richesse des effets et du décor (0 à 3 : bois
-// allégés, arbres plus simples, moins de fumée) ; ombres : 0 aucune, 1 le décor, 2 aussi les troupes, 3 plus fines ;
-// clouds : ombres des nuages ; epis : couches des cultures en relief près de la caméra (0 : peintes à plat) ; corps :
-// tués couchés en 3D au plus (au-delà, les plus anciens sont peints au sol) ;
-// textures : octets des motifs du sol ; sprites : octets des figurines des cartes d'unités ; post : après-rendu
-// (apres.js : 0 rendu direct, 1 étalonnage et vignettage, 2 aussi FXAA et halo, 3 aussi anticrénelage matériel et
-// profondeur de champ façon maquette) ; sols : sols photo (sols.js, relief.js : 1 une échelle en 512 px, 2 deux
-// échelles, 3 en 1024 px avec le pavage hexagonal) ; herbe : touffes d'herbe en relief (herbe.js : 0 aucune,
-// 2 jusqu'à 70 m, 3 jusqu'à 95 m de la vue)
+// dpr : densité maximale de l'image ; level : sol le plus fin (pixels par mètre des tuiles, sol2d.js et decor2d.js) ;
+// maxZ : zoom le plus rapproché (pixels CSS par mètre) ; troupes : figures au plus (au-delà, chacune compte plusieurs
+// hommes, troupes2d.js) ; puffs : fumées et poussières (effets.js) ; fx : richesse des effets et du décor (0 à 3 : bêtes
+// et villageois, fumées des cheminées, brume, pluie) ; ombres : 2 et plus, les ombres des troupes ; clouds : ombres des
+// nuages ; textures : octets des motifs du sol (les tuiles en prennent le double) ; sprites : octets des figures en cache
 export const PROFILS = {
-  basse: { corps: 800, dpr: 1, aa: false, level: 4, maxZ: 25, troupes: 3000, puffs: 520, fx: 0, ombres: 0, clouds: false, epis: 0, textures: 8e6, sprites: 6e6, post: 0, sols: 1, herbe: 0 },
-  moyenne: { corps: 1500, dpr: 1.5, aa: false, level: 8, maxZ: 32, troupes: 6000, puffs: 1100, fx: 1, ombres: 1, clouds: true, epis: 0, textures: 20e6, sprites: 12e6, post: 1, sols: 2, herbe: 0 },
-  haute: { corps: 2500, dpr: 2, aa: false, level: 16, maxZ: 40, troupes: 10000, puffs: 2000, fx: 2, ombres: 2, clouds: true, epis: 4, textures: 32e6, sprites: 24e6, post: 2, sols: 3, herbe: 2 },
-  ultra: { corps: 4000, dpr: 2.5, aa: true, level: 16, maxZ: 45, troupes: 20000, puffs: 3200, fx: 3, ombres: 3, clouds: true, epis: 8, textures: 48e6, sprites: 48e6, post: 3, sols: 3, herbe: 3 },
+  basse: { dpr: 1, level: 8, maxZ: 12, troupes: 3000, puffs: 520, fx: 0, ombres: 0, clouds: false, textures: 8e6, sprites: 6e6 },
+  moyenne: { dpr: 1.5, level: 8, maxZ: 16, troupes: 6000, puffs: 1100, fx: 1, ombres: 1, clouds: true, textures: 20e6, sprites: 12e6 },
+  haute: { dpr: 2, level: 16, maxZ: 24, troupes: 10000, puffs: 2000, fx: 2, ombres: 2, clouds: true, textures: 32e6, sprites: 24e6 },
+  ultra: { dpr: 2.5, level: 16, maxZ: 30, troupes: 20000, puffs: 3200, fx: 3, ombres: 3, clouds: true, textures: 48e6, sprites: 48e6 },
 };
 
 // appareil : iPad (y compris ceux qui se disent Macintosh), iPhone, Android, ordinateur
@@ -71,8 +66,6 @@ export function setQualite(q, auto = false) {
   for (const f of ecoutes) { try { f(courant); } catch (e) { console.error(e); } }
 }
 export function onQualite(f) { ecoutes.add(f); return () => ecoutes.delete(f); }
-// côté des photos des sols (px) pour un profil
-export const solPx = q => (q.sols ?? 3) >= 3 ? 1024 : 512;
 
 // Mesure des images par seconde pendant la bataille : sur 5 s de combat sans geste ni peinture du sol en
 // rafale, si la moitié des images dépasse 38 ms (moins de 26 images/s), on descend d'un niveau. Seulement tant
