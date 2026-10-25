@@ -104,12 +104,14 @@ test('crue et feux des Landes : les prés au bord du fleuve sous l’eau, la pin
   // la Garonne d'ouest en est à y = 20, une petite rivière à y = 5 ; des collines au nord-est
   for (let j = 0; j < 12; j++) for (let i = 40; i < W; i++) terrain[j * W + i] = TT.COLLINES;
   const T = new Terre({ W, H, terrain, m: { x_cote: 8, waters: [], rivers: [{ name: 'Garonne', rank: 1, pts: [[0, 20], [60, 20]] }, { name: 'Isle', rank: 2, pts: [[0, 5], [60, 5]] }] } });
-  const map = { nodes: [] }, st = { season: 'printemps', date: '15 avril 1790', year: 1790, weather: { interieur: { kind: 'soleil' }, cote: { kind: 'soleil' } }, nodes: [] };
+  const map = { nodes: [] }, st = { season: 'printemps', date: '15 mai 1790', year: 1790, weather: { interieur: { kind: 'soleil' }, cote: { kind: 'soleil' } }, nodes: [] };
   majAmbiance(map, st);
-  assert.equal(T.inonde(30, 20.3), false, 'au soleil, pas de crue');
+  assert.equal(T.inonde(30, 20.3), false, 'en mai, les eaux sont rentrées');
   const avant = cleTuiles();
   st.weather.interieur.kind = 'pluie';
-  assert.equal(majAmbiance(map, st), true, 'la pluie de printemps fait déborder les fleuves : tuiles repeintes');
+  assert.equal(majAmbiance(map, st), false, 'une averse ne repeint pas les tuiles');
+  st.date = '15 avril 1790';
+  assert.equal(majAmbiance(map, st), true, 'les hautes eaux d’avril font déborder les fleuves : tuiles repeintes');
   assert.notEqual(cleTuiles(), avant);
   let noyes = 0;
   for (let x = 1; x < 59; x += 0.5) { if (T.inonde(x, 20.4)) noyes++; assert.equal(T.inonde(x, 23.5), false, 'loin du fleuve, au sec'); assert.equal(T.inonde(x, 5.2), false, 'seulement la Garonne et la Dordogne'); }
@@ -117,7 +119,7 @@ test('crue et feux des Landes : les prés au bord du fleuve sous l’eau, la pin
   const n = 8, c = new Uint8ClampedArray(n * n * 4), tg = new Uint8Array(n * n);
   T.grille(Math.floor(30 / 0.05), Math.floor(20.1 / 0.05), n, 0.05, c, tg);
   assert.ok(tg.some(t => t === TT.EAU), 'ni parcelle ni arbre dans le pré noyé');
-  st.season = 'ete'; st.weather.interieur.kind = 'pluie'; majAmbiance(map, st);
+  st.season = 'ete'; st.date = '15 juillet 1790'; st.weather.interieur.kind = 'pluie'; majAmbiance(map, st);
   assert.equal(AMB.crue, false, 'l’été, la pluie ne fait pas de crue');
   st.flood = true; majAmbiance(map, st);
   assert.equal(AMB.crue, true, 'la crue de l’état (flood), si');

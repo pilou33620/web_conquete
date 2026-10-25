@@ -473,8 +473,8 @@ Le ciel (`ciel.js`) :
     crue du serveur ne ralentit que les bacs : couper les routes changerait la marche des armées) ;
   - **feux des Landes** (`feuxDe`) : le panache noir de loin, les flammes sur la lisière dès z 10, la lueur (`LUM`,
     aussi de jour).
-- Tuiles (`terre.js`, `ambiance.js`), dans `cleTuiles` : **crue** (`AMB.crue` : `flood` de l'état, ou printemps et
-  pluie ou orage sur la côte ou à l'intérieur) : les prés bas (altitude approchée < 0,11) à moins de 0,25 à 1,35 km de
+- Tuiles (`terre.js`, `ambiance.js`), dans `cleTuiles` : **crue** (`AMB.crue` : `flood` de l'état, ou les hautes eaux de
+  mars et avril ; pas la pluie du jour, qui repeindrait les tuiles à chaque averse) : les prés bas (altitude approchée < 0,11) à moins de 0,25 à 1,35 km de
   la Garonne et de la Dordogne (`Terre.CRUE`, distance au fleuve par case, `inonde`) sous une eau trouble, sans
   parcelles ni arbres ; **brûlis** (`feuDe`, `brule`, `FEU_K` = 7 km, `FEU_MOIS` juin à novembre) : un carré de 7 km
   sur sept a son feu de l'année, allumé en juin, juillet ou août, de 0,5 à 1,6 km de rayon, noir sans arbres jusqu'en

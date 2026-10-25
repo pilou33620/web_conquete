@@ -96,9 +96,9 @@ export class Travaux {
       const ns = st.nodes[n.id];
       if (ns.lv?.[0] === 'epidemie' && !ns.sg) r.cordons.push({ n, ns, R: null });   // (le rayon des murs, à la première vue : le choléra touche toutes les villes)
       if (ns.o !== me || ns.sg) continue;
-      for (const q of ns.q || []) if (q.kind === 'build' && (q.what === 'dev' || q.what === 'repar')) r.chantiers.push({ n, ns, k: q.what, p: clamp(1 - q.left / (q.total || 1), 0, 1), R: rayonMurs(mp, n, ns) });
+      for (const q of ns.q || []) if (q.kind === 'build' && (q.what === 'dev' || q.what === 'repar')) r.chantiers.push({ n, ns, k: q.what, p: clamp(1 - q.left / (q.total || 1), 0, 1), R: null });
       const sp = ns.sl?.find(x => x[0] === 'specialite')?.[1], k = PRODUIT[n.star?.[0]];
-      if (sp > 0 && k) r.produits.push({ n, ns, k, lvl: sp, R: rayonMurs(mp, n, ns) });
+      if (sp > 0 && k) r.produits.push({ n, ns, k, lvl: sp, R: null });   // (le rayon des murs, à la première vue)
     }
     // les voies ferrées en chantier (de tous les camps : la carte les montre) : la tête du chantier et le remblai devant
     const secs = mp.m?.rails?.sections;
@@ -204,7 +204,8 @@ export class Travaux {
     if (z < 40) return;
     // les chantiers des places du joueur
     for (const c of r.chantiers) {
-      const n = c.n; if (!G.dans(sc, n.x, n.y, c.R + 1)) continue;
+      const n = c.n; if (!G.dans(sc, n.x, n.y, 3)) continue;
+      c.R ??= rayonMurs(G.map, n, c.ns);
       if (c.k === 'dev') {
         // le faubourg qui s'agrandit, le long de la première route : six maisons de la porte vers la campagne
         const s = this.sortiesDe(n)[0]; if (!s) continue;
@@ -236,7 +237,8 @@ export class Travaux {
     }
     // les produits de la spécialité : sur le quai du port, sinon devant la porte ; les charrettes qui les emportent
     for (const P of r.produits) {
-      const n = P.n; if (!G.dans(sc, n.x, n.y, P.R + 1.5)) continue;
+      const n = P.n; if (!G.dans(sc, n.x, n.y, 4.5)) continue;
+      P.R ??= rayonMurs(G.map, n, P.ns);
       const s = this.sortiesDe(n)[1] || this.sortiesDe(n)[0], L = G.lieu(n, P.ns), q = L.port ? { x: L.port[0], y: L.port[1], a: 0 } : s ? surChemin(s.pts, P.R + 0.05) : null;
       if (!q) continue;
       if (P.k === 'betail') { for (let m = 0; m < 4 * P.lvl; m++) { const x = q.x + (m % 4 - 1.5) * 0.012, y = q.y + 0.03 + (m >> 2) * 0.012; if (G.dans(sc, x, y)) { G.figK(sc, g, x, y, m); vache(g, 0, 0, 0, m % 2 ? '#efe9dd' : '#c9a07a'); } } }

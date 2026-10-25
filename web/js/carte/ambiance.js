@@ -49,7 +49,7 @@ export function majAmbiance(map, st) {
   for (const z of Object.keys(AMB.meteo)) AMB.meteo[z] = st.weather?.[z]?.kind || 'soleil';
   const m = MOIS.findIndex(x => st.date?.includes(' ' + x + ' '));
   if (m >= 0) AMB.mois = m;
-  AMB.crue = !!st.flood || (AMB.saison === 'printemps' && ['cote', 'interieur'].some(z => AMB.meteo[z] === 'pluie' || AMB.meteo[z] === 'orage'));
+  AMB.crue = !!st.flood || AMB.mois === 2 || AMB.mois === 3;   // les hautes eaux de mars et avril, ou la crue du serveur (stable : les tuiles ne se repeignent pas à chaque averse)
   const R = { village: 3, fort: 3, ville: 4.5, capitale: 6 };
   AMB.disette = (map?.nodes || []).filter(n => { const ns = st.nodes?.[n.id]; return ns && (ns.lv?.[0] === 'disette' || (st.me?.famine && ns.o === st.me.code)); })
     .map(n => [n.x, n.y, R[n.type] || 3]);

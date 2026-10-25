@@ -10,6 +10,7 @@ import { Epoque, phylloxera, styleCarte, startTechs, startRails } from './epoque
 import { AMB, LUM, majAmbiance } from './carte/ambiance.js';
 import { Z, nuit } from './carte/ambiance.js';
 import { Guerre, rayonMurs } from './carte/guerre.js';
+import { Travaux } from './carte/travaux.js';
 import { interieurOuvert, majInterieur } from './carte/interieur.js';
 import { Ciel } from './carte/ciel.js';
 import * as ambiance from './carte/ambiance.js';
@@ -1930,7 +1931,7 @@ export class MapView {
     this.epoque.teinte(ctx);
     this.guerreDe().sol(ctx, performance.now() / 1000);
   }
-  guerreDe() { return this.guerre || (this.guerre = new Guerre(this)); }
+  guerreDe() { if (!this.guerre) { this.guerre = new Guerre(this); this.guerre.travaux = new Travaux(this.guerre); } return this.guerre; }
   cielDe() { return this.ciel || (this.ciel = new Ciel(this)); }
 
   nodeSize(n) {

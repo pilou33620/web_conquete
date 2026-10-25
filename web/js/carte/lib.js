@@ -807,6 +807,7 @@ function distPoly(pts, x, y) {
 }
 function longueur(pts) { let l = 0; for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return l; }
 function surChemin(pts, s) {
+  if (pts.length < 2) return { x: pts[0][0], y: pts[0][1], a: 0 };   // un seul point (armée arrêtée hors route)
   for (let i = 1; i < pts.length; i++) {
     const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], l = Math.hypot(x1 - x0, y1 - y0);
     if (s <= l || i === pts.length - 1) { const k = clamp(s / l, 0, 1); return { x: lerp(x0, x1, k), y: lerp(y0, y1, k), a: Math.atan2(y1 - y0, x1 - x0) }; }

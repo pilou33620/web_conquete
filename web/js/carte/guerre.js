@@ -7,7 +7,6 @@ import { C, E, T, RR, PG, TAU, SPR, toile, avant, bat, caisson, cavalier, cheval
 import { AMB, LUM, U, Z, bivouac, nuit } from './ambiance.js';
 import { S as SU, IC, carteDe, etatVille, planDe } from './villes.js';
 import { LARG_RIVIERE } from './terre.js';
-import { Travaux } from './travaux.js';
 
 export const VENT = [0.004, -0.002];   // km/s : le vent d'ouest emporte les fumées vers l'est
 const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -455,7 +454,7 @@ export class Guerre {
       const mien = a.o === st.me?.code && a.n == null, de = mien ? this.ravitDe(a) : null;
       list.push({ d, a, back, L: longueur(back), compo: c, marche, enRoute: a.st === 'move' || a.st === 'retreat', mien, de, coupe: mien && de == null, tr: trainardsDe(a, a.o === st.me?.code, mien && de == null) });
     }
-    for (const id of [...this.hist.keys()]) if (!seen.has(id)) { this.hist.delete(id); this.compos.delete(id); this.vu.delete(id); }   // disparue dans le brouillard : ses traces aussi
+    for (const id of [...this.hist.keys()]) if (!seen.has(id)) { this.hist.delete(id); this.compos.delete(id); this.vu.delete(id); this.fourr?.delete(id); }   // disparue dans le brouillard : ses traces aussi
     this.prep = { n: mp.frameNo, list };
     return list;
   }
@@ -836,7 +835,7 @@ export class Guerre {
     for (const b of st.battles) this.bataille(sc, g, b);
     this.pillages(sc, g, st);
     this.fetes(sc, g);
-    (this.travaux ||= new Travaux(this)).dessiner(sc, g);   // chantiers, produits, cordons, grands travaux, crue, feux (lot H)
+    this.travaux?.dessiner(sc, g);   // chantiers, produits, cordons, grands travaux, crue, feux (lot H)
     // les fumées
     const [wx, wy] = VENT, amort = Math.exp(-dt * 1.6);
     this.fx = this.fx.filter(f => (f.age += dt) < f.life);
@@ -981,7 +980,7 @@ export class Guerre {
           const p = surChemin(A.back, s0), sorte = k % 5, fa = p.a + Math.PI, nx = -Math.sin(fa), ny = Math.cos(fa);
           const off = sorte === 4 ? 0.04 + mod(t * 0.002 + h * 5, 0.3) : sorte === 3 ? 0.028 : (hash2(ih, k, 161) - 0.5) * 0.02, sg = hash2(ih, k, 162) < 0.5 ? -1 : 1;
           const x = p.x + nx * off * sg, y = p.y + ny * off * sg;
-          if (!this.dans(sc, x, y)) continue;
+          if (!this.dans(sc, x, y) || !this.visible(x, y)) continue;
           const q = sorte === 3 ? null : phase(pas * (sorte === 4 ? 0.9 : 0.5) + k), arme = sorte >= 3 ? 'aucun' : 'epaule';
           this.poser(sc, g, x, y, sorte === 4 ? fa + sg * Math.PI / 2 : sorte === 3 ? fa + h * 6 : fa, this.tampon(sc, `${Lt.cle}|tr|${q}|${arme}`, 5, 5, gg => fantassin(gg, Lt, { role: 'h' }, { legs: q, arme })));
         }
@@ -998,7 +997,7 @@ export class Guerre {
         if (this.dans(sc, fx, fy, 0.1)) { this.figK(sc, g, fx, fy, k); bat(g, FERME, 0, 0, 0, 2.2); this.figK(sc, g, fx + 0.06, fy + 0.035, 0); meule(g, 0.6); }
         const D = Math.hypot(fx - c.x, fy - c.y), s = mod(t * 0.004 + k * 0.37, 2 * D), retour = s > D, u = (retour ? 2 * D - s : s) / D;
         const px = lerp(c.x, fx, u), py = lerp(c.y, fy, u), ang = Math.atan2(fy - c.y, fx - c.x) + (retour ? Math.PI : 0);
-        if (!this.dans(sc, px, py, 0.06)) return;
+        if (!this.dans(sc, px, py, 0.06) || !this.visible(px, py)) return;
         if (retour) {
           for (let b = 0; b < 3; b++) { this.figK(sc, g, ...versMonde(px, py, ang, 7 + b * 2, (b - 1) * 3), ang); if (k % 2) { E(g, '#efeade', 0, 0, 1.9, 1.2); C(g, '#2c2a28', 2, 0, 0.6); } else vache(g, 0, 0, 0, b % 2 ? '#efe9dd' : '#c9a07a'); }
           if (k === 0) { this.figK(sc, g, ...versMonde(px, py, ang, -12, 0), ang); charrette(g, pas, false, 1); }

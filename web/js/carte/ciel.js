@@ -275,9 +275,9 @@ export class Ciel {
     const k = 'g' + n.id;
     let f = this.fenetres.get(k);
     if (!f || f.V !== p.V || f.r !== r) {
-      const pts = reverberes(p.V, n.x, n.y), a = new Path2D(), b = new Path2D();
+      const pts = f?.V === p.V ? f.pts : reverberes(p.V, n.x, n.y), a = new Path2D(), b = new Path2D();
       for (const [x, y] of pts) { a.moveTo(x + r, y); a.arc(x, y, r, 0, TAU); b.moveTo(x + r * 3, y); b.arc(x, y, r * 3, 0, TAU); }
-      f = { V: p.V, r, path: [a, b] }; this.fenetres.set(k, f);
+      f = { V: p.V, r, pts, path: [a, b] }; this.fenetres.set(k, f);
     }
     return f.path;
   }
