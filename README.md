@@ -435,7 +435,7 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   montre aussi un **petit plan de la position** (`web/js/plan.js`) : la vraie carte de la bataille, tournée pour que vos
   troupes soient en bas, vos régiments, et l'ennemi tel que vos éclaireurs le voient (sinon sa zone, hachurée).
   (Il n'y a plus de commandement régiment par régiment : on donne ses ordres, puis on regarde.)
-- **« Donner mes ordres »** (`game/tactics/orders.py`, `web/js/battle/ordres.js`) : le champ de bataille s'ouvre en 3D,
+- **« Donner mes ordres »** (`game/tactics/orders.py`, `web/js/battle/ordres.js`) : le champ de bataille s'ouvre
   **vu de dessus**, et une fenêtre propose vos ordres en quatre onglets. **Manœuvre** : l'objectif de la journée
   (battre son armée, la position clé, couper sa retraite, l'user), la manœuvre (en attaque : assaut frontal, ordre
   oblique avant 1789, percée au centre après 1789, enveloppement d'une aile, double enveloppement avec un général de
@@ -495,44 +495,35 @@ tirés au sort. La bataille se livre **sur ordres**, comme en campagne, puis « 
 ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
 
 #### Regarder la bataille
-- **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît **en 3D**,
-  la caméra tournée vers l'ennemi : relief en volume, sol peint comme un paysage (herbe aux nuances multiples, blé
-  doré mêlé de cultures vertes, chaumes et labours selon la saison, vignes en rangs, larges chemins de terre à
-  ornières, rivières avec berges et reflets) ; de près, le blé, les cultures, l'herbe des prés et des landes montent
-  en relief et ondulent au vent.
-  Arbres et bois aux couronnes touffues, fermes, villages, église et clocher, moulins, ponts, remparts et bastions,
-  tranchées, haies, murets et clôtures ; le soleil de l'heure porte leurs ombres, adoucies, et une lumière douce
-  éclaire le tout. Chaque régiment est fait de figurines 3D arrondies (un homme par figurine tant que la qualité
-  graphique le permet) en uniforme français de l'époque : justaucorps gris-blanc sous Louis XIV, habit bleu national
-  puis impérial, capote bleu foncé et pantalon garance en 1870, artillerie en bleu foncé, dragons en habit vert (de
-  1760 à 1860, la cavalerie compte dragons, chasseurs à cheval et hussards). Son camp se lit à ses revers,
-  son collet et ses parements, de loin à son plastron et à sa ceinture, et à ses drapeaux et fanions. Il se tient en
-  rangs serrés (trois rangs pour une ligne), avec porte-drapeau, tambours, officiers et colonel à cheval ; les
-  coiffures suivent l'époque (tricorne relevé, bicorne, shako, képi, bonnet à poil), buffleteries blanches,
-  havresac ; chaque homme a son ombre au sol. Dans un bois, la couronne des arbres s'efface au-dessus d'un régiment :
-  on voit ses hommes entre les troncs. Les hommes sont
-  **animés**, chacun avec son allure et son temps de retard : ils marchent au pas, mettent en joue l'un après
-  l'autre quand la salve roule le long du front (le premier rang à genoux), puis rechargent à la baguette ; quand la
-  formation change, chacun court à sa nouvelle place ; en mêlée, les premiers rangs avancent baïonnette en avant
-  vers l'ennemi le plus proche. Les cavaliers sont en selle, sabre au clair, au pas, au trot ou au galop ; au choc,
-  les chevaux du premier rang se cabrent et les cavaliers frappent. Les servants écouvillonnent, chargent, pointent
-  et mettent le boutefeu ; la pièce recule au départ du coup. Les tués tombent selon le coup (un boulet fauche une
-  file, les hommes sont projetés ; les chevaux s'abattent, leur cavalier à côté) et **restent au sol toute la
-  bataille** (jusqu'à un plafond selon la qualité, les plus anciens deviennent des taches au sol). Les troupes
-  **contournent les bâtiments** au lieu de les traverser. La fumée blanche des salves forme un banc le long de la
-  ligne, s'amasse et dérive avec le vent ; avec la poudre B (le fusil Lebel, et les pièces d'un camp qui a la
-  technologie), plus que l'éclair et un voile à peine visible. Les armes suivent l'époque et la génération de chaque
-  régiment : avant la baïonnette, un homme sur cinq porte la pique, au centre du bataillon (dressée, croisée à la
-  charge et en carré) ; chaque génération d'artillerie a sa pièce (long fût de bronze sur affût de bois, Gribeauval
-  vert olive, Valée et La Hitte à flèche, de Bange en acier, canon de 75 et son bouclier, dont seul le tube recule) ;
-  la mitrailleuse de Reffye crépite, un servant à la manivelle. Les porte-drapeau portent les **vrais drapeaux de
-  l'époque** : d'ordonnance aux couleurs de chaque régiment (jusqu'en 1790), modèles 1791, de l'an II, 1804 et 1812,
-  drapeau blanc fleurdelisé de la Restauration, tricolore au coq puis à l'aigle, « RF » ; avec le haut de hampe (fer
-  de lance, aigle, coq) et la cravate de leur temps. Tous les camps étant français, c'est le fanion au-dessus du
-  régiment qui dit à qui il est. Au-dessus de chaque régiment, un fanion à la manière d'Ultimate
-  General porte le pictogramme de son arme et son effectif (barré et pâli s'il est en déroute) ; le général a son
-  médaillon. Le temps, la saison et l'heure se voient : pluie, brouillard, neige, orage, ombres des nuages qui
-  passent, lumière dorée du matin, couchant puis nuit.
+- **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît **vu de
+  dessus, à plat**, dans le style de Champs de Plaine : parcelles striées (chaume, blé, labour, pré, colza, friche,
+  jachère) avec leurs tournières et leurs bottes, haies bocagères en boules, chemins de terre, **routes royales
+  empierrées** (ornières, fossés, bornes, rangs d'ormes), rues pavées en ville, rivières à ripisylve, collines lisibles
+  par un ombrage doux éclairé du nord-ouest ; saisons et neige. Le décor est de l'époque et de la région : église
+  romane, cathédrale gothique, église à dôme (après 1630), ferme à cour, longère, mas, colombages, hôtel particulier,
+  halle, moulins qui tournent, caserne, poudrière, gare et immeubles haussmanniens seulement après leur date ; toits
+  d'ardoise, de tuile plate, de tuile canal ou de chaume selon le département et le moteur des villes. Les villes ont
+  leurs îlots de maisons serrées le long des rues, leur grand-place, leur mur médiéval à tours rondes ou leur **tracé
+  bastionné** (bastions, courtines, demi-lunes, fossé, chemin couvert, glacis), leurs portes et leurs brèches. Les bois
+  sont des houppiers ronds et des sapins, qui s'ouvrent au-dessus d'un régiment pour laisser voir ses hommes ; des bêtes
+  paissent au pré et fuient les boulets, les villageois quittent les maisons, les cheminées fument. Un boulet crève un
+  toit, le feu prend (plus vite sur le chaume), gagne les maisons voisines et laisse des ruines qui couvent.
+  Chaque régiment est fait de **soldats dessinés vus d'en haut, un par homme** tant que la qualité graphique le permet,
+  en uniforme français de l'époque (justaucorps gris-blanc sous Louis XIV, habit bleu national puis impérial, capote
+  et pantalon garance en 1870, dragons en vert de 1760 à 1860) ; les coiffures suivent l'époque (tricorne, bicorne,
+  shako, képi, bonnet à poil). Il se tient dans l'emprise de sa formation : ligne sur deux ou trois rangs, colonne,
+  carré à quatre faces, tirailleurs par deux, avec porte-drapeau, officier et tambour ; chaque homme a son ombre.
+  Les hommes sont **animés** : marche, charge à la baïonnette, feu (en joue, recul, rechargement à la baguette),
+  mêlée, déroute, repos ; la cavalerie au pas, au trot, au galop, sabre au clair ; l'artillerie recule au coup, ses
+  servants écouvillonnent, avec avant-train et chevaux (sauf sur un rempart) ; mitrailleuses, général et état-major,
+  caissons. De loin, un régiment devient un bloc aux couleurs de son camp, à la forme de sa formation. Les tués
+  restent au sol toute la bataille (un boulet fauche une file). La fumée des salves forme des taches pâles qui
+  dérivent au vent, les éclairs partent des bouches des fusils et des pièces, les boulets volent en cloche avec leur
+  ombre, ricochent et projettent la terre ; la poussière suit les charges ; les incendies jettent une fumée noire et
+  des braises ; avec la poudre B, plus que l'éclair et un voile à peine visible. Au-dessus de chaque régiment, un
+  fanion à la manière d'Ultimate General porte le pictogramme de son arme et son effectif (barré et pâli s'il est en
+  déroute) ; le général a son médaillon. Le temps, la saison et l'heure se voient : pluie, brouillard, neige, orage,
+  ombres des nuages qui passent, lumière dorée du matin, couchant puis nuit.
 - **Le déploiement.** Vos officiers placent vos troupes selon vos ordres, dans votre moitié du champ de bataille (sauf
   une bande neutre de 400 m au milieu) ; devant une place, l'assaillant reste à 450 m de l'enceinte, le défenseur tient
   la place et 250 m autour. L'ennemi se déploie plus en retrait : les armées ne commencent pas au contact. Une place
@@ -552,20 +543,16 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   entières (à 50 m, elle tue plus que deux bataillons qui font feu). Aborder une batterie de face coûte très cher ;
   prenez-la de flanc, ou faites-la taire d'abord.
 - **La vue.** Pendant le film, la caméra suit l'action (« Caméra : vue d'ensemble » la fige au-dessus du champ) ; on
-  peut toujours la prendre : glisser pour se déplacer, pincer pour zoomer, **tourner deux doigts pour pivoter** ; à la
-  souris, molette pour zoomer, **clic droit glissé pour pivoter** ; flèches du clavier. La **mini-carte** (en bas à
+  peut toujours la prendre : glisser pour se déplacer (avec élan), pincer pour zoomer ; à la souris, molette pour
+  zoomer ; flèches du clavier. La vue est toujours de dessus, le nord en haut : elle ne pivote pas. La **mini-carte** (en bas à
   droite) montre la part de terrain vue et se touche pour s'y rendre.
 - **Lire la bataille**, comme dans Ultimate General : le régiment choisi est cerné d'un anneau lumineux ; entre deux
   régiments ennemis au contact, une **ligne de front** ondule au sol, à la couleur de chaque camp de son côté ; le
   bouton **« Ligne de vue »** de la fiche d'un régiment assombrit tout ce qu'il ne voit pas (crêtes, bois,
-  bâti et vergers, la même règle que le moteur, haies mises à part). La fumée des canons, plus grise, monte au-dessus
-  de celle des fusils. De près, les fantassins ont le corps modelé des personnages de Quaternius (CC0), habillé de
-  l'uniforme de l'époque ; les revers portent leurs boutons dorés et les visages leurs yeux et sourcils ;
-  baïonnettes, cuivres et bronze des pièces renvoient le soleil ; les haies du bocage sont des
-  rangs de feuillage touffu, d'où dépassent des arbres têtards ; les creux du terrain sont plus verts et plus sombres.
-  Au fil de la bataille, la boue monte sur les guêtres et les culottes ; sous la pluie, les habits foncent et la boue
-  foulée luit, ses flaques reflétant le ciel. Au fil des pertes, des débris jonchent le sol (chapeaux, fusils, havresacs, roues brisées près des pièces), et la
-  boue laissée par les troupes est gardée avec la bataille : une bataille rechargée retrouve ses traces.
+  bâti et vergers, la même règle que le moteur, haies mises à part). Au fil des pertes, des débris jonchent le sol
+  (chapeaux, fusils, havresacs, roues brisées près des pièces) et les trous d'obus restent ; la boue laissée par les
+  troupes (plus sous la cavalerie et l'artillerie, deux fois plus sous la pluie) est gardée avec la bataille : une
+  bataille rechargée retrouve ses traces, ses toits crevés, ses feux et ses ruines.
   Le décor suit l'époque et les technologies des deux camps : poteaux télégraphiques et voie ferrée le long de la
   grand-route, cheminées d'usine à l'horizon, ambulances à l'arrière (à croix rouge après la convention de Genève),
   ballon captif au-dessus de l'état-major des aérostiers, parapet de terre devant l'infanterie retranchée. Les
@@ -577,44 +564,14 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
 - **La fin.** Le récapitulatif donne victoire ou défaite, pertes des deux camps, prisonniers, expérience, et les
   pertes de chaque régiment ; « Retour à la carte » ramène la campagne, que vous relancez quand vous voulez.
 - **Qualité graphique** (menu ☰, section Affichage, ou fenêtre du journal de bataille) : **Basse** (appareils
-  anciens : image moins fine, 3 000 figurines, peu de fumée, bois allégés, sans ombres), **Moyenne** (tablettes et
-  téléphones modestes : ombres du décor, 6 000 figurines), **Haute** (iPad récent : écran Retina, sol détaillé
-  jusqu'à 16 pixels par mètre, 10 000 figurines, ombres des troupes), **Ultra** (ordinateurs : 20 000 figurines, plus
-  de fumée, ombres plus fines). Au-delà, chaque figurine compte plusieurs hommes. En Haute et en Ultra, les cultures
-  proches de la caméra sont en relief ; de loin, les figurines passent à une version plus simple (on ne voit pas la
-  différence, l'appareil la sent), et elles grandissent (jusqu'à trois fois) en se faisant moins nombreuses, à la
-  manière d'Ultimate General, pour que les rangs restent lisibles ; la fumée grandit avec elles. Les tués restent
-  au sol jusqu'à 800 (Basse), 1 500, 2 500 ou 4 000 (Ultra). À partir de Moyenne, l'image passe par un
-  **après-rendu** à la manière d'Ultimate General : courbe filmique ACES, étalonnage propre à l'heure et au temps
-  (matin doré et brumeux, midi chaud aux verts tirés vers le jaune, couchant orangé, nuit bleue, pluie grise),
-  vignettage, et la **brume** : un voile qui pâlit les lointains (plus dense au ras du sol, éclairci du côté du
-  soleil), la brume basse des vallées au petit matin, épaisse par temps de brouillard. Au-dessus de l'horizon, un
-  **ciel** : bleu au zénith, clair à l'horizon, halo du soleil, couchant coloré et bancs de nuages qui défilent au
-  vent (leurs ombres passent sur le champ). L'**eau** des rivières et des étangs est vert-de-gris, ridée par le vent,
-  avec le reflet du ciel qui grandit vers l'horizon, l'éclat du soleil et une écume claire aux berges ; en Haute s'y ajoutent l'anticrénelage FXAA et un léger halo des plein-soleil ; en Ultra,
-  l'anticrénelage matériel et, à ras des troupes, une profondeur de champ « maquette » (le haut et le bas de l'image
-  se floutent). Le sol garde sa peinture (couleurs de la saison et des parcelles) mais prend la **matière de huit
-  sols photographiés** (pré, herbe sèche, lande, terre, chemin, route empierrée, sable, roche ; CC0, ambientCG) :
-  touffes, mottes et cailloux qui accrochent la lumière, mêlés par leur hauteur à la frontière de deux sols, la terre
-  puis la roche sur les pentes ; photos de 512 px en Basse et Moyenne, de 1024 px avec un pavage aléatoire qui en
-  cache la répétition en Haute et Ultra. Le **relief se lit** : le soleil l'emporte sur la lumière du ciel par temps
-  clair, les pentes accrochent la lumière, les fonds de vallée sont plus sombres, et quand le soleil est bas les
-  collines portent leur ombre, comme les nuages, sur le sol, les troupes et les arbres. Les **bois** sont des masses
-  sombres : sous-bois assombri, couronnes qui se touchent, grappes de feuilles, nuances d'un bout à l'autre du bois,
-  soleil qui traverse le feuillage à contre-jour, arbres qui se balancent au vent. Les **chevaux** sont de vrais modèles
-  animés (Quaternius, CC0) : au repos ils broutent ou s'ébrouent, ils vont au pas et au galop, tombent quand ils sont
-  tués ; de loin, une version simplifiée. En Haute et Ultra, les prés et les
-  landes ont de l'**herbe en relief** autour de la vue (des touffes de brins qui prennent la couleur du sol, ondulent
-  au vent et se couchent là où les troupes passent). Le **sol garde la trace** de la
-  bataille : là où passent les troupes (la cavalerie et l'artillerie plus que l'infanterie, deux fois plus sous la
-  pluie) et autour des trous d'obus, il tourne à la boue, les épis se couchent et la neige s'efface (la trace n'est
-  pas enregistrée : une bataille rechargée repart d'un sol neuf). La caméra regarde le champ en biais (50° de loin),
-  et l'interface reprend l'allure d'Ultimate General : panneaux d'ardoise, bandeau fin avec l'année et l'heure, cartes
-  d'unités en portrait sous des onglets à la couleur du camp, mini-carte encadrée. Au premier lancement, elle est
-  choisie d'après l'appareil, puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par
-  seconde) ; un choix fait à la main est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de
-  suite, sans quitter la bataille (l'anticrénelage, à la bataille suivante). Les batailles demandent **WebGL 2**
-  (iPadOS 15 et plus, tout navigateur récent) ; sans lui, un message le dit et vos officiers mènent la bataille.
+  anciens : image moins fine, 3 000 figures, peu de fumée, décor allégé, sans ombres des troupes), **Moyenne**
+  (tablettes et téléphones modestes : 6 000 figures), **Haute** (iPad récent : écran Retina, sol détaillé jusqu'à
+  16 pixels par mètre, 10 000 figures, ombres des troupes), **Ultra** (ordinateurs : 20 000 figures, plus de fumée,
+  tout le décor). Au-delà, chaque figure compte plusieurs hommes. Chaque niveau fixe aussi le zoom le plus rapproché
+  et la mémoire laissée aux tuiles du sol et aux figures. Au premier lancement, elle est choisie d'après l'appareil,
+  puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par seconde) ; un choix fait à la main
+  est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de suite, sans quitter la bataille. Le
+  dessin est fait sur un seul canevas 2D (ni WebGL ni Three.js) : tout navigateur récent l'affiche.
 - Clavier : flèches ou ZQSD pour la vue, + et − zoom, Échap referme la fiche.
 
 ### Voies ferrées et trains
@@ -813,31 +770,21 @@ game/tactics/        batailles sur ordres : carte de bataille (terrain.py), unit
 web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/peintre.js (worker qui peint les tuiles de la carte), js/dev/banc.js (banc de la carte sur la machine du joueur : adresse terminée par #banc), js/lot.js (lot de dessins : les petites figures de la carte dessinées d'un coup), js/ambient.js (animations
                      de la carte), js/towns.js (dessin des villes), js/ui.js, js/plan.js (plan de la position dans la fenêtre de bataille),
                      js/tuto.js (tutoriel), js/main.js
-web/js/battle/       vue de bataille en 3D (Three.js) : bataille.js (entrée et sortie depuis la campagne),
-                     vue.js (scène WebGL et calque 2D, boucle, interrogation du serveur, tracés au sol),
-                     camera.js (caméra orbitale, passage écran ↔ terrain), relief.js (relief, sol peint de
-                     plus en plus fin autour de la caméra, tués au sol, ciel, brume, ombres), terrain.js
-                     (peinture du sol, altitudes, données du décor), textures.js (motifs du sol), decor.js
-                     (arbres, bâti, remparts, haies en volume), troupes.js (figurines 3D animées sur la
-                     carte graphique, dispositions des rangs, tués au sol), gestes.js (le geste de chaque homme,
-                     sa place, les tués, l'échelle de loin : logique pure, testée),
-                     fanions.js (fanions et médaillons),
-                     unites.js (figurines peintes des cartes d'unités), effets.js (fumées, tirs, météo),
-                     heures.js (table des heures : lumière, brume et étalonnage de 5 h à 22 h ; logique pure,
-                     testée), horizon.js (normales fines, occlusion et horizons du relief, calculés une fois
-                     par bataille ; logique pure, testée), apres.js (après-rendu : brume, ACES, LUT d'étalonnage, vignettage, FXAA, halo,
-                     maquette), ciel.js (le ciel : dégradé, soleil, nuages), visibilite.js (ligne de vue ; logique pure, testée), epoque3d.js (le décor de l'époque), herbe.js (touffes d'herbe en relief), pietinement.js (la boue laissée par les troupes), sols.js (sols photo : chargement des huit sols), qualite.js (qualité
-                     graphique), commandes.js (caméra au doigt et au clavier), ordres.js (fenêtre des ordres, flèches,
-                     film : étiquettes, repères, vitesses),
-                     interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils
-                     communs), css/bataille.css ;
-                     dev/cuire.mjs : précalcule les animations sur le squelette de nos figurines (à relancer
-                     seulement si on change les gestes) ; dev/cheval.mjs : précalcule le cheval de Quaternius
-                     (node web/js/battle/dev/cheval.mjs Horse.gltf) ; dev/anims.html : page d'essai des animations
-web/anims/           animations précalculées des soldats (soldat.bin, soldat.json), cheval animé de Quaternius
-                     (cheval.bin, cheval.json : maillage et gestes, CC0) et leur licence
-web/textures/sols/   les huit sols photo (couleur, normales, hauteur ; 6,4 Mo) et leur licence (CC0, ambientCG)
-web/vendor/three/    Three.js r186 (licence MIT), copié tel quel : le jeu marche hors ligne
+web/js/battle/       vue de bataille de dessus, sur un canevas 2D (SPEC-2D.md) : bataille.js (entrée et sortie depuis
+                     la campagne), vue.js (calques dans l'ordre, boucle, interrogation du serveur, tracés au sol),
+                     camera.js (caméra verticale, passage écran ↔ terrain), terrain.js (peinture du sol,
+                     altitudes, données du décor), textures.js (motifs du sol), sol2d.js (le sol en tuiles par
+                     niveau de zoom, tués et cratères peints dedans), pietinement.js (la boue laissée par les
+                     troupes), decor2d.js et decor2d-dessin.js (bâtiments d'époque, enceintes, ponts, bois, feu
+                     et ruines, vie des champs), troupes2d.js (les soldats vus de dessus, sprites mis en cache,
+                     dispositions des rangs, tués, bouches à feu), effets.js (fumées, tirs, boulets, météo, lumière
+                     de l'heure), heures.js (table des heures ; logique pure, testée), fanions.js (fanions et
+                     médaillons), unites.js (figurines peintes des cartes d'unités), visibilite.js (ligne de vue ;
+                     logique pure, testée), qualite.js (qualité graphique), commandes.js (caméra au doigt et au
+                     clavier), ordres.js (fenêtre des ordres, flèches, film : étiquettes, repères, vitesses),
+                     interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils communs),
+                     css/bataille.css ; dev/maquette-2d.html : la maquette de référence du rendu (page autonome)
+web/vendor/three/    Three.js r186 (licence MIT), copié tel quel pour la carte de campagne : le jeu marche hors ligne
 saves/               parties sauvegardées (JSON)
 tests/               bancs d'essai (voir « Tests » ci-dessous)
 ```
@@ -860,9 +807,11 @@ node --test tests/*.mjs                         # l'interface seule
 | `tests/test_cartes.py` | cartes de bataille : même graine, même carte ; plus de parcelles en quadrillage (moins de 30 % de bords en longues droites) ; vergers près des maisons, jamais sur le glacis ; moins d'une demi-seconde par carte |
 | `tests/test_serveur.py` | un vrai serveur HTTP sur un port libre : requêtes mal formées, fichiers hors de `web/`, ordres pendant le tour des IA, sauvegardes (dossier temporaire, les vraies ne sont pas touchées) |
 | `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, fiche du régiment (camouflage compris), fenêtre de bataille à deux choix, barre du tour, tutoriel et bulles de bataille |
-| `tests/camera.test.mjs` | caméra 3D des batailles : allers-retours écran ↔ terrain à 1 m et 1 pixel près sur une colline, à plusieurs caps et zooms ; bornes |
-| `tests/troupes.test.mjs` | dispositions des figurines : rangs de la ligne, plafond par régiment, carré à quatre faces, colonne, tirailleurs, déroute |
-| `tests/gestes.test.mjs` | animations des batailles : geste de chaque homme (salve qui roule, recharge, servants, mêlée, charge), allure propre à chacun, place gardée d'une formation à l'autre, tués (ligne d'un boulet, plafond des corps), contour des bâtiments, échelle des figurines de loin |
+| `tests/camera.test.mjs` | caméra des batailles vues de dessus : allers-retours écran ↔ terrain exacts, centre et sens des axes, point gardé sous le doigt au zoom, bornes |
+| `tests/troupes2d.test.mjs` | soldats vus de dessus : rangs de la ligne, plafond par régiment et figure pour plusieurs hommes, carré à quatre faces, colonne, tirailleurs, déroute, cavalerie, batterie, général, chariot, bouches à feu, tués dans l'emprise, tenues de l'époque, disposition stable d'une image à l'autre |
+| `tests/sol2d.test.mjs` | sol en tuiles : niveaux de zoom, mémoire bornée, repli sur une tuile plus grossière, tués et cratères peints dans les seules tuiles touchées, tuiles repeintes après une brèche, piétinement relu au bon endroit |
+| `tests/decor2d.test.mjs` | décor : bâtiments déduits des cases sans données du moteur, gare et immeubles après leur date, toits selon la contrée, touché / en feu / ruine, feuillage ouvert au-dessus des régiments, mur médiéval, tracé bastionné, brèche refaite, bêtes et villageois qui fuient |
+| `tests/effets.test.mjs` | effets : chaque genre d'effet du serveur se dessine, éclairs et fumée aux bouches des figures (ou au front), plafonds de particules, trous gardés, poudre sans fumée, lumière de chaque heure dans des bornes sûres |
 | `tests/visibilite.test.mjs` | ligne de vue du navigateur : rase campagne vue, crête et bois épais qui bouchent, lisière qui voit dehors, la même dans les deux sens, champ de vision borné |
 | `tests/decouvertes.test.mjs` | découvertes : chaque technologie a sa famille de vignette animée |
 | `tests/epoque.test.mjs` | la carte selon l'époque : drapeau de chaque période, chapeaux des passants, phylloxéra de 1875 aux plants greffés |
@@ -870,13 +819,10 @@ node --test tests/*.mjs                         # l'interface seule
 | `tests/secours.test.mjs` | tuiles de secours de la carte : un niveau de zoom auquel il manque une tuile est sauté en entier (plus de bandes noires) |
 | `tests/frontieres.test.mjs` | frontières de la carte de campagne : les segments des carrés marchants raboutés en lignes continues, sans perdre ni doubler un point, puis découpés en morceaux qui se recouvrent |
 | `tests/portraits.test.mjs` | portraits des régiments : la même figure en bataille et en campagne (piquiers avant la baïonnette, pièce de son époque, cavalier pour le général) |
-| `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse, étalonnage neutre sans effet et toujours dans [0, 1], LUT complète, verts tirés vers le jaune à midi, nuit bleue, pluie éteinte ; zénith bleu par beau temps et pâle sous les nuages, brume des vallées seulement le matin, voile épaissi par le brouillard |
-| `tests/horizon.test.mjs` | relief et lumière : horizon plat en plaine, haut du côté d'une colline et bas de l'autre, occlusion au pied d'une colline, normales qui penchent vers l'extérieur |
+| `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse |
 | `tests/pietinement.test.mjs` | piétinement : rien au repos ni sous un général, un tiers de boue au passage d'un régiment de ligne, plus sous la cavalerie et l'artillerie, double sous la pluie, mêlée sur place |
-| `tests/cheval.test.mjs` | cheval précalculé : gestes attendus par le shader, quatre os et des poids qui font 1 par sommet, maillage léger, dos à hauteur de selle |
-| `tests/herbe.test.mjs` | herbe en relief : rien en Basse et Moyenne, au plus 60 000 touffes en Haute et 120 000 en Ultra |
-| `tests/sols.test.mjs` | sols photo : huit sols, parts de chaque sorte de terrain et de chaque culture (elles font 1, 0 sous l'eau), images et licence présentes, après-rendu et sols qui montent avec la qualité |
-| `tests/modeles.test.mjs` | modèles 3D des figurines : os de l'animation, pieds au sol, hauteur, tournés vers l'avant, formes arrondies, version de loin (mêmes os, même hauteur, un tiers des sommets), choix de la version selon la taille à l'écran |
+| `tests/test_degats.py` | dégâts aux bâtiments : un boulet sur une maison, le feu qui gagne puis laisse des ruines, occupants chassés, couvert selon l'état, vue à travers une ruine, même graine même incendie, `bati` depuis `since` et carte complète, sauvegarde ; canons du défenseur sur l'enceinte et qui tirent de là |
+| `tests/test_villes.py` | villes et places : tailles du village à la capitale, nature et toit de chaque bâtiment, place bastionnée, murs qui ferment la ville, pas de maison sur une rue, brèche du siège, même graine même ville, temps de génération |
 
 **Essayer une nouvelle fonctionnalité sans jouer.** `tests/fabrique.py` fabrique une situation en une ligne : une
 partie (`partie('64', '1870')`), un ou plusieurs mois joués (`jouer_mois(g, 3)`), une bataille déjà engagée avec les
@@ -885,10 +831,6 @@ secondes de bataille (`avancer(tb, 60)`). Les batailles sont tirées avec une gr
 bataille. Les essais n'écrivent pas dans `logs/batailles.jsonl` (`WEB_CONQUETE_NOLOG=1`).
 
 ## Sources des données
-Animations des soldats : [Universal Animation Library](https://quaternius.com/) 1 et 2 de Quaternius (CC0, domaine
-public), retouchées et précalculées sur nos figurines (`web/anims/LICENCE.txt`). Corps des fantassins de près :
-[Universal Base Characters](https://quaternius.itch.io/universal-base-characters) de Quaternius (CC0), allégé et
-posé sur nos os par `web/js/battle/dev/corps.mjs`.
 Contours des départements et des communes : [france-geojson](https://github.com/gregoiredavid/france-geojson) (données IGN, Licence Ouverte).
 Population des communes : INSEE via [@etalab/decoupage-administratif](https://github.com/etalab/decoupage-administratif).
 Fleuves et lacs : [Natural Earth](https://www.naturalearthdata.com/) (domaine public), complétés à la main pour l'Isle, la Vézère,

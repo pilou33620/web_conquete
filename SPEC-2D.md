@@ -116,3 +116,36 @@ garde ses quatre niveaux (densité de pixels, hommes par figure, fumée, détail
   dessus ; une escarmouche et un siège de place forte ont été joués jusqu'au bout.
 - `node --test tests/*.mjs` et `python3 tests/lancer.py` passent (échecs connus de `tests/resume.sh` exceptés).
 - Le README dit ce qui a changé (section des batailles, tableau des tests).
+
+## 9. Livré (25/10/2026)
+
+Tout ce qui précède est livré : `vue.js` n'a plus de WebGL, un seul canevas porte les calques dans l'ordre du § 2,
+la caméra est celle du § 1 (`camera.js`, banc `tests/camera.test.mjs`), les modules du § 3 sont branchés, le moteur
+envoie `bati`, `rempart`, `town`, `bastions`, `demi_lunes`, `batis` et les tours, portes et fossés des enceintes, et
+tout le § 7 est retiré (avec leurs bancs ; `heures.js` reste, réduit à la table que lit `effets.js`). Une escarmouche
+et l'assaut d'une place bastionnée (Pau) ont été joués jusqu'au bout dans Chromium, sans erreur dans la console.
+
+Écarts et décisions de l'intégration :
+- **Ponts** : un seul dessin, celui du décor (`Decor2D`, `objetsFixes`) ; `terrain.paint` ne les peint plus. Les
+  haies restent au sol.
+- **Toits et modèles** : `buildings[]` porte déjà `kind` et `toit` ; `Decor2D` prend le toit du moteur (sinon celui de
+  la contrée) et ne promeut plus une église en cathédrale quand la carte vient du nouveau moteur (`batis` présent : le
+  moteur nomme sa cathédrale). `batis[]` lui-même n'est pas relu. Les tours, portes et fossés de `walls[i]` et les
+  `demi_lunes` sont lus quand ils sont donnés (sinon les replis du module).
+- **Fanions** : la hampe part du bord nord de l'emprise du régiment (au plus 40 px au-dessus de son centre) : il n'y
+  a plus de « au-dessus des têtes ». `view.toScreenH(u)` le donne.
+- **Gestes** : le clic droit ne pivote plus (il inspecte, comme le gauche) ; l'élan compte comme un geste pour la
+  mesure des images par seconde.
+- **Ligne de vue** : un voile case par case (20 m), adouci par l'agrandissement, posé après le décor du dessus et avant
+  les effets.
+- **Boue** : seulement pendant le combat ; un déplacement plus rapide que 15 m par seconde de bataille est un saut
+  (redéploiement, ennemi revu ailleurs) : pas de glissade ni de traînée.
+- **Qualité** : zoom le plus rapproché 12, 16, 24, 30 px/m ; sol au plus 8 px/m en Basse et Moyenne, 16 en Haute et
+  Ultra ; plus d'anticrénelage, d'après-rendu, de sols photo, d'herbe ni de plafond de corps.
+- **Sans WebGL** : `bataille.js` ne demande plus WebGL 2, la bataille s'ouvre partout.
+- `fx.ciel(...).ombre` n'est pas passé aux troupes : leurs ombres gardent la lumière fixe du nord-ouest.
+
+Reste à surveiller : les temps d'image n'ont été mesurés qu'en Chromium sans carte graphique (1280 × 800, densité 1 :
+11 à 16 ms par image en combat de près, 13 à 22 ms en vue d'ensemble) ; à fort zoom, une tuile du sol neuve coûte un
+à-coup (p90 jusqu'à 50 ms) ; quand des hommes sont sous les bois, les houppiers passent par une copie plein écran
+(5 à 7 ms).
