@@ -11,26 +11,20 @@ import { AMB, LUM, majAmbiance } from './carte/ambiance.js';
 import { Z, nuit } from './carte/ambiance.js';
 import { Guerre, rayonMurs } from './carte/guerre.js';
 import { Ciel } from './carte/ciel.js';
+import * as ambiance from './carte/ambiance.js';
+import { terre, EAU, SABLE } from './carte/terre.js';
 const TILE = 256;
 function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
 // niveaux de détail des tuiles (pixels par km) : une échelle fine, pour qu'une tuile ne soit jamais beaucoup
-// réduite à l'écran (sinon il en faut des centaines pour couvrir un grand écran d'iPad)
-const LEVELS = [2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64];
+// réduite à l'écran (sinon il en faut des centaines pour couvrir un grand écran d'iPad) ; jusqu'au zoom le plus près
+const LEVELS = [2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256];
 const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
-// teintes du terrain, comme la carte de campagne d'Ultimate General : herbe olive et dorée, sous-bois sombre,
-// landes ocre ; l'hiver, du givre en plaine et de la neige en montagne ; l'automne, des prés roussis
+// teintes du terrain (seules leurs clés servent encore : la carte vue du ciel est peinte par carte/terre.js)
 const TCOL = {
   0: [40, 108, 118], 1: [72, 140, 146], 2: [156, 156, 76], 3: [78, 94, 44], 4: [160, 146, 88], 5: [104, 124, 82],
   6: [150, 148, 76], 7: [134, 128, 100], 8: [226, 228, 224], 9: [216, 200, 148], 10: [150, 144, 72],
 };
-const GIVRE = [198, 200, 190], NEIGE = [238, 240, 242], ROUX = [176, 140, 72];
-function teinte(t, saison) {
-  const c = TCOL[t];
-  if (saison === 'hiver') return t === T.MONTAGNE || t === T.HAUTE ? mix(c, NEIGE, t === T.HAUTE ? 1 : 0.75) : t === T.FORET ? mix(c, [70, 76, 62], 0.5) : mix(c, GIVRE, 0.55);
-  if (saison === 'automne') return t === T.FORET ? mix(c, [96, 82, 40], 0.4) : t <= T.EAU ? c : mix(c, ROUX, 0.28);
-  return c;
-}
 // les cartes d'époque (SPEC-SUITE H3) : papier, lavis et encre. Cassini sobre (bois verts, le reste au papier) ;
 // l'état-major aux couleurs de ses minutes au 1/40 000 (bois vert-jaune, vignes lie-de-vin, eaux bleues)
 const PAPIER = {
@@ -338,9 +332,11 @@ export class MapView {
   // tout ce que le style peint dans les couches et les tuiles
   repaint() { this.paintOcean(); this.paintLand(); this.invalidateTiles(); this.vig = null; }
 
-  // couleur des terres, ombrées par un soleil du nord-ouest (repeinte quand la saison change)
+  // couleur des terres (repeinte quand la saison ou la neige tombée change) : vue du ciel, le fond de la maquette
+  // (carte/terre.js) ; d'époque, le papier ombré par un soleil du nord-ouest
   paintLand() {
     const P = PAPIER[this.era = this.styleEra()];
+    if (!P) { terre(this).fond(this.landCanvas, RL); return; }
     const W = this.W, H = this.H, hf = this.hgt, R = RL, WR = W * R, HR = H * R;
     const g = this.landCanvas.getContext('2d'), img = g.createImageData(WR, HR), data = img.data;
     const hAt = (x, y) => {
@@ -349,9 +345,9 @@ export class MapView {
       return a + (b - a) * fx + (d - a) * fy + (a - b - d + e) * fx * fy;
     };
     // (les cartes d'époque ignorent les saisons : la gravure est la même en janvier et en août)
-    const cols = Object.keys(TCOL).map(t => P ? P.t[t] || P.papier : teinte(+t, this.season));
+    const cols = Object.keys(TCOL).map(t => P.t[t] || P.papier);
     const lx = -0.55, ly = -0.62, lz = 0.56, flat = lz / Math.hypot(lx, ly, lz), K = 3.2;
-    const sand = P ? P.t[T.DUNES] : this.season === 'hiver' ? [214, 208, 186] : [222, 206, 156];
+    const sand = P.t[T.DUNES];
     for (let sy = 0; sy < HR; sy++) {
       const y = (sy + 0.5) / R, j = Math.min(H - 1, y | 0);
       for (let sx = 0; sx < WR; sx++) {
@@ -359,24 +355,13 @@ export class MapView {
         let col;
         if (t === T.OCEAN) col = this.oceanDist[c] <= 1 ? sand : cols[T.OCEAN];
         else if (t === T.EAU) col = cols[T.EAU];
-        else if (P) {
+        else {
           // papier taché par endroits ; les versants à l'ombre lavés de bistre (les hachures sont dans les tuiles)
           const n = vnoise(x / 9, y / 9, 3) * 0.6 + vnoise(x / 3, y / 3, 4) * 0.4;
           col = mix(cols[t], n > 0.5 ? [250, 246, 230] : [196, 180, 146], Math.abs(n - 0.5) * 0.3);
           const gx = (hAt(x + 0.5, y) - hAt(x - 0.5, y)) * K, gy = (hAt(x, y + 0.5) - hAt(x, y - 0.5)) * K;
           const s = clamp((-gx * lx - gy * ly + lz) / Math.hypot(gx, gy, 1) / Math.hypot(lx, ly, lz) / flat, 0.5, 1.2);
           if (s < 1) col = mix(col, P.hach, (1 - s) * 0.6);
-        }
-        else {
-          col = cols[t];
-          const n = vnoise(x / 9, y / 9, 3) * 0.6 + vnoise(x / 3, y / 3, 4) * 0.4, k = (n - 0.5) * 0.2;
-          col = k > 0 ? mix(col, [236, 226, 170], k) : mix(col, [34, 44, 14], -k);
-          const h = hAt(x, y);
-          // coteaux plus secs et dorés, fonds humides plus verts
-          if (t !== T.FORET && t < T.MONTAGNE) col = h > 0.3 ? mix(col, [184, 164, 98], Math.min(0.3, (h - 0.3) * 0.6)) : mix(col, [96, 128, 60], Math.min(0.18, (0.3 - h) * 0.5));
-          const gx = (hAt(x + 0.5, y) - hAt(x - 0.5, y)) * K, gy = (hAt(x, y + 0.5) - hAt(x, y - 0.5)) * K;
-          const s = clamp((-gx * lx - gy * ly + lz) / Math.hypot(gx, gy, 1) / Math.hypot(lx, ly, lz) / flat, 0.5, 1.32);
-          col = s < 1 ? mix(col, [22, 30, 30], (1 - s) * 0.95) : mix(col, [255, 246, 214], (s - 1) * 0.55);
         }
         const o = (sy * WR + sx) * 4;
         data[o] = col[0]; data[o + 1] = col[1]; data[o + 2] = col[2]; data[o + 3] = 255;
@@ -616,7 +601,7 @@ export class MapView {
     this.moveTo(cx, cy, z, instant);
   }
   moveTo(x, y, z, instant = false, dur = 650) {
-    z = clamp(z ?? this.cam.z, this.minZoom(), 26);
+    z = clamp(z ?? this.cam.z, this.minZoom(), ambiance.Z.MAX);
     if (instant) { this.cam = { x, y, z }; this.camAnim = null; return; }
     this.camAnim = { from: { ...this.cam }, to: { x, y, z }, t0: performance.now(), dur };
   }
@@ -626,7 +611,7 @@ export class MapView {
   toWorld(sx, sy) { return [(sx - this.vw / 2) / this.cam.z + this.cam.x, (sy - this.vh / 2) / this.cam.z + this.cam.y]; }
   clampCam() {
     const c = this.cam;
-    c.z = clamp(c.z, this.minZoom(), 26);
+    c.z = clamp(c.z, this.minZoom(), ambiance.Z.MAX);
     const mx = this.vw / 2 / c.z, my = this.vh / 2 / c.z;
     c.x = clamp(c.x, Math.min(mx - 30, this.W / 2), Math.max(this.W - mx + 30, this.W / 2));
     c.y = clamp(c.y, Math.min(my - 40, this.H / 2), Math.max(this.H - my + 30, this.H / 2));
@@ -705,7 +690,7 @@ export class MapView {
         const d = Math.hypot(a.x - b.x, a.y - b.y);
         const mid = [(a.x + b.x) / 2, (a.y + b.y) / 2];
         if (Math.abs(d - g.d0) > 12 || Math.hypot(mid[0] - g.mid0[0], mid[1] - g.mid0[1]) > 12) g.moved = true;
-        this.cam.z = clamp(g.z0 * d / g.d0, this.minZoom(), 26);
+        this.cam.z = clamp(g.z0 * d / g.d0, this.minZoom(), ambiance.Z.MAX);
         this.cam.x = g.w[0] - (mid[0] - this.vw / 2) / this.cam.z;
         this.cam.y = g.w[1] - (mid[1] - this.vh / 2) / this.cam.z;
         this.clampCam();
@@ -817,7 +802,7 @@ export class MapView {
       const [sx, sy] = pos(e);
       const w = this.toWorld(sx, sy);
       const f = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0016));
-      this.cam.z = clamp(this.cam.z * f, this.minZoom(), 26);
+      this.cam.z = clamp(this.cam.z * f, this.minZoom(), ambiance.Z.MAX);
       this.cam.x = w[0] - (sx - this.vw / 2) / this.cam.z;
       this.cam.y = w[1] - (sy - this.vh / 2) / this.cam.z;
       this.clampCam();
@@ -830,7 +815,7 @@ export class MapView {
 
   zoomAt(sx, sy, f) {
     const w = this.toWorld(sx, sy);
-    const z = clamp(this.cam.z * f, this.minZoom(), 26);
+    const z = clamp(this.cam.z * f, this.minZoom(), ambiance.Z.MAX);
     this.moveTo(w[0] - (sx - this.vw / 2) / z, w[1] - (sy - this.vh / 2) / z, z);
   }
 
@@ -1212,7 +1197,7 @@ export class MapView {
     if (typeof Worker !== 'function' || typeof OffscreenCanvas !== 'function') return;
     const init = {
       W: this.W, H: this.H, terrain: this.terrain, dept: this.dept, deptCodes: this.deptCodes, hgt: this.hgt, fieldAngle: this.fieldAngle,
-      depts: this.depts, m: { waters: this.m.waters, rivers: this.m.rivers, y_spain: this.m.y_spain, ways: this.m.ways },
+      depts: this.depts, m: { waters: this.m.waters, rivers: this.m.rivers, y_spain: this.m.y_spain, ways: this.m.ways, x_cote: this.m.x_cote, y_mont: this.m.y_mont },
       nodes: this.nodes.map(n => ({ x: n.x, y: n.y })), edges: this.edges.map(({ path, ...e }) => e), colors: this.colors,
     };
     this.asked = new Set();
@@ -1253,7 +1238,7 @@ export class MapView {
       era: this.era, season: this.season, tileGen: gen, dpr: this.dpr, cellFac: this.cellFac, facCodes: this.facCodes,
       frontiers: this.frontiers.map(f => ({ code: f.code, lines: f.lines })), year: this.epoque.year,
       marks: Object.fromEntries(Object.entries(this.epoque.marks).map(([k, v]) => [k, [...v]])),
-      oceanCanvas, landCanvas, grain, fillCanvas,
+      oceanCanvas, landCanvas, grain, fillCanvas, amb: { ...AMB, meteo: { ...AMB.meteo } },   // (la saison et la neige des tuiles, carte/terre.js)
     };
     for (const w of this.painters) w.postMessage({ state });
   }
@@ -1304,59 +1289,49 @@ export class MapView {
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = 'high';
     const P = PAPIER[this.era];
-    g.fillStyle = P ? rgb(P.mer) : '#1f5c6c';
+    g.fillStyle = P ? rgb(P.mer) : EAU;
     g.fillRect(0, 0, TILE, TILE);
-    this.drawSub(g, this.oceanCanvas, x0, y0, span);
     const W = (px) => g.setTransform(L, 0, 0, L, -x0 * L, -y0 * L);
-    W();
     const i0 = Math.max(0, Math.floor(x0) - 2), i1 = Math.min(this.W - 1, Math.ceil(x0 + span) + 2);
     const j0 = Math.max(0, Math.floor(y0) - 2), j1 = Math.min(this.H - 1, Math.ceil(y0 + span) + 2);
-    // vagues
-    if (L >= 4 && !P) {
-      g.strokeStyle = 'rgba(214,240,232,0.22)';
-      g.lineWidth = Math.max(0.07, 0.8 / L);
-      g.beginPath();
-      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-        const c = j * this.W + i;
-        if (this.terrain[c] !== T.OCEAN) continue;
-        if (hash(i, j, 31) < 0.22) {
-          const x = i + hash(i, j, 32), y = j + hash(i, j, 33);
-          g.moveTo(x - 0.35, y); g.quadraticCurveTo(x - 0.17, y - 0.16, x, y); g.quadraticCurveTo(x + 0.17, y - 0.16, x + 0.35, y);
-        }
-      }
-      g.stroke();
-    }
-    // côte : un liseré d'écume, puis la tranche de terre brune sous le rivage (les terres ont de l'épaisseur)
-    const bank = Math.max(0.07, 2.4 / L);
-    g.lineJoin = 'round';
     if (P) {
+      this.drawSub(g, this.oceanCanvas, x0, y0, span);
+      W();
       // carte gravée : les côtes ourlées de lignes d'eau, de plus en plus espacées vers le large
+      g.lineJoin = 'round';
       const line = Math.max(0.04, 0.95 / L), step = Math.max(0.1, 2.6 / L);
       for (let k = 5; k >= 1; k--) {
         const r = step * k * (1 + k * 0.3);
         g.strokeStyle = rgb(P.ligne, 0.3 + 0.12 * (5 - k)); g.lineWidth = 2 * r + line; g.stroke(this.landPath);
         g.strokeStyle = rgb(P.mer); g.lineWidth = 2 * r - line; g.stroke(this.landPath);
       }
+      // terres
+      g.save();
+      g.clip(this.landPath, 'nonzero');
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      this.drawSub(g, this.landCanvas, x0, y0, span, RL);
+      g.globalCompositeOperation = 'multiply';
+      g.globalAlpha = 0.4;
+      const pat = g.createPattern(this.grain, 'repeat');
+      g.fillStyle = pat;
+      g.fillRect(0, 0, TILE, TILE);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'source-over';
+      W();
+      if (L >= 4) this.decorate(g, L, i0, i1, j0, j1);
     } else {
-    g.strokeStyle = 'rgba(226,244,232,0.5)'; g.lineWidth = bank * 2.6; g.stroke(this.landPath);
-    g.save(); g.translate(bank * 0.25, bank);
-    g.fillStyle = '#4b3b27'; g.fill(this.landPath, 'nonzero');
-    g.restore();
+      // vue du ciel (carte/terre.js) : de loin le fond de toute la carte, puis une grille propre à la tuile, et de
+      // près les parcelles, les bois, les marais salants et les vagues
+      if (L < 6) { this.drawSub(g, this.landCanvas, x0, y0, span, RL); W(); }
+      else {
+        W();
+        const tr = terre(this), at = (i, j) => this.epoque.at(clamp(i, 0, this.W - 1), clamp(j, 0, this.H - 1));
+        if (L < 16) tr.moyen(g, L, x0, y0, span);
+        else tr.detail(g, L, x0, y0, span, at, (x, y) => phylloxera(this.epoque.year, at(x | 0, y | 0)));
+      }
+      g.save();
+      g.clip(this.landPath, 'nonzero');
     }
-    // terres
-    g.save();
-    g.clip(this.landPath, 'nonzero');
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    this.drawSub(g, this.landCanvas, x0, y0, span, RL);
-    g.globalCompositeOperation = 'multiply';
-    g.globalAlpha = P ? 0.4 : 0.3;
-    const pat = g.createPattern(this.grain, 'repeat');
-    g.fillStyle = pat;
-    g.fillRect(0, 0, TILE, TILE);
-    g.globalAlpha = 1;
-    g.globalCompositeOperation = 'source-over';
-    W();
-    if (L >= 4) this.decorate(g, L, i0, i1, j0, j1);
     // hors du jeu : voile sombre suivant le tracé exact des départements (et non les cases d'1 km)
     g.fillStyle = P ? 'rgba(110,96,74,0.3)' : 'rgba(30,32,30,0.5)';
     g.fill(this.outPath, 'evenodd');
@@ -1369,31 +1344,32 @@ export class MapView {
       g.fillStyle = rgb(P.t[T.EAU]); g.fill(this.waterPath);
       g.strokeStyle = rgb(P.ligne, 0.9); g.lineWidth = Math.max(0.04, 0.9 / L); g.stroke(this.waterPath);
     } else {
-    g.strokeStyle = '#4b3b27';
-    g.lineWidth = Math.max(0.12, 2.6 / L);
-    g.stroke(this.waterPath);
-    g.fillStyle = '#4f9a98';
-    g.fill(this.waterPath);
-    g.strokeStyle = 'rgba(226,244,232,0.35)';
-    g.lineWidth = Math.max(0.05, 0.9 / L);
-    g.stroke(this.waterPath);
+      g.lineJoin = 'round';
+      g.fillStyle = EAU; g.fill(this.waterPath);
+      g.strokeStyle = SABLE; g.lineWidth = Math.max(0.08, 1.5 / L); g.stroke(this.waterPath);
     }
     // rivières
     g.lineCap = 'round'; g.lineJoin = 'round';
-    for (const r of this.riverPaths) {
-      const w = r.rank === 1 ? 0.75 : r.rank === 2 ? 0.42 : 0.26;
-      const mn = r.rank === 1 ? 3.2 : r.rank === 2 ? 2.1 : 1.3;
-      const ww = Math.max(w, mn / L);
+    // (vue du ciel : en morceaux avec leur emprise, comme les frontières ; les tirets fins d'une rivière entière
+    // coûtaient plus que la tuile)
+    const proche = c => c.box[0] < x0 + span + 1 && c.box[2] > x0 - 1 && c.box[1] < y0 + span + 1 && c.box[3] > y0 - 1;
+    const morceaux = parts => { const q = new Path2D(); for (const c of parts) if (proche(c)) q.addPath(c.p); return q; };
+    if (!P) this.riverChunks ||= this.m.rivers.map(r => ({ rank: r.rank, parts: lineChunks([r.pts]) }));
+    for (const r of P ? this.riverPaths : this.riverChunks) {
       if (P) {
+        const w = r.rank === 1 ? 0.75 : r.rank === 2 ? 0.42 : 0.26;
+        const mn = r.rank === 1 ? 3.2 : r.rank === 2 ? 2.1 : 1.3;
+        const ww = Math.max(w, mn / L);
         // à l'encre bleue : les fleuves en deux traits, les rivières d'un seul
         g.strokeStyle = rgb(P.ligne, 0.95); g.lineWidth = r.rank === 1 ? ww * 0.8 + 1.4 / L : ww * 0.45; g.stroke(r.p);
         if (r.rank === 1) { g.strokeStyle = rgb(P.t[T.EAU]); g.lineWidth = ww * 0.8; g.stroke(r.p); }
         continue;
       }
-      // berges brunes, eau vert-de-gris, reflet clair au milieu
-      g.strokeStyle = 'rgba(70,58,36,0.85)'; g.lineWidth = ww + 2 / L; g.stroke(r.p);
-      g.strokeStyle = '#6aa3a0'; g.lineWidth = ww; g.stroke(r.p);
-      if (L >= 8) { g.strokeStyle = 'rgba(190,226,218,0.55)'; g.lineWidth = ww * 0.3; g.stroke(r.p); }
+      // eau bleue entre des berges vertes, comme la maquette ; de près un reflet clair au fil de l'eau
+      const w = Math.max([0, 0.32, 0.16, 0.09, 0.06][r.rank] || 0.05, 1.3 / L), rp = morceaux(r.parts);
+      g.strokeStyle = '#4b7438'; g.lineWidth = w + Math.max(0.06, 2 / L); g.stroke(rp);
+      g.strokeStyle = '#4a78b4'; g.lineWidth = w; g.stroke(rp);
+      if (L >= 48) { g.setLineDash([2.5 / L, 11 / L, 1.2 / L, 9 / L]); g.strokeStyle = 'rgba(160,195,235,.45)'; g.lineWidth = 0.9 / L; g.stroke(rp); g.setLineDash([]); }
     }
     // voies navigables (fleuves à gabares) et route du cabotage
     for (const w of this.wayPaths) {
@@ -1407,7 +1383,7 @@ export class MapView {
       } else {
         if (L < 4) continue;
         g.strokeStyle = P ? rgb(P.ligne, 0.7) : 'rgba(232,244,255,0.75)';
-        g.lineWidth = Math.max(0.08, 0.9 / L);
+        g.lineWidth = P ? Math.max(0.08, 0.9 / L) : Math.min(0.06, Math.max(0.03, 0.9 / L));
         const d = Math.max(0.5, 4 / L);
         g.setLineDash([d * 1.4, d]);
       }
@@ -1416,11 +1392,14 @@ export class MapView {
     g.setLineDash([]);
     // limites des départements
     g.save();
-    g.strokeStyle = P ? rgb(P.encre, 0.6) : 'rgba(62,44,24,0.55)';
-    g.lineWidth = Math.max(0.16, 1.3 / L);
-    const dl = Math.max(0.8, 6 / L);
-    g.setLineDash(P ? [dl, dl * 0.35, dl * 0.12, dl * 0.35] : [dl, dl * 0.7]);   // (trait-point des limites gravées)
-    for (const p of Object.values(this.deptPaths)) g.stroke(p);
+    if (P) {
+      g.strokeStyle = rgb(P.encre, 0.6);
+      g.lineWidth = Math.max(0.16, 1.3 / L);
+      const dl = Math.max(0.8, 6 / L);
+      g.setLineDash([dl, dl * 0.35, dl * 0.12, dl * 0.35]);   // (trait-point des limites gravées)
+    } else { g.strokeStyle = 'rgba(70,50,30,0.55)'; g.lineWidth = 1.6 / L; g.setLineDash([4 / L, 3 / L]); }
+    if (P) for (const p of Object.values(this.deptPaths)) g.stroke(p);
+    else g.stroke(morceaux(this.deptChunks ||= lineChunks(Object.values(this.depts).filter(d => d.playable).flatMap(d => d.rings.map(r => [...r, r[0]])))));
     g.restore();
     // routes
     this.drawRoads(g, L, x0, y0, span);
@@ -1430,16 +1409,18 @@ export class MapView {
     W();
     const z = L * 0.88 / this.dpr;   // (le zoom moyen auquel s'affiche ce niveau : voir level)
     g.lineCap = 'round'; g.lineJoin = 'round'; g.setLineDash([]);
-    const m = Math.max(1.4, 11 / z), bx0 = x0 - m, by0 = y0 - m, bx1 = x0 + span + m, by1 = y0 + span + m;
+    // (au-delà du zoom 30, les traits gardent leur largeur à l'écran au lieu de grossir avec la carte ; la carte
+    // d'époque reste telle qu'elle était jusqu'au niveau 64)
+    const k = Math.min(1, (P ? 57 : 30) / z), m = Math.max(1.4 * k, 11 / z), bx0 = x0 - m, by0 = y0 - m, bx1 = x0 + span + m, by1 = y0 + span + m;
     for (const fr of this.frontiers) {
       const path = new Path2D();
       for (const c of fr.parts) if (c.box[0] < bx1 && c.box[2] > bx0 && c.box[1] < by1 && c.box[3] > by0) path.addPath(c.p);
       const col = this.colors[fr.code];
       g.strokeStyle = col;
-      g.globalAlpha = 0.16; g.lineWidth = Math.max(1.4, 11 / z); g.stroke(path);
-      g.globalAlpha = 0.35; g.lineWidth = Math.max(0.7, 5.5 / z); g.stroke(path);
-      g.globalAlpha = 0.95; g.lineWidth = Math.max(0.25, 2.4 / z); g.stroke(path);
-      g.strokeStyle = lighten(col, 0.6); g.globalAlpha = 0.7; g.lineWidth = Math.max(0.08, 0.8 / z); g.stroke(path);
+      g.globalAlpha = 0.16; g.lineWidth = Math.max(1.4 * k, 11 / z); g.stroke(path);
+      g.globalAlpha = 0.35; g.lineWidth = Math.max(0.7 * k, 5.5 / z); g.stroke(path);
+      g.globalAlpha = 0.95; g.lineWidth = Math.max(0.25 * k, 2.4 / z); g.stroke(path);
+      g.strokeStyle = lighten(col, 0.6); g.globalAlpha = 0.7; g.lineWidth = Math.max(0.08 * k, 0.8 / z); g.stroke(path);
       g.globalAlpha = 1;
     }
     g.restore();
@@ -1451,13 +1432,17 @@ export class MapView {
     const vis = ({ box: b }) => b[2] > x0 - 1 && b[0] < x0 + span + 1 && b[3] > y0 - 1 && b[1] < y0 + span + 1;
     const es = this.edges.filter(e => !e.water && vis(e)), P = PAPIER[this.era];
     g.lineCap = 'round'; g.lineJoin = 'round';
+    // vue du ciel : routes empierrées (carte/terre.js), les royales bordées d'arbres de près
+    const larg = royal => P ? Math.max(royal ? 0.34 : 0.2, (royal ? 2.1 : 1.2) / L) : royal ? Math.max(0.07, 2.6 / L) : Math.max(0.04, 1.4 / L);
+    if (!P && L >= 32) terre(this).arbresRoyaux(g, es.filter(e => e.royal && !e.ferry).map(e => e.pts), larg(true));
     for (const pass of [0, 1]) {
       for (const e of es) {
-        const royal = e.royal;
-        let w = royal ? 0.34 : 0.2;
-        w = Math.max(w, (royal ? 2.1 : 1.2) / L);
-        if (pass === 0) { g.strokeStyle = P ? rgb(P.encre, 0.85) : 'rgba(74,60,36,0.6)'; g.lineWidth = w + 1.2 / L; }
-        else { g.strokeStyle = P ? (royal && this.era === 'etatmajor' ? '#dcae6a' : rgb(P.papier)) : royal ? '#e8d8a8' : '#d6c497'; g.lineWidth = w; }
+        const royal = e.royal, w = larg(royal);
+        if (P) {
+          if (pass === 0) { g.strokeStyle = rgb(P.encre, 0.85); g.lineWidth = w + 1.2 / L; }
+          else { g.strokeStyle = royal && this.era === 'etatmajor' ? '#dcae6a' : rgb(P.papier); g.lineWidth = w; }
+        } else if (pass === 0) { g.strokeStyle = royal ? '#8f7a55' : '#a8946a'; g.lineWidth = w + Math.max(0.02, 1 / L); }
+        else { g.strokeStyle = royal ? '#d9c79c' : '#cdb98a'; g.lineWidth = w; }
         g.globalAlpha = royal || L >= 8 ? 1 : 0.6;
         if (e.ferry) { g.setLineDash([w * 2, w * 1.6]); } else g.setLineDash([]);
         g.stroke(e.path);
@@ -1468,13 +1453,19 @@ export class MapView {
     // ponts et bacs
     for (const e of es) {
       if (e.bx == null) continue;
-      const len = Math.max(e.rrank === 1 ? 1.2 : 0.8, 7 / L), wid = Math.max(0.5, 3.2 / L);
+      let len = Math.max(e.rrank === 1 ? 1.2 : 0.8, 7 / L), wid = Math.max(0.5, 3.2 / L);
+      // (vue du ciel : un pont de pierre à la mesure de la rivière, plus fine que sur l'ancienne carte)
+      if (!P) { len = Math.max(([0, 0.32, 0.16, 0.09, 0.06][e.rrank] || 0.05) + 0.14, 7 / L); wid = Math.max(larg(e.royal) * 1.5, 3.2 / L); }
       g.save();
       g.translate(e.bx, e.by);
       g.rotate(e.bang);
       if (e.ferry) {
         g.fillStyle = '#6b4a2e';
         g.beginPath(); g.ellipse(0, 0, len * 0.45, wid * 0.4, 0, 0, Math.PI * 2); g.fill();
+      } else if (!P) {
+        g.fillStyle = 'rgba(20,32,12,0.42)'; g.fillRect(-len / 2 + wid * 0.12, -wid / 2 + wid * 0.2, len, wid);
+        g.fillStyle = '#8f876f'; g.fillRect(-len / 2, -wid / 2, len, wid);
+        g.fillStyle = '#c9bc9c'; g.fillRect(-len / 2, -wid * 0.32, len, wid * 0.64);
       } else {
         g.fillStyle = '#4a3320';
         g.fillRect(-len / 2 - 0.05, -wid / 2 - 0.08, len + 0.1, wid + 0.16);
@@ -1491,18 +1482,15 @@ export class MapView {
     }
   }
 
+  // le décor gravé des cartes d'époque (style « époque » seulement ; la vue du ciel est peinte par carte/terre.js)
   decorate(g, L, i0, i1, j0, j1) {
     const W = this.W, P = PAPIER[this.era], hach = new Path2D(), hf = this.hgt;
     const big = L >= 8;
-    const trees = { sh: new Path2D(), c: [new Path2D(), new Path2D(), new Path2D(), new Path2D()], lit: new Path2D(), hi: new Path2D() };
+    const trees = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
     const pines = new Path2D();
     const shrubs = [new Path2D(), new Path2D()];
     const pools = new Path2D();
     const reeds = new Path2D();
-    const dunes = new Path2D();
-    const hillL = new Path2D(), hillD = new Path2D();
-    const peaks = [];
-    const fields = [];
     const circle = (p, x, y, r) => { p.moveTo(x + r, y); p.arc(x, y, r, 0, Math.PI * 2); };
     const treeSc = L >= 16 ? 1 : L >= 8 ? 1.25 : 1.9;
     for (let j = j0; j <= j1; j++) {
@@ -1511,7 +1499,7 @@ export class MapView {
         const t = this.terrain[c];
         if (t <= T.EAU) continue;
         const h = (k) => hash(i, j, k);
-        if (P && i > 0 && j > 0 && i < W - 1 && j < this.H - 1) {
+        if (i > 0 && j > 0 && i < W - 1 && j < this.H - 1) {
           // hachures : de courts traits dans le sens de la pente, d'autant plus serrés que le versant est raide
           const gx = (hf[c + 1] - hf[c - 1]) * 0.5, gy = (hf[c + W] - hf[c - W]) * 0.5, m = Math.hypot(gx, gy);
           const n = Math.min(big ? 9 : 5, Math.floor((m - 0.03) * (big ? 70 : 40) + h(199)));   // (rien sur les plaines : pente < 0,03)
@@ -1524,25 +1512,17 @@ export class MapView {
           }
         }
         if (t === T.FORET) {
-          // une futaie dense de houppiers ronds : ombre portée au sud-est, côté éclairé au nord-ouest
           const n = L >= 16 ? 7 : L >= 8 ? 5 : 3;
           for (let k = 0; k < n; k++) {
             const x = i + h(k * 3 + 1), y = j + h(k * 3 + 2), r = (0.22 + h(k * 3 + 3) * 0.14) * treeSc;
-            trees.sh.moveTo(x + r * 0.5 + r, y + r * 0.55); trees.sh.ellipse(x + r * 0.5, y + r * 0.55, r, r * 0.7, 0, 0, Math.PI * 2);
             const v = h(k + 40);
-            circle(trees.c[v < 0.06 ? 3 : (v * 3) | 0], x, y, r);
-            circle(trees.lit, x - r * 0.26, y - r * 0.28, r * 0.62);
-            if (big) circle(trees.hi, x - r * 0.4, y - r * 0.44, r * 0.26);
+            circle(trees[v < 0.06 ? 3 : (v * 3) | 0], x, y, r);
           }
         } else if (t === T.LANDE) {
           // (epoque.js) les semis de pins, puis la loi de 1857, font de la lande rase une forêt de pins
           const mk = this.epoque.at(i, j), np = mk?.has('landes1857') ? 4 : mk?.has('pins') ? 2 : 1, pp = mk?.has('landes1857') ? 0.95 : mk?.has('pins') ? 0.7 : 0.35;
           if (big && np === 1) for (let k = 0; k < 4; k++) circle(shrubs[k & 1], i + h(k + 1), j + h(k + 6), 0.09 + h(k + 11) * 0.05);
-          for (let k = 0; k < np; k++) if (h(20 + k * 5) < pp) {
-            const x = i + h(21 + k * 5), y = j + h(22 + k * 5), r = 0.22 * treeSc;
-            trees.sh.moveTo(x + r * 1.4, y + r * 0.5); trees.sh.ellipse(x + r * 0.4, y + r * 0.5, r, r * 0.6, 0, 0, Math.PI * 2);
-            circle(pines, x, y, r);
-          }
+          for (let k = 0; k < np; k++) if (h(20 + k * 5) < pp) circle(pines, i + h(21 + k * 5), j + h(22 + k * 5), 0.22 * treeSc);
         } else if (t === T.MARAIS) {
           if (h(1) < (this.epoque.at(i, j)?.has('drainage') ? 0.2 : 0.6)) {   // drainés, les marais n'ont plus que quelques mares
             const x = i + h(2), y = j + h(3);
@@ -1552,100 +1532,22 @@ export class MapView {
             const x = i + h(k + 10), y = j + h(k + 14);
             reeds.moveTo(x, y); reeds.lineTo(x - 0.04, y - 0.22); reeds.moveTo(x + 0.06, y); reeds.lineTo(x + 0.1, y - 0.2);
           }
-        } else if (t === T.COLLINES) {
-          if (!P && h(1) < 0.32) {
-            const x = i + h(2), y = j + h(3), r = 0.6 + h(4) * 0.4;
-            hillL.moveTo(x - r, y); hillL.quadraticCurveTo(x - r * 0.5, y - r * 0.75, x, y - r * 0.55);
-            hillD.moveTo(x, y - r * 0.55); hillD.quadraticCurveTo(x + r * 0.5, y - r * 0.4, x + r, y);
-          }
-        } else if (t === T.MONTAGNE || t === T.HAUTE) {
-          if (!P && h(1) < (t === T.HAUTE ? 0.9 : 0.62)) peaks.push([i + h(2), j + h(3) + 0.4, (t === T.HAUTE ? 1.25 : 0.85) + h(4) * 0.55, t === T.HAUTE]);
-        } else if (t === T.DUNES) {
-          if (h(1) < 0.7) {
-            const x = i + h(2) * 0.6, y = j + h(3);
-            dunes.moveTo(x, y); dunes.quadraticCurveTo(x + 0.2, y - 0.18, x + 0.4, y); dunes.quadraticCurveTo(x + 0.6, y + 0.18, x + 0.8, y);
-          }
         }
-        if ((t === T.PLAINE || t === T.COLLINES) && this.fieldAngle[c] > -50 && L >= 8 && !P) {
-          const n = 2;
-          for (let k = 0; k < n; k++) {
-            if (h(60 + k) < 0.25) continue;
-            // (epoque.js) maïs de Chalosse et du Béarn, prairies et cultures variées de l'assolement
-            const mk = this.epoque.at(i, j), dc = this.deptCodes[this.dept[c] - 1];
-            const extra = mk?.has('mais') && (dc === '40' || dc === '64') && h(72 + k) < 0.5 ? 5 : mk?.has('assolement') && h(73 + k) < 0.35 ? 6 + ((h(74 + k) * 2) | 0) : -1;
-            fields.push([i + h(61 + k * 4), j + h(62 + k * 4), 0.45 + h(63 + k * 4) * 0.35, 0.3 + h(64 + k * 4) * 0.25,
-                         this.fieldAngle[c], extra >= 0 ? extra : (h(70 + k) * 5) | 0]);
-          }
-        } else if (t === T.PLAINE && h(50) < 0.05) {
-          const x = i + h(51), y = j + h(52), r = 0.2 * treeSc;
-          trees.sh.moveTo(x + r * 1.4, y + r * 0.5); trees.sh.ellipse(x + r * 0.4, y + r * 0.5, r, r * 0.6, 0, 0, Math.PI * 2);
-          circle(trees.c[1], x, y, r);
-        }
+        if (t === T.PLAINE && h(50) < 0.05) circle(trees[1], i + h(51), j + h(52), 0.2 * treeSc);
       }
-    }
-    // parcelles
-    const fcol = this.season === 'hiver' ? ['#b9b39c', '#a89c80', '#c4c2b4', '#9c8a6c', '#cfcbbd']
-      : ['#cfb563', '#bb9e55', '#9ea24f', '#ad8656', '#d8c47c', '#a9b84e', '#8ea65a', '#c7a46c'];   // (5 : maïs ; 6, 7 : luzerne, betterave)
-    for (const [x, y, w, hgt, ang, ci] of fields) {
-      g.save();
-      g.translate(x, y); g.rotate(ang);
-      g.fillStyle = fcol[ci];
-      g.fillRect(-w / 2, -hgt / 2, w, hgt);
-      g.strokeStyle = 'rgba(70,56,26,0.4)'; g.lineWidth = 0.7 / L;
-      g.strokeRect(-w / 2, -hgt / 2, w, hgt);
-      if (L >= 16 && ci !== 2) {
-        g.beginPath();
-        for (let s = -w / 2 + 0.06; s < w / 2; s += 0.07) { g.moveTo(s, -hgt / 2); g.lineTo(s, hgt / 2); }
-        g.strokeStyle = 'rgba(110,80,40,0.22)'; g.stroke();
-      }
-      g.restore();
     }
     g.lineCap = 'round';
     g.fillStyle = 'rgba(96,82,44,0.45)'; g.fill(shrubs[0]);
     g.fillStyle = 'rgba(128,84,110,0.45)'; g.fill(shrubs[1]);
-    g.fillStyle = P ? rgb(P.t[T.EAU]) : 'rgba(84,140,132,0.85)'; g.fill(pools);
-    g.strokeStyle = P ? rgb(P.ligne, 0.8) : 'rgba(58,70,44,0.6)'; g.lineWidth = 0.6 / L; g.stroke(pools);
-    g.strokeStyle = P ? rgb(P.ligne, 0.7) : 'rgba(70,98,52,0.8)'; g.lineWidth = Math.max(0.03, 0.7 / L); g.stroke(reeds);
+    g.fillStyle = rgb(P.t[T.EAU]); g.fill(pools);
+    g.strokeStyle = rgb(P.ligne, 0.8); g.lineWidth = 0.6 / L; g.stroke(pools);
+    g.strokeStyle = rgb(P.ligne, 0.7); g.lineWidth = Math.max(0.03, 0.7 / L); g.stroke(reeds);
     this.vineyards(g, L, i0, i1, j0, j1, P);
-    if (P) {
-      g.strokeStyle = rgb(P.hach, 0.75); g.lineWidth = Math.max(0.025, 0.75 / L); g.stroke(hach);
-      // bois en petits arbres cernés d'encre, sans ombre ni reflet
-      g.strokeStyle = rgb(P.encre, 0.75); g.lineWidth = Math.max(0.02, 0.6 / L);
-      for (const p of trees.c) { g.fillStyle = P.bois; g.fill(p); g.stroke(p); }
-      g.fillStyle = P.pins; g.fill(pines); g.stroke(pines);
-      return;
-    }
-    g.strokeStyle = 'rgba(176,150,96,0.7)'; g.lineWidth = Math.max(0.05, 0.8 / L); g.stroke(dunes);
-    g.lineWidth = Math.max(0.1, 1.2 / L);
-    g.strokeStyle = 'rgba(214,206,150,0.35)'; g.stroke(hillL);
-    g.strokeStyle = 'rgba(60,70,34,0.3)'; g.stroke(hillD);
-    const winter = this.season === 'hiver', autumn = this.season === 'automne';
-    const crowns = winter ? ['#2b3727', '#33402d', '#3c4833', '#4a4a3c'] : autumn ? ['#4a5424', '#62602a', '#77592a', '#8c4a22'] : ['#30431d', '#3b5121', '#475e25', '#7d7a2c'];
-    g.fillStyle = 'rgba(14,22,8,0.45)'; g.fill(trees.sh);
-    crowns.forEach((c, k) => { g.fillStyle = c; g.fill(trees.c[k]); });
-    g.fillStyle = winter ? 'rgba(222,228,230,0.55)' : autumn ? 'rgba(178,150,70,0.6)' : 'rgba(104,128,50,0.75)'; g.fill(trees.lit);
-    g.fillStyle = winter ? '#283326' : '#2c4022'; g.fill(pines);
-    if (big) { g.fillStyle = winter ? 'rgba(250,252,255,0.75)' : 'rgba(176,190,96,0.5)'; g.fill(trees.hi); }
-    // sommets
-    for (const [x, y, s, high] of peaks) {
-      const hgt = s * 0.95, half = s * 0.62;
-      g.fillStyle = 'rgba(30,30,20,0.25)';
-      g.beginPath(); g.moveTo(x, y - hgt); g.lineTo(x + half * 1.35, y + 0.08); g.lineTo(x + half * 0.2, y + 0.08); g.fill();
-      g.fillStyle = '#c3c2a7';
-      g.beginPath(); g.moveTo(x - half, y); g.lineTo(x, y - hgt); g.lineTo(x + 0.08, y); g.fill();
-      g.fillStyle = '#7f826c';
-      g.beginPath(); g.moveTo(x, y - hgt); g.lineTo(x + half, y); g.lineTo(x + 0.08, y); g.fill();
-      if (high || winter) {
-        const k = high ? 0.42 : 0.3;
-        g.fillStyle = '#f6f7f5';
-        g.beginPath(); g.moveTo(x, y - hgt); g.lineTo(x - half * k, y - hgt * (1 - k)); g.lineTo(x - half * k * 0.2, y - hgt * (1 - k * 0.8));
-        g.lineTo(x + half * k * 0.4, y - hgt * (1 - k)); g.lineTo(x + half * k, y - hgt * (1 - k)); g.closePath(); g.fill();
-      }
-      if (L >= 8) {
-        g.strokeStyle = 'rgba(50,50,36,0.55)'; g.lineWidth = 0.6 / L;
-        g.beginPath(); g.moveTo(x - half, y); g.lineTo(x, y - hgt); g.lineTo(x + half, y); g.stroke();
-      }
-    }
+    g.strokeStyle = rgb(P.hach, 0.75); g.lineWidth = Math.max(0.025, 0.75 / L); g.stroke(hach);
+    // bois en petits arbres cernés d'encre, sans ombre ni reflet
+    g.strokeStyle = rgb(P.encre, 0.75); g.lineWidth = Math.max(0.02, 0.6 / L);
+    for (const p of trees) { g.fillStyle = P.bois; g.fill(p); g.stroke(p); }
+    g.fillStyle = P.pins; g.fill(pines); g.stroke(pines);
   }
 
   // part de vigne autour d'un point (interpolée entre les centres des cases d'1 km)

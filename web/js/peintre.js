@@ -1,8 +1,9 @@
 // Peintre de tuiles (worker) : les tuiles détaillées de la carte de campagne, peintes par le processeur hors du fil
 // principal, avec le code même de la carte (map.js renderTile). Il reçoit la carte une fois (init), son état à chaque
-// changement (state : époque, saison, territoires, images de fond), puis des demandes de tuiles.
+// changement (state : époque, saison et météo (AMB), territoires, images de fond), puis des demandes de tuiles.
 import { MapView, lineChunks } from './map.js';
 import { Epoque } from './epoque.js';
+import { AMB } from './carte/ambiance.js';
 
 let p = null, ready = false;
 globalThis.onmessage = ({ data: d }) => {
@@ -17,8 +18,9 @@ globalThis.onmessage = ({ data: d }) => {
     return;
   }
   if (d.state) {
-    const { marks, year, frontiers, ...s } = d.state;
+    const { marks, year, frontiers, amb, ...s } = d.state;
     Object.assign(p, s);
+    Object.assign(AMB, amb);   // (la saison et la neige tombée, peintes dans les tuiles : carte/terre.js)
     p.epoque.year = year;
     p.epoque.marks = Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, new Set(v)]));
     p.frontiers = frontiers.map(f => ({ code: f.code, parts: lineChunks(f.lines) }));
@@ -28,8 +30,8 @@ globalThis.onmessage = ({ data: d }) => {
   // (sans état reçu, ou si la peinture échoue : réponse vide, la carte redemandera la tuile)
   if (!ready) { postMessage({ key: d.key, gen: -1 }); return; }
   try {
-    const cv = p.renderTile(d.L, d.tx, d.ty), bmp = cv.transferToImageBitmap();
+    const t0 = performance.now(), cv = p.renderTile(d.L, d.tx, d.ty), bmp = cv.transferToImageBitmap();
     p.pool.push(cv);
-    postMessage({ key: d.key, gen: p.tileGen, bmp }, [bmp]);
+    postMessage({ key: d.key, gen: p.tileGen, bmp, ms: performance.now() - t0 }, [bmp]);   // (ms : le temps de peinture, pour le banc)
   } catch (e) { postMessage({ key: d.key, gen: -1 }); }
 };

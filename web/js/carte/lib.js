@@ -1,7 +1,8 @@
 // Primitives de dessin vu de dessus des maquettes (web/js/dev/carte-vivante.html, battle/dev/maquette-2d.html) :
 // formes, couleurs, figures (fantassins, cavaliers, pièces, chevaux), bâtiments, fumées. Reprises telles quelles pour
 // que la carte de campagne dessine comme la maquette validée ; marche aussi dans un worker (OffscreenCanvas).
-const toile = (w, h) => typeof document === 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+// (sous Node, pour les tests : ni document ni OffscreenCanvas, toile() rend null et les images d'avance sont sautées)
+const toile = (w, h) => typeof document !== 'undefined' ? Object.assign(document.createElement('canvas'), { width: w, height: h }) : typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : null;
 const TAU = Math.PI * 2, PEAU = '#e2b996';
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v, lerp = (a, b, t) => a + (b - a) * t, mod = (a, n) => ((a % n) + n) % n;
 const ease = t => t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
@@ -515,13 +516,13 @@ function drapeau(g, L, x, y, t, r, petit) {
 
 const SPR = {};
 function sprite(nom, rgb) {
-  const c = toile(64, 64); const g = c.getContext('2d');
+  const c = toile(64, 64), g = c?.getContext?.('2d'); if (!g) return;
   const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
   gr.addColorStop(0, `rgba(${rgb},1)`); gr.addColorStop(.55, `rgba(${rgb},.55)`); gr.addColorStop(1, `rgba(${rgb},0)`);
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64); SPR[nom] = c;
 }
 sprite('f', '244,242,234'); sprite('p', '214,196,152'); sprite('t', '120,94,60'); sprite('n', '62,58,54'); sprite('lueur', '255,150,50'); sprite('trou', '255,255,255');
-{
+if (toile(1, 1)?.getContext?.('2d')) {
   const c = toile(64, 64); const g = c.getContext('2d'), gr = g.createRadialGradient(32, 38, 0, 32, 32, 32);
   gr.addColorStop(0, 'rgba(255,248,200,1)'); gr.addColorStop(.3, 'rgba(255,190,70,.95)'); gr.addColorStop(.65, 'rgba(235,90,20,.55)'); gr.addColorStop(1, 'rgba(180,30,10,0)');
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64); SPR.fl = c;
