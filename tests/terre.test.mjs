@@ -84,3 +84,16 @@ test('la grille : les mêmes couleurs pour un même point, quelle que soit la tu
   assert.equal(tc[0], TT.OCEAN);
   assert.equal(tc[19], TT.PLAINE);
 });
+
+test('famine et disette : la campagne autour de la place passe en friche, et les tuiles se repeignent', async () => {
+  const { majAmbiance, enDisette, cleTuiles } = await import('../web/js/carte/ambiance.js');
+  const map = { nodes: [{ id: 0, x: 10, y: 10, type: 'ville' }, { id: 1, x: 50, y: 50, type: 'village' }] };
+  const st = { season: 'printemps', weather: {}, me: { code: '33', famine: false }, nodes: [{ o: '33' }, { o: '24', lv: ['disette', 12] }] };
+  majAmbiance(map, st);
+  assert.ok(enDisette(51, 50) && !enDisette(10, 10), 'la disette du village, pas encore la ville');
+  const avant = cleTuiles();
+  st.me.famine = true;
+  assert.equal(majAmbiance(map, st), true, 'la famine du joueur repeint les tuiles');
+  assert.notEqual(cleTuiles(), avant);
+  assert.ok(enDisette(13, 10) && !enDisette(15, 10), 'ses places à lui, sur 4,5 km autour d’une ville');
+});

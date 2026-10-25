@@ -4,7 +4,7 @@
 // workers (peintre.js) comme sur le fil principal. Ce qui change d'une tuile à l'autre vient d'une grille absolue :
 // pas de couture entre deux tuiles voisines.
 import { SOLS, BOIS, OMBRE, TAU, alea, bat, clamp, lerp, hx, mix, sombre, clair, toile } from './lib.js';
-import { AMB, zoneDe } from './ambiance.js';
+import { AMB, zoneDe, enDisette } from './ambiance.js';
 
 export const TT = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 export const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -352,7 +352,8 @@ function peindreParcelles(T, g, L, x0, y0, x1, y1, at, phyllo) {
     const dc = T.dept(cx, cy);
     if (mk?.has('mais') && (dc === '40' || dc === '64') && hh * 17 % 1 < .5) sol = 'mais';
     else if (mk?.has('assolement') && hh * 23 % 1 < .35) sol = hh * 29 % 1 < .5 ? 'luzerne' : 'betterave';
-    sol = T.neige(cx, cy) > .95 ? 'neige' : solSaison(sol, sa, hh);
+    // (autour d'une place en famine ou en disette, les trois quarts des champs restent en friche)
+    sol = T.neige(cx, cy) > .95 ? 'neige' : hh < .75 && enDisette(cx, cy) ? 'friche' : solSaison(sol, sa, hh);
     const s = SOLS[sol], l = lot(sol), dirH = hh * 13 % 1 < .5;
     const px0 = x + .7 * u, py0 = y + .7 * u, pw = w - 1.4 * u, ph = h - 1.4 * u, W = pw / u, H = ph / u;
     l.rects.rect(px0, py0, pw, ph);

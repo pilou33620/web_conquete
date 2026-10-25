@@ -21,6 +21,7 @@ export const AMB = {
   heure: HEURES.includes(lire('conquete.heure', 'midi')) ? lire('conquete.heure', 'midi') : 'midi',
   meteo: { cote: 'soleil', interieur: 'soleil', montagne: 'soleil' },   // rules.WEATHER, par zone
   yMont: 1e9, xCote: -1e9,
+  disette: [],   // [x, y, r] (km) : campagnes en friche autour des places en famine (le joueur) ou en disette (lv)
 };
 export const nuit = () => AMB.heure === 'nuit';
 export const bivouac = () => AMB.heure === 'soir' || AMB.heure === 'nuit';
@@ -43,10 +44,14 @@ export function majAmbiance(map, st) {
   AMB.saison = saisonDe(st.season);
   if (st.year) AMB.annee = st.year;
   for (const z of Object.keys(AMB.meteo)) AMB.meteo[z] = st.weather?.[z]?.kind || 'soleil';
+  const R = { village: 3, fort: 3, ville: 4.5, capitale: 6 };
+  AMB.disette = (map?.nodes || []).filter(n => { const ns = st.nodes?.[n.id]; return ns && (ns.lv?.[0] === 'disette' || (st.me?.famine && ns.o === st.me.code)); })
+    .map(n => [n.x, n.y, R[n.type] || 3]);
   return cleTuiles() !== avant;
 }
 // ce dont dépend la peinture des tuiles : la saison, et la neige tombée là où il neige
-export const cleTuiles = () => AMB.saison + ':' + Object.entries(AMB.meteo).filter(([, k]) => k === 'neige').map(([z]) => z).join(',');
+export const cleTuiles = () => AMB.saison + ':' + Object.entries(AMB.meteo).filter(([, k]) => k === 'neige').map(([z]) => z).join(',') + ':' + AMB.disette.map(d => d[0] + ',' + d[1]).join(';');
+export const enDisette = (x, y) => AMB.disette.some(([px, py, r]) => (x - px) ** 2 + (y - py) ** 2 < r * r);
 
 // lumières de l'image : { x, y (km), r (km), a (0-1), jour (visible aussi de jour : incendies, éclairs), spr ('lueur' | 'fen') }
 export const LUM = [];
