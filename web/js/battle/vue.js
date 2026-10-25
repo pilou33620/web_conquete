@@ -15,12 +15,64 @@ import { Effects } from './effets.js';
 import { Controls } from './commandes.js';
 import { BattleUI } from './interface.js';
 import * as camera from './camera.js';
-import { emprise, clsOf, clamp, wrapAngle, segDist, TAU } from './formes.js';
+import { emprise, clsOf, clamp, wrapAngle, segDist, TAU, hexRgb, rgbStr } from './formes.js';
 import { profil, onQualite, Mesure } from './qualite.js';
 import { Pietinement } from './pietinement.js';
 import { champDeVision, OEIL } from './visibilite.js';
 
 const POLL_MS = 120;
+const CONTACT = new Set(['feu', 'recharge', 'melee', 'charge']);
+
+// lignes de front, vues de dessus : pour chaque paire de régiments ennemis au contact (l'un feu, recharge, mêlée ou
+// charge sur l'autre, centres à moins de 200 m ; le serveur ne dit pas la cible des ennemis), une bande à peine
+// bombée le long du bord de chaque emprise qui fait face à l'autre (le front, les arrières ou un flanc), un peu au
+// dehors et de son côté du milieu ; elle suit le régiment, pas la direction de l'adversaire : calme. Une bande par bord.
+// gap : écart (m) entre le bord et la bande ; get(id) : l'unité. [{ side, x0, y0, x1, y1, cx, cy }] en m (les deux
+// bouts et le point de contrôle de la courbe)
+export function fronts(units, get, gap) {
+  const out = [], vus = new Set();
+  const bande = (u, t, L) => {
+    // repère du régiment : vers l'avant (c, s) sur d / 2, le long du front (-s, c) sur w / 2 ; le bord tourné vers t
+    const c = Math.cos(u.dir || 0), s = Math.sin(u.dir || 0), w = (u.w || 40) / 2, d = (u.d || 10) / 2, dx = t.x - u.x, dy = t.y - u.y;
+    const av = (dx * c + dy * s) / L, fl = (dy * c - dx * s) / L, face = Math.abs(av) >= Math.abs(fl);
+    const sg = Math.sign(face ? av : fl) || 1, key = `${u.id}|${face ? 'a' : 'f'}${sg}`;
+    if (vus.has(key)) return;
+    vus.add(key);
+    const [ox, oy] = face ? [c * sg, s * sg] : [-s * sg, c * sg];
+    const off = Math.min((face ? d : w) + gap, (L / 2 - 0.5) / Math.abs(face ? av : fl)), hl = (face ? w : d) * 0.9;
+    const mx = u.x + ox * off, my = u.y + oy * off;
+    out.push({ side: u.side, x0: mx - oy * hl, y0: my + ox * hl, x1: mx + oy * hl, y1: my - ox * hl, cx: mx + ox * hl * 0.06, cy: my + oy * hl * 0.06 });
+  };
+  for (const u of units) {
+    if (u._ghost || u.target == null || !CONTACT.has(u.state)) continue;
+    const t = get(String(u.target));
+    if (!t || t.side === u.side || t._ghost || t.state === 'hors') continue;
+    const L = Math.hypot(t.x - u.x, t.y - u.y);
+    if (L > 200 || L < 1) continue;
+    bande(u, t, L); bande(t, u, L);
+  }
+  return out;
+}
+
+// le voile de la ligne de vue, adouci : chaque case (vu[k] : 0 cachée) devient F × F pixels, puis deux passes d'un
+// flou en boîte de rayon r : un bord fondu sur environ deux cases. { a (0 vu à 1 caché), w, h }
+export function voileDoux(vu, cols, rows, F = 4, r = 4) {
+  const w = cols * F, h = rows * F, a = new Float32Array(w * h), b = new Float32Array(w * h), k = 1 / (2 * r + 1);
+  for (let y = 0; y < h; y++) { const o = y * w, j = ((y / F) | 0) * cols; for (let x = 0; x < w; x++) a[o + x] = vu[j + ((x / F) | 0)] ? 0 : 1; }
+  for (let pass = 0; pass < 2; pass++) {
+    for (let y = 0; y < h; y++) {
+      const o = y * w; let s = 0;
+      for (let x = -r; x <= r; x++) s += a[o + clamp(x, 0, w - 1)];
+      for (let x = 0; x < w; x++) { b[o + x] = s * k; s += a[o + Math.min(w - 1, x + r + 1)] - a[o + Math.max(0, x - r)]; }
+    }
+    for (let x = 0; x < w; x++) {
+      let s = 0;
+      for (let y = -r; y <= r; y++) s += b[clamp(y, 0, h - 1) * w + x];
+      for (let y = 0; y < h; y++) { a[y * w + x] = s * k; s += b[Math.min(h - 1, y + r + 1) * w + x] - b[Math.max(0, y - r) * w + x]; }
+    }
+  }
+  return { a, w, h };
+}
 
 export class BattleView {
   // api : {get(url), post(url, body)} ; root : élément qui recevra la vue
@@ -412,7 +464,8 @@ export class BattleView {
     mark('interface');
   }
   // ligne de vue (SPEC-SUITE F6, visibilite.js) : avec une seule unité choisie, ce qu'elle ne voit pas s'assombrit,
-  // un voile case par case adouci par l'agrandissement ; recalculé quand l'unité change de case
+  // un voile à basse définition au bord fondu (voileDoux), lissé par l'agrandissement ; recalculé quand l'unité change
+  // de case
   setLos(on) { this.losOn = !!on; if (!on) this.losKey = ''; }
   drawLos(ctx, view) {
     const u = this.losOn && this.sel.size === 1 ? this.units.get([...this.sel][0]) : null;
@@ -421,14 +474,14 @@ export class BattleView {
     const cls = clsOf(u), eye = cls === 'cavalerie' || cls === 'general' ? 3.5 : cls === 'artillerie' ? 3 : OEIL, key = `${u.id}|${c0}`;
     if (key !== this.losKey) {
       this.losKey = key;
-      const vu = champDeVision(t, c0, eye, Math.ceil(1600 / t.cell));
-      if (!this.losCv) { this.losCv = document.createElement('canvas'); this.losCv.width = t.cols; this.losCv.height = t.rows; }
-      const g = this.losCv.getContext('2d'), img = g.createImageData(t.cols, t.rows);
-      for (let k = 0; k < vu.length; k++) if (!vu[k]) { img.data[k * 4] = 12; img.data[k * 4 + 1] = 14; img.data[k * 4 + 2] = 20; img.data[k * 4 + 3] = 150; }
+      const { a, w, h } = voileDoux(champDeVision(t, c0, eye, Math.ceil(1600 / t.cell)), t.cols, t.rows);
+      if (!this.losCv) { this.losCv = document.createElement('canvas'); this.losCv.width = w; this.losCv.height = h; }
+      const g = this.losCv.getContext('2d'), img = g.createImageData(w, h), px = img.data;
+      for (let k = 0; k < a.length; k++) { px[k * 4] = 12; px[k * 4 + 1] = 14; px[k * 4 + 2] = 20; px[k * 4 + 3] = a[k] * 150; }
       g.putImageData(img, 0, 0);
     }
     view.monde(ctx);
-    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(this.losCv, 0, 0, t.cols * t.cell, t.rows * t.cell);
   }
   onScreen(u) {
@@ -486,30 +539,20 @@ export class BattleView {
       ctx.fillStyle = 'rgba(255,226,150,0.12)'; ctx.strokeStyle = 'rgba(255,236,170,0.95)'; ctx.lineWidth = 2;
       this.footprint(ctx, u.x, u.y, u.dir, u.w, u.d, 4); ctx.fill(); ctx.stroke();
     }
-    // lignes de front (à la manière d'UGAR) : entre deux régiments ennemis au contact (feu, recharge, mêlée, charge), un ruban
-    // qui ondule au sol, à la couleur de chaque camp de son côté
-    const seen = new Set();
-    ctx.lineCap = 'round';
-    for (const u of this.units.values()) {
-      if (u._ghost || u.target == null || !(u.state === 'feu' || u.state === 'recharge' || u.state === 'melee' || u.state === 'charge')) continue;
-      const t = this.units.get(String(u.target));
-      if (!t || t.side === u.side || t._ghost || t.state === 'hors') continue;
-      const key = String(u.id) < String(t.id) ? `${u.id}|${t.id}` : `${t.id}|${u.id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const dx = t.x - u.x, dy = t.y - u.y, L = Math.hypot(dx, dy);
-      if (L > 320 || L < 1) continue;
-      const nx = dx / L, ny = dy / L, half = Math.max(u.w || 40, t.w || 40) * 0.55, mx = (u.x + t.x) / 2, my = (u.y + t.y) / 2;
-      for (const [side, off] of [[u.side, -3], [t.side, 3]]) {
-        const pts = [];
-        for (let k = 0; k <= 16; k++) {
-          const s = -half + 2 * half * k / 16, w = off + Math.sin(s * 0.07 + time * 2.2) * 2.5 * Math.sin(Math.PI * k / 16);
-          pts.push([mx - ny * s + nx * w, my + nx * s + ny * w]);
-        }
-        ctx.strokeStyle = this.colors?.[side] || '#ccc'; ctx.globalAlpha = 0.85; ctx.lineWidth = 3.2;
-        this.groundPath(ctx, pts); ctx.stroke();
+    // lignes de front (fronts) : une bande calme à la couleur du camp, qui s'efface aux deux bouts, sur un liseré sombre
+    // qui la détache du sol ; rien quand elle ferait moins de 8 px
+    const z = this.cam.z, lw = clamp(1.6 + z * 0.35, 2.5, 5);
+    ctx.lineCap = 'butt';
+    for (const f of fronts(this.units.values(), id => this.units.get(id), 1.5 + 5 / z)) {
+      const [ax, ay] = this.toScreen(f.x0, f.y0), [bx, by] = this.toScreen(f.x1, f.y1), [qx, qy] = this.toScreen(f.cx, f.cy);
+      if (Math.hypot(bx - ax, by - ay) < 8) continue;
+      const rgb = hexRgb(this.colors?.[f.side] || (f.side ? '#3f6fb5' : '#b8352a'));
+      for (const [col, a, l] of [[[20, 16, 10], 0.3, lw + 2.5], [rgb, 0.9, lw]]) {
+        const gr = ctx.createLinearGradient(ax, ay, bx, by);
+        gr.addColorStop(0, rgbStr(col, 0)); gr.addColorStop(0.22, rgbStr(col, a)); gr.addColorStop(0.78, rgbStr(col, a)); gr.addColorStop(1, rgbStr(col, 0));
+        ctx.strokeStyle = gr; ctx.lineWidth = l;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(qx, qy, bx, by); ctx.stroke();
       }
-      ctx.globalAlpha = 1;
     }
     // objectif d'un assaut : le cœur de la place (tenu hold_need secondes sans défenseur pour l'emporter)
     const obj = st?.objective || (this.map?.heart && this.map?.place ? this.map.heart : null);

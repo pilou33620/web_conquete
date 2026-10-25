@@ -421,8 +421,8 @@ export class Effects {
         // sorti de la vue : revient de l'autre côté
         if (b.x - cx > span) b.x -= 2 * span; else if (cx - b.x > span) b.x += 2 * span;
         if (b.y - cy > span) b.y -= 2 * span; else if (cy - b.y > span) b.y += 2 * span;
-        const brume = i < nb, r = b.r * (brume ? 1 : 1.6);
-        g.globalAlpha = brume ? C.brume * (0.35 + 0.15 * Math.sin(time * 0.1 + b.ph)) : C.nuages * 0.45;
+        const brume = i < nb, r = b.r * (brume ? (w === 'brouillard' ? 1.5 : 1) : 1.6);
+        g.globalAlpha = brume ? C.brume * (0.42 + 0.15 * Math.sin(time * 0.1 + b.ph)) : C.nuages * 0.45;
         g.drawImage(brume ? this.S.brume : this.S.nuage, b.x - r, b.y - r * 0.7, r * 2, r * 1.4);
       });
       this.poser(ctx, view, this.ciels);
@@ -438,6 +438,8 @@ export class Effects {
       ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, vw, vh);
     }
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    // brouillard : vu de dessus, un voile pâle sur tout le champ, sous les bancs plus épais
+    if (w === 'brouillard') { ctx.fillStyle = 'rgba(222,226,230,0.3)'; ctx.fillRect(0, 0, vw, vh); }
     // les bords de l'image plus sombres quand la nuit tombe (un seul dégradé par image)
     const L = clamp(st.light ?? 1, 0, 1), k = Math.max(clamp((1 - L) / 0.8, 0, 1), C.nuit), vk = fx >= 3 ? 0.16 : 0;
     if (vk || k > 0.05) {
