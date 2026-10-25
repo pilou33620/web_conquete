@@ -246,3 +246,31 @@ Le ciel (`ciel.js`) :
   densité 1 / 2 : vue d'ensemble 0,16 → 0,18 / 0,71 → 0,10 ms ; z 26 Bordeaux 1,56 → 0,54 / 2,07 → 0,70, Landes
   0,82 → 0,45 / 1,47 → 0,37, Pyrénées 1,06 → 0,76 / 1,33 → 0,86 ; z 110 Bordeaux 2,97 / 5,84, Landes 0,89 / 1,42,
   Pyrénées 2,56 / 3,78 ; z 320 Bordeaux 1,70 / 1,53, Landes 0,83 / 0,69, Pyrénées 1,85 / 1,89.
+
+## Livré — A
+
+- `carte/terre.js` : la peinture de la maquette sur les données du jeu (`terre(map)`, une fois par carte et par
+  worker). `grille` (pays par `terOnde`, sable, saisons, neige, ombrage), `fond` (le fond de la carte, `paintLand`),
+  `moyen` (6 à 12 px/km), `detail` (16 px/km et plus : houppiers sans couture, parcelles dès 24, marais salants,
+  vagues), `arbresRoyaux` (routes royales dès 32). Exports pour les autres : `TT`, `hash2` (= `map.js hash`),
+  `bruitC`, `solSaison`, `neigeAu`, `SEUIL_NEIGE`, `BOIS_S`, `boisSaison`, `parcelles`, `EAU`, `SABLE`,
+  `LARG_RIVIERE` (largeur de l'eau par rang : 0,32 / 0,16 / 0,09 / 0,06 km, plus fine que l'ancienne carte) ;
+  `terre(map).neige(x, y)`, `.terOnde(x, y)`, `.pinede(x, y)`, `.alt(x, y)` pour placer la vie là où la terre le dit.
+- `map.js` : niveaux 2 à 256 px/km (96 et 192 en plus de 128 et 256, pour garder une échelle fine) ; zoom jusqu'à
+  `Z.MAX`, aussi dans `moveTo` et `clampCam` (hors liste, sans quoi le zoom restait bloqué à 26). `syncPainters`
+  envoie `AMB` aux peintres. Le style « époque » est le même au pixel près jusqu'à 64 px/km (vérifié tuile à tuile) ;
+  au-delà, c'est la même gravure agrandie. `decorate` et `vineyards` ne servent plus qu'à lui.
+- Écarts à la maquette :
+  - densités des bois par km², les mêmes à tous les niveaux (dans la maquette, la lande devenait forêt dès 128 px/km
+    et la forêt s'éclaircissait à 256) ; tirages par parcelle et vagues sur la grille d'un km (pas de couture) ;
+  - l'ombre des arbres de bord de route était posée à 1,6 km (rangs de points sombres dans les champs) : corrigée ;
+  - la neige couvre les parcelles d'une limite douce qui suit le relief (au lieu de parcelles blanches une à une),
+    vignes comprises ; la neige qui tombe suit `AMB.meteo` par zone, aux limites de zone ondulées ;
+  - limite de la pinède et, dès 64 px/km, lisières ondulées d'une onde fine de plus (plus de lignes droites de près) ;
+  - de 6 à 12 px/km, une grille par tuile (un point tous les 2 px) ; le fond de la carte à 2 px/km (coût) ;
+  - menus détails en carrés sous 1,5 px, ceps en pointillés ronds ; rivières et limites tracées par morceaux ;
+  - au-delà du zoom 30, frontières de largeur constante à l'écran ;
+  - pas de disette dans les tuiles (la maquette la simulait en Périgord).
+- `lib.js` : `toile()` rend null sous Node (les tests importent `map.js`, qui importe maintenant `lib.js`).
+- Pour C : `ambient.drawFlows` garde les largeurs de l'ancienne carte (0,75 × 0,3 km) ; les rivières sont plus fines
+  (`LARG_RIVIERE`).

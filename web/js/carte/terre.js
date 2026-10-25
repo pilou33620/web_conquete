@@ -9,13 +9,18 @@ import { AMB, zoneDe } from './ambiance.js';
 export const TT = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 export const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
 // couleur de pays : des zones de quelques kilomètres, pas un damier
-export const bruitC = (i, j, s) => .5 + .25 * Math.sin(i * .31 + s) * Math.cos(j * .27 - s * .6) + .25 * Math.sin((i * .13 - j * .17) + s * 2.3);
+// un sinus rapide (écart < 0,001) : les ondulations du terrain en demandent des dizaines par point de tuile
+const sn = x => { x -= 6.283185307179586 * Math.round(x * 0.15915494309189535); const y = 1.2732395447351628 * x - 0.4052847345693511 * x * Math.abs(x); return 0.225 * (y * Math.abs(y) - y) + y; };
+const cs = x => sn(x + 1.5707963267948966);
+export const bruitC = (i, j, s) => .5 + .25 * sn(i * .31 + s) * cs(j * .27 - s * .6) + .25 * sn((i * .13 - j * .17) + s * 2.3);
 const CHAMPS = ['chaume', 'ble', 'labour', 'pre', 'colza', 'friche', 'pre', 'chaume'];
 export const champDe = (i, j, h) => CHAMPS[Math.min(7, ((bruitC(i, j, 1.7) * .8 + h * .2) * 8) | 0)];
 // les pays ne suivent pas la grille du jeu : chaque point lit le terrain un peu à côté, d'un décalage qui ondule
-const ondeX = (x, y) => .55 * Math.sin(x * 1.31 + Math.sin(y * .93) * 1.7) + .3 * Math.sin(y * 2.7 + x * .61) + .15 * Math.sin((x + y) * 5.3);
-const ondeY = (x, y) => .55 * Math.sin(y * 1.17 + Math.sin(x * .87) * 1.7) + .3 * Math.sin(x * 2.9 - y * .57) + .15 * Math.sin((x - y) * 4.9);
+const ondeX = (x, y) => .55 * sn(x * 1.31 + sn(y * .93) * 1.7) + .3 * sn(y * 2.7 + x * .61) + .15 * sn((x + y) * 5.3);
+const ondeY = (x, y) => .55 * sn(y * 1.17 + sn(x * .87) * 1.7) + .3 * sn(x * 2.9 - y * .57) + .15 * sn((x - y) * 4.9);
 export const EAU = '#4f86a8', SABLE = '#e3d3a3';
+// largeur de l'eau des rivières (km) selon leur rang (1 : fleuve) ; de loin, au moins 1,3 pixel (map.js)
+export const LARG_RIVIERE = [0, .32, .16, .09, .06];
 const COUL = { 0: EAU, 1: EAU, 3: '#3a6834', 4: '#a39e68', 5: '#6f8f5a', 7: '#8f9a6a', 8: '#d9dcd8', 9: SABLE, 10: '#8f8456' };
 const COUL_RGB = Object.fromEntries(Object.entries(COUL).map(([k, v]) => [k, hx(v)]));
 const PIN = [86, 112, 64], PIN_HEX = '#2f5a33';
@@ -60,7 +65,7 @@ export const SEUIL_NEIGE = { printemps: 1.05, ete: 1.35, automne: 1.15, hiver: .
 // part de neige au sol d'après l'altitude, la saison et la neige qui tombe là ; la limite suit le relief, ondulée de
 // bruits à basse fréquence seulement (un bruit fin hachurait la limite en damier)
 export function neigeAu(a, x, y, saison, tombe) {
-  let n = clamp((a - SEUIL_NEIGE[saison]) / .3 + .3 * Math.sin(x * .21 + y * .13) + .2 * Math.sin(x * .11 - y * .29), 0, 1);
+  let n = clamp((a - SEUIL_NEIGE[saison]) / .3 + .3 * sn(x * .21 + y * .13) + .2 * sn(x * .11 - y * .29), 0, 1);
   if (tombe) n = Math.max(n, clamp(.85 + (bruitC(x * .35, y * .35, 5.1) - .5) * 1.1, 0, 1));
   return n;
 }
@@ -95,6 +100,9 @@ export class Terre {
       }
       if (sale) this.SALINE.add(j * W + i);
     }
+    // pentes (différences centrées, par km), lues avec l'altitude d'une seule interpolation (altPente)
+    const GX = this.GX = new Float32Array(W * H), GY = this.GY = new Float32Array(W * H);
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const k = j * W + i; GX[k] = (ALT[j * W + Math.min(W - 1, i + 1)] - ALT[j * W + Math.max(0, i - 1)]) / 2; GY[k] = (ALT[Math.min(H - 1, j + 1) * W + i] - ALT[Math.max(0, j - 1) * W + i]) / 2; }
     this.DEPT = map.dept; this.codes = map.deptCodes || [];
     this.c3 = [0, 0, 0]; this.TO = null;
   }
@@ -103,15 +111,15 @@ export class Terre {
   ter(x, y) { const i = x | 0, j = y | 0; return i >= 0 && j >= 0 && i < this.W && j < this.H ? this.TER[j * this.W + i] : 0; }
   terOnde(x, y) { return this.ter(x + ondeX(x, y), y + ondeY(x, y)); }
   // de près, une ondulation de plus, fine : les lisières restent sinueuses au lieu de lignes droites
-  terOndeFin(x, y) { return this.ter(x + ondeX(x, y) + .05 * Math.sin(x * 13.7 + y * 5.1) + .025 * Math.sin(y * 29 - x * 11), y + ondeY(x, y) + .05 * Math.sin(y * 12.9 - x * 4.3) + .025 * Math.sin(x * 27 + y * 13)); }
+  terOndeFin(x, y) { return this.ter(x + ondeX(x, y) + .05 * sn(x * 13.7 + y * 5.1) + .025 * sn(y * 29 - x * 11), y + ondeY(x, y) + .05 * sn(y * 12.9 - x * 4.3) + .025 * sn(x * 27 + y * 13)); }
   alt(x, y) {
     const W = this.W, A = this.ALT, i = clamp(Math.floor(x - .5), 0, W - 2), j = clamp(Math.floor(y - .5), 0, this.H - 2), fx = clamp(x - .5 - i, 0, 1), fy = clamp(y - .5 - j, 0, 1), k = j * W + i;
     return lerp(lerp(A[k], A[k + 1], fx), lerp(A[k + W], A[k + W + 1], fx), fy);
   }
   // la pinède des Landes (pins), le reste en feuillus ; limite ondulée, sans ligne droite
-  pinede(x, y) { const u = x + 2.5 * Math.sin(y * .083) + 1.5 * Math.sin(y * .21 + x * .05), v = y + 2.5 * Math.sin(x * .071) + 1.5 * Math.sin(x * .19 - y * .04); return u < this.xCote + 70 && v > 80 && v < 230; }
+  pinede(x, y) { const u = x + 2.5 * sn(y * .083) + 1.5 * sn(y * .21 + x * .05), v = y + 2.5 * sn(x * .071) + 1.5 * sn(x * .19 - y * .04); return u < this.xCote + 70 && v > 80 && v < 230; }
   // il neige là (météo de la zone, AMB) ; les limites des zones ondulent sur quelques kilomètres
-  tombe(x, y) { return AMB.meteo[zoneDe(x + 6 * Math.sin(y * .05) + 3 * Math.sin(y * .17 + 1), y + 6 * Math.sin(x * .045) + 3 * Math.sin(x * .15 + 2))] === 'neige'; }
+  tombe(x, y) { return AMB.meteo[zoneDe(x + 6 * sn(y * .05) + 3 * sn(y * .17 + 1), y + 6 * sn(x * .045) + 3 * sn(x * .15 + 2))] === 'neige'; }
   neige(x, y) { return neigeAu(this.alt(x, y), x, y, AMB.saison, this.tombe(x, y)); }
   // les couleurs d'une grille de n × n points ((gi + ½) × pas km) : pays, saison, neige, sable au bord de l'eau,
   // ombrage du relief. Écrites dans data (RVBA) ; le terrain de chaque point dans tg
@@ -134,10 +142,11 @@ export class Terre {
       else { const a = bruitC(x * .9, y * .9, 1.7), b = bruitC(x * .5, y * .5, 4.1) * .4; c[0] = lerp(lerp(206, 124, a), 196, b); c[1] = lerp(lerp(186, 166, a), 178, b); c[2] = lerp(lerp(122, 90, a), 120, b); }
       const ts = VEGET.has(t) ? TS : t === TT.FORET && !pin ? FS : null;
       if (ts) { const [v, k] = ts; c[0] = lerp(c[0], v[0], k); c[1] = lerp(c[1], v[1], k); c[2] = lerp(c[2], v[2], k); }
-      const a = this.alt(x, y);
+      const W = this.W, i0 = clamp(Math.floor(x - .5), 0, W - 2), j0 = clamp(Math.floor(y - .5), 0, this.H - 2), fx = clamp(x - .5 - i0, 0, 1), fy = clamp(y - .5 - j0, 0, 1), q0 = j0 * W + i0;
+      const bil = A => lerp(lerp(A[q0], A[q0 + 1], fx), lerp(A[q0 + W], A[q0 + W + 1], fx), fy), a = bil(this.ALT);
       const nn = neigeAu(a, x, y, sa, neigeT && this.tombe(x, y)) * (t === TT.FORET && a < .3 ? .45 : 1) * .78;   // sous les bois de plaine, moins de neige
       if (nn > 0) { c[0] = lerp(c[0], 236, nn); c[1] = lerp(c[1], 239, nn); c[2] = lerp(c[2], 239, nn); if (blanc) blanc[j * n + i] = nn; }
-      const gx = this.alt(x + .5, y) - this.alt(x - .5, y), gy = this.alt(x, y + .5) - this.alt(x, y - .5);
+      const gx = bil(this.GX), gy = bil(this.GY);
       const k = clamp(1 - (gx * .6 + gy * .8) * 2.6, .62, 1.3) * (.95 + .1 * bruitC(x * 1.2, y * 1.2, .4));
       data[o] = c[0] * k; data[o + 1] = c[1] * k; data[o + 2] = c[2] * k;
     }

@@ -12,7 +12,7 @@ import { Z, nuit } from './carte/ambiance.js';
 import { Guerre, rayonMurs } from './carte/guerre.js';
 import { Ciel } from './carte/ciel.js';
 import * as ambiance from './carte/ambiance.js';
-import { terre, EAU, SABLE } from './carte/terre.js';
+import { terre, EAU, SABLE, LARG_RIVIERE } from './carte/terre.js';
 const TILE = 256;
 function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
@@ -1366,7 +1366,7 @@ export class MapView {
         continue;
       }
       // eau bleue entre des berges vertes, comme la maquette ; de près un reflet clair au fil de l'eau
-      const w = Math.max([0, 0.32, 0.16, 0.09, 0.06][r.rank] || 0.05, 1.3 / L), rp = morceaux(r.parts);
+      const w = Math.max(LARG_RIVIERE[r.rank] || 0.05, 1.3 / L), rp = morceaux(r.parts);
       g.strokeStyle = '#4b7438'; g.lineWidth = w + Math.max(0.06, 2 / L); g.stroke(rp);
       g.strokeStyle = '#4a78b4'; g.lineWidth = w; g.stroke(rp);
       if (L >= 48) { g.setLineDash([2.5 / L, 11 / L, 1.2 / L, 9 / L]); g.strokeStyle = 'rgba(160,195,235,.45)'; g.lineWidth = 0.9 / L; g.stroke(rp); g.setLineDash([]); }
@@ -1455,7 +1455,7 @@ export class MapView {
       if (e.bx == null) continue;
       let len = Math.max(e.rrank === 1 ? 1.2 : 0.8, 7 / L), wid = Math.max(0.5, 3.2 / L);
       // (vue du ciel : un pont de pierre à la mesure de la rivière, plus fine que sur l'ancienne carte)
-      if (!P) { len = Math.max(([0, 0.32, 0.16, 0.09, 0.06][e.rrank] || 0.05) + 0.14, 7 / L); wid = Math.max(larg(e.royal) * 1.5, 3.2 / L); }
+      if (!P) { len = Math.max((LARG_RIVIERE[e.rrank] || 0.05) + 0.14, 7 / L); wid = Math.max(larg(e.royal) * 1.5, 3.2 / L); }
       g.save();
       g.translate(e.bx, e.by);
       g.rotate(e.bang);
