@@ -75,6 +75,12 @@ function reechant(pts, pas) {
   return out;
 }
 const angLerp = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * clamp(k, 0, 1);
+// contour d'un trou du feuillage [x, y, dir, profondeur, front], élargi de m : un rectangle aux coins arrondis
+function trouPoly([x, y, a, hd, hw], m) {
+  const ca = Math.cos(a), sa = Math.sin(a), A = hd + m, B = hw + m, r = Math.min(3 + m, A, B), pts = [];
+  for (const [cx, cy, t0] of [[A - r, B - r, 0], [-A + r, B - r, 1], [-A + r, -B + r, 2], [A - r, -B + r, 3]]) for (let k = 0; k <= 3; k++) { const t = (t0 + k / 3) * Math.PI / 2, u = cx + Math.cos(t) * r, v = cy + Math.sin(t) * r; pts.push([x + u * ca - v * sa, y + u * sa + v * ca]); }
+  return pts;
+}
 const coupe = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
 export class Decor2D {
@@ -436,12 +442,14 @@ export class Decor2D {
     this.invalider(b.bbox);
   }
 
-  // ------------------------------------------------------------------ arbres (houppiers, au-dessus des troupes)
+  // ------------------------------------------------------------------ arbres
+  // houppiers des bois et des vergers au-dessus des troupes (canopée) ; les arbres isolés, des haies et des champs, au sol
+  // (sous les troupes : ils ne cachent personne, et la canopée n'a de tuiles que sur les bois)
   preparerArbres() {
     const tg = this.tr.treeGrid || [], pal = this.pal, fx = this.q.fx ?? 2, S = this.seed;
     const garder = [0.45, 0.7, 1, 1][fx] ?? 1, plus = 1 / Math.sqrt(garder);
     const sc = Math.ceil(this.W / SEAU), sr = Math.ceil(this.H / SEAU);
-    this.arbresSeau = Array.from({ length: sc * sr }, () => []);
+    this.arbresSeau = Array.from({ length: sc * sr }, () => []); this.arbresSol = Array.from({ length: sc * sr }, () => []);
     this.sc = sc; this.sr = sr;
     const bois = c => this.t[c] === TY.BOIS || this.t[c] === TY.FORET;
     const nuance = (c, x, y) => {
@@ -460,7 +468,7 @@ export class Decor2D {
         if (w && k !== 'meule') col = D.sombre(col, .12);
         const r = tr.r * (k === 'peuplier' ? 0.55 : 1) * big * (0.92 + hash(tr.x | 0, tr.y | 0, 5) * 0.16);
         const i = clamp(Math.floor(tr.x / SEAU), 0, sc - 1), j = clamp(Math.floor(tr.y / SEAU), 0, sr - 1);
-        this.arbresSeau[j * sc + i].push([tr.x, tr.y, r, col, k === 'sapin' ? 'sapin' : k === 'meule' ? 'meule' : k === 'nu' ? 'nu' : 'rond']);
+        (w || this.t[c] === TY.VERGER ? this.arbresSeau : this.arbresSol)[j * sc + i].push([tr.x, tr.y, r, col, k === 'sapin' ? 'sapin' : k === 'meule' ? 'meule' : k === 'nu' ? 'nu' : 'rond']);
       }
     });
   }
@@ -708,11 +716,15 @@ export class Decor2D {
 
   // ------------------------------------------------------------------ rangement et tuiles
   ranger() {
-    const objets = [...this.enceintes.filter(o => o.z === 0), ...this.fixes.filter(o => o.z <= 2), ...this.batiments.map(b => ({ z: 3, bbox: b.bbox, b })), ...this.enceintes.filter(o => o.z === 4)];
+    // (les arbres au sol : un seul objet, peint dans les tuiles de loin seulement ; de près, sous() les dessine à chaque
+    // image, peu nombreux à l'écran : pas de tuiles partout dans la campagne)
+    const arbres = { z: 2.5, bbox: [-1e9, -1e9, 1e9, 1e9], arbres: true, draw: (g, r) => D.arbres(g, this.arbresDans(this.arbresSol, r)) };
+    const objets = [...this.enceintes.filter(o => o.z === 0), ...this.fixes.filter(o => o.z <= 2), arbres, ...this.batiments.map(b => ({ z: 3, bbox: b.bbox, b })), ...this.enceintes.filter(o => o.z === 4)];
     objets.sort((a, b) => a.z - b.z);
-    const L = this.couches.sous;
-    L.objets = objets; L.seaux = Array.from({ length: this.sc * this.sr }, () => []);
+    const L = this.couches.sous, { sc, sr } = this;
+    L.objets = objets; L.seaux = Array.from({ length: sc * sr }, () => []); L.vides.clear(); this.couches.canopee.vides.clear();
     objets.forEach((o, k) => {
+      if (o.arbres) { L.arbres = k; return; }
       if (o.cases) return;   // (le mur des cases, posé partout : dessiné à part dans chaque tuile)
       const i0 = clamp(Math.floor(o.bbox[0] / SEAU), 0, this.sc - 1), i1 = clamp(Math.floor(o.bbox[2] / SEAU), 0, this.sc - 1);
       const j0 = clamp(Math.floor(o.bbox[1] / SEAU), 0, this.sr - 1), j1 = clamp(Math.floor(o.bbox[3] / SEAU), 0, this.sr - 1);
@@ -720,14 +732,17 @@ export class Decor2D {
     });
     L.partout = objets.map((o, k) => o.cases ? k : -1).filter(k => k >= 0);
   }
-  couche() { return { cache: new Map(), objets: [], seaux: [], partout: [] }; }
-  occupe(nom, x0, y0, S) {
+  couche() { return { cache: new Map(), vides: new Set(), objets: [], seaux: [], partout: [] }; }
+  // une tuile a-t-elle quelque chose à peindre (au plus juste : une tuile vide n'est jamais posée) ; L : sa finesse
+  occupe(nom, x0, y0, S, L) {
+    if (x0 >= this.W || y0 >= this.H || x0 + S <= 0 || y0 + S <= 0) return false;
+    const r = [x0, y0, x0 + S, y0 + S];
+    if (nom === 'canopee') return this.arbresDans(this.arbresSeau, r).length > 0;
+    const C = this.couches.sous;
+    if (C.partout.length || (L <= 1 && this.arbresDans(this.arbresSol, r).length)) return true;
     const i0 = clamp(Math.floor(x0 / SEAU), 0, this.sc - 1), i1 = clamp(Math.floor((x0 + S - 0.01) / SEAU), 0, this.sc - 1);
     const j0 = clamp(Math.floor(y0 / SEAU), 0, this.sr - 1), j1 = clamp(Math.floor((y0 + S - 0.01) / SEAU), 0, this.sr - 1);
-    if (x0 >= this.W || y0 >= this.H || x0 + S <= 0 || y0 + S <= 0) return false;
-    if (nom === 'sous' && this.couches.sous.partout.length) return true;
-    const s = nom === 'sous' ? this.couches.sous.seaux : this.arbresSeau, m = nom === 'canopee' ? 1 : 0;
-    for (let j = Math.max(0, j0 - m); j <= Math.min(this.sr - 1, j1 + m); j++) for (let i = Math.max(0, i0 - m); i <= Math.min(this.sc - 1, i1 + m); i++) if (s[j * this.sc + i].length) return true;
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) for (const k of C.seaux[j * this.sc + i]) if (coupe(C.objets[k].bbox, r)) return true;
     return false;
   }
   // peint le rectangle r (m) de la tuile tl
@@ -738,23 +753,27 @@ export class Decor2D {
     g.save(); g.beginPath(); g.rect(r[0], r[1], r[2] - r[0], r[3] - r[1]); g.clip(); g.clearRect(r[0], r[1], r[2] - r[0], r[3] - r[1]);
     if (nom === 'sous') {
       const C = this.couches.sous, vus = new Set(C.partout);
+      if (tl.L <= 1) vus.add(C.arbres);
       const i0 = clamp(Math.floor(r[0] / SEAU), 0, this.sc - 1), i1 = clamp(Math.floor(r[2] / SEAU), 0, this.sc - 1), j0 = clamp(Math.floor(r[1] / SEAU), 0, this.sr - 1), j1 = clamp(Math.floor(r[3] / SEAU), 0, this.sr - 1);
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) for (const k of C.seaux[j * this.sc + i]) if (coupe(C.objets[k].bbox, r)) vus.add(k);
-      for (const k of [...vus].sort((a, b) => a - b)) { const o = C.objets[k]; if (o.b) this.dessiner(g, o.b); else o.draw(g); }
-    } else {
-      const liste = [], m = 12;
-      const i0 = clamp(Math.floor((r[0] - m) / SEAU), 0, this.sc - 1), i1 = clamp(Math.floor((r[2] + m) / SEAU), 0, this.sc - 1), j0 = clamp(Math.floor((r[1] - m) / SEAU), 0, this.sr - 1), j1 = clamp(Math.floor((r[3] + m) / SEAU), 0, this.sr - 1);
-      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) for (const a of this.arbresSeau[j * this.sc + i]) if (a[0] + a[2] + 4 > r[0] && a[0] - a[2] < r[2] && a[1] + a[2] + 4 > r[1] && a[1] - a[2] < r[3]) liste.push(a);
-      D.arbres(g, liste);
-    }
+      for (const k of [...vus].sort((a, b) => a - b)) { const o = C.objets[k]; if (o.b) this.dessiner(g, o.b); else o.draw(g, r); }
+    } else D.arbres(g, this.arbresDans(this.arbresSeau, r));
     g.restore();
+  }
+  // les arbres de seaux dont la couronne (ou l'ombre) touche le rectangle r
+  arbresDans(seaux, r) {
+    const liste = [], m = 12;
+    const i0 = clamp(Math.floor((r[0] - m) / SEAU), 0, this.sc - 1), i1 = clamp(Math.floor((r[2] + m) / SEAU), 0, this.sc - 1), j0 = clamp(Math.floor((r[1] - m) / SEAU), 0, this.sr - 1), j1 = clamp(Math.floor((r[3] + m) / SEAU), 0, this.sr - 1);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) for (const a of seaux[j * this.sc + i]) if (a[0] + a[2] + 4 > r[0] && a[0] - a[2] < r[2] && a[1] + a[2] + 4 > r[1] && a[1] - a[2] < r[3]) liste.push(a);
+    return liste;
   }
   tuile(nom, L, i, j) {
     const C = this.couches[nom], cle = L + ':' + i + ':' + j;
     let tl = C.cache.get(cle);
     if (tl) { C.cache.delete(cle); C.cache.set(cle, tl); return tl; }   // (récente : en fin de liste)
     const S = TPX / L;
-    if (!this.occupe(nom, i * S, j * S, S)) return null;
+    if (C.vides.has(cle)) return null;
+    if (!this.occupe(nom, i * S, j * S, S, L)) { C.vides.add(cle); return null; }
     tl = { cv: null, L, S, x0: i * S, y0: j * S, sale: null, neuve: true };
     C.cache.set(cle, tl);
     // mémoire bornée selon la qualité : les plus anciennes s'en vont (jamais la vue d'ensemble)
@@ -777,8 +796,8 @@ export class Decor2D {
     }
   }
   // pose les tuiles d'une couche sur g (pixels de l'écran) ; au plus quelques millisecondes de peinture par image : ce
-  // qui n'est pas prêt est pris dans la vue d'ensemble
-  poser(g, view, nom, budget) {
+  // qui n'est pas prêt est pris dans la vue d'ensemble. garder(rect en m) : seulement ces tuiles
+  poser(g, view, nom, budget, garder = null) {
     const z = view.z, dpr = view.dpr || 1, need = z * dpr, maxL = Math.max(this.q.level ?? 16, 4) * 2;
     // la finesse la plus proche de celle de l'écran (en rapport), et pas plus fine que la qualité ne le permet
     let L = NIVEAUX.reduce((a, l) => Math.abs(Math.log(l / need)) < Math.abs(Math.log(a / need)) - 1e-9 ? l : a, NIVEAUX[0]); L = Math.min(L, maxL);
@@ -786,7 +805,8 @@ export class Decor2D {
     const x0 = cx - vw / 2 / z, y0 = cy - vh / 2 / z, x1 = cx + vw / 2 / z, y1 = cy + vh / 2 / z;
     const px = x => Math.round(dpr * (vw / 2 + (x - cx) * z)), py = y => Math.round(dpr * (vh / 2 + (y - cy) * z));
     g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = true;
-    const C = this.couches[nom], iL = NIVEAUX.indexOf(L), Lm = iL >= 3 ? NIVEAUX[iL - 2] : 0, Sm = TPX / Lm;
+    // (au sol, pas moins fine que 2 px/m : plus grossières, les tuiles ont les arbres isolés, dessinés à part de près)
+    const C = this.couches[nom], iL = NIVEAUX.indexOf(L), Lm = iL >= 3 ? NIVEAUX[Math.max(iL - 2, nom === 'sous' ? 2 : 0)] : 0, Sm = TPX / Lm;
     this.visibles = (Math.ceil((x1 - x0) / S) + 1) * (Math.ceil((y1 - y0) / S) + 1) + (Lm ? (Math.ceil((x1 - x0) / Sm) + 1) * (Math.ceil((y1 - y0) / Sm) + 1) : 0);
     // de près, les tuiles quatre fois moins fines d'abord (peu nombreuses) : en attendant les fines, l'image reste nette
     if (Lm) for (let j = Math.max(0, Math.floor(y0 / Sm)); j * Sm < Math.min(y1, this.H); j++) for (let i = Math.max(0, Math.floor(x0 / Sm)); i * Sm < Math.min(x1, this.W); i++) {
@@ -794,6 +814,7 @@ export class Decor2D {
       if (tl && (tl.neuve || tl.sale) && performance.now() < budget.fin) this.finir(nom, tl);
     }
     for (let j = Math.max(0, Math.floor(y0 / S)); j * S < Math.min(y1, this.H); j++) for (let i = Math.max(0, Math.floor(x0 / S)); i * S < Math.min(x1, this.W); i++) {
+      if (garder && !garder([i * S, j * S, (i + 1) * S, (j + 1) * S])) continue;
       const tl = this.tuile(nom, L, i, j);
       if (!tl) continue;
       if ((tl.neuve || tl.sale) && (L === VUE || performance.now() < budget.fin)) this.finir(nom, tl);
@@ -805,6 +826,7 @@ export class Decor2D {
         if (v && v.cv && !v.neuve) { g.drawImage(v.cv, (i * S - v.x0) * l, (j * S - v.y0) * l, S * l, S * l, dx, dy, dw, dh); break; }
       }
     }
+    return L;
   }
 
   // ------------------------------------------------------------------ dessin de chaque image
@@ -812,9 +834,11 @@ export class Decor2D {
     this.vue = view;
     const budget = { fin: performance.now() + (view.q?.fx ?? this.q.fx ?? 2) * 2 + 3 };
     this._budget = budget;
-    this.poser(ctx, view, 'sous', budget);
-    // la vie des champs
+    const L = this.poser(ctx, view, 'sous', budget);
     view.monde(ctx);
+    // de près, les arbres isolés, des haies et des champs (de loin, ils sont dans les tuiles)
+    if (L > 1) { const z = view.z, cx = view.cam.x, cy = view.cam.y, w = view.vw / 2 / z, h = view.vh / 2 / z; D.arbres(ctx, this.arbresDans(this.arbresSol, [cx - w, cy - h, cx + w, cy + h])); }
+    // la vie des champs
     const s = D.ECH_VIE;
     for (const e of this.vie) {
       if ((e.alpha ?? 1) <= 0 || !view.visible(e.x, e.y, 20)) continue;
@@ -828,24 +852,20 @@ export class Decor2D {
     this.vue = view; this._units = units;
     const budget = this._budget && this._budget.fin > performance.now() ? this._budget : { fin: performance.now() + 3 };
     const trous = this.clairieres(units).filter(([x, y, , hd, hw]) => view.visible(x, y, hd + hw));
-    let g = ctx;
-    if (trous.length) {
-      const w = Math.round(view.vw * (view.dpr || 1)), h = Math.round(view.vh * (view.dpr || 1));
-      if (!this.tmp || this.tmp.width !== w || this.tmp.height !== h) { if (this.tmp) this.tmp.width = 0; this.tmp = this.mk(w, h); }
-      g = this.tmp.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.clearRect(0, 0, w, h);
-    }
-    this.poser(g, view, 'canopee', budget);
-    if (trous.length) {
-      // le feuillage s'ouvre au-dessus des hommes : trois rectangles arrondis de plus en plus grands, de moins en moins
-      // effacés (un bord doux, quelques feuilles restent au milieu)
-      view.monde(g); g.globalCompositeOperation = 'destination-out';
-      for (const [x, y, a, hd, hw] of trous) {
-        g.save(); g.translate(x, y); g.rotate(a);
-        for (const [m, al] of [[7, .3], [3.5, .5], [0, .85]]) { g.globalAlpha = al; D.RR(g, '#fff', -hd - m, -hw - m, 2 * (hd + m), 2 * (hw + m), 3 + m); }
-        g.restore();
-      }
-      g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
-      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(this.tmp, 0, 0);
+    if (!trous.length) this.poser(ctx, view, 'canopee', budget);
+    else {
+      // le feuillage s'ouvre au-dessus des hommes. Les tuiles qui ne touchent aucun trou sont posées telles quelles ; celles
+      // qui en touchent passent sous des masques : hors des trous en plein, puis l'orée de chaque trou à demi (un bord
+      // doux). Pas de calque à part : le recopier coûtait plus que tout le reste
+      const OREE = 5, boites = trous.map(([x, y, , hd, hw]) => { const R = Math.hypot(hd, hw) + OREE + 3; return [x - R, y - R, x + R, y + R]; });
+      const touche = r => boites.some(b => coupe(b, r)), tout = boiteDe(boites.flatMap(b => [[b[0] - 1, b[1] - 1], [b[2] + 1, b[3] + 1]]));
+      this.poser(ctx, view, 'canopee', budget, r => !touche(r));
+      const horsDe = (m, sauf = -1) => trous.forEach((tr, k) => { if (k === sauf) return; ctx.beginPath(); ctx.rect(tout[0], tout[1], tout[2] - tout[0], tout[3] - tout[1]); D.trace(ctx, trouPoly(tr, m), true); ctx.clip('evenodd'); });
+      ctx.save(); view.monde(ctx); horsDe(OREE); this.poser(ctx, view, 'canopee', budget, touche); ctx.restore();
+      trous.forEach((tr, k) => {
+        ctx.save(); view.monde(ctx); ctx.beginPath(); D.trace(ctx, trouPoly(tr, OREE), true); ctx.clip(); horsDe(0);
+        ctx.globalAlpha = 0.45; this.poser(ctx, view, 'canopee', budget, r => coupe(r, boites[k])); ctx.restore();
+      });
     }
     view.monde(ctx);
     const t = this.time;
@@ -1042,7 +1062,6 @@ export class Decor2D {
   }
   liberer() {
     for (const C of Object.values(this.couches)) { for (const tl of C.cache.values()) if (tl.cv) tl.cv.width = tl.cv.height = 0; C.cache.clear(); }
-    if (this.tmp) { this.tmp.width = this.tmp.height = 0; this.tmp = null; }
   }
   dispose() { this.liberer(); this.fumees.length = 0; this.feux.clear(); this.vie.length = 0; }
 }

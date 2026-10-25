@@ -125,7 +125,11 @@ test('états reçus du serveur : touché, en feu (flammes, fumée), ruine qui co
 });
 
 test('le feuillage s\'ouvre au-dessus des régiments dans les bois, pas ailleurs', () => {
-  const d = new Decor2D(terrain(), {}, Q);
+  const tr = terrain();
+  tr.treeGrid[cellule(10, 35)].push({ x: 210, y: 710, r: 5, ci: 0, kind: 'feuillu' });   // un arbre isolé dans le pré
+  const d = new Decor2D(tr, {}, Q);
+  assert.equal(d.arbresSeau.flat().filter(a => a[1] === 710).length, 0, 'l\'arbre isolé n\'est pas dans la canopée');
+  assert.equal(d.arbresSol.flat().filter(a => a[1] === 710).length, 1, 'il est peint au sol, sous les troupes');
   const bois = { x: 960, y: 170, w: 60, d: 10, dir: 0.4, state: 'marche' }, champ = { x: 200, y: 700, w: 60, d: 10, dir: 0 };
   assert.equal(d.clairieres([bois]).length, 1);
   assert.equal(d.clairieres([champ]).length, 0);
@@ -134,10 +138,12 @@ test('le feuillage s\'ouvre au-dessus des régiments dans les bois, pas ailleurs
   assert.equal(a, 0.4); assert.ok(hw > 30 && hd > 5, 'le trou couvre le front et la profondeur');
   const ctx = contexte(), v = vue(960, 170, 4);
   d.dessus(ctx, v, [bois]);
-  assert.ok(d.tmp, 'calque du feuillage à part');
-  assert.ok(d.tmp.getContext('2d').appels.includes('gco:destination-out'), 'trous découpés dans le feuillage');
+  assert.ok(ctx.appels.includes('clip'), 'trous découpés dans le feuillage');
+  const tuiles = ctx.appels.filter(k => k === 'drawImage').length, ctx3 = contexte(); d.dessus(ctx3, v, []);
+  assert.ok(tuiles > ctx3.appels.filter(k => k === 'drawImage').length, 'les tuiles du trou sont reposées (plein, puis l\'orée)');
   const ctx2 = contexte(); d.dessus(ctx2, v, [champ]);
-  assert.ok(!ctx2.appels.includes('gco:destination-out'));
+  assert.ok(!ctx2.appels.includes('clip'));
+  assert.equal(d.clairieres([{ ...champ, x: 210, y: 710 }]).length, 0, 'un arbre de pré ne cache pas un régiment');
 });
 
 test('enceintes : mur médiéval, tracé bastionné, brèche refaite ; sans tracé, le mur suit les cases MUR', () => {
