@@ -214,3 +214,35 @@ Le ciel (`ciel.js`) :
   `vie.js`), `V.rMur` (rayon des remparts, pour le siège de `guerre.js`). Dans `drawNodes`, l'anneau de siège et le tri
   des places hors écran (`x < -s - 80`) suivent encore la taille du signe : de près, l'anneau tombe dans la ville et
   un grand plan disparaît trop tôt au bord de l'écran. `moulinVu` est recopié dans `interieur.js`.
+
+## Livré — C
+
+- `carte/vie.js` : la vie de la maquette, tirée de la carte (même route, mêmes passants ; même kilomètre, mêmes
+  bêtes et mêmes travaux), animée sur l'horloge de `ambient.js`. Deux passes : `dessinerSol` (sous les villes :
+  Cordouan, bateaux, pêche, relais, contrebande, moulins vus de dessus, et au plus près les routes, bêtes, travaux,
+  transhumance, brigands) et `dessinerDessus` (après les villes : marchés sur la grand-place de `planDe(...).lieux.place`,
+  foire hors les murs, fumées des cheminées, ombres des nuages par beau temps de jour, oiseaux).
+- Zooms : vie au plus près à `Z.VIE` ; marchés 40 ; foires, relais, sentiers 30 ; pêche, radeaux 18 ; fumées 14 ;
+  oiseaux 4 ; Cordouan 2,5. **Écart** : les bateaux (gabares, navires, vapeurs de `epoque.vapeur`) dès z 10 au lieu
+  de 18, à taille constante à l'écran, pour que l'eau ne soit pas morte entre 10 et 18.
+- **Écart** : de loin (moins d'un pixel par unité, z < 222 à densité 1, z < 111 à densité 2), les figures sont
+  dessinées en deux ou trois taches et les bêtes par couleur d'un seul tracé. Sans cela la vie coûtait 8,6 ms à
+  Bordeaux z 110 l'été.
+- Densité (`densite(x, y)`, de 0 à 1, la plus basse règle l'emporte) : nuit 0,15, soir 0,6 ; météo (pluie 0,6,
+  orage 0,35, tempête 0,25, neige 0,5, brouillard 0,8, canicule 0,7) ; siège (`sg`) 0,06 jusqu'à 4 km du bord de la
+  place ; bataille (`battles`) 0,1 dans 5 km ; famine (`me.famine`) 0,45 dans les places du joueur ; `lv` épidémie
+  0,25 (convois funèbres), disette 0,3 (mendiants, pas de moisson ni de vendange). Grille par kilomètre recalculée
+  quand l'état qui compte change (`majEtat`). Brigands : une bande tous les 4 km sur les routes d'une place à `lv`
+  brigands, parfois une diligence arrêtée. Marchés : places à `sl` `marche` ≥ 1, ni assiégées ni en disette ou
+  épidémie. Routes à moins de 12 km d'une foire : 1,6 fois plus de passants. La tempête garde navires et pêcheurs au port.
+- Pour D : `ajouterDensite(fn)` ajoute une règle (`fn(x, y)` → 0 à 1), par exemple devant une armée ennemie ;
+  `VIE.cordouan` donne la place du phare (le faisceau est à `ciel.js`) ; les lanternes (relais, diligences, bateaux,
+  pêcheurs, yeux des loups) vont dans `LUM` avec `spr: 'fen'` (sprite créé par `vie.js` s'il manque).
+- `ambient.js` garde l'interface (`under`, `over`, `drawTrains`, `setOn`, `conquete.anim`), les trains, l'écume et
+  les reflets de la mer ; le courant des fleuves s'arrête à z 18 (la rivière des tuiles suffit). Supprimés : les
+  dessins de profil (moulins, troupeaux, voyageurs, voiliers, phare, mouettes, vols) et la fumée des sièges (D).
+  Animations coupées ou mouvement réduit : la vie reste dessinée, immobile, sans fumées.
+- Temps de la vie par image (`under` + `over`, Chromium sans carte graphique, machine chargée), avant → après,
+  densité 1 / 2 : vue d'ensemble 0,16 → 0,18 / 0,71 → 0,10 ms ; z 26 Bordeaux 1,56 → 0,54 / 2,07 → 0,70, Landes
+  0,82 → 0,45 / 1,47 → 0,37, Pyrénées 1,06 → 0,76 / 1,33 → 0,86 ; z 110 Bordeaux 2,97 / 5,84, Landes 0,89 / 1,42,
+  Pyrénées 2,56 / 3,78 ; z 320 Bordeaux 1,70 / 1,53, Landes 0,83 / 0,69, Pyrénées 1,85 / 1,89.
