@@ -169,6 +169,20 @@ test('enceintes : mur médiéval, tracé bastionné, brèche refaite ; sans trac
   d2.sous(contexte(), vue(660, 610, 3));
 });
 
+test('barricades dressées pendant la bataille : charrettes en ville, abattis près des bois, seulement sur leurs cases', () => {
+  for (const s of ['v', 'b']) {
+    const tr = terrain();
+    for (let i = 10; i <= 14; i++) tr.t[cellule(i, 33)] = T.BARRICADE;   // (une case de plus, 15, renversée)
+    tr.walls = [{ kind: 'barricade', style: s, pts: [[200, 670], [320, 670]] }];
+    const d = new Decor2D(tr, {}, Q), e = d.enceintes[0], g = contexte(), xs = [];
+    if (s === 'v') g.translate = (x) => { xs.push(x); };   // (chaque objet posé à sa place)
+    else g.moveTo = (x) => { xs.push(x); };            // (troncs et branches, en mètres du terrain)
+    e.draw(g);
+    assert.ok(g.appels.includes(s === 'b' ? 'arc' : 'roundRect'), s);
+    assert.ok(xs.length && xs.every(x => x >= 190 && x <= 310), `${s} : rien hors des cases de la barricade`);
+  }
+});
+
 test('bêtes et villageois fuient les boulets', () => {
   const d = new Decor2D(terrain(), { place: { x: 470, y: 350, r: 120, type: 'village' } }, Q);
   const vache = d.vie.find(e => e.k === 'vache');

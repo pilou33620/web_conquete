@@ -55,6 +55,23 @@ RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MEL
   trouve en sort et perd FEU_MOR de moral) ; une ruine laisse mieux passer la vue (RUINE_OPAC). Tout se tire de
   battle.rng : même graine, même incendie. Le client reçoit les changements [case, état] dans `bati` de la vue (depuis
   since), l'état complet dans `bati` de la carte ; la sauvegarde les garde.
+- Maisons (ordre 'maisons', MAISON_*) : l'infanterie (légers et milice compris), ni aux prises ni en déroute, va au bâti
+  le plus proche du point visé (à 60 m au plus ; une ruine aussi, une maison en feu non), y entre en 40 s (forme
+  'maisons') et en sort en 30 s (tout ordre de marche, une retraite, une charge ; la déroute et l'incendie l'en
+  chassent sur-le-champ). 25 hommes par case bâtie à moins de 40 m : les autres restent dans la rue et les avantages
+  vont au prorata des hommes à l'abri. Couvert des maisons (BATI_COVER selon leur état) ; cachée (80 % à l'abri) : vue
+  à moins de 120 m seulement, ou 60 s après avoir tiré ; feu par les fenêtres (60 % des hommes, units.FRONT) ; corps à
+  corps ×1,6 ; les cavaliers ne la chargent pas (l'ordre est refusé, une charge lancée meurt au pied des maisons).
+- Barricades (ordre 'barricade', BARR_*) : l'infanterie arrêtée, sans ennemi repéré à moins de 200 m, qui a de quoi
+  faire (maisons à 80 m : charrettes, tonneaux, meubles, portes ; bois à 40 m : abattis ; des sapeurs : partout), dresse
+  en 4 min (sapeurs 2 ; ×1,3 fatigués, à 50 de fatigue) une ligne de cases T_BARRICADE à 15 m devant son front, de sa
+  largeur, sur le découvert et les routes seulement (BARR_ON : jamais sur le bâti, l'eau, les murs, les portes, ni dans
+  la zone de déploiement de l'assaillant) ; un ennemi à moins de 150 m ou un nouvel ordre arrête le travail. Une
+  barricade par troupe. Derrière : le couvert d'un ouvrage (WALLISH) et ×1,5 au corps à corps ; cavaliers et canons n'y
+  passent pas ; une charge sur la troupe qui est derrière perd 60 % de son choc et ne la rompt pas (les cavaliers
+  tournent bride) ; un boulet qui tombe sur une case de barricade la renverse une fois sur quatre (battle.rng). Le
+  client reçoit les barricades dans `barr` de la vue et de la carte, les cases posées ou renversées dans `barr_t` ;
+  la sauvegarde les garde.
 
 ==================================================================================================================
 AIDE-MÉMOIRE POUR L'ÉQUIPE IA (game/tactics/ai.py)
@@ -68,7 +85,10 @@ Ordres (renvoient (ok, msg)) :
   battle.order(side, ids, kind, **params)                 kind : 'move' (x, y, dir?, run?), 'attack' (target),
         'charge' (target), 'hold', 'fire' (mode='free'|'hold'), 'form' (form), 'rally', 'retreat',
         'bombard' (x, y) : batterie de brèche (canons de l'assaillant, place à enceinte) : elle bat le rempart au plus
-        près de (x, y) et ne tire sur l'ennemi qu'à portée de mitraille.
+        près de (x, y) et ne tire sur l'ennemi qu'à portée de mitraille ;
+        'maisons' (x?, y? : par défaut là où elle est) : occuper les maisons ; 'barricade' : se barricader (voir les
+        règles). battle.why_maisons(u, x, y)[0] et battle.why_barricade(u) disent pourquoi c'est impossible ('' sinon) ;
+        la vue de mes unités d'infanterie les donne (can_occupy, can_barricade : True ou la raison).
         Plusieurs unités en 'move' gardent leur disposition relative autour du point. L'IA ne commande que les unités
         qu'elle contrôle (u.ctrl == 'ia') : battle.ai_units(side).
   battle.withdraw(side)                                   tout le camp décroche (fin de bataille).
@@ -92,6 +112,8 @@ Lecture (sans tricher sur la vue) :
   battle.zone(side) → [x0, y0, x1, y1]                    zone de déploiement ; battle.edge(side) : 'N','S','E','O' ;
   battle.front_dir(side) → angle vers l'ennemi depuis sa zone ;
   battle.feature_at(x, y) → 0 aucun, 1 clôture, 2 haie, 3 muret (couvert léger à moyen, léger ralentissement) ;
+  battle.cells_near(x, y, r) → cases à moins de r m ;    battle.barr (barricades dressées), battle.barr_prev (leurs
+                                                          cases debout) ;
   battle.objective() → (x, y) | None                      cœur de la place (assaut) ;
   battle.place_info() → dict | None                       {x, y, r, fort} de la place ;
   battle.best_spot(x, y, radius, kind, side, facing=None) meilleure case proche : kind = 'cover' (couvert),
@@ -125,6 +147,10 @@ accéléré est enregistré avec la bataille (anciennes sauvegardes : une batail
 Chiffres : DT = 2 s par pas, repérage toutes les 4 s, IA toutes
 les 2 s ; fin au crépuscule (DUSK) ; assaut gagné en tenant le cœur de la place 6 min (au moins 150 hommes à 90 m)
 sans défenseur à 160 m.
+Abris (ai._abris) : la garnison d'une place (rôles rue, cœur, îlot) occupe les maisons quand l'ennemi est à 600 m ;
+l'infanterie de ligne du défenseur se barricade devant des cavaliers qui la menacent (à 400 m, ou qui marchent droit
+sur elle à 800 m) ; ni les légers ni l'assaillant ne se barricadent. L'IA ne déplace plus une troupe dans les maisons
+ou à sa barricade (ai._tenue) : elle n'en sort que pour charger, se replier ou fuir.
 ==================================================================================================================
 """
 import heapq
@@ -263,6 +289,26 @@ VOLLEY_CHARGE_AT = 0.6   # « salve puis baïonnette » : on tire à 60 % de la 
 VOLLEY_WAIT = 30.0       # … et l'on charge quand même si la volée n'est pas partie 30 s après être arrivé à portée
 ENTRENCH_T = 300.0       # retranchements : cinq minutes à l'arrêt pour s'enterrer (technologie, SPEC-TECH.md)
 LOGEMENT_K = 0.3         # logement dans une brèche (spec['logement'] : ids, posés par l'IA) : gabions, sacs à terre
+# « Occuper les maisons » (ordre 'maisons' ; la troupe prend la forme 'maisons') : l'infanterie va au bâti le plus
+# proche du point (à MAISON_R au plus), y entre en MAISON_IN s, en sort en MAISON_OUT s (tout ordre de marche l'en
+# fait sortir). Chaque case bâtie qui ne brûle pas, à moins de MAISON_CAP_R, abrite MAISON_MEN hommes : les autres
+# restent dans la rue, sans rien gagner (les avantages vont au prorata des hommes à l'abri)
+MAISON_R, MAISON_CAP_R, MAISON_MEN = 60.0, 40.0, 25.0
+MAISON_IN, MAISON_OUT = 40.0, 30.0
+MAISON_SEEN = 120.0      # cachée (si MAISON_HIDE de ses hommes sont à l'abri) : vue à moins de 120 m, ou 60 s après
+MAISON_HIDE = 0.8        # avoir tiré ; on tire par les fenêtres (units.FRONT : 60 % des hommes)
+MAISON_MELEE = 1.6       # au corps à corps, ×1,6 (au lieu de ×1,4 dans le bâti) ; les cavaliers n'y chargent pas
+# « Barricader » (ordre 'barricade') : l'infanterie arrêtée, sans ennemi repéré à moins de BARR_FOE, qui a de quoi faire
+# (maisons à BARR_HOUSE : charrettes, tonneaux, meubles, portes ; bois à BARR_WOOD : abattis ; sapeurs : partout)
+# dresse en BARR_T s (sapeurs BARR_T_SAP, ×BARR_FAT fatigués) une ligne de cases T_BARRICADE à BARR_D m devant son
+# front, de sa largeur, sur le découvert et les routes (BARR_ON ; pas dans la zone de déploiement de l'assaillant) ;
+# un ennemi à moins de BARR_STOP ou un ordre interrompt le travail. Une barricade par troupe. Cavaliers et canons n'y
+# passent pas ; une charge sur la troupe qui est derrière perd BARR_CHOC de son choc et ne la rompt pas ; un boulet qui
+# y tombe la renverse BARR_CASSE fois (la case redevient ce qu'elle était)
+BARR_FOE, BARR_STOP, BARR_HOUSE, BARR_WOOD = 200.0, 150.0, 80.0, 40.0
+BARR_T, BARR_T_SAP, BARR_FAT, BARR_D = 240.0, 120.0, 1.3, 15.0
+BARR_CHOC, BARR_CASSE = 0.4, 0.25
+BARR_ON = (T_PRE, T_CHAMP, T_VIGNE_T, T_LANDE_T, T_ROUTE, T_CHEMIN, T_SABLE, T_VERGER)
 HARASS_NEAR = 0.8        # harcèlement : on recule devant l'ennemi qui s'approche à moins de 80 % de la portée efficace…
 HARASS_FAR = 1.05        # … et l'on s'avance s'il reste au-delà (jamais plus près que 90 % de la portée efficace)
 HARASS_EVERY = 6.0       # le tirailleur réfléchit toutes les 6 s
@@ -291,9 +337,9 @@ VIEW = {'soleil': 2000, 'nuages': 1800, 'canicule': 1800, 'brouillard': 250, 'pl
 VUL_FIRE = dict(ligne=1.0, colonne=1.2, carre=1.3, tirailleurs=0.8, batterie=0.9, attelee=1.2)
 VUL_BALL = dict(ligne=0.8, colonne=1.5, carre=1.5, tirailleurs=0.35, batterie=0.6, attelee=1.2)
 VUL_GRAPE = dict(ligne=1.0, colonne=1.3, carre=1.3, tirailleurs=0.55, batterie=0.8, attelee=1.0)
-ARC = dict(ligne=0.9, colonne=1.0, carre=4.0, tirailleurs=1.6, batterie=0.8, attelee=0.0)
+ARC = dict(ligne=0.9, colonne=1.0, carre=4.0, tirailleurs=1.6, batterie=0.8, attelee=0.0, maisons=4.0)
 TURN = dict(ligne=0.03, colonne=0.12, carre=0.2, tirailleurs=0.1, batterie=0.05, attelee=0.1)
-FORM_TIME = dict(ligne=50, colonne=40, carre=60, tirailleurs=45, batterie=60, attelee=60)
+FORM_TIME = dict(ligne=50, colonne=40, carre=60, tirailleurs=45, batterie=60, attelee=60, maisons=MAISON_IN)
 
 
 def grape_k(d, grape):
@@ -376,6 +422,10 @@ class TacticalBattle:
         self.piet = None                     # la boue laissée par les troupes (image PNG du navigateur, SPEC-SUITE F8)
         self.bati = bytearray(N)             # état de chaque case bâtie (BATI_*) : 0 intacte, 1 touchée, 2 feu, 3 ruine
         self.bati_log = []                   # … ses changements : [seq, case, état, heure de bataille (s)]
+        self.barr = []                       # barricades dressées : {u: troupe, s: 'v' ville, 'b' abattis, None terre,
+                                             # pts: [[x, y], [x, y]], c: [[case, type d'avant], …]}
+        self.barr_log = []                   # … leurs cases posées ou renversées : [seq, case, type, type d'avant]
+        self.barr_prev = {}                  # cases de barricade debout : type d'avant
         self.feu = {}                        # cases en feu : heure où le feu a pris
         self._feu_t = -99.0
         self.chaume = {TR.cell_of(b['x'], b['y']) for b in self.map.buildings if b.get('toit') == 'chaume'}
@@ -539,6 +589,13 @@ class TacticalBattle:
         tc = self.t[c]
         return max(BATI_COVER[self.bati[c]] if tc == T_BATI else COVER[tc], FCOVER[self.f[c]])
 
+    def cells_near(self, x, y, r):
+        """Cases dont le centre est à moins de r m de (x, y)."""
+        i0, i1 = max(0, int((x - r) // CELL)), min(COLS - 1, int((x + r) // CELL))
+        j0, j1 = max(0, int((y - r) // CELL)), min(ROWS - 1, int((y + r) // CELL))
+        return [j * COLS + i for j in range(j0, j1 + 1) for i in range(i0, i1 + 1)
+                if ((i + 0.5) * CELL - x) ** 2 + ((j + 0.5) * CELL - y) ** 2 <= r * r]
+
     def feature_at(self, x, y):
         """Élément linéaire de la case : 0 aucun, 1 clôture, 2 haie, 3 muret (terrain.FEAT_NAMES)."""
         return self.f[self.cell(x, y)]
@@ -569,6 +626,9 @@ class TacticalBattle:
         for c in range(N):
             if f[c] and arr[c] is not None:
                 arr[c] += FCOST[f[c]] * fk
+        if mc in ('cav', 'art'):
+            for c in self.barr_prev:   # (barricades dressées pendant la bataille : ni chevaux, ni canons)
+                arr[c] = None
         self._cost_cache[key] = arr
         return arr
 
@@ -1094,8 +1154,11 @@ class TacticalBattle:
             tg = self.by_id.get(p.get('target'))
             if not tg or tg.side == side or not tg.alive or tg.id not in self.seen_by[side]:
                 return False, "Cible invisible ou introuvable."
+            if kind == 'charge' and tg.form == 'maisons' and all(u.cls == 'cavalerie' for u in us):
+                return False, "Des cavaliers ne chargent pas des maisons : l'ennemi s'y est retranché."
             for u in us:
-                if kind == 'charge' and u.cls in ('artillerie', 'general', 'chariot'):
+                if kind == 'charge' and (u.cls in ('artillerie', 'general', 'chariot') or
+                                         (u.cls == 'cavalerie' and tg.form == 'maisons')):
                     continue
                 if u.state == 'melee':
                     if u.melee_with == tg.id:
@@ -1106,7 +1169,7 @@ class TacticalBattle:
                     self._end_melee(u)   # on se dégage pour aller ailleurs (sans élan : il faudra le reprendre)
                 if kind == 'charge' and u.state == 'charge' and u.target == tg.id:
                     continue             # la charge est déjà lancée sur cette cible : elle garde son élan
-                if kind == 'charge' and u.form == 'carre':
+                if kind == 'charge' and u.form in ('carre', 'maisons'):
                     u.form = 'colonne'
                 u.target = tg.id
                 u.order = dict(kind=kind, target=tg.id)
@@ -1189,6 +1252,37 @@ class TacticalBattle:
             if not n:
                 return False, "Seule l'infanterie se met à couvert."
             return True, "Au couvert !"
+        if kind == 'maisons':
+            # « Occuper les maisons » : l'infanterie va au bâti le plus proche du point (par défaut, le sien) et y entre
+            try:
+                pt = (float(p['x']), float(p['y'])) if 'x' in p else None
+            except (KeyError, TypeError, ValueError):
+                pt = (math.nan, math.nan)
+            if pt and not (math.isfinite(pt[0]) and math.isfinite(pt[1])):
+                return False, "Destination invalide."
+            n, why = 0, None
+            for u in us:
+                w, spot = self.why_maisons(u, *(pt or (u.x, u.y)))
+                if w:
+                    why = why or w
+                    continue
+                self._go(u, spot[0], spot[1], None)
+                u.order = dict(kind='maisons', x=round(spot[0]), y=round(spot[1]))
+                u.target = None
+                n += 1
+            return (True, "Aux maisons !") if n else (False, why)
+        if kind == 'barricade':
+            n, why = 0, None
+            for u in us:
+                w = self.why_barricade(u)
+                if w:
+                    why = why or w
+                    continue
+                k = (BARR_T_SAP if u.type == 'sapeurs' else BARR_T) * (BARR_FAT if u.fat >= 50 else 1.0)
+                u.order = dict(kind='barricade', t0=self.clock, need=k)
+                u.target = None
+                n += 1
+            return (True, "On se barricade.") if n else (False, why)
         if kind == 'pursue':
             # la cavalerie court sus aux fuyards (le plus proche d'abord)
             seen = self.seen_by[side]
@@ -1316,6 +1410,8 @@ class TacticalBattle:
             self._end_melee(u)
         if u.cls == 'artillerie' and u.form == 'batterie':
             self._change_form(u, 'attelee')
+        if u.form == 'maisons' or u.next_form == 'maisons':
+            self._change_form(u, self._dehors(u))
         u.order = dict(kind='retreat')
         u.target = None
         u.path, u.goal = [], None
@@ -1325,6 +1421,8 @@ class TacticalBattle:
     def _go(self, u, gx, gy, d, run=False, allow_out=False):
         if u.cls == 'artillerie' and u.form == 'batterie':
             self._change_form(u, 'attelee')
+        if u.form == 'maisons' or u.next_form == 'maisons':
+            self._change_form(u, self._dehors(u))   # (on sort des maisons : MAISON_OUT)
         if u.state == 'melee':
             self._end_melee(u)
         if allow_out:
@@ -1374,6 +1472,8 @@ class TacticalBattle:
                 base *= CAMO_SETUP   # (mise en batterie entre les arbres)
         elif u.cls == 'cavalerie':
             base = 30
+        if u.form == 'maisons':
+            base = MAISON_OUT
         u.next_form = f
         # (pendant un ralliement, les officiers reforment d'abord les rangs : pas de raccourci)
         u.busy = max(10.0, base * max(0.4, k), u.busy if u.state == 'ralliement' else 0.0)
@@ -1510,6 +1610,7 @@ class TacticalBattle:
                 ce = self.cell(e.x, e.y)
                 hidden = self.t[ce] in WOODS or (self.t[ce] == T_BATI and e.cls != 'general')
                 camo = e.cls == 'artillerie' and self.t[ce] in WOODS
+                inside = e.form == 'maisons' and self._maisons(e)[0] >= MAISON_HIDE
                 near = (100 if e.light else 150) + (100 if eclaireur else 0)
                 he = self.h[ce]
                 for o in mine:
@@ -1524,6 +1625,8 @@ class TacticalBattle:
                     if recent:
                         seen.add(e.id)
                         break
+                    if inside and d2 > MAISON_SEEN * MAISON_SEEN:
+                        continue   # (dans les maisons, derrière les volets)
                     if hidden and d2 > near * near and (e.light or self._deep(e, o, d2)):
                         continue   # (un bataillon posté à la lisière, face à qui regarde, se voit ; les légers non)
                     if d2 < 60 * 60 or self.los_units(o, e):
@@ -1616,6 +1719,13 @@ class TacticalBattle:
                 self._change_form(u, 'batterie')
         elif not u.path and u.state == 'marche':
             u.state = 'repos'
+        if kind == 'maisons' and not u.path and u.busy <= 0 and u.form != 'maisons' and u.order.get('kind') == kind:
+            if self._maisons(u)[0] > 0:   # arrivée : on entre (MAISON_IN)
+                self._change_form(u, 'maisons')
+            else:
+                u.order = dict(kind='hold')   # (chemin introuvable : pas de maison ici)
+        elif kind == 'barricade' and u.order.get('kind') == kind:
+            self._barricading(u)
         self._fatigue(u, dt, 'repos')
         if u.busy <= 0:
             self._fire(u, dt)
@@ -1830,8 +1940,13 @@ class TacticalBattle:
         return x + ux * a - uy * b, y + uy * a + ux * b
 
     def _bati_hit(self, x, y, u):
-        """Un boulet de u tombe en (x, y) : la case bâtie s'entame ou prend feu (BATI_*)."""
+        """Un boulet de u tombe en (x, y) : la case bâtie s'entame ou prend feu (BATI_*), la barricade dressée pendant la
+        bataille se renverse (BARR_CASSE)."""
         c = self.cell(x, y)
+        if c in self.barr_prev:
+            if self.rng.random() < BARR_CASSE:
+                self._barr_set(c, self.barr_prev[c])
+            return
         if self.t[c] != T_BATI or self.bati[c] >= 2:
             return
         p = (BATI_FEU_CHAUME if c in self.chaume else BATI_FEU) * (1 + 2 * self.ufx(u, 'shell'))
@@ -1874,7 +1989,143 @@ class TacticalBattle:
             if bt[c] == 2 and t[c] == T_BATI and u.alive and u.state != 'melee':
                 u.x, u.y = self.nearest_passable(u, u.side, u.x, u.y, hors_feu=True)
                 u.morale = max(0.0, u.morale - FEU_MOR)
+                if u.form == 'maisons' or u.next_form == 'maisons':
+                    u.form, u.next_form, u.busy, u.order = self._dehors(u), None, 0.0, dict(kind='hold')
                 self.log(f"{u.name} quitte une maison en feu.", u.side, u.side)
+
+    # ================================================================== maisons occupées, barricades
+    @staticmethod
+    def _dehors(u):
+        """La formation que reprend la troupe qui sort des maisons."""
+        return 'tirailleurs' if u.light else 'ligne'
+
+    def why_maisons(self, u, x, y):
+        """Pourquoi u ne peut pas occuper les maisons près de (x, y) ('' si elle le peut), et la case bâtie où elle va
+        (la plus proche du point, qui ne brûle pas ; une ruine abrite moins : BATI_COVER)."""
+        if self.phase != 'combat':
+            return "La bataille n'est pas engagée.", None
+        if u.cls != 'inf':
+            return "Seule l'infanterie occupe les maisons.", None
+        if u.state == 'deroute':
+            return "Ces troupes sont en déroute : il faut d'abord les rallier.", None
+        if u.state in ('melee', 'charge'):
+            return "Elle est aux prises : impossible d'occuper les maisons.", None
+        cs = [c for c in self.cells_near(x, y, MAISON_R) if self.t[c] == T_BATI]
+        ok = [c for c in cs if self.bati[c] != 2]
+        if not ok:
+            return ("Ces maisons brûlent." if cs else "Aucune maison à moins de 60 m."), None
+        c = min(ok, key=lambda c: ((c % COLS + 0.5) * CELL - x) ** 2 + ((c // COLS + 0.5) * CELL - y) ** 2)
+        spot = ((c % COLS + 0.5) * CELL, (c // COLS + 0.5) * CELL)
+        if u.form == 'maisons' and math.hypot(spot[0] - u.x, spot[1] - u.y) < MAISON_CAP_R:
+            return "Elle tient déjà ces maisons.", spot
+        return '', spot
+
+    def _maisons(self, u):
+        """Les maisons que tient u (forme 'maisons') : (part de ses hommes à l'abri, couvert moyen de leurs cases). Chaque
+        case bâtie qui ne brûle pas, à moins de MAISON_CAP_R, abrite MAISON_MEN hommes, les mieux couvertes d'abord."""
+        covs = sorted((BATI_COVER[self.bati[c]] for c in self.cells_near(u.x, u.y, MAISON_CAP_R)
+                       if self.t[c] == T_BATI and self.bati[c] != 2), reverse=True)
+        n = min(len(covs), math.ceil(u.men / MAISON_MEN))
+        if not n:
+            return 0.0, 0.0
+        return min(1.0, n * MAISON_MEN / max(1.0, u.men)), sum(covs[:n]) / n
+
+    def why_barricade(self, u):
+        """Pourquoi u ne peut pas se barricader ('' si elle le peut)."""
+        if self.phase != 'combat':
+            return "La bataille n'est pas engagée."
+        if u.cls != 'inf':
+            return "Seule l'infanterie dresse des barricades."
+        if u.state == 'deroute':
+            return "Ces troupes sont en déroute : il faut d'abord les rallier."
+        if u.form == 'maisons':
+            return "Elle tient les maisons : qu'elle en sorte d'abord."
+        if (u.order or {}).get('kind') == 'barricade':
+            return "Elle s'y emploie déjà."
+        if u.state not in ('repos', 'feu', 'recharge') or u.path or u.busy > 0:
+            return "Il faut d'abord qu'elle s'arrête."
+        if any(b['u'] == u.id and any(c in self.barr_prev for c, _p in b['c']) for b in self.barr):
+            return "Elle a déjà sa barricade."
+        if any(e.valid and (e.x - u.x) ** 2 + (e.y - u.y) ** 2 < BARR_FOE ** 2 for e in self.visible_enemies(u.side)):
+            return "L'ennemi est trop près : pas le temps de se barricader."
+        if self._barr_style(u) is False:
+            return "Rien pour se barricader ici : ni maisons à moins de 80 m, ni bois à moins de 40 m (les sapeurs en " \
+                   "dressent partout)."
+        if not self._barr_line(u)[0]:
+            return "Pas de terrain où la dresser devant elle (découvert ou route, hors de la zone de l'assaillant)."
+        return ''
+
+    def _barr_style(self, u):
+        """De quoi se barricader : 'v' (maisons à BARR_HOUSE : charrettes, tonneaux, meubles), 'b' (bois à BARR_WOOD :
+        abattis), None (des sapeurs, partout : gabions et terre), False (rien)."""
+        if any(self.t[c] == T_BATI for c in self.cells_near(u.x, u.y, BARR_HOUSE)):
+            return 'v'
+        if any(self.t[c] in WOODS for c in self.cells_near(u.x, u.y, BARR_WOOD)):
+            return 'b'
+        return None if u.type == 'sapeurs' else False
+
+    def _barr_line(self, u):
+        """Cases de la barricade de u : une ligne à BARR_D m devant son front, de sa largeur, sur le découvert et les
+        routes (BARR_ON), hors de la zone de déploiement de l'assaillant ; et ses deux bouts [[x, y], [x, y]]."""
+        w, d = U.footprint(u)
+        ca, sa = math.cos(u.dir), math.sin(u.dir)
+        cx, cy = u.x + ca * (d / 2 + BARR_D), u.y + sa * (d / 2 + BARR_D)
+        z = self.zones[0]
+        out, last, n = [], None, max(1, int(w // 5))
+        for k in range(n + 1):
+            s = (k / n - 0.5) * w
+            x, y = cx - sa * s, cy + ca * s
+            if not (0 <= x < W and 0 <= y < H):
+                last = None
+                continue
+            c = self.cell(x, y)
+            # (en biais, la case du coin aussi : pas de trou en diagonale)
+            cs = (c,) if last is None or c % COLS == last % COLS or c // COLS == last // COLS else \
+                (last // COLS * COLS + c % COLS, c)
+            for cc in cs:
+                xc, yc = (cc % COLS + 0.5) * CELL, (cc // COLS + 0.5) * CELL
+                if cc not in out and self.t[cc] in BARR_ON and not (z[0] <= xc <= z[2] and z[1] <= yc <= z[3]):
+                    out.append(cc)
+            last = c
+        return out, [[round(cx + sa * w / 2), round(cy - ca * w / 2)], [round(cx - sa * w / 2), round(cy + ca * w / 2)]]
+
+    def _barricading(self, u):
+        """Le travail de la barricade : l'ennemi qui approche l'interrompt ; au bout du temps voulu, elle est debout."""
+        o = u.order
+        if any(e.valid and (e.x - u.x) ** 2 + (e.y - u.y) ** 2 < BARR_STOP ** 2 for e in self.visible_enemies(u.side)):
+            u.order = dict(kind='hold')
+            self.log(f"{u.name} abandonne sa barricade : l'ennemi approche.", u.side)
+            return
+        if self.clock - o['t0'] < o['need']:
+            return
+        u.order = dict(kind='hold')
+        style, (cells, pts) = self._barr_style(u), self._barr_line(u)
+        if style is False or not cells:
+            return
+        self.barr.append(dict(u=u.id, s=style, pts=pts, c=[[c, self.t[c]] for c in cells]))
+        for c in cells:
+            self._barr_set(c, T_BARRICADE)
+        self.log(f"{u.name} s'est barricadé" + {'v': " (charrettes, tonneaux, meubles).", 'b': " (un abattis d'arbres)."}
+                 .get(style, "."), u.side)
+
+    def _barr_set(self, c, t):
+        self.seq += 1
+        self.barr_log.append([self.seq, c, t, self.t[c]])
+        self._barr_mark(c, t, self.t[c])
+
+    def _barr_mark(self, c, t, prev):
+        if t == T_BARRICADE:
+            self.barr_prev[c] = prev
+        else:
+            self.barr_prev.pop(c, None)
+        self.t[c] = t
+        self._cost_cache, self._path_cache, self._los_cache = {}, {}, {}
+
+    def _barr_front(self, tg, src):
+        """Une barricade juste devant tg, face à src (à une, deux ou trois cases) ?"""
+        dx, dy = src.x - tg.x, src.y - tg.y
+        L = math.hypot(dx, dy) or 1.0
+        return any(self.t[self.cell(tg.x + dx / L * CELL * k, tg.y + dy / L * CELL * k)] == T_BARRICADE for k in (1, 2, 3))
 
     # ================================================================== brèches ouvertes au canon
     def _wall_target(self, u, mx, aim=None):
@@ -2118,6 +2369,9 @@ class TacticalBattle:
         c = self.cover_at(tg.x, tg.y)
         if tg.cls == 'chariot':
             return 0.0
+        if tg.form == 'maisons':
+            occ, cm = self._maisons(tg)
+            c += occ * max(0.0, cm - c)   # (ceux qui sont restés dans la rue n'en profitent pas)
         if tg.light and self.t[self.cell(tg.x, tg.y)] in WOODS:
             c += 0.1
         dx, dy = shooter.x - tg.x, shooter.y - tg.y
@@ -2249,6 +2503,15 @@ class TacticalBattle:
             self._capture(a, tg, frac * min(1.0, mom / ST.ELAN['cavalerie' if cav else 'inf']))
             a.state = 'repos'
             return
+        if cav and tg.form == 'maisons':
+            # des cavaliers ne prennent pas des maisons : ils tournent bride sous le feu des fenêtres
+            a.morale = max(0.0, a.morale - 5)
+            self._repulse(a, tg)
+            self.log(f"La charge de {a.name} vient mourir au pied des maisons que tient {tg.name}.", None, a.side)
+            return
+        barr = self._barr_front(tg, a)
+        if barr:
+            mom *= BARR_CHOC   # (charrettes, abattis : on s'y empêtre)
         if cav and tg.form == 'carre' and tg.busy <= 0:
             # le carré brise la charge
             back = self._melee_k(tg, a) * tg.men * 0.04
@@ -2261,7 +2524,7 @@ class TacticalBattle:
         # feu de défense : de face, une troupe en ordre (ou une batterie chargée) tire à bout portant sur ceux qui
         # chargent
         ready = flank == 1.0 and tg.busy <= 0 and tg.ammo >= 1 and tg.state not in ('melee', 'ralliement', 'charge') and \
-            ((tg.cls == 'inf' and tg.form in ('ligne', 'colonne', 'tirailleurs')) or
+            ((tg.cls == 'inf' and tg.form in ('ligne', 'colonne', 'tirailleurs', 'maisons')) or
              (tg.cls == 'artillerie' and tg.form == 'batterie'))
         if ready:
             if tg.type == 'mitrailleuses':
@@ -2295,7 +2558,7 @@ class TacticalBattle:
                 return
         # une troupe en bon ordre, de face, encaisse le choc sans se rompre
         formed = flank == 1.0 and tg.busy <= 0 and tg.morale >= FORMED and tg.state != 'ralliement' and \
-            tg.cls == 'inf' and tg.form in ('ligne', 'colonne')
+            tg.cls == 'inf' and tg.form in ('ligne', 'colonne', 'maisons')
         vul = 1.0
         if cav:
             vul = dict(ligne=1.2, tirailleurs=1.6, colonne=1.0, attelee=1.7, batterie=1.4).get(tg.form, 1.0)
@@ -2310,11 +2573,17 @@ class TacticalBattle:
         self._damage(tg, cas, a, 'impact')
         shock = 6 * mom * flank * (1.3 if cav and tg.form in ('ligne', 'tirailleurs') else 1.0)
         tg.morale = max(0.0, tg.morale - shock * (0.5 if formed else 1.0))
-        if tg.morale < 25:
+        if tg.morale < 25 and not barr:
             self._rout(tg)
             if cav:
                 self._capture(a, tg, CAPTURE['rupture_cav'])
             a.state = 'repos'
+            return
+        if barr and cav:
+            # la barricade tient : les cavaliers ne passent pas
+            a.morale = max(0.0, a.morale - 8)
+            self._repulse(a, tg)
+            self.log(f"La charge de {a.name} se brise sur la barricade de {tg.name}.", None, a.side)
             return
         if formed and cav and tg.morale >= HOLD:
             # la ligne a tenu : les cavaliers tournent bride
@@ -2343,7 +2612,9 @@ class TacticalBattle:
         elif u.form == 'tirailleurs':
             k *= 0.7
         tt = self.t[self.cell(u.x, u.y)]
-        if tt in (T_MUR, T_PORTE, T_BARRICADE) and u.side == 0:
+        if u.form == 'maisons':
+            k *= 1 + (MAISON_MELEE - 1) * self._maisons(u)[0]   # (aux fenêtres, aux portes)
+        elif tt in (T_MUR, T_PORTE, T_BARRICADE) and u.side == 0:
             k *= 0.6   # l'assaillant à cheval sur l'obstacle (à l'échelle, sur la barricade) se bat mal
         elif tt == T_BATI:
             k *= 1.4
@@ -2529,6 +2800,8 @@ class TacticalBattle:
             self._end_melee(u)
         u.state = 'deroute'
         u.halt = False
+        if u.form == 'maisons':
+            u.form = self._dehors(u)   # (les fuyards se sauvent par les rues)
         u.order = dict(kind='deroute')
         u.target = None
         u.busy = 0.0
@@ -2716,6 +2989,10 @@ class TacticalBattle:
                 units[-1]['rempart'] = True   # sur l'enceinte : le client la dessine sans avant-train
             if mine and u.cls == 'general' and u.alive:
                 units[-1]['rally'] = round(self.rally_radius(u))   # (zone où il rallie les fuyards)
+            if mine and u.cls == 'inf' and u.alive:
+                # « Occuper les maisons » (là où elle est), « Barricader » : True, ou pourquoi c'est impossible
+                units[-1]['can_occupy'] = self.why_maisons(u, u.x, u.y)[0] or True
+                units[-1]['can_barricade'] = self.why_barricade(u) or True
         sides = []
         for s in (0, 1):
             us = [u for u in self.units if u.side == s and u.cls not in ('general', 'chariot')]
@@ -2740,6 +3017,7 @@ class TacticalBattle:
                    skirmish=bool(self.spec.get('skirmish')),   # mode Bataille : « Retour au menu »
                    breaches=self.breaches,                     # brèches ouvertes au canon pendant la bataille
                    bati=[[c, e] for s, c, e, _t in self.bati_log if s > since],   # maisons touchées, en feu, en ruine
+                   barr=self.barr, barr_t=[[c, t] for s, c, t, _p in self.barr_log if s > since],   # barricades
                    fx=[e for e in self.fx if e['s'] > since],
                    log=[(txt if ab is None or me is None or ab == me else 'Ennemi : ' + txt)
                         for s, sd, txt, ab in self.logs if s > since and (sd is None or me is None or sd == me)])
@@ -2801,6 +3079,7 @@ class TacticalBattle:
         d = self.map.to_client(self.spec)
         d['nbreach'] = len(self.breaches)   # (déjà dans les remparts envoyés : le client ne les rajoute pas)
         d['bati'] = [[c, e] for c, e in enumerate(self.bati) if e]   # état des maisons (SPEC-2D § 5), au chargement
+        d['barr'] = self.barr   # (leurs cases sont déjà dans t)
         if getattr(self, 'piet', None):
             d['piet'] = self.piet   # la boue laissée par les troupes (SPEC-SUITE F8), redessinée au rechargement
         return d
@@ -2811,7 +3090,7 @@ class TacticalBattle:
                     seq=self.seq, logs=[list(x) for x in self.logs[-60:]], ai_sides=self.ai_sides,
                     withdrawing=self.withdrawing, withdraw_t=self.withdraw_t, hold_t=self.hold_t, siege_t=self.siege_t, prisoners=self.prisoners,
                     ai_mem=self.ai_mem, result=self.result, pound=self.pound, breaches=self.breaches,
-                    breach_t=self.breach_t, bati=self.bati_log,
+                    breach_t=self.breach_t, bati=self.bati_log, barr=self.barr, barr_log=self.barr_log,
                     accel=self.accel, accel_t=self.accel_t, replay=self.replay, ask=self.ask,
                     end=[getattr(self, 'winner', None), getattr(self, 'disengage', None), getattr(self, 'why', None)],
                     piet=getattr(self, 'piet', None))
@@ -2843,6 +3122,10 @@ class TacticalBattle:
             tb._bati_mark(c, e, t0)
         for wi, x, y, r in d.get('breaches') or []:
             tb._apply_breach(wi, x, y, r)
+        tb.barr = list(d.get('barr') or [])   # (anciennes sauvegardes : pas de barricade)
+        tb.barr_log = [list(x) for x in d.get('barr_log') or [] if 0 <= x[1] < N]
+        for _s, c, t, prev in tb.barr_log:
+            tb._barr_mark(c, t, prev)
         e = d.get('end') or [None, None, None]
         if e[0] is not None:
             tb.winner, tb.disengage, tb.why = e

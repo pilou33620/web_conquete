@@ -166,3 +166,13 @@ test('la disposition est la même d’une image à l’autre ; une perte ne dép
   for (let i = 0; i < b.length - 3; i++) if (a[i].role === R.H && b[i].role === R.H) max = Math.max(max, Math.hypot(a[i].ox - b[i].ox, a[i].oy - b[i].oy));
   assert.ok(max < 2, `${max.toFixed(2)} m au plus`);
 });
+
+test('dans les maisons : quelques hommes aux portes et aux fenêtres, tournés vers le dehors, et le drapeau', () => {
+  const figs = disposition(reg({ form: 'maisons', w: 40, d: 40 }));
+  assert.ok(hommes(figs) <= 10 && count(figs, R.H) >= 4, `${hommes(figs)} hommes`);
+  assert.equal(count(figs, R.DRAPEAU), 1);
+  for (const f of figs.filter(f => f.role === R.H)) {
+    assert.ok(Math.hypot(f.ox, f.oy) > 10, 'aux portes, pas au milieu');
+    assert.ok(Math.abs(Math.atan2(f.oy, f.ox) - f.fa + Math.PI) % (2 * Math.PI) - Math.PI < 0.01, 'tourné vers le dehors');
+  }
+});

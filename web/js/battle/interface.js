@@ -158,7 +158,7 @@ export class BattleUI {
     const u = this.inspected && v.units.get(this.inspected);
     if (!u) { p.hidden = true; this.panelSig = ''; this.el.classList.remove('has-panel'); return; }
     const mine = u.side === v.me;
-    const sig = JSON.stringify([u.id, u.men, Math.round(u.morale ?? 0), Math.round(u.fat ?? 0), u.ammo, u.state, u.form, u._ghost, u.camo, v.losOn, this.showVals]);
+    const sig = JSON.stringify([u.id, u.men, Math.round(u.morale ?? 0), Math.round(u.fat ?? 0), u.ammo, u.state, u.form, u._ghost, u.camo, v.losOn, this.showVals, u.can_occupy, u.can_barricade, u.seen, u.order]);
     if (sig === this.panelSig && !force) return;
     this.panelSig = sig;
     p.hidden = false;
@@ -179,9 +179,16 @@ export class BattleUI {
       </dl>
       <div class="bp-note">${am} · ${rg}<button class="bp-vl ${this.showVals ? 'on' : ''}" data-a="valeurs" aria-expanded="${!!this.showVals}">Valeurs</button></div>${this.showVals ? valeursHtml(u.stats) : ''}
       ${u.camo ? '<p class="bp-help">Camouflée dans le bois : l’ennemi ne la voit qu’à moins de 250 m (500 m quand elle tire). En échange, les arbres gênent son tir (−35 %) et sa mise en batterie (plus longue de moitié).</p>' : ''}
-      <div class="bp-row bp-btns"><button class="bt-btn ${v.losOn ? 'on' : ''}" data-a="los" title="Ce que voit ce régiment">Ligne de vue</button></div>`;
+      ${u.form === 'maisons' ? `<p class="bp-help">Dans les maisons${u.seen ? '' : ', <b>cachée</b>'} : l’ennemi ne la voit qu’à moins de 120 m (60 s après qu’elle a tiré). Elle tire par les fenêtres (60 % des hommes), se défend mieux au corps à corps, et les cavaliers n’y chargent pas.</p>` : ''}
+      ${u.order === 'barricade' ? '<p class="bp-help">Elle se barricade (4 min, 2 pour des sapeurs) : un ennemi à moins de 150 m interrompt le travail.</p>' : ''}
+      <div class="bp-row bp-btns"><button class="bt-btn ${v.losOn ? 'on' : ''}" data-a="los" title="Ce que voit ce régiment">Ligne de vue</button>${'can_occupy' in u ? this.abri(u, 'maisons', 'Occuper les maisons', u.can_occupy) + this.abri(u, 'barricade', 'Barricader', u.can_barricade) : ''}</div>`;
     const c = p.querySelector('canvas[data-fig]');
     if (c) this.figure(c, u);
+  }
+  // « Occuper les maisons », « Barricader » : refusés, ils disent pourquoi (la raison du serveur)
+  abri(u, kind, label, can) {
+    const why = can === true ? '' : String(can || '');
+    return `<button class="bt-btn${why ? ' lock' : ''}" data-a="abri" data-k="${kind}"${why ? ` aria-disabled="true" title="${esc(why)}"` : ''}>${label}</button>`;
   }
   foeHtml(u) {
     const ghost = u._ghost;
@@ -200,6 +207,13 @@ export class BattleUI {
     switch (b.dataset.a) {
       case 'desel': this.inspect(null); break;
       case 'los': v.setLos(!v.losOn); this.renderPanel(true); break;
+      case 'abri': {
+        const u = this.inspected && v.units.get(this.inspected);
+        if (!u) break;
+        if (b.title) { this.toast(b.title); break; }
+        v.cmd('unit', { id: u.id, kind: b.dataset.k }).then(r => { if (r.ok && r.msg) this.toast(r.msg, 'good'); });
+        break;
+      }
       case 'valeurs':
         this.showVals = !this.showVals;
         try { localStorage.setItem('conquete.bataille.valeurs', this.showVals ? '1' : '0'); } catch (e) { /* tant pis */ }

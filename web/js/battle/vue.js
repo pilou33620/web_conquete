@@ -125,6 +125,9 @@ export class BattleView {
     this.troupes = new Troupes2D(this.q, m.year);
     this.decor = new Decor2D(this.terrain, m, this.q);
     if (m.bati?.length) this.decor.bati(m.bati);   // toits crevés, feux et ruines d'avant (bataille rechargée)
+    for (const b of m.barr || []) this.terrain.addBarricade(b);   // barricades d'avant (leurs cases sont déjà dans t)
+    this.nBarr = (m.barr || []).length;
+    if (this.nBarr) this.decor.walls();
     this.fx.marks = m.marks || [[], []];   // (poudre sans fumée de chaque camp)
     this.art.setYear(m.year);   // coiffures de l'époque
     this.cam = { x: this.W / 2, y: this.H / 2, z: this.fitZ() };
@@ -209,6 +212,15 @@ export class BattleView {
     for (const b of (st.breaches || []).slice(this.nBreach || 0)) { this.terrain.addBreach(b); this.sol.invalidate(b[1], b[2], (b[3] || 20) + 40); this.breached = true; }
     if (this.breached) { this.breached = false; this.decor.walls(); }
     this.nBreach = Math.max(this.nBreach || 0, (st.breaches || []).length);
+    // barricades dressées ou renversées depuis le dernier relevé : les cases (passage, sol), le décor
+    const nBarr = (st.barr || []).length;
+    for (const b of (st.barr || []).slice(this.nBarr || 0)) this.terrain.addBarricade(b);
+    if (st.barr_t?.length || nBarr > (this.nBarr || 0)) {
+      this.nBarr = Math.max(this.nBarr || 0, nBarr);
+      const xy = (st.barr_t || []).map(([c, t]) => this.terrain.setCell(c, t));
+      this.decor.walls();   // (d'après les cases à jour)
+      for (const [x, y] of xy) { this.sol.invalidate(x, y, 40); this.decor.invalider([x - 30, y - 30, x + 30, y + 30]); }
+    }
     // bâtiments touchés, en feu, en ruine depuis le dernier relevé
     if (st.bati?.length) this.decor.bati(st.bati);
     this.seq = st.seq ?? this.seq;
@@ -396,7 +408,8 @@ export class BattleView {
       u.x = u.from.x + (u.to.x - u.from.x) * k;
       u.y = u.from.y + (u.to.y - u.from.y) * k;
       u.dir = u.from.dir + wrapAngle(u.to.dir - u.from.dir) * k;
-      u._fade = u._ghost ? clamp(1 - (now - u.ghostT) / 60000, 0.25, 1) : 1;
+      // (dans les maisons, à l'abri des regards : ses hommes à soi la voient pâlie)
+      u._fade = u._ghost ? clamp(1 - (now - u.ghostT) / 60000, 0.25, 1) : u.side === this.me && u.form === 'maisons' && !u.seen ? 0.55 : 1;
       // poussière sous les sabots, seulement si la charge avance vraiment
       if (u.state === 'charge' && clsOf(u) === 'cavalerie' && !u._ghost && Math.hypot(u.to.x - u.from.x, u.to.y - u.from.y) > 2) this.fx.trail(u.x, u.y, u.dir, u.w, u._figScale);
     }

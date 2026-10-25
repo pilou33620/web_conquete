@@ -754,6 +754,13 @@ def command(g, body):
         if bt:
             bt['mode'] = 'attente'
         return dict(ok=True)
+    if sub == 'unit':
+        # la fiche d'un de vos régiments : « Occuper les maisons » (là où il est), « Barricader » ; vos officiers l'y
+        # laissent (ai._tenue)
+        if body.get('kind') not in ('maisons', 'barricade') or tb.me not in (0, 1):
+            return dict(ok=False, msg='Ordre inconnu.')
+        ok, msg = tb.order(tb.me, [body.get('id')], body['kind'], who='any')
+        return dict(ok=ok, msg=msg)
     if sub == 'answer':
         ok = OR.answer(tb, 'go' if body.get('v') == 'go' else 'wait')
         return dict(ok=ok, msg='' if ok else 'Aucune question en attente.')

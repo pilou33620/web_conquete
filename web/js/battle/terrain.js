@@ -77,7 +77,7 @@ export class Terrain {
     const mk = k => this.marks.some(l => (l || []).includes(k));
     this.epoque = { mais: mk('mais') && /\((40|64)\)/.test(m.region || ''), foule: !mk('greffe') && this.year < 1885, pinsLignes: mk('landes1857') || this.year >= 1860 };
     this.cols = m.cols || Math.round(this.W / this.cell); this.rows = m.rows || Math.round(this.H / this.cell);
-    const n = this.cols * this.rows, remap = cellRemap(m.types);
+    const n = this.cols * this.rows, remap = this.remap = cellRemap(m.types);
     const tr = b64(m.t), hr = b64(m.h);
     this.t = new Uint8Array(n); this.h = new Uint8Array(n);
     for (let c = 0; c < n; c++) { this.t[c] = tr ? remap[tr[c]] : T.PRE; this.h[c] = hr ? hr[c] : 0; }
@@ -952,10 +952,21 @@ export class Terrain {
     const w = this.walls[wi];
     if (!w) return;
     (w.breach = w.breach || []).push([x, y, r]);
-    const m = r + 40, x0 = x - m, y0 = y - m;
-    const cv = this.paintCanvas(x0, y0, 2 * m, 2 * m, BASE);
+    this.repaint(x, y, r + 40);
+  }
+  repaint(x, y, m) {
+    const x0 = x - m, y0 = y - m, cv = this.paintCanvas(x0, y0, 2 * m, 2 * m, BASE);
     this.base.getContext('2d').drawImage(cv, x0 * BASE, y0 * BASE);
     cv.width = cv.height = 0;
+  }
+  // barricade dressée pendant la bataille ({s: 'v' ville, 'b' abattis, null terre ; pts : ses deux bouts}) : le décor la
+  // dessine là où ses cases sont des barricades (setCell les pose et les renverse, d'après le serveur)
+  addBarricade(b) { this.walls.push({ kind: 'barricade', pts: b.pts, style: b.s, neuve: true }); }
+  setCell(c, t) {
+    const x = (c % this.cols + 0.5) * this.cell, y = ((c / this.cols | 0) + 0.5) * this.cell;
+    this.t[c] = this.remap[t];
+    this.repaint(x, y, this.cell * 2);
+    return [x, y];
   }
   // tués, chevaux, trous d'obus : ceux qui tombent sur le sol découvert (Sol2D.stamp les peint)
   addDecals(list) { return list.filter(d => this.bare(d.x, d.y)); }

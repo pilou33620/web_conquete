@@ -61,10 +61,11 @@ WAGON_RATE = 0.04        # … de 4 % de leur dotation par minute…
 WAGON_LOAD = 50.0        # … et se vide de 50 % quand il recomplète toute l'armée (deux pleins par chariot)
 FORMS = dict(inf=('ligne', 'colonne', 'carre', 'tirailleurs'), cavalerie=('ligne', 'colonne'),
              artillerie=('attelee', 'batterie'), general=('colonne',), chariot=('colonne',))
-FRONT = dict(ligne=1.0, tirailleurs=0.6, colonne=0.25, carre=0.25)   # part des hommes qui tirent
+# part des hommes qui tirent (maisons : par les fenêtres, ordre « Occuper les maisons » de battle.py, pas une formation)
+FRONT = dict(ligne=1.0, tirailleurs=0.6, colonne=0.25, carre=0.25, maisons=0.6)
 FORM_SPEED = dict(ligne=0.8, colonne=1.1, carre=0.4, tirailleurs=1.0, attelee=1.0, batterie=0.0)
 FORM_LABEL = dict(ligne='Ligne', colonne='Colonne', carre='Carré', tirailleurs='Tirailleurs', attelee='Attelée',
-                  batterie='En batterie')
+                  batterie='En batterie', maisons='Dans les maisons')
 STATE_LABEL = dict(repos='Au repos', marche='En marche', feu='Feu', recharge='Recharge', charge='Charge',
                    melee='Mêlée', deroute='Déroute', ralliement='Ralliement', hors='Hors de combat')
 
@@ -140,6 +141,8 @@ def footprint(u):
         return (100 * k, 15) if f == 'ligne' else (30, 60 * k)
     if f == 'colonne':
         return 40, 50 * k
+    if f == 'maisons':
+        return 40, 40
     if f == 'carre':
         s = 45 * math.sqrt(k)
         return s, s

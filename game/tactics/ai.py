@@ -212,6 +212,13 @@ GUN_EYE = EYES['artillerie']
 # et elle est terrible sous 150 m (×1,5 à 100 m, ×1,6 dès 90 m : battle.GRAPE_CLOSE) : c'est cette zone (plus 40 m) que la
 # ligne évite ; une batterie en ordre ne s'aborde pas de face (_gun_front), sauf déjà ébranlée ou en nombre
 GRAPE_DEADLY = 0.6
+# maisons et barricades (battle.py, ordres 'maisons' et 'barricade') : la garnison d'une place (rues, cœur, îlots)
+# entre dans les maisons quand l'ennemi repéré est à moins d'ABRI_FOE ; l'infanterie du défenseur que des cavaliers
+# ennemis menacent (à moins de la moitié d'ABRI_CAV, ou qui marchent droit sur elle à moins d'ABRI_CAV) se barricade
+# quand le moteur le permet (pas les légers, qui vont et viennent devant la ligne) ; l'assaillant ne se barricade
+# jamais
+ABRI_FOE, ABRI_CAV = 600.0, 800.0
+ABRI_ROLES = ('rue', 'coeur', 'ilot')
 
 # l'assaillant qui mène l'attaque (plans frontal, artillerie, débordement) ne décroche qu'avec ce supplément de pertes :
 # il sait qu'on n'emporte pas une position sans le payer (même valeur à tous les niveaux)
@@ -1581,6 +1588,8 @@ def _square(b, side, mem, L, u, cavs, foes=()):
 def _charge_ok(b, side, u, e):
     """La charge peut-elle aller droit au but ? (le moteur charge en ligne droite ; rochers, eau, forêt l'arrêtent)"""
     mc = 'cav' if u.cls == 'cavalerie' else ('light' if u.light else 'inf')
+    if mc == 'cav' and e.form == 'maisons':
+        return False   # (le moteur refuse : des cavaliers ne chargent pas des maisons)
     dx, dy = e.x - u.x, e.y - u.y
     n = max(1, int(math.hypot(dx, dy) // 25))
     for k in range(1, n):
@@ -1645,7 +1654,38 @@ def _heavy(b, side, mem, L, us, foes):
     _cavalry(b, side, mem, L, us, foes, sit, want, busy)
     _bayonets(b, side, mem, L, us, foes, sit, busy)
     _artillery(b, side, mem, L, us, foes, sit, want, busy)
+    _abris(b, side, mem, us, foes, busy)
     _apply(b, side, mem, us, want, busy)
+
+
+def _tenue(u):
+    """Dans les maisons, en chemin pour y entrer ou à sa barricade : l'IA ne la déplace plus (elle n'en sort que pour
+    charger, se replier ou fuir)."""
+    return u.form == 'maisons' or (u.order or {}).get('kind') in ('maisons', 'barricade')
+
+
+def _abris(b, side, mem, us, foes, busy):
+    """Le défenseur se met à l'abri : la garnison dans les maisons, l'infanterie menacée par des cavaliers derrière une
+    barricade (voir ABRI_*)."""
+    if side != 1:
+        return
+    place = mem.get('plan') == 'place'
+    cavs = [e for e in foes if e.cls == 'cavalerie' and e.valid]
+    for u in us:
+        if u.cls != 'inf' or not u.valid or u.id in busy or _tenue(u) or u.path or u.busy > 0 or \
+                u.state not in ('repos', 'feu', 'recharge'):
+            continue
+        if place and mem['role'].get(u.id) in ABRI_ROLES:
+            if any(e.valid and _d2(e.x, e.y, u.x, u.y) < ABRI_FOE ** 2 for e in foes) and \
+                    b.order(side, [u.id], 'maisons')[0]:
+                busy.add(u.id)
+                _note_once(b, mem, 'maisons', f"l'ennemi approche : {u.name} occupe les maisons.", 1800)
+        elif not u.light and any(_d2(e.x, e.y, u.x, u.y) < (ABRI_CAV / 2) ** 2 or (
+                _d2(e.x, e.y, u.x, u.y) < ABRI_CAV ** 2 and e.state in ('marche', 'charge') and
+                _ang(e.dir, math.atan2(u.y - e.y, u.x - e.x)) < 0.6) for e in cavs) and not b.why_barricade(u):
+            b.order(side, [u.id], 'barricade')
+            busy.add(u.id)
+            _note_once(b, mem, 'barricade', f"des cavaliers rôdent : {u.name} se barricade.", 1800)
 
 
 def _situation(b, mem, us, foes):
@@ -4518,7 +4558,7 @@ def _apply(b, side, mem, us, want, busy):
         w = want.get(u.id)
         if w is None or u.id in busy or u.id in eng:
             continue
-        if u.state in ('deroute', 'melee', 'charge', 'ralliement') or u.busy > 0 or u.form == 'carre':
+        if u.state in ('deroute', 'melee', 'charge', 'ralliement') or u.busy > 0 or u.form == 'carre' or _tenue(u):
             continue
         x, y, d, form, run = w
         x, y = _clamp(x, y)
@@ -4537,6 +4577,8 @@ def _apply(b, side, mem, us, want, busy):
 
 
 def _goto(b, side, mem, u, x, y, d=None, run=False, tol=22.0):
+    if _tenue(u):
+        return
     dx, dy = x - u.x, y - u.y
     g = u.goal
     if dx * dx + dy * dy <= tol * tol:

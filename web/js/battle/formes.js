@@ -36,7 +36,7 @@ export const TYPE_LABEL = {
   sapeurs: 'Sapeurs', garde: 'Garde nationale', cavalerie: 'Cavalerie', artillerie: 'Artillerie', mitrailleuses: 'Mitrailleuses', milice: 'Milice',
   general: 'État-major', chariot: 'Chariot de munitions',
 };
-export const FORM_LABEL = { ligne: 'Ligne', colonne: 'Colonne', carre: 'Carré', tirailleurs: 'Tirailleurs', batterie: 'En batterie', attelee: 'Attelée' };
+export const FORM_LABEL = { ligne: 'Ligne', colonne: 'Colonne', carre: 'Carré', tirailleurs: 'Tirailleurs', batterie: 'En batterie', attelee: 'Attelée', maisons: 'Dans les maisons' };
 export const STATE_LABEL = {
   repos: 'En position', marche: 'En marche', feu: 'Fait feu', recharge: 'Recharge', charge: 'Charge !', melee: 'Corps à corps',
   deroute: 'En déroute', ralliement: 'Se rallie', hors: 'Hors de combat', formation: 'Change de formation',
@@ -73,6 +73,7 @@ export function emprise(u) {
     case 'colonne': return [Math.max(14, 40 * Math.sqrt(k)), Math.max(12, 50 * Math.sqrt(k))];
     case 'carre': { const s = Math.max(14, 45 * Math.sqrt(k)); return [s, s]; }
     case 'tirailleurs': return [Math.max(30, 220 * k), 30];
+    case 'maisons': return [40, 40];
     default: return [Math.max(10, 120 * k), 12];
   }
 }

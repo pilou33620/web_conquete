@@ -106,6 +106,44 @@ function surChemin(pts, s) {
 function decaler(pts, d) {
   return pts.map((p, k) => { const a = pts[Math.max(0, k - 1)], b = pts[Math.min(pts.length - 1, k + 1)], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [p[0] - (b[1] - a[1]) / l * d, p[1] + (b[0] - a[0]) / l * d]; });
 }
+// barricade dressée pendant la bataille (battle.py, « Barricader ») : en ville, charrettes renversées, tonneaux,
+// armoires et portes arrachées ; près d'un bois, un abattis (arbres abattus, la cime vers l'ennemi). m : le morceau
+// debout, pts : la barricade entière (de la gauche à la droite de la troupe : l'ennemi est à sa gauche)
+function barricadeNeuve(g, m, style, neige, pts) {
+  const [a, b] = [pts[0], pts.at(-1)], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L;
+  const R = D.alea((m[0][0] * 13 + m[0][1] * 7) | 0), ang = Math.atan2(uy, ux);
+  if (style === 'b') {
+    const feuille = neige ? ['#5d5a4a', '#6e6a58'] : [D.BOIS[0], D.BOIS[2], D.BOIS[4]];
+    for (const p of reechant(m, 4.5)) {
+      const k = ang - Math.PI / 2 + (R() - 0.5) * 0.9, c = Math.cos(k), s = Math.sin(k), l = 6 + R() * 3;
+      const x1 = p[0] + c * l * 0.6, y1 = p[1] + s * l * 0.6, x2 = p[0] - c * l * 0.4, y2 = p[1] - s * l * 0.4;
+      for (let i = 0; i < 5; i++) {   // les branches de la cime, taillées en pointe, vers l'ennemi
+        const q = k + (R() - 0.5) * 1.6, r = 1.6 + R() * 2;
+        D.T(g, '#4a3826', 0.25, x1, y1, x1 + Math.cos(q) * r, y1 + Math.sin(q) * r);
+      }
+      D.C(g, D.OMBRE, x1 + 0.8, y1 + 1.1, 1.7);
+      for (let i = 0; i < 3; i++) D.C(g, feuille[i % feuille.length], x1 + (R() - 0.5) * 2.4, y1 + (R() - 0.5) * 2.4, 0.9 + R() * 0.6);
+      tronc(g, x1, y1, x2, y2);   // (la coupe, claire, du côté des défenseurs)
+    }
+    return;
+  }
+  for (const p of reechant(m, 3.6)) {
+    const r = R();
+    g.save(); g.translate(p[0], p[1]); g.rotate(ang + (R() - 0.5) * 0.6);
+    D.E(g, D.OMBRE, 0.5, 0.7, 2.6, 1.3);
+    if (r < 0.3) {   // charrette renversée : le plateau, ses ridelles, une roue en l'air
+      D.RR(g, '#7a5a3a', -2.6, -1.2, 5.2, 2.4, 0.3); D.T(g, '#5b4127', 0.25, -2.6, -0.4, 2.6, -0.4); D.T(g, '#5b4127', 0.25, -2.6, 0.4, 2.6, 0.4);
+      D.C(g, '#3a2a1b', 1.8, -1.5, 0.95); D.C(g, '#8a6a45', 1.8, -1.5, 0.35);
+    } else if (r < 0.55) {   // tonneaux
+      for (const [x, y] of [[-0.8, -0.3], [0.7, 0.4]]) { D.C(g, '#5b4127', x, y, 0.7); D.C(g, '#8a6a45', x, y, 0.45); D.C(g, '#3a2a1b', x, y, 0.12); }
+    } else if (r < 0.8) {   // armoire, table renversée
+      D.RR(g, '#5a3f28', -1.3, -0.7, 2.6, 1.4, 0.2); D.T(g, '#3a2a1b', 0.12, 0, -0.7, 0, 0.7); D.RR(g, neige ? '#e8e4dc' : '#9a7650', 1.4, -0.9, 0.6, 0.6, 0.1);
+    } else {   // portes et volets arrachés, poutres
+      D.RR(g, '#9a7650', -1.6, -0.55, 3.2, 1.1, 0.1); D.T(g, '#6e5134', 0.12, -1.6, 0, 1.6, 0); D.T(g, '#6b4d31', 0.35, -2.2, 0.9, 2, -0.2);
+    }
+    g.restore();
+  }
+}
 function reechant(pts, pas) {
   const out = [];
   for (let k = 1; k < pts.length; k++) { const [ax, ay] = pts[k - 1], [bx, by] = pts[k], L = Math.hypot(bx - ax, by - ay); for (let u = 0; u < L; u += pas) out.push([ax + (bx - ax) * u / L, ay + (by - ay) * u / L]); }
@@ -847,10 +885,12 @@ export class Decor2D {
     let cur = [];
     for (const p of reechant(pts, 4)) { const v = this.at(p[0], p[1]); if (v === TY.EAU || v === TY.GUE || (bar && v !== TY.BARRICADE)) { if (cur.length > 1) morceaux.push(cur); cur = []; } else cur.push(p); }
     if (cur.length > 1) morceaux.push(cur);
-    return [{ z: 1, bbox, draw: g => {
+    // (dressée pendant la bataille : par-dessus les prés et les champs, sous les arbres et les maisons)
+    return [{ z: w.neuve ? 2.4 : 1, bbox, draw: g => {
       g.lineCap = 'round'; g.lineJoin = 'round';
       for (const m of morceaux) {
-        if (longueur(m) > 70) {   // tranchée : parapet de terre rejetée, gabions sur la crête
+        if (w.style === 'v' || w.style === 'b') barricadeNeuve(g, m, w.style, neige, pts);
+        else if (longueur(m) > 70) {   // tranchée : parapet de terre rejetée, gabions sur la crête
           D.ligne(g, decaler(m, -2)); g.strokeStyle = terre; g.lineWidth = 4.5; g.stroke();
           D.ligne(g, m); g.strokeStyle = neige ? '#8d8070' : '#5e4630'; g.lineWidth = 2.4; g.stroke();
           g.fillStyle = '#6b4d31'; g.beginPath(); for (const p of reechant(decaler(m, -3.2), 2.6)) { g.moveTo(p[0] + 1, p[1]); g.arc(p[0], p[1], 1, 0, TAU); } g.fill();
@@ -893,7 +933,7 @@ export class Decor2D {
     // (les arbres au sol : un seul objet, peint dans les tuiles de loin seulement ; de près, sous() les dessine à chaque
     // image, peu nombreux à l'écran : pas de tuiles partout dans la campagne)
     const arbres = { z: 2.5, bbox: [-1e9, -1e9, 1e9, 1e9], arbres: true, draw: (g, r) => D.arbres(g, this.arbresDans(this.arbresSol, r)) };
-    const objets = [...this.enceintes.filter(o => o.z === 0), ...this.fixes.filter(o => o.z <= 2), arbres, ...this.batiments.map(b => ({ z: 3, bbox: b.bbox, b })), ...this.enceintes.filter(o => o.z === 4)];
+    const objets = [...this.enceintes.filter(o => o.z < 4), ...this.fixes.filter(o => o.z <= 2), arbres, ...this.batiments.map(b => ({ z: 3, bbox: b.bbox, b })), ...this.enceintes.filter(o => o.z === 4)];
     objets.sort((a, b) => a.z - b.z);
     const L = this.couches.sous, { sc, sr } = this;
     L.objets = objets; L.seaux = Array.from({ length: sc * sr }, () => []); L.vides.clear(); this.couches.canopee.vides.clear();

@@ -160,7 +160,15 @@ export function disposition(u, per = 1, fs = 1) {
     // piquiers : l'infanterie « mousquet et piques » (arme 0), un homme sur cinq au centre ; la milice en a quelques-uns
     const pike = u.arm === 0 && !isLight(u) && (type === 'ligne' || mil || !type);
     const hab = () => (rnd() * 5) | 0;
-    if (u.form === 'carre') {
+    if (u.form === 'maisons') {
+      // dans les maisons : quelques hommes aux portes et aux fenêtres, tout autour ; le drapeau et l'officier au milieu
+      const m = clamp(Math.round(n / 25), 4, 9), r = Math.max(w, d) * 0.42;
+      for (let j = 0; j < m; j++) {
+        const a = (j + rnd() * 0.5) / m * TAU, rr = r * (0.75 + rnd() * 0.3);
+        H(R.H, Math.cos(a) * rr, Math.sin(a) * rr, { fa: a, rang: 0, off: rnd() * 4.6, v: hab() });
+      }
+      H(R.DRAPEAU, 0, 0, { rang: 0 }); H(R.OFFICIER, 3 * k, 3 * k);
+    } else if (u.form === 'carre') {
       // carré : deux ou trois rangs par face, tournés vers l'extérieur ; drapeau, officier et tambour au milieu
       const ranks = n > 60 ? 3 : 2, m = n - 1, slots = 4 * ranks, dv = 4.6 * k, s = Math.max(w / 2, ranks * dv + 2 * k);
       for (let j = 0; j < m; j++) {
