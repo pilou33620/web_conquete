@@ -1137,8 +1137,10 @@ class IAFinirAutomatiquementEtLogement(unittest.TestCase):
         tb._update_vision()
         pense(1)
         self.assertEqual((res.state, res.target), ('charge', u.id))
-        # en déroute, le logement est perdu
+        # en déroute, le logement est perdu (la réserve qui l'a chargé tient la brèche : on n'y en loge pas un autre)
         u.state = 'deroute'
+        res.x, res.y = bx, by
+        tb._update_vision()
         pense(0)
         self.assertIsNone(mem['lodge'])
         self.assertNotIn(u.id, tb.spec['logement'])

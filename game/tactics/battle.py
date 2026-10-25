@@ -46,6 +46,14 @@ RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MEL
 - Place : l'assaillant l'emporte en tenant le cœur 6 min (HEART_*) ; à l'échelle ou sur une barricade, il se bat mal.
   Reddition (SURR_*) : une brèche ouverte depuis 20 min, une heure sous le canon, 30 % de pertes, un moral moyen sous 55
   et l'assaillant deux fois plus nombreux en ligne : la garnison capitule et elle est prisonnière (la place est prise).
+  Siège ou assaut d'une place à enceinte : l'artillerie du défenseur se déploie sur l'enceinte (la case de mur la plus
+  proche, à REMPART_GAP de la batterie voisine, tournée vers le dehors), tire de là et n'en bouge plus (on_rampart).
+- Bâti (BATI_*, FEU_*, SPEC-2D § 5) : chaque case bâtie est intacte (0), touchée (1), en feu (2) ou en ruine (3). Un
+  boulet qui tombe dessus l'entame (BATI_TOUCHE) ou y met le feu (BATI_FEU, BATI_FEU_CHAUME, ×2 à l'obus) ; le feu
+  dure FEU_DUREE, gagne les cases bâties voisines (FEU_PROPAG), puis laisse une ruine. Couvert : BATI_COVER (en feu,
+  aucun ; la troupe qui s'y trouve en sort et perd FEU_MOR de moral) ; une ruine laisse mieux passer la vue
+  (RUINE_OPAC). Tout se tire de battle.rng : même graine, même incendie. Le client reçoit les changements
+  [case, état] dans `bati` de la vue (depuis since), l'état complet dans `bati` de la carte ; la sauvegarde les garde.
 
 ==================================================================================================================
 AIDE-MÉMOIRE POUR L'ÉQUIPE IA (game/tactics/ai.py)
@@ -68,7 +76,9 @@ Lecture (sans tricher sur la vue) :
   battle.ai_units(side) / battle.units_of(side)           unités du camp (objets Unit, voir units.py) ;
   battle.visible_enemies(side)                            ennemis actuellement repérés par ce camp ;
   battle.unit(uid)                                        une unité par son id (ne lire que les siennes ou les repérées) ;
-  battle.cover_at(x, y) → 0..0,7                          couvert de la case (réduction des pertes au feu) ;
+  battle.cover_at(x, y) → 0..0,7                          couvert de la case (réduction des pertes au feu ; maisons
+                                                          touchées, en feu, en ruine : BATI_COVER) ;
+  battle.on_rampart(u) → bool                             canon du défenseur sur l'enceinte (fixe) ;
   battle.height_at(x, y) → m                              altitude ;
   battle.terrain_at(x, y) → type T_* (terrain.TYPE_NAMES) ; battle.is_wood(x, y) ;
   battle.los(x1, y1, x2, y2, eye1, eye2) → bool           ligne de vue symétrique (bois, bâti, murs, haies, crêtes),
@@ -161,6 +171,17 @@ FCOST = [0.0, 0.15, 0.4, 0.3]
 FOPAC = [0, 0, 15, 0]
 FTOP = [0, 0, 2.8, 0]    # une haie (talus compris) cache ce qui est à hauteur d'homme, pas ce qu'on voit de plus haut
 EYE = 2.5                # hauteur d'un fantassin, pour la vue (m)
+# bâti sous le canon (SPEC-2D § 5) : chaque case bâtie est 0 intacte, 1 touchée, 2 en feu, 3 en ruine
+BATI_COVER = (COVER[T_BATI], 0.45, 0.0, 0.3)   # en feu, elle ne couvre plus ; en ruine, moins qu'une maison
+BATI_TOUCHE = 0.5        # un boulet tombé sur une case bâtie intacte l'entame une fois sur deux…
+BATI_FEU = 0.06          # … et y met le feu (tuile, ardoise) six fois sur cent…
+BATI_FEU_CHAUME = 0.3    # … trente sur un toit de chaume (map.buildings, toit='chaume') ; ×2 à l'obus (mélinite)
+FEU_DT = 10.0            # l'incendie se calcule toutes les 10 s de bataille :
+FEU_DUREE = 900.0        # une maison brûle un quart d'heure, puis il en reste une ruine ;
+FEU_PROPAG = 0.006       # à chaque fois, le feu gagne une case bâtie voisine (×2,5 chaume, ×0,4 pluie ou neige) ;
+FEU_MOR = 6.0            # la troupe chassée d'une maison en feu perd 6 points de moral
+RUINE_OPAC = 25          # une ruine bouche la vue moitié moins qu'une maison (OPACITY du bâti : 50)
+REMPART_GAP = 60.0       # siège : deux batteries du défenseur sur l'enceinte à 60 m l'une de l'autre au moins
 PIET_MAX = 200000        # taille au plus de l'image de la boue (data URL PNG, SPEC-SUITE F8)
 
 
@@ -350,6 +371,11 @@ class TacticalBattle:
         self.breaches = []                   # brèches ouvertes pendant la bataille : [mur, x, y, rayon]
         self.breach_t = []                   # … et quand : [heure de bataille (s), secteur] (journal des batailles)
         self.piet = None                     # la boue laissée par les troupes (image PNG du navigateur, SPEC-SUITE F8)
+        self.bati = bytearray(N)             # état de chaque case bâtie (BATI_*) : 0 intacte, 1 touchée, 2 feu, 3 ruine
+        self.bati_log = []                   # … ses changements : [seq, case, état, heure de bataille (s)]
+        self.feu = {}                        # cases en feu : heure où le feu a pris
+        self._feu_t = -99.0
+        self.chaume = {TR.cell_of(b['x'], b['y']) for b in self.map.buildings if b.get('toit') == 'chaume'}
         rng = random.Random(spec['seed'] ^ 0x5A5A)
         self.rng = rng
         wa = rng.random() * 6.283
@@ -481,7 +507,8 @@ class TacticalBattle:
 
     def cover_at(self, x, y):
         c = self.cell(x, y)
-        return max(COVER[self.t[c]], FCOVER[self.f[c]])
+        tc = self.t[c]
+        return max(BATI_COVER[self.bati[c]] if tc == T_BATI else COVER[tc], FCOVER[self.f[c]])
 
     def feature_at(self, x, y):
         """Élément linéaire de la case : 0 aucun, 1 clôture, 2 haie, 3 muret (terrain.FEAT_NAMES)."""
@@ -530,9 +557,13 @@ class TacticalBattle:
     def _passable_u(self, u, x, y):
         return self.costs(move_class(u), u.side)[self.cell(x, y)] is not None
 
-    def nearest_passable(self, u_or_cls, side, x, y, maxr=12):
+    def nearest_passable(self, u_or_cls, side, x, y, maxr=12, hors_feu=False):
+        """Case franchissable la plus proche (hors_feu : et pas dans une maison en feu)."""
         mc = move_class(u_or_cls) if isinstance(u_or_cls, U.Unit) else u_or_cls
         cost = self.costs(mc, side)
+        if hors_feu:
+            bt = self.bati
+            cost = [None if bt[c] == 2 else v for c, v in enumerate(cost)]
         c0 = self.cell(x, y)
         if cost[c0] is not None:
             return x, y
@@ -563,7 +594,7 @@ class TacticalBattle:
         r = self._los_cache.get(key)
         if r is not None:
             return r
-        t, h, f = self.t, self.h, self.f
+        t, h, f, bt = self.t, self.h, self.f, self.bati
         i1, j1, i2, j2 = c1 % COLS, c1 // COLS, c2 % COLS, c2 // COLS
         n = max(abs(i2 - i1), abs(j2 - j1))
         ok = True
@@ -581,7 +612,7 @@ class TacticalBattle:
                 if 2 < s < n - 2:
                     tc = t[c]
                     if OPACITY[tc] and clear < TOP[tc]:
-                        op += OPACITY[tc]
+                        op += OPACITY[tc] if bt[c] != 3 else RUINE_OPAC
                     fc = f[c]
                     if fc and FOPAC[fc] and clear < FTOP[fc]:
                         op += FOPAC[fc]
@@ -936,13 +967,45 @@ class TacticalBattle:
             uy = min(max(y + py * ox, z[1] + 5), z[3] - 5)
             ux, uy = self.nearest_passable(u, side, ux, uy)
             u.x, u.y, u.dir = ux, uy, dir
+            if side == 1 and u.cls == 'artillerie':
+                self._to_rampart(u)
             u.path, u.goal, u.order = [], None, None
             u.state = 'repos'
         return True, f"{len(us)} unité{'s' if len(us) > 1 else ''} en place."
 
+    def on_rampart(self, u):
+        """Canon du défenseur sur l'enceinte (ou canons du rempart de la place) : il tire, il ne bouge pas."""
+        return u.src == 'rempart' or (u.side == 1 and u.cls == 'artillerie' and self.t[self.cell(u.x, u.y)] == T_MUR)
+
+    def _to_rampart(self, u):
+        """Siège ou assaut d'une place à enceinte : la batterie du défenseur va sur la case de mur la plus proche,
+        à REMPART_GAP au moins des autres, tournée vers le dehors. Rien hors d'une place à enceinte."""
+        pl, t = self.map.place, self.t
+        if not (pl and pl.get('battle')) or t[self.cell(u.x, u.y)] == T_MUR:
+            return
+        others = [(o.x, o.y) for o in self.units if o is not u and o.side == 1 and o.cls == 'artillerie' and
+                  t[self.cell(o.x, o.y)] == T_MUR]
+        best = None
+        for c in range(N):
+            if t[c] != T_MUR:
+                continue
+            cx, cy = TR.center_of(c)
+            d = (cx - u.x) ** 2 + (cy - u.y) ** 2
+            if any((cx - ox) ** 2 + (cy - oy) ** 2 < REMPART_GAP ** 2 for ox, oy in others):
+                d += 1e12   # (la place est prise : seulement s'il n'en reste aucune autre)
+            if best is None or d < best[0]:
+                best = (d, cx, cy)
+        if best:
+            u.x, u.y = best[1], best[2]
+            u.dir = math.atan2(u.y - pl['y'], u.x - pl['x'])
+            u.form = 'batterie'
+
     def start(self):
         if self.phase != 'deploiement':
             return False, "La bataille est déjà engagée."
+        for u in self.units:
+            if u.side == 1 and u.cls == 'artillerie' and u.alive:
+                self._to_rampart(u)   # (aussi celles que personne n'a déployées)
         self.phase = 'combat'
         self.warm()
         self._update_vision()
@@ -962,8 +1025,8 @@ class TacticalBattle:
         us = [u for u in us if u and u.side == side and u.alive and (who == 'any' or u.ctrl == who)]
         if not us:
             return False, "Aucune unité à commander."
-        if kind not in ('fire', 'hold', 'rally', 'shot', 'counter') and any(u.src == 'rempart' for u in us):
-            us = [u for u in us if u.src != 'rempart']   # les canons du rempart ne bougent pas
+        if kind not in ('fire', 'hold', 'rally', 'shot', 'counter') and any(self.on_rampart(u) for u in us):
+            us = [u for u in us if not self.on_rampart(u)]   # les canons du rempart ne bougent pas
             if not us:
                 return False, "Les canons du rempart sont fixés sur la muraille : ils tirent, mais ne bougent pas."
         if self.phase == 'deploiement' and kind not in ('form', 'fire', 'shot', 'counter'):
@@ -1374,6 +1437,9 @@ class TacticalBattle:
             self._update_unit(u, dt)
         self._contacts(alive, dt)
         self._wagons(dt)
+        if self.feu and self.clock - self._feu_t >= FEU_DT:
+            self._feu_t = self.clock
+            self._incendie()
         for u in alive:
             if u.alive:
                 self._morale(u, dt)
@@ -1721,6 +1787,54 @@ class TacticalBattle:
             u.target = best.id
         return best
 
+    # ================================================================== maisons touchées, en feu, en ruine
+    def _bati_hit(self, x, y, u):
+        """Un boulet de u tombe en (x, y) : la case bâtie s'entame ou prend feu (BATI_*)."""
+        c = self.cell(x, y)
+        if self.t[c] != T_BATI or self.bati[c] >= 2:
+            return
+        p = (BATI_FEU_CHAUME if c in self.chaume else BATI_FEU) * (1 + 2 * self.ufx(u, 'shell'))
+        if self.rng.random() < p:
+            self._bati_set(c, 2)
+        elif self.bati[c] == 0 and self.rng.random() < BATI_TOUCHE:
+            self._bati_set(c, 1)
+
+    def _bati_set(self, c, e):
+        self.seq += 1
+        self.bati_log.append([self.seq, c, e, round(self.clock)])
+        self._bati_mark(c, e, self.clock)
+
+    def _bati_mark(self, c, e, t0):
+        self.bati[c] = e
+        if e == 2:
+            self.feu[c] = t0
+        else:
+            self.feu.pop(c, None)
+        if e == 3:
+            self._los_cache.clear()   # (une ruine laisse passer la vue)
+
+    def _incendie(self):
+        """Toutes les FEU_DT : les maisons brûlées tombent en ruine, le feu gagne les voisines, et la troupe qui est
+        dans une maison en feu en sort."""
+        t, bt = self.t, self.bati
+        wet = 0.4 if self.weather in ('pluie', 'orage', 'tempete', 'neige') else 1.0
+        for c, t0 in list(self.feu.items()):   # (ordre d'arrivée : même graine, même incendie)
+            if self.clock - t0 >= FEU_DUREE:
+                self._bati_set(c, 3)
+                continue
+            i, j = c % COLS, c // COLS
+            for cc in (c - 1 if i > 0 else -1, c + 1 if i < COLS - 1 else -1, c - COLS if j > 0 else -1,
+                       c + COLS if j < ROWS - 1 else -1):
+                if cc >= 0 and t[cc] == T_BATI and bt[cc] < 2 and \
+                        self.rng.random() < FEU_PROPAG * wet * (2.5 if cc in self.chaume else 1.0):
+                    self._bati_set(cc, 2)
+        for u in self.units:
+            c = self.cell(u.x, u.y)
+            if bt[c] == 2 and t[c] == T_BATI and u.alive and u.state != 'melee':
+                u.x, u.y = self.nearest_passable(u, u.side, u.x, u.y, hors_feu=True)
+                u.morale = max(0.0, u.morale - FEU_MOR)
+                self.log(f"{u.name} quitte une maison en feu.", u.side, u.side)
+
     # ================================================================== brèches ouvertes au canon
     def _wall_target(self, u, mx, aim=None):
         """Point de l'enceinte d'une place le plus proche du canon (ou, avec aim, du point visé), à portée :
@@ -1925,6 +2039,8 @@ class TacticalBattle:
         self._fatigue(u, u.reload, 'feu')
         cas *= self._entrench_k(tg, u)
         self.emit(kind, u.x, u.y, tg.x, tg.y, n=cas, src=u.id)
+        if kind == 'canon':
+            self._bati_hit(tg.x, tg.y, u)
         if kind == 'canon' and u.side == 0 and self.in_place(tg.x, tg.y, 0.0):
             # les boulets tirés sur les défenseurs de la place frappent aussi son rempart
             wt = self._wall_target(u, mx)
@@ -2554,6 +2670,8 @@ class TacticalBattle:
             if u.cls == 'inf' and (self.ufx(u, 'entrench') or
                                    u.id in (self.spec.get('logement') or ())) and self.clock - u.still_t >= ENTRENCH_T:
                 units[-1]['dug'] = 1   # retranchée : le client dessine sa tranchée et ses gabions (SPEC-SUITE J)
+            if u.cls == 'artillerie' and self.on_rampart(u):
+                units[-1]['rempart'] = True   # sur l'enceinte : le client la dessine sans avant-train
             if mine and u.cls == 'general' and u.alive:
                 units[-1]['rally'] = round(self.rally_radius(u))   # (zone où il rallie les fuyards)
         sides = []
@@ -2579,6 +2697,7 @@ class TacticalBattle:
                    title=self.spec.get('title'), place=self.spec.get('place_name'),
                    skirmish=bool(self.spec.get('skirmish')),   # mode Bataille : « Retour au menu »
                    breaches=self.breaches,                     # brèches ouvertes au canon pendant la bataille
+                   bati=[[c, e] for s, c, e, _t in self.bati_log if s > since],   # maisons touchées, en feu, en ruine
                    fx=[e for e in self.fx if e['s'] > since],
                    log=[(txt if ab is None or me is None or ab == me else 'Ennemi : ' + txt)
                         for s, sd, txt, ab in self.logs if s > since and (sd is None or me is None or sd == me)])
@@ -2639,6 +2758,7 @@ class TacticalBattle:
     def map_view(self):
         d = self.map.to_client(self.spec)
         d['nbreach'] = len(self.breaches)   # (déjà dans les remparts envoyés : le client ne les rajoute pas)
+        d['bati'] = [[c, e] for c, e in enumerate(self.bati) if e]   # état des maisons (SPEC-2D § 5), au chargement
         if getattr(self, 'piet', None):
             d['piet'] = self.piet   # la boue laissée par les troupes (SPEC-SUITE F8), redessinée au rechargement
         return d
@@ -2649,7 +2769,7 @@ class TacticalBattle:
                     seq=self.seq, logs=[list(x) for x in self.logs[-60:]], ai_sides=self.ai_sides,
                     withdrawing=self.withdrawing, withdraw_t=self.withdraw_t, hold_t=self.hold_t, siege_t=self.siege_t, prisoners=self.prisoners,
                     ai_mem=self.ai_mem, result=self.result, pound=self.pound, breaches=self.breaches,
-                    breach_t=self.breach_t,
+                    breach_t=self.breach_t, bati=self.bati_log,
                     accel=self.accel, accel_t=self.accel_t, replay=self.replay, ask=self.ask,
                     end=[getattr(self, 'winner', None), getattr(self, 'disengage', None), getattr(self, 'why', None)],
                     piet=getattr(self, 'piet', None))
@@ -2676,6 +2796,9 @@ class TacticalBattle:
         tb.ask = d.get('ask')
         tb.pound = dict(d.get('pound') or {})
         tb.breach_t = [list(x) for x in d.get('breach_t') or []]
+        tb.bati_log = [list(x) for x in d.get('bati') or [] if 0 <= x[1] < N]   # (anciennes sauvegardes : intact)
+        for _s, c, e, t0 in tb.bati_log:
+            tb._bati_mark(c, e, t0)
         for wi, x, y, r in d.get('breaches') or []:
             tb._apply_breach(wi, x, y, r)
         e = d.get('end') or [None, None, None]

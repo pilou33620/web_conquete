@@ -1,13 +1,12 @@
 // Vue tactique : le sol qui garde la trace de la bataille (étape 9e). Une carte de piétinement couvre tout le champ
-// (une texture d'environ 3 m par pixel, 2 m en Ultra) : chaque régiment qui marche, charge ou se bat y dépose une
-// tache douce à la forme de sa formation, plus fort pour la cavalerie et l'artillerie, deux fois plus fort sous la
-// pluie ; chaque trou d'obus y laisse une tache de terre retournée. relief.js la lit : le sol y tourne à la boue,
-// les épis s'y couchent, la neige s'y efface.
-// La carte est dessinée cinq fois par seconde (un quad instancié par régiment, en mélange additif). Elle est
-// enregistrée avec la bataille (SPEC-SUITE F8) : une image réduite de 256 px de large, envoyée au serveur de temps en
-// temps (exporter) et redessinée dans la carte au rechargement (importer).
-import * as THREE from '../../vendor/three/three.module.js';
-import { clsOf, clamp } from './formes.js';
+// (environ 3 m par pixel, 2 m en Ultra) : chaque régiment qui marche, charge ou se bat y dépose une tache douce à la
+// forme de sa formation, plus fort pour la cavalerie et l'artillerie, deux fois plus fort sous la pluie ; chaque trou
+// d'obus y laisse une tache de terre retournée. La carte est tenue en nombres (les petits dépôts de chaque pas ne se
+// perdent pas dans l'arrondi) et recopiée dans un canevas, de la terre foulée plus ou moins opaque, que Sol2D
+// (sol2d.js) pose sur le sol à chaque image.
+// Elle est enregistrée avec la bataille (SPEC-SUITE F8) : une image réduite de 256 px de large, la boue en gris (la
+// première ligne au nord), envoyée au serveur de temps en temps (exporter) et relue au rechargement (importer).
+import { clsOf, clamp, vnoise, canvas } from './formes.js';
 
 // dépôt par seconde (part de la boue complète, 0 à 1) d'un régiment u qui se déplace à v m/s ; wet : temps de pluie.
 // Un régiment de ligne qui passe une fois laisse environ un tiers de boue ; une charge de cavalerie, la moitié.
@@ -21,56 +20,29 @@ export function depot(u, v, wet = false) {
   return base * (fight ? 0.6 : 1) * (cls === 'artillerie' || cls === 'chariot' ? 1 : men) * (wet ? 2 : 1);
 }
 
-const STEP = 0.2;   // s entre deux dessins de la carte
-const CAP = 256;    // régiments et impacts dessinés en une fois
-
-const VERT = `
-  precision highp float;
-  in vec3 position; in vec2 uv; in mat4 instanceMatrix; in float aK;
-  uniform mat4 projectionMatrix;
-  out vec2 vUv; out vec2 vW; out float vK;
-  void main() {
-    vec4 w = instanceMatrix * vec4(position, 1.0);
-    vUv = uv; vW = w.xy; vK = aK;
-    gl_Position = projectionMatrix * w;
-  }`;
-// une tache aux bords doux, à la forme d'un rectangle arrondi, bousculée par un bruit (le sol n'est jamais foulé
-// régulièrement)
-const FRAG = `
-  precision highp float;
-  in vec2 vUv; in vec2 vW; in float vK;
-  out vec4 outColor;
-  float h(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-  float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(h(i), h(i + vec2(1.0, 0.0)), f.x), mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), f.x), f.y); }
-  void main() {
-    vec2 q = abs(vUv - 0.5) * 2.0;
-    float a = (1.0 - smoothstep(0.55, 1.0, q.x)) * (1.0 - smoothstep(0.55, 1.0, q.y));
-    a *= 0.45 + 1.1 * n(vW * 0.12) * n(vW * 0.37 + 7.0);
-    outColor = vec4(1.0, 1.0, 1.0, a * vK);
-  }`;
+const STEP = 0.2;      // s entre deux dépôts
+const CAP = 256;       // impacts gardés pour le prochain dépôt
+const BOUE = [92, 68, 38], OPAC = 0.5;   // la terre foulée, et son opacité quand la boue est complète
+const sm = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
 export class Pietinement {
-  // renderer : WebGLRenderer ; W, H : taille du champ (m) ; q : profil de qualité (ultra : 2 m par pixel)
-  constructor(renderer, W, H, q) {
-    this.r = renderer; this.W = W; this.H = H;
-    const res = q?.fx >= 3 ? 2 : 3, w = Math.ceil(W / res), hh = Math.ceil(H / res);
-    // demi-flottants si la carte sait y dessiner : les petits dépôts de chaque dessin ne se perdent pas dans l'arrondi
-    const ext = renderer.extensions, half = ext.has('EXT_color_buffer_half_float') || ext.has('EXT_color_buffer_float');
-    this.rt = new THREE.WebGLRenderTarget(w, hh, { type: half ? THREE.HalfFloatType : THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false });
-    this.cam = new THREE.OrthographicCamera(0, W, H, 0, -1, 1);   // (y du champ vers le haut de la texture : v = y / H)
-    const geo = new THREE.PlaneGeometry(1, 1);
-    this.k = new THREE.InstancedBufferAttribute(new Float32Array(CAP), 1);
-    geo.setAttribute('aK', this.k);
-    this.mat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending });
-    this.mesh = new THREE.InstancedMesh(geo, this.mat, CAP);
-    this.mesh.frustumCulled = false; this.mesh.count = 0;
-    this.scene = new THREE.Scene(); this.scene.add(this.mesh);
+  // W, H : taille du champ (m) ; q : profil de qualité (ultra : 2 m par pixel)
+  constructor(W, H, q) {
+    this.W = W; this.H = H; this.res = q?.fx >= 3 ? 2 : 3;
+    const w = this.w = Math.ceil(W / this.res), h = this.h = Math.ceil(H / this.res);
+    this.m = new Float32Array(w * h);
+    // le sol n'est jamais foulé régulièrement : un bruit fixe module chaque dépôt
+    this.n = new Float32Array(w * h);
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const x = (i + 0.5) * this.res, y = (j + 0.5) * this.res;
+      this.n[j * w + i] = 0.45 + 1.1 * vnoise(x * 0.12, y * 0.12, 11) * vnoise(x * 0.37 + 7, y * 0.37 + 7, 12);
+    }
     this.t = 0; this.fresh = true;
-    this.stamps = [];   // impacts en attente du prochain dessin : [x, y, r, k]
-    this.m = new THREE.Matrix4(); this.qt = new THREE.Quaternion(); this.p = new THREE.Vector3(); this.s = new THREE.Vector3(); this.z = new THREE.Vector3(0, 0, 1);
+    this.stamps = [];   // impacts en attente du prochain dépôt : [x, y, r, k]
+    this.dirty = null;  // [i0, j0, i1, j1] : pixels à recopier dans le canevas
+    this.canvas = typeof document !== 'undefined' ? canvas(w, h) : null;
+    this.version = 0;   // change à chaque recopie (Sol2D n'a rien à faire sinon)
   }
-  get texture() { return this.rt.texture; }
   // un trou d'obus ou une explosion en (x, y), de rayon r m
   stamp(x, y, r, k = 0.55) { if (this.stamps.length < CAP) this.stamps.push([x, y, r, k]); }
   // units : les régiments (vue.js : x, y, dir, w, d, from, to) ; gap : intervalle entre deux relevés du serveur (s) ;
@@ -78,127 +50,101 @@ export class Pietinement {
   update(units, gap, wet, dt, rate) {
     this.t += dt * rate;
     if (this.t < STEP * Math.max(1, rate) && !this.fresh) return;
-    const span = this.t; this.t = 0;
-    let n = 0;
-    const add = (x, y, a, sx, sy, k) => {
-      if (n >= CAP || k <= 0) return;
-      this.p.set(x, y, 0); this.qt.setFromAxisAngle(this.z, a); this.s.set(sx, sy, 1);
-      this.mesh.setMatrixAt(n, this.m.compose(this.p, this.qt, this.s));
-      this.k.array[n++] = Math.min(1, k);
-    };
+    const span = this.t; this.t = 0; this.fresh = false;
     for (const u of units) {
       if (!u.to || !u.from) continue;
       // (vitesse en m par seconde de bataille)
       const v = Math.hypot(u.to.x - u.from.x, u.to.y - u.from.y) / Math.max(0.05, gap * rate);
       // le long du sens (dir) : la profondeur de la formation ; en travers : son front
-      add(u.x, u.y, u.dir || 0, (u.d || 10) + 6, (u.w || 20) + 6, depot(u, v, wet) * span);
+      this.tache(u.x, u.y, u.dir || 0, (u.d || 10) + 6, (u.w || 20) + 6, depot(u, v, wet) * span);
     }
-    for (const [x, y, r, k] of this.stamps.splice(0)) add(x, y, 0, r * 2.4, r * 2.4, k);
-    this.k.needsUpdate = true;
-    this.mesh.count = n;
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.dirty = n > 0 || this.fresh;
+    for (const [x, y, r, k] of this.stamps.splice(0)) this.tache(x, y, 0, r * 2.4, r * 2.4, k);
+    this.peindre();
   }
-  // dessine les dépôts de ce pas dans la carte (avant le rendu de la scène)
-  render() {
-    if (!this.dirty) return;
-    this.dirty = false;
-    const r = this.r, prev = r.getRenderTarget(), auto = r.autoClear;
-    r.setRenderTarget(this.rt);
-    if (this.fresh) {
-      const c = r.getClearColor(new THREE.Color()), a = r.getClearAlpha();
-      r.setClearColor(0x000000, 0); r.clear(); r.setClearColor(c, a);
-      this.fresh = false;
+  // tache aux bords doux, à la forme d'un rectangle arrondi (sx le long de a, sy en travers), de force k
+  tache(x, y, a, sx, sy, k) {
+    if (!(k > 0)) return;
+    const { w, h, res, m, n } = this, ca = Math.cos(a), sa = Math.sin(a), R = Math.hypot(sx, sy) / 2;
+    const i0 = clamp(Math.floor((x - R) / res), 0, w - 1), i1 = clamp(Math.ceil((x + R) / res), 0, w - 1);
+    const j0 = clamp(Math.floor((y - R) / res), 0, h - 1), j1 = clamp(Math.ceil((y + R) / res), 0, h - 1);
+    if (i0 >= i1 || j0 >= j1) return;
+    k = Math.min(1, k);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const dx = (i + 0.5) * res - x, dy = (j + 0.5) * res - y;
+      const qu = Math.abs(dx * ca + dy * sa) / (sx / 2), qv = Math.abs(-dx * sa + dy * ca) / (sy / 2);
+      if (qu >= 1 || qv >= 1) continue;
+      const c = j * w + i;
+      m[c] = Math.min(1, m[c] + (1 - sm(0.55, 1, qu)) * (1 - sm(0.55, 1, qv)) * n[c] * k);
     }
-    r.autoClear = false;
-    r.render(this.scene, this.cam);
-    r.autoClear = auto;
-    r.setRenderTarget(prev);
+    const d = this.dirty;
+    this.dirty = d ? [Math.min(d[0], i0), Math.min(d[1], j0), Math.max(d[2], i1), Math.max(d[3], j1)] : [i0, j0, i1, j1];
   }
-  // contexte WebGL rendu par Safari : la carte est vide, elle repart de zéro
-  reset() { this.fresh = true; }
-  // copie la texture src dans la cible dst (un triangle plein écran ; la boue est dans le rouge)
-  copy(src, dst) {
-    if (!this.copyMat) {
-      this.copyMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, depthTest: false, depthWrite: false, uniforms: { tSrc: { value: null } },
-        vertexShader: 'precision highp float; in vec3 position; out vec2 vUv; void main() { vUv = position.xy * 0.5 + 0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-        fragmentShader: 'precision highp float; uniform sampler2D tSrc; in vec2 vUv; out vec4 outColor; void main() { float m = clamp(texture(tSrc, vUv).r, 0.0, 1.0); outColor = vec4(m, m, m, 1.0); }' });
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
-      this.copyMesh = new THREE.Mesh(g, this.copyMat); this.copyMesh.frustumCulled = false;
-      this.copyScene = new THREE.Scene(); this.copyScene.add(this.copyMesh);
-      this.copyCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  // recopie les pixels changés dans le canevas (terre foulée, opaque selon la boue)
+  peindre() {
+    const d = this.dirty;
+    if (!d || !this.canvas) return;
+    this.dirty = null;
+    const g = this.canvas.getContext('2d'), w = this.w, iw = d[2] - d[0] + 1, ih = d[3] - d[1] + 1;
+    const img = g.createImageData(iw, ih), px = img.data;
+    for (let j = 0; j < ih; j++) for (let i = 0; i < iw; i++) {
+      const q = (j * iw + i) * 4;
+      px[q] = BOUE[0]; px[q + 1] = BOUE[1]; px[q + 2] = BOUE[2]; px[q + 3] = this.m[(d[1] + j) * w + d[0] + i] * OPAC * 255;
     }
-    this.copyMat.uniforms.tSrc.value = src;
-    const r = this.r, prev = r.getRenderTarget();
-    r.setRenderTarget(dst); r.render(this.copyScene, this.copyCam); r.setRenderTarget(prev);
+    g.putImageData(img, d[0], d[1]);
+    this.version++;
   }
-  // la carte réduite (256 px de large, la boue en gris) en image PNG, pour l'enregistrer avec la bataille
+  // contexte graphique perdu : la carte en nombres reste, le canevas est refait
+  reset() { this.dirty = [0, 0, this.w - 1, this.h - 1]; this.peindre(); }
+  // la carte réduite : 256 px de large, la boue de 0 à 255, ligne 0 au nord (comme les anciennes sauvegardes)
+  petite() {
+    const w2 = 256, h2 = Math.max(1, Math.round(256 * this.H / this.W)), out = new Uint8ClampedArray(w2 * h2);
+    for (let j = 0; j < h2; j++) for (let i = 0; i < w2; i++) {
+      // (moyenne des pixels de la carte sous ce pixel)
+      const a = Math.floor(i * this.w / w2), b = Math.max(a + 1, Math.floor((i + 1) * this.w / w2));
+      const c = Math.floor(j * this.h / h2), e = Math.max(c + 1, Math.floor((j + 1) * this.h / h2));
+      let s = 0;
+      for (let y = c; y < e; y++) for (let x = a; x < b; x++) s += this.m[y * this.w + x];
+      out[j * w2 + i] = Math.round(s / ((b - a) * (e - c)) * 255);
+    }
+    return { px: out, w: w2, h: h2 };
+  }
+  // relit une carte réduite (px : la boue de 0 à 255, w × h), adoucie
+  depuis(px, w2, h2) {
+    for (let j = 0; j < this.h; j++) for (let i = 0; i < this.w; i++) {
+      const fx = clamp((i + 0.5) * w2 / this.w - 0.5, 0, w2 - 1), fy = clamp((j + 0.5) * h2 / this.h - 0.5, 0, h2 - 1);
+      const x = Math.min(w2 - 2, Math.floor(fx)), y = Math.min(h2 - 2, Math.floor(fy)), u = fx - x, v = fy - y;
+      const at = (a, b) => px[clamp(b, 0, h2 - 1) * w2 + clamp(a, 0, w2 - 1)];
+      this.m[j * this.w + i] = ((at(x, y) * (1 - u) + at(x + 1, y) * u) * (1 - v) + (at(x, y + 1) * (1 - u) + at(x + 1, y + 1) * u) * v) / 255;
+    }
+    this.fresh = false;
+    this.reset();
+  }
+  // la carte réduite en image PNG, pour l'enregistrer avec la bataille
   exporter() {
-    const w = 256, h = Math.max(1, Math.round(256 * this.H / this.W));
-    if (!this.small) this.small = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false });
-    this.copy(this.rt.texture, this.small);
-    const px = new Uint8Array(w * h * 4);
-    this.r.readRenderTargetPixels(this.small, 0, 0, w, h, px);
-    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-    const g = cv.getContext('2d'), img = g.createImageData(w, h);
-    // (les lignes restent dans l'ordre de la carte : importer relit l'image sans la retourner)
-    for (let i = 0; i < w * h; i++) { const m = px[i * 4]; img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = m; img.data[i * 4 + 3] = 255; }
+    const { px, w, h } = this.petite(), cv = canvas(w, h), g = cv.getContext('2d'), img = g.createImageData(w, h);
+    for (let i = 0; i < w * h; i++) { img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = px[i]; img.data[i * 4 + 3] = 255; }
     g.putImageData(img, 0, 0);
     return cv.toDataURL('image/png');
   }
-  // redessine une carte enregistrée (exporter) ; rien si l'image est illisible
+  // relit une carte enregistrée (exporter) ; false si l'image est illisible
   importer(url) {
     if (typeof url !== 'string' || !url.startsWith('data:image/png;base64,')) return Promise.resolve(false);
     return new Promise(res => {
       const img = new Image();
       img.onload = () => {
-        const tex = new THREE.Texture(img); tex.flipY = false; tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
-        this.fresh = false;
-        this.copy(tex, this.rt);
-        tex.dispose();
+        const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+        if (!w || !h) { res(false); return; }
+        const cv = canvas(w, h), g = cv.getContext('2d');
+        g.drawImage(img, 0, 0);
+        const d = g.getImageData(0, 0, w, h).data, px = new Uint8ClampedArray(w * h);
+        for (let i = 0; i < w * h; i++) px[i] = d[i * 4];
+        cv.width = cv.height = 0;
+        this.depuis(px, w, h);
         res(true);
       };
       img.onerror = () => res(false);
       img.src = url;
     });
   }
-  dispose() { this.rt.dispose(); this.small?.dispose(); this.copyMat?.dispose(); this.copyMesh?.geometry.dispose(); this.mesh.geometry.dispose(); this.mat.dispose(); this.mesh.dispose(); }
-}
-
-// Ombre de régiment (étape 9h) : une tache large et très douce sous chaque formation, redessinée à chaque image dans
-// une petite texture du champ (6 m par pixel) ; relief.js en assombrit le sol. À la vue d'ensemble, le bloc « pose » sur
-// le sol au lieu de flotter.
-export class OmbreRegiments {
-  constructor(renderer, W, H) {
-    this.r = renderer;
-    this.rt = new THREE.WebGLRenderTarget(Math.ceil(W / 6), Math.ceil(H / 6), { depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false });
-    this.cam = new THREE.OrthographicCamera(0, W, H, 0, -1, 1);
-    const geo = new THREE.PlaneGeometry(1, 1);
-    this.k = new THREE.InstancedBufferAttribute(new Float32Array(CAP), 1);
-    geo.setAttribute('aK', this.k);
-    const frag = FRAG.replace('a *= 0.45 + 1.1 * n(vW * 0.12) * n(vW * 0.37 + 7.0);', 'a = a * a;');
-    this.mat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: VERT, fragmentShader: frag, transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending });
-    this.mesh = new THREE.InstancedMesh(geo, this.mat, CAP);
-    this.mesh.frustumCulled = false; this.mesh.count = 0;
-    this.scene = new THREE.Scene(); this.scene.add(this.mesh);
-    this.m = new THREE.Matrix4(); this.qt = new THREE.Quaternion(); this.p = new THREE.Vector3(); this.s = new THREE.Vector3(); this.z = new THREE.Vector3(0, 0, 1);
-  }
-  get texture() { return this.rt.texture; }
-  // units : les régiments vus (x, y, dir, w, d, _fade) ; dessine leurs ombres (avant le rendu de la scène)
-  render(units) {
-    let n = 0;
-    for (const u of units) {
-      if (n >= CAP || u.state === 'hors' || (u.men || 0) <= 0) continue;
-      this.p.set(u.x, u.y, 0); this.qt.setFromAxisAngle(this.z, u.dir || 0); this.s.set((u.d || 10) + 10, (u.w || 20) + 10, 1);
-      this.mesh.setMatrixAt(n, this.m.compose(this.p, this.qt, this.s));
-      this.k.array[n++] = 0.55 * (u._fade ?? 1);
-    }
-    this.mesh.count = n; this.k.needsUpdate = true; this.mesh.instanceMatrix.needsUpdate = true;
-    const r = this.r, prev = r.getRenderTarget(), c = r.getClearColor(new THREE.Color()), a = r.getClearAlpha();
-    r.setRenderTarget(this.rt); r.setClearColor(0x000000, 0); r.clear();
-    if (n) r.render(this.scene, this.cam);
-    r.setClearColor(c, a); r.setRenderTarget(prev);
-  }
-  dispose() { this.rt.dispose(); this.mesh.geometry.dispose(); this.mat.dispose(); this.mesh.dispose(); }
+  dispose() { if (this.canvas) this.canvas.width = this.canvas.height = 0; }
 }

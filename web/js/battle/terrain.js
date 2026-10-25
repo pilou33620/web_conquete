@@ -1,17 +1,17 @@
-// Vue tactique : le sol du champ de bataille, peint vu de haut à la manière d'un paysage peint : herbe aux nuances
-// multiples, cultures striées selon la saison, chemins de terre à ornières, eau avec berges et reflets, fossés et
-// glacis, ombre douce au pied des arbres et des maisons. La vue 3D (relief.js) pose cette peinture sur le relief :
-// une image entière à basse résolution (aussi mini-carte), puis des blocs plus fins autour de la caméra (paintInto).
-// Ce qui est debout (arbres, maisons, remparts, haies) est en volume (decor.js), d'après les données préparées ici
+// Vue tactique : le sol du champ de bataille, peint à plat vu de haut dans le style de Champs de Plaine (maquette
+// dev/maquette-2d.html) : parcelles striées avec leurs tournières et leurs bottes, prés à touffes et fleurs, labours à
+// mottes, haies bocagères en boules sombres, chemins de terre, routes royales empierrées (fossés, ornières, bornes,
+// rangs d'ormes hors des villes), rues pavées en ville, rivières à ripisylve, ponts de pierre, collines lisibles par
+// un ombrage doux éclairé du nord-ouest (d'après les altitudes du moteur), saisons et neige. Sol2D (sol2d.js) en fait
+// des tuiles par niveau de zoom (paintInto) ; une image entière à basse résolution (base) sert de repli et de
+// mini-carte. Ce qui est debout (arbres, maisons, remparts) est dessiné par le décor, d'après les données préparées ici
 // (treeGrid, ponts, portes, tracés adoucis). Aussi : altitudes adoucies (fineAt), cotes des sommets, couverts.
 // Motifs des sols : textures.js.
 import { T, cellRemap, normSeason, hash, clamp, TAU, OMBRE, mixHex, vnoise, canvas } from './formes.js';
-import { texture, softShadow, culture, EPIS } from './textures.js';
+import { texture, culture, couleurs, mix, BOIS } from './textures.js';
 import { profil } from './qualite.js';
-import { SOLS } from './sols.js';
 
-const BASE = 0.5;   // pixels par mètre de l'image entière
-const SOL = Object.fromEntries(SOLS.map((k, i) => [k, i]));   // numéro de chaque sol photo (sols.js)
+export const BASE = 0.5;   // pixels par mètre de l'image entière
 
 function b64(s) {
   if (!s) return null;
@@ -52,18 +52,6 @@ export const PALETTES = {
     chemin: '#dedbd2', bati: '#d8d8d4', toit: ['#e9ecef', '#dfe3e6', '#f0f2f4'], ardoise: ['#d5dade', '#cdd2d6'], neige: 1,
   },
 };
-
-// Parts des sols photo (sols.js) sous une région de type v et de motif tex : {pre: 0.5, sec: 0.5}… (elles font 1 ;
-// {} sous l'eau : pas de matière). null pour les routes et chemins : ils sont tracés à part (solMask).
-const CULT = { ble: { sec: 1 }, chaume: { sec: 1 }, avoine: { pre: 0.5, sec: 0.5 }, bleVert: { pre: 0.7, sec: 0.3 }, mais: { pre: 0.4, terre: 0.6 },
-  labour: { terre: 1 }, semis: { terre: 0.85, pre: 0.15 }, prairie: { pre: 0.5, sec: 0.5 } };
-export function solParts(v, tex) {
-  return v === T.CHAMP ? CULT[tex] || { sec: 1 } : v === T.PRE ? (tex === 'prairie' ? CULT.prairie : { pre: 1 }) : v === T.VERGER ? { pre: 0.8, sec: 0.2 }
-    : v === T.VIGNE ? { terre: 0.85, pre: 0.15 } : v === T.LANDE ? { lande: 1 } : v === T.MARAIS ? { pre: 0.7, terre: 0.3 }
-    : v === T.SABLE ? { sable: 1 } : v === T.ROCHE ? { roche: 1 } : v === T.BOIS || v === T.FORET ? { terre: 0.6, sec: 0.4 }
-    : v === T.EAU ? {} : v === T.GUE ? { sable: 0.6, terre: 0.4 } : v === T.BARRICADE ? { terre: 1 }
-    : v === T.ROUTE || v === T.CHEMIN ? null : { chemin: 0.8, pre: 0.2 };   // cours des maisons, pied des murs
-}
 
 // Douglas-Peucker sur une boucle fermée : les sommets à moins de tol m de la droite de leurs voisins gardés sont ôtés
 function simplify(pts, tol) {
@@ -126,13 +114,14 @@ export class Terrain {
     this.buildings = m.buildings || [];
     this.walls = (m.walls || []).filter(w => w && w.pts && w.pts.length > 1);
     this.place = m.place || null;
+    // la ville (SPEC-2D § 6 : town, sinon la place) : ses rues sont pavées
+    this.town = [m.town, m.place].find(o => o && o.r > 0 && o.x != null) || null;
     this.seed = (m.seed | 0) || 1;
     this.season = normSeason(m.season);
     this.pal = PALETTES[this.season];
     this.setQuality(q);
     this.cache = new Map();      // motifs et silhouettes d'arbres (textures.js), bornés en mémoire par la qualité
     this.cacheBytes = 0;
-    this.ombre = softShadow();
     this.prepare();
     this.base = this.paintCanvas(0, 0, this.W, this.H, BASE);
   }
@@ -214,16 +203,16 @@ export class Terrain {
       // (maïs de Chalosse et du Béarn : la moitié des champs l'été et l'automne ; vigne en foule avant les plants greffés)
       const maize = this.epoque.mais && (this.season === 'ete' || this.season === 'automne') && hash(reg.parcel, 16, S) < 0.5;
       reg.tex = v === T.CHAMP ? (maize ? 'mais' : culture(this.season, hash(reg.parcel, 6, S)))
-        : v === T.PRE || v === T.VERGER ? (snow ? 'neige' : v === T.PRE && hash(reg.parcel, 7, S) < 0.22 ? 'prairie' : 'herbe')
+        : v === T.PRE || v === T.VERGER ? (v === T.PRE && hash(reg.parcel, 7, S) < 0.22 ? 'prairie' : 'pre')
         : v === T.VIGNE ? (this.epoque.foule ? 'vigneFoule' : 'vigne') : v === T.LANDE ? 'lande' : v === T.MARAIS ? 'marais' : v === T.SABLE ? 'sable' : v === T.ROCHE ? 'roche'
-        : v === T.BOIS || v === T.FORET ? 'sousBois' : v === T.ROUTE || v === T.CHEMIN ? (snow ? 'neige' : 'herbe')
+        : v === T.BOIS || v === T.FORET ? 'sousBois' : v === T.ROUTE || v === T.CHEMIN ? 'herbe'
         : v === T.BARRICADE ? 'terre' : v === T.EAU || v === T.GUE ? 'eau' : 'cour';
       // décalage du motif d'une parcelle à l'autre : la répétition ne s'aligne pas
       reg.off = [hash(id, 8, S) * 97, hash(id, 9, S) * 97];
     }
     this.byId = this.regions.slice();   // région d'après son numéro (label), avant le tri
     // motifs dont cette carte se sert (préparés d'avance dans le temps libre : warm)
-    this.kinds = [...new Set([snow ? 'neige' : 'herbe', 'terre', 'route', 'eau', ...this.regions.map(r => r.tex)])];
+    this.kinds = [...new Set(['herbe', 'eau', 'pave', ...this.regions.map(r => r.tex)])];
     // ordre de peinture : les sols d'abord, l'eau et le bâti ensuite
     const ORDER = [T.PRE, T.VERGER, T.LANDE, T.SABLE, T.ROCHE, T.CHAMP, T.VIGNE, T.MARAIS, T.BOIS, T.FORET, T.ROUTE, T.CHEMIN, T.BATI, T.MUR, T.BRECHE, T.PORTE, T.BARRICADE, T.GUE, T.EAU];
     this.regions.sort((a, b) => ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
@@ -234,6 +223,10 @@ export class Terrain {
     this.prepPaths();
     this.prepLaneTrees();
     this.prepCover();
+    this.prepVille();
+    this.prepRoutes();
+    this.prepOrnements();
+    this.prepOmbrage();
   }
   // contour d'une région : arêtes des cases au bord, chaînées en boucles, un peu bousculées puis adoucies
   regionPath(id, jit, box) {
@@ -415,86 +408,10 @@ export class Terrain {
       const e = (vnoise(x / 9, y / 9, S + 50) - 0.5) * 1.3 + (vnoise(x / 2.5, y / 2.5, S + 51) - 0.5) * 0.5 + (0.5 - (h[c] - this.hmin) / range) * 0.4;
       const q = (y * W + x) * 4, col = snow ? [186, 200, 222] : e > 0 ? [52, 86, 26] : [214, 196, 110];
       d[q] = col[0]; d[q + 1] = col[1]; d[q + 2] = col[2];
-      d[q + 3] = 255 * k * (snow ? Math.min(0.2, Math.abs(e) * 0.25) : e > 0 ? Math.min(0.3, e * 0.42) : Math.min(0.28, -e * 0.4));
+      d[q + 3] = 255 * k * (snow ? Math.min(0.1, Math.abs(e) * 0.12) : e > 0 ? Math.min(0.18, e * 0.25) : Math.min(0.16, -e * 0.24));
     }
     g.putImageData(img, 0, 0);
     this.nuances = cv;
-  }
-  // couleur et hauteur des cultures, pour les épis en relief (relief.js) : une image à `res` m par pixel, rgb la couleur
-  // des pieds, a leur hauteur (255 : hmax m) ; les routes et chemins qui traversent les champs en sont ôtés ; rien
-  // sous la neige
-  cropMask(hmax, res = 2.5) {
-    const w = Math.ceil(this.W / res), h = Math.ceil(this.H / res), out = new Uint8Array(w * h * 4);
-    if (this.pal.neige) return { data: out, w, h };
-    const col = canvas(w, h), hgt = canvas(w, h), gc = col.getContext('2d'), gh = hgt.getContext('2d');
-    for (const g of [gc, gh]) g.setTransform(1 / res, 0, 0, 1 / res, 0, 0);
-    for (const r of this.regions) {
-      // champs, prés (herbe ou prairie de fauche) et landes ; pas les routes et chemins, qui ont aussi le motif d'herbe
-      const e = EPIS[r.tex];
-      if (!e || (r.type !== T.CHAMP && r.type !== T.PRE && r.type !== T.LANDE && r.type !== T.VERGER)) continue;
-      gc.fillStyle = e[1] || (r.type === T.LANDE ? this.pal.lande : mixHex(this.pal.pre[r.tone ?? 0], this.pal.herbeSec, 0.15 + 0.35 * hash(r.parcel, 11, 7)));
-      if (r.tex === 'mais' && this.season === 'automne') gc.fillStyle = '#c4aa64';
-      gc.fill(r.path);
-      const v = Math.round(e[0] / hmax * 255); gh.fillStyle = `rgb(${v},${v},${v})`; gh.fill(r.path);
-    }
-    gh.lineCap = 'round'; gh.lineJoin = 'round'; gh.strokeStyle = '#000';
-    gh.lineWidth = 7; for (const p of this.pathPts) strokePts(gh, p);
-    gh.lineWidth = 12; for (const r of this.roadPts) strokePts(gh, r);
-    const c = gc.getImageData(0, 0, w, h).data, a = gh.getImageData(0, 0, w, h).data;
-    for (let i = 0; i < w * h; i++) { const k = i * 4; out[k] = c[k]; out[k + 1] = c[k + 1]; out[k + 2] = c[k + 2]; out[k + 3] = a[k]; }
-    col.width = col.height = hgt.width = hgt.height = 0;   // (Safari garde sinon la mémoire des canevas)
-    return { data: out, w, h };
-  }
-  // Masques des sols photo (sols.js, relief.js) : une image à `res` m par pixel, huit canaux (deux textures RGBA :
-  // pré, herbe sèche, lande, terre ; chemin, route, sable, roche), la part de chaque sol en chaque point. Peints
-  // comme le sol (mêmes contours de parcelles, mêmes tracés de routes) sur trois canevas opaques de trois canaux
-  // chacun : chaque région écrit ses huit parts à la fois (les parts d'avant sont remplacées, ou mêlées par la
-  // transparence), si bien qu'elles font toujours 1, sauf sous l'eau (0 : pas de matière).
-  solMask(res = 2) {
-    const w = Math.ceil(this.W / res), h = Math.ceil(this.H / res), S = this.seed, pal = this.pal;
-    const cvs = [0, 1, 2].map(() => canvas(w, h)), gs = cvs.map(c => c.getContext('2d', { willReadFrequently: true }));
-    // parts des huit sols → trois couleurs (le neuvième canal ne sert pas)
-    const cols = p => [0, 1, 2].map(k => `rgb(${[0, 1, 2].map(q => Math.round((p[k * 3 + q] || 0) * 255)).join(',')})`);
-    const P = (o) => { const p = new Array(8).fill(0); for (const [k, v] of Object.entries(o)) p[SOL[k]] = v; return cols(p); };
-    const each = (c, f) => gs.forEach((g, k) => { g.fillStyle = g.strokeStyle = c[k]; f(g); });
-    for (const g of gs) { g.setTransform(1 / res, 0, 0, 1 / res, 0, 0); g.lineCap = 'round'; g.lineJoin = 'round'; }
-    each(P({ pre: 1 }), g => g.fillRect(-50, -50, this.W + 100, this.H + 100));
-    for (const r of this.regions) {
-      const v = r.type, p = solParts(v, r.tex);
-      if (!p) continue;
-      each(P(p), g => g.fill(r.path));
-      // tournière : une bordure d'herbe autour des champs et des vignes
-      if (v === T.CHAMP || v === T.VIGNE) { each(P({ pre: 0.7, sec: 0.3 }), g => { g.globalAlpha = 0.8; g.lineWidth = 3; g.stroke(r.path); g.globalAlpha = 1; }); }
-    }
-    // rivières : berges de terre, puis l'eau sans matière
-    for (const rv of this.riverPts) {
-      each(P({ terre: 0.5, pre: 0.5 }), g => { g.lineWidth = rv.w + 26; strokePts(g, rv.pts); });
-      each(P({}), g => { g.lineWidth = rv.w + 8; strokePts(g, rv.pts); });
-    }
-    // chemins (bas-côtés foulés, terre battue), routes (empierrées)
-    each(P({ chemin: 1 }), g => { g.globalAlpha = 0.45; g.lineWidth = 9; for (const q of this.pathPts) strokePts(g, q); g.globalAlpha = 1; g.lineWidth = 5; for (const q of this.pathPts) strokePts(g, q); });
-    each(P({ chemin: 1 }), g => { g.globalAlpha = 0.5; g.lineWidth = 15; for (const q of this.roadPts) strokePts(g, q); g.globalAlpha = 1; });
-    each(P({ route: 0.75, chemin: 0.25 }), g => { g.lineWidth = 9.5; for (const q of this.roadPts) strokePts(g, q); });
-    const d = gs.map(g => g.getImageData(0, 0, w, h).data);
-    for (const c of cvs) c.width = c.height = 0;
-    const a = new Uint8Array(w * h * 4), b = new Uint8Array(w * h * 4);
-    for (let i = 0, k = 0; i < w * h; i++, k += 4) {
-      a[k] = d[0][k]; a[k + 1] = d[0][k + 1]; a[k + 2] = d[0][k + 2]; a[k + 3] = d[1][k];
-      b[k] = d[1][k + 1]; b[k + 1] = d[1][k + 2]; b[k + 2] = d[2][k]; b[k + 3] = d[2][k + 1];
-    }
-    return { a, b, w, h, neige: !!pal.neige, seed: S };
-  }
-  // Masque des bois (relief.js : le sous-bois sombre) : une image à `res` m par pixel, 255 sous les bois et forêts,
-  // aux mêmes contours que la peinture
-  woodMask(res = 4) {
-    const w = Math.ceil(this.W / res), h = Math.ceil(this.H / res), cv = canvas(w, h), g = cv.getContext('2d', { willReadFrequently: true });
-    g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
-    g.setTransform(1 / res, 0, 0, 1 / res, 0, 0); g.fillStyle = '#fff';
-    for (const r of this.regions) if (r.type === T.BOIS || r.type === T.FORET) g.fill(r.path);
-    const d = g.getImageData(0, 0, w, h).data, out = new Uint8Array(w * h);
-    for (let i = 0; i < w * h; i++) out[i] = d[i * 4];
-    cv.width = cv.height = 0;
-    return { data: out, w, h };
   }
   // cotes des sommets (comme sur les cartes d'état-major), écrites sur le calque par la vue
   prepPeaks() {
@@ -608,6 +525,104 @@ export class Terrain {
     this.coverImg = cv;
   }
 
+  // ------------------------------------------------------------------ ville, routes, ornements, ombrage (une fois)
+  // cases de ville : dans le rayon d'une ville (pas d'un village), ou au cœur d'un bâti serré (12 cases bâties au
+  // moins sur 7 × 7) ; une région de route (cases) surtout en ville y est pavée
+  prepVille() {
+    const { cols, rows, cell, t } = this, C1 = cols + 1, S = new Int32Array(C1 * (rows + 1)), u = new Uint8Array(cols * rows);
+    const bati = v => v === T.BATI || v === T.MUR || v === T.PORTE || v === T.BRECHE;
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) S[(j + 1) * C1 + i + 1] = (bati(t[j * cols + i]) ? 1 : 0) + S[j * C1 + i + 1] + S[(j + 1) * C1 + i] - S[j * C1 + i];
+    const tw = this.town && this.town.type !== 'village' ? this.town : null;
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      const a = Math.max(0, i - 3), b = Math.max(0, j - 3), c = Math.min(cols, i + 4), d = Math.min(rows, j + 4);
+      const n = S[d * C1 + c] - S[b * C1 + c] - S[d * C1 + a] + S[b * C1 + a];
+      u[j * cols + i] = n >= 12 || (tw && Math.hypot((i + 0.5) * cell - tw.x, (j + 0.5) * cell - tw.y) < tw.r + 10) ? 1 : 0;
+    }
+    this.urbain = u;
+    for (const r of this.regions) if (r.type === T.ROUTE) r.urb = r.cells.filter(c => u[c]).length * 2 > r.cells.length;
+  }
+  enVille(x, y) { return this.urbain[clamp(Math.floor(y / this.cell), 0, this.rows - 1) * this.cols + clamp(Math.floor(x / this.cell), 0, this.cols - 1)] === 1; }
+  // routes coupées en tronçons : rue pavée en ville, route empierrée ailleurs (royale : plus large, rangs d'ormes)
+  prepRoutes() {
+    this.routes = [];
+    this.roads.forEach((r, k) => {
+      const kind = this.roadKinds[k];
+      if (kind === 'chemin') return;
+      const pts = chaikin(r.map(p => [p[0], p[1]]), 2, false);
+      let cur = null;
+      for (const p of resample(pts, 4).concat([pts[pts.length - 1]])) {
+        const kk = kind === 'rue' || this.enVille(p[0], p[1]) ? 'rue' : kind === 'royale' ? 'royale' : 'route';
+        if (!cur || cur.kind !== kk) { const prev = cur && cur.pts[cur.pts.length - 1]; cur = { kind: kk, w: LARGEUR[kk], pts: prev ? [prev] : [] }; this.routes.push(cur); }
+        cur.pts.push(p);
+      }
+    });
+    this.routes = this.routes.filter(r => r.pts.length > 1);
+    for (const r of this.routes) r.box = boxOf(r.pts, r.w + 10);
+    this.pathBox = this.pathPts.map(p => boxOf(p, 8));
+    for (const rv of this.riverPts) rv.box = boxOf(rv.pts, rv.w + 40);
+  }
+  // ce qui est peint au sol le long des tracés : ormes des routes royales, ripisylve et roseaux, buissons des haies,
+  // bornes, bottes de paille des chaumes ; points fixés une fois (les tuiles se raccordent)
+  prepOrnements() {
+    const S = this.seed, snow = this.pal.neige;
+    const libre = (x, y) => { const v = this.at(x, y); return v === T.PRE || v === T.CHAMP || v === T.LANDE || v === T.VERGER || v === T.VIGNE || v === T.MARAIS || v === T.SABLE; };
+    const loinDe = (x, y, d) => !this.bridges.some(b => Math.hypot(b.x - x, b.y - y) < b.len / 2 + d) && !this.gates.some(b => Math.hypot(b.x - x, b.y - y) < d + 10);
+    const pres = (lines, x, y, d) => lines.some(q => distPts(q, x, y) < d);
+    const feuille = c => snow ? mix(c, '#8a7a68', 0.75) : c;   // (en hiver, des branches nues)
+    this.ormes = [];
+    this.routes.forEach((r, ri) => {
+      if (r.kind !== 'royale') return;
+      for (const side of [-1, 1]) for (const [k, p] of resample(offsetPts(r.pts, side * (r.w / 2 + 5)), 15).entries()) {
+        const h = q => hash(k, ri * 4 + side + 2, S + q);
+        if (h(140) < 0.08 || !libre(p[0], p[1]) || !loinDe(p[0], p[1], 8)) continue;
+        if (pres(this.routes.filter(q => q !== r).map(q => q.pts), p[0], p[1], 12) || pres(this.pathPts, p[0], p[1], 6)) continue;
+        this.ormes.push([p[0] + (h(141) - 0.5) * 2, p[1] + (h(142) - 0.5) * 2, 3.2 + h(143), feuille(BOIS[2])]);
+      }
+    });
+    this.ripi = []; this.roseaux = [];
+    const routes = [...this.routes.map(r => r.pts), ...this.pathPts];
+    this.riverPts.forEach((rv, ri) => {
+      const petit = rv.w <= 10;
+      for (const side of [-1, 1]) {
+        for (const [k, p] of resample(offsetPts(rv.pts, side * (rv.w / 2 + (petit ? 6 : 11))), 10).entries()) {
+          const h = q => hash(k, ri * 4 + side + 2, S + q);
+          if (h(150) > 0.24 || !libre(p[0], p[1]) || !loinDe(p[0], p[1], 6) || pres(routes, p[0], p[1], 10)) continue;
+          this.ripi.push([p[0] + (h(151) - 0.5) * 4, p[1] + (h(152) - 0.5) * 4, (petit ? 2.5 : 3.5) + h(153) * (petit ? 2 : 3.5), feuille(BOIS[(h(154) * 5) | 0])]);
+        }
+        for (const [k, p] of resample(offsetPts(rv.pts, side * (rv.w / 2 + (petit ? 2.5 : 5))), 3.3).entries()) {
+          const h = q => hash(k, ri * 4 + side + 2, S + q), v = this.at(p[0], p[1]);
+          if (v === T.ROUTE || v === T.BATI || v === T.MUR || v === T.PORTE || v === T.CHEMIN) continue;
+          this.roseaux.push([p[0] + (h(160) - 0.5) * 3, p[1] + (h(161) - 0.5) * 2, snow ? '#9a8f78' : h(162) < 0.5 ? '#6d9a4a' : '#3f6a33']);
+        }
+      }
+    });
+    // haies bocagères : un liseré sombre, des boules serrées qui le débordent un peu
+    this.haies = this.fencePts.filter(f => f.kind === 'haie').map((f, hi) => ({
+      pts: f.pts, box: boxOf(f.pts, 12),
+      b: resample(f.pts, 5).map((p, k) => { const h = q => hash(k, hi, S + q); return [p[0] + (h(170) - 0.5) * 2.4, p[1] + (h(171) - 0.5) * 1.6, 2.6 + h(172) * 3.4, feuille(BOIS[(h(173) * 5) | 0])]; }),
+    }));
+    this.bornes = [];
+    for (const r of this.routes) if (r.kind !== 'rue') for (const [k, p] of resample(offsetPts(r.pts, r.w / 2 + 1.6), 70).entries()) if (k) this.bornes.push(p);
+    this.bottes = [];
+    if (!snow) for (const r of this.regions) if (r.tex === 'chaume' && hash(r.parcel, 17, S) < 0.75) for (const c of r.cells) {
+      if (hash(c, 18, S) > 0.1) continue;
+      this.bottes.push([(c % this.cols + 0.2 + hash(c, 19, S) * 0.6) * this.cell, (((c / this.cols) | 0) + 0.2 + hash(c, 20, S) * 0.6) * this.cell, 2.3 + hash(c, 21, S) * 0.6]);
+    }
+  }
+  // ombrage des collines (une image à 10 m par pixel, adoucie à l'affichage) : lumière du nord-ouest, les pentes au
+  // soleil un peu dorées, celles à l'ombre un peu sombres ; rien sur le plat
+  prepOmbrage() {
+    const R = 10, w = Math.ceil(this.W / R), h = Math.ceil(this.H / R), cv = canvas(w, h), g = cv.getContext('2d'), img = g.createImageData(w, h), d = img.data;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const X = (x + 0.5) * R, Y = (y + 0.5) * R;
+      const gx = (this.fineAt(X + R, Y) - this.fineAt(X - R, Y)) / (2 * R), gy = (this.fineAt(X, Y + R) - this.fineAt(X, Y - R)) / (2 * R);
+      const e = (gx + gy) * Math.SQRT1_2, q = (y * w + x) * 4, col = e > 0 ? [255, 246, 210] : [28, 38, 14];
+      d[q] = col[0]; d[q + 1] = col[1]; d[q + 2] = col[2]; d[q + 3] = 255 * clamp(Math.abs(e) * (e > 0 ? 2.2 : 2.8), 0, e > 0 ? 0.3 : 0.38);
+    }
+    g.putImageData(img, 0, 0);
+    this.ombrage = cv;
+  }
+
   // ------------------------------------------------------------------ peinture d'un rectangle du monde
   // motifs et silhouettes d'arbres (textures.js), gardés tant que la mémoire le permet ; on ne libère qu'après une
   // peinture (trim) : jamais un canevas en cours d'usage
@@ -653,71 +668,68 @@ export class Terrain {
     return cv;
   }
   paint(g, x0, y0, wm, hm, s) {
-    const pal = this.pal, snow = pal.neige, S = this.seed;
+    const pal = this.pal, snow = pal.neige, x1 = x0 + wm, y1 = y0 + hm;
     const W = () => g.setTransform(s, 0, 0, s, -x0 * s, -y0 * s);
     // mesure facultative du temps de chaque étape (this.prof = {} pour l'activer)
     let tm = performance.now();
     const mark = k => { if (!this.prof) return; const n = performance.now(); this.prof[k] = (this.prof[k] || 0) + n - tm; tm = n; };
-    const vis = b => !(b[2] < x0 - 20 || b[0] > x0 + wm + 20 || b[3] < y0 - 20 || b[1] > y0 + hm + 20);
+    const vis = b => !(b[2] < x0 - 20 || b[0] > x1 + 20 || b[3] < y0 - 20 || b[1] > y1 + 20);
+    const inR = (p, m) => p[0] > x0 - m && p[0] < x1 + m && p[1] > y0 - m && p[1] < y1 + m;
+    const nv = c => snow ? mix(c, '#e8ecef', 0.72) : c;   // couleurs du sol sous la neige
+    const saison = snow ? 'hiver' : this.season;
     g.imageSmoothingEnabled = true;
     W();
-    // l'herbe partout d'abord (sous les routes, entre les parcelles) : les prés n'ont plus qu'une légère nuance
-    g.fillStyle = this.pat(g, snow ? 'neige' : 'herbe', s);
+    // l'herbe partout d'abord (sous les routes, entre les parcelles)
+    g.fillStyle = this.pat(g, 'herbe', s);
     g.fillRect(x0 - 50, y0 - 50, wm + 100, hm + 100);
-    // sols : motif de la nature du sol (culture de la saison, prairie de fauche…), nuance de la parcelle, tournière
-    // d'herbe autour des champs et des vignes
+    // sols : motif de la culture, raies dans le sens de la parcelle ; tournières et liseré clair autour des champs
     for (const r of this.regions) {
       if (!vis(r.box)) continue;
-      const v = r.type, crop = v === T.CHAMP || v === T.VIGNE || r.tex === 'prairie';
-      if (v === T.EAU || v === T.GUE || v === T.ROUTE || v === T.CHEMIN) continue;   // l'eau plus bas ; les routes sur l'herbe
-      if (r.tex !== 'herbe' && r.tex !== 'neige') { g.fillStyle = this.pat(g, r.tex, s, crop ? r.angle : 0, r.off); g.fill(r.path); }
-      if (v === T.PRE || v === T.VERGER) { g.globalAlpha = 0.16; g.fillStyle = pal.pre[r.tone]; g.fill(r.path); g.globalAlpha = 1; }
-      else if (v === T.CHAMP) { g.globalAlpha = 0.04 + (r.tone >> 1) * 0.04; g.fillStyle = r.tone & 1 ? '#fff8dc' : '#281e0a'; g.fill(r.path); g.globalAlpha = 1; }
-      if (crop && s >= 0.9) {
-        g.strokeStyle = mixHex(pal.pre[1], pal.herbeSec, 0.3); g.globalAlpha = 0.75; g.lineWidth = v === T.VIGNE ? 1.1 : 1.6; g.stroke(r.path);
-        g.globalAlpha = 1;
-        if (s < 2) { g.strokeStyle = 'rgba(70,56,30,0.2)'; g.lineWidth = 0.8 / s; g.stroke(r.path); }
+      const v = r.type;
+      if (v === T.EAU || v === T.GUE || v === T.CHEMIN) continue;   // l'eau plus bas ; les chemins sur l'herbe
+      if (v === T.ROUTE) { if (r.urb) { g.fillStyle = this.pat(g, 'pave', s); g.fill(r.path); } continue; }
+      const crop = v === T.CHAMP || v === T.VIGNE || v === T.PRE || v === T.VERGER;
+      g.fillStyle = this.pat(g, r.tex, s, crop ? r.angle : 0, r.off); g.fill(r.path);
+      // (bois, landes… : un trait du même motif couvre le liseré d'anticrénelage entre deux régions voisines)
+      if (!crop) { g.strokeStyle = g.fillStyle; g.lineWidth = 1.5 / s; g.stroke(r.path); }
+      if (v === T.CHAMP && !snow) { g.globalAlpha = 0.03 + (r.tone >> 1) * 0.03; g.fillStyle = r.tone & 1 ? '#fff8dc' : '#281e0a'; g.fill(r.path); g.globalAlpha = 1; }
+      if (v === T.CHAMP || v === T.VIGNE) {
+        const c = couleurs(r.tex, saison);
+        g.save(); g.clip(r.path);
+        g.strokeStyle = mix(c.base, c.raie || c.base, 0.5); g.lineWidth = 8; g.stroke(r.path);
+        g.strokeStyle = 'rgba(245,235,200,.3)'; g.lineWidth = 2.8; g.stroke(r.path);
+        g.restore();
       }
     }
     mark('sols');
-    // grandes nuances (herbe grasse ou sèche), puis les rochers
     g.drawImage(this.nuances, 0, 0, this.W, this.H);
     this.paintCells(g, x0, y0, wm, hm, s, snow);
+    for (const b of this.bottes) if (inR(b, 4)) botte(g, b[0], b[1], b[2]);
     mark('cases');
-    // eau : berges de terre humide, eau claire sur les bords et plus sombre au milieu, ombre de la rive, reflets
-    const bank = snow ? 'rgba(150,150,140,0.7)' : 'rgba(104,94,58,0.6)', shallow = snow ? '#9fb4c4' : mixHex(pal.eau, '#9db58a', 0.45);
+    // eau : étangs et cases d'eau (berge, bord profond), puis les rivières, couche par couche
     g.lineCap = 'round'; g.lineJoin = 'round';
-    for (const r of this.regions) { if ((r.type !== T.EAU && r.type !== T.GUE) || !vis(r.box)) continue; g.strokeStyle = bank; g.lineWidth = 4; g.stroke(r.path); }
-    // (les cases d'eau débordent du lit jusqu'à ≈ 12 m : berges et bords clairs les recouvrent)
-    for (const rv of this.riverPts) { g.strokeStyle = bank; g.lineWidth = rv.w + 26; strokePts(g, rv.pts); }
-    const eau = this.pat(g, 'eau', s);
-    for (const r of this.regions) {
-      if ((r.type !== T.EAU && r.type !== T.GUE) || !vis(r.box)) continue;
+    const eau = this.pat(g, 'eau', s), profond = snow ? '#4f6f86' : '#355f97';
+    const eaux = this.regions.filter(r => (r.type === T.EAU || r.type === T.GUE) && vis(r.box));
+    for (const r of eaux) { g.strokeStyle = nv('#4b7438'); g.lineWidth = 6; g.stroke(r.path); }
+    for (const r of eaux) {
       g.fillStyle = eau; g.fill(r.path);
       g.save(); g.clip(r.path);
-      const gue = r.type === T.GUE;
-      g.strokeStyle = gue ? mixHex(pal.eau, pal.sable, 0.5) : shallow; g.globalAlpha = gue ? 0.8 : 0.55; g.lineWidth = gue ? 30 : 7; g.stroke(r.path);
-      g.globalAlpha = 0.3; g.strokeStyle = '#1c3040'; g.lineWidth = 2.4; g.translate(-0.9, -0.9); g.stroke(r.path);
-      g.restore();
+      if (r.type === T.GUE) { g.strokeStyle = 'rgba(190,175,130,.7)'; g.lineWidth = 30; } else { g.strokeStyle = profond; g.lineWidth = 7; }
+      g.stroke(r.path); g.restore();
     }
-    for (const rv of this.riverPts) {
-      g.strokeStyle = shallow; g.lineWidth = rv.w + 20; strokePts(g, rv.pts);
-      g.strokeStyle = eau; g.globalAlpha = 0.55; g.lineWidth = rv.w + 12; strokePts(g, rv.pts); g.globalAlpha = 1;
-      g.strokeStyle = eau; g.lineWidth = rv.w * 0.85 + 4; strokePts(g, rv.pts);
-      g.strokeStyle = 'rgba(16,40,72,0.16)'; g.lineWidth = rv.w * 0.42; strokePts(g, rv.pts);
-    }
-    if (s >= 0.9) {
-      // reflets : un liseré clair le long de la rive éclairée, quelques rides au milieu
-      for (const rv of this.riverPts) {
-        g.strokeStyle = pal.eauHi; g.lineWidth = Math.max(0.8, rv.w * 0.06);
-        strokePts(g, offsetPts(rv.pts, -rv.w * 0.36));
-        g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = Math.max(0.6, rv.w * 0.04);
-        g.setLineDash([3, 9, 6, 17]); strokePts(g, offsetPts(rv.pts, rv.w * 0.08));
+    const rivs = this.riverPts.filter(rv => vis(rv.box));
+    const couches = [[w => w > 10 ? w + 27 : 0, nv('#557f3e')], [w => w > 10 ? w + 15 : w * 2.1, nv('#4b7438')], [w => w > 10 ? w + 8 : w * 1.1, profond], [w => w > 10 ? w : w * 0.75, eau]];
+    for (const [f, c] of couches) { g.strokeStyle = c; for (const rv of rivs) { const lw = f(rv.w); if (lw) { g.lineWidth = lw; strokePts(g, rv.pts); } } }
+    if (s >= 1) {
+      g.strokeStyle = 'rgba(160,195,235,.45)';
+      for (const rv of rivs) {
+        g.lineWidth = rv.w > 10 ? 1.1 : 0.7; g.setLineDash(rv.w > 10 ? [2.5, 11, 1.2, 9] : [1.6, 8, 0.8, 6]);
+        strokePts(g, rv.pts); if (rv.w > 10) { g.lineDashOffset = 9; strokePts(g, offsetPts(rv.pts, rv.w * 0.2)); g.lineDashOffset = 0; }
       }
       g.setLineDash([]);
       // gués : pierres dans l'eau claire
-      for (const r of this.regions) {
-        if (r.type !== T.GUE || !vis(r.box)) continue;
+      for (const r of eaux) {
+        if (r.type !== T.GUE) continue;
         for (const c of r.cells) for (let k = 0; k < 6; k++) {
           const x = (c % this.cols + hash(c, k, 3)) * this.cell, y = (((c / this.cols) | 0) + hash(c, k, 4)) * this.cell, rr = 0.8 + hash(c, k, 5) * 1.2;
           g.fillStyle = 'rgba(40,50,50,0.3)'; g.beginPath(); g.arc(x + 0.4, y + 0.3, rr, 0, TAU); g.fill();
@@ -725,34 +737,68 @@ export class Terrain {
         }
       }
     }
+    // roseaux et ripisylve
+    for (const p of this.roseaux) if (inR(p, 1)) C(g, p[2], p[0], p[1], 0.6);
+    touffes(g, this.ripi.filter(p => inR(p, 10)), snow);
     mark('eau');
-    // chemins de terre : larges, bas-côtés foulés aux bords fondus, ornières, herbe au milieu ; routes : chaussée de
-    // terre battue et de gravier
-    g.lineCap = 'round'; g.lineJoin = 'round';
-    const verge = snow ? 'rgba(150,150,150,0.15)' : 'rgba(112,90,44,0.15)', terre = this.pat(g, 'terre', s), route = this.pat(g, 'route', s);
-    g.strokeStyle = verge;
-    for (const w of [9.5, 7.6]) for (const p of this.pathPts) { g.lineWidth = w; strokePts(g, p); }   // deux passes : un bord fondu
-    for (const w of [16, 13]) for (const r of this.roadPts) { g.lineWidth = w; strokePts(g, r); }
-    for (const p of this.pathPts) { g.strokeStyle = 'rgba(96,72,40,0.26)'; g.lineWidth = 5.8; strokePts(g, p); }
-    for (const p of this.pathPts) { g.strokeStyle = terre; g.lineWidth = 5; strokePts(g, p); }
-    for (const r of this.roadPts) { g.strokeStyle = pal.routeBord; g.lineWidth = 10.2; strokePts(g, r); }
-    for (const r of this.roadPts) { g.strokeStyle = route; g.lineWidth = 9.2; strokePts(g, r); }
-    if (s >= 1.5) {
-      g.strokeStyle = snow ? 'rgba(110,100,90,0.4)' : 'rgba(96,70,40,0.4)'; g.lineWidth = 0.6;
-      for (const r of this.roadPts) { strokePts(g, offsetPts(r, -1.6)); strokePts(g, offsetPts(r, 1.6)); }
-      for (const p of this.pathPts) { strokePts(g, offsetPts(p, -1.2)); strokePts(g, offsetPts(p, 1.2)); }
-      g.strokeStyle = snow ? 'rgba(250,252,255,0.6)' : 'rgba(112,136,60,0.55)'; g.lineWidth = 0.9;
-      for (const p of this.pathPts) strokePts(g, p);
-      g.strokeStyle = 'rgba(255,250,232,0.14)'; g.lineWidth = 1.3;
-      for (const r of this.roadPts) strokePts(g, r);
+    // chemins de terre : terre battue, raie d'herbe tiretée au milieu
+    const chemins = this.pathPts.filter((p, k) => vis(this.pathBox[k]));
+    g.strokeStyle = nv('#c9b98e'); g.lineWidth = 6; for (const p of chemins) strokePts(g, p);
+    g.strokeStyle = nv('#d9caa1'); g.lineWidth = 5; for (const p of chemins) strokePts(g, p);
+    if (s >= 1) { g.setLineDash([3.5, 3]); g.strokeStyle = nv('#bba981'); g.lineWidth = 0.9; for (const p of chemins) strokePts(g, p); g.setLineDash([]); }
+    // routes empierrées (XVIIIe s.) : fossés, accotements herbus, chaussée de cailloutis bombée, ornières
+    const rs = this.routes.filter(r => r.kind !== 'rue' && vis(r.box));
+    for (const [dw, k, c] of [[7, 1, '#5b7f3f'], [4, 1, '#7d9c55'], [0, 1, '#ad9a70'], [0, 0.8, '#c6b388'], [0, 0.3, '#d3c299']]) {
+      g.strokeStyle = nv(c); for (const r of rs) { g.lineWidth = r.w * k + dw; strokePts(g, r.pts); }
     }
-    // (ponts : en volume, decor.js)
+    g.strokeStyle = 'rgba(120,96,60,.5)';
+    for (const r of rs) { g.lineWidth = r.w * 0.09; strokePts(g, offsetPts(r.pts, -r.w * 0.24)); strokePts(g, offsetPts(r.pts, r.w * 0.24)); }
+    if (s >= 2 && !snow) this.gravier(g, rs, x0, y0, x1, y1);
+    for (const p of this.bornes) if (inR(p, 2)) { C(g, OMB, p[0] + 0.5, p[1] + 0.7, 0.9); C(g, '#ebe5d6', p[0], p[1], 0.8); C(g, '#c9c0aa', p[0], p[1], 0.35); }
+    // rues pavées des villes : pavés de grès en rangs, caniveau au milieu
+    const rues = this.routes.filter(r => r.kind === 'rue' && vis(r.box));
+    g.strokeStyle = '#8b826e'; for (const r of rues) { g.lineWidth = r.w + 1.4; strokePts(g, r.pts); }
+    g.strokeStyle = nv('#a69d88'); for (const r of rues) { g.lineWidth = r.w; strokePts(g, r.pts); }
+    if (s >= 2) {
+      g.setLineDash([0.9, 0.45]); g.strokeStyle = 'rgba(80,72,58,.35)'; g.lineWidth = 0.7;
+      for (const r of rues) for (let o = -r.w / 2 + 0.8; o < r.w / 2 - 0.4; o += 1.2) { g.lineDashOffset = o * 3.3; strokePts(g, offsetPts(r.pts, o)); }
+      g.setLineDash([]); g.lineDashOffset = 0;
+    }
+    g.strokeStyle = '#776f5e'; g.lineWidth = 0.6; for (const r of rues) strokePts(g, r.pts);
+    // ormes des routes royales, ponts de pierre
+    touffes(g, this.ormes.filter(p => inR(p, 8)), snow);
+    for (const b of this.bridges) if (inR([b.x, b.y], b.len + 20)) pont(g, b, nv);
     mark('routes');
-    // au pied de ce qui est debout (en volume : decor.js) : fossés, glacis, terre remuée, pied des haies, ombre douce
+    // fossés et glacis des remparts, haies, pied des murets et clôtures (debout : le décor)
     this.paintWalls(g);
+    const haies = this.haies.filter(h => vis(h.box));
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    g.strokeStyle = 'rgba(20,32,12,.35)'; g.lineWidth = 5.5; for (const h of haies) { g.save(); g.translate(1.6, 2.2); strokePts(g, h.pts); g.restore(); }
+    g.strokeStyle = snow ? '#5a5444' : '#2c5628'; g.lineWidth = 4.2; for (const h of haies) strokePts(g, h.pts);
+    touffes(g, haies.flatMap(h => h.b.filter(p => inR(p, 9))), snow);
     this.paintFences(g);
-    this.paintStanding(g, x0, y0, wm, hm);
+    // collines : l'ombrage par-dessus tout ce qui est au sol
+    g.drawImage(this.ombrage, 0, 0, this.W, this.H);
     mark('debout');
+  }
+  // cailloutis et flaques des routes empierrées (de près)
+  gravier(g, rs, x0, y0, x1, y1) {
+    const S = this.seed, paths = [new Path2D(), new Path2D()];
+    rs.forEach((r, ri) => {
+      const p = r.pts, w = r.w;
+      for (let i = 1; i < p.length; i++) {
+        const [ax, ay] = p[i - 1], [bx, by] = p[i];
+        if (Math.max(ax, bx) < x0 - w || Math.min(ax, bx) > x1 + w || Math.max(ay, by) < y0 - w || Math.min(ay, by) > y1 + w) continue;
+        const l = Math.hypot(bx - ax, by - ay); if (!l) continue;
+        const ux = (bx - ax) / l, uy = (by - ay) / l;
+        for (let t = 0, n = 0; t < l; t += 1.6, n++) for (let k = 0; k < 2; k++) {
+          const h = q => hash(i * 8 + n * 2 + k, ri, S + q), o = (h(1) - 0.5) * w * 0.85, x = ax + ux * t - uy * o, y = ay + uy * t + ux * o, rr = 0.18 + h(2) * 0.22;
+          const P = paths[h(3) < 0.5 ? 0 : 1]; P.moveTo(x + rr, y); P.arc(x, y, rr, 0, TAU);
+          if (k === 0 && h(4) < 0.006) E(g, 'rgba(110,130,140,.45)', ax + ux * t - uy * w * 0.2, ay + uy * t + ux * w * 0.2, w * 0.14, w * 0.07, Math.atan2(uy, ux));
+        }
+      }
+    });
+    g.fillStyle = '#a8946a'; g.fill(paths[0]); g.fillStyle = '#e0d2ab'; g.fill(paths[1]);
   }
   // bâtiments rangés pour le shader des troupes, qui en repousse les hommes et les chevaux (troupes.js, pushOut) : une
   // grille de cell m sur leur emprise, au plus 4 bâtiments par case (numéro + 1 ; 0 : aucun) ; rects, deux lignes :
@@ -816,19 +862,6 @@ export class Terrain {
     g.fillStyle = 'rgba(60,56,48,0.38)'; g.fill(rocksD);
     g.fillStyle = 'rgba(255,252,240,0.3)'; g.fill(rocksL);
   }
-  // ombre douce au pied des arbres et des maisons (en volume : decor.js)
-  paintStanding(g, x0, y0, wm, hm) {
-    const { cols, rows, cell } = this, snow = this.pal.neige;
-    const i0 = Math.max(0, Math.floor(x0 / cell) - 1), i1 = Math.min(cols - 1, Math.ceil((x0 + wm) / cell) + 1);
-    const j0 = Math.max(0, Math.floor(y0 / cell) - 1), j1 = Math.min(rows - 1, Math.ceil((y0 + hm + 30) / cell) + 1);
-    g.globalAlpha = snow ? 0.2 : 0.3;
-    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) for (const tr of this.treeGrid[j * cols + i]) { const rr = tr.r * 1.1; g.drawImage(this.ombre, tr.x - rr, tr.y - rr * 0.9, rr * 2, rr * 1.8); }
-    for (const b of this.buildings) {
-      if (b.x < x0 - 60 || b.x > x0 + wm + 60 || b.y < y0 - 60 || b.y > y0 + hm + 90) continue;
-      const rr = Math.max(b.w, b.h) * 0.75 + 2; g.drawImage(this.ombre, b.x - rr, b.y - rr, rr * 2, rr * 2);
-    }
-    g.globalAlpha = 1;
-  }
   // emprise d'un bâtiment : coins au sol, dans l'ordre
   corners(b) {
     const ca = Math.cos(b.a || 0), sa = Math.sin(b.a || 0), w = b.w / 2, h = b.h / 2;
@@ -867,11 +900,12 @@ export class Terrain {
     }
     g.restore();
   }
-  // pied des haies, murets et clôtures (en volume : decor.js), un peu assombri
+  // pied des murets et clôtures (debout : le décor), un peu assombri
   paintFences(g) {
     const snow = this.pal.neige;
     g.lineCap = 'round'; g.lineJoin = 'round';
-    for (const f of this.fencePts) { g.strokeStyle = snow ? 'rgba(50,60,90,0.18)' : 'rgba(20,34,12,0.25)'; g.lineWidth = f.kind === 'haie' ? 3.2 : 1.4; strokePts(g, f.pts); }
+    g.strokeStyle = snow ? 'rgba(50,60,90,0.18)' : 'rgba(20,34,12,0.25)'; g.lineWidth = 1.4;
+    for (const f of this.fencePts) if (f.kind !== 'haie') strokePts(g, f.pts);
   }
 
   // découpe une ligne là où elle passe sur l'eau
@@ -890,7 +924,7 @@ export class Terrain {
   // ------------------------------------------------------------------ tuiles
   setQuality(q) { this.q = q || profil(); if (this.cache) this.trim(); }   // (le constructeur l'appelle avant le cache)
   // brèche ouverte au canon pendant la bataille ([mur, x, y, rayon]) : l'image entière est repeinte autour d'elle
-  // (relief.js repeint ses blocs, decor.js l'enceinte)
+  // (Sol2D.invalidate repeint ses tuiles, le décor l'enceinte)
   addBreach([wi, x, y, r]) {
     const w = this.walls[wi];
     if (!w) return;
@@ -900,15 +934,65 @@ export class Terrain {
     this.base.getContext('2d').drawImage(cv, x0 * BASE, y0 * BASE);
     cv.width = cv.height = 0;
   }
-  // tués, chevaux, trous d'obus : ceux qui tombent sur le sol découvert (relief.js les pose sur le relief)
+  // tués, chevaux, trous d'obus : ceux qui tombent sur le sol découvert (Sol2D.stamp les peint)
   addDecals(list) { return list.filter(d => this.bare(d.x, d.y)); }
   dispose() {
     for (const e of this.cache.values()) { const cv = e.cv || e; cv.width = cv.height = 0; }
     this.cache.clear(); this.cacheBytes = 0;
-    this.base.width = this.base.height = 0;
+    for (const cv of [this.base, this.nuances, this.ombrage, this.coverImg]) if (cv) cv.width = cv.height = 0;
   }
 }
 
+// ------------------------------------------------------------------ dessins de la maquette (vus de haut, en mètres)
+const LARGEUR = { royale: 11, route: 8, rue: 8 };   // chaussée (m), sans fossés
+const OMB = 'rgba(20,32,12,.42)';                   // ombre portée des arbres, bottes, bornes
+function C(g, c, x, y, r) { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); }
+function E(g, c, x, y, rx, ry, r = 0) { g.fillStyle = c; g.beginPath(); g.ellipse(x, y, rx, ry, r, 0, TAU); g.fill(); }
+function boxOf(pts, m) {
+  const b = [1e9, 1e9, -1e9, -1e9];
+  for (const p of pts) { b[0] = Math.min(b[0], p[0] - m); b[1] = Math.min(b[1], p[1] - m); b[2] = Math.max(b[2], p[0] + m); b[3] = Math.max(b[3], p[1] + m); }
+  return b;
+}
+// distance de (x, y) à une ligne brisée
+function distPts(pts, x, y) {
+  let d = 1e9;
+  for (let k = 1; k < pts.length; k++) {
+    const [ax, ay] = pts[k - 1], [bx, by] = pts[k], dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1;
+    const u = clamp(((x - ax) * dx + (y - ay) * dy) / l2, 0, 1);
+    d = Math.min(d, Math.hypot(ax + dx * u - x, ay + dy * u - y));
+  }
+  return d;
+}
+// houppiers ronds [x, y, r, couleur] : les ombres, puis les houppiers, puis les reflets ; les arbres se recouvrent
+// proprement (une passe par couleur)
+function touffes(g, pts, snow) {
+  if (!pts.length) return;
+  const sh = new Path2D(), hi = new Path2D(), byC = new Map();
+  for (const [x, y, r, c] of pts) {
+    sh.moveTo(x + 2 + r, y + 2.6); sh.arc(x + 2, y + 2.6, r, 0, TAU);
+    hi.moveTo(x - r * 0.32 + r * 0.5, y - r * 0.34); hi.arc(x - r * 0.32, y - r * 0.34, r * 0.5, 0, TAU);
+    let p = byC.get(c); if (!p) byC.set(c, p = new Path2D());
+    p.moveTo(x + r, y); p.arc(x, y, r, 0, TAU);
+  }
+  g.fillStyle = OMB; g.fill(sh);
+  for (const [c, p] of byC) { g.fillStyle = c; g.fill(p); }
+  g.globalAlpha = snow ? 0.55 : 0.26; g.fillStyle = snow ? '#f4f6f8' : '#a5cf7f'; g.fill(hi); g.globalAlpha = 1;
+}
+function botte(g, x, y, r) {
+  E(g, OMB, x + 1.2, y + 1.6, r, r * 0.9); C(g, '#d6ba5c', x, y, r);
+  g.strokeStyle = '#b49841'; g.lineWidth = 0.45; g.beginPath(); g.arc(x, y, r * 0.62, 0, TAU); g.stroke(); C(g, '#c2a54a', x, y, r * 0.25);
+}
+// pont de pierre {x, y, a (sens de la route), len} : tablier, parapets, joints des pierres
+function pont(g, b, nv) {
+  const L = (b.len || 30) + 12, l = L / 2, RR = (c, x, y, w, h) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+  g.save(); g.translate(b.x, b.y); g.rotate(b.a || 0);
+  RR('rgba(20,20,10,.35)', -l + 1.5, -7 + 2.2, L, 14);
+  RR(nv('#b8ad94'), -l, -7, L, 14); RR(nv('#cfc3a2'), -l, -4, L, 8);
+  RR('#8f856e', -l, -7, L, 2.2); RR('#8f856e', -l, 4.8, L, 2.2);
+  g.strokeStyle = '#7d745f'; g.lineWidth = 0.5; g.beginPath();
+  for (let i = -l + 6; i <= l - 6; i += 10) { g.moveTo(i, -7); g.lineTo(i, -4.8); g.moveTo(i, 4.8); g.lineTo(i, 7); }
+  g.stroke(); g.restore();
+}
 function strokePts(g, pts) {
   g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
   for (let k = 1; k < pts.length; k++) g.lineTo(pts[k][0], pts[k][1]);
@@ -921,11 +1005,14 @@ export function offsetPts(pts, d) {
     return [p[0] - dy / l * d, p[1] + dx / l * d];
   });
 }
+// points tous les step m le long d'une ligne brisée (la distance court d'un segment à l'autre)
 export function resample(pts, step) {
   const out = [];
+  let u = 0;
   for (let k = 1; k < pts.length; k++) {
     const [ax, ay] = pts[k - 1], [bx, by] = pts[k], L = Math.hypot(bx - ax, by - ay);
-    for (let u = 0; u < L; u += step) out.push([ax + (bx - ax) * u / L, ay + (by - ay) * u / L]);
+    for (; u < L; u += step) out.push([ax + (bx - ax) * u / L, ay + (by - ay) * u / L]);
+    u -= L;
   }
   return out;
 }
@@ -940,11 +1027,15 @@ export function paintDecal(g, d, s) {
   const el = (x, y, rx, ry) => { g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, TAU); g.fill(); };
   g.save(); g.translate(d.x, d.y); g.rotate(d.a || 0);
   if (d.k === 'trou') {
-    // entonnoir d'obus : terre rejetée tout autour, fond sombre
-    const r = (d.r || 2.6) * 0.7;
-    g.fillStyle = 'rgba(122,98,64,0.18)'; el(0, 0, r * 1.35, r * 1.1);
-    g.fillStyle = 'rgba(84,62,38,0.26)'; el(0, 0, r, r * 0.8);
-    g.fillStyle = 'rgba(42,30,18,0.24)'; el(r * 0.12, r * 0.1, r * 0.5, r * 0.4);
+    // cratère (maquette) : terre noircie autour, mottes projetées, entonnoir sombre
+    const r = (d.r || 2.6) * 0.8, h = q => hash(d.x * 10 | 0, d.y * 10 | 0, q);
+    g.fillStyle = 'rgba(60,42,22,.22)'; el(0, 0, r * 2.2, r * 1.8);
+    for (let i = 0; i < 9; i++) {
+      const a = h(i) * TAU, e = r * (1.2 + h(i + 20) * 1.6);
+      g.fillStyle = h(i + 40) < 0.5 ? '#6d5338' : '#4f3b27'; el(Math.cos(a) * e, Math.sin(a) * e, 0.35 + h(i + 60) * 0.5, 0.35 + h(i + 60) * 0.5);
+    }
+    g.fillStyle = '#5a4330'; el(0, 0, r, r);
+    g.fillStyle = '#3b2b1d'; el(0.3, 0.4, r * 0.55, r * 0.55);
   } else if (d.k === 'chapeau') {
     // débris (SPEC-SUITE F8) : un chapeau tombé, sa cocarde
     g.fillStyle = 'rgba(30,20,15,0.25)'; el(0.06, 0.05, 0.32, 0.22);

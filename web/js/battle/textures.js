@@ -1,87 +1,80 @@
-// Vue tactique : motifs du terrain, peints une fois par niveau de détail.
-// Un motif est un petit canevas qui se répète sans joint (bruit périodique) : herbe aux nuances multiples, blé
-// doré strié, chaumes, labours, maïs, vigne en rangs, lande, marais, sable, roche, sous-bois, terre des chemins,
-// eau, pavés. Il est peint à la densité de la tuile (L pixels par mètre) : de loin, des nuances seulement ; de
-// près, brins d'herbe, épis, mottes, cailloux et fleurs. Les cultures ont leurs rangs le long de x : la tuile les
-// tourne dans le sens de la parcelle. Aussi : l'ombre douce posée au pied des arbres et des maisons.
-import { hash, clamp, TAU, hexRgb, canvas } from './formes.js';
+// Vue tactique : motifs du sol, dans le style de Champs de Plaine (maquette dev/maquette-2d.html, parcelle).
+// Un motif est un petit canevas qui se répète sans joint (période P m, les marques qui touchent un bord sont recopiées
+// de l'autre côté : dup) : aplat de la culture, grandes taches plus claires ou plus sombres, raies régulières le long de
+// x (la tuile les tourne dans le sens de la parcelle), puis les menus détails (touffes et fleurs des prés, mottes des
+// labours, pailles du chaume, épis du blé, ceps…). Peint à la densité de la tuile (L pixels par mètre). Sous la neige,
+// les mêmes motifs pâlis, des touffes qui percent. Aussi : les couleurs de chaque sol (tournières), les outils de
+// couleur de la maquette (mix, alea) et l'ombre douce.
+import { TAU, canvas } from './formes.js';
 
-// ------------------------------------------------------------------ bruit périodique
-// grille de n × n valeurs aléatoires, interpolée en douceur sur size pixels : se répète sans joint
-function lattice(size, n, seed) {
-  const g = new Float32Array(n * n), out = new Float32Array(size * size), cell = size / n;
-  for (let k = 0; k < n * n; k++) g[k] = hash(k % n, (k / n) | 0, seed);
-  for (let y = 0; y < size; y++) {
-    const fy = y / cell, iy = Math.floor(fy), ty = fy - iy, sy = ty * ty * (3 - 2 * ty), j0 = (iy % n) * n, j1 = ((iy + 1) % n) * n;
-    for (let x = 0; x < size; x++) {
-      const fx = x / cell, ix = Math.floor(fx), tx = fx - ix, sx = tx * tx * (3 - 2 * tx), i0 = ix % n, i1 = (ix + 1) % n;
-      const a = g[j0 + i0], b = g[j0 + i1], c = g[j1 + i0], d = g[j1 + i1];
-      out[y * size + x] = a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
-    }
-  }
-  return out;
+// ------------------------------------------------------------------ outils de la maquette
+const hx = c => { const n = parseInt(c.slice(1), 16); return [n >> 16, n >> 8 & 255, n & 255]; };
+const MEMO = new Map();
+// mélange de deux couleurs #rrggbb (k : part de b), en #rrggbb : se laisse remélanger
+export function mix(a, b, k) {
+  const key = a + b + k; let v = MEMO.get(key);
+  if (!v) { const A = hx(a), B = hx(b); v = '#' + A.map((x, i) => Math.round(x + (B[i] - x) * k).toString(16).padStart(2, '0')).join(''); MEMO.set(key, v); }
+  return v;
 }
-// somme de couches de bruit centrées sur 0 ; layers : [[taille du grain en m, amplitude], …] ; L : px/m.
-// Un grain de moins de 1,5 pixel ne se verrait pas : la couche est sautée.
-function noise(size, L, layers, seed) {
-  const out = new Float32Array(size * size);
-  layers.forEach(([m, a], q) => {
-    if (m * L < 1.5) return;
-    const n = Math.max(1, Math.round(size / (m * L))), l = lattice(size, n, seed + q * 31);
-    for (let k = 0; k < out.length; k++) out[k] += (l[k] - 0.5) * 2 * a;
-  });
-  return out;
+export const sombre = (c, k = 0.25) => mix(c, '#000000', k), clair = (c, k = 0.25) => mix(c, '#ffffff', k);
+// tirage pseudo-aléatoire déterministe (mulberry32) : une même graine, les mêmes marques d'une tuile à l'autre
+export function alea(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function E(g, c, x, y, rx, ry, r = 0) { g.fillStyle = c; g.beginPath(); g.ellipse(x, y, rx, ry, r, 0, TAU); g.fill(); }
+function C(g, c, x, y, r) { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); }
+// répète un dessin de l'autre côté du motif (période P) quand il touche un bord
+function dup(P, x, y, m, fn) {
+  fn(x, y);
+  const xs = [x], ys = [y];
+  if (x < m) xs.push(x + P); if (x > P - m) xs.push(x - P);
+  if (y < m) ys.push(y + P); if (y > P - m) ys.push(y - P);
+  for (const a of xs) for (const b of ys) if (a !== x || b !== y) fn(a, b);
 }
-// remplit le motif : couleur de base, éclaircie ou assombrie par v, mêlée à une autre couleur selon mix (0 à 1)
-function paintBase(size, base, v, alt = null, mix = null) {
-  const cv = canvas(size, size), g = cv.getContext('2d'), img = g.createImageData(size, size), d = img.data;
-  for (let k = 0; k < size * size; k++) {
-    let r = base[0], gg = base[1], b = base[2];
-    if (mix) { const t = mix[k]; r += (alt[0] - r) * t; gg += (alt[1] - gg) * t; b += (alt[2] - b) * t; }
-    const f = 1 + v[k];
-    d[k * 4] = r * f; d[k * 4 + 1] = gg * f; d[k * 4 + 2] = b * f; d[k * 4 + 3] = 255;
-  }
-  g.putImageData(img, 0, 0);
-  return cv;
-}
-// fonction du bruit → mélange (0 à 1) : seuil doux
-const ramp = (v, lo, hi, max = 1) => { const o = new Float32Array(v.length); for (let k = 0; k < v.length; k++) o[k] = clamp((v[k] - lo) / (hi - lo), 0, 1) * max; return o; };
-const mul = (c, f) => [c[0] * f, c[1] * f, c[2] * f];
-const mixc = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-const css = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
-// rangs (le long de x) : profil périodique en y ; period en m, prof : fonction de la phase (0 à 1) → −1 à 1
-function rows(v, size, L, period, amp, prof = p => Math.sin(p * TAU)) {
-  if (period * L < 2) return;                                // trop fins pour se voir
-  const n = Math.max(1, Math.round(size / (period * L)));   // un nombre entier de rangs : pas de joint
-  for (let y = 0; y < size; y++) { const a = prof((y * n / size) % 1) * amp; for (let x = 0; x < size; x++) v[y * size + x] += a; }
-}
-// petites marques semées au hasard (brins, épis, cailloux, fleurs), regroupées par couleur ; recopiées de l'autre
-// côté quand elles débordent : le motif reste sans joint
-function strew(g, size, count, seed, colors, mark, margin = 10) {
-  const paths = colors.map(() => new Path2D());
-  for (let k = 0; k < count; k++) {
-    const x = hash(k, 1, seed) * size, y = hash(k, 2, seed) * size, p = paths[(hash(k, 3, seed) * colors.length) | 0];
-    mark(p, x, y, k);
-    const dx = x < margin ? size : x > size - margin ? -size : 0, dy = y < margin ? size : y > size - margin ? -size : 0;
-    if (dx) mark(p, x + dx, y, k);
-    if (dy) mark(p, x, y + dy, k);
-    if (dx && dy) mark(p, x + dx, y + dy, k);
-  }
-  colors.forEach((c, i) => { if (c.fill) { g.fillStyle = c.fill; g.fill(paths[i]); } else { g.strokeStyle = c.stroke; g.lineWidth = c.w; g.stroke(paths[i]); } });
-}
-const blade = (L, len0, len1, seed) => (p, x, y, k) => {
-  const l = (len0 + hash(k, 4, seed) * (len1 - len0)) * L, a = -Math.PI / 2 + (hash(k, 5, seed) - 0.5) * 0.9;
-  p.moveTo(x, y); p.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
+
+// ------------------------------------------------------------------ les sols
+export const HERBE = '#6c984d', NEIGE = '#e9edf0', BOIS = ['#2f5e2c', '#3a6c34', '#45793c', '#2b5427', '#518644'];
+// base : aplat ; raie : couleur des raies (null : aucune), pas et ep : leur écartement et leur largeur (m) ; les pas
+// divisent 40 m (la période des motifs fins) : pas de joint
+export const SOLS = {
+  chaume: { base: '#cfb87e', raie: '#bea86b', pas: 5, ep: 2 },
+  ble: { base: '#d8bf6c', raie: '#c7aa55', pas: 4, ep: 1.7 },
+  labour: { base: '#6f4a31', raie: '#5b3b26', pas: 5, ep: 2.4 },
+  pre: { base: '#7aa659', raie: '#72a052', pas: 8, ep: 3.5 },
+  colza: { base: '#418d3e', raie: '#377d35', pas: 4, ep: 2 },
+  friche: { base: '#8e8b4e', raie: '#817e45', pas: 5, ep: 2.2 },
+  jachere: { base: '#b9ad86', raie: '#aca079', pas: 8, ep: 2.5 },
+  bleVert: { base: '#5f9a47', raie: '#558d3f', pas: 4, ep: 1.6 },
+  avoine: { base: '#a8b064', raie: '#99a157', pas: 4, ep: 1.6 },
+  semis: { base: '#7a5638', raie: '#664530', pas: 5, ep: 2.2 },
+  mais: { base: '#5f8d3e', raie: '#4a7631', pas: 5, ep: 2.6 },
+  prairie: { base: '#86ad5f', raie: '#7ba354', pas: 8, ep: 3 },
+  vigne: { base: '#b5a27a', raie: '#a39066', pas: 2.5, ep: 1.1 },
+  vigneFoule: { base: '#b5a27a' }, herbe: { base: HERBE }, lande: { base: '#8f8a55' }, marais: { base: '#6e9468' },
+  sable: { base: '#ddcb94' }, roche: { base: '#aaa491' }, sousBois: { base: '#284b24' }, terre: { base: '#d9caa1' },
+  route: { base: '#c6b388' }, eau: { base: '#4a78b4' }, cour: { base: '#bfb498' }, pave: { base: '#a69d88' },
 };
-const dot = (r0, r1, seed) => (p, x, y, k) => { const r = r0 + hash(k, 6, seed) * (r1 - r0); p.moveTo(x + r, y); p.arc(x, y, r, 0, TAU); };
+// couleurs d'un sol selon la saison (mêmes champs que SOLS)
+export function couleurs(kind, season) {
+  const s = SOLS[kind] || SOLS.herbe, o = { ...s };
+  const vert = kind === 'pre' || kind === 'herbe' || kind === 'prairie';
+  if (vert && season === 'ete') { o.base = mix(s.base, '#b9b060', 0.18); if (s.raie) o.raie = mix(s.raie, '#b9b060', 0.18); }
+  if (vert && season === 'automne') { o.base = mix(s.base, '#a0965a', 0.25); if (s.raie) o.raie = mix(s.raie, '#a0965a', 0.25); }
+  if (kind === 'mais' && season === 'automne') { o.base = '#b49a5e'; o.raie = '#9c8450'; }
+  if (season === 'hiver') {
+    const k = kind === 'eau' ? 0 : kind === 'sousBois' ? 0.55 : kind === 'route' || kind === 'terre' || kind === 'pave' ? 0.7 : vert ? 0.9 : 0.84;
+    o.base = kind === 'eau' ? mix(s.base, '#8fa6b8', 0.35) : mix(s.base, NEIGE, k);
+    // (les raies : des creux à peine bleutés, la terre d'un labour y perce un peu)
+    if (s.raie) o.raie = mix(mix(o.base, '#a9b6c4', vert ? 0.2 : 0.35), s.raie, kind === 'labour' || kind === 'semis' ? 0.22 : 0.08);
+  }
+  return o;
+}
 
 // ------------------------------------------------------------------ cultures selon la saison
 // [culture, poids] ; une parcelle tire sa culture d'après son numéro
 export const CULTURES = {
-  printemps: [['bleVert', 38], ['avoine', 18], ['labour', 22], ['prairie', 22]],
-  ete: [['ble', 34], ['chaume', 14], ['avoine', 14], ['mais', 12], ['bleVert', 8], ['prairie', 18]],   // l'or alterne avec des verts
-  automne: [['labour', 40], ['chaume', 24], ['mais', 14], ['semis', 22]],
-  hiver: [['labour', 60], ['chaume', 40]],
+  printemps: [['bleVert', 30], ['colza', 12], ['avoine', 14], ['labour', 18], ['prairie', 18], ['jachere', 8]],
+  ete: [['ble', 30], ['chaume', 16], ['avoine', 12], ['mais', 10], ['bleVert', 6], ['prairie', 14], ['friche', 6], ['jachere', 6]],
+  automne: [['labour', 34], ['chaume', 22], ['mais', 12], ['semis', 18], ['colza', 8], ['friche', 6]],
+  hiver: [['labour', 55], ['chaume', 35], ['friche', 10]],
 };
 export function culture(season, r) {
   const list = CULTURES[season] || CULTURES.printemps, tot = list.reduce((a, c) => a + c[1], 0);
@@ -91,212 +84,90 @@ export function culture(season, r) {
 }
 
 // ------------------------------------------------------------------ motifs
-// taille du motif : assez grande pour que la répétition ne se voie pas (128 à 64 m de côté selon le niveau)
-const texSize = L => (L <= 1 ? 128 : L <= 4 ? 256 : 512);
+// période du motif (m) : 80 m de loin, 40 m de près (la mémoire d'un motif à 16 px/m reste sous 2 Mo)
+export const periode = L => (L <= 4 ? 80 : 40);
 
-// kind : nature du sol ; L : px/m ; pal : palette de la saison (terrain.js) ; season : printemps, ete…
+// kind : nature du sol (SOLS) ; L : px/m ; pal : palette de la saison (terrain.js) ; season : printemps, ete…
 export function texture(kind, L, pal, season) {
-  const size = texSize(L), S = 7 + kind.length * 13 + kind.charCodeAt(0), snow = !!pal.neige;
-  const fine = L >= 4, tres = L >= 8;
-  const n = layers => noise(size, L, layers, S);
+  const P = periode(L), size = Math.max(4, Math.round(P * L)), snow = !!pal.neige;
+  const cv = canvas(size, size), g = cv.getContext('2d');
+  g.setTransform(size / P, 0, 0, size / P, 0, 0);
+  const s = couleurs(kind, snow ? 'hiver' : season), R = alea(7 + kind.length * 131 + kind.charCodeAt(0) * 17 + Math.round(L * 8));
+  g.fillStyle = s.base; g.fillRect(0, 0, P, P);
+  // grandes taches douces
+  g.globalAlpha = kind === 'eau' ? 0.12 : snow ? 0.08 : 0.2;
+  for (let i = 0, n = P * P / 700; i < n; i++) {
+    const c = R() < 0.5 ? clair(s.base, 0.14) : sombre(s.base, 0.12), rx = 8 + R() * 18, ry = 5 + R() * 12, r = R() * 3;
+    dup(P, R() * P, R() * P, 30, (a, b) => E(g, c, a, b, rx, ry, r));
+  }
+  g.globalAlpha = 1;
+  // raies le long de x (trop serrées pour la densité : leur teinte moyenne, sans moirure)
+  if (s.raie && s.pas * L < 3) { g.globalAlpha = s.ep / s.pas; g.fillStyle = s.raie; g.fillRect(0, 0, P, P); g.globalAlpha = 1; }
+  else if (s.raie) {
+    g.strokeStyle = s.raie; g.lineWidth = s.ep; g.beginPath();
+    for (let y = s.pas / 2; y < P; y += s.pas) { g.moveTo(-1, y); g.lineTo(P + 1, y); }
+    g.stroke();
+  }
+  if (L < 1.5) return cv;   // (les détails ne feraient pas un pixel)
+  const n = P * P, pt = (cnt, fn, m = 3) => { for (let i = 0; i < cnt; i++) { const a = R(), b = R(), c = R(), d = R(); dup(P, a * P, b * P, m, (u, v) => fn(u, v, c, d)); } };
+  if (snow) {
+    // neige : quelques touffes et chaumes qui percent, scintillement de près
+    if (kind !== 'eau' && kind !== 'route' && kind !== 'pave') pt(n / 60, (u, v, c) => E(g, c < 0.5 ? 'rgba(110,104,84,.45)' : 'rgba(150,140,110,.4)', u, v, 0.5, 0.3, c * 3));
+    if (L >= 8) pt(n / 30, (u, v) => C(g, 'rgba(255,255,255,.9)', u, v, 0.07));
+    return cv;
+  }
   switch (kind) {
-    case 'herbe': case 'prairie': {
-      const base = hexRgb(pal.pre[0]), dry = hexRgb(pal.herbeSec || pal.pre[2]);
-      const v = n([[16, 0.06], [4.5, 0.08], [1.3, 0.09], [0.35, 0.09], [0.1, 0.07]]);
-      if (kind === 'prairie' && !snow) rows(v, size, L, 2.2, 0.04);   // andains de la fauche
-      const mix = ramp(n([[9, 1], [2.5, 0.5]]), -0.1, 0.9, kind === 'prairie' ? 0.75 : 0.5);
-      const cv = paintBase(size, kind === 'prairie' ? mixc(base, dry, 0.35) : base, v, dry, mix), g = cv.getContext('2d');
-      if (snow) { neigeDetails(g, size, L, S); return cv; }
-      if (fine) {
-        const w = Math.max(0.6, 0.035 * L);
-        strew(g, size, Math.min(14000, size * size / (tres ? 18 : 34)), S, [{ stroke: css(mul(base, 0.62), 0.6), w }, { stroke: css(mixc(mul(base, 1.22), [235, 225, 150], 0.3), 0.55), w }, { stroke: css(mul(dry, 0.85), 0.5), w }, { stroke: css(mul(base, 0.8), 0.5), w }], blade(L, 0.1, kind === 'prairie' ? 0.4 : 0.26, S));
+    case 'pre': case 'prairie': case 'herbe':
+      pt(n / (kind === 'herbe' ? 30 : 40), (u, v, c, d) => E(g, c < 0.5 ? sombre(s.base, 0.13) : clair(s.base, 0.14), u, v, 0.8 + d, 0.6 + d * 0.6, c * 3));
+      if (season !== 'automne') pt(n / (kind === 'herbe' ? 900 : 380), (u, v, c) => C(g, c < 0.6 ? '#f4f1e4' : season === 'printemps' && c > 0.85 ? '#b79ad0' : '#efd45a', u, v, 0.38));
+      break;
+    case 'labour': case 'semis':
+      pt(n / 26, (u, v, c, d) => C(g, c < 0.5 ? clair(s.base, 0.12) : sombre(s.base, 0.2), u, v, 0.4 + d * 0.6));
+      if (kind === 'semis') { g.fillStyle = 'rgba(110,150,70,.6)'; for (let y = s.pas; y < P; y += s.pas) g.fillRect(0, y - 0.15, P, 0.3); }
+      break;
+    case 'chaume': pt(n / 45, (u, v, c) => { g.strokeStyle = c < 0.5 ? '#e4d3a0' : '#b39c60'; g.lineWidth = 0.35; g.beginPath(); g.moveTo(u, v); g.lineTo(u + 1.6, v + 0.2); g.stroke(); }); break;
+    case 'ble': pt(n / 36, (u, v, c) => C(g, c < 0.5 ? '#ead28a' : '#b9993f', u, v, 0.35)); break;
+    case 'colza': case 'bleVert': pt(n / 34, (u, v, c, d) => C(g, c < 0.5 ? clair(s.base, 0.15) : sombre(s.base, 0.22), u, v, 0.5 + d * 0.4)); break;
+    case 'mais':
+      // pieds de maïs sur les raies
+      for (let y = s.pas / 2; y < P; y += s.pas) for (let x = 0.4; x < P; x += 0.8) C(g, R() < 0.5 ? clair(s.raie, 0.12) : sombre(s.raie, 0.15), x, y + (R() - 0.5) * 0.3, 0.45);
+      break;
+    case 'vigne':
+      // ceps en rangs, ombrés au sud-est
+      for (let y = s.pas / 2; y < P; y += s.pas) for (let x = 0.45; x < P; x += 0.9) {
+        const c = season === 'automne' ? mix('#6f8a3a', '#c9a040', R() * 0.7) : R() < 0.5 ? '#4f7d33' : '#5d8f3c';
+        C(g, 'rgba(60,48,30,.35)', x + 0.25, y + 0.3, 0.55); C(g, c, x, y, 0.5);
       }
-      if (tres) {
-        const fl = { printemps: [['#f4f1e6', '#e8d04a', '#a58ac2'], 0.5], ete: [['#f1e6a0', '#e8d04a'], 0.15], automne: [['#efe9dc'], 0.04] }[season];
-        if (fl) strew(g, size, Math.round(size * size / (L * L) * fl[1]), S + 9, fl[0].map(c => ({ fill: c })), dot(0.03 * L, 0.06 * L, S));
-      }
-      return cv;
+      break;
+    case 'vigneFoule': pt(n / 1.4, (u, v, c) => { C(g, 'rgba(60,48,30,.35)', u + 0.25, v + 0.3, 0.5); C(g, season === 'automne' ? mix('#6f8a3a', '#c9a040', c) : c < 0.5 ? '#4f7d33' : '#5d8f3c', u, v, 0.45); }); break;
+    case 'friche': case 'jachere': pt(n / 40, (u, v, c, d) => E(g, c < 0.5 ? clair(s.base, 0.15) : sombre(s.base, 0.18), u, v, 0.9 + d, 0.6, c * 3)); break;
+    case 'lande':
+      pt(n / 10, (u, v, c, d) => C(g, c < 0.4 ? '#8f6a92' : c < 0.6 ? '#c9b648' : c < 0.8 ? '#6f7d48' : sombre(s.base, 0.2), u, v, 0.5 + d * 0.7));
+      break;
+    case 'marais':
+      pt(n / 160, (u, v, c, d) => E(g, 'rgba(74,120,150,.55)', u, v, 2 + d * 3, 1.2 + d * 1.5, c * 3), 6);
+      pt(n / 8, (u, v, c) => { g.strokeStyle = c < 0.5 ? '#3f6a33' : '#8a9a5a'; g.lineWidth = 0.18; g.beginPath(); g.moveTo(u, v); g.lineTo(u + (c - 0.5) * 0.6, v - 0.9); g.stroke(); });
+      break;
+    case 'sousBois': pt(n / 14, (u, v, c, d) => E(g, c < 0.5 ? '#335d2d' : '#22401f', u, v, 1, 0.6, d * 3)); break;
+    case 'sable': pt(n / 12, (u, v, c) => C(g, c < 0.5 ? clair(s.base, 0.2) : sombre(s.base, 0.12), u, v, 0.2)); break;
+    case 'roche': pt(n / 30, (u, v, c, d) => E(g, c < 0.5 ? '#8c8676' : '#c4bea9', u, v, 0.6 + d * 1.4, 0.4 + d, c * 3)); break;
+    case 'terre': case 'route': case 'cour': pt(n / 6, (u, v, c, d) => C(g, c < 0.5 ? sombre(s.base, 0.14) : clair(s.base, 0.18), u, v, 0.12 + d * 0.18)); break;
+    case 'pave': {
+      // pavés de grès en rangs décalés (1,25 m : 32 ou 64 rangs par période)
+      g.strokeStyle = 'rgba(80,72,58,.35)'; g.lineWidth = 0.7;
+      for (let y = 0.625, k = 0; y < P; y += 1.25, k++) { g.setLineDash([0.8, 0.45]); g.lineDashOffset = (k % 3) * 0.42; g.beginPath(); g.moveTo(0, y); g.lineTo(P, y); g.stroke(); }
+      g.setLineDash([]); g.lineDashOffset = 0;
+      break;
     }
-    case 'neige': {
-      const v = n([[12, 0.03], [3, 0.03], [0.7, 0.02]]);
-      const cv = paintBase(size, hexRgb(pal.pre[0]), v, [206, 218, 232], ramp(n([[7, 1]]), 0, 0.8, 0.5)), g = cv.getContext('2d');
-      neigeDetails(g, size, L, S);
-      return cv;
-    }
-    case 'ble': case 'bleVert': case 'avoine': case 'chaume': case 'semis': case 'labour': case 'mais':
-      return crop(kind, size, L, pal, season, S, n);
-    case 'vigneFoule': {
-      // la vigne « en foule » d'avant le phylloxéra (SPEC-SUITE J) : des ceps plantés serrés et sans ordre, provignés
-      const soil = hexRgb(pal.vigneSol), leaf = hexRgb(pal.vigneRang), v = n([[8, 0.05], [1.5, 0.06], [0.3, 0.06]]);
-      const cv = paintBase(size, soil, v), g = cv.getContext('2d');
-      if (snow) return cv;
-      // (de loin, les ceps ne feraient qu'un point : un voile de feuillage, moucheté)
-      if (L < 4) { g.fillStyle = css(leaf, 0.62); g.fillRect(0, 0, size, size); }
-      const count = Math.min(16000, Math.round(size * size / (L * L) * (L < 4 ? 0.4 : 0.95)));
-      for (let k = 0; k < count; k++) {
-        const x = hash(k, 11, S) * size, y = hash(k, 12, S) * size, rr = (0.28 + hash(k, 13, S) * 0.2) * L;
-        const c = season === 'automne' ? mixc(leaf, [205, 160, 60], hash(k, 14, S) * 0.6) : mixc(leaf, mul(leaf, 0.8), hash(k, 14, S));
-        g.fillStyle = css(mul(soil, 0.7), 0.6); g.beginPath(); g.arc(x + rr * 0.3, y + rr * 0.35, rr, 0, TAU); g.fill();
-        g.fillStyle = css(c); g.beginPath(); g.arc(x, y, rr * 0.85, 0, TAU); g.fill();
-      }
-      return cv;
-    }
-    case 'vigne': {
-      const soil = hexRgb(pal.vigneSol), v = n([[8, 0.05], [1.5, 0.06], [0.3, 0.06]]);
-      const cv = paintBase(size, soil, v), g = cv.getContext('2d');
-      const nr = Math.max(1, Math.round(size / (2.1 * L))), sp = size / nr, leaf = hexRgb(pal.vigneRang);
-      for (let r = 0; r < nr; r++) {
-        const y = (r + 0.5) * sp;
-        if (snow) {   // hiver : ceps taillés, fil de fer
-          g.strokeStyle = 'rgba(70,58,44,0.6)'; g.lineWidth = Math.max(0.5, 0.05 * L); g.beginPath(); g.moveTo(0, y); g.lineTo(size, y); g.stroke();
-          g.fillStyle = '#5a4a3c'; for (let x = 0; x < size; x += 1.2 * L) { g.beginPath(); g.arc(x, y, Math.max(0.6, 0.1 * L), 0, TAU); g.fill(); }
-          continue;
-        }
-        // ombre du rang (au sud-est), puis le feuillage en touffes éclairées par-dessus
-        g.fillStyle = css(mul(soil, 0.72), 0.7); g.fillRect(0, y - 0.15 * L, size, 0.75 * L);
-        if (L < 4) { g.fillStyle = css(leaf); g.fillRect(0, y - 0.45 * L, size, 0.85 * L); g.fillStyle = css(mul(leaf, 1.2), 0.6); g.fillRect(0, y - 0.45 * L, size, 0.3 * L); continue; }
-        const step = size / Math.round(size / (0.32 * L)), k0 = r * 997;
-        for (let x0 = 0; x0 < size; x0 += step) for (const x of [x0, x0 - size, x0 + size]) {
-          if (x < -L || x > size + L) continue;   // recopie de l'autre côté : pas de joint
-          const q = k0 + x0 | 0, rr = (0.3 + hash(q, 1, S) * 0.18) * L, yy = y + (hash(q, 2, S) - 0.5) * 0.25 * L;
-          const c = season === 'automne' ? mixc(leaf, [205, 160, 60], hash(q, 3, S) * 0.6) : mixc(leaf, mul(leaf, 0.8), hash(q, 3, S));
-          g.fillStyle = css(mul(c, 0.7)); g.beginPath(); g.arc(x, yy + rr * 0.15, rr, 0, TAU); g.fill();
-          g.fillStyle = css(c); g.beginPath(); g.arc(x - rr * 0.15, yy - rr * 0.12, rr * 0.8, 0, TAU); g.fill();
-          if (fine) { g.fillStyle = css(mixc(c, [240, 240, 190], 0.35), 0.8); g.beginPath(); g.arc(x - rr * 0.35, yy - rr * 0.35, rr * 0.35, 0, TAU); g.fill(); }
-        }
-      }
-      return cv;
-    }
-    case 'lande': {
-      const base = hexRgb(pal.lande), fl = pal.landeFleurs.map(hexRgb);
-      const v = n([[7, 0.07], [1.8, 0.1], [0.45, 0.09], [0.12, 0.06]]);
-      const cv = paintBase(size, base, v, fl[0], ramp(n([[3.5, 1], [1, 0.4]]), 0.1, 0.9, snow ? 0.12 : 0.25)), g = cv.getContext('2d');
-      if (L >= 2) {   // touffes de bruyère et d'ajonc, ombrées au sud-est
-        const count = Math.min(9000, Math.round(size * size / (L * L) * 0.9)), r0 = Math.max(0.6, 0.1 * L), r1 = Math.max(1, 0.28 * L);
-        strew(g, size, count, S + 3, [{ fill: 'rgba(40,36,20,0.28)' }], (p, x, y, k) => { const r = r0 + hash(k, 6, S) * (r1 - r0); p.moveTo(x + r * 1.25, y + r * 0.3); p.arc(x + r * 0.25, y + r * 0.3, r, 0, TAU); });
-        strew(g, size, count, S + 3, [...fl, mul(base, 0.75)].map(c => ({ fill: css(mixc(snow ? mixc(c, [240, 244, 248], 0.5) : c, base, 0.3), 0.85) })), dot(r0, r1, S));
-      }
-      return cv;
-    }
-    case 'marais': {
-      const base = hexRgb(pal.marais), v = n([[6, 0.06], [1.2, 0.08], [0.3, 0.06]]);
-      const wet = snow ? [214, 226, 236] : [96, 128, 140];
-      const cv = paintBase(size, base, v, wet, ramp(n([[5, 1], [1.4, 0.5]]), 0.25, 0.6, 0.85)), g = cv.getContext('2d');
-      if (L >= 2) strew(g, size, Math.min(7000, Math.round(size * size / (L * L) * 1.2)), S, [{ stroke: snow ? 'rgba(120,110,90,0.6)' : 'rgba(58,86,40,0.7)', w: Math.max(0.5, 0.04 * L) }, { stroke: snow ? 'rgba(160,150,120,0.5)' : 'rgba(140,150,80,0.6)', w: Math.max(0.5, 0.04 * L) }], blade(L, 0.3, 0.8, S));
-      return cv;
-    }
-    case 'sable': {
-      const v = n([[9, 0.04], [2, 0.03], [0.25, 0.04]]);
-      rows(v, size, L, 0.9, 0.035, p => Math.sin(p * TAU) ** 3);   // rides du vent
-      return paintBase(size, hexRgb(pal.sable), v);
-    }
-    case 'roche': {
-      const v = n([[6, 0.1], [1.6, 0.12], [0.4, 0.1], [0.1, 0.06]]);
-      const cv = paintBase(size, hexRgb(pal.roche), v, hexRgb(pal.rocheSombre), ramp(n([[2.5, 1]]), 0.3, 0.8, 0.6)), g = cv.getContext('2d');
-      if (fine) strew(g, size, Math.round(size * size / (L * L) * 0.05), S, [{ stroke: 'rgba(60,56,48,0.45)', w: Math.max(0.6, 0.04 * L) }], (p, x, y, k) => { p.moveTo(x, y); let a = hash(k, 7, S) * TAU, xx = x, yy = y; for (let q = 0; q < 4; q++) { a += (hash(k, q, S + 1) - 0.5) * 1.6; xx += Math.cos(a) * 0.5 * L; yy += Math.sin(a) * 0.5 * L; p.lineTo(xx, yy); } }, 2.2 * L);
-      return cv;
-    }
-    case 'sousBois': {
-      const base = hexRgb(pal.sousBois), v = n([[5, 0.12], [1.2, 0.12], [0.3, 0.1]]);
-      const cv = paintBase(size, base, v, snow ? [226, 230, 232] : [104, 88, 56], ramp(n([[3, 1]]), 0, 0.8, 0.5)), g = cv.getContext('2d');
-      if (fine) strew(g, size, Math.round(size * size / (L * L) * 0.6), S, [{ fill: snow ? 'rgba(120,110,95,0.4)' : 'rgba(120,96,52,0.5)' }, { fill: snow ? 'rgba(250,252,255,0.6)' : 'rgba(80,110,50,0.6)' }], dot(0.06 * L, 0.16 * L, S));
-      return cv;
-    }
-    case 'terre': case 'route': {
-      const base = hexRgb(kind === 'route' ? pal.route : pal.chemin);
-      const v = n([[7, 0.05], [1.8, 0.06], [0.4, 0.07], [0.1, 0.07]]);
-      const cv = paintBase(size, base, v, mul(base, 0.82), ramp(n([[3, 1]]), 0.2, 0.9, 0.55)), g = cv.getContext('2d');
-      if (fine) {   // gravier et cailloux, avec leur ombre
-        const count = Math.round(size * size / (L * L) * (kind === 'route' ? 3 : 1.2)), r0 = 0.02 * L, r1 = (tres ? 0.07 : 0.05) * L;
-        strew(g, size, count, S, [{ fill: css(mul(base, 0.6), 0.5) }], (p, x, y, k) => { const r = r0 + hash(k, 6, S) * (r1 - r0); p.moveTo(x + r * 1.3, y + r * 0.3); p.arc(x + r * 0.3, y + r * 0.3, r, 0, TAU); });
-        strew(g, size, count, S, [{ fill: css(mul(base, 1.12)) }, { fill: css(mixc(base, [150, 150, 150], 0.5)) }], dot(r0, r1, S));
-      }
-      return cv;
-    }
-    case 'eau': {
-      const v = n([[12, 0.04], [3, 0.04], [0.8, 0.03]]);
-      rows(v, size, L, 1.6, 0.03);
-      const cv = paintBase(size, hexRgb(pal.eau), v), g = cv.getContext('2d');
-      if (L >= 2) strew(g, size, Math.round(size * size / (L * L) * 0.03), S, [{ stroke: 'rgba(235,245,255,0.35)', w: Math.max(0.6, 0.06 * L) }], (p, x, y, k) => { const l = (0.6 + hash(k, 4, S) * 1.4) * L; p.moveTo(x, y); p.quadraticCurveTo(x + l / 2, y - 0.08 * L, x + l, y); });
-      return cv;
-    }
-    case 'cour': {   // sol des villages et des cours : terre battue, pavés de près
-      const base = hexRgb(pal.bati), v = n([[5, 0.05], [1, 0.06], [0.25, 0.05]]);
-      const cv = paintBase(size, base, v), g = cv.getContext('2d');
-      if (tres && !snow) {
-        const st = 0.4 * L;
-        g.strokeStyle = css(mul(base, 0.72), 0.55); g.lineWidth = Math.max(0.6, 0.04 * L);
-        for (let y = 0; y < size; y += st) for (let x = ((y / st) % 2) * st / 2; x < size; x += st) { g.beginPath(); g.roundRect(x, y, st * 0.92, st * 0.9, st * 0.3); g.stroke(); }
-      }
-      return cv;
-    }
-  }
-  return paintBase(size, hexRgb(pal.pre[0]), n([[4, 0.05]]));
-}
-// neige : touffes qui percent et scintillement de près
-function neigeDetails(g, size, L, S) {
-  if (L >= 4) strew(g, size, Math.round(size * size / 500), S, [{ stroke: 'rgba(110,104,84,0.5)', w: Math.max(0.5, 0.03 * L) }], blade(L, 0.08, 0.2, S));
-  if (L >= 8) strew(g, size, Math.round(size * size / 260), S + 1, [{ fill: 'rgba(255,255,255,0.95)' }, { fill: 'rgba(190,206,228,0.5)' }], dot(0.015 * L, 0.03 * L, S));
-}
-// épis en relief (relief.js) : hauteur (m) et couleur des pieds de chaque culture ; le reste est à ras du sol
-export const EPIS = { ble: [1.0, '#c9a54f'], avoine: [0.85, '#a7b865'], bleVert: [0.6, '#86ab4e'], mais: [1.3, '#4c762e'], chaume: [0.2, '#cfbd88'], prairie: [0.4, null],
-  herbe: [0.35, null], lande: [0.4, null] };   // (prés et landes : couleur prise dans la palette de la saison)
-// cultures : rangs le long de x
-const CROP = {
-  ble: { base: '#c9a54f', alt: '#a98a43', rows: 0.3, band: 3.2 },
-  bleVert: { base: '#86ab4e', alt: '#a3bd60', rows: 0.22, band: 2.8 },
-  avoine: { base: '#a7b865', alt: '#bdc274', rows: 0.22, band: 2.4 },
-  chaume: { base: '#cfbd88', alt: '#b9a571', rows: 0.24, band: 1.9 },
-  semis: { base: '#8f6c48', alt: '#7c8c4a', rows: 0.7, band: 6 },
-  labour: { base: '#8c6a47', alt: '#74573a', rows: 0.75, band: 9 },
-  mais: { base: '#a0805a', alt: '#8e7050', rows: 0.8, band: 7 },
-};
-function crop(kind, size, L, pal, season, S, n) {
-  const C = CROP[kind], snow = !!pal.neige;
-  let base = hexRgb(C.base), alt = hexRgb(C.alt);
-  if (snow) { base = hexRgb(pal.champ[0][0]); alt = [214, 222, 232]; }
-  if (kind === 'mais' && season === 'automne') { base = [176, 150, 98]; alt = [160, 132, 84]; }
-  const v = n([[14, 0.05], [3.5, 0.04], [0.9, 0.05], [0.22, 0.07]]);
-  rows(v, size, L, C.band, kind === 'labour' || kind === 'semis' ? 0.03 : 0.05);
-  // sillons : crête claire, creux sombre (la neige reste dans les creux)
-  const furrow = kind === 'labour' || kind === 'semis';
-  if (furrow) rows(v, size, L, C.rows, snow ? 0.07 : 0.17, p => (p < 0.5 ? 1 - 4 * Math.abs(p - 0.25) : -1 + 4 * Math.abs(p - 0.75)) * (snow ? -1 : 1));
-  else if (C.rows * L >= 2) rows(v, size, L, C.rows, 0.06);
-  const cv = paintBase(size, base, v, alt, ramp(n([[10, 1], [2.5, 0.5]]), -0.2, 1, 0.7)), g = cv.getContext('2d');
-  if (snow) { neigeDetails(g, size, L, S); return cv; }
-  const nr = Math.max(1, Math.round(size / (C.rows * L))), sp = size / nr;
-  if (kind === 'mais' && L < 4) {
-    const leaf = season === 'automne' ? [196, 170, 100] : [76, 118, 46];
-    g.fillStyle = css(leaf, 0.75); for (let r = 0; r < nr; r++) g.fillRect(0, (r + 0.2) * sp, size, sp * 0.55);
-  } else if (kind === 'mais') {
-    // pieds de maïs en rangs : touffes de feuilles en étoile
-    const leaf = season === 'automne' ? [196, 170, 100] : [76, 118, 46];
-    g.fillStyle = css(mul(base, 0.7), 0.6); for (let r = 0; r < nr; r++) g.fillRect(0, (r + 0.5) * sp, size, 0.25 * L);
-    const step = size / Math.round(size / (0.28 * L));
-    g.lineWidth = Math.max(0.6, 0.07 * L); g.lineCap = 'round';
-    for (let r = 0; r < nr; r++) for (let x = 0; x < size; x += step) {
-      const q = r * 4099 + x | 0, cy = (r + 0.5) * sp, R = (0.22 + hash(q, 2, S) * 0.1) * L;
-      g.strokeStyle = css(mixc(leaf, mul(leaf, 0.75), hash(q, 3, S)));
-      g.beginPath();
-      for (const cx of [x, x - size]) for (let a = 0; a < 5; a++) { const an = hash(q, 4 + a, S) * TAU; g.moveTo(cx, cy); g.lineTo(cx + Math.cos(an) * R, cy + Math.sin(an) * R * 0.8); }
-      g.stroke();
-    }
-  } else if (kind === 'semis' && L >= 2) {
-    g.fillStyle = 'rgba(120,150,70,0.55)'; for (let r = 0; r < nr; r++) g.fillRect(0, (r + 0.25) * sp, size, Math.max(0.6, 0.06 * L));
-  }
-  if (L >= 4 && (kind === 'ble' || kind === 'bleVert' || kind === 'avoine' || kind === 'chaume')) {
-    // épis et tiges : marques courtes, claires au sommet, sombres entre les pieds
-    const lite = kind === 'ble' ? [236, 210, 138] : kind === 'chaume' ? [238, 226, 184] : mixc(base, [230, 240, 160], 0.4);
-    const dark = mul(base, kind === 'chaume' ? 0.72 : 0.62), w = Math.max(0.6, 0.03 * L);
-    strew(g, size, Math.min(12000, size * size / (L >= 8 ? 22 : 34)), S + 5, [{ stroke: css(dark, 0.5), w }, { stroke: css(lite, 0.6), w }, { stroke: css(mixc(lite, base, 0.5), 0.5), w }], blade(L, 0.06, kind === 'chaume' ? 0.1 : 0.18, S));
+    case 'eau':
+      g.strokeStyle = 'rgba(160,195,235,.4)'; g.lineWidth = 0.4;
+      pt(n / 50, (u, v, c) => { g.beginPath(); g.moveTo(u, v); g.lineTo(u + 1.5 + c * 3, v); g.stroke(); }, 5);
+      break;
   }
   return cv;
 }
 
-// ------------------------------------------------------------------ arbres
-// kind : 'feuillu' | 'buisson' | 'peuplier' | 'sapin' | 'parasol' | 'nu' ; col : couleur du feuillage ; px : rayon de la
-// couronne en pixels pour un arbre de 8 m de rayon (la tuile met à l'échelle) ; renvoie {cv, cx, cy, px} : le
-// ombre douce (ellipse floue), pour les arbres et les meules
+// ombre douce (ellipse floue)
 export function softShadow() {
   const s = 64, cv = canvas(s, s), g = cv.getContext('2d'), gr = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
   gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.75)'); gr.addColorStop(1, 'rgba(0,0,0,0)');

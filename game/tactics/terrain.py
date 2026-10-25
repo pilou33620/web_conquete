@@ -23,8 +23,10 @@ from ..geo import (T_OCEAN, T_EAU as G_EAU, T_PLAINE, T_FORET, T_LANDE, T_MARAIS
                    T_DUNES, T_VIGNE)
 
 # version du générateur : écrite dans la description de chaque nouvelle bataille (bridge.make_spec). Une bataille sans
-# version (ancienne sauvegarde) est refabriquée par le générateur d'avant (terrain_v1.py, figé) : même carte qu'au début
-VERSION = 2
+# version (ancienne sauvegarde) est refabriquée par le générateur d'avant (terrain_v1.py, figé) : même carte qu'au début.
+# Version 3 : villes en îlots, enceintes à tours ou tracé bastionné (SPEC-2D § 6) ; une carte de version 2 garde sa
+# place d'avant (_town_v2), le reste du générateur est commun
+VERSION = 3
 
 W, H, CELL = 3000, 2000, 20
 COLS, ROWS = W // CELL, H // CELL
@@ -189,6 +191,11 @@ class BattleMap:
         self.biome = None
         self.region = ''
         self.stats = {}
+        self.town = None        # la place : {type, x, y, r, siecle, enceinte} (SPEC-2D § 6)
+        self.bastions = []      # sommets du tracé magistral d'une place bastionnée
+        self.demi_lunes = []    # [[b1, saillant, b2], …] devant les courtines
+        self.batis = []         # un par bâtiment (groupe de cases bâties d'un seul tenant) : {kind, toit, x, y, c}
+        self.kinds = {}         # (génération) case bâtie → nature du bâtiment
 
     def to_client(self, spec):
         r2 = lambda p: [round(p[0], 1), round(p[1], 1)]
@@ -203,6 +210,7 @@ class BattleMap:
                     f=base64.b64encode(bytes(self.f)).decode(), feature_names=FEAT_NAMES,
                     fences=[dict(kind=k, pts=[r2(p) for p in pts]) for k, pts in self.fences],
                     heart=list(self.heart) if self.heart else None,
+                    town=self.town, bastions=self.bastions, demi_lunes=self.demi_lunes, batis=self.batis,
                     seed=spec['seed'], season=spec['season'], weather=spec['weather'], year=spec.get('year'),
                     marks=spec.get('marks', [[], []]), balloon=spec.get('balloon', [0, 0]),   # (le ballon captif : SPEC-SUITE J)
                     camp=dict(x=spec['cx'], y=spec['cy']), region=self.region,
@@ -320,7 +328,7 @@ def _poly_cells(pts):
 # ====================================================================== génération
 def generate(geo, spec):
     """Carte de la bataille décrite par spec (voir bridge.make_spec) ; déterministe pour une graine donnée."""
-    if spec.get('carte', 1) < VERSION:
+    if spec.get('carte', 1) < 2:
         from . import terrain_v1
         return terrain_v1.generate(geo, spec)
     seed = int(spec['seed']) & 0x7FFFFFFF
@@ -549,12 +557,13 @@ def generate(geo, spec):
             pl = dict(nid=gn['id'], name=gn['name'], type=gn['type'], fort=0, dmg=0.0, bar=0.0, pop=gn['pop0'],
                       x=gn['x'], y=gn['y'], battle=False)
     if pl:
-        _town(m, pl, to_m(pl['x'], pl['y']), rng, spec, t, road_cells)
+        (_town if spec.get('carte', 1) >= 3 else _town_v2)(m, pl, to_m(pl['x'], pl['y']), rng, spec, t, road_cells)
 
     # ---------------------------------------------------------- fermes, moulin, chemins
     _farms(m, rng, FARMS.get(main, 3), t, hf, main)
     _mill(m, rng, t, hf, main)
     _terroir(m, seed, t, hf, dwat, biome, dept)
+    _batis(m, seed, dept, year)
 
     # ---------------------------------------------------------- altitude finale
     hb = m.h
@@ -722,7 +731,557 @@ def _causeway(m, t, px, py, att_a, land):
     return cells
 
 
+# ---------------------------------------------------------------------- villes et places (SPEC-2D § 6)
+# selon le type de la place : pas des rues en cases (tirés au sort ; None : un bourg le long de ses routes), part des
+# cases sur rue qui sont bâties, côté de la grand-place (cases), bâtiments publics en plus de l'église
+VILLES = {
+    'village': dict(pas=None, dens=0.95, place=3, egl=0, couvent=0, hotel=0, caserne=0, hopital=0),
+    'fort': dict(pas=(5, 5, 6), dens=0.9, place=3, egl=0, couvent=0, hotel=0, caserne=2, hopital=0),
+    'ville': dict(pas=(5, 6, 6), dens=0.92, place=3, egl=1, couvent=1, hotel=2, caserne=0, hopital=1),
+    'capitale': dict(pas=(5, 5, 6), dens=0.98, place=5, egl=3, couvent=2, hotel=4, caserne=2, hopital=1),
+}
+# nature d'un bâtiment fait de cases de natures différentes : la première de la liste
+KINDS = ('cathedrale', 'eglise', 'caserne', 'poudriere', 'hopital', 'couvent', 'hotel', 'halle', 'moulin', 'ferme',
+         'maison')
+NOBLE = ('eglise', 'cathedrale', 'hotel', 'caserne', 'couvent', 'hopital')
+RUE = (T_ROUTE, T_CHEMIN)
+
+
+def _line4(pts):
+    """Cases d'un tracé, d'un seul tenant par les côtés (une case d'angle à chaque pas en diagonale : un mur ainsi tracé
+    ne se passe pas en diagonale, une porte ainsi ouverte se passe sans couper de coin)."""
+    out = []
+    for c in _poly_cells(pts):
+        if out:
+            p = out[-1]
+            if p == c:
+                continue
+            if abs(p % COLS - c % COLS) == 1 and abs(p // COLS - c // COLS) == 1:
+                out.append(p // COLS * COLS + c % COLS)
+        out.append(c)
+    return out
+
+
+def _dedans(poly):
+    """Fonction case → vrai si son centre est dans le polygone fermé (balayage par rangées)."""
+    rows = {}
+    n = len(poly)
+    for j in range(ROWS):
+        y = (j + 0.5) * CELL
+        xs = []
+        for k in range(n):
+            (x1, y1), (x2, y2) = poly[k], poly[(k + 1) % n]
+            if (y1 <= y) != (y2 <= y):
+                xs.append(x1 + (y - y1) * (x2 - x1) / (y2 - y1))
+        if xs:
+            xs.sort()
+            rows[j] = xs
+
+    def inside(c):
+        xs = rows.get(c // COLS)
+        if not xs:
+            return False
+        x = (c % COLS + 0.5) * CELL
+        return sum(1 for v in xs if v < x) % 2 == 1
+    return inside
+
+
+def _vauban(px, py, nb, Rb, rot):
+    """Premier système de Vauban (maquette-2d.html, bastions) : polygone de nb côtés extérieurs inscrit dans Rb ; faces
+    aux 2/7 du côté, perpendiculaire au 1/8 (carré), 1/7 (pentagone), 1/6 au-delà. Renvoie le tracé magistral (sommets),
+    les demi-lunes [b1, saillant, b2] et le milieu de chaque courtine."""
+    V = [(px + math.cos(rot + k * 2 * math.pi / nb) * Rb, py + math.sin(rot + k * 2 * math.pi / nb) * Rb)
+         for k in range(nb)]
+    poly, ravs, mids = [], [], []
+    for k in range(nb):
+        (ax, ay), (bx, by) = V[k], V[(k + 1) % nb]
+        L = math.hypot(bx - ax, by - ay)
+        mx, my = (ax + bx) / 2, (ay + by) / 2
+        nl = math.hypot(px - mx, py - my)
+        nx, ny = (px - mx) / nl, (py - my) / nl
+        perp = L / (8 if nb <= 4 else 7 if nb == 5 else 6)
+        dx, dy = mx + nx * perp, my + ny * perp
+        la, lb = math.hypot(dx - ax, dy - ay), math.hypot(dx - bx, dy - by)
+        ua, ub = ((dx - ax) / la, (dy - ay) / la), ((dx - bx) / lb, (dy - by) / lb)
+        fa = (ax + ua[0] * 2 * L / 7, ay + ua[1] * 2 * L / 7)
+        fb = (bx + ub[0] * 2 * L / 7, by + ub[1] * 2 * L / 7)
+        r = math.hypot(fa[0] - fb[0], fa[1] - fb[1])
+        ga, gb = (fb[0] + ub[0] * r, fb[1] + ub[1] * r), (fa[0] + ua[0] * r, fa[1] + ua[1] * r)
+        poly += [fa, ga, gb, fb, (bx, by)]
+        u = ((bx - ax) / L, (by - ay) / L)
+        ravs.append([(mx - nx * L * 0.04 - u[0] * L * 0.2, my - ny * L * 0.04 - u[1] * L * 0.2),
+                     (mx - nx * L * 0.34, my - ny * L * 0.34),
+                     (mx - nx * L * 0.04 + u[0] * L * 0.2, my - ny * L * 0.04 + u[1] * L * 0.2)])
+        mids.append(((ga[0] + gb[0]) / 2, (ga[1] + gb[1]) / 2))
+    return poly, ravs, mids
+
+
+def _trace(pos, R, bast, rng, road_a):
+    """Tracé de l'enceinte : (sommets du polygone, demi-lunes, bastionné ?). Mur médiéval : un cercle irrégulier à
+    R + 25 m ; tracé bastionné : une route arrive au milieu d'une courtine, la courtine reste à R + 30 m au moins."""
+    px, py = pos
+    if not bast:
+        wob = [rng.uniform(-0.06, 0.06) for _ in range(12)]
+        pts = []
+        for k in range(48):
+            f = k / 4.0
+            i0 = int(f) % 12
+            r = (R + 25) * (1 + wob[i0] * (1 - f + int(f)) + wob[(i0 + 1) % 12] * (f - int(f)))
+            a = k * 2 * math.pi / 48
+            pts.append((px + math.cos(a) * r, py + math.sin(a) * r))
+        return pts, []
+    nb = max(5, min(9, round(2 * math.pi * (R + 80) / 260)))
+    rot = road_a - math.pi / nb
+    Rb = (R + 40) / math.cos(math.pi / nb)
+    while True:
+        poly, ravs, mids = _vauban(px, py, nb, Rb, rot)
+        if min(math.hypot(x - px, y - py) for x, y in poly) >= R + 30:
+            return poly, ravs
+        Rb += 10
+
+
+def _poser(t, cells_ok, near, w, h, kind, kinds, reserve, parvis):
+    """Bâtiment public d'un seul tenant (w × h cases, est-ouest) au plus près de near ; ses abords (une case autour)
+    deviennent parvis (rue) ou enclos (pré) : il ne touche aucune maison. Renvoie ses cases (vide s'il n'y a pas la
+    place)."""
+    nx, ny = near
+    i0, j0 = int(nx // CELL), int(ny // CELL)
+    cand = []
+    for dj in range(-4, 5):
+        for di in range(-4, 5):
+            cand.append((di * di + dj * dj, i0 + di - w // 2, j0 + dj - h // 2))
+    cand.sort()
+    for _, i, j in cand:
+        if i < 1 or j < 1 or i + w >= COLS - 1 or j + h >= ROWS - 1:
+            continue
+        foot = [(j + b) * COLS + i + a for b in range(h) for a in range(w)]
+        if not all(cells_ok(c) for c in foot):
+            continue
+        for b in range(-1, h + 1):
+            for a in range(-1, w + 1):
+                c = (j + b) * COLS + i + a
+                if c in reserve or t[c] in (T_EAU, T_GUE, T_MUR, T_PORTE):
+                    continue
+                reserve.add(c)
+                if 0 <= a < w and 0 <= b < h:
+                    t[c] = T_BATI
+                    kinds[c] = kind
+                elif t[c] not in RUE:
+                    t[c] = parvis
+        return foot
+    return []
+
+
 def _town(m, pl, pos, rng, spec, t, road_cells):
+    """Bourg, ville ou place forte au centre de la carte (SPEC-2D § 6, maquette-2d.html « Bourgs et villes ») : rues en
+    damier un peu irrégulier, coupées par les routes ; îlots de maisons serrées sur rue, cours et jardins au milieu ;
+    grand-place, église (cathédrale d'une capitale), églises, couvents, hôtels, hôpital, casernes et poudrière selon
+    la taille ; quais et ponts sur la rivière ; faubourgs le long des routes ; enceinte (mur médiéval à tours, ou tracé
+    bastionné à demi-lunes) percée de portes là où entrent les routes."""
+    px, py = pos
+    typ = pl['type'] if pl['type'] in VILLES else 'village'
+    cfg = VILLES[typ]
+    pop = max(200, pl.get('pop') or 600)
+    seed = int(spec['seed']) & 0x7FFFFFFF
+    if typ == 'village':
+        R = 70 + min(70, pop / 25)
+    elif typ == 'fort':
+        R = 95 + min(60, pop / 60)
+    elif typ == 'ville':
+        R = 150 + min(170, math.sqrt(pop) * 1.6)
+    else:
+        R = 260 + min(220, math.sqrt(pop) * 1.1)
+    m.town_r = R
+    m.place = dict(name=pl['name'], x=round(px), y=round(py), type=typ, r=round(R), fort=pl.get('fort', 0),
+                   battle=bool(pl.get('battle')))
+    year = spec.get('year', 1790)
+    fort = pl.get('fort', 0) if pl.get('battle') else min(pl.get('fort', 0), 1)
+    att_a = spec.get('att_angle', 0.0)   # direction d'où vient l'assaillant, vue de la place
+    bast = fort >= 1 and (typ in ('fort', 'capitale') or fort >= 3)
+    kinds, reserve = m.kinds, set()
+    rn = noise(rng, 6, 2)
+    dist = lambda c: math.hypot(*(a - b for a, b in zip(center_of(c), pos)))
+    ci, cj = int(px // CELL), int(py // CELL)
+
+    # ------------------------------------------------ l'enceinte (tracée d'abord : rues et maisons s'y ajustent)
+    poly, ravs = [], []
+    if fort >= 1:
+        road_a = att_a
+        for r in m.roads:   # (la première route qui sort de la place arrive au milieu d'une courtine)
+            p = next((p for p in r['pts'] if abs(math.hypot(p[0] - px, p[1] - py) - R - 100) < 60), None)
+            if p:
+                road_a = math.atan2(p[1] - py, p[0] - px)
+                break
+        poly, ravs = _trace(pos, R, bast, rng, road_a)
+        if not (bast and fort >= 2):
+            ravs = []
+    ext = max([math.hypot(x - px, y - py) for x, y in poly] + [R]) + (60 if ravs else 0)
+    # la grille de campagne, trop grossière sur les côtes et l'estuaire, peut poser la place dans l'eau, coupée de la
+    # terre ferme : elle est bâtie au sec, remparts et glacis compris, et une chaussée et son pont l'y relient (côté de
+    # l'assaillant de préférence)
+    land = _mainland(t)
+    streets = set()
+    if cell_of(px, py) not in land:
+        dry = max(R + 130, ext + 40)
+        for dj in range(-int(dry // CELL) - 1, int(dry // CELL) + 2):
+            for di in range(-int(dry // CELL) - 1, int(dry // CELL) + 2):
+                i, j = ci + di, cj + dj
+                if 0 <= i < COLS and 0 <= j < ROWS and t[j * COLS + i] == T_EAU and dist(j * COLS + i) < dry:
+                    t[j * COLS + i] = T_PRE
+        streets |= _causeway(m, t, px, py, att_a, land)
+        road_cells = road_cells | streets
+    # en ville et aux portes, les routes d'un seul tenant par les côtés (pas de maison en travers, pas de pont qu'on ne
+    # passe qu'en diagonale)
+    for r in m.roads:
+        for c in _line4(r['pts']):
+            if dist(c) < ext + 40:
+                if t[c] == T_EAU:
+                    t[c] = T_ROUTE
+                streets.add(c)
+    wall, inside, ring = set(), None, set()
+    if poly:
+        inside = _dedans(poly)
+        outer = _line4(poly + poly[:1])
+        wall = set(outer)
+        if fort >= 2:   # (rempart épais : une seconde rangée de cases en dedans)
+            for c in outer:
+                for nc in (c - 1, c + 1, c - COLS, c + COLS):
+                    if 0 <= nc < N and nc not in wall and inside(nc):
+                        wall.add(nc)
+        for rv in ravs:
+            wall.update(c for c in _line4(rv) if not inside(c))
+        wall = {c for c in wall if 0 <= c < N and t[c] != T_EAU}
+        # rue du rempart : la case en dedans du mur, tout du long
+        for c in list(wall):
+            for nc in (c - 1, c + 1, c - COLS, c + COLS):
+                if 0 <= nc < N and nc not in wall and inside(nc) and t[nc] != T_EAU:
+                    ring.add(nc)
+        streets |= ring
+    inner = (lambda c: inside(c) and c not in wall) if inside else (lambda c: dist(c) <= R * 1.05)
+    # la ville bâtie : jusqu'à R, ou jusqu'à 30 m de la courtine dans une place dont l'enceinte est plus large
+    Rin = max(R * 0.97, min((_seg_dist(px, py, *a, *b) for a, b in zip(poly, poly[1:] + poly[:1])), default=0) - 30)
+    in_disc = lambda c: dist(c) <= Rin and inner(c)
+
+    # ------------------------------------------------ rues : les routes, le damier (ou les ruelles d'un bourg)
+    streets |= {c for c in road_cells if dist(c) < R + 40 or (inside and inside(c))}
+    rc = int(ext // CELL) + 2
+    box = [j * COLS + i for j in range(max(0, cj - rc), min(ROWS, cj + rc + 1))
+           for i in range(max(0, ci - rc), min(COLS, ci + rc + 1))]
+    if cfg['pas']:
+        lines_i, lines_j = {ci}, {cj}
+        for sgn in (1, -1):
+            for lines, c0 in ((lines_i, ci), (lines_j, cj)):
+                k = c0
+                while abs(k - c0) < rc:
+                    k += sgn * cfg['pas'][rng.randrange(len(cfg['pas']))]
+                    lines.add(k)
+        for c in box:
+            if (c % COLS in lines_i or c // COLS in lines_j) and in_disc(c) and t[c] != T_EAU:
+                streets.add(c)
+    else:
+        a0 = rng.random() * math.pi
+        for k in range(3):
+            a = a0 + k * 2.1 + rng.uniform(-0.25, 0.25)
+            streets.update(_line4([(px, py), (px + math.cos(a) * R * 0.95, py + math.sin(a) * R * 0.95)]))
+    # quais le long de l'eau, ponts des deux grandes rues sur une rivière étroite (80 m au plus)
+    for c in box:
+        if in_disc(c) and t[c] != T_EAU and any(0 <= nc < N and t[nc] == T_EAU for nc in (c - 1, c + 1, c - COLS, c + COLS)):
+            streets.add(c)
+    for axis in ([cj * COLS + i for i in range(COLS)], [j * COLS + ci for j in range(ROWS)]):
+        run, bord = [], False   # (bord : la rive d'où part le pont est en ville)
+        for c in axis + [-1]:
+            if c >= 0 and t[c] == T_EAU and in_disc(c):
+                run.append(c)
+                continue
+            ok = c >= 0 and in_disc(c)
+            if run and bord and ok and len(run) <= 4:
+                for w in run:
+                    t[w] = T_ROUTE
+                    streets.add(w)
+                _add_bridge(m, run, t)
+            run, bord = [], ok and t[c] != T_EAU
+    for c in streets:
+        if t[c] != T_EAU and c not in wall:
+            t[c] = T_ROUTE if t[c] != T_CHEMIN or dist(c) < R else T_CHEMIN
+    # grand-place
+    s = cfg['place']
+    for dj in range(-(s // 2), s - s // 2):
+        for di in range(-(s // 2), s - s // 2):
+            c = (cj + dj) * COLS + ci + di
+            if 0 <= c < N and t[c] != T_EAU:
+                t[c] = T_ROUTE
+                reserve.add(c)
+                streets.add(c)
+    if ring:   # (rue du rempart : un bout coincé au fond d'un bastion, sans issue, reste terre-plein)
+        net, todo = {ci + cj * COLS}, [ci + cj * COLS]
+        while todo:
+            c = todo.pop()
+            for nc in (c - 1, c + 1, c - COLS, c + COLS):
+                if 0 <= nc < N and nc not in net and abs(nc % COLS - c % COLS) <= 1 and t[nc] in RUE and inner(nc):
+                    net.add(nc)
+                    todo.append(nc)
+        for c in ring - net - road_cells:
+            if t[c] == T_ROUTE:
+                t[c] = T_PRE
+                streets.discard(c)
+
+    # ------------------------------------------------ bâtiments publics d'un seul tenant
+    town_rue = T_ROUTE if typ != 'village' else T_PRE
+
+    def libre(c):
+        return in_disc(c) and c not in reserve and t[c] not in RUE and t[c] != T_EAU
+
+    off = (s // 2 + 2) * CELL
+    big = typ == 'capitale'
+    egl = _poser(t, libre, (px + off + CELL, py), 3 if big else 2, 2 if big else 1, 'cathedrale' if big else 'eglise',
+                 kinds, reserve, town_rue if typ != 'village' else T_PRE)
+    if egl:
+        xs, ys = zip(*(center_of(c) for c in egl))
+        m.heart = (round(sum(xs) / len(xs)), round(sum(ys) / len(ys)))
+        m.buildings.append(dict(x=m.heart[0], y=m.heart[1], w=CELL * (3 if big else 2) - 4, h=CELL * (2 if big else 1) - 6,
+                                a=0, kind='cathedrale' if big else 'eglise'))
+    else:
+        m.heart = (round(px), round(py))
+    publics = []
+    if typ in ('village', 'ville') and (typ == 'ville' or pop >= 700):
+        publics.append(('halle', (px - off, py), 2, 1))
+    if typ == 'capitale':
+        publics.append(('hotel', (px - off, py), 2, 1))   # (l'hôtel de ville)
+    for k in range(cfg['egl']):
+        a = 0.7 + k * 2 * math.pi / max(1, cfg['egl'])
+        publics.append(('eglise', (px + math.cos(a) * R * 0.55, py + math.sin(a) * R * 0.55), 2, 1))
+    if bast:
+        a = att_a + math.pi   # (la poudrière à l'opposé de l'assaillant)
+        publics.append(('poudriere', (px + math.cos(a) * R * 0.8, py + math.sin(a) * R * 0.8), 1, 1))
+    for kind, near, w, h in publics:
+        foot = _poser(t, libre, near, w, h, kind, kinds, reserve, T_ROUTE if kind in ('halle', 'hotel') else
+                      (T_PRE if kind == 'poudriere' or typ == 'village' else T_ROUTE))
+        if foot:
+            xs, ys = zip(*(center_of(c) for c in foot))
+            m.buildings.append(dict(x=round(sum(xs) / len(xs)), y=round(sum(ys) / len(ys)), w=CELL * w - 4,
+                                    h=CELL * h - 6, a=0, kind=kind))
+
+    # ------------------------------------------------ îlots : les cases entre les rues, d'un seul tenant
+    seen = set()
+    blocs = []
+    for c0 in box:
+        if c0 in seen or not in_disc(c0) or t[c0] in RUE or c0 in reserve or t[c0] == T_EAU:
+            continue
+        comp, todo = [], [c0]
+        seen.add(c0)
+        while todo:
+            c = todo.pop()
+            comp.append(c)
+            for nc in (c - 1, c + 1, c - COLS, c + COLS):
+                if 0 <= nc < N and nc not in seen and abs(nc % COLS - c % COLS) <= 1 and in_disc(nc) and \
+                        t[nc] not in RUE and nc not in reserve and t[nc] != T_EAU:
+                    seen.add(nc)
+                    todo.append(nc)
+        comp.sort()
+        xs, ys = zip(*(center_of(c) for c in comp))
+        blocs.append([math.hypot(sum(xs) / len(xs) - px, sum(ys) / len(ys) - py) / R, comp, 'maison'])
+    blocs.sort(key=lambda b: (b[0], b[1][0]))
+    if cfg['pas']:   # îlots entiers des couvents, hôtels, hôpital et casernes (bâtis tout autour d'une cour)
+        def choisir(n, d0, d1, kind, step=1):
+            libres = [b for b in blocs if b[2] == 'maison' and d0 <= b[0] < d1 and len(b[1]) >= 4]
+            for b in libres[::step][:n]:
+                b[2] = kind
+        choisir(cfg['hotel'], 0.2, 0.6, 'hotel', 3)
+        choisir(cfg['couvent'], 0.55, 0.95, 'couvent', 2)
+        choisir(cfg['hopital'], 0.4, 0.9, 'hopital')
+        choisir(cfg['caserne'], 0.6, 1.2, 'caserne', 2)
+    for d, comp, kind in blocs:
+        for c in comp:
+            sur_rue = any(0 <= nc < N and t[nc] in RUE for nc in (c - 1, c + 1, c - COLS, c + COLS))
+            dd = dist(c) / R
+            if kind != 'maison':
+                p = 1.0
+            elif cfg['pas']:
+                p = cfg['dens'] - 0.25 * dd * dd + (rn[c] - 0.5) * 0.4
+            else:
+                p = cfg['dens'] * (1.0 - 0.6 * dd * dd) + (rn[c] - 0.5) * 0.5
+            if sur_rue and _hash(c, 41, seed) < p:
+                t[c] = T_BATI
+                kinds[c] = kind
+            elif cfg['pas'] or dd < 0.6 or t[c] in (T_BOIS, T_FORET_T, T_MARAIS_T, T_LANDE_T, T_ROCHE, T_SABLE):
+                t[c] = T_PRE   # cours, jardins et vergers
+    # dans les murs, ce qui n'est pas bâti est jardin, terre-plein des bastions
+    if inside:
+        for c in box:
+            if inner(c) and not in_disc(c) and t[c] not in RUE and t[c] not in (T_EAU, T_GUE, T_BATI):
+                t[c] = T_PRE
+    # maisons : un bâtiment par case de bâti, tourné vers la rue la plus proche (les bâtiments publics sont déjà posés)
+    bati = [c for c in box if t[c] == T_BATI and kinds.get(c) in ('maison', 'hotel', 'couvent', 'hopital', 'caserne')]
+    stride = 1 if len(bati) < 500 else 2
+    for c in bati[::stride]:
+        x, y = center_of(c)
+        horiz = t[c - COLS] in RUE or t[c + COLS] in RUE if COLS <= c < N - COLS else True
+        m.buildings.append(dict(x=round(x + rng.uniform(-2, 2)), y=round(y + rng.uniform(-2, 2)),
+                                w=round(rng.uniform(15, 19)), h=round(rng.uniform(10, 14)), a=0.0 if horiz else 1.57,
+                                kind=kinds[c]))
+
+    # ------------------------------------------------ l'enceinte sur la carte : murs, portes, glacis, brèches
+    if wall:
+        _enceinte(m, pl, pos, R, fort, bast, poly, ravs, wall, inside, road_cells | streets, rng, t, att_a)
+
+    # ------------------------------------------------ faubourgs le long des routes, hors les murs et le glacis
+    f0 = (ext + 150) if bast else ((ext + 50) if wall else R)
+    f1 = f0 + R * (0.35 if typ == 'village' else 0.6)
+    pf = 0.35 if typ == 'village' else 0.6
+    for c in sorted(road_cells):
+        d = dist(c)
+        if not (f0 <= d <= f1) or t[c] not in RUE:
+            continue
+        for nc in (c - 1, c + 1, c - COLS, c + COLS):
+            if 0 <= nc < N and abs(nc % COLS - c % COLS) <= 1 and t[nc] in CULTIVE + (T_BOIS, T_VERGER) and \
+                    nc not in road_cells and _hash(nc, 43, seed) < pf * (1.2 - (d - f0) / max(1.0, f1 - f0)):
+                t[nc] = T_BATI
+                kinds[nc] = 'maison'
+                x, y = center_of(nc)
+                m.buildings.append(dict(x=round(x), y=round(y), w=round(rng.uniform(12, 17)),
+                                        h=round(rng.uniform(8, 11)), a=0.0, kind='maison'))
+    m.town = dict(type=typ, x=round(px), y=round(py), r=round(R), siecle=(year - 1) // 100 + 1,
+                  enceinte=(m.walls[-1]['kind'] if wall else None))
+    bar = pl.get('bar', 0.0) if pl.get('battle') else 0.0
+    if bar > 0.05:
+        if fort <= 0:
+            _barricades(m, pos, R, bar, rng, t, att_a)
+        else:
+            _redoubts(m, pos, ext - 40, bar, rng, t, att_a)
+
+
+def _enceinte(m, pl, pos, R, fort, bast, poly, ravs, wall, inside, streets, rng, t, att_a):
+    """Pose l'enceinte tracée par _town : murs (T_MUR), portes (T_PORTE) sur les routes et les rues qui la traversent,
+    glacis dégagé (140 m), brèches du siège du côté de l'assaillant ; le dessin (m.walls, m.bastions, m.demi_lunes)."""
+    px, py = pos
+    gates = sorted(c for c in wall if c in streets)
+    for c in wall:
+        t[c] = T_PORTE if c in streets else T_MUR
+    # passage d'une porte : là où la route franchit le mur en diagonale, la case d'angle est ouverte aussi
+    for r in m.roads:
+        cells = _poly_cells(r['pts'])
+        for a, b in zip(cells, cells[1:]):
+            if (a in wall or b in wall) and abs(a % COLS - b % COLS) == 1 and abs(a // COLS - b // COLS) == 1:
+                k = a // COLS * COLS + b % COLS
+                if t[k] == T_MUR:
+                    t[k] = T_PORTE
+                    gates.append(k)
+                elif t[k] not in (T_PORTE, T_EAU):
+                    t[k] = T_ROUTE
+    if not gates:   # au moins une porte, du côté de l'assaillant, et sa rue jusqu'à la grand-place
+        best = min(sorted(wall), key=lambda c: abs(((math.atan2(center_of(c)[1] - py, center_of(c)[0] - px) - att_a
+                                                     + math.pi) % (2 * math.pi)) - math.pi))
+        t[best] = T_PORTE
+        gates.append(best)
+        x, y = center_of(best)
+        for c in _line4([(px, py), (x, y), (x + (x - px) * 0.3, y + (y - py) * 0.3)]):
+            if t[c] not in (T_PORTE, T_EAU, T_MUR):
+                t[c] = T_ROUTE
+            elif t[c] == T_MUR:
+                t[c] = T_PORTE
+    # glacis : rien qui cache l'assaillant à moins de 140 m des murs
+    dg = bfs(sorted(wall), 7)
+    for c in range(N):
+        if dg[c] <= 7 and t[c] in (T_BOIS, T_FORET_T, T_VIGNE_T, T_VERGER) and not inside(c):
+            t[c] = T_PRE
+    thick = CELL * (1 if fort <= 1 else 2) + 2
+    kind = 'bastion' if bast else ('mur' if fort == 1 else 'rempart')
+    trace = _densify(poly + poly[:1], 25.0)
+    wpts = [[round(x), round(y)] for x, y in trace]
+    tours = []
+    if not bast:   # tours rondes du mur médiéval, tous les 50 m environ
+        tours = [[round(x), round(y)] for x, y in _densify(poly + poly[:1], 50.0)[:-1]]
+    wall_rec = dict(pts=wpts, kind=kind, breach=[], thick=round(thick), tours=tours,
+                    portes=[list(map(round, center_of(c))) for c in sorted(set(gates))],
+                    fosse=22 if bast else 10)
+    if bast:
+        m.bastions = [[round(x), round(y)] for x, y in poly]
+        m.demi_lunes = [[[round(x), round(y)] for x, y in rv] for rv in ravs]
+    # brèches du siège, du côté de l'assaillant
+    dmg = pl.get('dmg', 0.0) if pl.get('battle') else 0.0
+    dyn = pl.get('dyn', 0) if pl.get('battle') else 0   # la dynamite de l'assaillant : une brèche de plus
+    if dmg >= 0.12 or dyn:
+        nbr = (1 + int(dmg * 2.4) if dmg >= 0.12 else 0) + dyn
+        dmg = max(dmg, 0.12)
+        for k in range(min(3 + dyn, nbr)):
+            a = att_a + (k - (nbr - 1) / 2) * 0.55 + rng.uniform(-0.15, 0.15)
+            bx, by = min(trace, key=lambda p: abs(((math.atan2(p[1] - py, p[0] - px) - a + math.pi) % (2 * math.pi))
+                                                  - math.pi))
+            br = 16 + dmg * 34
+            for c in wall:
+                x, y = center_of(c)
+                if t[c] == T_MUR and math.hypot(x - bx, y - by) <= br + 10:
+                    t[c] = T_BRECHE
+            wall_rec['breach'].append([round(bx), round(by), round(br)])
+    m.walls.append(wall_rec)
+
+
+def _toit(kind, dept, ville, year, h):
+    """Couverture d'un bâtiment (indice de dessin ; le chaume brûle plus vite) : ardoise des édifices et des grandes
+    villes (et du Béarn), tuile plate du Périgord, tuile canal du Midi, chaume des campagnes de l'ouest (Landes,
+    Médoc) jusqu'au milieu du XIXe siècle."""
+    if kind in NOBLE or dept == '64':
+        return 'ardoise'
+    if dept == '24':
+        return 'tuile'
+    if ville:
+        return 'ardoise' if h < (0.5 if ville == 'capitale' else 0.25) else 'canal'
+    if dept in ('40', '33') and year < 1860 and kind in ('ferme', 'maison') and h < 0.55:
+        return 'chaume'
+    return 'canal'
+
+
+def _batis(m, seed, dept, year):
+    """Bâtiments : chaque groupe de cases bâties d'un seul tenant (4 voisins) reçoit sa nature (la plus noble de ses
+    cases, sinon celle du bâtiment dessiné le plus proche) et sa couverture ; les bâtiments dessinés reçoivent la leur."""
+    t, kinds = m.t, m.kinds
+    for b in m.buildings:
+        c = cell_of(b['x'], b['y'])
+        if c >= 0 and t[c] == T_BATI and c not in kinds:
+            kinds[c] = b['kind']
+    pl = m.place
+    reach = (m.town_r * 1.8 + 150) if pl else 0
+    group = {}
+    seen = bytearray(N)
+    for c0 in range(N):
+        if seen[c0] or t[c0] != T_BATI:
+            continue
+        comp, todo = [], [c0]
+        seen[c0] = 1
+        while todo:
+            c = todo.pop()
+            comp.append(c)
+            i = c % COLS
+            for nc in ((c + 1) if i < COLS - 1 else -1, (c - 1) if i > 0 else -1, c + COLS, c - COLS):
+                if 0 <= nc < N and not seen[nc] and t[nc] == T_BATI:
+                    seen[nc] = 1
+                    todo.append(nc)
+        comp.sort()
+        xs, ys = zip(*(center_of(c) for c in comp))
+        x, y = sum(xs) / len(xs), sum(ys) / len(ys)
+        ks = [kinds[c] for c in comp if c in kinds]
+        if ks:
+            kind = min(ks, key=KINDS.index)
+        else:
+            near = min(m.buildings, key=lambda b: (b['x'] - x) ** 2 + (b['y'] - y) ** 2, default=None)
+            kind = near['kind'] if near and math.hypot(near['x'] - x, near['y'] - y) < 60 else 'maison'
+        ville = pl['type'] if pl and pl['type'] != 'village' and math.hypot(x - pl['x'], y - pl['y']) < reach else None
+        toit = _toit(kind, dept, ville, year, _hash(comp[0], 47, seed))
+        for c in comp:
+            group[c] = len(m.batis)
+        m.batis.append(dict(kind=kind, toit=toit, x=round(x), y=round(y), c=comp))
+    for b in m.buildings:
+        g = group.get(cell_of(b['x'], b['y']))
+        if g is not None:
+            b['g'] = g
+            b['toit'] = m.batis[g]['toit']
+        else:
+            b['toit'] = _toit(b['kind'], dept, None, year, 0.9)
+    m.kinds = {}
+
+
+def _town_v2(m, pl, pos, rng, spec, t, road_cells):
+    """Place des cartes de version 2 (figée : une bataille en cours d'une sauvegarde garde sa carte)."""
     px, py = pos
     typ = pl['type']
     pop = max(200, pl.get('pop') or 600)
@@ -812,7 +1371,7 @@ def _town(m, pl, pos, rng, spec, t, road_cells):
     fort = pl.get('fort', 0) if pl.get('battle') else min(pl.get('fort', 0), 1)
     att_a = spec.get('att_angle', 0.0)   # direction d'où vient l'assaillant, vue de la place
     if fort >= 1:
-        _walls(m, pl, pos, R, fort, rng, t, road_cells | streets, att_a)
+        _walls_v2(m, pl, pos, R, fort, rng, t, road_cells | streets, att_a)
     bar = pl.get('bar', 0.0) if pl.get('battle') else 0.0
     if bar > 0.05:
         if fort <= 0:
@@ -821,7 +1380,7 @@ def _town(m, pl, pos, rng, spec, t, road_cells):
             _redoubts(m, pos, R, bar, rng, t, att_a)
 
 
-def _walls(m, pl, pos, R, fort, rng, t, streets, att_a):
+def _walls_v2(m, pl, pos, R, fort, rng, t, streets, att_a):
     px, py = pos
     Rw = R + 25
     thick = CELL * (1 if fort == 1 else 2) + 2
