@@ -4,6 +4,8 @@
 // à chaque image ne s'ajoutent que l'animation : drapeau au clocher, habitants qui vont et viennent, pigeons.
 import { clamp } from './battle/formes.js';
 import { Lot } from './lot.js';
+import { Z } from './carte/ambiance.js';
+import { carteDe, etatVille, imageEnCache, planCarte, planCartePas, resPour, S as SU } from './carte/villes.js';
 const TAU = Math.PI * 2;
 function hash(i, j, k = 0) {
   let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0;
@@ -283,6 +285,7 @@ export class TownArt {
   // ------------------------------------------------------------------ à chaque image
   draw(ctx, n, s, col, ns, time, owner) {
     const mp = this.map;
+    if (mp.m && mp.style !== 'epoque' && mp.cam.z >= Z.PLAN && this.plan(ctx, n, s, col, ns, owner)) return;
     const dev = (ns && ns.d) || 0, winter = mp.season === 'hiver';
     const sp = this.sprite(n, s, dev, winter);
     const k = s / sp.S;
@@ -328,6 +331,37 @@ export class TownArt {
       }
       lot.stroke();
     }
+  }
+
+  // À partir de Z.PLAN (carte vue du ciel), le vrai plan de la place (carte/villes.js), à l'échelle, puis par-dessus
+  // les remparts et les ouvrages de map.js (walls, works : niveau, brèche, palissade), agrandis jusqu'au mur du plan.
+  // Une image par place, état et résolution (paliers de 2) ; on n'en peint que pour 6 ms par image, les autres
+  // places gardent le palier voisin ou le signe le temps d'être peintes. Renvoie faux pour garder le signe.
+  plan(ctx, n, s, col, ns, owner) {
+    const mp = this.map, z = mp.cam.z, e = etatVille(n, ns, mp.state), res = resPour(z * (mp.dpr || 1) / SU);
+    if (this.planFrame !== mp.frameNo) { this.planFrame = mp.frameNo; this.planMs = 0; }
+    let p = imageEnCache(n, e, res);
+    if ((!p || p.r0 !== res) && (!p || !mp.zooming()) && this.planMs < 6) {
+      const t0 = performance.now(), K = carteDe(mp.m);
+      // une place sans image : son plan à plat tout de suite (2 ms), le détail suivra
+      if (!p && res > 0.5) { p = planCarte(K, n, e, 0.5); p.r0 = p.r0 || 0.5; }
+      const pend = this.pend || (this.pend = new Map()), k = n.id + '|' + res;
+      let it = pend.get(k);
+      if (!it) { if (pend.size > 8) pend.clear(); pend.set(k, it = planCartePas(K, n, e, res)); }
+      for (let r; performance.now() - t0 < 6 - this.planMs;) if ((r = it.next()).done) { p = r.value; p.r0 = res; pend.delete(k); break; }
+      this.planMs += performance.now() - t0;
+    }
+    if (!p) return false;
+    const u = z / SU, k = u / p.res, o = -p.Rr * u;   // pixels CSS par unité du plan ; par pixel de l'image
+    ctx.drawImage(p.c, o, o, p.c.width * k, p.c.height * k);
+    // les remparts de la partie, au rayon du mur du plan (jamais plus petits que ceux dessinés dessous par drawNodes)
+    const sW = Math.max(s, Math.pow(1.04, Math.round(Math.log(Math.max(1, (p.V.rMur * u - 2) / 0.62)) / Math.log(1.04))));
+    const wallR = ns.f > 0 ? mp.walls(ctx, sW, ns.f, n.id, ns.sg && !ns.sg.occ && !ns.sg.bl ? ns.sg.dmg : 0) : 0;
+    if (ns.bar != null || ns.bw) mp.works(ctx, sW, ns.f, n.id, ns.bar || 0, ns.bw, wallR);
+    const lot = mp.lot || (mp.lot = new Lot());
+    lot.m = ctx.getTransform();
+    lot.next(); mp.flag(lot, p.mat[0] * u, p.mat[1] * u, clamp(s * (n.type === 'village' ? 0.32 : 0.28), 7, 24), owner === 'neutre' ? '#e9e4d4' : col);
+    return true;
   }
 }
 

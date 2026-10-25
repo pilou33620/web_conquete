@@ -188,3 +188,29 @@ Le ciel (`ciel.js`) :
 - Temps d'image mesurés à 1280 × 800, densités 1 et 2 : vue d'ensemble, zoom 26, zoom 110, zoom 320. Rien ne doit
   être plus lent qu'avant à la vue d'ensemble et au zoom 26.
 - Pas d'erreur dans la console. Le brouillard de guerre est respecté.
+
+## Livré — B
+
+- `carte/villes.js` : `profilVille`, `genererInterieur`, `peindreInterieur` (et `peindreInterieurPas`, par pas),
+  `planCarte` (et `planCartePas`), `degats`, `lecture`, portés de la maquette, avec `carteDe(map.m)` pour les données.
+  `etatVille(n, ns, st)` lit l'état : `f` choisit l'enceinte (1-2 murs et tours, 3-4 bastions ; après 1860 des cours
+  si la ville n'a pas de bastions), `pop` la taille (par paliers de 8 unités), `d` des faubourgs plus longs et plus
+  serrés, `sg.dmg` ruines et toits crevés, `lv` incendie (un quartier brûlé), crue (quais sous l'eau). Le **modèle** de
+  plan suit `pop0` et `fort` du jeu : il ne change pas en cours de partie.
+- Carte (`towns.js`) : à partir de `Z.PLAN`, hors style « époque », le plan à l'échelle ; à plat jusqu'à 0,5 pixel
+  par unité, maison par maison au-delà (dès z 72 sur un écran Retina), peint au plus 6 ms par image et par pas.
+  Par-dessus, `map.walls` et `map.works` (appelés, pas changés), agrandis au rayon du mur du plan (`V.rMur`) : niveau
+  et brèche restent lisibles ; l'enceinte propre du plan n'est donc peinte que dans l'intérieur. Caches bornés :
+  300 plans, 14 Mpx d'images.
+- Intérieur (`carte/interieur.js`, bouton « Voir l'intérieur » du panneau) : plein écran, gestes, retour (et Échap),
+  visites, « Ce que le générateur a lu » avec l'état ; s'ouvre tout de suite et se peint en 0,3 à 1,5 s par pas de
+  12 ms. Vie : passants (moins la nuit, en famine, en siège, presque personne en épidémie), charrettes, bateaux,
+  bêtes, fumées, moulins ; foire (étals, foule), émeute (attroupement au nord de la place), épidémie (convoi funèbre),
+  disette (place vide), incendie et siège (flammes, fumée noire). Drapeau du maître par `map.flag`.
+- Écart : dans `polaire`, les sommets des îlots sont pris dans l'autre sens. Dans la maquette, `decalerQuad`
+  **gonflait** les îlots des plans ronds au lieu de les rentrer : sur la carte, la vieille ville devenait un disque
+  beige ; dans l'intérieur, les îlots se chevauchaient. Les plans ronds ont maintenant des rues et des cours.
+- Pour les autres : `planCarte(...).lum` (fenêtres en km, pour la nuit de `ciel.js`), `V.lieux.place` (marchés de
+  `vie.js`), `V.rMur` (rayon des remparts, pour le siège de `guerre.js`). Dans `drawNodes`, l'anneau de siège et le tri
+  des places hors écran (`x < -s - 80`) suivent encore la taille du signe : de près, l'anneau tombe dans la ville et
+  un grand plan disparaît trop tôt au bord de l'écran. `moulinVu` est recopié dans `interieur.js`.

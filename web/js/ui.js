@@ -8,6 +8,7 @@ import { profil } from './battle/qualite.js';
 import { figureKind, drawPortrait } from './portraits.js';
 import { valeursTable } from './valeurs.js';
 import { Decouvertes } from './decouvertes.js';
+import { ouvrirInterieur } from './carte/interieur.js';
 import { arbreHtml } from './arbre.js';
 import { startTechs, startRails } from './epoque.js';
 import { drawPlan } from './plan.js';
@@ -774,6 +775,11 @@ export class UI {
         this.tuto.start();
         break;
       case 'goto': if (d.x) { if (this.modal) this.closeModal(); this.map.moveTo(+d.x, +d.y, Math.max(this.map.cam.z, 6)); } break;
+      case 'interieur': {   // la ville en plein écran (carte/interieur.js)
+        const gn = sel && sel.kind === 'node' && this.md.nodes[sel.id];
+        if (gn) ouvrirInterieur({ m: this.md, n: gn, ns: this.st.nodes[gn.id], st: this.st, dept: this.md.depts?.[gn.dept]?.name, col: this.map.colors[this.st.nodes[gn.id]?.o], flag: (g, x, y, h, c) => this.map.flag(g, x, y, h, c) });
+        break;
+      }
       case 'center': {
         const p = this.selPos();
         if (p) this.map.moveTo(p[0], p[1], Math.max(this.map.cam.z, 7));
@@ -1271,7 +1277,7 @@ export class UI {
         }).join('');
       }
     }
-    h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
+    h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button><button class="btn" data-act="interieur">Voir l’intérieur</button></div>`;
     // signature = ce qui est affiché (valeurs arrondies, boutons actifs ou non) : pas de redessin à chaque relevé
     return [h, id + '|' + h];
   }
