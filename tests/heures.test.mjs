@@ -1,26 +1,16 @@
-// Banc de la table des heures et de l'étalonnage (web/js/battle/heures.js) : node --test tests/
+// Banc de la table des heures (web/js/battle/heures.js) : node --test tests/
 //
-// POURQUOI CE BANC EXISTE. Toute la lumière des batailles et la LUT de l'après-rendu sortent de cette table. Une
-// heure mal rangée, un saut entre deux lignes, ou un étalonnage qui sort de [0, 1] ferait clignoter l'image quand
-// l'horloge tourne, ou la noircirait sans que rien ne plante.
+// POURQUOI CE BANC EXISTE. Toute la lumière des batailles (effets.js, ciel) sort de cette table. Une heure mal
+// rangée ou un saut entre deux lignes ferait clignoter l'image quand l'horloge tourne, sans que rien ne plante.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { HEURES, METEO, ligne, heureEffective, etalonnage, grade, lut, cleEtalonnage, ambiance } from '../web/js/battle/heures.js';
-
-const NEUTRE = { expo: 1, temp: 0, sat: 1, vert: 0, contrast: 1, lift: [0, 0, 0], gain: [1, 1, 1], vig: 0 };
+import { HEURES, ligne, heureEffective } from '../web/js/battle/heures.js';
 
 test('la table est rangée de 5 h à 22 h, chaque ligne complète', () => {
   assert.equal(HEURES[0].he, 5); assert.equal(HEURES.at(-1).he, 22);
   for (let i = 1; i < HEURES.length; i++) assert.ok(HEURES[i].he > HEURES[i - 1].he, `ligne ${i}`);
   const cles = Object.keys(HEURES[0].g).sort().join();
   for (const r of HEURES) assert.equal(Object.keys(r.g).sort().join(), cles, `étalonnage de ${r.he} h`);
-});
-
-test('un étalonnage neutre ne change pas les couleurs', () => {
-  for (const c of [[0, 0, 0], [1, 1, 1], [0.2, 0.6, 0.3], [0.9, 0.4, 0.1]]) {
-    const o = grade(...c, NEUTRE);
-    c.forEach((v, i) => assert.ok(Math.abs(o[i] - v) < 1e-9, `${c} → ${o}`));
-  }
 });
 
 test('pas de saut quand l’heure tourne : deux instants à une minute d’écart se ressemblent', () => {
@@ -37,58 +27,4 @@ test('le crépuscule suit la lumière du serveur, sans saut quand elle commence 
   assert.equal(heureEffective(15, 0.15), 21, 'la nuit');
   let prev = 0;
   for (let L = 1; L >= 0.15; L -= 0.05) { const he = heureEffective(16, L); assert.ok(he >= prev); prev = he; }
-});
-
-test('l’étalonnage reste dans [0, 1] et la LUT est complète, à toute heure et par tous les temps', () => {
-  for (const w of Object.keys(METEO)) for (let h = 5; h <= 22; h += 0.5) {
-    const G = etalonnage(h, w);
-    for (const c of [[0, 0, 0], [1, 1, 1], [0, 1, 0], [0.3, 0.5, 0.2]]) for (const v of grade(...c, G)) assert.ok(v >= 0 && v <= 1 && !Number.isNaN(v), `${w} ${h} h`);
-  }
-  const L = lut(etalonnage(13, 'soleil'), 8);
-  assert.equal(L.length, 8 * 8 * 8 * 4);
-  assert.ok(L.every((v, i) => i % 4 !== 3 || v === 255));
-});
-
-test('midi au soleil : verts tirés vers le jaune, ombres bleutées ; la nuit, une image froide', () => {
-  const midi = etalonnage(13, 'soleil');
-  // (UGAR : des verts vifs, saturés, avec une pointe de jaune : plus vifs que la couleur d'origine, plus jaunes que le
-  // même étalonnage sans virage)
-  const herbe = grade(0.3, 0.55, 0.2, midi), sansVirage = grade(0.3, 0.55, 0.2, { ...midi, vert: 0 });
-  assert.ok(herbe[0] / herbe[1] > sansVirage[0] / sansVirage[1], 'le vert tire vers le jaune');
-  assert.ok(herbe[1] - herbe[2] > 0.55 - 0.2, 'l’herbe est plus vive');
-  const ombre = grade(0.05, 0.05, 0.05, midi);
-  assert.ok(ombre[2] > ombre[0], 'les ombres sont bleutées');
-  const nuit = grade(0.5, 0.5, 0.5, etalonnage(21.5, 'soleil'));
-  assert.ok(nuit[2] > nuit[0], 'la nuit est bleue');
-  assert.ok(etalonnage(13, 'pluie').sat < midi.sat && etalonnage(13, 'pluie').vig > midi.vig, 'la pluie éteint les couleurs et assombrit les bords');
-});
-
-test('la clé ne change que si l’étalonnage change', () => {
-  assert.equal(cleEtalonnage(etalonnage(13, 'soleil')), cleEtalonnage(etalonnage(13.0001, 'soleil')));
-  assert.notEqual(cleEtalonnage(etalonnage(13, 'soleil')), cleEtalonnage(etalonnage(19, 'soleil')));
-});
-
-test('ambiance : soleil bas et doré le soir, plus haut l’été, brume du temps qu’il fait', () => {
-  const soir = ambiance({ weather: 'soleil', light: 0.85, hour: 19 }, 'ete'), midi = ambiance({ weather: 'soleil', light: 1, hour: 13 }, 'ete');
-  assert.ok(soir.sunDir[1] < midi.sunDir[1]);
-  assert.ok(soir.sun[2] < midi.sun[2], 'le soir, le soleil est plus jaune');
-  assert.ok(ambiance({ hour: 13 }, 'ete').sunDir[1] > ambiance({ hour: 13 }, 'hiver').sunDir[1]);
-  assert.ok(ambiance({ weather: 'pluie', hour: 13 }, 'ete').fog[0] < midi.fog[0]);
-  assert.equal(ambiance({ weather: 'pluie', hour: 13 }, 'ete', { clouds: false }).cloudA, 0);
-});
-
-test('ciel et brume (SPEC-SUITE F1) : zénith bleu par beau temps, voile partout, brume des vallées le matin', () => {
-  const midi = ambiance({ weather: 'soleil', light: 1, hour: 13 }, 'ete');
-  for (const he of [5, 7, 13, 19, 21]) {
-    const a = ambiance({ weather: 'soleil', light: he > 19 ? 0.2 : 1, hour: he }, 'ete');
-    assert.equal(a.zen.length, 3);
-    assert.ok(a.zen.every(v => v >= 0 && v < 2), `zénith borné à ${he} h`);
-    assert.ok(a.voile[0] > 0 && a.voile[1] > 0 && a.vallee[1] > 0);
-  }
-  assert.ok(midi.zen[2] > midi.zen[0] * 2, 'le zénith de midi est bleu');
-  const couvert = ambiance({ weather: 'nuages', light: 1, hour: 13 }, 'ete');
-  assert.ok(Math.abs(couvert.zen[2] - couvert.zen[0]) < Math.abs(midi.zen[2] - midi.zen[0]), 'sous les nuages, le ciel pâlit');
-  assert.ok(ambiance({ weather: 'soleil', hour: 6.5 }, 'ete').vallee[0] > 0, 'brume des vallées au petit matin');
-  assert.equal(midi.vallee[0], 0, 'pas de brume des vallées à midi');
-  assert.ok(ambiance({ weather: 'brouillard', hour: 13 }, 'ete').voile[0] > midi.voile[0] * 5, 'le brouillard épaissit le voile');
 });

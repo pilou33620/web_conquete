@@ -2,8 +2,8 @@
 // ciel, de la brume, et l'étalonnage de l'image (balance des blancs, saturation, verts tirés vers le jaune,
 // contraste, ombres bleutées, hautes lumières chaudes, vignettage), à la manière des ambiances d'Ultimate General
 // (matin doré et brumeux, midi chaud et franc, couchant orangé, nuit bleue). La météo s'applique par-dessus.
-// Une seule table remplace les calculs dispersés de l'éclairage ; effets.js (ciel) et apres.js (LUT) la lisent.
-// Fonctions pures, sans Three.js : tests/heures.test.mjs.
+// Une seule table pour la lumière de la bataille : effets.js (ciel, atmosphere) en tire la teinte de l'heure, la
+// direction des ombres et les couleurs éteintes du soir. Fonctions pures : tests/heures.test.mjs.
 import { clamp } from './formes.js';
 
 // he : heure de la table ; sun : couleur du soleil (linéaire) et sunI sa force (× celle de la météo) ; sky : lumière
@@ -34,7 +34,6 @@ export const HEURES = [
     g: { expo: 1.1, temp: -0.6, sat: 0.52, vert: 0.5, contrast: 0.95, lift: [0.0, 0.012, 0.05], gain: [0.94, 0.98, 1.06], vig: 0.45 } },
 ];
 // la brume à midi par beau temps : la couleur du ciel de chaque météo y est ramenée à l'heure
-const NOON_FOG = [201, 216, 230];
 
 // Météo : ciel (brume), force du soleil, ombres des nuages, et retouches de l'étalonnage (ajoutées, sauf sat et
 // contrast multipliés)
@@ -76,91 +75,4 @@ export function ligne(he) {
     }
   }
   return T[T.length - 1];
-}
-
-// étalonnage de l'heure, retouché par la météo
-export function etalonnage(he, weather = 'soleil') {
-  const g = { ...ligne(he).g }, m = (METEO[weather] || METEO.soleil).g || {};
-  for (const [k, v] of Object.entries(m)) {
-    if (k === 'sat' || k === 'contrast') g[k] *= v;
-    else if (Array.isArray(v)) g[k] = g[k].map((x, i) => x + v[i]);
-    else g[k] += v;
-  }
-  return g;
-}
-
-// L'étalonnage d'une couleur (r, g, b entre 0 et 1, déjà passée en sRGB) : c'est ce que contient la LUT.
-// temp : balance des blancs (+ chaud, − froid) ; vert : les verts vifs tirés vers le jaune ; sat : saturation ;
-// contrast : autour d'un gris moyen ; lift : teinte ajoutée dans les ombres ; gain : teinte des hautes lumières.
-// Avec temp = vert = 0, sat = contrast = 1, lift = 0 et gain = 1, la couleur ne change pas.
-export function grade(r, g, b, G) {
-  r *= 1 + 0.08 * G.temp; g *= 1 + 0.01 * G.temp; b *= 1 - 0.08 * G.temp;
-  const gx = Math.max(0, g - Math.max(r, b)) * G.vert;
-  g -= gx * 0.28; r += gx * 0.16;
-  let l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  r = l + (r - l) * G.sat; g = l + (g - l) * G.sat; b = l + (b - l) * G.sat;
-  const P = 0.42;
-  r = P + (r - P) * G.contrast; g = P + (g - P) * G.contrast; b = P + (b - P) * G.contrast;
-  l = clamp(0.2126 * r + 0.7152 * g + 0.0722 * b, 0, 1);
-  const sh = (1 - l) * (1 - l), hi = l * l;
-  r = (r + G.lift[0] * sh) * (1 + (G.gain[0] - 1) * hi);
-  g = (g + G.lift[1] * sh) * (1 + (G.gain[1] - 1) * hi);
-  b = (b + G.lift[2] * sh) * (1 + (G.gain[2] - 1) * hi);
-  return [clamp(r, 0, 1), clamp(g, 0, 1), clamp(b, 0, 1)];
-}
-
-// La LUT 3D de l'étalonnage G : n³ cases RGBA (octets), r le plus rapide, puis g, puis b (l'ordre d'une texture 3D)
-export function lut(G, n = 32) {
-  const out = new Uint8Array(n * n * n * 4);
-  let k = 0;
-  for (let bi = 0; bi < n; bi++) for (let gi = 0; gi < n; gi++) for (let ri = 0; ri < n; ri++) {
-    const c = grade(ri / (n - 1), gi / (n - 1), bi / (n - 1), G);
-    out[k++] = Math.round(c[0] * 255); out[k++] = Math.round(c[1] * 255); out[k++] = Math.round(c[2] * 255); out[k++] = 255;
-  }
-  return out;
-}
-// une clé qui ne change que si l'étalonnage change à l'œil (la LUT n'est recalculée qu'alors)
-export function cleEtalonnage(G) {
-  return Object.keys(G).sort().map(k => Array.isArray(G[k]) ? G[k].map(v => v.toFixed(3)).join(',') : G[k].toFixed(2)).join('|');
-}
-
-// Lumière et ciel de la scène pour l'état du ciel st ({weather, light, hour, wind}) et la saison : direction et
-// couleur du soleil (à l'est le matin, au sud à midi, bas à l'ouest le soir ; plus haut l'été), lumière du ciel,
-// couleur et portée de la brume, force des ombres des nuages, teinte de la fumée, étalonnage (grade).
-// flash : éclair d'orage en cours (0 à 0,5) ; clouds : ombres des nuages permises par la qualité
-export function ambiance(st, season, { flash = 0, clouds = true } = {}) {
-  const w = METEO[st.weather] ? st.weather : 'soleil', M = METEO[w];
-  const L = clamp(st.light ?? 1, 0, 1), h = st.hour ?? 12, he = heureEffective(h, L), row = ligne(he);
-  const emax = ({ ete: 62, printemps: 47, automne: 40, hiver: 26 }[season] ?? 45) * Math.PI / 180;
-  const el = Math.max(0.06, emax * Math.sin(Math.PI * clamp((h - 6) / 14, 0, 1))), az = (90 + (h - 6) * 15) * Math.PI / 180;
-  const wet = w === 'pluie' || w === 'orage' || w === 'tempete';
-  const dull = wet || w === 'brouillard' || w === 'nuages' || w === 'neige';
-  // sous un ciel couvert, la lumière perd sa couleur (la moitié) ; la brume est le ciel de la météo, teinté par l'heure
-  const lum = (row.sun[0] + row.sun[1] + row.sun[2]) / 3;
-  const sun = dull ? lerp3(row.sun, [lum, lum, lum], 0.5) : row.sun;
-  const fog = M.sky.map((c, i) => clamp(c * row.fog[i] / NOON_FOG[i], 0, 255) / 255);
-  // ciel au zénith : bleu franc par beau temps, presque la couleur de la brume sous un ciel couvert
-  // (la table est en sRGB : le bleu passe en linéaire, sinon l'ACES de l'après-rendu le blanchit)
-  const zenL = row.zen.map(c => Math.pow(c / 255, 2.2) * 1.6);
-  const zen = lerp3(zenL, fog, w === 'brouillard' ? 0.9 : dull ? 0.65 : w === 'canicule' ? 0.25 : 0);
-  // perspective aérienne (apres.js) : un voile léger qui s'épaissit avec la distance, plus dense au ras du sol
-  // ([densité par m au niveau le plus bas du champ, hauteur d'échelle en m]) ; et la brume des vallées du petit matin,
-  // très basse, qui se lève vers 9 h
-  const matin = clamp((9 - he) / 2.5, 0, 1) * (he < 20 ? 1 : 0);
-  const voile = [w === 'brouillard' ? 0.0022 : wet ? 0.0005 : w === 'nuages' || w === 'neige' ? 0.00026 : 0.00016, w === 'brouillard' ? 140 : 320];
-  const vallee = [(w === 'brouillard' ? 0.01 : 0.0035) * Math.max(matin, w === 'brouillard' ? 1 : wet ? 0.3 : 0), w === 'brouillard' ? 45 : 22];
-  return {
-    he, sunDir: [Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)], sun,
-    sunI: M.sunI * row.sunI,
-    // le ciel éclaire, bleuté : les ombres restent teintées au lieu de noires ; par temps clair, le soleil l'emporte
-    // nettement (sinon le relief, les nuages et l'ombre des collines ne se lisent pas), sous un ciel couvert c'est
-    // la lumière diffuse
-    hemiSky: dull ? lerp3(row.sky, [0.86, 0.88, 0.9], 0.4) : row.sky, hemiGround: [0.46, 0.4, 0.27],
-    hemiI: (dull ? 2.15 : 1.5) * row.skyI + flash * 3,
-    fog, zen, voile, vallee, fogNear: w === 'brouillard' ? 0.05 : wet ? 0.6 : 1, fogFar: w === 'brouillard' ? 0.15 : wet ? 0.6 : 1,
-    cloudA: M.cloud * L * (clouds ? 1 : 0),
-    wind: st.wind || [1.5, 0.5],
-    smoke: lerp3([1, 1, 1], sun, 0.6).map(v => v * (0.45 + 0.55 * L)),
-    grade: etalonnage(he, w),
-  };
 }
