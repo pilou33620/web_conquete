@@ -1312,6 +1312,23 @@ function sapin(g, x, y, r, c) {
   const etoile = (ox, oy, rr, col) => { g.fillStyle = col; g.beginPath(); for (let i = 0; i < 16; i++) { const a = i * TAU / 16, q = i % 2 ? rr * .55 : rr; g.lineTo(ox + Math.cos(a) * q, oy + Math.sin(a) * q); } g.closePath(); g.fill(); };
   etoile(x + 1.8, y + 2.4, r, OMBRE); etoile(x, y, r, c); etoile(x - r * .12, y - r * .12, r * .6, clair(c, .15)); C(g, sombre(c, .2), x, y, r * .15);
 }
+// moulin vu d'en haut : les ailes tournent dans un plan vertical face au vent, on les voit donc de profil (une barre
+// fine dont la longueur bat entre 0,71 L et L) ; c'est leur ombre au sol, une croix de biais, qui montre qu'elles tournent
+function moulinVu(g, x, y, t, wa = .35, L = 17, H = 12) {
+  const dx = Math.cos(wa), dy = Math.sin(wa), px = -dy, py = dx, sx = .34, sy = .45;
+  const hx0 = x - dx * 4.5, hy0 = y - dy * 4.5;   // le moyeu, du côté du vent
+  const bras = [0, 1, 2, 3].map(k => t * .9 + k * Math.PI / 2);
+  g.lineCap = 'round';
+  g.strokeStyle = 'rgba(20,20,10,.34)'; g.lineWidth = 3.2; g.beginPath();
+  for (const a of bras) { const u = L * Math.cos(a), h = H + L * Math.sin(a); g.moveTo(hx0 + sx * H, hy0 + sy * H); g.lineTo(hx0 + px * u + sx * h, hy0 + py * u + sy * h); }
+  g.stroke();
+  T(g, '#5b4127', 1, x, y, x + dx * 13, y + dy * 13);   // la queue, sous le vent
+  C(g, OMBRE, x + 3, y + 4, 7.5); C(g, '#d8cdb5', x, y, 7); coneF(g, x, y, 5.4, PAL.ardoise, 0);
+  const us = bras.map(a => L * Math.cos(a)), u0 = Math.min(...us), u1 = Math.max(...us);
+  T(g, '#4a3a28', 1.6, hx0 + px * u0, hy0 + py * u0, hx0 + px * u1, hy0 + py * u1);
+  T(g, '#e8e0cc', .9, hx0 + px * u0, hy0 + py * u0, hx0 + px * u1, hy0 + py * u1);
+  C(g, '#3a2a1b', hx0, hy0, 1.3);
+}
 function peindreVillage(k) {
   const c = document.createElement('canvas'); c.width = Math.round(VW * k); c.height = Math.round(VH * k);
   const g = c.getContext('2d'), R = alea(1812); g.scale(k, k);
@@ -1568,7 +1585,7 @@ VS.sous = (sc, g) => {
   sc.monde(g);
   for (const m of MAISONS) for (const d of m.debris) { g.fillStyle = d.c; g.save(); g.translate(d.x, d.y); g.rotate(d.a); g.fillRect(-.5, -.35, 1, .7); g.restore(); }
   for (const m of MAISONS) { sc.fig(g, m.x, m.y, m.a); dessinMaison(g, m, t); }
-  sc.monde(g); C(g, OMBRE, 841, 92, 7.5); C(g, '#d8cdb5', 838, 88, 7); C(g, '#7d5c3a', 838, 88, 3.6);   // le moulin
+  sc.monde(g); moulinVu(g, 838, 88, t);   // le moulin
   dessinVie(sc, g, t);
 };
 VS.dessus = (sc, g) => {
@@ -1585,10 +1602,6 @@ VS.dessus = (sc, g) => {
   }
   g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.drawImage(tmp, 0, 0);
   for (const mm of MAISONS) if (mm.intensite > 0) { sc.fig(g, mm.x, mm.y, mm.a); flammes(g, mm, t); }
-  // les ailes du moulin
-  sc.fig(g, 838, 88, t * .9); g.lineCap = 'butt';
-  for (let i = 0; i < 4; i++) { g.save(); g.rotate(i * Math.PI / 2); RR(g, 'rgba(20,20,10,.25)', 4, -.4, 17, 3.6, .3); RR(g, '#e8e0cc', 3, -1.8, 17, 3.4, .3); T(g, '#6b4d31', .5, 0, 0, 20, 0); for (let x = 5; x < 20; x += 3) T(g, '#9c8a66', .25, x, -1.8, x, 1.6); g.restore(); }
-  C(g, '#5b4127', 0, 0, 1.4);
   // la maison que vous avez désignée
   const cm = sc.cibleManuelle;
   if (cm && cm.n > 0 && cm.m.etat < 3) {
