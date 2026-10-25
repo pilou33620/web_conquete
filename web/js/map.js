@@ -10,6 +10,7 @@ import { Epoque, phylloxera, styleCarte, startTechs, startRails } from './epoque
 import { AMB, LUM, majAmbiance } from './carte/ambiance.js';
 import { Z, nuit } from './carte/ambiance.js';
 import { Guerre, rayonMurs } from './carte/guerre.js';
+import { interieurOuvert } from './carte/interieur.js';
 import { Ciel } from './carte/ciel.js';
 import * as ambiance from './carte/ambiance.js';
 import { terre, EAU, SABLE, LARG_RIVIERE } from './carte/terre.js';
@@ -1613,6 +1614,8 @@ export class MapView {
   frame(now) {
     const dt = Math.min(0.1, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
+    // l'intérieur d'une ville couvre tout l'écran : la carte attend dessous sans se dessiner (batterie de l'iPad)
+    if (interieurOuvert()) { requestAnimationFrame(t => this.frame(t)); return; }
     if (this.camAnim) {
       const a = this.camAnim, k = Math.min(1, (now - a.t0) / a.dur), e = 1 - Math.pow(1 - k, 3);
       const lz = Math.log(a.from.z) + (Math.log(a.to.z) - Math.log(a.from.z)) * e;
@@ -1937,9 +1940,10 @@ export class MapView {
     for (const a of st.armies) if (a.qr && a.n != null && a.st === 'idle') camp.set(a.n, a.o);
     for (const n of this.nodes) {
       const [x, y] = this.toScreen(n.x, n.y);
-      const s = this.nodeSize(n);
-      if (x < -s - 80 || y < -s - 40 || x > this.vw + s + 80 || y > this.vh + s + 40) continue;
-      const ns = st.nodes[n.id];
+      const s = this.nodeSize(n), ns = st.nodes[n.id];
+      // (dès le plan des villes, la place couvre son vrai rayon : elle reste dessinée tant qu'un bout est à l'écran)
+      const rP = z >= Z.PLAN && !PAPIER[this.era] && x > -1e4 && x < this.vw + 1e4 && y > -1e4 && y < this.vh + 1e4 ? rayonMurs(this, n, ns) * z : 0, sc = Math.max(s, rP);
+      if (x < -sc - 80 || y < -sc - 40 || x > this.vw + sc + 80 || y > this.vh + sc + 40) continue;
       const col = this.colors[ns.o] || '#999';
       const sel = this.selection && this.selection.kind === 'node' && this.selection.id === n.id;
       ctx.save();
@@ -1977,7 +1981,7 @@ export class MapView {
       if (ns.ev) this.evMark(ctx, -s * 0.6, -s * 0.55, clamp(s * 0.45, 10, 15), time);   // décision locale en attente
       ctx.restore();
       const showLabel = n.type === 'capitale' || (n.type !== 'village' && z >= 2.3) || z >= 4.8 || sel;
-      if (showLabel) labels.push([n, x, y, s, ns]);
+      if (showLabel) labels.push([n, x, y, s, ns, rP]);
     }
     if (this.lot) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); this.lot.flush(ctx); ctx.restore(); }   // (habitants et pigeons : towns.js)
     // étiquettes (les plus importantes d'abord, sans chevauchement)
@@ -1988,11 +1992,11 @@ export class MapView {
     labels.sort((a, b) => prio[a[0].type] - prio[b[0].type]);
     const placed = [];
     const P = PAPIER[this.era];
-    for (const [n, x, y, s, ns] of labels) {
+    for (const [n, x, y, s, ns, rP] of labels) {
       // (carte d'époque : les villages en italique bas-de-casse, comme les gravaient Cassini et l'état-major)
       const fs = this.labelFs(n), fc = Math.round(fs * 0.8), vil = P && n.type === 'village', name = vil ? n.name : n.name.toLocaleUpperCase('fr-FR');
       ctx.font = `${vil ? 'italic 500' : n.type === 'capitale' ? 700 : 600} ${vil ? fc + 2 : fc}px "EB Garamond", Georgia, serif`;
-      const ty = y + s * 0.5 + 3, ph = fc + 6;
+      const ty = y + Math.max(s * 0.5, Math.min(rP, this.vh * 0.4)) + 3, ph = fc + 6;   // (sous le plan, pas au milieu des rues)
       const tw = this.textW(ctx, name);
       const box = [x - tw / 2 - 9, ty, x + tw / 2 + 6, ty + ph];
       const isSel = this.selection && this.selection.kind === 'node' && this.selection.id === n.id;
