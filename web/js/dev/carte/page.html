@@ -1,0 +1,219 @@
+<title>Aquitaine vue du ciel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Mise en page : la scène de jeu en tête (barres sombres du jeu, carte au centre), puis les planches troupes et terrain en grilles */
+:root {
+  --bg: #121712; --barre: #1a211a; --panneau: #1f281f; --bord: #2f3b2e;
+  --fg: #eeedde; --doux: #a7ad97; --or: #e9b949; --vert: #6fc27c; --encre: #141a14;
+  --bleu: #3557a8; --rouge: #b8352c;
+  --titre: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
+  --texte: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body { font-family: var(--texte); font-size: 15px; line-height: 1.5; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 56px; }
+.page { max-width: 1180px; margin: 0 auto; display: grid; gap: 40px; }
+header { display: grid; gap: 8px; max-width: 70ch; }
+.sur { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; color: var(--or); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--titre); font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: .01em; }
+h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1; }
+h2 { font-size: 28px; line-height: 1.1; }
+h3 { font-size: 21px; line-height: 1.1; }
+p { margin: 0; }
+.doux { color: var(--doux); }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--or); outline-offset: 2px; }
+
+/* --- la scène de jeu --- */
+.jeu { border-radius: 14px; overflow: hidden; border: 1px solid var(--bord); background: var(--barre); }
+.barre { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px; background: var(--barre); border-bottom: 1px solid #0c100c; }
+.date { display: flex; flex-direction: column; font-family: var(--titre); line-height: 1.05; }
+.date b { font-size: 20px; }
+.date span { color: var(--doux); font-size: 15px; font-weight: 600; }
+.forces { text-align: right; display: grid; gap: 2px; }
+.forces .lbl { font-size: 11px; letter-spacing: .14em; color: var(--doux); }
+.forces .nb { font-family: var(--titre); font-size: 22px; color: var(--or); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.forces .nb em { font-style: normal; color: var(--doux); font-size: 15px; margin: 0 4px; }
+.pastille { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 2px; }
+.pastille.fr { background: var(--bleu); } .pastille.co { background: var(--rouge); }
+.scene { position: relative; height: clamp(440px, 70vh, 700px); background: #6c984d; }
+.scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; display: block; }
+.scene canvas:active { cursor: grabbing; }
+.outils { position: absolute; left: 12px; top: 12px; display: grid; gap: 1px; border-radius: 10px; overflow: hidden; }
+.outils button { width: 44px; height: 44px; display: grid; place-items: center; background: var(--barre); border: 0; }
+.outils button:hover { background: #26302a; }
+.outils svg { width: 20px; height: 20px; }
+.calques { position: absolute; right: 12px; top: 12px; display: flex; background: var(--barre); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 9px 14px; font-weight: 500; font-size: 15px; }
+.seg button[aria-pressed="true"] { background: var(--or); color: var(--encre); }
+.vitesse { position: absolute; right: 22px; bottom: 132px; width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--barre); font-family: var(--mono); font-weight: 500; font-size: 15px; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.lecture { position: absolute; right: 14px; bottom: 58px; width: 66px; height: 66px; border-radius: 50%; border: 0; background: var(--vert); color: var(--encre); display: grid; place-items: center; box-shadow: 0 3px 10px rgba(0,0,0,.35); }
+.lecture svg { width: 24px; height: 24px; }
+.journal { position: absolute; left: 12px; right: 12px; bottom: 10px; background: rgba(22,28,22,.92); border-radius: 10px; padding: 8px 12px; display: flex; gap: 12px; align-items: baseline; min-width: 0; }
+.journal .t { font-family: var(--mono); color: var(--doux); white-space: nowrap; font-size: 14px; }
+.journal #j-msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.visites { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 14px; background: var(--barre); border-top: 1px solid #0c100c; align-items: center; }
+.visites .lbl { font-size: 13px; color: var(--doux); margin-right: 4px; }
+.puce { border: 1px solid var(--bord); background: var(--panneau); border-radius: 999px; padding: 5px 12px; font-size: 14px; }
+.puce:hover { border-color: #4a5a48; }
+.puce[aria-pressed="true"] { background: var(--or); color: var(--encre); border-color: var(--or); }
+[hidden] { display: none !important; }
+.ambiance { row-gap: 10px; }
+.ambiance .seg { margin-right: 10px; }
+.ambiance .seg button { padding: 6px 11px; font-size: 14px; }
+.vie .lbl { flex-basis: 100%; margin-top: 4px; }
+.vie .lbl:first-child { margin-top: 0; }
+
+/* --- planches --- */
+.section { display: grid; gap: 16px; }
+.entete { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+.entete > div { display: grid; gap: 6px; max-width: 62ch; min-width: 0; }
+.seg.camp { display: flex; background: var(--barre); border-radius: 10px; overflow: hidden; border: 1px solid var(--bord); }
+.grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
+.carte { background: var(--panneau); border: 1px solid var(--bord); border-radius: 12px; overflow: hidden; display: grid; grid-template-rows: auto 1fr; }
+.carte canvas { display: block; width: 100%; aspect-ratio: 3 / 2; max-width: 100%; background: #6c984d; }
+.carte .corps { padding: 12px 14px 14px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.carte .ligne-puces { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.carte .ligne-puces .lbl { font-family: var(--mono); font-size: 11px; color: var(--doux); text-transform: uppercase; letter-spacing: .06em; width: 74px; }
+.carte .puce { font-size: 13px; padding: 3px 10px; }
+.sols { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.sol { display: grid; gap: 6px; }
+.sol canvas { width: 100%; aspect-ratio: 5 / 3; max-width: 100%; border-radius: 8px; display: block; background: #6c984d; }
+.sol b { font-family: var(--titre); font-size: 17px; font-weight: 600; }
+.sol span { font-size: 13px; color: var(--doux); line-height: 1.35; }
+.bats { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.bat { background: var(--panneau); border: 1px solid var(--bord); border-radius: 12px; overflow: hidden; display: grid; grid-template-rows: auto 1fr; }
+.bat canvas { display: block; width: 100%; aspect-ratio: 3 / 2; max-width: 100%; background: #6c984d; }
+.bat > div { padding: 10px 14px 14px; display: grid; gap: 4px; align-content: start; }
+.bat b { font-family: var(--titre); font-size: 19px; font-weight: 600; }
+.bat i { font-style: normal; font-family: var(--mono); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--or); }
+.bat span { font-size: 13.5px; color: var(--doux); line-height: 1.4; }
+.code { display: grid; gap: 10px; max-width: 78ch; padding: 0; margin: 0; list-style: none; }
+.code li { padding-left: 18px; position: relative; }
+.code li::before { content: ""; position: absolute; left: 0; top: .62em; width: 8px; height: 8px; border-radius: 2px; background: var(--or); }
+.code code { font-family: var(--mono); font-size: 13px; color: #d9d6c0; }
+@media (max-width: 560px) {
+  .seg button { padding: 8px 10px; font-size: 14px; }
+  .forces .nb { font-size: 18px; }
+  .vitesse { bottom: 128px; right: 18px; width: 46px; height: 46px; }
+  .lecture { width: 58px; height: 58px; }
+}
+
+.fiche { position: absolute; left: 12px; right: 12px; bottom: 12px; max-width: 460px; margin-inline: auto; background: rgba(26,33,26,.96); border: 1px solid var(--bord); border-radius: 14px; padding: 14px 16px; display: grid; gap: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+.fiche .haut { display: flex; justify-content: space-between; align-items: start; gap: 10px; }
+.fiche h3 { font-size: 24px; }
+.fiche .x { border: 0; background: transparent; color: var(--doux); font-size: 22px; line-height: 1; padding: 2px 6px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font-size: 12.5px; border: 1px solid var(--bord); border-radius: 999px; padding: 2px 9px; color: #dcd8c2; }
+.voir { justify-self: start; border: 0; border-radius: 10px; background: var(--or); color: var(--encre); font-weight: 600; padding: 10px 16px; font-size: 15px; }
+.retour { border: 1px solid var(--bord); background: var(--panneau); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
+.nav { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--barre); border-top: 1px solid #0c100c; }
+.nav span { display: grid; place-items: center; gap: 2px; padding: 9px 4px 10px; font-size: 13px; color: var(--doux); }
+.nav span.on { color: var(--fg); box-shadow: inset 0 3px 0 var(--vert); }
+.nav svg { width: 20px; height: 20px; }
+.lecture-ville { display: grid; gap: 8px; margin: 0; }
+.lecture-ville div { display: grid; grid-template-columns: 92px 1fr; gap: 10px; }
+.lecture-ville dt { font-family: var(--mono); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--or); padding-top: 3px; }
+.lecture-ville dd { margin: 0; min-width: 0; }
+.deux { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 28px; }
+@media (max-width: 820px) { .deux { grid-template-columns: 1fr; } }
+.props { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.prop { background: var(--panneau); border: 1px solid var(--bord); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.prop b { font-family: var(--titre); font-size: 19px; font-weight: 600; }
+.prop p { color: var(--doux); font-size: 14px; }
+</style>
+<div class="page">
+  <header>
+    <span class="sur">web_conquete · maquettes de rendu</span>
+    <h1>L’Aquitaine vue du ciel</h1>
+    <p class="doux">La carte de campagne dans le même style que les batailles, dessinée à partir des vraies données du jeu : terrain, rivières, routes royales, 223 villes et villages. Touchez une ville puis « Voir l’intérieur » : son plan est construit à partir de sa taille, de ses routes, de sa rivière ou de sa côte, de son pays et de ses métiers. Deux villes n’ont jamais la même disposition, et une ville a toujours la même.</p>
+  </header>
+
+  <section class="jeu" id="jeu-carte" aria-label="Carte de campagne et intérieur des villes">
+    <div id="mode-carte">
+      <div class="barre">
+        <div class="date"><b>Mai 1789</b><span>Tour 14 · printemps</span></div>
+        <div class="forces"><span class="lbl">TRÉSOR</span><span class="nb">12 400 livres</span></div>
+      </div>
+      <div class="scene">
+        <canvas id="carte" aria-label="Carte de l’Aquitaine vue de dessus"></canvas>
+        <div class="outils">
+          <button id="m-zplus" aria-label="Zoomer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button id="m-zmoins" aria-label="Dézoomer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+          <button id="m-zall" aria-label="Vue d’ensemble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 11 12 4l8 7v9H4z"/></svg></button>
+        </div>
+        <div class="fiche" id="fiche" hidden>
+          <div class="haut"><div><h3 id="f-nom">Bordeaux</h3><p class="doux" id="f-sous"></p></div><button class="x" id="f-fermer" aria-label="Fermer">×</button></div>
+          <div class="tags" id="f-tags"></div>
+          <button class="voir" id="f-voir">Voir l’intérieur</button>
+        </div>
+      </div>
+      <div class="visites" id="m-visites"><span class="lbl">Aller voir</span></div>
+      <div class="visites ambiance"><span class="lbl">Saison</span><div class="seg camp" id="a-saison" role="group" aria-label="Saison"><button data-v="printemps" aria-pressed="false">Printemps</button><button data-v="ete" aria-pressed="false">Été</button><button data-v="automne" aria-pressed="false">Automne</button><button data-v="hiver" aria-pressed="false">Hiver</button></div><span class="lbl">Heure</span><div class="seg camp" id="a-heure" role="group" aria-label="Heure"><button data-v="matin" aria-pressed="false">Matin</button><button data-v="midi" aria-pressed="false">Midi</button><button data-v="soir" aria-pressed="false">Soir</button><button data-v="nuit" aria-pressed="false">Nuit</button></div><span class="lbl">Temps</span><div class="seg camp" id="a-temps" role="group" aria-label="Temps"><button data-v="beau" aria-pressed="false">Beau</button><button data-v="averses" aria-pressed="false">Averses</button><button data-v="brume" aria-pressed="false">Brume</button><button data-v="neige" aria-pressed="false">Neige</button></div></div>
+      <div class="visites" id="m-evts"><span class="lbl">Événements</span><button class="puce" data-v="marche" aria-pressed="true">Jour de marché et foires</button><button class="puce" data-v="siege" aria-pressed="true">Siège de Bayonne</button><button class="puce" data-v="bataille" aria-pressed="true">Bataille de Tonneins</button><button class="puce" data-v="ennemi" aria-pressed="true">L’ennemi en Agenais</button><button class="puce" data-v="disette" aria-pressed="true">Disette en Périgord</button></div>
+      <div class="visites vie" id="m-vie"></div>
+      <div class="nav" aria-hidden="true">
+  <span class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z M9 4v14 M15 6v14"/></svg>Carte</span>
+  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10l4-3 4 3v10 M12 20V6l4-3 4 3v14 M3 20h18"/></svg>Villes</span>
+  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 20V4 M6 4h11l-3 4 3 4H6"/></svg>Armées</span>
+  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18l5-6 4 3 7-9"/></svg>Commerce</span>
+  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Plus</span>
+</div>
+    </div>
+    <div id="mode-ville" hidden>
+      <div class="barre">
+        <div class="date"><b id="i-nom">Bordeaux</b><span id="i-sous"></span></div>
+        <button class="retour" id="i-retour">Retour à la carte</button>
+      </div>
+      <div class="scene">
+        <canvas id="interieur" aria-label="Intérieur de la ville vu de dessus"></canvas>
+        <div class="outils">
+          <button id="i-zplus" aria-label="Zoomer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button id="i-zmoins" aria-label="Dézoomer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+          <button id="i-zall" aria-label="Vue d’ensemble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 11 12 4l8 7v9H4z"/></svg></button>
+        </div>
+      </div>
+      <div class="visites" id="i-visites"><span class="lbl">Aller voir</span></div>
+    </div>
+  </section>
+
+  <section class="section deux">
+    <div style="display:grid;gap:12px;align-content:start">
+      <h2>Essayer d’autres villes</h2>
+      <p class="doux">Chaque bouton ouvre l’intérieur d’une vraie ville du jeu. Changez d’année pour voir les murs tomber et la gare arriver.</p>
+      <div class="ligne-puces" style="display:flex;flex-wrap:wrap;gap:8px" id="exemples"></div>
+      <div class="seg camp" role="group" aria-label="Année" style="justify-self:start">
+        <button id="an-1700" aria-pressed="false">1700</button><button id="an-1789" aria-pressed="true">1789</button><button id="an-1860" aria-pressed="false">1860</button>
+      </div>
+    </div>
+    <div style="display:grid;gap:12px;align-content:start">
+      <h2>Ce que le générateur a lu</h2>
+      <dl class="lecture-ville" id="lecture-ville"></dl>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="entete"><div>
+      <h2>Propositions</h2>
+      <p class="doux">Ce que je propose de faire dans le jeu, à valider.</p>
+    </div></div>
+    <div class="props">
+      <div class="prop"><b>Une carte, deux échelles</b><p>De loin, une mosaïque de pays (vignes, pinèdes, landes, Pyrénées ombrées) ; de près, chaque kilomètre se découpe en parcelles striées comme dans les batailles, avec haies, fermes isolées et routes royales bordées d’arbres. Les villes y montrent leur vrai plan, le même qu’à l’intérieur.</p></div>
+      <div class="prop"><b>Onze plans de ville</b><p>Grande ville, ville close, port, bastide, place forte, fort isolé, village castral, village de montagne, village landais à airiaux, village-rue, bourg rond. Le jeu choisit selon le type, la population, la fortification et le relief ; les bastides de l’Agenais et du Périgord sont reconnues par leur nom.</p></div>
+      <div class="prop"><b>Le site décide du reste</b><p>Les rues partent vers les vraies routes de la carte, la rivière et la côte viennent de la grille du jeu, le pays donne les toits et les murs, les métiers donnent les quartiers : quais et navires, chais et châteaux viticoles, scieries, forges, salines, séchoirs à tabac, moulins.</p></div>
+      <div class="prop"><b>Jamais deux fois pareil</b><p>La graine vient du nom de la ville : Bordeaux est toujours Bordeaux, mais deux villages de même taille n’ont pas le même plan. Les agrandissements de la ville (faubourgs) et l’époque (murs abattus, cours plantés, gare) changent le plan au fil de la partie.</p></div>
+      <div class="prop"><b>La vie suit l’état de la ville</b><p>Passants, marché, charrettes, bateaux, fumées et bêtes aux prés, en nombre selon la population. À brancher ensuite : moins de monde en temps de famine, ruines et cratères après un siège, garnison qui fait l’exercice, foire les jours de marché.</p></div>
+      <div class="prop"><b>Une carte qui vit</b><p>Saisons (blés verts, moissons, vendanges, neige), heures (brume du matin, bivouacs et fenêtres le soir, phare de Cordouan la nuit), averses qui passent. Les métiers des pays au plus près : résiniers, paludiers, radeliers, pêcheurs, malle-poste et relais, marchés et foires, transhumance, contrebandiers. La guerre se voit : fumée de bataille de loin, siège avec tranchées et incendies, réfugiés devant l’ennemi, villages pillés et routes défoncées derrière lui.</p></div>
+      <div class="prop"><b>Même code que les batailles</b><p>Le plan intérieur sert aussi de carte de bataille quand on assiège la ville : mêmes îlots, mêmes murailles, mêmes bâtiments d’époque. Le moteur des batailles générerait ses rues à partir de ce plan.</p></div>
+    </div>
+  </section>
+</div>
+<script type="application/json" id="geo">/*GEO*/</script>
+<script>
+'use strict';
+/*SCRIPT*/
+</script>

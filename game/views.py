@@ -270,6 +270,9 @@ def _siege(g, n):
     return d
 
 
+LEV_DAYS = 90   # un événement local reste visible sur la carte trois mois
+
+
 def player_state(g, since=0):
     if g._dirty_income:
         g.compute_income()
@@ -336,6 +339,8 @@ def player_state(g, since=0):
         spy = next((s for s in g.spies if s['by'] == p and s['node'] == n['id']), None)
         if spy:
             d['spy'] = dict(kind=spy['kind'], tn=TT.tours_left(g, spy['done']))
+        if n.get('lev') and g.t - n.get('evt', -1e9) < LEV_DAYS:
+            d['lv'] = [n['lev'], round(g.t - n['evt'])]   # événement local récent et son âge en jours : la carte le montre
         AA.view_node(g, n, d, n['owner'] in side, lambda: g.intel_active(p, n['id']) or seen(gn['x'], gn['y']))
         nodes.append(d)
 

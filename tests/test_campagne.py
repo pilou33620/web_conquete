@@ -359,6 +359,16 @@ class RechercheEtPolitiques(unittest.TestCase):
         jouer_mois(g)
         self.assertEqual(CT.policy_w(g, n), 1.0)
 
+    def test_evenement_local_visible_sur_la_carte(self):
+        g = partie()
+        n = next(n for n in g.owned_nodes(g.player))
+        self.assertTrue(CT.fire(g, g.player, n, CT.LOCAL_BY_ID['foire']))
+        d = next(x for x in V.player_state(g)['nodes'] if x['id'] == n['id'])
+        self.assertEqual(d['lv'], ['foire', 0], 'la carte montre la foire de la ville')
+        g.t += V.LEV_DAYS + 1
+        d = next(x for x in V.player_state(g)['nodes'] if x['id'] == n['id'])
+        self.assertNotIn('lv', d, 'passé trois mois, la carte l\'oublie')
+
     def test_ancienne_politique_en_jours(self):
         g = partie()
         n = next(n for n in g.owned_nodes(g.player))

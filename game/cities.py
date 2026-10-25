@@ -711,6 +711,7 @@ def fire(g, code, n, ev=None):
     nid = n['id']
     gn = g.geo.nodes[nid]
     n['evt'] = g.t
+    n['lev'] = ev['id']   # le dernier événement local, que la carte montre (incendie, foire, crue…)
     k = SIZE_COST[gn['type']]
     title, text = _fill(g, nid, ev['title']), _fill(g, nid, ev['text'])
     b0 = EV.soften(g, code, ev['id'], dict(ev['base'], nid=nid)) if ev.get('base') else None

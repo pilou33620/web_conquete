@@ -7,6 +7,7 @@ import { profil } from './battle/qualite.js';
 import { uniform } from './battle/formes.js';
 import { figureKind, portraitGeneral } from './portraits.js';
 import { Epoque, phylloxera, styleCarte, startTechs, startRails } from './epoque.js';
+import { AMB, LUM, majAmbiance } from './carte/ambiance.js';
 const TILE = 256;
 function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
@@ -956,8 +957,8 @@ export class MapView {
     const prev = this.state;
     this.state = st;
     // le givre, la neige et les prés roussis sont peints dans les tuiles : on les repeint quand la saison change
-    const peinte = s => (s === 'hiver' || s === 'automne' ? s : '');
-    if (peinte(st.season) !== peinte(this.season)) { this.season = st.season; this.paintLand(); this.invalidateTiles(); }
+    // (la saison et la neige tombée sont peintes dans les tuiles : on les repeint quand elles changent ; carte/ambiance.js)
+    if (majAmbiance(this, st)) { this.season = st.season; this.paintLand(); this.invalidateTiles(); }
     this.season = st.season;
     const key = st.nodes.map(n => n.o).join(',');
     if (key !== this.ownersKey) {
@@ -1779,6 +1780,7 @@ export class MapView {
 
   draw(dt, time) {
     const ctx = this.ctx, dpr = this.dpr, z = this.cam.z;
+    LUM.length = 0;   // (les calques y posent les feux et lanternes de cette image ; ciel.js les allume)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#141618';
     ctx.fillRect(0, 0, this.vw, this.vh);
