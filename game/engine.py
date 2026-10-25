@@ -19,6 +19,7 @@ ATTRITION_STEP = 0.25   # jours : pas de l'usure, des désertions et du ravitail
 CONTACT_KM = 2.6
 AMBUSH_KM = 5.0
 BASE_DETECT = 2.5
+SITE_DAYS = 120   # jours qu'un champ de bataille reste sur la carte (Game.sites)
 START_DATE = datetime.date(1790, 3, 4)
 START_ORD = START_DATE.toordinal()
 PROD_KEYS = ('livres', 'vivres', 'recrues', 'industrie', 'fer', 'bois')
@@ -64,6 +65,7 @@ class Game:
         self.proposals = []
         self.armies = {}
         self.battles = {}
+        self.sites = []   # champs de bataille récents, pour la carte (blessés, tombes) : dict(x, y, t, l, o)
         self.spies = []
         self._blockade = set()
         self.over = None
@@ -3188,6 +3190,11 @@ class Game:
                 st = f_['stats']
                 st['won' if si == winner else 'lost'] += 1
                 st['killed'] += bt['sides'][1 - si]['lost']
+                f_['lb'] = [int(si == winner), round(self.t, 2)]   # dernière bataille, pour la carte (fêtes, deuil)
+        if bt['node'] is None:   # champ de bataille : la carte y montre blessés et tombes (décor seulement)
+            self.sites = [x for x in self.sites if self.t - x['t'] < SITE_DAYS]
+            self.sites.append(dict(x=round(bt['x'], 2), y=round(bt['y'], 2), t=round(self.t, 2),
+                                   l=[int(x['lost']) for x in bt['sides']], o=[x['owner'] for x in bt['sides']]))
         if W['node'] is not None:
             # la place a tenu : le siège des vaincus est levé (pas celui d'un autre camp)
             n = self.nodes[W['node']]

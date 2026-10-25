@@ -296,7 +296,7 @@ export class TownArt {
     const lot = mp.lot || (mp.lot = new Lot());
     lot.m = ctx.getTransform();
     const neutral = owner === 'neutre';
-    lot.next(); mp.flag(lot, px * k, py * k + 1, clamp(s * (n.type === 'village' ? 0.32 : 0.28), 7, 24), neutral ? '#e9e4d4' : col);
+    lot.next(); mp.flag(lot, px * k, py * k + 1, clamp(s * (n.type === 'village' ? 0.32 : 0.28), 7, 24), neutral ? '#e9e4d4' : col, mp.guerreDe?.().fete(n));   // (en berne après une défaite : carte/guerre.js)
     const amb = mp.ambient;
     if (!amb || !amb.on || mp.zooming?.()) return;   // (habitants et pigeons : pas pendant un zoom)
     const z = mp.cam.z;
@@ -360,7 +360,7 @@ export class TownArt {
     if (ns.bar != null || ns.bw) mp.works(ctx, sW, ns.f, n.id, ns.bar || 0, ns.bw, wallR);
     const lot = mp.lot || (mp.lot = new Lot());
     lot.m = ctx.getTransform();
-    lot.next(); mp.flag(lot, p.mat[0] * u, p.mat[1] * u, clamp(s * (n.type === 'village' ? 0.32 : 0.28), 7, 24), owner === 'neutre' ? '#e9e4d4' : col);
+    lot.next(); mp.flag(lot, p.mat[0] * u, p.mat[1] * u, clamp(s * (n.type === 'village' ? 0.32 : 0.28), 7, 24), owner === 'neutre' ? '#e9e4d4' : col, mp.guerreDe?.().fete(n));
     return true;
   }
 }

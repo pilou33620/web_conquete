@@ -2282,10 +2282,16 @@ export class MapView {
     return g;
   }
 
-  // drapeau qui flotte au vent (chaque place a son propre rythme, d'après sa position à l'écran)
-  flag(ctx, x, y, h, col) {
+  // drapeau qui flotte au vent (chaque place a son propre rythme, d'après sa position à l'écran) ; fete === 'deuil' :
+  // en berne, un crêpe noir au haut du mât (après une défaite : carte/guerre.js)
+  flag(ctx, x, y, h, col, fete) {
     ctx.strokeStyle = '#3b2c1c'; ctx.lineWidth = Math.max(1, h * 0.07);
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h); ctx.stroke();
+    if (fete === 'deuil') {
+      ctx.fillStyle = '#141214'; ctx.fillRect(x - h * 0.1, y - h * 1.02, h * 0.2, h * 0.14);
+      ctx.beginPath(); ctx.moveTo(x, y - h * 0.94); ctx.lineTo(x + h * 0.26, y - h * 0.58); ctx.lineTo(x + h * 0.12, y - h * 0.54); ctx.lineTo(x, y - h * 0.8); ctx.fill();
+      y += h * 0.44;
+    }
     ctx.fillStyle = col;
     const m = ctx.getTransform();
     const ph = (this.now || 0) * 4.2 + m.e * 0.031 + m.f * 0.017, on = this.ambient?.on;

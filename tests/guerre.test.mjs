@@ -101,3 +101,70 @@ test("route parcourue : l'arête finie s'ajoute derrière l'armée, un saut l'ef
   G.armeesDe(0);
   assert.equal(G.hist.size, 0);
 });
+
+// ------------------------------------------------------------------ l'arrière (chantier G)
+const { ravitaillement, routeEntre, tombes, fermesAutour, JOURS } = await import('../web/js/carte/guerre.js');
+// trois places sur une ligne : Libourne (ville, x 2) et un village (x 12) au joueur, Périgueux (ville, x 28) à l'ennemi ;
+// le pays de chacune : x < 8, de 8 à 20, au-delà
+function petiteCarte() {
+  const edge = (id, a, b, pts) => { const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])); return { id, a, b, pts, cum }; };
+  const W = 40, H = 5, cellnode = new Uint8Array(W * H).map((_, c) => (c % W) < 8 ? 0 : (c % W) < 20 ? 1 : 2);
+  const nodes = [{ id: 0, name: 'Libourne', type: 'ville', x: 2, y: 2, pop0: 4000 }, { id: 1, name: 'Coutras', type: 'village', x: 12, y: 2, pop0: 800 }, { id: 2, name: 'Périgueux', type: 'ville', x: 28, y: 2, pop0: 6000 }];
+  const edges = [edge(0, 0, 1, [[2, 2], [7, 2.5], [12, 2]]), edge(1, 1, 2, [[12, 2], [20, 2], [28, 2]])];
+  const state = { me: { code: '33' }, factions: [{ code: '33', wars: ['24'] }, { code: '24', st: 'guerre', wars: ['33'] }], nodes: [{ id: 0, o: '33' }, { id: 1, o: '33' }, { id: 2, o: '24' }], armies: [], vis: [] };
+  return { W, H, cellnode, terrain: new Uint8Array(W * H).fill(2), nodes, edges, state, disp: new Map(), frameNo: 0, rules: { units: {} }, colors: {}, fogOn: true,
+    edgePoint: (e, t) => { const s = t * e.cum[e.cum.length - 1]; let i = 1; while (i < e.cum.length - 1 && e.cum[i] < s) i++; const f = (s - e.cum[i - 1]) / (e.cum[i] - e.cum[i - 1]); return [e.pts[i - 1][0] + (e.pts[i][0] - e.pts[i - 1][0]) * f, e.pts[i - 1][1] + (e.pts[i][1] - e.pts[i - 1][1]) * f]; } };
+}
+
+test('ravitaillement : du magasin, sinon de la place amie la plus proche ; en pays ennemi sans magasin, rien', () => {
+  const map = petiteCarte(), st = map.state;
+  assert.equal(ravitaillement(map, st, { x: 15, y: 2, dp: null }), 0, 'sur ses terres : la ville la plus proche (pas le village)');
+  assert.equal(ravitaillement(map, st, { x: 24, y: 2, dp: null }), null, 'en pays ennemi : coupée');
+  assert.equal(ravitaillement(map, st, { x: 24, y: 2, dp: 'Libourne' }), 0, 'son magasin la ravitaille');
+  st.nodes[0].sg = { by: '24' };
+  assert.equal(ravitaillement(map, st, { x: 15, y: 2, dp: null }), null, 'une place assiégée ne ravitaille personne');
+  delete st.nodes[0].sg;
+  assert.deepEqual(routeEntre(map, 0, 2), [[2, 2], [7, 2.5], [12, 2], [20, 2], [28, 2]], 'par les routes, de place en place');
+  assert.equal(routeEntre(map, 0, 2, 20), null, 'trop loin');
+});
+
+test("convoi : des fourgons derrière l'armée ravitaillée, aucun derrière l'armée coupée (colonne maigre, sans bagages)", () => {
+  const map = petiteCarte(), G = new Guerre(map), regs = [['r1', 'ligne', 600, 600], ['r2', 'ligne', 600, 600]];
+  const armee = (id, frac, dp) => { const e = map.edges[1], [x, y] = map.edgePoint(e, frac); const a = { id, o: '33', x, y, e: [1, 1, frac], n: null, st: 'move', regs, dp }; map.disp.set(id, { a, x, y, head: 0 }); return a; };
+  map.state.armies = [armee('ami', 0.3, null), armee('coupee', 0.8, null), armee('magasin', 0.85, 'Libourne')];
+  map.frameNo = 1;
+  const L = Object.fromEntries(G.armeesDe(0).map(A => [A.a.id, A]));
+  assert.equal(L.ami.de, 0); assert.equal(L.ami.coupe, false);
+  const R = G.routeRavit(L.ami);
+  assert.deepEqual(R.pts[0], [2, 2], 'le convoi part de Libourne');
+  assert.ok(R.n >= 2 && R.L > 10, 'et roule jusqu’à la queue de la colonne');
+  assert.equal(L.coupee.de, null); assert.equal(L.coupee.coupe, true, 'coupée : ni convoi, ni bagages, une alerte');
+  assert.equal(L.magasin.coupe, false); assert.ok(G.routeRavit(L.magasin).pts.length > 2, 'de son magasin, par la route');
+  map.state.armies[0].o = '24';   // (l'ennemi : son ravitaillement est inconnu)
+  map.frameNo = 2;
+  assert.equal(G.armeesDe(0).find(A => A.a.id === 'ami').de, null);
+});
+
+test("champs de bataille, fermes, fêtes et recrues : mêmes tirages, d'après l'état", () => {
+  assert.deepEqual(tombes(105.8, 107.7, 900), tombes(105.8, 107.7, 900), 'même champ, mêmes tombes');
+  assert.ok(tombes(105.8, 107.7, 1500).length > tombes(105.8, 107.7, 300).length, 'plus de pertes, plus de tombes');
+  assert.ok(tombes(105.8, 107.7, 1500).every(([x, y]) => Math.hypot(x - 105.8, y - 107.7) < 1));
+  const map = petiteCarte(), f = fermesAutour(map, 24.5, 2.5);
+  assert.deepEqual(fermesAutour(map, 24.5, 2.5), f, 'mêmes fermes au même endroit');
+  assert.ok(f.length > 0 && f.length <= 3 && f.every(([x, y]) => Math.hypot(x - 24.5, y - 2.5) <= 1.8 && Math.hypot(x - 28, y - 2) > 0.4));
+  const st = map.state, G = new Guerre(map);
+  st.factions[0].lb = [1, 3]; st.factions[1].lb = [0, 3];
+  st.nodes[1].q = [{ kind: 'unit', what: 'ligne' }]; st.nodes[0].q = [{ kind: 'build', what: 'fort' }];
+  st.sites = [[20, 2.5, 5, 600, 400, '33', '24']];
+  let ar = G.arriere();
+  assert.equal(ar.fetes.get(0), 'fete', 'victoire : la fête dans les places du vainqueur');
+  assert.equal(ar.fetes.get(2), undefined, "le deuil de l'ennemi, hors de vue, ne se voit pas");
+  assert.deepEqual(ar.recrues.map(r => r.n.id), [1], 'les recrues vont à la place qui lève un régiment');
+  assert.deepEqual(ar.recrues[0].routes.map(r => r.pts[r.pts.length - 1]), [[12, 2], [12, 2]], 'des villages voisins, par les routes, vers la place');
+  assert.deepEqual(ar.sites[0].convois.map(c => c.pts[c.pts.length - 1]), [[2, 2], [28, 2]], 'les blessés de chaque camp vers sa ville la plus proche');
+  map.state = Object.assign({}, st, { vis: [[28, 2, 5]], sites: [[20, 2.5, JOURS.blesses + 1, 600, 400, '33', '24']] });
+  ar = G.arriere();
+  assert.equal(ar.fetes.get(2), 'deuil', 'à portée de vue : en berne');
+  assert.equal(ar.sites[0].convois.length, 0, 'passé un mois, plus de charrettes ; les tombes restent');
+  assert.ok(ar.sites[0].tombes.length > 0);
+});

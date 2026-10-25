@@ -2,10 +2,10 @@
 // route et bivouacs des armées, traces de leur passage et villages pillés, réfugiés devant l'ennemi, sièges et
 // batailles. On ne dessine que ce que l'état montre : une armée cachée par le brouillard n'a ni colonne ni traces.
 // Les figures et la plupart des dessins viennent de la maquette (web/js/dev/carte/new.js et vivante.js).
-import { C, E, T, RR, PG, TAU, SPR, toile, avant, caisson, cavalier, cheval, clair, clamp, distPoly, fantassin, lerp, ligne,
+import { C, E, T, RR, PG, TAU, SPR, toile, avant, bat, caisson, cavalier, cheval, clair, clamp, distPoly, fantassin, lerp, ligne,
          mod, piece, sombre, surChemin, tenue } from './lib.js';
-import { LUM, U, Z, bivouac, nuit } from './ambiance.js';
-import { S as SU, carteDe, etatVille, planDe } from './villes.js';
+import { AMB, LUM, U, Z, bivouac, nuit } from './ambiance.js';
+import { S as SU, IC, carteDe, etatVille, planDe } from './villes.js';
 import { LARG_RIVIERE } from './terre.js';
 
 export const VENT = [0.004, -0.002];   // km/s : le vent d'ouest emporte les fumées vers l'est
@@ -34,6 +34,8 @@ function curseur(pts) {
     return { x: x0 + (x1 - x0) * k, y: y0 + (y1 - y0) * k, a: Math.atan2(y1 - y0, x1 - x0) };
   };
 }
+const boite = pts => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const [x, y] of pts) { a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); } return [a - 0.1, b - 0.1, c + 0.1, d + 0.1]; };
+const FERME = [{ t: 'g', x: -6, y: -3, w: 12, h: 6, p: 'tuile', h2: 1 }];
 // la phase d'un pas, arrondie à un huitième (les figures en marche sont peintes une fois par phase : Guerre.tampon)
 const PHASES = 8, phase = p => p == null ? null : (Math.round(mod(p, TAU) / TAU * PHASES) % PHASES) * TAU / PHASES;
 // la terre piétinée, d'un seul tracé : [[x, y, rx, ry, angle], …] (comme pietine de lib.js, une à une)
@@ -142,6 +144,72 @@ export function densiteGuerre(x, y) {
   return d;
 }
 
+// ------------------------------------------------------------------ l'arrière des armées (chantier G)
+// Combien de jours on voit, après une bataille rangée (state.sites : x, y, âge, pertes et camps des deux côtés), les
+// charrettes de blessés, la terre piétinée, les tombes ; après la dernière bataille d'un camp (factions[].lb), la fête
+// de ses villes s'il l'a gagnée, le deuil s'il l'a perdue.
+export const JOURS = { blesses: 30, pietine: 60, tombes: 120, fete: 10, deuil: 30 };
+// le plus court chemin par les routes, de la place a à la place b (au plus max km) : la polyligne en km, ou null
+const VOISINS = new WeakMap();
+export function routeEntre(map, a, b, max = 60) {
+  let V = VOISINS.get(map);
+  if (!V) {
+    V = new Map(); VOISINS.set(map, V);
+    for (const e of map.edges) if (!e.water && e.kind !== 'water' && !e.ferry && e.pts.length > 1) for (const [p, q] of [[e.a, e.b], [e.b, e.a]]) { if (!V.has(p)) V.set(p, []); V.get(p).push([q, e]); }
+  }
+  const dist = new Map([[a, 0]]), prev = new Map(), todo = [a];
+  while (todo.length) {
+    let k = 0; for (let i = 1; i < todo.length; i++) if (dist.get(todo[i]) < dist.get(todo[k])) k = i;
+    const n = todo.splice(k, 1)[0]; if (n === b) break;
+    for (const [q, e] of V.get(n) || []) { const d = dist.get(n) + e.cum[e.cum.length - 1]; if (d <= max && d < (dist.get(q) ?? Infinity)) { dist.set(q, d); prev.set(q, [n, e]); todo.push(q); } }
+  }
+  if (a !== b && !prev.has(b)) return null;
+  let pts = [[map.nodes[b].x, map.nodes[b].y]];
+  for (let n = b; n !== a;) { const [p, e] = prev.get(n); pts = (e.a === p ? e.pts : e.pts.slice().reverse()).slice(0, -1).concat(pts); n = p; }
+  return pts;
+}
+// la place la plus proche de (x, y) qui remplit ok(n, ns), à moins de max km : son id, ou null
+function plusProche(map, st, x, y, ok, max = 1e9) {
+  let best = null, bd = max;
+  for (const n of map.nodes) { const d = Math.hypot(n.x - x, n.y - y); if (d < bd && ok(n, st.nodes[n.id])) { bd = d; best = n.id; } }
+  return best;
+}
+const amiDe = st => o => o === st.me?.code || st.factions?.find(f => f.code === o)?.st === 'alliance';
+const maitreEn = (map, st, x, y) => { const c = map.cellnode?.[(y | 0) * map.W + (x | 0)]; return c == null || c === 255 ? null : st.nodes[c]?.o; };
+// d'où vient le pain d'une armée du joueur en campagne (comme engine.attrition) : de son magasin (dp), sinon, sur ses
+// terres ou celles d'un allié, de la place amie la plus proche ; null si elle est coupée (pays ennemi ou neutre, sans
+// magasin)
+export function ravitaillement(map, st, a) {
+  if (a.dp) { const n = map.nodes.find(n => n.name === a.dp); if (n) return n.id; }
+  const ami = amiDe(st);
+  if (!ami(maitreEn(map, st, a.x, a.y))) return null;
+  return plusProche(map, st, a.x, a.y, (n, ns) => n.type !== 'village' && ami(ns.o) && !ns.sg);
+}
+// les tombes d'un champ de bataille, d'autant plus nombreuses que les pertes sont lourdes : des rangées de tertres le
+// long d'un axe tiré du lieu (même champ, mêmes tombes). [[x, y, angle], …] en km
+export function tombes(x, y, pertes) {
+  const n = clamp(Math.round(pertes / 40), 3, 60), h = (x * 100 | 0) ^ (y * 37 | 0), a = hash2(h, 1, 150) * Math.PI;
+  const ux = Math.cos(a), uy = Math.sin(a), cx = x - uy * 0.45, cy = y + ux * 0.45, out = [];
+  for (let k = 0; k < n; k++) {
+    const u = (k % 8 - 3.5) * 0.03 + (hash2(h, k, 151) - 0.5) * 0.006, v = (Math.floor(k / 8) - 1) * 0.075;
+    out.push([cx + ux * u - uy * v, cy + uy * u + ux * v, a + Math.PI / 2 + (hash2(h, k, 152) - 0.5) * 0.12]);
+  }
+  return out;
+}
+// les fermes autour d'une armée, où vont ses fourrageurs : sur la grille du kilomètre (même endroit, mêmes fermes),
+// en pays découvert (ni bois, ni marais, ni dunes), hors des places, à moins de 1,8 km ; les trois plus proches. [[x, y], …]
+const OUVERT = new Set([2, 4, 6, 7, 10]);   // plaine, lande, collines, montagne, vignes (carte/vie.js, TT)
+export function fermesAutour(map, x, y) {
+  const out = [];
+  for (let j = Math.floor(y) - 2; j <= Math.floor(y) + 2; j++) for (let i = Math.floor(x) - 2; i <= Math.floor(x) + 2; i++) {
+    if (hash2(i, j, 131) > 0.45) continue;
+    const fx = i + 0.2 + hash2(i, j, 132) * 0.6, fy = j + 0.2 + hash2(i, j, 133) * 0.6, d = Math.hypot(fx - x, fy - y);
+    if (d < 0.35 || d > 1.8 || !OUVERT.has(map.terrain?.[j * map.W + i] ?? 2) || map.nodes.some(n => Math.abs(n.x - fx) < 2 && Math.hypot(n.x - fx, n.y - fy) < rayonPlace(n) + 0.4)) continue;
+    out.push([fx, fy, d]);
+  }
+  return out.sort((p, q) => p[2] - q[2]).slice(0, 3);
+}
+
 // ------------------------------------------------------------------ petits dessins (unités de figure)
 const LCIV = tenue('fr', 'civil');
 const CIVILS = ['#7a6a4f', '#5d6b86', '#8a5a44', '#6e5c45', '#4f5a6a', '#9a4a3a'].map((h, i) => ({ L: Object.assign({}, LCIV, { tete: i % 2 ? 'coiffe' : 'rond' }), habit: h }));
@@ -178,6 +246,26 @@ function debris(g, h) {
   else if (h < 0.6) { g.rotate(0.5); RR(g, '#7a5b3a', -6, -2.9, 12, 5.8, 0.6); RR(g, '#3a2a1b', 3, -3.7, 4, 1, 0.4); C(g, '#3a2a1b', -9, 3, 2.2); C(g, '#7a5b3a', -9, 3, 1.4); }
   else { RR(g, '#8a6a45', -1, -1, 2.4, 2, 0.4); C(g, '#1c1b1d', 3, 1, 1.1); T(g, '#5b4127', 0.5, -4, -2, 2, -3); }
 }
+// un tertre frais et sa croix de bois ; f : de 0 (frais) à 1 (l'herbe repousse)
+function tombe(g, f) { E(g, 'rgba(20,32,12,.3)', 0.5, 0.6, 2.6, 1.3); E(g, mix2('#6d5338', '#77864b', f), 0, 0, 2.5, 1.15); T(g, '#3a2a1b', 0.8, 2.2, 0, 4.6, 0); T(g, '#b8925e', 0.5, 2.2, 0, 4.6, 0); T(g, '#b8925e', 0.5, 3.8, -1.2, 3.8, 1.2); }
+// charrette de blessés couchés sur la paille (hab : la couleur de leurs habits) ; l'ambulance, une voiture bâchée
+// (croix rouge après la convention de Genève, 1864)
+function blesses(g, pas, hab, ambulance) {
+  if (ambulance) {
+    for (const x of [-4, 4]) { RR(g, '#3a2a1b', x - 2, -3.9, 4, 1, 0.4); RR(g, '#3a2a1b', x - 2, 2.9, 4, 1, 0.4); }
+    T(g, '#5b4127', 0.6, 6, 0, 10, 0); RR(g, '#ece6d4', -6.5, -3.2, 13, 6.4, 2.2); for (const x of [-3, 0, 3]) T(g, '#b9b09a', 0.35, x, -3, x, 3);
+    if (AMB.annee >= 1864) { RR(g, '#c0392b', -0.6, -2.2, 1.2, 4.4, 0.2); RR(g, '#c0392b', -2.2, -0.6, 4.4, 1.2, 0.2); }
+    for (const y of [-2.4, 2.4]) { g.save(); g.translate(15, y); cheval(g, '#6b4a2c', { gait: pas, bob: 0 }); g.restore(); }
+    return;
+  }
+  charrette(g, pas, true, 0);
+  RR(g, '#d6c27a', -5.5, -2.2, 10, 4.4, 0.5);
+  for (const y of [-1.1, 1.1]) { E(g, hab, -0.5, y, 3.2, 0.9); C(g, '#e2b996', 3, y, 0.8); RR(g, '#f4f1ea', -2.4, y - 0.5, 1.4, 1, 0.3); }
+}
+// le fourgon des vivres (bâché, plein) ou vide au retour
+function fourgon(g, pas, plein, k) { charrette(g, pas, false, 0); if (plein) { RR(g, '#e8dfc4', -6, -3, 12, 6, 2.4); for (const x of [-3, 0, 3]) T(g, '#bdb193', 0.35, x, -2.8, x, 2.8); } else RR(g, '#6e5236', -5.5, -2.2, 10, 4.4, 0.5); }
+// une meule de foin, vue de dessus (r : ce qui en reste)
+function meule(g, r) { E(g, 'rgba(20,32,12,.35)', 1, 1, 5 * r, 4.4 * r); C(g, '#c9a650', 0, 0, 4.6 * r); C(g, '#b08d3c', 0, 0, 2.6 * r); C(g, '#d8b964', -0.8, -0.8, 1.2 * r); }
 // le drapeau d'un camp : sa couleur, une cravate blanche, qui flotte au vent (comme drapeau() de lib.js)
 function drapeauCamp(g, col, x, y, t, r, petit) {
   const n = 8, long = petit ? 6.5 : 11, larg = petit ? 4 : 7, wa = -0.4 + Math.sin(t * 0.5 + r) * 0.1, ca = Math.cos(wa), sa = Math.sin(wa), nx = -sa, ny = ca;
@@ -309,7 +397,9 @@ export class Guerre {
       const v = this.vu.get(a.id);
       if (!v || Math.hypot(v.x - head[0], v.y - head[1]) > 0.003) this.vu.set(a.id, { x: head[0], y: head[1], t: time });
       const marche = (a.st === 'move' || a.st === 'retreat') && time - (this.vu.get(a.id).t) < 1.5;
-      list.push({ d, a, back, L: longueur(back), compo: c, marche, enRoute: a.st === 'move' || a.st === 'retreat' });
+      // une armée du joueur en campagne : d'où vient son pain (null : coupée de ses vivres)
+      const mien = a.o === st.me?.code && a.n == null, de = mien ? this.ravitDe(a) : null;
+      list.push({ d, a, back, L: longueur(back), compo: c, marche, enRoute: a.st === 'move' || a.st === 'retreat', mien, de, coupe: mien && de == null });
     }
     for (const id of [...this.hist.keys()]) if (!seen.has(id)) { this.hist.delete(id); this.compos.delete(id); this.vu.delete(id); }   // disparue dans le brouillard : ses traces aussi
     this.prep = { n: mp.frameNo, list };
@@ -373,6 +463,20 @@ export class Guerre {
       const B = this.batailleDe(b); if (!this.dans(sc, B.x, B.y, 2)) continue;
       sc.monde(g); pietines(g, Array.from({ length: 40 }, (_, k) => [B.x + B.ux * (hash2(k, 1, 106) - 0.5) * 2.2 + B.nx * (hash2(k, 2, 106) - 0.5) * 0.9, B.y + B.uy * (hash2(k, 1, 106) - 0.5) * 2.2 + B.ny * (hash2(k, 2, 106) - 0.5) * 0.9, 0.09, 0.05, B.a]), 0.2);
     }
+    // les champs de bataille des derniers mois : la terre piétinée, puis les tombes, qui s'effacent
+    if (z >= 18) for (const S of this.arriere().sites) {
+      if (!this.dans(sc, S.x, S.y, 1.5)) continue;
+      sc.monde(g);
+      if (S.age < JOURS.pietine) {   // (d'un seul tracé, gardé d'un état à l'autre)
+        const k = S.x + ',' + S.y; let P = this.pp?.get(k);
+        if (!P) { P = new Path2D(); for (const [x, y, rx, ry, a] of S.pt) { P.moveTo(x + Math.cos(a) * rx, y + Math.sin(a) * rx); P.ellipse(x, y, rx, ry, a, 0, TAU); } (this.pp ||= new Map()).set(k, P); if (this.pp.size > 40) this.pp.delete(this.pp.keys().next().value); }
+        g.fillStyle = `rgba(105,80,45,${0.2 * (1 - S.age / JOURS.pietine)})`; g.fill(P);
+      }
+      if (z < Z.VIE || S.age >= JOURS.tombes) continue;
+      const f = S.age / JOURS.tombes; g.globalAlpha = clamp(1.4 * (1 - f), 0, 1);
+      for (const [x, y, a] of S.tombes) if (this.dans(sc, x, y)) { this.figK(sc, g, x, y, a, 1.7); tombe(g, f); }
+      g.globalAlpha = 1;
+    }
     g.restore();
   }
   // derrière la queue de la colonne : la route défoncée, les champs piétinés, des débris derrière l'ennemi
@@ -402,6 +506,12 @@ export class Guerre {
   armees(ctx, time, vie = true) {
     const mp = this.map, st = mp.state; if (!st || mp.papierVu()) return;
     const sc = this.scene(time), g = ctx, list = this.armeesDe(time);
+    // une armée coupée de ses vivres : un triangle d'alerte près d'elle, de loin comme de près
+    if (sc.z < 200) for (const A of list) if (A.coupe && this.dans(sc, A.d.x, A.d.y)) {
+      const [sx, sy] = mp.toScreen(A.d.x, A.d.y), x = sx + 15, y = sy - 24;
+      g.setTransform(mp.dpr, 0, 0, mp.dpr, 0, 0); PG(g, '#f6efdc', [x, y - 9, x + 9, y + 6.5, x - 9, y + 6.5]); PG(g, '#b8352c', [x, y - 6.5, x + 6.8, y + 5, x - 6.8, y + 5]);
+      g.fillStyle = '#f6efdc'; g.font = 'bold 9px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillText('!', x, y + 3.8);
+    }
     if (!vie) {
       // de loin, le soir et la nuit : quelques feux autour des armées au bivouac
       if (bivouac()) for (const A of list) if (A.a.st !== 'battle' && this.dans(sc, A.d.x, A.d.y, 1)) for (let k = 0; k < 4; k++) LUM.push({ x: A.d.x + (hash2(k, 1, 125) - 0.5) * 0.8, y: A.d.y + 0.25 + (hash2(k, 2, 125) - 0.5) * 0.4, r: 0.05, a: 0.7, petit: true });
@@ -417,6 +527,7 @@ export class Guerre {
       g.globalAlpha = 1;
     }
     this.refugies(sc, g, list);
+    this.arriereDePres(sc, g, list);
     g.restore();
   }
   colonne(sc, g, A) {
@@ -425,6 +536,7 @@ export class Guerre {
     const sur = curseur(A.back);
     for (const e of A.compo.liste) {
       if (e.d > A.L) break;   // la queue est encore dans la place
+      if (A.coupe && (e.k === 'bagage' || (e.k === 'rang' && !e.drapeau && e.r % 3 === 2))) continue;   // coupée : colonne maigre, sans bagages
       const p = sur(e.d); if (!this.dans(sc, p.x, p.y, 0.1)) continue;
       const fa = p.a + Math.PI, nx = -Math.sin(fa), ny = Math.cos(fa), pas = pas0;
       const leg = k => pas == null ? null : pas + k;
@@ -658,6 +770,7 @@ export class Guerre {
     ctx.save();
     for (const b of st.battles) this.bataille(sc, g, b);
     this.pillages(sc, g, st);
+    this.fetes(sc, g);
     // les fumées
     const [wx, wy] = VENT, amort = Math.exp(-dt * 1.6);
     this.fx = this.fx.filter(f => (f.age += dt) < f.life);
@@ -673,6 +786,164 @@ export class Guerre {
     this.eclairs = this.eclairs.filter(e => time - e.t0 < 0.2);
     for (const e of this.eclairs) LUM.push({ x: e.x, y: e.y, r: 0.04, a: 1 - (time - e.t0) / 0.2, eclair: true });
     ctx.restore();
+  }
+  // ---------------------------------------------------------------- l'arrière (chantier G)
+  // relevé une fois par état reçu : champs de bataille (tombes, blessés vers la ville la plus proche de chaque camp),
+  // fêtes et deuils des villes (celles du joueur, et des autres à portée de vue), places du joueur qui lèvent un
+  // régiment et leurs routes
+  arriere() {
+    const mp = this.map, st = mp.state;
+    if (this.ar?.st === st) return this.ar;
+    const me = st.me?.code, ar = this.ar = { st, sites: [], fetes: new Map(), recrues: [], rv: new Map(), routes: new Map(), lx: new Map() };
+    for (const [x, y, age, l0, l1, o0, o1] of st.sites || []) {
+      const h = (x * 100 | 0) ^ (y * 37 | 0), S = { x, y, age, tombes: tombes(x, y, l0 + l1), convois: [],
+        pt: Array.from({ length: 40 }, (_, k) => [x + (hash2(k, h, 153) - 0.5) * 2.2, y + (hash2(k, h, 154) - 0.5) * 1.1, 0.09, 0.05, hash2(k, h, 155) * 3]) };
+      const dep = age < JOURS.blesses ? plusProche(mp, st, x, y, () => true) : null;
+      if (dep != null) for (const [l, o] of [[l0, o0], [l1, o1]]) {
+        const v = l >= 20 ? plusProche(mp, st, x, y, (n, ns) => n.type !== 'village' && ns.o === o && !ns.sg, 40) : null, r = v != null && routeEntre(mp, dep, v);
+        if (!r) continue;
+        const pts = [[x, y], ...r], L = longueur(pts);
+        S.convois.push({ pts, L, o, bb: boite(pts), n: clamp(Math.round(L / 1.2 * clamp(l / 600, 0.3, 1) * (1 - age / JOURS.blesses)), 1, 24) });
+      }
+      ar.sites.push(S);
+    }
+    for (const f of st.factions || []) {
+      const k = !f.lb ? null : f.lb[0] ? (f.lb[1] < JOURS.fete ? 'fete' : null) : f.lb[1] < JOURS.deuil ? 'deuil' : null;
+      if (k) for (const n of mp.nodes) if (st.nodes[n.id].o === f.code && (f.code === me || this.visible(n.x, n.y))) ar.fetes.set(n.id, k);
+    }
+    for (const n of mp.nodes) {
+      const ns = st.nodes[n.id];
+      if (ns.o !== me || ns.sg || !ns.q?.some(q => q.kind === 'unit')) continue;
+      const routes = mp.edges.filter(e => (e.a === n.id || e.b === n.id) && !e.water && e.kind !== 'water' && !e.ferry && e.pts.length > 1 && e.cum[e.cum.length - 1] < 25)
+        .map(e => { const pts = e.a === n.id ? e.pts.slice().reverse() : e.pts; return { pts, L: longueur(pts) }; });
+      ar.recrues.push({ n, ns, routes });
+    }
+    return ar;
+  }
+  // le drapeau d'une place (towns.js) : 'fete', 'deuil' (en berne, crêpe noir) ou null
+  fete(n) { return this.map.state ? this.arriere().fetes.get(n.id) || null : null; }
+  ravitDe(a) { const ar = this.arriere(); if (!ar.rv.has(a.id)) ar.rv.set(a.id, ravitaillement(this.map, ar.st, a)); return ar.rv.get(a.id); }
+  // la grand-place et l'église d'une place, en km, d'après son plan (carte/villes.js)
+  lieu(n, ns) {
+    const ar = this.arriere();
+    let L = ar.lx.get(n.id);
+    if (!L) {
+      const V = planDe(carteDe(this.map.m), n, etatVille(n, ns, this.map.state)), at = l => l && [n.x + (l.x - IC[0]) / SU, n.y + (l.y - IC[1]) / SU];
+      L = { place: at(V.lieux.place) || [n.x, n.y] }; L.eglise = at(V.lieux.cathedrale || V.lieux.eglise) || L.place;
+      ar.lx.set(n.id, L);
+    }
+    return L;
+  }
+  // la route des vivres, du magasin (ou de la place amie) à la queue de la colonne, par la meilleure des deux places au
+  // bout de son arête ; les fourgons à raison d'un par kilomètre et demi
+  routeRavit(A) {
+    const mp = this.map, ar = this.arriere();
+    if (ar.routes.has(A.a.id)) return ar.routes.get(A.a.id);
+    const q = surChemin(A.back, Math.min(A.compo.long, A.L)), e = A.a.e && mp.edges[A.a.e[0]];
+    let best = null;
+    for (const b of e ? [e.a, e.b] : [plusProche(mp, ar.st, q.x, q.y, () => true)]) {
+      const r = b != null && routeEntre(mp, A.de, b);
+      if (!r) continue;
+      const pts = [...r, [q.x, q.y]], L = longueur(pts);
+      if (!best || L < best.L) best = { pts, L, bb: boite(pts), n: clamp(Math.round(L / 1.5), 2, 14) };
+    }
+    ar.routes.set(A.a.id, best);
+    return best;
+  }
+  // au plus près : blessés vers les villes, fourgons de vivres, fourrageurs en pays ennemi, recrues et exercice
+  arriereDePres(sc, g, list) {
+    const mp = this.map, st = mp.state, t = sc.time, ar = this.arriere(), pas = t * 1.7 * TAU, vu = bb => bb[2] > sc.x0 && bb[0] < sc.x1 && bb[3] > sc.y0 && bb[1] < sc.y1;
+    for (const S of ar.sites) for (const c of S.convois) {
+      if (!vu(c.bb)) continue;
+      const hab = this.look(c.o, 'ligne').habit;
+      for (let k = 0; k < c.n; k++) {
+        const p = surChemin(c.pts, mod(t * 0.0045 + k * c.L / c.n, c.L));
+        if (!this.dans(sc, p.x, p.y) || !this.visible(p.x, p.y)) continue;
+        this.figK(sc, g, p.x, p.y, p.a); blesses(g, pas + k, hab, k % 4 === 0);
+      }
+    }
+    for (const A of list) {
+      const a = A.a;
+      if (a.st === 'battle' || a.st === 'siege') continue;
+      // les vivres : les fourgons pleins vers l'armée, vides au retour, chacun à droite de la route
+      const R = A.de != null && this.routeRavit(A);
+      if (R && vu(R.bb)) for (let k = 0; k < R.n; k++) {
+        const plein = k % 2 === 0, p = surChemin(R.pts, mod((plein ? t : -t) * 0.0045 + k * R.L / R.n, R.L)), o = plein ? 0.012 : -0.012;
+        if (this.dans(sc, p.x, p.y)) { this.figK(sc, g, p.x - Math.sin(p.a) * o, p.y + Math.cos(p.a) * o, p.a + (plein ? 0 : Math.PI)); fourgon(g, pas + k, plein, k); }
+      }
+      // en pays ennemi, les fourrageurs vont aux fermes et ramènent bêtes et foin
+      const [hx, hy] = A.back[0];
+      if (a.n != null || Math.max(sc.x0 - hx, hx - sc.x1, sc.y0 - hy, hy - sc.y1) > 2 || !this.enGuerre(a.o, maitreEn(mp, st, hx, hy))) continue;
+      const key = (hx | 0) + ',' + (hy | 0);
+      let F = this.fourr?.get(a.id);
+      if (!F || F.key !== key) (this.fourr ||= new Map()).set(a.id, F = { key, fermes: fermesAutour(mp, hx, hy) });
+      const L = this.look(a.o, 'legere'), c = surChemin(A.back, Math.min(A.compo.long * 0.5, A.L));
+      F.fermes.forEach(([fx, fy], k) => {
+        if (!this.visible(fx, fy)) return;
+        if (this.dans(sc, fx, fy, 0.1)) { this.figK(sc, g, fx, fy, k); bat(g, FERME, 0, 0, 0, 2.2); this.figK(sc, g, fx + 0.06, fy + 0.035, 0); meule(g, 0.6); }
+        const D = Math.hypot(fx - c.x, fy - c.y), s = mod(t * 0.004 + k * 0.37, 2 * D), retour = s > D, u = (retour ? 2 * D - s : s) / D;
+        const px = lerp(c.x, fx, u), py = lerp(c.y, fy, u), ang = Math.atan2(fy - c.y, fx - c.x) + (retour ? Math.PI : 0);
+        if (!this.dans(sc, px, py, 0.06)) return;
+        if (retour) {
+          for (let b = 0; b < 3; b++) { this.figK(sc, g, ...versMonde(px, py, ang, 7 + b * 2, (b - 1) * 3), ang); if (k % 2) { E(g, '#efeade', 0, 0, 1.9, 1.2); C(g, '#2c2a28', 2, 0, 0.6); } else vache(g, 0, 0, 0, b % 2 ? '#efe9dd' : '#c9a07a'); }
+          if (k === 0) { this.figK(sc, g, ...versMonde(px, py, ang, -12, 0), ang); charrette(g, pas, false, 1); }
+        }
+        for (const [lx, ly] of [[0, 0], [-3.5, -2.5], [-3.5, 2.5]]) { this.figK(sc, g, ...versMonde(px, py, ang, lx, ly), ang); fantassin(g, L, { role: 'h' }, { legs: pas + lx, arme: 'epaule' }); }
+      });
+    }
+    // les recrues : par les routes, des villages à la place qui lève un régiment, derrière un sergent ; sur la
+    // grand-place, l'exercice (trois rangs, le sergent devant, deux tambours ; demi-tour toutes les huit secondes)
+    for (const R of ar.recrues) {
+      const n = R.n, Ls = this.look(st.me.code, 'ligne');
+      if (Math.max(sc.x0 - n.x, n.x - sc.x1, sc.y0 - n.y, n.y - sc.y1) > 25) continue;
+      for (const r of R.routes) for (let k = 0; k < 2; k++) {
+        const p = surChemin(r.pts, mod(t * 0.0045 + k * r.L / 2 + n.id, r.L));
+        if (!this.dans(sc, p.x, p.y, 0.05)) continue;
+        this.figK(sc, g, p.x, p.y, p.a); fantassin(g, Ls, { role: 'h' }, { legs: pas, arme: 'epaule' });
+        for (let m = 0; m < 4; m++) { this.figK(sc, g, ...versMonde(p.x, p.y, p.a, -5 - (m >> 1) * 4, m & 1 ? 2 : -2), p.a); marcheur(g, m + k + n.id, pas + m, true); }
+      }
+      if (!this.dans(sc, n.x, n.y, 2)) continue;
+      const [qx, qy] = this.lieu(n, R.ns).place, a0 = -Math.PI / 2, demi = mod(t, 16) < 8 ? 0 : Math.PI;
+      if (!this.dans(sc, qx, qy, 0.1)) continue;
+      for (let r = 0; r < 3; r++) for (let i = 0; i < 6; i++) {
+        const c = CIVILS[(r * 6 + i + n.id) % CIVILS.length];
+        this.figK(sc, g, ...versMonde(qx, qy, a0, -r * 4, (i - 2.5) * 3.2), a0 + demi); fantassin(g, c.L, { role: 'h', habit: c.habit }, { legs: pas + r, arme: 'epaule' });
+      }
+      this.figK(sc, g, ...versMonde(qx, qy, a0, 9, 0), a0 + Math.PI); fantassin(g, Ls, { role: 'officier' }, { legs: null, arme: 'epee' });
+      for (const o of [-12, 12]) { this.figK(sc, g, ...versMonde(qx, qy, a0, 6, o), a0 + Math.PI); fantassin(g, Ls, { role: 'tambour', r: o + t }, { legs: null, arme: 'tambour' }); }
+    }
+  }
+  // après une victoire, le Te Deum (les cloches à toute volée), le feu de joie devant l'église (allumé la nuit par
+  // ciel.js), la foule, les guirlandes de drapeaux ; après une défaite, le glas (et les drapeaux en berne : towns.js)
+  fetes(sc, g) {
+    const mp = this.map, z = sc.z, t = sc.time, ar = this.arriere();
+    for (const [id, k] of ar.fetes) {
+      const n = mp.nodes[id], ns = ar.st.nodes[id], fete = k === 'fete';
+      if (!this.dans(sc, n.x, n.y, 2)) continue;
+      const L = z >= Z.PLAN ? this.lieu(n, ns) : { place: [n.x, n.y], eglise: [n.x, n.y] };
+      if (fete) LUM.push({ x: L.eglise[0], y: L.eglise[1], r: 0.16, a: 0.9 });
+      if (z >= 6) {
+        const [sx, sy] = mp.toScreen(...L.eglise);
+        g.setTransform(mp.dpr, 0, 0, mp.dpr, 0, 0); g.lineWidth = 2.2; g.lineCap = 'round';
+        for (let q = 0; q < 2; q++) {
+          const u = mod(t * (fete ? 0.9 : 0.3) + q / 2, 1), r = 8 + u * 18;
+          g.strokeStyle = fete ? `rgba(255,226,120,${0.95 * (1 - u)})` : `rgba(24,24,30,${0.8 * (1 - u)})`;
+          g.beginPath(); g.arc(sx, sy, r, -0.8, 0.8); g.moveTo(sx - r * Math.cos(0.8), sy + r * Math.sin(0.8)); g.arc(sx, sy, r, Math.PI - 0.8, Math.PI + 0.8); g.stroke();
+        }
+      }
+      const [px, py] = L.eglise;   // (sur le parvis : la grand-place est à l'exercice des recrues)
+      if (!fete || z < 40 || !this.dans(sc, px, py, 0.2)) continue;
+      this.figK(sc, g, px, py, 0, 2.2); feuCamp(g, t, id); sc.monde(g); flamme(g, px, py, Math.max(0.02, 3 / z), t, id);
+      if (z < Z.VIE) continue;
+      for (let m = 0; m < 14; m++) { const a = m * TAU / 14 + Math.sin(t * 0.3 + m) * 0.05, d = 0.024 + (m % 2) * 0.007; this.figK(sc, g, px + Math.cos(a) * d, py + Math.sin(a) * d, a + Math.PI); marcheur(g, m + id, null, false); }
+      // une guirlande de fanions autour de la place, aux couleurs du camp et blancs
+      const col = mp.colors[ns.o] || '#8d8a7a', h = 0.055, f = Math.max(0.006, 2.5 / z);
+      sc.monde(g); g.strokeStyle = '#3a2e24'; g.lineWidth = Math.max(0.0015, 0.6 / z); g.strokeRect(px - h, py - h, 2 * h, 2 * h);
+      for (let c = 0; c < 4; c++) for (let i = 0; i < 8; i++) {
+        const u = -h + (i + 0.5) * h / 4, [x, y] = [[px + u, py - h], [px + h, py + u], [px - u, py + h], [px - h, py - u]][c];
+        PG(g, i % 2 ? '#f4f1ea' : col, [x - f / 2, y, x + f / 2, y, x, y + f * (1 + 0.15 * Math.sin(t * 5 + i))]);
+      }
+    }
   }
   fumee(x, y, vx, vy, r0, r1, life, al = 0.55, spr = 'f') { if (this.fx.length < 500) this.fx.push({ spr, x, y, vx, vy, r0, r1, life, age: 0, al }); }
   // les villages d'un camp en guerre avec une armée qui passe près d'eux brûlent quelques jours

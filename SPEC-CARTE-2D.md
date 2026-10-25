@@ -378,3 +378,44 @@ Le ciel (`ciel.js`) :
   contre 0,35 et 0,23 avant ; image entière 5,0 / 4,6 ms (densité 1) et 5,2 / 5,5 (densité 2) contre 4,7 / 5,3 et
   5,4 / 5,3 avant, dans le bruit. Avec une bataille, un siège et trois colonnes : zoom 110, colonne 4,8 ms (5,8 en
   densité 2), bataille 2,7 (3,6), siège 3,0 (3,3) ; zoom 320, colonne 2,9 (3,1), bataille 2,0 (2,4), batterie 2,2.
+
+## Livré — G (blessés, ravitaillement, réquisitions, conscription, fêtes, trains)
+
+- Serveur (décor seulement, aucune règle changée) : `Game.sites`, les batailles rangées des 120 derniers jours
+  (`engine.SITE_DAYS` ; `x`, `y`, `t`, pertes `l` et camps `o` des deux côtés), écrit par `end_battle`, sauvegardé
+  (anciennes sauvegardes : vide) ; `factions[code].lb = [gagnée 0/1, date]`, la dernière bataille du camp, sauvegardée
+  avec la faction. Vue (`views.player_state`) : `sites = [[x, y, âge, pertes 0, pertes 1, camp 0, camp 1]]` pour les
+  batailles du joueur ou à portée de vue ; `factions[].lb = [gagnée, âge]` pendant 30 jours (`LB_DAYS`). Banc :
+  `test_campagne.ChampsDeBataille`.
+- `carte/guerre.js` (`JOURS`, `routeEntre`, `ravitaillement`, `tombes`, `fermesAutour`, `Guerre.arriere` relevé une
+  fois par état) :
+  - **blessés** : 30 jours, charrettes de blessés couchés sur la paille et ambulances bâchées (croix rouge après
+    1864) du champ de bataille à la ville la plus proche de chaque camp, par les routes, d'autant plus nombreuses que
+    les pertes sont lourdes, seulement dans les cercles de vision ; **terre piétinée** 60 jours (dès z 18) ;
+    **tombes** (tertres et croix de bois, une pour 40 morts, de 3 à 60) 120 jours, l'herbe repousse et elles
+    s'effacent (dès `Z.VIE`) ;
+  - **ravitaillement** (armées du joueur hors des places) : d'après `dp`, sinon la place amie la plus proche sur ses
+    terres ou celles d'un allié (comme `engine.attrition`) ; fourgons pleins vers la queue de la colonne, vides au
+    retour, par les routes (60 km au plus). Coupée (pays ennemi ou neutre, sans magasin) : pas de convoi, colonne
+    maigre (un rang sur trois manque), sans bagages, et un triangle d'alerte rouge près d'elle de z 5,5 à 200 ;
+  - **réquisitions** : toute armée visible sur les terres d'un camp avec qui elle est en guerre envoie des
+    fourrageurs aux trois fermes les plus proches (grille du kilomètre, pays découvert, à moins de 1,8 km) ; au
+    retour, vaches ou moutons poussés devant, une charrette de foin ; meules entamées ;
+  - **conscription** : une place du joueur dont la file (`q`) lève un régiment reçoit des recrues par chacune de ses
+    routes (quatre conscrits et leur baluchon derrière un sergent) ; sur la grand-place (`planDe(...).lieux.place`),
+    l'exercice : trois rangs, le sergent, deux tambours, demi-tour toutes les huit secondes ;
+  - **fêtes et deuil** : 10 jours après une victoire, dans les places du vainqueur (celles du joueur, et des autres
+    à portée de vue), le Te Deum (cloches à toute volée, arcs dorés autour de l'église, dès z 6), le feu de joie
+    devant l'église (dans `LUM`, allumé la nuit), la foule, des guirlandes de fanions (dès z 40 et `Z.VIE`) ; 30 jours
+    après une défaite, le glas (arcs sombres) et les drapeaux en berne avec un crêpe noir (`map.flag(…, 'deuil')`,
+    demandé par `towns.js` à `Guerre.fete`).
+- `ambient.drawTrains` : vu du ciel, les trains de dessus (`locoDessus`, `tenderDessus`, `voitureDessus` : chaudière,
+  dôme, cheminée, cabine, charbon ; voitures de voyageurs ou wagons de charbon, de grumes, bâchés), le panache en
+  bouffées laissées où était la cheminée, qui grossissent et dérivent sous le vent ; de profil sur la carte d'époque.
+- Écarts : le feu de joie est sur le parvis, la grand-place étant à l'exercice des recrues ; les fermes des
+  fourrageurs sont tirées sur la grille du kilomètre, pas celles des tuiles. En tour par tour, une bataille du tour
+  des IA peut avoir plus de 10 jours au tour suivant : sa fête ne se voit alors pas (le deuil, si).
+- Mesures (1280 × 800, Chromium sans carte graphique, scène montée à la main, médiane de 120 images, avant → après) :
+  vue d'ensemble 4,0 / 3,9 → 4,3 / 3,8 ms (calques nouveaux 0,03 ms) ; z 26 Bordeaux 2,8 / 2,8 → 3,1 / 2,7 (0,05 à
+  0,1 ms) ; z 110 champ de bataille, convoi et colonne 3,7–4,1 → 4,8–5,3 (+1,1) ; z 110 Bordeaux (recrues, fête,
+  tombes) 3,3 → 4,1–4,5 (+0,8 à 1,2) ; z 110 armée coupée 3,2–3,3 → 3,1–3,6 ; z 320 Bordeaux 2,0 → 2,5, champ 2,0 → 2,2–2,4.

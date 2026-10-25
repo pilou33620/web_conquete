@@ -59,6 +59,40 @@ export function voiture(ctx, s, corps) {   // voiture à compartiments, toit bom
   roue(ctx, -s * 0.26, s * 0.08, 0, false); roue(ctx, s * 0.26, s * 0.08, 0, false);
 }
 
+// les mêmes, vus du ciel (l'avant vers +x, longueur s px, la voie en y = 0) : chaudière, dôme et cheminée, cabine ; le
+// tender et son charbon ; une voiture de voyageurs (toit) ou un wagon de marchandises (planches ; charge 0 à 2 : charbon,
+// grumes, bâche)
+function caisse(ctx, s, l, w, c) { ctx.fillStyle = 'rgba(20,20,10,.28)'; ctx.fillRect(-l / 2 + s * 0.03, -w / 2 + s * 0.04, l, w); ctx.fillStyle = c; ctx.fillRect(-l / 2, -w / 2, l, w); }
+export function locoDessus(ctx, s, corps = '#2f4a34') {
+  caisse(ctx, s, s * 0.92, s * 0.28, '#1a1612');                                                            // tablier
+  ctx.fillStyle = corps; ctx.beginPath(); ctx.roundRect(-s * 0.2, -s * 0.1, s * 0.6, s * 0.2, s * 0.08); ctx.fill();   // chaudière
+  ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(-s * 0.18, -s * 0.075, s * 0.56, s * 0.035);
+  ctx.fillStyle = '#c8a24a'; ctx.beginPath(); ctx.arc(s * 0.06, 0, s * 0.05, 0, TAU); ctx.fill();          // dôme de laiton
+  ctx.fillStyle = '#22201c'; ctx.beginPath(); ctx.arc(s * 0.32, 0, s * 0.06, 0, TAU); ctx.fill();          // cheminée
+  ctx.fillStyle = '#0a0908'; ctx.beginPath(); ctx.arc(s * 0.32, 0, s * 0.032, 0, TAU); ctx.fill();
+  ctx.fillStyle = corps; ctx.fillRect(-s * 0.46, -s * 0.14, s * 0.26, s * 0.28);                            // cabine
+  ctx.fillStyle = '#22201c'; ctx.fillRect(-s * 0.44, -s * 0.12, s * 0.22, s * 0.24);                        // son toit
+  ctx.fillStyle = '#9a2a1e'; ctx.fillRect(s * 0.44, -s * 0.13, s * 0.04, s * 0.26);                         // traverse rouge
+}
+export function tenderDessus(ctx, s, corps = '#2f4a34') {
+  caisse(ctx, s, s * 0.6, s * 0.26, corps);
+  ctx.fillStyle = '#121010'; ctx.beginPath(); ctx.roundRect(-s * 0.23, -s * 0.09, s * 0.46, s * 0.18, s * 0.05); ctx.fill();   // le charbon
+  ctx.fillStyle = 'rgba(200,200,210,.25)'; for (const [x, y] of [[-0.12, -0.03], [0.05, 0.04], [0.14, -0.04]]) ctx.fillRect(x * s, y * s, s * 0.03, s * 0.02);
+}
+export function voitureDessus(ctx, s, corps, charge = null) {
+  caisse(ctx, s, s * 0.88, s * 0.28, corps);
+  if (charge == null) {   // toit bombé, clair au faîte, lanternes de toit
+    ctx.fillStyle = '#3a3430'; ctx.fillRect(-s * 0.42, -s * 0.11, s * 0.84, s * 0.22);
+    ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.fillRect(-s * 0.42, -s * 0.02, s * 0.84, s * 0.04);
+    ctx.fillStyle = '#d8cfb8'; for (const x of [-0.27, -0.09, 0.09, 0.27]) { ctx.beginPath(); ctx.arc(x * s, 0, s * 0.022, 0, TAU); ctx.fill(); }
+    return;
+  }
+  ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = Math.max(0.5, s * 0.012);   // planches, et le chargement : charbon, grumes, bâche
+  ctx.beginPath(); for (const x of [-0.3, -0.15, 0, 0.15, 0.3]) { ctx.moveTo(x * s, -s * 0.14); ctx.lineTo(x * s, s * 0.14); } ctx.stroke();
+  const k = charge % 3;
+  ctx.fillStyle = ['#151313', '#8a6a45', '#c9c0a4'][k]; ctx.beginPath(); ctx.roundRect(-s * 0.36, -s * 0.09, s * 0.72, s * 0.18, s * (k === 2 ? 0.07 : 0.02)); ctx.fill();
+}
+
 export class Ambient {
   constructor(map) {
     this.map = map;
@@ -216,11 +250,13 @@ export class Ambient {
     ctx.globalAlpha = 1;
   }
 
-  // trains : sur chaque voie ouverte (et ses sorties vers le bord), un convoi va et vient, locomotive et panache devant
+  // trains : sur chaque voie ouverte (et ses sorties vers le bord), un convoi va et vient, locomotive et panache devant.
+  // Vu du ciel, de dessus, voitures ou wagons, le panache laissé en arrière et poussé par le vent ; sur la carte d'époque,
+  // de profil
   drawTrains(ctx, time, st) {   // (appelé par la carte après les voies, pour rouler dessus)
-    const mp = this.map, R = st && st.rails, secs = mp.m.rails;
-    if (!this.on || mp.cam.z < 3.5 || !R || !secs) return;
-    const [x0, y0, x1, y1] = this.view(40), s = clamp(mp.cam.z * 1.4, 12, 28);   // (plus large que le trait de la voie)
+    const mp = this.map, R = st && st.rails, secs = mp.m.rails, z = mp.cam.z;
+    if (!this.on || z < 3.5 || !R || !secs) return;
+    const ciel = !mp.papierVu?.(), [x0, y0, x1, y1] = this.view(40), s = Math.max(clamp(z * 1.4, 12, 28), ciel ? z * 0.12 : 0);   // (plus large que le trait de la voie)
     const byId = mp.railSecs || (mp.railSecs = new Map(secs.sections.map(x => [x[0], x])));
     const lines = [], served = new Set();
     for (const [sid, kind] of R.state) {
@@ -230,6 +266,7 @@ export class Ambient {
       lines.push([sid, mp.railLine(sec)]); served.add(sec[1]); served.add(sec[2]);
     }
     for (const [nid, , dir] of secs.exits) if (served.has(nid)) lines.push([`x${nid}`, mp.railExit(nid, dir)]);
+    const wn = Math.hypot(0.004, 0.002), wx = 0.004 / wn, wy = -0.002 / wn;   // le vent d'ouest (carte/guerre.js, VENT)
     for (const [key, pts] of lines) {
       const b = pts.box || [Math.min(pts[0][0], pts[1][0]), Math.min(pts[0][1], pts[1][1]), Math.max(pts[0][0], pts[1][0]), Math.max(pts[0][1], pts[1][1])];
       if (b[2] < x0 || b[0] > x1 || b[3] < y0 || b[1] > y1) continue;
@@ -237,29 +274,42 @@ export class Ambient {
       let kh = 0;
       for (let i = 0; i < key.length; i++) kh = (kh * 31 + key.charCodeAt(i)) | 0;
       const L = cum[cum.length - 1], h = hash(kh, key.length, 7);   // (chaque voie a son propre horaire)
-      // aller (0 à 1), halte en gare, retour, halte : 0,6 km par seconde
-      const u = frac(time / (L / 0.6 * 2.4) + h) * 2.4;
-      if (u > 2.3 || (u > 1 && u < 1.2)) continue;
-      const back = u > 1, f = back ? 1 - (u - 1.2) / 1.1 : u;
-      const at = d => {   // point et direction à la distance d le long de la voie
+      // aller (0 à 1), halte en gare, retour, halte : 0,6 km par seconde. null : en gare
+      const marche = tm => { const u = frac(tm / (L / 0.6 * 2.4) + h) * 2.4; return u > 2.3 || (u > 1 && u < 1.2) ? null : u > 1 ? [1 - (u - 1.2) / 1.1, true] : [u, false]; };
+      const m0 = marche(time);
+      if (!m0) continue;
+      const at = (d, back) => {   // point et direction à la distance d le long de la voie
         d = clamp(d, 0, L);
         let i = 1;
         while (i < cum.length - 1 && cum[i] < d) i++;
         const k = (d - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1e-9), p = pts[i - 1], q = pts[i];
         return [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k, Math.atan2(q[1] - p[1], q[0] - p[0]) + (back ? Math.PI : 0)];
       };
-      const head = f * L, gap = s * 1.05 / mp.cam.z;
+      const [f, back] = m0, head = f * L, gap = s * 1.05 / z, fret = kh & 4;
       for (let w = 4; w >= 0; w--) {   // voitures derrière, le tender, la locomotive en dernier (dessus)
-        const [x, y, a] = at(back ? head + w * gap : head - w * gap), [sx, sy] = this.scr(x, y), flip = Math.cos(a) < 0;
+        const [x, y, a] = at(back ? head + w * gap : head - w * gap, back), [sx, sy] = this.scr(x, y), flip = !ciel && Math.cos(a) < 0;
         ctx.save(); ctx.translate(sx, sy); ctx.rotate(flip ? a + Math.PI : a); ctx.scale(flip ? -1 : 1, 1);   // (de profil, toujours debout)
-        if (!w) locomotive(ctx, s, time); else if (w === 1) { ctx.translate(s * 0.1, 0); tender(ctx, s); }
-        else voiture(ctx, s, ['#6e3a24', '#b8923a', '#4a5a72'][(w + (kh & 3)) % 3]);
+        const corps = ['#6e3a24', '#b8923a', '#4a5a72'][(w + (kh & 3)) % 3];
+        if (ciel) { if (!w) locoDessus(ctx, s); else if (w === 1) tenderDessus(ctx, s); else voitureDessus(ctx, s, fret ? ['#5a4632', '#6e3a24', '#4f4a44'][(w + (kh & 255)) % 3] : corps, fret ? (w + (kh >> 3 & 7)) % 3 : null); }
+        else if (!w) locomotive(ctx, s, time); else if (w === 1) { ctx.translate(s * 0.1, 0); tender(ctx, s); }
+        else voiture(ctx, s, corps);
         ctx.restore();
-        if (!w) for (let q = 0; q < 4; q++) {   // le panache sort de la cheminée, traîne derrière et monte
-          const u = frac(time * 1.4 + q / 4), [px, py] = this.scr(...at(back ? head - s * 0.38 / mp.cam.z + u * gap * 1.6 : head + s * 0.38 / mp.cam.z - u * gap * 1.6).slice(0, 2));
+      }
+      if (!ciel) {
+        for (let q = 0; q < 4; q++) {   // le panache sort de la cheminée, traîne derrière et monte
+          const u = frac(time * 1.4 + q / 4), [px, py] = this.scr(...at(back ? head - s * 0.38 / z + u * gap * 1.6 : head + s * 0.38 / z - u * gap * 1.6, back).slice(0, 2));
           ctx.fillStyle = `rgba(238,234,226,${0.6 * (1 - u)})`;
           ctx.beginPath(); ctx.arc(px, py - s * (0.72 + u * 0.4), s * (0.1 + u * 0.22), 0, TAU); ctx.fill();
         }
+        continue;
+      }
+      // vu du ciel : chaque bouffée part de la cheminée où était la locomotive, grossit, pâlit et dérive sous le vent
+      for (let q = 0; q < 7; q++) {
+        const u = frac(time * 0.8 + q / 7), m = marche(time - u * 1.25);
+        if (!m) continue;
+        const [px, py] = this.scr(...at(m[0] * L + (m[1] ? -1 : 1) * s * 0.32 / z, m[1]).slice(0, 2)), d = u * s * 1.4;
+        ctx.fillStyle = `rgba(${u < 0.15 ? '120,116,110' : '240,237,230'},${0.75 * (1 - u)})`;
+        ctx.beginPath(); ctx.arc(px + wx * d, py + wy * d, s * (0.07 + u * 0.3), 0, TAU); ctx.fill();
       }
     }
   }

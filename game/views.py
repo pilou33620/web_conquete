@@ -9,16 +9,16 @@ from . import events as EV
 from . import army_actions as AA
 from . import cities as CT
 from . import turns as TT
-from .engine import Game
+from .engine import Game, SITE_DAYS
 from .tactics import bridge as TB
 from .tactics import units as TU
 from .tactics import stats as ST
 
 SAVE_KEYS = ['player', 'difficulty', 'seed', 't', 'uid', 'seq', 'events', 'proposals', 'armies', 'battles', 'over',
              'flood_until', 'market', 'weather', 'factions', 'nodes', '_ai_clock', 'spies', 'scenario', 'start_ord',
-             'era_id', 'pending_ev', 'ev_done', 'tour', 'rails']
+             'era_id', 'pending_ev', 'ev_done', 'tour', 'rails', 'sites']
 DEFAULTS = dict(spies=list, scenario=lambda: '1790', start_ord=lambda: datetime.date(1790, 3, 4).toordinal(),
-                era_id=lambda: None, pending_ev=list, ev_done=lambda: None, tour=lambda: None, rails=dict)
+                era_id=lambda: None, pending_ev=list, ev_done=lambda: None, tour=lambda: None, rails=dict, sites=list)
 
 
 def to_dict(g):
@@ -271,6 +271,7 @@ def _siege(g, n):
 
 
 LEV_DAYS = 90   # un événement local reste visible sur la carte trois mois
+LB_DAYS = 30    # la dernière bataille d'un camp (fêtes, deuil dans ses villes) : un mois
 
 
 def player_state(g, since=0):
@@ -437,6 +438,8 @@ def player_state(g, since=0):
                          mk=R.marks(f['techs']),   # marques visibles sur la carte (rules.VISUALS ; SPEC-SUITE H)
                          pr=int(f.get('prisoners', {}).get(p, 0)) if code != p else 0,
                          prestige=g.prestige(code), weary=int(f.get('weary', 0)), **AA.view_passage(g, p, code)))
+        if f.get('lb') and g.t - f['lb'][1] < LB_DAYS:
+            facs[-1]['lb'] = [f['lb'][0], round(g.t - f['lb'][1])]   # dernière bataille : gagnée ?, âge en jours
 
     has_port = any('port' in g.geo.nodes[n['id']]['spec'] for n in g.owned_nodes(p))
     tb, cov = g.tools_bonus(p)
@@ -477,7 +480,10 @@ def player_state(g, since=0):
                                 get=x['get'], date=x['date']) for x in g.proposals],
                 market=dict(prices=g.market, spread=[1.15, 0.85] if has_port else [1.4, 0.6]),
                 tac=TB.tac_view(g), settings=dict(g.settings),
-                flood=g.t < g.flood_until, tour=TT.view(g), rails=RL.player_view(g, p), vis=[[round(x, 1), round(y, 1), round(r, 1)] for x, y, r in srcs])
+                flood=g.t < g.flood_until, tour=TT.view(g),
+                # champs de bataille récents vus du joueur : x, y, âge (jours), pertes et camps des deux côtés
+                sites=[[s['x'], s['y'], round(g.t - s['t']), *s['l'], *s['o']] for s in g.sites
+                       if g.t - s['t'] < SITE_DAYS and (p in s['o'] or seen(s['x'], s['y']))], rails=RL.player_view(g, p), vis=[[round(x, 1), round(y, 1), round(r, 1)] for x, y, r in srcs])
 
 
 def _popy(g, p):

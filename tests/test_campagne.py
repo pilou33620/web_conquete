@@ -1976,6 +1976,50 @@ class RemontesEtRegimentsReleves(unittest.TestCase):
         self.assertNotIn('ro', a)
 
 
+
+class ChampsDeBataille(unittest.TestCase):
+    """La carte montre les blessés et les tombes d'une bataille rangée, les fêtes ou le deuil après une bataille : le
+    serveur garde les champs de bataille récents (Game.sites) et la dernière bataille de chaque camp (factions[].lb)."""
+
+    def test_champ_de_bataille_et_derniere_bataille(self):
+        from fabrique import bataille_de_campagne
+        from game.engine import SITE_DAYS
+        g, bt = bataille_de_campagne()
+        bt['sides'][0]['lost'], bt['sides'][1]['lost'] = 320.0, 150.0
+        foe = bt['sides'][1]['owner']
+        g.end_battle(bt, 1)
+        self.assertEqual(len(g.sites), 1)
+        s = g.sites[0]
+        self.assertEqual((s['x'], s['y'], s['l']), (round(bt['x'], 2), round(bt['y'], 2), [320, 150]))
+        self.assertEqual(s['o'], [x['owner'] for x in bt['sides']])
+        st = V.player_state(g)
+        self.assertEqual(st['sites'], [[s['x'], s['y'], 0, 320, 150, *s['o']]], 'sa propre bataille : vue')
+        lb = {f['code']: f.get('lb') for f in st['factions']}
+        self.assertEqual(lb[g.player], [0 if s['o'][1] != g.player else 1, 0])
+        self.assertEqual(lb[foe], [1, 0], 'le vainqueur')
+        self.assertTrue(all(lb[c] is None for c in lb if c not in s['o']), 'les autres camps : rien')
+        # sauvegarde : gardés ; une ancienne sauvegarde n'en a pas
+        d = json.loads(json.dumps(V.to_dict(g)))
+        g2 = V.from_dict(GEO, d)
+        self.assertEqual(g2.sites, g.sites)
+        self.assertEqual(g2.factions[foe]['lb'], g.factions[foe]['lb'])
+        del d['sites']
+        self.assertEqual(V.from_dict(GEO, d).sites, [])
+        # la bataille de deux autres camps : vue seulement à portée de vue
+        g.sites.append(dict(x=-500.0, y=-500.0, t=g.t, l=[10, 10], o=['40', '47']))
+        self.assertEqual(len(V.player_state(g)['sites']), 1, 'loin de tout regard : cachée')
+        g.sites[-1]['x'], g.sites[-1]['y'] = s['x'], s['y']
+        self.assertEqual(len(V.player_state(g)['sites']), 2, 'sous les yeux du joueur : vue')
+        # passé un mois, plus de fête ; passé SITE_DAYS, plus de tombes (et oubliée à la bataille suivante)
+        g.t += V.LB_DAYS + 1
+        st = V.player_state(g)
+        self.assertTrue(all('lb' not in f for f in st['factions']))
+        self.assertEqual(len(st['sites']), 2)
+        g.t += SITE_DAYS
+        self.assertEqual(V.player_state(g)['sites'], [])
+        g.end_battle(dict(bt, id='b2'), 0)
+        self.assertEqual(len(g.sites), 1, 'les vieux champs de bataille sont oubliés')
+
 if __name__ == '__main__':
     unittest.main()
 
