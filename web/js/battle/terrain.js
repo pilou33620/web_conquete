@@ -1,7 +1,7 @@
 // Vue tactique : le sol du champ de bataille, peint à plat vu de haut dans le style de Champs de Plaine (maquette
 // dev/maquette-2d.html) : parcelles striées avec leurs tournières et leurs bottes, prés à touffes et fleurs, labours à
 // mottes, haies bocagères en boules sombres, chemins de terre, routes royales empierrées (fossés, ornières, bornes,
-// rangs d'ormes hors des villes), rues pavées en ville, rivières à ripisylve, ponts de pierre, collines lisibles par
+// rangs d'ormes hors des villes), rues pavées en ville, rivières à ripisylve, collines lisibles par
 // un ombrage doux éclairé du nord-ouest (d'après les altitudes du moteur), saisons et neige. Sol2D (sol2d.js) en fait
 // des tuiles par niveau de zoom (paintInto) ; une image entière à basse résolution (base) sert de repli et de
 // mini-carte. Ce qui est debout (arbres, maisons, remparts) est dessiné par le décor, d'après les données préparées ici
@@ -365,7 +365,7 @@ export class Terrain {
     }
     return this._landes;
   }
-  // altitudes affinées à 5 m par interpolation cubique, puis adoucies : le relief de la vue 3D et la hauteur des troupes
+  // altitudes affinées à 5 m par interpolation cubique, puis adoucies : l'ombrage des collines
   prepFine() {
     const { cols, rows, cell, h } = this, F = 4, W = cols * F, H = rows * F;
     let hmin = 255, hmax = 0;
@@ -765,9 +765,8 @@ export class Terrain {
       g.setLineDash([]); g.lineDashOffset = 0;
     }
     g.strokeStyle = '#776f5e'; g.lineWidth = 0.6; for (const r of rues) strokePts(g, r.pts);
-    // ormes des routes royales, ponts de pierre
+    // ormes des routes royales (les ponts : le décor, decor2d.js)
     touffes(g, this.ormes.filter(p => inR(p, 8)), snow);
-    for (const b of this.bridges) if (inR([b.x, b.y], b.len + 20)) pont(g, b, nv);
     mark('routes');
     // fossés et glacis des remparts, haies, pied des murets et clôtures (debout : le décor)
     this.paintWalls(g);
@@ -799,40 +798,6 @@ export class Terrain {
       }
     });
     g.fillStyle = '#a8946a'; g.fill(paths[0]); g.fillStyle = '#e0d2ab'; g.fill(paths[1]);
-  }
-  // bâtiments rangés pour le shader des troupes, qui en repousse les hommes et les chevaux (troupes.js, pushOut) : une
-  // grille de cell m sur leur emprise, au plus 4 bâtiments par case (numéro + 1 ; 0 : aucun) ; rects, deux lignes :
-  // centre et angle, puis demi-côtés élargis de margin. null sans bâtiment
-  // reach : un cheval ou une pièce est repoussé de tout son long (troupes.js, uPush) : chaque bâtiment est rangé dans
-  // les cases jusqu'à reach m de plus (sur 24 cartes du serveur, aucune case n'y dépasse 4 bâtiments).
-  // shortcut: de loin (figurines ×2 à ×3), un cheval ou une pièce plus long que reach peut mordre un peu sur un mur ;
-  // agrandir reach si ça se voit (des cases plus pleines)
-  buildingGrid(cell = 8, margin = 0.5, reach = 3.5) {
-    const B = this.buildings;
-    if (!B.length) return null;
-    const R = b => Math.hypot(b.w, b.h) / 2 + margin + reach;
-    const x0 = Math.min(...B.map(b => b.x - R(b))), y0 = Math.min(...B.map(b => b.y - R(b)));
-    const cols = Math.ceil((Math.max(...B.map(b => b.x + R(b))) - x0) / cell) + 1, rows = Math.ceil((Math.max(...B.map(b => b.y + R(b))) - y0) / cell) + 1;
-    const cells = new Float32Array(cols * rows * 4), rects = new Float32Array(B.length * 8);
-    let full = 0;
-    B.forEach((b, i) => {
-      rects.set([b.x, b.y, b.a || 0, 0], i * 4); rects.set([b.w / 2 + margin, b.h / 2 + margin, 0, 0], (B.length + i) * 4);
-      const r = R(b);
-      for (let cy = Math.floor((b.y - r - y0) / cell); cy <= Math.floor((b.y + r - y0) / cell); cy++) {
-        for (let cx = Math.floor((b.x - r - x0) / cell); cx <= Math.floor((b.x + r - x0) / cell); cx++) {
-          const o = (cy * cols + cx) * 4;
-          let k = 0;
-          while (k < 4 && cells[o + k]) k++;
-          if (k < 4) cells[o + k] = i + 1; else full++;
-        }
-      }
-    });
-    // un bourg serré remplit des cases : la portée raccourcit (chevaux et pièces repoussés de moins loin) plutôt qu'un
-    // bâtiment ne se laisse traverser
-    if (full && reach > 0) return this.buildingGrid(cell, margin, reach > 1 ? reach / 2 : 0);
-    // shortcut: 4 bâtiments au plus par case (un texel RGBA) ; le cinquième se traverse. Deux textures si ça arrive
-    if (full) console.warn(`bâtiments : ${full} cases de ${cell} m déjà pleines, des troupes pourront traverser un bâtiment`);
-    return { cell, x0, y0, cols, rows, cells, rects, n: B.length };
   }
   // Le sol est-il découvert en (x, y) ? Ni bois, ni eau, ni bâti, ni dans l'emprise d'une maison : les tués et les
   // trous d'obus ne se posent que là
@@ -867,7 +832,7 @@ export class Terrain {
     const ca = Math.cos(b.a || 0), sa = Math.sin(b.a || 0), w = b.w / 2, h = b.h / 2;
     return [[-w, -h], [w, -h], [w, h], [-w, h]].map(([u, v]) => [b.x + u * ca - v * sa, b.y + u * sa + v * ca]);
   }
-  // au pied des enceintes (en volume : decor.js) : fossé et glacis des remparts (hors des brèches), terre remuée et fond
+  // au pied des enceintes (debout : decor2d.js) : fossé et glacis des remparts (hors des brèches), terre remuée et fond
   // des tranchées, jamais sur l'eau
   paintWalls(g) {
     const snow = this.pal.neige;
@@ -981,17 +946,6 @@ function touffes(g, pts, snow) {
 function botte(g, x, y, r) {
   E(g, OMB, x + 1.2, y + 1.6, r, r * 0.9); C(g, '#d6ba5c', x, y, r);
   g.strokeStyle = '#b49841'; g.lineWidth = 0.45; g.beginPath(); g.arc(x, y, r * 0.62, 0, TAU); g.stroke(); C(g, '#c2a54a', x, y, r * 0.25);
-}
-// pont de pierre {x, y, a (sens de la route), len} : tablier, parapets, joints des pierres
-function pont(g, b, nv) {
-  const L = (b.len || 30) + 12, l = L / 2, RR = (c, x, y, w, h) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
-  g.save(); g.translate(b.x, b.y); g.rotate(b.a || 0);
-  RR('rgba(20,20,10,.35)', -l + 1.5, -7 + 2.2, L, 14);
-  RR(nv('#b8ad94'), -l, -7, L, 14); RR(nv('#cfc3a2'), -l, -4, L, 8);
-  RR('#8f856e', -l, -7, L, 2.2); RR('#8f856e', -l, 4.8, L, 2.2);
-  g.strokeStyle = '#7d745f'; g.lineWidth = 0.5; g.beginPath();
-  for (let i = -l + 6; i <= l - 6; i += 10) { g.moveTo(i, -7); g.lineTo(i, -4.8); g.moveTo(i, 4.8); g.lineTo(i, 7); }
-  g.stroke(); g.restore();
 }
 function strokePts(g, pts) {
   g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);

@@ -174,13 +174,15 @@ export class Decor2D {
     let kind = b.kind || 'maison';
     if ((kind === 'gare' || kind === 'haussmann') && this.year < DATES[kind]) kind = 'maison';   // pas avant leur date
     const c = this.contree, v = this.ville, h = hash(b.x | 0, b.y | 0, this.seed + 7), urb = this.urbain(b.x, b.y);
-    const toit = toitDe(c, urb, this.year, h, this.montagne), remap = toit === 'tuile' ? null : { tuile: toit };
+    // (le toit donné par le moteur des villes, sinon celui de la contrée)
+    const toit = D.PAL[b.toit] ? b.toit : toitDe(c, urb, this.year, h, this.montagne), remap = toit === 'tuile' ? null : { tuile: toit };
     let cle = kind, parts;
     switch (kind) {
       case 'eglise': {
-        const grande = v && (v.type === 'capitale' || v.type === 'ville') && Math.hypot(b.x - v.x, b.y - v.y) < v.r * 0.4;
+        // (le moteur des villes nomme lui-même sa cathédrale : une église n'en devient pas une)
+        const grande = !this.m.batis && v && (v.type === 'capitale' || v.type === 'ville') && Math.hypot(b.x - v.x, b.y - v.y) < v.r * 0.4;
         cle = grande && (v.type === 'capitale' || h < 0.55) ? 'cathedrale' : v && v.type !== 'village' && this.year >= DATES.egliseDome && h < 0.5 ? 'egliseDome' : 'egliseRomane';
-        parts = cle === 'egliseRomane' ? D.BATS.egliseRomane(c === 'sud' ? 'canal' : 'ardoise') : D.BATS[cle]();
+        parts = cle === 'egliseRomane' ? D.BATS.egliseRomane(D.PAL[b.toit] ? b.toit : c === 'sud' ? 'canal' : 'ardoise') : D.BATS[cle]();
         break;
       }
       case 'ferme':
@@ -431,8 +433,9 @@ export class Decor2D {
       if (ferme) pts.pop();
       const C = this.ville && Math.hypot(centre(pts)[0] - this.ville.x, centre(pts)[1] - this.ville.y) < 150 ? [this.ville.x, this.ville.y] : centre(pts);
       const br = (w.breach || []).map(b => [b[0], b[1], b[2] || 20]);
-      const gs = portes.filter(p => pts.some(q => Math.hypot(q[0] - p.x, q[1] - p.y) < (w.thick || 20) + 25));
-      E.push(...(w.kind === 'mur' && (w.thick || 0) < 30 ? this.murMedieval(pts, C, br, gs, ferme) : this.traceBastionne(pts, C, w, br, gs)));
+      // (les portes de cette enceinte, données par le moteur des villes, sinon celles proches de son tracé)
+      const gs = w.portes?.length ? w.portes.map(([x, y]) => ({ x, y })) : portes.filter(p => pts.some(q => Math.hypot(q[0] - p.x, q[1] - p.y) < (w.thick || 20) + 25));
+      E.push(...(w.kind === 'mur' && (w.thick || 0) < 30 ? this.murMedieval(pts, C, br, gs, ferme, w.tours) : this.traceBastionne(pts, C, w, br, gs)));
     }
     if (!liste.some(w => w.kind !== 'barricade')) E.push(...this.mursDesCases(portes));
     this.ranger();
@@ -445,7 +448,7 @@ export class Decor2D {
     }
     return out;
   }
-  murMedieval(pts, C, breches, portes, ferme) {
+  murMedieval(pts, C, breches, portes, ferme, donnees = null) {
     const neige = this.neige, bb = boiteDe(pts), bbox = [bb[0] - 30, bb[1] - 30, bb[2] + 30, bb[3] + 30];
     const toit = this.contree === 'sud' ? 'canal' : 'tuile';
     const trousDe = () => { const p = new Path2D(); p.rect(bbox[0] - 50, bbox[1] - 50, bbox[2] - bbox[0] + 100, bbox[3] - bbox[1] + 100); for (const [x, y, r] of breches) { p.moveTo(x + r, y); p.arc(x, y, r, 0, TAU); } for (const g of portes) { p.moveTo(g.x + 7, g.y); p.arc(g.x, g.y, 7, 0, TAU); } return p; };
@@ -455,7 +458,10 @@ export class Decor2D {
     for (const p of reechant(ligneP, 4)) { const v = this.at(p[0], p[1]); if (v === TY.EAU || v === TY.GUE) { if (cur.length > 1) secs.push(cur); cur = []; } else cur.push(p); }
     if (cur.length > 1) secs.push(cur);
     let acc = 0;
-    for (const p of secs.flat()) { acc += 4; if (acc >= 44 && portes.every(g => Math.hypot(g.x - p[0], g.y - p[1]) > 16) && breches.every(([x, y, r]) => Math.hypot(x - p[0], y - p[1]) > r + 4)) { acc = 0; tours.push(p); } }
+    const libre = p => portes.every(g => Math.hypot(g.x - p[0], g.y - p[1]) > 16) && breches.every(([x, y, r]) => Math.hypot(x - p[0], y - p[1]) > r + 4);
+    // les tours du moteur (hors des portes et des brèches), sinon une tous les 44 m
+    if (donnees?.length) tours.push(...donnees.filter(libre));
+    else for (const p of secs.flat()) { acc += 4; if (acc >= 44 && libre(p)) { acc = 0; tours.push(p); } }
     return [
       { z: 0, bbox, draw: g => {   // le fossé sec au pied du mur, dehors
         g.save(); const dehors = new Path2D(); dehors.rect(bbox[0] - 50, bbox[1] - 50, bbox[2] - bbox[0] + 100, bbox[3] - bbox[1] + 100); D.trace(dehors, pts, true); g.clip(dehors, 'evenodd');
@@ -481,12 +487,18 @@ export class Decor2D {
     const tr = donne && donne.length > 2 ? donne.map(p => Array.isArray(p) ? p : [p.x, p.y]) : null;
     // (le tracé donné par la carte, s'il est bien celui de cette enceinte : il passe alors par l'escarpe)
     const esc = tr && Math.hypot(centre(tr)[0] - centre(pts0)[0], centre(tr)[1] - centre(pts0)[1]) < 100 ? tr : pts0.map(p => pousse(C, p, th / 2));
-    const fos = bastion ? 22 : 16, env = esc.map(p => pousse(C, p, fos + 12)), bb = boiteDe(env), bbox = [bb[0] - 45, bb[1] - 45, bb[2] + 45, bb[3] + 45];
+    const fos = w.fosse || (bastion ? 22 : 16), env = esc.map(p => pousse(C, p, fos + 12)), bb = boiteDe(env), bbox = [bb[0] - 45, bb[1] - 45, bb[2] + 45, bb[3] + 45];
     // pointes des bastions : maxima du rayon ; demi-lunes au milieu des courtines
     const r = esc.map(p => Math.hypot(p[0] - C[0], p[1] - C[1])), rmin = Math.min(...r), n = esc.length, pointes = [];
     for (let k = 0; k < n; k++) { let m = true; for (let d = -3; d <= 3 && m; d++) if (d && r[(k + d + n) % n] > r[k]) m = false; if (m && r[k] - rmin > 12 && !pointes.some(q => Math.abs(q - k) < 3)) pointes.push(k); }
     const ravs = [];
-    if (bastion && pointes.length >= 3) for (let q = 0; q < pointes.length; q++) {
+    // demi-lunes données par le moteur ([b1, saillant, b2]) devant cette enceinte, sinon placées ici
+    const dl = bastion ? (this.m.demi_lunes || []).filter(t => t.length === 3 && Math.hypot(t[1][0] - C[0], t[1][1] - C[1]) < rmin + 400) : [];
+    for (const [b1, apex, b2] of dl) {
+      const M = [(b1[0] + b2[0]) / 2, (b1[1] + b2[1]) / 2], l = Math.hypot(apex[0] - M[0], apex[1] - M[1]) || 1;
+      ravs.push({ apex, b1, b2, out: [(apex[0] - M[0]) / l, (apex[1] - M[1]) / l], M });
+    }
+    if (!dl.length && bastion && pointes.length >= 3) for (let q = 0; q < pointes.length; q++) {
       const a = pointes[q], b = pointes[(q + 1) % pointes.length], L = Math.hypot(esc[b][0] - esc[a][0], esc[b][1] - esc[a][1]);
       let k = a, best = 1e9; for (let s = a; s !== b; s = (s + 1) % n) if (r[s] < best) { best = r[s]; k = s; }
       const M = esc[k], l = Math.hypot(M[0] - C[0], M[1] - C[1]) || 1, out = [(M[0] - C[0]) / l, (M[1] - C[1]) / l], u = [-out[1], out[0]];
