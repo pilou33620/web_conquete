@@ -111,7 +111,8 @@ class TourParTour(unittest.TestCase):
         self.assertTrue(E.resolve(g, 'e1', 0)[0])
         TT.advance(g, 0.1)
         st = g.tour['stop']   # (le tour reprend : plus d'arrêt du tout, ou un arrêt pour autre chose)
-        self.assertTrue(g.speed_idx or not st or st['kind'] != 'decision', 'la décision prise, le tour reprend seul')
+        # (un imprévu tiré pendant le tour des IA peut demander à son tour une décision : il n'a rien à voir ici)
+        self.assertTrue(g.speed_idx or not st or st.get('ev') != 'e1', 'la décision prise, le tour reprend seul')
 
     def test_deux_decisions_au_meme_moment(self):
         g = partie()
@@ -128,7 +129,7 @@ class TourParTour(unittest.TestCase):
         E.resolve(g, 'e2', 0)
         TT.advance(g, 0.1)
         st = g.tour['stop']
-        self.assertTrue(g.speed_idx or not st or st['kind'] != 'decision')
+        self.assertTrue(g.speed_idx or not st or st.get('ev') not in ('e1', 'e2'))
 
     def test_une_guerre_n_arrete_plus_le_tour_des_ia(self):
         g = partie()
