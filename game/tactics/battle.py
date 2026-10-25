@@ -86,6 +86,7 @@ Ordres (renvoient (ok, msg)) :
         'charge' (target), 'hold', 'fire' (mode='free'|'hold'), 'form' (form), 'rally', 'retreat',
         'bombard' (x, y) : batterie de brèche (canons de l'assaillant, place à enceinte) : elle bat le rempart au plus
         près de (x, y) et ne tire sur l'ennemi qu'à portée de mitraille ;
+        'bombard' (x, y) vaut aussi pour une barricade dressée pendant la bataille, de n'importe quel camp ;
         'maisons' (x?, y? : par défaut là où elle est) : occuper les maisons ; 'barricade' : se barricader (voir les
         règles). battle.why_maisons(u, x, y)[0] et battle.why_barricade(u) disent pourquoi c'est impossible ('' sinon) ;
         la vue de mes unités d'infanterie les donne (can_occupy, can_barricade : True ou la raison).
@@ -150,7 +151,12 @@ sans défenseur à 160 m.
 Abris (ai._abris) : la garnison d'une place (rôles rue, cœur, îlot) occupe les maisons quand l'ennemi est à 600 m ;
 l'infanterie de ligne du défenseur se barricade devant des cavaliers qui la menacent (à 400 m, ou qui marchent droit
 sur elle à 800 m) ; ni les légers ni l'assaillant ne se barricadent. L'IA ne déplace plus une troupe dans les maisons
-ou à sa barricade (ai._tenue) : elle n'en sort que pour charger, se replier ou fuir.
+ou à sa barricade (ai._tenue) : elle n'en sort que pour charger, se replier ou fuir. Au plus une barricade pour trois
+bataillons de ligne (ai.ABRI_PART). Devant une barricade (ai._barrage) : les canons la battent ('bombard' sur sa case
+debout la plus proche : chaque pièce y envoie son boulet) jusqu'à la brèche, quand notre infanterie est à 500 m devant
+elle ; la cavalerie ne charge ni la troupe qui est derrière ni celle des maisons, elle la prend par un bout ou par la
+brèche s'il y a la place, sinon elle attend ; l'infanterie passe par la brèche, sinon par un bout, sinon ne l'aborde de
+face qu'à 1,5 contre un (la barricade comptée) ; les canons visent d'abord une troupe repérée dans les maisons.
 ==================================================================================================================
 """
 import heapq
@@ -308,6 +314,8 @@ MAISON_MELEE = 1.6       # au corps à corps, ×1,6 (au lieu de ×1,4 dans le b�
 BARR_FOE, BARR_STOP, BARR_HOUSE, BARR_WOOD = 200.0, 150.0, 80.0, 40.0
 BARR_T, BARR_T_SAP, BARR_FAT, BARR_D = 240.0, 120.0, 1.3, 15.0
 BARR_CHOC, BARR_CASSE = 0.4, 0.25
+BARR_AIM = 80.0          # 'bombard' sur une barricade : les canons battent sa case debout la plus proche du point (chaque
+                         # pièce de la batterie y envoie son boulet)
 BARR_ON = (T_PRE, T_CHAMP, T_VIGNE_T, T_LANDE_T, T_ROUTE, T_CHEMIN, T_SABLE, T_VERGER)
 HARASS_NEAR = 0.8        # harcèlement : on recule devant l'ennemi qui s'approche à moins de 80 % de la portée efficace…
 HARASS_FAR = 1.05        # … et l'on s'avance s'il reste au-delà (jamais plus près que 90 % de la portée efficace)
@@ -1370,23 +1378,26 @@ class TacticalBattle:
                 self._retreat(u)
             return True, "Retraite !"
         if kind == 'bombard':
+            # (ou une barricade dressée pendant la bataille, à BARR_AIM du point : de n'importe quel camp)
+            try:
+                x, y = float(p['x']), float(p['y'])
+            except (KeyError, TypeError, ValueError):
+                x = y = math.nan
+            ok = math.isfinite(x) and math.isfinite(y)
+            barr = ok and any(c in self.barr_prev for c in self.cells_near(x, y, BARR_AIM))
             pl = self.map.place
-            if side != 0 or not pl or not pl.get('battle') or \
-                    not any(w.get('kind') != 'barricade' for w in self.map.walls or []):
+            if not barr and (side != 0 or not pl or not pl.get('battle') or
+                             not any(w.get('kind') != 'barricade' for w in self.map.walls or [])):
                 return False, "Il n'y a pas de rempart à battre ici."
             us = [u for u in us if u.cls == 'artillerie' and u.type != 'mitrailleuses']
             if not us:
                 return False, "Seuls les canons battent un rempart."
-            try:
-                x, y = float(p['x']), float(p['y'])
-            except (KeyError, TypeError, ValueError):
-                return False, "Touchez le rempart à battre."
-            if not (math.isfinite(x) and math.isfinite(y)):
+            if not ok:
                 return False, "Touchez le rempart à battre."
             for u in us:
                 u.order = dict(kind='bombard', x=round(x), y=round(y))
                 u.target = None
-            return True, "Batterie de brèche : on bat le rempart."
+            return True, "On bat la barricade." if barr else "Batterie de brèche : on bat le rempart."
         return False, "Ordre inconnu."
 
     def withdraw(self, side):
@@ -2145,9 +2156,22 @@ class TacticalBattle:
                     best, bv = (wi, x, y, d), v
         return best
 
+    def _barr_aim(self, u, mx, aim):
+        """Case de barricade debout à BARR_AIM du point visé, à portée du canon : (None, x, y, distance) ou None."""
+        best = None
+        for c in self.cells_near(aim[0], aim[1], BARR_AIM):
+            if c in self.barr_prev:
+                x, y = (c % COLS + 0.5) * CELL, (c // COLS + 0.5) * CELL
+                d = math.hypot(x - u.x, y - u.y)
+                v = math.hypot(x - aim[0], y - aim[1])
+                if d < mx and (best is None or v < best[0]):
+                    best = (v, (None, x, y, d))
+        return best and best[1]
+
     def _bombard(self, u, e, mx, aim=None):
-        """Canon de l'assaillant sans cible : il bat le rempart à portée. Vrai s'il s'en occupe."""
-        wt = self._wall_target(u, mx, aim)
+        """Canon sans cible : il bat le rempart à portée (l'assaillant), ou la barricade visée. Vrai s'il s'en occupe."""
+        bt = aim and self._barr_aim(u, mx, aim)
+        wt = bt or self._wall_target(u, mx, aim)
         if not wt:
             return False
         wi, x, y, d = wt
@@ -2166,6 +2190,10 @@ class TacticalBattle:
         u.state = 'feu'
         self._fatigue(u, u.reload, 'feu')
         self.emit('canon', u.x, u.y, x, y, n=0, src=u.id)
+        if bt:
+            for _ in range(U.pieces(u)):   # (sur une barricade, chaque boulet compte : BARR_CASSE)
+                self._bati_hit(*self._chute(u, x, y), u)
+            return True
         self._bati_hit(*self._chute(u, x, y), u)   # (un boulet trop long passe le rempart et tombe sur les maisons)
         self._pound(u, wi, x, y, d, e, mx)
         return True

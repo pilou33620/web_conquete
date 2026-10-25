@@ -219,6 +219,13 @@ GRAPE_DEADLY = 0.6
 # jamais
 ABRI_FOE, ABRI_CAV = 600.0, 800.0
 ABRI_ROLES = ('rue', 'coeur', 'ilot')
+ABRI_PART = 3        # au plus une barricade pour trois bataillons d'infanterie de ligne du camp (au moins une)
+# devant une barricade dressée pendant la bataille (_barrage) : les canons la battent jusqu'à y ouvrir une brèche
+# (BARR_GUN : nos fantassins à moins de 500 m devant elle, à portée efficace) ; la cavalerie ne charge jamais la troupe
+# qui est derrière (ni celle des maisons) : elle la prend par un bout ou par la brèche s'il y a la place, sinon elle
+# attend ; l'infanterie passe par la brèche, sinon par un bout quand la barricade ne ferme pas le passage, sinon ne
+# l'aborde de face qu'à BARR_SUP contre un au corps à corps (la barricade comptée : ×1,5)
+BARR_GUN, BARR_SUP, BARR_OFF = 500.0, 1.5, 60.0
 
 # l'assaillant qui mène l'attaque (plans frontal, artillerie, débordement) ne décroche qu'avec ce supplément de pertes :
 # il sait qu'on n'emporte pas une position sans le payer (même valeur à tous les niveaux)
@@ -1588,8 +1595,8 @@ def _square(b, side, mem, L, u, cavs, foes=()):
 def _charge_ok(b, side, u, e):
     """La charge peut-elle aller droit au but ? (le moteur charge en ligne droite ; rochers, eau, forêt l'arrêtent)"""
     mc = 'cav' if u.cls == 'cavalerie' else ('light' if u.light else 'inf')
-    if mc == 'cav' and e.form == 'maisons':
-        return False   # (le moteur refuse : des cavaliers ne chargent pas des maisons)
+    if mc == 'cav' and (e.form == 'maisons' or _barr_devant(b, e, u) is not None):
+        return False   # (des cavaliers ne chargent pas des maisons, ni une troupe derrière sa barricade : _barrage)
     dx, dy = e.x - u.x, e.y - u.y
     n = max(1, int(math.hypot(dx, dy) // 25))
     for k in range(1, n):
@@ -1664,6 +1671,76 @@ def _tenue(u):
     return u.form == 'maisons' or (u.order or {}).get('kind') in ('maisons', 'barricade')
 
 
+def _barr_devant(b, e, u):
+    """La barricade dressée pendant la bataille juste devant e (à trois cases au plus) face à u, ou None."""
+    dx, dy = u.x - e.x, u.y - e.y
+    L = math.hypot(dx, dy) or 1.0
+    for k in (1, 2, 3):
+        c = b.cell(e.x + dx / L * BT.CELL * k, e.y + dy / L * BT.CELL * k)
+        if c in b.barr_prev:
+            return next((r for r in b.barr if any(cc == c for cc, _p in r['c'])), None)
+    return None
+
+
+def _barr_libre(b, x, y, e):
+    """De (x, y) à e, aucune case de barricade debout (tous les 10 m)."""
+    n = max(1, int(math.hypot(e.x - x, e.y - y) // 10))
+    return not any(b.cell(x + (e.x - x) * k / n, y + (e.y - y) * k / n) in b.barr_prev for k in range(n + 1))
+
+
+def _barrage(b, side, u, e, ratio=0.0):
+    """u veut aborder e : 'ok' (pas de barricade devant e), un point (x, y) d'où l'aborder sans la franchir (par la
+    brèche que les canons y ont ouverte, sinon par un bout, à hauteur de e, quand elle ne ferme pas le passage), 'front'
+    (l'infanterie, à BARR_SUP contre un au corps à corps, la barricade comptée) ou None (on attend)."""
+    r = _barr_devant(b, e, u)
+    if r is None:
+        return 'ok'
+    mc = 'cav' if u.cls == 'cavalerie' else ('light' if u.light else 'inf')
+    (x1, y1), (x2, y2) = r['pts']
+    L = math.hypot(x2 - x1, y2 - y1) or 1.0
+    ux, uy = (x2 - x1) / L, (y2 - y1) / L
+    spots = []
+    for c, _p in r['c']:
+        if c not in b.barr_prev:   # (la brèche : on s'y présente dans l'axe, pour y passer)
+            gx, gy = (c % BT.COLS + 0.5) * BT.CELL, (c // BT.COLS + 0.5) * BT.CELL
+            d = math.hypot(gx - e.x, gy - e.y) or 1.0
+            spots.append((gx + (gx - e.x) / d * BARR_OFF, gy + (gy - e.y) / d * BARR_OFF))
+    if not spots:
+        w = BT.U.footprint(e)[0]
+        for s in (-1, 1):   # (au bout, à hauteur de la troupe : on la prend de flanc)
+            spots.append((e.x + ux * s * (w / 2 + BARR_OFF), e.y + uy * s * (w / 2 + BARR_OFF)))
+    for x, y in sorted(spots, key=lambda p: _d2(p[0], p[1], u.x, u.y)):
+        if 0 < x < W and 0 < y < H and b.passable(x, y, mc, side) and _barr_libre(b, x, y, e) and \
+                b.path_cost(u.x, u.y, x, y, mc, side) is not None:
+            return (round(x, 1), round(y, 1))
+    if u.cls == 'inf' and ratio >= BARR_SUP * 1.5:
+        return 'front'
+    return None
+
+
+def _barr_cible(b, side, u, ours, e_r):
+    """La barricade ennemie sans brèche qui arrête notre infanterie (à BARR_GUN devant elle), à portée efficace du
+    canon u : (x, y) de sa case debout la plus proche de son milieu, ou None."""
+    best = None
+    for r in b.barr:
+        owner = b.by_id.get(r['u'])
+        cells = [c for c, _p in r['c']]
+        if owner is None or owner.side == side or not all(c in b.barr_prev for c in cells):
+            continue
+        (x1, y1), (x2, y2) = r['pts']
+        mx_, my_ = (x1 + x2) / 2, (y1 + y2) / 2
+        nx, ny = (y2 - y1), -(x2 - x1)   # (devant elle : là où regardait la troupe qui l'a dressée)
+        if _d2(mx_, my_, u.x, u.y) > e_r * e_r or not any(
+                o.cls == 'inf' and _d2(o.x, o.y, mx_, my_) < BARR_GUN ** 2 and (o.x - mx_) * nx + (o.y - my_) * ny > 0
+                for o in ours):
+            continue
+        d = _d2(mx_, my_, u.x, u.y)
+        if best is None or d < best[0]:
+            c = min(cells, key=lambda c: _d2((c % BT.COLS + 0.5) * BT.CELL, (c // BT.COLS + 0.5) * BT.CELL, mx_, my_))
+            best = (d, ((c % BT.COLS + 0.5) * BT.CELL, (c // BT.COLS + 0.5) * BT.CELL))
+    return best and best[1]
+
+
 def _abris(b, side, mem, us, foes, busy):
     """Le défenseur se met à l'abri : la garnison dans les maisons, l'infanterie menacée par des cavaliers derrière une
     barricade (voir ABRI_*)."""
@@ -1671,6 +1748,10 @@ def _abris(b, side, mem, us, foes, busy):
         return
     place = mem.get('plan') == 'place'
     cavs = [e for e in foes if e.cls == 'cavalerie' and e.valid]
+    # (pas de barricade partout : au plus une pour ABRI_PART bataillons de ligne)
+    room = max(1, sum(1 for u in us if u.cls == 'inf' and not u.light) // ABRI_PART) - sum(
+        1 for r in b.barr if b.by_id[r['u']].side == side and any(c in b.barr_prev for c, _p in r['c'])) - sum(
+        1 for u in us if (u.order or {}).get('kind') == 'barricade')
     for u in us:
         if u.cls != 'inf' or not u.valid or u.id in busy or _tenue(u) or u.path or u.busy > 0 or \
                 u.state not in ('repos', 'feu', 'recharge'):
@@ -1680,11 +1761,12 @@ def _abris(b, side, mem, us, foes, busy):
                     b.order(side, [u.id], 'maisons')[0]:
                 busy.add(u.id)
                 _note_once(b, mem, 'maisons', f"l'ennemi approche : {u.name} occupe les maisons.", 1800)
-        elif not u.light and any(_d2(e.x, e.y, u.x, u.y) < (ABRI_CAV / 2) ** 2 or (
+        elif room > 0 and not u.light and any(_d2(e.x, e.y, u.x, u.y) < (ABRI_CAV / 2) ** 2 or (
                 _d2(e.x, e.y, u.x, u.y) < ABRI_CAV ** 2 and e.state in ('marche', 'charge') and
                 _ang(e.dir, math.atan2(u.y - e.y, u.x - e.x)) < 0.6) for e in cavs) and not b.why_barricade(u):
             b.order(side, [u.id], 'barricade')
             busy.add(u.id)
+            room -= 1
             _note_once(b, mem, 'barricade', f"des cavaliers rôdent : {u.name} se barricade.", 1800)
 
 
@@ -3880,7 +3962,7 @@ def _cavalry(b, side, mem, L, us, foes, sit, want, busy):
         if u.order and u.order.get('kind') == 'attack' and u.path and u.target in seen_ids:
             t = seen_ids[u.target]
             if t.alive and t.state != 'hors':
-                if _d2(t.x, t.y, u.x, u.y) < 150 ** 2 and t.form != 'carre':
+                if _d2(t.x, t.y, u.x, u.y) < 150 ** 2 and t.form != 'carre' and _charge_ok(b, side, u, t):
                     b.order(side, [u.id], 'charge', target=t.id)   # l'obstacle est contourné : on charge
                 busy.add(u.id)
                 continue
@@ -3928,6 +4010,17 @@ def _cavalry(b, side, mem, L, us, foes, sit, want, busy):
             continue
         if u.id in want:   # (débordement : le groupe de flanc a déjà sa destination)
             continue
+        if fresh:
+            # une troupe derrière sa barricade : par un bout, ou par la brèche, s'il y a la place (sinon on attend)
+            for e in foes:
+                if e.cls == 'inf' and e.valid and _d2(e.x, e.y, u.x, u.y) < r * r:
+                    pt_ = _barrage(b, side, u, e)
+                    if isinstance(pt_, tuple):
+                        want[u.id] = [pt_[0], pt_[1], math.atan2(e.y - pt_[1], e.x - pt_[0]), None, True]
+                        _note_once(b, mem, 'contourne' + u.id, f"{u.name} tourne la barricade du {_foe(e)}.", 900)
+                        break
+            if u.id in want:
+                continue
         od = mem.get('ord') or {}
         if od.get('cav') == 'raid' and fresh and plan not in ('place', 'assaut') and \
                 mem['phase'] in ('prepa', 'assaut', 'combat'):
@@ -4090,7 +4183,9 @@ def _melee_power(b, u):
     if u.form == 'tirailleurs':
         k *= 0.7
     t = b.terrain_at(u.x, u.y)
-    if t in (T_MUR, T_PORTE, T_BARRICADE) and u.side == 0:
+    if u.form == 'maisons':
+        k *= BT.MAISON_MELEE
+    elif t in (T_MUR, T_PORTE, T_BARRICADE) and u.side == 0:
         k *= 0.6
     elif t == T_BATI:
         k *= 1.4
@@ -4207,6 +4302,14 @@ def _bayonets(b, side, mem, L, us, foes, sit, busy):
                 any(_d2(v.x, v.y, u.x, u.y) < 220 ** 2 for v, _ in launched):
             go = True
         if go and dfn and roles.get(u.id) == 'ligne' and n_ca >= max_ca:
+            continue
+        how = _barrage(b, side, u, e, br) if go and not dfn else 'ok'
+        if how is None:
+            continue   # (une barricade sans brèche ni bout libre, et pas assez de monde : on attend les canons)
+        if isinstance(how, tuple):
+            _goto(b, side, mem, u, how[0], how[1], math.atan2(e.y - how[1], e.x - how[0]))
+            busy.add(u.id)
+            _note_once(b, mem, 'contourne' + u.id, f"{u.name} tourne la barricade du {_foe(e)}.", 900)
             continue
         if go and _charge_ok(b, side, u, e):
             b.order(side, [u.id], 'charge', target=e.id)
@@ -4414,8 +4517,15 @@ def _artillery(b, side, mem, L, us, foes, sit, want, busy):
                            7200)
                 _stat(mem, 'batter')
             continue
+        bar = _barr_cible(b, side, u, ours, e)
+        if bar is not None:
+            o = u.order or {}
+            if (o.get('kind'), o.get('x'), o.get('y')) != ('bombard', bar[0], bar[1]) and \
+                    b.order(side, [u.id], 'bombard', x=bar[0], y=bar[1])[0]:
+                _note_once(b, mem, 'barr' + u.id, f"{u.name} bat la barricade qui arrête l'infanterie.", 1800)
+            continue
         if (u.order or {}).get('kind') == 'bombard':
-            b.order(side, [u.id], 'hold')   # (l'assaut est lancé : les pièces tirent sur les défenseurs)
+            b.order(side, [u.id], 'hold')   # (l'assaut est lancé, la brèche est ouverte : les pièces tirent sur les défenseurs)
         # cible
         if not L['art_pick']:
             continue   # facile : les canons tirent sur ce qui se présente (choix du moteur)
@@ -4522,6 +4632,8 @@ def _art_target(b, u, foes, ours, mem, mx, e_r, g, pt_k=1.6):
         elif od.get('vsRes') == 'canons' and t.cls == 'inf' and t.form == 'colonne' and \
                 min((_d2(t.x, t.y, o.x, o.y) for o in ours), default=1e12) > 400 ** 2:
             v *= 2.0   # ordres : les canons sur la réserve ennemie qui s'approche en colonne
+        elif t.form == 'maisons':
+            v *= 1.5   # (repérée dans les maisons : ni charge de cavaliers ni fusillade ne l'en délogent, le canon oui)
         elif t.cls == 'cavalerie':
             v *= 1.3
         elif t.cls == 'chariot':

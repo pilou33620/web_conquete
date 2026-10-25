@@ -523,5 +523,139 @@ class IA(unittest.TestCase):
         self.assertFalse(u.path)
 
 
+
+def barricade_faite(tb, u):
+    """u se barricade tout de suite (le travail est fait) : ses cases."""
+    tb.order(u.side, [u.id], 'barricade', who='any')
+    u.order['t0'] = tb.clock - BT.BARR_T
+    tb._barricading(u)
+    return [c for c, _p in tb.barr[-1]['c']]
+
+
+class Assaillant(unittest.TestCase):
+    """L'IA devant une barricade ou des maisons : canons, cavalerie, infanterie ; le défenseur ne s'en sert pas partout."""
+
+    def scene(self):
+        tb, us = calme()
+        cav = us['cavalerie']
+        d = foe(tb, cav)                                                    # (le défenseur, face à l'est)
+        front(tb, d)
+        cells = barricade_faite(tb, d)
+        return tb, us, d, cells
+
+    def test_le_boulet_ouvre_une_breche(self):
+        tb, us = calme(dict(ligne=1, cavalerie=1, artillerie=1))
+        gun = us['artillerie']
+        d = foe(tb, gun)
+        front(tb, d)
+        cells = barricade_faite(tb, d)
+        poser(gun, d.x + 400, d.y, d=math.pi)
+        gun.form = 'batterie'
+        x, y = (cells[2] % COLS + 0.5) * CELL, (cells[2] // COLS + 0.5) * CELL
+        self.assertEqual(tb.order(gun.side, [gun.id], 'bombard', who='any', x=x, y=y), (True, "On bat la barricade."))
+        e, mx, _g = tb.ranges(gun)
+        self.assertEqual(AI._barr_cible(tb, gun.side, gun, [gun], e), None)  # (pas de fantassin devant elle)
+        inf = us['ligne']
+        poser(inf, d.x + 250, d.y, d=math.pi)
+        self.assertIsNotNone(AI._barr_cible(tb, gun.side, gun, [inf], e))
+        for _ in range(12):
+            gun.reload, gun.ammo = 0.0, 50.0
+            self.assertTrue(tb._bombard(gun, e, mx, (x, y)))
+            if any(c not in tb.barr_prev for c in cells):
+                break
+        self.assertTrue(any(c not in tb.barr_prev for c in cells), 'une brèche en douze volées')
+        self.assertIsNone(AI._barr_cible(tb, gun.side, gun, [inf], e))   # (la brèche est ouverte : on cesse)
+
+    def test_la_cavalerie_ne_charge_pas_de_face_et_tourne_la_barricade(self):
+        tb, us, d, cells = self.scene()
+        cav = us['cavalerie']
+        poser(cav, d.x + 250, d.y, d=math.pi)
+        self.assertFalse(AI._charge_ok(tb, cav.side, cav, d))              # derrière sa barricade
+        pt = AI._barrage(tb, cav.side, cav, d)
+        self.assertIsInstance(pt, tuple)                                    # par un bout, à hauteur de la troupe
+        self.assertLess(abs(pt[0] - d.x), 40)
+        poser(cav, *pt, d=math.atan2(d.y - pt[1], d.x - pt[0]))
+        self.assertTrue(AI._charge_ok(tb, cav.side, cav, d))               # de là, de flanc : elle charge
+        # les deux bouts fermés (l'eau) : elle attend l'infanterie
+        poser(cav, d.x + 250, d.y, d=math.pi)
+        w = BT.U.footprint(d)[0]
+        for s in (-1, 1):
+            peindre(tb, d.x, d.y + s * (w / 2 + 60), 50, T_EAU)
+        self.assertIsNone(AI._barrage(tb, cav.side, cav, d))
+        # des maisons : jamais
+        e = foe(tb, cav)
+        dedans(tb, e)
+        poser(cav, e.x + 200, e.y)
+        self.assertFalse(AI._charge_ok(tb, cav.side, cav, e))
+
+    def test_l_infanterie_passe_par_la_breche_sinon_par_un_bout_sinon_en_force(self):
+        tb, us, d, cells = self.scene()
+        inf = us['ligne']
+        poser(inf, d.x + 200, d.y, d=math.pi)
+        pt = AI._barrage(tb, inf.side, inf, d, 1.0)
+        self.assertIsInstance(pt, tuple)
+        self.assertLess(abs(pt[0] - d.x), 40)                              # (la barricade ne ferme pas le passage)
+        w = BT.U.footprint(d)[0]
+        for s in (-1, 1):
+            peindre(tb, d.x, d.y + s * (w / 2 + 60), 50, T_EAU)
+        self.assertIsNone(AI._barrage(tb, inf.side, inf, d, 1.0))         # elle ferme la route : on attend les canons
+        self.assertEqual(AI._barrage(tb, inf.side, inf, d, 3.0), 'front')  # … sauf à trois contre un
+        tb._barr_set(cells[len(cells) // 2], T_PRE)                         # un boulet y ouvre une brèche
+        poser(inf, d.x + 150, d.y + 100, d=math.pi)                         # (face à une case encore debout)
+        pt = AI._barrage(tb, inf.side, inf, d, 1.0)
+        self.assertIsInstance(pt, tuple)
+        self.assertGreater(pt[0], d.x + 40)                                 # devant la brèche, dans son axe
+        self.assertTrue(AI._barr_libre(tb, pt[0], pt[1], d))
+        poser(inf, *pt, d=math.pi)
+        self.assertEqual(AI._barrage(tb, inf.side, inf, d, 1.0), 'ok')     # de là, plus rien devant elle
+
+    def test_la_baionnette_tourne_la_barricade(self):
+        tb, us, d, cells = self.scene()
+        inf = us['ligne']
+        inf.ctrl = 'ia'
+        poser(inf, d.x + 110, d.y, d=math.pi, men=400)
+        inf.order = dict(kind='hold')
+        mem = {'role': {inf.id: 'assaut'}, 'plan': 'assaut', 'blocked': {}}
+        L = AI.LEVELS['normal']
+        AI._bayonets(tb, inf.side, mem, L, [inf], [d], {}, set())
+        self.assertEqual(kind(inf), 'move')                                 # elle va au bout, pas à la baïonnette
+        self.assertLess(abs(inf.goal[0] - d.x), 40)
+        w = BT.U.footprint(d)[0]
+        for s in (-1, 1):
+            peindre(tb, d.x, d.y + s * (w / 2 + 60), 50, T_EAU)
+        poser(inf, d.x + 110, d.y, d=math.pi, men=400)
+        inf.order = dict(kind='hold')
+        AI._bayonets(tb, inf.side, mem, L, [inf], [d], {}, set())
+        self.assertEqual(kind(inf), 'hold')                                 # la route fermée : on attend les canons
+
+    def test_les_canons_visent_les_maisons_reperees(self):
+        tb, us = calme(dict(ligne=2, artillerie=1))
+        gun = us['artillerie']
+        a, b2 = [x for x in tb.units if x.side != gun.side and x.cls == 'inf'][:2]
+        bourg(tb)
+        poser(a, X0, Y0)
+        a.form = 'maisons'
+        poser(b2, X0, Y0 + 300)
+        poser(gun, X0 + 500, Y0 + 150, d=math.pi)
+        mem = {'plan': 'tenir', 'ord': {}, 'pt': None}
+        e, mx, g = tb.ranges(gun)
+        tgt = AI._art_target(tb, gun, [a, b2], [], mem, mx, e, g)
+        self.assertIs(tgt, a)
+
+    def test_le_defenseur_ne_se_barricade_pas_partout(self):
+        tb, us = calme(dict(ligne=4, cavalerie=1))
+        cav = us['cavalerie']
+        ds = [x for x in tb.units if x.side != cav.side and x.cls == 'inf' and not x.light]
+        peindre(tb, X0, Y0, 600, T_PRE)
+        for k, d in enumerate(ds):
+            poser(d, X0, Y0 + 150 * k)                                       # (hors de la zone de l'assaillant)
+            d.ctrl, d.order = 'ia', dict(kind='hold')
+            peindre(tb, d.x - 60, d.y, 20, T_BATI)                          # (des maisons derrière chacun)
+        self.assertGreaterEqual(sum(1 for d in ds if tb.why_barricade(d) == ''), 2)
+        poser(cav, X0 + 350, Y0)
+        cav.state, cav.dir = 'marche', math.pi
+        AI._abris(tb, 1, {'plan': 'tenir', 'role': {}}, ds, [cav], set())
+        self.assertEqual(sum(1 for d in ds if kind(d) == 'barricade'), max(1, len(ds) // AI.ABRI_PART))
+
 if __name__ == '__main__':
     unittest.main()
