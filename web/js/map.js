@@ -10,7 +10,7 @@ import { Epoque, phylloxera, styleCarte, startTechs, startRails } from './epoque
 import { AMB, LUM, majAmbiance } from './carte/ambiance.js';
 import { Z, nuit } from './carte/ambiance.js';
 import { Guerre, rayonMurs } from './carte/guerre.js';
-import { interieurOuvert } from './carte/interieur.js';
+import { interieurOuvert, majInterieur } from './carte/interieur.js';
 import { Ciel } from './carte/ciel.js';
 import * as ambiance from './carte/ambiance.js';
 import { terre, EAU, SABLE, LARG_RIVIERE } from './carte/terre.js';
@@ -948,6 +948,7 @@ export class MapView {
     // le givre, la neige et les prés roussis sont peints dans les tuiles : on les repeint quand la saison change
     // (la saison et la neige tombée sont peintes dans les tuiles : on les repeint quand elles changent ; carte/ambiance.js)
     if (majAmbiance(this, st)) { this.season = st.season; this.paintLand(); this.invalidateTiles(); }
+    majInterieur(st);   // (la ville ouverte en plein écran suit l'état de la partie)
     this.season = st.season;
     const key = st.nodes.map(n => n.o).join(',');
     if (key !== this.ownersKey) {
@@ -1406,7 +1407,11 @@ export class MapView {
     this.drawRoads(g, L, x0, y0, span);
     // territoires, puis frontières (au zoom de ce niveau)
     g.setTransform(1, 0, 0, 1, 0, 0);
+    // (sur la neige, le voile du camp se fait discret : la campagne reste blanche, pas rose ; les frontières disent qui tient)
+    // (le même voile partout, pour qu'aucune tuile ne tranche sur sa voisine)
+    if (!P && AMB.saison === 'hiver') g.globalAlpha = Object.values(AMB.meteo).includes('neige') ? 0.5 : 0.8;
     this.drawSub(g, this.fillCanvas, x0, y0, span, 3);
+    g.globalAlpha = 1;
     W();
     const z = L * 0.88 / this.dpr;   // (le zoom moyen auquel s'affiche ce niveau : voir level)
     g.lineCap = 'round'; g.lineJoin = 'round'; g.setLineDash([]);

@@ -382,9 +382,12 @@ class TacticalBattle:
         # la ville garde les ruines des combats passés (nodes[].deg) : autant de maisons en ruine dès le début
         deg = (spec.get('place') or {}).get('deg', 0.0)
         if deg:
-            for c in self.cases_ville():
-                if TR._hash(c, 7, spec['seed']) < deg:
-                    self.bati[c] = 3
+            # (par quartiers, comme l'incendie les a pris : un tirage par îlot de 80 m, un peu de hasard par maison)
+            cs = self.cases_ville()
+            sd = spec['seed']
+            cs.sort(key=lambda c: 0.7 * TR._hash((c % COLS) // 4, (c // COLS) // 4, sd) + 0.3 * TR._hash(c, 7, sd))
+            for c in cs[:round(deg * len(cs))]:
+                self.bati[c] = 3
         rng = random.Random(spec['seed'] ^ 0x5A5A)
         self.rng = rng
         wa = rng.random() * 6.283

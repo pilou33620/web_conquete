@@ -239,12 +239,24 @@ export class Decor2D {
     const cases = q => { const bb = boiteDe(q), out = []; for (let j = Math.max(0, Math.floor(bb[1] / cell)); j <= Math.min(rows - 1, Math.floor(bb[3] / cell)); j++) for (let i = Math.max(0, Math.floor(bb[0] / cell)); i <= Math.min(cols - 1, Math.floor(bb[2] / cell)); i++) if (dansPoly(q, (i + .5) * cell, (j + .5) * cell)) out.push(j * cols + i); return out; };
     const col = c => neige ? D.mix(c, '#eceae6', .7) : c;
     // le sol de la ville : îlots et rues entre eux (planCarte), les rues pavées (rue), la grand-place, les cours plantés
-    const fond = P.ilots.filter(b => !b[2]).map(b => b[0]);
+    // (sur l'eau de la bataille, plus large que la rivière du plan à Bordeaux : ni sol de ville ni rue)
+    const mouille = (x, y) => this.at(x, y) === TY.EAU;
+    const fond = P.ilots.filter(b => !b[2]).map(b => b[0]).filter(q => { const cs = cases(q); return !cs.length || cs.filter(c => t[c] === TY.EAU).length * 2 < cs.length; });
+    const rues = [];   // les rues coupées là où elles passent sur l'eau (morceaux de 10 m)
+    for (const [x1, y1, x2, y2, main] of P.rues) {
+      const L = Math.hypot(x2 - x1, y2 - y1), nb = Math.max(1, Math.ceil(L / 10));
+      let a = null;
+      for (let i = 0; i <= nb; i++) {
+        const x = x1 + (x2 - x1) * i / nb, y = y1 + (y2 - y1) * i / nb, sec = !mouille(x, y);
+        if (sec && !a) a = [x, y];
+        if ((!sec || i === nb) && a) { const e = sec ? [x, y] : [x1 + (x2 - x1) * (i - 1) / nb, y1 + (y2 - y1) * (i - 1) / nb]; if (Math.hypot(e[0] - a[0], e[1] - a[1]) > 1) rues.push([a[0], a[1], e[0], e[1], main]); a = null; }
+      }
+    }
     sol.push({ z: 0.5, bbox: boiteDe(P.ilots.flatMap(b => b[0])).map((v, i) => v + (i < 2 ? -20 : 20)), draw: g => {
       g.lineJoin = 'round'; g.lineCap = 'round';
       if (urbain) { g.fillStyle = g.strokeStyle = col('#bfb498'); g.lineWidth = 10 * k; for (const q of fond) { D.ligne(g, q, true); g.fill(); g.stroke(); } }
       if (P.place) D.C(g, col('#c9bea6'), P.place[0], P.place[1], P.place[2] * 24 / 22);
-      for (const [x1, y1, x2, y2, main] of P.rues) {
+      for (const [x1, y1, x2, y2, main] of rues) {
         if (urbain) { const w = (main ? 8 : 5) * k; D.T(g, col('#8b826e'), w + 1.4 * k, x1, y1, x2, y2); D.T(g, col('#a69d88'), w, x1, y1, x2, y2); D.T(g, '#776f5e', .6 * k, x1, y1, x2, y2); }
         else { D.T(g, col('#d9caa1'), (main ? 7 : 4.5) * k, x1, y1, x2, y2); }
       }

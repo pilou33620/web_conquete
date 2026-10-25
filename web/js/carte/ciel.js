@@ -249,9 +249,17 @@ export class Ciel {
     for (const l of LUM) {
       if (!k && !l.jour && !l.eclair) continue;
       const r = Math.max(l.r, (l.spr === 'fen' || l.petit ? 3 : 5) / z);
-      if (l.x + r < x0 || l.x - r > x1 || l.y + r < y0 || l.y - r > y1) continue;
+      if (l.x + r * 3 < x0 || l.x - r * 3 > x1 || l.y + r * 3 < y0 || l.y - r * 3 > y1) continue;
       const f = 0.85 + 0.15 * Math.sin(time * 9 + l.x * 50);
-      ctx.globalAlpha = clamp(l.a * (l.eclair ? 1 : l.jour ? Math.max(k, 0.5) : k) * f * loin, 0, 1);
+      const al = clamp(l.a * (l.eclair ? 1 : l.jour ? Math.max(k, 0.5) : k) * f * loin, 0, 1);
+      if (l.spr === 'fen') {
+        // une lanterne : un point vif et son halo sur le sol (une flamme de chandelle se voit de loin la nuit)
+        const h = Math.max(l.r * 2.5, 8 / z), c = Math.max(l.r * 0.5, 1.6 / z);
+        ctx.globalAlpha = al * 0.5; ctx.drawImage(SPR.fen, l.x - h, l.y - h, h * 2, h * 2);
+        ctx.globalAlpha = al; ctx.drawImage(SPR.fen, l.x - c, l.y - c, c * 2, c * 2); ctx.drawImage(SPR.fen, l.x - c * 0.6, l.y - c * 0.6, c * 1.2, c * 1.2);
+        continue;
+      }
+      ctx.globalAlpha = al;
       ctx.drawImage(SPR[l.spr || 'lueur'], l.x - r, l.y - r, r * 2, r * 2);
     }
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';

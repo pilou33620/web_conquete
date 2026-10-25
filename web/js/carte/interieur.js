@@ -65,7 +65,7 @@ export function ouvrirInterieur(o) {
   sc.resize();
   const V = planDe(K, n, e), Pf = V.Pf;
   const cle = cleVille(n, e) + `|${Math.round(e.dmg * 10)}|${Math.round(e.deg * 20)}|${e.lv}|${AMB.saison}|${KT}`;
-  Object.assign(vue, { V, e, col: o.col, flag: o.flag, t0, peinte: 0 });
+  Object.assign(vue, { V, e, col: o.col, flag: o.flag, t0, peinte: 0, o, etat: cle + `|${e.siege}|${e.blocus}|${e.famine}` });
   sc.V = V; sc.fx = []; sc.vie = []; sc.etals = []; sc.feux = []; sc.fumees = []; sc.moulins = [];
   // la texture se peint par pas pendant les premières images (peindreInterieurPas), puis la vie s'y installe
   const fini = tv => { vue.peint = null; vue.deg = tv.deg; vue.tex = tv; sc.tv = tv; vivre(sc, V, e); vue.peinte = performance.now() - t0; };
@@ -105,6 +105,19 @@ export function fermerInterieur() {
   vue.sc.vie = []; vue.sc.fx = [];
 }
 export const interieurOuvert = () => !!vue && !vue.el.hidden;
+// un nouvel état de la partie arrive pendant qu'on regarde la ville : si elle a changé (siège, ruines, foire,
+// incendie, famine…), on la redessine sans bouger la vue
+export function majInterieur(st) {
+  if (!interieurOuvert() || !vue.o || !st?.nodes) return;
+  const o = vue.o, ns = st.nodes[o.n.id];
+  if (!ns) return;
+  const e = etatVille(o.n, ns, st);
+  const etat = cleVille(o.n, e) + `|${Math.round(e.dmg * 10)}|${Math.round(e.deg * 20)}|${e.lv}|${AMB.saison}|${KT}|${e.siege}|${e.blocus}|${e.famine}`;
+  if (etat === vue.etat) return;
+  const { cx, cy, z } = vue.sc;
+  ouvrirInterieur({ ...o, ns, st });
+  Object.assign(vue.sc, { cx, cy, z }); vue.sc.borner();
+}
 export const vueInterieur = () => vue;
 
 // ---------- la vie : tirée du plan (mêmes rues, mêmes gens), réglée par l'état de la ville
