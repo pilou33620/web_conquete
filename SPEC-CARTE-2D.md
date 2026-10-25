@@ -304,6 +304,21 @@ Le ciel (`ciel.js`) :
     édifices ; chaque parcelle va au bâtiment (groupe de cases bâties) de la case sous elle : touché, en feu, en
     ruine se voient bâtiment par bâtiment.
   - Une carte de version 3 garde la ville de `_town` (sauvegardes).
+- Métiers et quais (suite) : le portage tire aussi les métiers de `genererInterieur` (`plus` : châteaux viticoles,
+  scieries, forges, salines, séchoirs, moulins, fermes, airiaux landais), avec le même tirage ; comparaison avec Node :
+  892 états, 7 288 métiers, **0 différence**. Sur la carte (`terrain_ville._metiers`), chacun à sa place du plan
+  (à l'échelle de la carte) et à sa vraie taille : bâtiment en `BATI` (natures `chateau`, `forge`, `scierie`,
+  `sechoir`, `moulin`, `ferme`), les quatre vignes du château en `VIGNE`, les douze bassins des salines en `MARAIS` ;
+  un moulin à moins de 60 m d'une rivière devient moulin à roue (l'intérieur n'a que des moulins à vent). Rien sur le
+  glacis (140 m), entre les bastions, à moins de 80 m d'une porte, ni dans les 250 premiers mètres de la bande de
+  l'assaillant (son bord choisi comme `battle._zones`) ; une route ou une maison à sa place le décale de 50 m au
+  plus. Hors du champ (beaucoup de métiers sont à 1,5–2,5 km), rien. Quais d'un port : la ligne de quai de
+  l'intérieur le long de la première rivière, des deux côtés jusqu'à 1,15 R, en `ROUTE` sur la rive (pas où l'eau
+  de la bataille la noie) ; bateaux amarrés le long des quais et, au bord de la mer, au mouillage. Le client
+  (`decor2d.js`) dessine les modèles de la maquette (château, ferme, mas, moulin et ses ailes, moulin à roue) et ceux
+  de `peindreInterieur` (scierie et grumes, forge et scories, séchoir, airial sous les chênes, salines, quais,
+  `navire`). Les bancs : `test_les_metiers_et_les_quais` (Saint-Émilion, Sabres, Salies-de-Béarn, Bordeaux, glacis).
+  Temps : la pose de la ville avec ses métiers 12 à 46 ms (Bayonne 44, Bordeaux 46, Saint-Émilion 12).
 - Écarts :
   - **échelle réduite pour les grandes places** : à l'échelle de l'intérieur, Bayonne bastionnée fait 5 km de large et
     Navarrenx 2,5 km, plus que le champ (3 × 2 km). Toute la carte (ville et campagne, pour que rivières et côtes

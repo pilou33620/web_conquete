@@ -17,7 +17,7 @@ réduire toute la carte (échelle k < 1 : la campagne autour aussi, pour que riv
 import math
 
 from . import plan_ville as PV
-from .terrain import (CELL, COLS, ROWS, N, W, H, VILLES, _causeway, _mainland, bfs, T_EAU, T_GUE, T_PRE, T_ROUTE, T_CHEMIN, T_BATI, T_MUR, T_PORTE,
+from .terrain import (CELL, COLS, ROWS, N, W, H, VILLES, _causeway, _mainland, bfs, T_CHAMP, T_EAU, T_GUE, T_PRE, T_ROUTE, T_CHEMIN, T_BATI, T_MUR, T_PORTE,
                       T_BOIS, T_FORET_T, T_MARAIS_T, T_LANDE_T, T_ROCHE, T_SABLE, T_VIGNE_T, T_VERGER, RUE, cell_of,
                       center_of, _add_bridge, _barricades, _dedans, _densify, _enceinte, _line4, _redoubts, _seg_dist)
 
@@ -28,6 +28,13 @@ BOITE = dict(cathedrale=(-53.0, -26.0, 55.4, 26.0), egliseRomane=(-27.0, -7.3, 1
              poudriere=(-10.0, -7.6, 10.0, 7.6), chateau=(-44.0, -14.0, 44.0, 34.0), gare=(-50.0, -30.0, 28.0, 16.0))
 COUR = ('caserne', 'hotel', 'couvent', 'hopital')   # bâtis autour d'une cour : la cour reste un pré
 SOL = (T_BOIS, T_FORET_T, T_MARAIS_T, T_LANDE_T, T_ROCHE, T_SABLE, T_VIGNE_T, T_VERGER)   # rasé dans la ville
+# les métiers du plan (genererInterieur : plus) : modèle du client (decor2d.js, METIERS), nature du bâtiment, emprise
+# (unités du modèle) et échelle (m par unité du modèle : à leur vraie taille, comme les maisons)
+METIERS = dict(ferme=('fermeCour', 'ferme', (-31, -27, 30, 27), .6), mas=('mas', 'ferme', (-21, -7, 18, 5), .7),
+               chateauVin=('chateau', 'chateau', (-44, -14, 44, 34), .4), scierie=('scierie', 'scierie', (-12, -7, 12, 7), .8),
+               forge=('forge', 'forge', (-14, -8, 14, 8), .8), sechoir=('sechoir', 'sechoir', (-20, -5, 20, 5), .8),
+               moulin=('moulin', 'moulin', (-7, -7, 7, 7), .5), moulinEau=('moulinEau', 'moulin', (-6, -22, 28, -9), .5),
+               airial=('airial', 'ferme', (-18, -6, 24, 10), .8))
 PROF = 16.0   # m : profondeur d'une maison sur rue (le client les dessine à cette taille, pas à celle de l'intérieur)
 DEPLOI = 400.0   # m entre l'enceinte et le bord de l'assaillant (sa bande de déploiement, battle._zones)
 
@@ -391,6 +398,9 @@ def ville(m, pl, L, rng, spec, t, road_cells):
                     ponts.append((tf(a), tf(b)))
                 continue
             A, B_ = tf(a), tf(b)
+            cm = cell_of((A[0] + B_[0]) / 2, (A[1] + B_[1]) / 2)
+            if cm < 0 or t[cm] in (T_EAU, T_GUE):   # (l'eau de la bataille, plus large que celle du plan par endroits)
+                continue
             rues_cl.append([round(A[0], 1), round(A[1], 1), round(B_[0], 1), round(B_[1], 1), 1 if rr.get('main') else 0])
             streets.update(_line4([A, B_]))
     if V['placeCentre']:
@@ -492,6 +502,47 @@ def ville(m, pl, L, rng, spec, t, road_cells):
                     any(0 <= nc < N and t[nc] == T_EAU for nc in (c - 1, c + 1, c - COLS, c + COLS)):
                 t[c] = T_ROUTE
                 streets.add(c)
+    # les quais du plan (peindreInterieur) : le long de la première rivière d'un port, des deux côtés, jusqu'à 1,15 R
+    quais, bateaux, quai_c = [], [], set()
+    if Pf['port'] and Pf['rivs']:
+        nomr, rq2 = Pf['rivs'][0]['name'], Pf['R'] * 1.15 * Mk
+        for rv in m.rivers:
+            if rv.get('name') != nomr:
+                continue
+            for sg in (-1, 1):
+                pts = [p for p in _decaler(rv['pts'], sg * (rv['w'] / 2 + 5)) if math.hypot(p[0] - px, p[1] - py) < rq2]
+                runs, cur = [], []   # (le quai sur la rive seulement : pas où la mer ou l'estuaire la noient)
+                for p in pts:
+                    c = cell_of(*p)
+                    if c >= 0 and t[c] not in (T_EAU, T_GUE):
+                        cur.append(p)
+                    else:
+                        if len(cur) > 1:
+                            runs.append(cur)
+                        cur = []
+                if len(cur) > 1:
+                    runs.append(cur)
+                for ligne in runs:
+                    quais.append([[round(x, 1), round(y, 1)] for x, y in ligne])
+                for c in (c for ligne in runs for c in _line4(ligne)):
+                    if t[c] not in (T_EAU, T_GUE, T_BATI) and c not in murs:
+                        t[c] = T_ROUTE
+                        streets.add(c)
+                        quai_c.add(c)
+                # des bateaux amarrés le long du quai (côté de l'eau)
+                bord = _decaler(rv['pts'], sg * max(4.0, rv['w'] / 2 - 7))
+                for k in range(1, len(bord) - 1, 2):
+                    x, y = bord[k]
+                    if math.hypot(x - px, y - py) < rq2 and PV.hash2(k, sg, Pf['sd']) < .45 and t[cell_of(x, y)] == T_EAU:
+                        a = math.atan2(bord[k + 1][1] - bord[k - 1][1], bord[k + 1][0] - bord[k - 1][0])
+                        bateaux.append([round(x, 1), round(y, 1), round(a, 2), 1 if rv['rank'] <= 1 and PV.hash2(k, 3, Pf['sd']) < .5 else 0])
+    if Pf['port'] and Pf['mer']:   # (au mouillage, au large : comme la vue de l'intérieur)
+        for i in range(6):
+            a = Pf['mer']['a'] + (PV.hash2(i, 1, Pf['sd']) - .5) * .8
+            d = Pf['R'] * (1.1 + PV.hash2(i, 2, Pf['sd']) * .8)
+            x, y = tf((PV.IC[0] + math.cos(a) * d, PV.IC[1] + math.sin(a) * d))
+            if cell_of(x, y) >= 0 and t[cell_of(x, y)] == T_EAU:
+                bateaux.append([round(x, 1), round(y, 1), round(PV.hash2(i, 3, Pf['sd']) * 6.28, 2), 1 if PV.hash2(i, 4, Pf['sd']) < .4 else 0])
     for A, B_ in ponts:
         cells = _line4([A, B_])
         wet = [c for c in cells if t[c] in (T_EAU, T_GUE)]
@@ -544,8 +595,10 @@ def ville(m, pl, L, rng, spec, t, road_cells):
                 net.add(nc)
                 todo.append(nc)
     for c in streets:
-        if c not in net and t[c] == T_ROUTE and c not in road_cells:
+        if c not in net and t[c] == T_ROUTE and c not in road_cells and c not in quai_c:
             t[c] = T_PRE
+
+    metiers, vignes, salines = _metiers(m, pl, L, t, kinds, murs, road_cells | streets, att_a)
 
     # ------------------------------------------------ l'enceinte sur la carte : murs, portes, glacis, brèches
     allst = road_cells | streets
@@ -584,4 +637,111 @@ def ville(m, pl, L, rng, spec, t, road_cells):
                 sum(1 << i for i, on in enumerate(B['b'].get('cotes') or []) if on)]
                for k, B in enumerate(blocs)],
         rues=rues_cl, edifices=eds, place=[round(px, 1), round(py, 1), round(22 * Mk, 1)] if V['placeCentre'] else None,
-        cours=round(V['murLigne'] * Mk, 1) if Pf['murs'] == 'cours' and V['murLigne'] else None)
+        cours=round(V['murLigne'] * Mk, 1) if Pf['murs'] == 'cours' and V['murLigne'] else None,
+        metiers=metiers, vignes=vignes, salines=salines, quais=quais, bateaux=bateaux)
+
+
+def _decaler(pts, d):
+    """Le tracé décalé de d sur sa gauche (lib.js : decaler)."""
+    out = []
+    for i, p in enumerate(pts):
+        a, b = pts[max(0, i - 1)], pts[min(len(pts) - 1, i + 1)]
+        l = math.hypot(b[0] - a[0], b[1] - a[1]) or 1.0
+        out.append((p[0] - (b[1] - a[1]) / l * d, p[1] + (b[0] - a[0]) / l * d))
+    return out
+
+
+def _metiers(m, pl, L, t, kinds, murs, rues, att_a):
+    """Les métiers du plan (châteaux viticoles et leurs vignes, scieries, forges, salines, séchoirs, moulins, fermes,
+    airiaux) sur la carte, à leur place (à l'échelle) et à leur vraie taille : bâtiments en BATI, vignes en VIGNE,
+    salines en MARAIS. Rien sur le glacis (140 m), à moins de 80 m d'une porte, dans la bande de l'assaillant, sur
+    une route, l'eau ou une maison. Renvoie ce que le client dessine."""
+    V, Pf = L.V, L.V['Pf']
+    tf, Mk = L.tf, L.Mk
+    px, py = L.pos
+    pres = bfs(sorted(murs), 7) if murs else bytearray([255]) * N
+    portes = [c for c in murs if c in rues]
+    pres_p = bfs(portes, 4) if portes else bytearray([255]) * N
+    bandes = []
+    if pl.get('battle'):   # (la bande de déploiement de l'assaillant, comme battle._zones ; de tous les bords près de l'eau)
+        r = PV.rayon_enceinte(V) * Mk
+        room = dict(O=px, E=W - px, N=py, S=H - py)
+        # (le bord de l'assaillant comme battle._zones le choisira : le plus sec si le sien est noyé)
+        def band(e, dep):
+            return dict(O=(0, 100, dep, H - 100), E=(W - dep, 100, W, H - 100), N=(150, 0, W - 150, dep), S=(150, H - dep, W - 150, H))[e]
+
+        def sec(bx):
+            cs = [j * COLS + i for j in range(int(bx[1] // CELL), min(ROWS, int(bx[3] // CELL)))
+                  for i in range(int(bx[0] // CELL), min(COLS, int(bx[2] // CELL)))]
+            return sum(t[c] != T_EAU for c in cs) / max(1, len(cs))
+        e0 = bord_assaillant(att_a)
+        if sec(band(e0, 600)) < 0.4:
+            e0 = max('ONES', key=lambda e: (sec(band(e, 600)), e == e0))
+        for e in (e0,):
+            d = room[e] - r
+            # (au plus les 250 premiers mètres : là où il entre et se range ; plus loin, les fermes de la campagne
+            # y sont aussi, comme sur toute carte)
+            dep = min(250, max(max(200, min(500, d - 150)), d - 450))
+            bandes.append(band(e, dep))
+    ok_c = lambda c: (0 <= c < N and t[c] not in (T_EAU, T_GUE, T_BATI, T_MUR, T_PORTE) and c not in rues and
+                      c not in murs and pres[c] > 7 and pres_p[c] > 4)
+    r_in = L.r_mur * 1.05 + 20 if murs else 0.0   # (rien entre les bastions : hors de l'enceinte, au-delà de ses pointes)
+    dans_bande = lambda x, y: math.hypot(x - px, y - py) < r_in or any(b[0] <= x <= b[2] and b[1] <= y <= b[3] for b in bandes)
+    eaux = [r for r in m.rivers if r['kind'] != 'ruisseau']
+    out, vignes, salines = [], [], []
+    for p in V['plus']:
+        if 'x' not in p:
+            continue
+        X, Y = tf((p['x'], p['y']))
+        if not (40 < X < W - 40 and 40 < Y < H - 40) or dans_bande(X, Y):
+            continue
+        k = p['k']
+        if k == 'salines':   # (douze bassins, comme l'intérieur, à l'échelle du plan)
+            bas = []
+            for i in range(12):
+                x0, y0 = p['x'] - 40 + (i % 4) * 20, p['y'] - 24 + (i // 4) * 16
+                q = [tf((x0, y0)), tf((x0 + 17, y0)), tf((x0 + 17, y0 + 13)), tf((x0, y0 + 13))]
+                cs = [c for c in _dans(q) if ok_c(c)]
+                if not cs and len(_dans(q)):
+                    continue
+                for c in cs:
+                    t[c] = m.garder[c] = T_MARAIS_T
+                bas.append([[round(a, 1), round(b, 1)] for a, b in q])
+            if bas:
+                salines.append(bas)
+            continue
+        if k == 'moulin' and any(min(_seg_dist(X, Y, *a, *b) for a, b in zip(r['pts'], r['pts'][1:])) < r['w'] / 2 + 60
+                                for r in eaux):
+            k = 'moulinEau'   # (au bord de l'eau, un moulin à roue)
+        if k == 'ferme' and Pf['style'] in ('bearn', 'basque'):
+            k = 'mas'
+        cle, kind, (u0, v0, u1, v1), s = METIERS[k]
+        a = p['a']
+        if k == 'moulinEau':   # (la roue tournée vers la rivière la plus proche)
+            r = min(eaux, key=lambda r: min(_seg_dist(X, Y, *a_, *b_) for a_, b_ in zip(r['pts'], r['pts'][1:])))
+            q = min(r['pts'], key=lambda q: (q[0] - X) ** 2 + (q[1] - Y) ** 2)
+            a = math.atan2(q[1] - Y, q[0] - X) + math.pi / 2
+        ca, sa = math.cos(a), math.sin(a)
+        X0, Y0 = X, Y
+        for dx, dy in ((0, 0), (20, 0), (-20, 0), (0, 20), (0, -20), (30, 30), (-30, 30), (30, -30), (-30, -30), (50, 0),
+                       (-50, 0), (0, 50), (0, -50)):   # (une route ou une maison à sa place : un peu à côté)
+            X, Y = X0 + dx, Y0 + dy
+            coins = [(X + (u * ca - v * sa) * s, Y + (u * sa + v * ca) * s) for u, v in ((u0, v0), (u1, v0), (u1, v1), (u0, v1))]
+            foot = sorted(set(_dans(coins)) | {cell_of(X, Y)})   # (la case de son milieu, au moins)
+            if all(ok_c(c) for c in foot) and not dans_bande(X, Y):
+                break
+        else:
+            continue
+        for c in foot:
+            t[c] = T_BATI
+            kinds[c] = kind
+        out.append(dict(k=k, cle=cle, kind=kind, x=round(X, 1), y=round(Y, 1), a=round(a, 3), s=s))
+        if k == 'chateauVin':   # ses quatre vignes (peindreInterieur), à l'échelle du plan
+            for i in range(4):
+                x0, y0 = p['x'] - 70 + (i % 2) * 74, p['y'] + (-70 if i < 2 else 34)
+                q = [tf((x0, y0)), tf((x0 + 66, y0)), tf((x0 + 66, y0 + 34)), tf((x0, y0 + 34))]
+                for c in _dans(q):
+                    if ok_c(c) and t[c] in (T_PRE, T_CHAMP, T_LANDE_T, T_VERGER):
+                        t[c] = m.garder[c] = T_VIGNE_T
+                vignes.append([[round(a_, 1), round(b_, 1)] for a_, b_ in q])
+    return out, vignes, salines

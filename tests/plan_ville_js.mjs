@@ -20,6 +20,7 @@ const out = etats.map(([id, annee, f, pop, d]) => {
     ilots: W.ilots.map(b => ({ q: b.q.map(P), role: b.role || null, zone: b.zone, main: !!b.main })),
     rues: W.rues.length, trace: enc(W.trace), citadelle: enc(W.citadelle), rect: W.rect || null,
     murLigne: W.murLigne ?? null, rMur: W.rMur,
+    plus: W.plus.map(p => ({ k: p.k, x: p.x ?? null, y: p.y ?? null, a: p.a ?? null })),
   };
 });
 process.stdout.write(JSON.stringify(out));

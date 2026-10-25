@@ -246,10 +246,10 @@ def generer_interieur(K, Pf):
     la citadelle, la gare, les routes jusqu'au bord de la scène."""
     R = alea(Pf['sd'])
     n, Rv, sd = Pf['n'], Pf['R'], Pf['sd']
-    ilots, rues = [], []
+    ilots, rues, plus = [], [], []
     V = dict(Pf=Pf, type='grande' if Rv > 190 else 'moyenne' if Rv > 110 else 'bourg',
              larg=[4.5, 8] if Rv > 190 else [5, 9] if Rv > 110 else [6, 11], rues=rues, lieux={}, placeCentre=False,
-             murLigne=None, rect=None, trace=None, citadelle=None, gare=None, murInt=None)
+             murLigne=None, rect=None, trace=None, citadelle=None, gare=None, murInt=None, plus=plus)
 
     def eauL(x, y):
         return K.eauK(n['x'] + (x - IC[0]) / S, n['y'] + (y - IC[1]) / S)
@@ -430,6 +430,10 @@ def generer_interieur(K, Pf):
     elif m == 'airial':
         for r in Pf['routes']:
             ruban(r, 22, 70 * fau, 36, 30, densite=dens(.8))
+        for k in range(9):
+            a = R() * TAU
+            d = 120 + R() * 220
+            plus.append(dict(k='airial', x=IC[0] + cos(a) * d, y=IC[1] + sin(a) * d, a=R() * TAU))
     # --- les lieux
     villes = [b for b in ilots if b['zone'] == 'ville']
     if m in ('bastide', 'place'):
@@ -479,7 +483,38 @@ def generer_interieur(K, Pf):
         if b:
             b['role'] = 'eglise'
             V['lieux']['eglise'] = b['c']
-    # (les métiers de la ville, tirés ensuite, ne changent ni les îlots ni l'enceinte : pas portés)
+    # --- les métiers de la ville (plus : {k, x, y, a})
+    def autour(dmin, dmax, k):
+        for _ in range(40):
+            a = R() * TAU
+            d = dmin + R() * (dmax - dmin)
+            x, y = IC[0] + cos(a) * d, IC[1] + sin(a) * d
+            if not pres(x, y, 16) and not any(hypot(b['c'][0] - x, b['c'][1] - y) < 40 for b in ilots):
+                return dict(k=k, x=x, y=y, a=R() * TAU)
+        return None
+
+    def add(o):
+        if o:
+            plus.append(o)
+        return o
+    spec = Pf['spec']
+    if 'vin' in spec:
+        for _ in range(3):
+            add(autour(Rv + 60, Rv + 300, 'chateauVin'))
+    if 'bois' in spec:
+        add(autour(Rv + 30, Rv + 140, 'scierie'))
+    if 'fer' in spec:
+        add(autour(Rv + 30, Rv + 160, 'forge'))
+    if 'sel' in spec:
+        add(autour(Rv + 20, Rv + 120, 'salines'))
+    if 'tabac' in spec:
+        for _ in range(2):
+            add(autour(Rv + 30, Rv + 200, 'sechoir'))
+    if 'ble' in spec or m in ('rond', 'rue'):
+        for _ in range(2):
+            add(autour(Rv + 40, Rv + 220, 'moulin'))
+    for _ in range(5 if n['type'] == 'village' else 8):
+        add(autour(Rv + 50, 460, 'airial' if Pf['style'] == 'landes' else 'ferme'))
     if Pf['citadelle']:
         a1 = ang_routes[1] if len(ang_routes) > 1 else 1
         a = (Pf['mer']['a'] if Pf['mer'] else a1) if Pf['rivs'] else a1 + .4
@@ -511,6 +546,7 @@ def generer_interieur(K, Pf):
             elif b['zone'] == 'faubourg' and b['d'] < Rb + 110:
                 b['supprime'] = True
         if m == 'fortin':
+            plus.append(dict(k='fortin'))
             V['lieux']['place'] = IC
     if Pf['annee'] >= 1860 and Pf['pop'] > 3000:
         a = (ang_routes[1] if len(ang_routes) > 1 else a_main) + .5

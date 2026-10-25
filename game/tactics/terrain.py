@@ -198,6 +198,7 @@ class BattleMap:
         self.batis = []         # un par bâtiment (groupe de cases bâties d'un seul tenant) : {kind, toit, x, y, c}
         self.kinds = {}         # (génération) case bâtie → nature du bâtiment
         self.plan = None        # (version 4) le plan de la ville pour le client (terrain_ville.py)
+        self.garder = {}        # (génération, version 4) cases des métiers du plan que le terroir ne change pas
 
     def to_client(self, spec):
         r2 = lambda p: [round(p[0], 1), round(p[1], 1)]
@@ -613,6 +614,9 @@ def generate(geo, spec):
     _farms(m, rng, FARMS.get(main, 3), t, hf, main)
     _mill(m, rng, t, hf, main)
     _terroir(m, seed, t, hf, dwat, biome, dept)
+    for c, ty in m.garder.items():   # (vignes et salines des métiers du plan : le terroir ne les réattribue pas)
+        if t[c] in CULTIVE + (T_VERGER, T_MARAIS_T):
+            t[c] = ty
     _batis(m, seed, dept, year)
 
     # ---------------------------------------------------------- altitude finale
@@ -791,8 +795,8 @@ VILLES = {
     'capitale': dict(pas=(5, 5, 6), dens=0.98, place=5, egl=3, couvent=2, hotel=4, caserne=2, hopital=1),
 }
 # nature d'un bâtiment fait de cases de natures différentes : la première de la liste
-KINDS = ('cathedrale', 'eglise', 'caserne', 'poudriere', 'hopital', 'couvent', 'hotel', 'halle', 'moulin', 'ferme',
-         'maison')
+KINDS = ('cathedrale', 'eglise', 'caserne', 'poudriere', 'hopital', 'couvent', 'hotel', 'halle', 'chateau', 'forge',
+         'scierie', 'sechoir', 'moulin', 'ferme', 'maison')   # (château viticole, forge… : les métiers du plan, version 4)
 NOBLE = ('eglise', 'cathedrale', 'hotel', 'caserne', 'couvent', 'hopital')
 RUE = (T_ROUTE, T_CHEMIN)
 

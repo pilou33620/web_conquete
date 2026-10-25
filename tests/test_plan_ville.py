@@ -19,7 +19,7 @@ ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(ICI))
 
 from game.geo import GeoMap  # noqa: E402
-from game.tactics import plan_ville as PV, terrain as TR  # noqa: E402
+from game.tactics import plan_ville as PV, terrain as TR, terrain_ville as TV  # noqa: E402
 
 GEO = GeoMap()
 K = PV.carte_de(GEO)
@@ -42,7 +42,8 @@ def resume(V):
                 ilots=[dict(q=[list(p) for p in b['q']], role=b.get('role'), zone=b['zone'], main=bool(b['main']))
                        for b in V['ilots']],
                 rues=len(V['rues']), trace=enc(V['trace']), citadelle=enc(V['citadelle']), rect=V['rect'],
-                murLigne=V['murLigne'], rMur=V['rMur'])
+                murLigne=V['murLigne'], rMur=V['rMur'],
+                plus=[dict(k=p['k'], x=p.get('x'), y=p.get('y'), a=p.get('a')) for p in V['plus']])
 
 
 def ecart(a, b, path=''):
@@ -166,6 +167,38 @@ class BatailleSurLePlan(unittest.TestCase):
                     todo.append(v)
         bord = [c for c in vus if c % TR.COLS in (0, TR.COLS - 1) or c // TR.COLS in (0, TR.ROWS - 1)]
         self.assertTrue(bord, "du village, on gagne le bord de la carte par les rues et les routes")
+
+    def test_les_metiers_et_les_quais(self):
+        # les métiers du plan (comme « Voir l'intérieur ») : château viticole et ses vignes, airiaux landais, salines
+        m = carte(nom('Saint-Émilion'))
+        ks = [e['k'] for e in m.plan['metiers']]
+        self.assertIn('chateauVin', ks)
+        ch = next(e for e in m.plan['metiers'] if e['k'] == 'chateauVin')
+        self.assertEqual(m.t[TR.cell_of(ch['x'], ch['y'])], TR.T_BATI)
+        self.assertIn('chateau', {b['kind'] for b in m.batis})
+        vignes = [c for q in m.plan['vignes'] for c in TV._dans(q) if m.t[c] == TR.T_VIGNE_T]
+        self.assertGreater(len(vignes), 20, 'les vignes du château')
+        m = carte(nom('Sabres'))
+        airiaux = [e for e in m.plan['metiers'] if e['k'] == 'airial']
+        self.assertTrue(airiaux)
+        self.assertTrue(all(m.t[TR.cell_of(e['x'], e['y'])] == TR.T_BATI for e in airiaux))
+        m = carte(nom('Salies-de-Béarn'), att=3.14)   # (l'assaillant de l'ouest : les salines, à l'est, restent hors de sa bande)
+        self.assertTrue(m.plan['salines'])
+        self.assertTrue(any(m.t[c] == TR.T_MARAIS_T for q in m.plan['salines'][0] for c in TV._dans(q)))
+        # rien sur le glacis ni devant une porte ; les quais d'un port le long de l'eau, des bateaux
+        for n, f in ((nom('Libourne'), 1), (nom('Bordeaux'), 2), (nom('Navarrenx'), 3)):
+            m = carte(n, f)
+            murs = [c for c in range(TR.N) if m.t[c] in (TR.T_MUR, TR.T_PORTE, TR.T_BRECHE)]
+            dg = TR.bfs(murs, 7)
+            for e in m.plan['metiers']:
+                self.assertGreater(dg[TR.cell_of(e['x'], e['y'])], 7, f"{n['name']} : {e['k']} sur le glacis")
+        m = carte(nom('Bordeaux'), 2)
+        self.assertTrue(m.plan['quais'] and m.plan['bateaux'])
+        quai = [c for q in m.plan['quais'] for c in TR._line4([tuple(p) for p in q])
+                if m.t[c] not in (TR.T_EAU, TR.T_GUE, TR.T_MUR, TR.T_PORTE, TR.T_BRECHE)]   # (la rive, hors les murs)
+        self.assertGreater(len(quai), 40)
+        self.assertGreater(sum(m.t[c] == TR.T_ROUTE for c in quai) / len(quai), 0.9, 'on passe sur les quais')
+        self.assertTrue(all(m.t[TR.cell_of(b[0], b[1])] == TR.T_EAU for b in m.plan['bateaux']))
 
     def test_meme_graine_meme_ville(self):
         a, b = carte(nom('Navarrenx'), 3, seed=4), carte(nom('Navarrenx'), 3, seed=4)

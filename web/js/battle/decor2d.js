@@ -56,6 +56,25 @@ const BLOQUE = new Set([TY.EAU, TY.BOIS, TY.FORET, TY.BATI, TY.MUR, TY.MARAIS, T
 // « Voir l'intérieur » (web/js/carte/villes.js, TOITS_STYLE), les maisons à leur vraie taille (m)
 const TOITS_STYLE = { bordelais: [['bordelais', 1]], perigord: [['perigord', .82], ['lauze', .18]], landes: [['landes', 1]], agenais: [['agenais', 1]], bearn: [['bearn', 1]], basque: [['basque', 1]] };
 const LARG = { grande: [6.3, 11.2], moyenne: [7, 12.6], bourg: [8.4, 15.4] }, PROF = 16;
+// les métiers du plan (peindreInterieur de carte/villes.js), dans le repère de la maquette ; roof : le toit du pays
+const tronc = (g, x1, y1, x2, y2) => { g.lineCap = 'round'; D.T(g, 'rgba(20,32,12,.42)', 2.4, x1 + 1, y1 + 1.4, x2 + 1, y2 + 1.4); D.T(g, '#5b4127', 2.2, x1, y1, x2, y2); D.T(g, '#7a5634', 1, x1, y1 - .4, x2, y2 - .4); D.C(g, '#c9a878', x2, y2, 1); };
+const METIERS = {
+  scierie: roof => [{ t: 'g', x: -12, y: -7, w: 24, h: 14, p: roof, h2: 1.6 }, { t: 'fn', fn: g => { for (let i = 0; i < 6; i++) tronc(g, 18, -10 + i * 3.6, 40, -9 + i * 3.6); } }],
+  forge: () => [{ t: 'g', x: -14, y: -8, w: 28, h: 16, p: 'ardoise', h2: 2 }, { t: 'f', x: 6, y: -3, w: 4, h: 4, c: '#5a3d2c', h2: 4 },
+    { t: 'fn', fn: g => { for (let i = 0; i < 14; i++) D.C(g, '#3a3530', 20 + (hash(i, 1, 5) - .5) * 16, 12 + (hash(i, 2, 5) - .5) * 10, 1.4); } }],
+  sechoir: roof => [{ t: 'g', x: -20, y: -5, w: 40, h: 10, p: roof, h2: 2 }],
+  airial: () => [{ t: 'fn', fn: g => { D.C(g, '#7aa659', 0, 0, 38); D.C(g, '#86b363', -4, -4, 26); } },
+    { t: 'g', x: -12, y: -6, w: 24, h: 12, p: 'landes', h2: 1.6 }, { t: 'f', x: -7.7, y: -2.7, w: 1.4, h: 1.4, c: '#7d4a3a', h2: 1.8 },
+    { t: 'g', x: 14, y: -4, w: 10, h: 8, p: 'landes', h2: 1.2 }, { t: 'c', x: -18, y: 8, r: 2.4, p: 'landes', h2: 1.2 },
+    { t: 'fn', fn: g => { D.C(g, '#857c6c', 10, 12, 1.6); D.C(g, '#3d5f86', 10, 12, .9); for (let k = 0; k < 7; k++) { const a = hash(k, 3, 9) * TAU, d = 16 + hash(k, 4, 9) * 18; D.arbre(g, Math.cos(a) * d, Math.sin(a) * d, 5 + hash(k, 5, 9) * 3, '#3f6b33'); } } }],
+};
+// un navire vu de dessus (carte/villes.js : navire), à sa vraie taille (m)
+function navire(g, x, y, a, grand) {
+  g.save(); g.translate(x, y); g.rotate(a); const L = grand ? 26 : 13;
+  D.E(g, 'rgba(20,30,40,.3)', 1.5, 2, L / 2, L / 7); D.E(g, '#5b4127', 0, 0, L / 2, L / 7); D.E(g, '#8a6a45', 0, 0, L / 2 - 1.5, L / 7 - 1.2);
+  for (const m of grand ? [-.28, 0, .28] : [0]) { D.C(g, '#3a2a1b', m * L, 0, .9); D.RR(g, '#ece4cc', m * L - .9, -L / 5, 1.8, L / 2.5, .4); }
+  g.restore();
+}
 const tirer = (R, liste) => { let r = R(); for (const [k, p] of liste) if ((r -= p) < 0) return k; return liste[0][0]; };
 function decalerQuad(q, w) {   // (lib.js) le quadrilatère rentré de w de chaque côté
   const n = q.length, L = [];
@@ -239,6 +258,18 @@ export class Decor2D {
       this.ajouter({ kind: KINDS[e.kind] || e.kind, modele: e.cle, x: e.x, y: e.y, a: e.a, s: e.s, w: 0, h: 0, jardin: e.cle === 'hotel' ? 1 : 0, cases: [] }, occupe);
       if (c >= 0) planCase[c] = 1;
     }
+    // les métiers (châteaux viticoles, scieries, forges, séchoirs, moulins, fermes, airiaux), à leur vraie taille ; les
+    // salines, les quais le long de l'eau, les bateaux amarrés et au mouillage
+    const roof = toits[0][0];
+    for (const e of P.metiers || []) this.ajouter({ kind: KINDS[e.kind] || e.kind, modele: e.cle, roof, x: e.x, y: e.y, a: e.a, s: e.s, w: 0, h: 0, cases: [] }, occupe);
+    for (const bas of P.salines || []) sol.push({ z: 1, bbox: boiteDe(bas.flat()).map((v, i) => v + (i < 2 ? -4 : 4)), draw: g => {
+      for (const q of bas) { D.ligne(g, q, true); g.fillStyle = col('#e9ecef'); g.fill(); const i2 = decalerQuad(q, Math.min(6, aireQ(q) ** .5 * .12)); if (i2) { D.ligne(g, i2, true); g.fillStyle = col('#c9d6de'); g.fill(); } }
+    } });
+    if ((P.quais || []).length || (P.bateaux || []).length) sol.push({ z: 2, bbox: boiteDe([...(P.quais || []).flat(), ...(P.bateaux || []).map(b => [b[0], b[1]])]).map((v, i) => v + (i < 2 ? -30 : 30)), draw: g => {
+      g.lineCap = 'round'; g.lineJoin = 'round';
+      for (const q of P.quais || []) { D.ligne(g, q); g.strokeStyle = col('#a39b88'); g.lineWidth = 6; g.stroke(); g.strokeStyle = col('#c9bfa7'); g.lineWidth = 3.6; g.stroke(); }
+      for (const [x, y, a, grand] of P.bateaux || []) navire(g, x, y, a, grand);
+    } });
     // les îlots
     P.ilots.forEach(([q, role, fau, main, sd, cotes], ib) => {
       let ins = decalerQuad(q, (main ? 4.6 : 2.7) * k);
@@ -328,9 +359,9 @@ export class Decor2D {
   }
   // le modèle de la maquette d'un bâtiment donné : clé, volumes (unités), échelle (m par unité), palettes remplacées
   modele(b) {
-    if (b.modele && D.BATS[b.modele]) {   // (le modèle donné par le plan de la ville, à son échelle)
+    if (b.modele && (D.BATS[b.modele] || METIERS[b.modele])) {   // (le modèle donné par le plan de la ville, à son échelle)
       const toit = D.PAL[b.toit] ? b.toit : toitDe(this.contree, true, this.year, 0.5, this.montagne);
-      const parts = b.modele === 'egliseRomane' ? D.BATS.egliseRomane(toit === 'canal' ? 'canal' : 'ardoise') : b.modele === 'hotel' ? D.BATS.hotel(b.jardin || 0) : D.BATS[b.modele]();
+      const parts = METIERS[b.modele] ? METIERS[b.modele](b.roof || toit) : b.modele === 'egliseRomane' ? D.BATS.egliseRomane(toit === 'canal' ? 'canal' : 'ardoise') : b.modele === 'hotel' ? D.BATS.hotel(b.jardin || 0) : D.BATS[b.modele]();
       return { cle: b.modele, parts, s: b.s || ECH, boite: D.boite(parts), remap: toit === 'canal' && CANAL.has(b.modele) ? { tuile: 'canal', ardoise: 'canal' } : null };
     }
     let kind = b.kind || 'maison';
