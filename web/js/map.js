@@ -8,6 +8,9 @@ import { uniform } from './battle/formes.js';
 import { figureKind, portraitGeneral } from './portraits.js';
 import { Epoque, phylloxera, styleCarte, startTechs, startRails } from './epoque.js';
 import { AMB, LUM, majAmbiance } from './carte/ambiance.js';
+import { Z, nuit } from './carte/ambiance.js';
+import { Guerre, rayonMurs } from './carte/guerre.js';
+import { Ciel } from './carte/ciel.js';
 const TILE = 256;
 function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
@@ -1997,14 +2000,13 @@ export class MapView {
     ctx.restore();
   }
 
+  // sous les villes : la teinte de l'époque, puis la guerre au sol (traces, tranchées, terre piétinée : carte/guerre.js)
   drawSeasonTint(ctx) {
     this.epoque.teinte(ctx);
-    const tint = this.era ? null : { hiver: 'rgba(214,228,248,0.17)', automne: 'rgba(222,140,60,0.07)', 'été': 'rgba(255,232,140,0.05)' }[this.season];
-    if (tint) {
-      const [x0, y0] = this.toScreen(0, 0), [x1, y1] = this.toScreen(this.W, this.H);
-      ctx.fillStyle = tint; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
-    }
+    this.guerreDe().sol(ctx, performance.now() / 1000);
   }
+  guerreDe() { return this.guerre || (this.guerre = new Guerre(this)); }
+  cielDe() { return this.ciel || (this.ciel = new Ciel(this)); }
 
   nodeSize(n) {
     const ns = this.state && this.state.nodes[n.id];
@@ -2051,17 +2053,21 @@ export class MapView {
       }
       const wallR = ns.f > 0 ? this.walls(ctx, s, ns.f, n.id, ns.sg && !ns.sg.occ && !ns.sg.bl ? ns.sg.dmg : 0) : 0;
       const worksR = ns.bar != null || ns.bw ? this.works(ctx, s, ns.f, n.id, ns.bar || 0, ns.bw, wallR) : 0;
-      if (camp.has(n.id) && z >= 2.8) this.tents(ctx, s, n.id, this.colors[camp.get(n.id)] || col);
+      // (dès le plan des villes, les tentes et les anneaux du siège se posent hors des murs du plan : carte/guerre.js)
+      const sP = z >= Z.PLAN && (ns.sg || ns.bk || camp.has(n.id)) ? Math.max(s, rayonMurs(this, n, ns) * z / 0.62) : s;
+      if (camp.has(n.id) && z >= 2.8) this.tents(ctx, sP, n.id, this.colors[camp.get(n.id)] || col);
       this.towns.draw(ctx, n, s, col, ns, time, ns.o);
       // siège
-      if (ns.sg && ns.sg.bl) this.blockadeRing(ctx, Math.max(s * 0.62 + 6, wallR + 6, worksR + 5), ns.sg, n.id);
+      // (de près : le camp, les batteries qui tirent, les incendies ; les tranchées sont au sol, carte/guerre.js)
+      if (ns.sg) this.guerreDe().siege(ctx, n, ns, time);
+      if (ns.sg && ns.sg.bl) this.blockadeRing(ctx, Math.max(sP * 0.62 + 6, wallR + 6, worksR + 5), ns.sg, n.id);
       else if (ns.sg) {
-        const sr = Math.max(s * 0.62 + 4, wallR + 4, worksR + 3);
+        const sr = Math.max(sP * 0.62 + 4, wallR + 4, worksR + 3);
         ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 5;
         ctx.beginPath(); ctx.arc(0, 0, sr, 0, Math.PI * 2); ctx.stroke();
         ctx.strokeStyle = this.colors[ns.sg.by] || '#f80'; ctx.lineWidth = 3.4;
         ctx.beginPath(); ctx.arc(0, 0, sr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0.03, ns.sg.dmg)); ctx.stroke();
-      }
+      } else if (ns.bk) this.blockadeRing(ctx, Math.max(sP * 0.62 + 6, wallR + 6, worksR + 5), { mer: true, dmg: 0 }, n.id);   // blocus du port
       if (n.quai && (z >= 3.2 || ns.bk)) this.anchor(ctx, -s * 0.62, s * 0.3, clamp(s * 0.36, 7, 13), ns.bk ? '#ff8a6a' : '#cfe8ff');
       if (ns.dp && z >= 3.2) this.depot(ctx, s * 0.62, s * 0.32, clamp(s * 0.34, 7, 12));
       if (ns.intel || ns.spy) this.eye(ctx, s * 0.62, -s * 0.5, clamp(s * 0.4, 9, 14), ns.intel ? '#f3d98e' : 'rgba(243,217,142,0.6)');
@@ -2235,8 +2241,9 @@ export class MapView {
   }
 
   // blocus : un cordon de postes en pointillé, aux couleurs de l'assiégeant, sans brèche ; la faim en arc fin
+  // (blocus du port, sg.mer : l'anneau en bleu de mer, sans la faim)
   blockadeRing(ctx, r, sg, id) {
-    const TAU = Math.PI * 2, col = this.colors[sg.by] || '#f80';
+    const TAU = Math.PI * 2, col = sg.mer ? '#2b4a78' : this.colors[sg.by] || '#f80';
     ctx.save();
     ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU);
     ctx.strokeStyle = 'rgba(20,14,8,.7)'; ctx.lineWidth = 6; ctx.stroke();
@@ -2254,6 +2261,7 @@ export class MapView {
       ctx.fillStyle = '#f3e7c6'; ctx.fillRect(x - p * 0.35, y - p * 0.35, p * 0.7, p * 0.7);
     }
     // la faim gagne : arc intérieur
+    if (sg.mer) { ctx.restore(); return; }
     ctx.strokeStyle = 'rgba(20,14,8,.6)'; ctx.lineWidth = 3.6;
     ctx.beginPath(); ctx.arc(0, 0, r - 5.5, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0.03, sg.dmg)); ctx.stroke();
     ctx.strokeStyle = '#e8c070'; ctx.lineWidth = 2;
@@ -2502,7 +2510,10 @@ export class MapView {
 
   drawArmies(ctx, time) {
     const z = this.cam.z, st = this.state;
-    const detailed = z >= 5.5;
+    const detailed = z >= 5.5, vie = z >= Z.VIE && !this.era;
+    // de près, les armées en colonne de route ou au bivouac (carte/guerre.js) ; le jeton et la formation restent
+    // en dessous de Z.VIE, et leur place reste celle des clics
+    if (detailed) this.guerreDe().armees(ctx, time, vie);
     const list = [...this.disp.values()].sort((p, q) => p.y - q.y);
     const atNode = {};
     for (const d of list) if (d.a.n != null && d.a.st !== 'battle') (atNode[d.a.n] = atNode[d.a.n] || []).push(d);
@@ -2519,11 +2530,21 @@ export class MapView {
       if (a.h) ctx.globalAlpha = 0.62;
       if (a.rail && a.n == null) this.drawTrain(ctx, a, d, col, sel, time);
       else if (a.boat && a.n == null) this.drawBoat(ctx, a, d, col, sel, time);
+      else if (vie) this.drawLife(ctx, a, sel);
       else if (detailed) this.drawFormation(ctx, a, d, col, sel, time);
       else this.drawToken(ctx, a, d, col, sel, time);
       ctx.restore();
     }
     this.drawArmyLabels(ctx);
+  }
+
+  // de près (Z.VIE) : la colonne est dessinée par carte/guerre.js ; ici la sélection et le nom, là où l'on clique
+  drawLife(ctx, a, sel) {
+    if (sel) { ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(0, 0, 26, 14, 0, 0, Math.PI * 2); ctx.stroke(); }
+    if (sel || a.o === this.state.me.code) {
+      const m = ctx.getTransform(), gen = a.gen ? ` · ${a.gen.name}` : '';
+      this.armyLabels.push({ x: m.e / this.dpr, y: m.f / this.dpr + 16, txt: a.name + gen, warn: !!a.wn?.length, alpha: ctx.globalAlpha });
+    }
   }
 
   drawToken(ctx, a, d, col, sel, time) {
@@ -2884,13 +2905,13 @@ export class MapView {
     for (const b of (this.state || this.preview).battles) {
       const [x, y] = this.toScreen(b.x, b.y);
       if (x < -100 || y < -100 || x > this.vw + 100 || y > this.vh + 100) continue;
-      // fumée
-      if (Math.random() < dt * 9) {
+      // fumée (de près, celle de carte/guerre.js : les salves, les batteries)
+      if (z < Z.VIE && !nuit() && Math.random() < dt * 9) {
         const r = 1.6;
         this.particles.push({ type: 'smoke', x: b.x + (Math.random() - 0.5) * r * 2, y: b.y + (Math.random() - 0.5) * r * 1.4,
                               life: 0, max: 2.2 + Math.random(), size: 0.5 + Math.random() * 0.6 });
       }
-      if (Math.random() < dt * 14) {
+      if (z < Z.VIE && !nuit() && Math.random() < dt * 14) {
         this.particles.push({ type: 'spark', x: b.x + (Math.random() - 0.5) * 2.4, y: b.y + (Math.random() - 0.5) * 1.6, life: 0, max: 0.15 });
       }
       if (z < 5.5) {
@@ -2905,6 +2926,8 @@ export class MapView {
         ctx.restore();
       }
     }
+    // le nuage de la bataille, les lignes face à face, les villages pillés, les fumées (carte/guerre.js)
+    if (this.state) this.guerreDe().dessus(ctx, dt, time);
   }
 
   drawParticles(ctx, dt) {
@@ -2961,115 +2984,9 @@ export class MapView {
     });
   }
 
+  // la météo de chaque zone, la brume, l'heure du jour et les lumières (carte/ciel.js)
   drawWeather(ctx, dt, time) {
-    const st = this.state;
-    const [mx0, my0] = this.toScreen(0, 0), [mx1, my1] = this.toScreen(this.W, this.H);
-    const X0 = Math.max(0, mx0), Y0 = Math.max(0, my0), X1 = Math.min(this.vw, mx1), Y1 = Math.min(this.vh, my1);
-    if (X1 <= X0 || Y1 <= Y0) return;
-    const ym = clamp(this.toScreen(0, this.m.y_mont)[1], Y0, Y1);
-    const xc = clamp(this.toScreen(this.m.x_cote, 0)[0], X0, X1);
-    // zones : [x0, y0, x1, y1] et bords intérieurs (gauche, droite, haut, bas) qui touchent une autre zone
-    const zones = {
-      montagne: [X0, ym, X1, Y1, 0, 0, ym > Y0, 0],
-      cote: [X0, Y0, xc, ym, 0, xc < X1, 0, ym < Y1],
-      interieur: [xc, Y0, X1, ym, xc > X0, 0, 0, ym < Y1],
-    };
-    // Les voiles de couleur sont peints sur un calque en très basse résolution que le navigateur agrandit :
-    // le lissage fond les limites entre zones sur une quarantaine de pixels, sans couture droite.
-    const K = 1 / 40;
-    const tw = Math.ceil(this.vw * K) + 1, th = Math.ceil(this.vh * K) + 1;
-    const tint = this.wxTint || (this.wxTint = document.createElement('canvas'));
-    if (tint.width !== tw || tint.height !== th) { tint.width = tw; tint.height = th; }
-    const tg = tint.getContext('2d');
-    tg.setTransform(1, 0, 0, 1, 0, 0);
-    tg.clearRect(0, 0, tw, th);
-    tg.setTransform(K, 0, 0, K, 0, 0);
-    let tinted = false;
-    // vers l'extérieur de la carte, le voile déborde : la découpe au bord de la carte reste franche
-    const ext = zr => [zr[4] ? zr[0] : zr[0] - 60, zr[6] ? zr[1] : zr[1] - 60, zr[5] ? zr[2] : zr[2] + 60, zr[7] ? zr[3] : zr[3] + 60];
-    const veil = (zr, col) => { const [a, b, c, d] = ext(zr); tg.fillStyle = col; tg.fillRect(a, b, c - a, d - b); tinted = true; };
-    const live = Object.entries(zones).filter(([zn, zr]) => zr[2] > zr[0] && zr[3] > zr[1] && st.weather[zn]?.kind);
-    // 1) voiles (calque basse résolution)
-    for (const [zn, zr] of live) {
-      const kind = st.weather[zn].kind;
-      if (kind === 'pluie' || kind === 'orage' || kind === 'tempete') {
-        veil(zr, 'rgba(40,52,70,0.12)');
-        if (kind === 'orage') {
-          if (Math.random() < dt * 0.35) this.flash[zn] = 0.4;
-          if (this.flash[zn] > 0) { veil(zr, `rgba(255,255,255,${this.flash[zn]})`); this.flash[zn] -= dt * 1.6; }
-        }
-      } else if (kind === 'neige') veil(zr, 'rgba(240,246,255,0.22)');
-      else if (kind === 'brouillard') {
-        // voile discret et nappes peu blanches : sous le brouillard de guerre, les cercles de vision
-        // ne doivent pas ressortir comme des disques éclatants
-        const pool = this.wx[zn];
-        while (pool.length < 9) pool.push({ x: Math.random(), y: Math.random(), r: 0.25 + Math.random() * 0.3, v: 0.004 + Math.random() * 0.006 });
-        veil(zr, 'rgba(214,220,228,0.12)');
-        const [x0, y0, x1, y1] = zr, zw = x1 - x0, zh = y1 - y0, [ea, eb, ec, ed] = ext(zr);
-        tg.save();
-        tg.beginPath(); tg.rect(ea, eb, ec - ea, ed - eb); tg.clip();
-        for (const p of pool) {
-          p.x += p.v * dt; if (p.x > 1.3) p.x = -0.3;
-          const cx = x0 + p.x * zw, cy = y0 + p.y * zh, R = p.r * Math.max(zw, zh);
-          const gr = tg.createRadialGradient(cx, cy, 0, cx, cy, R);
-          gr.addColorStop(0, 'rgba(224,228,234,0.24)'); gr.addColorStop(1, 'rgba(224,228,234,0)');
-          tg.fillStyle = gr; tg.fillRect(cx - R, cy - R, R * 2, R * 2);
-        }
-        tg.restore();
-      } else if (kind === 'canicule') veil(zr, 'rgba(255,170,70,0.09)');
-      else if (kind === 'nuages') veil(zr, 'rgba(60,70,90,0.06)');
-    }
-    if (tinted) {
-      ctx.save();
-      ctx.beginPath(); ctx.rect(X0, Y0, X1 - X0, Y1 - Y0); ctx.clip();   // le lissage ne déborde pas hors de la carte
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(tint, 0, 0, tw / K, th / K);
-      ctx.restore();
-    }
-    // 2) gouttes et flocons : ils débordent un peu sur la zone voisine et s'y effacent progressivement
-    const F = 40, Hf = F / 2;
-    for (const [zn, zr] of live) {
-      const kind = st.weather[zn].kind;
-      const rain = kind === 'pluie' || kind === 'orage' || kind === 'tempete';
-      if (!rain && kind !== 'neige') continue;
-      const [x0, y0, x1, y1, eL, eR, eT, eB] = zr;
-      const rx = x0 - (eL ? Hf : 0), ry = y0 - (eT ? Hf : 0), rw = x1 + (eR ? Hf : 0) - rx, rh = y1 + (eB ? Hf : 0) - ry;
-      const fade = (x, y) => Math.min(eL ? (x - x0 + Hf) / F : 1, eR ? (x1 + Hf - x) / F : 1, eT ? (y - y0 + Hf) / F : 1, eB ? (y1 + Hf - y) / F : 1);
-      const bucket = (x, y) => Math.ceil(clamp(fade(x, y), 0, 1) * 4) - 1;   // 4 niveaux d'opacité, -1 : invisible
-      const P = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
-      const pool = this.wx[zn];
-      const area = rw * rh / 1e5;
-      ctx.save();
-      ctx.beginPath(); ctx.rect(rx, ry, rw, rh); ctx.clip();
-      if (rain) {
-        const want = Math.min(420, area * (kind === 'pluie' ? 60 : 95));
-        while (pool.length < want) pool.push({ x: rx + Math.random() * rw, y: ry + Math.random() * rh, l: 8 + Math.random() * 10 });
-        pool.length = Math.min(pool.length, Math.ceil(want));
-        const vx = kind === 'tempete' ? -260 : -60, vy = 620;
-        for (const p of pool) {
-          p.x += vx * dt; p.y += vy * dt;
-          if (p.y > ry + rh) { p.y = ry - 10; p.x = rx + Math.random() * (rw + 200); }
-          if (p.x < rx - 50) p.x += rw + 100;
-          const b = bucket(p.x, p.y);
-          if (b >= 0) { P[b].moveTo(p.x, p.y); P[b].lineTo(p.x + vx * 0.02, p.y + p.l); }
-        }
-        ctx.strokeStyle = 'rgb(205,222,240)'; ctx.lineWidth = 1;
-        P.forEach((path, i) => { ctx.globalAlpha = 0.45 * (i + 1) / 4; ctx.stroke(path); });
-      } else {
-        const want = Math.min(360, area * 55);
-        while (pool.length < want) pool.push({ x: rx + Math.random() * rw, y: ry + Math.random() * rh, r: 1 + Math.random() * 2, ph: Math.random() * 6 });
-        pool.length = Math.min(pool.length, Math.ceil(want));
-        for (const p of pool) {
-          p.y += 40 * dt; p.x += Math.sin(time + p.ph) * 12 * dt;
-          if (p.y > ry + rh) { p.y = ry - 4; p.x = rx + Math.random() * rw; }
-          const b = bucket(p.x, p.y);
-          if (b >= 0) { P[b].moveTo(p.x + p.r, p.y); P[b].arc(p.x, p.y, p.r, 0, Math.PI * 2); }
-        }
-        ctx.fillStyle = '#ffffff';
-        P.forEach((path, i) => { ctx.globalAlpha = 0.9 * (i + 1) / 4; ctx.fill(path); });
-      }
-      ctx.restore();
-    }
+    this.cielDe().dessiner(ctx, dt, time);
   }
 }
 
