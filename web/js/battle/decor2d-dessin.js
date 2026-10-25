@@ -32,6 +32,7 @@ export function ligne(g, pts, ferme = false) { g.beginPath(); trace(g, pts, ferm
 const PAL0 = {
   tuile: ['#bf5a40', '#8f3f2e', '#6e3024'], canal: ['#dc9066', '#b56a46', '#94533a'], ardoise: ['#8696a8', '#5a697b', '#46525f'],
   zinc: ['#b5bec2', '#8d979c', '#6d767b'], plomb: ['#9aa3a5', '#6f777a', '#555c5f'], chaume: ['#c8ab66', '#9c8446', '#7a6634'],
+  pierre: ['#e2d8c0', '#b3a88f', '#8f876f'],   // (tour de moulin)
 };
 const PALN = Object.fromEntries(Object.entries(PAL0).map(([k, P]) => [k, [mix(P[0], '#f4f6f8', .75), mix(P[1], '#dfe4e8', .7), P[2]]]));
 export let PAL = PAL0;
@@ -56,6 +57,10 @@ export function pignon(g, x, y, w, h, P, a, hip, canal) {
   if (hip) { g.moveTo(x + i, m); g.lineTo(x + w - i, m); g.moveTo(x, y); g.lineTo(x + i, m); g.lineTo(x, y + h); g.moveTo(x + w, y); g.lineTo(x + w - i, m); g.lineTo(x + w, y + h); }
   else { g.moveTo(x, m); g.lineTo(x + w, m); }
   g.stroke();
+  // le faîtage accroche la lumière du côté du pan éclairé, l'égout du pan à l'ombre se marque : on lit deux pentes
+  const k = .8 * Math.cos(a) - .6 * Math.sin(a) > 0 ? -1 : 1, e = Math.min(hip ? i : 0, w / 2);
+  T(g, clair(P[0], .35), .22, x + e, m + k * .32, x + w - e, m + k * .32);
+  g.globalAlpha = .45; T(g, P[2], .3, x, k < 0 ? y + h - .15 : y + .15, x + w, k < 0 ? y + h - .15 : y + .15); g.globalAlpha = 1;
   if (canal) { g.strokeStyle = 'rgba(245,230,205,.6)'; g.lineWidth = .35; g.strokeRect(x + .2, y + .2, w - .4, h - .4); }   // la génoise
 }
 function pyramideF(g, x, y, w, h, P, a) {
@@ -132,11 +137,12 @@ export function bat(g, parts, x, y, a = 0, s = 1, remap = null) {
   g.restore();
   REMAP = null;
 }
-// emprise d'un bâtiment (unités de la maquette) : boîte des volumes, sans les sols ni les dessins libres
-export function boite(parts) {
+// emprise d'un bâtiment (unités de la maquette) : boîte des volumes, sans les sols ni les dessins libres (tout : avec
+// les sols et les dessins qui disent leur emprise, les parterres)
+export function boite(parts, tout = false) {
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const p of parts) {
-    if (p.sol || p.t === 'fn' || p.t === 'arbre') continue;
+    if (tout ? p.t === 'fn' && p.w == null : p.sol || p.t === 'fn' || p.t === 'arbre') continue;
     const [a, b, c, d] = p.r != null ? [p.x - p.r, p.y - p.r, p.x + p.r, p.y + p.r] : p.pts ? [Math.min(...p.pts.filter((v, i) => !(i % 2))), Math.min(...p.pts.filter((v, i) => i % 2)), Math.max(...p.pts.filter((v, i) => !(i % 2))), Math.max(...p.pts.filter((v, i) => i % 2))] : [p.x, p.y, p.x + p.w, p.y + p.h];
     x0 = Math.min(x0, a); y0 = Math.min(y0, b); x1 = Math.max(x1, c); y1 = Math.max(y1, d);
   }
@@ -166,12 +172,24 @@ export function botte(g, x, y, r = 2.6) {
 const croix = (x, y, s = 1) => ({ t: 'fn', fn: g => { T(g, '#3a3530', .45 * s, x, y - 1.8 * s, x, y + 1.8 * s); T(g, '#3a3530', .45 * s, x - 1.1 * s, y - .6 * s, x + 1.1 * s, y - .6 * s); } });
 const cheminee = (x, y) => ({ t: 'f', x: x - .7, y: y - .7, w: 1.4, h: 1.4, c: '#7d4a3a', h2: 1.8, chem: 1 });
 function parterre(x, y, w, h, R) {   // parterre de broderie : buis taillé en volutes sur gravier
-  return { t: 'fn', fn: g => {
+  return { t: 'fn', x, y, w, h, fn: g => {
     RR(g, '#e3d8bb', x, y, w, h, .4); g.strokeStyle = '#3f6b35'; g.lineWidth = .7;
     g.strokeRect(x + .8, y + .8, w - 1.6, h - 1.6);
     for (let k = 0; k < 4; k++) { const cx = x + w * (k % 2 ? .72 : .28), cy = y + h * (k < 2 ? .3 : .7); g.beginPath(); g.ellipse(cx, cy, w * .16, h * .14, 0, 0, TAU); g.stroke(); g.beginPath(); g.arc(cx, cy, Math.min(w, h) * .05, 0, TAU); g.stroke(); }
     g.beginPath(); g.moveTo(x + w / 2, y + 1.5); g.bezierCurveTo(x + w * .3, y + h * .5, x + w * .7, y + h * .5, x + w / 2, y + h - 1.5); g.stroke();
     if (R) for (let i = 0; i < 6; i++) C(g, '#2f5a2c', x + 1 + (i % 3) * (w - 2) / 2, y + (i < 3 ? 1 : h - 1), .9);
+  } };
+}
+function gazon(x, y, w, h) {   // parterre de gazon : un tapis vert bordé de gravier, des ifs taillés aux coins
+  return { t: 'fn', x, y, w, h, fn: g => {
+    RR(g, '#e3d8bb', x, y, w, h, .4); RR(g, '#7aa659', x + 1.6, y + 1.6, w - 3.2, h - 3.2, .3); RR(g, '#86b264', x + 3.2, y + 3.2, w - 6.4, h - 6.4, .3);
+    for (const [a, b] of [[x + 1, y + 1], [x + w - 1, y + 1], [x + 1, y + h - 1], [x + w - 1, y + h - 1]]) C(g, '#2f5a2c', a, b, .9);
+  } };
+}
+function fruitiers(x, y, w, h, R) {   // potager et fruitiers en espalier (le jardin d'un hôtel plus modeste)
+  return { t: 'fn', x, y, w, h, fn: g => {
+    RR(g, '#e3d8bb', x, y, w, h, .4); potager(g, x + 1.5, y + 1.5, w * .55 - 2, h - 3, R, false);
+    for (let yy = y + 3; yy < y + h - 1; yy += 5) for (let xx = x + w * .6 + 1.5; xx < x + w - 1; xx += 5) arbre(g, xx, yy, 1.9, '#5f9a48');
   } };
 }
 function drapeau(g, x, y) { RR(g, '#2b4ea0', x, y - 1.6, 1.3, 1.6, 0); RR(g, '#f4f1ea', x + 1.3, y - 1.6, 1.3, 1.6, 0); RR(g, '#c8322b', x + 2.6, y - 1.6, 1.3, 1.6, 0); }
@@ -238,8 +256,9 @@ export const BATS = {
     }
     return parts;
   },
-  hotel: () => [
-    parterre(-26, -46, 24, 16, 1), parterre(2, -46, 24, 16, 1), { t: 'r', sol: 1, c: '#e3d8bb', x: -2, y: -46, w: 4, h: 34 },
+  // jardin : 0 parterres de broderie (un seul hôtel par ville), 1 parterres de gazon, 2 potager et fruitiers
+  hotel: (jardin = 0) => [
+    ...[-26, 2].map(x => jardin === 1 ? gazon(x, -46, 24, 16) : jardin === 2 ? fruitiers(x, -46, 24, 16, alea(x + 40)) : parterre(x, -46, 24, 16, 1)), { t: 'r', sol: 1, c: '#e3d8bb', x: -2, y: -46, w: 4, h: 34 },
     { t: 'fn', fn: g => { C(g, '#a89c86', 0, -28, 3.6); C(g, '#4a78b4', 0, -28, 2.7); for (let x = -26; x <= 26; x += 6) C(g, BOIS[2], x, -51, 2.4); } },
     { t: 'r', sol: 1, c: '#d2c8b0', x: -16, y: 3, w: 32, h: 21 },
     { t: 'f', x: -24, y: 24, w: 48, h: 2, c: '#c2b8a0', h2: 1.4 }, { t: 'g', x: -6, y: 20, w: 12, h: 7, hip: 1, p: 'ardoise', h2: 2 },
@@ -268,7 +287,7 @@ export const BATS = {
   // (le bief et la roue ; la rivière elle-même est peinte par le sol)
   moulinEau: () => [
     { t: 'g', x: -6, y: -22, w: 22, h: 13, p: 'tuile', h2: 2.2 }, cheminee(10, -18),
-    { t: 'fn', fn: g => { RR(g, '#4a78b4', -14, -8, 22, 4, .5); RR(g, '#5b4127', -4, -9, 7, 3.6, .4); for (let x = -3.4; x < 3; x += 1) T(g, '#3a2a1b', .3, x, -9, x, -5.4); } },
+    { t: 'fn', fn: g => { RR(g, '#4a78b4', -14, -8, 22, 4, .5); RR(g, '#5b4127', -4, -9, 7, 3.6, .4); T(g, '#3a2a1b', .35, -4, -8.8, 3, -8.8); T(g, '#3a2a1b', .35, -4, -5.6, 3, -5.6); } },   // (les aubes : roue)
     { t: 'g', x: 18, y: -20, w: 10, h: 10, p: 'tuile', h2: 1.2 }, { t: 'arbre', x: -22, y: -20, r: 6, c: BOIS[1] },
   ],
   caserne: () => {
@@ -316,8 +335,8 @@ export const BATS = {
     { t: 'g', x: -26, y: -20, w: 52, h: 9, hip: 1, p: 'ardoise', h2: 2.2 }, { t: 'g', x: -26, y: 11, w: 52, h: 9, hip: 1, p: 'ardoise', h2: 2.2 }, { t: 'g', x: -26, y: -11, w: 9, h: 22, ax: 'y', p: 'ardoise', h2: 2.2 }, { t: 'g', x: 17, y: -11, w: 9, h: 22, ax: 'y', p: 'ardoise', h2: 2.2 },
     { t: 'r', sol: 1, c: '#7aa659', x: -15, y: -9, w: 30, h: 18 }, { t: 'd', x: 0, y: 0, r: 4.5, p: 'plomb', h2: 3.4 },
   ],
-  // moulin à vent : la tour ronde et son toit ; les ailes tournent au-dessus (ailes)
-  moulin: () => [{ t: 'c', x: 0, y: 0, r: 7, p: 'ardoise', h2: 3.5 }, { t: 'fn', fn: g => { C(g, '#d8cdb5', 0, 0, 7); C(g, '#7d5c3a', 0, 0, 3.6); } }],
+  // moulin à vent : la tour de pierre, un peu en cône, et son toit tournant ; les ailes et la queue : ailes
+  moulin: () => [{ t: 'c', x: 0, y: 0, r: 7, p: 'pierre', h2: 3 }, { t: 'c', x: 0, y: 0, r: 5.4, p: 'ardoise', h2: .3 }],
   // maison (ou grange) seule : un toit à deux pans de w × h unités, une cheminée
   maison: (w, h, p, R, grange) => {
     const parts = [{ t: 'g', x: -w / 2, y: -h / 2, w, h, p, h2: 1.6, hip: !grange && R() < .2 }];
@@ -342,6 +361,8 @@ export function toitParcelle(g, o, u, n, w, d, P, long = true) {
   PG(g, teinte(P, -n[0], -n[1]), [o[0], o[1], p1[0], p1[1], m1[0], m1[1], m0[0], m0[1]]);
   PG(g, teinte(P, n[0], n[1]), [m0[0], m0[1], m1[0], m1[1], p2[0], p2[1], p3[0], p3[1]]);
   g.strokeStyle = P[2]; g.lineWidth = .4; g.beginPath(); g.moveTo(m0[0], m0[1]); g.lineTo(m1[0], m1[1]); g.stroke();
+  const k = n[0] * SOLEIL[0] + n[1] * SOLEIL[1] > 0 ? .32 : -.32;   // (le faîtage accroche la lumière, côté éclairé)
+  T(g, clair(P[0], .35), .22, m0[0] + n[0] * k, m0[1] + n[1] * k, m1[0] + n[0] * k, m1[1] + n[1] * k);
   g.strokeStyle = 'rgba(0,0,0,.14)'; g.lineWidth = .25; g.beginPath(); g.moveTo(o[0], o[1]); g.lineTo(p3[0], p3[1]); g.stroke();
   return m0;
 }
@@ -413,11 +434,35 @@ export function arbres(g, liste, ombre = OMBRE) {
 }
 function etoile(g, x, y, r) { for (let i = 0; i < 16; i++) { const a = i * TAU / 16, q = i % 2 ? r * .55 : r; if (i) g.lineTo(x + Math.cos(a) * q, y + Math.sin(a) * q); else g.moveTo(x + q, y); } g.closePath(); }
 
-// ---------- ailes d'un moulin à vent (maquette) : repère du moulin, unités de la maquette, tournées de a
-export function ailes(g, a) {
-  g.rotate(a); g.lineCap = 'butt';
-  for (let i = 0; i < 4; i++) { g.save(); g.rotate(i * Math.PI / 2); RR(g, 'rgba(20,20,10,.25)', 4, -.4, 17, 3.6, .3); RR(g, '#e8e0cc', 3, -1.8, 17, 3.4, .3); T(g, '#6b4d31', .5, 0, 0, 20, 0); for (let x = 5; x < 20; x += 3) T(g, '#9c8a66', .25, x, -1.8, x, 1.6); g.restore(); }
-  C(g, '#5b4127', 0, 0, 1.4);
+// ---------- moulin à vent vu d'en haut (maquette : moulinVu) ; repère du moulin, unités de la maquette
+// Les ailes tournent dans un plan vertical face au vent : de dessus on les voit de profil, une barre fine en travers du
+// vent dont la demi-longueur est le plus grand |L cos(t + k·90°)| des quatre bras (elle bat entre 0,71 L et L) ; c'est
+// leur ombre au sol (soleil du nord-ouest : un bout d'aile à la hauteur h tombe à h·(sx, sy) du pied) qui montre qu'elles
+// tournent, une croix de biais. t : angle des ailes ; wa : là où va le vent (la queue y pointe, le moyeu à l'opposé) ;
+// r : rayon de la tour, L : longueur d'un bras, H : hauteur du moyeu
+export function ailes(g, t, wa, r = 7, L = 17, H = 12) {
+  const dx = Math.cos(wa), dy = Math.sin(wa), px = -dy, py = dx, sx = .34, sy = .45, hx = -dx * 4.5, hy = -dy * 4.5;
+  const bras = [0, 1, 2, 3].map(k => t + k * Math.PI / 2);
+  g.lineCap = 'round';
+  g.save(); g.beginPath(); g.rect(-60, -60, 120, 120); g.moveTo(r, 0); g.arc(0, 0, r, 0, TAU); g.clip('evenodd');   // (pas sur la tour)
+  g.strokeStyle = 'rgba(20,20,10,.3)'; g.lineWidth = 3.2; g.beginPath();
+  for (const a of bras) { const u = L * Math.cos(a), h = H + L * Math.sin(a); g.moveTo(hx + sx * H, hy + sy * H); g.lineTo(hx + px * u + sx * h, hy + py * u + sy * h); }
+  g.stroke(); g.restore();
+  T(g, '#5b4127', 1, 0, 0, dx * 13, dy * 13);   // la queue, sous le vent
+  const m = L * Math.max(...bras.map(a => Math.abs(Math.cos(a)))), x0 = hx - px * m, y0 = hy - py * m, x1 = hx + px * m, y1 = hy + py * m;
+  T(g, '#4a3a28', 1.6, x0, y0, x1, y1); T(g, '#e8e0cc', .9, x0, y0, x1, y1);
+  g.strokeStyle = '#7a5f3e'; g.lineWidth = .22; g.beginPath();   // (le treillis, de profil : ses barreaux)
+  for (let s = 3.2; s < m - .8; s += 2.2) for (const k of [-1, 1]) { const x = hx + px * s * k, y = hy + py * s * k; g.moveTo(x - dx * .7, y - dy * .7); g.lineTo(x + dx * .7, y + dy * .7); }
+  g.stroke();
+  C(g, '#3a2a1b', hx, hy, 1.3);
+}
+// roue d'un moulin à eau (moulinEau) : verticale, dans le sens du bief, donc vue de profil, un rectangle mince ; les aubes
+// du dessus défilent quand elle tourne (t : son angle)
+export function roue(g, t, x0 = -4, y0 = -8.8, x1 = 3, y1 = -5.6) {
+  const r = (x1 - x0) / 2, cx = (x0 + x1) / 2;
+  g.strokeStyle = '#3a2a1b'; g.lineWidth = .3; g.beginPath();
+  for (let k = 0; k < 12; k++) { const a = t + k * TAU / 12; if (Math.sin(a) < 0) continue; const x = cx + r * Math.cos(a); g.moveTo(x, y0); g.lineTo(x, y1); }
+  g.stroke();
 }
 
 // ---------- la vie des champs (maquette : dessinVie) ; repère de la bête, unités des figures, l'avant vers +x

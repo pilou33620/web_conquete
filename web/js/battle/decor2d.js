@@ -3,7 +3,7 @@
 // enceintes (mur médiéval à tours rondes, tracé bastionné avec fossé, demi-lunes, chemin couvert et glacis ; portes,
 // brèches en talus d'éboulis), ouvrages de siège, murets et clôtures, ponts, puis la vie des champs (bêtes, bergers,
 // villageois qui fuient, charrettes à bœufs). dessus (au-dessus des troupes) : houppiers des bois, ajourés là où se
-// tiennent des hommes, flammes des maisons, fumées (cheminées, incendies), braises, ailes des moulins.
+// tiennent des hommes, flammes des maisons, fumées (cheminées, incendies), braises, moulins (ailes de profil face au vent et leur ombre, roues à aubes).
 // Le décor fixe est peint une fois dans des tuiles (512 px, par niveau de zoom ; une vue d'ensemble à 0,5 px/m toujours
 // prête) ; chaque image ne fait que les poser, et ne dessine que ce qui bouge. Un bâtiment touché, en feu ou en ruine
 // (bati, d'après le serveur : SPEC-2D § 5) fait repeindre le coin des tuiles qui le couvrent.
@@ -20,6 +20,7 @@ const VUE = 0.5;                              // la vue d'ensemble, peinte d'ava
 const SEAU = 64;                              // grille de rangement des objets (m)
 const ECH = D.ECH;
 const VENT = [1.1, -0.35];                    // vent par défaut (m/s) quand la vue n'en donne pas
+const FRUITIERS = ['#5f9a48', '#6fa552', '#4f8a3e'];
 
 // ------------------------------------------------------------------ régions, époques
 // contrée d'après le département (« plaine (33) ») : les toits en dépendent (SPEC-2D § 4)
@@ -45,6 +46,10 @@ export const DATES = { gare: 1840, haussmann: 1853, egliseDome: 1630, chateau: 1
 const KINDS = { immeuble: 'haussmann', mairie: 'hotelDeVille', hotel_de_ville: 'hotelDeVille', hoteldeville: 'hotelDeVille', 'hôtel': 'hotel', 'château': 'chateau', 'hôpital': 'hopital', 'poudrière': 'poudriere', 'église': 'eglise', 'cathédrale': 'cathedrale' };
 
 const BATI = TY.BATI, MURS = new Set([TY.MUR, TY.PORTE, TY.BRECHE]);
+// bâtis tout autour d'une cour : le moteur des villes en donne un par case de l'îlot (un seul modèle pour l'îlot)
+const ENCLOS = new Set(['hotel', 'couvent', 'hopital', 'caserne']);
+// sous la tuile canal du sud, les bâtiments communs n'ont pas d'ardoise (églises, hôtels et châteaux la gardent)
+const CANAL = new Set(['halle', 'hopital', 'couvent', 'caserne', 'poudriere', 'ferme', 'moulinEau']);
 const BLOQUE = new Set([TY.EAU, TY.BOIS, TY.FORET, TY.BATI, TY.MUR, TY.MARAIS, TY.BARRICADE]);
 
 // ------------------------------------------------------------------ outils
@@ -87,7 +92,7 @@ export class Decor2D {
     this.montagne = (terrain.hmax ?? 0) > 55;
     this.ville = this.lireVille();
     this.etat = new Uint8Array(this.cols * this.rows);
-    this.time = 0;
+    this.time = 0; this.vent = VENT;
     this.mk = (w, h) => canvas(w, h);
     this.spr = D.sprites(this.mk);
     this.fumees = []; this.feux = new Map();
@@ -134,13 +139,18 @@ export class Decor2D {
     for (const b of src) { const c = this.caseDe(b.x, b.y); if (c >= 0 && (b.kind || 'maison') === 'maison') maisons[c]++; }
     if (src.length) {
       // les fermes à cour fermée ont leurs granges : l'annexe voisine n'est pas redessinée
-      const grandes = src.filter(b => b.kind === 'ferme' && b.w >= 18);
+      const grandes = src.filter(b => b.kind === 'ferme' && b.w >= 18), groupes = new Map();
       for (const b of src) {
         const kind = KINDS[b.kind] || b.kind || 'maison', c = this.caseDe(b.x, b.y);
+        if (ENCLOS.has(kind) && c >= 0 && comp[c] >= 0) { const k = kind + ':' + comp[c]; if (!groupes.has(k)) groupes.set(k, []); groupes.get(k).push(b); continue; }
         if (kind === 'maison' && bourg(c) && maisons[c] <= 1) continue;   // dans un bourg : l'îlot de sa case
         if (kind === 'ferme' && b.w < 18 && grandes.some(o => Math.hypot(o.x - b.x, o.y - b.y) < 45 && this.modele(o).cle === 'fermeCour')) continue;
         this.ajouter(Object.assign({}, b, { kind }), occupe);
       }
+      // (les parterres de broderie à l'hôtel le plus près du centre ; les autres ont des gazons ou un potager)
+      const v = this.ville || { x: this.W / 2, y: this.H / 2 }, loin = gr => Math.hypot(gr[0].x - v.x, gr[0].y - v.y);
+      let n = 0;
+      for (const [k, gr] of [...groupes].sort((a, b) => loin(a[1]) - loin(b[1]))) { const kind = k.split(':')[0]; this.ajouter(this.enclos(kind, gr, kind === 'hotel' ? n++ : 0), occupe); }
     } else {
       // sans bâtiments donnés : un petit groupe de cases est une maison ou une ferme, un grand un bourg (îlots) et
       // son église au plus près de son milieu
@@ -168,6 +178,23 @@ export class Decor2D {
       if (best) { best.cells.push(c); this.parCase.set(c, [best]); }
     }
     B.sort((a, b) => a.y - b.y);
+    this.moulins = B.filter(b => b.ailes || b.roue);
+  }
+  // un îlot d'un seul tenant (couvent, hôtel, hôpital, caserne) : son modèle une fois, au milieu de ses cases, tourné et
+  // mis à leur mesure (les cases qu'il ne couvre pas sont ses cours) ; un hôtel de deux cases donné d'un bloc (w ≥ 30) est
+  // l'hôtel de ville d'une capitale ; n : rang de l'hôtel (le premier a les parterres de broderie)
+  enclos(kind, gr, n = 0) {
+    const { cols, cell, comp } = this, ids = new Set(gr.map(b => comp[this.caseDe(b.x, b.y)]));
+    const bb = boiteDe(gr.flatMap(b => { const c = this.caseDe(b.x, b.y), x = (c % cols) * cell, y = ((c / cols) | 0) * cell; return [[x, y], [x + cell, y + cell]]; }));
+    const cases = [];
+    for (let j = Math.floor(bb[1] / cell); j < bb[3] / cell; j++) for (let i = Math.floor(bb[0] / cell); i < bb[2] / cell; i++) if (ids.has(comp[j * cols + i])) cases.push(j * cols + i);
+    if (kind === 'hotel' && gr.some(b => b.w >= 30)) kind = 'hotelDeVille';
+    const cx = (bb[0] + bb[2]) / 2, cy = (bb[1] + bb[3]) / 2, bw = bb[2] - bb[0], bh = bb[3] - bb[1];
+    const src = { kind, x: cx, y: cy, w: 0, h: 0, toit: gr[0].toit, cases, jardin: n ? 1 + (n - 1) % 2 : 0 }, [u0, v0, u1, v1] = D.boite(this.modele(src).parts, true);
+    const W = (u1 - u0) * ECH, H = (v1 - v0) * ECH, s0 = Math.min(bw / W, bh / H), s1 = Math.min(bw / H, bh / W);
+    const a = (s1 > s0 * 1.05 ? Math.PI / 2 : 0) + (hash(cx | 0, cy | 0, this.seed + 5) < 0.5 ? Math.PI : 0);
+    const S = ECH * clamp(Math.max(s0, s1), 1, 3.2), ca = Math.cos(a), sa = Math.sin(a), mu = (u0 + u1) / 2 * S, mv = (v0 + v1) / 2 * S;
+    return Object.assign(src, { a, s: S, x: cx - (mu * ca - mv * sa), y: cy - (mu * sa + mv * ca) });
   }
   // le modèle de la maquette d'un bâtiment donné : clé, volumes (unités), échelle (m par unité), palettes remplacées
   modele(b) {
@@ -189,7 +216,10 @@ export class Decor2D {
         if (b.w >= 18) { cle = c === 'ouest' ? 'longere' : c === 'sud' ? 'mas' : 'fermeCour'; parts = cle === 'longere' ? D.BATS.longere(toit) : D.BATS[cle](); }
         else { cle = 'grange'; parts = D.BATS.maison(b.w / ECH, b.h / ECH, toit, D.alea(h * 1e9), true); }
         break;
+      case 'hotel': parts = D.BATS.hotel(b.jardin); break;
       case 'moulin': cle = b.water ? 'moulinEau' : 'moulin'; parts = D.BATS[cle](); break;
+      case 'caserne': if (this.year < DATES.caserne) { cle = 'hopital'; parts = D.BATS.hopital().filter(p => p.t !== 'd'); break; }   // (avant les casernes : un logis autour d'une cour)
+      // falls through
       default:
         if (D.BATS[kind] && kind !== 'maison' && !(DATES[kind] && this.year < DATES[kind])) parts = D.BATS[kind]();
         else { cle = 'maison'; parts = D.BATS.maison(b.w / ECH, b.h / ECH, toit, D.alea(h * 1e9), false); }
@@ -197,26 +227,26 @@ export class Decor2D {
     const bx = D.boite(parts), natW = (bx[2] - bx[0]) * ECH;
     // les modèles gardent leurs proportions ; un bâtiment donné plus grand les agrandit (jusqu'au double)
     const s = cle === 'maison' || cle === 'grange' ? ECH : ECH * clamp((b.w || 0) / natW, 1, 2);
-    return { cle, parts, s, boite: bx, remap: cle === 'maison' || cle === 'grange' || cle === 'longere' ? null : remap };
+    return { cle, parts, s, boite: bx, remap: cle === 'maison' || cle === 'grange' || cle === 'longere' ? null : toit === 'canal' && CANAL.has(cle) ? { tuile: 'canal', ardoise: 'canal' } : remap };
   }
   ajouter(src, occupe) {
-    const md = this.modele(src), a = src.a || 0, s = md.s, [u0, v0, u1, v1] = md.boite;
+    const md = this.modele(src), a = src.a || 0, s = src.s || md.s, [u0, v0, u1, v1] = md.boite;
     const b = { kind: src.kind, cle: md.cle, x: src.x, y: src.y, a, s, parts: md.parts, remap: md.remap, boite: md.boite, etat: 0, braise: 0, cells: [], seed: (hash(src.x | 0, src.y | 0, this.seed) * 2 ** 31) | 0 };
     const ca = Math.cos(a), sa = Math.sin(a), monde = (u, v) => [src.x + (u * ca - v * sa) * s, src.y + (u * sa + v * ca) * s];
-    const coins = [monde(u0, v0), monde(u1, v0), monde(u1, v1), monde(u0, v1)];
-    const bb = boiteDe(coins);
-    b.bbox = [bb[0] - 8, bb[1] - 8, bb[2] + 10, bb[3] + 10];
+    const coins = [monde(u0, v0), monde(u1, v0), monde(u1, v1), monde(u0, v1)], [w0, z0, w1, z1] = D.boite(md.parts, true);
+    const bb = boiteDe(coins), tout = boiteDe([monde(w0, z0), monde(w1, z0), monde(w1, z1), monde(w0, z1)]);   // (jardins compris)
+    b.bbox = [Math.min(bb[0], tout[0]) - 8, Math.min(bb[1], tout[1]) - 8, Math.max(bb[2], tout[2]) + 10, Math.max(bb[3], tout[3]) + 10];
     b.r = Math.hypot(bb[2] - bb[0], bb[3] - bb[1]) / 2;
     // cases sous l'emprise : leur état est celui du bâtiment ; un grand bâtiment chasse les îlots de ses cases
     const dedans = (x, y, m) => { const dx = x - src.x, dy = y - src.y, u = (dx * ca + dy * sa) / s, v = (-dx * sa + dy * ca) / s; return u > u0 - m && u < u1 + m && v > v0 - m && v < v1 + m; };
-    const cs = new Set([this.caseDe(src.x, src.y)]);
+    const cs = new Set([this.caseDe(src.x, src.y), ...(src.cases || [])]), siennes = new Set(src.cases);
     for (let y = bb[1]; y <= bb[3]; y += 4) for (let x = bb[0]; x <= bb[2]; x += 4) if (dedans(x, y, 0)) cs.add(this.caseDe(x, y));
     for (const c of cs) {
       if (c < 0 || (this.t[c] !== BATI && c !== this.caseDe(src.x, src.y))) continue;
       b.cells.push(c);
       const l = this.parCase.get(c); if (l) l.push(b); else this.parCase.set(c, [b]);
       const cx = (c % this.cols + 0.5) * this.cell, cy = (((c / this.cols) | 0) + 0.5) * this.cell;
-      if (b.cle !== 'maison' && (c === this.caseDe(src.x, src.y) || dedans(cx, cy, 2 / s))) occupe[c] = 1;
+      if (b.cle !== 'maison' && (c === this.caseDe(src.x, src.y) || siennes.has(c) || dedans(cx, cy, 2 / s))) occupe[c] = 1;
     }
     // cheminées (pour la fumée), foyers (pour les flammes), ailes
     const R = D.alea(b.seed);
@@ -228,7 +258,7 @@ export class Decor2D {
       const p = toits[(R() * toits.length) | 0], [cx, cy, w, h] = p.r != null ? [p.x, p.y, p.r * 1.4, p.r * 1.4] : [p.x + p.w / 2, p.y + p.h / 2, p.w, p.h];
       b.foyers.push([cx + (R() - .5) * w * .8, cy + (R() - .5) * h * .7, R() * 20, .8 + R() * .6]);
     }
-    b.ailes = md.cle === 'moulin';
+    b.ailes = md.cle === 'moulin'; b.roue = md.cle === 'moulinEau';
     this.batiments.push(b);
     return b;
   }
@@ -268,13 +298,74 @@ export class Decor2D {
         s += w;
       }
     }
-    // un arbre ou deux dans la cour, quand il y a la place
-    const arbres = fronts.length <= 2 && !coeur && !haussmann ? Array.from({ length: 1 + (R() < 0.5) }, () => [(R() - 0.5) * S * 0.4, (R() - 0.5) * S * 0.4, 2.6 + R() * 2, D.BOIS[(R() * 5) | 0]]) : [];
-    const b = { kind: 'maison', cle: 'ilot', x, y, a: 0, s: ECH, parcelles, arbres, boite: [-h, -h, h, h], etat: 0, braise: 0, cells: [c], seed: (hash(i, j, this.seed + 14) * 2 ** 31) | 0, chem, bbox: [x - cell / 2 - 6, y - cell / 2 - 6, x + cell / 2 + 8, y + cell / 2 + 8], r: cell * 0.7 };
+    // la cour derrière les maisons, quand il y a la place : une remise contre le mur du voisin, un potager, un puits,
+    // un fruitier ou deux (chacun dans un coin de la cour, au hasard)
+    const arbres = [], cour = [];
+    if (fronts.length <= 2 && !coeur && !haussmann) {
+      const pr = k => fronts.includes(k) ? prof[k] * 1.1 + 0.5 : 1;
+      const x0 = -h + pr('O'), x1 = h - pr('E'), y0 = -h + pr('N'), y1 = h - pr('S'), w = x1 - x0, hh = y1 - y0;
+      if (w > 6 && hh > 6) {
+        const mur = ['N', 'E', 'S', 'O'].filter(k => !fronts.includes(k))[(R() * (4 - fronts.length)) | 0];
+        if (mur && R() < 0.4) cour.push(this.remise(mur, x0, y0, x1, y1, R));
+        const coins = [[0, 0], [1, 0], [0, 1], [1, 1]];
+        for (let k = 3; k > 0; k--) { const m = (R() * (k + 1)) | 0; [coins[k], coins[m]] = [coins[m], coins[k]]; }
+        const qw = w / 2, qh = hh / 2;
+        for (const [ci, cj] of coins) {
+          const qx = x0 + ci * qw, qy = y0 + cj * qh, r = R();
+          if (r < 0.25 && qw > 5 && qh > 4 && !this.neige) cour.push({ t: 'fn', fn: g => D.potager(g, qx + 1, qy + 1, qw - 2, qh - 2, D.alea(i * 37 + j), false) });
+          else if (r < 0.4) cour.push(this.puits(qx + qw / 2, qy + qh / 2));
+          else if (r < 0.75) arbres.push([qx + qw / 2 + (R() - 0.5) * qw * 0.3, qy + qh / 2 + (R() - 0.5) * qh * 0.3, clamp(Math.min(qw, qh) * 0.36, 1.8, 3.6), FRUITIERS[(R() * 3) | 0]]);
+        }
+      }
+    }
+    const b = { kind: 'maison', cle: 'ilot', x, y, a: 0, s: ECH, parcelles, arbres, cour, boite: [-h, -h, h, h], etat: 0, braise: 0, cells: [c], seed: (hash(i, j, this.seed + 14) * 2 ** 31) | 0, chem, bbox: [x - cell / 2 - 6, y - cell / 2 - 6, x + cell / 2 + 8, y + cell / 2 + 8], r: cell * 0.7 };
     b.foyers = parcelles.map(p => [p.o[0] + p.u[0] * p.w / 2 + p.n[0] * p.d / 2, p.o[1] + p.u[1] * p.w / 2 + p.n[1] * p.d / 2, R() * 20, .8 + R() * .6]);
     this.batiments.push(b);
     this.parCase.set(c, [b]);
     return b;
+  }
+  // remise en appentis contre le côté k d'une cour [x0, y0, x1, y1] (unités) ; puits (margelle et eau)
+  remise(k, x0, y0, x1, y1, R) {
+    const L = Math.min(10, (k === 'N' || k === 'S' ? x1 - x0 : y1 - y0) - 2), d = 4, o = 1 + R() * Math.max(0, (k === 'N' || k === 'S' ? x1 - x0 : y1 - y0) - L - 2);
+    const p = this.contree === 'sud' ? 'canal' : this.contree === 'nord' ? 'ardoise' : 'tuile';
+    return k === 'N' ? { t: 's', x: x0 + o, y: y0, w: L, h: d, n: [0, 1], p, h2: .9 } : k === 'S' ? { t: 's', x: x0 + o, y: y1 - d, w: L, h: d, n: [0, -1], p, h2: .9 }
+      : k === 'O' ? { t: 's', x: x0, y: y0 + o, w: d, h: L, n: [1, 0], p, h2: .9 } : { t: 's', x: x1 - d, y: y0 + o, w: d, h: L, n: [-1, 0], p, h2: .9 };
+  }
+  puits(x, y) { return { t: 'fn', fn: g => { D.C(g, 'rgba(20,20,10,.3)', x + .5, y + .7, 1.7); D.C(g, '#a39b88', x, y, 1.6); D.C(g, '#3d5f86', x, y, .9); } }; }
+  // les cœurs d'îlot des villes et des bourgs (prés entre les maisons, loin des rues) : potagers en planches, vergers,
+  // cours de terre battue avec leur puits et une remise, ou un pré ; jamais de parterres (ceux des hôtels et des châteaux)
+  jardins() {
+    const v = this.ville, { cols, rows, cell, t } = this;
+    if (!v) return;
+    const grands = this.batiments.filter(b => b.cle !== 'ilot' && b.cle !== 'maison' && b.cle !== 'grange').map(b => b.bbox), U = cell / 2 / ECH;
+    const loin = new Set([TY.ROUTE, TY.CHEMIN, TY.EAU, TY.GUE, ...MURS]);
+    for (let j = Math.max(2, Math.floor((v.y - v.r) / cell)); j < Math.min(rows - 2, (v.y + v.r) / cell); j++) for (let i = Math.max(2, Math.floor((v.x - v.r) / cell)); i < Math.min(cols - 2, (v.x + v.r) / cell); i++) {
+      const x = (i + 0.5) * cell, y = (j + 0.5) * cell;
+      if (t[j * cols + i] !== TY.PRE || Math.hypot(x - v.x, y - v.y) > v.r || grands.some(bb => x > bb[0] && x < bb[2] && y > bb[1] && y < bb[3])) continue;
+      let bati = false, rue = false;
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const d = t[(j + dj) * cols + i + di]; if (d === BATI) bati = true; else if (Math.abs(di) <= 1 && Math.abs(dj) <= 1 && loin.has(d)) rue = true; }
+      const r = hash(i, j, this.seed + 21);
+      if (rue || !bati || r > 0.85) continue;
+      const R = D.alea((hash(i, j, this.seed + 22) * 2 ** 31) | 0), parts = [], arbres = [];
+      if (r < 0.35 && !this.neige) {   // potager : deux ou trois planches en rangs, une allée
+        const n = 2 + (R() < 0.5), e = (2 * U - 4) / n;
+        for (let k = 0; k < n; k++) parts.push(R() < 0.5 ? [-U + 2, -U + 2 + k * e, 2 * U - 4, e - 2] : [-U + 2 + k * e, -U + 2, e - 2, 2 * U - 4]);
+        if (R() < 0.5) arbres.push([U - 4, -U + 4, 3, FRUITIERS[0]]);
+      } else if (r >= 0.35 && r < 0.6) {   // verger : des fruitiers en rangs tous les 6 m, quelques manques
+        for (let a = -1; a <= 1; a++) for (let c = -1; c <= 1; c++) if (R() < 0.8) arbres.push([a * 12 + (R() - .5) * 2, c * 12 + (R() - .5) * 2, 2.8 + R() * 0.9, FRUITIERS[(R() * 3) | 0]]);
+      }
+      const cour = r >= 0.6 || (r < 0.35 && this.neige), mur = ['N', 'E', 'S', 'O'][(R() * 4) | 0], rem = cour && R() < 0.7 ? this.remise(mur, -U + 2, -U + 2, U - 2, U - 2, R) : null;
+      const px = (R() - .5) * U, py = (R() - .5) * U;
+      this.fixes.push({ z: 1, bbox: [x - cell / 2 - 3, y - cell / 2 - 3, x + cell / 2 + 4, y + cell / 2 + 4], draw: g => {
+        g.save(); g.translate(x, y); g.scale(ECH, ECH);
+        if (cour) { D.RR(g, this.neige ? '#e4e2dc' : '#b9aa88', -U + 1.5, -U + 1.5, 2 * U - 3, 2 * U - 3, 2); D.RR(g, this.neige ? '#eceae6' : '#c4b694', -U + 5, -U + 5, 2 * U - 10, 2 * U - 10, 4); }
+        for (const [a, b, w, h] of parts) D.potager(g, a, b, w, h, D.alea(i * 31 + j), false);
+        if (rem) D.bat(g, [rem], 0, 0);
+        if (cour) this.puits(px, py).fn(g);
+        if (arbres.length) D.arbres(g, arbres.map(([a, b, rr, c]) => [a, b, rr, c, this.neige ? 'nu' : 'rond']));
+        g.restore();
+      } });
+    }
   }
   // dessin d'un bâtiment selon son état (0 intact, 1 touché, 2 en feu, 3 en ruine)
   dessiner(g, b) {
@@ -304,7 +395,8 @@ export class Decor2D {
       }
       g.restore(); return;
     }
-    // ombres d'un seul tracé, puis les toits
+    // la cour (remise, potager, puits), les ombres d'un seul tracé, les fruitiers, puis les toits
+    if (b.cour.length) D.bat(g, b.cour, 0, 0);
     g.fillStyle = 'rgba(20,20,10,.3)'; g.beginPath();
     for (const p of b.parcelles) { const q = quad(p); g.moveTo(q[0] + OMB[0], q[1] + OMB[1]); for (let k = 2; k < 8; k += 2) g.lineTo(q[k] + OMB[0], q[k + 1] + OMB[1]); g.closePath(); }
     g.fill();
@@ -416,6 +508,7 @@ export class Decor2D {
         else { D.ligne(g, pts); g.strokeStyle = '#8a6a46'; g.lineWidth = .14; g.stroke(); g.fillStyle = neige ? '#4e4034' : '#5a4430'; g.beginPath(); for (const p of reechant(pts, 2.5)) { g.moveTo(p[0] + .14, p[1]); g.arc(p[0], p[1], .14, 0, TAU); } g.fill(); }
       } });
     }
+    this.jardins();
   }
   // ------------------------------------------------------------------ enceintes (refaites après une brèche)
   walls() {
@@ -785,10 +878,13 @@ export class Decor2D {
     ctx.globalAlpha = 1;
     for (const p of this.fumees) if (p.k === 'm') { ctx.globalAlpha = clamp(1 - p.age / p.life, 0, 1); D.C(ctx, '#ffb04a', p.x, p.y, .35); }
     ctx.globalCompositeOperation = 'source-over';
-    // ailes des moulins
-    for (const b of this.batiments) {
-      if (!b.ailes || b.etat >= 2 || !view.visible(b.x, b.y, 14)) continue;
-      ctx.save(); ctx.translate(b.x, b.y); ctx.scale(b.s, b.s); D.ailes(ctx, t * .9 + (b.seed % 7)); ctx.restore();
+    // moulins : ailes face au vent (et leur ombre), roues à aubes
+    const wa = Math.atan2(this.vent[1], this.vent[0]);
+    for (const b of this.moulins) {
+      if (b.etat >= 2 || !view.visible(b.x, b.y, 20)) continue;
+      ctx.save(); ctx.translate(b.x, b.y);
+      if (b.ailes) { ctx.scale(b.s, b.s); D.ailes(ctx, t * .9 + (b.seed % 7), wa); } else { ctx.rotate(b.a); ctx.scale(b.s, b.s); D.roue(ctx, t * 1.4); }
+      ctx.restore();
     }
   }
 
@@ -796,7 +892,7 @@ export class Decor2D {
   update(dt, vent = null) {
     dt = Math.min(dt || 0, 0.25);
     this.time += dt;
-    const w = vent ? [vent[0] ?? vent.x ?? 0, vent[1] ?? vent.y ?? 0] : VENT, fx = this.q.fx ?? 2;
+    const w = this.vent = vent ? [vent[0] ?? vent.x ?? 0, vent[1] ?? vent.y ?? 0] : VENT, fx = this.q.fx ?? 2;
     const max = Math.min(160, (this.q.puffs ?? 2000) / 12), P = this.fumees, rnd = Math.random;
     const fumee = (x, y, r0, r1, life, al, spr) => { if (P.length < max) P.push({ k: 'f', spr, x, y, vx: (rnd() - .5) * .6, vy: (rnd() - .5) * .6, r0, r1, life, age: 0, al }); };
     const vis = this.vue ? (x, y, m) => this.vue.visible(x, y, m) : () => true;

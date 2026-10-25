@@ -182,3 +182,50 @@ test('bêtes et villageois fuient les boulets', () => {
   assert.equal(d.vie.filter(e => e.k === 'civil').length, 0, 'ils sont partis');
   const ctx = contexte(); d.sous(ctx, vue(x0, y0, 5));
 });
+
+test('moulin vu de dessus : ailes de profil en travers du vent, queue sous le vent, ombre en croix qui tourne', async () => {
+  const D = await import('../web/js/battle/decor2d-dessin.js');
+  const traits = (t, wa) => {   // les segments tracés (moveTo puis lineTo)
+    const segs = []; let p = null;
+    const g = new Proxy({}, { get: (o, k) => k in o ? o[k] : k === 'moveTo' ? (x, y) => { p = [x, y]; } : k === 'lineTo' ? (x, y) => { segs.push([...p, x, y]); p = [x, y]; } : () => {}, set: (o, k, v) => { o[k] = v; return true; } });
+    D.ailes(g, t, wa);
+    return segs;
+  };
+  const L = 17, wa = 0.6, dx = Math.cos(wa), dy = Math.sin(wa);
+  for (const t of [0, 0.3, Math.PI / 4, 1.2]) {
+    const s = traits(t, wa);
+    assert.ok(s.some(([x0, y0, x1, y1]) => x0 === 0 && y0 === 0 && Math.abs(x1 - dx * 13) < 1e-9 && Math.abs(y1 - dy * 13) < 1e-9), 'la queue pointe sous le vent');
+    // la barre des ailes : perpendiculaire au vent, demi-longueur entre 0,71 L et L
+    const barre = s.find(([x0, y0, x1, y1]) => Math.hypot(x1 - x0, y1 - y0) > L && Math.abs((x1 - x0) * dx + (y1 - y0) * dy) < 1e-9);
+    assert.ok(barre, 'une barre en travers du vent');
+    const m = Math.hypot(barre[2] - barre[0], barre[3] - barre[1]) / 2;
+    assert.ok(m >= L * Math.SQRT1_2 - 1e-9 && m <= L + 1e-9);
+    assert.ok(Math.abs(m - L * Math.max(Math.abs(Math.cos(t)), Math.abs(Math.sin(t)))) < 1e-9);
+  }
+  // l'ombre : quatre bras partis du même point, qui changent quand les ailes tournent
+  const ombre = t => traits(t, wa).slice(0, 4);
+  assert.equal(new Set(ombre(0).map(([x, y]) => x.toFixed(6) + y.toFixed(6))).size, 1);
+  assert.notDeepEqual(ombre(0), ombre(0.4));
+});
+
+test('couvents, hôtels, hôpitaux, casernes donnés case par case : un seul modèle par îlot ; jardins dans les cœurs d\'îlot', () => {
+  const tr = terrain(), b = [];
+  for (let j = 18; j <= 21; j++) for (let i = 24; i <= 28; i++) b.push({ x: (i + .5) * CELL, y: (j + .5) * CELL, w: 17, h: 12, a: 0, kind: 'hotel' });
+  for (let j = 14; j <= 16; j++) for (let i = 24; i <= 28; i++) b.push({ x: (i + .5) * CELL, y: (j + .5) * CELL, w: 17, h: 12, a: 0, kind: 'couvent' });
+  const d = new Decor2D(tr, { buildings: b, place: { x: 470, y: 350, r: 150, type: 'ville' } }, Q);
+  const hotels = d.batiments.filter(o => o.kind === 'hotel'), couvents = d.batiments.filter(o => o.kind === 'couvent');
+  assert.equal(hotels.length, 1, 'un hôtel pour l\'îlot');
+  assert.equal(couvents.length, 1, 'un couvent pour l\'îlot');
+  for (let j = 18; j <= 21; j++) for (let i = 24; i <= 28; i++) assert.deepEqual(d.parCase.get(cellule(i, j)), [hotels[0]], 'ses cases brûlent avec lui');
+  const [x0, y0, x1, y1] = hotels[0].bbox;
+  assert.ok(x0 > 23 * CELL - 12 && x1 < 29 * CELL + 12 && y0 > 17 * CELL - 12 && y1 < 22 * CELL + 12, 'à la mesure de son îlot, jardin compris');
+  // un cœur d'îlot (des prés entourés de maisons) : potager, verger ou cour, quelle que soit la graine
+  let jardins = 0;
+  for (let seed = 1; seed <= 6; seed++) {
+    const t2 = terrain(); t2.t[cellule(20, 19)] = t2.t[cellule(20, 20)] = T.PRE;
+    const d0 = new Decor2D(terrain(), { seed, place: { x: 470, y: 350, r: 150, type: 'ville' } }, Q), d1 = new Decor2D(t2, { seed, place: { x: 470, y: 350, r: 150, type: 'ville' } }, Q);
+    jardins += d1.fixes.length - d0.fixes.length;
+    d1.sous(contexte(), vue(410, 390, 6));
+  }
+  assert.ok(jardins >= 4, 'des jardins dans les cœurs d\'îlot');
+});
