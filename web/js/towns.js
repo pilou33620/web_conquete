@@ -13,10 +13,13 @@ import { rejouer } from './carte/rejeu.js';
 const TS = 512, MAXT = 40, TUILES = new Map(), ATTENTE = new Set();
 let peintre, nP = 0;
 const ENVOYES = new Set();   // les plans dont le worker a l'enregistrement
-const garder = (cle, c) => { TUILES.set(cle, c); while (TUILES.size > MAXT) { const [k, v] = TUILES.entries().next().value; TUILES.delete(k); v.close ? v.close() : v.width = 0; } };
+const VUE = new Map();   // (la dernière image où chaque tuile a servi : jamais chassée dans l'image en cours)
+let img = 0;
+const garder = (cle, c) => { TUILES.set(cle, c); while (TUILES.size > MAXT) { const [k, v] = TUILES.entries().next().value; if (VUE.get(k) === img) break; TUILES.delete(k); VUE.delete(k); v.close ? v.close() : v.width = 0; } };
 function lePeintre() {
   if (peintre === undefined) {
     try { peintre = typeof OffscreenCanvas === 'function' ? new Worker(new URL('./carte/peintre-tuiles.js', import.meta.url), { type: 'module' }) : null; } catch (e) { peintre = null; }
+    if (peintre) peintre.onerror = () => { peintre.terminate(); peintre = null; ATTENTE.clear(); };   // (le worker ne se charge pas : la carte peint ses tuiles)
     if (peintre) peintre.onmessage = ({ data: d }) => { ATTENTE.delete(d.cle); if (d.ko) { peintre.terminate(); peintre = null; } if (d.bmp) garder(d.cle, d.bmp); else ENVOYES.delete(d.cle.split('|')[0]); };   // (sans image : le worker l'a oublié, on le renvoie)
   }
   return peintre;
@@ -392,12 +395,14 @@ TownArt.prototype.tuiles = function (n, p, u) {
   // 1,5 ms chacune à poser, sans carte graphique)
   const mp = this.map, r = 2 ** Math.floor(Math.log2(u * (mp.dpr || 1))), uT = TS / r, w = lePeintre(), [sx, sy] = mp.toScreen(n.x, n.y);
   p.id ??= 'plan' + ++nP;
-  if (w && !ENVOYES.has(p.id)) { ENVOYES.add(p.id); w.postMessage({ id: p.id, n: 6, rec: p.rec }); }
+  img = mp.frameNo;
+  if (w && !ENVOYES.has(p.id)) { ENVOYES.add(p.id); w.postMessage({ id: p.id, n: 16, rec: p.rec }); }
   const X0 = Math.max(IC[0] - p.Rr, IC[0] - sx / u), X1 = Math.min(IC[0] + p.Rr, IC[0] + (mp.vw - sx) / u);
   const Y0 = Math.max(IC[1] - p.Rr, IC[1] - sy / u), Y1 = Math.min(IC[1] + p.Rr, IC[1] + (mp.vh - sy) / u), fin = performance.now() + 4, T = [];
   for (let j = Math.floor(Y0 / uT); j * uT < Y1; j++) for (let i = Math.floor(X0 / uT); i * uT < X1; i++) {
     const cle = `${p.id}|${r}|${i}|${j}`;
     let c = TUILES.get(cle);
+    VUE.set(cle, img);
     if (c) { TUILES.delete(cle); TUILES.set(cle, c); }
     else if (w) { if (ATTENTE.size < 3 && !ATTENTE.has(cle)) { ATTENTE.add(cle); w.postMessage({ id: p.id, cle, r, i, j, T: TS }); } }
     else if (performance.now() < fin) {

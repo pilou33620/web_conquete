@@ -70,14 +70,17 @@ function construire() {
 
 // ---------- de près, le plan plus fin que sa texture : des tuiles de 512 pixels où l'on rejoue la peinture enregistrée
 // (rejeu.js), par un worker (peintre-tuiles.js), sinon ici, 6 ms par image ; en attendant, la texture agrandie.
-// Au plus 48 tuiles (48 Mo), assez pour un écran d'iPad.
-const TS = 512, MAXT = 48, TUILES = new Map(), ATTENTE = new Set();
-let peintre, tuilesDe = null, nT = 0;
-const garder = (cle, c) => { TUILES.set(cle, c); while (TUILES.size > MAXT) { const [k, v] = TUILES.entries().next().value; TUILES.delete(k); v.close ? v.close() : v.width = 0; } };
-function viderTuiles() { for (const v of TUILES.values()) v.close ? v.close() : v.width = 0; TUILES.clear(); ATTENTE.clear(); tuilesDe = null; }
+// Au plus 48 tuiles (48 Mo), assez pour un écran d'iPad ; jamais une tuile posée dans l'image en cours (un grand écran
+// en demande davantage : sinon la tuile peinte chasserait sa voisine et le worker tournerait sans fin).
+const TS = 512, MAXT = 48, TUILES = new Map(), ATTENTE = new Set(), VUE = new Map();
+let peintre, tuilesDe = null, nT = 0, img = 0;
+const garder = (cle, c) => { TUILES.set(cle, c); while (TUILES.size > MAXT) { const [k, v] = TUILES.entries().next().value; if (VUE.get(k) === img) break; TUILES.delete(k); VUE.delete(k); v.close ? v.close() : v.width = 0; } };
+function viderTuiles() { for (const v of TUILES.values()) v.close ? v.close() : v.width = 0; TUILES.clear(); VUE.clear(); ATTENTE.clear(); tuilesDe = null; nT++; }   // (nT : les tuiles d'avant, arrivées tard, sont jetées)
 function lePeintre() {
   if (peintre === undefined) {
     try { peintre = typeof OffscreenCanvas === 'function' ? new Worker(new URL('./peintre-tuiles.js', import.meta.url), { type: 'module' }) : null; } catch (e) { peintre = null; }
+    // (un worker qui ne se charge pas, module refusé ou erreur réseau : la vue peint elle-même)
+    if (peintre) peintre.onerror = () => { peintre.terminate(); peintre = null; ATTENTE.clear(); aIci(); };
     if (peintre) peintre.onmessage = ({ data: d }) => {
       ATTENTE.delete(d.cle); if (d.ko) { peintre.terminate(); peintre = null; aIci(); }
       if (d.cle.startsWith('tex|')) { texRecue(d); return; }
@@ -123,11 +126,13 @@ function tuiles(sc, t) {
   if (!t.rec || m < t.k * 1.25) return null;
   const w = lePeintre();
   envoyer(t);
+  img++;
   const r = 2 ** Math.ceil(Math.log2(m * .75)), u = TS / r, x0 = sc.cx - sc.W / 2 / m, y0 = sc.cy - sc.H / 2 / m, fin = performance.now() + 6;
   const ecran = v => Math.round((v - sc.cx) * m + sc.W / 2), ecranY = v => Math.round((v - sc.cy) * m + sc.H / 2);
   for (let j = Math.floor(y0 / u); j * u < y0 + sc.H / m; j++) for (let i = Math.floor(x0 / u); i * u < x0 + sc.W / m; i++) {
     const cle = `${nT}|${r}|${i}|${j}`;
     let c = TUILES.get(cle);
+    VUE.set(cle, img);
     if (c) { TUILES.delete(cle); TUILES.set(cle, c); }
     else if (w) { if (ATTENTE.size < 3 && !ATTENTE.has(cle)) { ATTENTE.add(cle); w.postMessage({ id: nT, cle, r, i, j, T: TS }); } }
     else if (performance.now() < fin) {
@@ -142,6 +147,7 @@ function tuiles(sc, t) {
 // o : { m (map.m), n (nœud), ns (st.nodes[id]), st, dept (nom du pays), col (couleur du maître), flag (g, x, y, h, col) }
 export function ouvrirInterieur(o) {
   const t0 = performance.now();
+  peinture = null;   // (la peinture d'une ville d'avant, si elle court encore : ses images tardives seront jetées)
   if (!vue) vue = construire();
   const { el, sc } = vue, n = o.n, K = carteDe(o.m), e = etatVille(n, o.ns, o.st);
   el.hidden = false; document.body.classList.add('vi-ouverte');
@@ -152,9 +158,9 @@ export function ouvrirInterieur(o) {
   sc.V = V; sc.fx = []; sc.vie = []; sc.etals = []; sc.feux = []; sc.fumees = []; sc.moulins = [];
   // la texture se peint par pas pendant les premières images (peindreInterieurPas), puis la vie s'y installe
   const fini = tv => { vue.peint = null; vue.deg = tv.deg; vue.tex = tv; sc.tv = tv; vivre(sc, V, e); };
-  const peinte = (tv, p) => { TEX.set(p.cle, tv); while (TEX.size > 2) { const [k0, v0] = TEX.entries().next().value; TEX.delete(k0); if (v0 !== tv) v0.c.close ? v0.c.close() : v0.c.width = v0.c.height = 0; } if (vue.t0 === t0) vue.peinte = performance.now() - t0; };
+  const peinte = (tv, p) => { TEX.set(p.cle, tv); while (TEX.size > 2) { const [k0, v0] = TEX.entries().next().value; TEX.delete(k0); if (v0 !== tv && v0 !== sc.tv) v0.c.close ? v0.c.close() : v0.c.width = v0.c.height = 0; } if (vue.t0 === t0) vue.peinte = performance.now() - t0; };
   const tv = TEX.get(cle);
-  if (tv) { vue.peint = null; fini(tv); vue.peinte = performance.now() - t0; }
+  if (tv) { TEX.delete(cle); TEX.set(cle, tv); vue.peint = null; fini(tv); vue.peinte = performance.now() - t0; }
   else {
     const w = lePeintre(), it = peindreInterieurPas(K, V, KT, e, !w);
     sc.tv = it.next().value;

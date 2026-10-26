@@ -215,6 +215,16 @@ class BatailleSurLePlan(unittest.TestCase):
         self.assertIsNone(m.plan)
         self.assertEqual(m.place['r'], 117)   # (le bourg du générateur d'avant)
 
+    def test_carte_v4_figee(self):
+        """Une bataille de version 4 d'une sauvegarde garde son plan d'avant les bâtiments à la vraie taille
+        (plan_ville_v4, terrain_ville_v4, figés) ; la version 5 prend le nouveau."""
+        n = nom('Belin')
+        pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=0, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'], y=n['y'], battle=True)
+        spec = dict(seed=700, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.5)
+        v4, v5 = TR.generate(GEO, dict(spec, carte=4)), TR.generate(GEO, dict(spec, carte=5))
+        self.assertEqual(bytes(v4.t), bytes(TR.generate(GEO, dict(spec, carte=4)).t))
+        self.assertNotEqual(bytes(v4.t), bytes(v5.t), 'le village de Belin a rétréci : la carte de version 5 diffère')
+
     def test_vite(self):
         cas = [(nom('Bayonne'), 3), (nom('Bordeaux'), 2), (nom('Navarrenx'), 3), (nom('Belin'), 0)]
         t0 = time.perf_counter()

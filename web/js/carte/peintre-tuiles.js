@@ -12,11 +12,11 @@ globalThis.onmessage = ({ data: d }) => {
     try {
       if (TEX?.id !== d.id) { if (TEX) TEX.c.width = TEX.c.height = 0; TEX = { id: d.id, c: new OffscreenCanvas(d.W, d.H), txt: [], img: [], t: performance.now() }; TEX.g = TEX.c.getContext('2d'); TEX.g.setTransform(d.k, 0, 0, d.k, 0, 0); }
       const T = TEX; T.txt.push(...d.tex.txt); T.img.push(...d.tex.img); rejouerTout(T.g, d.tex, T.txt, T.img);
-      if (d.fin || performance.now() - T.t > 250) { T.t = performance.now(); const cle = `tex|${d.id}|${++n}`; createImageBitmap(T.c).then(bmp => { if (d.fin) T.c.width = T.c.height = 0; postMessage({ cle, bmp, fin: d.fin }, [bmp]); }); if (d.fin) TEX = null; }
+      if (d.fin || performance.now() - T.t > 250) { T.t = performance.now(); const cle = `tex|${d.id}|${++n}`; createImageBitmap(T.c).then(bmp => { if (d.fin) T.c.width = T.c.height = 0; postMessage({ cle, bmp, fin: d.fin }, [bmp]); }).catch(() => postMessage({ cle: `tex|${d.id}|0`, ko: true })); if (d.fin) TEX = null; }
     } catch (e) { postMessage({ cle: `tex|${d.id}|0`, ko: true }); }
     return;
   }
-  if (d.rec) { RECS.set(d.id, d.rec); while (RECS.size > (d.n || 2)) RECS.delete(RECS.keys().next().value); return; }   // (n : la carte en garde six, ses places)
+  if (d.rec) { RECS.set(d.id, d.rec); while (RECS.size > (d.n || 2)) RECS.delete(RECS.keys().next().value); return; }   // (n : la carte en garde seize, ses places)
   const R = RECS.get(d.id);
   if (!R) { postMessage({ cle: d.cle }); return; }
   try {

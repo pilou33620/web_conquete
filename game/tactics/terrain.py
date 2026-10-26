@@ -26,8 +26,9 @@ from ..geo import (T_OCEAN, T_EAU as G_EAU, T_PLAINE, T_FORET, T_LANDE, T_MARAIS
 # version (ancienne sauvegarde) est refabriquée par le générateur d'avant (terrain_v1.py, figé) : même carte qu'au début.
 # Version 3 : villes en îlots, enceintes à tours ou tracé bastionné (SPEC-2D § 6) ; une carte de version 2 garde sa
 # place d'avant (_town_v2), le reste du générateur est commun. Version 4 : la place sur le plan de « Voir l'intérieur »
-# (terrain_ville.py ; une carte de version 3 garde la ville de _town) ; le client reçoit ce plan (to_client : plan)
-VERSION = 4
+# (terrain_ville.py ; une carte de version 3 garde la ville de _town) ; le client reçoit ce plan (to_client : plan).
+# Version 5 : les bâtiments à la vraie taille (une carte de version 4 garde son plan : plan_ville_v4, terrain_ville_v4, figés)
+VERSION = 5
 
 W, H, CELL = 3000, 2000, 20
 COLS, ROWS = W // CELL, H // CELL
@@ -365,13 +366,15 @@ def generate(geo, spec):
     # le champ réduit toute la carte (k)
     L = None
     if pl and carte >= 4:
-        from . import terrain_ville as TV
+        if carte >= 5:
+            from . import terrain_ville as TV
+        else:
+            from . import terrain_ville_v4 as TV
         L = TV.preparer(geo, spec, pl, cx, cy)
     k = L.k if L else 1.0
     eau_plan = None
     if L:
-        from .plan_ville import carte_de
-        eau_plan = carte_de(geo).eauK
+        eau_plan = TV.PV.carte_de(geo).eauK
 
     def to_m(xk, yk):
         return ((xk - cx) * 1000.0 * k + W / 2, (yk - cy) * 1000.0 * k + H / 2)
