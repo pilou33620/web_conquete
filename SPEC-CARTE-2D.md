@@ -792,7 +792,7 @@ proche, le paysage et les plans des villes nets jusque-là, et à chaque zoom qu
   sur la carte, le pont de la route de Lormont devient un bac (`map.js`, `pontAn` ; les tuiles se repeignent au passage,
   `epoque.js`) ; dans une bataille, les routes qui passent la Garonne à moins de 2 km de Bordeaux y passent sur un pont de
   bateaux (le dessin seul change : mêmes cases, toutes versions de carte). Banc : `test_plan_ville`.
-  - Autres ponts dessinés dès 1789 qu'on pourrait dater (à vérifier, non faits) : le pont de pierre de Libourne sur la
+  - (fait depuis, « Livré — les autres ponts datés ») Autres ponts dessinés dès 1789 qu'on pourrait dater : le pont de pierre de Libourne sur la
     Dordogne (1824), le pont suspendu de Cubzac (1839), le pont de pierre d'Agen (1827), le pont de Bergerac (vers 1825), les
     ponts suspendus de La Réole (vers 1835), Langon (vers 1831), Cadillac, Marmande, Tonneins, Sainte-Foy (années 1830-1840) ;
     la carte dessine un pont à chaque route qui passe un fleuve (`geo.py`, `bx`), l'intérieur à chaque route ou rue
@@ -971,3 +971,23 @@ jamais dans l'eau ; les villages et les bourgs sans murs comme avant.
   - Bayonne et Blaye (bastionnées, faubourgs hors du glacis) ont 14 à 16 habitants par maison ; Libourne et Agen 6 ;
     Bordeaux 10 (ses échoppes basses) ;
   - les villages au bord d'une grande rivière (Port-Sainte-Marie) gardent leurs îlots noyés.
+
+
+## Livré — les autres ponts datés
+
+- **`PONTS_DATES`** (`villes.js` et `terrain.py`, identiques, banc `test_les_autres_ponts_dates`) : Bordeaux, Garonne 1822 ;
+  ponts de pierre de Libourne (Dordogne) 1824, Bergerac (Dordogne) vers 1825, Agen (Garonne) 1827 ; ponts suspendus de
+  Sainte-Foy-la-Grande (Dordogne, à Port-Sainte-Foy) 1829, Langon (Garonne) 1831, Tonneins 1833, La Réole (pont du Rouergue)
+  1835, Marmande 1838 (1836 selon d'autres sources), Cubzac (Dordogne, `Saint-André-de-Cubzac`) 1839 ; Cadillac 1835,
+  **date approximative** (non trouvée). Sources : Bridgemeister (Langon, Tonneins, Marmande, Port-Sainte-Foy, La Réole),
+  geneawiki (La Réole).
+- Avant la date : sur la carte, un bac (`map.js`, `passes`, l'année de la ville la plus proche du passage, à moins de 5 km :
+  Cubzac est à 4,6 km de son pont) ; dans une bataille, un pont de bateaux (à moins de 5 km de la ville, au lieu de 2 ; le
+  dessin seul change, toutes versions de carte) ; dans l'intérieur, pas de pont, et les charrettes s'arrêtent au bac (elles
+  roulaient sur la Garonne à Bordeaux avant 1822 : `interieur.js`, `jusquAuBac`).
+- **La route de Libourne passe la Garonne** : `geo.py` ne retenait qu'un passage par route (la Dordogne) ; chaque route garde le
+  passage de sa règle (`bx`, `river`) et note les autres grandes rivières que son tracé passe (`ponts`) : la carte y pose aussi
+  un pont ou un bac (routes de Bordeaux à Libourne et à Cubzac : la Garonne ; cinq routes des Landes : le Gave de Pau, la
+  Midouze). La règle du jeu (attente au bac, sapeurs, crue) reste celle d'un seul passage par route.
+- Écart : deux routes qui passent la même rivière près d'une ville ont chacune leur pont (Libourne : routes de Bordeaux et de
+  Créon) ; le pont de l'Isle à Libourne n'est pas daté.

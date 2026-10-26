@@ -222,15 +222,19 @@ export class MapView {
       if (e.water) continue;
       e.path = new Path2D();
       e.pts.forEach((q, k) => k ? e.path.lineTo(q[0], q[1]) : e.path.moveTo(q[0], q[1]));
-      if (e.bx != null) {    // le pont suit le segment du tracé qui franchit l'eau ; pontAn : son année (un bac avant)
-        e.pontAn ??= PONTS_DATES.find(([v, r]) => r === e.river && [A, B].some(n => n.name === v && Math.hypot(n.x - e.bx, n.y - e.by) < 2))?.[2] || 0;
+      // les ponts : celui de la règle (bx), puis ceux des autres grandes rivières que le tracé passe (geo.py, ponts) ; chacun
+      // suit le segment du tracé qui franchit l'eau ; an : son année, celle de la ville la plus proche (un bac avant)
+      if (e.bx != null) e.passes ??= [[e.bx, e.by, e.river, e.rrank], ...(e.ponts || [])].map(([x, y, river, rank]) => {
+        const v = Math.hypot(A.x - x, A.y - y) < Math.hypot(B.x - x, B.y - y) ? A : B, o = { x, y, rank, a: 0, an: 0 };
+        if (Math.hypot(v.x - x, v.y - y) < 5) o.an = PONTS_DATES.find(([n, r]) => n === v.name && r === river)?.[2] || 0;
         let best = 1e9;
         for (let i = 1; i < e.pts.length; i++) {
           // (la distance au segment, pas à son milieu : un long segment qui passe sur le pont perdait contre un court voisin)
-          const [p, q] = [e.pts[i - 1], e.pts[i]], dx = q[0] - p[0], dy = q[1] - p[1], u = clamp(((e.bx - p[0]) * dx + (e.by - p[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1), d = Math.hypot(p[0] + dx * u - e.bx, p[1] + dy * u - e.by);
-          if (d < best) { best = d; e.bang = Math.atan2(q[1] - p[1], q[0] - p[0]); }
+          const [p, q] = [e.pts[i - 1], e.pts[i]], dx = q[0] - p[0], dy = q[1] - p[1], u = clamp(((x - p[0]) * dx + (y - p[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1), d = Math.hypot(p[0] + dx * u - x, p[1] + dy * u - y);
+          if (d < best) { best = d; o.a = Math.atan2(q[1] - p[1], q[0] - p[0]); }
         }
-      }
+        return o;
+      });
     }
     // voies navigables découpées en tronçons avec leur emprise : chaque tuile ne trace que ce qui la traverse
     this.wayPaths = [];
@@ -1477,15 +1481,14 @@ export class MapView {
     g.setLineDash([]);
     g.globalAlpha = 1;
     // ponts et bacs
-    for (const e of es) {
-      if (e.bx == null) continue;
-      let len = Math.max(e.rrank === 1 ? 1.2 : 0.8, 7 / L), wid = Math.max(0.5, 3.2 / L);
+    for (const e of es) for (const pt of e.passes || []) {
+      let len = Math.max(pt.rank === 1 ? 1.2 : 0.8, 7 / L), wid = Math.max(0.5, 3.2 / L);
       // (vue du ciel : un pont de pierre à la mesure de la rivière, plus fine que sur l'ancienne carte)
-      if (!P) { len = Math.max((LARG_RIVIERE[e.rrank] || 0.05) + 0.14, 7 / L); wid = Math.max(larg(e.royal) * 1.5, 3.2 / L); }
+      if (!P) { len = Math.max((LARG_RIVIERE[pt.rank] || 0.05) + 0.14, 7 / L); wid = Math.max(larg(e.royal) * 1.5, 3.2 / L); }
       g.save();
-      g.translate(e.bx, e.by);
-      g.rotate(e.bang);
-      if (e.ferry || this.epoque.year < e.pontAn) {
+      g.translate(pt.x, pt.y);
+      g.rotate(pt.a);
+      if (e.ferry || this.epoque.year < pt.an) {
         g.fillStyle = '#6b4a2e';
         g.beginPath(); g.ellipse(0, 0, len * 0.45, wid * 0.4, 0, 0, Math.PI * 2); g.fill();
       } else if (!P) {

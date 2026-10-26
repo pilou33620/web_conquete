@@ -563,6 +563,15 @@ class GeoMap:
                 e['bx'], e['by'] = e['cx'], e['cy']
             elif best and (on := crossing(path)):
                 e['bx'], e['by'] = round(on[2][0], 2), round(on[2][1], 2)
+                # (les autres grandes rivières que le tracé passe, une fois chacune : leurs ponts ou leurs bacs ; la règle du
+                # passage reste celle de la ligne droite)
+                e['ponts'] = []
+                for p1, p2 in zip(path, path[1:]):
+                    for name, rank, pts in rivers:
+                        if name != on[0] and name not in [q[2] for q in e['ponts']]:
+                            it = next((it for p, q in zip(pts, pts[1:]) if (it := _seg_inter(p1, p2, p, q))), None)
+                            if it:
+                                e['ponts'].append([round(it[1][0], 2), round(it[1][1], 2), name, rank])
             e['pts'] = [[round(x, 2), round(y, 2)] for x, y in path]
             edges.append(e)
 

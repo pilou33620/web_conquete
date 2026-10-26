@@ -68,8 +68,15 @@ export const STYLE_TXT = {
 export const TOITS_STYLE = { bordelais: [['bordelais', 1]], perigord: [['perigord', .82], ['lauze', .18]], landes: [['landes', 1]], agenais: [['agenais', 1]], bearn: [['bearn', 1]], basque: [['basque', 1]] };
 
 // les ponts datés (ville, rivière, année) : avant, la rivière se passe en bac (intérieur, carte, batailles :
-// terrain.PONTS_DATES)
-export const PONTS_DATES = [['Bordeaux', 'Garonne', 1822]];   // (le pont de pierre)
+// terrain.PONTS_DATES) ; sur la carte et dans les batailles, le pont de la ville la plus proche, à moins de 5 km
+export const PONTS_DATES = [
+  ['Bordeaux', 'Garonne', 1822],   // (le pont de pierre)
+  ['Libourne', 'Dordogne', 1824], ['Agen', 'Garonne', 1827], ['Bergerac', 'Dordogne', 1825],   // (ponts de pierre ; Bergerac : vers 1825)
+  ['Saint-André-de-Cubzac', 'Dordogne', 1839],   // (ponts suspendus : Cubzac, 1839)
+  ['Sainte-Foy-la-Grande', 'Dordogne', 1829], ['Langon', 'Garonne', 1831], ['Tonneins', 'Garonne', 1833], ['La Réole', 'Garonne', 1835],
+  ['Marmande', 'Garonne', 1838],   // (1836 selon d'autres sources)
+  ['Cadillac', 'Garonne', 1835],   // (date approximative : non trouvée)
+];
 
 // ---------- l'état de la partie qui compte pour une ville
 // ns : st.nodes[id] ; st : l'état reçu (year, me)

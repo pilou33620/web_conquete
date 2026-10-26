@@ -5,7 +5,7 @@
 // disette, incendie, crue), famine du joueur ; l'heure du jour (AMB.heure) assombrit la scène.
 import {
   C, E, RR, T, TAU, KT, OMBRE, PAL, SPR, Scene, alea, angLerp, brancher, camAnim, cheval, clamp, coneF, fantassin, flammes, fumee,
-  longueur, mod, sombre, surChemin, tenue, toile,
+  distPoly, longueur, mod, sombre, surChemin, tenue, toile,
 } from './lib.js';
 import { carteDe, etatVille, planDe, peindreInterieurPas, lecture, navire, cleVille, IC, IW, IH, S, PONTS_DATES } from './villes.js';
 import { AMB, FIG } from './ambiance.js';
@@ -229,7 +229,10 @@ function vivre(sc, V, e) {
   const rues = V.rues.filter(r => r.pts.length > 1 && r.pts.some(p => V.ilots.some(b => Math.hypot(b.c[0] - p[0], b.c[1] - p[1]) < 40)));
   const passant = (r, v) => { const L = longueur(r.pts); return { k: 'passant', pts: r.pts, L, s: R() * L, v: (R() < .5 ? -1 : 1) * v, lat: (R() - .5) * 3, L2: Object.assign({}, LCIV, { tete: R() < .5 ? 'coiffe' : 'rond' }), habit: HABITS[R() * 6 | 0], x: 0, y: 0, a: 0, pas: R() }; };
   for (let i = 0; i < clamp(Pf.pop / 90, 14, 90) * k; i++) { const r = rues[R() * rues.length | 0]; if (!r) break; vie.push(passant(r, (1.1 + R() * .5) * MS)); }
-  if (!e.siege) for (const r of V.routesL) for (let i = 0; i < 2; i++) vie.push({ k: 'charrette', pts: r.pts, L: longueur(r.pts), s: 40 + R() * 500, v: (R() < .5 ? -1 : 1) * 1.3 * MS, lat: 2.6, x: 0, y: 0, a: 0, pas: 0 });
+  // (les charrettes vont jusqu'au bac d'une rivière sans pont, pas au travers : PONTS_DATES)
+  const sansPont = Pf.rivs.filter(rv => PONTS_DATES.some(([v, n, an]) => v === Pf.n.name && n === rv.name && e.annee < an));
+  const jusquAuBac = pts => { const k0 = pts.findIndex(p => sansPont.some(rv => distPoly(rv.pts, p[0], p[1]) < rv.w / 2 + 3)); return k0 < 0 ? pts : pts.slice(0, k0); };
+  if (!e.siege) for (const r of V.routesL) for (let i = 0, pts = jusquAuBac(r.pts); i < 2 && pts.length > 1; i++) vie.push({ k: 'charrette', pts, L: longueur(pts), s: 40 + R() * 500, v: (R() < .5 ? -1 : 1) * 1.3 * MS, lat: 2.6, x: 0, y: 0, a: 0, pas: 0 });
   for (const rv of Pf.rivs) { const L = longueur(rv.pts); for (let i = 0; i < (Pf.port ? 6 : 2) * (e.blocus ? .3 : 1); i++) vie.push({ k: 'bateau', pts: rv.pts, L, s: R() * L, v: (R() < .5 ? -1 : 1) * (1 + R()) * MS, lat: (R() - .5) * rv.w * .5, grand: Pf.port && rv.rank <= 1 && R() < .5, x: 0, y: 0, a: 0 }); }
   if (Pf.mer && Pf.port) for (let i = 0; i < 6; i++) { const a = Pf.mer.a + (R() - .5) * .8, d = Pf.R * (1.1 + R() * .8); vie.push({ k: 'mouille', x: V.C[0] + Math.cos(a) * d, y: V.C[1] + Math.sin(a) * d, a: R() * TAU, grand: R() < .4 }); }
   // la place : badauds, foire, émeute ; vide en disette et en épidémie

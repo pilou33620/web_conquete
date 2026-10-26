@@ -256,6 +256,19 @@ class BatailleSurLePlan(unittest.TestCase):
         self.assertEqual(kinds(1800), {'bateaux'})
         self.assertEqual(kinds(1830), {None})
 
+    def test_les_autres_ponts_dates(self):
+        import re
+        with open(os.path.join(ICI, '..', 'web', 'js', 'carte', 'villes.js'), encoding='utf-8') as f:
+            js = re.search(r'PONTS_DATES = \[(.*?)\];', f.read(), re.S).group(1)
+        self.assertEqual(sorted((v, r, int(a)) for v, r, a in re.findall(r"\['([^']+)', '([^']+)', (\d+)\]", js)),
+                         sorted(TR.PONTS_DATES), 'villes.js et terrain.py : les mêmes ponts')
+        kinds = lambda y: {b.get('kind') for b in carte(nom('Libourne'), year=y).bridges if b.get('river') == 'Dordogne'}
+        self.assertEqual(kinds(1800), {'bateaux'})
+        self.assertEqual(kinds(1830), {None})
+        # la route de Bordeaux à Libourne passe la Garonne et la Dordogne : un pont (ou un bac) sur chacune
+        e = next(e for e in GEO.edges if {GEO.nodes[e['a']]['name'], GEO.nodes[e['b']]['name']} == {'Bordeaux', 'Libourne'})
+        self.assertEqual({e['river']} | {p[2] for p in e['ponts']}, {'Garonne', 'Dordogne'})
+
     def test_vite(self):
         cas = [(nom('Bayonne'), 3), (nom('Bordeaux'), 2), (nom('Navarrenx'), 3), (nom('Belin'), 0)]
         t0 = time.perf_counter()

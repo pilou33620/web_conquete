@@ -33,7 +33,12 @@ from ..geo import (T_OCEAN, T_EAU as G_EAU, T_PLAINE, T_FORET, T_LANDE, T_MARAIS
 VERSION = 7
 
 # les ponts datés (ville, rivière, année ; comme villes.js, PONTS_DATES) : avant, la route passe sur un pont de bateaux
-PONTS_DATES = [('Bordeaux', 'Garonne', 1822)]   # (le pont de pierre)
+PONTS_DATES = [('Bordeaux', 'Garonne', 1822),   # (le pont de pierre)
+               ('Libourne', 'Dordogne', 1824), ('Agen', 'Garonne', 1827), ('Bergerac', 'Dordogne', 1825),   # (Bergerac : vers 1825)
+               ('Saint-André-de-Cubzac', 'Dordogne', 1839),   # (ponts suspendus : Cubzac, 1839)
+               ('Sainte-Foy-la-Grande', 'Dordogne', 1829), ('Langon', 'Garonne', 1831), ('Tonneins', 'Garonne', 1833),
+               ('La Réole', 'Garonne', 1835), ('Marmande', 'Garonne', 1838),   # (Marmande : 1836 selon d'autres sources)
+               ('Cadillac', 'Garonne', 1835)]   # (date approximative : non trouvée)
 
 W, H, CELL = 3000, 2000, 20
 COLS, ROWS = W // CELL, H // CELL
@@ -611,7 +616,7 @@ def generate(geo, spec):
             elif wet_run:
                 _add_bridge(m, wet_run, t)
                 b = m.bridges[-1]
-                if any(rv == b['river'] and math.hypot(b['x'] - p[0], b['y'] - p[1]) < 2000 * k for p, rv in bacs):
+                if any(rv == b['river'] and math.hypot(b['x'] - p[0], b['y'] - p[1]) < 5000 * k for p, rv in bacs):
                     b['kind'] = 'bateaux'   # (pas encore de pont : les troupes passent sur des bateaux)
                 wet_run = []
             t[c] = T_ROUTE if r['kind'] != 'chemin' else T_CHEMIN

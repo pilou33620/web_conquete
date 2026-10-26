@@ -302,14 +302,13 @@ export class Terre {
   // (au-delà de 256 px/km, plus petits et plus serrés : 9 m de rayon tous les 35 m à 1 024 ; interrompus sur le pont)
   arbresRoyaux(g, routes, w, L = 256) {
     const r = clamp(9 / L, .005, .035), col = boisSaison(.4), ombre = new Path2D(), houp = new Path2D(), lum = new Path2D();
-    for (const { pts, bx, by, rrank } of routes) for (let i = 1; i < pts.length; i++) {
-      const pont = bx == null ? 0 : (LARG_RIVIERE[rrank] || .05) / 2 + .07 + r;   // la moitié du pont de map.js, plus un houppier
+    for (const { pts, passes = [] } of routes) for (let i = 1; i < pts.length; i++) {
       const [a0, b0] = pts[i - 1], [a1, b1] = pts[i], l = Math.hypot(a1 - a0, b1 - b0);
       if (!l) continue;
       const nx = -(b1 - b0) / l, ny = (a1 - a0) / l;
       for (let t = 0; t < l; t += r * 4) for (const s of [-1, 1]) {
         const x = a0 + (a1 - a0) * t / l + nx * s * (w + r * .86), y = b0 + (b1 - b0) * t / l + ny * s * (w + r * .86);
-        if (pont && Math.hypot(x - bx, y - by) < pont) continue;
+        if (passes.some(p => Math.hypot(x - p.x, y - p.y) < (LARG_RIVIERE[p.rank] || .05) / 2 + .07 + r)) continue;   // (la moitié du pont de map.js, plus un houppier)
         ombre.moveTo(x + r * 1.7, y + r * .9); ombre.arc(x + r * .7, y + r * .9, r, 0, TAU);
         houp.moveTo(x + r, y); houp.arc(x, y, r, 0, TAU);
         lum.moveTo(x - r * .32 + r * .5, y - r * .34); lum.arc(x - r * .32, y - r * .34, r * .5, 0, TAU);
