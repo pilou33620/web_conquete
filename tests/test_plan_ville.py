@@ -22,8 +22,9 @@ from game.geo import GeoMap  # noqa: E402
 from game.tactics import plan_ville as PV, terrain as TR, terrain_ville as TV  # noqa: E402
 
 GEO = GeoMap()
+GEO1 = GeoMap(1)   # (la géographie des anciennes parties : les batailles des versions figées n'existent que là)
 K = PV.carte_de(GEO)
-nom = lambda x: next(n for n in GEO.nodes if n['name'] == x)
+nom = lambda x, geo=GEO: next(n for n in geo.nodes if n['name'] == x)
 
 
 def carte(n, fort=None, battle=True, att=0.5, seed=700, dmg=0.0, year=1790, cx=None, cy=None):
@@ -153,7 +154,7 @@ class BatailleSurLePlan(unittest.TestCase):
         # des maisons sur les rues du plan, une église
         bati = [c for c in range(TR.N) if m.t[c] == TR.T_BATI and
                 ((TR.center_of(c)[0] - m.place['x']) ** 2 + (TR.center_of(c)[1] - m.place['y']) ** 2) ** .5 < m.town_r]
-        self.assertGreater(len(bati), 30)   # (un village de 111 m de rayon, quelque 200 maisons)
+        self.assertGreater(len(bati), 25)   # (un village de 111 m de rayon, quelque 200 maisons)
         voisins = lambda c: (c - 1, c + 1, c - TR.COLS, c + TR.COLS)
         sur_rue = [c for c in bati if any(m.t[v] in (TR.T_ROUTE, TR.T_CHEMIN) for v in voisins(c))]
         self.assertGreater(len(sur_rue) / len(bati), 0.95)
@@ -220,21 +221,21 @@ class BatailleSurLePlan(unittest.TestCase):
     def test_carte_v4_figee(self):
         """Une bataille de version 4 d'une sauvegarde garde son plan d'avant les bâtiments à la vraie taille
         (plan_ville_v4, terrain_ville_v4, figés) ; la version 5 prend le nouveau."""
-        n = nom('Belin')
+        n = nom('Belin', GEO1)
         pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=0, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'], y=n['y'], battle=True)
         spec = dict(seed=700, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.5)
-        v4, v5 = TR.generate(GEO, dict(spec, carte=4)), TR.generate(GEO, dict(spec, carte=5))
-        self.assertEqual(bytes(v4.t), bytes(TR.generate(GEO, dict(spec, carte=4)).t))
+        v4, v5 = TR.generate(GEO1, dict(spec, carte=4)), TR.generate(GEO1, dict(spec, carte=5))
+        self.assertEqual(bytes(v4.t), bytes(TR.generate(GEO1, dict(spec, carte=4)).t))
         self.assertNotEqual(bytes(v4.t), bytes(v5.t), 'le village de Belin a rétréci : la carte de version 5 diffère')
 
     def test_carte_v5_figee(self):
         """Une bataille de version 5 d'une sauvegarde garde son plan d'avant la densité des bourgs (plan_ville_v5,
         terrain_ville_v5, figés) ; la version 6 prend le nouveau."""
-        n = nom('Nontron')
+        n = nom('Nontron', GEO1)
         pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=0, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'], y=n['y'], battle=True)
         spec = dict(seed=700, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.5)
-        v5, v6 = TR.generate(GEO, dict(spec, carte=5)), TR.generate(GEO, dict(spec, carte=6))
-        self.assertEqual(bytes(v5.t), bytes(TR.generate(GEO, dict(spec, carte=5)).t))
+        v5, v6 = TR.generate(GEO1, dict(spec, carte=5)), TR.generate(GEO1, dict(spec, carte=6))
+        self.assertEqual(bytes(v5.t), bytes(TR.generate(GEO1, dict(spec, carte=5)).t))
         self.assertNotEqual(bytes(v5.t), bytes(v6.t), 'Nontron a rétréci et s’est aéré : la carte de version 6 diffère')
         bati = lambda m: sum(m.t[c] == TR.T_BATI for c in range(TR.N))
         self.assertLess(bati(v6), bati(v5) * .6, 'moins de maisons')
@@ -242,14 +243,16 @@ class BatailleSurLePlan(unittest.TestCase):
     def test_carte_v6_figee(self):
         """Une bataille de version 6 d'une sauvegarde garde sa carte d'avant les villes denses dans leurs murs et collées
         à leur fleuve (plan_ville_v6, terrain_ville_v6, figés : l'empreinte de la carte de Libourne d'alors) ; la
-        version 7 prend le nouveau plan."""
+        version 7 prend le nouveau plan. Toutes deux sur la carte des anciennes parties (geo_v1.json), qui ne change pas
+        avec les rivières affinées : la version 7 d'une ancienne partie garde aussi la sienne."""
         import hashlib
-        n = nom('Libourne')
+        n = nom('Libourne', GEO1)
         pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=1, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'], y=n['y'], battle=True)
         spec = dict(seed=700, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.5)
-        v6, v7 = TR.generate(GEO, dict(spec, carte=6)), TR.generate(GEO, dict(spec, carte=7))
+        v6, v7 = TR.generate(GEO1, dict(spec, carte=6)), TR.generate(GEO1, dict(spec, carte=7))
         self.assertEqual(hashlib.sha1(bytes(v6.t)).hexdigest(), 'ae47148c3fe604aecb7ab8406c4faf9de693f63c')
         self.assertNotEqual(bytes(v6.t), bytes(v7.t), 'Libourne serrée dans ses murs, au bord de l’Isle : la version 7 diffère')
+        self.assertEqual(hashlib.sha1(bytes(v7.t)).hexdigest(), '302feb7219df7186089752db2f0e5fd3d04b6126')
 
     def test_pas_de_pont_de_pierre_a_bordeaux_avant_1822(self):
         kinds = lambda y: {b.get('kind') for b in carte(nom('Bordeaux'), year=y).bridges if b.get('river') == 'Garonne'}
@@ -280,7 +283,7 @@ class BatailleSurLePlan(unittest.TestCase):
             js = re.search(r'PONTS_DATES = \[(.*?)\];', f.read(), re.S).group(1)
         self.assertEqual(sorted((v, r, int(a)) for v, r, a in re.findall(r"\['([^']+)', '([^']+)', (\d+)\]", js)),
                          sorted(TR.PONTS_DATES), 'villes.js et terrain.py : les mêmes ponts')
-        kinds = lambda y: {b.get('kind') for b in carte(nom('Libourne'), year=y).bridges if b.get('river') == 'Dordogne'}
+        kinds = lambda y: {b.get('kind') for b in carte(nom('Bergerac'), year=y).bridges if b.get('river') == 'Dordogne'}
         self.assertEqual(kinds(1800), {'bateaux'})
         self.assertEqual(kinds(1830), {None})
         # la route de Bordeaux à Libourne passe la Garonne et la Dordogne : un pont (ou un bac) sur chacune

@@ -6,8 +6,9 @@ Le résultat est mis en cache dans data/map_cache.json (régénéré si la sourc
 
 Versions de la géographie (VERSION, notée dans la sauvegarde : une partie garde la sienne, ses routes, ses crues et ses
 cartes de bataille) : 1, les données d'avant (data/geo_v1.json, figé, avec la place d'alors des villes déplacées depuis) ;
-2, les rivières affinées et les villes à leur vraie place. Une modification du calcul de ce fichier change aussi la carte
-des anciennes parties.
+2, les rivières d'OpenStreetMap (Overture, octobre 2026 : leur cours principal, simplifié à 60 m, chaque affluent
+raccordé à sa rivière) et les villes au bord de l'eau à leur vraie place (places.py). Une modification du calcul de ce
+fichier change aussi la carte des anciennes parties.
 """
 import base64
 import hashlib
@@ -506,7 +507,7 @@ class GeoMap:
                 k = (min(a, b), max(a, b))
                 if k in pairs:
                     pairs[k]['royal'] = True
-                elif self._water_on_segment(P[a], P[b]) < 1:
+                elif self._water_on_segment(P[a], P[b]) < 2:   # (une route royale passe une case de côte : Bayonne, Saint-Jean-de-Luz)
                     pairs[k] = dict(royal=True, ferry=False)
         for na, nb in EXTRA_ROADS:
             a, b = self.by_name[na], self.by_name[nb]
@@ -540,15 +541,22 @@ class GeoMap:
             if r['rank'] <= 2:
                 rivers.append((r['name'], r['rank'], [self.xy(lat, lon) for lon, lat in r['pts']]))
 
-        def crossing(path):
+        def crossing(path, pair=()):
             best = None
             for p1, p2 in zip(path, path[1:]):
                 for name, rank, pts in rivers:
                     for p, q in zip(pts, pts[1:]):
                         it = _seg_inter(p1, p2, p, q)
-                        if it and (best is None or rank < best[1]):
+                        if it and (best is None or rank < best[1]) and name not in pair:
                             best = (name, rank, it[1])
             return best
+
+        def pair(path):   # (géographie 2) les rivières que la ligne coupe un nombre pair de fois : leurs méandres, sans passage
+            n = {}
+            for p1, p2 in zip(path, path[1:]):
+                for name, rank, pts in rivers:
+                    n[name] = n.get(name, 0) + sum(1 for p, q in zip(pts, pts[1:]) if _seg_inter(p1, p2, p, q))
+            return {k for k, v in n.items() if v % 2 == 0}
 
         edges = []
         self.road = bytearray(self.W * self.H)
@@ -558,7 +566,7 @@ class GeoMap:
             e = dict(id=eid, a=a, b=b, len=round(d * 1.12, 2), royal=info['royal'], ferry=info['ferry'],
                      river=None, rrank=0, cx=None, cy=None)
             # le jeu (rivière à franchir, longueur) reste celui de la ligne droite ; seul le tracé dessiné change
-            best = crossing([P[a], P[b]])
+            best = crossing([P[a], P[b]], pair([P[a], P[b]]) if self.version >= 2 else ())
             path = [P[a], P[b]] if info['ferry'] else self._road_path(P[a], P[b], cost[info['royal']])
             if info['ferry']:
                 e['river'], e['rrank'] = 'Gironde', 1
@@ -569,7 +577,8 @@ class GeoMap:
             # le pont dessiné, là où le tracé franchit l'eau (cx, cy : le passage pour les règles)
             if info['ferry']:
                 e['bx'], e['by'] = e['cx'], e['cy']
-            elif best and (on := crossing(path)):
+            elif best and (on := crossing(path, {r[0] for r in rivers} - {best[0]} if self.version >= 2 else ()) or crossing(path)):
+                # (géographie 2 : le pont dessiné est celui de la rivière de la règle, s'il est sur le tracé)
                 e['bx'], e['by'] = round(on[2][0], 2), round(on[2][1], 2)
                 # (les autres grandes rivières que le tracé passe, une fois chacune : leurs ponts ou leurs bacs ; la règle du
                 # passage reste celle de la ligne droite)

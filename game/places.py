@@ -2,7 +2,9 @@
 
 Par département : le chef-lieu, 9 autres villes principales (les plus peuplées aujourd'hui, hors banlieues
 collées au chef-lieu, réparties sur le territoire) et 33 villages choisis parmi les communes réelles
-(coordonnées : centre de la commune, données IGN ; population : INSEE via @etalab/decoupage-administratif).
+(coordonnées : centre de la commune, données IGN ; les villes au bord de l'eau à leur vraie place, le point de la
+localité d'OpenStreetMap porté au bord de leur rivière ou de la mer, là où leur plan est dessiné : villes.js, site ;
+population : INSEE via @etalab/decoupage-administratif).
 
 Format : (nom, latitude, longitude, département, type, spécialités, fortification)
 type : capitale (chef-lieu) | ville | village | fort
@@ -11,15 +13,15 @@ spécialités : port, vin, fer, bois, ble, sel, tabac
 
 PLACES = [
     # ---------------- GIRONDE (33) ----------------
-    ('Bordeaux', 44.8378, -0.5792, '33', 'capitale', ['port', 'vin'], 2),
+    ('Bordeaux', 44.8412, -0.5801, '33', 'capitale', ['port', 'vin'], 2),
     ('Bazas', 44.4319, -0.2131, '33', 'ville', [], 1),
-    ('Blaye', 45.1275, -0.6622, '33', 'ville', ['port'], 3),
-    ('Coutras', 45.0408, -0.1281, '33', 'ville', [], 0),
-    ('La Réole', 44.5833, -0.0333, '33', 'ville', [], 1),
-    ('La Teste-de-Buch', 44.6306, -1.1450, '33', 'ville', ['port', 'bois'], 0),
-    ('Langon', 44.5531, -0.2494, '33', 'ville', ['vin'], 0),
+    ('Blaye', 45.1261, -0.6661, '33', 'ville', ['port'], 3),
+    ('Coutras', 45.0351, -0.1387, '33', 'ville', [], 0),
+    ('La Réole', 44.5819, -0.0410, '33', 'ville', [], 1),
+    ('La Teste-de-Buch', 44.6345, -1.1468, '33', 'ville', ['port', 'bois'], 0),
+    ('Langon', 44.5533, -0.2449, '33', 'ville', ['vin'], 0),
     ('Lesparre-Médoc', 45.3072, -0.9378, '33', 'ville', [], 0),
-    ('Libourne', 44.9153, -0.2436, '33', 'ville', ['port', 'vin'], 1),
+    ('Libourne', 44.9134, -0.2443, '33', 'ville', ['port', 'vin'], 1),
     ('Saint-André-de-Cubzac', 44.9953, -0.4461, '33', 'ville', [], 0),
     ('Fort Médoc', 45.1131, -0.7039, '33', 'fort', [], 2),
     ('Ambarès-et-Lagrave', 44.9443, -0.5008, '33', 'village', [], 0),
@@ -27,7 +29,7 @@ PLACES = [
     ('Belin', 44.4975, -0.7883, '33', 'village', ['bois'], 0),
     ('Biganos', 44.6610, -0.9476, '33', 'village', ['bois'], 0),
     ('Blanquefort', 44.9231, -0.6128, '33', 'village', ['ble'], 0),
-    ('Cadillac', 44.6372, -0.3189, '33', 'village', ['vin'], 0),
+    ('Cadillac', 44.6344, -0.3192, '33', 'village', ['vin'], 0),
     ('Captieux', 44.2958, -0.2597, '33', 'village', ['bois'], 0),
     ('Castelnau-de-Médoc', 44.9711, -0.8000, '33', 'village', [], 0),
     ('Cavignac', 45.1003, -0.3906, '33', 'village', ['ble'], 0),
@@ -43,13 +45,13 @@ PLACES = [
     ('Margaux', 45.0397, -0.6747, '33', 'village', ['vin'], 0),
     ('Mios', 44.6176, -0.8957, '33', 'village', ['bois'], 0),
     ('Mérignac', 44.8322, -0.6818, '33', 'village', [], 0),
-    ('Pauillac', 45.1992, -0.7486, '33', 'village', ['vin', 'port'], 0),
+    ('Pauillac', 45.1991, -0.7503, '33', 'village', ['vin', 'port'], 0),
     ('Saint-Ciers-sur-Gironde', 45.2903, -0.6156, '33', 'village', [], 0),
     ("Saint-Jean-d'Illac", 44.7935, -0.8191, '33', 'village', [], 0),
     ('Saint-Médard-en-Jalles', 44.8833, -0.7843, '33', 'village', ['bois'], 0),
     ('Saint-Symphorien', 44.4300, -0.4889, '33', 'village', ['bois'], 0),
     ('Saint-Émilion', 44.8936, -0.1556, '33', 'village', ['vin'], 0),
-    ('Sainte-Foy-la-Grande', 44.8353, 0.2192, '33', 'village', ['ble'], 0),
+    ('Sainte-Foy-la-Grande', 44.8408, 0.2154, '33', 'village', ['ble'], 0),
     ('Salles', 44.5414, -0.8837, '33', 'village', ['bois'], 0),
     ('Sauternes', 44.5317, -0.3442, '33', 'village', ['vin'], 0),
     ('Sauveterre-de-Guyenne', 44.6928, -0.0858, '33', 'village', ['ble'], 0),
@@ -57,18 +59,18 @@ PLACES = [
     ("Villenave-d'Ornon", 44.7733, -0.5583, '33', 'village', ['ble'], 0),
 
     # ---------------- DORDOGNE (24) ----------------
-    ('Périgueux', 45.1846, 0.7214, '24', 'capitale', [], 1),
-    ('Bergerac', 44.8517, 0.4828, '24', 'ville', ['vin', 'port'], 1),
-    ('Lalinde', 44.8394, 0.7417, '24', 'ville', ['ble'], 0),
-    ('Montpon', 45.0089, 0.1589, '24', 'ville', ['bois'], 0),
-    ('Mussidan', 45.0356, 0.3642, '24', 'ville', [], 0),
+    ('Périgueux', 45.1831, 0.7200, '24', 'capitale', [], 1),
+    ('Bergerac', 44.8517, 0.4861, '24', 'ville', ['vin', 'port'], 1),
+    ('Lalinde', 44.8377, 0.7377, '24', 'ville', ['ble'], 0),
+    ('Montpon', 45.0085, 0.1620, '24', 'ville', ['bois'], 0),
+    ('Mussidan', 45.0373, 0.3647, '24', 'ville', [], 0),
     ('Nontron', 45.5292, 0.6619, '24', 'ville', ['fer'], 0),
     ('Ribérac', 45.2511, 0.3392, '24', 'ville', ['ble'], 0),
     ('Sarlat', 44.8897, 1.2167, '24', 'ville', [], 1),
-    ('Terrasson', 45.1300, 1.3008, '24', 'ville', [], 0),
+    ('Terrasson', 45.1313, 1.3015, '24', 'ville', [], 0),
     ('Thiviers', 45.4153, 0.9192, '24', 'ville', ['ble'], 0),
     ('Beynac', 44.8400, 1.1442, '24', 'fort', [], 2),
-    ('Domme', 44.8019, 1.2153, '24', 'fort', [], 2),
+    ('Domme', 44.8025, 1.2140, '24', 'fort', [], 2),
     ('Hautefort', 45.2600, 1.1453, '24', 'fort', [], 2),
     ('Annesse-et-Beaulieu', 45.1829, 0.5953, '24', 'village', ['ble'], 0),
     ('Bassillac', 45.1614, 0.8853, '24', 'village', [], 0),
@@ -105,15 +107,15 @@ PLACES = [
     ('Échourgnac', 45.1300, 0.2300, '24', 'village', ['bois'], 0),
 
     # ---------------- LANDES (40) ----------------
-    ('Mont-de-Marsan', 43.8902, -0.4994, '40', 'capitale', [], 1),
-    ("Aire-sur-l'Adour", 43.7019, -0.2622, '40', 'ville', ['ble'], 0),
-    ('Biscarrosse', 44.3944, -1.1631, '40', 'ville', ['bois'], 0),
-    ('Capbreton', 43.6417, -1.4317, '40', 'ville', ['port'], 0),
-    ('Dax', 43.7102, -1.0536, '40', 'ville', [], 1),
+    ('Mont-de-Marsan', 43.8911, -0.4989, '40', 'capitale', [], 1),
+    ("Aire-sur-l'Adour", 43.7000, -0.2650, '40', 'ville', ['ble'], 0),
+    ('Biscarrosse', 44.3851, -1.1664, '40', 'ville', ['bois'], 0),
+    ('Capbreton', 43.6440, -1.4464, '40', 'ville', ['port'], 0),
+    ('Dax', 43.7091, -1.0524, '40', 'ville', [], 1),
     ('Mimizan', 44.2006, -1.2297, '40', 'ville', ['bois'], 0),
     ('Morcenx', 44.0361, -0.9119, '40', 'ville', ['bois'], 0),
-    ('Peyrehorade', 43.5467, -1.1056, '40', 'ville', [], 0),
-    ('Saint-Sever', 43.7572, -0.5733, '40', 'ville', ['ble'], 0),
+    ('Peyrehorade', 43.5457, -1.1043, '40', 'ville', [], 0),
+    ('Saint-Sever', 43.7619, -0.5763, '40', 'ville', ['ble'], 0),
     ('Soustons', 43.7522, -1.3283, '40', 'ville', [], 0),
     ('Amou', 43.5928, -0.7458, '40', 'village', ['ble'], 0),
     ('Benquet', 43.8216, -0.5071, '40', 'village', [], 0),
@@ -150,16 +152,16 @@ PLACES = [
     ('Ychoux', 44.3289, -0.9706, '40', 'village', ['fer'], 0),
 
     # ---------------- LOT-ET-GARONNE (47) ----------------
-    ('Agen', 44.2033, 0.6163, '47', 'capitale', ['ble'], 1),
-    ('Aiguillon', 44.3011, 0.3383, '47', 'ville', ['ble'], 0),
+    ('Agen', 44.2011, 0.6154, '47', 'capitale', ['ble'], 1),
+    ('Aiguillon', 44.3024, 0.3422, '47', 'ville', ['ble'], 0),
     ('Casteljaloux', 44.3108, 0.0872, '47', 'ville', ['bois'], 0),
-    ('Fumel', 44.4983, 0.9658, '47', 'ville', ['fer'], 0),
-    ('Marmande', 44.5000, 0.1653, '47', 'ville', ['ble'], 0),
+    ('Fumel', 44.4976, 0.9683, '47', 'ville', ['fer'], 0),
+    ('Marmande', 44.5004, 0.1630, '47', 'ville', ['ble'], 0),
     ('Miramont', 44.6031, 0.3539, '47', 'ville', ['ble'], 0),
     ('Nérac', 44.1361, 0.3394, '47', 'ville', [], 1),
-    ('Sainte-Livrade', 44.3986, 0.5917, '47', 'ville', ['tabac'], 0),
-    ('Tonneins', 44.3919, 0.3092, '47', 'ville', ['tabac'], 0),
-    ('Villeneuve-sur-Lot', 44.4081, 0.7047, '47', 'ville', ['ble'], 1),
+    ('Sainte-Livrade', 44.3992, 0.5887, '47', 'ville', ['tabac'], 0),
+    ('Tonneins', 44.3929, 0.3087, '47', 'ville', ['tabac'], 0),
+    ('Villeneuve-sur-Lot', 44.4083, 0.7078, '47', 'ville', ['ble'], 1),
     ("Penne-d'Agenais", 44.3886, 0.8186, '47', 'fort', [], 1),
     ('Astaffort', 44.0647, 0.6519, '47', 'village', ['ble'], 0),
     ('Barbaste', 44.1586, 0.2443, '47', 'village', [], 0),
@@ -196,17 +198,17 @@ PLACES = [
     ('Villeréal', 44.6361, 0.7433, '47', 'village', [], 0),
 
     # ---------------- BASSES-PYRÉNÉES (64) ----------------
-    ('Pau', 43.2951, -0.3708, '64', 'capitale', [], 2),
-    ('Bayonne', 43.4929, -1.4748, '64', 'ville', ['port', 'fer'], 3),
-    ('Biarritz', 43.4832, -1.5586, '64', 'ville', [], 0),
+    ('Pau', 43.2943, -0.3698, '64', 'capitale', [], 2),
+    ('Bayonne', 43.4907, -1.4762, '64', 'ville', ['port', 'fer'], 3),
+    ('Biarritz', 43.4835, -1.5597, '64', 'ville', [], 0),
     ('Hasparren', 43.3842, -1.3053, '64', 'ville', [], 0),
-    ('Hendaye', 43.3586, -1.7744, '64', 'ville', [], 1),
+    ('Hendaye', 43.3717, -1.7667, '64', 'ville', [], 1),
     ('Mauléon', 43.2244, -0.8869, '64', 'ville', [], 1),
-    ('Oloron-Sainte-Marie', 43.1947, -0.6067, '64', 'ville', [], 1),
-    ('Orthez', 43.4883, -0.7719, '64', 'ville', [], 1),
-    ('Saint-Jean-de-Luz', 43.3883, -1.6625, '64', 'ville', ['port'], 0),
+    ('Oloron-Sainte-Marie', 43.1925, -0.6111, '64', 'ville', [], 1),
+    ('Orthez', 43.4887, -0.7733, '64', 'ville', [], 1),
+    ('Saint-Jean-de-Luz', 43.3889, -1.6650, '64', 'ville', ['port'], 0),
     ('Salies-de-Béarn', 43.4744, -0.9256, '64', 'ville', ['sel'], 0),
-    ('Navarrenx', 43.3214, -0.7592, '64', 'fort', [], 3),
+    ('Navarrenx', 43.3222, -0.7609, '64', 'fort', [], 3),
     ('Saint-Jean-Pied-de-Port', 43.1631, -1.2378, '64', 'fort', [], 3),
     ('Urdos', 42.8700, -0.5550, '64', 'fort', [], 1),
     ('Accous', 42.9767, -0.6033, '64', 'village', [], 0),
@@ -237,7 +239,7 @@ PLACES = [
     ('Saint-Pée-sur-Nivelle', 43.3562, -1.5555, '64', 'village', [], 0),
     ('Saint-Étienne-de-Baïgorry', 43.1753, -1.3444, '64', 'village', ['fer'], 0),
     ('Sare', 43.2959, -1.5869, '64', 'village', [], 0),
-    ('Sauveterre-de-Béarn', 43.4008, -0.9414, '64', 'village', [], 0),
+    ('Sauveterre-de-Béarn', 43.3969, -0.9384, '64', 'village', [], 0),
     ('Serres-Castet', 43.3801, -0.3668, '64', 'village', [], 0),
     ('Soumoulou', 43.2618, -0.1931, '64', 'village', [], 0),
     ('Tardets', 43.1181, -0.8636, '64', 'village', [], 0),
@@ -271,6 +273,7 @@ EXTRA_ROADS = [
     ('Blaye', 'Fort Médoc'),  # bac sur l'estuaire
     ('Saint-Jean-Pied-de-Port', 'Saint-Étienne-de-Baïgorry'),
     ('Mauléon', 'Tardets'),
+    ('Bazas', 'La Réole'),   # (Langon, à sa vraie place, la cachait au maillage automatique)
 ]
 FERRIES = {('Blaye', 'Fort Médoc')}
 

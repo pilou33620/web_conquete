@@ -114,6 +114,7 @@ class Villes(unittest.TestCase):
             self.assertTrue(corps, n['name'])
             self.assertTrue(corps <= reseau, f"{n['name']} : {len(corps - reseau)} portes hors des rues")
             rues = [c for c in range(TR.N) if m.t[c] == TR.T_ROUTE and dedans(c)]
+            reseau |= flood(m, c0, lambda tc: tc in RUE or tc == TR.T_EAU)   # (la Dordogne passe dans la place à Domme : les rues d'en face)
             self.assertGreater(sum(c in reseau for c in rues) / len(rues), 0.95, n['name'])
 
     def test_les_murs_ferment_la_ville(self):
@@ -130,7 +131,7 @@ class Villes(unittest.TestCase):
             self.assertTrue(coeur <= ville, f"{n['name']} : des maisons hors les murs")
 
     def test_pas_de_maison_sur_une_rue(self):
-        for n, fort in ((noeud('village', 7), 0), (noeud('ville', 3), 1), (noeud('capitale', 0), 4), (FORTS[1], 3)):
+        for n, fort in ((noeud('village', 7), 0), (noeud('ville', 3), 1), (noeud('capitale', 0), 4), (FORTS[3], 3)):   # (pas Beynac : au pied du château, la Dordogne prend sa place bastionnée)
             m = carte(n, fort)
             for r in m.roads:
                 if r['kind'] != 'chemin':

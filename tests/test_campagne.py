@@ -978,9 +978,9 @@ class TraceDesRoutes(unittest.TestCase):
         from game.geo import _seg_inter
         rivers = [[GEO.xy(la, lo) for lo, la in r['pts']] for r in GEO.src['rivers'] if r['rank'] <= 2]
 
-        def crossings(path, A, B):
+        def crossings(path, A, B, marge=0.6):
             return sum(1 for p1, p2 in zip(path, path[1:]) for pts in rivers for p, q in zip(pts, pts[1:])
-                       if (it := _seg_inter(p1, p2, p, q)) and min(math.dist(it[1], A), math.dist(it[1], B)) > 0.6)
+                       if (it := _seg_inter(p1, p2, p, q)) and min(math.dist(it[1], A), math.dist(it[1], B)) > marge)
         for e in GEO.edges:
             if e.get('kind') == 'water':
                 continue
@@ -990,7 +990,7 @@ class TraceDesRoutes(unittest.TestCase):
                 self.assertLessEqual(crossings(e['pts'], A, B), max(1, crossings([A, B], A, B)))
                 self.assertLess(sum(math.dist(p, q) for p, q in zip(e['pts'], e['pts'][1:])), 2.2 * math.dist(A, B) + 1)
         bc = next(e for e in GEO.edges if {GEO.nodes[e['a']]['name'], GEO.nodes[e['b']]['name']} == {'Bordeaux', 'Cadillac'})
-        self.assertEqual(crossings(bc['pts'], bc['pts'][0], bc['pts'][-1]), 1)
+        self.assertEqual(crossings(bc['pts'], bc['pts'][0], bc['pts'][-1], 0), 1)   # (au pied de Cadillac)
 
 
 class RoutesCoupeesParLaCrue(unittest.TestCase):
@@ -1001,7 +1001,7 @@ class RoutesCoupeesParLaCrue(unittest.TestCase):
         g.flood_until = -1
         an = g.date().year + 1
         cut = CR.spans(GEO)
-        self.assertEqual(len(cut), 27, 'la règle des parties en cours (crue.py, rayon figé de plan_ville_v5)')
+        self.assertEqual(len(cut), 29, 'les rivières affinées (27 sur la carte des anciennes parties : test_serveur)')
         eid = max(cut, key=lambda k: GEO.edges[k]['len'])
         e = GEO.edges[eid]
         g.has_sapeurs = lambda a: True   # (sans l'attente au bac : ces routes passent toutes le fleuve)

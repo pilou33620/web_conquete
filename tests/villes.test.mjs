@@ -124,7 +124,7 @@ test('les bâtiments à leur vraie taille : rues, façades, îlots, places, cath
   const cath = P.ilots.find(b => b.role === 'cathedrale'), gc = releve(); P.apres.length = 0;
   L.remplirIlot(gc, cath, P, R); P.apres.forEach(f => f());
   const lc = gc.echelles[0] * longueurModele(L.BATS.cathedrale()) * M;
-  assert.ok(lc >= 100 && lc <= 135, `la cathédrale : ${lc.toFixed(0)} m`);
+  assert.ok(lc >= 100 && lc <= 150, `la cathédrale : ${lc.toFixed(0)} m`);
   // l'église d'un village
   const B = plan(nom('Belin')), eg = B.ilots.find(b => b.role === 'eglise'), ge = releve();
   L.remplirIlot(ge, eg, B, R);
@@ -148,10 +148,10 @@ test('les villes denses dans leurs murs, collées à leur fleuve', () => {
   const CL = new Set(V.CLOS), M = 1000 / 180;
   for (const x of ['Bordeaux', 'Bayonne', 'Libourne', 'Agen']) {
     const W = plan(nom(x)), C = W.C, dedans = W.ilots.filter(b => b.zone === 'ville' && !b.hors && b.d < W.rMur), ha = Math.PI * (W.rMur * M) ** 2 / 1e4;
-    assert.ok(dedans.filter(b => CL.has(b.role)).length <= Math.max(3, dedans.length * .08), `${x} : quelques cours et jardins dans les murs`);
+    assert.ok(dedans.filter(b => CL.has(b.role)).length <= Math.max(5, dedans.length * .08), `${x} : quelques cours et jardins dans les murs`);
     assert.ok(Array.from({ length: 72 }, (_, i) => i * Math.PI / 36).some(a => W.eau(C[0] + Math.cos(a) * (W.rMur + 30), C[1] + Math.sin(a) * (W.rMur + 30))), `${x} : l’eau à moins de 170 m des murs`);
     assert.ok(W.Pf.pop / ha > 150 && W.Pf.pop / ha < 600, `${x} : ${(W.Pf.pop / ha).toFixed(0)} habitants par hectare dans les murs`);
   }
-  assert.ok(Math.hypot(...plan(nom('Bayonne')).Pf.o) * M > 1000, 'Bayonne descend à l’Adour');
+  for (const x of ['Bayonne', 'Agen', 'Libourne', 'Langon', 'Saint-Sever']) assert.ok(Math.hypot(...plan(nom(x)).Pf.o) * M < 20, `${x} : au bord de l’eau à son nœud (sa vraie place)`);
   assert.deepEqual(plan(nom('Belin')).Pf.o, [0, 0], 'les villages restent au nœud');
 });

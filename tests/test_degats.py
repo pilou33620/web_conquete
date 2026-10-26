@@ -12,7 +12,7 @@ import math
 import unittest
 
 from fabrique import BT, GEO, S, avancer
-from game.tactics.terrain import COLS, N, T_BATI, T_MUR, T_PRE, center_of
+from game.tactics.terrain import COLS, N, T_BATI, T_MUR, T_PRE, cell_of, center_of
 
 
 def place(role='att', seed=1, demarree=True):
@@ -111,7 +111,12 @@ class Maisons(unittest.TestCase):
         pl = tb.map.place
         art = next(u for u in tb.units if u.cls == 'artillerie' and u.side == 0)
         murs = [c for c in range(N) if tb.t[c] == T_MUR]
-        w = max(murs, key=lambda c: center_of(c)[0])   # le mur le plus à l'est
+
+        def derriere(c):   # la case à 40 m derrière le mur c, vers le centre de la place
+            x, y = center_of(c)
+            k = 40 / math.hypot(x - pl['x'], y - pl['y'])
+            return cell_of(x - (x - pl['x']) * k, y - (y - pl['y']) * k)
+        w = max((c for c in murs if tb.t[derriere(c)] == T_BATI), key=lambda c: center_of(c)[0])   # le mur le plus à l'est, des maisons derrière lui
         wx, wy = center_of(w)
         a = math.atan2(wy - pl['y'], wx - pl['x'])
         art.x, art.y = wx + math.cos(a) * 350, wy + math.sin(a) * 350   # dehors, face au mur
