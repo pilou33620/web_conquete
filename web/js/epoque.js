@@ -9,7 +9,7 @@
 //       du tricorne, du bicorne puis du haut-de-forme, une teinte un peu sépia au XVIIIe siècle.
 import { clamp } from './battle/formes.js';
 import { hash } from './map.js';
-import { PONTS_DATES } from './carte/villes.js';
+import { PONTS_DATES, site } from './carte/villes.js';
 
 const TAU = Math.PI * 2;
 // marques qui changent la peinture des tuiles : les tuiles sont repeintes quand elles changent
@@ -75,7 +75,7 @@ export class Epoque {
     for (const n of mp.nodes) {
       const mk = this.of(owner(n));
       if (!mk) continue;
-      const [x, y] = mp.toScreen(n.x, n.y), s = mp.nodeSize(n);
+      const [x, y] = mp.toScreen(...site(n)), s = mp.nodeSize(n);
       if (x < -120 || y < -120 || x > mp.vw + 120 || y > mp.vh + 120) continue;
       const big = n.type === 'ville' || n.type === 'capitale';
       // tour Chappe sur une hauteur voisine (le télégraphe électrique la remplace)

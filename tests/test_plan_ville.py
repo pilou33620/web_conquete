@@ -256,6 +256,24 @@ class BatailleSurLePlan(unittest.TestCase):
         self.assertEqual(kinds(1800), {'bateaux'})
         self.assertEqual(kinds(1830), {None})
 
+    def test_bataille_rangee_pres_d_une_ville_decalee(self):
+        """Version 7 : la ville est à son site, jusqu'à 1,35 km du nœud vers l'eau ; une bataille rangée tout près la
+        garde entière sur la carte (la place choisie d'après son site, le centre déplacé au plus juste)."""
+        vues = 0
+        for nm, dx, dy in (('Bayonne', 0, 0), ('Bayonne', 0, 1.2), ('Agen', 1.2, 0), ('Agen', 0, 0), ('Libourne', -.8, .5)):
+            n = nom(nm)
+            spec = dict(seed=700, cx=n['x'] + dx, cy=n['y'] + dy, season='ete', weather='soleil', year=1790, place=None,
+                        att_angle=0.5, carte=TR.VERSION, lieu=dict(nid=n['id'], f=n['fort'], pop=n['pop0'], d=0))
+            m = TR.generate(GEO, spec)
+            if not m.plan:
+                continue
+            vues += 1
+            pts = [p for b in m.plan['ilots'] if not b[2] for p in b[0]]   # (la ville, sans les faubourgs des routes)
+            t = m.town
+            self.assertTrue(all(-1 <= x <= TR.W + 1 and -1 <= y <= TR.H + 1 for x, y in pts) and
+                            t['r'] <= t['x'] <= TR.W - t['r'] and t['r'] <= t['y'] <= TR.H - t['r'], f'{nm} {dx} {dy} : hors de la carte')
+        self.assertGreaterEqual(vues, 3)
+
     def test_les_autres_ponts_dates(self):
         import re
         with open(os.path.join(ICI, '..', 'web', 'js', 'carte', 'villes.js'), encoding='utf-8') as f:

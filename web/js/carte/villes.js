@@ -551,7 +551,8 @@ function murMedieval(g, V) {
   V.lieux.remparts = { x: portes[0]?.[0] ?? IC[0], y: portes[0]?.[1] ?? IC[1] };
 }
 function murRect(g, V) {   // (coupé là où il passerait dans l'eau : formeMur ; une tour tous les 50 m environ)
-  for (const m of formeMur(V).murs) {
+  const f = formeMur(V);
+  for (const m of f.murs.slice(0, f.nr)) {   // (sans la citadelle, qui a son dessin)
     const c = m.map(([x, y]) => [x + V.C[0], y + V.C[1]]);
     ligne(g, c); g.strokeStyle = '#6e8a4a'; g.lineWidth = 4; g.stroke(); ligne(g, c); g.strokeStyle = '#8f876f'; g.lineWidth = .9; g.stroke(); g.strokeStyle = '#b5aa92'; g.lineWidth = .55; g.stroke();
     for (const [x, y] of c) { C(g, '#b5aa92', x, y, 1.3); coneF(g, x, y, 1.1, PAL[TOITS_STYLE[V.Pf.style][0][0]], 0); }
@@ -602,6 +603,7 @@ export function formeMur(V) {
   else tours.push(Array.from({ length: 48 }, (_, i) => [Math.cos(i * TAU / 48) * V.rMur, Math.sin(i * TAU / 48) * V.rMur]));
   if (V.citadelle) tours.push(rel(V.citadelle.poly));
   for (const m of tours) {
+    if (m === tours[1]) V.nr = murs.length;   // (les tracés de l'enceinte, avant ceux de la citadelle : murRect)
     const P = [];
     m.forEach((p, i) => { const q = m[(i + 1) % m.length], nb = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / pas)); for (let j = 0; j < nb; j++) { const x = p[0] + (q[0] - p[0]) * j / nb, y = p[1] + (q[1] - p[1]) * j / nb; P.push([x, y, V.eau(x + C0[0], y + C0[1])]); } });
     const k0 = P.findIndex(p => p[2]);
@@ -610,7 +612,7 @@ export function formeMur(V) {
     for (let i = 1; i <= P.length; i++) { const p = P[(k0 + i) % P.length]; if (p[2]) { if (run.length > 1) murs.push(run); run = []; } else run.push([p[0], p[1]]); }
   }
   const lunes = (V.trace?.ravs || []).filter(r => !V.eau(...r.apex)).map(r => rel([r.b1, r.apex, r.b2])), loin = L => Math.max(0, ...L.flat().map(p => Math.hypot(p[0], p[1])));
-  return V.forme = { murs, lunes, r: V.rMur, ext: [loin(murs), Math.max(loin(murs), loin(lunes))] };
+  return V.forme = { murs, lunes, r: V.rMur, ext: [loin(murs), Math.max(loin(murs), loin(lunes))], nr: V.nr ?? murs.length };
 }
 // ce qui change l'image sans changer le plan : dégâts du siège (par dixièmes), incendie
 const cleImage = (n, e) => cleVille(n, e) + `|${Math.round((e.dmg || 0) * 10)}|${Math.round((e.deg || 0) * 20)}|${e.lv === 'incendie' ? 1 : 0}`;

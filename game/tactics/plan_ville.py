@@ -111,7 +111,15 @@ class Carte:
                                                                   for lon, lat in r['pts']]) for r in geo.src['rivers']]
         self.noeud = {n['id']: n for n in geo.nodes}
         self.y_mont = geo.xy(43.2, 0)[1]
-        self.plans = {}
+        self.plans, self.sites = {}, {}
+
+    def site(self, n):
+        """Où la ville est dessinée (km) : son centre, décalé du nœud vers l'eau (villes.js, site)."""
+        s = self.sites.get(n['id'])
+        if s is None:
+            o = profil_ville(self, n)['o']
+            s = self.sites[n['id']] = (n['x'] + o[0] / S, n['y'] + o[1] / S)
+        return s
 
     def ter(self, x, y):
         i, j = int(x), int(y)

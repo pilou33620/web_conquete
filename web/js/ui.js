@@ -1,6 +1,7 @@
 import { ICON, speedIcon, coat } from './icons.js';
 import { esc, clamp } from './battle/formes.js';
 import { fmtMen, unitCls, toursTxt, partTour, TOUR_DAYS } from './map.js';
+import { site } from './carte/villes.js';
 import { QUALITES, QUALITE_LABEL, QUALITE_AIDE, qualite, setQualite } from './battle/qualite.js';
 import { Tuto } from './tuto.js';
 import { UnitArt } from './battle/unites.js';
@@ -1014,7 +1015,7 @@ export class UI {
   selPos() {
     const s = this.sel;
     if (!s) return null;
-    if (s.kind === 'node') { const n = this.md.nodes[s.id]; return [n.x, n.y]; }
+    if (s.kind === 'node') return site(this.md.nodes[s.id]);   // (la ville, au bord de l'eau)
     if (s.kind === 'army') { const d = this.map.disp.get(s.id); return d ? [d.x, d.y] : null; }
     if (s.kind === 'battle') { const b = this.st.battles.find(x => x.id === s.id); return b ? [b.x, b.y] : null; }
     return null;

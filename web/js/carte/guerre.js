@@ -1064,8 +1064,8 @@ export class Guerre {
     const mp = this.map, z = sc.z, t = sc.time, ar = this.arriere();
     for (const [id, k] of ar.fetes) {
       const n = mp.nodes[id], ns = ar.st.nodes[id], fete = k === 'fete';
-      if (!this.dans(sc, n.x, n.y, 2)) continue;
-      const L = z >= Z.PLAN ? this.lieu(n, ns) : { place: [n.x, n.y], eglise: [n.x, n.y] };
+      if (!this.dans(sc, ...site(n), 2)) continue;
+      const L = z >= Z.PLAN ? this.lieu(n, ns) : { place: site(n), eglise: site(n) };
       if (fete) LUM.push({ x: L.eglise[0], y: L.eglise[1], r: 0.16, a: 0.9 });
       if (z >= 6) {
         const [sx, sy] = mp.toScreen(...L.eglise);

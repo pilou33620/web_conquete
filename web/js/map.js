@@ -585,9 +585,9 @@ export class MapView {
   armyScreen(d) {
     let [x, y] = this.toScreen(d.x, d.y);
     const a = d.a;
+    if (a && a.n != null) { const n = this.nodes[a.n], [vx, vy] = site(n); x += (vx - n.x) * this.cam.z; y += (vy - n.y) * this.cam.z; }   // (sous la ville, au bord de l'eau)
     if (a && a.n != null && a.st !== 'battle') {
-      const n = this.nodes[a.n], [vx, vy] = site(n);
-      x += (vx - n.x) * this.cam.z; y += (vy - n.y) * this.cam.z;   // (sous la ville, au bord de l'eau)
+      const n = this.nodes[a.n];
       const s = this.nodeSize(n);
       const z = this.cam.z;
       const k = d.slot || 0;
@@ -961,6 +961,7 @@ export class MapView {
   setState(st) {
     const prev = this.state;
     this.state = st;
+    for (const b of st.battles || []) if (b.node != null && this.nodes[b.node]) [b.x, b.y] = site(this.nodes[b.node]);   // (l'assaut : à la ville, au bord de l'eau)
     // le givre, la neige et les prés roussis sont peints dans les tuiles : on les repeint quand la saison change
     // (la saison et la neige tombée sont peintes dans les tuiles : on les repeint quand elles changent ; carte/ambiance.js)
     if (majAmbiance(this, st)) { this.season = st.season; this.paintLand(); this.invalidateTiles(); }
@@ -2412,7 +2413,7 @@ export class MapView {
     for (const [nid, , dir] of this.m.rails.exits) if (served.has(nid)) stroke(this.railExit(nid, dir));
     // gares : un petit bâtiment à côté de chaque ville desservie
     if (z >= 1.6) for (const nid of served) {
-      const n = this.nodes[nid], [x, y] = this.toScreen(n.x, n.y), s = clamp(z * 1.6, 6, 12);
+      const n = this.nodes[nid], [x, y] = this.toScreen(...site(n)), s = clamp(z * 1.6, 6, 12);
       const gx = x - s * 2.6, gy = y + s * 0.6;   // (en bas à gauche : l'effectif de la ville est à droite)
       ctx.fillStyle = '#7a3b2a'; ctx.fillRect(gx, gy, s * 1.3, s * 0.7);
       ctx.fillStyle = '#4a2a1e'; ctx.beginPath(); ctx.moveTo(gx - s * 0.1, gy); ctx.lineTo(gx + s * 0.65, gy - s * 0.5); ctx.lineTo(gx + s * 1.4, gy); ctx.closePath(); ctx.fill();

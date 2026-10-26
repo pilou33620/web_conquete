@@ -361,6 +361,9 @@ def generate(geo, spec):
         best = None
         for gn in geo.nodes:
             d = math.hypot(gn['x'] - cx, gn['y'] - cy)
+            if carte >= 7 and d < 2.7:   # (version 7 : la ville est à son site, jusqu'à 1,35 km du nœud vers l'eau)
+                from .plan_ville import carte_de
+                d = math.hypot(*(a - b for a, b in zip(carte_de(geo).site(gn), (cx, cy))))
             if d < 1.3 and (best is None or d < best[0]):
                 best = (d, gn)
         if best:
@@ -388,6 +391,13 @@ def generate(geo, spec):
         if carte >= 7 and pl.get('battle') and (cx, cy) != L.site:   # (l'assaut : la carte autour de la ville, au bord de l'eau)
             cx, cy = L.site
             L = TV.preparer(geo, spec, pl, cx, cy)
+        elif carte >= 7:   # (une bataille rangée près d'une ville : la ville entière sur la carte, le centre déplacé au plus juste)
+            r = L.r_ville + 20   # (les murs et la ville, sans les faubourgs le long des routes)
+            fit = lambda p, size: min(max(p, r), size - r) if 2 * r < size else size / 2
+            dx, dy = L.pos[0] - fit(L.pos[0], W), L.pos[1] - fit(L.pos[1], H)
+            if dx or dy:
+                cx, cy = cx + dx / (1000.0 * L.k), cy + dy / (1000.0 * L.k)
+                L = TV.preparer(geo, spec, pl, cx, cy)
     k = L.k if L else 1.0
     eau_plan = None
     if L:
