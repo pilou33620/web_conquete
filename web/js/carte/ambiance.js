@@ -6,6 +6,9 @@
 export const Z = { PLAN: 18, VIE: 110, MAX: 320 };
 // km par unité de dessin des figures (hommes, chevaux, charrettes) : la même échelle que la maquette
 export const U = 0.0045;
+// mètres par unité de dessin des figures, à la vraie taille (un fantassin fait 4,3 unités d'épaules, 0,65 m ; un
+// cheval 16, 2,4 m) : la vue de l'intérieur (SPEC-CARTE-2D.md, « Livré — échelle réelle »)
+export const FIG = 0.15;
 
 export const SAISONS = ['printemps', 'ete', 'automne', 'hiver'];
 // le serveur écrit « été »

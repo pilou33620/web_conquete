@@ -5,10 +5,11 @@
 // disette, incendie, crue), famine du joueur ; l'heure du jour (AMB.heure) assombrit la scène.
 import {
   C, E, RR, T, TAU, KT, OMBRE, PAL, SPR, Scene, alea, angLerp, brancher, camAnim, cheval, clamp, coneF, fantassin, flammes, fumee,
-  longueur, mod, sombre, surChemin, tenue,
+  longueur, mod, sombre, surChemin, tenue, toile,
 } from './lib.js';
-import { carteDe, etatVille, planDe, peindreInterieurPas, lecture, navire, cleVille, IC, IW, IH } from './villes.js';
-import { AMB } from './ambiance.js';
+import { carteDe, etatVille, planDe, peindreInterieurPas, lecture, navire, cleVille, IC, IW, IH, S } from './villes.js';
+import { AMB, FIG } from './ambiance.js';
+import { rejouer } from './rejeu.js';
 
 const TYPE_TXT = { capitale: 'Capitale', ville: 'Ville', village: 'Village', fort: 'Place forte' };
 const LV_TXT = {
@@ -19,6 +20,11 @@ const LV_TXT = {
 const HABITS = ['#7a6a4f', '#5d6b86', '#8a5a44', '#6e5c45', '#4f5a6a', '#9a4a3a'];
 const LCIV = tenue('fr', 'civil');
 const TEINTE = { matin: 'rgb(255,226,196)', soir: 'rgb(236,170,128)', nuit: 'rgb(70,84,130)' };
+// les figures à la vraie taille (FIG m par unité de figure, le plan à S unités par km) ; vitesses en m/s × MS
+export const ECH = FIG * S / 1000;
+const MS = S / 1000;
+// leur plus grande taille, en unités de figure : sous un pixel, elles ne se dessinent pas
+const TAILLE = { passant: 4.3, badaud: 4.3, charrette: 44, convoi: 60, vache: 15 };
 let vue = null;   // { el, sc, raf, V, tex }
 const TEX = new Map();   // les deux derniers intérieurs peints (rouvrir la même ville est immédiat)
 
@@ -39,12 +45,17 @@ function construire() {
   document.body.appendChild(el);
   el.hidden = false;   // (la scène mesure son canevas à sa création)
   const sc = new Scene(el.querySelector('#vi-cv'), {
-    max: 500, vie: [], zMax: 4.5,
-    sol(sc, g) { const t = sc.tv; g.fillStyle = '#6c984d'; g.fillRect(0, 0, sc.W, sc.H); if (!t) return; const m = sc.m, k = t.k; g.drawImage(t.c, (sc.cx - sc.W / 2 / m) * k, (sc.cy - sc.H / 2 / m) * k, sc.W / m * k, sc.H / m * k, 0, 0, sc.W, sc.H); },
+    max: 500, vie: [], zMax: 6 * 1000 / S, ech: ECH,   // (au plus près, 6 pixels par mètre)
+    sol(sc, g) {
+      const t = sc.tv; g.fillStyle = '#6c984d'; g.fillRect(0, 0, sc.W, sc.H); if (!t) return;
+      const m = sc.m, k = t.k, T = tuiles(sc, t);
+      if (!T || T.manque) g.drawImage(t.c, (sc.cx - sc.W / 2 / m) * k, (sc.cy - sc.H / 2 / m) * k, sc.W / m * k, sc.H / m * k, 0, 0, sc.W, sc.H);
+      for (const d of T || []) g.drawImage(...d);
+    },
   });
   const lieu = k => () => vue?.V?.lieux[k];
   brancher(sc, IW, IH, 'vi', [
-    ['La grand-place', lieu('place'), 0, 3.2], ['L’église', () => vue?.V?.lieux.eglise || vue?.V?.lieux.cathedrale, 0, 3.4], ['Le port', lieu('port'), 0, 2.6],
+    ['La grand-place', lieu('place'), 0, 9], ['L’église', () => vue?.V?.lieux.eglise || vue?.V?.lieux.cathedrale, 0, 3.4], ['Le port', lieu('port'), 0, 2.6],
     ['Les remparts', () => vue?.V?.lieux.remparts || (vue?.V?.trace ? { x: vue.V.trace.V[0][0], y: vue.V.trace.V[0][1] } : null), 0, 2.6],
     ['La citadelle', lieu('citadelle'), 0, 2.6], ['Le château', lieu('chateau'), 0, 3.4], ['Les vignes', lieu('vin'), 0, 2.4], ['La gare', lieu('gare'), 0, 2.6],
     ['Les salines', lieu('sel'), 0, 3], ['Les forges', lieu('fer'), 0, 3],
@@ -54,6 +65,45 @@ function construire() {
   addEventListener('keydown', e => { if (e.key === 'Escape' && vue && !vue.el.hidden) fermerInterieur(); });
   addEventListener('resize', () => { if (vue && !vue.el.hidden) { sc.resize(); } });
   return { el, sc };
+}
+
+// ---------- de près, le plan plus fin que sa texture : des tuiles de 512 pixels où l'on rejoue la peinture enregistrée
+// (rejeu.js), par un worker (peintre-tuiles.js), sinon ici, 6 ms par image ; en attendant, la texture agrandie.
+// Au plus 48 tuiles (48 Mo), assez pour un écran d'iPad.
+const TS = 512, MAXT = 48, TUILES = new Map(), ATTENTE = new Set();
+let peintre, tuilesDe = null, nT = 0;
+const garder = (cle, c) => { TUILES.set(cle, c); while (TUILES.size > MAXT) { const [k, v] = TUILES.entries().next().value; TUILES.delete(k); v.close ? v.close() : v.width = 0; } };
+function viderTuiles() { for (const v of TUILES.values()) v.close ? v.close() : v.width = 0; TUILES.clear(); ATTENTE.clear(); tuilesDe = null; }
+function lePeintre() {
+  if (peintre === undefined) {
+    try { peintre = typeof OffscreenCanvas === 'function' ? new Worker(new URL('./peintre-tuiles.js', import.meta.url), { type: 'module' }) : null; } catch (e) { peintre = null; }
+    if (peintre) peintre.onmessage = ({ data: d }) => { ATTENTE.delete(d.cle); if (d.ko) { peintre.terminate(); peintre = null; } if (!d.bmp) return; if (d.cle.startsWith(nT + '|')) garder(d.cle, d.bmp); else d.bmp.close(); };
+  }
+  return peintre;
+}
+// les tuiles à poser ([image, x, y, l, h] en pixels de l'écran) ; manque : la texture doit passer dessous
+function tuiles(sc, t) {
+  const m = sc.m, T = [];
+  if (!t.rec || m < t.k * 1.25) return null;
+  const w = lePeintre();
+  if (tuilesDe !== t) {
+    viderTuiles(); tuilesDe = t; nT++;
+    if (w) Promise.all(t.rec.img.map(c => createImageBitmap(c))).then(img => w.postMessage({ id: nT, rec: { ...t.rec, img } }));
+  }
+  const r = 2 ** Math.ceil(Math.log2(m * .75)), u = TS / r, x0 = sc.cx - sc.W / 2 / m, y0 = sc.cy - sc.H / 2 / m, fin = performance.now() + 6;
+  const ecran = v => Math.round((v - sc.cx) * m + sc.W / 2), ecranY = v => Math.round((v - sc.cy) * m + sc.H / 2);
+  for (let j = Math.floor(y0 / u); j * u < y0 + sc.H / m; j++) for (let i = Math.floor(x0 / u); i * u < x0 + sc.W / m; i++) {
+    const cle = `${nT}|${r}|${i}|${j}`;
+    let c = TUILES.get(cle);
+    if (c) { TUILES.delete(cle); TUILES.set(cle, c); }
+    else if (w) { if (ATTENTE.size < 3 && !ATTENTE.has(cle)) { ATTENTE.add(cle); w.postMessage({ id: nT, cle, r, i, j, T: TS }); } }
+    else if (performance.now() < fin) {
+      c = toile(TS, TS); const h = c.getContext('2d'); h.setTransform(r, 0, 0, r, -i * TS, -j * TS);
+      rejouer(h, t.rec, i * u, j * u, (i + 1) * u, (j + 1) * u); garder(cle, c);
+    }
+    if (c) { const X = ecran(i * u), Y = ecranY(j * u); T.push([c, X, Y, ecran((i + 1) * u) - X, ecranY((j + 1) * u) - Y]); } else T.manque = true;
+  }
+  return T;
 }
 
 // o : { m (map.m), n (nœud), ns (st.nodes[id]), st, dept (nom du pays), col (couleur du maître), flag (g, x, y, h, col) }
@@ -103,6 +153,7 @@ export function fermerInterieur() {
   vue.el.hidden = true; document.body.classList.remove('vi-ouverte');
   if (vue.raf) cancelAnimationFrame(vue.raf); vue.raf = 0;
   vue.sc.vie = []; vue.sc.fx = [];
+  viderTuiles();
 }
 export const interieurOuvert = () => !!vue && !vue.el.hidden;
 // un nouvel état de la partie arrive pendant qu'on regarde la ville : si elle a changé (siège, ruines, foire,
@@ -127,9 +178,9 @@ function vivre(sc, V, e) {
   const k = (e.famine ? .4 : 1) * (e.lv === 'epidemie' ? .15 : e.lv === 'disette' ? .7 : 1) * (e.siege ? .35 : 1) * ({ nuit: .2, soir: .65 }[AMB.heure] || 1);
   const rues = V.rues.filter(r => r.pts.length > 1 && r.pts.some(p => V.ilots.some(b => Math.hypot(b.c[0] - p[0], b.c[1] - p[1]) < 40)));
   const passant = (r, v) => { const L = longueur(r.pts); return { k: 'passant', pts: r.pts, L, s: R() * L, v: (R() < .5 ? -1 : 1) * v, lat: (R() - .5) * 3, L2: Object.assign({}, LCIV, { tete: R() < .5 ? 'coiffe' : 'rond' }), habit: HABITS[R() * 6 | 0], x: 0, y: 0, a: 0, pas: R() }; };
-  for (let i = 0; i < clamp(Pf.pop / 90, 14, 90) * k; i++) { const r = rues[R() * rues.length | 0]; if (!r) break; vie.push(passant(r, 1.4 + R())); }
-  if (!e.siege) for (const r of V.routesL) for (let i = 0; i < 2; i++) vie.push({ k: 'charrette', pts: r.pts, L: longueur(r.pts), s: 40 + R() * 500, v: (R() < .5 ? -1 : 1) * 5, lat: 2.6, x: 0, y: 0, a: 0, pas: 0 });
-  for (const rv of Pf.rivs) { const L = longueur(rv.pts); for (let i = 0; i < (Pf.port ? 6 : 2) * (e.blocus ? .3 : 1); i++) vie.push({ k: 'bateau', pts: rv.pts, L, s: R() * L, v: (R() < .5 ? -1 : 1) * (2 + R() * 2), lat: (R() - .5) * rv.w * .5, grand: Pf.port && rv.rank <= 1 && R() < .5, x: 0, y: 0, a: 0 }); }
+  for (let i = 0; i < clamp(Pf.pop / 90, 14, 90) * k; i++) { const r = rues[R() * rues.length | 0]; if (!r) break; vie.push(passant(r, (1.1 + R() * .5) * MS)); }
+  if (!e.siege) for (const r of V.routesL) for (let i = 0; i < 2; i++) vie.push({ k: 'charrette', pts: r.pts, L: longueur(r.pts), s: 40 + R() * 500, v: (R() < .5 ? -1 : 1) * 1.3 * MS, lat: 2.6, x: 0, y: 0, a: 0, pas: 0 });
+  for (const rv of Pf.rivs) { const L = longueur(rv.pts); for (let i = 0; i < (Pf.port ? 6 : 2) * (e.blocus ? .3 : 1); i++) vie.push({ k: 'bateau', pts: rv.pts, L, s: R() * L, v: (R() < .5 ? -1 : 1) * (1 + R()) * MS, lat: (R() - .5) * rv.w * .5, grand: Pf.port && rv.rank <= 1 && R() < .5, x: 0, y: 0, a: 0 }); }
   if (Pf.mer && Pf.port) for (let i = 0; i < 6; i++) { const a = Pf.mer.a + (R() - .5) * .8, d = Pf.R * (1.1 + R() * .8); vie.push({ k: 'mouille', x: IC[0] + Math.cos(a) * d, y: IC[1] + Math.sin(a) * d, a: R() * TAU, grand: R() < .4 }); }
   // la place : badauds, foire, émeute ; vide en disette et en épidémie
   const pl = V.lieux.place;
@@ -137,13 +188,13 @@ function vivre(sc, V, e) {
   if (pl) {
     let nb = V.placeCentre ? 24 * k : 0, r0 = 15, vite = 2;
     if (e.lv === 'foire') { const rp = V.placeCentre ? 19 : 12; nb = 80; r0 = rp; for (let i = 0; i < 14; i++) { const a = i * 2.4, d = rp * (.45 + (i % 3) * .25); sc.etals.push([pl.x + Math.cos(a) * d, pl.y + Math.sin(a) * d, a + Math.PI / 2, i]); } }
-    if (e.lv === 'emeute') { nb = 70; r0 = 9; vite = 5; }
+    if (e.lv === 'emeute') { nb = 70; r0 = 3; vite = 5; }   // (serrés : 70 personnes sur 35 m)
     if (e.lv === 'disette' || e.lv === 'epidemie') nb = 0;
     const ox = e.lv === 'emeute' ? 0 : 0, oy = e.lv === 'emeute' ? -14 : 0;   // l'attroupement devant l'hôtel de ville, au nord de la place
     for (let i = 0; i < nb; i++) vie.push({ k: 'badaud', x0: pl.x + ox, y0: pl.y + oy, r0, vite, x: pl.x + ox + (R() - .5) * r0 * 2, y: pl.y + oy + (R() - .5) * r0 * 2, a: R() * TAU, c: ['#5d6b86', '#7a4a3a', '#f2efe6', '#6e5c45', '#8a5a44', '#2f4f9c'][R() * 6 | 0], poing: e.lv === 'emeute' && R() < .3 });
   }
   // épidémie : le convoi funèbre suit une rue maîtresse
-  if (e.lv === 'epidemie') { const r = V.rues.find(x => x.main && x.pts.length > 1) || rues[0]; if (r) { const L = longueur(r.pts); vie.push({ k: 'convoi', pts: r.pts, L, s: R() * L, v: 1.1, lat: 0, x: 0, y: 0, a: 0, pas: 0 }); } }
+  if (e.lv === 'epidemie') { const r = V.rues.find(x => x.main && x.pts.length > 1) || rues[0]; if (r) { const L = longueur(r.pts); vie.push({ k: 'convoi', pts: r.pts, L, s: R() * L, v: .9 * MS, lat: 0, x: 0, y: 0, a: 0, pas: 0 }); } }
   // bêtes aux prés (pas pendant un siège : la campagne est vide)
   if (!e.siege) for (let i = 0; i < 8; i++) { const a = R() * TAU, d = Pf.R + 90 + R() * 200, x = IC[0] + Math.cos(a) * d, y = IC[1] + Math.sin(a) * d; if (!V.eau(x, y)) vie.push({ k: 'vache', x, y, a: R() * TAU, zone: [x - 30, y - 20, 60, 40], attente: R() * 4, v: 0, robe: R() < .5 ? '#efe9dd' : '#c9a07a', tache: R() < .5 ? '#3a2c22' : '#8a5a3a', pas: 0 }); }
   sc.vie = vie;
@@ -162,9 +213,9 @@ function vivre(sc, V, e) {
 function avant(sc, dt = 0) {
   camAnim(sc);
   for (const e of sc.vie) {
-    if (e.pts) { e.s = mod(e.s + e.v * dt, e.L); const p = surChemin(e.pts, e.s), a = p.a + (e.v < 0 ? Math.PI : 0); e.x = p.x - Math.sin(a) * e.lat; e.y = p.y + Math.cos(a) * e.lat; e.a = a; e.pas = (e.pas || 0) + dt * 1.6; }
-    else if (e.k === 'badaud') { if (!e.tx || Math.random() < dt * .3 * e.vite) { e.tx = e.x0 + (Math.random() - .5) * e.r0 * 2.4; e.ty = e.y0 + (Math.random() - .5) * e.r0 * 2.4; } const d = Math.hypot(e.tx - e.x, e.ty - e.y); if (d > .3) { e.a = Math.atan2(e.ty - e.y, e.tx - e.x); e.x += Math.cos(e.a) * Math.min(d, e.vite * dt); e.y += Math.sin(e.a) * Math.min(d, e.vite * dt); } }
-    else if (e.k === 'vache') { if (e.attente > 0) { e.attente -= dt; e.v = 0; } else { if (!e.but || Math.hypot(e.but[0] - e.x, e.but[1] - e.y) < 2) { e.but = [e.zone[0] + Math.random() * e.zone[2], e.zone[1] + Math.random() * e.zone[3]]; e.attente = 2 + Math.random() * 6; } e.a = angLerp(e.a, Math.atan2(e.but[1] - e.y, e.but[0] - e.x), dt * 2); e.v = 1.5; e.x += Math.cos(e.a) * e.v * dt; e.y += Math.sin(e.a) * e.v * dt; } }
+    if (e.pts) { e.s = mod(e.s + e.v * dt, e.L); const p = surChemin(e.pts, e.s), a = p.a + (e.v < 0 ? Math.PI : 0); e.x = p.x - Math.sin(a) * e.lat; e.y = p.y + Math.cos(a) * e.lat; e.a = a; e.pas = (e.pas || 0) + dt * 1.8; }
+    else if (e.k === 'badaud') { if (!e.tx || Math.random() < dt * .3 * e.vite) { e.tx = e.x0 + (Math.random() - .5) * e.r0 * 2.4; e.ty = e.y0 + (Math.random() - .5) * e.r0 * 2.4; } const d = Math.hypot(e.tx - e.x, e.ty - e.y), v = e.vite * .6 * MS * dt; if (d > .05) { e.a = Math.atan2(e.ty - e.y, e.tx - e.x); e.x += Math.cos(e.a) * Math.min(d, v); e.y += Math.sin(e.a) * Math.min(d, v); } }
+    else if (e.k === 'vache') { if (e.attente > 0) { e.attente -= dt; e.v = 0; } else { if (!e.but || Math.hypot(e.but[0] - e.x, e.but[1] - e.y) < 2) { e.but = [e.zone[0] + Math.random() * e.zone[2], e.zone[1] + Math.random() * e.zone[3]]; e.attente = 2 + Math.random() * 6; } e.a = angLerp(e.a, Math.atan2(e.but[1] - e.y, e.but[0] - e.x), dt * 2); e.v = .8 * MS; e.x += Math.cos(e.a) * e.v * dt; e.y += Math.sin(e.a) * e.v * dt; } }
   }
   for (const [x, y] of sc.fumees || []) if (Math.random() < dt * .25) fumee(sc, x, y, 0, 0, .6, 4.5, 4, .28);
   for (const f of sc.feux || []) if (Math.random() < dt * 3) fumee(sc, f.x + (Math.random() - .5) * 6, f.y + (Math.random() - .5) * 6, 0, 0, 2, 14, 6, .5, 'n');
@@ -175,19 +226,28 @@ function etal(g, k) {
   for (let i = 0; i < 3; i++) RR(g, '#f1eee4', -3.5 + .7 + i * 2.2, -2.5, 1, 5, 0);
   for (let i = 0; i < 4; i++) C(g, ['#d6ba5c', '#9a4a3a', '#6b8f3a', '#e8dcc0'][(k + i) % 4], -2.6 + i * 1.7, 3.4, .7);
 }
+// une charrette attelée, de la tête du cheval (x = 8,6) à l'arrière de la caisse : 6 m, la caisse 3 m × 1,6 m
+export function charrette(g, pas) {
+  cheval(g, '#6b4a2c', { gait: pas * TAU, bob: 0 });
+  T(g, '#5b4127', .6, -8, -2.4, -1, -2.2); T(g, '#5b4127', .6, -8, 2.4, -1, 2.2);
+  RR(g, '#3a2a1b', -23, -6.6, 8, 1.2, .5); RR(g, '#3a2a1b', -23, 5.4, 8, 1.2, .5);
+  RR(g, '#8a6a45', -29, -5.3, 20, 10.6, .8); RR(g, '#b8a27a', -27.6, -4, 12, 8, .6);
+}
 function sous(sc, g) {
-  for (const [x, y, a, k] of sc.etals || []) { sc.fig(g, x, y, a); etal(g, k); }
+  const px = sc.z * ECH;   // (pixels CSS par unité de figure)
+  if (px * 20 >= 1) for (const [x, y, a, k] of sc.etals || []) { sc.fig(g, x, y, a); g.scale(2.8, 2.8); etal(g, k); }   // (un étal : 3 m)
   for (const e of sc.vie) {
-    if (Math.abs(e.x - sc.cx) > sc.W / 2 / sc.m + 30 || Math.abs(e.y - sc.cy) > sc.H / 2 / sc.m + 30) continue;
+    if (Math.abs(e.x - sc.cx) > sc.W / 2 / sc.m + 30 || Math.abs(e.y - sc.cy) > sc.H / 2 / sc.m + 30 || (TAILLE[e.k] || 1e9) * px < 1) continue;
     sc.fig(g, e.x, e.y, e.a); g.lineCap = 'round';
     if (e.k === 'passant') fantassin(g, e.L2, { role: 'h', habit: e.habit }, { legs: e.pas * TAU, arme: 'aucun' });
-    else if (e.k === 'badaud') { C(g, e.c, 0, 0, .9); C(g, '#2a2420', .25, 0, .45); if (e.poing) T(g, '#e8d2b0', .35, .4, .5, 1.6, .9); }
-    else if (e.k === 'charrette') { cheval(g, '#6b4a2c', { gait: e.pas * TAU, bob: 0 }); g.save(); g.translate(-9, 0); RR(g, '#3a2a1b', -3, -3.6, 6, 1, .4); RR(g, '#3a2a1b', -3, 2.6, 6, 1, .4); RR(g, '#8a6a45', -4, -2.6, 8, 5.2, .6); RR(g, '#b8a27a', -3.4, -2, 3.4, 4, .4); g.restore(); }
-    else if (e.k === 'convoi') { RR(g, '#2a2420', -6, -2.6, 12, 5.2, .6); RR(g, '#5b4127', -4.5, -1.4, 9, 2.8, .4); T(g, '#efe6cc', .4, -1, 0, 2, 0); T(g, '#efe6cc', .4, 0, -1, 0, 1); g.save(); g.translate(13, 0); cheval(g, '#2e2119', { gait: e.pas * TAU * .6, bob: 0 }); g.restore(); for (let m = 0; m < 4; m++) { g.save(); g.translate(-10 - m * 4, m % 2 ? 1.5 : -1.5); fantassin(g, LCIV, { role: 'h', habit: '#1f1d1d' }, { legs: e.pas * TAU * .6 + m, arme: 'aucun' }); g.restore(); } }
-    else if (e.k === 'bateau' || e.k === 'mouille') { sc.monde(g); navire(g, e.x, e.y, e.a, e.grand); }
-    else if (e.k === 'vache') { E(g, e.robe, 0, 0, 4.3, 1.9); E(g, e.tache, -1.2, .5, 1.4, .9, .4); E(g, sombre(e.robe, .08), 4.6, 0, 1.4, .95); }
+    else if (e.k === 'badaud') { E(g, e.c, 0, 0, 1.4, 2.1); C(g, '#2a2420', .3, 0, 1.1); if (e.poing) T(g, '#e8d2b0', .8, .9, 1.1, 3.6, 2); }
+    else if (e.k === 'charrette') charrette(g, e.pas);
+    else if (e.k === 'convoi') { RR(g, '#2a2420', -10, -5.3, 20, 10.6, .8); RR(g, '#5b4127', -6.5, -2, 13, 4, .5); T(g, '#efe6cc', .6, -1.5, 0, 3, 0); T(g, '#efe6cc', .6, 0, -1.5, 0, 1.5); g.save(); g.translate(19, 0); cheval(g, '#2e2119', { gait: e.pas * TAU * .6, bob: 0 }); g.restore(); for (let m = 0; m < 4; m++) { g.save(); g.translate(-15 - m * 6, m % 2 ? 2.4 : -2.4); fantassin(g, LCIV, { role: 'h', habit: '#1f1d1d' }, { legs: e.pas * TAU * .6 + m, arme: 'aucun' }); g.restore(); } }
+    else if (e.k === 'bateau' || e.k === 'mouille') { g.scale(NAV, NAV); navire(g, 0, 0, 0, e.grand); }
+    else if (e.k === 'vache') { g.scale(1.45, 1.45); E(g, e.robe, 0, 0, 4.3, 1.9); E(g, e.tache, -1.2, .5, 1.4, .9, .4); E(g, sombre(e.robe, .08), 4.6, 0, 1.4, .95); }   // (2,2 m)
   }
 }
+export const NAV = 20 / (13 * FIG);   // navire() : 13 unités de long, la gabare fait 20 m, le grand navire 40
 // moulin vu d'en haut : les ailes tournent dans un plan vertical face au vent, on les voit donc de profil ; leur ombre
 // au sol, une croix de biais, montre qu'elles tournent (la maquette, new.js)
 function moulinVu(g, x, y, t, wa = .35, L = 17, H = 12) {

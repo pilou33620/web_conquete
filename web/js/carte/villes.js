@@ -10,6 +10,7 @@ import {
   sapin, touffes, tronc,
 } from './lib.js';
 import { AMB } from './ambiance.js';
+import { enregistrer } from './rejeu.js';
 
 export const hashS = s => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
 export const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -318,9 +319,9 @@ function vigne(g, x, y, w, h, R, dir) {
   g.stroke();
   const F = FEUILLES_VIGNE[AMB.saison]; if (!F) return;
   // les ceps, un tracé par couleur de feuillage
-  const r = AMB.saison === 'printemps' ? .45 : .65, chemins = F.map(() => new Path2D());
-  for (let a = 1.5; a < (dir ? h : w); a += 3) for (let b = 1; b < (dir ? w : h); b += 1.6) { const px = dir ? x + b : x + a, py = dir ? y + a : y + b, q = chemins[R() * F.length | 0]; q.moveTo(px + r, py); q.arc(px, py, r, 0, TAU); }
-  F.forEach((c, i) => { g.fillStyle = c; g.fill(chemins[i]); });
+  const r = AMB.saison === 'printemps' ? .45 : .65, P = F.map(() => []);
+  for (let a = 1.5; a < (dir ? h : w); a += 3) for (let b = 1; b < (dir ? w : h); b += 1.6) P[R() * F.length | 0].push(dir ? x + b : x + a, dir ? y + a : y + b);
+  F.forEach((c, i) => { g.fillStyle = c; g.beginPath(); for (let k = 0; k < P[i].length; k += 2) { g.moveTo(P[i][k] + r, P[i][k + 1]); g.arc(P[i][k], P[i][k + 1], r, 0, TAU); } g.fill(); });
 }
 function airial(g, x, y, a, R) {
   C(g, '#7aa659', x, y, 38); C(g, '#86b363', x - 4, y - 4, 26);
@@ -339,7 +340,8 @@ export function peindreInterieur(K, V, k, e = {}) { const it = peindreInterieurP
 // la même peinture par petits pas (yield) : la vue de l'intérieur s'ouvre tout de suite et se peint en quelques images
 export function* peindreInterieurPas(K, V, k, e = {}) {
   const Pf = V.Pf, n = Pf.n, cv = toile(Math.round(IW * k), Math.round(IH * k));
-  const g = cv.getContext('2d'), R = alea(Pf.sd + 17); g.scale(k, k);
+  const g0 = cv.getContext('2d'), R = alea(Pf.sd + 17); g0.scale(k, k);
+  const [g, fin] = enregistrer(g0);   // (rejoué plus fin, par tuiles, quand on s'approche : interieur.js)
   V.cheminees.length = 0; V.apres.length = 0;
   g.fillStyle = HERBE; g.fillRect(0, 0, IW, IH);
   yield { c: cv, k };   // (le canevas, montré pendant qu'il se peint)
@@ -422,7 +424,7 @@ export function* peindreInterieurPas(K, V, k, e = {}) {
     for (const s of [-1, 1]) { T(g, '#5b4a3a', 4, -IW, s * 4, IW, s * 4); for (let x = -IW; x < IW; x += 2) T(g, '#6b5a48', .6, x, s * 4 - 1.6, x, s * 4 + 1.6); T(g, '#3a3a3a', .35, -IW, s * 4 - .9, IW, s * 4 - .9); T(g, '#3a3a3a', .35, -IW, s * 4 + .9, IW, s * 4 + .9); }
     g.restore(); bat(g, BATS.gare().slice(1), V.gare.x, V.gare.y, V.gare.a, .55);
   }
-  return { c: cv, k, deg, chem: V.cheminees.slice() };
+  return { c: cv, k, deg, chem: V.cheminees.slice(), rec: fin() };
 }
 const chateau = g => bat(g, [{ t: 'f', x: -20, y: -14, w: 40, h: 28, c: '#b9b09a', h2: 2, bal: 1 }, { t: 'g', x: -16, y: -10, w: 26, h: 12, hip: 1, p: 'lauze', h2: 3 }, { t: 'c', x: -18, y: -12, r: 5, p: 'lauze', h2: 4.5 }, { t: 'c', x: 18, y: -12, r: 4.5, p: 'lauze', h2: 4 }, { t: 'c', x: 18, y: 12, r: 4.5, p: 'lauze', h2: 4 }, { t: 'p', x: 4, y: -2, w: 12, h: 12, p: 'lauze', h2: 6 }], IC[0], IC[1], .2, .95);
 function riviereL(g, pts, w) {

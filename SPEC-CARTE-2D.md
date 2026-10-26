@@ -515,3 +515,44 @@ Le ciel (`ciel.js`) :
 - Captures (`integration/vie3/`) : `h1-bordeaux-printemps-z260` (crue, faubourg en chantier, routes, tombes),
   `h2-champ-prisonniers-z200` (prisonniers, blessés, tombes), `h3-siege-sape-z110` (deux parallèles, sapes),
   `h4-landes-feu-z30` (feux, brûlis), `h5-bordeaux-gaz-nuit-z60` (réverbères au gaz).
+
+## Livré — échelle réelle
+
+Demande du joueur (iPhone, iPad) : gens, chevaux, charrettes, bateaux, bêtes et colonnes à leur vraie taille par
+rapport aux maisons, aux rues et au terrain ; au plus près, environ 6 pixels CSS par mètre. Les batailles ne changent
+pas.
+
+- **Une échelle des figures** : `FIG` = 0,15 m par unité de figure (`ambiance.js`). Un fantassin ou un passant fait
+  4,3 unités d'épaules (0,65 m), un cheval 16 (2,4 m). Banc : `tests/echelle.test.mjs` (ce que chaque figure dessine
+  vraiment, en mètres, à 30 % près).
+- **Vue de l'intérieur** (`interieur.js`) :
+  - figures posées par `Scene.ech` = `FIG × S / 1000` (0,027 unité du plan par unité de figure ; le plan est à
+    `S` = 180 unités par km, 5,56 m l'unité). Avant : un passant faisait 24 m, un cheval 59 m, une charrette 44 m.
+  - tailles corrigées dans cette unité : charrette attelée (`charrette`, caisse 3 m × 1,6 m, 5,6 m avec le cheval),
+    corbillard du convoi (3 m), badauds (0,65 m, comme les passants ; avant 2,4 fois plus petits), étals (3 m),
+    vaches (2,2 m), gabares (20 m) et navires (40 m) ; émeute serrée (70 personnes sur 35 m au lieu de 100).
+  - vitesses réelles : passants 1,1 à 1,6 m/s, charrettes 1,3, bateaux 1 à 2, vaches 0,8 (avant 8 à 28 m/s).
+  - zoom jusqu'à `zMax` = 6 px/m (33 px par unité, au lieu de 4,5) ; la visite « La grand-place » à 9 (les gens s'y
+    voient). Une figure de moins d'un pixel ne se dessine pas : les passants et badauds à partir du zoom 8,6
+    (1,5 px/m), les vaches dès 2,5, les étals dès 1,9, les charrettes, convois et bateaux toujours (dès 0,8).
+  - **le plan net de près** (`rejeu.js`, `peintre-tuiles.js`) : la peinture de l'intérieur s'enregistre pendant
+    qu'elle se fait (tableaux typés : 5 à 12 Mo pour une ville, 175 000 à 415 000 appels), chaque tracé avec sa boîte.
+    Au-delà de 1,25 fois la résolution de la texture, l'écran se couvre de tuiles de 512 pixels (niveaux 4 à 64 px par
+    unité, puissances de deux) où un worker rejoue seulement ce qui touche la tuile : morceaux d'une soixantaine
+    d'appels sautés d'un coup, segments des longs traits (rivières, routes, murs) hors de la tuile sautés, couleurs
+    posées seulement avant un tracé rejoué. Même image au pixel près que la peinture entière (vérifié tuile à tuile à
+    16 et 64 px par unité, trois villes). En attendant une tuile, la texture agrandie dessous ; quand les tuiles
+    couvrent l'écran, la texture n'est plus posée. Sans worker à canevas 2D, les tuiles se peignent dans la vue,
+    6 ms par image. Au plus 48 tuiles (48 Mo), vidées à la fermeture.
+- Mesures (Chromium sans carte graphique, 1280 × 800, dpr 2, médiane de 120 images de `sc.draw` avec le rendu,
+  `integration/echelle/int.cjs`, avant → après) : Bordeaux vue d'ensemble 29,3 → 26,8 ms, z 4 28,8 → 9,8, la place
+  z 9 (avant bloqué à 4,5) 29,4 → 25,7, z 18 30,7 → 28,7, zoom max 32,1 → 27,1, port au zoom max 27,0 → 27,0 ; Libourne
+  en foire z 9 28,3 → 28,3, zoom max 32,4 → 27,1. Une tuile : 3 à 12 ms de rejeu, 12 à 38 ms avec la peinture, dans
+  le worker. Peinture de la texture : 1,4 → 2,1 s pour Bordeaux (l'enregistrement), toujours 12 ms par image.
+- Écarts :
+  - le plan de l'intérieur garde sa taille : ses parcelles font 25 à 45 m de façade, la grand-place de Bordeaux
+    244 m, une cathédrale jusqu'à 600 m. À côté, les gens à leur vraie taille paraissent petits ; ramener les
+    bâtiments à leur vraie taille changerait le générateur (et son portage Python des batailles) : à décider.
+  - moulins, fumées, flammes et drapeau restent à l'échelle des bâtiments du plan.
+  - les badauds trop petits pour un pixel ne se dessinent pas en tache (une foule de 80 sur 80 m de rayon est trop
+    clairsemée pour une tache à sa vraie taille).

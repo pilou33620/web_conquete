@@ -646,7 +646,8 @@ class Scene {
   }
   get m() { return this.z * this.d; }
   monde(g) { const m = this.m; g.setTransform(m, 0, 0, m, -this.cx * m + this.W / 2, -this.cy * m + this.H / 2); }
-  fig(g, x, y, a) { const m = this.m, c = Math.cos(a) * m, s = Math.sin(a) * m; g.setTransform(c, s, -s, c, (x - this.cx) * m + this.W / 2, (y - this.cy) * m + this.H / 2); }
+  // (ech : unités du monde par unité de figure ; 1 dans la maquette)
+  fig(g, x, y, a) { const m = this.m, e = m * (this.ech || 1), c = Math.cos(a) * e, s = Math.sin(a) * e; g.setTransform(c, s, -s, c, (x - this.cx) * m + this.W / 2, (y - this.cy) * m + this.H / 2); }
   step(dt) {
     this.time += dt;
     if (this.avant) this.avant(this, dt);
