@@ -28,7 +28,8 @@ from ..geo import (T_OCEAN, T_EAU as G_EAU, T_PLAINE, T_FORET, T_LANDE, T_MARAIS
 # place d'avant (_town_v2), le reste du générateur est commun. Version 4 : la place sur le plan de « Voir l'intérieur »
 # (terrain_ville.py ; une carte de version 3 garde la ville de _town) ; le client reçoit ce plan (to_client : plan).
 # Version 5 : les bâtiments à la vraie taille (une carte de version 4 garde son plan : plan_ville_v4, terrain_ville_v4, figés)
-VERSION = 5
+# Version 6 : bourgs et villes moins serrés, clos et jardins (une carte de version 5 : plan_ville_v5, terrain_ville_v5, figés)
+VERSION = 6
 
 # les ponts datés (ville, rivière, année ; comme villes.js, PONTS_DATES) : avant, la route passe sur un pont de bateaux
 PONTS_DATES = [('Bordeaux', 'Garonne', 1822)]   # (le pont de pierre)
@@ -369,8 +370,10 @@ def generate(geo, spec):
     # le champ réduit toute la carte (k)
     L = None
     if pl and carte >= 4:
-        if carte >= 5:
+        if carte >= 6:
             from . import terrain_ville as TV
+        elif carte == 5:
+            from . import terrain_ville_v5 as TV
         else:
             from . import terrain_ville_v4 as TV
         L = TV.preparer(geo, spec, pl, cx, cy)

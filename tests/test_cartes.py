@@ -13,7 +13,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from game.geo import GeoMap  # noqa: E402
-from game.tactics import terrain as TR  # noqa: E402
+from game.tactics import terrain as TR, terrain_ville as TV  # noqa: E402
 
 GEO = GeoMap()
 VILLAGES = [n for n in GEO.nodes if n['type'] in ('village', 'bourg', 'ville')][::9][:10]
@@ -80,8 +80,9 @@ class Cartes(unittest.TestCase):
             spec = dict(seed=900 + k, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.0, carte=TR.VERSION)
             m = TR.generate(GEO, spec)
             px, py, r = m.place['x'], m.place['y'], m.town_r + 300
+            clos = {c for q, role, *_ in m.plan['ilots'] if role == 'verger' for c in TV._dans(q)}   # (les vergers de la ville)
             for c in range(TR.N):
-                if m.t[c] == TR.T_VERGER:
+                if m.t[c] == TR.T_VERGER and c not in clos:
                     x, y = TR.center_of(c)
                     self.assertGreater(math.hypot(x - px, y - py), r - TR.CELL, 'pas de verger sur le glacis')
 

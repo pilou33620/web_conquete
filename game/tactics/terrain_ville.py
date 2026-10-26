@@ -479,9 +479,9 @@ def ville(m, pl, L, rng, spec, t, road_cells):
             for c in cells:
                 t[c] = T_ROUTE   # (pavé : la place, le parvis)
             continue
-        if sp in ('jardin', 'eglise', 'egliseDome', 'cathedrale') or sp in COUR:
-            for c in cells:
-                t[c] = T_PRE   # (jardin public, cimetière du bourg, cours des couvents, casernes…)
+        if sp in ('jardin', 'eglise', 'egliseDome', 'cathedrale') or sp in COUR or sp in PV.CLOS:
+            for c in cells:   # (jardin public, cimetière du bourg, cours des couvents, casernes… ; les clos, des vergers)
+                t[c] = T_VERGER if sp == 'verger' else T_PRE
             continue
         cx0 = sum(p[0] for p in ins) / 4, sum(p[1] for p in ins) / 4
         ed = _cotes(ins, cx0)

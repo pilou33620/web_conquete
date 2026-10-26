@@ -6,7 +6,7 @@
 // L'état (année, f, pop, d, sg.dmg, lv) choisit l'enceinte, la taille, les faubourgs, les ruines et les incendies.
 import {
   toile, BATS, BOIS, C, E, HERBE, PAL, RR, T, TAU, aire, alea, arbre, bastions, bat, bois, chemin_, cheminee, clamp,
-  coneF, decaler, decalerQuad, dessinerEnceinte, distPoly, lerp, ligne, mix, mod, parcelle, potager, taches, remplirIlot, route, rue,
+  CLOS_COUL, coneF, decaler, decalerQuad, dessinerEnceinte, distPoly, lerp, ligne, mix, mod, parcelle, potager, taches, remplirIlot, route, rue,
   sapin, touffes, tronc,
 } from './lib.js';
 import { AMB } from './ambiance.js';
@@ -85,10 +85,10 @@ export const S = 180, IW = 1000, IH = 760, IC = [500, 380];   // unités de l'in
 const loc = (n, x, y) => [IC[0] + (x - n.x) * S, IC[1] + (y - n.y) * S];
 // le plan ne dépend de l'année que par ces seuils (murs abattus et gare après 1860), et de la population par paliers
 const ere = a => (a >= 1860 ? 1860 : 1789);
-// le rayon d'une place (unités de 5,56 m) d'après sa population : un village de 700 habitants, 111 m (180 maisons, 4 par
-// maison ; jamais moins, pour qu'il se lise sur la carte), un bourg de 3 000, 445 m, Bayonne 1,13 km, Bordeaux 1,47 km
-// (« Livré — la surface des villages et des bourgs »)
-export const rayon = pop => Math.round(clamp(2.1 * Math.sqrt(pop) - 36, 20, 262) / 4) * 4;
+// le rayon d'une place (unités de 5,56 m) d'après sa population : un village de 700 habitants, 111 m (jamais moins, pour
+// qu'il se lise sur la carte), un bourg de 3 000, 334 m, Libourne 600 m, Bayonne 800 m, Bordeaux 1,47 km (« Livré — la
+// surface des villages et des bourgs », puis « la densité des bourgs et des villes »)
+export const rayon = pop => Math.round(clamp(1.45 * Math.sqrt(pop) - 20, 20, 262) / 4) * 4;
 export function profilVille(K, n, e = {}) {
   const pop0 = n.pop0 || 700, pop = e.pop || pop0, spec = n.spec || [], annee = ere(e.annee || 1789), f = e.f ?? n.fort ?? 0, d = e.d || 0;
   const R = rayon(pop);
@@ -146,12 +146,17 @@ export const MODELES = {
   rond: 'Bourg rond : maisons en anneaux autour de l’église et de la place',
 };
 
+// les îlots sans maisons (lib.js, remplirIlot) : vergers, maraîchers, cours (chantiers, entrepôts), terrains vagues ; la part
+// d'îlots qui en sont, par taille de ville : [le cœur, en part du rayon ; au bord ; la part des côtés bâtis au bord]
+export const CLOS = ['verger', 'verger', 'potager', 'potager', 'potager', 'cour', 'cour', 'vague'];
+const DENSITE = { bourg: [.2, .95, .2], moyenne: [.2, .95, .2], grande: [.3, .9, .2] };
+
 // ---------- les dispositions : un modèle de plan par type de ville, ajusté au site (routes, eau, relief)
 export function genererInterieur(K, Pf) {
   const R = alea(Pf.sd), n = Pf.n, Rv = Pf.R, ilots = [], rues = [], plus = [];
   // (à la vraie taille, en unités de 5,56 m : façades de 6 à 15 m sur 10 à 15 m de profondeur ; voir « Livré — bâtiments à
   // la vraie taille »)
-  const V = { prof: 2.6, Pf, type: Rv > 190 ? 'grande' : Rv > 110 ? 'moyenne' : 'bourg', cfg: { larg: Rv > 190 ? [1.1, 2.2] : Rv > 110 ? [1.2, 2.5] : [1.4, 2.7], toits: TOITS_STYLE[Pf.style], riv: 0 }, ilots, rues, lieux: {}, cheminees: [], apres: [], plus };
+  const V = { prof: 2.6, Pf, type: Rv > 136 ? 'grande' : Rv > 80 ? 'moyenne' : 'bourg', cfg: { larg: Rv > 136 ? [1.5, 2.6] : Rv > 80 ? [1.5, 2.7] : [1.6, 3], toits: TOITS_STYLE[Pf.style], riv: 0 }, ilots, rues, lieux: {}, cheminees: [], apres: [], plus };
   const eauL = (x, y) => K.eauK(n.x + (x - IC[0]) / S, n.y + (y - IC[1]) / S);
   // (loin de la boîte d'une rivière, loin de la rivière, sans calcul : un plan à la vraie taille en demande des milliers)
   const boites = Pf.rivs.map(r => [Math.min(...r.pts.map(p => p[0])), Math.min(...r.pts.map(p => p[1])), Math.max(...r.pts.map(p => p[0])), Math.max(...r.pts.map(p => p[1]))]);
@@ -230,8 +235,8 @@ export function genererInterieur(K, Pf) {
     V.murLigne = r1 + 9; V.rPlace = R0 - 1.25;
     for (const r of Pf.routes) ruban(r, r1 + 12, r1 * (Pf.annee >= 1860 ? 1.7 : 1.4) * fau, 12, 8, { densite: dens(.75) });
   } else if (m === 'bastide' || m === 'place') {
-    // (le damier garde son emprise, celle de 4 à 9 îlots de 170 à 180 m de côté)
-    const n0 = clamp(Math.round(Rv / 19), 4, 9), p0 = m === 'place' ? 30 : 33, pas = m === 'place' ? 12 : 13, nx = Math.round(n0 * p0 / pas), ny = m === 'bastide' ? Math.round((n0 - 1) * p0 / pas) : nx;
+    // (le damier garde son emprise, celle de 4 à 9 îlots de 170 à 180 m de côté ; une bastide de village, 2)
+    const n0 = clamp(Math.round(Rv / 19), m === 'bastide' ? 2 : 4, 9), p0 = m === 'place' ? 30 : 33, pas = m === 'place' ? 12 : 13, nx = Math.round(n0 * p0 / pas), ny = m === 'bastide' ? Math.round((n0 - 1) * p0 / pas) : nx;
     grille(IC[0], IC[1], aMain, nx, ny, pas);
     V.rect = { a: aMain, w: nx * pas, h: ny * pas };
     for (const r of Pf.routes) ruban(r, nx * pas * .75 + 34, nx * pas * 1.25 * fau, 12, 8, { densite: dens(.6) });
@@ -299,13 +304,26 @@ export function genererInterieur(K, Pf) {
   // rayon du mur de ville (unités de l'intérieur) : la carte y pose les remparts de map.js (walls)
   const bord = Math.max(40, ...V.ilots.filter(b => b.zone === 'ville').map(b => Math.max(...b.q.map(p => Math.hypot(p[0] - IC[0], p[1] - IC[1])))));
   V.rMur = V.murInt ? V.murInt + 10 : V.rect ? Math.hypot(V.rect.w, V.rect.h) / 2 + 6 : V.murLigne && m !== 'montagne' ? V.murLigne : bord + 9;
+  // moins serré (« Livré — la densité des bourgs et des villes ») : passé le cœur (c0, en part du rayon), de plus en plus
+  // d'îlots sans maisons en s'éloignant de la place, jusqu'à pmax au bord (les faubourgs des routes, 0,6 pmax), et les
+  // autres bâtis sur moins de côtés (jusqu'à smin), des jardins derrière ; les rues maîtresses gardent leurs maisons
+  const [c0, pmax, smin] = DENSITE[V.type];
+  V.ilots.forEach((b, k) => {
+    if (b.role) return;
+    const f = b.zone === 'faubourg' ? .6 : clamp((b.d / Rv - c0) / (.75 - c0), 0, 1);
+    if (hash2(k, 17, Pf.sd) < pmax * f * (b.main ? .35 : 1)) b.role = CLOS[hash2(k, 18, Pf.sd) * CLOS.length | 0];
+    else if (b.zone === 'ville' && f > 0 && !b.main) {
+      b.cotes = [0, 1, 2, 3].map(i => hash2(k, 19 + i, Pf.sd) < 1 - (1 - smin) * f);
+      if (!b.cotes.includes(true)) b.cotes[hash2(k, 23, Pf.sd) * 4 | 0] = true;
+    }
+  });
   return V;
 }
 
 // ---------- ce que l'état de la partie abîme : maisons brûlées (incendie), ruines et toits crevés (siège)
 // une carte îlot → 'brule' | 'ruine' | 'creve', toujours la même pour un même état
 export function degats(V, e) {
-  const out = new Map(), sd = V.Pf.sd, L = V.ilots.filter(b => b.role !== 'place' && b.role !== 'parvis' && b.role !== 'jardin');
+  const out = new Map(), sd = V.Pf.sd, L = V.ilots.filter(b => b.role !== 'place' && b.role !== 'parvis' && b.role !== 'jardin' && !CLOS_COUL[b.role]);
   // ruines : celles du siège en cours (sg.dmg), et celles qui restent des combats passés tant qu'on n'a pas rebâti (dg)
   const pr = Math.max(e.dmg * .22, e.deg || 0), pc = Math.max(e.dmg * .6, Math.min(1, (e.deg || 0) * 1.4));
   if (pr > .01) L.forEach((b, i) => { const h = hash2(i, sd, 91); if (h < pr) out.set(b, 'ruine'); else if (h < pc) out.set(b, 'creve'); });
@@ -573,10 +591,10 @@ export function* planCartePas(K, n, e, res = .5) {
       const q = decalerQuad(b.q, b.main ? 1.25 : .6); if (!q) continue;
       const P = PAL[b.role === 'cathedrale' || b.role === 'eglise' || b.role === 'egliseDome' ? 'ardoise' : TOITS_STYLE[Pf.style][0][0]], kd = deg.get(b);
       chemin_(g, q);
-      g.fillStyle = kd === 'brule' ? '#3a302a' : kd === 'ruine' ? '#958a78' : b.zone === 'faubourg' ? mix(P[0], '#7aa659', .55) : b.role === 'place' || b.role === 'parvis' ? '#d6ccb2' : kd === 'creve' ? mix(P[0], '#231d19', .35) : P[0];
+      g.fillStyle = CLOS_COUL[b.role] || (kd === 'brule' ? '#3a302a' : kd === 'ruine' ? '#958a78' : b.zone === 'faubourg' || b.cotes ? mix(P[0], '#7aa659', .55) : b.role === 'place' || b.role === 'parvis' ? '#d6ccb2' : kd === 'creve' ? mix(P[0], '#231d19', .35) : P[0]);
       g.fill();
-      if (!kd && b.zone === 'ville' && b.aire > 80 && !b.role) { const inn = decalerQuad(q, 2.6); if (inn) { chemin_(g, inn); g.fillStyle = '#cdbf9f'; g.fill(); } }
-      if (!kd && b.zone === 'faubourg') {   // les maisons du faubourg au bord de la rue, les jardins derrière
+      if (!kd && b.zone === 'ville' && b.aire > 80 && !b.role && !b.cotes) { const inn = decalerQuad(q, 2.6); if (inn) { chemin_(g, inn); g.fillStyle = '#cdbf9f'; g.fill(); } }
+      if (!kd && (b.zone === 'faubourg' || b.cotes) && !b.role) {   // les maisons au bord de la rue (le faubourg, ou sur quelques côtés), les jardins derrière
         g.fillStyle = P[0];
         (b.cotes || [true, false, false, false]).forEach((on, i) => {
           if (!on) return;
@@ -595,7 +613,7 @@ export function* planCartePas(K, n, e, res = .5) {
   const lum = [];
   // (une fenêtre sur deux tous les 50 m de façade ; au plus 900, prises dans toute la ville)
   let nl = 0;
-  for (const b of V.ilots) { if (b.role === 'place' || b.role === 'parvis' || deg.get(b) === 'brule' || deg.get(b) === 'ruine') continue; const q = decalerQuad(b.q, 2); if (!q) continue; for (let i = 0; i < q.length; i++) { const [ax, ay] = q[i], [bx, by] = q[(i + 1) % q.length], l = Math.hypot(bx - ax, by - ay); for (let d = 4; d < l; d += 9) if (hash2(nl++, n.id, 41) < .45) lum.push([n.x + (ax + (bx - ax) * d / l - IC[0]) / S, n.y + (ay + (by - ay) * d / l - IC[1]) / S]); } }
+  for (const b of V.ilots) { if (b.role === 'place' || b.role === 'parvis' || CLOS_COUL[b.role] || deg.get(b) === 'brule' || deg.get(b) === 'ruine') continue; const q = decalerQuad(b.q, 2); if (!q) continue; for (let i = 0; i < q.length; i++) { const [ax, ay] = q[i], [bx, by] = q[(i + 1) % q.length], l = Math.hypot(bx - ax, by - ay); for (let d = 4; d < l; d += 9) if (hash2(nl++, n.id, 41) < .45) lum.push([n.x + (ax + (bx - ax) * d / l - IC[0]) / S, n.y + (ay + (by - ay) * d / l - IC[1]) / S]); } }
   const pas = Math.ceil(lum.length / 900);
   const rec = detail ? fin() : null, oct = rec ? Object.values(rec).reduce((s, a) => s + (a.byteLength || 0), 0) : 0;
   p = { c, Rr, res, rec, lum: lum.filter((_, i) => i % pas === 0), V, mat: [mat.x - IC[0], mat.y - IC[1]], px: c.width * c.height + oct / 4 };   // (l'enregistrement compte dans le budget, comme des pixels)

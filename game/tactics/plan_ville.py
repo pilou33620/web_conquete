@@ -160,7 +160,7 @@ def ere(a):
 
 
 def rayon(pop):   # (villes.js, rayon)
-    return jround(clamp(2.1 * math.sqrt(pop) - 36, 20, 262) / 4) * 4
+    return jround(clamp(1.45 * math.sqrt(pop) - 20, 20, 262) / 4) * 4
 
 
 def _loc(n, x, y):
@@ -249,14 +249,19 @@ def profil_ville(K, n, annee=1789, f=None, pop=None, d=0):
                 fau=1 + .18 * d, dfau=.08 * d)
 
 
+# les îlots sans maisons et leur part par taille de ville (villes.js, CLOS et DENSITE)
+CLOS = ['verger', 'verger', 'potager', 'potager', 'potager', 'cour', 'cour', 'vague']
+DENSITE = dict(bourg=(.2, .95, .2), moyenne=(.2, .95, .2), grande=(.3, .9, .2))
+
+
 def generer_interieur(K, Pf):
     """genererInterieur : les îlots (q, c, d, zone, main, aire, rôle…), les rues, l'enceinte (trace, rect, murLigne),
     la citadelle, la gare, les routes jusqu'au bord de la scène."""
     R = alea(Pf['sd'])
     n, Rv, sd = Pf['n'], Pf['R'], Pf['sd']
     ilots, rues, plus = [], [], []
-    V = dict(Pf=Pf, type='grande' if Rv > 190 else 'moyenne' if Rv > 110 else 'bourg',
-             larg=[1.1, 2.2] if Rv > 190 else [1.2, 2.5] if Rv > 110 else [1.4, 2.7], rues=rues, lieux={}, placeCentre=False,
+    V = dict(Pf=Pf, type='grande' if Rv > 136 else 'moyenne' if Rv > 80 else 'bourg',
+             larg=[1.5, 2.6] if Rv > 136 else [1.5, 2.7] if Rv > 80 else [1.6, 3], rues=rues, lieux={}, placeCentre=False,
              murLigne=None, rect=None, trace=None, citadelle=None, gare=None, murInt=None, rPlace=None, plus=plus)
 
     def eauL(x, y):
@@ -447,7 +452,7 @@ def generer_interieur(K, Pf):
         for r in Pf['routes']:
             ruban(r, r1 + 12, r1 * (1.7 if Pf['annee'] >= 1860 else 1.4) * fau, 12, 8, densite=dens(.75))
     elif m in ('bastide', 'place'):
-        n0 = clamp(jround(Rv / 19), 4, 9)
+        n0 = clamp(jround(Rv / 19), 2 if m == 'bastide' else 4, 9)   # (une bastide de village : 5 îlots sur 3)
         p0, pas = (30, 12) if m == 'place' else (33, 13)
         nx = jround(n0 * p0 / pas)
         ny = jround((n0 - 1) * p0 / pas) if m == 'bastide' else nx
@@ -601,6 +606,18 @@ def generer_interieur(K, Pf):
         V['rMur'] = V['murLigne']
     else:
         V['rMur'] = bord + 9
+    # moins serré (villes.js, DENSITE) : des clos sans maisons passé le cœur, les autres îlots bâtis sur moins de côtés
+    c0, pmax, smin = DENSITE[V['type']]
+    for k, b in enumerate(V['ilots']):
+        if b.get('role'):
+            continue
+        f = .6 if b['zone'] == 'faubourg' else clamp((b['d'] / Rv - c0) / (.75 - c0), 0, 1)
+        if hash2(k, 17, sd) < pmax * f * (.35 if b['main'] else 1):
+            b['role'] = CLOS[int(hash2(k, 18, sd) * len(CLOS))]
+        elif b['zone'] == 'ville' and f > 0 and not b['main']:
+            b['cotes'] = [hash2(k, 19 + i, sd) < 1 - (1 - smin) * f for i in range(4)]
+            if True not in b['cotes']:
+                b['cotes'][int(hash2(k, 23, sd) * 4)] = True
     return V
 
 

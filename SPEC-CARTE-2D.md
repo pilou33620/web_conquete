@@ -806,3 +806,48 @@ proche, le paysage et les plans des villes nets jusque-là, et à chaque zoom qu
   Écart : les seuils sont en pixels de l'écran, la gravure s'efface donc à z 35-42 sur un écran Retina et à z 70-85 sur un
   écran simple (voulu : au-delà, la tuile de 64 serait floue).
 
+
+## Livré — la densité des bourgs et des villes
+
+Demande du joueur : environ un habitant par maison dans un bourg de 3 000 habitants ou à Libourne ; la cible, 6 à 10 dans
+un bourg, 15 à 30 par immeuble de 2 à 4 étages dans une grande ville. Approche retenue, un mélange : un cœur serré, des
+faubourgs aérés, un rayon un peu plus court.
+
+- **Le rayon** (`villes.js`, `rayon`, et `plan_ville.rayon`) : R = 1,45 √pop − 20 unités (avant 2,1 √pop − 36), mêmes bornes
+  (20 à 262) ; un village de 700 garde ses 111 m, Bordeaux ses 1,47 km. Les tailles de ville suivent (même population : grande
+  au-delà de R 136, moyenne au-delà de 80 ; avant 190 et 110). Une bastide de village n'a plus que 5 îlots sur 3 (au moins
+  10 sur 8 avant : Cadillac, 318 habitants, avait 376 maisons).
+- **Les clos** (`villes.js`, `CLOS`, `DENSITE` ; `plan_ville.py`, identiques) : passé le cœur (0,2 du rayon, 0,3 dans une grande
+  ville), une part croissante des îlots sans rôle devient un clos, jusqu'à 95 % (90 %) aux trois quarts du rayon ; les
+  faubourgs des routes à 0,6 de ce maximum, les îlots des rues maîtresses au tiers. Un clos est un verger, un maraîcher, une
+  cour avec son hangar (chantier, entrepôt) ou un terrain vague (`lib.js`, `remplirIlot`, `CLOS_COUL`). Les autres îlots hors
+  du cœur ne sont bâtis que sur une partie de leurs côtés (`cotes`, jusqu'à 20 % au bord), jardins derrière. Tirages par
+  `hash2` de l'îlot : le tirage du plan ne change pas.
+- **Les façades** un peu plus larges : 8 à 14 m dans une grande ville (avant 6 à 12), 8 à 15 dans une moyenne, 9 à 17 dans un
+  bourg (`remplirIlot` ; `decor2d.js`, `LARG` des batailles inchangé).
+- **Ce qui suit** : la carte (`planCarte`, à plat : clos à leur teinte, maisons sur leurs seuls côtés), les dégâts et les
+  fenêtres de la nuit (pas dans les clos), les batailles (`terrain_ville.py` : un clos en pré, un verger en `VERGER` ; maisons
+  sur les côtés du plan ; `decor2d.js` : teintes des clos, maisons sur les côtés), la crue (`crue.py`, par `rayon`).
+- **Cartes de bataille, version 6** (`terrain.VERSION`) : une bataille de version 5 d'une sauvegarde garde son plan
+  (`plan_ville_v5.py`, `terrain_ville_v5.py`, figés ; banc `test_carte_v5_figee`). Carte de bataille 0,32 s en moyenne avant
+  comme après (Bayonne 0,43 → 0,38, Bordeaux 0,44 → 0,41, Navarrenx 0,32 → 0,29, Belin 0,19 → 0,28). Nontron : cases bâties
+  506 → 142.
+- Avant → après (maisons comptées sur le plan peint, 1789 ; `integration/campagne-echelle/maisons.mjs`) :
+
+  | Place | Habitants | Rayon | Îlots | Maisons | Habitants par maison |
+  |---|---|---|---|---|---|
+  | Belin (village rond) | 731 | 111 m | 14 | 229 → 120 | 3,2 → 6,1 |
+  | Lanton (village rond) | 676 | 111 m | 12 | 182 → 136 | 3,7 → 5,0 |
+  | Nontron (bourg) | 3 000 | 445 → 334 m | 112 → 78 | 2 433 → 424 | 1,2 → 7,1 |
+  | Libourne (bastide) | 8 000 | 845 → 600 m | 403 → 231 | 8 291 → 1 069 | 1,0 → 7,5 |
+  | Bayonne | 13 000 | 1 134 → 801 m | 508 → 233 | 15 822 → 1 984 | 0,8 → 6,6 |
+  | Bordeaux | 110 000 | 1 468 m | 878 | 23 869 → 6 711 | 4,6 → 16,4 |
+
+  Médianes, toutes places : villages 2,8 → 6,8 habitants par maison, villes 1,2 → 6,6, capitales 1,3 → 10,3.
+- Écarts :
+  - Bayonne (6,6) et les capitales de département restent sous la cible d'une grande ville : leur vieille ville dans les murs
+    reste serrée ; y arriver demanderait d'aérer aussi l'intérieur des murs ou d'en raccourcir encore le rayon : à décider ;
+  - à Bordeaux, les faubourgs hors les murs sont presque tous des clos, les Chartrons compris (le long du port, ils étaient
+    bâtis) ;
+  - quelques villages (Buzet, Sainte-Colombe : 2 habitants par maison) gardent leur plancher de 111 m.
+- Captures (`integration/densite/`) : intérieurs de Nontron, Libourne, Bayonne, Bordeaux ; Nontron sur la carte à z 200 et 450.

@@ -335,7 +335,7 @@ export class Decor2D {
       const edges = [0, 1, 2, 3].map(i => { const a = ins[i], e = ins[(i + 1) % 4], l = Math.hypot(e[0] - a[0], e[1] - a[1]) || 1, u = [(e[0] - a[0]) / l, (e[1] - a[1]) / l]; let nn = [-u[1], u[0]]; if ((c0[0] - a[0]) * nn[0] + (c0[1] - a[1]) * nn[1] < 0) nn = [-nn[0], -nn[1]]; return { a, l, u, n: nn }; });
       const cote = Math.min(edges[0].l, edges[1].l), bb = boiteDe(q), bbox = [bb[0] - 4, bb[1] - 4, bb[2] + 4, bb[3] + 4], R = D.alea(sd | 0);
       // le sol de l'îlot (remplirIlot) : cour, jardin, place, parvis, cimetière…
-      const fill = { place: '#d6ccb2', parvis: '#cfc5ad', jardin: '#e3d8bb', caserne: '#d9cda9', hopital: '#d2c8b0', couvent: '#7aa659', royale: '#d6ccb2', eglise: P.type === 'bourg' ? '#7aa659' : '#cfc5ad', egliseDome: '#cfc5ad', cathedrale: '#cfc5ad' }[role] || (fau ? '#7a9a52' : '#cdbf9f');
+      const fill = { place: '#d6ccb2', parvis: '#cfc5ad', jardin: '#e3d8bb', caserne: '#d9cda9', hopital: '#d2c8b0', couvent: '#7aa659', royale: '#d6ccb2', eglise: P.type === 'bourg' ? '#7aa659' : '#cfc5ad', egliseDome: '#cfc5ad', cathedrale: '#cfc5ad', verger: '#8fae5f', potager: '#7c9a52', cour: '#c9bc9c', vague: '#a9a877' }[role] || (fau || cotes ? '#7a9a52' : '#cdbf9f');   // (les clos : carte/lib.js, CLOS_COUL)
       const inner = !fau && !role && aireQ(ins) > 80 * k * k ? decalerQuad(ins, PROF + 5) : null, vert = aireQ(ins) > 300 * k * k;
       const arbres = [];
       if (inner && aireQ(inner) > 300) for (let i = 0; i < 4; i++) arbres.push([c0[0] + (R() - .5) * cote * .4, c0[1] + (R() - .5) * cote * .4, (2.4 + R() * 2) * .8, BOIS2, neige ? 'nu' : 'rond']);
@@ -350,7 +350,7 @@ export class Decor2D {
       } });
       if (role && role !== 'royale') return;
       // une maison par parcelle le long de chaque rue (le faubourg : sur son côté de la route), à leur vraie taille
-      const sides = fau ? edges.filter((e, i) => cotes & (1 << i)) : edges;
+      const sides = fau || cotes ? edges.filter((e, i) => cotes & (1 << i)) : edges;
       if (fau && !sides.length) sides.push(edges[(R() * 4) | 0]);
       const dmax = Math.min(cote * .36, PROF), dom = tirer(R, toits), parcelles = [];
       for (const e of sides) for (let s0 = 0; s0 < e.l - 1;) {

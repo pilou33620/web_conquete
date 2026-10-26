@@ -19,6 +19,8 @@ function E(g, c, x, y, rx, ry, r = 0) { g.fillStyle = c; g.beginPath(); g.ellips
 function C(g, c, x, y, r) { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); }
 function T(g, c, w, x1, y1, x2, y2) { g.strokeStyle = c; g.lineWidth = w; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
 function RR(g, c, x, y, w, h, r) { g.fillStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); }
+// les teintes des clos sans maisons (villes.js, CLOS ; decor2d.js les reprend)
+const CLOS_COUL = { verger: '#8fae5f', potager: '#7c9a52', cour: '#c9bc9c', vague: '#a9a877' };
 function PG(g, c, p) { g.fillStyle = c; g.beginPath(); g.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]); g.closePath(); g.fill(); }
 function ligne(g, pts) { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (const p of pts) g.lineTo(p[0], p[1]); }
 // des taches d'une couleur d'un seul tracé : L, couleur → [[x, y, r]] (cercles) ou [[x, y, rx, ry, a]] (ellipses)
@@ -1241,7 +1243,7 @@ function remplirIlot(g, b, V, R, vite) {
   // (à la vraie taille, unités de 5,56 m : la moitié des rues, 13 m pour une grande rue et 6,7 m pour les autres)
   const cfg = V.cfg, poly = decalerQuad(b.q, b.main ? 1.25 : .6); if (!poly) return;
   const fau = b.zone === 'faubourg', c = b.c;
-  chemin_(g, poly); g.fillStyle = fau ? '#7a9a52' : '#cdbf9f'; g.fill();
+  chemin_(g, poly); g.fillStyle = fau || b.cotes ? '#7a9a52' : '#cdbf9f'; g.fill();   // (bâti sur quelques côtés : des jardins)
   const edges = [0, 1, 2, 3].map(k => { const a = poly[k], e = poly[(k + 1) % 4], l = Math.hypot(e[0] - a[0], e[1] - a[1]), u = [(e[0] - a[0]) / l, (e[1] - a[1]) / l]; let n = [-u[1], u[0]]; if ((c[0] - a[0]) * n[0] + (c[1] - a[1]) * n[1] < 0) n = [-n[0], -n[1]]; return { a, l, u, n }; });
   const angB = Math.atan2(edges[0].u[1], edges[0].u[0]), cote = Math.min(edges[0].l, edges[1].l);
   const sp = b.role;
@@ -1302,9 +1304,21 @@ function remplirIlot(g, b, V, R, vite) {
     V.lieux.hopital = { x: c[0], y: c[1] };
     return;
   }
+  // les clos sans maisons (villes.js, CLOS) : vergers en quinconce, planches des maraîchers, cour et hangar (chantier,
+  // entrepôt), terrain vague ; bl(s, t) : un point de l'îlot (0 à 1 le long du premier côté, puis du dernier)
+  if (CLOS_COUL[sp]) {
+    chemin_(g, poly); g.fillStyle = CLOS_COUL[sp]; g.fill();
+    const bl = (s, t) => { const a = poly[0], b = poly[1], c2 = poly[2], d = poly[3], x0 = a[0] + (b[0] - a[0]) * s, y0 = a[1] + (b[1] - a[1]) * s; return [x0 + (d[0] + (c2[0] - d[0]) * s - x0) * t, y0 + (d[1] + (c2[1] - d[1]) * s - y0) * t]; };
+    const n0 = Math.max(1, Math.round(edges[0].l / 1.7)), n1 = Math.max(1, Math.round(edges[3].l / 1.7));   // (un arbre tous les 9 m)
+    if (sp === 'verger') for (let i = 0; i < n0; i++) for (let j = 0; j < n1; j++) { const [x, y] = bl((i + (j % 2 ? .75 : .25)) / n0, (j + .5) / n1); if (vite) C(g, '#5a8a3e', x, y, .55); else arbre(g, x, y, .6, '#5a9748'); }
+    if (sp === 'potager') { g.lineWidth = edges[3].l / n1 / 2.4; for (let j = 0; j < n1 * 2; j++) { const a = bl(.06, (j + .5) / n1 / 2), b = bl(.94, (j + .5) / n1 / 2); T(g, j % 2 ? '#9a8358' : '#5f8a3e', g.lineWidth, a[0], a[1], b[0], b[1]); } }
+    if (sp === 'cour') { PG(g, '#8a6a4a', [...bl(.12, .1), ...bl(.88, .1), ...bl(.88, .36), ...bl(.12, .36)]); const a = bl(.12, .23), b = bl(.88, .23); T(g, 'rgba(50,30,20,.5)', .15, a[0], a[1], b[0], b[1]); }   // (le hangar)
+    if (sp === 'vague') for (let i = 0; i < 6; i++) { const [x, y] = bl(.1 + R() * .8, .1 + R() * .8); C(g, '#7f8f55', x, y, .5 + R() * .5); }
+    return;
+  }
   // îlot ordinaire : une maison par parcelle le long de chaque rue, cour ou jardins au milieu
   if (!fau && b.aire > 80) { const inn = decalerQuad(poly, 3); if (inn && aire(inn) * Math.sign(aire(poly)) > 4) { chemin_(g, inn); g.fillStyle = b.aire > 300 ? '#7c9a52' : '#cdbf9f'; g.fill(); for (let i = 0; i < (vite ? 0 : 4); i++) arbre(g, c[0] + (R() - .5) * cote * .4, c[1] + (R() - .5) * cote * .4, .7 + R() * .5, BOIS[R() * 5 | 0]); } }
-  const sides = fau ? edges.filter((e, k) => (b.cotes || [b.j === V.j0, b.i + 1 === V.i0, b.j + 1 === V.j0, b.i === V.i0])[k]) : edges;
+  const sides = fau || b.cotes ? edges.filter((e, k) => (b.cotes || [b.j === V.j0, b.i + 1 === V.i0, b.j + 1 === V.j0, b.i === V.i0])[k]) : edges;
   if (fau && !sides.length) sides.push(edges[(R() * 4) | 0]);
   // (la profondeur suit la taille de l'îlot, pas son côté le plus court : aux pointes, les maisons se rejoignent en coin)
   const dmax = Math.min(Math.sqrt(b.aire) * .3, V.prof || 11), parcelles = [], annexes = [], jardins = [], ombres = [];
@@ -1351,4 +1365,4 @@ function remplirIlot(g, b, V, R, vite) {
   if (fau) for (const [o, u, n, w, d] of parcelles) if (R() < .5) potager(g, o[0] + n[0] * (d + .5) + u[0] * .2, o[1] + n[1] * (d + .5) + u[1] * .2, Math.max(.8, w - .4), 2, R, false);
   if (royale) { C(g, '#a89c86', c[0], c[1], 1); C(g, '#2c2f33', c[0], c[1], .45); V.lieux.royale = { x: c[0], y: c[1] }; }
 }
-export { toile, taches, BATS, BOIS, BOUGE, C, CHEVAL, DPR, E, GRAINE, HERBE, KT, LPIECE, MEMO, OMB, OMBRE, PAL, PEAU, PG, RR, SOLEIL, SOLS, SPR, Scene, T, TAU, TOITS, abreuvoir, aire, ajouterCorps, alea, angLerp, arbre, avant, bastions, bat, bois, botte, boulet, brancher, bras, caisson, calvaire, camAnim, cavalier, charbonniere, charrue, chemin, chemin_, cheminee, cheval, cibleDe, clair, clamp, cloture, coneF, copeaux, corps, cratere, croix, decaler, decalerQuad, dessinMaison, dessinPart, dessinerEnceinte, distPoly, domeF, drapeau, dup, ease, eclair, empreinte, epouvantail, etincelle, fantassin, ferme, figAuHasard, flammes, fumee, fusil, haie, hx, impact, lerp, ligne, linge, longueur, majUnite, mansardeF, mare, mix, mod, moutons, parcelle, parterre, piece, pietine, pignon, placer, pont, poseFig, potager, pyramideF, remplirIlot, riviere, route, ruche, rue, ruisseau, sapin, sombre, souche, sprite, stere, surChemin, surPoly, tasBois, teinte, teinteL, tenue, terre, tete, tirs, toit, toitParcelle, touffes, tronc, unite, verger };
+export { toile, taches, BATS, BOIS, BOUGE, C, CHEVAL, CLOS_COUL, DPR, E, GRAINE, HERBE, KT, LPIECE, MEMO, OMB, OMBRE, PAL, PEAU, PG, RR, SOLEIL, SOLS, SPR, Scene, T, TAU, TOITS, abreuvoir, aire, ajouterCorps, alea, angLerp, arbre, avant, bastions, bat, bois, botte, boulet, brancher, bras, caisson, calvaire, camAnim, cavalier, charbonniere, charrue, chemin, chemin_, cheminee, cheval, cibleDe, clair, clamp, cloture, coneF, copeaux, corps, cratere, croix, decaler, decalerQuad, dessinMaison, dessinPart, dessinerEnceinte, distPoly, domeF, drapeau, dup, ease, eclair, empreinte, epouvantail, etincelle, fantassin, ferme, figAuHasard, flammes, fumee, fusil, haie, hx, impact, lerp, ligne, linge, longueur, majUnite, mansardeF, mare, mix, mod, moutons, parcelle, parterre, piece, pietine, pignon, placer, pont, poseFig, potager, pyramideF, remplirIlot, riviere, route, ruche, rue, ruisseau, sapin, sombre, souche, sprite, stere, surChemin, surPoly, tasBois, teinte, teinteL, tenue, terre, tete, tirs, toit, toitParcelle, touffes, tronc, unite, verger };

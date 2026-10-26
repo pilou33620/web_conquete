@@ -39,7 +39,7 @@ def resume(V):
     enc = lambda t: t and dict(poly=[list(p) for p in t['poly']],
                                ravs=[[list(r['b1']), list(r['apex']), list(r['b2'])] for r in t['ravs']])
     return dict(modele=V['Pf']['modele'], murs=V['Pf']['murs'], R=V['Pf']['R'], routes=[r['a'] for r in V['Pf']['routes']],
-                ilots=[dict(q=[list(p) for p in b['q']], role=b.get('role'), zone=b['zone'], main=bool(b['main']))
+                ilots=[dict(q=[list(p) for p in b['q']], role=b.get('role'), zone=b['zone'], main=bool(b['main']), cotes=b.get('cotes'))
                        for b in V['ilots']],
                 rues=len(V['rues']), trace=enc(V['trace']), citadelle=enc(V['citadelle']), rect=V['rect'],
                 murLigne=V['murLigne'], rMur=V['rMur'],
@@ -108,7 +108,9 @@ class BatailleSurLePlan(unittest.TestCase):
         k = P['k']
         tf = lambda p: (P['c'][0] + (p[0] - PV.IC[0]) * k, P['c'][1] + (p[1] - PV.IC[1]) * k)
         # le tracé bastionné et les demi-lunes de la bataille sont ceux du plan, à l'échelle de la carte
-        self.assertEqual(m.bastions, [[round(x), round(y)] for x, y in map(tf, V['trace']['poly'])])
+        # (à un mètre près : l'échelle du plan envoyé au client, k, est arrondie)
+        self.assertTrue(all(abs(a - round(b)) <= 1 for p, q in zip(m.bastions, map(tf, V['trace']['poly'])) for a, b in zip(p, q)))
+        self.assertEqual(len(m.bastions), len(V['trace']['poly']))
         self.assertEqual(m.demi_lunes, [[[round(x), round(y)] for x, y in map(tf, (r['b1'], r['apex'], r['b2']))]
                                         for r in V['trace']['ravs']])
         self.assertEqual(m.walls[0]['kind'], 'bastion')
@@ -182,8 +184,8 @@ class BatailleSurLePlan(unittest.TestCase):
         airiaux = [e for e in m.plan['metiers'] if e['k'] == 'airial']
         self.assertTrue(airiaux)
         self.assertTrue(all(m.t[TR.cell_of(e['x'], e['y'])] == TR.T_BATI for e in airiaux))
-        n = nom('Salies-de-Béarn')   # (ses salines à 1,3 km au sud : la carte centrée 600 m plus au sud ; l'assaillant de l'est)
-        m = carte(n, att=0.0, cy=n['y'] + 0.6)
+        n = nom('Salies-de-Béarn')   # (ses salines à 0,9 km au nord-ouest ; l'assaillant de l'est)
+        m = carte(n, att=0.0)
         self.assertTrue(m.plan['salines'])
         self.assertTrue(any(m.t[c] == TR.T_MARAIS_T for q in m.plan['salines'][0] for c in TV._dans(q)))
         # rien sur le glacis ni devant une porte ; les quais d'un port le long de l'eau, des bateaux
@@ -224,6 +226,18 @@ class BatailleSurLePlan(unittest.TestCase):
         v4, v5 = TR.generate(GEO, dict(spec, carte=4)), TR.generate(GEO, dict(spec, carte=5))
         self.assertEqual(bytes(v4.t), bytes(TR.generate(GEO, dict(spec, carte=4)).t))
         self.assertNotEqual(bytes(v4.t), bytes(v5.t), 'le village de Belin a rétréci : la carte de version 5 diffère')
+
+    def test_carte_v5_figee(self):
+        """Une bataille de version 5 d'une sauvegarde garde son plan d'avant la densité des bourgs (plan_ville_v5,
+        terrain_ville_v5, figés) ; la version 6 prend le nouveau."""
+        n = nom('Nontron')
+        pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=0, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'], y=n['y'], battle=True)
+        spec = dict(seed=700, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.5)
+        v5, v6 = TR.generate(GEO, dict(spec, carte=5)), TR.generate(GEO, dict(spec, carte=6))
+        self.assertEqual(bytes(v5.t), bytes(TR.generate(GEO, dict(spec, carte=5)).t))
+        self.assertNotEqual(bytes(v5.t), bytes(v6.t), 'Nontron a rétréci et s’est aéré : la carte de version 6 diffère')
+        bati = lambda m: sum(m.t[c] == TR.T_BATI for c in range(TR.N))
+        self.assertLess(bati(v6), bati(v5) * .6, 'moins de maisons')
 
     def test_pas_de_pont_de_pierre_a_bordeaux_avant_1822(self):
         kinds = lambda y: {b.get('kind') for b in carte(nom('Bordeaux'), year=y).bridges if b.get('river') == 'Garonne'}
