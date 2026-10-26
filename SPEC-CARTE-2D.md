@@ -770,8 +770,9 @@ proche, le paysage et les plans des villes nets jusque-là, et à chaque zoom qu
 - Captures (`integration/campagne-echelle/`) : `carte-colonne-z700.png` (900 fantassins, 300 cavaliers, 120 artilleurs sur la
   route de Libourne), `carte-bordeaux-z1300.png` (le plan rejoué net), `carte-libourne-z450.png`.
 - Écarts :
-  - les trains (`ambient.js`) gardent leur taille d'écran (une voiture de 20 m au plus près, deux fois la vraie) ; les
-    oiseaux aussi (au moins 2 px) ; les lumières (lanternes, feux) gardent leur halo de quelques pixels ;
+  - (décision du joueur, depuis) les trains vus du ciel ont leur vraie longueur (14 m par voiture, rien sous 1,5 px ; de
+    profil sur la carte d'époque, lisibles) et les oiseaux leur vraie envergure (grue 2 m, mouette 1 m, palombe 0,7 m,
+    étourneau 0,4 m ; rien sous le pixel) ; les lumières (lanternes, feux) gardent leur halo de quelques pixels ;
   - le mur de `map.walls` ne suit pas le plan d'une bastide ni le tracé bastionné (un cercle ou une étoile à 5 ou 6 pointes) ;
   - les tuiles de l'intérieur sont encore prises réduites (`interieur.js`) ; les rangs d'arbres des routes royales passent sur
     les ponts ;

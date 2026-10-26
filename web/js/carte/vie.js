@@ -629,17 +629,19 @@ function oiseau(p, sc, x, y, a, s, fl) {
 }
 function oiseaux(sc, g, x0, y0, x1, y1) {
   const z = sc.z, t = sc.time, sa = AMB.saison, W = VIE.W, H = VIE.H; if (z < 4) return;
-  const s = Math.max(U * 2.4, 2.2 / z), P = { '#3a3530': new Path2D(), '#5a5f6a': new Path2D(), '#f4f2ea': new Path2D(), '#2a2622': new Path2D() };
+  // (taille réelle : demi-envergure en km ; sous le pixel, on ne les dessine pas)
+  const T = { grues: .001, palombes: .00035, mouettes: .0005, etourneaux: .0002 }, P = { '#3a3530': new Path2D(), '#5a5f6a': new Path2D(), '#f4f2ea': new Path2D(), '#2a2622': new Path2D() };
   const vu = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
   for (const v of VIE.vols) {
+    const s = T[v.sorte]; if (!s || s * z * 2 < .8) continue;
     if (v.sorte === 'grues' && (sa === 'printemps' || sa === 'automne')) {
       const a = sa === 'printemps' ? -.75 : Math.PI - .75, cx = mod(v.x + Math.cos(a) * .06 * t, W + 100) - 50, cy = mod(v.y + Math.sin(a) * .06 * t, H + 100) - 50;
       if (!vu(cx, cy) && Math.hypot(cx - (x0 + x1) / 2, cy - (y0 + y1) / 2) > (x1 - x0) + s * 40) continue;
       for (let m = 0; m < 21; m++) { const r = Math.ceil(m / 2), sg = m % 2 ? 1 : -1, x = cx - Math.cos(a) * r * s * 2.2 - Math.sin(a) * sg * r * s * 1.8, y = cy - Math.sin(a) * r * s * 2.2 + Math.cos(a) * sg * r * s * 1.8; if (vu(x, y)) oiseau(P['#3a3530'], sc, x, y, a, s, Math.sin(t * 5 + m * .4)); }
     } else if (v.sorte === 'palombes' && sa === 'automne') {
       const a = Math.PI - .6, cx = mod(v.x + Math.cos(a) * .07 * t, 120) + 60, cy = mod(v.y + Math.sin(a) * .07 * t, 150) + 100;   // les palombes passent sur les Landes
-      if (cx + s * 13 < x0 || cx - s * 13 > x1 || cy + s * 7 < y0 || cy - s * 7 > y1) continue;
-      for (let m = 0; m < 60; m++) { const x = cx + (hash2(m, v.k, 130) - .5) * s * 26, y = cy + (hash2(v.k, m, 131) - .5) * s * 14; if (vu(x, y)) oiseau(P['#5a5f6a'], sc, x, y, a, s, Math.sin(t * 7 + m)); }
+      if (cx + .04 < x0 || cx - .04 > x1 || cy + .02 < y0 || cy - .02 > y1) continue;
+      for (let m = 0; m < 60; m++) { const x = cx + (hash2(m, v.k, 130) - .5) * .08, y = cy + (hash2(v.k, m, 131) - .5) * .04; if (vu(x, y)) oiseau(P['#5a5f6a'], sc, x, y, a, s, Math.sin(t * 7 + m)); }
     } else if (v.sorte === 'mouettes') {
       const Pt = VIE.ports[v.k / 4 % VIE.ports.length | 0]; if (!Pt || Pt.x < x0 - 1 || Pt.x > x1 + 1 || Pt.y < y0 - 1 || Pt.y > y1 + 1) continue;
       for (let m = 0; m < 12; m++) { const ph = t * .05 + m * .52 + v.ph, r = .25 + (m % 4) * .1, x = Pt.x + Math.cos(ph) * r - .4, y = Pt.y + Math.sin(ph) * r * .7 - .3; if (vu(x, y)) oiseau(P['#f4f2ea'], sc, x, y, ph + Math.PI / 2, s, Math.sin(t * 3 + m) * .5); }
@@ -649,7 +651,7 @@ function oiseaux(sc, g, x0, y0, x1, y1) {
       for (let m = 0; m < 160; m++) { const ph = m * .7, x = cx + Math.sin(t * .4 + ph) * .35 + Math.sin(t * .23 + ph * 1.7) * .2, y = cy + Math.cos(t * .31 + ph * 1.3) * .22; if (vu(x, y)) oiseau(P['#2a2622'], sc, x, y, t + ph, s, Math.sin(t * 9 + m)); }
     }
   }
-  g.setTransform(1, 0, 0, 1, 0, 0); g.lineCap = 'round'; g.lineWidth = Math.max(1, .28 * s * sc.m);
+  g.setTransform(1, 0, 0, 1, 0, 0); g.lineCap = 'round'; g.lineWidth = Math.max(1, .28 * T.grues * sc.m);
   for (const [c, p] of Object.entries(P)) { g.strokeStyle = c; g.stroke(p); }
 }
 
