@@ -18,6 +18,7 @@ S, IW, IH = 180, 1000, 760
 IC = (500.0, 380.0)
 TAU = math.pi * 2
 M = 1000.0 / S   # mètres par unité
+RUE_MAIN, RUE = 1.25, .6   # (la moitié des rues, en unités : 13 m pour une grande rue, 6,7 m pour les autres)
 
 
 def mod(a, n):
@@ -103,6 +104,7 @@ class Carte:
     def __init__(self, geo):
         self.geo = geo
         self.GW, self.GH, self.TER = geo.W, geo.H, geo.terrain
+        self.EAU = bytes(1 if t in (0, 1) else 0 for t in self.TER)
         self.nodes, self.edges = geo.nodes, geo.edges
         self.rivers = [dict(name=r['name'], rank=r['rank'], pts=[[round(c, 2) for c in geo.xy(lat, lon)]
                                                                   for lon, lat in r['pts']]) for r in geo.src['rivers']]
@@ -117,10 +119,16 @@ class Carte:
     def eauK(self, x, y):
         i, j = math.floor(x - .5), math.floor(y - .5)
         fx, fy = x - .5 - i, y - .5 - j
-
-        def w(a, b):
-            return 1 if self.ter(a + .5, b + .5) in (0, 1) else 0
-        return lerp(lerp(w(i, j), w(i + 1, j), fx), lerp(w(i, j + 1), w(i + 1, j + 1), fx), fy)
+        e, GW, GH = self.EAU, self.GW, self.GH
+        # (comme ter(i + .5, j + .5) dans la mer ou l'eau, en plus vite : une carte de bataille en lit 15 000)
+        if 0 <= i < GW - 1 and 0 <= j < GH - 1:
+            k = j * GW + i
+            w0, w1, w2, w3 = e[k], e[k + 1], e[k + GW], e[k + GW + 1]
+        else:
+            w0, w1, w2, w3 = ((e[b * GW + a] if 0 <= a < GW and 0 <= b < GH else 1)
+                              for a, b in ((int(a + .5), int(b + .5)) for a, b in ((i, j), (i + 1, j), (i, j + 1), (i + 1, j + 1))))
+        a0, a1 = w0 + (w1 - w0) * fx, w2 + (w3 - w2) * fx
+        return a0 + (a1 - a0) * fy
 
 
 _CARTES = {}
@@ -248,8 +256,8 @@ def generer_interieur(K, Pf):
     n, Rv, sd = Pf['n'], Pf['R'], Pf['sd']
     ilots, rues, plus = [], [], []
     V = dict(Pf=Pf, type='grande' if Rv > 190 else 'moyenne' if Rv > 110 else 'bourg',
-             larg=[4.5, 8] if Rv > 190 else [5, 9] if Rv > 110 else [6, 11], rues=rues, lieux={}, placeCentre=False,
-             murLigne=None, rect=None, trace=None, citadelle=None, gare=None, murInt=None, plus=plus)
+             larg=[1.1, 2.2] if Rv > 190 else [1.2, 2.5] if Rv > 110 else [1.4, 2.7], rues=rues, lieux={}, placeCentre=False,
+             murLigne=None, rect=None, trace=None, citadelle=None, gare=None, murInt=None, rPlace=None, plus=plus)
 
     def eauL(x, y):
         return K.eauK(n['x'] + (x - IC[0]) / S, n['y'] + (y - IC[1]) / S)
@@ -257,7 +265,15 @@ def generer_interieur(K, Pf):
     boites = [(min(p[0] for p in r['pts']), min(p[1] for p in r['pts']), max(p[0] for p in r['pts']),
                max(p[1] for p in r['pts']), r['w'] / 2) for r in Pf['rivs']]
 
-    def pres(x, y, m=7):
+    vus = {}   # (un sommet sert à quatre îlots)
+
+    def pres(x, y, m=4):
+        v = vus.get((x, y, m))
+        if v is None:
+            v = vus[x, y, m] = _pres(x, y, m)
+        return v
+
+    def _pres(x, y, m):
         for r, (x0, y0, x1, y1, w) in zip(Pf['rivs'], boites):
             e = w + m + 1e-6   # (loin de la boîte de la rivière : loin de la rivière, sans calcul)
             if x0 - e < x < x1 + e and y0 - e < y < y1 + e and dist_poly(r['pts'], x, y) < w + m:
@@ -266,7 +282,7 @@ def generer_interieur(K, Pf):
     V['eau'] = lambda x, y: pres(x, y, 0)
 
     def ajout(q, **o):
-        if any(pres(p[0], p[1]) for p in q) or pres((q[0][0] + q[2][0]) / 2, (q[0][1] + q[2][1]) / 2, 10):
+        if any(pres(p[0], p[1]) for p in q) or pres((q[0][0] + q[2][0]) / 2, (q[0][1] + q[2][1]) / 2, 6):
             return None
         c = ((q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4)
         b = dict(q=q, c=c, d=hypot(c[0] - IC[0], c[1] - IC[1]), zone='ville', main=False, aire=abs(aire(q)))
@@ -287,51 +303,55 @@ def generer_interieur(K, Pf):
         routesL.append(dict(r, pts=pts))
     V['routesL'] = routesL
 
-    def polaire(R0, R1, pasA=.55, pasR=34, tord=.1, zone='ville', cotes=None):
+    def polaire(R0, R1, arc=16, pasR=12, tord=.3, zone='ville', cotes=None):
+        """Les anneaux autour de la place (R0 : son bord), d'îlots de pasR de profondeur et d'environ arc de long : en
+        s'éloignant de la place, une rue naît entre deux autres dès que l'îlot dépasserait 1,5 arc."""
         angs = ang_routes[:]
         while len(angs) < 3:
             angs.append((angs[0] if angs else 0) + TAU * (len(angs) / 3) + .4)
         angs = sorted(mod(a, TAU) for a in angs)
-        routes_idx, full = set(), []
-        for k in range(len(angs)):
-            a0 = angs[k]
-            a1 = angs[k + 1] if k + 1 < len(angs) else angs[0] + TAU
-            n_ins = max(0, jround((a1 - a0) / pasA) - 1)
-            routes_idx.add(len(full))
-            full.append(a0)
-            for q in range(1, n_ins + 1):
-                full.append(a0 + (a1 - a0) * q / (n_ins + 1) + (R() - .5) * .08)
-        na = len(full)
-        full.append(full[0] + TAU)
         rings = []
         r = R0
         while r < R1 - pasR * .6:
             rings.append(r)
             r += pasR * (.85 + R() * .3)
         rings.append(R1)
-
+        A = [dict(a=a, id=i, route=True, m0=0) for i, a in enumerate(angs)]
+        nid = len(A)
         memo = {}
 
-        def P(m, k):
-            p = memo.get((m, k))
+        def P(m, s):
+            p = memo.get((m, s['id']))
             if p is None:
-                a = full[k] + tord * sin(k * 1.7 + m * .9 + sd % 11)
-                rr = rings[m] * (1 + .06 * sin(full[k] * 3 + sd % 5))
-                p = memo[m, k] = (IC[0] + cos(a) * rr, IC[1] + sin(a) * rr)
+                a = s['a'] + tord * min(arc / rings[m], .33) * sin(s['id'] * 1.7 + m * .9 + sd % 11)
+                rr = rings[m] * (1 + .06 * sin(a * 3 + sd % 5))
+                p = memo[m, s['id']] = (IC[0] + cos(a) * rr, IC[1] + sin(a) * rr)
             return p
+        bandes = []
         for m in range(len(rings) - 1):
-            for k in range(na):
-                main = k in routes_idx or (k + 1) % na in routes_idx
-                ajout([P(m, k + 1), P(m, k), P(m + 1, k), P(m + 1, k + 1)], main=main, zone=zone, anneau=m, secteur=k,
-                      cotes=cotes)
-        for k in range(na):
-            rues.append(dict(pts=[P(m, k) for m in range(len(rings))], main=k in routes_idx))
-            if k in routes_idx:   # (pour les batailles : les rues maîtresses qui mènent aux routes)
-                V.setdefault('radiales', []).append((full[k], rues[-1]['pts']))
+            rm = (rings[m] + rings[m + 1]) / 2
+            B = []
+            for k, s in enumerate(A):
+                a1 = A[k + 1]['a'] if k + 1 < len(A) else A[0]['a'] + TAU
+                n_ = jround((a1 - s['a']) * rm / arc)
+                B.append(s)
+                for q in range(1, n_):
+                    B.append(dict(a=s['a'] + (a1 - s['a']) * q / n_ + (R() - .5) * .25 * arc / rm, id=nid, route=False, m0=m))
+                    nid += 1
+            A = B
+            bandes.append(A)
+            for k, s in enumerate(A):
+                t = A[(k + 1) % len(A)]
+                ajout([P(m, t), P(m, s), P(m + 1, s), P(m + 1, t)], main=s['route'] or t['route'], zone=zone, anneau=m,
+                      secteur=k, cotes=cotes)
+        for k, s in enumerate(A):   # (n : le rang de la rue, pour les batailles sur une carte réduite)
+            rues.append(dict(pts=[P(m, s) for m in range(s['m0'], len(rings))], main=s['route'], n=k))
+            if s['route']:   # (pour les batailles : les rues maîtresses qui mènent aux routes)
+                V.setdefault('radiales', []).append((s['a'], rues[-1]['pts']))
         for m in range(len(rings)):
-            rues.append(dict(pts=[P(m, k) for k in range(na + 1)], anneau=True, main=False))
+            L = bandes[min(m, len(bandes) - 1)] if bandes else A
+            rues.append(dict(pts=[P(m, s) for s in L + L[:1]], anneau=True, main=False, n=m))
         return rings
-
     def grille(cx, cy, a, nx, ny, pas, jit=0, garder=None, zone='ville'):
         memo = {}
 
@@ -343,17 +363,28 @@ def generer_interieur(K, Pf):
                     if jit else (cx + u, cy + v)
             return p
         hx, hy = nx // 2, ny // 2
+        garde = set()
         for i in range(nx):
             for j in range(ny):
                 q = [P(i, j), P(i + 1, j), P(i + 1, j + 1), P(i, j + 1)]
                 c = ((q[0][0] + q[2][0]) / 2, (q[0][1] + q[2][1]) / 2)
                 if garder and not garder(c):
                     continue
-                ajout(q, main=i == nx / 2 or i + 1 == hx or j == hy or j + 1 == hy, zone=zone, gi=i, gj=j)
+                if ajout(q, main=i == nx / 2 or i + 1 == hx or j == hy or j + 1 == hy, zone=zone, gi=i, gj=j):
+                    garde.add((i, j))
+
+        def ligne(n, pt, on, main, rang):   # (les rues le long des îlots gardés seulement)
+            pts = []
+            for k in range(n + 1):
+                if k < n and on(k):
+                    pts += [pt(k + 1)] if pts else [pt(k), pt(k + 1)]
+                elif pts:
+                    rues.append(dict(pts=pts, main=main, n=rang))
+                    pts = []
         for i in range(nx + 1):
-            rues.append(dict(pts=[P(i, 0), P(i, ny)], main=i == hx))
+            ligne(ny, lambda j: P(i, j), lambda j: (i - 1, j) in garde or (i, j) in garde, i == hx, i)
         for j in range(ny + 1):
-            rues.append(dict(pts=[P(0, j), P(nx, j)], main=j == hy))
+            ligne(nx, lambda i: P(i, j), lambda i: (i, j - 1) in garde or (i, j) in garde, j == hy, j)
 
     def le_plus_pres(liste, x, y, filtre=lambda b: True):
         l = [b for b in liste if not b.get('role') and filtre(b)]
@@ -366,7 +397,7 @@ def generer_interieur(K, Pf):
             V['lieux'].setdefault(r, (b['c'][0], b['c'][1]))
         return b
 
-    def ruban(route, d0, d1, prof=42, seg=34, densite=None):
+    def ruban(route, d0, d1, prof=12, seg=8, densite=None):
         a0 = route['a']
         d = d0
         while d < d1:
@@ -377,8 +408,8 @@ def generer_interieur(K, Pf):
                 def p(t, off):
                     a = a0 + .06 * sin(t / 90)
                     return (IC[0] + cos(a) * t - sin(a) * off * s, IC[1] + sin(a) * t + cos(a) * off * s)
-                q = [p(d, 6), p(d + seg, 6), p(d + seg, prof), p(d, prof)] if s > 0 else \
-                    [p(d + seg, 6), p(d, 6), p(d, prof), p(d + seg, prof)]
+                q = [p(d, 1.5), p(d + seg, 1.5), p(d + seg, prof), p(d, prof)] if s > 0 else \
+                    [p(d + seg, 1.5), p(d, 1.5), p(d, prof), p(d + seg, prof)]
                 ajout(q, zone='faubourg', cotes=[True, False, False, False])
             d += seg * (.85 + R() * .3)
 
@@ -389,47 +420,49 @@ def generer_interieur(K, Pf):
     def dens(x):
         return min(1, x + (Pf['dfau'] or 0))
     if m == 'grande':
-        rings = polaire(26, Rv * .58, pasR=24, pasA=.34)
-        V['murLigne'] = rings[-1] + 8
+        polaire(10, Rv * .58 + (0 if Pf['murs'] == 'bastions' else 5.5), pasR=12, arc=16)
+        V['murLigne'], V['rPlace'] = Rv * .58 + 8, 8.75
         if Pf['rivs']:
             p0, p1 = Pf['rivs'][0]['pts'][0], Pf['rivs'][0]['pts'][-1]
             ax = atan2(p1[1] - p0[1], p1[0] - p0[0])
         else:
             ax = a_main
-        n2 = math.ceil(Rv * 2.1 / 34)
+        n2 = math.ceil(Rv * 2.1 / 17)
         ml = V['murLigne']
 
         def garder(c):
             d = hypot(c[0] - IC[0], c[1] - IC[1])
-            return d > ml + 16 and d < Rv * (1 + .1 * sin(atan2(c[1] - IC[1], c[0] - IC[0]) * 3))
-        grille(IC[0], IC[1], ax, n2, n2, 34, jit=7, garder=garder)
+            return d > ml + 6 and d < Rv * (1 + .1 * sin(atan2(c[1] - IC[1], c[0] - IC[0]) * 3)) + 12
+        grille(IC[0], IC[1], ax, n2, n2, 17, jit=3, garder=garder)
         for r in Pf['routes']:
-            ruban(r, Rv + 10, Rv * 1.5 * fau, 40, 30, densite=dens(.95 if Pf['annee'] >= 1860 else .7))
+            ruban(r, Rv + 10, Rv * 1.5 * fau, 12, 8, densite=dens(.95 if Pf['annee'] >= 1860 else .7))
     elif m in ('ville', 'port', 'castrum', 'rond', 'montagne'):
         r1 = Rv * .95 if m == 'montagne' else Rv
-        polaire(30 if m == 'castrum' else 18, r1, pasR=22 if m in ('rond', 'castrum') else 26,
-                pasA=.7 if m == 'montagne' else .36, tord=.35 if m == 'montagne' else .1,
-                zone='faubourg' if m == 'montagne' else 'ville',
+        R0 = 8 if m == 'castrum' else 7 if m in ('ville', 'port') else 6
+        polaire(R0, r1 if m == 'montagne' or Pf['murs'] == 'bastions' else r1 + 6.5,
+                pasR=11 if m in ('rond', 'castrum') else 14 if m == 'montagne' else 12, arc=24 if m == 'montagne' else 16,
+                tord=.5 if m == 'montagne' else .3, zone='faubourg' if m == 'montagne' else 'ville',
                 cotes=[True, True, True, True] if m == 'montagne' else None)
-        V['murLigne'] = r1 + 9
+        V['murLigne'], V['rPlace'] = r1 + 9, R0 - 1.25
         for r in Pf['routes']:
-            ruban(r, r1 + 12, r1 * (1.7 if Pf['annee'] >= 1860 else 1.4) * fau, 40, 32, densite=dens(.75))
+            ruban(r, r1 + 12, r1 * (1.7 if Pf['annee'] >= 1860 else 1.4) * fau, 12, 8, densite=dens(.75))
     elif m in ('bastide', 'place'):
-        nx = clamp(jround(Rv / 19), 4, 9)
-        pas = 30 if m == 'place' else 33
-        ny = nx - (1 if m == 'bastide' else 0)
+        n0 = clamp(jround(Rv / 19), 4, 9)
+        p0, pas = (30, 12) if m == 'place' else (33, 13)
+        nx = jround(n0 * p0 / pas)
+        ny = jround((n0 - 1) * p0 / pas) if m == 'bastide' else nx
         grille(IC[0], IC[1], a_main, nx, ny, pas)
         V['rect'] = dict(a=a_main, w=nx * pas, h=ny * pas)
         for r in Pf['routes']:
-            ruban(r, nx * pas * .75 + 34, nx * pas * 1.25 * fau, 40, 32, densite=dens(.6))
+            ruban(r, nx * pas * .75 + 34, nx * pas * 1.25 * fau, 12, 8, densite=dens(.6))
     elif m == 'rue':
         r = Pf['routes'][0] if Pf['routes'] else dict(a=0)
         r2 = Pf['routes'][1] if len(Pf['routes']) > 1 else dict(a=r['a'] + math.pi)
-        ruban(r, 0, Rv * 1.5 * fau, 46, 30)
-        ruban(r2, 30, Rv * 1.5 * fau, 46, 30)
+        ruban(r, 0, Rv * 1.5 * fau, 14)
+        ruban(r2, 8, Rv * 1.5 * fau, 14)
     elif m == 'airial':
         for r in Pf['routes']:
-            ruban(r, 22, 70 * fau, 36, 30, densite=dens(.8))
+            ruban(r, 22, 70 * fau, 12, 8, densite=dens(.8))
         for k in range(9):
             a = R() * TAU
             d = 120 + R() * 220
@@ -439,17 +472,17 @@ def generer_interieur(K, Pf):
     if m in ('bastide', 'place'):
         c = le_plus_pres(villes, IC[0], IC[1])
         role(c, 'place')
-        role(le_plus_pres(villes, IC[0] + 30, IC[1] + 30, lambda b: b is not c), 'eglise')
+        role(le_plus_pres(villes, IC[0] + 13, IC[1] + 13, lambda b: b is not c), 'eglise')
         if m == 'place':
             for b in sorted([b for b in villes if not b.get('role')], key=lambda b: -b['d'])[:3]:
                 role(b, 'caserne')
     elif m not in ('rue', 'airial', 'fortin'):
         V['placeCentre'] = True
         V['lieux']['place'] = IC
-        l0 = sorted([b for b in villes if b.get('anneau') == 0], key=lambda b: -b['aire'])
+        l0 = sorted([b for b in villes if b.get('anneau') is not None], key=lambda b: (b['anneau'], -b['aire']))
         cath = role(l0[0] if l0 else None, 'cathedrale' if m == 'grande' else 'eglise')
         if cath and m == 'grande':
-            nb = next((b for b in villes if not b.get('role') and b.get('anneau') == 0 and b.get('secteur') is not None
+            nb = next((b for b in villes if not b.get('role') and b.get('anneau') == cath['anneau'] and b.get('secteur') is not None
                        and abs(b['secteur'] - cath['secteur']) == 1), None)
             if nb:
                 nb['role'] = 'parvis'
@@ -489,7 +522,8 @@ def generer_interieur(K, Pf):
             a = R() * TAU
             d = dmin + R() * (dmax - dmin)
             x, y = IC[0] + cos(a) * d, IC[1] + sin(a) * d
-            if not pres(x, y, 16) and not any(hypot(b['c'][0] - x, b['c'][1] - y) < 40 for b in ilots):
+            if not pres(x, y, 16) and not any(abs(b['c'][0] - x) < 40 and abs(b['c'][1] - y) < 40 and
+                                              hypot(b['c'][0] - x, b['c'][1] - y) < 40 for b in ilots):
                 return dict(k=k, x=x, y=y, a=R() * TAU)
         return None
 
@@ -518,17 +552,17 @@ def generer_interieur(K, Pf):
     if Pf['citadelle']:
         a1 = ang_routes[1] if len(ang_routes) > 1 else 1
         a = (Pf['mer']['a'] if Pf['mer'] else a1) if Pf['rivs'] else a1 + .4
-        d = (V['murLigne'] or Rv) + 60
-        V['citadelle'] = ct = bastions(IC[0] + cos(a) * d, IC[1] + sin(a) * d, 5,
-                                       70 if n['type'] == 'capitale' else 56, a + math.pi)
+        Rc = 36 if n['type'] == 'capitale' else 30
+        d = (V['murLigne'] or Rv) + Rc * .9
+        V['citadelle'] = ct = bastions(IC[0] + cos(a) * d, IC[1] + sin(a) * d, 5, Rc, a + math.pi)
         V['lieux']['citadelle'] = ct['C']
         for b in ilots:
-            if hypot(b['c'][0] - ct['C'][0], b['c'][1] - ct['C'][1]) < 150:
+            if hypot(b['c'][0] - ct['C'][0], b['c'][1] - ct['C'][1]) < Rc + 25:
                 b['supprime'] = True
     if Pf['murs'] == 'bastions':
-        N = 5 if m == 'fortin' else clamp(jround(Rv / 32), 5, 9)
+        N = 5 if m == 'fortin' else clamp(jround(Rv / 8), 5, 32)
         if m == 'fortin':
-            besoin = 60
+            besoin = 22
         else:
             besoin = max([60] + [max(hypot(p[0] - IC[0], p[1] - IC[1]) for p in b['q']) for b in ilots
                                  if b['zone'] == 'ville' and not b.get('supprime')]) + 4
@@ -536,7 +570,7 @@ def generer_interieur(K, Pf):
         k = 0
         while k < 30 and interieur < besoin:
             V['trace'] = bastions(IC[0], IC[1], N, Rb, a_main + math.pi / N)
-            interieur = min(hypot(c['GA'][0] - IC[0], c['GA'][1] - IC[1]) for c in V['trace']['cotes']) - 20
+            interieur = min(hypot(c['GA'][0] - IC[0], c['GA'][1] - IC[1]) for c in V['trace']['cotes']) - 5
             Rb *= 1.05
             k += 1
         V['Rb'], V['murInt'] = Rb / 1.05, interieur
@@ -553,7 +587,7 @@ def generer_interieur(K, Pf):
         d = (V['murLigne'] or Rv) + 70
         V['gare'] = g = dict(x=IC[0] + cos(a) * d, y=IC[1] + sin(a) * d, a=a + math.pi / 2)
         for b in ilots:
-            if hypot(b['c'][0] - g['x'], b['c'][1] - g['y']) < 80:
+            if hypot(b['c'][0] - g['x'], b['c'][1] - g['y']) < 30:
                 b['supprime'] = True
     if m == 'castrum':
         V['lieux']['chateau'] = IC
@@ -585,13 +619,14 @@ def plan(geo, nid, annee=1789, f=None, pop=None, d=0):
 
 
 def decaler_quad(q, w):
-    """decalerQuad de lib.js : le quadrilatère rentré de w de chaque côté (l'îlot moins la moitié de la rue)."""
+    """decalerQuad de lib.js : le quadrilatère rentré de w de chaque côté (l'îlot moins la moitié de la rue). (Pour les
+    batailles seulement : math.hypot suffit, plus vite que celui de V8.)"""
     n = len(q)
     L = []
     for k in range(n):
         a, b = q[k], q[(k + 1) % n]
         dx, dy = b[0] - a[0], b[1] - a[1]
-        l = hypot(dx, dy)
+        l = math.hypot(dx, dy)
         L.append((a[0] - dy / l * w, a[1] + dx / l * w, dx, dy))
     out = []
     for k in range(n):
@@ -614,7 +649,7 @@ def rayon_enceinte(V):
             r = max([r] + [hypot(p[0] - IC[0], p[1] - IC[1]) for p in t['poly']] +
                     [hypot(rv['apex'][0] - IC[0], rv['apex'][1] - IC[1]) for rv in t['ravs']])
     if V['Pf']['murs'] in ('medieval', 'cours') and V['rect']:
-        r = max(r, hypot(V['rect']['w'] / 2 + 10, V['rect']['h'] / 2 + 10))
+        r = max(r, hypot(V['rect']['w'] / 2 + 3, V['rect']['h'] / 2 + 3))
     elif V['Pf']['murs'] in ('medieval', 'cours') and V['murLigne']:
         r = max(r, V['murLigne'])
     return r

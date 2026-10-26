@@ -86,3 +86,48 @@ test('les images des plans restent bornées en mémoire', () => {
   const mem = V.memoirePlans();
   assert.ok(mem.pixels <= 14e6 && mem.plans <= 300, JSON.stringify(mem));
 });
+
+// la vraie taille, mesurée sur ce que le plan dessine (SPEC-CARTE-2D.md, « Livré — bâtiments à la vraie taille ») : un
+// faux contexte relève les pans des toits (deux par maison : façade × demi-profondeur) et l'échelle des édifices
+const L = await import('../web/js/carte/lib.js');
+const releve = () => {
+  const t = { quads: [], echelles: [], sous: [], fillStyle: '' };
+  return new Proxy(t, {
+    get: (o, k) => k in o ? o[k] : k === 'beginPath' ? () => { o.sous = []; } : k === 'moveTo' ? (x, y) => o.sous.push([[x, y]]) : k === 'lineTo' ? (x, y) => o.sous.at(-1)?.push([x, y])
+      : k === 'fill' ? () => { if (!['rgba(20,20,10,.3)', '#7c9a52'].includes(o.fillStyle)) o.quads.push(...o.sous.filter(q => q.length === 4)); } : k === 'scale' ? s => o.echelles.push(s) : () => {},
+    set: (o, k, v) => { o[k] = v; return true; },
+  });
+};
+const longueurModele = parts => { const xs = parts.filter(p => typeof p.x === 'number').flatMap(p => [p.x - (p.r || 0), p.x + (p.w ?? p.r ?? 0)]); return Math.max(...xs) - Math.min(...xs); };
+test('les bâtiments à leur vraie taille : rues, façades, îlots, places, cathédrale', () => {
+  const M = 1000 / V.S, med = a => a.sort((x, y) => x - y)[a.length >> 1], d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]) * M;
+  const P = plan(nom('Bordeaux')), R = L.alea(7), g = releve();
+  const ordinaires = P.ilots.filter(b => b.zone === 'ville' && !b.role && b.anneau != null);
+  for (const b of ordinaires.slice(0, 150)) L.remplirIlot(g, b, P, R);
+  const facade = med(g.quads.map(q => d(q[0], q[1]))), prof = 2 * med(g.quads.map(q => d(q[1], q[2])));
+  assert.ok(facade >= 6 && facade <= 15, `façades : ${facade.toFixed(1)} m`);
+  assert.ok(prof >= 8 && prof <= 16, `profondeur des maisons : ${prof.toFixed(1)} m`);
+  const ilot = med(ordinaires.map(b => Math.sqrt(b.aire) * M));
+  assert.ok(ilot >= 40 && ilot <= 100, `îlots : ${ilot.toFixed(0)} m`);
+  // les rues : l'écart entre deux îlots voisins d'un même anneau, rentrés chacun de la moitié de la rue
+  const rue = main => med(ordinaires.filter(b => b.main === main).flatMap(b => {
+    const v = ordinaires.find(c => c.anneau === b.anneau && c.secteur === b.secteur + 1 && c.main === main); if (!v) return [];
+    const A = L.decalerQuad(b.q, main ? 1.25 : .6), B = L.decalerQuad(v.q, main ? 1.25 : .6); if (!A || !B) return [];
+    return [Math.min(...B.map(p => L.distPoly([...A, A[0]], p[0], p[1]))) * M];
+  }));
+  assert.ok(rue(false) >= 5 && rue(false) <= 8, `rues : ${rue(false).toFixed(1)} m`);
+  assert.ok(rue(true) >= 10 && rue(true) <= 20, `grandes rues : ${rue(true).toFixed(1)} m`);
+  assert.ok(P.rPlace * 2 * M >= 50 && P.rPlace * 2 * M <= 120, `la place royale : ${(P.rPlace * 2 * M).toFixed(0)} m`);
+  const pl = plan(nom('Libourne')).ilots.find(b => b.role === 'place'), cote = Math.min(d(pl.q[0], pl.q[1]), d(pl.q[1], pl.q[2]));
+  assert.ok(cote >= 40 && cote <= 120, `la place de la bastide : ${cote.toFixed(0)} m`);
+  // la cathédrale, posée après les îlots à cheval sur son parvis (Saint-André : 124 m)
+  const cath = P.ilots.find(b => b.role === 'cathedrale'), gc = releve(); P.apres.length = 0;
+  L.remplirIlot(gc, cath, P, R); P.apres.forEach(f => f());
+  const lc = gc.echelles[0] * longueurModele(L.BATS.cathedrale()) * M;
+  assert.ok(lc >= 100 && lc <= 135, `la cathédrale : ${lc.toFixed(0)} m`);
+  // l'église d'un village
+  const B = plan(nom('Belin')), eg = B.ilots.find(b => b.role === 'eglise'), ge = releve();
+  L.remplirIlot(ge, eg, B, R);
+  const le = ge.echelles[0] * longueurModele(L.BATS.egliseRomane()) * M;
+  assert.ok(le >= 20 && le <= 40, `l’église du village : ${le.toFixed(0)} m`);
+});

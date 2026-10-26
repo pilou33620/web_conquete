@@ -5,7 +5,8 @@ livre dans la ville de « Voir l'intérieur » (plan_ville.py, le portage de web
 Le plan est posé sur la grille de 20 m (cartes de version 4 et plus) :
 - l'enceinte (cercle ou rectangle médiéval à tours, tracé bastionné et demi-lunes, citadelle) en MUR, percée de PORTE
   là où passent les routes du plan ; brèches, glacis et canons du rempart comme avant (terrain._enceinte) ;
-- les rues (bandes entre les îlots, axes du plan) en ROUTE (CHEMIN au village), la grand-place, les parvis ;
+- les rues (leurs axes, d'une case : une rue du plan fait 6 à 13 m) en ROUTE (CHEMIN au village), la grand-place, les
+  parvis ; sur une carte réduite, une rue sur deux ou trois seulement, plus les rues maîtresses ;
 - les îlots : maisons (BATI) le long de la rue sur la profondeur d'une parcelle, cours et jardins (PRE) au milieu ; les
   faubourgs sur leur seul côté de la route ; les édifices (église, cathédrale, couvent, hôpital, hôtel, caserne, halle,
   château, gare) sur l'emprise de leur modèle, que le client dessine au même endroit (to_client : plan) ;
@@ -46,11 +47,11 @@ class Lieu:
         self.V, self.k, self.nid = V, k, nid
         self.Mk = PV.M * k
         self.pos = (W / 2 + (nx - cx) * 1000.0 * k, H / 2 + (ny - cy) * 1000.0 * k)
-        ext = max([60.0] + [max(PV.hypot(p[0] - PV.IC[0], p[1] - PV.IC[1]) for p in b['q']) for b in V['ilots']])
+        ext = max([60.0] + [max(math.hypot(p[0] - PV.IC[0], p[1] - PV.IC[1]) for p in b['q']) for b in V['ilots']])
         self.r_eau = max(ext, PV.rayon_enceinte(V)) * self.Mk + 120   # (la mer et les étangs, d'après le plan)
         self.r_calme = self.r_eau + 200   # (les rivières sans méandres : celles du plan)
         self.r_mur = PV.rayon_enceinte(V) * self.Mk
-        ext_v = max([0.0] + [max(PV.hypot(p[0] - PV.IC[0], p[1] - PV.IC[1]) for p in b['q']) for b in V['ilots']
+        ext_v = max([0.0] + [max(math.hypot(p[0] - PV.IC[0], p[1] - PV.IC[1]) for p in b['q']) for b in V['ilots']
                              if b['zone'] == 'ville'])
         self.r_ville = max(self.r_mur, ext_v * self.Mk)   # (rien ne traverse la ville que les rivières du plan)
         self.rivieres = {r['name'] for r in V['Pf']['rivs']}
@@ -189,7 +190,7 @@ def _cotes(poly, c):
     out = []
     for k in range(4):
         a, e = poly[k], poly[(k + 1) % 4]
-        l = PV.hypot(e[0] - a[0], e[1] - a[1]) or 1e-9
+        l = math.hypot(e[0] - a[0], e[1] - a[1]) or 1e-9
         u = ((e[0] - a[0]) / l, (e[1] - a[1]) / l)
         nn = (-u[1], u[0])
         if (c[0] - a[0]) * nn[0] + (c[1] - a[1]) * nn[1] < 0:
@@ -206,7 +207,7 @@ def _edifices(V, Pf):
         sp = b.get('role')
         if not sp or sp in ('parvis', 'jardin', 'royale'):
             continue
-        poly = PV.decaler_quad(b['q'], 4.6 if b['main'] else 2.7)
+        poly = PV.decaler_quad(b['q'], PV.RUE_MAIN if b['main'] else PV.RUE)
         if not poly:
             continue
         c = b['c']
@@ -215,7 +216,7 @@ def _edifices(V, Pf):
         if sp == 'place':
             if V['type'] == 'grande':
                 n0 = ed[0][3]
-                out.append([b, 'hotel', 'hotelDeVille', c[0] + n0[0] * 8, c[1] + n0[1] * 8 - cote * .3, angB, cote / 60])
+                out.append([b, 'hotel', 'hotelDeVille', c[0] + n0[0] * 2, c[1] + n0[1] * 2 - cote * .3, angB, cote / 60])
             else:
                 out.append([b, 'halle', 'halle', c[0], c[1] + cote * .08, angB, cote / 75])
                 if V['type'] == 'moyenne':
@@ -224,13 +225,13 @@ def _edifices(V, Pf):
             o = b['voisin']['c']
             Lc = PV.hypot(o[0] - c[0], o[1] - c[1]) + cote
             out.append([b, 'cathedrale', 'cathedrale', (c[0] + o[0]) / 2, (c[1] + o[1]) / 2,
-                        PV.atan2(o[1] - c[1], o[0] - c[0]), Lc * .82 / 110])
+                        PV.atan2(o[1] - c[1], o[0] - c[0]), Lc * 1.1 / 110])
         elif sp in ('cathedrale', 'eglise', 'egliseDome'):
             cle = 'cathedrale' if sp == 'cathedrale' else 'egliseDome' if sp == 'egliseDome' else \
                 ('egliseRomane' if V['type'] == 'bourg' else 'cathedrale')
             larg = 110 if sp == 'cathedrale' else 58 if sp == 'egliseDome' else (40 if V['type'] == 'bourg' else 112)
             out.append([b, 'cathedrale' if sp == 'cathedrale' else 'eglise', cle, c[0], c[1], angB,
-                        min(ed[0][1], ed[2][1]) * .9 / larg])
+                        b['aire'] ** .5 * (.5 if V['type'] == 'bourg' else .8) / larg])
         elif sp == 'caserne':
             out.append([b, 'caserne', 'caserne', c[0], c[1], angB, cote / 92])
         elif sp == 'hotel':
@@ -241,18 +242,18 @@ def _edifices(V, Pf):
             out.append([b, 'hopital', 'hopital', c[0], c[1], angB, cote / 60])
     m = Pf['modele']
     if V['placeCentre'] and m != 'grande':
-        out.append([None, 'halle', 'halle', IC[0], IC[1], Pf['routes'][0]['a'] if Pf['routes'] else 0.0, .32])
+        out.append([None, 'halle', 'halle', IC[0], IC[1], Pf['routes'][0]['a'] if Pf['routes'] else 0.0, .1])
     if m == 'castrum':
-        out.append([None, 'hotel', 'chateau', IC[0], IC[1] - 8, .2, 38 / 88])
+        out.append([None, 'hotel', 'chateau', IC[0], IC[1] - 2, .2, 10 / 88])
     if m == 'fortin':
-        out += [[None, 'caserne', 'caserne', IC[0], IC[1], 0.0, .5], [None, 'poudriere', 'poudriere', IC[0] + 40, IC[1] - 30, .6, .7],
-                [None, 'eglise', 'egliseRomane', IC[0] - 36, IC[1] + 36, 0.0, .45]]
+        out += [[None, 'caserne', 'caserne', IC[0], IC[1], 0.0, .15], [None, 'poudriere', 'poudriere', IC[0] + 12, IC[1] - 9, .6, .2],
+                [None, 'eglise', 'egliseRomane', IC[0] - 11, IC[1] + 11, 0.0, .14]]
     if V['citadelle']:
         C2 = V['citadelle']['C']
-        out.append([None, 'caserne', 'caserne', C2[0], C2[1], 0.0, .45])
+        out.append([None, 'caserne', 'caserne', C2[0], C2[1], 0.0, .12])
     if V['gare']:
         g = V['gare']
-        out.append([None, 'halle', 'gare', g['x'], g['y'], g['a'], .55])
+        out.append([None, 'halle', 'gare', g['x'], g['y'], g['a'], .2])
     return out
 
 
@@ -267,13 +268,13 @@ def _enceinte_poly(V, L):
         return [], [], False, None
     if V['rect']:
         a, w, h = V['rect']['a'], V['rect']['w'], V['rect']['h']
-        poly = [L.tf((IC[0] + math.cos(a) * u * (w / 2 + 10) - math.sin(a) * v * (h / 2 + 10),
-                      IC[1] + math.sin(a) * u * (w / 2 + 10) + math.cos(a) * v * (h / 2 + 10)))
+        poly = [L.tf((IC[0] + math.cos(a) * u * (w / 2 + 3) - math.sin(a) * v * (h / 2 + 3),
+                      IC[1] + math.sin(a) * u * (w / 2 + 3) + math.cos(a) * v * (h / 2 + 3)))
                 for u, v in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
         return poly, [], False, [[round(x), round(y)] for x, y in poly]
     r = V['murLigne']
     poly = [L.tf((IC[0] + math.cos(a) * r, IC[1] + math.sin(a) * r)) for a in (k * 2 * math.pi / 72 for k in range(72))]
-    tours = [[round(x), round(y)] for x, y in _densify(poly + poly[:1], 36 * L.Mk)[:-1]]   # (une tour tous les 200 m)
+    tours = [[round(x), round(y)] for x, y in _densify(poly + poly[:1], 9 * L.Mk)[:-1]]   # (une tour tous les 50 m)
     return poly, [], False, tours
 
 
@@ -358,12 +359,15 @@ def ville(m, pl, L, rng, spec, t, road_cells):
     # ------------------------------------------------ îlots en mètres ; le sol de la ville (bois, landes… rasés)
     blocs = []
     for b in V['ilots']:
-        ins = PV.decaler_quad(b['q'], 4.6 if b['main'] else 2.7)
-        blocs.append(dict(b=b, q=[tf(p) for p in b['q']], ins=[tf(p) for p in ins] if ins else None))
+        ins = PV.decaler_quad(b['q'], PV.RUE_MAIN if b['main'] else PV.RUE)
+        B = dict(b=b, q=[tf(p) for p in b['q']], ins=[tf(p) for p in ins] if ins else None)
+        B['dq'] = _dans(B['q']) if b['zone'] == 'ville' else []   # (les cases de l'îlot, et celles sans sa rue)
+        B['di'] = _dans(B['ins']) if ins else []
+        blocs.append(B)
     sol = set()
     for B in blocs:
         if B['b']['zone'] == 'ville' and urbain:
-            sol.update(_dans(B['q']))
+            sol.update(B['dq'])
     if inside:
         rc = int(PV.rayon_enceinte(V) * Mk // CELL) + 2
         ci, cj = int(px // CELL), int(py // CELL)
@@ -373,22 +377,23 @@ def ville(m, pl, L, rng, spec, t, road_cells):
         if t[c] in SOL:
             t[c] = T_PRE
 
-    # ------------------------------------------------ rues : entre les îlots, les axes du plan, la grand-place
-    streets, bandes = set(), set()   # (bandes : entre les îlots ; un édifice peut y déborder, pas sur les axes)
-    if urbain:
-        for B in blocs:
-            if B['b']['zone'] == 'ville' and B['ins']:
-                bandes.update(set(_dans(B['q'])) - set(_dans(B['ins'])))
+    # ------------------------------------------------ rues : les axes du plan, la grand-place
+    # (une rue plus étroite qu'une case compte pour une case de passage, son axe ; une rue sur pas seulement, plus les
+    # rues maîtresses, pour 80 m au moins entre deux rues : sinon, sur des cases de 20 m, la ville serait à moitié rue)
+    streets = set()
+    pas = max(1, math.ceil(4 * CELL / (12 * Mk)))
     seaux = {}
     for b in V['ilots']:
-        seaux.setdefault((int(b['c'][0] // 34), int(b['c'][1] // 34)), []).append(b['c'])
+        seaux.setdefault((int(b['c'][0] // 14), int(b['c'][1] // 14)), []).append(b['c'])
 
-    def pres_ilot(x, y):
-        i0, j0 = int(x // 34), int(y // 34)
-        return any(PV.hypot(c[0] - x, c[1] - y) < 34 for di in (-1, 0, 1) for dj in (-1, 0, 1)
+    def pres_ilot(x, y):   # (comme peindreInterieur : une rue ne va que là où il y a des maisons)
+        i0, j0 = int(x // 14), int(y // 14)
+        return any(math.hypot(c[0] - x, c[1] - y) < 14 for di in (-1, 0, 1) for dj in (-1, 0, 1)
                    for c in seaux.get((i0 + di, j0 + dj), ()))
     rues_cl, ponts = [], []
     for rr in V['rues']:
+        if not rr.get('main') and rr['n'] % pas:
+            continue
         for a, b in zip(rr['pts'], rr['pts'][1:]):
             mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
             if not pres_ilot(mx, my):
@@ -404,21 +409,20 @@ def ville(m, pl, L, rng, spec, t, road_cells):
             rues_cl.append([round(A[0], 1), round(A[1], 1), round(B_[0], 1), round(B_[1], 1), 1 if rr.get('main') else 0])
             streets.update(_line4([A, B_]))
     if V['placeCentre']:
-        r = 22 * Mk
+        r = V['rPlace'] * Mk
         streets.update(c for c in _dans([(px + math.cos(a) * r, py + math.sin(a) * r) for a in
                                           (k * math.pi / 12 for k in range(24))]))
         streets.add(cell_of(px, py))
     if Pf['murs'] == 'cours' and V['murLigne']:   # (les murs abattus : un boulevard planté)
         r = V['murLigne'] * Mk
         streets.update(_line4([(px + math.cos(a) * r, py + math.sin(a) * r) for a in (k * math.pi / 36 for k in range(73))]))
-    bandes -= streets
-    streets = {c for c in streets | bandes if 0 <= c < N and c not in murs and t[c] not in (T_EAU, T_GUE)}
+    streets = {c for c in streets if 0 <= c < N and c not in murs and t[c] not in (T_EAU, T_GUE)}
     for c in streets:
         if t[c] != T_ROUTE:
             t[c] = rue_t
 
     # ------------------------------------------------ édifices sur l'emprise de leur modèle
-    reserve = set(murs) | road_cells | (streets - bandes)
+    reserve = set(murs) | road_cells | streets
     eds = []
     for b, kind, cle, x, y, a, s in _edifices(V, Pf):
         X, Y = tf((x, y))
@@ -440,11 +444,14 @@ def ville(m, pl, L, rng, spec, t, road_cells):
             t[c] = T_BATI
             kinds[c] = kind
             foot.append(c)
-        if not foot:   # (trop petit pour une case : la case de son milieu)
-            c = cell_of(X, Y)
-            if c >= 0 and c not in reserve and t[c] not in (T_EAU, T_GUE):
-                t[c], kinds[c] = T_BATI, kind
-                foot.append(c)
+        if not foot:   # (trop petit pour une case : la case de son milieu, ou la plus proche hors des rues)
+            c0 = cell_of(X, Y)
+            for c in sorted((c0 + dj * COLS + di for dj in (-1, 0, 1) for di in (-1, 0, 1)),
+                            key=lambda c: math.hypot(center_of(c)[0] - X, center_of(c)[1] - Y)) if c0 >= 0 else ():
+                if 0 <= c < N and c not in reserve and t[c] not in (T_EAU, T_GUE) and not kinds.get(c):
+                    t[c], kinds[c] = T_BATI, kind
+                    foot.append(c)
+                    break
         eds.append(dict(cle=cle, kind=kind, x=round(X, 1), y=round(Y, 1), a=round(a, 3), s=round(sm, 4),
                         b=None if b is None else id(b)))
 
@@ -464,10 +471,10 @@ def ville(m, pl, L, rng, spec, t, road_cells):
             # (maisons du faubourg au bord de la route : l'îlot rejoint la route, la bande des maisons part de là)
             q0, q1, q2, q3 = B['q']
             l0, l1 = math.hypot(q0[0] - q3[0], q0[1] - q3[1]) or 1, math.hypot(q1[0] - q2[0], q1[1] - q2[1]) or 1
-            e = 6 * Mk   # (le front sur l'axe de la route ; les maisons sur une case au-delà de la route)
+            e = 1.5 * Mk   # (le front sur l'axe de la route ; les maisons sur une case au-delà de la route)
             ins = [(q0[0] + (q0[0] - q3[0]) / l0 * e, q0[1] + (q0[1] - q3[1]) / l0 * e),
                    (q1[0] + (q1[0] - q2[0]) / l1 * e, q1[1] + (q1[1] - q2[1]) / l1 * e), q2, q3]
-        cells = [c for c in _dans(ins) if c not in reserve and t[c] not in (T_EAU, T_GUE) and not kinds.get(c)]
+        cells = [c for c in (B['di'] if ins is B['ins'] else _dans(ins)) if c not in reserve and t[c] not in (T_EAU, T_GUE) and not kinds.get(c)]
         if sp in ('place', 'parvis') or (sp in ('eglise', 'egliseDome', 'cathedrale') and urbain and V['type'] != 'bourg'):
             for c in cells:
                 t[c] = T_ROUTE   # (pavé : la place, le parvis)
@@ -636,7 +643,7 @@ def ville(m, pl, L, rng, spec, t, road_cells):
                 1 if B['b']['main'] else 0, int(PV.hash2(k, 7, Pf['sd']) * 2 ** 31),
                 sum(1 << i for i, on in enumerate(B['b'].get('cotes') or []) if on)]
                for k, B in enumerate(blocs)],
-        rues=rues_cl, edifices=eds, place=[round(px, 1), round(py, 1), round(22 * Mk, 1)] if V['placeCentre'] else None,
+        rues=rues_cl, edifices=eds, place=[round(px, 1), round(py, 1), round(V['rPlace'] * Mk, 1)] if V['placeCentre'] else None,
         cours=round(V['murLigne'] * Mk, 1) if Pf['murs'] == 'cours' and V['murLigne'] else None,
         metiers=metiers, vignes=vignes, salines=salines, quais=quais, bateaux=bateaux)
 

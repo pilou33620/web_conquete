@@ -55,10 +55,11 @@ function construire() {
   });
   const lieu = k => () => vue?.V?.lieux[k];
   brancher(sc, IW, IH, 'vi', [
-    ['La grand-place', lieu('place'), 0, 9], ['L’église', () => vue?.V?.lieux.eglise || vue?.V?.lieux.cathedrale, 0, 3.4], ['Le port', lieu('port'), 0, 2.6],
-    ['Les remparts', () => vue?.V?.lieux.remparts || (vue?.V?.trace ? { x: vue.V.trace.V[0][0], y: vue.V.trace.V[0][1] } : null), 0, 2.6],
-    ['La citadelle', lieu('citadelle'), 0, 2.6], ['Le château', lieu('chateau'), 0, 3.4], ['Les vignes', lieu('vin'), 0, 2.4], ['La gare', lieu('gare'), 0, 2.6],
-    ['Les salines', lieu('sel'), 0, 3], ['Les forges', lieu('fer'), 0, 3],
+    // (zooms en pixels par unité de 5,56 m : la grand-place entière et ses gens à 4,7 px par mètre, l'église entière)
+    ['La grand-place', lieu('place'), 0, 26], ['L’église', () => vue?.V?.lieux.eglise || vue?.V?.lieux.cathedrale, 0, 12], ['Le port', lieu('port'), 0, 5],
+    ['Les remparts', () => vue?.V?.lieux.remparts || (vue?.V?.trace ? { x: vue.V.trace.V[0][0], y: vue.V.trace.V[0][1] } : null), 0, 8],
+    ['La citadelle', lieu('citadelle'), 0, 7], ['Le château', lieu('chateau'), 0, 14], ['Les vignes', lieu('vin'), 0, 4], ['La gare', lieu('gare'), 0, 8],
+    ['Les salines', lieu('sel'), 0, 4], ['Les forges', lieu('fer'), 0, 14],
   ], sc => { sc.z = Math.max(sc.zB()[0], sc.cssW / 640); sc.cx = IC[0]; sc.cy = IC[1]; });
   sc.avant = avant; sc.sous = sous; sc.dessus = dessus; sc.apres = apres;
   el.querySelector('#vi-retour').onclick = fermerInterieur;
@@ -186,11 +187,12 @@ function vivre(sc, V, e) {
   const pl = V.lieux.place;
   sc.etals = [];
   if (pl) {
-    let nb = V.placeCentre ? 24 * k : 0, r0 = 15, vite = 2;
-    if (e.lv === 'foire') { const rp = V.placeCentre ? 19 : 12; nb = 80; r0 = rp; for (let i = 0; i < 14; i++) { const a = i * 2.4, d = rp * (.45 + (i % 3) * .25); sc.etals.push([pl.x + Math.cos(a) * d, pl.y + Math.sin(a) * d, a + Math.PI / 2, i]); } }
+    const rp = (V.rPlace || 6) * .85;   // (la place : 97 m à Bordeaux, 50 à 65 m ailleurs)
+    let nb = V.placeCentre ? 24 * k : 0, r0 = rp * .7, vite = 2;
+    if (e.lv === 'foire') { nb = 80; r0 = rp; for (let i = 0; i < 14; i++) { const a = i * 2.4, d = rp * (.45 + (i % 3) * .25); sc.etals.push([pl.x + Math.cos(a) * d, pl.y + Math.sin(a) * d, a + Math.PI / 2, i]); } }
     if (e.lv === 'emeute') { nb = 70; r0 = 3; vite = 5; }   // (serrés : 70 personnes sur 35 m)
     if (e.lv === 'disette' || e.lv === 'epidemie') nb = 0;
-    const ox = e.lv === 'emeute' ? 0 : 0, oy = e.lv === 'emeute' ? -14 : 0;   // l'attroupement devant l'hôtel de ville, au nord de la place
+    const ox = 0, oy = e.lv === 'emeute' ? -rp * .6 : 0;   // l'attroupement devant l'hôtel de ville, au nord de la place
     for (let i = 0; i < nb; i++) vie.push({ k: 'badaud', x0: pl.x + ox, y0: pl.y + oy, r0, vite, x: pl.x + ox + (R() - .5) * r0 * 2, y: pl.y + oy + (R() - .5) * r0 * 2, a: R() * TAU, c: ['#5d6b86', '#7a4a3a', '#f2efe6', '#6e5c45', '#8a5a44', '#2f4f9c'][R() * 6 | 0], poing: e.lv === 'emeute' && R() < .3 });
   }
   // épidémie : le convoi funèbre suit une rue maîtresse
@@ -206,7 +208,7 @@ function vivre(sc, V, e) {
     const brule = kd === 'brule' && e.lvAge < 8, siege = e.siege && kd !== 'brule' && R() < .35;
     if (!brule && !siege) continue;
     const r = Math.sqrt(b.aire) * .3;
-    sc.feux.push({ x: b.c[0], y: b.c[1], m: { intensite: brule ? 1 : .7, w: r * 1.4, foyers: Array.from({ length: 3 }, () => ({ x: (R() - .5) * r, y: (R() - .5) * r, s: R() * 9, k: .8 + R() * .6 })) } });
+    sc.feux.push({ x: b.c[0], y: b.c[1], m: { intensite: brule ? 1 : .7, w: r * 1.4, foyers: Array.from({ length: 3 }, () => ({ x: (R() - .5) * r, y: (R() - .5) * r, s: R() * 9, k: (.8 + R() * .6) * .3 })) } });   // (des flammes de 6 à 11 m)
   }
   if (e.lv === 'incendie' && e.lvAge >= 8 && e.lvAge < 30) for (const [b, kd] of vue.deg || []) if (kd === 'brule' && R() < .4) sc.fumees.push(b.c);   // les décombres fument encore
 }
@@ -217,8 +219,8 @@ function avant(sc, dt = 0) {
     else if (e.k === 'badaud') { if (!e.tx || Math.random() < dt * .3 * e.vite) { e.tx = e.x0 + (Math.random() - .5) * e.r0 * 2.4; e.ty = e.y0 + (Math.random() - .5) * e.r0 * 2.4; } const d = Math.hypot(e.tx - e.x, e.ty - e.y), v = e.vite * .6 * MS * dt; if (d > .05) { e.a = Math.atan2(e.ty - e.y, e.tx - e.x); e.x += Math.cos(e.a) * Math.min(d, v); e.y += Math.sin(e.a) * Math.min(d, v); } }
     else if (e.k === 'vache') { if (e.attente > 0) { e.attente -= dt; e.v = 0; } else { if (!e.but || Math.hypot(e.but[0] - e.x, e.but[1] - e.y) < 2) { e.but = [e.zone[0] + Math.random() * e.zone[2], e.zone[1] + Math.random() * e.zone[3]]; e.attente = 2 + Math.random() * 6; } e.a = angLerp(e.a, Math.atan2(e.but[1] - e.y, e.but[0] - e.x), dt * 2); e.v = .8 * MS; e.x += Math.cos(e.a) * e.v * dt; e.y += Math.sin(e.a) * e.v * dt; } }
   }
-  for (const [x, y] of sc.fumees || []) if (Math.random() < dt * .25) fumee(sc, x, y, 0, 0, .6, 4.5, 4, .28);
-  for (const f of sc.feux || []) if (Math.random() < dt * 3) fumee(sc, f.x + (Math.random() - .5) * 6, f.y + (Math.random() - .5) * 6, 0, 0, 2, 14, 6, .5, 'n');
+  for (const [x, y] of sc.fumees || []) if (Math.random() < dt * .25) fumee(sc, x, y, 0, 0, .2, 1.5, 4, .28);   // (à l'échelle des maisons)
+  for (const f of sc.feux || []) if (Math.random() < dt * 3) fumee(sc, f.x + (Math.random() - .5) * 2, f.y + (Math.random() - .5) * 2, 0, 0, .8, 7, 6, .5, 'n');
 }
 function etal(g, k) {
   const c = ['#c8322b', '#e3c04f', '#2f4f9c', '#3f8a3c', '#8a5a44'][k % 5];
@@ -267,10 +269,11 @@ function moulinVu(g, x, y, t, wa = .35, L = 17, H = 12) {
 }
 function dessus(sc, g) {
   sc.monde(g);
-  for (const p of sc.moulins || []) moulinVu(g, p.x, p.y, sc.time + p.x);
+  // (le moulin : une tour de 9 m, des ailes de 11 m ; le drapeau : 2,5 unités, 14 m)
+  for (const p of sc.moulins || []) { g.save(); g.translate(p.x, p.y); g.scale(.12, .12); moulinVu(g, 0, 0, sc.time + p.x); g.restore(); }
   // le drapeau du maître de la place, au clocher ou à la citadelle
   const L = vue.V.lieux, mat = L.citadelle || L.cathedrale || L.eglise || L.chateau || L.place;
-  if (mat && vue.flag && vue.col) { sc.monde(g); vue.flag(g, mat.x + 3, mat.y - 1, 9, vue.col); }
+  if (mat && vue.flag && vue.col) { sc.monde(g); vue.flag(g, mat.x + .8, mat.y - .3, 2.5, vue.col); }
   for (const f of sc.feux || []) { sc.monde(g); g.translate(f.x, f.y); flammes(g, f.m, sc.time); }
 }
 function apres(sc, g) {

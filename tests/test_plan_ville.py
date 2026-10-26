@@ -182,7 +182,7 @@ class BatailleSurLePlan(unittest.TestCase):
         airiaux = [e for e in m.plan['metiers'] if e['k'] == 'airial']
         self.assertTrue(airiaux)
         self.assertTrue(all(m.t[TR.cell_of(e['x'], e['y'])] == TR.T_BATI for e in airiaux))
-        m = carte(nom('Salies-de-Béarn'), att=3.14)   # (l'assaillant de l'ouest : les salines, à l'est, restent hors de sa bande)
+        m = carte(nom('Salies-de-Béarn'), att=0.0)   # (l'assaillant de l'est : les salines, à l'ouest, restent hors de sa bande)
         self.assertTrue(m.plan['salines'])
         self.assertTrue(any(m.t[c] == TR.T_MARAIS_T for q in m.plan['salines'][0] for c in TV._dans(q)))
         # rien sur le glacis ni devant une porte ; les quais d'un port le long de l'eau, des bateaux

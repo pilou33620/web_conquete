@@ -566,3 +566,73 @@ pas.
   comme l'intérieur : `planCarte` s'arrête à 2 px par unité et 2 048 px de côté), puis passer `U` à `FIG / 1000`
   (0,00015 km, 30 fois plus petit) avec tous les décalages en km de `vie.js`, `guerre.js`, `travaux.js`, `ciel.js`,
   les seuils (une personne fait un pixel à 1 550 px/km) et la vraie longueur des colonnes.
+
+## Livré — bâtiments à la vraie taille
+
+Demande validée par le joueur : bâtiments, rues, places, églises, quais et remparts à leur vraie taille, à côté des
+gens de « Livré — échelle réelle ». L'emprise des villes ne change pas : rayon d'après la population (`rayon`,
+`rayonPlace`), mur du plan (`V.rMur`, donc `rayonMurs`) ; une ville garde sa surface, avec quatre à huit fois plus
+d'îlots (Bordeaux : 187 → 878). Puis, à la demande du joueur (« ça c'est pas beau »), l'aspect de l'intérieur.
+
+- **Le générateur** (`villes.js`, `genererInterieur`, et son portage `plan_ville.py`, toujours identique : 0 plan
+  différent sur 669 états) ; 1 unité = 5,56 m :
+  - plans ronds (`polaire`) : anneaux de 12 unités (11 au bourg, 14 en montagne), îlots d'environ 16 de long ; en
+    s'éloignant de la place, une rue naît entre deux autres dès qu'un îlot dépasserait 1,5 fois cette longueur (le tracé
+    reste rond et rayonnant) ; le tremblé des sommets est borné à 0,1 radian (près de la place, il croisait les îlots).
+    La place : 97 m à Bordeaux (`V.rPlace`, 8,75), 64 m dans une ville, 53 m dans un bourg. Le mur médiéval et la vieille
+    ville gardent leur rayon (les îlots vont jusqu'à 14 m du mur).
+  - damiers : faubourgs des grandes villes au pas de 17 (94 m), bastides de 13 (72 m), places fortes de 12, à la même
+    emprise qu'avant ; leurs rues seulement le long des îlots gardés (plus à travers la vieille ville ni les champs).
+    Faubourgs le long des routes : lots de 44 × 67 m, maisons à 8 m de l'axe.
+  - rues de 6,7 m et grandes rues de 13,9 m (les îlots rentrés de 0,6 et 1,25), routes de 8 et 12 m, ponts de 13 m ;
+    façades de 6 à 12 m (grande ville), 7 à 14, 8 à 15 (bourg), profondeur de 10 à 16 m ; maisons à 22 m de l'eau,
+    derrière le quai (22 m).
+  - église ou cathédrale : le plus grand îlot du premier anneau qui reste (à La Réole, l'eau prenait tout le premier) ;
+    à l'échelle de l'aire de son îlot (un coin n'en fait plus une chapelle). Citadelle de 400 m (capitale) ou 330 m ;
+    tracé bastionné à fronts d'environ 300 m (`N` = R / 8, de 5 à 32), bastions de 80 m de face, terre-plein de 28 m ;
+    fort isolé de 280 m (au lieu de 670) ; gare de 87 m ; château du castrum 56 m ; halle 27 m ; métiers aux échelles de
+    `terrain_ville.METIERS` (vignes et salines gardent leurs champs).
+- **La peinture** (`lib.js`, `villes.js`) : murs de 3 m, tours de 11 m tous les 50 m, lices de 22 m ; enceinte
+  bastionnée (fossé de 36 m, glacis de 100 m, chemin couvert, pièces à la taille des figures) ; cours de 33 m, un
+  arbre tous les 10 m ; moulins (tour de 9 m), fumées, flammes et drapeau à l'échelle des maisons.
+- **L'aspect** : rues de teinte unie, d'un seul tracé par largeur (plus de joints ronds ni de sillons), le milieu bombé un
+  peu plus clair ; la grand-place pavée sobrement, la statue sur son socle (la halle ailleurs) ; toits en rangées serrées
+  de tailles et de teintes variées, faîtages, ailes en retour et jardinets sur les cours ; la profondeur des maisons
+  suit l'aire de l'îlot, pas son côté le plus court : aux pointes, les maisons se rejoignent en coin.
+- **Ce qui lit le plan** : badauds, foire, étals et émeute selon `V.rPlace` ; visites (`interieur.js`, pixels par unité) :
+  la grand-place à 26 (4,7 px/m, la place entière et ses gens), l'église 12, le port 5, les remparts 8, la citadelle 7,
+  le château 14, les forges 14 ; fenêtres de la nuit (`planCarte().lum`) : une fenêtre sur deux tous les 50 m, au plus
+  900 réparties dans toute la ville (avant : `hash2(lum.length…)` retirait toujours le même nombre, 8 fenêtres à
+  Bordeaux) ; réverbères (`ciel.js`), lieux, quais, port, dégâts, faubourgs : inchangés, ils suivent le plan.
+- **Le mur sur la carte** : `V.rMur` à 2,3 % près au début de la partie (Bayonne −2,3 %, Blaye −1,8 %), à 4 à 8 % dans un
+  état bastionné hypothétique (les pas de 5 % de la recherche du tracé) ; sauf Fort Médoc et Urdos : 71 → 32 unités,
+  `rayonMurs` 0,63 → 0,49 km (`rayonPlace` l'emporte).
+- **La carte de campagne** (`planCarte`) : à plat jusqu'à 1 pixel par unité (îlots pleins), maison par maison à 2,
+  sans ailes, jardinets, faîtages, cheminées ni arbres, d'un pan par maison.
+- **Batailles** (`terrain_ville.py`, cases de 20 m) : une rue plus étroite qu'une case compte pour une case de passage,
+  son axe (`_line4`, d'un seul tenant) ; les bandes entre les îlots (moins d'une case) ne sont plus des rues ; une rue sur
+  `pas` = ⌈80 m / (12 unités × l'échelle)⌉ seulement, plus les rues maîtresses, pour 80 m au moins entre deux rues
+  (sinon la ville serait à moitié rue) ; un édifice plus petit qu'une case prend la case la plus proche hors des rues.
+  L'enceinte étant plus petite, la carte est moins réduite (Bordeaux 0,57 → 0,73, Bayonne 0,35 → 0,54, Périgueux 0,38 →
+  0,65, Navarrenx 0,66 → 1). Cases bâties / de rue, avant → après : Bordeaux 1 120 / 3 758 → 2 332 / 3 142, Bayonne
+  208 / 1 729 → 1 121 / 1 745, Périgueux 122 / 1 023 → 791 / 1 342, Navarrenx 224 / 648 → 467 / 972, Belin 555 / 1 336
+  → 657 / 1 039. Client (`decor2d.js`) : mêmes rues, place, cours et rentrées que l'intérieur.
+  `Carte.eauK` lit un masque d'eau précalculé (deux fois plus vite, mêmes valeurs).
+- **Bancs** : `villes.test.mjs` (la vraie taille mesurée sur ce que le plan dessine : façades 8,8 m, profondeur 12,1 m,
+  îlots 76 m, rues 6,7 m, grandes rues 13,9 m, place royale 97 m, place de bastide 72 m, cathédrale 119 m, église de
+  village 35 m) ; `test_plan_ville` : Salies-de-Béarn attaquée de l'est (ses salines sont tirées à l'ouest désormais).
+- Mesures (Chromium sans carte graphique, médianes ; avant → après). Génération du plan dans le navigateur : Bordeaux
+  7 → 13 ms, Bayonne 5 → 10, Libourne 1 → 6 ; les 223 places 0,22 → 0,42 s. Peinture de l'intérieur (texture à 3 px par
+  unité, enregistrée) : Bordeaux 1,0 → 1,7 s (373 000 → 934 000 appels), Bayonne 0,6 → 1,4, Libourne 0,7 → 1,2, Sabres
+  0,5 → 0,4 ; à l'écran, peinte en 1,7 → 4,0 s pour Bordeaux (12 ms par image). Plan de la carte : à plat 12 → 46 ms,
+  maison par maison 76 → 310 ms (Bordeaux, étalés à 6 ms par image). Images de la vue de l'intérieur (dpr 2, 120 images,
+  `integration/echelle/int.cjs`) : Bordeaux vue d'ensemble 27,1 → 27,5 ms, z 4 10,1 → 10,9, z 9 32,2 → 29,8, z 18
+  29,3 → 28,4, zoom max 24,2 → 26,4, port 26,0 → 23,9 ; Libourne en foire z 9 28,8 → 23,6, zoom max 29,9 → 28,3. Carte de
+  campagne (`vie3/h3.cjs`, dpr 1) : z 26 4,6 / 4,0 → 4,9 / 4,1 ms, z 110 7,5 / 7,4 → 7,4 / 7,7, z 320 5,5 / 5,0 → 5,4 /
+  5,4. Carte de bataille (`test_vite`) : 0,43 à 0,55 s par carte avant comme après sur cette machine (très chargée : la
+  version d'avant n'y passe pas non plus sous 0,5 s).
+- Écarts :
+  - un village garde l'emprise de son rayon (311 m au moins) : à la vraie taille, cela fait des centaines de maisons
+    pour 700 habitants ; réduire l'emprise des bourgs et des villages est à décider (elle sert à la carte et au jeu).
+  - la peinture de l'intérieur de Bordeaux et de Bayonne dure 1,7 à 2,3 fois plus.
+  - les gens à leur vraie taille restent petits à l'ouverture de la grand-place (3 px).
