@@ -95,9 +95,12 @@ export class Travaux {
     for (const n of mp.nodes) {
       const ns = st.nodes[n.id];
       if (ns.lv?.[0] === 'epidemie' && !ns.sg) r.cordons.push({ n, ns, R: null });   // (le rayon des murs, à la première vue : le choléra touche toutes les villes)
-      if (ns.o !== me || ns.sg) continue;
+      if (ns.sg) continue;
+      const k = PRODUIT[n.star?.[0]];
+      // la spécialité : partout (d'après ce que la place produit) ; le niveau de la chaîne, chez le joueur seulement
+      if (ns.o !== me) { if (k) r.produits.push({ n, ns, k, lvl: 1, R: null }); continue; }
       for (const q of ns.q || []) if (q.kind === 'build' && (q.what === 'dev' || q.what === 'repar')) r.chantiers.push({ n, ns, k: q.what, p: clamp(1 - q.left / (q.total || 1), 0, 1), R: null });
-      const sp = ns.sl?.find(x => x[0] === 'specialite')?.[1], k = PRODUIT[n.star?.[0]];
+      const sp = ns.sl?.find(x => x[0] === 'specialite')?.[1];
       if (sp > 0 && k) r.produits.push({ n, ns, k, lvl: sp, R: null });   // (le rayon des murs, à la première vue)
     }
     // les voies ferrées en chantier (de tous les camps : la carte les montre) : la tête du chantier et le remblai devant
@@ -237,7 +240,7 @@ export class Travaux {
     }
     // les produits de la spécialité : sur le quai du port, sinon devant la porte ; les charrettes qui les emportent
     for (const P of r.produits) {
-      const n = P.n; if (!G.dans(sc, n.x, n.y, 4.5)) continue;
+      const n = P.n; if (!G.dans(sc, n.x, n.y, 4.5) || !G.visible(n.x, n.y)) continue;
       P.R ??= rayonMurs(G.map, n, P.ns);
       const s = this.sortiesDe(n)[1] || this.sortiesDe(n)[0], L = G.lieu(n, P.ns), q = L.port ? { x: L.port[0], y: L.port[1], a: 0 } : s ? surChemin(s.pts, P.R + 0.05) : null;
       if (!q) continue;

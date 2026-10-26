@@ -46,7 +46,9 @@ test('chantiers et produits des places du joueur, cordons de toutes les villes e
   st.nodes[Lib.id].lv = ['epidemie', 12];
   const r = W.releve();
   assert.deepEqual(r.chantiers.map(c => [c.n.name, c.k, c.p]), [['Bordeaux', 'dev', 0.75], ['Bordeaux', 'repar', 0]], 'la file de ses places : agrandissement et réparations (pas la levée)');
-  assert.deepEqual(r.produits.map(p => [p.n.name, p.k, p.lvl]), [['Bordeaux', 'barrique', 2]], 'les grands crus : des barriques ; pas chez l’ennemi');
+  const pb = r.produits.filter(p => st.nodes[p.n.id].o === '33'), pa = r.produits.filter(p => st.nodes[p.n.id].o !== '33');
+  assert.deepEqual(pb.map(p => [p.n.name, p.k, p.lvl]), [['Bordeaux', 'barrique', 2]], 'les grands crus : des barriques, au niveau de la chaîne');
+  assert.ok(pa.length > 0 && pa.every(p => p.lvl === 1), 'chez les autres aussi, d’après la spécialité seule (niveau inconnu : 1)');
   assert.deepEqual(r.cordons.map(c => c.n.name).sort(), ['Libourne', 'Périgueux'], 'le cordon sanitaire se voit partout');
   assert.ok(r.cordons.every(c => c.R == null), 'le rayon des murs, seulement à la première vue');
   assert.ok(W.sortiesDe(B).length >= 3 && W.sortiesDe(B).every(s => Math.hypot(s.pts[0][0] - B.x, s.pts[0][1] - B.y) < 0.01), 'les routes qui partent de la place');

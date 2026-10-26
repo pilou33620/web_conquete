@@ -487,8 +487,8 @@ Le ciel (`ciel.js`) :
   carte), `guerre.test.mjs` (nouvelle et fêtes, estafettes, prisonniers, traînards, avancée du siège), `terre.test.mjs`
   (crue, feux, clé des tuiles).
 - Écarts : estafettes, prisonniers et traînards seulement au plus près (`Z.VIE`), comme les blessés de G ; le moral
-  des armées étrangères est caché, leurs traînards ne se voient qu'en retraite ; les produits ne se voient que dans les
-  places du joueur (`sl` n'est envoyé que pour elles) ; les grands travaux des Ponts et Chaussées et du canal
+  des armées étrangères est caché, leurs traînards ne se voient qu'en retraite ; les produits se voient partout, d'après la
+  spécialité de la place, mais au niveau de la chaîne chez le joueur seulement (`sl` n'est envoyé que pour lui ; ailleurs 1) ; les grands travaux des Ponts et Chaussées et du canal
   seulement chez le joueur (`tech_dates`), la voie ferrée d'après son vrai chantier (`rails.state`) et non la date de
   la découverte ; dessins répétés (ouvriers, piles de produits, maisons, échafaudages, groupes de prisonniers,
   traînards) peints une fois par échelle et par pas (`Guerre.tampon`) : sans cela le lot coûtait 2,7 à 3,2 ms au zoom 110.
