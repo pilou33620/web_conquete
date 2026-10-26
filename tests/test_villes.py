@@ -5,6 +5,7 @@ POURQUOI CE BANC EXISTE. Le client dessine les bourgs, les villes et les places 
 nature (`batis[].kind`) et sa couverture (`toit`). Les cases doivent rester cohérentes avec les règles du moteur
 (murs, portes, rues, maisons) : l'assaillant entre par les portes ou les brèches, jamais par un trou du mur.
 """
+import math
 import os
 import sys
 import time
@@ -123,7 +124,10 @@ class Villes(unittest.TestCase):
             ville = flood(m, c0, lambda tc: tc not in (TR.T_MUR, TR.T_PORTE, TR.T_EAU), diag=True)
             bord = {c for c in ville if c % TR.COLS in (0, TR.COLS - 1) or c // TR.COLS in (0, TR.ROWS - 1)}
             self.assertFalse(bord, f"{n['name']} : l'enceinte a un trou")
-            self.assertTrue(set(bati_en_ville(m)) <= ville, f"{n['name']} : des maisons hors les murs")
+            # (les maisons de la ville dans les murs ; les faubourgs les touchent dehors, version 7 : bastide de Domme)
+            pl = m.place
+            coeur = {c for c in bati_en_ville(m) if math.hypot(TR.center_of(c)[0] - pl['x'], TR.center_of(c)[1] - pl['y']) < .5 * m.town_r}
+            self.assertTrue(coeur <= ville, f"{n['name']} : des maisons hors les murs")
 
     def test_pas_de_maison_sur_une_rue(self):
         for n, fort in ((noeud('village', 7), 0), (noeud('ville', 3), 1), (noeud('capitale', 0), 4), (FORTS[1], 3)):

@@ -41,26 +41,29 @@ DEPLOI = 400.0   # m entre l'enceinte et le bord de l'assaillant (sa bande de d�
 
 
 class Lieu:
-    """Le plan d'une place posé sur la carte : V (plan_ville), k (échelle de la carte), pos (centre en m)."""
+    """Le plan d'une place posé sur la carte : V (plan_ville), k (échelle de la carte), pos (centre de la ville en m :
+    V['C'], décalé du nœud vers l'eau ; site : le même en km)."""
 
     def __init__(self, V, k, nid, nx, ny, cx, cy):
         self.V, self.k, self.nid = V, k, nid
         self.Mk = PV.M * k
-        self.pos = (W / 2 + (nx - cx) * 1000.0 * k, H / 2 + (ny - cy) * 1000.0 * k)
-        ext = max([60.0] + [max(math.hypot(p[0] - PV.IC[0], p[1] - PV.IC[1]) for p in b['q']) for b in V['ilots']])
+        C = self.C = V['C']
+        self.site = (nx + (C[0] - PV.IC[0]) / PV.S, ny + (C[1] - PV.IC[1]) / PV.S)
+        self.pos = (W / 2 + (self.site[0] - cx) * 1000.0 * k, H / 2 + (self.site[1] - cy) * 1000.0 * k)
+        ext = max([60.0] + [max(math.hypot(p[0] - C[0], p[1] - C[1]) for p in b['q']) for b in V['ilots']])
         self.r_eau = max(ext, PV.rayon_enceinte(V)) * self.Mk + 120   # (la mer et les étangs, d'après le plan)
         self.r_calme = self.r_eau + 200   # (les rivières sans méandres : celles du plan)
         self.r_mur = PV.rayon_enceinte(V) * self.Mk
-        ext_v = max([0.0] + [max(math.hypot(p[0] - PV.IC[0], p[1] - PV.IC[1]) for p in b['q']) for b in V['ilots']
+        ext_v = max([0.0] + [max(math.hypot(p[0] - C[0], p[1] - C[1]) for p in b['q']) for b in V['ilots']
                              if b['zone'] == 'ville'])
         self.r_ville = max(self.r_mur, ext_v * self.Mk)   # (rien ne traverse la ville que les rivières du plan)
         self.rivieres = {r['name'] for r in V['Pf']['rivs']}
 
     def tf(self, p):
-        return (self.pos[0] + (p[0] - PV.IC[0]) * self.Mk, self.pos[1] + (p[1] - PV.IC[1]) * self.Mk)
+        return (self.pos[0] + (p[0] - self.C[0]) * self.Mk, self.pos[1] + (p[1] - self.C[1]) * self.Mk)
 
     def unites(self, x, y):
-        return (PV.IC[0] + (x - self.pos[0]) / self.Mk, PV.IC[1] + (y - self.pos[1]) / self.Mk)
+        return (self.C[0] + (x - self.pos[0]) / self.Mk, self.C[1] + (y - self.pos[1]) / self.Mk)
 
 
 def bord_assaillant(a):
@@ -82,10 +85,11 @@ def preparer(geo, spec, pl, cx, cy):
     e0, k = bord_assaillant(spec.get('att_angle', 0.0)), 1.0
     # (près de l'eau, battle._zones peut faire venir l'assaillant par un autre bord, plus sec : place pour lui partout)
     K = PV.carte_de(geo)
-    mouille = any(K.eauK(n['x'] + math.cos(a) * d, n['y'] + math.sin(a) * d) > .5
+    sx, sy = n['x'] + (V['C'][0] - PV.IC[0]) / PV.S, n['y'] + (V['C'][1] - PV.IC[1]) / PV.S   # (la ville, vers l'eau)
+    mouille = any(K.eauK(sx + math.cos(a) * d, sy + math.sin(a) * d) > .5
                   for d in (.8, 1.6, 2.4) for a in (q * math.pi / 6 for q in range(12)))
     for _ in range(4):   # (la place se rapproche du centre quand la carte rétrécit)
-        px, py = W / 2 + (n['x'] - cx) * 1000.0 * k, H / 2 + (n['y'] - cy) * 1000.0 * k
+        px, py = W / 2 + (sx - cx) * 1000.0 * k, H / 2 + (sy - cy) * 1000.0 * k
         if pl.get('battle'):
             room = dict(O=px, E=W - px, N=py, S=H - py)
             lim = min(v - (DEPLOI if e == e0 or mouille else 20.0) for e, v in room.items())
@@ -100,7 +104,7 @@ def routes(L, geo, nid):
     de la vieille ville, puis (tracé bastionné) par la porte au milieu de sa courtine et à travers la demi-lune, puis
     tout droit comme dans l'intérieur. {indice de l'arête : points}."""
     V, n = L.V, geo.nodes[nid]
-    IC = PV.IC
+    IC = V['C']
     out = {}
     plans = []
     for j, r in enumerate(V['routesL']):
@@ -202,7 +206,7 @@ def _cotes(poly, c):
 def _edifices(V, Pf):
     """Les édifices du plan (comme remplirIlot et peindreInterieur les posent) : [îlot ou None, rôle du moteur, modèle,
     x, y, angle, échelle (unités du plan par unité du modèle)]."""
-    IC, out = PV.IC, []
+    IC, out = V['C'], []
     for b in V['ilots']:
         sp = b.get('role')
         if not sp or sp in ('parvis', 'jardin', 'royale'):
@@ -259,7 +263,7 @@ def _edifices(V, Pf):
 
 def _enceinte_poly(V, L):
     """Le tracé de l'enceinte en mètres : (sommets, demi-lunes, bastionné ?, tours)."""
-    Pf, IC = V['Pf'], PV.IC
+    Pf, IC = V['Pf'], V['C']
     if Pf['murs'] == 'bastions':
         tr = V['trace']
         return ([L.tf(p) for p in tr['poly']], [[L.tf(r['b1']), L.tf(r['apex']), L.tf(r['b2'])] for r in tr['ravs']],
@@ -503,15 +507,15 @@ def ville(m, pl, L, rng, spec, t, road_cells):
 
     # ------------------------------------------------ quais, ponts des rues maîtresses
     rq = V['rMur'] * Mk * 1.15
-    if Pf['port']:
+    if Pf['quai']:   # (un port, ou une ville au bord d'un fleuve)
         for c in list(sol) + [c for c in streets]:
             if t[c] in (T_PRE, rue_t) and c not in murs and dist(c) < rq and \
                     any(0 <= nc < N and t[nc] == T_EAU for nc in (c - 1, c + 1, c - COLS, c + COLS)):
                 t[c] = T_ROUTE
                 streets.add(c)
-    # les quais du plan (peindreInterieur) : le long de la première rivière d'un port, des deux côtés, jusqu'à 1,15 R
+    # les quais du plan (peindreInterieur) : le long de la première rivière d'un port ou d'une ville sur l'eau, des deux côtés, jusqu'à 1,15 R
     quais, bateaux, quai_c = [], [], set()
-    if Pf['port'] and Pf['rivs']:
+    if Pf['quai'] and Pf['rivs']:
         nomr, rq2 = Pf['rivs'][0]['name'], Pf['R'] * 1.15 * Mk
         for rv in m.rivers:
             if rv.get('name') != nomr:
@@ -547,7 +551,7 @@ def ville(m, pl, L, rng, spec, t, road_cells):
         for i in range(6):
             a = Pf['mer']['a'] + (PV.hash2(i, 1, Pf['sd']) - .5) * .8
             d = Pf['R'] * (1.1 + PV.hash2(i, 2, Pf['sd']) * .8)
-            x, y = tf((PV.IC[0] + math.cos(a) * d, PV.IC[1] + math.sin(a) * d))
+            x, y = tf((V['C'][0] + math.cos(a) * d, V['C'][1] + math.sin(a) * d))
             if cell_of(x, y) >= 0 and t[cell_of(x, y)] == T_EAU:
                 bateaux.append([round(x, 1), round(y, 1), round(PV.hash2(i, 3, Pf['sd']) * 6.28, 2), 1 if PV.hash2(i, 4, Pf['sd']) < .4 else 0])
     for A, B_ in ponts:
@@ -604,6 +608,10 @@ def ville(m, pl, L, rng, spec, t, road_cells):
     for c in streets:
         if c not in net and t[c] == T_ROUTE and c not in road_cells and c not in quai_c:
             t[c] = T_PRE
+    for c in [c for c, k in kinds.items() if k == 'maison']:   # (la maison de cette rue-là : la cour)
+        if t[c] == T_BATI and not any(0 <= nc < N and t[nc] in RUE for nc in (c - 1, c + 1, c - COLS, c + COLS)):
+            t[c] = T_PRE
+            del kinds[c]
 
     metiers, vignes, salines = _metiers(m, pl, L, t, kinds, murs, road_cells | streets, att_a)
 
@@ -624,7 +632,7 @@ def ville(m, pl, L, rng, spec, t, road_cells):
                    fort=pl.get('fort', 0), battle=bool(pl.get('battle')))
     # le cœur (l'objectif) : l'église ou la cathédrale, sinon la place, le château, le centre
     lieux = V['lieux']
-    hx, hy = tf(lieux.get('cathedrale') or lieux.get('eglise') or lieux.get('chateau') or lieux.get('citadelle') or PV.IC)
+    hx, hy = tf(lieux.get('cathedrale') or lieux.get('eglise') or lieux.get('chateau') or lieux.get('citadelle') or V['C'])
     m.heart = (round(hx), round(hy))
     m.town = dict(type=typ, x=round(px), y=round(py), r=round(max(R, 60.0)), siecle=(year - 1) // 100 + 1,
                   enceinte=(m.walls[-1]['kind'] if (wall or cwall) else None))

@@ -50,7 +50,7 @@ test('le modèle de plan se lit dans les données du jeu', () => {
   const b = plan(nom('Bayonne'), { f: 3 });
   assert.equal(b.Pf.murs, 'bastions');
   assert.ok(b.trace && b.citadelle, 'Bayonne : enceinte et citadelle');
-  for (const il of b.ilots.filter(i => i.zone === 'ville')) for (const p of il.q) assert.ok(Math.hypot(p[0] - 500, p[1] - 380) <= b.murInt + 1e-6, 'un îlot hors de l’enceinte');
+  for (const il of b.ilots.filter(i => i.zone === 'ville' && !i.hors)) for (const p of il.q) assert.ok(Math.hypot(p[0] - b.C[0], p[1] - b.C[1]) <= b.murInt + 1e-6, 'un îlot hors de l’enceinte');
   // un village des Pyrénées
   const mont = m.nodes.filter(n => n.type === 'village' && n.dept === '64' && n.y > m.y_mont - 25);
   assert.ok(mont.length > 0 && mont.every(n => ['montagne', 'bastide'].includes(V.profilVille(K, n, {}).modele)), 'villages de montagne');
@@ -132,12 +132,26 @@ test('les bâtiments à leur vraie taille : rues, façades, îlots, places, cath
   assert.ok(le >= 20 && le <= 40, `l’église du village : ${le.toFixed(0)} m`);
 });
 
-test('le mur de la carte suit le tracé du plan : bastide, tracé bastionné, citadelle', () => {
-  const lib = V.formeMur(plan(nom('Libourne'), { f: 1 }));
-  assert.equal(lib.murs.length, 1); assert.equal(lib.murs[0].length, 4);   // (le rectangle de la bastide)
+test('le mur de la carte suit le tracé du plan : bastide, tracé bastionné, citadelle ; jamais dans l’eau', () => {
+  const sec = (W, f) => f.murs.flat().every(([x, y]) => !W.eau(x + W.C[0], y + W.C[1]));
+  const L = plan(nom('Libourne'), { f: 1 }), lib = V.formeMur(L), { a, w, h } = L.rect;
+  assert.ok(lib.murs.length >= 1 && sec(L, lib), 'Libourne : le rectangle, coupé par l’Isle');
+  for (const [x, y] of lib.murs.flat()) { const u = Math.abs(Math.cos(a) * x + Math.sin(a) * y), v = Math.abs(-Math.sin(a) * x + Math.cos(a) * y); assert.ok(Math.abs(u - w / 2 - 3) < 1e-6 || Math.abs(v - h / 2 - 3) < 1e-6, 'sur le rectangle de la bastide'); }
   const bay = plan(nom('Bayonne'), { f: 4 }), fb = V.formeMur(bay);
-  assert.ok(bay.trace && bay.citadelle);
-  assert.equal(fb.murs.length, 2); assert.equal(fb.murs[0].length, bay.trace.poly.length);
-  assert.ok(fb.ext[1] > fb.ext[0] && fb.ext[0] > bay.rMur, 'les bastions puis les demi-lunes débordent le mur');
-  assert.equal(V.formeMur(plan(nom('Sarlat'), { f: 0 })), null);   // (pas de tracé : le mur rond)
+  assert.ok(bay.trace && bay.citadelle && sec(bay, fb));
+  assert.ok(fb.ext[1] >= fb.ext[0] && fb.ext[0] > bay.rMur && fb.lunes.length, 'les bastions (et la citadelle) puis les demi-lunes débordent le mur');
+  const bx = plan(nom('Bordeaux'), { f: 2 }), fx = V.formeMur(bx);   // (le mur rond, au bord de la Garonne)
+  assert.ok(sec(bx, fx) && fx.murs.flat().some(([x, y]) => Math.abs(Math.hypot(x, y) - bx.rMur) < 1e-6));
+});
+
+test('les villes denses dans leurs murs, collées à leur fleuve', () => {
+  const CL = new Set(V.CLOS), M = 1000 / 180;
+  for (const x of ['Bordeaux', 'Bayonne', 'Libourne', 'Agen']) {
+    const W = plan(nom(x)), C = W.C, dedans = W.ilots.filter(b => b.zone === 'ville' && !b.hors && b.d < W.rMur), ha = Math.PI * (W.rMur * M) ** 2 / 1e4;
+    assert.ok(dedans.filter(b => CL.has(b.role)).length <= Math.max(3, dedans.length * .08), `${x} : quelques cours et jardins dans les murs`);
+    assert.ok(Array.from({ length: 72 }, (_, i) => i * Math.PI / 36).some(a => W.eau(C[0] + Math.cos(a) * (W.rMur + 30), C[1] + Math.sin(a) * (W.rMur + 30))), `${x} : l’eau à moins de 170 m des murs`);
+    assert.ok(W.Pf.pop / ha > 150 && W.Pf.pop / ha < 600, `${x} : ${(W.Pf.pop / ha).toFixed(0)} habitants par hectare dans les murs`);
+  }
+  assert.ok(Math.hypot(...plan(nom('Bayonne')).Pf.o) * M > 1000, 'Bayonne descend à l’Adour');
+  assert.deepEqual(plan(nom('Belin')).Pf.o, [0, 0], 'les villages restent au nœud');
 });

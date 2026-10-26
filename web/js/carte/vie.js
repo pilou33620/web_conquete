@@ -9,7 +9,7 @@ import {
 } from './lib.js';
 import { AMB, U, Z, LUM, bivouac, meteoEn, vue } from './ambiance.js';
 import { charrette } from './guerre.js';
-import { carteDe, etatVille, planDe, rayon, S as S_INT, IC } from './villes.js';
+import { carteDe, etatVille, planDe, rayon, S as S_INT, IC, site } from './villes.js';
 
 const TT = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 export const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -187,7 +187,7 @@ export function majEtat(st) {
     for (let j = Math.max(0, Math.floor(y - r)); j <= Math.min(H - 1, y + r); j++) for (let i = Math.max(0, Math.floor(x - r)); i <= Math.min(W - 1, x + r); i++)
       if (Math.hypot(i + .5 - x, j + .5 - y) < r) D_ETAT[j * W + i] = Math.min(D_ETAT[j * W + i], v);
   };
-  for (const n of ns) if (n.sg) { const g = NOEUDS[n.id]; if (g) tampon(g.x, g.y, rayonPlace(g) + 4, .06); }
+  for (const n of ns) if (n.sg) { const g = NOEUDS[n.id]; if (g) tampon(...site(g), rayonPlace(g) + 4, .06); }
   for (const b of st?.battles || []) tampon(b.x, b.y, 5, .1);
   // marchés : les places du joueur qui ont la chaîne du commerce ; foires : l'événement local
   VIE.marches = ns.filter(n => n.sl?.some(s => s[0] === 'marche' && s[1] > 0) && !n.sg && n.lv?.[0] !== 'disette' && n.lv?.[0] !== 'epidemie').map(n => {
@@ -206,7 +206,7 @@ export function majEtat(st) {
     let a = 0;
     if (r) { const pts = r.a === g.id ? r.pts : r.pts.slice().reverse(), p = pts.find(q => Math.hypot(q[0] - g.x, q[1] - g.y) > .9) || pts[pts.length - 1]; a = Math.atan2(p[1] - g.y, p[0] - g.x) + .5; }
     const d = rayonPlace(g) * 1.2 + .15;
-    VIE.foires.push({ n: g, x: g.x + Math.cos(a) * d, y: g.y + Math.sin(a) * d, a });
+    VIE.foires.push({ n: g, x: site(g)[0] + Math.cos(a) * d, y: site(g)[1] + Math.sin(a) * d, a });
   }
   // les routes autour des foires sont plus passantes
   VIE.foireRoutes = new Set(VIE.routes.filter(r => VIE.foires.some(f => Math.hypot(Math.max(r.bb[0] - f.x, 0, f.x - r.bb[2]), Math.max(r.bb[1] - f.y, 0, f.y - r.bb[3])) < 12)).map(r => r.ie));
@@ -610,7 +610,7 @@ function fumees(sc, x0, y0, x1, y1) {
   for (const n of NOEUDS) {
     if (n.x < x0 || n.x > x1 || n.y < y0 || n.y > y1) continue;
     const r = rayonPlace(n);
-    if (Math.random() < .04 * (n.type === 'village' ? 1 : 3) * densite(n.x, n.y) * k) fumee(sc, n.x + (Math.random() - .5) * r, n.y + (Math.random() - .5) * r, 0, 0, .01, .07, 5, .3);
+    if (Math.random() < .04 * (n.type === 'village' ? 1 : 3) * densite(n.x, n.y) * k) fumee(sc, site(n)[0] + (Math.random() - .5) * r, site(n)[1] + (Math.random() - .5) * r, 0, 0, .01, .07, 5, .3);
   }
 }
 function nuages(sc, g, x0, y0, x1, y1) {

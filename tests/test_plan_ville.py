@@ -106,7 +106,7 @@ class BatailleSurLePlan(unittest.TestCase):
         P = m.plan
         self.assertEqual(len(P['ilots']), len(V['ilots']))
         k = P['k']
-        tf = lambda p: (P['c'][0] + (p[0] - PV.IC[0]) * k, P['c'][1] + (p[1] - PV.IC[1]) * k)
+        tf = lambda p: (P['c'][0] + (p[0] - V['C'][0]) * k, P['c'][1] + (p[1] - V['C'][1]) * k)   # (le centre de la ville)
         # le tracé bastionné et les demi-lunes de la bataille sont ceux du plan, à l'échelle de la carte
         # (à un mètre près : l'échelle du plan envoyé au client, k, est arrondie)
         self.assertTrue(all(abs(a - round(b)) <= 1 for p, q in zip(m.bastions, map(tf, V['trace']['poly'])) for a, b in zip(p, q)))
@@ -238,6 +238,18 @@ class BatailleSurLePlan(unittest.TestCase):
         self.assertNotEqual(bytes(v5.t), bytes(v6.t), 'Nontron a rétréci et s’est aéré : la carte de version 6 diffère')
         bati = lambda m: sum(m.t[c] == TR.T_BATI for c in range(TR.N))
         self.assertLess(bati(v6), bati(v5) * .6, 'moins de maisons')
+
+    def test_carte_v6_figee(self):
+        """Une bataille de version 6 d'une sauvegarde garde sa carte d'avant les villes denses dans leurs murs et collées
+        à leur fleuve (plan_ville_v6, terrain_ville_v6, figés : l'empreinte de la carte de Libourne d'alors) ; la
+        version 7 prend le nouveau plan."""
+        import hashlib
+        n = nom('Libourne')
+        pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=1, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'], y=n['y'], battle=True)
+        spec = dict(seed=700, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.5)
+        v6, v7 = TR.generate(GEO, dict(spec, carte=6)), TR.generate(GEO, dict(spec, carte=7))
+        self.assertEqual(hashlib.sha1(bytes(v6.t)).hexdigest(), 'ae47148c3fe604aecb7ab8406c4faf9de693f63c')
+        self.assertNotEqual(bytes(v6.t), bytes(v7.t), 'Libourne serrée dans ses murs, au bord de l’Isle : la version 7 diffère')
 
     def test_pas_de_pont_de_pierre_a_bordeaux_avant_1822(self):
         kinds = lambda y: {b.get('kind') for b in carte(nom('Bordeaux'), year=y).bridges if b.get('river') == 'Garonne'}

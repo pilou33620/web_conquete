@@ -1001,7 +1001,7 @@ class RoutesCoupeesParLaCrue(unittest.TestCase):
         g.flood_until = -1
         an = g.date().year + 1
         cut = CR.spans(GEO)
-        self.assertTrue(10 <= len(cut) <= 60, len(cut))
+        self.assertEqual(len(cut), 27, 'la règle des parties en cours (crue.py, rayon figé de plan_ville_v5)')
         eid = max(cut, key=lambda k: GEO.edges[k]['len'])
         e = GEO.edges[eid]
         g.has_sapeurs = lambda a: True   # (sans l'attente au bac : ces routes passent toutes le fleuve)

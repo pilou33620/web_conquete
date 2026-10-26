@@ -2,7 +2,7 @@
 import { Ambient, locomotive, voiture } from './ambient.js';
 import { clamp, hexRgb } from './battle/formes.js';
 import { TownArt } from './towns.js';
-import { PONTS_DATES } from './carte/villes.js';
+import { PONTS_DATES, carteDe, site } from './carte/villes.js';
 import { UnitArt } from './battle/unites.js';
 import { profil } from './battle/qualite.js';
 import { uniform } from './battle/formes.js';
@@ -137,6 +137,7 @@ export class MapView {
     this.W = m.W; this.H = m.H;
     this.terrain = b64(m.terrain); this.dept = b64(m.dept); this.cellnode = b64(m.cellnode); this.river = b64(m.river);
     this.nodes = m.nodes; this.edges = m.edges;
+    carteDe(m);   // (le centre de chaque ville, au bord de l'eau : site)
     this.depts = m.depts; this.deptCodes = m.dept_codes;
     this.cam = { x: m.W / 2, y: m.H / 2, z: 2 };
     this.camAnim = null;
@@ -581,7 +582,8 @@ export class MapView {
     let [x, y] = this.toScreen(d.x, d.y);
     const a = d.a;
     if (a && a.n != null && a.st !== 'battle') {
-      const n = this.nodes[a.n];
+      const n = this.nodes[a.n], [vx, vy] = site(n);
+      x += (vx - n.x) * this.cam.z; y += (vy - n.y) * this.cam.z;   // (sous la ville, au bord de l'eau)
       const s = this.nodeSize(n);
       const z = this.cam.z;
       const k = d.slot || 0;
@@ -849,7 +851,7 @@ export class MapView {
       // l'icône d'une place reste à la place (Villenave-d'Ornon sous l'armée de Bordeaux)
       for (const n of this.nodes) {
         if (n.id === best.a.n && best.a.st !== 'move' && best.a.st !== 'retreat') continue;
-        const [x, y] = this.toScreen(n.x, n.y);
+        const [x, y] = this.toScreen(...site(n));
         if (Math.hypot(sx - x, sy - y) < this.nodeSize(n) * 0.4) return { kind: 'node', id: n.id, d: 0 };
       }
     }
@@ -860,7 +862,7 @@ export class MapView {
       if (dd < 20 + pad && b.node == null) return { kind: 'battle', id: b.id };
     }
     for (const n of this.nodes) {
-      const [x, y] = this.toScreen(n.x, n.y);
+      const [x, y] = this.toScreen(...site(n));
       const r = this.nodeSize(n) / 2 + 7 + pad;
       const dd = Math.hypot(sx - x, sy - y);
       if (dd < r && (!best || dd < best.d)) best = { kind: 'node', id: n.id, d: dd };
@@ -886,7 +888,7 @@ export class MapView {
       const [ex, ey] = tr.end;
       if (tr.hit && tr.hit.kind === 'node') {
         const n = this.nodes[tr.hit.id];
-        const [nx, ny] = this.toScreen(n.x, n.y);
+        const [nx, ny] = this.toScreen(...site(n));
         ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(nx, ny, this.nodeSize(n) * 0.7 + 8, 0, Math.PI * 2); ctx.stroke();
         this.hoverCard(ctx, nx, ny - this.nodeSize(n) * 0.7 - 14, [n.name], true);
@@ -1973,7 +1975,7 @@ export class MapView {
     const camp = new Map();
     for (const a of st.armies) if (a.qr && a.n != null && a.st === 'idle') camp.set(a.n, a.o);
     for (const n of this.nodes) {
-      const [x, y] = this.toScreen(n.x, n.y);
+      const [x, y] = this.toScreen(...site(n));   // (la ville au bord de l'eau, pas au nœud : carte/villes.js, site)
       const s = this.nodeSize(n), ns = st.nodes[n.id];
       // (dès le plan des villes, la place couvre son vrai rayon : elle reste dessinée tant qu'un bout est à l'écran)
       const rP = z >= Z.PLAN && !this.papierVu() && x > -1e4 && x < this.vw + 1e4 && y > -1e4 && y < this.vh + 1e4 ? rayonMurs(this, n, ns) * z : 0, sc = Math.max(s, rP);
@@ -2228,7 +2230,8 @@ export class MapView {
 
   // géométrie d'une enceinte (voir walls) : chemins prêts à tracer et rayon extérieur
   wallGeom(s, f, id, dmg, forme) {
-    // (de près, sur le plan de la ville : le mur du plan, rond à 48 pans ou celui de formeMur ; de loin, en vue cavalière)
+    // (de près, sur le plan de la ville : le mur du plan, formeMur, coupé là où il passerait dans l'eau ; de loin, en vue
+    // cavalière)
     const R = s * 0.62 + 2, sq = s > 200 || forme ? 1 : 0.86, TAU = Math.PI * 2;
     const a0 = (id * 2.399) % TAU;   // orientation propre à chaque ville : la brèche y reste au même endroit
     const half = dmg > 0.02 ? Math.PI * 0.5 * Math.min(1, dmg) : 0;
@@ -2242,15 +2245,11 @@ export class MapView {
     const ring = [], towers = [], lunes = [], rings = [ring];
     let outer;
     if (forme) {
-      // le tracé du plan, mis au rayon R du mur (rMur), ses côtés coupés en pans d'environ R / 8 (tours, brèche)
+      // le tracé du plan (déjà en pans d'environ R / 8 : tours, brèche), mis au rayon R du mur (rMur)
       const k = R / forme.r;
       for (const m of forme.murs) {
-        const r = [];
-        m.forEach((p, i) => {
-          const q = m[(i + 1) % m.length], n = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) * k / (R / 8)));
-          for (let j = 0; j < n; j++) r.push([(p[0] + (q[0] - p[0]) * j / n) * k, (p[1] + (q[1] - p[1]) * j / n) * k]);
-        });
-        r.push(r[0]); rings.push(r);
+        const r = m.map(([x, y]) => [x * k, y * k]);
+        rings.push(r);
         if (f <= 2) for (let i = 0; i < r.length - 1; i += f === 1 ? 3 : 2) towers.push(r[i]);
       }
       if (f >= 4) for (const t of forme.lunes) lunes.push(t.map(([x, y]) => [x * k, y * k]));

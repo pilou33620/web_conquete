@@ -7,6 +7,7 @@ import { C, E, T, RR, PG, TAU, SPR, bat, cheval, clamp, mod, stere, surChemin } 
 import { AMB, LUM, U, Z, FEU_K, feuDe, vue } from './ambiance.js';
 import { terre, LARG_RIVIERE } from './terre.js';
 import { CIVILS, charrette, fantassin, flamme, phase, rayonMurs, rayonPlace, vache, versMonde } from './guerre.js';
+import { site } from './villes.js';
 
 // combien de jours les grands travaux d'une technologie restent en chantier après sa découverte (me.tech_dates)
 export const GRANDS_TRAVAUX = { ponts_chaussees: 180, canal: 240 };
@@ -218,7 +219,7 @@ export class Travaux {
         // les réparations : échafaudages sur les maisons touchées, une grue, des charrettes de pierres par les routes
         const nb = 2 + Math.round(clamp(c.ns.dg || 0.2, 0, 1) * 8), rp = rayonPlace(n, c.ns) * 0.7;
         for (let k = 0; k < nb; k++) {
-          const a = hash2(n.id, k, 170) * TAU, d = Math.sqrt(hash2(n.id, k, 171)) * rp, x = n.x + Math.cos(a) * d, y = n.y + Math.sin(a) * d;
+          const a = hash2(n.id, k, 170) * TAU, d = Math.sqrt(hash2(n.id, k, 171)) * rp, x = site(n)[0] + Math.cos(a) * d, y = site(n)[1] + Math.sin(a) * d;
           if (!G.dans(sc, x, y, 0.1)) continue;
           this.pose(sc, g, x, y, a, 'echaf', 40, 27, gg => { gg.scale(6, 6); echafaudage(gg); });   // (une maison de 10 m)
           if (k === 0) { G.figK(sc, g, x, y, 0, 5); grue(g, 0.6 + Math.sin(t * 0.2 + n.id) * 0.9); }

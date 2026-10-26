@@ -6,7 +6,7 @@ import { AMB, HEURES, LUM, Z, setHeure, zoneDe } from './ambiance.js';
 import { SPR, TAU, clamp, mod, sprite, surChemin } from './lib.js';
 import { rayonPlace } from './guerre.js';
 import { terre } from './terre.js';
-import { CLOS, IC, S as SU, etatVille, imageEnCache, resPour } from './villes.js';
+import { CLOS, IC, S as SU, etatVille, imageEnCache, resPour, site } from './villes.js';
 
 sprite('fen', '255,214,140'); sprite('pluie', '64,74,88'); sprite('gaz', '226,236,255');
 const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -233,7 +233,7 @@ export class Ciel {
       for (const n of mp.nodes) {
         if (n.x < x0 - 3 || n.x > x1 + 3 || n.y < y0 - 3 || n.y > y1 + 3) continue;
         const ns = st.nodes[n.id], R = rayonPlace(n, ns), Rh = Math.max(R * 1.8, (n.type === 'village' ? 5 : 9) / z), gaz = n.type !== 'village' && this.gaz.has(ns.o);
-        ctx.globalAlpha = 0.3 * k; ctx.drawImage(gaz ? SPR.gaz : SPR.lueur, n.x - Rh, n.y - Rh, Rh * 2, Rh * 2);
+        ctx.globalAlpha = 0.3 * k; ctx.drawImage(gaz ? SPR.gaz : SPR.lueur, site(n)[0] - Rh, site(n)[1] - Rh, Rh * 2, Rh * 2);
         if (z >= Z.PLAN) { const f = this.fenetresDe(n, ns, R, Math.max(0.0012, 0.8 / z)); if (f) { ctx.globalAlpha = 0.85 * k; ctx.fillStyle = '#ffd58a'; ctx.fill(f); } }
         if (z >= Z.PLAN && gaz) { const f = this.reverberesDe(n, ns, Math.max(0.001, 0.7 / z)); if (f) { ctx.globalAlpha = 0.16 * k; ctx.fillStyle = '#c8d8ff'; ctx.fill(f[1]); ctx.globalAlpha = 0.9 * k; ctx.fillStyle = '#f4f8ff'; ctx.fill(f[0]); } }
       }

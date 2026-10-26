@@ -373,10 +373,10 @@ export class TownArt {
     }
     if (!p) return false;
     const u = z / SU, k = u / p.res, o = -p.Rr * u;   // pixels CSS par unité du plan ; par pixel de l'image
-    // (de près, les tuiles ; l'image dessous tant qu'il en manque)
-    const T = p.rec && u * (mp.dpr || 1) > p.res * 1.2 ? this.tuiles(n, p, u) : null;
-    if (!T || T.manque) ctx.drawImage(p.c, o, o, p.c.width * k, p.c.height * k);
-    for (const d of T || []) ctx.drawImage(...d);
+    // (de près, les tuiles ; l'image dessous tant qu'il en manque ; l'image est centrée sur le nœud, ctx sur la ville)
+    const T = p.rec && u * (mp.dpr || 1) > p.res * 1.2 ? this.tuiles(n, p, u) : null, dx = (IC[0] - p.V.C[0]) * u, dy = (IC[1] - p.V.C[1]) * u;
+    if (!T || T.manque) ctx.drawImage(p.c, o + dx, o + dy, p.c.width * k, p.c.height * k);
+    for (const [c, x, y, l, h] of T || []) ctx.drawImage(c, x + dx, y + dy, l, h);
     // les remparts de la partie, sur le tracé et au rayon du mur du plan (jamais plus petits que ceux dessinés dessous par drawNodes)
     const sW = Math.max(s, Math.pow(1.04, Math.round(Math.log(Math.max(1, (p.V.rMur * u - 2) / 0.62)) / Math.log(1.04))));
     const wallR = ns.f > 0 ? mp.walls(ctx, sW, ns.f, n.id, ns.sg && !ns.sg.occ && !ns.sg.bl ? ns.sg.dmg : 0, formeMur(p.V)) : 0;

@@ -5,7 +5,7 @@
 import { C, E, T, RR, PG, TAU, SPR, toile, avant, bat, caisson, cavalier as cavalier0, cheval, clair, clamp, distPoly, fantassin as fantassin0, lerp, ligne,
          mod, piece, sombre, surChemin, tenue } from './lib.js';
 import { AMB, LUM, U, Z, bivouac, nuit, vue } from './ambiance.js';
-import { S as SU, IC, carteDe, etatVille, formeMur, planDe, rayon } from './villes.js';
+import { S as SU, IC, carteDe, etatVille, formeMur, planDe, rayon, site } from './villes.js';
 import { LARG_RIVIERE } from './terre.js';
 
 // à la vraie taille, une personne fait moins d'un pixel jusqu'au zoom maximum : elle ne se dessine pas (GENS, fixé à
@@ -262,7 +262,7 @@ export function fermesAutour(map, x, y) {
   for (let j = Math.floor(y) - 2; j <= Math.floor(y) + 2; j++) for (let i = Math.floor(x) - 2; i <= Math.floor(x) + 2; i++) {
     if (hash2(i, j, 131) > 0.45) continue;
     const fx = i + 0.2 + hash2(i, j, 132) * 0.6, fy = j + 0.2 + hash2(i, j, 133) * 0.6, d = Math.hypot(fx - x, fy - y);
-    if (d < 0.35 || d > 1.8 || !OUVERT.has(map.terrain?.[j * map.W + i] ?? 2) || map.nodes.some(n => Math.abs(n.x - fx) < 2 && Math.hypot(n.x - fx, n.y - fy) < rayonPlace(n) + 0.4)) continue;
+    if (d < 0.35 || d > 1.8 || !OUVERT.has(map.terrain?.[j * map.W + i] ?? 2) || map.nodes.some(n => Math.abs(n.x - fx) < 4 && Math.hypot(site(n)[0] - fx, site(n)[1] - fy) < rayonPlace(n) + 0.4)) continue;
     out.push([fx, fy, d]);
   }
   return out.sort((p, q) => p[2] - q[2]).slice(0, 3);
@@ -510,7 +510,7 @@ export class Guerre {
     // personne autour d'un siège ou d'une bataille, moins de monde devant l'ennemi (densiteGuerre)
     if (this.zst !== st) {   // (sièges et batailles : une fois par état reçu)
       this.zst = st; this.zfixes = [];
-      for (const n of mp.nodes) { const ns = st.nodes[n.id]; if (ns.sg && !ns.sg.occ) this.zfixes.push({ x: n.x, y: n.y, r: rayonMurs(this.map, n, ns) + 4, d: 0.06 }); }
+      for (const n of mp.nodes) { const ns = st.nodes[n.id]; if (ns.sg && !ns.sg.occ) this.zfixes.push({ x: site(n)[0], y: site(n)[1], r: rayonMurs(this.map, n, ns) + 4, d: 0.06 }); }
       for (const b of st.battles) this.zfixes.push({ x: b.x, y: b.y, r: 5, d: 0.1 });
       this.sieges0 = mp.nodes.filter(n => { const sg = st.nodes[n.id].sg; return sg && !sg.occ && !sg.bl; });
     }
@@ -658,7 +658,7 @@ export class Guerre {
     if (a.n != null || A.L < long * 0.5) {
       // dans une place ou sans route derrière elle : le camp se dresse en dehors de la ville, au sud
       const n = a.n != null ? this.map.nodes[a.n] : null, ns = n && this.map.state.nodes[n.id];
-      const k = (A.d.slot || 0) - ((A.d.slots || 1) - 1) / 2, x = (n ? n.x : A.back[0][0]) + k * long * 0.9, y = n ? n.y + rayonMurs(this.map, n, ns) + 0.25 : A.back[0][1];
+      const k = (A.d.slot || 0) - ((A.d.slots || 1) - 1) / 2, x = (n ? site(n)[0] : A.back[0][0]) + k * long * 0.9, y = n ? site(n)[1] + rayonMurs(this.map, n, ns) + 0.25 : A.back[0][1];
       pts = [[x + long * 0.4, y], [x - long * 0.4, y]];
     }
     const L = Math.min(longueur(pts), long * 0.8);
@@ -717,7 +717,7 @@ export class Guerre {
   siegeDe(n, ns) {
     const r = rayonMurs(this.map, n, ns), key = n.id + ':' + r.toFixed(2);
     let S = this.sieges.get(n.id);
-    if (!S || S.key !== key) { S = geoSiege(n.x, n.y, r, (x, y) => this.mouille(x, y), n.id); S.key = key; this.sieges.set(n.id, S); }
+    if (!S || S.key !== key) { S = geoSiege(...site(n), r, (x, y) => this.mouille(x, y), n.id); S.key = key; this.sieges.set(n.id, S); }
     return S;
   }
   // sur l'eau : mer, estuaire, fleuve (terrain du kilomètre, et le tracé des rivières)
@@ -1110,9 +1110,9 @@ export class Guerre {
       if (st.t - t0 > 4 || st.t < t0) { this.pilles.delete(id); continue; }
       const n = mp.nodes[id];
       if (!this.dans(sc, n.x, n.y, 2) || !this.visible(n.x, n.y)) continue;
-      const r = rayonPlace(n, st.nodes[id]) * 0.6;
+      const r = rayonPlace(n, st.nodes[id]) * 0.6, [vx, vy] = site(n);
       for (let k = 0; k < 3; k++) {
-        const x = n.x + (hash2(n.id, k, 120) - 0.5) * r * 2, y = n.y + (hash2(n.id, k, 121) - 0.5) * r * 2;
+        const x = vx + (hash2(n.id, k, 120) - 0.5) * r * 2, y = vy + (hash2(n.id, k, 121) - 0.5) * r * 2;
         LUM.push({ x, y, r: 0.25, a: 0.55, jour: true });
         if (Math.random() < 0.05) this.fumee(x, y, 0, 0, 0.02, 0.25, 14, 0.42, 'n');
         sc.monde(g);

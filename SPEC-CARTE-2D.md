@@ -905,3 +905,69 @@ Cubzac posée dans l'état, `cut`), `6-bayonne-murs-z45.png` (le tracé bastionn
     route, ici celui de la Dordogne) ; de même pour toute route qui passe deux rivières ;
   - dans les batailles, les clos n'ont que leur teinte (ni arbres du plan, ni hangar), les vergers ont les arbres des cases
     `VERGER`.
+
+
+## Livré — villes denses dans leurs murs, collées à leur fleuve
+
+Décision du joueur : chaque ville à sa vraie taille, serrée dans ses murs (300 à 500 habitants par hectare dans le cœur), les
+clos (vergers, maraîchers, vignes, jardins) seulement hors les murs, chaque ville au bord de son fleuve avec ses quais, le mur
+jamais dans l'eau ; les villages et les bourgs sans murs comme avant.
+
+- **Le cœur d'une ville close** (`villes.js`, `coeur`, et `plan_ville.coeur`, identiques) : 0,47 √pop unités (environ
+  400 habitants par hectare, au moins 111 m) ; Bordeaux 870 m (le mur au même endroit qu'avant), Bayonne 300 m, Agen 270 m,
+  Libourne 230 m. L'emprise (`rayon`) ne change pas : au-delà du mur, les faubourgs (`hors`) jusqu'à elle.
+  - grande ville : la vieille ville ronde jusqu'au cœur, le damier des faubourgs au-delà ; ville, port : les anneaux du cœur,
+    puis d'autres anneaux et d'autres rues hors les murs ; bastide close : 3 îlots sur 2 à Libourne (`rc / 13`), un damier de
+    faubourgs autour jusqu'au bord de l'emprise ; place forte : 2 îlots au moins (au lieu de 4).
+  - dans les murs, rien que des maisons, sauf 4 % de cours et de vergers (jardins d'hôtels) ; hors les murs, les clos comme
+    avant (de plus en plus vers le bord) ; à moins de 220 m de l'eau, tout est bâti (les quais : les Chartrons).
+  - les lieux dans les murs : églises selon la taille de la vieille ville (une à quatre), couvents, hôpital, casernes ;
+    l'esplanade de la citadelle 55 m (au lieu de 140) ; les faubourgs hors du glacis, 250 m au-delà des bastions (au lieu de
+    610).
+- **Au bord de l'eau** (`profilVille`, `o`) : les rivières des données passent souvent à 1 ou 2 km du nœud. Le plan d'une
+  ville, d'un port ou d'une place forte est décalé vers la grande rivière la plus proche (ou la mer) : la rive au pied des
+  murs (67 m de quais), ou, sans murs, l'eau qui mord sur 15 % de l'emprise. Décalage : Bordeaux 220 m (du fleuve), Bayonne
+  1,27 km (vers l'Adour), Agen 910 m, Libourne 870 m (au confluent de l'Isle et de la Dordogne), Blaye 350 m, Pauillac 110 m ;
+  les villages, les forts et les villages perchés sous leur château (castrum) restent au nœud. Au-delà de 1,35 km, l'eau des
+  données n'est pas la sienne : Langon, Montpon, Domme, Saint-Sever, Sainte-Livrade, Penne-d'Agenais restent au nœud.
+  - les grandes rivières se trouvent par leurs segments (Bergerac, Cadillac : la Dordogne et la Garonne passaient entre deux
+    points des données, à 500 m) ; les petites comme avant ; largeur du plan = largeur de la carte (`terre.js`,
+    `LARG_RIVIERE`), les maisons ne s'arrêtent plus à 100 m d'une eau qu'on ne voit pas ; les quais d'une ville au bord d'un
+    fleuve, port ou non (`Pf.quai`), coupés au confluent.
+- **Le mur jamais dans l'eau** : `formeMur` rend des tracés ouverts, en pans de r / 8, coupés là où ils passeraient dans
+  l'eau (le mur rond aussi : `map.walls`) ; dans l'intérieur, l'enceinte bastionnée est peinte avant l'eau, qui la recouvre ;
+  la citadelle tourne jusqu'au sec ; les demi-lunes dans l'eau tombent. Bataille : les murs ne prennent pas les cases d'eau
+  (comme avant).
+- **Où la ville est dessinée** (`villes.site`, `n.vx`, `n.vy`, calculés par `carteDe`) : le plan, les remparts, le signe, le
+  nom, la garnison, le choix au doigt, les armées rangées sous la place, le siège (tranchées, camps), les foires, les halos
+  de la nuit, les fumées, les échafaudages. Restent au nœud : les routes de la carte et les armées en marche (les données du
+  serveur), le cordon sanitaire et les chantiers du faubourg (le long des routes).
+- **Batailles, version 7** (`terrain.VERSION`) : la carte d'un assaut se centre sur la ville (`Lieu.site`), le plan s'y
+  pose par son centre (`V['C']`) ; les quais des villes au bord d'un fleuve ; une maison dont la rue a été retirée (rue sans
+  issue) devient une cour. La version 6 est figée (`plan_ville_v6`, `terrain_ville_v6` ; `test_carte_v6_figee` : l'empreinte
+  de la carte de Libourne d'alors). Carte de bataille 0,32 s en moyenne (Bayonne 0,31, Bordeaux 0,46, Navarrenx 0,27, Belin
+  0,24).
+- **La crue** (`crue.py`, `_rayon`) lit le rayon figé de `plan_ville_v5` : la règle des parties en cours ne suit plus le
+  dessin des villes ; 27 routes coupées (`test_campagne`, 30 avec le rayon de la version 6).
+- Avant → après (1789, maisons comptées sur le plan peint, `integration/villes-denses/mesures.mjs` ; « murs → eau » : du mur
+  du plan à l'eau, 0 = coupé à la rive) :
+
+  | Place | Habitants | Mur (rayon) | Maisons | Habitants par maison | Bâti → eau | Murs → eau | Décalage |
+  |---|---|---|---|---|---|---|---|
+  | Bordeaux | 110 000 | 895 → 911 m | 6 711 → 11 233 | 16,4 → 9,8 | 40 → 40 m | 0 (dans la Garonne) → 24 m | 220 m |
+  | Bayonne (bastionnée) | 13 000 | 1 104 → 419 m | 1 984 → 909 | 6,6 → 14,3 | 754 → 40 m | 420 → 0 m | 1 270 m |
+  | Libourne (bastide) | 8 000 | 750 → 374 m | 1 069 → 1 391 | 7,5 → 5,8 | 124 → 33 m | 547 → 17 m | 870 m |
+  | Agen | 11 000 | 470 → 318 m | 1 536 → 1 907 | 7,2 → 5,8 | 135 → 24 m | 778 → 17 m | 910 m |
+  | Nontron (bourg sans murs) | 3 000 | — | 424 → 424 | 7,1 | — | — | 0 |
+  | Saint-Médard-en-Jalles (village) | 691 | — | 133 → 133 | 5,2 | — | — | 0 |
+  | Blaye (port, bastionné) | 4 500 | 541 → 416 m | 578 → 276 | 7,8 → 16,3 | 182 → 64 m | 0 (dans l'estuaire) → 17 m | 350 m |
+  | Pauillac (port, village) | 1 478 | — | 104 → 322 | 14,2 → 4,6 | 33 → 24 m | — | 110 m |
+
+- Écarts :
+  - les routes de la carte vont toujours au nœud : à Bayonne, 1,3 km au sud de la ville, elles se rejoignent dans les
+    faubourgs ; les armées en marche aussi (les positions du serveur) ; déplacer les nœuds des données réglerait tout, mais
+    changerait la carte, les batailles des versions figées et la crue ;
+  - la Nive des données s'arrête 1,9 km au sud de l'Adour : Bayonne est sur l'Adour, pas sur la Nive ;
+  - Bayonne et Blaye (bastionnées, faubourgs hors du glacis) ont 14 à 16 habitants par maison ; Libourne et Agen 6 ;
+    Bordeaux 10 (ses échoppes basses) ;
+  - les villages au bord d'une grande rivière (Port-Sainte-Marie) gardent leurs îlots noyés.

@@ -60,7 +60,7 @@ function construire() {
     ['Les remparts', () => vue?.V?.lieux.remparts || (vue?.V?.trace ? { x: vue.V.trace.V[0][0], y: vue.V.trace.V[0][1] } : null), 0, 8],
     ['La citadelle', lieu('citadelle'), 0, 7], ['Le château', lieu('chateau'), 0, 14], ['Les vignes', lieu('vin'), 0, 4], ['La gare', lieu('gare'), 0, 8],
     ['Les salines', lieu('sel'), 0, 4], ['Les forges', lieu('fer'), 0, 14],
-  ], sc => { sc.z = Math.max(sc.zB()[0], sc.cssW / 640); sc.cx = IC[0]; sc.cy = IC[1]; });
+  ], sc => { sc.z = Math.max(sc.zB()[0], sc.cssW / 640); [sc.cx, sc.cy] = vue?.V?.C || IC; });
   sc.avant = avant; sc.sous = sous; sc.dessus = dessus; sc.apres = apres;
   el.querySelector('#vi-retour').onclick = fermerInterieur;
   addEventListener('keydown', e => { if (e.key === 'Escape' && vue && !vue.el.hidden) fermerInterieur(); });
@@ -169,7 +169,7 @@ export function ouvrirInterieur(o) {
     const t = sc.tv; vue.peint = { it, cle, w, t };
     if (w) peinture = { id: ++nP, t, seq: 0, fait: () => peinte(t, { cle }) };
   }
-  sc.z = Math.max(sc.zB()[0], Math.min(12, sc.cssW / (Pf.R * 2.7))); sc.cx = IC[0]; sc.cy = IC[1]; sc.vol = null; sc.suivi = null; sc.borner(); sc.marquer(null);   // (la place entière ; un village de 111 m à 12 px par unité)
+  sc.z = Math.max(sc.zB()[0], Math.min(12, sc.cssW / (Pf.R * 2.7))); [sc.cx, sc.cy] = V.C; sc.vol = null; sc.suivi = null; sc.borner(); sc.marquer(null);   // (la place entière ; un village de 111 m à 12 px par unité)
   el.querySelector('#vi-nom').textContent = n.name;
   el.querySelector('#vi-sous').textContent = `${TYPE_TXT[n.type] || n.type} · ${o.dept || n.dept} · ${e.annee}`;
   const etat = [e.siege ? (e.blocus ? 'bloquée' : `assiégée, ${Math.round(e.dmg * 100)} % de dégâts`) : null, e.deg >= .01 ? `${Math.round(e.deg * 100)} % de la ville en ruine` : null, e.lv ? `${LV_TXT[e.lv] || e.lv} (il y a ${e.lvAge} jours)` : null, e.famine ? 'famine : moins de monde dans les rues' : null].filter(Boolean);
@@ -231,7 +231,7 @@ function vivre(sc, V, e) {
   for (let i = 0; i < clamp(Pf.pop / 90, 14, 90) * k; i++) { const r = rues[R() * rues.length | 0]; if (!r) break; vie.push(passant(r, (1.1 + R() * .5) * MS)); }
   if (!e.siege) for (const r of V.routesL) for (let i = 0; i < 2; i++) vie.push({ k: 'charrette', pts: r.pts, L: longueur(r.pts), s: 40 + R() * 500, v: (R() < .5 ? -1 : 1) * 1.3 * MS, lat: 2.6, x: 0, y: 0, a: 0, pas: 0 });
   for (const rv of Pf.rivs) { const L = longueur(rv.pts); for (let i = 0; i < (Pf.port ? 6 : 2) * (e.blocus ? .3 : 1); i++) vie.push({ k: 'bateau', pts: rv.pts, L, s: R() * L, v: (R() < .5 ? -1 : 1) * (1 + R()) * MS, lat: (R() - .5) * rv.w * .5, grand: Pf.port && rv.rank <= 1 && R() < .5, x: 0, y: 0, a: 0 }); }
-  if (Pf.mer && Pf.port) for (let i = 0; i < 6; i++) { const a = Pf.mer.a + (R() - .5) * .8, d = Pf.R * (1.1 + R() * .8); vie.push({ k: 'mouille', x: IC[0] + Math.cos(a) * d, y: IC[1] + Math.sin(a) * d, a: R() * TAU, grand: R() < .4 }); }
+  if (Pf.mer && Pf.port) for (let i = 0; i < 6; i++) { const a = Pf.mer.a + (R() - .5) * .8, d = Pf.R * (1.1 + R() * .8); vie.push({ k: 'mouille', x: V.C[0] + Math.cos(a) * d, y: V.C[1] + Math.sin(a) * d, a: R() * TAU, grand: R() < .4 }); }
   // la place : badauds, foire, émeute ; vide en disette et en épidémie
   const pl = V.lieux.place;
   sc.etals = [];
@@ -247,7 +247,7 @@ function vivre(sc, V, e) {
   // épidémie : le convoi funèbre suit une rue maîtresse
   if (e.lv === 'epidemie') { const r = V.rues.find(x => x.main && x.pts.length > 1) || rues[0]; if (r) { const L = longueur(r.pts); vie.push({ k: 'convoi', pts: r.pts, L, s: R() * L, v: .9 * MS, lat: 0, x: 0, y: 0, a: 0, pas: 0 }); } }
   // bêtes aux prés (pas pendant un siège : la campagne est vide)
-  if (!e.siege) for (let i = 0; i < 8; i++) { const a = R() * TAU, d = Pf.R + 90 + R() * 200, x = IC[0] + Math.cos(a) * d, y = IC[1] + Math.sin(a) * d; if (!V.eau(x, y)) vie.push({ k: 'vache', x, y, a: R() * TAU, zone: [x - 30, y - 20, 60, 40], attente: R() * 4, v: 0, robe: R() < .5 ? '#efe9dd' : '#c9a07a', tache: R() < .5 ? '#3a2c22' : '#8a5a3a', pas: 0 }); }
+  if (!e.siege) for (let i = 0; i < 8; i++) { const a = R() * TAU, d = Pf.R + 90 + R() * 200, x = V.C[0] + Math.cos(a) * d, y = V.C[1] + Math.sin(a) * d; if (!V.eau(x, y)) vie.push({ k: 'vache', x, y, a: R() * TAU, zone: [x - 30, y - 20, 60, 40], attente: R() * 4, v: 0, robe: R() < .5 ? '#efe9dd' : '#c9a07a', tache: R() < .5 ? '#3a2c22' : '#8a5a3a', pas: 0 }); }
   sc.vie = vie;
   sc.fumees = (vue.tex?.chem || V.cheminees).filter((c, i) => i % 7 === 0 && (e.lv !== 'epidemie' || i % 21 === 0));
   sc.moulins = V.plus.filter(p => p.ailes);
