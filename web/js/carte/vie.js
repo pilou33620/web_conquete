@@ -210,6 +210,17 @@ export function majEtat(st) {
   }
   // les routes autour des foires sont plus passantes
   VIE.foireRoutes = new Set(VIE.routes.filter(r => VIE.foires.some(f => Math.hypot(Math.max(r.bb[0] - f.x, 0, f.x - r.bb[2]), Math.max(r.bb[1] - f.y, 0, f.y - r.bb[3])) < 12)).map(r => r.ie));
+  // la circulation (« Livré — le trafic des routes ») : aux portes d'une ville de pop habitants, Q = 300 (pop / 110 000)^0,6
+  // voitures par jour sur une route royale (Bordeaux 300, plusieurs centaines aux portes ; Bayonne 80, Libourne 60, un bourg
+  // de 3 000 veh. 35, un village de 700 : 14), le tiers sur un chemin ; jour de marché × 1,5, foire × 2,5 ; elle s'éteint
+  // vers la campagne sur λ = 2 + 4 √(pop / 110 000) km (Bordeaux 6, Libourne 3, un village 2,3). En voyageurs par km
+  // (piétons et cavaliers compris, 60 % de voitures ; douze heures de jour, 5 km/h) : Q / 36, comptés depuis la porte (le
+  // rayon de la ville). villes : [voyageurs, λ, bout, porte]
+  const marche = new Set(VIE.marches.map(m => m.n.id)), foire = new Set(VIE.foires.map(f => f.n.id));
+  for (const r of VIE.routes) r.villes = [r.a, r.b].map((id, i) => {
+    const pop = ns[id]?.pop || NOEUDS[id]?.pop0 || 700, p = pop / 110000, lam = 2 + 4 * Math.sqrt(p);
+    return [Math.round(300 * p ** .6 * (r.royal ? 1 : 1 / 3) * (foire.has(id) ? 2.5 : marche.has(id) ? 1.5 : 1) / 36 * lam), lam, i, Math.min(rayon(pop) / S_INT, r.L / 3)];
+  });
   // brigands : sur les routes qui partent d'une place où l'on en signale, une bande tous les quatre kilomètres
   VIE.brigands = [];
   const brig = new Set(ns.filter(n => n.lv?.[0] === 'brigands').map(n => n.id));
@@ -382,20 +393,30 @@ function paludiers(sc, g, i, j, t) {
 const VITESSE = { malle: .004, diligence: .0028, cavalier: .003, charrette: .0013, boeufs: .0008, troupeau: .0007, pieton: .0013, convoi: .0009, mendiant: .001 };
 // leur taille, en unités de figure (une personne 4,3, un cheval 16, une charrette attelée 41, la diligence 58) : sous un pixel, rien
 const TAILLE = { malle: 54, diligence: 58, cavalier: 16, charrette: 41, boeufs: 41, troupeau: 16, pieton: 4.3, convoi: 40, mendiant: 4.3 };
+// (sous 6 px de long, une tache de sa couleur, sur la route : les dessins coûtaient trop aux portes de Bordeaux)
+const TEINTE = { malle: '#3a3f4f', diligence: '#5a4632', cavalier: '#5d4a36', charrette: '#8a6a45', boeufs: '#b9a37a', troupeau: '#e6e2d6', convoi: '#2a2622', mendiant: '#4a4338', pieton: '#6e5c45' };
 function vieDePres(sc, g, x0, y0, x1, y1) {
   const t = sc.time, dans = (x, y) => x > x0 - .2 && x < x1 + .2 && y > y0 - .2 && y < y1 + .2, soir = bivouac();
   for (const r of VIE.routes) {
     const bb = r.bb; if (bb[2] < x0 - .2 || bb[0] > x1 + .2 || bb[3] < y0 - .2 || bb[1] > y1 + .2) continue;
-    const L = r.L, ie = r.ie, n = Math.ceil(L / (r.royal ? 1.1 : 2.2) * (VIE.foireRoutes.has(ie) ? 1.6 : 1));
-    for (let k = 0; k < n; k++) {
-      const h = hash2(ie, k, 31), sens = h < .5 ? 1 : -1, sorte = hash2(ie, k, 32);
+    // le passage d'un bout à l'autre (40 voitures par jour sur une route royale, 4 sur un chemin : Q / 36 voyageurs par km),
+    // puis ceux des deux villes, qui vont et reviennent : chacun jusqu'à D, tiré pour que la foule décroisse en e^(-d/λ)
+    const L = r.L, ie = r.ie, n = Math.ceil(L * (r.royal ? 40 : 4) / 36 * (VIE.foireRoutes.has(ie) ? 1.6 : 1)), [va, vb] = r.villes || [[0], [0]];
+    const taches = new Map();
+    for (let k = 0; k < n + va[0] + vb[0]; k++) {
+      const h = hash2(ie, k, 31), sorte = hash2(ie, k, 32);
       let kind = r.royal ? (sorte < .05 ? 'malle' : sorte < .12 ? 'diligence' : sorte < .4 ? 'charrette' : sorte < .55 ? 'cavalier' : sorte < .62 ? 'troupeau' : 'pieton') : (sorte < .35 ? 'boeufs' : sorte < .5 ? 'troupeau' : sorte < .58 ? 'cavalier' : 'pieton');
-      const p0 = surChemin(r.pts, h * L); if (hash2(ie, k, 34) > densite(p0.x, p0.y)) continue;   // pays déserté
-      const mal = malheur(p0.x, p0.y);
+      if (!vue(sc.z, sorte > .55 ? TAILLE.convoi : TAILLE[kind])) continue;   // (rien sous le pixel : ni calcul ni dessin)
+      let s, sens = h < .5 ? 1 : -1;
+      if (k < n) s = mod(h * L + sens * VITESSE[kind] * t, L);
+      else { const [, lam, i, r0] = k < n + va[0] ? va : vb, D = clamp(-lam * Math.log(hash2(ie, k, 36) * hash2(ie, k, 37) + 1e-9), .3, L - r0), u = h * 2 * D + VITESSE[kind] * t, q = r0 + pingpong(u, D); s = i ? L - q : q; sens = (mod(u, 2 * D) < D) === !i ? 1 : -1; }
+      const p = surChemin(r.pts, s); if (!dans(p.x, p.y) || hash2(ie, k, 34) > densite(p.x, p.y)) continue;   // (pays déserté)
+      const mal = malheur(p.x, p.y);
       if (mal && sorte > .55) kind = mal === 2 && hash2(ie, k, 35) < .4 ? 'convoi' : 'mendiant';
       if (!vue(sc.z, TAILLE[kind])) continue;
-      const p = surChemin(r.pts, mod(h * L + sens * VITESSE[kind] * t, L)); if (!dans(p.x, p.y)) continue;
       const a = p.a + (sens < 0 ? Math.PI : 0), cote = .003, x = p.x - Math.sin(a) * cote, y = p.y + Math.cos(a) * cote, pas = t * 1.7 * TAU + k;
+      if (soir && (kind === 'malle' || kind === 'diligence')) { const [lx, ly] = versMonde(x, y, a, 8, 0); LUM.push({ x: lx, y: ly, r: .012, a: .8, spr: 'fen' }); }   // la lanterne
+      if (sc.z * U * TAILLE[kind] < 6) { let l = taches.get(TEINTE[kind]); if (!l) taches.set(TEINTE[kind], l = []); l.push(x, y, a, TAILLE[kind] * U / 2); continue; }
       figK(sc, g, x, y, a);
       if (kind === 'troupeau') {
         g.scale(2, 2);   // (des brebis de 1,2 m)
@@ -408,7 +429,14 @@ function vieDePres(sc, g, x0, y0, x1, y1) {
       else if (kind === 'charrette' || kind === 'boeufs') charrette(g, pas, kind === 'boeufs', k);
       else if (kind === 'cavalier') { cheval(g, ['#6b4a2c', '#3f2d1f', '#8b6a47'][k % 3], { gait: pas * 1.4, bob: 0 }); cavalier(g, LCIV, { habit: '#5d6b86' }, { sabre: 0, bob: 0 }); }
       else marcheur(g, k, pas, hash2(ie, k, 33) < .5);
-      if (soir && (kind === 'malle' || kind === 'diligence')) { const [lx, ly] = versMonde(x, y, a, 8, 0); LUM.push({ x: lx, y: ly, r: .012, a: .8, spr: 'fen' }); }   // la lanterne
+    }
+    if (taches.size) {   // (une tache longue comme la voiture, large du tiers, au moins un pixel ; d'un tracé par couleur)
+      sc.monde(g);
+      for (const [c, l] of taches) {
+        g.beginPath();
+        for (let i = 0; i < l.length; i += 4) { const [x, y, a, h] = l.slice(i, i + 4), e = Math.max(h / 3, .5 / sc.z), ca = Math.cos(a), sa = Math.sin(a); g.moveTo(x - ca * h + sa * e, y - sa * h - ca * e); g.lineTo(x + ca * h + sa * e, y + sa * h - ca * e); g.lineTo(x + ca * h - sa * e, y + sa * h + ca * e); g.lineTo(x - ca * h - sa * e, y - sa * h + ca * e); }
+        g.fillStyle = c; g.fill();
+      }
     }
   }
   // (chaque chose dès qu'elle fait un pixel : le troupeau à son âne et ses chiens, les brigands à leur cheval, les bêtes des

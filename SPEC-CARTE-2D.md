@@ -991,3 +991,26 @@ jamais dans l'eau ; les villages et les bourgs sans murs comme avant.
   Midouze). La règle du jeu (attente au bac, sapeurs, crue) reste celle d'un seul passage par route.
 - Écart : deux routes qui passent la même rivière près d'une ville ont chacune leur pont (Libourne : routes de Bordeaux et de
   Créon) ; le pont de l'Isle à Libourne n'est pas daté.
+
+## Livré — le trafic des routes
+
+Avant : un voyageur tous les 1,1 km de route royale (2,2 km de chemin), partout pareil : une voiture visible tous les 2 à 3 km.
+
+- **La circulation** (`vie.js`, `majEtat` : `r.villes` ; `vieDePres`), estimations pour la fin du XVIIIe siècle :
+  - aux portes d'une ville de pop habitants, Q = 300 (pop / 110 000)^0,6 voitures par jour sur une route royale : Bordeaux
+    300 (plusieurs centaines aux portes), Bayonne 80, Libourne 60, un bourg de 3 000 35, un village de 700 14 ; le tiers sur
+    un chemin ; jour de marché (la chaîne du commerce) × 1,5, foire (l'événement de l'état) × 2,5 ;
+  - elle s'éteint vers la campagne sur λ = 2 + 4 √(pop / 110 000) km (Bordeaux 6 km, Libourne 3, un village 2,3), comptée
+    depuis la porte (le rayon de la ville) ;
+  - le passage d'un bout à l'autre : 40 voitures par jour sur une route royale (trois ou quatre à l'heure), 4 sur un chemin ;
+  - en voyageurs par km de route (piétons et cavaliers compris, 60 % de voitures ; douze heures de jour, 5 km/h) : Q / 36.
+    Aux portes de Bordeaux, 8 voyageurs par km (5 voitures), 3 à 6 km ; en pleine campagne, 1,1 sur une route royale (une
+    voiture tous les 1,5 km), 0,1 sur un chemin.
+  - les voyageurs d'une ville vont et reviennent (jusqu'à D, tiré pour que la foule décroisse en e^(−d/λ)) : rien ne paraît
+    ni ne disparaît au milieu de la route ; le pays déserté (siège, bataille, nuit, mauvais temps) comme avant.
+- **Le coût** : rien n'est calculé sous le pixel (le genre d'abord) ; une voiture de moins de 6 px de long est une tache de sa
+  couleur sur la route, d'un tracé par couleur. Mesures (`integration/villes-denses/h3v.cjs`, la scène de `vie3/h3.cjs` plus
+  z 450 et z 1 300, à Bordeaux et sur la route de Belin à 2,5 km ; médianes de 120 images, deux passes, deux séries, avant →
+  après) : z 450 Bordeaux 2,5 / 2,5 et 2,6 / 2,5 → 2,7 / 2,6 ms ; z 450 route 1,9 / 1,9 et 2,1 / 1,9 → 1,8 / 1,8 ; z 1 300
+  Bordeaux 2,9 / 2,0 et 2,2 / 2,0 → 2,5 / 2,4 ; z 1 300 route 1,3 / 1,2 et 1,2 / 1,1 → 1,4 / 1,5 ; ailleurs dans le bruit.
+- Banc : `vie.test.mjs` (une ville plus qu'un village, une capitale plus loin, la foire attire du monde).

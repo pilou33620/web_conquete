@@ -13,7 +13,7 @@ function contexte(journal) {
   return new Proxy({}, {
     get(o, k) {
       if (k in o) return o[k];
-      if (k === 'setTransform') return (...a) => journal && journal.push(a.map(v => +v.toFixed(6)).join(','));
+      if (k === 'setTransform' || k === 'moveTo') return (...a) => journal && journal.push(a.map(v => +v.toFixed(6)).join(','));   // (les figures, et les taches des voitures)
       if (k === 'createRadialGradient' || k === 'createLinearGradient') return () => grad;
       if (k === 'getContext') return () => contexte(null);
       return () => {};
@@ -116,4 +116,14 @@ test('brigands, marchés et foires viennent de l’état', () => {
   const f = V.VIE.foires[0];
   assert.ok(Math.hypot(f.x - 8, f.y - 15) > V.rayonPlace(V.VIE.foires[0].n), 'la foire se tient hors les murs');
   assert.ok(V.VIE.foireRoutes.has(0), 'les routes autour de la foire sont plus passantes');
+});
+
+test('le trafic des routes : beaucoup aux portes des grandes villes, peu sur les chemins, plus les jours de foire', () => {
+  V.preparer(carte()); V.majEtat(etat());
+  const [r0, r1] = V.VIE.routes, [aval, milieu] = r0.villes, amont = r1.villes[1];
+  assert.ok(aval[0] >= milieu[0] * 3, `une ville de 4 000 plus qu’un village de 600 (${aval[0]}, ${milieu[0]})`);
+  assert.ok(amont[1] > aval[1], 'plus loin vers la campagne autour d’une grande ville');
+  assert.ok(amont[0] > aval[0], `une capitale de 30 000 sur un chemin plus qu’une ville sur une route royale (${amont[0]}, ${aval[0]})`);
+  V.majEtat(etat({ nodes: { 0: { lv: ['foire', 1] } } }));
+  assert.ok(V.VIE.routes[0].villes[0][0] > aval[0] * 2, 'la foire attire du monde');
 });
