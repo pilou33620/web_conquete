@@ -9,6 +9,7 @@
 //       du tricorne, du bicorne puis du haut-de-forme, une teinte un peu sépia au XVIIIe siècle.
 import { clamp } from './battle/formes.js';
 import { hash } from './map.js';
+import { PONTS_DATES } from './carte/villes.js';
 
 const TAU = Math.PI * 2;
 // marques qui changent la peinture des tuiles : les tuiles sont repeintes quand elles changent
@@ -54,7 +55,7 @@ export class Epoque {
     const pays = Object.entries(this.marks).map(([c, s]) => c + ':' + PAYSAGE.filter(k => s.has(k)).join('+')).join(',');
     const any = Object.values(this.marks).some(s => PAYSAGE.some(k => s.has(k)));
     // (les marques du paysage suivent le maître de chaque case : les propriétaires comptent aussi)
-    const key = `${pays}|${this.year >= 1875}|${any ? this.map.ownersKey : ''}`;
+    const key = `${pays}|${this.year >= 1875}|${PONTS_DATES.filter(p => this.year >= p[2]).length}|${any ? this.map.ownersKey : ''}`;   // (les ponts datés : map.js drawRoads)
     const changed = key !== this.key;
     this.key = key;
     return changed;

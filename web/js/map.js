@@ -2,6 +2,7 @@
 import { Ambient, locomotive, voiture } from './ambient.js';
 import { clamp, hexRgb } from './battle/formes.js';
 import { TownArt } from './towns.js';
+import { PONTS_DATES } from './carte/villes.js';
 import { UnitArt } from './battle/unites.js';
 import { profil } from './battle/qualite.js';
 import { uniform } from './battle/formes.js';
@@ -21,7 +22,9 @@ function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`
 // niveaux de détail des tuiles (pixels par km) : une échelle fine, pour qu'une tuile ne soit jamais beaucoup
 // réduite à l'écran (sinon il en faut des centaines pour couvrir un grand écran d'iPad) ; jusqu'au zoom le plus près
 const LEVELS = [2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024];
-const PAPIER_L = 64, FONDU = [70, 100], PAPIER_MAX = 85;   // (fondu de la gravure dans la vue du ciel, en px d'écran par km)
+// (fondu de la gravure dans la vue du ciel, en px d'écran par km : elle a fini de s'effacer quand les plans des villes, la
+// vie et les lumières paraissent, à PAPIER_MAX ; avant, ils se posaient sur une gravure encore au tiers)
+const PAPIER_L = 64, PAPIER_MAX = 85, FONDU = [70, PAPIER_MAX];
 const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 // teintes du terrain (seules leurs clés servent encore : la carte vue du ciel est peinte par carte/terre.js)
 const TCOL = {
@@ -218,7 +221,8 @@ export class MapView {
       if (e.water) continue;
       e.path = new Path2D();
       e.pts.forEach((q, k) => k ? e.path.lineTo(q[0], q[1]) : e.path.moveTo(q[0], q[1]));
-      if (e.bx != null) {    // le pont suit le segment du tracé qui franchit l'eau
+      if (e.bx != null) {    // le pont suit le segment du tracé qui franchit l'eau ; pontAn : son année (un bac avant)
+        e.pontAn ??= PONTS_DATES.find(([v, r]) => r === e.river && [A, B].some(n => n.name === v && Math.hypot(n.x - e.bx, n.y - e.by) < 2))?.[2] || 0;
         let best = 1e9;
         for (let i = 1; i < e.pts.length; i++) {
           const [p, q] = [e.pts[i - 1], e.pts[i]], d = Math.hypot((p[0] + q[0]) / 2 - e.bx, (p[1] + q[1]) / 2 - e.by);
@@ -1453,7 +1457,7 @@ export class MapView {
     // vue du ciel : routes empierrées (carte/terre.js), les royales bordées d'arbres de près
     // (vue du ciel, à la vraie taille de près : la route royale 12 m, les autres 6 ; de loin, 2,6 et 1,4 px)
     const larg = royal => P ? Math.max(royal ? 0.34 : 0.2, (royal ? 2.1 : 1.2) / L) : royal ? Math.max(0.012, 2.6 / L) : Math.max(0.006, 1.4 / L);
-    if (!P && L >= 32) terre(this).arbresRoyaux(g, es.filter(e => e.royal && !e.ferry).map(e => e.pts), larg(true), L);
+    if (!P && L >= 32) terre(this).arbresRoyaux(g, es.filter(e => e.royal && !e.ferry), larg(true), L);
     for (const pass of [0, 1]) {
       for (const e of es) {
         const royal = e.royal, w = larg(royal);
@@ -1478,7 +1482,7 @@ export class MapView {
       g.save();
       g.translate(e.bx, e.by);
       g.rotate(e.bang);
-      if (e.ferry) {
+      if (e.ferry || this.epoque.year < e.pontAn) {
         g.fillStyle = '#6b4a2e';
         g.beginPath(); g.ellipse(0, 0, len * 0.45, wid * 0.4, 0, 0, Math.PI * 2); g.fill();
       } else if (!P) {
@@ -2073,14 +2077,15 @@ export class MapView {
   // enceinte autour d'une place, selon son niveau : mur d'enceinte flanqué de tours (1), remparts épais (2),
   // tracé bastionné en pointes de flèche (3), bastions et demi-lunes à la Vauban (4).
   // Pendant un siège, la brèche s'ouvre à mesure que les canons travaillent. Retourne le rayon extérieur de l'ouvrage.
-  walls(ctx, s, f, id, dmg) {
+  // forme : le mur du plan de la ville (carte/villes.js, formeMur), de près
+  walls(ctx, s, f, id, dmg, forme) {
     // le tracé ne dépend que du niveau, de la taille, de la brèche et de la ville : on le garde en cache (Path2D)
     s = Math.round(s * 2) / 2;
     const db = dmg > 0.02 ? Math.round(dmg * 50) / 50 : 0;
-    const key = `${f}|${s}|${db}|${id}`;
+    const key = `${f}|${s}|${db}|${id}|${forme ? forme.ext[1] : ''}`;
     let w = this.wallCache.get(key);
     if (!w) {
-      w = this.wallGeom(s, f, id, db);
+      w = this.wallGeom(s, f, id, db, forme);
       if (this.wallCache.size > 400) this.wallCache.clear();
       this.wallCache.set(key, w);
     }
@@ -2221,9 +2226,9 @@ export class MapView {
   }
 
   // géométrie d'une enceinte (voir walls) : chemins prêts à tracer et rayon extérieur
-  wallGeom(s, f, id, dmg) {
-    // (de près, sur le plan de la ville : le mur rond, à 48 pans, sur celui du plan ; de loin, en vue cavalière)
-    const R = s * 0.62 + 2, sq = s > 200 ? 1 : 0.86, TAU = Math.PI * 2;
+  wallGeom(s, f, id, dmg, forme) {
+    // (de près, sur le plan de la ville : le mur du plan, rond à 48 pans ou celui de formeMur ; de loin, en vue cavalière)
+    const R = s * 0.62 + 2, sq = s > 200 || forme ? 1 : 0.86, TAU = Math.PI * 2;
     const a0 = (id * 2.399) % TAU;   // orientation propre à chaque ville : la brèche y reste au même endroit
     const half = dmg > 0.02 ? Math.PI * 0.5 * Math.min(1, dmg) : 0;
     const P = (a, r) => [Math.cos(a) * r, Math.sin(a) * r * sq];
@@ -2233,9 +2238,23 @@ export class MapView {
       return d < half;
     };
     const lw = clamp(s * 0.03 * (1 + f * 0.5), 1.3, 6);
-    const ring = [], towers = [], lunes = [];
+    const ring = [], towers = [], lunes = [], rings = [ring];
     let outer;
-    if (f <= 2) {
+    if (forme) {
+      // le tracé du plan, mis au rayon R du mur (rMur), ses côtés coupés en pans d'environ R / 8 (tours, brèche)
+      const k = R / forme.r;
+      for (const m of forme.murs) {
+        const r = [];
+        m.forEach((p, i) => {
+          const q = m[(i + 1) % m.length], n = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) * k / (R / 8)));
+          for (let j = 0; j < n; j++) r.push([(p[0] + (q[0] - p[0]) * j / n) * k, (p[1] + (q[1] - p[1]) * j / n) * k]);
+        });
+        r.push(r[0]); rings.push(r);
+        if (f <= 2) for (let i = 0; i < r.length - 1; i += f === 1 ? 3 : 2) towers.push(r[i]);
+      }
+      if (f >= 4) for (const t of forme.lunes) lunes.push(t.map(([x, y]) => [x * k, y * k]));
+      outer = forme.ext[f >= 4 ? 1 : 0] * k + lw;
+    } else if (f <= 2) {
       const N = s > 200 ? 48 : 12;
       for (let i = 0; i <= N; i++) ring.push(P(a0 + i * TAU / N, R));
       for (let i = 0; i < N; i += f === 1 ? 3 : 2) towers.push(ring[i]);
@@ -2267,7 +2286,7 @@ export class MapView {
       }
     };
     const g = { lw, outer, ring: new Path2D(), lunes: null, towers: null, towersDark: null, rubble: null };
-    trace(g.ring, ring, true);
+    for (const r of rings) trace(g.ring, r, true);
     const lu = lunes.filter(t => !inGap(t[1][0], t[1][1]));
     if (lu.length) { g.lunes = new Path2D(); for (const t of lu) trace(g.lunes, t, false); }
     const tw = towers.filter(([x, y]) => !inGap(x, y));

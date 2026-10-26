@@ -5,7 +5,7 @@
 import { C, E, T, RR, PG, TAU, SPR, toile, avant, bat, caisson, cavalier as cavalier0, cheval, clair, clamp, distPoly, fantassin as fantassin0, lerp, ligne,
          mod, piece, sombre, surChemin, tenue } from './lib.js';
 import { AMB, LUM, U, Z, bivouac, nuit, vue } from './ambiance.js';
-import { S as SU, IC, carteDe, etatVille, planDe, rayon } from './villes.js';
+import { S as SU, IC, carteDe, etatVille, formeMur, planDe, rayon } from './villes.js';
 import { LARG_RIVIERE } from './terre.js';
 
 // à la vraie taille, une personne fait moins d'un pixel jusqu'au zoom maximum : elle ne se dessine pas (GENS, fixé à
@@ -61,14 +61,14 @@ function parPas(pts, s0, s1, pas, fn) {
 // 110 m ; Bordeaux, un kilomètre et demi
 export const rayonPlace = (n, ns) => rayon(ns?.pop || n.pop0 || 700) / SU;
 // rayon extérieur des remparts (km), d'après le mur du plan de la ville (carte/villes.js, V.rMur) et la forme de
-// l'enceinte de map.js (walls : les bastions et les demi-lunes débordent le mur)
+// l'enceinte de map.js (walls : les bastions et les demi-lunes débordent le mur ; le tracé du plan, formeMur)
 const MURS = new Map();
 export function rayonMurs(map, n, ns) {
   const e = etatVille(n, ns, map.state), k = n.id + ':' + e.f + ':' + e.pop + ':' + e.d + ':' + e.annee;
   let r = MURS.get(k);
   if (r == null) {
-    const V = planDe(carteDe(map.m), n, e), f = e.f;
-    r = Math.max(rayonPlace(n, ns) * 1.1, V.rMur / SU * (f >= 4 ? 1.62 : f >= 3 ? 1.42 : 1.06));
+    const V = planDe(carteDe(map.m), n, e), f = e.f, fm = formeMur(V);
+    r = Math.max(rayonPlace(n, ns) * 1.1, fm ? fm.ext[f >= 4 ? 1 : 0] / SU * 1.06 : V.rMur / SU * (f >= 4 ? 1.62 : f >= 3 ? 1.42 : 1.06));
     if (MURS.size > 400) MURS.clear();
     MURS.set(k, r);
   }

@@ -773,7 +773,36 @@ proche, le paysage et les plans des villes nets jusque-là, et à chaque zoom qu
   - (décision du joueur, depuis) les trains vus du ciel ont leur vraie longueur (14 m par voiture, rien sous 1,5 px ; de
     profil sur la carte d'époque, lisibles) et les oiseaux leur vraie envergure (grue 2 m, mouette 1 m, palombe 0,7 m,
     étourneau 0,4 m ; rien sous le pixel) ; les lumières (lanternes, feux) gardent leur halo de quelques pixels ;
-  - le mur de `map.walls` ne suit pas le plan d'une bastide ni le tracé bastionné (un cercle ou une étoile à 5 ou 6 pointes) ;
-  - les tuiles de l'intérieur sont encore prises réduites (`interieur.js`) ; les rangs d'arbres des routes royales passent sur
-    les ponts ;
+  - (fait depuis, « Livré — petits défauts ») le mur de `map.walls` suit le tracé du plan ; les rangs d'arbres s'arrêtent aux
+    ponts ;
+  - les tuiles de l'intérieur sont encore prises réduites (`interieur.js`) ;
   - le style « époque » garde ses figures et ses tailles d'avant.
+
+## Livré — petits défauts (arbres des ponts, murs du plan, pont de pierre, carte d'époque)
+
+- **Les arbres des routes royales** (`terre.js`, `arbresRoyaux`) s'arrêtent sur le pont (la moitié du pont de `drawRoads`, plus
+  un houppier) ; les bacs n'en avaient déjà pas (la route du bac n'est que la traversée).
+- **Le mur de la carte suit le plan** (`villes.js`, `formeMur` ; `map.js`, `walls` et `wallGeom` ; `towns.js`, `plan`) : de
+  près, sur le plan, le rectangle de la bastide (Libourne), le tracé bastionné du plan et ses demi-lunes (au niveau 4), la
+  citadelle à côté du mur (Bordeaux, Bayonne), mis au rayon du mur (`V.rMur`), coupés en pans pour les tours et la brèche ;
+  sans tracé, le mur rond comme avant ; de loin (le signe), l'étoile d'avant. `rayonMurs` (`guerre.js`) lit l'étendue de ce
+  tracé au lieu des facteurs de l'étoile (1,42, 1,62). Banc : `villes.test.mjs`.
+- **Les ponts datés** (`villes.PONTS_DATES`, `terrain.PONTS_DATES` : ville, rivière, année) : le pont de pierre de Bordeaux,
+  inauguré en 1822. Avant : dans l'intérieur, pas de pont, l'eau repasse sur la route (la texture change avec, `cleTexture`) ;
+  sur la carte, le pont de la route de Lormont devient un bac (`map.js`, `pontAn` ; les tuiles se repeignent au passage,
+  `epoque.js`) ; dans une bataille, les routes qui passent la Garonne à moins de 2 km de Bordeaux y passent sur un pont de
+  bateaux (le dessin seul change : mêmes cases, toutes versions de carte). Banc : `test_plan_ville`.
+  - Autres ponts dessinés dès 1789 qu'on pourrait dater (à vérifier, non faits) : le pont de pierre de Libourne sur la
+    Dordogne (1824), le pont suspendu de Cubzac (1839), le pont de pierre d'Agen (1827), le pont de Bergerac (vers 1825), les
+    ponts suspendus de La Réole (vers 1835), Langon (vers 1831), Cadillac, Marmande, Tonneins, Sainte-Foy (années 1830-1840) ;
+    la carte dessine un pont à chaque route qui passe un fleuve (`geo.py`, `bx`), l'intérieur à chaque route ou rue
+    maîtresse. Dans une bataille à Bordeaux, trois routes passent la Garonne (Lormont, Libourne, Cubzac) : trois à cinq ponts
+    au lieu d'un.
+  - De près, sur la carte, un pont n'a que 1,5 fois la largeur de la route (vraie taille) : il se lit mal.
+- **La carte d'époque** revue à chaque zoom (captures `integration/petits-defauts/`, dpr 1 et 2) : la gravure jusqu'à 64 px/km,
+  puis elle s'efface sur la vue du ciel. Elle finit désormais de s'effacer à `PAPIER_MAX` (85 px d'écran par km), quand
+  paraissent les plans, la vie et les lumières (avant, jusqu'à 100 : les plans se posaient sur une gravure encore au tiers).
+  Le reste tient : signes, jetons et trains de profil lisibles, tailles des routes et des ponts gravés en km comme avant.
+  Écart : les seuils sont en pixels de l'écran, la gravure s'efface donc à z 35-42 sur un écran Retina et à z 70-85 sur un
+  écran simple (voulu : au-delà, la tuile de 64 serait floue).
+

@@ -63,6 +63,10 @@ export const STYLE_TXT = {
 };
 export const TOITS_STYLE = { bordelais: [['bordelais', 1]], perigord: [['perigord', .82], ['lauze', .18]], landes: [['landes', 1]], agenais: [['agenais', 1]], bearn: [['bearn', 1]], basque: [['basque', 1]] };
 
+// les ponts datés (ville, rivière, année) : avant, la rivière se passe en bac (intérieur, carte, batailles :
+// terrain.PONTS_DATES)
+export const PONTS_DATES = [['Bordeaux', 'Garonne', 1822]];   // (le pont de pierre)
+
 // ---------- l'état de la partie qui compte pour une ville
 // ns : st.nodes[id] ; st : l'état reçu (year, me)
 export function etatVille(n, ns, st) {
@@ -416,8 +420,10 @@ export function* peindreInterieurPas(K, V, k, e = {}, natif = true) {
     // (la statue sur son socle, 7 m, et sa grille ; ailleurs, la halle, 27 m)
     if (Pf.modele === 'grande') { C(g, 'rgba(20,20,10,.25)', IC[0] + .3, IC[1] + .4, 1.3); C(g, '#bdb39b', IC[0], IC[1], 1.3); g.strokeStyle = '#3a3530'; g.lineWidth = .06; g.stroke(); RR(g, '#a89c86', IC[0] - .6, IC[1] - .35, 1.2, .7, .1); E(g, '#3c4a45', IC[0], IC[1], .42, .16, Pf.routes[0]?.a || 0); C(g, '#3c4a45', IC[0], IC[1], .14); } else { bat(g, BATS.halle().slice(1), IC[0], IC[1], Pf.routes[0]?.a || 0, .1); }
   }
-  // ponts là où une route ou une rue maîtresse passe l'eau
-  for (const r of Pf.rivs) for (const rr of [...V.routesL.map(x => x.pts), ...V.rues.filter(x => x.main).map(x => x.pts)]) for (let i = 1; i < rr.length; i++) {
+  // ponts là où une route ou une rue maîtresse passe l'eau ; avant leur année (PONTS_DATES), l'eau repasse sur la route
+  const sansPont = Pf.rivs.filter(r => PONTS_DATES.some(([v, rv, an]) => v === Pf.n.name && rv === r.name && (e.annee || 1789) < an));
+  for (const r of sansPont) { ligne(g, r.pts); g.strokeStyle = '#355f97'; g.lineWidth = r.w * (crue ? 1.45 : 1); g.stroke(); g.strokeStyle = '#4a78b4'; g.lineWidth *= .72; g.stroke(); }
+  for (const r of Pf.rivs.filter(r => !sansPont.includes(r))) for (const rr of [...V.routesL.map(x => x.pts), ...V.rues.filter(x => x.main).map(x => x.pts)]) for (let i = 1; i < rr.length; i++) {
     const [x0, y0] = rr[i - 1], [x1, y1] = rr[i], mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
     if (distPoly(r.pts, mx, my) < 6) { const a = Math.atan2(y1 - y0, x1 - x0), L = r.w + 5; g.save(); g.translate(mx, my); g.rotate(a); RR(g, 'rgba(20,20,10,.35)', -L / 2 + .4, -1.2 + .5, L, 2.4, .4); RR(g, '#b8ad94', -L / 2, -1.2, L, 2.4, .4); RR(g, '#cfc3a2', -L / 2, -.8, L, 1.6, .3); for (let t = -L / 2 + 2; t < L / 2 - 1; t += 4) { E(g, '#9a907a', t, -1.4, .6, .3); E(g, '#9a907a', t, 1.4, .6, .3); } g.restore(); break; }   // (13 m de large)
   }
@@ -473,7 +479,7 @@ function murMedieval(g, V) {
   V.lieux.remparts = { x: portes[0]?.[0] ?? IC[0], y: portes[0]?.[1] ?? IC[1] };
 }
 function murRect(g, V) {
-  const { a, w, h } = V.rect, c = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([u, v]) => { const x = u * (w / 2 + 3), y = v * (h / 2 + 3); return [IC[0] + Math.cos(a) * x - Math.sin(a) * y, IC[1] + Math.sin(a) * x + Math.cos(a) * y]; });
+  const c = formeMur(V).murs[0].map(([x, y]) => [x + IC[0], y + IC[1]]);
   chemin_(g, c); g.strokeStyle = '#6e8a4a'; g.lineWidth = 4; g.stroke(); chemin_(g, c); g.strokeStyle = '#8f876f'; g.lineWidth = .9; g.stroke(); g.strokeStyle = '#b5aa92'; g.lineWidth = .55; g.stroke();
   for (const [x, y] of c) { C(g, '#b5aa92', x, y, 1.3); coneF(g, x, y, 1.1, PAL[TOITS_STYLE[V.Pf.style][0][0]], 0); }
   V.lieux.remparts = { x: c[0][0], y: c[0][1] };
@@ -509,6 +515,19 @@ export function planDe(K, n, e) {
     while (PLANS.size > MAXPLANS) PLANS.delete(PLANS.keys().next().value);
   }
   return V;
+}
+// le mur du plan pour la carte (map.walls), autour du centre, en unités du plan : la bastide en rectangle, le tracé
+// bastionné et la citadelle comme l'intérieur les dessine ; null : le mur rond de rayon r = V.rMur.
+// ext : jusqu'où il va, sans puis avec les demi-lunes
+export function formeMur(V) {
+  if (V.forme !== undefined) return V.forme;
+  const rel = q => q.map(p => [p[0] - IC[0], p[1] - IC[1]]), murs = [];
+  if (V.trace) murs.push(rel(V.trace.poly));
+  else if (V.rect) { const { a, w, h } = V.rect; murs.push([[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([u, v]) => { const x = u * (w / 2 + 3), y = v * (h / 2 + 3); return [Math.cos(a) * x - Math.sin(a) * y, Math.sin(a) * x + Math.cos(a) * y]; })); }
+  else if (V.citadelle) murs.push(Array.from({ length: 48 }, (_, i) => [Math.cos(i * TAU / 48) * V.rMur, Math.sin(i * TAU / 48) * V.rMur]));
+  if (V.citadelle) murs.push(rel(V.citadelle.poly));
+  const lunes = (V.trace?.ravs || []).map(r => rel([r.b1, r.apex, r.b2])), loin = L => Math.max(0, ...L.flat().map(p => Math.hypot(p[0], p[1])));
+  return V.forme = murs.length ? { murs, lunes, r: V.rMur, ext: [loin(murs), Math.max(loin(murs), loin(lunes))] } : null;
 }
 // ce qui change l'image sans changer le plan : dégâts du siège (par dixièmes), incendie
 const cleImage = (n, e) => cleVille(n, e) + `|${Math.round((e.dmg || 0) * 10)}|${Math.round((e.deg || 0) * 20)}|${e.lv === 'incendie' ? 1 : 0}`;

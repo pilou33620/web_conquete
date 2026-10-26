@@ -30,6 +30,9 @@ from ..geo import (T_OCEAN, T_EAU as G_EAU, T_PLAINE, T_FORET, T_LANDE, T_MARAIS
 # Version 5 : les bâtiments à la vraie taille (une carte de version 4 garde son plan : plan_ville_v4, terrain_ville_v4, figés)
 VERSION = 5
 
+# les ponts datés (ville, rivière, année ; comme villes.js, PONTS_DATES) : avant, la route passe sur un pont de bateaux
+PONTS_DATES = [('Bordeaux', 'Garonne', 1822)]   # (le pont de pierre)
+
 W, H, CELL = 3000, 2000, 20
 COLS, ROWS = W // CELL, H // CELL
 N = COLS * ROWS
@@ -586,6 +589,7 @@ def generate(geo, spec):
 
     # ---------------------------------------------------------- routes de campagne : tracées plus haut, posées ici
     road_cells = set()
+    bacs = [(to_m(gn['x'], gn['y']), rv) for v, rv, an in PONTS_DATES if spec.get('year', 1790) < an for gn in geo.nodes if gn['name'] == v]
     for r in m.roads:
         for c in _poly_cells(r['pts']):
             road_cells.add(c)
@@ -597,6 +601,9 @@ def generate(geo, spec):
                 wet_run.append(c)
             elif wet_run:
                 _add_bridge(m, wet_run, t)
+                b = m.bridges[-1]
+                if any(rv == b['river'] and math.hypot(b['x'] - p[0], b['y'] - p[1]) < 2000 * k for p, rv in bacs):
+                    b['kind'] = 'bateaux'   # (pas encore de pont : les troupes passent sur des bateaux)
                 wet_run = []
             t[c] = T_ROUTE if r['kind'] != 'chemin' else T_CHEMIN
         for c in wet_run:

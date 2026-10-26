@@ -7,7 +7,7 @@ import {
   C, E, RR, T, TAU, KT, OMBRE, PAL, SPR, Scene, alea, angLerp, brancher, camAnim, cheval, clamp, coneF, fantassin, flammes, fumee,
   longueur, mod, sombre, surChemin, tenue, toile,
 } from './lib.js';
-import { carteDe, etatVille, planDe, peindreInterieurPas, lecture, navire, cleVille, IC, IW, IH, S } from './villes.js';
+import { carteDe, etatVille, planDe, peindreInterieurPas, lecture, navire, cleVille, IC, IW, IH, S, PONTS_DATES } from './villes.js';
 import { AMB, FIG } from './ambiance.js';
 import { rejouer } from './rejeu.js';
 
@@ -145,6 +145,8 @@ function tuiles(sc, t) {
 }
 
 // o : { m (map.m), n (nœud), ns (st.nodes[id]), st, dept (nom du pays), col (couleur du maître), flag (g, x, y, h, col) }
+// ce qui change la texture de la ville (les ponts datés : villes.js, PONTS_DATES)
+const cleTexture = (n, e) => cleVille(n, e) + `|${Math.round(e.dmg * 10)}|${Math.round(e.deg * 20)}|${e.lv}|${AMB.saison}|${KT}|${PONTS_DATES.filter(p => p[0] === n.name && e.annee < p[2]).length}`;
 export function ouvrirInterieur(o) {
   const t0 = performance.now();
   peinture = null;   // (la peinture d'une ville d'avant, si elle court encore : ses images tardives seront jetées)
@@ -153,7 +155,7 @@ export function ouvrirInterieur(o) {
   el.hidden = false; document.body.classList.add('vi-ouverte');
   sc.resize();
   const V = planDe(K, n, e), Pf = V.Pf;
-  const cle = cleVille(n, e) + `|${Math.round(e.dmg * 10)}|${Math.round(e.deg * 20)}|${e.lv}|${AMB.saison}|${KT}`;
+  const cle = cleTexture(n, e);
   Object.assign(vue, { V, e, col: o.col, flag: o.flag, t0, peinte: 0, o, etat: cle + `|${e.siege}|${e.blocus}|${e.famine}` });
   sc.V = V; sc.fx = []; sc.vie = []; sc.etals = []; sc.feux = []; sc.fumees = []; sc.moulins = [];
   // la texture se peint par pas pendant les premières images (peindreInterieurPas), puis la vie s'y installe
@@ -211,7 +213,7 @@ export function majInterieur(st) {
   const o = vue.o, ns = st.nodes[o.n.id];
   if (!ns) return;
   const e = etatVille(o.n, ns, st);
-  const etat = cleVille(o.n, e) + `|${Math.round(e.dmg * 10)}|${Math.round(e.deg * 20)}|${e.lv}|${AMB.saison}|${KT}|${e.siege}|${e.blocus}|${e.famine}`;
+  const etat = cleTexture(o.n, e) + `|${e.siege}|${e.blocus}|${e.famine}`;
   if (etat === vue.etat) return;
   const { cx, cy, z } = vue.sc;
   ouvrirInterieur({ ...o, ns, st });

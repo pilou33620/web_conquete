@@ -5,7 +5,7 @@
 import { clamp } from './battle/formes.js';
 import { Lot } from './lot.js';
 import { Z } from './carte/ambiance.js';
-import { IC, carteDe, etatVille, imageEnCache, planCarte, planCartePas, rayon, resPour, S as SU } from './carte/villes.js';
+import { IC, carteDe, etatVille, formeMur, imageEnCache, planCarte, planCartePas, rayon, resPour, S as SU } from './carte/villes.js';
 import { rejouer } from './carte/rejeu.js';
 // de près, le plan plus fin que son image (2 px par unité) : des tuiles de 512 pixels où l'on rejoue sa peinture
 // enregistrée (rejeu.js, comme l'intérieur), par un worker (carte/peintre-tuiles.js), sinon ici, 4 ms par image ; en
@@ -377,9 +377,9 @@ export class TownArt {
     const T = p.rec && u * (mp.dpr || 1) > p.res * 1.2 ? this.tuiles(n, p, u) : null;
     if (!T || T.manque) ctx.drawImage(p.c, o, o, p.c.width * k, p.c.height * k);
     for (const d of T || []) ctx.drawImage(...d);
-    // les remparts de la partie, au rayon du mur du plan (jamais plus petits que ceux dessinés dessous par drawNodes)
+    // les remparts de la partie, sur le tracé et au rayon du mur du plan (jamais plus petits que ceux dessinés dessous par drawNodes)
     const sW = Math.max(s, Math.pow(1.04, Math.round(Math.log(Math.max(1, (p.V.rMur * u - 2) / 0.62)) / Math.log(1.04))));
-    const wallR = ns.f > 0 ? mp.walls(ctx, sW, ns.f, n.id, ns.sg && !ns.sg.occ && !ns.sg.bl ? ns.sg.dmg : 0) : 0;
+    const wallR = ns.f > 0 ? mp.walls(ctx, sW, ns.f, n.id, ns.sg && !ns.sg.occ && !ns.sg.bl ? ns.sg.dmg : 0, formeMur(p.V)) : 0;
     if (ns.bar != null || ns.bw) mp.works(ctx, sW, ns.f, n.id, ns.bar || 0, ns.bw, wallR);
     const lot = mp.lot || (mp.lot = new Lot());
     lot.m = ctx.getTransform();

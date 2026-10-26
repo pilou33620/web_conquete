@@ -131,3 +131,13 @@ test('les bâtiments à leur vraie taille : rues, façades, îlots, places, cath
   const le = ge.echelles[0] * longueurModele(L.BATS.egliseRomane()) * M;
   assert.ok(le >= 20 && le <= 40, `l’église du village : ${le.toFixed(0)} m`);
 });
+
+test('le mur de la carte suit le tracé du plan : bastide, tracé bastionné, citadelle', () => {
+  const lib = V.formeMur(plan(nom('Libourne'), { f: 1 }));
+  assert.equal(lib.murs.length, 1); assert.equal(lib.murs[0].length, 4);   // (le rectangle de la bastide)
+  const bay = plan(nom('Bayonne'), { f: 4 }), fb = V.formeMur(bay);
+  assert.ok(bay.trace && bay.citadelle);
+  assert.equal(fb.murs.length, 2); assert.equal(fb.murs[0].length, bay.trace.poly.length);
+  assert.ok(fb.ext[1] > fb.ext[0] && fb.ext[0] > bay.rMur, 'les bastions puis les demi-lunes débordent le mur');
+  assert.equal(V.formeMur(plan(nom('Sarlat'), { f: 0 })), null);   // (pas de tracé : le mur rond)
+});

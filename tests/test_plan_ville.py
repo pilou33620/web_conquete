@@ -225,6 +225,11 @@ class BatailleSurLePlan(unittest.TestCase):
         self.assertEqual(bytes(v4.t), bytes(TR.generate(GEO, dict(spec, carte=4)).t))
         self.assertNotEqual(bytes(v4.t), bytes(v5.t), 'le village de Belin a rétréci : la carte de version 5 diffère')
 
+    def test_pas_de_pont_de_pierre_a_bordeaux_avant_1822(self):
+        kinds = lambda y: {b.get('kind') for b in carte(nom('Bordeaux'), year=y).bridges if b.get('river') == 'Garonne'}
+        self.assertEqual(kinds(1800), {'bateaux'})
+        self.assertEqual(kinds(1830), {None})
+
     def test_vite(self):
         cas = [(nom('Bayonne'), 3), (nom('Bordeaux'), 2), (nom('Navarrenx'), 3), (nom('Belin'), 0)]
         t0 = time.perf_counter()
