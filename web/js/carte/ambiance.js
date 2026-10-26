@@ -3,12 +3,16 @@
 // (feux, lanternes, fenêtres, incendies, éclairs), remplie par les calques et allumée par ciel.js après la nuit.
 
 // zooms (pixels CSS par km) : de loin un signe, puis le plan des villes, puis la vie, puis le plus près
-export const Z = { PLAN: 18, VIE: 110, MAX: 320 };
-// km par unité de dessin des figures (hommes, chevaux, charrettes) : la même échelle que la maquette
-export const U = 0.0045;
+// (« Livré — la carte de campagne à la vraie taille » : 1 300 px/km au plus près, un cheval y fait 3 px)
+export const Z = { PLAN: 18, VIE: 110, MAX: 1300 };
 // mètres par unité de dessin des figures, à la vraie taille (un fantassin fait 4,3 unités d'épaules, 0,65 m ; un
-// cheval 16, 2,4 m) : la vue de l'intérieur (SPEC-CARTE-2D.md, « Livré — échelle réelle »)
+// cheval 16, 2,4 m) : la vue de l'intérieur (SPEC-CARTE-2D.md, « Livré — échelle réelle ») et la carte
 export const FIG = 0.15;
+// km par unité de dessin des figures (hommes, chevaux, charrettes) sur la carte : la vraie taille (avant, 0,0045 km,
+// celle de la maquette : un passant y faisait 19 m)
+export const U = FIG / 1000;
+// pixels CSS d'une figure de t unités au zoom z : sous un pixel, elle ne se dessine pas
+export const vue = (z, t) => z * U * t >= 1;
 
 export const SAISONS = ['printemps', 'ete', 'automne', 'hiver'];
 // le serveur écrit « été »

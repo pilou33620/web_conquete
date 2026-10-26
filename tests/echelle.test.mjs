@@ -12,6 +12,8 @@ const { enregistrer, rejouer, rejouerTout } = await import('../web/js/carte/reje
 const { fantassin, cheval, tenue } = await import('../web/js/carte/lib.js');
 const { navire, S } = await import('../web/js/carte/villes.js');
 const { charrette, ECH, NAV } = await import('../web/js/carte/interieur.js');
+const { compoColonne, charrette: charretteCarte } = await import('../web/js/carte/guerre.js');
+const { U } = await import('../web/js/carte/ambiance.js');
 
 // un contexte qui ne dessine rien mais note les appels ; ses réglages sont des accesseurs, comme ceux d'un canevas
 class Faux {
@@ -76,4 +78,14 @@ test('rejeu : un tracé de plusieurs taches ne rejoue que celles de la fenêtre 
   const t = new Faux(), txt = [], img = [];
   for (const x of T) { txt.push(...x.txt); rejouerTout(t, x, txt, img); }
   assert.deepEqual(t.journal, f.journal, 'les tranches rejouent tous les appels, dans l’ordre');
+});
+
+test('carte de campagne : les figures à leur vraie taille, la colonne à sa vraie longueur', () => {
+  assert.equal(U, 0.00015, 'une unité de figure : 0,15 m, en km');
+  const c = etendue(g => charretteCarte(g, 0, false, 0)), km = u => u * U;
+  assert.ok(km(c[2] - c[0]) > 0.005 && km(c[2] - c[0]) < 0.007, `une charrette attelée fait 6 m (${(km(c[2] - c[0]) * 1000).toFixed(1)} m)`);
+  assert.ok(km(c[3] - c[1]) > 0.0015 && km(c[3] - c[1]) < 0.0022, `et 1,8 m de large, roues comprises (${(km(c[3] - c[1]) * 1000).toFixed(1)} m)`);
+  const col = compoColonne([['r', 'ligne', 600, 600]], () => 'inf', () => false, null);
+  assert.ok(col.long > 0.18 && col.long < 0.22, `600 hommes par quatre, l'état-major et les bagages : 200 m (${(col.long * 1000).toFixed(0)} m)`);
+  assert.ok(col.liste.filter(e => e.k === 'rang').every(e => e.w === 3), 'en bande de 3 m');
 });

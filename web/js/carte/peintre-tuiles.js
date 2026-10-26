@@ -5,7 +5,7 @@
 // telle quelle) et la rend ({ cle: 'tex|id|n', bmp, fin }) tous les quarts de seconde, puis finie.
 import { rejouer, rejouerTout } from './rejeu.js';
 
-const RECS = new Map();   // les deux derniers enregistrements
+const RECS = new Map();   // les derniers enregistrements (deux intérieurs, ou six plans de la carte)
 let TEX = null, n = 0;   // la texture en cours
 globalThis.onmessage = ({ data: d }) => {
   if (d.tex) {
@@ -16,7 +16,7 @@ globalThis.onmessage = ({ data: d }) => {
     } catch (e) { postMessage({ cle: `tex|${d.id}|0`, ko: true }); }
     return;
   }
-  if (d.rec) { RECS.set(d.id, d.rec); while (RECS.size > 2) RECS.delete(RECS.keys().next().value); return; }
+  if (d.rec) { RECS.set(d.id, d.rec); while (RECS.size > (d.n || 2)) RECS.delete(RECS.keys().next().value); return; }   // (n : la carte en garde six, ses places)
   const R = RECS.get(d.id);
   if (!R) { postMessage({ cle: d.cle }); return; }
   try {

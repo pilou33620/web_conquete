@@ -234,8 +234,8 @@ export class Ciel {
         if (n.x < x0 - 3 || n.x > x1 + 3 || n.y < y0 - 3 || n.y > y1 + 3) continue;
         const ns = st.nodes[n.id], R = rayonPlace(n, ns), Rh = Math.max(R * 1.8, (n.type === 'village' ? 5 : 9) / z), gaz = n.type !== 'village' && this.gaz.has(ns.o);
         ctx.globalAlpha = 0.3 * k; ctx.drawImage(gaz ? SPR.gaz : SPR.lueur, n.x - Rh, n.y - Rh, Rh * 2, Rh * 2);
-        if (z >= Z.PLAN) { const f = this.fenetresDe(n, ns, R, Math.max(0.004, 0.8 / z)); if (f) { ctx.globalAlpha = 0.85 * k; ctx.fillStyle = '#ffd58a'; ctx.fill(f); } }
-        if (z >= Z.PLAN && gaz) { const f = this.reverberesDe(n, ns, Math.max(0.003, 0.7 / z)); if (f) { ctx.globalAlpha = 0.16 * k; ctx.fillStyle = '#c8d8ff'; ctx.fill(f[1]); ctx.globalAlpha = 0.9 * k; ctx.fillStyle = '#f4f8ff'; ctx.fill(f[0]); } }
+        if (z >= Z.PLAN) { const f = this.fenetresDe(n, ns, R, Math.max(0.0012, 0.8 / z)); if (f) { ctx.globalAlpha = 0.85 * k; ctx.fillStyle = '#ffd58a'; ctx.fill(f); } }
+        if (z >= Z.PLAN && gaz) { const f = this.reverberesDe(n, ns, Math.max(0.001, 0.7 / z)); if (f) { ctx.globalAlpha = 0.16 * k; ctx.fillStyle = '#c8d8ff'; ctx.fill(f[1]); ctx.globalAlpha = 0.9 * k; ctx.fillStyle = '#f4f8ff'; ctx.fill(f[0]); } }
       }
       const c = this.cordouan;
       if (c) {

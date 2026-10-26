@@ -5,7 +5,22 @@
 import { clamp } from './battle/formes.js';
 import { Lot } from './lot.js';
 import { Z } from './carte/ambiance.js';
-import { carteDe, etatVille, imageEnCache, planCarte, planCartePas, rayon, resPour, S as SU } from './carte/villes.js';
+import { IC, carteDe, etatVille, imageEnCache, planCarte, planCartePas, rayon, resPour, S as SU } from './carte/villes.js';
+import { rejouer } from './carte/rejeu.js';
+// de près, le plan plus fin que son image (2 px par unité) : des tuiles de 512 pixels où l'on rejoue sa peinture
+// enregistrée (rejeu.js, comme l'intérieur), par un worker (carte/peintre-tuiles.js), sinon ici, 4 ms par image ; en
+// attendant, l'image agrandie dessous. Au plus 40 tuiles (40 Mo), toutes places confondues.
+const TS = 512, MAXT = 40, TUILES = new Map(), ATTENTE = new Set();
+let peintre, nP = 0;
+const ENVOYES = new Set();   // les plans dont le worker a l'enregistrement
+const garder = (cle, c) => { TUILES.set(cle, c); while (TUILES.size > MAXT) { const [k, v] = TUILES.entries().next().value; TUILES.delete(k); v.close ? v.close() : v.width = 0; } };
+function lePeintre() {
+  if (peintre === undefined) {
+    try { peintre = typeof OffscreenCanvas === 'function' ? new Worker(new URL('./carte/peintre-tuiles.js', import.meta.url), { type: 'module' }) : null; } catch (e) { peintre = null; }
+    if (peintre) peintre.onmessage = ({ data: d }) => { ATTENTE.delete(d.cle); if (d.ko) { peintre.terminate(); peintre = null; } if (d.bmp) garder(d.cle, d.bmp); else ENVOYES.delete(d.cle.split('|')[0]); };   // (sans image : le worker l'a oublié, on le renvoie)
+  }
+  return peintre;
+}
 const TAU = Math.PI * 2;
 function hash(i, j, k = 0) {
   let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0;
@@ -355,7 +370,10 @@ export class TownArt {
     }
     if (!p) return false;
     const u = z / SU, k = u / p.res, o = -p.Rr * u;   // pixels CSS par unité du plan ; par pixel de l'image
-    ctx.drawImage(p.c, o, o, p.c.width * k, p.c.height * k);
+    // (de près, les tuiles ; l'image dessous tant qu'il en manque)
+    const T = p.rec && u * (mp.dpr || 1) > p.res * 1.2 ? this.tuiles(n, p, u) : null;
+    if (!T || T.manque) ctx.drawImage(p.c, o, o, p.c.width * k, p.c.height * k);
+    for (const d of T || []) ctx.drawImage(...d);
     // les remparts de la partie, au rayon du mur du plan (jamais plus petits que ceux dessinés dessous par drawNodes)
     const sW = Math.max(s, Math.pow(1.04, Math.round(Math.log(Math.max(1, (p.V.rMur * u - 2) / 0.62)) / Math.log(1.04))));
     const wallR = ns.f > 0 ? mp.walls(ctx, sW, ns.f, n.id, ns.sg && !ns.sg.occ && !ns.sg.bl ? ns.sg.dmg : 0) : 0;
@@ -366,6 +384,30 @@ export class TownArt {
     return true;
   }
 }
+
+// les tuiles du plan p de la place n qui touchent l'écran ([image, x, y, l, h], u : pixels CSS par unité du plan) ;
+// manque : l'image doit passer dessous
+TownArt.prototype.tuiles = function (n, p, u) {
+  // (r : au plus les pixels de l'écran par unité, les tuiles agrandies d'au plus deux fois ; réduites, elles coûtaient
+  // 1,5 ms chacune à poser, sans carte graphique)
+  const mp = this.map, r = 2 ** Math.floor(Math.log2(u * (mp.dpr || 1))), uT = TS / r, w = lePeintre(), [sx, sy] = mp.toScreen(n.x, n.y);
+  p.id ??= 'plan' + ++nP;
+  if (w && !ENVOYES.has(p.id)) { ENVOYES.add(p.id); w.postMessage({ id: p.id, n: 6, rec: p.rec }); }
+  const X0 = Math.max(IC[0] - p.Rr, IC[0] - sx / u), X1 = Math.min(IC[0] + p.Rr, IC[0] + (mp.vw - sx) / u);
+  const Y0 = Math.max(IC[1] - p.Rr, IC[1] - sy / u), Y1 = Math.min(IC[1] + p.Rr, IC[1] + (mp.vh - sy) / u), fin = performance.now() + 4, T = [];
+  for (let j = Math.floor(Y0 / uT); j * uT < Y1; j++) for (let i = Math.floor(X0 / uT); i * uT < X1; i++) {
+    const cle = `${p.id}|${r}|${i}|${j}`;
+    let c = TUILES.get(cle);
+    if (c) { TUILES.delete(cle); TUILES.set(cle, c); }
+    else if (w) { if (ATTENTE.size < 3 && !ATTENTE.has(cle)) { ATTENTE.add(cle); w.postMessage({ id: p.id, cle, r, i, j, T: TS }); } }
+    else if (performance.now() < fin) {
+      c = document.createElement('canvas'); c.width = c.height = TS; const h = c.getContext('2d'); h.setTransform(r, 0, 0, r, -i * TS, -j * TS);
+      rejouer(h, p.rec, i * uT, j * uT, (i + 1) * uT, (j + 1) * uT); garder(cle, c);
+    }
+    if (c) T.push([c, (i * uT - IC[0]) * u, (j * uT - IC[1]) * u, uT * u + 0.5, uT * u + 0.5]); else T.manque = true;
+  }
+  return T;
+};
 
 function shade(hex, t) {
   const v = parseInt(hex.slice(1), 16);

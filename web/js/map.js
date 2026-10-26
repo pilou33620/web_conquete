@@ -20,7 +20,7 @@ function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) *
 function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
 // niveaux de détail des tuiles (pixels par km) : une échelle fine, pour qu'une tuile ne soit jamais beaucoup
 // réduite à l'écran (sinon il en faut des centaines pour couvrir un grand écran d'iPad) ; jusqu'au zoom le plus près
-const LEVELS = [2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256];
+const LEVELS = [2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024];
 const PAPIER_L = 64, FONDU = [70, 100], PAPIER_MAX = 85;   // (fondu de la gravure dans la vue du ciel, en px d'écran par km)
 const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 // teintes du terrain (seules leurs clés servent encore : la carte vue du ciel est peinte par carte/terre.js)
@@ -1148,6 +1148,13 @@ export class MapView {
   // avec une marge pour ne pas basculer d'un niveau à l'autre au moindre mouvement
   level() {
     const want = this.cam.z * this.dpr, cur = this.curL;
+    // (au-delà de 256 px/km, des tuiles un peu agrandies, jamais réduites : réduites, sans carte graphique, les poser
+    // coûtait 20 à 40 ms par image à 320 px/km sur un écran Retina)
+    if (want > 256) {
+      if (cur > 256 && want / cur >= 1 && want / cur <= 1.6) return cur;
+      let b = 256; for (const L of LEVELS) if (L <= want) b = L;
+      return b;
+    }
     if (cur && want / cur >= 0.78 && want / cur <= 1.12) return cur;
     for (const L of LEVELS) if (L >= want * 0.91) return L;
     return LEVELS[LEVELS.length - 1];
@@ -1444,15 +1451,16 @@ export class MapView {
     const es = this.edges.filter(e => !e.water && vis(e)), P = L > PAPIER_L ? null : PAPIER[this.era];
     g.lineCap = 'round'; g.lineJoin = 'round';
     // vue du ciel : routes empierrées (carte/terre.js), les royales bordées d'arbres de près
-    const larg = royal => P ? Math.max(royal ? 0.34 : 0.2, (royal ? 2.1 : 1.2) / L) : royal ? Math.max(0.07, 2.6 / L) : Math.max(0.04, 1.4 / L);
-    if (!P && L >= 32) terre(this).arbresRoyaux(g, es.filter(e => e.royal && !e.ferry).map(e => e.pts), larg(true));
+    // (vue du ciel, à la vraie taille de près : la route royale 12 m, les autres 6 ; de loin, 2,6 et 1,4 px)
+    const larg = royal => P ? Math.max(royal ? 0.34 : 0.2, (royal ? 2.1 : 1.2) / L) : royal ? Math.max(0.012, 2.6 / L) : Math.max(0.006, 1.4 / L);
+    if (!P && L >= 32) terre(this).arbresRoyaux(g, es.filter(e => e.royal && !e.ferry).map(e => e.pts), larg(true), L);
     for (const pass of [0, 1]) {
       for (const e of es) {
         const royal = e.royal, w = larg(royal);
         if (P) {
           if (pass === 0) { g.strokeStyle = rgb(P.encre, 0.85); g.lineWidth = w + 1.2 / L; }
           else { g.strokeStyle = royal && this.era === 'etatmajor' ? '#dcae6a' : rgb(P.papier); g.lineWidth = w; }
-        } else if (pass === 0) { g.strokeStyle = royal ? '#8f7a55' : '#a8946a'; g.lineWidth = w + Math.max(0.02, 1 / L); }
+        } else if (pass === 0) { g.strokeStyle = royal ? '#8f7a55' : '#a8946a'; g.lineWidth = w + Math.max(0.003, 1 / L); }
         else { g.strokeStyle = royal ? '#d9c79c' : '#cdb98a'; g.lineWidth = w; }
         g.globalAlpha = royal || L >= 8 ? 1 : 0.6;
         if (e.ferry) { g.setLineDash([w * 2, w * 1.6]); } else g.setLineDash([]);
@@ -2214,7 +2222,8 @@ export class MapView {
 
   // géométrie d'une enceinte (voir walls) : chemins prêts à tracer et rayon extérieur
   wallGeom(s, f, id, dmg) {
-    const R = s * 0.62 + 2, sq = 0.86, TAU = Math.PI * 2;
+    // (de près, sur le plan de la ville : le mur rond, à 48 pans, sur celui du plan ; de loin, en vue cavalière)
+    const R = s * 0.62 + 2, sq = s > 200 ? 1 : 0.86, TAU = Math.PI * 2;
     const a0 = (id * 2.399) % TAU;   // orientation propre à chaque ville : la brèche y reste au même endroit
     const half = dmg > 0.02 ? Math.PI * 0.5 * Math.min(1, dmg) : 0;
     const P = (a, r) => [Math.cos(a) * r, Math.sin(a) * r * sq];
@@ -2227,7 +2236,7 @@ export class MapView {
     const ring = [], towers = [], lunes = [];
     let outer;
     if (f <= 2) {
-      const N = 12;
+      const N = s > 200 ? 48 : 12;
       for (let i = 0; i <= N; i++) ring.push(P(a0 + i * TAU / N, R));
       for (let i = 0; i < N; i += f === 1 ? 3 : 2) towers.push(ring[i]);
       outer = R + lw;

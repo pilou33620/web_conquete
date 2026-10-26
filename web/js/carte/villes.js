@@ -531,9 +531,11 @@ export function* planCartePas(K, n, e, res = .5) {
   const V = planDe(K, n, e), Pf = V.Pf, Rr = Math.min(Pf.R * 1.6, 380) + 20, R = alea(Pf.sd + 17);
   res = Math.min(res, 2048 / (Rr * 2));   // (pas de canevas de plus de 2048 pixels de côté)
   const c = toile(Math.max(1, Math.round(Rr * 2 * res)), Math.max(1, Math.round(Rr * 2 * res)));
-  const g = c.getContext('2d'); g.scale(res, res); g.translate(Rr - IC[0], Rr - IC[1]);
+  const g0 = c.getContext('2d'); g0.scale(res, res); g0.translate(Rr - IC[0], Rr - IC[1]);
   const urbain = Pf.modele !== 'rue' && Pf.modele !== 'airial' && Pf.modele !== 'montagne' && Pf.modele !== 'fortin';
   const deg = degats(V, e), detail = res >= 2;   // (maison par maison à 2 pixels par unité, 11 m, seulement)
+  // (maison par maison, la peinture s'enregistre : de plus près, towns.js la rejoue nette par tuiles, rejeu.js)
+  const [g, fin] = detail ? enregistrer(g0) : [g0];
   // le sol de la ville : îlots entiers et rues entre eux, pour que la campagne ne passe pas entre les maisons
   if (urbain) { g.fillStyle = g.strokeStyle = '#bfb498'; g.lineWidth = 3; g.lineJoin = 'round'; for (const b of V.ilots) if (b.zone === 'ville') { chemin_(g, b.q); g.fill(); g.stroke(); } }
   if (V.placeCentre) C(g, '#d6ccb2', IC[0], IC[1], V.rPlace);
@@ -576,7 +578,8 @@ export function* planCartePas(K, n, e, res = .5) {
   let nl = 0;
   for (const b of V.ilots) { if (b.role === 'place' || b.role === 'parvis' || deg.get(b) === 'brule' || deg.get(b) === 'ruine') continue; const q = decalerQuad(b.q, 2); if (!q) continue; for (let i = 0; i < q.length; i++) { const [ax, ay] = q[i], [bx, by] = q[(i + 1) % q.length], l = Math.hypot(bx - ax, by - ay); for (let d = 4; d < l; d += 9) if (hash2(nl++, n.id, 41) < .45) lum.push([n.x + (ax + (bx - ax) * d / l - IC[0]) / S, n.y + (ay + (by - ay) * d / l - IC[1]) / S]); } }
   const pas = Math.ceil(lum.length / 900);
-  p = { c, Rr, res, lum: lum.filter((_, i) => i % pas === 0), V, mat: [mat.x - IC[0], mat.y - IC[1]], px: c.width * c.height };
+  const rec = detail ? fin() : null, oct = rec ? Object.values(rec).reduce((s, a) => s + (a.byteLength || 0), 0) : 0;
+  p = { c, Rr, res, rec, lum: lum.filter((_, i) => i % pas === 0), V, mat: [mat.x - IC[0], mat.y - IC[1]], px: c.width * c.height + oct / 4 };   // (l'enregistrement compte dans le budget, comme des pixels)
   IMAGES.set(kk, p); pix += p.px;
   while (pix > MAXPIX && IMAGES.size > 1) { const [k0, o] = IMAGES.entries().next().value; IMAGES.delete(k0); pix -= o.px; o.c.width = o.c.height = 0; }   // (Safari garde sinon la mémoire des canevas)
   return p;

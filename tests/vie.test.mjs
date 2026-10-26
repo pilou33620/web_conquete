@@ -57,7 +57,7 @@ const scene = (z, t) => ({
   fig(g, x, y, a) { const m = this.m, c = Math.cos(a) * m, s = Math.sin(a) * m; g.setTransform(c, s, -s, c, (x - this.cx) * m + this.W / 2, (y - this.cy) * m + this.H / 2); },
 });
 const dessin = (t, saison = 'ete') => {
-  AMB.saison = saison; const j = [], sc = scene(Math.max(110, 1), t);
+  AMB.saison = saison; const j = [], sc = scene(600, t);   // (de près : à la vraie taille, les charrettes font 3 px, les gens moins d'un)
   V.dessinerSol(sc, contexte(j), 0, 0, 40, 30, null); V.dessinerDessus(sc, contexte(j), 0, 0, 40, 30);
   return j;
 };

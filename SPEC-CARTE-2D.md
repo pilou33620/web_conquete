@@ -715,3 +715,64 @@ les bourgs un peu, les grandes villes presque pas.
   arrondie au mètre, à 1e-9 près.
 - Captures (`integration/campagne-echelle/`) : `int-village-belin.png`, `int-bourg-nontron.png`,
   `carte-village-belin-z110.png`.
+
+## Livré — la carte de campagne à la vraie taille
+
+L'étape intermédiaire validée par le joueur : les figures de la carte à leur vraie taille, un zoom quatre fois plus
+proche, le paysage et les plans des villes nets jusque-là, et à chaque zoom quelque chose de sensé.
+
+- **Échelle et zooms** (`ambiance.js`) : `U` = `FIG` / 1000 (0,00015 km par unité de figure, 30 fois moins qu'avant) ;
+  `Z.MAX` = 1 300 px/km (un cheval y fait 3 px) ; `vue(z, t)` : une figure de t unités fait-elle un pixel ? Niveaux des tuiles
+  jusqu'à 1 024 px/km (384, 512, 768, 1 024) ; au-delà de 256, une tuile est prise un peu agrandie, jamais réduite (réduites,
+  sans carte graphique, les poser coûtait 20 à 40 ms par image sur un écran Retina).
+- **Le paysage** (`terre.js`, `map.js`) : au-delà de 256 px/km, les houppiers rapetissent et se resserrent avec le zoom
+  (21 m de rayon à 1 024, autant d'arbres par tuile ; la marge des tuiles élargie : plus de coutures) ; les arbres des routes
+  royales 9 m tous les 35 m ; la route royale 12 m, les autres 6 (de loin, 2,6 et 1,4 px comme avant), son bord 3 m ; la
+  ferme isolée 25 m (elle en faisait 250), la cabane du saunier 10 m. Une tuile de 256 px à 1 024 px/km : 6 à 23 ms
+  (Bordeaux 19, Sabres 6, Laruns 23 ; avant ce lot, 17 à 42), environ 25 tuiles pour un écran d'iPad.
+- **Les plans des villes** (`villes.js`, `towns.js`) : maison par maison, la peinture du plan s'enregistre (`rejeu.js`) ; au-delà
+  de 2,4 px par unité de l'écran, des tuiles de 512 px rejouées par un worker (`peintre-tuiles.js`, qui garde six plans),
+  agrandies d'au plus deux fois ; l'image du plan dessous tant qu'il en manque. Au plus 40 tuiles (40 Mo), toutes places
+  confondues ; l'enregistrement compte dans le budget des plans (Bordeaux 6,8 Mo). Le plan de Bordeaux maison par maison :
+  183 → 249 ms (étalés à 6 ms par image). Le mur de `map.walls`, sur un grand plan : rond, à 48 pans.
+- **La vie** (`vie.js`) : les gens à pied ne se dessinent pas (moins d'un pixel jusqu'à 1 550 px/km) ; la foule d'un marché ou
+  d'une foire en taches, une par personne ; les chevaux dès qu'ils font un pixel ; chaque voyageur de la route seulement s'il
+  fait un pixel. Tailles : diligence 10 m, malle-poste 9, charrette attelée 6 (`guerre.charrette`, partagée), vaches 2,2 m,
+  brebis 1,2, cerfs 1,8, sangliers 1,3, gabares 20 m et navires 40 (au moins 3 px de long : de loin, un signe), pinasses 10,
+  trains de bois 30, relais de poste 25 m et sa cour, cabanes tchanquées 6 m, carrelets 5, cayolar 6 et son parc de 15,
+  charbonnière 5, moulins (tour de 9 m), étals 3 m, enclos de foire 7 m, Cordouan 16 m. Vitesses réelles : malle-poste
+  15 km/h, diligence 10, cavalier 11, charrette 5, bœufs 3, troupeaux 2,5. Passants à 3 m de l'axe de la route.
+- **La guerre** (`guerre.js`) : la colonne à sa vraie longueur (`compoColonne`, en mètres : par quatre, un rang d'infanterie au
+  mètre, de cavalerie aux trois mètres ; une pièce attelée 22 m, un caisson 14, une voiture 10, l'état-major 15, 10 m entre
+  deux bataillons : 600 hommes, 200 m ; avant, 2 à 8 km pour 1 100 hommes), en bandes de leur vraie largeur (infanterie 3 m,
+  cavalerie 5, au moins un pixel), ses chevaux un à un, ses pièces, caissons et bagages en figures dès 420 px/km ; coupée de
+  ses vivres, des bandes plus étroites et sans bagages. Bataille : un bataillon, une bande de son front (0,65 m par file sur
+  trois rangs), un escadron de même (1,2 m par cheval), trois pièces à 15 m. Bivouac : tentes 3 m, feux 1,5 m, pièces tous
+  les 8 m, chevaux à la corde côte à côte. Siège : tranchées 8 m, épaulements 40 m, parapets de gabions 28 m, maisons en feu.
+  Traces 12 m, tertres 2 m ; prisonniers en tache de 5 m ; fourgons, blessés, estafettes à leur vitesse ; fêtes, pillages,
+  traînards, recrues, fourrageurs à pied : sous le pixel.
+- **Les travaux** (`travaux.js`) et **le ciel** (`ciel.js`) : faubourgs en chantier (maisons de 12 m à 10 m de la route),
+  échafaudages, grue, barrières des cordons, remblais de 10 m, halage de 3 m, crue sur 40 m ; fenêtres de 1,2 m de près.
+- **Ce qui se voit, à quel zoom** (px CSS par km ; un pixel CSS) : une personne, jamais (0,84 px à 1 300) ; une brebis dès 830,
+  un cheval, une vache dès 420-450, une tente dès 330, un étal dès 330, une charrette dès 170, une diligence dès 105, une
+  gabare dès 50 (avant, en signe de 3 px dès 10), un navire dès 25 ; la colonne en bande dès `Z.VIE` (110), ses chevaux dès
+  420, son drapeau dès 600 ; les tranchées, routes, traces, au moins 3 px. Avant ce lot, au même zoom 110, les figures
+  faisaient 30 fois leur taille.
+- Mesures (`campagne-echelle/h3.cjs`, la scène du lot H montée à la main, médiane de 120 images, deux passes, avant → après,
+  dpr 1) : vue d'ensemble 5,0 / 4,4 → 4,0 / 4,4 ms ; z 26 Bordeaux 3,5 / 2,8 → 3,2 / 2,8 ; z 110 Bordeaux 4,7 / 4,2 → 4,0 /
+  3,4, champ de bataille 5,0 / 5,2 → 4,0 / 4,0, siège 3,7 / 3,4 → 3,2 / 3,1 ; z 320 Bordeaux 2,9 / 3,0 → 2,5 / 2,6, colonne 2,3 /
+  2,8 → 2,0 / 1,7 ; z 640 Bordeaux 2,6 / 2,4 → 2,2 / 2,3 ; z 1 300 Bordeaux 2,2 / 2,4 → 2,2 / 2,4, colonne 1,6 / 1,5 → 2,0 /
+  1,7, siège 1,2 / 1,2 → 1,3 / 1,3 (avant, à 640 et 1 300 : la caméra posée là, hors des bornes d'alors). Dpr 2 : vue
+  d'ensemble 5,1 / 4,7 → 4,9 / 4,4 ; z 110 Bordeaux 6,0 / 5,2 → 4,6 / 4,2 ; z 320 Bordeaux 3,7 / 3,3 → 3,2 / 3,4 ; z 1 300
+  Bordeaux 2,8 / 2,8 → 2,6 / 2,4, colonne 2,0 / 1,9 → 2,2 / 2,1. Au plus +0,4 ms.
+- Bancs : `echelle.test.mjs` (`U` en km, une charrette attelée de 6 m sur 1,8, une colonne de 600 hommes de 200 m en bande
+  de 3 m), `guerre.test.mjs` (1 120 hommes sur 0,5 à 0,8 km), `vie.test.mjs` (la vie tirée et animée de près, à 600 px/km).
+- Captures (`integration/campagne-echelle/`) : `carte-colonne-z700.png` (900 fantassins, 300 cavaliers, 120 artilleurs sur la
+  route de Libourne), `carte-bordeaux-z1300.png` (le plan rejoué net), `carte-libourne-z450.png`.
+- Écarts :
+  - les trains (`ambient.js`) gardent leur taille d'écran (une voiture de 20 m au plus près, deux fois la vraie) ; les
+    oiseaux aussi (au moins 2 px) ; les lumières (lanternes, feux) gardent leur halo de quelques pixels ;
+  - le mur de `map.walls` ne suit pas le plan d'une bastide ni le tracé bastionné (un cercle ou une étoile à 5 ou 6 pointes) ;
+  - les tuiles de l'intérieur sont encore prises réduites (`interieur.js`) ; les rangs d'arbres des routes royales passent sur
+    les ponts ;
+  - le style « époque » garde ses figures et ses tailles d'avant.

@@ -202,7 +202,9 @@ export class Terre {
     const x1 = x0 + span, y1 = y0 + span, px = 1 / L, sa = AMB.saison, nus = sa === 'hiver';
     // échantillons sur une grille absolue, avec une marge : les houppiers qui débordent d'une tuile sont les mêmes
     // dans la voisine. Densités par km², les mêmes à tous les niveaux (au plus un arbre par échantillon)
-    const pas = 3 / L, M = Math.ceil(.13 / pas) + 1, a2 = pas * pas;
+    // (au-delà de 256 px/km, les houppiers rapetissent avec le zoom et se resserrent d'autant : 21 m de rayon à 1 024 au
+    // lieu de 85, autant d'arbres par tuile ; jusqu'à 256, rien ne change)
+    const pas = 3 / L, kb = Math.min(1, 256 / L), M = Math.ceil(.16 * kb / pas) + 1, a2 = pas * pas / (kb * kb);
     const gi0 = Math.floor(x0 / pas) - M, gj0 = Math.floor(y0 / pas) - M, n = Math.ceil(span / pas) + 2 * M + 1;
     const fin = TOILE = toileDe(TOILE, n), fg = fin.getContext('2d', { willReadFrequently: true }), img = fg.createImageData(n, n), data = img.data;
     const masque = new Uint8Array(n * n), bois = [], tg = new Uint8Array(n * n), blanc = this.BLANC = new Float32Array(n * n);
@@ -244,7 +246,7 @@ export class Terre {
       g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = .82; g.drawImage(tmp, 0, 0); g.restore();
     }
     // bois : houppiers ronds là où le fond dit forêt, lisières sinueuses ; un seul tracé par couleur
-    const pts = bois.map(([x, y, pin]) => [x, y, (pin ? .055 : .085) * (.75 + hash2(x * 50 | 0, y * 50 | 0) * .6), pin ? PIN_HEX : boisSaison(hash2(x * 31 | 0, y * 17 | 0)), pin]);
+    const pts = bois.map(([x, y, pin]) => [x, y, (pin ? .055 : .085) * kb * (.75 + hash2(x * 50 | 0, y * 50 | 0) * .6), pin ? PIN_HEX : boisSaison(hash2(x * 31 | 0, y * 17 | 0)), pin]);
     const disques = (col, liste, dx, dy, k) => {
       if (!liste.length) return;
       g.fillStyle = col; g.beginPath();
@@ -252,7 +254,7 @@ export class Terre {
       g.fill();
     };
     g.fillStyle = OMBRE; g.beginPath();
-    for (const p of pts) { const x = p[0] + .025, y = p[1] + .033; g.moveTo(x + p[2], y); g.arc(x, y, p[2], 0, TAU); }
+    for (const p of pts) { const x = p[0] + .025 * kb, y = p[1] + .033 * kb; g.moveTo(x + p[2], y); g.arc(x, y, p[2], 0, TAU); }
     g.fill();
     const parCoul = new Map(); for (const p of pts) { let l = parCoul.get(p[3]); if (!l) parCoul.set(p[3], l = []); l.push(p); }
     // l'hiver, les feuillus sont nus : des houppiers clairsemés, à travers lesquels on voit le sol
@@ -293,18 +295,19 @@ export class Terre {
     g.fillStyle = '#9d916f'; g.fill(levees);
     ['#dfe6e3', '#a9c2c6', s === 'hiver' ? '#5f8496' : '#8fb0bb'].forEach((c, k) => { g.fillStyle = c; g.fill(eau[k]); });
     g.fillStyle = 'rgba(30,30,20,.3)'; g.fill(mulO); g.fillStyle = '#f7f6ef'; g.fill(mul);
-    for (const [x, y] of cabanes) bat(g, [{ t: 'g', x: -6, y: -3, w: 12, h: 6, p: 'tuile', h2: 1 }], x, y, 0, .006);
+    for (const [x, y] of cabanes) bat(g, [{ t: 'g', x: -6, y: -3, w: 12, h: 6, p: 'tuile', h2: 1 }], x, y, 0, .0008);   // (la cabane du saunier, 10 m)
   }
 
   // les arbres des routes royales, de près : un rang de chaque côté (map.js drawRoads)
-  arbresRoyaux(g, routes, w) {
-    const r = .035, col = boisSaison(.4), ombre = new Path2D(), houp = new Path2D(), lum = new Path2D();
+  // (au-delà de 256 px/km, plus petits et plus serrés : 9 m de rayon tous les 35 m à 1 024)
+  arbresRoyaux(g, routes, w, L = 256) {
+    const r = clamp(9 / L, .005, .035), col = boisSaison(.4), ombre = new Path2D(), houp = new Path2D(), lum = new Path2D();
     for (const pts of routes) for (let i = 1; i < pts.length; i++) {
       const [a0, b0] = pts[i - 1], [a1, b1] = pts[i], l = Math.hypot(a1 - a0, b1 - b0);
       if (!l) continue;
       const nx = -(b1 - b0) / l, ny = (a1 - a0) / l;
-      for (let t = 0; t < l; t += .14) for (const s of [-1, 1]) {
-        const x = a0 + (a1 - a0) * t / l + nx * s * (w + .03), y = b0 + (b1 - b0) * t / l + ny * s * (w + .03);
+      for (let t = 0; t < l; t += r * 4) for (const s of [-1, 1]) {
+        const x = a0 + (a1 - a0) * t / l + nx * s * (w + r * .86), y = b0 + (b1 - b0) * t / l + ny * s * (w + r * .86);
         ombre.moveTo(x + r * 1.7, y + r * .9); ombre.arc(x + r * .7, y + r * .9, r, 0, TAU);
         houp.moveTo(x + r, y); houp.arc(x, y, r, 0, TAU);
         lum.moveTo(x - r * .32 + r * .5, y - r * .34); lum.arc(x - r * .32, y - r * .34, r * .5, 0, TAU);
@@ -427,5 +430,5 @@ function peindreParcelles(T, g, L, x0, y0, x1, y1, at, phyllo) {
       else if (op === 'h') { g.strokeStyle = c; g.lineWidth = +lw; g.stroke(p); }
     }
   }
-  for (const [x, y, a] of fermes) bat(g, [{ t: 'g', x: -6, y: -3, w: 12, h: 6, p: 'tuile', h2: 1 }], x, y, a, u * 2.2);
+  for (const [x, y, a] of fermes) bat(g, [{ t: 'g', x: -6, y: -3, w: 12, h: 6, p: 'tuile', h2: 1 }], x, y, a, Math.max(.002, .13 / L));   // (une ferme de 25 m ; de loin, au moins 1,5 px)
 }
