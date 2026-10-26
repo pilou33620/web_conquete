@@ -1030,6 +1030,27 @@ class RoutesCoupeesParLaCrue(unittest.TestCase):
         self.assertAlmostEqual(g.edge_cost(g.player, e), c0 + 22.0 * CR.DELAY)
 
 
+class DepartSansDeficit(unittest.TestCase):
+    def test_aucune_ressource_en_baisse_au_depart(self):
+        """Les ateliers d'une partie neuve dépassaient le fer et le bois du département (dès 1790 : Gironde −29 fer par
+        tour, à 0 en trois tours) : sous la réserve, ils ne travaillent que ce qui est produit chaque jour."""
+        for ep in ('1700', '1790', '1813', '1870'):
+            for code in ('33', '64'):
+                g = partie(code, ep)
+                f = g.factions[code]
+                self.assertFalse({k: v for k, v in f['income'].items() if v < 0}, f'{ep} {code}')
+                r0 = dict(f['res'])
+                jouer_mois(g)
+                self.assertFalse({k for k in r0 if f['res'][k] < r0[k] - 0.5}, f'{ep} {code} : en baisse après un tour')
+        me = V.player_state(g)['me']
+        self.assertEqual(me['work'][1], 'fer', '1870 : les ateliers manquent de fer, la fiche le dit')
+        self.assertLess(me['work'][0], 1.0)
+        f['res']['fer'] = 400   # au-dessus de la réserve (achat au marché) : pleine capacité, le stock baisse
+        g.compute_income()
+        self.assertEqual(f['_work'][0], 1.0)
+        self.assertLess(f['income']['fer'], 0)
+
+
 class CruesDesVilles(unittest.TestCase):
     def test_au_printemps_au_bord_des_grands_fleuves_surtout_l_annee_de_la_grande_crue(self):
         """L'événement « crue » d'une place suit la grande crue (engine : flood_until, tirée en mars un printemps sur

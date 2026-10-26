@@ -148,7 +148,7 @@ def rules_payload():
                 fast_speed=R.FAST_SPEED, arms={c: [[t, nm, k] for t, nm, k in l] for c, l in R.ARMS.items()},
                 specialty=R.SPECIALTY, specialty_capital=R.SPECIALTY_CAPITAL, dev=dev,
                 branches=R.BRANCHES, man_days=R.MAN_DAYS, deg_prod=R.DEG_PROD, visuals=R.VISUALS, build=build, node_base=R.NODE_BASE, spec={k: v['label'] for k, v in R.SPEC.items()},
-                weather=R.WEATHER, zones=R.ZONES, speeds=R.SPEEDS, res=R.RESOURCES, res_label=R.RES_LABEL,
+                weather=R.WEATHER, zones=R.ZONES, speeds=R.SPEEDS, res=R.RESOURCES, res_label=R.RES_LABEL, workshop_reserve=R.WORKSHOP_RESERVE,
                 difficulty={k: v['label'] for k, v in R.DIFFICULTY.items()}, neutral_color=R.NEUTRAL_COLOR,
                 seasons=R.SEASON_LABEL, traits=R.GENERAL_TRAITS, ranks=R.GENERAL_RANKS, formations=R.FORMATIONS,
                 formation_speed=R.FORMATION_SPEED, plans=R.PLANS, phases=R.PHASES, spy=R.SPY, spy_tours=R.SPY_INTEL_TOURS,
@@ -458,7 +458,7 @@ def player_state(g, since=0):
                 research={b: (dict(tech=v['tech'], left=round(v['left'], 1), total=v['total'],
                                    tn=TT.ready_in(g, v['left'] / (1 + g.mod(p, 'research_speed') + CT.college_k(g, p))))
                               if v else None) for b, v in me['research'].items()},
-                techs=me['techs'], tech_dates=me.get('tech_dates', {}), cov=round(cov, 2), tools_bonus=round(tb, 3), cap=round(me.get('_cap', 0), 2),
+                techs=me['techs'], tech_dates=me.get('tech_dates', {}), cov=round(cov, 2), tools_bonus=round(tb, 3), cap=round(me.get('_cap', 0), 2), work=me.get('_work', [1.0, None]),
                 upkeep={k: round(v, 2) for k, v in me.get('_upkeep', {}).items()},
                 trade={k: round(v, 2) for k, v in me.get('_trade', {}).items()},
                 unit_costs={u: g.unit_cost(p, u) for u in R.UNITS}, unit_days={u: round(g.unit_days(p, u), 1) for u in R.UNITS},

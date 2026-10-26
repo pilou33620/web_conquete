@@ -577,6 +577,18 @@ en lignes (rangs de 6,7 m) avec la loi de 1857 ou après 1860. Rien ne change le
 **Les deux tests de campagne** (20/10/2026) : ce n'était pas le jeu mais les tests, qui lisaient `stop['kind']`
 quand le tour avait repris et que l'arrêt était vide ; corrigés comme le test voisin, toute la suite passe.
 
+**Défauts trouvés par les simulations scriptées** (26/10/2026 ; avis de la carte et crues des villes : SPEC-CARTE-2D) :
+- **Le fer au départ** : les ateliers d'une partie neuve demandaient plus de fer et de bois que le département n'en
+  donne (le minimum garanti, 9 par jour, `R.FLOOR`) dès que l'époque apporte de l'industrie (manufactures, armureries :
+  1700 sans déficit ; 1790 Gironde −29 fer par tour, à 0 en trois tours ; 1813 et 1870 −50 à −530 fer, −20 à
+  −300 bois). Rien ne le justifiait : désormais les ateliers ne touchent pas la réserve (`R.WORKSHOP_RESERVE` :
+  80 fer, 120 bois, le stock de départ) ; en dessous, ils ne travaillent que ce qui est produit chaque jour
+  (`f['_work']`), au-dessus (achats, échanges, prises), à pleine capacité. La fiche Production dit à quel pourcentage
+  ils tournent et comment y remédier (marché, échange, forge ou mine, village forestier). Les cinq départements aux
+  quatre époques : aucune ressource en baisse sur les trois premiers tours (`test_campagne.DepartSansDeficit`).
+  Reste à décider : en 1870, les ateliers de la Gironde tournent à 38 % faute de fer (la production de fer ne suit pas
+  l'industrie des époques avancées).
+
 ## Livraison (ordre proposé)
 
 | Ordre | Étape | Contenu | Dépend de | Effet |

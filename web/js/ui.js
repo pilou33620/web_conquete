@@ -1859,8 +1859,8 @@ export class UI {
         </dl>
         ${(me.effects || []).length ? `<div class="muted small" style="margin-top:6px"><b>Effets des événements :</b> ${me.effects.map(esc).join(' · ')}</div>` : ''}
         <div class="bar"><i style="width:${Math.round(me.cov * 100)}%"></i></div>
-        ${me.res.fer < 5 || me.res.bois < 5 ? `<p class="warnline">Les ateliers manquent de ${me.res.fer < 5 ? 'fer' : 'bois'} : achetez-en au marché, négociez un échange ou prenez ${me.res.fer < 5 ? 'une forge ou une mine' : 'un village forestier'}.</p>` : ''}
-        <p class="muted small">Chaque arme coûte 1 fer et ½ bois ; chaque outil ½ fer et 1 bois. Sans fer ni bois, les ateliers s’arrêtent.</p>
+        ${me.work?.[1] ? `<p class="warnline">Les ateliers tournent à ${Math.round(me.work[0] * 100)} % de leur capacité, faute de ${me.work[1]} : achetez-en au marché, négociez un échange ou prenez ${me.work[1] === 'fer' ? 'une forge ou une mine' : 'un village forestier'}.</p>` : ''}
+        <p class="muted small">Chaque arme coûte 1 fer et ½ bois ; chaque outil ½ fer et 1 bois. Les ateliers gardent une réserve de ${this.rules.workshop_reserve.fer} fer et ${this.rules.workshop_reserve.bois} bois pour vos chantiers et vos canons : en dessous, ils ne travaillent que le fer et le bois produits chaque jour.</p>
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Vos villes et villages (${own.length})</h3>
         <div class="tbl-wrap"><table class="grid"><thead><tr><th>Lieu</th><th>Type</th><th>Défense</th><th>Habitants</th><th>Fort/Agr.</th><th>Ordre</th><th>Chantier</th></tr></thead><tbody>${rows}</tbody></table></div>

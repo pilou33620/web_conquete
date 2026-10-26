@@ -39,6 +39,7 @@ FACTIONS = {
 # Production minimale garantie par jour tant que le département tient son chef-lieu
 # (modulée par ses traits : forges du Périgord, pins des Landes, grenier agenais… ; les vivres suivent les saisons)
 FLOOR = dict(livres=20, vivres=16, fer=9, bois=9, recrues=8)
+WORKSHOP_RESERVE = dict(fer=80, bois=120)   # les ateliers n'y touchent pas (le stock de départ : un atelier, une batterie)
 
 # cours ordinaires du marché (Game.new_day les fait varier autour) : la seule source de ces prix
 MARKET_BASE = dict(vivres=0.6, fer=2.0, bois=1.0, armes=3.5, outils=3.0, recrues=0.5)

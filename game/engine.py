@@ -919,13 +919,22 @@ class Game:
             s = f['slider']
             f['_arm_rate'] = cap * s * (1 + self.mod(code, 'armes_eff')) * 0.5
             f['_tool_rate'] = cap * (1 - s) * 0.5
+            # les ateliers ne mangent pas la réserve (R.WORKSHOP_RESERVE) : en dessous, ils tournent avec le fer et le
+            # bois du jour (une partie neuve n'est pas en déficit) ; au-dessus (achats, échanges), à pleine capacité
+            kc = 1 + self.mod(code, 'tools_cost')
+            need = dict(fer=f['_arm_rate'] + 0.5 * f['_tool_rate'] * kc, bois=0.5 * f['_arm_rate'] + f['_tool_rate'] * kc)
+            short = {k: tot[k] / need[k] for k in need if need[k] > tot[k] and f['res'][k] <= R.WORKSHOP_RESERVE[k]}
+            work = min([1.0, *short.values()])
+            f['_arm_rate'] *= work
+            f['_tool_rate'] *= work
+            f['_work'] = [round(work, 2), min(short, key=short.get) if short else None]   # (la fiche du joueur : ce qui manque)
             f['_cap'] = cap
             f['_cov'] = cov
             f['_upkeep'] = dict(vivres=up_v * k_up, livres=up_l * k_up, forts=up_f, prisoners=up_p, batiments=up_b)
             f['_trade'] = dict(trade_s)
             f['_trade']['livres'] = f['_trade'].get('livres', 0) + trade_l
-            f['income'] = dict(livres=tot['livres'], vivres=tot['vivres'], fer=tot['fer'] - f['_arm_rate'] - 0.5 * f['_tool_rate'] * (1 + self.mod(code, 'tools_cost')),
-                               bois=tot['bois'] - 0.5 * f['_arm_rate'] - f['_tool_rate'] * (1 + self.mod(code, 'tools_cost')),
+            f['income'] = dict(livres=tot['livres'], vivres=tot['vivres'], fer=tot['fer'] - need['fer'] * work,
+                               bois=tot['bois'] - need['bois'] * work,
                                armes=f['_arm_rate'], outils=f['_tool_rate'], recrues=tot['recrues'], industrie=cap)
             if f.get('_measured'):
                 f['income'].update(f['_measured'])
