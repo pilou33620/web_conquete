@@ -273,8 +273,8 @@ EXTRA_ROADS = [
     ('Blaye', 'Fort Médoc'),  # bac sur l'estuaire
     ('Saint-Jean-Pied-de-Port', 'Saint-Étienne-de-Baïgorry'),
     ('Mauléon', 'Tardets'),
-    ('Bazas', 'La Réole'),   # (Langon, à sa vraie place, la cachait au maillage automatique)
 ]
+EXTRA_ROADS_2 = [('Bazas', 'La Réole')]   # (géographie 2 : Langon, à sa vraie place, la cachait au maillage automatique)
 FERRIES = {('Blaye', 'Fort Médoc')}
 
 # Spécialité phare de chaque ville principale : (type, nom affiché). Le type renvoie à rules.SPECIALTY

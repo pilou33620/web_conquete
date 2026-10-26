@@ -17,6 +17,14 @@ const pingpong = (s, L) => { const m = mod(s, 2 * L); return m < L ? m : 2 * L -
 const versMonde = (x, y, a, lx, ly, s = 1) => [x + (lx * Math.cos(a) - ly * Math.sin(a)) * U * s, y + (lx * Math.sin(a) + ly * Math.cos(a)) * U * s];
 function dansAnneau(r, x, y) { let d = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) d = !d; } return d; }
 const bboxOf = pts => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const [x, y] of pts) { a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); } return [a, b, c, d]; };
+// (une rivière a des centaines de points : un bateau s'y place par dichotomie sur les longueurs cumulées, cum)
+const cumul = pts => { const c = [0]; for (let i = 1; i < pts.length; i++) c.push(c[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])); return c; };
+function surCumul(pts, c, s) {
+  let lo = 1, hi = c.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (c[m] < s) lo = m + 1; else hi = m; }
+  const [x0, y0] = pts[lo - 1], [x1, y1] = pts[lo], k = clamp((s - c[lo - 1]) / (c[lo] - c[lo - 1] || 1), 0, 1);
+  return { x: lerp(x0, x1, k), y: lerp(y0, y1, k), a: Math.atan2(y1 - y0, x1 - x0) };
+}
 const longueur = pts => { let l = 0; for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return l; };
 // rayon d'une place en km (profilVille de la maquette : R en unités de l'intérieur, 180 par km)
 export const rayonPlace = n => rayon(n.pop0 || 700) / S_INT;
@@ -101,7 +109,7 @@ export function preparer(map) {
   }
   const rivers = m.rivers || [];
   VIE.radeaux = [];
-  for (const r of rivers) if (['Adour', 'Gave de Pau', "Gave d'Oloron", 'Midouze', 'Leyre', 'Nive', "Gave d'Aspe"].includes(r.name)) { const L = longueur(r.pts); for (let k = 0; k < Math.ceil(L / 16); k++) VIE.radeaux.push({ pts: r.pts, L, bb: bboxOf(r.pts), s0: hash2(k, L * 10 | 0, 98) * L, v: .007 }); }
+  for (const r of rivers) if (['Adour', 'Gave de Pau', "Gave d'Oloron", 'Midouze', 'Leyre', 'Nive', "Gave d'Aspe"].includes(r.name)) { const L = longueur(r.pts), cum = cumul(r.pts); for (let k = 0; k < Math.ceil(L / 16); k++) VIE.radeaux.push({ pts: r.pts, cum, L, bb: bboxOf(r.pts), s0: hash2(k, L * 10 | 0, 98) * L, v: .007 }); }
   // pêche : pinasses dans le bassin d'Arcachon, chaloupes devant Saint-Jean-de-Luz ; parcs à huîtres ; cabanes tchanquées
   VIE.peche = []; VIE.parcs = []; VIE.tchanquees = [];
   if (BASSIN) {
@@ -150,8 +158,8 @@ export function preparer(map) {
   VIE.ports = ['Bordeaux', 'Bayonne', 'La Teste-de-Buch', 'Saint-Jean-de-Luz', 'Blaye', 'Pauillac'].map(nom).filter(Boolean);
   // bateaux : gabares sur les grandes rivières, navires sur la route du cabotage
   VIE.bateaux = [];
-  for (const r of rivers) if (r.rank <= 2) { const L = longueur(r.pts); for (let k = 0; k < Math.ceil(L / 14); k++) VIE.bateaux.push({ pts: r.pts, L, bb: bboxOf(r.pts), s0: hash2(k, r.rank, 5) * L, v: (hash2(k, 7, 5) < .5 ? -1 : 1) * .02, mer: false, ph: hash2(k, L | 0, 8) * 1000 }); }
-  for (const w of m.ways || []) if (w.sea) { const L = longueur(w.pts); for (let k = 0; k < Math.ceil(L / 25); k++) VIE.bateaux.push({ pts: w.pts, L, bb: bboxOf(w.pts), s0: hash2(k, 9, 6) * L, v: (hash2(k, 8, 6) < .5 ? -1 : 1) * .04, mer: true, ph: 0 }); }
+  for (const r of rivers) if (r.rank <= 2) { const L = longueur(r.pts), cum = cumul(r.pts); for (let k = 0; k < Math.ceil(L / 14); k++) VIE.bateaux.push({ pts: r.pts, cum, L, bb: bboxOf(r.pts), s0: hash2(k, r.rank, 5) * L, v: (hash2(k, 7, 5) < .5 ? -1 : 1) * .02, mer: false, ph: hash2(k, L | 0, 8) * 1000 }); }
+  for (const w of m.ways || []) if (w.sea) { const L = longueur(w.pts); for (let k = 0; k < Math.ceil(L / 25); k++) VIE.bateaux.push({ pts: w.pts, cum: cumul(w.pts), L, bb: bboxOf(w.pts), s0: hash2(k, 9, 6) * L, v: (hash2(k, 8, 6) < .5 ? -1 : 1) * .04, mer: true, ph: 0 }); }
   // moulins à vent dans les champs autour des bourgs (vus de dessus, moulinVu)
   VIE.moulins = [];
   for (const n of NOEUDS) {
@@ -509,7 +517,7 @@ function eaux(sc, g, x0, y0, x1, y1, epoque) {
   // gabares et navires (dès Z.BATEAUX, à taille constante à l'écran jusqu'au plus près)
   for (const b of VIE.bateaux) {
     if (!vu(b.bb)) continue;
-    const p = surChemin(b.pts, mod(b.s0 + t * b.v, b.L)); if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
+    const p = surCumul(b.pts, b.cum, mod(b.s0 + t * b.v, b.L)); if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
     if (b.mer && tempete(p)) continue;   // la tempête garde les navires au port
     const a = p.a + (b.v < 0 ? Math.PI : 0);
     const kb = b.mer ? Math.max(.0018, .14 / z) : k;
@@ -540,7 +548,7 @@ function eaux(sc, g, x0, y0, x1, y1, epoque) {
   }
   for (const r of VIE.radeaux) {
     if (!vu(r.bb)) continue;
-    const p = surChemin(r.pts, mod(r.s0 + r.v * t, r.L)); if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
+    const p = surCumul(r.pts, r.cum, mod(r.s0 + r.v * t, r.L)); if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
     const kr = Math.max(.0009, .1 / z); sc.monde(g); g.save(); g.translate(p.x, p.y); g.rotate(p.a); g.scale(kr, kr);
     for (let m = 0; m < 3; m++) { RR(g, 'rgba(20,30,40,.3)', -4 - m * 11, -1.6, 10, 4.4, .6); for (let l = 0; l < 4; l++) RR(g, l % 2 ? '#7a5634' : '#8d6a44', -5 - m * 11, -2.2 + l * 1.1, 10, 1, .45); if (m) T(g, '#5b4127', .4, -m * 11 + 5, 0, -m * 11 + 6, 0); }
     g.save(); g.translate(2, 0); marcheur(g, 2, 0, false); T(g, '#6b4d31', .4, 0, 1, 7, 4); g.restore();   // le radelier et sa perche

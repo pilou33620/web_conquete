@@ -17,7 +17,7 @@ import json
 import math
 import os
 
-from .places import PLACES, ROYAL_ROUTES, EXTRA_ROADS, FERRIES, CITY_SPECIALTIES, CITY_POP
+from .places import PLACES, ROYAL_ROUTES, EXTRA_ROADS, EXTRA_ROADS_2, FERRIES, CITY_SPECIALTIES, CITY_POP
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 CACHE_VERSION = 7
@@ -180,6 +180,7 @@ class GeoMap:
         h.update(repr(PLACES).encode())
         h.update(repr(ROYAL_ROUTES).encode())
         h.update(repr(EXTRA_ROADS).encode())
+        h.update(repr(EXTRA_ROADS_2).encode())
         h.update(str(CACHE_VERSION).encode())
         with open(os.path.abspath(__file__), 'rb') as f:
             h.update(f.read())
@@ -507,9 +508,10 @@ class GeoMap:
                 k = (min(a, b), max(a, b))
                 if k in pairs:
                     pairs[k]['royal'] = True
-                elif self._water_on_segment(P[a], P[b]) < 2:   # (une route royale passe une case de côte : Bayonne, Saint-Jean-de-Luz)
+                # (géographie 2 : une route royale passe une case de côte, Bayonne – Saint-Jean-de-Luz)
+                elif self._water_on_segment(P[a], P[b]) < (2 if self.version >= 2 else 1):
                     pairs[k] = dict(royal=True, ferry=False)
-        for na, nb in EXTRA_ROADS:
+        for na, nb in EXTRA_ROADS + (EXTRA_ROADS_2 if self.version >= 2 else []):
             a, b = self.by_name[na], self.by_name[nb]
             k = (min(a, b), max(a, b))
             fer = (na, nb) in FERRIES or (nb, na) in FERRIES
@@ -536,26 +538,36 @@ class GeoMap:
         # connexité
         self._ensure_connected(pairs, P)
 
-        rivers = []
+        rivers = []   # (nom, rang, morceaux de 48 segments avec leur emprise : on ne cherche l'eau que là où passe la route)
         for r in self.src['rivers']:
             if r['rank'] <= 2:
-                rivers.append((r['name'], r['rank'], [self.xy(lat, lon) for lon, lat in r['pts']]))
+                pts = [self.xy(lat, lon) for lon, lat in r['pts']]
+                parts = [pts[k:k + 49] for k in range(0, len(pts) - 1, 48)]
+                rivers.append((r['name'], r['rank'], [(q, min(x for x, _ in q), min(y for _, y in q), max(x for x, _ in q),
+                                                       max(y for _, y in q)) for q in parts]))
+
+        def coupes(p1, p2):   # où le segment p1-p2 coupe les rivières : (nom, rang, point), rivière par rivière
+            x0, y0, x1, y1 = min(p1[0], p2[0]), min(p1[1], p2[1]), max(p1[0], p2[0]), max(p1[1], p2[1])
+            for name, rank, parts in rivers:
+                for pts, a, b, c, d in parts:
+                    if a <= x1 and c >= x0 and b <= y1 and d >= y0:
+                        for p, q in zip(pts, pts[1:]):
+                            if it := _seg_inter(p1, p2, p, q):
+                                yield name, rank, it[1]
 
         def crossing(path, pair=()):
             best = None
             for p1, p2 in zip(path, path[1:]):
-                for name, rank, pts in rivers:
-                    for p, q in zip(pts, pts[1:]):
-                        it = _seg_inter(p1, p2, p, q)
-                        if it and (best is None or rank < best[1]) and name not in pair:
-                            best = (name, rank, it[1])
+                for name, rank, it in coupes(p1, p2):
+                    if (best is None or rank < best[1]) and name not in pair:
+                        best = (name, rank, it)
             return best
 
         def pair(path):   # (géographie 2) les rivières que la ligne coupe un nombre pair de fois : leurs méandres, sans passage
-            n = {}
+            n = {name: 0 for name, _, _ in rivers}
             for p1, p2 in zip(path, path[1:]):
-                for name, rank, pts in rivers:
-                    n[name] = n.get(name, 0) + sum(1 for p, q in zip(pts, pts[1:]) if _seg_inter(p1, p2, p, q))
+                for name, _, _ in coupes(p1, p2):
+                    n[name] += 1
             return {k for k, v in n.items() if v % 2 == 0}
 
         edges = []
@@ -584,11 +596,9 @@ class GeoMap:
                 # passage reste celle de la ligne droite)
                 e['ponts'] = []
                 for p1, p2 in zip(path, path[1:]):
-                    for name, rank, pts in rivers:
+                    for name, rank, it in coupes(p1, p2):
                         if name != on[0] and name not in [q[2] for q in e['ponts']]:
-                            it = next((it for p, q in zip(pts, pts[1:]) if (it := _seg_inter(p1, p2, p, q))), None)
-                            if it:
-                                e['ponts'].append([round(it[1][0], 2), round(it[1][1], 2), name, rank])
+                            e['ponts'].append([round(it[0], 2), round(it[1], 2), name, rank])
             e['pts'] = [[round(x, 2), round(y, 2)] for x, y in path]
             edges.append(e)
 

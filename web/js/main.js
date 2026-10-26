@@ -62,6 +62,16 @@ async function poll() {
   if (bataille && bataille.wants(st.tac)) bataille.enter(st.tac, st);
 }
 
+// la partie lancée ou chargée a une autre carte que cette page : on recharge, et la page reprend la partie (et le tutoriel
+// demandé) au lieu de l'intro et de l'écran de départ
+const REPRISE = 'conquete.reprise';
+function autreCarte(r, tuto = false) {
+  if (r.geo == null || r.geo === bootGeo) return false;
+  try { sessionStorage.setItem(REPRISE, tuto ? 'tuto' : '1'); } catch (e) { /* sans stockage : l'écran de départ, « Reprendre » */ }
+  location.reload();
+  return true;
+}
+
 function startPolling() {
   running = true;
   if (!timer) timer = setInterval(poll, 250);
@@ -134,6 +144,7 @@ async function boot() {
     let r;
     try { r = await api.post('/api/new', { dept, difficulty, scenario }); } catch (e) { return ui.toast('Serveur injoignable : la partie n’a pas pu commencer.', 'bad'); }
     if (!r.ok) return ui.toast(r.msg, 'bad');
+    if (autreCarte(r, !Tuto.vu())) return;
     resetUI();
     ui.hideStart();
     const cap = payload.map.nodes.find(n => n.type === 'capitale' && n.dept === dept);
@@ -155,7 +166,7 @@ async function boot() {
     let r;
     try { r = await api.post('/api/load', { name }); } catch (e) { return ui.toast('Serveur injoignable : sauvegarde non chargée.', 'bad'); }
     ui.toast(r.msg, r.ok ? 'good' : 'bad');
-    if (!r.ok) return;
+    if (!r.ok || autreCarte(r)) return;
     resetUI();
     ui.hideStart();
     await focusCapital();
@@ -192,6 +203,13 @@ async function boot() {
     return;
   }
   document.getElementById('loading').hidden = true;
+  let reprise = null;
+  try { reprise = sessionStorage.getItem(REPRISE); sessionStorage.removeItem(REPRISE); } catch (e) { /* stockage indisponible */ }
+  if (reprise && info.running) {
+    await ui.onResume();
+    if (reprise === 'tuto') ui.tuto.start();
+    return;
+  }
   await intro(map, payload.map.nodes);
   await showStart(info);
   announceUpdate(info.update);

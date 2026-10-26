@@ -144,11 +144,18 @@ export class Ambient {
       }
       if (d >= 1 && hash(i, j, 82) < 0.05) this.glints.push({ x: i + hash(i, j, 83), y: j + hash(i, j, 84), ph: hash(i, j, 86) * TAU, sp: 0.6 + hash(i, j, 87) * 0.8 });
     }
-    // courant des fleuves : tirets clairs qui descendent vers l'embouchure (les tracés vont de la source à la mer)
-    this.flows = m.rivers.filter(r => r.rank <= 2).map((r, k) => {
-      const p = new Path2D();
-      r.pts.forEach((pt, i) => i ? p.lineTo(pt[0], pt[1]) : p.moveTo(pt[0], pt[1]));
-      return { p, rank: r.rank, ph: hash(k, 7, 95) * 10 };
+    // courant des fleuves : tirets clairs qui descendent vers l'embouchure (les tracés vont de la source à la mer) ; en
+    // morceaux de 48 pas avec leur emprise, comme les rivières des tuiles (map.js, lineChunks) : chaque image ne trace que
+    // ceux de la vue (s : la longueur de la rivière avant le morceau, pour que les tirets se suivent)
+    this.flows = [];
+    m.rivers.filter(r => r.rank <= 2).forEach((r, k) => {
+      let s = 0;
+      for (let a = 0; a < r.pts.length - 1; a += 48) {
+        const pts = r.pts.slice(a, a + 49), p = new Path2D(), xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
+        pts.forEach(([x, y], i) => i ? p.lineTo(x, y) : p.moveTo(x, y));
+        this.flows.push({ p, rank: r.rank, ph: hash(k, 7, 95) * 10, s, box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] });
+        for (let i = 1; i < pts.length; i++) s += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      }
     });
   }
 
@@ -203,12 +210,14 @@ export class Ambient {
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
     ctx.lineCap = 'round';
     ctx.strokeStyle = 'rgba(226,242,255,0.55)';
+    const [x0, y0, x1, y1] = this.view(10);
     for (const f of this.flows) {
+      if (f.box[0] > x1 || f.box[2] < x0 || f.box[1] > y1 || f.box[3] < y0) continue;
       const w = Math.max(f.rank === 1 ? 0.75 : 0.42, (f.rank === 1 ? 3.2 : 2.1) / z) * 0.3;
       const d = Math.max(0.5, 9 / z);
       ctx.lineWidth = w;
       ctx.setLineDash([d * 0.5, d * 1.6]);
-      ctx.lineDashOffset = -(time * (f.rank === 1 ? 0.55 : 0.4) + f.ph) % (d * 2.1 * 1000);
+      ctx.lineDashOffset = -(time * (f.rank === 1 ? 0.55 : 0.4) + f.ph) % (d * 2.1 * 1000) + f.s;
       ctx.stroke(f.p);
     }
     ctx.restore();

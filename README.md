@@ -76,8 +76,10 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
   `journalctl -u web_conquete -f`.
 
 Au premier lancement (et après une mise à jour du calcul de la carte, `game/geo.py`), la carte est calculée
-(3 à 4 secondes sur un PC, 15 à 30 secondes sur un Raspberry Pi),
-puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git).
+(environ 5 secondes sur un PC, 15 à 30 secondes sur un Raspberry Pi),
+puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git). Une partie sauvegardée avant les rivières
+affinées garde sa carte d'alors (`game/data/geo_v1.json`, en cache dans `map_cache_v1.json`, calculée la première fois
+qu'on la charge).
 
 ## Principe
 
@@ -252,6 +254,9 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
 - Chaque département compte son chef-lieu, 9 autres villes principales et 33 villages, soit 223 lieux avec les 8 places fortes.
   Les villes sont les plus peuplées aujourd'hui (hors banlieues collées au chef-lieu), les villages sont de vraies communes
   réparties sur tout le territoire (Saint-Émilion, Margaux, Sare, Saint-Palais, Pontenx-les-Forges…).
+- Rivières et position des villes : © les contributeurs d'OpenStreetMap (ODbL), via Overture Maps. `game/data/geo.json`
+  (les rivières) et la place des villes au bord de l'eau dans `game/places.py` forment une base de données dérivée,
+  sous licence ODbL (Open Database License, https://opendatacommons.org/licenses/odbl/).
 - Vous commencez avec votre chef-lieu et vos 9 villes. Les 165 villages et les places fortes sont indépendants :
   ralliez-les avec une armée nettement plus forte que leur milice pour gagner des revenus.
 - **Victoire** : tous les chefs-lieux vous appartiennent, ou appartiennent à un département qui s'est soumis à vous.

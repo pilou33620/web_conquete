@@ -2026,6 +2026,7 @@ export class UI {
         ${saves ? `<div class="section-t">Parties sauvegardées${info.saves.length > 5 ? ` <span class="muted small">(${info.saves.length})</span>` : ''}</div><div class="saves scroll">${saves}</div>` : ''}
         ${info.net && info.net.lan && info.net.urls.length ? `<div class="section-t">Sur le réseau local</div>${this.netHtml(info.net)}` : ''}
         ${this.versionHtml(info.update)}
+        <div class="ver-line">Rivières et position des villes : © les contributeurs d’OpenStreetMap (ODbL), via Overture Maps</div>
       </div></div>`;
     const det = this.$('start').querySelector('details.ver-line');
     if (det) det.addEventListener('toggle', () => { this.verOpen = det.open; });   // reste ouvert d'un rendu à l'autre
@@ -2135,6 +2136,7 @@ export class UI {
       <div class="start-actions">
         <button class="btn primary" data-act="sk-start" ${ready ? '' : 'disabled'}>${!sk.me ? 'Choisissez votre camp' : !n ? 'Choisissez vos régiments' : 'Livrer bataille'}</button>
         ${this.versionHtml(info.update)}
+        <div class="ver-line">Rivières et position des villes : © les contributeurs d’OpenStreetMap (ODbL), via Overture Maps</div>
       </div></div>`;
     const sel = this.$('start').querySelector('select.sk-place');
     sel.addEventListener('change', () => { sk.place = sel.value; this.skMark(); this.renderStart(); });

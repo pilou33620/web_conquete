@@ -24,7 +24,7 @@ from http.server import ThreadingHTTPServer
 
 import fabrique  # noqa: F401  (chemins, journal des batailles coupé)
 import server
-from game import views as V
+from game import rails as RL, views as V
 from game.engine import Game
 
 
@@ -199,10 +199,12 @@ class Sauvegardes(unittest.TestCase):
         reçoit cette carte."""
         app = self.app()
         app.geos, app.static, app.geo = {fabrique.GEO.version: fabrique.GEO}, {}, fabrique.GEO
+        app.lock, app.geo_lock = threading.RLock(), threading.Lock()
         ancienne = app.geo_for(1)
-        empreinte = hashlib.sha1(json.dumps([ancienne.nodes, ancienne.edges], sort_keys=True).encode() + bytes(ancienne.terrain)
-                                 + bytes(ancienne.river) + bytes(ancienne.cellnode)).hexdigest()
-        self.assertEqual(empreinte, '7a894dddd683355a40157ce2f178ee8dd5a5b720', 'la carte des anciennes parties ne change pas')
+        # (ce que la page reçoit, lieux, arêtes, grilles, rivières, rails, et les cases des routes : celle d'avant le lot)
+        empreinte = hashlib.sha1(json.dumps([ancienne.client_payload(), RL.client_payload(ancienne)], sort_keys=True).encode()
+                                 + bytes(ancienne.road)).hexdigest()
+        self.assertEqual(empreinte, '36421fef2a39cf909b5f075799b574936aa8a11f', 'la carte des anciennes parties ne change pas')
         g = Game(ancienne, '33', 'normal', 1, '1790')
         a = fabrique.armee(g)
         nm = {n['name']: n['id'] for n in ancienne.nodes}
@@ -217,7 +219,7 @@ class Sauvegardes(unittest.TestCase):
             json.dump(dict(meta={}, game=d), f)
         with self.assertRaises(ValueError):
             V.from_dict(fabrique.GEO, d)   # (jamais sur la carte des nouvelles parties)
-        self.assertTrue(app.load('ancienne')['ok'])
+        self.assertEqual(app.load('ancienne')['geo'], 1, 'la page sait qu’elle doit prendre la carte de la partie')
         g2 = app.game
         self.assertIs(g2.geo, ancienne)
         a2 = g2.armies[a['id']]

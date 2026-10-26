@@ -53,7 +53,7 @@ class App:
     def __init__(self):
         t0 = time.time()
         print('Préparation de la carte de l\'Aquitaine…', flush=True)
-        self.geos, self.static = {}, {}
+        self.geos, self.static, self.geo_lock = {}, {}, threading.Lock()
         self.geo = self.geo_for(GEO_VERSION)   # la carte des nouvelles parties
         nw = sum(1 for e in self.geo.edges if e.get('kind') == 'water')
         print(f'Carte prête ({time.time() - t0:.1f} s) : {len(self.geo.nodes)} villes et villages, '
@@ -71,10 +71,11 @@ class App:
 
     def geo_for(self, v):
         """La carte d'une géographie (une ancienne partie garde la sienne : geo.py), faite au premier besoin."""
-        if v not in self.geos:
-            self.geos[v] = GeoMap(v)
-            CR.spans(self.geos[v])   # les routes que la crue coupe : calculées ici (environ 1 s) plutôt qu'au premier état en crue
-        return self.geos[v]
+        with self.geo_lock:   # (une seule fois, même si deux appareils chargent en même temps)
+            if v not in self.geos:
+                self.geos[v] = GeoMap(v)
+                CR.spans(self.geos[v])   # les routes que la crue coupe : calculées ici (environ 1 s) plutôt qu'au premier état en crue
+            return self.geos[v]
 
     def payload(self, geo):
         """/api/map pour cette carte (brut, compressé), calculé une fois."""
@@ -429,8 +430,9 @@ class App:
         except Exception:
             traceback.print_exc()
             return dict(ok=False, msg='Sauvegarde illisible ou abîmée.')
-        self.game = game
-        return dict(ok=True, msg=f'Partie « {name} » chargée.')
+        with self.lock:   # (le reste hors du verrou : la carte d'une ancienne partie se fait sans arrêter les autres appareils)
+            self.game = game
+        return dict(ok=True, msg=f'Partie « {name} » chargée.', geo=game.geo.version)
 
 
 APP = None
@@ -593,6 +595,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get_content_type() != 'application/json':
             return self._json(dict(ok=False, msg='JSON attendu.'), 415)
         body = self._body()
+        if path == '/api/load':
+            return self._json(APP.load(body.get('name')))
         with APP.lock:
             if path == '/api/new':
                 dept = body.get('dept')
@@ -603,7 +607,7 @@ class Handler(BaseHTTPRequestHandler):
                 except (TypeError, ValueError, OverflowError):
                     seed = None
                 APP.game = Game(APP.geo, dept, body.get('difficulty', 'normal'), seed, body.get('scenario', '1790'))
-                return self._json(dict(ok=True))
+                return self._json(dict(ok=True, geo=APP.geo.version))
             if path == '/api/skirmish':   # mode Bataille : une bataille isolée, sans campagne
                 try:
                     sk, bid = SK.new(APP.geo, body)
@@ -618,8 +622,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(APP.command(body))
             if path == '/api/save':
                 return self._json(APP.save(body.get('name')))
-            if path == '/api/load':
-                return self._json(APP.load(body.get('name')))
         self._json(dict(ok=False, msg='Route inconnue.'), 404)
 
 

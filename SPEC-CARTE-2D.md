@@ -1107,6 +1107,29 @@ arrivent à la ville et non dans ses faubourgs (la carte du jeu change : les dis
 - **Batailles** : pas de nouvelle version (`terrain.VERSION` 7 : le code ne change pas ; une bataille d'une ancienne
   partie a sa carte d'alors). Les plans des villes (`villes.js` et `plan_ville.py`) restent identiques sur la nouvelle
   carte (669 états, banc).
+- **Relecture** :
+  - le coût par image : le courant des fleuves (`ambient.js`, `drawFlows`, z 3,5 à 18) en morceaux de 48 pas avec leur
+    emprise, seuls ceux de la vue tracés (3 441 sommets à chaque image sinon) ; les gabares et les radeaux placés par
+    dichotomie sur les longueurs cumulées de leur rivière (`vie.js`, `surCumul`). Mesures (`vie3/h3.cjs`, médianes de
+    120 images, deux passes, dpr 1 ; main → branche) : z 26 Bordeaux 2,7 / 2,6 → 2,5 / 2,4 ms, z 110 Bordeaux 2,2 / 2,9 →
+    1,9 / 1,9, champ 2,3 / 2,3 → 2,1 / 1,9, siège 2,6 / 2,8 → 2,3 / 2,5, z 320 2,4 / 2,2 → 2,2 / 2,0. Le reste de l'écart
+    mesuré d'abord à z 26 (la couche sol, 0,35 → 0,8) venait de la scène : sur la nouvelle carte, `h3.cjs` pose l'armée
+    A1 plus loin sur la route de Bordeaux (`fr1` 0,7 au lieu de 0,4, d'après le territoire de Bordeaux, qui a bougé), sa
+    trace piétinée est plus longue ; à `fr1` égal, la couche sol fait 0,36 à 0,42 ms (0,32 sur main) ;
+  - la construction à froid (`geo.py`, les passages des routes) : les rivières en morceaux de 48 segments avec leur
+    emprise, on ne cherche l'eau que là où passe la route (même carte, à l'octet) : carte 2, 8,4 → 4,6 s ; carte 1, 4,9 →
+    4,6 s. `/api/load` fait la carte d'une ancienne partie hors du verrou de la partie (`App.geo_lock`, une seule fois) :
+    les autres appareils continuent (`/api/saves` répond en 90 ms pendant les 5,6 s du chargement à froid) ; la sauvegarde
+    automatique d'une ancienne partie fait sa carte au démarrage ;
+  - la carte 1 vraiment figée : la case de côte des routes royales et la route de Bazas à La Réole (`EXTRA_ROADS_2`) en
+    géographie 2 seulement ; l'empreinte du banc couvre ce que la page reçoit (`client_payload`, rails) et les cases des
+    routes, la même que sur main ;
+  - le rechargement sur la carte de la partie : `/api/new` et `/api/load` disent sa géographie ; si ce n'est pas celle de
+    la page, elle note la reprise (`sessionStorage`, `conquete.reprise`, avec le tutoriel s'il était demandé) et se
+    recharge ; au retour, elle reprend la partie (ni l'intro ni l'écran de départ) et relance le tutoriel ;
+  - l'attribution (ODbL) : « Rivières et position des villes : © les contributeurs d'OpenStreetMap (ODbL), via Overture
+    Maps » sur l'écran de départ et dans le README, qui dit aussi que `geo.json` et la place des villes au bord de l'eau
+    forment une base dérivée sous ODbL.
 - Captures (`integration/rivieres/`, une partie neuve préparée, aucun tour joué) : `1-bayonne-nive-adour-z170.png` (la Nive
   au travers de la ville jusqu'à l'Adour, les routes à la ville), `2-langon-z220.png`, `3-saint-sever-z220.png`,
   `4-agen-routes-z320.png` (les routes de l'autre rive passent la Garonne au pied des murs), `5-ensemble-z2.png`,
