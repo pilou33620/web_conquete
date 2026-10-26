@@ -59,7 +59,7 @@ def simulate(seed, epoque='1790', mois=12, joueur='33'):
     g.ais[g.player] = AI(g, g.player)   # le camp du joueur joué par une IA, comme les autres
     codes = sorted(g.factions)
     pairs = [(a, b) for i, a in enumerate(codes) for b in codes[i + 1:]]
-    starts = war_months = 0
+    starts = war_months = bq = fam = 0
     before = {p: g.at_war(*p) for p in pairs}
     err = None
     for _ in range(mois):
@@ -71,6 +71,8 @@ def simulate(seed, epoque='1790', mois=12, joueur='33'):
         carry_on(g)
         if g.over:
             break
+        bq += sum(1 for c in codes if g.factions[c]['alive'] and g.factions[c].get('banqueroute'))
+        fam += sum(1 for c in codes if g.factions[c]['alive'] and g.factions[c].get('famine'))
         now = {p: g.at_war(*p) for p in pairs}
         starts += sum(1 for p in pairs if now[p] and not before[p])
         war_months += sum(now.values())
@@ -88,6 +90,7 @@ def simulate(seed, epoque='1790', mois=12, joueur='33'):
                 tresor=round(sum(g.factions[c]['res']['livres'] for c in codes) / len(codes)),
                 hommes=round(sum(g.army_men(a) for a in g.armies.values()) / len(codes)),
                 lignes=sum(1 for st in getattr(g, 'rails', {}).values() if st.get('done')),   # tronçons de voie ferrée ouverts
+                bq=bq, fam=fam,   # mois de banqueroute et de famine, tous camps
                 crues=getattr(g, 'city_stats', {}).get('quoi', {}).get('crue', 0),   # crues de ville, tous camps
                 # SPEC-ARBRE.md : année de découverte des grandes armes, par camp qui les a trouvées en cours de partie
                 armes={t: [g.date(g.factions[c]['tech_dates'][t][1]).year for c in codes
@@ -126,6 +129,7 @@ def main():
           f"{mean(rows, 'vivants'):>8} {mean(rows, 'techs'):>6} {mean(rows, 'tresor'):>7} {mean(rows, 'hommes'):>7} "
           f"{mean(rows, 'lignes'):>6}  "
           f"erreurs : {sum(1 for r in rows if r['err'] and not r['err'].startswith('fin'))}")
+    print(f"mois de banqueroute / de famine (tous camps) : {sum(r['bq'] for r in rows)} / {sum(r['fam'] for r in rows)}")
     print(f"crues de ville (tous camps) : {sum(r['crues'] for r in rows)} en {a.parties * a.annees} ans de jeu")
     for t in GRANDES_ARMES:
         ys = [y for r in rows for y in r['armes'][t]]

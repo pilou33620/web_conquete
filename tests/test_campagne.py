@@ -1072,19 +1072,28 @@ class IADepenseSonTresor(unittest.TestCase):
     def test_au_dela_de_deux_tresors_de_guerre_l_ia_arme_davantage(self):
         """Les IA amassaient 60 000 livres en 1802 et 280 000 en 1878 (outils/simuler.py) : bâtiments et remparts faits,
         l'armée plafonnait au revenu. L'argent qui dort au-delà de deux trésors de guerre (AI.idle_money) paie des
-        régiments de plus (quatre ans de solde), des remparts et des bâtiments ; la réserve reste."""
+        régiments de plus (quatre ans de solde et de rations), tant que le revenu en livres et en vivres reste positif :
+        revenu négatif, pas un de plus (personne ne les licencierait) ; la réserve reste."""
         from unittest import mock
         from game.ai import AI
         out = []
-        for dort in (False, True):
+        for dort, deficit in ((False, 0), (True, 0), (True, 50)):
             g = partie('33', '1790', seed=3)
             ai, f = g.ais['24'], g.factions['24']
             f['res']['livres'] = 60 * ai.reserve()
-            with mock.patch.object(AI, 'idle_money', AI.idle_money if dort else (lambda self: 0.0)):
+            calcul = g.compute_income
+
+            def revenu():
+                calcul()
+                f['income']['livres'] -= deficit   # (un revenu en livres négatif)
+            g.compute_income = revenu
+            with mock.patch.object(AI, 'idle_money', AI.idle_money if dort else (lambda self: 0.0)), \
+                    mock.patch.object(AI, 'relieve_taxes', lambda self, res, wars: None):
                 jouer_mois(g, 6)
             out.append(ai.regs_total() + sum(1 for n in g.owned_nodes('24') for q in n['queue'] if q.get('kind') == 'unit'))
             self.assertGreater(f['res']['livres'], 2 * ai.reserve(), 'la réserve reste')
         self.assertGreater(out[1], out[0] + 4, f'des régiments de plus ({out})')
+        self.assertLessEqual(out[2], out[0] + 1, f'revenu négatif : pas de régiments de plus ({out})')
 
 
 class CruesDesVilles(unittest.TestCase):

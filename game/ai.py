@@ -631,8 +631,12 @@ class AI:
         if not self.menace and f['res']['livres'] < FLOOD * self.reserve():
             surplus = 0   # en paix et sans voisin menaçant, l'armée s'en tient à ce que paie le revenu
         income_cap = max(5, int(gross * (0.5 + 0.25 * aggr) / 2.6))
-        u = R.UNITS['ligne']
-        funded = int(self.idle_money() / (4 * 365 * u['upkeep_l'] * u['men'] / 100 * (1 + g.mod(code, 'upkeep'))))
+        # régiments que l'argent qui dort paie quatre ans (solde et rations moyennes de l'armée), tant que le revenu en
+        # livres et en vivres reste positif (personne ne les licencie ensuite)
+        up, n = f.get('_upkeep') or {}, max(1, sum(1 for _ in g.all_regs(code)))
+        per_reg = max(1.0, (up.get('livres', 0) + up.get('vivres', 0) * g.market['vivres']) / n)
+        rich = f['income']['livres'] > 3 and f['income']['vivres'] > 0
+        funded = int(self.idle_money() / (4 * 365 * per_reg)) if rich else 0
         target = min(time_target + surplus, income_cap + surplus // 2) + funded
         if self.regs_total() >= target:
             return

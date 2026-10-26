@@ -591,10 +591,12 @@ quand le tour avait repris et que l'arrêt était vide ; corrigés comme le test
 - **Le trésor des IA** : bâtiments, faubourgs et remparts faits, l'armée plafonnait au revenu (`AI.recruit` : au plus
   12 régiments de plus pour un trésor plein) et les ventes d'armes au marché remplissaient le trésor (60 000 à
   80 000 livres en 1802, 280 000 à 300 000 en 1878). Désormais l'argent qui dort au-delà de deux trésors de guerre
-  (`AI.idle_money`) paie des régiments de plus (quatre ans de solde d'un bataillon de ligne chacun), plus de remparts
+  (`AI.idle_money`) paie des régiments de plus (quatre ans de solde et de rations moyennes de l'armée chacun, et
+  seulement tant que le revenu en livres et en vivres reste positif : personne ne les licencie ensuite), plus de remparts
   (cinq ans d'entretien) et des bâtiments plus lents à rembourser (dix ans au lieu de quatre) ;
-  `test_campagne.IADepenseSonTresor`. Mesures : tableau du rapport du 26/10/2026 (`outils/simuler.py`, 1790 × 12 ans,
-  1870 × 8 ans, graines 11 et 21).
+  `test_campagne.IADepenseSonTresor`. Mesures (`outils/simuler.py`, qui compte aussi les mois de banqueroute et de
+  famine) : trésor moyen 1870 × 8 ans 303 900 → 36 700 livres (hommes 14 500 → 14 800), 1870 × 12 ans 25 300,
+  1790 × 15 ans 29 400 ; aucun mois de banqueroute ni de famine.
 - **Les assauts de place** : les remparts épais (Fort Médoc : 60 à 90 m sur l'axe) gardaient une brèche borgne (24 m de
   rayon, le mur intact derrière) ; les colonnes attendaient au pied sans chemin, des heures durant (banc : 7 h de
   bataille, 2 à 8 % de pertes). La brèche s'ouvre maintenant sur toute l'épaisseur du rempart, le long de l'axe de la
