@@ -3,17 +3,23 @@
 // (feux, lanternes, fenêtres, incendies, éclairs), remplie par les calques et allumée par ciel.js après la nuit.
 
 // zooms (pixels CSS par km) : de loin un signe, puis le plan des villes, les armées en colonnes (une bande de 600 hommes
-// fait 22 px), la vie (une charrette, une diligence y font un pixel ; « Livré — le zoom de la vie »), le plus près
-// (« Livré — la carte de campagne à la vraie taille » : 1 300 px/km au plus près, un cheval y fait 3 px)
-export const Z = { PLAN: 18, COLONNES: 110, VIE: 170, MAX: 1300 };
+// fait 22 px), la vie (« Livré — les figures lisibles » : les figures grossies y font 3,5 px la personne), le plus près
+// (« Livré — la carte de campagne à la vraie taille » : 1 300 px/km au plus près)
+export const Z = { PLAN: 18, COLONNES: 110, VIE: 110, MAX: 1300 };
 // mètres par unité de dessin des figures, à la vraie taille (un fantassin fait 4,3 unités d'épaules, 0,65 m ; un
 // cheval 16, 2,4 m) : la vue de l'intérieur (SPEC-CARTE-2D.md, « Livré — échelle réelle ») et la carte
 export const FIG = 0.15;
-// km par unité de dessin des figures (hommes, chevaux, charrettes) sur la carte : la vraie taille (avant, 0,0045 km,
-// celle de la maquette : un passant y faisait 19 m)
-export const U = FIG / 1000;
-// pixels CSS d'une figure de t unités au zoom z : sous un pixel, elle ne se dessine pas
-export const vue = (z, t) => z * U * t >= 1;
+// les figures lisibles : toutes grossies d'un même facteur k, pour qu'une personne (0,6 m) fasse au moins P px à l'écran ;
+// k = 1 dès que la vraie taille suffit (pxm : pixels CSS par mètre). Les bâtiments, rues, routes et plans n'en changent pas.
+export const P_FIG = 3.5;
+export const kFig = pxm => Math.max(1, P_FIG / (0.6 * pxm));
+// km par unité de dessin des figures sur la carte, grossies de K au zoom de l'image (echelle(z), à chaque image)
+export let K = 1, U = FIG / 1000;
+export const echelle = z => { K = kFig(z / 1000); U = K * FIG / 1000; };
+// une figure de t unités fait-elle un pixel au zoom z : à la vraie taille (vraie : étals, enclos, maisons des chantiers,
+// dessinés en unités de figure), grossie (vue : une personne toujours, de la vie)
+export const vraie = (z, t) => z * FIG / 1000 * t >= 1;
+export const vue = (z, t) => vraie(z * kFig(z / 1000), t);
 
 export const SAISONS = ['printemps', 'ete', 'automne', 'hiver'];
 // le serveur écrit « été »

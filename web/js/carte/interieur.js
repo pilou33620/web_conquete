@@ -8,7 +8,7 @@ import {
   distPoly, longueur, mod, sombre, surChemin, tenue, toile,
 } from './lib.js';
 import { carteDe, etatVille, planDe, peindreInterieurPas, lecture, navire, cleVille, IC, IW, IH, S, PONTS_DATES } from './villes.js';
-import { AMB, FIG } from './ambiance.js';
+import { AMB, FIG, kFig } from './ambiance.js';
 import { rejouer } from './rejeu.js';
 
 const TYPE_TXT = { capitale: 'Capitale', ville: 'Ville', village: 'Village', fort: 'Place forte' };
@@ -288,10 +288,12 @@ export function charrette(g, pas) {
   RR(g, '#8a6a45', -29, -5.3, 20, 10.6, .8); RR(g, '#b8a27a', -27.6, -4, 12, 8, .6);
 }
 function sous(sc, g) {
-  const px = sc.z * ECH;   // (pixels CSS par unité de figure)
+  const px = sc.z * ECH;   // (pixels CSS par unité de figure, à la vraie taille)
+  sc.ech = ECH;   // (les étals à la vraie taille, les figures grossies : « Livré — les figures lisibles »)
   if (px * 20 >= 1) for (const [x, y, a, k] of sc.etals || []) { sc.fig(g, x, y, a); g.scale(2.8, 2.8); etal(g, k); }   // (un étal : 3 m)
+  sc.ech = ECH * kFig(sc.z * S / 1000);
   for (const e of sc.vie) {
-    if (Math.abs(e.x - sc.cx) > sc.W / 2 / sc.m + 30 || Math.abs(e.y - sc.cy) > sc.H / 2 / sc.m + 30 || (TAILLE[e.k] || 1e9) * px < 1) continue;
+    if (Math.abs(e.x - sc.cx) > sc.W / 2 / sc.m + 30 || Math.abs(e.y - sc.cy) > sc.H / 2 / sc.m + 30 || (TAILLE[e.k] || 1e9) * sc.z * sc.ech < 1) continue;
     sc.fig(g, e.x, e.y, e.a); g.lineCap = 'round';
     if (e.k === 'passant') fantassin(g, e.L2, { role: 'h', habit: e.habit }, { legs: e.pas * TAU, arme: 'aucun' });
     else if (e.k === 'badaud') { E(g, e.c, 0, 0, 1.4, 2.1); C(g, '#2a2420', .3, 0, 1.1); if (e.poing) T(g, '#e8d2b0', .8, .9, 1.1, 3.6, 2); }

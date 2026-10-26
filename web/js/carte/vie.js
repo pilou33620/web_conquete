@@ -7,7 +7,7 @@ import {
   C, E, T, RR, OMBRE, BOIS, PAL, SPR, TAU, PEAU, bat, cheminee, charbonniere, stere, charrue, cloture, pietine, coneF,
   cheval as cheval0, cavalier as cavalier0, fantassin as fantassin0, tenue, sombre, clamp, lerp, mod, surChemin, distPoly, ligne, fumee, sprite,
 } from './lib.js';
-import { AMB, U, Z, LUM, bivouac, meteoEn, vue } from './ambiance.js';
+import { AMB, K, U, Z, LUM, bivouac, echelle, meteoEn, vraie, vue } from './ambiance.js';
 import { charrette } from './guerre.js';
 import { carteDe, etatVille, planDe, rayon, S as S_INT, IC, site } from './villes.js';
 
@@ -242,8 +242,8 @@ export function majEtat(st) {
 // ---------- petits dessins, en unités de figure (U km), repris de la maquette
 // De loin (moins d'un pixel par unité), les figures se dessinent en deux ou trois taches : les jambes, les bras, les
 // fusils et les épaulettes n'y feraient pas un pixel, et coûteraient le gros de l'image au zoom de la vie.
-// À la vraie taille (U = FIG / 1000), une personne fait moins d'un pixel jusqu'au zoom maximum : elle ne se dessine pas
-// (GENS) ; un cheval, à partir de 420 px/km (CHEVAL). La foule d'un marché ou d'une foire se voit en tache.
+// Grossies de K (U = K × FIG / 1000, « Livré — les figures lisibles »), une personne fait au moins 3,5 px : GENS et
+// CHEVAL dès la vie (Z.VIE). La foule d'un marché ou d'une foire, à la vraie taille, se voit en tache.
 let SIMPLE = false, GENS = false, CHEVAL = false;
 function fantassin(g, L, f, p) {
   if (!GENS) return;
@@ -415,6 +415,7 @@ function vieDePres(sc, g, x0, y0, x1, y1) {
       const h = hash2(ie, k, 31), sorte = hash2(ie, k, 32);
       let kind = r.royal ? (sorte < .05 ? 'malle' : sorte < .12 ? 'diligence' : sorte < .4 ? 'charrette' : sorte < .55 ? 'cavalier' : sorte < .62 ? 'troupeau' : 'pieton') : (sorte < .35 ? 'boeufs' : sorte < .5 ? 'troupeau' : sorte < .58 ? 'cavalier' : 'pieton');
       if (!vue(sc.z, sorte > .55 ? TAILLE.convoi : TAILLE[kind])) continue;   // (rien sous le pixel : ni calcul ni dessin)
+      if (hash2(ie, k, 38) * K > 6) continue;   // (grossis de K, un voyageur sur K / 6 : une figure tous les 120 px aux portes de Bordeaux, à tout zoom)
       let s, sens = h < .5 ? 1 : -1;
       if (k < n) s = mod(h * L + sens * VITESSE[kind] * t, L);
       else { const [, lam, i, r0] = k < n + va[0] ? va : vb, D = clamp(-lam * Math.log(hash2(ie, k, 36) * hash2(ie, k, 37) + 1e-9), .3, L - r0), u = h * 2 * D + VITESSE[kind] * t, q = r0 + pingpong(u, D); s = i ? L - q : q; sens = (mod(u, 2 * D) < D) === !i ? 1 : -1; }
@@ -422,9 +423,9 @@ function vieDePres(sc, g, x0, y0, x1, y1) {
       const mal = malheur(p.x, p.y);
       if (mal && sorte > .55) kind = mal === 2 && hash2(ie, k, 35) < .4 ? 'convoi' : 'mendiant';
       if (!vue(sc.z, TAILLE[kind])) continue;
-      const a = p.a + (sens < 0 ? Math.PI : 0), cote = .003, x = p.x - Math.sin(a) * cote, y = p.y + Math.cos(a) * cote, pas = t * 1.7 * TAU + k;
+      const a = p.a + (sens < 0 ? Math.PI : 0), cote = Math.max(.003, .001 * K), x = p.x - Math.sin(a) * cote, y = p.y + Math.cos(a) * cote, pas = t * 1.7 * TAU + k;
       if (soir && (kind === 'malle' || kind === 'diligence')) { const [lx, ly] = versMonde(x, y, a, 8, 0); LUM.push({ x: lx, y: ly, r: .012, a: .8, spr: 'fen' }); }   // la lanterne
-      if (sc.z * U * TAILLE[kind] < 6) { let l = taches.get(TEINTE[kind]); if (!l) taches.set(TEINTE[kind], l = []); l.push(x, y, a, TAILLE[kind] * U / 2); continue; }
+      if (sc.z * U * TAILLE[kind] < 3) { let l = taches.get(TEINTE[kind]); if (!l) taches.set(TEINTE[kind], l = []); l.push(x, y, a, TAILLE[kind] * U / 2); continue; }
       figK(sc, g, x, y, a);
       if (kind === 'troupeau') {
         g.scale(2, 2);   // (des brebis de 1,2 m)
@@ -464,11 +465,11 @@ function vieDePres(sc, g, x0, y0, x1, y1) {
   const sa = AMB.saison, taches = new Map(), betes = vue(z, 12);   // (une vache de 2,2 m ; un cerf, 1,8)
   const tache = (c, x, y, rx, ry, a) => { let l = taches.get(c); if (!l) taches.set(c, l = []); l.push(x, y, rx * U, ry * U, a); };
   for (let j = Math.max(0, Math.floor(y0)); j <= Math.min(VIE.H - 1, y1); j++) for (let i = Math.max(0, Math.floor(x0)); i <= Math.min(VIE.W - 1, x1); i++) {
-    const tt = TER[j * VIE.W + i]; if (tt <= 1) continue;
+    const tt = TER[j * VIE.W + i]; if (tt <= 1 || hash2(i, j, 39) * K > 12) continue;   // (grossis de K, un kilomètre sur K / 12 : à z 110, un quart)
     const cx = i + .5, cy = j + .5, dc = densite(cx, cy);
     if (betes && hash2(i, j, 76) <= dc) {
       const h = hash2(i, j, 77), bx = i + .2 + hash2(i, j, 78) * .6, by = j + .2 + hash2(j, i, 79) * .6;
-      const troupe = (n, fn) => { for (let m = 0; m < n; m++) { const ph = m * 2.1 + h * 9, x = bx + Math.cos(ph) * .03 + Math.sin(t * .05 + ph) * .02, y = by + Math.sin(ph * 1.3) * .025 + Math.cos(t * .04 + ph) * .015; if (dans(x, y)) fn(x, y, ph + t * .05, m); } };
+      const troupe = (n, fn) => { n = Math.min(n, Math.max(1, Math.round(n * 3 / K))); for (let m = 0; m < n; m++) { const ph = m * 2.1 + h * 9, x = bx + Math.cos(ph) * .03 + Math.sin(t * .05 + ph) * .02, y = by + Math.sin(ph * 1.3) * .025 + Math.cos(t * .04 + ph) * .015; if (dans(x, y)) fn(x, y, ph + t * .05, m); } };   // (grossies de K, moins de bêtes : pas en tas)
       if ((tt === TT.PLAINE || tt === TT.COLLINES || tt === TT.MONTAGNE) && h < .22 * BETES[sa] && neige(cx, cy) < .5) {
         if (SIMPLE) { if (h < .1) troupe(5, (x, y, a, m) => { const robe = m % 2 ? '#efe9dd' : '#c9a07a'; tache(robe, x, y, 6.2, 2.75, a); tache(sombre(robe, .08), ...versMonde(x, y, a, 6.7, 0), 2, 1.4, a); }); else troupe(10, (x, y, a) => tache('#f1efe6', x, y, 3.8, 2.6, a)); }   // (vaches de 2,2 m, brebis de 1,2 m)
         else if (h < .1) troupe(5, (x, y, a, m) => { figK(sc, g, x, y, a); const robe = m % 2 ? '#efe9dd' : '#c9a07a'; E(g, robe, 0, 0, 4.3, 1.9); E(g, '#3a2c22', -1.2, .5, 1.4, .9); E(g, sombre(robe, .08), 4.6 + Math.max(0, Math.sin(t + m)) * .8, 0, 1.4, .95); });
@@ -511,8 +512,8 @@ function eaux(sc, g, x0, y0, x1, y1, epoque) {
   if (z >= 40) {
     sc.monde(g);
     for (const [x, y, a] of VIE.parcs) { if (x < x0 || x > x1 || y < y0 || y > y1) continue; g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = 'rgba(196,204,186,.4)'; g.fillRect(-.16, -.08, .32, .16); g.strokeStyle = '#5e5440'; g.lineWidth = Math.max(.003, .6 / z); for (let u = -.15; u <= .151; u += .05) { g.beginPath(); g.moveTo(u, -.07); g.lineTo(u, .07); g.stroke(); } g.strokeRect(-.15, -.07, .3, .14); g.restore(); }
-    for (const [x, y] of VIE.tchanquees) { if (x < x0 || x > x1 || y < y0 || y > y1) continue; figK(sc, g, x, y, .4, 5); for (const [lx, ly] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) T(g, 'rgba(20,30,40,.35)', .5, lx, ly, lx + 6, ly + 8); RR(g, '#8a6a45', -4, -4, 8, 8, .4); bat(g, [{ t: 'g', x: -3, y: -2.5, w: 6, h: 5, p: 'tuile', h2: 1 }], 0, 0, 0, 1); }
-    for (const c of VIE.carrelets) { if (c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1) continue; figK(sc, g, c.x, c.y, c.a, 4); T(g, 'rgba(20,30,40,.35)', .6, 2, 1.5, 15, 3.5); T(g, '#6b4d31', .9, 0, 0, 13, 0); RR(g, '#7a5634', -3, -3, 6, 6, .4); RR(g, '#b0503a', -2.4, -2.4, 4.8, 4.8, .3); const lev = Math.sin(t * .15 + c.lev) > .3; g.strokeStyle = lev ? '#d9d2bc' : 'rgba(60,70,70,.55)'; g.lineWidth = .3; g.strokeRect(13, -4, 8, 8); g.beginPath(); g.moveTo(13, -4); g.lineTo(21, 4); g.moveTo(21, -4); g.lineTo(13, 4); g.stroke(); if (lev) for (let m = 0; m < 3; m++) C(g, '#c9d6dd', 15 + m * 2.5, 1 + Math.sin(t * 5 + m), .35); }
+    for (const [x, y] of VIE.tchanquees) { if (x < x0 || x > x1 || y < y0 || y > y1) continue; figK(sc, g, x, y, .4, 5 / K); for (const [lx, ly] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) T(g, 'rgba(20,30,40,.35)', .5, lx, ly, lx + 6, ly + 8); RR(g, '#8a6a45', -4, -4, 8, 8, .4); bat(g, [{ t: 'g', x: -3, y: -2.5, w: 6, h: 5, p: 'tuile', h2: 1 }], 0, 0, 0, 1); }
+    for (const c of VIE.carrelets) { if (c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1) continue; figK(sc, g, c.x, c.y, c.a, 4 / K); T(g, 'rgba(20,30,40,.35)', .6, 2, 1.5, 15, 3.5); T(g, '#6b4d31', .9, 0, 0, 13, 0); RR(g, '#7a5634', -3, -3, 6, 6, .4); RR(g, '#b0503a', -2.4, -2.4, 4.8, 4.8, .3); const lev = Math.sin(t * .15 + c.lev) > .3; g.strokeStyle = lev ? '#d9d2bc' : 'rgba(60,70,70,.55)'; g.lineWidth = .3; g.strokeRect(13, -4, 8, 8); g.beginPath(); g.moveTo(13, -4); g.lineTo(21, 4); g.moveTo(21, -4); g.lineTo(13, 4); g.stroke(); if (lev) for (let m = 0; m < 3; m++) C(g, '#c9d6dd', 15 + m * 2.5, 1 + Math.sin(t * 5 + m), .35); }
   }
   // gabares et navires (dès Z.BATEAUX, à taille constante à l'écran jusqu'au plus près)
   for (const b of VIE.bateaux) {
@@ -562,7 +563,8 @@ function relaisPoste(sc, g, x0, y0, x1, y1) {
     const nx = -Math.sin(r.a) * r.c, ny = Math.cos(r.a) * r.c, x = r.x + nx * .03, y = r.y + ny * .03, a = r.a + (r.c < 0 ? Math.PI : 0);
     sc.monde(g); g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = '#cdbf9f'; g.fillRect(-.02, -.0125, .04, .025); g.restore();
     bat(g, [{ t: 'g', x: -14, y: -9, w: 28, h: 7, p: 'tuile', h2: 1.6 }, cheminee(-8, -6), { t: 'g', x: 8, y: -2, w: 7, h: 12, p: 'tuile', h2: 1.3 }, { t: 'g', x: -14, y: 4, w: 16, h: 6, p: 'chaume', h2: 1.1 }], x, y, a, .0009);
-    if (CHEVAL) for (let m = 0; m < 4; m++) { if (hash2(m, r.x * 10 | 0, 96) > densite(x, y) + .3) continue; figK(sc, g, ...versMonde(x, y, a, -40 + m * 14, 60), a + Math.PI / 2 + m * .3); cheval(g, ['#6b4a2c', '#8b6a47', '#3f2d1f', '#54402e'][m], { bob: 0 }); }   // les chevaux de relève dans la cour
+    if (CHEVAL) for (let m = 0; m < (K > 10 ? 1 : 4); m++) {   // (grossis de K, de loin un seul cheval)
+      if (hash2(m, r.x * 10 | 0, 96) > densite(x, y) + .3) continue; figK(sc, g, ...versMonde(x, y, a, -40 + m * 14, 60, 1 / K), a + Math.PI / 2 + m * .3); cheval(g, ['#6b4a2c', '#8b6a47', '#3f2d1f', '#54402e'][m], { bob: 0 }); }   // les chevaux de relève dans la cour
     LUM.push({ x: r.x + nx * .02, y: r.y + ny * .02, r: Math.max(.006, 3 / sc.z), a: .8, spr: 'fen' });   // la lanterne du relais
   }
 }
@@ -575,7 +577,7 @@ function contrebande(sc, g, x0, y0, x1, y1) {
     const u = t * .0035 + P.ph * 50, s = pingpong(u, P.L), dir = mod(u, 2 * P.L) < P.L ? 1 : -1;
     // les contrebandiers passent plutôt la nuit, et pas sous les yeux d'une armée
     if (hash2(P.ph * 9 | 0, 1, 143) < densite(P.pts[0][0], P.pts[0][1]) + (AMB.heure === 'nuit' ? .9 : .5)) for (let m = 0; m < 5; m++) {
-      const q = surChemin(P.pts, clamp(s - dir * m * .004, 0, P.L)); if (q.x < x0 || q.x > x1 || q.y < y0 || q.y > y1) continue;
+      const q = surChemin(P.pts, clamp(s - dir * m * .004 * K, 0, P.L)); if (q.x < x0 || q.x > x1 || q.y < y0 || q.y > y1) continue;
       figK(sc, g, q.x, q.y, q.a + (dir < 0 ? Math.PI : 0)); const pas = t * 1.5 * TAU + m;
       if (m % 2) { cheval(g, '#5e4b3a', { gait: pas, bob: 0 }); RR(g, '#c9b48a', -2.4, -3.6, 4.8, 1.7, .4); RR(g, '#c9b48a', -2.4, 1.9, 4.8, 1.7, .4); T(g, '#6b4d31', .3, 0, -2, 0, 2); }   // mulets chargés de ballots
       else { fantassin(g, CIVILS[m].L, { role: 'h', habit: '#3a3530' }, { legs: pas, arme: 'aucun' }); C(g, '#2a2622', -.2, 0, 1.1); }   // le béret noir
@@ -609,10 +611,10 @@ function marches(sc, g, x0, y0, x1, y1) {
   if (!peu) return;
   // (à la vraie taille : les étals de 3 m sur la place, sur 12 à 35 m ; la foule en taches, une par personne)
   const foule = (l, c) => { if (!l.length) return; g.fillStyle = c; g.beginPath(); for (const [x, y, r] of l) { g.moveTo(x + r, y); g.arc(x, y, r, 0, TAU); } g.fill(); };
-  if (vue(z, 20)) for (const { n, x: mx, y: my } of VIE.marches) {   // (dès qu'un étal de 3 m fait un pixel)
+  if (vraie(z, 20)) for (const { n, x: mx, y: my } of VIE.marches) {   // (dès qu'un étal de 3 m fait un pixel)
     if (mx < x0 - 1 || mx > x1 + 1 || my < y0 - 1 || my > y1 + 1) continue;
     const pop = n.pop0 || 700, N = clamp(Math.round(4 + Math.sqrt(pop) / 4), 5, 26), R0 = Math.min(230, 80 + Math.sqrt(pop) * .8);
-    figK(sc, g, mx, my, 0);
+    figK(sc, g, mx, my, 0, 1 / K);   // (la place, ses étals et sa foule à la vraie taille)
     for (let k = 0; k < N; k++) { const a = k * 2.4, d = R0 * (.3 + .7 * Math.sqrt((k + .5) / N)); g.save(); g.translate(Math.cos(a) * d, Math.sin(a) * d); g.rotate(a + Math.PI / 2); g.scale(2.8, 2.8); etal(g, k); g.restore(); }
     const M = Math.round(N * 6 * peu * Math.min(1, densite(mx, my) * 2)), l = [];
     for (let m = 0; m < M; m++) { const a = m * 2.17 + Math.sin(t * .05 + m) * .4, d = R0 * (.2 + Math.sqrt((m + .5) / (N * 6)) * 1.15); l.push([Math.cos(a) * d, Math.sin(a) * d, 2.2]); }
@@ -623,15 +625,15 @@ function marches(sc, g, x0, y0, x1, y1) {
     const { x, y, a, n } = f;
     if (x < x0 - .5 || x > x1 + .5 || y < y0 - .5 || y > y1 + .5) continue;
     sc.monde(g); pietine(g, x, y, .16, .1, a, .32);
-    if (!vue(z, 48)) continue;   // (la foule et les enclos de 7 m, dès qu'un enclos fait un pixel)
-    figK(sc, g, x, y, a, 3);   // (les enclos de 7 m sur 5, les étals de 4 m, la foire sur 30 m)
+    if (!vraie(z, 48)) continue;   // (la foule et les enclos de 7 m, dès qu'un enclos fait un pixel)
+    figK(sc, g, x, y, a, 3 / K);   // (à la vraie taille, comme le marché : les enclos de 7 m sur 5, les étals de 4 m, la foire sur 30 m)
     for (let q = 0; q < 3; q++) cloture(g, (q - 1) * 20 - 8, -8, 16, 12);
     for (let k = 0; k < 4; k++) { g.save(); g.translate(-20 + k * 13, 12); g.scale(1.4, 1.4); etal(g, k + 2); g.restore(); }
     const l = []; for (let m = 0; m < 40 * peu; m++) l.push([(hash2(m, n.id, 124) - .5) * 60 + Math.sin(t * .1 + m) * 2, (hash2(n.id, m, 125) - .5) * 30 + 4, .75]);
     foule(l, '#5d554c');
     // les bêtes dans les enclos, à leur vraie taille
     for (let q = 0; q < 3; q++) for (let m = 0; m < 5; m++) {
-      figK(sc, g, ...versMonde(x, y, a, ((q - 1) * 20 - 5 + (m % 3) * 5) * 3, (-5 + (m / 3 | 0) * 6) * 3), a + m);
+      figK(sc, g, ...versMonde(x, y, a, ((q - 1) * 20 - 5 + (m % 3) * 5) * 3, (-5 + (m / 3 | 0) * 6) * 3, 1 / K), a + m, 1 / K);
       if (q === 0) { g.scale(1.45, 1.45); vache(g, 0, 0, 0, m % 2 ? '#efe9dd' : '#c9a07a'); }
       else if (q === 1) cheval(g, ['#6b4a2c', '#8b6a47', '#3f2d1f'][m % 3], { bob: 0 });
       else { g.scale(2, 2); mouton(g, 0, 0, 0); mouton(g, 2, 1, 0); }
@@ -699,16 +701,16 @@ function oiseaux(sc, g, x0, y0, x1, y1) {
 export const Z_BATEAUX = 10;
 export function dessinerSol(sc, g, x0, y0, x1, y1, epoque) {
   const z = sc.z;
-  SIMPLE = sc.m * U < 1; GENS = vue(z, 4.3); CHEVAL = vue(z, 16);
+  echelle(z); SIMPLE = sc.m * U < 1; GENS = CHEVAL = z >= Z.VIE;   // (grossis, toujours plus d'un pixel : dès la vie)
   if (VIE.cordouan && z >= 2.5) cordouan(sc, g);
   if (z >= Z_BATEAUX) eaux(sc, g, x0, y0, x1, y1, epoque);
   if (z >= 30) { relaisPoste(sc, g, x0, y0, x1, y1); contrebande(sc, g, x0, y0, x1, y1); }
-  if (vue(z, 60)) moulins(sc, g, x0, y0, x1, y1);   // (la tour de 9 m)
+  if (vraie(z, 60)) moulins(sc, g, x0, y0, x1, y1);   // (la tour de 9 m)
   if (z >= Z.VIE) vieDePres(sc, g, x0, y0, x1, y1);
 }
 export function dessinerDessus(sc, g, x0, y0, x1, y1) {
   const z = sc.z;
-  SIMPLE = sc.m * U < 1; GENS = vue(z, 4.3); CHEVAL = vue(z, 16);
+  echelle(z); SIMPLE = sc.m * U < 1; GENS = CHEVAL = z >= Z.VIE;   // (grossis, toujours plus d'un pixel : dès la vie)
   if (z >= 30) marches(sc, g, x0, y0, x1, y1);
   fumees(sc, x0, y0, x1, y1);
   // les fumées (lib.js fumee) : avancent avec le vent, grossissent et pâlissent

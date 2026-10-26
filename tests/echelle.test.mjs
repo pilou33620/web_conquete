@@ -13,7 +13,7 @@ const { fantassin, cheval, tenue } = await import('../web/js/carte/lib.js');
 const { navire, S } = await import('../web/js/carte/villes.js');
 const { charrette, ECH, NAV } = await import('../web/js/carte/interieur.js');
 const { compoColonne, charrette: charretteCarte } = await import('../web/js/carte/guerre.js');
-const { U } = await import('../web/js/carte/ambiance.js');
+const A = await import('../web/js/carte/ambiance.js');
 
 // un contexte qui ne dessine rien mais note les appels ; ses réglages sont des accesseurs, comme ceux d'un canevas
 class Faux {
@@ -80,8 +80,20 @@ test('rejeu : un tracé de plusieurs taches ne rejoue que celles de la fenêtre 
   assert.deepEqual(t.journal, f.journal, 'les tranches rejouent tous les appels, dans l’ordre');
 });
 
+test('les figures lisibles : la vraie taille au plus près de l’intérieur, au moins 3,5 px la personne de loin', () => {
+  assert.equal(A.kFig(6), 1, 'au zoom maximum de l’intérieur (6 px/m), la vraie taille');
+  assert.ok(A.kFig(0.5) > 1 && A.kFig(0.5) * 0.6 * 0.5 >= 3.5 - 1e-9, 'de loin, une personne grossie à 3,5 px');
+  const p = etendue(g => fantassin(g, tenue('fr', 'civil'), { role: 'h' }, { legs: 0, arme: 'aucun' })), c = etendue(g => charretteCarte(g, 0, false, 0));
+  for (const z of [A.Z.VIE, 450, A.Z.MAX]) {
+    A.echelle(z); const px = u => u * A.U * z;
+    assert.ok(px(p[3] - p[1]) >= 3.5 && px(p[3] - p[1]) < 4.5, `z ${z} : une personne fait ${px(p[3] - p[1]).toFixed(1)} px`);
+    assert.ok(Math.abs((c[2] - c[0]) / (p[3] - p[1]) - 6 / 0.65) < 2, 'toutes grossies du même facteur : la charrette reste à 9 personnes');
+  }
+  A.echelle(1e6); assert.equal(A.U, 0.00015, 'sans grossir, une unité de figure : 0,15 m, en km');
+});
+
 test('carte de campagne : les figures à leur vraie taille, la colonne à sa vraie longueur', () => {
-  assert.equal(U, 0.00015, 'une unité de figure : 0,15 m, en km');
+  A.echelle(1e6); const U = A.U;
   const c = etendue(g => charretteCarte(g, 0, false, 0)), km = u => u * U;
   assert.ok(km(c[2] - c[0]) > 0.005 && km(c[2] - c[0]) < 0.007, `une charrette attelée fait 6 m (${(km(c[2] - c[0]) * 1000).toFixed(1)} m)`);
   assert.ok(km(c[3] - c[1]) > 0.0015 && km(c[3] - c[1]) < 0.0022, `et 1,8 m de large, roues comprises (${(km(c[3] - c[1]) * 1000).toFixed(1)} m)`);

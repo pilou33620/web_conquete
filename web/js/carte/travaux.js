@@ -4,7 +4,7 @@
 // Chaussées, chemins de halage), routes coupées par la crue, feux de forêt des Landes l'été. Tout est tiré de la carte
 // (même endroit, mêmes ouvriers) ; appelé par carte/guerre.js (Guerre.dessus), au-dessus des villes.
 import { C, E, T, RR, PG, TAU, SPR, bat, cheval, clamp, mod, stere, surChemin } from './lib.js';
-import { AMB, LUM, U, Z, FEU_K, feuDe, vue } from './ambiance.js';
+import { AMB, K, LUM, U, Z, FEU_K, feuDe, vraie, vue } from './ambiance.js';
 import { terre, LARG_RIVIERE } from './terre.js';
 import { CIVILS, charrette, fantassin, flamme, phase, rayonMurs, rayonPlace, vache, versMonde } from './guerre.js';
 import { site } from './villes.js';
@@ -74,9 +74,12 @@ function rouleau(g, pas) { RR(g, '#6f6b63', -1.6, -3.2, 3.2, 6.4, 1.4); T(g, '#5
 export class Travaux {
   constructor(G) { this.G = G; this.sorties = new Map(); this.coupures = null; this.feux = null; }
   // un dessin peint une fois par échelle (Guerre.tampon), puis posé d'un drawImage : bw, bh, sa demi-étendue en unités
-  pose(sc, g, x, y, a, cle, bw, bh, fn) { if (vue(sc.z, 2 * Math.max(bw, bh))) this.G.poser(sc, g, x, y, a, this.G.tampon(sc, 'T|' + cle, bw, bh, fn)); }
-  // (une personne ne fait jamais un pixel à la vraie taille : de la vie, un point d'un pixel de son habit)
-  ouvrier(sc, g, x, y, a, k, t) { if (!vue(sc.z, 4.3)) return this.point(sc, g, x, y, CIVILS[k % CIVILS.length].habit); const q = Math.round(mod(t * 1.1 + k * 0.37, 1) * 6) % 6; this.pose(sc, g, x, y, a, `ouv|${k % 6}|${q}`, 7, 7, gg => ouvrier(gg, k % 6, q / 6)); }
+  // (s = 1 / K : un bâtiment à la vraie taille, dès 4 px, son image réduite de K coûtant ; les figures grossies de K :
+  // « Livré — les figures lisibles »)
+  pose(sc, g, x, y, a, cle, bw, bh, fn, s = 1) { if (vraie(sc.z * K * s, (s < 1 ? 8 : 2) * Math.max(bw, bh))) this.G.poser(sc, g, x, y, a, this.G.tampon(sc, 'T|' + cle, bw, bh, fn), s); }
+  // (une personne ne fait jamais un pixel à la vraie taille : de la vie, un point d'un pixel de son habit ; grossis de K, un
+  // ouvrier sur K / 20)
+  ouvrier(sc, g, x, y, a, k, t) { if (k % Math.ceil(K / 20)) return; if (!vue(sc.z, 4.3)) return this.point(sc, g, x, y, CIVILS[k % CIVILS.length].habit); const q = Math.round(mod(t * 1.1 + k * 0.37, 1) * 6) % 6; this.pose(sc, g, x, y, a, `ouv|${k % 6}|${q}`, 7, 7, gg => ouvrier(gg, k % 6, q / 6)); }
   point(sc, g, x, y, c) { const d = 1 / sc.z; sc.monde(g); g.fillStyle = c; g.fillRect(x - d / 2, y - d / 2, d, d); }
   charge(sc, g, x, y, a, pas, k) { if (!vue(sc.z, 41)) return; const q = phase(pas); this.pose(sc, g, x, y, a, `ch|${k}|${q}`, 32, 8, gg => charge(gg, q, k)); }
   // les routes qui sortent d'une place, chacune depuis la place (km) ; mêmes pour toujours
@@ -210,10 +213,10 @@ export class Travaux {
           const d = c.R + 0.03 + (k >> 1) * 0.014; if (d > s.L - 0.1) break;   // (des maisons de 12 m, à 10 m de la route)
           const p = surChemin(s.pts, d), sg = k % 2 ? 1 : -1, nx = -Math.sin(p.a), ny = Math.cos(p.a), x = p.x + nx * 0.01 * sg, y = p.y + ny * 0.01 * sg, et = etatMaison(k, 6, c.p);
           if (!G.dans(sc, x, y, 0.1)) continue;
-          this.pose(sc, g, x, y, p.a, 'maison|' + et, 50, 30, gg => { gg.scale(6.5, 6.5); maison(gg, et); });
+          this.pose(sc, g, x, y, p.a, 'maison|' + et, 50, 30, gg => { gg.scale(6.5, 6.5); maison(gg, et); }, 1 / K);   // (les maisons et leurs tas à la vraie taille)
           if (et === 'finie') continue;
-          this.pose(sc, g, x - nx * 0.006 * sg, y - ny * 0.006 * sg, p.a, 'tas|stere', 48, 15, gg => { gg.scale(3, 3); tasPierres(gg, -4, 0); stere(gg, 5, 0); });
-          if (vie) for (let m = 0; m < 2; m++) this.ouvrier(sc, g, ...versMonde(x, y, p.a, -8 + m * 16, -sg * 9), p.a + Math.PI / 2, k * 2 + m, t);
+          this.pose(sc, g, x - nx * 0.006 * sg, y - ny * 0.006 * sg, p.a, 'tas|stere', 48, 15, gg => { gg.scale(3, 3); tasPierres(gg, -4, 0); stere(gg, 5, 0); }, 1 / K);
+          if (vie) for (let m = 0; m < 2; m++) this.ouvrier(sc, g, ...versMonde(x, y, p.a, -8 + m * 16, -sg * 9, 1 / K), p.a + Math.PI / 2, k * 2 + m, t);
         }
         if (vie) { const q = surChemin(s.pts, c.R + 0.02); this.charge(sc, g, q.x, q.y, q.a, null, 'sac'); }
       } else {
@@ -222,9 +225,9 @@ export class Travaux {
         for (let k = 0; k < nb; k++) {
           const a = hash2(n.id, k, 170) * TAU, d = Math.sqrt(hash2(n.id, k, 171)) * rp, x = site(n)[0] + Math.cos(a) * d, y = site(n)[1] + Math.sin(a) * d;
           if (!G.dans(sc, x, y, 0.1)) continue;
-          this.pose(sc, g, x, y, a, 'echaf', 40, 27, gg => { gg.scale(6, 6); echafaudage(gg); });   // (une maison de 10 m)
-          if (k === 0) { G.figK(sc, g, x, y, 0, 5); grue(g, 0.6 + Math.sin(t * 0.2 + n.id) * 0.9); }
-          if (vie) this.ouvrier(sc, g, ...versMonde(x, y, a, 0, 12), a, k, t);
+          this.pose(sc, g, x, y, a, 'echaf', 40, 27, gg => { gg.scale(6, 6); echafaudage(gg); }, 1 / K);   // (une maison de 10 m)
+          if (k === 0) { G.figK(sc, g, x, y, 0, 5 / K); grue(g, 0.6 + Math.sin(t * 0.2 + n.id) * 0.9); }
+          if (vie) this.ouvrier(sc, g, ...versMonde(x, y, a, 0, 12, 1 / K), a, k, t);
         }
         if (vie) for (const s of this.sortiesDe(n).slice(0, 2)) {
           const L = Math.min(s.L, c.R + 1.5), p = surChemin(s.pts, L - mod(t * 0.0013 + n.id, L - c.R * 0.5));
@@ -255,7 +258,7 @@ export class Travaux {
       g.beginPath(); rem.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.strokeStyle = 'rgba(120,92,58,.85)'; g.lineWidth = Math.max(0.01, 4 / z); g.stroke();   // (le remblai, 10 m)
       g.strokeStyle = 'rgba(160,128,84,.9)'; g.lineWidth = Math.max(0.005, 2 / z); g.stroke();
       if (!vie) continue;
-      for (let k = 0; k < 8; k++) { const p = surChemin(R.pts, R.s0 + 0.02 + k * 0.02), sg = k % 2 ? 1 : -1; const [wx, wy] = versMonde(p.x, p.y, p.a, 0, sg * 4), wa = p.a + sg * Math.PI / 2; k % 3 === 2 ? this.pose(sc, g, wx, wy, wa, `brou|${k % 6}|${phase(pas)}`, 8, 5, gg => brouette(gg, k % 6, phase(pas))) : this.ouvrier(sc, g, wx, wy, wa, k, t); }
+      for (let k = 0; k < 8; k += Math.ceil(K / 20)) { const p = surChemin(R.pts, R.s0 + 0.02 + k * 0.02), sg = k % 2 ? 1 : -1; const [wx, wy] = versMonde(p.x, p.y, p.a, 0, sg * 4), wa = p.a + sg * Math.PI / 2; k % 3 === 2 ? this.pose(sc, g, wx, wy, wa, `brou|${k % 6}|${phase(pas)}`, 8, 5, gg => brouette(gg, k % 6, phase(pas))) : this.ouvrier(sc, g, wx, wy, wa, k, t); }
       const b = surChemin(R.pts, Math.max(0, R.s0 - 0.06)); G.figK(sc, g, ...versMonde(b.x, b.y, b.a, 0, 9), b.a);
       for (let k = 0; k < 5; k++) RR(g, '#5b4127', -6, -2.2 + k * 1.1, 12, 0.6, 0.2);   // les traverses empilées
       RR(g, '#4a4d52', -7, 4, 14, 0.5, 0.2); RR(g, '#4a4d52', -7, 5, 14, 0.5, 0.2);

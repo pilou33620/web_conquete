@@ -1028,6 +1028,26 @@ Avant : un voyageur tous les 1,1 km de route royale (2,2 km de chemin), partout 
   Bordeaux 2,9 / 2,0 et 2,2 / 2,0 → 2,5 / 2,4 ; z 1 300 route 1,3 / 1,2 et 1,2 / 1,1 → 1,4 / 1,5 ; ailleurs dans le bruit.
 - Banc : `vie.test.mjs` (une ville plus qu'un village, une capitale plus loin, la foire attire du monde).
 
+## Livré — les figures lisibles
+
+À la vraie taille, on ne distinguait plus personne sur les routes. Toutes les figures (gens, chevaux, voitures, bateaux,
+bêtes, soldats) grossissent d'un même facteur k = max(1, P / (0,6 m × pixels par mètre)), P = 3,5 px (`ambiance.js`,
+`kFig`, `echelle(z)` à chaque image : `U` = k × `FIG` / 1000) : une personne fait toujours au moins 3,5 px, une charrette
+36, et les proportions entre figures restent vraies. k vaut 53 à z 110, 13 à z 450, 4,5 à z 1 300 ; dans l'intérieur
+(`Scene.ech`), 1 au plus près (6 px/m). 5 px faisaient une charrette de 460 m à z 110.
+- Restent à la vraie taille (`vraie`, ou `s / K`) : bâtiments, rues, routes, plans ; étals, marchés et foire ; maisons,
+  échafaudages et grue des chantiers ; tentes et feux des camps et du siège, gabions ; fermes, tertres, cabanes
+  tchanquées et carrelets. Les vignettes des champs (moisson, estive, labour…) grossissent entières.
+- `Z.VIE` = 110 (comme avant « le zoom de la vie ») ; `GENS` et `CHEVAL` dès la vie.
+- Pas de tas, et un coût borné : un voyageur sur k / 6 (une figure tous les 120 px aux portes de Bordeaux, à tout zoom), à
+  k m de l'axe ; un kilomètre de champs sur k / 12 (un quart à z 110), moins de bêtes par troupeau ; un blessé, prisonnier,
+  fourgon, mort, danseur sur k / 10, un ouvrier sur k / 20.
+- La colonne garde sa vraie longueur (s'allonger de k la ferait 12 km pour 600 hommes à z 110) : sur sa bande, un fantassin
+  tous les 0,8 k m (un pour 3 k hommes), un cavalier tous les 3 k m.
+- Mesures (`integration/vie3/h3.cjs`, médianes de 120 images, deux passes, avant → après) : z 110 Bordeaux 2,1 / 1,8 →
+  2,5 / 2,5 ms, champ 2,1 / 2,1 → 2,6 / 2,6, siège 2,5 / 2,3 → 2,6 / 2,5 ; z 450 2,3 / 2,3 → 2,5 / 2,7 ; z 1 300 2,4 / 1,9 →
+  2,1 / 2,2. Captures : `integration/figures/`. Banc : `echelle.test.mjs`.
+
 ## Livré — petits défauts de la relecture
 
 - Les bornes (27 cm, une par kilomètre des routes royales empierrées) et les balises du chemin de halage n'étaient jamais
