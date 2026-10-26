@@ -12,6 +12,7 @@ jamais être perdue. Bugs déjà rattrapés, à ne pas revoir :
 - une sauvegarde manuelle nommée « sauvegarde-automatique » était écrasée au mois suivant.
 """
 import contextlib
+import hashlib
 import http.client
 import io
 import json
@@ -23,6 +24,7 @@ from http.server import ThreadingHTTPServer
 
 import fabrique  # noqa: F401  (chemins, journal des batailles coupé)
 import server
+from game import views as V
 from game.engine import Game
 
 
@@ -190,6 +192,40 @@ class Sauvegardes(unittest.TestCase):
         with open(os.path.join(server.SAVES, server.AUTOSAVE + '.json'), encoding='utf-8') as f:
             self.assertEqual(json.load(f)['meta']['player'], '33')
         self.assertEqual([s['name'] for s in app.list_saves()], [server.AUTOSAVE])
+
+    def test_une_ancienne_sauvegarde_garde_sa_carte(self):
+        """Une sauvegarde d'avant les versions de la géographie (sans « geo ») se charge sur la carte d'alors
+        (game/data/geo_v1.json) : ses armées restent sur leurs routes, la crue y coupe les mêmes routes (27), et la page
+        reçoit cette carte."""
+        app = self.app()
+        app.geos, app.static, app.geo = {fabrique.GEO.version: fabrique.GEO}, {}, fabrique.GEO
+        ancienne = app.geo_for(1)
+        empreinte = hashlib.sha1(json.dumps([ancienne.nodes, ancienne.edges], sort_keys=True).encode() + bytes(ancienne.terrain)
+                                 + bytes(ancienne.river) + bytes(ancienne.cellnode)).hexdigest()
+        self.assertEqual(empreinte, '7a894dddd683355a40157ce2f178ee8dd5a5b720', 'la carte des anciennes parties ne change pas')
+        g = Game(ancienne, '33', 'normal', 1, '1790')
+        a = fabrique.armee(g)
+        nm = {n['name']: n['id'] for n in ancienne.nodes}
+        e = next(e for e in ancienne.edges if {e['a'], e['b']} == {nm['Bordeaux'], nm['Libourne']})
+        a.update(state='move', at_node=None, edge=dict(e=e['id'], frm=e['a'], pos=5.0),
+                 path=[dict(kind='road', e=e['id'], frm=e['a'], to=e['b'], pos=5.0)])
+        a['x'], a['y'] = g.edge_xy(e, e['a'], 5.0)
+        g.flood_until = g.t + 30
+        d = json.loads(json.dumps(V.to_dict(g)))
+        del d['geo']   # (le format d'avant)
+        with open(os.path.join(server.SAVES, 'ancienne.json'), 'w', encoding='utf-8') as f:
+            json.dump(dict(meta={}, game=d), f)
+        with self.assertRaises(ValueError):
+            V.from_dict(fabrique.GEO, d)   # (jamais sur la carte des nouvelles parties)
+        self.assertTrue(app.load('ancienne')['ok'])
+        g2 = app.game
+        self.assertIs(g2.geo, ancienne)
+        a2 = g2.armies[a['id']]
+        self.assertEqual(a2['edge'], dict(e=e['id'], frm=e['a'], pos=5.0))
+        self.assertEqual((a2['x'], a2['y']), g2.edge_xy(g2.geo.edges[e['id']], e['a'], 5.0))
+        self.assertEqual(len(g2.cut_edges()), 27)
+        self.assertTrue(app.payload(g2.geo)[0].endswith(b'"ver":"%s/1"}' % str(server.UPDATE['version']).encode()))
+        self.assertEqual(V.to_dict(g2)['geo'], 1, 'resauvegardée, elle garde sa carte')
 
 
 

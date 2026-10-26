@@ -46,15 +46,15 @@ from game import views as V  # noqa: E402
 from game.engine import Game  # noqa: E402
 from game.tactics import bridge as TB  # noqa: E402
 from game.tactics import skirmish as SK  # noqa: E402
-from game.geo import GeoMap  # noqa: E402
+from game.geo import GeoMap, VERSION as GEO_VERSION  # noqa: E402
 
 
 class App:
     def __init__(self):
         t0 = time.time()
         print('Préparation de la carte de l\'Aquitaine…', flush=True)
-        self.geo = GeoMap()
-        CR.spans(self.geo)   # les routes que la crue coupe : calculées ici (environ 1 s) plutôt qu'au premier état en crue
+        self.geos, self.static = {}, {}
+        self.geo = self.geo_for(GEO_VERSION)   # la carte des nouvelles parties
         nw = sum(1 for e in self.geo.edges if e.get('kind') == 'water')
         print(f'Carte prête ({time.time() - t0:.1f} s) : {len(self.geo.nodes)} villes et villages, '
               f'{len(self.geo.edges) - nw} routes, {nw} tronçons navigables.', flush=True)
@@ -64,15 +64,26 @@ class App:
         self.port = 8790
         self.lan = False
         self.ips = []
-        payload = dict(map=dict(self.geo.client_payload(), rails=RL.client_payload(self.geo)), rules=V.rules_payload(),
-                       skirmish=SK.options(self.geo),
-                       ver=UPDATE['version'])
-        raw = json.dumps(payload, ensure_ascii=False, separators=(',', ':'), default=str).encode('utf-8')
-        self.static_raw = raw
-        self.static_gz = gzip.compress(raw, 6)
+        self.payload(self.geo)
         os.makedirs(SAVES, exist_ok=True)
         self._auto_key = None
         self.load_autosave()
+
+    def geo_for(self, v):
+        """La carte d'une géographie (une ancienne partie garde la sienne : geo.py), faite au premier besoin."""
+        if v not in self.geos:
+            self.geos[v] = GeoMap(v)
+            CR.spans(self.geos[v])   # les routes que la crue coupe : calculées ici (environ 1 s) plutôt qu'au premier état en crue
+        return self.geos[v]
+
+    def payload(self, geo):
+        """/api/map pour cette carte (brut, compressé), calculé une fois."""
+        if geo.version not in self.static:
+            payload = dict(map=dict(geo.client_payload(), rails=RL.client_payload(geo)), rules=V.rules_payload(),
+                           skirmish=SK.options(self.geo), ver=ver(geo))
+            raw = json.dumps(payload, ensure_ascii=False, separators=(',', ':'), default=str).encode('utf-8')
+            self.static[geo.version] = raw, gzip.compress(raw, 6)
+        return self.static[geo.version]
 
     def loop(self):
         last = time.monotonic()
@@ -392,7 +403,7 @@ class App:
                 data = json.load(f)
             if data['game'].get('over'):
                 return
-            self.game = V.from_dict(self.geo, data['game'])
+            self.game = V.from_dict(self.geo_for(data['game'].get('geo', 1)), data['game'])
             print(f"Partie reprise depuis la sauvegarde automatique ({data['meta'].get('faction')}, "
                   f"{data['meta'].get('date')}).", flush=True)
         except Exception:
@@ -414,7 +425,7 @@ class App:
         try:
             with open(path, encoding='utf-8') as f:
                 data = json.load(f)
-            game = V.from_dict(self.geo, data['game'])
+            game = V.from_dict(self.geo_for(data['game'].get('geo', 1)), data['game'])
         except Exception:
             traceback.print_exc()
             return dict(ok=False, msg='Sauvegarde illisible ou abîmée.')
@@ -423,6 +434,11 @@ class App:
 
 
 APP = None
+
+
+def ver(geo):
+    """Version du jeu et de la carte servie : la page se recharge si l'une change (mise à jour, ancienne partie chargée)."""
+    return f"{UPDATE['version']}/{geo.version}"
 
 
 class GzipCache:
@@ -530,9 +546,11 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         path = u.path
         if path == '/api/map':
+            g = APP.game
+            raw, gz = APP.payload(g.geo if g else APP.geo)   # (la carte de la partie en cours)
             if 'gzip' in self.headers.get('Accept-Encoding', ''):
-                return self._send(200, APP.static_raw, gz=APP.static_gz)
-            return self._send(200, APP.static_raw)
+                return self._send(200, raw, gz=gz)
+            return self._send(200, raw)
         if path == '/api/state':
             q = parse_qs(u.query)
             try:
@@ -541,9 +559,9 @@ class Handler(BaseHTTPRequestHandler):
                 since = 0
             with APP.lock:
                 if not APP.game:
-                    return self._json(dict(game=None, ver=UPDATE['version']))
+                    return self._json(dict(game=None, ver=ver(APP.geo)))
                 st = V.player_state(APP.game, since)
-            st['ver'] = UPDATE['version']   # le client recharge la page si le serveur a changé de version
+                st['ver'] = ver(APP.game.geo)   # le client recharge la page si le serveur ou la carte de la partie a changé
             return self._json(st)
         if path in ('/api/tactic', '/api/tactic_map'):
             q = parse_qs(u.query)

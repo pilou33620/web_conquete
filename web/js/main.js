@@ -19,11 +19,13 @@ let skirmishBid = null;   // mode Bataille : la bataille isolée en cours (au re
 let epoch = 0, lost = false;   // epoch : change à chaque resetUI, pour jeter les réponses d'une ancienne partie
 let bootVer, reloading = false;  // version du serveur au chargement de la page
 
-// le serveur a été relancé sur une nouvelle version : cette page tourne encore avec l'ancien code
+// le serveur a été relancé sur une nouvelle version, ou la partie chargée a une autre carte (« version/géographie ») :
+// cette page tourne encore avec l'ancien code ou l'autre carte
 function checkVersion(ver) {
   if (!ver || bootVer === undefined || ver === bootVer || reloading) return reloading;
   reloading = true;
-  ui && ui.toast('Nouvelle version du jeu installée : la page va se recharger.', 'good');
+  const carte = ver.split('/')[0] === String(bootVer).split('/')[0];
+  ui && ui.toast(carte ? 'Cette partie a sa propre carte : la page va se recharger.' : 'Nouvelle version du jeu installée : la page va se recharger.', 'good');
   setTimeout(() => location.reload(), 2500);   // la partie est sur le serveur : rien n'est perdu
   return true;
 }

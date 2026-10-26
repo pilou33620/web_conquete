@@ -3,6 +3,11 @@ réseau routier et recherche de chemin hors route (A*).
 
 Tout est calculé en kilomètres. Une cellule de grille = 1 km x 1 km.
 Le résultat est mis en cache dans data/map_cache.json (régénéré si la source change).
+
+Versions de la géographie (VERSION, notée dans la sauvegarde : une partie garde la sienne, ses routes, ses crues et ses
+cartes de bataille) : 1, les données d'avant (data/geo_v1.json, figé, avec la place d'alors des villes déplacées depuis) ;
+2, les rivières affinées et les villes à leur vraie place. Une modification du calcul de ce fichier change aussi la carte
+des anciennes parties.
 """
 import base64
 import hashlib
@@ -15,6 +20,7 @@ from .places import PLACES, ROYAL_ROUTES, EXTRA_ROADS, FERRIES, CITY_SPECIALTIES
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 CACHE_VERSION = 7
+VERSION = 2
 
 LAT_REF = 44.25
 KX = 111.32 * math.cos(math.radians(LAT_REF))
@@ -98,8 +104,10 @@ def _seg_inter(p1, p2, p3, p4):
 
 
 class GeoMap:
-    def __init__(self):
-        with open(os.path.join(DATA_DIR, 'geo.json'), encoding='utf-8') as f:
+    def __init__(self, version=VERSION):
+        self.version = version
+        self.suffixe = '' if version == VERSION else f'_v{version}'
+        with open(os.path.join(DATA_DIR, f'geo{self.suffixe}.json'), encoding='utf-8') as f:
             self.src = json.load(f)
         b = self.src['bounds']
         self.lon0, self.lon1, self.lat0, self.lat1 = b['lon0'], b['lon1'], b['lat0'], b['lat1']
@@ -153,7 +161,7 @@ class GeoMap:
         self.nodes = []
         self.by_name = {}
         for k, (name, lat, lon, dept, typ, spec, fort) in enumerate(PLACES):
-            x, y = self.xy(lat, lon)
+            x, y = self.xy(*self.src.get('places', {}).get(name, (lat, lon)))   # (une ancienne géographie : la place d'alors)
             n = dict(id=k, slug=slugify(name), name=name, x=round(x, 2), y=round(y, 2), dept=dept,
                      type=typ, spec=list(spec), fort=fort)
             if name in CITY_SPECIALTIES:
@@ -177,7 +185,7 @@ class GeoMap:
         return h.hexdigest()
 
     def _load_or_generate(self):
-        path = os.path.join(DATA_DIR, 'map_cache.json')
+        path = os.path.join(DATA_DIR, f'map_cache{self.suffixe}.json')
         hsh = self._src_hash()
         if os.path.exists(path):
             try:

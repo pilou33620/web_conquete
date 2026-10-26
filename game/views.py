@@ -31,6 +31,7 @@ def to_dict(g):
                              refused=[[k, v] for k, v in ai.refused.items()])
                      for c, ai in getattr(g, 'ais', {}).items()}
     d['version'] = 2
+    d['geo'] = g.geo.version   # la géographie de la partie (geo.VERSION) : une ancienne partie garde la sienne
     TB.save_into(g, d)   # réglage des batailles et bataille tactique en cours
     return d
 
@@ -93,6 +94,8 @@ def migrate(g):
 
 
 def from_dict(geo, d):
+    if geo.version != d.get('geo', 1):
+        raise ValueError(f"sauvegarde de la géographie {d.get('geo', 1)}, carte {geo.version}")
     g = Game.__new__(Game)
     g.geo = geo
     for k in SAVE_KEYS:
