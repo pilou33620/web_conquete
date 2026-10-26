@@ -880,3 +880,28 @@ faubourgs aérés, un rayon un peu plus court.
   3,5 → 2,8 / 2,6, champ 3,2 / 4,0 → 2,8 / 2,7 ; z 450 Bordeaux 2,5 / 2,4 → 2,7 / 2,5, champ 2,3 / 1,7 → 2,2 / 1,9 (dans le
   bruit de la machine).
 
+
+## Captures de contrôle (après les trois lots précédents)
+
+États préparés à la main, aucune partie ni bataille jouée (`integration/controle/`) : `1-siege-bayonne-debut-ensemble.png` et
+`2-siege-bayonne-debut-ville.png` (assaut de Bayonne préparé par `onStartSkirmish`, en déploiement, `siege-debut.cjs`),
+`3-bordeaux-gaz-nuit-z90.png`, `4-cordon-libourne-z220.png`, `5-crue-route-coupee-z400.png` (la coupure de la route de
+Cubzac posée dans l'état, `cut`), `6-bayonne-murs-z45.png` (le tracé bastionné et la citadelle sur la carte),
+`7-vie-bordeaux-marche-z450.png` ; scripts `../c1/cap.cjs` (état forcé, vues, intérieurs) et `h3z.cjs`.
+
+- Corrigé :
+  - le pont d'une route dont le tracé a plusieurs segments était tourné selon le segment dont le milieu est le plus proche,
+    pas celui qui passe l'eau (le pont de Cubzac de travers sur la Dordogne) : `map.js`, `prepEdges`, la distance au segment ;
+  - les réverbères au gaz éclairaient les rues des clos et toutes celles à moins de 24 unités d'un îlot (les faubourgs aérés
+    restaient illuminés) : seulement le long des îlots bâtis, à moins de 20 unités (`ciel.js`, `reverberes`).
+- À décider :
+  - Libourne (600 m) et Bayonne (800 m) ne touchent plus leurs rivières : la ville rétrécit autour de son point, la Dordogne,
+    l'Isle, l'Adour passent hors les murs ; le port et ses quais n'ont plus d'eau (il faudrait décaler le centre du plan vers
+    l'eau, ou garder le rayon des ports) ;
+  - le mur rond de la carte (et de l'intérieur) traverse la Garonne à Bordeaux, ses tours dans l'eau ;
+  - la vie à la vraie taille est rare : un voyageur visible tous les 2 à 3 km de route royale, une scène des champs par km² ;
+    à 600 px/km l'écran (2 km sur 1,3) n'en montre souvent aucune ; la densifier coûterait des figures par image ;
+  - sur la carte, la route de Libourne passe la Garonne à Bordeaux sans pont ni bac (`geo.py` ne retient qu'un passage par
+    route, ici celui de la Dordogne) ; de même pour toute route qui passe deux rivières ;
+  - dans les batailles, les clos n'ont que leur teinte (ni arbres du plan, ni hangar), les vergers ont les arbres des cases
+    `VERGER`.

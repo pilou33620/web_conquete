@@ -6,7 +6,7 @@ import { AMB, HEURES, LUM, Z, setHeure, zoneDe } from './ambiance.js';
 import { SPR, TAU, clamp, mod, sprite, surChemin } from './lib.js';
 import { rayonPlace } from './guerre.js';
 import { terre } from './terre.js';
-import { IC, S as SU, etatVille, imageEnCache, resPour } from './villes.js';
+import { CLOS, IC, S as SU, etatVille, imageEnCache, resPour } from './villes.js';
 
 sprite('fen', '255,214,140'); sprite('pluie', '64,74,88'); sprite('gaz', '226,236,255');
 const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -299,9 +299,9 @@ export class Ciel {
 
 // les réverbères le long des rues d'un plan V (unités de l'intérieur, centre IC), en km autour de la place (x, y) : un
 // tous les 13 unités (70 m), au même endroit d'une nuit à l'autre ; seulement entre les maisons (les rues d'un plan en
-// damier passent aussi là où il n'a pas gardé d'îlot)
+// damier passent aussi là où il n'a pas gardé d'îlot ; ni le long des clos, villes.js CLOS)
 export function reverberes(V, x, y) {
-  const out = [], bati = (u, v) => V.ilots.some(b => Math.abs(b.c[0] - u) < 24 && Math.abs(b.c[1] - v) < 24);
+  const out = [], bati = (u, v) => V.ilots.some(b => !CLOS.includes(b.role) && Math.abs(b.c[0] - u) < 20 && Math.abs(b.c[1] - v) < 20);   // (la rue d'un îlot bâti, pas celle d'après)
   for (const r of V.rues) for (let i = 1; i < r.pts.length; i++) {
     const [ax, ay] = r.pts[i - 1], [bx, by] = r.pts[i], l = Math.hypot(bx - ax, by - ay);
     for (let d = 6.5; d < l; d += 13) { const u = ax + (bx - ax) * d / l, v = ay + (by - ay) * d / l; if (bati(u, v)) out.push([x + (u - IC[0]) / SU, y + (v - IC[1]) / SU]); }

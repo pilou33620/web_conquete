@@ -225,7 +225,8 @@ export class MapView {
         e.pontAn ??= PONTS_DATES.find(([v, r]) => r === e.river && [A, B].some(n => n.name === v && Math.hypot(n.x - e.bx, n.y - e.by) < 2))?.[2] || 0;
         let best = 1e9;
         for (let i = 1; i < e.pts.length; i++) {
-          const [p, q] = [e.pts[i - 1], e.pts[i]], d = Math.hypot((p[0] + q[0]) / 2 - e.bx, (p[1] + q[1]) / 2 - e.by);
+          // (la distance au segment, pas à son milieu : un long segment qui passe sur le pont perdait contre un court voisin)
+          const [p, q] = [e.pts[i - 1], e.pts[i]], dx = q[0] - p[0], dy = q[1] - p[1], u = clamp(((e.bx - p[0]) * dx + (e.by - p[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1), d = Math.hypot(p[0] + dx * u - e.bx, p[1] + dy * u - e.by);
           if (d < best) { best = d; e.bang = Math.atan2(q[1] - p[1], q[0] - p[0]); }
         }
       }
