@@ -995,7 +995,7 @@ class TraceDesRoutes(unittest.TestCase):
 
 class RoutesCoupeesParLaCrue(unittest.TestCase):
     def test_coupee_en_avril_pas_en_juin_et_l_armee_y_marche_lentement(self):
-        """Les hautes eaux de mars et avril (ou la crue tirée) coupent les routes des prés noyés (le critère de la carte,
+        """La grande crue (tirée un printemps sur cinq environ) coupe les routes des prés noyés (le critère de la carte,
         game/crue.py) : la vue les envoie, l'armée y perd un jour sur l'arête, la recherche de chemin le sait."""
         g = partie()
         g.flood_until = -1
@@ -1006,10 +1006,12 @@ class RoutesCoupeesParLaCrue(unittest.TestCase):
         e = GEO.edges[eid]
         g.has_sapeurs = lambda a: True   # (sans l'attente au bac : ces routes passent toutes le fleuve)
         g.t = datetime.date(an, 4, 15).toordinal() - g.start_ord
+        self.assertEqual(g.cut_edges(), {}, 'pas de crue tirée : avril ne coupe rien')
+        g.flood_until = g.t + 30
         self.assertIn(eid, g.cut_edges())
         self.assertIn(eid, [c[0] for c in V.player_state(g)['cut']])
         g.t = datetime.date(an, 6, 15).toordinal() - g.start_ord
-        self.assertEqual(g.cut_edges(), {})
+        self.assertEqual(g.cut_edges(), {}, 'la crue passée')
         self.assertNotIn('cut', V.player_state(g))
         a = armee(g)
 

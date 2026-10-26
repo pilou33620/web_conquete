@@ -472,8 +472,8 @@ Le ciel (`ciel.js`) :
     sur la chaussée dès z 40, une charrette arrêtée devant dès `Z.VIE` ;
   - **feux des Landes** (`feuxDe`) : le panache noir de loin, les flammes sur la lisière dès z 10, la lueur (`LUM`,
     aussi de jour).
-- **Règle de la crue** (`game/crue.py`, décision du joueur) : pendant la crue (`Game.flooded` : les hautes eaux de mars et
-  avril, ou les 10 jours de `flood_until` tirés au printemps), les routes coupées (`Game.cut_edges`) : là où une route
+- **Règle de la crue** (`game/crue.py`, décision du joueur) : pendant la crue (`Game.flooded` : la grande crue de `flood_until`,
+  tirée en mars un printemps sur cinq environ, pour 3 à 6 semaines ; décision du joueur : pas tous les ans), les routes coupées (`Game.cut_edges`) : là où une route
   (ni bac ni voie d'eau) passe plus de 240 m dans les prés noyés (échantillons tous les 120 m), loin des places
   (`rayonPlace` + 0,5 km), d'après le critère des tuiles (`inonde`, ci-dessous) recalculé côté serveur sur les données
   de `client_payload` (relief approché, distance au fleuve en flottants 32 bits : la même liste que la carte). Calculé
@@ -483,13 +483,14 @@ Le ciel (`ciel.js`) :
   compte (+22 km équivalents), donc la recherche de chemin, l'IA et l'arrivée estimée (`turns.eta`)
   aussi. Vue : `cut = [[arête, début, fin], …]` (km le long du tracé), seulement pendant la crue ; la fiche d'une
   armée du joueur dont l'itinéraire passe par une route coupée le dit. Bancs : `test_campagne.RoutesCoupeesParLaCrue`.
-- Tuiles (`terre.js`, `ambiance.js`), dans `cleTuiles` : **crue** (`AMB.crue` : `flood` de l'état, ou les hautes eaux de
-  mars et avril, la période de `Game.flooded` ; pas la pluie du jour, qui repeindrait les tuiles à chaque averse) : les prés bas (altitude approchée < 0,11) à moins de 0,25 à 1,35 km de
+- Tuiles (`terre.js`, `ambiance.js`), dans `cleTuiles` : **crue** (`AMB.crue` : `flood` de l'état, la période de
+  `Game.flooded` ; pas la pluie du jour, qui repeindrait les tuiles à chaque averse) : les prés bas (altitude approchée < 0,11) à moins de 0,25 à 1,35 km de
   la Garonne et de la Dordogne (`Terre.CRUE`, distance au fleuve par case, `inonde`) sous une eau trouble, sans
-  parcelles ni arbres ; **brûlis** (`feuDe`, `brule`, `FEU_K` = 7 km, `FEU_MOIS` juin à novembre) : un carré de 7 km
-  sur sept a son feu de l'année, allumé en juin, juillet ou août, de 0,5 à 1,6 km de rayon, noir sans arbres jusqu'en
+  parcelles ni arbres ; **brûlis** (`feuDe`, `brule`, `FEU_K` = 7 km, `FEU_MOIS` juin à novembre) : les étés secs seulement
+  (`anneeSeche`, un sur trois environ ; décision du joueur), un carré de 7 km sur 48 a son feu de l'année (2 à 5 feux sur
+  toute la forêt), allumé en juin, juillet ou août, de 0,5 à 1,6 km de rayon, noir sans arbres jusqu'en
   novembre, dans la pinède (forêt et lande). `AMB.mois` vient de la date de l'état ; la clé change chaque mois de juin
-  à novembre (le fond et les tuiles se repeignent une fois par mois, comme au changement de saison).
+  à novembre des étés secs (le fond et les tuiles se repeignent une fois par mois, comme au changement de saison).
 - `carte/ciel.js` : **gaz** (`factions[].mk` `gaz`) : la nuit, le halo des villes du camp plus blanc (sprite `gaz`) ;
   dès `Z.PLAN`, des réverbères blancs tous les 70 m le long des rues du plan, entre les maisons seulement
   (`reverberes`).

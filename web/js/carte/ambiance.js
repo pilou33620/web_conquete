@@ -49,7 +49,7 @@ export function majAmbiance(map, st) {
   for (const z of Object.keys(AMB.meteo)) AMB.meteo[z] = st.weather?.[z]?.kind || 'soleil';
   const m = MOIS.findIndex(x => st.date?.includes(' ' + x + ' '));
   if (m >= 0) AMB.mois = m;
-  AMB.crue = !!st.flood || AMB.mois === 2 || AMB.mois === 3;   // les hautes eaux de mars et avril, ou la crue du serveur : la période de Game.flooded, celle des routes coupées (stable : les tuiles ne se repeignent pas à chaque averse)
+  AMB.crue = !!st.flood;   // la grande crue, quand le serveur la tire (un printemps sur cinq environ) : la période de Game.flooded, celle des routes coupées ; pas la pluie du jour
   const R = { village: 3, fort: 3, ville: 4.5, capitale: 6 };
   AMB.disette = (map?.nodes || []).filter(n => { const ns = st.nodes?.[n.id]; return ns && (ns.lv?.[0] === 'disette' || (st.me?.famine && ns.o === st.me.code)); })
     .map(n => [n.x, n.y, R[n.type] || 3]);
@@ -57,21 +57,22 @@ export function majAmbiance(map, st) {
 }
 // ce dont dépend la peinture des tuiles : la saison, la neige tombée là où il neige, les friches, la crue, les brûlis
 export const cleTuiles = () => AMB.saison + ':' + Object.entries(AMB.meteo).filter(([, k]) => k === 'neige').map(([z]) => z).join(',') + ':' + AMB.disette.map(d => d[0] + ',' + d[1]).join(';')
-  + ':' + (AMB.crue ? 'crue' : '') + ':' + (AMB.mois >= FEU_MOIS[0] && AMB.mois <= FEU_MOIS[1] ? AMB.annee + '-' + AMB.mois : '');
+  + ':' + (AMB.crue ? 'crue' : '') + ':' + (AMB.mois >= FEU_MOIS[0] && AMB.mois <= FEU_MOIS[1] && anneeSeche(AMB.annee) ? AMB.annee + '-' + AMB.mois : '');
 export const enDisette = (x, y) => AMB.disette.some(([px, py, r]) => (x - px) ** 2 + (y - py) ** 2 < r * r);
 
 // lumières de l'image : { x, y (km), r (km), a (0-1), jour (visible aussi de jour : incendies, éclairs), spr ('lueur' | 'fen') }
 export const LUM = [];
 
 // ------------------------------------------------------------------ les feux des Landes
-// L'été, la pinède brûle : sur une grille de FEU_K km, un carré sur sept a son feu de l'année, allumé en juin, juillet
-// ou août (mois tiré) ; la parcelle reste noire jusqu'en novembre. Mêmes feux pour la même année, partout (tuiles des
+// Les étés secs (un sur trois environ), la pinède brûle : sur une grille de FEU_K km, un carré sur 48 a son feu de
+// l'année (2 à 5 feux sur toute la forêt), allumé en juin, juillet ou août (mois tiré) ; les autres étés, aucun ; la parcelle reste noire jusqu'en novembre. Mêmes feux pour la même année, partout (tuiles des
 // peintres et fumées de la carte). L'appelant vérifie la pinède (terre(map).pinede).
 export const FEU_K = 7, FEU_MOIS = [5, 10];
 const hash = (i, j, k) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+export const anneeSeche = annee => hash(0, 0, annee * 7 + 9) < 1 / 3;
 // le feu du carré (I, J) cette année : { x, y, r (km), m (mois) } ou null
 export function feuDe(I, J, annee) {
-  if (hash(I, J, annee * 7 + 3) > 1 / 7) return null;
+  if (!anneeSeche(annee) || hash(I, J, annee * 7 + 3) > 1 / 48) return null;
   return { x: (I + 0.3 + 0.4 * hash(I, J, annee * 7 + 4)) * FEU_K, y: (J + 0.3 + 0.4 * hash(I, J, annee * 7 + 5)) * FEU_K, r: 0.5 + 1.1 * hash(I, J, annee * 7 + 6), m: FEU_MOIS[0] + (hash(I, J, annee * 7 + 1) * 3 | 0) };
 }
 // brûlé (x, y) ce mois-ci : 1 au cœur, de 0 à 1 sur la lisière roussie, 0 hors du feu (ou avant qu'il ne prenne)

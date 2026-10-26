@@ -426,8 +426,8 @@ class Game:
         return R.SEASONS[self.date().month - 1]
 
     def flooded(self):
-        """La crue de la Garonne et de la Dordogne : les hautes eaux de mars et avril, ou la crue tirée au printemps."""
-        return self.t < self.flood_until or self.date().month in (3, 4)
+        """La grande crue de la Garonne et de la Dordogne : tirée un printemps sur cinq environ (monthly), 3 à 6 semaines."""
+        return self.t < self.flood_until
 
     def cut_edges(self):
         """Les routes que la crue coupe en ce moment ({arête : tronçons noyés}), vide hors crue."""
@@ -744,9 +744,9 @@ class Game:
                          a['x'], a['y'], who=a['owner'], important=des >= 50)
             a['des'] = 0.0
             a['des_why'] = None
-        if season == 'printemps' and self.rng.random() < 0.35:
-            self.flood_until = self.t + 10
-            self.log('meteo', 'Crue de la Garonne et de la Dordogne : les bacs sont ralentis et des routes coupées pendant un tiers de tour.', important=True)
+        if d.month == 3 and self.rng.random() < 0.2:   # une grande crue un printemps sur cinq environ
+            self.flood_until = self.t + self.rng.randint(21, 42)
+            self.log('meteo', 'Grande crue de la Garonne et de la Dordogne : bacs ralentis et routes coupées pendant quelques semaines.', important=True)
         if self.factions[self.player]['alive']:
             f = self.factions[self.player]
             inc = f['income']

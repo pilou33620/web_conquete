@@ -99,19 +99,19 @@ test('famine et disette : la campagne autour de la place passe en friche, et les
 });
 
 test('crue et feux des Landes : les prés au bord du fleuve sous l’eau, la pinède brûlée l’été ; les tuiles se repeignent', async () => {
-  const { majAmbiance, cleTuiles, brule, feuDe, FEU_K } = await import('../web/js/carte/ambiance.js');
+  const { majAmbiance, cleTuiles, brule, feuDe, anneeSeche, FEU_K } = await import('../web/js/carte/ambiance.js');
   const W = 60, H = 40, terrain = new Uint8Array(W * H).fill(TT.PLAINE);
   // la Garonne d'ouest en est à y = 20, une petite rivière à y = 5 ; des collines au nord-est
   for (let j = 0; j < 12; j++) for (let i = 40; i < W; i++) terrain[j * W + i] = TT.COLLINES;
   const T = new Terre({ W, H, terrain, m: { x_cote: 8, waters: [], rivers: [{ name: 'Garonne', rank: 1, pts: [[0, 20], [60, 20]] }, { name: 'Isle', rank: 2, pts: [[0, 5], [60, 5]] }] } });
   const map = { nodes: [] }, st = { season: 'printemps', date: '15 mai 1790', year: 1790, weather: { interieur: { kind: 'soleil' }, cote: { kind: 'soleil' } }, nodes: [] };
   majAmbiance(map, st);
-  assert.equal(T.inonde(30, 20.3), false, 'en mai, les eaux sont rentrées');
+  assert.equal(T.inonde(30, 20.3), false, 'sans crue, au sec');
   const avant = cleTuiles();
-  st.weather.interieur.kind = 'pluie';
-  assert.equal(majAmbiance(map, st), false, 'une averse ne repeint pas les tuiles');
-  st.date = '15 avril 1790';
-  assert.equal(majAmbiance(map, st), true, 'les hautes eaux d’avril font déborder les fleuves : tuiles repeintes');
+  st.weather.interieur.kind = 'pluie'; st.date = '15 avril 1790';
+  assert.equal(majAmbiance(map, st), false, 'ni une averse ni avril ne repeignent les tuiles : la crue est rare');
+  st.flood = true;
+  assert.equal(majAmbiance(map, st), true, 'la grande crue tirée par le serveur fait déborder les fleuves : tuiles repeintes');
   assert.notEqual(cleTuiles(), avant);
   let noyes = 0;
   for (let x = 1; x < 59; x += 0.5) { if (T.inonde(x, 20.4)) noyes++; assert.equal(T.inonde(x, 23.5), false, 'loin du fleuve, au sec'); assert.equal(T.inonde(x, 5.2), false, 'seulement la Garonne et la Dordogne'); }
@@ -119,24 +119,28 @@ test('crue et feux des Landes : les prés au bord du fleuve sous l’eau, la pin
   const n = 8, c = new Uint8ClampedArray(n * n * 4), tg = new Uint8Array(n * n);
   T.grille(Math.floor(30 / 0.05), Math.floor(20.1 / 0.05), n, 0.05, c, tg);
   assert.ok(tg.some(t => t === TT.EAU), 'ni parcelle ni arbre dans le pré noyé');
-  st.season = 'ete'; st.date = '15 juillet 1790'; st.weather.interieur.kind = 'pluie'; majAmbiance(map, st);
-  assert.equal(AMB.crue, false, 'l’été, la pluie ne fait pas de crue');
-  st.flood = true; majAmbiance(map, st);
-  assert.equal(AMB.crue, true, 'la crue de l’état (flood), si');
+  st.flood = false; st.season = 'ete'; st.date = '15 juillet 1790'; majAmbiance(map, st);
+  assert.equal(AMB.crue, false, 'la crue passée, plus d’eau');
   // les feux : mêmes feux pour la même année, rien avant juin ni après octobre, noir au cœur
-  let f = null, I = 0, J = 0;
-  for (I = 0; I < 40 && !f; I++) for (J = 0; J < 40 && !f; J++) f = feuDe(I, J, 1790);
+  const ans = Array.from({ length: 300 }, (_, k) => 1790 + k), secs = ans.filter(anneeSeche);
+  assert.ok(secs.length > 60 && secs.length < 140, `un été sec sur trois environ (${secs.length} sur 300)`);
+  assert.ok(ans.filter(a => !anneeSeche(a)).every(a => [...Array(40).keys()].every(I => [...Array(40).keys()].every(J => !feuDe(I, J, a)))), 'les autres étés, aucun feu');
+  const S = secs[0]; st.year = S;
+  let f = null, I = 0, J = 0, nf = 0;
+  for (let i = 0; i < 40; i++) for (let j = 0; j < 40; j++) if (feuDe(i, j, S)) nf++;
+  assert.ok(nf > 10 && nf < 70, `peu de carrés brûlent (${nf} sur 1600)`);
+  for (I = 0; I < 40 && !f; I++) for (J = 0; J < 40 && !f; J++) f = feuDe(I, J, S);
   assert.ok(f, 'des feux cette année-là');
-  assert.deepEqual(feuDe(I - 1, J - 1, 1790), f);
+  assert.deepEqual(feuDe(I - 1, J - 1, S), f);
   assert.ok(f.m >= 5 && f.m <= 7 && f.r >= 0.5 && f.r <= 1.6 && Math.floor(f.x / FEU_K) === I - 1);
-  assert.equal(brule(f.x, f.y, 1790, f.m), 1, 'le mois du feu, le cœur brûlé');
-  assert.equal(brule(f.x, f.y, 1790, 10), 1, 'encore noir en novembre');
-  assert.equal(brule(f.x, f.y, 1790, f.m - 1), 0, 'pas avant');
-  assert.equal(brule(f.x, f.y, 1790, 11), 0, 'en décembre, la lande a reverdi');
-  assert.equal(brule(f.x + 5, f.y + 5, 1790, f.m), 0, 'loin du feu, rien');
-  st.date = '15 juin 1790'; majAmbiance(map, st); const k6 = cleTuiles();
-  st.date = '15 juillet 1790'; assert.equal(majAmbiance(map, st), true, 'chaque mois d’été, de nouveaux brûlis : tuiles repeintes');
-  st.date = '15 décembre 1790'; st.season = 'hiver'; majAmbiance(map, st);
-  assert.ok(!cleTuiles().includes('1790-'), 'l’hiver, plus de brûlis dans la clé'); assert.notEqual(cleTuiles(), k6);
+  assert.equal(brule(f.x, f.y, S, f.m), 1, 'le mois du feu, le cœur brûlé');
+  assert.equal(brule(f.x, f.y, S, 10), 1, 'encore noir en novembre');
+  assert.equal(brule(f.x, f.y, S, f.m - 1), 0, 'pas avant');
+  assert.equal(brule(f.x, f.y, S, 11), 0, 'en décembre, la lande a reverdi');
+  assert.equal(brule(f.x + 5, f.y + 5, S, f.m), 0, 'loin du feu, rien');
+  st.date = '15 juin ' + S; majAmbiance(map, st); const k6 = cleTuiles();
+  st.date = '15 juillet ' + S; assert.equal(majAmbiance(map, st), true, 'chaque mois d’été, de nouveaux brûlis : tuiles repeintes');
+  st.date = '15 décembre ' + S; st.season = 'hiver'; majAmbiance(map, st);
+  assert.ok(!cleTuiles().includes('' + S + '-'), 'l’hiver, plus de brûlis dans la clé'); assert.notEqual(cleTuiles(), k6);
   st.date = '15 avril 1790'; st.season = 'printemps'; st.flood = false; st.weather.interieur.kind = 'soleil'; majAmbiance(map, st);
 });
