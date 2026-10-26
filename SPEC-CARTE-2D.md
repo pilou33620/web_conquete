@@ -636,3 +636,39 @@ d'îlots (Bordeaux : 187 → 878). Puis, à la demande du joueur (« ça c'est p
     pour 700 habitants ; réduire l'emprise des bourgs et des villages est à décider (elle sert à la carte et au jeu).
   - la peinture de l'intérieur de Bordeaux et de Bayonne dure 1,7 à 2,3 fois plus.
   - les gens à leur vraie taille restent petits à l'ouverture de la grand-place (3 px).
+
+## Livré — peinture de l'intérieur optimisée
+
+Choix du joueur : « optimiser d'abord ». Le lot des bâtiments à la vraie taille avait porté la peinture de l'intérieur de
+Bordeaux à 1,7 s (934 000 appels) et l'ouverture complète à l'écran à 4 s ; l'image ne devait pas changer.
+
+- **Profil** (Bordeaux, Chromium sans carte graphique) : environ 500 ms de rastérisation (quelque 200 000 petites formes,
+  dont 70 000 pans de toit), 350 ms d'enregistrement (`rejeu.js`), 150 ms de calcul. Rassembler les toits de toute la ville
+  en un tracé par teinte ne gagnait que 5 % et ralentissait les tuiles (les morceaux de 63 appels couraient sur toute la
+  ville) : écarté.
+- **La texture peinte par le worker** (`interieur.js`, `peintre-tuiles.js`) : avec un worker à canevas 2D, le fil principal
+  ne fait plus qu'enregistrer (`enregistrer(g, false)` : repère et réglages passent au canevas, pas les tracés), 12 ms par
+  image comme avant ; après chaque pas, la tranche enregistrée part au worker (`tranche()`), qui la rejoue telle quelle,
+  dans l'ordre (`rejouerTout`), et rend la texture tous les quarts de seconde, puis finie. Sans worker, la peinture se fait
+  ici comme avant ; si le worker échoue en route, tout se rejoue ici d'un coup à la fin.
+- **Pas d'image refaite pour rien** : pendant l'enregistrement rien ne vit encore ; la vue ne se redessine que si la caméra ou
+  la texture a changé (la redessiner à chaque image, 25 à 40 ms sans carte graphique, doublait l'ouverture).
+- **Moins d'appels** : les menus détails des parcelles (herbes, fleurs, mottes, chaumes, des centaines par parcelle) et les
+  disques de l'eau, d'un tracé par couleur (`taches`) ; l'enregistreur va plus vite (`moveTo`, `lineTo` sans détour, tableaux
+  typés par `new` et non `from`). Chaque sous-chemin a sa boîte : une tuile ne rejoue que les taches qui la touchent.
+- Mesures (Chromium sans carte graphique, 1280 × 800, dpr 2, avant → après ; la machine moins chargée qu'au lot précédent) :
+  - génération du plan inchangée (Bordeaux 11 à 15 ms, Bayonne 5 à 6, Libourne 3 à 5) ;
+  - peinture sur le fil principal : Bordeaux 1 140 → 520 ms (enregistrement seul ; 1 220 sans worker), Bayonne 940 → 370,
+    Libourne 1 100 → 320 ; appels 934 000 → 903 000 (Bayonne 674 000 → 625 000) ;
+  - complète à l'écran (`campagne-echelle/ouvre.cjs`, deux passes) : Bordeaux 2,31 / 2,44 → 1,22 / 1,21 s, Bayonne 1,93 /
+    1,84 → 1,03 / 1,17, Libourne 1,82 / 1,54 → 1,49 / 1,39 ; `echelle/int.cjs` : Bordeaux 2,03 → 1,32 s, Libourne 1,73 → 0,95 ;
+  - images de la vue (médiane de 120, `int.cjs` avec vidage) : Bordeaux vue d'ensemble 18,8 / 18,1 → 17,4 / 18,2 ms, z 4 6,2 /
+    6,7 → 6,3 / 6,4, z 9 15,8 / 16,7 → 17,3 / 19,3, z 18 16,6 / 18,1 → 17,3 / 17,6, zoom max 16,2 / 18,0 → 17,0 / 16,3, port
+    16,1 / 19,4 → 16,1 / 17,6 ; Libourne z 9 16,7 / 18,9 → 19,4 / 18,4, zoom max 16,9 / 18,5 → 17,7 / 17,8 (dans le bruit) ;
+  - une tuile de 512 px rejouée (fil principal, Bordeaux) : à 16 px par unité 15,6 → 11,5 ms, à 64 6,6 → 3,4.
+- Fidélité (moyenne de |ΔR| + |ΔG| + |ΔB| par pixel, part des pixels à plus de 60) : peinte ici, avant → après : Bordeaux
+  0,025 et 0,009 % (99,3 % des pixels identiques), Bayonne 0,055 / 0,023 %, Libourne 0,006 / 0,002 %, Sabres 0,055 / 0,018 %
+  (les taches d'une couleur passent avant celles de l'autre) ; peinte par le worker : Bordeaux 0,15 / 0,035 %, Bayonne 0,24 /
+  0,076 % (un `OffscreenCanvas` ne rastérise pas tout à fait comme un canevas de la page : rejouée sur un canevas de la page,
+  la même tranche donne la même image au pixel près) ; tuiles contre rejeu entier (`echelle/fidele.cjs`) : 0,00 à 0,02, aucun
+  pixel à plus de 60. Banc : `echelle.test.mjs` (sous-chemins hors de la fenêtre sautés, tranches rejouées dans l'ordre).

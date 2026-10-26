@@ -1,5 +1,6 @@
 // Le plan de l'intérieur rejoué plus fin, de près (SPEC-CARTE-2D.md, « Livré — échelle réelle »). La peinture de
-// l'intérieur (villes.js, peindreInterieurPas) s'enregistre pendant qu'elle se fait, appel par appel, dans des tableaux
+// l'intérieur (villes.js, peindreInterieurPas) s'enregistre pendant qu'elle se fait (ou au lieu de se faire : le worker la
+// rejoue alors par tranches, rejouerTout), appel par appel, dans des tableaux
 // typés (envoyés tels quels à un worker, peintre-tuiles.js) ; chaque tuile ne rejoue que ce qui la touche, à sa
 // résolution. Chaque tracé garde sa boîte (unités du dessin) ; les changements de repère se rejouent toujours, les
 // couleurs et réglages juste avant un tracé rejoué. (setTransform n'est pas suivi : les peintres n'en font pas.)
@@ -7,22 +8,30 @@
 const INF = Infinity;
 // bx (boîte de chaque appel) : ≥ 0 sa boîte, -1 toujours (repère, save…), -2 réglage (posé avant le tracé suivant),
 // -3 partout (clip, Path2D, texte)
-export function enregistrer(g) {
+// natif = false : enregistrer seulement (la texture se peint ensuite en rejouant, dans le worker) ; repère et réglages
+// passent quand même au canevas (le peintre peut les relire)
+const DESSIN = new Set(['beginPath', 'moveTo', 'lineTo', 'closePath', 'arc', 'arcTo', 'ellipse', 'rect', 'roundRect', 'quadraticCurveTo', 'bezierCurveTo', 'fill', 'stroke', 'fillRect', 'strokeRect', 'clearRect', 'drawImage', 'fillText', 'strokeText', 'clip']);
+export function enregistrer(g, natif = true) {
   const nm = [], code = new Map(), txt = [], tcode = new Map(), img = [], op = [], kd = [], a0 = [], na = [], N = [], bx = [], BX = [], sg = [], SG = [], pile = [];
-  let M = [1, 0, 0, 1, 0, 0], lw = 1, tiret = false, b = -1, X = 0, Y = 0;
+  let M = [1, 0, 0, 1, 0, 0], lw = 1, tiret = false, b = -1, s = -1, subs = [], X = 0, Y = 0;
   const nom = k => { let c = code.get(k); if (c === undefined) code.set(k, c = nm.push(k) - 1); return c; };
   const chaine = s => { let c = tcode.get(s); if (c === undefined) tcode.set(s, c = txt.push(s) - 1); return c; };
   const ech = () => Math.max(Math.hypot(M[0], M[1]), Math.hypot(M[2], M[3]));
   const neuve = () => BX.push(INF, INF, -INF, -INF, 0, 0) / 6 - 1;
+  // chaque sous-chemin (d'un moveTo au suivant) a sa boîte, celle de ses appels : une tuile saute ceux qui ne la touchent
+  // pas (exact pour un remplissage ; un trait les élargit de sa demi-largeur) ; le chemin entier garde la sienne, celle du
+  // fill ou du stroke. Ainsi l'eau d'une ville, d'un tracé par couleur, ne se rejoue que là où elle passe.
+  const sous = () => { if (b < 0) { b = neuve(); subs = []; } subs.push(s = neuve()); };
+  const etend = (o, r) => { if (X - r < BX[o]) BX[o] = X - r; if (Y - r < BX[o + 1]) BX[o + 1] = Y - r; if (X + r > BX[o + 2]) BX[o + 2] = X + r; if (Y + r > BX[o + 3]) BX[o + 3] = Y + r; };
   const pt = (x, y, r = 0) => {
-    X = M[0] * x + M[2] * y + M[4]; Y = M[1] * x + M[3] * y + M[5]; r *= ech();
-    const o = b * 6; if (X - r < BX[o]) BX[o] = X - r; if (Y - r < BX[o + 1]) BX[o + 1] = Y - r; if (X + r > BX[o + 2]) BX[o + 2] = X + r; if (Y + r > BX[o + 3]) BX[o + 3] = Y + r;
+    X = M[0] * x + M[2] * y + M[4]; Y = M[1] * x + M[3] * y + M[5]; if (r) r *= ech();
+    etend(b * 6, r); if (s >= 0) etend(s * 6, r);
   };
   const rect = (x, y, w, h) => { pt(x, y); pt(x + w, y); pt(x, y + h); pt(x + w, y + h); };
   // un chemin rempli, fermé, en tirets ou fait d'autre chose que de segments se rejoue entier ; une ligne brisée qu'on
   // trace seulement, par segments
-  const entier = () => { BX[b * 6 + 5] = 1; return b; };
-  const seule = (f, ...a) => { const b0 = b; b = neuve(); f(...a); const o = b; b = b0; return o; };   // (la boîte d'un tracé hors chemin)
+  const entier = () => { if (s < 0) sous(); BX[s * 6 + 5] = 1; return s; };
+  const seule = (f, ...a) => { const b0 = b, s0 = s; b = neuve(); s = -1; f(...a); const o = b; b = b0; s = s0; return o; };   // (la boîte d'un tracé hors chemin)
   // kd : 0 nombres, 1 une chaîne, 2 un tableau de nombres (setLineDash), 3 un objet d'abord (image, dégradé)
   const ajouter = (k, a, box) => {
     op.push(nom(k)); a0.push(N.length); bx.push(box); sg.push(-1);
@@ -40,20 +49,21 @@ export function enregistrer(g) {
       case 'scale': M = [M[0] * a[0], M[1] * a[0], M[2] * a[1], M[3] * a[1], M[4], M[5]]; break;
       case 'rotate': { const c = Math.cos(a[0]), s = Math.sin(a[0]); M = [M[0] * c + M[2] * s, M[1] * c + M[3] * s, M[2] * c - M[0] * s, M[3] * c - M[1] * s, M[4], M[5]]; break; }
       case 'transform': M = [M[0] * a[0] + M[2] * a[1], M[1] * a[0] + M[3] * a[1], M[0] * a[2] + M[2] * a[3], M[1] * a[2] + M[3] * a[3], M[0] * a[4] + M[2] * a[5] + M[4], M[1] * a[4] + M[3] * a[5] + M[5]]; break;
-      case 'beginPath': o = b = neuve(); break;
-      case 'moveTo': if (b < 0) b = neuve(); pt(a[0], a[1]); o = b; break;
-      case 'lineTo': { if (b < 0) b = neuve(); const x = X, y = Y; pt(a[0], a[1]); o = b; ajouter(k, a, o); sg[sg.length - 1] = SG.push(Math.min(x, X), Math.min(y, Y), Math.max(x, X), Math.max(y, Y)) / 4 - 1; return; }
-      case 'quadraticCurveTo': case 'bezierCurveTo': if (b < 0) b = neuve(); for (let i = 0; i < a.length; i += 2) pt(a[i], a[i + 1]); o = entier(); break;
-      case 'arcTo': if (b < 0) b = neuve(); pt(a[0], a[1], a[4]); pt(a[2], a[3], a[4]); o = entier(); break;
-      case 'arc': if (b < 0) b = neuve(); pt(a[0], a[1], a[2]); o = entier(); break;
-      case 'ellipse': if (b < 0) b = neuve(); pt(a[0], a[1], Math.max(a[2], a[3])); o = entier(); break;
-      case 'rect': case 'roundRect': if (b < 0) b = neuve(); rect(a[0], a[1], a[2], a[3]); o = entier(); break;
+      case 'beginPath': o = b = neuve(); s = -1; subs = []; break;
+      case 'quadraticCurveTo': case 'bezierCurveTo': if (s < 0) sous(); for (let i = 0; i < a.length; i += 2) pt(a[i], a[i + 1]); o = entier(); break;
+      case 'arcTo': if (s < 0) sous(); pt(a[0], a[1], a[4]); pt(a[2], a[3], a[4]); o = entier(); break;
+      case 'arc': if (s < 0) sous(); pt(a[0], a[1], a[2]); o = entier(); break;
+      case 'ellipse': if (s < 0) sous(); pt(a[0], a[1], Math.max(a[2], a[3])); o = entier(); break;
+      case 'rect': case 'roundRect': if (s < 0) sous(); rect(a[0], a[1], a[2], a[3]); o = entier(); break;
       case 'closePath': o = b < 0 ? -1 : entier(); break;
-      case 'clip': o = -3; if (b >= 0) BX.splice(b * 6, 4, -INF, -INF, INF, INF); break;   // (le chemin du clip se rejoue partout)
+      case 'clip': o = -3; if (b >= 0) for (const q of [b, ...subs]) BX.splice(q * 6, 4, -INF, -INF, INF, INF); break;   // (le chemin du clip se rejoue partout)
       case 'fill': case 'stroke':
         if (b < 0 || (a[0] && typeof a[0] === 'object')) o = -3;
-        else if (k === 'stroke') { const r = lw * ech() / 2, q = b * 6; BX[q] -= r; BX[q + 1] -= r; BX[q + 2] += r; BX[q + 3] += r; BX[q + 4] = Math.max(BX[q + 4], r); o = tiret ? entier() : b; }
-        else o = entier();
+        else if (k === 'stroke') {
+          const r = lw * ech() / 2;
+          for (const q of [b * 6, ...subs.map(x => x * 6)]) { BX[q] -= r; BX[q + 1] -= r; BX[q + 2] += r; BX[q + 3] += r; BX[q + 4] = Math.max(BX[q + 4], r); if (tiret) BX[q + 5] = 1; }
+          o = b;
+        } else { for (const q of subs) BX[q * 6 + 5] = 1; o = b; }
         break;
       case 'fillRect': case 'strokeRect': case 'clearRect': o = seule(rect, a[0] - lw, a[1] - lw, a[2] + 2 * lw, a[3] + 2 * lw); break;
       case 'drawImage': { const n = a.length; o = n === 3 ? seule(rect, a[1], a[2], a[0].width, a[0].height) : seule(rect, a[n - 4], a[n - 3], a[n - 2], a[n - 1]); break; }
@@ -66,14 +76,40 @@ export function enregistrer(g) {
   const P = {}, proto = Object.getPrototypeOf(g);
   for (const k of Object.getOwnPropertyNames(proto)) {
     const d = Object.getOwnPropertyDescriptor(proto, k);
-    if (typeof d.value === 'function') P[k] = (...a) => { rec(k, a); return d.value.apply(g, a); };
+    if (k === 'moveTo' || k === 'lineTo') {   // (plus de la moitié des appels : sans passer par rec ni ajouter)
+      const c = nom(k), f = d.value, seg = k === 'lineTo';
+      P[k] = (x, y) => {
+        if (!seg || s < 0) sous();
+        const x0 = X, y0 = Y; pt(x, y);
+        op.push(c); a0.push(N.length); bx.push(s); kd.push(0); N.push(x, y); na.push(2);
+        sg.push(seg ? SG.push(x0 < X ? x0 : X, y0 < Y ? y0 : Y, x0 > X ? x0 : X, y0 > Y ? y0 : Y) / 4 - 1 : -1);
+        if (natif) f.call(g, x, y);
+      };
+    } else if (typeof d.value === 'function') P[k] = !natif && DESSIN.has(k) ? (...a) => rec(k, a) : (...a) => { rec(k, a); return d.value.apply(g, a); };
     else if (d.get) Object.defineProperty(P, k, { get: () => g[k], set: v => { g[k] = v; if (k === 'lineWidth') lw = g.lineWidth; ajouter(k, [v], -2); } });
   }
   const fin = () => ({
-    nm, txt, img, op: Uint8Array.from(op), kd: Uint8Array.from(kd), a0: Uint32Array.from(a0), na: Uint16Array.from(na), N: Float32Array.from(N),
-    bx: Int32Array.from(bx), BX: Float32Array.from(BX), sg: Int32Array.from(sg), SG: Float32Array.from(SG),
+    nm, txt, img, op: new Uint8Array(op), kd: new Uint8Array(kd), a0: new Uint32Array(a0), na: new Uint16Array(na), N: new Float32Array(N),
+    bx: new Int32Array(bx), BX: new Float32Array(BX), sg: new Int32Array(sg), SG: new Float32Array(SG),   // (new et non from : bien plus vite)
   });
-  return [P, fin];
+  // ce qui s'est enregistré depuis la dernière tranche, pour le rejouer tel quel (rejouerTout) : txt et img, les nouveaux
+  let i0 = 0, j0 = 0, t0 = 0, m0 = 0;
+  const tranche = () => {
+    const T = { nm: nm.slice(), op: new Uint8Array(op.slice(i0)), kd: new Uint8Array(kd.slice(i0)), na: new Uint16Array(na.slice(i0)), N: new Float32Array(N.slice(j0)), txt: txt.slice(t0), img: img.slice(m0) };
+    i0 = op.length; j0 = N.length; t0 = txt.length; m0 = img.length; return T;
+  };
+  return [P, fin, tranche];
+}
+// rejoue tout une tranche, dans l'ordre, sur g (la texture, dans le worker) ; txt et img : ceux de tout l'enregistrement
+export function rejouerTout(g, T, txt, img) {
+  const { nm, op, kd, na, N } = T;
+  for (let i = 0, j = 0; i < op.length; j += na[i++]) {
+    const f = nm[op[i]], k = kd[i], meth = typeof g[f] === 'function';
+    if (k === 0 && na[i] === 2 && meth) { g[f](N[j], N[j + 1]); continue; }
+    const a = k === 1 ? [txt[N[j]]] : Array.from(N.subarray(j, j + na[i]));
+    if (k === 3) a[0] = img[a[0]];
+    if (k === 2) g.setLineDash(a); else if (meth) g[f](...a); else g[f] = a[0];
+  }
 }
 
 // des morceaux d'une soixantaine d'appels, chacun avec sa boîte : un morceau hors de la fenêtre se saute d'un coup,

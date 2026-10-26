@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { enregistrer, rejouer } = await import('../web/js/carte/rejeu.js');
+const { enregistrer, rejouer, rejouerTout } = await import('../web/js/carte/rejeu.js');
 const { fantassin, cheval, tenue } = await import('../web/js/carte/lib.js');
 const { navire, S } = await import('../web/js/carte/villes.js');
 const { charrette, ECH, NAV } = await import('../web/js/carte/interieur.js');
@@ -62,4 +62,18 @@ test('rejeu : seul ce qui touche la fenêtre se rejoue, avec ses réglages', () 
   assert.deepEqual(j.filter(o => o[0] === 'lineTo').map(o => o[1]), [0, 100], 'du long trait, les segments de la fenêtre seulement');
   assert.ok(noms.indexOf('save') < noms.indexOf('translate') && noms.includes('restore'), 'le repère se rejoue toujours');
   assert.ok(vers(495, -5, 505, 5).some(o => o[0] === 'arc'), 'le disque se rejoue dans sa fenêtre');
+});
+
+test('rejeu : un tracé de plusieurs taches ne rejoue que celles de la fenêtre ; les tranches rejouent tout, dans l’ordre', () => {
+  const f = new Faux(), [g, fin, tranche] = enregistrer(f), T = [];
+  g.fillStyle = 'brun'; g.beginPath();
+  for (const x of [0, 300, 600]) { g.moveTo(x + 2, 0); g.arc(x, 0, 2, 0, 7); }
+  g.fill(); T.push(tranche());
+  g.lineWidth = 3; g.strokeStyle = 'noir'; g.beginPath(); g.moveTo(0, 50); g.lineTo(9, 50); g.moveTo(300, 50); g.lineTo(309, 50); g.stroke(); T.push(tranche());
+  const h = new Faux(); rejouer(h, fin(), 290, -10, 320, 60);
+  assert.deepEqual(h.journal.filter(o => o[0] === 'arc').map(o => o[1]), [300], 'des trois taches, celle de la fenêtre');
+  assert.deepEqual(h.journal.filter(o => o[0] === 'moveTo').map(o => o[1]), [302, 300], 'et du trait, son morceau');
+  const t = new Faux(), txt = [], img = [];
+  for (const x of T) { txt.push(...x.txt); rejouerTout(t, x, txt, img); }
+  assert.deepEqual(t.journal, f.journal, 'les tranches rejouent tous les appels, dans l’ordre');
 });

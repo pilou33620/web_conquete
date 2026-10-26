@@ -6,7 +6,7 @@
 // L'état (année, f, pop, d, sg.dmg, lv) choisit l'enceinte, la taille, les faubourgs, les ruines et les incendies.
 import {
   toile, BATS, BOIS, C, E, HERBE, PAL, RR, T, TAU, aire, alea, arbre, bastions, bat, bois, chemin_, cheminee, clamp,
-  coneF, decaler, decalerQuad, dessinerEnceinte, distPoly, lerp, ligne, mix, mod, parcelle, potager, remplirIlot, route, rue,
+  coneF, decaler, decalerQuad, dessinerEnceinte, distPoly, lerp, ligne, mix, mod, parcelle, potager, taches, remplirIlot, route, rue,
   sapin, touffes, tronc,
 } from './lib.js';
 import { AMB } from './ambiance.js';
@@ -348,15 +348,17 @@ export function navire(g, x, y, a, grand) {
   g.restore();
 }
 // e : etatVille (dégâts, crue) ; renvoie { c, k, deg } (deg : les îlots abîmés, pour les feux de la vue)
-export function peindreInterieur(K, V, k, e = {}) { const it = peindreInterieurPas(K, V, k, e); let r; do r = it.next(); while (!r.done); return r.value; }
+export function peindreInterieur(K, V, k, e = {}) { const it = peindreInterieurPas(K, V, k, e); let r; do r = it.next(); while (!r.done); r.value.tranche = null; return r.value; }
 // la même peinture par petits pas (yield) : la vue de l'intérieur s'ouvre tout de suite et se peint en quelques images
-export function* peindreInterieurPas(K, V, k, e = {}) {
+// (natif = false : seulement enregistrée, le canevas reste vide ; interieur.js la fait peindre au worker en la rejouant)
+export function* peindreInterieurPas(K, V, k, e = {}, natif = true) {
   const Pf = V.Pf, n = Pf.n, cv = toile(Math.round(IW * k), Math.round(IH * k));
   const g0 = cv.getContext('2d'), R = alea(Pf.sd + 17); g0.scale(k, k);
-  const [g, fin] = enregistrer(g0);   // (rejoué plus fin, par tuiles, quand on s'approche : interieur.js)
+  const [g, fin, tranche] = enregistrer(g0, natif);   // (rejoué plus fin, par tuiles, quand on s'approche : interieur.js)
   V.cheminees.length = 0; V.apres.length = 0;
   g.fillStyle = HERBE; g.fillRect(0, 0, IW, IH);
-  yield { c: cv, k };   // (le canevas, montré pendant qu'il se peint)
+  const tex = { c: cv, k, tranche };
+  yield tex;   // (le canevas, montré pendant qu'il se peint ; le même objet à la fin)
   const km = (x, y) => [n.x + (x - IC[0]) / S, n.y + (y - IC[1]) / S];
   // la campagne : parcelles selon le terrain du jeu sous chacune
   for (let y = 0; y < IH; y += 60 + R() * 30) { const h = 60 + R() * 30; for (let x = 0; x < IW;) {
@@ -377,7 +379,7 @@ export function* peindreInterieurPas(K, V, k, e = {}) {
   const urbain = Pf.modele !== 'rue' && Pf.modele !== 'airial' && Pf.modele !== 'montagne';
   if (urbain && Pf.modele !== 'fortin') { g.beginPath(); for (let a = 0; a <= TAU + .01; a += .04) { const r = Math.max(...V.ilots.filter(b => b.zone === 'ville').map(b => { const d = Math.atan2(b.c[1] - IC[1], b.c[0] - IC[0]); return Math.abs(angDiff(d, a)) < .35 ? b.d + 8 : 0; }), 40); g.lineTo(IC[0] + Math.cos(a) * r, IC[1] + Math.sin(a) * r); } g.fillStyle = '#bfb498'; g.fill(); }
   // la mer, les étangs, l'estuaire (d'après la grille du jeu), puis les rivières (en crue, elles débordent)
-  for (const [r, c] of [[11, '#e3d3a3'], [8.5, '#3d6ea6'], [6.5, '#4a7db8']]) { g.fillStyle = c; for (let y = 0; y < IH; y += 9) for (let x = 0; x < IW; x += 9) if (K.eauK(...km(x, y)) > (c === '#e3d3a3' ? .38 : .5)) { g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); } }
+  for (const [r, c] of [[11, '#e3d3a3'], [8.5, '#3d6ea6'], [6.5, '#4a7db8']]) { const l = []; for (let y = 0; y < IH; y += 9) for (let x = 0; x < IW; x += 9) if (K.eauK(...km(x, y)) > (c === '#e3d3a3' ? .38 : .5)) l.push([x, y, r]); taches(g, new Map([[c, l]])); }
   const crue = e.lv === 'crue';
   for (const r of Pf.rivs) riviereL(g, r.pts, r.w * (crue ? 1.45 : 1), R);
   // l'enceinte avant les îlots : le fossé et le glacis passent sous les maisons du bord
@@ -446,7 +448,7 @@ export function* peindreInterieurPas(K, V, k, e = {}) {
     for (const s of [-1, 1]) { T(g, '#5b4a3a', .9, -IW, s * .5, IW, s * .5); g.setLineDash([.05, .06]); T(g, '#6b5a48', .48, -IW, s * .5, IW, s * .5); g.setLineDash([]); T(g, '#3a3a3a', .05, -IW, s * .5 - .13, IW, s * .5 - .13); T(g, '#3a3a3a', .05, -IW, s * .5 + .13, IW, s * .5 + .13); }
     g.restore(); bat(g, BATS.gare().slice(1), V.gare.x, V.gare.y, V.gare.a, .2);   // (87 m)
   }
-  return { c: cv, k, deg, chem: V.cheminees.slice(), rec: fin() };
+  return Object.assign(tex, { deg, chem: V.cheminees.slice(), rec: fin() });
 }
 const chateau = g => bat(g, [{ t: 'f', x: -20, y: -14, w: 40, h: 28, c: '#b9b09a', h2: 2, bal: 1 }, { t: 'g', x: -16, y: -10, w: 26, h: 12, hip: 1, p: 'lauze', h2: 3 }, { t: 'c', x: -18, y: -12, r: 5, p: 'lauze', h2: 4.5 }, { t: 'c', x: 18, y: -12, r: 4.5, p: 'lauze', h2: 4 }, { t: 'c', x: 18, y: 12, r: 4.5, p: 'lauze', h2: 4 }, { t: 'p', x: 4, y: -2, w: 12, h: 12, p: 'lauze', h2: 6 }], IC[0], IC[1], .2, .25);   // (56 m)
 function riviereL(g, pts, w) {
