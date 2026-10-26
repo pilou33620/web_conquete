@@ -351,7 +351,9 @@ Le ciel (`ciel.js`) :
   tempête), brouillard en nappes dans les fonds (`terre(map).alt`), neige, canicule ; brume du matin ; voile de
   l'heure en `multiply` ; `LUM` en `lighter`, fenêtres des villes (`planCarte().lum`), phare de Cordouan ;
   sélecteur d'heure (quatre boutons `aria-pressed`, rangés à gauche du premier bouton de `#zoombar` : le bas reste aux
-  avis de `#feed`, rangés à gauche de la colonne du zoom, trois au plus, trois lignes chacun, au-dessus de la date).
+  avis de `#feed`, rangés à gauche de la colonne du zoom, trois au plus, trois lignes chacun, au-dessus de la date ; un
+  avis ne rétrécit pas, les plus anciens sont coupés par le haut ; sous 660 px de haut, le zoom passe en haut, à gauche de
+  la barre de côté ; captures 1280×720, 1366×768, 844×390, 768×1024).
 - Écarts :
   - `drawSeasonTint` n'a plus la teinte de saison (les tuiles de A portent les saisons) ; c'est là, seule de mes
     fonctions appelée sous les villes, que se dessinent les traces, les tranchées et la terre piétinée.

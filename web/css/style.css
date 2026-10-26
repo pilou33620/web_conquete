@@ -258,6 +258,7 @@ span.turn-why { padding: 8px 10px; }
 #feed { position: absolute; right: 72px; bottom: calc(12px + var(--safe-b)); width: 330px; display: flex; flex-direction: column; justify-content: flex-end;
   gap: 4px; z-index: 14; pointer-events: none; overflow: hidden; max-height: calc(100% - var(--tb-h) - var(--safe-t) - 400px - 12px - var(--safe-b)); }
 #feed .feed-item:nth-last-child(n+4) { display: none; }
+#feed .feed-item { flex-shrink: 0; }   /* (sans quoi les trois rétrécissent ensemble au lieu que le plus ancien soit coupé) */
 .feed-item > span:last-child { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 /* au-dessus de la date en bas à droite (grands écrans) */
 @media (min-width: 1101px) {
@@ -558,7 +559,8 @@ table.grid.vl-tab td:first-child, table.grid.vl-tab th:first-child { text-align:
   .feed-item, .toast, #tuto { animation: none; }
 }
 /* téléphones à l'horizontale : peu de hauteur, le rail et le zoom doivent tenir à l'écran */
-@media (max-height: 520px) and (min-width: 761px) {
+/* (jusqu'à 660 px : un portable 1280×720 ou 1366×768 n'a pas la hauteur du zoom sous la barre de côté) */
+@media (max-height: 660px) and (min-width: 761px) {
   #rail { top: calc(var(--tb-h) + var(--safe-t) + 8px); gap: 5px; }
   #rail button { width: 42px; height: 42px; }
   #rail button svg { width: 22px; height: 22px; }
