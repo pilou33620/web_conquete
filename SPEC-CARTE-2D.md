@@ -966,10 +966,11 @@ jamais dans l'eau ; les villages et les bourgs sans murs comme avant.
   | Pauillac (port, village) | 1 478 | — | 104 → 322 | 14,2 → 4,6 | 33 → 24 m | — | 110 m |
 
 - Écarts :
-  - les routes de la carte vont toujours au nœud : à Bayonne, 1,3 km au sud de la ville, elles se rejoignent dans les
+  - (fait depuis pour les nouvelles parties, « Livré — les rivières affinées, les villes à leur vraie place ») les routes
+    de la carte vont toujours au nœud : à Bayonne, 1,3 km au sud de la ville, elles se rejoignent dans les
     faubourgs ; les armées en marche aussi (les positions du serveur) ; déplacer les nœuds des données réglerait tout, mais
     changerait la carte, les batailles des versions figées et la crue ;
-  - la Nive des données s'arrête 1,9 km au sud de l'Adour : Bayonne est sur l'Adour, pas sur la Nive ;
+  - (fait depuis, même lot) la Nive des données s'arrête 1,9 km au sud de l'Adour : Bayonne est sur l'Adour, pas sur la Nive ;
   - Bayonne et Blaye (bastionnées, faubourgs hors du glacis) ont 14 à 16 habitants par maison ; Libourne et Agen 6 ;
     Bordeaux 10 (ses échoppes basses) ;
   - les villages au bord d'une grande rivière (Port-Sainte-Marie) gardent leurs îlots noyés.
@@ -1023,3 +1024,102 @@ Avant : un voyageur tous les 1,1 km de route royale (2,2 km de chemin), partout 
   dessinées (`vue(z, 1,8)` demande 3 704 px/km, `Z.MAX` vaut 1 300), ni les ouvriers des chantiers (`vue(z, 4,3)`) : de la
   vie (`Z.VIE`), chacun est un point d'un pixel, blanc pour la borne, rouge pour la balise, de son habit pour l'ouvrier
   (`travaux.js`, `point`) ; au-delà de 4,3 unités par pixel (jamais à la vraie taille), l'ouvrier dessiné comme avant.
+
+
+## Livré — les rivières affinées, les villes à leur vraie place
+
+Décision du joueur : des rivières au vrai tracé, et les villes à leur vraie place, pour que les routes et les armées
+arrivent à la ville et non dans ses faubourgs (la carte du jeu change : les distances bougent un peu).
+
+- **Les sauvegardes** (étude d'abord) : une sauvegarde référence la géographie par les numéros des lieux (l'ordre de
+  `PLACES`, inchangé) et des arêtes (l'ordre des paires de lieux, qui change dès qu'une route naît ou disparaît), les
+  positions sur une arête (`edge.pos`, en km de sa longueur), les `x`, `y` des armées, la crue (`crue.spans`, recalculée
+  d'après la carte), et les batailles en cours, refaites au chargement d'après la carte (les versions figées,
+  `terrain.VERSION`, ne figent que le code). Convertir au chargement aurait laissé les batailles en cours changer sous
+  les troupes. Retenu : **une version de la géographie dans la sauvegarde** (`geo.VERSION`, clé `geo` ; absente : 1).
+  Une ancienne partie se charge sur la carte d'alors (`game/data/geo_v1.json`, figé, avec la place d'alors des villes
+  déplacées ; son cache `map_cache_v1.json`, refait au premier besoin, 5 s sur un PC) : mêmes routes, mêmes armées sur
+  leurs arêtes, même crue (27 routes), mêmes cartes de bataille. Le serveur fait chaque carte au premier besoin
+  (`App.geo_for`) et sert à la page celle de la partie en cours (`/api/map`, `geo`) ; l'état dit la géographie de la
+  partie (`geo`) : la page se recharge sur la bonne carte (« Cette partie a sa propre carte »). Les nouvelles parties, le
+  mode Bataille : la géographie 2. Une modification du calcul de `geo.py` change aussi la carte des anciennes parties
+  (d'où l'empreinte du banc). Bancs : `test_serveur` (une sauvegarde sans `geo` : la carte d'alors et son empreinte,
+  l'armée sur la route de Libourne à sa place, 27 routes coupées, la page reçoit la géographie 1) ; `test_plan_ville`
+  (les cartes de bataille des versions 4 à 7 sur la géographie 1, et l'empreinte de Libourne en version 7).
+- **Les rivières** (`game/data/geo.json`) : d'OpenStreetMap (Overture, octobre 2026), le cours principal de chacune (du
+  départ d'avant au bout de son lit), simplifié à 60 m (Douglas-Peucker), chaque affluent coupé au plus près de sa rivière
+  et raccordé à elle ; 572 → 6 838 points, la carte envoyée au navigateur 82 → 121 Ko compressée. Garonne 426 → 512 km,
+  Dordogne 241 → 289, Adour 236 → 303, Isle 175 → 253, Lot 131 → 189, Baïse 128 → 182, Dropt 81 → 121 (avec le Drot),
+  Midouze 39 → 42, Nive 50 → 68 (elle traverse Bayonne jusqu'à l'Adour) ; le second « Isle » d'avant (un bout de son
+  cours d'amont) devient l'Auvézère ; la Charente (surtout hors de la carte, données partielles) et la Dordogne d'amont
+  (hors de la carte) comme avant ; le Gave d'Ossau a un trou de 4 km dans les données, vers Bielle (en ligne droite).
+- **Les villes à leur vraie place** (`places.py`) : les 40 villes dessinées au bord de l'eau (celles dont le plan était
+  décalé, `site`) au point de la localité d'OSM, puis à leur site (le centre du plan, la rive au pied des murs) : leur
+  nœud est là où leur plan est dessiné, `site` n'y décale plus que de 1 à 10 m (il reste pour la carte des anciennes
+  parties). Les villages et les villes loin de l'eau gardent leur nœud (centre de la commune, IGN).
+
+  | Ville | Rivière | Nœud → axe de la rivière, avant → après | Plan décalé, avant → après | Bord de la ville → eau, avant → après |
+  |---|---|---|---|---|
+  | Langon | Garonne | 1 985 → 460 m | 0 → 2 m | 1 523 → 0 m |
+  | Montpon | Isle | 1 825 → 291 m | 0 → 3 m | 1 537 → 0 m |
+  | Saint-Sever | Adour | 2 260 → 515 m | 0 → 3 m | 1 741 → 0 m |
+  | Sainte-Livrade | Lot | 2 092 → 369 m | 0 → 6 m | 1 728 → 0 m |
+  | Domme | Dordogne | 2 126 → 329 m | 0 → 8 m | 1 788 → 0 m |
+  | Mussidan | Isle | plus de 2,6 km → 288 m | 0 → 0 m | — → 0 m |
+  | Marmande | Garonne | plus de 2,6 km → 591 m | 0 → 3 m | — → 0 m |
+  | Bayonne | Adour (la Nive au travers) | 1 792 → 521 m | 1 268 → 3 m | 0 → 0 m |
+  | Agen | Garonne | 1 413 → 503 m | 912 → 3 m | 0 → 0 m |
+  | Libourne | Dordogne, Isle | 1 330 → 463 m | 870 → 3 m | 0 → 0 m |
+  | Dax | Adour | 1 544 → 403 m | 1 142 → 1 m | 0 → 0 m |
+  | Aire-sur-l'Adour | Adour | 1 326 → 464 m | 864 → 2 m | 0 → 0 m |
+  | Sainte-Foy-la-Grande | Dordogne | 1 259 → 301 m | 947 → 10 m | 0 → 0 m |
+  | Villeneuve-sur-Lot | Lot | 1 222 → 394 m | 828 → 1 m | 0 → 0 m |
+  | Aiguillon | Lot | 1 199 → 385 m | 736 → 3 m | 0 → 0 m |
+  | Tonneins | Garonne | 1 180 → 591 m | 586 → 4 m | 0 → 0 m |
+  | Coutras | Isle | 957 → 328 m | 632 → 2 m | 0 → 0 m |
+  | Bordeaux | Garonne | 869 → 1 088 m | 224 → 4 m | 0 → 0 m |
+  | Périgueux | Isle | 718 → 347 m | 369 → 2 m | 0 → 0 m |
+  | Bergerac, Cadillac, La Réole, Lalinde, Pau, Orthez, Oloron, Peyrehorade, Navarrenx, Sauveterre, Fumel, Terrasson, Mont-de-Marsan | leur rivière | 30 à 490 → 180 à 460 m | 19 à 345 → 1 à 8 m | 0 → 0 m |
+
+  (« Bord → eau » : du mur, ou de l'emprise d'une ville sans murs, à la rive, après le décalage du plan ; au-delà de
+  1,35 km, le plan n'était pas décalé. Saint-André-de-Cubzac, à 2,3 km de la Dordogne, reste loin de l'eau, comme en vrai.)
+- **Les routes suivent** (`geo.py`, géographie 2 seulement) : elles partent des nouveaux nœuds (le pont ou le bac au pied
+  de la ville : 81 des 139 ponts dessinés à moins de 1 km d'une ville, 58 sur 140 avant) ; la règle du passage (la ligne
+  droite) ne compte plus une rivière qu'elle coupe un nombre pair de fois (ses méandres : la ligne reste sur sa rive) ; le
+  pont dessiné (`bx`) est celui de la rivière de la règle s'il est sur le tracé (la route de Bordeaux à Libourne : la
+  Dordogne, la Garonne dans `ponts`) ; une route royale passe une case de côte (Bayonne – Saint-Jean-de-Luz, perdue
+  sinon) ; la route de Bazas à La Réole est gardée (`EXTRA_ROADS` : Langon, à sa vraie place, la cachait au maillage).
+  500 routes (498 avant) : naissent Urdos – Laruns et Mauléon – Sauveterre-de-Béarn. 80 routes changent de rivière à
+  passer, dont 22 pour l'attente au bac (rang 1 : 77 → 79 routes) : Bergerac – Monbazillac, Sainte-Foy – Bergerac, Nérac –
+  Port-Sainte-Marie la passent désormais, Bergerac – Vergt, Agen – Port-Sainte-Marie, Lalinde – Sainte-Alvère plus (elles
+  restent sur leur rive) ; Peyrehorade – Bayonne passe le Gave de Pau au lieu de l'Adour.
+- **Les distances par les routes** (plus court chemin, 153 paires de 18 villes principales) : écart moyen 0,3 %, au plus
+  2 % (Pau – Oloron 24,5 → 25,0 km, Langon – Marmande 40,2 → 39,4) ; Bordeaux – Libourne 31,5 → 31,3, Bordeaux – Bayonne
+  190,5 → 191,6, Bordeaux – Agen 144,5 → 145,0, Bordeaux – Pau 205,5 → 206,0. Aucun écart de plus de 5 % entre villes
+  principales ; entre toutes les places, 51 paires sur 24 753, toutes raccourcies par les deux routes nouvelles (Urdos –
+  Laruns 29,9 → 18,7 km, Mauléon – Sauveterre 31,2 → 21,9).
+- **Les voies d'eau** suivent les méandres : 1 266 → 1 405 km de tronçons (Bordeaux – Agen 165 → 175 km, + 6 % ; Bordeaux
+  – Langon + 7 % ; Bordeaux – Bergerac 159 → 183, + 15 % ; Dax – Mont-de-Marsan 56 → 86, + 54 % ; Bayonne – Dax + 2 %) ;
+  quais à moins de 3 km de leur rivière : gagnés Layrac, Meilhan-sur-Garonne, Hinx, Lamonzie-Saint-Martin ; perdus
+  Saint-Martin-de-Seignanx, Saint-Hilaire-de-Lusignan, Ambarès-et-Lagrave, Castelculier.
+- **La crue** (`crue.py`, même règle) : 29 routes coupées dans les nouvelles parties, 27 dans les anciennes ; peinte dans
+  les tuiles d'après les mêmes rivières (`terre.js`, `inonde` ; banc `travaux.test.mjs`).
+- **Batailles** : pas de nouvelle version (`terrain.VERSION` 7 : le code ne change pas ; une bataille d'une ancienne
+  partie a sa carte d'alors). Les plans des villes (`villes.js` et `plan_ville.py`) restent identiques sur la nouvelle
+  carte (669 états, banc).
+- Captures (`integration/rivieres/`, une partie neuve préparée, aucun tour joué) : `1-bayonne-nive-adour-z170.png` (la Nive
+  au travers de la ville jusqu'à l'Adour, les routes à la ville), `2-langon-z220.png`, `3-saint-sever-z220.png`,
+  `4-agen-routes-z320.png` (les routes de l'autre rive passent la Garonne au pied des murs), `5-ensemble-z2.png`,
+  `6-bayonne-interieur.png`.
+- Écarts :
+  - à Libourne, les routes de Bordeaux, Créon et Izon passent la Dordogne à 2,4 km en amont (vers Condat) : entre les
+    méandres serrés, la grille d'un km du tracé ne trouve pas de passage unique au pied de la ville ; la carte d'une bataille
+    à Libourne n'a plus qu'un pont de bateaux (le banc des ponts datés regarde Bergerac) ; la route d'Izon fait 19,5 km
+    pour 8,9 à vol d'oiseau ;
+  - Urdos – Laruns, d'une vallée à l'autre par la montagne (le relief des Pyrénées suit les gaves affinés) : à garder ou
+    à retirer ;
+  - les gabares vont plus lentement d'un port à l'autre (les méandres) ;
+  - Beynac (au pied de son château, sur la Dordogne) : une place bastionnée y serait presque toute dans l'eau ; Domme
+    bastionnée a des rues de l'autre côté de la Dordogne ;
+  - les villages au bord de l'eau gardent leur nœud (Saint-Pierre-d'Eyraud à 2,6 km de la Dordogne, Barbaste à 4,2 km de
+    la Baïse) ; les villes loin de l'eau aussi (Morcenx à 3,7 km de sa localité).

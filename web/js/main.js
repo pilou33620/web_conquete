@@ -17,14 +17,14 @@ let ui, map, seq = 0, polling = false, running = false, timer = null;
 let bataille = null;   // vue de bataille tactique : pendant qu'elle est ouverte, la campagne n'est plus interrogée
 let skirmishBid = null;   // mode Bataille : la bataille isolée en cours (au retour, l'écran de départ)
 let epoch = 0, lost = false;   // epoch : change à chaque resetUI, pour jeter les réponses d'une ancienne partie
-let bootVer, reloading = false;  // version du serveur au chargement de la page
+let bootVer, bootGeo, reloading = false;  // version du serveur et géographie de la carte au chargement de la page
 
-// le serveur a été relancé sur une nouvelle version, ou la partie chargée a une autre carte (« version/géographie ») :
-// cette page tourne encore avec l'ancien code ou l'autre carte
-function checkVersion(ver) {
-  if (!ver || bootVer === undefined || ver === bootVer || reloading) return reloading;
+// le serveur a été relancé sur une nouvelle version, ou la partie chargée a une autre carte (geo.py, VERSION) : cette
+// page tourne encore avec l'ancien code ou l'autre carte
+function checkVersion(ver, geo) {
+  const carte = geo != null && geo !== bootGeo;
+  if (reloading || bootVer === undefined || !carte && (!ver || ver === bootVer)) return reloading;
   reloading = true;
-  const carte = ver.split('/')[0] === String(bootVer).split('/')[0];
   ui && ui.toast(carte ? 'Cette partie a sa propre carte : la page va se recharger.' : 'Nouvelle version du jeu installée : la page va se recharger.', 'good');
   setTimeout(() => location.reload(), 2500);   // la partie est sur le serveur : rien n'est perdu
   return true;
@@ -48,7 +48,7 @@ async function poll() {
   if (lost) { lost = false; ui.toast('Connexion au serveur rétablie.', 'good'); }
   if (ep !== epoch || !running) return;
   if (ui.cmdSeq !== cs) { setTimeout(poll, 40); return; }   // état d’avant l’ordre (fin du mois…) : on le redemande
-  if (st && checkVersion(st.ver)) return;
+  if (st && checkVersion(st.ver, st.geo)) return;
   if (st && st.game === null) {   // le serveur n'a plus de partie : retour à l'écran de départ
     resetUI();
     showStart();
@@ -107,6 +107,7 @@ async function boot() {
     return;
   }
   bootVer = payload.ver;
+  bootGeo = payload.geo;
   lt.textContent = 'Peinture du terrain…';
   await new Promise(r => setTimeout(r, 30));
   map = new MapView(document.getElementById('map'), payload);

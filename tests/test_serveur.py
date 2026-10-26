@@ -224,7 +224,7 @@ class Sauvegardes(unittest.TestCase):
         self.assertEqual(a2['edge'], dict(e=e['id'], frm=e['a'], pos=5.0))
         self.assertEqual((a2['x'], a2['y']), g2.edge_xy(g2.geo.edges[e['id']], e['a'], 5.0))
         self.assertEqual(len(g2.cut_edges()), 27)
-        self.assertTrue(app.payload(g2.geo)[0].endswith(b'"ver":"%s/1"}' % str(server.UPDATE['version']).encode()))
+        self.assertEqual(json.loads(app.payload(g2.geo)[0])['geo'], 1, 'la page reçoit la carte de la partie')
         self.assertEqual(V.to_dict(g2)['geo'], 1, 'resauvegardée, elle garde sa carte')
 
 

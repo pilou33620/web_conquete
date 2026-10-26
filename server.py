@@ -80,7 +80,7 @@ class App:
         """/api/map pour cette carte (brut, compressé), calculé une fois."""
         if geo.version not in self.static:
             payload = dict(map=dict(geo.client_payload(), rails=RL.client_payload(geo)), rules=V.rules_payload(),
-                           skirmish=SK.options(self.geo), ver=ver(geo))
+                           skirmish=SK.options(self.geo), ver=UPDATE['version'], geo=geo.version)
             raw = json.dumps(payload, ensure_ascii=False, separators=(',', ':'), default=str).encode('utf-8')
             self.static[geo.version] = raw, gzip.compress(raw, 6)
         return self.static[geo.version]
@@ -436,11 +436,6 @@ class App:
 APP = None
 
 
-def ver(geo):
-    """Version du jeu et de la carte servie : la page se recharge si l'une change (mise à jour, ancienne partie chargée)."""
-    return f"{UPDATE['version']}/{geo.version}"
-
-
 class GzipCache:
     """Derniers corps JSON compressés (quelques-uns : un par navigateur) : un état identique, partie en pause et
     navigateur qui interroge le serveur 4 fois par seconde, n'est pas recompressé."""
@@ -559,9 +554,10 @@ class Handler(BaseHTTPRequestHandler):
                 since = 0
             with APP.lock:
                 if not APP.game:
-                    return self._json(dict(game=None, ver=ver(APP.geo)))
+                    return self._json(dict(game=None, ver=UPDATE['version']))
                 st = V.player_state(APP.game, since)
-                st['ver'] = ver(APP.game.geo)   # le client recharge la page si le serveur ou la carte de la partie a changé
+                st['geo'] = APP.game.geo.version   # (la page recharge la carte de la partie)
+            st['ver'] = UPDATE['version']   # le client recharge la page si le serveur a changé de version
             return self._json(st)
         if path in ('/api/tactic', '/api/tactic_map'):
             q = parse_qs(u.query)
