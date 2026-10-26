@@ -567,8 +567,17 @@ def _w_foire(g, n, gn, s):
     return {'printemps': 1.4, 'automne': 1.5, 'hiver': 0.3}.get(s, 1.0)
 
 
+GRANDS = ('Garonne', 'Dordogne')   # les grands fleuves, ceux de la grande crue (engine : flood_until)
+
+
 def _w_crue(g, n, gn, s):
-    return 1.6 if s == 'printemps' and _river(g, n['id']) else 0.0
+    """Au printemps, au bord de la Garonne ou de la Dordogne : surtout pendant la grande crue, un peu l'année d'une
+    grande crue, presque jamais les autres années."""
+    if s != 'printemps' or not any(w in GRANDS for w in _river(g, n['id'])):
+        return 0.0
+    if g.flooded():
+        return 3.0
+    return 0.5 if g.flood_until > 0 and g.date(g.flood_until).year == g.date().year else 0.05
 
 
 def _w_refugies(g, n, gn, s):
@@ -624,7 +633,7 @@ LOCAL = [
          choices=[dict(label='Accorder des franchises aux marchands', res=dict(livres=-60), v=dict(stab=0.02, tm=dict(livres=0.40), days=60), ai=2),
                   dict(label='Lever un droit sur les étals', res=dict(livres=90), v=dict(stab=-0.02), ai=1)]),
     dict(id='crue', short='crues', w=3.0, weight=_w_crue, title='Crue {a_ville}',
-         text="Après les pluies et la fonte des neiges, {riviere} sort de son lit : les quais et les bas quartiers "
+         text="Grossie par les pluies du printemps et la fonte des neiges, {riviere} sort de son lit : les quais et les bas quartiers "
               "{de_ville} sont sous l'eau.",
          choices=[dict(label='Renforcer les digues', res=dict(livres=-100, bois=-50), v=dict(tm=dict(prod=-0.05), days=30), ai=2),
                   dict(label='Évacuer les bas quartiers', v=dict(tm=dict(prod=-0.15), days=45), ai=2),
@@ -654,7 +663,7 @@ def _fill(g, nid, s):
     gn = g.geo.nodes[nid]
     v = gn['name']
     a_ville = 'au ' + v[3:] if v.startswith('Le ') else ('aux ' + v[4:] if v.startswith('Les ') else f"à {v}")
-    riv = _river(g, nid)
+    riv = sorted(_river(g, nid), key=lambda w: w not in GRANDS)   # (Libourne : la Dordogne plutôt que l'Isle)
     riviere = {'Garonne': 'la Garonne', 'Dordogne': 'la Dordogne', 'Isle': "l'Isle", 'Lot': 'le Lot', 'Baïse': 'la Baïse',
                'Midouze': 'la Midouze', 'Adour': "l'Adour"}.get(riv[0] if riv else '', 'la rivière')
     return s.format(ville=v, de_ville=R.de(v), a_ville=a_ville, riviere=riviere)
@@ -684,6 +693,19 @@ def tick(g):
         if fire(g, code, n):
             key = 'joueur' if code == g.player else 'ia'
             st['ev_' + key] = st.get('ev_' + key, 0) + 1
+
+
+def grande_crue(g):
+    """La grande crue tirée (engine.monthly) : dans un camp sur deux, une place au bord de la Garonne ou de la Dordogne
+    sous l'eau."""
+    busy = {p.get('town') for p in g.pending_ev if p.get('kind') == 'ville'}
+    for code, f in g.factions.items():
+        if not f['alive'] or (code == g.player and busy):
+            continue
+        bords = [n for n in g.owned_nodes(code) if not n['siege'] and g.t - n.get('evt', -1e9) > CITY_GAP
+                 and any(w in GRANDS for w in _river(g, n['id']))]
+        if bords and g.rng.random() < 0.5:
+            fire(g, code, g.rng.choices(bords, [TOWN_W[g.geo.nodes[m['id']]['type']] for m in bords])[0], LOCAL_BY_ID['crue'])
 
 
 def weights(g, n):

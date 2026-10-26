@@ -484,6 +484,13 @@ Le ciel (`ciel.js`) :
   compte (+22 km équivalents), donc la recherche de chemin, l'IA et l'arrivée estimée (`turns.eta`)
   aussi. Vue : `cut = [[arête, début, fin], …]` (km le long du tracé), seulement pendant la crue ; la fiche d'une
   armée du joueur dont l'itinéraire passe par une route coupée le dit. Bancs : `test_campagne.RoutesCoupeesParLaCrue`.
+- **Crues des villes** (événement local `crue`, `cities._w_crue`, décision du joueur) : seulement au printemps, et
+  seulement dans les places au bord de la Garonne ou de la Dordogne (`cities.GRANDS`). Quand la grande crue est tirée,
+  un camp sur deux voit une de ses places du bord sous l'eau (`cities.grande_crue`) ; le reste du printemps, le tirage
+  ordinaire la pèse 3 pendant la crue, 0,5 l'année de la crue, 0,05 les autres années (incendie : 3). Mesure
+  (`outils/simuler.py` compte les crues de ville ; 3 parties × 12 ans depuis 1790, graines 11 à 13, mois relevés à
+  part) : 15 crues de ville avant, de mars à mai, aucune pendant une grande crue, au bord du Lot, de l'Adour, de
+  l'Isle… ; après, 18, toutes en mars, pendant une des 10 grandes crues, au bord des deux fleuves. Bancs : `test_campagne.CruesDesVilles`.
 - Tuiles (`terre.js`, `ambiance.js`), dans `cleTuiles` : **crue** (`AMB.crue` : `flood` de l'état, la période de
   `Game.flooded` ; pas la pluie du jour, qui repeindrait les tuiles à chaque averse) : les prés bas (altitude approchée < 0,11) à moins de 0,25 à 1,35 km de
   la Garonne et de la Dordogne (`Terre.CRUE`, distance au fleuve par case, `inonde`) sous une eau trouble, sans

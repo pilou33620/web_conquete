@@ -88,6 +88,7 @@ def simulate(seed, epoque='1790', mois=12, joueur='33'):
                 tresor=round(sum(g.factions[c]['res']['livres'] for c in codes) / len(codes)),
                 hommes=round(sum(g.army_men(a) for a in g.armies.values()) / len(codes)),
                 lignes=sum(1 for st in getattr(g, 'rails', {}).values() if st.get('done')),   # tronçons de voie ferrée ouverts
+                crues=getattr(g, 'city_stats', {}).get('quoi', {}).get('crue', 0),   # crues de ville, tous camps
                 # SPEC-ARBRE.md : année de découverte des grandes armes, par camp qui les a trouvées en cours de partie
                 armes={t: [g.date(g.factions[c]['tech_dates'][t][1]).year for c in codes
                            if t in g.factions[c].get('tech_dates', {})] for t in GRANDES_ARMES})
@@ -125,6 +126,7 @@ def main():
           f"{mean(rows, 'vivants'):>8} {mean(rows, 'techs'):>6} {mean(rows, 'tresor'):>7} {mean(rows, 'hommes'):>7} "
           f"{mean(rows, 'lignes'):>6}  "
           f"erreurs : {sum(1 for r in rows if r['err'] and not r['err'].startswith('fin'))}")
+    print(f"crues de ville (tous camps) : {sum(r['crues'] for r in rows)} en {a.parties * a.annees} ans de jeu")
     for t in GRANDES_ARMES:
         ys = [y for r in rows for y in r['armes'][t]]
         print(f"{t:<11} trouvée en cours de partie par {len(ys)} camps sur {5 * len(rows)}" + (f", vers {round(sum(ys) / len(ys))} "

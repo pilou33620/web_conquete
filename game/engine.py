@@ -747,6 +747,7 @@ class Game:
         if d.month == 3 and self.rng.random() < 0.2:   # une grande crue un printemps sur cinq environ
             self.flood_until = self.t + self.rng.randint(21, 42)
             self.log('meteo', 'Grande crue de la Garonne et de la Dordogne : bacs ralentis et routes coupées pendant quelques semaines.', important=True)
+            CT.grande_crue(self)
         if self.factions[self.player]['alive']:
             f = self.factions[self.player]
             inc = f['income']

@@ -1030,6 +1030,39 @@ class RoutesCoupeesParLaCrue(unittest.TestCase):
         self.assertAlmostEqual(g.edge_cost(g.player, e), c0 + 22.0 * CR.DELAY)
 
 
+class CruesDesVilles(unittest.TestCase):
+    def test_au_printemps_au_bord_des_grands_fleuves_surtout_l_annee_de_la_grande_crue(self):
+        """L'événement « crue » d'une place suit la grande crue (engine : flood_until, tirée en mars un printemps sur
+        cinq) : jamais l'été, jamais loin de la Garonne et de la Dordogne, presque jamais hors des années de crue."""
+        g = partie()
+        w = lambda n: dict((e['id'], x) for e, x in CT.weights(g, n)).get('crue', 0.0)
+        bord = next(n for n in g.nodes if GEO.nodes[n['id']]['name'] == 'Langon')
+        loin = [n for n in g.nodes if n['owner'] in g.factions and not any(r in CT.GRANDS for r in CT._river(g, n['id']))]
+        an = g.date().year + 1
+        g.flood_until = -1
+        au(g, an, 4, 10)
+        calme = w(bord)
+        self.assertGreater(calme, 0.0)
+        g.flood_until = g.t + 20
+        self.assertGreater(w(bord), 20 * calme, 'pendant la grande crue')
+        self.assertEqual(max(w(n) for n in loin), 0.0, 'loin des grands fleuves (Lot, Adour, côte…)')
+        au(g, an, 5, 20)
+        self.assertGreater(w(bord), 5 * calme, "l'année de la grande crue")
+        for m in (7, 8, 10, 1):
+            au(g, an, m, 5)
+            self.assertEqual(w(bord), 0.0, f'hors du printemps (mois {m})')
+        self.assertIn('printemps', CT.LOCAL_BY_ID['crue']['text'])
+        g.pending_ev.clear()
+        avant = len(g.pending_ev)
+        for _ in range(8):   # la grande crue tirée : une place du camp au bord du fleuve, une fois sur deux
+            for n in g.nodes:
+                n.pop('evt', None)
+            CT.grande_crue(g)
+        ev = [p for p in g.pending_ev[avant:] if p['ev'] == 'crue']
+        self.assertTrue(ev)
+        self.assertTrue(all(any(r in CT.GRANDS for r in CT._river(g, p['town'])) for p in ev))
+
+
 class Sauvegarde(unittest.TestCase):
     def test_aller_retour(self):
         g = partie()
