@@ -350,7 +350,8 @@ Le ciel (`ciel.js`) :
 - `carte/ciel.js` : `Ciel` (`drawWeather`) : voiles par zone, averses (éclairs pour l'orage, pluie couchée pour la
   tempête), brouillard en nappes dans les fonds (`terre(map).alt`), neige, canicule ; brume du matin ; voile de
   l'heure en `multiply` ; `LUM` en `lighter`, fenêtres des villes (`planCarte().lum`), phare de Cordouan ;
-  sélecteur d'heure (quatre boutons `aria-pressed`, rangés à gauche du dernier bouton de `#zoombar`).
+  sélecteur d'heure (quatre boutons `aria-pressed`, rangés à gauche du premier bouton de `#zoombar` : le bas reste aux
+  avis de `#feed`, rangés à gauche de la colonne du zoom, trois au plus, trois lignes chacun, au-dessus de la date).
 - Écarts :
   - `drawSeasonTint` n'a plus la teinte de saison (les tuiles de A portent les saisons) ; c'est là, seule de mes
     fonctions appelée sous les villes, que se dessinent les traces, les tranchées et la terre piétinée.

@@ -557,7 +557,7 @@ export class UI {
       const col = this.map.colors[e.who] || '#8d8a7a';
       const icon = e.kind === 'battle_end' ? ICON.swords : e.kind === 'capture' ? ICON.flag : ICON.seal;
       return `<div class="feed-item ${i < items.length - 2 ? 'old' : ''}" data-act="goto" data-x="${e.x ?? ''}" data-y="${e.y ?? ''}">
-        <span class="stripe" style="background:${col}"></span>${icon}<span>${esc(e.text)}</span></div>`;
+        <span class="stripe" style="background:${col}"></span>${icon}<span title="${esc(e.text)}">${esc(e.text)}</span></div>`;
     }).join('');
   }
 
