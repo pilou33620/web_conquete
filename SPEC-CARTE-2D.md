@@ -477,9 +477,10 @@ Le ciel (`ciel.js`) :
   (ni bac ni voie d'eau) passe plus de 240 m dans les prés noyés (échantillons tous les 120 m), loin des places
   (`rayonPlace` + 0,5 km), d'après le critère des tuiles (`inonde`, ci-dessous) recalculé côté serveur sur les données
   de `client_payload` (relief approché, distance au fleuve en flottants 32 bits : la même liste que la carte). Calculé
-  une fois par carte (environ 1 s) : **25 routes**, toutes au passage de la Garonne ou de la Dordogne. Une armée y avance
-  à `crue.FACTOR` = **×0,25** sur toute l'arête (à gué ou par un détour ; jamais bloquée, pour ne pas rester au milieu),
-  pas le train ; `edge_cost` en tient compte (×4), donc la recherche de chemin, l'IA et l'arrivée estimée (`turns.eta`)
+  une fois par carte, au démarrage du serveur (environ 1 s) : **25 routes**, toutes au passage de la Garonne ou de la Dordogne. Une armée y perd
+  `crue.DELAY` = **un jour** par arête coupée (à gué ou par un détour, quelle que soit la longueur de la route ; la marche
+  est ralentie d'autant sur l'arête, jamais bloquée, pour ne pas rester au milieu), pas le train ; `edge_cost` en tient
+  compte (+22 km équivalents), donc la recherche de chemin, l'IA et l'arrivée estimée (`turns.eta`)
   aussi. Vue : `cut = [[arête, début, fin], …]` (km le long du tracé), seulement pendant la crue ; la fiche d'une
   armée du joueur dont l'itinéraire passe par une route coupée le dit. Bancs : `test_campagne.RoutesCoupeesParLaCrue`.
 - Tuiles (`terre.js`, `ambiance.js`), dans `cleTuiles` : **crue** (`AMB.crue` : `flood` de l'état, ou les hautes eaux de

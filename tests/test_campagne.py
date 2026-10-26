@@ -996,7 +996,7 @@ class TraceDesRoutes(unittest.TestCase):
 class RoutesCoupeesParLaCrue(unittest.TestCase):
     def test_coupee_en_avril_pas_en_juin_et_l_armee_y_marche_lentement(self):
         """Les hautes eaux de mars et avril (ou la crue tirée) coupent les routes des prés noyés (le critère de la carte,
-        game/crue.py) : la vue les envoie, l'armée y avance quatre fois plus lentement, la recherche de chemin le sait."""
+        game/crue.py) : la vue les envoie, l'armée y perd un jour sur l'arête, la recherche de chemin le sait."""
         g = partie()
         g.flood_until = -1
         an = g.date().year + 1
@@ -1021,8 +1021,9 @@ class RoutesCoupeesParLaCrue(unittest.TestCase):
         sec, c0 = marche(), g.edge_cost(g.player, e)
         self.assertGreater(sec, 1)
         g.flood_until = g.t + 10   # la crue tirée au printemps dure encore
-        self.assertAlmostEqual(marche(), sec * CR.FACTOR)
-        self.assertAlmostEqual(g.edge_cost(g.player, e), c0 / CR.FACTOR)
+        sp = sec / 0.2
+        self.assertAlmostEqual(marche(), 0.2 * e['len'] / (e['len'] / sp + CR.DELAY))
+        self.assertAlmostEqual(g.edge_cost(g.player, e), c0 + 22.0 * CR.DELAY)
 
 
 class Sauvegarde(unittest.TestCase):

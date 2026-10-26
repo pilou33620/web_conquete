@@ -187,7 +187,7 @@ def eta(g, a, legs=None):
     legs = a['path'] if legs is None else legs
     if not legs:
         return None
-    km, rail, x, y = 0.0, 0.0, a['x'], a['y']   # (rail : jours de train, embarquements compris)
+    km, rail, x, y = 0.0, 0.0, a['x'], a['y']   # (rail : jours de train, embarquements compris, et jours perdus à la crue)
     on = bool(a.get('rail'))
     for leg in legs:
         if leg['kind'] == 'road':
@@ -195,7 +195,9 @@ def eta(g, a, legs=None):
             if leg.get('rail'):
                 rail += k / R.RAIL_SPEED + (0.0 if on else R.RAIL_EMBARK)
             else:
-                km += k / (CR.FACTOR if leg['e'] in g.cut_edges() else 1.0)   # (route coupée par la crue)
+                km += k
+                if leg['e'] in g.cut_edges():
+                    rail += CR.DELAY * k / g.geo.edges[leg['e']]['len']   # (route coupée par la crue : un jour sur l'arête)
             on = bool(leg.get('rail'))
             x, y = g.node_xy(leg['to'])
         else:

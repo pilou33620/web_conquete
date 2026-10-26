@@ -6,7 +6,7 @@ import math
 import re
 from array import array
 
-FACTOR = 0.25   # sur une route coupée, on passe à gué ou on fait un détour : quatre fois plus lent
+DELAY = 1.0   # jours : passer la partie noyée d'une route coupée, à gué ou par un détour (quelle que soit sa longueur)
 HT = [-.1, -.05, .04, .1, .05, 0, .38, .9, 1.6, .14, .16]   # altitude approchée par terrain (terre.js)
 M32 = 0xffffffff
 

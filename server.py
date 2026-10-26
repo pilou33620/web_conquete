@@ -36,6 +36,7 @@ sys.path.insert(0, ROOT)
 
 from game import army_actions as AA  # noqa: E402
 from game import cities as CT  # noqa: E402
+from game import crue as CR  # noqa: E402
 from game import diplomacy as D  # noqa: E402
 from game import events as EV  # noqa: E402
 from game import rules as R  # noqa: E402
@@ -53,6 +54,7 @@ class App:
         t0 = time.time()
         print('Préparation de la carte de l\'Aquitaine…', flush=True)
         self.geo = GeoMap()
+        CR.spans(self.geo)   # les routes que la crue coupe : calculées ici (environ 1 s) plutôt qu'au premier état en crue
         nw = sum(1 for e in self.geo.edges if e.get('kind') == 'water')
         print(f'Carte prête ({time.time() - t0:.1f} s) : {len(self.geo.nodes)} villes et villages, '
               f'{len(self.geo.edges) - nw} routes, {nw} tronçons navigables.', flush=True)

@@ -1596,8 +1596,10 @@ class Game:
         """Coût d'un tronçon en « km de route équivalents » pour une armée marchant à `speed` km/j."""
         if e.get('kind') == 'water':
             return e['len'] * 22.0 / max(5.0, self.water_speed(e, frm, estimate=True, code=code))
-        sp = (1.15 if e['royal'] else 1.0) * (CR.FACTOR if e['id'] in self.cut_edges() else 1.0)
+        sp = 1.15 if e['royal'] else 1.0
         c = e['len'] / sp
+        if e['id'] in self.cut_edges():
+            c += max(5.0, speed) * CR.DELAY   # route coupée par la crue : un jour de plus
         if e['rrank'] == 1 and not self.mod(code, 'bridges'):
             c += 8 if not e['ferry'] else 20
         return c * 22.0 / max(5.0, speed)
@@ -2153,7 +2155,7 @@ class Game:
                 if self.wx(a['x'], a['y']) is R.WEATHER['neige'] and self.zone_of(a['x'], a['y']) == 'montagne':
                     sp *= 0.6
                 if e['id'] in self.cut_edges():
-                    sp *= CR.FACTOR   # route coupée par la crue : à gué ou par un détour (pas bloquée : on ne reste pas coincé)
+                    sp = e['len'] / (e['len'] / sp + CR.DELAY)   # route coupée par la crue : un jour de plus sur l'arête (à gué ou par un détour ; jamais bloquée)
                 if a.get('rail'):
                     sp = R.RAIL_SPEED   # (le train passe les fleuves sur ses ponts)
                 zone_end = e['len']

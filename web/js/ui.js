@@ -1463,7 +1463,7 @@ export class UI {
       ? `${a.cl[1] <= 1 ? 'jusqu’à la fin du tour' : `encore ${a.cl[1]} tours`} pour en sortir (itinéraire de sortie tracé), sinon incident diplomatique.`
       : `délai de grâce écoulé, rester ici fâche ${esc(a.cl[0])} (incident, voire la guerre).`}</div>`;
     else if (a.dt && a.st === 'move') h += `<div class="muted small">Détour : l’itinéraire contourne les terres ${esc(de(a.dt.join(' et ')))} (sans droit de passage).</div>`;
-    if (a.st === 'move' && a.path?.some(l => !l.r && st.cut?.some(c => c[0] === l.e))) h += `<div class="muted small">Route coupée par la crue : l’armée passe à gué, quatre fois plus lentement.</div>`;
+    if (a.st === 'move' && a.path?.some(l => !l.r && st.cut?.some(c => c[0] === l.e))) h += `<div class="muted small">Route coupée par la crue : l’armée passe à gué ou fait un détour, environ un jour de plus.</div>`;
     if (own) {
       h += `<dl class="kv"><dt>Terrain</dt><dd>${terr}${a.h ? ', à couvert' : ''}</dd><dt>Ravitaillement</dt><dd>${Math.round(a.sup * 100)} %</dd>
         ${a.dp ? `<dt></dt><dd class="muted small">Ravitaillée par le magasin de ${esc(a.dp)}</dd>` : ''}
