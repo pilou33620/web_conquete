@@ -920,10 +920,12 @@ class Game:
             f['_arm_rate'] = cap * s * (1 + self.mod(code, 'armes_eff')) * 0.5
             f['_tool_rate'] = cap * (1 - s) * 0.5
             # les ateliers ne mangent pas la réserve (R.WORKSHOP_RESERVE) : en dessous, ils tournent avec le fer et le
-            # bois du jour (une partie neuve n'est pas en déficit) ; au-dessus (achats, échanges), à pleine capacité
+            # bois du jour (une partie neuve n'est pas en déficit) ; au-dessus (achats, échanges), l'excédent aussi
             kc = 1 + self.mod(code, 'tools_cost')
             need = dict(fer=f['_arm_rate'] + 0.5 * f['_tool_rate'] * kc, bois=0.5 * f['_arm_rate'] + f['_tool_rate'] * kc)
-            short = {k: tot[k] / need[k] for k in need if need[k] > tot[k] and f['res'][k] <= R.WORKSHOP_RESERVE[k]}
+            # (ce qui dépasse la réserve se travaille en un jour : compute_income revient chaque jour)
+            avail = {k: tot[k] + max(0.0, f['res'][k] - R.WORKSHOP_RESERVE[k]) for k in need}
+            short = {k: avail[k] / need[k] for k in need if need[k] > avail[k]}
             work = min([1.0, *short.values()])
             f['_arm_rate'] *= work
             f['_tool_rate'] *= work
@@ -936,6 +938,7 @@ class Game:
             f['income'] = dict(livres=tot['livres'], vivres=tot['vivres'], fer=tot['fer'] - need['fer'] * work,
                                bois=tot['bois'] - need['bois'] * work,
                                armes=f['_arm_rate'], outils=f['_tool_rate'], recrues=tot['recrues'], industrie=cap)
+            f['_in'] = dict(fer=tot['fer'], bois=tot['bois'])   # (le fer et le bois qui rentrent, avant les ateliers)
             if f.get('_measured'):
                 f['income'].update(f['_measured'])
 
@@ -954,8 +957,8 @@ class Game:
             # au-delà du plafond des casernes, plus de nouvelles recrues (mais on ne perd pas celles reçues par échange)
             r['recrues'] = min(r['recrues'] + inc['recrues'] * dt, max(3000 + 250 * held_n.get(code, 0), r['recrues']))
             kc = 1 + self.mod(code, 'tools_cost')
-            gross_fer = inc['fer'] + f['_arm_rate'] + 0.5 * f['_tool_rate'] * kc
-            gross_bois = inc['bois'] + 0.5 * f['_arm_rate'] + f['_tool_rate'] * kc
+            # (pas d'après income, que remplace la variation mesurée la veille : un jour en baisse se répétait chaque jour)
+            gross_fer, gross_bois = f['_in']['fer'], f['_in']['bois']
             r['fer'] += gross_fer * dt
             r['bois'] += gross_bois * dt
             # fabrication limitée par les stocks

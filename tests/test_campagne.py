@@ -1050,6 +1050,23 @@ class DepartSansDeficit(unittest.TestCase):
         self.assertEqual(f['_work'][0], 1.0)
         self.assertLess(f['income']['fer'], 0)
 
+    def test_un_stock_juste_au_dessus_de_la_reserve_n_y_descend_pas(self):
+        """81 fer en 1870 : les ateliers travaillaient un jour à pleine capacité et descendaient à 66 ; ils ne
+        prennent plus que ce qui dépasse la réserve."""
+        g = partie('33', '1870')
+        f = g.factions['33']
+        f['res']['fer'], f['res']['bois'] = R.WORKSHOP_RESERVE['fer'] + 1, R.WORKSHOP_RESERVE['bois'] + 1
+        g.compute_income()
+        TT.go(g)
+        bas = dict(f['res'])
+        while g.t < 3:
+            TT.advance(g, 0.5)
+            if g.tour['stop'] or g.tour['end'] is None:
+                TT.go(g)
+            bas = {k: min(bas[k], f['res'][k]) for k in ('fer', 'bois')}
+        self.assertGreaterEqual(bas['fer'], R.WORKSHOP_RESERVE['fer'] - 0.5)
+        self.assertGreaterEqual(bas['bois'], R.WORKSHOP_RESERVE['bois'] - 0.5)
+
 
 class IADepenseSonTresor(unittest.TestCase):
     def test_au_dela_de_deux_tresors_de_guerre_l_ia_arme_davantage(self):
