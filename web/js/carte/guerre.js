@@ -5,7 +5,7 @@
 import { C, E, T, RR, PG, TAU, SPR, toile, avant, bat, caisson, cavalier, cheval, clair, clamp, distPoly, fantassin, lerp, ligne,
          mod, piece, sombre, surChemin, tenue } from './lib.js';
 import { AMB, LUM, U, Z, bivouac, nuit } from './ambiance.js';
-import { S as SU, IC, carteDe, etatVille, planDe } from './villes.js';
+import { S as SU, IC, carteDe, etatVille, planDe, rayon } from './villes.js';
 import { LARG_RIVIERE } from './terre.js';
 
 export const VENT = [0.004, -0.002];   // km/s : le vent d'ouest emporte les fumées vers l'est
@@ -53,9 +53,9 @@ function parPas(pts, s0, s1, pas, fn) {
 }
 
 // ------------------------------------------------------------------ rayon d'une place
-// rayon de la ville bâtie (km), d'après sa population, comme le plan des villes (carte/villes.js) : un village,
-// 300 m ; Bordeaux, un kilomètre et demi
-export const rayonPlace = (n, ns) => Math.round(clamp(46 + 1.55 * Math.sqrt(ns?.pop || n.pop0 || 700), 56, 262) / 8) * 8 / 180;
+// rayon de la ville bâtie (km), d'après sa population, comme le plan des villes (carte/villes.js, rayon) : un village,
+// 110 m ; Bordeaux, un kilomètre et demi
+export const rayonPlace = (n, ns) => rayon(ns?.pop || n.pop0 || 700) / SU;
 // rayon extérieur des remparts (km), d'après le mur du plan de la ville (carte/villes.js, V.rMur) et la forme de
 // l'enceinte de map.js (walls : les bastions et les demi-lunes débordent le mur)
 const MURS = new Map();

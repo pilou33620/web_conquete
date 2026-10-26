@@ -5,7 +5,7 @@
 import { clamp } from './battle/formes.js';
 import { Lot } from './lot.js';
 import { Z } from './carte/ambiance.js';
-import { carteDe, etatVille, imageEnCache, planCarte, planCartePas, resPour, S as SU } from './carte/villes.js';
+import { carteDe, etatVille, imageEnCache, planCarte, planCartePas, rayon, resPour, S as SU } from './carte/villes.js';
 const TAU = Math.PI * 2;
 function hash(i, j, k = 0) {
   let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0;
@@ -338,7 +338,9 @@ export class TownArt {
   // Une image par place, état et résolution (paliers de 2) ; on n'en peint que pour 6 ms par image, les autres
   // places gardent le palier voisin ou le signe le temps d'être peintes. Renvoie faux pour garder le signe.
   plan(ctx, n, s, col, ns, owner) {
-    const mp = this.map, z = mp.cam.z, e = etatVille(n, ns, mp.state), res = resPour(z * (mp.dpr || 1) / SU);
+    const mp = this.map, z = mp.cam.z;
+    if (rayon(ns?.pop || n.pop0 || 700) / SU * z < 10) return false;   // (plancher : moins de 10 px de rayon, le signe ; un village de 111 m, jusqu'à z 90)
+    const e = etatVille(n, ns, mp.state), res = resPour(z * (mp.dpr || 1) / SU);
     if (this.planFrame !== mp.frameNo) { this.planFrame = mp.frameNo; this.planMs = 0; }
     let p = imageEnCache(n, e, res);
     if ((!p || p.r0 !== res) && (!p || !mp.zooming()) && this.planMs < 6) {

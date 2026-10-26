@@ -95,7 +95,7 @@ test('la crue coupe les routes de la liste du serveur, dans les prés noyés du 
   for (const k of c) {
     assert.ok(fleuves.some(([x, y]) => Math.hypot(x - k.x, y - k.y) < 4), 'au bord de la Garonne ou de la Dordogne');
     assert.ok(m.nodes.every(n => Math.hypot(n.x - k.x, n.y - k.y) > 0.5), 'pas dans une place');
-    assert.ok(k.l >= 0.24);
+    assert.ok(k.l >= 0.24 - 1e-9);   // (bornes arrondies au mètre par le serveur)
   }
   assert.equal(W.coupuresDe(), c, 'une fois par état');
   AMB.crue = false;

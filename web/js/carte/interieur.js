@@ -161,7 +161,7 @@ export function ouvrirInterieur(o) {
     const t = sc.tv; vue.peint = { it, cle, w, t };
     if (w) peinture = { id: ++nP, t, seq: 0, fait: () => peinte(t, { cle }) };
   }
-  sc.z = Math.max(sc.zB()[0], Math.min(4, sc.cssW / (Pf.R * 2.7))); sc.cx = IC[0]; sc.cy = IC[1]; sc.vol = null; sc.suivi = null; sc.borner(); sc.marquer(null);
+  sc.z = Math.max(sc.zB()[0], Math.min(12, sc.cssW / (Pf.R * 2.7))); sc.cx = IC[0]; sc.cy = IC[1]; sc.vol = null; sc.suivi = null; sc.borner(); sc.marquer(null);   // (la place entière ; un village de 111 m à 12 px par unité)
   el.querySelector('#vi-nom').textContent = n.name;
   el.querySelector('#vi-sous').textContent = `${TYPE_TXT[n.type] || n.type} · ${o.dept || n.dept} · ${e.annee}`;
   const etat = [e.siege ? (e.blocus ? 'bloquée' : `assiégée, ${Math.round(e.dmg * 100)} % de dégâts`) : null, e.deg >= .01 ? `${Math.round(e.deg * 100)} % de la ville en ruine` : null, e.lv ? `${LV_TXT[e.lv] || e.lv} (il y a ${e.lvAge} jours)` : null, e.famine ? 'famine : moins de monde dans les rues' : null].filter(Boolean);

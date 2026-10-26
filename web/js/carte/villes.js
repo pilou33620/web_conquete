@@ -81,7 +81,10 @@ export const S = 180, IW = 1000, IH = 760, IC = [500, 380];   // unités de l'in
 const loc = (n, x, y) => [IC[0] + (x - n.x) * S, IC[1] + (y - n.y) * S];
 // le plan ne dépend de l'année que par ces seuils (murs abattus et gare après 1860), et de la population par paliers
 const ere = a => (a >= 1860 ? 1860 : 1789);
-const rayon = pop => Math.round(clamp(46 + 1.55 * Math.sqrt(pop), 56, 262) / 8) * 8;
+// le rayon d'une place (unités de 5,56 m) d'après sa population : un village de 700 habitants, 111 m (180 maisons, 4 par
+// maison ; jamais moins, pour qu'il se lise sur la carte), un bourg de 3 000, 445 m, Bayonne 1,13 km, Bordeaux 1,47 km
+// (« Livré — la surface des villages et des bourgs »)
+export const rayon = pop => Math.round(clamp(2.1 * Math.sqrt(pop) - 36, 20, 262) / 4) * 4;
 export function profilVille(K, n, e = {}) {
   const pop0 = n.pop0 || 700, pop = e.pop || pop0, spec = n.spec || [], annee = ere(e.annee || 1789), f = e.f ?? n.fort ?? 0, d = e.d || 0;
   const R = rayon(pop);
@@ -230,7 +233,7 @@ export function genererInterieur(K, Pf) {
     for (const r of Pf.routes) ruban(r, nx * pas * .75 + 34, nx * pas * 1.25 * fau, 12, 8, { densite: dens(.6) });
   } else if (m === 'rue') {
     const r = Pf.routes[0] || { a: 0 }, r2 = Pf.routes[1] || { a: r.a + Math.PI };
-    ruban(r, 0, Rv * 1.5 * fau, 14); ruban(r2, 8, Rv * 1.5 * fau, 14);
+    ruban(r, 0, Rv * 4 * fau, 14); ruban(r2, 8, Rv * 4 * fau, 14);   // (la rue plus longue que le rayon : 5 à 7 habitants par maison)
   } else if (m === 'airial') {
     for (const r of Pf.routes) ruban(r, 22, 70 * fau, 12, 8, { densite: dens(.8) });
     for (let k = 0; k < 9; k++) { const a = R() * TAU, d = 120 + R() * 220; plus.push({ k: 'airial', x: IC[0] + Math.cos(a) * d, y: IC[1] + Math.sin(a) * d, a: R() * TAU }); }
@@ -377,7 +380,7 @@ export function* peindreInterieurPas(K, V, k, e = {}, natif = true) {
     if (Math.abs(s) > .02) { g.fillStyle = s > 0 ? `rgba(25,35,10,${s * .32})` : `rgba(255,248,215,${-s * .26})`; g.fillRect(x, y, 16, 16); }
   }
   const urbain = Pf.modele !== 'rue' && Pf.modele !== 'airial' && Pf.modele !== 'montagne';
-  if (urbain && Pf.modele !== 'fortin') { g.beginPath(); for (let a = 0; a <= TAU + .01; a += .04) { const r = Math.max(...V.ilots.filter(b => b.zone === 'ville').map(b => { const d = Math.atan2(b.c[1] - IC[1], b.c[0] - IC[0]); return Math.abs(angDiff(d, a)) < .35 ? b.d + 8 : 0; }), 40); g.lineTo(IC[0] + Math.cos(a) * r, IC[1] + Math.sin(a) * r); } g.fillStyle = '#bfb498'; g.fill(); }
+  if (urbain && Pf.modele !== 'fortin') { g.beginPath(); for (let a = 0; a <= TAU + .01; a += .04) { const r = Math.max(...V.ilots.filter(b => b.zone === 'ville').map(b => { const d = Math.atan2(b.c[1] - IC[1], b.c[0] - IC[0]); return Math.abs(angDiff(d, a)) < .35 ? b.d + 8 : 0; }), Math.min(40, Pf.R)); g.lineTo(IC[0] + Math.cos(a) * r, IC[1] + Math.sin(a) * r); } g.fillStyle = '#bfb498'; g.fill(); }
   // la mer, les étangs, l'estuaire (d'après la grille du jeu), puis les rivières (en crue, elles débordent)
   for (const [r, c] of [[11, '#e3d3a3'], [8.5, '#3d6ea6'], [6.5, '#4a7db8']]) { const l = []; for (let y = 0; y < IH; y += 9) for (let x = 0; x < IW; x += 9) if (K.eauK(...km(x, y)) > (c === '#e3d3a3' ? .38 : .5)) l.push([x, y, r]); taches(g, new Map([[c, l]])); }
   const crue = e.lv === 'crue';

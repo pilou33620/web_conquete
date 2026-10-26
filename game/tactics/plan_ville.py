@@ -159,8 +159,8 @@ def ere(a):
     return 1860 if a >= 1860 else 1789
 
 
-def rayon(pop):
-    return jround(clamp(46 + 1.55 * math.sqrt(pop), 56, 262) / 8) * 8
+def rayon(pop):   # (villes.js, rayon)
+    return jround(clamp(2.1 * math.sqrt(pop) - 36, 20, 262) / 4) * 4
 
 
 def _loc(n, x, y):
@@ -458,8 +458,8 @@ def generer_interieur(K, Pf):
     elif m == 'rue':
         r = Pf['routes'][0] if Pf['routes'] else dict(a=0)
         r2 = Pf['routes'][1] if len(Pf['routes']) > 1 else dict(a=r['a'] + math.pi)
-        ruban(r, 0, Rv * 1.5 * fau, 14)
-        ruban(r2, 8, Rv * 1.5 * fau, 14)
+        ruban(r, 0, Rv * 4 * fau, 14)   # (le village plus petit : la rue plus longue que son rayon, 5 à 7 habitants par maison)
+        ruban(r2, 8, Rv * 4 * fau, 14)
     elif m == 'airial':
         for r in Pf['routes']:
             ruban(r, 22, 70 * fau, 12, 8, densite=dens(.8))

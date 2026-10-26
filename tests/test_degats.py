@@ -230,7 +230,7 @@ class CanonsSurLeRempart(unittest.TestCase):
         self.assertTrue(tb.deploy(1, [u.id], z[0], z[1], who='any')[0])
         self.assertEqual(tb.t[tb.cell(u.x, u.y)], T_MUR)
         tb.start()
-        vus = {d['id']: d for d in tb.view(me=None)['units']}
+        vus = {d['id']: d for d in tb.view(me=1)['units']}   # (la vue du défenseur : l'assaillant ne les voit pas toujours)
         for u in canons:
             with self.subTest(canon=u.id):
                 self.assertEqual(tb.t[tb.cell(u.x, u.y)], T_MUR)

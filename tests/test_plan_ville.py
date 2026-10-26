@@ -151,7 +151,7 @@ class BatailleSurLePlan(unittest.TestCase):
         # des maisons sur les rues du plan, une église
         bati = [c for c in range(TR.N) if m.t[c] == TR.T_BATI and
                 ((TR.center_of(c)[0] - m.place['x']) ** 2 + (TR.center_of(c)[1] - m.place['y']) ** 2) ** .5 < m.town_r]
-        self.assertGreater(len(bati), 50)
+        self.assertGreater(len(bati), 30)   # (un village de 111 m de rayon, quelque 200 maisons)
         voisins = lambda c: (c - 1, c + 1, c - TR.COLS, c + TR.COLS)
         sur_rue = [c for c in bati if any(m.t[v] in (TR.T_ROUTE, TR.T_CHEMIN) for v in voisins(c))]
         self.assertGreater(len(sur_rue) / len(bati), 0.95)
@@ -182,7 +182,8 @@ class BatailleSurLePlan(unittest.TestCase):
         airiaux = [e for e in m.plan['metiers'] if e['k'] == 'airial']
         self.assertTrue(airiaux)
         self.assertTrue(all(m.t[TR.cell_of(e['x'], e['y'])] == TR.T_BATI for e in airiaux))
-        m = carte(nom('Salies-de-Béarn'), att=0.0)   # (l'assaillant de l'est : les salines, à l'ouest, restent hors de sa bande)
+        n = nom('Salies-de-Béarn')   # (ses salines à 1,3 km au sud : la carte centrée 600 m plus au sud ; l'assaillant de l'est)
+        m = carte(n, att=0.0, cy=n['y'] + 0.6)
         self.assertTrue(m.plan['salines'])
         self.assertTrue(any(m.t[c] == TR.T_MARAIS_T for q in m.plan['salines'][0] for c in TV._dans(q)))
         # rien sur le glacis ni devant une porte ; les quais d'un port le long de l'eau, des bateaux

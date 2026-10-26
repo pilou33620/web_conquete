@@ -8,7 +8,7 @@ import {
   cheval as cheval0, cavalier as cavalier0, fantassin as fantassin0, tenue, sombre, clamp, lerp, mod, surChemin, distPoly, ligne, fumee, sprite,
 } from './lib.js';
 import { AMB, U, Z, LUM, bivouac, meteoEn } from './ambiance.js';
-import { carteDe, etatVille, planDe, S as S_INT, IC } from './villes.js';
+import { carteDe, etatVille, planDe, rayon, S as S_INT, IC } from './villes.js';
 
 const TT = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 export const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -18,7 +18,7 @@ function dansAnneau(r, x, y) { let d = false; for (let i = 0, j = r.length - 1; 
 const bboxOf = pts => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const [x, y] of pts) { a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); } return [a, b, c, d]; };
 const longueur = pts => { let l = 0; for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return l; };
 // rayon d'une place en km (profilVille de la maquette : R en unités de l'intérieur, 180 par km)
-export const rayonPlace = n => clamp(46 + 1.55 * Math.sqrt(n.pop0 || 700), 56, 262) / 180;
+export const rayonPlace = n => rayon(n.pop0 || 700) / S_INT;
 const BETES = { printemps: 1, ete: 1, automne: .8, hiver: .25 };   // l'hiver, les bêtes restent à l'étable
 // la météo garde les gens chez eux
 const METEO_D = { pluie: .6, orage: .35, tempete: .25, neige: .5, brouillard: .8, canicule: .7 };

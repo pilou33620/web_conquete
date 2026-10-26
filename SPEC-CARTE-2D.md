@@ -672,3 +672,46 @@ Bordeaux à 1,7 s (934 000 appels) et l'ouverture complète à l'écran à 4 s ;
   0,076 % (un `OffscreenCanvas` ne rastérise pas tout à fait comme un canevas de la page : rejouée sur un canevas de la page,
   la même tranche donne la même image au pixel près) ; tuiles contre rejeu entier (`echelle/fidele.cjs`) : 0,00 à 0,02, aucun
   pixel à plus de 60. Banc : `echelle.test.mjs` (sous-chemins hors de la fenêtre sautés, tranches rejouées dans l'ordre).
+
+## Livré — la surface des villages et des bourgs
+
+Choix du joueur : « il faudrait trouver un entre-deux suivant la taille des villes » ; les villages rétrécissent nettement,
+les bourgs un peu, les grandes villes presque pas.
+
+- **Le rayon** (`villes.js`, `rayon`, et `plan_ville.rayon`, identiques) : R = 2,1 √pop − 36 unités de 5,56 m, entre 20 et
+  262, par paliers de 4 (avant : 46 + 1,55 √pop, entre 56 et 262, par paliers de 8). Le plancher, 20 unités (111 m), garde
+  un village lisible : à z 110, 24 px de diamètre, une couronne d'îlots autour de la place et de l'église. Il est lu partout :
+  `rayonPlace` (`guerre.js`, `vie.js`, d'après `rayon`), donc `rayonMurs`, le siège, les bivouacs, les foires, les lumières
+  (`ciel.js`), `travaux.js` ; `crue.py` (les places que la crue épargne) ; les cartes de bataille et de siège
+  (`terrain_ville.py`, par le plan). Le village-rue garde des rues de 4 fois son rayon (avant 1,5) : 5 à 8 habitants par
+  maison.
+- **Sur la carte**, une place dont le plan ferait moins de 10 px de rayon garde son signe (`towns.js`, `plan`) : un village
+  de 111 m jusqu'à z 90, un bourg de 445 m jusqu'à z 22. Dans l'intérieur, la place s'ouvre entière (jusqu'à 12 px par
+  unité au lieu de 4) ; le sol de la ville suit ses îlots (plancher 40 unités ramené au rayon).
+- Exemples (maisons comptées sur le plan peint, 1789 ; avant → après) :
+
+  | Place | Habitants | Rayon | Îlots | Maisons | Habitants par maison |
+  |---|---|---|---|---|---|
+  | Belin (village rond) | 731 | 489 → 111 m | 174 → 14 | 3 391 → 229 | 0,2 → 3,2 |
+  | Lanton (village rond) | 676 | 489 → 111 m | 171 → 12 | 3 420 → 182 | 0,2 → 3,7 |
+  | Nontron (bourg) | 3 000 | 712 → 445 m | 321 → 112 | 7 709 → 2 433 | 0,4 → 1,2 |
+  | Libourne (bastide) | 8 000 | 1 023 → 845 m | 509 → 403 | 10 820 → 8 291 | 0,7 → 1,0 |
+  | Bayonne | 13 000 | 1 245 → 1 134 m | 626 → 508 | 19 727 → 15 822 | 0,7 → 0,8 |
+  | Bordeaux | 110 000 | 1 468 m | 878 | 23 869 | 4,6 |
+
+  Médianes : villages 0,3 → 2,8 habitants par maison, villes 0,4 → 1,2, capitales 0,6 → 1,3.
+- Écarts :
+  - les bourgs et les villes restent bien plus serrés que la cible (6 à 10 habitants par maison dans un bourg, 15 à 30 par
+    immeuble dans une grande ville) : à la densité du générateur (des maisons en rangées sur tout le tour des îlots), y
+    arriver demanderait des bourgs de 170 m de rayon et un Bayonne de 500 m, ou des îlots moins serrés (jardins entre les
+    maisons) : à décider ;
+  - un village de montagne au plancher n'a qu'un anneau (Denguin, Gan : 45 à 50 maisons) ; une place sur l'eau perd ses
+    îlots noyés (Port-Sainte-Marie : 9 maisons) ;
+  - la vie autour (passants, foires, fumées) suit `rayonPlace`, mais sa densité ne suit pas encore le nombre de maisons.
+- Batailles : `test_plan_ville` (JS = Python sur tous les états) passe ; carte de bataille 0,30 → 0,27 s en moyenne (Bayonne
+  0,34 → 0,29, Bordeaux 0,38 → 0,36, Navarrenx 0,26 → 0,25, Belin 0,22 → 0,19). Tests adaptés : le bourg de Belin compte
+  plus de 30 cases bâties (avant 50) ; la carte de Salies-de-Béarn est centrée 600 m au sud (ses salines, tirées à 1,3 km au
+  sud, sortaient de la carte) ; les canons du défenseur se vérifient dans sa propre vue ; la longueur d'une coupure de crue,
+  arrondie au mètre, à 1e-9 près.
+- Captures (`integration/campagne-echelle/`) : `int-village-belin.png`, `int-bourg-nontron.png`,
+  `carte-village-belin-z110.png`.
