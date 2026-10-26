@@ -2471,9 +2471,9 @@ export class MapView {
 
   drawArmies(ctx, time) {
     const z = this.cam.z, st = this.state;
-    const detailed = z >= 5.5, vie = z >= Z.VIE && !this.papierVu();
+    const detailed = z >= 5.5, vie = z >= Z.COLONNES && !this.papierVu();
     // de près, les armées en colonne de route ou au bivouac (carte/guerre.js) ; le jeton et la formation restent
-    // en dessous de Z.VIE, et leur place reste celle des clics
+    // en dessous de Z.COLONNES, et leur place reste celle des clics
     if (detailed) this.guerreDe().armees(ctx, time, vie);
     const list = [...this.disp.values()].sort((p, q) => p.y - q.y);
     const atNode = {};
@@ -2499,7 +2499,7 @@ export class MapView {
     this.drawArmyLabels(ctx);
   }
 
-  // de près (Z.VIE) : la colonne est dessinée par carte/guerre.js ; ici la sélection et le nom, là où l'on clique
+  // de près (Z.COLONNES) : la colonne est dessinée par carte/guerre.js ; ici la sélection et le nom, là où l'on clique
   drawLife(ctx, a, sel) {
     if (sel) { ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(0, 0, 26, 14, 0, 0, Math.PI * 2); ctx.stroke(); }
     if (sel || a.o === this.state.me.code) {
@@ -2867,12 +2867,12 @@ export class MapView {
       const [x, y] = this.toScreen(b.x, b.y);
       if (x < -100 || y < -100 || x > this.vw + 100 || y > this.vh + 100) continue;
       // fumée (de près, celle de carte/guerre.js : les salves, les batteries)
-      if (z < Z.VIE && !nuit() && Math.random() < dt * 9) {
+      if (z < Z.COLONNES && !nuit() && Math.random() < dt * 9) {
         const r = 1.6;
         this.particles.push({ type: 'smoke', x: b.x + (Math.random() - 0.5) * r * 2, y: b.y + (Math.random() - 0.5) * r * 1.4,
                               life: 0, max: 2.2 + Math.random(), size: 0.5 + Math.random() * 0.6 });
       }
-      if (z < Z.VIE && !nuit() && Math.random() < dt * 14) {
+      if (z < Z.COLONNES && !nuit() && Math.random() < dt * 14) {
         this.particles.push({ type: 'spark', x: b.x + (Math.random() - 0.5) * 2.4, y: b.y + (Math.random() - 0.5) * 1.6, life: 0, max: 0.15 });
       }
       if (z < 5.5) {

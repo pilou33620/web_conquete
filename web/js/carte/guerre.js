@@ -565,7 +565,7 @@ export class Guerre {
     sc.monde(g);
   }
 
-  // ---------------------------------------------------------------- les armées (à partir de Z.VIE)
+  // ---------------------------------------------------------------- les armées (à partir de Z.COLONNES ; leur arrière, de Z.VIE)
   armees(ctx, time, vie = true) {
     const mp = this.map, st = mp.state; if (!st || mp.papierVu()) return;
     const sc = this.scene(time), g = ctx, list = this.armeesDe(time);
@@ -590,7 +590,7 @@ export class Guerre {
       g.globalAlpha = 1;
     }
     this.refugies(sc, g, list);
-    this.arriereDePres(sc, g, list);
+    if (sc.z >= Z.VIE) this.arriereDePres(sc, g, list);
     g.restore();
   }
   // la colonne à la vraie taille (compoColonne) : l'infanterie, une bande de 3 m à la couleur de ses habits (au moins un
@@ -680,7 +680,7 @@ export class Guerre {
     });
     // les canons parqués, les chevaux à la corde, une sentinelle sur la route
     const p = surChemin(pts, L), nx = -Math.sin(p.a), ny = Math.cos(p.a);
-    if (this.dans(sc, p.x, p.y, 0.4) && z >= Z.VIE) {
+    if (this.dans(sc, p.x, p.y, 0.4) && vue(z, 16)) {   // (dès qu'un cheval fait un pixel)
       const guns = Math.min(6, A.compo.liste.filter(e => e.k === 'piece').length);
       for (let m = 0; m < guns; m++) { this.figK(sc, g, p.x + nx * (0.05 + m * 0.008), p.y + ny * (0.05 + m * 0.008), p.a + Math.PI); piece(g, Lart, { recul: 0 }); }   // (une pièce tous les 8 m)
       for (let m = 0; m < 8; m++) { this.figK(sc, g, p.x + nx * 0.07 + Math.cos(p.a) * m * 0.0015, p.y + ny * 0.07 + Math.sin(p.a) * m * 0.0015, p.a + Math.PI / 2); cheval(g, Lcav.chevaux[m % 5], { bob: 0 }); }   // (à la corde, côte à côte)
@@ -766,14 +766,14 @@ export class Guerre {
         if (z >= 40 && this.dans(sc, b.x, b.y)) { this.figK(sc, g, ...versMonde(b.x, b.y, b.a, 24, 0), b.a, 3.5); for (let k = 0; k < 21; k++) gabion(g, 0, (k - 10) * 2.6); }   // le parapet de gabions (28 m)
         if (z >= 40 && this.dans(sc, b.x, b.y)) for (const o of [-60, 0, 60]) {   // (trois pièces, à 9 m)
           const [px, py] = versMonde(b.x, b.y, b.a, -10, o); this.figK(sc, g, px, py, b.a); piece(g, L, { recul: Math.max(0, 2 - (t - b.tir) * 4) });
-          if (z >= Z.VIE) { this.figK(sc, g, ...versMonde(b.x, b.y, b.a, -14, o + 2), b.a); fantassin(g, L, { role: 'h' }, { legs: null, arme: 'refouloir', ext: 0.5 + 0.5 * Math.sin(t * 2 + o) }); }
+          if (GENS) { this.figK(sc, g, ...versMonde(b.x, b.y, b.a, -14, o + 2), b.a); fantassin(g, L, { role: 'h' }, { legs: null, arme: 'refouloir', ext: 0.5 + 0.5 * Math.sin(t * 2 + o) }); }
         }
       }
       // la tête de sape au bout de chaque boyau : le gabion farci roulé devant, les sapeurs qui creusent derrière
       const W = this.travauxDe(s, sg), Ls = this.look(sg.by, 'sapeurs');
       if (z >= Z.PLAN) for (const [x, y, a] of W.tetes) {
         if (!this.dans(sc, x, y, 0.05)) continue;
-        if (z < Z.VIE) { sc.monde(g); C(g, '#5a4429', x, y, Math.max(0.002, 2.2 / z)); continue; }
+        if (!vue(z, 16)) { sc.monde(g); C(g, '#5a4429', x, y, Math.max(0.002, 2.2 / z)); continue; }   // (le gabion farci, 2,3 m)
         this.figK(sc, g, x, y, a, 3); C(g, '#4d3b26', 3, 0, 2.6); C(g, '#8a6d44', 3, 0, 2.2); for (let k = 0; k < 3; k++) T(g, '#6b5235', 0.3, 3 - 2, -1.5 + k * 1.5, 3 + 2, -1.5 + k * 1.5);
         for (let k = 0; k < 4; k++) gabion(g, -2 - k * 2.4, (k % 2 ? 1 : -1) * 2.4);
         for (let k = 0; k < 3; k++) { this.figK(sc, g, ...versMonde(x, y, a, -2.5 - k * 3, (k - 1) * 2.2), a); fantassin(g, Ls, { role: 'h' }, { legs: null, arme: 'hache', ext: mod(t * 1.1 + k * 0.37, 1) }); }
@@ -821,7 +821,7 @@ export class Guerre {
     const B = this.batailleDe(b), z = sc.z, t = sc.time, noir = nuit();
     if (!noir) { sc.monde(g); for (let k = 0; k < 12; k++) { const d = mod(t * 0.02 + k * 0.35, 4.2), r = Math.max(0.5 + d * 0.55, 7 / z), x = B.x + (hash2(k, 1, 105) - 0.5) * 1.6 + d * 0.9, y = B.y + (hash2(k, 2, 105) - 0.5) * 0.8 - d * 0.45; g.globalAlpha = 0.34 * (1 - d / 4.2); g.drawImage(SPR.f, x - r, y - r, 2 * r, 2 * r); } g.globalAlpha = 1; }
     if (z < 18 || !this.dans(sc, B.x, B.y, 2.5)) return;   // (de loin, le nuage ; les salves se voient de près)
-    const ph = b.phase || 'fusillade', ecart = ph === 'canonnade' ? 0.42 : ph === 'charge' ? 0.22 : 0.3, vie = z >= Z.VIE;
+    const ph = b.phase || 'fusillade', ecart = ph === 'canonnade' ? 0.42 : ph === 'charge' ? 0.22 : 0.3, vie = z >= Z.COLONNES;
     for (const u of B.unites) {
       const s = b.sides[u.i], L = this.look(s.o, u.type);
       const charge = u.k === 'cav' && ph === 'charge' && !noir ? Math.max(0, Math.sin(t * 0.04 + u.ph)) * 0.18 * 3 : 0;
@@ -985,7 +985,7 @@ export class Guerre {
       }
     }
     // l'estafette porte la nouvelle de la bataille à la capitale de son camp, au galop
-    for (const E0 of ar.estafettes) {
+    if (vue(sc.z, 16)) for (const E0 of ar.estafettes) {
       const p = surChemin(E0.pts, Math.min(E0.L, E0.k * E0.L + mod(t * 0.006, 3)));   // (au galop, 22 km/h)
       if (!this.dans(sc, p.x, p.y, 0.05) || !this.visible(p.x, p.y)) continue;
       const Lc = this.look(E0.o, 'cavalerie');

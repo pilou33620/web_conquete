@@ -2,9 +2,10 @@
 // la saison et la météo de la partie, l'heure du jour (réglage d'affichage), et la liste des lumières de l'image
 // (feux, lanternes, fenêtres, incendies, éclairs), remplie par les calques et allumée par ciel.js après la nuit.
 
-// zooms (pixels CSS par km) : de loin un signe, puis le plan des villes, puis la vie, puis le plus près
+// zooms (pixels CSS par km) : de loin un signe, puis le plan des villes, les armées en colonnes (une bande de 600 hommes
+// fait 22 px), la vie (une charrette, une diligence y font un pixel ; « Livré — le zoom de la vie »), le plus près
 // (« Livré — la carte de campagne à la vraie taille » : 1 300 px/km au plus près, un cheval y fait 3 px)
-export const Z = { PLAN: 18, VIE: 110, MAX: 1300 };
+export const Z = { PLAN: 18, COLONNES: 110, VIE: 170, MAX: 1300 };
 // mètres par unité de dessin des figures, à la vraie taille (un fantassin fait 4,3 unités d'épaules, 0,65 m ; un
 // cheval 16, 2,4 m) : la vue de l'intérieur (SPEC-CARTE-2D.md, « Livré — échelle réelle ») et la carte
 export const FIG = 0.15;

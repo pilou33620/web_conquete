@@ -74,7 +74,7 @@ function rouleau(g, pas) { RR(g, '#6f6b63', -1.6, -3.2, 3.2, 6.4, 1.4); T(g, '#5
 export class Travaux {
   constructor(G) { this.G = G; this.sorties = new Map(); this.coupures = null; this.feux = null; }
   // un dessin peint une fois par échelle (Guerre.tampon), puis posé d'un drawImage : bw, bh, sa demi-étendue en unités
-  pose(sc, g, x, y, a, cle, bw, bh, fn) { this.G.poser(sc, g, x, y, a, this.G.tampon(sc, 'T|' + cle, bw, bh, fn)); }
+  pose(sc, g, x, y, a, cle, bw, bh, fn) { if (vue(sc.z, 2 * Math.max(bw, bh))) this.G.poser(sc, g, x, y, a, this.G.tampon(sc, 'T|' + cle, bw, bh, fn)); }
   ouvrier(sc, g, x, y, a, k, t) { if (!vue(sc.z, 4.3)) return; const q = Math.round(mod(t * 1.1 + k * 0.37, 1) * 6) % 6; this.pose(sc, g, x, y, a, `ouv|${k % 6}|${q}`, 7, 7, gg => ouvrier(gg, k % 6, q / 6)); }
   charge(sc, g, x, y, a, pas, k) { if (!vue(sc.z, 41)) return; const q = phase(pas); this.pose(sc, g, x, y, a, `ch|${k}|${q}`, 32, 8, gg => charge(gg, q, k)); }
   // les routes qui sortent d'une place, chacune depuis la place (km) ; mêmes pour toujours
@@ -268,7 +268,8 @@ export class Travaux {
       const o = (mod(t * 0.01, 0.2) < 0.1 ? mod(t * 0.01, 0.1) : 0.1 - mod(t * 0.01, 0.1)) - 0.05;
       this.pose(sc, g, p.x + Math.cos(p.a) * (0.06 + o), p.y + Math.sin(p.a) * (0.06 + o), p.a, 'rouleau|' + phase(pas), 20, 6, gg => rouleau(gg, phase(pas)));
     }
-    if (vie) for (const p of r.bornes) if (G.dans(sc, p.x, p.y)) { G.figK(sc, g, p.x - Math.sin(p.a) * 0.02, p.y + Math.cos(p.a) * 0.02, p.a); RR(g, '#efe9dd', -0.9, -0.9, 1.8, 1.8, 0.6); RR(g, '#c0392b', -0.9, -0.9, 0.7, 1.8, 0.3); }
+    // (les bornes de 27 cm, les balises : chacune dès qu'elle fait un pixel)
+    if (vue(z, 1.8)) for (const p of r.bornes) if (G.dans(sc, p.x, p.y)) { G.figK(sc, g, p.x - Math.sin(p.a) * 0.02, p.y + Math.cos(p.a) * 0.02, p.a); RR(g, '#efe9dd', -0.9, -0.9, 1.8, 1.8, 0.6); RR(g, '#c0392b', -0.9, -0.9, 0.7, 1.8, 0.3); }
     // le chemin de halage : de la terre remuée et des terrassiers, puis le chemin fini le long de la rive, balisé
     for (const b of r.berges) {
       if (!G.dans(sc, b.x, b.y, 0.2) || !G.visible(b.x, b.y)) continue;
@@ -278,7 +279,7 @@ export class Travaux {
     if (r.halage.length) {
       sc.monde(g); g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = 'rgba(214,196,150,.85)'; g.lineWidth = Math.max(0.003, 1.5 / z);   // (le chemin de halage, 3 m)
       for (const h of r.halage) { g.beginPath(); h.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke(); }
-      if (vie) for (const [x, y] of r.balises || []) if (G.dans(sc, x, y)) { G.figK(sc, g, x, y, 0); balise(g); }
+      if (vue(z, 2.2)) for (const [x, y] of r.balises || []) if (G.dans(sc, x, y)) { G.figK(sc, g, x, y, 0); balise(g); }
     }
     // la crue coupe les routes : l'eau sur la chaussée ; de près, une charrette arrêtée devant
     for (const c of this.coupuresDe()) {

@@ -23,7 +23,7 @@ Cette spec la fait entrer dans le jeu, branchée sur l'état de la partie.
   |---|---|
   | moins de 18 | le signe des villes |
   | à partir de 18 | le plan des villes |
-  | à partir de 110 | la vie : gens, bêtes, colonnes |
+  | à partir de 110 | la vie : gens, bêtes, colonnes (depuis « Livré — le zoom de la vie » : les colonnes à 110, la vie à 170) |
   | 320 | le plus près |
 
   Les figures se dessinent à `U` = 0,0045 km par unité, comme dans la maquette.
@@ -851,3 +851,32 @@ faubourgs aérés, un rayon un peu plus court.
     bâtis) ;
   - quelques villages (Buzet, Sainte-Colombe : 2 habitants par maison) gardent leur plancher de 111 m.
 - Captures (`integration/densite/`) : intérieurs de Nontron, Libourne, Bayonne, Bordeaux ; Nontron sur la carte à z 200 et 450.
+
+## Livré — le zoom de la vie
+
+À la vraie taille, `Z.VIE` (110 px/km) ne montrait plus que les colonnes, les diligences et les bateaux ; le reste de la vie
+(paysans, charrettes, bêtes, travaux, marchés) se calculait et se peignait sous le pixel jusqu'à 170 à 450 px/km.
+
+- **Les zooms** (`ambiance.js`, `Z`) : `COLONNES` = 110 (les armées en bandes à leur vraie taille, les batailles en lignes :
+  une colonne de 600 hommes y fait 22 px ; `map.js`, `guerre.js`), `VIE` = 170 (une charrette ou une diligence y fait un pixel).
+- **Chaque chose dès qu'elle fait un pixel** (`vue(z, taille)`), rien n'est calculé en dessous :
+  - `vie.js` : la vie des routes, des champs et des bois à partir de `Z.VIE` (chaque voyageur à sa taille, comme avant) ; les
+    transhumances dès qu'un mouton bâté (16 unités) fait un pixel (420 px/km), les brigands à leur cheval (ou à la voiture
+    arrêtée), les bêtes des champs à leur vache (12 unités, 560), le labour à ses bœufs (420), le gemmeur à son pot et son
+    houppier (510), les loups (830), les paludiers à leur râteau (1 100) ; moisson, vendanges, bûcherons et estive dès
+    `Z.VIE` (charrette, charbonnière, cayolar) ; les chevaux de relève et les contrebandiers à leurs chevaux (420, au lieu de
+    110 et 60) ; les marchés à leurs étals de 3 m (330, au lieu de 40) ; la foire, sa terre piétinée dès 30, ses enclos et
+    sa foule dès 140 ; les moulins à leur tour de 9 m (110, au lieu de 40) ;
+  - `guerre.js` : l'arrière des armées (blessés, prisonniers, fourgons, traînards, fourrageurs, recrues) dès `Z.VIE` ;
+    l'estafette, les pièces et les chevaux du camp, les sapeurs et leur gabion dès qu'un cheval fait un pixel (420) ; les
+    servants des batteries avec les gens (jamais à la vraie taille) ;
+  - `travaux.js` : barrières, ouvriers et charrettes des chantiers dès `Z.VIE` ; chaque dessin posé (`pose`) dès qu'il fait
+    un pixel (maisons du faubourg, échafaudages, tas, brouettes, rouleau) ; bornes et balises à leur taille ;
+  - `ciel.js` : rien de vivant (fenêtres et réverbères dès le plan, au moins un pixel).
+- Mesures (`integration/vie3/h3.cjs`, la scène du lot H, médiane de 120 images, deux passes, dpr 1, avant → après) : vue
+  d'ensemble 4,3 / 5,7 → 5,9 / 4,4 ms (bruit) ; z 26 Bordeaux 3,0 / 3,5 → 2,7 / 2,8 ; z 110 Bordeaux 4,1 / 4,2 → 2,2 / 2,6,
+  champ de bataille 4,5 / 4,1 → 2,8 / 2,4, siège 4,5 / 3,4 → 2,7 / 3,7 ; z 320 Bordeaux 3,3 / 3,5 → 2,1 / 2,1. Avec
+  `integration/controle/h3z.cjs` (mêmes scènes, d'autres zooms) : z 80 champ 2,9 / 2,8 → 2,3 / 2,3 ; z 170 Bordeaux 3,1 /
+  3,5 → 2,8 / 2,6, champ 3,2 / 4,0 → 2,8 / 2,7 ; z 450 Bordeaux 2,5 / 2,4 → 2,7 / 2,5, champ 2,3 / 1,7 → 2,2 / 1,9 (dans le
+  bruit de la machine).
+

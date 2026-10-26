@@ -411,23 +411,26 @@ function vieDePres(sc, g, x0, y0, x1, y1) {
       if (soir && (kind === 'malle' || kind === 'diligence')) { const [lx, ly] = versMonde(x, y, a, 8, 0); LUM.push({ x: lx, y: ly, r: .012, a: .8, spr: 'fen' }); }   // la lanterne
     }
   }
-  if (AMB.saison === 'printemps' || AMB.saison === 'automne') for (const f of VIE.transhumances) {
+  // (chaque chose dès qu'elle fait un pixel : le troupeau à son âne et ses chiens, les brigands à leur cheval, les bêtes des
+  // champs à leur vache, chaque travail à ce qu'il a de plus grand ; en dessous, rien n'est calculé)
+  const z = sc.z;
+  if ((AMB.saison === 'printemps' || AMB.saison === 'automne') && vue(z, TAILLE.troupeau)) for (const f of VIE.transhumances) {
     const sens = AMB.saison === 'automne' ? -f.haut : f.haut, p = surChemin(f.pts, mod(f.s0 + sens * .0028 * t, f.L));
     if (!dans(p.x, p.y) || hash2(f.ie, 2, 101) > densite(p.x, p.y) + .2) continue;
     figK(sc, g, p.x, p.y, p.a + (sens < 0 ? Math.PI : 0), 2); troupeauTrans(g, t, t * 1.7 * TAU);   // (des brebis de 1,2 m)
   }
   for (const b of VIE.brigands) {
-    if (!dans(b.x, b.y)) continue;
+    if (!dans(b.x, b.y) || !vue(z, b.proie ? TAILLE.diligence : TAILLE.cavalier)) continue;
     figK(sc, g, b.x - Math.sin(b.a) * .006 * b.c, b.y + Math.cos(b.a) * .006 * b.c, b.a + (b.c < 0 ? Math.PI : 0)); brigands(g, t, b.proie && AMB.heure !== 'nuit');
   }
   // bêtes et travaux : chaque kilomètre de pays a les siens (même endroit, mêmes bêtes). De loin, les bêtes sont des
   // taches rangées par couleur et peintes d'un seul tracé chacune (taches, à la fin)
-  const sa = AMB.saison, taches = new Map();
+  const sa = AMB.saison, taches = new Map(), betes = vue(z, 12);   // (une vache de 2,2 m ; un cerf, 1,8)
   const tache = (c, x, y, rx, ry, a) => { let l = taches.get(c); if (!l) taches.set(c, l = []); l.push(x, y, rx * U, ry * U, a); };
   for (let j = Math.max(0, Math.floor(y0)); j <= Math.min(VIE.H - 1, y1); j++) for (let i = Math.max(0, Math.floor(x0)); i <= Math.min(VIE.W - 1, x1); i++) {
     const tt = TER[j * VIE.W + i]; if (tt <= 1) continue;
     const cx = i + .5, cy = j + .5, dc = densite(cx, cy);
-    if (hash2(i, j, 76) <= dc) {
+    if (betes && hash2(i, j, 76) <= dc) {
       const h = hash2(i, j, 77), bx = i + .2 + hash2(i, j, 78) * .6, by = j + .2 + hash2(j, i, 79) * .6;
       const troupe = (n, fn) => { for (let m = 0; m < n; m++) { const ph = m * 2.1 + h * 9, x = bx + Math.cos(ph) * .03 + Math.sin(t * .05 + ph) * .02, y = by + Math.sin(ph * 1.3) * .025 + Math.cos(t * .04 + ph) * .015; if (dans(x, y)) fn(x, y, ph + t * .05, m); } };
       if ((tt === TT.PLAINE || tt === TT.COLLINES || tt === TT.MONTAGNE) && h < .22 * BETES[sa] && neige(cx, cy) < .5) {
@@ -448,13 +451,13 @@ function vieDePres(sc, g, x0, y0, x1, y1) {
     }
     if (hash2(i, j, 80) > dc) continue;
     const h = hash2(i, j, 81), bx = i + .25 + hash2(i, j, 82) * .5, by = j + .25 + hash2(j, i, 83) * .5;
-    if (VIE.saline.has(j * VIE.W + i) && (sa === 'ete' || sa === 'automne') && h < .6) paludiers(sc, g, i, j, t);
+    if (VIE.saline.has(j * VIE.W + i) && (sa === 'ete' || sa === 'automne') && h < .6 && vue(z, 6)) paludiers(sc, g, i, j, t);   // (le grand râteau)
     if (!dans(bx, by)) continue;
-    if (tt === TT.FORET && pinede(bx, by)) { if (h < .22 && sa !== 'hiver') resinier(sc, g, bx, by, t, h); }
-    else if (tt === TT.FORET) { if (sa === 'hiver' && h < .1) loups(sc, g, bx, by, t, h); else if (h > .88) bucherons(sc, g, bx, by, t, h); }
+    if (tt === TT.FORET && pinede(bx, by)) { if (h < .22 && sa !== 'hiver' && vue(z, 13)) resinier(sc, g, bx, by, t, h); }   // (le pot, le houppier)
+    else if (tt === TT.FORET) { if (sa === 'hiver' && h < .1) { if (vue(z, 8)) loups(sc, g, bx, by, t, h); } else if (h > .88) bucherons(sc, g, bx, by, t, h); }
     else if ((tt === TT.PLAINE || tt === TT.COLLINES) && neige(bx, by) < .5 && !malheur(bx, by)) {
       if (sa === 'ete' && h < .22) moisson(sc, g, bx, by, t, h);
-      else if ((sa === 'automne' || sa === 'printemps') && h > .8) labour(sc, g, bx, by, t, h);
+      else if ((sa === 'automne' || sa === 'printemps') && h > .8 && CHEVAL) labour(sc, g, bx, by, t, h);   // (les bœufs)
     } else if (tt === TT.VIGNE && sa === 'automne' && h < .45 && !malheur(bx, by)) vendanges(sc, g, bx, by, t, h);
     else if ((tt === TT.MONTAGNE || tt === TT.HAUTE) && sa === 'ete' && h < .3 && neige(bx, by) < .5) estive(sc, g, bx, by, t, h);
   }
@@ -523,7 +526,7 @@ function relaisPoste(sc, g, x0, y0, x1, y1) {
     const nx = -Math.sin(r.a) * r.c, ny = Math.cos(r.a) * r.c, x = r.x + nx * .03, y = r.y + ny * .03, a = r.a + (r.c < 0 ? Math.PI : 0);
     sc.monde(g); g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = '#cdbf9f'; g.fillRect(-.02, -.0125, .04, .025); g.restore();
     bat(g, [{ t: 'g', x: -14, y: -9, w: 28, h: 7, p: 'tuile', h2: 1.6 }, cheminee(-8, -6), { t: 'g', x: 8, y: -2, w: 7, h: 12, p: 'tuile', h2: 1.3 }, { t: 'g', x: -14, y: 4, w: 16, h: 6, p: 'chaume', h2: 1.1 }], x, y, a, .0009);
-    if (sc.z >= Z.VIE) for (let m = 0; m < 4; m++) { if (hash2(m, r.x * 10 | 0, 96) > densite(x, y) + .3) continue; figK(sc, g, ...versMonde(x, y, a, -40 + m * 14, 60), a + Math.PI / 2 + m * .3); cheval(g, ['#6b4a2c', '#8b6a47', '#3f2d1f', '#54402e'][m], { bob: 0 }); }   // les chevaux de relève dans la cour
+    if (CHEVAL) for (let m = 0; m < 4; m++) { if (hash2(m, r.x * 10 | 0, 96) > densite(x, y) + .3) continue; figK(sc, g, ...versMonde(x, y, a, -40 + m * 14, 60), a + Math.PI / 2 + m * .3); cheval(g, ['#6b4a2c', '#8b6a47', '#3f2d1f', '#54402e'][m], { bob: 0 }); }   // les chevaux de relève dans la cour
     LUM.push({ x: r.x + nx * .02, y: r.y + ny * .02, r: Math.max(.006, 3 / sc.z), a: .8, spr: 'fen' });   // la lanterne du relais
   }
 }
@@ -532,7 +535,7 @@ function contrebande(sc, g, x0, y0, x1, y1) {
   for (const P of VIE.sentiers) {
     const [a, b, c, d] = P.bb; if (c < x0 || a > x1 || d < y0 || b > y1) continue;
     sc.monde(g); g.setLineDash([Math.max(.02, 3 / z), Math.max(.015, 2 / z)]); ligne(g, P.pts); g.strokeStyle = 'rgba(189,169,127,.85)'; g.lineWidth = Math.max(.008, .9 / z); g.stroke(); g.setLineDash([]);
-    if (z < 60) continue;
+    if (!CHEVAL) continue;   // (mulets et douaniers : dès qu'un mulet fait un pixel)
     const u = t * .0035 + P.ph * 50, s = pingpong(u, P.L), dir = mod(u, 2 * P.L) < P.L ? 1 : -1;
     // les contrebandiers passent plutôt la nuit, et pas sous les yeux d'une armée
     if (hash2(P.ph * 9 | 0, 1, 143) < densite(P.pts[0][0], P.pts[0][1]) + (AMB.heure === 'nuit' ? .9 : .5)) for (let m = 0; m < 5; m++) {
@@ -570,7 +573,7 @@ function marches(sc, g, x0, y0, x1, y1) {
   if (!peu) return;
   // (à la vraie taille : les étals de 3 m sur la place, sur 12 à 35 m ; la foule en taches, une par personne)
   const foule = (l, c) => { if (!l.length) return; g.fillStyle = c; g.beginPath(); for (const [x, y, r] of l) { g.moveTo(x + r, y); g.arc(x, y, r, 0, TAU); } g.fill(); };
-  if (z >= 40) for (const { n, x: mx, y: my } of VIE.marches) {
+  if (vue(z, 20)) for (const { n, x: mx, y: my } of VIE.marches) {   // (dès qu'un étal de 3 m fait un pixel)
     if (mx < x0 - 1 || mx > x1 + 1 || my < y0 - 1 || my > y1 + 1) continue;
     const pop = n.pop0 || 700, N = clamp(Math.round(4 + Math.sqrt(pop) / 4), 5, 26), R0 = Math.min(230, 80 + Math.sqrt(pop) * .8);
     figK(sc, g, mx, my, 0);
@@ -584,6 +587,7 @@ function marches(sc, g, x0, y0, x1, y1) {
     const { x, y, a, n } = f;
     if (x < x0 - .5 || x > x1 + .5 || y < y0 - .5 || y > y1 + .5) continue;
     sc.monde(g); pietine(g, x, y, .16, .1, a, .32);
+    if (!vue(z, 48)) continue;   // (la foule et les enclos de 7 m, dès qu'un enclos fait un pixel)
     figK(sc, g, x, y, a, 3);   // (les enclos de 7 m sur 5, les étals de 4 m, la foire sur 30 m)
     for (let q = 0; q < 3; q++) cloture(g, (q - 1) * 20 - 8, -8, 16, 12);
     for (let k = 0; k < 4; k++) { g.save(); g.translate(-20 + k * 13, 12); g.scale(1.4, 1.4); etal(g, k + 2); g.restore(); }
@@ -663,7 +667,7 @@ export function dessinerSol(sc, g, x0, y0, x1, y1, epoque) {
   if (VIE.cordouan && z >= 2.5) cordouan(sc, g);
   if (z >= Z_BATEAUX) eaux(sc, g, x0, y0, x1, y1, epoque);
   if (z >= 30) { relaisPoste(sc, g, x0, y0, x1, y1); contrebande(sc, g, x0, y0, x1, y1); }
-  if (z >= 40) moulins(sc, g, x0, y0, x1, y1);
+  if (vue(z, 60)) moulins(sc, g, x0, y0, x1, y1);   // (la tour de 9 m)
   if (z >= Z.VIE) vieDePres(sc, g, x0, y0, x1, y1);
 }
 export function dessinerDessus(sc, g, x0, y0, x1, y1) {
