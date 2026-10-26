@@ -17,9 +17,12 @@ const { Travaux, etatMaison, PRODUIT, GRANDS_TRAVAUX } = await import('../web/js
 const { AMB } = await import('../web/js/carte/ambiance.js');
 const { reverberes } = await import('../web/js/carte/ciel.js');
 const { IC, S } = await import('../web/js/carte/villes.js');
+const { terre } = await import('../web/js/carte/terre.js');
+const { surChemin } = await import('../web/js/carte/lib.js');
 
 const racine = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const m = JSON.parse(execFileSync('python3', ['-c', 'import json,sys; from game.geo import GeoMap; sys.stdout.write(json.dumps(GeoMap().client_payload()))'], { cwd: racine, maxBuffer: 64 << 20 }).toString());
+// (avec cut : les routes que la crue coupe, la liste que le serveur envoie pendant la crue)
+const m = JSON.parse(execFileSync('python3', ['-c', 'import json,sys; from game.geo import GeoMap; from game import crue; g = GeoMap(); m = g.client_payload(); m["cut"] = [[k, *s] for k, l in crue.spans(g).items() for s in l]; sys.stdout.write(json.dumps(m))'], { cwd: racine, maxBuffer: 64 << 20 }).toString());
 const dec = s => Uint8Array.from(Buffer.from(s, 'base64'));
 const edges = m.edges.map(e => { const cum = [0]; for (let i = 1; i < e.pts.length; i++) cum.push(cum[i - 1] + Math.hypot(e.pts[i][0] - e.pts[i - 1][0], e.pts[i][1] - e.pts[i - 1][1])); return { ...e, cum }; });
 const nom = x => m.nodes.find(n => n.name === x);
@@ -79,20 +82,22 @@ test('grands travaux : routes royales empierrées puis bornées, chemin de halag
   delete m.rails;
 });
 
-test('la crue coupe les routes dans les prés noyés du fleuve, loin des places ; sans crue, rien', () => {
+test('la crue coupe les routes de la liste du serveur, dans les prés noyés du fleuve, loin des places ; sans crue, rien', () => {
   const st = etat(), map = carte(st), W = new Travaux({ map });
-  AMB.crue = false;
-  assert.deepEqual(W.coupuresDe(), []);
-  AMB.crue = true;
+  assert.deepEqual(W.coupuresDe(), [], 'hors crue, le serveur n’envoie pas de cut');
+  map.state = Object.assign({}, st, { cut: m.cut });
   const c = W.coupuresDe();
-  assert.ok(c.length > 0, 'quelques routes coupées');
+  assert.ok(c.length > 0 && c.length === m.cut.length, 'quelques routes coupées, celles du serveur');
+  AMB.crue = true;
+  const T = terre(map);
+  for (const [id, s0] of m.cut) { const p = surChemin(edges[id].pts, s0); assert.ok(T.inonde(p.x, p.y), 'la carte noie les prés où le serveur coupe la route'); }
   const fleuves = m.rivers.filter(r => r.rank === 1 && /Garonne|Dordogne/.test(r.name)).flatMap(r => r.pts);
   for (const k of c) {
     assert.ok(fleuves.some(([x, y]) => Math.hypot(x - k.x, y - k.y) < 4), 'au bord de la Garonne ou de la Dordogne');
     assert.ok(m.nodes.every(n => Math.hypot(n.x - k.x, n.y - k.y) > 0.5), 'pas dans une place');
     assert.ok(k.l >= 0.24);
   }
-  assert.equal(W.coupuresDe(), c, 'une fois par crue');
+  assert.equal(W.coupuresDe(), c, 'une fois par état');
   AMB.crue = false;
 });
 

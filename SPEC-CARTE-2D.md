@@ -422,7 +422,7 @@ Le ciel (`ciel.js`) :
 
 ## Livré — H (estafettes, prisonniers, traînards, chantiers, produits, gaz, crues, cordons, feux des Landes, grands travaux, sièges)
 
-- Serveur (décor seulement, aucune règle changée) : un champ de bataille garde son vainqueur et ses prisonniers
+- Serveur (décor seulement, aucune règle changée, sauf la règle de la crue plus bas) : un champ de bataille garde son vainqueur et ses prisonniers
   (`Game.sites[].w`, `.p` ; vue `sites = [x, y, âge, pertes 0, pertes 1, camp 0, camp 1, vainqueur, prisonniers]`,
   vainqueur `None` pour une ancienne sauvegarde) ; la dernière bataille d'un camp garde son lieu
   (`factions[].lb = [gagnée, date, x, y]`, vue `[gagnée, âge, x, y]`, le lieu seulement pour les camps du joueur et ses
@@ -468,13 +468,22 @@ Le ciel (`ciel.js`) :
     rouleau dès `Z.VIE`), puis une borne par kilomètre (`Z.VIE`) ; **canal**, 240 jours de chantier tous les 4 km sur
     la rive de la Garonne et de la Dordogne (terre remuée dès z 40, terrassiers dès `Z.VIE`), puis le chemin de halage
     (dès z 40) et ses balises ;
-  - **routes coupées par la crue** : une fois par crue, là où une route passe plus de 240 m dans les prés noyés, loin
-    des places : l'eau sur la chaussée dès z 40, une charrette arrêtée devant dès `Z.VIE`. **Purement visuel** (la
-    crue du serveur ne ralentit que les bacs : couper les routes changerait la marche des armées) ;
+  - **routes coupées par la crue** (`coupuresDe`, une fois par état) : les tronçons de `st.cut` (ci-dessous) : l'eau
+    sur la chaussée dès z 40, une charrette arrêtée devant dès `Z.VIE` ;
   - **feux des Landes** (`feuxDe`) : le panache noir de loin, les flammes sur la lisière dès z 10, la lueur (`LUM`,
     aussi de jour).
+- **Règle de la crue** (`game/crue.py`, décision du joueur) : pendant la crue (`Game.flooded` : les hautes eaux de mars et
+  avril, ou les 10 jours de `flood_until` tirés au printemps), les routes coupées (`Game.cut_edges`) : là où une route
+  (ni bac ni voie d'eau) passe plus de 240 m dans les prés noyés (échantillons tous les 120 m), loin des places
+  (`rayonPlace` + 0,5 km), d'après le critère des tuiles (`inonde`, ci-dessous) recalculé côté serveur sur les données
+  de `client_payload` (relief approché, distance au fleuve en flottants 32 bits : la même liste que la carte). Calculé
+  une fois par carte (environ 1 s) : **25 routes**, toutes au passage de la Garonne ou de la Dordogne. Une armée y avance
+  à `crue.FACTOR` = **×0,25** sur toute l'arête (à gué ou par un détour ; jamais bloquée, pour ne pas rester au milieu),
+  pas le train ; `edge_cost` en tient compte (×4), donc la recherche de chemin, l'IA et l'arrivée estimée (`turns.eta`)
+  aussi. Vue : `cut = [[arête, début, fin], …]` (km le long du tracé), seulement pendant la crue ; la fiche d'une
+  armée du joueur dont l'itinéraire passe par une route coupée le dit. Bancs : `test_campagne.RoutesCoupeesParLaCrue`.
 - Tuiles (`terre.js`, `ambiance.js`), dans `cleTuiles` : **crue** (`AMB.crue` : `flood` de l'état, ou les hautes eaux de
-  mars et avril ; pas la pluie du jour, qui repeindrait les tuiles à chaque averse) : les prés bas (altitude approchée < 0,11) à moins de 0,25 à 1,35 km de
+  mars et avril, la période de `Game.flooded` ; pas la pluie du jour, qui repeindrait les tuiles à chaque averse) : les prés bas (altitude approchée < 0,11) à moins de 0,25 à 1,35 km de
   la Garonne et de la Dordogne (`Terre.CRUE`, distance au fleuve par case, `inonde`) sous une eau trouble, sans
   parcelles ni arbres ; **brûlis** (`feuDe`, `brule`, `FEU_K` = 7 km, `FEU_MOIS` juin à novembre) : un carré de 7 km
   sur sept a son feu de l'année, allumé en juin, juillet ou août, de 0,5 à 1,6 km de rayon, noir sans arbres jusqu'en

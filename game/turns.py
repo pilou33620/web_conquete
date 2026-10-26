@@ -36,6 +36,7 @@ import math
 import re
 import time
 
+from . import crue as CR
 from . import rules as R
 
 BUDGET = 0.25         # secondes de calcul du tour des IA par appel (la boucle du serveur appelle toutes les 0,1 s)
@@ -194,7 +195,7 @@ def eta(g, a, legs=None):
             if leg.get('rail'):
                 rail += k / R.RAIL_SPEED + (0.0 if on else R.RAIL_EMBARK)
             else:
-                km += k
+                km += k / (CR.FACTOR if leg['e'] in g.cut_edges() else 1.0)   # (route coupée par la crue)
             on = bool(leg.get('rail'))
             x, y = g.node_xy(leg['to'])
         else:

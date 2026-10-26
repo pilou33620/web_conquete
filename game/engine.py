@@ -9,6 +9,7 @@ from . import events as EV
 from . import army_actions as AA
 from . import battle_log as BL
 from . import cities as CT
+from . import crue as CR
 from . import rails as RL
 from . import turns as TT
 from .tactics import bridge as TB
@@ -424,6 +425,14 @@ class Game:
     def season(self):
         return R.SEASONS[self.date().month - 1]
 
+    def flooded(self):
+        """La crue de la Garonne et de la Dordogne : les hautes eaux de mars et avril, ou la crue tirée au printemps."""
+        return self.t < self.flood_until or self.date().month in (3, 4)
+
+    def cut_edges(self):
+        """Les routes que la crue coupe en ce moment ({arête : tronçons noyés}), vide hors crue."""
+        return CR.spans(self.geo) if self.flooded() else {}
+
     def zone_of(self, x, y):
         if y > self.y_mont:
             return 'montagne'
@@ -737,7 +746,7 @@ class Game:
             a['des_why'] = None
         if season == 'printemps' and self.rng.random() < 0.35:
             self.flood_until = self.t + 10
-            self.log('meteo', 'Crue de la Garonne et de la Dordogne : les bacs sont ralentis pendant un tiers de tour.', important=True)
+            self.log('meteo', 'Crue de la Garonne et de la Dordogne : les bacs sont ralentis et des routes coupées pendant un tiers de tour.', important=True)
         if self.factions[self.player]['alive']:
             f = self.factions[self.player]
             inc = f['income']
@@ -1587,7 +1596,7 @@ class Game:
         """Coût d'un tronçon en « km de route équivalents » pour une armée marchant à `speed` km/j."""
         if e.get('kind') == 'water':
             return e['len'] * 22.0 / max(5.0, self.water_speed(e, frm, estimate=True, code=code))
-        sp = 1.15 if e['royal'] else 1.0
+        sp = (1.15 if e['royal'] else 1.0) * (CR.FACTOR if e['id'] in self.cut_edges() else 1.0)
         c = e['len'] / sp
         if e['rrank'] == 1 and not self.mod(code, 'bridges'):
             c += 8 if not e['ferry'] else 20
@@ -2143,6 +2152,8 @@ class Game:
                     * (1 + self.mod(a['owner'], 'road_speed'))
                 if self.wx(a['x'], a['y']) is R.WEATHER['neige'] and self.zone_of(a['x'], a['y']) == 'montagne':
                     sp *= 0.6
+                if e['id'] in self.cut_edges():
+                    sp *= CR.FACTOR   # route coupée par la crue : à gué ou par un détour (pas bloquée : on ne reste pas coincé)
                 if a.get('rail'):
                     sp = R.RAIL_SPEED   # (le train passe les fleuves sur ses ponts)
                 zone_end = e['len']

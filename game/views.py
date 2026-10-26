@@ -488,6 +488,9 @@ def player_state(g, since=0):
                 market=dict(prices=g.market, spread=[1.15, 0.85] if has_port else [1.4, 0.6]),
                 tac=TB.tac_view(g), settings=dict(g.settings),
                 flood=g.t < g.flood_until, tour=TT.view(g),
+                # les routes que la crue coupe (pendant la crue seulement) : [arête, début, fin] des tronçons noyés, en km
+                # le long du tracé
+                **({'cut': [[k, *s] for k, l in cut.items() for s in l]} if (cut := g.cut_edges()) else {}),
                 # champs de bataille récents vus du joueur : x, y, âge (jours), pertes et camps des deux côtés, vainqueur (0, 1 ;
                 # None : ancienne sauvegarde), prisonniers
                 sites=[[s['x'], s['y'], round(g.t - s['t']), *s['l'], *s['o'], s.get('w'), s.get('p', 0)] for s in g.sites

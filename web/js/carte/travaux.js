@@ -140,22 +140,14 @@ export class Travaux {
     if (ca != null && ca >= GRANDS_TRAVAUX.canal) r.balises = r.halage.flatMap(h => h.filter((_, i) => i % 4 === 2));
     return r;
   }
-  // les routes que la crue coupe : là où une route passe dans les prés noyés, loin des places (une fois par crue)
+  // les routes que la crue coupe : la liste du serveur (st.cut, [arête, début, fin] des tronçons noyés en km le long du
+  // tracé ; game/crue.py, même critère que terre.js inonde), qui ralentit aussi les armées. Relevée une fois par état
   coupuresDe() {
-    if (!AMB.crue) return [];
-    if (this.coupures) return this.coupures;
-    const mp = this.G.map, T = terre(mp), out = [];
-    for (const e of mp.edges) {
-      if (e.water || e.kind === 'water' || e.ferry || e.pts.length < 2) continue;
-      const L = e.cum[e.cum.length - 1];
-      let s0 = null;
-      for (let s = 0.2; s <= L; s += 0.12) {
-        const p = surChemin(e.pts, Math.min(s, L)), noye = s < L - 0.2 && T.inonde(p.x, p.y) && !mp.nodes.some(n => Math.abs(n.x - p.x) < 3 && Math.hypot(n.x - p.x, n.y - p.y) < rayonPlace(n) + 0.5);
-        if (noye && s0 == null) s0 = s;
-        if (!noye && s0 != null) { if (s - s0 >= 0.24) { const m = surChemin(e.pts, (s0 + s) / 2); out.push({ x: m.x, y: m.y, a: m.a, l: s - s0, avant: surChemin(e.pts, Math.max(0, s0 - 0.06)) }); } s0 = null; }
-      }
-    }
-    return (this.coupures = out);
+    const mp = this.G.map, st = mp.state;
+    if (this.coupures?.st === st) return this.coupures.l;
+    const l = (st?.cut || []).map(([id, s0, s]) => { const e = mp.edges[id], m = surChemin(e.pts, (s0 + s) / 2); return { x: m.x, y: m.y, a: m.a, l: s - s0, avant: surChemin(e.pts, Math.max(0, s0 - 0.06)) }; });
+    this.coupures = { st, l };
+    return l;
   }
   // les feux de la pinède ce mois-ci (ceux qui brûlent : allumés ce mois), sur toute la carte
   feuxDe() {

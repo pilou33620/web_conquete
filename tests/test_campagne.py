@@ -10,6 +10,7 @@ marche, retraite, dettes, sauvegarde des IA) ne se vérifie qu'au bout de plusie
 - un événement effaçait la dette d'une faction en banqueroute ;
 - l'état des IA (impôts, dépenses) n'était qu'à moitié sauvegardé.
 """
+import datetime
 import json
 import os
 import math
@@ -19,6 +20,7 @@ from fabrique import GEO, TT, armee, jouer_mois, partie
 from game import diplomacy as D
 from game import army_actions as AA
 from game import cities as CT
+from game import crue as CR
 from game import events as E
 from game import rules as R
 from game import views as V
@@ -989,6 +991,38 @@ class TraceDesRoutes(unittest.TestCase):
                 self.assertLess(sum(math.dist(p, q) for p, q in zip(e['pts'], e['pts'][1:])), 2.2 * math.dist(A, B) + 1)
         bc = next(e for e in GEO.edges if {GEO.nodes[e['a']]['name'], GEO.nodes[e['b']]['name']} == {'Bordeaux', 'Cadillac'})
         self.assertEqual(crossings(bc['pts'], bc['pts'][0], bc['pts'][-1]), 1)
+
+
+class RoutesCoupeesParLaCrue(unittest.TestCase):
+    def test_coupee_en_avril_pas_en_juin_et_l_armee_y_marche_lentement(self):
+        """Les hautes eaux de mars et avril (ou la crue tirée) coupent les routes des prés noyés (le critère de la carte,
+        game/crue.py) : la vue les envoie, l'armée y avance quatre fois plus lentement, la recherche de chemin le sait."""
+        g = partie()
+        g.flood_until = -1
+        an = g.date().year + 1
+        cut = CR.spans(GEO)
+        self.assertTrue(10 <= len(cut) <= 60, len(cut))
+        eid = max(cut, key=lambda k: GEO.edges[k]['len'])
+        e = GEO.edges[eid]
+        g.has_sapeurs = lambda a: True   # (sans l'attente au bac : ces routes passent toutes le fleuve)
+        g.t = datetime.date(an, 4, 15).toordinal() - g.start_ord
+        self.assertIn(eid, g.cut_edges())
+        self.assertIn(eid, [c[0] for c in V.player_state(g)['cut']])
+        g.t = datetime.date(an, 6, 15).toordinal() - g.start_ord
+        self.assertEqual(g.cut_edges(), {})
+        self.assertNotIn('cut', V.player_state(g))
+        a = armee(g)
+
+        def marche():
+            a.update(state='move', edge=None, rail=False, emb=0.0, path=[dict(kind='road', e=eid, frm=e['a'], to=e['b'], pos=0.0)])
+            a['x'], a['y'] = g.node_xy(e['a'])
+            g.move_army(a, 0.2)
+            return a['path'][0]['pos']
+        sec, c0 = marche(), g.edge_cost(g.player, e)
+        self.assertGreater(sec, 1)
+        g.flood_until = g.t + 10   # la crue tirée au printemps dure encore
+        self.assertAlmostEqual(marche(), sec * CR.FACTOR)
+        self.assertAlmostEqual(g.edge_cost(g.player, e), c0 / CR.FACTOR)
 
 
 class Sauvegarde(unittest.TestCase):
