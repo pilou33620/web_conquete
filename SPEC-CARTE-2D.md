@@ -871,7 +871,8 @@ faubourgs aérés, un rayon un peu plus court.
     l'estafette, les pièces et les chevaux du camp, les sapeurs et leur gabion dès qu'un cheval fait un pixel (420) ; les
     servants des batteries avec les gens (jamais à la vraie taille) ;
   - `travaux.js` : barrières, ouvriers et charrettes des chantiers dès `Z.VIE` ; chaque dessin posé (`pose`) dès qu'il fait
-    un pixel (maisons du faubourg, échafaudages, tas, brouettes, rouleau) ; bornes et balises à leur taille ;
+    un pixel (maisons du faubourg, échafaudages, tas, brouettes, rouleau) ; bornes et balises à leur taille (en fait jamais
+    dessinées : un point d'un pixel depuis, « Livré — petits défauts de la relecture ») ;
   - `ciel.js` : rien de vivant (fenêtres et réverbères dès le plan, au moins un pixel).
 - Mesures (`integration/vie3/h3.cjs`, la scène du lot H, médiane de 120 images, deux passes, dpr 1, avant → après) : vue
   d'ensemble 4,3 / 5,7 → 5,9 / 4,4 ms (bruit) ; z 26 Bordeaux 3,0 / 3,5 → 2,7 / 2,8 ; z 110 Bordeaux 4,1 / 4,2 → 2,2 / 2,6,
@@ -894,7 +895,8 @@ Cubzac posée dans l'état, `cut`), `6-bayonne-murs-z45.png` (le tracé bastionn
     pas celui qui passe l'eau (le pont de Cubzac de travers sur la Dordogne) : `map.js`, `prepEdges`, la distance au segment ;
   - les réverbères au gaz éclairaient les rues des clos et toutes celles à moins de 24 unités d'un îlot (les faubourgs aérés
     restaient illuminés) : seulement le long des îlots bâtis, à moins de 20 unités (`ciel.js`, `reverberes`).
-- À décider :
+- À décider (depuis : Libourne, Bayonne et le mur de Bordeaux, « villes denses dans leurs murs » ; la vie rare, « le trafic
+  des routes » ; la route de Libourne, « les autres ponts datés ») :
   - Libourne (600 m) et Bayonne (800 m) ne touchent plus leurs rivières : la ville rétrécit autour de son point, la Dordogne,
     l'Isle, l'Adour passent hors les murs ; le port et ses quais n'ont plus d'eau (il faudrait décaler le centre du plan vers
     l'eau, ou garder le rayon des ports) ;
@@ -1014,3 +1016,10 @@ Avant : un voyageur tous les 1,1 km de route royale (2,2 km de chemin), partout 
   après) : z 450 Bordeaux 2,5 / 2,5 et 2,6 / 2,5 → 2,7 / 2,6 ms ; z 450 route 1,9 / 1,9 et 2,1 / 1,9 → 1,8 / 1,8 ; z 1 300
   Bordeaux 2,9 / 2,0 et 2,2 / 2,0 → 2,5 / 2,4 ; z 1 300 route 1,3 / 1,2 et 1,2 / 1,1 → 1,4 / 1,5 ; ailleurs dans le bruit.
 - Banc : `vie.test.mjs` (une ville plus qu'un village, une capitale plus loin, la foire attire du monde).
+
+## Livré — petits défauts de la relecture
+
+- Les bornes (27 cm, une par kilomètre des routes royales empierrées) et les balises du chemin de halage n'étaient jamais
+  dessinées (`vue(z, 1,8)` demande 3 704 px/km, `Z.MAX` vaut 1 300), ni les ouvriers des chantiers (`vue(z, 4,3)`) : de la
+  vie (`Z.VIE`), chacun est un point d'un pixel, blanc pour la borne, rouge pour la balise, de son habit pour l'ouvrier
+  (`travaux.js`, `point`) ; au-delà de 4,3 unités par pixel (jamais à la vraie taille), l'ouvrier dessiné comme avant.
