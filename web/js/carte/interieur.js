@@ -45,7 +45,7 @@ function construire() {
   document.body.appendChild(el);
   el.hidden = false;   // (la scène mesure son canevas à sa création)
   const sc = new Scene(el.querySelector('#vi-cv'), {
-    max: 500, vie: [], zMax: 6 * 1000 / S, ech: ECH,   // (au plus près, 6 pixels par mètre)
+    max: 500, vie: [], zMax: 7.5 * 1000 / S, ech: ECH,   // (au plus près, 7,5 pixels par mètre : les figures y sont à leur vraie taille, P_FIG / 0,6 m)
     sol(sc, g) {
       const t = sc.tv; g.fillStyle = '#6c984d'; g.fillRect(0, 0, sc.W, sc.H); if (!t) return;
       const m = sc.m, k = t.k, T = tuiles(sc, t);

@@ -11,7 +11,7 @@ export const Z = { PLAN: 18, COLONNES: 110, VIE: 110, MAX: 1300 };
 export const FIG = 0.15;
 // les figures lisibles : toutes grossies d'un même facteur k, pour qu'une personne (0,6 m) fasse au moins P px à l'écran ;
 // k = 1 dès que la vraie taille suffit (pxm : pixels CSS par mètre). Les bâtiments, rues, routes et plans n'en changent pas.
-export const P_FIG = 3.5;
+export const P_FIG = 4.5;
 export const kFig = pxm => Math.max(1, P_FIG / (0.6 * pxm));
 // km par unité de dessin des figures sur la carte, grossies de K au zoom de l'image (echelle(z), à chaque image)
 export let K = 1, U = FIG / 1000;

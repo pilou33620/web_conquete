@@ -558,7 +558,7 @@ export class Guerre {
       if (!this.dans(sc, x, y)) return;
       const k = (s + fin) * 11 | 0, ca = Math.cos(a), sa = Math.sin(a);
       for (const sg of [-1, 1]) { const o = 0.05 + hash2(k, sg, 104) * 0.12; foule.push([x - sa * o * sg, y + ca * o * sg, 0.03 + hash2(k, 2, 104) * 0.03, 0.018, a]); }
-      if (hostile && z >= Z.VIE && k % (6 * Math.ceil(K / 10)) === 0) restes.push([x - sa * 0.02, y + ca * 0.02, a + hash2(k, 3, 104) * 3, hash2(k, 4, 104)]);
+      if (hostile && z >= Z.VIE && k % (6 * Math.ceil(K / 14)) === 0) restes.push([x - sa * 0.02, y + ca * 0.02, a + hash2(k, 3, 104) * 3, hash2(k, 4, 104)]);
     });
     pietines(g, foule, 0.22);
     for (const [x, y, a, h] of restes) { this.figK(sc, g, x, y, a); debris(g, h); }
@@ -619,7 +619,7 @@ export class Guerre {
           if (!fig) { bande(sombre(L.chevaux[e.r % 5], 0.1), e.w, e.d0, d1); break; }
           // un cavalier sur la file tous les 3 K m : le cheval (2,4 m K) et son cavalier
           const ux = Math.cos(p.a), uy = Math.sin(p.a), mid = (e.d0 + d1) / 2;
-          for (let s = e.d0 + 0.0015; s < d1; s += 0.003 * K) {
+          for (let s = e.d0 + 0.0015; s < d1; s += 0.0022 * K) {
             const x = p.x + ux * (s - mid), y = p.y + uy * (s - mid), c = L.chevaux[(s * 333 | 0) % 5], q = s * 999;
             figures.push(() => { this.figK(sc, g, x, y, fa); cheval(g, c, { gait: leg(q), bob: 0 }); cavalier(g, L, {}, { sabre: 0, bob: 0 }); });
           }
@@ -848,7 +848,7 @@ export class Guerre {
     // les tombés, de chaque camp à proportion de ses pertes (sous le pixel, comme les vivants)
     if (vie && GENS) {
       const l0 = b.sides[0].lost || 0, l1 = b.sides[1].lost || 0, n = clamp(Math.round((l0 + l1) / 20), 4, 60), c0 = this.look(b.sides[0].o, 'ligne').habit, c1 = this.look(b.sides[1].o, 'ligne').habit;
-      for (let k = 0; k < n; k += Math.ceil(K / 10)) {   // (grossis de K, un sur K / 10)
+      for (let k = 0; k < n; k += Math.ceil(K / 14)) {   // (grossis de K, un sur K / 14)
         const x = B.x + B.ux * (hash2(k, 1, 107) - 0.5) * 1.4 + B.nx * (hash2(k, 2, 107) - 0.5) * 0.5, y = B.y + B.uy * (hash2(k, 1, 107) - 0.5) * 1.4 + B.ny * (hash2(k, 2, 107) - 0.5) * 0.5;
         if (!this.dans(sc, x, y)) continue;
         this.figK(sc, g, x, y, k * 2.1); E(g, hash2(k, 3, 107) * (l0 + l1) < l0 ? c0 : c1, 0, 0, 2.4, 1.1); C(g, '#e2b996', 2.4, 0, 0.7);
@@ -960,7 +960,7 @@ export class Guerre {
     for (const S of ar.sites) for (const c of S.convois) {
       if (!vu(c.bb)) continue;
       const hab = this.look(c.o, 'ligne').habit;
-      for (let k = 0; k < c.n; k += Math.ceil(K / 10)) {   // (grossis de K, un sur K / 10 : pas en tas ; de même les prisonniers et les fourgons)
+      for (let k = 0; k < c.n; k += Math.ceil(K / 14)) {   // (grossis de K, un sur K / 14 : pas en tas ; de même les prisonniers et les fourgons)
         const p = surChemin(c.pts, mod(t * 0.0011 + k * c.L / c.n, c.L));   // (au pas des bœufs)
         if (!this.dans(sc, p.x, p.y) || !this.visible(p.x, p.y)) continue;
         this.figK(sc, g, p.x, p.y, p.a); blesses(g, pas + k, hab, k % 4 === 0);
@@ -971,7 +971,7 @@ export class Guerre {
     for (const S of ar.sites) {
       const P = S.prison; if (!P || !vu(P.bb)) continue;
       const Lp = this.look(P.ov, 'ligne'), Le = this.look(P.o, 'ligne'), Lc = this.look(P.o, 'cavalerie');
-      for (let k = 0; k < P.n; k += Math.ceil(K / 10)) {
+      for (let k = 0; k < P.n; k += Math.ceil(K / 14)) {
         const p = surChemin(P.pts, mod(t * 0.0012 + k * P.L / P.n, P.L));
         if (!this.dans(sc, p.x, p.y, 0.06) || !this.visible(p.x, p.y)) continue;
         // (seize prisonniers par quatre, l'escorte sur les flancs : sous le pixel, une tache de 3 m sur 5, à leurs habits)
@@ -998,7 +998,7 @@ export class Guerre {
       if (a.st === 'battle' || a.st === 'siege') continue;
       // les vivres : les fourgons pleins vers l'armée, vides au retour, chacun à droite de la route
       const R = A.de != null && this.routeRavit(A);
-      if (R && vu(R.bb)) for (let k = 0; k < R.n; k += Math.ceil(K / 10)) {
+      if (R && vu(R.bb)) for (let k = 0; k < R.n; k += Math.ceil(K / 14)) {
         const plein = k % 2 === 0, p = surChemin(R.pts, mod((plein ? t : -t) * 0.0013 + k * R.L / R.n, R.L)), o = plein ? 0.002 : -0.002;
         if (this.dans(sc, p.x, p.y)) { this.figK(sc, g, p.x - Math.sin(p.a) * o, p.y + Math.cos(p.a) * o, p.a + (plein ? 0 : Math.PI)); fourgon(g, pas + k, plein, k); }
       }
@@ -1081,7 +1081,7 @@ export class Guerre {
       if (!fete || z < 40 || !this.dans(sc, px, py, 0.2)) continue;
       this.figK(sc, g, px, py, 0, 6 / K); feuCamp(g, t, id); sc.monde(g); flamme(g, px, py, Math.max(0.004, 3 / z), t, id);   // (le feu de joie, 4 m)
       if (z < Z.VIE) continue;
-      if (GENS) for (let m = 0; m < 14; m += Math.ceil(K / 10)) { const a = m * TAU / 14 + Math.sin(t * 0.3 + m) * 0.05, d = 0.024 + (m % 2) * 0.007; this.figK(sc, g, px + Math.cos(a) * d, py + Math.sin(a) * d, a + Math.PI); marcheur(g, m + id, null, false); }
+      if (GENS) for (let m = 0; m < 14; m += Math.ceil(K / 14)) { const a = m * TAU / 14 + Math.sin(t * 0.3 + m) * 0.05, d = 0.024 + (m % 2) * 0.007; this.figK(sc, g, px + Math.cos(a) * d, py + Math.sin(a) * d, a + Math.PI); marcheur(g, m + id, null, false); }
       // une guirlande de fanions autour de la place, aux couleurs du camp et blancs
       const col = mp.colors[ns.o] || '#8d8a7a', h = 0.03, f = Math.max(0.0015, 2.5 / z);   // (des fanions de 1,5 m autour d'un carré de 60 m)
       sc.monde(g); g.strokeStyle = '#3a2e24'; g.lineWidth = Math.max(0.0015, 0.6 / z); g.strokeRect(px - h, py - h, 2 * h, 2 * h);

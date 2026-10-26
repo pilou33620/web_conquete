@@ -415,7 +415,7 @@ function vieDePres(sc, g, x0, y0, x1, y1) {
       const h = hash2(ie, k, 31), sorte = hash2(ie, k, 32);
       let kind = r.royal ? (sorte < .05 ? 'malle' : sorte < .12 ? 'diligence' : sorte < .4 ? 'charrette' : sorte < .55 ? 'cavalier' : sorte < .62 ? 'troupeau' : 'pieton') : (sorte < .35 ? 'boeufs' : sorte < .5 ? 'troupeau' : sorte < .58 ? 'cavalier' : 'pieton');
       if (!vue(sc.z, sorte > .55 ? TAILLE.convoi : TAILLE[kind])) continue;   // (rien sous le pixel : ni calcul ni dessin)
-      if (hash2(ie, k, 38) * K > 6) continue;   // (grossis de K, un voyageur sur K / 6 : une figure tous les 120 px aux portes de Bordeaux, à tout zoom)
+      if (hash2(ie, k, 38) * K > 9) continue;   // (grossis de K, un voyageur sur K / 9 : une figure tous les 100 px environ aux portes de Bordeaux, à tout zoom)
       let s, sens = h < .5 ? 1 : -1;
       if (k < n) s = mod(h * L + sens * VITESSE[kind] * t, L);
       else { const [, lam, i, r0] = k < n + va[0] ? va : vb, D = clamp(-lam * Math.log(hash2(ie, k, 36) * hash2(ie, k, 37) + 1e-9), .3, L - r0), u = h * 2 * D + VITESSE[kind] * t, q = r0 + pingpong(u, D); s = i ? L - q : q; sens = (mod(u, 2 * D) < D) === !i ? 1 : -1; }
@@ -465,7 +465,7 @@ function vieDePres(sc, g, x0, y0, x1, y1) {
   const sa = AMB.saison, taches = new Map(), betes = vue(z, 12);   // (une vache de 2,2 m ; un cerf, 1,8)
   const tache = (c, x, y, rx, ry, a) => { let l = taches.get(c); if (!l) taches.set(c, l = []); l.push(x, y, rx * U, ry * U, a); };
   for (let j = Math.max(0, Math.floor(y0)); j <= Math.min(VIE.H - 1, y1); j++) for (let i = Math.max(0, Math.floor(x0)); i <= Math.min(VIE.W - 1, x1); i++) {
-    const tt = TER[j * VIE.W + i]; if (tt <= 1 || hash2(i, j, 39) * K > 12) continue;   // (grossis de K, un kilomètre sur K / 12 : à z 110, un quart)
+    const tt = TER[j * VIE.W + i]; if (tt <= 1 || hash2(i, j, 39) * K > 18) continue;   // (grossis de K, un kilomètre sur K / 18 : à z 110, un tiers)
     const cx = i + .5, cy = j + .5, dc = densite(cx, cy);
     if (betes && hash2(i, j, 76) <= dc) {
       const h = hash2(i, j, 77), bx = i + .2 + hash2(i, j, 78) * .6, by = j + .2 + hash2(j, i, 79) * .6;

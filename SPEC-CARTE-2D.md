@@ -1031,8 +1031,8 @@ Avant : un voyageur tous les 1,1 km de route royale (2,2 km de chemin), partout 
 ## Livré — les figures lisibles
 
 À la vraie taille, on ne distinguait plus personne sur les routes. Toutes les figures (gens, chevaux, voitures, bateaux,
-bêtes, soldats) grossissent d'un même facteur k = max(1, P / (0,6 m × pixels par mètre)), P = 3,5 px (`ambiance.js`,
-`kFig`, `echelle(z)` à chaque image : `U` = k × `FIG` / 1000) : une personne fait toujours au moins 3,5 px, une charrette
+bêtes, soldats) grossissent d'un même facteur k = max(1, P / (0,6 m × pixels par mètre)), P = 4,5 px (décision du joueur : « plus gros, mais pas de trop » ; `ambiance.js`,
+`kFig`, `echelle(z)` à chaque image : `U` = k × `FIG` / 1000) : une personne fait toujours au moins 4,5 px, une charrette
 36, et les proportions entre figures restent vraies. k vaut 53 à z 110, 13 à z 450, 4,5 à z 1 300 ; dans l'intérieur
 (`Scene.ech`), 1 au plus près (6 px/m). 5 px faisaient une charrette de 460 m à z 110.
 - Restent à la vraie taille (`vraie`, ou `s / K`) : bâtiments, rues, routes, plans ; étals, marchés et foire ; maisons,
