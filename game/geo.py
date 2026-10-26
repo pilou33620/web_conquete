@@ -17,7 +17,7 @@ import json
 import math
 import os
 
-from .places import PLACES, ROYAL_ROUTES, EXTRA_ROADS, EXTRA_ROADS_2, FERRIES, CITY_SPECIALTIES, CITY_POP
+from .places import PLACES, ROYAL_ROUTES, EXTRA_ROADS, EXTRA_ROADS_2, NO_ROADS_2, FERRIES, CITY_SPECIALTIES, CITY_POP
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 CACHE_VERSION = 7
@@ -180,7 +180,7 @@ class GeoMap:
         h.update(repr(PLACES).encode())
         h.update(repr(ROYAL_ROUTES).encode())
         h.update(repr(EXTRA_ROADS).encode())
-        h.update(repr(EXTRA_ROADS_2).encode())
+        h.update(repr(EXTRA_ROADS_2 + NO_ROADS_2).encode())
         h.update(str(CACHE_VERSION).encode())
         with open(os.path.abspath(__file__), 'rb') as f:
             h.update(f.read())
@@ -242,18 +242,20 @@ class GeoMap:
                 for i in range(i0, i1 + 1):
                     fn(base + i)
 
-    def _raster_line(self, pts, fn, step=0.35):
+    def _raster_line(self, pts, fn, step=0.35, f=1):
+        """Les cases que la ligne traverse (f : cases par km)."""
+        W, H = self.W * f, self.H * f
         for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
             L = math.hypot(x2 - x1, y2 - y1)
             n = max(1, int(L / step))
             for s in range(n + 1):
                 t = s / n
-                c = self.cell(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t)
-                if c >= 0:
-                    fn(c)
+                i, j = int((x1 + (x2 - x1) * t) * f), int((y1 + (y2 - y1) * t) * f)
+                if 0 <= i < W and 0 <= j < H:
+                    fn(j * W + i)
 
-    def _bfs(self, sources, maxd, passable=None):
-        W, H = self.W, self.H
+    def _bfs(self, sources, maxd, passable=None, f=1):
+        W, H = self.W * f, self.H * f
         dist = [255] * (W * H)
         q = list(sources)
         for c in q:
@@ -518,6 +520,9 @@ class GeoMap:
             if fer or self._water_on_segment(P[a], P[b]) < 1:
                 pairs.setdefault(k, dict(royal=False, ferry=fer))
                 pairs[k]['ferry'] = fer
+        for na, nb in NO_ROADS_2 if self.version >= 2 else []:
+            a, b = self.by_name[na], self.by_name[nb]
+            pairs.pop((min(a, b), max(a, b)), None)
         # élague les chemins redondants (un détour par une autre ville est presque aussi court)
         nb = {}
         for a, b in pairs:
@@ -607,27 +612,46 @@ class GeoMap:
             self._raster_line(path, setroad, 0.3)
         self.edges = edges
 
+    def _route_f(self):
+        """La grille des tracés de routes : f cases par km et les rivières qui y passent. Géographie 2 : à la demi-case, pour
+        que les routes passent entre les méandres serrés (Libourne) au lieu de les contourner."""
+        f = 2 if self.version >= 2 else 1
+        if f == 1:
+            return f, self.river
+        if '_rivf' not in self.__dict__:
+            riv = self._rivf = bytearray(self.W * self.H * f * f)
+            for r in self.src['rivers']:
+                def setr(c, v={1: 3, 2: 2, 3: 1}[r['rank']]):
+                    if riv[c] < v:
+                        riv[c] = v
+                self._raster_line([self.xy(lat, lon) for lon, lat in r['pts']], setr, 0.35 / f, f)
+        return f, self._rivf
+
     def _road_costs(self, wobble):
         """Coût d'une cellule pour tracer une route : le relief, l'eau à éviter (on ne la franchit qu'une fois, sur un
         pont), les berges, et un bruit doux pour que les routes ondulent au lieu d'aller à la règle."""
-        W, N = self.W, self.W * self.H
-        near = self._bfs([c for c in range(N) if self.river[c] >= 2], 2)
+        f, riv = self._route_f()
+        W, N = self.W * f, self.W * self.H * f * f
+        near = self._bfs([c for c in range(N) if riv[c] >= 2], 2, f=f)
         terr = {T_PLAINE: 1.0, T_VIGNE: 1.0, T_LANDE: 1.1, T_FORET: 1.3, T_COLLINES: 1.5, T_DUNES: 2.0,
                 T_MARAIS: 2.5, T_MONTAGNE: 2.4, T_HAUTE: 4.0}
+        bruit = [vnoise(c % self.W / 7, c // self.W / 7, 91) for c in range(self.W * self.H)] if wobble else None   # (au km)
         cost = [0.0] * N
         for c in range(N):
             i, j = c % W, c // W
-            t = self.terrain[c]
-            k = terr.get(t, 40.0) if self.dept[c] and self.dept_codes[self.dept[c] - 1] in PLAYABLE else 40.0
-            k += (25.0, 10.0, 3.0)[3 - self.river[c]] if self.river[c] else (1.5, 0.4, 0.0)[near[c] - 1] if near[c] <= 2 else 0.0
-            cost[c] = k * (1 - wobble / 2 + wobble * vnoise(i / 7, j / 7, 91))
+            c1 = j // f * self.W + i // f   # (la case du km : terrain, département, bruit)
+            t = self.terrain[c1]
+            k = terr.get(t, 40.0) if self.dept[c1] and self.dept_codes[self.dept[c1] - 1] in PLAYABLE else 40.0
+            k += (25.0, 10.0, 3.0)[3 - riv[c]] if riv[c] else (1.5, 0.4, 0.0)[near[c] - 1] if near[c] <= 2 else 0.0
+            cost[c] = k * (1 - wobble / 2 + wobble * bruit[c1]) if wobble else k
         return cost
 
     def _road_path(self, A, B, cost):
         """Tracé d'une route de A à B : A* sur la grille (coûts de _road_costs), puis simplifié et lissé."""
-        W, H = self.W, self.H
-        si, sj, gi, gj = int(A[0]), int(A[1]), int(B[0]), int(B[1])
-        m = max(6, int(0.35 * math.dist(A, B)))
+        fr, riv = self._route_f()
+        W, H = self.W * fr, self.H * fr
+        si, sj, gi, gj = int(A[0] * fr), int(A[1] * fr), int(B[0] * fr), int(B[1] * fr)
+        m = max(6, int(0.35 * math.dist(A, B))) * fr
         i0, i1 = max(0, min(si, gi) - m), min(W - 1, max(si, gi) + m)
         j0, j1 = max(0, min(sj, gj) - m), min(H - 1, max(sj, gj) + m)
         start, goal = sj * W + si, gj * W + gi
@@ -659,11 +683,15 @@ class GeoMap:
         while cells[-1] != start:
             cells.append(prev[cells[-1]])
         cells.reverse()
-        pts = [A] + [(c % W + 0.5, c // W + 0.5) for c in cells[1:-1]] + [B]
+        pts = [A] + [((c % W + 0.5) / fr, (c // W + 0.5) / fr) for c in cells[1:-1]] + [B]
+
+        def cel(x, y):
+            i, j = int(x * fr), int(y * fr)
+            return j * W + i if 0 <= i < W and 0 <= j < H else -1
 
         def along(p, q):    # coût d'un segment droit, échantillonné tous les 0,25 km
             n = max(1, int(math.dist(p, q) / 0.25))
-            return sum(cost[self.cell(p[0] + (q[0] - p[0]) * (s + 0.5) / n, p[1] + (q[1] - p[1]) * (s + 0.5) / n)]
+            return sum(cost[cel(p[0] + (q[0] - p[0]) * (s + 0.5) / n, p[1] + (q[1] - p[1]) * (s + 0.5) / n)]
                        for s in range(n)) * math.dist(p, q) / n
         seg = [along(p, q) for p, q in zip(pts, pts[1:])]
         # corde tendue : du point i, on va en ligne droite au point le plus loin qui ne coûte guère plus que le
@@ -683,8 +711,8 @@ class GeoMap:
             n = [0]
 
             def f(c):
-                n[0] += self.river[c] >= 2
-            self._raster_line(line, f, 0.3)
+                n[0] += riv[c] >= 2
+            self._raster_line(line, f, 0.3 / fr, fr)
             return n[0]
         smooth = pts
         for _ in range(3):    # Chaikin : coins arrondis, extrémités fixes

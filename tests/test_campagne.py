@@ -989,6 +989,8 @@ class TraceDesRoutes(unittest.TestCase):
                 self.assertLess(math.dist(e['pts'][0], A) + math.dist(e['pts'][-1], B), 0.02)
                 self.assertLessEqual(crossings(e['pts'], A, B), max(1, crossings([A, B], A, B)))
                 self.assertLess(sum(math.dist(p, q) for p, q in zip(e['pts'], e['pts'][1:])), 2.2 * math.dist(A, B) + 1)
+        self.assertFalse([e for e in GEO.edges if {GEO.nodes[e['a']]['name'], GEO.nodes[e['b']]['name']} == {'Urdos', 'Laruns'}],
+                         'pas de route par la montagne entre les vallées d’Aspe et d’Ossau')
         bc = next(e for e in GEO.edges if {GEO.nodes[e['a']]['name'], GEO.nodes[e['b']]['name']} == {'Bordeaux', 'Cadillac'})
         self.assertEqual(crossings(bc['pts'], bc['pts'][0], bc['pts'][-1], 0), 1)   # (au pied de Cadillac)
 
@@ -1001,7 +1003,7 @@ class RoutesCoupeesParLaCrue(unittest.TestCase):
         g.flood_until = -1
         an = g.date().year + 1
         cut = CR.spans(GEO)
-        self.assertEqual(len(cut), 29, 'les rivières affinées (27 sur la carte des anciennes parties : test_serveur)')
+        self.assertEqual(len(cut), 26, 'les rivières affinées (27 sur la carte des anciennes parties : test_serveur)')
         eid = max(cut, key=lambda k: GEO.edges[k]['len'])
         e = GEO.edges[eid]
         g.has_sapeurs = lambda a: True   # (sans l'attente au bac : ces routes passent toutes le fleuve)

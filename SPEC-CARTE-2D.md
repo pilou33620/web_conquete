@@ -1130,12 +1130,30 @@ arrivent à la ville et non dans ses faubourgs (la carte du jeu change : les dis
   - l'attribution (ODbL) : « Rivières et position des villes : © les contributeurs d'OpenStreetMap (ODbL), via Overture
     Maps » sur l'écran de départ et dans le README, qui dit aussi que `geo.json` et la place des villes au bord de l'eau
     forment une base dérivée sous ODbL.
+- **Décisions du joueur** (géographie 2) :
+  - les routes tracées à la demi-case (`geo.py`, `_route_f` : les rivières rastérisées à 500 m pour le tracé ; le bruit
+    des routes au km) : elles passent entre les méandres serrés. À Libourne, les routes de Bordeaux, Créon et Izon passent
+    la Dordogne au pied de la ville (460 à 530 m du nœud, 2,4 km en amont avant) ; Libourne – Izon, 12,9 km de tracé pour
+    8,9 à vol d'oiseau (19,5 avant), en contournant la boucle de Vayres ; détour moyen des tracés 1,05 → 1,02, aucun au-delà
+    de 1,5 ; 83 ponts sur 139 à moins de 1 km d'une ville. Le banc des ponts datés regarde de nouveau Libourne (pont de
+    bateaux en 1800, de pierre en 1830 ; ses trois routes passent au pied de la ville). Construction à froid de la carte 2 :
+    7,1 s (5,0 sur main) ;
+  - pas de route Urdos – Laruns (`NO_ROADS_2`) : 499 routes (498 avant ; naît Mauléon – Sauveterre-de-Béarn) ;
+  - les gabares gardent les méandres, sans compenser leur vitesse ;
+  - les autres lieux restent à leur nœud ; seul Le Bugue, dont le nœud tombait dans le lit de la Vézère (aucun îlot), est
+    porté à 216 m, sur sa rive (géographie 2 ; `geo_v1.json` garde sa place d'alors, la carte 1 ne change pas).
+  Crue des nouvelles parties : 26 routes coupées (27 dans les anciennes) ; attente au bac (rang 1) : 77 → 79 routes ;
+  80 routes changent de rivière à passer, dont 22 de rang 1. Distances par les routes entre les 18 villes principales :
+  écart moyen 0,3 %, au plus 2 % (aucun au-delà de 5 %) ; entre toutes les places, 43 paires sur 24 753 au-delà de 5 %,
+  toutes raccourcies par Mauléon – Sauveterre. Coût par image (`vie3/h3.cjs`, main → branche, l'armée A1 à la même place) :
+  z 26 Bordeaux 3,2 / 2,8 → 2,6 / 3,3 ms, z 110 Bordeaux 2,7 / 2,2 → 2,3 / 2,2 (dans le bruit). Capture :
+  `integration/rivieres2/1-libourne-routes-z110.png`.
 - Captures (`integration/rivieres/`, une partie neuve préparée, aucun tour joué) : `1-bayonne-nive-adour-z170.png` (la Nive
   au travers de la ville jusqu'à l'Adour, les routes à la ville), `2-langon-z220.png`, `3-saint-sever-z220.png`,
   `4-agen-routes-z320.png` (les routes de l'autre rive passent la Garonne au pied des murs), `5-ensemble-z2.png`,
   `6-bayonne-interieur.png`.
 - Écarts :
-  - à Libourne, les routes de Bordeaux, Créon et Izon passent la Dordogne à 2,4 km en amont (vers Condat) : entre les
+  - (fait depuis, « Décisions du joueur ») à Libourne, les routes de Bordeaux, Créon et Izon passent la Dordogne à 2,4 km en amont (vers Condat) : entre les
     méandres serrés, la grille d'un km du tracé ne trouve pas de passage unique au pied de la ville ; la carte d'une bataille
     à Libourne n'a plus qu'un pont de bateaux (le banc des ponts datés regarde Bergerac) ; la route d'Izon fait 19,5 km
     pour 8,9 à vol d'oiseau ;

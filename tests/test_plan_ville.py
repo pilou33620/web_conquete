@@ -283,12 +283,18 @@ class BatailleSurLePlan(unittest.TestCase):
             js = re.search(r'PONTS_DATES = \[(.*?)\];', f.read(), re.S).group(1)
         self.assertEqual(sorted((v, r, int(a)) for v, r, a in re.findall(r"\['([^']+)', '([^']+)', (\d+)\]", js)),
                          sorted(TR.PONTS_DATES), 'villes.js et terrain.py : les mêmes ponts')
-        kinds = lambda y: {b.get('kind') for b in carte(nom('Bergerac'), year=y).bridges if b.get('river') == 'Dordogne'}
+        kinds = lambda y: {b.get('kind') for b in carte(nom('Libourne'), year=y).bridges if b.get('river') == 'Dordogne'}
         self.assertEqual(kinds(1800), {'bateaux'})
         self.assertEqual(kinds(1830), {None})
         # la route de Bordeaux à Libourne passe la Garonne et la Dordogne : un pont (ou un bac) sur chacune
         e = next(e for e in GEO.edges if {GEO.nodes[e['a']]['name'], GEO.nodes[e['b']]['name']} == {'Bordeaux', 'Libourne'})
         self.assertEqual({e['river']} | {p[2] for p in e['ponts']}, {'Garonne', 'Dordogne'})
+        # (géographie 2 : les routes de Bordeaux, Créon et Izon passent la Dordogne au pont de Libourne, pas en amont)
+        lib = nom('Libourne')
+        for e in GEO.edges:
+            if lib['id'] in (e['a'], e['b']) and e.get('kind') != 'water' and {GEO.nodes[e['a']]['name'], GEO.nodes[e['b']]['name']} & {'Bordeaux', 'Créon', 'Izon'}:
+                x, y = next(p[:2] for p in [[e['bx'], e['by'], e['river']]] + e.get('ponts', []) if p[2] == 'Dordogne')
+                self.assertLess(((x - lib['x']) ** 2 + (y - lib['y']) ** 2) ** .5, 1, 'au pied de Libourne')
 
     def test_vite(self):
         cas = [(nom('Bayonne'), 3), (nom('Bordeaux'), 2), (nom('Navarrenx'), 3), (nom('Belin'), 0)]

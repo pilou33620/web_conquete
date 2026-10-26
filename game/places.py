@@ -87,7 +87,7 @@ PLACES = [
     ('Issigeac', 44.7314, 0.6083, '24', 'village', ['ble'], 0),
     ('La Roche-Chalais', 45.1357, 0.0547, '24', 'village', [], 0),
     ('Lamonzie-Saint-Martin', 44.8334, 0.3883, '24', 'village', ['vin'], 0),
-    ('Le Bugue', 44.9175, 0.9272, '24', 'village', [], 0),
+    ('Le Bugue', 44.9193, 0.9283, '24', 'village', [], 0),   # (géographie 2 : sur la rive, hors du lit de la Vézère)
     ('Le Buisson-de-Cadouin', 44.8205, 0.8903, '24', 'village', ['bois'], 0),
     ('Mareuil', 45.4486, 0.5072, '24', 'village', ['ble'], 0),
     ('Monbazillac', 44.7953, 0.4925, '24', 'village', ['vin'], 0),
@@ -275,6 +275,8 @@ EXTRA_ROADS = [
     ('Mauléon', 'Tardets'),
 ]
 EXTRA_ROADS_2 = [('Bazas', 'La Réole')]   # (géographie 2 : Langon, à sa vraie place, la cachait au maillage automatique)
+# Pas de route (géographie 2) : le maillage automatique en tire une entre les vallées d'Aspe et d'Ossau, par la montagne
+NO_ROADS_2 = [('Urdos', 'Laruns')]
 FERRIES = {('Blaye', 'Fort Médoc')}
 
 # Spécialité phare de chaque ville principale : (type, nom affiché). Le type renvoie à rules.SPECIALTY
