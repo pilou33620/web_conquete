@@ -898,8 +898,9 @@ def ai_build(ai, budget, wars):
                 cands.append((val / price, n, chain, cost, price))
     cands.sort(key=lambda c: -c[0])
     built = 0
+    slow = 1 / 4000 if ai.idle_money() > 0 else 1 / 1500   # (un trésor qui dort attend dix ans, sinon quatre)
     for ratio, n, chain, cost, price in cands:
-        if built >= (1 if wars else 2) or budget < 150 or ratio < 1 / 1500:
+        if built >= (1 if wars else 2) or budget < 150 or ratio < slow:
             break   # au-delà de quatre ans pour se rembourser, on attend
         extra = ai.provide(cost, budget)
         if extra is None:

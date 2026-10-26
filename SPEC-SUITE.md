@@ -588,6 +588,20 @@ quand le tour avait repris et que l'arrêt était vide ; corrigés comme le test
   quatre époques : aucune ressource en baisse sur les trois premiers tours (`test_campagne.DepartSansDeficit`).
   Reste à décider : en 1870, les ateliers de la Gironde tournent à 38 % faute de fer (la production de fer ne suit pas
   l'industrie des époques avancées).
+- **Le trésor des IA** : bâtiments, faubourgs et remparts faits, l'armée plafonnait au revenu (`AI.recruit` : au plus
+  12 régiments de plus pour un trésor plein) et les ventes d'armes au marché remplissaient le trésor (60 000 à
+  80 000 livres en 1802, 280 000 à 300 000 en 1878). Désormais l'argent qui dort au-delà de deux trésors de guerre
+  (`AI.idle_money`) paie des régiments de plus (quatre ans de solde d'un bataillon de ligne chacun), plus de remparts
+  (cinq ans d'entretien) et des bâtiments plus lents à rembourser (dix ans au lieu de quatre) ;
+  `test_campagne.IADepenseSonTresor`. Mesures : tableau du rapport du 26/10/2026 (`outils/simuler.py`, 1790 × 12 ans,
+  1870 × 8 ans, graines 11 et 21).
+- **Les assauts de place** : les remparts épais (Fort Médoc : 60 à 90 m sur l'axe) gardaient une brèche borgne (24 m de
+  rayon, le mur intact derrière) ; les colonnes attendaient au pied sans chemin, des heures durant (banc : 7 h de
+  bataille, 2 à 8 % de pertes). La brèche s'ouvre maintenant sur toute l'épaisseur du rempart, le long de l'axe de la
+  place (`battle._apply_breach` ; `test_bataille.BrecheDePartEnPart`). Banc (`outils/banc_ia.py --lieux forteresse`, deux
+  graines, quatre époques) : l'assaillant gagne toujours 4 assauts sur 16 (3 sur 8 quand il a deux fois plus de
+  bataillons), mais plus aucune bataille passive : durée moyenne 250 → 158 min. Rase campagne et villages inchangés.
+  Écart : la page dessine la brèche en cercle de 24 m sur le tracé du rempart, pas la saignée dans son épaisseur.
 
 ## Livraison (ordre proposé)
 

@@ -349,6 +349,11 @@ class AI:
         Au-delà, l'argent qui dort est dépensé (impôts allégés, faubourgs, remparts, présents)."""
         return (1000 + 40 * self.gross_norm()) * (1.5 if self.menace else 1.0)   # un voisin menaçant : on garde davantage
 
+    def idle_money(self):
+        """L'argent qui dort au-delà de deux trésors de guerre : il paie des régiments de plus (quatre ans de solde), plus
+        de remparts (cinq ans d'entretien) et des bâtiments plus lents à rembourser."""
+        return max(0.0, self.f['res']['livres'] - 2 * self.reserve())
+
     def spend(self):
         """Tous les cinq jours environ : un trésor qui déborde se dépense, utilement et sans tout miser sur l'armée."""
         g, f = self.g, self.f
@@ -532,7 +537,7 @@ class AI:
             return budget
         own = g.owned_nodes(code)
         up_f = sum(R.FORT_UPKEEP[min(n['fort'], R.BASTION_LEVEL)] for n in own)
-        if up_f > (0.18 if flood else 0.1) * self.gross_norm():
+        if up_f > (0.18 if flood else 0.1) * self.gross_norm() + self.idle_money() / (5 * 365):
             return budget
         nb = self.neighbours()
         cands = []
@@ -626,7 +631,9 @@ class AI:
         if not self.menace and f['res']['livres'] < FLOOD * self.reserve():
             surplus = 0   # en paix et sans voisin menaçant, l'armée s'en tient à ce que paie le revenu
         income_cap = max(5, int(gross * (0.5 + 0.25 * aggr) / 2.6))
-        target = min(time_target + surplus, income_cap + surplus // 2)
+        u = R.UNITS['ligne']
+        funded = int(self.idle_money() / (4 * 365 * u['upkeep_l'] * u['men'] / 100 * (1 + g.mod(code, 'upkeep'))))
+        target = min(time_target + surplus, income_cap + surplus // 2) + funded
         if self.regs_total() >= target:
             return
         if f['income']['livres'] < 0.5 and f['res']['livres'] < 400:

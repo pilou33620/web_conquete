@@ -896,6 +896,27 @@ class PlaceAuMilieuDeLEau(unittest.TestCase):
         self.assertIsNotNone(tb.path_cost(u.x, u.y, pl['x'] + math.cos(a) * r, pl['y'] + math.sin(a) * r, 'inf', 0))
 
 
+class BrecheDePartEnPart(unittest.TestCase):
+    """Fort Médoc (graine 2) : ses remparts ont 60 à 90 m d'épaisseur ; la brèche, d'un rayon de 24 m, restait borgne
+    (le mur derrière intact) et les colonnes attendaient au pied des heures durant (banc : 7 h, 2 à 8 % de pertes).
+    Elle s'ouvre maintenant sur toute l'épaisseur du rempart."""
+
+    def test_on_passe_la_breche_d_un_rempart_epais(self):
+        import math
+        from game.tactics import skirmish as S
+        g, bid = S.new(GEO, dict(me='33', foe='24', era='1700', kind='forteresse', role='att',
+                                 units=dict(ligne=2, artillerie=1), seed=2))
+        tb = g.tactical[bid]
+        pl = tb.map.place
+        x, y = 1590.0, 798.0   # (un pan du nord-est ; avant : 17 des 30 pans essayés restaient borgnes)
+        a = math.atan2(y - pl['y'], x - pl['x'])
+        bout = tb.nearest_passable('inf', 0, x + math.cos(a) * 60, y + math.sin(a) * 60)
+        bin_ = tb.nearest_passable('inf', 0, x - math.cos(a) * 50, y - math.sin(a) * 50)
+        wi = min(range(len(tb.map.walls)), key=lambda i: min(math.hypot(p[0] - x, p[1] - y) for p in tb.map.walls[i]['pts']))
+        tb._apply_breach(wi, x, y, BT.BREACH_R)
+        self.assertLess(tb.path_cost(*bout, *bin_, 'inf', 0) or 1e9, 500)
+
+
 class RedditionDUnePlace(unittest.TestCase):
     """Une garnison battue en brèche, éprouvée et débordée capitule sans assaut (SURR_*) : elle est prisonnière et la
     place est prise sur la carte de campagne ; une garnison encore solide tient."""

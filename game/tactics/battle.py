@@ -2219,12 +2219,20 @@ class TacticalBattle:
                 mem['breach'].append([round(x - math.cos(a) * 40), round(y - math.sin(a) * 40), round(a, 3)])
 
     def _apply_breach(self, wi, x, y, r):
-        i0, i1 = max(0, int((x - r - 20) // CELL)), min(COLS - 1, int((x + r + 20) // CELL))
-        j0, j1 = max(0, int((y - r - 20) // CELL)), min(ROWS - 1, int((y + r + 20) // CELL))
-        for j in range(j0, j1 + 1):
-            for i in range(i0, i1 + 1):
-                c = j * COLS + i
-                if self.t[c] == T_MUR and math.hypot((i + 0.5) * CELL - x, (j + 0.5) * CELL - y) <= r + 10:
+        # le rempart éboulé de part en part : un rempart épais (bastion, terre-plein) s'ouvre sur toute son épaisseur,
+        # le long de l'axe de la place (sinon la brèche restait borgne et les colonnes attendaient au pied)
+        pl = self.map.place
+        a = math.atan2(y - pl['y'], x - pl['x']) if pl else 0.0
+        pts = [(x, y)]
+        for sg in (1, -1):
+            for k in range(10, 160, 10):
+                q = (x + sg * math.cos(a) * k, y + sg * math.sin(a) * k)
+                if self.terrain_at(*q) not in (T_MUR, T_BRECHE):
+                    break
+                pts.append(q)
+        for px_, py_ in pts:
+            for c in self.cells_near(px_, py_, r + 10):
+                if self.t[c] == T_MUR:
                     self.t[c] = T_BRECHE
         self.map.walls[wi].setdefault('breach', []).append([round(x), round(y), round(r)])
         self.breaches.append([wi, round(x), round(y), round(r)])

@@ -1051,6 +1051,25 @@ class DepartSansDeficit(unittest.TestCase):
         self.assertLess(f['income']['fer'], 0)
 
 
+class IADepenseSonTresor(unittest.TestCase):
+    def test_au_dela_de_deux_tresors_de_guerre_l_ia_arme_davantage(self):
+        """Les IA amassaient 60 000 livres en 1802 et 280 000 en 1878 (outils/simuler.py) : bâtiments et remparts faits,
+        l'armée plafonnait au revenu. L'argent qui dort au-delà de deux trésors de guerre (AI.idle_money) paie des
+        régiments de plus (quatre ans de solde), des remparts et des bâtiments ; la réserve reste."""
+        from unittest import mock
+        from game.ai import AI
+        out = []
+        for dort in (False, True):
+            g = partie('33', '1790', seed=3)
+            ai, f = g.ais['24'], g.factions['24']
+            f['res']['livres'] = 60 * ai.reserve()
+            with mock.patch.object(AI, 'idle_money', AI.idle_money if dort else (lambda self: 0.0)):
+                jouer_mois(g, 6)
+            out.append(ai.regs_total() + sum(1 for n in g.owned_nodes('24') for q in n['queue'] if q.get('kind') == 'unit'))
+            self.assertGreater(f['res']['livres'], 2 * ai.reserve(), 'la réserve reste')
+        self.assertGreater(out[1], out[0] + 4, f'des régiments de plus ({out})')
+
+
 class CruesDesVilles(unittest.TestCase):
     def test_au_printemps_au_bord_des_grands_fleuves_surtout_l_annee_de_la_grande_crue(self):
         """L'événement « crue » d'une place suit la grande crue (engine : flood_until, tirée en mars un printemps sur
