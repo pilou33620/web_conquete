@@ -556,3 +556,13 @@ pas.
   - moulins, fumées, flammes et drapeau restent à l'échelle des bâtiments du plan.
   - les badauds trop petits pour un pixel ne se dessinent pas en tache (une foule de 80 sur 80 m de rayon est trop
     clairsemée pour une tache à sa vraie taille).
+- **Carte de campagne : pas faite** (arrêt prévu par la demande). Sonde (`integration/echelle/campagne.cjs`, fil
+  principal, Chromium sans carte graphique) : une tuile de 256 px de `renderTile` à 1–2 km d'une ville coûte, à 256 /
+  512 / 1024 / 2048 / 4096 / 8192 px/km, Bordeaux 31 / 31 / 43 / 74 / 151 / 403 ms, Sabres 17 / 19 / 21 / 32 / 92 /
+  274, Laruns 19 / 31 / 54 / 92 / 249 / 531 ; un écran d'iPad au zoom 6 000 px/km demande environ 106 tuiles à
+  8 192 px/km (28 Mo, la mémoire tiendrait), soit 30 à 55 s de peinture : des secondes de flou à chaque
+  déplacement. La peinture du paysage (`terre.js`) ne descend pas avec la surface de la tuile ; il faudrait d'abord
+  la rendre proportionnelle (moins de 30 ms par tuile), puis rejouer les plans des villes par tuiles (`rejeu.js`,
+  comme l'intérieur : `planCarte` s'arrête à 2 px par unité et 2 048 px de côté), puis passer `U` à `FIG / 1000`
+  (0,00015 km, 30 fois plus petit) avec tous les décalages en km de `vie.js`, `guerre.js`, `travaux.js`, `ciel.js`,
+  les seuils (une personne fait un pixel à 1 550 px/km) et la vraie longueur des colonnes.
