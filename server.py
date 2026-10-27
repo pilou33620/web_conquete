@@ -220,10 +220,6 @@ class App:
                 return self._r(g.merge(p, a, body.get('other')))
             if c == 'split_type':
                 return self._r(g.split_by_type(p, a, body.get('value')))
-            if c == 'formation':
-                return self._r(g.set_formation(p, a, body.get('value')))
-            if c == 'plan':
-                return self._r(g.set_plan(p, a, body.get('value')))
             if c == 'spy':
                 return self._r(g.spy(p, self._node(body['node']), body.get('value')))
             if c == 'tax':
@@ -264,13 +260,6 @@ class App:
                 node = body.get('node')
                 return self._r(g.modernize(p, army_id=a if node is None else None,
                                          nid=None if node is None else self._node(node)))
-            if c == 'reflex':
-                ar = g.armies.get(a)
-                if ar and ar['owner'] == p:
-                    ar['rx'] = bool(body.get('value'))
-                    return dict(ok=True, msg='Carré réflexe activé.' if ar['rx'] else 'Carré réflexe désactivé : '
-                                                                                      'vous formerez le carré vous-même.')
-                return dict(ok=False, msg='Armée introuvable.')
             if c == 'enroll':
                 frm = body.get('from')
                 if frm not in g.factions and frm != R.NEUTRAL:

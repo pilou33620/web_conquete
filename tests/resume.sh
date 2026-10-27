@@ -4,7 +4,7 @@
 #   sh tests/resume.sh
 cd "$(dirname "$0")/.." || exit 1
 LOG=/tmp/tests-conquete.log
-CONNUS='test_vite (test_cartes'
+CONNUS='test_vite ('
 timeout 1500 python3 tests/lancer.py > "$LOG" 2>&1
 NOUV=$(grep -E '^(FAIL|ERROR):|^not ok|✖' "$LOG" | grep -v "$CONNUS" | sort -u | head -30)
 PY=$(grep -E '^Ran [0-9]+ tests' "$LOG" | tail -1)

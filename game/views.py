@@ -381,8 +381,6 @@ def player_state(g, since=0):
             d['sup'] = round(a['supply'], 2)
             d['path'] = _legs(a)
             d['bt'] = a['battle']
-            d['pl'] = a.get('pl', 'frontal')
-            d['auto'] = bool(a.get('tac_auto', True))
             d['sp'] = round(g.army_speed(a), 1)
             if g.tour['on']:
                 d['mp'] = round(TT.march_left(g, a), 1)   # jours de marche qui restent ce tour
@@ -395,7 +393,6 @@ def player_state(g, since=0):
                 d['emb'] = round(a['emb'], 2)
             if a.get('_fire'):
                 d['fire'] = 1
-            d['rx'] = bool(a.get('rx', True))
             d['des'] = int(a.get('des', 0))
             d['wn'] = [w for w, on in (('solde', me.get('banqueroute')),
                                        ('faim', me.get('famine'))) if on]

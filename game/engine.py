@@ -4000,39 +4000,6 @@ class Game:
         t = self.gen_title(a['gen'])
         return True, f"Armées réunies sous le commandement du {t[0].lower() + t[1:]}."
 
-    def set_formation(self, code, aid, fm):
-        a = self.armies.get(aid)
-        if not a or a['owner'] != code:
-            return False, "Armée introuvable."
-        if fm not in R.FORMATIONS:
-            return False, "Formation inconnue."
-        if a.get('fm') == fm:
-            a['tac_auto'] = False
-            return True, f"Déjà en {R.FORMATIONS[fm]['label'].lower()}."
-        a['fm'] = fm
-        a['tac_auto'] = False
-        if a['state'] == 'battle':
-            a['fm_t'] = self.t
-            return True, f"Les régiments se forment en {R.FORMATIONS[fm]['label'].lower()} (réorganisation de quelques heures)."
-        return True, f"Formation : {R.FORMATIONS[fm]['label'].lower()}."
-
-    def set_plan(self, code, aid, pl):
-        a = self.armies.get(aid)
-        if not a or a['owner'] != code:
-            return False, "Armée introuvable."
-        if pl == 'auto':
-            a['tac_auto'] = True
-            bt = self.battles.get(a['battle']) if a['state'] == 'battle' else None
-            if bt:
-                si = 0 if aid in bt['sides'][0]['armies'] else 1
-                self.choose_tactics(a, bt, si)
-            return True, "Le général choisira la formation et le plan selon l'ennemi."
-        if pl not in R.PLANS:
-            return False, "Plan inconnu."
-        a['pl'] = pl
-        a['tac_auto'] = False
-        return True, f"Plan de bataille : {R.PLANS[pl]['label'].lower()}."
-
     def set_stance(self, code, aid, stance):
         a = self.armies.get(aid)
         if not a or a['owner'] != code:

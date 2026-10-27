@@ -839,9 +839,6 @@ export class UI {
       case 'selbattle': this.select({ kind: 'battle', id: d.id }); break;
       case 'tactic': if (this.onTactic) this.onTactic(d.id); break;
       case 'mode': this.cmd({ cmd: 'mode', army: sel.id, value: d.v }, false); break;
-      case 'formation': this.cmd({ cmd: 'formation', army: d.army || sel.id, value: d.v }); break;
-      case 'plan': this.cmd({ cmd: 'plan', army: d.army || sel.id, value: d.v }); break;
-      case 'reflex': this.cmd({ cmd: 'reflex', army: d.army || sel.id, value: d.v === '1' }); break;
       case 'evchoice': this.cmd({ cmd: 'event', id: d.id, choice: +d.v }).then(r => { if (r && r.ok && (this.st.pending || []).length <= 1) this.closeModal(); }); break;
       case 'rearm': this.cmd(d.node != null ? { cmd: 'rearm', node: +d.node } : { cmd: 'rearm', army: sel.id }); break;
       case 'enroll': {
@@ -1418,24 +1415,6 @@ export class UI {
       <div class="gt"><b>${tr.label}</b> : ${esc(tr.desc)}</div></div></div>`;
   }
 
-  tacHtml(a, inBattle) {
-    const F = this.rules.formations, P = this.rules.plans;
-    const fm = a.fm || 'ligne', pl = a.pl || 'frontal';
-    const hasInf = a.regs.some(r => unitCls(this.rules, r[1]) === 'inf');
-    const rx = a.rx !== false;
-    return `<div class="section-t">Tactique</div>
-      ${hasInf ? `<div class="row"><span class="lab">Formation</span><span class="seg wrap">${Object.entries(F).map(([k, f]) =>
-        `<button data-act="formation" data-army="${a.id}" data-v="${k}" class="${fm === k ? 'on' : ''}" title="${esc(f.desc)}">${f.label}</button>`).join('')}</span></div>
-      <div class="tac-desc">${esc(F[fm].desc)}</div>
-      <div class="btns"><button class="btn ${rx ? 'primary' : ''}" data-act="reflex" data-army="${a.id}" data-v="${rx ? 0 : 1}" title="Quand vous commandez vous-même, l’infanterie se forme d’elle-même en carré si la cavalerie ennemie charge.">Carré réflexe face aux charges : ${rx ? 'oui' : 'non'}</button></div>` : ''}
-      <div class="row"><span class="lab">Plan de bataille</span><span class="seg wrap">${Object.entries(P).map(([k, p]) =>
-        `<button data-act="plan" data-army="${a.id}" data-v="${k}" class="${pl === k ? 'on' : ''}" title="${esc(p.desc)}">${p.label}</button>`).join('')}</span></div>
-      <div class="tac-desc">${esc(P[pl].desc)}</div>
-      <div class="btns"><button class="btn ${a.auto ? 'primary' : ''}" data-act="plan" data-army="${a.id}" data-v="auto">${a.auto ? '✓ Le général décide' : 'Laisser le général décider'}</button></div>
-      <div class="muted small">${a.auto ? 'Le général choisit formation et plan selon les armes de l’ennemi, et s’adapte à chaque phase : canonnade, fusillade, charge.' : 'Vos ordres tactiques sont appliqués tels quels.'}
-      ${inBattle ? ' Changer de formation sous le feu désorganise les rangs quelques heures.' : ' Le carré brise les charges mais souffre du canon ; la ligne fusille, la colonne charge, les tirailleurs esquivent les boulets.'}</div>`;
-  }
-
   armyPanel(id) {
     const st = this.st, a = this.armyById(id);
     if (!a) return [null, ''];
@@ -1509,22 +1488,19 @@ export class UI {
           const lab = { cavalerie: 'la cavalerie', artillerie: 'l’artillerie', inf: 'l’infanterie' };
           h += `<div class="btns">${kinds.map(k => `<button class="btn" data-act="split-type" data-v="${k}">${ICON[k === 'inf' ? 'ligne' : k].replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Détacher ${lab[k]}</button>`).join('')}</div>`;
         }
-        h += this.tacHtml(a, false);
         h += `<div class="muted small" style="margin-top:6px">Glissez l’armée du doigt ou du stylet pour tracer son chemin. Par les routes, l’armée embarque d’elle-même sur les gabares quand le fleuve est plus rapide (l’artillerie y gagne beaucoup). Embuscade : hors des routes, dans un bois, une lande, un marais ou en montagne.</div>`;
       } else {
         h += `<div class="btns"><button class="btn danger" data-act="retreat">Ordonner la retraite</button>${a.bt ? `<button class="btn" data-act="selbattle" data-id="${a.bt}">Voir la bataille</button>` : ''}</div><div class="muted small">La retraite coûte des hommes, surtout face à la cavalerie.</div>`;
-        h += this.tacHtml(a, true);
       }
     } else {
       const fs = st.factions.find(x => x.code === a.o);
-      const fmL = this.rules.formations[a.fm || 'ligne'].label;
-      h += `<div class="row"><span class="chip ${fs?.st === 'guerre' ? 'war' : fs?.st === 'alliance' ? 'ally' : ''}">${STATUS[fs?.st] || ''}</span><span class="muted small">Terrain : ${terr}, en ${fmL.toLowerCase()}</span></div>
+      h += `<div class="row"><span class="chip ${fs?.st === 'guerre' ? 'war' : fs?.st === 'alliance' ? 'ally' : ''}">${STATUS[fs?.st] || ''}</span><span class="muted small">Terrain : ${terr}</span></div>
         ${this.cardsHtml(a.regs, a.o, false)}<div class="reg-list">${a.regs.map(r => this.regRow(r, a.o, false)).join('')}</div>`;
     }
     h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
     const sig = JSON.stringify([id, a.st, a.sk, a.md, a.h, a.n, Math.round(a.sup * 20), a.regs.map(r => [r[0], r[2], Math.round(r[5] / 5), r[6]]), st.me.arm, a.mz, Object.entries(a.mz?.c || {}).map(([k, v]) => st.me.res[k] >= v),
       lastNode(), st.armies.filter(b => b.o === me && Math.hypot(b.x - a.x, b.y - a.y) < 3).length, a.n != null ? st.nodes[a.n].sg : null,
-      a.fm, a.pl, a.auto, a.gen, a.boat, !!a.emb, a.fire, a.e && a.e[0], a.dp, a.wn, a.des, a.rx, a.tr, a.hold, a.qr, a.ax, a.rg,
+      a.fm, a.gen, a.boat, !!a.emb, a.fire, a.e && a.e[0], a.dp, a.wn, a.des, a.tr, a.hold, a.qr, a.ax, a.rg,
       a.cl && [a.cl[0], Math.ceil(a.cl[1])], a.dt,
       a.n != null ? [st.nodes[a.n].o, st.nodes[a.n].bar] : null]);
     return [h, sig];
@@ -1626,7 +1602,6 @@ export class UI {
     const lastSeq = this.events.length ? this.events[this.events.length - 1].seq : 0;
     this.fightMemo = { id, x: b.x, y: b.y, seq: lastSeq, mine: b.sides.flatMap(s => s.o === me ? [...(s.armies || []), ...(s.tac || []).map(t => t.id)] : []) };
     if (b.mode === 'ordres' || b.mode === 'manuel') h += `<div class="btns"><button class="btn primary" data-act="tactic" data-id="${b.id}">${b.mode === 'manuel' ? 'Commander la bataille' : 'Voir la bataille'}</button></div>`;
-    else if (mineIn.length) h += `<p class="muted small">Touchez une de vos armées pour changer sa formation ou son plan pendant le combat.</p>`;
     return [h, JSON.stringify([b.phase, b.sides.map(s => [s.men, s.lost, s.mor, (s.tac || []).map(t => [t.fm, t.pl, t.reorg])])])];
   }
 
@@ -1924,7 +1899,7 @@ export class UI {
           <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite. Les remparts ont quatre niveaux (le quatrième, les bastions à la Vauban, après la technologie du même nom, dans le chef-lieu et les places fortes) ; ils coûtent un entretien et perdent un niveau quand la place est prise de force.</li>
           <li><b>Deux siècles</b> : la grande campagne part de 1700 (ou de 1790, 1813, 1870) et s’achève fin 1899 ; le plus prestigieux l’emporte. Les provinces deviennent départements en 1790 ; technologies et unités n’apparaissent qu’à leur époque. ${this.st.tour && this.st.tour.on ? '' : 'Vitesses ×10 et ×30 (touches 5 et 6) pour les années de paix : guerres, batailles et grandes propositions remettent en pause.'}</li>
           <li><b>Tour par tour</b> : chaque tour est un mois. Pendant votre tour, vos ordres s’exécutent tout de suite : vos armées marchent sous vos yeux (dans la limite de leur marche du tour, ou jusqu’au contact de l’ennemi), les batailles et les assauts se livrent aussitôt, les achats sont payés. Touchez « Tour suivant » : les IA jouent leur tour d’un coup (une ou deux secondes), puis c’est de nouveau à vous, au 1er du mois suivant, avec le bilan du mois écoulé. Le tour des IA ne s’arrête que si vous devez choisir : une IA vous attaque (livrer la bataille ou la laisser au général), ou une décision vous attend ; votre choix fait, il reprend tout seul. Le reste (armées ennemies sur vos terres, sièges, guerres, propositions) est dans le bilan du mois.</li>
-          <li><b>Tactique</b> : chaque armée a un général (trait et grade) et suit une formation et un plan de bataille. Une bataille passe par la canonnade, la fusillade puis la charge. Le carré brise la cavalerie mais souffre du canon ; la ligne fusille mais craint les charges ; la colonne charge fort ; les tirailleurs esquivent les boulets. Laissez le général décider, ou commandez vous-même.</li>
+          <li><b>Tactique</b> : chaque armée a un général (trait et grade). Une bataille passe par la canonnade, la fusillade puis la charge. Devant une bataille, choisissez : donner des ordres, commander à la main ou laisser faire le général.</li>
           <li><b>Événements</b> : aux grandes dates (Grand Hiver, Révolution, Blocus continental, phylloxéra…) et au gré des imprévus, une fenêtre vous demande un choix ; chaque option affiche ses effets. Vos choix nourrissent l’« histoire » de votre prestige. Sans réponse avant la fin du tour suivant, l’option la plus prudente s’applique.</li>
           <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes et les manœuvres (feu de rang, ordre mixte, cuirassiers…) reçues à sa levée, affichées à côté de son nom : après une découverte, modernisez les régiments en retard dans une de vos places (bouton « Moderniser » : armes, fer pour l’artillerie, et livres pour les manœuvres ; un tiers de tour d’exercice, que l’armée perd si elle part avant). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
           <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>

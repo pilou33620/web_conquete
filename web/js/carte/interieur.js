@@ -213,7 +213,6 @@ export function majInterieur(st) {
   ouvrirInterieur({ ...o, ns, st });
   Object.assign(vue.sc, { cx, cy, z }); vue.sc.borner();
 }
-export const vueInterieur = () => vue;
 
 // ---------- la vie : tirée du plan (mêmes rues, mêmes gens), réglée par l'état de la ville
 function vivre(sc, V, e) {

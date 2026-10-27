@@ -166,11 +166,3 @@ export function texture(kind, L, pal, season) {
   }
   return cv;
 }
-
-// ombre douce (ellipse floue)
-export function softShadow() {
-  const s = 64, cv = canvas(s, s), g = cv.getContext('2d'), gr = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-  gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.75)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, s, s);
-  return cv;
-}
