@@ -119,7 +119,7 @@ export function texture(kind, L, pal, season) {
   switch (kind) {
     case 'pre': case 'prairie': case 'herbe':
       pt(n / (kind === 'herbe' ? 30 : 40), (u, v, c, d) => E(g, c < 0.5 ? sombre(s.base, 0.13) : clair(s.base, 0.14), u, v, 0.8 + d, 0.6 + d * 0.6, c * 3));
-      if (season !== 'automne') pt(n / (kind === 'herbe' ? 900 : 380), (u, v, c) => C(g, c < 0.6 ? '#f4f1e4' : season === 'printemps' && c > 0.85 ? '#b79ad0' : '#efd45a', u, v, 0.38));
+      if (season !== 'automne') pt(n / (kind === 'herbe' ? 1800 : 800), (u, v, c) => C(g, c < 0.6 ? '#f4f1e4' : season === 'printemps' && c > 0.85 ? '#b79ad0' : '#efd45a', u, v, 0.38));
       break;
     case 'labour': case 'semis':
       pt(n / 26, (u, v, c, d) => C(g, c < 0.5 ? clair(s.base, 0.12) : sombre(s.base, 0.2), u, v, 0.4 + d * 0.6));
@@ -142,7 +142,7 @@ export function texture(kind, L, pal, season) {
     case 'vigneFoule': pt(n / 1.4, (u, v, c) => { C(g, 'rgba(60,48,30,.35)', u + 0.25, v + 0.3, 0.5); C(g, season === 'automne' ? mix('#6f8a3a', '#c9a040', c) : c < 0.5 ? '#4f7d33' : '#5d8f3c', u, v, 0.45); }); break;
     case 'friche': case 'jachere': pt(n / 40, (u, v, c, d) => E(g, c < 0.5 ? clair(s.base, 0.15) : sombre(s.base, 0.18), u, v, 0.9 + d, 0.6, c * 3)); break;
     case 'lande':
-      pt(n / 10, (u, v, c, d) => C(g, c < 0.4 ? '#8f6a92' : c < 0.6 ? '#c9b648' : c < 0.8 ? '#6f7d48' : sombre(s.base, 0.2), u, v, 0.5 + d * 0.7));
+      pt(n / 20, (u, v, c, d) => C(g, c < 0.2 ? '#8f6a92' : c < 0.3 ? '#c9b648' : c < 0.7 ? '#6f7d48' : sombre(s.base, 0.2), u, v, 0.5 + d * 0.7));
       break;
     case 'marais':
       pt(n / 160, (u, v, c, d) => E(g, 'rgba(74,120,150,.55)', u, v, 2 + d * 3, 1.2 + d * 1.5, c * 3), 6);

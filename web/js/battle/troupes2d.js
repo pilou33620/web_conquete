@@ -136,7 +136,7 @@ export function disposition(u, per = 1, fs = 1) {
     } else {
       // en batterie : la pièce au front, ses servants (écouvillon et refouloir, pointeur, pourvoyeurs), l'avant-train
       // et ses chevaux derrière ; sur un rempart, ni avant-train ni chevaux
-      const mur = !!u.rempart, sp = w / p, x0 = mur ? 4 * k : 17 * k;
+      const mur = !!u.rempart, sp = w / p, k = S * fs * 0.7, x0 = mur ? 4 * k : 17 * k;  // (servants et avant-train serrés sur la pièce)
       for (let i = 0; i < p; i++) {
         const oy = (i - (p - 1) / 2) * sp;
         H(R.PIECE, x0, oy, { i });
@@ -193,7 +193,7 @@ export function disposition(u, per = 1, fs = 1) {
       let ranks, files;
       if (col) { files = clamp(Math.round(w / ep), 2, n); ranks = Math.ceil(n / files); }
       else { ranks = Math.min(n, u.rangs || (n >= 36 ? 3 : 2)); files = Math.ceil(n / ranks); }
-      const dy = w / files, dv = col ? clamp(d / ranks, 5 * k, 9 * k) : Math.min(5 * k, d / ranks), front = (ranks - 1) / 2 * dv;
+      const dy = col ? w / files : Math.min(w / files, 3.2 * k), dv = col ? clamp(d / ranks, 5 * k, 9 * k) : 5 * k, front = (ranks - 1) / 2 * dv;
       for (let j = 0; j < n; j++) {
         const f = (j / ranks) | 0, r = j % ranks, centre = Math.abs(f + 0.5 - files / 2) < files * 0.1;
         H((pike && centre) || (mil && rnd() < 0.25) ? R.PIQUE : R.H, front - r * dv + (mil ? rnd() * 1.4 * k : 0), (f - (files - 1) / 2) * dy, { rang: r, v: hab() });
@@ -468,7 +468,7 @@ function peindre(g, L, role, v, p) {
 // ------------------------------------------------------------------ le calque des troupes
 // tailles des sprites : paliers de 15 % en pixels par unité ; caps : 64 sens, chaque sprite est peint déjà tourné (il
 // est posé sans rotation ni, pour les petites figures, mise à l'échelle : c'est le plus rapide à poser)
-const NIV0 = 12, PAS = Math.log(1.15), NA = 64;
+const GROS = 4, NIV0 = 12, PAS = Math.log(1.15), NA = 64;
 const O = { x: 0, y: 0, a: 0, code: 0 };
 const VOISINS = [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [-1, 1], [1, -1], [1, 1], [0, -2], [0, 2]];  // (pose de la figure en cours : réutilisée, pas d'objet par figure)
 
@@ -510,15 +510,16 @@ export class Troupes2D {
     const dt = t - e.stT;
     e.spread = u.state === 'deroute' ? clamp(dt / 4, 0, 1) : u.state === 'ralliement' && e.prevSt === 'deroute' ? clamp(1 - dt / 4, 0, 1) : 0;
     e.seen = this.frame;
-    u._figScale = e.fs;   // (effets.js : poussière et fumée à l'échelle de ses figures)
+    u._figScale = Math.min(e.fs, 2);   // (effets.js : poussière et fumée à l'échelle de ses figures)
     return e;
   }
   // budget : hommes par figure pour tous les régiments de la bataille
   budget(list) {
     let men = 0;
     for (const u of list) men += Math.min(u.men || 0, capOf(u));
-    this.per = hommesParFigure(men, this.q.troupes ?? 10000);
-    this.fs = clamp(Math.sqrt(this.per), 1, 1.4);
+    // figures GROS fois plus grandes (lisibles au cadrage d'ouverture), une figure pour au moins GROS × 1,25 hommes
+    this.per = Math.max(hommesParFigure(men, this.q.troupes ?? 10000), GROS * 1.25);
+    this.fs = clamp(Math.sqrt(this.per / (GROS * 1.25)), 1, 1.4) * GROS;
   }
   // figures du régiment à l'instant t, dans le monde : [{x, y, a, role, rang}] (tests, kill, muzzles)
   figures(u, t = this.t) {
@@ -701,7 +702,7 @@ export class Troupes2D {
       if (O.x < X0 || O.x > X1 || O.y < Y0 || O.y > Y1) continue;
       const K = A * S * e.fs;
       ctx.globalAlpha = u._fade ?? 1;
-      ctx.setTransform(K, 0, 0, K, A * O.x + ex, A * O.y + ey);
+      ctx.setTransform(K * 1.2, 0, 0, K * 1.2, A * O.x + ex, A * O.y + ey);
       drapeau(ctx, this.L[look], 0, 0, time, f.r * 9, f.role !== R.DRAPEAU);
     }
     ctx.globalAlpha = 1;
