@@ -1194,3 +1194,20 @@ arrivent à la ville et non dans ses faubourgs (la carte du jeu change : les dis
     bastionnée a des rues de l'autre côté de la Dordogne ;
   - les villages au bord de l'eau gardent leur nœud (Saint-Pierre-d'Eyraud à 2,6 km de la Dordogne, Barbaste à 4,2 km de
     la Baïse) ; les villes loin de l'eau aussi (Morcenx à 3,7 km de sa localité).
+
+## Retour aux villes d'avant (décision du joueur)
+
+Après comparaison (captures A et B), le joueur garde les villes de `ccdf31e` et les figures de la maquette :
+- **Plans** : villes.js, plan_ville.py et terrain_ville.py reviennent au générateur de `ccdf31e` (identiques, banc
+  test_plan_ville) ; plus de `site`, de cœur, de clos ni de `formeMur` : la ville est dessinée à son nœud, au bord de
+  l'eau en géographie 2, sous le mur rond de la carte (à Libourne et Agen, ce mur passe sur la rivière ; pas de quai à sec).
+- **Figures** : U = 0,0045 km par unité, fixe ; Z = { PLAN 18, VIE 110, MAX 450 } (au-delà de 450 px/km, les figures de la
+  maquette seraient démesurées) ; l'intérieur à l'échelle de la maquette, zMax 4,5 ; trains et oiseaux d'avant.
+- **Gardé** : la peinture enregistrée et rejouée par un worker (intérieur, plans de la carte), les ponts datés, le trafic
+  des routes (une voiture ou un cavalier tous les 110 px environ à z 450 près de Bordeaux), la géographie 2, la crue v5.
+- **Batailles** : cartes de version 8 = plan de la version 4 (la 7 figée : plan_ville_v7, terrain_ville_v7) ; decor2d.js
+  revient aussi, une bataille de version 5 à 7 rechargée a donc ses rues et maisons dessinées à l'ancienne échelle. La vue
+  s'ouvre à mi-distance (vue.js, miZ : 2,5 px/m, au moins 250 m dans la plus petite dimension de l'écran) et la caméra
+  qui suit l'action y reste ; la vue d'ensemble en dézoomant.
+- **Mesure** (h3.cjs, médiane par image) : z 110 Bordeaux 2,7 → 5,4 ms, champ 2,8 → 5,3 à 6,0 ms (les figures de la
+  maquette se dessinent toutes) ; z 320 2,0 → 3,7 à 4,2 ; z 450 2,4 à 3,1 → 3,6 ; ailleurs à 0,5 ms près.

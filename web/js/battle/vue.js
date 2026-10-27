@@ -334,6 +334,9 @@ export class BattleView {
   // zoom qui montre tout le champ
   fitZ() { return Math.min(this.vw / (this.W || 3000), this.vh / (this.H || 2000)) * 0.95; }
   minZ() { return this.fitZ() * 0.7; }
+  // mi-distance (la première maquette, maquette-2d.html : les soldats en rangs, les drapeaux, la fumée) : 2,5 px par mètre,
+  // un peu moins sur un petit écran (au moins 250 m dans sa plus petite dimension) ; l'ouverture et la caméra qui suit l'action
+  miZ() { return clamp(Math.min(2.5, Math.min(this.vw, this.vh) / 250), this.fitZ(), this.maxZ()); }
   maxZ() { return this.q.maxZ; }
   // terrain → écran ([sx, sy, 1]) et écran → terrain
   toScreen = (x, y) => camera.toScreen(this.cam, this, x, y);
@@ -380,8 +383,8 @@ export class BattleView {
     const tx = foe.length ? foe.reduce((a, u) => a + u.x, 0) / foe.length : this.W / 2;
     const ty = foe.length ? foe.reduce((a, u) => a + u.y, 0) / foe.length : this.H / 2;
     const d = Math.hypot(tx - cx, ty - cy) || 1, fx = (tx - cx) / d, fy = (ty - cy) / d;
-    // assez près pour distinguer les régiments, toutes ses troupes dans le cadre
-    const zz = clamp(Math.min(this.vw / (x1 - x0 + 400), this.vh / (y1 - y0 + 400)), this.fitZ(), 2);
+    // à mi-distance, le centre de ses troupes (la vue d'ensemble en dézoomant)
+    const zz = this.miZ();
     const ahead = Math.min(d * 0.25, Math.min(this.vw, this.vh) / zz * 0.2);
     this.moveCam(cx + fx * ahead, cy + fy * ahead, zz, dur);
   }

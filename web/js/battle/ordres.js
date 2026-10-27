@@ -234,8 +234,7 @@ export class Ordres {
     if (!this.camAuto) return;
     const h = this.hot();
     if (!h) return;
-    const z = clamp(Math.min(v.vw, v.vh) / (2 * h[2] + 500), v.fitZ() * 1.2, v.fitZ() * 3.2);
-    v.moveCam(h[0], h[1], z, 2200);
+    v.moveCam(h[0], h[1], v.miZ(), 2200);   // (à mi-distance, comme l'ouverture)
   }
   // pendant les ordres : les flèches de la manœuvre, au sol (lissées), pointe à l'arrivée
   drawGround(ctx, time) {
