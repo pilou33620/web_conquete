@@ -959,22 +959,23 @@ export class UI {
       case 'map-style': {   // style de la carte (enregistré sur cet appareil)
         this.map.setStyle(d.v);
         this.toast(this.map.style === 'epoque' ? 'Carte d’époque : Cassini, puis état-major.' : 'Carte à la manière d’Ultimate General.');
-        this.modalSig = ''; this.renderModal(true);
+        this.modalSig = ''; this.renderModal(true); this.startOn() && this.renderStart();
         break;
       }
       case 'anim': {
         this.map.ambient.setOn(!this.map.ambient.on);
         this.toast(this.map.ambient.on ? 'Animations de la carte activées.' : 'Animations de la carte coupées.');
-        this.modalSig = ''; this.renderModal(true);
+        this.modalSig = ''; this.renderModal(true); this.startOn() && this.renderStart();
         break;
       }
       case 'bt-qualite': {   // qualité graphique des batailles (enregistrée sur cet appareil)
         if (!QUALITE_LABEL[d.v]) break;
         setQualite(d.v);
         this.toast(`Qualité graphique des batailles : ${QUALITE_LABEL[d.v].toLowerCase()}.`);
-        this.modalSig = ''; this.renderModal(true);
+        this.modalSig = ''; this.renderModal(true); this.startOn() && this.renderStart();
         break;
       }
+      case 'mainmenu': this.closeModal(); this.onNewGame && this.onNewGame(); break;   // (la partie reste en cours : « Reprendre » depuis le menu)
       case 'newgame': if (confirm('Abandonner la partie en cours et revenir à l’écran de départ ?')) this.onNewGame && this.onNewGame(); break;
       case 'selnode-modal': this.closeModal(); this.select({ kind: 'node', id: +d.node }); this.action('center', {}); break;
       // écran de départ
@@ -1893,6 +1894,7 @@ export class UI {
       <dl class="kv" style="margin-top:8px"><dt>Gloire accumulée (bilans du 1er janvier)</dt><dd>${fmt(me.glory || 0)}</dd></dl>
       <p class="muted small" style="margin:8px 0 2px">Rayonnement du moment :</p><dl class="kv">${parts}</dl>`;
     const html = `<h2 class="m-title" id="m-title">Partie</h2><p class="m-sub">${f.name}, ${this.st.date}${this.st.era ? ` — ${esc(this.st.era.name)}` : ''}. Victoires ${me.stats.won}, défaites ${me.stats.lost}, places prises ${me.stats.captured}.</p>
+      <div class="btns"><button class="btn" data-act="mainmenu">← Menu principal</button></div>
       ${prest}
       <div class="two"><div>
         <h3 class="section-t" style="border:0;padding:0">Sauvegarder</h3>
@@ -1901,14 +1903,7 @@ export class UI {
         <h3 class="section-t">Charger</h3><div class="saves">${saves || '<p class="muted">Aucune sauvegarde.</p>'}</div>
         <h3 class="section-t">Recommencer</h3><div class="btns"><button class="btn danger" data-act="newgame">Nouvelle partie</button></div>
         ${this.turnSettings()}
-        <h3 class="section-t">Affichage</h3><div class="btns"><button class="btn" data-act="anim">${this.map.ambient.on ? 'Couper les animations de la carte' : 'Animer la carte'}</button></div>
-        <p class="muted small" style="margin:4px 0 0">Moulins, fumées, oiseaux, bateaux, charrettes et troupeaux.</p>
-        <p class="small" style="margin:10px 0 4px">Style de la carte :</p><div class="seg wrap" role="group" aria-label="Style de la carte">${[['ugar', 'Ultimate General'], ['epoque', 'Carte d’époque']].map(([k, l]) =>
-          `<button class="${k === this.map.style ? 'on' : ''}" data-act="map-style" data-v="${k}" aria-pressed="${k === this.map.style}">${l}</button>`).join('')}</div>
-        <p class="muted small" style="margin:4px 0 0">${this.map.style === 'epoque' ? 'Papier, hachures et encre : la carte de Cassini, puis celle de l’état-major à partir de 1818.' : 'Couleurs, reliefs ombrés et plaques d’ardoise, à la manière d’Ultimate General.'}</p>
-        <p class="small" style="margin:10px 0 4px">Qualité graphique des batailles :</p><div class="seg wrap" role="group" aria-label="Qualité graphique des batailles">${QUALITES.map(k =>
-          `<button class="${k === qualite().q ? 'on' : ''}" data-act="bt-qualite" data-v="${k}" aria-pressed="${k === qualite().q}" title="${QUALITE_AIDE[k]}">${QUALITE_LABEL[k]}</button>`).join('')}</div>
-        <p class="muted small" style="margin:4px 0 0">${qualite().auto ? 'Choisie d’après cet appareil ; elle baisse d’elle-même si la bataille saccade.' : QUALITE_AIDE[qualite().q]}</p>
+        ${this.reglagesHtml()}
         <h3 class="section-t">Batailles</h3><div class="seg wrap">${[['demander', 'Toujours demander'], ['auto_petites', 'Escarmouches automatiques'], ['auto', 'Toujours automatiques']].map(([k, l]) =>
           `<button class="${(this.st.settings || {}).battles === k ? 'on' : ''}" data-act="tac-set" data-v="${k}">${l}</button>`).join('')}</div>
         <p class="muted small" style="margin:4px 0 0">Donner ses ordres et regarder ses officiers livrer la bataille, ou laisser le général la résoudre.</p>
@@ -1962,6 +1957,18 @@ export class UI {
       <div class="net-urls">${net.urls.map(u => `<code>${esc(u)}</code>`).join('')}</div>`;
   }
 
+  // réglages de cet appareil (animations, style de la carte, qualité des batailles) : menu de la partie et écran de départ
+  reglagesHtml() {
+    return `<h3 class="section-t">Affichage</h3><div class="btns"><button class="btn" data-act="anim">${this.map.ambient.on ? 'Couper les animations de la carte' : 'Animer la carte'}</button></div>
+        <p class="muted small" style="margin:4px 0 0">Moulins, fumées, oiseaux, bateaux, charrettes et troupeaux.</p>
+        <p class="small" style="margin:10px 0 4px">Style de la carte :</p><div class="seg wrap" role="group" aria-label="Style de la carte">${[['ugar', 'Ultimate General'], ['epoque', 'Carte d’époque']].map(([k, l]) =>
+          `<button class="${k === this.map.style ? 'on' : ''}" data-act="map-style" data-v="${k}" aria-pressed="${k === this.map.style}">${l}</button>`).join('')}</div>
+        <p class="muted small" style="margin:4px 0 0">${this.map.style === 'epoque' ? 'Papier, hachures et encre : la carte de Cassini, puis celle de l’état-major à partir de 1818.' : 'Couleurs, reliefs ombrés et plaques d’ardoise, à la manière d’Ultimate General.'}</p>
+        <p class="small" style="margin:10px 0 4px">Qualité graphique des batailles :</p><div class="seg wrap" role="group" aria-label="Qualité graphique des batailles">${QUALITES.map(k =>
+          `<button class="${k === qualite().q ? 'on' : ''}" data-act="bt-qualite" data-v="${k}" aria-pressed="${k === qualite().q}" title="${QUALITE_AIDE[k]}">${QUALITE_LABEL[k]}</button>`).join('')}</div>
+        <p class="muted small" style="margin:4px 0 0">${qualite().auto ? 'Choisie d’après cet appareil ; elle baisse d’elle-même si la bataille saccade.' : QUALITE_AIDE[qualite().q]}</p>`;
+  }
+
   endModal() {
     const o = this.st.over;
     const win = o.result === 'victoire';
@@ -1978,6 +1985,7 @@ export class UI {
     this.$('start').hidden = false;
     this.renderStart();
   }
+  startOn() { return !this.$('start').hidden; }
   hideStart() { this.$('start').hidden = true; this.map.highlightDept = null; this.map.selection = null; }
 
   pickDept(code) {
@@ -1994,8 +2002,9 @@ export class UI {
   // au lieu de remonter en haut, tant qu'on reste dans le même onglet (Campagne ou Bataille)
   renderStart() {
     const root = this.$('start'), sel = '.start-side, .scroll', same = this.startDrawn === this.startMode;
-    const keep = same ? [...root.querySelectorAll(sel)].map(e => e.scrollTop) : [];
+    const keep = same ? [...root.querySelectorAll(sel)].map(e => e.scrollTop) : [], ouvert = root.querySelector('details.start-reglages')?.open;
     this.drawStart();
+    if (ouvert) root.querySelector('details.start-reglages').open = true;   // (un réglage touché ne replie pas le bloc)
     this.startDrawn = this.startMode;
     root.querySelectorAll(sel).forEach((e, i) => { if (keep[i]) e.scrollTop = keep[i]; });
   }
@@ -2024,6 +2033,7 @@ export class UI {
         <button class="btn primary" data-act="start-game" ${this.startDept ? '' : 'disabled'}>${this.startDept ? `Commencer avec ${esc(sc.names[this.startDept] || this.rules.factions[this.startDept].name)} en ${sc.year}` : (sc.word === 'province' ? 'Choisissez une province' : 'Choisissez un département')}</button>
         ${saves ? `<div class="section-t">Parties sauvegardées${info.saves.length > 5 ? ` <span class="muted small">(${info.saves.length})</span>` : ''}</div><div class="saves scroll">${saves}</div>` : ''}
         ${info.net && info.net.lan && info.net.urls.length ? `<div class="section-t">Sur le réseau local</div>${this.netHtml(info.net)}` : ''}
+        <details class="start-reglages"><summary class="section-t">Réglages</summary>${this.reglagesHtml()}</details>
         ${this.versionHtml(info.update)}
         <div class="ver-line">Rivières et position des villes : © les contributeurs d’OpenStreetMap (ODbL), via Overture Maps</div>
       </div></div>`;
@@ -2134,6 +2144,7 @@ export class UI {
       <div class="row"><span class="lab">Difficulté</span><span class="seg">${diffs}</span></div>
       <div class="start-actions">
         <button class="btn primary" data-act="sk-start" ${ready ? '' : 'disabled'}>${!sk.me ? 'Choisissez votre camp' : !n ? 'Choisissez vos régiments' : 'Livrer bataille'}</button>
+        <details class="start-reglages"><summary class="section-t">Réglages</summary>${this.reglagesHtml()}</details>
         ${this.versionHtml(info.update)}
         <div class="ver-line">Rivières et position des villes : © les contributeurs d’OpenStreetMap (ODbL), via Overture Maps</div>
       </div></div>`;

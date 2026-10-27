@@ -32,6 +32,7 @@ export class BattleUI {
         <div class="bt-gauge" title="Rapport de forces (hommes valides)"><div class="bt-g-l"></div><div class="bt-g-bar"><i class="a"></i><i class="b"></i></div><div class="bt-g-r"></div></div>
         <div class="bt-clock" title="Année et heure de la bataille"></div>
         <div class="bt-acts">
+          <button class="bt-btn bt-menu" data-a="menu" hidden title="Quitter la bataille et revenir au menu principal" aria-label="Revenir au menu principal">Menu</button>
           <button class="bt-ib" data-a="journal" aria-label="Journal de la bataille" title="Journal">${I.journal}</button>
         </div>
       </header>
@@ -71,6 +72,7 @@ export class BattleUI {
     const side = st.sides || [], me = v.me, foe = 1 - me;
     const title = st.title || v.map?.title || (v.map?.place ? `Assaut de ${v.map.place.name}` : 'Bataille');
     this.$('.bt-name').textContent = title;
+    this.$('.bt-menu').hidden = !st.skirmish;
     const wx = st.weather || v.map?.weather || 'soleil', season = normSeason(st.season || v.map?.season);
     const left = st.dusk != null && st.clock != null ? st.dusk - st.clock : null;
     const dusk = left != null && left < 5400 && left > 0 ? ` · <span class="bt-dusk">nuit dans ${Math.max(1, Math.round(left / 60))} min</span>` : '';
@@ -219,6 +221,7 @@ export class BattleUI {
         try { localStorage.setItem('conquete.bataille.valeurs', this.showVals ? '1' : '0'); } catch (e) { /* tant pis */ }
         this.renderPanel(true); break;
       case 'journal': this.journal(); break;
+      case 'menu': if (confirm('Quitter la bataille et revenir au menu principal ?')) { this.closeModal(); v.onExit && v.onExit(null); } break;
       case 'qualite': setQualite(b.dataset.q); this.journal(); break;
       case 'feedtog': this.setFeed(this.feedOff); break;
       case 'close': this.closeModal(); break;
