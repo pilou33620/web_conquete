@@ -33,7 +33,7 @@ function etapes(ui) {
     ] : [
       { at: '#tb-speed', txt: 'Temps réel : la pause et les vitesses sont ici (espace, touches 1 à 6).' },
     ]),
-    { txt: 'Les batailles : « Donner mes ordres » pour choisir votre plan, vos ruses et l’heure, puis regarder vos officiers la livrer ; ou laissez-la à votre général. Bonne campagne !' },
+    { txt: 'Les batailles : « Donner mes ordres » pour choisir votre plan, vos ruses et l’heure, puis regarder vos officiers la livrer ; « Commander la bataille » pour la mener vous-même (des bulles vous guideront sur le terrain) ; ou laissez-la à votre général. Bonne campagne !' },
   ];
 }
 

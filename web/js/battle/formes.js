@@ -37,6 +37,15 @@ export const TYPE_LABEL = {
   general: 'État-major', chariot: 'Chariot de munitions',
 };
 export const FORM_LABEL = { ligne: 'Ligne', colonne: 'Colonne', carre: 'Carré', tirailleurs: 'Tirailleurs', batterie: 'En batterie', attelee: 'Attelée', maisons: 'Dans les maisons' };
+export const FORM_HELP = {
+  ligne: 'Tout le front tire ; fragile face aux charges.',
+  colonne: 'Marche vite et charge ; offre une belle cible au canon.',
+  carre: 'Brise les charges de cavalerie ; le canon y fait des ravages.',
+  tirailleurs: 'Dispersés : esquivent les boulets, feu plus faible.',
+  batterie: 'Pièces dételées, prêtes à tirer.',
+  attelee: 'Pièces attelées : se déplacent, ne tirent pas.',
+};
+export const FORMS = { inf: ['ligne', 'colonne', 'carre', 'tirailleurs'], cavalerie: ['ligne', 'colonne'], artillerie: ['batterie', 'attelee'], general: [], chariot: [] };
 export const STATE_LABEL = {
   repos: 'En position', marche: 'En marche', feu: 'Fait feu', recharge: 'Recharge', charge: 'Charge !', melee: 'Corps à corps',
   deroute: 'En déroute', ralliement: 'Se rallie', hors: 'Hors de combat', formation: 'Change de formation',

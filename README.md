@@ -91,7 +91,7 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
    reprend d'elle-même au tour suivant ; la bulle de l'ordre annonce l'arrivée). Une bataille contre une armée se
    livre sur-le-champ ; achats, constructions et recherches sont payés tout de suite.
    **Devant une ville qui n'est pas à vous** (sa destination, ou une ville sur sa route), l'armée s'arrête et une
-   fenêtre vous demande quoi faire, quel que soit le réglage des batailles : **donner vos ordres** ou la
+   fenêtre vous demande quoi faire, quel que soit le réglage des batailles : **donner vos ordres**, **commander la bataille** ou la
    **résolution automatique** (l'assaut tout de suite, même contre des remparts : vos canons y ouvrent des brèches),
    **rallier** (ville neutre, armée au moins trois fois plus forte que sa défense), **négocier** le ralliement,
    **assiéger** (place à remparts : l'assaut part de lui-même à la brèche, pendant le tour des IA), **bloquer et
@@ -433,13 +433,13 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
 - Bouton « Détacher la cavalerie / l'artillerie / l'infanterie » : une arme entière forme sa propre armée,
   par exemple pour envoyer la cavalerie en reconnaissance ou déborder par un autre chemin.
 
-### Batailles sur ordres
+### Batailles sur ordres ou commandées
 - Quand une bataille concerne vos armées ou vos places (assauts compris), la campagne s'arrête et une fenêtre propose
-  **« Donner mes ordres »** ou **« Résolution automatique »** (réglage dans le menu ☰ : toujours demander,
-  escarmouches automatiques, toujours automatiques). Les batailles entre IA se résolvent toujours seules. La fenêtre
+  **« Donner mes ordres »**, **« Commander la bataille »** ou **« Résolution automatique »** (réglage dans le menu ☰ :
+  toujours demander, escarmouches automatiques, toujours automatiques). Les batailles entre IA se résolvent toujours seules. La fenêtre
   montre aussi un **petit plan de la position** (`web/js/plan.js`) : la vraie carte de la bataille, tournée pour que vos
   troupes soient en bas, vos régiments, et l'ennemi tel que vos éclaireurs le voient (sinon sa zone, hachurée).
-  (Il n'y a plus de commandement régiment par régiment : on donne ses ordres, puis on regarde.)
+  Une partie enregistrée en pleine bataille la reprend dans son mode (sur ordres ou à la main).
 - **« Donner mes ordres »** (`game/tactics/orders.py`, `web/js/battle/ordres.js`) : le champ de bataille s'ouvre
   **vu de dessus**, et une fenêtre propose vos ordres en quatre onglets. **Manœuvre** : l'objectif de la journée
   (battre son armée, la position clé, couper sa retraite, l'user), la manœuvre (en attaque : assaut frontal, ordre
@@ -496,7 +496,7 @@ de bataille : **bataille rangée** en rase campagne ou **place forte**, en attaq
 place, remparts intacts, reçoit 5 régiments de renfort : 2 batteries, des sapeurs, des grenadiers et de la ligne, soit
 15 régiments contre une garnison de 7 et la milice ; il faut escalader les murs). Lieu, saison et météo se
 règlent ou se tirent **au hasard** ; on peut aussi toucher une ville sur la carte. L'ennemi aligne autant de régiments,
-tirés au sort. La bataille se livre **sur ordres**, comme en campagne, puis « Retour au menu ». Elle n'est pas enregistrée et
+tirés au sort. Un choix « Le commandement » la fait livrer **sur ordres** ou **commander à la main**, comme en campagne, puis « Retour au menu ». Elle n'est pas enregistrée et
 ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
 
 #### Regarder la bataille
@@ -578,6 +578,30 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de suite, sans quitter la bataille. Le
   dessin est fait sur un seul canevas 2D (ni WebGL ni Three.js) : tout navigateur récent l'affiche.
 - Clavier : flèches ou ZQSD pour la vue, + et − zoom, Échap referme la fiche.
+
+#### Commander la bataille
+« Commander la bataille » vous laisse mener chaque régiment, sur le même champ de bataille vu de dessus.
+- **Le déploiement.** Vos troupes sont dans la zone dorée. Glissez un régiment pour le placer, glissez depuis le sol
+  pour fixer l'emplacement et l'orientation de la ligne, pivotez-le avec ses boutons, choisissez sa formation.
+  **« Couverts »** met en évidence bois (vert), hauteurs (or), bâti et murs (bleu). Puis **« Engager la bataille »**.
+- **Choisir.** Touchez un régiment (sur le terrain, son fanion ou sa carte en bas) ; **appui long puis glisser**
+  pour un cadre de sélection (maj + clic ou maj + glisser à la souris) ; touchez le titre d'un groupe pour toute
+  la brigade. Double appui sur une carte : la vue s'y rend.
+- **Ordonner.** Régiment choisi : **touchez le sol** pour qu'il y aille ; **glissez depuis le régiment** pour tracer
+  sa route (flèche courbe et silhouette à l'arrivée) ; **glissez depuis le sol** pour fixer le point d'arrivée et le
+  sens de la ligne ; **touchez un ennemi** pour l'attaquer (clic droit : marche ou attaque). Le panneau du régiment
+  donne sa formation, tenir, rallier, retraite, « Occuper les maisons », « Barricader », et des ordres **propres à
+  chaque arme** (`web/js/battle/doctrine.js`) : feu à volonté, en salve, « Salve + baïonnette » et « Baïonnette ! »
+  pour la ligne et les grenadiers ; harceler pour les tirailleurs ; charger, poursuivre et galop pour la cavalerie ;
+  boulet, mitraille, contre-batterie et brèche pour l'artillerie.
+- **Déroutes.** Un cercle doré marque autour de votre état-major la zone où il rallie les fuyards : il faut aller les
+  chercher.
+- **Le temps.** Temps réel avec pause sous la mini-carte : pause, ×1, ×2, ×4 (espace, 1, 2, 4 au clavier ; à ×1 une
+  seconde vaut 18 secondes de bataille).
+- **« Finir auto. »** confie la suite à vos officiers : la bataille continue en accéléré sous un bandeau « Les
+  généraux poursuivent la bataille… », **« Reprendre le commandement »** vous rend la main, bataille en pause.
+  **« Décrocher »** fait quitter le terrain à toute l'armée. Chacun avec confirmation.
+- Clavier : C charger, H tenir, F feu, R rallier, V ligne de vue, Échap désélectionner, Ctrl + A tout choisir.
 
 ### Voies ferrées et trains
 - Avec la technologie « Chemins de fer » (vers 1841), le panneau d'une ville propose les **tronçons** de voie ferrée
@@ -769,7 +793,7 @@ game/cities.py       villes : emplacements et bâtiments, politique de la ville,
 game/diplomacy.py    diplomatie et commerce
 game/battle_log.py   journal des batailles (logs/batailles.jsonl) ; outils/bilan.py en fait le bilan
 game/views.py        état envoyé au navigateur (brouillard de guerre), sauvegardes
-game/tactics/        batailles sur ordres : carte de bataille (terrain.py), unités (units.py), simulation
+game/tactics/        batailles sur ordres ou commandées : carte de bataille (terrain.py), unités (units.py), simulation
                      (battle.py), IA qui livre la bataille (ai.py), vos ordres et leurs flèches (orders.py), raccord avec la
                      campagne et plan de la position (bridge.py)
 web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/peintre.js (worker qui peint les tuiles de la carte), js/dev/banc.js (banc de la carte sur la machine du joueur : adresse terminée par #banc), js/lot.js (lot de dessins : les petites figures de la carte dessinées d'un coup), js/ambient.js (animations
@@ -785,8 +809,8 @@ web/js/battle/       vue de bataille de dessus, sur un canevas 2D (SPEC-2D.md) :
                      dispositions des rangs, tués, bouches à feu), effets.js (fumées, tirs, boulets, météo, lumière
                      de l'heure), heures.js (table des heures ; logique pure, testée), fanions.js (fanions et
                      médaillons), unites.js (figurines peintes des cartes d'unités), visibilite.js (ligne de vue ;
-                     logique pure, testée), qualite.js (qualité graphique), commandes.js (caméra au doigt et au
-                     clavier), ordres.js (fenêtre des ordres, flèches, film : étiquettes, repères, vitesses),
+                     logique pure, testée), qualite.js (qualité graphique), commandes.js (gestes au doigt, à la
+                     souris et au clavier ; à la main : choisir, déployer, ordonner), doctrine.js (ordres par arme), ordres.js (fenêtre des ordres, flèches, film : étiquettes, repères, vitesses),
                      interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils communs),
                      css/bataille.css ; dev/maquette-2d.html : la maquette de référence du rendu (page autonome)
 web/vendor/three/    Three.js r186 (licence MIT), copié tel quel pour la carte de campagne : le jeu marche hors ligne
@@ -807,11 +831,11 @@ node --test tests/*.mjs                         # l'interface seule
 
 | Fichier | Ce qu'il vérifie |
 |---|---|
-| `tests/test_bataille.py` | ordres propres à chaque arme (acceptés ou refusés), salve puis baïonnette, harcèlement, canons sans munitions, régiment anéanti, bataille jusqu'au bout et rechargement en plein combat ; « Donner mes ordres » de bout en bout (choix verrouillés, redéploiement, heure, moment décisif, récapitulatif), flèches de manœuvre, plan de la position, vitesses du film, mode Bataille sur ordres, banc de quelques jeux d'ordres ; canons camouflés dans un bois |
+| `tests/test_bataille.py` | ordres propres à chaque arme (acceptés ou refusés), salve puis baïonnette, harcèlement, canons sans munitions, régiment anéanti, bataille jusqu'au bout et rechargement en plein combat ; « Donner mes ordres » de bout en bout (choix verrouillés, redéploiement, heure, moment décisif, récapitulatif), flèches de manœuvre, plan de la position, vitesses du film, mode Bataille sur ordres ; « Commander la bataille » (déploiement, ordre de marche, vitesses, fin automatique et reprise, décrocher, sauvegarde), banc de quelques jeux d'ordres ; canons camouflés dans un bois |
 | `tests/test_campagne.py` | votre tour puis celui des IA (d'un coup, arrêts, reprise), villes neutres, temps en tours (production, recherche, échéances, actions d'armée, sièges, arrivée), retraite une fois par tour, dettes et événements, prix du marché, sauvegarde (IA comprises) |
 | `tests/test_cartes.py` | cartes de bataille : même graine, même carte ; plus de parcelles en quadrillage (moins de 30 % de bords en longues droites) ; vergers près des maisons, jamais sur le glacis ; moins d'une demi-seconde par carte |
 | `tests/test_serveur.py` | un vrai serveur HTTP sur un port libre : requêtes mal formées, fichiers hors de `web/`, ordres pendant le tour des IA, sauvegardes (dossier temporaire, les vraies ne sont pas touchées) |
-| `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, fiche du régiment (camouflage compris), fenêtre de bataille à deux choix, barre du tour, tutoriel et bulles de bataille |
+| `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, fiche du régiment (camouflage compris), ordres par arme et panneau de la bataille commandée, fenêtre de bataille à trois choix, barre du tour, tutoriel et bulles de bataille |
 | `tests/camera.test.mjs` | caméra des batailles vues de dessus : allers-retours écran ↔ terrain exacts, centre et sens des axes, point gardé sous le doigt au zoom, bornes |
 | `tests/troupes2d.test.mjs` | soldats vus de dessus : rangs de la ligne, plafond par régiment et figure pour plusieurs hommes, carré à quatre faces, colonne, tirailleurs, déroute, cavalerie, batterie, général, chariot, bouches à feu, tués dans l'emprise, tenues de l'époque, disposition stable d'une image à l'autre |
 | `tests/sol2d.test.mjs` | sol en tuiles : niveaux de zoom, mémoire bornée, repli sur une tuile plus grossière, tués et cratères peints dans les seules tuiles touchées, tuiles repeintes après une brèche, piétinement relu au bon endroit |

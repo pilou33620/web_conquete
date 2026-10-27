@@ -5,7 +5,8 @@
 // les fonctions d'affichage reçoivent un état fabriqué à la main (comme celui que renvoie le serveur) : on vérifie le
 // HTML produit. Ce qui est vérifié :
 //  - tous les modules se chargent (imports et exports cohérents) ;
-//  - la fiche du régiment inspecté pendant la bataille (interface.js) ;
+//  - la fiche du régiment inspecté pendant la bataille sur ordres (interface.js) ;
+//  - commandée à la main : les ordres proposés dépendent de l'arme (doctrine.js), dans le panneau du régiment ;
 //  - la barre du tour : « Tour suivant », tour des IA, interruption (texte échappé), bataille en attente ;
 //  - le tutoriel de la campagne (tuto.js) avance quand le joueur fait l'action demandée.
 import { test } from 'node:test';
@@ -19,6 +20,7 @@ const dom = installer();
 const JS = join(dirname(fileURLToPath(import.meta.url)), '..', 'web', 'js');
 const charger = f => import(pathToFileURL(join(JS, f)).href);
 
+const { ordresHtml, arme } = await charger('battle/doctrine.js');
 const { UI } = await charger('ui.js');
 const { BattleUI } = await charger('battle/interface.js');
 const { Tuto } = await charger('tuto.js');
@@ -30,6 +32,7 @@ const unite = (type, extra = {}) => ({
   cls: { cavalerie: 'cavalerie', artillerie: 'artillerie', general: 'general' }[type] || 'inf',
   light: type === 'legere' || type === 'chasseurs', ...extra,
 });
+const ordres = us => { const o = ordresHtml(us, { targeting: null, run: false }); return o.top + o.btns; };
 const a = (html, act) => html.includes(`data-a="${act}"`);
 
 test('tous les modules se chargent', async () => {
@@ -41,12 +44,13 @@ test('tous les modules se chargent', async () => {
 });
 
 // ------------------------------------------------------------------ panneau du régiment (bataille)
-function panneau(us, st = { phase: 'combat' }, reglages = {}) {
+function panneau(us, st = { phase: 'combat', mode: 'ordres' }, reglages = {}) {
   const ui = Object.assign(Object.create(BattleUI.prototype), reglages);
   const p = element();
   ui.$ = () => p;
   ui.el = element();
   ui.figure = () => {};
+  ui.ordres = { on: () => st.mode === 'ordres' };
   ui.inspected = us[0].id;
   ui.v = { me: 0, units: new Map(us.map(u => [u.id, u])), st, setLos() {} };
   ui.renderPanel(true);
@@ -66,6 +70,47 @@ test('fiche du régiment : canons camouflés dans un bois', () => {
   assert.ok(!panneau([unite('artillerie')]).includes('Camouflée'));
 });
 
+// ------------------------------------------------------------------ commandée à la main (« Commander la bataille »)
+test('ordres de l’infanterie de ligne et des grenadiers', () => {
+  for (const t of ['ligne', 'grenadiers']) {
+    const h = ordres([unite(t)]);
+    assert.ok(a(h, 'vcharge') && a(h, 'charge'), `${t} : salve + baïonnette et baïonnette`);
+    assert.ok(h.includes('data-m="volley"'), `${t} : feu de salve`);
+    assert.ok(!a(h, 'harass') && !a(h, 'pursue'), `${t} : ni harcèlement ni poursuite`);
+  }
+});
+
+test('ordres des tirailleurs, de la cavalerie, de l’artillerie', () => {
+  const t = ordres([unite('legere')]);
+  assert.equal(arme(unite('legere')), 'tirailleurs');
+  assert.ok(a(t, 'harass') && a(t, 'cover') && !t.includes('data-m="volley"'));
+  const c = ordres([unite('cavalerie')]);
+  assert.ok(a(c, 'charge') && c.includes('Charger !') && a(c, 'pursue') && !a(c, 'fire'));
+  const r = ordres([unite('artillerie')]);
+  assert.ok(a(r, 'shot') && r.includes('data-m="mitraille"') && a(r, 'counter') && !a(r, 'charge'));
+  assert.ok(!a(ordres([unite('ligne'), unite('cavalerie')]), 'vcharge'), 'sélection mêlée : les ordres communs');
+});
+
+function commande(us, st = { phase: 'combat' }) {
+  const ui = Object.create(BattleUI.prototype), p = element();
+  ui.$ = () => p;
+  ui.el = element();
+  ui.figure = () => {};
+  ui.ordres = { on: () => false };
+  ui.v = { me: 0, sel: new Set(us.map(u => u.id)), units: new Map(us.map(u => [u.id, u])), st, controls: { targeting: null, run: false }, mine: () => us };
+  ui.renderPanel(true);
+  return p.innerHTML;
+}
+
+test('à la main : le panneau du régiment donne ses ordres ; au déploiement, pivoter', () => {
+  const h = commande([unite('cavalerie', { name: '<b>Hussards</b>', can_occupy: 'Pas de maisons ici', can_barricade: true })]);
+  assert.ok(h.includes('Charger !') && a(h, 'retreat') && a(h, 'los') && a(h, 'abri'));
+  assert.ok(!h.includes('<b>Hussards</b>'), 'nom échappé');
+  const d = commande([unite('ligne')], { phase: 'deploiement' });
+  assert.ok(d.includes('Pivoter') && a(d, 'form') && !a(d, 'vcharge'));
+  assert.ok(commande([unite('ligne')], { phase: 'combat', accel: true }).includes('Reprendre le commandement'), 'en accéléré : les officiers');
+});
+
 // valeurs chiffrées (valeurs.js, game/tactics/stats.py), à la manière d'Empire: Total War
 const { valeursTable } = await charger('valeurs.js');
 const VLIGNE = { mel: [32, 8, 0], chg: [15, 0, 0], pre: [32, 8, 0], rec: [68, -8, 0], por: [120, 230, null], mun: 60, vit: [1.2, 0, 0], dis: [40, 0, 0], car: [60, -12, 0] };
@@ -73,10 +118,10 @@ const VLIGNE = { mel: [32, 8, 0], chg: [15, 0, 0], pre: [32, 8, 0], rec: [68, -8
 test('panneau : valeurs du régiment, repliées par défaut', () => {
   const ferme = panneau([unite('ligne', { stats: VLIGNE })]);
   assert.ok(a(ferme, 'valeurs') && ferme.includes('>Valeurs</button>') && !ferme.includes('Mêlée'), 'le bouton seulement');
-  const h = panneau([unite('ligne', { stats: VLIGNE })], { phase: 'combat' }, { showVals: true });
+  const h = panneau([unite('ligne', { stats: VLIGNE })], { phase: 'combat', mode: 'ordres' }, { showVals: true });
   for (const x of ['Mêlée', '40', '+8', '60 s', '−8', '1,2', 'Discipline', '120 / 230 m', 'aria-expanded="true"']) assert.ok(h.includes(x), x);
   assert.ok(!h.includes('mitr.'), 'pas de mitraille pour un fusil');
-  assert.ok(!panneau([unite('ligne')], { phase: 'combat' }, { showVals: true }).includes('class="vl"'), 'sans valeurs (ennemi, ancien serveur) : rien');
+  assert.ok(!panneau([unite('ligne')], { phase: 'combat', mode: 'ordres' }, { showVals: true }).includes('class="vl"'), 'sans valeurs (ennemi, ancien serveur) : rien');
 });
 
 test('tableau des valeurs (campagne) : « — » quand l’arme n’a pas la valeur, noms échappés', () => {
@@ -162,14 +207,24 @@ test('barre du tour : bloquée tant qu’une armée attend votre choix devant un
   assert.ok(h.includes('disabled'));
 });
 
+test('fenêtre de bataille : trois choix (ordres, à la main, automatique)', () => {
+  const ui = Object.create(UI.prototype);
+  ui.md = { nodes: [] };
+  ui.api = { post: () => new Promise(() => {}) };
+  ui.plans = { b1: { err: 'x' } };
+  ui.st = { names: {}, battles: [{ id: 'b1', mode: 'attente', node: null, terrain: 'Plaine', sides: [{ o: '33', men: 1 }, { o: '24', men: 1 }] }] };
+  const [h] = ui.battleModal();
+  for (const v of ['ordres', 'manuel', 'auto']) assert.ok(h.includes(`data-act="tac-choose" data-id="b1" data-v="${v}"`), v);
+});
+
 test('fenêtre d’arrivée devant une ville : les choix permis, les autres grisés avec leur raison', () => {
   const ui = Object.create(UI.prototype);
   ui.md = { nodes: [{ id: 0, name: '<Mérignac>' }] };
-  ui.st = { armies: [{ id: 'a1', name: '1re Armée', ask: { n: 0, c: { ordres: '', auto: '', rallier: 'Armée trop faible <b>', attendre: '' } } }] };
+  ui.st = { armies: [{ id: 'a1', name: '1re Armée', ask: { n: 0, c: { ordres: '', manuel: '', auto: '', rallier: 'Armée trop faible <b>', attendre: '' } } }] };
   const [h] = ui.arriveeModal();
   assert.ok(h.includes('Devant &lt;Mérignac&gt;'), 'nom échappé');
-  for (const v of ['ordres', 'auto', 'rallier', 'attendre']) assert.ok(h.includes(`data-act="arrive" data-id="a1" data-v="${v}"`), v);
-  assert.ok(h.includes('Donner mes ordres') && h.includes('Résolution automatique') && !h.includes('Commander'));
+  for (const v of ['ordres', 'manuel', 'auto', 'rallier', 'attendre']) assert.ok(h.includes(`data-act="arrive" data-id="a1" data-v="${v}"`), v);
+  assert.ok(h.includes('Donner mes ordres') && h.includes('Commander la bataille') && h.includes('Résolution automatique'));
   assert.ok(/data-v="rallier" disabled/.test(h) && h.includes('Armée trop faible &lt;b&gt;'), 'rallier grisé, avec sa raison (échappée)');
   assert.ok(!h.includes('data-v="assieger"'), 'un choix absent n’est pas proposé');
 });
@@ -254,7 +309,7 @@ test('voie ferrée : la section du panneau de la ville (SPEC-TECH.md, phase 2a)'
 
 test('valeurs : la portée de justesse (demi-justesse D50 de l’arme), dans la fiche et dans le tableau', () => {
   const s = { ...VLIGNE, jus: 180 };
-  const h = panneau([unite('ligne', { stats: s })], { phase: 'combat' }, { showVals: true });
+  const h = panneau([unite('ligne', { stats: s })], { phase: 'combat', mode: 'ordres' }, { showVals: true });
   assert.ok(h.includes('Portée de justesse') && h.includes('>180 m<'), 'la ligne de la fiche');
   assert.ok(h.includes('bout portant'), 'la bulle de la Précision dit qu’elle vaut à bout portant');
   assert.ok(valeursTable([['Ligne', s]]).includes('<td>180 m</td>'), 'une colonne du tableau');

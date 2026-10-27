@@ -10,6 +10,7 @@ se vérifie en quelques secondes. Bugs déjà rattrapés, à ne pas revoir :
 - un régiment « anéanti » (moins de 8 hommes) revenait sur la carte de campagne.
 """
 import json
+import math
 import unittest
 
 from fabrique import BT, GEO, S, avancer, bataille, bataille_de_campagne, ennemi, face_a_face, kind, ordre
@@ -1173,6 +1174,82 @@ def TB_view(g, bid):
     return TB.battle_view(g, bid, 0)
 
 
+class CommanderLaBataille(unittest.TestCase):
+    """« Commander la bataille » (mode manuel) : le joueur déploie et mène lui-même chaque régiment (commandes `tac`
+    deploy, start, order, speed), « Finir automatiquement » et reprise du commandement, « Décrocher »."""
+
+    def commandee(self):
+        from game.tactics import bridge as TB
+        g, bt = bataille_de_campagne('1813', attaque=True)
+        r = TB.command(g, dict(sub='choose', bid=bt['id'], mode='manuel'))
+        self.assertTrue(r['ok'], r['msg'])
+        tb = g.tactical[bt['id']]
+        self.assertEqual(bt['mode'], 'manuel')
+        self.assertNotEqual(tb.spec.get('mode'), 'ordres')
+        self.assertNotIn('ordres', TB.battle_view(g, bt['id'], 0), 'pas de fenêtre des ordres')
+        u = next(x for x in tb.units if x.side == tb.me and x.ctrl == 'joueur' and x.cls == 'inf')
+        return TB, g, bt, tb, u
+
+    def test_deploiement_marche_et_fin_automatique(self):
+        TB, g, bt, tb, u = self.commandee()
+        z = tb.zone(tb.me)
+        cx, cy = (z[0] + z[2]) / 2, (z[1] + z[3]) / 2
+        self.assertTrue(TB.command(g, dict(sub='deploy', bid=bt['id'], units=[u.id], x=cx, y=cy, dir=0.5))['ok'])
+        self.assertLess(((u.x - cx) ** 2 + (u.y - cy) ** 2) ** 0.5, 80, 'placé à la main dans sa zone')
+        self.assertTrue(TB.command(g, dict(sub='start', bid=bt['id']))['ok'])
+        self.assertEqual(tb.phase, 'combat')
+        # ordre de marche vers son arrière (loin de l'ennemi), à la vitesse ×4
+        x0, y0 = u.x, u.y
+        tx, ty = u.x - 300 * math.cos(u.dir), u.y - 300 * math.sin(u.dir)
+        r = TB.command(g, dict(sub='order', bid=bt['id'], units=[u.id], kind='move', x=tx, y=ty))
+        self.assertTrue(r['ok'], r['msg'])
+        self.assertFalse(TB.command(g, dict(sub='speed', bid=bt['id'], v=3))['ok'], 'vitesse invalide')
+        self.assertTrue(TB.command(g, dict(sub='speed', bid=bt['id'], v=4))['ok'])
+        c0 = tb.clock
+        for _ in range(10):
+            TB.tick(g, 0.1)
+        self.assertGreater(tb.clock, c0, 'le temps tourne à sa vitesse')
+        self.assertLess((u.x - tx) ** 2 + (u.y - ty) ** 2, (x0 - tx) ** 2 + (y0 - ty) ** 2, 'le régiment marche')
+        # « Finir auto. », reprise du commandement, puis les officiers achèvent la bataille
+        self.assertTrue(TB.command(g, dict(sub='autofinish', bid=bt['id']))['ok'])
+        self.assertTrue(tb.accel and u.ctrl == 'ia')
+        self.assertFalse(TB.command(g, dict(sub='speed', bid=bt['id'], v=1))['ok'], 'pas de vitesse en accéléré')
+        self.assertTrue(TB.command(g, dict(sub='resume', bid=bt['id']))['ok'])
+        self.assertTrue(not tb.accel and tb.speed == 0 and u.ctrl == 'joueur', 'commandement rendu, en pause')
+        TB.command(g, dict(sub='autofinish', bid=bt['id']))
+        TB.resolve_now(g, tb)
+        self.assertEqual(tb.phase, 'fin')
+        self.assertNotIn(bt['id'], g.tactical)
+
+    def test_decrocher(self):
+        TB, g, bt, tb, u = self.commandee()
+        TB.command(g, dict(sub='start', bid=bt['id']))
+        self.assertTrue(TB.command(g, dict(sub='withdraw', bid=bt['id']))['ok'])
+        self.assertTrue(tb.withdrawing[tb.me])
+        self.assertTrue(TB.command(g, dict(sub='autofinish', bid=bt['id']))['ok'])
+        TB.resolve_now(g, tb)
+        self.assertEqual(tb.phase, 'fin')
+
+    def test_sauvegarde_reprend_dans_son_mode(self):
+        TB, g, bt, tb, u = self.commandee()
+        TB.command(g, dict(sub='start', bid=bt['id']))
+        d = {}
+        TB.save_into(g, d)
+        TB.load_from(g, json.loads(json.dumps(d)))
+        tb2 = g.tactical[bt['id']]
+        self.assertEqual(tb2.phase, 'combat')
+        self.assertFalse(tb2.accel, 'la bataille commandée reprend à la main, pas en accéléré')
+        self.assertEqual(tb2.by_id[u.id].ctrl, 'joueur')
+        self.assertTrue(TB.command(g, dict(sub='speed', bid=bt['id'], v=2))['ok'])
+
+    def test_mode_bataille_a_la_main(self):
+        g, bid = S.new(GEO, dict(me='33', foe='24', era='1813', units=dict(ligne=2, cavalerie=1), seed=1, mode='manuel'))
+        tb = g.tactical[bid]
+        self.assertNotEqual(tb.spec.get('mode'), 'ordres')
+        self.assertTrue(all(u.ctrl == 'joueur' for u in tb.units if u.side == tb.me))
+        self.assertNotIn('ordres', TB_view(g, bid))
+
+
 class DonnerMesOrdres(unittest.TestCase):
     """« Donner mes ordres » (game/tactics/orders.py) : le joueur choisit ses ordres, ses officiers livrent la bataille
     selon eux, sous ses yeux, et s'arrêtent au moment décisif s'il l'a demandé."""
@@ -1236,7 +1313,7 @@ class DonnerMesOrdres(unittest.TestCase):
         r = TB.command(g, dict(sub='orders', bid=bt['id'], orders=dict(man='enveloppement', ruse='feinte', art='grande')))
         kinds = {a['k'] for a in r['ordres']['arrows']}
         self.assertTrue({'main', 'fix'} <= kinds, kinds)
-        self.assertFalse(TB.command(g, dict(sub='choose', bid=bt['id'], mode='manuel'))['ok'], 'plus de bataille commandée')
+        self.assertFalse(TB.command(g, dict(sub='choose', bid=bt['id'], mode='manuel'))['ok'], 'le mode est déjà choisi')
         TB.command(g, dict(sub='orders', bid=bt['id'], orders={}, go=True))
         self.assertTrue(TB.command(g, dict(sub='replay', bid=bt['id'], k=4))['ok'])
         self.assertEqual(TB.battle_view(g, bt['id'], 0)['replay']['k'], 4)

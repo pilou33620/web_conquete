@@ -87,6 +87,7 @@ export class Bataille {
     if (gone()) return;
     this.suspendMap();
     view.ui.entering = false;
+    setTimeout(() => this.view === view && view.ui.tips(), 1800);
   }
   // retour à la campagne, avec le résultat (affiché par main.js / ui.js)
   async exit(result = null) {

@@ -64,7 +64,7 @@ export class UI {
     this.startScen = (rules.scenario_order || ['1790'])[0];
     this.startMode = 'campagne';   // écran de départ : « campagne » ou « bataille » (mode Bataille, bataille isolée)
     this.skOpts = null;            // choix du mode Bataille (serveur : game/tactics/skirmish.py, via main.js)
-    this.sk = { me: null, foe: '', era: '1790', kind: 'bataille', role: 'att', place: '', season: '', weather: '', units: {} };
+    this.sk = { mode: 'ordres', me: null, foe: '', era: '1790', kind: 'bataille', role: 'att', place: '', season: '', weather: '', units: {} };
     try { Object.assign(this.sk, JSON.parse(localStorage.getItem('conquete.bataille') || '{}')); } catch (e) { /* réglages perdus */ }
     this.overShown = false;
     try { this.trMode = localStorage.getItem('conquete.traverse') === '1'; } catch (e) { this.trMode = false; }
@@ -280,6 +280,7 @@ export class UI {
       <p class="m-sub">${esc(b.terrain)}${b.river ? ', rivière' : ''}. ${side(b.sides[0])} attaque ; ${side(b.sides[1])}.</p>
       <figure class="bt-plan"><canvas role="img" aria-label="Plan de la bataille : la position ennemie"></canvas><figcaption class="muted small">${pcap}</figcaption></figure>
       <div class="ev-choices"><button class="btn primary ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="ordres"><b>Donner mes ordres</b><small>Votre plan, vos ruses ; vos officiers la livrent sous vos yeux, vue de dessus</small></button>
+        <button class="btn ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="manuel"><b>Commander la bataille</b><small>Disposez et menez vos troupes sur le champ de bataille</small></button>
         <button class="btn ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="auto"><b>Résolution automatique</b><small>Le général décide ; la bataille se joue avec la campagne</small></button></div>
       <p class="muted small">La campagne reste en pause tant que vous n’avez pas choisi. Réglage dans le menu ☰.</p>`;
     return [html, `${b.id}|${plan ? 1 : 0}`];
@@ -292,6 +293,7 @@ export class UI {
     const name = this.md.nodes[a.ask.n]?.name || '';
     const L = {
       ordres: ['Donner mes ordres', 'L’assaut selon votre plan, livré par vos officiers sous vos yeux'],
+      manuel: ['Commander la bataille', 'L’assaut : disposez et menez vos troupes sur le champ de bataille'],
       auto: ['Résolution automatique', 'L’assaut, réglé par le général'],
       rallier: ['Rallier', 'La place se rallie sans combat'],
       negocier: ['Négocier le ralliement', 'Pourparlers avec les notables, réponse au prochain tour'],
@@ -770,7 +772,8 @@ export class UI {
       case 'close-panel': this.select(null); break;
       case 'tuto-next': this.tuto.next(); break;
       case 'tuto-skip': this.tuto.stop(); break;
-      case 'tuto-start':   // menu ☰ : tout le tutoriel de la campagne
+      case 'tuto-start':   // menu ☰ : tout le tutoriel, campagne et bulles de bataille
+        try { for (const k of ['conquete.bataille.aide', 'conquete.bataille.aide.vues']) localStorage.removeItem(k); } catch (e) { /* stockage indisponible */ }
         this.closeModal();
         this.tuto.start();
         break;
@@ -1622,7 +1625,7 @@ export class UI {
     const mineIn = b.sides.flatMap(s => s.o === me ? (s.tac || []) : []);
     const lastSeq = this.events.length ? this.events[this.events.length - 1].seq : 0;
     this.fightMemo = { id, x: b.x, y: b.y, seq: lastSeq, mine: b.sides.flatMap(s => s.o === me ? [...(s.armies || []), ...(s.tac || []).map(t => t.id)] : []) };
-    if (b.mode === 'ordres') h += `<div class="btns"><button class="btn primary" data-act="tactic" data-id="${b.id}">Voir la bataille</button></div>`;
+    if (b.mode === 'ordres' || b.mode === 'manuel') h += `<div class="btns"><button class="btn primary" data-act="tactic" data-id="${b.id}">${b.mode === 'manuel' ? 'Commander la bataille' : 'Voir la bataille'}</button></div>`;
     else if (mineIn.length) h += `<p class="muted small">Touchez une de vos armées pour changer sa formation ou son plan pendant le combat.</p>`;
     return [h, JSON.stringify([b.phase, b.sides.map(s => [s.men, s.lost, s.mor, (s.tac || []).map(t => [t.fm, t.pl, t.reorg])])])];
   }
@@ -1906,7 +1909,7 @@ export class UI {
         ${this.reglagesHtml()}
         <h3 class="section-t">Batailles</h3><div class="seg wrap">${[['demander', 'Toujours demander'], ['auto_petites', 'Escarmouches automatiques'], ['auto', 'Toujours automatiques']].map(([k, l]) =>
           `<button class="${(this.st.settings || {}).battles === k ? 'on' : ''}" data-act="tac-set" data-v="${k}">${l}</button>`).join('')}</div>
-        <p class="muted small" style="margin:4px 0 0">Donner ses ordres et regarder ses officiers livrer la bataille, ou laisser le général la résoudre.</p>
+        <p class="muted small" style="margin:4px 0 0">Donner ses ordres et regarder ses officiers livrer la bataille, la commander soi-même, ou laisser le général la résoudre.</p>
         <h3 class="section-t">Jouer depuis un autre appareil</h3>${this.netHtml(this.net)}
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Comment jouer</h3>
@@ -2138,6 +2141,7 @@ export class UI {
       <p class="muted small sk-help">${fort ? 'Au hasard parmi les places fortes, ou touchez une place sur la carte.' : 'Le combat se livre dans la campagne voisine. Touchez aussi une ville ou un village sur la carte.'}</p>
       <div class="row"><span class="lab">Saison</span>${seg('season', seasons, true)}</div>
       <div class="row"><span class="lab">Météo</span>${seg('weather', weathers, true)}</div>
+      <div class="sk-l">Le commandement</div>${seg('mode', [['ordres', 'Donner mes ordres', 'Votre plan, vos ruses ; vos officiers la livrent sous vos yeux'], ['manuel', 'Commander la bataille', 'Disposez et menez vous-même chaque régiment']])}
       <div class="sk-l">Vos régiments <span class="muted">${n} / ${o.max}</span></div>
       <div class="sk-units">${units}</div>
       <p class="muted small sk-help">${foeTxt}</p>
