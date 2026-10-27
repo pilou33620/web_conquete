@@ -40,7 +40,7 @@ def resume(V):
     enc = lambda t: t and dict(poly=[list(p) for p in t['poly']],
                                ravs=[[list(r['b1']), list(r['apex']), list(r['b2'])] for r in t['ravs']])
     return dict(modele=V['Pf']['modele'], murs=V['Pf']['murs'], R=V['Pf']['R'], routes=[r['a'] for r in V['Pf']['routes']],
-                ilots=[dict(q=[list(p) for p in b['q']], role=b.get('role'), zone=b['zone'], main=bool(b['main']), cotes=b.get('cotes'))
+                ilots=[dict(q=[list(p) for p in b['q']], role=b.get('role'), zone=b['zone'], main=bool(b['main']))
                        for b in V['ilots']],
                 rues=len(V['rues']), trace=enc(V['trace']), citadelle=enc(V['citadelle']), rect=V['rect'],
                 murLigne=V['murLigne'], rMur=V['rMur'],
@@ -107,7 +107,7 @@ class BatailleSurLePlan(unittest.TestCase):
         P = m.plan
         self.assertEqual(len(P['ilots']), len(V['ilots']))
         k = P['k']
-        tf = lambda p: (P['c'][0] + (p[0] - V['C'][0]) * k, P['c'][1] + (p[1] - V['C'][1]) * k)   # (le centre de la ville)
+        tf = lambda p: (P['c'][0] + (p[0] - PV.IC[0]) * k, P['c'][1] + (p[1] - PV.IC[1]) * k)
         # le tracé bastionné et les demi-lunes de la bataille sont ceux du plan, à l'échelle de la carte
         # (à un mètre près : l'échelle du plan envoyé au client, k, est arrondie)
         self.assertTrue(all(abs(a - round(b)) <= 1 for p, q in zip(m.bastions, map(tf, V['trace']['poly'])) for a, b in zip(p, q)))
@@ -154,7 +154,7 @@ class BatailleSurLePlan(unittest.TestCase):
         # des maisons sur les rues du plan, une église
         bati = [c for c in range(TR.N) if m.t[c] == TR.T_BATI and
                 ((TR.center_of(c)[0] - m.place['x']) ** 2 + (TR.center_of(c)[1] - m.place['y']) ** 2) ** .5 < m.town_r]
-        self.assertGreater(len(bati), 25)   # (un village de 111 m de rayon, quelque 200 maisons)
+        self.assertGreater(len(bati), 50)
         voisins = lambda c: (c - 1, c + 1, c - TR.COLS, c + TR.COLS)
         sur_rue = [c for c in bati if any(m.t[v] in (TR.T_ROUTE, TR.T_CHEMIN) for v in voisins(c))]
         self.assertGreater(len(sur_rue) / len(bati), 0.95)
@@ -185,8 +185,7 @@ class BatailleSurLePlan(unittest.TestCase):
         airiaux = [e for e in m.plan['metiers'] if e['k'] == 'airial']
         self.assertTrue(airiaux)
         self.assertTrue(all(m.t[TR.cell_of(e['x'], e['y'])] == TR.T_BATI for e in airiaux))
-        n = nom('Salies-de-Béarn')   # (ses salines à 0,9 km au nord-ouest ; l'assaillant de l'est)
-        m = carte(n, att=0.0)
+        m = carte(nom('Salies-de-Béarn'), att=1.57)   # (un assaillant dont la bande laisse les salines hors de son chemin)
         self.assertTrue(m.plan['salines'])
         self.assertTrue(any(m.t[c] == TR.T_MARAIS_T for q in m.plan['salines'][0] for c in TV._dans(q)))
         # rien sur le glacis ni devant une porte ; les quais d'un port le long de l'eau, des bateaux
@@ -259,23 +258,17 @@ class BatailleSurLePlan(unittest.TestCase):
         self.assertEqual(kinds(1800), {'bateaux'})
         self.assertEqual(kinds(1830), {None})
 
-    def test_bataille_rangee_pres_d_une_ville_decalee(self):
-        """Version 7 : la ville est à son site, jusqu'à 1,35 km du nœud vers l'eau ; une bataille rangée tout près la
-        garde entière sur la carte (la place choisie d'après son site, le centre déplacé au plus juste)."""
-        vues = 0
-        for nm, dx, dy in (('Bayonne', 0, 0), ('Bayonne', 0, 1.2), ('Agen', 1.2, 0), ('Agen', 0, 0), ('Libourne', -.8, .5)):
-            n = nom(nm)
-            spec = dict(seed=700, cx=n['x'] + dx, cy=n['y'] + dy, season='ete', weather='soleil', year=1790, place=None,
-                        att_angle=0.5, carte=TR.VERSION, lieu=dict(nid=n['id'], f=n['fort'], pop=n['pop0'], d=0))
-            m = TR.generate(GEO, spec)
-            if not m.plan:
-                continue
-            vues += 1
-            pts = [p for b in m.plan['ilots'] if not b[2] for p in b[0]]   # (la ville, sans les faubourgs des routes)
-            t = m.town
-            self.assertTrue(all(-1 <= x <= TR.W + 1 and -1 <= y <= TR.H + 1 for x, y in pts) and
-                            t['r'] <= t['x'] <= TR.W - t['r'] and t['r'] <= t['y'] <= TR.H - t['r'], f'{nm} {dx} {dy} : hors de la carte')
-        self.assertGreaterEqual(vues, 3)
+    def test_carte_v7_figee(self):
+        """Une bataille de version 7 d'une sauvegarde garde sa carte des villes denses collées à leur fleuve
+        (plan_ville_v7, terrain_ville_v7, figés : l'empreinte de Libourne d'alors) ; la version 8 revient au plan de la
+        version 4 (décision du joueur), la même carte."""
+        import hashlib
+        n = nom('Libourne', GEO1)
+        pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=1, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'], y=n['y'], battle=True)
+        spec = dict(seed=700, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.5)
+        v4, v7, v8 = (TR.generate(GEO1, dict(spec, carte=c)) for c in (4, 7, 8))
+        self.assertEqual(hashlib.sha1(bytes(v7.t)).hexdigest(), '302feb7219df7186089752db2f0e5fd3d04b6126')
+        self.assertEqual(bytes(v8.t), bytes(v4.t))
 
     def test_les_autres_ponts_dates(self):
         import re

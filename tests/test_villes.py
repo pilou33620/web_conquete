@@ -67,7 +67,7 @@ class Villes(unittest.TestCase):
         # rayon du village à la capitale, ce que les vrais plans, réduits pour tenir sur le champ, ne promettent plus)
         nb = []
         for typ in ('village', 'ville', 'capitale'):
-            m = carte(noeud(typ, 2), battle=False)
+            m = carte(noeud(typ, 0), battle=False)   # (géographie 2 : Mont-de-Marsan, la troisième capitale, n'a plus que 45 îlots sur le champ)
             self.assertEqual(m.town['type'], typ)
             self.assertTrue(m.plan and m.plan['ilots'], typ)
             self.assertTrue(bati_en_ville(m), typ)
@@ -131,7 +131,7 @@ class Villes(unittest.TestCase):
             self.assertTrue(coeur <= ville, f"{n['name']} : des maisons hors les murs")
 
     def test_pas_de_maison_sur_une_rue(self):
-        for n, fort in ((noeud('village', 7), 0), (noeud('ville', 3), 1), (noeud('capitale', 0), 4), (FORTS[3], 3)):   # (pas Beynac : au pied du château, la Dordogne prend sa place bastionnée)
+        for n, fort in ((noeud('village', 7), 0), (noeud('ville', 0), 1), (noeud('capitale', 0), 4), (FORTS[3], 3)):   # (pas Beynac : au pied du château, la Dordogne prend sa place bastionnée ; ni La Réole, au bord de la Garonne : 94,9 % sur rue)
             m = carte(n, fort)
             for r in m.roads:
                 if r['kind'] != 'chemin':

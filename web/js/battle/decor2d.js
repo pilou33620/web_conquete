@@ -292,15 +292,14 @@ export class Decor2D {
     }
     sol.push({ z: 0.5, bbox: boiteDe(P.ilots.flatMap(b => b[0])).map((v, i) => v + (i < 2 ? -20 : 20)), draw: g => {
       g.lineJoin = 'round'; g.lineCap = 'round';
-      if (urbain) { g.fillStyle = g.strokeStyle = col('#bfb498'); g.lineWidth = 3 * k; for (const q of fond) { D.ligne(g, q, true); g.fill(); g.stroke(); } }
-      // (comme peindreInterieur : rues de 13 et 6 m, la place, le cours planté de 33 m, à l'échelle k du plan)
-      if (P.place) D.C(g, col('#c9bea6'), P.place[0], P.place[1], P.place[2] + 1.25 * k);
+      if (urbain) { g.fillStyle = g.strokeStyle = col('#bfb498'); g.lineWidth = 10 * k; for (const q of fond) { D.ligne(g, q, true); g.fill(); g.stroke(); } }
+      if (P.place) D.C(g, col('#c9bea6'), P.place[0], P.place[1], P.place[2] * 24 / 22);
       for (const [x1, y1, x2, y2, main] of rues) {
-        if (urbain) { const w = (main ? 2.3 : 1.1) * k; D.T(g, col('#8b826e'), w + .3 * k, x1, y1, x2, y2); D.T(g, col('#a69d88'), w, x1, y1, x2, y2); D.T(g, '#776f5e', .15 * k, x1, y1, x2, y2); }
-        else { D.T(g, col('#d9caa1'), (main ? 2 : 1) * k, x1, y1, x2, y2); }
+        if (urbain) { const w = (main ? 8 : 5) * k; D.T(g, col('#8b826e'), w + 1.4 * k, x1, y1, x2, y2); D.T(g, col('#a69d88'), w, x1, y1, x2, y2); D.T(g, '#776f5e', .6 * k, x1, y1, x2, y2); }
+        else { D.T(g, col('#d9caa1'), (main ? 7 : 4.5) * k, x1, y1, x2, y2); }
       }
-      if (P.place) { const [x, y, r] = P.place; D.C(g, col('#d6ccb2'), x, y, r); g.strokeStyle = 'rgba(120,105,80,.18)'; g.lineWidth = .08 * k; for (let rr = k; rr < r; rr += .6 * k) { g.beginPath(); g.arc(x, y, rr, 0, TAU); g.stroke(); } }
-      if (P.cours) { const [x, y] = P.c; g.beginPath(); g.arc(x, y, P.cours, 0, TAU); g.strokeStyle = col('#cdbf9f'); g.lineWidth = 6 * k; g.stroke(); const arb = []; for (let a = 0; a < TAU; a += 8 / P.cours) for (const dr of [-2.2, 2.2]) arb.push([x + Math.cos(a) * (P.cours + dr * k), y + Math.sin(a) * (P.cours + dr * k), .9 * k * .8, BOIS2, neige ? 'nu' : 'rond']); D.arbres(g, arb); }
+      if (P.place) { const [x, y, r] = P.place; D.C(g, col('#d6ccb2'), x, y, r); g.strokeStyle = 'rgba(120,105,80,.18)'; g.lineWidth = .3 * k; for (let rr = 4 * k; rr < r; rr += 2.4 * k) { g.beginPath(); g.arc(x, y, rr, 0, TAU); g.stroke(); } }
+      if (P.cours) { const [x, y] = P.c; g.beginPath(); g.arc(x, y, P.cours, 0, TAU); g.strokeStyle = col('#cdbf9f'); g.lineWidth = 14 * k; g.stroke(); const arb = []; for (let a = 0; a < TAU; a += 8 / P.cours) for (const dr of [-5, 5]) arb.push([x + Math.cos(a) * (P.cours + dr * k), y + Math.sin(a) * (P.cours + dr * k), 2.2 * k * .8, BOIS2, neige ? 'nu' : 'rond']); D.arbres(g, arb); }
     } });
     // les édifices (cases bâties sous leur emprise : leur état est le leur)
     for (const e of P.edifices || []) {
@@ -323,9 +322,9 @@ export class Decor2D {
     } });
     // les îlots
     P.ilots.forEach(([q, role, fau, main, sd, cotes], ib) => {
-      let ins = decalerQuad(q, (main ? 1.25 : .6) * k);
+      let ins = decalerQuad(q, (main ? 4.6 : 2.7) * k);
       if (fau && cotes === 1) {   // (le faubourg au bord de la route : ses maisons à 6 m de l'axe, comme les cases du serveur)
-        const [q0, q1, q2, q3] = q, l0 = Math.hypot(q0[0] - q3[0], q0[1] - q3[1]) || 1, l1 = Math.hypot(q1[0] - q2[0], q1[1] - q2[1]) || 1, e = 1.5 * k - 6;
+        const [q0, q1, q2, q3] = q, l0 = Math.hypot(q0[0] - q3[0], q0[1] - q3[1]) || 1, l1 = Math.hypot(q1[0] - q2[0], q1[1] - q2[1]) || 1, e = 6 * k - 6;
         ins = [[q0[0] + (q0[0] - q3[0]) / l0 * e, q0[1] + (q0[1] - q3[1]) / l0 * e], [q1[0] + (q1[0] - q2[0]) / l1 * e, q1[1] + (q1[1] - q2[1]) / l1 * e], q2, q3];
       }
       for (const c of cases(q)) { planCase[c] = 1; if (t[c] === BATI) occupe[c] = 1; }
@@ -335,8 +334,8 @@ export class Decor2D {
       const edges = [0, 1, 2, 3].map(i => { const a = ins[i], e = ins[(i + 1) % 4], l = Math.hypot(e[0] - a[0], e[1] - a[1]) || 1, u = [(e[0] - a[0]) / l, (e[1] - a[1]) / l]; let nn = [-u[1], u[0]]; if ((c0[0] - a[0]) * nn[0] + (c0[1] - a[1]) * nn[1] < 0) nn = [-nn[0], -nn[1]]; return { a, l, u, n: nn }; });
       const cote = Math.min(edges[0].l, edges[1].l), bb = boiteDe(q), bbox = [bb[0] - 4, bb[1] - 4, bb[2] + 4, bb[3] + 4], R = D.alea(sd | 0);
       // le sol de l'îlot (remplirIlot) : cour, jardin, place, parvis, cimetière…
-      const fill = { place: '#d6ccb2', parvis: '#cfc5ad', jardin: '#e3d8bb', caserne: '#d9cda9', hopital: '#d2c8b0', couvent: '#7aa659', royale: '#d6ccb2', eglise: P.type === 'bourg' ? '#7aa659' : '#cfc5ad', egliseDome: '#cfc5ad', cathedrale: '#cfc5ad', verger: '#8fae5f', potager: '#7c9a52', cour: '#c9bc9c', vague: '#a9a877' }[role] || (fau || cotes ? '#7a9a52' : '#cdbf9f');   // (les clos : carte/lib.js, CLOS_COUL)
-      const inner = !fau && !role && aireQ(ins) > 80 * k * k ? decalerQuad(ins, PROF + 5) : null, vert = aireQ(ins) > 300 * k * k;
+      const fill = { place: '#d6ccb2', parvis: '#cfc5ad', jardin: '#e3d8bb', caserne: '#d9cda9', hopital: '#d2c8b0', couvent: '#7aa659', royale: '#d6ccb2', eglise: P.type === 'bourg' ? '#7aa659' : '#cfc5ad', egliseDome: '#cfc5ad', cathedrale: '#cfc5ad' }[role] || (fau ? '#7a9a52' : '#cdbf9f');
+      const inner = !fau && !role && aireQ(ins) > 900 * k * k ? decalerQuad(ins, PROF + 5) : null, vert = aireQ(ins) > 2600 * k * k;
       const arbres = [];
       if (inner && aireQ(inner) > 300) for (let i = 0; i < 4; i++) arbres.push([c0[0] + (R() - .5) * cote * .4, c0[1] + (R() - .5) * cote * .4, (2.4 + R() * 2) * .8, BOIS2, neige ? 'nu' : 'rond']);
       if (role === 'jardin') { for (const e of edges) for (let s = 4; s < e.l - 3; s += 7) arbres.push([e.a[0] + e.u[0] * s + e.n[0] * 3.5, e.a[1] + e.u[1] * s + e.n[1] * 3.5, 2.6, BOIS2, neige ? 'nu' : 'rond']); }
@@ -350,7 +349,7 @@ export class Decor2D {
       } });
       if (role && role !== 'royale') return;
       // une maison par parcelle le long de chaque rue (le faubourg : sur son côté de la route), à leur vraie taille
-      const sides = fau || cotes ? edges.filter((e, i) => cotes & (1 << i)) : edges;
+      const sides = fau ? edges.filter((e, i) => cotes & (1 << i)) : edges;
       if (fau && !sides.length) sides.push(edges[(R() * 4) | 0]);
       const dmax = Math.min(cote * .36, PROF), dom = tirer(R, toits), parcelles = [];
       for (const e of sides) for (let s0 = 0; s0 < e.l - 1;) {

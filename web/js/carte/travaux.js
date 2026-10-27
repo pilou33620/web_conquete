@@ -3,11 +3,10 @@
 // les quais, cordons sanitaires des villes en épidémie, grands travaux (voies ferrées en chantier, routes des Ponts et
 // Chaussées, chemins de halage), routes coupées par la crue, feux de forêt des Landes l'été. Tout est tiré de la carte
 // (même endroit, mêmes ouvriers) ; appelé par carte/guerre.js (Guerre.dessus), au-dessus des villes.
-import { C, E, T, RR, PG, TAU, SPR, bat, cheval, clamp, mod, stere, surChemin } from './lib.js';
-import { AMB, K, LUM, U, Z, FEU_K, feuDe, vraie, vue } from './ambiance.js';
+import { C, E, T, RR, PG, TAU, SPR, bat, cheval, clamp, fantassin, mod, stere, surChemin } from './lib.js';
+import { AMB, LUM, U, Z, FEU_K, feuDe } from './ambiance.js';
 import { terre, LARG_RIVIERE } from './terre.js';
-import { CIVILS, charrette, fantassin, flamme, phase, rayonMurs, rayonPlace, vache, versMonde } from './guerre.js';
-import { site } from './villes.js';
+import { CIVILS, charrette, flamme, phase, rayonMurs, rayonPlace, vache, versMonde } from './guerre.js';
 
 // combien de jours les grands travaux d'une technologie restent en chantier après sa découverte (me.tech_dates)
 export const GRANDS_TRAVAUX = { ponts_chaussees: 180, canal: 240 };
@@ -37,7 +36,7 @@ function produit(g, k, i) {
   }
 }
 // une charrette chargée (k : le produit)
-function charge(g, pas, k) { charrette(g, pas, k === 'barrique' || k === 'fer', 0); for (let i = 0; i < 3; i++) { g.save(); g.translate(-6 + i * 6, 0); g.scale(1.4, 1.4); produit(g, k === 'betail' ? 'sac' : k, i); g.restore(); } }
+function charge(g, pas, k) { charrette(g, pas, k === 'barrique' || k === 'fer', 0); for (let i = 0; i < 3; i++) { g.save(); g.translate(-3.6 + i * 3.6, 0); g.scale(0.7, 0.7); produit(g, k === 'betail' ? 'sac' : k, i); g.restore(); } }
 // un ouvrier (k : son habit) qui pioche, frappe ou creuse ; ext : où en est son coup (0 à 1)
 const ouvrier = (g, k, ext) => { const c = CIVILS[k % CIVILS.length]; fantassin(g, c.L, { role: 'h', habit: c.habit }, { legs: null, arme: 'hache', ext }); };
 const brouette = (g, k, pas) => { RR(g, '#7a5634', 1, -1.6, 5, 3.2, 0.5); RR(g, k % 2 ? '#8c7b62' : '#9a9a92', 1.5, -1.2, 4, 2.4, 0.5); C(g, '#3a2a1b', 6.5, 0, 0.8); T(g, '#6b4d31', 0.4, 1, -1.4, -1, -1.6); T(g, '#6b4d31', 0.4, 1, 1.4, -1, 1.6); const c = CIVILS[k % CIVILS.length]; fantassin(g, c.L, { role: 'h', habit: c.habit }, { legs: pas, arme: 'aucun' }); };
@@ -69,19 +68,15 @@ function grue(g, a) {
   T(g, 'rgba(20,20,10,.3)', 1.2, 1, 1.4, fx + 1, fy + 1.4); T(g, '#8a6a45', 1, 0, 0, fx, fy); T(g, '#3a2e24', 0.2, fx, fy, fx + 0.6, fy + 1.4); RR(g, '#9a958a', fx - 0.4, fy + 1.2, 2, 1.6, 0.3);
 }
 function barriere(g) { for (let k = 0; k < 6; k++) T(g, k % 2 ? '#f4f1ea' : '#b8352c', 0.9, 0, -6.5 + k * 2.2, 0, -4.3 + k * 2.2); C(g, '#3a2a1b', 0, -7, 0.8); C(g, '#3a2a1b', 0, 7, 0.8); }
+function balise(g) { C(g, 'rgba(20,20,10,.3)', 0.4, 0.5, 1.1); C(g, '#f4f1ea', 0, 0, 1.1); C(g, '#c0392b', 0, 0, 0.6); }
 function rouleau(g, pas) { RR(g, '#6f6b63', -1.6, -3.2, 3.2, 6.4, 1.4); T(g, '#5b4127', 0.6, 1.6, 0, 7, 0); for (const y of [-1.8, 1.8]) { g.save(); g.translate(11, y); cheval(g, '#6b4a2c', { gait: pas, bob: 0 }); g.restore(); } }
 
 export class Travaux {
   constructor(G) { this.G = G; this.sorties = new Map(); this.coupures = null; this.feux = null; }
   // un dessin peint une fois par échelle (Guerre.tampon), puis posé d'un drawImage : bw, bh, sa demi-étendue en unités
-  // (s = 1 / K : un bâtiment à la vraie taille, dès 4 px, son image réduite de K coûtant ; les figures grossies de K :
-  // « Livré — les figures lisibles »)
-  pose(sc, g, x, y, a, cle, bw, bh, fn, s = 1) { if (vraie(sc.z * K * s, (s < 1 ? 8 : 2) * Math.max(bw, bh))) this.G.poser(sc, g, x, y, a, this.G.tampon(sc, 'T|' + cle, bw, bh, fn), s); }
-  // (une personne ne fait jamais un pixel à la vraie taille : de la vie, un point d'un pixel de son habit ; grossis de K, un
-  // ouvrier sur K / 20)
-  ouvrier(sc, g, x, y, a, k, t) { if (k % Math.ceil(K / 20)) return; if (!vue(sc.z, 4.3)) return this.point(sc, g, x, y, CIVILS[k % CIVILS.length].habit); const q = Math.round(mod(t * 1.1 + k * 0.37, 1) * 6) % 6; this.pose(sc, g, x, y, a, `ouv|${k % 6}|${q}`, 7, 7, gg => ouvrier(gg, k % 6, q / 6)); }
-  point(sc, g, x, y, c) { const d = 1 / sc.z; sc.monde(g); g.fillStyle = c; g.fillRect(x - d / 2, y - d / 2, d, d); }
-  charge(sc, g, x, y, a, pas, k) { if (!vue(sc.z, 41)) return; const q = phase(pas); this.pose(sc, g, x, y, a, `ch|${k}|${q}`, 32, 8, gg => charge(gg, q, k)); }
+  pose(sc, g, x, y, a, cle, bw, bh, fn) { this.G.poser(sc, g, x, y, a, this.G.tampon(sc, 'T|' + cle, bw, bh, fn)); }
+  ouvrier(sc, g, x, y, a, k, t) { const q = Math.round(mod(t * 1.1 + k * 0.37, 1) * 6) % 6; this.pose(sc, g, x, y, a, `ouv|${k % 6}|${q}`, 7, 7, gg => ouvrier(gg, k % 6, q / 6)); }
+  charge(sc, g, x, y, a, pas, k) { const q = phase(pas); this.pose(sc, g, x, y, a, `ch|${k}|${q}`, 20, 6, gg => charge(gg, q, k)); }
   // les routes qui sortent d'une place, chacune depuis la place (km) ; mêmes pour toujours
   sortiesDe(n) {
     let s = this.sorties.get(n.id);
@@ -179,7 +174,7 @@ export class Travaux {
       if (z >= 10) for (let k = 0; k < 14; k++) {
         const a = k * TAU / 14 + Math.sin(k * 3.1) * 0.2, d = f.r * (1 + 0.3 * Math.sin(a * 3 + Math.floor(f.x / FEU_K)) + 0.15 * Math.sin(a * 7 + Math.floor(f.y / FEU_K))), x = f.x + Math.cos(a) * d, y = f.y + Math.sin(a) * d;
         if (!G.dans(sc, x, y, 0.1)) continue;
-        flamme(g, x, y, Math.max(0.01, 4 / z), t, k);   // (des flammes de 10 m sur la lisière)
+        flamme(g, x, y, Math.max(0.03, 4 / z), t, k);
         if (z >= 18 && Math.random() < 0.01) G.fumee(x, y, 0, 0, 0.03, 0.25, 12, 0.4, 'n');
       }
     }
@@ -191,14 +186,14 @@ export class Travaux {
       const Lg = G.look(r.st.nodes[n.id].o, 'milice');
       for (const s of this.sortiesDe(n)) {
         if (s.L < R + 0.2) continue;
-        const p = surChemin(s.pts, R), nx = -Math.sin(p.a), ny = Math.cos(p.a), fx = p.x + nx * 0.008, fy = p.y + ny * 0.008;
+        const p = surChemin(s.pts, R), nx = -Math.sin(p.a), ny = Math.cos(p.a), fx = p.x + nx * 0.035, fy = p.y + ny * 0.035;
         if (!G.dans(sc, p.x, p.y, 0.1)) continue;
-        LUM.push({ x: fx, y: fy, r: Math.max(0.005, 3 / z), a: 0.8, spr: 'fen' });
-        const h = Math.max(0.0025, 5 / z);   // (le drapeau jaune, sa hampe de 4 m)
+        LUM.push({ x: fx, y: fy, r: 0.015, a: 0.8, spr: 'fen' });
+        const h = Math.max(0.012, 5 / z);
         sc.monde(g); T(g, '#3a2a1b', Math.max(0.002, 1 / z), fx, fy, fx, fy - h * 1.6); PG(g, '#e8c53a', [fx, fy - h * 1.6, fx + h * (1.3 + 0.1 * Math.sin(t * 4 + n.id)), fy - h * 1.25, fx, fy - h * 0.9]);
         if (!vie) continue;
-        G.figK(sc, g, p.x, p.y, p.a, 3); barriere(g);   // (la barrière sur la route, 6 m)
-        if (vue(z, 4.3)) for (const o of [-9, 9]) this.pose(sc, g, ...versMonde(p.x, p.y, p.a, -3, o), p.a, Lg.cle + '|garde', 5, 5, gg => fantassin(gg, Lg, { role: 'h' }, { legs: null, arme: 'epaule' }));
+        G.figK(sc, g, p.x, p.y, p.a); barriere(g);
+        for (const o of [-9, 9]) this.pose(sc, g, ...versMonde(p.x, p.y, p.a, -3, o), p.a, Lg.cle + '|garde', 5, 5, gg => fantassin(gg, Lg, { role: 'h' }, { legs: null, arme: 'epaule' }));
       }
     }
     if (z < 40) return;
@@ -210,27 +205,27 @@ export class Travaux {
         // le faubourg qui s'agrandit, le long de la première route : six maisons de la porte vers la campagne
         const s = this.sortiesDe(n)[0]; if (!s) continue;
         for (let k = 0; k < 6; k++) {
-          const d = c.R + 0.03 + (k >> 1) * 0.014; if (d > s.L - 0.1) break;   // (des maisons de 12 m, à 10 m de la route)
-          const p = surChemin(s.pts, d), sg = k % 2 ? 1 : -1, nx = -Math.sin(p.a), ny = Math.cos(p.a), x = p.x + nx * 0.01 * sg, y = p.y + ny * 0.01 * sg, et = etatMaison(k, 6, c.p);
+          const d = c.R + 0.12 + k * 0.07; if (d > s.L - 0.1) break;
+          const p = surChemin(s.pts, d), sg = k % 2 ? 1 : -1, nx = -Math.sin(p.a), ny = Math.cos(p.a), x = p.x + nx * 0.055 * sg, y = p.y + ny * 0.055 * sg, et = etatMaison(k, 6, c.p);
           if (!G.dans(sc, x, y, 0.1)) continue;
-          this.pose(sc, g, x, y, p.a, 'maison|' + et, 50, 30, gg => { gg.scale(6.5, 6.5); maison(gg, et); }, 1 / K);   // (les maisons et leurs tas à la vraie taille)
+          this.pose(sc, g, x, y, p.a, 'maison|' + et, 17, 10, gg => { gg.scale(2.2, 2.2); maison(gg, et); });
           if (et === 'finie') continue;
-          this.pose(sc, g, x - nx * 0.006 * sg, y - ny * 0.006 * sg, p.a, 'tas|stere', 48, 15, gg => { gg.scale(3, 3); tasPierres(gg, -4, 0); stere(gg, 5, 0); }, 1 / K);
-          if (vie) for (let m = 0; m < 2; m++) this.ouvrier(sc, g, ...versMonde(x, y, p.a, -8 + m * 16, -sg * 9, 1 / K), p.a + Math.PI / 2, k * 2 + m, t);
+          this.pose(sc, g, x - nx * 0.03 * sg, y - ny * 0.03 * sg, p.a, 'tas|stere', 16, 5, gg => { tasPierres(gg, -4, 0); stere(gg, 5, 0); });
+          if (vie) for (let m = 0; m < 2; m++) this.ouvrier(sc, g, ...versMonde(x, y, p.a, -8 + m * 16, -sg * 9), p.a + Math.PI / 2, k * 2 + m, t);
         }
-        if (vie) { const q = surChemin(s.pts, c.R + 0.02); this.charge(sc, g, q.x, q.y, q.a, null, 'sac'); }
+        if (vie) { const q = surChemin(s.pts, c.R + 0.06); this.charge(sc, g, q.x, q.y, q.a, null, 'sac'); }
       } else {
         // les réparations : échafaudages sur les maisons touchées, une grue, des charrettes de pierres par les routes
         const nb = 2 + Math.round(clamp(c.ns.dg || 0.2, 0, 1) * 8), rp = rayonPlace(n, c.ns) * 0.7;
         for (let k = 0; k < nb; k++) {
-          const a = hash2(n.id, k, 170) * TAU, d = Math.sqrt(hash2(n.id, k, 171)) * rp, x = site(n)[0] + Math.cos(a) * d, y = site(n)[1] + Math.sin(a) * d;
+          const a = hash2(n.id, k, 170) * TAU, d = Math.sqrt(hash2(n.id, k, 171)) * rp, x = n.x + Math.cos(a) * d, y = n.y + Math.sin(a) * d;
           if (!G.dans(sc, x, y, 0.1)) continue;
-          this.pose(sc, g, x, y, a, 'echaf', 40, 27, gg => { gg.scale(6, 6); echafaudage(gg); }, 1 / K);   // (une maison de 10 m)
-          if (k === 0) { G.figK(sc, g, x, y, 0, 5 / K); grue(g, 0.6 + Math.sin(t * 0.2 + n.id) * 0.9); }
-          if (vie) this.ouvrier(sc, g, ...versMonde(x, y, a, 0, 12, 1 / K), a, k, t);
+          this.pose(sc, g, x, y, a, 'echaf', 15, 10, gg => { gg.scale(2.2, 2.2); echafaudage(gg); });
+          if (k === 0) { G.figK(sc, g, x, y, 0, 1.6); grue(g, 0.6 + Math.sin(t * 0.2 + n.id) * 0.9); }
+          if (vie) this.ouvrier(sc, g, ...versMonde(x, y, a, 0, 12), a, k, t);
         }
         if (vie) for (const s of this.sortiesDe(n).slice(0, 2)) {
-          const L = Math.min(s.L, c.R + 1.5), p = surChemin(s.pts, L - mod(t * 0.0013 + n.id, L - c.R * 0.5));
+          const L = Math.min(s.L, c.R + 1.5), p = surChemin(s.pts, L - mod(t * 0.004 + n.id, L - c.R * 0.5));
           if (G.dans(sc, p.x, p.y)) this.charge(sc, g, p.x, p.y, p.a + Math.PI, pas, 'sel');   // (des pierres de taille, blanches)
         }
       }
@@ -241,10 +236,10 @@ export class Travaux {
       P.R ??= rayonMurs(G.map, n, P.ns);
       const s = this.sortiesDe(n)[1] || this.sortiesDe(n)[0], L = G.lieu(n, P.ns), q = L.port ? { x: L.port[0], y: L.port[1], a: 0 } : s ? surChemin(s.pts, P.R + 0.05) : null;
       if (!q) continue;
-      if (P.k === 'betail') { for (let m = 0; m < 4 * P.lvl; m++) { const x = q.x + (m % 4 - 1.5) * 0.003, y = q.y + 0.008 + (m >> 2) * 0.003; if (G.dans(sc, x, y)) { G.figK(sc, g, x, y, m, 1.45); vache(g, 0, 0, 0, m % 2 ? '#efe9dd' : '#c9a07a'); } } }
+      if (P.k === 'betail') { for (let m = 0; m < 4 * P.lvl; m++) { const x = q.x + (m % 4 - 1.5) * 0.012, y = q.y + 0.03 + (m >> 2) * 0.012; if (G.dans(sc, x, y)) { G.figK(sc, g, x, y, m); vache(g, 0, 0, 0, m % 2 ? '#efe9dd' : '#c9a07a'); } } }
       else if (G.dans(sc, q.x, q.y, 0.1)) this.pose(sc, g, q.x, q.y, q.a, `pile|${P.k}|${P.lvl}`, 16, 4.2 * P.lvl + 8, gg => { for (let m = 0; m < 6 * P.lvl; m++) { gg.save(); gg.translate((m % 6 - 2.5) * 5, (m / 6 | 0) * 4.2 + 5); produit(gg, P.k, m); gg.restore(); } });
       if (vie && s) for (let k = 0; k < P.lvl; k++) {
-        const L2 = Math.min(s.L, P.R + 3), p = surChemin(s.pts, P.R + mod(t * 0.0013 + k * 1.1 + n.id, L2 - P.R));
+        const L2 = Math.min(s.L, P.R + 3), p = surChemin(s.pts, P.R + mod(t * 0.005 + k * 1.1 + n.id, L2 - P.R));
         if (G.dans(sc, p.x, p.y)) this.charge(sc, g, p.x, p.y, p.a, pas + k, P.k);
       }
     }
@@ -255,10 +250,10 @@ export class Travaux {
       const rem = [];
       for (let s = R.s0; s <= Math.min(R.L, R.s0 + 1.2); s += 0.1) { const p = surChemin(R.pts, s); rem.push([p.x, p.y]); }
       sc.monde(g); g.lineCap = 'round'; g.lineJoin = 'round';
-      g.beginPath(); rem.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.strokeStyle = 'rgba(120,92,58,.85)'; g.lineWidth = Math.max(0.01, 4 / z); g.stroke();   // (le remblai, 10 m)
-      g.strokeStyle = 'rgba(160,128,84,.9)'; g.lineWidth = Math.max(0.005, 2 / z); g.stroke();
+      g.beginPath(); rem.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.strokeStyle = 'rgba(120,92,58,.85)'; g.lineWidth = Math.max(0.03, 4 / z); g.stroke();
+      g.strokeStyle = 'rgba(160,128,84,.9)'; g.lineWidth = Math.max(0.015, 2 / z); g.stroke();
       if (!vie) continue;
-      for (let k = 0; k < 8; k += Math.ceil(K / 20)) { const p = surChemin(R.pts, R.s0 + 0.02 + k * 0.02), sg = k % 2 ? 1 : -1; const [wx, wy] = versMonde(p.x, p.y, p.a, 0, sg * 4), wa = p.a + sg * Math.PI / 2; k % 3 === 2 ? this.pose(sc, g, wx, wy, wa, `brou|${k % 6}|${phase(pas)}`, 8, 5, gg => brouette(gg, k % 6, phase(pas))) : this.ouvrier(sc, g, wx, wy, wa, k, t); }
+      for (let k = 0; k < 8; k++) { const p = surChemin(R.pts, R.s0 + 0.02 + k * 0.02), sg = k % 2 ? 1 : -1; const [wx, wy] = versMonde(p.x, p.y, p.a, 0, sg * 4), wa = p.a + sg * Math.PI / 2; k % 3 === 2 ? this.pose(sc, g, wx, wy, wa, `brou|${k % 6}|${phase(pas)}`, 8, 5, gg => brouette(gg, k % 6, phase(pas))) : this.ouvrier(sc, g, wx, wy, wa, k, t); }
       const b = surChemin(R.pts, Math.max(0, R.s0 - 0.06)); G.figK(sc, g, ...versMonde(b.x, b.y, b.a, 0, 9), b.a);
       for (let k = 0; k < 5; k++) RR(g, '#5b4127', -6, -2.2 + k * 1.1, 12, 0.6, 0.2);   // les traverses empilées
       RR(g, '#4a4d52', -7, 4, 14, 0.5, 0.2); RR(g, '#4a4d52', -7, 5, 14, 0.5, 0.2);
@@ -273,8 +268,7 @@ export class Travaux {
       const o = (mod(t * 0.01, 0.2) < 0.1 ? mod(t * 0.01, 0.1) : 0.1 - mod(t * 0.01, 0.1)) - 0.05;
       this.pose(sc, g, p.x + Math.cos(p.a) * (0.06 + o), p.y + Math.sin(p.a) * (0.06 + o), p.a, 'rouleau|' + phase(pas), 20, 6, gg => rouleau(gg, phase(pas)));
     }
-    // (les bornes de 27 cm, une par kilomètre au bord de la route, les balises : jamais un pixel à leur taille ; de la vie, un point)
-    if (vie) for (const p of r.bornes) if (G.dans(sc, p.x, p.y)) this.point(sc, g, p.x - Math.sin(p.a) * 0.008, p.y + Math.cos(p.a) * 0.008, '#efe9dd');
+    if (vie) for (const p of r.bornes) if (G.dans(sc, p.x, p.y)) { G.figK(sc, g, p.x - Math.sin(p.a) * 0.02, p.y + Math.cos(p.a) * 0.02, p.a); RR(g, '#efe9dd', -0.9, -0.9, 1.8, 1.8, 0.6); RR(g, '#c0392b', -0.9, -0.9, 0.7, 1.8, 0.3); }
     // le chemin de halage : de la terre remuée et des terrassiers, puis le chemin fini le long de la rive, balisé
     for (const b of r.berges) {
       if (!G.dans(sc, b.x, b.y, 0.2) || !G.visible(b.x, b.y)) continue;
@@ -282,16 +276,16 @@ export class Travaux {
       if (vie) for (let k = 0; k < 4; k++) { const [wx, wy] = versMonde(b.x, b.y, b.a, k * 7 + 3, 5), wa = b.a + Math.PI / 2; k % 2 ? this.pose(sc, g, wx, wy, wa, `brou|${k}|${phase(pas)}`, 8, 5, gg => brouette(gg, k, phase(pas))) : this.ouvrier(sc, g, wx, wy, wa, k, t); }
     }
     if (r.halage.length) {
-      sc.monde(g); g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = 'rgba(214,196,150,.85)'; g.lineWidth = Math.max(0.003, 1.5 / z);   // (le chemin de halage, 3 m)
+      sc.monde(g); g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = 'rgba(214,196,150,.85)'; g.lineWidth = Math.max(0.012, 1.5 / z);
       for (const h of r.halage) { g.beginPath(); h.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke(); }
-      if (vie) for (const [x, y] of r.balises || []) if (G.dans(sc, x, y)) this.point(sc, g, x, y, '#c0392b');
+      if (vie) for (const [x, y] of r.balises || []) if (G.dans(sc, x, y)) { G.figK(sc, g, x, y, 0); balise(g); }
     }
     // la crue coupe les routes : l'eau sur la chaussée ; de près, une charrette arrêtée devant
     for (const c of this.coupuresDe()) {
       if (!G.dans(sc, c.x, c.y, c.l)) continue;
-      sc.monde(g); E(g, 'rgba(78,124,160,.9)', c.x, c.y, c.l / 2 + 0.03, Math.max(0.02, 4 / z), c.a);   // (l'eau sur 40 m de large)
+      sc.monde(g); E(g, 'rgba(78,124,160,.9)', c.x, c.y, c.l / 2 + 0.03, Math.max(0.05, 4 / z), c.a);
       if (!vie) continue;
-      const p = c.avant; if (vue(z, 41)) { G.figK(sc, g, p.x, p.y, p.a); charrette(g, null, true, 1); }
+      const p = c.avant; G.figK(sc, g, p.x, p.y, p.a); charrette(g, null, true, 1);
       G.figK(sc, g, ...versMonde(p.x, p.y, p.a, 4, 7), p.a); fantassin(g, CIVILS[1].L, { role: 'h', habit: CIVILS[1].habit }, { legs: null, arme: 'aucun' });
     }
   }

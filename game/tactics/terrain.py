@@ -30,7 +30,8 @@ from ..geo import (T_OCEAN, T_EAU as G_EAU, T_PLAINE, T_FORET, T_LANDE, T_MARAIS
 # Version 5 : les bâtiments à la vraie taille (une carte de version 4 garde son plan : plan_ville_v4, terrain_ville_v4, figés)
 # Version 6 : bourgs et villes moins serrés, clos et jardins (une carte de version 5 : plan_ville_v5, terrain_ville_v5, figés)
 # Version 7 : villes denses dans leurs murs, collées à leur fleuve (une carte de version 6 : plan_ville_v6, terrain_ville_v6)
-VERSION = 7
+# Version 8 : retour au plan de la version 4, décision du joueur (une carte de version 7 : plan_ville_v7, terrain_ville_v7)
+VERSION = 8
 
 # les ponts datés (ville, rivière, année ; comme villes.js, PONTS_DATES) : avant, la route passe sur un pont de bateaux
 PONTS_DATES = [('Bordeaux', 'Garonne', 1822),   # (le pont de pierre)
@@ -361,8 +362,8 @@ def generate(geo, spec):
         best = None
         for gn in geo.nodes:
             d = math.hypot(gn['x'] - cx, gn['y'] - cy)
-            if carte >= 7 and d < 2.7:   # (version 7 : la ville est à son site, jusqu'à 1,35 km du nœud vers l'eau)
-                from .plan_ville import carte_de
+            if carte == 7 and d < 2.7:   # (version 7 : la ville est à son site, jusqu'à 1,35 km du nœud vers l'eau)
+                from .plan_ville_v7 import carte_de
                 d = math.hypot(*(a - b for a, b in zip(carte_de(geo).site(gn), (cx, cy))))
             if d < 1.3 and (best is None or d < best[0]):
                 best = (d, gn)
@@ -379,8 +380,10 @@ def generate(geo, spec):
     # le champ réduit toute la carte (k)
     L = None
     if pl and carte >= 4:
-        if carte >= 7:
+        if carte >= 8:
             from . import terrain_ville as TV
+        elif carte == 7:
+            from . import terrain_ville_v7 as TV
         elif carte == 6:
             from . import terrain_ville_v6 as TV
         elif carte == 5:
@@ -388,10 +391,10 @@ def generate(geo, spec):
         else:
             from . import terrain_ville_v4 as TV
         L = TV.preparer(geo, spec, pl, cx, cy)
-        if carte >= 7 and pl.get('battle') and (cx, cy) != L.site:   # (l'assaut : la carte autour de la ville, au bord de l'eau)
+        if carte == 7 and pl.get('battle') and (cx, cy) != L.site:   # (l'assaut : la carte autour de la ville, au bord de l'eau)
             cx, cy = L.site
             L = TV.preparer(geo, spec, pl, cx, cy)
-        elif carte >= 7:   # (une bataille rangée près d'une ville : la ville entière sur la carte, le centre déplacé au plus juste)
+        elif carte == 7:   # (une bataille rangée près d'une ville : la ville entière sur la carte, le centre déplacé au plus juste)
             r = L.r_ville + 20   # (les murs et la ville, sans les faubourgs le long des routes)
             fit = lambda p, size: min(max(p, r), size - r) if 2 * r < size else size / 2
             dx, dy = L.pos[0] - fit(L.pos[0], W), L.pos[1] - fit(L.pos[1], H)

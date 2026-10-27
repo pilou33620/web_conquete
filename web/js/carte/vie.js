@@ -7,9 +7,8 @@ import {
   C, E, T, RR, OMBRE, BOIS, PAL, SPR, TAU, PEAU, bat, cheminee, charbonniere, stere, charrue, cloture, pietine, coneF,
   cheval as cheval0, cavalier as cavalier0, fantassin as fantassin0, tenue, sombre, clamp, lerp, mod, surChemin, distPoly, ligne, fumee, sprite,
 } from './lib.js';
-import { AMB, K, U, Z, LUM, bivouac, echelle, meteoEn, vraie, vue } from './ambiance.js';
-import { charrette } from './guerre.js';
-import { carteDe, etatVille, planDe, rayon, S as S_INT, IC, site } from './villes.js';
+import { AMB, U, Z, LUM, bivouac, meteoEn } from './ambiance.js';
+import { carteDe, etatVille, planDe, S as S_INT, IC } from './villes.js';
 
 const TT = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 export const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -17,17 +16,9 @@ const pingpong = (s, L) => { const m = mod(s, 2 * L); return m < L ? m : 2 * L -
 const versMonde = (x, y, a, lx, ly, s = 1) => [x + (lx * Math.cos(a) - ly * Math.sin(a)) * U * s, y + (lx * Math.sin(a) + ly * Math.cos(a)) * U * s];
 function dansAnneau(r, x, y) { let d = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) d = !d; } return d; }
 const bboxOf = pts => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const [x, y] of pts) { a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); } return [a, b, c, d]; };
-// (une rivière a des centaines de points : un bateau s'y place par dichotomie sur les longueurs cumulées, cum)
-const cumul = pts => { const c = [0]; for (let i = 1; i < pts.length; i++) c.push(c[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])); return c; };
-function surCumul(pts, c, s) {
-  let lo = 1, hi = c.length - 1;
-  while (lo < hi) { const m = (lo + hi) >> 1; if (c[m] < s) lo = m + 1; else hi = m; }
-  const [x0, y0] = pts[lo - 1], [x1, y1] = pts[lo], k = clamp((s - c[lo - 1]) / (c[lo] - c[lo - 1] || 1), 0, 1);
-  return { x: lerp(x0, x1, k), y: lerp(y0, y1, k), a: Math.atan2(y1 - y0, x1 - x0) };
-}
 const longueur = pts => { let l = 0; for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return l; };
 // rayon d'une place en km (profilVille de la maquette : R en unités de l'intérieur, 180 par km)
-export const rayonPlace = n => rayon(n.pop0 || 700) / S_INT;
+export const rayonPlace = n => clamp(46 + 1.55 * Math.sqrt(n.pop0 || 700), 56, 262) / 180;
 const BETES = { printemps: 1, ete: 1, automne: .8, hiver: .25 };   // l'hiver, les bêtes restent à l'étable
 // la météo garde les gens chez eux
 const METEO_D = { pluie: .6, orage: .35, tempete: .25, neige: .5, brouillard: .8, canicule: .7 };
@@ -109,7 +100,7 @@ export function preparer(map) {
   }
   const rivers = m.rivers || [];
   VIE.radeaux = [];
-  for (const r of rivers) if (['Adour', 'Gave de Pau', "Gave d'Oloron", 'Midouze', 'Leyre', 'Nive', "Gave d'Aspe"].includes(r.name)) { const L = longueur(r.pts), cum = cumul(r.pts); for (let k = 0; k < Math.ceil(L / 16); k++) VIE.radeaux.push({ pts: r.pts, cum, L, bb: bboxOf(r.pts), s0: hash2(k, L * 10 | 0, 98) * L, v: .007 }); }
+  for (const r of rivers) if (['Adour', 'Gave de Pau', "Gave d'Oloron", 'Midouze', 'Leyre', 'Nive', "Gave d'Aspe"].includes(r.name)) { const L = longueur(r.pts); for (let k = 0; k < Math.ceil(L / 16); k++) VIE.radeaux.push({ pts: r.pts, L, bb: bboxOf(r.pts), s0: hash2(k, L * 10 | 0, 98) * L, v: .007 }); }
   // pêche : pinasses dans le bassin d'Arcachon, chaloupes devant Saint-Jean-de-Luz ; parcs à huîtres ; cabanes tchanquées
   VIE.peche = []; VIE.parcs = []; VIE.tchanquees = [];
   if (BASSIN) {
@@ -158,8 +149,8 @@ export function preparer(map) {
   VIE.ports = ['Bordeaux', 'Bayonne', 'La Teste-de-Buch', 'Saint-Jean-de-Luz', 'Blaye', 'Pauillac'].map(nom).filter(Boolean);
   // bateaux : gabares sur les grandes rivières, navires sur la route du cabotage
   VIE.bateaux = [];
-  for (const r of rivers) if (r.rank <= 2) { const L = longueur(r.pts), cum = cumul(r.pts); for (let k = 0; k < Math.ceil(L / 14); k++) VIE.bateaux.push({ pts: r.pts, cum, L, bb: bboxOf(r.pts), s0: hash2(k, r.rank, 5) * L, v: (hash2(k, 7, 5) < .5 ? -1 : 1) * .02, mer: false, ph: hash2(k, L | 0, 8) * 1000 }); }
-  for (const w of m.ways || []) if (w.sea) { const L = longueur(w.pts); for (let k = 0; k < Math.ceil(L / 25); k++) VIE.bateaux.push({ pts: w.pts, cum: cumul(w.pts), L, bb: bboxOf(w.pts), s0: hash2(k, 9, 6) * L, v: (hash2(k, 8, 6) < .5 ? -1 : 1) * .04, mer: true, ph: 0 }); }
+  for (const r of rivers) if (r.rank <= 2) { const L = longueur(r.pts); for (let k = 0; k < Math.ceil(L / 14); k++) VIE.bateaux.push({ pts: r.pts, L, bb: bboxOf(r.pts), s0: hash2(k, r.rank, 5) * L, v: (hash2(k, 7, 5) < .5 ? -1 : 1) * .02, mer: false, ph: hash2(k, L | 0, 8) * 1000 }); }
+  for (const w of m.ways || []) if (w.sea) { const L = longueur(w.pts); for (let k = 0; k < Math.ceil(L / 25); k++) VIE.bateaux.push({ pts: w.pts, L, bb: bboxOf(w.pts), s0: hash2(k, 9, 6) * L, v: (hash2(k, 8, 6) < .5 ? -1 : 1) * .04, mer: true, ph: 0 }); }
   // moulins à vent dans les champs autour des bourgs (vus de dessus, moulinVu)
   VIE.moulins = [];
   for (const n of NOEUDS) {
@@ -195,7 +186,7 @@ export function majEtat(st) {
     for (let j = Math.max(0, Math.floor(y - r)); j <= Math.min(H - 1, y + r); j++) for (let i = Math.max(0, Math.floor(x - r)); i <= Math.min(W - 1, x + r); i++)
       if (Math.hypot(i + .5 - x, j + .5 - y) < r) D_ETAT[j * W + i] = Math.min(D_ETAT[j * W + i], v);
   };
-  for (const n of ns) if (n.sg) { const g = NOEUDS[n.id]; if (g) tampon(...site(g), rayonPlace(g) + 4, .06); }
+  for (const n of ns) if (n.sg) { const g = NOEUDS[n.id]; if (g) tampon(g.x, g.y, rayonPlace(g) + 4, .06); }
   for (const b of st?.battles || []) tampon(b.x, b.y, 5, .1);
   // marchés : les places du joueur qui ont la chaîne du commerce ; foires : l'événement local
   VIE.marches = ns.filter(n => n.sl?.some(s => s[0] === 'marche' && s[1] > 0) && !n.sg && n.lv?.[0] !== 'disette' && n.lv?.[0] !== 'epidemie').map(n => {
@@ -214,21 +205,10 @@ export function majEtat(st) {
     let a = 0;
     if (r) { const pts = r.a === g.id ? r.pts : r.pts.slice().reverse(), p = pts.find(q => Math.hypot(q[0] - g.x, q[1] - g.y) > .9) || pts[pts.length - 1]; a = Math.atan2(p[1] - g.y, p[0] - g.x) + .5; }
     const d = rayonPlace(g) * 1.2 + .15;
-    VIE.foires.push({ n: g, x: site(g)[0] + Math.cos(a) * d, y: site(g)[1] + Math.sin(a) * d, a });
+    VIE.foires.push({ n: g, x: g.x + Math.cos(a) * d, y: g.y + Math.sin(a) * d, a });
   }
   // les routes autour des foires sont plus passantes
   VIE.foireRoutes = new Set(VIE.routes.filter(r => VIE.foires.some(f => Math.hypot(Math.max(r.bb[0] - f.x, 0, f.x - r.bb[2]), Math.max(r.bb[1] - f.y, 0, f.y - r.bb[3])) < 12)).map(r => r.ie));
-  // la circulation (« Livré — le trafic des routes ») : aux portes d'une ville de pop habitants, Q = 300 (pop / 110 000)^0,6
-  // voitures par jour sur une route royale (Bordeaux 300, plusieurs centaines aux portes ; Bayonne 80, Libourne 60, un bourg
-  // de 3 000 veh. 35, un village de 700 : 14), le tiers sur un chemin ; jour de marché × 1,5, foire × 2,5 ; elle s'éteint
-  // vers la campagne sur λ = 2 + 4 √(pop / 110 000) km (Bordeaux 6, Libourne 3, un village 2,3). En voyageurs par km
-  // (piétons et cavaliers compris, 60 % de voitures ; douze heures de jour, 5 km/h) : Q / 36, comptés depuis la porte (le
-  // rayon de la ville). villes : [voyageurs, λ, bout, porte]
-  const marche = new Set(VIE.marches.map(m => m.n.id)), foire = new Set(VIE.foires.map(f => f.n.id));
-  for (const r of VIE.routes) r.villes = [r.a, r.b].map((id, i) => {
-    const pop = ns[id]?.pop || NOEUDS[id]?.pop0 || 700, p = pop / 110000, lam = 2 + 4 * Math.sqrt(p);
-    return [Math.round(300 * p ** .6 * (r.royal ? 1 : 1 / 3) * (foire.has(id) ? 2.5 : marche.has(id) ? 1.5 : 1) / 36 * lam), lam, i, Math.min(rayon(pop) / S_INT, r.L / 3)];
-  });
   // brigands : sur les routes qui partent d'une place où l'on en signale, une bande tous les quatre kilomètres
   VIE.brigands = [];
   const brig = new Set(ns.filter(n => n.lv?.[0] === 'brigands').map(n => n.id));
@@ -242,21 +222,16 @@ export function majEtat(st) {
 // ---------- petits dessins, en unités de figure (U km), repris de la maquette
 // De loin (moins d'un pixel par unité), les figures se dessinent en deux ou trois taches : les jambes, les bras, les
 // fusils et les épaulettes n'y feraient pas un pixel, et coûteraient le gros de l'image au zoom de la vie.
-// Grossies de K (U = K × FIG / 1000, « Livré — les figures lisibles »), une personne fait au moins 3,5 px : GENS et
-// CHEVAL dès la vie (Z.VIE). La foule d'un marché ou d'une foire, à la vraie taille, se voit en tache.
-let SIMPLE = false, GENS = false, CHEVAL = false;
+let SIMPLE = false;
 function fantassin(g, L, f, p) {
-  if (!GENS) return;
   if (!SIMPLE) return fantassin0(g, L, f, p);
   RR(g, f.habit || L.habit, -1.35, -2.15, 2.7, 4.3, 1.2); C(g, L.tete === 'coiffe' ? '#f2efe6' : '#3a2b1c', 0, 0, 1.3);
 }
 function cheval(g, c, p) {
-  if (!CHEVAL) return;
   if (!SIMPLE) return cheval0(g, c, p);
   E(g, c, 0, 0, 5.3, 2.05); E(g, c, 5.8, 0, 2.4, 1.05);
 }
 function cavalier(g, L, f, p, postillon) {
-  if (!GENS) return;
   if (!SIMPLE) return cavalier0(g, L, f, p, postillon);
   E(g, f.habit || L.habit, -.4, 0, 1.45, 2.05); C(g, '#3a2b1c', 0, 0, 1);
 }
@@ -268,22 +243,26 @@ let LDOU = null;   // les douaniers (tenue des chasseurs)
 PAL.lauze ??= ['#8a8478', '#6a655c', '#4f4b44'];
 if (!SPR.fen) sprite('fen', '255,214,140');   // (les lanternes de LUM ; ciel.js les allume)
 function marcheur(g, k, pas, bagage) { const c = CIVILS[k % CIVILS.length]; fantassin(g, c.L, { role: 'h', habit: c.habit }, { legs: pas, arme: 'aucun' }); if (bagage) C(g, '#b9a37a', -2.1, 0, 1.4); }
-// (à la vraie taille : la caisse de la diligence 4,5 m sur 2, ses quatre chevaux devant, 10 m en tout ; la malle-poste
-// 4 m ; le corbillard 3 m)
+function charrette(g, pas, boeufs, k) {
+  if (!SIMPLE) for (const x of [-4, 4]) { RR(g, '#3a2a1b', x - 2, -3.7, 4, 1, .4); RR(g, '#3a2a1b', x - 2, 2.7, 4, 1, .4); }
+  T(g, '#5b4127', .6, 6, 0, 10, 0); RR(g, '#8a6a45', -6.5, -2.9, 13, 5.8, .6);
+  RR(g, ['#b8a27a', '#d6ba5c', '#6b8fb5'][k % 3], -5.5, -2.2, 10, 4.4, .5);
+  for (const y of boeufs ? [-2.4, 2.4] : [0]) { g.save(); g.translate(15, y); cheval(g, boeufs ? '#d2bf95' : '#6b4a2c', { gait: pas, bob: 0 }); if (boeufs) { T(g, '#efe6cc', .35, 7.7, -.6, 8.3, -1.4); T(g, '#efe6cc', .35, 7.7, .6, 8.3, 1.4); } g.restore(); }
+}
 function diligence(g, pas) {
-  for (const x of [-9, 9]) { RR(g, '#e3c04f', x - 3.5, -7.6, 7, 1.6, .6); RR(g, '#e3c04f', x - 3.5, 6, 7, 1.6, .6); }
-  RR(g, '#2f4a3a', -15, -6.5, 30, 13, 2); RR(g, '#1c1b1d', -13, -5.3, 19, 10.6, 1.6); RR(g, '#b9a37a', -13.5, -4.6, 8, 9.2, 1);
-  for (const x of [26, 43]) for (const y of [-3.5, 3.5]) { g.save(); g.translate(x, y); cheval(g, x === 26 ? '#6b4a2c' : '#3f2d1f', { gait: pas + x, bob: 0 }); g.restore(); }
+  for (const x of [-5, 5]) { RR(g, '#e3c04f', x - 2.2, -4.2, 4.4, 1, .4); RR(g, '#e3c04f', x - 2.2, 3.2, 4.4, 1, .4); }
+  RR(g, '#2f4a3a', -7, -3.4, 14, 6.8, 1.2); RR(g, '#1c1b1d', -6, -2.8, 9, 5.6, 1); RR(g, '#b9a37a', -6.4, -2.4, 4, 4.8, .6);
+  for (const x of [15, 26]) for (const y of [-2.6, 2.6]) { g.save(); g.translate(x, y); cheval(g, x === 15 ? '#6b4a2c' : '#3f2d1f', { gait: pas + x, bob: 0 }); g.restore(); }
 }
 function mallePoste(g, pas) {
-  for (const x of [-8, 8]) { RR(g, '#1c1b1d', x - 3.5, -7.2, 7, 1.6, .6); RR(g, '#1c1b1d', x - 3.5, 5.6, 7, 1.6, .6); }
-  RR(g, '#c9a12c', -13, -6, 26, 12, 2); RR(g, '#2a2a2e', -11, -4.6, 14, 9.2, 1.4); RR(g, '#7a6a4f', 4.5, -4.6, 7, 9.2, .8);   // caisse jaune, impériale bâchée, coffre des dépêches
-  for (const x of [24, 41]) for (const y of [-3.5, 3.5]) { g.save(); g.translate(x, y); cheval(g, x === 24 ? '#6b4a2c' : '#8b6a47', { gait: pas * 1.5 + x + y, bob: 0 }); g.restore(); }
+  for (const x of [-5, 5]) { RR(g, '#1c1b1d', x - 2.2, -4.2, 4.4, 1, .4); RR(g, '#1c1b1d', x - 2.2, 3.2, 4.4, 1, .4); }
+  RR(g, '#c9a12c', -7.5, -3.4, 15, 6.8, 1.2); RR(g, '#2a2a2e', -6.5, -2.6, 8, 5.2, .8); RR(g, '#7a6a4f', 2.5, -2.6, 4, 5.2, .5);   // caisse jaune, impériale bâchée, coffre des dépêches
+  for (const x of [16, 27]) for (const y of [-2.6, 2.6]) { g.save(); g.translate(x, y); cheval(g, x === 16 ? '#6b4a2c' : '#8b6a47', { gait: pas * 1.5 + x + y, bob: 0 }); if (x === 16 && y < 0) cavalier(g, LCIV, { habit: '#2f4f9c' }, { sabre: 0, bob: 0 }, true); g.restore(); }
 }
 function convoiFunebre(g, pas) {
-  RR(g, '#2a2420', -10, -5.3, 20, 10.6, .8); RR(g, '#5b4127', -6.5, -2, 13, 4, .5); T(g, '#efe6cc', .6, -1.5, 0, 3, 0); T(g, '#efe6cc', .6, 0, -1.5, 0, 1.5);
-  g.save(); g.translate(19, 0); cheval(g, '#2e2119', { gait: pas * .6, bob: 0 }); g.restore();
-  for (let m = 0; m < 3; m++) { g.save(); g.translate(-15 - m * 6, (m % 2 ? 2.4 : -2.4)); fantassin(g, CIVILS[m].L, { role: 'h', habit: '#1f1d1d' }, { legs: pas * .6 + m, arme: 'aucun' }); g.restore(); }
+  RR(g, '#2a2420', -6, -2.6, 12, 5.2, .6); RR(g, '#5b4127', -4.5, -1.4, 9, 2.8, .4); T(g, '#efe6cc', .4, -1, 0, 2, 0); T(g, '#efe6cc', .4, 0, -1, 0, 1);
+  g.save(); g.translate(13, 0); cheval(g, '#2e2119', { gait: pas * .6, bob: 0 }); g.restore();
+  for (let m = 0; m < 3; m++) { g.save(); g.translate(-10 - m * 4, (m % 2 ? 1.5 : -1.5)); fantassin(g, CIVILS[m].L, { role: 'h', habit: '#1f1d1d' }, { legs: pas * .6 + m, arme: 'aucun' }); g.restore(); }
 }
 function mouton(g, x, y, a, c = '#efeade') { if (!SIMPLE) E(g, OMBRE, x + .8, y + 1, 1.9, 1.2, a); E(g, c, x, y, 1.9, 1.2, a); C(g, '#2c2a28', x + Math.cos(a) * 2, y + Math.sin(a) * 2, .6); }
 function vache(g, x, y, a, robe) { E(g, OMBRE, x + 1, y + 1.3, 4.3, 1.9, a); E(g, robe, x, y, 4.3, 1.9, a); E(g, sombre(robe, .1), x + Math.cos(a) * 4.6, y + Math.sin(a) * 4.6, 1.4, .95, a); }
@@ -298,7 +277,7 @@ function etal(g, k) {
 function troupeauTrans(g, t, pas) {
   g.save(); g.translate(7, 0); marcheur(g, 4, pas, false); T(g, '#6b4d31', .4, .5, 1.8, 4.8, 2.6); g.restore();
   for (let m = 0; m < 46; m++) { const ox = -3 - (m % 9) * 2.6 - (m / 9 | 0) * 2.4 + Math.sin(t * 1.3 + m) * .4, oy = ((m * 7) % 11 - 5) * 1.15 + Math.sin(t + m * 2) * .3; mouton(g, ox, oy, Math.sin(t + m) * .3); }
-  g.save(); g.translate(-30, 0); g.scale(.4, .4); cheval(g, '#7d7366', { gait: pas, bob: 0 }); RR(g, '#8a6a45', -2.5, -3.2, 5, 1.6, .4); RR(g, '#8a6a45', -2.5, 1.6, 5, 1.6, .4); g.restore();   // l'âne bâté
+  g.save(); g.translate(-30, 0); g.scale(.75, .75); cheval(g, '#7d7366', { gait: pas, bob: 0 }); RR(g, '#8a6a45', -2.5, -3.2, 5, 1.6, .4); RR(g, '#8a6a45', -2.5, 1.6, 5, 1.6, .4); g.restore();   // l'âne bâté
   chien(g, -12 + Math.sin(t * .7) * 4, -8, Math.sin(t) * .4, t); chien(g, -20 + Math.cos(t * .6) * 4, 8, Math.PI + Math.sin(t) * .4, t + 2);
   g.save(); g.translate(-37, 1); marcheur(g, 5, pas, true); g.restore();
 }
@@ -353,11 +332,11 @@ function loups(sc, g, x, y, t, h) {
   }
 }
 function bucherons(sc, g, x, y, t, h) {
-  const a = h * 20; figK(sc, g, x, y, a, 4);   // (la charbonnière de 5 m, l'arbre abattu de 8)
+  const a = h * 20; figK(sc, g, x, y, a);
   charbonniere(g, 14, 8); stere(g, -10, 6);
   T(g, '#6b4d31', 1.4, -4, -8, 8, -11); for (const k of [0, 1, 2]) C(g, BOIS[k + 1], 6 + k * 1.5, -11 + k, 1.8);   // l'arbre abattu
   for (const [ox, oy, k] of [[0, 0, 0], [4.5, -4, 1]]) { g.save(); g.translate(ox, oy); fantassin(g, CIVILS[3 + k].L, { role: 'h', habit: CIVILS[3 + k].habit }, { legs: null, arme: 'hache', ext: mod(t * .9 + k * .5, 1) }); g.restore(); }
-  if (sc.on && Math.random() < .04) { const [fx, fy] = versMonde(x, y, a, 14, 8, 4); fumee(sc, fx, fy, 0, 0, .003, .03, 7, .3); }   // la charbonnière fume
+  if (sc.on && Math.random() < .04) { const [fx, fy] = versMonde(x, y, a, 14, 8); fumee(sc, fx, fy, 0, 0, .003, .03, 7, .3); }   // la charbonnière fume
 }
 function moisson(sc, g, x, y, t, h) {
   figK(sc, g, x, y, h * 7);
@@ -382,9 +361,9 @@ function vendanges(sc, g, x, y, t, h) {
   g.save(); g.translate(-14, 11); charrette(g, 0, true, 2); for (const cx of [-3.5, 0, 3.5]) { C(g, '#6b4a2c', cx, 0, 1.6); C(g, '#4a2747', cx, 0, 1.1); } g.restore();   // les comportes
 }
 function estive(sc, g, x, y, t, h) {
-  figK(sc, g, x, y, h * 9, 2);   // (des brebis de 1,2 m, sur 13 m sur 8)
-  bat(g, [{ t: 'g', x: -6, y: -4, w: 12, h: 8, p: 'lauze', h2: 1.2 }], -30, -14, .3, 1.7);   // le cayolar, la cabane du berger (6 m)
-  g.strokeStyle = '#a39a88'; g.lineWidth = 2; g.beginPath(); g.arc(-30, 14, 25, 0, TAU); g.stroke();   // le parc de pierres sèches (15 m)
+  figK(sc, g, x, y, h * 9);
+  bat(g, [{ t: 'g', x: -6, y: -4, w: 12, h: 8, p: 'lauze', h2: 1.2 }], -16, -8, .3, 1);   // le cayolar, la cabane du berger
+  g.strokeStyle = '#a39a88'; g.lineWidth = 1.1; g.beginPath(); g.arc(-17, 7, 6, 0, TAU); g.stroke();   // le parc de pierres sèches
   for (let m = 0; m < 30; m++) { const px = (hash2(m, h * 999 | 0, 140) - .5) * 44, py = (hash2(h * 999 | 0, m, 141) - .5) * 26; mouton(g, px + Math.sin(t * .05 + m) * 1.2, py + Math.cos(t * .04 + m) * .8, hash2(m, 3, 142) * TAU + Math.sin(t * .1 + m) * .3); }
   g.save(); g.translate(-8, 2); marcheur(g, 6, 0, false); g.restore(); chien(g, 14, -3, 2 + Math.sin(t * .5), t);
 }
@@ -397,38 +376,22 @@ function paludiers(sc, g, i, j, t) {
 }
 
 // ---------- au plus près (z ≥ Z.VIE) : passants sur les routes, bêtes, travaux, transhumance, brigands
-// (km/s, les vraies : la malle-poste au trot allongé, 15 km/h ; une charrette 5 km/h ; des bœufs 3)
-const VITESSE = { malle: .004, diligence: .0028, cavalier: .003, charrette: .0013, boeufs: .0008, troupeau: .0007, pieton: .0013, convoi: .0009, mendiant: .001 };
-// leur taille, en unités de figure (une personne 4,3, un cheval 16, une charrette attelée 41, la diligence 58) : sous un pixel, rien
-const TAILLE = { malle: 54, diligence: 58, cavalier: 16, charrette: 41, boeufs: 41, troupeau: 16, pieton: 4.3, convoi: 40, mendiant: 4.3 };
-// (sous 6 px de long, une tache de sa couleur, sur la route : les dessins coûtaient trop aux portes de Bordeaux)
-const TEINTE = { malle: '#3a3f4f', diligence: '#5a4632', cavalier: '#5d4a36', charrette: '#8a6a45', boeufs: '#b9a37a', troupeau: '#e6e2d6', convoi: '#2a2622', mendiant: '#4a4338', pieton: '#6e5c45' };
+const VITESSE = { malle: .045, diligence: .03, cavalier: .025, charrette: .009, boeufs: .006, troupeau: .004, pieton: .0045, convoi: .004, mendiant: .003 };
 function vieDePres(sc, g, x0, y0, x1, y1) {
   const t = sc.time, dans = (x, y) => x > x0 - .2 && x < x1 + .2 && y > y0 - .2 && y < y1 + .2, soir = bivouac();
   for (const r of VIE.routes) {
     const bb = r.bb; if (bb[2] < x0 - .2 || bb[0] > x1 + .2 || bb[3] < y0 - .2 || bb[1] > y1 + .2) continue;
-    // le passage d'un bout à l'autre (40 voitures par jour sur une route royale, 4 sur un chemin : Q / 36 voyageurs par km),
-    // puis ceux des deux villes, qui vont et reviennent : chacun jusqu'à D, tiré pour que la foule décroisse en e^(-d/λ)
-    const L = r.L, ie = r.ie, n = Math.ceil(L * (r.royal ? 40 : 4) / 36 * (VIE.foireRoutes.has(ie) ? 1.6 : 1)), [va, vb] = r.villes || [[0], [0]];
-    const taches = new Map();
-    for (let k = 0; k < n + va[0] + vb[0]; k++) {
-      const h = hash2(ie, k, 31), sorte = hash2(ie, k, 32);
+    const L = r.L, ie = r.ie, n = Math.ceil(L / (r.royal ? 1.1 : 2.2) * (VIE.foireRoutes.has(ie) ? 1.6 : 1));
+    for (let k = 0; k < n; k++) {
+      const h = hash2(ie, k, 31), sens = h < .5 ? 1 : -1, sorte = hash2(ie, k, 32);
       let kind = r.royal ? (sorte < .05 ? 'malle' : sorte < .12 ? 'diligence' : sorte < .4 ? 'charrette' : sorte < .55 ? 'cavalier' : sorte < .62 ? 'troupeau' : 'pieton') : (sorte < .35 ? 'boeufs' : sorte < .5 ? 'troupeau' : sorte < .58 ? 'cavalier' : 'pieton');
-      if (!vue(sc.z, sorte > .55 ? TAILLE.convoi : TAILLE[kind])) continue;   // (rien sous le pixel : ni calcul ni dessin)
-      if (hash2(ie, k, 38) * K > 9) continue;   // (grossis de K, un voyageur sur K / 9 : une figure tous les 100 px environ aux portes de Bordeaux, à tout zoom)
-      let s, sens = h < .5 ? 1 : -1;
-      if (k < n) s = mod(h * L + sens * VITESSE[kind] * t, L);
-      else { const [, lam, i, r0] = k < n + va[0] ? va : vb, D = clamp(-lam * Math.log(hash2(ie, k, 36) * hash2(ie, k, 37) + 1e-9), .3, L - r0), u = h * 2 * D + VITESSE[kind] * t, q = r0 + pingpong(u, D); s = i ? L - q : q; sens = (mod(u, 2 * D) < D) === !i ? 1 : -1; }
-      const p = surChemin(r.pts, s); if (!dans(p.x, p.y) || hash2(ie, k, 34) > densite(p.x, p.y)) continue;   // (pays déserté)
-      const mal = malheur(p.x, p.y);
+      const p0 = surChemin(r.pts, h * L); if (hash2(ie, k, 34) > densite(p0.x, p0.y)) continue;   // pays déserté
+      const mal = malheur(p0.x, p0.y);
       if (mal && sorte > .55) kind = mal === 2 && hash2(ie, k, 35) < .4 ? 'convoi' : 'mendiant';
-      if (!vue(sc.z, TAILLE[kind])) continue;
-      const a = p.a + (sens < 0 ? Math.PI : 0), cote = Math.max(.003, .001 * K), x = p.x - Math.sin(a) * cote, y = p.y + Math.cos(a) * cote, pas = t * 1.7 * TAU + k;
-      if (soir && (kind === 'malle' || kind === 'diligence')) { const [lx, ly] = versMonde(x, y, a, 8, 0); LUM.push({ x: lx, y: ly, r: .012, a: .8, spr: 'fen' }); }   // la lanterne
-      if (sc.z * U * TAILLE[kind] < 3) { let l = taches.get(TEINTE[kind]); if (!l) taches.set(TEINTE[kind], l = []); l.push(x, y, a, TAILLE[kind] * U / 2); continue; }
+      const p = surChemin(r.pts, mod(h * L + sens * VITESSE[kind] * t, L)); if (!dans(p.x, p.y)) continue;
+      const a = p.a + (sens < 0 ? Math.PI : 0), cote = .012, x = p.x - Math.sin(a) * cote, y = p.y + Math.cos(a) * cote, pas = t * 1.7 * TAU + k;
       figK(sc, g, x, y, a);
       if (kind === 'troupeau') {
-        g.scale(2, 2);   // (des brebis de 1,2 m)
         marcheur(g, k, pas, false); T(g, '#6b4d31', .4, .4, 2, 5, 2.8);
         for (let m = 0; m < 9; m++) { const ox = -5 - (m % 3) * 3, oy = ((m / 3 | 0) - 1) * 2.6 + Math.sin(t * 2 + m) * .4; g.save(); g.translate(ox * 1.4 - 4, oy); brebis(g, '#f1efe6'); g.restore(); }
       } else if (kind === 'malle') mallePoste(g, pas);
@@ -438,63 +401,53 @@ function vieDePres(sc, g, x0, y0, x1, y1) {
       else if (kind === 'charrette' || kind === 'boeufs') charrette(g, pas, kind === 'boeufs', k);
       else if (kind === 'cavalier') { cheval(g, ['#6b4a2c', '#3f2d1f', '#8b6a47'][k % 3], { gait: pas * 1.4, bob: 0 }); cavalier(g, LCIV, { habit: '#5d6b86' }, { sabre: 0, bob: 0 }); }
       else marcheur(g, k, pas, hash2(ie, k, 33) < .5);
-    }
-    if (taches.size) {   // (une tache longue comme la voiture, large du tiers, au moins un pixel ; d'un tracé par couleur)
-      sc.monde(g);
-      for (const [c, l] of taches) {
-        g.beginPath();
-        for (let i = 0; i < l.length; i += 4) { const [x, y, a, h] = l.slice(i, i + 4), e = Math.max(h / 3, .5 / sc.z), ca = Math.cos(a), sa = Math.sin(a); g.moveTo(x - ca * h + sa * e, y - sa * h - ca * e); g.lineTo(x + ca * h + sa * e, y + sa * h - ca * e); g.lineTo(x + ca * h - sa * e, y + sa * h + ca * e); g.lineTo(x - ca * h - sa * e, y - sa * h + ca * e); }
-        g.fillStyle = c; g.fill();
-      }
+      if (soir && (kind === 'malle' || kind === 'diligence')) { const [lx, ly] = versMonde(x, y, a, 8, 0); LUM.push({ x: lx, y: ly, r: .012, a: .8, spr: 'fen' }); }   // la lanterne
     }
   }
-  // (chaque chose dès qu'elle fait un pixel : le troupeau à son âne et ses chiens, les brigands à leur cheval, les bêtes des
-  // champs à leur vache, chaque travail à ce qu'il a de plus grand ; en dessous, rien n'est calculé)
-  const z = sc.z;
-  if ((AMB.saison === 'printemps' || AMB.saison === 'automne') && vue(z, TAILLE.troupeau)) for (const f of VIE.transhumances) {
+  if (AMB.saison === 'printemps' || AMB.saison === 'automne') for (const f of VIE.transhumances) {
     const sens = AMB.saison === 'automne' ? -f.haut : f.haut, p = surChemin(f.pts, mod(f.s0 + sens * .0028 * t, f.L));
     if (!dans(p.x, p.y) || hash2(f.ie, 2, 101) > densite(p.x, p.y) + .2) continue;
-    figK(sc, g, p.x, p.y, p.a + (sens < 0 ? Math.PI : 0), 2); troupeauTrans(g, t, t * 1.7 * TAU);   // (des brebis de 1,2 m)
+    figK(sc, g, p.x, p.y, p.a + (sens < 0 ? Math.PI : 0)); troupeauTrans(g, t, t * 1.7 * TAU);
   }
   for (const b of VIE.brigands) {
-    if (!dans(b.x, b.y) || !vue(z, b.proie ? TAILLE.diligence : TAILLE.cavalier)) continue;
+    if (!dans(b.x, b.y)) continue;
     figK(sc, g, b.x - Math.sin(b.a) * .006 * b.c, b.y + Math.cos(b.a) * .006 * b.c, b.a + (b.c < 0 ? Math.PI : 0)); brigands(g, t, b.proie && AMB.heure !== 'nuit');
   }
   // bêtes et travaux : chaque kilomètre de pays a les siens (même endroit, mêmes bêtes). De loin, les bêtes sont des
   // taches rangées par couleur et peintes d'un seul tracé chacune (taches, à la fin)
-  const sa = AMB.saison, taches = new Map(), betes = vue(z, 12);   // (une vache de 2,2 m ; un cerf, 1,8)
+  const sa = AMB.saison, taches = new Map();
   const tache = (c, x, y, rx, ry, a) => { let l = taches.get(c); if (!l) taches.set(c, l = []); l.push(x, y, rx * U, ry * U, a); };
   for (let j = Math.max(0, Math.floor(y0)); j <= Math.min(VIE.H - 1, y1); j++) for (let i = Math.max(0, Math.floor(x0)); i <= Math.min(VIE.W - 1, x1); i++) {
-    const tt = TER[j * VIE.W + i]; if (tt <= 1 || hash2(i, j, 39) * K > 18) continue;   // (grossis de K, un kilomètre sur K / 18 : à z 110, un tiers)
+    const tt = TER[j * VIE.W + i]; if (tt <= 1) continue;
     const cx = i + .5, cy = j + .5, dc = densite(cx, cy);
-    if (betes && hash2(i, j, 76) <= dc) {
+    if (hash2(i, j, 76) <= dc) {
       const h = hash2(i, j, 77), bx = i + .2 + hash2(i, j, 78) * .6, by = j + .2 + hash2(j, i, 79) * .6;
-      const troupe = (n, fn) => { n = Math.min(n, Math.max(1, Math.round(n * 3 / K))); for (let m = 0; m < n; m++) { const ph = m * 2.1 + h * 9, x = bx + Math.cos(ph) * .03 + Math.sin(t * .05 + ph) * .02, y = by + Math.sin(ph * 1.3) * .025 + Math.cos(t * .04 + ph) * .015; if (dans(x, y)) fn(x, y, ph + t * .05, m); } };   // (grossies de K, moins de bêtes : pas en tas)
+      const troupe = (n, fn) => { for (let m = 0; m < n; m++) { const ph = m * 2.1 + h * 9, x = bx + Math.cos(ph) * .03 + Math.sin(t * .05 + ph) * .02, y = by + Math.sin(ph * 1.3) * .025 + Math.cos(t * .04 + ph) * .015; if (dans(x, y)) fn(x, y, ph + t * .05, m); } };
       if ((tt === TT.PLAINE || tt === TT.COLLINES || tt === TT.MONTAGNE) && h < .22 * BETES[sa] && neige(cx, cy) < .5) {
-        if (SIMPLE) { if (h < .1) troupe(5, (x, y, a, m) => { const robe = m % 2 ? '#efe9dd' : '#c9a07a'; tache(robe, x, y, 6.2, 2.75, a); tache(sombre(robe, .08), ...versMonde(x, y, a, 6.7, 0), 2, 1.4, a); }); else troupe(10, (x, y, a) => tache('#f1efe6', x, y, 3.8, 2.6, a)); }   // (vaches de 2,2 m, brebis de 1,2 m)
+        if (SIMPLE) { if (h < .1) troupe(5, (x, y, a, m) => { const robe = m % 2 ? '#efe9dd' : '#c9a07a'; tache(robe, x, y, 4.3, 1.9, a); tache(sombre(robe, .08), ...versMonde(x, y, a, 4.6, 0), 1.4, .95, a); }); else troupe(10, (x, y, a) => tache('#f1efe6', x, y, 1.9, 1.3, a)); }
         else if (h < .1) troupe(5, (x, y, a, m) => { figK(sc, g, x, y, a); const robe = m % 2 ? '#efe9dd' : '#c9a07a'; E(g, robe, 0, 0, 4.3, 1.9); E(g, '#3a2c22', -1.2, .5, 1.4, .9); E(g, sombre(robe, .08), 4.6 + Math.max(0, Math.sin(t + m)) * .8, 0, 1.4, .95); });
         else troupe(10, (x, y, a) => { figK(sc, g, x, y, a); brebis(g, '#f1efe6'); });
       } else if (tt === TT.FORET && h < .16) {
         const sanglier = h < .06;
-        if (SIMPLE) troupe(sanglier ? 3 : 4, (x, y, a, m) => { tache(sanglier ? '#3a2c22' : m ? '#9a6a40' : '#8a5a34', x, y, sanglier ? 4.4 : 5.8, sanglier ? 2.2 : 2, a); if (!sanglier) tache('#7a4a2a', ...versMonde(x, y, a, 8.3, 0), 1.5, .9, a); });   // (cerfs de 1,8 m, sangliers de 1,3)
+        if (SIMPLE) troupe(sanglier ? 3 : 4, (x, y, a, m) => { tache(sanglier ? '#3a2c22' : m ? '#9a6a40' : '#8a5a34', x, y, sanglier ? 2.6 : 3.4, sanglier ? 1.3 : 1.2, a); if (!sanglier) tache('#7a4a2a', ...versMonde(x, y, a, 4.9, 0), .9, .55, a); });
         else troupe(sanglier ? 3 : 4, (x, y, a, m) => { figK(sc, g, x, y, a); if (sanglier) { E(g, '#3a2c22', 0, 0, 2.6, 1.3); E(g, '#2a1f18', 2.6, 0, 1, .7); } else { E(g, m ? '#9a6a40' : '#8a5a34', 0, 0, 3.4, 1.2); E(g, '#f1e6d0', -3, 0, .7, .6); T(g, '#8a5a34', .7, 2.6, 0, 4.6, 0); E(g, '#7a4a2a', 4.9, 0, .9, .55); if (!m) { T(g, '#5b3d24', .3, 4.9, -.4, 5.8, -1.6); T(g, '#5b3d24', .3, 4.9, .4, 5.8, 1.6); } } });
       } else if (tt === TT.LANDE && h < .14 && neige(cx, cy) < .5) {
         // le berger landais sur ses échasses : on voit surtout la longue ombre des échasses
         figK(sc, g, bx, by, h * 9);
         T(g, 'rgba(20,20,10,.35)', .5, 1, 1.4, 14, 18); T(g, 'rgba(20,20,10,.35)', .5, 1.5, .4, 15, 16.5); marcheur(g, 3, t * 2, false);
-        if (SIMPLE) troupe(12, (x, y, a) => tache('#ece6d6', x + .02, y + .02, 3.8, 2.6, a)); else troupe(12, (x, y, a) => { figK(sc, g, x + .02, y + .02, a); brebis(g, '#ece6d6'); });
+        if (SIMPLE) troupe(12, (x, y, a) => tache('#ece6d6', x + .02, y + .02, 1.9, 1.3, a)); else troupe(12, (x, y, a) => { figK(sc, g, x + .02, y + .02, a); brebis(g, '#ece6d6'); });
       } else if (tt === TT.MARAIS && h < .3) troupe(3, SIMPLE ? (x, y, a) => tache('#d9dcd8', x, y, 1.3, .55, a) : (x, y, a) => { figK(sc, g, x, y, a); E(g, '#d9dcd8', 0, 0, 1.3, .55); T(g, '#c9ccc8', .35, 1.2, 0, 2.6, 0); });   // hérons
       else if (tt === TT.VIGNE && h < .12 && (sa === 'printemps' || sa === 'ete')) troupe(4, (x, y, a, m) => { figK(sc, g, x, y, Math.PI / 2); marcheur(g, m, 0, false); });
     }
     if (hash2(i, j, 80) > dc) continue;
     const h = hash2(i, j, 81), bx = i + .25 + hash2(i, j, 82) * .5, by = j + .25 + hash2(j, i, 83) * .5;
-    if (VIE.saline.has(j * VIE.W + i) && (sa === 'ete' || sa === 'automne') && h < .6 && vue(z, 6)) paludiers(sc, g, i, j, t);   // (le grand râteau)
+    if (VIE.saline.has(j * VIE.W + i) && (sa === 'ete' || sa === 'automne') && h < .6) paludiers(sc, g, i, j, t);
     if (!dans(bx, by)) continue;
-    if (tt === TT.FORET && pinede(bx, by)) { if (h < .22 && sa !== 'hiver' && vue(z, 13)) resinier(sc, g, bx, by, t, h); }   // (le pot, le houppier)
-    else if (tt === TT.FORET) { if (sa === 'hiver' && h < .1) { if (vue(z, 8)) loups(sc, g, bx, by, t, h); } else if (h > .88) bucherons(sc, g, bx, by, t, h); }
+    if (tt === TT.FORET && pinede(bx, by)) { if (h < .22 && sa !== 'hiver') resinier(sc, g, bx, by, t, h); }
+    else if (tt === TT.FORET) { if (sa === 'hiver' && h < .1) loups(sc, g, bx, by, t, h); else if (h > .88) bucherons(sc, g, bx, by, t, h); }
     else if ((tt === TT.PLAINE || tt === TT.COLLINES) && neige(bx, by) < .5 && !malheur(bx, by)) {
       if (sa === 'ete' && h < .22) moisson(sc, g, bx, by, t, h);
-      else if ((sa === 'automne' || sa === 'printemps') && h > .8 && CHEVAL) labour(sc, g, bx, by, t, h);   // (les bœufs)
+      else if ((sa === 'automne' || sa === 'printemps') && h > .8) labour(sc, g, bx, by, t, h);
     } else if (tt === TT.VIGNE && sa === 'automne' && h < .45 && !malheur(bx, by)) vendanges(sc, g, bx, by, t, h);
     else if ((tt === TT.MONTAGNE || tt === TT.HAUTE) && sa === 'ete' && h < .3 && neige(bx, by) < .5) estive(sc, g, bx, by, t, h);
   }
@@ -506,51 +459,49 @@ function vieDePres(sc, g, x0, y0, x1, y1) {
 
 // ---------- l'eau : bateaux, bois flotté, pêcheurs, parcs à huîtres, cabanes tchanquées, carrelets
 function eaux(sc, g, x0, y0, x1, y1, epoque) {
-  // (à la vraie taille, au moins 3 px de long : une gabare de 20 m, un navire de 40, une pinasse de 10, un train de bois de 30)
-  const z = sc.z, t = sc.time, k = Math.max(.00125, .19 / z), soir = bivouac(), tempete = k2 => meteoEn(k2.x, k2.y) === 'tempete';
+  const z = sc.z, t = sc.time, k = Math.max(.006, 2 / z), soir = bivouac(), tempete = k2 => meteoEn(k2.x, k2.y) === 'tempete';
   const vu = bb => !(bb[2] < x0 || bb[0] > x1 || bb[3] < y0 || bb[1] > y1);
   if (z >= 40) {
     sc.monde(g);
     for (const [x, y, a] of VIE.parcs) { if (x < x0 || x > x1 || y < y0 || y > y1) continue; g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = 'rgba(196,204,186,.4)'; g.fillRect(-.16, -.08, .32, .16); g.strokeStyle = '#5e5440'; g.lineWidth = Math.max(.003, .6 / z); for (let u = -.15; u <= .151; u += .05) { g.beginPath(); g.moveTo(u, -.07); g.lineTo(u, .07); g.stroke(); } g.strokeRect(-.15, -.07, .3, .14); g.restore(); }
-    for (const [x, y] of VIE.tchanquees) { if (x < x0 || x > x1 || y < y0 || y > y1) continue; figK(sc, g, x, y, .4, 5 / K); for (const [lx, ly] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) T(g, 'rgba(20,30,40,.35)', .5, lx, ly, lx + 6, ly + 8); RR(g, '#8a6a45', -4, -4, 8, 8, .4); bat(g, [{ t: 'g', x: -3, y: -2.5, w: 6, h: 5, p: 'tuile', h2: 1 }], 0, 0, 0, 1); }
-    for (const c of VIE.carrelets) { if (c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1) continue; figK(sc, g, c.x, c.y, c.a, 4 / K); T(g, 'rgba(20,30,40,.35)', .6, 2, 1.5, 15, 3.5); T(g, '#6b4d31', .9, 0, 0, 13, 0); RR(g, '#7a5634', -3, -3, 6, 6, .4); RR(g, '#b0503a', -2.4, -2.4, 4.8, 4.8, .3); const lev = Math.sin(t * .15 + c.lev) > .3; g.strokeStyle = lev ? '#d9d2bc' : 'rgba(60,70,70,.55)'; g.lineWidth = .3; g.strokeRect(13, -4, 8, 8); g.beginPath(); g.moveTo(13, -4); g.lineTo(21, 4); g.moveTo(21, -4); g.lineTo(13, 4); g.stroke(); if (lev) for (let m = 0; m < 3; m++) C(g, '#c9d6dd', 15 + m * 2.5, 1 + Math.sin(t * 5 + m), .35); }
+    for (const [x, y] of VIE.tchanquees) { if (x < x0 || x > x1 || y < y0 || y > y1) continue; figK(sc, g, x, y, .4, 1.4); for (const [lx, ly] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) T(g, 'rgba(20,30,40,.35)', .5, lx, ly, lx + 6, ly + 8); RR(g, '#8a6a45', -4, -4, 8, 8, .4); bat(g, [{ t: 'g', x: -3, y: -2.5, w: 6, h: 5, p: 'tuile', h2: 1 }], 0, 0, 0, 1); }
+    for (const c of VIE.carrelets) { if (c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1) continue; figK(sc, g, c.x, c.y, c.a, 1.3); T(g, 'rgba(20,30,40,.35)', .6, 2, 1.5, 15, 3.5); T(g, '#6b4d31', .9, 0, 0, 13, 0); RR(g, '#7a5634', -3, -3, 6, 6, .4); RR(g, '#b0503a', -2.4, -2.4, 4.8, 4.8, .3); const lev = Math.sin(t * .15 + c.lev) > .3; g.strokeStyle = lev ? '#d9d2bc' : 'rgba(60,70,70,.55)'; g.lineWidth = .3; g.strokeRect(13, -4, 8, 8); g.beginPath(); g.moveTo(13, -4); g.lineTo(21, 4); g.moveTo(21, -4); g.lineTo(13, 4); g.stroke(); if (lev) for (let m = 0; m < 3; m++) C(g, '#c9d6dd', 15 + m * 2.5, 1 + Math.sin(t * 5 + m), .35); }
   }
   // gabares et navires (dès Z.BATEAUX, à taille constante à l'écran jusqu'au plus près)
   for (const b of VIE.bateaux) {
     if (!vu(b.bb)) continue;
-    const p = surCumul(b.pts, b.cum, mod(b.s0 + t * b.v, b.L)); if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
+    const p = surChemin(b.pts, mod(b.s0 + t * b.v, b.L)); if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
     if (b.mer && tempete(p)) continue;   // la tempête garde les navires au port
     const a = p.a + (b.v < 0 ? Math.PI : 0);
-    const kb = b.mer ? Math.max(.0018, .14 / z) : k;
-    sc.monde(g); g.save(); g.translate(p.x, p.y); g.rotate(a); g.scale(kb, kb);
+    sc.monde(g); g.save(); g.translate(p.x, p.y); g.rotate(a); g.scale(k, k);
     if (!b.mer && epoque?.vapeur?.(p.x, p.y, b.ph)) {   // (epoque.js) un vapeur à roues sur les fleuves d'un camp qui a les vapeurs
       E(g, 'rgba(20,30,40,.3)', 1.5, 2, 9, 2.4); E(g, '#2f2a26', 0, 0, 9, 2.4); RR(g, '#e8e0cc', -5, -1.4, 7, 2.8, .5);
       for (const s of [-1, 1]) { RR(g, '#5a3d22', -1.8, s * 2.2 - 1, 3.6, 2, .6); }
       C(g, '#7a2a22', 2.6, 0, .9); C(g, '#1c1b1d', 2.6, 0, .5);
       g.restore();
-      if (sc.on && Math.random() < .08) fumee(sc, p.x + Math.cos(a) * 2.6 * kb, p.y + Math.sin(a) * 2.6 * kb, 0, 0, 1.2 * kb, 5 * kb, 4, .4, 'n');
+      if (sc.on && Math.random() < .08) fumee(sc, p.x + Math.cos(a) * 2.6 * k, p.y + Math.sin(a) * 2.6 * k, 0, 0, 1.2 * k, 5 * k, 4, .4, 'n');
     } else {
       E(g, 'rgba(20,30,40,.3)', 1.5, 2, b.mer ? 11 : 8, b.mer ? 3 : 2.2); E(g, '#5b4127', 0, 0, b.mer ? 11 : 8, b.mer ? 3 : 2.2); E(g, '#8a6a45', 0, 0, b.mer ? 9.5 : 6.6, b.mer ? 2 : 1.4);
       if (b.mer) for (const m of [-4, 0, 4]) RR(g, '#ece4cc', m - .8, -4.5, 1.6, 9, .4); else { RR(g, '#e0d2ab', -1, -3.6, 2, 7.2, .4); RR(g, '#b8a27a', -6, -1.2, 4, 2.4, .4); }
       g.restore();
     }
-    if (soir) LUM.push({ x: p.x, y: p.y, r: Math.max(.005, 3 / z), a: .7, spr: 'fen' });
+    if (soir) LUM.push({ x: p.x, y: p.y, r: .02, a: .7, spr: 'fen' });
   }
   if (z < 18) return;
   for (const b of VIE.peche) {
     const ang = t * b.v / b.r + b.ph, x = b.x + Math.cos(ang) * b.r, y = b.y + Math.sin(ang) * b.r * .6; if (x < x0 || x > x1 || y < y0 || y > y1 || tempete(b)) continue;
     const a = Math.atan2(Math.cos(ang) * .6, -Math.sin(ang));
-    const kp = Math.max(.0007, .19 / z); sc.monde(g); g.save(); g.translate(x, y); g.rotate(a); g.scale(kp, kp);
+    sc.monde(g); g.save(); g.translate(x, y); g.rotate(a); g.scale(k, k);
     for (let i = 0; i < 9; i++) { const aa = Math.PI * .5 + i / 8 * Math.PI; C(g, '#efe6cc', -6 + Math.cos(aa) * 7, Math.sin(aa) * 7, .45); }   // les flotteurs du filet
     E(g, 'rgba(20,30,40,.3)', 1.2, 1.6, b.pinasse ? 6 : 8, 1.8); E(g, b.pinasse ? '#2f4a5a' : '#5b4127', 0, 0, b.pinasse ? 6 : 8, 1.8); E(g, '#8a6a45', 0, 0, b.pinasse ? 5 : 7, 1.1);
     C(g, '#7a6a4f', -1.5, 0, .9); C(g, '#5d6b86', 2, 0, .9);
     g.restore();
-    if (soir) LUM.push({ x, y, r: Math.max(.005, 3 / z), a: .8, spr: 'fen' });
+    if (soir) LUM.push({ x, y, r: .02, a: .8, spr: 'fen' });
   }
   for (const r of VIE.radeaux) {
     if (!vu(r.bb)) continue;
-    const p = surCumul(r.pts, r.cum, mod(r.s0 + r.v * t, r.L)); if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
-    const kr = Math.max(.0009, .1 / z); sc.monde(g); g.save(); g.translate(p.x, p.y); g.rotate(p.a); g.scale(kr, kr);
+    const p = surChemin(r.pts, mod(r.s0 + r.v * t, r.L)); if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
+    sc.monde(g); g.save(); g.translate(p.x, p.y); g.rotate(p.a); g.scale(k, k);
     for (let m = 0; m < 3; m++) { RR(g, 'rgba(20,30,40,.3)', -4 - m * 11, -1.6, 10, 4.4, .6); for (let l = 0; l < 4; l++) RR(g, l % 2 ? '#7a5634' : '#8d6a44', -5 - m * 11, -2.2 + l * 1.1, 10, 1, .45); if (m) T(g, '#5b4127', .4, -m * 11 + 5, 0, -m * 11 + 6, 0); }
     g.save(); g.translate(2, 0); marcheur(g, 2, 0, false); T(g, '#6b4d31', .4, 0, 1, 7, 4); g.restore();   // le radelier et sa perche
     g.restore();
@@ -559,13 +510,11 @@ function eaux(sc, g, x0, y0, x1, y1, epoque) {
 function relaisPoste(sc, g, x0, y0, x1, y1) {
   for (const r of VIE.relais) {
     if (r.x < x0 - .2 || r.x > x1 + .2 || r.y < y0 - .2 || r.y > y1 + .2) continue;
-    // (à la vraie taille : le relais de 25 m, sa cour de 40 sur 25, à 30 m de la route)
-    const nx = -Math.sin(r.a) * r.c, ny = Math.cos(r.a) * r.c, x = r.x + nx * .03, y = r.y + ny * .03, a = r.a + (r.c < 0 ? Math.PI : 0);
-    sc.monde(g); g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = '#cdbf9f'; g.fillRect(-.02, -.0125, .04, .025); g.restore();
-    bat(g, [{ t: 'g', x: -14, y: -9, w: 28, h: 7, p: 'tuile', h2: 1.6 }, cheminee(-8, -6), { t: 'g', x: 8, y: -2, w: 7, h: 12, p: 'tuile', h2: 1.3 }, { t: 'g', x: -14, y: 4, w: 16, h: 6, p: 'chaume', h2: 1.1 }], x, y, a, .0009);
-    if (CHEVAL) for (let m = 0; m < (K > 10 ? 1 : 4); m++) {   // (grossis de K, de loin un seul cheval)
-      if (hash2(m, r.x * 10 | 0, 96) > densite(x, y) + .3) continue; figK(sc, g, ...versMonde(x, y, a, -40 + m * 14, 60, 1 / K), a + Math.PI / 2 + m * .3); cheval(g, ['#6b4a2c', '#8b6a47', '#3f2d1f', '#54402e'][m], { bob: 0 }); }   // les chevaux de relève dans la cour
-    LUM.push({ x: r.x + nx * .02, y: r.y + ny * .02, r: Math.max(.006, 3 / sc.z), a: .8, spr: 'fen' });   // la lanterne du relais
+    const nx = -Math.sin(r.a) * r.c, ny = Math.cos(r.a) * r.c, x = r.x + nx * .1, y = r.y + ny * .1, a = r.a + (r.c < 0 ? Math.PI : 0);
+    sc.monde(g); g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = '#cdbf9f'; g.fillRect(-.05, -.03, .1, .06); g.restore();
+    bat(g, [{ t: 'g', x: -14, y: -9, w: 28, h: 7, p: 'tuile', h2: 1.6 }, cheminee(-8, -6), { t: 'g', x: 8, y: -2, w: 7, h: 12, p: 'tuile', h2: 1.3 }, { t: 'g', x: -14, y: 4, w: 16, h: 6, p: 'chaume', h2: 1.1 }], x, y, a, U * 1.1);
+    if (sc.z >= Z.VIE) for (let m = 0; m < 4; m++) { if (hash2(m, r.x * 10 | 0, 96) > densite(x, y) + .3) continue; figK(sc, g, ...versMonde(x, y, a, -6 + m * 4, 1.5, 1.1), a + Math.PI / 2 + m * .3); cheval(g, ['#6b4a2c', '#8b6a47', '#3f2d1f', '#54402e'][m], { bob: 0 }); }   // les chevaux de relève dans la cour
+    LUM.push({ x: r.x + nx * .06, y: r.y + ny * .06, r: .03, a: .8, spr: 'fen' });   // la lanterne du relais
   }
 }
 function contrebande(sc, g, x0, y0, x1, y1) {
@@ -573,11 +522,11 @@ function contrebande(sc, g, x0, y0, x1, y1) {
   for (const P of VIE.sentiers) {
     const [a, b, c, d] = P.bb; if (c < x0 || a > x1 || d < y0 || b > y1) continue;
     sc.monde(g); g.setLineDash([Math.max(.02, 3 / z), Math.max(.015, 2 / z)]); ligne(g, P.pts); g.strokeStyle = 'rgba(189,169,127,.85)'; g.lineWidth = Math.max(.008, .9 / z); g.stroke(); g.setLineDash([]);
-    if (!CHEVAL) continue;   // (mulets et douaniers : dès qu'un mulet fait un pixel)
+    if (z < 60) continue;
     const u = t * .0035 + P.ph * 50, s = pingpong(u, P.L), dir = mod(u, 2 * P.L) < P.L ? 1 : -1;
     // les contrebandiers passent plutôt la nuit, et pas sous les yeux d'une armée
     if (hash2(P.ph * 9 | 0, 1, 143) < densite(P.pts[0][0], P.pts[0][1]) + (AMB.heure === 'nuit' ? .9 : .5)) for (let m = 0; m < 5; m++) {
-      const q = surChemin(P.pts, clamp(s - dir * m * .004 * K, 0, P.L)); if (q.x < x0 || q.x > x1 || q.y < y0 || q.y > y1) continue;
+      const q = surChemin(P.pts, clamp(s - dir * m * .014, 0, P.L)); if (q.x < x0 || q.x > x1 || q.y < y0 || q.y > y1) continue;
       figK(sc, g, q.x, q.y, q.a + (dir < 0 ? Math.PI : 0)); const pas = t * 1.5 * TAU + m;
       if (m % 2) { cheval(g, '#5e4b3a', { gait: pas, bob: 0 }); RR(g, '#c9b48a', -2.4, -3.6, 4.8, 1.7, .4); RR(g, '#c9b48a', -2.4, 1.9, 4.8, 1.7, .4); T(g, '#6b4d31', .3, 0, -2, 0, 2); }   // mulets chargés de ballots
       else { fantassin(g, CIVILS[m].L, { role: 'h', habit: '#3a3530' }, { legs: pas, arme: 'aucun' }); C(g, '#2a2622', -.2, 0, 1.1); }   // le béret noir
@@ -589,7 +538,7 @@ function contrebande(sc, g, x0, y0, x1, y1) {
   }
 }
 function cordouan(sc, g) {
-  const { x, y } = VIE.cordouan, k = Math.max(.006, 2.4 / sc.z);   // (de près, la tour de 16 m et son plateau de 40)
+  const { x, y } = VIE.cordouan, k = Math.max(.012, 2.4 / sc.z);
   sc.monde(g);
   C(g, 'rgba(222,212,180,.55)', x, y, k * 3.2); C(g, 'rgba(160,150,128,.6)', x, y, k * 2.2);   // le plateau de roches et l'enceinte
   T(g, 'rgba(20,20,10,.3)', k * .9, x, y, x + k * 3, y + k * 4);   // la longue ombre de la tour
@@ -600,7 +549,7 @@ function moulins(sc, g, x0, y0, x1, y1) {
   for (const m of VIE.moulins) {
     if (m.x < x0 - .2 || m.x > x1 + .2 || m.y < y0 - .2 || m.y > y1 + .2) continue;
     const w = ventDe(meteoEn(m.x, m.y));
-    sc.monde(g); g.save(); g.translate(m.x, m.y); g.scale(.12 / 180, .12 / 180);   // (la tour de 9 m, comme dans l'intérieur)
+    sc.monde(g); g.save(); g.translate(m.x, m.y); g.scale(1 / 180, 1 / 180);
     moulinVu(g, 0, 0, m.ph + t * m.sp * w * 1.4, sc.ventA);
     g.restore();
   }
@@ -609,35 +558,27 @@ function moulins(sc, g, x0, y0, x1, y1) {
 function marches(sc, g, x0, y0, x1, y1) {
   const z = sc.z, t = sc.time, peu = AMB.heure === 'nuit' ? 0 : AMB.heure === 'soir' ? .4 : 1;
   if (!peu) return;
-  // (à la vraie taille : les étals de 3 m sur la place, sur 12 à 35 m ; la foule en taches, une par personne)
-  const foule = (l, c) => { if (!l.length) return; g.fillStyle = c; g.beginPath(); for (const [x, y, r] of l) { g.moveTo(x + r, y); g.arc(x, y, r, 0, TAU); } g.fill(); };
-  if (vraie(z, 20)) for (const { n, x: mx, y: my } of VIE.marches) {   // (dès qu'un étal de 3 m fait un pixel)
+  if (z >= 40) for (const { n, x: mx, y: my } of VIE.marches) {
     if (mx < x0 - 1 || mx > x1 + 1 || my < y0 - 1 || my > y1 + 1) continue;
-    const pop = n.pop0 || 700, N = clamp(Math.round(4 + Math.sqrt(pop) / 4), 5, 26), R0 = Math.min(230, 80 + Math.sqrt(pop) * .8);
-    figK(sc, g, mx, my, 0, 1 / K);   // (la place, ses étals et sa foule à la vraie taille)
-    for (let k = 0; k < N; k++) { const a = k * 2.4, d = R0 * (.3 + .7 * Math.sqrt((k + .5) / N)); g.save(); g.translate(Math.cos(a) * d, Math.sin(a) * d); g.rotate(a + Math.PI / 2); g.scale(2.8, 2.8); etal(g, k); g.restore(); }
-    const M = Math.round(N * 6 * peu * Math.min(1, densite(mx, my) * 2)), l = [];
-    for (let m = 0; m < M; m++) { const a = m * 2.17 + Math.sin(t * .05 + m) * .4, d = R0 * (.2 + Math.sqrt((m + .5) / (N * 6)) * 1.15); l.push([Math.cos(a) * d, Math.sin(a) * d, 2.2]); }
-    foule(l, '#5d554c');
+    const pop = n.pop0 || 700, N = clamp(Math.round(4 + Math.sqrt(pop) / 4), 5, 26), R0 = Math.min(40, 14 + Math.sqrt(pop) / 6);
+    figK(sc, g, mx, my, 0);
+    for (let k = 0; k < N; k++) { const a = k * 2.4, d = R0 * (.3 + .7 * Math.sqrt((k + .5) / N)); g.save(); g.translate(Math.cos(a) * d, Math.sin(a) * d); g.rotate(a + Math.PI / 2); etal(g, k); g.restore(); }
+    const M = Math.round(N * 2 * peu * Math.min(1, densite(mx, my) * 2));
+    for (let m = 0; m < M; m++) {
+      const a = m * 2.17 + Math.sin(t * .05 + m) * .4, d = R0 * (.2 + Math.sqrt((m + .5) / (N * 2)) * 1.15), px = Math.cos(a) * d, py = Math.sin(a) * d;
+      if (z >= Z.VIE) { g.save(); g.translate(px, py); g.rotate(a + Math.PI / 2 + Math.sin(t * .3 + m)); marcheur(g, m, t * 4 + m, m % 3 === 0); g.restore(); }
+      else C(g, CIVILS[m % CIVILS.length].habit, px, py, Math.max(1.2, 1 / (z * U)));
+    }
   }
   if (z < 30) return;
   for (const f of VIE.foires) {
     const { x, y, a, n } = f;
     if (x < x0 - .5 || x > x1 + .5 || y < y0 - .5 || y > y1 + .5) continue;
     sc.monde(g); pietine(g, x, y, .16, .1, a, .32);
-    if (!vraie(z, 48)) continue;   // (la foule et les enclos de 7 m, dès qu'un enclos fait un pixel)
-    figK(sc, g, x, y, a, 3 / K);   // (à la vraie taille, comme le marché : les enclos de 7 m sur 5, les étals de 4 m, la foire sur 30 m)
-    for (let q = 0; q < 3; q++) cloture(g, (q - 1) * 20 - 8, -8, 16, 12);
+    figK(sc, g, x, y, a);
+    for (let q = 0; q < 3; q++) { const ox = (q - 1) * 20 - 8, oy = -8; cloture(g, ox, oy, 16, 12); for (let m = 0; m < 5; m++) { const mx = ox + 3 + (m % 3) * 5, my = oy + 3 + (m / 3 | 0) * 6; if (q === 0) vache(g, mx, my, m, m % 2 ? '#efe9dd' : '#c9a07a'); else if (q === 1) { g.save(); g.translate(mx, my); g.rotate(m); g.scale(.6, .6); cheval(g, ['#6b4a2c', '#8b6a47', '#3f2d1f'][m % 3], { bob: 0 }); g.restore(); } else for (let s2 = 0; s2 < 2; s2++) mouton(g, mx + s2 * 2, my + s2, m); } }
     for (let k = 0; k < 4; k++) { g.save(); g.translate(-20 + k * 13, 12); g.scale(1.4, 1.4); etal(g, k + 2); g.restore(); }
-    const l = []; for (let m = 0; m < 40 * peu; m++) l.push([(hash2(m, n.id, 124) - .5) * 60 + Math.sin(t * .1 + m) * 2, (hash2(n.id, m, 125) - .5) * 30 + 4, .75]);
-    foule(l, '#5d554c');
-    // les bêtes dans les enclos, à leur vraie taille
-    for (let q = 0; q < 3; q++) for (let m = 0; m < 5; m++) {
-      figK(sc, g, ...versMonde(x, y, a, ((q - 1) * 20 - 5 + (m % 3) * 5) * 3, (-5 + (m / 3 | 0) * 6) * 3, 1 / K), a + m, 1 / K);
-      if (q === 0) { g.scale(1.45, 1.45); vache(g, 0, 0, 0, m % 2 ? '#efe9dd' : '#c9a07a'); }
-      else if (q === 1) cheval(g, ['#6b4a2c', '#8b6a47', '#3f2d1f'][m % 3], { bob: 0 });
-      else { g.scale(2, 2); mouton(g, 0, 0, 0); mouton(g, 2, 1, 0); }
-    }
+    for (let m = 0; m < 40 * peu; m++) { const px = (hash2(m, n.id, 124) - .5) * 60 + Math.sin(t * .1 + m) * 2, py = (hash2(n.id, m, 125) - .5) * 30 + 4; if (z >= Z.VIE) { g.save(); g.translate(px, py); g.rotate(m); marcheur(g, m, t * 4 + m, false); g.restore(); } else C(g, CIVILS[m % CIVILS.length].habit, px, py, Math.max(1.2, 1 / (z * U))); }
   }
 }
 
@@ -648,7 +589,7 @@ function fumees(sc, x0, y0, x1, y1) {
   for (const n of NOEUDS) {
     if (n.x < x0 || n.x > x1 || n.y < y0 || n.y > y1) continue;
     const r = rayonPlace(n);
-    if (Math.random() < .04 * (n.type === 'village' ? 1 : 3) * densite(n.x, n.y) * k) fumee(sc, site(n)[0] + (Math.random() - .5) * r, site(n)[1] + (Math.random() - .5) * r, 0, 0, .01, .07, 5, .3);
+    if (Math.random() < .04 * (n.type === 'village' ? 1 : 3) * densite(n.x, n.y) * k) fumee(sc, n.x + (Math.random() - .5) * r, n.y + (Math.random() - .5) * r, 0, 0, .01, .07, 5, .3);
   }
 }
 function nuages(sc, g, x0, y0, x1, y1) {
@@ -671,19 +612,17 @@ function oiseau(p, sc, x, y, a, s, fl) {
 }
 function oiseaux(sc, g, x0, y0, x1, y1) {
   const z = sc.z, t = sc.time, sa = AMB.saison, W = VIE.W, H = VIE.H; if (z < 4) return;
-  // (taille réelle : demi-envergure en km ; sous le pixel, on ne les dessine pas)
-  const T = { grues: .001, palombes: .00035, mouettes: .0005, etourneaux: .0002 }, P = { '#3a3530': new Path2D(), '#5a5f6a': new Path2D(), '#f4f2ea': new Path2D(), '#2a2622': new Path2D() };
+  const s = Math.max(U * 2.4, 2.2 / z), P = { '#3a3530': new Path2D(), '#5a5f6a': new Path2D(), '#f4f2ea': new Path2D(), '#2a2622': new Path2D() };
   const vu = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
   for (const v of VIE.vols) {
-    const s = T[v.sorte]; if (!s || s * z * 2 < .8) continue;
     if (v.sorte === 'grues' && (sa === 'printemps' || sa === 'automne')) {
       const a = sa === 'printemps' ? -.75 : Math.PI - .75, cx = mod(v.x + Math.cos(a) * .06 * t, W + 100) - 50, cy = mod(v.y + Math.sin(a) * .06 * t, H + 100) - 50;
       if (!vu(cx, cy) && Math.hypot(cx - (x0 + x1) / 2, cy - (y0 + y1) / 2) > (x1 - x0) + s * 40) continue;
       for (let m = 0; m < 21; m++) { const r = Math.ceil(m / 2), sg = m % 2 ? 1 : -1, x = cx - Math.cos(a) * r * s * 2.2 - Math.sin(a) * sg * r * s * 1.8, y = cy - Math.sin(a) * r * s * 2.2 + Math.cos(a) * sg * r * s * 1.8; if (vu(x, y)) oiseau(P['#3a3530'], sc, x, y, a, s, Math.sin(t * 5 + m * .4)); }
     } else if (v.sorte === 'palombes' && sa === 'automne') {
       const a = Math.PI - .6, cx = mod(v.x + Math.cos(a) * .07 * t, 120) + 60, cy = mod(v.y + Math.sin(a) * .07 * t, 150) + 100;   // les palombes passent sur les Landes
-      if (cx + .04 < x0 || cx - .04 > x1 || cy + .02 < y0 || cy - .02 > y1) continue;
-      for (let m = 0; m < 60; m++) { const x = cx + (hash2(m, v.k, 130) - .5) * .08, y = cy + (hash2(v.k, m, 131) - .5) * .04; if (vu(x, y)) oiseau(P['#5a5f6a'], sc, x, y, a, s, Math.sin(t * 7 + m)); }
+      if (cx + s * 13 < x0 || cx - s * 13 > x1 || cy + s * 7 < y0 || cy - s * 7 > y1) continue;
+      for (let m = 0; m < 60; m++) { const x = cx + (hash2(m, v.k, 130) - .5) * s * 26, y = cy + (hash2(v.k, m, 131) - .5) * s * 14; if (vu(x, y)) oiseau(P['#5a5f6a'], sc, x, y, a, s, Math.sin(t * 7 + m)); }
     } else if (v.sorte === 'mouettes') {
       const Pt = VIE.ports[v.k / 4 % VIE.ports.length | 0]; if (!Pt || Pt.x < x0 - 1 || Pt.x > x1 + 1 || Pt.y < y0 - 1 || Pt.y > y1 + 1) continue;
       for (let m = 0; m < 12; m++) { const ph = t * .05 + m * .52 + v.ph, r = .25 + (m % 4) * .1, x = Pt.x + Math.cos(ph) * r - .4, y = Pt.y + Math.sin(ph) * r * .7 - .3; if (vu(x, y)) oiseau(P['#f4f2ea'], sc, x, y, ph + Math.PI / 2, s, Math.sin(t * 3 + m) * .5); }
@@ -693,7 +632,7 @@ function oiseaux(sc, g, x0, y0, x1, y1) {
       for (let m = 0; m < 160; m++) { const ph = m * .7, x = cx + Math.sin(t * .4 + ph) * .35 + Math.sin(t * .23 + ph * 1.7) * .2, y = cy + Math.cos(t * .31 + ph * 1.3) * .22; if (vu(x, y)) oiseau(P['#2a2622'], sc, x, y, t + ph, s, Math.sin(t * 9 + m)); }
     }
   }
-  g.setTransform(1, 0, 0, 1, 0, 0); g.lineCap = 'round'; g.lineWidth = Math.max(1, .28 * T.grues * sc.m);
+  g.setTransform(1, 0, 0, 1, 0, 0); g.lineCap = 'round'; g.lineWidth = Math.max(1, .28 * s * sc.m);
   for (const [c, p] of Object.entries(P)) { g.strokeStyle = c; g.stroke(p); }
 }
 
@@ -701,16 +640,16 @@ function oiseaux(sc, g, x0, y0, x1, y1) {
 export const Z_BATEAUX = 10;
 export function dessinerSol(sc, g, x0, y0, x1, y1, epoque) {
   const z = sc.z;
-  echelle(z); SIMPLE = sc.m * U < 1; GENS = CHEVAL = z >= Z.VIE;   // (grossis, toujours plus d'un pixel : dès la vie)
+  SIMPLE = sc.m * U < 1;
   if (VIE.cordouan && z >= 2.5) cordouan(sc, g);
   if (z >= Z_BATEAUX) eaux(sc, g, x0, y0, x1, y1, epoque);
   if (z >= 30) { relaisPoste(sc, g, x0, y0, x1, y1); contrebande(sc, g, x0, y0, x1, y1); }
-  if (vraie(z, 60)) moulins(sc, g, x0, y0, x1, y1);   // (la tour de 9 m)
+  if (z >= 40) moulins(sc, g, x0, y0, x1, y1);
   if (z >= Z.VIE) vieDePres(sc, g, x0, y0, x1, y1);
 }
 export function dessinerDessus(sc, g, x0, y0, x1, y1) {
   const z = sc.z;
-  echelle(z); SIMPLE = sc.m * U < 1; GENS = CHEVAL = z >= Z.VIE;   // (grossis, toujours plus d'un pixel : dès la vie)
+  SIMPLE = sc.m * U < 1;
   if (z >= 30) marches(sc, g, x0, y0, x1, y1);
   fumees(sc, x0, y0, x1, y1);
   // les fumées (lib.js fumee) : avancent avec le vent, grossissent et pâlissent

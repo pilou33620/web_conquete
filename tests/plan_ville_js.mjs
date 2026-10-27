@@ -17,7 +17,7 @@ const out = etats.map(([id, annee, f, pop, d]) => {
   const enc = t => t ? { poly: t.poly.map(P), ravs: t.ravs.map(r => [P(r.b1), P(r.apex), P(r.b2)]) } : null;
   return {
     modele: Pf.modele, murs: Pf.murs, R: Pf.R, routes: Pf.routes.map(r => r.a),
-    ilots: W.ilots.map(b => ({ q: b.q.map(P), role: b.role || null, zone: b.zone, main: !!b.main, cotes: b.cotes || null })),
+    ilots: W.ilots.map(b => ({ q: b.q.map(P), role: b.role || null, zone: b.zone, main: !!b.main })),
     rues: W.rues.length, trace: enc(W.trace), citadelle: enc(W.citadelle), rect: W.rect || null,
     murLigne: W.murLigne ?? null, rMur: W.rMur,
     plus: W.plus.map(p => ({ k: p.k, x: p.x ?? null, y: p.y ?? null, a: p.a ?? null })),

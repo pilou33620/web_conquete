@@ -19,18 +19,8 @@ function E(g, c, x, y, rx, ry, r = 0) { g.fillStyle = c; g.beginPath(); g.ellips
 function C(g, c, x, y, r) { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); }
 function T(g, c, w, x1, y1, x2, y2) { g.strokeStyle = c; g.lineWidth = w; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
 function RR(g, c, x, y, w, h, r) { g.fillStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); }
-// les teintes des clos sans maisons (villes.js, CLOS ; decor2d.js les reprend)
-const CLOS_COUL = { verger: '#8fae5f', potager: '#7c9a52', cour: '#c9bc9c', vague: '#a9a877' };
 function PG(g, c, p) { g.fillStyle = c; g.beginPath(); g.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]); g.closePath(); g.fill(); }
 function ligne(g, pts) { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (const p of pts) g.lineTo(p[0], p[1]); }
-// des taches d'une couleur d'un seul tracé : L, couleur → [[x, y, r]] (cercles) ou [[x, y, rx, ry, a]] (ellipses)
-function taches(g, L) {
-  for (const [c, l] of L) {
-    g.fillStyle = c; g.beginPath();
-    for (const [x, y, rx, ry, a] of l) if (ry === undefined) { g.moveTo(x + rx, y); g.arc(x, y, rx, 0, TAU); } else { g.moveTo(x + rx * Math.cos(a), y + rx * Math.sin(a)); g.ellipse(x, y, rx, ry, a, 0, TAU); }
-    g.fill();
-  }
-}
 function dup(P, x, y, m, fn) {
   fn(x, y); if (!P) return;
   const xs = [x], ys = [y];
@@ -64,18 +54,16 @@ function parcelle(g, p, R, P = 0) {
   if (p.dir === 'h') for (let yy = y + s.pas / 2; yy < y + h; yy += s.pas) { g.moveTo(x, yy); g.lineTo(x + w, yy); }
   else for (let xx = x + s.pas / 2; xx < x + w; xx += s.pas) { g.moveTo(xx, y); g.lineTo(xx, y + h); }
   g.stroke();
-  // menus détails de chaque culture (des centaines par parcelle : d'un tracé par couleur)
+  // menus détails de chaque culture
   const n = w * h * (p.det ?? 1), pt = (cnt, fn) => { for (let i = 0; i < cnt; i++) { const a = R(), b = R(), c = R(), d = R(); dup(P, x + a * w, y + b * h, 3, (u, v) => fn(u, v, c, d)); } };
-  const L = new Map(), tache = (c, ...a) => { let l = L.get(c); if (!l) L.set(c, l = []); l.push(a); };
   if (p.sol === 'pre') {
-    pt(n / 40, (u, v, c, d) => tache(c < .5 ? '#5f8f43' : '#86b363', u, v, .8 + d, .6 + d * .6, c * 3));
-    pt(n / 380, (u, v, c) => tache(c < .6 ? '#f4f1e4' : '#efd45a', u, v, .38));
-  } else if (p.sol === 'labour') pt(n / 26, (u, v, c, d) => tache(c < .5 ? '#7d5839' : '#4f331f', u, v, .4 + d * .6));
-  else if (p.sol === 'chaume') { pt(n / 45, (u, v, c) => tache(c < .5 ? '#e4d3a0' : '#b39c60', u, v)); for (const [c, l] of L) { g.strokeStyle = c; g.lineWidth = .35; g.beginPath(); for (const [u, v] of l) { g.moveTo(u, v); p.dir === 'h' ? g.lineTo(u + 1.6, v + .2) : g.lineTo(u + .2, v + 1.6); } g.stroke(); } L.clear(); }
-  else if (p.sol === 'ble') pt(n / 36, (u, v, c) => tache(c < .5 ? '#ead28a' : '#b9993f', u, v, .35));
-  else if (p.sol === 'colza') pt(n / 34, (u, v, c, d) => tache(c < .5 ? '#52a24c' : '#2f6e2e', u, v, .5 + d * .4));
-  else pt(n / 40, (u, v, c, d) => tache(c < .5 ? clair(s.base, .15) : sombre(s.base, .18), u, v, .9 + d, .6, c * 3));
-  taches(g, L);
+    pt(n / 40, (u, v, c, d) => E(g, c < .5 ? '#5f8f43' : '#86b363', u, v, .8 + d, .6 + d * .6, c * 3));
+    pt(n / 380, (u, v, c) => C(g, c < .6 ? '#f4f1e4' : '#efd45a', u, v, .38));
+  } else if (p.sol === 'labour') pt(n / 26, (u, v, c, d) => C(g, c < .5 ? '#7d5839' : '#4f331f', u, v, .4 + d * .6));
+  else if (p.sol === 'chaume') pt(n / 45, (u, v, c) => { g.strokeStyle = c < .5 ? '#e4d3a0' : '#b39c60'; g.lineWidth = .35; g.beginPath(); g.moveTo(u, v); p.dir === 'h' ? g.lineTo(u + 1.6, v + .2) : g.lineTo(u + .2, v + 1.6); g.stroke(); });
+  else if (p.sol === 'ble') pt(n / 36, (u, v, c) => C(g, c < .5 ? '#ead28a' : '#b9993f', u, v, .35));
+  else if (p.sol === 'colza') pt(n / 34, (u, v, c, d) => C(g, c < .5 ? '#52a24c' : '#2f6e2e', u, v, .5 + d * .4));
+  else pt(n / 40, (u, v, c, d) => E(g, c < .5 ? clair(s.base, .15) : sombre(s.base, .18), u, v, .9 + d, .6, c * 3));
   if (!P) {
     // tournières : la bande où l'attelage tourne, au bout des raies
     g.fillStyle = mix(s.base, s.raie, .5);
@@ -123,8 +111,8 @@ function decaler(pts, d) {
 function route(g, pts, w = 17) {
   const R = alea(Math.round(w * 100) + pts.length);
   g.lineCap = 'round'; g.lineJoin = 'round';
-  ligne(g, pts); g.strokeStyle = '#5b7f3f'; g.lineWidth = w * 1.6 + .4; g.stroke();   // les fossés
-  g.strokeStyle = '#7d9c55'; g.lineWidth = w * 1.3 + .2; g.stroke();                    // les accotements herbus
+  ligne(g, pts); g.strokeStyle = '#5b7f3f'; g.lineWidth = w + 7; g.stroke();   // les fossés
+  g.strokeStyle = '#7d9c55'; g.lineWidth = w + 4; g.stroke();                    // les accotements herbus
   g.strokeStyle = '#ad9a70'; g.lineWidth = w; g.stroke();
   g.strokeStyle = '#c6b388'; g.lineWidth = w * .8; g.stroke();
   g.strokeStyle = '#d3c299'; g.lineWidth = w * .3; g.stroke();                   // le bombement, plus clair au milieu
@@ -134,18 +122,20 @@ function route(g, pts, w = 17) {
     const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], l = Math.hypot(x1 - x0, y1 - y0); if (!l) continue;
     const ux = (x1 - x0) / l, uy = (y1 - y0) / l;
     for (let t = 0; t < l; t += 1.6) {
-      for (let k = 0; k < 2; k++) { const o = (R() - .5) * w * .85; C(g, R() < .5 ? '#a8946a' : '#e0d2ab', x0 + ux * t - uy * o, y0 + uy * t + ux * o, .05 + R() * .06); }
+      for (let k = 0; k < 2; k++) { const o = (R() - .5) * w * .85; C(g, R() < .5 ? '#a8946a' : '#e0d2ab', x0 + ux * t - uy * o, y0 + uy * t + ux * o, .18 + R() * .22); }
       if (R() < .006) E(g, 'rgba(110,130,140,.45)', x0 + ux * t - uy * w * .2, y0 + uy * t + ux * w * .2, w * .14, w * .07, Math.atan2(uy, ux));   // flaque
-      if ((acc += 1.6) > borne) { acc = 0; borne = 70; const bx = x0 + ux * t - uy * (w / 2 + .4), by = y0 + uy * t + ux * (w / 2 + .4); C(g, OMBRE, bx + .1, by + .15, .2); C(g, '#ebe5d6', bx, by, .18); C(g, '#c9c0aa', bx, by, .08); }   // (une borne de 1 m)
+      if ((acc += 1.6) > borne) { acc = 0; borne = 70; const bx = x0 + ux * t - uy * (w / 2 + 1.6), by = y0 + uy * t + ux * (w / 2 + 1.6); C(g, OMBRE, bx + .5, by + .7, .9); C(g, '#ebe5d6', bx, by, .8); C(g, '#c9c0aa', bx, by, .35); }
     }
   }
 }
-// une rue pavée, de teinte unie : le caniveau au bord, le pavé bombé un peu plus clair au milieu
-function rue(g, pts, w = 2) {
+function rue(g, pts, w = 9) {
   g.lineCap = 'round'; g.lineJoin = 'round';
-  ligne(g, pts); g.strokeStyle = '#8b826e'; g.lineWidth = w + .25; g.stroke();
+  ligne(g, pts); g.strokeStyle = '#8b826e'; g.lineWidth = w + 1.4; g.stroke();
   g.strokeStyle = '#a69d88'; g.lineWidth = w; g.stroke();
-  g.strokeStyle = 'rgba(232,224,204,.16)'; g.lineWidth = w * .45; g.stroke();
+  g.setLineDash([.9, .45]); g.strokeStyle = 'rgba(80,72,58,.35)'; g.lineWidth = .7;
+  for (let o = -w / 2 + .8; o < w / 2 - .4; o += 1.2) { g.lineDashOffset = o * 3.3; ligne(g, decaler(pts, o)); g.stroke(); }
+  g.setLineDash([]); g.lineDashOffset = 0;
+  ligne(g, pts); g.strokeStyle = '#776f5e'; g.lineWidth = .6; g.stroke();
 }
 function riviere(g, pts, R) {
   g.lineCap = 'round'; g.lineJoin = 'round';
@@ -656,8 +646,7 @@ class Scene {
   }
   get m() { return this.z * this.d; }
   monde(g) { const m = this.m; g.setTransform(m, 0, 0, m, -this.cx * m + this.W / 2, -this.cy * m + this.H / 2); }
-  // (ech : unités du monde par unité de figure ; 1 dans la maquette)
-  fig(g, x, y, a) { const m = this.m, e = m * (this.ech || 1), c = Math.cos(a) * e, s = Math.sin(a) * e; g.setTransform(c, s, -s, c, (x - this.cx) * m + this.W / 2, (y - this.cy) * m + this.H / 2); }
+  fig(g, x, y, a) { const m = this.m, c = Math.cos(a) * m, s = Math.sin(a) * m; g.setTransform(c, s, -s, c, (x - this.cx) * m + this.W / 2, (y - this.cy) * m + this.H / 2); }
   step(dt) {
     this.time += dt;
     if (this.avant) this.avant(this, dt);
@@ -1162,53 +1151,51 @@ function bastions(cx, cy, N, Rb, rot) {
 }
 function chemin_(g, pts, ferme = true) { g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); if (ferme) g.closePath(); }
 const LPIECE = { affut: '#5f6b3e', fut: '#b08a3e' };
-// (à la vraie taille, unités de 5,56 m : fossé de 2 fosse, glacis de 100 m, chemin couvert de 11 m, terre-plein de 25 m)
 function dessinerEnceinte(g, Tr, o = {}) {
-  const fos = o.fosse || 3, [cx, cy] = Tr.C, poly = Tr.poly;
+  const fos = o.fosse || 22, [cx, cy] = Tr.C, poly = Tr.poly;
   const pousse = (p, d) => { const dx = p[0] - cx, dy = p[1] - cy, l = Math.hypot(dx, dy); return [p[0] + dx / l * d, p[1] + dy / l * d]; };
-  const env = []; Tr.V.forEach((v, i) => { env.push(pousse(v, fos + 4)); const r = Tr.ravs[i]; env.push([r.apex[0] + r.out[0] * 7, r.apex[1] + r.out[1] * 7]); });
+  const env = []; Tr.V.forEach((v, i) => { env.push(pousse(v, fos + 14)); const r = Tr.ravs[i]; env.push([r.apex[0] + r.out[0] * 24, r.apex[1] + r.out[1] * 24]); });
   g.lineJoin = 'round'; g.lineCap = 'round';
   // le glacis descend en pente douce vers la campagne
-  for (const [w, c] of [[36, 'rgba(250,245,215,.08)'], [27, 'rgba(250,245,215,.09)'], [18, 'rgba(250,245,215,.1)'], [10, 'rgba(250,245,215,.12)']]) { chemin_(g, env); g.strokeStyle = c; g.lineWidth = w; g.stroke(); }
+  for (const [w, c] of [[120, 'rgba(250,245,215,.08)'], [90, 'rgba(250,245,215,.09)'], [60, 'rgba(250,245,215,.1)'], [32, 'rgba(250,245,215,.12)']]) { chemin_(g, env); g.strokeStyle = c; g.lineWidth = w; g.stroke(); }
   chemin_(g, env); g.fillStyle = '#93a865'; g.fill();
-  g.save(); chemin_(g, env); g.clip(); g.strokeStyle = '#c7b98f'; g.lineWidth = 4; g.stroke(); g.restore();   // le chemin couvert
-  chemin_(g, env); g.setLineDash([.3, .25]); g.strokeStyle = '#5b4127'; g.lineWidth = .2; g.stroke(); g.setLineDash([]);   // sa palissade
+  g.save(); chemin_(g, env); g.clip(); g.strokeStyle = '#c7b98f'; g.lineWidth = 14; g.stroke(); g.restore();   // le chemin couvert
+  chemin_(g, env); g.setLineDash([1, .9]); g.strokeStyle = '#5b4127'; g.lineWidth = .7; g.stroke(); g.setLineDash([]);   // sa palissade
   // fossés : ceux des demi-lunes, puis le grand
   const eauC = o.eau ? ['#355f97', '#4a78b4'] : ['#6f7d4a', '#7f8a55'];
   g.lineJoin = 'miter';
-  for (const r of Tr.ravs) { chemin_(g, [r.b1, r.apex, r.b2]); g.strokeStyle = '#8f856e'; g.lineWidth = 5.6; g.stroke(); g.strokeStyle = eauC[0]; g.lineWidth = 5; g.stroke(); }
-  chemin_(g, poly); g.strokeStyle = '#8f856e'; g.lineWidth = fos * 2 + .8; g.stroke(); g.strokeStyle = eauC[0]; g.lineWidth = fos * 2; g.stroke();
-  g.strokeStyle = eauC[1]; g.lineWidth = fos * 2 - 1.6; g.stroke();
-  if (o.eau) { g.setLineDash([1.6, 3]); g.strokeStyle = 'rgba(160,195,235,.6)'; g.lineWidth = .25; chemin_(g, env.map(p => pousse(p, -fos - 1.6))); g.stroke(); g.setLineDash([]); }
+  for (const r of Tr.ravs) { chemin_(g, [r.b1, r.apex, r.b2]); g.strokeStyle = '#8f856e'; g.lineWidth = 29; g.stroke(); g.strokeStyle = eauC[0]; g.lineWidth = 26; g.stroke(); }
+  chemin_(g, poly); g.strokeStyle = '#8f856e'; g.lineWidth = fos * 2 + 3; g.stroke(); g.strokeStyle = eauC[0]; g.lineWidth = fos * 2; g.stroke();
+  g.strokeStyle = eauC[1]; g.lineWidth = fos * 2 - 6; g.stroke();
+  if (o.eau) { g.setLineDash([6, 12]); g.strokeStyle = 'rgba(160,195,235,.6)'; g.lineWidth = .8; chemin_(g, env.map(p => pousse(p, -fos - 6))); g.stroke(); g.setLineDash([]); }
   // demi-lunes
   for (const r of Tr.ravs) {
     chemin_(g, [r.b1, r.apex, r.b2]); g.fillStyle = '#86a95f'; g.fill();
     const c = [(r.b1[0] + r.b2[0] + r.apex[0]) / 3, (r.b1[1] + r.b2[1] + r.apex[1]) / 3], k = .55;
     chemin_(g, [r.b1, r.apex, r.b2].map(p => [c[0] + (p[0] - c[0]) * k, c[1] + (p[1] - c[1]) * k])); g.fillStyle = '#9dbb72'; g.fill();
-    chemin_(g, [r.b1, r.apex, r.b2]); g.strokeStyle = '#968c75'; g.lineWidth = .8; g.stroke(); g.strokeStyle = '#c2b79f'; g.lineWidth = .5; g.stroke();
+    chemin_(g, [r.b1, r.apex, r.b2]); g.strokeStyle = '#968c75'; g.lineWidth = 2.6; g.stroke(); g.strokeStyle = '#c2b79f'; g.lineWidth = 1.5; g.stroke();
   }
   // le corps de place : intérieur, talus, terre-plein, banquette, parapet, escarpe de pierre
   g.save(); chemin_(g, poly); g.fillStyle = o.interieur || '#9cb36e'; g.fill(); g.clip();
-  for (const [w, c] of [[9, '#6f9450'], [8, '#89ad61'], [2.6, '#7f9e57'], [2.2, '#a7c37b']]) { chemin_(g, poly); g.strokeStyle = c; g.lineWidth = w; g.stroke(); }
+  for (const [w, c] of [[36, '#6f9450'], [32, '#89ad61'], [10.4, '#7f9e57'], [8.8, '#a7c37b']]) { chemin_(g, poly); g.strokeStyle = c; g.lineWidth = w; g.stroke(); }
   g.restore();
-  chemin_(g, poly); g.strokeStyle = '#968c75'; g.lineWidth = .8; g.stroke(); g.strokeStyle = '#c2b79f'; g.lineWidth = .5; g.stroke();
+  chemin_(g, poly); g.strokeStyle = '#968c75'; g.lineWidth = 3; g.stroke(); g.strokeStyle = '#c2b79f'; g.lineWidth = 1.8; g.stroke();
   // guérites aux saillants
-  for (const v of Tr.V) { const p = pousse(v, -.7); C(g, '#c2b79f', p[0], p[1], .45); coneF(g, p[0], p[1], .36, PAL.ardoise, 0, 0, TAU, 10); }
+  for (const v of Tr.V) { const p = pousse(v, -2.5); C(g, '#c2b79f', p[0], p[1], 2.3); coneF(g, p[0], p[1], 1.8, PAL.ardoise, 0, 0, TAU, 10); }
   // portes : pont dormant sur le fossé, porte dans la courtine, passage dans la demi-lune
   for (const i of o.portes || []) {
     const c = Tr.cotes[i], r = Tr.ravs[i], a = Math.atan2(r.out[1], r.out[0]), p = c.porte;
-    g.lineCap = 'butt'; T(g, '#b9ae96', 1.8, p[0] - r.out[0] * 5, p[1] - r.out[1] * 5, r.apex[0] + r.out[0] * 20, r.apex[1] + r.out[1] * 20);
-    for (const [q0, q1] of [[p, [p[0] + r.out[0] * (fos + .6), p[1] + r.out[1] * (fos + .6)]], [[r.apex[0], r.apex[1]], [r.apex[0] + r.out[0] * 3.5, r.apex[1] + r.out[1] * 3.5]]]) { T(g, '#5b4127', 1.9, ...q0, ...q1); T(g, '#8a6a45', 1.6, ...q0, ...q1); for (let k = 0; k <= 1; k += .12) T(g, '#6b4d31', .07, q0[0] + (q1[0] - q0[0]) * k - r.u[0] * .8, q0[1] + (q1[1] - q0[1]) * k - r.u[1] * .8, q0[0] + (q1[0] - q0[0]) * k + r.u[0] * .8, q0[1] + (q1[1] - q0[1]) * k + r.u[1] * .8); }
-    bat(g, [{ t: 'g', x: -7, y: -7, w: 10, h: 14, hip: 1, p: 'ardoise', h2: 2.4 }], p[0] - r.out[0] * .5, p[1] - r.out[1] * .5, a, .25);
+    g.lineCap = 'butt'; T(g, '#b9ae96', 8, p[0] - r.out[0] * 20, p[1] - r.out[1] * 20, r.apex[0] + r.out[0] * 70, r.apex[1] + r.out[1] * 70);
+    for (const [q0, q1] of [[p, [p[0] + r.out[0] * (fos + 2), p[1] + r.out[1] * (fos + 2)]], [[r.apex[0], r.apex[1]], [r.apex[0] + r.out[0] * 16, r.apex[1] + r.out[1] * 16]]]) { T(g, '#5b4127', 7.6, ...q0, ...q1); T(g, '#8a6a45', 6.4, ...q0, ...q1); for (let k = 0; k <= 1; k += .12) T(g, '#6b4d31', .25, q0[0] + (q1[0] - q0[0]) * k - r.u[0] * 3.2, q0[1] + (q1[1] - q0[1]) * k - r.u[1] * 3.2, q0[0] + (q1[0] - q0[0]) * k + r.u[0] * 3.2, q0[1] + (q1[1] - q0[1]) * k + r.u[1] * 3.2); }
+    bat(g, [{ t: 'g', x: -7, y: -7, w: 10, h: 14, hip: 1, p: 'ardoise', h2: 2.4 }], p[0] - r.out[0] * 2, p[1] - r.out[1] * 2, a);
   }
   // canons en batterie sur les faces des bastions
   if (o.canons) for (let i = 0; i < poly.length; i++) {
     const p = poly[i], q = poly[(i + 1) % poly.length], L = Math.hypot(q[0] - p[0], q[1] - p[1]);
-    if (L < 8) continue;
+    if (L < 30) continue;
     const u = [(q[0] - p[0]) / L, (q[1] - p[1]) / L]; let n = [-u[1], u[0]];
     if ((cx - p[0]) * n[0] + (cy - p[1]) * n[1] < 0) n = [-n[0], -n[1]];
-    // (les pièces à la vraie taille des figures de l'intérieur : FIG × S / 1000 unité par unité de figure)
-    for (const k of [.3, .7]) { const x = p[0] + u[0] * L * k + n[0] * 2.2, y = p[1] + u[1] * L * k + n[1] * 2.2; g.save(); g.translate(x, y); g.rotate(Math.atan2(-n[1], -n[0])); g.scale(.027, .027); piece(g, LPIECE, { recul: 0 }); g.restore(); }
+    for (const k of [.3, .7]) { const x = p[0] + u[0] * L * k + n[0] * 8, y = p[1] + u[1] * L * k + n[1] * 8; g.save(); g.translate(x, y); g.rotate(Math.atan2(-n[1], -n[0])); g.scale(.8, .8); piece(g, LPIECE, { recul: 0 }); g.restore(); }
   }
   return env;
 }
@@ -1228,45 +1215,42 @@ function decalerQuad(q, w) {   // le quadrilatère rentré de w de chaque côté
   return out;
 }
 const aire = q => { let s = 0; for (let k = 0; k < q.length; k++) { const a = q[k], b = q[(k + 1) % q.length]; s += a[0] * b[1] - b[0] * a[1]; } return s / 2; };
-// les deux pans d'une maison (o : coin sur la rue, u : le long de la rue, n : vers la cour), rangés par teinte dans pans,
-// et son faîtage dans faites : l'îlot les peint ensuite d'un tracé par teinte (une ville en compte des dizaines de milliers)
-function toitParcelle(pans, faites, o, u, n, w, d, P, entier) {   // (entier : d'un seul pan, de loin)
+function toitParcelle(g, o, u, n, w, d, P) {
   const p1 = [o[0] + u[0] * w, o[1] + u[1] * w], m0 = [o[0] + n[0] * d / 2, o[1] + n[1] * d / 2], m1 = [p1[0] + n[0] * d / 2, p1[1] + n[1] * d / 2];
   const p2 = [p1[0] + n[0] * d, p1[1] + n[1] * d], p3 = [o[0] + n[0] * d, o[1] + n[1] * d];
-  for (const [s, q] of entier ? [[-1, [o, p1, p2, p3]]] : [[-1, [o, p1, m1, m0]], [1, [m0, m1, p2, p3]]]) { const c = teinte(P, s * n[0], s * n[1]); if (!pans.has(c)) pans.set(c, []); pans.get(c).push(q); }
-  faites.push(m0, m1);
+  PG(g, teinte(P, -n[0], -n[1]), [o[0], o[1], p1[0], p1[1], m1[0], m1[1], m0[0], m0[1]]);
+  PG(g, teinte(P, n[0], n[1]), [m0[0], m0[1], m1[0], m1[1], p2[0], p2[1], p3[0], p3[1]]);
+  g.strokeStyle = P[2]; g.lineWidth = .4; g.beginPath(); g.moveTo(m0[0], m0[1]); g.lineTo(m1[0], m1[1]); g.stroke();
+  g.strokeStyle = 'rgba(0,0,0,.14)'; g.lineWidth = .25; g.beginPath(); g.moveTo(o[0], o[1]); g.lineTo(p3[0], p3[1]); g.stroke();
   return m0;
 }
-const quads = (g, L) => { g.beginPath(); for (const q of L) { g.moveTo(q[0][0], q[0][1]); for (let i = 1; i < q.length; i++) g.lineTo(q[i][0], q[i][1]); } };   // (à remplir : fill les ferme)
-// vite : de loin (le plan sur la carte), les maisons sans ailes, jardinets, faîtages, cheminées ni arbres des cours
-function remplirIlot(g, b, V, R, vite) {
-  // (à la vraie taille, unités de 5,56 m : la moitié des rues, 13 m pour une grande rue et 6,7 m pour les autres)
-  const cfg = V.cfg, poly = decalerQuad(b.q, b.main ? 1.25 : .6); if (!poly) return;
+function remplirIlot(g, b, V, R) {
+  const cfg = V.cfg, poly = decalerQuad(b.q, b.main ? 4.6 : 2.7); if (!poly) return;
   const fau = b.zone === 'faubourg', c = b.c;
-  chemin_(g, poly); g.fillStyle = fau || b.cotes ? '#7a9a52' : '#cdbf9f'; g.fill();   // (bâti sur quelques côtés : des jardins)
+  chemin_(g, poly); g.fillStyle = fau ? '#7a9a52' : '#cdbf9f'; g.fill();
   const edges = [0, 1, 2, 3].map(k => { const a = poly[k], e = poly[(k + 1) % 4], l = Math.hypot(e[0] - a[0], e[1] - a[1]), u = [(e[0] - a[0]) / l, (e[1] - a[1]) / l]; let n = [-u[1], u[0]]; if ((c[0] - a[0]) * n[0] + (c[1] - a[1]) * n[1] < 0) n = [-n[0], -n[1]]; return { a, l, u, n }; });
   const angB = Math.atan2(edges[0].u[1], edges[0].u[0]), cote = Math.min(edges[0].l, edges[1].l);
   const sp = b.role;
   if (sp === 'place') {
     chemin_(g, poly); g.fillStyle = '#d6ccb2'; g.fill();
-    g.save(); chemin_(g, poly); g.clip(); g.strokeStyle = 'rgba(120,105,80,.14)'; g.lineWidth = .08; for (let x = c[0] - cote; x < c[0] + cote; x += .7) { g.beginPath(); g.moveTo(x, c[1] - cote); g.lineTo(x + 2, c[1] + cote); g.stroke(); } g.restore();
-    if (V.type === 'grande') { C(g, '#a89c86', c[0], c[1], .9); C(g, '#7d745f', c[0], c[1], .5); C(g, '#2c2f33', c[0], c[1], .25); bat(g, BATS.hotelDeVille(), c[0] + edges[0].n[0] * 2, c[1] + edges[0].n[1] * 2 - cote * .3, angB, cote / 60); }
-    else { bat(g, BATS.halle().slice(1), c[0], c[1] + cote * .08, angB, cote / 75); C(g, '#a89c86', c[0] - cote * .32, c[1] + cote * .32, .7); C(g, '#4a78b4', c[0] - cote * .32, c[1] + cote * .32, .5); if (V.type === 'moyenne') bat(g, BATS.hotelDeVille(), c[0], c[1] - cote * .34, angB, cote / 70); }
+    g.save(); chemin_(g, poly); g.clip(); g.strokeStyle = 'rgba(120,105,80,.14)'; g.lineWidth = .3; for (let x = c[0] - 40; x < c[0] + 40; x += 2.6) { g.beginPath(); g.moveTo(x, c[1] - 40); g.lineTo(x + 8, c[1] + 40); g.stroke(); } g.restore();
+    if (V.type === 'grande') { C(g, '#a89c86', c[0], c[1], 3.5); C(g, '#7d745f', c[0], c[1], 2); C(g, '#2c2f33', c[0], c[1], 1); bat(g, BATS.hotelDeVille(), c[0] + edges[0].n[0] * 8, c[1] + edges[0].n[1] * 8 - cote * .3, angB, cote / 60); }
+    else { bat(g, BATS.halle().slice(1), c[0], c[1] + cote * .08, angB, cote / 75); C(g, '#a89c86', c[0] - cote * .32, c[1] + cote * .32, 2.8); C(g, '#4a78b4', c[0] - cote * .32, c[1] + cote * .32, 2); if (V.type === 'moyenne') bat(g, BATS.hotelDeVille(), c[0], c[1] - cote * .34, angB, cote / 70); }
     return;
   }
   if (b.zone === 'clos') {
     chemin_(g, poly); g.fillStyle = '#7c9a52'; g.fill();
     g.save(); chemin_(g, poly); g.clip();
-    for (let i = 0; i < 3; i++) potager(g, c[0] - cote * .35 + R() * cote * .4, c[1] - cote * .3 + R() * cote * .35, cote * (.25 + R() * .15), cote * (.2 + R() * .1), R, false);
-    for (let i = 0; i < 7; i++) arbre(g, c[0] + (R() - .5) * cote, c[1] + (R() - .5) * cote, .7 + R() * .5, R() < .5 ? '#5a9748' : BOIS[2]);
-    g.restore(); g.strokeStyle = '#a39b88'; g.lineWidth = .2; chemin_(g, poly); g.stroke();
+    for (let i = 0; i < 3; i++) potager(g, c[0] - 14 + R() * 16, c[1] - 12 + R() * 14, 10 + R() * 6, 8 + R() * 4, R, false);
+    for (let i = 0; i < 7; i++) arbre(g, c[0] + (R() - .5) * cote, c[1] + (R() - .5) * cote, 2.4 + R() * 1.6, R() < .5 ? '#5a9748' : BOIS[2]);
+    g.restore(); g.strokeStyle = '#a39b88'; g.lineWidth = .8; chemin_(g, poly); g.stroke();
     return;
   }
   if (sp === 'parvis') { chemin_(g, poly); g.fillStyle = '#cfc5ad'; g.fill(); return; }
   if (sp === 'cathedrale' && b.voisin) {   // dessinée après les îlots, à cheval sur son parvis
     chemin_(g, poly); g.fillStyle = '#cfc5ad'; g.fill();
     const o = b.voisin.c, mx = (c[0] + o[0]) / 2, my = (c[1] + o[1]) / 2, L = Math.hypot(o[0] - c[0], o[1] - c[1]) + cote;
-    V.apres.push(() => bat(g, BATS.cathedrale(), mx, my, Math.atan2(o[1] - c[1], o[0] - c[0]) * (o[0] > c[0] ? 1 : 1) + (o[0] < c[0] ? Math.PI : 0) * 0, L * 1.1 / 110));   // (vers 120 m, comme Saint-André)
+    V.apres.push(() => bat(g, BATS.cathedrale(), mx, my, Math.atan2(o[1] - c[1], o[0] - c[0]) * (o[0] > c[0] ? 1 : 1) + (o[0] < c[0] ? Math.PI : 0) * 0, L * .82 / 110));
     V.lieux.cathedrale = { x: mx, y: my };
     return;
   }
@@ -1274,17 +1258,17 @@ function remplirIlot(g, b, V, R, vite) {
     chemin_(g, poly); g.fillStyle = '#cfc5ad'; g.fill();
     const parts = sp === 'cathedrale' ? BATS.cathedrale() : sp === 'eglise' ? (V.type === 'bourg' ? BATS.egliseRomane('ardoise') : BATS.cathedrale()) : BATS.egliseDome();
     const larg = sp === 'cathedrale' ? 110 : sp === 'eglise' ? (V.type === 'bourg' ? 40 : 112) : 58;
-    if (V.type === 'bourg') { chemin_(g, poly); g.fillStyle = '#7aa659'; g.fill(); for (let i = 0; i < 16; i++) { const x = c[0] + (R() - .5) * cote * .7, y = c[1] + (R() < .5 ? -1 : 1) * cote * (.28 + R() * .1); T(g, '#5e5850', .07, x, y - .3, x, y + .3); T(g, '#5e5850', .07, x - .18, y - .13, x + .18, y - .13); } }   // (les croix du cimetière)
-    bat(g, parts, c[0], c[1], angB, Math.sqrt(b.aire) * (V.type === 'bourg' ? .5 : .8) / larg);   // (d'après l'aire de l'îlot : un coin n'en fait pas une chapelle)
+    if (V.type === 'bourg') { chemin_(g, poly); g.fillStyle = '#7aa659'; g.fill(); for (let i = 0; i < 16; i++) { const x = c[0] + (R() - .5) * cote * .7, y = c[1] + (R() < .5 ? -1 : 1) * cote * (.28 + R() * .1); T(g, '#5e5850', .4, x, y - 1.4, x, y + 1.4); T(g, '#5e5850', .4, x - .8, y - .6, x + .8, y - .6); } }
+    bat(g, parts, c[0], c[1], angB, Math.min(edges[0].l, edges[2].l) * .9 / larg);
     V.lieux[sp] = V.lieux[sp] || { x: c[0], y: c[1] };
     return;
   }
   if (sp === 'jardin') {
     chemin_(g, poly); g.fillStyle = '#e3d8bb'; g.fill();
-    const inn = decalerQuad(poly, 1.5); if (inn) { chemin_(g, inn); g.fillStyle = '#7aa659'; g.fill(); }
+    const inn = decalerQuad(poly, 4); if (inn) { chemin_(g, inn); g.fillStyle = '#7aa659'; g.fill(); }
     g.save(); g.translate(c[0], c[1]); g.rotate(angB); for (const [x, y] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) dessinPart(g, parterre(x * cote * .22 - cote * .18, y * cote * .2 - cote * .14, cote * .36, cote * .28), 0);
-    C(g, '#a89c86', 0, 0, 1.2); C(g, '#4a78b4', 0, 0, .9); g.restore();
-    for (const e of edges) for (let t = 1; t < e.l - .7; t += 1.6) arbre(g, e.a[0] + e.u[0] * t + e.n[0] * .8, e.a[1] + e.u[1] * t + e.n[1] * .8, .7, BOIS[2]);
+    C(g, '#a89c86', 0, 0, 4); C(g, '#4a78b4', 0, 0, 3); g.restore();
+    for (const e of edges) for (let t = 3; t < e.l - 2; t += 5) arbre(g, e.a[0] + e.u[0] * t + e.n[0] * 2.5, e.a[1] + e.u[1] * t + e.n[1] * 2.5, 2, BOIS[2]);
     return;
   }
   if (sp === 'caserne') { chemin_(g, poly); g.fillStyle = '#d9cda9'; g.fill(); bat(g, BATS.caserne().slice(1), c[0], c[1], angB, cote / 92); return; }
@@ -1295,7 +1279,7 @@ function remplirIlot(g, b, V, R, vite) {
     bat(g, [{ t: 'r', sol: 1, c: '#7aa659', x: -12, y: -12, w: 24, h: 24 }, { t: 'fn', fn: gg => { T(gg, '#e3d8bb', 1.2, -12, 0, 12, 0); T(gg, '#e3d8bb', 1.2, 0, -12, 0, 12); C(gg, '#a89c86', 0, 0, 1.6); } },
       { t: 'g', x: -18, y: -18, w: 36, h: 6, p: 'tuile', h2: 1.4 }, { t: 'g', x: -18, y: 12, w: 36, h: 6, p: 'tuile', h2: 1.4 }, { t: 'g', x: -18, y: -12, w: 6, h: 24, ax: 'y', p: 'tuile', h2: 1.4 }, { t: 'g', x: 12, y: -12, w: 6, h: 24, ax: 'y', p: 'tuile', h2: 1.4 },
       ...BATS.egliseRomane('ardoise').map(p => Object.assign({}, p, p.x != null ? { x: p.x - 4, y: p.y - 27 } : {})).filter(p => p.t !== 'fn')], c[0] - cote * .1, c[1] - cote * .02, angB, s);
-    g.strokeStyle = '#a39b88'; g.lineWidth = .25; chemin_(g, poly); g.stroke();
+    g.strokeStyle = '#a39b88'; g.lineWidth = 1; chemin_(g, poly); g.stroke();
     return;
   }
   if (sp === 'hopital') {
@@ -1304,65 +1288,35 @@ function remplirIlot(g, b, V, R, vite) {
     V.lieux.hopital = { x: c[0], y: c[1] };
     return;
   }
-  // les clos sans maisons (villes.js, CLOS) : vergers en quinconce, planches des maraîchers, cour et hangar (chantier,
-  // entrepôt), terrain vague ; bl(s, t) : un point de l'îlot (0 à 1 le long du premier côté, puis du dernier)
-  if (CLOS_COUL[sp]) {
-    chemin_(g, poly); g.fillStyle = CLOS_COUL[sp]; g.fill();
-    const bl = (s, t) => { const a = poly[0], b = poly[1], c2 = poly[2], d = poly[3], x0 = a[0] + (b[0] - a[0]) * s, y0 = a[1] + (b[1] - a[1]) * s; return [x0 + (d[0] + (c2[0] - d[0]) * s - x0) * t, y0 + (d[1] + (c2[1] - d[1]) * s - y0) * t]; };
-    const n0 = Math.max(1, Math.round(edges[0].l / 1.7)), n1 = Math.max(1, Math.round(edges[3].l / 1.7));   // (un arbre tous les 9 m)
-    if (sp === 'verger') for (let i = 0; i < n0; i++) for (let j = 0; j < n1; j++) { const [x, y] = bl((i + (j % 2 ? .75 : .25)) / n0, (j + .5) / n1); if (vite) C(g, '#5a8a3e', x, y, .55); else arbre(g, x, y, .6, '#5a9748'); }
-    if (sp === 'potager') { g.lineWidth = edges[3].l / n1 / 2.4; for (let j = 0; j < n1 * 2; j++) { const a = bl(.06, (j + .5) / n1 / 2), b = bl(.94, (j + .5) / n1 / 2); T(g, j % 2 ? '#9a8358' : '#5f8a3e', g.lineWidth, a[0], a[1], b[0], b[1]); } }
-    if (sp === 'cour') { PG(g, '#8a6a4a', [...bl(.12, .1), ...bl(.88, .1), ...bl(.88, .36), ...bl(.12, .36)]); const a = bl(.12, .23), b = bl(.88, .23); T(g, 'rgba(50,30,20,.5)', .15, a[0], a[1], b[0], b[1]); }   // (le hangar)
-    if (sp === 'vague') for (let i = 0; i < 6; i++) { const [x, y] = bl(.1 + R() * .8, .1 + R() * .8); C(g, '#7f8f55', x, y, .5 + R() * .5); }
-    return;
-  }
   // îlot ordinaire : une maison par parcelle le long de chaque rue, cour ou jardins au milieu
-  if (!fau && b.aire > 80) { const inn = decalerQuad(poly, 3); if (inn && aire(inn) * Math.sign(aire(poly)) > 4) { chemin_(g, inn); g.fillStyle = b.aire > 300 ? '#7c9a52' : '#cdbf9f'; g.fill(); for (let i = 0; i < (vite ? 0 : 4); i++) arbre(g, c[0] + (R() - .5) * cote * .4, c[1] + (R() - .5) * cote * .4, .7 + R() * .5, BOIS[R() * 5 | 0]); } }
-  const sides = fau || b.cotes ? edges.filter((e, k) => (b.cotes || [b.j === V.j0, b.i + 1 === V.i0, b.j + 1 === V.j0, b.i === V.i0])[k]) : edges;
+  if (!fau && b.aire > 900) { const inn = decalerQuad(poly, 12); if (inn && aire(inn) * Math.sign(aire(poly)) > 40) { chemin_(g, inn); g.fillStyle = b.aire > 2600 ? '#7c9a52' : '#cdbf9f'; g.fill(); for (let i = 0; i < 4; i++) arbre(g, c[0] + (R() - .5) * cote * .4, c[1] + (R() - .5) * cote * .4, 2.4 + R() * 2, BOIS[R() * 5 | 0]); } }
+  const sides = fau ? edges.filter((e, k) => (b.cotes || [b.j === V.j0, b.i + 1 === V.i0, b.j + 1 === V.j0, b.i === V.i0])[k]) : edges;
   if (fau && !sides.length) sides.push(edges[(R() * 4) | 0]);
-  // (la profondeur suit la taille de l'îlot, pas son côté le plus court : aux pointes, les maisons se rejoignent en coin)
-  const dmax = Math.min(Math.sqrt(b.aire) * .3, V.prof || 11), parcelles = [], annexes = [], jardins = [], ombres = [];
+  const dmax = Math.min(cote * .36, V.prof || 11), parcelles = [];
   const royale = sp === 'royale';
   let dom = 'tuile'; { let r = R(); for (const [k, p] of cfg.toits) { if ((r -= p) < 0) { dom = k; break; } } }
   if (royale) { chemin_(g, poly); g.fillStyle = '#d6ccb2'; g.fill(); }
   for (const e of sides) {
     for (let t = 0; t < e.l - 1;) {
-      let w = royale ? 3.5 : cfg.larg[0] + R() * (cfg.larg[1] - cfg.larg[0]); if (e.l - t - w < cfg.larg[0]) w = e.l - t;
+      let w = royale ? 7 : cfg.larg[0] + R() * (cfg.larg[1] - cfg.larg[0]); if (e.l - t - w < cfg.larg[0]) w = e.l - t;
       if (fau && R() < .25) { t += w; continue; }
       if (!royale && R() < .05) { t += w; continue; }
-      const dp = royale ? 3.6 : dmax * (.7 + R() * .45);
+      const dp = royale ? 11 : dmax * (.75 + R() * .35);
       let pal = dom; if (R() < .12) { let r = R(); for (const [k, p] of cfg.toits) { if ((r -= p) < 0) { pal = k; break; } } }
       if (fau && V.type === 'bourg' && R() < .25) pal = 'chaume';
       if (royale) pal = 'ardoise';
-      const P = royale ? PAL.ardoise : PAL[pal].map(x => mix(x, R() < .5 ? '#ffffff' : '#000000', (R() * 3 | 0) * .07)), o = [e.a[0] + e.u[0] * t, e.a[1] + e.u[1] * t];
-      parcelles.push([o, e.u, e.n, w + .04, dp, P]);
-      // derrière la maison, sur la cour : un corps de logis plus bas, ou un jardinet
-      const reste = Math.sqrt(b.aire) * .45 - dp;
-      if (!royale && !fau && !vite && reste > .5) {
-        const k = R(), a = w * R() * .4, p0 = [o[0] + e.n[0] * dp + e.u[0] * a, o[1] + e.n[1] * dp + e.u[1] * a];
-        if (k < .4) annexes.push([p0, e.n, e.u, Math.min(reste, .9 + R() * .9), w * (.5 + R() * .3), P.map(x => mix(x, '#000000', .12))]);   // (une aile en retour)
-        else if (k < .65) { const d = Math.min(reste, 1 + R()), q = [p0, [p0[0] + e.u[0] * w * .6, p0[1] + e.u[1] * w * .6]]; jardins.push([...q[0], ...q[1], q[1][0] + e.n[0] * d, q[1][1] + e.n[1] * d, q[0][0] + e.n[0] * d, q[0][1] + e.n[1] * d]); }
-      }
+      const P = royale ? PAL.ardoise : PAL[pal].map(x => mix(x, R() < .5 ? '#ffffff' : '#000000', R() * .08));
+      parcelles.push([[e.a[0] + e.u[0] * t, e.a[1] + e.u[1] * t], e.u, e.n, w + .15, dp, P]);
       t += w;
     }
-    if (!fau) ombres.push([e.a, e.u, e.n, e.l, dmax * .9]);   // (l'ombre de la rangée entière)
   }
-  for (const q of jardins) PG(g, '#7c9a52', q);
-  // les ombres, les ailes, les maisons, les faîtages, les cheminées : un tracé chacun (un par teinte pour les toits)
-  const k = .35, ombre = ([o, u, n, w, d]) => [o, [o[0] + u[0] * w, o[1] + u[1] * w], [o[0] + u[0] * w + n[0] * d, o[1] + u[1] * w + n[1] * d], [o[0] + n[0] * d, o[1] + n[1] * d]].map(p => [p[0] + OMB[0] * k, p[1] + OMB[1] * k]);
-  g.fillStyle = 'rgba(20,20,10,.3)'; quads(g, [...annexes, ...(fau ? parcelles : ombres)].map(ombre)); g.fill();
-  const faites = [], chem = [];
-  for (const L of [annexes, parcelles]) {
-    const pans = new Map();
-    for (const p of L) {
-      const m0 = toitParcelle(pans, faites, ...p, vite);
-      if (L === parcelles && R() < .45) { const [o, u, n, w] = p, x = m0[0] + u[0] * w * .8, y = m0[1] + u[1] * w * .8; chem.push([x, y]); V.cheminees.push([x, y]); }
-    }
-    for (const [c, Q] of pans) { g.fillStyle = c; quads(g, Q); g.fill(); }
+  g.fillStyle = 'rgba(20,20,10,.3)';
+  for (const [o, u, n, w, d] of parcelles) { const k = 1.2; g.beginPath(); g.moveTo(o[0] + OMB[0] * k, o[1] + OMB[1] * k); g.lineTo(o[0] + u[0] * w + OMB[0] * k, o[1] + u[1] * w + OMB[1] * k); g.lineTo(o[0] + u[0] * w + n[0] * d + OMB[0] * k, o[1] + u[1] * w + n[1] * d + OMB[1] * k); g.lineTo(o[0] + n[0] * d + OMB[0] * k, o[1] + n[1] * d + OMB[1] * k); g.fill(); }
+  for (const p of parcelles) {
+    const m0 = toitParcelle(g, ...p);
+    if (R() < .45) { const [o, u, n, w] = p, x = m0[0] + u[0] * w * .8, y = m0[1] + u[1] * w * .8; RR(g, '#7d4a3a', x - .6, y - .6, 1.2, 1.2, .2); V.cheminees.push([x, y]); }
+    if (fau && R() < .5) { const [o, u, n, w, d] = p; potager(g, o[0] + n[0] * (d + 3) + u[0] * 1, o[1] + n[1] * (d + 3) + u[1] * 1, Math.max(3, w - 2), 6, R, false); }
   }
-  if (!vite) { g.strokeStyle = 'rgba(60,30,20,.4)'; g.lineWidth = .12; g.beginPath(); for (let i = 0; i < faites.length; i += 2) { g.moveTo(faites[i][0], faites[i][1]); g.lineTo(faites[i + 1][0], faites[i + 1][1]); } g.stroke(); }
-  if (chem.length && !vite) { g.fillStyle = '#7d4a3a'; g.beginPath(); for (const [x, y] of chem) g.rect(x - .15, y - .15, .3, .3); g.fill(); }
-  if (fau) for (const [o, u, n, w, d] of parcelles) if (R() < .5) potager(g, o[0] + n[0] * (d + .5) + u[0] * .2, o[1] + n[1] * (d + .5) + u[1] * .2, Math.max(.8, w - .4), 2, R, false);
-  if (royale) { C(g, '#a89c86', c[0], c[1], 1); C(g, '#2c2f33', c[0], c[1], .45); V.lieux.royale = { x: c[0], y: c[1] }; }
+  if (royale) { C(g, '#a89c86', c[0], c[1], 3); C(g, '#2c2f33', c[0], c[1], 1.4); V.lieux.royale = { x: c[0], y: c[1] }; }
 }
-export { toile, taches, BATS, BOIS, BOUGE, C, CHEVAL, CLOS_COUL, DPR, E, GRAINE, HERBE, KT, LPIECE, MEMO, OMB, OMBRE, PAL, PEAU, PG, RR, SOLEIL, SOLS, SPR, Scene, T, TAU, TOITS, abreuvoir, aire, ajouterCorps, alea, angLerp, arbre, avant, bastions, bat, bois, botte, boulet, brancher, bras, caisson, calvaire, camAnim, cavalier, charbonniere, charrue, chemin, chemin_, cheminee, cheval, cibleDe, clair, clamp, cloture, coneF, copeaux, corps, cratere, croix, decaler, decalerQuad, dessinMaison, dessinPart, dessinerEnceinte, distPoly, domeF, drapeau, dup, ease, eclair, empreinte, epouvantail, etincelle, fantassin, ferme, figAuHasard, flammes, fumee, fusil, haie, hx, impact, lerp, ligne, linge, longueur, majUnite, mansardeF, mare, mix, mod, moutons, parcelle, parterre, piece, pietine, pignon, placer, pont, poseFig, potager, pyramideF, remplirIlot, riviere, route, ruche, rue, ruisseau, sapin, sombre, souche, sprite, stere, surChemin, surPoly, tasBois, teinte, teinteL, tenue, terre, tete, tirs, toit, toitParcelle, touffes, tronc, unite, verger };
+export { toile, BATS, BOIS, BOUGE, C, CHEVAL, DPR, E, GRAINE, HERBE, KT, LPIECE, MEMO, OMB, OMBRE, PAL, PEAU, PG, RR, SOLEIL, SOLS, SPR, Scene, T, TAU, TOITS, abreuvoir, aire, ajouterCorps, alea, angLerp, arbre, avant, bastions, bat, bois, botte, boulet, brancher, bras, caisson, calvaire, camAnim, cavalier, charbonniere, charrue, chemin, chemin_, cheminee, cheval, cibleDe, clair, clamp, cloture, coneF, copeaux, corps, cratere, croix, decaler, decalerQuad, dessinMaison, dessinPart, dessinerEnceinte, distPoly, domeF, drapeau, dup, ease, eclair, empreinte, epouvantail, etincelle, fantassin, ferme, figAuHasard, flammes, fumee, fusil, haie, hx, impact, lerp, ligne, linge, longueur, majUnite, mansardeF, mare, mix, mod, moutons, parcelle, parterre, piece, pietine, pignon, placer, pont, poseFig, potager, pyramideF, remplirIlot, riviere, route, ruche, rue, ruisseau, sapin, sombre, souche, sprite, stere, surChemin, surPoly, tasBois, teinte, teinteL, tenue, terre, tete, tirs, toit, toitParcelle, touffes, tronc, unite, verger };

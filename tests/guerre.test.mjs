@@ -35,7 +35,7 @@ test('colonne : avant-garde, état-major, bataillons, artillerie, caissons, baga
   assert.equal(c.liste.filter(e => e.k === 'rang' && e.b === 0).length, 25);
   for (let i = 1; i < c.liste.length; i++) assert.ok(c.liste[i].d > c.liste[i - 1].d, 'chacun derrière le précédent');
   assert.equal(c.long, c.liste[c.liste.length - 1].d);
-  assert.ok(c.long > 0.5 && c.long < 0.8, `à la vraie taille, 1 120 hommes sur un peu plus d'un demi-kilomètre (${c.long.toFixed(2)} km)`);
+  assert.ok(c.long > 2 && c.long < 8, `une colonne de quelques kilomètres (${c.long.toFixed(2)} km)`);
 });
 
 test("colonne : sans cavalerie, les voltigeurs en tête et quelques rangs en arrière-garde ; l'effectif l'allonge", () => {

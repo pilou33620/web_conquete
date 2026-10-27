@@ -50,7 +50,7 @@ test('le modèle de plan se lit dans les données du jeu', () => {
   const b = plan(nom('Bayonne'), { f: 3 });
   assert.equal(b.Pf.murs, 'bastions');
   assert.ok(b.trace && b.citadelle, 'Bayonne : enceinte et citadelle');
-  for (const il of b.ilots.filter(i => i.zone === 'ville' && !i.hors)) for (const p of il.q) assert.ok(Math.hypot(p[0] - b.C[0], p[1] - b.C[1]) <= b.murInt + 1e-6, 'un îlot hors de l’enceinte');
+  for (const il of b.ilots.filter(i => i.zone === 'ville')) for (const p of il.q) assert.ok(Math.hypot(p[0] - 500, p[1] - 380) <= b.murInt + 1e-6, 'un îlot hors de l’enceinte');
   // un village des Pyrénées
   const mont = m.nodes.filter(n => n.type === 'village' && n.dept === '64' && n.y > m.y_mont - 25);
   assert.ok(mont.length > 0 && mont.every(n => ['montagne', 'bastide'].includes(V.profilVille(K, n, {}).modele)), 'villages de montagne');
@@ -85,73 +85,4 @@ test('les images des plans restent bornées en mémoire', () => {
   for (const n of m.nodes) V.planCarte(K, n, { annee: 1789 }, .5);
   const mem = V.memoirePlans();
   assert.ok(mem.pixels <= 14e6 && mem.plans <= 300, JSON.stringify(mem));
-});
-
-// la vraie taille, mesurée sur ce que le plan dessine (SPEC-CARTE-2D.md, « Livré — bâtiments à la vraie taille ») : un
-// faux contexte relève les pans des toits (deux par maison : façade × demi-profondeur) et l'échelle des édifices
-const L = await import('../web/js/carte/lib.js');
-const releve = () => {
-  const t = { quads: [], echelles: [], sous: [], fillStyle: '' };
-  return new Proxy(t, {
-    get: (o, k) => k in o ? o[k] : k === 'beginPath' ? () => { o.sous = []; } : k === 'moveTo' ? (x, y) => o.sous.push([[x, y]]) : k === 'lineTo' ? (x, y) => o.sous.at(-1)?.push([x, y])
-      : k === 'fill' ? () => { if (!['rgba(20,20,10,.3)', '#7c9a52'].includes(o.fillStyle)) o.quads.push(...o.sous.filter(q => q.length === 4)); } : k === 'scale' ? s => o.echelles.push(s) : () => {},
-    set: (o, k, v) => { o[k] = v; return true; },
-  });
-};
-const longueurModele = parts => { const xs = parts.filter(p => typeof p.x === 'number').flatMap(p => [p.x - (p.r || 0), p.x + (p.w ?? p.r ?? 0)]); return Math.max(...xs) - Math.min(...xs); };
-test('les bâtiments à leur vraie taille : rues, façades, îlots, places, cathédrale', () => {
-  const M = 1000 / V.S, med = a => a.sort((x, y) => x - y)[a.length >> 1], d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]) * M;
-  const P = plan(nom('Bordeaux')), R = L.alea(7), g = releve();
-  const ordinaires = P.ilots.filter(b => b.zone === 'ville' && !b.role && b.anneau != null);
-  for (const b of ordinaires.slice(0, 150)) L.remplirIlot(g, b, P, R);
-  const facade = med(g.quads.map(q => d(q[0], q[1]))), prof = 2 * med(g.quads.map(q => d(q[1], q[2])));
-  assert.ok(facade >= 6 && facade <= 15, `façades : ${facade.toFixed(1)} m`);
-  assert.ok(prof >= 8 && prof <= 16, `profondeur des maisons : ${prof.toFixed(1)} m`);
-  const ilot = med(ordinaires.map(b => Math.sqrt(b.aire) * M));
-  assert.ok(ilot >= 40 && ilot <= 100, `îlots : ${ilot.toFixed(0)} m`);
-  // les rues : l'écart entre deux îlots voisins d'un même anneau, rentrés chacun de la moitié de la rue
-  const rue = main => med(ordinaires.filter(b => b.main === main).flatMap(b => {
-    const v = ordinaires.find(c => c.anneau === b.anneau && c.secteur === b.secteur + 1 && c.main === main); if (!v) return [];
-    const A = L.decalerQuad(b.q, main ? 1.25 : .6), B = L.decalerQuad(v.q, main ? 1.25 : .6); if (!A || !B) return [];
-    return [Math.min(...B.map(p => L.distPoly([...A, A[0]], p[0], p[1]))) * M];
-  }));
-  assert.ok(rue(false) >= 5 && rue(false) <= 8, `rues : ${rue(false).toFixed(1)} m`);
-  assert.ok(rue(true) >= 10 && rue(true) <= 20, `grandes rues : ${rue(true).toFixed(1)} m`);
-  assert.ok(P.rPlace * 2 * M >= 50 && P.rPlace * 2 * M <= 120, `la place royale : ${(P.rPlace * 2 * M).toFixed(0)} m`);
-  const pl = plan(nom('Libourne')).ilots.find(b => b.role === 'place'), cote = Math.min(d(pl.q[0], pl.q[1]), d(pl.q[1], pl.q[2]));
-  assert.ok(cote >= 40 && cote <= 120, `la place de la bastide : ${cote.toFixed(0)} m`);
-  // la cathédrale, posée après les îlots à cheval sur son parvis (Saint-André : 124 m)
-  const cath = P.ilots.find(b => b.role === 'cathedrale'), gc = releve(); P.apres.length = 0;
-  L.remplirIlot(gc, cath, P, R); P.apres.forEach(f => f());
-  const lc = gc.echelles[0] * longueurModele(L.BATS.cathedrale()) * M;
-  assert.ok(lc >= 100 && lc <= 150, `la cathédrale : ${lc.toFixed(0)} m`);
-  // l'église d'un village
-  const B = plan(nom('Belin')), eg = B.ilots.find(b => b.role === 'eglise'), ge = releve();
-  L.remplirIlot(ge, eg, B, R);
-  const le = ge.echelles[0] * longueurModele(L.BATS.egliseRomane()) * M;
-  assert.ok(le >= 20 && le <= 40, `l’église du village : ${le.toFixed(0)} m`);
-});
-
-test('le mur de la carte suit le tracé du plan : bastide, tracé bastionné, citadelle ; jamais dans l’eau', () => {
-  const sec = (W, f) => f.murs.flat().every(([x, y]) => !W.eau(x + W.C[0], y + W.C[1]));
-  const L = plan(nom('Libourne'), { f: 1 }), lib = V.formeMur(L), { a, w, h } = L.rect;
-  assert.ok(lib.murs.length >= 1 && sec(L, lib), 'Libourne : le rectangle, coupé par l’Isle');
-  for (const [x, y] of lib.murs.flat()) { const u = Math.abs(Math.cos(a) * x + Math.sin(a) * y), v = Math.abs(-Math.sin(a) * x + Math.cos(a) * y); assert.ok(Math.abs(u - w / 2 - 3) < 1e-6 || Math.abs(v - h / 2 - 3) < 1e-6, 'sur le rectangle de la bastide'); }
-  const bay = plan(nom('Bayonne'), { f: 4 }), fb = V.formeMur(bay);
-  assert.ok(bay.trace && bay.citadelle && sec(bay, fb));
-  assert.ok(fb.ext[1] >= fb.ext[0] && fb.ext[0] > bay.rMur && fb.lunes.length, 'les bastions (et la citadelle) puis les demi-lunes débordent le mur');
-  const bx = plan(nom('Bordeaux'), { f: 2 }), fx = V.formeMur(bx);   // (le mur rond, au bord de la Garonne)
-  assert.ok(sec(bx, fx) && fx.murs.flat().some(([x, y]) => Math.abs(Math.hypot(x, y) - bx.rMur) < 1e-6));
-});
-
-test('les villes denses dans leurs murs, collées à leur fleuve', () => {
-  const CL = new Set(V.CLOS), M = 1000 / 180;
-  for (const x of ['Bordeaux', 'Bayonne', 'Libourne', 'Agen']) {
-    const W = plan(nom(x)), C = W.C, dedans = W.ilots.filter(b => b.zone === 'ville' && !b.hors && b.d < W.rMur), ha = Math.PI * (W.rMur * M) ** 2 / 1e4;
-    assert.ok(dedans.filter(b => CL.has(b.role)).length <= Math.max(5, dedans.length * .08), `${x} : quelques cours et jardins dans les murs`);
-    assert.ok(Array.from({ length: 72 }, (_, i) => i * Math.PI / 36).some(a => W.eau(C[0] + Math.cos(a) * (W.rMur + 30), C[1] + Math.sin(a) * (W.rMur + 30))), `${x} : l’eau à moins de 170 m des murs`);
-    assert.ok(W.Pf.pop / ha > 150 && W.Pf.pop / ha < 600, `${x} : ${(W.Pf.pop / ha).toFixed(0)} habitants par hectare dans les murs`);
-  }
-  for (const x of ['Bayonne', 'Agen', 'Libourne', 'Langon', 'Saint-Sever']) assert.ok(Math.hypot(...plan(nom(x)).Pf.o) * M < 20, `${x} : au bord de l’eau à son nœud (sa vraie place)`);
-  assert.deepEqual(plan(nom('Belin')).Pf.o, [0, 0], 'les villages restent au nœud');
 });
