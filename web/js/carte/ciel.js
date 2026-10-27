@@ -44,14 +44,14 @@ export class Ciel {
   }
   eau(x, y) { const mp = this.map, i = x | 0, j = y | 0; return i < 0 || j < 0 || i >= mp.W || j >= mp.H || mp.terrain[j * mp.W + i] <= 1; }
 
-  // le sélecteur d'heure : quatre petits boutons en rang, à gauche du dernier bouton du zoom (réglage d'affichage,
-  // enregistré par setHeure)
+  // le sélecteur d'heure : quatre petits boutons en rang, à gauche du premier bouton du zoom (réglage d'affichage,
+  // enregistré par setHeure) ; en haut, pour laisser le bas aux avis (#feed)
   selecteur() {
     const bar = typeof document !== 'undefined' && document.getElementById?.('zoombar');
     if (!bar || !document.createElement) return;
     const box = document.createElement('div');
     box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Heure du jour');
-    box.style.cssText = 'position:absolute;right:calc(100% + 6px);bottom:0;display:flex;gap:3px';
+    box.style.cssText = 'position:absolute;right:calc(100% + 6px);top:0;display:flex;gap:3px';
     const maj = () => { for (const b of box.querySelectorAll('button')) { const on = b.dataset.h === AMB.heure; b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.classList.toggle('on', on); } };
     for (const h of HEURES) {
       const b = document.createElement('button');

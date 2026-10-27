@@ -2,8 +2,9 @@
 // la saison et la météo de la partie, l'heure du jour (réglage d'affichage), et la liste des lumières de l'image
 // (feux, lanternes, fenêtres, incendies, éclairs), remplie par les calques et allumée par ciel.js après la nuit.
 
-// zooms (pixels CSS par km) : de loin un signe, puis le plan des villes, puis la vie, puis le plus près
-export const Z = { PLAN: 18, VIE: 110, MAX: 320 };
+// zooms (pixels CSS par km) : de loin un signe, puis le plan des villes, puis la vie, puis le plus près (450 : au-delà,
+// les figures de la maquette, U, seraient démesurées ; « Retour aux villes d'avant »)
+export const Z = { PLAN: 18, VIE: 110, MAX: 450 };
 // km par unité de dessin des figures (hommes, chevaux, charrettes) : la même échelle que la maquette
 export const U = 0.0045;
 

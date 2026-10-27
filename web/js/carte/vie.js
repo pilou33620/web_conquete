@@ -16,6 +16,14 @@ const pingpong = (s, L) => { const m = mod(s, 2 * L); return m < L ? m : 2 * L -
 const versMonde = (x, y, a, lx, ly, s = 1) => [x + (lx * Math.cos(a) - ly * Math.sin(a)) * U * s, y + (lx * Math.sin(a) + ly * Math.cos(a)) * U * s];
 function dansAnneau(r, x, y) { let d = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) d = !d; } return d; }
 const bboxOf = pts => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const [x, y] of pts) { a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); } return [a, b, c, d]; };
+// (une rivière a des centaines de points : un bateau s'y place par dichotomie sur les longueurs cumulées, cum)
+const cumul = pts => { const c = [0]; for (let i = 1; i < pts.length; i++) c.push(c[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])); return c; };
+function surCumul(pts, c, s) {
+  let lo = 1, hi = c.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (c[m] < s) lo = m + 1; else hi = m; }
+  const [x0, y0] = pts[lo - 1], [x1, y1] = pts[lo], k = clamp((s - c[lo - 1]) / (c[lo] - c[lo - 1] || 1), 0, 1);
+  return { x: lerp(x0, x1, k), y: lerp(y0, y1, k), a: Math.atan2(y1 - y0, x1 - x0) };
+}
 const longueur = pts => { let l = 0; for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return l; };
 // rayon d'une place en km (profilVille de la maquette : R en unités de l'intérieur, 180 par km)
 export const rayonPlace = n => clamp(46 + 1.55 * Math.sqrt(n.pop0 || 700), 56, 262) / 180;
@@ -100,7 +108,7 @@ export function preparer(map) {
   }
   const rivers = m.rivers || [];
   VIE.radeaux = [];
-  for (const r of rivers) if (['Adour', 'Gave de Pau', "Gave d'Oloron", 'Midouze', 'Leyre', 'Nive', "Gave d'Aspe"].includes(r.name)) { const L = longueur(r.pts); for (let k = 0; k < Math.ceil(L / 16); k++) VIE.radeaux.push({ pts: r.pts, L, bb: bboxOf(r.pts), s0: hash2(k, L * 10 | 0, 98) * L, v: .007 }); }
+  for (const r of rivers) if (['Adour', 'Gave de Pau', "Gave d'Oloron", 'Midouze', 'Leyre', 'Nive', "Gave d'Aspe"].includes(r.name)) { const L = longueur(r.pts), cum = cumul(r.pts); for (let k = 0; k < Math.ceil(L / 16); k++) VIE.radeaux.push({ pts: r.pts, cum, L, bb: bboxOf(r.pts), s0: hash2(k, L * 10 | 0, 98) * L, v: .007 }); }
   // pêche : pinasses dans le bassin d'Arcachon, chaloupes devant Saint-Jean-de-Luz ; parcs à huîtres ; cabanes tchanquées
   VIE.peche = []; VIE.parcs = []; VIE.tchanquees = [];
   if (BASSIN) {
@@ -149,8 +157,8 @@ export function preparer(map) {
   VIE.ports = ['Bordeaux', 'Bayonne', 'La Teste-de-Buch', 'Saint-Jean-de-Luz', 'Blaye', 'Pauillac'].map(nom).filter(Boolean);
   // bateaux : gabares sur les grandes rivières, navires sur la route du cabotage
   VIE.bateaux = [];
-  for (const r of rivers) if (r.rank <= 2) { const L = longueur(r.pts); for (let k = 0; k < Math.ceil(L / 14); k++) VIE.bateaux.push({ pts: r.pts, L, bb: bboxOf(r.pts), s0: hash2(k, r.rank, 5) * L, v: (hash2(k, 7, 5) < .5 ? -1 : 1) * .02, mer: false, ph: hash2(k, L | 0, 8) * 1000 }); }
-  for (const w of m.ways || []) if (w.sea) { const L = longueur(w.pts); for (let k = 0; k < Math.ceil(L / 25); k++) VIE.bateaux.push({ pts: w.pts, L, bb: bboxOf(w.pts), s0: hash2(k, 9, 6) * L, v: (hash2(k, 8, 6) < .5 ? -1 : 1) * .04, mer: true, ph: 0 }); }
+  for (const r of rivers) if (r.rank <= 2) { const L = longueur(r.pts), cum = cumul(r.pts); for (let k = 0; k < Math.ceil(L / 14); k++) VIE.bateaux.push({ pts: r.pts, cum, L, bb: bboxOf(r.pts), s0: hash2(k, r.rank, 5) * L, v: (hash2(k, 7, 5) < .5 ? -1 : 1) * .02, mer: false, ph: hash2(k, L | 0, 8) * 1000 }); }
+  for (const w of m.ways || []) if (w.sea) { const L = longueur(w.pts); for (let k = 0; k < Math.ceil(L / 25); k++) VIE.bateaux.push({ pts: w.pts, cum: cumul(w.pts), L, bb: bboxOf(w.pts), s0: hash2(k, 9, 6) * L, v: (hash2(k, 8, 6) < .5 ? -1 : 1) * .04, mer: true, ph: 0 }); }
   // moulins à vent dans les champs autour des bourgs (vus de dessus, moulinVu)
   VIE.moulins = [];
   for (const n of NOEUDS) {
@@ -209,6 +217,17 @@ export function majEtat(st) {
   }
   // les routes autour des foires sont plus passantes
   VIE.foireRoutes = new Set(VIE.routes.filter(r => VIE.foires.some(f => Math.hypot(Math.max(r.bb[0] - f.x, 0, f.x - r.bb[2]), Math.max(r.bb[1] - f.y, 0, f.y - r.bb[3])) < 12)).map(r => r.ie));
+  // la circulation (« Livré — le trafic des routes ») : aux portes d'une ville de pop habitants, Q = 300 (pop / 110 000)^0,6
+  // voitures par jour sur une route royale (Bordeaux 300, plusieurs centaines aux portes ; Bayonne 80, Libourne 60, un bourg
+  // de 3 000 veh. 35, un village de 700 : 14), le tiers sur un chemin ; jour de marché × 1,5, foire × 2,5 ; elle s'éteint
+  // vers la campagne sur λ = 2 + 4 √(pop / 110 000) km (Bordeaux 6, Libourne 3, un village 2,3). En voyageurs par km
+  // (piétons et cavaliers compris, 60 % de voitures ; douze heures de jour, 5 km/h) : Q / 36, comptés depuis la porte (le
+  // rayon de la ville). villes : [voyageurs, λ, bout, porte]
+  const marche = new Set(VIE.marches.map(m => m.n.id)), foire = new Set(VIE.foires.map(f => f.n.id));
+  for (const r of VIE.routes) r.villes = [r.a, r.b].map((id, i) => {
+    const pop = ns[id]?.pop || NOEUDS[id]?.pop0 || 700, p = pop / 110000, lam = 2 + 4 * Math.sqrt(p);
+    return [Math.round(300 * p ** .6 * (r.royal ? 1 : 1 / 3) * (foire.has(id) ? 2.5 : marche.has(id) ? 1.5 : 1) / 36 * lam), lam, i, Math.min(rayonPlace({ pop0: pop }), r.L / 3)];
+  });
   // brigands : sur les routes qui partent d'une place où l'on en signale, une bande tous les quatre kilomètres
   VIE.brigands = [];
   const brig = new Set(ns.filter(n => n.lv?.[0] === 'brigands').map(n => n.id));
@@ -377,19 +396,30 @@ function paludiers(sc, g, i, j, t) {
 
 // ---------- au plus près (z ≥ Z.VIE) : passants sur les routes, bêtes, travaux, transhumance, brigands
 const VITESSE = { malle: .045, diligence: .03, cavalier: .025, charrette: .009, boeufs: .006, troupeau: .004, pieton: .0045, convoi: .004, mendiant: .003 };
+// leur taille, en unités de figure (une personne 4,3, un cheval 16, une charrette attelée 41, la diligence 58)
+const TAILLE = { malle: 54, diligence: 58, cavalier: 16, charrette: 41, boeufs: 41, troupeau: 16, pieton: 4.3, convoi: 40, mendiant: 4.3 };
+// (sous 6 px de long, une tache de sa couleur, sur la route : les dessins coûtaient trop aux portes de Bordeaux)
+const TEINTE = { malle: '#3a3f4f', diligence: '#5a4632', cavalier: '#5d4a36', charrette: '#8a6a45', boeufs: '#b9a37a', troupeau: '#e6e2d6', convoi: '#2a2622', mendiant: '#4a4338', pieton: '#6e5c45' };
 function vieDePres(sc, g, x0, y0, x1, y1) {
   const t = sc.time, dans = (x, y) => x > x0 - .2 && x < x1 + .2 && y > y0 - .2 && y < y1 + .2, soir = bivouac();
   for (const r of VIE.routes) {
     const bb = r.bb; if (bb[2] < x0 - .2 || bb[0] > x1 + .2 || bb[3] < y0 - .2 || bb[1] > y1 + .2) continue;
-    const L = r.L, ie = r.ie, n = Math.ceil(L / (r.royal ? 1.1 : 2.2) * (VIE.foireRoutes.has(ie) ? 1.6 : 1));
-    for (let k = 0; k < n; k++) {
-      const h = hash2(ie, k, 31), sens = h < .5 ? 1 : -1, sorte = hash2(ie, k, 32);
+    // le passage d'un bout à l'autre (40 voitures par jour sur une route royale, 4 sur un chemin : Q / 36 voyageurs par km),
+    // puis ceux des deux villes, qui vont et reviennent : chacun jusqu'à D, tiré pour que la foule décroisse en e^(-d/λ)
+    const L = r.L, ie = r.ie, n = Math.ceil(L * (r.royal ? 40 : 4) / 36 * (VIE.foireRoutes.has(ie) ? 1.6 : 1)), [va, vb] = r.villes || [[0], [0]];
+    const taches = new Map();
+    for (let k = 0; k < n + va[0] + vb[0]; k++) {
+      const h = hash2(ie, k, 31), sorte = hash2(ie, k, 32);
       let kind = r.royal ? (sorte < .05 ? 'malle' : sorte < .12 ? 'diligence' : sorte < .4 ? 'charrette' : sorte < .55 ? 'cavalier' : sorte < .62 ? 'troupeau' : 'pieton') : (sorte < .35 ? 'boeufs' : sorte < .5 ? 'troupeau' : sorte < .58 ? 'cavalier' : 'pieton');
-      const p0 = surChemin(r.pts, h * L); if (hash2(ie, k, 34) > densite(p0.x, p0.y)) continue;   // pays déserté
-      const mal = malheur(p0.x, p0.y);
+      let s, sens = h < .5 ? 1 : -1;
+      if (k < n) s = mod(h * L + sens * VITESSE[kind] * t, L);
+      else { const [, lam, i, r0] = k < n + va[0] ? va : vb, D = clamp(-lam * Math.log(hash2(ie, k, 36) * hash2(ie, k, 37) + 1e-9), .3, L - r0), u = h * 2 * D + VITESSE[kind] * t, q = r0 + pingpong(u, D); s = i ? L - q : q; sens = (mod(u, 2 * D) < D) === !i ? 1 : -1; }
+      const p = surChemin(r.pts, s); if (!dans(p.x, p.y) || hash2(ie, k, 34) > densite(p.x, p.y)) continue;   // (pays déserté)
+      const mal = malheur(p.x, p.y);
       if (mal && sorte > .55) kind = mal === 2 && hash2(ie, k, 35) < .4 ? 'convoi' : 'mendiant';
-      const p = surChemin(r.pts, mod(h * L + sens * VITESSE[kind] * t, L)); if (!dans(p.x, p.y)) continue;
       const a = p.a + (sens < 0 ? Math.PI : 0), cote = .012, x = p.x - Math.sin(a) * cote, y = p.y + Math.cos(a) * cote, pas = t * 1.7 * TAU + k;
+      if (soir && (kind === 'malle' || kind === 'diligence')) { const [lx, ly] = versMonde(x, y, a, 8, 0); LUM.push({ x: lx, y: ly, r: .012, a: .8, spr: 'fen' }); }   // la lanterne
+      if (sc.z * U * TAILLE[kind] < 6) { let l = taches.get(TEINTE[kind]); if (!l) taches.set(TEINTE[kind], l = []); l.push(x, y, a, TAILLE[kind] * U / 2); continue; }
       figK(sc, g, x, y, a);
       if (kind === 'troupeau') {
         marcheur(g, k, pas, false); T(g, '#6b4d31', .4, .4, 2, 5, 2.8);
@@ -401,7 +431,14 @@ function vieDePres(sc, g, x0, y0, x1, y1) {
       else if (kind === 'charrette' || kind === 'boeufs') charrette(g, pas, kind === 'boeufs', k);
       else if (kind === 'cavalier') { cheval(g, ['#6b4a2c', '#3f2d1f', '#8b6a47'][k % 3], { gait: pas * 1.4, bob: 0 }); cavalier(g, LCIV, { habit: '#5d6b86' }, { sabre: 0, bob: 0 }); }
       else marcheur(g, k, pas, hash2(ie, k, 33) < .5);
-      if (soir && (kind === 'malle' || kind === 'diligence')) { const [lx, ly] = versMonde(x, y, a, 8, 0); LUM.push({ x: lx, y: ly, r: .012, a: .8, spr: 'fen' }); }   // la lanterne
+    }
+    if (taches.size) {   // (une tache longue comme la voiture, large du tiers, au moins un pixel ; d'un tracé par couleur)
+      sc.monde(g);
+      for (const [c, l] of taches) {
+        g.beginPath();
+        for (let i = 0; i < l.length; i += 4) { const [x, y, a, h] = l.slice(i, i + 4), e = Math.max(h / 3, .5 / sc.z), ca = Math.cos(a), sa = Math.sin(a); g.moveTo(x - ca * h + sa * e, y - sa * h - ca * e); g.lineTo(x + ca * h + sa * e, y + sa * h - ca * e); g.lineTo(x + ca * h - sa * e, y + sa * h + ca * e); g.lineTo(x - ca * h - sa * e, y - sa * h + ca * e); }
+        g.fillStyle = c; g.fill();
+      }
     }
   }
   if (AMB.saison === 'printemps' || AMB.saison === 'automne') for (const f of VIE.transhumances) {
@@ -470,7 +507,7 @@ function eaux(sc, g, x0, y0, x1, y1, epoque) {
   // gabares et navires (dès Z.BATEAUX, à taille constante à l'écran jusqu'au plus près)
   for (const b of VIE.bateaux) {
     if (!vu(b.bb)) continue;
-    const p = surChemin(b.pts, mod(b.s0 + t * b.v, b.L)); if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
+    const p = surCumul(b.pts, b.cum, mod(b.s0 + t * b.v, b.L)); if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
     if (b.mer && tempete(p)) continue;   // la tempête garde les navires au port
     const a = p.a + (b.v < 0 ? Math.PI : 0);
     sc.monde(g); g.save(); g.translate(p.x, p.y); g.rotate(a); g.scale(k, k);
@@ -500,7 +537,7 @@ function eaux(sc, g, x0, y0, x1, y1, epoque) {
   }
   for (const r of VIE.radeaux) {
     if (!vu(r.bb)) continue;
-    const p = surChemin(r.pts, mod(r.s0 + r.v * t, r.L)); if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
+    const p = surCumul(r.pts, r.cum, mod(r.s0 + r.v * t, r.L)); if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
     sc.monde(g); g.save(); g.translate(p.x, p.y); g.rotate(p.a); g.scale(k, k);
     for (let m = 0; m < 3; m++) { RR(g, 'rgba(20,30,40,.3)', -4 - m * 11, -1.6, 10, 4.4, .6); for (let l = 0; l < 4; l++) RR(g, l % 2 ? '#7a5634' : '#8d6a44', -5 - m * 11, -2.2 + l * 1.1, 10, 1, .45); if (m) T(g, '#5b4127', .4, -m * 11 + 5, 0, -m * 11 + 6, 0); }
     g.save(); g.translate(2, 0); marcheur(g, 2, 0, false); T(g, '#6b4d31', .4, 0, 1, 7, 4); g.restore();   // le radelier et sa perche

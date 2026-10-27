@@ -2,7 +2,7 @@
 import { Ambient, locomotive, voiture } from './ambient.js';
 import { clamp, hexRgb } from './battle/formes.js';
 import { TownArt } from './towns.js';
-import { PONTS_DATES, carteDe, site } from './carte/villes.js';
+import { PONTS_DATES } from './carte/villes.js';
 import { UnitArt } from './battle/unites.js';
 import { profil } from './battle/qualite.js';
 import { uniform } from './battle/formes.js';
@@ -137,7 +137,6 @@ export class MapView {
     this.W = m.W; this.H = m.H;
     this.terrain = b64(m.terrain); this.dept = b64(m.dept); this.cellnode = b64(m.cellnode); this.river = b64(m.river);
     this.nodes = m.nodes; this.edges = m.edges;
-    carteDe(m);   // (le centre de chaque ville, au bord de l'eau : site)
     this.depts = m.depts; this.deptCodes = m.dept_codes;
     this.cam = { x: m.W / 2, y: m.H / 2, z: 2 };
     this.camAnim = null;
@@ -585,7 +584,6 @@ export class MapView {
   armyScreen(d) {
     let [x, y] = this.toScreen(d.x, d.y);
     const a = d.a;
-    if (a && a.n != null) { const n = this.nodes[a.n], [vx, vy] = site(n); x += (vx - n.x) * this.cam.z; y += (vy - n.y) * this.cam.z; }   // (sous la ville, au bord de l'eau)
     if (a && a.n != null && a.st !== 'battle') {
       const n = this.nodes[a.n];
       const s = this.nodeSize(n);
@@ -855,7 +853,7 @@ export class MapView {
       // l'icône d'une place reste à la place (Villenave-d'Ornon sous l'armée de Bordeaux)
       for (const n of this.nodes) {
         if (n.id === best.a.n && best.a.st !== 'move' && best.a.st !== 'retreat') continue;
-        const [x, y] = this.toScreen(...site(n));
+        const [x, y] = this.toScreen(n.x, n.y);
         if (Math.hypot(sx - x, sy - y) < this.nodeSize(n) * 0.4) return { kind: 'node', id: n.id, d: 0 };
       }
     }
@@ -866,7 +864,7 @@ export class MapView {
       if (dd < 20 + pad && b.node == null) return { kind: 'battle', id: b.id };
     }
     for (const n of this.nodes) {
-      const [x, y] = this.toScreen(...site(n));
+      const [x, y] = this.toScreen(n.x, n.y);
       const r = this.nodeSize(n) / 2 + 7 + pad;
       const dd = Math.hypot(sx - x, sy - y);
       if (dd < r && (!best || dd < best.d)) best = { kind: 'node', id: n.id, d: dd };
@@ -892,7 +890,7 @@ export class MapView {
       const [ex, ey] = tr.end;
       if (tr.hit && tr.hit.kind === 'node') {
         const n = this.nodes[tr.hit.id];
-        const [nx, ny] = this.toScreen(...site(n));
+        const [nx, ny] = this.toScreen(n.x, n.y);
         ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(nx, ny, this.nodeSize(n) * 0.7 + 8, 0, Math.PI * 2); ctx.stroke();
         this.hoverCard(ctx, nx, ny - this.nodeSize(n) * 0.7 - 14, [n.name], true);
@@ -961,7 +959,6 @@ export class MapView {
   setState(st) {
     const prev = this.state;
     this.state = st;
-    for (const b of st.battles || []) if (b.node != null && this.nodes[b.node]) [b.x, b.y] = site(this.nodes[b.node]);   // (l'assaut : à la ville, au bord de l'eau)
     // le givre, la neige et les prés roussis sont peints dans les tuiles : on les repeint quand la saison change
     // (la saison et la neige tombée sont peintes dans les tuiles : on les repeint quand elles changent ; carte/ambiance.js)
     if (majAmbiance(this, st)) { this.season = st.season; this.paintLand(); this.invalidateTiles(); }
@@ -1463,16 +1460,15 @@ export class MapView {
     const es = this.edges.filter(e => !e.water && vis(e)), P = L > PAPIER_L ? null : PAPIER[this.era];
     g.lineCap = 'round'; g.lineJoin = 'round';
     // vue du ciel : routes empierrées (carte/terre.js), les royales bordées d'arbres de près
-    // (vue du ciel, à la vraie taille de près : la route royale 12 m, les autres 6 ; de loin, 2,6 et 1,4 px)
-    const larg = royal => P ? Math.max(royal ? 0.34 : 0.2, (royal ? 2.1 : 1.2) / L) : royal ? Math.max(0.012, 2.6 / L) : Math.max(0.006, 1.4 / L);
-    if (!P && L >= 32) terre(this).arbresRoyaux(g, es.filter(e => e.royal && !e.ferry), larg(true), L);
+    const larg = royal => P ? Math.max(royal ? 0.34 : 0.2, (royal ? 2.1 : 1.2) / L) : royal ? Math.max(0.07, 2.6 / L) : Math.max(0.04, 1.4 / L);
+    if (!P && L >= 32) terre(this).arbresRoyaux(g, es.filter(e => e.royal && !e.ferry), larg(true));
     for (const pass of [0, 1]) {
       for (const e of es) {
         const royal = e.royal, w = larg(royal);
         if (P) {
           if (pass === 0) { g.strokeStyle = rgb(P.encre, 0.85); g.lineWidth = w + 1.2 / L; }
           else { g.strokeStyle = royal && this.era === 'etatmajor' ? '#dcae6a' : rgb(P.papier); g.lineWidth = w; }
-        } else if (pass === 0) { g.strokeStyle = royal ? '#8f7a55' : '#a8946a'; g.lineWidth = w + Math.max(0.003, 1 / L); }
+        } else if (pass === 0) { g.strokeStyle = royal ? '#8f7a55' : '#a8946a'; g.lineWidth = w + Math.max(0.02, 1 / L); }
         else { g.strokeStyle = royal ? '#d9c79c' : '#cdb98a'; g.lineWidth = w; }
         g.globalAlpha = royal || L >= 8 ? 1 : 0.6;
         if (e.ferry) { g.setLineDash([w * 2, w * 1.6]); } else g.setLineDash([]);
@@ -1979,7 +1975,7 @@ export class MapView {
     const camp = new Map();
     for (const a of st.armies) if (a.qr && a.n != null && a.st === 'idle') camp.set(a.n, a.o);
     for (const n of this.nodes) {
-      const [x, y] = this.toScreen(...site(n));   // (la ville au bord de l'eau, pas au nœud : carte/villes.js, site)
+      const [x, y] = this.toScreen(n.x, n.y);
       const s = this.nodeSize(n), ns = st.nodes[n.id];
       // (dès le plan des villes, la place couvre son vrai rayon : elle reste dessinée tant qu'un bout est à l'écran)
       const rP = z >= Z.PLAN && !this.papierVu() && x > -1e4 && x < this.vw + 1e4 && y > -1e4 && y < this.vh + 1e4 ? rayonMurs(this, n, ns) * z : 0, sc = Math.max(s, rP);
@@ -2084,15 +2080,14 @@ export class MapView {
   // enceinte autour d'une place, selon son niveau : mur d'enceinte flanqué de tours (1), remparts épais (2),
   // tracé bastionné en pointes de flèche (3), bastions et demi-lunes à la Vauban (4).
   // Pendant un siège, la brèche s'ouvre à mesure que les canons travaillent. Retourne le rayon extérieur de l'ouvrage.
-  // forme : le mur du plan de la ville (carte/villes.js, formeMur), de près
-  walls(ctx, s, f, id, dmg, forme) {
+  walls(ctx, s, f, id, dmg) {
     // le tracé ne dépend que du niveau, de la taille, de la brèche et de la ville : on le garde en cache (Path2D)
     s = Math.round(s * 2) / 2;
     const db = dmg > 0.02 ? Math.round(dmg * 50) / 50 : 0;
-    const key = `${f}|${s}|${db}|${id}|${forme ? forme.ext[1] : ''}`;
+    const key = `${f}|${s}|${db}|${id}`;
     let w = this.wallCache.get(key);
     if (!w) {
-      w = this.wallGeom(s, f, id, db, forme);
+      w = this.wallGeom(s, f, id, db);
       if (this.wallCache.size > 400) this.wallCache.clear();
       this.wallCache.set(key, w);
     }
@@ -2233,10 +2228,8 @@ export class MapView {
   }
 
   // géométrie d'une enceinte (voir walls) : chemins prêts à tracer et rayon extérieur
-  wallGeom(s, f, id, dmg, forme) {
-    // (de près, sur le plan de la ville : le mur du plan, formeMur, coupé là où il passerait dans l'eau ; de loin, en vue
-    // cavalière)
-    const R = s * 0.62 + 2, sq = s > 200 || forme ? 1 : 0.86, TAU = Math.PI * 2;
+  wallGeom(s, f, id, dmg) {
+    const R = s * 0.62 + 2, sq = 0.86, TAU = Math.PI * 2;
     const a0 = (id * 2.399) % TAU;   // orientation propre à chaque ville : la brèche y reste au même endroit
     const half = dmg > 0.02 ? Math.PI * 0.5 * Math.min(1, dmg) : 0;
     const P = (a, r) => [Math.cos(a) * r, Math.sin(a) * r * sq];
@@ -2246,20 +2239,10 @@ export class MapView {
       return d < half;
     };
     const lw = clamp(s * 0.03 * (1 + f * 0.5), 1.3, 6);
-    const ring = [], towers = [], lunes = [], rings = [ring];
+    const ring = [], towers = [], lunes = [];
     let outer;
-    if (forme) {
-      // le tracé du plan (déjà en pans d'environ R / 8 : tours, brèche), mis au rayon R du mur (rMur)
-      const k = R / forme.r;
-      for (const m of forme.murs) {
-        const r = m.map(([x, y]) => [x * k, y * k]);
-        rings.push(r);
-        if (f <= 2) for (let i = 0; i < r.length - 1; i += f === 1 ? 3 : 2) towers.push(r[i]);
-      }
-      if (f >= 4) for (const t of forme.lunes) lunes.push(t.map(([x, y]) => [x * k, y * k]));
-      outer = forme.ext[f >= 4 ? 1 : 0] * k + lw;
-    } else if (f <= 2) {
-      const N = s > 200 ? 48 : 12;
+    if (f <= 2) {
+      const N = 12;
       for (let i = 0; i <= N; i++) ring.push(P(a0 + i * TAU / N, R));
       for (let i = 0; i < N; i += f === 1 ? 3 : 2) towers.push(ring[i]);
       outer = R + lw;
@@ -2290,7 +2273,7 @@ export class MapView {
       }
     };
     const g = { lw, outer, ring: new Path2D(), lunes: null, towers: null, towersDark: null, rubble: null };
-    for (const r of rings) trace(g.ring, r, true);
+    trace(g.ring, ring, true);
     const lu = lunes.filter(t => !inGap(t[1][0], t[1][1]));
     if (lu.length) { g.lunes = new Path2D(); for (const t of lu) trace(g.lunes, t, false); }
     const tw = towers.filter(([x, y]) => !inGap(x, y));
@@ -2413,7 +2396,7 @@ export class MapView {
     for (const [nid, , dir] of this.m.rails.exits) if (served.has(nid)) stroke(this.railExit(nid, dir));
     // gares : un petit bâtiment à côté de chaque ville desservie
     if (z >= 1.6) for (const nid of served) {
-      const n = this.nodes[nid], [x, y] = this.toScreen(...site(n)), s = clamp(z * 1.6, 6, 12);
+      const n = this.nodes[nid], [x, y] = this.toScreen(n.x, n.y), s = clamp(z * 1.6, 6, 12);
       const gx = x - s * 2.6, gy = y + s * 0.6;   // (en bas à gauche : l'effectif de la ville est à droite)
       ctx.fillStyle = '#7a3b2a'; ctx.fillRect(gx, gy, s * 1.3, s * 0.7);
       ctx.fillStyle = '#4a2a1e'; ctx.beginPath(); ctx.moveTo(gx - s * 0.1, gy); ctx.lineTo(gx + s * 0.65, gy - s * 0.5); ctx.lineTo(gx + s * 1.4, gy); ctx.closePath(); ctx.fill();
@@ -2475,9 +2458,9 @@ export class MapView {
 
   drawArmies(ctx, time) {
     const z = this.cam.z, st = this.state;
-    const detailed = z >= 5.5, vie = z >= Z.COLONNES && !this.papierVu();
+    const detailed = z >= 5.5, vie = z >= Z.VIE && !this.papierVu();
     // de près, les armées en colonne de route ou au bivouac (carte/guerre.js) ; le jeton et la formation restent
-    // en dessous de Z.COLONNES, et leur place reste celle des clics
+    // en dessous de Z.VIE, et leur place reste celle des clics
     if (detailed) this.guerreDe().armees(ctx, time, vie);
     const list = [...this.disp.values()].sort((p, q) => p.y - q.y);
     const atNode = {};
@@ -2503,7 +2486,7 @@ export class MapView {
     this.drawArmyLabels(ctx);
   }
 
-  // de près (Z.COLONNES) : la colonne est dessinée par carte/guerre.js ; ici la sélection et le nom, là où l'on clique
+  // de près (Z.VIE) : la colonne est dessinée par carte/guerre.js ; ici la sélection et le nom, là où l'on clique
   drawLife(ctx, a, sel) {
     if (sel) { ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(0, 0, 26, 14, 0, 0, Math.PI * 2); ctx.stroke(); }
     if (sel || a.o === this.state.me.code) {
@@ -2871,12 +2854,12 @@ export class MapView {
       const [x, y] = this.toScreen(b.x, b.y);
       if (x < -100 || y < -100 || x > this.vw + 100 || y > this.vh + 100) continue;
       // fumée (de près, celle de carte/guerre.js : les salves, les batteries)
-      if (z < Z.COLONNES && !nuit() && Math.random() < dt * 9) {
+      if (z < Z.VIE && !nuit() && Math.random() < dt * 9) {
         const r = 1.6;
         this.particles.push({ type: 'smoke', x: b.x + (Math.random() - 0.5) * r * 2, y: b.y + (Math.random() - 0.5) * r * 1.4,
                               life: 0, max: 2.2 + Math.random(), size: 0.5 + Math.random() * 0.6 });
       }
-      if (z < Z.COLONNES && !nuit() && Math.random() < dt * 14) {
+      if (z < Z.VIE && !nuit() && Math.random() < dt * 14) {
         this.particles.push({ type: 'spark', x: b.x + (Math.random() - 0.5) * 2.4, y: b.y + (Math.random() - 0.5) * 1.6, life: 0, max: 0.15 });
       }
       if (z < 5.5) {

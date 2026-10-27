@@ -7,7 +7,6 @@
 // Les découvertes marquantes des IA arrivent en bandeau, avec un éclat sur leur chef-lieu, sans arrêter le jeu.
 // La frise de vos découvertes est dans le panneau des technologies (ui.js, techModal).
 import { esc } from './battle/formes.js';
-import { site } from './carte/villes.js';
 
 const TAU = Math.PI * 2;
 
@@ -154,10 +153,9 @@ export class Decouvertes {
     const map = this.ui.map, cap = this.ui.rules.factions[code]?.capital;
     const n = map.nodes.find(x => x.name === cap) || map.nodes.find(x => x.dept === code && x.type === 'capitale');
     if (!n) return;
-    const [x, y] = site(n);   // (la ville, au bord de l'eau)
-    if (go) map.moveTo(x, y, Math.max(map.cam.z, 4));
+    if (go) map.moveTo(n.x, n.y, Math.max(map.cam.z, 4));
     map.flashes = map.flashes || [];
-    map.flashes.push({ x, y, t0: performance.now(), col: map.colors[code] || '#e6c97f' });
+    map.flashes.push({ x: n.x, y: n.y, t0: performance.now(), col: map.colors[code] || '#e6c97f' });
   }
   html() {
     const t = this.techOf(this.tech);

@@ -5,7 +5,7 @@
 import { clamp } from './battle/formes.js';
 import { Lot } from './lot.js';
 import { Z } from './carte/ambiance.js';
-import { IC, carteDe, etatVille, formeMur, imageEnCache, planCarte, planCartePas, rayon, resPour, S as SU } from './carte/villes.js';
+import { IC, carteDe, etatVille, imageEnCache, planCarte, planCartePas, resPour, S as SU } from './carte/villes.js';
 import { rejouer } from './carte/rejeu.js';
 // de près, le plan plus fin que son image (2 px par unité) : des tuiles de 512 pixels où l'on rejoue sa peinture
 // enregistrée (rejeu.js, comme l'intérieur), par un worker (carte/peintre-tuiles.js), sinon ici, 4 ms par image ; en
@@ -356,9 +356,7 @@ export class TownArt {
   // Une image par place, état et résolution (paliers de 2) ; on n'en peint que pour 6 ms par image, les autres
   // places gardent le palier voisin ou le signe le temps d'être peintes. Renvoie faux pour garder le signe.
   plan(ctx, n, s, col, ns, owner) {
-    const mp = this.map, z = mp.cam.z;
-    if (rayon(ns?.pop || n.pop0 || 700) / SU * z < 10) return false;   // (plancher : moins de 10 px de rayon, le signe ; un village de 111 m, jusqu'à z 90)
-    const e = etatVille(n, ns, mp.state), res = resPour(z * (mp.dpr || 1) / SU);
+    const mp = this.map, z = mp.cam.z, e = etatVille(n, ns, mp.state), res = resPour(z * (mp.dpr || 1) / SU);
     if (this.planFrame !== mp.frameNo) { this.planFrame = mp.frameNo; this.planMs = 0; }
     let p = imageEnCache(n, e, res);
     if ((!p || p.r0 !== res) && (!p || !mp.zooming()) && this.planMs < 6) {
@@ -373,13 +371,13 @@ export class TownArt {
     }
     if (!p) return false;
     const u = z / SU, k = u / p.res, o = -p.Rr * u;   // pixels CSS par unité du plan ; par pixel de l'image
-    // (de près, les tuiles ; l'image dessous tant qu'il en manque ; l'image est centrée sur le nœud, ctx sur la ville)
-    const T = p.rec && u * (mp.dpr || 1) > p.res * 1.2 ? this.tuiles(n, p, u) : null, dx = (IC[0] - p.V.C[0]) * u, dy = (IC[1] - p.V.C[1]) * u;
-    if (!T || T.manque) ctx.drawImage(p.c, o + dx, o + dy, p.c.width * k, p.c.height * k);
-    for (const [c, x, y, l, h] of T || []) ctx.drawImage(c, x + dx, y + dy, l, h);
-    // les remparts de la partie, sur le tracé et au rayon du mur du plan (jamais plus petits que ceux dessinés dessous par drawNodes)
+    // (de près, les tuiles ; l'image dessous tant qu'il en manque)
+    const T = p.rec && u * (mp.dpr || 1) > p.res * 1.2 ? this.tuiles(n, p, u) : null;
+    if (!T || T.manque) ctx.drawImage(p.c, o, o, p.c.width * k, p.c.height * k);
+    for (const d of T || []) ctx.drawImage(...d);
+    // les remparts de la partie, au rayon du mur du plan (jamais plus petits que ceux dessinés dessous par drawNodes)
     const sW = Math.max(s, Math.pow(1.04, Math.round(Math.log(Math.max(1, (p.V.rMur * u - 2) / 0.62)) / Math.log(1.04))));
-    const wallR = ns.f > 0 ? mp.walls(ctx, sW, ns.f, n.id, ns.sg && !ns.sg.occ && !ns.sg.bl ? ns.sg.dmg : 0, formeMur(p.V)) : 0;
+    const wallR = ns.f > 0 ? mp.walls(ctx, sW, ns.f, n.id, ns.sg && !ns.sg.occ && !ns.sg.bl ? ns.sg.dmg : 0) : 0;
     if (ns.bar != null || ns.bw) mp.works(ctx, sW, ns.f, n.id, ns.bar || 0, ns.bw, wallR);
     const lot = mp.lot || (mp.lot = new Lot());
     lot.m = ctx.getTransform();

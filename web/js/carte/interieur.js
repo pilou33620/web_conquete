@@ -5,10 +5,11 @@
 // disette, incendie, crue), famine du joueur ; l'heure du jour (AMB.heure) assombrit la scène.
 import {
   C, E, RR, T, TAU, KT, OMBRE, PAL, SPR, Scene, alea, angLerp, brancher, camAnim, cheval, clamp, coneF, fantassin, flammes, fumee,
-  longueur, mod, sombre, surChemin, tenue,
+  distPoly, longueur, mod, sombre, surChemin, tenue, toile,
 } from './lib.js';
-import { carteDe, etatVille, planDe, peindreInterieurPas, lecture, navire, cleVille, IC, IW, IH } from './villes.js';
+import { carteDe, etatVille, planDe, peindreInterieurPas, lecture, navire, cleVille, IC, IW, IH, PONTS_DATES } from './villes.js';
 import { AMB } from './ambiance.js';
+import { rejouer } from './rejeu.js';
 
 const TYPE_TXT = { capitale: 'Capitale', ville: 'Ville', village: 'Village', fort: 'Place forte' };
 const LV_TXT = {
@@ -40,7 +41,12 @@ function construire() {
   el.hidden = false;   // (la scène mesure son canevas à sa création)
   const sc = new Scene(el.querySelector('#vi-cv'), {
     max: 500, vie: [], zMax: 4.5,
-    sol(sc, g) { const t = sc.tv; g.fillStyle = '#6c984d'; g.fillRect(0, 0, sc.W, sc.H); if (!t) return; const m = sc.m, k = t.k; g.drawImage(t.c, (sc.cx - sc.W / 2 / m) * k, (sc.cy - sc.H / 2 / m) * k, sc.W / m * k, sc.H / m * k, 0, 0, sc.W, sc.H); },
+    sol(sc, g) {
+      const t = sc.tv; g.fillStyle = '#6c984d'; g.fillRect(0, 0, sc.W, sc.H); if (!t) return;
+      const m = sc.m, k = t.k, T = tuiles(sc, t);
+      if (!T || T.manque) g.drawImage(t.c, (sc.cx - sc.W / 2 / m) * k, (sc.cy - sc.H / 2 / m) * k, sc.W / m * k, sc.H / m * k, 0, 0, sc.W, sc.H);
+      for (const d of T || []) g.drawImage(...d);
+    },
   });
   const lieu = k => () => vue?.V?.lieux[k];
   brancher(sc, IW, IH, 'vi', [
@@ -56,25 +62,106 @@ function construire() {
   return { el, sc };
 }
 
+// ---------- de près, le plan plus fin que sa texture : des tuiles de 512 pixels où l'on rejoue la peinture enregistrée
+// (rejeu.js), par un worker (peintre-tuiles.js), sinon ici, 6 ms par image ; en attendant, la texture agrandie.
+// Au plus 48 tuiles (48 Mo), assez pour un écran d'iPad ; jamais une tuile posée dans l'image en cours (un grand écran
+// en demande davantage : sinon la tuile peinte chasserait sa voisine et le worker tournerait sans fin).
+const TS = 512, MAXT = 48, TUILES = new Map(), ATTENTE = new Set(), VUE = new Map();
+let peintre, tuilesDe = null, nT = 0, img = 0;
+const garder = (cle, c) => { TUILES.set(cle, c); while (TUILES.size > MAXT) { const [k, v] = TUILES.entries().next().value; if (VUE.get(k) === img) break; TUILES.delete(k); VUE.delete(k); v.close ? v.close() : v.width = 0; } };
+function viderTuiles() { for (const v of TUILES.values()) v.close ? v.close() : v.width = 0; TUILES.clear(); VUE.clear(); ATTENTE.clear(); tuilesDe = null; nT++; }   // (nT : les tuiles d'avant, arrivées tard, sont jetées)
+function lePeintre() {
+  if (peintre === undefined) {
+    try { peintre = typeof OffscreenCanvas === 'function' ? new Worker(new URL('./peintre-tuiles.js', import.meta.url), { type: 'module' }) : null; } catch (e) { peintre = null; }
+    // (un worker qui ne se charge pas, module refusé ou erreur réseau : la vue peint elle-même)
+    if (peintre) peintre.onerror = () => { peintre.terminate(); peintre = null; ATTENTE.clear(); aIci(); };
+    if (peintre) peintre.onmessage = ({ data: d }) => {
+      ATTENTE.delete(d.cle); if (d.ko) { peintre.terminate(); peintre = null; aIci(); }
+      if (d.cle.startsWith('tex|')) { texRecue(d); return; }
+      if (!d.bmp) return; if (d.cle.startsWith(nT + '|')) garder(d.cle, d.bmp); else d.bmp.close();
+    };
+  }
+  return peintre;
+}
+// l'enregistrement d'une texture envoyé une fois au worker (son numéro nT)
+function envoyer(t) {
+  if (tuilesDe === t) return;
+  viderTuiles(); tuilesDe = t; nT++;
+  const w = lePeintre();
+  if (w) Promise.all(t.rec.img.map(c => createImageBitmap(c))).then(img => w.postMessage({ id: nT, rec: { ...t.rec, img } }));
+}
+// la texture elle-même, peinte par le worker à mesure qu'elle s'enregistre : le fil principal ne fait plus que
+// l'enregistrer (2,5 fois moins long), le worker rejoue chaque tranche dans l'ordre (même image) et rend la texture
+// tous les quarts de seconde, puis finie. Sans worker à canevas 2D, peinte ici comme avant.
+let peinture = null, nP = 0, envoi = Promise.resolve();   // { id, t, seq, fait, secours }
+function tranche(p, fin) {
+  const w = lePeintre(), T = p.t.tranche(), id = peinture?.id;
+  if (w) envoi = envoi.then(() => Promise.all(T.img.map(c => createImageBitmap(c)))).then(img => w.postMessage({ id, tex: { ...T, img }, W: p.t.c.width, H: p.t.c.height, k: p.t.k, fin })).catch(aIci);
+}
+function texRecue(d) {
+  const P = peinture, [, id, seq] = d.cle.split('|');
+  if (!P || +id !== P.id || !d.bmp || +seq <= P.seq) return d.bmp?.close();
+  if (P.t.c.close) P.t.c.close(); else P.t.c.width = P.t.c.height = 0;
+  P.t.c = d.bmp; P.seq = +seq;
+  if (d.fin) { peinture = null; P.fait(); }
+}
+// (secours, rare : le worker n'a pas de canevas 2D ou une tranche n'est pas partie ; tout se rejoue ici d'un coup, une
+// fois l'enregistrement fini)
+function aIci() { if (peinture) { peinture.secours = true; secours(); } }
+function secours() {
+  const P = peinture; if (!P?.secours || !P.t.rec) return;
+  peinture = null;
+  const c = toile(Math.round(IW * P.t.k), Math.round(IH * P.t.k)), g = c.getContext('2d');
+  g.scale(P.t.k, P.t.k); rejouer(g, P.t.rec, -Infinity, -Infinity, Infinity, Infinity); P.t.c = c; P.fait();
+}
+// les tuiles à poser ([image, x, y, l, h] en pixels de l'écran) ; manque : la texture doit passer dessous
+function tuiles(sc, t) {
+  const m = sc.m, T = [];
+  if (!t.rec || m < t.k * 1.25) return null;
+  const w = lePeintre();
+  envoyer(t);
+  img++;
+  const r = 2 ** Math.ceil(Math.log2(m * .75)), u = TS / r, x0 = sc.cx - sc.W / 2 / m, y0 = sc.cy - sc.H / 2 / m, fin = performance.now() + 6;
+  const ecran = v => Math.round((v - sc.cx) * m + sc.W / 2), ecranY = v => Math.round((v - sc.cy) * m + sc.H / 2);
+  for (let j = Math.floor(y0 / u); j * u < y0 + sc.H / m; j++) for (let i = Math.floor(x0 / u); i * u < x0 + sc.W / m; i++) {
+    const cle = `${nT}|${r}|${i}|${j}`;
+    let c = TUILES.get(cle);
+    VUE.set(cle, img);
+    if (c) { TUILES.delete(cle); TUILES.set(cle, c); }
+    else if (w) { if (ATTENTE.size < 3 && !ATTENTE.has(cle)) { ATTENTE.add(cle); w.postMessage({ id: nT, cle, r, i, j, T: TS }); } }
+    else if (performance.now() < fin) {
+      c = toile(TS, TS); const h = c.getContext('2d'); h.setTransform(r, 0, 0, r, -i * TS, -j * TS);
+      rejouer(h, t.rec, i * u, j * u, (i + 1) * u, (j + 1) * u); garder(cle, c);
+    }
+    if (c) { const X = ecran(i * u), Y = ecranY(j * u); T.push([c, X, Y, ecran((i + 1) * u) - X, ecranY((j + 1) * u) - Y]); } else T.manque = true;
+  }
+  return T;
+}
+
 // o : { m (map.m), n (nœud), ns (st.nodes[id]), st, dept (nom du pays), col (couleur du maître), flag (g, x, y, h, col) }
+// ce qui change la texture de la ville (les ponts datés : villes.js, PONTS_DATES)
+const cleTexture = (n, e) => cleVille(n, e) + `|${Math.round(e.dmg * 10)}|${Math.round(e.deg * 20)}|${e.lv}|${AMB.saison}|${KT}|${PONTS_DATES.filter(p => p[0] === n.name && e.annee < p[2]).length}`;
 export function ouvrirInterieur(o) {
   const t0 = performance.now();
+  peinture = null;   // (la peinture d'une ville d'avant, si elle court encore : ses images tardives seront jetées)
   if (!vue) vue = construire();
   const { el, sc } = vue, n = o.n, K = carteDe(o.m), e = etatVille(n, o.ns, o.st);
   el.hidden = false; document.body.classList.add('vi-ouverte');
   sc.resize();
   const V = planDe(K, n, e), Pf = V.Pf;
-  const cle = cleVille(n, e) + `|${Math.round(e.dmg * 10)}|${Math.round(e.deg * 20)}|${e.lv}|${AMB.saison}|${KT}`;
+  const cle = cleTexture(n, e);
   Object.assign(vue, { V, e, col: o.col, flag: o.flag, t0, peinte: 0, o, etat: cle + `|${e.siege}|${e.blocus}|${e.famine}` });
   sc.V = V; sc.fx = []; sc.vie = []; sc.etals = []; sc.feux = []; sc.fumees = []; sc.moulins = [];
   // la texture se peint par pas pendant les premières images (peindreInterieurPas), puis la vie s'y installe
-  const fini = tv => { vue.peint = null; vue.deg = tv.deg; vue.tex = tv; sc.tv = tv; vivre(sc, V, e); vue.peinte = performance.now() - t0; };
+  const fini = tv => { vue.peint = null; vue.deg = tv.deg; vue.tex = tv; sc.tv = tv; vivre(sc, V, e); };
+  const peinte = (tv, p) => { TEX.set(p.cle, tv); while (TEX.size > 2) { const [k0, v0] = TEX.entries().next().value; TEX.delete(k0); if (v0 !== tv && v0 !== sc.tv) v0.c.close ? v0.c.close() : v0.c.width = v0.c.height = 0; } if (vue.t0 === t0) vue.peinte = performance.now() - t0; };
   const tv = TEX.get(cle);
-  if (tv) { vue.peint = null; fini(tv); }
+  if (tv) { TEX.delete(cle); TEX.set(cle, tv); vue.peint = null; fini(tv); vue.peinte = performance.now() - t0; }
   else {
-    const it = peindreInterieurPas(K, V, KT, e);
+    const w = lePeintre(), it = peindreInterieurPas(K, V, KT, e, !w);
     sc.tv = it.next().value;
-    vue.peint = { it, cle };
+    const t = sc.tv; vue.peint = { it, cle, w, t };
+    if (w) peinture = { id: ++nP, t, seq: 0, fait: () => peinte(t, { cle }) };
   }
   sc.z = Math.max(sc.zB()[0], Math.min(4, sc.cssW / (Pf.R * 2.7))); sc.cx = IC[0]; sc.cy = IC[1]; sc.vol = null; sc.suivi = null; sc.borner(); sc.marquer(null);
   el.querySelector('#vi-nom').textContent = n.name;
@@ -87,11 +174,18 @@ export function ouvrirInterieur(o) {
     const boucle = now => {
       if (!vue || vue.el.hidden) { vue.raf = 0; return; }
       const p = vue.peint;
-      if (p) {   // 12 ms de peinture par image
-        const tf = performance.now();
-        for (let r; performance.now() - tf < 12;) if ((r = p.it.next()).done) { TEX.set(p.cle, r.value); while (TEX.size > 2) { const [k0, v0] = TEX.entries().next().value; TEX.delete(k0); if (v0 !== r.value) v0.c.width = v0.c.height = 0; } fini(r.value); break; }
+      if (p) {   // 12 ms de peinture (ou d'enregistrement) par image
+        const tf = performance.now(); let r;
+        do r = p.it.next(); while (!r.done && performance.now() - tf < 12);
+        if (p.w) tranche(p, r.done);
+        if (r.done) { r.value.tranche = null; fini(r.value); if (p.w) secours(); else peinte(r.value, p); }
       }
-      const dt = Math.min(.05, (now - tp) / 1000); tp = now; sc.step(dt); sc.draw(); vue.raf = requestAnimationFrame(boucle);
+      const dt = Math.min(.05, (now - tp) / 1000); tp = now; sc.step(dt);
+      // pendant l'enregistrement, rien ne vit encore : l'image ne se refait que si la vue ou la texture a changé (la
+      // refaire à chaque image doublait le temps de l'ouverture)
+      const sig = vue.peint?.w && `${sc.cx}|${sc.cy}|${sc.z}|${sc.W}|${sc.H}|${peinture?.seq}`;
+      if (!sig || sig !== vue.sig) sc.draw();
+      vue.sig = sig; vue.raf = requestAnimationFrame(boucle);
     };
     vue.raf = requestAnimationFrame(boucle);
   }
@@ -103,6 +197,7 @@ export function fermerInterieur() {
   vue.el.hidden = true; document.body.classList.remove('vi-ouverte');
   if (vue.raf) cancelAnimationFrame(vue.raf); vue.raf = 0;
   vue.sc.vie = []; vue.sc.fx = [];
+  viderTuiles();
 }
 export const interieurOuvert = () => !!vue && !vue.el.hidden;
 // un nouvel état de la partie arrive pendant qu'on regarde la ville : si elle a changé (siège, ruines, foire,
@@ -112,7 +207,7 @@ export function majInterieur(st) {
   const o = vue.o, ns = st.nodes[o.n.id];
   if (!ns) return;
   const e = etatVille(o.n, ns, st);
-  const etat = cleVille(o.n, e) + `|${Math.round(e.dmg * 10)}|${Math.round(e.deg * 20)}|${e.lv}|${AMB.saison}|${KT}|${e.siege}|${e.blocus}|${e.famine}`;
+  const etat = cleTexture(o.n, e) + `|${e.siege}|${e.blocus}|${e.famine}`;
   if (etat === vue.etat) return;
   const { cx, cy, z } = vue.sc;
   ouvrirInterieur({ ...o, ns, st });
@@ -128,7 +223,10 @@ function vivre(sc, V, e) {
   const rues = V.rues.filter(r => r.pts.length > 1 && r.pts.some(p => V.ilots.some(b => Math.hypot(b.c[0] - p[0], b.c[1] - p[1]) < 40)));
   const passant = (r, v) => { const L = longueur(r.pts); return { k: 'passant', pts: r.pts, L, s: R() * L, v: (R() < .5 ? -1 : 1) * v, lat: (R() - .5) * 3, L2: Object.assign({}, LCIV, { tete: R() < .5 ? 'coiffe' : 'rond' }), habit: HABITS[R() * 6 | 0], x: 0, y: 0, a: 0, pas: R() }; };
   for (let i = 0; i < clamp(Pf.pop / 90, 14, 90) * k; i++) { const r = rues[R() * rues.length | 0]; if (!r) break; vie.push(passant(r, 1.4 + R())); }
-  if (!e.siege) for (const r of V.routesL) for (let i = 0; i < 2; i++) vie.push({ k: 'charrette', pts: r.pts, L: longueur(r.pts), s: 40 + R() * 500, v: (R() < .5 ? -1 : 1) * 5, lat: 2.6, x: 0, y: 0, a: 0, pas: 0 });
+  // (les charrettes vont jusqu'au bac d'une rivière sans pont, pas au travers : PONTS_DATES)
+  const sansPont = Pf.rivs.filter(rv => PONTS_DATES.some(([v, n, an]) => v === Pf.n.name && n === rv.name && e.annee < an));
+  const jusquAuBac = pts => { const k0 = pts.findIndex(p => sansPont.some(rv => distPoly(rv.pts, p[0], p[1]) < rv.w / 2 + 3)); return k0 < 0 ? pts : pts.slice(0, k0); };
+  if (!e.siege) for (const r of V.routesL) for (let i = 0, pts = jusquAuBac(r.pts); i < 2 && pts.length > 1; i++) vie.push({ k: 'charrette', pts, L: longueur(pts), s: 40 + R() * 500, v: (R() < .5 ? -1 : 1) * 5, lat: 2.6, x: 0, y: 0, a: 0, pas: 0 });
   for (const rv of Pf.rivs) { const L = longueur(rv.pts); for (let i = 0; i < (Pf.port ? 6 : 2) * (e.blocus ? .3 : 1); i++) vie.push({ k: 'bateau', pts: rv.pts, L, s: R() * L, v: (R() < .5 ? -1 : 1) * (2 + R() * 2), lat: (R() - .5) * rv.w * .5, grand: Pf.port && rv.rank <= 1 && R() < .5, x: 0, y: 0, a: 0 }); }
   if (Pf.mer && Pf.port) for (let i = 0; i < 6; i++) { const a = Pf.mer.a + (R() - .5) * .8, d = Pf.R * (1.1 + R() * .8); vie.push({ k: 'mouille', x: IC[0] + Math.cos(a) * d, y: IC[1] + Math.sin(a) * d, a: R() * TAU, grand: R() < .4 }); }
   // la place : badauds, foire, émeute ; vide en disette et en épidémie

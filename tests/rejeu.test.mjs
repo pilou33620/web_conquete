@@ -1,19 +1,12 @@
-// Banc de l'échelle réelle (SPEC-CARTE-2D.md, « Livré — échelle réelle ») : node --test tests/
+// Banc du rejeu de la peinture (rejeu.js) : node --test tests/
 //
-// POURQUOI CE BANC EXISTE. Les figures (gens, chevaux, charrettes, bateaux) se dessinent dans leur propre unité, posée
-// sur le plan par un facteur ; un facteur oublié ou une figure dessinée dans une autre unité ne fait rien planter, mais
-// rend les gens grands comme des maisons (avant ce lot, un passant de l'intérieur faisait 24 m). On mesure donc ce que
-// chaque figure dessine vraiment, en mètres du monde. Et le plan rejoué de près (rejeu.js) doit dessiner ce qui touche
-// la fenêtre, avec les bonnes couleurs, et rien d'autre.
+// POURQUOI CE BANC EXISTE. Les plans des villes et l'intérieur se peignent une fois en s'enregistrant, puis se rejouent
+// nets, par tuiles, de près (dans un worker, peintre-tuiles.js). Le rejeu doit dessiner ce qui touche la fenêtre, avec
+// les bonnes couleurs, et rien d'autre ; les tranches de la texture, tout, dans l'ordre.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { enregistrer, rejouer, rejouerTout } = await import('../web/js/carte/rejeu.js');
-const { fantassin, cheval, tenue } = await import('../web/js/carte/lib.js');
-const { navire, S } = await import('../web/js/carte/villes.js');
-const { charrette, ECH, NAV } = await import('../web/js/carte/interieur.js');
-const { compoColonne, charrette: charretteCarte } = await import('../web/js/carte/guerre.js');
-const A = await import('../web/js/carte/ambiance.js');
 
 // un contexte qui ne dessine rien mais note les appels ; ses réglages sont des accesseurs, comme ceux d'un canevas
 class Faux {
@@ -23,29 +16,6 @@ for (const k of ['save', 'restore', 'translate', 'rotate', 'scale', 'beginPath',
   Faux.prototype[k] = function (...a) { this.journal.push([k, ...a]); };
 for (const k of ['fillStyle', 'strokeStyle', 'lineWidth', 'lineCap', 'globalAlpha'])
   Object.defineProperty(Faux.prototype, k, { get() { return this.r[k] ?? (k === 'lineWidth' ? 1 : null); }, set(v) { this.r[k] = v; this.journal.push(['=' + k, v]); } });
-
-// l'étendue de ce que dessine f, en unités de figure : [x0, y0, x1, y1]
-function etendue(f) {
-  const [g, fin] = enregistrer(new Faux()); f(g);
-  const { BX } = fin(), e = [Infinity, Infinity, -Infinity, -Infinity];
-  for (let i = 0; i < BX.length; i += 6) if (Number.isFinite(BX[i]) && Number.isFinite(BX[i + 2])) { e[0] = Math.min(e[0], BX[i]); e[1] = Math.min(e[1], BX[i + 1]); e[2] = Math.max(e[2], BX[i + 2]); e[3] = Math.max(e[3], BX[i + 3]); }
-  return e;
-}
-const metres = u => u * ECH * 1000 / S;   // unités de figure → unités du plan → mètres
-const proche = (v, vrai, nom) => assert.ok(Math.abs(v / vrai - 1) < 0.3, `${nom} : ${v.toFixed(2)} m au lieu d'environ ${vrai} m`);
-
-test('vue de l’intérieur : gens, chevaux, charrettes et bateaux à leur vraie taille (à 30 % près)', () => {
-  const L = tenue('fr', 'civil');
-  const p = etendue(g => fantassin(g, L, { role: 'h' }, { legs: 0, arme: 'aucun' }));
-  proche(metres(p[3] - p[1]), 0.6, 'largeur d’épaules d’un passant');
-  const c = etendue(g => cheval(g, '#6b4a2c', { gait: 0, bob: 0 }));
-  proche(metres(c[2] - c[0]), 2.4, 'longueur d’un cheval');
-  const a = etendue(g => charrette(g, 0));
-  proche(metres(a[2] - a[0] - (c[2] - c[0])), 3.2, 'longueur de la charrette (sans le cheval)');
-  proche(metres(a[3] - a[1]), 1.8, 'largeur de la charrette (roues comprises)');
-  const n = etendue(g => navire(g, 0, 0, 0, false));
-  proche(metres((n[2] - n[0]) * NAV), 20, 'longueur d’une gabare');
-});
 
 test('rejeu : seul ce qui touche la fenêtre se rejoue, avec ses réglages', () => {
   const [g, fin] = enregistrer(new Faux());
@@ -80,24 +50,3 @@ test('rejeu : un tracé de plusieurs taches ne rejoue que celles de la fenêtre 
   assert.deepEqual(t.journal, f.journal, 'les tranches rejouent tous les appels, dans l’ordre');
 });
 
-test('les figures lisibles : la vraie taille au plus près de l’intérieur, au moins 4,5 px la personne de loin', () => {
-  assert.equal(A.kFig(7.5), 1, 'au zoom maximum de l’intérieur (7,5 px/m), la vraie taille');
-  assert.ok(A.kFig(0.5) > 1 && A.kFig(0.5) * 0.6 * 0.5 >= 4.5 - 1e-9, 'de loin, une personne grossie à 4,5 px');
-  const p = etendue(g => fantassin(g, tenue('fr', 'civil'), { role: 'h' }, { legs: 0, arme: 'aucun' })), c = etendue(g => charretteCarte(g, 0, false, 0));
-  for (const z of [A.Z.VIE, 450, A.Z.MAX]) {
-    A.echelle(z); const px = u => u * A.U * z;
-    assert.ok(px(p[3] - p[1]) >= 4.5 && px(p[3] - p[1]) < 5.5, `z ${z} : une personne fait ${px(p[3] - p[1]).toFixed(1)} px`);
-    assert.ok(Math.abs((c[2] - c[0]) / (p[3] - p[1]) - 6 / 0.65) < 2, 'toutes grossies du même facteur : la charrette reste à 9 personnes');
-  }
-  A.echelle(1e6); assert.equal(A.U, 0.00015, 'sans grossir, une unité de figure : 0,15 m, en km');
-});
-
-test('carte de campagne : les figures à leur vraie taille, la colonne à sa vraie longueur', () => {
-  A.echelle(1e6); const U = A.U;
-  const c = etendue(g => charretteCarte(g, 0, false, 0)), km = u => u * U;
-  assert.ok(km(c[2] - c[0]) > 0.005 && km(c[2] - c[0]) < 0.007, `une charrette attelée fait 6 m (${(km(c[2] - c[0]) * 1000).toFixed(1)} m)`);
-  assert.ok(km(c[3] - c[1]) > 0.0015 && km(c[3] - c[1]) < 0.0022, `et 1,8 m de large, roues comprises (${(km(c[3] - c[1]) * 1000).toFixed(1)} m)`);
-  const col = compoColonne([['r', 'ligne', 600, 600]], () => 'inf', () => false, null);
-  assert.ok(col.long > 0.18 && col.long < 0.22, `600 hommes par quatre, l'état-major et les bagages : 200 m (${(col.long * 1000).toFixed(0)} m)`);
-  assert.ok(col.liste.filter(e => e.k === 'rang').every(e => e.w === 3), 'en bande de 3 m');
-});

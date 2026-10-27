@@ -296,15 +296,16 @@ export class Terre {
     for (const [x, y] of cabanes) bat(g, [{ t: 'g', x: -6, y: -3, w: 12, h: 6, p: 'tuile', h2: 1 }], x, y, 0, .006);
   }
 
-  // les arbres des routes royales, de près : un rang de chaque côté (map.js drawRoads)
+  // les arbres des routes royales, de près : un rang de chaque côté (map.js drawRoads), interrompus sur les ponts
   arbresRoyaux(g, routes, w) {
     const r = .035, col = boisSaison(.4), ombre = new Path2D(), houp = new Path2D(), lum = new Path2D();
-    for (const pts of routes) for (let i = 1; i < pts.length; i++) {
+    for (const { pts, passes = [] } of routes) for (let i = 1; i < pts.length; i++) {
       const [a0, b0] = pts[i - 1], [a1, b1] = pts[i], l = Math.hypot(a1 - a0, b1 - b0);
       if (!l) continue;
       const nx = -(b1 - b0) / l, ny = (a1 - a0) / l;
       for (let t = 0; t < l; t += .14) for (const s of [-1, 1]) {
         const x = a0 + (a1 - a0) * t / l + nx * s * (w + .03), y = b0 + (b1 - b0) * t / l + ny * s * (w + .03);
+        if (passes.some(p => Math.hypot(x - p.x, y - p.y) < (LARG_RIVIERE[p.rank] || .05) / 2 + .07 + r)) continue;   // (la moitié du pont de map.js, plus un houppier)
         ombre.moveTo(x + r * 1.7, y + r * .9); ombre.arc(x + r * .7, y + r * .9, r, 0, TAU);
         houp.moveTo(x + r, y); houp.arc(x, y, r, 0, TAU);
         lum.moveTo(x - r * .32 + r * .5, y - r * .34); lum.arc(x - r * .32, y - r * .34, r * .5, 0, TAU);

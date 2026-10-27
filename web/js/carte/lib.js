@@ -21,6 +21,14 @@ function T(g, c, w, x1, y1, x2, y2) { g.strokeStyle = c; g.lineWidth = w; g.begi
 function RR(g, c, x, y, w, h, r) { g.fillStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); }
 function PG(g, c, p) { g.fillStyle = c; g.beginPath(); g.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]); g.closePath(); g.fill(); }
 function ligne(g, pts) { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (const p of pts) g.lineTo(p[0], p[1]); }
+// des taches d'une couleur d'un seul tracé : L, couleur → [[x, y, r]] (cercles) ou [[x, y, rx, ry, a]] (ellipses)
+function taches(g, L) {
+  for (const [c, l] of L) {
+    g.fillStyle = c; g.beginPath();
+    for (const [x, y, rx, ry, a] of l) if (ry === undefined) { g.moveTo(x + rx, y); g.arc(x, y, rx, 0, TAU); } else { g.moveTo(x + rx * Math.cos(a), y + rx * Math.sin(a)); g.ellipse(x, y, rx, ry, a, 0, TAU); }
+    g.fill();
+  }
+}
 function dup(P, x, y, m, fn) {
   fn(x, y); if (!P) return;
   const xs = [x], ys = [y];
@@ -54,16 +62,18 @@ function parcelle(g, p, R, P = 0) {
   if (p.dir === 'h') for (let yy = y + s.pas / 2; yy < y + h; yy += s.pas) { g.moveTo(x, yy); g.lineTo(x + w, yy); }
   else for (let xx = x + s.pas / 2; xx < x + w; xx += s.pas) { g.moveTo(xx, y); g.lineTo(xx, y + h); }
   g.stroke();
-  // menus détails de chaque culture
+  // menus détails de chaque culture (des centaines par parcelle : d'un tracé par couleur)
   const n = w * h * (p.det ?? 1), pt = (cnt, fn) => { for (let i = 0; i < cnt; i++) { const a = R(), b = R(), c = R(), d = R(); dup(P, x + a * w, y + b * h, 3, (u, v) => fn(u, v, c, d)); } };
+  const L = new Map(), tache = (c, ...a) => { let l = L.get(c); if (!l) L.set(c, l = []); l.push(a); };
   if (p.sol === 'pre') {
-    pt(n / 40, (u, v, c, d) => E(g, c < .5 ? '#5f8f43' : '#86b363', u, v, .8 + d, .6 + d * .6, c * 3));
-    pt(n / 380, (u, v, c) => C(g, c < .6 ? '#f4f1e4' : '#efd45a', u, v, .38));
-  } else if (p.sol === 'labour') pt(n / 26, (u, v, c, d) => C(g, c < .5 ? '#7d5839' : '#4f331f', u, v, .4 + d * .6));
-  else if (p.sol === 'chaume') pt(n / 45, (u, v, c) => { g.strokeStyle = c < .5 ? '#e4d3a0' : '#b39c60'; g.lineWidth = .35; g.beginPath(); g.moveTo(u, v); p.dir === 'h' ? g.lineTo(u + 1.6, v + .2) : g.lineTo(u + .2, v + 1.6); g.stroke(); });
-  else if (p.sol === 'ble') pt(n / 36, (u, v, c) => C(g, c < .5 ? '#ead28a' : '#b9993f', u, v, .35));
-  else if (p.sol === 'colza') pt(n / 34, (u, v, c, d) => C(g, c < .5 ? '#52a24c' : '#2f6e2e', u, v, .5 + d * .4));
-  else pt(n / 40, (u, v, c, d) => E(g, c < .5 ? clair(s.base, .15) : sombre(s.base, .18), u, v, .9 + d, .6, c * 3));
+    pt(n / 40, (u, v, c, d) => tache(c < .5 ? '#5f8f43' : '#86b363', u, v, .8 + d, .6 + d * .6, c * 3));
+    pt(n / 380, (u, v, c) => tache(c < .6 ? '#f4f1e4' : '#efd45a', u, v, .38));
+  } else if (p.sol === 'labour') pt(n / 26, (u, v, c, d) => tache(c < .5 ? '#7d5839' : '#4f331f', u, v, .4 + d * .6));
+  else if (p.sol === 'chaume') { pt(n / 45, (u, v, c) => tache(c < .5 ? '#e4d3a0' : '#b39c60', u, v)); for (const [c, l] of L) { g.strokeStyle = c; g.lineWidth = .35; g.beginPath(); for (const [u, v] of l) { g.moveTo(u, v); p.dir === 'h' ? g.lineTo(u + 1.6, v + .2) : g.lineTo(u + .2, v + 1.6); } g.stroke(); } L.clear(); }
+  else if (p.sol === 'ble') pt(n / 36, (u, v, c) => tache(c < .5 ? '#ead28a' : '#b9993f', u, v, .35));
+  else if (p.sol === 'colza') pt(n / 34, (u, v, c, d) => tache(c < .5 ? '#52a24c' : '#2f6e2e', u, v, .5 + d * .4));
+  else pt(n / 40, (u, v, c, d) => tache(c < .5 ? clair(s.base, .15) : sombre(s.base, .18), u, v, .9 + d, .6, c * 3));
+  taches(g, L);
   if (!P) {
     // tournières : la bande où l'attelage tourne, au bout des raies
     g.fillStyle = mix(s.base, s.raie, .5);
@@ -1319,4 +1329,4 @@ function remplirIlot(g, b, V, R) {
   }
   if (royale) { C(g, '#a89c86', c[0], c[1], 3); C(g, '#2c2f33', c[0], c[1], 1.4); V.lieux.royale = { x: c[0], y: c[1] }; }
 }
-export { toile, BATS, BOIS, BOUGE, C, CHEVAL, DPR, E, GRAINE, HERBE, KT, LPIECE, MEMO, OMB, OMBRE, PAL, PEAU, PG, RR, SOLEIL, SOLS, SPR, Scene, T, TAU, TOITS, abreuvoir, aire, ajouterCorps, alea, angLerp, arbre, avant, bastions, bat, bois, botte, boulet, brancher, bras, caisson, calvaire, camAnim, cavalier, charbonniere, charrue, chemin, chemin_, cheminee, cheval, cibleDe, clair, clamp, cloture, coneF, copeaux, corps, cratere, croix, decaler, decalerQuad, dessinMaison, dessinPart, dessinerEnceinte, distPoly, domeF, drapeau, dup, ease, eclair, empreinte, epouvantail, etincelle, fantassin, ferme, figAuHasard, flammes, fumee, fusil, haie, hx, impact, lerp, ligne, linge, longueur, majUnite, mansardeF, mare, mix, mod, moutons, parcelle, parterre, piece, pietine, pignon, placer, pont, poseFig, potager, pyramideF, remplirIlot, riviere, route, ruche, rue, ruisseau, sapin, sombre, souche, sprite, stere, surChemin, surPoly, tasBois, teinte, teinteL, tenue, terre, tete, tirs, toit, toitParcelle, touffes, tronc, unite, verger };
+export { toile, taches, BATS, BOIS, BOUGE, C, CHEVAL, DPR, E, GRAINE, HERBE, KT, LPIECE, MEMO, OMB, OMBRE, PAL, PEAU, PG, RR, SOLEIL, SOLS, SPR, Scene, T, TAU, TOITS, abreuvoir, aire, ajouterCorps, alea, angLerp, arbre, avant, bastions, bat, bois, botte, boulet, brancher, bras, caisson, calvaire, camAnim, cavalier, charbonniere, charrue, chemin, chemin_, cheminee, cheval, cibleDe, clair, clamp, cloture, coneF, copeaux, corps, cratere, croix, decaler, decalerQuad, dessinMaison, dessinPart, dessinerEnceinte, distPoly, domeF, drapeau, dup, ease, eclair, empreinte, epouvantail, etincelle, fantassin, ferme, figAuHasard, flammes, fumee, fusil, haie, hx, impact, lerp, ligne, linge, longueur, majUnite, mansardeF, mare, mix, mod, moutons, parcelle, parterre, piece, pietine, pignon, placer, pont, poseFig, potager, pyramideF, remplirIlot, riviere, route, ruche, rue, ruisseau, sapin, sombre, souche, sprite, stere, surChemin, surPoly, tasBois, teinte, teinteL, tenue, terre, tete, tirs, toit, toitParcelle, touffes, tronc, unite, verger };

@@ -265,8 +265,7 @@ export class Ambient {
   drawTrains(ctx, time, st) {   // (appelé par la carte après les voies, pour rouler dessus)
     const mp = this.map, R = st && st.rails, secs = mp.m.rails, z = mp.cam.z;
     if (!this.on || z < 3.5 || !R || !secs) return;
-    const ciel = !mp.papierVu?.(), [x0, y0, x1, y1] = this.view(40), s = ciel ? z * 0.014 : clamp(z * 1.4, 12, 28);   // (vu du ciel, chaque voiture à sa vraie longueur, 14 m ; de profil sur la carte d'époque, lisible)
-    if (s < 1.5) return;   // (un train de 70 m sous le pixel)
+    const ciel = !mp.papierVu?.(), [x0, y0, x1, y1] = this.view(40), s = Math.max(clamp(z * 1.4, 12, 28), ciel ? z * 0.12 : 0);   // (plus large que le trait de la voie)
     const byId = mp.railSecs || (mp.railSecs = new Map(secs.sections.map(x => [x[0], x])));
     const lines = [], served = new Set();
     for (const [sid, kind] of R.state) {
