@@ -13,6 +13,10 @@ batailles :
 
 Cette spec la fait entrer dans le jeu, branchée sur l'état de la partie.
 
+> **Retiré le 2026-10-30** : la vue de l'intérieur (`carte/interieur.js`, bouton « Voir l'intérieur ») n'a pas suivi
+> les villes organiques de la carte (`plan-organique.js`) ; elle est supprimée. Ce qui suit à son sujet est historique.
+> `genererInterieur` et `peindreInterieur` (villes.js) restent : les batailles en ville s'en servent.
+
 ## Choix faits (25/10/2026)
 
 - Le nouveau rendu **remplace** le style « ugar ». Le style « époque » (Cassini, puis état-major, `PAPIER`) reste un

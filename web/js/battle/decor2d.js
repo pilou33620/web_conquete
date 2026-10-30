@@ -53,7 +53,7 @@ const ENCLOS = new Set(['hotel', 'couvent', 'hopital', 'caserne']);
 const CANAL = new Set(['halle', 'hopital', 'couvent', 'caserne', 'poudriere', 'ferme', 'moulinEau']);
 const BLOQUE = new Set([TY.EAU, TY.BOIS, TY.FORET, TY.BATI, TY.MUR, TY.MARAIS, TY.BARRICADE]);
 // la ville sur son plan (carte de version 4 : map.plan, game/tactics/terrain_ville.py) : les toits des pays comme dans
-// « Voir l'intérieur » (web/js/carte/villes.js, TOITS_STYLE), les maisons à leur vraie taille (m)
+// le plan de la ville (web/js/carte/villes.js, TOITS_STYLE), les maisons à leur vraie taille (m)
 const TOITS_STYLE = { bordelais: [['bordelais', 1]], perigord: [['perigord', .82], ['lauze', .18]], landes: [['landes', 1]], agenais: [['agenais', 1]], bearn: [['bearn', 1]], basque: [['basque', 1]] };
 const LARG = { grande: [6.3, 11.2], moyenne: [7, 12.6], bourg: [8.4, 15.4] }, PROF = 16;
 // les métiers du plan (peindreInterieur de carte/villes.js), dans le repère de la maquette ; roof : le toit du pays
@@ -264,7 +264,7 @@ export class Decor2D {
     this.moulins = B.filter(b => b.ailes || b.roue);
   }
   // ------------------------------------------------------------------ la ville sur son plan (map.plan, version 4)
-  // Les îlots, les rues et les édifices de « Voir l'intérieur » (web/js/carte/villes.js), en mètres : les maisons de
+  // Les îlots, les rues et les édifices du plan de la ville (web/js/carte/villes.js), en mètres : les maisons de
   // chaque îlot le long de ses rues, une par parcelle (remplirIlot, à leur vraie taille), dessinées par toitParcelle ;
   // chaque parcelle va au bâtiment (groupe de cases bâties du serveur) de la case sous elle, qui la fait brûler ou
   // tomber. Les édifices sont posés où le serveur a mis leurs cases. Le sol (rues, cours, places) : this.planSol.

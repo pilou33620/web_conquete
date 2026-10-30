@@ -642,32 +642,3 @@ body.modal-event #proposals { display: none; }   /* une décision à prendre : l
   box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 0 0 3px rgba(200,162,83,.35); }
 .bt-plan figcaption { text-align: center; margin-top: 5px; }
 .bt-plan canvas.tall { aspect-ratio: 2 / 3; max-width: 230px; }
-
-/* ------------------------------------------------------------- intérieur d'une ville (carte/interieur.js) */
-.vi { position: absolute; inset: 0; z-index: 34; display: grid; grid-template-rows: auto 1fr auto; background: var(--nuit);
-  padding-top: var(--safe-t); padding-bottom: var(--safe-b); }
-.vi-barre, .vi-visites { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 16px; background: var(--prusse); }
-.vi-barre { justify-content: space-between; border-bottom: 1px solid var(--hair); }
-.vi-titre { display: grid; }
-.vi-titre b { font-family: var(--f-titre); font-size: 22px; font-weight: 400; color: var(--laiton-clair); line-height: 1.1; }
-.vi-titre span { font-size: 14px; color: var(--papier-2); }
-.vi-scene { position: relative; min-height: 0; overflow: hidden; }
-.vi-scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
-.vi-outils { position: absolute; left: 12px; top: 12px; display: grid; gap: 1px; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px var(--ombre); }
-.vi-outils button { width: 44px; height: 44px; display: grid; place-items: center; background: var(--prusse); border: 0; color: var(--papier); }
-.vi-outils button:hover { background: var(--prusse-2); }
-.vi-outils svg { width: 20px; height: 20px; }
-.vi-lecture { position: absolute; right: 12px; top: 12px; width: min(380px, calc(100% - 80px)); max-height: calc(100% - 24px); overflow-y: auto;
-  background: var(--panel); border: 1px solid var(--hair); border-radius: 8px; padding: 6px 12px; font-size: 14.5px; touch-action: pan-y; }
-.vi-lecture:not([open]) { width: auto; }
-.vi-lecture summary { cursor: pointer; color: var(--laiton-clair); padding: 4px 0; min-height: 32px; display: flex; align-items: center; }
-.vi-lecture dl { display: grid; gap: 6px; margin: 6px 0 8px; }
-.vi-lecture dl div { display: grid; grid-template-columns: 80px 1fr; gap: 8px; }
-.vi-lecture dt { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--laiton); padding-top: 2px; }
-.vi-lecture dd { margin: 0; min-width: 0; }
-.vi-visites { border-top: 1px solid var(--hair); }
-.vi-visites .lbl { font-size: 14px; color: var(--papier-2); }
-.vi-visites .puce { border: 1px solid var(--hair); background: rgba(0,0,0,.2); border-radius: 999px; padding: 6px 14px; font-size: 15px; min-height: 36px; color: var(--papier); }
-.vi-visites .puce:hover { border-color: var(--laiton); }
-.vi-visites .puce[aria-pressed="true"] { background: var(--laiton); color: var(--nuit); border-color: var(--laiton); }
-@media (max-width: 600px) { .vi-barre, .vi-visites { padding: 6px 10px; } .vi-titre b { font-size: 19px; } }

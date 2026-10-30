@@ -58,11 +58,6 @@ export function styleDe(n) {
   if (n.dept === '64') return BASQUES.has(n.name) || n.x < 75 ? 'basque' : 'bearn';
   return { '33': 'bordelais', '24': 'perigord', '40': 'landes', '47': 'agenais' }[n.dept] || 'bordelais';
 }
-export const STYLE_TXT = {
-  bordelais: 'Bordelais : pierre blonde, tuiles canal orangées, chais', perigord: 'Périgord : pierre ocre, toits bruns très pentus, quelques lauzes',
-  landes: 'Landes : maisons à colombages, tuiles canal, airiaux sous les chênes', agenais: 'Agenais : brique rose et tuiles canal',
-  bearn: 'Béarn : murs blancs, ardoise des Pyrénées', basque: 'Pays basque : murs blancs, pans de bois rouges ou verts, tuiles canal',
-};
 export const TOITS_STYLE = { bordelais: [['bordelais', 1]], perigord: [['perigord', .82], ['lauze', .18]], landes: [['landes', 1]], agenais: [['agenais', 1]], bearn: [['bearn', 1]], basque: [['basque', 1]] };
 
 // les ponts datés (ville, rivière, année) : avant, la rivière se passe en bac (intérieur, carte, batailles :
@@ -138,19 +133,6 @@ export function profilVille(K, n, e = {}) {
     fau: 1 + .18 * d, dfau: .08 * d,   // agrandissements : des faubourgs plus longs et plus serrés
   };
 }
-export const MODELES = {
-  grande: 'Grande ville : vieille ville ronde serrée dans ses murs, faubourgs en damier au-delà, cathédrale, couvents, hôpital, place royale',
-  ville: 'Ville close : rues rayonnantes vers les portes, boulevards en anneaux, église sur la grand-place',
-  port: 'Port : quartiers tournés vers l’eau, quais, chais et magasins, navires amarrés',
-  bastide: 'Bastide : ville neuve du Moyen Âge en damier, place centrale à cornières avec sa halle, église à l’écart de la place',
-  place: 'Place forte : enceinte bastionnée, rues droites, casernes, arsenal',
-  fortin: 'Fort isolé : tracé bastionné, casernes et poudrière, sans ville',
-  castrum: 'Village castral : maisons serrées en anneaux sous le château',
-  montagne: 'Village de montagne : maisons éparses suivant la pente, toits d’ardoise, terrasses',
-  airial: 'Village landais : église au carrefour, airiaux (fermes sous les chênes) dans la pinède',
-  rue: 'Village-rue : maisons des deux côtés de la route, jardins en lanières à l’arrière',
-  rond: 'Bourg rond : maisons en anneaux autour de l’église et de la place',
-};
 
 // ---------- les dispositions : un modèle de plan par type de ville, ajusté au site (routes, eau, relief)
 export function genererInterieur(K, Pf) {
@@ -351,11 +333,11 @@ export function navire(g, x, y, a, grand) {
 // e : etatVille (dégâts, crue) ; renvoie { c, k, deg } (deg : les îlots abîmés, pour les feux de la vue)
 export function peindreInterieur(K, V, k, e = {}) { const it = peindreInterieurPas(K, V, k, e); let r; do r = it.next(); while (!r.done); r.value.tranche = null; return r.value; }
 // la même peinture par petits pas (yield) : la vue de l'intérieur s'ouvre tout de suite et se peint en quelques images
-// (natif = false : seulement enregistrée, le canevas reste vide ; interieur.js la fait peindre au worker en la rejouant)
+// (natif = false : seulement enregistrée, le canevas reste vide)
 export function* peindreInterieurPas(K, V, k, e = {}, natif = true) {
   const Pf = V.Pf, n = Pf.n, cv = toile(Math.round(IW * k), Math.round(IH * k));
   const g0 = cv.getContext('2d'), R = alea(Pf.sd + 17); g0.scale(k, k);
-  const [g, fin, tranche] = enregistrer(g0, natif);   // (rejoué plus fin, par tuiles, quand on s'approche : interieur.js)
+  const [g, fin, tranche] = enregistrer(g0, natif);
   V.cheminees.length = 0; V.apres.length = 0;
   g.fillStyle = HERBE; g.fillRect(0, 0, IW, IH);
   const tex = { c: cv, k, tranche };
@@ -466,19 +448,6 @@ function murRect(g, V) {
   chemin_(g, c); g.strokeStyle = '#6e8a4a'; g.lineWidth = 14; g.stroke(); chemin_(g, c); g.strokeStyle = '#8f876f'; g.lineWidth = 4.2; g.stroke(); g.strokeStyle = '#b5aa92'; g.lineWidth = 2.8; g.stroke();
   for (const [x, y] of c) { C(g, '#b5aa92', x, y, 5); coneF(g, x, y, 4.2, PAL[TOITS_STYLE[V.Pf.style][0][0]], 0); }
   V.lieux.remparts = { x: c[0][0], y: c[0][1] };
-}
-
-// ---------- ce que le générateur a lu (le panneau de la vue de l'intérieur)
-export function lecture(Pf, V) {
-  return [
-    ['Plan', MODELES[Pf.modele]],
-    ['Site', [Pf.rivs.length ? 'sur ' + [...new Set(Pf.rivs.map(r => r.name))].join(' et ') : null, Pf.mer ? 'au bord de l’eau (côte, étang ou estuaire)' : null, Pf.relief > .4 ? 'sur un relief marqué' : null].filter(Boolean).join(', ') || 'en plaine'],
-    ['Routes', Pf.routes.length ? Pf.routes.map(r => (r.royal ? 'route royale' : 'chemin') + (r.vers ? ' vers ' + r.vers : '')).join(' ; ') : 'aucune'],
-    ['Style', STYLE_TXT[Pf.style]],
-    ['Taille', `${Math.round(Pf.pop).toLocaleString('fr-FR')} habitants : ${V.ilots.length} îlots`],
-    ['Défenses', ({ medieval: 'mur et tours rondes', bastions: 'enceinte bastionnée, fossé, demi-lunes', cours: 'murs abattus, remplacés par des cours plantés (après 1860)' }[Pf.murs] || 'aucune') + (V.citadelle ? ', citadelle' : '')],
-    ['Métiers', [Pf.port ? 'quais et navires' : null, Pf.spec.includes('vin') ? 'châteaux viticoles et chais' : null, Pf.spec.includes('bois') ? 'scierie et grumes' : null, Pf.spec.includes('fer') ? 'forges' : null, Pf.spec.includes('sel') ? 'salines' : null, Pf.spec.includes('tabac') ? 'séchoirs à tabac' : null, Pf.spec.includes('ble') ? 'moulins' : null, V.gare ? 'gare (après 1860)' : null].filter(Boolean).join(', ') || 'fermes alentour'],
-  ];
 }
 
 // ---------- le plan d'une ville sur la carte (le même que l'intérieur, sans la campagne ni l'enceinte : les remparts

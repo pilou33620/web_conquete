@@ -12,7 +12,6 @@ import { AMB, LUM, majAmbiance } from './carte/ambiance.js';
 import { Z, nuit } from './carte/ambiance.js';
 import { Guerre, rayonMurs } from './carte/guerre.js';
 import { Travaux } from './carte/travaux.js';
-import { interieurOuvert, majInterieur } from './carte/interieur.js';
 import { Ciel } from './carte/ciel.js';
 import * as ambiance from './carte/ambiance.js';
 import { terre, EAU, SABLE, LARG_RIVIERE } from './carte/terre.js';
@@ -962,7 +961,6 @@ export class MapView {
     // le givre, la neige et les prés roussis sont peints dans les tuiles : on les repeint quand la saison change
     // (la saison et la neige tombée sont peintes dans les tuiles : on les repeint quand elles changent ; carte/ambiance.js)
     if (majAmbiance(this, st)) { this.season = st.season; this.paintLand(); this.invalidateTiles(); }
-    majInterieur(st);   // (la ville ouverte en plein écran suit l'état de la partie)
     this.season = st.season;
     const key = st.nodes.map(n => n.o).join(',');
     if (key !== this.ownersKey) {
@@ -1639,8 +1637,6 @@ export class MapView {
   frame(now) {
     const dt = Math.min(0.1, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
-    // l'intérieur d'une ville couvre tout l'écran : la carte attend dessous sans se dessiner (batterie de l'iPad)
-    if (interieurOuvert()) { requestAnimationFrame(t => this.frame(t)); return; }
     if (this.camAnim) {
       const a = this.camAnim, k = Math.min(1, (now - a.t0) / a.dur), e = 1 - Math.pow(1 - k, 3);
       const lz = Math.log(a.from.z) + (Math.log(a.to.z) - Math.log(a.from.z)) * e;
