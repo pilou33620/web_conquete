@@ -2,13 +2,17 @@
 // commandent : les gestes ne servent qu'à regarder (appui sur un régiment : sa fiche ; sur le sol : la refermer).
 // Commandée à la main (« Commander la bataille ») :
 //  appui sur une de ses unités : la sélectionner (maj + clic : ajouter ou retirer ; nouvel appui : désélectionner)
-//  appui long puis glisser : cadre de sélection (maj + glisser à la souris)
 //  glisser depuis une de ses unités : tracer sa destination (flèche courbe et silhouette à l'arrivée) ;
 //    pendant le déploiement, la déplacer directement dans la zone
-//  unités sélectionnées : appui sur le sol pour y aller ; glisser depuis le sol pour fixer l'emplacement et
-//    l'orientation de la ligne d'arrivée ; appui sur un ennemi pour l'attaquer (ou le charger après « Charger »)
-//  un doigt ailleurs ou clic du milieu : déplacer la vue (avec élan) ; deux doigts : zoomer et déplacer ; molette :
-//    zoomer (la vue est de dessus : elle ne pivote pas) ; clic droit : ordre de marche ou d'attaque
+//  appui sur un ennemi, unités sélectionnées : l'attaquer (ou le charger après « Charger »)
+//  au doigt : appui long puis glisser : cadre de sélection ; unités sélectionnées : appui sur le sol pour y aller,
+//    glisser depuis le sol pour fixer l'emplacement et l'orientation de la ligne d'arrivée ; un doigt ailleurs :
+//    déplacer la vue (avec élan) ; deux doigts : zoomer et déplacer
+//  à la souris (façon Total War) : glisser du clic gauche ailleurs que depuis une de ses unités : cadre de sélection
+//    (maj : ajouter, ctrl : retirer) ; clic gauche sur le sol : désélectionner ; clic droit sur le sol : y aller en
+//    gardant la formation, tournée vers la marche (double clic droit : au pas de course, au galop) ; clic droit sur
+//    un ennemi : l'attaquer ; clic droit glissé : ligne d'arrivée (voir lineSlots) ; clic du milieu, flèches,
+//    ZQSD/WASD : déplacer la vue ; molette : zoomer (la vue est de dessus : elle ne pivote pas)
 import { clamp, wrapAngle, TAU } from './formes.js';
 import { anchor } from './camera.js';
 
@@ -74,7 +78,7 @@ export class Controls {
     if (this.pts.size > 2) return;
     const touch = e.pointerType !== 'mouse';
     const hit = v.unitAt(sx, sy, touch ? 16 : 6);
-    this.g = { mode: 'pending', sx, sy, x: sx, y: sy, t0: performance.now(), hit, touch, button: e.button, shift: e.shiftKey, w0: v.toWorld(sx, sy), vel: [0, 0] };
+    this.g = { mode: 'pending', sx, sy, x: sx, y: sy, t0: performance.now(), hit, touch, button: e.button, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, w0: v.toWorld(sx, sy), vel: [0, 0] };
     if (e.button === 1 || e.button === 2) { this.g.mode = e.button === 1 ? 'pan' : 'rpending'; return; }
     if (this.locked()) return;   // (sur ordres : ni cadre de sélection ni ordres)
     this.g.longT = setTimeout(() => {
@@ -116,10 +120,13 @@ export class Controls {
       if (moved < (g.touch ? 11 : 5)) return;
       clearTimeout(g.longT);
       const hitU = g.hit && v.units.get(g.hit), mine = hitU && hitU.side === v.me && !hitU._ghost;
-      const sel = this.mineSel();
-      if (g.mode === 'rpending') g.mode = 'pan';
-      else if (g.shift && !g.touch) g.mode = 'box';
-      else if (mine && hitU.state !== 'deroute' && !this.locked()) {
+      const sel = this.mineSel(), own = mine && hitU.state !== 'deroute' && !this.locked();
+      if (g.mode === 'rpending') {
+        if (sel.length) { g.units = sel.map(u => u.id); g.mode = 'line'; } else g.mode = 'pan';
+      }
+      // à la souris, le glisser gauche trace un cadre de sélection ; la vue se déplace au clic du milieu et au clavier
+      else if (!g.touch && (g.shift || g.ctrl || !own && !this.locked())) g.mode = 'box';
+      else if (own) {
         if (!v.sel.has(hitU.id)) { v.sel.clear(); v.sel.add(hitU.id); v.ui.selChanged(); }
         g.units = this.mineSel().map(u => u.id);
         g.mode = this.deploying() ? 'drag-unit' : 'order';
@@ -176,6 +183,12 @@ export class Controls {
         else this.order('move', { x: x0, y: y0, dir });
         break;
       }
+      case 'line': {
+        const slots = lineSlots(this.mineSel(), g.w0, [wx, wy]);
+        if (this.deploying()) for (const s of slots) this.deploy([s.u], s.x, s.y, s.dir);
+        else for (const s of slots) if (this.order('move', { x: s.x, y: s.y, dir: s.dir }, [s.u]) === false) break;
+        break;
+      }
     }
   }
   tap(g) {
@@ -205,6 +218,8 @@ export class Controls {
     }
     if (this.targeting) { this.setTargeting(null); v.ui.toast('Ordre annulé.'); return; }
     if (!sel.length) { v.ui.inspect(null); return; }
+    // à la souris, l'ordre se donne au clic droit : le clic gauche sur le sol désélectionne
+    if (!g.touch) { v.sel.clear(); v.ui.selChanged(); return; }
     if (this.deploying()) { this.deploy(sel, wx, wy, null); return; }
     const c = centroid(sel);
     this.order('move', { x: wx, y: wy, dir: sel.length === 1 && Math.hypot(wx - c[0], wy - c[1]) < 30 ? sel[0].dir : Math.atan2(wy - c[1], wx - c[0]) });
@@ -215,17 +230,21 @@ export class Controls {
     const hitU = g.hit && v.units.get(g.hit);
     if (hitU && hitU.side !== v.me) { this.order('attack', { target: hitU.id }); return; }
     const [wx, wy] = g.w0, c = centroid(sel);
+    // double clic droit : le même ordre, au pas de course (au galop pour la cavalerie)
+    const now = performance.now(), l = this.lastRTap;
+    const dbl = l && now - l.t < 320 && Math.hypot(g.sx - l.x, g.sy - l.y) < 30;
+    this.lastRTap = dbl ? null : { t: now, x: g.sx, y: g.sy };
     if (this.deploying()) this.deploy(sel, wx, wy, null);
-    else this.order('move', { x: wx, y: wy, dir: Math.atan2(wy - c[1], wx - c[0]) });
+    else this.order('move', { x: wx, y: wy, dir: Math.atan2(wy - c[1], wx - c[0]), ...(dbl ? { run: true } : {}) });
   }
   boxSelect(g) {
     const v = this.v;
     const x0 = Math.min(g.sx, g.x), x1 = Math.max(g.sx, g.x), y0 = Math.min(g.sy, g.y), y1 = Math.max(g.sy, g.y);
     if (x1 - x0 < 8 && y1 - y0 < 8) { if (g.hit) v.ui.inspect(g.hit); return; }
-    if (!g.shift) v.sel.clear();
+    if (!g.shift && !g.ctrl) v.sel.clear();
     for (const u of v.mine()) {
       const [sx, sy] = v.toScreen(u.x, u.y);
-      if (sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1) v.sel.add(u.id);
+      if (sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1) { if (g.ctrl) v.sel.delete(u.id); else v.sel.add(u.id); }
     }
     v.ui.selChanged();
   }
@@ -238,23 +257,14 @@ export class Controls {
   }
 
   // ------------------------------------------------------------------ ordres
-  // destinations de chaque unité : la disposition relative est gardée, tournée avec la nouvelle orientation
-  spread(us, x, y, dir) {
-    const c = centroid(us);
-    const mean = Math.atan2(us.reduce((a, u) => a + Math.sin(u.dir), 0), us.reduce((a, u) => a + Math.cos(u.dir), 0));
-    const da = dir == null || us.length < 2 ? 0 : wrapAngle(dir - mean);
-    return us.map(u => {
-      const ox = u.x - c[0], oy = u.y - c[1];
-      return { u, x: us.length > 1 ? x + ox * Math.cos(da) - oy * Math.sin(da) : x, y: us.length > 1 ? y + ox * Math.sin(da) + oy * Math.cos(da) : y, dir: dir == null ? u.dir : us.length > 1 ? wrapAngle(u.dir + da) : dir };
-    });
-  }
-  order(kind, body = {}) {
-    const v = this.v, us = this.mineSel();
+  // us : par défaut la sélection (la ligne d'arrivée donne un ordre par unité, à sa place sur la ligne)
+  order(kind, body = {}, us = this.mineSel()) {
+    const v = this.v;
     if (!us.length) return;
     // « Finir automatiquement » : vos officiers commandent ; un geste sur le terrain ne leur reprend pas la main
-    if (v.st?.accel) { v.ui.toast('Vos officiers mènent la bataille : touchez « Reprendre le commandement » pour donner vos ordres.'); return; }
+    if (v.st?.accel) { v.ui.toast('Vos officiers mènent la bataille : touchez « Reprendre le commandement » pour donner vos ordres.'); return false; }
     if (kind === 'move') {
-      for (const d of this.spread(us, body.x, body.y, body.dir)) v.orders.set(d.u.id, { kind: 'move', x: d.x, y: d.y, dir: d.dir, t: performance.now() });
+      for (const d of spread(us, body.x, body.y, body.dir)) v.orders.set(d.u.id, { kind: 'move', x: d.x, y: d.y, dir: d.dir, t: performance.now() });
       this.ping(body.x, body.y);
     } else if (kind === 'attack' || kind === 'charge' || kind === 'volley_charge') {
       for (const u of us) v.orders.set(u.id, { kind, target: body.target, t: performance.now() });
@@ -268,7 +278,7 @@ export class Controls {
     if (!us.length) return;
     const now = performance.now();
     let out = false;
-    for (const d of this.spread(us, x, y, dir)) {
+    for (const d of spread(us, x, y, dir)) {
       let nx = d.x, ny = d.y;
       if (z) { const cx = clamp(nx, z[0], z[2]), cy = clamp(ny, z[1], z[3]); out = out || cx !== nx || cy !== ny; nx = cx; ny = cy; }
       Object.assign(d.u, { x: nx, y: ny, dir: d.dir, _pin: now });
@@ -313,7 +323,7 @@ export class Controls {
     if (this.keys.has('ArrowDown') || this.keys.has('s')) ky += 1;
     // en traçant un ordre près du bord, la vue suit
     const g = this.g;
-    if (g && (g.mode === 'order' || g.mode === 'drag-unit' || g.mode === 'order-line' || g.mode === 'box')) {
+    if (g && (g.mode === 'order' || g.mode === 'drag-unit' || g.mode === 'order-line' || g.mode === 'box' || g.mode === 'line')) {
       const m = 36;
       kx += g.x < m ? -1 : g.x > v.vw - m ? 1 : 0;
       ky += g.y < m + 50 ? -1 : g.y > v.vh - m - 100 ? 1 : 0;
@@ -338,6 +348,13 @@ export class Controls {
       ctx.fillRect(Math.min(g.sx, g.x), Math.min(g.sy, g.y), Math.abs(g.x - g.sx), Math.abs(g.y - g.sy));
       ctx.strokeRect(Math.min(g.sx, g.x), Math.min(g.sy, g.y), Math.abs(g.x - g.sx), Math.abs(g.y - g.sy));
       ctx.setLineDash([]);
+      return;
+    }
+    if (g.mode === 'line') {
+      const w1 = v.toWorld(g.x, g.y);
+      ctx.strokeStyle = '#ffe29a'; ctx.lineWidth = 2;
+      v.groundPath(ctx, [g.w0, w1]); ctx.stroke();
+      this.drawGhosts(ctx, g, lineSlots((g.units || []).map(id => v.units.get(id)).filter(Boolean), g.w0, w1));
       return;
     }
     if (g.mode !== 'order' && g.mode !== 'drag-unit' && g.mode !== 'order-line') return;
@@ -378,8 +395,12 @@ export class Controls {
       ctx.strokeText(label, bx, by - 28); ctx.fillText(label, bx, by - 28);
       return;
     }
-    // silhouette fantôme de chaque régiment à l'arrivée : orientation et largeur du front
-    const ghosts = this.spread(us, dest[0], dest[1], dir).map(dd => {
+    this.drawGhosts(ctx, g, spread(us, dest[0], dest[1], dir));
+  }
+  // silhouette fantôme de chaque régiment à l'arrivée : orientation et largeur du front
+  drawGhosts(ctx, g, dests) {
+    const v = this.v;
+    const ghosts = dests.map(dd => {
       const key = dd.u.id;
       g.ghosts = g.ghosts || new Map();
       let gh = g.ghosts.get(key);
@@ -394,6 +415,50 @@ export class Controls {
       v.groundPath(ctx, [pts[0], pts[1]]); ctx.stroke();
     }
   }
+}
+
+// destinations de chaque unité : la disposition relative est gardée, tournée avec la nouvelle orientation (le serveur
+// fait de même pour un ordre de marche à plusieurs unités)
+export function spread(us, x, y, dir) {
+  const c = centroid(us);
+  const mean = Math.atan2(us.reduce((a, u) => a + Math.sin(u.dir), 0), us.reduce((a, u) => a + Math.cos(u.dir), 0));
+  const da = dir == null || us.length < 2 ? 0 : wrapAngle(dir - mean);
+  return us.map(u => {
+    const ox = u.x - c[0], oy = u.y - c[1];
+    return { u, x: us.length > 1 ? x + ox * Math.cos(da) - oy * Math.sin(da) : x, y: us.length > 1 ? y + ox * Math.sin(da) + oy * Math.cos(da) : y, dir: dir == null ? u.dir : us.length > 1 ? wrapAngle(u.dir + da) : dir };
+  });
+}
+
+// ligne d'arrivée tracée du point a au point b (clic droit glissé, façon Total War) : le front des unités est posé
+// sur la ligne et elles regardent à sa gauche (tracée de gauche à droite à l'écran, elles font face vers le haut).
+// Rangées de a vers b selon leur place actuelle le long de la ligne, pour qu'elles ne se croisent pas. Le serveur ne
+// règle pas la largeur du front (elle suit l'effectif et la formation) : sur un seul rang, la longueur de la ligne
+// règle les intervalles ; trop courte pour toutes, le reste se range en rangs derrière.
+export function lineSlots(us, a, b, gap = 10) {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]), L = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  const ex = Math.cos(L), ey = Math.sin(L), dir = wrapAngle(L - Math.PI / 2), fx = Math.cos(dir), fy = Math.sin(dir);
+  const W = u => u.w || 40, D = u => u.d || 10;
+  const rows = [[]];
+  let used = 0;
+  for (const u of [...us].sort((p, q) => p.x * ex + p.y * ey - (q.x * ex + q.y * ey))) {
+    if (rows.at(-1).length && used + gap + W(u) > len) { rows.push([]); used = 0; }
+    used += (rows.at(-1).length ? gap : 0) + W(u);
+    rows.at(-1).push(u);
+  }
+  const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, out = [];
+  let back = 0;
+  for (const r of rows) {
+    const sw = r.reduce((s, u) => s + W(u), 0);
+    const g = rows.length === 1 && r.length > 1 ? Math.max(gap, (len - sw) / (r.length - 1)) : gap;
+    let t = -(sw + g * (r.length - 1)) / 2;
+    for (const u of r) {
+      const s = t + W(u) / 2, k = back + D(u) / 2;
+      out.push({ u, x: mx + ex * s - fx * k, y: my + ey * s - fy * k, dir });
+      t += W(u) + g;
+    }
+    back += Math.max(...r.map(D)) + gap;
+  }
+  return out;
 }
 
 function centroid(us) {
