@@ -104,6 +104,72 @@ def _seg_inter(p1, p2, p3, p4):
     return None
 
 
+def _proj(p, line):
+    """(distance, abscisse) du point le plus proche de p sur la polyligne line."""
+    best, s0 = (1e18, 0.0), 0.0
+    for q, r in zip(line, line[1:]):
+        dx, dy = r[0] - q[0], r[1] - q[1]
+        L = math.hypot(dx, dy)
+        t = max(0.0, min(1.0, ((p[0] - q[0]) * dx + (p[1] - q[1]) * dy) / (L * L or 1)))
+        d = math.hypot(q[0] + dx * t - p[0], q[1] + dy * t - p[1])
+        if d < best[0]:
+            best = (d, s0 + t * L)
+        s0 += L
+    return best
+
+
+def _jusqua(line, s):
+    """La polyligne line du début jusqu'à l'abscisse s."""
+    out, s0 = [line[0]], 0.0
+    for q, r in zip(line, line[1:]):
+        L = math.dist(q, r)
+        if s0 + L >= s:
+            t = (s - s0) / (L or 1)
+            out.append((q[0] + (r[0] - q[0]) * t, q[1] + (r[1] - q[1]) * t))
+            return out
+        out.append(r)
+        s0 += L
+    return out
+
+
+def _troncs(paires, paths, ecart=0.35, mini=0.5):
+    """Deux routes qui sortent d'une même ville côte à côte (moins de 0,35 km l'une de l'autre) se dessinaient en
+    double : la seconde reprend le tracé de la première (royales d'abord) jusqu'où elles se séparent, puis bifurque.
+    paths : les tracés de chaque paire (a, b), modifiés sur place."""
+    ordre = sorted(range(len(paires)), key=lambda k: (not paires[k][1]['royal'], k))
+    faits = {}    # lieu -> tracés déjà posés qui en partent, orientés depuis lui
+    for k in ordre:
+        (a, b), info = paires[k]
+        if info['ferry']:
+            continue
+        for bout, autre in ((a, b), (b, a)):
+            line = paths[k] if bout == a else paths[k][::-1]
+            # échantillons tous les 100 m depuis le lieu : jusqu'où la route longe une route déjà posée
+            ech, s = [], 0.0
+            for q, r in zip(line, line[1:]):
+                L = math.dist(q, r)
+                n = max(1, int(L / 0.1))
+                for i in range(n):
+                    ech.append((s + L * i / n, (q[0] + (r[0] - q[0]) * i / n, q[1] + (r[1] - q[1]) * i / n)))
+                s += L
+            meilleur = None
+            for f in faits.get(bout, ()):
+                fin = None
+                for se, p in ech[1:]:
+                    d, sf = _proj(p, f)
+                    if d > ecart:
+                        break
+                    fin = (se, sf)
+                if fin and fin[0] >= mini and (not meilleur or fin[0] > meilleur[0][0]):
+                    meilleur = (fin, f)
+            if meilleur:
+                (se, sf), f = meilleur
+                reste = [p for s2, p in ech if s2 > se + 0.05] + [line[-1]]
+                line = _jusqua(f, sf) + reste
+                paths[k] = line if bout == a else line[::-1]
+            faits.setdefault(bout, []).append(line)
+
+
 class GeoMap:
     def __init__(self, version=VERSION):
         self.version = version
@@ -578,13 +644,17 @@ class GeoMap:
         edges = []
         self.road = bytearray(self.W * self.H)
         cost = {False: self._road_costs(0.4), True: self._road_costs(0.0)}   # routes royales : tirées au cordeau
-        for eid, ((a, b), info) in enumerate(sorted(pairs.items())):
+        paires = sorted(pairs.items())
+        paths = [[P[a], P[b]] if info['ferry'] else self._road_path(P[a], P[b], cost[info['royal']]) for (a, b), info in paires]
+        if self.version >= 2:
+            _troncs(paires, paths)
+        for eid, ((a, b), info) in enumerate(paires):
             d = math.dist(P[a], P[b])
             e = dict(id=eid, a=a, b=b, len=round(d * 1.12, 2), royal=info['royal'], ferry=info['ferry'],
                      river=None, rrank=0, cx=None, cy=None)
             # le jeu (rivière à franchir, longueur) reste celui de la ligne droite ; seul le tracé dessiné change
             best = crossing([P[a], P[b]], pair([P[a], P[b]]) if self.version >= 2 else ())
-            path = [P[a], P[b]] if info['ferry'] else self._road_path(P[a], P[b], cost[info['royal']])
+            path = paths[eid]
             if info['ferry']:
                 e['river'], e['rrank'] = 'Gironde', 1
                 e['cx'], e['cy'] = round((P[a][0] + P[b][0]) / 2, 2), round((P[a][1] + P[b][1]) / 2, 2)

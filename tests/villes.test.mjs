@@ -86,3 +86,34 @@ test('les images des plans restent bornées en mémoire', () => {
   const mem = V.memoirePlans();
   assert.ok(mem.pixels <= 14e6 && mem.plans <= 300, JSON.stringify(mem));
 });
+
+// POURQUOI. Sur la carte, la ville est le plan organique (plan-organique.js) : ses rues suivent les vraies routes de la
+// carte. Une maison ou un arbre posé sur une route peinte, ou dans l'eau, se voit tout de suite.
+test('plan organique : rien de bâti ni de planté sur les routes ni dans l’eau, toujours le même', async () => {
+  const { primitives } = await import('../web/js/carte/plan-organique.js');
+  const { LARG_RIVIERE } = await import('../web/js/carte/terre.js');
+  const dSeg = (x, y, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(a[0] + dx * t - x, a[1] + dy * t - y); };
+  const villes = [['Bordeaux', {}], ['Libourne', { f: 1 }], ['Bayonne', { f: 3 }], ['Sarlat', {}], ['Agen', { annee: 1870 }], ['Beynac', {}], ['Laruns', {}], ['Sabres', {}]];
+  for (const [x, e] of villes) {
+    const n = nom(x), Pv = plan(n, e), O = V.planOrganique(K, Pv, { annee: 1789, ...e });
+    assert.ok(O, x);
+    const routes = m.edges.map(ed => ({ pts: ed.pts, d: ed.royal ? .035 : .02 })).filter(r => r.pts.some(p => Math.hypot(p[0] - n.x, p[1] - n.y) < 6));
+    const rivs = m.rivers.filter(r => r.pts.some(p => Math.hypot(p[0] - n.x, p[1] - n.y) < 6)).map(r => ({ pts: r.pts, d: (LARG_RIVIERE[r.rank] || .05) / 2 }));
+    const sur = (L, q) => L.find(r => r.pts.some((p, k) => k && dSeg(q[0], q[1], r.pts[k - 1], p) < (r.ws ? Math.min(r.ws[k - 1], r.ws[k]) : r.d)));
+    // (en ville, la route se fait rue : la largeur laissée par le plan ; au-delà, celle de la route peinte)
+    const rv = Pv.Pf.R / 180, horsVille = q => Math.hypot(q[0] - n.x, q[1] - n.y) > 1.3 * rv;
+    let bat = 0;
+    for (const il of O.ilots) for (const p of primitives(il, O)) {
+      const pts = p[0] === 't' ? [p[2], p[3], p[4], p[5]] : p[0] === 'p' ? p[2] : p[0] === 'a' || p[0] === 'h' || p[0] === 'c' ? [[p[1], p[2]]] : null;
+      if (!pts) continue;
+      if (p[0] !== 'a') bat++;
+      for (const q of pts) {
+        assert.ok(!sur(O.axes, q) && !(horsVille(q) && sur(routes, q)), `${x} : ${p[0] === 'a' ? 'arbre' : 'bâtiment'} sur une route en ${q.map(v => v.toFixed(3))}`);
+        assert.ok(!sur(rivs, q), `${x} : ${p[0] === 'a' ? 'arbre' : 'bâtiment'} dans la rivière en ${q.map(v => v.toFixed(3))}`);
+      }
+    }
+    assert.ok(bat > 20, `${x} : ${bat} bâtiments`);
+    const sig = P => P.ilots.map(il => il.bloc.map(p => p.map(v => v.toFixed(4)).join(',')).join(';')).join('|');
+    assert.equal(sig(V.planOrganique(K, plan(n, e), { annee: 1789, ...e })), sig(O), `${x} : pas le même plan`);
+  }
+});

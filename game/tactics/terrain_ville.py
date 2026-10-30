@@ -17,6 +17,7 @@ réduire toute la carte (échelle k < 1 : la campagne autour aussi, pour que riv
 import math
 
 from . import plan_ville as PV
+from ..geo import _proj
 from .terrain import (CELL, COLS, ROWS, N, W, H, VILLES, _causeway, _mainland, bfs, T_CHAMP, T_EAU, T_GUE, T_PRE, T_ROUTE, T_CHEMIN, T_BATI, T_MUR, T_PORTE,
                       T_BOIS, T_FORET_T, T_MARAIS_T, T_LANDE_T, T_ROCHE, T_SABLE, T_VIGNE_T, T_VERGER, RUE, cell_of,
                       center_of, _add_bridge, _barricades, _dedans, _densify, _enceinte, _line4, _redoubts, _seg_dist)
@@ -122,15 +123,21 @@ def routes(L, geo, nid):
         pts += [(IC[0] + PV.cos(a + .06 * PV.sin(d / 90)) * d, IC[1] + PV.sin(a + .06 * PV.sin(d / 90)) * d)
                 for d in range(0, 761, 20) if d > d0]
         plans.append((a, [L.tf(p) for p in pts]))
+    mien = [ed for ed in geo.edges if nid in (ed['a'], ed['b']) and ed.get('kind') != 'water' and not ed.get('ferry')]
     for ei, ed in enumerate(geo.edges):
-        if nid not in (ed['a'], ed['b']) or ed.get('kind') == 'water' or ed.get('ferry'):
+        if ed not in mien:
             continue
         p = ed['pts'] if ed['a'] == nid else ed['pts'][::-1]
-        q = next((q for q in p if PV.hypot(q[0] - n['x'], q[1] - n['y']) > .9), p[-1])
-        a = PV.atan2(q[1] - n['y'], q[0] - n['x'])
-        best = min(plans, key=lambda x: abs(PV.ang_diff(x[0], a)), default=None)
-        if best and abs(PV.ang_diff(best[0], a)) < .5:
-            out[ei] = best[1]
+        # sa direction là où elle quitte le tronc commun d'une route posée avant elle (geo._troncs, royales d'abord) ;
+        # sans rue du plan de ce côté, celle du tronc (sinon elle traverserait la ville tout droit)
+        autres = [o['pts'] for o in mien if (not o['royal'], o['id']) < (not ed['royal'], ed['id'])]
+        q9 = next((q for q in p if PV.hypot(q[0] - n['x'], q[1] - n['y']) > .9), p[-1])
+        for q in (next((q for q in p if PV.hypot(q[0] - n['x'], q[1] - n['y']) > .9 and all(_proj(q, o)[0] > .1 for o in autres)), q9), q9):
+            a = PV.atan2(q[1] - n['y'], q[0] - n['x'])
+            best = min(plans, key=lambda x: abs(PV.ang_diff(x[0], a)), default=None)
+            if best and abs(PV.ang_diff(best[0], a)) < .5:
+                out[ei] = best[1]
+                break
     return out
 
 
@@ -440,11 +447,16 @@ def ville(m, pl, L, rng, spec, t, road_cells):
             t[c] = T_BATI
             kinds[c] = kind
             foot.append(c)
-        if not foot:   # (trop petit pour une case : la case de son milieu)
-            c = cell_of(X, Y)
-            if c >= 0 and c not in reserve and t[c] not in (T_EAU, T_GUE):
-                t[c], kinds[c] = T_BATI, kind
-                foot.append(c)
+        if not foot:   # (trop petit pour une case : la case de son milieu, ou une voisine libre ; à défaut, une case de
+            # rue, jamais une route, un mur ni l'eau : un îlot plus étroit qu'une rue de la bataille garde son édifice)
+            c0 = cell_of(X, Y)
+            autour = [c0] + [c0 + dj * COLS + di for dj in (-1, 0, 1) for di in (-1, 0, 1)] if c0 >= 0 else []
+            for interdit in (reserve, set(murs) | road_cells):
+                c = next((c for c in autour if 0 <= c < N and c not in interdit and t[c] not in (T_EAU, T_GUE) and not kinds.get(c)), None)
+                if c is not None:
+                    t[c], kinds[c] = T_BATI, kind
+                    foot.append(c)
+                    break
         eds.append(dict(cle=cle, kind=kind, x=round(X, 1), y=round(Y, 1), a=round(a, 3), s=round(sm, 4),
                         b=None if b is None else id(b)))
 

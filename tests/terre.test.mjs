@@ -144,3 +144,16 @@ test('crue et feux des Landes : les prés au bord du fleuve sous l’eau, la pin
   assert.ok(!cleTuiles().includes('' + S + '-'), 'l’hiver, plus de brûlis dans la clé'); assert.notEqual(cleTuiles(), k6);
   st.date = '15 avril 1790'; st.season = 'printemps'; st.flood = false; st.weather.interieur.kind = 'soleil'; majAmbiance(map, st);
 });
+
+// POURQUOI. Arbres des bois et des rangées royales, fermes isolées : rien ne se pose sur une route peinte (surRoute).
+test('les routes : un arbre ou une ferme s’en écarte, la rangée royale s’arrête au croisement', () => {
+  const W = 40, H = 40, terrain = new Uint8Array(W * H).fill(TT.PLAINE);
+  const T = new Terre({ W, H, terrain, m: { x_cote: 8, waters: [] }, edges: [{ pts: [[10, 10], [30, 10]], royal: true }, { pts: [[20, 0], [20, 30]], royal: false }, { pts: [[0, 30], [39, 30]], water: true }] });
+  assert.ok(T.surRoute(15, 10, 0, 64) && T.surRoute(20, 25, 0, 64), 'sur la route, sur le chemin');
+  assert.ok(!T.surRoute(15, 10.2, 0, 64) && !T.surRoute(5, 5, 0, 64), 'loin des routes');
+  assert.ok(!T.surRoute(10, 30, 0, 64), 'une voie d’eau n’est pas une route');
+  // la rangée d'arbres de la route royale (à w + 0,03 de son axe, houppier .035) : gardée le long de sa route, pas sur le chemin
+  const w = .07, r = .035;
+  assert.ok(!T.surRoute(25, 10 + w + .03, r * .8, 64), 'la rangée le long de sa route');
+  assert.ok(T.surRoute(20, 10 + w + .03, r * .8, 64), 'la rangée sur le chemin qui croise');
+});

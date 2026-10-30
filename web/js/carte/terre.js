@@ -113,8 +113,29 @@ export class Terre {
         if (d < CR[j * W + i]) CR[j * W + i] = d;
       }
     }
-    this.DEPT = map.dept; this.codes = map.deptCodes || [];
+    this.DEPT = map.dept; this.codes = map.deptCodes || []; this.carte = map;
     this.c3 = [0, 0, 0]; this.TO = null;
+  }
+  // le point est sur une route ou un chemin peint à L px/km (map.js drawRoads, liseré compris), à m km près ; les routes
+  // rangées par cases d'un km, une fois
+  surRoute(x, y, m, L) {
+    let I = this.ROUTES;
+    if (!I) {
+      I = this.ROUTES = new Map();
+      for (const e of this.carte.edges || []) if (!e.water) for (let k = 1; k < e.pts.length; k++) {
+        const a = e.pts[k - 1], b = e.pts[k], s = [a[0], a[1], b[0], b[1], e.royal ? 1 : 0];
+        for (let i = Math.floor(Math.min(a[0], b[0]) - .3); i <= Math.max(a[0], b[0]) + .3; i++) for (let j = Math.floor(Math.min(a[1], b[1]) - .3); j <= Math.max(a[1], b[1]) + .3; j++) {
+          const c = I.get(i * 65536 + j); if (c) c.push(s); else I.set(i * 65536 + j, [s]);
+        }
+      }
+    }
+    const segs = I.get(Math.floor(x) * 65536 + Math.floor(y)); if (!segs) return false;
+    const d0 = [Math.max(.04, 1.4 / L) / 2, Math.max(.07, 2.6 / L) / 2].map(d => d + .5 / L + m);
+    for (const [ax, ay, bx, by, r] of segs) {
+      const dx = bx - ax, dy = by - ay, t = clamp(((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+      if (Math.hypot(ax + dx * t - x, ay + dy * t - y) < d0[r]) return true;
+    }
+    return false;
   }
   // code du département d'un point ('33', '64'…)
   dept(x, y) { const i = x | 0, j = y | 0; return i >= 0 && j >= 0 && i < this.W && j < this.H && this.DEPT ? this.codes[this.DEPT[j * this.W + i] - 1] : undefined; }
@@ -243,8 +264,8 @@ export class Terre {
       tg.globalCompositeOperation = 'source-over';
       g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = .82; g.drawImage(tmp, 0, 0); g.restore();
     }
-    // bois : houppiers ronds là où le fond dit forêt, lisières sinueuses ; un seul tracé par couleur
-    const pts = bois.map(([x, y, pin]) => [x, y, (pin ? .055 : .085) * (.75 + hash2(x * 50 | 0, y * 50 | 0) * .6), pin ? PIN_HEX : boisSaison(hash2(x * 31 | 0, y * 17 | 0)), pin]);
+    // bois : houppiers ronds là où le fond dit forêt, lisières sinueuses ; un seul tracé par couleur ; aucun sur une route
+    const pts = bois.filter(([x, y, pin]) => !this.surRoute(x, y, pin ? .07 : .1, L)).map(([x, y, pin]) => [x, y, (pin ? .055 : .085) * (.75 + hash2(x * 50 | 0, y * 50 | 0) * .6), pin ? PIN_HEX : boisSaison(hash2(x * 31 | 0, y * 17 | 0)), pin]);
     const disques = (col, liste, dx, dy, k) => {
       if (!liste.length) return;
       g.fillStyle = col; g.beginPath();
@@ -297,7 +318,7 @@ export class Terre {
   }
 
   // les arbres des routes royales, de près : un rang de chaque côté (map.js drawRoads), interrompus sur les ponts
-  arbresRoyaux(g, routes, w) {
+  arbresRoyaux(g, routes, w, L) {
     const r = .035, col = boisSaison(.4), ombre = new Path2D(), houp = new Path2D(), lum = new Path2D();
     for (const { pts, passes = [] } of routes) for (let i = 1; i < pts.length; i++) {
       const [a0, b0] = pts[i - 1], [a1, b1] = pts[i], l = Math.hypot(a1 - a0, b1 - b0);
@@ -306,6 +327,7 @@ export class Terre {
       for (let t = 0; t < l; t += .14) for (const s of [-1, 1]) {
         const x = a0 + (a1 - a0) * t / l + nx * s * (w + .03), y = b0 + (b1 - b0) * t / l + ny * s * (w + .03);
         if (passes.some(p => Math.hypot(x - p.x, y - p.y) < (LARG_RIVIERE[p.rank] || .05) / 2 + .07 + r)) continue;   // (la moitié du pont de map.js, plus un houppier)
+        if (this.surRoute(x, y, r * .8, L)) continue;   // (aux croisements, l'autre route)
         ombre.moveTo(x + r * 1.7, y + r * .9); ombre.arc(x + r * .7, y + r * .9, r, 0, TAU);
         houp.moveTo(x + r, y); houp.arc(x, y, r, 0, TAU);
         lum.moveTo(x - r * .32 + r * .5, y - r * .34); lum.arc(x - r * .32, y - r * .34, r * .5, 0, TAU);
@@ -408,7 +430,7 @@ function peindreParcelles(T, g, L, x0, y0, x1, y1, at, phyllo) {
         disque(o, gx + .9 * u, gy + 1.2 * u, 1.5 * u); disque(m1, gx, gy, 1.5 * u); disque(m2, gx + .3 * u, gy + .3 * u, .7 * u);
       }
     }
-    if (L >= 48 && hh < .04) fermes.push([x + w * .3, y + h * .4, hh * 40]);   // une ferme isolée
+    if (L >= 48 && hh < .04 && !T.surRoute(x + w * .3, y + h * .4, 7 * u * 2.2, L)) fermes.push([x + w * .3, y + h * .4, hh * 40]);   // une ferme isolée, à l'écart des routes
   });
   // une culture après l'autre : le sol, découpé à ses parcelles, puis ses tracés
   for (const [sol, l] of lots) {

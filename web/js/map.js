@@ -1461,7 +1461,7 @@ export class MapView {
     g.lineCap = 'round'; g.lineJoin = 'round';
     // vue du ciel : routes empierrées (carte/terre.js), les royales bordées d'arbres de près
     const larg = royal => P ? Math.max(royal ? 0.34 : 0.2, (royal ? 2.1 : 1.2) / L) : royal ? Math.max(0.07, 2.6 / L) : Math.max(0.04, 1.4 / L);
-    if (!P && L >= 32) terre(this).arbresRoyaux(g, es.filter(e => e.royal && !e.ferry), larg(true));
+    if (!P && L >= 32) terre(this).arbresRoyaux(g, es.filter(e => e.royal && !e.ferry), larg(true), L);
     for (const pass of [0, 1]) {
       for (const e of es) {
         const royal = e.royal, w = larg(royal);

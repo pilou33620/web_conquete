@@ -11,6 +11,8 @@ import {
 } from './lib.js';
 import { AMB } from './ambiance.js';
 import { enregistrer } from './rejeu.js';
+import { LARG_RIVIERE } from './terre.js';
+import { genererPlan, dessinerPlan } from './plan-organique.js';
 
 export const hashS = s => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
 export const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -307,8 +309,8 @@ export function degats(V, e) {
   }
   return out;
 }
-function peindreDegat(g, b, k, R) {
-  const poly = decalerQuad(b.q, b.main ? 4.6 : 2.7); if (!poly) return;
+function peindreDegat(g, b, k, R, poly = decalerQuad(b.q, b.main ? 4.6 : 2.7)) {
+  if (!poly) return;
   const [cx, cy] = b.c, r = Math.sqrt(b.aire) * .3;
   if (k === 'brule' || k === 'ruine') {
     chemin_(g, poly); g.fillStyle = k === 'brule' ? 'rgba(46,38,33,.9)' : 'rgba(140,128,110,.92)'; g.fill();
@@ -316,7 +318,7 @@ function peindreDegat(g, b, k, R) {
     if (k === 'brule') for (let i = 0; i < 5; i++) { const x = cx + (R() - .5) * r * 1.6, y = cy + (R() - .5) * r * 1.6, a = R() * TAU; T(g, '#14110f', .9, x, y, x + Math.cos(a) * 7, y + Math.sin(a) * 7); }
     g.strokeStyle = k === 'brule' ? '#2a231f' : '#8b826e'; g.lineWidth = 1; chemin_(g, poly); g.stroke();
   } else for (let i = 0; i < 3; i++) {   // toits crevés : des trous noirs, des tuiles tombées autour
-    const t = R(), e = poly[R() * 4 | 0], f = poly[(poly.indexOf(e) + 1) % 4], x = lerp(e[0], f[0], t) * .8 + cx * .2, y = lerp(e[1], f[1], t) * .8 + cy * .2;
+    const t = R(), e = poly[R() * poly.length | 0], f = poly[(poly.indexOf(e) + 1) % poly.length], x = lerp(e[0], f[0], t) * .8 + cx * .2, y = lerp(e[1], f[1], t) * .8 + cy * .2;
     E(g, '#231d19', x, y, 1.6 + R() * 1.6, 1.1 + R(), R() * TAU);
     for (let j = 0; j < 4; j++) C(g, '#8f3f2e', x + (R() - .5) * 7, y + (R() - .5) * 7, .5);
   }
@@ -499,6 +501,63 @@ export function planDe(K, n, e) {
 }
 // ce qui change l'image sans changer le plan : dégâts du siège (par dixièmes), incendie
 const cleImage = (n, e) => cleVille(n, e) + `|${Math.round((e.dmg || 0) * 10)}|${Math.round((e.deg || 0) * 20)}|${e.lv === 'incendie' ? 1 : 0}`;
+// ---------- le plan organique de la carte (plan-organique.js, de web_engine) : rues en Voronoï le long des vraies routes
+// et rivières de la carte, l'enceinte des remparts de map.js ; tout en km. Le plan V (genererInterieur) reste pour
+// l'intérieur, les passants, les sièges et le rayon du mur (rMur).
+const DEMI_ROUTE = [.03, .045];
+const RUE_VILLE = .012;   // demi-largeur d'une route dans la ville (km)   // demi-largeur (km) des chemins et des routes royales peints de près (map.js drawRoads), liseré compris
+const NON_BATI = new Set(['place', 'jardin', 'maraichers', 'parc']);
+const dSeg = (x, y, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], t = clamp(((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1); return Math.hypot(a[0] + dx * t - x, a[1] + dy * t - y); };
+// la partie d'une polyligne à moins de B du point (du premier au dernier segment proche)
+function autour(pts, x, y, B) {
+  let i0 = -1, i1 = -1;
+  for (let k = 1; k < pts.length; k++) if (dSeg(x, y, pts[k - 1], pts[k]) < B) { if (i0 < 0) i0 = k - 1; i1 = k; }
+  return i0 < 0 ? null : pts.slice(i0, i1 + 1);
+}
+// la courtine des remparts de map.js (wallGeom) au rayon r (km) : douze pans, ou les courtines entre les bastions
+function enceinteCarte(n, f, r) {
+  const a0 = (n.id * 2.399) % TAU, P = a => [n.x + Math.cos(a) * r, n.y + Math.sin(a) * r * .86], pts = [];
+  if (f <= 2) for (let i = 0; i <= 12; i++) pts.push(P(a0 + i * TAU / 12));
+  else { const m = f >= 4 ? 6 : 5, w = Math.PI / m * .42; for (let k = 0; k < m; k++) { const a = a0 + (k + .5) * TAU / m; pts.push(P(a - w), P(a + w)); } pts.push(pts[0]); }
+  return pts;
+}
+export function planOrganique(K, V, e) {
+  if (V.org !== undefined) return V.org;
+  const Pf = V.Pf, n = Pf.n;
+  if (Pf.modele === 'fortin') return (V.org = null);
+  const ere = Pf.annee >= 1860 ? 'industrielle' : 'classique', r = Pf.R / S * (1 + .05 * (Pf.d || 0)), rMur = V.rMur / S, B = 1.75 * r + .3;
+  // (deux arêtes sur le même tracé, le tronc commun de geo.py, s'annuleraient dans le module, chacune chassant les
+  // graines de l'autre : la seconde ne commence qu'où elle quitte les routes déjà posées)
+  const axes = [], pres = q => axes.some(a => a.pts.some((p, k) => k && dSeg(q[0], q[1], a.pts[k - 1], p) < .03));
+  for (const ed of K.m.edges.slice().sort((a, b) => !!b.royal - !!a.royal)) {
+    const pts = autour(ed.b === n.id ? ed.pts.slice().reverse() : ed.pts, n.x, n.y, B);
+    if (!pts) continue;
+    const ech = []; for (let k = 1; k < pts.length; k++) for (let t = 0; t < 1; t += .05 / (Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]) || 1)) ech.push([pts[k - 1][0] + (pts[k][0] - pts[k - 1][0]) * t, pts[k - 1][1] + (pts[k][1] - pts[k - 1][1]) * t]);
+    ech.push(pts.at(-1));
+    const ici = ech.filter(q => Math.hypot(q[0] - n.x, q[1] - n.y) < B + .3);   // (un long segment droit déborde de la ville)
+    ech.length = 0; ech.push(...ici);
+    let i0 = 0; while (i0 < ech.length && pres(ech[i0])) i0++;
+    let i1 = ech.length; while (i1 > i0 && pres(ech[i1 - 1])) i1--;
+    // (un point tous les 250 m : assez pour la largeur qui change en sortant de la ville ; plus serré, le module rame)
+    const dense = ech.slice(Math.max(0, i0 - 1), Math.min(ech.length, i1 + 1)).filter((q, k, l) => k % 5 === 0 || k === l.length - 1);
+    if (dense.length < 2 || ech.slice(i0, i1).some(pres) && i1 - i0 < .5 * ech.length) continue;   // (rien de propre : déjà là)
+    // en ville, la route devient une rue (les maisons couvrent ses bords peints) ; elle reprend sa largeur en sortant
+    const D = DEMI_ROUTE[ed.royal ? 1 : 0];
+    const ws = dense.map(q => D + (RUE_VILLE - D) * clamp((1.25 * r - Math.hypot(q[0] - n.x, q[1] - n.y)) / (.35 * r), 0, 1));
+    axes.push({ pts: dense, ws, libre: true, grand: !!ed.royal, demi: D });
+  }
+  const rivieres = [];
+  for (const rv of K.m.rivers) { const pts = autour(rv.pts, n.x, n.y, B + .3), w = (LARG_RIVIERE[rv.rank] || .05) / 2; if (pts) rivieres.push({ pts, ws: pts.map(() => w), w }); }
+  // ni îlot sur l'eau, ni sous la citadelle, la gare, le château
+  const km = p => [n.x + (p.x - IC[0]) / S, n.y + (p.y - IC[1]) / S];
+  const libres = [V.citadelle && [km({ x: V.citadelle.C[0], y: V.citadelle.C[1] }), 90 / S], V.gare && [km(V.gare), 50 / S], Pf.modele === 'castrum' && [[n.x, n.y], 30 / S]].filter(Boolean);
+  const eau = (x, y) => K.eauK(x, y) > .42 || rivieres.some(rv => rv.pts.some((p, k) => k && dSeg(x, y, rv.pts[k - 1], p) < rv.w)) || libres.some(([c, d]) => Math.hypot(x - c[0], y - c[1]) < d);
+  const f = e.f ?? n.fort ?? 0;
+  const mur = f > 0 ? { pts: enceinteCarte(n, f, rMur), kind: 'mur', demi: .012, dessine: false }   // (map.js dessine les remparts)
+    : Pf.murs === 'cours' ? { pts: enceinteCarte(n, 1, rMur), kind: 'boulevard', demi: .015 } : null;
+  const v = { x: n.x, y: n.y, pop: Pf.pop, ere, r, rh: mur ? rMur : r * .5, graine: Pf.sd, axes, rivieres, mur, toutes: true, gare: false, serre: true, damier: Pf.modele === 'bastide' || Pf.modele === 'place' };
+  return (V.org = genererPlan(v, eau));
+}
 export const RES = [.125, .25, .5, 1, 2];
 export function resPour(m) { for (const r of RES) if (r >= m * .8) return r; return RES[RES.length - 1]; }
 // l'image du plan si elle est déjà peinte (à cette résolution, sinon à la plus proche)
@@ -520,48 +579,70 @@ export function* planCartePas(K, n, e, res = .5) {
   const c = toile(Math.max(1, Math.round(Rr * 2 * res)), Math.max(1, Math.round(Rr * 2 * res)));
   const g0 = c.getContext('2d'); g0.scale(res, res); g0.translate(Rr - IC[0], Rr - IC[1]);
   const urbain = Pf.modele !== 'rue' && Pf.modele !== 'airial' && Pf.modele !== 'montagne' && Pf.modele !== 'fortin';
-  const deg = degats(V, e), detail = res >= 1;
+  const O = planOrganique(K, V, e), bati = O && O.ilots.filter(il => !NON_BATI.has(il.type));
+  const deg = O ? degats({ Pf, ilots: bati }, e) : degats(V, e), detail = res >= 1;
   // (maison par maison, la peinture s'enregistre : de plus près, towns.js la rejoue nette par tuiles, rejeu.js)
   const [g, fin] = detail ? enregistrer(g0) : [g0];
-  // le sol de la ville : îlots entiers et rues entre eux, pour que la campagne ne passe pas entre les maisons
-  if (urbain) { g.fillStyle = g.strokeStyle = '#bfb498'; g.lineWidth = 10; g.lineJoin = 'round'; for (const b of V.ilots) if (b.zone === 'ville') { chemin_(g, b.q); g.fill(); g.stroke(); } }
-  if (V.placeCentre) C(g, '#d6ccb2', IC[0], IC[1], 22);
-  if (detail) {
-    V.cheminees.length = 0; V.apres.length = 0;
-    let nb = 0;
-    for (const b of V.ilots) { remplirIlot(g, b, V, R); if (++nb % 10 === 0) yield; }
-    for (const f of V.apres) f();
-    for (const [b, kd] of deg) peindreDegat(g, b, kd, R);
-    if (V.placeCentre) { C(g, '#d6ccb2', IC[0], IC[1], 20); if (Pf.modele !== 'grande') bat(g, BATS.halle().slice(1), IC[0], IC[1], Pf.routes[0]?.a || 0, .32); }
-    if (Pf.modele === 'castrum') chateau(g);
-    if (Pf.modele === 'fortin') { RR(g, '#d9cda9', IC[0] - 22, IC[1] - 22, 44, 44, 1); bat(g, BATS.caserne().slice(2), IC[0], IC[1], 0, .5); bat(g, BATS.poudriere(), IC[0] + 40, IC[1] - 30, .6, .7); }
-    if (V.gare) bat(g, BATS.gare().slice(1), V.gare.x, V.gare.y, V.gare.a, .55);
-  } else {
-    for (const b of V.ilots) {
-      const q = decalerQuad(b.q, b.main ? 4.6 : 2.7); if (!q) continue;
-      const P = PAL[b.role === 'cathedrale' || b.role === 'eglise' || b.role === 'egliseDome' ? 'ardoise' : TOITS_STYLE[Pf.style][0][0]], kd = deg.get(b);
-      chemin_(g, q);
-      g.fillStyle = kd === 'brule' ? '#3a302a' : kd === 'ruine' ? '#958a78' : b.zone === 'faubourg' ? mix(P[0], '#7aa659', .55) : b.role === 'place' || b.role === 'parvis' ? '#d6ccb2' : kd === 'creve' ? mix(P[0], '#231d19', .35) : P[0];
-      g.fill();
-      if (!kd && b.zone === 'ville' && b.aire > 600 && !b.role) { const inn = decalerQuad(q, 8); if (inn) { chemin_(g, inn); g.fillStyle = '#cdbf9f'; g.fill(); } }
-      if (!kd && b.zone === 'faubourg') {   // les maisons du faubourg au bord de la rue, les jardins derrière
-        g.fillStyle = P[0];
-        (b.cotes || [true, false, false, false]).forEach((on, i) => {
-          if (!on) return;
-          const a = q[i], f = q[(i + 1) % 4], l = Math.hypot(f[0] - a[0], f[1] - a[1]) || 1; let nx = -(f[1] - a[1]) / l, ny = (f[0] - a[0]) / l;
-          if ((b.c[0] - a[0]) * nx + (b.c[1] - a[1]) * ny < 0) { nx = -nx; ny = -ny; }
-          const dp = Math.min(10, Math.sqrt(b.aire) * .35);
-          chemin_(g, [a, f, [f[0] + nx * dp, f[1] + ny * dp], [a[0] + nx * dp, a[1] + ny * dp]]); g.fill();
-        });
-      }
+  if (O) {
+    // par morceaux de 400 m (chacun découpé au sien : les ombres qui débordent ne se peignent qu'une fois)
+    const x0 = n.x - Rr / S, y0 = n.y - Rr / S, x1 = n.x + Rr / S, y1 = n.y + Rr / S, pas = detail ? .4 : x1 - x0;
+    for (let y = y0; y < y1; y += pas) for (let x = x0; x < x1; x += pas) {
+      g.save(); g.translate(IC[0], IC[1]); g.scale(S, S); g.translate(-n.x, -n.y);
+      if (pas < x1 - x0) { g.beginPath(); g.rect(x, y, pas, pas); g.clip(); }
+      dessinerPlan(g, O, x, y, x + pas, y + pas, res * S);
+      g.restore();
+      if (detail) yield;
     }
-    if (Pf.modele === 'castrum' || Pf.modele === 'fortin') { RR(g, '#6a655c', IC[0] - 18, IC[1] - 12, 36, 24, 2); }
+    const enU = q => q.map(p => [IC[0] + (p[0] - n.x) * S, IC[1] + (p[1] - n.y) * S]);
+    for (const [il, kd] of deg) peindreDegat(g, { c: enU([il.c])[0], aire: Math.abs(aire(il.bloc)) * S * S }, kd, R, enU(il.bloc));
+    if (detail) { if (Pf.modele === 'castrum') chateau(g); if (V.gare) bat(g, BATS.gare().slice(1), V.gare.x, V.gare.y, V.gare.a, .55); }
+    else if (Pf.modele === 'castrum') RR(g, '#6a655c', IC[0] - 18, IC[1] - 12, 36, 24, 2);
+  } else {
+    // le sol de la ville : îlots entiers et rues entre eux, pour que la campagne ne passe pas entre les maisons
+    if (urbain) { g.fillStyle = g.strokeStyle = '#bfb498'; g.lineWidth = 10; g.lineJoin = 'round'; for (const b of V.ilots) if (b.zone === 'ville') { chemin_(g, b.q); g.fill(); g.stroke(); } }
+    if (V.placeCentre) C(g, '#d6ccb2', IC[0], IC[1], 22);
+    if (detail) {
+      V.cheminees.length = 0; V.apres.length = 0;
+      let nb = 0;
+      for (const b of V.ilots) { remplirIlot(g, b, V, R); if (++nb % 10 === 0) yield; }
+      for (const f of V.apres) f();
+      for (const [b, kd] of deg) peindreDegat(g, b, kd, R);
+      if (V.placeCentre) { C(g, '#d6ccb2', IC[0], IC[1], 20); if (Pf.modele !== 'grande') bat(g, BATS.halle().slice(1), IC[0], IC[1], Pf.routes[0]?.a || 0, .32); }
+      if (Pf.modele === 'castrum') chateau(g);
+      if (Pf.modele === 'fortin') { RR(g, '#d9cda9', IC[0] - 22, IC[1] - 22, 44, 44, 1); bat(g, BATS.caserne().slice(2), IC[0], IC[1], 0, .5); bat(g, BATS.poudriere(), IC[0] + 40, IC[1] - 30, .6, .7); }
+      if (V.gare) bat(g, BATS.gare().slice(1), V.gare.x, V.gare.y, V.gare.a, .55);
+    } else {
+      for (const b of V.ilots) {
+        const q = decalerQuad(b.q, b.main ? 4.6 : 2.7); if (!q) continue;
+        const P = PAL[b.role === 'cathedrale' || b.role === 'eglise' || b.role === 'egliseDome' ? 'ardoise' : TOITS_STYLE[Pf.style][0][0]], kd = deg.get(b);
+        chemin_(g, q);
+        g.fillStyle = kd === 'brule' ? '#3a302a' : kd === 'ruine' ? '#958a78' : b.zone === 'faubourg' ? mix(P[0], '#7aa659', .55) : b.role === 'place' || b.role === 'parvis' ? '#d6ccb2' : kd === 'creve' ? mix(P[0], '#231d19', .35) : P[0];
+        g.fill();
+        if (!kd && b.zone === 'ville' && b.aire > 600 && !b.role) { const inn = decalerQuad(q, 8); if (inn) { chemin_(g, inn); g.fillStyle = '#cdbf9f'; g.fill(); } }
+        if (!kd && b.zone === 'faubourg') {   // les maisons du faubourg au bord de la rue, les jardins derrière
+          g.fillStyle = P[0];
+          (b.cotes || [true, false, false, false]).forEach((on, i) => {
+            if (!on) return;
+            const a = q[i], f = q[(i + 1) % 4], l = Math.hypot(f[0] - a[0], f[1] - a[1]) || 1; let nx = -(f[1] - a[1]) / l, ny = (f[0] - a[0]) / l;
+            if ((b.c[0] - a[0]) * nx + (b.c[1] - a[1]) * ny < 0) { nx = -nx; ny = -ny; }
+            const dp = Math.min(10, Math.sqrt(b.aire) * .35);
+            chemin_(g, [a, f, [f[0] + nx * dp, f[1] + ny * dp], [a[0] + nx * dp, a[1] + ny * dp]]); g.fill();
+          });
+        }
+      }
+      if (Pf.modele === 'castrum' || Pf.modele === 'fortin') { RR(g, '#6a655c', IC[0] - 18, IC[1] - 12, 36, 24, 2); }
+    }
   }
   if (V.citadelle) { chemin_(g, V.citadelle.poly); g.fillStyle = '#9cb36e'; g.fill(); g.strokeStyle = '#b5aa92'; g.lineWidth = 3; g.stroke(); const C2 = V.citadelle.C; RR(g, '#d9cda9', C2[0] - 15, C2[1] - 15, 30, 30, 1); if (detail) bat(g, BATS.caserne().slice(2), C2[0], C2[1], 0, .45); }
   // le drapeau au clocher (ou à la citadelle, au château) ; les fenêtres pour la nuit, en km (ciel.js)
-  const L = V.lieux, mat = L.cathedrale || L.eglise || L.citadelle || L.chateau || L.place || { x: IC[0], y: IC[1] };
+  const L = V.lieux, lieu = t => { const il = O?.ilots.find(b => b.type === t); return il && { x: IC[0] + (il.c[0] - n.x) * S, y: IC[1] + (il.c[1] - n.y) * S }; };
+  const mat = L.citadelle || L.chateau || (O ? lieu('eglise') || lieu('place') : L.cathedrale || L.eglise || L.place) || { x: IC[0], y: IC[1] };
   const lum = [];
-  for (const b of V.ilots) { if (b.role === 'place' || b.role === 'parvis' || deg.get(b) === 'brule' || deg.get(b) === 'ruine') continue; const q = decalerQuad(b.q, 6); if (!q) continue; for (let i = 0; i < q.length; i++) { const [ax, ay] = q[i], [bx, by] = q[(i + 1) % q.length], l = Math.hypot(bx - ax, by - ay); for (let d = 4; d < l; d += 9) if (hash2(lum.length, n.id, 41) < .45) lum.push([n.x + (ax + (bx - ax) * d / l - IC[0]) / S, n.y + (ay + (by - ay) * d / l - IC[1]) / S]); } }
+  if (O) for (const b of bati) {
+    const kd = deg.get(b); if (kd === 'brule' || kd === 'ruine') continue;
+    const q = b.bloc; for (let i = 0; i < q.length; i++) { const [ax, ay] = q[i], [bx, by] = q[(i + 1) % q.length], l = Math.hypot(bx - ax, by - ay); for (let d = .02; d < l; d += .05) if (hash2(lum.length, n.id, 41) < .45) lum.push([ax + (bx - ax) * d / l, ay + (by - ay) * d / l]); }
+  }
+  else for (const b of V.ilots) { if (b.role === 'place' || b.role === 'parvis' || deg.get(b) === 'brule' || deg.get(b) === 'ruine') continue; const q = decalerQuad(b.q, 6); if (!q) continue; for (let i = 0; i < q.length; i++) { const [ax, ay] = q[i], [bx, by] = q[(i + 1) % q.length], l = Math.hypot(bx - ax, by - ay); for (let d = 4; d < l; d += 9) if (hash2(lum.length, n.id, 41) < .45) lum.push([n.x + (ax + (bx - ax) * d / l - IC[0]) / S, n.y + (ay + (by - ay) * d / l - IC[1]) / S]); } }
   const rec = detail ? fin() : null, oct = rec ? Object.values(rec).reduce((s, a) => s + (a.byteLength || 0), 0) : 0;
   p = { c, Rr, res, rec, lum: lum.slice(0, 900), V, mat: [mat.x - IC[0], mat.y - IC[1]], px: c.width * c.height + oct / 4 };   // (l'enregistrement compte dans le budget, comme des pixels)
   IMAGES.set(kk, p); pix += p.px;
