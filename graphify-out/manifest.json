@@ -102,9 +102,9 @@
     "semantic_hash": ""
   },
   "game/tactics/terrain.py": {
-    "mtime": 1793092432.023247,
-    "seen": 1793426021.9021168,
-    "ast_hash": "c90e1d073c2322d298f15ca957d58629",
+    "mtime": 1793451564.3611813,
+    "seen": 1793464562.0808465,
+    "ast_hash": "db275a00b7105174d614796d84e73eeb",
     "semantic_hash": ""
   },
   "game/tactics/units.py": {
@@ -258,9 +258,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1793105863.6218686,
-    "seen": 1793426021.9027922,
-    "ast_hash": "3ac59e9a57c9866e003ac4c8ff003927",
+    "mtime": 1793450518.3377337,
+    "seen": 1793464562.0816474,
+    "ast_hash": "8e2c5f95e084ff89d9e670a189f1610c",
     "semantic_hash": ""
   },
   "web/index.html": {
@@ -318,9 +318,9 @@
     "semantic_hash": "a4f9bbc5ae519bf6bc974804cd75f4bc"
   },
   "tests/test_bataille.py": {
-    "mtime": 1793105863.6298685,
-    "seen": 1793426021.902386,
-    "ast_hash": "129dba84070f73242d0814265c09ac31",
+    "mtime": 1793452594.1278675,
+    "seen": 1793464562.0811443,
+    "ast_hash": "464ab9c33efe7452030ec6d51111ced3",
     "semantic_hash": ""
   },
   "tests/test_campagne.py": {
@@ -384,9 +384,9 @@
     "semantic_hash": ""
   },
   "tasks/plan-3d.md": {
-    "mtime": 1792331086.3637793,
-    "seen": 1792384995.1597862,
-    "ast_hash": "2202303602ae152578c411c6269ae44d",
+    "mtime": 1793449722.9848454,
+    "seen": 1793464562.0817695,
+    "ast_hash": "1a44ae41d9c70b335787ffd25cf644f1",
     "semantic_hash": ""
   },
   "tasks/todo-3d.md": {
@@ -462,9 +462,9 @@
     "semantic_hash": ""
   },
   "game/crue.py": {
-    "mtime": 1793039381.3843727,
-    "seen": 1793426021.901947,
-    "ast_hash": "3a2d1ccb20d318fbf3edf71c37a985af",
+    "mtime": 1793450181.18414,
+    "seen": 1793464562.0806885,
+    "ast_hash": "9deb55793c62c2bbf790104c74995bb4",
     "semantic_hash": ""
   },
   "game/data/geo_v1.json": {
@@ -486,33 +486,9 @@
     "semantic_hash": ""
   },
   "game/tactics/plan_ville.py": {
-    "mtime": 1793092432.023247,
-    "seen": 1793426021.9020605,
-    "ast_hash": "d58c7ae6c7cca5d7d200064a7ab69e12",
-    "semantic_hash": ""
-  },
-  "game/tactics/plan_ville_v4.py": {
-    "mtime": 1793039381.3843727,
-    "seen": 1793426021.9020667,
-    "ast_hash": "b61f27e4c41ad9b2676521e0db1267e2",
-    "semantic_hash": ""
-  },
-  "game/tactics/plan_ville_v5.py": {
-    "mtime": 1793039381.3843727,
-    "seen": 1793426021.902073,
-    "ast_hash": "b1f8e5560b1762b636fbad2f1e0b0d56",
-    "semantic_hash": ""
-  },
-  "game/tactics/plan_ville_v6.py": {
-    "mtime": 1793039381.3883727,
-    "seen": 1793426021.9020784,
-    "ast_hash": "8aebca7ef7590689a14117fedd062062",
-    "semantic_hash": ""
-  },
-  "game/tactics/plan_ville_v7.py": {
-    "mtime": 1793092432.023247,
-    "seen": 1793426021.9020846,
-    "ast_hash": "127b03f4a1aafc720c0b3ddf2df78689",
+    "mtime": 1793453482.6568277,
+    "seen": 1793464562.0808222,
+    "ast_hash": "dfd883f2bbabc40a1827230e90b17840",
     "semantic_hash": ""
   },
   "game/tactics/stats.py": {
@@ -528,33 +504,9 @@
     "semantic_hash": ""
   },
   "game/tactics/terrain_ville.py": {
-    "mtime": 1793386864.3698356,
-    "seen": 1793426021.9021292,
-    "ast_hash": "715d8cefa2fd444d0a53bfecdd54b542",
-    "semantic_hash": ""
-  },
-  "game/tactics/terrain_ville_v4.py": {
-    "mtime": 1793039381.3883727,
-    "seen": 1793426021.9021351,
-    "ast_hash": "9a2ea3db30fe53611e103bce35b6df79",
-    "semantic_hash": ""
-  },
-  "game/tactics/terrain_ville_v5.py": {
-    "mtime": 1793039381.3923726,
-    "seen": 1793426021.902141,
-    "ast_hash": "df15d2283c00ff83e054d9ec15905473",
-    "semantic_hash": ""
-  },
-  "game/tactics/terrain_ville_v6.py": {
-    "mtime": 1793039381.3923726,
-    "seen": 1793426021.902147,
-    "ast_hash": "4373cde50d30b6d00acee90a7605e03f",
-    "semantic_hash": ""
-  },
-  "game/tactics/terrain_ville_v7.py": {
-    "mtime": 1793092432.027247,
-    "seen": 1793426021.902153,
-    "ast_hash": "7731535a523efd1c760fbccfd80faac2",
+    "mtime": 1793464171.3438973,
+    "seen": 1793464562.0808604,
+    "ast_hash": "b3e195b8be80b7d5f6e435020cf7235a",
     "semantic_hash": ""
   },
   "outils/banc_arbre.sh": {
@@ -582,9 +534,9 @@
     "semantic_hash": ""
   },
   "tests/decor2d.test.mjs": {
-    "mtime": 1792966372.6285105,
-    "seen": 1793426021.9022565,
-    "ast_hash": "a1ae45281f12ccc12854b0fe877f6555",
+    "mtime": 1793451380.7236624,
+    "seen": 1793464562.0809758,
+    "ast_hash": "e863e5d3b6bd6f8acead32bbbb3c96da",
     "semantic_hash": ""
   },
   "tests/decouvertes.test.mjs": {
@@ -696,21 +648,21 @@
     "semantic_hash": ""
   },
   "tests/test_plan_ville.py": {
-    "mtime": 1793092432.027247,
-    "seen": 1793426021.9024105,
-    "ast_hash": "17580930850d3568460f15e51d7f07f9",
+    "mtime": 1793450232.5878167,
+    "seen": 1793464562.0811818,
+    "ast_hash": "698730107556e542a51b9f54bac68a48",
     "semantic_hash": ""
   },
   "tests/test_villes.py": {
-    "mtime": 1793092432.027247,
-    "seen": 1793426021.9024222,
-    "ast_hash": "a2767c4cbf5a3a44b739df360ee860fe",
+    "mtime": 1793451380.7226415,
+    "seen": 1793464562.0811963,
+    "ast_hash": "31cfcf9a4cd44ac67841aacef6be91cf",
     "semantic_hash": ""
   },
   "tests/travaux.test.mjs": {
-    "mtime": 1793092432.027247,
-    "seen": 1793426021.902428,
-    "ast_hash": "5afdd2daedb4912caecf8152f694c79e",
+    "mtime": 1793453482.662591,
+    "seen": 1793464562.081203,
+    "ast_hash": "2ccf1654bd47fab475cc717bda806ecd",
     "semantic_hash": ""
   },
   "tests/troupes2d.test.mjs": {
@@ -756,9 +708,9 @@
     "semantic_hash": ""
   },
   "web/js/battle/decor2d.js": {
-    "mtime": 1793394781.7576876,
-    "seen": 1793426021.902502,
-    "ast_hash": "e563539012e9597508eb5f4b9d9511ef",
+    "mtime": 1793450243.0287201,
+    "seen": 1793464562.0812953,
+    "ast_hash": "003d5983cbe2950e71fe642b2f2ce09f",
     "semantic_hash": ""
   },
   "web/js/battle/heures.js": {
@@ -804,15 +756,15 @@
     "semantic_hash": ""
   },
   "web/js/carte/ciel.js": {
-    "mtime": 1793092432.031247,
-    "seen": 1793426021.9026182,
-    "ast_hash": "d7437867be6df224d419f77f3f774ef0",
+    "mtime": 1793450280.9484243,
+    "seen": 1793464562.0814297,
+    "ast_hash": "ec0a71fc452ea7eaa7a69d471614efb8",
     "semantic_hash": ""
   },
   "web/js/carte/guerre.js": {
-    "mtime": 1793092432.0352468,
-    "seen": 1793426021.9026237,
-    "ast_hash": "96c7b2ca350770cb9a7e494d997f3551",
+    "mtime": 1793450271.655887,
+    "seen": 1793464562.0814362,
+    "ast_hash": "5035dd3c154e339e1fa46848d2a168eb",
     "semantic_hash": ""
   },
   "web/js/carte/lib.js": {
@@ -852,15 +804,15 @@
     "semantic_hash": ""
   },
   "web/js/carte/vie.js": {
-    "mtime": 1793092432.0392468,
-    "seen": 1793426021.9026635,
-    "ast_hash": "2457952a6f469f8e21afe75ea40fc992",
+    "mtime": 1793450271.6538436,
+    "seen": 1793464562.0814896,
+    "ast_hash": "0a1850ebe32d8acfbb493fa895508366",
     "semantic_hash": ""
   },
   "web/js/carte/villes.js": {
-    "mtime": 1793394775.940147,
-    "seen": 1793426021.902669,
-    "ast_hash": "c07470e5df20afcc7468efd5f8983816",
+    "mtime": 1793450271.6523354,
+    "seen": 1793464562.0814965,
+    "ast_hash": "ea16d5165230c251851bb4eeffac32d2",
     "semantic_hash": ""
   },
   "web/js/carte3d.js": {
@@ -1035,6 +987,36 @@
     "mtime": 1792966372.67251,
     "seen": 1793426021.9030244,
     "ast_hash": "28e7fbc5838498cbe1b0ab4b9ce0d5e1",
+    "semantic_hash": ""
+  },
+  "game/tactics/plan_organique.py": {
+    "mtime": 1793451421.5222988,
+    "seen": 1793464562.0808144,
+    "ast_hash": "8b0c9a8a38437bc8b64bff7c61f30b57",
+    "semantic_hash": ""
+  },
+  "tests/plan_organique_js.mjs": {
+    "mtime": 1793450151.6534898,
+    "seen": 1793464562.081076,
+    "ast_hash": "c4b2356a7727d551cc9f6dc036d9b89e",
+    "semantic_hash": ""
+  },
+  "tests/test_plan_organique.py": {
+    "mtime": 1793450182.9081361,
+    "seen": 1793464562.0811744,
+    "ast_hash": "dae46580b01a655822046b0c9288d4c1",
+    "semantic_hash": ""
+  },
+  "SPEC-VILLES-BATAILLE.md": {
+    "mtime": 1793450293.9780777,
+    "seen": 1793464562.0817237,
+    "ast_hash": "2a16c3edf7bfa809d9e5b190d2513a9e",
+    "semantic_hash": ""
+  },
+  "tasks/plan-villes-bataille.md": {
+    "mtime": 1793453503.7234213,
+    "seen": 1793464562.0817986,
+    "ast_hash": "b55d9d762c502a5bfdefb1b2a9c89b84",
     "semantic_hash": ""
   }
 }
