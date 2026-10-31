@@ -6,15 +6,15 @@
     "semantic_hash": "d33a1b361a27dec6eb7d5827071fc871"
   },
   "game/ai.py": {
-    "mtime": 1792388187.360779,
-    "seen": 1792406076.9535155,
-    "ast_hash": "50c727bdd28d6bb68dad6dfa840eb030",
+    "mtime": 1793085530.273167,
+    "seen": 1793426021.9019086,
+    "ast_hash": "e350feae9cf6d6e30c99225671ad365e",
     "semantic_hash": ""
   },
   "game/army_actions.py": {
-    "mtime": 1792351104.272205,
-    "seen": 1792384995.1592605,
-    "ast_hash": "7c9bd97ccda5e2d4903d9f1c02e5f770",
+    "mtime": 1793105863.6218686,
+    "seen": 1793426021.9019215,
+    "ast_hash": "0befc3c7c8bc0ee72f9684aeb7cf173f",
     "semantic_hash": ""
   },
   "game/battle_log.py": {
@@ -24,16 +24,16 @@
     "semantic_hash": "7bbbeb7109496ed2c3c339e87f3d5f9f"
   },
   "game/cities.py": {
-    "mtime": 1792350714.5357172,
-    "seen": 1792384995.1592784,
-    "ast_hash": "63883239ca5f6d8f5f338d45c3380da6",
+    "mtime": 1793085530.273167,
+    "seen": 1793426021.9019399,
+    "ast_hash": "adb29167c176ec23ca52a09ed8e0aa13",
     "semantic_hash": ""
   },
   "game/data/geo.json": {
-    "mtime": 1791662996.7198074,
-    "seen": 1791890364.984307,
-    "ast_hash": "31a9de0db2e3c81f544bdd7a9d92bc04",
-    "semantic_hash": "31a9de0db2e3c81f544bdd7a9d92bc04"
+    "mtime": 1793085530.2771668,
+    "seen": 1793426021.901954,
+    "ast_hash": "4cf2983aec5af3bbd3174b5409f9b37c",
+    "semantic_hash": ""
   },
   "game/diplomacy.py": {
     "mtime": 1792068648.1524844,
@@ -42,9 +42,9 @@
     "semantic_hash": ""
   },
   "game/engine.py": {
-    "mtime": 1792403762.8582547,
-    "seen": 1792406076.9535716,
-    "ast_hash": "2d6d438f65fc123e6d04cde6a673bf53",
+    "mtime": 1793129122.038415,
+    "seen": 1793426021.9019773,
+    "ast_hash": "72e9dc6e993287921a55549c29047b98",
     "semantic_hash": ""
   },
   "game/events.py": {
@@ -54,82 +54,82 @@
     "semantic_hash": ""
   },
   "game/geo.py": {
-    "mtime": 1791901724.71538,
-    "seen": 1791902400.9794693,
-    "ast_hash": "6a59c913e6062457e24126c8e6ab3fa4",
-    "semantic_hash": "6a59c913e6062457e24126c8e6ab3fa4"
+    "mtime": 1793386472.614022,
+    "seen": 1793426021.9019928,
+    "ast_hash": "229e71188272f73c519e1fcc97e890cb",
+    "semantic_hash": ""
   },
   "game/places.py": {
-    "mtime": 1791739336.6386335,
-    "seen": 1791890364.9843464,
-    "ast_hash": "5235431e33bb8af900323c6e2154f550",
-    "semantic_hash": "5235431e33bb8af900323c6e2154f550"
+    "mtime": 1793085530.2811668,
+    "seen": 1793426021.9019997,
+    "ast_hash": "28189227e54d88af489ce34eb6c2c301",
+    "semantic_hash": ""
   },
   "game/rules.py": {
-    "mtime": 1792387613.7808774,
-    "seen": 1792406076.9536119,
-    "ast_hash": "6057ddafca699698498e3778f54d96ce",
+    "mtime": 1793085530.2811668,
+    "seen": 1793426021.902015,
+    "ast_hash": "4ed490892fd1930da7b0510942ec458f",
     "semantic_hash": ""
   },
   "game/tactics/__init__.py": {
-    "mtime": 1791814438.3790185,
-    "seen": 1791890364.9843645,
-    "ast_hash": "2119e961092180020743c56146cb2baa",
-    "semantic_hash": "2119e961092180020743c56146cb2baa"
+    "mtime": 1793105863.6258686,
+    "seen": 1793426021.9020214,
+    "ast_hash": "b03d38b830d2f14a053878ad506c888e",
+    "semantic_hash": ""
   },
   "game/tactics/ai.py": {
-    "mtime": 1792355750.979735,
-    "seen": 1792384995.1593459,
-    "ast_hash": "7f81aa675644d0bb13dc78c3ede9802f",
+    "mtime": 1792966372.6205103,
+    "seen": 1793426021.902028,
+    "ast_hash": "38b2dc1fcbe3b8642e85bac46a7ab949",
     "semantic_hash": ""
   },
   "game/tactics/battle.py": {
-    "mtime": 1792355423.5809896,
-    "seen": 1792384995.1593523,
-    "ast_hash": "e502109c0b44fa04b2afeb2bbc4e577d",
+    "mtime": 1793105863.6298685,
+    "seen": 1793426021.9020345,
+    "ast_hash": "6cb49462996a5ecb3cf2012b8b092f04",
     "semantic_hash": ""
   },
   "game/tactics/bridge.py": {
-    "mtime": 1792355423.571035,
-    "seen": 1792384995.1593585,
-    "ast_hash": "9239ed97fc085fc2f5faba2d5a2c325d",
+    "mtime": 1793105863.6298685,
+    "seen": 1793426021.9020407,
+    "ast_hash": "06e51b91dc78b677aea3bd4c8aa152f8",
     "semantic_hash": ""
   },
   "game/tactics/skirmish.py": {
-    "mtime": 1791902952.1531923,
-    "seen": 1792041202.9348228,
-    "ast_hash": "bef9d5e19bde8a09c9f224baa6399dcc",
-    "semantic_hash": "bef9d5e19bde8a09c9f224baa6399dcc"
+    "mtime": 1793105863.6298685,
+    "seen": 1793426021.902103,
+    "ast_hash": "350b8d5414faa6ad6ccce2d7b8fe29c8",
+    "semantic_hash": ""
   },
   "game/tactics/terrain.py": {
-    "mtime": 1792351121.71925,
-    "seen": 1792384995.1593726,
-    "ast_hash": "649d3ee738a040b77b566f80732d595f",
+    "mtime": 1793092432.023247,
+    "seen": 1793426021.9021168,
+    "ast_hash": "c90e1d073c2322d298f15ca957d58629",
     "semantic_hash": ""
   },
   "game/tactics/units.py": {
-    "mtime": 1792352774.4187927,
-    "seen": 1792384995.159379,
-    "ast_hash": "ccd42b11faf647b20cf59fc00e42c6fe",
+    "mtime": 1792966372.6245105,
+    "seen": 1793426021.9021595,
+    "ast_hash": "16fb8389e16a93d4c7e0d4f78eaf7df0",
     "semantic_hash": ""
   },
   "game/turns.py": {
-    "mtime": 1792387903.2727377,
-    "seen": 1792406076.9536724,
-    "ast_hash": "e598a20f1aaee0413c97c95aa1de36f7",
+    "mtime": 1792996293.5115433,
+    "seen": 1793426021.9021664,
+    "ast_hash": "590319ac8c94775e86e101cfcd8e04f8",
     "semantic_hash": ""
   },
   "game/views.py": {
-    "mtime": 1792388605.7744865,
-    "seen": 1792406076.9536786,
-    "ast_hash": "8ad331b09ab1797ec00a07ca010f59bf",
+    "mtime": 1793129122.0312607,
+    "seen": 1793426021.9021733,
+    "ast_hash": "ab4ff17a0fa6f5f2e64352dc54fdcde5",
     "semantic_hash": ""
   },
   "game/waterways.py": {
-    "mtime": 1791739336.6386335,
-    "seen": 1791890364.9844236,
-    "ast_hash": "b7cd4e3291f2888ace5f61fc985891e5",
-    "semantic_hash": "b7cd4e3291f2888ace5f61fc985891e5"
+    "mtime": 1792569810.5487585,
+    "seen": 1793426021.9021795,
+    "ast_hash": "9827658ce62847a20e1e2137131c6fe8",
+    "semantic_hash": ""
   },
   "lancer.sh": {
     "mtime": 1791662996.7198074,
@@ -150,93 +150,81 @@
     "semantic_hash": "c5894a57720146fe53f2907ac3e34d2d"
   },
   "server.py": {
-    "mtime": 1792388373.8102453,
-    "seen": 1792406076.9537234,
-    "ast_hash": "d31c3991ef89df1064fccd6dc840dfd1",
+    "mtime": 1793129122.0335853,
+    "seen": 1793426021.9022374,
+    "ast_hash": "1364d4d0d3f3c3956d8c9f956b2d25aa",
     "semantic_hash": ""
   },
   "web/js/ambient.js": {
-    "mtime": 1792393239.4506655,
-    "seen": 1792406076.9538193,
-    "ast_hash": "679744413c80f45340a366cccfaf9d18",
+    "mtime": 1793092432.027247,
+    "seen": 1793426021.9024646,
+    "ast_hash": "1cc31b51c303c35b64429aa42d77ccfc",
     "semantic_hash": ""
   },
   "web/js/battle/bataille.js": {
-    "mtime": 1792022152.8982706,
-    "seen": 1792041202.9349592,
-    "ast_hash": "f95e71e0f80200dd2e5b8abd542510dd",
-    "semantic_hash": "f95e71e0f80200dd2e5b8abd542510dd"
+    "mtime": 1793105863.6338685,
+    "seen": 1793426021.9024773,
+    "ast_hash": "97d3a90658f8d436a4ea0adf74fbefba",
+    "semantic_hash": ""
   },
   "web/js/battle/commandes.js": {
-    "mtime": 1792022152.8956134,
-    "seen": 1792041202.9349718,
-    "ast_hash": "9119d3e678ba399c13c3a051e0efff96",
-    "semantic_hash": "9119d3e678ba399c13c3a051e0efff96"
-  },
-  "web/js/battle/dev/maquette.mjs": {
-    "mtime": 1792055903.7707334,
-    "seen": 1792062446.1289203,
-    "ast_hash": "41b8a0d45ce26c965e2bc6c3107730f4",
-    "semantic_hash": "41b8a0d45ce26c965e2bc6c3107730f4"
-  },
-  "web/js/battle/dev/simulation.mjs": {
-    "mtime": 1792354439.7724683,
-    "seen": 1792384995.1596062,
-    "ast_hash": "2db3a60986986ee4c7f55e007ba3f107",
+    "mtime": 1793379907.5537999,
+    "seen": 1793426021.9024904,
+    "ast_hash": "676adea6eb6755b85fb1f9fb1ce6090d",
     "semantic_hash": ""
   },
   "web/js/battle/doctrine.js": {
-    "mtime": 1792352986.4697263,
-    "seen": 1792384995.1596208,
-    "ast_hash": "65f018fd66e5faad327549622ef37e05",
+    "mtime": 1793105863.6338685,
+    "seen": 1793426021.902509,
+    "ast_hash": "2d46ee0f92129380b8fd8b4df7f7434a",
     "semantic_hash": ""
   },
   "web/js/battle/effets.js": {
-    "mtime": 1792354439.7653818,
-    "seen": 1792384995.1596274,
-    "ast_hash": "24334a22ccc8032e528dfc39e13660c9",
+    "mtime": 1792966372.6405103,
+    "seen": 1793426021.902516,
+    "ast_hash": "18314952af74936e2086c7192a16f8ff",
     "semantic_hash": ""
   },
   "web/js/battle/formes.js": {
-    "mtime": 1792354481.635977,
-    "seen": 1792384995.1596406,
-    "ast_hash": "3d5c0c6c285b291dcb989f2dc41dbd23",
+    "mtime": 1793105863.6338685,
+    "seen": 1793426021.9025297,
+    "ast_hash": "c2811f168d78967689a8e65154ecb08c",
     "semantic_hash": ""
   },
   "web/js/battle/interface.js": {
-    "mtime": 1792354303.4020727,
-    "seen": 1792384995.1596532,
-    "ast_hash": "ded71fc5c019765562b22752fa81e130",
+    "mtime": 1793105863.6338685,
+    "seen": 1793426021.9025426,
+    "ast_hash": "687a3395a2f2558bcf2563e4167b5108",
     "semantic_hash": ""
   },
   "web/js/battle/qualite.js": {
-    "mtime": 1792284639.867538,
-    "seen": 1792304037.9186935,
-    "ast_hash": "2475ac5d7e20e68e88d3cd0357ae6dfb",
+    "mtime": 1792966372.6445103,
+    "seen": 1793426021.9025612,
+    "ast_hash": "afcf6c64d3e250e0b63f83ab688e923c",
     "semantic_hash": ""
   },
   "web/js/battle/terrain.js": {
-    "mtime": 1792328555.472641,
-    "seen": 1792384995.159674,
-    "ast_hash": "fd81fc4d4b9b59ee91bce3d85bafeaec",
+    "mtime": 1792966372.6445103,
+    "seen": 1793426021.9025736,
+    "ast_hash": "2a3f2a2515ee63cf918b31a49b399f1b",
     "semantic_hash": ""
   },
   "web/js/battle/textures.js": {
-    "mtime": 1792295675.565209,
-    "seen": 1792304037.9187145,
-    "ast_hash": "da73a6fa866f84a9d1a9fff9399af904",
+    "mtime": 1793129122.0398972,
+    "seen": 1793426021.9025803,
+    "ast_hash": "d9e405189ed3c18aeec9716e2405cf42",
     "semantic_hash": ""
   },
   "web/js/battle/unites.js": {
-    "mtime": 1792354439.7673807,
-    "seen": 1792384995.1596947,
-    "ast_hash": "21024d55bd2375d866397ef676750ba2",
+    "mtime": 1792966372.6485102,
+    "seen": 1793426021.9025931,
+    "ast_hash": "831a19abdb5526ca41edfbb9b91b0b84",
     "semantic_hash": ""
   },
   "web/js/battle/vue.js": {
-    "mtime": 1792353339.5938807,
-    "seen": 1792384995.1597018,
-    "ast_hash": "b6c574b9dd92d5c1b8746d23ea246562",
+    "mtime": 1793105863.6378686,
+    "seen": 1793426021.9026062,
+    "ast_hash": "31e022c04b1683fe7f22904bb7411b99",
     "semantic_hash": ""
   },
   "web/js/icons.js": {
@@ -246,33 +234,33 @@
     "semantic_hash": ""
   },
   "web/js/main.js": {
-    "mtime": 1792328518.3871703,
-    "seen": 1792384995.1597137,
-    "ast_hash": "97b16ab333e8c70e3c3fda393cae9e9a",
+    "mtime": 1793085530.2971666,
+    "seen": 1793426021.9027362,
+    "ast_hash": "3f469b9aec3b044fac7b270b4d64fe21",
     "semantic_hash": ""
   },
   "web/js/map.js": {
-    "mtime": 1792393239.4428692,
-    "seen": 1792406076.9540024,
-    "ast_hash": "0d002022b1c279f7177412a8e66269f8",
+    "mtime": 1793394725.866412,
+    "seen": 1793426021.9027426,
+    "ast_hash": "1027a3ef0e5fbf27b8f0e0e9da63cfc2",
     "semantic_hash": ""
   },
   "web/js/towns.js": {
-    "mtime": 1791901694.6444924,
-    "seen": 1791902400.9797125,
-    "ast_hash": "df262913954bb3b8553363a2423251d4",
-    "semantic_hash": "df262913954bb3b8553363a2423251d4"
+    "mtime": 1793092432.0432467,
+    "seen": 1793426021.9027662,
+    "ast_hash": "6eb57db91e2689158461149d63bc19d8",
+    "semantic_hash": ""
   },
   "web/js/ui.js": {
-    "mtime": 1792403762.8547194,
-    "seen": 1792406076.9540234,
-    "ast_hash": "f786fc37399502cc2a6771763d28917f",
+    "mtime": 1793394725.8432214,
+    "seen": 1793426021.902779,
+    "ast_hash": "fcfc7dadf78544b28ba93c4a6c0e0978",
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1792392731.4727263,
-    "seen": 1792406076.9540303,
-    "ast_hash": "6901a16795bd9dd11d19678c64186c35",
+    "mtime": 1793105863.6218686,
+    "seen": 1793426021.9027922,
+    "ast_hash": "3ac59e9a57c9866e003ac4c8ff003927",
     "semantic_hash": ""
   },
   "web/index.html": {
@@ -280,12 +268,6 @@
     "seen": 1792041202.9351509,
     "ast_hash": "2c4874018ae273ca82b4870fb005ca58",
     "semantic_hash": "2c4874018ae273ca82b4870fb005ca58"
-  },
-  "web/js/battle/dev/banc.html": {
-    "mtime": 1791814438.3923485,
-    "seen": 1791890364.9846284,
-    "ast_hash": "7a4507f0ddd4d78f735a34be57e83a5f",
-    "semantic_hash": "7a4507f0ddd4d78f735a34be57e83a5f"
   },
   "web/icons/icon-180.png": {
     "mtime": 1791662996.7240565,
@@ -306,10 +288,10 @@
     "semantic_hash": "eef2d260f6cfd2f0bbb5954638f1d8f1"
   },
   "tests/camera.test.mjs": {
-    "mtime": 1792010091.4931543,
-    "seen": 1792041202.9348953,
-    "ast_hash": "f0faa6b7a9d592184650064a472f069a",
-    "semantic_hash": "f0faa6b7a9d592184650064a472f069a"
+    "mtime": 1792966372.6285105,
+    "seen": 1793426021.9022443,
+    "ast_hash": "eddcb2cf38a440ea72fcff3c5fb7e0f8",
+    "semantic_hash": ""
   },
   "tests/dom.mjs": {
     "mtime": 1791903323.5675244,
@@ -318,15 +300,15 @@
     "semantic_hash": "1696b923f31f1a581da7b42bdcee1a63"
   },
   "tests/fabrique.py": {
-    "mtime": 1791903139.8517232,
-    "seen": 1792041202.9349084,
-    "ast_hash": "fd19e3e8b96d9055378390c351a2b120",
-    "semantic_hash": "fd19e3e8b96d9055378390c351a2b120"
+    "mtime": 1792784635.3787146,
+    "seen": 1793426021.9022884,
+    "ast_hash": "016719232282c89e286a37dea011f865",
+    "semantic_hash": ""
   },
   "tests/interface.test.mjs": {
-    "mtime": 1792388400.0413933,
-    "seen": 1792406076.9537616,
-    "ast_hash": "97fbfacbc7765f77e99035419f64a2cf",
+    "mtime": 1793105863.6298685,
+    "seen": 1793426021.9023137,
+    "ast_hash": "3402672ecdb03536cf069c06bf782ec5",
     "semantic_hash": ""
   },
   "tests/lancer.py": {
@@ -336,69 +318,39 @@
     "semantic_hash": "a4f9bbc5ae519bf6bc974804cd75f4bc"
   },
   "tests/test_bataille.py": {
-    "mtime": 1792355397.773373,
-    "seen": 1792384995.159514,
-    "ast_hash": "823ea2aa9450e25d811832c4a3423321",
+    "mtime": 1793105863.6298685,
+    "seen": 1793426021.902386,
+    "ast_hash": "129dba84070f73242d0814265c09ac31",
     "semantic_hash": ""
   },
   "tests/test_campagne.py": {
-    "mtime": 1792393191.9967005,
-    "seen": 1792406076.953791,
-    "ast_hash": "855c85de1b3c7d2fbfbfcbc8c36a20d3",
+    "mtime": 1793386572.0803711,
+    "seen": 1793426021.9023926,
+    "ast_hash": "89292a95013338206bdafff35fac805f",
     "semantic_hash": ""
   },
   "tests/test_serveur.py": {
-    "mtime": 1792388373.815221,
-    "seen": 1792406076.9537976,
-    "ast_hash": "54450f688b4bbd755030a0e443975f1d",
-    "semantic_hash": ""
-  },
-  "tests/troupes.test.mjs": {
-    "mtime": 1792353961.958133,
-    "seen": 1792384995.159534,
-    "ast_hash": "cd8e84a1bdf4d51e3d4272d33bb2dc2b",
+    "mtime": 1793085530.2891667,
+    "seen": 1793426021.9024167,
+    "ast_hash": "1a1d358d2921d5b5c0504e281f5f8f7d",
     "semantic_hash": ""
   },
   "web/js/battle/camera.js": {
-    "mtime": 1792010076.4164822,
-    "seen": 1792041202.9349651,
-    "ast_hash": "60809b96f11fb52f61bd2fcf7bcd398e",
-    "semantic_hash": "60809b96f11fb52f61bd2fcf7bcd398e"
-  },
-  "web/js/battle/decor.js": {
-    "mtime": 1792058384.8030765,
-    "seen": 1792062446.1289084,
-    "ast_hash": "693f2f5a43ae760ea6b014bdc6c7476a",
-    "semantic_hash": "693f2f5a43ae760ea6b014bdc6c7476a"
-  },
-  "web/js/battle/dev/capture.mjs": {
-    "mtime": 1792389157.385234,
-    "seen": 1792406076.9538546,
-    "ast_hash": "b9ffb6c20997c265345ae4769bed6b9f",
+    "mtime": 1792966372.6365104,
+    "seen": 1793426021.9024842,
+    "ast_hash": "08fdf486fd308ef9d8416b88a37a5743",
     "semantic_hash": ""
   },
   "web/js/battle/fanions.js": {
-    "mtime": 1792352986.4756718,
-    "seen": 1792384995.1596339,
-    "ast_hash": "2c45262fa7b2b4e219d2359cc998b07d",
-    "semantic_hash": ""
-  },
-  "web/js/battle/relief.js": {
-    "mtime": 1792317036.9872851,
-    "seen": 1792384995.1596675,
-    "ast_hash": "524c0dcc510c3d132309d6efb67da663",
-    "semantic_hash": ""
-  },
-  "web/js/battle/troupes.js": {
-    "mtime": 1792355456.9307833,
-    "seen": 1792384995.159688,
-    "ast_hash": "068cf63aa2c7eb6b9afcceda52cad510",
+    "mtime": 1792966372.6445103,
+    "seen": 1793426021.9025226,
+    "ast_hash": "543abb2186f45000b714586e8a8b7d9a",
     "semantic_hash": ""
   },
   "web/js/tuto.js": {
-    "mtime": 1792068566.1279755,
-    "seen": 1792077574.3999352,
-    "ast_hash": "153880a7a65e9dcf23a259b6a2a96cbe",
+    "mtime": 1793105863.6378686,
+    "seen": 1793426021.9027727,
+    "ast_hash": "93ef7996ee72eee1800515d6217f50ad",
     "semantic_hash": ""
   },
   "SPEC-3D.md": {
@@ -425,12 +377,6 @@
     "ast_hash": "05f9f2d6e0c44d7398fcc114fec82b03",
     "semantic_hash": ""
   },
-  "tests/modeles.test.mjs": {
-    "mtime": 1792355457.1455855,
-    "seen": 1792384995.1595078,
-    "ast_hash": "8e2697ae8ff1371db70152b20cb674e3",
-    "semantic_hash": ""
-  },
   "SPEC-TOURS.md": {
     "mtime": 1792309460.6124895,
     "seen": 1792309854.5610442,
@@ -449,52 +395,10 @@
     "ast_hash": "35345ff469180ef8cdeb8c033a4adde4",
     "semantic_hash": ""
   },
-  "tests/gestes.test.mjs": {
-    "mtime": 1792354574.2628925,
-    "seen": 1792384995.1594875,
-    "ast_hash": "04a2a34e87065ab62ae91607368dc342",
-    "semantic_hash": ""
-  },
-  "web/anims/soldat.json": {
-    "mtime": 1792317017.2234182,
-    "seen": 1792384995.159541,
-    "ast_hash": "4c01f8537b818ac9ca782a86261470aa",
-    "semantic_hash": ""
-  },
-  "web/js/battle/dev/cuire.mjs": {
-    "mtime": 1792317015.0585556,
-    "seen": 1792384995.1595917,
-    "ast_hash": "41e5e208732ae06160acbea3f19a238b",
-    "semantic_hash": ""
-  },
-  "web/js/battle/dev/suivre.js": {
-    "mtime": 1792271614.5770268,
-    "seen": 1792304037.9186413,
-    "ast_hash": "bb673ecd2ce994dac5d7f827f433120f",
-    "semantic_hash": ""
-  },
-  "web/js/battle/gestes.js": {
-    "mtime": 1792354591.990176,
-    "seen": 1792384995.1596467,
-    "ast_hash": "1630acda0288988813c080a1a0b6200e",
-    "semantic_hash": ""
-  },
   "tasks/reste-a-faire-etape7.md": {
     "mtime": 1792317783.8537154,
     "seen": 1792384995.1598206,
     "ast_hash": "c108f3fc190183c6e3217f859000767e",
-    "semantic_hash": ""
-  },
-  "web/anims/LICENCE.txt": {
-    "mtime": 1792253793.0974877,
-    "seen": 1792304037.9188519,
-    "ast_hash": "7b1a2b23bb728b28daa43d26beb9da90",
-    "semantic_hash": ""
-  },
-  "web/js/battle/dev/anims.html": {
-    "mtime": 1792298225.9920537,
-    "seen": 1792304037.9188657,
-    "ast_hash": "f1289916df4be75a1283f9f7bc81813d",
     "semantic_hash": ""
   },
   "tasks/plan-arrivee.md": {
@@ -510,9 +414,9 @@
     "semantic_hash": ""
   },
   "outils/simuler.py": {
-    "mtime": 1792392406.7990782,
-    "seen": 1792406076.953708,
-    "ast_hash": "2251063af0dae73885ecf9dfa2d0a7fc",
+    "mtime": 1793085530.2851667,
+    "seen": 1793426021.9022229,
+    "ast_hash": "7485fab5f0db9271358f84b577c87ab6",
     "semantic_hash": ""
   },
   "SPEC-TECH.md": {
@@ -522,9 +426,9 @@
     "semantic_hash": ""
   },
   "tasks/equilibre-reference.md": {
-    "mtime": 1792399763.6222148,
-    "seen": 1792406076.954074,
-    "ast_hash": "05f5a2aba971a5a112775df3e311e55c",
+    "mtime": 1792829562.857167,
+    "seen": 1793426021.902878,
+    "ast_hash": "3c4269d47624e8ff9cd0630db520b9d5",
     "semantic_hash": ""
   },
   "tasks/plan-tech.md": {
@@ -552,9 +456,585 @@
     "semantic_hash": ""
   },
   "tasks/a-faire.md": {
-    "mtime": 1792406045.5462568,
-    "seen": 1792406076.954066,
-    "ast_hash": "8cc764cb9d2d8b77b7b271161060182e",
+    "mtime": 1792613917.9303107,
+    "seen": 1793426021.9028654,
+    "ast_hash": "f4d06379ee6f182036adbb8ad314675a",
+    "semantic_hash": ""
+  },
+  "game/crue.py": {
+    "mtime": 1793039381.3843727,
+    "seen": 1793426021.901947,
+    "ast_hash": "3a2d1ccb20d318fbf3edf71c37a985af",
+    "semantic_hash": ""
+  },
+  "game/data/geo_v1.json": {
+    "mtime": 1793085530.2771668,
+    "seen": 1793426021.9019608,
+    "ast_hash": "4c7c7e031c6e23628617492c40ac80e7",
+    "semantic_hash": ""
+  },
+  "game/tactics/jsmath.py": {
+    "mtime": 1792966372.6245105,
+    "seen": 1793426021.9020476,
+    "ast_hash": "ea35322dda2439e8ee6c8fe7ef408530",
+    "semantic_hash": ""
+  },
+  "game/tactics/orders.py": {
+    "mtime": 1792784635.3707147,
+    "seen": 1793426021.9020543,
+    "ast_hash": "5a5f2ca571e5c46e720931c6b59aec1f",
+    "semantic_hash": ""
+  },
+  "game/tactics/plan_ville.py": {
+    "mtime": 1793092432.023247,
+    "seen": 1793426021.9020605,
+    "ast_hash": "d58c7ae6c7cca5d7d200064a7ab69e12",
+    "semantic_hash": ""
+  },
+  "game/tactics/plan_ville_v4.py": {
+    "mtime": 1793039381.3843727,
+    "seen": 1793426021.9020667,
+    "ast_hash": "b61f27e4c41ad9b2676521e0db1267e2",
+    "semantic_hash": ""
+  },
+  "game/tactics/plan_ville_v5.py": {
+    "mtime": 1793039381.3843727,
+    "seen": 1793426021.902073,
+    "ast_hash": "b1f8e5560b1762b636fbad2f1e0b0d56",
+    "semantic_hash": ""
+  },
+  "game/tactics/plan_ville_v6.py": {
+    "mtime": 1793039381.3883727,
+    "seen": 1793426021.9020784,
+    "ast_hash": "8aebca7ef7590689a14117fedd062062",
+    "semantic_hash": ""
+  },
+  "game/tactics/plan_ville_v7.py": {
+    "mtime": 1793092432.023247,
+    "seen": 1793426021.9020846,
+    "ast_hash": "127b03f4a1aafc720c0b3ddf2df78689",
+    "semantic_hash": ""
+  },
+  "game/tactics/stats.py": {
+    "mtime": 1792691814.8889577,
+    "seen": 1793426021.9021094,
+    "ast_hash": "e078b2365be427ed44afc5692d7203c3",
+    "semantic_hash": ""
+  },
+  "game/tactics/terrain_v1.py": {
+    "mtime": 1792522638.4350226,
+    "seen": 1793426021.9021232,
+    "ast_hash": "dd621af4cb626b3f62813e7bf528ab71",
+    "semantic_hash": ""
+  },
+  "game/tactics/terrain_ville.py": {
+    "mtime": 1793386864.3698356,
+    "seen": 1793426021.9021292,
+    "ast_hash": "715d8cefa2fd444d0a53bfecdd54b542",
+    "semantic_hash": ""
+  },
+  "game/tactics/terrain_ville_v4.py": {
+    "mtime": 1793039381.3883727,
+    "seen": 1793426021.9021351,
+    "ast_hash": "9a2ea3db30fe53611e103bce35b6df79",
+    "semantic_hash": ""
+  },
+  "game/tactics/terrain_ville_v5.py": {
+    "mtime": 1793039381.3923726,
+    "seen": 1793426021.902141,
+    "ast_hash": "df15d2283c00ff83e054d9ec15905473",
+    "semantic_hash": ""
+  },
+  "game/tactics/terrain_ville_v6.py": {
+    "mtime": 1793039381.3923726,
+    "seen": 1793426021.902147,
+    "ast_hash": "4373cde50d30b6d00acee90a7605e03f",
+    "semantic_hash": ""
+  },
+  "game/tactics/terrain_ville_v7.py": {
+    "mtime": 1793092432.027247,
+    "seen": 1793426021.902153,
+    "ast_hash": "7731535a523efd1c760fbccfd80faac2",
+    "semantic_hash": ""
+  },
+  "outils/banc_arbre.sh": {
+    "mtime": 1792819270.994625,
+    "seen": 1793426021.902195,
+    "ast_hash": "cf3b117829716b652c7efb2c3d50f983",
+    "semantic_hash": ""
+  },
+  "outils/banc_compare.sh": {
+    "mtime": 1792825737.3836925,
+    "seen": 1793426021.9022017,
+    "ast_hash": "eb70164265157d9bcb262b51fdc0ef18",
+    "semantic_hash": ""
+  },
+  "outils/banc_ia.py": {
+    "mtime": 1792784635.3787146,
+    "seen": 1793426021.9022079,
+    "ast_hash": "3668e1e91fe28b2f3119c6fdc5f24287",
+    "semantic_hash": ""
+  },
+  "tests/commandes.test.mjs": {
+    "mtime": 1793379936.0361586,
+    "seen": 1793426021.9022505,
+    "ast_hash": "af62a228394af1f59fda84a2fc45e9fa",
+    "semantic_hash": ""
+  },
+  "tests/decor2d.test.mjs": {
+    "mtime": 1792966372.6285105,
+    "seen": 1793426021.9022565,
+    "ast_hash": "a1ae45281f12ccc12854b0fe877f6555",
+    "semantic_hash": ""
+  },
+  "tests/decouvertes.test.mjs": {
+    "mtime": 1792787051.4924757,
+    "seen": 1793426021.9022622,
+    "ast_hash": "f7d46ea605f7984752ad27812ac18f75",
+    "semantic_hash": ""
+  },
+  "tests/effets.test.mjs": {
+    "mtime": 1792966372.6285105,
+    "seen": 1793426021.902276,
+    "ast_hash": "a09265bb549034c789425e4522209cab",
+    "semantic_hash": ""
+  },
+  "tests/epoque.test.mjs": {
+    "mtime": 1792787433.0928314,
+    "seen": 1793426021.9022818,
+    "ast_hash": "4c13ef90b0cf08988749ac0fc488c048",
+    "semantic_hash": ""
+  },
+  "tests/frontieres.test.mjs": {
+    "mtime": 1792784635.3787146,
+    "seen": 1793426021.9022946,
+    "ast_hash": "e238932a7cc082cdb060fdcd443c58f8",
+    "semantic_hash": ""
+  },
+  "tests/guerre.test.mjs": {
+    "mtime": 1793092432.027247,
+    "seen": 1793426021.9023008,
+    "ast_hash": "cec68d22c1d78a3631873e724817d8f2",
+    "semantic_hash": ""
+  },
+  "tests/heures.test.mjs": {
+    "mtime": 1792966372.6285105,
+    "seen": 1793426021.9023068,
+    "ast_hash": "68a1ae5a806efa6221bb5fd1ad4e0010",
+    "semantic_hash": ""
+  },
+  "tests/lot.test.mjs": {
+    "mtime": 1792784635.3787146,
+    "seen": 1793426021.9023273,
+    "ast_hash": "e763747f25c6b5f17d233c7484d241d8",
+    "semantic_hash": ""
+  },
+  "tests/pietinement.test.mjs": {
+    "mtime": 1792966372.6285105,
+    "seen": 1793426021.9023333,
+    "ast_hash": "6c4ea6c782fabb8113967dca6bf546e5",
+    "semantic_hash": ""
+  },
+  "tests/plan_ville_js.mjs": {
+    "mtime": 1793092432.027247,
+    "seen": 1793426021.9023387,
+    "ast_hash": "a8ecb20b90147a5c0f5bbc9fe390ec2d",
+    "semantic_hash": ""
+  },
+  "tests/portraits.test.mjs": {
+    "mtime": 1792522638.4390225,
+    "seen": 1793426021.9023445,
+    "ast_hash": "620e5d9d0dbf126a52e1bc63642e81b4",
+    "semantic_hash": ""
+  },
+  "tests/rejeu.test.mjs": {
+    "mtime": 1793092432.027247,
+    "seen": 1793426021.9023502,
+    "ast_hash": "9c472bb876e03da35c822245a9ccb5a9",
+    "semantic_hash": ""
+  },
+  "tests/resume.sh": {
+    "mtime": 1793130212.347984,
+    "seen": 1793426021.9023557,
+    "ast_hash": "6eb7027e16113e7329a51e6bca77babb",
+    "semantic_hash": ""
+  },
+  "tests/secours.test.mjs": {
+    "mtime": 1792784635.3787146,
+    "seen": 1793426021.9023619,
+    "ast_hash": "0e12057251260a137b203ec68c8a7208",
+    "semantic_hash": ""
+  },
+  "tests/sol2d.test.mjs": {
+    "mtime": 1792966372.6285105,
+    "seen": 1793426021.9023683,
+    "ast_hash": "fe2beb5b8142fa702c4e4d9e8a2625f3",
+    "semantic_hash": ""
+  },
+  "tests/terre.test.mjs": {
+    "mtime": 1793378287.3225691,
+    "seen": 1793426021.9023736,
+    "ast_hash": "ea73665967f800508183395a0215fcb5",
+    "semantic_hash": ""
+  },
+  "tests/test_abris.py": {
+    "mtime": 1792966372.6285105,
+    "seen": 1793426021.902379,
+    "ast_hash": "ca1104d214e0269651438610d11b8f76",
+    "semantic_hash": ""
+  },
+  "tests/test_cartes.py": {
+    "mtime": 1793039381.3963726,
+    "seen": 1793426021.9023988,
+    "ast_hash": "52a020ac9cab5de0b967b5f9f460099c",
+    "semantic_hash": ""
+  },
+  "tests/test_degats.py": {
+    "mtime": 1793085530.2891667,
+    "seen": 1793426021.9024048,
+    "ast_hash": "9f2a0385951a1de18cb2d6ab91017a46",
+    "semantic_hash": ""
+  },
+  "tests/test_plan_ville.py": {
+    "mtime": 1793092432.027247,
+    "seen": 1793426021.9024105,
+    "ast_hash": "17580930850d3568460f15e51d7f07f9",
+    "semantic_hash": ""
+  },
+  "tests/test_villes.py": {
+    "mtime": 1793092432.027247,
+    "seen": 1793426021.9024222,
+    "ast_hash": "a2767c4cbf5a3a44b739df360ee860fe",
+    "semantic_hash": ""
+  },
+  "tests/travaux.test.mjs": {
+    "mtime": 1793092432.027247,
+    "seen": 1793426021.902428,
+    "ast_hash": "5afdd2daedb4912caecf8152f694c79e",
+    "semantic_hash": ""
+  },
+  "tests/troupes2d.test.mjs": {
+    "mtime": 1792966372.6325104,
+    "seen": 1793426021.9024346,
+    "ast_hash": "388925f4d776a2e344a12b70edf7ff3e",
+    "semantic_hash": ""
+  },
+  "tests/vie.test.mjs": {
+    "mtime": 1793092432.027247,
+    "seen": 1793426021.9024408,
+    "ast_hash": "b4138bdd5a9ead36ed0e6a7098ab6b1e",
+    "semantic_hash": ""
+  },
+  "tests/villes.test.mjs": {
+    "mtime": 1793379827.6521685,
+    "seen": 1793426021.9024465,
+    "ast_hash": "a1de4d50544dc348b03e7dbca21d5d9e",
+    "semantic_hash": ""
+  },
+  "tests/visibilite.test.mjs": {
+    "mtime": 1792522638.4390225,
+    "seen": 1793426021.9024525,
+    "ast_hash": "7b241f8f42772ddc13b5d6514f5917af",
+    "semantic_hash": ""
+  },
+  "tests/vue.test.mjs": {
+    "mtime": 1792966372.6325104,
+    "seen": 1793426021.9024582,
+    "ast_hash": "a63dae979afb683bd49a3cf4ab4332d0",
+    "semantic_hash": ""
+  },
+  "web/js/arbre.js": {
+    "mtime": 1792797319.7646463,
+    "seen": 1793426021.9024704,
+    "ast_hash": "66ee7285dc5738126d20bd710532f14e",
+    "semantic_hash": ""
+  },
+  "web/js/battle/decor2d-dessin.js": {
+    "mtime": 1793394776.3658829,
+    "seen": 1793426021.9024966,
+    "ast_hash": "52be4e7b5b4c6508e35b7ac3fc6362df",
+    "semantic_hash": ""
+  },
+  "web/js/battle/decor2d.js": {
+    "mtime": 1793394781.7576876,
+    "seen": 1793426021.902502,
+    "ast_hash": "e563539012e9597508eb5f4b9d9511ef",
+    "semantic_hash": ""
+  },
+  "web/js/battle/heures.js": {
+    "mtime": 1792966372.6445103,
+    "seen": 1793426021.9025357,
+    "ast_hash": "2e075566d795b24c39c5d2281a4da57b",
+    "semantic_hash": ""
+  },
+  "web/js/battle/ordres.js": {
+    "mtime": 1793092432.031247,
+    "seen": 1793426021.9025488,
+    "ast_hash": "122ef30cb70affc57a0b02cbc0dad000",
+    "semantic_hash": ""
+  },
+  "web/js/battle/pietinement.js": {
+    "mtime": 1792966372.6445103,
+    "seen": 1793426021.9025545,
+    "ast_hash": "94b27b69c883ca0c479c5183977543e2",
+    "semantic_hash": ""
+  },
+  "web/js/battle/sol2d.js": {
+    "mtime": 1792966372.6445103,
+    "seen": 1793426021.9025667,
+    "ast_hash": "ec48a6c919570e7df71b0c58f915bf7c",
+    "semantic_hash": ""
+  },
+  "web/js/battle/troupes2d.js": {
+    "mtime": 1793105863.6378686,
+    "seen": 1793426021.9025862,
+    "ast_hash": "3f57b87e0c56336314001522b4532fd8",
+    "semantic_hash": ""
+  },
+  "web/js/battle/visibilite.js": {
+    "mtime": 1792522638.4630222,
+    "seen": 1793426021.9025993,
+    "ast_hash": "9683c7b5287a96f221ff4b598658c711",
+    "semantic_hash": ""
+  },
+  "web/js/carte/ambiance.js": {
+    "mtime": 1793092432.031247,
+    "seen": 1793426021.9026122,
+    "ast_hash": "a611930a8f8220c59019376ff8349a55",
+    "semantic_hash": ""
+  },
+  "web/js/carte/ciel.js": {
+    "mtime": 1793092432.031247,
+    "seen": 1793426021.9026182,
+    "ast_hash": "d7437867be6df224d419f77f3f774ef0",
+    "semantic_hash": ""
+  },
+  "web/js/carte/guerre.js": {
+    "mtime": 1793092432.0352468,
+    "seen": 1793426021.9026237,
+    "ast_hash": "96c7b2ca350770cb9a7e494d997f3551",
+    "semantic_hash": ""
+  },
+  "web/js/carte/lib.js": {
+    "mtime": 1793092432.0352468,
+    "seen": 1793426021.9026296,
+    "ast_hash": "a50633f0b41fade817415c18d02ed4be",
+    "semantic_hash": ""
+  },
+  "web/js/carte/peintre-tuiles.js": {
+    "mtime": 1793394738.7753236,
+    "seen": 1793426021.902635,
+    "ast_hash": "370fc7ecf2657b8ebc1d816e623816be",
+    "semantic_hash": ""
+  },
+  "web/js/carte/plan-organique.js": {
+    "mtime": 1793379812.020198,
+    "seen": 1793426021.902641,
+    "ast_hash": "fe5a8312d872b8b78bf4667b9246157b",
+    "semantic_hash": ""
+  },
+  "web/js/carte/rejeu.js": {
+    "mtime": 1793039381.4043725,
+    "seen": 1793426021.902647,
+    "ast_hash": "48b16e3487af29ae0f0326b65f24f44e",
+    "semantic_hash": ""
+  },
+  "web/js/carte/terre.js": {
+    "mtime": 1793377622.6497693,
+    "seen": 1793426021.9026525,
+    "ast_hash": "fe8d301d0b2f7ee2290b69f2da2c3a7f",
+    "semantic_hash": ""
+  },
+  "web/js/carte/travaux.js": {
+    "mtime": 1793092432.0352468,
+    "seen": 1793426021.9026577,
+    "ast_hash": "0360307b5e0edaa069053d7b548b8990",
+    "semantic_hash": ""
+  },
+  "web/js/carte/vie.js": {
+    "mtime": 1793092432.0392468,
+    "seen": 1793426021.9026635,
+    "ast_hash": "2457952a6f469f8e21afe75ea40fc992",
+    "semantic_hash": ""
+  },
+  "web/js/carte/villes.js": {
+    "mtime": 1793394775.940147,
+    "seen": 1793426021.902669,
+    "ast_hash": "c07470e5df20afcc7468efd5f8983816",
+    "semantic_hash": ""
+  },
+  "web/js/carte3d.js": {
+    "mtime": 1792569810.5607584,
+    "seen": 1793426021.902675,
+    "ast_hash": "eff540ea07f03bd8eacb8a08ae9473bd",
+    "semantic_hash": ""
+  },
+  "web/js/decouvertes.js": {
+    "mtime": 1793092432.0392468,
+    "seen": 1793426021.9026806,
+    "ast_hash": "aa6b5e9ff65e697eec799033193b7918",
+    "semantic_hash": ""
+  },
+  "web/js/dev/banc.js": {
+    "mtime": 1792784635.3947144,
+    "seen": 1793426021.9026864,
+    "ast_hash": "572e6d84975ac3fd79905563383eca02",
+    "semantic_hash": ""
+  },
+  "web/js/dev/carte/assemble.py": {
+    "mtime": 1792966372.66051,
+    "seen": 1793426021.9026923,
+    "ast_hash": "e84a61571019c2fd138994df6127c0a7",
+    "semantic_hash": ""
+  },
+  "web/js/dev/carte/new.js": {
+    "mtime": 1792966372.6656628,
+    "seen": 1793426021.9026983,
+    "ast_hash": "42988c170eeccc2aebaf52f0cf62da26",
+    "semantic_hash": ""
+  },
+  "web/js/dev/carte/vivante.js": {
+    "mtime": 1792966372.6656628,
+    "seen": 1793426021.9027042,
+    "ast_hash": "51cc6afc060320b0e9592a3043a94237",
+    "semantic_hash": ""
+  },
+  "web/js/epoque.js": {
+    "mtime": 1793092432.0392468,
+    "seen": 1793426021.9027097,
+    "ast_hash": "719de8f279cae90bec80a6cf4c70c5f4",
+    "semantic_hash": ""
+  },
+  "web/js/intro.js": {
+    "mtime": 1792613917.9383106,
+    "seen": 1793426021.9027236,
+    "ast_hash": "283f2a06e8221944b61100da66f147a7",
+    "semantic_hash": ""
+  },
+  "web/js/lot.js": {
+    "mtime": 1792784635.3987143,
+    "seen": 1793426021.9027295,
+    "ast_hash": "7372493ff74006dacd77dfcf16d3b39b",
+    "semantic_hash": ""
+  },
+  "web/js/peintre.js": {
+    "mtime": 1792966372.6765099,
+    "seen": 1793426021.9027483,
+    "ast_hash": "145dcd4925653aefd22bd2fdcfa9bc04",
+    "semantic_hash": ""
+  },
+  "web/js/plan.js": {
+    "mtime": 1792784635.4067142,
+    "seen": 1793426021.902754,
+    "ast_hash": "0a7bd70d1c22558cbe3a5d9256a6432a",
+    "semantic_hash": ""
+  },
+  "web/js/portraits.js": {
+    "mtime": 1792522638.4670222,
+    "seen": 1793426021.9027593,
+    "ast_hash": "28deaf1d54edd13cfee1d05254ca8d17",
+    "semantic_hash": ""
+  },
+  "web/js/valeurs.js": {
+    "mtime": 1792691814.9089575,
+    "seen": 1793426021.9027855,
+    "ast_hash": "6eeaf5405ccef073765bcd9b0c6cb101",
+    "semantic_hash": ""
+  },
+  "SPEC-2D.md": {
+    "mtime": 1792966372.6089113,
+    "seen": 1793426021.902798,
+    "ast_hash": "1e8ddf7db80f04341e83cfe1494d7371",
+    "semantic_hash": ""
+  },
+  "SPEC-ARBRE.md": {
+    "mtime": 1792829562.904628,
+    "seen": 1793426021.9028125,
+    "ast_hash": "edf034fbbb7bf3d2b896b47b7cb8290f",
+    "semantic_hash": ""
+  },
+  "SPEC-CARTE-2D.md": {
+    "mtime": 1793394851.6398878,
+    "seen": 1793426021.9028184,
+    "ast_hash": "0cd5d9f311cc7f34230633d66d37c982",
+    "semantic_hash": ""
+  },
+  "SPEC-CARTES.md": {
+    "mtime": 1792569810.5367584,
+    "seen": 1793426021.9028246,
+    "ast_hash": "70bf2fb6a58df0f2543e3c6093a13c62",
+    "semantic_hash": ""
+  },
+  "SPEC-RENDU.md": {
+    "mtime": 1792522638.4270227,
+    "seen": 1793426021.9028304,
+    "ast_hash": "7f7ce889a8ec31c2f34721f1d411866f",
+    "semantic_hash": ""
+  },
+  "SPEC-SUITE.md": {
+    "mtime": 1793085530.269167,
+    "seen": 1793426021.902836,
+    "ast_hash": "359e82ac58eb2280c16f7dd344628c23",
+    "semantic_hash": ""
+  },
+  "tasks/banc-ia-reference.md": {
+    "mtime": 1792691814.8929577,
+    "seen": 1793426021.9028714,
+    "ast_hash": "3f6471d3ead3ec95bc1988d98b001727",
+    "semantic_hash": ""
+  },
+  "tasks/idees-fonctionnalites.md": {
+    "mtime": 1793130638.83853,
+    "seen": 1793426021.9028838,
+    "ast_hash": "578dc1b74c23747e9fff41cd2aec6825",
+    "semantic_hash": ""
+  },
+  "tasks/plan-arbre.md": {
+    "mtime": 1792797329.212682,
+    "seen": 1793426021.9028971,
+    "ast_hash": "bdfcbe7bbe06052d02204a87ff8864e5",
+    "semantic_hash": ""
+  },
+  "tasks/todo-arbre.md": {
+    "mtime": 1792829562.9193373,
+    "seen": 1793426021.9029489,
+    "ast_hash": "ed4a956b50223427f57d5016d2d32107",
+    "semantic_hash": ""
+  },
+  "tasks/todo-ia-bataille.md": {
+    "mtime": 1792691814.8929577,
+    "seen": 1793426021.9029627,
+    "ast_hash": "1aa003f7d43798593e215540513578fa",
+    "semantic_hash": ""
+  },
+  "web/js/battle/dev/maquette-2d.html": {
+    "mtime": 1792966372.6405103,
+    "seen": 1793426021.9029896,
+    "ast_hash": "28119b2213397cb89299c1f6313ff799",
+    "semantic_hash": ""
+  },
+  "web/js/dev/carte-vivante.html": {
+    "mtime": 1792966372.66051,
+    "seen": 1793426021.9029953,
+    "ast_hash": "5180e2d668dd8241e74baa5325f0c05a",
+    "semantic_hash": ""
+  },
+  "web/js/dev/carte/page.html": {
+    "mtime": 1792966372.6656628,
+    "seen": 1793426021.9030013,
+    "ast_hash": "0384f742c4f635c7d48f5691502c7ea5",
+    "semantic_hash": ""
+  },
+  "web/js/dev/carte3d.html": {
+    "mtime": 1792569810.5607584,
+    "seen": 1793426021.903018,
+    "ast_hash": "a0834f836dce49e450b6d2cb377e479c",
+    "semantic_hash": ""
+  },
+  "web/js/dev/gravure.html": {
+    "mtime": 1792966372.67251,
+    "seen": 1793426021.9030244,
+    "ast_hash": "28e7fbc5838498cbe1b0ab4b9ce0d5e1",
     "semantic_hash": ""
   }
 }
