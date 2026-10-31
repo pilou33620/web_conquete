@@ -783,10 +783,17 @@ class IAPlaces(unittest.TestCase):
         # un assaillant ébranlé dans la brèche : on le rejette à la baïonnette
         e = next(u for u in tb.units if u.side == 0 and u.cls == 'inf' and u.valid)
         e.x, e.y, e.morale, e.path, e.goal = q[0], q[1], 45.0, [], None
-        for u in tb.units:
-            if u.side == 1 and mem['role'].get(u.id) in ('coupure', 'breche', 'res'):
-                u.x, u.y = q[0] - math.cos(a) * 90, q[1] - math.sin(a) * 90
-                u.morale, u.state = 90.0, 'repos'
+        # (les défenseurs à 90 m, du côté de la ville d'où une charge va droit à la brèche : à Oloron, le gave passe
+        # entre la brèche et le centre)
+        dfs = [u for u in tb.units if u.side == 1 and mem['role'].get(u.id) in ('coupure', 'breche', 'res')]
+        for da in (0, .5, -.5, 1, -1, 1.5, -1.5):
+            x, y = q[0] - math.cos(a + da) * 90, q[1] - math.sin(a + da) * 90
+            for u in dfs:
+                u.x, u.y = x, y
+            if dfs and ai._charge_ok(tb, 1, dfs[0], e):
+                break
+        for u in dfs:
+            u.morale, u.state = 90.0, 'repos'
         tb._update_vision()
         pense(1)
         self.assertTrue(any('dans la brèche' in n[1] for n in mem['journal']))

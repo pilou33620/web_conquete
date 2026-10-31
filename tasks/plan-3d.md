@@ -329,11 +329,11 @@ terrain.js, relief.js, effets.js : couleurs, lumière, fumée (7f, indépendant)
 
 ### Tâches
 
-- [ ] T47 : la couleur du camp sur les revers (teinte 3, `aFace`), d'abord avec l'habit encore à la couleur du camp
-- [ ] T48 : l'habit d'époque (palette, culotte garance en 1870, artillerie, dragons), corps compris
-- [ ] Point de contrôle 8a : captures des quatre époques, de près et de loin ; bancs
-- [ ] T49 : les figurines des cartes d'unités
-- [ ] T50 : README, revue, galerie
+- [x] T47 : la couleur du camp sur les revers (teinte 3, `aFace`), d'abord avec l'habit encore à la couleur du camp
+- [x] T48 : l'habit d'époque (palette, culotte garance en 1870, artillerie, dragons), corps compris
+- [x] Point de contrôle 8a : captures des quatre époques, de près et de loin ; bancs
+- [x] T49 : les figurines des cartes d'unités
+- [x] T50 : README, revue, galerie
 
 ### Risques
 

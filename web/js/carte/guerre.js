@@ -5,7 +5,7 @@
 import { C, E, T, RR, PG, TAU, SPR, toile, avant, bat, caisson, cavalier, cheval, clair, clamp, distPoly, fantassin, lerp, ligne,
          mod, piece, sombre, surChemin, tenue } from './lib.js';
 import { AMB, LUM, U, Z, bivouac, nuit } from './ambiance.js';
-import { S as SU, IC, carteDe, etatVille, planDe } from './villes.js';
+import { S as SU, IC, carteDe, etatVille, lieuxPlan, planDe } from './villes.js';
 import { LARG_RIVIERE } from './terre.js';
 
 export const VENT = [0.004, -0.002];   // km/s : le vent d'ouest emporte les fumées vers l'est
@@ -903,8 +903,8 @@ export class Guerre {
     const ar = this.arriere();
     let L = ar.lx.get(n.id);
     if (!L) {
-      const V = planDe(carteDe(this.map.m), n, etatVille(n, ns, this.map.state)), at = l => l && [n.x + (l.x - IC[0]) / SU, n.y + (l.y - IC[1]) / SU];
-      L = { place: at(V.lieux.place) || [n.x, n.y], port: n.spec?.includes('port') ? at(V.lieux.port) : null }; L.eglise = at(V.lieux.cathedrale || V.lieux.eglise) || L.place;
+      const P = lieuxPlan(carteDe(this.map.m), n, etatVille(n, ns, this.map.state)), at = l => l && [n.x + (l.x - IC[0]) / SU, n.y + (l.y - IC[1]) / SU];
+      L = { place: P.place || [n.x, n.y], port: n.spec?.includes('port') ? at(P.V.lieux.port) : null }; L.eglise = P.eglise || L.place;
       ar.lx.set(n.id, L);
     }
     return L;

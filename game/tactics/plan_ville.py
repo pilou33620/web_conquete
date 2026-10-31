@@ -582,39 +582,3 @@ def plan(geo, nid, annee=1789, f=None, pop=None, d=0):
         if len(K.plans) > 64:
             K.plans.pop(next(iter(K.plans)))
     return V
-
-
-def decaler_quad(q, w):
-    """decalerQuad de lib.js : le quadrilatère rentré de w de chaque côté (l'îlot moins la moitié de la rue)."""
-    n = len(q)
-    L = []
-    for k in range(n):
-        a, b = q[k], q[(k + 1) % n]
-        dx, dy = b[0] - a[0], b[1] - a[1]
-        l = hypot(dx, dy)
-        L.append((a[0] - dy / l * w, a[1] + dx / l * w, dx, dy))
-    out = []
-    for k in range(n):
-        x1, y1, dx1, dy1 = L[(k + n - 1) % n]
-        x2, y2, dx2, dy2 = L[k]
-        den = dx1 * dy2 - dy1 * dx2
-        if abs(den) < 1e-6:
-            return None
-        t = ((x2 - x1) * dy2 - (y2 - y1) * dx2) / den
-        out.append((x1 + dx1 * t, y1 + dy1 * t))
-    return out
-
-
-def rayon_enceinte(V):
-    """Jusqu'où porte la place, en unités depuis IC : l'enceinte (fossé et demi-lunes compris, citadelle aussi), sinon
-    la ville bâtie."""
-    r = V['rMur']
-    for t in (V['trace'], V['citadelle']):
-        if t:
-            r = max([r] + [hypot(p[0] - IC[0], p[1] - IC[1]) for p in t['poly']] +
-                    [hypot(rv['apex'][0] - IC[0], rv['apex'][1] - IC[1]) for rv in t['ravs']])
-    if V['Pf']['murs'] in ('medieval', 'cours') and V['rect']:
-        r = max(r, hypot(V['rect']['w'] / 2 + 10, V['rect']['h'] / 2 + 10))
-    elif V['Pf']['murs'] in ('medieval', 'cours') and V['murLigne']:
-        r = max(r, V['murLigne'])
-    return r

@@ -267,7 +267,7 @@ export class Ciel {
     }
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }
-  // les réverbères au gaz d'une ville : un tous les 70 m le long des rues de son plan (carte/villes.js, V.rues), d'un
+  // les réverbères au gaz d'une ville : un tous les 70 m le long des rues de son plan (organique, sinon V.rues), d'un
   // seul tracé, et leur halo ; tant que le plan n'est pas peint, rien
   reverberesDe(n, ns, r) {
     const mp = this.map, p = imageEnCache(n, etatVille(n, ns, mp.state), resPour(mp.cam.z * mp.dpr / SU));
@@ -301,6 +301,14 @@ export class Ciel {
 // tous les 13 unités (70 m), au même endroit d'une nuit à l'autre ; seulement entre les maisons (les rues d'un plan en
 // damier passent aussi là où il n'a pas gardé d'îlot)
 export function reverberes(V, x, y) {
+  if (V.org) {   // (le plan organique de la carte, en km : le long de ses routes, entre les maisons)
+    const out = [], O = V.org, bati = (u, v) => O.ilots.some(b => Math.abs(b.c[0] - u) < .13 && Math.abs(b.c[1] - v) < .13);
+    for (const r of O.axes) for (let i = 1; i < r.pts.length; i++) {
+      const [ax, ay] = r.pts[i - 1], [bx, by] = r.pts[i], l = Math.hypot(bx - ax, by - ay);
+      for (let d = .035; d < l; d += .07) { const u = ax + (bx - ax) * d / l, v = ay + (by - ay) * d / l; if (bati(u, v)) out.push([u, v]); }
+    }
+    return out;
+  }
   const out = [], bati = (u, v) => V.ilots.some(b => Math.abs(b.c[0] - u) < 24 && Math.abs(b.c[1] - v) < 24);
   for (const r of V.rues) for (let i = 1; i < r.pts.length; i++) {
     const [ax, ay] = r.pts[i - 1], [bx, by] = r.pts[i], l = Math.hypot(bx - ax, by - ay);

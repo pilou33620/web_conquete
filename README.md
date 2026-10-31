@@ -479,6 +479,8 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   prisonniers et vainqueurs sont du même ordre dans les deux modes (mesuré bataille par bataille).
 - Sur ordres, la bataille se livre sur une carte de 3 × 2 km tirée du terrain de la campagne : relief, bois, champs, vignes, haies, clôtures et
   murets, routes, rivières avec gués et ponts, fermes, et la ville avec ses remparts, ses portes et la brèche du siège.
+  La ville est celle de la carte de campagne : mêmes rues, mêmes îlots, mêmes routes et mêmes remparts (bastions et
+  demi-lunes compris), avec ses églises, sa halle, ses couvents, ses casernes et ses hôtels sur leurs îlots.
   Le paysage est composé comme une vraie campagne : des parcelles aux formes variées qui suivent les routes et les
   courbes de niveau, des **vergers** autour des maisons (couvert léger, ils ralentissent un peu et gênent un peu la
   vue ; jamais sur le glacis d'une place forte), des prés le long de l'eau, pas de labours sur les pentes fortes, des

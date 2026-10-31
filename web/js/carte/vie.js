@@ -8,7 +8,7 @@ import {
   cheval as cheval0, cavalier as cavalier0, fantassin as fantassin0, tenue, sombre, clamp, lerp, mod, surChemin, distPoly, ligne, fumee, sprite,
 } from './lib.js';
 import { AMB, U, Z, LUM, bivouac, meteoEn } from './ambiance.js';
-import { carteDe, etatVille, planDe, S as S_INT, IC } from './villes.js';
+import { carteDe, etatVille, lieuxPlan } from './villes.js';
 
 const TT = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 export const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -201,8 +201,8 @@ export function majEtat(st) {
     const g = NOEUDS[n.id]; if (!g) return null;
     // sur la grand-place du plan de la ville (villes.js), à défaut au centre
     let pl = null;
-    try { pl = MAP && planDe(carteDe(MAP.m), g, etatVille(g, n, st)).lieux?.place; } catch (e) { /* plan indisponible */ }
-    return { n: g, x: g.x + (pl ? (pl.x - IC[0]) / S_INT : 0), y: g.y + (pl ? (pl.y - IC[1]) / S_INT : 0) };
+    try { pl = MAP && lieuxPlan(carteDe(MAP.m), g, etatVille(g, n, st)).place; } catch (e) { /* plan indisponible */ }
+    return { n: g, x: pl ? pl[0] : g.x, y: pl ? pl[1] : g.y };
   }).filter(Boolean);
   VIE.foires = [];
   for (const n of ns) {

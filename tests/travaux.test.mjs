@@ -108,3 +108,11 @@ test('les réverbères au gaz : réguliers le long des rues, seulement entre les
   for (let i = 1; i < l.length; i++) assert.ok(Math.abs(l[i][0] - l[i - 1][0] - 13 / S) < 1e-9, 'tous les 70 m');
   assert.ok(l.every(([x, y]) => x < 100 && Math.abs(y - 50) < 1e-9));
 });
+
+test('les réverbères du plan organique (km) : le long de ses routes, seulement entre les maisons', () => {
+  const V = { org: { axes: [{ pts: [[99.6, 50], [100.4, 50]] }], ilots: [{ c: [99.8, 50.05] }] } };
+  const l = reverberes(V, 100, 50);
+  assert.ok(l.length >= 3 && l.length <= 5, `${l.length} réverbères, du côté des maisons`);
+  for (let i = 1; i < l.length; i++) assert.ok(Math.abs(l[i][0] - l[i - 1][0] - 0.07) < 1e-9, 'tous les 70 m');
+  assert.ok(l.every(([x, y]) => x < 100 && y === 50));
+});

@@ -97,8 +97,8 @@ def _sur(pts, s):   # surChemin (lib.js) : le point à s km le long du tracé
 
 def _rayon(n):   # rayonPlace (guerre.js), d'après la population de départ
     # (figé sur le rayon des cartes de version 5 : la règle de la crue des parties en cours ne suit pas le dessin des villes)
-    from .tactics.plan_ville_v5 import rayon
-    return rayon(n.get('pop0') or 700) / 180
+    from .tactics.jsmath import jround
+    return jround(min(262, max(20, 2.1 * math.sqrt(n.get('pop0') or 700) - 36)) / 4) * 4 / 180
 
 
 def spans(geo):

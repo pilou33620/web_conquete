@@ -19,10 +19,9 @@ ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(ICI))
 
 from game.geo import GeoMap  # noqa: E402
-from game.tactics import plan_ville as PV, terrain as TR, terrain_ville as TV  # noqa: E402
+from game.tactics import plan_organique as PO, plan_ville as PV, terrain as TR, terrain_ville as TV  # noqa: E402
 
 GEO = GeoMap()
-GEO1 = GeoMap(1)   # (la géographie des anciennes parties : les batailles des versions figées n'existent que là)
 K = PV.carte_de(GEO)
 nom = lambda x, geo=GEO: next(n for n in geo.nodes if n['name'] == x)
 
@@ -103,43 +102,47 @@ class BatailleSurLePlan(unittest.TestCase):
         n = nom('Bayonne')
         m = carte(n, 3, dmg=0.3)
         V = PV.plan(GEO, n['id'], 1790, 3, n['pop0'], 0)
-        self.assertEqual(V['Pf']['murs'], 'bastions')
+        O = PO.plan(GEO, n['id'], 1790, 3, n['pop0'], 0)
         P = m.plan
-        self.assertEqual(len(P['ilots']), len(V['ilots']))
+        self.assertEqual(len(P['ilots']), len(O['ilots']), 'les îlots du plan organique de la carte')
         k = P['k']
-        tf = lambda p: (P['c'][0] + (p[0] - PV.IC[0]) * k, P['c'][1] + (p[1] - PV.IC[1]) * k)
-        # le tracé bastionné et les demi-lunes de la bataille sont ceux du plan, à l'échelle de la carte
-        # (à un mètre près : l'échelle du plan envoyé au client, k, est arrondie)
-        self.assertTrue(all(abs(a - round(b)) <= 1 for p, q in zip(m.bastions, map(tf, V['trace']['poly'])) for a, b in zip(p, q)))
-        self.assertEqual(len(m.bastions), len(V['trace']['poly']))
-        self.assertEqual(m.demi_lunes, [[[round(x), round(y)] for x, y in map(tf, (r['b1'], r['apex'], r['b2']))]
-                                        for r in V['trace']['ravs']])
+        tf = lambda p: (P['c'][0] + (p[0] - n['x']) * PV.S * k, P['c'][1] + (p[1] - n['y']) * PV.S * k)
+        # le tracé bastionné et les demi-lunes de la bataille sont les remparts de la carte (map.js : wallGeom), à
+        # l'échelle de la carte (à un mètre près : l'échelle du plan envoyé au client, k, est arrondie)
+        ring, lunes, _ = TV.enceinte_carte(n, 3, V['rMur'] / PV.S)
+        self.assertEqual(len(m.bastions), len(ring))
+        self.assertTrue(all(abs(a - round(b)) <= 1 for p, q in zip(m.bastions, map(tf, ring)) for a, b in zip(p, q)))
+        self.assertEqual(m.demi_lunes, [])   # (f = 3 : pas de demi-lunes, comme sur la carte)
         self.assertEqual(m.walls[0]['kind'], 'bastion')
         self.assertTrue(m.walls[0]['breach'], 'le siège a ouvert une brèche')
         if V['citadelle']:
-            self.assertEqual(m.walls[1]['bastions'][0], [round(v) for v in tf(V['citadelle']['poly'][0])])
-        # chaque route du plan entre par une porte au milieu de la courtine qui lui fait face
+            self.assertEqual(len(m.walls), 2, 'la citadelle a son enceinte')
+        # chaque route qui entre dans les murs y passe par une porte
         dedans = TR._dedans([tuple(p) for p in m.bastions])
-        portes = [TR.center_of(c) for c in range(TR.N) if m.t[c] == TR.T_PORTE]
-        cotes = [tf(c['porte']) for c in V['trace']['cotes']]
         entrees = 0
         for r in m.roads:
             cells = TR._poly_cells(r['pts'])
             if r['kind'] != 'chemin' and any(dedans(c) for c in cells) and not all(dedans(c) for c in cells):
                 entrees += 1
-                self.assertTrue(any(m.t[c] == TR.T_PORTE for c in cells), 'route sans porte')
-                self.assertTrue(any(min(((x - a) ** 2 + (y - b) ** 2) ** .5 for a, b in portes) < 45 for x, y in cotes))
+                self.assertTrue(any(m.t[c] in (TR.T_PORTE, TR.T_BRECHE) for c in cells), 'route sans porte')
         self.assertGreaterEqual(entrees, 2)
         # des maisons dans les îlots, des rues entre eux ; le cœur est l'église du plan
         self.assertGreater(m.stats['hist']['BATI'], 100)
         self.assertIn(TR.cell_of(*m.heart), [c for c in range(TR.N) if m.t[c] in (TR.T_BATI, TR.T_ROUTE, TR.T_PRE)])
         kinds = {b['kind'] for b in m.batis}
-        self.assertTrue({'maison', 'caserne'} <= kinds and kinds & {'eglise', 'cathedrale'}, kinds)
+        self.assertTrue({'maison'} <= kinds and kinds & {'eglise', 'cathedrale'}, kinds)
         # l'assaillant a la place de se déployer hors des murs (DEPLOI m au moins entre l'enceinte et son bord)
         self.assertLessEqual(m.place['r'] + 400, max(m.place['x'], TR.W - m.place['x']) + 1)
         d = m.to_client(dict(seed=1, season='ete', weather='soleil', cx=0, cy=0))
         self.assertEqual(d['plan']['modele'], 'grande')
+        self.assertTrue(any(len(il[6]) != 4 for il in d['plan']['ilots']), 'des îlots à n côtés')
         json.dumps(d)
+
+    def test_une_place_a_demi_lunes(self):
+        n = nom('Navarrenx')
+        m = carte(n, 4)
+        V = PV.plan(GEO, n['id'], 1790, 4, n['pop0'], 0)
+        self.assertEqual(len(m.demi_lunes), len(TV.enceinte_carte(n, 4, V['rMur'] / PV.S)[1]))
 
     def test_un_village_et_ses_rues(self):
         n = nom('Belin')
@@ -148,7 +151,7 @@ class BatailleSurLePlan(unittest.TestCase):
         self.assertEqual(m.place['name'], 'Belin')
         self.assertFalse(m.place['battle'])
         self.assertEqual(m.plan['echelle'], 1.0, 'un village tient sur le champ : à la vraie échelle')
-        self.assertEqual(len(m.plan['ilots']), len(V['ilots']))
+        self.assertEqual(len(m.plan['ilots']), len(PO.plan(GEO, n['id'], 1790, n['fort'], n['pop0'], 0)['ilots']))
         self.assertFalse(m.walls)
         self.assertAlmostEqual(m.place['x'], 1500 - 400, delta=1)
         # des maisons sur les rues du plan, une église
@@ -208,67 +211,10 @@ class BatailleSurLePlan(unittest.TestCase):
         self.assertEqual(bytes(a.t), bytes(b.t))
         self.assertEqual((a.plan, a.walls, a.batis), (b.plan, b.walls, b.batis))
 
-    def test_une_carte_de_version_3_garde_sa_ville(self):
-        n = nom('Navarrenx')
-        pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=3, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'],
-                  y=n['y'], battle=True)
-        m = TR.generate(GEO, dict(seed=4, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl,
-                                  att_angle=0.5, carte=3))
-        self.assertIsNone(m.plan)
-        self.assertEqual(m.place['r'], 117)   # (le bourg du générateur d'avant)
-
-    def test_carte_v4_figee(self):
-        """Une bataille de version 4 d'une sauvegarde garde son plan d'avant les bâtiments à la vraie taille
-        (plan_ville_v4, terrain_ville_v4, figés) ; la version 5 prend le nouveau."""
-        n = nom('Belin', GEO1)
-        pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=0, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'], y=n['y'], battle=True)
-        spec = dict(seed=700, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.5)
-        v4, v5 = TR.generate(GEO1, dict(spec, carte=4)), TR.generate(GEO1, dict(spec, carte=5))
-        self.assertEqual(bytes(v4.t), bytes(TR.generate(GEO1, dict(spec, carte=4)).t))
-        self.assertNotEqual(bytes(v4.t), bytes(v5.t), 'le village de Belin a rétréci : la carte de version 5 diffère')
-
-    def test_carte_v5_figee(self):
-        """Une bataille de version 5 d'une sauvegarde garde son plan d'avant la densité des bourgs (plan_ville_v5,
-        terrain_ville_v5, figés) ; la version 6 prend le nouveau."""
-        n = nom('Nontron', GEO1)
-        pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=0, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'], y=n['y'], battle=True)
-        spec = dict(seed=700, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.5)
-        v5, v6 = TR.generate(GEO1, dict(spec, carte=5)), TR.generate(GEO1, dict(spec, carte=6))
-        self.assertEqual(bytes(v5.t), bytes(TR.generate(GEO1, dict(spec, carte=5)).t))
-        self.assertNotEqual(bytes(v5.t), bytes(v6.t), 'Nontron a rétréci et s’est aéré : la carte de version 6 diffère')
-        bati = lambda m: sum(m.t[c] == TR.T_BATI for c in range(TR.N))
-        self.assertLess(bati(v6), bati(v5) * .6, 'moins de maisons')
-
-    def test_carte_v6_figee(self):
-        """Une bataille de version 6 d'une sauvegarde garde sa carte d'avant les villes denses dans leurs murs et collées
-        à leur fleuve (plan_ville_v6, terrain_ville_v6, figés : l'empreinte de la carte de Libourne d'alors) ; la
-        version 7 prend le nouveau plan. Toutes deux sur la carte des anciennes parties (geo_v1.json), qui ne change pas
-        avec les rivières affinées : la version 7 d'une ancienne partie garde aussi la sienne."""
-        import hashlib
-        n = nom('Libourne', GEO1)
-        pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=1, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'], y=n['y'], battle=True)
-        spec = dict(seed=700, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.5)
-        v6, v7 = TR.generate(GEO1, dict(spec, carte=6)), TR.generate(GEO1, dict(spec, carte=7))
-        self.assertEqual(hashlib.sha1(bytes(v6.t)).hexdigest(), 'ae47148c3fe604aecb7ab8406c4faf9de693f63c')
-        self.assertNotEqual(bytes(v6.t), bytes(v7.t), 'Libourne serrée dans ses murs, au bord de l’Isle : la version 7 diffère')
-        self.assertEqual(hashlib.sha1(bytes(v7.t)).hexdigest(), '302feb7219df7186089752db2f0e5fd3d04b6126')
-
     def test_pas_de_pont_de_pierre_a_bordeaux_avant_1822(self):
         kinds = lambda y: {b.get('kind') for b in carte(nom('Bordeaux'), year=y).bridges if b.get('river') == 'Garonne'}
         self.assertEqual(kinds(1800), {'bateaux'})
         self.assertEqual(kinds(1830), {None})
-
-    def test_carte_v7_figee(self):
-        """Une bataille de version 7 d'une sauvegarde garde sa carte des villes denses collées à leur fleuve
-        (plan_ville_v7, terrain_ville_v7, figés : l'empreinte de Libourne d'alors) ; la version 8 revient au plan de la
-        version 4 (décision du joueur), la même carte."""
-        import hashlib
-        n = nom('Libourne', GEO1)
-        pl = dict(nid=n['id'], name=n['name'], type=n['type'], fort=1, dmg=0.0, bar=0.0, pop=n['pop0'], x=n['x'], y=n['y'], battle=True)
-        spec = dict(seed=700, cx=n['x'], cy=n['y'], season='ete', weather='soleil', year=1790, place=pl, att_angle=0.5)
-        v4, v7, v8 = (TR.generate(GEO1, dict(spec, carte=c)) for c in (4, 7, 8))
-        self.assertEqual(hashlib.sha1(bytes(v7.t)).hexdigest(), '302feb7219df7186089752db2f0e5fd3d04b6126')
-        self.assertEqual(bytes(v8.t), bytes(v4.t))
 
     def test_les_autres_ponts_dates(self):
         import re

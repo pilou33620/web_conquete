@@ -97,7 +97,9 @@ class Villes(unittest.TestCase):
             m = carte(n, 3)
             self.assertEqual(m.walls[-1]['kind'], 'bastion', n['name'])
             self.assertGreaterEqual(len(m.bastions), 25, 'cinq sommets par front au moins')
-            self.assertEqual(len(m.demi_lunes), len(m.bastions) // 5, 'une demi-lune devant chaque courtine')
+            self.assertEqual(m.demi_lunes, [], 'pas de demi-lune au niveau 3, comme sur la carte')
+            m = carte(n, 4)
+            self.assertEqual(len(m.demi_lunes), len(m.bastions) // 5, 'au niveau 4, une demi-lune devant chaque front')
             portes = {c for c in range(TR.N) if m.t[c] == TR.T_PORTE}
             self.assertTrue(portes, n['name'])
             # chaque route qui entre dans la place passe une porte

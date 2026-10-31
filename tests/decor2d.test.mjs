@@ -254,7 +254,7 @@ test('la ville sur son plan (map.plan) : maisons des îlots par parcelle, chacun
   // un îlot du plan sur les cases bâties (18..22, 14..16), une église du plan sur (24..28, 14..16)
   const tr = terrain();
   const plan = { k: 1, c: [470, 350], style: 'bordelais', modele: 'ville', type: 'moyenne', murs: null, rues: [], place: null,
-    ilots: [[[[360, 280], [460, 280], [460, 340], [360, 340]], '', 0, 0, 123, 0]],
+    ilots: [[[[360, 280], [460, 280], [460, 340], [360, 340]], '', 0, 0, 123, 15, [[363, 283], [457, 283], [457, 337], [363, 337]]]],
     edifices: [{ cle: 'egliseRomane', kind: 'eglise', x: 530, y: 300, a: 0, s: 0.8 }] };
   const d = new Decor2D(tr, { plan, place: { name: 'X', x: 470, y: 350, r: 200, type: 'ville' } }, Q);
   const plans = d.batiments.filter(b => b.cle === 'ilot' && b.parcelles.some(p => p.key === 'bordelais'));

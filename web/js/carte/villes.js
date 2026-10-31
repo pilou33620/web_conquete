@@ -527,6 +527,13 @@ export function planOrganique(K, V, e) {
   const v = { x: n.x, y: n.y, pop: Pf.pop, ere, r, rh: mur ? rMur : r * .5, graine: Pf.sd, axes, rivieres, mur, toutes: true, gare: false, serre: true, damier: Pf.modele === 'bastide' || Pf.modele === 'place' };
   return (V.org = genererPlan(v, eau));
 }
+// la grand-place et l'église d'une place en km : celles du plan organique (sinon, un fortin, celles du plan V)
+export function lieuxPlan(K, n, e) {
+  const V = planDe(K, n, e), O = planOrganique(K, V, e), il = t => O?.ilots.filter(b => b.type === t).sort((a, b) => Math.hypot(a.c[0] - n.x, a.c[1] - n.y) - Math.hypot(b.c[0] - n.x, b.c[1] - n.y))[0]?.c;
+  const at = l => l && [n.x + (l.x - IC[0]) / S, n.y + (l.y - IC[1]) / S];
+  const place = O ? il('place') : at(V.lieux.place);
+  return { V, place, eglise: O ? il('eglise') || place : at(V.lieux.cathedrale || V.lieux.eglise) || place };
+}
 export const RES = [.125, .25, .5, 1, 2];
 export function resPour(m) { for (const r of RES) if (r >= m * .8) return r; return RES[RES.length - 1]; }
 // l'image du plan si elle est déjà peinte (à cette résolution, sinon à la plus proche)
