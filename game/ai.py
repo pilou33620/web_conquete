@@ -646,6 +646,11 @@ class AI:
             return
         if f['income']['livres'] < 0.5 and f['res']['livres'] < 400:
             return
+        # en guerre, sans recrues mais riche : des régiments étrangers (g.recruit vérifie époque, lieu, plafond, coût)
+        if self.wars() and f['res']['recrues'] < R.UNITS['ligne']['cost']['recrues'] and f['res']['livres'] > 3 * self.reserve():
+            for n in g.owned_nodes(code):
+                if len(n['queue']) < 2 and any(g.recruit(code, n['id'], t)[0] for t in R.MERCS):
+                    return
         typ = self.rng.choice(MIX[code])
         if typ == 'artillerie' and 'mitrailleuse' in f['techs'] and self.rng.random() < 0.35:
             typ = 'mitrailleuses'   # (avant la technologie, le tirage ne change pas)

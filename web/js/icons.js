@@ -48,6 +48,7 @@ export const ICON = {
   village: S('<path d="M3 20v-7l4-4 4 4v7M11 20v-5l5-4.5 5 4.5v5M2 20h20"/>'),
   capitale: S('<path d="M12 2l2.4 4.6L20 6l-1.6 5L22 15l-5.2.4L15 21l-3-3.8L9 21l-1.8-5.6L2 15l3.6-4L4 6l5.6.6z"/><circle cx="12" cy="12" r="2.4"/>'),
 };
+ICON.royal_allemand = ICON.cavalerie;   // régiment étranger (les autres prennent l'icône de la ligne)
 
 export function speedIcon(i) {
   if (i >= 5) return `<svg viewBox="0 0 24 20"><text x="12" y="14.5" text-anchor="middle" font-size="${i === 5 ? 10 : 10}" font-weight="700" fill="currentColor" font-family="Georgia, serif">×${i === 5 ? 10 : 30}</text></svg>`;

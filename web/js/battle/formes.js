@@ -23,7 +23,7 @@ export function cellRemap(types) {
   return map;
 }
 
-export const CLS_OF_TYPE = { cavalerie: 'cavalerie', artillerie: 'artillerie', mitrailleuses: 'artillerie', general: 'general', etat_major: 'general', chariot: 'chariot' };
+export const CLS_OF_TYPE = { cavalerie: 'cavalerie', artillerie: 'artillerie', mitrailleuses: 'artillerie', royal_allemand: 'cavalerie', general: 'general', etat_major: 'general', chariot: 'chariot' };
 export const clsOf = u => u.cls || CLS_OF_TYPE[u.type] || 'inf';
 export const isLight = u => u.light ?? (u.type === 'legere' || u.type === 'chasseurs');
 export const isGeneral = u => u.type === 'general' || u.cls === 'general' || u.cls === 'etat_major';

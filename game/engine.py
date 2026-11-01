@@ -320,11 +320,23 @@ class Game:
             return False, "Un fort ne lève que de l'infanterie."
         if R.UNIT_YEAR.get(typ, 0) > self.date().year:
             return False, f"N'existe pas encore (vers {R.UNIT_YEAR[typ]})."
+        if R.hors_service(typ, self.date().year):
+            return False, "Plus au service de France."
+        if typ in R.MERCS:
+            if nid != self.capital_of(code) and 'port' not in gn['spec']:
+                return False, "Se loue au chef-lieu ou dans un port."
+            if self.merc_count(code) >= R.MERC_MAX:
+                return False, f"Au plus {R.MERC_MAX} régiments étrangers."
         if u['req'] and u['req'] not in self.factions[code]['techs']:
             return False, f"Technologie requise : {R.TECH[u['req']]['name']}."
         if u.get('where') and gn['dept'] not in u['where']:
             return False, "Se lève seulement en Pays basque et en Béarn."
         return True, ''
+
+    def merc_count(self, code):
+        """Régiments étrangers du camp : armées, garnisons et files des places."""
+        return sum(1 for r in self.all_regs(code) if r['type'] in R.MERCS) + sum(
+            1 for n in self.nodes if n['owner'] == code for q in n['queue'] if q['kind'] == 'unit' and q['what'] in R.MERCS)
 
     def capital_of(self, code):
         # la carte ne change pas : le chef-lieu de chaque camp n'est cherché qu'une fois
@@ -3858,7 +3870,7 @@ class Game:
                 if drate > 0:
                     gone = 0.0
                     for r in a['regs']:
-                        g_ = r['n'] * drate * dt
+                        g_ = r['n'] * drate * dt * (3 if unpaid and r['type'] in R.MERCS else 1)   # pas de solde, pas de service
                         r['n'] -= g_
                         gone += g_
                     a['des'] = a.get('des', 0.0) + gone
