@@ -6,6 +6,7 @@ from . import rules as R
 from . import cities as CT
 from . import rails as RL
 from . import diplomacy as D
+from . import familles as FM
 from . import army_actions as AA
 
 AI_AHEAD = 5   # ans d'avance au plus sur l'histoire pour une recherche des IA (SPEC-ARBRE.md)
@@ -1092,6 +1093,10 @@ class AI:
             # cartel d'échange : on récupère ses hommes prisonniers
             if (D.held(g, o, code) >= 40 or D.captifs(g, o, code)) and rel > -70 and self.rng.random() < 0.3:
                 self.propose(o, 'prisonniers')
+            # mariages : on unit sa maison à celle d'un voisin ami, avec une petite dot
+            if rel > 20 and st != 'guerre' and not FM.refus_mariage(g, code, o) and self.rng.random() < 0.01 \
+                    and D.borders(g, code, o):
+                self.propose(o, 'mariage', int(min(f['res']['livres'] * 0.1, 150)))
             if f['overlord']:
                 continue
             po = max(1.0, g.faction_power(o))

@@ -10,6 +10,7 @@ from . import army_actions as AA
 from . import battle_log as BL
 from . import cities as CT
 from . import crue as CR
+from . import familles as FM
 from . import rails as RL
 from . import turns as TT
 from .tactics import bridge as TB
@@ -89,6 +90,7 @@ class Game:
                 overlord=None, war_since={}, mods={}, army_count=0, stats=dict(won=0, lost=0, captured=0, killed=0),
                 start_nodes=0, alerts={}, tax=0.5, intel={}, prisoners={}, weary=0.0, prestige=0.0, treaties={},
                 last_war=-2 * 365.0, refu=0.0)   # au départ, de vieilles rancunes : les premières guerres viennent vite
+            self.factions[code]['maison'] = FM.nouvelle(self, code)   # famille dirigeante (game/familles.py)
         for a in R.FACTIONS:
             for b in R.FACTIONS:
                 if a < b:
@@ -532,6 +534,10 @@ class Game:
             if e['until'] > self.t:
                 # (blocus, phylloxéra… atténués par les technologies du camp)
                 m[e['k']] = m.get(e['k'], 0) + EV.tmod_value(e, m)
+        ch = (f.get('maison') or {}).get('chef')
+        if ch:   # le trait du chef de la maison (game/familles.py)
+            for k, v in R.MAISON_TRAITS[ch['trait']]['fx'].items():
+                m[k] = m.get(k, 0) + v
         if code != self.player:
             d = R.DIFFICULTY[self.difficulty]
             m['ai_income'] = d['ai_income'] - 1
@@ -752,6 +758,7 @@ class Game:
                 if f['alive']:
                     f['prestige'] = f.get('prestige', 0.0) + self.prestige_now(code) / 10
             self.uprisings()
+            FM.annuel(self)   # naissances, morts et successions des familles dirigeantes
         # désertions du mois écoulé
         for a in self.armies.values():
             des = int(a.get('des', 0))

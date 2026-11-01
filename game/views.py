@@ -9,6 +9,7 @@ from . import events as EV
 from . import army_actions as AA
 from . import cities as CT
 from . import turns as TT
+from . import familles as FM
 from .engine import Game, SITE_DAYS
 from .tactics import bridge as TB
 from .tactics import units as TU
@@ -57,6 +58,9 @@ def migrate(g):
         # sauvegarde d'avant les événements : ce qui est déjà passé ne se rejoue pas
         today = g.date().toordinal()
         g.ev_done = [e['id'] for e in EV.HIST if datetime.date(*e['date']).toordinal() <= today]
+    for code, f in g.factions.items():
+        if 'maison' not in f:
+            f['maison'] = FM.nouvelle(g, code)   # avant les familles dirigeantes : une maison tirée au chargement
     for n in g.nodes:
         n.setdefault('depot', 0)
         n.setdefault('assim', 1.0)
@@ -447,7 +451,8 @@ def player_state(g, since=0):
                          cap_owner=g.nodes[g.capital_of(code)]['owner'], techs=len(f['techs']),
                          mk=R.marks(f['techs']),   # marques visibles sur la carte (rules.VISUALS ; SPEC-SUITE H)
                          pr=int(f.get('prisoners', {}).get(p, 0)) if code != p else 0,
-                         prestige=g.prestige(code), weary=int(f.get('weary', 0)), **AA.view_passage(g, p, code)))
+                         prestige=g.prestige(code), weary=int(f.get('weary', 0)), maison=FM.vue(g, code),
+                         **AA.view_passage(g, p, code)))
         if f.get('lb') and g.t - f['lb'][1] < LB_DAYS:
             facs[-1]['lb'] = [f['lb'][0], round(g.t - f['lb'][1])]   # dernière bataille : gagnée ?, âge en jours
             if len(f['lb']) > 3 and (code in side or seen(f['lb'][2], f['lb'][3])):

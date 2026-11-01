@@ -853,6 +853,34 @@ SURNAMES = ['Labat', 'Dufau', 'Lacoste', 'Darricau', 'Etcheverry', 'Bordenave', 
             'Faget', 'Lartigue', 'Daguerre', 'Barrère', 'Courrèges', 'Lacaze', 'Saint-Martin', 'Doumecq', 'Laborde', 'Pédelaborde',
             'Mauriac', 'Lafon', 'Delpech', 'Marty', 'Roumégoux', 'Sudre', 'Bouyssou', 'Vialle', 'Escande', 'Fabre']
 
+# ------------------------------------------------------------------ familles dirigeantes (game/familles.py)
+MAISON_NOMS = {
+    '33': ['de Ségur', 'de Pontac', 'de Lur-Saluces', 'Pichon', 'Ducos', 'Boyer-Fonfrède', 'Nairac', 'Gradis'],
+    '24': ['de Bourdeille', 'de Salignac', 'de Beynac', 'de Hautefort', 'de Biron', 'Maine de Biran', 'Lagrange-Chancel', 'Fournier'],
+    '40': ['de Borda', 'de Poyanne', 'Batbedat', 'Lamarque', 'Dufau', 'de Caupenne', 'Basquiat', 'Lalanne'],
+    '47': ['de Lacépède', 'de Durfort', 'de Fumel', 'Lacuée', 'de Raymond', 'Boudon', 'de Nort', 'Lafont'],
+    '64': ['de Gramont', 'Etcheverry', 'de Gassion', 'de Navailles', 'Harispe', 'Garat', 'd’Abbadie', 'Larralde'],
+}
+PRENOMS = ['Jean', 'Pierre', 'Bernard', 'Arnaud', 'Guillaume', 'Raymond', 'Jacques', 'Joseph', 'Gaston', 'Henri', 'Louis',
+           'Antoine', 'Étienne', 'Bertrand', 'Armand', 'François']
+PRENOMS_F = ['Marie', 'Jeanne', 'Catherine', 'Marguerite', 'Anne', 'Louise', 'Madeleine', 'Isabeau', 'Françoise', 'Thérèse']
+MAISON_TITRES = [(0, 'Gouverneur'), (1790, 'Président du directoire'), (1800, 'Préfet')]   # (dès l'année, titre du chef)
+# traits du chef : leurs effets passent par les modificateurs du camp, comme ceux des technologies (Game.recompute_mods)
+MAISON_TRAITS = {
+    'batisseur': dict(label='Bâtisseur', desc='Constructions −10 % de coût et de délai.', fx=dict(build_cost=-0.10)),
+    'econome': dict(label='Économe', desc='Soldes et rations −5 %.', fx=dict(upkeep=-0.05)),
+    'belliqueux': dict(label='Belliqueux', desc='Recrues +10 %, propositions moins bien reçues.', fx=dict(recrues=0.10, diplo=-10)),
+    'diplomate': dict(label='Diplomate', desc='Propositions mieux reçues, alliances plus faciles.', fx=dict(diplo=15)),
+    'savant': dict(label='Savant', desc='Recherche +8 %.', fx=dict(research_speed=0.08)),
+    'populaire': dict(label='Populaire', desc='Ordre public +5 %.', fx=dict(order=0.05)),
+}
+MARIAGE_REL = 25          # relations gagnées des deux côtés par un mariage
+NAISSANCE_P = 0.25        # chance par an d'un enfant (chef marié de moins de NAISSANCE_AGE ans)…
+NAISSANCE_AGE = 45
+HERITIERS_MAX = 4         # … jusqu'à tant d'héritiers
+CRISE_JOURS = 180         # désordre d'une crise de succession (ordre public −0,1 dans tout le camp)
+PARJURE_JOURS = 120       # guerre déclarée à une maison alliée par mariage (ordre public −0,1)
+
 # ------------------------------------------------------------------ tactique
 FORMATIONS = {
     'ligne': dict(label='Ligne', desc='Infanterie déployée : feu nourri (+20 %), mais vulnérable aux charges de cavalerie.'),

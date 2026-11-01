@@ -2,6 +2,7 @@
 from . import rules as R
 from . import turns as TT
 from . import army_actions as AA
+from . import familles as FM
 
 BASE_VALUE = dict(livres=1.0, **R.MARKET_BASE)
 
@@ -63,6 +64,7 @@ def declare_war(game, a, b, quiet=False):
         else:
             f['rel'][a] = max(-100, f['rel'][a] - (14 if was_ally else 7))
     game.log('diplo', f"{game.fname(a)} déclare la guerre à {game.fname(b)} !", who=a, important=True)
+    FM.guerre(game, a, b)   # contre une maison alliée par mariage : l'ordre public en pâtit
     if game.player in (a, b):
         game.alert_pause()
     # alliances et vassaux
@@ -248,7 +250,7 @@ def ai_evaluate(game, ai, frm, action, amount=0, give=None, get=None):
         if st == 'alliance':
             return False, "Déjà alliés."
         common = any(game.at_war(ai, o) and game.at_war(frm, o) for o in game.factions)
-        score = op + diplo + (25 if common else 0) + 15 * min(1.5, pb / pa) + amount / 15
+        score = op + diplo + (25 if common else 0) + (20 if FM.lie(game, ai, frm) else 0) + 15 * min(1.5, pb / pa) + amount / 15
         if score >= 60:
             return True, f"{game.fname(ai)} accepte l'alliance."
         return False, f"{game.fname(ai)} ne vous fait pas encore assez confiance (relation {int(op)})."
@@ -277,6 +279,13 @@ def ai_evaluate(game, ai, frm, action, amount=0, give=None, get=None):
         return False, f"{game.fname(ai)} juge l'échange déséquilibré."
     if action == 'passage':
         return AA.eval_passage(game, ai, frm, amount)
+    if action == 'mariage':
+        why = FM.refus_mariage(game, ai, frm)
+        if why:
+            return False, why
+        if op + diplo + amount / 15 > 20:
+            return True, f"{game.fname(ai)} accepte le mariage."
+        return False, f"{game.fname(ai)} décline : nos maisons ne sont pas assez proches (relation {int(op)})."
     if action == 'prisonniers':
         if not a_echanger(game, ai, frm):
             return False, "Personne n'a de prisonniers à échanger."
@@ -350,12 +359,14 @@ def act(game, frm, to, action, amount=0, give=None, get=None):
             return False, "Livres insuffisantes pour l'échange et le tribut."
     if action == 'prisonniers' and not a_echanger(game, frm, to):
         return False, "Personne n'a de prisonniers à échanger."
+    if action == 'mariage' and (why := FM.refus_mariage(game, frm, to)):
+        return False, why
     if to == game.player:
         game.proposals.append(dict(id=game.nid('p'), frm=frm, action=action, amount=amount, give=give, get=get,
                                    expires=TT.deadline(game, R.PROPOSAL_TOURS), date=game.date_str()))
         what = dict(paix='propose la paix', alliance='propose une alliance', commerce='propose un accord commercial',
                     echange='propose un échange', prisonniers='propose un échange de prisonniers',
-                    passage='demande le droit de passage sur vos terres',
+                    passage='demande le droit de passage sur vos terres', mariage='propose un mariage entre vos maisons',
                     soumission='exige votre soumission').get(action, 'vous fait une proposition')
         game.log('diplo', f"{game.fname(frm)} {what} : répondez pendant votre tour.", who=frm, important=True)
         if action in ('paix', 'alliance', 'soumission'):
@@ -398,6 +409,8 @@ def apply(game, frm, to, action, amount=0, give=None, get=None):
         exchange_prisoners(game, frm, to)
     elif action == 'passage':
         AA.grant_passage(game, to, frm)
+    elif action == 'mariage':
+        FM.marier(game, frm, to)
 
 
 def answer(game, pid, accept):
@@ -431,5 +444,7 @@ def answer(game, pid, accept):
         return False, "Nous ne sommes plus en paix : cette demande n'a plus lieu d'être."
     if p['action'] == 'prisonniers' and not a_echanger(game, me, frm):
         return False, "Il n'y a plus de prisonniers à échanger."
+    if p['action'] == 'mariage' and (why := FM.refus_mariage(game, frm, me)):
+        return False, why
     apply(game, frm, me, p['action'], p['amount'], p['give'], p['get'])
     return True, "Proposition acceptée."

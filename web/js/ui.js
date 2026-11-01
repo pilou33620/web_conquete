@@ -30,7 +30,7 @@ const STATUS = { paix: 'En paix', guerre: 'En guerre', alliance: 'Alliés', self
 const TYPE_LABEL = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' };
 const RES_ORDER = ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'];
 const BRANCH_LABEL = { infanterie: 'Infanterie et cavalerie', artillerie: 'Artillerie et génie', civil: 'Civil et social', industriel: 'Industriel', agricole: 'Agricole' };
-const ACTION_LABEL = { paix: 'propose la paix', alliance: 'propose une alliance', commerce: 'propose un accord commercial', echange: 'propose un échange', prisonniers: 'propose un échange de prisonniers', passage: 'demande le droit de passage sur vos terres' };
+const ACTION_LABEL = { paix: 'propose la paix', alliance: 'propose une alliance', commerce: 'propose un accord commercial', echange: 'propose un échange', prisonniers: 'propose un échange de prisonniers', passage: 'demande le droit de passage sur vos terres', mariage: 'propose un mariage entre vos maisons' };
 // conduite d'une marche : conquérir en chemin ou traverser (le dernier choix est gardé)
 const TR_HELP = ['Rallie ou attaque les places indépendantes et ennemies sur la route.',
   'Passe les places indépendantes sans combattre ; halte devant la destination.'];
@@ -544,6 +544,7 @@ export class UI {
       if (p.action === 'commerce') detail = 'Chacun gagnera des livres et la ressource phare de l’autre.';
       if (p.action === 'prisonniers') detail = 'Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.';
       if (p.action === 'alliance') detail = 'Vision partagée et entrée en guerre à vos côtés si vous êtes attaqué.';
+      if (p.action === 'mariage') detail = `Relations +25 des deux côtés, alliance plus facile, droit de succession réciproque.${p.amount ? ` Il offre une dot de ${fmt(p.amount)} livres.` : ''}`;
       if (p.action === 'passage') detail = `Sans ce droit, ses armées ne peuvent pas traverser vos terres. Accordé, il vaut un an (révocable dans la fenêtre Diplomatie).${p.amount ? ` Il offre ${fmt(p.amount)} livres.` : ''}`;
       return `<div class="sheet proposal" style="border-left-color:${f.color}"><div class="pt">${esc(f.name)} ${esc(ACTION_LABEL[p.action] || p.action)}</div>
         <p>${detail}</p><div class="btns"><button class="btn primary" data-act="answer" data-id="${p.id}" data-v="1">Accepter</button>
@@ -1744,6 +1745,9 @@ export class UI {
     const myPow = st.factions.find(f => f.code === me).power;
     const pris = st.me.prisoners || {};
     const enrollBtn = (code, n, l) => `<button class="btn" data-act="enroll" data-from="${code}" data-n="${n}" ${n ? '' : 'disabled'}>${l}</button>`;
+    // familles dirigeantes (game/familles.py) : chef, héritiers, mariages
+    const fn = c => esc(this.rules.factions[c]?.name || c);
+    const maisonTxt = m => !m ? '' : `<div class="small"><b>Maison ${esc(m.nom)}</b> · ${m.chef ? `${esc(m.titre)} ${esc(m.chef.nom)}, ${m.chef.age} ans, <span title="${esc(m.chef.desc)}">${esc(m.chef.trait.toLowerCase())}</span>` : 'succession disputée'}${m.conjoint ? ` · marié à ${esc(m.conjoint.nom)}${m.conjoint.de ? ` (${fn(m.conjoint.de)})` : ''}` : ''} · ${m.her.length ? `${m.her.length} héritier${m.her.length > 1 ? 's' : ''} (${m.her.join(', ')} ans)` : 'aucun héritier'}${m.liens.length ? ` · unie par mariage à ${m.liens.map(fn).join(', ')}` : ''}</div>`;
     const cards = st.factions.filter(f => f.code !== me).map(f => {
       const R = this.rules.factions[f.code];
       const held = pris[f.code] || 0;
@@ -1769,6 +1773,7 @@ export class UI {
         if (f.st === 'paix' && !f.ps) acts += `<div class="row"><input class="amount" type="number" min="0" step="50" value="0" id="amt-passage-${f.code}" aria-label="Livres offertes pour le passage"><span class="muted small">livres</span>${btn('passage', 'Demander le droit de passage')}</div>`;
         if (f.pg) acts += `<div class="btns">${btn('fin_passage', 'Retirer le droit de passage')}</div>`;
       }
+      if (f.st !== 'guerre' && f.maison && !f.maison.liens.includes(me)) acts += `<div class="row"><input class="amount" type="number" min="0" step="50" value="0" id="amt-mariage-${f.code}" aria-label="Dot offerte"><span class="muted small">livres de dot</span>${btn('mariage', 'Proposer un mariage')}</div>`;
       acts += `<div class="row"><input class="amount" type="number" min="0" step="50" value="100" id="amt-cadeau-${f.code}" aria-label="Montant du présent"><span class="muted small">livres</span>${btn('cadeau', 'Offrir un présent')}</div>`;
       const theirs = f.pr || 0;
       acts += `<div class="small">Prisonniers : vous tenez ${fmt(held)} de ses soldats, il tient ${fmt(theirs)} des vôtres.</div>
@@ -1778,6 +1783,7 @@ export class UI {
           <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}${f.ps ? `<span class="chip ally" title="Vos armées peuvent traverser ses terres">Passage chez lui jusqu’au ${f.ps}</span>` : ''}${f.pg ? `<span class="chip" title="Ses armées peuvent traverser vos terres">Vous lui accordez le passage jusqu’au ${f.pg}</span>` : ''}${f.cl ? '<span class="chip" title="Sans droit de passage, vos armées ne traversent ni ses places ni ses campagnes : elles contournent, ou passent en force (déclaration de guerre)">Terres fermées</span>' : ''}</div>
           <div class="row"><span class="lab">${relLabel(f.rel)} (${fmt(f.rel)})</span><div class="relbar" style="flex:1;min-width:120px"><i style="left:${relPos}%"></i></div></div>
           <div class="small">Puissance estimée ${fmt(f.power)} (vous ${fmt(myPow)}), ${f.nodes} villes et villages, ${f.techs} technologies.</div>
+          ${maisonTxt(f.maison)}
           <div class="small">Prestige ${fmt(f.prestige || 0)} (vous ${fmt(st.me.prestige || 0)})${f.weary >= 30 ? ` · <span style="color:#ff9a85">las de la guerre (${f.weary} %)</span>` : ''}</div>
           ${wars.length ? `<div class="small" style="color:#ffb3a6">En guerre contre : ${wars.join(', ')}</div>` : ''}
           <ul>${R.pros.map(p => `<li>${p}</li>`).join('')}${R.cons.map(p => `<li class="con">${p}</li>`).join('')}</ul>
@@ -1796,8 +1802,8 @@ export class UI {
     const passLine = `<div class="small" style="margin:0 0 8px"><b>Droits de passage</b> · Vous laissent passer : ${list(others.filter(f => !f.cl).map(f => why(f, f.ps)))} ; terres fermées à vos armées : ${list(others.filter(f => f.cl).map(nm))}.<br>
       Vous laissez passer : ${list(others.filter(f => !f.cg).map(f => why(f, f.pg)))} ; vos terres sont fermées à : ${list(others.filter(f => f.cg).map(nm))}.
       <span class="muted">Sans droit de passage (ni alliance, ni guerre), on contourne ses terres, ou l’on passe en force : c’est la guerre.</span></div>`;
-    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${hegLine}${neuLine}${passLine}<div class="diplo-list">${cards}</div>`;
-    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner, f.ps, f.pg, f.cl, f.cg]),
+    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${hegLine}${neuLine}${passLine}${maisonTxt(st.factions.find(f => f.code === me).maison)}<div class="diplo-list">${cards}</div>`;
+    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner, f.ps, f.pg, f.cl, f.cg, f.maison]),
       pris, fmt1(st.me.prisoner_upkeep || 0), Math.round(myPow / 500), st.heg])];
   }
 

@@ -17,6 +17,7 @@ Effets (dictionnaire fx) :
   rel       points                           ce que les autres camps pensent de vous
   regs      [[type, nombre]]                 régiments offerts, en garnison au chef-lieu
   research  1                                recherches en cours avancées de moitié
+  chef, vassal, refus                        crise de succession (game/familles.py)
 """
 import datetime
 
@@ -270,6 +271,9 @@ def describe(g, code, fx, town=None):
     if fx.get('ville'):
         from . import cities as CT   # événements locaux (game/cities.py)
         out += CT.describe_local(g, fx['ville'])
+    if fx.get('chef'):
+        from . import familles as FM   # crise de succession (game/familles.py)
+        out += FM.decrire(g, fx)
     return out or ['aucun effet']
 
 
@@ -333,6 +337,9 @@ def apply(g, code, fx, town=None):
     if fx.get('ville'):
         from . import cities as CT
         CT.apply_local(g, code, fx['ville'])
+    if fx.get('chef'):
+        from . import familles as FM
+        FM.appliquer(g, code, fx)
     g.recompute_mods(code)
     g._dirty_income = True
 
