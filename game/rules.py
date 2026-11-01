@@ -94,10 +94,30 @@ UNITS = {
                   desc='Milice citoyenne bon marché, levée même dans un village : elle ne quitte pas sa ville, '
                        'mais la défend avec ardeur (+30 %).'),
 }
-UNIT_ORDER = ['ligne', 'legere', 'grenadiers', 'chasseurs', 'cavalerie', 'artillerie', 'mitrailleuses', 'sapeurs', 'garde']
-UNIT_CLS = {'cavalerie': 'cavalerie', 'artillerie': 'artillerie', 'mitrailleuses': 'artillerie'}   # tout le reste est de l'infanterie
+# régiments étrangers (SPEC-MERCENAIRES.md) : loués contre des livres seulement (prime et solde doubles de la ligne),
+# vétérans, prêts deux fois plus vite ; levés au chef-lieu ou dans un port, MERC_MAX par camp
+MERC_MAX = 3
+
+
+def _merc(base, name, short, desc):
+    return dict(UNITS[base], name=name, short=short, desc=desc, cost=dict(livres=2 * UNITS['ligne']['cost']['livres']),
+                upkeep_l=2 * UNITS['ligne']['upkeep_l'], days=UNITS[base]['days'] // 2, xp0=30)
+
+
+UNITS.update(
+    suisses=_merc('ligne', 'Régiment suisse', 'Suisses', 'Infanterie suisse au service du roi : solide et fidèle, si la solde suit.'),
+    irlandais=_merc('ligne', 'Brigade irlandaise', 'Irlandais', 'Jacobites exilés, vétérans des guerres du roi : ardents à l’assaut.'),
+    royal_allemand=_merc('cavalerie', 'Royal-Allemand (cavalerie)', 'Royal-All.', 'Cavaliers allemands au service de France : '
+                         'une cavalerie aguerrie, louée à prix d’or.'),
+    legion=_merc('ligne', 'Légion étrangère', 'Légion', 'Volontaires étrangers sous le drapeau français : une troupe dure, '
+                 'qui marche partout.'))
+MERCS = ('suisses', 'irlandais', 'royal_allemand', 'legion')
+UNIT_ORDER = ['ligne', 'legere', 'grenadiers', 'chasseurs', 'cavalerie', 'artillerie', 'mitrailleuses', 'sapeurs', 'garde', *MERCS]
+UNIT_CLS = {'cavalerie': 'cavalerie', 'artillerie': 'artillerie', 'mitrailleuses': 'artillerie',
+            'royal_allemand': 'cavalerie'}   # tout le reste est de l'infanterie
 LIGHT_UNITS = ('legere', 'chasseurs')
-READY = {'grenadiers': 'prêts', 'chasseurs': 'prêts', 'sapeurs': 'prêts', 'mitrailleuses': 'prêtes'}   # les autres noms sont féminins
+READY = {'grenadiers': 'prêts', 'chasseurs': 'prêts', 'sapeurs': 'prêts', 'mitrailleuses': 'prêtes', 'suisses': 'prêt',
+         'royal_allemand': 'prêt'}   # les autres noms sont féminins
 for _k, _u in UNITS.items():
     _u.setdefault('ready', READY.get(_k, 'prête'))
     _u.setdefault('cls', UNIT_CLS.get(_k, 'inf'))
@@ -675,7 +695,16 @@ TECH_YEAR = dict(
     syndicats=1884, vapeur_fluviale=1818, ciment=1817, fresnel=1823, betterave=1812, dombasle=1820, moissonneuses=1855,
     bouillie=1885)
 # unités apparues en cours de route (la milice bourgeoise et les miquelets existent dès 1700 sous d'autres noms)
-UNIT_YEAR = dict()
+UNIT_YEAR = dict(legion=1831)
+# et disparues : les régiments étrangers du roi, licenciés en 1791-1792 ; les Suisses, revenus en 1815, renvoyés en 1830
+UNIT_UNTIL = dict(suisses=1830, irlandais=1791, royal_allemand=1791)
+UNIT_GAP = dict(suisses=(1793, 1814))
+
+
+def hors_service(typ, y):
+    """Ce type de troupe n'existe pas cette année-là (pas encore, ou plus)."""
+    gap = UNIT_GAP.get(typ)
+    return UNIT_YEAR.get(typ, 0) > y or UNIT_UNTIL.get(typ, 9999) < y or bool(gap and gap[0] <= y <= gap[1])
 
 # ------------------------------------------------------------------ voies ferrées (SPEC-TECH.md, phase 2a)
 # Lignes historiques, vérifiées le 19/10/2026 sur les articles « Ligne de… » de Wikipédia : (nom, villes de la carte
