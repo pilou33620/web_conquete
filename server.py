@@ -218,6 +218,10 @@ class App:
                 return self._r(g.split(p, a, body.get('regs', [])))
             if c == 'merge':
                 return self._r(g.merge(p, a, body.get('other')))
+            if c == 'talent':   # le talent choisi à une promotion (SPEC-GENERAUX.md)
+                return self._r(g.choisir_talent(p, a, str(body.get('value', ''))))
+            if c == 'nommer':   # un général de la réserve à la tête de l'armée (SPEC-GENERAUX.md)
+                return self._r(g.nommer(p, a, str(body.get('gen', ''))))
             if c == 'split_type':
                 return self._r(g.split_by_type(p, a, body.get('value')))
             if c == 'spy':

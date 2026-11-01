@@ -188,7 +188,11 @@ class AI:
             return False
         done = g.modernize(code, army_id=bid)[0]
         g.merge(code, ident, bid)
-        a['gen'] = gen                  # le détachement n'a duré qu'un instant : ni nouveau général ni nouveau numéro
+        if a.get('gen') is not gen:     # le détachement n'a duré qu'un instant : ni nouveau général ni nouveau numéro
+            res = self.f.get('generaux', [])
+            if gen in res:
+                res.remove(gen)
+            a['gen'] = gen
         self.f['army_count'] -= 1
         return done
 
@@ -1081,7 +1085,7 @@ class AI:
             f['rel'][o] = max(-100, min(100, rel + delta))
             rel = f['rel'][o]
             # cartel d'échange : on récupère ses hommes prisonniers
-            if D.held(g, o, code) >= 40 and rel > -70 and self.rng.random() < 0.3:
+            if (D.held(g, o, code) >= 40 or D.captifs(g, o, code)) and rel > -70 and self.rng.random() < 0.3:
                 self.propose(o, 'prisonniers')
             if f['overlord']:
                 continue

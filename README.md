@@ -409,9 +409,20 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   Diplomatie (homme pour homme, puis le surplus se rachète 2 livres par tête).
 
 ### Généraux, formations et plans de bataille
-- Chaque armée est menée par un **général** (colonel, puis général de brigade et de division après des victoires)
-  doté d'un trait : audacieux, prudent, cavalier, artilleur, montagnard, éclaireur, inspirant ou logisticien.
-  Un général peut tomber au combat. Chaque département a son trait de prédilection (artilleurs du Périgord, éclaireurs landais…).
+- Chaque armée est menée par un **général** (colonel, puis général de brigade, de division, lieutenant général après
+  des victoires ; un seul **maréchal** par camp, après cinq victoires) doté d'un trait : audacieux, prudent, cavalier,
+  artilleur, montagnard, éclaireur, inspirant ou logisticien. Chaque département a son trait de prédilection
+  (artilleurs du Périgord, éclaireurs landais…).
+  - À chaque promotion, une fenêtre propose un **talent** : deux de l'arbre de son trait, un commun (puissance d'une
+    arme, feu, charge, couvert, montagne, attelages). Les IA choisissent seules.
+  - Des **médailles** viennent d'elles-mêmes après un exploit (victoire à un contre deux, prise d'une place forte,
+    siège repoussé, armée ennemie anéantie) : Ordre de Saint-Louis, arme d'honneur, puis Légion d'honneur ; chacune
+    relève le moral de son armée.
+  - Après une bataille, un général peut être **blessé** (un colonel le remplace 1 à 3 mois), **tué** ou **pris**.
+    Un audacieux s'expose davantage, un prudent moins ; en bataille commandée, c'est le sort de son état-major.
+    Les captifs s'échangent un pour un ou se rachètent selon leur grade (Diplomatie, « Échanger les prisonniers ») et
+    rentrent à la paix. Un général sans armée attend dans la **réserve** ; le panneau « Généraux » permet de l'y
+    nommer à la tête d'une armée qui est dans une de vos places.
 - Une bataille se déroule en trois **phases** : la **canonnade** (l'artillerie domine), la **fusillade** (la ligne et
   les voltigeurs), puis la **charge** (cavalerie et colonnes). Une armée surtout montée charge plus tôt.
 - **Formations** de l'infanterie, visibles sur la carte :

@@ -190,9 +190,9 @@ class Game:
             lag += [t for i, (t, _, _) in enumerate(R.ARMS[cls]) if t in techs and i > r.get('arm', 0)]
         return lag
 
-    def reg_mods(self, code, r):
+    def reg_mods(self, code, r, a=None):
         """Effets de technologie de ce régiment : ceux du camp, moins les effets de régiment (R.REG_KEYS) de ce qui ne
-        lui sert pas encore (reg_lag)."""
+        lui sert pas encore (reg_lag), plus les talents du général de son armée a (SPEC-GENERAUX.md)."""
         md = self.factions[code]['mods'] if code in self.factions else {}
         out = md
         for t in self.reg_lag(code, r):
@@ -201,6 +201,11 @@ class Game:
                     if out is md:
                         out = dict(md)
                     out[k] = out.get(k, 0.0) - v
+        for t in ((a or {}).get('gen') or {}).get('talents', ()):
+            for k, v in R.GENERAL_TALENTS[t]['fx'].items():
+                if out is md:
+                    out = dict(md)
+                out[k] = out.get(k, 0.0) + v
         return out
 
     def milice_k(self, code):
@@ -573,6 +578,7 @@ class Game:
     # ================================================================== jours, météo, événements
     def new_day(self):
         self._dirty_income = True
+        self.soigner_generaux()
         for f in self.factions.values():
             acc = f.get('_acc')
             if acc and acc['dt'] > 0.5:
@@ -1431,14 +1437,14 @@ class Game:
         return True, f"Recherche lancée : {t['name']}."
 
     # ================================================================== armées
-    def create_army(self, code, x, y, regs, node=None, name=None):
+    def create_army(self, code, x, y, regs, node=None, name=None, gen=None):
         f = self.factions[code]
         f['army_count'] += 1
         aid = self.nid('a')
         a = dict(id=aid, owner=code, name=name or f"{ordinal(f['army_count'])} Armée",
                  regs=regs, x=float(x), y=float(y), at_node=node, path=[], target=None, state='idle', stance='normal',
                  mode='route', supply=1.0, battle=None, grace=0.0, hidden=False, onroad=node is not None, edge=None,
-                 assault=False, ai=None, viol=0.0, gen=self.new_general(code), fm='ligne', pl='frontal', fm_t=-9.0,
+                 assault=False, ai=None, viol=0.0, gen=gen or self.prendre_general(code), fm='ligne', pl='frontal', fm_t=-9.0,
                  tac_auto=True, landing=False, boat=False, rx=True, des=0.0, depot=None, tr=False, hold=False, qrt=False,
                  mp=None)   # mp : jours de marche qui restent ce tour (None : tout le mois), en tour par tour
         self.armies[aid] = a
@@ -1448,7 +1454,7 @@ class Game:
         return sum(r['n'] for r in a['regs'])
 
     def army_speed(self, a):
-        sp = min(R.UNITS[r['type']]['speed'] * (1 + (self.reg_mods(a['owner'], r).get('art_speed', 0.0) if r['type'] == 'artillerie' else 0))
+        sp = min(R.UNITS[r['type']]['speed'] * (1 + (self.reg_mods(a['owner'], r, a).get('art_speed', 0.0) if r['type'] == 'artillerie' else 0))
                  for r in a['regs']) if a['regs'] else 20
         if a['supply'] < 0.35:
             sp *= 0.9
@@ -1466,20 +1472,181 @@ class Game:
             w[traits.index(fav)] = 3.0
         used = {a['gen']['name'] for a in self.armies.values() if a.get('gen')}
         names = [s for s in R.SURNAMES if s not in used] or R.SURNAMES
-        return dict(name=self.rng.choice(names), trait=self.rng.choices(traits, w)[0], lvl=1, xp=0)
+        return dict(id=self.gid(code), name=self.rng.choice(names), trait=self.rng.choices(traits, w)[0], lvl=1, xp=0, vic=0,
+                    talents=[], medailles=[], etats=[])
+
+    def gid(self, code):
+        """Identifiant d'un général : un compteur par camp (le compteur commun, nid, numérote armées et régiments)."""
+        f = self.factions.get(code, {})
+        f['gid'] = f.get('gid', 0) + 1
+        return f"g{code}-{f['gid']}"
 
     @staticmethod
     def gen_title(g):
         return f"{R.GENERAL_RANKS[g['lvl'] - 1]} {g['name']}"
 
-    def general_xp(self, a, n):
+    def generaux(self, code):
+        """Les généraux d'un camp : à la tête de ses armées, en réserve, blessés."""
+        f = self.factions[code]
+        return [a['gen'] for a in self.armies.values() if a['owner'] == code and a.get('gen') and not a['gen'].get('interim')] + \
+            f.get('generaux', []) + [b['gen'] for b in f.get('blesses', [])]
+
+    def _journal_gen(self, a, texte):
+        if a['owner'] == self.player:
+            self.log('armee', texte, a['x'], a['y'], who=a['owner'], important=True)
+
+    def blesser_general(self, a, gravite=None):
+        """Le général est emporté blessé : un colonel le remplace jusqu'à son retour (1 à 3 mois)."""
+        gen = a.get('gen')
+        if not gen or gen.get('interim'):
+            return
+        mois = gravite or self.rng.randint(*R.BLESSURE_MOIS)
+        gen['retour'] = self.t + 30 * mois
+        self.factions[a['owner']].setdefault('blesses', []).append(dict(gen=gen, armee=a['id']))
+        a['gen'] = dict(self.new_general(a['owner']), interim=True)
+        t = self.gen_title(gen)
+        self._journal_gen(a, f"Le {t[0].lower() + t[1:]} est blessé ({mois} mois de convalescence). Le colonel "
+                             f"{a['gen']['name']} commande la {a['name']} en attendant.")
+
+    def tuer_general(self, a):
+        gen = a.get('gen')
+        if not gen:
+            return
+        a['gen'] = self.prendre_general(a['owner'])
+        t = self.gen_title(gen)
+        self._journal_gen(a, f"Le {t[0].lower() + t[1:]} est tombé au combat. Le {self.gen_title(a['gen']).lower()} "
+                             f"prend la tête de la {a['name']}.")
+
+    def capturer_general(self, a, vainqueur, reste=True):
+        """Le général est pris par le camp vainqueur ; l'armée, si elle survit, reçoit un autre chef."""
+        gen = a.get('gen')
+        if not gen:
+            return
+        gen.pop('interim', None)
+        if vainqueur in self.factions:
+            self.factions[vainqueur].setdefault('captifs', []).append(dict(gen=gen, de=a['owner']))
+        a['gen'] = self.prendre_general(a['owner']) if reste else None
+        t = self.gen_title(gen)
+        self._journal_gen(a, f"Le {t[0].lower() + t[1:]} est fait prisonnier par {self.fname(vainqueur)}.")
+
+    def risques_general(self, a, issue, assaut=False):
+        """Le sort du général après une bataille de campagne (résolution automatique) : 'victoire', 'defaite',
+        'aneantie' (rules.GENERAL_RISQUES). Renvoie 'blesse', 'tue', 'pris' ou None."""
+        gen = a.get('gen')
+        if not gen:
+            return None
+        k = R.GENERAL_RISQUE_TRAIT.get(gen['trait'], 1.0) * (1.5 if assaut else 1.0)
+        pb, pt, pp = (p * k for p in R.GENERAL_RISQUES[issue])
+        # (son propre tirage, fixé par la partie, le jour et l'armée : le hasard commun de la partie n'est pas décalé)
+        x = random.Random(f"{self.seed}-{int(self.t)}-{a['id']}").random()
+        return 'pris' if x < pp else 'tue' if x < pp + pt else 'blesse' if x < pp + pt + pb else None
+
+    def soigner_generaux(self):
+        """Chaque jour : le général guéri reprend son armée, ou attend dans la réserve si elle n'est plus."""
+        for code, f in self.factions.items():
+            for b in [b for b in f.get('blesses', []) if self.t >= b['gen']['retour']]:
+                f['blesses'].remove(b)
+                gen = b['gen']
+                gen.pop('retour', None)
+                a = self.armies.get(b['armee'])
+                if a and a['owner'] == code:
+                    if a.get('gen') and not a['gen'].get('interim'):
+                        self.reserver(code, a['gen'])
+                    a['gen'] = gen
+                    t = self.gen_title(gen)
+                    self._journal_gen(a, f"Guéri, le {t[0].lower() + t[1:]} reprend la tête de la {a['name']}.")
+                else:
+                    self.reserver(code, gen)
+
+    def reserver(self, code, gen):
+        """Un général sans armée passe dans la réserve de son camp (un colonel sans états de service se retire)."""
+        if not gen or code not in self.factions or (gen['lvl'] < 2 and not gen.get('talents') and not gen.get('medailles')):
+            return
+        res = self.factions[code].setdefault('generaux', [])
+        res.append(gen)
+        del res[:-R.RESERVE_MAX]
+
+    def prendre_general(self, code):
+        """Le meilleur général de la réserve (prêt à servir), sinon un colonel nouveau."""
+        res = [x for x in self.factions.get(code, {}).get('generaux', []) if not x.get('retour')]
+        if not res:
+            return self.new_general(code)
+        gen = max(res, key=lambda x: (x['lvl'], x['xp']))
+        self.factions[code]['generaux'].remove(gen)
+        return gen
+
+    def decorer(self, a, exploit):
+        """Une médaille pour un exploit (SPEC-GENERAUX.md) : son nom selon l'époque ; +1 point d'expérience."""
+        g = a.get('gen')
+        if not g or g.get('interim'):
+            return
+        nom = next(n for y, n in R.MEDAILLES if self.date().year < y)
+        g.setdefault('medailles', []).append([nom, exploit, self.date_str()])
+        self._journal_gen(a, f"{self.gen_title(g)} est décoré : {nom} ({exploit}).")
+        self.general_xp(a, 1.0)
+
+    def moral_medailles(self, a):
+        return R.MEDAILLE_MORAL * min(3, len(((a or {}).get('gen') or {}).get('medailles', [])))
+
+    def offres_talent(self, g):
+        """Les talents proposés à une promotion : deux de l'arbre de son trait encore libres (le second étage s'ouvre
+        avec l'un des deux premiers), et un commun tiré au sort."""
+        pris = set(g.get('talents', []))
+        arbre = [k for k, t in R.GENERAL_TALENTS.items() if t['trait'] == g['trait'] and k not in pris and
+                 (t['etage'] == 1 or any(R.GENERAL_TALENTS[p]['trait'] == g['trait'] for p in pris))]
+        communs = [k for k, t in R.GENERAL_TALENTS.items() if t['trait'] is None and k not in pris]
+        return arbre[:2] + ([self.rng.choice(communs)] if communs else [])
+
+    def offrir_talent(self, a):
+        """Une promotion : un talent par grade gagné ; le joueur choisit (fenêtre de promotion), une IA aussitôt."""
+        g = a['gen']
+        while len(g.get('talents', [])) < g['lvl'] - 1:
+            offres = self.offres_talent(g)
+            if not offres:
+                return
+            if a['owner'] == self.player and not g.get('interim'):
+                g['promo'] = offres
+                return
+            g.setdefault('talents', []).append(offres[0] if self.rng.random() < 0.7 else offres[-1])
+
+    def choisir_talent(self, code, aid, cle):
+        a = self.armies.get(aid)
+        g = a and a.get('gen')
+        if not g or a['owner'] != code or cle not in (g.get('promo') or []):
+            return False, "Ce talent n'est pas proposé."
+        g['talents'].append(cle)
+        del g['promo']
+        self.offrir_talent(a)   # (deux grades d'un coup : le talent suivant)
+        return True, f"{g['name']} : {R.GENERAL_TALENTS[cle]['label']}."
+
+    def nommer(self, code, aid, gid):
+        """Le joueur met un général de la réserve à la tête d'une armée qui est dans une de ses places."""
+        a = self.armies.get(aid)
+        res = self.factions[code].get('generaux', [])
+        gen = next((x for x in res if x.get('id') == gid and not x.get('retour')), None)
+        if not a or a['owner'] != code or gen is None:
+            return False, "Général ou armée introuvable."
+        if a['at_node'] is None or self.nodes[a['at_node']]['owner'] != code or a['battle']:
+            return False, "L'armée doit être dans une de vos places, hors combat."
+        res.remove(gen)
+        self.reserver(code, a.get('gen'))
+        a['gen'] = gen
+        t = self.gen_title(gen)
+        return True, f"Le {t[0].lower() + t[1:]} prend la tête de la {a['name']}."
+
+    def general_xp(self, a, n, victoire=False):
         g = a.get('gen')
         if not g:
             return
         g['xp'] += n
-        lvl = 3 if g['xp'] >= 7 else (2 if g['xp'] >= 3 else 1)
+        g['vic'] = g.get('vic', 0) + (1 if victoire else 0)
+        lvl = max(i + 1 for i, x in enumerate(R.GENERAL_XP) if g['xp'] >= x)
+        if lvl == len(R.GENERAL_RANKS) and (g['vic'] < R.MARECHAL_VICTOIRES or any(
+                o['lvl'] == lvl for o in self.generaux(a['owner']) if o is not g)):
+            lvl -= 1   # (le bâton de maréchal : assez de victoires, et pas déjà un maréchal dans le camp)
         if lvl > g['lvl']:
             g['lvl'] = lvl
+            self.offrir_talent(a)
             if a['owner'] == self.player:
                 self.log('armee', f"{g['name']} est promu {R.GENERAL_RANKS[lvl - 1].lower()} ({a['name']}).",
                          a['x'], a['y'], who=a['owner'], important=True)
@@ -1489,7 +1656,7 @@ class Game:
 
     def reg_power(self, code, r, tname, wx_fire=1.0, cover=False, a=None):
         u = R.UNITS[r['type']]
-        md = self.reg_mods(code, r)   # ce que le régiment a appris (SPEC-ARBRE.md)
+        md = self.reg_mods(code, r, a)   # ce que le régiment a appris (SPEC-ARBRE.md), les talents de son général
         p = r['n'] * u['power'] * u['terrain'].get(tname, 1.0)
         k = 1 + md.get('all_power', 0.0)
         cls = u['cls']
@@ -1521,7 +1688,7 @@ class Game:
             elif tr == 'eclaireur' and u['light']:
                 k += 0.10
             k *= self.gen_level_k(a)
-        p *= k * (0.55 + 0.45 * r['morale'] / 100) * (1 + r['xp'] / 250)
+        p *= k * (0.55 + 0.45 * min(100.0, r['morale'] + self.moral_medailles(a)) / 100) * (1 + r['xp'] / 250)
         return max(0.0, p)
 
     # ------------------------------------------------------------------ canons des remparts
@@ -2756,7 +2923,9 @@ class Game:
 
     def gen_level_k(self, a):
         g = a.get('gen') if a else None
-        return 1 + 0.05 * ((g['lvl'] if g else 1) - 1)
+        # (+5 % par grade jusqu'au général de division ; lieutenant général et maréchal sont des titres : au banc du
+        # 31/10/2026, +20 % au maréchal creusait l'écart entre camps de 48 %)
+        return 1 + 0.05 * (min(3, g['lvl'] if g else 1) - 1)
 
     def unit_vul(self, cls_att, typ, fm, protected, phase='charge'):
         """Vulnérabilité d'une unité cible face à une arme donnée."""
@@ -3156,6 +3325,18 @@ class Game:
                     continue
                 a['battle'] = None
                 a['landing'] = False
+                if a.get('gen'):   # (ses états de service : les douze dernières batailles)
+                    issue = 'victoire' if si == winner else 'décroché' if disengage else 'défaite'
+                    a['gen']['etats'] = (a['gen'].get('etats', []) + [[self.date_str(), gname, issue]])[-12:]
+                    if not bt.get('tac'):   # (une bataille commandée : le sort de l'état-major, bridge.finish)
+                        assaut = bt['sides'][si]['node'] is None and bt['sides'][1 - si]['node'] is not None
+                        sort = self.risques_general(a, 'victoire' if si == winner or disengage else 'defaite', assaut)
+                        if sort == 'blesse':
+                            self.blesser_general(a)
+                        elif sort == 'tue':
+                            self.tuer_general(a)
+                        elif sort == 'pris':
+                            self.capturer_general(a, bt['sides'][1 - si]['owner'])
                 if si == winner:
                     for r in a['regs']:
                         r['xp'] = min(100, r['xp'] + 8)
@@ -3165,7 +3346,17 @@ class Game:
                     # (l'ennemi qui décroche en bon ordre lui laisse aussi le terrain : c'est une victoire)
                     # une vraie bataille rangée compte plus qu'une escarmouche contre la milice d'un village
                     foe_armies = bool(L['armies']) or (L['node'] is not None and self.geo.nodes[L['node']]['type'] in ('capitale', 'ville', 'fort'))
-                    self.general_xp(a, 1 if foe_armies and L['men0'] >= 300 else 0.34)
+                    vraie = foe_armies and L['men0'] >= 300
+                    self.general_xp(a, 1 if vraie else 0.34, victoire=vraie)
+                    if vraie and not disengage:   # médailles (SPEC-GENERAUX.md)
+                        if L['men0'] >= 2 * W['men0']:
+                            self.decorer(a, 'victoire à un contre deux')
+                        elif L['node'] is not None and self.nodes[L['node']]['fort'] >= 1 and self.geo.nodes[L['node']]['type'] != 'village':
+                            self.decorer(a, f"prise de {self.geo.nodes[L['node']]['name']}")
+                        elif W['node'] is not None:
+                            self.decorer(a, f"siège de {self.geo.nodes[W['node']]['name']} repoussé")
+                        elif not any(x in self.armies for x in L['armies']):
+                            self.decorer(a, 'armée ennemie anéantie')
                 else:
                     # poursuite d'un vaincu rompu (déjà faite sur le champ de bataille d'une bataille commandée)
                     pursuit = 0.0 if disengage or bt.get('tac') else \
@@ -3184,16 +3375,16 @@ class Game:
                         a['des'] = a.get('des', 0.0) + gone
                         a['des_why'] = a.get('des_why') or 'traînards de la retraite'
                     self.prune(a)
-                    if not a['regs']:
+                    if not a['regs']:   # (armée anéantie : son général tombe, est pris, ou rentre blessé à la réserve)
+                        sort = self.risques_general(a, 'aneantie') if not bt.get('tac') else None
+                        if sort == 'pris':
+                            self.capturer_general(a, W['owner'], reste=False)
+                        elif sort != 'tue' and a.get('gen') and not a['gen'].get('interim'):
+                            if sort == 'blesse':
+                                a['gen']['retour'] = self.t + 30 * self.rng.randint(*R.BLESSURE_MOIS)
+                            self.reserver(a['owner'], a['gen'])
                         del self.armies[aid]
                         continue
-                    if not disengage and a.get('gen') and self.rng.random() < 0.12:
-                        old = self.gen_title(a['gen'])
-                        a['gen'] = self.new_general(a['owner'])
-                        if a['owner'] == self.player:
-                            self.log('armee', f"Le {old[0].lower() + old[1:]} est tombé au combat. Le colonel {a['gen']['name']} "
-                                              f"prend la tête de la {a['name']}.",
-                                     a['x'], a['y'], who=a['owner'], important=True)
                     self.retreat(a)
         tac = bt.get('tac')   # bataille menée à la main : ses prisonniers, déjà faits sur le champ de bataille
         if tac:
@@ -3947,7 +4138,7 @@ class Game:
         if not regs or len(regs) == len(a['regs']):
             return False, "Choisissez une partie des régiments."
         a['regs'] = [r for r in a['regs'] if r['id'] not in reg_ids]
-        b = self.create_army(code, a['x'], a['y'], regs, node=a['at_node'])
+        b = self.create_army(code, a['x'], a['y'], regs, node=a['at_node'], gen=self.new_general(code))
         b['onroad'] = a['onroad']
         b['edge'] = dict(a['edge']) if a['edge'] else None
         b['fm'], b['pl'], b['tac_auto'], b['stance'] = a.get('fm', 'ligne'), a.get('pl', 'frontal'), a.get('tac_auto', True), \
@@ -3989,7 +4180,8 @@ class Game:
         a['regs'] += b['regs']
         ga, gb = a.get('gen'), b.get('gen')
         if gb and (not ga or (gb['lvl'], gb['xp']) > (ga['lvl'], ga['xp'])):
-            a['gen'] = gb
+            a['gen'], gb = gb, ga
+        self.reserver(code, gb)   # (l'autre général attend dans la réserve)
         a['supply'] = min(a['supply'], b['supply'])
         if a.get('mp') is not None or b.get('mp') is not None:
             full = TT.march_days(self)

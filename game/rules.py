@@ -128,6 +128,7 @@ DEPOT_KM = 30.0              # rayon d'action d'un magasin aux vivres
 DEPOT_FOOD = 0.15            # vivres par jour et par centaine d'hommes ravitaillés par un magasin
 PRISONER_FOOD = 0.003        # vivres par jour et par prisonnier
 PRISONER_RANSOM = 2          # livres par prisonnier racheté
+GENERAL_RANCON = [60, 120, 200, 320, 500]   # rançon d'un général selon son grade (livres)
 SAPEUR_SIEGE = 0.04
 PROPOSAL_TOURS = 1           # validité d'une proposition reçue : le tour qui suit (turns.deadline)
 PEACE_TRUCE = 4              # trêve après une paix signée (tours)
@@ -769,7 +770,52 @@ GENERAL_TRAITS = {
     'inspirant': dict(label='Inspirant', desc='Moral de départ +10, pertes de moral −15 %.'),
     'logisticien': dict(label='Logisticien', desc='Ravitaillement deux fois plus durable, usure −40 %.'),
 }
-GENERAL_RANKS = ['Colonel', 'Général de brigade', 'Général de division']
+GENERAL_RANKS = ['Colonel', 'Général de brigade', 'Général de division', 'Lieutenant général', 'Maréchal']
+GENERAL_XP = [0, 3, 7, 12, 18]   # points d'expérience de chaque grade (SPEC-GENERAUX.md)
+# risques d'un général à chaque bataille de campagne (blessé, tué, pris) ; Audacieux ×1,5, Prudent ×0,6, assaut d'une place ×1,5
+GENERAL_RISQUES = dict(victoire=(0.04, 0.01, 0.0), defaite=(0.10, 0.04, 0.06), aneantie=(0.15, 0.10, 0.50))
+GENERAL_RISQUE_TRAIT = dict(audacieux=1.5, prudent=0.6)
+BLESSURE_MOIS = (1, 3)           # convalescence d'un général blessé
+# talents (SPEC-GENERAUX.md) : un petit arbre par trait (étage 1, puis étage 2 avec l'un des deux premiers), et des talents
+# communs ; leurs effets s'ajoutent à ceux des technologies des régiments de l'armée (mêmes clés : puissance, feu, charge)
+def _t(label, desc, trait, etage, **fx):
+    return dict(label=label, desc=desc, trait=trait, etage=etage, fx=fx)
+
+
+GENERAL_TALENTS = {
+    'charge_furieuse': _t('Charge furieuse', 'Charges des colonnes +12 %, de la cavalerie +8 %.', 'audacieux', 1, colonne_charge=0.12, cav_charge=0.08),
+    'elan': _t('Élan', 'Infanterie +6 %.', 'audacieux', 1, inf_power=0.06),
+    'coup_de_main': _t('Coup de main', 'Toutes armes +5 %.', 'audacieux', 2, all_power=0.05),
+    'feu_de_rang': _t('Feu de rang', 'Feu de l’infanterie en ligne +10 %.', 'prudent', 1, ligne_fire=0.10),
+    'carre_solide': _t('Carré solide', 'Feu du carré +12 %.', 'prudent', 1, carre_fire=0.12),
+    'inebranlable': _t('Inébranlable', 'Toutes armes +4 %, troupes légères à couvert +5 %.', 'prudent', 2, all_power=0.04, legere_cover=0.05),
+    'sabreurs': _t('Sabreurs', 'Cavalerie +8 %.', 'cavalier', 1, cav_power=0.08),
+    'cuirasses': _t('Escadrons cuirassés', 'Charge de la cavalerie +12 %.', 'cavalier', 1, cav_charge=0.12),
+    'grande_charge': _t('Grande charge', 'Cavalerie +6 %, sa charge +6 %.', 'cavalier', 2, cav_power=0.06, cav_charge=0.06),
+    'pointeurs': _t('Pointeurs', 'Artillerie +8 %.', 'artilleur', 1, art_power=0.08),
+    'attelages': _t('Attelages', 'Artillerie 15 % plus rapide en marche.', 'artilleur', 1, art_speed=0.15),
+    'grande_batterie': _t('Grande batterie', 'Artillerie +8 %.', 'artilleur', 2, art_power=0.08),
+    'chasseurs_des_cols': _t('Chasseurs des cols', '+8 % en collines et montagne.', 'montagnard', 1, mountain=0.08),
+    'tirailleurs': _t('Tirailleurs', 'Troupes légères à couvert +10 %.', 'montagnard', 1, legere_cover=0.10),
+    'maitre_des_hauteurs': _t('Maître des hauteurs', '+8 % en collines et montagne.', 'montagnard', 2, mountain=0.08),
+    'voltigeurs': _t('Voltigeurs', 'Troupes légères à couvert +10 %.', 'eclaireur', 1, legere_cover=0.10),
+    'escarmouche': _t('Escarmouche', 'Infanterie +5 %.', 'eclaireur', 1, inf_power=0.05),
+    'rideau': _t('Rideau de cavaliers', 'Troupes légères à couvert +8 %, cavalerie +4 %.', 'eclaireur', 2, legere_cover=0.08, cav_power=0.04),
+    'harangue': _t('Harangue', 'Toutes armes +4 %.', 'inspirant', 1, all_power=0.04),
+    'drapeau': _t('Au drapeau !', 'Charges des colonnes +10 %.', 'inspirant', 1, colonne_charge=0.10),
+    'idole': _t('Idole des troupes', 'Toutes armes +5 %.', 'inspirant', 2, all_power=0.05),
+    'trains': _t('Trains d’artillerie', 'Artillerie 12 % plus rapide en marche.', 'logisticien', 1, art_speed=0.12),
+    'munitions': _t('Caissons pleins', 'Feu de ligne +6 %, artillerie +4 %.', 'logisticien', 1, ligne_fire=0.06, art_power=0.04),
+    'intendance': _t('Intendance', 'Toutes armes +4 %.', 'logisticien', 2, all_power=0.04),
+    'veteran': _t('Vétéran', 'Toutes armes +3 %.', None, 1, all_power=0.03),
+    'feu_roulant': _t('Feu roulant', 'Feu de ligne +5 %.', None, 1, ligne_fire=0.05),
+    'artillerie_volante': _t('Artillerie volante', 'Artillerie 8 % plus rapide en marche.', None, 1, art_speed=0.08),
+    'eclaireurs': _t('Cavalerie légère', 'Cavalerie +4 %.', None, 1, cav_power=0.04),
+}
+MEDAILLES = [(1792, 'Ordre de Saint-Louis'), (1804, 'Arme d’honneur'), (9999, 'Légion d’honneur')]   # (jusqu'à l'année, nom)
+MEDAILLE_MORAL = 2               # moral de départ de son armée par médaille (3 médailles comptent au plus)
+RESERVE_MAX = 8                  # généraux en réserve par camp au plus (les plus anciens partent en retraite)
+MARECHAL_VICTOIRES = 5           # victoires (vraies batailles) avant le bâton de maréchal ; un seul maréchal par camp
 # trait plus fréquent selon le département
 GENERAL_FAVORITE = {'33': 'logisticien', '24': 'artilleur', '40': 'eclaireur', '47': 'prudent', '64': 'montagnard'}
 SURNAMES = ['Labat', 'Dufau', 'Lacoste', 'Darricau', 'Etcheverry', 'Bordenave', 'Lafargue', 'Larrieu', 'Castaing', 'Duprat',

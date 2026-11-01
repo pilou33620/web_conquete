@@ -254,13 +254,13 @@ def _umd(g, bt):
     plus entrench et shell."""
     out = {}
     for si, side in enumerate(bt['sides']):
-        regs = [(o, r) for o, r, _ in g.side_units(bt, si)]
+        regs = [(o, r, a) for o, r, a in g.side_units(bt, si)]
         if side['node'] is not None:
             n = g.nodes[side['node']]
-            regs += [(n['owner'], r) for r in n['garrison']]
-        for o, r in regs:
-            if g.reg_lag(o, r):
-                md = g.reg_mods(o, r)
+            regs += [(n['owner'], r, None) for r in n['garrison']]
+        for o, r, a in regs:
+            if g.reg_lag(o, r) or ((a or {}).get('gen') or {}).get('talents'):   # (talents du général : SPEC-GENERAUX.md)
+                md = g.reg_mods(o, r, a)
                 out[r['id']] = {k: md[k] for k in (*ST.TECH_MODS, 'entrench', 'shell') if md.get(k)}
     return out
 
@@ -294,6 +294,7 @@ def make_units(g, bt, manual=False):
             gname = a['name'] + (f" ({g.gen_title(gen)})" if gen else '')
             for r in a['regs']:
                 u = U.from_reg(r, si, a['owner'], name_for(a['owner'], r['type']), army=aid, ctrl=ctrl)
+                u.morale = u.morale0 = min(100.0, u.morale + g.moral_medailles(a))   # (médailles du général)
                 u.group, u.gname = aid, gname
                 units.append(u)
             if gen:
@@ -521,14 +522,15 @@ def finish(g, tb):
         if u.src == 'milice':
             mil[u.nid] = mil.get(u.nid, 0.0) + max(0.0, r_['men'])
             continue
-        if u.src == 'general':
+        if u.src == 'general':   # le sort de l'état-major est celui du général (SPEC-GENERAUX.md)
             a = g.armies.get(u.army)
-            if a and r_['wounded'] and a.get('gen') and g.rng.random() < 0.5:
-                old = g.gen_title(a['gen'])
-                a['gen'] = g.new_general(a['owner'])
-                if a['owner'] == g.player:
-                    g.log('armee', f"Le {old[0].lower() + old[1:]} est tombé au combat. Le colonel {a['gen']['name']} "
-                                   f"prend la tête de la {a['name']}.", a['x'], a['y'], who=a['owner'], important=True)
+            if a and a.get('gen'):
+                if r_['captured'] >= 15:
+                    g.capturer_general(a, next((x.owner for x in tb.units if x.side != u.side), None))
+                elif r_['men'] <= 3:
+                    g.tuer_general(a)
+                elif r_['wounded']:
+                    g.blesser_general(a)
             continue
         if u.src == 'chariot':
             continue

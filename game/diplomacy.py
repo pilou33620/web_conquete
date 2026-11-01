@@ -112,12 +112,36 @@ def make_peace(game, a, b):
                 if ar['state'] == 'move':
                     ar['state'] = 'idle'
             ar['grace'] = game.t + 2
+    for x, y in ((a, b), (b, a)):   # les généraux captifs sont libérés (SPEC-GENERAUX.md)
+        for c in captifs(game, x, y):
+            rendre_general(game, x, c)
     game.log('diplo', f"Paix signée entre {game.fname(a)} et {game.fname(b)} (trêve de {R.PEACE_TRUCE} tours).", who=a, important=True)
 
 
 def held(game, a, b):
     """Prisonniers originaires de b détenus par a."""
     return int(game.factions[a].get('prisoners', {}).get(b, 0))
+
+
+def captifs(game, a, b):
+    """Généraux de b captifs de a (les plus gradés d'abord)."""
+    return sorted((c for c in game.factions[a].get('captifs', []) if c['de'] == b), key=lambda c: -c['gen']['lvl'])
+
+
+def a_echanger(game, a, b):
+    return bool(held(game, a, b) or held(game, b, a) or captifs(game, a, b) or captifs(game, b, a))
+
+
+def rendre_general(game, a, c):
+    """Le captif c de a rentre dans la réserve de son camp."""
+    game.factions[a]['captifs'].remove(c)
+    if c['de'] in game.factions and game.factions[c['de']]['alive']:
+        gen = c['gen']
+        if gen['lvl'] == len(R.GENERAL_RANKS) and any(o['lvl'] == gen['lvl'] for o in game.generaux(c['de'])):
+            gen['lvl'] -= 1   # (un seul maréchal par camp : le revenant redescend lieutenant général)
+        res = game.factions[c['de']].setdefault('generaux', [])
+        res.append(gen)
+        del res[:-R.RESERVE_MAX]
 
 
 def exchange_prisoners(game, a, b):
@@ -144,6 +168,21 @@ def exchange_prisoners(game, a, b):
         fx['prisoners'][y] = fx['prisoners'].get(y, 0) - m
         game.add_recrues(y, m)
         out.append(f"{game.fname(y)} rachète {m} des siens pour {m * R.PRISONER_RANSOM} livres")
+    # les généraux : un pour un (les plus gradés ensemble), le surplus se rachète selon le grade
+    ga, gb = captifs(game, a, b), captifs(game, b, a)
+    for ca, cb in zip(ga, gb):
+        rendre_general(game, a, ca)
+        rendre_general(game, b, cb)
+        out.append(f"{ca['gen']['name']} échangé contre {cb['gen']['name']}")
+    for x, y, reste in ((a, b, ga[len(gb):]), (b, a, gb[len(ga):])):
+        for c in reste:
+            prix = R.GENERAL_RANCON[c['gen']['lvl'] - 1]
+            if game.factions[y]['res']['livres'] < prix:
+                continue
+            game.factions[y]['res']['livres'] -= prix
+            game.factions[x]['res']['livres'] += prix
+            rendre_general(game, x, c)
+            out.append(f"{game.fname(y)} rachète {game.gen_title(c['gen']).lower()} pour {prix} livres")
     for x, y in ((a, b), (b, a)):
         if game.factions[x]['prisoners'].get(y, 1) <= 0:
             del game.factions[x]['prisoners'][y]
@@ -239,8 +278,7 @@ def ai_evaluate(game, ai, frm, action, amount=0, give=None, get=None):
     if action == 'passage':
         return AA.eval_passage(game, ai, frm, amount)
     if action == 'prisonniers':
-        mine, theirs = held(game, ai, frm), held(game, frm, ai)
-        if not mine and not theirs:
+        if not a_echanger(game, ai, frm):
             return False, "Personne n'a de prisonniers à échanger."
         if op < -70:
             return False, f"{game.fname(ai)} refuse de traiter avec vous, même pour ses prisonniers."
@@ -310,7 +348,7 @@ def act(game, frm, to, action, amount=0, give=None, get=None):
             return False, "Vos casernes ne peuvent pas loger autant de recrues."
         if give[0] == 'livres' and amount + give[1] > f['res']['livres']:
             return False, "Livres insuffisantes pour l'échange et le tribut."
-    if action == 'prisonniers' and not held(game, frm, to) and not held(game, to, frm):
+    if action == 'prisonniers' and not a_echanger(game, frm, to):
         return False, "Personne n'a de prisonniers à échanger."
     if to == game.player:
         game.proposals.append(dict(id=game.nid('p'), frm=frm, action=action, amount=amount, give=give, get=get,
@@ -391,7 +429,7 @@ def answer(game, pid, accept):
         return False, "Déjà alliés."
     if p['action'] == 'passage' and st != 'paix':
         return False, "Nous ne sommes plus en paix : cette demande n'a plus lieu d'être."
-    if p['action'] == 'prisonniers' and not held(game, me, frm) and not held(game, frm, me):
+    if p['action'] == 'prisonniers' and not a_echanger(game, me, frm):
         return False, "Il n'y a plus de prisonniers à échanger."
     apply(game, frm, me, p['action'], p['amount'], p['give'], p['get'])
     return True, "Proposition acceptée."

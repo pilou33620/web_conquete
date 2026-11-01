@@ -125,3 +125,20 @@ Choix du 24/10 : **l'IA suit l'ordre historique** (elle ne lance une recherche q
 Grandes armes : aucune IA ne les trouve avant leur époque (depuis 1700, ni Gribeauval ni la percussion avant 1730 ;
 depuis 1790, ni la percussion ni les canons rayés avant 1820). Tout est dans ±25 %, sauf le trésor depuis 1700
 (+28 %) : les recherches durent des années, les IA lancent moins souvent une recherche payée d'avance.
+
+## Généraux qui évoluent (SPEC-GENERAUX.md, 31/10/2026)
+
+1790, 30 ans, graines 1 à 6 ; « avant » : `fe1c2f4` ; « après » : grades jusqu'à maréchal (bonus de grade arrêté au
+général de division), talents, médailles, blessures, morts et captures. Un premier « après » avec +20 % au maréchal
+donnait un écart de places de 99,7 (+48 %) : réglé.
+
+| Moyenne des 6 parties | Avant | Après | Écart |
+|---|---|---|---|
+| Guerres | 15,7 | 13,8 | −12 % |
+| Durée d'une guerre (mois) | 4,4 | 4,2 | −5 % |
+| Écart de places entre le premier et le dernier camp | 67,5 | 74,8 | +11 % |
+| Camps en vie | 4,2 | 3,8 | −10 % |
+| Technologies | 47,8 | 47,3 | −1 % |
+| Trésor moyen (livres) | 24 312 | 31 344 | +29 % (de 8 000 à 46 000 selon la partie) |
+| Hommes | 14 568 | 14 369 | −1 % |
+| Mois de banqueroute / de famine | 6 / 4 | 0 / 0 | |

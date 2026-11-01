@@ -90,8 +90,8 @@ export class UI {
     this.$('btn-menu').innerHTML = ICON.menu;
     this.$('btn-menu').dataset.act = 'modal';
     this.$('btn-menu').dataset.v = 'menu';
-    const rail = [['tech', 'Technologies'], ['diplo', 'Diplomatie'], ['commerce', 'Commerce'], ['production', 'Production'], ['journal', 'Journal']];
-    this.$('rail').innerHTML = rail.map(([k, l]) => `<button data-act="modal" data-v="${k}" aria-label="${l}">${ICON[k]}<span class="lbl">${l}</span><span class="badge" id="badge-${k}" hidden></span></button>`).join('');
+    const rail = [['tech', 'Technologies'], ['diplo', 'Diplomatie'], ['generaux', 'Généraux'], ['commerce', 'Commerce'], ['production', 'Production'], ['journal', 'Journal']];
+    this.$('rail').innerHTML = rail.map(([k, l]) => `<button data-act="modal" data-v="${k}" aria-label="${l}">${ICON[k] || ICON.bicorne}<span class="lbl">${l}</span><span class="badge" id="badge-${k}" hidden></span></button>`).join('');
     this.$('tb-res').innerHTML = RES_ORDER.map(r => `<div class="res" data-res="${r}">${ICON[r]}<span class="v" id="res-${r}">0</span><span class="d" id="inc-${r}"></span></div>`).join('');
     document.body.addEventListener('click', e => {
       const b = e.target.closest('[data-act]');
@@ -253,6 +253,11 @@ export class UI {
     const asked = !waitBt && (st.armies || []).find(a => a.ask);
     if (asked && !st.over && (!this.modal || this.modal === 'arrivee')) { if (this.modal !== 'arrivee') this.openModal('arrivee'); }
     else if (this.modal === 'arrivee' && !asked) this.closeModal();
+    // un de vos généraux est promu : le talent à choisir (SPEC-GENERAUX.md)
+    // (refermée sans choisir : elle ne revient qu'à la promotion suivante ; le bouton « Choisir » de la fiche la rouvre)
+    const promu = !waitBt && !asked && (st.armies || []).find(a => a.o === st.me.code && a.gen?.promo && a.id + a.gen.promo.join() !== this.promoVue);
+    if (promu && !st.over && (!this.modal || this.modal === 'promotion')) { if (this.modal !== 'promotion') this.openModal('promotion'); }
+    else if (this.modal === 'promotion' && !promu) this.closeModal();
     this.tuto.check();
   }
 
@@ -936,6 +941,15 @@ export class UI {
         break;
       }
       case 'load': this.onLoad && this.onLoad(d.v); break;
+      case 'promo': this.promoArmee = d.id; this.openModal('promotion'); break;
+      case 'talent':
+        this.cmd({ cmd: 'talent', army: d.id, value: d.v }).then(r => { if (r && r.ok) this.closeModal(); });
+        break;
+      case 'nommer': {
+        const sel = document.getElementById(`nom-${d.v}`);
+        if (sel) this.cmd({ cmd: 'nommer', army: sel.value, gen: d.v });
+        break;
+      }
       case 'arrive':
         this.cmd({ cmd: 'arrive', army: d.id, value: d.v }).then(r => {
           if (r && r.ok) { this.closeModal(); if (r.bid && this.onTactic) this.onTactic(r.bid); }   // (à la main ou sur ordres)
@@ -1402,11 +1416,47 @@ export class UI {
     return this.rules.tax_labels[this.rules.tax_labels.length - 1][1];
   }
 
-  genHtml(g) {
+  genHtml(g, id = null, own = false) {
     if (!g) return '';
-    const tr = this.rules.traits[g.trait];
+    const tr = this.rules.traits[g.trait], T = this.rules.talents;
+    const tal = (g.talents || []).map(k => `<span class="chip" title="${esc(T[k].desc)}">${esc(T[k].label)}</span>`).join('');
+    const med = (g.medailles || []).map(([nom, exploit, date]) => `<span class="chip ally" title="${esc(exploit)}, ${esc(date)}">${esc(nom)}</span>`).join('');
+    const etats = (g.etats || []).slice().reverse().map(([date, lieu, issue]) => `<li>${esc(date)} : ${esc(lieu)} (${esc(issue)})</li>`).join('');
     return `<div class="gen">${ICON.bicorne}<div><div class="gn">${esc(g.rank)} ${esc(g.name)} <span class="stars" title="Niveau ${g.lvl}">${'★'.repeat(g.lvl)}</span></div>
-      <div class="gt"><b>${tr.label}</b> : ${esc(tr.desc)}</div></div></div>`;
+      <div class="gt"><b>${tr.label}</b> : ${esc(tr.desc)}</div>
+      ${tal || med ? `<div class="row">${tal}${med}</div>` : ''}
+      ${g.promo && own ? `<button class="btn primary" data-act="promo" data-id="${esc(id)}">Choisir son talent</button>` : ''}
+      ${etats ? `<details class="small"><summary>États de service (${g.vic || 0} victoires)</summary><ul>${etats}</ul></details>` : ''}</div></div>`;
+  }
+
+  // une promotion : un talent à choisir parmi trois (deux de l'arbre de son trait, un commun)
+  promotionModal() {
+    const a = (this.st.armies || []).find(x => x.o === this.st.me.code && x.gen?.promo && (x.id === this.promoArmee || x.id + x.gen.promo.join() !== this.promoVue)) ||
+      (this.st.armies || []).find(x => x.o === this.st.me.code && x.gen?.promo);
+    if (!a) return ['<p class="muted">Aucune promotion en attente.</p>', 'none'];
+    const g = a.gen, T = this.rules.talents;
+    this.promoVue = a.id + g.promo.join();   // (vue : si elle est refermée, elle ne se rouvre pas d'elle-même)
+    const btns = g.promo.map(k => `<button class="btn ev-choice" data-act="talent" data-id="${esc(a.id)}" data-v="${k}"><b>${esc(T[k].label)}</b><small>${esc(T[k].desc)}${T[k].trait ? '' : ' (talent commun)'}</small></button>`).join('');
+    return [`<h2 class="m-title" id="m-title">${esc(g.rank)} ${esc(g.name)}</h2>
+      <p class="m-sub">Promu à la tête de la ${esc(a.name)}. Quel talent acquiert-il ?</p>
+      <div class="ev-choices">${btns}</div>`, `${a.id}|${g.promo.join()}`];
+  }
+
+  // les généraux : à la tête des armées, en réserve (à nommer), blessés, captifs des deux camps
+  generauxModal() {
+    const st = this.st, G = st.me.generaux || {}, me = st.me.code, fn = c => esc(this.rules.factions[c]?.name || c);
+    const ligne = (g, plus = '') => `<div class="row"><span>${esc(g.rank)} ${esc(g.name)} <span class="stars">${'★'.repeat(g.lvl)}</span> <span class="muted small">${esc(this.rules.traits[g.trait].label)}</span></span>${plus}</div>`;
+    const mes = (st.armies || []).filter(a => a.o === me && a.gen);
+    const dansPlace = mes.filter(a => a.n != null && this.st.nodes?.[a.n]?.o === me);
+    const choix = dansPlace.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
+    const sec = (titre, corps) => `<h3>${titre}</h3>${corps || '<p class="muted small">Personne.</p>'}`;
+    const html = `<h2 class="m-title" id="m-title">Généraux</h2>
+      ${sec('À la tête de vos armées', mes.map(a => ligne(a.gen, `<span class="muted small">${esc(a.name)}</span>`)).join(''))}
+      ${sec('En réserve', (G.reserve || []).map(g => ligne(g, choix ? `<select id="nom-${esc(g.id)}" aria-label="Armée">${choix}</select><button class="btn" data-act="nommer" data-v="${esc(g.id)}">Nommer</button>` : '<span class="muted small">(une armée dans une de vos places)</span>')).join(''))}
+      ${sec('Blessés', (G.blesses || []).map(g => ligne(g, `<span class="muted small">de retour le ${esc(g.retour)}</span>`)).join(''))}
+      ${sec('Vos captifs', (G.captifs || []).map(g => ligne(g, `<span class="muted small">${fn(g.de)}</span>`)).join(''))}
+      ${sec('Vos généraux captifs', (G.pris || []).map(g => ligne(g, `<span class="muted small">chez ${fn(g.par)}, rançon ${this.rules.rancon[g.lvl - 1]} livres</span><button class="btn" data-act="diplo" data-to="${g.par}" data-v="prisonniers" title="Échange un pour un, le surplus se rachète selon le grade">Échanger ou racheter</button>`)).join(''))}`;
+    return [html, JSON.stringify([G, mes.map(a => [a.id, a.gen.id, a.n])])];
   }
 
   armyPanel(id) {
@@ -1433,7 +1483,7 @@ export class UI {
     const cell = Math.floor(a.y) * this.md.W + Math.floor(a.x);
     const terr = a.boat && a.n == null ? (way && way.sea ? 'Océan' : 'Fleuve') : this.md.terrain_names[this.map.terrain[cell]];
     let h = `<div class="p-head">${coat(f.color, a.o)}<div><div class="p-title">${esc(a.name)}</div><div class="p-sub">${f.name}, ${fmtMen(a.men)} hommes</div></div></div>
-      <div class="p-state">${state}</div>${this.genHtml(a.gen)}`;
+      <div class="p-state">${state}</div>${this.genHtml(a.gen, a.id, own)}`;
     if (a.fire) h += `<div class="warnline">Les gabares essuient le feu des canons ennemis sur la berge !</div>`;
     // terres fermées : délai de grâce pour en sortir, ou contournement
     if (a.cl) h += `<div class="warnline">Sur les terres ${esc(de(a.cl[0]))}, sans droit de passage : ${a.cl[1] > 0
@@ -1661,7 +1711,7 @@ export class UI {
     if (!force && ae && card.contains(ae) && (/^(SELECT|TEXTAREA)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !['range', 'checkbox'].includes(ae.type)))) return;
     const fn = { tech: this.techModal, diplo: this.diploModal, commerce: this.commerceModal, production: this.prodModal,
                  journal: this.journalModal, menu: this.menuModal, fin: this.endModal, event: this.eventModal,
-                 bataille: this.battleModal, arrivee: this.arriveeModal, decouverte: () => this.decouv.html() }[k];
+                 bataille: this.battleModal, arrivee: this.arriveeModal, promotion: this.promotionModal, generaux: this.generauxModal, decouverte: () => this.decouv.html() }[k];
     const [html, sig] = fn.call(this);
     if (!force && sig === this.modalSig) return;
     this.modalSig = sig;
@@ -1722,7 +1772,7 @@ export class UI {
       acts += `<div class="row"><input class="amount" type="number" min="0" step="50" value="100" id="amt-cadeau-${f.code}" aria-label="Montant du présent"><span class="muted small">livres</span>${btn('cadeau', 'Offrir un présent')}</div>`;
       const theirs = f.pr || 0;
       acts += `<div class="small">Prisonniers : vous tenez ${fmt(held)} de ses soldats, il tient ${fmt(theirs)} des vôtres.</div>
-        <div class="btns"><button class="btn" data-act="diplo" data-to="${f.code}" data-v="prisonniers" ${held || theirs ? '' : 'disabled'} title="Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.">Échanger les prisonniers</button>${enrollBtn(f.code, held, 'Enrôler ses prisonniers')}</div>`;
+        <div class="btns"><button class="btn" data-act="diplo" data-to="${f.code}" data-v="prisonniers" ${held || theirs || (st.me.generaux?.captifs || []).some(x => x.de === f.code) || (st.me.generaux?.pris || []).some(x => x.par === f.code) ? '' : 'disabled'} title="Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.">Échanger les prisonniers</button>${enrollBtn(f.code, held, 'Enrôler ses prisonniers')}</div>`;
       return `<div class="dcard">${coat(R.color, f.code)}<div>
           <div class="dn">${R.name}</div><div class="dt">${R.title}, chef-lieu ${R.capital}</div>
           <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}${f.ps ? `<span class="chip ally" title="Vos armées peuvent traverser ses terres">Passage chez lui jusqu’au ${f.ps}</span>` : ''}${f.pg ? `<span class="chip" title="Ses armées peuvent traverser vos terres">Vous lui accordez le passage jusqu’au ${f.pg}</span>` : ''}${f.cl ? '<span class="chip" title="Sans droit de passage, vos armées ne traversent ni ses places ni ses campagnes : elles contournent, ou passent en force (déclaration de guerre)">Terres fermées</span>' : ''}</div>

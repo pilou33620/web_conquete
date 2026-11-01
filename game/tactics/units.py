@@ -312,7 +312,7 @@ def general(uid, side, owner, gen, army, ctrl='ia'):
                 men=30.0, men0=30.0, men_nom=30.0, xp=50.0, xp0=50.0, morale=90.0, morale0=90.0, ammo=20.0, ammo0=20,
                 arm=0, form='colonne', src='general', army=army, ctrl=ctrl,
                 gen=dict(name=gen.get('name'), trait=gen.get('trait'), lvl=gen.get('lvl', 1),
-                         rank=R.GENERAL_RANKS[max(0, min(2, gen.get('lvl', 1) - 1))]))
+                         rank=R.GENERAL_RANKS[max(0, min(len(R.GENERAL_RANKS) - 1, gen.get('lvl', 1) - 1))]))
 
 
 def wagon(uid, side, owner, army, name, ctrl='ia'):

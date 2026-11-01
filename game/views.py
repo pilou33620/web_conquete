@@ -67,6 +67,9 @@ def migrate(g):
     for a in g.armies.values():
         if not a.get('gen'):
             a['gen'] = g.new_general(a['owner'])
+        for k, v in dict(vic=0, talents=[], medailles=[], etats=[]).items():   # (SPEC-GENERAUX.md)
+            a['gen'].setdefault(k, list(v) if isinstance(v, list) else v)
+        a['gen'].setdefault('id', g.gid(a['owner']))
         for k, v in dict(fm='ligne', pl='frontal', fm_t=-9.0, tac_auto=True, landing=False, boat=False, rail=False, emb=0.0,
                          rx=True, des=0.0, depot=None).items():
             a.setdefault(k, v)
@@ -150,7 +153,7 @@ def rules_payload():
                 branches=R.BRANCHES, man_days=R.MAN_DAYS, deg_prod=R.DEG_PROD, visuals=R.VISUALS, build=build, node_base=R.NODE_BASE, spec={k: v['label'] for k, v in R.SPEC.items()},
                 weather=R.WEATHER, zones=R.ZONES, speeds=R.SPEEDS, res=R.RESOURCES, res_label=R.RES_LABEL, workshop_reserve=R.WORKSHOP_RESERVE,
                 difficulty={k: v['label'] for k, v in R.DIFFICULTY.items()}, neutral_color=R.NEUTRAL_COLOR,
-                seasons=R.SEASON_LABEL, traits=R.GENERAL_TRAITS, ranks=R.GENERAL_RANKS, formations=R.FORMATIONS,
+                seasons=R.SEASON_LABEL, traits=R.GENERAL_TRAITS, ranks=R.GENERAL_RANKS, talents=R.GENERAL_TALENTS, rancon=R.GENERAL_RANCON, formations=R.FORMATIONS,
                 formation_speed=R.FORMATION_SPEED, plans=R.PLANS, phases=R.PHASES, spy=R.SPY, spy_tours=R.SPY_INTEL_TOURS,
                 tax_labels=R.TAX_LABELS, water=dict(speed=R.WATER_SPEED, sea=R.SEA_SPEED, embark=R.EMBARK_DAYS,
                                                     quai=R.QUAI_LIVRES, blockade=R.BLOCKADE_K),
@@ -158,7 +161,9 @@ def rules_payload():
 
 
 def _gen(g):
-    return dict(name=g['name'], rank=R.GENERAL_RANKS[g['lvl'] - 1], trait=g['trait'], lvl=g['lvl'], xp=round(g['xp'], 1)) if g else None
+    return dict(id=g.get('id'), name=g['name'], rank=R.GENERAL_RANKS[g['lvl'] - 1], trait=g['trait'], lvl=g['lvl'], xp=round(g['xp'], 1),
+                vic=g.get('vic', 0), talents=g.get('talents', []), medailles=g.get('medailles', []), etats=g.get('etats', []),
+                promo=g.get('promo')) if g else None
 
 
 def _effects(g, f):
@@ -464,6 +469,13 @@ def player_state(g, since=0):
                 has_port=has_port, famine=bool(me.get('famine')), banqueroute=bool(me.get('banqueroute')),
                 stats={k: int(v) for k, v in me['stats'].items()}, mods={k: round(v, 3) for k, v in me['mods'].items()},
                 prisoners={k: int(v) for k, v in me.get('prisoners', {}).items() if v > 0},
+                # les généraux (SPEC-GENERAUX.md) : réserve, blessés (retour), captifs détenus et nos généraux captifs
+                generaux=dict(reserve=[_gen(x) for x in me.get('generaux', [])],
+                              blesses=[dict(_gen(b['gen']), armee=b['armee'], retour=g.date_str(b['gen']['retour']))
+                                       for b in me.get('blesses', [])],
+                              captifs=[dict(_gen(c['gen']), de=c['de']) for c in me.get('captifs', [])],
+                              pris=[dict(_gen(c['gen']), par=code) for code, f in g.factions.items() if code != p
+                                    for c in f.get('captifs', []) if c['de'] == p]),
                 prisoner_upkeep=round(me.get('_upkeep', {}).get('prisoners', 0), 2),
                 pop=int(round(sum(n.get('pop', 0) for n in g.owned_nodes(p)), -2)), popy=_popy(g, p),
                 weary=int(me.get('weary', 0)), prestige=g.prestige(p),
