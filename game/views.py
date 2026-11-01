@@ -43,6 +43,8 @@ def migrate(g):
         f.setdefault('tax', 0.5)
         f.setdefault('intel', {})
         f.setdefault('prisoners', {})
+        f.setdefault('tarif', 0)          # douane (SPEC-MERCENAIRES.md) : libre
+        f.setdefault('douaniers', False)
     for f in g.factions.values():
         for k, v in dict(weary=0.0, prestige=0.0, treaties={}, last_war=0.0, refu=0.0).items():
             f.setdefault(k, v)
@@ -468,6 +470,8 @@ def player_state(g, since=0):
                 techs=me['techs'], tech_dates=me.get('tech_dates', {}), cov=round(cov, 2), tools_bonus=round(tb, 3), cap=round(me.get('_cap', 0), 2), work=me.get('_work', [1.0, None]),
                 upkeep={k: round(v, 2) for k, v in me.get('_upkeep', {}).items()},
                 trade={k: round(v, 2) for k, v in me.get('_trade', {}).items()},
+                douane=dict(tarif=me['tarif'], on=me['douaniers'], niveaux=R.TARIFS, cout_place=R.DOUANIERS_L,
+                            **{k: round(v, 2) for k, v in me.get('_douane', {}).items()}),
                 unit_costs={u: g.unit_cost(p, u) for u in R.UNITS}, unit_days={u: round(g.unit_days(p, u), 1) for u in R.UNITS},
                 floor=me.get('_floor', {}), tax=me.get('tax', 0.5), order=_order(g, p),
                 spies=[dict(node=s['node'], kind=s['kind'], tn=TT.tours_left(g, s['done'])) for s in g.spies if s['by'] == p],

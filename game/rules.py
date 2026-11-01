@@ -936,6 +936,11 @@ RIVER_FIRE_KM = 3.0  # portée des canons sur les berges
 QUAI_LIVRES = 0.5  # commerce fluvial d'un quai (par jour)
 BLOCKADE_K = 0.35  # revenus portuaires et fluviaux sous blocus
 TAX_LABELS = [(0.15, 'Très légers'), (0.4, 'Légers'), (0.6, 'Normaux'), (0.85, 'Lourds'), (1.01, 'Écrasants')]
+# douane (SPEC-MERCENAIRES.md) : tarif aux frontières de chaque camp (nom, taux)
+TARIFS = [('Libre', 0.0), ('Modéré', 0.10), ('Élevé', 0.20), ('Prohibitif', 0.35)]
+DOUANE_VOL = 0.06      # part du revenu brut d'un voisin que prend le commerce frontalier (comme un accord)
+DOUANIERS_L = 0.15     # solde des douaniers : livres par jour et par place frontalière
+DOUANE_REL = 0.5       # relations des voisins : tant par niveau de tarif et par mois
 
 
 def tax_label(v):

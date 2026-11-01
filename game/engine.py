@@ -89,6 +89,7 @@ class Game:
                 rel={o: self.rng.randint(-15, 25) for o in R.FACTIONS if o != code}, trade={}, truce={},
                 overlord=None, war_since={}, mods={}, army_count=0, stats=dict(won=0, lost=0, captured=0, killed=0),
                 start_nodes=0, alerts={}, tax=0.5, intel={}, prisoners={}, weary=0.0, prestige=0.0, treaties={},
+                tarif=0, douaniers=False,   # douane (SPEC-MERCENAIRES.md)
                 last_war=-2 * 365.0, refu=0.0)   # au départ, de vieilles rancunes : les premières guerres viennent vite
             self.factions[code]['maison'] = FM.nouvelle(self, code)   # famille dirigeante (game/familles.py)
         for a in R.FACTIONS:
@@ -752,6 +753,12 @@ class Game:
             if code == self.player and any(before < s_ <= f['weary'] for s_ in (60, 80)):
                 self.log('revolte', f"Le pays est las de la guerre (lassitude {int(f['weary'])} %) : l'ordre public "
                                     f"se dégrade partout. Songez à la paix.", important=True)
+        # douane : les voisins d'un camp qui taxe ses frontières l'aiment moins
+        nb = self.frontieres()[0]
+        for code, f in self.factions.items():
+            for o in (nb.get(code, ()) if f['alive'] and f['tarif'] else ()):
+                rel = self.factions[o]['rel']
+                rel[code] = max(-100, rel[code] - R.DOUANE_REL * f['tarif'])
         # prestige : chaque année, le rayonnement de chacun s'ajoute à sa gloire
         if d.month == 1:
             for code, f in self.factions.items():
@@ -859,10 +866,28 @@ class Game:
             mult *= 1 + self.mod(code, 'mountain_prod')
         return {k: v * mult for k, v in out.items()}
 
+    def frontieres(self):
+        """Douane : les camps voisins de chacun (frontière commune) et ses places frontalières."""
+        nb, front = {}, {}
+        for e in self.geo.edges:
+            oa, ob = self.nodes[e['a']]['owner'], self.nodes[e['b']]['owner']
+            if oa != ob and oa in self.factions and ob in self.factions:
+                nb.setdefault(oa, set()).add(ob)
+                nb.setdefault(ob, set()).add(oa)
+                front.setdefault(oa, set()).add(e['a'])
+                front.setdefault(ob, set()).add(e['b'])
+        return nb, front
+
+    def contrebande(self, code):
+        """Part du commerce frontalier qui échappe à la douane : grandit avec le tarif, moitié moins avec des douaniers."""
+        f = self.factions[code]
+        return min(0.9, 1.5 * R.TARIFS[f['tarif']][1]) * (0.5 if f['douaniers'] else 1)
+
     def compute_income(self):
         self._dirty_income = False
         season = self.season()
         self.compute_blockades()
+        nb, front = self.frontieres()
         for code, f in self.factions.items():
             if not f['alive']:
                 continue
@@ -905,7 +930,7 @@ class Game:
                 of = self.factions.get(o)
                 if not of or not of['alive']:
                     continue
-                m = 1 + self.mod(code, 'trade')
+                m = (1 + self.mod(code, 'trade')) * (1 - 1.5 * R.TARIFS[of['tarif']][1])   # sa douane rogne nos gains
                 trade_l += 0.06 * max(0, of.get('_gross_livres', 0)) * m + 1.0 * m
                 sp = R.FACTIONS[o]['specialty']
                 trade_s[sp] = trade_s.get(sp, 0) + 0.05 * max(0, of.get('_gross_' + sp, 0)) * m
@@ -915,6 +940,13 @@ class Game:
             tot['livres'] += trade_l
             for k, v in trade_s.items():
                 tot[k] = tot.get(k, 0) + v
+            # douane : le taux sur le commerce frontalier de chaque voisin, moins la contrebande
+            t = R.TARIFS[f['tarif']][1]
+            vol = sum(R.DOUANE_VOL * max(0, self.factions[o].get('_gross_livres', 0)) for o in nb.get(code, ()))
+            smug = self.contrebande(code)
+            f['_douane'] = dict(recette=t * vol * (1 - smug), contrebande=t * vol * smug,
+                                perte=t * vol * min(0.9, 1.5 * t), front=len(front.get(code, ())))
+            tot['livres'] += f['_douane']['recette']
             # tribut de vassal
             if f['overlord']:
                 trib = tot['livres'] * 0.15
@@ -939,6 +971,8 @@ class Game:
             tot['livres'] -= up_b
             up_p = sum(f.get('prisoners', {}).values()) * R.PRISONER_FOOD
             tot['vivres'] -= up_p
+            up_d = len(front.get(code, ())) * R.DOUANIERS_L if f['douaniers'] else 0.0
+            tot['livres'] -= up_d
             # industrie
             cap = tot['industrie']
             s = f['slider']
@@ -958,6 +992,7 @@ class Game:
             f['_cap'] = cap
             f['_cov'] = cov
             f['_upkeep'] = dict(vivres=up_v * k_up, livres=up_l * k_up, forts=up_f, prisoners=up_p, batiments=up_b)
+            f['_upkeep']['douaniers'] = up_d
             f['_trade'] = dict(trade_s)
             f['_trade']['livres'] = f['_trade'].get('livres', 0) + trade_l
             f['income'] = dict(livres=tot['livres'], vivres=tot['vivres'], fer=tot['fer'] - need['fer'] * work,
@@ -4078,6 +4113,21 @@ class Game:
         f['tax'] = max(0.0, min(1.0, round(v, 2)))
         self._dirty_income = True
         return True, f"Impôts : {R.tax_label(f['tax']).lower()}."
+
+    def set_tarif(self, code, v):
+        if type(v) is not int or not 0 <= v < len(R.TARIFS):
+            return False, "Tarif invalide."
+        self.factions[code]['tarif'] = v
+        self._dirty_income = True
+        nom, t = R.TARIFS[v]
+        return True, f"Douane : tarif {nom.lower()} ({round(t * 100)} %)."
+
+    def set_douaniers(self, code, v):
+        if not isinstance(v, bool):
+            return False, "Réglage invalide."
+        self.factions[code]['douaniers'] = v
+        self._dirty_income = True
+        return True, "Douaniers postés aux frontières." if v else "Douaniers rappelés."
 
     def stab_targets(self):
         """Stabilité vers laquelle tend chaque place d'un département."""
