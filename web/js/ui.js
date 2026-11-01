@@ -102,6 +102,8 @@ export class UI {
       if (t.dataset.reg) { t.checked ? this.checked.add(t.dataset.reg) : this.checked.delete(t.dataset.reg); t.closest('.reg')?.classList.toggle('sel', t.checked); }
       if (t.dataset.act === 'slider') this.cmd({ cmd: 'slider', value: t.value / 100 }, false);
       if (t.dataset.act === 'tax') this.cmd({ cmd: 'tax', value: t.value / 100 }, false);
+      // douane (panneau Commerce) : hors data-act, que le clic de la page n'empêche pas de cocher
+      if (t.dataset.douane) this.cmd({ cmd: t.dataset.douane, value: t.dataset.douane === 'tarif' ? +t.value : t.checked });
     });
     document.body.addEventListener('input', e => {
       if (e.target.dataset.live === 'slider') {
@@ -1811,6 +1813,7 @@ export class UI {
     const partners = st.factions.filter(f => f.code !== me.code && f.alive && f.st !== 'guerre');
     const resOpts = sel => ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'].map(r => `<option value="${r}" ${r === sel ? 'selected' : ''}>${this.rules.res_label[r]}</option>`).join('');
     const trades = st.factions.filter(f => f.trade);
+    const dn = me.douane, dnCout = (dn.front || 0) * dn.cout_place;   // solde des douaniers, postés ou non
     const html = `<h2 class="m-title" id="m-title">Commerce</h2>
       <p class="m-sub">${me.has_port ? 'Vous tenez un port : les négociants vous font de bons prix.' : 'Sans port, les négociants prennent une forte marge. Prenez Bordeaux, Libourne, Bayonne ou un autre port pour mieux commercer.'}</p>
       <div class="two"><div>
@@ -1827,8 +1830,14 @@ export class UI {
         ${trades.length ? trades.map(f => `<div class="row"><span class="chip ally">${this.rules.factions[f.code].name}</span><span class="muted small">Spécialité reçue : ${this.rules.res_label[this.rules.factions[f.code].specialty].toLowerCase()}</span></div>`).join('') +
           `<p class="small">Gains ${this.st.tour?.on ? 'par tour' : 'par jour'} : ${Object.entries(me.trade).filter(([, v]) => v > 0.01).map(([k, v]) => `+${fmt1(this.per(v))} ${this.rules.res_label[k].toLowerCase()}`).join(', ') || 'aucun'}</p>`
           : '<p class="muted">Aucun accord. Proposez-en un depuis la Diplomatie.</p>'}
+        <h3 class="section-t">Douane</h3>
+        <div class="row"><span class="lab">Tarif</span><select class="amount" data-douane="tarif" aria-label="Tarif aux frontières">${dn.niveaux.map(([nom, t], i) => `<option value="${i}" ${i === dn.tarif ? 'selected' : ''}>${esc(nom)} (${Math.round(t * 100)} %)</option>`).join('')}</select></div>
+        <div class="row"><label class="small"><input type="checkbox" data-douane="douaniers" ${dn.on ? 'checked' : ''}> Douaniers : ${fmt1(this.per(dnCout))} livres ${this.perU} (${dn.front || 0} places frontalières)</label></div>
+        <p class="small">Recettes : +${fmt1(this.per(dn.recette || 0))} livres ${this.perU} · perdu en contrebande : −${fmt1(this.per(dn.contrebande || 0))}</p>
+        <p class="muted small">Le tarif rapporte sur le commerce de vos voisins, mais vos partenaires gagnent moins à commercer avec vous, vos voisins vous en veulent et la contrebande grandit avec lui ; les douaniers la divisent par deux.</p>
       </div></div>`;
-    return [html, JSON.stringify([Object.values(st.market.prices).map(p => p.toFixed(2)), Object.values(me.res).map(Math.round), partners.map(f => f.code), trades.map(f => f.code)])];
+    return [html, JSON.stringify([Object.values(st.market.prices).map(p => p.toFixed(2)), Object.values(me.res).map(Math.round), partners.map(f => f.code), trades.map(f => f.code),
+      [dn.tarif, dn.on, dn.front, fmt1(this.per(dn.recette || 0)), fmt1(this.per(dn.contrebande || 0)), fmt1(this.per(dnCout))]])];
   }
 
   prodModal() {

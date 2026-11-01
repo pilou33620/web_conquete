@@ -296,6 +296,9 @@ class AI:
             tax = 0.62
         if abs(tax - f.get('tax', 0.5)) > 0.01:
             g.set_tax(code, tax)
+        if g.t >= getattr(self, 'tarif_clock', 0):
+            self.tarif_clock = g.t + 30
+            self.douane()
         if r['livres'] < 120:
             for res, keep in (('vivres', 500), ('bois', 350), ('fer', 300)):
                 if r[res] > keep + 50:
@@ -347,6 +350,21 @@ class AI:
         """Revenu brut en livres ramené à des impôts normaux (0,5), pour ne pas mesurer le trésor à l'aune de ses propres allègements."""
         f = self.f
         return f.get('_gross_livres', 20) / (0.6 + 0.8 * f.get('tax', 0.5))   # voir Game.compute_income
+
+    def douane(self):
+        """Chaque mois (SPEC-MERCENAIRES.md) : un camp marchand garde un tarif bas, un camp pauvre ou en guerre le monte ;
+        des douaniers quand la contrebande coûte plus que leur solde."""
+        g, f, code = self.g, self.f, self.code
+        marchand = self.pers['trade'] >= 0.8
+        pauvre = f['income']['livres'] < 0.15 * self.gross_norm()
+        t = bool(self.wars()) + pauvre
+        t = min(1, t) if marchand else t + (t > 0)   # libre en paix et à l'aise ; jusqu'à prohibitif sinon
+        if t != f['tarif']:
+            g.set_tarif(code, t)
+        dn = f.get('_douane')
+        on = bool(dn) and dn['perte'] / 2 > dn['front'] * R.DOUANIERS_L
+        if dn and on != f['douaniers']:
+            g.set_douaniers(code, on)
 
     def reserve(self):
         """Trésor de guerre à garder sous la main : quarante jours de revenu brut, plus un fonds fixe.

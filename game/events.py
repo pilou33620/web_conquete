@@ -196,6 +196,15 @@ def _has_port(g, code):
     return any('port' in g.geo.nodes[n['id']]['spec'] for n in g.owned_nodes(code))
 
 
+def _contrebande_ok(g, code):
+    return _has_port(g, code) or g.factions[code]['tarif'] > 0
+
+
+def _contrebande_w(g, code):
+    """Une douane chère attire les contrebandiers (SPEC-MERCENAIRES.md) : 2 en tarif libre, jusqu'à 7 environ."""
+    return 2 * (1 + 5 * g.contrebande(code))
+
+
 RANDOM = [
     dict(id='recolte', w=3, season=('été', 'automne'), title='Une récolte magnifique',
          text="Les greniers débordent : jamais on n'avait vu pareille moisson.", base=dict(res_pct=dict(vivres=0.25))),
@@ -210,7 +219,7 @@ RANDOM = [
          text="Un savant renommé propose de s'installer à {ville} si on le pensionne.",
          choices=[dict(label='Le pensionner', fx=dict(res=dict(livres=-250), research=1), ai=2),
                   dict(label='Le laisser partir', fx=dict(), ai=1)]),
-    dict(id='contrebande', w=2, cond=_has_port, title='Des contrebandiers',
+    dict(id='contrebande', w=_contrebande_w, cond=_contrebande_ok, title='Des contrebandiers',
          text="Des contrebandiers débarquent du tabac et des toiles anglaises près {de_ville}.",
          choices=[dict(label='Fermer les yeux contre une part', fx=dict(res=dict(livres=250), stab=-0.03), ai=2),
                   dict(label='Saisir la marchandise', fx=dict(res=dict(livres=100), stab=0.02), ai=1)]),
@@ -369,7 +378,7 @@ def tick(g, d):
         season = g.season()
         pool = [e for e in RANDOM if season in e.get('season', (season,)) and (not e.get('cond') or e['cond'](g, code))]
         if pool:
-            fire(g, code, g.rng.choices(pool, [e['w'] for e in pool])[0], 'rand')
+            fire(g, code, g.rng.choices(pool, [e['w'](g, code) if callable(e['w']) else e['w'] for e in pool])[0], 'rand')
 
 
 # événements qu'une technologie atténue (SPEC-TECH.md) : la clé d'effet du camp (−0,5 : moitié moins)
