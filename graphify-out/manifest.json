@@ -6,9 +6,9 @@
     "semantic_hash": "d33a1b361a27dec6eb7d5827071fc871"
   },
   "game/ai.py": {
-    "mtime": 1793085530.273167,
-    "seen": 1793426021.9019086,
-    "ast_hash": "e350feae9cf6d6e30c99225671ad365e",
+    "mtime": 1793465711.5492225,
+    "seen": 1793507749.262339,
+    "ast_hash": "11dd4a2c5843bb6f742a103ebbe1b770",
     "semantic_hash": ""
   },
   "game/army_actions.py": {
@@ -36,15 +36,15 @@
     "semantic_hash": ""
   },
   "game/diplomacy.py": {
-    "mtime": 1792068648.1524844,
-    "seen": 1792077574.3995287,
-    "ast_hash": "7867175d58d9a383fb9d0bc0ba98cc55",
+    "mtime": 1793479723.2402825,
+    "seen": 1793507749.2624035,
+    "ast_hash": "51d7c830fb1a1e5fda762a45bf06bc7c",
     "semantic_hash": ""
   },
   "game/engine.py": {
-    "mtime": 1793129122.038415,
-    "seen": 1793426021.9019773,
-    "ast_hash": "72e9dc6e993287921a55549c29047b98",
+    "mtime": 1793482063.1812465,
+    "seen": 1793507749.2624114,
+    "ast_hash": "147d5e6e59e84a7ee37643904a2e791d",
     "semantic_hash": ""
   },
   "game/events.py": {
@@ -66,9 +66,9 @@
     "semantic_hash": ""
   },
   "game/rules.py": {
-    "mtime": 1793085530.2811668,
-    "seen": 1793426021.902015,
-    "ast_hash": "4ed490892fd1930da7b0510942ec458f",
+    "mtime": 1793465887.6412177,
+    "seen": 1793507749.2624505,
+    "ast_hash": "889f6a1b1fac244c331d2a6ca397f03d",
     "semantic_hash": ""
   },
   "game/tactics/__init__.py": {
@@ -90,9 +90,9 @@
     "semantic_hash": ""
   },
   "game/tactics/bridge.py": {
-    "mtime": 1793105863.6298685,
-    "seen": 1793426021.9020407,
-    "ast_hash": "06e51b91dc78b677aea3bd4c8aa152f8",
+    "mtime": 1793465887.6499515,
+    "seen": 1793507749.2624815,
+    "ast_hash": "b9e86d1886d42c10588150d7e909e70f",
     "semantic_hash": ""
   },
   "game/tactics/skirmish.py": {
@@ -108,9 +108,9 @@
     "semantic_hash": ""
   },
   "game/tactics/units.py": {
-    "mtime": 1792966372.6245105,
-    "seen": 1793426021.9021595,
-    "ast_hash": "16fb8389e16a93d4c7e0d4f78eaf7df0",
+    "mtime": 1793465451.6214736,
+    "seen": 1793507749.2625592,
+    "ast_hash": "91ae0a8df7f58db202a936e4ff2740c8",
     "semantic_hash": ""
   },
   "game/turns.py": {
@@ -120,9 +120,9 @@
     "semantic_hash": ""
   },
   "game/views.py": {
-    "mtime": 1793129122.0312607,
-    "seen": 1793426021.9021733,
-    "ast_hash": "ab4ff17a0fa6f5f2e64352dc54fdcde5",
+    "mtime": 1793477647.2972217,
+    "seen": 1793507749.262573,
+    "ast_hash": "e1a4d91913357160be35dd4a601b6d77",
     "semantic_hash": ""
   },
   "game/waterways.py": {
@@ -150,9 +150,9 @@
     "semantic_hash": "c5894a57720146fe53f2907ac3e34d2d"
   },
   "server.py": {
-    "mtime": 1793129122.0335853,
-    "seen": 1793426021.9022374,
-    "ast_hash": "1364d4d0d3f3c3956d8c9f956b2d25aa",
+    "mtime": 1793465838.1852727,
+    "seen": 1793507749.2626443,
+    "ast_hash": "cd433b8e3445927275fc584379bb9705",
     "semantic_hash": ""
   },
   "web/js/ambient.js": {
@@ -252,15 +252,15 @@
     "semantic_hash": ""
   },
   "web/js/ui.js": {
-    "mtime": 1793394725.8432214,
-    "seen": 1793426021.902779,
-    "ast_hash": "fcfc7dadf78544b28ba93c4a6c0e0978",
+    "mtime": 1793479728.796192,
+    "seen": 1793507749.2633317,
+    "ast_hash": "d74d313c03c9f25c719925ad9697c74f",
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1793450518.3377337,
-    "seen": 1793464562.0816474,
-    "ast_hash": "8e2c5f95e084ff89d9e670a189f1610c",
+    "mtime": 1793466038.3915074,
+    "seen": 1793507749.2633457,
+    "ast_hash": "ed80a26fb44271d797d111498fc1c4f8",
     "semantic_hash": ""
   },
   "web/index.html": {
@@ -324,9 +324,9 @@
     "semantic_hash": ""
   },
   "tests/test_campagne.py": {
-    "mtime": 1793386572.0803711,
-    "seen": 1793426021.9023926,
-    "ast_hash": "89292a95013338206bdafff35fac805f",
+    "mtime": 1793478074.8608701,
+    "seen": 1793507749.262842,
+    "ast_hash": "19581317f03d9cc8205f05d3bb881e91",
     "semantic_hash": ""
   },
   "tests/test_serveur.py": {
@@ -426,9 +426,9 @@
     "semantic_hash": ""
   },
   "tasks/equilibre-reference.md": {
-    "mtime": 1792829562.857167,
-    "seen": 1793426021.902878,
-    "ast_hash": "3c4269d47624e8ff9cd0630db520b9d5",
+    "mtime": 1793484907.1385486,
+    "seen": 1793507749.2634568,
+    "ast_hash": "97f6fc719089db56943cfe57d9dc9694",
     "semantic_hash": ""
   },
   "tasks/plan-tech.md": {
@@ -1017,6 +1017,24 @@
     "mtime": 1793453503.7234213,
     "seen": 1793464562.0817986,
     "ast_hash": "b55d9d762c502a5bfdefb1b2a9c89b84",
+    "semantic_hash": ""
+  },
+  "tests/test_generaux.py": {
+    "mtime": 1793479769.0281577,
+    "seen": 1793507749.2628632,
+    "ast_hash": "b8cec19a1edb612ab0a0298a233484a4",
+    "semantic_hash": ""
+  },
+  "SPEC-GENERAUX.md": {
+    "mtime": 1793482063.1826735,
+    "seen": 1793507749.2633896,
+    "ast_hash": "200f1139006d7f82146b73ccd0d03cca",
+    "semantic_hash": ""
+  },
+  "tasks/plan-generaux.md": {
+    "mtime": 1793507703.8663063,
+    "seen": 1793507749.263492,
+    "ast_hash": "2c695b42b41b56879142e3515d5bcd46",
     "semantic_hash": ""
   }
 }
