@@ -2,7 +2,8 @@
 // vers une nouvelle formation, les pas, le feu (épaule, joue, recul, baguette), la charge, la mêlée, la déroute et les
 // pertes sont ceux des figures 2D (battle/troupes2d.js : preparer, poses, kill) : on ne pose ici que des figurines,
 // une par figure, aux couleurs et à la tenue de l'époque (tenue). Rendu instancié : un maillage par modèle et par tenue,
-// ses contours à part ; le fusil est une pièce à part, que la pose lève ou abaisse. Les tués restent couchés au sol.
+// ses contours à part ; ce qui bouge est une pièce à part, que la pose fait pivoter : jambes (des hommes et des chevaux),
+// fusil, bras armé du sabre ou de l'épée, refouloir des servants. Les tués restent couchés au sol.
 import { THREE, MAT, CONT, lot, put, fusion, boite, cyl, cone, sphere, clamp } from './moteur.js';
 import { R, tenue } from '../battle/troupes2d.js';
 
@@ -35,9 +36,8 @@ function pieton(t, role) {
   if (role === R.DRAPEAU) { put(L, cyl(0.025, 0.025, 2.6, 5), CUIR, 0.1, 1.3, 0.2, 0, 0); put(L, boite(0.02, 0.6, 0.9), t.drap || habit, 0.1, 2.25, 0.66, 0, 0.02); put(L, boite(0.025, 0.25, 0.35), BLANC, 0.1, 2.25, 0.66, 0, 0); }
   return L;
 }
-function cheval(L, robe) {
+function cheval(L, robe) {   // (les jambes sont à part : jambeCheval(), hanches à 0,86 m, elles trottent)
   put(L, boite(1.7, 0.62, 0.52), robe, 0, 1.15, 0, 0, 0.04);
-  for (const [a, b] of [[0.62, 0.17], [0.62, -0.17], [-0.62, 0.17], [-0.62, -0.17]]) put(L, boite(0.14, 0.86, 0.14), robe, a, 0.43, b, 0, 0);
   const cou = boite(0.42, 0.72, 0.32); cou.rotateZ(-0.55); put(L, cou, robe, 0.95, 1.55, 0, 0, 0.04);
   put(L, boite(0.56, 0.26, 0.24), robe, 1.25, 1.83, 0, 0, 0.03);
   put(L, boite(0.12, 0.6, 0.08), NOIR, -0.92, 1.05, 0, 0, 0);   // queue
@@ -48,7 +48,8 @@ function cavalier(t, role) {
   put(L, boite(0.3, 0.62, 0.42), t.habit, -0.05, 1.82, 0, 0, 0.04);
   put(L, boite(0.18, 0.5, 0.12), t.culotte || BLANC, 0, 1.45, 0.3, 0, 0); put(L, boite(0.18, 0.5, 0.12), t.culotte || BLANC, 0, 1.45, -0.3, 0, 0);
   put(L, sphere(0.12, 1), CHAIR, -0.05, 2.25, 0, 0, 0.03);
-  const C = lot(); coiffe(C, role === R.CAV_GEN || role === R.CAV_OFF ? t.teteOff || t.tete : t.tete, t.plume); for (const g of C.g) { g.translate(-0.05, 0.62, 0); L.g.push(g); } for (const o of C.o) { o.translate(-0.05, 0.62, 0); L.o.push(o); }
+  const C = lot(); coiffe(C, role === R.CAV_GEN || role === R.CAV_OFF ? t.teteOff || t.tete : t.tete, t.plume); greffer(L, C, -0.05, 0.62, 0);
+  const f = boite(0.05, 0.85, 0.07); f.rotateZ(-0.9); put(L, f, 0x8d9196, -0.2, 1.25, -0.34, 0, 0.02);   // le fourreau, à gauche (le sabre : lame())
   if (role === R.CAV_GEN) { put(L, cyl(0.025, 0.025, 2.4, 5), CUIR, -0.4, 2.2, 0.3, 0, 0); put(L, boite(0.02, 0.5, 0.8), t.drap || t.habit, -0.4, 3.1, 0.7, 0, 0.02); }
   return L;
 }
@@ -69,6 +70,17 @@ function voiture(t, bache) {
 }
 // une jambe, la hanche à l'origine : elle pend vers le bas et pivote autour de la hanche (le pas)
 function jambe(col) { const L = lot(); put(L, boite(0.11, 0.84, 0.12), col, 0, -0.42, 0, 0, 0.03); return L; }
+// une jambe de cheval, la hanche à l'origine, et son sabot
+function jambeCheval(robe) { const L = lot(); put(L, boite(0.14, 0.78, 0.14), robe, 0, -0.39, 0, 0, 0.03); put(L, boite(0.16, 0.08, 0.16), NOIR, 0, -0.82, 0, 0, 0); return L; }
+// le bras armé, l'épaule à l'origine : bras, main, garde et lame vers +y ; la pose le fait pivoter autour de l'épaule
+function lame(habit, long) {
+  const L = lot(); put(L, boite(0.1, 0.48, 0.1), habit, 0, 0.24, 0, 0, 0.03); put(L, sphere(0.06, 0), CHAIR, 0, 0.5, 0, 0, 0);
+  put(L, boite(0.05, 0.04, 0.16), BRONZE, 0, 0.56, 0, 0, 0); put(L, boite(0.025, long, 0.06), 0xdfe3e6, 0, 0.58 + long / 2, 0, 0, 0.02); return L;
+}
+// le refouloir (l'écouvillon au bout), les mains à l'origine, la hampe vers +x
+function refouloir() { const L = lot(); put(L, boite(2.3, 0.05, 0.05), CUIR, 1, 0, 0, 0, 0.02); const b = cyl(0.08, 0.08, 0.22, 6); b.rotateZ(Math.PI / 2); put(L, b, NOIR, 2.2, 0, 0, 0, 0.02); return L; }
+// ajoute au lot L les pièces du lot J, décalées de (x, y, z)
+function greffer(L, J, x, y, z) { for (const k of ['g', 'o']) for (const geo of J[k]) { geo.translate(x, y, z); L[k].push(geo); } }
 function fusil() { const L = lot(); put(L, boite(0.05, 1.45, 0.05), CUIR, 0, 0, 0, 0, 0.02); put(L, boite(0.02, 0.35, 0.02), 0xc8ccd0, 0, 0.88, 0, 0, 0); return L; }
 
 // ---------------------------------------------------------------- un maillage instancié (et ses contours)
@@ -92,6 +104,8 @@ class Lot3D {
 const MT = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(), EU = new THREE.Euler(0, 0, 0, 'YXZ');
 const PIETONS = new Set([R.H, R.PIQUE, R.DRAPEAU, R.OFFICIER, R.TAMBOUR, R.SERVANT]);
 const MONTES = new Set([R.CAV, R.CAV_OFF, R.CAV_GEN]);
+// jambes du cheval : [avant, côté (droite +), phase au pas et au trot (les diagonales, comme les figures 2D), au galop]
+const JC = [[0.62, -0.17, 0, 0], [0.62, 0.17, Math.PI, 0.8], [-0.62, -0.17, Math.PI, Math.PI], [-0.62, 0.17, 0, Math.PI + 0.8]];
 
 export class Troupes3D {
   // champ : hex/champ.js (sol, scène) ; troupes : battle/troupes2d.js (dispositions, poses, pertes) ; year : tenues
@@ -109,6 +123,16 @@ export class Troupes3D {
     P.set(x, this.champ.hauteur(x, y) + dy, y); EU.set(rx, -a, rz); Q.setFromEuler(EU); SC.set(s, s, s);
     return MT.compose(P, Q, SC);
   }
+  // une pièce au point (fx, fy, fz) du repère de la figure (x, y, cap a, échelle s), tangage rz, tournée de da
+  sous(cle, fab, x, y, a, s, fx, fy, fz, rz = 0, da = 0) {
+    const c = Math.cos(a), sn = Math.sin(a);
+    this.lotDe(cle, fab).poser(this.mat(x + (fx * c - fz * sn) * s, y + (fx * sn + fz * c) * s, a + da, s, fy * s, 0, rz));
+  }
+  // les quatre jambes d'un cheval qui marche, trotte ou galope (d.gait, d.amp : la phase et l'allure des figures 2D)
+  jambesCheval(x, y, a, s, dy, d, robe) {
+    const k = d.gait == null ? 0 : 0.22 * d.amp, gal = d.amp > 2, fab = () => jambeCheval(robe);
+    for (const [fx, fz, pt, pg] of JC) this.sous('jc|' + robe, fab, x, y, a, s, fx, 0.86 + dy, fz, k && Math.sin(d.gait + (gal ? pg : pt)) * k);
+  }
   // une image : units (vue.js), couleurs des camps, temps (s), visible(x, y, marge)
   image(units, colors, time, visible) {
     for (const l of this.lots.values()) l.n = 0;
@@ -116,16 +140,20 @@ export class Troupes3D {
     for (const u of list) {
       if ((u._fade ?? 1) < 0.5 || !visible(u.x, u.y, Math.max(u.w || 0, u.d || 0) + 20)) continue;
       const col = colors[u.side] || '#888', t = this.tenueDe(col, u.type), cle = col + '|' + u.type;
-      this.tr.poses(u, time, (x, y, a, role, d) => {
+      this.tr.poses(u, time, (x, y, a, role, d, job, cyc) => {
         // le pas : la figure monte et descend ; au galop, plus fort ; à la charge, elle se penche
         const pas = d.legs != null ? Math.abs(Math.sin(d.legs)) * 0.07 : d.gait != null ? Math.abs(Math.sin(d.gait)) * 0.05 * d.amp : 0;
         const pench = u.state === "charge" ? -0.18 : 0, s = fs * 0.75;
         if (PIETONS.has(role)) {
           const lr = role === R.SERVANT ? R.H : role;
-          this.lotDe('p' + lr + '|' + cle, () => pieton(t, lr)).poser(this.mat(x, y, a, s, pas * s, 0, pench));
+          // les servants : au coup, un mouvement de recul ; le pointeur, penché sur la culasse, jusqu'à ce qu'il s'écarte
+          let rz = pench;
+          if (role === R.SERVANT && cyc >= 0) rz = cyc < 0.6 ? 0.3 * (1 - cyc / 0.6) : job === 2 && cyc > 1.4 && cyc < 4.6 ? -0.55 : 0;
+          // (le corps pivote aux hanches, pour rester sur ses jambes)
+          this.sous('p' + lr + '|' + cle, () => pieton(t, lr), x, y, a, s, 0.84 * Math.sin(rz), pas + 0.84 * (1 - Math.cos(rz)), 0, rz);
           // les jambes : chacune balance d'avant en arrière au rythme du pas (d.legs, la phase du pas des figures 2D)
-          const sw = d.legs != null ? Math.sin(d.legs) * 0.5 : 0, cj = 'j|' + (t.culotte || BLANC), sa = Math.sin(a), ca = Math.cos(a);
-          for (const c of [-1, 1]) this.lotDe(cj, () => jambe(t.culotte || BLANC)).poser(this.mat(x - sa * c * 0.07 * s, y + ca * c * 0.07 * s, a, s, (0.84 + pas) * s, 0, c * sw));
+          const sw = d.legs != null ? Math.sin(d.legs) * 0.5 : 0, cj = 'j|' + (t.culotte || BLANC);
+          for (const c of [-1, 1]) this.sous(cj, () => jambe(t.culotte || BLANC), x, y, a, s, 0, 0.84 + pas, c * 0.07, c * sw);
           // le fusil selon la pose : à l'épaule, en joue, baïonnette en avant, à la baguette, posé
           if (role === R.H || role === R.PIQUE) {
             let fx = 0.05, fy = 1.3, fz = 0.22, rz = 0;
@@ -136,14 +164,24 @@ export class Troupes3D {
               case 'sol': case 'hache0': fx = 0.05; fy = 0.72; fz = 0.25; break;
               case 'aucun': fy = -99; break;
             }
-            if (fy > -9) {
-              const c = Math.cos(a), sn = Math.sin(a), wx = x + (fx * c - fz * sn) * s, wy = y + (fx * sn + fz * c) * s;
-              this.lotDe('fusil', fusil).poser(this.mat(wx, wy, a, s, (fy + pas) * s, 0, rz + pench));
-            }
+            if (fy > -9) this.sous('fusil', fusil, x, y, a, s, fx, fy + pas, fz, rz + pench);
           }
-        } else if (MONTES.has(role)) this.lotDe('c' + role + '|' + cle, () => cavalier(t, role)).poser(this.mat(x, y, a, s, pas * s, 0, pench * 0.5));
-        else if (role === R.CHEVAL) this.lotDe('a|' + cle, () => attelage(t)).poser(this.mat(x, y, a, s, pas * s));
-        else if (role === R.PIECE) { const r = d.recul * 0.12; this.lotDe('k|' + cle + (t.mit ? 'm' : ''), () => piece(t)).poser(this.mat(x - Math.cos(a) * r * s, y - Math.sin(a) * r * s, a, s)); }
+          // l'épée de l'officier : basse au repos ; levée à la charge, elle frappe dans la mêlée (d.ext)
+          if (role === R.OFFICIER) this.sous('e|' + t.habit, () => lame(t.habit, 0.75), x, y, a, s, 0, 1.38 + pas, 0.2, d.arme === 'epee+' ? -0.5 - d.ext * 1.3 : Math.PI - 0.35);
+          // le refouloir (servant n° 1) : poussé dans la bouche entre deux coups (d.ext), debout à côté de lui sinon
+          if (role === R.SERVANT && job === 1) {
+            if (d.arme === 'refouloir') { const da = 2.3, e = 0.25 + d.ext * 0.5; this.sous('r', refouloir, x, y, a, s, 0.25 + Math.cos(da) * e, 1.05 + pas, 0.15 + Math.sin(da) * e, -0.1, da); }
+            else this.sous('r', refouloir, x, y, a, s, 0.1, 0.18, 0.3, Math.PI / 2);
+          }
+        } else if (MONTES.has(role)) {
+          const robe = t.chevaux?.[1] || 0x6b4a2c;
+          this.lotDe('c' + role + '|' + cle, () => cavalier(t, role)).poser(this.mat(x, y, a, s, pas * s, 0, pench * 0.5));
+          this.jambesCheval(x, y, a, s, pas, d, robe);
+          // le sabre : au fourreau (dans le modèle) ; tiré et levé à la charge, il frappe dans la mêlée (d.ext de −1 à 1)
+          if (d.sabre) this.sous('e|' + t.habit + 'c', () => lame(t.habit, 0.9), x, y, a, s, -0.05, 2.06 + pas, 0.22, d.sabre === 2 ? -0.9 + d.ext * 0.9 : -1);
+        } else if (role === R.CHEVAL) { this.lotDe('a|' + cle, () => attelage(t)).poser(this.mat(x, y, a, s, pas * s)); this.jambesCheval(x, y, a, s, pas, d, t.chevaux?.[0] || 0x6b4a2c); }
+        // la pièce recule au coup sur son affût, la bouche se relève
+        else if (role === R.PIECE) { const r = d.recul * 0.12; this.lotDe('k|' + cle + (t.mit ? 'm' : ''), () => piece(t)).poser(this.mat(x - Math.cos(a) * r * s, y - Math.sin(a) * r * s, a, s, 0, 0, d.recul * 0.04)); }
         else if (role === R.AVANT || role === R.CAISSON) this.lotDe('v' + role + '|' + cle, () => voiture(t, role === R.CAISSON)).poser(this.mat(x, y, a, s * (role === R.AVANT ? 0.8 : 1), pas * s));
       });
     }
@@ -157,8 +195,9 @@ export class Troupes3D {
       const t = this.tenueDe(d.c || '#888', 'ligne'), cle = (d.k === 'cheval' ? 'h' : 'm') + (d.c || '');
       let l = this.morts.get(cle);
       if (!l) {
-        const L = d.k === 'cheval' ? attelage(t) : pieton(t, R.H);
-        if (d.k !== 'cheval') for (const c of [-1, 1]) { const J = jambe(t.culotte || BLANC); for (const k of ['g', 'o']) for (const geo of J[k]) { geo.translate(0, 0.84, c * 0.07); L[k].push(geo); } }
+        const L = d.k === 'cheval' ? attelage(t) : pieton(t, R.H), robe = t.chevaux?.[0] || 0x6b4a2c;
+        if (d.k === 'cheval') for (const [fx, fz] of JC) greffer(L, jambeCheval(robe), fx, 0.86, fz);
+        else for (const c of [-1, 1]) greffer(L, jambe(t.culotte || BLANC), 0, 0.84, c * 0.07);
         l = new Lot3D(this.grp, L, 64); this.morts.set(cle, l);
       }
       if (l.n >= 4000) continue;

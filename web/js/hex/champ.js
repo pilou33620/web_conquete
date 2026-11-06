@@ -7,7 +7,7 @@
 // tournent) ont leur modèle. Toits crevés, incendies et ruines suivent l'état envoyé par le serveur (bati) ; brèches
 // et barricades refont l'enceinte. Les troupes (hex/troupes3d.js) et les effets, la vie, l'interface (calques 2D)
 // viennent par-dessus.
-import { THREE, DEGRADE, Scene3D, Grille, lot, put, fige, jeter, transfere, boite, cyl, cone, sphere, ruban, hache, semer, rnd, entre, choix, toit, pavillon } from './moteur.js';
+import { THREE, DEGRADE, MAT, CONT, Scene3D, Grille, lot, put, fige, fusion, jeter, transfere, boite, cyl, cone, sphere, ruban, hache, semer, rnd, entre, choix, toit, pavillon } from './moteur.js';
 import * as M from './modeles.js';
 import { CELL_NAMES } from '../battle/formes.js';
 
@@ -19,6 +19,38 @@ const EAU_Y = -0.5, REL = 0.5;   // relief : la moitié des hauteurs du moteur
 const TRACES = new Set(['ROUTE', 'CHEMIN', 'GUE']);
 const TOITS = { ardoise: 0x5b5866, chaume: 0xb89a5a, lauze: 0x7a7268 };
 const NOBLE = new Set(['cathedrale', 'eglise', 'caserne', 'poudriere', 'hopital', 'couvent', 'hotel', 'halle', 'chateau', 'forge', 'scierie', 'sechoir', 'moulin']);
+const NEIGE = new THREE.Color(0xf4f7fa);
+// un matériau dont les pièces s'ajourent selon leur hexagone (attribut aHex ; texture : ouverture 0–255 par hexagone) :
+// une trame de Bayer 4×4 fait sauter jusqu'aux trois quarts des pixels, le bois reste lisible et les troupes paraissent
+function ajoure(base, tex) {
+  const m = base.clone();
+  m.onBeforeCompile = s => {
+    s.uniforms.uOuv = { value: tex };
+    s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nattribute float aHex; uniform sampler2D uOuv; varying float vOuv;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nint ih = int(aHex + 0.5), lw = textureSize(uOuv, 0).x; vOuv = texelFetch(uOuv, ivec2(ih % lw, ih / lw), 0).r;');
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vOuv;')
+      .replace('void main() {', 'void main() {\nivec2 bp = ivec2(gl_FragCoord.xy) & 3; int bx = bp.x ^ bp.y;\nif (float(((bx & 1) << 3) | ((bp.y & 1) << 2) | (bx & 2) | ((bp.y >> 1) & 1)) < vOuv * 12.0) discard;');
+  };
+  return m;
+}
+// débris du combat (vue.js, casualties), en mètres, à l'échelle des tués : tricorne, fusil, havresac, roue brisée
+const DEBRIS = {
+  chapeau: L => { put(L, cyl(0.27, 0.27, 0.05, 3), 0x24211e, 0, 0.03, 0, 0, 0.02); put(L, sphere(0.15, 0), 0x2e2a26, 0, 0.1, 0, 0, 0.02); },
+  fusil: L => { put(L, boite(1.45, 0.06, 0.09), 0x6b4a2e, 0, 0.04, 0, 0, 0.02); put(L, boite(1, 0.04, 0.035), 0xc8ccd0, 0.3, 0.09, 0, 0, 0); },
+  sac: L => { put(L, boite(0.42, 0.16, 0.34), 0x8a6a4a, 0, 0.08, 0, 0, 0.02); const r = cyl(0.08, 0.08, 0.46, 6); r.rotateZ(Math.PI / 2); put(L, r, 0x9aa0a8, 0, 0.2, -0.1, 0, 0.02); },
+  roue: L => {
+    const j = new THREE.TorusGeometry(0.62, 0.07, 4, 12, 4.4); j.rotateX(Math.PI / 2); put(L, j, 0x5a3a24, 0, 0.07, 0, 0, 0.02);   // la jante, un morceau en moins
+    put(L, cyl(0.13, 0.13, 0.14, 8), 0x3a2a1b, 0, 0.07, 0, 0, 0.02);
+    for (const a of [0.3, 1.5, 2.7, 3.9]) { const b = boite(0.58, 0.05, 0.06); b.translate(0.3, 0, 0); put(L, b, 0x6b4a2e, 0, 0.07, 0, a, 0); }
+  },
+  // le cratère, rayon 1 : le trou de terre noire, la terre rejetée en bourrelet, des mottes
+  trou: L => {
+    put(L, cyl(1, 0.8, 0.1, 10), 0x3b2e21, 0, 0.05, 0, 0, 0);
+    const b = new THREE.TorusGeometry(1.05, 0.3, 4, 10); b.rotateX(Math.PI / 2); b.scale(1, 0.45, 1); put(L, b, 0x7a5a3a, 0, 0.06, 0, 0, 0);
+    for (let k = 0; k < 4; k++) put(L, sphere(0.2, 0), 0x6b4e32, Math.cos(k * 1.7) * 1.55, 0.08, Math.sin(k * 1.7) * 1.55, 0, 0);
+  },
+};
+const MX = new THREE.Matrix4(), QX = new THREE.Quaternion(), PX = new THREE.Vector3(), SX = new THREE.Vector3(), AXE = new THREE.Vector3(0, 1, 0);
 
 export class Champ {
   // canvas : canevas WebGL sous celui de la bataille ; m : carte du moteur (/api/tactic_map) ; terrain : battle/terrain.js
@@ -34,6 +66,7 @@ export class Champ {
     this.objets = [];           // bâtiments : { cases, etat, bati(), grp }
     this.parCase = new Map();   // case → indices des bâtiments qui la couvrent
     this.etat = new Uint8Array(terrain.cols * terrain.rows);
+    this.neige = !!terrain.pal?.neige || m.weather === 'neige';   // sol enneigé : l'hiver (comme decor2d.js), ou s'il neige
     this.echantillonner();
     this.tuiles();
     const eau = new THREE.Mesh(new THREE.PlaneGeometry(terrain.W / g.f + 600, terrain.H / g.f + 600), new THREE.MeshToonMaterial({ color: 0x3fa6dc, gradientMap: DEGRADE, transparent: true, opacity: 0.72 }));
@@ -78,7 +111,7 @@ export class Champ {
       const geo = put(L, cyl(g.R * 0.965, g.R, h, 6), SOL[t.t] || SOL.PRE, t.x, bas + h / 2, t.z, 0, 0);
       semer(t.q, t.r);
       c.set(SOL[t.t] || SOL.PRE).offsetHSL((rnd() - 0.5) * 0.015, 0, (rnd() - 0.5) * 0.05);
-      if (saison === 'hiver' && !this.estEau(t)) c.lerp(new THREE.Color(0xf1f4f6), 0.35);
+      if (this.neige && !this.estEau(t)) c.lerp(new THREE.Color(0xf1f4f6), 0.45);
       else if (saison === 'automne' && (t.t === 'BOIS' || t.t === 'FORET' || t.t === 'PRE')) c.lerp(new THREE.Color(0xc98a3c), 0.2);
       else if ((saison === 'été' || saison === 'ete') && (t.t === 'CHAMP' || t.t === 'PRE')) c.lerp(new THREE.Color(0xd8c45a), 0.2);
       const nr = geo.attributes.normal, co = geo.attributes.color;
@@ -95,12 +128,20 @@ export class Champ {
 
   // ---------------------------------------------------------------- le décor des champs
   decor() {
-    const { g } = this, L = lot(), R = g.R;
+    const { g } = this, L = lot(), A = lot(), R = g.R;
+    this.boise = new Uint8Array(g.liste.length);
+    // les arbres des bois et des vergers, à part : chacun marqué de son hexagone (aHex), pour s'ouvrir au-dessus des troupes ;
+    // l'hiver, les feuillus sont nus (houppiers gris-brun, poudrés par neiger)
+    const arbre = (t, x, z, s, sorte) => {
+      const n = A.g.length, no = A.o.length; this.boise[t.i] = 1;
+      M.arbre(A, x, t.top, z, s, sorte, this.neige && sorte !== 'sapin' && sorte !== 'pin' ? choix([0x8f8a6e, 0x9a927a]) : undefined);
+      for (const geo of [...A.g.slice(n), ...A.o.slice(no)]) geo.setAttribute('aHex', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(t.i), 1));
+    };
     for (const t of g.liste) {
       semer(t.q, t.r);
       const y = t.top, rr = (k = 0.62) => { const a = rnd() * Math.PI * 2, l = Math.sqrt(rnd()) * R * k; return [t.x + Math.cos(a) * l, t.z + Math.sin(a) * l]; };
-      if (t.t === 'BOIS' || t.t === 'FORET') for (let i = 0, nb = t.t === 'FORET' ? 6 : 4; i < nb; i++) { const [x, z] = rr(); M.arbre(L, x, y, z, entre(0.85, 1.2), t.t === 'FORET' && (this.dept === '64' || rnd() < 0.4) ? 'sapin' : this.dept === '40' && rnd() < 0.6 ? 'pin' : 'feuillu'); }
-      if (t.t === 'VERGER') for (let i = 0; i < 3; i++) { const [x, z] = rr(0.55); M.arbre(L, x, y, z, 1, 'fruitier'); }
+      if (t.t === 'BOIS' || t.t === 'FORET') for (let i = 0, nb = t.t === 'FORET' ? 6 : 4; i < nb; i++) { const [x, z] = rr(); arbre(t, x, z, entre(0.85, 1.2), t.t === 'FORET' && (this.dept === '64' || rnd() < 0.4) ? 'sapin' : this.dept === '40' && rnd() < 0.6 ? 'pin' : 'feuillu'); }
+      if (t.t === 'VERGER') for (let i = 0; i < 3; i++) { const [x, z] = rr(0.55); arbre(t, x, z, 1, 'fruitier'); }
       if (t.t === 'CHAMP') { const a = hache(t.q >> 2, t.r >> 2, 3) * Math.PI; for (let k = -2; k <= 2; k++) put(L, boite(14 - Math.abs(k) * 2.6, 0.3, 2.6), [0xe3c75b, 0xd6b24a, 0xbfae4f][(k + 9 + (t.q >> 2)) % 3], t.x + Math.sin(a) * k * 2.9, y + 0.15, t.z + Math.cos(a) * k * 2.9, a, 0); }
       if (t.t === 'VIGNE') { const a = hache(t.q >> 2, t.r >> 2, 4) * Math.PI; for (let k = -3; k <= 3; k++) put(L, boite(12 - Math.abs(k) * 1.7, 0.8, 0.55), 0x557a2e, t.x + Math.sin(a) * k * 1.7, y + 0.4, t.z + Math.cos(a) * k * 1.7, a, 0.1); }
       if (t.t === 'LANDE') for (let i = 0; i < 3; i++) { const [x, z] = rr(), b = sphere(entre(0.8, 1.2), 0); b.scale(1.3, 0.5, 1); put(L, b, 0x9a6f9e, x, y + 0.2, z, 0, 0.1); }
@@ -108,7 +149,25 @@ export class Champ {
       if (t.t === 'ROCHE') for (let i = 0; i < 2; i++) { const [x, z] = rr(); put(L, sphere(entre(1.2, 2.4), 0), 0x8f8879, x, y + 0.6, z); }
       if (t.t === 'PRE' && rnd() < 0.18) { const [x, z] = rr(); put(L, sphere(0.9, 0), 0x5fa83c, x, y + 0.5, z); }
     }
-    fige(L, this.racine);
+    this.neiger(L.g); this.neiger(A.g); fige(L, this.racine);
+    // un seul maillage pour tous les arbres ; l'ouverture de chaque hexagone dans une petite texture (eclaircir)
+    const tex = this.texOuv = new THREE.DataTexture(this.ouv = new Uint8Array(g.cols * g.rows), g.cols, g.rows, THREE.RedFormat);
+    tex.needsUpdate = true;
+    const grp = fige(A, this.racine, { mat: ajoure(MAT, tex) });
+    if (grp.children[1]) grp.children[1].material = ajoure(CONT, tex);
+  }
+  // la neige : les faces tournées vers le ciel blanchissent (toits, houppiers, sapins, haut des murs, haies, clôtures) ;
+  // les pentes raides (flèches, tours) restent sombres
+  neiger(geos) {
+    if (!this.neige) return;
+    for (const geo of geos) {
+      const p = geo.attributes.position.array, c = geo.attributes.color;
+      for (let i = 0; i + 8 < p.length; i += 9) {
+        const ax = p[i + 3] - p[i], ay = p[i + 4] - p[i + 1], az = p[i + 5] - p[i + 2], bx = p[i + 6] - p[i], by = p[i + 7] - p[i + 1], bz = p[i + 8] - p[i + 2];
+        const ny = az * bx - ax * bz, l = Math.hypot(ay * bz - az * by, ny, ax * by - ay * bx) || 1, k = Math.min(1, Math.max(0, (ny / l - 0.3) / 0.3)) * 0.92;
+        if (k > 0) for (let v = i / 3; v < i / 3 + 3; v++) c.setXYZ(v, c.getX(v) + (NEIGE.r - c.getX(v)) * k, c.getY(v) + (NEIGE.g - c.getY(v)) * k, c.getZ(v) + (NEIGE.b - c.getZ(v)) * k);
+      }
+    }
   }
 
   // ---------------------------------------------------------------- routes, rivières, ponts, haies, clôtures
@@ -133,6 +192,7 @@ export class Champ {
       transfere(B, L, this.u(b.x), y, this.u(b.y), ry);
     }
     // haies (boules de verdure), clôtures et murets
+    const n0 = L.g.length;
     for (const hd of this.m.hedges || []) for (const [x, y, z] of g.suivre(hd, 1.6, 0, sol)) { semer(x * 10, z * 10); const b = sphere(entre(0.8, 1.05), 0); b.scale(1, 0.8, 1); put(L, b, choix([0x4f9a37, 0x5fae3e]), x, y + 0.7, z, 0, 0.12); }
     for (const fe of tr.fences) {
       const p = g.suivre(fe.pts, 3, 0, sol), muret = fe.kind === 'muret';
@@ -142,7 +202,7 @@ export class Champ {
         if (!muret) put(L, boite(0.18, 0.8, 0.18), 0x7a5233, ax, ay + 0.4, az, 0, 0);
       }
     }
-    fige(L, this.racine, { ombre: false }); fige(W, this.racine, { ombre: false, contour: false });
+    this.neiger(L.g.slice(n0)); fige(L, this.racine, { ombre: false }); fige(W, this.racine, { ombre: false, contour: false });
   }
 
   // ---------------------------------------------------------------- les bâtiments
@@ -155,7 +215,7 @@ export class Champ {
   }
   refaire(o) {
     jeter(o.grp);
-    const L = lot(); semer(o.cases[0] || 0, 17); o.bati(L, o.etat);
+    const L = lot(); semer(o.cases[0] || 0, 17); o.bati(L, o.etat); this.neiger(L.g);
     o.grp = fige(L, this.racine); this.sc.sale = true;
   }
   // état reçu du serveur : [[case, état], …]
@@ -303,7 +363,7 @@ export class Champ {
       const p = g.suivre(dl, 3, 0, sol);
       for (let i = 0; i < p.length - 1; i++) { const [ax, ay, az] = p[i], [bx, , bz] = p[i + 1], l = Math.hypot(bx - ax, bz - az); put(L, boite(l + 0.4, this.u(5), this.u(4)), 0xc4b083, (ax + bx) / 2, ay + this.u(2.5), (az + bz) / 2, -Math.atan2(bz - az, bx - ax), 0.14); }
     }
-    this.grpMurs = fige(L, this.racine); this.sc.sale = true;
+    this.neiger(L.g); this.grpMurs = fige(L, this.racine); this.sc.sale = true;
   }
   barricades() {
     jeter(this.grpBarr);
@@ -319,20 +379,28 @@ export class Champ {
         else put(L, boite(entre(3, 5), 1.6, 0.5), 0x8a6a4a, px, y + 0.8, pz, rnd() * 3, 0.12);
       }
     }
-    this.grpBarr = fige(L, this.racine); this.sc.sale = true;
+    this.neiger(L.g); this.grpBarr = fige(L, this.racine); this.sc.sale = true;
   }
 
-  // ---------------------------------------------------------------- cratères (les tués : hex/troupes3d.js)
-  cratere(x, y, r = 2.6) {
-    const t = this.g.en(x, y); if (!t) return;
-    if (!this.trous) {
-      const geo = new THREE.CircleGeometry(1, 10); geo.rotateX(-Math.PI / 2);
-      this.trous = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0x4a3a28, transparent: true, opacity: 0.8, depthWrite: false }), 1500);
-      this.trous.count = 0; this.trous.frustumCulled = false; this.racine.add(this.trous); this.nTrous = 0;
+  // ---------------------------------------------------------------- cratères et débris (les tués : hex/troupes3d.js)
+  // chaque sorte (DEBRIS) : un maillage instancié et ses contours, en mètres ; au-delà de 2 000, les plus anciens cèdent
+  poser(k, x, y, a, s, sy = s) {
+    const deb = this.deb || (this.deb = new Map()), grp = this.grpDeb || (this.grpDeb = new THREE.Group());
+    if (!grp.parent) this.sc.monde.add(grp);
+    let I = deb.get(k);
+    if (!I) {
+      const L = lot(); DEBRIS[k](L);
+      const geoO = fusion(L.o), ms = [new THREE.InstancedMesh(fusion(L.g), MAT, 2000), geoO && new THREE.InstancedMesh(geoO, CONT, 2000)].filter(Boolean);
+      for (const m of ms) { m.count = 0; m.frustumCulled = false; m.receiveShadow = true; grp.add(m); }
+      deb.set(k, I = { ms, n: 0 });
     }
-    const m = new THREE.Matrix4().compose(new THREE.Vector3(this.u(x), this.sol(t) + 0.05, this.u(y)), new THREE.Quaternion(), new THREE.Vector3(this.u(r), 1, this.u(r)));
-    this.trous.setMatrixAt(this.nTrous % 1500, m); this.nTrous++; this.trous.count = Math.min(this.nTrous, 1500); this.trous.instanceMatrix.needsUpdate = true;
+    MX.compose(PX.set(x, this.hauteur(x, y) + 0.03, y), QX.setFromAxisAngle(AXE, -a), SX.set(s, sy, s));
+    for (const m of I.ms) { m.setMatrixAt(I.n % 2000, MX); m.count = Math.min(I.n + 1, 2000); m.instanceMatrix.needsUpdate = true; }
+    I.n++; this.sc.sale = true;
   }
+  cratere(x, y, r = 2.6) { if (this.g.en(x, y)) this.poser('trou', x, y, Math.random() * 6.3, r, r * 0.7); }
+  // débris du combat (decals de vue.casualties) ; fs : l'échelle des figures (les tués sont à fs × 0,75)
+  debris(list, fs = 1) { for (const d of list) if (DEBRIS[d.k] && d.k !== 'trou' && this.g.en(d.x, d.y)) this.poser(d.k, d.x, d.y, d.a || 0, fs * 0.75); }
 
   // ---------------------------------------------------------------- chaque image
   // la boue du piétinement (battle/pietinement.js) : son canevas posé en texture sur le dessus des hexagones de terre
@@ -351,8 +419,32 @@ export class Champ {
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: this.texBoue, transparent: true, depthWrite: false }));
     m.renderOrder = 1; this.racine.add(m); this.piet = piet; this.vBoue = -1;
   }
-  image(cam, vw, vh, dpr, time) {
+  // les bois s'ouvrent au-dessus des troupes : les hexagones boisés sous un régiment (marge d'un demi-hexagone, poussée un
+  // peu au sud : en vue penchée les arbres de devant cachent) s'ajourent en fondu, puis se referment
+  eclaircir(units, dt) {
+    const { g } = this, RK = g.RK, H = 1.5 * RK, vise = this.vise || (this.vise = new Set()), act = this.actifs || (this.actifs = new Set());
+    vise.clear();
+    for (const u of units) {
+      if (u._ghost) continue;
+      const c = Math.cos(u.dir || 0), s = Math.sin(u.dir || 0), hw = Math.max(6, u.w || 0) / 2 + RK, hd = Math.max(6, u.d || 0) / 2 + RK, r = Math.hypot(hw, hd), y0 = u.y + 6;
+      for (let row = Math.max(0, Math.floor((y0 - r) / H)); row <= Math.min(g.rows - 1, Math.ceil((y0 + r) / H)); row++)
+        for (let col = Math.max(0, Math.floor((u.x - r) / g.pas)); col <= Math.min(g.cols - 1, Math.ceil((u.x + r) / g.pas)); col++) {
+          const i = row * g.cols + col; if (!this.boise[i]) continue;
+          const t = g.liste[i], dx = t.gx - u.x, dy = t.gy - y0;
+          if (Math.abs(-s * dx + c * dy) < hw && Math.abs(c * dx + s * dy) < hd) { vise.add(i); act.add(i); }
+        }
+    }
+    const pas = Math.ceil(dt * 255 * 4); let sale = false;
+    for (const i of act) {
+      const v = this.ouv[i], c = vise.has(i) ? 255 : 0;
+      if (v === c) { if (!c) act.delete(i); continue; }
+      this.ouv[i] = c > v ? Math.min(c, v + pas) : Math.max(c, v - pas); sale = true;
+    }
+    if (sale) this.texOuv.needsUpdate = true;
+  }
+  image(cam, vw, vh, dpr, time, units) {
     if (this.piet && this.piet.version !== this.vBoue) { this.vBoue = this.piet.version; this.texBoue.needsUpdate = true; }
+    if (units) this.eclaircir(units, Math.min(0.1, Math.max(0, time - (this.tImg ?? time)))); this.tImg = time;
     for (const a of this.ailes) a.rotation.z = time * 0.9;
     this.sc.caler(cam, vw, vh, dpr);
     this.sc.rendre(true);

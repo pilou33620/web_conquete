@@ -339,7 +339,7 @@ export class BattleView {
       const a = Math.random() * TAU, r = 0.8 + Math.random() * 2.5;
       out.push({ k: art && Math.random() < 0.5 ? 'roue' : ['chapeau', 'fusil', 'sac'][(Math.random() * 3) | 0], x: d.x + Math.cos(a) * r, y: d.y + Math.sin(a) * r, a: Math.random() * TAU });
     }
-    if (out.length) { this.sol.stamp(out); this.t3?.tomber(out); }
+    if (out.length) { this.sol.stamp(out); this.t3?.tomber(out); this.champ?.debris(out, this.troupes.fs); }
   }
   // la boue, envoyée au serveur toutes les 30 s de bataille environ (gardée avec la sauvegarde)
   sendPiet() {
@@ -492,7 +492,7 @@ export class BattleView {
       // le plateau 3D (SPEC-HEX) : sol, décor, bâtiments et troupes en 3D, dessous ; ici, la vie, les fumées, les feux
       ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, this.cv.width, this.cv.height);
       this.t3.image(all, this.colors || [], time, view.visible);
-      this.champ.image(this.cam, this.vw, this.vh, dpr, time);
+      this.champ.image(this.cam, this.vw, this.vh, dpr, time, all);
       mark('plateau');
       this.decor.vivant(ctx, view);
       this.drawLos(ctx, view);
