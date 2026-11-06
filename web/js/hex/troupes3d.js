@@ -170,7 +170,7 @@ export class Troupes3D {
           if (role === R.OFFICIER) this.sous('e|' + t.habit, () => lame(t.habit, 0.75), x, y, a, s, 0, 1.38 + pas, 0.2, d.arme === 'epee+' ? -0.5 - d.ext * 1.3 : Math.PI - 0.35);
           // le refouloir (servant n° 1) : poussé dans la bouche entre deux coups (d.ext), debout à côté de lui sinon
           if (role === R.SERVANT && job === 1) {
-            if (d.arme === 'refouloir') { const da = 2.3, e = 0.25 + d.ext * 0.5; this.sous('r', refouloir, x, y, a, s, 0.25 + Math.cos(da) * e, 1.05 + pas, 0.15 + Math.sin(da) * e, -0.1, da); }
+            if (d.arme === 'refouloir') { const da = 2.75, e = 0.25 + d.ext * 0.5; this.sous('r', refouloir, x, y, a, s, 0.25 + Math.cos(da) * e, 1.05 + pas, 0.15 + Math.sin(da) * e, -0.1, da); }
             else this.sous('r', refouloir, x, y, a, s, 0.1, 0.18, 0.3, Math.PI / 2);
           }
         } else if (MONTES.has(role)) {

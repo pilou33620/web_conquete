@@ -46,7 +46,7 @@ const DEBRIS = {
   // le cratère, rayon 1 : le trou de terre noire, la terre rejetée en bourrelet, des mottes
   trou: L => {
     put(L, cyl(1, 0.8, 0.1, 10), 0x3b2e21, 0, 0.05, 0, 0, 0);
-    const b = new THREE.TorusGeometry(1.05, 0.3, 4, 10); b.rotateX(Math.PI / 2); b.scale(1, 0.45, 1); put(L, b, 0x7a5a3a, 0, 0.06, 0, 0, 0);
+    const b = new THREE.TorusGeometry(1, 0.22, 4, 10); b.rotateX(Math.PI / 2); b.scale(1, 0.6, 1); put(L, b, 0x7a5a3a, 0, 0.06, 0, 0, 0);
     for (let k = 0; k < 4; k++) put(L, sphere(0.2, 0), 0x6b4e32, Math.cos(k * 1.7) * 1.55, 0.08, Math.sin(k * 1.7) * 1.55, 0, 0);
   },
 };
@@ -111,7 +111,7 @@ export class Champ {
       const geo = put(L, cyl(g.R * 0.965, g.R, h, 6), SOL[t.t] || SOL.PRE, t.x, bas + h / 2, t.z, 0, 0);
       semer(t.q, t.r);
       c.set(SOL[t.t] || SOL.PRE).offsetHSL((rnd() - 0.5) * 0.015, 0, (rnd() - 0.5) * 0.05);
-      if (this.neige && !this.estEau(t)) c.lerp(new THREE.Color(0xf1f4f6), 0.45);
+      if (this.neige && !this.estEau(t)) c.lerp(new THREE.Color(0xf1f4f6), 0.72);
       else if (saison === 'automne' && (t.t === 'BOIS' || t.t === 'FORET' || t.t === 'PRE')) c.lerp(new THREE.Color(0xc98a3c), 0.2);
       else if ((saison === 'été' || saison === 'ete') && (t.t === 'CHAMP' || t.t === 'PRE')) c.lerp(new THREE.Color(0xd8c45a), 0.2);
       const nr = geo.attributes.normal, co = geo.attributes.color;
@@ -135,6 +135,7 @@ export class Champ {
     const arbre = (t, x, z, s, sorte) => {
       const n = A.g.length, no = A.o.length; this.boise[t.i] = 1;
       M.arbre(A, x, t.top, z, s, sorte, this.neige && sorte !== 'sapin' && sorte !== 'pin' ? choix([0x8f8a6e, 0x9a927a]) : undefined);
+      this.neiger(A.g.slice(n), sorte === 'sapin' ? 0.25 : 0.55);   // (sapins blancs, houppiers poudrés sur le dessus)
       for (const geo of [...A.g.slice(n), ...A.o.slice(no)]) geo.setAttribute('aHex', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(t.i), 1));
     };
     for (const t of g.liste) {
@@ -149,7 +150,7 @@ export class Champ {
       if (t.t === 'ROCHE') for (let i = 0; i < 2; i++) { const [x, z] = rr(); put(L, sphere(entre(1.2, 2.4), 0), 0x8f8879, x, y + 0.6, z); }
       if (t.t === 'PRE' && rnd() < 0.18) { const [x, z] = rr(); put(L, sphere(0.9, 0), 0x5fa83c, x, y + 0.5, z); }
     }
-    this.neiger(L.g); this.neiger(A.g); fige(L, this.racine);
+    this.neiger(L.g); fige(L, this.racine);
     // un seul maillage pour tous les arbres ; l'ouverture de chaque hexagone dans une petite texture (eclaircir)
     const tex = this.texOuv = new THREE.DataTexture(this.ouv = new Uint8Array(g.cols * g.rows), g.cols, g.rows, THREE.RedFormat);
     tex.needsUpdate = true;
@@ -158,13 +159,13 @@ export class Champ {
   }
   // la neige : les faces tournées vers le ciel blanchissent (toits, houppiers, sapins, haut des murs, haies, clôtures) ;
   // les pentes raides (flèches, tours) restent sombres
-  neiger(geos) {
+  neiger(geos, s0 = 0.3) {
     if (!this.neige) return;
     for (const geo of geos) {
       const p = geo.attributes.position.array, c = geo.attributes.color;
       for (let i = 0; i + 8 < p.length; i += 9) {
         const ax = p[i + 3] - p[i], ay = p[i + 4] - p[i + 1], az = p[i + 5] - p[i + 2], bx = p[i + 6] - p[i], by = p[i + 7] - p[i + 1], bz = p[i + 8] - p[i + 2];
-        const ny = az * bx - ax * bz, l = Math.hypot(ay * bz - az * by, ny, ax * by - ay * bx) || 1, k = Math.min(1, Math.max(0, (ny / l - 0.3) / 0.3)) * 0.92;
+        const ny = az * bx - ax * bz, l = Math.hypot(ay * bz - az * by, ny, ax * by - ay * bx) || 1, k = Math.min(1, Math.max(0, (ny / l - s0) / 0.3)) * 0.92;
         if (k > 0) for (let v = i / 3; v < i / 3 + 3; v++) c.setXYZ(v, c.getX(v) + (NEIGE.r - c.getX(v)) * k, c.getY(v) + (NEIGE.g - c.getY(v)) * k, c.getZ(v) + (NEIGE.b - c.getZ(v)) * k);
       }
     }
