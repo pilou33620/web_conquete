@@ -30,6 +30,8 @@ button { cursor: pointer; }
 
 #app { position: fixed; inset: 0; }
 #map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+#map3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+#map3d[hidden] { display: none; }
 #map.dragging { cursor: grabbing; }
 #fog { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
 #map.targeting { cursor: crosshair; }

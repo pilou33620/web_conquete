@@ -642,7 +642,7 @@ function nuages(sc, g, x0, y0, x1, y1) {
 }
 // un oiseau : deux ailes en croissant, ajoutées au tracé p en pixels de l'écran
 function oiseau(p, sc, x, y, a, s, fl) {
-  const m = sc.m, ox = (x - sc.cx) * m + sc.W / 2, oy = (y - sc.cy) * m + sc.H / 2, c = Math.cos(a) * s * m, sn = Math.sin(a) * s * m;
+  const m = sc.m, ox = (x - sc.cx) * m + sc.W / 2, oy = (y - sc.cy) * m * (sc.k || 1) + sc.H / 2, c = Math.cos(a) * s * m, sn = Math.sin(a) * s * m;
   const P = (u, v) => [ox + u * c - v * sn, oy + u * sn + v * c];
   const [ax, ay] = P(-.5, -1 + fl * .4), [bx, by] = P(0, -.2), [cx, cy] = P(.35, 0), [dx, dy] = P(0, .2), [ex, ey] = P(-.5, 1 - fl * .4);
   p.moveTo(ax, ay); p.quadraticCurveTo(bx, by, cx, cy); p.quadraticCurveTo(dx, dy, ex, ey);

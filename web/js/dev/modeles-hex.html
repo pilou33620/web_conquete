@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Modèles du plateau</title>
+<style>html,body{margin:0;height:100%;background:#1b211a}canvas{display:block;width:100%;height:100%}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+// Galerie des modèles du plateau (hex/modeles.js) : de quoi juger le détail des maisons de chaque pays, des églises,
+// des enceintes selon le niveau des remparts, des moulins et des arbres.
+import { THREE, lot, fige, put, cyl, Scene3D } from '../hex/moteur.js';
+import * as M from '../hex/modeles.js';
+const sc = new Scene3D(document.getElementById('c'), { ombreMax: 400 });
+const L = lot(), sol = (x, z, w, d) => put(L, new THREE.BoxGeometry(w, 0.4, d), 0x84c450, x, -0.2, z, 0, 0);
+sol(40, 25, 110, 70);
+let x = 0;
+for (const d of ['33', '24', '40', '47', '64']) {
+  M.semer(x, 3);
+  for (let k = 0; k < 3; k++) M.maison(L, M.style(d), x + k * 4 - 4, 0, 0, { etages: 1 + (k % 3) });
+  M.eglise(L, M.style(d), x, 8, 0, 1, d);
+  x += 16;
+}
+M.cathedrale(L, 4, 26, 0); M.halle(L, M.style('47'), 18, 24, 0); M.chateau(L, M.style('24'), 32, 26, 0); M.moulin(L, 44, 24, 0);
+M.fortEtoile(L, 60, 26);
+for (let n = 1; n <= 4; n++) { const E = lot(); M.enceinte(E, n, 7, [Math.PI / 2]); for (const k of ['g', 'o']) for (const geo of E[k]) { geo.translate(-8 + n * 17, 0, 46); L[k].push(geo); } }
+M.quai(L, 76, 0, 6, 0, 8, 2);
+for (const [i, s] of ['feuillu', 'pin', 'sapin', 'peuplier', 'fruitier'].entries()) M.arbre(L, 72 + i * 3.5, 0, 20, 1, s);
+fige(L, sc.monde);
+const r = () => { sc.caler({ x: 36, y: 26, z: innerWidth / 110 }, innerWidth, innerHeight, devicePixelRatio || 1); sc.rendre(true); };
+addEventListener('resize', r); r();
+window.zoom = (x, y, z) => { sc.caler({ x, y, z }, innerWidth, innerHeight, devicePixelRatio || 1); sc.rendre(true); };
+</script></body></html>

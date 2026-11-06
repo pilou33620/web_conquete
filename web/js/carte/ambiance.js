@@ -6,7 +6,13 @@
 // les figures de la maquette, U, seraient démesurées ; « Retour aux villes d'avant »)
 export const Z = { PLAN: 18, VIE: 110, MAX: 450 };
 // km par unité de dessin des figures (hommes, chevaux, charrettes) : la même échelle que la maquette
-export const U = 0.0045;
+export let U = 0.0045;
+// sur le plateau d'hexagones (SPEC-HEX), les maisons sont des maquettes grossies : la vie l'est aussi, se montre plus
+// tôt, et le zoom s'arrête avant qu'un hexagone ne déborde de l'écran (plateau : vrai ; sinon, les réglages d'origine)
+export function echellePlateau(plateau) {
+  U = plateau ? 0.0045 * 4 : 0.0045;
+  Object.assign(Z, plateau ? { VIE: 60, MAX: 240 } : { VIE: 110, MAX: 450 });
+}
 
 export const SAISONS = ['printemps', 'ete', 'automne', 'hiver'];
 // le serveur écrit « été »

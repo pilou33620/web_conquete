@@ -105,8 +105,9 @@ export class Ambient {
     // la scène vue par carte/vie.js (comme la Scene de la maquette) : monde en km, figures orientées, fumées
     this.sc = {
       fx: [], max: 400, ventA: Math.atan2(-0.002, 0.004),
-      monde(g) { const m = this.m; g.setTransform(m, 0, 0, m, -this.cx * m + this.W / 2, -this.cy * m + this.H / 2); },
-      fig(g, x, y, a) { const m = this.m, c = Math.cos(a) * m, s = Math.sin(a) * m; g.setTransform(c, s, -s, c, (x - this.cx) * m + this.W / 2, (y - this.cy) * m + this.H / 2); },
+      // (k : l'aplatissement de la vue inclinée du plateau, SPEC-HEX ; 1 en vue verticale)
+      monde(g) { const m = this.m, k = this.k; g.setTransform(m, 0, 0, m * k, -this.cx * m + this.W / 2, -this.cy * m * k + this.H / 2); },
+      fig(g, x, y, a) { const m = this.m, k = this.k, c = Math.cos(a) * m, s = Math.sin(a) * m; g.setTransform(c, s * k, -s, c * k, (x - this.cx) * m + this.W / 2, (y - this.cy) * m * k + this.H / 2); },
     };
     this.build();
     preparer(map);
@@ -163,19 +164,18 @@ export class Ambient {
   view(margin) {
     const mp = this.map, z = mp.cam.z;
     const mx = margin / z;
-    return [mp.cam.x - mp.vw / 2 / z - mx, mp.cam.y - mp.vh / 2 / z - mx, mp.cam.x + mp.vw / 2 / z + mx, mp.cam.y + mp.vh / 2 / z + mx];
+    return [mp.cam.x - mp.vw / 2 / z - mx, mp.cam.y - mp.vh / 2 / z / mp.K - mx, mp.cam.x + mp.vw / 2 / z + mx, mp.cam.y + mp.vh / 2 / z / mp.K + mx];
   }
   scr(x, y) {
-    const mp = this.map, c = mp.cam;
-    return [(x - c.x) * c.z + mp.vw / 2, (y - c.y) * c.z + mp.vh / 2];
+    return this.map.toScreen(x, y);
   }
 
   // la scène de cette image (l'horloge avance de dt) ; renvoie les bornes de la vue en km, à un demi-kilomètre près
   scene(dt) {
     const mp = this.map, c = mp.cam, d = mp.dpr, sc = this.sc;
     if (this.on) this.t += dt;
-    Object.assign(sc, { z: c.z, d, m: c.z * d, cx: c.x, cy: c.y, W: mp.vw * d, H: mp.vh * d, cssW: mp.vw, cssH: mp.vh, time: this.t, on: this.on });
-    const hw = mp.vw / 2 / c.z + 0.5, hh = mp.vh / 2 / c.z + 0.5;
+    Object.assign(sc, { z: c.z, d, m: c.z * d, k: mp.K, cx: c.x, cy: c.y, W: mp.vw * d, H: mp.vh * d, cssW: mp.vw, cssH: mp.vh, time: this.t, on: this.on });
+    const hw = mp.vw / 2 / c.z + 0.5, hh = mp.vh / 2 / c.z / mp.K + 0.5;
     return [c.x - hw, c.y - hh, c.x + hw, c.y + hh];
   }
 
@@ -184,7 +184,7 @@ export class Ambient {
     const z = this.map.cam.z, zoom = this.map.zooming();   // (pendant un zoom, les petites figures qui bougent attendent)
     if (st !== this.st) { this.st = st; majEtat(st); }
     const [x0, y0, x1, y1] = this.scene(dt), sc = this.sc;
-    if (this.on) {
+    if (this.on && !this.map.hex) {   // (sur le plateau, l'eau est en 3D : ni courant ni écume peints)
       if (z >= 3.5 && z < 18 && !zoom) this.drawFlows(ctx, this.t);   // (de plus près, la rivière peinte par les tuiles suffit)
       if (z >= 3) this.drawSea(ctx, this.t);
       const w = ventDe(meteoEn(this.map.cam.x, this.map.cam.y));

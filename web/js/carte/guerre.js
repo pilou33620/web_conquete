@@ -368,13 +368,13 @@ export class Guerre {
 
   // la scène du calque, aux conventions de la maquette (Scene de lib.js) : z en px par km, d la densité de l'écran
   scene(time) {
-    const mp = this.map, z = mp.cam.z, d = mp.dpr, cx = mp.cam.x, cy = mp.cam.y, ox = mp.vw * d / 2, oy = mp.vh * d / 2, m = z * d;
-    const hw = mp.vw / 2 / z, hh = mp.vh / 2 / z;
+    const mp = this.map, z = mp.cam.z, d = mp.dpr, cx = mp.cam.x, cy = mp.cam.y, ox = mp.vw * d / 2, oy = mp.vh * d / 2, m = z * d, k = mp.K;   // (k : vue inclinée du plateau)
+    const hw = mp.vw / 2 / z, hh = mp.vh / 2 / z / k;
     return {
       z, d, cx, cy, time, fx: this.fx, max: 500,
       x0: cx - hw - 0.3, x1: cx + hw + 0.3, y0: cy - hh - 0.3, y1: cy + hh + 0.3,
-      monde(g) { g.setTransform(m, 0, 0, m, -cx * m + ox, -cy * m + oy); },
-      fig(g, x, y, a) { const c = Math.cos(a) * m, s = Math.sin(a) * m; g.setTransform(c, s, -s, c, (x - cx) * m + ox, (y - cy) * m + oy); },
+      monde(g) { g.setTransform(m, 0, 0, m * k, -cx * m + ox, -cy * m * k + oy); },
+      fig(g, x, y, a) { const c = Math.cos(a) * m, s = Math.sin(a) * m; g.setTransform(c, s * k, -s, c * k, (x - cx) * m + ox, (y - cy) * m * k + oy); },
     };
   }
   // place une figure : position en km, cap, puis dessin en unités de figure

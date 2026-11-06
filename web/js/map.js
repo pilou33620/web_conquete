@@ -8,13 +8,15 @@ import { profil } from './battle/qualite.js';
 import { uniform } from './battle/formes.js';
 import { figureKind, portraitGeneral } from './portraits.js';
 import { Epoque, phylloxera, styleCarte, startTechs, startRails } from './epoque.js';
-import { AMB, LUM, majAmbiance } from './carte/ambiance.js';
+import { AMB, LUM, majAmbiance, echellePlateau } from './carte/ambiance.js';
 import { Z, nuit } from './carte/ambiance.js';
 import { Guerre, rayonMurs } from './carte/guerre.js';
 import { Travaux } from './carte/travaux.js';
 import { Ciel } from './carte/ciel.js';
 import * as ambiance from './carte/ambiance.js';
 import { terre, EAU, SABLE, LARG_RIVIERE } from './carte/terre.js';
+import { Plateau } from './hex/plateau.js';
+import { K as HEX_K, C as HEX_C } from './hex/moteur.js';
 const TILE = 256;
 function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
@@ -170,8 +172,9 @@ export class MapView {
     this.colors.neutre = this.rules.neutral_color;
     this.epoque = new Epoque(this);   // la carte selon l'époque (epoque.js)
     // style de la carte (SPEC-SUITE H3) : « ugar » (à la manière d'Ultimate General) ou « epoque » (Cassini, puis état-major)
-    this.style = 'ugar';
-    try { if (localStorage.getItem('conquete.carte.style') === 'epoque') this.style = 'epoque'; } catch (e) { /* stockage indisponible */ }
+    // et, depuis SPEC-HEX, « plateau » : le plateau d'hexagones en 3D (hex/plateau.js), le rendu par défaut
+    this.style = 'plateau';
+    try { const v = localStorage.getItem('conquete.carte.style2') || (localStorage.getItem('conquete.carte.style') === 'epoque' ? 'epoque' : null); if (v === 'epoque' || v === 'ugar') this.style = v; } catch (e) { /* stockage indisponible */ }
     this.playable = new Uint8Array(this.W * this.H);
     for (let c = 0; c < this.W * this.H; c++) {
       const d = this.dept[c];
@@ -191,6 +194,7 @@ export class MapView {
     this.lastFrame = performance.now();
     this.resize();
     for (let ty = 0; ty * 128 < this.H; ty++) for (let tx = 0; tx * 128 < this.W; tx++) this.getTile(LEVELS[0], tx, ty, true);
+    if (this.style === 'plateau' && !this.initPlateau()) this.style = 'ugar';
     this.fitAll(true);
     window.addEventListener('resize', () => this.resize());
     this.bindInput();
@@ -338,10 +342,35 @@ export class MapView {
   papierVu() { return this.era && this.cam.z * this.dpr <= PAPIER_MAX ? this.era : null; }
 
   setStyle(v) {
-    this.style = v === 'epoque' ? 'epoque' : 'ugar';
-    try { localStorage.setItem('conquete.carte.style', this.style); } catch (e) { /* stockage indisponible */ }
+    this.style = v === 'epoque' ? 'epoque' : v === 'plateau' && this.initPlateau() ? 'plateau' : 'ugar';
+    try { localStorage.setItem('conquete.carte.style2', this.style); } catch (e) { /* stockage indisponible */ }
+    if (this.cv3) this.cv3.hidden = this.style !== 'plateau';
+    echellePlateau(this.hex); this.clampCam();
     this.repaint();
   }
+  // le plateau d'hexagones (SPEC-HEX) : son canevas WebGL sous celui de la carte ; faux si WebGL manque
+  initPlateau() {
+    if (this.plateau) return true;
+    if (this.plateauKo) return false;
+    try {
+      const c = this.cv3 = document.createElement('canvas');
+      c.id = 'map3d'; c.setAttribute('aria-hidden', 'true');
+      this.cv.parentNode.insertBefore(c, this.cv);
+      this.plateau = new Plateau(this, c);
+    } catch (e) {
+      console.warn('Plateau 3D indisponible, carte classique', e);
+      this.plateauKo = true; this.cv3?.remove(); this.cv3 = null; this.plateau = null;
+      return false;
+    }
+    if (this.cellFac) this.plateau.territoire(this.cellFac, this.facCodes, this.colors);
+    this.plateau.majLieux(this.state || this.preview);
+    echellePlateau(this.style === 'plateau');
+    return true;
+  }
+  // le plateau est-il affiché ? (sinon les tuiles peintes, vue du ciel ou d'époque)
+  get hex() { return this.style === 'plateau' && !!this.plateau; }
+  // aplatissement vertical de la vue inclinée du plateau (1 : vue verticale)
+  get K() { return this.hex ? HEX_K : 1; }
 
   // tout ce que le style peint dans les couches et les tuiles
   repaint() { this.paintOcean(); this.paintLand(); this.invalidateTiles(); this.vig = null; }
@@ -565,6 +594,7 @@ export class MapView {
     this.owners = this.preview.nodes.map(n => n.o);
     this.ownersKey = '';
     this.rebuildTerritory();
+    this.plateau?.majLieux(this.preview);
     if (this.epoque.update(this.preview)) this.invalidateTiles();
     if (this.styleEra() !== this.era) this.repaint();
   }
@@ -578,7 +608,7 @@ export class MapView {
     this.cv.height = Math.round(h * dpr);
     this.vw = w; this.vh = h;
   }
-  minZoom() { return Math.min(this.vw / this.W, this.vh / this.H) * 0.8; }
+  minZoom() { return Math.min(this.vw / this.W, this.vh / (this.H * this.K)) * 0.8; }
 
   armyScreen(d) {
     let [x, y] = this.toScreen(d.x, d.y);
@@ -610,8 +640,8 @@ export class MapView {
 
   fitAll(instant, left = 0, top = 60) {
     const aw = this.vw - left, ah = this.vh - top;
-    const z = Math.min(aw / this.W, ah / this.H) * 0.96;
-    const cx = this.W / 2 - (left / 2) / z, cy = this.H / 2 - (top / 2) / z + 4;
+    const z = Math.min(aw / this.W, ah / (this.H * this.K)) * 0.96;
+    const cx = this.W / 2 - (left / 2) / z, cy = this.H / 2 - (top / 2) / (z * this.K) + 4;
     this.moveTo(cx, cy, z, instant);
   }
   moveTo(x, y, z, instant = false, dur = 650) {
@@ -621,12 +651,17 @@ export class MapView {
   }
   // zoom en cours, ou fini depuis moins de 250 ms (zoomT : draw)
   zooming() { return performance.now() - this.zoomT < 250; }
-  toScreen(x, y) { return [(x - this.cam.x) * this.cam.z + this.vw / 2, (y - this.cam.y) * this.cam.z + this.vh / 2]; }
-  toWorld(sx, sy) { return [(sx - this.vw / 2) / this.cam.z + this.cam.x, (sy - this.vh / 2) / this.cam.z + this.cam.y]; }
+  toScreen(x, y) {
+    const c = this.cam;
+    if (!this.hex) return [(x - c.x) * c.z + this.vw / 2, (y - c.y) * c.z + this.vh / 2];
+    // (vue inclinée : ce qui est debout se pose sur le relief du plateau)
+    return [(x - c.x) * c.z + this.vw / 2, (y - c.y) * c.z * HEX_K + this.vh / 2 - this.plateau.hauteur(x, y) * c.z * HEX_C];
+  }
+  toWorld(sx, sy) { return [(sx - this.vw / 2) / this.cam.z + this.cam.x, (sy - this.vh / 2) / (this.cam.z * this.K) + this.cam.y]; }
   clampCam() {
     const c = this.cam;
     c.z = clamp(c.z, this.minZoom(), ambiance.Z.MAX);
-    const mx = this.vw / 2 / c.z, my = this.vh / 2 / c.z;
+    const mx = this.vw / 2 / c.z, my = this.vh / 2 / (c.z * this.K);
     c.x = clamp(c.x, Math.min(mx - 30, this.W / 2), Math.max(this.W - mx + 30, this.W / 2));
     c.y = clamp(c.y, Math.min(my - 40, this.H / 2), Math.max(this.H - my + 30, this.H / 2));
   }
@@ -706,14 +741,14 @@ export class MapView {
         if (Math.abs(d - g.d0) > 12 || Math.hypot(mid[0] - g.mid0[0], mid[1] - g.mid0[1]) > 12) g.moved = true;
         this.cam.z = clamp(g.z0 * d / g.d0, this.minZoom(), ambiance.Z.MAX);
         this.cam.x = g.w[0] - (mid[0] - this.vw / 2) / this.cam.z;
-        this.cam.y = g.w[1] - (mid[1] - this.vh / 2) / this.cam.z;
+        this.cam.y = g.w[1] - (mid[1] - this.vh / 2) / (this.cam.z * this.K);
         this.clampCam();
         return;
       }
       if (g.kind === 'long') return;
       const dx = sx - g.sx, dy = sy - g.sy;
       if (g.kind === 'twotap') {
-        if (Math.hypot(dx, dy) > 10) { g.kind = 'pan'; g.moved = true; g.cx = this.cam.x - dx / this.cam.z; g.cy = this.cam.y - dy / this.cam.z; }
+        if (Math.hypot(dx, dy) > 10) { g.kind = 'pan'; g.moved = true; g.cx = this.cam.x - dx / this.cam.z; g.cy = this.cam.y - dy / (this.cam.z * this.K); }
         else return;
       }
       const thr = g.type === 'mouse' ? 5 : g.type === 'pen' ? 6 : 10;
@@ -732,7 +767,7 @@ export class MapView {
       }
       if (g.kind === 'pan') {
         this.cam.x = g.cx - dx / this.cam.z;
-        this.cam.y = g.cy - dy / this.cam.z;
+        this.cam.y = g.cy - dy / (this.cam.z * this.K);
         this.clampCam();
         g.samples.push([performance.now(), sx, sy]);
         if (g.samples.length > 6) g.samples.shift();
@@ -818,7 +853,7 @@ export class MapView {
       const f = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0016));
       this.cam.z = clamp(this.cam.z * f, this.minZoom(), ambiance.Z.MAX);
       this.cam.x = w[0] - (sx - this.vw / 2) / this.cam.z;
-      this.cam.y = w[1] - (sy - this.vh / 2) / this.cam.z;
+      this.cam.y = w[1] - (sy - this.vh / 2) / (this.cam.z * this.K);
       this.clampCam();
     }, { passive: false });
   }
@@ -830,7 +865,7 @@ export class MapView {
   zoomAt(sx, sy, f) {
     const w = this.toWorld(sx, sy);
     const z = clamp(this.cam.z * f, this.minZoom(), ambiance.Z.MAX);
-    this.moveTo(w[0] - (sx - this.vw / 2) / z, w[1] - (sy - this.vh / 2) / z, z);
+    this.moveTo(w[0] - (sx - this.vw / 2) / z, w[1] - (sy - this.vh / 2) / (z * this.K), z);
   }
 
   // opt.skipArmy(a) : ignore ces armées (ordre de marche : ses propres jetons ne doivent pas masquer la ville dessous)
@@ -968,6 +1003,7 @@ export class MapView {
       this.owners = st.nodes.map(n => n.o);
       this.rebuildTerritory();
     }
+    if (this.plateau) { this.plateau.majLieux(st); this.plateau.colorer(st.season, Object.values(AMB.meteo).includes('neige')); }
     // ce que les technologies de chaque camp ont changé au paysage est peint dans les tuiles (epoque.js)
     if (this.epoque.update(st)) this.invalidateTiles();
     if (this.styleEra() !== this.era) this.repaint();   // (la carte d'état-major succède à celle de Cassini en 1818)
@@ -1112,7 +1148,8 @@ export class MapView {
       this.frontiers.push({ code: codes[ci], lines, parts: lineChunks(lines) });
     }
     this.tileGen++; this.painterDirty = true;
-    this.cellFac = idx; this.facCodes = codes;   // (le camp qui tient chaque case : le paysage de son époque, epoque.js)
+    this.cellFac = idx; this.facCodes = codes;
+    this.plateau?.territoire(idx, codes, this.colors);   // (le camp qui tient chaque case : le paysage de son époque, epoque.js)
     this.paintTerritory(idx, fields, codes);
   }
 
@@ -1646,7 +1683,7 @@ export class MapView {
     if (this.inertia) {
       const iv = this.inertia;
       this.cam.x -= iv.vx * dt / this.cam.z;
-      this.cam.y -= iv.vy * dt / this.cam.z;
+      this.cam.y -= iv.vy * dt / (this.cam.z * this.K);
       const k = Math.exp(-dt * 4.5);
       iv.vx *= k; iv.vy *= k;
       this.clampCam();
@@ -1711,17 +1748,20 @@ export class MapView {
     const ctx = this.ctx, dpr = this.dpr, z = this.cam.z;
     LUM.length = 0;   // (les calques y posent les feux et lanternes de cette image ; ciel.js les allume)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#141618';
-    ctx.fillRect(0, 0, this.vw, this.vh);
+    const hex = this.hex, K = this.K;
+    // le plateau (SPEC-HEX) se dessine sur son canevas, dessous : celui-ci reste transparent
+    if (hex) { ctx.clearRect(0, 0, this.vw, this.vh); this.plateau.image(this.cam, this.vw, this.vh, dpr); }
+    else { ctx.fillStyle = '#141618'; ctx.fillRect(0, 0, this.vw, this.vh); }
     const [wx0, wy0] = this.toWorld(0, 0), [wx1, wy1] = this.toWorld(this.vw, this.vh);
     // fond rapide
     ctx.imageSmoothingEnabled = true;
-    const ox = this.vw / 2 - this.cam.x * z, oy = this.vh / 2 - this.cam.y * z;
+    const ox = this.vw / 2 - this.cam.x * z, oy = this.vh / 2 - this.cam.y * z * K;
     // tuiles. Pendant un pincement ou un zoom animé, on garde le niveau en cours (agrandi ou réduit) au lieu
     // d'en repeindre un nouveau à chaque palier ; le bon niveau se peint quand le zoom se pose
     const now = performance.now();
     this.frameNo++;
     if (z !== this.lastZ) { this.zoomT = now; this.lastZ = z; }
+    if (!hex) {
     const want = this.level();
     if (!this.curL) this.curL = want;
     else if (want !== this.curL) {
@@ -1784,10 +1824,11 @@ export class MapView {
     ctx.strokeRect(ox - 4, oy - 4, this.W * z + 8, this.H * z + 8);
     ctx.strokeStyle = 'rgba(150,142,116,0.3)'; ctx.lineWidth = 1;
     ctx.strokeRect(ox - 8, oy - 8, this.W * z + 16, this.H * z + 16);
+    }
     // territoires
     // (le voile et les frontières sont peints dans les tuiles : retracés à chaque image, ils en coûtaient le tiers)
     ctx.save();
-    ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
+    ctx.setTransform(dpr * z, 0, 0, dpr * z * K, dpr * ox, dpr * oy);
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     if (this.highlightDept && this.deptPaths[this.highlightDept]) {
       const col = this.colors[this.highlightDept];
@@ -1974,27 +2015,29 @@ export class MapView {
       const [x, y] = this.toScreen(n.x, n.y);
       const s = this.nodeSize(n), ns = st.nodes[n.id];
       // (dès le plan des villes, la place couvre son vrai rayon : elle reste dessinée tant qu'un bout est à l'écran)
-      const rP = z >= Z.PLAN && !this.papierVu() && x > -1e4 && x < this.vw + 1e4 && y > -1e4 && y < this.vh + 1e4 ? rayonMurs(this, n, ns) * z : 0, sc = Math.max(s, rP);
+      const rP = this.hex ? this.plateau.rayon(n) * z * HEX_K : z >= Z.PLAN && !this.papierVu() && x > -1e4 && x < this.vw + 1e4 && y > -1e4 && y < this.vh + 1e4 ? rayonMurs(this, n, ns) * z : 0, sc = Math.max(s, rP);
       if (x < -sc - 80 || y < -sc - 40 || x > this.vw + sc + 80 || y > this.vh + sc + 40) continue;
       const col = this.colors[ns.o] || '#999';
       const sel = this.selection && this.selection.kind === 'node' && this.selection.id === n.id;
       ctx.save();
       ctx.translate(x, y);
       // halo
+      if (!this.hex) {
       ctx.fillStyle = col;
       ctx.globalAlpha = ns.o === 'neutre' ? 0.18 : 0.42;
       ctx.beginPath(); ctx.ellipse(0, s * 0.12, s * 0.62, s * 0.42, 0, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1;
+      }
       if (sel) {
         ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.ellipse(0, s * 0.12, s * 0.72 + 3, s * 0.5 + 3, 0, 0, Math.PI * 2); ctx.stroke();
       }
-      const wallR = ns.f > 0 ? this.walls(ctx, s, ns.f, n.id, ns.sg && !ns.sg.occ && !ns.sg.bl ? ns.sg.dmg : 0) : 0;
+      const wallR = ns.f > 0 && !this.hex ? this.walls(ctx, s, ns.f, n.id, ns.sg && !ns.sg.occ && !ns.sg.bl ? ns.sg.dmg : 0) : 0;
       const worksR = ns.bar != null || ns.bw ? this.works(ctx, s, ns.f, n.id, ns.bar || 0, ns.bw, wallR) : 0;
       // (dès le plan des villes, les tentes et les anneaux du siège se posent hors des murs du plan : carte/guerre.js)
-      const sP = z >= Z.PLAN && (ns.sg || ns.bk || camp.has(n.id)) ? Math.max(s, rayonMurs(this, n, ns) * z / 0.62) : s;
+      const sP = this.hex ? Math.max(s, rP / 0.62) : z >= Z.PLAN && (ns.sg || ns.bk || camp.has(n.id)) ? Math.max(s, rayonMurs(this, n, ns) * z / 0.62) : s;
       if (camp.has(n.id) && z >= 2.8) this.tents(ctx, sP, n.id, this.colors[camp.get(n.id)] || col);
-      this.towns.draw(ctx, n, s, col, ns, time, ns.o);
+      if (!this.hex) this.towns.draw(ctx, n, s, col, ns, time, ns.o);
       // siège
       // (de près : le camp, les batteries qui tirent, les incendies ; les tranchées sont au sol, carte/guerre.js)
       if (ns.sg) this.guerreDe().siege(ctx, n, ns, time);

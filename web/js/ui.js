@@ -966,7 +966,7 @@ export class UI {
         break;
       case 'map-style': {   // style de la carte (enregistré sur cet appareil)
         this.map.setStyle(d.v);
-        this.toast(this.map.style === 'epoque' ? 'Carte d’époque : Cassini, puis état-major.' : 'Carte à la manière d’Ultimate General.');
+        this.toast(this.map.style === 'epoque' ? 'Carte d’époque : Cassini, puis état-major.' : this.map.style === 'plateau' ? 'Plateau d’hexagones en relief.' : d.v === 'plateau' ? 'Le plateau 3D ne marche pas sur cet appareil : carte vue du ciel.' : 'Carte vue du ciel.');
         this.modalSig = ''; this.renderModal(true); this.startOn() && this.renderStart();
         break;
       }
@@ -1983,9 +1983,9 @@ export class UI {
   reglagesHtml() {
     return `<h3 class="section-t">Affichage</h3><div class="btns"><button class="btn" data-act="anim">${this.map.ambient.on ? 'Couper les animations de la carte' : 'Animer la carte'}</button></div>
         <p class="muted small" style="margin:4px 0 0">Moulins, fumées, oiseaux, bateaux, charrettes et troupeaux.</p>
-        <p class="small" style="margin:10px 0 4px">Style de la carte :</p><div class="seg wrap" role="group" aria-label="Style de la carte">${[['ugar', 'Ultimate General'], ['epoque', 'Carte d’époque']].map(([k, l]) =>
+        <p class="small" style="margin:10px 0 4px">Style de la carte :</p><div class="seg wrap" role="group" aria-label="Style de la carte">${[['plateau', 'Plateau'], ['ugar', 'Vue du ciel'], ['epoque', 'Carte d’époque']].map(([k, l]) =>
           `<button class="${k === this.map.style ? 'on' : ''}" data-act="map-style" data-v="${k}" aria-pressed="${k === this.map.style}">${l}</button>`).join('')}</div>
-        <p class="muted small" style="margin:4px 0 0">${this.map.style === 'epoque' ? 'Papier, hachures et encre : la carte de Cassini, puis celle de l’état-major à partir de 1818.' : 'Couleurs, reliefs ombrés et plaques d’ardoise, à la manière d’Ultimate General.'}</p>
+        <p class="muted small" style="margin:4px 0 0">${this.map.style === 'epoque' ? 'Papier, hachures et encre : la carte de Cassini, puis celle de l’état-major à partir de 1818.' : this.map.style === 'plateau' ? 'Un plateau d’hexagones en relief : villes et villages en maquette, à la manière de leur pays. Les batailles aussi.' : 'Couleurs, reliefs ombrés et plaques d’ardoise, à la manière d’Ultimate General.'}</p>
         <p class="small" style="margin:10px 0 4px">Qualité graphique des batailles :</p><div class="seg wrap" role="group" aria-label="Qualité graphique des batailles">${QUALITES.map(k =>
           `<button class="${k === qualite().q ? 'on' : ''}" data-act="bt-qualite" data-v="${k}" aria-pressed="${k === qualite().q}" title="${QUALITE_AIDE[k]}">${QUALITE_LABEL[k]}</button>`).join('')}</div>
         <p class="muted small" style="margin:4px 0 0">${qualite().auto ? 'Choisie d’après cet appareil ; elle baisse d’elle-même si la bataille saccade.' : QUALITE_AIDE[qualite().q]}</p>`;
