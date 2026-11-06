@@ -287,7 +287,12 @@ export class Plateau {
       maisons(t0, cap ? 1.0 : 0.95, cap ? 3 : 2, 3.6);
       for (const t of l.hex.slice(1)) maisons(t, 0.62 + dev * 0.08, cap ? 2 : 1, 0);
       if (!l.hex.slice(1).length && dev) maisons(t0, 0.3 * dev, 1, 7.5);
-      if (f) M.enceinte(L, f, cap && l.hex.length > 3 ? 10.5 : 9, angles);
+      if (f) {   // l'enceinte entoure le cœur et les faubourgs voisins : centrée sur eux
+        const cx = l.hex.reduce((a, h) => a + h.x, 0) / l.hex.length - t0.x, cz = l.hex.reduce((a, h) => a + h.z, 0) / l.hex.length - t0.z;
+        const rad = Math.max(...l.hex.map(h => Math.hypot(h.x - t0.x - cx, h.z - t0.z - cz))) + 9.5, E = lot();
+        M.enceinte(E, f, rad, angles);
+        for (const k of ['g', 'o']) for (const geo of E[k]) { geo.translate(cx, 0, cz); L[k].push(geo); }
+      }
       if ((n.quai || (n.spec || []).includes('port')) && n.type !== 'fort') {
         const eau = g.voisins(t0).find(v => this.estEau(v)) || l.hex.find(h => h.riv);
         if (eau) { const a = Math.atan2(eau.z - t0.z, eau.x - t0.x); M.quai(L, Math.cos(a) * 8.6, 0, Math.sin(a) * 8.6, -a + Math.PI / 2, 9, 3); }
