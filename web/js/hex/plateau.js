@@ -282,26 +282,50 @@ export class Plateau {
     let ox = 0, oz = 0;
     if (!sec(0, 0, 3.5)) search: for (let r = 2; r <= 8; r += 2) for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; if (sec(Math.cos(a) * r, Math.sin(a) * r, 3.5)) { ox = Math.cos(a) * r; oz = Math.sin(a) * r; break search; } }
     const cx0 = t0.x + ox, cz0 = t0.z + oz;
+    const posees = [];   // les maisons déjà bâties (unités du plateau) : deux maisons ne se posent pas l'une sur l'autre
+    const libre = (x, z, t, rayonVide) => g.sous(x, z) === t && Math.hypot(x - cx0, z - cz0) >= rayonVide && !surRue(x, z, t0.x, t0.z)
+      && !this.mouille(x, z, 1) && posees.every(([px, pz]) => Math.hypot(px - x, pz - z) > 2);
+    const poser = (x, z, etagesMax) => {
+      // la façade regarde la rue la plus proche
+      const a = Math.atan2(z - t0.z, x - t0.x), r = rues.reduce((b, rr) => (Math.abs(Math.sin(a - rr)) < Math.abs(Math.sin(a - b)) ? rr : b), rues[0]);
+      const et = 1 + ((rnd() * etagesMax) | 0), rui = ruine();
+      M.maison(L, st, x - t0.x, z - t0.z, -r + (rnd() < 0.5 ? 0 : Math.PI), { s: entre(0.85, 1.05), etages: et, toitCol: rui ? brule : undefined });
+      posees.push([x, z]);
+    };
+    // sur une grille fine de l'hexagone t, au plus près du centre, jusqu'à n maisons au sec ; rend celles qui manquent
+    const combler = (t, n, etagesMax, rayonVide) => {
+      const fins = [];
+      for (let u = -9.6; u <= 9.6; u += 1.2) for (let v = -9.6; v <= 9.6; v += 1.2) fins.push([t.x + u, t.z + v]);
+      fins.sort((a, b) => Math.hypot(a[0] - t0.x, a[1] - t0.z) - Math.hypot(b[0] - t0.x, b[1] - t0.z));
+      for (const [x, z] of fins) { if (n <= 0) break; if (libre(x, z, t, rayonVide)) { poser(x, z, etagesMax); n--; } }
+      return n;
+    };
+    // les maisons de l'hexagone t : leur nombre est celui d'une ville sans rivière ; celles que l'eau chasse se rebâtissent
+    // au sec ailleurs dans l'hexagone ; rend celles qui n'y ont pas trouvé de place
     const maisons = (t, dens, etagesMax, rayonVide) => {
+      const cands = [];
       for (let u = -9; u <= 9; u += 2.4) for (let v = -9; v <= 9; v += 2.4) {
-        let x = t.x + u + (hache(u * 10 + t.q, v * 10 + t.r, 2) - 0.5) * 1.2, z = t.z + v + (hache(v * 10 + t.q, u * 10 + t.r, 4) - 0.5) * 1.2;
-        // au bord de l'eau, la maison recule d'un pas vers la terre ferme plutôt que de disparaître
-        if (this.mouille(x, z, 1)) { const p = [[1.2, 0], [-1.2, 0], [0, 1.2], [0, -1.2]].find(([a, b]) => !this.mouille(x + a, z + b, 1)); if (!p) continue; x += p[0]; z += p[1]; }
-        // (la place, au sec, garde son vide ; les rues et la densité partent du centre de la ville, là où entrent les routes)
+        const x = t.x + u + (hache(u * 10 + t.q, v * 10 + t.r, 2) - 0.5) * 1.2, z = t.z + v + (hache(v * 10 + t.q, u * 10 + t.r, 4) - 0.5) * 1.2;
+        // (la place garde son vide ; les rues et la densité partent du centre de la ville, là où entrent les routes)
         const dc = Math.hypot(x - t0.x, z - t0.z);
         if (g.sous(x, z) !== t || Math.hypot(x - cx0, z - cz0) < rayonVide || surRue(x, z, t0.x, t0.z) || rnd() > dens * (1 - dc / 40)) continue;
-        // la façade regarde la rue la plus proche
-        const a = Math.atan2(z - t0.z, x - t0.x), r = rues.reduce((b, rr) => (Math.abs(Math.sin(a - rr)) < Math.abs(Math.sin(a - b)) ? rr : b), rues[0]);
-        const et = 1 + ((rnd() * etagesMax) | 0), rui = ruine();
-        M.maison(L, st, x - t0.x, z - t0.z, -r + (rnd() < 0.5 ? 0 : Math.PI), { s: entre(0.85, 1.05), etages: et, toitCol: rui ? brule : undefined });
+        cands.push([x, z]);
       }
+      let reste = 0;
+      for (const [x, z] of cands) {
+        const p = [[0, 0], [1.2, 0], [-1.2, 0], [0, 1.2], [0, -1.2]].find(([a, b]) => libre(x + a, z + b, t, rayonVide));
+        if (p) poser(x + p[0], z + p[1], etagesMax); else reste++;
+      }
+      return reste ? combler(t, reste, etagesMax, rayonVide) : 0;
     };
     if (n.type === 'fort') {
       M.fortEtoile(L, 0, 0, 1.1);   // (le drapeau, qui flotte, est dessiné en 2D : towns.js, animer)
     } else if (n.type === 'village') {
       for (let k = 0, nb = 4 + Math.min(4, Math.round((n.pop0 || 600) / 400)) + dev * 2; k < nb; k++) {
-        const a = rnd() * Math.PI * 2, r = entre(2.6, 6.2), hx = ox + Math.cos(a) * r, hz = oz + Math.sin(a) * r;
-        if (!sec(hx, hz, 1.4)) continue;
+        // (au sec : jusqu'à huit essais, un peu plus loin à chaque fois)
+        let hx = 0, hz = 0, a = 0, ok = false;
+        for (let e = 0; e < 8 && !ok; e++) { a = rnd() * Math.PI * 2; const r = entre(2.6, 6.2 + e * 0.6); hx = ox + Math.cos(a) * r; hz = oz + Math.sin(a) * r; ok = sec(hx, hz, 1.2); }
+        if (!ok) continue;
         M.maison(L, st, hx, hz, -a + Math.PI / 2 + entre(-0.3, 0.3), { s: 0.85, etages: rnd() < 0.2 ? 2 : 1, toitCol: ruine() ? brule : undefined });
       }
       M.eglise(L, st, ox, oz, rnd() * 6, 0.65, n.dept);
@@ -319,9 +343,11 @@ export class Plateau {
       else M.eglise(P, st, -0.4, -0.8, 0, 0.85, n.dept);
       if ((n.dept === '47' || n.dept === '24' || !cap) && sec(ox + 2.4, oz + 2.1, 1.5)) M.halle(P, st, 2.4, 2.1, Math.PI / 2, 0.5);
       transfere(P, L, ox, 0, oz);
-      maisons(t0, cap ? 1.0 : 0.95, cap ? 3 : 2, 3.6);
-      for (const t of l.hex.slice(1)) maisons(t, 0.62 + dev * 0.08, cap ? 2 : 1, 0);
-      if (!l.hex.slice(1).length && dev) maisons(t0, 0.3 * dev, 1, 7.5);
+      let manque = maisons(t0, cap ? 1.0 : 0.95, cap ? 3 : 2, 3.6);
+      for (const t of l.hex.slice(1)) manque += maisons(t, 0.62 + dev * 0.08, cap ? 2 : 1, 0);
+      if (!l.hex.slice(1).length && dev) manque += maisons(t0, 0.3 * dev, 1, 7.5);
+      // une ville que l'eau serre : ce qui n'a pas trouvé place déborde en faubourg sur les hexagones voisins libres
+      if (manque > 0) for (const h of new Set(l.hex.flatMap(x => g.voisins(x)))) { if (manque <= 0) break; if (!h.lieu && !this.estEau(h)) manque = combler(h, manque, 1, 0); }
       if (f) {   // l'enceinte entoure le cœur et les faubourgs voisins : centrée sur eux
         const cx = l.hex.reduce((a, h) => a + h.x, 0) / l.hex.length - t0.x, cz = l.hex.reduce((a, h) => a + h.z, 0) / l.hex.length - t0.z;
         const rad = Math.max(...l.hex.map(h => Math.hypot(h.x - t0.x - cx, h.z - t0.z - cz))) + 9.5, E = lot();
