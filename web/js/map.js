@@ -8,7 +8,7 @@ import { profil } from './battle/qualite.js';
 import { uniform } from './battle/formes.js';
 import { figureKind, portraitGeneral } from './portraits.js';
 import { Epoque, phylloxera, styleCarte, startTechs, startRails } from './epoque.js';
-import { AMB, LUM, majAmbiance, echellePlateau } from './carte/ambiance.js';
+import { AMB, LUM, majAmbiance, echellePlateau, vieDePres } from './carte/ambiance.js';
 import { Z, nuit } from './carte/ambiance.js';
 import { Guerre, rayonMurs } from './carte/guerre.js';
 import { Travaux } from './carte/travaux.js';
@@ -175,6 +175,10 @@ export class MapView {
     // et, depuis SPEC-HEX, « plateau » : le plateau d'hexagones en 3D (hex/plateau.js), le seul rendu proposé ; « ugar »
     // ne sert plus que de secours, sur un appareil sans WebGL (initPlateau)
     this.style = 'plateau';
+    // les teintes du plateau (SPEC-HEX) : « nature », ou « epoque » : papier et encre de la carte de Cassini, puis de
+    // celle de l'état-major (1818)
+    this.teinte = 'nature';
+    try { if (localStorage.getItem('conquete.carte.teinte') === 'epoque') this.teinte = 'epoque'; } catch (e) { /* stockage indisponible */ }
     this.playable = new Uint8Array(this.W * this.H);
     for (let c = 0; c < this.W * this.H; c++) {
       const d = this.dept[c];
@@ -341,6 +345,18 @@ export class MapView {
   // agrandie y est floue) ; les tuiles de 96 px/km et plus sont toujours vues du ciel, celles de 64 s'y fondent
   papierVu() { return this.era && this.cam.z * this.dpr <= PAPIER_MAX ? this.era : null; }
 
+  setTeinte(v) {
+    this.teinte = v === 'epoque' ? 'epoque' : 'nature';
+    try { localStorage.setItem('conquete.carte.teinte', this.teinte); } catch (e) { /* stockage indisponible */ }
+    this.majPapier();
+  }
+  // la carte d'époque sur le plateau : ses tuiles au papier de l'année (hex/plateau.js, papier), le tout passé au sépia
+  majPapier() {
+    if (!this.plateau) return;
+    const era = this.teinte === 'epoque' ? styleCarte('epoque', this.epoque.year) : null;
+    this.plateau.papier(era);
+    if (this.cv3) this.cv3.style.filter = era === 'cassini' ? 'sepia(.6) saturate(.75) contrast(.95) brightness(1.04)' : era ? 'sepia(.3) saturate(.85) brightness(1.03)' : '';
+  }
   // le plateau d'hexagones (SPEC-HEX) : son canevas WebGL sous celui de la carte ; faux si WebGL manque
   initPlateau() {
     if (this.plateau) return true;
@@ -357,6 +373,8 @@ export class MapView {
     }
     if (this.cellFac) this.plateau.territoire(this.cellFac, this.facCodes, this.colors);
     this.plateau.majLieux(this.state || this.preview);
+    this.plateau.paysage();
+    this.majPapier();
     echellePlateau(this.style === 'plateau');
     return true;
   }
@@ -589,6 +607,7 @@ export class MapView {
     this.rebuildTerritory();
     this.plateau?.majLieux(this.preview);
     if (this.epoque.update(this.preview)) this.invalidateTiles();
+    this.plateau?.paysage(); this.majPapier();
     if (this.styleEra() !== this.era) this.repaint();
   }
 
@@ -999,6 +1018,7 @@ export class MapView {
     if (this.plateau) { this.plateau.majLieux(st); this.plateau.colorer(st.season, Object.values(AMB.meteo).includes('neige')); }
     // ce que les technologies de chaque camp ont changé au paysage est peint dans les tuiles (epoque.js)
     if (this.epoque.update(st)) this.invalidateTiles();
+    this.plateau?.paysage(); this.majPapier();   // (le plateau refait les morceaux du décor qui ont changé)
     if (this.styleEra() !== this.era) this.repaint();   // (la carte d'état-major succède à celle de Cassini en 1818)
     // pertes en bataille -> chiffres flottants
     const prevB = new Map((prev?.battles || []).map(b => [b.id, b]));
@@ -1743,7 +1763,7 @@ export class MapView {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const hex = this.hex, K = this.K;
     // le plateau (SPEC-HEX) se dessine sur son canevas, dessous : celui-ci reste transparent
-    if (hex) { ctx.clearRect(0, 0, this.vw, this.vh); this.plateau.image(this.cam, this.vw, this.vh, dpr, 8, this.ambient.on); }
+    if (hex) { vieDePres(z); ctx.clearRect(0, 0, this.vw, this.vh); this.plateau.image(this.cam, this.vw, this.vh, dpr, 8, this.ambient.on); }
     else { ctx.fillStyle = '#141618'; ctx.fillRect(0, 0, this.vw, this.vh); }
     const [wx0, wy0] = this.toWorld(0, 0), [wx1, wy1] = this.toWorld(this.vw, this.vh);
     // fond rapide

@@ -7,6 +7,9 @@
 // camp. Tout le reste (vie des pays, armées, interface, ciel) reste dessiné par les calques 2D au-dessus (map.js).
 import { THREE, DEGRADE, Scene3D, Grille, lot, put, fige, jeter, transfere, boite, cyl, cone, sphere, ruban, hache, bruit, semer, rnd, entre, choix, K, C } from './moteur.js';
 import * as M from './modeles.js';
+import { phylloxera } from '../epoque.js';
+import { etatVille } from '../carte/villes.js';
+import { maquette, cleMaquette } from './maquette.js';
 
 const GEO = ['mer', 'eau', 'plaine', 'foret', 'lande', 'marais', 'colline', 'montagne', 'haute', 'dunes', 'vigne'];
 // couleurs et hauteurs (unités du plateau ; le relief reste bas pour que les calques 2D tombent juste)
@@ -18,7 +21,16 @@ const TERR = {
   vigne: { nom: 'Vignoble', col: 0xb4b660, h: 0.12 }, ville: { nom: 'Ville', col: 0xd6cbab, h: 0.25 },
 };
 const EAU_Y = -0.7, PARCHEMIN = new THREE.Color(0xdcc79a), NEIGE = new THREE.Color(0xf1f4f6), ROUX = new THREE.Color(0xc98a3c), BLOND = new THREE.Color(0xd8c45a);
+// le paysage des siècles (epoque.js, 2c) : pinède semée sur la lande, marais drainé, vigne roussie par le phylloxéra
+const PINEDE = new THREE.Color(0x6f9445), DRAINE = new THREE.Color(0x8fbf58), ROUSSI = new THREE.Color(0x9c7a48);
+// la carte d'époque (map.js, majPapier) : les teintes au lavis de Cassini (papier, bois gris-vert), puis de l'état-major
+const PAPIER = {
+  cassini: { fond: 0xeadfbf, foret: 0xa9b388, lande: 0xd9cfa6, marais: 0xb9c2a2, vigne: 0xd8c9a6, prairie: 0xe2dcb4, colline: 0xdcd0a8, montagne: 0xc9bb9a, haute: 0xe6e0d0, ville: 0xd7b9a0, cote: 0xe6dcb6, eau: 0xb7c3bc, mer: 0x9fb4b4, dunes: 0xeee2c0 },
+  etatmajor: { fond: 0xf0e8cc, foret: 0x9fc27c, lande: 0xd8d6a0, marais: 0xa7c6b4, vigne: 0xcfa6c0, prairie: 0xcfe0a2, colline: 0xe0d4ac, montagne: 0xd2c2a2, haute: 0xeae6dc, ville: 0xe1a796, cote: 0xeee2bc, eau: 0x96c6dc, mer: 0x86b8d6, dunes: 0xf2e6c4 },
+};
 const RANG = { capitale: 0, fort: 1, ville: 2, village: 3 };
+export const ZM = 100;   // px par km : de plus près, les places montrent leur vrai plan (maquette.js)
+const MAQS = 8;          // maquettes gardées
 
 export class Plateau {
   // mp : la carte (map.js) ; canvas : le canevas WebGL posé sous le sien
@@ -30,6 +42,7 @@ export class Plateau {
     this.racine = new THREE.Group(); this.racine.scale.setScalar(g.f); this.sc.monde.add(this.racine);
     this.ailes = [];             // ailes des moulins : elles tournent (image)
     this.lieux = new Map();      // id de la place → { n, t (hexagones), grp, cle }
+    this.maqs = new Map();       // id de la place → la maquette de son vrai plan, de près : { grp, cle, eglise, place }
     this.file = [];              // ce qui reste à bâtir, un peu à chaque image
     this.saison = null;
     this.echantillonner();
@@ -40,7 +53,9 @@ export class Plateau {
     const eau = new THREE.Mesh(new THREE.PlaneGeometry(mp.W / g.f + 400, mp.H / g.f + 400), new THREE.MeshToonMaterial({ color: 0x3fa6dc, gradientMap: DEGRADE, transparent: true, opacity: 0.72 }));
     eau.rotation.x = -Math.PI / 2; eau.position.set(mp.W / g.f / 2, EAU_Y, mp.H / g.f / 2); eau.receiveShadow = true; this.racine.add(eau);
     // le décor des pays et les routes se bâtissent par paquets ; les places, d'après l'état de la partie
-    for (let i = 0; i < g.liste.length; i += 400) this.file.push(() => this.decor(g.liste.slice(i, i + 400)));
+    // (par morceaux, que le paysage des siècles refait un à un : paysage)
+    this.morceaux = [];
+    for (let i = 0; i < g.liste.length; i += 400) { const m = { liste: g.liste.slice(i, i + 400), grp: null }; this.morceaux.push(m); this.file.push(() => { m.grp = this.decor(m.liste); }); }
     this.file.push(() => this.routes());
   }
 
@@ -107,6 +122,15 @@ export class Plateau {
       // les points de la rivière, hexagone par hexagone, avec la demi-largeur peinte (eau et berges) : rien ne s'y bâtit
       for (const [x, , z, t] of g.suivre(pts, 1.5, 0)) if (t) { const [w, b] = this.largeur(rv.rank, t.t === 'ville'); if (!this.eau.has(t.i)) this.eau.set(t.i, []); this.eau.get(t.i).push([x, z, w + b]); }
     }
+    // les étangs et les lacs trop petits pour faire un hexagone d'eau : une mare par case d'eau de 1 km (decor), où rien
+    // ne se bâtit non plus
+    for (let c = 0; c < mp.W * mp.H; c++) {
+      if (mp.terrain[c] !== 1) continue;
+      const x = (c % mp.W + 0.5) / g.f, z = (Math.floor(c / mp.W) + 0.5) / g.f, t = g.sous(x, z);
+      if (!t || this.estEau(t)) continue;
+      (t.etangs ||= []).push([x, z]);
+      if (!this.eau.has(t.i)) this.eau.set(t.i, []); this.eau.get(t.i).push([x, z, 3.2]);
+    }
   }
   // un point du plateau (unités du plateau) dans l'eau ou sur une rivière et ses berges, à marge près ?
   mouille(x, z, marge = 1.4) {
@@ -136,13 +160,17 @@ export class Plateau {
     this.colorer('printemps', false);
   }
   // les tuiles à la saison : neige l'hiver (partout en montagne, en plaine s'il a neigé), roux l'automne, blé mûr l'été
-  colorer(saison, neige) {
-    const cle = saison + (neige ? '+' : '');
+  colorer(saison = this.sais, neige = this.neige) {
+    this.sais = saison; this.neige = neige;
+    const cle = saison + (neige ? '+' : '') + '|' + (this.versionPays || 0) + '|' + (this.era || '');
     if (cle === this.saison) return;
     this.saison = cle;
     const geo = this.grpTuiles.children[0].geometry, co = geo.attributes.color, nr = geo.attributes.normal, n = co.count / this.g.liste.length, c = new THREE.Color();
     this.g.liste.forEach((t, i) => {
       c.copy(this.base[i]);
+      if (this.era) c.lerp(new THREE.Color(PAPIER[this.era][t.t] ?? PAPIER[this.era].fond), 0.82);
+      const p = this.sigPays(t);
+      if (p) c.lerp(t.t === 'lande' ? PINEDE : t.t === 'marais' ? DRAINE : t.t === 'vigne' ? ROUSSI : c, t.t === 'lande' ? p * 0.22 : t.t === 'vigne' ? 0.3 : t.t === 'marais' ? 0.45 : 0);
       if (!this.estEau(t)) {
         if (saison === 'hiver') c.lerp(NEIGE, t.t === 'haute' || t.t === 'montagne' ? 0.8 : neige ? 0.6 : 0.12);
         else if (saison === 'automne' && (t.t === 'foret' || t.t === 'prairie' || t.t === 'colline')) c.lerp(ROUX, 0.22);
@@ -154,13 +182,50 @@ export class Plateau {
     co.needsUpdate = true; this.sc.sale = true;
   }
 
+  // la carte d'époque : 'cassini', 'etatmajor' ou null (les couleurs de la nature)
+  papier(era) { if (era !== this.era) { this.era = era; this.colorer(); this.sc.sale = true; } }
+
+  // ---------------------------------------------------------------- le paysage des siècles (epoque.js, 2c)
+  // les marques du camp qui tient l'hexagone (territoire) : le paysage suit le maître, comme sur la carte d'avant
+  marques(t) { return t.fac >= 0 && this.codes ? this.mp.epoque.of(this.codes[t.fac]) : null; }
+  // ce que l'époque change à l'hexagone (0 : rien) ; le décor bâti le garde dans t.pays
+  sigPays(t) {
+    const m = this.marques(t);
+    switch (t.t) {
+      case 'lande': return m?.has('landes1857') ? 2 : m?.has('pins') ? 1 : 0;
+      case 'marais': return m?.has('drainage') ? 1 : 0;
+      case 'vigne': return phylloxera(this.mp.epoque.year, m) ? 1 : 0;
+      case 'plaine': return (m?.has('mais') && (t.dep === '40' || t.dep === '64') ? 1 : 0) + (m?.has('assolement') ? 2 : 0);
+      default: return 0;
+    }
+  }
+  // après un changement des marques, de l'année ou des territoires : les morceaux du décor qui ont changé sont refaits
+  // (le neuf bâti avant que l'ancien parte : rien ne clignote), les tuiles recolorées
+  paysage() {
+    if (!this.morceaux) return;
+    let n = 0;
+    for (const m of this.morceaux) {
+      if (!m.grp || m.attente || m.liste.every(t => (t.pays || 0) === this.sigPays(t))) continue;
+      m.attente = true; n++;
+      this.file.push(() => { m.attente = false; const old = m.grp; m.grp = this.decor(m.liste); jeter(old); });
+    }
+    if (n || this.versionPays === undefined) { this.versionPays = (this.versionPays || 0) + 1; this.colorer(); }
+  }
+
   // ---------------------------------------------------------------- le décor des pays
   decor(liste) {
     const { g } = this, L = lot(), R = g.R, tourn = [];
     for (const t of liste) {
+      // les étangs : l'eau (assez large pour que deux cases voisines se rejoignent), sa grève, des roseaux
+      if (t.etangs) for (const [x, z] of t.etangs) {
+        semer(x * 7 | 0, z * 7 | 0);
+        put(L, cyl(3.5, 3.6, 0.08, 12), 0xcfc690, x, t.top + 0.03, z, rnd(), 0);
+        put(L, cyl(3.15, 3.15, 0.1, 12), 0x46a9dd, x, t.top + 0.06, z, rnd(), 0);
+        for (let k = 0; k < 3; k++) { const a = rnd() * 6.3; put(L, cyl(0.06, 0.1, 1.1, 4), 0x9cae5a, x + Math.cos(a) * 3.3, t.top + 0.55, z + Math.sin(a) * 3.3, 0, 0); }
+      }
       if (t.lieu || this.estEau(t)) { if (t.t === 'cote') { semer(t.q, t.r); if (rnd() < 0.2) put(L, sphere(entre(0.8, 1.4), 0), 0x9b958a, t.x + entre(-4, 4), t.top + 0.6, t.z + entre(-4, 4)); } continue; }
       semer(t.q, t.r);
-      const fane = !t.jeu, y = t.top, peu = t.riv ? 0.5 : 1;
+      const fane = !t.jeu, y = t.top, peu = t.riv ? 0.5 : 1, pays = t.pays = this.sigPays(t);
       const pres = this.pres(t);
       const rr = (k = 0.62) => {   // un point de l'hexagone, hors de la rivière (cinq essais)
         for (let n = 0; ; n++) { const a = rnd() * Math.PI * 2, l = Math.sqrt(rnd()) * R * k, p = [t.x + Math.cos(a) * l, t.z + Math.sin(a) * l]; if (n >= 4 || !pres || !this.mouille(p[0], p[1], 1)) return p; }
@@ -168,13 +233,22 @@ export class Plateau {
       const col = c => (fane ? new THREE.Color(c).lerp(PARCHEMIN, 0.5) : c);
       if (t.t === 'foret') for (let i = 0, nb = (6 + (rnd() * 3 | 0)) * peu; i < nb; i++) { const [x, z] = rr(); M.arbre(L, x, y, z, entre(0.8, 1.25), t.dep === '64' || rnd() < 0.3 ? 'sapin' : 'feuillu', fane ? 0x9aa070 : undefined); }
       if (t.t === 'lande') {   // pins maritimes, bruyère, une parc à brebis, de loin en loin une maison de résinier
-        for (let i = 0, nb = (4 + (rnd() * 3 | 0)) * peu; i < nb; i++) { const [x, z] = rr(); M.arbre(L, x, y, z, entre(0.8, 1.15), 'pin'); }
-        for (let i = 0; i < 2; i++) { const [x, z] = rr(), b = sphere(entre(0.8, 1.2), 0); b.scale(1.3, 0.5, 1); put(L, b, col(0x9a6f9e), x, y + 0.2, z, 0, 0.1); }
+        // (les semis de pins, puis la loi de 1857, font de la lande rase une forêt de pins : deux, puis trois fois plus)
+        for (let i = 0, nb = (4 + (rnd() * 3 | 0)) * peu * [1, 2, 3][pays]; i < nb; i++) { const [x, z] = rr(pays ? 0.8 : 0.62); M.arbre(L, x, y, z, entre(0.8, 1.15) * (pays === 2 ? 1.1 : 1), 'pin'); }
+        for (let i = 0; i < 2 - pays; i++) { const [x, z] = rr(), b = sphere(entre(0.8, 1.2), 0); b.scale(1.3, 0.5, 1); put(L, b, col(0x9a6f9e), x, y + 0.2, z, 0, 0.1); }
         if (rnd() < 0.12) { const [x, z] = rr(0.4); M.maison(L, M.style('40'), x, z, rnd() * 6, { s: 0.7 }); }
       }
-      if (t.t === 'marais') for (let i = 0; i < 3; i++) {
-        const [x, z] = rr(); put(L, cyl(entre(1.4, 2.4), entre(1.4, 2.4), 0.06, 9), 0x46a9dd, x, y + 0.04, z, 0, 0);
-        for (let k = 0; k < 4; k++) put(L, cyl(0.06, 0.1, 1.3, 4), 0x9cae5a, x + entre(-2, 2), y + 0.65, z + entre(-2, 2), 0, 0);
+      if (t.t === 'marais') {
+        // drainé, le marais n'a plus qu'une mare : des prés coupés de fossés, une rangée de peupliers
+        for (let i = 0; i < (pays ? 1 : 3); i++) {
+          const [x, z] = rr(), r = pays ? 0.6 : 1; put(L, cyl(entre(1.4, 2.4) * r, entre(1.4, 2.4) * r, 0.06, 9), 0x46a9dd, x, y + 0.04, z, 0, 0);
+          for (let k = 0; k < 4; k++) put(L, cyl(0.06, 0.1, 1.3, 4), 0x9cae5a, x + entre(-2, 2), y + 0.65, z + entre(-2, 2), 0, 0);
+        }
+        if (pays) {
+          const a = hache(t.q >> 1, t.r >> 1, 6) * Math.PI;
+          for (let k = -2; k <= 2; k++) put(L, boite(12 - Math.abs(k) * 2, 0.04, 0.22), 0x3f93c4, t.x + Math.cos(a + Math.PI / 2) * k * 2.6, y + 0.03, t.z - Math.sin(a + Math.PI / 2) * k * 2.6, a, 0);
+          for (let k = 0; k < 3; k++) { const [x, z] = rr(0.7); M.arbre(L, x, y, z, 0.7, 'peuplier'); }
+        }
       }
       if (t.t === 'colline') {
         for (let i = 0; i < 2; i++) { const [x, z] = rr(), b = sphere(entre(3, 4.4), 1); b.scale(1, 0.38, 1); put(L, b, col(0x97ad52), x, y, z, 0, 0.2); }
@@ -189,7 +263,12 @@ export class Plateau {
       }
       if (t.t === 'plaine' && !t.riv) {   // champs en lanières, et parfois une ferme à cour avec sa haie
         const a = hache(t.q >> 1, t.r >> 1, 3) * Math.PI;
-        for (let i = 0; i < 4; i++) { const [x, z] = rr(); put(L, boite(entre(3, 5), 0.5, entre(1.6, 2.6)), col(choix([0xe3c75b, 0xd6b24a, 0xa9c457, 0xc9a55a])), x, y + 0.25, z, a + entre(-0.2, 0.2), 0.15); }
+        // (le maïs de Chalosse et du Béarn, haut et vert ; la luzerne et la betterave de l'assolement)
+        for (let i = 0; i < 4 + (pays & 2 ? 1 : 0); i++) {
+          const [x, z] = rr(), mais = pays & 1 && i % 2 === 0, cul = mais ? 0x8fae3e : choix(pays & 2 ? [0xe3c75b, 0xa9c457, 0x7f9c4f, 0x4f8a3a, 0xb6a46a] : [0xe3c75b, 0xd6b24a, 0xa9c457, 0xc9a55a]), h = mais ? 1.1 : 0.5;
+          put(L, boite(entre(3, 5), h, entre(1.6, 2.6)), col(cul), x, y + h / 2, z, a + entre(-0.2, 0.2), 0.15);
+          if (mais) for (let k = -1; k <= 1; k++) put(L, boite(entre(3, 4.6), 0.12, 0.12), 0xd6c25a, x + Math.sin(a) * k * 0.6, y + h + 0.06, z + Math.cos(a) * k * 0.6, a, 0);   // panicules
+        }
         if (t.jeu && rnd() < 0.3) this.ferme(L, t, rr(0.45));
       }
       if (t.t === 'prairie') {
@@ -199,12 +278,14 @@ export class Plateau {
       }
       if (t.t === 'vigne') {   // rangs de vigne, et un chai
         const a = hache(t.q >> 1, t.r >> 1, 4) * Math.PI;
-        for (let k = -3; k <= 3; k++) put(L, boite(11 - Math.abs(k) * 1.6, 0.7, 0.55), col(0x557a2e), t.x + Math.cos(a + Math.PI / 2) * k * 1.6, y + 0.35, t.z - Math.sin(a + Math.PI / 2) * k * 1.6, a, 0.12);
+        // (de 1875 aux plants greffés, le phylloxéra roussit les rangs ; certains sont arrachés)
+        for (let k = -3; k <= 3; k++) { const mal = pays && hache(t.q + k, t.r, 8) < 0.7; if (mal && hache(t.q, t.r + k, 9) < 0.25) continue; put(L, boite(11 - Math.abs(k) * 1.6, mal ? 0.5 : 0.7, 0.55), col(mal ? 0x9a7444 : 0x557a2e), t.x + Math.cos(a + Math.PI / 2) * k * 1.6, y + (mal ? 0.25 : 0.35), t.z - Math.sin(a + Math.PI / 2) * k * 1.6, a, 0.12); }
         if (t.jeu && rnd() < 0.25) { const [x, z] = rr(0.5); M.maison(L, M.style(t.dep), x, z, a, { s: 0.8, w: 3.2, etages: 1 }); }
       }
       if (t.t === 'dunes') for (let i = 0; i < 2; i++) { const [x, z] = rr(), b = sphere(entre(2.4, 3.4), 1); b.scale(1.4, 0.35, 0.8); put(L, b, 0xf0e2b0, x, y, z, rnd() * 3, 0.15); }
     }
-    this.tourner(fige(L, this.racine), tourn);
+    const grp = fige(L, this.racine); this.tourner(grp, tourn);
+    return grp;
   }
   // ferme à cour : logis, grange, haie, un arbre
   ferme(L, t, [x, z]) {
@@ -258,6 +339,7 @@ export class Plateau {
   cleLieu(ns) { return ns ? `${ns.o}|${ns.f || 0}|${ns.d || 0}|${ns.sg ? Math.round((ns.sg.dmg || 0) * 3) : 0}|${(this.mp.state?.year || 0) >= 1830 ? 1 : 0}` : '-'; }
   majLieux(st) {
     if (!st) return;
+    this.st = st;
     for (const [id, l] of this.lieux) {
       const ns = st.nodes[id], cle = this.cleLieu(ns);
       if (cle === l.cle) continue;
@@ -372,6 +454,7 @@ export class Plateau {
   // ---------------------------------------------------------------- territoires : teinte et liseré aux couleurs des camps
   territoire(cellFac, codes, colors) {
     const { g } = this, T = lot(), B = lot();
+    this.codes = codes;
     for (const t of g.liste) {
       t.fac = -1;
       if (!t.jeu || this.estEau(t)) continue;
@@ -397,6 +480,43 @@ export class Plateau {
     this.sc.sale = true;
   }
 
+  // ---------------------------------------------------------------- de près, le vrai plan des places (maquette.js)
+  // les places à l'écran montrent leur maquette, une fois bâtie (une à la fois, par petits pas) ; la ville « jouet »
+  // reste en attendant, et revient de loin
+  proches(cam, vw, vh) {
+    const st = this.st, pres = cam.z >= ZM && st, m0 = 2.5;
+    const x0 = cam.x - vw / 2 / cam.z - m0, x1 = cam.x + vw / 2 / cam.z + m0, y0 = cam.y - vh / 2 / (cam.z * K) - m0, y1 = cam.y + vh / 2 / (cam.z * K) + m0;
+    for (const [id, l] of this.lieux) {
+      const n = l.n, m = this.maqs.get(id), voulu = pres && n.x > x0 && n.x < x1 && n.y > y0 && n.y < y1;
+      if (voulu && !this.chantier) {
+        const cle = cleMaquette(n, etatVille(n, st.nodes[id], st));
+        if (!m || m.cle !== cle) this.batirMaquette(id, n, st.nodes[id], cle);
+      }
+      const vue = !!(voulu && m?.grp);
+      if (m?.grp && m.grp.visible !== vue) { m.grp.visible = vue; this.sc.sale = true; }
+      if (l.grp && l.grp.visible === vue) { l.grp.visible = !vue; this.sc.sale = true; }
+      if (vue) m.vu = performance.now();
+    }
+  }
+  batirMaquette(id, n, ns, cle) {
+    this.chantier = id;
+    const it = maquette(this, n, ns);
+    const pas = () => {
+      const r = it.next();
+      if (!r.done) { this.file.push(pas); return; }
+      this.chantier = null;
+      jeter(this.maqs.get(id)?.grp);
+      if (r.value) { r.value.grp.visible = false; this.racine.add(r.value.grp); }
+      this.maqs.set(id, r.value || { cle, grp: null });
+      // (les plus anciennes, hors de l'écran, partent)
+      const vieilles = [...this.maqs].filter(([, m]) => m.grp && !m.grp.visible).sort((a, b) => a[1].vu - b[1].vu);
+      while (this.maqs.size > MAQS && vieilles.length) { const [k, m] = vieilles.shift(); jeter(m.grp); this.maqs.delete(k); }
+    };
+    this.file.push(pas);
+  }
+  // la maquette affichée de la place (km : eglise, place), ou rien (towns.js y pose drapeau, habitants, pigeons)
+  maqVue(id) { const m = this.maqs.get(id); return m?.grp?.visible ? m : null; }
+
   // ---------------------------------------------------------------- chaque image
   // hauteur du sol (km) sous un point du jeu : les calques 2D y posent ce qui est debout
   hauteur(x, y) { const t = this.g.en(x, y); return t ? Math.max(t.top, EAU_Y) * this.g.f : 0; }
@@ -406,10 +526,11 @@ export class Plateau {
   // anim : la vie de la carte est animée (ambient.on)
   image(cam, vw, vh, dpr, budget = 8, anim = false) {
     const t0 = performance.now();
+    this.proches(cam, vw, vh);
     while (this.file.length && performance.now() - t0 < budget) { this.file.shift()(); this.sc.sale = true; }
     // les moulins tournent quand on les distingue : le plateau se redessine alors 15 fois par seconde, pas plus
     if (anim && cam.z >= 15 && this.ailes.length && t0 - (this.tAiles || 0) > 66) {
-      this.tAiles = t0; this.ailes = this.ailes.filter(a => a.parent);
+      this.tAiles = t0; this.ailes = this.ailes.filter(a => a.parent?.parent);   // (celles des groupes refaits sont parties)
       for (const a of this.ailes) a.rotation.z = a.userData.ph + t0 / 1000 * 0.9;
       this.sc.sale = true;
     }

@@ -25,7 +25,8 @@ avec un avertissement dans la console : c'est un secours, pas un choix.
 |---|---|
 | `web/js/hex/moteur.js` | Le moteur repris de web_power : matériaux toon, contours, lots fusionnés (`put`, `fige`), formes, toits, rubans, la grille d'hexagones (`Grille`), la scène sous le canevas 2D (`Scene3D`) |
 | `web/js/hex/modeles.js` | Les modèles : maisons de chaque pays (portes, fenêtres, volets, colombages, cheminées), église (clocher-mur en Béarn), cathédrale, halle, château, moulin, arbres, barque, quai, enceintes selon les remparts (1 à 4), fort en étoile |
-| `web/js/hex/plateau.js` | La carte de campagne : hexagones de 4 km, terrain, rivières, routes, territoires, villes et villages d'après l'état |
+| `web/js/hex/plateau.js` | La carte de campagne : hexagones de 4 km, terrain, rivières, étangs, routes, territoires, paysage des siècles, villes et villages d'après l'état, carte d'époque |
+| `web/js/hex/maquette.js` | De près, le vrai plan de chaque place (le plan organique de la carte d'avant) monté en maquette à l'échelle, abîmé selon l'état |
 | `web/js/hex/champ.js` | Le champ de bataille : hexagones de 40 m, décor, routes, ponts, haies, clôtures, bâtiments (états du serveur), enceinte, barricades, cratères |
 | `web/js/hex/troupes3d.js` | Les troupes en figurines 3D instanciées, posées par la logique de `battle/troupes2d.js` |
 | `web/js/dev/modeles-hex.html` | Galerie des modèles |
@@ -66,6 +67,22 @@ Tous les calques 2D appliquent ce `K` sur l'axe vertical : `map.js` (`toScreen`,
   (`ambient.js`), ailes des moulins 3D qui tournent (le plateau se redessine alors 15 fois par seconde, dès 15 px/km).
 - Vie : figures grossies 4 fois (`carte/ambiance.js`, `echellePlateau`), visibles dès 60 px/km ; zoom limité à 240 px/km.
 - Le décor se bâtit par paquets pendant les premières images (8 ms par image).
+- Étangs et lacs trop petits pour faire un hexagone d'eau : une mare par case d'eau de 1 km, avec sa grève et ses
+  roseaux ; rien ne s'y bâtit.
+- Le paysage des siècles (`epoque.js`, 2c), selon les marques du camp qui tient chaque hexagone : les semis de pins
+  doublent les pins de la lande, la loi de 1857 la change en pinède (trois fois plus de pins, teinte plus verte) ; le
+  drainage ne laisse au marais qu'une mare, des fossés et des peupliers ; le phylloxéra roussit les rangs de vigne de
+  1875 aux plants greffés (certains arrachés) ; le maïs, haut et vert, en Chalosse et en Béarn ; la luzerne et la
+  betterave de l'assolement. Seuls les morceaux du décor qui changent sont refaits (`Plateau.paysage`).
+- De près (dès 100 px/km, `ZM`), chaque place à l'écran montre son vrai plan, le même que la carte d'avant
+  (`carte/plan-organique.js` par `carte/villes.js`) : rues le long des vraies routes et rivières, îlots selon le
+  quartier, faubourgs, jardins et leurs arbres, maisons à deux versants (hauteurs × 1,6), toits plats, cheminées
+  d'usine, courtines et tours de l'enceinte ouvertes aux portes ; ruines, toits crevés et maisons brûlées d'après le
+  siège, les combats passés et l'incendie (`villes.js`, `degats`), brèches dans le mur. Une maquette à la fois, par
+  petits pas ; huit gardées. Le drapeau passe au clocher de l'église, les habitants sur la place. Le zoom va jusqu'à
+  450 px/km, la vie grossie revient peu à peu à l'échelle vraie (`vieDePres`).
+- Teintes de la carte (Réglages) : « Nature », ou « Carte d'époque » : les tuiles au lavis de Cassini, puis de
+  l'état-major à partir de 1818, et le plateau passé au sépia.
 
 ## Batailles
 
@@ -90,5 +107,4 @@ Tous les calques 2D appliquent ce `K` sur l'axe vertical : `map.js` (`toScreen`,
 - La boue du piétinement (`battle/pietinement.js`) est posée en texture sur le dessus des hexagones de terre
   (`Champ.boue`) ; elle passe sous les cultures en relief (champs, vignes). Les tués 2D restent à la vue de dessus : le
   plateau a ses tués couchés en 3D.
-- La carte d'époque garde son papier : le plateau n'existe qu'au style Plateau.
 - Sur un appareil lent, le décor du plateau met quelques secondes à se bâtir à l'ouverture.
