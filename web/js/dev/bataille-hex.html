@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bataille en hexagones</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Maquette : une bataille de Conquête refaite en plateau d'hexagones, style web_power (GridMaster), suite de carte-hex.html.
+   Même champ de bataille et même échelle que le jeu (3 000 × 2 000 m), 1 hexagone = 40 m ; les régiments à leur place,
+   dans leur formation. Champ à gauche, panneau à droite ; en portrait, panneau dessous. Un seul thème sombre, par choix. */
+:root {
+  color-scheme: dark;
+  --fond: #1b211a; --fond2: #253021; --fond3: #2a3327; --bord: #0f130e; --trait: #2b1d14; --sol: #141813;
+  --txt: #f6f4ea; --doux: #b3bca5; --gris: #a9b39a; --or: #ffc94d; --vert: #7be08a; --rouge: #ff8a7a; --creme: #fff7e6;
+  --titre: Fredoka, "Trebuchet MS", system-ui, sans-serif; --corps: Nunito, "Segoe UI", system-ui, sans-serif;
+  --ombre: 0 4px 0 rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--sol); color: var(--txt); font-family: var(--corps); }
+button { font-family: inherit; color: inherit; }
+button:focus-visible { outline: 3px solid var(--vert); outline-offset: 2px; }
+#app { display: grid; grid-template-rows: 60px minmax(0, 1fr); grid-template-columns: minmax(0, 1fr) 380px; height: 100%; }
+.barre { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding-block: 0; padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); background: var(--fond); border-bottom: 3px solid var(--bord); min-width: 0; }
+.titre-date { font-family: var(--titre); font-weight: 600; font-size: 19px; line-height: 1.15; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.titre-date small { display: block; font: 800 11px var(--corps); color: var(--gris); }
+.badge { flex: none; padding: 2px 8px; border-radius: 8px; background: var(--creme); color: var(--trait); font-weight: 800; font-size: 11px; border: 2px solid var(--bord); }
+.badge.phase { background: var(--or); }
+.forces { display: flex; align-items: center; gap: 6px; margin-left: auto; min-width: 0; }
+.force { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 12px; background: var(--fond2); border: 2px solid var(--bord); font-weight: 800; font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.force i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--bord); background: var(--c); }
+.contre { font-family: var(--titre); color: var(--gris); }
+.lancer { flex: none; min-height: 38px; padding: 0 14px; border-radius: 12px; border: 2.5px solid var(--bord); background: var(--or); color: var(--trait); font-weight: 800; font-size: 14px; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.35); }
+
+main { position: relative; overflow: hidden; background: #2d6aa0; min-width: 0; }
+#scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+#scene.glisse { cursor: grabbing; }
+#etiquettes { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.ban { position: absolute; left: 0; top: 0; display: flex; align-items: center; white-space: nowrap; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); will-change: transform; }
+.ban .pop { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--fond); border: 2.5px solid var(--bord); color: var(--txt); font-family: var(--titre); font-weight: 700; font-size: 10.5px; z-index: 1; font-variant-numeric: tabular-nums; }
+.ban .nom { margin-left: -8px; padding: 2px 10px 2px 12px; border-radius: 0 10px 10px 0; background: var(--c); color: var(--txt); border: 2.5px solid var(--bord); font-family: var(--titre); font-weight: 700; font-size: 13px; line-height: 1.1; }
+.ban .nom small { display: block; font-family: var(--corps); font-weight: 800; font-size: 10px; opacity: .85; }
+.ban.choisi .pop { background: var(--or); color: var(--trait); }
+.flottant { position: absolute; z-index: 3; background: var(--fond); border: 2.5px solid var(--bord); border-radius: 16px; box-shadow: var(--ombre); }
+.temps { left: max(12px, env(safe-area-inset-left, 0px)); top: 12px; display: flex; gap: 3px; padding: 4px; font-variant-numeric: tabular-nums; }
+.temps button, .temps span { min-width: 42px; min-height: 36px; padding: 0 10px; border: 0; border-radius: 11px; background: transparent; font: 800 13px var(--corps); display: grid; place-items: center; }
+.temps button { cursor: pointer; }
+.temps button.actif { background: var(--or); color: var(--trait); }
+.lentilles { right: 12px; top: 12px; display: flex; flex-direction: column; gap: 4px; padding: 6px; }
+.lentilles button { min-height: 30px; padding: 0 10px; border-radius: 10px; border: 2px solid var(--bord); background: var(--fond2); font-weight: 800; font-size: 12px; text-align: left; cursor: pointer; }
+.lentilles button[aria-pressed="true"] { background: var(--or); color: var(--trait); }
+.echelle { left: max(12px, env(safe-area-inset-left, 0px)); bottom: 12px; padding: 6px 10px 7px; font-weight: 800; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.echelle .regle { height: 8px; margin-top: 4px; border: 2.5px solid var(--txt); border-top: 0; }
+.bulle { position: fixed; z-index: 9; pointer-events: none; padding: 6px 10px; border-radius: 11px; background: var(--creme); color: var(--trait); border: 2px solid var(--bord); font-size: 12px; font-weight: 800; max-width: 260px; }
+.bulle b { font-family: var(--titre); font-weight: 600; font-size: 14px; }
+
+aside { display: flex; flex-direction: column; min-height: 0; background: var(--fond); border-left: 3px solid var(--bord); }
+.onglets { display: flex; gap: 4px; padding: 8px 10px 6px; border-bottom: 2px solid var(--fond2); }
+.onglets button { min-height: 32px; padding: 0 12px; border-radius: 10px; border: 2px solid var(--bord); background: var(--fond2); font-weight: 800; font-size: 12.5px; cursor: pointer; }
+.onglets button[aria-selected="true"] { background: var(--or); color: var(--trait); }
+#contenu { flex: 1; overflow-y: auto; padding: 6px 16px 24px; }
+h2 { font-family: var(--titre); font-weight: 600; font-size: 24px; margin: 8px 0 2px; text-wrap: balance; }
+h3 { font-family: var(--titre); font-weight: 600; font-size: 15px; margin: 18px 0 6px; color: var(--doux); }
+.sous { color: var(--gris); font-weight: 700; font-size: 13px; }
+.lignes { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13.5px; align-items: center; }
+.lignes dt { color: var(--gris); font-weight: 700; }
+.lignes dd { margin: 0; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.barre-v { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.barre-v span { width: 110px; height: 10px; border-radius: 6px; border: 2px solid var(--bord); background: var(--fond3); overflow: hidden; }
+.barre-v span i { display: block; height: 100%; background: var(--c, var(--vert)); }
+.regs { display: grid; gap: 5px; }
+.reg { display: grid; grid-template-columns: 12px 1fr auto; gap: 2px 10px; align-items: center; width: 100%; padding: 7px 10px; border-radius: 12px; border: 2.5px solid var(--bord); background: var(--fond2); text-align: left; cursor: pointer; }
+.reg i { grid-row: span 2; width: 12px; height: 28px; border-radius: 4px; border: 2px solid var(--bord); background: var(--c); }
+.reg b { font-family: var(--titre); font-weight: 600; font-size: 14.5px; }
+.reg small { color: var(--gris); font-weight: 700; font-size: 11.5px; }
+.reg .n { grid-row: span 2; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; }
+.reg[aria-current="true"] { border-color: var(--or); }
+.formes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.formes button, .actions button { min-height: 38px; border-radius: 12px; border: 2.5px solid var(--bord); background: var(--fond2); font-weight: 800; font-size: 12.5px; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.3); }
+.formes button[aria-pressed="true"] { background: var(--creme); color: var(--trait); }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.actions button.prim { background: var(--or); color: var(--trait); }
+.note { margin-top: 14px; color: var(--gris); font-size: 12px; font-weight: 700; line-height: 1.45; }
+.chargement { position: absolute; inset: 0; display: grid; place-items: center; z-index: 5; font-family: var(--titre); font-size: 18px; background: var(--fond); }
+
+@media (max-width: 900px) {
+  #app { grid-template-columns: minmax(0, 1fr); grid-template-rows: 52px minmax(0, 1fr) minmax(0, 42%); }
+  aside { border-left: 0; border-top: 3px solid var(--bord); }
+  .forces, .titre-date small, .badge:not(.phase) { display: none; }
+  .titre-date { font-size: 15px; } .barre { gap: 6px; } .lancer { margin-left: auto; padding: 0 10px; font-size: 13px; }
+  .lentilles { top: auto; bottom: 12px; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 24px); right: max(12px, env(safe-area-inset-right, 0px)); }
+  .echelle { bottom: auto; top: 64px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="barre">
+    <div class="titre-date" id="titre">Bataille</div>
+    <span class="badge phase">DÉPLOIEMENT</span>
+    <span class="badge">MAQUETTE</span>
+    <div class="forces" id="forces"></div>
+    <button type="button" class="lancer">Lancer la bataille ▸</button>
+  </header>
+  <main id="zone">
+    <canvas id="scene" aria-label="Champ de bataille en hexagones"></canvas>
+    <div id="etiquettes"></div>
+    <div class="flottant temps" role="group" aria-label="Temps">
+      <button type="button" class="actif">❚❚</button><button type="button">×1</button><button type="button">×4</button><span>8 h 00</span>
+    </div>
+    <div class="flottant lentilles" role="group" aria-label="Calques">
+      <button type="button" id="l-por" aria-pressed="true">Portées</button>
+      <button type="button" id="l-nom" aria-pressed="true">Noms</button>
+      <button type="button" id="l-hex" aria-pressed="false">Grille</button>
+    </div>
+    <div class="flottant echelle"><span id="ech-txt">100 m</span><div class="regle" id="ech-regle"></div></div>
+    <div class="chargement" id="chargement">Les régiments prennent position…</div>
+  </main>
+  <aside>
+    <div class="onglets" role="tablist">
+      <button type="button" role="tab" id="o-reg" aria-selected="true">Mes régiments</button>
+      <button type="button" role="tab" id="o-obs" aria-selected="false">Ordre de bataille</button>
+    </div>
+    <div id="contenu"></div>
+  </aside>
+</div>
+<div class="bulle" id="bulle" hidden></div>
+
+<script src="bataille-hex-data.js"></script>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }</script>
+<script type="module">
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+const $ = s => document.querySelector(s);
+const nf = n => Math.round(n).toLocaleString('fr-FR');
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ============================================================ données du jeu (game/tactics, mode Bataille)
+const D = BATAILLE_HEX, R = 10, SQ3 = Math.sqrt(3), RK = D.hexM / SQ3, S = R / RK;   // S : unités 3D par mètre
+const OX = D.W * S / 2, OZ = D.H * S / 2;
+const mVers = (x, y) => [x * S - OX, y * S - OZ];
+const MOI = 0, FAC = D.factions, colSide = s => FAC[D.sides[s]].col;
+const H0 = Math.min(...D.h);
+const SOL = {
+  PRE: { col: 0x84c450 }, CHAMP: { col: 0xc9c65c }, VIGNE: { col: 0xb4b660 }, LANDE: { col: 0xaaa762 }, BOIS: { col: 0x6aa843 }, FORET: { col: 0x4e8a34 },
+  MARAIS: { col: 0x6f9e6a }, EAU: { col: 0xd2c88f, eau: 1 }, GUE: { col: 0xd2c88f, eau: 1 }, ROUTE: { col: 0xcfc3a3 }, CHEMIN: { col: 0xd9c79a }, BATI: { col: 0xcfc3a3 },
+  MUR: { col: 0xbfb39a }, BRECHE: { col: 0xa79a7a }, PORTE: { col: 0xcfc3a3 }, SABLE: { col: 0xead9a2 }, ROCHE: { col: 0x9c968c }, BARRICADE: { col: 0xb59a6a }, VERGER: { col: 0x8cc45a },
+};
+const FORME = { ligne: 'Ligne', colonne: 'Colonne', carre: 'Carré', tirailleurs: 'Tirailleurs', batterie: 'En batterie', avanttrain: 'Attelée' };
+const ETAT = { repos: 'Au repos', marche: 'En marche', feu: 'Fait feu', melee: 'Mêlée', deroute: 'En déroute' };
+
+// ============================================================ hasard (repris de web_power)
+function hache(x, y, s = 7) { let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 1442695041)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+let g = 1;
+function rnd() { g = (g + 0x6D2B79F5) | 0; let t = Math.imul(g ^ (g >>> 15), 1 | g); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
+const semer = (a, b) => { g = a * 7919 + b * 104729 + 13; };
+const entre = (a, b) => a + rnd() * (b - a);
+
+// ============================================================ grille (pointe en haut, axiale)
+const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+const cle = (q, r) => q + ',' + r;
+const T = new Map(), LISTE = [];
+for (let row = 0; row < D.rows; row++) for (let col = 0; col < D.cols; col++) {
+  const i = row * D.cols + col, r = row, q = col - (row - (row & 1)) / 2;
+  const t = { q, r, col, row, x: R * SQ3 * (q + r / 2) - OX, z: R * 1.5 * r - OZ, t: D.types[D.ter.charCodeAt(i) - 65], hm: D.h[i] };
+  t.top = (t.hm - H0) * S * 1.6 - (SOL[t.t].eau ? 2.4 : 0);   // relief du moteur, un peu accentué
+  T.set(cle(q, r), t); LISTE.push(t);
+}
+const voisins = t => DIRS.map(([a, b]) => T.get(cle(t.q + a, t.r + b))).filter(Boolean);
+function versHex(x, z) {
+  x += OX; z += OZ;
+  const q = (SQ3 / 3 * x - z / 3) / R, r = (2 / 3 * z) / R, s = -q - r;
+  let rq = Math.round(q), rr = Math.round(r); const rs = Math.round(s);
+  const dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs - s);
+  if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs;
+  return T.get(cle(rq, rr));
+}
+const solEn = (x, z) => { const t = versHex(x, z); return t ? Math.max(t.top, -.4) : 0; };
+
+// ============================================================ moteur 3D (repris de web_power/js/03-moteur-3d.js)
+const toile = $('#scene'), zone = $('#zone');
+const renderer = new THREE.WebGLRenderer({ canvas: toile, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+const gris = D.weather === 'pluie' || D.weather === 'brouillard' || D.weather === 'nuages';
+scene.background = new THREE.Color(0x1b211a);
+if (gris) scene.fog = new THREE.Fog(0x8d9a8c, 1200, 2800);
+const cam = new THREE.PerspectiveCamera(30, 1, 5, 5000);
+scene.add(new THREE.HemisphereLight(0xeef7ff, 0x7d8466, gris ? 1.35 : 1.5));
+const soleil = new THREE.DirectionalLight(gris ? 0xe6ecf0 : 0xfff0d4, gris ? 2.1 : 2.6), SOL_DEC = new THREE.Vector3(-170, 300, 160);
+soleil.castShadow = true;
+Object.assign(soleil.shadow.camera, { left: -300, right: 300, top: 260, bottom: -260, near: 10, far: 1000 });
+soleil.shadow.mapSize.set(4096, 4096); soleil.shadow.bias = -.0006; soleil.shadow.normalBias = .4;
+scene.add(soleil, soleil.target);
+const degrade = new THREE.DataTexture(new Uint8Array([105, 190, 255]), 3, 1, THREE.RedFormat);
+degrade.minFilter = degrade.magFilter = THREE.NearestFilter; degrade.needsUpdate = true;
+const MAT = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: degrade });
+const CONT = new THREE.MeshBasicMaterial({ color: 0x24180f, side: THREE.BackSide });
+const VA = new THREE.Vector3(), VB = new THREE.Vector3();
+const lot = () => ({ g: [], o: [] });
+function put(L, geo, col, x = 0, y = 0, z = 0, ry = 0, ep = .26) {
+  if (geo.index) geo = geo.toNonIndexed();
+  if (geo.attributes.uv) geo.deleteAttribute('uv');
+  if (!geo.attributes.normal) geo.computeVertexNormals();
+  if (ry) geo.rotateY(ry);
+  geo.translate(x, y, z);
+  const c = new THREE.Color(col), n = geo.attributes.position.count, a = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
+  geo.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  L.g.push(geo);
+  if (ep) {
+    const o = geo.clone(); o.computeBoundingBox(); o.boundingBox.getCenter(VA); o.boundingBox.getSize(VB);
+    o.translate(-VA.x, -VA.y, -VA.z);
+    o.scale((VB.x + 2 * ep) / Math.max(VB.x, 1e-3), (VB.y + 2 * ep) / Math.max(VB.y, 1e-3), (VB.z + 2 * ep) / Math.max(VB.z, 1e-3));
+    o.translate(VA.x, VA.y, VA.z); L.o.push(o);
+  }
+  return geo;
+}
+// pose un modèle local (x vers l'avant, z vers la droite) à (x, y, z), tourné de ry
+function transfere(src, L, x, y, z, ry = 0) { for (const k of ['g', 'o']) for (const geo of src[k]) { if (ry) geo.rotateY(ry); geo.translate(x, y, z); L[k].push(geo); } }
+function fige(L, mat = MAT, ombre = true) {
+  const grp = new THREE.Group();
+  if (L.g.length) { const m = new THREE.Mesh(mergeGeometries(L.g), mat); m.castShadow = ombre; m.receiveShadow = true; grp.add(m); }
+  if (L.o.length) grp.add(new THREE.Mesh(mergeGeometries(L.o), CONT));
+  scene.add(grp); return grp;
+}
+const boite = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+const cyl = (rt, rb, h, s = 10) => new THREE.CylinderGeometry(rt, rb, h, s);
+const cone = (r, h, s = 8) => new THREE.ConeGeometry(r, h, s);
+const sphere = (r, d = 1) => new THREE.IcosahedronGeometry(r, d);
+function toit(L, w, d, h, col, x, y, z, ry = 0) {
+  const p = cyl(1, 1, d, 3); p.rotateX(Math.PI / 2); p.rotateZ(Math.PI / 2); p.scale(h / 1.5, w / SQ3, 1); p.translate(0, h / 2 - h / 3, 0);
+  put(L, p, col, x, y + h / 6, z, ry);
+}
+function ruban(pts, larg) {
+  const pos = [];
+  const perp = i => { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], dx = b[0] - a[0], dz = b[2] - a[2], l = Math.hypot(dx, dz) || 1; return [-dz / l, dx / l]; };
+  for (let i = 0; i < pts.length - 1; i++) {
+    const A = pts[i], B = pts[i + 1], pa = perp(i), pb = perp(i + 1);
+    pos.push(A[0] + pa[0] * larg, A[1], A[2] + pa[1] * larg, B[0] + pb[0] * larg, B[1], B[2] + pb[1] * larg, A[0] - pa[0] * larg, A[1], A[2] - pa[1] * larg,
+      A[0] - pa[0] * larg, A[1], A[2] - pa[1] * larg, B[0] + pb[0] * larg, B[1], B[2] + pb[1] * larg, B[0] - pb[0] * larg, B[1], B[2] - pb[1] * larg);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(pos.map((_, i) => i % 3 === 1 ? 1 : 0), 3));
+  return geo;
+}
+// une polyligne en mètres, posée sur le relief et rééchantillonnée tous les `pas` (unités 3D)
+function suivre(pm, pas, dy) {
+  const out = [];
+  for (let i = 0; i < pm.length - 1; i++) {
+    const [ax, az] = mVers(...pm[i]), [bx, bz] = mVers(...pm[i + 1]), nb = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / pas));
+    for (let s = i ? 1 : 0; s <= nb; s++) { const x = ax + (bx - ax) * s / nb, z = az + (bz - az) * s / nb; out.push([x, solEn(x, z) + dy, z]); }
+  }
+  return out;
+}
+
+// ============================================================ décor
+function maison(L, x, z, ry, s = 1, haute = false) {
+  const h = (haute ? 2.8 : 1.8) * s;
+  put(L, boite(2.6 * s, h, 2.2 * s), [0xf6eedb, 0xf1e2c2, 0xe9dcc0, 0xe4d2a8][rnd() * 4 | 0], x, h / 2, z, ry);
+  toit(L, 2.9 * s, 2.4 * s, 1.4 * s, [0xb8562f, 0xc4493a, 0x8a6a4a, 0x6d6a75][rnd() * 4 | 0], x, h, z, ry);
+}
+function batiModele(b) {
+  const L = lot(), s = clamp(Math.sqrt(b.n) * .55, .8, 2.2);
+  semer(b.x, b.y);
+  if (b.k === 'eglise' || b.k === 'couvent') {
+    put(L, boite(3.4 * s, 3 * s, 6 * s), 0xe8dcc0, 0, 1.5 * s, 0); toit(L, 3.8 * s, 6.2 * s, 2 * s, 0x6d6a75, 0, 3 * s, 0, Math.PI / 2);
+    put(L, boite(1.8 * s, 6.4 * s, 1.8 * s), 0xe8dcc0, 0, 3.2 * s, 3.4 * s); put(L, cone(1.5 * s, 3.4 * s, 4), 0x5b5866, 0, 8.1 * s, 3.4 * s, Math.PI / 4);
+  } else if (b.k === 'halle') { put(L, boite(5 * s, .4, 3.4 * s), 0x8a6a4a, 0, 1.9 * s, 0); toit(L, 5.6 * s, 3.8 * s, 1.8 * s, 0x8a6a4a, 0, 2.1 * s, 0); for (const [x, z] of [[-2, -1.4], [2, -1.4], [-2, 1.4], [2, 1.4]]) put(L, boite(.4, 2 * s, .4), 0x7a5233, x * s, s, z * s, 0, .1); }
+  else if (b.k === 'ferme') { maison(L, 0, 0, 0, 1.3); put(L, boite(4.4, 2.2, 2.4), 0xd9c7a0, 1.2, 1.1, 3.4); toit(L, 4.8, 2.6, 1.5, 0xb8562f, 1.2, 2.2, 3.4, Math.PI / 2); }
+  else maison(L, 0, 0, 0, Math.min(s, 1.3), b.n > 3);
+  return L;
+}
+function arbre(L, x, y, z, s = 1, sapin = false) {
+  put(L, cyl(.3 * s, .42 * s, 1.6 * s, 5), 0x7a5233, x, y + .8 * s, z);
+  if (sapin) { put(L, cone(1.9 * s, 3 * s, 6), 0x3e7f34, x, y + 2.8 * s, z); put(L, cone(1.4 * s, 2.4 * s, 6), 0x4c9440, x, y + 4.2 * s, z); }
+  else put(L, sphere(2 * s, 0), [0x5fae3e, 0x74b83f, 0x4f9a37][rnd() * 3 | 0], x, y + 3 * s, z);
+}
+function construireSol() {
+  const TUILES = lot(), DECOR = lot(), TRACES = lot();
+  const bat = new Set(['BATI', 'MUR', 'PORTE', 'BRECHE', 'ROUTE']);
+  for (const t of LISTE) {
+    semer(t.q, t.r);
+    const d = SOL[t.t], bas = -12, h = t.top - bas;
+    const geo = put(TUILES, cyl(R * .965, R, h, 6), d.col, t.x, bas + h / 2, t.z, 0, 0);
+    const c = new THREE.Color(d.col).offsetHSL((rnd() - .5) * .015, 0, (rnd() - .5) * .05), nr = geo.attributes.normal, co = geo.attributes.color;
+    for (let i = 0; i < co.count; i++) { const k = nr.getY(i) > .5 ? 1 : .62; co.setXYZ(i, c.r * k, c.g * k, c.b * k); }
+    const y = t.top, rr = (k = .62) => { const a = rnd() * Math.PI * 2, l = Math.sqrt(rnd()) * R * k; return [t.x + Math.cos(a) * l, t.z + Math.sin(a) * l]; };
+    if (t.t === 'BOIS' || t.t === 'FORET') for (let i = 0, nb = t.t === 'FORET' ? 6 : 4; i < nb; i++) { const [x, z] = rr(); arbre(DECOR, x, y, z, entre(.85, 1.2), t.t === 'FORET' && rnd() < .45); }
+    if (t.t === 'VERGER') for (let i = 0; i < 3; i++) { const [x, z] = rr(.55); put(DECOR, cyl(.2, .26, 1.1, 5), 0x7a5233, x, y + .55, z); put(DECOR, sphere(1.2, 0), 0x6fb447, x, y + 1.7, z); }
+    if (t.t === 'CHAMP') { const a = hache(t.q >> 2, t.r >> 2, 3) * Math.PI; for (let k = -2; k <= 2; k++) put(DECOR, boite(14 - Math.abs(k) * 2.6, .3, 2.6), [0xe3c75b, 0xd6b24a, 0xbfae4f][(k + 9 + (t.q >> 2)) % 3], t.x + Math.sin(a) * k * 2.9, y + .15, t.z + Math.cos(a) * k * 2.9, a, 0); }
+    if (t.t === 'VIGNE') { const a = hache(t.q >> 2, t.r >> 2, 4) * Math.PI; for (let k = -3; k <= 3; k++) put(DECOR, boite(12 - Math.abs(k) * 1.7, .8, .55), 0x557a2e, t.x + Math.sin(a) * k * 1.7, y + .4, t.z + Math.cos(a) * k * 1.7, a, .1); }
+    if (t.t === 'LANDE') for (let i = 0; i < 3; i++) { const [x, z] = rr(), b = sphere(entre(.8, 1.2), 0); b.scale(1.3, .5, 1); put(DECOR, b, 0x9a6f9e, x, y + .2, z, 0, .1); }
+    if (t.t === 'PRE' && rnd() < .2) { const [x, z] = rr(); put(DECOR, sphere(.9, 0), 0x5fa83c, x, y + .5, z); }
+    if (t.t === 'BATI') for (let i = 0; i < 3; i++) { const [x, z] = rr(.5); maison(DECOR, x - t.x, z - t.z, (rnd() * 4 | 0) * Math.PI / 2, 1, rnd() < .5); }
+    if (t.t === 'BATI') { const L = DECOR.g.splice(-6), O = DECOR.o.splice(-6); transfere({ g: L, o: O }, DECOR, t.x, y, t.z); }
+  }
+  // bâtiments du moteur hors de la ville serrée (fermes, église, halle)
+  for (const b of D.batis) { const [x, z] = mVers(b.x, b.y), t = versHex(x, z); if (!t || (bat.has(t.t) && b.k === 'maison')) continue; transfere(batiModele(b), DECOR, x, t.top, z, hache(b.x, b.y, 2) * Math.PI); }
+  // routes (royale empierrée, route, chemin de terre), rivières, haies, enceinte
+  for (const r of D.roads) {
+    const w = r.k === 'royale' ? 2.2 : r.k === 'route' ? 1.6 : 1, pts = suivre(r.p, 2, .12);
+    put(TRACES, ruban(pts.map(p => [p[0], p[1] - .02, p[2]]), w + .35), 0x6b5236, 0, 0, 0, 0, 0); put(TRACES, ruban(pts, w), r.k === 'chemin' ? 0xd9c79a : 0xf1e4bd, 0, 0, 0, 0, 0);
+  }
+  for (const r of D.rivers) { const pts = suivre(r.p, 2, .1); put(TRACES, ruban(pts.map(p => [p[0], p[1] - .03, p[2]]), r.w * S / 2 + 1), 0xdccf96, 0, 0, 0, 0, 0); put(TRACES, ruban(pts, r.w * S / 2), 0x46a9dd, 0, 0, 0, 0, 0); }
+  for (const hd of D.hedges) for (const [x, y, z] of suivre(hd, 1.6, 0)) { semer(x * 10 | 0, z * 10 | 0); const b = sphere(entre(.8, 1.05), 0); b.scale(1, .8, 1); put(DECOR, b, [0x4f9a37, 0x5fae3e][rnd() * 2 | 0], x, y + .7, z, 0, .12); }
+  for (const w of D.walls) {
+    const pts = suivre(w, 3, 0);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, ay, az] = pts[i], [bx, by, bz] = pts[i + 1], l = Math.hypot(bx - ax, bz - az);
+      put(DECOR, boite(l + .3, 3.2, 1.3), 0xc9bb98, (ax + bx) / 2, Math.min(ay, by) + 1.6, (az + bz) / 2, -Math.atan2(bz - az, bx - ax), .18);
+      if (i % 9 === 0) { put(DECOR, cyl(1.7, 1.9, 4.6, 10), 0xc2b38f, ax, ay + 2.3, az, 0, .18); put(DECOR, cone(2, 2.2, 10), 0x8a6a4a, ax, ay + 5.7, az, 0, .14); }
+    }
+  }
+  fige(TUILES); fige(DECOR); fige(TRACES, MAT, false);
+  const eau = new THREE.Mesh(new THREE.PlaneGeometry(D.W * S + 600, D.H * S + 600), new THREE.MeshToonMaterial({ color: 0x3fa6dc, gradientMap: degrade, transparent: true, opacity: .7 }));
+  eau.rotation.x = -Math.PI / 2; eau.position.y = -.7; scene.add(eau);
+  // grille : le contour de chaque hexagone (calque)
+  const p = [];
+  for (const t of LISTE) for (let i = 0; i < 3; i++) { const a = Math.PI / 180 * (60 * i - 30), b = a + Math.PI / 3; p.push(t.x + R * Math.cos(a), t.top + .2, t.z + R * Math.sin(a), t.x + R * Math.cos(b), t.top + .2, t.z + R * Math.sin(b)); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+  OBJ.grille = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x2b1d14, transparent: true, opacity: .35 })); OBJ.grille.visible = false; scene.add(OBJ.grille);
+}
+const OBJ = {};
+
+// ============================================================ troupes : une figurine pour quelques hommes, dans l'emprise réelle de la formation
+const K = 2.4;                    // les figurines sont grossies, comme les maisons de web_power (un homme : 1,8 m)
+const CHAIR = 0xf0c9a0, BLANC = 0xf4f1e6, NOIR = 0x2a2522, CUIR = 0x7a5233, BRONZE = 0xb9893a;
+function fantassin(L, x, z, coat, grenadier = false) {
+  const s = K * .45;
+  put(L, boite(.5 * s, .9 * s, .7 * s), BLANC, x, .45 * s, z, 0, .07);                               // culotte et guêtres
+  put(L, boite(.62 * s, .9 * s, .8 * s), coat, x, 1.3 * s, z, 0, .08);                                // habit
+  put(L, sphere(.3 * s, 0), CHAIR, x, 1.95 * s, z, 0, .06);
+  if (grenadier) put(L, cyl(.22 * s, .3 * s, .7 * s, 6), NOIR, x, 2.45 * s, z, 0, .06);              // bonnet à poil
+  else { const b = boite(.4 * s, .26 * s, 1 * s); put(L, b, NOIR, x, 2.25 * s, z, 0, .06); }         // bicorne
+  put(L, boite(.12 * s, 1.9 * s, .12 * s), CUIR, x + .05 * s, 1.5 * s, z + .5 * s, 0, 0);            // fusil, à l'épaule
+}
+function cavalier(L, x, z, coat) {
+  const s = K * .45;
+  put(L, boite(2.2 * s, 1 * s, .8 * s), 0x8a5a3a, x, 1.6 * s, z, 0, .08);
+  for (const [a, b] of [[.8, .28], [.8, -.28], [-.8, .28], [-.8, -.28]]) put(L, boite(.22 * s, 1.1 * s, .22 * s), 0x6b4429, x + a * s, .55 * s, z + b * s, 0, 0);
+  const cou = boite(.5 * s, 1.1 * s, .45 * s); cou.rotateZ(-.6); put(L, cou, 0x8a5a3a, x + 1.15 * s, 2.3 * s, z, 0, .07);
+  put(L, boite(.8 * s, .4 * s, .4 * s), 0x8a5a3a, x + 1.55 * s, 2.7 * s, z, 0, .06);
+  put(L, boite(.6 * s, 1 * s, .7 * s), coat, x - .1 * s, 2.6 * s, z, 0, .07);
+  put(L, sphere(.28 * s, 0), CHAIR, x - .1 * s, 3.3 * s, z, 0, .05);
+  put(L, cyl(.26 * s, .3 * s, .4 * s, 7), BRONZE, x - .1 * s, 3.6 * s, z, 0, .05);                   // casque de dragon
+}
+function canon(L, x, z) {
+  const s = K * .5;
+  for (const k of [-1, 1]) { const r = cyl(.8 * s, .8 * s, .16 * s, 10); r.rotateX(Math.PI / 2); put(L, r, CUIR, x, .8 * s, z + k * .55 * s, 0, .07); }
+  const f = cyl(.2 * s, .28 * s, 2.4 * s, 8); f.rotateZ(Math.PI / 2); put(L, f, BRONZE, x + .5 * s, 1.15 * s, z, 0, .08);
+  const fl = boite(2.2 * s, .3 * s, .45 * s); fl.rotateZ(.32); put(L, fl, 0x5b6b3a, x - 1 * s, .65 * s, z, 0, .07);
+}
+function fanion(L, coat, x, z, h) { put(L, cyl(.1, .12, h, 6), CUIR, x, h / 2, z, 0, .08); put(L, boite(.12, 1.6, 2.4), coat, x, h - .9, z + 1.25, 0, .1); put(L, boite(.13, .6, .8), BLANC, x, h - .9, z + 1.25, 0, 0); }
+function chariot(L, x, z) {
+  const s = K * .5;
+  put(L, boite(2.6 * s, .9 * s, 1.3 * s), 0x9c7a52, x, 1.2 * s, z, 0, .08);
+  const b = cyl(.8 * s, .8 * s, 2.6 * s, 8, 1, false); b.rotateZ(Math.PI / 2); b.scale(1, 1, 1); put(L, b, BLANC, x, 1.7 * s, z, 0, .07);
+  for (const a of [-.8, .8]) for (const k of [-1, 1]) { const r = cyl(.55 * s, .55 * s, .14 * s, 10); r.rotateX(Math.PI / 2); put(L, r, CUIR, x + a * s, .55 * s, z + k * .72 * s, 0, .05); }
+}
+// emplacements (avant, côté) des figurines, dans un repère où x est vers l'avant ; w et d en mètres
+function places(u) {
+  const w = u.w * S, d = u.d * S, out = [], pas = K * .62;
+  if (u.cls === 'artillerie') { const n = u.pieces || 4; for (let i = 0; i < n; i++) out.push([0, (i + .5 - n / 2) * w / n, 'canon']); return out; }
+  if (u.cls === 'general') return [[0, 0, 'general']];
+  if (u.cls === 'chariot') return [[0, 0, 'chariot']];
+  const parFig = u.cls === 'cavalerie' ? 10 : 6, nb = Math.max(4, Math.round(u.men / parFig));
+  if (u.form === 'tirailleurs') { semer(u.x, u.y); for (let i = 0; i < nb / 2; i++) { const c = (i + .5) / (nb / 2) * w - w / 2, a = entre(-d / 2, d / 2); out.push([a, c], [a - pas * .9, c + pas * .5]); } return out; }
+  const prof = u.cls === 'cavalerie' ? K * 1.3 : pas, rangs = Math.max(1, Math.min(Math.round(d / prof), Math.ceil(nb / 2))), files = Math.ceil(nb / rangs);
+  const ep = Math.min(w / files, pas * 2.2);
+  for (let r = 0; r < rangs; r++) for (let f = 0; f < files && out.length < nb; f++) out.push([-r * prof, (f + .5 - files / 2) * ep]);
+  return out;
+}
+function construireTroupes() {
+  const L = lot();
+  for (const u of D.units) {
+    const coat = colSide(u.side), [ux, uz] = mVers(u.x, u.y), fx = Math.cos(u.dir), fz = Math.sin(u.dir);
+    for (const [a, c, k] of places(u)) {
+      const x = ux + fx * a - fz * c, z = uz + fz * a + fx * c, y = solEn(x, z), M = lot();
+      if (k === 'canon') { canon(M, 0, 0); for (const [p, q] of [[-2.2, -1.6], [-2.4, 1.6], [1.2, 2]]) fantassin(M, p, q, coat); }
+      else if (k === 'general') { cavalier(M, 0, 0, coat); fanion(M, coat, -2.4, -1.4, 6.5); }
+      else if (k === 'chariot') chariot(M, 0, 0);
+      else if (u.cls === 'cavalerie') cavalier(M, 0, 0, coat);
+      else fantassin(M, 0, 0, coat, u.type === 'grenadiers');
+      transfere(M, L, x, y, z, -u.dir);
+    }
+    if (u.cls === 'inf') { const x = ux - fx * K, z = uz - fz * K; const M = lot(); fanion(M, coat, 0, 0, K * 2.6); transfere(M, L, x, solEn(x, z), z, -u.dir); }
+    u.p3 = [ux, solEn(ux, uz), uz];
+  }
+  fige(L);
+}
+// portées du régiment choisi : deux éventails au sol, efficace et maximale (units.ranges, en mètres)
+function eventail(u) {
+  if (OBJ.portee) { scene.remove(OBJ.portee); OBJ.portee.traverse(o => o.geometry?.dispose()); OBJ.portee = null; }
+  if (!u || !voirPortees) return;
+  const grp = new THREE.Group(), [ux, uy, uz] = u.p3, ouv = u.cls === 'artillerie' ? .5 : u.form === 'tirailleurs' ? 1.1 : .7;
+  [[u.range[1], 0xfff7e6, .22], [u.range[0], 0xffc94d, .36]].forEach(([m, col, op], i) => {
+    const geo = new THREE.CircleGeometry(m * S, 48, -ouv, ouv * 2); geo.rotateX(-Math.PI / 2); geo.rotateY(-u.dir);
+    const me = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, depthWrite: false })); me.position.set(ux, uy + 3 + i * .05, uz); me.renderOrder = 2; grp.add(me);
+  });
+  scene.add(grp); OBJ.portee = grp;
+}
+
+// ============================================================ caméra (web_power/js/15-camera.js), rendu à la demande
+const cible = new THREE.Vector3(); let distc = 210;
+const AXE = new THREE.Vector3(0, .83, .56).normalize();
+let sale = true; const demander = () => { sale = true; };
+function majCam() {
+  cible.x = clamp(cible.x, -OX, OX); cible.z = clamp(cible.z, -OZ, OZ);
+  cam.position.copy(cible).addScaledVector(AXE, distc); cam.lookAt(cible);
+  soleil.position.copy(cible).add(SOL_DEC); soleil.target.position.copy(cible);
+  majEchelle(); demander();
+}
+let ZW = 1, ZH = 1;
+function redim() { const r = zone.getBoundingClientRect(); ZW = Math.max(1, r.width); ZH = Math.max(1, r.height); renderer.setSize(ZW, ZH, false); cam.aspect = ZW / ZH; cam.updateProjectionMatrix(); majCam(); }
+const ray = new THREE.Raycaster(), PL = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), PT = new THREE.Vector3(), NDC = new THREE.Vector2();
+function pointSous(cx, cy) {
+  const r = zone.getBoundingClientRect(); NDC.set((cx - r.left) / r.width * 2 - 1, -((cy - r.top) / r.height) * 2 + 1); ray.setFromCamera(NDC, cam);
+  let t = null, y = 0;
+  for (let k = 0; k < 3; k++) { PL.constant = -y; if (!ray.ray.intersectPlane(PL, PT)) return null; t = versHex(PT.x, PT.z); if (!t) return null; y = Math.max(t.top, -.6); }
+  return { t, x: PT.x, z: PT.z };
+}
+// le régiment sous le point : dans son emprise (w × d, tournée selon dir), avec une marge
+function uniteSous(p) {
+  if (!p) return null;
+  return D.units.find(u => {
+    const [ux, , uz] = u.p3, dx = p.x - ux, dz = p.z - uz, fx = Math.cos(u.dir), fz = Math.sin(u.dir);
+    const av = dx * fx + dz * fz, co = -dx * fz + dz * fx;
+    return Math.abs(co) <= u.w * S / 2 + 3 && av <= 4 && av >= -(u.d * S + 4);
+  }) || null;
+}
+const ZMIN = 50, ZMAX = 1300;
+const ptrs = new Map(); let glisse = false, dep0 = null, pinch0 = 0, dist0 = 0;
+toile.addEventListener('pointerdown', e => {
+  toile.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); dep0 = { x: e.clientX, y: e.clientY }; glisse = false;
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); dist0 = distc; }
+});
+toile.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId);
+  if (p) {
+    if (ptrs.size === 2) { p.x = e.clientX; p.y = e.clientY; const [a, b] = [...ptrs.values()]; distc = clamp(dist0 * pinch0 / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), ZMIN, ZMAX); majCam(); glisse = true; return; }
+    const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+    if (!glisse && Math.hypot(e.clientX - dep0.x, e.clientY - dep0.y) > 6) { glisse = true; toile.classList.add('glisse'); survoler(null); }
+    if (glisse) { const upp = 2 * distc * Math.tan(cam.fov * Math.PI / 360) / ZH; cible.x -= dx * upp; cible.z -= dy * upp / AXE.y; majCam(); }
+    return;
+  }
+  if (e.pointerType === 'mouse') survoler(pointSous(e.clientX, e.clientY), e.clientX, e.clientY);
+});
+const finPtr = e => { const etait = ptrs.has(e.pointerId); ptrs.delete(e.pointerId); toile.classList.remove('glisse'); if (etait && !glisse && e.type === 'pointerup' && ptrs.size === 0) { const p = pointSous(e.clientX, e.clientY); choisir(uniteSous(p), p); } };
+toile.addEventListener('pointerup', finPtr); toile.addEventListener('pointercancel', finPtr);
+toile.addEventListener('pointerleave', () => survoler(null));
+toile.addEventListener('wheel', e => { e.preventDefault(); distc = clamp(distc * Math.exp(e.deltaY * .0012), ZMIN, ZMAX); majCam(); }, { passive: false });
+function majEchelle() {
+  const mPx = 2 * distc * Math.tan(cam.fov * Math.PI / 360) / ZH / S;
+  const m = [10, 20, 50, 100, 200, 500, 1000].find(k => k / mPx >= 70) || 1000;
+  $('#ech-txt').textContent = m >= 1000 ? m / 1000 + ' km' : m + ' m'; $('#ech-regle').style.width = Math.round(m / mPx) + 'px';
+}
+
+// ============================================================ bannières des régiments
+const ETI = $('#etiquettes'), V = new THREE.Vector3();
+let voirNoms = true, voirPortees = true;
+for (const u of D.units) {
+  const el = document.createElement('div');
+  el.className = 'ban'; el.style.setProperty('--c', colSide(u.side));
+  el.innerHTML = `<span class="pop">${u.cls === 'general' ? '★' : u.cls === 'chariot' ? '⛁' : u.men}</span><span class="nom">${esc(u.cls === 'chariot' ? 'Munitions' : u.name)}<small>${esc(u.cls === 'general' ? 'Général' : FORME[u.form] || u.form)}</small></span>`;
+  u.el = el; ETI.appendChild(el);
+}
+function majEtiquettes() {
+  for (const u of D.units) {
+    if (!voirNoms || (u.cls === 'chariot' && distc > 260)) { u.el.hidden = true; continue; }
+    V.set(u.p3[0], u.p3[1] + K * 4, u.p3[2]).project(cam);
+    if (V.z > 1 || Math.abs(V.x) > 1.1 || Math.abs(V.y) > 1.1) { u.el.hidden = true; continue; }
+    u.el.hidden = false; u.el.classList.toggle('choisi', u === choisie);
+    u.el.style.transform = `translate(${Math.round((V.x + 1) / 2 * ZW - 15)}px, ${Math.round((1 - V.y) / 2 * ZH - 15)}px)`;
+  }
+}
+
+// ============================================================ survol, choix, panneau
+const bulle = $('#bulle');
+function survoler(p, x, y) {
+  if (!p) { bulle.hidden = true; return; }
+  const u = uniteSous(p);
+  bulle.hidden = false; bulle.style.left = x + 14 + 'px'; bulle.style.top = y + 14 + 'px';
+  bulle.innerHTML = u ? `<b>${esc(u.name)}</b><br>${u.men} hommes · ${esc(FORME[u.form] || u.form)}` : `<b>${esc(D.labels[D.types.indexOf(p.t.t)])}</b><br>Altitude ${p.t.hm} · ${Math.round((p.x + OX) / S)} m, ${Math.round((p.z + OZ) / S)} m`;
+}
+let choisie = null, onglet = 'reg';
+function choisir(u, p) {
+  choisie = u; eventail(u);
+  if (u) montrer('reg'); demander();
+}
+const pc = (v, max) => Math.round(clamp(v / max, 0, 1) * 100);
+const jauge = (v, max, col) => `<div class="barre-v"><span style="--c:${col}"><i style="width:${pc(v, max)}%"></i></span>${v}</div>`;
+function ficheUnite(u) {
+  const formes = u.cls === 'inf' ? ['ligne', 'colonne', 'carre', 'tirailleurs'] : u.cls === 'cavalerie' ? ['ligne', 'colonne'] : u.cls === 'artillerie' ? ['batterie', 'avanttrain'] : [];
+  return `<h2>${esc(u.name)}</h2><div class="sous">${esc(FAC[u.owner].nom)} · ${esc(u.gname || '')}</div>
+    <h3>Le régiment</h3><dl class="lignes">
+    <dt>Hommes</dt><dd>${jauge(u.men, u.men0, 'var(--vert)')}</dd><dt>Moral</dt><dd>${jauge(u.morale, 100, 'var(--or)')}</dd>
+    <dt>Fatigue</dt><dd>${jauge(u.fat, 100, 'var(--rouge)')}</dd><dt>Munitions</dt><dd>${jauge(u.ammo, u.ammo0, '#7cc0f2')}</dd>
+    <dt>État</dt><dd>${esc(ETAT[u.state] || u.state)}</dd>${u.pieces ? `<dt>Pièces</dt><dd>${u.pieces}</dd>` : ''}
+    <dt>Front × profondeur</dt><dd>${Math.round(u.w)} × ${Math.round(u.d)} m</dd><dt>Portée efficace</dt><dd>${u.range[0]} m</dd><dt>Portée maximale</dt><dd>${u.range[1]} m</dd>${u.range[2] ? `<dt>Mitraille</dt><dd>${u.range[2]} m</dd>` : ''}</dl>`
+    + (u.side === MOI && formes.length ? `<h3>Formation</h3><div class="formes">${formes.map(f => `<button type="button" aria-pressed="${f === u.form}">${FORME[f]}</button>`).join('')}</div>` : '')
+    + (u.side === MOI ? `<h3>Ordres</h3><div class="actions"><button type="button" class="prim">Avancer</button><button type="button">Tenir la position</button><button type="button">${u.cls === 'cavalerie' ? 'Charger' : 'Feu à volonté'}</button><button type="button">Se replier</button></div>
+      <p class="note">Maquette : les boutons ne font rien. Les effectifs, l'emprise, les portées et la place du régiment viennent du jeu.</p>` : '<p class="note">Régiment ennemi repéré.</p>');
+}
+function listeRegs(side) {
+  return `<div class="regs">${D.units.filter(u => u.side === side).map(u => `<button type="button" class="reg" style="--c:${colSide(side)}" data-u="${D.units.indexOf(u)}" aria-current="${u === choisie}"><i></i><b>${esc(u.cls === 'chariot' ? 'Chariot de munitions' : u.name)}</b><span class="n">${u.cls === 'general' ? '★' : u.men}</span><small>${esc(u.cls === 'general' ? 'Général en chef' : FORME[u.form] || u.form)} · moral ${u.morale}</small></button>`).join('')}</div>`;
+}
+function montrer(o) {
+  onglet = o;
+  $('#o-reg').setAttribute('aria-selected', o === 'reg'); $('#o-obs').setAttribute('aria-selected', o === 'obs');
+  if (o === 'reg') $('#contenu').innerHTML = choisie ? ficheUnite(choisie) + `<h3>Mes régiments</h3>` + listeRegs(MOI)
+    : `<h2>Déployez vos troupes</h2><p class="sous">Touchez un régiment pour voir sa fiche et ses portées.</p>${listeRegs(MOI)}`;
+  else $('#contenu').innerHTML = `<h2>Ordre de bataille</h2><dl class="lignes"><dt>Lieu</dt><dd>${esc(lieu)}</dd><dt>Date</dt><dd>${esc(D.date)}</dd><dt>Temps</dt><dd>${esc(meteo)}</dd>
+      <dt>Champ de bataille</dt><dd>${D.W} × ${D.H} m</dd><dt>Un hexagone</dt><dd>${D.hexM} m</dd><dt>Plateau</dt><dd>${D.cols} × ${D.rows}</dd></dl>`
+    + [0, 1].map(s => `<h3>${esc(FAC[D.sides[s]].nom)}${s === MOI ? ' (vous)' : ''} · ${nf(effectif(s))} hommes</h3>${listeRegs(s)}`).join('');
+}
+const effectif = s => D.units.filter(u => u.side === s && u.cls !== 'chariot').reduce((a, u) => a + u.men, 0);
+const lieu = D.place ? `${D.place} (${D.region})` : D.region, meteo = D.weather[0].toUpperCase() + D.weather.slice(1);
+$('#o-reg').onclick = () => montrer('reg'); $('#o-obs').onclick = () => montrer('obs');
+$('#contenu').addEventListener('click', e => {
+  const b = e.target.closest('[data-u]'); if (!b) return;
+  const u = D.units[+b.dataset.u]; cible.set(u.p3[0], 0, u.p3[2]); majCam(); choisir(u);
+});
+const bascule = (id, f) => { const b = $(id); b.onclick = () => { const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on); f(on); demander(); }; };
+bascule('#l-por', on => { voirPortees = on; eventail(choisie); });
+bascule('#l-nom', on => { voirNoms = on; });
+bascule('#l-hex', on => { OBJ.grille.visible = on; });
+$('#titre').innerHTML = `Bataille ${esc(D.place ? 'de ' + D.place : 'en ' + D.region)}<small>${esc(D.date)} · ${esc(meteo)} · ${esc(D.region)}</small>`;
+$('#forces').innerHTML = [0, 1].map(s => `<span class="force" style="--c:${colSide(s)}"><i></i>${esc(FAC[D.sides[s]].nom)} ${nf(effectif(s))}</span>`).join('<span class="contre">contre</span>');
+
+// ============================================================ démarrage
+requestAnimationFrame(() => {
+  construireSol(); construireTroupes();
+  const mes = D.units.filter(u => u.side === MOI), mx = mes.reduce((a, u) => a + u.p3[0], 0) / mes.length, mz = mes.reduce((a, u) => a + u.p3[2], 0) / mes.length;
+  cible.set(mx, 0, mz);
+  new ResizeObserver(redim).observe(zone); redim();
+  choisir(mes[0]); $('#chargement').remove();
+  (function boucle() { if (sale) { sale = false; renderer.render(scene, cam); majEtiquettes(); } requestAnimationFrame(boucle); })();
+});
+</script>
+</body>
+</html>
