@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Bataille en hexagones</title>
+<title>Batailles en hexagones</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
-/* Maquette : une bataille de Conquête refaite en plateau d'hexagones, style web_power (GridMaster), suite de carte-hex.html.
+/* Maquette : des batailles de Conquête (rase campagne, place forte, ville, village, collines) refaites en plateau d'hexagones, style web_power (GridMaster), suite de carte-hex.html.
    Même champ de bataille et même échelle que le jeu (3 000 × 2 000 m), 1 hexagone = 40 m ; les régiments à leur place,
    dans leur formation. Champ à gauche, panneau à droite ; en portrait, panneau dessous. Un seul thème sombre, par choix. */
 :root {
@@ -54,6 +54,11 @@ main { position: relative; overflow: hidden; background: #2d6aa0; min-width: 0; 
 .lentilles button[aria-pressed="true"] { background: var(--or); color: var(--trait); }
 .echelle { left: max(12px, env(safe-area-inset-left, 0px)); bottom: 12px; padding: 6px 10px 7px; font-weight: 800; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .echelle .regle { height: 8px; margin-top: 4px; border: 2.5px solid var(--txt); border-top: 0; }
+.scenarios { left: 50%; transform: translateX(-50%); bottom: 12px; max-width: calc(100% - 300px); display: flex; gap: 6px; padding: 6px; overflow-x: auto; }
+.scen { flex: none; width: 128px; padding: 6px 8px; border-radius: 12px; border: 2px solid var(--bord); background: var(--fond2); cursor: pointer; display: flex; flex-direction: column; gap: 1px; text-align: left; }
+.scen b { font-family: var(--titre); font-weight: 600; font-size: 13.5px; line-height: 1.15; }
+.scen span { font-size: 11px; font-weight: 700; color: var(--doux); }
+.scen[aria-pressed="true"] { background: var(--or); color: var(--trait); } .scen[aria-pressed="true"] span { color: var(--trait); }
 .bulle { position: fixed; z-index: 9; pointer-events: none; padding: 6px 10px; border-radius: 11px; background: var(--creme); color: var(--trait); border: 2px solid var(--bord); font-size: 12px; font-weight: 800; max-width: 260px; }
 .bulle b { font-family: var(--titre); font-weight: 600; font-size: 14px; }
 
@@ -91,8 +96,11 @@ h3 { font-family: var(--titre); font-weight: 600; font-size: 15px; margin: 18px 
   aside { border-left: 0; border-top: 3px solid var(--bord); }
   .forces, .titre-date small, .badge:not(.phase) { display: none; }
   .titre-date { font-size: 15px; } .barre { gap: 6px; } .lancer { margin-left: auto; padding: 0 10px; font-size: 13px; }
-  .lentilles { top: auto; bottom: 12px; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 24px); right: max(12px, env(safe-area-inset-right, 0px)); }
-  .echelle { bottom: auto; top: 64px; }
+  .temps { display: none; }
+  .lentilles { right: max(12px, env(safe-area-inset-right, 0px)); }
+  .echelle { bottom: auto; top: 12px; }
+  .scenarios { max-width: calc(100% - 24px); left: 12px; transform: none; }
+  .scen { width: 112px; } .scen span { display: none; }
 }
 </style>
 </head>
@@ -117,6 +125,7 @@ h3 { font-family: var(--titre); font-weight: 600; font-size: 15px; margin: 18px 
       <button type="button" id="l-hex" aria-pressed="false">Grille</button>
     </div>
     <div class="flottant echelle"><span id="ech-txt">100 m</span><div class="regle" id="ech-regle"></div></div>
+    <div class="flottant scenarios" id="scenarios" role="group" aria-label="Style de bataille"></div>
     <div class="chargement" id="chargement">Les régiments prennent position…</div>
   </main>
   <aside>
@@ -140,11 +149,13 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ============================================================ données du jeu (game/tactics, mode Bataille)
-const D = BATAILLE_HEX, R = 10, SQ3 = Math.sqrt(3), RK = D.hexM / SQ3, S = R / RK;   // S : unités 3D par mètre
-const OX = D.W * S / 2, OZ = D.H * S / 2;
+const TOUS = BATAILLES_HEX, D0 = TOUS[0];   // toutes au même format : 3 000 × 2 000 m, hexagones de 40 m
+let D = D0, MOI = 0, H0 = 0;
+const R = 10, SQ3 = Math.sqrt(3), RK = D0.hexM / SQ3, S = R / RK;   // S : unités 3D par mètre
+const OX = D0.W * S / 2, OZ = D0.H * S / 2;
 const mVers = (x, y) => [x * S - OX, y * S - OZ];
-const MOI = 0, FAC = D.factions, colSide = s => FAC[D.sides[s]].col;
-const H0 = Math.min(...D.h);
+const FAC = D0.factions, colSide = s => FAC[D.sides[s]].col;
+const ICI = '33';   // le joueur : la Gironde (outils/bataille_hex.py)
 const SOL = {
   PRE: { col: 0x84c450 }, CHAMP: { col: 0xc9c65c }, VIGNE: { col: 0xb4b660 }, LANDE: { col: 0xaaa762 }, BOIS: { col: 0x6aa843 }, FORET: { col: 0x4e8a34 },
   MARAIS: { col: 0x6f9e6a }, EAU: { col: 0xd2c88f, eau: 1 }, GUE: { col: 0xd2c88f, eau: 1 }, ROUTE: { col: 0xcfc3a3 }, CHEMIN: { col: 0xd9c79a }, BATI: { col: 0xcfc3a3 },
@@ -164,11 +175,14 @@ const entre = (a, b) => a + rnd() * (b - a);
 const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 const cle = (q, r) => q + ',' + r;
 const T = new Map(), LISTE = [];
-for (let row = 0; row < D.rows; row++) for (let col = 0; col < D.cols; col++) {
-  const i = row * D.cols + col, r = row, q = col - (row - (row & 1)) / 2;
-  const t = { q, r, col, row, x: R * SQ3 * (q + r / 2) - OX, z: R * 1.5 * r - OZ, t: D.types[D.ter.charCodeAt(i) - 65], hm: D.h[i] };
-  t.top = (t.hm - H0) * S * 1.6 - (SOL[t.t].eau ? 2.4 : 0);   // relief du moteur, un peu accentué
-  T.set(cle(q, r), t); LISTE.push(t);
+function grille() {
+  T.clear(); LISTE.length = 0; H0 = Math.min(...D.h);
+  for (let row = 0; row < D.rows; row++) for (let col = 0; col < D.cols; col++) {
+    const i = row * D.cols + col, r = row, q = col - (row - (row & 1)) / 2;
+    const t = { q, r, col, row, x: R * SQ3 * (q + r / 2) - OX, z: R * 1.5 * r - OZ, t: D.types[D.ter.charCodeAt(i) - 65], hm: D.h[i] };
+    t.top = (t.hm - H0) * S * 1.6 - (SOL[t.t].eau ? 2.4 : 0);   // relief du moteur, un peu accentué
+    T.set(cle(q, r), t); LISTE.push(t);
+  }
 }
 const voisins = t => DIRS.map(([a, b]) => T.get(cle(t.q + a, t.r + b))).filter(Boolean);
 function versHex(x, z) {
@@ -187,12 +201,20 @@ const renderer = new THREE.WebGLRenderer({ canvas: toile, antialias: true, power
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
-const gris = D.weather === 'pluie' || D.weather === 'brouillard' || D.weather === 'nuages';
 scene.background = new THREE.Color(0x1b211a);
-if (gris) scene.fog = new THREE.Fog(0x8d9a8c, 1200, 2800);
 const cam = new THREE.PerspectiveCamera(30, 1, 5, 5000);
-scene.add(new THREE.HemisphereLight(0xeef7ff, 0x7d8466, gris ? 1.35 : 1.5));
-const soleil = new THREE.DirectionalLight(gris ? 0xe6ecf0 : 0xfff0d4, gris ? 2.1 : 2.6), SOL_DEC = new THREE.Vector3(-170, 300, 160);
+const ciel = new THREE.HemisphereLight(0xeef7ff, 0x7d8466, 1.5); scene.add(ciel);
+const soleil = new THREE.DirectionalLight(0xfff0d4, 2.6), SOL_DEC = new THREE.Vector3(-170, 300, 160);
+let MONDE = new THREE.Group(); scene.add(MONDE);
+function ambiance() {
+  const gris = D.weather === 'pluie' || D.weather === 'brouillard' || D.weather === 'nuages';
+  scene.fog = gris ? new THREE.Fog(0x8d9a8c, D.weather === 'brouillard' ? 500 : 1200, D.weather === 'brouillard' ? 1500 : 2800) : null;
+  ciel.intensity = gris ? 1.35 : 1.5; soleil.intensity = gris ? 2.1 : 2.6; soleil.color.set(gris ? 0xe6ecf0 : D.season === 'automne' ? 0xffe2b8 : 0xfff0d4);
+}
+function vider() {
+  MONDE.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && ![MAT, CONT].includes(o.material)) o.material.dispose(); });
+  scene.remove(MONDE); MONDE = new THREE.Group(); scene.add(MONDE); OBJ.portee = null;
+}
 soleil.castShadow = true;
 Object.assign(soleil.shadow.camera, { left: -300, right: 300, top: 260, bottom: -260, near: 10, far: 1000 });
 soleil.shadow.mapSize.set(4096, 4096); soleil.shadow.bias = -.0006; soleil.shadow.normalBias = .4;
@@ -227,7 +249,7 @@ function fige(L, mat = MAT, ombre = true) {
   const grp = new THREE.Group();
   if (L.g.length) { const m = new THREE.Mesh(mergeGeometries(L.g), mat); m.castShadow = ombre; m.receiveShadow = true; grp.add(m); }
   if (L.o.length) grp.add(new THREE.Mesh(mergeGeometries(L.o), CONT));
-  scene.add(grp); return grp;
+  MONDE.add(grp); return grp;
 }
 const boite = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const cyl = (rt, rb, h, s = 10) => new THREE.CylinderGeometry(rt, rb, h, s);
@@ -310,34 +332,52 @@ function construireSol() {
   }
   for (const r of D.rivers) { const pts = suivre(r.p, 2, .1); put(TRACES, ruban(pts.map(p => [p[0], p[1] - .03, p[2]]), r.w * S / 2 + 1), 0xdccf96, 0, 0, 0, 0, 0); put(TRACES, ruban(pts, r.w * S / 2), 0x46a9dd, 0, 0, 0, 0, 0); }
   for (const hd of D.hedges) for (const [x, y, z] of suivre(hd, 1.6, 0)) { semer(x * 10 | 0, z * 10 | 0); const b = sphere(entre(.8, 1.05), 0); b.scale(1, .8, 1); put(DECOR, b, [0x4f9a37, 0x5fae3e][rnd() * 2 | 0], x, y + .7, z, 0, .12); }
+  const bastion = D.town?.enceinte === 'bastion', palissade = !D.town?.enceinte;   // (village : palissade de pieux)
   for (const w of D.walls) {
     const pts = suivre(w, 3, 0);
+    if (bastion) put(TRACES, ruban(pts.map(p => [p[0], p[1] + .06, p[2]]), 9), 0x5f8a4a, 0, 0, 0, 0, 0);   // fossé et glacis
     for (let i = 0; i < pts.length - 1; i++) {
-      const [ax, ay, az] = pts[i], [bx, by, bz] = pts[i + 1], l = Math.hypot(bx - ax, bz - az);
-      put(DECOR, boite(l + .3, 3.2, 1.3), 0xc9bb98, (ax + bx) / 2, Math.min(ay, by) + 1.6, (az + bz) / 2, -Math.atan2(bz - az, bx - ax), .18);
-      if (i % 9 === 0) { put(DECOR, cyl(1.7, 1.9, 4.6, 10), 0xc2b38f, ax, ay + 2.3, az, 0, .18); put(DECOR, cone(2, 2.2, 10), 0x8a6a4a, ax, ay + 5.7, az, 0, .14); }
+      const [ax, ay, az] = pts[i], [bx, by, bz] = pts[i + 1], l = Math.hypot(bx - ax, bz - az), a = -Math.atan2(bz - az, bx - ax), y0 = Math.min(ay, by);
+      if (bastion) {
+        put(DECOR, boite(l + .4, 3.8, 3.2), 0xcdb98c, (ax + bx) / 2, y0 + 1.9, (az + bz) / 2, a, .18);         // escarpe en pierre de taille
+        put(DECOR, boite(l + .4, .9, 1.1), 0x8fae5a, (ax + bx) / 2, y0 + 4.2, (az + bz) / 2, a, .12);          // parapet gazonné
+        if (i % 12 === 0) { put(DECOR, cyl(.8, .8, 2, 6), 0xd9c9a0, ax, ay + 4.8, az, 0, .12); put(DECOR, cone(1, 1.2, 6), 0x6d6a75, ax, ay + 6.4, az, 0, .1); }   // guérite
+      } else if (palissade) {
+        put(DECOR, boite(l + .2, 2.2, .45), 0x8a6a4a, (ax + bx) / 2, y0 + 1.1, (az + bz) / 2, a, .12);
+      } else {
+        put(DECOR, boite(l + .3, 3.2, 1.3), 0xc9bb98, (ax + bx) / 2, y0 + 1.6, (az + bz) / 2, a, .18);
+        if (i % 9 === 0) { put(DECOR, cyl(1.7, 1.9, 4.6, 10), 0xc2b38f, ax, ay + 2.3, az, 0, .18); put(DECOR, cone(2, 2.2, 10), 0x8a6a4a, ax, ay + 5.7, az, 0, .14); }
+      }
     }
+  }
+  for (const [bx, by] of D.barr) {   // barricades : charrettes, tonneaux et palissades en travers des rues
+    const [x, z] = mVers(bx, by), y = solEn(x, z); semer(bx, by);
+    if (rnd() < .5) put(DECOR, boite(entre(3, 5), 1.6, .5), 0x8a6a4a, x, y + .8, z, rnd() * 3, .12);
+    else if (rnd() < .5) { put(DECOR, cyl(.7, .7, 1.5, 8), 0x9c7a52, x, y + .75, z, 0, .1); put(DECOR, cyl(.7, .7, 1.5, 8), 0x9c7a52, x + 1.5, y + .75, z + .4, 0, .1); }
+    else { const c = boite(3, 1, 1.8); c.rotateZ(.5); put(DECOR, c, 0xb08a5a, x, y + 1, z, rnd() * 3, .12); }
   }
   fige(TUILES); fige(DECOR); fige(TRACES, MAT, false);
   const eau = new THREE.Mesh(new THREE.PlaneGeometry(D.W * S + 600, D.H * S + 600), new THREE.MeshToonMaterial({ color: 0x3fa6dc, gradientMap: degrade, transparent: true, opacity: .7 }));
-  eau.rotation.x = -Math.PI / 2; eau.position.y = -.7; scene.add(eau);
+  eau.rotation.x = -Math.PI / 2; eau.position.y = -.7; MONDE.add(eau);
   // grille : le contour de chaque hexagone (calque)
   const p = [];
   for (const t of LISTE) for (let i = 0; i < 3; i++) { const a = Math.PI / 180 * (60 * i - 30), b = a + Math.PI / 3; p.push(t.x + R * Math.cos(a), t.top + .2, t.z + R * Math.sin(a), t.x + R * Math.cos(b), t.top + .2, t.z + R * Math.sin(b)); }
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
-  OBJ.grille = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x2b1d14, transparent: true, opacity: .35 })); OBJ.grille.visible = false; scene.add(OBJ.grille);
+  OBJ.grille = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x2b1d14, transparent: true, opacity: .35 })); OBJ.grille.visible = voirGrille; MONDE.add(OBJ.grille);
 }
 const OBJ = {};
 
 // ============================================================ troupes : une figurine pour quelques hommes, dans l'emprise réelle de la formation
 const K = 2.4;                    // les figurines sont grossies, comme les maisons de web_power (un homme : 1,8 m)
 const CHAIR = 0xf0c9a0, BLANC = 0xf4f1e6, NOIR = 0x2a2522, CUIR = 0x7a5233, BRONZE = 0xb9893a;
-function fantassin(L, x, z, coat, grenadier = false) {
+function fantassin(L, x, z, coat, coiffe = 'bicorne') {
+  const grenadier = coiffe === 'bonnet';
   const s = K * .45;
   put(L, boite(.5 * s, .9 * s, .7 * s), BLANC, x, .45 * s, z, 0, .07);                               // culotte et guêtres
   put(L, boite(.62 * s, .9 * s, .8 * s), coat, x, 1.3 * s, z, 0, .08);                                // habit
   put(L, sphere(.3 * s, 0), CHAIR, x, 1.95 * s, z, 0, .06);
   if (grenadier) put(L, cyl(.22 * s, .3 * s, .7 * s, 6), NOIR, x, 2.45 * s, z, 0, .06);              // bonnet à poil
+  else if (coiffe === 'rond') put(L, cyl(.45 * s, .45 * s, .2 * s, 8), 0x5b4632, x, 2.22 * s, z, 0, .06);   // chapeau rond (milice)
   else { const b = boite(.4 * s, .26 * s, 1 * s); put(L, b, NOIR, x, 2.25 * s, z, 0, .06); }         // bicorne
   put(L, boite(.12 * s, 1.9 * s, .12 * s), CUIR, x + .05 * s, 1.5 * s, z + .5 * s, 0, 0);            // fusil, à l'épaule
 }
@@ -387,7 +427,7 @@ function construireTroupes() {
       else if (k === 'general') { cavalier(M, 0, 0, coat); fanion(M, coat, -2.4, -1.4, 6.5); }
       else if (k === 'chariot') chariot(M, 0, 0);
       else if (u.cls === 'cavalerie') cavalier(M, 0, 0, coat);
-      else fantassin(M, 0, 0, coat, u.type === 'grenadiers');
+      else fantassin(M, 0, 0, u.type === 'milice' ? new THREE.Color(coat).lerp(new THREE.Color(0xe9dcc0), .5) : coat, u.type === 'grenadiers' || u.type === 'sapeurs' ? 'bonnet' : u.type === 'milice' ? 'rond' : 'bicorne');
       transfere(M, L, x, y, z, -u.dir);
     }
     if (u.cls === 'inf') { const x = ux - fx * K, z = uz - fz * K; const M = lot(); fanion(M, coat, 0, 0, K * 2.6); transfere(M, L, x, solEn(x, z), z, -u.dir); }
@@ -397,14 +437,14 @@ function construireTroupes() {
 }
 // portées du régiment choisi : deux éventails au sol, efficace et maximale (units.ranges, en mètres)
 function eventail(u) {
-  if (OBJ.portee) { scene.remove(OBJ.portee); OBJ.portee.traverse(o => o.geometry?.dispose()); OBJ.portee = null; }
+  if (OBJ.portee) { MONDE.remove(OBJ.portee); OBJ.portee.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); }); OBJ.portee = null; }
   if (!u || !voirPortees) return;
   const grp = new THREE.Group(), [ux, uy, uz] = u.p3, ouv = u.cls === 'artillerie' ? .5 : u.form === 'tirailleurs' ? 1.1 : .7;
   [[u.range[1], 0xfff7e6, .22], [u.range[0], 0xffc94d, .36]].forEach(([m, col, op], i) => {
     const geo = new THREE.CircleGeometry(m * S, 48, -ouv, ouv * 2); geo.rotateX(-Math.PI / 2); geo.rotateY(-u.dir);
     const me = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, depthWrite: false })); me.position.set(ux, uy + 3 + i * .05, uz); me.renderOrder = 2; grp.add(me);
   });
-  scene.add(grp); OBJ.portee = grp;
+  MONDE.add(grp); OBJ.portee = grp;
 }
 
 // ============================================================ caméra (web_power/js/15-camera.js), rendu à la demande
@@ -464,12 +504,15 @@ function majEchelle() {
 
 // ============================================================ bannières des régiments
 const ETI = $('#etiquettes'), V = new THREE.Vector3();
-let voirNoms = true, voirPortees = true;
-for (const u of D.units) {
-  const el = document.createElement('div');
-  el.className = 'ban'; el.style.setProperty('--c', colSide(u.side));
-  el.innerHTML = `<span class="pop">${u.cls === 'general' ? '★' : u.cls === 'chariot' ? '⛁' : u.men}</span><span class="nom">${esc(u.cls === 'chariot' ? 'Munitions' : u.name)}<small>${esc(u.cls === 'general' ? 'Général' : FORME[u.form] || u.form)}</small></span>`;
-  u.el = el; ETI.appendChild(el);
+let voirNoms = true, voirPortees = true, voirGrille = false;
+function bannieres() {
+  ETI.textContent = '';
+  for (const u of D.units) {
+    const el = document.createElement('div');
+    el.className = 'ban'; el.style.setProperty('--c', colSide(u.side));
+    el.innerHTML = `<span class="pop">${u.cls === 'general' ? '★' : u.cls === 'chariot' ? '⛁' : u.men}</span><span class="nom">${esc(u.cls === 'chariot' ? 'Munitions' : u.name)}<small>${esc(u.cls === 'general' ? 'Général' : FORME[u.form] || u.form)}</small></span>`;
+    u.el = el; ETI.appendChild(el);
+  }
 }
 function majEtiquettes() {
   for (const u of D.units) {
@@ -521,7 +564,7 @@ function montrer(o) {
     + [0, 1].map(s => `<h3>${esc(FAC[D.sides[s]].nom)}${s === MOI ? ' (vous)' : ''} · ${nf(effectif(s))} hommes</h3>${listeRegs(s)}`).join('');
 }
 const effectif = s => D.units.filter(u => u.side === s && u.cls !== 'chariot').reduce((a, u) => a + u.men, 0);
-const lieu = D.place ? `${D.place} (${D.region})` : D.region, meteo = D.weather[0].toUpperCase() + D.weather.slice(1);
+let lieu = '', meteo = '';
 $('#o-reg').onclick = () => montrer('reg'); $('#o-obs').onclick = () => montrer('obs');
 $('#contenu').addEventListener('click', e => {
   const b = e.target.closest('[data-u]'); if (!b) return;
@@ -530,17 +573,31 @@ $('#contenu').addEventListener('click', e => {
 const bascule = (id, f) => { const b = $(id); b.onclick = () => { const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on); f(on); demander(); }; };
 bascule('#l-por', on => { voirPortees = on; eventail(choisie); });
 bascule('#l-nom', on => { voirNoms = on; });
-bascule('#l-hex', on => { OBJ.grille.visible = on; });
-$('#titre').innerHTML = `Bataille ${esc(D.place ? 'de ' + D.place : 'en ' + D.region)}<small>${esc(D.date)} · ${esc(meteo)} · ${esc(D.region)}</small>`;
-$('#forces').innerHTML = [0, 1].map(s => `<span class="force" style="--c:${colSide(s)}"><i></i>${esc(FAC[D.sides[s]].nom)} ${nf(effectif(s))}</span>`).join('<span class="contre">contre</span>');
+bascule('#l-hex', on => { voirGrille = on; OBJ.grille.visible = on; });
+const cap = s => s[0].toUpperCase() + s.slice(1);
+$('#scenarios').innerHTML = TOUS.map(b => `<button type="button" class="scen" data-b="${b.id}" aria-pressed="false"><b>${esc(b.style)}</b><span>${esc(b.lieu || cap(b.region))} · ${esc(b.date.split(' ')[0].toLowerCase())}</span></button>`).join('');
+$('#scenarios').addEventListener('click', e => { const b = e.target.closest('[data-b]'); if (b) location.hash = b.dataset.b; });
+addEventListener('hashchange', () => charger(location.hash.slice(1)));
+// une bataille : le plateau, les troupes, les bannières et le panneau sont refaits
+function charger(id) {
+  const nd = TOUS.find(b => b.id === id) || D0;
+  if (nd === D && MONDE.children.length) return;
+  vider(); D = nd; MOI = D.sides.indexOf(ICI); choisie = null;
+  for (const b of document.querySelectorAll('.scen')) b.setAttribute('aria-pressed', b.dataset.b === D.id);
+  lieu = D.lieu ? `${D.lieu} (${D.region})` : D.region; meteo = cap(D.weather);
+  grille(); ambiance(); construireSol(); construireTroupes(); bannieres();
+  $('#titre').innerHTML = `${esc(D.style)}${D.lieu ? ' · ' + esc(D.lieu) : ''}<small>${esc(D.date)} · ${esc(meteo)} · ${esc(D.region)}</small>`;
+  $('#forces').innerHTML = [0, 1].map(s => `<span class="force" style="--c:${colSide(s)}"><i></i>${esc(FAC[D.sides[s]].nom)} ${nf(effectif(s))}</span>`).join('<span class="contre">contre</span>');
+  // la caméra : sur mes troupes, ou entre elles et la place quand il y en a une
+  const mes = D.units.filter(u => u.side === MOI), mx = mes.reduce((a, u) => a + u.p3[0], 0) / mes.length, mz = mes.reduce((a, u) => a + u.p3[2], 0) / mes.length;
+  if (D.town) { const [tx, tz] = mVers(D.town.x, D.town.y); cible.set((mx + tx) / 2, 0, (mz + tz) / 2); distc = 420; } else { cible.set(mx, 0, mz); distc = 210; }
+  majCam(); choisir(mes[0]);
+}
 
 // ============================================================ démarrage
 requestAnimationFrame(() => {
-  construireSol(); construireTroupes();
-  const mes = D.units.filter(u => u.side === MOI), mx = mes.reduce((a, u) => a + u.p3[0], 0) / mes.length, mz = mes.reduce((a, u) => a + u.p3[2], 0) / mes.length;
-  cible.set(mx, 0, mz);
   new ResizeObserver(redim).observe(zone); redim();
-  choisir(mes[0]); $('#chargement').remove();
+  charger(location.hash.slice(1)); $('#chargement').remove();
   (function boucle() { if (sale) { sale = false; renderer.render(scene, cam); majEtiquettes(); } requestAnimationFrame(boucle); })();
 });
 </script>

@@ -1,9 +1,10 @@
-"""Exporte une bataille du jeu sur une grille d'hexagones pour la maquette web/js/dev/bataille-hex.html.
+"""Exporte des batailles du jeu sur une grille d'hexagones pour la maquette web/js/dev/bataille-hex.html.
 
 Même échelle que le jeu : le champ de bataille garde ses 3 000 × 2 000 m et ses positions en mètres ; un hexagone fait
 HEX_M de large. Chaque hexagone prend le type de case majoritaire des cases de 20 m qu'il couvre (routes, chemins et gués
-mis à part : ils sont tracés à leur place) et leur hauteur moyenne. La bataille vient du mode Bataille (skirmish.new).
-Usage : python3 outils/bataille_hex.py [graine] > web/js/dev/bataille-hex-data.js
+mis à part : ils sont tracés à leur place) et leur hauteur moyenne. Les batailles viennent du mode Bataille
+(skirmish.new), une par style (SCENARIOS : rase campagne, place forte, ville, village barricadé, collines).
+Usage : python3 outils/bataille_hex.py > web/js/dev/bataille-hex-data.js
 """
 import json
 import math
@@ -20,12 +21,21 @@ from game.tactics import terrain as TT  # noqa: E402
 HEX_M = 40.0
 RK = HEX_M / math.sqrt(3)
 TRACES = (TT.T_ROUTE, TT.T_CHEMIN, TT.T_GUE)   # tracés à part : l'hexagone prend le terrain d'à côté
+UNITS = dict(ligne=3, cavalerie=1, artillerie=2, legere=1, grenadiers=1)
+# (id, style, lieu ou None, kind, saison, temps, graine) ; graines choisies pour un terrain lisible
+SCENARIOS = [
+    ('plaine', 'Rase campagne', 'Marmande', 'bataille', 'été', 'soleil', 1),
+    ('place', 'Siège d’une place forte', 'Navarrenx', 'forteresse', 'été', 'soleil', 1),
+    ('ville', 'Devant la ville', None, 'bataille', None, None, 5),
+    ('village', 'Village barricadé', 'Villeréal', 'village', 'automne', 'soleil', 1),
+    ('collines', 'Dans les collines', 'Oloron-Sainte-Marie', 'bataille', 'printemps', 'soleil', 2),
+]
 
 
-def main():
-    seed = int(sys.argv[1]) if len(sys.argv) > 1 else 5
-    g, bid = SK.new(GeoMap(), dict(me='33', era='1790', kind='bataille', seed=seed, mode='manuel',
-                                   units=dict(ligne=3, cavalerie=1, artillerie=2, legere=1, grenadiers=1)))
+def bataille(geo, sid, style, lieu, kind, season, weather, seed):
+    place = next((n['id'] for n in geo.nodes if n['name'] == lieu), None) if lieu else None
+    g, bid = SK.new(geo, dict(me='33', era='1790', kind=kind, place=place, season=season, weather=weather, seed=seed,
+                              mode='manuel', units=UNITS))
     assert g, bid
     tb = g.tactical[bid]
     m = tb.map
@@ -48,9 +58,10 @@ def main():
             ter.append((fond or t or Counter({TT.T_PRE: 1})).most_common(1)[0][0])
             hau.append(round(sum(hs) / len(hs)) if hs else 0)
     r1 = lambda p: [round(p[0]), round(p[1])]
-    sides = [s['owner'] for s in tb.spec['sides']] if 'sides' in tb.spec else sorted({u.owner for u in tb.units})
-    data = dict(
-        hexM=HEX_M, cols=cols, rows=rows, W=TT.W, H=TT.H,
+    sides = [next(u.owner for u in tb.units if u.side == k) for k in (0, 1)]   # le camp de chaque côté (0 : l'assaillant)
+    barr = [[(c % TT.COLS + .5) * TT.CELL, (c // TT.COLS + .5) * TT.CELL] for c in range(TT.N) if m.t[c] == TT.T_BARRICADE]
+    return dict(
+        id=sid, style=style, kind=kind, lieu=lieu or m.place and m.place['name'], barr=barr, hexM=HEX_M, cols=cols, rows=rows, W=TT.W, H=TT.H,
         ter=''.join(chr(65 + t) for t in ter),            # 'A' + type de case (terrain.TYPE_NAMES)
         h=hau, types=TT.TYPE_NAMES, labels=TT.TYPE_LABEL,
         roads=[dict(k=k, p=[r1(p) for p in r['pts']]) for k, r in zip([r['kind'] for r in m.roads], m.roads)],
@@ -62,8 +73,13 @@ def main():
         sides=sides, units=[u.view(True, False) for u in tb.units],
         factions={k: dict(nom=f['name'], col=f['color']) for k, f in R.FACTIONS.items()},
     )
-    sys.stdout.write("// Généré par outils/bataille_hex.py : une bataille du jeu sur une grille d'hexagones.\n")
-    sys.stdout.write('const BATAILLE_HEX = ' + json.dumps(data, ensure_ascii=False, separators=(',', ':')) + ';\n')
+
+
+def main():
+    geo = GeoMap()
+    data = [bataille(geo, *sc) for sc in SCENARIOS]
+    sys.stdout.write("// Généré par outils/bataille_hex.py : des batailles du jeu sur une grille d'hexagones.\n")
+    sys.stdout.write('const BATAILLES_HEX = ' + json.dumps(data, ensure_ascii=False, separators=(',', ':')) + ';\n')
 
 
 if __name__ == '__main__':
