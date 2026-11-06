@@ -78,7 +78,7 @@ function lame(habit, long) {
   put(L, boite(0.05, 0.04, 0.16), BRONZE, 0, 0.56, 0, 0, 0); put(L, boite(0.025, long, 0.06), 0xdfe3e6, 0, 0.58 + long / 2, 0, 0, 0.02); return L;
 }
 // le refouloir (l'écouvillon au bout), les mains à l'origine, la hampe vers +x
-function refouloir() { const L = lot(); put(L, boite(2.3, 0.05, 0.05), CUIR, 1, 0, 0, 0, 0.02); const b = cyl(0.08, 0.08, 0.22, 6); b.rotateZ(Math.PI / 2); put(L, b, NOIR, 2.2, 0, 0, 0, 0.02); return L; }
+function refouloir() { const L = lot(); put(L, boite(1.7, 0.05, 0.05), CUIR, 0.75, 0, 0, 0, 0.02); const b = cyl(0.08, 0.08, 0.22, 6); b.rotateZ(Math.PI / 2); put(L, b, NOIR, 1.6, 0, 0, 0, 0.02); return L; }
 // ajoute au lot L les pièces du lot J, décalées de (x, y, z)
 function greffer(L, J, x, y, z) { for (const k of ['g', 'o']) for (const geo of J[k]) { geo.translate(x, y, z); L[k].push(geo); } }
 function fusil() { const L = lot(); put(L, boite(0.05, 1.45, 0.05), CUIR, 0, 0, 0, 0, 0.02); put(L, boite(0.02, 0.35, 0.02), 0xc8ccd0, 0, 0.88, 0, 0, 0); return L; }

@@ -502,8 +502,10 @@ export class Plateau {
     this.chantier = id;
     const it = maquette(this, n, ns);
     const pas = () => {
-      const r = it.next();
-      if (!r.done) { this.file.push(pas); return; }
+      // (quelques millisecondes par image, en tête de file : la maquette demandée passe avant le reste)
+      const t0 = performance.now(); let r;
+      do r = it.next(); while (!r.done && performance.now() - t0 < 5);
+      if (!r.done) { this.file.unshift(pas); return; }
       this.chantier = null;
       jeter(this.maqs.get(id)?.grp);
       if (r.value) { r.value.grp.visible = false; this.racine.add(r.value.grp); }
