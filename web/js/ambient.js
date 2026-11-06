@@ -184,7 +184,7 @@ export class Ambient {
     const z = this.map.cam.z, zoom = this.map.zooming();   // (pendant un zoom, les petites figures qui bougent attendent)
     if (st !== this.st) { this.st = st; majEtat(st); }
     const [x0, y0, x1, y1] = this.scene(dt), sc = this.sc;
-    if (this.on && !this.map.hex) {   // (sur le plateau, l'eau est en 3D : ni courant ni écume peints)
+    if (this.on) {
       if (z >= 3.5 && z < 18 && !zoom) this.drawFlows(ctx, this.t);   // (de plus près, la rivière peinte par les tuiles suffit)
       if (z >= 3) this.drawSea(ctx, this.t);
       const w = ventDe(meteoEn(this.map.cam.x, this.map.cam.y));
@@ -205,9 +205,9 @@ export class Ambient {
 
   drawFlows(ctx, time) {
     const mp = this.map, z = mp.cam.z, dpr = mp.dpr;
-    const ox = mp.vw / 2 - mp.cam.x * z, oy = mp.vh / 2 - mp.cam.y * z;
+    const K = mp.K, ox = mp.vw / 2 - mp.cam.x * z, oy = mp.vh / 2 - mp.cam.y * z * K;   // (K : vue inclinée du plateau)
     ctx.save();
-    ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
+    ctx.setTransform(dpr * z, 0, 0, dpr * z * K, dpr * ox, dpr * oy);
     ctx.lineCap = 'round';
     ctx.strokeStyle = 'rgba(226,242,255,0.55)';
     const [x0, y0, x1, y1] = this.view(10);

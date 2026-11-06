@@ -24,8 +24,7 @@ function coiffe(L, tete, col) {
   if (col) put(L, sphere(0.04, 0), col, 0.04, y + 0.28, 0, 0, 0);   // pompon, plumet
 }
 function pieton(t, role) {
-  const L = lot(), habit = t.habit;
-  put(L, boite(0.24, 0.84, 0.26), t.culotte || BLANC, 0, 0.42, 0, 0, 0.03);
+  const L = lot(), habit = t.habit;   // (les jambes sont à part : jambe(), elles marchent)
   put(L, boite(0.3, 0.62, 0.42), habit, 0, 1.13, 0, 0, 0.04);
   if (t.revers) put(L, boite(0.02, 0.4, 0.16), t.revers, 0.16, 1.2, 0, 0, 0);
   if (t.buff) { const b = boite(0.02, 0.7, 0.05); b.rotateX(0.6); put(L, b, t.buff, 0.16, 1.13, 0, 0, 0); }
@@ -68,6 +67,8 @@ function voiture(t, bache) {
   for (const a of [-0.6, 0.6]) for (const k of [-1, 1]) { const r = cyl(0.42, 0.42, 0.08, 10); r.rotateX(Math.PI / 2); put(L, r, CUIR, a, 0.42, k * 0.55, 0, 0.03); }
   return L;
 }
+// une jambe, la hanche à l'origine : elle pend vers le bas et pivote autour de la hanche (le pas)
+function jambe(col) { const L = lot(); put(L, boite(0.11, 0.84, 0.12), col, 0, -0.42, 0, 0, 0.03); return L; }
 function fusil() { const L = lot(); put(L, boite(0.05, 1.45, 0.05), CUIR, 0, 0, 0, 0, 0.02); put(L, boite(0.02, 0.35, 0.02), 0xc8ccd0, 0, 0.88, 0, 0, 0); return L; }
 
 // ---------------------------------------------------------------- un maillage instancié (et ses contours)
@@ -122,6 +123,9 @@ export class Troupes3D {
         if (PIETONS.has(role)) {
           const lr = role === R.SERVANT ? R.H : role;
           this.lotDe('p' + lr + '|' + cle, () => pieton(t, lr)).poser(this.mat(x, y, a, s, pas * s, 0, pench));
+          // les jambes : chacune balance d'avant en arrière au rythme du pas (d.legs, la phase du pas des figures 2D)
+          const sw = d.legs != null ? Math.sin(d.legs) * 0.5 : 0, cj = 'j|' + (t.culotte || BLANC), sa = Math.sin(a), ca = Math.cos(a);
+          for (const c of [-1, 1]) this.lotDe(cj, () => jambe(t.culotte || BLANC)).poser(this.mat(x - sa * c * 0.07 * s, y + ca * c * 0.07 * s, a, s, (0.84 + pas) * s, 0, c * sw));
           // le fusil selon la pose : à l'épaule, en joue, baïonnette en avant, à la baguette, posé
           if (role === R.H || role === R.PIQUE) {
             let fx = 0.05, fy = 1.3, fz = 0.22, rz = 0;
@@ -152,7 +156,11 @@ export class Troupes3D {
       if (d.k !== 'mort' && d.k !== 'cheval') continue;
       const t = this.tenueDe(d.c || '#888', 'ligne'), cle = (d.k === 'cheval' ? 'h' : 'm') + (d.c || '');
       let l = this.morts.get(cle);
-      if (!l) { l = new Lot3D(this.grp, d.k === 'cheval' ? attelage(t) : pieton(t, R.H), 64); this.morts.set(cle, l); }
+      if (!l) {
+        const L = d.k === 'cheval' ? attelage(t) : pieton(t, R.H);
+        if (d.k !== 'cheval') for (const c of [-1, 1]) { const J = jambe(t.culotte || BLANC); for (const k of ['g', 'o']) for (const geo of J[k]) { geo.translate(0, 0.84, c * 0.07); L[k].push(geo); } }
+        l = new Lot3D(this.grp, L, 64); this.morts.set(cle, l);
+      }
       if (l.n >= 4000) continue;
       // couché sur le flanc : roulis d'un quart de tour, posé un peu plus bas
       l.poser(this.mat(d.x, d.y, d.a || 0, fs, (d.k === 'cheval' ? 0.3 : 0.15) * fs, Math.PI / 2, 0)); l.fin();

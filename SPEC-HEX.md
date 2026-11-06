@@ -62,6 +62,9 @@ Tous les calques 2D appliquent ce `K` sur l'axe vertical : `map.js` (`toScreen`,
 - Pays : forêts (sapins en Béarn), landes (pins maritimes, bruyère, maison de résinier), marais, collines (moulins),
   montagnes enneigées, plaines en lanières et fermes à cour, vignes et chais, dunes, peupliers au bord de l'eau, ormes
   le long des routes royales.
+- Animations de la carte gardées sur le plateau : drapeau du maître de chaque place qui flotte (en berne, en fête),
+  habitants sur la place et pigeons au clocher (`towns.js`, `animer`), courant des fleuves et écume de la mer
+  (`ambient.js`), ailes des moulins 3D qui tournent (le plateau se redessine alors 15 fois par seconde, dès 15 px/km).
 - Vie : figures grossies 4 fois (`carte/ambiance.js`, `echellePlateau`), visibles dès 60 px/km ; zoom limité à 240 px/km.
 - Le décor se bâtit par paquets pendant les premières images (8 ms par image).
 
@@ -83,7 +86,8 @@ Tous les calques 2D appliquent ce `K` sur l'axe vertical : `map.js` (`toScreen`,
 
 ## Limites connues
 
-- shortcut: les figurines n'ont pas de jambes animées (la pose monte et descend au pas) ; à revoir si le joueur le demande.
+- Les fantassins ont des jambes qui marchent (phase du pas des figures 2D) ; les chevaux montent et descendent au pas,
+  sans jambes animées.
 - La boue du piétinement (`battle/pietinement.js`) est posée en texture sur le dessus des hexagones de terre
   (`Champ.boue`) ; elle passe sous les cultures en relief (champs, vignes). Les tués 2D restent à la vue de dessus : le
   plateau a ses tués couchés en 3D.

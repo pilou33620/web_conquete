@@ -1750,7 +1750,7 @@ export class MapView {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const hex = this.hex, K = this.K;
     // le plateau (SPEC-HEX) se dessine sur son canevas, dessous : celui-ci reste transparent
-    if (hex) { ctx.clearRect(0, 0, this.vw, this.vh); this.plateau.image(this.cam, this.vw, this.vh, dpr); }
+    if (hex) { ctx.clearRect(0, 0, this.vw, this.vh); this.plateau.image(this.cam, this.vw, this.vh, dpr, 8, this.ambient.on); }
     else { ctx.fillStyle = '#141618'; ctx.fillRect(0, 0, this.vw, this.vh); }
     const [wx0, wy0] = this.toWorld(0, 0), [wx1, wy1] = this.toWorld(this.vw, this.vh);
     // fond rapide
@@ -2038,6 +2038,7 @@ export class MapView {
       const sP = this.hex ? Math.max(s, rP / 0.62) : z >= Z.PLAN && (ns.sg || ns.bk || camp.has(n.id)) ? Math.max(s, rayonMurs(this, n, ns) * z / 0.62) : s;
       if (camp.has(n.id) && z >= 2.8) this.tents(ctx, sP, n.id, this.colors[camp.get(n.id)] || col);
       if (!this.hex) this.towns.draw(ctx, n, s, col, ns, time, ns.o);
+      else this.towns.animer(ctx, n, s, col, ns, time, ns.o, this.plateau.g.f);
       // siège
       // (de près : le camp, les batteries qui tirent, les incendies ; les tranchées sont au sol, carte/guerre.js)
       if (ns.sg) this.guerreDe().siege(ctx, n, ns, time);

@@ -28,6 +28,7 @@ export class Plateau {
     const g = this.g = new Grille(mp.W, mp.H, 4);
     this.sc.soleil.shadow.normalBias = 0.4 * g.f;
     this.racine = new THREE.Group(); this.racine.scale.setScalar(g.f); this.sc.monde.add(this.racine);
+    this.ailes = [];             // ailes des moulins : elles tournent (image)
     this.lieux = new Map();      // id de la place → { n, t (hexagones), grp, cle }
     this.file = [];              // ce qui reste à bâtir, un peu à chaque image
     this.saison = null;
@@ -142,7 +143,7 @@ export class Plateau {
 
   // ---------------------------------------------------------------- le décor des pays
   decor(liste) {
-    const { g } = this, L = lot(), R = g.R;
+    const { g } = this, L = lot(), R = g.R, tourn = [];
     for (const t of liste) {
       if (t.lieu || this.estEau(t)) { if (t.t === 'cote') { semer(t.q, t.r); if (rnd() < 0.2) put(L, sphere(entre(0.8, 1.4), 0), 0x9b958a, t.x + entre(-4, 4), t.top + 0.6, t.z + entre(-4, 4)); } continue; }
       semer(t.q, t.r);
@@ -161,7 +162,7 @@ export class Plateau {
       }
       if (t.t === 'colline') {
         for (let i = 0; i < 2; i++) { const [x, z] = rr(), b = sphere(entre(3, 4.4), 1); b.scale(1, 0.38, 1); put(L, b, col(0x97ad52), x, y, z, 0, 0.2); }
-        if (rnd() < 0.15 && t.jeu) { const [x, z] = rr(0.4); M.moulin(L, x, z, rnd() * 6, 0.8, rnd()); }
+        if (rnd() < 0.15 && t.jeu) { const [x, z] = rr(0.4); M.moulin(L, x, z, rnd() * 6, 0.8, rnd(), tourn, y); }
         else if (rnd() < 0.4) { const [x, z] = rr(); M.arbre(L, x, y + 0.6, z, 0.9); }
       }
       if (t.t === 'montagne' || t.t === 'haute') for (let i = 0, nb = 1 + (rnd() * 2 | 0); i < nb; i++) {
@@ -187,7 +188,7 @@ export class Plateau {
       }
       if (t.t === 'dunes') for (let i = 0; i < 2; i++) { const [x, z] = rr(), b = sphere(entre(2.4, 3.4), 1); b.scale(1.4, 0.35, 0.8); put(L, b, 0xf0e2b0, x, y, z, rnd() * 3, 0.15); }
     }
-    fige(L, this.racine);
+    this.tourner(fige(L, this.racine), tourn);
   }
   // ferme à cour : logis, grange, haie, un arbre
   ferme(L, t, [x, z]) {
@@ -237,12 +238,13 @@ export class Plateau {
       const ns = st.nodes[id], cle = this.cleLieu(ns);
       if (cle === l.cle) continue;
       l.cle = cle;
-      this.file.push(() => { jeter(l.grp); l.grp = fige(this.batirLieu(l, ns), this.racine); this.sc.sale = true; });
+      this.file.push(() => { jeter(l.grp); const L = this.batirLieu(l, ns); l.grp = fige(L, this.racine); this.tourner(l.grp, L.tourn); this.sc.sale = true; });
     }
   }
   batirLieu(l, ns) {
     const { mp, g } = this, n = l.n, t0 = l.t, st = M.style(n.dept), L = lot();
-    const col = mp.colors[ns?.o] || '#999', f = ns?.f || 0, dev = ns?.d || 0, dmg = ns?.sg ? ns.sg.dmg || 0 : 0;
+    const f = ns?.f || 0, dev = ns?.d || 0, dmg = ns?.sg ? ns.sg.dmg || 0 : 0;
+    L.tourn = [];
     semer(n.id, 11);
     // les routes qui entrent : leurs angles (portes, rues)
     const angles = mp.edges.filter(e => e.a === n.id || e.b === n.id).map(e => { const p = e.a === n.id ? e.pts[Math.min(1, e.pts.length - 1)] : e.pts[Math.max(0, e.pts.length - 2)]; return Math.atan2(p[1] - n.y, p[0] - n.x); });
@@ -263,7 +265,7 @@ export class Plateau {
       }
     };
     if (n.type === 'fort') {
-      M.fortEtoile(L, 0, 0, 1.1); M.fanion(L, col, 0, 1.7, -1.6, 6);
+      M.fortEtoile(L, 0, 0, 1.1);   // (le drapeau, qui flotte, est dessiné en 2D : towns.js, animer)
     } else if (n.type === 'village') {
       for (let k = 0, nb = 4 + Math.min(4, Math.round((n.pop0 || 600) / 400)) + dev * 2; k < nb; k++) {
         const a = rnd() * Math.PI * 2, r = entre(2.6, 6.2);
@@ -271,9 +273,8 @@ export class Plateau {
       }
       M.eglise(L, st, 0, 0, rnd() * 6, 0.65, n.dept);
       for (let k = 0; k < 3; k++) { const a = rnd() * 6.3, r = entre(6.5, 8.5); M.arbre(L, Math.cos(a) * r, 0, Math.sin(a) * r, 0.7, 'fruitier'); }
-      if (rnd() < 0.35) M.moulin(L, entre(-7, 7), entre(-7, 7), rnd() * 6, 0.75, rnd());
+      if (rnd() < 0.35) M.moulin(L, entre(-7, 7), entre(-7, 7), rnd() * 6, 0.75, rnd(), L.tourn);
       if (f) M.enceinte(L, Math.min(f, 2), 7.5, angles);
-      M.fanion(L, col, 1.6, 0, -1.4, 5);
     } else {
       // la ville : place au centre (église ou cathédrale, halle, fontaine), rues vers les routes, maisons serrées au cœur,
       // faubourgs plus lâches sur les hexagones voisins, enceinte selon les remparts
@@ -299,10 +300,10 @@ export class Plateau {
       }
       // l'industrie du XIXe siècle : une cheminée d'usine dans les villes des forges
       if (this.cleLieu(ns).endsWith('|1') && ((n.spec || []).includes('fer') || (n.spec || []).includes('forge'))) put(L, cyl(0.4, 0.6, 7, 8), 0xa8573a, 6, 3.5, -5, 0, 0.1);
-      M.fanion(L, col, 2.6, 0, -2.8, cap ? 9 : 7);
     }
     // posé sur l'hexagone central
     for (const k of ['g', 'o']) for (const geo of L[k]) geo.translate(t0.x, y0, t0.z);
+    for (const a of L.tourn) a.position.add(new THREE.Vector3(t0.x, y0, t0.z));
     return L;
   }
   // rayon de la place sur le plateau, en km (les étiquettes se posent dessous)
@@ -340,9 +341,18 @@ export class Plateau {
   // hauteur du sol (km) sous un point du jeu : les calques 2D y posent ce qui est debout
   hauteur(x, y) { const t = this.g.en(x, y); return t ? Math.max(t.top, EAU_Y) * this.g.f : 0; }
   // bâtit un peu de ce qui reste (budget en ms), cale la caméra et dessine si quelque chose a changé
-  image(cam, vw, vh, dpr, budget = 8) {
+  // les ailes de moulin d'un groupe bâti : elles tournent avec lui (et partent avec lui quand il est refait)
+  tourner(grp, ailes) { for (const a of ailes) { grp.add(a); this.ailes.push(a); } }
+  // anim : la vie de la carte est animée (ambient.on)
+  image(cam, vw, vh, dpr, budget = 8, anim = false) {
     const t0 = performance.now();
     while (this.file.length && performance.now() - t0 < budget) { this.file.shift()(); this.sc.sale = true; }
+    // les moulins tournent quand on les distingue : le plateau se redessine alors 15 fois par seconde, pas plus
+    if (anim && cam.z >= 15 && this.ailes.length && t0 - (this.tAiles || 0) > 66) {
+      this.tAiles = t0; this.ailes = this.ailes.filter(a => a.parent);
+      for (const a of this.ailes) a.rotation.z = a.userData.ph + t0 / 1000 * 0.9;
+      this.sc.sale = true;
+    }
     this.sc.caler(cam, vw, vh, dpr);
     return this.sc.rendre();
   }

@@ -4,7 +4,7 @@
 // volets, cheminées ; églises romanes ou clocher-mur béarnais, cathédrale gothique, halle de bastide, château, moulins,
 // enceintes selon le niveau des remparts (mur à tours, remparts épais, tracé bastionné, Vauban), quais et barques,
 // arbres. Les fenêtres et les portes sont des plaques sans contour : peu de sommets pour beaucoup de détail.
-import { THREE, put, lot, transfere, boite, cyl, cone, sphere, toit, pavillon, rnd, entre, choix, semer, SQ3 } from './moteur.js';
+import { THREE, put, lot, fige, transfere, boite, cyl, cone, sphere, toit, pavillon, rnd, entre, choix, semer, SQ3 } from './moteur.js';
 
 // murs, toits, volets, pente des toits ; repris de towns.js (STYLE) et complétés
 export const STYLES = {
@@ -111,12 +111,18 @@ export function chateau(L, st, x, z, ry, s = 1) {
   transfere(M, L, x, 0, z, ry, s);
 }
 // moulin à vent : tour ronde, chapeau, quatre ailes
-export function moulin(L, x, z, ry, s = 1, angle = 0.4) {
+// tournantes : un tableau où mettre les ailes, à part (un groupe à faire tourner, rotation.z) ; sinon elles sont figées
+export function moulin(L, x, z, ry, s = 1, angle = 0.4, tournantes = null, y = 0) {
   const M = lot();
   put(M, cyl(0.95, 1.25, 3.4, 10), 0xeee6d2, 0, 1.7, 0, 0, 0.12); put(M, cone(1.2, 1.2, 10), 0x6e4a30, 0, 4, 0, 0, 0.1);
   plaque(M, 0.5, 0.9, PORTE, 0, 0.45, 1.26, 0);
-  for (let k = 0; k < 4; k++) { const b = boite(0.5, 2.6, 0.06); b.translate(0, 1.4, 0); b.rotateZ(angle + k * Math.PI / 2); put(M, b, 0xf2ead8, 0, 3.3, 1.3, 0, 0.06); }
-  transfere(M, L, x, 0, z, ry, s);
+  const A = tournantes ? lot() : M;
+  for (let k = 0; k < 4; k++) { const b = boite(0.5, 2.6, 0.06); b.translate(0, 1.4, 0); b.rotateZ(angle + k * Math.PI / 2); put(A, b, 0xf2ead8, 0, tournantes ? 0 : 3.3, tournantes ? 0 : 1.3, 0, 0.06); }
+  transfere(M, L, x, y, z, ry, s);
+  if (tournantes) {
+    const grp = fige(A, null); grp.scale.setScalar(s); grp.rotation.y = ry; grp.userData.ph = angle;
+    grp.position.set(x + Math.sin(ry) * 1.3 * s, y + 3.3 * s, z + Math.cos(ry) * 1.3 * s); tournantes.push(grp);
+  }
 }
 // arbres : feuillu, pin maritime (tronc nu, houppier plat), sapin, peuplier, fruitier
 export function arbre(L, x, y, z, s = 1, sorte = 'feuillu', teinte) {
