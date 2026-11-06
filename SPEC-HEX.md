@@ -84,7 +84,8 @@ Tous les calques 2D appliquent ce `K` sur l'axe vertical : `map.js` (`toScreen`,
 ## Limites connues
 
 - shortcut: les figurines n'ont pas de jambes animées (la pose monte et descend au pas) ; à revoir si le joueur le demande.
-- shortcut: le piétinement (boue) et les tués 2D ne sont peints que dans la vue de dessus ; le plateau a ses cratères et
-  ses tués couchés.
+- La boue du piétinement (`battle/pietinement.js`) est posée en texture sur le dessus des hexagones de terre
+  (`Champ.boue`) ; elle passe sous les cultures en relief (champs, vignes). Les tués 2D restent à la vue de dessus : le
+  plateau a ses tués couchés en 3D.
 - La carte d'époque garde son papier : le plateau n'existe qu'au style Plateau.
 - Sur un appareil lent, le décor du plateau met quelques secondes à se bâtir à l'ouverture.

@@ -292,9 +292,10 @@ const boite = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const cyl = (rt, rb, h, s = 10) => new THREE.CylinderGeometry(rt, rb, h, s);
 const cone = (r, h, s = 8) => new THREE.ConeGeometry(r, h, s);
 const sphere = (r, d = 1) => new THREE.IcosahedronGeometry(r, d);
+// toit à deux pans : w de large (selon x), d de long (le faîtage, selon z), h de haut, posé sur y (pointe en haut)
 function toit(L, w, d, h, col, x, y, z, ry = 0) {
-  const p = cyl(1, 1, d, 3); p.rotateX(Math.PI / 2); p.rotateZ(Math.PI / 2); p.scale(h / 1.5, w / SQ3, 1); p.translate(0, h / 2 - h / 3, 0);
-  put(L, p, col, x, y + h / 6, z, ry);
+  const p = cyl(1, 1, d, 3); p.rotateX(Math.PI / 2); p.rotateZ(Math.PI); p.scale(w / SQ3, h / 1.5, 1); p.translate(0, h / 3, 0);
+  put(L, p, col, x, y, z, ry);
 }
 // ruban posé sur le relief : points [x, y, z]
 function ruban(pts, larg) {
@@ -318,12 +319,12 @@ function maison(L, x, z, ry, s = 1, haute = false) {
   toit(L, 2.5 * s, 2.2 * s, 1.3 * s, [0xd9573b, 0xe07a3a, 0xc4493a, 0x6d6a75][rnd() * 4 | 0], x, h, z, ry);
 }
 function eglise(L, x, z, ry, s = 1) {
-  put(L, boite(2 * s, 1.9 * s, 3.4 * s), 0xe8dcc0, x, .95 * s, z, ry); toit(L, 2.3 * s, 3.6 * s, 1.4 * s, 0x6d6a75, x, 1.9 * s, z, ry + Math.PI / 2);
+  put(L, boite(2 * s, 1.9 * s, 3.4 * s), 0xe8dcc0, x, .95 * s, z, ry); toit(L, 2.3 * s, 3.6 * s, 1.4 * s, 0x6d6a75, x, 1.9 * s, z, ry);
   const dx = Math.sin(ry) * 1.9 * s, dz = Math.cos(ry) * 1.9 * s;
   put(L, boite(1.1 * s, 3.6 * s, 1.1 * s), 0xe8dcc0, x + dx, 1.8 * s, z + dz, ry); put(L, cone(.95 * s, 2.2 * s, 4), 0x5b5866, x + dx, 4.7 * s, z + dz, ry + Math.PI / 4);
 }
 function cathedrale(L, x, z) {
-  put(L, boite(3.2, 3.4, 7.5), 0xeee3c8, x, 1.7, z); toit(L, 3.6, 7.7, 1.8, 0x5b5866, x, 3.4, z, Math.PI / 2);
+  put(L, boite(3.2, 3.4, 7.5), 0xeee3c8, x, 1.7, z); toit(L, 3.6, 7.7, 1.8, 0x5b5866, x, 3.4, z);
   for (const k of [-1, 1]) { put(L, boite(1.6, 6.4, 1.6), 0xeee3c8, x + k * 1.1, 3.2, z + 4.2); put(L, cone(1.15, 2.8, 4), 0x5b5866, x + k * 1.1, 7.8, z + 4.2, Math.PI / 4); }
 }
 function fanion(L, col, x, z, h = 7) { put(L, cyl(.16, .2, h, 6), 0x6b5236, x, h / 2, z, 0, .12); put(L, boite(2.6, 1.6, .16), col, x + 1.35, h - .9, z, 0, .14); }

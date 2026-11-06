@@ -150,6 +150,7 @@ export class BattleView {
         this.champ = new Champ(this.cv3, m, this.terrain);
         this.t3 = new Troupes3D(this.champ, this.troupes, m.year);
         if (m.bati?.length) this.champ.bati(m.bati);
+        this.champ.boue(this.piet);   // (la boue d'avant comprise : importée plus haut)
         this.k = HEX_K;
       } catch (e) {
         console.warn('Plateau 3D indisponible, vue de dessus', e);

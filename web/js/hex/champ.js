@@ -335,7 +335,24 @@ export class Champ {
   }
 
   // ---------------------------------------------------------------- chaque image
+  // la boue du piétinement (battle/pietinement.js) : son canevas posé en texture sur le dessus des hexagones de terre
+  boue(piet) {
+    if (!piet?.canvas) return;
+    const { g } = this, pos = [], uv = [], W = piet.w * piet.res, H = piet.h * piet.res;
+    for (const t of g.liste) {
+      if (this.estEau(t)) continue;
+      const y = t.top + 0.03, c = [0, 1, 2, 3, 4, 5].map(i => g.coin(t, i, 0.965));
+      for (let i = 0; i < 6; i++) for (const [x, z] of [[t.x, t.z], c[(i + 1) % 6], c[i]]) { pos.push(x, y, z); uv.push(x * this.f / W, 1 - z * this.f / H); }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    this.texBoue = new THREE.CanvasTexture(piet.canvas); this.texBoue.colorSpace = THREE.SRGBColorSpace;
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: this.texBoue, transparent: true, depthWrite: false }));
+    m.renderOrder = 1; this.racine.add(m); this.piet = piet; this.vBoue = -1;
+  }
   image(cam, vw, vh, dpr, time) {
+    if (this.piet && this.piet.version !== this.vBoue) { this.vBoue = this.piet.version; this.texBoue.needsUpdate = true; }
     for (const a of this.ailes) a.rotation.z = time * 0.9;
     this.sc.caler(cam, vw, vh, dpr);
     this.sc.rendre(true);
