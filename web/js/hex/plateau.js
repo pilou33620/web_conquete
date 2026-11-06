@@ -94,7 +94,7 @@ export class Plateau {
   // les rivières du jeu : les vallées qu'elles traversent sont à plat
   rivieres() {
     const { mp, g } = this;
-    this.rivs = [];
+    this.rivs = []; this.eau = new Map();
     for (const rv of mp.m.rivers) {
       const pts = rv.pts;
       for (let i = 0; i < pts.length; i++) {
@@ -104,8 +104,21 @@ export class Plateau {
         if (t.t === 'colline' || t.t === 'montagne' || t.t === 'haute') t.t = rv.rank < 3 || t.t === 'colline' ? 'prairie' : 'colline';
       }
       this.rivs.push(rv);
+      // les points de la rivière, hexagone par hexagone, avec la demi-largeur peinte (eau et berges) : rien ne s'y bâtit
+      for (const [x, , z, t] of g.suivre(pts, 1.5, 0)) if (t) { const [w, b] = this.largeur(rv.rank, t.t === 'ville'); if (!this.eau.has(t.i)) this.eau.set(t.i, []); this.eau.get(t.i).push([x, z, w + b]); }
     }
   }
+  // un point du plateau (unités du plateau) dans l'eau ou sur une rivière et ses berges, à marge près ?
+  mouille(x, z, marge = 1.4) {
+    const t = this.g.sous(x, z);
+    if (!t || this.estEau(t)) return true;
+    for (const h of [t, ...this.g.voisins(t)]) for (const [px, pz, w] of this.eau.get(h.i) || []) if (Math.hypot(x - px, z - pz) < w + marge) return true;
+    return false;
+  }
+  // demi-largeurs (unités du plateau) de l'eau et de la berge d'une rivière de ce rang ; en ville, l'eau entre des quais
+  largeur(rank, ville) { const w = [0, 1.9, 1.3, 0.85][rank] || 0.85; return ville ? [w * 0.45, 0.35] : [w, 1]; }
+  // une rivière passe-t-elle sur l'hexagone ou un voisin ?
+  pres(t) { return this.eau.has(t.i) || this.g.voisins(t).some(h => this.eau.has(h.i)); }
 
   // ---------------------------------------------------------------- les tuiles (un seul maillage, recoloré selon la saison)
   tuiles() {
@@ -148,7 +161,10 @@ export class Plateau {
       if (t.lieu || this.estEau(t)) { if (t.t === 'cote') { semer(t.q, t.r); if (rnd() < 0.2) put(L, sphere(entre(0.8, 1.4), 0), 0x9b958a, t.x + entre(-4, 4), t.top + 0.6, t.z + entre(-4, 4)); } continue; }
       semer(t.q, t.r);
       const fane = !t.jeu, y = t.top, peu = t.riv ? 0.5 : 1;
-      const rr = (k = 0.62) => { const a = rnd() * Math.PI * 2, l = Math.sqrt(rnd()) * R * k; return [t.x + Math.cos(a) * l, t.z + Math.sin(a) * l]; };
+      const pres = this.pres(t);
+      const rr = (k = 0.62) => {   // un point de l'hexagone, hors de la rivière (cinq essais)
+        for (let n = 0; ; n++) { const a = rnd() * Math.PI * 2, l = Math.sqrt(rnd()) * R * k, p = [t.x + Math.cos(a) * l, t.z + Math.sin(a) * l]; if (n >= 4 || !pres || !this.mouille(p[0], p[1], 1)) return p; }
+      };
       const col = c => (fane ? new THREE.Color(c).lerp(PARCHEMIN, 0.5) : c);
       if (t.t === 'foret') for (let i = 0, nb = (6 + (rnd() * 3 | 0)) * peu; i < nb; i++) { const [x, z] = rr(); M.arbre(L, x, y, z, entre(0.8, 1.25), t.dep === '64' || rnd() < 0.3 ? 'sapin' : 'feuillu', fane ? 0x9aa070 : undefined); }
       if (t.t === 'lande') {   // pins maritimes, bruyère, une parc à brebis, de loin en loin une maison de résinier
@@ -221,10 +237,18 @@ export class Plateau {
     }
     const R = lot();
     for (const rv of this.rivs) {
-      const w = [0, 1.9, 1.3, 0.85][rv.rank] || 0.85;
-      let run = [];
-      const fin = () => { if (run.length > 1) { put(L, ruban(run.map(p => [p[0], p[1] - 0.03, p[2]]), w + 1), 0xdccf96, 0, 0, 0, 0, 0); put(R, ruban(run, w), 0x46a9dd, 0, 0, 0, 0, 0); } run = []; };
-      for (const [x, y, z, t] of g.suivre(rv.pts, 0.8, 0.1)) { if (!t || this.estEau(t)) { fin(); continue; } run.push([x, y, z]); }
+      // un tronçon par largeur : la rivière se resserre entre les quais de pierre en traversant une ville
+      let run = [], ville = false;
+      const fin = () => {
+        if (run.length > 1) { const [w, b] = this.largeur(rv.rank, ville); put(L, ruban(run.map(p => [p[0], p[1] - 0.03, p[2]]), w + b), ville ? 0xbfb39a : 0xdccf96, 0, 0, 0, 0, 0); put(R, ruban(run, w), 0x46a9dd, 0, 0, 0, 0, 0); }
+        run = run.length ? [run[run.length - 1]] : [];
+      };
+      for (const [x, y, z, t] of g.suivre(rv.pts, 0.8, 0.1)) {
+        if (!t || this.estEau(t)) { fin(); run = []; continue; }
+        const v = t.t === 'ville';
+        if (v !== ville) { run.push([x, y, z]); fin(); ville = v; }
+        run.push([x, y, z]);
+      }
       fin();
     }
     fige(L, this.racine, { ombre: false }); fige(R, this.racine, { ombre: false });
@@ -253,11 +277,19 @@ export class Plateau {
     const ruine = () => dmg > 0.3 && rnd() < dmg * 0.5;
     const brule = 0x3a3230;
     const y0 = t0.top;
+    // rien dans l'eau : le centre (église, place) va au plus près du milieu sur la terre ferme, les maisons mouillées sautent
+    const sec = (x, z, m) => !this.mouille(t0.x + x, t0.z + z, m);
+    let ox = 0, oz = 0;
+    if (!sec(0, 0, 3.5)) search: for (let r = 2; r <= 8; r += 2) for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; if (sec(Math.cos(a) * r, Math.sin(a) * r, 3.5)) { ox = Math.cos(a) * r; oz = Math.sin(a) * r; break search; } }
+    const cx0 = t0.x + ox, cz0 = t0.z + oz;
     const maisons = (t, dens, etagesMax, rayonVide) => {
-      for (let u = -9; u <= 9; u += 2.6) for (let v = -9; v <= 9; v += 2.6) {
-        const x = t.x + u + (hache(u * 10 + t.q, v * 10 + t.r, 2) - 0.5) * 1.2, z = t.z + v + (hache(v * 10 + t.q, u * 10 + t.r, 4) - 0.5) * 1.2;
+      for (let u = -9; u <= 9; u += 2.4) for (let v = -9; v <= 9; v += 2.4) {
+        let x = t.x + u + (hache(u * 10 + t.q, v * 10 + t.r, 2) - 0.5) * 1.2, z = t.z + v + (hache(v * 10 + t.q, u * 10 + t.r, 4) - 0.5) * 1.2;
+        // au bord de l'eau, la maison recule d'un pas vers la terre ferme plutôt que de disparaître
+        if (this.mouille(x, z, 1)) { const p = [[1.2, 0], [-1.2, 0], [0, 1.2], [0, -1.2]].find(([a, b]) => !this.mouille(x + a, z + b, 1)); if (!p) continue; x += p[0]; z += p[1]; }
+        // (la place, au sec, garde son vide ; les rues et la densité partent du centre de la ville, là où entrent les routes)
         const dc = Math.hypot(x - t0.x, z - t0.z);
-        if (g.sous(x, z) !== t || dc < rayonVide || surRue(x, z, t0.x, t0.z) || rnd() > dens * (1 - dc / 40)) continue;
+        if (g.sous(x, z) !== t || Math.hypot(x - cx0, z - cz0) < rayonVide || surRue(x, z, t0.x, t0.z) || rnd() > dens * (1 - dc / 40)) continue;
         // la façade regarde la rue la plus proche
         const a = Math.atan2(z - t0.z, x - t0.x), r = rues.reduce((b, rr) => (Math.abs(Math.sin(a - rr)) < Math.abs(Math.sin(a - b)) ? rr : b), rues[0]);
         const et = 1 + ((rnd() * etagesMax) | 0), rui = ruine();
@@ -268,23 +300,25 @@ export class Plateau {
       M.fortEtoile(L, 0, 0, 1.1);   // (le drapeau, qui flotte, est dessiné en 2D : towns.js, animer)
     } else if (n.type === 'village') {
       for (let k = 0, nb = 4 + Math.min(4, Math.round((n.pop0 || 600) / 400)) + dev * 2; k < nb; k++) {
-        const a = rnd() * Math.PI * 2, r = entre(2.6, 6.2);
-        M.maison(L, st, Math.cos(a) * r, Math.sin(a) * r, -a + Math.PI / 2 + entre(-0.3, 0.3), { s: 0.85, etages: rnd() < 0.2 ? 2 : 1, toitCol: ruine() ? brule : undefined });
+        const a = rnd() * Math.PI * 2, r = entre(2.6, 6.2), hx = ox + Math.cos(a) * r, hz = oz + Math.sin(a) * r;
+        if (!sec(hx, hz, 1.4)) continue;
+        M.maison(L, st, hx, hz, -a + Math.PI / 2 + entre(-0.3, 0.3), { s: 0.85, etages: rnd() < 0.2 ? 2 : 1, toitCol: ruine() ? brule : undefined });
       }
-      M.eglise(L, st, 0, 0, rnd() * 6, 0.65, n.dept);
-      for (let k = 0; k < 3; k++) { const a = rnd() * 6.3, r = entre(6.5, 8.5); M.arbre(L, Math.cos(a) * r, 0, Math.sin(a) * r, 0.7, 'fruitier'); }
-      if (rnd() < 0.35) M.moulin(L, entre(-7, 7), entre(-7, 7), rnd() * 6, 0.75, rnd(), L.tourn);
+      M.eglise(L, st, ox, oz, rnd() * 6, 0.65, n.dept);
+      for (let k = 0; k < 3; k++) { const a = rnd() * 6.3, r = entre(6.5, 8.5), ax = ox + Math.cos(a) * r, az = oz + Math.sin(a) * r; if (sec(ax, az, 1)) M.arbre(L, ax, 0, az, 0.7, 'fruitier'); }
+      if (rnd() < 0.35) { const mx = entre(-7, 7), mz = entre(-7, 7); if (sec(mx, mz, 1.5)) M.moulin(L, mx, mz, rnd() * 6, 0.75, rnd(), L.tourn); }
       if (f) M.enceinte(L, Math.min(f, 2), 7.5, angles);
     } else {
       // la ville : place au centre (église ou cathédrale, halle, fontaine), rues vers les routes, maisons serrées au cœur,
       // faubourgs plus lâches sur les hexagones voisins, enceinte selon les remparts
-      const cap = n.type === 'capitale';
-      put(L, cyl(3.4, 3.4, 0.08, 16), 0xc9bc98, 0, 0.04, 0, 0, 0);
-      put(L, cyl(0.5, 0.6, 0.6, 10), 0xb9ad8f, 0, 0.3, 1.6, 0, 0.08); put(L, cyl(0.15, 0.15, 1, 6), 0x46a9dd, 0, 0.9, 1.6, 0, 0);
-      if (n.name === 'Pau') M.chateau(L, st, -0.6, -1.2, 0, 0.75);
-      else if (cap || (n.pop0 || 0) > 12000) M.cathedrale(L, 0, -0.6, 0, 0.6);
-      else M.eglise(L, st, -0.4, -0.8, 0, 0.85, n.dept);
-      if (n.dept === '47' || n.dept === '24' || !cap) M.halle(L, st, 2.4, 2.1, Math.PI / 2, 0.5);
+      const cap = n.type === 'capitale', P = lot();   // (la place du centre, posée au sec : ox, oz)
+      put(P, cyl(3.4, 3.4, 0.08, 16), 0xc9bc98, 0, 0.04, 0, 0, 0);
+      put(P, cyl(0.5, 0.6, 0.6, 10), 0xb9ad8f, 0, 0.3, 1.6, 0, 0.08); put(P, cyl(0.15, 0.15, 1, 6), 0x46a9dd, 0, 0.9, 1.6, 0, 0);
+      if (n.name === 'Pau') M.chateau(P, st, -0.6, -1.2, 0, 0.75);
+      else if (cap || (n.pop0 || 0) > 12000) M.cathedrale(P, 0, -0.6, 0, 0.6);
+      else M.eglise(P, st, -0.4, -0.8, 0, 0.85, n.dept);
+      if ((n.dept === '47' || n.dept === '24' || !cap) && sec(ox + 2.4, oz + 2.1, 1.5)) M.halle(P, st, 2.4, 2.1, Math.PI / 2, 0.5);
+      transfere(P, L, ox, 0, oz);
       maisons(t0, cap ? 1.0 : 0.95, cap ? 3 : 2, 3.6);
       for (const t of l.hex.slice(1)) maisons(t, 0.62 + dev * 0.08, cap ? 2 : 1, 0);
       if (!l.hex.slice(1).length && dev) maisons(t0, 0.3 * dev, 1, 7.5);
