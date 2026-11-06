@@ -172,9 +172,9 @@ export class MapView {
     this.colors.neutre = this.rules.neutral_color;
     this.epoque = new Epoque(this);   // la carte selon l'époque (epoque.js)
     // style de la carte (SPEC-SUITE H3) : « ugar » (à la manière d'Ultimate General) ou « epoque » (Cassini, puis état-major)
-    // et, depuis SPEC-HEX, « plateau » : le plateau d'hexagones en 3D (hex/plateau.js), le rendu par défaut
+    // et, depuis SPEC-HEX, « plateau » : le plateau d'hexagones en 3D (hex/plateau.js), le seul rendu proposé ; « ugar »
+    // ne sert plus que de secours, sur un appareil sans WebGL (initPlateau)
     this.style = 'plateau';
-    try { const v = localStorage.getItem('conquete.carte.style2') || (localStorage.getItem('conquete.carte.style') === 'epoque' ? 'epoque' : null); if (v === 'epoque' || v === 'ugar') this.style = v; } catch (e) { /* stockage indisponible */ }
     this.playable = new Uint8Array(this.W * this.H);
     for (let c = 0; c < this.W * this.H; c++) {
       const d = this.dept[c];
@@ -341,13 +341,6 @@ export class MapView {
   // agrandie y est floue) ; les tuiles de 96 px/km et plus sont toujours vues du ciel, celles de 64 s'y fondent
   papierVu() { return this.era && this.cam.z * this.dpr <= PAPIER_MAX ? this.era : null; }
 
-  setStyle(v) {
-    this.style = v === 'epoque' ? 'epoque' : v === 'plateau' && this.initPlateau() ? 'plateau' : 'ugar';
-    try { localStorage.setItem('conquete.carte.style2', this.style); } catch (e) { /* stockage indisponible */ }
-    if (this.cv3) this.cv3.hidden = this.style !== 'plateau';
-    echellePlateau(this.hex); this.clampCam();
-    this.repaint();
-  }
   // le plateau d'hexagones (SPEC-HEX) : son canevas WebGL sous celui de la carte ; faux si WebGL manque
   initPlateau() {
     if (this.plateau) return true;

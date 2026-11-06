@@ -23,11 +23,8 @@ import { Champ } from '../hex/champ.js';
 import { Troupes3D } from '../hex/troupes3d.js';
 import { K as HEX_K } from '../hex/moteur.js';
 
-// le rendu en plateau d'hexagones 3D (SPEC-HEX), réglé avec la carte (map.js : conquete.carte.style2), sauf « vue du ciel »
-// ou « carte d'époque » ; sans WebGL, la vue de dessus d'origine
-export function plateauVoulu() {
-  try { const v = localStorage.getItem('conquete.carte.style2'); return v !== 'ugar' && v !== 'epoque'; } catch (e) { return true; }
-}
+// le rendu en plateau d'hexagones 3D (SPEC-HEX), le seul proposé ; sans WebGL, la vue de dessus d'origine (load)
+export function plateauVoulu() { return true; }
 
 const POLL_MS = 120;
 const CONTACT = new Set(['feu', 'recharge', 'melee', 'charge']);

@@ -814,7 +814,7 @@ web/                 interface : index.html, css/style.css, js/map.js (rendu can
                      js/tuto.js (tutoriel), js/main.js
 web/js/hex/          rendu en plateau d'hexagones 3D, style web_power, par défaut (SPEC-HEX.md) : moteur.js (moteur et caméra
                      inclinée), modeles.js (maisons de chaque pays, églises, enceintes…), plateau.js (carte de campagne),
-                     champ.js (champ de bataille), troupes3d.js (figurines) ; réglage : menu ☰, Style de la carte
+                     champ.js (champ de bataille), troupes3d.js (figurines) ; le seul rendu (l'ancien, en secours sans WebGL)
 web/js/battle/       vue de bataille de dessus, sur un canevas 2D (SPEC-2D.md) : bataille.js (entrée et sortie depuis
                      la campagne), vue.js (calques dans l'ordre, boucle, interrogation du serveur, tracés au sol),
                      camera.js (caméra verticale, passage écran ↔ terrain), terrain.js (peinture du sol,

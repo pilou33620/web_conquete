@@ -13,12 +13,11 @@ tuiles en relief, ombrage à trois tons, contours sombres, maisons et arbres en 
 
 Le détail des villes, des villages et des bâtiments de bataille est plus poussé que sur les maquettes.
 
-## Réglage
+## Le seul rendu
 
-Menu ☰ → Affichage → Style de la carte : **Plateau** (par défaut), Vue du ciel, Carte d'époque. Le choix est enregistré
-sur l'appareil (`localStorage` : `conquete.carte.style2`). Il vaut aussi pour les batailles : Plateau donne le champ de
-bataille en hexagones, les deux autres la vue de dessus d'avant. Sans WebGL, le jeu revient de lui-même au rendu d'avant
-(un avertissement dans la console).
+Depuis le 06/11/2026, le plateau est le seul rendu proposé, sur la carte comme en bataille : le choix du style de la
+carte a quitté le menu. Sans WebGL, le jeu revient de lui-même au rendu d'avant (vue du ciel, vue de dessus en bataille),
+avec un avertissement dans la console : c'est un secours, pas un choix.
 
 ## Fichiers
 
