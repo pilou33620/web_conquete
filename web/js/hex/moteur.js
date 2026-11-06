@@ -102,10 +102,11 @@ export const boite = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 export const cyl = (rt, rb, h, s = 10) => new THREE.CylinderGeometry(rt, rb, h, s);
 export const cone = (r, h, s = 8) => new THREE.ConeGeometry(r, h, s);
 export const sphere = (r, d = 1) => new THREE.IcosahedronGeometry(r, d);
-// toit à deux pans : w de large (pignon), d de long, h de haut ; posé sur y
+// toit à deux pans : w de large (le pignon, selon x), d de long (le faîtage, selon z), h de haut ; posé sur y
+// (le prisme de web_power était couché, la pointe vers +x : ici la pointe est en haut)
 export function toit(L, w, d, h, col, x, y, z, ry = 0, ep = 0.2) {
-  const p = cyl(1, 1, d, 3); p.rotateX(Math.PI / 2); p.rotateZ(Math.PI / 2); p.scale(h / 1.5, w / SQ3, 1); p.translate(0, h / 2 - h / 3, 0);
-  put(L, p, col, x, y + h / 6, z, ry, ep);
+  const p = cyl(1, 1, d, 3); p.rotateX(Math.PI / 2); p.rotateZ(Math.PI); p.scale(w / SQ3, h / 1.5, 1); p.translate(0, h / 3, 0);
+  put(L, p, col, x, y, z, ry, ep);
 }
 // toit à quatre pans (pavillon) : une pyramide à base rectangulaire
 export function pavillon(L, w, d, h, col, x, y, z, ry = 0, ep = 0.2) {

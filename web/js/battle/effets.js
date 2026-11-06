@@ -285,13 +285,14 @@ export class Effects {
     const cv = this[nom] ??= canvas(W, H), g = cv.getContext('2d');
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
     g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.clearRect(0, 0, W, H);
-    g.setTransform(res * z, 0, 0, res * z, res * (view.vw / 2 - view.cam.x * z), res * (view.vh / 2 - view.cam.y * z));
+    const k = view.k ?? 1;   // (vue inclinée du plateau 3D)
+    g.setTransform(res * z, 0, 0, res * z * k, res * (view.vw / 2 - view.cam.x * z), res * (view.vh / 2 - view.cam.y * z * k));
     return g;
   }
   poser(ctx, view, cv) { ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0); ctx.globalAlpha = 1; ctx.drawImage(cv, 0, 0, view.vw, view.vh); }
   draw(ctx, view) {
     view.monde(ctx);
-    const z = view.z, hw = view.vw / 2 / z + 30, hh = view.vh / 2 / z + 30, cx = view.cam.x, cy = view.cam.y;
+    const z = view.z, K = view.k ?? 1, hw = view.vw / 2 / z + 30, hh = view.vh / 2 / z / K + 30, cx = view.cam.x, cy = view.cam.y;
     const vu = (x, y, r) => Math.abs(x - cx) < hw + r && Math.abs(y - cy) < hh + r;
     const px = 1 / z;   // un pixel, en mètres : les petits effets restent visibles de loin
     ctx.globalCompositeOperation = 'source-over';
@@ -343,13 +344,13 @@ export class Effects {
     }
     // ce qui brille s'ajoute à la lumière : éclairs, feux, étincelles, braises
     ctx.globalCompositeOperation = 'lighter';
-    const m = view.dpr * z, ox = view.dpr * (view.vw / 2 - cx * z), oy = view.dpr * (view.vh / 2 - cy * z);
+    const m = view.dpr * z, ox = view.dpr * (view.vw / 2 - cx * z), oy = view.dpr * (view.vh / 2 - cy * z * K);
     for (const f of this.flashes) {
       if (!vu(f.x, f.y, 20)) continue;
       const k = 1 - f.t / f.life;
       if (f.r) { const r = f.r * (0.6 + k * 0.6); ctx.globalAlpha = k; ctx.drawImage(S.fl, f.x - r, f.y - r, r * 2, r * 2); continue; }
       const s = Math.max(f.s, px * 2.5) / ES, c = Math.cos(f.a) * m * s, sn = Math.sin(f.a) * m * s;
-      ctx.setTransform(c, sn, -sn, c, ox + f.x * m, oy + f.y * m);
+      ctx.setTransform(c, sn * K, -sn, c * K, ox + f.x * m, oy + f.y * m * K);
       ctx.globalAlpha = Math.min(1, k * 1.6); ctx.drawImage(S.e, -EX, -32);
     }
     view.monde(ctx);

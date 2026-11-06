@@ -19,6 +19,15 @@ import { emprise, clsOf, isGeneral, clamp, wrapAngle, segDist, TAU, hexRgb, rgbS
 import { profil, onQualite, Mesure } from './qualite.js';
 import { Pietinement } from './pietinement.js';
 import { champDeVision, OEIL } from './visibilite.js';
+import { Champ } from '../hex/champ.js';
+import { Troupes3D } from '../hex/troupes3d.js';
+import { K as HEX_K } from '../hex/moteur.js';
+
+// le rendu en plateau d'hexagones 3D (SPEC-HEX), réglé avec la carte (map.js : conquete.carte.style2), sauf « vue du ciel »
+// ou « carte d'époque » ; sans WebGL, la vue de dessus d'origine
+export function plateauVoulu() {
+  try { const v = localStorage.getItem('conquete.carte.style2'); return v !== 'ugar' && v !== 'epoque'; } catch (e) { return true; }
+}
 
 const POLL_MS = 120;
 const CONTACT = new Set(['feu', 'recharge', 'melee', 'charge']);
@@ -82,11 +91,15 @@ export class BattleView {
     root.innerHTML = '';
     // qualité graphique (qualite.js) : densité du canevas, figures, fumée, détail du décor, mémoire des tuiles
     this.q = profil();
+    // le plateau 3D (SPEC-HEX) : son canevas WebGL dessous ; le canevas 2D, transparent, porte la vie, les effets, l'interface
+    this.hex = plateauVoulu();
+    this.k = 1;   // (aplatissement de la vue inclinée : HEX_K une fois le plateau prêt)
+    if (this.hex) { this.cv3 = document.createElement('canvas'); this.cv3.className = 'bt-canvas3d'; this.cv3.setAttribute('aria-hidden', 'true'); root.append(this.cv3); }
     this.cv = document.createElement('canvas');
     this.cv.className = 'bt-canvas';
     root.append(this.cv);
-    // (le sol couvre tout le canevas : pas de transparence à composer)
-    this.ctx = this.cv.getContext('2d', { alpha: false });
+    // (le sol couvre tout le canevas : pas de transparence à composer, sauf sur le plateau)
+    this.ctx = this.cv.getContext('2d', { alpha: this.hex });
     this.mesure = new Mesure();
     this.art = new UnitArt(this.q);
     this.fx = new Effects(this.q);
@@ -109,6 +122,7 @@ export class BattleView {
     this._offQ = onQualite(() => this.setQuality());
     this.controls = new Controls(this);
     this.ui = new BattleUI(this);
+    if (location.hash.includes('dev')) window.__bataille = this;   // (adresse terminée par #dev : la vue, pour les bancs et le débogage)
   }
 
   // ------------------------------------------------------------------ ouverture et fermeture
@@ -131,6 +145,17 @@ export class BattleView {
     this.nBarr = (m.barr || []).length;
     if (this.nBarr) this.decor.walls();
     this.fx.marks = m.marks || [[], []];   // (poudre sans fumée de chaque camp)
+    if (this.hex) {
+      try {
+        this.champ = new Champ(this.cv3, m, this.terrain);
+        this.t3 = new Troupes3D(this.champ, this.troupes, m.year);
+        if (m.bati?.length) this.champ.bati(m.bati);
+        this.k = HEX_K;
+      } catch (e) {
+        console.warn('Plateau 3D indisponible, vue de dessus', e);
+        this.hex = false; this.champ = null; this.t3 = null; this.cv3?.remove();
+      }
+    }
     this.art.setYear(m.year);   // coiffures de l'époque
     this.cam = { x: this.W / 2, y: this.H / 2, z: this.fitZ() };
     return m;
@@ -160,6 +185,7 @@ export class BattleView {
     this.ui.dispose();
     this.terrain?.dispose(); this.sol?.dispose(); this.piet?.dispose();
     this.troupes?.dispose(); this.decor?.dispose();
+    this.t3?.dispose(); this.champ?.dispose(); if (this.cv3) this.cv3.width = this.cv3.height = 0;
     this.art.clear();
     this.fx.dispose();
     // (Safari compte la mémoire des canevas : on la rend tout de suite)
@@ -212,7 +238,7 @@ export class BattleView {
     this.st = st;
     // brèches ouvertes au canon depuis le chargement de la carte : le sol est repeint autour, l'enceinte refaite
     for (const b of (st.breaches || []).slice(this.nBreach || 0)) { this.terrain.addBreach(b); this.sol.invalidate(b[1], b[2], (b[3] || 20) + 40); this.breached = true; }
-    if (this.breached) { this.breached = false; this.decor.walls(); }
+    if (this.breached) { this.breached = false; this.decor.walls(); this.champ?.murs(); }
     this.nBreach = Math.max(this.nBreach || 0, (st.breaches || []).length);
     // barricades dressées ou renversées depuis le dernier relevé : les cases (passage, sol), le décor
     const nBarr = (st.barr || []).length;
@@ -221,10 +247,11 @@ export class BattleView {
       this.nBarr = Math.max(this.nBarr || 0, nBarr);
       const xy = (st.barr_t || []).map(([c, t]) => this.terrain.setCell(c, t));
       this.decor.walls();   // (d'après les cases à jour)
+      this.champ?.barricades();
       for (const [x, y] of xy) { this.sol.invalidate(x, y, 40); this.decor.invalider([x - 30, y - 30, x + 30, y + 30]); }
     }
     // bâtiments touchés, en feu, en ruine depuis le dernier relevé
-    if (st.bati?.length) this.decor.bati(st.bati);
+    if (st.bati?.length) { this.decor.bati(st.bati); this.champ?.bati(st.bati); }
     this.seq = st.seq ?? this.seq;
     this.me = st.me ?? 0;
     this.colors = (st.sides || []).map((s, i) => s.color || (i ? '#3f6fb5' : '#b8352a'));
@@ -297,7 +324,7 @@ export class BattleView {
   stampFx() {
     if (!this.fx.decals.length) return;
     const list = this.fx.decals.splice(0);
-    for (const d of list) if (d.k === 'trou') this.piet.stamp(d.x, d.y, d.r || 2.6);
+    for (const d of list) if (d.k === 'trou') { this.piet.stamp(d.x, d.y, d.r || 2.6); this.champ?.cratere(d.x, d.y, d.r || 2.6); }
     this.sol.stamp(list);
   }
   // tués laissés au sol, dans l'emprise de l'unité (troupes2d.js, kill) : un boulet de ce relevé qui a traversé le
@@ -314,7 +341,7 @@ export class BattleView {
       const a = Math.random() * TAU, r = 0.8 + Math.random() * 2.5;
       out.push({ k: art && Math.random() < 0.5 ? 'roue' : ['chapeau', 'fusil', 'sac'][(Math.random() * 3) | 0], x: d.x + Math.cos(a) * r, y: d.y + Math.sin(a) * r, a: Math.random() * TAU });
     }
-    if (out.length) this.sol.stamp(out);
+    if (out.length) { this.sol.stamp(out); this.t3?.tomber(out); }
   }
   // la boue, envoyée au serveur toutes les 30 s de bataille environ (gardée avec la sauvegarde)
   sendPiet() {
@@ -341,7 +368,7 @@ export class BattleView {
     if (this.terrain) this.clampCam();
   }
   // zoom qui montre tout le champ
-  fitZ() { return Math.min(this.vw / (this.W || 3000), this.vh / (this.H || 2000)) * 0.95; }
+  fitZ() { return Math.min(this.vw / (this.W || 3000), this.vh / ((this.H || 2000) * this.k)) * 0.95; }
   minZ() { return this.fitZ() * 0.7; }
   // mi-distance (la première maquette, maquette-2d.html : les soldats en rangs, les drapeaux, la fumée) : 2,5 px par mètre,
   // un peu moins sur un petit écran (au moins 250 m dans sa plus petite dimension) ; l'ouverture et la caméra qui suit l'action
@@ -368,7 +395,7 @@ export class BattleView {
   // déplace la vue comme si le doigt passait de (px, py) à (sx, sy) : la carte suit le doigt
   panBy(px, py, sx, sy) {
     this.cam.x -= (sx - px) / this.cam.z;
-    this.cam.y -= (sy - py) / this.cam.z;
+    this.cam.y -= (sy - py) / (this.cam.z * this.k);
     this.camAnim = null;
     this.clampCam();
   }
@@ -445,12 +472,13 @@ export class BattleView {
   }
   // la caméra pour les calques (SPEC-2D § 2) : chacun dessine en mètres après view.monde(ctx)
   vue(time, dt) {
-    const { dpr, vw, vh } = this, cam = { ...this.cam }, z = cam.z, ox = vw / 2 - cam.x * z, oy = vh / 2 - cam.y * z;
-    const x0 = cam.x - vw / 2 / z, x1 = cam.x + vw / 2 / z, y0 = cam.y - vh / 2 / z, y1 = cam.y + vh / 2 / z;
+    // (k : la vue inclinée du plateau 3D aplatit le sol ; 1 en vue de dessus)
+    const { dpr, vw, vh, k } = this, cam = { ...this.cam }, z = cam.z, ox = vw / 2 - cam.x * z, oy = vh / 2 - cam.y * z * k;
+    const x0 = cam.x - vw / 2 / z, x1 = cam.x + vw / 2 / z, y0 = cam.y - vh / 2 / z / k, y1 = cam.y + vh / 2 / z / k;
     return {
-      z, dpr, vw, vh, cam, time, dt, q: this.q,
-      monde: ctx => ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy),
-      toScreen: (x, y) => [x * z + ox, y * z + oy, 1],
+      z, dpr, vw, vh, cam, time, dt, q: this.q, k,
+      monde: ctx => ctx.setTransform(dpr * z, 0, 0, dpr * z * k, dpr * ox, dpr * oy),
+      toScreen: (x, y) => [x * z + ox, y * z * k + oy, 1],
       visible: (x, y, m = 0) => x > x0 - m && x < x1 + m && y > y0 - m && y < y1 + m,
     };
   }
@@ -461,6 +489,16 @@ export class BattleView {
     // mesure facultative, poste par poste (this.prof = {} pour l'activer)
     let tm = performance.now();
     const mark = k => { if (!this.prof) return; const n = performance.now(); this.prof[k] = (this.prof[k] || 0) + n - tm; tm = n; };
+    const all = [...this.units.values()].filter(u => u.state !== 'hors');
+    if (this.hex) {
+      // le plateau 3D (SPEC-HEX) : sol, décor, bâtiments et troupes en 3D, dessous ; ici, la vie, les fumées, les feux
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, this.cv.width, this.cv.height);
+      this.t3.image(all, this.colors || [], time, view.visible);
+      this.champ.image(this.cam, this.vw, this.vh, dpr, time);
+      mark('plateau');
+      this.decor.vivant(ctx, view);
+      this.drawLos(ctx, view);
+    } else {
     // 1. le sol ; tuiles encore à peindre : la mesure des images par seconde attend
     this.detailBusy = this.sol.draw(ctx, view) > 0;
     mark('sol');
@@ -468,11 +506,11 @@ export class BattleView {
     this.decor.sous(ctx, view);
     mark('decor');
     // 3. les troupes ; 4. le décor au-dessus d'elles
-    const all = [...this.units.values()].filter(u => u.state !== 'hors');
     this.troupes.draw(ctx, view, all, this.colors || [], time);
     mark('troupes');
     this.decor.dessus(ctx, view, all);
     this.drawLos(ctx, view);
+    }
     mark('dessus');
     // 5. les effets, puis la lumière de l'heure, la pluie, la neige, la nuit
     this.fx.draw(ctx, view);

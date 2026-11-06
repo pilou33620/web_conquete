@@ -21,6 +21,7 @@ M.cathedrale(L, 4, 26, 0); M.halle(L, M.style('47'), 18, 24, 0); M.chateau(L, M.
 M.fortEtoile(L, 60, 26);
 for (let n = 1; n <= 4; n++) { const E = lot(); M.enceinte(E, n, 7, [Math.PI / 2]); for (const k of ['g', 'o']) for (const geo of E[k]) { geo.translate(-8 + n * 17, 0, 46); L[k].push(geo); } }
 M.quai(L, 76, 0, 6, 0, 8, 2);
+for (const [i, a] of [0, Math.PI / 2, Math.PI, -Math.PI / 2].entries()) M.maison(L, M.style('64'), 84 + i * 6, 30, a, { s: 1.4, etages: 2 });
 for (const [i, s] of ['feuillu', 'pin', 'sapin', 'peuplier', 'fruitier'].entries()) M.arbre(L, 72 + i * 3.5, 0, 20, 1, s);
 fige(L, sc.monde);
 const r = () => { sc.caler({ x: 36, y: 26, z: innerWidth / 110 }, innerWidth, innerHeight, devicePixelRatio || 1); sc.rendre(true); };

@@ -521,6 +521,20 @@ export class Troupes2D {
     this.per = Math.max(hommesParFigure(men, this.q.troupes ?? 10000), GROS * 1.25);
     this.fs = clamp(Math.sqrt(this.per / (GROS * 1.25)), 1, 1.4) * GROS;
   }
+  // le plateau 3D (SPEC-HEX, hex/troupes3d.js) : prépare l'image comme draw (horloge, budget de figures) sans rien
+  // dessiner ; rend les régiments à poser
+  preparer(units, time) {
+    this.frame++; this.t = time; this.builds = 0;
+    const list = [];
+    for (const u of units) if (u && u.state !== 'hors' && (u.men || 0) > 0) list.push(u);
+    this.budget(list);
+    return list;
+  }
+  // chaque figure du régiment à l'instant t, posée : cb(x, y, cap, rôle, pose décodée)
+  poses(u, t, cb) {
+    const e = this.entree(u, t);
+    for (let i = 0; i < e.figs.length; i++) { const f = e.figs[i]; poser(u, e, f, i, t, O); cb(O.x, O.y, O.a, f.role, decode(O.code)); }
+  }
   // figures du régiment à l'instant t, dans le monde : [{x, y, a, role, rang}] (tests, kill, muzzles)
   figures(u, t = this.t) {
     const e = this.entree(u, t);
