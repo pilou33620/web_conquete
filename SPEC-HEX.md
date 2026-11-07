@@ -102,13 +102,13 @@ Tous les calques 2D appliquent ce `K` sur l'axe vertical : `map.js` (`toScreen`,
 
 ## Limites connues
 
-- Bois : au-dessus des régiments, les hexagones boisés s'ajourent en fondu (trame de Bayer dans le shader des arbres,
-  `Champ.eclaircir`) ; les arbres ouverts gardent leur ombre pleine, et l'ouverture va par hexagone entier.
-- Débris (chapeaux, fusils, sacs, roues brisées) et cratères en 3D, d'après les pertes (`Champ.debris`) ; ceux d'avant
-  un rechargement ne reviennent pas. Neige : toits, murs, haies, barricades et arbres poudrés, sapins blancs.
+- Bois : au-dessus des régiments, les arbres sur leur emprise s'ajourent un à un en fondu (trame de Bayer dans le
+  shader des arbres et de leur ombre, `Champ.eclaircir`) ; les arbres des cours de ferme et les haies restent pleins.
+- Débris (chapeaux, fusils, sacs, roues brisées) et cratères en 3D, d'après les pertes (`Champ.debris`, vus dans une
+  vraie bataille) ; ceux d'avant un rechargement ne reviennent pas. Neige : toits, murs, haies, barricades et arbres poudrés, sapins blancs.
 - Figurines : jambes des chevaux au pas, au trot et au galop ; sabre tiré à la charge et en mêlée, épée des officiers ;
-  refouloir des servants entre deux coups, pointeur penché, recul au coup. Pas de postillon sur les attelages, pas de
-  geste des bras libres (rênes, tambour).
+  refouloir des servants entre deux coups, pointeur penché, recul au coup ; postillon (chapeau rond, rênes, fouet) sur
+  le cheval de gauche de chaque paire d'attelage ; rênes des cavaliers ; baguettes du tambour qui battent.
 - La boue du piétinement (`battle/pietinement.js`) est posée en texture sur le dessus des hexagones de terre
   (`Champ.boue`) ; elle passe sous les cultures en relief (champs, vignes).
 - Sur un appareil lent, le décor du plateau met quelques secondes à se bâtir à l'ouverture ; la maquette d'une grande
