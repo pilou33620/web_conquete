@@ -216,6 +216,7 @@ export class Plateau {
   decor(liste) {
     const { g } = this, L = lot(), R = g.R, tourn = [];
     for (const t of liste) {
+      t.pays = this.sigPays(t);   // (ce que l'époque a changé à l'hexagone, au moment de son décor : paysage)
       // les étangs : l'eau (assez large pour que deux cases voisines se rejoignent), sa grève, des roseaux
       if (t.etangs) for (const [x, z] of t.etangs) {
         semer(x * 7 | 0, z * 7 | 0);
@@ -225,7 +226,7 @@ export class Plateau {
       }
       if (t.lieu || this.estEau(t)) { if (t.t === 'cote') { semer(t.q, t.r); if (rnd() < 0.2) put(L, sphere(entre(0.8, 1.4), 0), 0x9b958a, t.x + entre(-4, 4), t.top + 0.6, t.z + entre(-4, 4)); } continue; }
       semer(t.q, t.r);
-      const fane = !t.jeu, y = t.top, peu = t.riv ? 0.5 : 1, pays = t.pays = this.sigPays(t);
+      const fane = !t.jeu, y = t.top, peu = t.riv ? 0.5 : 1, pays = t.pays;
       const pres = this.pres(t);
       const rr = (k = 0.62) => {   // un point de l'hexagone, hors de la rivière (cinq essais)
         for (let n = 0; ; n++) { const a = rnd() * Math.PI * 2, l = Math.sqrt(rnd()) * R * k, p = [t.x + Math.cos(a) * l, t.z + Math.sin(a) * l]; if (n >= 4 || !pres || !this.mouille(p[0], p[1], 1)) return p; }
