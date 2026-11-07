@@ -71,7 +71,7 @@ export class Champ {
     this.tuiles();
     const eau = new THREE.Mesh(new THREE.PlaneGeometry(terrain.W / g.f + 600, terrain.H / g.f + 600), new THREE.MeshToonMaterial({ color: 0x3fa6dc, gradientMap: DEGRADE, transparent: true, opacity: 0.72 }));
     eau.rotation.x = -Math.PI / 2; eau.position.set(terrain.W / g.f / 2, EAU_Y, terrain.H / g.f / 2); this.racine.add(eau);
-    this.decor(); this.traces(); this.batiments(); this.murs(); this.barricades();
+    this.decor(); this.traces(); this.batiments(); this.murs(); this.barricades(); this.figerArbres();
     this.ambiance(m.weather, m.season);
   }
   ambiance(meteo, saison) {
@@ -127,20 +127,28 @@ export class Champ {
   }
 
   // ---------------------------------------------------------------- le décor des champs
+  // ce qui s'ouvre au-dessus des troupes (arbres des bois, des vergers et des cours de ferme, boules des haies) : à part,
+  // dans le lot A, chaque pièce marquée de son numéro (aHex) ; fab(A) la bâtit ; figé une fois tout le champ bâti
+  ouvrable(x, z, fab, neige = 0.55) {
+    const { g, A } = this, t = g.sous(x, z);
+    if (!A || !t) return false;   // (un bâtiment refait après coup garde l'arbre déjà planté)
+    const n = A.g.length, no = A.o.length, k = this.arbres.length; this.boise[t.i] = 1;
+    this.arbres.push([x * g.f, z * g.f]); (this.parHex.get(t.i) || this.parHex.set(t.i, []).get(t.i)).push(k);
+    fab(A); this.neiger(A.g.slice(n), neige);
+    for (const geo of [...A.g.slice(n), ...A.o.slice(no)]) geo.setAttribute('aHex', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(k), 1));
+    return true;
+  }
+  // un arbre qui s'ouvre ; l'hiver, les feuillus sont nus (houppiers gris-brun, poudrés par neiger), les sapins blancs
+  planter(x, y, z, s, sorte) {
+    return this.ouvrable(x, z, A => M.arbre(A, x, y, z, s, sorte, this.neige && sorte !== 'sapin' && sorte !== 'pin' ? choix([0x8f8a6e, 0x9a927a]) : undefined), sorte === 'sapin' ? 0.25 : 0.55);
+  }
   decor() {
-    const { g } = this, L = lot(), A = lot(), R = g.R;
+    const { g } = this, L = lot(), R = g.R;
+    this.A = lot();
     this.boise = new Uint8Array(g.liste.length);
-    this.arbres = [];            // [x, y] de chaque arbre, en mètres
-    this.parHex = new Map();     // hexagone → numéros de ses arbres
-    // les arbres des bois et des vergers, à part : chacun marqué de son numéro (aHex), pour s'ouvrir au-dessus des troupes ;
-    // l'hiver, les feuillus sont nus (houppiers gris-brun, poudrés par neiger)
-    const arbre = (t, x, z, s, sorte) => {
-      const n = A.g.length, no = A.o.length, k = this.arbres.length; this.boise[t.i] = 1;
-      this.arbres.push([x * g.f, z * g.f]); (this.parHex.get(t.i) || this.parHex.set(t.i, []).get(t.i)).push(k);
-      M.arbre(A, x, t.top, z, s, sorte, this.neige && sorte !== 'sapin' && sorte !== 'pin' ? choix([0x8f8a6e, 0x9a927a]) : undefined);
-      this.neiger(A.g.slice(n), sorte === 'sapin' ? 0.25 : 0.55);   // (sapins blancs, houppiers poudrés sur le dessus)
-      for (const geo of [...A.g.slice(n), ...A.o.slice(no)]) geo.setAttribute('aHex', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(k), 1));
-    };
+    this.arbres = [];            // [x, y] de chaque pièce qui s'ouvre, en mètres
+    this.parHex = new Map();     // hexagone → numéros de ses pièces
+    const arbre = (t, x, z, s, sorte) => this.planter(x, t.top, z, s, sorte);
     for (const t of g.liste) {
       semer(t.q, t.r);
       const y = t.top, rr = (k = 0.62) => { const a = rnd() * Math.PI * 2, l = Math.sqrt(rnd()) * R * k; return [t.x + Math.cos(a) * l, t.z + Math.sin(a) * l]; };
@@ -154,8 +162,11 @@ export class Champ {
       if (t.t === 'PRE' && rnd() < 0.18) { const [x, z] = rr(); put(L, sphere(0.9, 0), 0x5fa83c, x, y + 0.5, z); }
     }
     this.neiger(L.g); fige(L, this.racine);
-    // un seul maillage pour tous les arbres ; l'ouverture de chaque arbre dans une petite texture (eclaircir) ; son ombre
-    // s'ajoure avec lui (customDepthMaterial : le passage des ombres)
+  }
+  // un seul maillage pour tout ce qui s'ouvre ; l'ouverture de chaque pièce dans une petite texture (eclaircir) ; son
+  // ombre s'ajoure avec elle (customDepthMaterial : le passage des ombres)
+  figerArbres() {
+    const A = this.A; this.A = null;
     const lw = 256, lh = Math.max(1, Math.ceil(this.arbres.length / lw));
     const tex = this.texOuv = new THREE.DataTexture(this.ouv = new Uint8Array(lw * lh), lw, lh, THREE.RedFormat);
     tex.needsUpdate = true;
@@ -200,7 +211,7 @@ export class Champ {
     }
     // haies (boules de verdure), clôtures et murets
     const n0 = L.g.length;
-    for (const hd of this.m.hedges || []) for (const [x, y, z] of g.suivre(hd, 1.6, 0, sol)) { semer(x * 10, z * 10); const b = sphere(entre(0.8, 1.05), 0); b.scale(1, 0.8, 1); put(L, b, choix([0x4f9a37, 0x5fae3e]), x, y + 0.7, z, 0, 0.12); }
+    for (const hd of this.m.hedges || []) for (const [x, y, z] of g.suivre(hd, 1.6, 0, sol)) { semer(x * 10, z * 10); const b = sphere(entre(0.8, 1.05), 0); b.scale(1, 0.8, 1); const c = choix([0x4f9a37, 0x5fae3e]); this.ouvrable(x, z, A => put(A, b, c, x, y + 0.7, z, 0, 0.12)); }
     for (const fe of tr.fences) {
       const p = g.suivre(fe.pts, 3, 0, sol), muret = fe.kind === 'muret';
       for (let i = 0; i < p.length - 1; i++) {
@@ -293,7 +304,7 @@ export class Champ {
     w /= 2;
     if (kind === 'ferme' && etat < 3) {   // la cour de ferme : un fumier, une charrette, un arbre
       put(L, sphere(0.9, 0), 0x6b5a3a, x + Math.cos(ry) * (w + 2), y + 0.3, z - Math.sin(ry) * (w + 2), 0, 0.08);
-      M.arbre(L, x - Math.cos(ry) * (w + 3), y, z + Math.sin(ry) * (w + 3) + 2, 0.8, 'fruitier');
+      this.planter(x - Math.cos(ry) * (w + 3), y, z + Math.sin(ry) * (w + 3) + 2, 0.8, 'fruitier');   // (il s'ouvre au-dessus des troupes)
     }
   }
   moulin(L, x, y, z, ry, s, etat) {
