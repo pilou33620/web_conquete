@@ -15,7 +15,7 @@ import { Effects } from './effets.js';
 import { Controls } from './commandes.js';
 import { BattleUI } from './interface.js';
 import * as camera from './camera.js';
-import { emprise, clsOf, isGeneral, clamp, wrapAngle, segDist, TAU, hexRgb, rgbStr } from './formes.js';
+import { emprise, clsOf, isGeneral, clamp, wrapAngle, segDist, TAU, hexRgb, rgbStr, fraction } from './formes.js';
 import { profil, onQualite, Mesure } from './qualite.js';
 import { Pietinement } from './pietinement.js';
 import { champDeVision, OEIL } from './visibilite.js';
@@ -27,6 +27,12 @@ import { K as HEX_K } from '../hex/moteur.js';
 export function plateauVoulu() { return true; }
 
 const POLL_MS = 120;
+// zones de tir (battle.fire_zones) : voile et trait, du plus dense (bout portant) au plus léger (longue portée)
+const ZONE_TINT = {
+  bout: ['rgba(255,214,120,0.26)', 'rgba(255,236,170,0.85)'], mitraille: ['rgba(240,120,90,0.24)', 'rgba(240,120,90,0.8)'],
+  efficace: ['rgba(255,236,170,0.15)', 'rgba(255,236,170,0.7)'], longue: ['rgba(255,236,170,0.06)', 'rgba(255,236,170,0.45)'],
+};
+const ZONE_NAME = { bout: 'bout portant', mitraille: 'mitraille', efficace: 'efficace', longue: 'longue' };
 const CONTACT = new Set(['feu', 'recharge', 'melee', 'charge']);
 
 // lignes de front, vues de dessus : pour chaque paire de régiments ennemis au contact (l'un feu, recharge, mêlée ou
@@ -592,20 +598,33 @@ export class BattleView {
       ctx.setLineDash([]);
     }
     this.ui.ordres.drawGround(ctx, time);
-    // portées de l'unité sélectionnée (efficace et maximale), dans son champ de tir
-    if (this.sel.size === 1) {
-      const u = this.units.get([...this.sel][0]);
-      if (u && u.range && u.range[0] > 0 && clsOf(u) !== 'general') {
-        const arc = Math.PI / 3;
-        ctx.lineWidth = 1.6;
-        for (const [r, a] of [[u.range[1], 0.35], [u.range[0], 0.7], [u.range[2], 0.6]]) {
-          if (!r) continue;
-          ctx.strokeStyle = r === u.range[2] ? `rgba(240,120,90,${a})` : `rgba(255,236,170,${a})`;
-          ctx.setLineDash(r === u.range[1] ? [8, 6] : []);
-          this.groundPath(ctx, [[u.x, u.y], ...this.arc(u.x, u.y, r, u.dir - arc, u.dir + arc)], true); ctx.stroke();
-          if (r === u.range[0]) { ctx.fillStyle = 'rgba(255,236,170,0.08)'; ctx.fill(); }
-        }
+    // zones de tir des unités sélectionnées, dans leur champ de tir (±60°) : bout portant (ou mitraille), efficace,
+    // longue (battle.fire_zones), l'effet relatif de chacune, et le repère où l'ordre « attaquer » s'arrêtera (stop_d)
+    for (const id of this.sel) {
+      const u = this.units.get(id);
+      if (!u || !u.range || !(u.range[0] > 0) || clsOf(u) === 'general' || u.state === 'hors') continue;
+      // (ennemi inspecté : pas de zones du serveur, ses deux portées seulement)
+      const zones = u.zones || [['efficace', 0, u.range[0]], ['longue', u.range[0], u.range[1]]];
+      const a0 = u.dir - Math.PI / 3, a1 = u.dir + Math.PI / 3;
+      for (const [k, r0, r1, eff] of zones) {
+        const [fill, line] = ZONE_TINT[k] || ZONE_TINT.longue;
+        this.groundPath(ctx, [...this.arc(u.x, u.y, r1, a0, a1), ...(r0 > 0 ? this.arc(u.x, u.y, r0, a1, a0) : [[u.x, u.y]])], true);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = line; ctx.lineWidth = 1.6; ctx.setLineDash(k === 'longue' ? [8, 6] : []);
+        this.groundPath(ctx, this.arc(u.x, u.y, r1, a0, a1)); ctx.stroke();
         ctx.setLineDash([]);
+        // étiquette discrète au milieu de la zone, dans l'axe, quand la zone est assez large à l'écran
+        const c = Math.cos(u.dir), s = Math.sin(u.dir), [px, py] = this.toScreen(u.x + c * r0, u.y + s * r0), [qx, qy] = this.toScreen(u.x + c * r1, u.y + s * r1);
+        if (eff != null && Math.hypot(qx - px, qy - py) > 22) {
+          const rm = r0 > 0 ? (r0 + r1) / 2 : r1 * 0.72, [sx, sy] = this.toScreen(u.x + c * rm, u.y + s * rm), txt = `${ZONE_NAME[k] || k} ×${fraction(eff)}`;
+          ctx.font = '600 12px "EB Garamond", Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(20,16,10,0.55)'; ctx.strokeText(txt, sx, sy);
+          ctx.fillStyle = 'rgba(255,240,200,0.92)'; ctx.fillText(txt, sx, sy);
+        }
+      }
+      if (u.stop_d) {
+        ctx.strokeStyle = 'rgba(255,250,225,0.95)'; ctx.lineWidth = 3.2;
+        this.groundPath(ctx, this.arc(u.x, u.y, u.stop_d, u.dir - 0.22, u.dir + 0.22)); ctx.stroke();
       }
     }
     // zone de ralliement autour de mes états-majors : un voile doré, son contour en pointillés qui tournent

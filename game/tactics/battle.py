@@ -19,6 +19,19 @@ RÈGLES DE COMBAT (équilibre ; les réglages sont les constantes P_*, CHOC, MEL
   effet en 1/distance) ; terrible à bout portant (sous GRAPE_CLOSE = 150 m : ×1,5 à 100 m, ×GRAPE_POINT = 1,6 dès
   90 m). L'ordre dispersé (tirailleurs) prend nettement moins au
   canon (×0,35 au boulet, ×0,55 à la mitraille), un peu moins au fusil (×0,8).
+- Zones de tir (fire_zones, dessinées à la sélection par le client) : bout portant (precision ≥ units.BOUT_K = 0,6 ;
+  la mitraille pour les canons), efficace (jusqu'à la portée efficace), longue (jusqu'à la portée maximale). Fusil
+  1777 : 0-65 m ×1, 65-120 m ×½, 120-230 m ×⅕ ; canon de 12 Gribeauval : mitraille 0-280 m ×1, boulet 280-700 m
+  ×0,38, 700-1 100 m ×0,13. L'infanterie à volonté ne tire qu'à 130 % de la portée efficace (on ménage les
+  cartouches), en salve à 85 % ; sous l'ordre « attaquer », jusqu'à la portée maximale (la zone longue : harcèlement).
+  Pas de bonus à tirer de loin : l'avantage est déjà l'impunité (la cible ne répond pas au-delà de sa propre portée),
+  payé en cartouches (cinq fois moins d'effet par coup) ; un bonus de moral aurait renforcé tout le canon contre
+  l'infanterie, qu'il surclasse toujours en portée.
+- Attaquer (ordre du joueur, sauf cavalerie) : la troupe s'arrête selon son profil d'arrêt (u.stop, ordre 'stop' :
+  'max' à 95 % de la portée maximale, 'bonne' à 90 % de la portée efficace, 'bout' à 90 % du bout portant ;
+  units.stop_dist), puis tient et tire, face à la cible, sans la poursuivre si elle recule (au joueur de redonner
+  l'ordre). L'IA garde son suivi : 90 % de la portée efficace (canons : dès qu'ils portent ; cavalerie : 120 m), et
+  elle suit la cible.
 - Charge : l'élan (charge_v, mètres de course utile ; plein élan en 110 m pour la cavalerie, 45 m pour l'infanterie)
   se gagne en courant et se perd en terrain difficile (bois, rochers, marais, vignes, maisons, murs : BRAKE_*), aux
   haies et en montée ; une charge relancée au contact ou en pleine mêlée n'a pas d'élan. De face, une troupe en ordre
@@ -86,6 +99,7 @@ Ordres (renvoient (ok, msg)) :
                                                           autour de (x, y), front tourné vers dir, dans la zone.
   battle.order(side, ids, kind, **params)                 kind : 'move' (x, y, dir?, run?), 'attack' (target),
         'charge' (target), 'hold', 'fire' (mode='free'|'hold'), 'form' (form), 'rally', 'retreat',
+        'stop' (mode='max'|'bonne'|'bout' : profil d'arrêt des prochains 'attack' donnés par le joueur),
         'bombard' (x, y) : batterie de brèche (canons de l'assaillant, place à enceinte) : elle bat le rempart au plus
         près de (x, y) et ne tire sur l'ennemi qu'à portée de mitraille ;
         'bombard' (x, y) vaut aussi pour une barricade dressée pendant la bataille, de n'importe quel camp ;
@@ -368,6 +382,27 @@ def ball_k(d, e):
     """Le boulet perd vite en justesse avec la distance : plein effet jusqu'au quart de la portée efficace, à peu près
     moitié à la portée efficace, presque rien au bout de la portée maximale."""
     return min(1.0, max(0.12, 1.2 - 0.75 * d / max(1.0, e)))
+
+
+def fire_zones(u):
+    """Zones de tir d'une unité, pour le client (vue de mes unités) : [[clé, de, à (m), effet], ...], clé 'bout' (ou
+    'mitraille' pour les canons), 'efficace', 'longue' ; effet : pertes au milieu de la zone sur une ligne à découvert,
+    rapportées à celles du milieu de la première zone (les mêmes formules que _fire : precision, grape_k, ball_k)."""
+    e, mx, g = U.ranges(u)
+    b = U.bout_portant(u)
+    if u.cls == 'artillerie' and u.type != 'mitrailleuses':
+        def eff(d):
+            if g and d <= g:
+                return P_MITRAILLE * grape_k(d, g) * VUL_GRAPE['ligne']
+            return P_BOULET * ball_k(d, e) * VUL_BALL['ligne']
+        first = 'mitraille'
+    else:
+        def eff(d):
+            return U.precision(u, d)
+        first = 'bout'
+    zs = [z for z in ((first, 0, b), ('efficace', b, e), ('longue', e, mx)) if z[2] > z[1]]
+    ref = eff((zs[0][1] + zs[0][2]) / 2)
+    return [[k, round(a), round(z), round(eff((a + z) / 2) / ref, 3)] for k, a, z in zs]
 
 
 def ang_diff(a, b):
@@ -1129,11 +1164,11 @@ class TacticalBattle:
         us = [u for u in us if u and u.side == side and u.alive and (who == 'any' or u.ctrl == who)]
         if not us:
             return False, "Aucune unité à commander."
-        if kind not in ('fire', 'hold', 'rally', 'shot', 'counter') and any(self.on_rampart(u) for u in us):
+        if kind not in ('fire', 'hold', 'rally', 'shot', 'counter', 'stop') and any(self.on_rampart(u) for u in us):
             us = [u for u in us if not self.on_rampart(u)]   # les canons du rempart ne bougent pas
             if not us:
                 return False, "Les canons du rempart sont fixés sur la muraille : ils tirent, mais ne bougent pas."
-        if self.phase == 'deploiement' and kind not in ('form', 'fire', 'shot', 'counter'):
+        if self.phase == 'deploiement' and kind not in ('form', 'fire', 'shot', 'counter', 'stop'):
             return False, "Déployez d'abord vos troupes, puis lancez la bataille."
         if kind in ('rally', 'retreat'):
             pass
@@ -1188,6 +1223,9 @@ class TacticalBattle:
                     u.form = 'colonne'
                 u.target = tg.id
                 u.order = dict(kind=kind, target=tg.id)
+                if kind == 'attack' and who == 'joueur' and u.cls != 'cavalerie':
+                    # (le joueur : arrêt selon le profil, puis on tient ; l'IA et la cavalerie gardent leur suivi)
+                    u.order['stop'] = u.stop
                 if kind == 'charge':
                     u.state = 'charge'
                     u.charge_v = 0.0
@@ -1214,6 +1252,16 @@ class TacticalBattle:
             if mode == 'volley':
                 return True, "Feu de salve : à mon commandement, à bonne portée."
             return True, "Feu à volonté !" if mode == 'free' else "Cessez le feu."
+        if kind == 'stop':
+            # profil d'arrêt de l'ordre « attaquer » (units.stop_dist) : il vaut pour les prochains ordres d'attaque
+            mode = p.get('mode') or p.get('value') or p.get('v')
+            if mode not in U.STOPS:
+                return False, "Profil d'arrêt inconnu."
+            for u in us:
+                u.stop = mode
+            return True, {'max': "À l'attaque, on s'arrêtera à portée maximale.",
+                          'bonne': "À l'attaque, on s'arrêtera à bonne portée.",
+                          'bout': "À l'attaque, on s'avancera jusqu'au bout portant."}[mode]
         if kind == 'volley_charge':
             # « salve puis baïonnette » : l'infanterie s'approche, lâche une volée à bout portant, puis charge
             tg = self.by_id.get(p.get('target'))
@@ -1455,11 +1503,15 @@ class TacticalBattle:
 
     def _approach(self, u, tg):
         """Se porter à portée de tir de la cible : on s'arrête dès qu'elle est à bonne portée (90 % de la
-        portée efficace : la distance d'ouverture du feu des règlements), sans aller au contact."""
+        portée efficace : la distance d'ouverture du feu des règlements), sans aller au contact. Ordre du joueur :
+        selon son profil d'arrêt (units.stop_dist), sans jamais reculer."""
         e, mx, g = U.ranges(u)
         d = self.dist(u, tg)
         want = e * 0.9
-        if u.cls == 'artillerie':
+        stop = u.order.get('stop') if u.order else None
+        if stop:
+            want = U.stop_dist(u, stop)
+        elif u.cls == 'artillerie':
             # les canons tirent dès qu'ils portent : ils ne s'approchent que hors de portée
             want = mx * 0.95 if d > mx else d
         elif u.cls == 'cavalerie':
@@ -1725,7 +1777,19 @@ class TacticalBattle:
             if tg and tg.alive and tg.state != 'hors' and tg.id in self.seen_by[u.side]:
                 e, mx, _ = U.ranges(u)
                 d = self.dist(u, tg)
-                if (d > e * 0.95 and not u.path) or (u.path and d < e * 0.9):
+                if u.order.get('stop'):
+                    # ordre du joueur : on s'arrête dès la distance du profil (la cible s'est approchée en chemin),
+                    # puis on tient et l'on tire ; pas de poursuite d'une cible qui recule (au joueur de redonner
+                    # l'ordre), mais on lui fait face
+                    if u.path:
+                        if d < U.stop_dist(u, u.order['stop']) and u.busy <= 0:
+                            self._approach(u, tg)
+                    elif d > mx and u.busy <= 0:
+                        b = self.bearing(u, tg)
+                        if ang_diff(u.dir, b) > ARC.get(u.form, 1.0):
+                            delta = (b - u.dir + math.pi) % (2 * math.pi) - math.pi
+                            u.dir += max(-TURN.get(u.form, 0.1) * dt, min(TURN.get(u.form, 0.1) * dt, delta))
+                elif (d > e * 0.95 and not u.path) or (u.path and d < e * 0.9):
                     if u.busy <= 0 and (not u.path or d < e * 0.9):
                         self._approach(u, tg)
             elif u.path == [] and u.order.get('kind') == 'attack':
@@ -3072,6 +3136,10 @@ class TacticalBattle:
                 units[-1]['rempart'] = True   # sur l'enceinte : le client la dessine sans avant-train
             if mine and u.cls == 'general' and u.alive:
                 units[-1]['rally'] = round(self.rally_radius(u))   # (zone où il rallie les fuyards)
+            if mine and u.cls in ('inf', 'cavalerie', 'artillerie') and u.alive:
+                units[-1]['zones'] = fire_zones(u)                 # (zones de tir, dessinées à la sélection)
+                if u.cls != 'cavalerie':
+                    units[-1]['stop_d'] = round(U.stop_dist(u, u.stop))   # (où l'ordre « attaquer » s'arrêtera)
             if mine and u.cls == 'inf' and u.alive:
                 # « Occuper les maisons » (là où elle est), « Barricader » : True, ou pourquoi c'est impossible
                 units[-1]['can_occupy'] = self.why_maisons(u, u.x, u.y)[0] or True

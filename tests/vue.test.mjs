@@ -58,3 +58,8 @@ test('le voile de la ligne de vue a un bord fondu, plein loin du bord', () => {
   const fondu = ligneY.filter(v => v > 0.02 && v < 0.98).length;
   assert.ok(fondu >= 8 && fondu <= 20, `un bord fondu sur environ deux cases (${fondu} pixels)`);
 });
+
+test('l’effet relatif des zones de tir se lit en fraction (fusil 1777 : ×1, ×½, ×⅕ ; canon de 12 : ×1, ×⅖, ×⅛)', async () => {
+  const { fraction } = await import('../web/js/battle/formes.js');
+  assert.deepEqual([1, 0.498, 0.202, 0.38, 0.133, 0.03].map(fraction), ['1', '½', '⅕', '⅖', '⅛', '<⅒']);
+});

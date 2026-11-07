@@ -73,6 +73,45 @@ class OrdresParArme(unittest.TestCase):
         self.assertLess(tb.dist(L, cible), e)            # à bonne portée, il fait feu…
         self.assertGreater(tb.dist(L, cible), e * 0.8)   # … sans aller se coller à l'ennemi
 
+    def test_profils_d_arret_puis_tenir(self):
+        """« Bonne portée » : arrêt entre 85 et 95 % de la portée efficace, puis on tient (pas de poursuite) ; « portée
+        max » : arrêt près de la portée maximale. Le profil survit à la sauvegarde."""
+        from game.tactics import units as U
+        for stop, lo, hi in (('bonne', 0.85, 0.95), ('max', 0.88, 1.0)):
+            with self.subTest(profil=stop):
+                tb, u = bataille()
+                L = u['ligne']
+                cible = ennemi(tb, L)
+                e, mx, _ = U.ranges(L)
+                ref = e if stop == 'bonne' else mx
+                face_a_face(tb, L, cible, e * 2.5)
+                for x in tb.units:   # (les ennemis restent sur place : on ne mesure que l'approche)
+                    if x.side == cible.side:
+                        x.ctrl = 'joueur'
+                self.assertTrue(ordre(tb, L, 'stop', mode=stop)[0])
+                self.assertTrue(ordre(tb, L, 'attack', target=cible.id)[0])
+                self.assertEqual(L.order.get('stop'), stop)
+                avancer(tb, 900, jusqua=lambda: not L.path and L.busy <= 0 and tb.dist(L, cible) < mx * 1.1)
+                d = tb.dist(L, cible)
+                self.assertTrue(lo * ref <= d <= hi * ref, (stop, d, ref))
+                # la cible recule (elle reste en vue) : on ne la poursuit pas
+                pos = (L.x, L.y)
+                face_a_face(tb, L, cible, d + 120)
+                avancer(tb, 120)
+                self.assertLess(math.hypot(L.x - pos[0], L.y - pos[1]), 5)
+                self.assertEqual(kind(L), 'attack')
+                tb2 = type(tb).from_dict(GEO, json.loads(json.dumps(tb.to_dict())))
+                self.assertEqual((tb2.by_id[L.id].stop, tb2.by_id[L.id].order.get('stop')), (stop, stop))
+
+    def test_zones_de_tir_dans_la_vue(self):
+        tb, u = bataille()
+        v = {x['id']: x for x in tb.view()['units']}
+        z = v[u['ligne'].id]['zones']
+        self.assertEqual([k[0] for k in z], ['bout', 'efficace', 'longue'])
+        self.assertEqual(z[-1][2], v[u['ligne'].id]['range'][1])
+        self.assertTrue(z[0][3] > z[1][3] > z[2][3])   # plus loin, moins d'effet
+        self.assertEqual(v[u['artillerie'].id]['zones'][0][0], 'mitraille')
+
     def test_harceler_passe_en_tirailleurs(self):
         tb, u = bataille(dict(legere=1))
         self.assertTrue(ordre(tb, u['legere'], 'harass')[0])

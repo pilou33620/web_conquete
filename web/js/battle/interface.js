@@ -344,7 +344,7 @@ export class BattleUI {
     const foe = this.inspected && v.units.get(this.inspected);
     if (!us.length && !foe) { p.hidden = true; this.panelSig = ''; this.el.classList.remove('has-panel'); return; }
     const deploy = v.st?.phase === 'deploiement';
-    const sig = JSON.stringify([deploy, !!v.st?.accel, foe ? [foe.id, foe.men, foe.state, foe.form, foe._ghost] : us.map(u => [u.id, u.men, Math.round(u.morale), Math.round(u.fat ?? 0), u.ammo, u.state, u.form, u.fire, u.shot, u.prio, u.order, u.state === 'deroute' && !!u.halt, u.can_occupy, u.can_barricade]), v.controls.run, v.controls.targeting]);
+    const sig = JSON.stringify([deploy, !!v.st?.accel, foe ? [foe.id, foe.men, foe.state, foe.form, foe._ghost] : us.map(u => [u.id, u.men, Math.round(u.morale), Math.round(u.fat ?? 0), u.ammo, u.state, u.form, u.fire, u.shot, u.stop, u.prio, u.order, u.state === 'deroute' && !!u.halt, u.can_occupy, u.can_barricade]), v.controls.run, v.controls.targeting]);
     if (sig === this.panelSig && !force) return;
     this.panelSig = sig;
     p.hidden = false;
@@ -441,7 +441,7 @@ export class BattleUI {
       } else c.order('form', { form: d.f });
     }
     else if (a === 'fire') { const m = d.m || (us.every(u => u.fire === 'hold') ? 'free' : 'hold'); for (const u of us) u.fire = m; c.order('fire', { mode: m, fire: m }); this.renderPanel(true); }
-    else if (a === 'shot') { for (const u of us) u.shot = d.m; c.order('shot', { mode: d.m }); this.renderPanel(true); }
+    else if (a === 'shot' || a === 'stop') { for (const u of us) u[a] = d.m; c.order(a, { mode: d.m }); this.renderPanel(true); }
     else if (a === 'counter') { const on = !us.every(u => u.prio === 'artillerie'); for (const u of us) u.prio = on ? 'artillerie' : null; c.order('counter', { mode: on ? 'on' : 'off' }); this.renderPanel(true); }
     else if (a === 'harass') c.order('harass');
     else if (a === 'cover') c.order('cover');
@@ -491,7 +491,7 @@ export class BattleUI {
       case 'desel': if (this.ordres.on()) this.inspect(null); else { v.sel.clear(); this.inspected = null; this.selChanged(); } break;
       case 'form': this.act('form', { f: b.dataset.f }); break;
       case 'rot': this.act('rot', { r: +b.dataset.r }); break;
-      case 'fire': case 'shot': this.act(a, { m: b.dataset.m }); break;
+      case 'fire': case 'shot': case 'stop': this.act(a, { m: b.dataset.m }); break;
       case 'los': v.setLos(!v.losOn); this.renderPanel(true); break;
       case 'abri': {
         const u = v.units.get(this.inspected || [...v.sel][0]);

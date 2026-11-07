@@ -31,7 +31,11 @@ pas. Le moteur (`game/tactics`) garde ses règles ; seuls les ajouts listés en 
 4. **décor au-dessus** (`Decor2D.dessus`) : houppiers des bois (ajourés au-dessus des hommes), flammes des bâtiments ;
 5. **effets** (`Effects.draw`) : fumée, éclairs, boulets, poussière ; puis l'atmosphère (pluie, neige, nuit) ;
 6. **calque d'interface** (inchangé dans l'esprit) : tracés au sol des ordres, portées, anneau du régiment inspecté,
-   lignes de front, objectif, fanions (`fanions.js`), étiquettes.
+   lignes de front, objectif, fanions (`fanions.js`), étiquettes. Portées : à la sélection seulement (une ou plusieurs
+   unités), les zones de tir envoyées par le serveur (`zones` de la vue, `battle.fire_zones`) : bout portant (ou
+   mitraille), efficace, longue, chacune avec son effet relatif (« ×1 », « ×½ », « ×⅕ ») et un repère là où l'ordre
+   « attaquer » s'arrêtera selon le profil d'arrêt de l'unité (`stop_d` ; panneau : portée max, bonne portée, bout
+   portant).
 
 Chaque module dessine **en mètres** : il reçoit `view` et appelle `view.monde(ctx)` pour poser la transformation.
 

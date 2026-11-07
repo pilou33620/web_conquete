@@ -7,7 +7,7 @@
 //    devant une place, l'assaillant bat en brèche le point du rempart qu'il touche.
 // Le moteur (battle.py, TacticalBattle.order) applique ces ordres : fire (mode free|volley|hold), charge,
 // volley_charge, harass, cover, pursue, shot (mode auto|boulet|mitraille), counter (mode on|off), bombard (x, y), hold,
-// rally, retreat.
+// rally, retreat, stop (mode max|bonne|bout : où s'arrête la troupe à qui l'on désigne un ennemi).
 import { clsOf, isLight, isGeneral, isWagon, esc } from './formes.js';
 
 export const ORDER_LABEL = {
@@ -30,13 +30,13 @@ export function arme(u) {
 
 // actions proposées, par arme (ordre d'affichage)
 const ACTIONS = {
-  ligne: ['feu', 'assaut', 'couvert', 'allure', 'tenir'],
-  grenadiers: ['feu', 'assaut', 'couvert', 'allure', 'tenir'],
-  tirailleurs: ['feu', 'harceler', 'couvert', 'allure', 'tenir'],
-  sapeurs: ['feu', 'couvert', 'tenir'],
+  ligne: ['feu', 'arret', 'assaut', 'couvert', 'allure', 'tenir'],
+  grenadiers: ['feu', 'arret', 'assaut', 'couvert', 'allure', 'tenir'],
+  tirailleurs: ['feu', 'arret', 'harceler', 'couvert', 'allure', 'tenir'],
+  sapeurs: ['feu', 'arret', 'couvert', 'tenir'],
   cavalerie: ['charge', 'poursuite', 'allure', 'tenir'],
-  artillerie: ['projectile', 'contrebatterie', 'breche', 'feu', 'tenir'],
-  mitrailleuses: ['contrebatterie', 'feu', 'tenir'],   // (ni boulet ni mitraille : un feu roulant)
+  artillerie: ['projectile', 'arret', 'contrebatterie', 'breche', 'feu', 'tenir'],
+  mitrailleuses: ['arret', 'contrebatterie', 'feu', 'tenir'],   // (ni boulet ni mitraille : un feu roulant)
   etat_major: ['tenir'],
   chariot: [],
 };
@@ -77,6 +77,11 @@ const SHOTS = [['auto', 'Au choix', 'Les pièces choisissent : mitraille à cour
   ['boulet', 'Boulet', 'Boulet sur toute la portée, même à bout portant.'],
   ['mitraille', 'Mitraille', 'On attend l’ennemi à portée de mitraille : terrible à moins de 150 m, nulle au-delà.']];
 
+// profil d'arrêt de l'ordre « attaquer » (battle.py, units.stop_dist) : une fois arrivée, la troupe tient et tire
+const STOPS = [['max', 'Portée max', 'Désignez un ennemi : on s’arrête dès qu’il est à portée maximale et on le harcèle de loin (peu de pertes de part et d’autre, beaucoup de munitions).'],
+  ['bonne', 'Bonne portée', 'Désignez un ennemi : on s’arrête à bonne portée (90 % de la portée efficace), puis on tient et on tire.'],
+  ['bout', 'Bout portant', 'Désignez un ennemi : on s’avance jusqu’au bout portant (la mitraille pour les canons), où chaque coup porte.']];
+
 // HTML des ordres propres à l'arme (data-a : l'interface les relie à act())
 export function ordresHtml(us, ctx) {
   const acts = actionsOf(us);
@@ -89,6 +94,9 @@ export function ordresHtml(us, ctx) {
     switch (a) {
       case 'projectile':
         h += seg('shot', SHOTS, m => all(u => (u.shot || 'auto') === m));
+        break;
+      case 'arret':
+        h += seg('stop', STOPS, m => all(u => (u.stop || 'bonne') === m));
         break;
       case 'feu': {
         const salve = all(u => arme(u) === 'ligne' || arme(u) === 'grenadiers');

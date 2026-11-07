@@ -101,6 +101,9 @@ export function uniform(year, cls, name = '', kind = '') {
 }
 
 // nombre d'étoiles d'expérience (0 à 5)
+// effet relatif d'une zone de tir (battle.fire_zones) en fraction lisible : 0,5 → '½', 0,2 → '⅕'
+const FRAC = [[1, '1'], [3 / 4, '¾'], [2 / 3, '⅔'], [1 / 2, '½'], [2 / 5, '⅖'], [1 / 3, '⅓'], [1 / 4, '¼'], [1 / 5, '⅕'], [1 / 6, '⅙'], [1 / 8, '⅛'], [1 / 10, '⅒']];
+export const fraction = k => k < 0.07 ? '<⅒' : FRAC.reduce((b, f) => Math.abs(Math.log(f[0] / k)) < Math.abs(Math.log(b[0] / k)) ? f : b)[1];
 export const stars = xp => Math.max(0, Math.min(5, Math.round((xp || 0) / 20)));
 // nombres à la française
 export const fmt = n => (Math.round(n) || 0).toLocaleString('fr-FR').replace(/^-/, '−');

@@ -4,7 +4,8 @@ Chiffres de référence (contrat, § 2 et § 4) :
 - dotation d'un plein de munitions : infanterie 60 cartouches par homme, artillerie 120 coups par pièce
   (8 pièces par batterie), cavalerie 20 (pistolets, carabines) ;
 - portées (efficace / maximale / mitraille), dérivées du type et de la génération d'armes `arm` : ranges(reg) ;
-- justesse du feu : precision(u, d), moitié à D50 ;
+- justesse du feu : precision(u, d), moitié à D50 ; bout portant (precision ≥ BOUT_K) : bout_portant(u) ;
+- profils d'arrêt de l'ordre « attaquer » du joueur (u.stop) : stop_dist(u, stop) ;
 - vitesses au pas sur prairie (m/s de bataille) : infanterie 1,2, légère 1,4, cavalerie 2,5 (galop 7),
   artillerie attelée 1,5 ;
 - cadence d'un feu soutenu : une salve par minute environ pour le fusil à silex, une volée toutes les 80 à 100 s pour
@@ -95,15 +96,42 @@ def ranges(reg):
     return e, m, None
 
 
+def d50(u):
+    """Distance où la justesse du feu tombe de moitié (m)."""
+    if u.type == 'mitrailleuses':
+        return MIT_D50
+    if u.cls == 'inf':
+        return INF_D50[max(0, min(u.arm, len(INF_D50) - 1))]
+    return CAV_D50
+
+
 def precision(u, d):
     """Part des coups qui portent à d mètres, rapportée au bout portant (1 à 0 m, moitié à D50)."""
-    if u.type == 'mitrailleuses':
-        h = MIT_D50
-    elif u.cls == 'inf':
-        h = INF_D50[max(0, min(u.arm, len(INF_D50) - 1))]
-    else:
-        h = CAV_D50
-    return 1 / (1 + (d / h) ** 2)
+    return 1 / (1 + (d / d50(u)) ** 2)
+
+
+BOUT_K = 0.6     # « bout portant » : là où precision() vaut encore 0,6 (65 m au fusil 1777) ; canons : la mitraille
+# profils d'arrêt de l'ordre « attaquer » donné par le joueur (u.stop) : portée max, bonne portée, bout portant
+STOPS = ('max', 'bonne', 'bout')
+
+
+def bout_portant(u):
+    """Bout portant (m) : precision ≥ BOUT_K, jamais au-delà de la portée efficace ; la mitraille des canons."""
+    e, mx, g = ranges(u)
+    if u.cls == 'artillerie' and u.type != 'mitrailleuses':
+        return g or 0
+    return min(e, d50(u) * math.sqrt(1 / BOUT_K - 1))
+
+
+def stop_dist(u, stop):
+    """Où s'arrête une troupe qui attaque selon son profil : 'max' (95 % de la portée maximale : harcèlement de loin),
+    'bonne' (90 % de la portée efficace : l'ouverture du feu des règlements), 'bout' (90 % du bout portant)."""
+    e, mx, g = ranges(u)
+    if stop == 'max':
+        return mx * 0.95
+    if stop == 'bout':
+        return bout_portant(u) * 0.9
+    return e * 0.9
 
 
 def reload_time(u):
@@ -155,7 +183,7 @@ SLOTS = ('id', 'side', 'owner', 'type', 'cls', 'light', 'name', 'men', 'men0', '
          'morale0', 'fat', 'ammo', 'ammo0', 'arm', 'x', 'y', 'dir', 'form', 'state', 'order', 'seen', 'target',
          'path', 'goal', 'reload', 'busy', 'next_form', 'fire_mode', 'fired_t', 'melee_with', 'rally_t', 'lost',
          'killed', 'captured', 'fought', 'army', 'src', 'nid', 'gen', 'ctrl', 'charge_v', 'spotted_t', 'stuck',
-         'rout_seen', 'hit_t', 'wounded', 'group', 'gname', 'halt', 'shot', 'prio', 'still_t')
+         'rout_seen', 'hit_t', 'wounded', 'group', 'gname', 'halt', 'shot', 'prio', 'still_t', 'stop')
 
 
 class Unit:
@@ -203,6 +231,7 @@ class Unit:
         self.halt = False      # en déroute : les fuyards se sont arrêtés pour se reformer (près du général, au calme)
         self.shot = 'auto'     # artillerie : projectile ordonné ('auto', 'boulet', 'mitraille')
         self.prio = None       # artillerie : cible de prédilection ('artillerie' : contre-batterie)
+        self.stop = 'bonne'    # profil d'arrêt de l'ordre « attaquer » du joueur (STOPS, stop_dist)
         for k, v in kw.items():
             setattr(self, k, v)
 
@@ -250,6 +279,7 @@ class Unit:
         if mine:
             out['seen'] = bool(seen_by_foe)
             out['fire'] = self.fire_mode
+            out['stop'] = self.stop
             if self.cls == 'artillerie':
                 out['shot'] = self.shot
                 out['prio'] = self.prio
