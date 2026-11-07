@@ -1782,7 +1782,14 @@ class TacticalBattle:
                     # puis on tient et l'on tire ; pas de poursuite d'une cible qui recule (au joueur de redonner
                     # l'ordre), mais on lui fait face
                     if u.path:
-                        if d < U.stop_dist(u, u.order['stop']) and u.busy <= 0:
+                        want = U.stop_dist(u, u.order['stop'])
+                        if d < want and u.busy <= 0:
+                            self._approach(u, tg)
+                        elif u.goal and u.busy <= 0 and self.clock - u.order.get('t_re', -99) > 10 and \
+                                math.hypot(u.goal[0] - tg.x, u.goal[1] - tg.y) > want * 1.1:
+                            # la cible a reculé pendant la marche : on corrige l'approche (toutes les 10 s au plus)
+                            # pour arriver à portée ; une fois arrivé, plus de poursuite
+                            u.order['t_re'] = self.clock
                             self._approach(u, tg)
                     elif d > mx and u.busy <= 0:
                         b = self.bearing(u, tg)

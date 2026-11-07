@@ -127,11 +127,10 @@ def stop_dist(u, stop):
     """Où s'arrête une troupe qui attaque selon son profil : 'max' (95 % de la portée maximale : harcèlement de loin),
     'bonne' (90 % de la portée efficace : l'ouverture du feu des règlements), 'bout' (90 % du bout portant)."""
     e, mx, g = ranges(u)
-    if stop == 'max':
-        return mx * 0.95
-    if stop == 'bout':
-        return bout_portant(u) * 0.9
-    return e * 0.9
+    want = mx * 0.95 if stop == 'max' else bout_portant(u) * 0.9 if stop == 'bout' else e * 0.9
+    if getattr(u, 'fire_mode', None) == 'volley':
+        want = min(want, e * 0.8)   # (la salve ne part qu'à 85 % de la portée efficace : battle.VOLLEY_RANGE)
+    return want
 
 
 def reload_time(u):

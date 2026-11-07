@@ -103,6 +103,24 @@ class OrdresParArme(unittest.TestCase):
                 tb2 = type(tb).from_dict(GEO, json.loads(json.dumps(tb.to_dict())))
                 self.assertEqual((tb2.by_id[L.id].stop, tb2.by_id[L.id].order.get('stop')), (stop, stop))
 
+    def test_la_cible_recule_pendant_l_approche(self):
+        """L'ordre du joueur corrige sa marche si la cible recule avant l'arrivée : il arrive à portée, pas avant."""
+        from game.tactics import units as U
+        tb, u = bataille()
+        L = u['ligne']
+        cible = ennemi(tb, L)
+        e = U.ranges(L)[0]
+        face_a_face(tb, L, cible, e * 3)
+        for x in tb.units:
+            if x.side == cible.side:
+                x.ctrl = 'joueur'
+        self.assertTrue(ordre(tb, L, 'attack', target=cible.id)[0])
+        avancer(tb, 30)
+        self.assertTrue(L.path)
+        face_a_face(tb, L, cible, tb.dist(L, cible) + 200)
+        avancer(tb, 1200, jusqua=lambda: not L.path and L.busy <= 0)
+        self.assertTrue(0.8 * e <= tb.dist(L, cible) <= e, (tb.dist(L, cible), e))
+
     def test_zones_de_tir_dans_la_vue(self):
         tb, u = bataille()
         v = {x['id']: x for x in tb.view()['units']}
