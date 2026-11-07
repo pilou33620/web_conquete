@@ -459,8 +459,8 @@ export class Plateau {
         bat(hx, hz, -a + Math.PI / 2 + entre(-0.3, 0.3), { s: 0.85, etages: rnd() < 0.2 ? 2 : 1, toitCol: ruine() ? brule : undefined });
       }
       M.eglise(L, st, ox, oz, rnd() * 6, 0.65, n.dept);
-      for (let k = 0; k < 3; k++) { const a = rnd() * 6.3, r = entre(6.5, 8.5), ax = ox + Math.cos(a) * r, az = oz + Math.sin(a) * r; if (sec(ax, az, 1)) M.arbre(L, ax, 0, az, 0.7, 'fruitier'); }
-      if (rnd() < 0.35) { const mx = entre(-7, 7), mz = entre(-7, 7); if (sec(mx, mz, 1.5)) M.moulin(L, mx, mz, rnd() * 6, 0.75, rnd(), L.tourn); }
+      for (let k = 0; k < 3; k++) { const a = rnd() * 6.3, r = entre(6.5, 8.5), ax = ox + Math.cos(a) * r, az = oz + Math.sin(a) * r; if (sec(ax, az, 1) && !surRue(t0.x + ax, t0.z + az)) M.arbre(L, ax, 0, az, 0.7, 'fruitier'); }
+      if (rnd() < 0.35) { const mx = entre(-7, 7), mz = entre(-7, 7); if (sec(mx, mz, 1.5) && !surRue(t0.x + mx, t0.z + mz)) M.moulin(L, mx, mz, rnd() * 6, 0.75, rnd(), L.tourn); }
       if (f) M.enceinte(L, Math.min(f, 2), 7.5, angles);
     } else {
       // la ville : place au centre (église ou cathédrale, halle, fontaine), rues vers les routes, maisons serrées au cœur,
