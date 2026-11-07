@@ -45,7 +45,7 @@ def units_for(era, garrison=False):
     out = []
     for typ in R.UNIT_ORDER:
         u = R.UNITS[typ]
-        if u['req'] and u['req'] not in techs:
+        if u['req'] and u['req'] not in techs or R.hors_service(typ, year):
             continue
         if u['garrison_only'] and (not garrison or year < 1789):
             continue

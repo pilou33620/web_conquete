@@ -396,6 +396,10 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   - **Sapeurs du génie** : peu combatifs, mais ils accélèrent les sièges et jettent des ponts (plus d'attente au bac).
   - **Garde nationale** : milice bon marché, levée même dans un village ; elle ne quitte pas sa ville mais la défend
     avec ardeur (+30 %).
+  - **Régiments étrangers**, à leur époque : régiment suisse (jusqu'en 1792, puis de 1815 à 1830), brigade irlandaise
+    et Royal-Allemand (cavalerie) jusqu'en 1791, Légion étrangère dès 1831. Loués au chef-lieu ou dans un port contre
+    des livres seulement (ni recrues ni armes), vétérans, solde double, trois au plus par camp ; sans solde, ils
+    désertent trois fois plus vite.
   - **Mitrailleuses** (batterie de six pièces de Reffye, après la technologie « Mitrailleuse de Reffye », 1866) : un feu
     roulant à 1 200 m (2 000 au plus), redoutable contre l'infanterie à découvert, faible contre les canons et sans
     effet sur les remparts ; ses munitions fondent vite. Armement fixe : elle ne se réarme pas.
@@ -714,6 +718,16 @@ Tout marche seul avec les réglages par défaut ; on intervient quand on veut, d
   le brouillard cache les armées, la canicule épuise les colonnes. Crues de printemps sur la Garonne et la Dordogne.
 
 ### Économie, technologies, diplomatie
+- **Douane** (panneau Commerce) : un tarif à vos frontières, libre, modéré (10 %), élevé (20 %) ou prohibitif (35 %),
+  prélève sur le commerce avec vos voisins ; vos partenaires commerciaux y gagnent moins et vos voisins vous en
+  veulent un peu chaque mois. Plus le tarif est haut, plus la contrebande en détourne (et plus les contrebandiers
+  font parler d'eux) ; des douaniers, payés par place frontalière, la réduisent de moitié.
+- **Familles** : chaque camp est mené par une maison (gouverneur, puis président du directoire, puis préfet). Son
+  chef a un trait (bâtisseur, économe, belliqueux, diplomate, savant, populaire), vieillit et meurt ; l'aîné de ses
+  héritiers lui succède. Sans héritier, une **crise de succession** : un cousin, un notable élu, ou le prétendant
+  d'une maison alliée par mariage (le camp devient son vassal ; le refuser peut lui valoir la guerre), et six mois de
+  désordre. Un **mariage** (Diplomatie, dot au choix) rapproche deux camps, facilite l'alliance et ouvre un droit de
+  succession ; faire la guerre à une maison alliée par mariage trouble l'ordre public.
 - Ressources : livres, vivres, fer, bois, armes, outils, recrues. Les ateliers transforment fer et bois en **armes**
   (pour lever les régiments) ou en **outils** (jusqu'à +30 % sur toute la production, +45 % avec la technologie).
 - **Minimum garanti** : tant qu'un département tient son chef-lieu, il produit au moins 20 livres, 16 vivres, 9 fer,

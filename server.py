@@ -228,6 +228,10 @@ class App:
                 return self._r(g.spy(p, self._node(body['node']), body.get('value')))
             if c == 'tax':
                 return self._r(g.set_tax(p, body.get('value', 0.5)))
+            if c == 'tarif':   # douane (SPEC-MERCENAIRES.md)
+                return self._r(g.set_tarif(p, body.get('value')))
+            if c == 'douaniers':
+                return self._r(g.set_douaniers(p, body.get('value')))
             if c == 'form':
                 return self._r(g.form_army(p, self._node(body['node']), body.get('regs', []), body.get('into')))
             if c == 'take':

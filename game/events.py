@@ -17,6 +17,7 @@ Effets (dictionnaire fx) :
   rel       points                           ce que les autres camps pensent de vous
   regs      [[type, nombre]]                 régiments offerts, en garnison au chef-lieu
   research  1                                recherches en cours avancées de moitié
+  chef, vassal, refus                        crise de succession (game/familles.py)
 """
 import datetime
 
@@ -192,8 +193,21 @@ HIST_BY_ID = {e['id']: e for e in HIST}
 
 
 # ------------------------------------------------------------------ événements aléatoires
+
+def _min1(s):   # (minuscule à l'initiale seulement : les noms propres du libellé restent)
+    return s[:1].lower() + s[1:]
+
 def _has_port(g, code):
     return any('port' in g.geo.nodes[n['id']]['spec'] for n in g.owned_nodes(code))
+
+
+def _contrebande_ok(g, code):
+    return _has_port(g, code) or g.factions[code]['tarif'] > 0
+
+
+def _contrebande_w(g, code):
+    """Une douane chère attire les contrebandiers (SPEC-MERCENAIRES.md) : 2 en tarif libre, jusqu'à 7 environ."""
+    return 2 * (1 + 5 * g.contrebande(code))
 
 
 RANDOM = [
@@ -210,7 +224,7 @@ RANDOM = [
          text="Un savant renommé propose de s'installer à {ville} si on le pensionne.",
          choices=[dict(label='Le pensionner', fx=dict(res=dict(livres=-250), research=1), ai=2),
                   dict(label='Le laisser partir', fx=dict(), ai=1)]),
-    dict(id='contrebande', w=2, cond=_has_port, title='Des contrebandiers',
+    dict(id='contrebande', w=_contrebande_w, cond=_contrebande_ok, title='Des contrebandiers',
          text="Des contrebandiers débarquent du tabac et des toiles anglaises près {de_ville}.",
          choices=[dict(label='Fermer les yeux contre une part', fx=dict(res=dict(livres=250), stab=-0.03), ai=2),
                   dict(label='Saisir la marchandise', fx=dict(res=dict(livres=100), stab=0.02), ai=1)]),
@@ -270,6 +284,9 @@ def describe(g, code, fx, town=None):
     if fx.get('ville'):
         from . import cities as CT   # événements locaux (game/cities.py)
         out += CT.describe_local(g, fx['ville'])
+    if fx.get('chef'):
+        from . import familles as FM   # crise de succession (game/familles.py)
+        out += FM.decrire(g, fx)
     return out or ['aucun effet']
 
 
@@ -333,6 +350,9 @@ def apply(g, code, fx, town=None):
     if fx.get('ville'):
         from . import cities as CT
         CT.apply_local(g, code, fx['ville'])
+    if fx.get('chef'):
+        from . import familles as FM
+        FM.appliquer(g, code, fx)
     g.recompute_mods(code)
     g._dirty_income = True
 
@@ -369,7 +389,7 @@ def tick(g, d):
         season = g.season()
         pool = [e for e in RANDOM if season in e.get('season', (season,)) and (not e.get('cond') or e['cond'](g, code))]
         if pool:
-            fire(g, code, g.rng.choices(pool, [e['w'] for e in pool])[0], 'rand')
+            fire(g, code, g.rng.choices(pool, [e['w'](g, code) if callable(e['w']) else e['w'] for e in pool])[0], 'rand')
 
 
 # événements qu'une technologie atténue (SPEC-TECH.md) : la clé d'effet du camp (−0,5 : moitié moins)
@@ -424,7 +444,7 @@ def fire(g, code, ev, kind):
         i = g.rng.choices(ok, [choices[j].get('ai', 1) for j in ok])[0]
         apply(g, code, choices[i]['fx'], town)
         if kind == 'hist' and ev['who'] is not ALL:
-            g.log('evenement', f"{title} : {g.fname(code)} choisit « {choices[i]['label'].lower()} ».", gn['x'], gn['y'], who=code)
+            g.log('evenement', f"{title} : {g.fname(code)} choisit « {_min1(choices[i]['label'])} ».", gn['x'], gn['y'], who=code)
         return
     g.pending_ev.append(dict(id=g.nid('e'), ev=ev['id'], kind=kind, title=title, text=text, town=town,
                              base=base_txt, until=TT.deadline(g, ANSWER_TOURS), date=g.date_str(),
@@ -446,9 +466,9 @@ def resolve(g, pid, choice, auto=False):
         return False, "Vous n'en avez pas les moyens."
     g.pending_ev.remove(p)
     apply(g, g.player, c['fx'], p['town'])
-    g.log('evenement', f"{p['title']} : {'faute de décision, ' if auto else ''}{c['label'].lower()}"
+    g.log('evenement', f"{p['title']} : {'faute de décision, ' if auto else ''}{_min1(c['label'])}"
                        f" ({', '.join(c['desc'])}).", important=True)
-    return True, f"{p['title']} : {c['label'].lower()}."
+    return True, f"{p['title']} : {_min1(c['label'])}."
 
 
 def expire(g):

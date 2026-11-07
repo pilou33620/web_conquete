@@ -94,10 +94,30 @@ UNITS = {
                   desc='Milice citoyenne bon marché, levée même dans un village : elle ne quitte pas sa ville, '
                        'mais la défend avec ardeur (+30 %).'),
 }
-UNIT_ORDER = ['ligne', 'legere', 'grenadiers', 'chasseurs', 'cavalerie', 'artillerie', 'mitrailleuses', 'sapeurs', 'garde']
-UNIT_CLS = {'cavalerie': 'cavalerie', 'artillerie': 'artillerie', 'mitrailleuses': 'artillerie'}   # tout le reste est de l'infanterie
+# régiments étrangers (SPEC-MERCENAIRES.md) : loués contre des livres seulement (prime et solde doubles de la ligne),
+# vétérans, prêts deux fois plus vite ; levés au chef-lieu ou dans un port, MERC_MAX par camp
+MERC_MAX = 2
+
+
+def _merc(base, name, short, desc):
+    return dict(UNITS[base], name=name, short=short, desc=desc, cost=dict(livres=2 * UNITS['ligne']['cost']['livres']),
+                upkeep_l=2 * UNITS['ligne']['upkeep_l'], days=UNITS[base]['days'] // 2, xp0=30)
+
+
+UNITS.update(
+    suisses=_merc('ligne', 'Régiment suisse', 'Suisses', 'Infanterie suisse au service du roi : solide et fidèle, si la solde suit.'),
+    irlandais=_merc('ligne', 'Brigade irlandaise', 'Irlandais', 'Jacobites exilés, vétérans des guerres du roi : ardents à l’assaut.'),
+    royal_allemand=_merc('cavalerie', 'Royal-Allemand (cavalerie)', 'Royal-All.', 'Cavaliers allemands au service de France : '
+                         'une cavalerie aguerrie, louée à prix d’or.'),
+    legion=_merc('ligne', 'Légion étrangère', 'Légion', 'Volontaires étrangers sous le drapeau français : une troupe dure, '
+                 'qui marche partout.'))
+MERCS = ('suisses', 'irlandais', 'royal_allemand', 'legion')
+UNIT_ORDER = ['ligne', 'legere', 'grenadiers', 'chasseurs', 'cavalerie', 'artillerie', 'mitrailleuses', 'sapeurs', 'garde', *MERCS]
+UNIT_CLS = {'cavalerie': 'cavalerie', 'artillerie': 'artillerie', 'mitrailleuses': 'artillerie',
+            'royal_allemand': 'cavalerie'}   # tout le reste est de l'infanterie
 LIGHT_UNITS = ('legere', 'chasseurs')
-READY = {'grenadiers': 'prêts', 'chasseurs': 'prêts', 'sapeurs': 'prêts', 'mitrailleuses': 'prêtes'}   # les autres noms sont féminins
+READY = {'grenadiers': 'prêts', 'chasseurs': 'prêts', 'sapeurs': 'prêts', 'mitrailleuses': 'prêtes', 'suisses': 'prêt',
+         'royal_allemand': 'prêt'}   # les autres noms sont féminins
 for _k, _u in UNITS.items():
     _u.setdefault('ready', READY.get(_k, 'prête'))
     _u.setdefault('cls', UNIT_CLS.get(_k, 'inf'))
@@ -675,7 +695,16 @@ TECH_YEAR = dict(
     syndicats=1884, vapeur_fluviale=1818, ciment=1817, fresnel=1823, betterave=1812, dombasle=1820, moissonneuses=1855,
     bouillie=1885)
 # unités apparues en cours de route (la milice bourgeoise et les miquelets existent dès 1700 sous d'autres noms)
-UNIT_YEAR = dict()
+UNIT_YEAR = dict(legion=1831)
+# et disparues : les régiments étrangers du roi, licenciés en 1791-1792 ; les Suisses, revenus en 1815, renvoyés en 1830
+UNIT_UNTIL = dict(suisses=1830, irlandais=1791, royal_allemand=1791)
+UNIT_GAP = dict(suisses=(1793, 1814))
+
+
+def hors_service(typ, y):
+    """Ce type de troupe n'existe pas cette année-là (pas encore, ou plus)."""
+    gap = UNIT_GAP.get(typ)
+    return UNIT_YEAR.get(typ, 0) > y or UNIT_UNTIL.get(typ, 9999) < y or bool(gap and gap[0] <= y <= gap[1])
 
 # ------------------------------------------------------------------ voies ferrées (SPEC-TECH.md, phase 2a)
 # Lignes historiques, vérifiées le 19/10/2026 sur les articles « Ligne de… » de Wikipédia : (nom, villes de la carte
@@ -824,6 +853,35 @@ SURNAMES = ['Labat', 'Dufau', 'Lacoste', 'Darricau', 'Etcheverry', 'Bordenave', 
             'Faget', 'Lartigue', 'Daguerre', 'Barrère', 'Courrèges', 'Lacaze', 'Saint-Martin', 'Doumecq', 'Laborde', 'Pédelaborde',
             'Mauriac', 'Lafon', 'Delpech', 'Marty', 'Roumégoux', 'Sudre', 'Bouyssou', 'Vialle', 'Escande', 'Fabre']
 
+# ------------------------------------------------------------------ familles dirigeantes (game/familles.py)
+MAISON_NOMS = {
+    '33': ['de Ségur', 'de Pontac', 'de Lur-Saluces', 'Pichon', 'Ducos', 'Boyer-Fonfrède', 'Nairac', 'Gradis'],
+    '24': ['de Bourdeille', 'de Salignac', 'de Beynac', 'de Hautefort', 'de Biron', 'Maine de Biran', 'Lagrange-Chancel', 'Fournier'],
+    '40': ['de Borda', 'de Poyanne', 'Batbedat', 'Lamarque', 'Dufau', 'de Caupenne', 'Basquiat', 'Lalanne'],
+    '47': ['de Lacépède', 'de Durfort', 'de Fumel', 'Lacuée', 'de Raymond', 'Boudon', 'de Nort', 'Lafont'],
+    '64': ['de Gramont', 'Etcheverry', 'de Gassion', 'de Navailles', 'Harispe', 'Garat', 'd’Abbadie', 'Larralde'],
+}
+PRENOMS = ['Jean', 'Pierre', 'Bernard', 'Arnaud', 'Guillaume', 'Raymond', 'Jacques', 'Joseph', 'Gaston', 'Henri', 'Louis',
+           'Antoine', 'Étienne', 'Bertrand', 'Armand', 'François']
+PRENOMS_F = ['Marie', 'Jeanne', 'Catherine', 'Marguerite', 'Anne', 'Louise', 'Madeleine', 'Isabeau', 'Françoise', 'Thérèse']
+MAISON_TITRES = [(0, 'Gouverneur'), (1790, 'Président du directoire'), (1800, 'Préfet')]   # (dès l'année, titre du chef)
+# traits du chef : leurs effets passent par les modificateurs du camp, comme ceux des technologies (Game.recompute_mods)
+MAISON_TRAITS = {
+    'batisseur': dict(label='Bâtisseur', desc='Constructions −10 % de coût et de délai.', fx=dict(build_cost=-0.10)),
+    'econome': dict(label='Économe', desc='Soldes et rations −5 %.', fx=dict(upkeep=-0.05)),
+    'belliqueux': dict(label='Belliqueux', desc='Recrues +10 %, propositions moins bien reçues.', fx=dict(recrues=0.10, diplo=-10)),
+    'diplomate': dict(label='Diplomate', desc='Propositions mieux reçues, alliances plus faciles.', fx=dict(diplo=15)),
+    'savant': dict(label='Savant', desc='Recherche +8 %.', fx=dict(research_speed=0.08)),
+    'populaire': dict(label='Populaire', desc='Ordre public +5 %.', fx=dict(order=0.05)),
+}
+MARIAGE_REL = 15          # relations gagnées des deux côtés par un mariage (25 au départ : banc de 1700, 1er/11/2026)
+MARIAGE_AGE = 16   # pas de mariage avant cet âge (un chef enfant attend)
+NAISSANCE_P = 0.25        # chance par an d'un enfant (chef marié de moins de NAISSANCE_AGE ans)…
+NAISSANCE_AGE = 45
+HERITIERS_MAX = 4         # … jusqu'à tant d'héritiers
+CRISE_JOURS = 180         # désordre d'une crise de succession (ordre public −0,1 dans tout le camp)
+PARJURE_JOURS = 120       # guerre déclarée à une maison alliée par mariage (ordre public −0,1)
+
 # ------------------------------------------------------------------ tactique
 FORMATIONS = {
     'ligne': dict(label='Ligne', desc='Infanterie déployée : feu nourri (+20 %), mais vulnérable aux charges de cavalerie.'),
@@ -879,6 +937,11 @@ RIVER_FIRE_KM = 3.0  # portée des canons sur les berges
 QUAI_LIVRES = 0.5  # commerce fluvial d'un quai (par jour)
 BLOCKADE_K = 0.35  # revenus portuaires et fluviaux sous blocus
 TAX_LABELS = [(0.15, 'Très légers'), (0.4, 'Légers'), (0.6, 'Normaux'), (0.85, 'Lourds'), (1.01, 'Écrasants')]
+# douane (SPEC-MERCENAIRES.md) : tarif aux frontières de chaque camp (nom, taux)
+TARIFS = [('Libre', 0.0), ('Modéré', 0.10), ('Élevé', 0.20), ('Prohibitif', 0.35)]
+DOUANE_VOL = 0.06      # part du revenu brut d'un voisin que prend le commerce frontalier (comme un accord)
+DOUANIERS_L = 0.15     # solde des douaniers : livres par jour et par place frontalière
+DOUANE_REL = 0.25      # relations des voisins : tant par niveau de tarif et par mois
 
 
 def tax_label(v):

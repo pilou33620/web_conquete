@@ -6,6 +6,7 @@ from . import rules as R
 from . import cities as CT
 from . import rails as RL
 from . import diplomacy as D
+from . import familles as FM
 from . import army_actions as AA
 
 AI_AHEAD = 5   # ans d'avance au plus sur l'histoire pour une recherche des IA (SPEC-ARBRE.md)
@@ -296,6 +297,9 @@ class AI:
             tax = 0.62
         if abs(tax - f.get('tax', 0.5)) > 0.01:
             g.set_tax(code, tax)
+        if g.t >= getattr(self, 'tarif_clock', 0):
+            self.tarif_clock = g.t + 30
+            self.douane()
         if r['livres'] < 120:
             for res, keep in (('vivres', 500), ('bois', 350), ('fer', 300)):
                 if r[res] > keep + 50:
@@ -347,6 +351,21 @@ class AI:
         """Revenu brut en livres ramené à des impôts normaux (0,5), pour ne pas mesurer le trésor à l'aune de ses propres allègements."""
         f = self.f
         return f.get('_gross_livres', 20) / (0.6 + 0.8 * f.get('tax', 0.5))   # voir Game.compute_income
+
+    def douane(self):
+        """Chaque mois (SPEC-MERCENAIRES.md) : un camp marchand garde un tarif bas, un camp pauvre ou en guerre le monte ;
+        des douaniers quand la contrebande coûte plus que leur solde."""
+        g, f, code = self.g, self.f, self.code
+        marchand = self.pers['trade'] >= 0.8
+        pauvre = f['income']['livres'] < 0.15 * self.gross_norm()
+        t = bool(self.wars()) + pauvre
+        t = min(1, t) if marchand else min(2, t + (t > 0))   # libre en paix et à l'aise ; jusqu'à élevé sinon (banc 1700)
+        if t != f['tarif']:
+            g.set_tarif(code, t)
+        dn = f.get('_douane')
+        on = bool(dn) and dn['perte'] / 2 > dn['front'] * R.DOUANIERS_L
+        if dn and on != f['douaniers']:
+            g.set_douaniers(code, on)
 
     def reserve(self):
         """Trésor de guerre à garder sous la main : quarante jours de revenu brut, plus un fonds fixe.
@@ -646,6 +665,11 @@ class AI:
             return
         if f['income']['livres'] < 0.5 and f['res']['livres'] < 400:
             return
+        # en guerre, sans recrues mais riche : des régiments étrangers (g.recruit vérifie époque, lieu, plafond, coût)
+        if self.wars() and f['res']['recrues'] < R.UNITS['ligne']['cost']['recrues'] and f['res']['livres'] > 6 * self.reserve():
+            for n in g.owned_nodes(code):
+                if len(n['queue']) < 2 and any(g.recruit(code, n['id'], t)[0] for t in R.MERCS):
+                    return
         typ = self.rng.choice(MIX[code])
         if typ == 'artillerie' and 'mitrailleuse' in f['techs'] and self.rng.random() < 0.35:
             typ = 'mitrailleuses'   # (avant la technologie, le tirage ne change pas)
@@ -1087,6 +1111,10 @@ class AI:
             # cartel d'échange : on récupère ses hommes prisonniers
             if (D.held(g, o, code) >= 40 or D.captifs(g, o, code)) and rel > -70 and self.rng.random() < 0.3:
                 self.propose(o, 'prisonniers')
+            # mariages : on unit sa maison à celle d'un voisin ami, avec une petite dot
+            if rel > 20 and st != 'guerre' and not FM.refus_mariage(g, code, o) and self.rng.random() < 0.005 \
+                    and D.borders(g, code, o):
+                self.propose(o, 'mariage', int(min(f['res']['livres'] * 0.1, 150)))
             if f['overlord']:
                 continue
             po = max(1.0, g.faction_power(o))

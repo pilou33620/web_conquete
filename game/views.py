@@ -9,6 +9,7 @@ from . import events as EV
 from . import army_actions as AA
 from . import cities as CT
 from . import turns as TT
+from . import familles as FM
 from .engine import Game, SITE_DAYS
 from .tactics import bridge as TB
 from .tactics import units as TU
@@ -42,6 +43,8 @@ def migrate(g):
         f.setdefault('tax', 0.5)
         f.setdefault('intel', {})
         f.setdefault('prisoners', {})
+        f.setdefault('tarif', 0)          # douane (SPEC-MERCENAIRES.md) : libre
+        f.setdefault('douaniers', False)
     for f in g.factions.values():
         for k, v in dict(weary=0.0, prestige=0.0, treaties={}, last_war=0.0, refu=0.0).items():
             f.setdefault(k, v)
@@ -57,6 +60,9 @@ def migrate(g):
         # sauvegarde d'avant les événements : ce qui est déjà passé ne se rejoue pas
         today = g.date().toordinal()
         g.ev_done = [e['id'] for e in EV.HIST if datetime.date(*e['date']).toordinal() <= today]
+    for code, f in g.factions.items():
+        if 'maison' not in f:
+            f['maison'] = FM.nouvelle(g, code)   # avant les familles dirigeantes : une maison tirée au chargement
     for n in g.nodes:
         n.setdefault('depot', 0)
         n.setdefault('assim', 1.0)
@@ -447,7 +453,8 @@ def player_state(g, since=0):
                          cap_owner=g.nodes[g.capital_of(code)]['owner'], techs=len(f['techs']),
                          mk=R.marks(f['techs']),   # marques visibles sur la carte (rules.VISUALS ; SPEC-SUITE H)
                          pr=int(f.get('prisoners', {}).get(p, 0)) if code != p else 0,
-                         prestige=g.prestige(code), weary=int(f.get('weary', 0)), **AA.view_passage(g, p, code)))
+                         prestige=g.prestige(code), weary=int(f.get('weary', 0)), maison=FM.vue(g, code),
+                         **AA.view_passage(g, p, code)))
         if f.get('lb') and g.t - f['lb'][1] < LB_DAYS:
             facs[-1]['lb'] = [f['lb'][0], round(g.t - f['lb'][1])]   # dernière bataille : gagnée ?, âge en jours
             if len(f['lb']) > 3 and (code in side or seen(f['lb'][2], f['lb'][3])):
@@ -463,6 +470,8 @@ def player_state(g, since=0):
                 techs=me['techs'], tech_dates=me.get('tech_dates', {}), cov=round(cov, 2), tools_bonus=round(tb, 3), cap=round(me.get('_cap', 0), 2), work=me.get('_work', [1.0, None]),
                 upkeep={k: round(v, 2) for k, v in me.get('_upkeep', {}).items()},
                 trade={k: round(v, 2) for k, v in me.get('_trade', {}).items()},
+                douane=dict(tarif=me['tarif'], on=me['douaniers'], niveaux=R.TARIFS, cout_place=R.DOUANIERS_L,
+                            **{k: round(v, 2) for k, v in me.get('_douane', {}).items()}),
                 unit_costs={u: g.unit_cost(p, u) for u in R.UNITS}, unit_days={u: round(g.unit_days(p, u), 1) for u in R.UNITS},
                 floor=me.get('_floor', {}), tax=me.get('tax', 0.5), order=_order(g, p),
                 spies=[dict(node=s['node'], kind=s['kind'], tn=TT.tours_left(g, s['done'])) for s in g.spies if s['by'] == p],
