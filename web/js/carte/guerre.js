@@ -60,6 +60,7 @@ export const rayonPlace = (n, ns) => Math.round(clamp(46 + 1.55 * Math.sqrt(ns?.
 // l'enceinte de map.js (walls : les bastions et les demi-lunes débordent le mur)
 const MURS = new Map();
 export function rayonMurs(map, n, ns) {
+  if (map.hex) return map.plateau.rayon(n);   // (sur le plateau, la ville jouet et son enceinte : camps, tranchées, chantiers autour)
   const e = etatVille(n, ns, map.state), k = n.id + ':' + e.f + ':' + e.pop + ':' + e.d + ':' + e.annee;
   let r = MURS.get(k);
   if (r == null) {

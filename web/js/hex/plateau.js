@@ -350,7 +350,12 @@ export class Plateau {
     // les routes qui entrent : leurs angles (portes, rues)
     const angles = mp.edges.filter(e => e.a === n.id || e.b === n.id).map(e => { const p = e.a === n.id ? e.pts[Math.min(1, e.pts.length - 1)] : e.pts[Math.max(0, e.pts.length - 2)]; return Math.atan2(p[1] - n.y, p[0] - n.x); });
     const rues = angles.length ? angles : [0, 2.1, 4.2];
-    const surRue = (x, z, cx, cz) => { const a = Math.atan2(z - cz, x - cx), d = Math.hypot(x - cx, z - cz); return rues.some(r => d * Math.abs(Math.sin(a - r)) < 0.9 && Math.cos(a - r) > 0); };
+    // les routes qui entrent, suivies depuis la place (unités du plateau, tous les 2,25) : les rangs de maisons les longent
+    const voies = mp.edges.filter(e => e.a === n.id || e.b === n.id).map(e => g.suivre(e.a === n.id ? e.pts : e.pts.slice().reverse(), 2.25, 0).map(p => [p[0], p[2]]).filter(p => Math.hypot(p[0] - t0.x, p[1] - t0.z) < 26));
+    // et toutes celles qui passent près (rien ne se bâtit dessus)
+    const pres = [];
+    for (const e of mp.edges) { if (!e.pts.some(p => Math.hypot(p[0] / g.f - t0.x, p[1] / g.f - t0.z) < 34)) continue; for (const [x, , z] of g.suivre(e.pts, 0.8, 0)) if (Math.hypot(x - t0.x, z - t0.z) < 30) pres.push([x, z]); }
+    const surRue = (x, z) => pres.some(([px, pz]) => (px - x) * (px - x) + (pz - z) * (pz - z) < 2.3);
     // ce que l'état abîme (comme la carte d'avant, villes.js degats) : maisons brûlées par l'incendie, ruines du siège en
     // cours et des combats passés (dg), toits noircis par le canon
     const feu = ns?.lv?.[0] === 'incendie', deg = Math.max(dmg * 0.22, ns?.dg || 0);
@@ -376,7 +381,7 @@ export class Plateau {
     if (!sec(0, 0, 3.5)) search: for (let r = 2; r <= 8; r += 2) for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; if (sec(Math.cos(a) * r, Math.sin(a) * r, 3.5)) { ox = Math.cos(a) * r; oz = Math.sin(a) * r; break search; } }
     const cx0 = t0.x + ox, cz0 = t0.z + oz;
     const posees = [];   // les maisons déjà bâties (unités du plateau) : deux maisons ne se posent pas l'une sur l'autre
-    const libre = (x, z, t, rayonVide) => g.sous(x, z) === t && Math.hypot(x - cx0, z - cz0) >= rayonVide && !surRue(x, z, t0.x, t0.z)
+    const libre = (x, z, t, rayonVide) => g.sous(x, z) === t && Math.hypot(x - cx0, z - cz0) >= rayonVide && !surRue(x, z)
       && !this.mouille(x, z, 1) && posees.every(([px, pz]) => Math.hypot(px - x, pz - z) > 2);
     const poser = (x, z, etagesMax) => {
       // la façade regarde la rue la plus proche
@@ -395,15 +400,16 @@ export class Plateau {
     };
     // les maisons de l'hexagone t : leur nombre est celui d'une ville sans rivière ; celles que l'eau chasse se rebâtissent
     // au sec ailleurs dans l'hexagone ; rend celles qui n'y ont pas trouvé de place
-    // les rangs de maisons serrées, façade sur la rue, le long des rues qui partent du centre (les routes qui entrent),
-    // un second rang derrière ; jusqu'à n maisons, rend celles qui manquent
-    const rangs = (t, n, etagesMax, rayonVide, prof = 2) => {
-      for (const r of rues) {
-        const c = Math.cos(r), sn = Math.sin(r);
-        for (let d = 1.4; d < 22 && n > 0; d += 2.25) for (const cote of [1, -1]) for (let k = 0; k < prof && n > 0; k++) {
-          const lat = cote * (1.9 + k * 2.3), x = t0.x + c * d - sn * lat, z = t0.z + sn * d + c * lat;
+    // les rangs de maisons serrées, façade sur la rue, le long des routes qui entrent (leur vrai tracé), un second rang
+    // derrière ; au plus près de la place d'abord ; jusqu'à n maisons, rend celles qui manquent
+    const rangs = (t, n, etagesMax, rayonVide, prof = 2, s = 0.92) => {
+      for (let i = 1; i < 12 && n > 0; i++) for (const v of voies) {
+        if (i >= v.length) continue;
+        const [ax, az] = v[i - 1], [bx, bz] = v[i], l = Math.hypot(bx - ax, bz - az) || 1, ux = (bx - ax) / l, uz = (bz - az) / l, r = Math.atan2(uz, ux);
+        for (const cote of [1, -1]) for (let k = 0; k < prof && n > 0; k++) {
+          const lat = cote * (1.9 + k * 2.3), x = bx - uz * lat, z = bz + ux * lat;
           if (!libre(x, z, t, rayonVide)) continue;
-          bat(x - t0.x, z - t0.z, -r + (cote > 0 ? Math.PI : 0), { s: 0.92, etages: 1 + ((rnd() * etagesMax) | 0), toitCol: ruine() ? brule : undefined });
+          bat(x - t0.x, z - t0.z, -r + (cote > 0 ? Math.PI : 0), { s, etages: 1 + ((rnd() * etagesMax) | 0), toitCol: ruine() ? brule : undefined });
           posees.push([x, z]); n--;
         }
       }
@@ -425,7 +431,7 @@ export class Plateau {
         const x = t.x + u + (hache(u * 10 + t.q, v * 10 + t.r, 2) - 0.5) * 1.2, z = t.z + v + (hache(v * 10 + t.q, u * 10 + t.r, 4) - 0.5) * 1.2;
         // (la place garde son vide ; les rues et la densité partent du centre de la ville, là où entrent les routes)
         const dc = Math.hypot(x - t0.x, z - t0.z);
-        if (g.sous(x, z) !== t || Math.hypot(x - cx0, z - cz0) < rayonVide || surRue(x, z, t0.x, t0.z) || rnd() > dens * (1 - dc / 40)) continue;
+        if (g.sous(x, z) !== t || Math.hypot(x - cx0, z - cz0) < rayonVide || surRue(x, z) || rnd() > dens * (1 - dc / 40)) continue;
         cands.push([x, z]);
       }
       // (autant de maisons qu'avant : d'abord le tour de la place et les rangs le long des rues, puis le reste entre elles)
@@ -442,11 +448,14 @@ export class Plateau {
     if (n.type === 'fort') {
       M.fortEtoile(L, 0, 0, 1.1);   // (le drapeau, qui flotte, est dessiné en 2D : towns.js, animer)
     } else if (n.type === 'village') {
-      for (let k = 0, nb = 4 + Math.min(4, Math.round((n.pop0 || 600) / 400)) + dev * 2; k < nb; k++) {
+      // le village : ses maisons le long de la route, de part et d'autre de l'église, puis quelques-unes à l'écart
+      let nbv = rangs(t0, 4 + Math.min(4, Math.round((n.pop0 || 600) / 400)) + dev * 2, 2, 2.2, 1, 0.85);
+      for (let k = 0, nb = nbv; k < nb; k++) {
         // (au sec : jusqu'à huit essais, un peu plus loin à chaque fois)
         let hx = 0, hz = 0, a = 0, ok = false;
-        for (let e = 0; e < 8 && !ok; e++) { a = rnd() * Math.PI * 2; const r = entre(2.6, 6.2 + e * 0.6); hx = ox + Math.cos(a) * r; hz = oz + Math.sin(a) * r; ok = sec(hx, hz, 1.2); }
+        for (let e = 0; e < 8 && !ok; e++) { a = rnd() * Math.PI * 2; const r = entre(2.6, 6.2 + e * 0.6); hx = ox + Math.cos(a) * r; hz = oz + Math.sin(a) * r; ok = libre(t0.x + hx, t0.z + hz, t0, 2.2); }
         if (!ok) continue;
+        posees.push([t0.x + hx, t0.z + hz]);
         bat(hx, hz, -a + Math.PI / 2 + entre(-0.3, 0.3), { s: 0.85, etages: rnd() < 0.2 ? 2 : 1, toitCol: ruine() ? brule : undefined });
       }
       M.eglise(L, st, ox, oz, rnd() * 6, 0.65, n.dept);
@@ -488,7 +497,8 @@ export class Plateau {
     return L;
   }
   // rayon de la place sur le plateau, en km (les étiquettes se posent dessous)
-  rayon(n) { const l = this.lieux.get(n.id); return l ? this.g.RK * (l.hex.length > 3 ? 2 : l.hex.length > 1 ? 1.5 : 0.9) : 0; }
+  // (jusqu'au bord de l'enceinte : rayon des faubourgs + 9,5, batirLieu ; les camps et les tranchées se posent au-delà)
+  rayon(n) { const l = this.lieux.get(n.id); return l ? (Math.max(...l.hex.map(h => Math.hypot(h.x - l.t.x, h.z - l.t.z))) + 9.5) * this.g.f : 0; }
 
   // ---------------------------------------------------------------- territoires : teinte et liseré aux couleurs des camps
   territoire(cellFac, codes, colors) {
