@@ -10,6 +10,8 @@ cities.json world-atlas @geo-maps/earth-rivers-10m @geo-maps/earth-lakes-10m ; e
 - rivières : Natural Earth 10 m (des surfaces) : rastérisées à 250 m, amincies en tracés (squelette), les plus longues
   gardées, nommées d'après des points connus de leur cours.
 
+Places : comme l'Aquitaine écrite à la main (game/places.py), par département le chef-lieu, 9 villes et 33 villages.
+
 Usage :  python3 outils/france.py /chemin/vers/node_modules
 """
 import json
@@ -298,14 +300,16 @@ def places(nm, depts, mer):
         cap = next((v for v in vs if v[0] == chef), vs[0])
         choix = [cap]
         loin = lambda v, k: min(math.hypot(*(np.subtract(xy(v[2], v[1]), xy(w[2], w[1])))) for w in choix) > k
-        for v in vs:   # les villes : les plus peuplées, pas collées à une autre
-            if len(choix) >= 8:
-                break
-            if v not in choix and v[3] >= 2500 and loin(v, 12):
-                choix.append(v)
+        # comme l'Aquitaine (game/places.py) : le chef-lieu, 9 autres villes, 33 villages
+        for k in (12, 8, 5):   # les villes : les plus peuplées, pas collées à une autre (on se rapproche s'il en manque)
+            for v in vs:
+                if len(choix) >= 10:
+                    break
+                if v not in choix and v[3] >= 1500 and loin(v, k):
+                    choix.append(v)
         nv = len(choix)
         petits = [v for v in vs if 250 <= v[3] < 6000 and v not in choix]
-        while len(choix) < nv + 16 and petits:   # les villages : répartis sur le département (le plus loin des autres)
+        while len(choix) < nv + 33 and petits:   # les villages : répartis sur le département (le plus loin des autres)
             best = max(petits, key=lambda v: min(math.hypot(*(np.subtract(xy(v[2], v[1]), xy(w[2], w[1])))) for w in choix))
             choix.append(best); petits.remove(best)
         for k, (nom, lat, lon, p) in enumerate(choix):

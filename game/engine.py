@@ -484,14 +484,15 @@ class Game:
             return 'self'
         if a == R.NEUTRAL or b == R.NEUTRAL:
             return 'neutre'
-        return self.diplo.get((min(a, b), max(a, b)), 'paix')
+        return self.diplo.get((a, b) if a < b else (b, a), 'paix')
 
     def set_status(self, a, b, s):
         self.diplo[(min(a, b), max(a, b))] = s
         self._dirty_income = True  # un blocus fluvial dépend de l'état de guerre
 
     def at_war(self, a, b):
-        return self.status(a, b) == 'guerre'
+        # (appelé des millions de fois par mois sur toute la France : sans passer par status)
+        return a != b and self.diplo.get((a, b) if a < b else (b, a)) == 'guerre'
 
     def friendly(self, a, b):
         return a == b or self.status(a, b) == 'alliance'
@@ -573,8 +574,9 @@ class Game:
             self._last_day = day
             self.new_day()
             self.drill_tick()
-        # (les revenus refaits au plus tous les quarts de journée : 89 camps agissent sans cesse et salissaient tout)
-        if self._dirty_income and self.t - getattr(self, '_income_t', -1.0) >= 0.25:
+        # (les revenus refaits au plus tous les quarts de journée, chaque jour sur toute la France : 89 camps agissent sans
+        # cesse et salissaient tout)
+        if self._dirty_income and self.t - getattr(self, '_income_t', -1.0) >= (1.0 if len(self.factions) > 5 else 0.25):
             self._income_t = self.t
             self.compute_income()
         self.economy(dt)
@@ -599,8 +601,16 @@ class Game:
                 continue
             nxt = self._ai_clock.get(code, 0.3 + 0.25 * len(self._ai_clock))
             if self.t >= nxt:
-                self._ai_clock[code] = self.t + 1.5
+                self._ai_clock[code] = self.t + self.ai_pas(code)
                 ai.step()
+
+    def ai_pas(self, code):
+        """Jours entre deux réflexions d'une IA : 1,5 ; toute la France, un camp à plus de 300 km du joueur (de chef-lieu à
+        chef-lieu) et en paix avec lui : 3 (89 camps, c'était l'essentiel du temps d'un mois)."""
+        if len(self.factions) <= 5 or self.at_war(code, self.player):
+            return 1.5
+        a, b = self.geo.nodes[self.capital_of(code)], self.geo.nodes[self.capital_of(self.player)]
+        return 3.0 if math.hypot(a['x'] - b['x'], a['y'] - b['y']) > 300 else 1.5
 
     # ================================================================== jours, météo, événements
     def new_day(self):
@@ -2765,11 +2775,11 @@ class Game:
                 b = arr[j]
                 if b['state'] == 'battle' or a['state'] == 'battle':
                     continue
-                if not self.at_war(a['owner'], b['owner']):
-                    continue
                 dx, dy = a['x'] - b['x'], a['y'] - b['y']
                 d2 = dx * dx + dy * dy
-                if d2 > AMBUSH_KM * AMBUSH_KM:
+                if d2 > AMBUSH_KM * AMBUSH_KM:   # (la distance d'abord : des centaines d'armées sur toute la France)
+                    continue
+                if not self.at_war(a['owner'], b['owner']):
                     continue
                 amb = None
                 for x, y in ((a, b), (b, a)):

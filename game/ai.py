@@ -935,7 +935,7 @@ class AI:
                 continue
             gn = g.geo.nodes[n['id']]
             d = math.hypot(gn['x'] - a['x'], gn['y'] - a['y'])
-            if d > 220:
+            if d > (150 if len(g.factions) > 5 else 220):   # (toute la France : pas des milliers de places à juger)
                 continue
             dfn = g.node_defense_power(n['id'])
             need = dfn * (1.25 if o == R.NEUTRAL else 1.3)
@@ -992,10 +992,12 @@ class AI:
         block = AA.closed_owners(g, self.code)
         if not block:
             return block, None   # rien de fermé : tout se rejoint (le réseau des routes est d'un seul tenant)
-        owners = tuple(n['owner'] for n in g.nodes)
+        # (seules comptent les places des camps fermés : les villages qui changent de main ailleurs n'y font rien)
+        fermees = tuple(i for i, n in enumerate(g.nodes) if n['owner'] in block)
         c = self._cache_reach
-        if c is not None and c[0] == block and c[1] == owners:
+        if c is not None and c[0] == block and c[1] == fermees:
             return block, c[2]
+        owners = [n['owner'] for n in g.nodes]
         parent = list(range(len(g.nodes)))
 
         def find(x):
@@ -1008,7 +1010,7 @@ class AI:
                 continue
             parent[find(e['a'])] = find(e['b'])
         comp = [find(i) for i in range(len(parent))]
-        self._cache_reach = (block, owners, comp)
+        self._cache_reach = (block, fermees, comp)
         return block, comp
 
     def reach_from(self, a):
