@@ -16,12 +16,14 @@ import heapq
 import json
 import math
 import os
+import sys
+from array import array
 
 from .places import PLACES, ROYAL_ROUTES, EXTRA_ROADS, EXTRA_ROADS_2, NO_ROADS_2, FERRIES, CITY_SPECIALTIES, CITY_POP
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
-CACHE_VERSION = 7
-VERSION = 2
+CACHE_VERSION = 8
+VERSION = 3   # 3 : toute la France (outils/france.py) ; 2 et 1 : le Sud-Ouest des anciennes parties
 
 LAT_REF = 44.25
 KX = 111.32 * math.cos(math.radians(LAT_REF))
@@ -43,7 +45,22 @@ TERRAIN = {
     T_DUNES: ('Dunes', 0.35, False, 1.0),
     T_VIGNE: ('Vignoble', 0.60, False, 1.05),
 }
-PLAYABLE = ['33', '24', '40', '47', '64']
+PLAYABLE = ['33', '24', '40', '47', '64']   # (géographies 1 et 2 ; depuis la 3, toute la France : GeoMap.playable_codes)
+NONE = 0xFFFF   # cellnode : case sans lieu (eau, hors du jeu)
+
+
+def _b16(a):
+    a = array('H', a)
+    if sys.byteorder == 'big':
+        a.byteswap()
+    return a.tobytes()
+
+
+def _h16(b):
+    a = array('H'); a.frombytes(b)
+    if sys.byteorder == 'big':
+        a.byteswap()
+    return a
 
 LANDES_POLY = [(45.48, -1.12), (45.20, -0.95), (45.02, -0.82), (44.80, -0.70), (44.55, -0.44), (44.30, -0.18),
                (44.08, 0.06), (43.93, -0.30), (43.90, -0.62), (43.82, -0.95), (43.72, -1.22), (43.66, -1.40),
@@ -59,6 +76,64 @@ VINEYARDS = [
     (44.25, 0.30, 6), (44.67, 0.18, 6), (43.28, -0.45, 7), (43.55, -0.05, 6), (43.18, -1.30, 4),
     (45.14, -0.76, 7), (44.70, -0.47, 5), (43.88, -0.25, 6),
 ]
+
+
+# ---------------------------------------------------------------- géographie 3 : toute la France (outils/france.py)
+# relief : des lignes de crête (lat, lon) et des massifs isolés, en « hauteur » du jeu (> 0,42 collines, > 0,80 montagne,
+# > 1,55 haute montagne) ; le Sud-Ouest garde son relief écrit à la main (_elev)
+CRETES = [   # (amplitude, demi-largeur en degrés, crête)
+    (2.5, 0.40, [(43.95, 7.25), (44.15, 6.95), (44.50, 6.70), (44.90, 6.60), (45.30, 6.90), (45.83, 6.86), (46.20, 6.65)]),   # Alpes
+    (1.25, 0.28, [(46.25, 5.95), (46.60, 6.15), (47.00, 6.55), (47.40, 7.00)]),   # Jura
+    (1.30, 0.22, [(47.85, 7.00), (48.10, 7.05), (48.40, 7.18), (48.70, 7.20)]),   # Vosges
+    (2.20, 0.22, [(41.70, 9.15), (42.00, 9.05), (42.40, 9.00), (42.70, 9.20)]),   # Corse
+]
+MASSIFS = [   # (lat, lon, amplitude, rayon en degrés)
+    (45.30, 3.00, 0.85, 1.25), (45.06, 2.75, 1.70, 0.25), (45.53, 2.81, 1.65, 0.20), (45.80, 2.95, 0.80, 0.15),
+    (44.90, 4.20, 1.30, 0.22), (44.85, 3.45, 0.70, 0.35), (44.60, 3.00, 0.60, 0.30), (44.25, 3.75, 1.00, 0.35),
+    (43.45, 2.30, 0.75, 0.20), (45.70, 1.90, 0.45, 0.50), (47.15, 4.00, 0.75, 0.30), (45.60, 3.80, 0.90, 0.20),
+    (45.65, 4.45, 0.55, 0.25), (45.00, 4.35, 0.80, 0.30), (45.45, 3.60, 0.70, 0.25), (46.10, 4.50, 0.60, 0.20),
+    (45.90, 3.25, -0.70, 0.28),   # la Limagne
+    (45.00, 5.50, 1.00, 0.25), (45.35, 5.80, 1.00, 0.20), (45.65, 6.15, 1.00, 0.20), (44.17, 5.28, 1.20, 0.15),
+    (43.80, 5.40, 0.55, 0.30), (43.53, 5.60, 0.55, 0.15), (43.25, 6.35, 0.60, 0.25), (43.48, 6.85, 0.50, 0.15),
+    (44.40, 5.20, 0.70, 0.35), (43.95, 6.20, 0.85, 0.35),   # Baronnies, Préalpes de Digne
+    (48.40, -3.90, 0.55, 0.20), (48.20, -3.60, 0.45, 0.22), (48.75, -0.55, 0.50, 0.40), (48.40, -0.30, 0.42, 0.30),
+    (49.85, 4.70, 0.75, 0.30), (49.15, 5.00, 0.45, 0.18), (47.20, 4.75, 0.50, 0.30), (47.80, 5.20, 0.48, 0.45),
+    (48.90, 7.40, 0.60, 0.20),
+    (42.70, 2.90, -1.60, 0.22), (43.20, 3.10, -0.80, 0.30),   # la plaine du Roussillon, le bas Languedoc
+]
+FORETS_3 = [   # (lat, lon, rayon km, densité)
+    (47.95, 2.15, 18, 0.85), (48.40, 2.68, 10, 0.90), (49.37, 2.88, 10, 0.90), (48.65, 1.82, 10, 0.85), (49.25, 3.05, 8, 0.80),
+    (49.18, 2.48, 7, 0.80), (47.55, 1.90, 30, 0.60), (48.15, 3.75, 12, 0.70), (47.12, 5.68, 10, 0.85), (48.20, 6.90, 35, 0.70),
+    (48.90, 7.40, 20, 0.75), (48.85, 7.85, 8, 0.85), (49.15, 5.00, 14, 0.75), (49.85, 4.70, 25, 0.75), (47.15, 4.00, 22, 0.70),
+    (46.65, 2.75, 9, 0.90), (47.80, 0.40, 8, 0.85), (46.80, 6.20, 40, 0.60), (48.00, -2.20, 8, 0.70), (45.00, 3.20, 60, 0.35),
+    (44.20, 3.70, 25, 0.55), (45.70, 1.90, 40, 0.40), (43.25, 6.35, 15, 0.70), (43.48, 6.85, 8, 0.70), (42.20, 9.10, 35, 0.50),
+    (49.43, 1.47, 10, 0.80), (49.95, 1.45, 8, 0.80), (49.60, 3.40, 9, 0.80), (48.50, 0.75, 14, 0.60), (45.40, 6.30, 45, 0.45),
+]
+VIGNES_3 = [   # (lat, lon, rayon km)
+    (49.05, 4.00, 18), (47.05, 4.85, 14), (47.80, 3.80, 6), (46.10, 4.60, 12), (46.35, 4.75, 8), (44.25, 4.80, 18),
+    (44.06, 4.85, 6), (48.15, 7.30, 14), (47.33, 2.83, 6), (47.40, 0.85, 10), (47.25, -0.20, 12), (47.10, -1.40, 12),
+    (45.69, -0.33, 18), (43.40, 3.20, 35), (42.65, 2.80, 15), (43.45, 6.20, 20), (46.75, 5.60, 8), (45.55, 5.95, 6),
+    (44.45, 1.30, 8), (43.90, 1.90, 8), (42.60, 9.35, 6),
+]
+ROUTES_ROYALES_3 = [   # les grandes routes de poste partant de Paris, et quelques transversales
+    ['Paris', 'Orléans', 'Blois', 'Tours', 'Poitiers', 'Angoulême', 'Bordeaux'],
+    ['Paris', 'Melun', 'Sens', 'Auxerre', 'Dijon', 'Chalon-sur-Saône', 'Mâcon', 'Lyon'],
+    ['Lyon', 'Vienne', 'Valence', 'Montélimar', 'Orange', 'Avignon', 'Aix-en-Provence', 'Marseille'],
+    ['Aix-en-Provence', 'Brignoles', 'Toulon'], ['Aix-en-Provence', 'Fréjus', 'Antibes', 'Nice'],
+    ['Paris', 'Senlis', 'Compiègne', 'Péronne', 'Arras', 'Lille'], ['Paris', 'Beauvais', 'Amiens', 'Abbeville', 'Boulogne-sur-Mer', 'Calais'],
+    ['Paris', 'Pontoise', 'Rouen', 'Le Havre'], ['Rouen', 'Lisieux', 'Caen', 'Bayeux', 'Saint-Lô', 'Coutances'],
+    ['Paris', 'Meaux', 'Château-Thierry', 'Épernay', 'Châlons-en-Champagne', 'Verdun', 'Metz'],
+    ['Châlons-en-Champagne', 'Vitry-le-François', 'Saint-Dizier', 'Toul', 'Nancy', 'Lunéville', 'Saverne', 'Strasbourg'],
+    ['Paris', 'Versailles', 'Chartres', 'Le Mans', 'Laval', 'Rennes', 'Saint-Brieuc', 'Morlaix', 'Brest'],
+    ['Le Mans', 'Angers', 'Nantes'], ['Rennes', 'Vannes', 'Lorient', 'Quimper'],
+    ['Paris', 'Étampes', 'Orléans', 'Vierzon', 'Châteauroux', 'Limoges', 'Brive-la-Gaillarde', 'Cahors', 'Montauban', 'Toulouse'],
+    ['Toulouse', 'Castelnaudary', 'Carcassonne', 'Narbonne', 'Béziers', 'Montpellier', 'Nîmes', 'Avignon'], ['Narbonne', 'Perpignan'],
+    ['Lyon', 'Bourg-en-Bresse'], ['Dijon', 'Dole', 'Besançon', 'Belfort', 'Mulhouse', 'Colmar', 'Strasbourg'],
+    ['Lyon', 'Roanne', 'Moulins', 'Nevers', 'Montargis', 'Fontainebleau', 'Paris'], ['Lyon', 'Bourgoin-Jallieu', 'Grenoble'],
+    ['Clermont-Ferrand', 'Riom', 'Moulins'], ['Paris', 'Provins', 'Troyes', 'Chaumont', 'Langres', 'Dijon'],
+    ['Lille', 'Douai', 'Cambrai', 'Saint-Quentin', 'Laon', 'Reims', 'Châlons-en-Champagne'],
+]
+MARAIS_3 = [(46.35, -1.00, 18), (43.55, 4.55, 20), (47.35, -2.25, 8), (46.00, 5.00, 15), (46.90, -2.00, 10), (49.30, -1.20, 9)]
 
 
 def _h(ix, iy, seed):
@@ -85,6 +160,13 @@ def fbm(x, y, seed, octaves=3):
         x *= 2.03
         y *= 2.03
     return t / norm
+
+
+def _dseg(y, x, ay, ax, by, bx):
+    """Distance du point (y, x) au segment a-b (mêmes unités)."""
+    dx, dy = bx - ax, by - ay
+    t = max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy or 1)))
+    return math.hypot(ax + dx * t - x, ay + dy * t - y)
 
 
 def slugify(name):
@@ -178,6 +260,9 @@ class GeoMap:
             self.src = json.load(f)
         b = self.src['bounds']
         self.lon0, self.lon1, self.lat0, self.lat1 = b['lon0'], b['lon1'], b['lat0'], b['lat1']
+        self.KX = 111.32 * math.cos(math.radians(self.src.get('lat_ref', LAT_REF)))   # (le parallèle de référence de la carte)
+        KX = self.KX
+        self.playable_codes = {c for c, d in self.src['depts'].items() if d.get('playable')}
         self.W = int(math.ceil((self.lon1 - self.lon0) * KX))
         self.H = int(math.ceil((self.lat1 - self.lat0) * KY))
         self.dept_codes = sorted(self.src['depts'].keys())
@@ -192,13 +277,13 @@ class GeoMap:
 
     # ------------------------------------------------------------ projection
     def xy(self, lat, lon):
-        return ((lon - self.lon0) * KX, (self.lat1 - lat) * KY)
+        return ((lon - self.lon0) * self.KX, (self.lat1 - lat) * KY)
 
     def lat_of(self, y):
         return self.lat1 - y / KY
 
     def lon_of(self, x):
-        return self.lon0 + x / KX
+        return self.lon0 + x / self.KX
 
     def cell(self, x, y):
         i, j = int(x), int(y)
@@ -215,7 +300,7 @@ class GeoMap:
         if c < 0:
             return False
         d = self.dept[c]
-        return d > 0 and self.dept_codes[d - 1] in PLAYABLE and self.terrain[c] > T_EAU
+        return d > 0 and self.dept_codes[d - 1] in self.playable_codes and self.terrain[c] > T_EAU
 
     def dept_at(self, x, y):
         c = self.cell(x, y)
@@ -238,12 +323,30 @@ class GeoMap:
             n['pop0'] = CITY_POP.get(name, 300 + (h % 1301))
             self.nodes.append(n)
             self.by_name[name] = k
+        # (géographie 3) les places des autres départements, générées par outils/france.py, avec leur population
+        if self.version >= 3:
+            with open(os.path.join(DATA_DIR, 'places_france.json'), encoding='utf-8') as f:
+                gen = json.load(f)
+            slugs = {n['slug'] for n in self.nodes}
+            for name, lat, lon, dept, typ, spec, fort, pop0 in gen:
+                k = len(self.nodes)
+                x, y = self.xy(lat, lon)
+                slug = slugify(name)
+                if slug in slugs:   # (homonymes d'un département à l'autre : Saint-Martin, Langon…)
+                    slug = f'{slug}-{dept.lower()}'
+                slugs.add(slug)
+                self.nodes.append(dict(id=k, slug=slug, name=name, x=round(x, 2), y=round(y, 2), dept=dept, type=typ,
+                                       spec=list(spec), fort=fort, pop0=pop0))
+                self.by_name.setdefault(name, k)   # (les noms des tables, Sud-Ouest d'abord : la place écrite à la main)
 
     # ------------------------------------------------------------ cache
     def _src_hash(self):
         h = hashlib.sha1()
         h.update(json.dumps(self.src, sort_keys=True).encode())
         h.update(repr(PLACES).encode())
+        if self.version >= 3:
+            with open(os.path.join(DATA_DIR, 'places_france.json'), 'rb') as f:
+                h.update(f.read())
         h.update(repr(ROYAL_ROUTES).encode())
         h.update(repr(EXTRA_ROADS).encode())
         h.update(repr(EXTRA_ROADS_2 + NO_ROADS_2).encode())
@@ -264,7 +367,7 @@ class GeoMap:
                     self.dept = bytearray(base64.b64decode(c['dept']))
                     self.river = bytearray(base64.b64decode(c['river']))
                     self.road = bytearray(base64.b64decode(c['road']))
-                    self.cellnode = bytearray(base64.b64decode(c['cellnode']))
+                    self.cellnode = _h16(base64.b64decode(c['cellnode']))
                     self.edges = c['edges']
                     return
             except Exception:
@@ -275,7 +378,7 @@ class GeoMap:
                  dept=base64.b64encode(bytes(self.dept)).decode(),
                  river=base64.b64encode(bytes(self.river)).decode(),
                  road=base64.b64encode(bytes(self.road)).decode(),
-                 cellnode=base64.b64encode(bytes(self.cellnode)).decode(),
+                 cellnode=base64.b64encode(_b16(self.cellnode)).decode(),
                  edges=self.edges)
         try:
             with open(path, 'w', encoding='utf-8') as f:
@@ -389,6 +492,11 @@ class GeoMap:
                 estuary = acc
 
         y_spain = self.xy(43.36, 0)[1]
+        hors = bytearray(N)   # (géographie 3) les terres des pays voisins, hors du jeu
+        for l in self.src.get('lands', []):
+            def seth(c):
+                hors[c] = 1
+            self._raster_ring([self.xy(lat, lon) for lon, lat in l['ring']], seth)
         terrain = bytearray(N)
         ocean_src = []
         for c in range(N):
@@ -396,7 +504,13 @@ class GeoMap:
             if water[c]:
                 terrain[c] = T_EAU
             elif self.dept[c] == 0:
-                if j + 0.5 > y_spain and (c % W) > 3:
+                if self.version >= 3:
+                    if hors[c]:
+                        terrain[c] = T_PLAINE
+                    else:
+                        terrain[c] = T_OCEAN
+                        ocean_src.append(c)
+                elif j + 0.5 > y_spain and (c % W) > 3:
                     terrain[c] = T_PLAINE  # Espagne (hors jeu)
                 else:
                     terrain[c] = T_OCEAN
@@ -431,8 +545,9 @@ class GeoMap:
             in_landes[c] = 1
         self._raster_ring(landes, setl)
 
-        forests = [(self.xy(la, lo), r, d) for la, lo, r, d in FORESTS]
-        vines = [(self.xy(la, lo), r) for la, lo, r in VINEYARDS]
+        forests = [(self.xy(la, lo), r, d) for la, lo, r, d in FORESTS + (FORETS_3 if self.version >= 3 else [])]
+        vines = [(self.xy(la, lo), r) for la, lo, r in VINEYARDS + (VIGNES_3 if self.version >= 3 else [])]
+        marais3 = [(self.xy(la, lo), r) for la, lo, r in MARAIS_3]
 
         for c in range(N):
             t = terrain[c]
@@ -441,10 +556,11 @@ class GeoMap:
             i, j = c % W, c // W
             x, y = i + 0.5, j + 0.5
             lat, lon = self.lat_of(y), self.lon_of(x)
-            e = self._elev(lat, lon) + (fbm(x / 22, y / 22, 11, 4) - 0.5) * 0.42
-            if lat < 43.35:
+            v3 = self.version >= 3
+            e = (self._elev3(lat, lon) if v3 else self._elev(lat, lon)) + (fbm(x / 22, y / 22, 11, 4) - 0.5) * 0.42
+            if lat < 43.35 or (v3 and e > 0.8):   # (les vallées des montagnes sont creusées par leurs rivières)
                 e -= 0.6 * math.exp(-(d_riv[c] / 2.6) ** 2)
-            else:
+            elif not v3:
                 e = min(e, 0.78)
             if e > 1.55:
                 terrain[c] = T_HAUTE
@@ -455,10 +571,11 @@ class GeoMap:
             t = T_COLLINES if e > 0.42 else T_PLAINE
             n1 = fbm(x / 7, y / 7, 3)
             do = d_ocean[c]
-            if do <= 2 and lat > 43.55:
+            aquit = not v3 or (lon < -0.9 and lat < 45.65)   # (géographie 3 : les dunes et la forêt du littoral aquitain)
+            if do <= 2 and lat > 43.55 and (aquit or (lat > 50.2 and lon < 2.6) or (46.0 < lat < 46.9 and lon < -1.2)):
                 terrain[c] = T_DUNES
                 continue
-            if do <= 7 and lat > 43.6 and n1 > 0.22:
+            if do <= 7 and lat > 43.6 and n1 > 0.22 and aquit:
                 terrain[c] = T_FORET
                 continue
             if in_landes[c]:
@@ -475,6 +592,11 @@ class GeoMap:
                 t = T_VIGNE if n1 > 0.3 else T_PLAINE
             if d_adour[c] <= 2 and lon < -0.55 and t in (T_PLAINE, T_LANDE):
                 t = T_MARAIS if n1 > 0.35 else t
+            if v3 and t in (T_PLAINE, T_COLLINES):
+                for (mx, my), r in marais3:
+                    if math.hypot(x - mx, y - my) < r and n1 > 0.3:
+                        t = T_MARAIS
+                        break
             if t in (T_PLAINE, T_COLLINES):
                 for (fx, fy), r, dens in forests:
                     dd = math.hypot(x - fx, y - fy)
@@ -533,6 +655,22 @@ class GeoMap:
         e += 0.34 * math.exp(-(((lat - 44.55) / 0.15) ** 2 + ((lon - 0.85) / 0.25) ** 2))
         return e
 
+    @staticmethod
+    def _elev3(lat, lon):
+        """Le relief de toute la France : les Pyrénées et le Sud-Ouest de _elev (là seulement), les crêtes et les massifs."""
+        cl = math.cos(math.radians(lat))
+        sw = min(1.0, max(0.0, (1.9 - lon) / 0.5)) * min(1.0, max(0.0, (46.1 - lat) / 0.4))   # (le Sud-Ouest d'avant)
+        e = GeoMap._elev(lat, lon) * sw
+        if lon > 1.4 and lat < 43.4:   # les Pyrénées à l'est du Sud-Ouest, jusqu'à la Méditerranée
+            base = 43.20 + 0.03 * (lon + 1.0) + 0.05 * math.sin(lon * 7.3) + 0.03 * math.sin(lon * 19.0 + 1.0)
+            e = max(e, max(0.0, base - lat) / 0.21 * min(1.0, max(0.0, (3.25 - lon) / 0.35)))
+        for amp, w, pts in CRETES:
+            d = min(_dseg(lat, lon * cl, a[0], a[1] * cl, b[0], b[1] * cl) for a, b in zip(pts, pts[1:]))
+            e += amp * math.exp(-(d / w) ** 2) + amp * 0.3 * math.exp(-(d / (w * 2.2)) ** 2)
+        for la, lo, amp, r in MASSIFS:
+            e += amp * math.exp(-(((lat - la) ** 2 + ((lon - lo) * cl) ** 2) / (r * r)))
+        return e
+
     # ------------------------------------------------------------ routes
     def _water_on_segment(self, a, b, margin=1.2):
         (x1, y1), (x2, y2) = a, b
@@ -545,7 +683,7 @@ class GeoMap:
                 continue
             c = self.cell(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t)
             if c < 0 or self.terrain[c] in (T_OCEAN, T_EAU) or self.dept[c] == 0 \
-                    or self.dept_codes[self.dept[c] - 1] not in PLAYABLE:
+                    or self.dept_codes[self.dept[c] - 1] not in self.playable_codes:
                 bad += 1
             elif self.terrain[c] == T_HAUTE:
                 bad += 0.25
@@ -556,20 +694,35 @@ class GeoMap:
         P = [(n['x'], n['y']) for n in nodes]
         pairs = {}
         n = len(nodes)
+        # le graphe de Gabriel des places à moins de 40 km : par cases de 20 km (toute la France : 2 000 places et plus)
+        G = 20.0
+        cases = {}
+        for i, (x, y) in enumerate(P):
+            cases.setdefault((int(x // G), int(y // G)), []).append(i)
+        def proches(x, y, r):
+            for ci in range(int((x - r) // G), int((x + r) // G) + 1):
+                for cj in range(int((y - r) // G), int((y + r) // G) + 1):
+                    yield from cases.get((ci, cj), ())
         for a in range(n):
-            for b in range(a + 1, n):
+            for b in proches(P[a][0], P[a][1], 40):
+                if b <= a:
+                    continue
                 d = math.dist(P[a], P[b])
                 if d > 40:
                     continue
                 mx, my = (P[a][0] + P[b][0]) / 2, (P[a][1] + P[b][1]) / 2
                 r2 = (d / 2) ** 2
-                ok = True
-                for c in range(n):
-                    if c != a and c != b and (P[c][0] - mx) ** 2 + (P[c][1] - my) ** 2 < r2:
-                        ok = False
-                        break
-                if ok and self._water_on_segment(P[a], P[b]) < 1:
+                if any(c != a and c != b and (P[c][0] - mx) ** 2 + (P[c][1] - my) ** 2 < r2 for c in proches(mx, my, d / 2)):
+                    continue
+                if self._water_on_segment(P[a], P[b]) < 1:
                     pairs[(a, b)] = dict(royal=False, ferry=False)
+        if self.version >= 3:   # les grandes routes royales de la France : le plus court chemin du réseau, entre leurs villes
+            self._ensure_connected(pairs, P)
+            for route in ROUTES_ROYALES_3:
+                ids = [self.by_name[nm] for nm in route if nm in self.by_name]
+                for a, b in zip(ids, ids[1:]):
+                    for k in self._chemin(pairs, P, a, b):
+                        pairs[k]['royal'] = True
         for route in ROYAL_ROUTES:
             ids = [self.by_name[nm] for nm in route]
             for a, b in zip(ids, ids[1:]):
@@ -682,6 +835,28 @@ class GeoMap:
             self._raster_line(path, setroad, 0.3)
         self.edges = edges
 
+    @staticmethod
+    def _chemin(pairs, P, a, b):
+        """Les arêtes (clés de pairs) du plus court chemin de a à b dans le réseau des routes."""
+        nb = {}
+        for (u, v) in pairs:
+            nb.setdefault(u, []).append(v); nb.setdefault(v, []).append(u)
+        dist, prev, pq = {a: 0.0}, {}, [(0.0, a)]
+        while pq:
+            d, u = heapq.heappop(pq)
+            if u == b:
+                break
+            if d > dist[u]:
+                continue
+            for v in nb.get(u, ()):
+                nd = d + math.dist(P[u], P[v])
+                if nd < dist.get(v, 1e18):
+                    dist[v] = nd; prev[v] = u; heapq.heappush(pq, (nd, v))
+        out, u = [], b
+        while u in prev:
+            out.append((min(u, prev[u]), max(u, prev[u]))); u = prev[u]
+        return out
+
     def _route_f(self):
         """La grille des tracés de routes : f cases par km et les rivières qui y passent. Géographie 2 : à la demi-case, pour
         que les routes passent entre les méandres serrés (Libourne) au lieu de les contourner."""
@@ -711,7 +886,7 @@ class GeoMap:
             i, j = c % W, c // W
             c1 = j // f * self.W + i // f   # (la case du km : terrain, département, bruit)
             t = self.terrain[c1]
-            k = terr.get(t, 40.0) if self.dept[c1] and self.dept_codes[self.dept[c1] - 1] in PLAYABLE else 40.0
+            k = terr.get(t, 40.0) if self.dept[c1] and self.dept_codes[self.dept[c1] - 1] in self.playable_codes else 40.0
             k += (25.0, 10.0, 3.0)[3 - riv[c]] if riv[c] else (1.5, 0.4, 0.0)[near[c] - 1] if near[c] <= 2 else 0.0
             cost[c] = k * (1 - wobble / 2 + wobble * bruit[c1]) if wobble else k
         return cost
@@ -792,7 +967,14 @@ class GeoMap:
         return smooth if wet(smooth) <= wet(pts) else pts
 
     def _ensure_connected(self, pairs, P):
+        """Relie les morceaux du réseau : le plus petit d'abord, à la place la plus proche d'un autre morceau (à moins de
+        60 km, sans eau entre elles) ; une île que rien ne relie reste à part (Corse, Belle-Île…)."""
         n = len(P)
+        G = 20.0
+        cases = {}
+        for i, (x, y) in enumerate(P):
+            cases.setdefault((int(x // G), int(y // G)), []).append(i)
+        isoles = set()
         while True:
             parent = list(range(n))
 
@@ -803,26 +985,41 @@ class GeoMap:
                 return x
             for a, b in pairs:
                 parent[find(a)] = find(b)
-            roots = {find(i) for i in range(n)}
-            if len(roots) == 1:
+            comps = {}
+            for i in range(n):
+                comps.setdefault(find(i), []).append(i)
+            if len(comps) == 1:
                 return
-            best = None
-            for a in range(n):
-                for b in range(n):
-                    if find(a) != find(b):
-                        d = math.dist(P[a], P[b])
-                        if (best is None or d < best[0]) and self._water_on_segment(P[a], P[b]) < 1:
-                            best = (d, a, b)
-            if best is None:
+            relie = False
+            for r, membres in sorted(comps.items(), key=lambda kv: len(kv[1])):
+                if r in isoles or len(membres) == max(len(m) for m in comps.values()) and len(comps) - len(isoles) <= 1:
+                    continue
+                cand = []
+                for a in membres:
+                    x, y = P[a]
+                    for ci in range(int((x - 60) // G), int((x + 60) // G) + 1):
+                        for cj in range(int((y - 60) // G), int((y + 60) // G) + 1):
+                            for b in cases.get((ci, cj), ()):
+                                if find(b) != r:
+                                    d = math.dist(P[a], P[b])
+                                    if d < 60:
+                                        cand.append((d, a, b))
+                cand.sort()
+                ok = next(((a, b) for _, a, b in cand if self._water_on_segment(P[a], P[b]) < 1), None)
+                if ok:
+                    a, b = ok
+                    pairs[(min(a, b), max(a, b))] = dict(royal=False, ferry=False)
+                    relie = True
+                    break
+                isoles.add(r)
+            if not relie:
                 return
-            _, a, b = best
-            pairs[(min(a, b), max(a, b))] = dict(royal=False, ferry=False)
 
     def _build_cellnode(self):
         """Zone d'influence de chaque lieu : distance par la terre (l'eau sépare), dans son département."""
         W, H = self.W, self.H
         N = W * H
-        cn = bytearray([255]) * N
+        cn = array('H', [NONE]) * N
         dist = [1e18] * N
         pq = []
         bonus = {'capitale': -6.0, 'ville': -3.0, 'village': 0.0, 'fort': 1.0}
@@ -867,7 +1064,7 @@ class GeoMap:
         for n in self.nodes:
             by_dept.setdefault(self.dept_codes.index(n['dept']) + 1, []).append((n['id'], n['x'], n['y']))
         for c in range(W * H):
-            if self.cellnode[c] != 255:
+            if self.cellnode[c] != NONE:
                 continue
             d = self.dept[c]
             if d == 0 or self.terrain[c] in (T_OCEAN, T_EAU) or d not in by_dept:
@@ -880,7 +1077,7 @@ class GeoMap:
         if c < 0:
             return None
         v = self.cellnode[c]
-        return None if v == 255 else v
+        return None if v == NONE else v
 
     # ------------------------------------------------------------ A* hors route
     def cell_costs(self):
@@ -894,7 +1091,7 @@ class GeoMap:
     def cell_cost(self, c):
         t = self.terrain[c]
         sp = TERRAIN[t][1]
-        if sp <= 0 or self.dept[c] == 0 or self.dept_codes[self.dept[c] - 1] not in PLAYABLE:
+        if sp <= 0 or self.dept[c] == 0 or self.dept_codes[self.dept[c] - 1] not in self.playable_codes:
             return None
         cost = 1.0 / sp
         r = self.river[c]
@@ -991,7 +1188,7 @@ class GeoMap:
             d, c = heapq.heappop(pq)
             if d > dist[c]:
                 continue
-            if c != s and not block[cn[c]] and cn[c] != 255:
+            if c != s and not block[cn[c]] and cn[c] != NONE:
                 path = [c]
                 while path[-1] != s:
                     path.append(came[path[-1]])
@@ -1076,11 +1273,11 @@ class GeoMap:
                        pts=[[round(c, 2) for c in self.xy(lat, lon)] for lon, lat in r['pts']]) for r in self.src['rivers']]
         waters = [dict(name=w['name'], ring=[[round(c, 2) for c in self.xy(lat, lon)] for lon, lat in w['ring']])
                   for w in self.src['waters']]
-        return dict(W=self.W, H=self.H, lon0=self.lon0, lat1=self.lat1, KX=KX, KY=KY,
+        return dict(W=self.W, H=self.H, lon0=self.lon0, lat1=self.lat1, KX=self.KX, KY=KY, playable=sorted(self.playable_codes),
                     y_mont=self.xy(43.2, 0)[1], x_cote=self.xy(44, -0.95)[0], y_spain=self.xy(43.36, 0)[1],
                     terrain=base64.b64encode(bytes(self.terrain)).decode(),
                     dept=base64.b64encode(bytes(self.dept)).decode(),
-                    cellnode=base64.b64encode(bytes(self.cellnode)).decode(),
+                    cellnode=base64.b64encode(_b16(self.cellnode)).decode(),   # (deux octets par case, petit-boutiste)
                     river=base64.b64encode(bytes(self.river)).decode(),
                     dept_codes=self.dept_codes, depts=depts, rivers=rivers, waters=waters,
                     nodes=self.nodes, edges=self.edges,

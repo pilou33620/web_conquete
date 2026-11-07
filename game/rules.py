@@ -36,6 +36,57 @@ FACTIONS = {
                mods=dict(inf_power=0.12, mountain=0.25, livres=0.10, industrie=-0.10, trade=-0.15, vivres=-0.10),
                personality=dict(aggr=0.7, trade=0.4, expand=0.7, tech='militaire'), specialty='recrues'),
 }
+# (géographie 3, SPEC-FRANCE.md) les autres départements de la France, générés d'après la carte (game/data/geo.json) et
+# leurs places (places_france.json) : le chef-lieu, une couleur bien à eux, un des cinq profils des départements écrits
+# à la main ci-dessus selon leur pays (ports, forges, grenier, vignoble, montagne)
+def _generer_departements():
+    import colorsys, hashlib, json, os
+    data = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+    try:
+        with open(os.path.join(data, 'geo.json'), encoding='utf-8') as f:
+            depts = json.load(f)['depts']
+        with open(os.path.join(data, 'places_france.json'), encoding='utf-8') as f:
+            caps = {p[3]: p[0] for p in json.load(f) if p[4] == 'capitale'}
+    except (OSError, KeyError, ValueError):
+        return
+    PROFILS = {
+        'negoce': ('Le Négoce de {cap}', ['Port et marchés : +20 % de livres', 'Accords commerciaux +20 %'], ['Milice bourgeoise : infanterie −6 %'],
+                   dict(livres=0.20, trade=0.20, inf_power=-0.06), dict(aggr=0.45, trade=0.9, expand=0.6, tech='civil'), 'livres'),
+        'forges': ('Les Forges de {nom}', ['Forges : +35 % de fer', 'Artillerie −15 %'], ['Livres −10 %'],
+                   dict(fer=0.35, art_cost=-0.15, livres=-0.10), dict(aggr=0.55, trade=0.5, expand=0.7, tech='industriel'), 'fer'),
+        'grenier': ('Le Grenier de {nom}', ['Blé : +30 % de vivres', 'Recrues +10 %'], ['Plaine ouverte : fortifications −10 %'],
+                    dict(vivres=0.30, recrues=0.10, fort_bonus=-0.10), dict(aggr=0.4, trade=0.75, expand=0.6, tech='agricole'), 'vivres'),
+        'vignoble': ('Les Vignobles de {nom}', ['Vins : +25 % de revenus viticoles', 'Livres +10 %'], ['Recrues −10 %'],
+                     dict(vin=0.25, livres=0.10, recrues=-0.10), dict(aggr=0.4, trade=0.85, expand=0.55, tech='civil'), 'livres'),
+        'montagne': ('Les Montagnards de {nom}', ['Infanterie +10 %', 'Combat et marche en montagne +25 %'], ['Commerce −15 %', 'Vivres −10 %'],
+                     dict(inf_power=0.10, mountain=0.25, trade=-0.15, vivres=-0.10), dict(aggr=0.65, trade=0.4, expand=0.7, tech='militaire'), 'recrues'),
+    }
+    PAYS = {   # départements dont le profil est connu ; les autres, au hasard (stable) parmi grenier, négoce, vignoble
+        'forges': {'59', '62', '57', '54', '42', '71', '18', '58', '52', '08', '55', '03'},
+        'montagne': {'05', '04', '73', '74', '38', '09', '65', '66', '15', '43', '48', '63', '20', '25', '39', '88', '06', '12', '19', '23'},
+        'negoce': {'75', '13', '44', '76', '29', '17', '69', '83', '34', '35', '56', '22', '50', '14', '80'},
+        'vignoble': {'51', '21', '89', '16', '11', '30', '84', '26', '37', '49', '68', '67', '81', '82', '46', '32'},
+    }
+    utilises = [f['color'] for f in FACTIONS.values()]
+    codes = sorted(c for c in depts if c not in FACTIONS)
+    for k, code in enumerate(codes):
+        nom = depts[code]['name']
+        h = int(hashlib.sha1(code.encode()).hexdigest()[:8], 16)
+        prof = next((p for p, cs in PAYS.items() if code in cs), ('grenier', 'negoce', 'vignoble')[h % 3])
+        titre, pros, cons, mods, pers, spec = PROFILS[prof]
+        # couleurs : l'angle d'or sur le cercle des teintes, deux luminosités en alternance
+        r, g, b = colorsys.hls_to_rgb((k * 0.381966) % 1.0, 0.42 if k % 2 else 0.55, 0.62)
+        col = '#%02x%02x%02x' % (int(r * 255), int(g * 255), int(b * 255))
+        cap = caps.get(code, nom)
+        FACTIONS[code] = dict(name=nom, short=nom if len(nom) <= 11 else nom[:10] + '.', capital=cap, color=col,
+                              adj=nom.lower(), title=titre.format(cap=cap, nom=nom), pros=list(pros), cons=list(cons),
+                              mods=dict(mods), personality=dict(pers, aggr=round(pers['aggr'] + ((h >> 8) % 21 - 10) / 100, 2)),
+                              specialty=spec)
+        utilises.append(col)
+
+
+_generer_departements()
+
 # Production minimale garantie par jour tant que le département tient son chef-lieu
 # (modulée par ses traits : forges du Périgord, pins des Landes, grenier agenais… ; les vivres suivent les saisons)
 FLOOR = dict(livres=20, vivres=16, fer=9, bois=9, recrues=8)
@@ -477,6 +528,8 @@ PROVINCES = {
     '47': dict(name='Agenais', title='Agenais'),
     '64': dict(name='Béarn et Pays basque', title='Béarn, Labourd et Soule'),
 }
+for _c, _f in FACTIONS.items():   # (les départements générés : la province porte le nom du département)
+    PROVINCES.setdefault(_c, dict(name=_f['name'], title=_f['name']))
 ERAS = [
     dict(id='louis14', year=1700, name='Le Grand Siècle finissant',
          desc='Louis XIV règne encore. Mousquets à mèche et à silex, derniers piquiers, places de Vauban.'),

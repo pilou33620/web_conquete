@@ -82,18 +82,20 @@ class Game:
         self.x_cote = geo.xy(44, -0.95)[0]
 
         self.factions = {}
-        for code, f in R.FACTIONS.items():
+        # les camps de cette carte : toute la France (géographie 3), ou les cinq départements du Sud-Ouest (1 et 2)
+        codes = [c for c in R.FACTIONS if c in geo.playable_codes]
+        for code in codes:
             self.factions[code] = dict(
                 code=code, alive=True, res=dict(livres=500, vivres=400, fer=80, bois=120, armes=160, outils=40, recrues=900),
                 income={r: 0.0 for r in R.RESOURCES}, slider=0.5, research={b: None for b in R.BRANCHES}, techs=[],
-                rel={o: self.rng.randint(-15, 25) for o in R.FACTIONS if o != code}, trade={}, truce={},
+                rel={o: self.rng.randint(-15, 25) for o in codes if o != code}, trade={}, truce={},
                 overlord=None, war_since={}, mods={}, army_count=0, stats=dict(won=0, lost=0, captured=0, killed=0),
                 start_nodes=0, alerts={}, tax=0.5, intel={}, prisoners={}, weary=0.0, prestige=0.0, treaties={},
                 tarif=0, douaniers=False,   # douane (SPEC-MERCENAIRES.md)
                 last_war=-2 * 365.0, refu=0.0)   # au départ, de vieilles rancunes : les premières guerres viennent vite
             self.factions[code]['maison'] = FM.nouvelle(self, code)   # famille dirigeante (game/familles.py)
-        for a in R.FACTIONS:
-            for b in R.FACTIONS:
+        for a in codes:
+            for b in codes:
                 if a < b:
                     self.diplo[(a, b)] = 'paix'
 
@@ -120,7 +122,7 @@ class Game:
                     known |= missing
                 f['techs'] = [t for t in R.TECH if t in known]
         # (les techniques de l'époque d'abord : les premières troupes en ont les armes)
-        for code in R.FACTIONS:
+        for code in codes:
             cap = self.capital_of(code)
             self.nodes[cap]['garrison'] = [self.new_reg('ligne', code=code), self.new_reg('ligne', code=code),
                                            self.new_reg('cavalerie', code=code)]
@@ -146,7 +148,7 @@ class Game:
         self.log('info', f"Objectif : prendre tous les chefs-lieux (ou obtenir la soumission de leurs {self.dept_word()}s), "
                          f"ou être le plus prestigieux à la fin de 1899.")
         from .ai import AI
-        self.ais = {c: AI(self, c) for c in R.FACTIONS if c != player}
+        self.ais = {c: AI(self, c) for c in codes if c != player}
         self.compute_income()
 
     # ================================================================== utilitaires
@@ -3817,7 +3819,7 @@ class Game:
             self.log('fin', self.over['text'], important=True)
             return
         ok = True
-        for code in R.FACTIONS:
+        for code in self.factions:
             cap = self.capital_of(code)
             o = self.nodes[cap]['owner']
             if o == p or (o in self.factions and self.factions[o]['overlord'] == p):
@@ -3826,7 +3828,7 @@ class Game:
         if ok:
             years = self.t / 365.25
             self.over = dict(result='victoire', t=self.t,
-                             text=f"Toute l'Aquitaine reconnaît votre autorité ({years:.1f} ans de campagne).")
+                             text=f"{'Toute la France' if len(self.factions) > 5 else "Toute l'Aquitaine"} reconnaît votre autorité ({years:.1f} ans de campagne).")
             self.speed_idx = 0
             self.log('fin', self.over['text'], important=True)
 

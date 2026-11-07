@@ -27,6 +27,7 @@ const PAPIER = {
   etatmajor: { fond: 0xf0e8cc, foret: 0x9fc27c, lande: 0xd8d6a0, marais: 0xa7c6b4, vigne: 0xcfa6c0, prairie: 0xcfe0a2, colline: 0xe0d4ac, montagne: 0xd2c2a2, haute: 0xeae6dc, ville: 0xe1a796, cote: 0xeee2bc, eau: 0x96c6dc, mer: 0x86b8d6, dunes: 0xf2e6c4 },
 };
 const RANG = { capitale: 0, fort: 1, ville: 2, village: 3 };
+const MAXB = 90, MAXL = 260, Z_LIEUX = 3;   // blocs du décor et places bâtis au plus ; zoom (px/km) dès lequel on bâtit les places
 
 export class Plateau {
   // mp : la carte (map.js) ; canvas : le canevas WebGL posé sous le sien
@@ -49,8 +50,15 @@ export class Plateau {
     eau.rotation.x = -Math.PI / 2; eau.position.set(mp.W / g.f / 2, EAU_Y, mp.H / g.f / 2); eau.receiveShadow = true; this.racine.add(eau);
     // le décor des pays et les routes se bâtissent par paquets ; les places, d'après l'état de la partie
     // (par morceaux, que le paysage des siècles refait un à un : paysage)
-    this.morceaux = [];
-    for (let i = 0; i < g.liste.length; i += 400) { const m = { liste: g.liste.slice(i, i + 400), grp: null }; this.morceaux.push(m); this.file.push(() => { m.grp = this.decor(m.liste); }); }
+    // (toute la France : par blocs de 16 × 16 hexagones, bâtis quand la caméra s'en approche, libérés loin d'elle : voir)
+    const blocs = new Map();
+    for (const t of g.liste) {
+      const k = (t.row >> 4) * 4096 + (t.col >> 4);
+      let m = blocs.get(k);
+      if (!m) blocs.set(k, m = { liste: [], grp: null, x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9, vu: 0 });
+      m.liste.push(t); m.x0 = Math.min(m.x0, t.gx); m.x1 = Math.max(m.x1, t.gx); m.y0 = Math.min(m.y0, t.gy); m.y1 = Math.max(m.y1, t.gy);
+    }
+    this.morceaux = [...blocs.values()];
     this.file.push(() => this.routes());
   }
 
@@ -337,10 +345,32 @@ export class Plateau {
     if (!st) return;
     for (const [id, l] of this.lieux) {
       const ns = st.nodes[id], cle = this.cleLieu(ns);
-      if (cle === l.cle) continue;
-      l.cle = cle;
-      this.file.push(() => { jeter(l.grp); const L = this.batirLieu(l, ns); l.grp = fige(L, this.racine); this.tourner(l.grp, L.tourn); this.sc.sale = true; });
+      l.cle = cle; l.ns = ns;   // (bâtie quand on la voit : voir)
     }
+  }
+  // ce que la caméra voit (km, avec une marge) : les blocs du décor et les places à l'écran se bâtissent, par petits pas ;
+  // au-delà de MAXB blocs et MAXL places bâtis, les plus anciens hors de vue sont libérés. De loin (trop de blocs à
+  // l'écran), les tuiles seules.
+  voir(cam, vw, vh) {
+    const now = performance.now(), m0 = 6, hx = vw / 2 / cam.z + m0, hy = vh / 2 / (cam.z * K) + m0;
+    const x0 = cam.x - hx, x1 = cam.x + hx, y0 = cam.y - hy, y1 = cam.y + hy;
+    const vus = this.morceaux.filter(m => m.x1 > x0 && m.x0 < x1 && m.y1 > y0 && m.y0 < y1);
+    if (vus.length <= MAXB) for (const m of vus) {
+      m.vu = now;
+      if (!m.grp && !m.attente) { m.attente = true; this.file.push(() => { m.attente = false; if (!m.grp) m.grp = this.decor(m.liste); }); }
+    }
+    const bati = this.morceaux.filter(m => m.grp && m.vu !== now).sort((a, b) => a.vu - b.vu);
+    for (let n = this.morceaux.filter(m => m.grp).length; n > MAXB && bati.length; n--) { const m = bati.shift(); jeter(m.grp); m.grp = null; this.sc.sale = true; }
+    if (cam.z >= Z_LIEUX) for (const l of this.lieux.values()) {
+      if (l.n.x < x0 - 8 || l.n.x > x1 + 8 || l.n.y < y0 - 8 || l.n.y > y1 + 8) continue;
+      l.vu = now;
+      if (l.cle && l.bati !== l.cle && !l.attente) {
+        l.attente = true;
+        this.file.push(() => { l.attente = false; l.bati = l.cle; jeter(l.grp); const L = this.batirLieu(l, l.ns); l.grp = fige(L, this.racine); this.tourner(l.grp, L.tourn); this.sc.sale = true; });
+      }
+    }
+    const places = [...this.lieux.values()].filter(l => l.grp && l.vu !== now).sort((a, b) => a.vu - b.vu);
+    for (let n = places.length + [...this.lieux.values()].filter(l => l.grp && l.vu === now).length; n > MAXL && places.length; n--) { const l = places.shift(); jeter(l.grp); l.grp = null; l.bati = null; this.sc.sale = true; }
   }
   batirLieu(l, ns) {
     const { mp, g } = this, n = l.n, t0 = l.t, st = M.style(n.dept), L = lot();
@@ -539,6 +569,7 @@ export class Plateau {
   // anim : la vie de la carte est animée (ambient.on)
   image(cam, vw, vh, dpr, budget = 8, anim = false) {
     const t0 = performance.now();
+    this.voir(cam, vw, vh);
     while (this.file.length && performance.now() - t0 < budget) { this.file.shift()(); this.sc.sale = true; }
     // les moulins tournent quand on les distingue : le plateau se redessine alors 15 fois par seconde, pas plus
     if (anim && cam.z >= 15 && this.ailes.length && t0 - (this.tAiles || 0) > 66) {

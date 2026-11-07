@@ -136,7 +136,7 @@ export class MapView {
     this.rules = payload.rules;
     this.m = m;
     this.W = m.W; this.H = m.H;
-    this.terrain = b64(m.terrain); this.dept = b64(m.dept); this.cellnode = b64(m.cellnode); this.river = b64(m.river);
+    this.terrain = b64(m.terrain); this.dept = b64(m.dept); this.cellnode = new Uint16Array(b64(m.cellnode).buffer);   // (deux octets par case ; 65535 : sans lieu) this.river = b64(m.river);
     this.nodes = m.nodes; this.edges = m.edges;
     this.depts = m.depts; this.deptCodes = m.dept_codes;
     this.cam = { x: m.W / 2, y: m.H / 2, z: 2 };
@@ -179,10 +179,11 @@ export class MapView {
     // celle de l'état-major (1818)
     this.teinte = 'nature';
     try { if (localStorage.getItem('conquete.carte.teinte') === 'epoque') this.teinte = 'epoque'; } catch (e) { /* stockage indisponible */ }
+    const jouables = m.playable || PLAYABLE;   // (toute la France, envoyée par le serveur ; les cinq d'avant sinon)
     this.playable = new Uint8Array(this.W * this.H);
     for (let c = 0; c < this.W * this.H; c++) {
       const d = this.dept[c];
-      this.playable[c] = d > 0 && PLAYABLE.includes(this.deptCodes[d - 1]) && this.terrain[c] > 1 ? 1 : 0;
+      this.playable[c] = d > 0 && jouables.includes(this.deptCodes[d - 1]) && this.terrain[c] > 1 ? 1 : 0;
     }
     this.prepEdges();
     this.buildBases();
@@ -470,7 +471,7 @@ export class MapView {
     const W = this.W, H = this.H, N = W * H;
     const proxy = new Int32Array(N).fill(-1);
     const q = [];
-    for (let c = 0; c < N; c++) if (this.playable[c] && this.cellnode[c] !== 255) { proxy[c] = c; q.push(c); }
+    for (let c = 0; c < N; c++) if (this.playable[c] && this.cellnode[c] !== 65535) { proxy[c] = c; q.push(c); }
     for (let h = 0; h < q.length; h++) {
       const c = q[h], i = c % W, j = (c / W) | 0;
       const nb = [i > 0 ? c - 1 : -1, i < W - 1 ? c + 1 : -1, j > 0 ? c - W : -1, j < H - 1 ? c + W : -1];

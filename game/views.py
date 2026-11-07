@@ -124,7 +124,7 @@ def from_dict(geo, d):
     migrate(g)
     TB.load_from(g, d)
     from .ai import AI
-    g.ais = {c: AI(g, c) for c in R.FACTIONS if c != g.player}
+    g.ais = {c: AI(g, c) for c in g.factions if c != g.player}
     for c, st in (d.get('ai_state') or {}).items():
         if c in g.ais:
             g.ais[c].diplo_clock = st.get('diplo_clock', g.ais[c].diplo_clock)

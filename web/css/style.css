@@ -413,6 +413,7 @@ table.grid.vl-tab td:first-child, table.grid.vl-tab th:first-child { text-align:
 .cartouche .campaign { font-family: var(--f-titre); font-style: italic; font-size: 27px; color: var(--laiton-clair); margin-top: 4px; }
 .cartouche p { margin: 8px 0 0; color: var(--papier-2); font-size: 16.5px; max-width: 42ch; }
 .dept-list { display: flex; flex-direction: column; gap: 7px; }
+.dept-sel { width: 100%; font: inherit; font-size: 17px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--hair); background: rgba(0,0,0,.25); color: var(--papier); }
 .dept-card { display: grid; grid-template-columns: 34px 1fr; gap: 3px 11px; text-align: left; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--hair);
   background: rgba(0,0,0,.18); }
 .dept-card .coat { width: 32px; height: 38px; grid-row: span 2; }

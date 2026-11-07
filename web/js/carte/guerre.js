@@ -216,7 +216,7 @@ function plusProche(map, st, x, y, ok, max = 1e9) {
   return best;
 }
 const amiDe = st => o => o === st.me?.code || st.factions?.find(f => f.code === o)?.st === 'alliance';
-const maitreEn = (map, st, x, y) => { const c = map.cellnode?.[(y | 0) * map.W + (x | 0)]; return c == null || c === 255 ? null : st.nodes[c]?.o; };
+const maitreEn = (map, st, x, y) => { const c = map.cellnode?.[(y | 0) * map.W + (x | 0)]; return c == null || c === 65535 ? null : st.nodes[c]?.o; };
 // d'où vient le pain d'une armée du joueur en campagne (comme engine.attrition) : de son magasin (dp), sinon, sur ses
 // terres ou celles d'un allié, de la place amie la plus proche ; null si elle est coupée (pays ennemi ou neutre, sans
 // magasin)

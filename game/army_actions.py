@@ -603,7 +603,7 @@ def cell_mask(g, owners):
     if not owners:
         return None
     tag = {o: i + 1 for i, o in enumerate(sorted(owners))}
-    m = bytearray(256)
+    m = bytearray(65536)   # (indexé par les valeurs de geo.cellnode, sur deux octets ; geo.NONE compris)
     for n in g.nodes:
         t = tag.get(n['owner'])
         if t:

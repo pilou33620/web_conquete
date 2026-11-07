@@ -103,6 +103,7 @@ export class UI {
       if (t.dataset.act === 'slider') this.cmd({ cmd: 'slider', value: t.value / 100 }, false);
       if (t.dataset.act === 'tax') this.cmd({ cmd: 'tax', value: t.value / 100 }, false);
       // douane (panneau Commerce) : hors data-act, que le clic de la page n'empêche pas de cocher
+      if (t.dataset.deptSel && t.value) this.pickDept(t.value);
       if (t.dataset.douane) this.cmd({ cmd: t.dataset.douane, value: t.dataset.douane === 'tarif' ? +t.value : t.checked });
     });
     document.body.addEventListener('input', e => {
@@ -2051,7 +2052,14 @@ export class UI {
     const scs = this.rules.scenarios || {};
     const sc = scs[this.startScen] || { title: 'Aquitaine, 1790', intro: '', names: {}, word: 'département' };
     const scenBtns = (this.rules.scenario_order || []).map(k => `<button class="${k === this.startScen ? 'on' : ''}" data-act="pick-scen" data-v="${k}" title="${esc(scs[k].campaign)}">${k}</button>`).join('');
-    const cards = Object.entries(this.rules.factions).map(([code, f]) => `
+    // (toute la France : la liste des départements de la carte, par nom ; la fiche de celui qu'on a choisi ; on peut aussi
+    // toucher une de ses villes sur la carte)
+    const jouables = this.md.playable || Object.keys(this.rules.factions), nomDe = c => sc.names[c] || this.rules.factions[c]?.name || c;
+    const choixDept = `<select class="dept-sel" data-dept-sel="1" aria-label="${sc.word === 'province' ? 'Province' : 'Département'}">
+      <option value="">${sc.word === 'province' ? 'Choisir une province…' : 'Choisir un département…'}</option>
+      ${jouables.filter(c => this.rules.factions[c]).sort((a, b) => nomDe(a).localeCompare(nomDe(b), 'fr')).map(c => `<option value="${c}" ${c === this.startDept ? 'selected' : ''}>${esc(nomDe(c))} (${c})</option>`).join('')}
+    </select><p class="muted small" style="margin:4px 0 0">ou touchez une de ses villes sur la carte</p>`;
+    const cards = Object.entries(this.rules.factions).filter(([code]) => jouables.length <= 5 || code === this.startDept).map(([code, f]) => `
       <button class="dept-card ${this.startDept === code ? 'on' : ''}" data-act="pick-dept" data-v="${code}">
         ${coat(f.color, code)}<div class="dn">${esc(sc.names[code] || f.name)}<small>${f.capital}</small></div><div class="dd">${f.title}</div>
         <div class="traits">${f.pros.map(p => `<div>${p}</div>`).join('')}${f.cons.map(p => `<div class="con">${p}</div>`).join('')}</div>
@@ -2064,6 +2072,7 @@ export class UI {
       <div class="row"><span class="lab">Début</span><span class="seg">${scenBtns}</span></div>
       ${this.startEraHtml(sc)}
       ${info.running ? '<button class="btn primary" data-act="resume">Reprendre la partie en cours</button>' : ''}
+      ${jouables.length > 5 ? choixDept : ''}
       <div class="dept-list">${cards}</div>
       <div class="row"><span class="lab">Difficulté</span><span class="seg">${diffs}</span></div>
       <div class="start-actions">
