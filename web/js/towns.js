@@ -315,12 +315,6 @@ export class TownArt {
   // (f : km par unité du plateau ; le drapeau au mât de la place, les habitants sur la place, les pigeons au clocher)
   animer(ctx, n, s, col, ns, time, owner, f) {
     const z = this.map.cam.z * f, K = this.map.K, C = Math.sqrt(1 - K * K), fort = n.type === 'fort';
-    // de près, la maquette du vrai plan (hex/maquette.js) : le drapeau au clocher de l'église, les habitants sur la place
-    const m = this.map.plateau?.maqVue(n.id);
-    if (m) {
-      const Z = this.map.cam.z, dx = p => (p[0] - n.x) * Z, dy = p => (p[1] - n.y) * Z * K;
-      return this.vivre(ctx, n, s, col, owner, time, [dx(m.eglise), dy(m.eglise) - 0.034 * Z * C], [dx(m.place) - 0.03 * Z, dx(m.place) + 0.03 * Z, dy(m.place)], [dx(m.eglise), dy(m.eglise) - 0.03 * Z * C]);
-    }
     const mat = fort ? [0, -1.7 * z * C] : [2.6 * z, -2.8 * z * K];
     this.vivre(ctx, n, s, col, owner, time, mat, [-3 * z, 3 * z, 1.6 * z * K], [-0.4 * z, -0.8 * z * K - (n.type === 'village' ? 3.5 : 5.5) * z * C]);
   }

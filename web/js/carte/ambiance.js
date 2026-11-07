@@ -9,15 +9,10 @@ export const Z = { PLAN: 18, VIE: 110, MAX: 450 };
 export let U = 0.0045;
 // sur le plateau d'hexagones (SPEC-HEX), les maisons sont des maquettes grossies : la vie l'est aussi, se montre plus
 // tôt, et le zoom s'arrête avant qu'un hexagone ne déborde de l'écran (plateau : vrai ; sinon, les réglages d'origine)
-let plat = false;
 export function echellePlateau(plateau) {
-  plat = plateau;
   U = plateau ? 0.0045 * 4 : 0.0045;
-  Object.assign(Z, plateau ? { VIE: 60, MAX: 450 } : { VIE: 110, MAX: 450 });
+  Object.assign(Z, plateau ? { VIE: 60, MAX: 240 } : { VIE: 110, MAX: 450 });
 }
-// sur le plateau, de près (dès 100 px/km), les places montrent leur vrai plan à l'échelle (hex/maquette.js) : la vie
-// grossie revient peu à peu à l'échelle vraie, sans changer de taille à l'écran (z : px par km)
-export function vieDePres(z) { if (plat) U = 0.0045 * Math.min(4, Math.max(1, 400 / z)); }
 
 export const SAISONS = ['printemps', 'ete', 'automne', 'hiver'];
 // le serveur écrit « été »

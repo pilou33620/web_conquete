@@ -47,7 +47,7 @@ const PAL = {
   meca: ["#c25e40", "#8a3d2b", "#5e2a20"], beton: ["#d8d5ce", "#aaa79f", "#8a877f"],
   vert: ["#8dbb62", "#5f8c42", "#4a6e34"], solaire: ["#46658a", "#24384f", "#16243a"],
 };
-export const TEINTES = {};  // « tuile1 » → 9 nuances du versant à l'ombre au versant au soleil, et le faîtage
+const TEINTES = {};  // « tuile1 » → 9 nuances du versant à l'ombre au versant au soleil, et le faîtage
 for (const [nom, p] of Object.entries(PAL)) {
   for (let v = 0; v < 3; v++) {
     const q = p.map((c) => (v ? melange(c, v === 1 ? "#ffffff" : "#000000", 0.08) : c));
@@ -128,7 +128,7 @@ function cadre(P) {
 const rect = (c, u, a, b) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => [c[0] + u[0] * a * i - u[1] * b * j, c[1] + u[1] * a * i + u[0] * b * j]);
 const ovale = (c, u, a, b, n = 24) => Array.from({ length: n }, (_, k) => { const t = (k / n) * TAU, x = Math.cos(t) * a, y = Math.sin(t) * b; return [c[0] + u[0] * x - u[1] * y, c[1] + u[1] * x + u[0] * y]; });
 // Une ligne (route, rivière, enceinte) : écart d'un point au bord de sa chaussée ou de son eau
-export function ecart(l, x, y) {
+function ecart(l, x, y) {
   if (!l.boite) { const xs = l.pts.map((p) => p[0]), ys = l.pts.map((p) => p[1]), w = l.ws ? Math.max(...l.ws) : l.demi; l.boite = [Math.min(...xs) - w, Math.min(...ys) - w, Math.max(...xs) + w, Math.max(...ys) + w]; }
   const b = l.boite, hors = Math.max(b[0] - x, x - b[2], b[1] - y, y - b[3]);
   if (hors > 0.5) return hors;  // loin de la ligne : une borne inférieure suffit
@@ -174,7 +174,7 @@ function tronquer(pts, cx, cy, B) {
 
 
 // Quartiers : demi-largeur de rue (km), sol, teinte du bâti vu de loin, profondeur des maisons
-export const QUARTIERS = {
+const QUARTIERS = {
   vieux: [0.0032, "#cdbd99", "#b0654a", 0.016], faubourg: [0.0025, "#87a35b", null, 0], maraichers: [0.002, "#86a159", null, 0],
   place: [0.0035, "#ddd0ae", null, 0], eglise: [0.0032, "#d6c8a6", "#7d8794", 0.014], jardin: [0.004, "#78a453", null, 0],
   insula: [0.003, "#dccdaa", "#bd6e4c", 0.013], horti: [0.0025, "#88a65c", null, 0], forum: [0.0045, "#e5d9bb", "#c07a55", 0.006], thermes: [0.004, "#dccfae", "#b97250", 0.01],

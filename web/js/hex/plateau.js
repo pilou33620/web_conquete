@@ -8,8 +8,6 @@
 import { THREE, DEGRADE, Scene3D, Grille, lot, put, fige, jeter, transfere, boite, cyl, cone, sphere, ruban, hache, bruit, semer, rnd, entre, choix, K, C } from './moteur.js';
 import * as M from './modeles.js';
 import { phylloxera } from '../epoque.js';
-import { etatVille } from '../carte/villes.js';
-import { maquette, cleMaquette } from './maquette.js';
 
 const GEO = ['mer', 'eau', 'plaine', 'foret', 'lande', 'marais', 'colline', 'montagne', 'haute', 'dunes', 'vigne'];
 // couleurs et hauteurs (unités du plateau ; le relief reste bas pour que les calques 2D tombent juste)
@@ -29,11 +27,6 @@ const PAPIER = {
   etatmajor: { fond: 0xf0e8cc, foret: 0x9fc27c, lande: 0xd8d6a0, marais: 0xa7c6b4, vigne: 0xcfa6c0, prairie: 0xcfe0a2, colline: 0xe0d4ac, montagne: 0xd2c2a2, haute: 0xeae6dc, ville: 0xe1a796, cote: 0xeee2bc, eau: 0x96c6dc, mer: 0x86b8d6, dunes: 0xf2e6c4 },
 };
 const RANG = { capitale: 0, fort: 1, ville: 2, village: 3 };
-// les villes de près : 'plan' (le vrai plan en maquette, maquette.js) ou 'jouet' (la ville jouet, à toute distance) ;
-// shortcut: choix par l'adresse (?villes=jouet), le temps que le joueur compare les deux rendus
-const VILLES = (typeof location !== 'undefined' && new URLSearchParams(location.search).get('villes')) || 'plan';
-export const ZM = 100;   // px par km : de plus près, les places montrent leur vrai plan (maquette.js)
-const MAQS = 8;          // maquettes gardées
 
 export class Plateau {
   // mp : la carte (map.js) ; canvas : le canevas WebGL posé sous le sien
@@ -45,7 +38,6 @@ export class Plateau {
     this.racine = new THREE.Group(); this.racine.scale.setScalar(g.f); this.sc.monde.add(this.racine);
     this.ailes = [];             // ailes des moulins : elles tournent (image)
     this.lieux = new Map();      // id de la place → { n, t (hexagones), grp, cle }
-    this.maqs = new Map();       // id de la place → la maquette de son vrai plan, de près : { grp, cle, eglise, place }
     this.file = [];              // ce qui reste à bâtir, un peu à chaque image
     this.saison = null;
     this.echantillonner();
@@ -343,7 +335,6 @@ export class Plateau {
   cleLieu(ns) { return ns ? `${ns.o}|${ns.f || 0}|${ns.d || 0}|${ns.sg ? Math.round((ns.sg.dmg || 0) * 3) : 0}|${ns.lv?.[0] === 'incendie' ? 1 : 0}|${Math.round((ns.dg || 0) * 5)}|${(this.mp.state?.year || 0) >= 1830 ? 1 : 0}` : '-'; }
   majLieux(st) {
     if (!st) return;
-    this.st = st;
     for (const [id, l] of this.lieux) {
       const ns = st.nodes[id], cle = this.cleLieu(ns);
       if (cle === l.cle) continue;
@@ -494,44 +485,6 @@ export class Plateau {
     this.sc.sale = true;
   }
 
-  // ---------------------------------------------------------------- de près, le vrai plan des places (maquette.js)
-  // les places à l'écran montrent leur maquette, une fois bâtie (une à la fois, par petits pas) ; la ville « jouet »
-  // reste en attendant, et revient de loin
-  proches(cam, vw, vh) {
-    const st = this.st, pres = cam.z >= ZM && st && VILLES !== 'jouet', m0 = 2.5;
-    const x0 = cam.x - vw / 2 / cam.z - m0, x1 = cam.x + vw / 2 / cam.z + m0, y0 = cam.y - vh / 2 / (cam.z * K) - m0, y1 = cam.y + vh / 2 / (cam.z * K) + m0;
-    for (const [id, l] of this.lieux) {
-      const n = l.n, m = this.maqs.get(id), voulu = pres && n.x > x0 && n.x < x1 && n.y > y0 && n.y < y1;
-      if (voulu && !this.chantier) {
-        const cle = cleMaquette(n, etatVille(n, st.nodes[id], st));
-        if (!m || m.cle !== cle) this.batirMaquette(id, n, st.nodes[id], cle);
-      }
-      const vue = !!(voulu && m?.grp);
-      if (m?.grp && m.grp.visible !== vue) { m.grp.visible = vue; this.sc.sale = true; }
-      if (l.grp && l.grp.visible === vue) { l.grp.visible = !vue; this.sc.sale = true; }
-      if (vue) m.vu = performance.now();
-    }
-  }
-  batirMaquette(id, n, ns, cle) {
-    this.chantier = id;
-    const it = maquette(this, n, ns);
-    const pas = () => {
-      // (quelques millisecondes par image, en tête de file : la maquette demandée passe avant le reste)
-      const t0 = performance.now(); let r;
-      do r = it.next(); while (!r.done && performance.now() - t0 < 5);
-      if (!r.done) { this.file.unshift(pas); return; }
-      this.chantier = null;
-      jeter(this.maqs.get(id)?.grp);
-      if (r.value) { r.value.grp.visible = false; this.racine.add(r.value.grp); }
-      this.maqs.set(id, r.value || { cle, grp: null });
-      // (les plus anciennes, hors de l'écran, partent)
-      const vieilles = [...this.maqs].filter(([, m]) => m.grp && !m.grp.visible).sort((a, b) => a[1].vu - b[1].vu);
-      while (this.maqs.size > MAQS && vieilles.length) { const [k, m] = vieilles.shift(); jeter(m.grp); this.maqs.delete(k); }
-    };
-    this.file.push(pas);
-  }
-  // la maquette affichée de la place (km : eglise, place), ou rien (towns.js y pose drapeau, habitants, pigeons)
-  maqVue(id) { const m = this.maqs.get(id); return m?.grp?.visible ? m : null; }
 
   // ---------------------------------------------------------------- chaque image
   // hauteur du sol (km) sous un point du jeu : les calques 2D y posent ce qui est debout
@@ -542,7 +495,6 @@ export class Plateau {
   // anim : la vie de la carte est animée (ambient.on)
   image(cam, vw, vh, dpr, budget = 8, anim = false) {
     const t0 = performance.now();
-    this.proches(cam, vw, vh);
     while (this.file.length && performance.now() - t0 < budget) { this.file.shift()(); this.sc.sale = true; }
     // les moulins tournent quand on les distingue : le plateau se redessine alors 15 fois par seconde, pas plus
     if (anim && cam.z >= 15 && this.ailes.length && t0 - (this.tAiles || 0) > 66) {

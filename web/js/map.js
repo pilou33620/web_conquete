@@ -8,7 +8,7 @@ import { profil } from './battle/qualite.js';
 import { uniform } from './battle/formes.js';
 import { figureKind, portraitGeneral } from './portraits.js';
 import { Epoque, phylloxera, styleCarte, startTechs, startRails } from './epoque.js';
-import { AMB, LUM, majAmbiance, echellePlateau, vieDePres } from './carte/ambiance.js';
+import { AMB, LUM, majAmbiance, echellePlateau } from './carte/ambiance.js';
 import { Z, nuit } from './carte/ambiance.js';
 import { Guerre, rayonMurs } from './carte/guerre.js';
 import { Travaux } from './carte/travaux.js';
@@ -1763,7 +1763,7 @@ export class MapView {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const hex = this.hex, K = this.K;
     // le plateau (SPEC-HEX) se dessine sur son canevas, dessous : celui-ci reste transparent
-    if (hex) { vieDePres(z); ctx.clearRect(0, 0, this.vw, this.vh); this.plateau.image(this.cam, this.vw, this.vh, dpr, 8, this.ambient.on); }
+    if (hex) { ctx.clearRect(0, 0, this.vw, this.vh); this.plateau.image(this.cam, this.vw, this.vh, dpr, 8, this.ambient.on); }
     else { ctx.fillStyle = '#141618'; ctx.fillRect(0, 0, this.vw, this.vh); }
     const [wx0, wy0] = this.toWorld(0, 0), [wx1, wy1] = this.toWorld(this.vw, this.vh);
     // fond rapide
