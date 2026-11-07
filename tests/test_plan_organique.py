@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(ICI))
 from game.geo import GeoMap  # noqa: E402
 from game.tactics import plan_organique as PO, plan_ville as PV  # noqa: E402
 
-GEO = GeoMap()
+GEO = GeoMap(2)   # (le Sud-Ouest des anciennes parties ; toute la France : test_france.py)
 K = PV.carte_de(GEO)
 nom = lambda x: next(n for n in GEO.nodes if n['name'] == x)
 # (nom, f, pop, d) : f=None garde l'enceinte de la place

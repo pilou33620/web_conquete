@@ -15,11 +15,17 @@ def lost_nodes(game, code):
 
 
 def borders(game, a, b):
-    for e in game.geo.edges:
-        oa, ob = game.nodes[e['a']]['owner'], game.nodes[e['b']]['owner']
-        if (oa == a and ob == b) or (oa == b and ob == a):
-            return True
-    return False
+    # (toute la France : 4 000 routes, demandé des dizaines de milliers de fois par mois ; gardé un quart de journée)
+    k = int(game.t * 4)
+    c = getattr(game, '_frontieres', None)
+    if c is None or c[0] != k:
+        s = set()
+        for e in game.geo.edges:
+            oa, ob = game.nodes[e['a']]['owner'], game.nodes[e['b']]['owner']
+            if oa != ob:
+                s.add((oa, ob)); s.add((ob, oa))
+        game._frontieres = c = (k, s)
+    return (a, b) in c[1]
 
 
 def value_of(game, code, res, qty):

@@ -432,6 +432,10 @@ class Game:
     def departements(self):
         return self.date() >= datetime.date(*R.DEPT_DATE)
 
+    def pays_de(self):
+        """« de France » (toute la France) ou « d'Aquitaine » (les anciennes parties du Sud-Ouest)."""
+        return 'de France' if len(self.factions) > 5 else "d'Aquitaine"
+
     def dept_word(self):
         return 'département' if self.departements() else 'province'
 
@@ -569,7 +573,9 @@ class Game:
             self._last_day = day
             self.new_day()
             self.drill_tick()
-        if self._dirty_income:
+        # (les revenus refaits au plus tous les quarts de journée : 89 camps agissent sans cesse et salissaient tout)
+        if self._dirty_income and self.t - getattr(self, '_income_t', -1.0) >= 0.25:
+            self._income_t = self.t
             self.compute_income()
         self.economy(dt)
         self.update_queues(dt)
@@ -890,13 +896,16 @@ class Game:
         season = self.season()
         self.compute_blockades()
         nb, front = self.frontieres()
+        par_camp = {}   # (les places de chaque camp en un seul passage : toute la France a 2 000 places et 89 camps)
+        for n in self.nodes:
+            par_camp.setdefault(n['owner'], []).append(n)
         for code, f in self.factions.items():
             if not f['alive']:
                 continue
             tb, cov = self.tools_bonus(code)
             ai = 1 + self.mod(code, 'ai_income')
             tot = dict(livres=0.0, vivres=0.0, recrues=0.0, industrie=0.0, fer=0.0, bois=0.0)
-            own = self.owned_nodes(code)
+            own = par_camp.get(code, [])
             food0 = R.SEASON_FOOD[season]
             if season == 'hiver':
                 food0 += self.mod(code, 'winter_food')
@@ -1797,6 +1806,16 @@ class Game:
         return top if cnt[top] > 0.4 * sum(cnt.values()) else None
 
     def faction_power(self, code):
+        # (toute la France : les forces de tous les camps d'un coup, gardées un quart de journée ; l'IA s'en sert pour juger)
+        k = int(self.t * 4)
+        c = getattr(self, '_forces', None)
+        if c is None or c[0] != k:
+            self._forces = c = (k, {})
+        if code not in c[1]:
+            c[1][code] = self._faction_power(code)
+        return c[1][code]
+
+    def _faction_power(self, code):
         p = 0.0
         for a in self.armies.values():
             if a['owner'] == code:
@@ -3803,8 +3822,8 @@ class Game:
         first = ranks[0]
         win = first == self.player or self.factions[first]['overlord'] == self.player
         self.over = dict(result='victoire' if win else 'defaite', t=self.t,
-                         text=("Le siècle s'achève : votre " + self.dept_word() + " est le plus prestigieux d'Aquitaine."
-                               if win else f"Le siècle s'achève : {self.fname(first)} est le plus prestigieux d'Aquitaine."))
+                         text=("Le siècle s'achève : votre " + self.dept_word() + f" est le plus prestigieux {self.pays_de()}."
+                               if win else f"Le siècle s'achève : {self.fname(first)} est le plus prestigieux {self.pays_de()}."))
         self.speed_idx = 0
         self.log('fin', self.over['text'], important=True)
 

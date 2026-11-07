@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from game.geo import GeoMap  # noqa: E402
 from game.tactics import terrain as TR  # noqa: E402
 
-GEO = GeoMap()
+GEO = GeoMap(2)   # (le Sud-Ouest des anciennes parties ; toute la France : test_france.py)
 RUE = (TR.T_ROUTE, TR.T_CHEMIN, TR.T_PORTE, TR.T_BRECHE)
 
 

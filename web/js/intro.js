@@ -36,7 +36,7 @@ export function intro(map, nodes) {
   el.innerHTML = `
     <div class="in-noir"></div>
     <div class="in-bande"></div><div class="in-bande bas"></div>
-    <p class="in-carton" style="--d:.6s"><b>Aquitaine, 1700</b><br>Cinq provinces se disputent le Sud-Ouest.</p>
+    <p class="in-carton" style="--d:.6s"><b>France, 1700</b><br>Les provinces se disputent le royaume.</p>
     <p class="in-carton" style="--d:5s"><b>1870</b><br>Le chemin de fer relie les villes.</p>
     <h1 class="in-titre">Conquête</h1>
     <span class="in-passer">Touchez pour passer</span>`;

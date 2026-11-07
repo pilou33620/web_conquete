@@ -82,18 +82,19 @@ VINEYARDS = [
 # relief : des lignes de crête (lat, lon) et des massifs isolés, en « hauteur » du jeu (> 0,42 collines, > 0,80 montagne,
 # > 1,55 haute montagne) ; le Sud-Ouest garde son relief écrit à la main (_elev)
 CRETES = [   # (amplitude, demi-largeur en degrés, crête)
-    (2.5, 0.40, [(43.95, 7.25), (44.15, 6.95), (44.50, 6.70), (44.90, 6.60), (45.30, 6.90), (45.83, 6.86), (46.20, 6.65)]),   # Alpes
-    (1.25, 0.28, [(46.25, 5.95), (46.60, 6.15), (47.00, 6.55), (47.40, 7.00)]),   # Jura
-    (1.30, 0.22, [(47.85, 7.00), (48.10, 7.05), (48.40, 7.18), (48.70, 7.20)]),   # Vosges
-    (2.20, 0.22, [(41.70, 9.15), (42.00, 9.05), (42.40, 9.00), (42.70, 9.20)]),   # Corse
+    (2.20, 0.26, [(43.95, 7.25), (44.15, 6.95), (44.50, 6.70), (44.90, 6.60), (45.30, 6.90), (45.83, 6.86), (46.20, 6.65)]),   # Alpes
+    (2.10, 0.26, [(43.10, -1.60), (42.98, -0.80), (42.80, 0.00), (42.70, 0.70), (42.62, 1.50), (42.52, 2.20), (42.48, 2.90)]),   # Pyrénées
+    (0.95, 0.22, [(46.25, 5.95), (46.60, 6.15), (47.00, 6.55), (47.40, 7.00)]),   # Jura
+    (1.00, 0.18, [(47.85, 7.00), (48.10, 7.05), (48.40, 7.18), (48.70, 7.20)]),   # Vosges
+    (1.60, 0.18, [(41.70, 9.15), (42.00, 9.05), (42.40, 9.00), (42.70, 9.20)]),   # Corse
 ]
 MASSIFS = [   # (lat, lon, amplitude, rayon en degrés)
-    (45.30, 3.00, 0.85, 1.25), (45.06, 2.75, 1.70, 0.25), (45.53, 2.81, 1.65, 0.20), (45.80, 2.95, 0.80, 0.15),
-    (44.90, 4.20, 1.30, 0.22), (44.85, 3.45, 0.70, 0.35), (44.60, 3.00, 0.60, 0.30), (44.25, 3.75, 1.00, 0.35),
-    (43.45, 2.30, 0.75, 0.20), (45.70, 1.90, 0.45, 0.50), (47.15, 4.00, 0.75, 0.30), (45.60, 3.80, 0.90, 0.20),
-    (45.65, 4.45, 0.55, 0.25), (45.00, 4.35, 0.80, 0.30), (45.45, 3.60, 0.70, 0.25), (46.10, 4.50, 0.60, 0.20),
+    (45.30, 3.00, 0.55, 1.20), (45.06, 2.75, 1.20, 0.22), (45.53, 2.81, 1.15, 0.18), (45.80, 2.95, 0.45, 0.12),
+    (44.90, 4.20, 0.90, 0.20), (44.85, 3.45, 0.40, 0.30), (44.60, 3.00, 0.35, 0.28), (44.25, 3.75, 0.70, 0.30),
+    (43.45, 2.30, 0.45, 0.18), (45.70, 1.90, 0.25, 0.45), (47.15, 4.00, 0.55, 0.25), (45.60, 3.80, 0.60, 0.18),
+    (45.65, 4.45, 0.35, 0.22), (45.00, 4.35, 0.55, 0.28), (45.45, 3.60, 0.45, 0.22), (46.10, 4.50, 0.40, 0.18),
     (45.90, 3.25, -0.70, 0.28),   # la Limagne
-    (45.00, 5.50, 1.00, 0.25), (45.35, 5.80, 1.00, 0.20), (45.65, 6.15, 1.00, 0.20), (44.17, 5.28, 1.20, 0.15),
+    (45.00, 5.50, 0.85, 0.22), (45.35, 5.80, 0.85, 0.18), (45.65, 6.15, 0.85, 0.18), (44.17, 5.28, 1.00, 0.12),
     (43.80, 5.40, 0.55, 0.30), (43.53, 5.60, 0.55, 0.15), (43.25, 6.35, 0.60, 0.25), (43.48, 6.85, 0.50, 0.15),
     (44.40, 5.20, 0.70, 0.35), (43.95, 6.20, 0.85, 0.35),   # Baronnies, Préalpes de Digne
     (48.40, -3.90, 0.55, 0.20), (48.20, -3.60, 0.45, 0.22), (48.75, -0.55, 0.50, 0.40), (48.40, -0.30, 0.42, 0.30),
@@ -660,10 +661,13 @@ class GeoMap:
         """Le relief de toute la France : les Pyrénées et le Sud-Ouest de _elev (là seulement), les crêtes et les massifs."""
         cl = math.cos(math.radians(lat))
         sw = min(1.0, max(0.0, (1.9 - lon) / 0.5)) * min(1.0, max(0.0, (46.1 - lat) / 0.4))   # (le Sud-Ouest d'avant)
-        e = GeoMap._elev(lat, lon) * sw
-        if lon > 1.4 and lat < 43.4:   # les Pyrénées à l'est du Sud-Ouest, jusqu'à la Méditerranée
+        # (le Sud-Ouest d'avant sans ses Pyrénées, qui montaient sans fin vers le sud : ici une ligne de crête, CRETES)
+        if lon > -1.0:
             base = 43.20 + 0.03 * (lon + 1.0) + 0.05 * math.sin(lon * 7.3) + 0.03 * math.sin(lon * 19.0 + 1.0)
-            e = max(e, max(0.0, base - lat) / 0.21 * min(1.0, max(0.0, (3.25 - lon) / 0.35)))
+            pyr = max(0.0, base - lat) / 0.21
+        else:
+            pyr = max(0.0, 43.36 + 0.04 * math.sin(lon * 9.0) - lat) / 0.30 + (0.18 if lat < 43.45 else 0.0)
+        e = max(0.0, GeoMap._elev(lat, lon) - pyr) * sw
         for amp, w, pts in CRETES:
             d = min(_dseg(lat, lon * cl, a[0], a[1] * cl, b[0], b[1] * cl) for a, b in zip(pts, pts[1:]))
             e += amp * math.exp(-(d / w) ** 2) + amp * 0.3 * math.exp(-(d / (w * 2.2)) ** 2)
@@ -967,7 +971,36 @@ class GeoMap:
         return smooth if wet(smooth) <= wet(pts) else pts
 
     def _ensure_connected(self, pairs, P):
-        """Relie les morceaux du réseau : le plus petit d'abord, à la place la plus proche d'un autre morceau (à moins de
+        if self.version >= 3:
+            return self._relier(pairs, P)
+        n = len(P)
+        while True:
+            parent = list(range(n))
+
+            def find(x):
+                while parent[x] != x:
+                    parent[x] = parent[parent[x]]
+                    x = parent[x]
+                return x
+            for a, b in pairs:
+                parent[find(a)] = find(b)
+            roots = {find(i) for i in range(n)}
+            if len(roots) == 1:
+                return
+            best = None
+            for a in range(n):
+                for b in range(n):
+                    if find(a) != find(b):
+                        d = math.dist(P[a], P[b])
+                        if (best is None or d < best[0]) and self._water_on_segment(P[a], P[b]) < 1:
+                            best = (d, a, b)
+            if best is None:
+                return
+            _, a, b = best
+            pairs[(min(a, b), max(a, b))] = dict(royal=False, ferry=False)
+
+    def _relier(self, pairs, P):
+        """(géographie 3) Relie les morceaux du réseau : le plus petit d'abord, à la place la plus proche d'un autre morceau (à moins de
         60 km, sans eau entre elles) ; une île que rien ne relie reste à part (Corse, Belle-Île…)."""
         n = len(P)
         G = 20.0

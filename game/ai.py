@@ -19,6 +19,8 @@ MIX = {
     '47': ['ligne'] * 4 + ['legere'] * 1 + ['cavalerie'] * 3 + ['artillerie'] * 1 + ['grenadiers'],
     '64': ['ligne'] * 5 + ['legere'] * 1 + ['chasseurs'] * 3 + ['cavalerie'] * 1 + ['artillerie'] * 1 + ['grenadiers'],
 }
+for _c, _f in R.FACTIONS.items():   # (les départements générés : l'armée du profil le plus proche)
+    MIX.setdefault(_c, MIX['64'] if _f['specialty'] == 'recrues' else MIX['24'] if _f['specialty'] == 'fer' else MIX['47'] if _f['specialty'] == 'vivres' else MIX['33'])
 VALUE = {'capitale': 12, 'ville': 5, 'fort': 3, 'village': 2}
 # cours ordinaires du marché (voir Game.new_day) : on n'achète pas quand les prix s'envolent
 MARKET_BASE = {k: v for k, v in R.MARKET_BASE.items() if k != 'armes'}   # (les armes s'achètent à part : arms_room)

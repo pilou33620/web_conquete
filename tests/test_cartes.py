@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from game.geo import GeoMap  # noqa: E402
 from game.tactics import terrain as TR, terrain_ville as TV  # noqa: E402
 
-GEO = GeoMap()
+GEO = GeoMap(2)   # (le Sud-Ouest des anciennes parties ; toute la France : test_france.py)
 VILLAGES = [n for n in GEO.nodes if n['type'] in ('village', 'bourg', 'ville')][::9][:10]
 CROP = {TR.T_CHAMP, TR.T_PRE, TR.T_VIGNE_T, TR.T_LANDE_T, TR.T_VERGER}
 

@@ -547,18 +547,18 @@ ERAS = [
          desc='Guerre de 1870, armée moderne, phylloxéra dans les vignes.'),
 ]
 SCENARIOS = {
-    '1700': dict(date=(1700, 3, 1), title='Aquitaine, 1700', campaign='Grande campagne 1700 – 1899',
-                 intro='Louis XIV règne. Cinq provinces du Sud-Ouest se disputent l’Aquitaine : traversez deux siècles, '
+    '1700': dict(date=(1700, 3, 1), title='France, 1700', campaign='Grande campagne 1700 – 1899',
+                 intro='Louis XIV règne. Les provinces du royaume se disputent la France : traversez deux siècles, '
                        'de la Guerre de Succession d’Espagne à la IIIe République. Le plus prestigieux en 1900 l’emporte.',
                  techs_before=None),
-    '1790': dict(date=(1790, 3, 4), title='Aquitaine, 1790', campaign='Depuis la Révolution',
+    '1790': dict(date=(1790, 3, 4), title='France, 1790', campaign='Depuis la Révolution',
                  intro='L’Assemblée vient de créer les départements. Choisissez le vôtre, ralliez ses villages, '
                        'puis prenez les chefs-lieux voisins par les armes, le commerce ou la diplomatie.',
                  techs_before=1778),
-    '1813': dict(date=(1813, 6, 1), title='Aquitaine, 1813', campaign='La fin de l’Empire',
+    '1813': dict(date=(1813, 6, 1), title='France, 1813', campaign='La fin de l’Empire',
                  intro='L’Empire vacille, la guerre d’Espagne tourne mal : la frontière des Pyrénées s’embrase.',
                  techs_before=1806),
-    '1870': dict(date=(1870, 7, 19), title='Aquitaine, 1870', campaign='La guerre de 1870',
+    '1870': dict(date=(1870, 7, 19), title='France, 1870', campaign='La guerre de 1870',
                  intro='La France déclare la guerre à la Prusse. Chemins de fer et fusils Chassepot : '
                        'un autre siècle commence.', techs_before=1866),
 }
@@ -713,6 +713,10 @@ POP_RETURN = 0.02        # sous ce plancher, hors siège, les familles reviennen
 POP_SAFE_STAB = 0.6      # ordre public d'une place sûre, qui accueille les réfugiés
 
 
+POP_CURVES.setdefault('ville_fr', _town(1.18, 1.4))   # (les départements générés : une ville, un village ordinaires)
+POP_CURVES.setdefault('rural_fr', _rural(1851, 1.15, 0.95, 'exode'))
+
+
 def pop_curve(gn):
     """Trajectoire de population d'un lieu (nœud de la carte)."""
     key = POP_PLACE.get(gn['name'])
@@ -724,7 +728,7 @@ def pop_curve(gn):
             key = 'pins' if dept == '40' and ('bois' in gn['spec'] or 'fer' in gn['spec']) else f'rural_{dept}'
         else:
             key = f'ville_{dept}'
-    return POP_CURVES[key]
+    return POP_CURVES.get(key) or POP_CURVES['ville_fr' if key.startswith('ville_') else 'rural_fr']
 # années à partir desquelles une technologie est connue (on ne recherche pas la machine à vapeur en 1700)
 TECH_YEAR = dict(
     baionnette=1700, vauban=1700, tir_rang=1700, cuirassiers=1700, diplomates=1700, manufactures=1700, gabares=1700,
@@ -914,6 +918,13 @@ MAISON_NOMS = {
     '47': ['de Lacépède', 'de Durfort', 'de Fumel', 'Lacuée', 'de Raymond', 'Boudon', 'de Nort', 'Lafont'],
     '64': ['de Gramont', 'Etcheverry', 'de Gassion', 'de Navailles', 'Harispe', 'Garat', 'd’Abbadie', 'Larralde'],
 }
+# (les départements générés : huit noms tirés d'une liste de familles de notables et de noblesse de province)
+_NOMS = ['de Rohan', 'de Montmorency', 'de La Rochefoucauld', 'de Noailles', 'de Polignac', 'de Broglie', 'de Choiseul',
+         'de Beauvau', "d'Harcourt", 'de Clermont-Tonnerre', 'de Castellane', 'de Crussol', 'de Villeneuve', 'de Sabran',
+         'Leroux', 'Dupont', 'Lefebvre', 'Moreau', 'Girard', 'Mercier', 'Bonnet', 'Lambert', 'Fontaine', 'Rousseau', 'Vincent',
+         'Morel', 'Fournier', 'Garnier', 'Chevalier', 'Perrin', 'Robin', 'Masson', 'Gauthier', 'Roussel', 'Blanchard', 'Picard']
+for _k, _c in enumerate(sorted(c for c in FACTIONS if c not in MAISON_NOMS)):
+    MAISON_NOMS[_c] = [_NOMS[(_k * 7 + i * 5) % len(_NOMS)] for i in range(8)]
 PRENOMS = ['Jean', 'Pierre', 'Bernard', 'Arnaud', 'Guillaume', 'Raymond', 'Jacques', 'Joseph', 'Gaston', 'Henri', 'Louis',
            'Antoine', 'Étienne', 'Bertrand', 'Armand', 'François']
 PRENOMS_F = ['Marie', 'Jeanne', 'Catherine', 'Marguerite', 'Anne', 'Louise', 'Madeleine', 'Isabeau', 'Françoise', 'Thérèse']

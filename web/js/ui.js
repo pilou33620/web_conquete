@@ -1794,8 +1794,8 @@ export class UI {
     }).join('');
     const neu = pris.neutre || 0;
     const hegLine = !st.heg ? '' : `<p class="small" style="color:#ffcf85;margin:0 0 8px">${st.heg === st.me.code
-      ? 'Vous dominez l’Aquitaine : les autres camps se méfient de vous et se liguent contre vous dès que vous êtes en guerre.'
-      : `${esc(this.rules.factions[st.heg].name)} domine l’Aquitaine : les autres camps s’en méfient et entrent volontiers dans ses guerres, dans le camp adverse.`}</p>`;
+      ? `Vous dominez ${Object.keys(st.factions || {}).length > 5 ? 'la France' : 'l’Aquitaine'} : les autres camps se méfient de vous et se liguent contre vous dès que vous êtes en guerre.`
+      : `${esc(this.rules.factions[st.heg].name)} domine ${Object.keys(st.factions || {}).length > 5 ? 'la France' : 'l’Aquitaine'} : les autres camps s’en méfient et entrent volontiers dans ses guerres, dans le camp adverse.`}</p>`;
     const neuLine = neu ? `<div class="row" style="margin-bottom:8px"><span class="small">Vous détenez ${fmt(neu)} miliciens insurgés prisonniers${st.me.prisoner_upkeep ? `, nourris ${fmt1(this.per(st.me.prisoner_upkeep))} vivres ${this.perU} pour tous vos prisonniers` : ''}.</span>${enrollBtn('neutre', neu, 'Enrôler')}</div>` : '';
     // droits de passage : qui nous laisse passer, à qui nous laissons passer (sinon, terres fermées)
     const others = st.factions.filter(f => f.code !== me && f.alive);
