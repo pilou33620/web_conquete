@@ -20,7 +20,7 @@ const TRACES = new Set(['ROUTE', 'CHEMIN', 'GUE']);
 const TOITS = { ardoise: 0x5b5866, chaume: 0xb89a5a, lauze: 0x7a7268 };
 const NOBLE = new Set(['cathedrale', 'eglise', 'caserne', 'poudriere', 'hopital', 'couvent', 'hotel', 'halle', 'chateau', 'forge', 'scierie', 'sechoir', 'moulin']);
 const NEIGE = new THREE.Color(0xf4f7fa);
-// un matériau dont les pièces s'ajourent selon leur hexagone (attribut aHex ; texture : ouverture 0–255 par hexagone) :
+// un matériau dont les pièces s'ajourent arbre par arbre (attribut aHex : le numéro de l'arbre ; texture : ouverture 0–255) :
 // une trame de Bayer 4×4 fait sauter jusqu'aux trois quarts des pixels, le bois reste lisible et les troupes paraissent
 function ajoure(base, tex) {
   const m = base.clone();
@@ -130,13 +130,16 @@ export class Champ {
   decor() {
     const { g } = this, L = lot(), A = lot(), R = g.R;
     this.boise = new Uint8Array(g.liste.length);
-    // les arbres des bois et des vergers, à part : chacun marqué de son hexagone (aHex), pour s'ouvrir au-dessus des troupes ;
+    this.arbres = [];            // [x, y] de chaque arbre, en mètres
+    this.parHex = new Map();     // hexagone → numéros de ses arbres
+    // les arbres des bois et des vergers, à part : chacun marqué de son numéro (aHex), pour s'ouvrir au-dessus des troupes ;
     // l'hiver, les feuillus sont nus (houppiers gris-brun, poudrés par neiger)
     const arbre = (t, x, z, s, sorte) => {
-      const n = A.g.length, no = A.o.length; this.boise[t.i] = 1;
+      const n = A.g.length, no = A.o.length, k = this.arbres.length; this.boise[t.i] = 1;
+      this.arbres.push([x * g.f, z * g.f]); (this.parHex.get(t.i) || this.parHex.set(t.i, []).get(t.i)).push(k);
       M.arbre(A, x, t.top, z, s, sorte, this.neige && sorte !== 'sapin' && sorte !== 'pin' ? choix([0x8f8a6e, 0x9a927a]) : undefined);
       this.neiger(A.g.slice(n), sorte === 'sapin' ? 0.25 : 0.55);   // (sapins blancs, houppiers poudrés sur le dessus)
-      for (const geo of [...A.g.slice(n), ...A.o.slice(no)]) geo.setAttribute('aHex', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(t.i), 1));
+      for (const geo of [...A.g.slice(n), ...A.o.slice(no)]) geo.setAttribute('aHex', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(k), 1));
     };
     for (const t of g.liste) {
       semer(t.q, t.r);
@@ -151,10 +154,13 @@ export class Champ {
       if (t.t === 'PRE' && rnd() < 0.18) { const [x, z] = rr(); put(L, sphere(0.9, 0), 0x5fa83c, x, y + 0.5, z); }
     }
     this.neiger(L.g); fige(L, this.racine);
-    // un seul maillage pour tous les arbres ; l'ouverture de chaque hexagone dans une petite texture (eclaircir)
-    const tex = this.texOuv = new THREE.DataTexture(this.ouv = new Uint8Array(g.cols * g.rows), g.cols, g.rows, THREE.RedFormat);
+    // un seul maillage pour tous les arbres ; l'ouverture de chaque arbre dans une petite texture (eclaircir) ; son ombre
+    // s'ajoure avec lui (customDepthMaterial : le passage des ombres)
+    const lw = 256, lh = Math.max(1, Math.ceil(this.arbres.length / lw));
+    const tex = this.texOuv = new THREE.DataTexture(this.ouv = new Uint8Array(lw * lh), lw, lh, THREE.RedFormat);
     tex.needsUpdate = true;
     const grp = fige(A, this.racine, { mat: ajoure(MAT, tex) });
+    if (grp.children[0]) grp.children[0].customDepthMaterial = ajoure(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), tex);
     if (grp.children[1]) grp.children[1].material = ajoure(CONT, tex);
   }
   // la neige : les faces tournées vers le ciel blanchissent (toits, houppiers, sapins, haut des murs, haies, clôtures) ;
@@ -420,8 +426,8 @@ export class Champ {
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: this.texBoue, transparent: true, depthWrite: false }));
     m.renderOrder = 1; this.racine.add(m); this.piet = piet; this.vBoue = -1;
   }
-  // les bois s'ouvrent au-dessus des troupes : les hexagones boisés sous un régiment (marge d'un demi-hexagone, poussée un
-  // peu au sud : en vue penchée les arbres de devant cachent) s'ajourent en fondu, puis se referment
+  // les bois s'ouvrent au-dessus des troupes : les arbres sur l'emprise d'un régiment (marge d'un houppier, poussée un peu
+  // au sud : en vue penchée les arbres de devant cachent) s'ajourent en fondu, puis se referment
   eclaircir(units, dt) {
     const { g } = this, RK = g.RK, H = 1.5 * RK, vise = this.vise || (this.vise = new Set()), act = this.actifs || (this.actifs = new Set());
     vise.clear();
@@ -431,8 +437,10 @@ export class Champ {
       for (let row = Math.max(0, Math.floor((y0 - r) / H)); row <= Math.min(g.rows - 1, Math.ceil((y0 + r) / H)); row++)
         for (let col = Math.max(0, Math.floor((u.x - r) / g.pas)); col <= Math.min(g.cols - 1, Math.ceil((u.x + r) / g.pas)); col++) {
           const i = row * g.cols + col; if (!this.boise[i]) continue;
-          const t = g.liste[i], dx = t.gx - u.x, dy = t.gy - y0;
-          if (Math.abs(-s * dx + c * dy) < hw && Math.abs(c * dx + s * dy) < hd) { vise.add(i); act.add(i); }
+          for (const k of this.parHex.get(i)) {
+            const [tx, ty] = this.arbres[k], dx = tx - u.x, dy = ty - y0;
+            if (Math.abs(-s * dx + c * dy) < hw - RK + 8 && Math.abs(c * dx + s * dy) < hd - RK + 8) { vise.add(k); act.add(k); }
+          }
         }
     }
     const pas = Math.ceil(dt * 255 * 4); let sale = false;

@@ -42,8 +42,27 @@ function cheval(L, robe) {   // (les jambes sont à part : jambeCheval(), hanche
   put(L, boite(0.56, 0.26, 0.24), robe, 1.25, 1.83, 0, 0, 0.03);
   put(L, boite(0.12, 0.6, 0.08), NOIR, -0.92, 1.05, 0, 0, 0);   // queue
 }
+// le bras gauche tendu vers l'encolure et les rênes, de la main à la bouche du cheval (cavalier, postillon)
+function renes(L, habit, z = -0.15) {
+  const b = boite(0.09, 0.42, 0.09); b.rotateZ(-1.05); put(L, b, habit, 0.12, 1.86, z, 0, 0.02); put(L, sphere(0.05, 0), CHAIR, 0.3, 1.76, z, 0, 0);
+  const r = boite(0.95, 0.025, 0.025); r.rotateZ(-0.06); put(L, r, NOIR, 0.78, 1.74, z * 0.6, 0, 0);
+}
+// le postillon, monté sur le cheval de gauche de la paire (troupes2d : monte) : chapeau rond, rênes et fouet
+function postillon(t) {
+  const L = lot();
+  put(L, boite(0.3, 0.6, 0.4), t.habit, -0.05, 1.82, 0, 0, 0.04);
+  for (const k of [-1, 1]) { put(L, boite(0.18, 0.5, 0.12), t.culotte || BLANC, 0, 1.45, k * 0.3, 0, 0); put(L, boite(0.2, 0.3, 0.13), NOIR, 0.02, 1.12, k * 0.3, 0, 0); }
+  put(L, sphere(0.12, 1), CHAIR, -0.05, 2.25, 0, 0, 0.03);
+  const C = lot(); coiffe(C, 'rond'); greffer(L, C, -0.05, 0.62, 0);
+  renes(L, t.habit, -0.15); renes(L, t.habit, 0.15);
+  const f = boite(0.02, 0.9, 0.02); f.rotateZ(0.5); put(L, f, CUIR, 0.1, 2.25, 0.25, 0, 0);   // le fouet
+  return L;
+}
+// le bras du tambour, l'épaule à l'origine : bras et baguette vers +y (la pose le fait battre)
+function baguette(habit) { const L = lot(); put(L, boite(0.09, 0.42, 0.09), habit, 0, 0.21, 0, 0, 0.02); put(L, boite(0.025, 0.34, 0.025), 0xd8c08a, 0, 0.56, 0, 0, 0); return L; }
 function cavalier(t, role) {
   const L = lot(); cheval(L, t.chevaux?.[1] || 0x6b4a2c);
+  renes(L, t.habit);
   put(L, boite(0.9, 0.06, 0.62), t.chabraque || t.habit, -0.05, 1.48, 0, 0, 0);
   put(L, boite(0.3, 0.62, 0.42), t.habit, -0.05, 1.82, 0, 0, 0.04);
   put(L, boite(0.18, 0.5, 0.12), t.culotte || BLANC, 0, 1.45, 0.3, 0, 0); put(L, boite(0.18, 0.5, 0.12), t.culotte || BLANC, 0, 1.45, -0.3, 0, 0);
@@ -167,6 +186,8 @@ export class Troupes3D {
             if (fy > -9) this.sous('fusil', fusil, x, y, a, s, fx, fy + pas, fz, rz + pench);
           }
           // l'épée de l'officier : basse au repos ; levée à la charge, elle frappe dans la mêlée (d.ext)
+          // le tambour bat : les deux baguettes, l'une après l'autre (d.ext)
+          if (role === R.TAMBOUR) for (const c of [-1, 1]) this.sous('b|' + t.habit, () => baguette(t.habit), x, y, a, s, 0, 1.36 + pas, c * 0.18, Math.PI - 0.95 + (c > 0 ? 1 + d.ext : 1 - d.ext) * 0.3);   // (d.ext de −1 à 1)
           if (role === R.OFFICIER) this.sous('e|' + t.habit, () => lame(t.habit, 0.75), x, y, a, s, 0, 1.38 + pas, 0.2, d.arme === 'epee+' ? -0.5 - d.ext * 1.3 : Math.PI - 0.35);
           // le refouloir (servant n° 1) : poussé dans la bouche entre deux coups (d.ext), debout à côté de lui sinon
           if (role === R.SERVANT && job === 1) {
@@ -179,7 +200,10 @@ export class Troupes3D {
           this.jambesCheval(x, y, a, s, pas, d, robe);
           // le sabre : au fourreau (dans le modèle) ; tiré et levé à la charge, il frappe dans la mêlée (d.ext de −1 à 1)
           if (d.sabre) this.sous('e|' + t.habit + 'c', () => lame(t.habit, 0.9), x, y, a, s, -0.05, 2.06 + pas, 0.22, d.sabre === 2 ? -0.9 + d.ext * 0.9 : -1);
-        } else if (role === R.CHEVAL) { this.lotDe('a|' + cle, () => attelage(t)).poser(this.mat(x, y, a, s, pas * s)); this.jambesCheval(x, y, a, s, pas, d, t.chevaux?.[0] || 0x6b4a2c); }
+        } else if (role === R.CHEVAL) {
+          this.lotDe('a|' + cle, () => attelage(t)).poser(this.mat(x, y, a, s, pas * s)); this.jambesCheval(x, y, a, s, pas, d, t.chevaux?.[0] || 0x6b4a2c);
+          if (d.monte) this.lotDe('po|' + cle, () => postillon(t)).poser(this.mat(x, y, a, s, pas * s));
+        }
         // la pièce recule au coup sur son affût, la bouche se relève
         else if (role === R.PIECE) { const r = d.recul * 0.12; this.lotDe('k|' + cle + (t.mit ? 'm' : ''), () => piece(t)).poser(this.mat(x - Math.cos(a) * r * s, y - Math.sin(a) * r * s, a, s, 0, 0, d.recul * 0.04)); }
         else if (role === R.AVANT || role === R.CAISSON) this.lotDe('v' + role + '|' + cle, () => voiture(t, role === R.CAISSON)).poser(this.mat(x, y, a, s * (role === R.AVANT ? 0.8 : 1), pas * s));
