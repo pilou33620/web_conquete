@@ -21,8 +21,10 @@ import tempfile
 import threading
 import unittest
 from http.server import ThreadingHTTPServer
+from unittest import mock
 
 import fabrique  # noqa: F401  (chemins, journal des batailles coupé)
+import appairage
 import server
 from game import rails as RL, views as V
 from game.engine import Game
@@ -162,6 +164,29 @@ class Http(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(server.SAVES, server.AUTOSAVE + '.json')))
 
 
+class Garde(unittest.TestCase):
+    def test_nom_inconnu_et_autre_appareil(self):
+        srv = ThreadingHTTPServer(('127.0.0.1', 0), server.Handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        ancienne = server.GARDE
+        self.addCleanup(setattr, server, 'GARDE', ancienne)
+
+        def statut(chemin, **entetes):
+            c = http.client.HTTPConnection('127.0.0.1', srv.server_address[1], timeout=10)
+            c.request('GET', chemin, headers=entetes)
+            s = c.getresponse().status
+            c.close()
+            return s
+        with tempfile.TemporaryDirectory() as d, mock.patch.dict(os.environ, {'WEB_TOOLS_JETON_FICHIER': d + '/jeton.txt'}):
+            server.GARDE = appairage.Garde('TEST', afficher=lambda t: None)
+            self.assertEqual(statut('/', Host='piege.example'), 403)
+            self.assertEqual(statut('/'), 200)                      # ce poste : pas de code
+            with mock.patch.object(appairage.Garde, 'ce_poste', staticmethod(lambda h: False)):
+                self.assertEqual(statut('/'), 303)                  # vers la page du code
+                self.assertEqual(statut('/api/saves'), 403)
+
+
 class Sauvegardes(unittest.TestCase):
     def setUp(self):
         self.saves = server.SAVES
@@ -230,20 +255,6 @@ class Sauvegardes(unittest.TestCase):
         self.assertEqual(V.to_dict(g2)['geo'], 1, 'resauvegardée, elle garde sa carte')
 
 
-
-class Connexions(unittest.TestCase):
-    def test_une_ligne_par_appareil_qui_arrive(self):
-        lignes = []
-        v = server.Visites('Conquête', afficher=lignes.append)
-        v.noter('192.168.1.20')
-        v.noter('192.168.1.20')                                    # déjà vu : rien
-        v.noter('::ffff:192.168.1.21')
-        self.assertEqual(len(lignes), 2)
-        self.assertIn('[connexion]', lignes[1])
-        self.assertIn('2 appareil(s) actif(s) : 192.168.1.20, 192.168.1.21', lignes[1])
-        v.vues['192.168.1.20'] -= server.Visites.INACTIF + 1         # parti depuis 10 min
-        v.noter('192.168.1.20')                                    # revenu : affiché de nouveau
-        self.assertEqual(len(lignes), 3)
 
 if __name__ == '__main__':
     unittest.main()

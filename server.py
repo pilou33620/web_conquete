@@ -9,9 +9,7 @@ n'essaie pas de lancer de navigateur et affiche son adresse réseau.
 Aucune dépendance externe : Python 3.8+ suffit (Windows, Linux, macOS, Termux).
 """
 import argparse
-import functools
 import gzip
-import ipaddress
 import json
 import math
 import mimetypes
@@ -27,6 +25,8 @@ import traceback
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
+
+import appairage
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(ROOT, 'web')
@@ -373,9 +373,10 @@ class App:
 
     def net_info(self):
         """Adresses à taper sur l'iPad ou un autre appareil du réseau local."""
-        urls = [f'http://{ip}:{self.port}' for ip in self.ips]
+        schema = GARDE.schema()
+        urls = [f'{schema}://{ip}:{self.port}' for ip in self.ips]
         if self.lan:
-            urls.append(f'http://{socket.gethostname()}.local:{self.port}')
+            urls.append(f'{schema}://{socket.gethostname()}.local:{self.port}')
         return dict(lan=self.lan, port=self.port, urls=urls if self.lan else [], host=socket.gethostname())
 
     def autosave_tick(self):
@@ -459,38 +460,6 @@ class GzipCache:
 GZ = GzipCache()
 
 
-class Visites:
-    """Les appareils qui utilisent ce serveur, affichés dans son terminal (et recopiés par
-    web_launcher) : une ligne quand une IP arrive, ou revient après INACTIF secondes sans requête."""
-    INACTIF = 600
-
-    def __init__(self, nom, afficher=None):
-        self.nom = nom
-        self.afficher = afficher or (lambda texte: print(texte, flush=True))
-        self.verrou = threading.Lock()
-        self.vues = {}                      # ip -> dernière requête (time.monotonic)
-
-    def noter(self, ip):
-        try:
-            a = ipaddress.ip_address(str(ip).split("%")[0])
-            ip = str(getattr(a, "ipv4_mapped", None) or a)
-        except ValueError:
-            pass
-        maintenant = time.monotonic()
-        with self.verrou:
-            arrivee = maintenant - self.vues.get(ip, float("-inf")) > self.INACTIF
-            self.vues = {i: t for i, t in self.vues.items() if maintenant - t <= self.INACTIF}
-            self.vues[ip] = maintenant
-            if not arrivee:
-                return
-            actifs = sorted(self.vues)
-        self.afficher("  [connexion] %s  %-11s %s  ->  %d appareil(s) actif(s) : %s"
-                      % (time.strftime("%H:%M:%S"), self.nom, ip, len(actifs), ", ".join(actifs)))
-
-
-VISITES = Visites('Conquête')
-
-
 class Handler(BaseHTTPRequestHandler):
     server_version = 'Conquete/1.0'
 
@@ -498,13 +467,8 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def parse_request(self):
-        if not super().parse_request():
-            return False
-        if not hote_permis(self.headers.get('Host')):
-            self.send_error(403, "Nom d'hote refuse : utilisez l'adresse IP")
-            return False
-        VISITES.noter(self.client_address[0])
-        return True
+        # Host, Internet, HTTPS, code d'appairage : avant tout traitement de la requête
+        return super().parse_request() and GARDE.filtrer(self)
 
     def _send(self, code, body, ctype='application/json; charset=utf-8', gz=None):
         self.send_response(code)
@@ -623,32 +587,6 @@ class Handler(BaseHTTPRequestHandler):
         self._json(dict(ok=False, msg='Route inconnue.'), 404)
 
 
-@functools.lru_cache(maxsize=1)
-def nom_tailscale():
-    """Le nom MagicDNS exact de CE poste (pilou.tailxxxx.ts.net), "" sans Tailscale."""
-    # shortcut: gardé jusqu'au redémarrage de l'outil, à revoir si le poste change de nom Tailscale
-    try:
-        r = subprocess.run(['tailscale', 'status', '--json', '--peers=false'], stdin=subprocess.DEVNULL,
-                           capture_output=True, timeout=3)
-        return json.loads(r.stdout)['Self']['DNSName'].lower().rstrip('.')
-    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError, AttributeError):
-        return ''
-
-
-def hote_permis(entete):
-    """Anti DNS rebinding : seulement une IP (réseau local, Tailscale 100.x), localhost ou le nom de la machine."""
-    hote = (entete or '').strip().lower()
-    hote = hote[1:].split(']', 1)[0] if hote.startswith('[') else hote.rsplit(':', 1)[0] if hote.count(':') == 1 else hote
-    try:
-        ipaddress.ip_address(hote)
-        return True
-    except ValueError:
-        nom = socket.gethostname().lower()
-        if hote.endswith('.ts.net'):
-            return hote == nom_tailscale()    # le nom exact de ce poste, jamais tout *.ts.net
-        return hote in ('localhost', nom, nom + '.local')
-
-
 def lan_addresses():
     """Adresses IPv4 de la machine sur le réseau local (pour jouer depuis une tablette)."""
     ips = []
@@ -695,8 +633,12 @@ def is_headless():
     return not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'))
 
 
+GARDE = appairage.Garde('Conquête', actif=False)   # remplacé dans main() selon --lan
+
+
 def banner(app, local_url, why=''):
     host = socket.gethostname()
+    schema = GARDE.schema()
     lines = ['', '  ' + '=' * 62, '   Conquête (Aquitaine 1790) est prêt' + (f'  [{why}]' if why else ''), '']
     if app.lan:
         if app.ips:
@@ -704,8 +646,8 @@ def banner(app, local_url, why=''):
             lines.append('   ouvrez le navigateur à l\'une de ces adresses :')
             lines.append('')
             for ip in app.ips:
-                lines.append(f'      http://{ip}:{app.port}')
-            lines.append(f'      http://{host}.local:{app.port}')
+                lines.append(f'      {schema}://{ip}:{app.port}')
+            lines.append(f'      {schema}://{host}.local:{app.port}')
         else:
             lines.append('   Réseau pas encore disponible : l\'adresse s\'affichera dès que')
             lines.append('   le Wi-Fi ou le câble sera connecté.')
@@ -721,8 +663,8 @@ def banner(app, local_url, why=''):
             with open(ADDR_FILE, 'w', encoding='utf-8') as f:
                 f.write('Conquête : adresses pour jouer depuis le réseau local\n\n')
                 for ip in app.ips:
-                    f.write(f'http://{ip}:{app.port}\n')
-                f.write(f'http://{host}.local:{app.port}\n')
+                    f.write(f'{schema}://{ip}:{app.port}\n')
+                f.write(f'{schema}://{host}.local:{app.port}\n')
         except OSError:
             pass
 
@@ -892,7 +834,7 @@ def auto_update(enabled=True, patient=False):
 
 
 def main():
-    global APP
+    global APP, GARDE
     ap = argparse.ArgumentParser(description='Conquête — serveur local')
     ap.add_argument('--host', default=None, help='adresse d\'écoute (0.0.0.0 = tout le réseau local)')
     ap.add_argument('--port', type=int, default=8790)
@@ -919,6 +861,8 @@ def main():
         print(f'\nImpossible d\'ouvrir le port {args.port} ({e}). Le jeu tourne peut-être déjà : essayez --port 8791.', flush=True)
         sys.exit(1)
     auto_update(not args.no_update, patient=auto)   # peut relancer le serveur avec le nouveau code
+    GARDE = appairage.Garde('Conquête', actif=host != '127.0.0.1')
+    GARDE.brancher(srv)
     mimetypes.add_type('application/javascript', '.js')
     mimetypes.add_type('text/css', '.css')
     mimetypes.add_type('application/manifest+json', '.webmanifest')
@@ -929,6 +873,7 @@ def main():
     threading.Thread(target=APP.loop, daemon=True).start()
     url = f'http://127.0.0.1:{args.port}' if APP.lan else f'http://{host}:{args.port}'
     banner(APP, url, 'Raspberry Pi' if rpi else ('sans écran' if auto and not args.lan else ''))
+    GARDE.annoncer()
     if APP.lan:
         threading.Thread(target=watch_network, args=(APP, url), daemon=True).start()
     if open_browser:

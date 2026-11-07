@@ -54,6 +54,7 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
    `sudo systemctl restart web_conquete`).
 2. Sur le Raspberry : `cd web_conquete && sh raspberry/installer.sh`
    Le script crée le service `web_conquete` (systemd) : le jeu démarre à chaque allumage et redémarre s'il plante.
+   (Un autre appareil entre une fois le code d'appairage, affiché par le serveur, puis passe en HTTPS sur le même port.)
    Il affiche l'adresse à taper sur l'iPad, par exemple `http://192.168.1.42:8790` ou `http://raspberrypi.local:8790`.
    Autre port : `sh raspberry/installer.sh 8800`. Désinstaller : `sh raspberry/installer.sh --retirer`.
 3. Sur l'iPad, ouvrez cette adresse dans Safari, puis bouton Partager, « Sur l'écran d'accueil ».
