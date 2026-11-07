@@ -9,6 +9,7 @@ n'essaie pas de lancer de navigateur et affiche son adresse réseau.
 Aucune dépendance externe : Python 3.8+ suffit (Windows, Linux, macOS, Termux).
 """
 import argparse
+import functools
 import gzip
 import ipaddress
 import json
@@ -622,6 +623,18 @@ class Handler(BaseHTTPRequestHandler):
         self._json(dict(ok=False, msg='Route inconnue.'), 404)
 
 
+@functools.lru_cache(maxsize=1)
+def nom_tailscale():
+    """Le nom MagicDNS exact de CE poste (pilou.tailxxxx.ts.net), "" sans Tailscale."""
+    # shortcut: gardé jusqu'au redémarrage de l'outil, à revoir si le poste change de nom Tailscale
+    try:
+        r = subprocess.run(['tailscale', 'status', '--json', '--peers=false'], stdin=subprocess.DEVNULL,
+                           capture_output=True, timeout=3)
+        return json.loads(r.stdout)['Self']['DNSName'].lower().rstrip('.')
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError, AttributeError):
+        return ''
+
+
 def hote_permis(entete):
     """Anti DNS rebinding : seulement une IP (réseau local, Tailscale 100.x), localhost ou le nom de la machine."""
     hote = (entete or '').strip().lower()
@@ -631,6 +644,8 @@ def hote_permis(entete):
         return True
     except ValueError:
         nom = socket.gethostname().lower()
+        if hote.endswith('.ts.net'):
+            return hote == nom_tailscale()    # le nom exact de ce poste, jamais tout *.ts.net
         return hote in ('localhost', nom, nom + '.local')
 
 
