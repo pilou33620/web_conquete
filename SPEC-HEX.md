@@ -102,9 +102,14 @@ Tous les calques 2D appliquent ce `K` sur l'axe vertical : `map.js` (`toScreen`,
 
 ## Limites connues
 
-- Les fantassins ont des jambes qui marchent (phase du pas des figures 2D) ; les chevaux montent et descendent au pas,
-  sans jambes animées.
+- Bois : au-dessus des régiments, les hexagones boisés s'ajourent en fondu (trame de Bayer dans le shader des arbres,
+  `Champ.eclaircir`) ; les arbres ouverts gardent leur ombre pleine, et l'ouverture va par hexagone entier.
+- Débris (chapeaux, fusils, sacs, roues brisées) et cratères en 3D, d'après les pertes (`Champ.debris`) ; ceux d'avant
+  un rechargement ne reviennent pas. Neige : toits, murs, haies, barricades et arbres poudrés, sapins blancs.
+- Figurines : jambes des chevaux au pas, au trot et au galop ; sabre tiré à la charge et en mêlée, épée des officiers ;
+  refouloir des servants entre deux coups, pointeur penché, recul au coup. Pas de postillon sur les attelages, pas de
+  geste des bras libres (rênes, tambour).
 - La boue du piétinement (`battle/pietinement.js`) est posée en texture sur le dessus des hexagones de terre
-  (`Champ.boue`) ; elle passe sous les cultures en relief (champs, vignes). Les tués 2D restent à la vue de dessus : le
-  plateau a ses tués couchés en 3D.
-- Sur un appareil lent, le décor du plateau met quelques secondes à se bâtir à l'ouverture.
+  (`Champ.boue`) ; elle passe sous les cultures en relief (champs, vignes).
+- Sur un appareil lent, le décor du plateau met quelques secondes à se bâtir à l'ouverture ; la maquette d'une grande
+  ville (jusqu'à 280 000 sommets pour Bordeaux) se bâtit en moins d'une seconde, par petits pas.
