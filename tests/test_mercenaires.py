@@ -71,18 +71,19 @@ class Levee(unittest.TestCase):
         self.assertIn('royal_allemand', ru[g.capital_of(code)])
         self.assertNotIn('suisses', ru[autre])
 
-    def test_trois_au_plus(self):
+    def test_plafond(self):
         g = partie(epoque='1700')
         code, cap = g.player, g.capital_of(g.player)
         g.factions[code]['res']['livres'] = 10000
         g.nodes[cap]['queue'] = []
         armee(g)['regs'].append(g.new_reg('irlandais', code=code))      # en campagne
-        g.nodes[cap]['garrison'].append(g.new_reg('suisses', code=code))  # en garnison
         self.assertTrue(g.recruit(code, cap, 'royal_allemand')[0])       # en file
-        self.assertEqual(g.merc_count(code), 3)
+        self.assertEqual(g.merc_count(code), R.MERC_MAX)
         ok, why = g.can_recruit(code, port(g, code), 'suisses')
         self.assertFalse(ok)
-        self.assertIn('3', why)
+        self.assertIn(str(R.MERC_MAX), why)
+        g.nodes[cap]['garrison'].append(g.new_reg('suisses', code=code))  # (en garnison, il compte aussi)
+        self.assertEqual(g.merc_count(code), R.MERC_MAX + 1)
 
 
 class Solde(unittest.TestCase):
@@ -118,7 +119,7 @@ class IA(unittest.TestCase):
         ai = g.ais[code]
         f = g.factions[code]
         f['res']['recrues'] = 0
-        f['res']['livres'] = 3 * ai.reserve() - 1
+        f['res']['livres'] = 6 * ai.reserve() - 1
         for n in g.owned_nodes(code):
             n['queue'] = []
         ai.recruit()
@@ -126,7 +127,7 @@ class IA(unittest.TestCase):
         D.declare_war(g, code, autre, quiet=True)
         ai.recruit()
         self.assertEqual(g.merc_count(code), 0, 'trésor trop maigre')
-        f['res']['livres'] = 4 * ai.reserve()
+        f['res']['livres'] = 7 * ai.reserve()
         ai.recruit()
         self.assertEqual(g.merc_count(code), 1)
         f['res']['recrues'] = 1000

@@ -48,9 +48,10 @@ def epoux(g, code):
     m = g.factions[code].get('maison')
     if not m or not m['chef']:
         return None
+    adulte = lambda p: g.date().year - p['ne'] >= R.MARIAGE_AGE
     if not m['conjoint']:
-        return m['chef']
-    return next((h for h in m['heritiers'] if not h.get('conjoint')), None)
+        return m['chef'] if adulte(m['chef']) else None
+    return next((h for h in m['heritiers'] if not h.get('conjoint') and adulte(h)), None)
 
 
 def refus_mariage(g, a, b):
@@ -154,7 +155,7 @@ def crise(g, code, chef, rnd):
         nom = f"{rnd.choice(R.PRENOMS)} {mp['nom']}"
         choices.append(dict(label=f"Reconnaître le prétendant {nom} : vassalité envers {g.fname(pret)}",
                             fx=dict(chef=dict(nom=nom, ne=y - rnd.randint(20, 40), trait=_trait(rnd), maison=mp['nom']),
-                                    vassal=pret), ai=3 if f['rel'][pret] > 40 else 1))
+                                    vassal=pret), ai=1 if f['rel'][pret] > 60 else 0.2))   # (une IA ne s'y résout guère : banc de 1700)
     refus = dict(refus=pret) if pret else {}
     nom = rnd.choice(autres)
     choices.append(dict(label=f"Faire élire un notable, {nom}",

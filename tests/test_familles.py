@@ -197,5 +197,19 @@ class Mariages(unittest.TestCase):
         self.assertAlmostEqual(g.stab_targets()['33'], cible0 - 0.1)
 
 
+
+class MariageEnfant(unittest.TestCase):
+
+    def test_pas_de_mariage_avant_seize_ans(self):
+        from game import familles as FM
+        g = partie()
+        m = g.factions[g.player]['maison']
+        m['conjoint'], m['heritiers'] = None, []
+        m['chef']['ne'] = g.date().year - 2   # (l'aîné, enfant, a succédé)
+        self.assertIsNone(FM.epoux(g, g.player))
+        m['chef']['ne'] = g.date().year - 20
+        self.assertIs(FM.epoux(g, g.player), m['chef'])
+
+
 if __name__ == '__main__':
     unittest.main()

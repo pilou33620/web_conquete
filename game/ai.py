@@ -359,7 +359,7 @@ class AI:
         marchand = self.pers['trade'] >= 0.8
         pauvre = f['income']['livres'] < 0.15 * self.gross_norm()
         t = bool(self.wars()) + pauvre
-        t = min(1, t) if marchand else t + (t > 0)   # libre en paix et à l'aise ; jusqu'à prohibitif sinon
+        t = min(1, t) if marchand else min(2, t + (t > 0))   # libre en paix et à l'aise ; jusqu'à élevé sinon (banc 1700)
         if t != f['tarif']:
             g.set_tarif(code, t)
         dn = f.get('_douane')
@@ -666,7 +666,7 @@ class AI:
         if f['income']['livres'] < 0.5 and f['res']['livres'] < 400:
             return
         # en guerre, sans recrues mais riche : des régiments étrangers (g.recruit vérifie époque, lieu, plafond, coût)
-        if self.wars() and f['res']['recrues'] < R.UNITS['ligne']['cost']['recrues'] and f['res']['livres'] > 3 * self.reserve():
+        if self.wars() and f['res']['recrues'] < R.UNITS['ligne']['cost']['recrues'] and f['res']['livres'] > 6 * self.reserve():
             for n in g.owned_nodes(code):
                 if len(n['queue']) < 2 and any(g.recruit(code, n['id'], t)[0] for t in R.MERCS):
                     return
@@ -1112,7 +1112,7 @@ class AI:
             if (D.held(g, o, code) >= 40 or D.captifs(g, o, code)) and rel > -70 and self.rng.random() < 0.3:
                 self.propose(o, 'prisonniers')
             # mariages : on unit sa maison à celle d'un voisin ami, avec une petite dot
-            if rel > 20 and st != 'guerre' and not FM.refus_mariage(g, code, o) and self.rng.random() < 0.01 \
+            if rel > 20 and st != 'guerre' and not FM.refus_mariage(g, code, o) and self.rng.random() < 0.005 \
                     and D.borders(g, code, o):
                 self.propose(o, 'mariage', int(min(f['res']['livres'] * 0.1, 150)))
             if f['overlord']:

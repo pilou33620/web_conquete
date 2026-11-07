@@ -125,7 +125,7 @@ class IA(unittest.TestCase):
             self.assertEqual(f['tarif'], 1 if code == '33' else 2)
             f['income']['livres'] = -5.0
             ai.douane()
-            self.assertEqual(f['tarif'], 1 if code == '33' else 3, 'un marchand ne dépasse pas « modéré »')
+            self.assertEqual(f['tarif'], 1 if code == '33' else 2, 'un marchand ne dépasse pas « modéré », les autres « élevé »')
 
 
 class Commandes(unittest.TestCase):

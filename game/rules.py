@@ -96,7 +96,7 @@ UNITS = {
 }
 # régiments étrangers (SPEC-MERCENAIRES.md) : loués contre des livres seulement (prime et solde doubles de la ligne),
 # vétérans, prêts deux fois plus vite ; levés au chef-lieu ou dans un port, MERC_MAX par camp
-MERC_MAX = 3
+MERC_MAX = 2
 
 
 def _merc(base, name, short, desc):
@@ -874,7 +874,8 @@ MAISON_TRAITS = {
     'savant': dict(label='Savant', desc='Recherche +8 %.', fx=dict(research_speed=0.08)),
     'populaire': dict(label='Populaire', desc='Ordre public +5 %.', fx=dict(order=0.05)),
 }
-MARIAGE_REL = 25          # relations gagnées des deux côtés par un mariage
+MARIAGE_REL = 15          # relations gagnées des deux côtés par un mariage (25 au départ : banc de 1700, 1er/11/2026)
+MARIAGE_AGE = 16   # pas de mariage avant cet âge (un chef enfant attend)
 NAISSANCE_P = 0.25        # chance par an d'un enfant (chef marié de moins de NAISSANCE_AGE ans)…
 NAISSANCE_AGE = 45
 HERITIERS_MAX = 4         # … jusqu'à tant d'héritiers
@@ -940,7 +941,7 @@ TAX_LABELS = [(0.15, 'Très légers'), (0.4, 'Légers'), (0.6, 'Normaux'), (0.85
 TARIFS = [('Libre', 0.0), ('Modéré', 0.10), ('Élevé', 0.20), ('Prohibitif', 0.35)]
 DOUANE_VOL = 0.06      # part du revenu brut d'un voisin que prend le commerce frontalier (comme un accord)
 DOUANIERS_L = 0.15     # solde des douaniers : livres par jour et par place frontalière
-DOUANE_REL = 0.5       # relations des voisins : tant par niveau de tarif et par mois
+DOUANE_REL = 0.25      # relations des voisins : tant par niveau de tarif et par mois
 
 
 def tax_label(v):
