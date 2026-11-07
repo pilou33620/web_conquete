@@ -103,7 +103,8 @@ Tous les calques 2D appliquent ce `K` sur l'axe vertical : `map.js` (`toScreen`,
 ## Limites connues
 
 - Bois : au-dessus des régiments, les arbres sur leur emprise s'ajourent un à un en fondu (trame de Bayer dans le
-  shader des arbres et de leur ombre, `Champ.eclaircir`) ; les arbres des cours de ferme et les haies restent pleins.
+  shader des arbres et de leur ombre, `Champ.eclaircir`), de même les haies et les arbres des cours de ferme
+  (`Champ.ouvrable`) ; les bâtiments restent pleins.
 - Débris (chapeaux, fusils, sacs, roues brisées) et cratères en 3D, d'après les pertes (`Champ.debris`, vus dans une
   vraie bataille) ; ceux d'avant un rechargement ne reviennent pas. Neige : toits, murs, haies, barricades et arbres poudrés, sapins blancs.
 - Figurines : jambes des chevaux au pas, au trot et au galop ; sabre tiré à la charge et en mêlée, épée des officiers ;
