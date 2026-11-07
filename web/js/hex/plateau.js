@@ -360,7 +360,13 @@ export class Plateau {
     // une maison, ou ce qu'il en reste
     const bat = (x, z, ry, o) => {
       const e = etat();
-      if (e === 'ruine') { semer(x * 13 | 0, z * 13 | 0); put(L, boite(2.2, 0.45, 1.8), 0x9a8f7c, x, 0.22, z, ry, 0.08); put(L, boite(0.3, 1.3, 1.8), 0xb7aa8f, x + Math.cos(ry) * 0.9, 0.65, z - Math.sin(ry) * 0.9, ry, 0.08); for (let k = 0; k < 3; k++) put(L, sphere(entre(0.3, 0.5), 0), 0x8a7f6c, x + entre(-1, 1), 0.5, z + entre(-0.8, 0.8)); return; }
+      if (e === 'ruine') {   // les murs restent, à mi-hauteur, un pignon debout ; des gravats dedans
+        const R = lot(), s = o.s || 1, w = 2.4, d = 2.0, h = 0.7;
+        for (const [a, b, l] of [[0, d / 2, w], [0, -d / 2, w], [w / 2, 0, d], [-w / 2, 0, d]]) put(R, boite(a ? 0.18 : l, h, a ? l : 0.18), 0xcfc2a6, a, h / 2, b, 0, 0.06);
+        put(R, boite(0.18, 1.6, d), 0xcfc2a6, w / 2, 0.8, 0, 0, 0.06);
+        put(R, boite(w - 0.3, 0.25, d - 0.3), 0x8f8472, 0, 0.12, 0, 0, 0);
+        transfere(R, L, x, 0, z, ry, s); return;
+      }
       M.maison(L, st, x, z, ry, e === 'brule' ? { ...o, col: 0x4a3f37, toitCol: 0x231d1a, details: false } : o);
     };
     const y0 = t0.top;
@@ -376,7 +382,7 @@ export class Plateau {
       // la façade regarde la rue la plus proche
       const a = Math.atan2(z - t0.z, x - t0.x), r = rues.reduce((b, rr) => (Math.abs(Math.sin(a - rr)) < Math.abs(Math.sin(a - b)) ? rr : b), rues[0]);
       const et = 1 + ((rnd() * etagesMax) | 0), rui = ruine();
-      bat(x - t0.x, z - t0.z, -r + (rnd() < 0.5 ? 0 : Math.PI), { s: entre(0.85, 1.05), etages: et, toitCol: rui ? brule : undefined });
+      bat(x - t0.x, z - t0.z, -r + (Math.sin(a - r) > 0 ? Math.PI : 0), { s: entre(0.88, 0.98), etages: et, toitCol: rui ? brule : undefined });
       posees.push([x, z]);
     };
     // sur une grille fine de l'hexagone t, au plus près du centre, jusqu'à n maisons au sec ; rend celles qui manquent
@@ -389,6 +395,30 @@ export class Plateau {
     };
     // les maisons de l'hexagone t : leur nombre est celui d'une ville sans rivière ; celles que l'eau chasse se rebâtissent
     // au sec ailleurs dans l'hexagone ; rend celles qui n'y ont pas trouvé de place
+    // les rangs de maisons serrées, façade sur la rue, le long des rues qui partent du centre (les routes qui entrent),
+    // un second rang derrière ; jusqu'à n maisons, rend celles qui manquent
+    const rangs = (t, n, etagesMax, rayonVide, prof = 2) => {
+      for (const r of rues) {
+        const c = Math.cos(r), sn = Math.sin(r);
+        for (let d = 1.4; d < 22 && n > 0; d += 2.25) for (const cote of [1, -1]) for (let k = 0; k < prof && n > 0; k++) {
+          const lat = cote * (1.9 + k * 2.3), x = t0.x + c * d - sn * lat, z = t0.z + sn * d + c * lat;
+          if (!libre(x, z, t, rayonVide)) continue;
+          bat(x - t0.x, z - t0.z, -r + (cote > 0 ? Math.PI : 0), { s: 0.92, etages: 1 + ((rnd() * etagesMax) | 0), toitCol: ruine() ? brule : undefined });
+          posees.push([x, z]); n--;
+        }
+      }
+      return n;
+    };
+    // le tour de la place : des maisons qui la regardent
+    const tourPlace = (n, etagesMax, rayon) => {
+      for (let i = 0, nb = Math.floor(2 * Math.PI * rayon / 2.3); i < nb && n > 0; i++) {
+        const a = i / nb * 2 * Math.PI, x = cx0 + Math.cos(a) * rayon, z = cz0 + Math.sin(a) * rayon;
+        if (!libre(x, z, t0, rayon - 0.1)) continue;
+        bat(x - t0.x, z - t0.z, -a - Math.PI / 2, { s: 0.92, etages: 1 + ((rnd() * etagesMax) | 0), toitCol: ruine() ? brule : undefined });
+        posees.push([x, z]); n--;
+      }
+      return n;
+    };
     const maisons = (t, dens, etagesMax, rayonVide) => {
       const cands = [];
       for (let u = -9; u <= 9; u += 2.4) for (let v = -9; v <= 9; v += 2.4) {
@@ -398,8 +428,12 @@ export class Plateau {
         if (g.sous(x, z) !== t || Math.hypot(x - cx0, z - cz0) < rayonVide || surRue(x, z, t0.x, t0.z) || rnd() > dens * (1 - dc / 40)) continue;
         cands.push([x, z]);
       }
+      // (autant de maisons qu'avant : d'abord le tour de la place et les rangs le long des rues, puis le reste entre elles)
+      let a = cands.length;
+      if (t === t0 && rayonVide) a = tourPlace(a, etagesMax, rayonVide + 1);
+      a = rangs(t, a, etagesMax, rayonVide);
       let reste = 0;
-      for (const [x, z] of cands) {
+      for (const [x, z] of cands.slice(cands.length - a)) {
         const p = [[0, 0], [1.2, 0], [-1.2, 0], [0, 1.2], [0, -1.2]].find(([a, b]) => libre(x + a, z + b, t, rayonVide));
         if (p) poser(x + p[0], z + p[1], etagesMax); else reste++;
       }
