@@ -255,6 +255,7 @@ function poser(u, e, f, i, t, o) {
   const pas = t * cadence(st, cav) * TAU;
   let arme = A.epaule, legs = 0, ext = 0, gait = 0, amp = 0, sabre = 0, recul = 0, bob = 1, lun = 0;
   const monte = f.monte ? 1 : 0;
+  o.cyc = -1;   // (plateau 3D : où en est le servant dans le cycle de sa pièce, pour ses gestes)
   if (role >= R.PIECE || (role === R.CHEVAL && !cav)) {
     // pièces, voitures et chevaux d'attelage
     if (role === R.PIECE && (st === 'feu' || st === 'recharge')) {
@@ -267,7 +268,7 @@ function poser(u, e, f, i, t, o) {
   } else if (role === R.SERVANT && st !== 'deroute') {
     arme = A.aucun;
     if (st === 'feu' || st === 'recharge') {
-      const c = mod(t + e.ph + f.i * 1.37, P);
+      const c = mod(t + e.ph + f.i * 1.37, P); o.cyc = c;
       if (f.job === 1) { const x = c > 2 && c < 4.4 ? Math.sin(Math.PI * (c - 2) / 2.4) : 0; ox += x * 5 * k; oy += x * 2.6 * k; arme = A.refouloir; ext = q7(x); if (x > 0.05) legs = q8(t * 9); }
       else if (f.job === 2) { if (c > 4.6 && c < 6) ox -= 1.5 * k; }
       else if (c < 0.35) ox -= 1.4 * k;
@@ -520,6 +521,20 @@ export class Troupes2D {
     // figures GROS fois plus grandes (lisibles au cadrage d'ouverture), une figure pour au moins GROS × 1,25 hommes
     this.per = Math.max(hommesParFigure(men, this.q.troupes ?? 10000), GROS * 1.25);
     this.fs = clamp(Math.sqrt(this.per / (GROS * 1.25)), 1, 1.4) * GROS;
+  }
+  // le plateau 3D (SPEC-HEX, hex/troupes3d.js) : prépare l'image comme draw (horloge, budget de figures) sans rien
+  // dessiner ; rend les régiments à poser
+  preparer(units, time) {
+    this.frame++; this.t = time; this.builds = 0;
+    const list = [];
+    for (const u of units) if (u && u.state !== 'hors' && (u.men || 0) > 0) list.push(u);
+    this.budget(list);
+    return list;
+  }
+  // chaque figure du régiment à l'instant t, posée : cb(x, y, cap, rôle, pose décodée, tâche du servant, son cycle (s))
+  poses(u, t, cb) {
+    const e = this.entree(u, t);
+    for (let i = 0; i < e.figs.length; i++) { const f = e.figs[i]; poser(u, e, f, i, t, O); cb(O.x, O.y, O.a, f.role, decode(O.code), f.job, O.cyc); }
   }
   // figures du régiment à l'instant t, dans le monde : [{x, y, a, role, rang}] (tests, kill, muzzles)
   figures(u, t = this.t) {

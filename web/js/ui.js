@@ -967,10 +967,10 @@ export class UI {
         this.st.settings = { battles: d.v };
         this.cmd({ cmd: 'tac', sub: 'settings', battles: d.v }).then(() => { this.modalSig = ''; this.renderModal(true); });
         break;
-      case 'map-style': {   // style de la carte (enregistré sur cet appareil)
-        this.map.setStyle(d.v);
-        this.toast(this.map.style === 'epoque' ? 'Carte d’époque : Cassini, puis état-major.' : 'Carte à la manière d’Ultimate General.');
-        this.modalSig = ''; this.renderModal(true); this.startOn() && this.renderStart();
+      case 'map-teinte': {   // teintes du plateau (enregistrées sur cet appareil)
+        this.map.setTeinte(d.v);
+        this.toast(this.map.teinte === 'epoque' ? 'Carte d’époque : Cassini, puis état-major.' : 'Couleurs de la nature.');
+        this.modalSig = ''; this.renderModal(true);
         break;
       }
       case 'anim': {
@@ -1998,9 +1998,9 @@ export class UI {
   reglagesHtml() {
     return `<h3 class="section-t">Affichage</h3><div class="btns"><button class="btn" data-act="anim">${this.map.ambient.on ? 'Couper les animations de la carte' : 'Animer la carte'}</button></div>
         <p class="muted small" style="margin:4px 0 0">Moulins, fumées, oiseaux, bateaux, charrettes et troupeaux.</p>
-        <p class="small" style="margin:10px 0 4px">Style de la carte :</p><div class="seg wrap" role="group" aria-label="Style de la carte">${[['ugar', 'Ultimate General'], ['epoque', 'Carte d’époque']].map(([k, l]) =>
-          `<button class="${k === this.map.style ? 'on' : ''}" data-act="map-style" data-v="${k}" aria-pressed="${k === this.map.style}">${l}</button>`).join('')}</div>
-        <p class="muted small" style="margin:4px 0 0">${this.map.style === 'epoque' ? 'Papier, hachures et encre : la carte de Cassini, puis celle de l’état-major à partir de 1818.' : 'Couleurs, reliefs ombrés et plaques d’ardoise, à la manière d’Ultimate General.'}</p>
+        ${this.map.hex ? `<p class="small" style="margin:10px 0 4px">Teintes de la carte :</p><div class="seg wrap" role="group" aria-label="Teintes de la carte">${[['nature', 'Nature'], ['epoque', 'Carte d’époque']].map(([k, l]) =>
+          `<button class="${k === this.map.teinte ? 'on' : ''}" data-act="map-teinte" data-v="${k}" aria-pressed="${k === this.map.teinte}">${l}</button>`).join('')}</div>
+        <p class="muted small" style="margin:4px 0 0">${this.map.teinte === 'epoque' ? 'Le plateau au papier et à l’encre : la carte de Cassini, puis celle de l’état-major à partir de 1818.' : 'Les couleurs de la saison et du pays.'}</p>` : ''}
         <p class="small" style="margin:10px 0 4px">Qualité graphique des batailles :</p><div class="seg wrap" role="group" aria-label="Qualité graphique des batailles">${QUALITES.map(k =>
           `<button class="${k === qualite().q ? 'on' : ''}" data-act="bt-qualite" data-v="${k}" aria-pressed="${k === qualite().q}" title="${QUALITE_AIDE[k]}">${QUALITE_LABEL[k]}</button>`).join('')}</div>
         <p class="muted small" style="margin:4px 0 0">${qualite().auto ? 'Choisie d’après cet appareil ; elle baisse d’elle-même si la bataille saccade.' : QUALITE_AIDE[qualite().q]}</p>`;

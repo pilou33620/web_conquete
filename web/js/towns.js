@@ -309,18 +309,34 @@ export class TownArt {
     const k = s / sp.S;
     ctx.drawImage(sp.cv, -sp.W / 2 * k, -sp.H * 0.62 * k, sp.W * k, sp.H * k);
     const [px, py] = sp.meta.pole || [0, -s * 0.3];
-    // drapeau du maître de la place, au sommet du clocher, de la tour ou du donjon
-    // drapeau, habitants et pigeons : mis en lot avec ceux des autres places, dessinés d'un coup après elles (lot.js)
+    this.vivre(ctx, n, s, col, owner, time, [px * k, py * k + 1], sp.meta.street.map(v => v * k), [px * k, py * k + s * 0.08]);
+  }
+  // sur le plateau d'hexagones (SPEC-HEX), la place est en 3D : seule sa vie se dessine ici, posée sur la maquette
+  // (f : km par unité du plateau ; le drapeau au mât de la place, les habitants sur la place, les pigeons au clocher)
+  animer(ctx, n, s, col, ns, time, owner, f) {
+    const z = this.map.cam.z * f, K = this.map.K, C = Math.sqrt(1 - K * K), fort = n.type === 'fort';
+    // de près, la maquette du vrai plan (hex/maquette.js) : le drapeau au clocher de l'église, les habitants sur la place
+    const m = this.map.plateau?.maqVue(n.id);
+    if (m) {
+      const Z = this.map.cam.z, dx = p => (p[0] - n.x) * Z, dy = p => (p[1] - n.y) * Z * K;
+      return this.vivre(ctx, n, s, col, owner, time, [dx(m.eglise), dy(m.eglise) - 0.034 * Z * C], [dx(m.place) - 0.03 * Z, dx(m.place) + 0.03 * Z, dy(m.place)], [dx(m.eglise), dy(m.eglise) - 0.03 * Z * C]);
+    }
+    const mat = fort ? [0, -1.7 * z * C] : [2.6 * z, -2.8 * z * K];
+    this.vivre(ctx, n, s, col, owner, time, mat, [-3 * z, 3 * z, 1.6 * z * K], [-0.4 * z, -0.8 * z * K - (n.type === 'village' ? 3.5 : 5.5) * z * C]);
+  }
+  // drapeau du maître de la place (au mât, au clocher, à la tour ou au donjon), habitants qui vont et viennent dans la rue
+  // de x0 à x1 (hauteur yy), pigeons autour du clocher ; en lot avec ceux des autres places, dessinés d'un coup (lot.js)
+  vivre(ctx, n, s, col, owner, time, [px, py], [x0, x1, yy], [cx, cy]) {
+    const mp = this.map;
     const lot = mp.lot || (mp.lot = new Lot());
     lot.m = ctx.getTransform();
     const neutral = owner === 'neutre';
-    lot.next(); mp.flag(lot, px * k, py * k + 1, clamp(s * (n.type === 'village' ? 0.32 : 0.28), 7, 24), neutral ? '#e9e4d4' : col, mp.guerreDe?.().fete(n));   // (en berne après une défaite : carte/guerre.js)
+    lot.next(); mp.flag(lot, px, py, clamp(s * (n.type === 'village' ? 0.32 : 0.28), 7, 24), neutral ? '#e9e4d4' : col, mp.guerreDe?.().fete(n));   // (en berne après une défaite : carte/guerre.js)
     const amb = mp.ambient;
     if (!amb || !amb.on || mp.zooming?.()) return;   // (habitants et pigeons : pas pendant un zoom)
     const z = mp.cam.z;
     // habitants qui vont et viennent dans la rue, devant les maisons
     if (z >= 8 && n.type !== 'fort') {
-      const [x0, x1, yy] = sp.meta.street.map(v => v * k);
       const nb = n.type === 'capitale' ? 6 : n.type === 'ville' ? 4 : 2;
       const fs = clamp(s * 0.075, 2.2, 5);
       for (let i = 0; i < nb; i++) {
@@ -338,7 +354,7 @@ export class TownArt {
     }
     // pigeons qui tournent autour du clocher
     if (z >= 7 && n.type !== 'fort' && hash(n.id, 3, 45) < 0.6) {
-      const cx = px * k, cy = py * k + s * 0.08, R = s * 0.22;
+      const R = s * 0.22;
       lot.next();
       lot.strokeStyle = 'rgba(40,40,44,0.8)'; lot.lineWidth = 1;
       lot.beginPath();

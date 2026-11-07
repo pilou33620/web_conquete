@@ -826,6 +826,9 @@ game/tactics/        batailles sur ordres ou commandées : carte de bataille (te
 web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/peintre.js (worker qui peint les tuiles de la carte), js/dev/banc.js (banc de la carte sur la machine du joueur : adresse terminée par #banc), js/lot.js (lot de dessins : les petites figures de la carte dessinées d'un coup), js/ambient.js (animations
                      de la carte), js/towns.js (dessin des villes), js/ui.js, js/plan.js (plan de la position dans la fenêtre de bataille),
                      js/tuto.js (tutoriel), js/main.js
+web/js/hex/          rendu en plateau d'hexagones 3D, style web_power, par défaut (SPEC-HEX.md) : moteur.js (moteur et caméra
+                     inclinée), modeles.js (maisons de chaque pays, églises, enceintes…), plateau.js (carte de campagne),
+                     champ.js (champ de bataille), troupes3d.js (figurines) ; le seul rendu (l'ancien, en secours sans WebGL)
 web/js/battle/       vue de bataille de dessus, sur un canevas 2D (SPEC-2D.md) : bataille.js (entrée et sortie depuis
                      la campagne), vue.js (calques dans l'ordre, boucle, interrogation du serveur, tracés au sol),
                      camera.js (caméra verticale, passage écran ↔ terrain), terrain.js (peinture du sol,

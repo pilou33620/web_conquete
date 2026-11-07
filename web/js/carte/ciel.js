@@ -77,7 +77,7 @@ export class Ciel {
     const X0 = Math.max(0, mx0), Y0 = Math.max(0, my0), X1 = Math.min(mp.vw, mx1), Y1 = Math.min(mp.vh, my1);
     if (X1 <= X0 || Y1 <= Y0) return;
     const [wx0, wy0] = mp.toWorld(0, 0), [wx1, wy1] = mp.toWorld(mp.vw, mp.vh);
-    const monde = () => ctx.setTransform(z * d, 0, 0, z * d, (mp.vw / 2 - mp.cam.x * z) * d, (mp.vh / 2 - mp.cam.y * z) * d);
+    const monde = () => ctx.setTransform(z * d, 0, 0, z * d * mp.K, (mp.vw / 2 - mp.cam.x * z) * d, (mp.vh / 2 - mp.cam.y * z * mp.K) * d);
     const kind = zn => st.weather?.[zn]?.kind || 'soleil';
     const zones = this.zones(X0, Y0, X1, Y1);
     ctx.save();
@@ -115,7 +115,7 @@ export class Ciel {
       const fort = kind(zoneDe(px, py)), k2 = PLUIE.has(fort) ? fort : null;
       if (!k2 || (k2 === 'pluie' && a.k % 3 === 0)) continue;   // (la pluie a moins d'averses que l'orage)
       if (k2 === 'tempete') [px, py] = this.posAverse(a, time, k2);
-      const sx = (px - mp.cam.x) * z * d + W / 2, sy = (py - mp.cam.y) * z * d + H / 2, rx = a.r * 1.4 * z * d, ry = a.r * z * d;
+      const sx = (px - mp.cam.x) * z * d + W / 2, sy = (py - mp.cam.y) * z * d * mp.K + H / 2, rx = a.r * 1.4 * z * d, ry = a.r * z * d;
       if (sx + rx < 0 || sx - rx > W || sy + ry < 0 || sy - ry > H) continue;
       ctx.globalAlpha = k2 === 'pluie' ? 0.5 : 0.72; ctx.drawImage(SPR.pluie, sx - rx, sy - ry, rx * 2, ry * 2); ctx.globalAlpha = 1;
       const n = clamp(Math.min(rx, W) * Math.min(ry, H) / (k2 === 'pluie' ? 700 : 450), 30, 700), dx = (k2 === 'tempete' ? -10 : -3) * d, dy = 11 * d;

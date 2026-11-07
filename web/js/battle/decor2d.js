@@ -1052,7 +1052,10 @@ export class Decor2D {
     view.monde(ctx);
     // de près, les arbres isolés, des haies et des champs (de loin, ils sont dans les tuiles)
     if (L > 1) { const z = view.z, cx = view.cam.x, cy = view.cam.y, w = view.vw / 2 / z, h = view.vh / 2 / z; D.arbres(ctx, this.arbresDans(this.arbresSol, [cx - w, cy - h, cx + w, cy + h])); }
-    // la vie des champs
+    this.vieDesChamps(ctx, view);
+  }
+  // la vie des champs : bêtes, bergers, chiens, villageois qui fuient
+  vieDesChamps(ctx, view) {
     const s = D.ECH_VIE;
     for (const e of this.vie) {
       if ((e.alpha ?? 1) <= 0 || !view.visible(e.x, e.y, 20)) continue;
@@ -1060,6 +1063,13 @@ export class Decor2D {
       ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.a || 0); ctx.scale(s, s); D.bete(ctx, e, this.time); ctx.restore();
     }
     ctx.globalAlpha = 1;
+  }
+  // sur le plateau 3D (SPEC-HEX) : la vie, les fumées et les feux, sans les tuiles du sol ni les houppiers (en 3D)
+  vivant(ctx, view) {
+    this.vue = view;
+    view.monde(ctx);
+    this.vieDesChamps(ctx, view);
+    this.feuxEtFumees(ctx, view);
   }
   dessus(ctx, view, units) {
     if (units && !Array.isArray(units)) units = [...units];
@@ -1082,6 +1092,10 @@ export class Decor2D {
       });
     }
     view.monde(ctx);
+    this.feuxEtFumees(ctx, view);
+    this.moulinsVus(ctx, view);
+  }
+  feuxEtFumees(ctx, view) {
     const t = this.time;
     // fumées : cheminées, incendies, ruines qui couvent
     for (const p of this.fumees) {
@@ -1112,6 +1126,9 @@ export class Decor2D {
     ctx.globalAlpha = 1;
     for (const p of this.fumees) if (p.k === 'm') { ctx.globalAlpha = clamp(1 - p.age / p.life, 0, 1); D.C(ctx, '#ffb04a', p.x, p.y, .35); }
     ctx.globalCompositeOperation = 'source-over';
+  }
+  moulinsVus(ctx, view) {
+    const t = this.time;
     // moulins : ailes face au vent (et leur ombre), roues à aubes
     const wa = Math.atan2(this.vent[1], this.vent[0]);
     for (const b of this.moulins) {

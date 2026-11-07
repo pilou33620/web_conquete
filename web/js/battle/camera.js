@@ -5,14 +5,15 @@
 import { clamp } from './formes.js';
 
 // terrain → écran : [sx, sy, 1] (le 3e terme, la profondeur de la 3D, reste pour les appelants : toujours devant)
-export function toScreen(cam, vp, x, y) { return [(x - cam.x) * cam.z + vp.vw / 2, (y - cam.y) * cam.z + vp.vh / 2, 1]; }
+// (vp.k : l'aplatissement vertical de la vue inclinée du plateau 3D, SPEC-HEX ; 1, ou absent, en vue verticale)
+export function toScreen(cam, vp, x, y) { return [(x - cam.x) * cam.z + vp.vw / 2, (y - cam.y) * cam.z * (vp.k ?? 1) + vp.vh / 2, 1]; }
 // écran → terrain
-export function toWorld(cam, vp, sx, sy) { return [cam.x + (sx - vp.vw / 2) / cam.z, cam.y + (sy - vp.vh / 2) / cam.z]; }
+export function toWorld(cam, vp, sx, sy) { return [cam.x + (sx - vp.vw / 2) / cam.z, cam.y + (sy - vp.vh / 2) / (cam.z * (vp.k ?? 1))]; }
 
 // déplace la caméra pour que le point (wx, wy) du terrain soit sous le point (sx, sy) de l'écran (glisser, zoomer au doigt)
 export function anchor(cam, vp, wx, wy, sx, sy) {
   cam.x = wx - (sx - vp.vw / 2) / cam.z;
-  cam.y = wy - (sy - vp.vh / 2) / cam.z;
+  cam.y = wy - (sy - vp.vh / 2) / (cam.z * (vp.k ?? 1));
   return cam;
 }
 
