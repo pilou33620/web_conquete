@@ -8,7 +8,7 @@ import { THREE, MAT, hache } from './moteur.js';
 import { carteDe, etatVille, planDe, planOrganique, degats, cleVille } from '../carte/villes.js';
 import { primitives, TEINTES, QUARTIERS, ecart } from '../carte/plan-organique.js';
 
-const VX = 1.6;   // les hauteurs un peu exagérées : vues de biais, les maisons à l'échelle s'écrasent
+const VX = 2.6;   // les hauteurs un peu exagérées : vues de biais, les maisons à l'échelle s'écrasent
 const NON_BATI = new Set(['place', 'jardin', 'maraichers', 'parc']);
 const VUE = new THREE.Vector3(0, 0.83, 0.56);   // vers la caméra (moteur.js) : les faces qui s'en détournent sont omises
 const ICO = new THREE.IcosahedronGeometry(1, 0).attributes.position.array;
@@ -64,6 +64,12 @@ export function* maquette(pl, n, ns) {
   const sol = (x, y) => { const t = g.en(x, y); return t ? Math.max(t.top, 0) : 0; };
   const mouille = (x, y) => pl.mouille(x / f, y / f, 0);
   const rue = T.teinte(O.rue || '#bfb498').clone();
+  // les routes qui entrent : pavées en rue, assez larges pour couvrir la route du plateau (les îlots passent dessus)
+  for (const a of O.axes) for (let i = 1; i < a.pts.length; i++) {
+    const p = a.pts[i - 1], q = a.pts[i], l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1, w = 0.09, nx = -(q[1] - p[1]) / l * w, ny = (q[0] - p[0]) / l * w;
+    if (mouille((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)) continue;
+    T.sol([[p[0] + nx, p[1] + ny], [q[0] + nx, q[1] + ny], [q[0] - nx, q[1] - ny], [p[0] - nx, p[1] - ny]].map(u), sol(p[0], p[1]) + 0.13, rue);
+  }
   let k = 0;
   for (const il of O.ilots) {
     if (mouille(il.c[0], il.c[1])) continue;

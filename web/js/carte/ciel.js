@@ -120,7 +120,14 @@ export class Ciel {
       ctx.globalAlpha = k2 === 'pluie' ? 0.5 : 0.72; ctx.drawImage(SPR.pluie, sx - rx, sy - ry, rx * 2, ry * 2); ctx.globalAlpha = 1;
       const n = clamp(Math.min(rx, W) * Math.min(ry, H) / (k2 === 'pluie' ? 700 : 450), 30, 700), dx = (k2 === 'tempete' ? -10 : -3) * d, dy = 11 * d;
       ctx.strokeStyle = 'rgba(215,224,236,.6)'; ctx.lineWidth = d; ctx.beginPath();
-      for (let k = 0; k < n; k++) { const an = Math.random() * TAU, rr = Math.sqrt(Math.random()), x = sx + Math.cos(an) * rx * 0.8 * rr, y = sy + Math.sin(an) * ry * 0.8 * rr; ctx.moveTo(x, y); ctx.lineTo(x + dx, y + dy); }
+      // chaque goutte garde sa place dans l'averse et tombe à son rythme (tirées au hasard à chaque image, elles
+      // grouillaient) : elle descend de six longueurs en 0,7 s, puis repart d'en haut
+      for (let k = 0; k < n; k++) {
+        const h = j => { const v = Math.sin(k * 127.1 + j * 311.7 + a.k * 74.7) * 43758.5453; return v - Math.floor(v); };
+        const an = h(1) * TAU, rr = Math.sqrt(h(2)), f = (h(3) + time / 0.7) % 1 - 0.5;
+        const x = sx + Math.cos(an) * rx * 0.8 * rr + dx * f * 6, y = sy + Math.sin(an) * ry * 0.8 * rr + dy * f * 6;
+        ctx.moveTo(x, y); ctx.lineTo(x + dx, y + dy);
+      }
       ctx.stroke();
       if (k2 === 'orage') this.eclair(ctx, a, sx, sy, rx, ry, dt, px, py);
     }

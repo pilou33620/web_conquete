@@ -29,6 +29,9 @@ const PAPIER = {
   etatmajor: { fond: 0xf0e8cc, foret: 0x9fc27c, lande: 0xd8d6a0, marais: 0xa7c6b4, vigne: 0xcfa6c0, prairie: 0xcfe0a2, colline: 0xe0d4ac, montagne: 0xd2c2a2, haute: 0xeae6dc, ville: 0xe1a796, cote: 0xeee2bc, eau: 0x96c6dc, mer: 0x86b8d6, dunes: 0xf2e6c4 },
 };
 const RANG = { capitale: 0, fort: 1, ville: 2, village: 3 };
+// les villes de près : 'plan' (le vrai plan en maquette, maquette.js) ou 'jouet' (la ville jouet, à toute distance) ;
+// shortcut: choix par l'adresse (?villes=jouet), le temps que le joueur compare les deux rendus
+const VILLES = (typeof location !== 'undefined' && new URLSearchParams(location.search).get('villes')) || 'plan';
 export const ZM = 100;   // px par km : de plus près, les places montrent leur vrai plan (maquette.js)
 const MAQS = 8;          // maquettes gardées
 
@@ -337,7 +340,7 @@ export class Plateau {
   }
 
   // ---------------------------------------------------------------- les places, d'après l'état
-  cleLieu(ns) { return ns ? `${ns.o}|${ns.f || 0}|${ns.d || 0}|${ns.sg ? Math.round((ns.sg.dmg || 0) * 3) : 0}|${(this.mp.state?.year || 0) >= 1830 ? 1 : 0}` : '-'; }
+  cleLieu(ns) { return ns ? `${ns.o}|${ns.f || 0}|${ns.d || 0}|${ns.sg ? Math.round((ns.sg.dmg || 0) * 3) : 0}|${ns.lv?.[0] === 'incendie' ? 1 : 0}|${Math.round((ns.dg || 0) * 5)}|${(this.mp.state?.year || 0) >= 1830 ? 1 : 0}` : '-'; }
   majLieux(st) {
     if (!st) return;
     this.st = st;
@@ -357,8 +360,18 @@ export class Plateau {
     const angles = mp.edges.filter(e => e.a === n.id || e.b === n.id).map(e => { const p = e.a === n.id ? e.pts[Math.min(1, e.pts.length - 1)] : e.pts[Math.max(0, e.pts.length - 2)]; return Math.atan2(p[1] - n.y, p[0] - n.x); });
     const rues = angles.length ? angles : [0, 2.1, 4.2];
     const surRue = (x, z, cx, cz) => { const a = Math.atan2(z - cz, x - cx), d = Math.hypot(x - cx, z - cz); return rues.some(r => d * Math.abs(Math.sin(a - r)) < 0.9 && Math.cos(a - r) > 0); };
+    // ce que l'état abîme (comme la carte d'avant, villes.js degats) : maisons brûlées par l'incendie, ruines du siège en
+    // cours et des combats passés (dg), toits noircis par le canon
+    const feu = ns?.lv?.[0] === 'incendie', deg = Math.max(dmg * 0.22, ns?.dg || 0);
     const ruine = () => dmg > 0.3 && rnd() < dmg * 0.5;
     const brule = 0x3a3230;
+    const etat = () => { const r = rnd(); return feu && r < 0.35 ? 'brule' : r < deg + (feu ? 0.35 : 0) && r >= (feu ? 0.35 : 0) ? 'ruine' : null; };
+    // une maison, ou ce qu'il en reste
+    const bat = (x, z, ry, o) => {
+      const e = etat();
+      if (e === 'ruine') { semer(x * 13 | 0, z * 13 | 0); put(L, boite(2.2, 0.45, 1.8), 0x9a8f7c, x, 0.22, z, ry, 0.08); put(L, boite(0.3, 1.3, 1.8), 0xb7aa8f, x + Math.cos(ry) * 0.9, 0.65, z - Math.sin(ry) * 0.9, ry, 0.08); for (let k = 0; k < 3; k++) put(L, sphere(entre(0.3, 0.5), 0), 0x8a7f6c, x + entre(-1, 1), 0.5, z + entre(-0.8, 0.8)); return; }
+      M.maison(L, st, x, z, ry, e === 'brule' ? { ...o, col: 0x4a3f37, toitCol: 0x231d1a, details: false } : o);
+    };
     const y0 = t0.top;
     // rien dans l'eau : le centre (église, place) va au plus près du milieu sur la terre ferme, les maisons mouillées sautent
     const sec = (x, z, m) => !this.mouille(t0.x + x, t0.z + z, m);
@@ -372,7 +385,7 @@ export class Plateau {
       // la façade regarde la rue la plus proche
       const a = Math.atan2(z - t0.z, x - t0.x), r = rues.reduce((b, rr) => (Math.abs(Math.sin(a - rr)) < Math.abs(Math.sin(a - b)) ? rr : b), rues[0]);
       const et = 1 + ((rnd() * etagesMax) | 0), rui = ruine();
-      M.maison(L, st, x - t0.x, z - t0.z, -r + (rnd() < 0.5 ? 0 : Math.PI), { s: entre(0.85, 1.05), etages: et, toitCol: rui ? brule : undefined });
+      bat(x - t0.x, z - t0.z, -r + (rnd() < 0.5 ? 0 : Math.PI), { s: entre(0.85, 1.05), etages: et, toitCol: rui ? brule : undefined });
       posees.push([x, z]);
     };
     // sur une grille fine de l'hexagone t, au plus près du centre, jusqu'à n maisons au sec ; rend celles qui manquent
@@ -409,7 +422,7 @@ export class Plateau {
         let hx = 0, hz = 0, a = 0, ok = false;
         for (let e = 0; e < 8 && !ok; e++) { a = rnd() * Math.PI * 2; const r = entre(2.6, 6.2 + e * 0.6); hx = ox + Math.cos(a) * r; hz = oz + Math.sin(a) * r; ok = sec(hx, hz, 1.2); }
         if (!ok) continue;
-        M.maison(L, st, hx, hz, -a + Math.PI / 2 + entre(-0.3, 0.3), { s: 0.85, etages: rnd() < 0.2 ? 2 : 1, toitCol: ruine() ? brule : undefined });
+        bat(hx, hz, -a + Math.PI / 2 + entre(-0.3, 0.3), { s: 0.85, etages: rnd() < 0.2 ? 2 : 1, toitCol: ruine() ? brule : undefined });
       }
       M.eglise(L, st, ox, oz, rnd() * 6, 0.65, n.dept);
       for (let k = 0; k < 3; k++) { const a = rnd() * 6.3, r = entre(6.5, 8.5), ax = ox + Math.cos(a) * r, az = oz + Math.sin(a) * r; if (sec(ax, az, 1)) M.arbre(L, ax, 0, az, 0.7, 'fruitier'); }
@@ -485,7 +498,7 @@ export class Plateau {
   // les places à l'écran montrent leur maquette, une fois bâtie (une à la fois, par petits pas) ; la ville « jouet »
   // reste en attendant, et revient de loin
   proches(cam, vw, vh) {
-    const st = this.st, pres = cam.z >= ZM && st, m0 = 2.5;
+    const st = this.st, pres = cam.z >= ZM && st && VILLES !== 'jouet', m0 = 2.5;
     const x0 = cam.x - vw / 2 / cam.z - m0, x1 = cam.x + vw / 2 / cam.z + m0, y0 = cam.y - vh / 2 / (cam.z * K) - m0, y1 = cam.y + vh / 2 / (cam.z * K) + m0;
     for (const [id, l] of this.lieux) {
       const n = l.n, m = this.maqs.get(id), voulu = pres && n.x > x0 && n.x < x1 && n.y > y0 && n.y < y1;
