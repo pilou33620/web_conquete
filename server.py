@@ -42,6 +42,8 @@ from game import diplomacy as D  # noqa: E402
 from game import events as EV  # noqa: E402
 from game import rules as R  # noqa: E402
 from game import rails as RL  # noqa: E402
+from game import religion as RG  # noqa: E402
+from game import revoltes as RV  # noqa: E402
 from game import turns as TT  # noqa: E402
 from game import views as V  # noqa: E402
 from game.engine import Game  # noqa: E402
@@ -231,6 +233,10 @@ class App:
                 return self._r(g.set_tax(p, body.get('value', 0.5)))
             if c == 'tarif':   # douane (SPEC-MERCENAIRES.md)
                 return self._r(g.set_tarif(p, body.get('value')))
+            if c == 'culte':   # politique religieuse (SPEC-RELIGION.md)
+                return self._r(RG.set_culte(g, p, str(body.get('value'))))
+            if c == 'bande':   # bandes armées : apaiser, soutenir, lever des partisans (game/revoltes.py)
+                return self._r(RV.commande(g, p, body.get('value')))
             if c == 'douaniers':
                 return self._r(g.set_douaniers(p, body.get('value')))
             if c == 'form':
