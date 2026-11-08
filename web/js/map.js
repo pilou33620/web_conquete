@@ -1997,6 +1997,33 @@ export class MapView {
     ctx.restore();
   }
 
+  // bande armée sur une place : un fanion qui claque au vent (rouge des insurgés, noir des brigands, vert des partisans)
+  // et ses hommes de près
+  bandMark(ctx, x, y, s, b, time) {
+    const col = { rebelles: '#c0392b', brigands: '#26231f', partisans: '#3f7d3a' }[b.k] || '#c0392b';
+    const w = Math.sin(time / 210 + x) * 0.18;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = 'rgba(14,20,30,.85)'; ctx.lineWidth = Math.max(2, s * 0.16);
+    ctx.beginPath(); ctx.moveTo(0, s * 0.55); ctx.lineTo(0, -s * 0.6); ctx.stroke();
+    ctx.strokeStyle = '#d8c39a'; ctx.lineWidth = Math.max(1, s * 0.07);
+    ctx.beginPath(); ctx.moveTo(0, s * 0.55); ctx.lineTo(0, -s * 0.6); ctx.stroke();
+    ctx.fillStyle = col; ctx.strokeStyle = '#e6c97f'; ctx.lineWidth = Math.max(1, s * 0.06);
+    ctx.beginPath(); ctx.moveTo(0, -s * 0.6);
+    ctx.quadraticCurveTo(s * 0.45, -s * (0.62 + w), s * 0.9, -s * (0.42 + w));
+    ctx.lineTo(s * 0.45, -s * 0.3); ctx.quadraticCurveTo(s * 0.7, -s * (0.18 - w), s * 0.9, -s * (0.1 - w));
+    ctx.quadraticCurveTo(s * 0.45, -s * (0.02 + w), 0, -s * 0.12); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (this.cam.z >= 2.3) {
+      const txt = String(b.n);
+      ctx.font = `600 ${Math.round(clamp(s * 0.75, 11, 15))}px "EB Garamond", Georgia, serif`;
+      const tw = this.textW(ctx, txt) + 8;
+      ctx.fillStyle = 'rgba(32,35,38,0.88)'; roundRect(ctx, -tw / 2, s * 0.6, tw, s * 0.85 + 2, 3); ctx.fill();
+      ctx.strokeStyle = col === '#26231f' ? '#9a9283' : col; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.fillStyle = '#f1ead8'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(txt, 0, s * 0.6 + 1);
+    }
+    ctx.restore();
+  }
+
   // sous les villes : la teinte de l'époque, puis la guerre au sol (traces, tranchées, terre piétinée : carte/guerre.js)
   drawSeasonTint(ctx) {
     this.epoque.teinte(ctx);
@@ -2074,6 +2101,7 @@ export class MapView {
       if (ns.intel || ns.spy) this.eye(ctx, s * 0.62, -s * 0.5, clamp(s * 0.4, 9, 14), ns.intel ? '#f3d98e' : 'rgba(243,217,142,0.6)');
       if (ns.bw) this.worksBar(ctx, s, ns.bw[0]);
       if (ns.ev) this.evMark(ctx, -s * 0.6, -s * 0.55, clamp(s * 0.45, 10, 15), time);   // décision locale en attente
+      if (ns.bd) this.bandMark(ctx, s * 0.55, -s * 0.05, clamp(s * 0.55, 11, 18), ns.bd, time);   // bande armée (SPEC-RELIGION.md)
       ctx.restore();
       const showLabel = n.type === 'capitale' || (n.type !== 'village' && z >= 2.3) || z >= 4.8 || sel;
       if (showLabel) labels.push([n, x, y, s, ns, rP]);
