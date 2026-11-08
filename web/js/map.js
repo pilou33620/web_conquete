@@ -136,7 +136,8 @@ export class MapView {
     this.rules = payload.rules;
     this.m = m;
     this.W = m.W; this.H = m.H;
-    this.terrain = b64(m.terrain); this.dept = b64(m.dept); this.cellnode = b64(m.cellnode); this.river = b64(m.river);
+    this.terrain = b64(m.terrain); this.dept = b64(m.dept); this.river = b64(m.river);
+    this.cellnode = new Uint16Array(b64(m.cellnode).buffer);   // (deux octets par case ; 65535 : sans lieu)
     this.nodes = m.nodes; this.edges = m.edges;
     this.depts = m.depts; this.deptCodes = m.dept_codes;
     this.cam = { x: m.W / 2, y: m.H / 2, z: 2 };
@@ -179,11 +180,10 @@ export class MapView {
     // celle de l'état-major (1818)
     this.teinte = 'nature';
     try { if (localStorage.getItem('conquete.carte.teinte') === 'epoque') this.teinte = 'epoque'; } catch (e) { /* stockage indisponible */ }
+    const jouables = m.playable || PLAYABLE;   // (toute la France, envoyée par le serveur ; les cinq d'avant sinon)
     this.playable = new Uint8Array(this.W * this.H);
-    for (let c = 0; c < this.W * this.H; c++) {
-      const d = this.dept[c];
-      this.playable[c] = d > 0 && PLAYABLE.includes(this.deptCodes[d - 1]) && this.terrain[c] > 1 ? 1 : 0;
-    }
+    const jd = Uint8Array.from([0, ...this.deptCodes.map(c => jouables.includes(c) ? 1 : 0)]);   // (par département : 1,2 million de cases)
+    for (let c = 0; c < this.W * this.H; c++) this.playable[c] = jd[this.dept[c]] && this.terrain[c] > 1 ? 1 : 0;
     this.prepEdges();
     this.buildBases();
     this.buildLandPath();
@@ -198,7 +198,7 @@ export class MapView {
     this.lastFrame = performance.now();
     this.resize();
     for (let ty = 0; ty * 128 < this.H; ty++) for (let tx = 0; tx * 128 < this.W; tx++) this.getTile(LEVELS[0], tx, ty, true);
-    if (this.style === 'plateau' && !this.initPlateau()) this.style = 'ugar';
+    if (this.style === 'plateau' && !this.initPlateau()) { this.style = 'ugar'; this.rebuildTerritory(); }
     this.fitAll(true);
     window.addEventListener('resize', () => this.resize());
     this.bindInput();
@@ -470,7 +470,7 @@ export class MapView {
     const W = this.W, H = this.H, N = W * H;
     const proxy = new Int32Array(N).fill(-1);
     const q = [];
-    for (let c = 0; c < N; c++) if (this.playable[c] && this.cellnode[c] !== 255) { proxy[c] = c; q.push(c); }
+    for (let c = 0; c < N; c++) if (this.playable[c] && this.cellnode[c] !== 65535) { proxy[c] = c; q.push(c); }
     for (let h = 0; h < q.length; h++) {
       const c = q[h], i = c % W, j = (c / W) | 0;
       const nb = [i > 0 ? c - 1 : -1, i < W - 1 ? c + 1 : -1, j > 0 ? c - W : -1, j < H - 1 ? c + W : -1];
@@ -1100,13 +1100,19 @@ export class MapView {
 
   rebuildTerritory() {
     const W = this.W, H = this.H, N = W * H;
-    const codes = Object.keys(this.rules.factions);
-    const idx = new Int8Array(N).fill(-1);
+    const codes = Object.keys(this.rules.factions), rang = new Map(codes.map((c, i) => [c, i]));
+    const idx = new Int16Array(N).fill(-1);
     for (let c = 0; c < N; c++) {
       const p = this.proxy[c];
       if (p < 0) continue;
-      const o = this.owners[this.cellnode[p]];
-      idx[c] = codes.indexOf(o);
+      idx[c] = rang.get(this.owners[this.cellnode[p]]) ?? -1;
+    }
+    // sur le plateau, ses teintes et ses liserés suffisent : ni frontières lissées ni peinture des tuiles (toute la
+    // France : 89 camps sur 1,2 million de cases) ; la carte d'avant les refait si elle revient (initPlateau)
+    if (this.style === 'plateau' && !this.plateauKo) {
+      this.tileGen++; this.cellFac = idx; this.facCodes = codes;
+      this.plateau?.territoire(idx, codes, this.colors);
+      return;
     }
     // frontières (carrés marchants sur un champ lissé)
     this.frontiers = [];

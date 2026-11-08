@@ -11,7 +11,7 @@ import math
 import random
 
 from .. import rules as R
-from ..geo import T_EAU, T_HAUTE, PLAYABLE
+from ..geo import T_EAU, T_HAUTE
 from . import bridge as TB
 from .. import battle_log as BL
 from .. import army_actions as AA
@@ -56,7 +56,7 @@ def units_for(era, garrison=False):
 def options(geo):
     """Choix offerts par l'écran du mode Bataille (envoyés avec la carte, /api/map)."""
     places = [dict(id=n['id'], name=n['name'], type=n['type'], fort=_fort(n)) for n in geo.nodes
-              if n['type'] in ('capitale', 'ville', 'fort') and n['dept'] in PLAYABLE]
+              if n['type'] in ('capitale', 'ville', 'fort') and n['dept'] in geo.playable_codes]
     places.sort(key=lambda p: p['name'])
     return dict(max=MAX_UNITS, kinds=KINDS, seasons=SEASONS, places=places,
                 weather_w=R.WEATHER_W, assault_units=ASSAULT_UNITS, garrison_units=GARRISON_UNITS,
@@ -165,20 +165,20 @@ def new(geo, body):
         nid = int(nid) if nid not in (None, '') else None
     except (TypeError, ValueError):
         nid = None
-    if nid is not None and not (0 <= nid < len(geo.nodes) and geo.nodes[nid]['dept'] in PLAYABLE):
+    if nid is not None and not (0 <= nid < len(geo.nodes) and geo.nodes[nid]['dept'] in geo.playable_codes):
         nid = None
     if kind == 'forteresse':
         if nid is None or _fort(geo.nodes[nid]) < 1:
-            nid = rng.choice([n['id'] for n in geo.nodes if _fort(n) >= 1 and n['dept'] in PLAYABLE])
+            nid = rng.choice([n['id'] for n in geo.nodes if _fort(n) >= 1 and n['dept'] in geo.playable_codes])
         bx, by = geo.nodes[nid]['x'], geo.nodes[nid]['y']
     elif kind == 'village':
         if nid is None or _fort(geo.nodes[nid]) >= 1:
             nid = rng.choice([n['id'] for n in geo.nodes if n['type'] == 'village' and _fort(n) < 1
-                              and n['dept'] in PLAYABLE])
+                              and n['dept'] in geo.playable_codes])
         bx, by = geo.nodes[nid]['x'], geo.nodes[nid]['y']
     else:
         if nid is None:
-            nid = rng.choice([n['id'] for n in geo.nodes if n['dept'] in PLAYABLE])
+            nid = rng.choice([n['id'] for n in geo.nodes if n['dept'] in geo.playable_codes])
         bx, by = _open_ground(geo, rng, geo.nodes[nid]['x'], geo.nodes[nid]['y'], 3.5, 6.0)
     for z in g.weather:
         g.weather[z] = dict(kind=weather, left=5)

@@ -18,7 +18,7 @@ from game.geo import GeoMap  # noqa: E402
 from game.tactics import battle as BT  # noqa: E402
 from game.tactics import skirmish as S  # noqa: E402
 
-GEO = GeoMap()   # la carte, calculée une fois (en cache dans game/data/map_cache.json)
+GEO = GeoMap(2)   # la carte du Sud-Ouest (géographie 2), calculée une fois (en cache dans game/data/map_cache_v2.json)
 
 
 # ------------------------------------------------------------------ campagne

@@ -17,7 +17,7 @@ globalThis.Path2D = class { moveTo() {} arc() {} lineTo() {} };
 const V = await import('../web/js/carte/villes.js');
 
 const racine = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const m = JSON.parse(execFileSync('python3', ['-c', 'import json,sys; from game.geo import GeoMap; sys.stdout.write(json.dumps(GeoMap().client_payload()))'], { cwd: racine, maxBuffer: 64 << 20 }).toString());
+const m = JSON.parse(execFileSync('python3', ['-c', 'import json,sys; from game.geo import GeoMap; sys.stdout.write(json.dumps(GeoMap(2).client_payload()))'], { cwd: racine, maxBuffer: 64 << 20 }).toString());
 const K = V.carteDe(m);
 const nom = x => m.nodes.find(n => n.name === x);
 const plan = (n, e = {}) => V.genererInterieur(K, V.profilVille(K, n, { annee: 1789, ...e }));

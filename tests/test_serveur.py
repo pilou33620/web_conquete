@@ -12,6 +12,8 @@ jamais être perdue. Bugs déjà rattrapés, à ne pas revoir :
 - une sauvegarde manuelle nommée « sauvegarde-automatique » était écrasée au mois suivant.
 """
 import contextlib
+import array
+import base64
 import hashlib
 import http.client
 import io
@@ -227,7 +229,13 @@ class Sauvegardes(unittest.TestCase):
         app.lock, app.geo_lock = threading.RLock(), threading.Lock()
         ancienne = app.geo_for(1)
         # (ce que la page reçoit, lieux, arêtes, grilles, rivières, rails, et les cases des routes : celle d'avant le lot)
-        empreinte = hashlib.sha1(json.dumps([ancienne.client_payload(), RL.client_payload(ancienne)], sort_keys=True).encode()
+        # (depuis toute la France, cellnode a deux octets par case et la liste des départements jouables s'ajoute : ramenés à
+        # l'ancienne forme, le contenu doit être le même)
+        p = ancienne.client_payload()
+        p.pop('playable')
+        cn = array.array('H'); cn.frombytes(base64.b64decode(p['cellnode']))
+        p['cellnode'] = base64.b64encode(bytes(255 if v == 0xFFFF else v for v in cn)).decode()
+        empreinte = hashlib.sha1(json.dumps([p, RL.client_payload(ancienne)], sort_keys=True).encode()
                                  + bytes(ancienne.road)).hexdigest()
         self.assertEqual(empreinte, '36421fef2a39cf909b5f075799b574936aa8a11f', 'la carte des anciennes parties ne change pas')
         g = Game(ancienne, '33', 'normal', 1, '1790')

@@ -113,7 +113,7 @@ export class Travaux {
     }
     // les grands travaux du joueur, quelques mois après la découverte : les routes royales qu'on empierre, puis leurs
     // bornes ; le chemin de halage de la Garonne et de la Dordogne qu'on creuse, puis fini et balisé
-    const td = st.me?.tech_dates || {}, age = k => td[k] ? st.t - td[k][1] : null, chez = (x, y) => { const c = mp.cellnode?.[(y | 0) * mp.W + (x | 0)]; return c != null && c !== 255 && st.nodes[c]?.o === me; };
+    const td = st.me?.tech_dates || {}, age = k => td[k] ? st.t - td[k][1] : null, chez = (x, y) => { const c = mp.cellnode?.[(y | 0) * mp.W + (x | 0)]; return c != null && c !== 65535 && st.nodes[c]?.o === me; };
     const pc = age('ponts_chaussees');
     if (pc != null) for (const e of mp.edges) {
       if (!e.royal || e.water || e.ferry) continue;

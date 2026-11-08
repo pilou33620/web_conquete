@@ -14,7 +14,29 @@ export const STYLES = {
   '47': { murs: [0xe8c7a6, 0xdcb08e, 0xefd2b4, 0xe4bd98], toits: [0xb5532f, 0xc4643a, 0xa94a2a], pente: 0.42, volets: [0x6d8b9a, 0x9a8a6a] },
   '64': { murs: [0xf7f4ee, 0xffffff, 0xf2eee6], toits: [0x5a6070, 0x4c5262, 0x666c7a], pente: 0.85, bois: 0x8c2f24, volets: [0x8c2f24, 0x2f5a3a] },
 };
-export const style = d => STYLES[d] || STYLES['33'];
+// (toute la France, SPEC-FRANCE.md) les grandes régions : murs, toits, pente, pans de bois, volets
+Object.assign(STYLES, {
+  nord: { murs: [0xa85a40, 0xb4664a, 0x9c5038, 0xc07656], toits: [0x5d5552, 0x6a5f58, 0x8a4a36], pente: 0.75, volets: [0xe9e2cf, 0x3f5a46] },
+  normandie: { murs: [0xf3ecdc, 0xefe6d2, 0xf6f1e4], toits: [0x5b5866, 0x8f7a52, 0x6a6672], pente: 1.0, bois: 0x5a3a24, volets: [0x6b3a2a, 0x3f5a46] },
+  bretagne: { murs: [0xb8b2a6, 0xc4beb2, 0xaaa498], toits: [0x4f5562, 0x5a6070, 0x464c58], pente: 0.95, volets: [0x2f5f8a, 0xe9e2cf] },
+  loire: { murs: [0xf4efe2, 0xefe9da, 0xf8f4ea], toits: [0x5b6170, 0x525866, 0x666c7a], pente: 0.95, volets: [0xe9e2cf, 0x7d8f9a] },
+  alsace: { murs: [0xf0d9a0, 0xe7b9a0, 0xc9d9e3, 0xf2e6c8], toits: [0xa0472f, 0xb05236, 0x943f2a], pente: 1.25, bois: 0x5e3b24, volets: [0x3f6a46, 0x8c2f24] },
+  lorraine: { murs: [0xe2d4b6, 0xd9c9a8, 0xe8dcc2], toits: [0xb05a40, 0xa65238, 0xbc6648], pente: 0.42, volets: [0x7a6a4a, 0x6d7f8a] },
+  bourgogne: { murs: [0xdcc8a0, 0xd2bc92, 0xe4d2ae], toits: [0x9a5a3a, 0x7e4a30, 0xb8763e], pente: 1.0, volets: [0x7a5a3a, 0x5a6a4a] },
+  alpes: { murs: [0xcfc6b5, 0xd8d0c0, 0xc4baa8], toits: [0x6e6a66, 0x5e5a56, 0x7a746c], pente: 0.8, bois: 0x6b4a2e, volets: [0x6b4a2e, 0x3f5a46] },
+  provence: { murs: [0xe8c58a, 0xf0d6a8, 0xe2b878, 0xf2dcb4], toits: [0xc7643f, 0xd0724a, 0xbc5a38], pente: 0.33, volets: [0x5a8a9a, 0x7a9a5a, 0x9a6a8a] },
+  auvergne: { murs: [0x9a9184, 0xa69e90, 0x8e8578], toits: [0x5a5550, 0x4e4a46, 0x66605a], pente: 0.95, volets: [0x6b4a2e, 0x5a6a4a] },
+  charentes: { murs: [0xf1ead8, 0xece3ce, 0xf5efe0], toits: [0xbf6a45, 0xc87650, 0xb4603c], pente: 0.35, volets: [0x7d9aa6, 0x9ab08a] },
+  toulouse: { murs: [0xd99a7a, 0xcf8c6a, 0xe2a888], toits: [0xb5583a, 0xc0623e, 0xa94a2f], pente: 0.4, volets: [0x6d8b9a, 0x9a8a6a] },
+});
+const REGION = {};
+for (const [r, cs] of Object.entries({
+  nord: '59 62 80 02 60', normandie: '76 27 14 50 61', bretagne: '29 22 56 35', alsace: '67 68',
+  loire: '75 78 77 28 45 41 37 18 36 49 72 53 44 85', lorraine: '57 54 55 88 51 52 10 08',
+  bourgogne: '21 71 58 89 25 39 70', alpes: '69 01 38 42 73 74 26 07 05', provence: '13 83 84 06 04 30 34 11 66 20',
+  auvergne: '63 15 43 48 12 19 23 87 03', charentes: '79 86 16 17', toulouse: '31 32 82 81 46 09 65',
+})) for (const c of cs.split(' ')) REGION[c] = r;
+export const style = d => STYLES[d] || STYLES[REGION[d]] || STYLES['33'];
 const VITRE = 0x3d4a5a, PORTE = 0x5a3a24, PIERRE = 0xd9ccb0, PIERRE2 = 0xc9bb98, ARDOISE = 0x5b5866, BRIQUE = 0xa8573a, BOIS = 0x7a5233;
 
 // une plaque (fenêtre, porte, poutre) plaquée contre une façade : centre (x, y, z), normale tournée de a autour de y
