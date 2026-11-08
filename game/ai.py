@@ -8,6 +8,7 @@ from . import rails as RL
 from . import diplomacy as D
 from . import familles as FM
 from . import army_actions as AA
+from . import revoltes as RV
 
 AI_AHEAD = 5   # ans d'avance au plus sur l'histoire pour une recherche des IA (SPEC-ARBRE.md)
 from .geo import TERRAIN
@@ -173,6 +174,7 @@ class AI:
         if self.g.t >= getattr(self, 'aa_clock', 0):
             self.aa_clock = self.g.t + 3   # barricades, garde bourgeoise, quartiers, réquisition, droit de passage
             AA.ai_step(self)
+        RV.ia(self)   # politique religieuse, bandes armées (game/revoltes.py)
         if self.g.t >= self.spend_clock:
             self.spend_clock = self.g.t + 4 + self.rng.random() * 2
             self.spend()
@@ -864,7 +866,7 @@ class AI:
             if a['target'] and a['state'] == 'move' and a['target'].get('node') is not None:
                 taken[a['target']['node']] = taken.get(a['target']['node'], 0) + 1
         for a in mine:
-            if a['id'] not in g.armies:
+            if a['id'] not in g.armies or RV.chasse(g, a):   # (une armée qui chasse une bande : game/revoltes.py)
                 continue
             try:
                 self.army_think(a, taken)

@@ -13,6 +13,8 @@ from . import cities as CT
 from . import crue as CR
 from . import familles as FM
 from . import rails as RL
+from . import religion as RG
+from . import revoltes as RV
 from . import turns as TT
 from .tactics import bridge as TB
 from .geo import TERRAIN, T_LANDE, T_MARAIS, T_PLAINE
@@ -118,6 +120,8 @@ class Game:
             self.nodes[-1]['ph'] = [int(self.nodes[-1]['pop'])]   # population des douze derniers mois
             if owner != R.NEUTRAL:
                 self.factions[owner]['start_nodes'] += 1
+        RG.init(self)   # réformés des places, politique religieuse des camps (game/religion.py)
+        self.bandes = []   # insurgés, brigands et partisans (game/revoltes.py)
         sc = R.SCENARIOS[self.scenario]
         if sc.get('techs_before'):
             for f in self.factions.values():
@@ -561,6 +565,7 @@ class Game:
         if ch:   # le trait du chef de la maison (game/familles.py)
             for k, v in R.MAISON_TRAITS[ch['trait']]['fx'].items():
                 m[k] = m.get(k, 0) + v
+        RG.mods(self, code, m)   # politique religieuse (game/religion.py)
         if code != self.player:
             d = R.DIFFICULTY[self.difficulty]
             m['ai_income'] = d['ai_income'] - 1
@@ -589,6 +594,7 @@ class Game:
             self._last_day = day
             self.new_day()
             self.drill_tick()
+            RV.quotidien(self)   # armées arrêtées sur la place d'une bande : combat
         # (les revenus refaits au plus tous les quarts de journée, chaque jour sur toute la France : 89 camps agissent sans
         # cesse et salissaient tout)
         if self._dirty_income and self.t - getattr(self, '_income_t', -1.0) >= (1.0 if len(self.factions) > 5 else 0.25):
@@ -794,6 +800,8 @@ class Game:
                 for o in list(pr):
                     if o == R.NEUTRAL or f['res']['recrues'] < 500 or pr[o] > 300:
                         self.enroll(code, o)
+        RG.mensuel(self)   # exil et conversions des réformés (game/religion.py)
+        RV.mensuel(self)   # bandes : insurrections, brigands, partisans (game/revoltes.py)
         # une génération pour faire sienne une place conquise
         for n in self.nodes:
             if n['owner'] != R.NEUTRAL and n.get('assim', 1.0) < 1.0:
@@ -1179,6 +1187,7 @@ class Game:
                     tgt += 0.15
                 tgt += AA.stab_bonus(self, n)
                 tgt += CT.stab_bonus(self, n)   # hospices, politique de la ville
+                tgt += RG.stab_bonus(self, n)   # politique religieuse et réformés de la place
                 tgt = max(0.1, min(1.0, tgt))
                 boost = boost0
             if n['stab'] < tgt:
@@ -4153,6 +4162,8 @@ class Game:
         o = n['owner']
         if o == code:
             return False, "Cette place vous appartient déjà."
+        if kind == 'soulever' and (o == R.NEUTRAL or not self.at_war(code, o)):
+            return False, "On ne soulève que la population d'un camp avec lequel vous êtes en guerre."
         if kind == 'saboter':
             if o == R.NEUTRAL or not self.at_war(code, o):
                 return False, "Le sabotage n'est possible que contre un camp avec lequel vous êtes en guerre."
@@ -4192,7 +4203,8 @@ class Game:
         chance = R.SPY[kind]['chance'] + (0.1 if 'diplomates' in f['techs'] else 0)
         if o in self.factions and 'chappe' in self.factions[o]['techs']:
             chance -= 0.15
-        if kind == 'saboter' and (o == R.NEUTRAL or not self.at_war(code, o) or n['fort'] <= 0):
+        if (kind == 'saboter' and (o == R.NEUTRAL or not self.at_war(code, o) or n['fort'] <= 0)) \
+                or (kind == 'soulever' and (o == R.NEUTRAL or not self.at_war(code, o))):
             if code == self.player:
                 self.log('espion', f"Mission annulée à {gn['name']} : la situation a changé.", gn['x'], gn['y'])
             f['res']['livres'] += R.SPY[kind]['cost'] * 0.5
@@ -4206,6 +4218,8 @@ class Game:
                     self.log('espion', f"Rapport d'espion sur {gn['name']} : milice {int(n['milice'])}, garnison {int(gm)}, "
                                        f"remparts niveau {n['fort']}, {len(near)} armée(s) aux environs.",
                              gn['x'], gn['y'], who=o, important=True)
+            elif kind == 'soulever':
+                RV.fomenter(self, code, nid)   # (game/revoltes.py)
             else:
                 n['fort'] = max(0, n['fort'] - 1)
                 n['milice_max'] = max(R.NODE_BASE[gn['type']]['milice'], n['milice_max'] - 40)

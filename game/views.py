@@ -10,6 +10,8 @@ from . import army_actions as AA
 from . import cities as CT
 from . import turns as TT
 from . import familles as FM
+from . import religion as RG
+from . import revoltes as RV
 from .engine import Game, SITE_DAYS
 from .tactics import bridge as TB
 from .tactics import units as TU
@@ -17,9 +19,10 @@ from .tactics import stats as ST
 
 SAVE_KEYS = ['player', 'difficulty', 'seed', 't', 'uid', 'seq', 'events', 'proposals', 'armies', 'battles', 'over',
              'flood_until', 'market', 'weather', 'factions', 'nodes', '_ai_clock', 'spies', 'scenario', 'start_ord',
-             'era_id', 'pending_ev', 'ev_done', 'tour', 'rails', 'sites']
+             'era_id', 'pending_ev', 'ev_done', 'tour', 'rails', 'sites', 'bandes']
 DEFAULTS = dict(spies=list, scenario=lambda: '1790', start_ord=lambda: datetime.date(1790, 3, 4).toordinal(),
-                era_id=lambda: None, pending_ev=list, ev_done=lambda: None, tour=lambda: None, rails=dict, sites=list)
+                era_id=lambda: None, pending_ev=list, ev_done=lambda: None, tour=lambda: None, rails=dict, sites=list,
+                bandes=list)
 
 
 def to_dict(g):
@@ -96,6 +99,7 @@ def migrate(g):
                 r['arm'] = g.arm_level(n['owner'], cls)
             if 'man' not in r:
                 r['man'] = g.known_man(n['owner'], cls)
+    RG.migrate(g)   # réformés des places, politique religieuse (SPEC-RELIGION.md)
     AA.migrate(g)   # actions d'armée : droits de passage, quartiers, traversée
     CT.migrate(g)   # emplacements : un magasin aux vivres existant en occupe un
     TB.migrate(g)   # munitions, fatigue, mode des batailles
@@ -167,7 +171,7 @@ def rules_payload():
                 formation_speed=R.FORMATION_SPEED, plans=R.PLANS, phases=R.PHASES, spy=R.SPY, spy_tours=R.SPY_INTEL_TOURS,
                 tax_labels=R.TAX_LABELS, water=dict(speed=R.WATER_SPEED, sea=R.SEA_SPEED, embark=R.EMBARK_DAYS,
                                                     quai=R.QUAI_LIVRES, blockade=R.BLOCKADE_K),
-                cities=CT.rules_payload())
+                cities=CT.rules_payload(), revoltes=RV.rules_payload())
 
 
 def _gen(g):
@@ -304,6 +308,8 @@ def player_state(g, since=0):
     seen = _seer(srcs)
 
     nodes = []
+    bmap = RV.par_place(g)   # bandes armées (game/revoltes.py)
+    held = {a['at_node'] for a in g.armies.values() if a['owner'] == p and a['at_node'] is not None}
     tr = g._pop_curves()
     cholera = round(g.t - (CHOLERA_T - g.start_ord))
     cholera = cholera if 0 <= cholera < LEV_DAYS and 'cholera' in (g.ev_done or ()) else None
@@ -311,6 +317,8 @@ def player_state(g, since=0):
         gn = g.geo.nodes[n['id']]
         d = dict(id=n['id'], o=n['owner'], f=n['fort'], d=n['dev'], s=round(n['stab'], 2), pop=int(round(n.get('pop', 0), -1)),
                  sg=_siege(g, n) if n['siege'] else None)
+        if n.get('rp'):
+            d['ref'] = round(n['rp'], 2)   # part de réformés (SPEC-RELIGION.md)
         d['pt'] = [round(tr['rate'][n['id']] * 100, 1), tr['why'][n['id']]]   # tendance : % par an et sa raison
         if n['id'] in g._blockade:
             d['bk'] = 1
@@ -372,6 +380,13 @@ def player_state(g, since=0):
         elif cholera is not None and gn['type'] in ('ville', 'capitale'):
             d['lv'] = ['epidemie', cholera]   # le choléra de 1832 frappe toutes les villes : la carte le montre comme une épidémie
         AA.view_node(g, n, d, n['owner'] in side, lambda: g.intel_active(p, n['id']) or seen(gn['x'], gn['y']))
+        b = bmap.get(n['id'])
+        if b is not None and (n['owner'] in side or p in (b['c'], b.get('sp')) or seen(gn['x'], gn['y'])):
+            d['bd'] = RV.vue(g, b)
+        if n['owner'] == p:
+            mr = RV.menace(g, n, held)
+            if mr:
+                d['mr'] = mr   # menace de révolte : niveau, cause
         nodes.append(d)
 
     armies = []
@@ -495,7 +510,7 @@ def player_state(g, since=0):
                 prestige_parts={k: int(round(v)) for k, v in g.prestige_parts(p).items()},
                 glory=int(me.get('prestige', 0)),
                 arm={c: g.arm_level(p, c) for c in R.ARMS}, unames={u: g.unit_name(p, u) for u in R.UNITS},
-                effects=_effects(g, me))
+                effects=_effects(g, me), culte=RG.vue(g, p))
 
     era = g.era()
     return dict(t=round(g.t, 3), date=g.date_str(), season=g.season(), speed=g.speed_idx, over=g.over,

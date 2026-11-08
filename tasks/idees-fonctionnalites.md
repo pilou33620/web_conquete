@@ -1,7 +1,8 @@
 # Idées de fonctionnalités à venir (choix du 27/10/2026)
 
 État au 1er/11/2026 : 1. généraux **faits** (`ffc1546`, SPEC-GENERAUX.md) ; 2. mercenaires, douane et mariages
-**construits, fusionnés en local, équilibre de 1700 à régler** (voir `tasks/plan-mercenaires.md`) ; 3. pas commencé.
+**construits, fusionnés en local, équilibre de 1700 à régler** (voir `tasks/plan-mercenaires.md`) ; 3. **construit le
+8/11/2026** sur sa branche (SPEC-RELIGION.md, `tasks/plan-religion.md`, `game/religion.py`, `game/revoltes.py`), à fusionner.
 
 Rien n'est écrit ni codé. Chaque chantier passe par `/spec`, `/plan`, puis `/build` par petites étapes avec l'accord du joueur,
 banc d'équilibre (`tasks/equilibre-reference.md`) et `/review` à la fin.
