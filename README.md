@@ -72,7 +72,9 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
 - La partie est **sauvegardée automatiquement** au début de chaque mois de jeu (donc au début de chaque tour) ; après
   une coupure de courant ou un redémarrage, le Raspberry la reprend telle quelle (en pause).
 - Le tour des IA se calcule d'un coup : environ 1 seconde sur un Raspberry Pi en début de partie, 2,5 secondes après
-  un an et demi de guerres (une cinquantaine d'armées).
+  un an et demi de guerres (une cinquantaine d'armées). Sur toute la France (89 camps), 2 à 4,5 secondes par mois sur
+  un PC en début de partie, 6 à 8 après deux ans (les camps loin du joueur réfléchissent une fois par semaine,
+  SPEC-FRANCE.md) : trois à cinq fois plus sur un Raspberry Pi.
 - Commandes utiles : `sudo systemctl status web_conquete`, `sudo systemctl restart web_conquete`,
   `journalctl -u web_conquete -f`.
 
