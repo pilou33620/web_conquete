@@ -1,4 +1,5 @@
 """Règles du jeu : départements, unités, technologies, bâtiments, météo."""
+from . import regions as RG   # textes et données de toute la France (données seules)
 
 RESOURCES = ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues']
 RES_LABEL = dict(livres='Livres', vivres='Vivres', fer='Fer', bois='Bois', armes='Armes', outils='Outils', recrues='Recrues')
@@ -62,6 +63,7 @@ def _generer_departements():
                      dict(inf_power=0.10, mountain=0.25, trade=-0.15, vivres=-0.10), dict(aggr=0.65, trade=0.4, expand=0.7, tech='militaire'), 'recrues'),
     }
     PAYS = {   # départements dont le profil est connu ; les autres, au hasard (stable) parmi grenier, négoce, vignoble
+        'grenier': {'28', '36', '27', '61', '53', '70', '01'},   # (Beauce, Champagne berrichonne, bocages : pas de vignoble)
         'forges': {'59', '62', '57', '54', '42', '71', '18', '58', '52', '08', '55', '03'},
         'montagne': {'05', '04', '73', '74', '38', '09', '65', '66', '15', '43', '48', '63', '20', '25', '39', '88', '06', '12', '19', '23'},
         'negoce': {'75', '13', '44', '76', '29', '17', '69', '83', '34', '35', '56', '22', '50', '14', '80'},
@@ -78,10 +80,15 @@ def _generer_departements():
         r, g, b = colorsys.hls_to_rgb((k * 0.381966) % 1.0, 0.42 if k % 2 else 0.55, 0.62)
         col = '#%02x%02x%02x' % (int(r * 255), int(g * 255), int(b * 255))
         cap = caps.get(code, nom)
+        pros = list(pros)
+        if code in RG.CAMPS:   # titre et premier atout propres au pays (game/regions.py) ; le chiffre reste celui du profil
+            titre, atout = RG.CAMPS[code]
+            reste = pros[0].split(' : ', 1)[-1]
+            pros[0] = f"{atout} : {reste[:1].lower()}{reste[1:]}"
         FACTIONS[code] = dict(name=nom, short=nom if len(nom) <= 11 else nom[:10] + '.', capital=cap, color=col,
-                              adj=nom.lower(), title=titre.format(cap=cap, nom=nom), pros=list(pros), cons=list(cons),
+                              adj=nom.lower(), title=titre.format(cap=cap, nom=nom), pros=pros, cons=list(cons),
                               mods=dict(mods), personality=dict(pers, aggr=round(pers['aggr'] + ((h >> 8) % 21 - 10) / 100, 2)),
-                              specialty=spec)
+                              specialty=spec, profil=prof, de=RG.DE_DEPT.get(code, ''), de_prov=RG.PROVINCES.get(code, ('', ''))[1])
         utilises.append(col)
 
 
@@ -528,8 +535,9 @@ PROVINCES = {
     '47': dict(name='Agenais', title='Agenais'),
     '64': dict(name='Béarn et Pays basque', title='Béarn, Labourd et Soule'),
 }
-for _c, _f in FACTIONS.items():   # (les départements générés : la province porte le nom du département)
-    PROVINCES.setdefault(_c, dict(name=_f['name'], title=_f['name']))
+for _c, _f in FACTIONS.items():   # (les départements générés : leur province d'avant 1790, game/regions.py)
+    _p = RG.PROVINCES.get(_c, (_f['name'],))[0]
+    PROVINCES.setdefault(_c, dict(name=_p, title=_p))
 ERAS = [
     dict(id='louis14', year=1700, name='Le Grand Siècle finissant',
          desc='Louis XIV règne encore. Mousquets à mèche et à silex, derniers piquiers, places de Vauban.'),

@@ -20,6 +20,7 @@ import sys
 from array import array
 
 from .places import PLACES, ROYAL_ROUTES, EXTRA_ROADS, EXTRA_ROADS_2, NO_ROADS_2, FERRIES, CITY_SPECIALTIES, CITY_POP
+from .regions import SPECIALITES
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 CACHE_VERSION = 8
@@ -338,6 +339,8 @@ class GeoMap:
                 slugs.add(slug)
                 self.nodes.append(dict(id=k, slug=slug, name=name, x=round(x, 2), y=round(y, 2), dept=dept, type=typ,
                                        spec=list(spec), fort=fort, pop0=pop0))
+                if name in SPECIALITES.get(dept, ()):
+                    self.nodes[-1]['star'] = list(SPECIALITES[dept][name])   # spécialité phare (game/regions.py)
                 self.by_name.setdefault(name, k)   # (les noms des tables, Sud-Ouest d'abord : la place écrite à la main)
 
     # ------------------------------------------------------------ cache

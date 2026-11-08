@@ -1169,7 +1169,8 @@ export class UI {
     const DE = st.word === 'province'
       ? { '33': 'de la Guyenne', '24': 'du Périgord', '40': 'des Landes de Gascogne', '47': 'de l’Agenais', '64': 'du Béarn et du Pays basque' }
       : { '33': 'de la Gironde', '24': 'de la Dordogne', '40': 'des Landes', '47': 'du Lot-et-Garonne', '64': 'des Basses-Pyrénées' };
-    const typeLab = gn.type === 'capitale' ? `Chef-lieu ${DE[gn.dept]}` : TYPE_LABEL[gn.type];
+    const fd = this.rules.factions[gn.dept] || {};   // (les départements générés : « du Nord », « de la Flandre », game/regions.py)
+    const typeLab = gn.type === 'capitale' ? `Chef-lieu ${DE[gn.dept] || (st.word === 'province' ? fd.de_prov : fd.de) || ''}`.trim() : TYPE_LABEL[gn.type];
     const terr = this.md.terrain_names[this.map.terrain[Math.floor(gn.y) * this.md.W + Math.floor(gn.x)]];
     const sub = ns.o === gn.dept && gn.type === 'capitale' ? typeLab : gn.type === 'capitale' ? `${typeLab}, tenu par ${oname}` : `${typeLab}, ${oname}`;
     let h = `<div class="p-head">${ns.o === 'neutre' ? coat('#8d8a7a', '—') : coat(col, ns.o)}<div><div class="p-title">${esc(gn.name)}</div>
@@ -1822,7 +1823,7 @@ export class UI {
     const trades = st.factions.filter(f => f.trade);
     const dn = me.douane, dnCout = (dn.front || 0) * dn.cout_place;   // solde des douaniers, postés ou non
     const html = `<h2 class="m-title" id="m-title">Commerce</h2>
-      <p class="m-sub">${me.has_port ? 'Vous tenez un port : les négociants vous font de bons prix.' : 'Sans port, les négociants prennent une forte marge. Prenez Bordeaux, Libourne, Bayonne ou un autre port pour mieux commercer.'}</p>
+      <p class="m-sub">${me.has_port ? 'Vous tenez un port : les négociants vous font de bons prix.' : `Sans port, les négociants prennent une forte marge. Prenez ${st.factions.length > 5 ? 'un port de mer ou de rivière' : 'Bordeaux, Libourne, Bayonne ou un autre port'} pour mieux commercer.`}</p>
       <div class="two"><div>
         <h3 class="section-t" style="border:0;padding:0">Marché des négociants</h3>
         <div class="tbl-wrap"><table class="grid"><thead><tr><th>Ressource</th><th>Stock</th><th>Achat</th><th>Vente</th><th>Quantité</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -1963,7 +1964,7 @@ export class UI {
           <li><b>Événements</b> : aux grandes dates (Grand Hiver, Révolution, Blocus continental, phylloxéra…) et au gré des imprévus, une fenêtre vous demande un choix ; chaque option affiche ses effets. Vos choix nourrissent l’« histoire » de votre prestige. Sans réponse avant la fin du tour suivant, l’option la plus prudente s’applique.</li>
           <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes et les manœuvres (feu de rang, ordre mixte, cuirassiers…) reçues à sa levée, affichées à côté de son nom : après une découverte, modernisez les régiments en retard dans une de vos places (bouton « Moderniser » : armes, fer pour l’artillerie, et livres pour les manœuvres ; un tiers de tour d’exercice, que l’armée perd si elle part avant). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
           <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>
-          <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
+          <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares ${Object.keys(this.st.factions || {}).length > 5 ? 'des rivières navigables' : 'de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour'}, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
           <li><b>Frontières</b> : les terres d’un ${this.st?.word || 'département'} en paix vous sont fermées, sauf droit de passage (fenêtre Diplomatie) ou alliance. Vos armées les contournent ; sans détour possible, vous pouvez passer en force, ce qui revient à lui déclarer la guerre. Les gabares passent devant ses quais sans y débarquer. Une armée surprise sur des terres fermées (droit retiré, paix signée…) a jusqu’à la fin du tour pour en sortir.</li>
           <li><b>Espions</b> : depuis une place étrangère, espionnez (vision et garnison pendant deux tours, rapport au tour suivant) ou sabotez ses remparts en temps de guerre. Le brouillard de guerre (bouton œil) montre ce que vous voyez réellement.</li>
           <li><b>Impôts</b> (fenêtre Production) : plus d’argent tout de suite, mais l’ordre public baisse ; une ville agitée sans garnison peut se révolter.</li>

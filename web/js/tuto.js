@@ -25,7 +25,7 @@ function etapes(ui) {
     { at: '#rail [data-v="production"]', txt: 'Ouvrez la Production : c’est là que se règlent les impôts.', done: () => ui.modal === 'production' },
     { at: '#rail', txt: 'Plus d’impôts, c’est plus d’argent tout de suite, mais l’ordre public baisse : une ville agitée sans garnison peut se révolter.' },
     { at: '#zb-fog', txt: 'Vous ne voyez que ce que voient vos villes, vos armées, vos alliés et vos espions. Touchez l’œil pour afficher ou masquer le brouillard. Pour espionner, choisissez une place étrangère proche de vos armées.', need: () => !!document.querySelector('#zb-fog')?.getClientRects?.().length, done: f => f.has('fog') },
-    { txt: 'Fleuves : par les routes, vos armées embarquent d’elles-mêmes sur les gabares de la Garonne, de la Dordogne, de l’Adour… Tenir une place en aval coupe le commerce de l’amont (blocus).' },
+    { txt: `Fleuves : par les routes, vos armées embarquent d’elles-mêmes sur les gabares ${Object.keys(st.factions || {}).length > 5 ? 'des rivières navigables.' : 'de la Garonne, de la Dordogne, de l’Adour…'} Tenir une place en aval coupe le commerce de l’amont (blocus).` },
     ...(tour ? [
       { at: '#tb-turn', txt: 'Vos ordres sont donnés. Touchez « Tour suivant » : les IA jouent le mois, puis c’est de nouveau à vous.', done: () => st.tour.phase !== 'ordres' },
       { at: '#tb-turn', txt: 'Les IA jouent leur tour d’un coup. Si une IA vous attaque ou si une décision vous attend, faites votre choix : le tour reprend tout seul.', done: () => st.tour.phase === 'ordres' },
