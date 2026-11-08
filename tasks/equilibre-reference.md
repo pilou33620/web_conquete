@@ -142,3 +142,34 @@ donnait un écart de places de 99,7 (+48 %) : réglé.
 | Trésor moyen (livres) | 24 312 | 31 344 | +29 % (de 8 000 à 46 000 selon la partie) |
 | Hommes | 14 568 | 14 369 | −1 % |
 | Mois de banqueroute / de famine | 6 / 4 | 0 / 0 | |
+
+## Religion, révoltes et guérilla (SPEC-RELIGION.md, 8/11/2026)
+
+12 parties par époque (graines 1 à 12, en deux bancs de 6), 30 ans, géographie 2. « Avec » : commit `bcd46f8` ;
+« sans » : le même code avec l'interrupteur `CONQUETE_SANS_RELIGION=1` (il redonne exactement les parties du commit de
+départ `f2a7433` : vérifié à 1790, graines 1 à 6).
+
+    python3 outils/simuler.py --parties 6 --epoque 1790 --annees 30 --graine 1 --proc 2   # puis --graine 7
+    CONQUETE_SANS_RELIGION=1 python3 outils/simuler.py …                                 # « sans »
+
+| Moyenne des 12 parties | 1790 sans | 1790 avec | 1700 sans | 1700 avec |
+|---|---|---|---|---|
+| Guerres déclarées | 16,4 | 15,5 (−5 %) | 16,7 | 16,0 (−4 %) |
+| Durée d'une guerre (mois) | 3,9 | 3,3 (−14 %) | 3,6 | 3,6 (−1 %) |
+| Écart de places | 84,9 | 104,3 (+23 %) | 111,9 | 112,2 (0 %) |
+| Camps en vie | 3,8 | 3,7 (−3 %) | 3,0 | 2,9 (−3 %) |
+| Technologies par camp | 47,4 | 46,8 (−1 %) | 16,4 | 15,7 (−4 %) |
+| Trésor (livres) | 40 040 | 33 516 (−16 %) | 27 751 | 25 045 (−10 %) |
+| Hommes par camp | 12 972 | 12 816 (−1 %) | 10 305 | 10 212 (−1 %) |
+| Mois de banqueroute / de famine (tous camps) | 0 / 10 | 2 / 0 | 9 / 38 | 91 / 43 |
+
+Tout est dans ±25 %. À lire avec prudence : sur les graines 1 à 6 seules, l'écart de places de 1790 passait de 70,5 à
+124,3 (+76 %), sur les graines 7 à 12 de 99,2 à 84,2 (−15 %) : une petite différence de règle fait partir chaque
+partie ailleurs, et trois expériences sur les graines 3 et 5 (sans les événements du chantier, sans l'effet des
+politiques, sans naissance de bandes) donnaient chacune d'autres vainqueurs sans désigner de coupable. Un premier
+« avec » (`bcb105a`) laissait une armée de l'IA bloquée en chasse d'une bande passée chez un autre camp : corrigé
+(`bcd46f8`, 45 jours de chasse au plus) avant les mesures ci-dessus. Les dépenses directes du chantier sont faibles
+(1700, graine 5, 20 ans : 180 livres pillées, 150 d'apaisement, 1 200 de partisans levés pour tous les camps).
+
+À surveiller : l'écart de places de 1790 (+23 %) et les mois de banqueroute depuis 1700 (91 contre 9 sur 21 600
+mois-camps, soit 0,4 %). Aucune partie n'a planté ; aucune révolte n'a rayé de camp (jamais de chef-lieu).
