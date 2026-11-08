@@ -244,13 +244,17 @@ export class MapView {
     }
     // voies navigables découpées en tronçons avec leur emprise : chaque tuile ne trace que ce qui la traverse
     this.wayPaths = [];
+    // canaux (géographie 3) : leur année d'ouverture, portée par leurs arêtes ; dessinés seulement une fois ouverts
+    const ouvert = {};
+    for (const e of this.edges) if (e.year) ouvert[e.way] = e.year;
     for (const w of this.m.ways || []) {
+      w.year = ouvert[w.name];
       for (let i = 0; i < w.pts.length - 1; i += 8) {
         const seg = w.pts.slice(i, i + 9);
         const p = new Path2D();
         seg.forEach((q, k) => k ? p.lineTo(q[0], q[1]) : p.moveTo(q[0], q[1]));
         const xs = seg.map(q => q[0]), ys = seg.map(q => q[1]);
-        this.wayPaths.push({ sea: w.sea, p, box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] });
+        this.wayPaths.push({ sea: w.sea, year: w.year, p, box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] });
       }
     }
   }
@@ -1452,6 +1456,10 @@ export class MapView {
     for (const w of this.wayPaths) {
       const bx = w.box;
       if (bx[2] < x0 - 1 || bx[0] > x0 + span + 1 || bx[3] < y0 - 1 || bx[1] > y0 + span + 1) continue;
+      if (w.year > this.epoque.year) continue;   // (canal pas encore creusé)
+      if (w.year) {   // le canal : un mince filet d'eau (aucune rivière dessous), le trait de la voie par-dessus
+        g.setLineDash([]); g.strokeStyle = P ? rgb(P.ligne, 0.8) : '#4a78b4'; g.lineWidth = Math.max(LARG_RIVIERE[3] || 0.05, 1.1 / L); g.stroke(w.p);
+      }
       if (w.sea) {
         g.strokeStyle = P ? rgb(P.ligne, 0.55) : 'rgba(235,246,255,0.55)';
         g.lineWidth = Math.max(0.12, 1.1 / L);

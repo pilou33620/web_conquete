@@ -113,7 +113,10 @@ export class Plateau {
   rivieres() {
     const { mp, g } = this;
     this.rivs = []; this.eau = new Map();
-    for (const rv of mp.m.rivers) {
+    // (et les canaux ouverts dès 1700, Midi, Briare, Orléans, comme de petites rivières : le plateau est bâti une fois, les
+    // canaux plus jeunes n'y sont pas dessinés ; map.js prepEdges a noté leur année)
+    const canaux = (mp.m.ways || []).filter(w => w.year && w.year <= 1700).map(w => ({ name: w.name, rank: 3, pts: w.pts }));
+    for (const rv of [...mp.m.rivers, ...canaux]) {
       const pts = rv.pts;
       for (let i = 0; i < pts.length; i++) {
         const t = g.en(pts[i][0], pts[i][1]);

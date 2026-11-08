@@ -55,7 +55,7 @@ export class Epoque {
     const pays = Object.entries(this.marks).map(([c, s]) => c + ':' + PAYSAGE.filter(k => s.has(k)).join('+')).join(',');
     const any = Object.values(this.marks).some(s => PAYSAGE.some(k => s.has(k)));
     // (les marques du paysage suivent le maître de chaque case : les propriétaires comptent aussi)
-    const key = `${pays}|${this.year >= 1875}|${PONTS_DATES.filter(p => this.year >= p[2]).length}|${any ? this.map.ownersKey : ''}`;   // (les ponts datés : map.js drawRoads)
+    const key = `${pays}|${this.year >= 1875}|${PONTS_DATES.filter(p => this.year >= p[2]).length}|${(this.map.m?.ways || []).filter(w => w.year && this.year >= w.year).length}|${any ? this.map.ownersKey : ''}`;   // (les ponts et les canaux datés : map.js)
     const changed = key !== this.key;
     this.key = key;
     return changed;

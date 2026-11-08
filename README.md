@@ -643,6 +643,17 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
 - La Garonne et l'estuaire de la Gironde, la Dordogne, l'Isle, le Lot, la Baïse, la Midouze et l'Adour sont
   **navigables**, et un cabotage relie l'estuaire, le bassin d'Arcachon, Capbreton, Bayonne, Biarritz,
   Saint-Jean-de-Luz et Hendaye. Les quais sont marqués d'une ancre.
+- **Toute la France** (cartes de France entière) : en plus, la Seine (depuis Nogent) et l'Yonne, la Marne, l'Oise et
+  l'Aisne, la Loire (depuis Saint-Rambert) et l'Allier, le Cher, la Vienne, la Mayenne et la Sarthe, la Vilaine, l'Orne,
+  la Somme, la Charente, la Sèvre niortaise, le Rhône (depuis Seyssel), la Saône (depuis Gray) et l'Isère, l'Aude, le
+  Tarn, la Garonne dès Toulouse, le Rhin et l'Ill, la Moselle et la Meurthe, la Meuse, l'Escaut. Le **cabotage** longe
+  les côtes du Ponant (de Dunkerque à la Gironde, Bretagne comprise), du Levant (de Collioure à Menton) et de la Corse,
+  avec une traversée Calvi – Antibes ; plus de 70 ports de mer (Brest, Lorient, Saint-Malo, Le Havre, Calais,
+  La Rochelle, Marseille, Toulon, Sète, Bastia, Ajaccio…). Les **canaux** ne portent bateau qu'à leur ouverture, et
+  ne sont dessinés qu'alors : canal du Midi (1681), de Briare et du Loing (1642), d'Orléans (1692), Crozat (1738), du
+  Centre (1793), de Saint-Quentin (1810), de Bourgogne (1832), du Rhône au Rhin et des Ardennes (1833), de Nantes à
+  Brest (1842), de la Marne au Rhin (1853), latéral à la Garonne (1856). Les places au bord d'un canal plus jeune que
+  1700 n'en ont pas de quai de commerce (on y embarque une fois le canal ouvert). Tracés en mer : `outils/voies_eau.py`.
 - En marche « routes et fleuves », l'armée **embarque toute seule** quand c'est plus rapide : environ 30 km par jour,
   plus vite en descendant le courant, moins vite en remontant ; basses eaux en été, crues au printemps,
   les tempêtes clouent les navires au port. L'artillerie, lente sur les routes, y gagne beaucoup.
@@ -815,7 +826,7 @@ raspberry/           installation en service sur Raspberry Pi
 game/rules.py        départements, unités, technologies, généraux, formations, météo
 game/engine.py       simulation : économie, impôts, armées, gabares, combats par phases, sièges, espions
 game/army_actions.py actions d’armée : barricades, quartiers, garde bourgeoise, réquisition, traversée, terres fermées et droit de passage, blocus
-game/waterways.py    voies navigables (fleuves, estuaire, cabotage) et blocus
+game/waterways.py    voies navigables (fleuves, canaux datés, estuaires, cabotage) et blocus
 game/ai.py           IA des départements
 game/cities.py       villes : emplacements et bâtiments, politique de la ville, événements locaux
 game/diplomacy.py    diplomatie et commerce
