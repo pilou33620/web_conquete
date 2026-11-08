@@ -155,9 +155,9 @@ export function preparer(map) {
   }
   VIE.vols = Array.from({ length: 16 }, (_, k) => ({ k, sorte: ['grues', 'palombes', 'mouettes', 'etourneaux'][k % 4], x: hash2(k, 1, 102) * W, y: hash2(k, 2, 102) * H, ph: hash2(k, 3, 102) * 99 }));
   VIE.ports = ['Bordeaux', 'Bayonne', 'La Teste-de-Buch', 'Saint-Jean-de-Luz', 'Blaye', 'Pauillac'].map(nom).filter(Boolean);
-  // bateaux : gabares sur les grandes rivières, navires sur la route du cabotage
+  // bateaux : gabares sur les rivières navigables (pas les canaux : datés), navires sur les routes du cabotage
   VIE.bateaux = [];
-  for (const r of rivers) if (r.rank <= 2) { const L = longueur(r.pts), cum = cumul(r.pts); for (let k = 0; k < Math.ceil(L / 14); k++) VIE.bateaux.push({ pts: r.pts, cum, L, bb: bboxOf(r.pts), s0: hash2(k, r.rank, 5) * L, v: (hash2(k, 7, 5) < .5 ? -1 : 1) * .02, mer: false, ph: hash2(k, L | 0, 8) * 1000 }); }
+  for (const r of m.ways || []) if (!r.sea && !r.year) { const L = longueur(r.pts), cum = cumul(r.pts); for (let k = 0; k < Math.ceil(L / 14); k++) VIE.bateaux.push({ pts: r.pts, cum, L, bb: bboxOf(r.pts), s0: hash2(k, 2, 5) * L, v: (hash2(k, 7, 5) < .5 ? -1 : 1) * .02, mer: false, ph: hash2(k, L | 0, 8) * 1000 }); }
   for (const w of m.ways || []) if (w.sea) { const L = longueur(w.pts); for (let k = 0; k < Math.ceil(L / 25); k++) VIE.bateaux.push({ pts: w.pts, cum: cumul(w.pts), L, bb: bboxOf(w.pts), s0: hash2(k, 9, 6) * L, v: (hash2(k, 8, 6) < .5 ? -1 : 1) * .04, mer: true, ph: 0 }); }
   // moulins à vent dans les champs autour des bourgs (vus de dessus, moulinVu)
   VIE.moulins = [];

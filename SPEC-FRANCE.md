@@ -44,8 +44,7 @@ l'échelle de l'Europe reste à trancher (France détaillée et reste plus gross
   grandes régions ; plateau bâti par blocs de 16 × 16 hexagones autour de la caméra (90 blocs, 260 places au plus) ;
   territoires sans lissage ni peinture des tuiles sur le plateau.
 
-Reste à faire : alléger encore l'IA des camps lointains (Raspberry Pi), voies navigables et côtes au-delà du
-Sud-Ouest, vérifier la fluidité sur iPad.
+Reste à faire : alléger encore l'IA des camps lointains (Raspberry Pi), vérifier la fluidité sur iPad.
 
 ### Événements et textes des autres régions — faits le 08/11/2026
 
@@ -83,6 +82,30 @@ vise les cinq départements écrits à la main, les imprévus régionaux ne joue
   (`views.migrate`) : il ne se déclenche pas d'un coup.
 - Non fait : la crue de printemps (Garonne et Dordogne seules) et les noms des eaux de la carte relèvent des voies
   navigables et des côtes.
+
+### Voies navigables et côtes — faites le 08/11/2026
+
+- `game/waterways.py` (géographie 3 seulement ; les géographies 1 et 2 gardent leurs voies d'eau à l'octet près, banc
+  `tests/test_voies_eau.py`) : 27 rivières navigables de plus (tête de navigation d'époque, un point de geo.json d'où
+  la rivière porte bateau jusqu'à l'aval), la Garonne dès Toulouse, 12 canaux, 4 routes de cabotage (Ponant, Levant,
+  Corse, traversée Calvi – Antibes) et plus de 70 ports de mer.
+- **Décisions** : un canal est daté (`year` sur ses arêtes) : `engine.road_route` ne s'y engage pas avant son
+  ouverture et la carte ne le dessine qu'ensuite. Ses quais du milieu ne comptent comme quais de commerce que s'il est
+  ouvert en 1700 (Midi, Briare, Orléans) : sinon les places resteraient « port » avant le canal. Le canal de Briare et
+  celui du Loing (1723) ne font qu'un, daté de 1642 (le Loing se naviguait déjà). Pas de courant sur un canal.
+- Les tracés en mer (routes plutôt à 2,5 – 6 km des côtes, chenal de chaque port, embouchures) sont calculés une fois
+  sur la grille (`outils/voies_eau.py`, plus court chemin pondéré, simplifié sans quitter l'eau) et rangés dans
+  `game/data/voies_france.json` : rien à calculer au démarrage. À relancer si la côte ou les places changent.
+- Dunkerque, Cherbourg, Saint-Tropez, Briare, Digoin manquent aux places générées : des places voisines en tiennent
+  lieu (Coudekerque-Branche, Fermanville, Sainte-Maxime, Gien, La Motte-Saint-Jean). Morlaix, Hyères, Fréjus et
+  Propriano sont à plus de 5 km de la mer sur la grille : leur chenal passe sur la terre (côte grossière).
+- Rendu : gabares sur toutes les rivières navigables (et non plus sur toutes les grandes rivières), navires sur toutes
+  les routes du cabotage, ancres des quais. Le plateau 3D est bâti une fois : il ne dessine que les canaux ouverts dès
+  1700 (Midi, Briare, Orléans) ; les autres n'apparaissent que sur la carte en tuiles (sans WebGL), à leur ouverture.
+- Coût mesuré (même machine, même moment) : 7 386 → 7 871 arêtes (58 → 543 voies d'eau), 57 → 505 quais ; bâtir les
+  voies d'eau prend 0,15 s au lieu de 0,45 s (les places sont d'abord filtrées par case) ; carte envoyée au navigateur
+  +0,2 Mo (14,7 Mo) ; un mois de jeu à 89 camps 10,3 s → 11,1 s environ (bruit compris).
+
 
 ## Étape 2 : l'Europe et l'Afrique du Nord (mode « Europe »)
 

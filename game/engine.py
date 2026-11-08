@@ -1921,6 +1921,7 @@ class Game:
             dist[(s, b0)] = c0
             heapq.heappush(pq, (c0, s, b0))
         best_goal = None
+        yr = self.year()   # (un canal ne porte personne avant son ouverture : waterways.CANALS)
         while pq:
             d, u, b = heapq.heappop(pq)
             if d > dist.get((u, b), 1e18):
@@ -1942,6 +1943,8 @@ class Game:
                 e = self.geo.edges[eid]
                 v = e['b'] if e['a'] == u else e['a']
                 water = e.get('kind') == 'water'
+                if water and e.get('year', 0) > yr:
+                    continue
                 if block is not None:
                     if ub and b == 1 and not water:
                         continue   # à bord devant des terres fermées : pas de débarquement
