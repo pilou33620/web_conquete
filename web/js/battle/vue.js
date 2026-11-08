@@ -600,6 +600,7 @@ export class BattleView {
     this.ui.ordres.drawGround(ctx, time);
     // zones de tir des unités sélectionnées, dans leur champ de tir (±60°) : bout portant (ou mitraille), efficace,
     // longue (battle.fire_zones), l'effet relatif de chacune, et le repère où l'ordre « attaquer » s'arrêtera (stop_d)
+    const posees = [];   // (plusieurs unités sélectionnées : une étiquette qui en chevaucherait une autre est omise)
     for (const id of this.sel) {
       const u = this.units.get(id);
       if (!u || !u.range || !(u.range[0] > 0) || clsOf(u) === 'general' || u.state === 'hors') continue;
@@ -618,6 +619,9 @@ export class BattleView {
         if (eff != null && Math.hypot(qx - px, qy - py) > 22) {
           const rm = r0 > 0 ? (r0 + r1) / 2 : r1 * 0.72, [sx, sy] = this.toScreen(u.x + c * rm, u.y + s * rm), txt = `${ZONE_NAME[k] || k} ×${fraction(eff)}`;
           ctx.font = '600 12px "EB Garamond", Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          const hw = ctx.measureText(txt).width / 2 + 4;
+          if (posees.some(([x, y, w]) => Math.abs(x - sx) < w + hw && Math.abs(y - sy) < 14)) continue;
+          posees.push([sx, sy, hw]);
           ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(20,16,10,0.55)'; ctx.strokeText(txt, sx, sy);
           ctx.fillStyle = 'rgba(255,240,200,0.92)'; ctx.fillText(txt, sx, sy);
         }

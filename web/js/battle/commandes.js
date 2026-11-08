@@ -5,7 +5,7 @@
 //  glisser depuis une de ses unités : tracer sa destination (flèche courbe et silhouette à l'arrivée) ;
 //    pendant le déploiement, la déplacer directement dans la zone
 //  appui sur un ennemi, unités sélectionnées : l'attaquer (ou le charger après « Charger »)
-//  au doigt : appui long puis glisser : cadre de sélection ; unités sélectionnées : appui sur le sol pour y aller,
+//  au doigt ou au stylet : appui long (un cercle s'ouvre) puis glisser : cadre de sélection ; unités sélectionnées : appui sur le sol pour y aller,
 //    glisser depuis le sol pour fixer l'emplacement et l'orientation de la ligne d'arrivée ; un doigt ailleurs :
 //    déplacer la vue (avec élan) ; deux doigts : zoomer et déplacer
 //  à la souris (façon Total War) : glisser du clic gauche ailleurs que depuis une de ses unités : cadre de sélection
@@ -42,6 +42,8 @@ export class Controls {
     cv.addEventListener('pointermove', this.h.move);
     cv.addEventListener('pointerup', this.h.up);
     cv.addEventListener('pointercancel', this.h.cancel);
+    // stylet sur iPad (Griffonnage) : sans cela, l'appui long du crayon peut annuler le geste (pointercancel)
+    cv.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
     cv.addEventListener('pointerleave', () => { if (!this.pts.size) this.hover = null; });
     cv.addEventListener('wheel', this.h.wheel, { passive: false });
     cv.addEventListener('contextmenu', this.h.ctx);
@@ -63,7 +65,7 @@ export class Controls {
   down(e) {
     const v = this.v;
     if (!v.terrain) return;   // (la carte se charge encore)
-    v.cv.setPointerCapture?.(e.pointerId);
+    try { v.cv.setPointerCapture?.(e.pointerId); } catch (_) { /* (pointeur déjà perdu : le geste continue sans capture) */ }
     const [sx, sy] = this.pos(e);
     this.pts.set(e.pointerId, { x: sx, y: sy });
     this.inertia = null;
@@ -84,6 +86,7 @@ export class Controls {
     this.g.longT = setTimeout(() => {
       if (this.g && this.g.mode === 'pending') {
         this.g.mode = 'box';
+        this.g.tBox = performance.now();   // (un cercle s'ouvre sous le doigt ou le stylet : le cadre est prêt)
         try { navigator.vibrate?.(15); } catch (_) { /* rien */ }
       }
     }, LONG_MS);
@@ -343,6 +346,11 @@ export class Controls {
     }
     if (!g) return;
     if (g.mode === 'box') {
+      if (g.tBox && now - g.tBox < 600) {
+        const k = (now - g.tBox) / 600;
+        ctx.strokeStyle = `rgba(255,226,150,${1 - k})`; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(g.sx, g.sy, 10 + k * 22, 0, TAU); ctx.stroke();
+      }
       ctx.fillStyle = 'rgba(230,201,127,0.12)'; ctx.strokeStyle = 'rgba(255,226,150,0.95)'; ctx.lineWidth = 1.5;
       ctx.setLineDash([6, 4]);
       ctx.fillRect(Math.min(g.sx, g.x), Math.min(g.sy, g.y), Math.abs(g.x - g.sx), Math.abs(g.y - g.sy));
