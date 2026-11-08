@@ -58,11 +58,13 @@ occupés. Le camp les réprime, les apaise ou les retourne contre l'ennemi ; les
    pas tout de suite). Recrues et commerce baissent par la population et l'ordre public, sans règle à part (décision).
 6. **Départ** : 1700 → contrainte ; 1790 → tolérance ; 1813 et 1870 → concordat. Une politique sortie de son époque
    passe à la tolérance (ou au concordat après 1801). Une ancienne sauvegarde reçoit la politique de son année.
-7. **Événements datés à choix** (`events.py`, ajoutés depuis `game/religion.py`) : les Camisards (juillet 1702 ; Gard,
-   Lozère, Ardèche), les assemblées du Désert (1745, tout camp qui a des réformés sous contrainte), l'affaire Calas
-   (1762, Haute-Garonne), l'édit de tolérance (novembre 1787), la Constitution civile du clergé (juillet 1790),
-   l'émancipation des juifs (septembre 1791), le Concordat (juillet 1801), l'expulsion des congrégations et les lois
-   Ferry (1880). Chacun propose de changer de politique, de payer, ou fait naître une bande.
+7. **Événements datés à choix** (`events.py`, ajoutés depuis `game/revoltes.py`) : les nouveaux convertis du Béarn
+   (juin 1700, Basses-Pyrénées), les Camisards (juillet 1702 ; Gard, Lozère, Ardèche), l'affaire Calas (1762,
+   Haute-Garonne), l'édit de tolérance (novembre 1787, seulement pour un camp qui a des réformés : un événement daté
+   peut désormais avoir une condition, `cond`), la Constitution civile du clergé (juillet 1790), l'émancipation des
+   juifs (septembre 1791), le Concordat (juillet 1801), les décrets Ferry (1880). Chacun propose de changer de
+   politique (effet `culte`), de payer, ou fait naître une bande (effet `bande`). Les assemblées du Désert ne sont pas
+   datées (décision) : c'est l'événement aléatoire de la décision 8.
 8. **Événement aléatoire** « Une assemblée au Désert » pour un camp qui contraint des réformés : disperser par les
    dragons, fermer les yeux, ou négocier.
 
@@ -98,18 +100,22 @@ occupés. Le camp les réprime, les apaise ou les retourne contre l'ennemi ; les
     passer l'orage), la Vendée (mars 1793 : Vendée, Maine-et-Loire, Loire-Inférieure, Deux-Sèvres), la chouannerie
     (1794 : Mayenne, Ille-et-Vilaine, Morbihan, Côtes-du-Nord, Sarthe, Orne, Manche), la guerre des Demoiselles (1829,
     Ariège), les canuts (novembre 1831 et avril 1834, Rhône), les journées de juin 1848 (Seine), la Commune (mars
-    1871 : Seine, et les communes de Lyon, Marseille, Saint-Étienne, Narbonne, Toulouse, Limoges, Le Creusot). En
-    géographie 2 : la Grande Peur, et les assemblées du Désert et l'affaire des « nouveaux convertis » du Béarn (1700,
-    Basses-Pyrénées). Chacun propose des choix : réprimer d'avance (des régiments), céder (des livres, l'ordre
-    public), ou laisser faire (la bande naît plus grosse).
+    1871 : Seine, et les communes de Lyon, Marseille, Saint-Étienne, Narbonne, Toulouse, Limoges, Le Creusot), Mandrin
+    (1754, brigands). L'événement existant de la Grande Peur est laissé tel quel (décision : `events.py` touché le
+    moins possible) ; « les châteaux brûlent » (28 juillet 1789, tous les camps) le suit avec sa jacquerie. En
+    géographie 2 : les châteaux brûlés, les nouveaux convertis du Béarn, l'édit de tolérance, la Constitution civile,
+    l'émancipation des juifs (Gironde, Basses-Pyrénées), le Concordat, Ferry, et les assemblées au Désert. Chacun
+    propose des choix : réprimer d'avance (des régiments), céder (des livres, l'ordre public), ou laisser faire (la
+    bande naît plus grosse). Une bande d'événement naît dans une place du département du camp, de préférence agitée
+    (et réformée pour une révolte de religion).
 
 ### Brigands et partisans
 
-16. **Brigands** : chaque mois, un camp peut voir naître une bande de brigands (60 à 200 hommes) dans un de ses
-    villages, de préférence en forêt ou en montagne ; plus souvent en guerre, en famine et quand l'ordre public est
+16. **Brigands** : chaque mois, un camp peut voir naître une bande de brigands (60 à 200 hommes) dans une de ses
+    places sans garnison hors chef-lieu, de préférence un village en forêt ou en montagne ; plus souvent en guerre, en famine et quand l'ordre public est
     bas ; deux fois moins avec la gendarmerie. Au plus une bande de brigands par camp. Elle ne prend pas de places :
-    elle **pille** : le camp perd 0,3 livre par brigand et par mois, la place et ses voisines −40 % de livres (convois
-    et marchés), et les armées du camp à moins de 15 km perdent du ravitaillement. Elle change de village une fois
+    elle **pille** : le camp perd 0,3 livre par brigand et par mois, la place et ses voisines −40 % de livres pendant
+    un mois (convois et marchés ; jamais le chef-lieu, qui a sa maréchaussée), et les armées du camp à moins de 15 km perdent du ravitaillement. Elle change de village une fois
     sur deux.
 17. **Amnistie** des brigands : 0,5 livre par brigand, et la moitié s'engage (recrues).
 18. **Partisans** : dans une place occupée (tenue par un camp en guerre avec son département d'origine, mal
@@ -128,11 +134,13 @@ occupés. Le camp les réprime, les apaise ou les retourne contre l'ennemi ; les
 ### IA
 
 21. **Politique religieuse** : chaque année, l'IA prend la politique de son époque qui rapporte le plus d'ordre public
-    (plus les livres) sur ses places ; un camp belliqueux préfère la contrainte s'il a peu de réformés. Aux
+    (plus les livres, moins l'exil de ses artisans, pondéré par les habitants) sur ses places ; un camp belliqueux
+    préfère la contrainte s'il a peu de réformés. Elle ne prend jamais d'elle-même les dragonnades (seulement par un
+    événement). Aux
     événements, elle choisit selon les poids `ai` comme ailleurs.
 22. **Répression** : tous les dix jours, pour chaque bande qui la vise, l'IA envoie la plus proche de ses armées au
     repos assez forte (1,3 fois la bande) ; l'armée en chasse n'est plus réaffectée par la réflexion militaire tant
-    que la bande vit. Faute d'armée, elle **apaise** les insurgés qui menacent une place, ou **amnistie** les brigands,
+    que la bande vit, qu'elle vise toujours ce camp, et 45 jours au plus. Faute d'armée, elle **apaise** les insurgés qui menacent une place, ou **amnistie** les brigands,
     si son trésor le permet.
 23. **En tirer parti** : en guerre et riche, l'IA soutient les révoltes chez l'ennemi et lève des partisans dans ses
     places d'origine occupées.

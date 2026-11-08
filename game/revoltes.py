@@ -256,6 +256,7 @@ def _rebelles(g, b):
             back = home != c and home in g.factions and g.factions[home]['alive']
             n.update(owner=home if back else R.NEUTRAL, assim=1.0, depot=0, milice=n['milice_max'] * 0.6, stab=0.7,
                      queue=[], garrison=[])
+            g._own_ver = getattr(g, '_own_ver', 0) + 1   # (cache des places de chaque camp, Game.owned_nodes)
             g._dirty_income = True
             b['n'] *= 0.8
             if _imp(g, b) or g.player == home:
