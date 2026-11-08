@@ -401,7 +401,7 @@ def advance(g, real_dt):
         go(g)   # le temps lancé autrement que par « Fin du mois » (script, ancienne commande) : le mois se joue
     until = time.monotonic() + BUDGET
     while not g.over and g.speed_idx and time.monotonic() < until:
-        sub = SUBSTEP if g.battles else SUBSTEP * 2
+        sub = SUBSTEP if g.bataille_proche() else SUBSTEP * 2
         rem = tr['end'] - g.t
         seq0 = g.seq
         if rem <= sub + 1e-6:

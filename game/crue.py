@@ -38,15 +38,22 @@ def _clamp(v, a, b):
 class _Terre:
     """Le relief approché et la distance au fleuve, par case, en flottants 32 bits comme les Float32Array du client."""
 
-    def __init__(self, geo, rivers):
+    def __init__(self, geo, rivers, box):
         self.W, self.H = W, H = geo.W, geo.H
         TER = geo.terrain
-        A = array('f', (HT[TER[k]] + .06 * _hash2(k % W, k // W, 7) for k in range(W * H)))
+        # (toute la France : le relief n'est lissé qu'autour des deux fleuves, box ; ses trois cases du bord, faussées par
+        # le lissage, ne sont jamais lues : inonde ne regarde l'altitude qu'à moins de 2,1 km du fleuve)
+        x0, y0, x1, y1 = box
+        A = array('f', bytes(4 * W * H))
+        for j in range(y0, y1 + 1):
+            for i in range(x0, x1 + 1):
+                k = j * W + i
+                A[k] = HT[TER[k]] + .06 * _hash2(i, j, 7)
         for _ in range(3):
             t = array('f', bytes(4 * W * H))
-            for j in range(H):
+            for j in range(y0, y1 + 1):
                 rows = [r for r in (j - 1, j, j + 1) if 0 <= r < H]
-                for i in range(W):
+                for i in range(x0, x1 + 1):
                     s, n = 0.0, 0
                     for r in rows:
                         for x in (i - 1, i, i + 1):
@@ -58,8 +65,6 @@ class _Terre:
         self.ALT = A
         C = self.CRUE = array('f', [3.0]) * (W * H)
         for r in rivers:
-            if r['rank'] != 1 or not re.search('Garonne|Dordogne', r['name'] or ''):
-                continue
             p = r['pts']
             for k in range(1, len(p)):
                 (ax, ay), (bx, by) = p[k - 1], p[k]
@@ -106,13 +111,22 @@ def spans(geo):
     if getattr(geo, '_crue', None) is not None:
         return geo._crue
     m = geo.client_payload()
-    T = _Terre(geo, m['rivers'])
+    rivers = [r for r in m['rivers'] if r['rank'] == 1 and re.search('Garonne|Dordogne', r['name'] or '')]
+    # la région des deux fleuves : à plus de 5 km de leurs tracés, rien n'est jamais noyé (distance au fleuve de 3)
+    xs = [x for r in rivers for x, _ in r['pts']] or [0]
+    ys = [y for r in rivers for _, y in r['pts']] or [0]
+    bx0, by0, bx1, by1 = min(xs) - 5, min(ys) - 5, max(xs) + 5, max(ys) + 5
+    T = _Terre(geo, rivers, (max(0, math.floor(bx0) - 4), max(0, math.floor(by0) - 4),
+                             min(geo.W - 1, math.ceil(bx1) + 4), min(geo.H - 1, math.ceil(by1) + 4)))
     places = [(n['x'], n['y'], _rayon(n) + 0.5) for n in m['nodes']]
     out = {}
     for e in m['edges']:
         pts = e['pts']
         if e.get('kind') == 'water' or e.get('ferry') or len(pts) < 2:
             continue
+        if max(x for x, _ in pts) < bx0 or min(x for x, _ in pts) > bx1 or max(y for _, y in pts) < by0 \
+                or min(y for _, y in pts) > by1:
+            continue   # (toute la France : loin des deux fleuves)
         L = sum(math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]) for i in range(1, len(pts)))
         s, s0 = 0.2, None
         while s <= L:

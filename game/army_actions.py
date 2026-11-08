@@ -1528,7 +1528,7 @@ def ai_passage(ai, wars):
         del refused[nid]   # vieux refus : oubliés
     if (not wars and not refused) or f['overlord'] or g.t < ai.cool.get(('aa', 'route'), -1):
         return
-    ai.cool[('aa', 'route')] = g.t + 15
+    ai.cool[('aa', 'route')] = g.t + (45 if g.ia_lointaine(code) else 15)   # (un camp loin du joueur : moins souvent)
     start = ai.rally if getattr(ai, 'rally', None) is not None else g.capital_of(code)
     if start is None or g.nodes[start]['owner'] != code:
         return
@@ -1538,13 +1538,20 @@ def ai_passage(ai, wars):
     goals = [g.capital_of(x) for x in wars[:2]]
     goals = [v for v in goals if g.nodes[v]['owner'] in wars]
     goals += sorted(refused, key=lambda v: -refused[v])[:2]
+    if g.ia_lointaine(code):
+        goals = goals[:2]   # (deux recherches de chemin dans toute la France au plus, pour un camp loin du joueur)
+    from .ai import network
     for goal in goals:
         if g.nodes[goal]['owner'] in block:
             continue   # la destination elle-même est fermée : ce n'est pas un passage qu'il faut
+        if network(g.geo)[start] != network(g.geo)[goal]:
+            continue   # aucune route n'y mène, même sans rien de fermé (une île) : pas de recherche dans toute la carte
         free = g.road_route(code, {start: 0.0}, goal, 22.0, False, 1, frozenset())
         if not free:
             continue
-        r = g.road_route(code, {start: 0.0}, goal, 22.0, False, 1, block)
+        _, comp = ai.reach()
+        # (sans chemin ouvert, les composantes de ai.reach le disent tout de suite : pas de recherche dans toute la carte)
+        r = g.road_route(code, {start: 0.0}, goal, 22.0, False, 1, block) if comp and comp[start] == comp[goal] else None
         if r and r[0] <= 1.3 * free[0]:
             continue   # le détour est court : pas besoin de demander
         for o in sorted({g.nodes[v]['owner'] for v in free[1]} & block):

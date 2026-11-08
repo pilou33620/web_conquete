@@ -18,6 +18,7 @@ from .geo import TERRAIN, T_LANDE, T_MARAIS, T_PLAINE
 
 SUBSTEP = 0.05  # jours
 ATTRITION_STEP = 0.25   # jours : pas de l'usure, des désertions et du ravitaillement des armées
+AI_PAS, AI_PAS_LOIN = 1.5, 6.0   # jours entre deux réflexions d'une IA, proche ou lointaine (Game.ai_pas)
 CONTACT_KM = 2.6
 AMBUSH_KM = 5.0
 BASE_DETECT = 2.5
@@ -47,6 +48,9 @@ class Game:
     _cache_year = None
     _cache_era = None
     _cache_cap = None
+    _cache_own = None   # places de chaque camp (owned_nodes)
+    _cache_loin = None  # camps loin du joueur (ia_lointaine)
+    _own_ver = 0        # augmenté à chaque changement de maître d'une place (owned_nodes)
     _cache_ns = None
     _cache_rel = None
 
@@ -524,7 +528,17 @@ class Game:
         return n['x'], n['y']
 
     def owned_nodes(self, code):
-        return [n for n in self.nodes if n['owner'] == code]
+        # (des milliers d'appels par mois sur toute la France : les places de tous les camps en un passage, refaites
+        # quand une place change de maître, _own_ver, à augmenter partout où l'on change n['owner'], et par prudence à
+        # chaque quart de journée)
+        k = (self._own_ver, int(self.t * 4))
+        c = self._cache_own
+        if c is None or c[0] != k or c[1] is not self.nodes:
+            par = {}
+            for n in self.nodes:
+                par.setdefault(n['owner'], []).append(n)
+            c = self._cache_own = (k, self.nodes, par)
+        return list(c[2].get(code, ()))
 
     def mod(self, code, key, default=0.0):
         return self.factions[code]['mods'].get(key, default)
@@ -593,24 +607,51 @@ class Game:
         self.update_battles(dt)
         # l'usure varie de quelques millièmes par jour : réglée par quarts de jour (40 % du coût d'un mois sinon)
         self._att_dt = getattr(self, '_att_dt', 0.0) + dt
-        if self._att_dt >= ATTRITION_STEP - 1e-9:
+        # (toute la France : par demi-journées, des centaines d'armées)
+        if self._att_dt >= (2 * ATTRITION_STEP if len(self.factions) > 5 else ATTRITION_STEP) - 1e-9:
             self.attrition(self._att_dt)
             self._att_dt = 0.0
         for code, ai in self.ais.items():
             if not self.factions[code]['alive']:
                 continue
-            nxt = self._ai_clock.get(code, 0.3 + 0.25 * len(self._ai_clock))
-            if self.t >= nxt:
+            # (premières réflexions décalées d'un quart de journée de camp en camp, dans le pas de chacun : toute la
+            # France en aurait étalé 89 sur trois semaines)
+            nxt = self._ai_clock.get(code)
+            if nxt is None:
+                nxt = 0.3 + (0.25 * len(self._ai_clock)) % self.ai_pas(code)
+            # (un camp lointain qui devient proche, guerre ou frontière avec le joueur, se réveille tout de suite)
+            if self.t >= nxt or (nxt > self.t + AI_PAS and self.ai_pas(code) == AI_PAS):
                 self._ai_clock[code] = self.t + self.ai_pas(code)
                 ai.step()
 
     def ai_pas(self, code):
-        """Jours entre deux réflexions d'une IA : 1,5 ; toute la France, un camp à plus de 300 km du joueur (de chef-lieu à
-        chef-lieu) et en paix avec lui : 3 (89 camps, c'était l'essentiel du temps d'un mois)."""
-        if len(self.factions) <= 5 or self.at_war(code, self.player):
-            return 1.5
-        a, b = self.geo.nodes[self.capital_of(code)], self.geo.nodes[self.capital_of(self.player)]
-        return 3.0 if math.hypot(a['x'] - b['x'], a['y'] - b['y']) > 300 else 1.5
+        """Jours entre deux réflexions d'une IA : 1,5 ; toute la France, un camp lointain (voir ia_lointaine) : 6, une
+        par semaine (89 camps, c'était l'essentiel du temps d'un mois)."""
+        return AI_PAS_LOIN if self.ia_lointaine(code) else AI_PAS
+
+    def bataille_proche(self):
+        """Une bataille du joueur ou d'un camp proche de lui : le tour des IA avance alors à petits pas. Toute la France :
+        les batailles entre camps lointains (il y en a presque toujours une quelque part) se règlent à grands pas."""
+        return any(s['owner'] in self.factions and not self.ia_lointaine(s['owner'])
+                   for bt in self.battles.values() for s in bt['sides'])
+
+    def ia_lointaine(self, code):
+        """Toute la France : un camp qui ne touche pas le joueur. Ni en guerre ni allié avec lui, sans frontière commune,
+        chef-lieu à plus de 200 km du sien. Il réfléchit une fois par semaine (ai_pas) ; ce que le joueur voit et
+        affronte garde l'IA complète. Le Sud-Ouest (5 camps) : jamais."""
+        p = self.player
+        if len(self.factions) <= 5 or code == p or p not in self.factions:
+            return False
+        k = (int(self.t * 4), p)   # (demandé à chaque pas pour chaque camp : gardé un quart de journée)
+        c = self._cache_loin
+        if c is None or c[0] != k:
+            c = self._cache_loin = (k, {})
+        if code not in c[1]:
+            from . import diplomacy as D
+            a, b = self.geo.nodes[self.capital_of(code)], self.geo.nodes[self.capital_of(p)]
+            c[1][code] = self.status(code, p) not in ('guerre', 'alliance') and not D.borders(self, code, p) \
+                and math.hypot(a['x'] - b['x'], a['y'] - b['y']) > 200
+        return c[1][code]
 
     # ================================================================== jours, météo, événements
     def new_day(self):
@@ -706,6 +747,7 @@ class Game:
                     home = gn['dept']
                     back = home != code and home in self.factions and self.factions[home]['alive']
                     n['owner'] = home if back else R.NEUTRAL
+                    self._own_ver += 1
                     n['assim'] = 1.0
                     n['depot'] = 0
                     n['milice'] = n['milice_max'] * 0.6
@@ -909,9 +951,12 @@ class Game:
         par_camp = {}   # (les places de chaque camp en un seul passage : toute la France a 2 000 places et 89 camps)
         for n in self.nodes:
             par_camp.setdefault(n['owner'], []).append(n)
+        loin = len(self.factions) > 5 and int(self.t) % 2
         for code, f in self.factions.items():
             if not f['alive']:
                 continue
+            if loin and '_floor' in f and self.ia_lointaine(code):
+                continue   # (toute la France : les revenus d'un camp loin du joueur refaits un jour sur deux)
             tb, cov = self.tools_bonus(code)
             ai = 1 + self.mod(code, 'ai_income')
             tot = dict(livres=0.0, vivres=0.0, recrues=0.0, industrie=0.0, fer=0.0, bois=0.0)
@@ -1024,6 +1069,12 @@ class Game:
                 f['income'].update(f['_measured'])
 
     def economy(self, dt):
+        if len(self.factions) > 5:
+            # (toute la France : les 89 trésors par quarts de jour, comme la milice ; à chaque pas, c'était 10 % d'un mois)
+            self._eco_dt = getattr(self, '_eco_dt', 0.0) + dt
+            if self._eco_dt < 0.25 - 1e-9:
+                return
+            dt, self._eco_dt = self._eco_dt, 0.0
         # places tenues par chacun (plafond des casernes, voir recruit_cap) : un seul passage sur la carte
         held_n = {}
         for n in self.nodes:
@@ -1091,7 +1142,7 @@ class Game:
         # milice et stabilité (l'ordre public tend vers une cible : impôts, famine, banqueroute, garnison) :
         # évolutions lentes, calculées par paquets d'un quart de jour pour ménager les petites machines
         self._slow_dt = getattr(self, '_slow_dt', 0.0) + dt
-        if self._slow_dt < 0.25:
+        if self._slow_dt < (0.5 if len(self.factions) > 5 else 0.25):   # (toute la France, 2 000 places : par demi-jours)
             return
         dt, self._slow_dt = self._slow_dt, 0.0
         targets = self.stab_targets()
@@ -1305,9 +1356,8 @@ class Game:
             del a['morts']
 
     def all_regs(self, code):
-        for n in self.nodes:
-            if n['owner'] == code:
-                yield from n['garrison']
+        for n in self.owned_nodes(code):
+            yield from n['garrison']
         for a in self.armies.values():
             if a['owner'] == code:
                 yield from a['regs']
@@ -1806,24 +1856,42 @@ class Game:
 
     def hegemon(self):
         """La puissance qui domine l'Aquitaine (plus de 40 % des places tenues), contre laquelle les autres se liguent."""
-        cnt = {}
-        for n in self.nodes:
-            if n['owner'] in self.factions:
-                cnt[n['owner']] = cnt.get(n['owner'], 0) + 1
+        self.owned_nodes(None)   # (les places de chaque camp, gardées par owned_nodes : même ordre que self.nodes)
+        cnt = {o: len(ns) for o, ns in self._cache_own[2].items() if o in self.factions}
         if len(cnt) < 3:
             return None
         top = max(cnt, key=cnt.get)
         return top if cnt[top] > 0.4 * sum(cnt.values()) else None
 
     def faction_power(self, code):
-        # (toute la France : les forces de tous les camps d'un coup, gardées un quart de journée ; l'IA s'en sert pour juger)
-        k = int(self.t * 4)
+        # (les forces de tous les camps, gardées un quart de journée ; toute la France : calculées d'un coup et gardées
+        # deux jours, des milliers de régiments ; l'IA s'en sert pour juger)
+        k = int(self.t / 2) if len(self.factions) > 5 else int(self.t * 4)
         c = getattr(self, '_forces', None)
         if c is None or c[0] != k:
             self._forces = c = (k, {})
         if code not in c[1]:
-            c[1][code] = self._faction_power(code)
+            if len(self.factions) > 5:
+                c[1].update(self._faction_powers())
+            else:
+                c[1][code] = self._faction_power(code)
         return c[1][code]
+
+    def _faction_powers(self):
+        """Les forces de tous les camps en un passage (mêmes sommes que _faction_power, dans le même ordre)."""
+        p = dict.fromkeys(self.factions, 0.0)
+        for a in self.armies.values():
+            if a['owner'] in p:
+                p[a['owner']] += self.army_power(a)
+        mk = {}
+        for n in self.nodes:
+            code = n['owner']
+            if code in p:
+                if code not in mk:
+                    mk[code] = self.milice_k(code)
+                p[code] += n['milice'] * R.MILICE_POWER * mk[code] * 0.5 + sum(self.reg_power(code, r, 'Plaine')
+                                                                                 for r in n['garrison'])
+        return p
 
     def _faction_power(self, code):
         p = 0.0
@@ -1983,8 +2051,20 @@ class Game:
         return dist[best_goal], nodes, eids
 
     def nearest_node(self, x, y, pred=None, maxd=1e9):
+        geo = self.geo
+        nodes = geo.nodes
+        if maxd <= 100:
+            # (toute la France, 2 000 places : seules celles des carrés de 20 km à moins de maxd, dans l'ordre des places)
+            grid = getattr(geo, '_grid20', None)
+            if grid is None:
+                grid = geo._grid20 = {}
+                for gn in nodes:
+                    grid.setdefault((int(gn['x'] // 20), int(gn['y'] // 20)), []).append(gn['id'])
+            ids = sorted(i for cx in range(int((x - maxd) // 20), int((x + maxd) // 20) + 1)
+                         for cy in range(int((y - maxd) // 20), int((y + maxd) // 20) + 1) for i in grid.get((cx, cy), ()))
+            nodes = [geo.nodes[i] for i in ids]
         best, bi = maxd, None
-        for gn in self.geo.nodes:
+        for gn in nodes:
             if pred and not pred(gn['id']):
                 continue
             d = math.hypot(gn['x'] - x, gn['y'] - y)
@@ -2117,7 +2197,6 @@ class Game:
         """Itinéraire selon le mode de marche de l'armée : (étapes, destination, None) ou (None, None, raison).
         block : propriétaires dont les terres sont fermées (None : comme avant)."""
         code = a['owner']
-        mask = AA.cell_mask(self, block)
         if a['mode'] == 'route':
             if node is None:
                 node_near = self.nearest_node(x, y, maxd=6)
@@ -2141,7 +2220,7 @@ class Game:
                 sx, sy = self.node_xy(legs[-1]['to'])
             else:
                 sx, sy = a['x'], a['y']
-            pts = self.geo.astar(sx, sy, x, y, block=mask)
+            pts = self.geo.astar(sx, sy, x, y, block=AA.cell_mask(self, block))
             if not pts:
                 return None, None, "Destination inaccessible (eau, montagne ou hors de la région)."
             legs.append(dict(kind='off', pts=[list(p) for p in pts], i=1))
@@ -2150,7 +2229,7 @@ class Game:
             x, y = self.node_xy(node)
         pre = self.boat_prefix(a)
         sx, sy = self.node_xy(pre[0]['to']) if pre else (a['x'], a['y'])
-        pts = self.geo.astar(sx, sy, x, y, block=mask)
+        pts = self.geo.astar(sx, sy, x, y, block=AA.cell_mask(self, block))
         if not pts:
             return None, None, "Destination inaccessible à travers champs (fleuve sans pont, eau ou hors région)."
         return (pre + [dict(kind='off', pts=[list(p) for p in pts], i=1)],
@@ -2762,44 +2841,52 @@ class Game:
         arr = [a for a in self.armies.values() if a['state'] not in ('battle',) and self.t >= a['grace'] and a['regs']
                and not (a.get('boat') and a['at_node'] is None)]
         n = len(arr)
-        outer = n
         if only is not None:
             # l'armée examinée en tête, et elle seule contre toutes les autres (n paires au lieu de n²/2)
             arr.sort(key=lambda x: x['id'] != only)
-            outer = 1 if arr and arr[0]['id'] == only else 0
-        for i in range(outer):
-            a = arr[i]
-            if a['state'] == 'battle':
+            pairs = [(0, j) for j in range(1, n)] if arr and arr[0]['id'] == only else []
+        else:
+            # (des centaines d'armées sur toute la France : seules les paires à moins de AMBUSH_KM en x, trouvées en
+            # balayant les armées rangées par x, puis traitées dans l'ordre d'avant)
+            order = sorted(range(n), key=lambda k: arr[k]['x'])
+            pairs = []
+            for p, i in enumerate(order):
+                xi = arr[i]['x']
+                for q in range(p + 1, n):
+                    j = order[q]
+                    if arr[j]['x'] - xi > AMBUSH_KM:
+                        break
+                    pairs.append((i, j) if i < j else (j, i))
+            pairs.sort()
+        for i, j in pairs:
+            a, b = arr[i], arr[j]
+            if b['state'] == 'battle' or a['state'] == 'battle':
                 continue
-            for j in range(i + 1, n):
-                b = arr[j]
-                if b['state'] == 'battle' or a['state'] == 'battle':
+            dx, dy = a['x'] - b['x'], a['y'] - b['y']
+            d2 = dx * dx + dy * dy
+            if d2 > AMBUSH_KM * AMBUSH_KM:
+                continue
+            if not self.at_war(a['owner'], b['owner']):
+                continue
+            amb = None
+            for x, y in ((a, b), (b, a)):
+                if x['stance'] == 'embuscade' and x['hidden'] and x['state'] == 'idle' and y['state'] in ('move', 'retreat') \
+                        and not y['hidden']:
+                    det = BASE_DETECT + self.mod(y['owner'], 'detect') + (2.0 if self.gen_trait(y) == 'eclaireur' else 0)
+                    if d2 > det * det or d2 <= CONTACT_KM * CONTACT_KM:
+                        amb = (x, y)
+            if amb:
+                x, y = amb
+                self.start_battle([x], [y], gx=y['x'], gy=y['y'], ambush=True)
+            elif d2 <= CONTACT_KM * CONTACT_KM:
+                if a['state'] == 'siege' and b['state'] == 'siege':
                     continue
-                dx, dy = a['x'] - b['x'], a['y'] - b['y']
-                d2 = dx * dx + dy * dy
-                if d2 > AMBUSH_KM * AMBUSH_KM:   # (la distance d'abord : des centaines d'armées sur toute la France)
+                if self.behind_walls(a, b) or self.behind_walls(b, a):
                     continue
-                if not self.at_war(a['owner'], b['owner']):
-                    continue
-                amb = None
-                for x, y in ((a, b), (b, a)):
-                    if x['stance'] == 'embuscade' and x['hidden'] and x['state'] == 'idle' and y['state'] in ('move', 'retreat') \
-                            and not y['hidden']:
-                        det = BASE_DETECT + self.mod(y['owner'], 'detect') + (2.0 if self.gen_trait(y) == 'eclaireur' else 0)
-                        if d2 > det * det or d2 <= CONTACT_KM * CONTACT_KM:
-                            amb = (x, y)
-                if amb:
-                    x, y = amb
-                    self.start_battle([x], [y], gx=y['x'], gy=y['y'], ambush=True)
-                elif d2 <= CONTACT_KM * CONTACT_KM:
-                    if a['state'] == 'siege' and b['state'] == 'siege':
-                        continue
-                    if self.behind_walls(a, b) or self.behind_walls(b, a):
-                        continue
-                    surprise = a['hidden'] or b['hidden']
-                    att, de = (a, b) if (a['state'] == 'move' or a['hidden']) else (b, a)
-                    self.start_battle([att], [de], gx=(a['x'] + b['x']) / 2, gy=(a['y'] + b['y']) / 2,
-                                      surprise=surprise and att['hidden'])
+                surprise = a['hidden'] or b['hidden']
+                att, de = (a, b) if (a['state'] == 'move' or a['hidden']) else (b, a)
+                self.start_battle([att], [de], gx=(a['x'] + b['x']) / 2, gy=(a['y'] + b['y']) / 2,
+                                  surprise=surprise and att['hidden'])
         # renforts : armées proches d'une bataille en cours
         for bt in self.battles.values():
             for a in self.armies.values():
@@ -3607,6 +3694,7 @@ class Game:
             return
         AA.on_capture(self, nid)
         n['owner'] = code
+        self._own_ver += 1
         n['assim'] = 1.0 if code == gn['dept'] else (0.3 if peaceful else 0.0)
         n['stab'] = 0.6 if peaceful else 0.35
         n['garrison'] = []
@@ -3674,6 +3762,7 @@ class Game:
         n = self.nodes[cap]
         gn = self.geo.nodes[cap]
         n['owner'] = loser
+        self._own_ver += 1
         n['assim'] = 1.0
         n['siege'] = None
         n['garrison'] = []
@@ -3731,6 +3820,7 @@ class Game:
                     continue
                 o = n['owner']
                 n.update(owner=code, assim=1.0, stab=0.8, queue=[], depot=0, milice=n['milice_max'] * 0.6)
+                self._own_ver += 1
                 freed.append((o, n))
             f.update(alive=True, overlord=None, trade={}, war_since={}, prisoners={}, weary=0.0, treaties={},
                      last_war=self.t, res=dict(livres=400, vivres=400, fer=60, bois=100, armes=150, outils=30, recrues=800))
@@ -3762,6 +3852,7 @@ class Game:
         for n in self.nodes:
             if n['owner'] == loser:
                 n['owner'] = winner
+                self._own_ver += 1
                 if self.geo.nodes[n['id']]['dept'] != winner:
                     n['assim'] = 0.0   # le pays absorbé garde le souvenir de sa liberté
                 n['stab'] = 0.4

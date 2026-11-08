@@ -452,8 +452,8 @@ def train_xp(g, n):
 def upkeep(g, code):
     """Entretien des bâtiments d'emplacement, en livres par jour."""
     tot = 0.0
-    for n in g.nodes:
-        if n['owner'] == code and n.get('slots'):
+    for n in g.owned_nodes(code):
+        if n.get('slots'):
             for c, lvl in n['slots'].items():
                 if lvl > 0 and c in CHAINS:
                     tot += CHAINS[c]['levels'][min(lvl, len(CHAINS[c]['levels'])) - 1].get('up', 0)
