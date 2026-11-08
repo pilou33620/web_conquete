@@ -21,6 +21,7 @@ Effets (dictionnaire fx) :
 """
 import datetime
 
+from . import regions as RG
 from . import rules as R
 from . import turns as TT
 
@@ -188,7 +189,7 @@ HIST = [
          text="Zola accuse l'état-major d'avoir condamné un innocent. L'affaire Dreyfus déchire la France.",
          choices=[dict(label='Soutenir la révision du procès', fx=dict(stab=-0.05, glory=4), ai=1),
                   dict(label="Défendre l'honneur de l'armée", fx=dict(stab=0.03, tmod=dict(morale=5), days=2 * 365), ai=1)]),
-]
+] + RG.HIST   # (les événements des autres régions de France : game/regions.py)
 HIST_BY_ID = {e['id']: e for e in HIST}
 
 
@@ -228,7 +229,7 @@ RANDOM = [
          text="Des contrebandiers débarquent du tabac et des toiles anglaises près {de_ville}.",
          choices=[dict(label='Fermer les yeux contre une part', fx=dict(res=dict(livres=250), stab=-0.03), ai=2),
                   dict(label='Saisir la marchandise', fx=dict(res=dict(livres=100), stab=0.02), ai=1)]),
-]
+] + RG.RANDOM   # (selon le pays et la côte, en partie de toute la France : game/regions.py)
 RANDOM_BY_ID = {e['id']: e for e in RANDOM}
 
 
@@ -428,7 +429,7 @@ def fire(g, code, ev, kind):
         if town is None:
             return
     title = _fill(g, code, ev['title'], town)
-    text = _fill(g, code, ev['text'], town)
+    text = _fill(g, code, RG.TEXTES.get(ev['id'], ev['text']) if code not in RG.SUD_OUEST else ev['text'], town)
     gn = g.geo.nodes[town if town is not None else g.capital_of(code)]
     base = soften(g, code, ev['id'], ev['base']) if ev.get('base') else None
     if base:

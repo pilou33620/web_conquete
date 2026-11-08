@@ -211,6 +211,11 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   continental, le 12 mars 1814, les Cent-Jours, le choléra, le train de La Teste, 1848, Biarritz impériale, le
   classement de 1855, la loi des Landes de 1857, 1870 et le gouvernement à Bordeaux, la Commune, le phylloxéra,
   l'Exposition de 1889 et l'affaire Dreyfus.
+  - **Toute la France** (`game/regions.py`) : 120 dates régionales de plus, de 3 à 9 par grande région : siège de
+    Lille (1708), Denain, la Compagnie des Indes à Lorient, l'incendie de Rennes, la peste de Marseille (1720), la
+    Lorraine réunie (1766), la Corse de Paoli (1755-1769), Valmy, le siège de Toulon (1793), Mulhouse française,
+    la campagne de France (1814), l'occupation alliée (1815), Saint-Étienne–Andrézieux, le Creusot des Schneider,
+    Haussmann, Nice et la Savoie françaises (1860), Sedan, Metz, Belfort, le traité de Francfort (1871)…
   - Chaque option affiche ses effets : ressources, ordre public, lassitude, population, régiments offerts, effets
     temporaires ou durables, et points d'**histoire** qui comptent dans le prestige.
   - Les IA choisissent elles aussi. Sans réponse avant la fin du tour suivant, la dernière option, la plus prudente,
@@ -218,7 +223,10 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   - Les effets en cours sont rappelés dans la fenêtre Production, et le journal a un onglet « Histoire ».
 - **Imprévus** : tous les 8 à 18 mois environ, chaque camp connaît un événement aléatoire : récolte magnifique,
   épizootie, legs d'un négociant, filon de fer, savant à pensionner, contrebandiers. Certains demandent une décision.
-  Incendies, fièvres, brigands et foires touchent désormais une seule ville (voir « Villes »).
+  Incendies, fièvres, brigands et foires touchent désormais une seule ville (voir « Villes »). En partie de toute la
+  France, d'autres imprévus suivent le pays : coup de grisou et commande de l'arsenal (forges), grêle et marchands de
+  grains (greniers), gelées et grand millésime (vignobles), avalanches, loups et colporteurs (montagnes), navire de
+  retour et faillite (négoce), tempête, naufrage et pêche miraculeuse (côtes).
 - **Traités plutôt qu'anéantissement** : quand un chef-lieu tombe, le vaincu signe un traité. Il cède les places
   occupées, verse un tribut, récupère son chef-lieu et doit respecter une trêve de cinq ans. Le congrès rétablit aussi
   la paix entre le vaincu et ses autres ennemis pour deux ans (les alliés eux-mêmes respectent ces trêves). Le vaincu
@@ -813,6 +821,7 @@ game/geo.py          carte : projection, grilles de terrain, réseau routier, re
 game/places.py       les 223 villes, villages et places fortes, routes royales
 raspberry/           installation en service sur Raspberry Pi
 game/rules.py        départements, unités, technologies, généraux, formations, météo
+game/regions.py      toute la France : provinces, titres des camps, spécialités des villes, événements régionaux
 game/engine.py       simulation : économie, impôts, armées, gabares, combats par phases, sièges, espions
 game/army_actions.py actions d’armée : barricades, quartiers, garde bourgeoise, réquisition, traversée, terres fermées et droit de passage, blocus
 game/waterways.py    voies navigables (fleuves, estuaire, cabotage) et blocus

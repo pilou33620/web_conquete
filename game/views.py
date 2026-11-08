@@ -60,6 +60,10 @@ def migrate(g):
         # sauvegarde d'avant les événements : ce qui est déjà passé ne se rejoue pas
         today = g.date().toordinal()
         g.ev_done = [e['id'] for e in EV.HIST if datetime.date(*e['date']).toordinal() <= today]
+    else:
+        # sauvegarde d'avant des événements ajoutés depuis (game/regions.py) : leur date passée ne se rejoue pas
+        today, vus = g.date().toordinal(), set(g.ev_done)
+        g.ev_done += [e['id'] for e in EV.HIST if e['id'] not in vus and datetime.date(*e['date']).toordinal() < today]
     for code, f in g.factions.items():
         if 'maison' not in f:
             f['maison'] = FM.nouvelle(g, code)   # avant les familles dirigeantes : une maison tirée au chargement

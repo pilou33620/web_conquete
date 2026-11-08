@@ -6,6 +6,7 @@ import random
 
 from . import rules as R
 from . import events as EV
+from . import regions as RG
 from . import army_actions as AA
 from . import battle_log as BL
 from . import cities as CT
@@ -3792,13 +3793,15 @@ class Game:
         if not getattr(self, 'era_id', None):
             self.era_id = self.era()['id']
         if d == datetime.date(*R.DEPT_DATE) and self.t > 0.5:
-            self.log('info', "4 mars 1790 : l'Assemblée crée les départements. Les provinces deviennent la Gironde, "
-                             "la Dordogne, les Landes, le Lot-et-Garonne et les Basses-Pyrénées.", important=True)
+            self.log('info', RG.DEPT_1790 if self.geo.version >= 3 else
+                     "4 mars 1790 : l'Assemblée crée les départements. Les provinces deviennent la Gironde, "
+                     "la Dordogne, les Landes, le Lot-et-Garonne et les Basses-Pyrénées.", important=True)
             self.alert_pause(big=True)
         e = self.era()
         if e['id'] != self.era_id:
             self.era_id = e['id']
-            self.log('epoque', f"Nouvelle époque : {e['name']}. {e['desc']}", important=True)
+            desc = RG.ERES.get(e['id'], e['desc']) if self.geo.version >= 3 else e['desc']   # (toute la France)
+            self.log('epoque', f"Nouvelle époque : {e['name']}. {desc}", important=True)
             self.alert_pause(big=True)
         if d >= datetime.date(*R.CAMPAIGN_END) and not self.over:
             self.end_campaign()
