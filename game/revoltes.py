@@ -34,6 +34,7 @@ LEVER = dict(livres=120, armes=40)
 LEVER_N = 250
 BRIGANDS_P = 0.025         # chance par mois qu'une bande de brigands naisse chez un camp (avant guerre et famine)
 PARTISANS_P = 0.04         # par mois et par place occupée, × (1 − ordre public)
+CHASSE_JOURS = 45          # une armée de l'IA ne chasse pas une bande plus longtemps
 CAV_K = 0.8                # la cavalerie chasse les bandes : puissance × (1 + 0,8 × part de cavalerie)
 SOULEVER_STAB = 0.7
 
@@ -283,7 +284,7 @@ def _pille(g, b):
     until = g.t + 30
     for nid in (b['node'], *voisins(g, b['node'])):
         m = g.nodes[nid]
-        if m['owner'] == c:
+        if m['owner'] == c and g.geo.nodes[nid]['type'] != 'capitale':   # (le chef-lieu a sa maréchaussée)
             m['tm'] = [e for e in m.get('tm') or () if e.get('src') != 'brigands'] + \
                 [dict(k='livres', v=-0.4, until=until, src='brigands')]
     gn = g.geo.nodes[b['node']]
@@ -529,7 +530,9 @@ def chasse(g, a):
     bid = a.get('chasse')
     if bid is None:
         return False
-    if a['state'] == 'battle' or not any(b['id'] == bid for b in g.bandes):
+    b = next((b for b in g.bandes if b['id'] == bid), None)
+    # (une bande qui a passé chez un autre camp, ou une chasse qui traîne : l'armée retourne à la guerre)
+    if a['state'] == 'battle' or b is None or b['c'] != a['owner'] or g.t > a.get('chasse_t', 0):
         a.pop('chasse', None)
         return False
     return True
@@ -554,7 +557,7 @@ def ia(ai):
               and not a.get('chasse')]
     for b in sorted((b for b in g.bandes if b['c'] == code), key=lambda b: (b['k'] != 'rebelles', -b['n'])):
         gn = g.geo.nodes[b['node']]
-        chasseurs = [a for a in g.armies.values() if a.get('chasse') == b['id']]
+        chasseurs = [a for a in g.armies.values() if a.get('chasse') == b['id'] and chasse(g, a)]
         if chasseurs:
             for a in chasseurs:   # la bande a bougé : on la suit
                 if a['state'] == 'idle' and a['at_node'] != b['node'] and not ai.go(a, b['node']):
@@ -567,7 +570,7 @@ def ia(ai):
             if d < 120 and g.army_power(a) > pb and (best is None or d < best[0]):
                 best = (d, a)
         if best and ai.go(best[1], b['node']):
-            best[1]['chasse'] = b['id']
+            best[1]['chasse'], best[1]['chasse_t'] = b['id'], g.t + CHASSE_JOURS
             libres.remove(best[1])
         elif b['k'] != 'partisans' and f['res']['livres'] > 2 * prix(b) + reserve \
                 and (b['k'] == 'brigands' or g.nodes[b['node']]['owner'] == code):

@@ -314,7 +314,7 @@ def player_state(g, since=0):
         d = dict(id=n['id'], o=n['owner'], f=n['fort'], d=n['dev'], s=round(n['stab'], 2), pop=int(round(n.get('pop', 0), -1)),
                  sg=_siege(g, n) if n['siege'] else None)
         if n.get('rp'):
-            d['rp'] = round(n['rp'], 2)   # part de réformés (SPEC-RELIGION.md)
+            d['ref'] = round(n['rp'], 2)   # part de réformés (SPEC-RELIGION.md)
         d['pt'] = [round(tr['rate'][n['id']] * 100, 1), tr['why'][n['id']]]   # tendance : % par an et sa raison
         if n['id'] in g._blockade:
             d['bk'] = 1

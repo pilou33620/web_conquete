@@ -131,7 +131,7 @@ class Evenements(unittest.TestCase):
         v = V.player_state(g)['me']['culte']
         self.assertEqual(v['k'], 'contrainte')
         self.assertIn('dragonnades', [o[0] for o in v['options']])
-        self.assertEqual(V.player_state(g)['nodes'][place(g, 'Sainte-Foy-la-Grande')['id']]['rp'], 0.6)
+        self.assertEqual(V.player_state(g)['nodes'][place(g, 'Sainte-Foy-la-Grande')['id']]['ref'], 0.6)
         self.assertIsNotNone(RV)
 
 

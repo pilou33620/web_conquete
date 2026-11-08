@@ -1218,7 +1218,7 @@ export class UI {
       <dt>Agrandissement</dt><dd title="${esc(this.devName(gn.type, ns.d))}">${pips(ns.d)}</dd>
       <dt></dt><dd class="muted small">${esc(this.devName(gn.type, ns.d))}${own && ns.pc ? `, place pour ${fmt(ns.pc)}` : ''}</dd>
       ${own ? `<dt>Ordre public</dt><dd>${Math.round(ns.s * 100)} %</dd>` : ''}
-      <dt>Confession</dt><dd>${this.confession(ns.rp)}</dd>
+      <dt>Confession</dt><dd>${this.confession(ns.ref)}</dd>
       ${ns.dg ? `<dt>Dégâts</dt><dd>${Math.round(ns.dg * 100)} % en ruine</dd><dt></dt><dd class="muted small">production −${Math.round(ns.dg * (this.rules.deg_prod ?? 0.8) * 100)} %</dd>` : ''}
       <dt>Terrain</dt><dd>${terr}</dd></dl>`;
     h += this.bandeHtml(gn, ns, me);
