@@ -447,13 +447,14 @@ class AI:
         return f.get('_gross_livres', 20) / (0.6 + 0.8 * f.get('tax', 0.5))   # voir Game.compute_income
 
     def douane(self):
-        """Chaque mois (SPEC-MERCENAIRES.md) : un camp marchand garde un tarif bas, un camp pauvre ou en guerre le monte ;
-        des douaniers quand la contrebande coûte plus que leur solde."""
+        """Chaque mois (SPEC-MERCENAIRES.md) : libre en paix ; en guerre, modéré, élevé si de plus le camp est en déficit
+        (un marchand s'en tient à modéré) ; des douaniers quand la contrebande coûte plus que leur solde."""
         g, f, code = self.g, self.f, self.code
         marchand = self.pers['trade'] >= 0.8
-        pauvre = f['income']['livres'] < 0   # (en déficit : les IA de 1700 dépensent tout et vivaient sous tarif)
-        t = bool(self.wars()) + pauvre
-        t = min(1, t) if marchand else t   # libre en paix et à l'aise ; modéré en guerre ou en déficit, élevé les deux (banc 1700)
+        pauvre = f['income']['livres'] < 0
+        # (en paix, plus de tarif même en déficit : les IA de 1700, toujours à court, vivaient sous tarif ; banc de 1700)
+        t = bool(self.wars()) * (1 + pauvre)
+        t = min(1, t) if marchand else t
         if t != f['tarif']:
             g.set_tarif(code, t)
         dn = f.get('_douane')
