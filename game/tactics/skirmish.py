@@ -199,6 +199,7 @@ def new(geo, body):
     if place:
         n = g.nodes[nid]
         n['owner'] = def_code
+        g._own_ver += 1   # (Game.owned_nodes)
         n['fort'] = max(1, _fort(geo.nodes[nid])) if kind == 'forteresse' else 0
         if kind == 'village':
             n['aa'] = dict(bar=AA.BAR_LEVEL)   # barricades et palissades dressées

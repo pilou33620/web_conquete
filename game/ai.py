@@ -8,6 +8,7 @@ from . import rails as RL
 from . import diplomacy as D
 from . import familles as FM
 from . import army_actions as AA
+from . import revoltes as RV
 
 AI_AHEAD = 5   # ans d'avance au plus sur l'histoire pour une recherche des IA (SPEC-ARBRE.md)
 from .geo import TERRAIN
@@ -26,6 +27,94 @@ VALUE = {'capitale': 12, 'ville': 5, 'fort': 3, 'village': 2}
 MARKET_BASE = {k: v for k, v in R.MARKET_BASE.items() if k != 'armes'}   # (les armes s'achètent à part : arms_room)
 TAX_FLOOR = 0.1   # impôts les plus légers qu'une IA consente quand son trésor déborde
 FLOOD = 4.0       # au-delà de ce multiple du trésor de guerre, c'est le trop-plein : impôts remis, remparts partout
+
+
+def edges(geo):
+    """Les routes et voies d'eau (a, b, eau ?), relevées une fois : la carte ne change pas."""
+    if getattr(geo, '_ai_edges', None) is None:
+        geo._ai_edges = [(e['a'], e['b'], e.get('kind') == 'water') for e in geo.edges]
+    return geo._ai_edges
+
+
+def _find(parent, x):
+    while parent[x] != x:
+        parent[x] = parent[parent[x]]
+        x = parent[x]
+    return x
+
+
+def network(geo):
+    """Composante de chaque place dans tout le réseau (routes et voies d'eau, sans rien de fermé) : deux places de
+    composantes différentes ne se rejoignent jamais (îles, vallées sans route)."""
+    if getattr(geo, '_ai_comp', None) is None:
+        parent = list(range(len(geo.nodes)))
+        for a, b, _ in edges(geo):
+            parent[_find(parent, a)] = _find(parent, b)
+        geo._ai_comp = [_find(parent, i) for i in range(len(parent))]
+    return geo._ai_comp
+
+
+def composantes(g, block):
+    """Toute la France : les composantes de AI.reach (mêmes groupes de places), en partant de celles des places neutres
+    et des voies d'eau, communes à tous les camps et gardées un quart de journée ; chaque camp n'y ajoute que les routes
+    des places qui lui sont ouvertes (les siennes, celles de ses ennemis et de ses alliés)."""
+    N = len(g.nodes)
+    base = getattr(g, '_ai_base', None)
+    if base is None or base[0] != int(g.t * 4) or len(base[1]) != N:
+        owners = [n['owner'] for n in g.nodes]
+        parent = list(range(N))
+        for a, b, water in edges(g.geo):
+            if water or (owners[a] == R.NEUTRAL and owners[b] == R.NEUTRAL):
+                parent[_find(parent, a)] = _find(parent, b)
+        base = g._ai_base = (int(g.t * 4), [_find(parent, i) for i in range(N)])
+    parent = list(base[1])
+    nodes, adj = g.nodes, adjacency(g.geo)
+    for o in g.factions:
+        if o in block:
+            continue
+        for n in g.owned_nodes(o):
+            for j, water in adj[n['id']]:
+                oj = nodes[j]['owner']
+                if not water and (oj == R.NEUTRAL or oj not in block):
+                    parent[_find(parent, n['id'])] = _find(parent, j)
+    return [_find(parent, i) for i in range(N)]
+
+
+def adjacency(geo):
+    """Pour chaque place, ses routes et voies d'eau : [(autre bout, eau ?)], relevées une fois."""
+    if getattr(geo, '_ai_adj', None) is None:
+        geo._ai_adj = [[] for _ in geo.nodes]
+        for a, b, water in edges(geo):
+            geo._ai_adj[a].append((b, water))
+            geo._ai_adj[b].append((a, water))
+    return geo._ai_adj
+
+
+def nearest_dist(pts, cell=40.0):
+    """Fonction (x, y) -> distance au plus proche des points pts (le même minimum que min(hypot…) sur tous) : les
+    points rangés par carrés de cell km, cherchés en anneaux autour de (x, y) (toute la France : 2 000 places)."""
+    grid = {}
+    for p in pts:
+        grid.setdefault((int(p[0] // cell), int(p[1] // cell)), []).append(p)
+    if not grid:
+        return lambda x, y: math.inf
+    i0, i1 = min(i for i, _ in grid), max(i for i, _ in grid)
+    j0, j1 = min(j for _, j in grid), max(j for _, j in grid)
+
+    def near(x, y):
+        cx, cy = int(x // cell), int(y // cell)
+        best = math.inf
+        for r in range(max(cx - i0, i1 - cx, cy - j0, j1 - cy) + 1):
+            for i in range(cx - r, cx + r + 1):
+                for j in (range(cy - r, cy + r + 1) if i in (cx - r, cx + r) else (cy - r, cy + r)):
+                    for tx, ty in grid.get((i, j), ()):
+                        d = math.hypot(x - tx, y - ty)
+                        if d < best:
+                            best = d
+            if best <= r * cell:   # (plus loin que l'anneau r, tout point est à plus de r × cell km)
+                break
+        return best
+    return near
 
 
 class AI:
@@ -85,11 +174,14 @@ class AI:
         if self.g.t >= getattr(self, 'aa_clock', 0):
             self.aa_clock = self.g.t + 3   # barricades, garde bourgeoise, quartiers, réquisition, droit de passage
             AA.ai_step(self)
+        RV.ia(self)   # politique religieuse, bandes armées (game/revoltes.py)
         if self.g.t >= self.spend_clock:
             self.spend_clock = self.g.t + 4 + self.rng.random() * 2
             self.spend()
         if self.g.t >= self.diplo_clock:
-            self.diplo_clock = self.g.t + 8 + self.rng.random() * 5
+            # (un camp lointain ne réfléchit qu'une fois par semaine : 4 à 9 jours le ramènent à la diplomatie à peu près
+            # aussi souvent que les autres, ses relations dérivent au même rythme)
+            self.diplo_clock = self.g.t + (4 if self.g.ia_lointaine(self.code) else 8) + self.rng.random() * 5
             self.diplomacy()
             self.espionage()
             self.rearm()
@@ -541,13 +633,14 @@ class AI:
         return budget
 
     def neighbours(self):
-        """Places voisines par les chemins (calculé une fois : la carte ne change pas)."""
-        if not hasattr(self, '_nb'):
-            self._nb = {}
-            for e in self.g.geo.edges:
-                self._nb.setdefault(e['a'], set()).add(e['b'])
-                self._nb.setdefault(e['b'], set()).add(e['a'])
-        return self._nb
+        """Places voisines par les chemins (calculé une fois pour tous les camps : la carte ne change pas)."""
+        geo = self.g.geo
+        if getattr(geo, '_ai_nb', None) is None:
+            geo._ai_nb = {}
+            for e in geo.edges:
+                geo._ai_nb.setdefault(e['a'], set()).add(e['b'])
+                geo._ai_nb.setdefault(e['b'], set()).add(e['a'])
+        return geo._ai_nb
 
     def fortify_frontier(self, budget, wars, res):
         """Fortifier les places qui bordent un voisin dangereux (en guerre, hostile ou plus fort que nous),
@@ -712,7 +805,8 @@ class AI:
     def foes(self):
         """Armées ennemies visibles (en guerre avec nous, pas cachées), dans l'ordre de g.armies."""
         g, code = self.g, self.code
-        return [a for a in g.armies.values() if not a['hidden'] and g.at_war(code, a['owner'])]
+        ennemis = {o for o in g.factions if g.at_war(code, o)}   # (89 camps : l'état de guerre relevé une fois)
+        return [a for a in g.armies.values() if not a['hidden'] and a['owner'] in ennemis] if ennemis else []
 
     def threat_at(self, nid, radius=35, foes=None, power=None):
         """Puissance des armées ennemies à moins de radius km de la place. foes : self.foes() déjà relevé, et power :
@@ -765,19 +859,21 @@ class AI:
                 if b['id'] in g.armies and abs(a['x'] - b['x']) < 1.5 and abs(a['y'] - b['y']) < 1.5:
                     g.merge(code, a['id'], b['id'])
         self._rally_stale = True   # point de ralliement recalculé seulement s'il sert (voir rally)
+        self._cibles = None   # cibles de pick_target, relevées à la première armée qui en cherche (voir plus bas)
         mine = [a for a in g.armies.values() if a['owner'] == code]
         taken = {}
         for a in mine:
             if a['target'] and a['state'] == 'move' and a['target'].get('node') is not None:
                 taken[a['target']['node']] = taken.get(a['target']['node'], 0) + 1
         for a in mine:
-            if a['id'] not in g.armies:
+            if a['id'] not in g.armies or RV.chasse(g, a):   # (une armée qui chasse une bande : game/revoltes.py)
                 continue
             try:
                 self.army_think(a, taken)
             except Exception:
                 a['path'] = []
                 a['state'] = 'idle'
+        self._cibles = False   # (hors d'une revue, pick_target relève les cibles sans les garder)
 
     def army_think(self, a, taken):
         g, code = self.g, self.code
@@ -844,7 +940,7 @@ class AI:
         # défense
         best = None
         foes, power = self.foes(), {}
-        for n in g.owned_nodes(code):
+        for n in (g.owned_nodes(code) if foes else ()):   # (sans ennemi en vue, aucune place menacée)
             th = self.threat_at(n['id'], 30, foes, power)
             if th <= 0:
                 continue
@@ -900,10 +996,10 @@ class AI:
             if not targets:
                 return None
         best = None
-        pts = [g.node_xy(t) for t in targets]
+        near = nearest_dist([g.node_xy(t) for t in targets])
         for i in own:
             x, y = g.node_xy(i)
-            d = min(math.hypot(x - tx, y - ty) for tx, ty in pts)
+            d = near(x, y)
             typ = g.geo.nodes[i]['type']
             d -= {'capitale': 6, 'ville': 4, 'fort': 3, 'village': 0}[typ]
             if best is None or d < best[0]:
@@ -927,7 +1023,23 @@ class AI:
         p_army = g.army_power(a)
         expand = self.pers['expand']
         cands = []
-        for n in g.nodes:
+        rayon = 150 if len(g.factions) > 5 else 220   # (toute la France : pas des milliers de places à juger)
+        grille = getattr(self, '_cibles', False)
+        if not grille:
+            # rangées par carrés de 50 km, et gardées pendant une revue militaire (military) pour toutes nos armées : une
+            # place ne peut alors que passer à nous ou sortir d'une guerre, et chacune est revérifiée plus bas
+            revue, grille = grille is None, {}
+            geo = g.geo.nodes
+            for n in g.nodes:
+                if n['owner'] == R.NEUTRAL or n['owner'] in wars:
+                    gn = geo[n['id']]
+                    grille.setdefault((int(gn['x'] // 50), int(gn['y'] // 50)), []).append(n)
+            if revue:
+                self._cibles = grille
+        # (l'ordre de la revue ne compte pas : les candidates sont ensuite triées)
+        pool = [n for i in range(int((a['x'] - rayon) // 50), int((a['x'] + rayon) // 50) + 1)
+                for j in range(int((a['y'] - rayon) // 50), int((a['y'] + rayon) // 50) + 1) for n in grille.get((i, j), ())]
+        for n in pool:
             o = n['owner']
             if o == code:
                 continue
@@ -935,15 +1047,7 @@ class AI:
                 continue
             gn = g.geo.nodes[n['id']]
             d = math.hypot(gn['x'] - a['x'], gn['y'] - a['y'])
-            if d > (150 if len(g.factions) > 5 else 220):   # (toute la France : pas des milliers de places à juger)
-                continue
-            dfn = g.node_defense_power(n['id'])
-            need = dfn * (1.25 if o == R.NEUTRAL else 1.3)
-            if n['fort'] >= 1 and any(r['type'] == 'artillerie' for r in a['regs']):
-                need /= 1 + 0.25 * n['fort']
-            if n['siege'] and n['siege']['by'] == code:
-                need *= 0.5
-            if p_army < need:
+            if d > rayon:
                 continue
             val = VALUE[gn['type']] + 1.5 * len(gn['spec'])
             if o == R.NEUTRAL:
@@ -962,14 +1066,28 @@ class AI:
                 sc *= 0.25 / k
             cands.append((sc, n['id']))
         cands.sort(reverse=True)
-        cands = [c for c in cands if not self.go_cooled(a, c[1])]   # destinations refusées naguère : on passe
+        arty = any(r['type'] == 'artillerie' for r in a['regs'])
+
+        def strong_enough(nid):
+            n = g.nodes[nid]
+            need = g.node_defense_power(nid) * (1.25 if n['owner'] == R.NEUTRAL else 1.3)
+            if n['fort'] >= 1 and arty:
+                need /= 1 + 0.25 * n['fort']
+            if n['siege'] and n['siege']['by'] == code:
+                need *= 0.5
+            return p_army >= need
+        # (la défense de chaque place, coûteuse, jugée seulement pour les mieux classées, jusqu'à quatre essais)
+        # destinations refusées naguère : on passe
+        cands = (c for c in cands if strong_enough(c[1]) and not self.go_cooled(a, c[1]))
         # destinations qu'aucune route ne permet d'atteindre (terres fermées tout autour) : écartées sans chercher de
         # chemin ; parmi les quatre premières, notées comme un ordre refusé (pour demander un droit de passage)
-        comp, starts = self.reach_from(a) if cands else (None, None)
+        comp = starts = None
         tries = 0
         for i, (sc, nid) in enumerate(cands):
             if tries >= 4:
                 break
+            if i == 0:
+                comp, starts = self.reach_from(a)
             if starts is not None and comp[nid] not in starts:
                 if i < 4:
                     self.cool[('go', a['id'], nid)] = g.t + self.GO_CD
@@ -989,27 +1107,29 @@ class AI:
         route dans une place fermée, les gabares passent devant ses quais sans y débarquer). Recalculé seulement quand
         les terres fermées (diplomatie, droits de passage) ou les maîtres des places changent."""
         g = self.g
+        c = self._cache_reach
+        france = len(g.factions) > 5
+        if france and c is not None and c[1] == int(g.t * 4):
+            # (toute la France : gardé un quart de journée, comme les frontières ; des places y changent de main sans
+            # cesse, et 89 camps à passer en revue pour savoir lesquels sont fermés)
+            return c[0], c[2]
         block = AA.closed_owners(g, self.code)
         if not block:
             return block, None   # rien de fermé : tout se rejoint (le réseau des routes est d'un seul tenant)
+        if france:
+            comp = composantes(g, block)
+            self._cache_reach = (block, int(g.t * 4), comp)
+            return block, comp
         # (seules comptent les places des camps fermés : les villages qui changent de main ailleurs n'y font rien)
         fermees = tuple(i for i, n in enumerate(g.nodes) if n['owner'] in block)
-        c = self._cache_reach
         if c is not None and c[0] == block and c[1] == fermees:
             return block, c[2]
-        owners = [n['owner'] for n in g.nodes]
+        ouvert = [n['owner'] not in block for n in g.nodes]
         parent = list(range(len(g.nodes)))
-
-        def find(x):
-            while parent[x] != x:
-                parent[x] = parent[parent[x]]
-                x = parent[x]
-            return x
-        for e in g.geo.edges:
-            if e.get('kind') != 'water' and (owners[e['a']] in block or owners[e['b']] in block):
-                continue
-            parent[find(e['a'])] = find(e['b'])
-        comp = [find(i) for i in range(len(parent))]
+        for a, b, water in edges(g.geo):
+            if water or (ouvert[a] and ouvert[b]):
+                parent[_find(parent, a)] = _find(parent, b)
+        comp = [_find(parent, i) for i in range(len(parent))]
         self._cache_reach = (block, fermees, comp)
         return block, comp
 

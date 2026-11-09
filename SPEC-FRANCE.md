@@ -39,12 +39,14 @@ l'échelle de l'Europe reste à trancher (France détaillée et reste plus gross
   négoce, forges, grenier, vignoble, montagne) ; familles, armées types, courbes de population par défaut. Une partie
   ne connaît que les camps de sa carte (`geo.playable_codes`).
 - **Vitesse** : frontières, forces et revenus gardés un quart de journée : un mois de jeu avec 89 camps prend 8 à 20 s
-  sur la machine de développement (40 à 60 s avant).
+  sur la machine de développement (40 à 60 s avant). Puis l'IA des camps lointains allégée (ci-dessous) : 2 à 4,5 s en
+  début de partie, 6 à 8 s après deux ans.
 - **Page** : liste déroulante des départements et fiche du choisi (ou toucher une ville) ; styles de maisons de douze
   grandes régions ; plateau bâti par blocs de 16 × 16 hexagones autour de la caméra (90 blocs, 260 places au plus) ;
   territoires sans lissage ni peinture des tuiles sur le plateau.
 
-Reste à faire : alléger encore l'IA des camps lointains (Raspberry Pi), vérifier la fluidité sur iPad.
+Reste à faire : vérifier la fluidité sur iPad et le temps d'un mois sur le Raspberry Pi lui-même ; relier au réseau
+des routes les 157 places isolées de la géographie 3.
 
 ### Événements et textes des autres régions — faits le 08/11/2026
 
@@ -106,6 +108,52 @@ vise les cinq départements écrits à la main, les imprévus régionaux ne joue
   voies d'eau prend 0,15 s au lieu de 0,45 s (les places sont d'abord filtrées par case) ; carte envoyée au navigateur
   +0,2 Mo (14,7 Mo) ; un mois de jeu à 89 camps 10,3 s → 11,1 s environ (bruit compris).
 
+### IA allégée des camps lointains — faite le 08/11/2026
+
+Le Raspberry Pi est 3 à 5 fois plus lent que la machine de développement : il fallait diviser par 3 au moins le temps
+d'un mois en France, sans changer le Sud-Ouest. Décisions (prises seul, le joueur absent) :
+
+- **Camp lointain** (`Game.ia_lointaine`) : ni en guerre ni allié avec le joueur, sans frontière commune avec lui,
+  chef-lieu à plus de 200 km du sien ; réévalué chaque quart de journée. Depuis la Gironde, 75 camps sur 89. Jamais dans
+  le Sud-Ouest (5 camps). Le camp du joueur, ses voisins, ses ennemis et ses alliés gardent l'IA complète.
+- **Il réfléchit tous les 6 jours** (`AI_PAS_LOIN`) au lieu de 1,5 ; une guerre ou une frontière avec le joueur le
+  réveille dans le quart de journée. Sa diplomatie revient tous les 4 à 9 jours au lieu de 8 à 13 (relations et
+  déclarations de guerre au même rythme qu'avant, puisqu'il ne la fait qu'à ses réflexions) ; ses demandes de droit de
+  passage tous les 45 jours (au lieu de 15), deux recherches de chemin au plus ; ses revenus refaits un jour sur deux.
+- **Batailles entre camps lointains** : le tour des IA ne passe plus à petits pas (0,05 jour) pour elles, seulement pour
+  une bataille du joueur ou d'un camp proche (`Game.bataille_proche`) ; il y en avait presque toujours une quelque part
+  en France, ce qui doublait le nombre de pas de tout le mois.
+- **Toute la France (89 camps), pour tous** : trésors par quarts de jour, milice et ordre public par demi-journées,
+  usure et ravitaillement des armées par demi-journées, forces des camps gardées deux jours, réseau des places ouvertes
+  à chaque camp gardé un quart de journée (et bâti à partir de celui des places neutres, commun à tous) ; premières
+  réflexions décalées dans le pas de chaque camp (elles s'étalaient sur trois semaines).
+- **Calculs exacts, partout** (mêmes résultats) : places de chaque camp (`owned_nodes`) gardées jusqu'au prochain
+  changement de maître (`_own_ver`, à augmenter là où l'on change `n['owner']`) ; rencontres d'armées par balayage
+  au lieu de toutes les paires ; plus proche place par carrés de 20 km ; cibles et point de ralliement par carrés de
+  40 à 50 km ; défense des places jugée seulement pour les cibles les mieux classées ; masque des terres fermées fait
+  seulement quand il sert ; demandes de passage vers une place qu'aucune route ne relie au reste (îles, vallées des
+  Pyrénées et des Alpes) écartées sans recherche dans toute la carte ; routes coupées par la crue calculées autour
+  de la Garonne et de la Dordogne seulement (7 s à la première crue, 1,6 s).
+
+Mesures (`outils/banc_france.py`, Gironde, camp du joueur joué par une IA ; temps de calcul du processus, avant et après
+lancés en même temps sur la machine de développement, chargée par d'autres calculs) :
+
+| | avant | après |
+|---|---|---|
+| 1790, mois 1 à 3 | 7,2 / 13,2 / 18,8 s | 2,2 / 3,5 / 4,3 s (÷ 4) |
+| 1700, mois 1 à 3 | 8,9 / 12,4 / 16,6 s | 3,2 / 3,3 / 3,2 s (÷ 4) |
+| 1790, après 2 ans (mois 25 à 27) | 39,8 / 31,9 / 32,5 s | 7,8 / 6,3 / 6,1 s (÷ 5) |
+
+Le monde lointain reste vivant : après deux ans, autant de places prises (2 598 avant, 2 622 après), plus de batailles
+(victoires et défaites des camps : 190 avant, 296 après), la même médiane de places par camp (39). Le Sud-Ouest est
+inchangé : `outils/simuler.py --parties 2 --epoque 1790 --annees 10 --graine 1 --proc 2` donne exactement les mêmes résultats.
+Test : `tests/test_france.py` (un camp lointain réfléchit une fois par semaine et rallie ses villages, un voisin garde
+le pas complet, la guerre réveille le lointain).
+
+Vu en mesurant (non corrigé, hors sujet) : après la course aux villages neutres (un an), la France à 89 camps n'a presque
+plus de guerres (aucune du 25e au 27e mois, avant comme après) ; 157 places de la géographie 3 ne sont pas reliées
+au grand réseau des routes (Soulac, Urdos, Laruns, Barcelonnette, Briançon, le pays de Gex, les îles…) : les IA les
+visent en vain ; les trésors des IA montent à 200 000 livres.
 
 ## Étape 2 : l'Europe et l'Afrique du Nord (mode « Europe »)
 

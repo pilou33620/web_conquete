@@ -61,6 +61,49 @@ class France(unittest.TestCase):
         self.assertEqual(g.date().month, 4)
         self.assertTrue(all(f['alive'] for f in g.factions.values()))
 
+    def test_ia_allegee_des_camps_lointains(self):
+        # (SPEC-FRANCE.md : un camp loin du joueur réfléchit une fois par semaine et joue quand même ; un voisin, ou un
+        # camp en guerre avec lui, garde l'IA complète)
+        g = Game(GEO, '33', 'normal', 3, '1790')
+        self.assertFalse(g.ia_lointaine('24'))   # la Dordogne, voisine
+        self.assertTrue(g.ia_lointaine('67'))    # le Bas-Rhin
+        self.assertEqual((g.ai_pas('24'), g.ai_pas('67')), (1.5, 6.0))
+        pas = {'24': [], '67': []}
+        for c, t in pas.items():
+            ai = g.ais[c]
+            ai.step = (lambda ai=ai, t=t, step=ai.step: (t.append(g.t), step()))
+        places = len(g.owned_nodes('67'))
+        while g.t < 20:
+            g.step(0.1)
+        self.assertGreaterEqual(len(pas['24']), 12)
+        self.assertTrue(3 <= len(pas['67']) <= 4, pas['67'])
+        self.assertGreater(len(g.owned_nodes('67')), places)   # il rallie ses villages
+        # la guerre déclarée au joueur le réveille dans le quart de journée, et il reprend le pas complet
+        g.set_status('33', '67', 'guerre')
+        n = len(pas['67'])
+        while g.t < 20.3:
+            g.step(0.05)
+        self.assertEqual(len(pas['67']), n + 1)
+        self.assertEqual(g.ai_pas('67'), 1.5)
+
+    def test_le_sud_ouest_garde_l_ia_complete(self):
+        from fabrique import partie
+        g = partie('33')
+        self.assertFalse(any(g.ia_lointaine(c) for c in g.factions))
+        self.assertFalse(g.bataille_proche())
+
+    def test_plus_proche_place(self):
+        import math
+        import random
+        from game.ai import nearest_dist
+        rng = random.Random(1)
+        for _ in range(50):
+            pts = [(rng.uniform(0, 900), rng.uniform(0, 900)) for _ in range(rng.randint(1, 80))]
+            near = nearest_dist(pts)
+            for _ in range(10):
+                x, y = rng.uniform(-200, 1100), rng.uniform(-200, 1100)
+                self.assertEqual(near(x, y), min(math.hypot(x - a, y - b) for a, b in pts))
+
 
 if __name__ == '__main__':
     unittest.main()

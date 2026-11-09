@@ -18,6 +18,7 @@ Effets (dictionnaire fx) :
   regs      [[type, nombre]]                 régiments offerts, en garnison au chef-lieu
   research  1                                recherches en cours avancées de moitié
   chef, vassal, refus                        crise de succession (game/familles.py)
+  culte, bande                               politique religieuse, bande armée qui se lève (game/revoltes.py)
 """
 import datetime
 
@@ -288,6 +289,9 @@ def describe(g, code, fx, town=None):
     if fx.get('chef'):
         from . import familles as FM   # crise de succession (game/familles.py)
         out += FM.decrire(g, fx)
+    if fx.get('culte') or fx.get('bande'):
+        from . import revoltes as RV   # politique religieuse, bandes armées (game/revoltes.py)
+        out += RV.decrire(g, code, fx)
     return out or ['aucun effet']
 
 
@@ -354,6 +358,9 @@ def apply(g, code, fx, town=None):
     if fx.get('chef'):
         from . import familles as FM
         FM.appliquer(g, code, fx)
+    if fx.get('culte') or fx.get('bande'):
+        from . import revoltes as RV
+        RV.appliquer(g, code, fx)
     g.recompute_mods(code)
     g._dirty_income = True
 
@@ -377,7 +384,7 @@ def tick(g, d):
         if o < g.start_ord:
             continue   # avant le début de la partie : c'est de l'histoire ancienne
         for code in (ev['who'] or R.FACTIONS):
-            if code in g.factions and g.factions[code]['alive']:
+            if code in g.factions and g.factions[code]['alive'] and (not ev.get('cond') or ev['cond'](g, code)):
                 fire(g, code, ev, 'hist')
     for code, f in g.factions.items():
         if not f['alive']:

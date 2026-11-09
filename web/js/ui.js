@@ -104,6 +104,7 @@ export class UI {
       if (t.dataset.act === 'tax') this.cmd({ cmd: 'tax', value: t.value / 100 }, false);
       // douane (panneau Commerce) : hors data-act, que le clic de la page n'empêche pas de cocher
       if (t.dataset.deptSel && t.value) this.pickDept(t.value);
+      if (t.dataset.culte) this.cmd({ cmd: 'culte', value: t.value });   // politique religieuse (SPEC-RELIGION.md)
       if (t.dataset.douane) this.cmd({ cmd: t.dataset.douane, value: t.dataset.douane === 'tarif' ? +t.value : t.checked });
     });
     document.body.addEventListener('input', e => {
@@ -912,6 +913,7 @@ export class UI {
         break;
       }
       case 'policy': this.cmd({ cmd: 'policy', node: sel.id, value: d.v }); break;
+      case 'bande': this.cmd({ cmd: 'bande', value: d.v === 'lever' ? { action: 'lever', node: sel.id } : { action: d.v, id: d.id } }); break;
       case 'policy-all': this.cmd({ cmd: 'policy', node: sel.id, value: d.v, all: true }); break;
       case 'research': this.cmd({ cmd: 'research', tech: d.v }); break;
       case 'techtab': this.techTab = d.v; this.modalSig = ''; this.renderModal(); break;
@@ -1159,6 +1161,32 @@ export class UI {
       <div class="rv">${fmt(r[2])}<small class="muted" style="display:block;font-weight:400;font-size:12px">${check ? 'moral ' + r[5] : '/ ' + r[3]}</small></div></label>`;
   }
 
+  // religion, révoltes et guérilla (SPEC-RELIGION.md)
+  confession(rp) {
+    if (!rp) return 'catholique';
+    return `${rp >= 0.5 ? 'protestante' : rp >= 0.15 ? 'mixte' : 'catholique'}, ${Math.round(rp * 100)} % de réformés`;
+  }
+
+  bandeHtml(gn, ns, me) {
+    const fs = c => this.st.factions.find(f => f.code === c), name = c => this.rules.factions[c]?.name || c;
+    const R = this.rules.revoltes || { genres: {} }, res = this.st.me.res;
+    let h = '';
+    const b = ns.bd;
+    if (b) {
+      const k = R.genres[b.k] || b.k, atWar = fs(b.c)?.st === 'guerre';
+      h += `<div class="section-t">${b.k === 'rebelles' ? 'Insurrection' : b.k === 'brigands' ? 'Brigands' : 'Partisans'}</div>
+        <p class="small">${esc(b.nom[0].toUpperCase() + b.nom.slice(1))} : ${fmt(b.n)} ${k}${b.k === 'partisans' ? ` au service de ${esc(name(b.sp))}, contre ${esc(name(b.c))}` : `, contre ${esc(name(b.c))}`}${b.why && b.k === 'rebelles' ? ` (population ${esc(b.why)})` : ''}${b.sp && b.k !== 'partisans' ? `, armés par ${esc(name(b.sp))}` : ''}.</p>`;
+      const btns = [];
+      if (b.c === me && b.k !== 'partisans') btns.push(`<button class="btn" data-act="bande" data-v="apaiser" data-id="${b.id}" ${res.livres >= b.prix ? '' : 'disabled'}>${b.k === 'rebelles' ? 'Apaiser (concessions)' : 'Amnistier'}<small>${fmt(b.prix)} livres</small></button>`);
+      if (b.c !== me && b.k !== 'brigands' && atWar) btns.push(`<button class="btn" data-act="bande" data-v="soutenir" data-id="${b.id}" ${res.livres >= R.soutien.livres && res.armes >= R.soutien.armes ? '' : 'disabled'}>Soutenir<small>${R.soutien.livres} livres, ${R.soutien.armes} armes : +40 % d’hommes</small></button>`);
+      if (btns.length) h += `<div class="btns">${btns.join('')}</div>`;
+      if (b.c === me) h += `<p class="muted small">${b.k === 'rebelles' ? 'Ils prennent les places mal défendues (jamais un chef-lieu).' : b.k === 'brigands' ? 'Ils pillent convois et marchés.' : 'Ils harcèlent vos armées et vos garnisons des environs.'} Envoyez une armée sur la place pour les écraser (la cavalerie les chasse mieux) ; vos garnisons voisines les usent chaque mois.</p>`;
+    } else if (gn.dept === me && ns.o !== me && fs(ns.o)?.st === 'guerre') {
+      h += `<div class="btns"><button class="btn" data-act="bande" data-v="lever" ${res.livres >= R.lever.livres && res.armes >= R.lever.armes ? '' : 'disabled'}>Lever des partisans<small>${R.lever.livres} livres, ${R.lever.armes} armes : ${R.lever_n} hommes qui harcèlent l’occupant</small></button></div>`;
+    }
+    return h;
+  }
+
   nodePanel(id) {
     const st = this.st, gn = this.md.nodes[id], ns = st.nodes[id];
     if (!gn || !ns) return [null, ''];
@@ -1191,9 +1219,12 @@ export class UI {
       <dt>Agrandissement</dt><dd title="${esc(this.devName(gn.type, ns.d))}">${pips(ns.d)}</dd>
       <dt></dt><dd class="muted small">${esc(this.devName(gn.type, ns.d))}${own && ns.pc ? `, place pour ${fmt(ns.pc)}` : ''}</dd>
       ${own ? `<dt>Ordre public</dt><dd>${Math.round(ns.s * 100)} %</dd>` : ''}
+      <dt>Confession</dt><dd>${this.confession(ns.ref)}</dd>
       ${ns.dg ? `<dt>Dégâts</dt><dd>${Math.round(ns.dg * 100)} % en ruine</dd><dt></dt><dd class="muted small">production −${Math.round(ns.dg * (this.rules.deg_prod ?? 0.8) * 100)} %</dd>` : ''}
       <dt>Terrain</dt><dd>${terr}</dd></dl>`;
-    if (own && ns.s < 0.5) h += `<div class="warnline">Population agitée : ${ns.g && ns.g.length ? 'la garnison maintient l’ordre.' : 'sans garnison ni armée sur place, la ville peut se révolter. Baissez les impôts ou laissez-y un régiment.'}</div>`;
+    h += this.bandeHtml(gn, ns, me);
+    if (own && ns.mr) h += `<div class="warnline">Menace de révolte ${ns.mr[0]} : la population est ${esc(ns.mr[1])}.${ns.mr[0] === 'imminente' ? ' Sous 30 % d’ordre public, elle peut prendre les armes même devant une garnison.' : ''}</div>`;
+    else if (own && ns.s < 0.5) h += `<div class="warnline">Population agitée : ${ns.g && ns.g.length ? 'la garnison maintient l’ordre.' : 'sans garnison ni armée sur place, la ville peut se révolter. Baissez les impôts ou laissez-y un régiment.'}</div>`;
     if (ns.pop) h += this.popLines(ns, own);
     if (ns.as != null && ns.as < 1 && this.rules.factions[gn.dept]) {
       const home = this.rules.factions[gn.dept].name;
@@ -1223,7 +1254,7 @@ export class UI {
       if (ns.spy) h += `<p class="small">${ICON.spy.replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Un agent est en route (${this.rules.spy[ns.spy.kind].label.toLowerCase()}) : son rapport ${toursTxt(ns.spy.tn)}.</p>`;
       else {
         h += `<div class="btns">${Object.entries(this.rules.spy).map(([k, sp]) => {
-          const ok = st.me.res.livres >= sp.cost && (k !== 'saboter' || (atWar && ns.f > 0));
+          const ok = st.me.res.livres >= sp.cost && (k !== 'saboter' || (atWar && ns.f > 0)) && (k !== 'soulever' || atWar);
           return `<button class="btn" data-act="spy" data-v="${k}" ${ok ? '' : 'disabled'} title="${esc(sp.desc)}">${sp.label}<small>${sp.cost} livres, rapport au prochain tour, ${Math.round(sp.chance * 100)} % de réussite</small></button>`;
         }).join('')}</div><div class="muted small">Espionner révèle la garnison et les armées alentour pendant ${this.rules.spy_tours} tours. Saboter (en guerre) ouvre une brèche dans les remparts. Un agent démasqué fâche ${this.st.word === 'province' ? 'la province visée' : 'le département visé'}.</div>`;
       }
@@ -1848,6 +1879,15 @@ export class UI {
       [dn.tarif, dn.on, dn.front, fmt1(this.per(dn.recette || 0)), fmt1(this.per(dn.contrebande || 0)), fmt1(this.per(dnCout))]])];
   }
 
+  culteHtml(c) {
+    if (!c) return '';
+    const cur = c.options.find(o => o[0] === c.k);
+    return `<h3 class="section-t">Politique religieuse</h3>
+      <div class="row"><span class="lab">Politique</span><select class="amount" data-culte="1" aria-label="Politique religieuse" ${c.lib ? 'disabled' : ''}>${(cur ? c.options : [[c.k, c.nom, ''], ...c.options]).map(([k, nom]) => `<option value="${k}" ${k === c.k ? 'selected' : ''}>${esc(nom)}</option>`).join('')}</select></div>
+      ${cur ? `<p class="small">${esc(cur[2])}</p>` : ''}
+      <p class="muted small">${c.ref ? `Vos terres comptent ${fmt(c.ref)} réformés (${Math.round(c.part * 100)} % des habitants).` : 'Vos terres ne comptent presque aucun réformé.'} ${c.lib ? `Une politique se garde un an : pas de changement avant le ${esc(c.lib)}.` : 'Une politique se garde au moins un an.'}</p>`;
+  }
+
   prodModal() {
     const st = this.st, me = st.me;
     const s = Math.round(me.slider * 100);
@@ -1879,6 +1919,7 @@ export class UI {
         ${od.risk.length ? `<p class="warnline">${od.risk.length} place(s) menacée(s) de révolte : ordre public très bas et ni garnison ni armée sur place.</p>` : ''}
         ${unrest ? `<div class="chips" style="margin-top:6px">${unrest}</div>` : ''}
         <p class="muted small">Au-delà d’impôts « normaux », l’ordre public baisse lentement : la production de chaque place suit son ordre public. Des impôts légers pacifient plus vite les villes conquises. Famine et banqueroute agitent aussi la population ; une garnison la calme.</p>
+        ${this.culteHtml(me.culte)}
         <h3 class="section-t">Ateliers</h3>
         <label for="sl" class="small muted">Répartition des ateliers</label>
         <input id="sl" class="slider" type="range" min="0" max="100" step="5" value="${s}" data-act="slider" data-live="slider">

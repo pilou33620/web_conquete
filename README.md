@@ -72,7 +72,9 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
 - La partie est **sauvegardée automatiquement** au début de chaque mois de jeu (donc au début de chaque tour) ; après
   une coupure de courant ou un redémarrage, le Raspberry la reprend telle quelle (en pause).
 - Le tour des IA se calcule d'un coup : environ 1 seconde sur un Raspberry Pi en début de partie, 2,5 secondes après
-  un an et demi de guerres (une cinquantaine d'armées).
+  un an et demi de guerres (une cinquantaine d'armées). Sur toute la France (89 camps), 2 à 4,5 secondes par mois sur
+  un PC en début de partie, 6 à 8 après deux ans (les camps loin du joueur réfléchissent une fois par semaine,
+  SPEC-FRANCE.md) : trois à cinq fois plus sur un Raspberry Pi.
 - Commandes utiles : `sudo systemctl status web_conquete`, `sudo systemctl restart web_conquete`,
   `journalctl -u web_conquete -f`.
 
@@ -684,6 +686,44 @@ ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
   pressurer le pays rapporte sur quelques semaines, puis coûte. Famine et banqueroute l'abaissent aussi.
 - Une place agitée sans garnison ni armée peut **se révolter** et redevenir indépendante. Un régiment en garnison calme la population.
 
+### Religion, révoltes et guérilla
+(SPEC-RELIGION.md)
+- **Confession** : chaque place a sa part de réformés (panneau de la ville : catholique, mixte ou protestante) ; les
+  Cévennes, l'Alsace luthérienne, le Poitou, la Saintonge, Montauban, Castres, Montbéliard, et dans le Sud-Ouest
+  Orthez, Salies, Nérac, Tonneins, Clairac, Bergerac, Sainte-Foy. L'Ouest, le Massif central, le Pays basque et la
+  Savoie sont plus fervents que le reste du pays.
+- **Politique religieuse** (fenêtre Production et impôts), gardée au moins un an : tolérance ; contrainte (jusqu'en
+  1789 : les réformés grondent, le clergé approuve, des réformés s'exilent chez le voisin tolérant) ; dragonnades
+  (jusqu'en 1760 : conversions forcées et exil massif) ; Concordat (dès 1801 : catholiques contents, clergé salarié) ;
+  clergé soumis à l'État (dès 1790 : Constitution civile, puis anticléricalisme, puis laïcité ; biens du clergé, mais
+  les catholiques grondent, surtout dans les pays fervents). On commence en contrainte en 1700, en tolérance en 1790,
+  au Concordat en 1813 et 1870.
+- **Événements à choix** : nouveaux convertis du Béarn (1700), Camisards (1702), affaire Calas (1762), édit de
+  tolérance (1787), Constitution civile du clergé (1790), émancipation des juifs (1791), Concordat (1801), décrets
+  Ferry (1880), assemblées au Désert ; et les révoltes datées là où leurs départements existent : Tard-Avisés (1707),
+  Mandrin (1754), châteaux brûlés (1789), Vendée (1793), chouannerie (1794), guerre des Demoiselles (1829), canuts
+  (1831, 1834), journées de Juin (1848), communes de province (1871).
+- **Insurrection** : sous 30 % d'ordre public, une place peut prendre les armes même devant une garnison. Une **bande
+  d'insurgés** (fanion rouge sur la carte, ses hommes de près) attaque chaque mois la place où elle se tient, la prend
+  si elle est plus forte que sa défense (elle redevient indépendante, ou retourne à son département d'origine), puis
+  marche vers la place voisine la moins bien gardée. **Jamais un chef-lieu.** Elle grossit là où l'ordre public reste
+  bas et fond ailleurs. Le panneau de vos villes dit la menace de révolte (faible, forte, imminente) et sa cause.
+- **Brigands** (fanion noir) : dans les villages, surtout en forêt et en montagne, en guerre, en famine ; ils pillent
+  livres, marchés et convois, sans prendre de places. La gendarmerie les rend deux fois plus rares.
+- **Partisans** (fanion vert) : dans les places occupées par un ennemi en guerre avec leur pays ; ils harcèlent les
+  armées de l'occupant à moins de 25 km (ravitaillement, hommes), sa garnison, et la production de la place. La paix
+  les disperse.
+- **Réprimer** : une armée arrêtée sur la place d'une bande la combat le jour même (la cavalerie chasse mieux ; forêt,
+  marais et montagne protègent la bande) ; vos garnisons de la place et des places voisines l'usent chaque mois.
+  **Apaiser** des insurgés (0,8 livre par homme ; pour une révolte de religion, une concession aux réformés de la
+  région pendant un an) ou **amnistier** des brigands (0,5 livre par homme, la moitié s'engage).
+- **Contre l'ennemi** : **soutenir** une bande chez un camp en guerre avec vous (150 livres, 50 armes : +40 %
+  d'hommes), **lever des partisans** dans une de vos places d'origine qu'il occupe (120 livres, 40 armes, 250
+  hommes), ou l'espion « Soulever la population » (200 livres) dans une de ses places agitées.
+- **IA** : elles prennent chaque année la politique religieuse qui les sert le mieux (les dragonnades seulement par un
+  événement), envoient une armée assez forte contre chaque bande qui les vise, apaisent ou amnistient faute d'armée,
+  et soutiennent les révoltes chez l'ennemi.
+
 ### Villes : emplacements, politique et événements locaux
 Tout marche seul avec les réglages par défaut ; on intervient quand on veut, depuis le panneau de la ville.
 
@@ -838,6 +878,8 @@ game/army_actions.py actions d’armée : barricades, quartiers, garde bourgeois
 game/waterways.py    voies navigables (fleuves, canaux datés, estuaires, cabotage) et blocus
 game/ai.py           IA des départements
 game/cities.py       villes : emplacements et bâtiments, politique de la ville, événements locaux
+game/religion.py     réformés des places, politique religieuse des camps (SPEC-RELIGION.md)
+game/revoltes.py     bandes armées : insurgés, brigands, partisans ; événements religieux et révoltes datées
 game/diplomacy.py    diplomatie et commerce
 game/battle_log.py   journal des batailles (logs/batailles.jsonl) ; outils/bilan.py en fait le bilan
 game/views.py        état envoyé au navigateur (brouillard de guerre), sauvegardes
@@ -902,6 +944,9 @@ node --test tests/*.mjs                         # l'interface seule
 | `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse |
 | `tests/pietinement.test.mjs` | piétinement : rien au repos ni sous un général, un tiers de boue au passage d'un régiment de ligne, plus sous la cavalerie et l'artillerie, double sous la pluie, mêlée sur place |
 | `tests/test_degats.py` | dégâts aux bâtiments : un boulet sur une maison, le feu qui gagne puis laisse des ruines, occupants chassés, couvert selon l'état, vue à travers une ruine, même graine même incendie, `bati` depuis `since` et carte complète, sauvegarde ; canons du défenseur sur l'enceinte et qui tirent de là |
+| `tests/test_religion.py` | réformés des places (Sud-Ouest), politique de départ et anciennes sauvegardes, ordre public selon la politique et la ferveur, époques et un changement par an, exil et conversions, événements religieux |
+| `tests/test_revoltes.py` | insurrection, jamais un chef-lieu, prise d'une place et marche, combat contre une armée, apaiser, brigands (pillage, amnistie, plafond), partisans (naissance, harcèlement, paix, lever, soutenir, soulever), bande d'un événement, IA qui chasse et apaise, vues et sauvegarde |
+| `tests/religion.test.mjs` | panneau de ville (confession, bande : apaiser, amnistier, soutenir, lever des partisans) et politique religieuse du panneau Production |
 | `tests/test_villes.py` | villes et places : tailles du village à la capitale, nature et toit de chaque bâtiment, place bastionnée, murs qui ferment la ville, pas de maison sur une rue, brèche du siège, même graine même ville, temps de génération |
 
 **Essayer une nouvelle fonctionnalité sans jouer.** `tests/fabrique.py` fabrique une situation en une ligne : une
