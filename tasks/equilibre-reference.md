@@ -278,7 +278,7 @@ camp (au moins deux en vie, comme avant ; le plus grand écart d'une partie est 
 
 Armées au repos (`outils/banc_guerres.py --geo 2 --epoque 1700 --mois 120`, graines 1 à 4 : part de la puissance des
 armées des camps en guerre restée au repos après une réflexion de son IA) : 65 / 59 / 51 / 65 % avant, dont 95 % à
-garder une place menacée ; 45 / 4 / 1 / 15 % après.
+garder une place menacée ; 45 / 40 / 1 / 15 % après.
 
 Essais écartés (1700, 12 parties) :
 
@@ -295,3 +295,29 @@ Quatre de ces variantes finissaient au moins une partie sur douze avec un seul c
 frapper, se replier, détacher ce qui dépasse une fois et demie la menace (au moins un tiers de l'armée), le quart du
 plus de places tenues partout ; trêve raccourcie et deuxième défaite face à n'importe quel vainqueur en France
 seulement.
+
+### Pas de frappe dans le Sud-Ouest (9/11/2026)
+
+La durée des guerres de 1790 (−32 %) sortait de la tolérance. Cause et essais : SPEC-FRANCE.md, « Revu le jour même :
+pas de frappe dans le Sud-Ouest ». Réglage : dans le Sud-Ouest (cinq camps au plus), une armée sur une place menacée
+ne sort plus frapper (`AI.frapper`, toute la France seulement) ; elle se replie ou détache son surplus. « Avant » :
+`27d9b16` (les mêmes fichiers que plus haut) ; « final » : `21fc7c5`, mêmes commandes, `--proc 4`.
+
+| Moyenne | 1700 avant (12) | 1700 final (12) | 1790 avant (24) | 1790 final (24) |
+|---|---|---|---|---|
+| Guerres déclarées | 17,0 | 14,8 (−13 %) | 13,85 | 13,05 (−6 %) |
+| Durée d'une guerre (mois) | 3,4 | 3,1 (−9 %) | 3,4 | 2,9 (−15 %) |
+| Écart de places | 101,0 | 117,1 (+16 %) | 107,7 | 119,1 (+11 %) |
+| Camps en vie | 3,3 | 2,9 (−12 %) | 3,35 | 3,05 (−9 %) |
+| Technologies par camp | 15,6 | 15,3 | 46,6 | 46,0 |
+| Trésor (livres) | 21 123 | 22 082 (+5 %) | 39 826 | 35 529 (−11 %) |
+| Hommes par camp | 10 499 | 9 756 (−7 %) | 12 163 | 12 268 (+1 %) |
+| Mois de banqueroute / de famine | 26 / 33 | 66 / 106 | 0 / 3 | 5 / 7 |
+
+Tout est dans ±25 %. Les mois de famine de 1700 montent (106 contre 33 ; 124 dans un essai voisin, même réglage) :
+à surveiller, ce n'est pas une mesure de la tolérance. Armées au repos (`outils/banc_guerres.py --geo 2 --epoque 1700
+--mois 120`, graines 1 à 4) : 31 / 16 / 26 / 36 % (45 / 40 / 1 / 15 % avec la frappe, 65 / 59 / 51 / 65 % avant le
+chantier). Toute la France ne change pas (le code n'y change pas ; `outils/banc_france.py --epoque 1790 --mois 36` :
+85 camps en vie, 863 places prises à un camp, contre 86 et 884 : ce banc ne se reproduit pas exactement d'une exécution à l'autre ; `outils/banc_guerres.py --geo 3
+--epoque 1790 --mois 84` : 4 / 9 / 12 / 16 / 18 camps disparus après 3 / 4 / 5 / 6 / 7 ans, 2 076 places prises,
+69 traités et 18 absorptions, 43 % des armées au repos, contre 24 disparus et 41 % dans la mesure du chantier).

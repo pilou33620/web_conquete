@@ -958,8 +958,10 @@ class AI:
                 return
         elif best:
             # sur la place menacée : frapper la menace si on la bat (sans cela, deux armées se regardent d'une ville à
-            # l'autre toute la guerre), se replier si elle nous écrase, sinon garder
-            if self.frapper(a, best[1], foes, power):
+            # l'autre toute la guerre), se replier si elle nous écrase, sinon garder. Frapper : toute la France seulement
+            # (89 camps) ; dans le Sud-Ouest, l'armée qui sortait frapper livrait des chefs-lieux proches de la frontière
+            # et les guerres y duraient un tiers de moins : elle n'y fait que détacher son surplus
+            if len(g.factions) > 5 and self.frapper(a, best[1], foes, power):
                 return
             home = self.home_node(a)
             th = self.threat_at(best[1], 30, foes, power)

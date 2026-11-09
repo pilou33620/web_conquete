@@ -246,7 +246,8 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   semaines : modernisation des régiments les plus en retard d'abord, achat au marché du fer et des armes qui manquent,
   grandes armées modernisées par fournées, crochet par la place amie la plus proche quand l'ennemi est loin, et pas de
   départ pendant l'exercice. En guerre, une armée qui garde une place menacée attaque l'armée qui la menace si elle
-  la bat nettement (1,3 fois sa puissance, ou celle de la place où elle se retranche), se replie vers une ville devant
+  la bat nettement (1,3 fois sa puissance, ou celle de la place où elle se retranche ; sur toute la France seulement,
+  pas dans le Sud-Ouest où elle garde sa place), se replie vers une ville devant
   une menace écrasante (2,5 fois la défense de la place), sinon n'y laisse que ce qu'il faut pour que la place tienne
   (une fois et demie la menace) et lance le reste, s'il pèse au moins le tiers de l'armée, contre une autre cible.
 - **Équilibre des puissances** : qui tient plus de 40 % des places de l'Aquitaine inquiète tout le monde. Les autres
