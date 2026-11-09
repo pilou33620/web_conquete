@@ -38,18 +38,90 @@ class France(unittest.TestCase):
         vus = {v for v in GEO.cellnode if v != NONE}
         self.assertGreater(max(vus), 254)
 
-    def test_le_reseau_routier_relie_le_continent(self):
-        nb = {}
-        for e in GEO.edges:
-            nb.setdefault(e['a'], set()).add(e['b']); nb.setdefault(e['b'], set()).add(e['a'])
-        paris = GEO.by_name['Paris']
-        vus, pile = {paris}, [paris]
-        while pile:
-            for v in nb.get(pile.pop(), ()):
-                if v not in vus:
-                    vus.add(v); pile.append(v)
-        for nom in ('Bordeaux', 'Lille', 'Strasbourg', 'Marseille', 'Brest', 'Perpignan', 'Nice'):
-            self.assertIn(GEO.by_name[nom], vus, f'{nom} coupée de Paris')
+    def test_toutes_les_places_rejoignent_paris(self):
+        # (SPEC-FRANCE.md : les vallées des Alpes et des Pyrénées, le pays de Gex, les bourgs du rivage par la route ; Ré,
+        # Oléron, Groix, Belle-Île, Noirmoutier par un bac ; la Corse et l'île d'Yeu par la mer seulement)
+        def depuis_paris(eau):
+            nb = {}
+            for e in GEO.edges:
+                if eau or e.get('kind') != 'water':
+                    nb.setdefault(e['a'], set()).add(e['b']); nb.setdefault(e['b'], set()).add(e['a'])
+            vus, pile = {GEO.by_name['Paris']}, [GEO.by_name['Paris']]
+            while pile:
+                for v in nb.get(pile.pop(), ()):
+                    if v not in vus:
+                        vus.add(v); pile.append(v)
+            return vus
+        self.assertEqual(len(depuis_paris(True)), len(GEO.nodes))
+        route = depuis_paris(False)
+        self.assertEqual({n['name'] for n in GEO.nodes if n['id'] not in route and n['dept'] != '20'}, {"L'Île-d'Yeu"})
+        for nom in ('Soulac', 'Urdos', 'Laruns', 'Barcelonnette', 'Briançon', 'Divonne-les-Bains', 'Chamonix-Mont-Blanc',
+                    'Ars-en-Ré', 'Groix', 'Le Palais', 'Zonza'):
+            self.assertTrue(GEO.adj[GEO.by_name[nom]], nom)
+
+    def test_le_sud_ouest_des_anciennes_parties_inchange(self):
+        # (places, routes, voies d'eau et zones des places des géographies 1 et 2, calculées avant les routes des vallées)
+        import hashlib
+        import json
+        for v, h in ((1, '76e4a833d55d4ec3b68871489dfb6765846f7271'), (2, 'fba6051100642cec6bb6c307ef2d586f7e23487a')):
+            g = GeoMap(v)
+            blob = json.dumps([g.edges, g.nodes, list(g.cellnode)], sort_keys=True).encode()
+            self.assertEqual(hashlib.sha1(blob).hexdigest(), h, f'géographie {v}')
+
+    def test_ancienne_sauvegarde_aux_aretes_renumerotees(self):
+        # une partie sauvegardée avant que les arêtes changent de numéros (voies d'eau, routes des vallées) : armées en marche
+        # sur la route et en bateau sur la côte ; elle se recharge (views.recaler) et joue un mois
+        import json
+        import math
+        import simuler as S
+        from game import views as V
+        from game.ai import AI
+        g = Game(GEO, '76', 'normal', 1, '1790')
+        route, bateau, perdue = [a for a in g.armies.values() if a['owner'] != '20'][:3]
+        havre = GEO.by_name['Le Havre']
+        mer = next(GEO.edges[i] for i in GEO.adj[havre] if GEO.edges[i].get('way') == 'Ponant')
+        for a in (route, bateau, perdue):
+            cap = g.capital_of(a['owner'])
+            e, frm = (mer, havre) if a is bateau else (GEO.edges[GEO.adj[cap][0]], cap)
+            a.update(at_node=None, state='move', boat=a is bateau, edge=dict(e=e['id'], frm=frm, pos=e['len'] / 2))
+            a['x'], a['y'] = g.edge_xy(e, frm, e['len'] / 2)
+            but = GEO.by_name['Fécamp'] if a is bateau else next(n['id'] for n in g.owned_nodes(a['owner']) if n['id'] != cap)
+            a['target'] = dict(node=but)
+            a['path'] = g.plan_route(a, but, frozenset())
+            self.assertTrue(a['path'])
+        avant = {a['id']: (a['edge']['e'], a['edge']['pos'], a['path'][-1]['to']) for a in (route, bateau)}
+        d = json.loads(json.dumps(V.to_dict(g)))
+        self.assertEqual(d.pop('graphe'), GEO.empreinte)
+        n = len(GEO.edges)
+        for a in d['armies'].values():   # l'ancienne numérotation
+            if a.get('edge'):
+                a['edge']['e'] = (a['edge']['e'] + 101) % n
+            for l in a['path']:
+                if l['kind'] == 'road':
+                    l['e'] = (l['e'] + 101) % n
+        d['armies'][perdue['id']]['x'] += 5   # (son arête n'existe plus : rien ne passe là où elle était)
+        g2 = V.from_dict(GEO, d)
+
+        def valides(ici=True):   # (ici : au point de son arête ; après un mois, une bataille la déporte)
+            for a in g2.armies.values():
+                if a.get('edge'):
+                    e = GEO.edges[a['edge']['e']]
+                    self.assertIn(a['edge']['frm'], (e['a'], e['b']))
+                    self.assertLess(0 if not ici else math.dist(g2.edge_xy(e, a['edge']['frm'], a['edge']['pos']), (a['x'], a['y'])), 0.05)
+                for l in a['path']:
+                    if l['kind'] == 'road':
+                        self.assertEqual({l['frm'], l['to']}, {GEO.edges[l['e']]['a'], GEO.edges[l['e']]['b']})
+        valides()
+        for aid, (e, pos, fin) in avant.items():   # (sur la même arête, au même endroit, vers la même place)
+            a = g2.armies[aid]
+            self.assertEqual((a['edge']['e'], a['edge']['pos'], a['path'][-1]['to']), (e, pos, fin))
+        p = g2.armies[perdue['id']]
+        self.assertEqual((p['edge'], p['at_node']), (None, g.capital_of(perdue['owner'])))
+        self.assertTrue(p['path'])   # (son chemin recalculé vers sa destination)
+        g2.ais[g2.player] = AI(g2, g2.player)
+        S.play_month(g2)
+        self.assertEqual(g2.date().month, 4)
+        valides(False)
 
     def test_une_partie_de_france_joue_un_mois(self):
         import simuler as S
