@@ -173,3 +173,78 @@ politiques, sans naissance de bandes) donnaient chacune d'autres vainqueurs sans
 
 À surveiller : l'écart de places de 1790 (+23 %) et les mois de banqueroute depuis 1700 (91 contre 9 sur 21 600
 mois-camps, soit 0,4 %). Aucune partie n'a planté ; aucune révolte n'a rayé de camp (jamais de chef-lieu).
+
+## Mercenaires, douane, familles : équilibre de 1700 et de 1790 (SPEC-MERCENAIRES.md, M4, 9/11/2026)
+
+Branche `equilibre-1700`. Référence : le code d'avant le chantier (`cc2c6aa`), remesuré sur la même machine (ses
+graines 1 à 6 redonnent exactement les chiffres connus : écart 80,7 depuis 1700, 74,8 depuis 1790). « Final » : la
+branche principale `4833ef3` (religion et révoltes comprises) fusionnée avec les réglages ci-dessous (`1a29eaa`).
+
+    python3 outils/simuler.py --parties 12 --epoque 1700 --annees 30 --graine 1 --proc 4
+    python3 outils/simuler.py --parties 12 --epoque 1790 --annees 30 --graine 1 --proc 4    # puis --graine 13
+    CONQUETE_SANS_RELIGION=1 python3 outils/simuler.py …                                    # « final sans religion »
+
+### Six parties ne suffisent pas
+
+Le code de référence lui-même, avec un seul tirage au hasard de plus dans la diplomatie des IA (aucune règle changée),
+donne depuis 1700 un écart de places de **114,3** sur 12 parties, contre 87,8 sans ce tirage : une partie va de 25 à
+176 places d'écart selon le vainqueur. L'écart de 80,7 des graines 1 à 6 était un tirage bas (les bancs précédents
+de 1700 donnaient 96 à 110). Les comparaisons ci-dessous portent donc sur 12 parties depuis 1700 et 24 depuis 1790 ;
+les mois de banqueroute (de 9 à 123 sur 12 parties selon le seul hasard) ne se comparent pas.
+
+### Ce que pèse chaque nouveauté (1700, avant réglage, graines 1 à 6 puis 1 à 12)
+
+| Variante (code de `f2a7433`, premier réglage `bb5477f`) | écart | camps en vie | guerres | trésor | hommes |
+|---|---|---|---|---|---|
+| tel quel (12 parties) | 111,9 | 3,0 | 16,7 | 27 751 | 10 305 |
+| sans familles (naissances, morts, mariages des IA) | 125,8 | 3,0 | 19,8 | 26 040 | 10 180 |
+| sans régiments étrangers, douane des IA ni familles | 117,8 | 3,3 | 14,8 | 27 990 | 11 174 |
+| … ni traits des chefs (12 parties) | 114,8 | 3,3 | 17,9 | 24 267 | 10 071 |
+| tel quel, sans les traits des chefs | 100,5 | 3,2 | 15,7 | 25 613 | 10 002 |
+
+Conclusions : les familles ne sont pas en cause (le soupçon du 1er/11) ; les régiments étrangers non plus (une partie
+de 30 ans n'en voit presque aucun loué : l'IA n'en prend que sans recrues et très riche) ; même tout coupé, l'écart
+reste vers 115 et le trésor vers 24 000, donc le reste de l'écart de 6 parties était du hasard. Le trésor plus haut
+que la référence (+30 %) vient en partie des traits des chefs et en partie d'une dérive non élucidée du code postérieur
+à `cc2c6aa`, qui subsiste tout coupé (ni la mise à jour des revenus par quart de journée ni le cache des frontières de
+la France : remis comme avant, rien ne change). Ce qui reste propre au chantier : la **douane des IA**. Une partie de 1700 (graine 3) passait 86 % des mois-camps sous tarif, parce qu'un camp « pauvre » (revenu net
+sous 15 % du brut) le montait même en paix, et les IA de 1700 dépensent tout.
+
+### Réglages retenus (en plus de `bb5477f` : `MERC_MAX` 2, régiments étrangers au-delà de 6 réserves, prétendant rare, pas de mariage avant 16 ans, `DOUANE_REL` 0,25)
+
+- Douane des IA : **libre en paix**, même en déficit ; en guerre, modéré, élevé si de plus en déficit (un marchand
+  s'en tient à modéré). Le joueur garde tous ses tarifs.
+- Mariages proposés par les IA : 0,3 % par voisin et par réflexion (au lieu de 0,5 %) ; `MARIAGE_REL` 15 → 10.
+- Guerre de succession d'un prétendant éconduit : 15 % + 30 % × agressivité (au lieu de 30 % + 40 %).
+- Essayé et écarté : les IA louant des régiments étrangers dès 4 réserves en guerre, recrues ou non (écart 121,5 depuis
+  1700 : l'argent du plus riche devient des vétérans).
+
+### Mesures finales
+
+| 1700, 12 parties | Référence `cc2c6aa` | `bb5477f` seul (sans religion) | `6ecc5f2` fusionné (tarif en déficit encore) | Final | Écart du final |
+|---|---|---|---|---|---|
+| Guerres déclarées | 18,9 | 16,7 | 15,2 | 17,0 | −10 % |
+| Durée d'une guerre (mois) | 4,3 | 3,6 | 3,2 | 3,4 | −21 % |
+| Écart de places | 87,8 | 111,9 | 113,5 | 101,0 | +15 % |
+| Camps en vie | 3,65 | 3,0 | 2,9 | 3,3 | −10 % |
+| Trésor (livres) | 18 515 | 27 751 | 24 595 | 21 123 | +14 % |
+| Hommes par camp | 11 134 | 10 305 | 10 076 | 10 499 | −6 % |
+| Mois de banqueroute (tous camps) | 69 | 9 | 46 | 26 | (hasard) |
+
+Sur les seules graines 1 à 6, le final donne : guerres 18,7 (−16 % contre 22,3), écart 88,5 (+10 % contre 80,7), camps
+en vie 3,8 (0 %), trésor 18 000 (+1 %), hommes 10 804 (−4 %). Tout est dans ±25 %, à 6 comme à 12 parties.
+
+| 1790, 24 parties | Référence `cc2c6aa` | Final | Écart | Final sans religion | Écart |
+|---|---|---|---|---|---|
+| Guerres déclarées | 13,8 | 13,9 | 0 % | 14,4 | +4 % |
+| Durée d'une guerre (mois) | 3,8 | 3,4 | −11 % | 4,1 | +6 % |
+| Écart de places | 85,6 | 107,7 | **+26 %** | 92,0 | +7 % |
+| Camps en vie | 3,7 | 3,35 | −9 % | 3,6 | −3 % |
+| Trésor (livres) | 38 328 | 39 826 | +4 % | 42 959 | +12 % |
+| Hommes par camp | 13 665 | 12 163 | −11 % | 13 379 | −2 % |
+| Mois de banqueroute (tous camps) | 23 | 0 | (hasard) | 19 | (hasard) |
+
+Depuis 1790, les trois nouveautés réglées restent dans ±12 % de la référence. L'écart de places du code complet
+(+26 %, juste au-delà de la tolérance) vient de la religion et des révoltes : leur propre banc le chiffrait à +23 % (voir
+plus haut) ; il est à surveiller par ce chantier-là. Sur les seules graines 1 à 6 de 1790, l'écart du final est de
+122,3 contre 74,8 : six parties n'en disent rien (graines 7 à 12 : 111,8 contre 89,0). Aucune partie n'a planté.

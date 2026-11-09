@@ -77,6 +77,11 @@ dont le chef vieillit, meurt, se marie, et dont la succession peut tourner à la
     de mariage, avec un bouton « Proposer un mariage » ; le panneau Commerce règle le tarif et les douaniers et montre
     recettes et contrebande ; les régiments étrangers apparaissent dans la liste de recrutement des places.
 16. **Équilibre** : banc d'équilibre avant et après (1790, et 1700 pour les mercenaires de l'Ancien Régime).
+    Réglages retenus au banc (7 et 9/11/2026, `tasks/equilibre-reference.md`) : au plus 2 régiments étrangers par
+    camp, l'IA n'en loue qu'au-delà de 6 réserves ; douane des IA libre en paix, modérée en guerre, élevée en guerre et
+    en déficit (marchand : modérée au plus) ; relations −0,25 par niveau de tarif et par mois ; mariage : relations +10,
+    pas avant 16 ans, l'IA en propose rarement ; une IA ne reconnaît guère un prétendant étranger, et un prétendant
+    éconduit déclare la guerre moins souvent (15 % + 30 % × agressivité).
 
 ## Risques
 

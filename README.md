@@ -409,7 +409,7 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
     avec ardeur (+30 %).
   - **Régiments étrangers**, à leur époque : régiment suisse (jusqu'en 1792, puis de 1815 à 1830), brigade irlandaise
     et Royal-Allemand (cavalerie) jusqu'en 1791, Légion étrangère dès 1831. Loués au chef-lieu ou dans un port contre
-    des livres seulement (ni recrues ni armes), vétérans, solde double, trois au plus par camp ; sans solde, ils
+    des livres seulement (ni recrues ni armes), vétérans, solde double, deux au plus par camp ; sans solde, ils
     désertent trois fois plus vite.
   - **Mitrailleuses** (batterie de six pièces de Reffye, après la technologie « Mitrailleuse de Reffye », 1866) : un feu
     roulant à 1 200 m (2 000 au plus), redoutable contre l'infanterie à découvert, faible contre les canons et sans

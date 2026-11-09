@@ -5,7 +5,7 @@ Construit par trois agents en parallèle (une copie du dépôt et une branche ch
 - [x] M1 (agent « mercenaires ») : décisions 1 à 4 ; `UNIT_YEAR`/`UNIT_UNTIL`/`UNIT_GAP` ; tests/test_mercenaires.py
 - [x] M2 (agent « douane ») : décisions 5 à 9 et la part Commerce de 15 ; tests/test_douane.py
 - [x] M3 (agent « familles ») : décisions 10 à 14 et la part Diplomatie de 15 ; tests/test_familles.py
-- [ ] M4 : fusion, tests, banc d'équilibre 1790 et 1700, README, revue, commit et push — **arrêté en cours le 1er/11/2026**
+- [x] M4 : fusion, tests, banc d'équilibre 1790 et 1700, README, revue, commit — **fini le 9/11/2026** (branche `equilibre-1700`, à fusionner)
 
 ## Où on s'est arrêté (1er/11/2026, à la demande du joueur)
 
@@ -37,7 +37,26 @@ Construit par trois agents en parallèle (une copie du dépôt et une branche ch
 toute une partie de 1700, presque pas en 1790) et la douane des IA y contribuent chacun ; il reste environ +45 % sans
 l'un ou l'autre : les familles (mariages, vassalités par succession) sont soupçonnées, à mesurer.
 
-## Ce qui reste à faire
+## Fin de M4 (9/11/2026, branche `equilibre-1700`)
+
+Mesures complètes dans `tasks/equilibre-reference.md` (« Mercenaires, douane, familles : équilibre de 1700 et de
+1790 »). En bref :
+- le premier réglage (`bb5477f`) mesuré : 1700 sur 12 parties, écart 111,9, trésor 27 751 ; les familles n'y sont pour
+  rien (sans elles : 125,8), les régiments étrangers non plus (presque jamais loués) ; même tout coupé, l'écart reste
+  vers 115 ;
+- **six parties ne suffisent pas** : le code de référence, avec un seul tirage au hasard de plus, passe de 87,8 à
+  114,3 d'écart sur 12 parties. On compare donc sur 12 parties (1700) et 24 (1790) ;
+- réglages retenus (décisions du 9/11, le joueur ayant laissé faire) : douane des IA libre en paix même en déficit
+  (modérée en guerre, élevée en guerre et en déficit) ; mariages des IA 0,3 % au lieu de 0,5 % ; `MARIAGE_REL` 10 ;
+  guerre de succession 15 % + 30 % × agressivité. Écarté : des régiments étrangers dès 4 réserves en guerre ;
+- final, 1700 (12 parties) : écart +15 %, camps en vie −10 %, guerres −10 %, trésor +14 %, hommes −6 % ; 1790
+  (24 parties) : tout dans ±11 % sauf l'écart de places, +26 %, qui vient de la religion et des révoltes (sans elles :
+  +7 %).
+
+Reste : la fusion de `equilibre-1700` dans la branche principale ; la mise à jour du graphe (`graphify update .`) ;
+l'écart de 1790 est à suivre par le chantier religion et révoltes.
+
+## Ce qui restait à faire (1er/11/2026, fait le 9/11)
 
 1. Mesurer le premier réglage à 1700 : `python3 outils/simuler.py --parties 6 --epoque 1700 --annees 30 --graine 1 --proc 2`
    (environ 40 min ; sur une copie figée, `git worktree add`, si l'on continue à coder pendant ce temps). En
