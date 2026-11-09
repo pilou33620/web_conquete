@@ -251,8 +251,9 @@ plus haut) ; il est à surveiller par ce chantier-là. Sur les seules graines 1 
 
 ## Guerres décisives et armées actives (SPEC-FRANCE.md, 9/11/2026)
 
-« Avant » : `27d9b16` ; « après » : `fd82254` (les règles propres à toute la France, plus de cinq camps, ne changent
-rien au Sud-Ouest : trêve de deux à cinq ans, deuxième défaite face à n'importe quel vainqueur). Les graines 1 à 24 de
+« Avant » : `27d9b16` ; « après » : `fd82254`, identique pour le Sud-Ouest au code final `854dbd2` (les règles propres
+à toute la France, plus de cinq camps, n'y changent rien : trêve de deux à cinq ans, deuxième défaite face à n'importe
+quel vainqueur). Les graines 1 à 24 de
 1790 « avant » redonnent exactement le « final » de la section précédente.
 
     python3 outils/simuler.py --parties 12 --epoque 1700 --annees 30 --graine 1 --proc 3
