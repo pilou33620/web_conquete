@@ -8,8 +8,8 @@ Usage :  python3 outils/banc_france.py [--epoque 1790] [--mois 3] [--joueur 33] 
          [--sauve f.json]    (garde la partie à la fin, au format des sauvegardes, à reprendre avec --reprend f.json)
          [--profil 25]       (les 25 fonctions les plus coûteuses, cProfile, temps cumulé)
 
-À la fin : guerres en cours (et toutes celles vues à la fin d'un mois), places qui ont changé de main, camps en vie
-(le monde lointain doit rester vivant).
+À la fin : guerres en cours (et toutes celles vues à la fin d'un mois), places qui ont changé de main (et celles prises
+à un camp, comptées d'une fin de mois à la suivante), camps en vie, trésor médian (le monde lointain doit rester vivant).
 """
 import argparse
 import cProfile
@@ -46,6 +46,7 @@ def jouer_mois(g):
 
 
 VUES = set()   # guerres vues en cours à la fin d'un mois
+CONQ = dict(prec=None, n=0)   # places passées d'un camp à un autre (d'une fin de mois à la suivante)
 
 
 def bilan(g, owners0):
@@ -53,9 +54,13 @@ def bilan(g, owners0):
     guerres = {(a, b) for i, a in enumerate(codes) for b in codes[i + 1:] if g.at_war(a, b)}
     VUES.update(guerres)
     pris = sum(1 for n, o in zip(g.nodes, owners0) if n['owner'] != o)
-    vivants = sum(1 for f in g.factions.values() if f['alive'])
-    return (f'{g.date_str()} : {len(guerres)} guerres en cours ({len(VUES)} vues), {pris} places ont changé de main, '
-            f'{vivants} camps en vie')
+    now = [n['owner'] for n in g.nodes]
+    CONQ['n'] += sum(1 for a, b in zip(CONQ['prec'] or now, now) if a != b and a in g.factions and b in g.factions)
+    CONQ['prec'] = now
+    vivants = [f for f in g.factions.values() if f['alive']]
+    tresor = sorted(f['res']['livres'] for f in vivants)[len(vivants) // 2]
+    return (f'{g.date_str()} : {len(guerres)} guerres en cours ({len(VUES)} vues), {pris} places ont changé de main '
+            f'(dont {CONQ["n"]} prises à un camp), {len(vivants)} camps en vie, trésor médian {tresor:.0f} livres')
 
 
 def main():

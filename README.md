@@ -824,7 +824,8 @@ Tout marche seul avec les réglages par défaut ; on intervient quand on veut, d
   ports et gabares (pêche et négoce). Aux vendanges, les grands vins comptent double.
 - Chaque département a ses avantages et inconvénients (négoce bordelais, forges du Périgord, échassiers landais,
   grenier agenais, montagnards basques et béarnais).
-- Diplomatie : guerre, paix (avec tribut), alliance, accord commercial, présents, échanges de ressources, exigence de soumission.
+- Diplomatie : guerre, paix (avec tribut), alliance, accord commercial (quatre au plus par département), présents, échanges
+  de ressources, exigence de soumission.
 - Marché des négociants : meilleurs prix si vous tenez un port.
 
 ### Journal des batailles (pour l'équilibre)

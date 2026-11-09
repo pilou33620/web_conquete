@@ -150,10 +150,61 @@ inchangé : `outils/simuler.py --parties 2 --epoque 1790 --annees 10 --graine 1 
 Test : `tests/test_france.py` (un camp lointain réfléchit une fois par semaine et rallie ses villages, un voisin garde
 le pas complet, la guerre réveille le lointain).
 
-Vu en mesurant (non corrigé, hors sujet) : après la course aux villages neutres (un an), la France à 89 camps n'a presque
-plus de guerres (aucune du 25e au 27e mois, avant comme après) ; 157 places de la géographie 3 ne sont pas reliées
-au grand réseau des routes (Soulac, Urdos, Laruns, Barcelonnette, Briançon, le pays de Gex, les îles…) : les IA les
-visent en vain ; les trésors des IA montent à 200 000 livres.
+Vu en mesurant (non corrigé, hors sujet) : 157 places de la géographie 3 ne sont pas reliées au grand réseau des routes
+(Soulac, Urdos, Laruns, Barcelonnette, Briançon, le pays de Gex, les îles…) : les IA les visent en vain. (Le peu de
+guerres après la première année et les trésors de 200 000 livres : réglés, ci-dessous.)
+
+### Guerres entre les IA — faites le 09/11/2026
+
+Constat : après la course aux villages neutres, la France à 89 camps restait presque en paix (en 1790, 1 à 7 guerres
+en cours, 70 places prises d'un camp à l'autre en trois ans ; en 1700, 8 guerres en cours en moyenne), et les trésors
+des IA montaient sans fin (1790 : médiane 240 000 livres, le plus riche 480 000 après deux ans et demi), alors que le
+Sud-Ouest (5 camps) est équilibré.
+
+**Cause** (banc instrumenté : pour chaque camp et chaque voisin, la condition de `AI.diplomacy` qui empêche la guerre) :
+les **accords de commerce**. Une IA propose un accord à tout camp qu'elle aime un peu (relation > 5), voisin ou non ;
+dans le Sud-Ouest, cela fait au plus quatre partenaires, en France plus de 55 par camp. Or chaque accord rapporte 6 %
+du revenu brut du partenaire et +1,5 de relation à chaque diplomatie : le revenu était décuplé (580 livres par jour
+au lieu de 65 de revenu brut), et les relations entre voisins restaient vers +5 à +8, loin des −20 qu'il faut à une
+IA pour attaquer un voisin à peine moins fort. La guerre n'était donc déclarée qu'au hasard des écarts de forces
+(rapport 1,7), et l'argent qui ne trouvait plus d'emploi s'entassait. Ni la lassitude (médiane 0), ni les trêves, ni
+les alliances, ni le nombre de voisins (5 à 6 en moyenne) ne bloquaient. L'IA allégée des camps lointains n'y est
+pour rien : sa diplomatie revient à peu près aussi souvent (tous les 10 jours environ contre 11) et, sans elle, le
+banc donne autant de guerres (5 en moyenne la première année, 14 la deuxième, contre 5,5 et 14).
+
+**Correction** (décision prise seul) : **quatre accords de commerce au plus par camp** (`R.TRADE_MAX`, autant qu'il y a
+d'autres camps dans le Sud-Ouest, où rien ne change donc). Un cinquième accord est refusé, au joueur comme aux IA
+(« … a déjà 4 accords commerciaux ») ; une IA n'en propose plus au-delà. Les parties de toute la France d'avant cette
+règle : chaque IA dénonce, à sa première diplomatie, ses accords en trop (elle garde ceux des camps qu'elle aime le
+plus). Les voisins sans accord se brouillent (relation médiane −35 à −40 au bout de deux ans) et se font la guerre ; le
+revenu redevient celui du pays, dépensé en régiments, remparts et constructions.
+
+Mesures (`outils/banc_france.py`, Gironde jouée par une IA, graine 1 ; « prises » : places passées d'un camp à un
+autre, comptées d'une fin de mois à la suivante ; avant et après lancés en même temps, machine partagée) :
+
+| | 1790 avant | 1790 après | 1700 avant | 1700 après |
+|---|---|---|---|---|
+| guerres en cours, moyenne des mois 1-12 / 13-24 / 25-36 | 2,4 / 4,6 / 3,0 | 5,5 / 14,3 / 11,3 | 6,2 / 7,9 / 7,8 | 6,1 / 20,6 / 9,4 |
+| places prises d'un camp à l'autre en 3 ans | 70 | 385 | 240 | 379 |
+| chefs-lieux tombés (traités) en 3 ans | 7 | 15 | 18 | 10 |
+| camps en vie après 3 ans | 89 | 89 | 89 | 89 |
+| trésor médian / le plus riche après 3 ans (livres) | 295 000 / 559 000 | 2 150 / 30 000 | 99 500 / 324 000 | 6 300 / 33 000 |
+| régiments (médiane) après 3 ans | 88 | 30 | 55 | 31 |
+| temps d'un mois, mois 25 à 36 | 8,5 s | 5,6 s | 6,8 s | 5,4 s |
+
+En 1700, les IA d'avant, riches et près de deux fois mieux armées, prenaient davantage de chefs-lieux (18 contre 10),
+mais moins de places en tout (240 contre 379) ; après, les guerres sont plus nombreuses et plus disputées. Le mois est plus court : moins de régiments à faire marcher et à nourrir.
+
+Sur sept ans (1790, après) : 12 guerres en cours en moyenne après la première année, un peu plus de 1 000 places prises, un chef-lieu
+qui tombe par mois environ (69 traités) ; le premier camp disparaît au bout de 5 ans et demi (88 en vie), un deuxième
+à 6 ans et demi, absorbé par un voisin qui passe de 85 à 132 places ; le plus petit tombe à 3 places, puis se relève à 11. La
+paix d'un traité (cinq ans de trêve) et la règle des deux défaites en 25 ans font que les camps disparaissent
+lentement : c'est voulu (règles d'avant, communes au Sud-Ouest).
+
+Sud-Ouest inchangé : `outils/simuler.py --parties 2 --epoque 1790 --annees 10 --graine 1 --proc 2` donne exactement
+les mêmes résultats (7,5 guerres en 10 ans, trésor 28 622, 13 069 hommes). Test : `tests/test_france.py`
+(`test_les_ia_se_font_la_guerre` : chacun tenant son département, un an de diplomatie seule mène à des guerres, les
+voisins se brouillent, quatre accords au plus, une ancienne partie ramenée à quatre accords).
 
 ## Étape 2 : l'Europe et l'Afrique du Nord (mode « Europe »)
 
