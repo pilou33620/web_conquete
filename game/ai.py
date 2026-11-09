@@ -809,11 +809,12 @@ class AI:
         ennemis = {o for o in g.factions if g.at_war(code, o)}   # (89 camps : l'état de guerre relevé une fois)
         return [a for a in g.armies.values() if not a['hidden'] and a['owner'] in ennemis] if ennemis else []
 
-    def threat_at(self, nid, radius=35, foes=None, power=None):
-        """Puissance des armées ennemies à moins de radius km de la place. foes : self.foes() déjà relevé, et power :
-        puissances déjà calculées (id -> army_power), quand on passe toutes nos places en revue sans rien changer."""
+    def threat_at(self, nid, radius=35, foes=None, power=None, xy=None):
+        """Puissance des armées ennemies à moins de radius km de la place (ou du point xy). foes : self.foes() déjà
+        relevé, et power : puissances déjà calculées (id -> army_power), quand on passe toutes nos places en revue sans
+        rien changer."""
         g = self.g
-        x, y = g.node_xy(nid)
+        x, y = xy or g.node_xy(nid)
         p = 0.0
         r2 = radius * radius
         if foes is not None:
@@ -938,11 +939,14 @@ class AI:
             elif home is not None:
                 g.to_garrison(code, a['id'])
                 return
-        # défense
+        # défense : une armée ennemie au repos dans ses propres places se garde, elle ne menace que notre chef-lieu
+        # (sans cela, deux armées de force égale se regardent d'une ville à l'autre toute la guerre)
         best = None
         foes, power = self.foes(), {}
+        mobiles = [e for e in foes if not self.retranchee(e)]
+        cap = g.capital_of(code)
         for n in (g.owned_nodes(code) if foes else ()):   # (sans ennemi en vue, aucune place menacée)
-            th = self.threat_at(n['id'], 30, foes, power)
+            th = self.threat_at(n['id'], 30, foes if n['id'] == cap else mobiles, power)
             if th <= 0:
                 continue
             dfn = g.node_defense_power(n['id'], include_armies=False)
@@ -956,6 +960,13 @@ class AI:
             if self.go(a, best[1], tr=True):   # secourir une place : pas de détour
                 return
         elif best:
+            # sur la place menacée : frapper la menace si on la bat, se replier si elle nous écrase, sinon garder
+            if self.frapper(a, best[1], foes, power):
+                return
+            home = self.home_node(a)
+            if best[1] != cap and home not in (None, best[1]) \
+                    and self.threat_at(best[1], 30, foes, power) > 2.5 * g.node_defense_power(best[1]):
+                self.go(a, home, tr=True)
             return
         wars = self.wars()
         if self.rearm_detour(a, wars):
@@ -971,6 +982,33 @@ class AI:
             r = self.rally
             if r is not None and r != a['at_node']:
                 self.go(a, r, tr=not wars)   # en guerre, le front se gagne en chemin
+
+    def retranchee(self, e):
+        """Armée ennemie au repos dans une place de son camp (ou d'un allié) : elle la garde."""
+        g = self.g
+        return e['state'] == 'idle' and e['at_node'] is not None and g.friendly(e['owner'], g.nodes[e['at_node']]['owner'])
+
+    def frapper(self, a, nid, foes, power):
+        """L'armée a garde la place nid : attaque la plus forte des armées ennemies à moins de 30 km qu'elle bat
+        nettement (1,3 fois leur puissance : celle de la place et de ses défenseurs si l'ennemi s'y retranche, sinon
+        celle de toutes les armées ennemies à moins de 8 km de lui). Rend True si elle part."""
+        g = self.g
+        mine = g.army_power(a)
+        x, y = g.node_xy(nid)
+        best = None
+        for e in foes:
+            if e['state'] == 'battle' or (e['x'] - x) ** 2 + (e['y'] - y) ** 2 > 900 or e['at_node'] == a['at_node']:
+                continue
+            need = g.node_defense_power(e['at_node']) if self.retranchee(e) else \
+                self.threat_at(None, 8, foes, power, xy=(e['x'], e['y']))
+            if mine >= 1.3 * need and (best is None or need > best[0]):
+                best = (need, e)
+        if best is None:
+            return False
+        e = best[1]
+        if e['at_node'] is not None:
+            return self.go(a, e['at_node'], tr=False)
+        return bool(g.order_move(self.code, a['id'], x=e['x'], y=e['y'], tr=False)[0])
 
     @property
     def rally(self):
