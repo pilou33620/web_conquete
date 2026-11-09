@@ -158,6 +158,36 @@ class France(unittest.TestCase):
         self.assertEqual(len(pas['67']), n + 1)
         self.assertEqual(g.ai_pas('67'), 1.5)
 
+    def test_les_ia_se_font_la_guerre(self):
+        # (SPEC-FRANCE.md, « Guerres entre les IA » : un accord de commerce avec presque chaque camp rendait tout le
+        # monde ami, et riche à 200 000 livres ; quatre accords au plus, les voisins se brouillent et se font la guerre)
+        import statistics
+        from game import diplomacy as D
+        g = Game(GEO, '33', 'normal', 1, '1790')
+        for n, gn in zip(g.nodes, GEO.nodes):   # la course aux villages faite : chacun tient son département
+            if n['owner'] not in g.factions and gn['dept'] in g.factions:
+                n['owner'] = gn['dept']
+        g._own_ver += 1
+        codes = sorted(g.factions)
+        for _ in range(37):   # un an de diplomatie (une tous les dix jours), sans les armées
+            g.t += 10
+            for c in codes:
+                if c != g.player:
+                    g.ais[c].diplomacy()
+        self.assertLessEqual(max(len(f['trade']) for f in g.factions.values()), R.TRADE_MAX)
+        rel = [g.factions[a]['rel'][b] for a in codes for b in codes if a != b and D.borders(g, a, b)]
+        self.assertLess(statistics.median(rel), -10)   # (+5 avec un accord de commerce avec chacun)
+        self.assertGreaterEqual(sum(g.at_war(a, b) for i, a in enumerate(codes) for b in codes[i + 1:]), 3)
+        # un cinquième accord est refusé ; une partie d'avant la règle ne garde que ses quatre meilleurs accords
+        f = g.factions['67']
+        f['trade'] = {o: True for o in codes[:12] if o != '67'}
+        for o in f['trade']:
+            g.factions[o]['trade']['67'] = True
+        g.ais['67'].diplomacy()
+        self.assertEqual(len(f['trade']), R.TRADE_MAX)
+        autre = next(o for o in codes if o != '67' and o not in f['trade'] and g.status('67', o) != 'guerre')
+        self.assertFalse(D.act(g, '67', autre, 'commerce')[0])
+
     def test_le_sud_ouest_garde_l_ia_complete(self):
         from fabrique import partie
         g = partie('33')

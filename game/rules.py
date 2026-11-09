@@ -210,6 +210,7 @@ GENERAL_RANCON = [60, 120, 200, 320, 500]   # rançon d'un général selon son g
 SAPEUR_SIEGE = 0.04
 PROPOSAL_TOURS = 1           # validité d'une proposition reçue : le tour qui suit (turns.deadline)
 PEACE_TRUCE = 4              # trêve après une paix signée (tours)
+TRADE_MAX = 4                # accords de commerce au plus par camp (autant que d'autres camps dans le Sud-Ouest)
 
 
 def de(nom):

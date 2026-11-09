@@ -1212,6 +1212,10 @@ class AI:
         pa = max(1.0, g.faction_power(code))
         wars = self.wars()
         heg = g.hegemon()
+        # (parties de toute la France d'avant R.TRADE_MAX : un accord avec presque chaque camp ; on garde les meilleurs)
+        for o in sorted(f['trade'], key=lambda o: f['rel'].get(o, 0))[:max(0, len(f['trade']) - R.TRADE_MAX)]:
+            if D.act(g, code, o, 'fin_commerce')[0] is not True:
+                f['trade'].pop(o, None)   # (un ancien partenaire disparu)
         for o, of in g.factions.items():
             if o == code or not of['alive']:
                 continue
@@ -1271,7 +1275,7 @@ class AI:
                         D.declare_war(g, code, o)
                         wars = self.wars()
                         continue
-                if o not in f['trade'] and rel > 5 and self.rng.random() < self.pers['trade'] * 0.5:
+                if o not in f['trade'] and rel > 5 and len(f['trade']) < R.TRADE_MAX and self.rng.random() < self.pers['trade'] * 0.5:
                     self.propose(o, 'commerce')
                 elif (rel > 40 or (heg and heg not in (code, o) and rel > 0)) and self.rng.random() < 0.35 \
                         and any(g.at_war(code, x) and g.at_war(o, x) for x in g.factions):
