@@ -56,7 +56,7 @@ export class Plateau {
       const k = (t.row >> 4) * 4096 + (t.col >> 4);
       let m = blocs.get(k);
       if (!m) blocs.set(k, m = { liste: [], grp: null, x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9, vu: 0 });
-      m.liste.push(t); m.x0 = Math.min(m.x0, t.gx); m.x1 = Math.max(m.x1, t.gx); m.y0 = Math.min(m.y0, t.gy); m.y1 = Math.max(m.y1, t.gy);
+      m.liste.push(t); t.bloc = m; m.x0 = Math.min(m.x0, t.gx); m.x1 = Math.max(m.x1, t.gx); m.y0 = Math.min(m.y0, t.gy); m.y1 = Math.max(m.y1, t.gy);
     }
     this.morceaux = [...blocs.values()];
     this.file.push(() => this.routes());
@@ -113,10 +113,11 @@ export class Plateau {
   rivieres() {
     const { mp, g } = this;
     this.rivs = []; this.eau = new Map();
-    // (et les canaux ouverts dès 1700, Midi, Briare, Orléans, comme de petites rivières : le plateau est bâti une fois, les
-    // canaux plus jeunes n'y sont pas dessinés ; map.js prepEdges a noté leur année)
-    const canaux = (mp.m.ways || []).filter(w => w.year && w.year <= 1700).map(w => ({ name: w.name, rank: 3, pts: w.pts }));
-    for (const rv of [...mp.m.rivers, ...canaux]) {
+    // (et les canaux ouverts dès 1700, Midi, Briare, Orléans, comme de petites rivières ; les plus jeunes se posent à leur
+    // ouverture : majCanaux ; map.js prepEdges a noté leur année)
+    const canaux = (mp.m.ways || []).filter(w => w.year).map(w => ({ name: w.name, rank: 3, pts: w.pts, year: w.year }));
+    this.canaux = canaux.filter(c => c.year > 1700);
+    for (const rv of [...mp.m.rivers, ...canaux.filter(c => c.year <= 1700)]) {
       const pts = rv.pts;
       for (let i = 0; i < pts.length; i++) {
         const t = g.en(pts[i][0], pts[i][1]);
@@ -128,6 +129,7 @@ export class Plateau {
       // les points de la rivière, hexagone par hexagone, avec la demi-largeur peinte (eau et berges) : rien ne s'y bâtit
       for (const [x, , z, t] of g.suivre(pts, 1.5, 0)) if (t) { const [w, b] = this.largeur(rv.rank, t.t === 'ville'); if (!this.eau.has(t.i)) this.eau.set(t.i, []); this.eau.get(t.i).push([x, z, w + b]); }
     }
+    for (const t of g.liste) t.riv0 = t.riv;
     // les étangs et les lacs trop petits pour faire un hexagone d'eau : une mare par case d'eau de 1 km (decor), où rien
     // ne se bâtit non plus
     for (let c = 0; c < mp.W * mp.H; c++) {
@@ -209,13 +211,40 @@ export class Plateau {
   // (le neuf bâti avant que l'ancien parte : rien ne clignote), les tuiles recolorées
   paysage() {
     if (!this.morceaux) return;
+    this.majCanaux();
     let n = 0;
     for (const m of this.morceaux) {
-      if (!m.grp || m.attente || m.liste.every(t => (t.pays || 0) === this.sigPays(t))) continue;
+      if (!m.grp || m.attente || (!m.refaire && m.liste.every(t => (t.pays || 0) === this.sigPays(t)))) continue;
       m.attente = true; n++;
-      this.file.push(() => { m.attente = false; const old = m.grp; m.grp = this.decor(m.liste); jeter(old); });
+      this.file.push(() => { m.attente = m.refaire = false; const old = m.grp; m.grp = this.decor(m.liste); jeter(old); });
     }
     if (n || this.versionPays === undefined) { this.versionPays = (this.versionPays || 0) + 1; this.colorer(); }
+  }
+
+  // les canaux creusés après 1700 (Centre 1793… latéral à la Garonne 1856) : à l'année de leur ouverture, chacun son filet
+  // d'eau, comme ceux de 1700 ; ôté si l'année recule (l'aperçu des scénarios). Seuls les blocs du décor et les places
+  // qu'il traverse sont refaits (rien ne se bâtit dans l'eau), pas tout le plateau ; le relief reste celui de 1700.
+  majCanaux() {
+    const an = this.mp.epoque?.year || 0;
+    for (const c of this.canaux || []) {
+      if (c.year <= an === !!c.grp) continue;
+      if (!c.eau) {   // les points du canal par hexagone, avec la demi-largeur peinte (voir rivieres)
+        c.eau = new Map();
+        for (const [x, , z, t] of this.g.suivre(c.pts, 1.5, 0)) if (t) { const [w, b] = this.largeur(c.rank, t.t === 'ville'); if (!c.eau.has(t)) c.eau.set(t, []); c.eau.get(t).push([x, z, w + b]); }
+      }
+      const ouvre = !c.grp;
+      for (const [t, pts] of c.eau) {
+        const l = this.eau.get(t.i) || [];
+        if (ouvre) { l.push(...pts); this.eau.set(t.i, l); } else { const r = l.filter(p => !pts.includes(p)); if (r.length) this.eau.set(t.i, r); else this.eau.delete(t.i); }
+        t.canaux = (t.canaux || 0) + (ouvre ? 1 : -1);
+        if (!this.estEau(t)) t.riv = t.riv0 || (t.canaux ? c.rank : undefined);
+        if (t.bloc?.grp && !t.bloc.attente) t.bloc.refaire = true;
+        if (t.lieu) { const lieu = this.lieux.get(t.lieu.id); if (lieu) lieu.bati = null; }   // (voir la rebâtit)
+      }
+      if (ouvre) { const L = lot(), R = lot(); this.filet(c, L, R); c.grp = [fige(L, this.racine, { ombre: false }), fige(R, this.racine, { ombre: false })]; }
+      else { c.grp.forEach(jeter); c.grp = null; }
+      if (this.sc) this.sc.sale = true;
+    }
   }
 
   // ---------------------------------------------------------------- le décor des pays
@@ -324,22 +353,25 @@ export class Plateau {
       if (royal) { const pts = g.suivre(e.pts, 9, 0, sol); semer(e.id, 5); for (const [x, y, z, t] of pts) if (t && !t.lieu && !this.estEau(t) && rnd() < 0.5) M.arbre(L, x + entre(-1.6, 1.6), y, z + entre(-1.6, 1.6), 0.55); }
     }
     const R = lot();
-    for (const rv of this.rivs) {
-      // un tronçon par largeur : la rivière se resserre entre les quais de pierre en traversant une ville
-      let run = [], ville = false;
-      const fin = () => {
-        if (run.length > 1) { const [w, b] = this.largeur(rv.rank, ville); put(L, ruban(run.map(p => [p[0], p[1] - 0.03, p[2]]), w + b), ville ? 0xbfb39a : 0xdccf96, 0, 0, 0, 0, 0); put(R, ruban(run, w), 0x46a9dd, 0, 0, 0, 0, 0); }
-        run = run.length ? [run[run.length - 1]] : [];
-      };
-      for (const [x, y, z, t] of g.suivre(rv.pts, 0.8, 0.1)) {
-        if (!t || this.estEau(t)) { fin(); run = []; continue; }
-        const v = t.t === 'ville';
-        if (v !== ville) { run.push([x, y, z]); fin(); ville = v; }
-        run.push([x, y, z]);
-      }
-      fin();
-    }
+    for (const rv of this.rivs) this.filet(rv, L, R);
     fige(L, this.racine, { ombre: false }); fige(R, this.racine, { ombre: false });
+  }
+  // une rivière ou un canal : la berge dans L, l'eau dans R
+  filet(rv, L, R) {
+    const { g } = this;
+    // un tronçon par largeur : la rivière se resserre entre les quais de pierre en traversant une ville
+    let run = [], ville = false;
+    const fin = () => {
+      if (run.length > 1) { const [w, b] = this.largeur(rv.rank, ville); put(L, ruban(run.map(p => [p[0], p[1] - 0.03, p[2]]), w + b), ville ? 0xbfb39a : 0xdccf96, 0, 0, 0, 0, 0); put(R, ruban(run, w), 0x46a9dd, 0, 0, 0, 0, 0); }
+      run = run.length ? [run[run.length - 1]] : [];
+    };
+    for (const [x, y, z, t] of g.suivre(rv.pts, 0.8, 0.1)) {
+      if (!t || this.estEau(t)) { fin(); run = []; continue; }
+      const v = t.t === 'ville';
+      if (v !== ville) { run.push([x, y, z]); fin(); ville = v; }
+      run.push([x, y, z]);
+    }
+    fin();
   }
 
   // ---------------------------------------------------------------- les places, d'après l'état

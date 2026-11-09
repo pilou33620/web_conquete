@@ -102,8 +102,9 @@ vise les cinq départements écrits à la main, les imprévus régionaux ne joue
   lieu (Coudekerque-Branche, Fermanville, Sainte-Maxime, Gien, La Motte-Saint-Jean). Morlaix, Hyères, Fréjus et
   Propriano sont à plus de 5 km de la mer sur la grille : leur chenal passe sur la terre (côte grossière).
 - Rendu : gabares sur toutes les rivières navigables (et non plus sur toutes les grandes rivières), navires sur toutes
-  les routes du cabotage, ancres des quais. Le plateau 3D est bâti une fois : il ne dessine que les canaux ouverts dès
-  1700 (Midi, Briare, Orléans) ; les autres n'apparaissent que sur la carte en tuiles (sans WebGL), à leur ouverture.
+  les routes du cabotage, ancres des quais. Le plateau 3D comme la carte en tuiles ne dessinent
+  un canal qu'à partir de son année d'ouverture (au chargement d'une partie de 1790, 1813 ou 1870 comme quand l'année
+  avance) : voir SPEC-HEX, « Canaux datés ».
 - Coût mesuré (même machine, même moment) : 7 386 → 7 871 arêtes (58 → 543 voies d'eau), 57 → 505 quais ; bâtir les
   voies d'eau prend 0,15 s au lieu de 0,45 s (les places sont d'abord filtrées par case) ; carte envoyée au navigateur
   +0,2 Mo (14,7 Mo) ; un mois de jeu à 89 camps 10,3 s → 11,1 s environ (bruit compris).

@@ -5,7 +5,8 @@
 // l'écran et le terrain, sinon un toucher choisirait le mauvais régiment ou la mauvaise ville sans que rien ne plante.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Grille, K, versEcran, versJeu } from '../web/js/hex/moteur.js';
+import { Grille, K, versEcran, versJeu, THREE } from '../web/js/hex/moteur.js';
+import { Plateau } from '../web/js/hex/plateau.js';
 import { toScreen, toWorld, anchor } from '../web/js/battle/camera.js';
 
 test('la grille retrouve l’hexagone sous chaque point', () => {
@@ -41,4 +42,23 @@ test('caméra des batailles avec l’aplatissement k', () => {
   assert.ok(Math.abs(ax - 100) < 1e-9 && Math.abs(ay - 650) < 1e-9);
   // sans k : la vue de dessus d'avant
   assert.deepEqual(toScreen({ x: 0, y: 0, z: 1 }, { vw: 10, vh: 10 }, 1, 1), [6, 6, 1]);
+});
+
+test('plateau : un canal daté paraît à son ouverture, seul son bloc est refait', () => {
+  // un plateau sans WebGL : la grille, deux blocs bâtis, un canal de 1853 qui ne traverse que le premier
+  const g = new Grille(40, 40, 4), p = Object.create(Plateau.prototype), a = { grp: 1 }, b = { grp: 1 };
+  for (const t of g.liste) { t.t = 'plaine'; t.top = 0; t.bloc = t.gx < 20 ? a : b; }
+  Object.assign(p, { g, eau: new Map(), lieux: new Map(), racine: new THREE.Group(), mp: { epoque: { year: 1790 } },
+    canaux: [{ name: 'canal de la Marne au Rhin', rank: 3, year: 1853, pts: [[4, 6], [16, 30]] }] });
+  const c = p.canaux[0];
+  p.majCanaux();
+  assert.equal(c.grp, undefined); assert.equal(p.eau.size, 0); assert.ok(!a.refaire && !b.refaire);
+  p.mp.epoque.year = 1870; p.majCanaux();
+  assert.equal(c.grp.length, 2); assert.ok(p.eau.size > 0 && p.racine.children.length === 2);
+  assert.ok(a.refaire && !b.refaire);
+  assert.ok([...c.eau.keys()].every(t => t.riv === 3));
+  // l'année recule (l'aperçu d'un autre scénario) : le canal s'en va, l'eau aussi
+  p.mp.epoque.year = 1790; p.majCanaux();
+  assert.equal(c.grp, null); assert.equal(p.eau.size, 0); assert.equal(p.racine.children.length, 0);
+  assert.ok([...c.eau.keys()].every(t => t.riv === undefined));
 });

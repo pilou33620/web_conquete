@@ -66,6 +66,11 @@ Tous les calques 2D appliquent ce `K` sur l'axe vertical : `map.js` (`toScreen`,
   (`ambient.js`), ailes des moulins 3D qui tournent (le plateau se redessine alors 15 fois par seconde, dès 15 px/km).
 - Vie : figures grossies 4 fois (`carte/ambiance.js`, `echellePlateau`), visibles dès 60 px/km ; zoom limité à 240 px/km.
 - Le décor se bâtit par paquets pendant les premières images (8 ms par image).
+- Canaux datés (`majCanaux`, appelé par `paysage`) : ceux de 1700 (Midi, Briare, Orléans) sont des rivières du
+  plateau ; chacun des autres (Crozat 1738, Centre 1793… latéral à la Garonne 1856) a son filet d'eau, de même allure,
+  posé à l'année d'ouverture (`epoque.year`) et ôté si l'année recule (aperçu des scénarios). **Décisions** : seuls les
+  blocs du décor et les places qu'il traverse sont refaits (rien ne s'y bâtit dans l'eau), pas tout le plateau ; le
+  relief reste celui de 1700 (un canal ouvert ensuite n'aplanit pas les collines, comme ses écluses).
 - Étangs et lacs trop petits pour faire un hexagone d'eau : une mare par case d'eau de 1 km, avec sa grève et ses
   roseaux ; rien ne s'y bâtit.
 - Le paysage des siècles (`epoque.js`, 2c), selon les marques du camp qui tient chaque hexagone : les semis de pins
