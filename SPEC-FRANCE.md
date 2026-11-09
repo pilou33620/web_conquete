@@ -180,7 +180,8 @@ le Somport monte désormais jusqu'à Urdos.
 Bacs créés : Ré (La Rochelle – La Flotte, La Flotte – Ars-en-Ré), Oléron (La Tremblade – Saint-Trojan), Belle-Île
 (Le Palais – Saint-Pierre-Quiberon), Noirmoutier (Pornic), Groix (Lorient), Soulac – Royan (la pointe de Grave),
 Saint-Malo – Saint-Briac (la Rance), Camaret – Lanvéoc, Saint-Pierre-Quiberon – Locmariaquer, Berck – Fort-Mahon
-(l'Authie), et deux bacs dus à la côte grossière (Guérande – Piriac, Notre-Dame-de-Monts – Saint-Urbain). Décision :
+(l'Authie), et deux bacs dus à la côte grossière (Guérande – Piriac, Notre-Dame-de-Monts – Saint-Urbain) ; ces deux-là
+et trois autres faux bacs sont devenus des routes le 09/11/2026 (voir « Bacs de la côte grossière »). Décision :
 ces bacs sont des routes (`ferry`), pas des voies d'eau : il aurait fallu recalculer les tracés en mer
 (`outils/voies_eau.py`) pour des îles sans port ; et aucune place n'est retirée des cibles des IA.
 
@@ -210,6 +211,74 @@ Coût : carte envoyée au navigateur 14,67 → 14,70 Mo (1,892 → 1,898 Mo comp
 le chargement d'une sauvegarde à recaler prend moins d'un dixième de seconde. Mois de jeu (`banc_france.py --epoque
 1790 --mois 3`, avant et après lancés ensemble) : 2,7 / 3,9 / 5,8 s avant, 2,6 / 4,3 / 6,0 s après (moyenne 4,1 → 4,3 s, dans
 le bruit de la machine partagée) ; 1 694 places changées de main avant, 1 714 après.
+
+### Bacs de la côte grossière, routes de montagne et canaux vus dans le navigateur — faits le 09/11/2026
+
+**Bacs.** Sur la grille au km, la côte est très simplifiée (178 points pour toute la Loire-Atlantique) : Piriac,
+Notre-Dame-de-Monts, Camaret, Saint-Malo, Soulac, Fort-Mahon tombent 4 à 9 km en mer, la presqu'île de Quiberon perd
+son isthme et l'île de Ré n'existe presque pas. Aucun critère tiré de la grille ne sépare ces bourgs d'une vraie île
+(Piriac est à 6 cases de mer de la côte, Groix à 8, Camaret à 9) : **décision**, une table `geo.ROUTES_COTE_3` des
+routes que la côte refuse, posées avant de relier les morceaux (`_relier`), et des vrais bacs que ces routes auraient
+remplacés (`_relier` ne fait qu'un lien par morceau), posés après. Chaque bac de la géographie 3, vérifié sur la carte
+réelle :
+
+| Bac (avant) | Bras de mer ? | Après |
+|---|---|---|
+| Blaye – Fort Médoc | oui, la Gironde (géographie 1) | gardé |
+| Soulac – Royan | oui, la pointe de Grave | gardé ; Soulac a aussi la route de Lesparre (royale, comme dans le Sud-Ouest) |
+| La Rochelle – La Flotte | oui, le pertuis Breton (Ré) | gardé |
+| Ars-en-Ré – La Flotte | non, la même île (isthme du Martray) | route |
+| La Tremblade – Saint-Trojan | oui, Maumusson (Oléron) | gardé |
+| Camaret – Lanvéoc | non, la même presqu'île de Crozon | route |
+| Saint-Malo – Saint-Briac | oui, la Rance | gardé ; Saint-Malo a aussi la route de Cancale (il n'avait que le bac) |
+| Pornic – Noirmoutier | oui, la baie de Bourgneuf | gardé |
+| Guérande – Piriac | non | route |
+| Lorient – Groix | oui | gardé |
+| Le Palais – Saint-Pierre-Quiberon | oui (Belle-Île) | gardé |
+| Saint-Pierre-Quiberon – Locmariaquer | non : la presqu'île tient à la terre par l'isthme de Penthièvre | route Saint-Pierre-Quiberon – Étel |
+| Berck – Fort-Mahon | oui, la baie d'Authie | gardé ; Fort-Mahon a aussi la route de Rue |
+| Notre-Dame-de-Monts – Saint-Urbain | non | route |
+
+14 bacs avant, 9 après ; 7 983 → 7 986 arêtes, 5 bacs devenus routes, 3 routes ajoutées (Saint-Malo – Cancale,
+Soulac – Lesparre, Fort-Mahon – Rue), rien d'autre ne change. Camaret – Lanvéoc et Locmariaquer étaient donnés pour vrais :
+ils ne traversent pourtant aucun bras de mer qu'une route ne contourne. Test : `test_bacs_des_vrais_bras_de_mer_seulement`
+(la liste exacte des bacs, et les routes de terre de Piriac, Notre-Dame-de-Monts, Ré, Camaret, Quiberon). Une sauvegarde
+d'avant ces routes se recharge (`views.recaler`, banc de la section précédente et `test_ancienne_sauvegarde_aux_aretes_renumerotees`).
+
+**Vu dans le navigateur** (Playwright, Chromium avec WebGL logiciel ; captures dans
+`/tmp/claude-0/-home-user-web-conquete/9d37804e-26e6-5a03-b5de-d55815175cd9/scratchpad/verifs/`, `apres/` après les
+corrections) :
+
+- Routes de montagne : la Maurienne (Saint-Michel – Modane), la vallée d'Aspe (Oloron – Accous – Urdos, route royale le
+  long du gave) se dessinent sur le plateau et sur la carte en tuiles. Mais sur le plateau, **les cônes des sommets
+  cachaient les routes** de haute montagne : Barcelonnette – Embrun et les routes du pays de Gex étaient invisibles
+  (`gl-Barcelonnette_Embrun-z14.png`, `gl-Divonne-les-Bains-z20.png`). Correction (`hex/plateau.js`) : comme les
+  vallées des rivières, un hexagone de montagne ou de haute montagne qu'une route traverse est mis à plat (collines) ;
+  les routes paraissent au fond de leurs vallées (`apres/gl-Divonne-les-Bains-z20.png`, `apres/gl-Modane-z12.png`).
+  Le tracé d'une route de montagne reste celui de la grille : Barcelonnette – Embrun compte 46 km (le chemin par la
+  terre, `_par_terre`) mais se dessine presque droit, la grille ne connaissant pas la vallée de l'Ubaye.
+- Bacs : le plateau ne dessinait rien sur l'eau (la route s'arrêtait au rivage) : **trait manquant**. Correction : la
+  traversée en tirets bruns à fleur d'eau (`apres/gl-La_Rochelle_La_Flotte-z18.png`, Oléron, Soulac – Royan,
+  Blaye). Carte en tuiles : les tirets étaient à l'échelle de la route (2 à 3 px, on aurait dit un trait plein) ; ils
+  font désormais au moins 6 px, sombres, sans liseré (`apres/tuiles-La_Rochelle_La_Flotte-z18.png`).
+- Le plateau dessinait aussi **les voies d'eau comme des routes** (ruban de route le long des rivières navigables et
+  des canaux, même avant l'ouverture d'un canal, par exemple le long de la Sèvre à Marans) : `Plateau.routes` les saute
+  désormais (les rivières et les canaux ont leur filet d'eau).
+- Pas corrigé : l'île de Ré et une partie d'Oléron sont de la mer sur le plateau (côte de la grille) ; la route
+  Ars-en-Ré – La Flotte ne s'y voit donc pas (elle se voit sur la carte en tuiles), comme le bout en mer des routes
+  des bourgs tombés en mer (Piriac, Soulac…).
+
+**Un canal qui ouvre en cours de partie** (`verifs/canal.cjs`) : partie de Saône-et-Loire commencée en 1790, jouée
+par le serveur tour après tour (`tour`/`go`, batailles en « Automatique », chaque décision réglée par la commande
+`event`), la page ouverte. Jouée en vrai, la partie est perdue en avril 1791 (le camp du joueur, sans personne pour
+le défendre, est rayé de la carte ; six décisions réglées, aucune erreur) : le plateau de 1790 n'a pas le canal du
+Centre (`canal-avant-1790.png`). La partie a donc été avancée côté serveur jusqu'au 1er décembre 1792
+(`outils/banc_france.py --joueur 71 --avant 32 --mois 1 --sauve saves/canal-1792.json`, le camp joué par une IA),
+rechargée dans le serveur (`/api/load`), puis décembre 1792 joué par « Tour suivant » : au 1er décembre, pas de canal
+(`canal-avant.png`) ; au 1er janvier 1793, l'état reçu par la page change d'année et le canal paraît sans recharger
+(`canal-apres.png`, Paray-le-Monial – Montceau – Écuisses – Chalon) ; page rechargée, il y est encore
+(`canal-recharge.png`). Aucune erreur de console. Rien à corriger dans `majCanaux` ; mais avant la correction des voies
+d'eau ci-dessus, un ruban de route aurait suivi le tracé du canal dès 1790.
 
 ### Guerres entre les IA — faites le 09/11/2026
 
