@@ -363,6 +363,10 @@ def act(game, frm, to, action, amount=0, give=None, get=None):
             return False, "Vos casernes ne peuvent pas loger autant de recrues."
         if give[0] == 'livres' and amount + give[1] > f['res']['livres']:
             return False, "Livres insuffisantes pour l'échange et le tribut."
+    if action == 'commerce' and max(len(f['trade']), len(game.factions[to]['trade'])) >= R.TRADE_MAX:
+        # (toute la France : un accord avec chacun des 88 autres camps décuplait les revenus et apaisait tout le monde)
+        qui = 'Vous avez' if len(f['trade']) >= R.TRADE_MAX else f"{game.fname(to)} a"
+        return False, f"{qui} déjà {R.TRADE_MAX} accords commerciaux : c'est le plus qu'un pays puisse suivre."
     if action == 'prisonniers' and not a_echanger(game, frm, to):
         return False, "Personne n'a de prisonniers à échanger."
     if action == 'mariage' and (why := FM.refus_mariage(game, frm, to)):
