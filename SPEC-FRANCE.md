@@ -210,7 +210,9 @@ dernière revenue à sa place, chemin recalculé) et joue un mois.
 
 Coût : carte envoyée au navigateur 14,67 → 14,70 Mo (1,892 → 1,898 Mo compressée) ; la carte se recalcule une fois
 (`map_cache.json`, 75 s environ sur la machine de développement chargée ; les géographies 1 et 2 aussi, identiques) ;
-le chargement d'une sauvegarde à recaler prend moins d'un dixième de seconde. Mois de jeu : MESURE.
+le chargement d'une sauvegarde à recaler prend moins d'un dixième de seconde. Mois de jeu (`banc_france.py --epoque
+1790 --mois 3`, avant et après lancés ensemble) : 2,7 / 3,9 / 5,8 s avant, 2,6 / 4,3 / 6,0 s après (moyenne 4,1 → 4,3 s, dans
+le bruit de la machine partagée) ; 1 694 places changées de main avant, 1 714 après.
 
 ## Étape 2 : l'Europe et l'Afrique du Nord (mode « Europe »)
 
