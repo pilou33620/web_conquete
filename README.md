@@ -231,18 +231,24 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   grains (greniers), gelées et grand millésime (vignobles), avalanches, loups et colporteurs (montagnes), navire de
   retour et faillite (négoce), tempête, naufrage et pêche miraculeuse (côtes).
 - **Traités plutôt qu'anéantissement** : quand un chef-lieu tombe, le vaincu signe un traité. Il cède les places
-  occupées, verse un tribut, récupère son chef-lieu et doit respecter une trêve de cinq ans. Le congrès rétablit aussi
-  la paix entre le vaincu et ses autres ennemis pour deux ans (les alliés eux-mêmes respectent ces trêves). Le vaincu
-  n'est absorbé que s'il est déjà écrasé (un quart de ses places de départ, ou 3 places) ou si le même vainqueur le
-  fait plier une seconde fois en moins de 25 ans. Cela vaut aussi pour vous : perdre son chef-lieu n'est plus la fin
-  de la partie.
+  occupées, verse un tribut, récupère son chef-lieu et doit respecter une trêve de cinq ans (en partie de toute la
+  France : de deux à cinq ans, d'autant plus courte qu'il garde peu de places face à son vainqueur ; deux ans sous le
+  cinquième). Le congrès rétablit aussi la paix entre le vaincu et ses autres ennemis pour deux ans (les alliés
+  eux-mêmes respectent ces trêves). Le vaincu n'est absorbé que s'il est déjà écrasé (réduit au quart du plus de places
+  qu'il a tenues, ou de ses places de départ, ou à 3 places) ou si le même vainqueur le fait plier une seconde fois en
+  moins de 25 ans (en partie de toute la France : n'importe quel vainqueur, s'il a perdu le quart de ce qu'il a tenu au
+  plus fort). Cela vaut aussi pour vous : perdre son
+  chef-lieu n'est plus la fin de la partie.
 - **IA** : elles ne thésaurisent plus. Au-delà d'un trésor de guerre (une quarantaine de jours de revenu), elles
   allègent leurs impôts, agrandissent leurs villes, fortifient leurs frontières, cherchent dans toutes les branches,
   vendent leurs surplus d'armes et d'outils et font des présents aux voisins redoutés. En guerre, elles puisent dans
   ce trésor pour lever des troupes. Elles généralisent aussi un nouvel armement ou une nouvelle manœuvre en quelques
   semaines : modernisation des régiments les plus en retard d'abord, achat au marché du fer et des armes qui manquent,
   grandes armées modernisées par fournées, crochet par la place amie la plus proche quand l'ennemi est loin, et pas de
-  départ pendant l'exercice.
+  départ pendant l'exercice. En guerre, une armée qui garde une place menacée attaque l'armée qui la menace si elle
+  la bat nettement (1,3 fois sa puissance, ou celle de la place où elle se retranche), se replie vers une ville devant
+  une menace écrasante (2,5 fois la défense de la place), sinon n'y laisse que ce qu'il faut pour que la place tienne
+  (une fois et demie la menace) et lance le reste, s'il pèse au moins le tiers de l'armée, contre une autre cible.
 - **Équilibre des puissances** : qui tient plus de 40 % des places de l'Aquitaine inquiète tout le monde. Les autres
   camps s'en méfient, s'allient plus volontiers et se joignent à ses guerres. Tenir beaucoup de pays mal assimilés
   accroît la lassitude (surextension). Enfin, un pays absorbé depuis plus de dix ans peut se soulever si son ancien
@@ -948,6 +954,7 @@ node --test tests/*.mjs                         # l'interface seule
 | `tests/test_degats.py` | dégâts aux bâtiments : un boulet sur une maison, le feu qui gagne puis laisse des ruines, occupants chassés, couvert selon l'état, vue à travers une ruine, même graine même incendie, `bati` depuis `since` et carte complète, sauvegarde ; canons du défenseur sur l'enceinte et qui tirent de là |
 | `tests/test_religion.py` | réformés des places (Sud-Ouest), politique de départ et anciennes sauvegardes, ordre public selon la politique et la ferveur, époques et un changement par an, exil et conversions, événements religieux |
 | `tests/test_revoltes.py` | insurrection, jamais un chef-lieu, prise d'une place et marche, combat contre une armée, apaiser, brigands (pillage, amnistie, plafond), partisans (naissance, harcèlement, paix, lever, soutenir, soulever), bande d'un événement, IA qui chasse et apaise, vues et sauvegarde |
+| `tests/test_guerres.py` | guerres décisives : un camp réduit au quart de ce qu'il a tenu absorbé dès la chute de son chef-lieu, sinon un traité et cinq ans de trêve (Sud-Ouest) ; armées des IA : attaquer l'armée qui menace sa place quand on la bat, pas contre plus fort, n'y laisser que ce qu'il faut. Banc des guerres en partie longue : `python3 outils/banc_guerres.py --geo 3 --mois 36` (traités, camps absorbés, raisons des armées au repos) |
 | `tests/religion.test.mjs` | panneau de ville (confession, bande : apaiser, amnistier, soutenir, lever des partisans) et politique religieuse du panneau Production |
 | `tests/test_villes.py` | villes et places : tailles du village à la capitale, nature et toit de chaque bâtiment, place bastionnée, murs qui ferment la ville, pas de maison sur une rue, brèche du siège, même graine même ville, temps de génération |
 

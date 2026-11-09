@@ -809,11 +809,12 @@ class AI:
         ennemis = {o for o in g.factions if g.at_war(code, o)}   # (89 camps : l'état de guerre relevé une fois)
         return [a for a in g.armies.values() if not a['hidden'] and a['owner'] in ennemis] if ennemis else []
 
-    def threat_at(self, nid, radius=35, foes=None, power=None):
-        """Puissance des armées ennemies à moins de radius km de la place. foes : self.foes() déjà relevé, et power :
-        puissances déjà calculées (id -> army_power), quand on passe toutes nos places en revue sans rien changer."""
+    def threat_at(self, nid, radius=35, foes=None, power=None, xy=None):
+        """Puissance des armées ennemies à moins de radius km de la place (ou du point xy). foes : self.foes() déjà
+        relevé, et power : puissances déjà calculées (id -> army_power), quand on passe toutes nos places en revue sans
+        rien changer."""
         g = self.g
-        x, y = g.node_xy(nid)
+        x, y = xy or g.node_xy(nid)
         p = 0.0
         r2 = radius * radius
         if foes is not None:
@@ -956,6 +957,16 @@ class AI:
             if self.go(a, best[1], tr=True):   # secourir une place : pas de détour
                 return
         elif best:
+            # sur la place menacée : frapper la menace si on la bat (sans cela, deux armées se regardent d'une ville à
+            # l'autre toute la guerre), se replier si elle nous écrase, sinon garder
+            if self.frapper(a, best[1], foes, power):
+                return
+            home = self.home_node(a)
+            th = self.threat_at(best[1], 30, foes, power)
+            if best[1] != g.capital_of(code) and home not in (None, best[1]) and th > 2.5 * g.node_defense_power(best[1]):
+                self.go(a, home, tr=True)
+            else:
+                self.detacher(a, best[1], th, taken)
             return
         wars = self.wars()
         if self.rearm_detour(a, wars):
@@ -971,6 +982,62 @@ class AI:
             r = self.rally
             if r is not None and r != a['at_node']:
                 self.go(a, r, tr=not wars)   # en guerre, le front se gagne en chemin
+
+    def retranchee(self, e):
+        """Armée ennemie au repos dans une place de son camp (ou d'un allié) : elle la garde."""
+        g = self.g
+        return e['state'] == 'idle' and e['at_node'] is not None and g.friendly(e['owner'], g.nodes[e['at_node']]['owner'])
+
+    def frapper(self, a, nid, foes, power):
+        """L'armée a garde la place nid : attaque la plus forte des armées ennemies à moins de 30 km qu'elle bat
+        nettement (1,3 fois leur puissance : celle de la place et de ses défenseurs si l'ennemi s'y retranche, sinon
+        celle de toutes les armées ennemies à moins de 8 km de lui). Rend True si elle part."""
+        g = self.g
+        mine = g.army_power(a)
+        x, y = g.node_xy(nid)
+        best = None
+        for e in foes:
+            if e['state'] == 'battle' or (e['x'] - x) ** 2 + (e['y'] - y) ** 2 > 900 or e['at_node'] == a['at_node']:
+                continue
+            need = g.node_defense_power(e['at_node']) if self.retranchee(e) else \
+                self.threat_at(None, 8, foes, power, xy=(e['x'], e['y']))
+            if mine >= 1.3 * need and (best is None or need > best[0]):
+                best = (need, e)
+        if best is None:
+            return False
+        e = best[1]
+        if e['at_node'] is not None:
+            return self.go(a, e['at_node'], tr=False)
+        return bool(g.order_move(self.code, a['id'], x=e['x'], y=e['y'], tr=False)[0])
+
+    def detacher(self, a, nid, th, taken):
+        """L'armée a garde la place nid, menacée par th : elle n'y laisse que ce qu'il faut pour que la place tienne
+        (sa défense vaut une fois et demie la menace) et lance le reste, s'il pèse au moins le tiers de l'armée, vers une
+        cible. Rend True si un détachement part."""
+        g, code = self.g, self.code
+        mine = g.army_power(a)
+        dfn0 = g.node_defense_power(nid, include_armies=False)
+        fb = (g.node_defense_power(nid) - dfn0) / max(1.0, mine)   # (remparts : un défenseur y compte plus)
+        if fb <= 0 or len(a['regs']) < 2:
+            return False
+        need = max(0.0, 1.5 * th - dfn0) / fb
+        regs = sorted(a['regs'], key=lambda r: -g.reg_power(code, r, 'Plaine', a=a))
+        kept = 0.0
+        for i, r in enumerate(regs):
+            if kept >= need and i:   # (au moins un régiment reste)
+                break
+            kept += g.reg_power(code, r, 'Plaine', a=a)
+        else:
+            return False
+        if mine - kept < mine / 3:
+            return False
+        ok, bid = g.split(code, a['id'], [r['id'] for r in regs[i:]])
+        if not ok:
+            return False
+        if self.pick_target(g.armies[bid], taken, self.wars()):
+            return True
+        g.merge(code, a['id'], bid)   # rien à prendre : le détachement rentre dans le rang
+        return False
 
     @property
     def rally(self):

@@ -2011,7 +2011,7 @@ export class UI {
           <li><b>Impôts</b> (fenêtre Production) : plus d’argent tout de suite, mais l’ordre public baisse ; une ville agitée sans garnison peut se révolter.</li>
           <li>La partie est sauvegardée automatiquement chaque mois ; elle reprend au redémarrage du serveur.</li>
           <li>La pluie mouille la poudre, la neige ferme les cols, l’hiver vide les greniers. Les récoltes arrivent en été et en automne.</li>
-          <li>Prenez tous les chefs-lieux, ou obtenez la soumission des autres camps. Un camp dont le chef-lieu tombe signe un traité (places cédées, tribut, trêve de cinq ans) ; il n’est rayé de la carte que s’il est déjà écrasé, ou si le même vainqueur le fait plier deux fois en 25 ans. Vous aussi.</li>
+          <li>Prenez tous les chefs-lieux, ou obtenez la soumission des autres camps. Un camp dont le chef-lieu tombe signe un traité (places cédées, tribut, trêve de deux à cinq ans, d’autant plus courte qu’il est petit face à son vainqueur) ; il n’est rayé de la carte que s’il est déjà écrasé (réduit au quart de ce qu’il a tenu au plus fort), ou si le même vainqueur le fait plier deux fois en 25 ans. Vous aussi.</li>
           <li>Raccourcis : ${this.st.tour && this.st.tour.on ? 'espace pour le tour suivant (ou continuer le tour des IA)' : 'espace pour la pause, 1 à 6 pour la vitesse'}, Échap pour annuler.</li>
         </ul>
       </div></div>`;

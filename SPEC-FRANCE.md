@@ -325,12 +325,97 @@ Sur sept ans (1790, après) : 12 guerres en cours en moyenne après la première
 qui tombe par mois environ (69 traités) ; le premier camp disparaît au bout de 5 ans et demi (88 en vie), un deuxième
 à 6 ans et demi, absorbé par un voisin qui passe de 85 à 132 places ; le plus petit tombe à 3 places, puis se relève à 11. La
 paix d'un traité (cinq ans de trêve) et la règle des deux défaites en 25 ans font que les camps disparaissent
-lentement : c'est voulu (règles d'avant, communes au Sud-Ouest).
+lentement : c'est voulu (règles d'avant, communes au Sud-Ouest ; revu le jour même, voir « Guerres décisives et
+armées actives »).
 
 Sud-Ouest inchangé : `outils/simuler.py --parties 2 --epoque 1790 --annees 10 --graine 1 --proc 2` donne exactement
 les mêmes résultats (7,5 guerres en 10 ans, trésor 28 622, 13 069 hommes). Test : `tests/test_france.py`
 (`test_les_ia_se_font_la_guerre` : chacun tenant son département, un an de diplomatie seule mène à des guerres, les
 voisins se brouillent, quatre accords au plus, une ancienne partie ramenée à quatre accords).
+
+### Guerres décisives et armées actives — faites le 09/11/2026
+
+**Constat** (`outils/banc_guerres.py --geo 3 --epoque 1790 --mois 84`, code d'avant `27d9b16`, Gironde jouée par une
+IA) : sept ans de guerres (11 en cours en moyenne, 923 places prises d'un camp à l'autre, 50 traités) et **aucun camp
+disparu**. Les vaincus gardent 12 à 82 places à la chute de leur chef-lieu (médiane 31) : la guerre se résume à un
+coup de main sur un chef-lieu tout proche de la frontière, suivi d'un traité qui ne coûte que les places occupées et
+protège le vaincu cinq ans. La règle du camp « écrasé » (un quart de ses places de départ) ne compte que le chef-lieu
+et les villes (3 à 8 places), soit 3 places en pratique, alors que chaque camp en tient une quarantaine après la course
+aux villages ; la deuxième défaite face au même vainqueur en 25 ans n'arrive presque jamais avec cinq ans de trêve.
+**Armées** : 78 % de la puissance des armées des camps en guerre reste au repos après une réflexion de son IA, à 89 %
+pour garder une place menacée, le plus souvent plus forte que la menace (dans le Sud-Ouest, 1700, graines 1 à 4, dix
+ans : 51 à 65 %, à 95 % pour garder). Cause (`AI.army_think`) : une place est menacée quand les armées ennemies à moins
+de 30 km dépassent 0,8 fois sa défense propre, et l'armée qui s'y trouve y reste tant que dure la menace, quel que soit
+le rapport de forces. Or cette armée ennemie est le plus souvent au repos dans sa propre place voisine, qu'elle garde
+pour la même raison : deux armées se regardent d'une ville à l'autre toute la guerre.
+
+**Décisions** (prises seul, le joueur absent) :
+
+- **Armée sur une place menacée** : elle frappe la plus forte des armées ennemies à moins de 30 km qu'elle bat
+  nettement (`AI.frapper` : 1,3 fois la puissance des armées ennemies à moins de 8 km de celle-ci, ou la défense de la
+  place où elle se retranche, garnison, remparts et armées compris) ; sinon, devant une menace écrasante (2,5 fois la
+  défense de la place, armée comprise ; jamais au chef-lieu), elle se replie vers la ville la plus proche ; sinon, elle
+  n'y laisse que ce qu'il faut pour que la place tienne (`AI.detacher` : une défense d'une fois et demie la menace,
+  remparts comptés) et lance le reste, s'il pèse au moins le tiers de l'armée, vers la meilleure cible à sa portée
+  (sans cible, le détachement rentre dans le rang). Pas de suicide : ni attaque sans 1,3 fois l'adversaire, ni place
+  vidée sous la menace.
+- **Écrasé** : un camp dont le chef-lieu tombe est absorbé s'il ne tient plus que le quart du **plus de places qu'il a
+  tenues** (`pic`, relevé chaque mois ; une ancienne sauvegarde le reprend au premier mois), de ses places de départ, ou
+  3 places. Partout.
+- **Toute la France (plus de cinq camps)** : la trêve d'un traité dure de deux à cinq ans, d'autant moins que le vaincu
+  garde peu de places face à son vainqueur (cinq ans à la moitié, deux ans au cinquième et en dessous : la paix d'un
+  faible ne dure pas) ; un camp qui plie une deuxième fois en 25 ans est absorbé **quel que soit le vainqueur** s'il a
+  perdu le quart de ce qu'il a tenu au plus fort (deux défaites et un pays entamé : il n'a plus de quoi se relever). Le
+  Sud-Ouest garde ses cinq ans et la règle du même vainqueur : avec quatre voisins seulement, les mêmes règles y
+  faisaient tomber les guerres de 40 % et les camps en vie à 2,5 (voir `tasks/equilibre-reference.md`).
+- Essayés et écartés : ne plus compter comme menace une armée ennemie retranchée chez elle (sauf autour du chef-lieu) :
+  toutes les armées partaient à l'offensive, la France prenait trois fois plus de places, mais le Sud-Ouest devenait bien
+  trop décisif (1700 : écart de places +42 %, 2,4 camps en vie, deux parties sur douze finies avec un seul camp) ;
+  détacher dès que la place tient (une fois la menace, un quart de l'armée) : Sud-Ouest 1700, 2,2 camps en vie ; la
+  deuxième défaite face à n'importe quel vainqueur sans condition : 28 camps disparus en six ans et demi en France,
+  dont des camps de 70 à 95 places absorbés d'un coup ; avec la condition de la moitié de ce qu'il a tenu, 3 camps en cinq
+  ans seulement.
+
+**Mesures en France** (Gironde jouée par une IA, graine 1 ; banc des guerres, 84 mois depuis 1790, `27d9b16` puis
+`854dbd2` ; le temps est le temps de calcul du processus, machine partagée et chargée différemment) :
+
+| 1790 | avant | après |
+|---|---|---|
+| camps disparus après 1 / 2 / 3 / 4 / 5 / 6 / 7 ans | 0 / 0 / 0 / 0 / 0 / 0 / 0 | 0 / 1 / 3 / 4 / 8 / 15 / 24 |
+| places prises d'un camp à l'autre après 3 / 7 ans | 491 / 923 | 884 / 2 259 |
+| chefs-lieux tombés en 7 ans (traités + absorptions) | 50 + 0 | 73 + 24 |
+| guerres en cours (moyenne des fins de mois sur 7 ans) | 10,9 | 8,9 |
+| plus petit / plus grand camp après 7 ans (places) | 17 / 100 | 13 / 133 |
+| armées des camps en guerre au repos après une réflexion | 78 % (garde : 89 %) | 41 % (garde : 44 %, sans cible : 48 %) |
+| temps d'un mois (moyenne sur 7 ans) | 5,5 s | 6,2 s |
+
+Pas d'effondrement en chaîne : les disparitions viennent au rythme de quelques-unes par an à partir de la troisième
+année (1, 2, 1, 4, 7, 9), et le plus grand camp tient 133 places sur 3 555 après sept ans. Ce qui retient encore les
+armées au repos : rien à prendre à leur portée qu'elles battent (48 %), ou garder une place devant une menace qu'elles
+ne battent pas et qui ne laisse rien à détacher.
+
+`outils/banc_france.py --mois 36` (trois ans ; avant et après lancés à des moments différents) :
+
+| | 1790 avant | 1790 après | 1700 avant | 1700 après |
+|---|---|---|---|---|
+| camps en vie (disparus) | 89 (0) | 86 (3) | 89 (0) | 83 (6) |
+| guerres en cours à la fin (vues en trois ans) | 9 (79) | 10 (84) | 16 (80) | 7 (86) |
+| places prises d'un camp à l'autre | 491 | 884 | 454 | 892 |
+| temps d'un mois (moyenne) | 5,64 s | 5,75 s | 5,91 s | 5,98 s |
+
+Depuis 1700, 33 % de la puissance des armées des camps en guerre reste au repos après une réflexion (banc des
+guerres, trois ans).
+
+Sud-Ouest (`outils/simuler.py`, `tasks/equilibre-reference.md`) : 1700, 12 parties : guerres 17,0 → 12,9 (−24 %),
+durée 3,4 → 2,8 mois, écart de places 101 → 115, camps en vie 3,3 → 3,2, trésor et hommes à ±4 % ; 1790, 24 parties :
+guerres 13,9 → 12,2, durée 3,4 → 2,3 mois (−32 % : les chefs-lieux tombent plus tôt, c'est l'effet voulu), écart 108 →
+130 (+20 %), camps en vie 3,35 → 2,95, trésor et hommes −5 %. Aucune partie ne finit avec un seul camp. Armées au repos
+dans le Sud-Ouest (1700, graines 1 à 4) : 65 / 59 / 51 / 65 % avant, 45 / 4 / 1 / 15 % après.
+
+Tests : `tests/test_guerres.py` (un camp réduit au quart de ce qu'il a tenu absorbé dès la chute de son chef-lieu,
+sinon un traité et cinq ans de trêve dans le Sud-Ouest ; l'armée plus forte attaque celle qui menace sa place, pas
+contre plus fort, ne laisser que ce qu'il faut), `tests/test_france.py` (trêve courte d'un petit vaincu, deuxième
+défaite face à un autre vainqueur). Une sauvegarde faite avec le code d'avant (Sud-Ouest, 1702) se recharge et joue un an.
 
 ## Étape 2 : l'Europe et l'Afrique du Nord (mode « Europe »)
 

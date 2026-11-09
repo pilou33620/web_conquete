@@ -813,6 +813,7 @@ class Game:
             wars = sum(1 for o in self.factions if o != code and self.factions[o]['alive'] and self.at_war(code, o))
             before = f.get('weary', 0.0)
             delta = (R.WEARY_PER_WAR * wars + f.get('_lost_m', 0.0) * R.WEARY_PER_LOSS) if wars else -R.WEARY_PEACE
+            f['pic'] = max(f.get('pic', 0), len(self.owned_nodes(code)))   # (le plus de places tenues : voir capture)
             # surextension : tenir des pays qui ne vous aiment pas épuise
             delta += R.WEARY_PER_UNRULY * sum(1 for n in self.nodes if n['owner'] == code and n.get('assim', 1.0) < 0.5)
             if delta > 0:
@@ -3760,8 +3761,14 @@ class Game:
         if gn['type'] == 'capitale' and old in self.factions and gn['dept'] == old:
             lf = self.factions[old]
             left = len(self.owned_nodes(old))
-            if left <= max(3, lf['start_nodes'] * R.TREATY_CRUSHED) or self.t - lf.get('treaties', {}).get(code, -1e9) < R.TREATY_AGAIN \
-                    or code not in self.factions:
+            # absorbé s'il est écrasé (réduit au quart de ce qu'il a tenu au plus fort, ou de ses places de départ, ou à
+            # 3 places), ou s'il plie une seconde fois en 25 ans devant le même vainqueur (toute la France, 89 camps :
+            # devant n'importe quel vainqueur s'il a perdu le quart de ce qu'il a tenu, il n'a plus de quoi se relever)
+            traites, pic = lf.get('treaties', {}), max(lf['start_nodes'], lf.get('pic', 0))
+            dernier = max(traites.values(), default=-1e9) if len(self.factions) > 5 and left * 4 <= pic * 3 \
+                else traites.get(code, -1e9)
+            if left <= max(3, pic * R.TREATY_CRUSHED) \
+                    or self.t - dernier < R.TREATY_AGAIN or code not in self.factions:
                 self.capitulate(old, code)
             else:
                 self.treaty(old, code, nid)
@@ -3769,7 +3776,8 @@ class Game:
 
     def treaty(self, loser, winner, cap):
         """Le chef-lieu est tombé : le vaincu signe la paix, cède les places que le vainqueur occupe, paie un tribut
-        et récupère son chef-lieu. Il peut se relever ; une seconde défaite face au même vainqueur avant 25 ans lui sera fatale."""
+        et récupère son chef-lieu. Il peut se relever ; une seconde défaite face au même vainqueur avant 25 ans (toute la
+        France : face à n'importe quel vainqueur, s'il a perdu le quart de ce qu'il a tenu) lui sera fatale."""
         from . import diplomacy as D
         lf, wf = self.factions[loser], self.factions[winner]
         n = self.nodes[cap]
@@ -3789,7 +3797,11 @@ class Game:
         lf['res']['livres'] -= pay
         wf['res']['livres'] += pay
         D.make_peace(self, winner, loser)
-        until = TT.deadline(self, R.TREATY_TRUCE, winner, loser)
+        # toute la France : la paix d'un vaincu bien plus petit que son vainqueur ne dure pas, trêve de deux à cinq ans
+        # (le Sud-Ouest, cinq camps qui ne peuvent guère se battre qu'entre voisins, garde ses cinq ans)
+        mois = R.TREATY_TRUCE if len(self.factions) <= 5 else max(R.TREATY_TRUCE_MIN, min(R.TREATY_TRUCE, round(
+            2 * R.TREATY_TRUCE * len(self.owned_nodes(loser)) / max(1, len(self.owned_nodes(winner))))))
+        until = TT.deadline(self, mois, winner, loser)
         lf['truce'][winner] = wf['truce'][loser] = until
         lf.setdefault('treaties', {})[winner] = self.t  # le même vainqueur n'accorde pas deux traités en 25 ans
         lf['weary'] = max(0.0, lf.get('weary', 0) - 40)
@@ -3802,7 +3814,7 @@ class Game:
             lf['truce'][o] = self.factions[o]['truce'][loser] = max(until, lf['truce'].get(o, 0))
         self._dirty_income = True
         cede = f"cède {R.pl(ceded, 'place')} à {self.fname(winner)} et lui verse" if ceded else f"verse à {self.fname(winner)}"
-        self.log('capitulation', f"Traité {R.de(gn['name'])} : {self.fname(loser)} {cede} {pay} livres. Trêve de cinq ans."
+        self.log('capitulation', f"Traité {R.de(gn['name'])} : {self.fname(loser)} {cede} {pay} livres. Trêve de {R.pl(mois // 12, 'an') if mois % 12 == 0 else R.pl(mois, 'mois', 'mois')}."
                                  + (f" Le congrès rétablit aussi la paix avec {', '.join(self.fname(o) for o in others)} "
                                     f"pour deux ans." if others else ''),
                  gn['x'], gn['y'], who=winner, important=True)

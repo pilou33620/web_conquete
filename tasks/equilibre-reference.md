@@ -248,3 +248,50 @@ Depuis 1790, les trois nouveautés réglées restent dans ±12 % de la référen
 (+26 %, juste au-delà de la tolérance) vient de la religion et des révoltes : leur propre banc le chiffrait à +23 % (voir
 plus haut) ; il est à surveiller par ce chantier-là. Sur les seules graines 1 à 6 de 1790, l'écart du final est de
 122,3 contre 74,8 : six parties n'en disent rien (graines 7 à 12 : 111,8 contre 89,0). Aucune partie n'a planté.
+
+## Guerres décisives et armées actives (SPEC-FRANCE.md, 9/11/2026)
+
+« Avant » : `27d9b16` ; « après » : `fd82254`, identique pour le Sud-Ouest au code final `854dbd2` (les règles propres
+à toute la France, plus de cinq camps, n'y changent rien : trêve de deux à cinq ans, deuxième défaite face à n'importe
+quel vainqueur). Les graines 1 à 24 de
+1790 « avant » redonnent exactement le « final » de la section précédente.
+
+    python3 outils/simuler.py --parties 12 --epoque 1700 --annees 30 --graine 1 --proc 3
+    python3 outils/simuler.py --parties 12 --epoque 1790 --annees 30 --graine 1 --proc 3    # puis --graine 13
+
+| Moyenne | 1700 avant (12) | 1700 après (12) | 1790 avant (24) | 1790 après (24) |
+|---|---|---|---|---|
+| Guerres déclarées | 17,0 | 12,9 (−24 %) | 13,85 | 12,2 (−12 %) |
+| Durée d'une guerre (mois) | 3,4 | 2,8 (−18 %) | 3,4 | 2,3 (**−32 %**) |
+| Écart de places | 101,0 | 114,9 (+14 %) | 107,7 | 129,6 (+20 %) |
+| Camps en vie | 3,3 | 3,2 (−3 %) | 3,35 | 2,95 (−12 %) |
+| Technologies par camp | 15,6 | 15,3 | 46,6 | 45,4 |
+| Trésor (livres) | 21 123 | 21 361 (+1 %) | 39 826 | 37 644 (−5 %) |
+| Hommes par camp | 10 499 | 10 966 (+4 %) | 12 163 | 11 541 (−5 %) |
+| Mois de banqueroute / de famine | 26 / 33 | 47 / 30 | 0 / 3 | 23 / 10 |
+
+Tout est dans ±25 %, sauf la durée des guerres de 1790 (−32 %) : c'est l'effet voulu, des armées qui frappent au lieu
+de se regarder font tomber les chefs-lieux plus tôt, et la guerre finit au traité. Aucune partie ne finit avec un seul
+camp (au moins deux en vie, comme avant ; le plus grand écart d'une partie est de 184 places, contre 176 avant). Sur les seules graines 1 à 12 de 1790, le trésor baissait de 39 % (47 606 → 29 007) ; les graines
+13 à 24 le font monter de 44 % (32 046 → 46 280) : c'est le hasard de quelques parties très riches (de 10 000 à
+107 000 livres), il faut les 24 parties.
+
+Armées au repos (`outils/banc_guerres.py --geo 2 --epoque 1700 --mois 120`, graines 1 à 4 : part de la puissance des
+armées des camps en guerre restée au repos après une réflexion de son IA) : 65 / 59 / 51 / 65 % avant, dont 95 % à
+garder une place menacée ; 45 / 4 / 1 / 15 % après.
+
+Essais écartés (1700, 12 parties) :
+
+| Variante | guerres | durée | écart | camps en vie | trésor | hommes |
+|---|---|---|---|---|---|---|
+| armée ennemie retranchée chez elle comptée comme menace seulement autour du chef-lieu | 13,5 | 2,4 | 143,0 (+42 %) | 2,4 (−27 %) | 25 682 | 9 236 |
+| frapper et se replier seulement (sans détacher) | 15,1 | 2,8 | 112,3 | 2,9 | 24 660 | 9 613 |
+| … et le quart du plus de places tenues | 15,0 | 2,8 | 121,2 | 2,8 | 24 840 | 9 182 |
+| … et de plus la trêve de deux à cinq ans partout | 15,4 | 2,7 | 133,4 (+32 %) | 2,7 | 16 977 | 9 918 |
+| détacher dès que la place tient (une fois la menace, un quart de l'armée) | 14,1 | 2,8 | 140,8 (+39 %) | 2,2 (−33 %) | 37 040 | 8 416 |
+| … et deuxième défaite face à n'importe quel vainqueur partout | 10,2 (−40 %) | 2,7 | 143,7 (+42 %) | 2,5 | 27 822 | 9 121 |
+
+Quatre de ces variantes finissaient au moins une partie sur douze avec un seul camp (de 1721 à 1729). Retenu :
+frapper, se replier, détacher ce qui dépasse une fois et demie la menace (au moins un tiers de l'armée), le quart du
+plus de places tenues partout ; trêve raccourcie et deuxième défaite face à n'importe quel vainqueur en France
+seulement.
