@@ -4,8 +4,9 @@
 
 - un camp réduit au quart du plus de places qu'il a tenues est absorbé dès la chute de son chef-lieu ; sinon il signe
   un traité (trêve de cinq ans dans le Sud-Ouest ; en France, plus courte pour un petit vaincu : test_france.py) ;
-- une armée d'IA qui garde une place menacée attaque l'armée qui la menace si elle la bat nettement, ne se jette
-  pas sur une armée plus forte, et n'y laisse que ce qu'il faut (le reste part vers une cible).
+- une armée d'IA qui garde une place menacée attaque l'armée qui la menace si elle la bat nettement (toute la France
+  seulement : dans le Sud-Ouest, elle garde sa place), ne se jette pas sur une armée plus forte, et n'y laisse que ce
+  qu'il faut (le reste part vers une cible).
 """
 import math
 import unittest
@@ -71,13 +72,19 @@ class ArmeesActives(unittest.TestCase):
         return g, ia, a, m
 
     def test_l_armee_plus_forte_attaque_celle_qui_menace_sa_place(self):
-        g, ia, a, m = self.situation(6, 2)
-        ia.army_think(a, {})
+        g, ia, a, m = self.situation(6, 2)   # (frapper : toute la France seulement, voir le test suivant)
+        self.assertTrue(ia.frapper(a, a['at_node'], ia.foes(), {}))
         self.assertEqual(a['state'], 'move')
         self.assertEqual((a['target'] or {}).get('node'), m)
 
+    def test_dans_le_sud_ouest_elle_garde_sa_place(self):
+        g, ia, a, m = self.situation(6, 2)
+        ia.army_think(a, {})
+        self.assertEqual(a['state'], 'idle')
+
     def test_pas_contre_une_armee_plus_forte(self):
         g, ia, a, m = self.situation(2, 6)
+        self.assertFalse(ia.frapper(a, a['at_node'], ia.foes(), {}))
         ia.army_think(a, {})
         self.assertNotEqual((a['target'] or {}).get('node'), m)
 
