@@ -946,7 +946,7 @@ MAISON_TRAITS = {
     'savant': dict(label='Savant', desc='Recherche +8 %.', fx=dict(research_speed=0.08)),
     'populaire': dict(label='Populaire', desc='Ordre public +5 %.', fx=dict(order=0.05)),
 }
-MARIAGE_REL = 15          # relations gagnées des deux côtés par un mariage (25 au départ : banc de 1700, 1er/11/2026)
+MARIAGE_REL = 10          # relations gagnées des deux côtés par un mariage (25 au départ, puis 15 : bancs de 1700, novembre 2026)
 MARIAGE_AGE = 16   # pas de mariage avant cet âge (un chef enfant attend)
 NAISSANCE_P = 0.25        # chance par an d'un enfant (chef marié de moins de NAISSANCE_AGE ans)…
 NAISSANCE_AGE = 45

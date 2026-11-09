@@ -185,7 +185,7 @@ def appliquer(g, code, fx):
     o = fx.get('refus')
     # le prétendant éconduit (une IA) peut prendre les armes : guerre de succession
     if o and o != g.player and g.factions[o]['alive'] and not D.war_refusal(g, o, code) \
-            and g.rng.random() < 0.3 + 0.4 * R.FACTIONS[o]['personality']['aggr']:
+            and g.rng.random() < 0.15 + 0.3 * R.FACTIONS[o]['personality']['aggr']:
         g.log('diplo', f"{g.fname(o)} revendique la succession {R.de(g.fname(code))} : guerre de succession !", who=o,
               important=True)
         D.declare_war(g, o, code)

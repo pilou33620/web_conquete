@@ -359,9 +359,9 @@ class AI:
         des douaniers quand la contrebande coûte plus que leur solde."""
         g, f, code = self.g, self.f, self.code
         marchand = self.pers['trade'] >= 0.8
-        pauvre = f['income']['livres'] < 0.15 * self.gross_norm()
+        pauvre = f['income']['livres'] < 0   # (en déficit : les IA de 1700 dépensent tout et vivaient sous tarif)
         t = bool(self.wars()) + pauvre
-        t = min(1, t) if marchand else min(2, t + (t > 0))   # libre en paix et à l'aise ; jusqu'à élevé sinon (banc 1700)
+        t = min(1, t) if marchand else t   # libre en paix et à l'aise ; modéré en guerre ou en déficit, élevé les deux (banc 1700)
         if t != f['tarif']:
             g.set_tarif(code, t)
         dn = f.get('_douane')
@@ -1116,7 +1116,7 @@ class AI:
             if (D.held(g, o, code) >= 40 or D.captifs(g, o, code)) and rel > -70 and self.rng.random() < 0.3:
                 self.propose(o, 'prisonniers')
             # mariages : on unit sa maison à celle d'un voisin ami, avec une petite dot
-            if rel > 20 and st != 'guerre' and not FM.refus_mariage(g, code, o) and self.rng.random() < 0.005 \
+            if rel > 20 and st != 'guerre' and not FM.refus_mariage(g, code, o) and self.rng.random() < 0.003 \
                     and D.borders(g, code, o):
                 self.propose(o, 'mariage', int(min(f['res']['livres'] * 0.1, 150)))
             if f['overlord']:

@@ -122,10 +122,13 @@ class IA(unittest.TestCase):
             self.assertEqual(f['tarif'], 0, 'en paix et à l’aise : libre')
             g.set_status(code, '40', 'guerre')
             ai.douane()
-            self.assertEqual(f['tarif'], 1 if code == '33' else 2)
+            self.assertEqual(f['tarif'], 1, 'en guerre : modéré')
             f['income']['livres'] = -5.0
             ai.douane()
-            self.assertEqual(f['tarif'], 1 if code == '33' else 2, 'un marchand ne dépasse pas « modéré », les autres « élevé »')
+            self.assertEqual(f['tarif'], 1 if code == '33' else 2, 'en guerre et en déficit : un marchand reste à « modéré », les autres « élevé »')
+            g.set_status(code, '40', 'paix')
+            ai.douane()
+            self.assertEqual(f['tarif'], 1, 'en déficit seulement : modéré')
 
 
 class Commandes(unittest.TestCase):
