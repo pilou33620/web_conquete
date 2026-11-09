@@ -351,7 +351,7 @@ pour la même raison : deux armées se regardent d'une ville à l'autre toute la
 
 **Décisions** (prises seul, le joueur absent) :
 
-- **Armée sur une place menacée** : elle frappe la plus forte des armées ennemies à moins de 30 km qu'elle bat
+- **Armée sur une place menacée** : (toute la France seulement, voir plus bas) elle frappe la plus forte des armées ennemies à moins de 30 km qu'elle bat
   nettement (`AI.frapper` : 1,3 fois la puissance des armées ennemies à moins de 8 km de celle-ci, ou la défense de la
   place où elle se retranche, garnison, remparts et armées compris) ; sinon, devant une menace écrasante (2,5 fois la
   défense de la place, armée comprise ; jamais au chef-lieu), elle se replie vers la ville la plus proche ; sinon, elle
@@ -410,11 +410,22 @@ Sud-Ouest (`outils/simuler.py`, `tasks/equilibre-reference.md`) : 1700, 12 parti
 durée 3,4 → 2,8 mois, écart de places 101 → 115, camps en vie 3,3 → 3,2, trésor et hommes à ±4 % ; 1790, 24 parties :
 guerres 13,9 → 12,2, durée 3,4 → 2,3 mois (−32 % : les chefs-lieux tombent plus tôt, c'est l'effet voulu), écart 108 →
 130 (+20 %), camps en vie 3,35 → 2,95, trésor et hommes −5 %. Aucune partie ne finit avec un seul camp. Armées au repos
-dans le Sud-Ouest (1700, graines 1 à 4) : 65 / 59 / 51 / 65 % avant, 45 / 4 / 1 / 15 % après.
+dans le Sud-Ouest (1700, graines 1 à 4) : 65 / 59 / 51 / 65 % avant, 45 / 40 / 1 / 15 % après.
+
+**Revu le jour même : pas de frappe dans le Sud-Ouest.** La durée des guerres de 1790 y était hors de la tolérance
+(−32 %). Instrumentées (graines 1 à 12), les guerres n'y finissent pas plus vite à la chute d'un chef-lieu (un mois
+après la déclaration, avant comme après) : ce sont les impasses de quatre à neuf mois, closes par une paix proposée
+(83 avant, 59 après), qui se dénouaient en un ou deux mois par la chute d'un chef-lieu proche de la frontière. La
+frappe en est la cause : sans elle, durée 2,8 mois sur ces douze parties ; sans repli ni détachement, ou sans le quart
+du plus de places tenues, toujours 2,3 à 2,4 ; frapper à 1,6 ou à 2,5 fois l'adversaire, 2,3 et 2,6 ; après trois mois
+de guerre seulement, 2,7 sur 24 parties, mais un écart de places à +31 % en 1700. Dans le Sud-Ouest (cinq camps au plus), une armée sur une
+place menacée ne frappe donc plus : elle se replie ou détache son surplus. Toute la France garde la frappe (rien n'y
+change). Mesures : `tasks/equilibre-reference.md` ; armées au repos dans le Sud-Ouest (1700, graines 1 à 4) : 31 / 16
+/ 26 / 36 %.
 
 Tests : `tests/test_guerres.py` (un camp réduit au quart de ce qu'il a tenu absorbé dès la chute de son chef-lieu,
 sinon un traité et cinq ans de trêve dans le Sud-Ouest ; l'armée plus forte attaque celle qui menace sa place, pas
-contre plus fort, ne laisser que ce qu'il faut), `tests/test_france.py` (trêve courte d'un petit vaincu, deuxième
+contre plus fort, mais pas dans le Sud-Ouest ; ne laisser que ce qu'il faut), `tests/test_france.py` (trêve courte d'un petit vaincu, deuxième
 défaite face à un autre vainqueur). Une sauvegarde faite avec le code d'avant (Sud-Ouest, 1702) se recharge et joue un an.
 
 ## Étape 2 : l'Europe et l'Afrique du Nord (mode « Europe »)
