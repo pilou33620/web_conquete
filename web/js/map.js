@@ -1533,7 +1533,8 @@ export class MapView {
         } else if (pass === 0) { g.strokeStyle = royal ? '#8f7a55' : '#a8946a'; g.lineWidth = w + Math.max(0.02, 1 / L); }
         else { g.strokeStyle = royal ? '#d9c79c' : '#cdb98a'; g.lineWidth = w; }
         g.globalAlpha = royal || L >= 8 ? 1 : 0.6;
-        if (e.ferry) { g.setLineDash([w * 2, w * 1.6]); } else g.setLineDash([]);
+        // un bac : tirets sombres sur l'eau, assez longs pour se voir de loin (pas un liseré de route)
+        if (e.ferry) { if (!pass) continue; g.strokeStyle = P ? rgb(P.encre, 0.85) : '#6b4a2e'; g.lineWidth = Math.max(w, 1.6 / L); g.setLineDash([Math.max(w * 2, 6 / L), Math.max(w * 1.6, 4 / L)]); } else g.setLineDash([]);
         g.stroke(e.path);
       }
     }

@@ -71,6 +71,9 @@ Tous les calques 2D appliquent ce `K` sur l'axe vertical : `map.js` (`toScreen`,
   posé à l'année d'ouverture (`epoque.year`) et ôté si l'année recule (aperçu des scénarios). **Décisions** : seuls les
   blocs du décor et les places qu'il traverse sont refaits (rien ne s'y bâtit dans l'eau), pas tout le plateau ; le
   relief reste celui de 1700 (un canal ouvert ensuite n'aplanit pas les collines, comme ses écluses).
+- Routes (SPEC-FRANCE, « Bacs de la côte grossière ») : un hexagone de montagne qu'une route traverse est mis à plat
+  (collines), comme les vallées des rivières, sinon les cônes des sommets cachent la route ; un bac se dessine en
+  tirets bruns à fleur d'eau ; les voies d'eau ne sont pas des routes (leur rivière ou leur canal a son filet).
 - Étangs et lacs trop petits pour faire un hexagone d'eau : une mare par case d'eau de 1 km, avec sa grève et ses
   roseaux ; rien ne s'y bâtit.
 - Le paysage des siècles (`epoque.js`, 2c), selon les marques du camp qui tient chaque hexagone : les semis de pins

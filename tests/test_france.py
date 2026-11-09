@@ -60,6 +60,19 @@ class France(unittest.TestCase):
                     'Ars-en-Ré', 'Groix', 'Le Palais', 'Zonza'):
             self.assertTrue(GEO.adj[GEO.by_name[nom]], nom)
 
+    def test_bacs_des_vrais_bras_de_mer_seulement(self):
+        # (SPEC-FRANCE.md, « Bacs de la côte grossière » : les autres étaient sur la terre ferme, ou sur la même île)
+        nom = lambda e: frozenset((GEO.nodes[e['a']]['name'], GEO.nodes[e['b']]['name']))
+        bacs = {nom(e) for e in GEO.edges if e.get('ferry')}
+        self.assertEqual(bacs, {frozenset(p) for p in (
+            ('Blaye', 'Fort Médoc'), ('Soulac', 'Royan'), ('La Rochelle', 'La Flotte'), ('La Tremblade', 'Saint-Trojan-les-Bains'),
+            ('Saint-Malo', 'Saint-Briac-sur-Mer'), ('Pornic', "Noirmoutier-en-l'Île"), ('Lorient', 'Groix'),
+            ('Le Palais', 'Saint-Pierre-Quiberon'), ('Berck', 'Fort-Mahon-Plage'))})
+        routes = {nom(e) for e in GEO.edges if not e.get('ferry') and e.get('kind') != 'water'}
+        for a, b in (('Guérande', 'Piriac-sur-Mer'), ('Notre-Dame-de-Monts', 'Saint-Urbain'), ('Ars-en-Ré', 'La Flotte'),
+                     ('Camaret-sur-Mer', 'Lanvéoc'), ('Saint-Pierre-Quiberon', 'Étel'), ('Royan', 'Semussac')):
+            self.assertIn(frozenset((a, b)), routes)
+
     def test_le_sud_ouest_des_anciennes_parties_inchange(self):
         # (places, routes, voies d'eau et zones des places des géographies 1 et 2, calculées avant les routes des vallées)
         import hashlib

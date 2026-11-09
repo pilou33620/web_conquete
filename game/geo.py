@@ -135,6 +135,17 @@ ROUTES_ROYALES_3 = [   # les grandes routes de poste partant de Paris, et quelqu
     ['Clermont-Ferrand', 'Riom', 'Moulins'], ['Paris', 'Provins', 'Troyes', 'Chaumont', 'Langres', 'Dijon'],
     ['Lille', 'Douai', 'Cambrai', 'Saint-Quentin', 'Laon', 'Reims', 'Châlons-en-Champagne'],
 ]
+# (géographie 3) les routes que la côte grossière de la grille au km refuse (SPEC-FRANCE, « Bacs de la côte grossière ») :
+# des bourgs du rivage tombés en mer, la presqu'île de Quiberon (l'isthme de Penthièvre), l'île de Ré d'un bout à l'autre ;
+# et les vrais bacs que ces routes auraient remplacés (_relier ne fait qu'un lien par morceau) : la Rance, la pointe de
+# Grave, l'Authie, ajoutés une fois les morceaux reliés. (a, b, bac)
+ROUTES_COTE_3 = [
+    ('Guérande', 'Piriac-sur-Mer', False), ('Notre-Dame-de-Monts', 'Saint-Urbain', False),
+    ('Ars-en-Ré', 'La Flotte', False), ('Saint-Pierre-Quiberon', 'Étel', False), ('Camaret-sur-Mer', 'Lanvéoc', False),
+    ('Saint-Malo', 'Cancale', False), ('Saint-Malo', 'Saint-Briac-sur-Mer', True),
+    ('Soulac', 'Lesparre-Médoc', False), ('Soulac', 'Royan', True),
+    ('Fort-Mahon-Plage', 'Rue', False), ('Berck', 'Fort-Mahon-Plage', True),
+]
 MARAIS_3 = [(46.35, -1.00, 18), (43.55, 4.55, 20), (47.35, -2.25, 8), (46.00, 5.00, 15), (46.90, -2.00, 10), (49.30, -1.20, 9)]
 
 
@@ -726,7 +737,13 @@ class GeoMap:
                 if self._water_on_segment(P[a], P[b]) < 1:
                     pairs[(a, b)] = dict(royal=False, ferry=False)
         if self.version >= 3:   # les grandes routes royales de la France : le plus court chemin du réseau, entre leurs villes
-            self._ensure_connected(pairs, P)
+            for bacs in (False, True):   # les routes avant de relier les morceaux, les bacs après (sinon ils en tiendraient lieu)
+                for na, nb, bac in ROUTES_COTE_3:
+                    if bac == bacs:
+                        a, b = sorted((self.by_name[na], self.by_name[nb]))
+                        pairs[(a, b)] = dict(royal=False, ferry=bac, mer=bac)
+                if not bacs:
+                    self._ensure_connected(pairs, P)
             for route in ROUTES_ROYALES_3:
                 ids = [self.by_name[nm] for nm in route if nm in self.by_name]
                 for a, b in zip(ids, ids[1:]):

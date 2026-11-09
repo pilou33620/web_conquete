@@ -44,6 +44,8 @@ export class Plateau {
     this.echantillonner();
     this.placerLieux();
     this.rivieres();
+    // les routes de montagne passent par les cols et les vallées : à plat elles aussi (les cônes des sommets les cachaient)
+    for (const e of mp.edges) if (!e.water && !e.ferry) for (const [, , , t] of g.suivre(e.pts, 1.5, 0)) if (t && (t.t === 'montagne' || t.t === 'haute')) t.t = 'colline';
     for (const t of g.liste) t.top = TERR[t.t].h + (t.t === 'montagne' || t.t === 'haute' ? (hache(t.q, t.r, 9) - 0.5) * 0.8 : 0);
     this.tuiles();
     const eau = new THREE.Mesh(new THREE.PlaneGeometry(mp.W / g.f + 400, mp.H / g.f + 400), new THREE.MeshToonMaterial({ color: 0x3fa6dc, gradientMap: DEGRADE, transparent: true, opacity: 0.72 }));
@@ -338,14 +340,22 @@ export class Plateau {
     const { mp, g } = this, L = lot(), sol = t => Math.max(t.top, 0);
     const lieu = t => t && t.t === 'ville';
     for (const e of mp.edges) {
+      if (e.water) continue;   // (les voies d'eau : leurs rivières et canaux, filet)
       const royal = e.royal, w = royal ? 0.62 : 0.36;
-      let run = [];
+      let run = [], n = 0, prec = null;
       const fin = () => {
         if (run.length > 1) { put(L, ruban(run.map(p => [p[0], p[1] - 0.02, p[2]]), w + 0.3), 0x6b5236, 0, 0, 0, 0, 0); put(L, ruban(run, w), royal ? 0xf1e4bd : 0xd9c79a, 0, 0, 0, 0, 0); }
         run = [];
       };
       for (const [x, y, z, t] of g.suivre(e.pts, 1.2, 0.24, sol)) {
-        if (!t || this.estEau(t)) { fin(); continue; }
+        if (!t || this.estEau(t)) {
+          fin();
+          // un bac : sa traversée en tirets sur l'eau, comme sur la carte en tuiles
+          if (e.ferry && prec && n++ % 3 !== 2) put(L, ruban([[prec[0], EAU_Y + 0.08, prec[1]], [x, EAU_Y + 0.08, z]], 0.3), 0x6b4a2e, 0, 0, 0, 0, 0);
+          prec = [x, z];
+          continue;
+        }
+        prec = [x, z];
         run.push([x, lieu(t) ? t.top + 0.06 : y, z]);
       }
       fin();
