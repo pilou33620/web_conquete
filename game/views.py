@@ -36,6 +36,7 @@ def to_dict(g):
                      for c, ai in getattr(g, 'ais', {}).items()}
     d['version'] = 2
     d['geo'] = g.geo.version   # la géographie de la partie (geo.VERSION) : une ancienne partie garde la sienne
+    d['graphe'] = g.geo.empreinte   # la numérotation des arêtes de sa carte (recaler)
     TB.save_into(g, d)   # réglage des batailles et bataille tactique en cours
     return d
 
@@ -143,7 +144,51 @@ def from_dict(geo, d):
     for c in g.factions:
         g.recompute_mods(c)
     g.compute_income()
+    if d.get('graphe') != geo.empreinte:
+        recaler(g)
     return g
+
+
+def recaler(g):
+    """Sauvegarde faite sur un autre graphe (voies d'eau du 08/11/2026, routes des vallées et des îles du 09/11 : arêtes
+    renumérotées). Les places gardent leurs numéros ; une armée sur une arête la retrouve à sa position (x, y), sinon revient
+    à la place d'où elle venait (un port pour un bateau) ; les étapes d'un chemin se retrouvent par leurs deux bouts, sinon
+    le chemin est recalculé vers la destination."""
+    geo = g.geo
+    bouts = {}
+    for e in geo.edges:
+        bouts.setdefault((min(e['a'], e['b']), max(e['a'], e['b'])), []).append(e)
+
+    def renumerote(legs):   # False : une étape sans arête entre ses deux bouts, ou entre une route et une voie d'eau
+        for leg in legs:
+            if leg['kind'] == 'road':
+                l = bouts.get((min(leg['frm'], leg['to']), max(leg['frm'], leg['to'])), [])
+                e = next((e for e in l if e['id'] == leg['e']), None) or (l[0] if len(l) == 1 else None)
+                if not e:
+                    return False
+                leg['e'], leg['pos'] = e['id'], min(leg['pos'], e['len'])
+        return True
+
+    for a in g.armies.values():
+        ed, revient = a.get('edge'), False
+        if ed:
+            frm = ed['frm']
+            prs = [(math.dist(g.edge_xy(e, frm, min(ed['pos'], e['len'])), (a['x'], a['y'])), e)
+                   for e in (geo.edges[i] for i in geo.adj[frm]) if (e.get('kind') == 'water') == bool(a.get('boat'))]
+            d, e = min(prs, key=lambda p: p[0], default=(9.0, None))
+            if d < 1.5:
+                ed['e'], ed['pos'] = e['id'], min(ed['pos'], e['len'])
+                a['x'], a['y'] = g.edge_xy(e, frm, ed['pos'])
+            else:
+                a['edge'], revient = None, True
+                if not a.get('battle'):   # (dans une bataille : elle reste où elle se bat, hors des routes)
+                    a['at_node'] = frm
+                    a['x'], a['y'] = g.node_xy(frm)
+        if a.get('ask') and not renumerote(a['ask']['path']):
+            a['ask']['path'] = []
+        if a['path'] and (revient or not renumerote(a['path'])):
+            if not g.reroute(a):
+                a['path'] = []
 
 
 def rules_payload():

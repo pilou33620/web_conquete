@@ -82,7 +82,8 @@ Au premier lancement (et après une mise à jour du calcul de la carte, `game/ge
 (environ 5 secondes sur un PC, 15 à 30 secondes sur un Raspberry Pi),
 puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git). Une partie sauvegardée avant les rivières
 affinées garde sa carte d'alors (`game/data/geo_v1.json`, en cache dans `map_cache_v1.json`, calculée la première fois
-qu'on la charge).
+qu'on la charge). Une partie de toute la France sauvegardée avant que ses routes ou ses voies d'eau changent se recharge
+aussi : ses armées en marche retrouvent leur route (ou reviennent à leur dernière place) et leur chemin (`views.recaler`).
 
 ## Principe
 

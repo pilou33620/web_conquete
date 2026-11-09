@@ -276,6 +276,8 @@ class GeoMap:
         for e in self.edges:
             self.adj[e['a']].append(e['id'])
             self.adj[e['b']].append(e['id'])
+        # la numérotation des arêtes (gardée dans les sauvegardes : arête et chemin des armées) ; views.recaler si elle change
+        self.empreinte = hashlib.sha1(repr([(e['a'], e['b'], e.get('way')) for e in self.edges]).encode()).hexdigest()[:16]
 
     # ------------------------------------------------------------ projection
     def xy(self, lat, lon):
@@ -810,13 +812,13 @@ class GeoMap:
             _troncs(paires, paths)
         for eid, ((a, b), info) in enumerate(paires):
             d = math.dist(P[a], P[b])
-            e = dict(id=eid, a=a, b=b, len=round(d * 1.12, 2), royal=info['royal'], ferry=info['ferry'],
+            e = dict(id=eid, a=a, b=b, len=info.get('len', round(d * 1.12, 2)), royal=info['royal'], ferry=info['ferry'],
                      river=None, rrank=0, cx=None, cy=None)
             # le jeu (rivière à franchir, longueur) reste celui de la ligne droite ; seul le tracé dessiné change
             best = crossing([P[a], P[b]], pair([P[a], P[b]]) if self.version >= 2 else ())
             path = paths[eid]
             if info['ferry']:
-                e['river'], e['rrank'] = 'Gironde', 1
+                e['river'], e['rrank'] = 'Mer' if info.get('mer') else 'Gironde', 1
                 e['cx'], e['cy'] = round((P[a][0] + P[b][0]) / 2, 2), round((P[a][1] + P[b][1]) / 2, 2)
             elif best:
                 e['river'], e['rrank'] = best[0], best[1]
@@ -1004,7 +1006,8 @@ class GeoMap:
 
     def _relier(self, pairs, P):
         """(géographie 3) Relie les morceaux du réseau : le plus petit d'abord, à la place la plus proche d'un autre morceau (à moins de
-        60 km, sans eau entre elles) ; une île que rien ne relie reste à part (Corse, Belle-Île…)."""
+        60 km, sans eau entre elles en ligne droite, sinon par un chemin de terre : vallée ou col, plus long) ; une île, par un bac
+        de moins de 20 km (Ré, Oléron, Groix, Belle-Île…) ; la Corse reste à part (le cabotage la relie)."""
         n = len(P)
         G = 20.0
         cases = {}
@@ -1041,15 +1044,62 @@ class GeoMap:
                                     if d < 60:
                                         cand.append((d, a, b))
                 cand.sort()
-                ok = next(((a, b) for _, a, b in cand if self._water_on_segment(P[a], P[b]) < 1), None)
+                ok = None
+                for d, a, b in cand:   # la plus proche : en ligne droite, sinon par la terre (vallée, col), plus longue
+                    if self._water_on_segment(P[a], P[b]) < 1:
+                        ok = (a, b, dict(royal=False, ferry=False))
+                    elif (L := self._par_terre(P[a], P[b])) is not None:
+                        ok = (a, b, dict(royal=False, ferry=False, len=round(L * 1.05, 2)))
+                    if ok:
+                        break
+                if not ok:   # une île : un bac vers la place la plus proche, à moins de 20 km
+                    ok = next(((a, b, dict(royal=False, ferry=True, mer=True)) for d, a, b in cand if d < 20), None)
                 if ok:
-                    a, b = ok
-                    pairs[(min(a, b), max(a, b))] = dict(royal=False, ferry=False)
+                    a, b, info = ok
+                    pairs[(min(a, b), max(a, b))] = info
                     relie = True
                     break
                 isoles.add(r)
             if not relie:
                 return
+
+    def _par_terre(self, A, B):
+        """(géographie 3) Longueur du chemin de A à B par la terre de la carte, la haute montagne comptée double, une case de
+        rivière ou de lac six fois (un pont, un bac) ; deux cases au plus de mer ou d'étranger, comptées quatre et trois fois
+        (la côte et la frontière de la grille sont grossières : un bourg du rivage ou de la frontière tombe dans l'eau ou
+        hors de France) ; None s'il n'y en a pas ou s'il fait plus de 2,5 fois la ligne droite (le tour d'une baie, un lac)."""
+        W, d = self.W, math.dist(A, B)
+        lim, m = 2.5 * d + 5, int(d / 2) + 5
+        si, sj, gi, gj = int(A[0]), int(A[1]), int(B[0]), int(B[1])
+        i0, i1, j0, j1 = max(0, min(si, gi) - m), min(W - 1, max(si, gi) + m), max(0, min(sj, gj) - m), min(self.H - 1, max(sj, gj) + m)
+        poids = {T_HAUTE: 2.0, T_MONTAGNE: 1.4, T_MARAIS: 1.5, T_EAU: 6.0, T_OCEAN: 4.0}
+        start, goal = sj * W + si, gj * W + gi
+        g, prev, pq = {start: 0.0}, {}, [(d, start)]
+        while pq:
+            f, c = heapq.heappop(pq)
+            if c == goal:
+                n, mauvais = prev.get(c), 0
+                while n is not None and n != start:
+                    mauvais += self.terrain[n] == T_OCEAN or not self.dept[n]
+                    n = prev.get(n)
+                return g[c] if mauvais <= 2 else None
+            if f > lim:
+                return None
+            i, j = c % W, c // W
+            for di, dj, s in ((1, 0, 1), (-1, 0, 1), (0, 1, 1), (0, -1, 1), (1, 1, 1.414), (1, -1, 1.414), (-1, 1, 1.414), (-1, -1, 1.414)):
+                ni, nj = i + di, j + dj
+                if not (i0 <= ni <= i1 and j0 <= nj <= j1):
+                    continue
+                n = nj * W + ni
+                k = poids.get(self.terrain[n], 1.0)
+                if self.terrain[n] != T_OCEAN and (not self.dept[n] or self.dept_codes[self.dept[n] - 1] not in self.playable_codes):
+                    k = 3.0
+                ng = g[c] + s * k
+                if ng < g.get(n, 1e18):
+                    g[n] = ng
+                    prev[n] = c
+                    heapq.heappush(pq, (ng + math.hypot(gi - ni, gj - nj), n))
+        return None
 
     def _build_cellnode(self):
         """Zone d'influence de chaque lieu : distance par la terre (l'eau sépare), dans son département."""

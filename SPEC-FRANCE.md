@@ -45,8 +45,8 @@ l'échelle de l'Europe reste à trancher (France détaillée et reste plus gross
   grandes régions ; plateau bâti par blocs de 16 × 16 hexagones autour de la caméra (90 blocs, 260 places au plus) ;
   territoires sans lissage ni peinture des tuiles sur le plateau.
 
-Reste à faire : vérifier la fluidité sur iPad et le temps d'un mois sur le Raspberry Pi lui-même ; relier au réseau
-des routes les 157 places isolées de la géographie 3.
+Reste à faire : vérifier la fluidité sur iPad et le temps d'un mois sur le Raspberry Pi lui-même. (Les places isolées :
+faites le 09/11/2026, ci-dessous.)
 
 ### Événements et textes des autres régions — faits le 08/11/2026
 
@@ -151,9 +151,68 @@ Test : `tests/test_france.py` (un camp lointain réfléchit une fois par semaine
 le pas complet, la guerre réveille le lointain).
 
 Vu en mesurant (non corrigé, hors sujet) : après la course aux villages neutres (un an), la France à 89 camps n'a presque
-plus de guerres (aucune du 25e au 27e mois, avant comme après) ; 157 places de la géographie 3 ne sont pas reliées
-au grand réseau des routes (Soulac, Urdos, Laruns, Barcelonnette, Briançon, le pays de Gex, les îles…) : les IA les
-visent en vain ; les trésors des IA montent à 200 000 livres.
+plus de guerres (aucune du 25e au 27e mois, avant comme après) ; les trésors des IA montent à 200 000 livres. (Les
+places hors du réseau des routes : corrigé le 09/11/2026, ci-dessous.)
+
+### Places isolées et anciennes sauvegardes — faites le 09/11/2026
+
+**Cause** : une route ne naissait (graphe de Gabriel, puis `_relier` pour raccorder les morceaux) que si la *ligne
+droite* entre deux places passait le test `_water_on_segment` : moins d'une « faute », chaque échantillon de 0,4 km en
+eau ou hors de France comptant 1 et chaque échantillon de haute montagne (`T_HAUTE`) 0,25. Plus de 1,6 km de haute
+montagne sur la ligne droite suffisait donc à refuser la route : toute la Haute-Savoie (aucune de ses places reliée à une
+autre, les crêtes des Alpes couvrent le département), la Tarentaise, la Maurienne, le Briançonnais, l'Ubaye, la Vésubie,
+la Roya, les vallées des Pyrénées (Aspe, Ossau, Lavedan, Luchon, Cerdagne, Conflent…), le pays de Gex derrière le
+Jura. Ailleurs, la côte et la frontière de la grille au km sont grossières : un bourg du rivage (Flamanville,
+Jullouville, Cap-d'Ail, Cayeux…) ou de la frontière (Givet, Wissembourg, Crespin, Boeschepe, Châtel) tombe dans une case
+de mer ou d'étranger, et la ligne droite vers ses voisins aussi. Enfin les îles sans port du cabotage (Groix, Ars-en-Ré,
+le sud d'Oléron) n'avaient rien. 159 places hors du grand réseau des routes, 97 même avec les voies d'eau.
+
+**Correction** (`geo._relier`, géographie 3 seulement) : pour raccorder un morceau, on essaie ses places voisines de la
+plus proche à la plus lointaine (60 km au plus) : en ligne droite comme avant, sinon **par la terre** (`_par_terre` :
+plus court chemin sur la grille, haute montagne comptée double, montagne 1,4, marais 1,5, une case de rivière ou de lac
+6 — un pont ou un bac —, deux cases au plus de mer ou d'étranger comptées 4 et 3 — la côte et la frontière grossières ;
+refusé au-delà de 2,5 fois la ligne droite, comme le tour d'une baie ou d'un lac). La route de terre a pour longueur ce
+chemin (× 1,05) : un chemin de montagne est donc environ deux fois plus long que la ligne droite (Barcelonnette –
+Embrun : 23 km à vol d'oiseau, 46 km de route ; Modane – Saint-Michel-de-Maurienne 15 → 31 km), sans autre règle. Sans
+chemin de terre, **un bac** de moins de 20 km vers la place la plus proche (même règle que le bac de Blaye : traversée
+lente, rivière « Mer » pour le dessin). Résultat : 129 routes de plus, 17 de moins (l'élagage des détours a changé
+autour), 7 328 → 7 440 routes. Toutes les places rejoignent Paris par la route, sauf la Corse (43 places, reliée par
+le cabotage comme avant) et l'île d'Yeu (à plus de 20 km de la côte ; port du cabotage). La route royale d'Espagne par
+le Somport monte désormais jusqu'à Urdos.
+
+Bacs créés : Ré (La Rochelle – La Flotte, La Flotte – Ars-en-Ré), Oléron (La Tremblade – Saint-Trojan), Belle-Île
+(Le Palais – Saint-Pierre-Quiberon), Noirmoutier (Pornic), Groix (Lorient), Soulac – Royan (la pointe de Grave),
+Saint-Malo – Saint-Briac (la Rance), Camaret – Lanvéoc, Saint-Pierre-Quiberon – Locmariaquer, Berck – Fort-Mahon
+(l'Authie), et deux bacs dus à la côte grossière (Guérande – Piriac, Notre-Dame-de-Monts – Saint-Urbain). Décision :
+ces bacs sont des routes (`ferry`), pas des voies d'eau : il aurait fallu recalculer les tracés en mer
+(`outils/voies_eau.py`) pour des îles sans port ; et aucune place n'est retirée des cibles des IA.
+
+**Anciennes sauvegardes** (`views.recaler`) : une sauvegarde désigne des arêtes par leur numéro à trois endroits, tous
+dans les armées : `a['edge']` (l'arête où elle se trouve, `e`, `frm`, `pos`), les étapes de son chemin `a['path']`
+(`kind='road'` : `e`, `frm`, `to`, `pos`) et le chemin mis de côté devant une place `a['ask']['path']`. Le reste est
+ailleurs : places par leur numéro (garnisons, sièges, bandes, batailles, blocus, voies ferrées `g.rails` par paires de
+villes « a-b », dont les arêtes sont recalculées sur la carte), routes coupées par la crue recalculées (`crue.spans`).
+Les numéros des places ne changent pas (mêmes 3 555 places, même ordre : rien n'a été ajouté). La sauvegarde garde
+désormais `graphe`, l'empreinte de la numérotation des arêtes (`geo.empreinte` : les deux bouts et la voie de chaque
+arête) ; si elle manque ou diffère au chargement : une armée sur une arête retrouve, parmi les arêtes de sa place de
+départ et du même genre (voie d'eau en bateau, route sinon), celle qui passe à moins de 1,5 km de sa position ; sinon
+elle revient à sa place de départ (un quai pour un bateau ; dans une bataille, elle reste où elle se bat, hors des
+routes). Chaque étape d'un chemin se retrouve par ses deux bouts s'il n'y a qu'une arête entre eux (route *ou* voie
+d'eau : sinon on ne sait laquelle) ; sinon le chemin est recalculé vers la destination (`Game.reroute`), ou l'armée
+s'arrête. Une partie sauvegardée avec l'ancienne carte (`banc_france.py --sauve`, 94 armées dont 4 sur une route et 7
+en marche) se recharge et joue un mois.
+
+Tests (`tests/test_france.py`) : toutes les places de la géographie 3 rejoignent Paris (par la route, sauf la Corse et
+Yeu, et toutes avec les voies d'eau) ; les géographies 1 et 2 inchangées (empreinte des routes, voies d'eau, places et
+zones calculée avant) ; une sauvegarde aux arêtes renumérotées, avec une armée en marche sur la route, une en bateau sur
+la côte du Ponant et une dont l'arête a disparu, se recharge (mêmes arêtes, mêmes positions, même destination ; la
+dernière revenue à sa place, chemin recalculé) et joue un mois.
+
+Coût : carte envoyée au navigateur 14,67 → 14,70 Mo (1,892 → 1,898 Mo compressée) ; la carte se recalcule une fois
+(`map_cache.json`, 75 s environ sur la machine de développement chargée ; les géographies 1 et 2 aussi, identiques) ;
+le chargement d'une sauvegarde à recaler prend moins d'un dixième de seconde. Mois de jeu (`banc_france.py --epoque
+1790 --mois 3`, avant et après lancés ensemble) : 2,7 / 3,9 / 5,8 s avant, 2,6 / 4,3 / 6,0 s après (moyenne 4,1 → 4,3 s, dans
+le bruit de la machine partagée) ; 1 694 places changées de main avant, 1 714 après.
 
 ## Étape 2 : l'Europe et l'Afrique du Nord (mode « Europe »)
 
