@@ -22,7 +22,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, 'outils'))
 os.environ['WEB_CONQUETE_NOLOG'] = '1'
 
-TRAITES = []   # (date, vaincu, vainqueur, places restantes, absorbé ?)
+TRAITES = []   # (date, vaincu, vainqueur, places restantes, absorbé ?, places du vainqueur)
 
 
 def pourquoi(g, ai, a):
@@ -37,10 +37,7 @@ def pourquoi(g, ai, a):
         return 'quartiers'
     nid = a['at_node']
     if nid is not None and g.nodes[nid]['owner'] == ai.code:
-        foes = ai.foes()
-        if hasattr(ai, 'retranchee') and nid != g.capital_of(ai.code):   # (règle de la défense depuis le 09/11)
-            foes = [e for e in foes if not ai.retranchee(e)]
-        th = ai.threat_at(nid, 30, foes, {})
+        th = ai.threat_at(nid, 30)
         if th > 0 and th > g.node_defense_power(nid, include_armies=False) * 0.8:
             k = g.army_power(a) / th
             return 'garde : plus forte' if k > 1.3 else 'garde : égale' if k > 0.75 else 'garde : plus faible'
@@ -64,12 +61,12 @@ def main():
     vieux_traite, vieux_cap = Game.treaty, Game.capitulate
 
     def traite(self, loser, winner, cap):
-        TRAITES.append((self.date_str(), loser, winner, len(self.owned_nodes(loser)), False))
+        TRAITES.append((self.date_str(), loser, winner, len(self.owned_nodes(loser)), False, len(self.owned_nodes(winner))))
         return vieux_traite(self, loser, winner, cap)
 
     def capitule(self, loser, winner):
         if self.factions[loser]['alive']:
-            TRAITES.append((self.date_str(), loser, winner, len(self.owned_nodes(loser)), True))
+            TRAITES.append((self.date_str(), loser, winner, len(self.owned_nodes(loser)), True, len(self.owned_nodes(winner))))
         return vieux_cap(self, loser, winner)
     Game.treaty, Game.capitulate = traite, capitule
     vieux_think = AI.army_think
@@ -110,8 +107,9 @@ def main():
           f'(en puissance)')
     for k, v in raisons.most_common():
         print(f'  {k} : {100 * v / max(1.0, immobiles):.0f} %')
-    print('vaincus (places restantes à la chute du chef-lieu) :',
-          ' '.join(f'{t[3]}{"*" if t[4] else ""}' for t in TRAITES), '(* absorbé)')
+    print('camps vaincus deux fois ou plus :', sum(1 for c, k in collections.Counter(t[1] for t in TRAITES).items() if k >= 2))
+    print('vaincus (places restantes à la chute du chef-lieu / places du vainqueur) :',
+          ' '.join(f'{t[3]}/{t[5]}{"*" if t[4] else ""}' for t in TRAITES), '(* absorbé)')
 
 
 if __name__ == '__main__':

@@ -196,6 +196,34 @@ class France(unittest.TestCase):
         autre = next(o for o in codes if o != '67' and o not in f['trade'] and g.status('67', o) != 'guerre')
         self.assertFalse(D.act(g, '67', autre, 'commerce')[0])
 
+    def test_treve_courte_pour_un_vaincu_bien_plus_petit(self):
+        # (SPEC-FRANCE.md, « Guerres décisives et armées actives » : de deux à cinq ans selon la taille du vaincu face à
+        # son vainqueur, au lieu de cinq ans toujours)
+        from game import diplomacy as D
+        g = Game(GEO, '33', 'normal', 1, '1790')
+        for n, gn in zip(g.nodes, GEO.nodes):   # chacun tient son département, la Gironde aussi les Landes et le Lot-et-Garonne
+            if n['owner'] not in g.factions and gn['dept'] in g.factions:
+                n['owner'] = gn['dept']
+            if gn['dept'] in ('40', '47'):
+                n['owner'] = '33'
+        g._own_ver += 1
+        g.factions['24']['pic'] = len(g.owned_nodes('24'))
+        D.declare_war(g, '33', '24', quiet=True)
+        petit, grand = len(g.owned_nodes('24')), len(g.owned_nodes('33'))
+        g.capture(g.capital_of('24'), '33')
+        self.assertTrue(g.factions['24']['alive'])
+        treve = (g.factions['24']['truce']['33'] - g.t) / 365
+        self.assertLess(petit * 2, grand)
+        self.assertAlmostEqual(treve, max(2, min(5, 10 * petit / grand)), delta=0.15)
+
+    def test_deux_defaites_en_25_ans_quel_que_soit_le_vainqueur(self):
+        from game import diplomacy as D
+        g = Game(GEO, '33', 'normal', 1, '1790')
+        g.factions['24']['treaties'] = {'87': g.t - 3 * 365}   # (la Haute-Vienne l'a fait plier il y a trois ans)
+        D.declare_war(g, '33', '24', quiet=True)
+        g.capture(g.capital_of('24'), '33')
+        self.assertFalse(g.factions['24']['alive'])
+
     def test_le_sud_ouest_garde_l_ia_complete(self):
         from fabrique import partie
         g = partie('33')
