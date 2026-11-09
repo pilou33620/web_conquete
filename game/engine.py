@@ -3763,10 +3763,11 @@ class Game:
             left = len(self.owned_nodes(old))
             # absorbé s'il est écrasé (réduit au quart de ce qu'il a tenu au plus fort, ou de ses places de départ, ou à
             # 3 places), ou s'il plie une seconde fois en 25 ans devant le même vainqueur (toute la France, 89 camps :
-            # devant n'importe quel vainqueur, il n'a plus de quoi se relever)
-            traites = lf.get('treaties', {})
-            dernier = max(traites.values(), default=-1e9) if len(self.factions) > 5 else traites.get(code, -1e9)
-            if left <= max(3, max(lf['start_nodes'], lf.get('pic', 0)) * R.TREATY_CRUSHED) \
+            # devant n'importe quel vainqueur s'il a perdu le quart de ce qu'il a tenu, il n'a plus de quoi se relever)
+            traites, pic = lf.get('treaties', {}), max(lf['start_nodes'], lf.get('pic', 0))
+            dernier = max(traites.values(), default=-1e9) if len(self.factions) > 5 and left * 4 <= pic * 3 \
+                else traites.get(code, -1e9)
+            if left <= max(3, pic * R.TREATY_CRUSHED) \
                     or self.t - dernier < R.TREATY_AGAIN or code not in self.factions:
                 self.capitulate(old, code)
             else:
@@ -3776,7 +3777,7 @@ class Game:
     def treaty(self, loser, winner, cap):
         """Le chef-lieu est tombé : le vaincu signe la paix, cède les places que le vainqueur occupe, paie un tribut
         et récupère son chef-lieu. Il peut se relever ; une seconde défaite face au même vainqueur avant 25 ans (toute la
-        France : face à n'importe quel vainqueur) lui sera fatale."""
+        France : face à n'importe quel vainqueur, s'il a perdu le quart de ce qu'il a tenu) lui sera fatale."""
         from . import diplomacy as D
         lf, wf = self.factions[loser], self.factions[winner]
         n = self.nodes[cap]

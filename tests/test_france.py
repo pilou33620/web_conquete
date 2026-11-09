@@ -216,13 +216,20 @@ class France(unittest.TestCase):
         self.assertLess(petit * 2, grand)
         self.assertAlmostEqual(treve, max(2, min(5, 10 * petit / grand)), delta=0.15)
 
-    def test_deux_defaites_en_25_ans_quel_que_soit_le_vainqueur(self):
+    def test_deux_defaites_en_25_ans_quel_que_soit_le_vainqueur_s_il_a_perdu_le_quart(self):
         from game import diplomacy as D
         g = Game(GEO, '33', 'normal', 1, '1790')
-        g.factions['24']['treaties'] = {'87': g.t - 3 * 365}   # (la Haute-Vienne l'a fait plier il y a trois ans)
+        f = g.factions['24']
+        f['treaties'] = {'87': g.t - 3 * 365}   # (la Haute-Vienne l'a fait plier il y a trois ans)
+        f['pic'] = 2 * len(g.owned_nodes('24'))   # et il a perdu plus du quart de ce qu'il a tenu
         D.declare_war(g, '33', '24', quiet=True)
         g.capture(g.capital_of('24'), '33')
-        self.assertFalse(g.factions['24']['alive'])
+        self.assertFalse(f['alive'])
+        f = g.factions['19']   # la Corrèze, elle aussi vaincue il y a trois ans, mais qui a gardé ce qu'elle tenait
+        f['treaties'] = {'87': g.t - 3 * 365}
+        D.declare_war(g, '33', '19', quiet=True)
+        g.capture(g.capital_of('19'), '33')
+        self.assertTrue(f['alive'])
 
     def test_le_sud_ouest_garde_l_ia_complete(self):
         from fabrique import partie

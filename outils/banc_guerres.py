@@ -55,6 +55,7 @@ def main():
     ap.add_argument('--joueur', default='33')
     o = ap.parse_args()
     from banc_france import jouer_mois
+    from simuler import carry_on   # (le camp du joueur rayé de la carte : le monde continue, vu d'un autre camp)
     from game.ai import AI
     from game.engine import Game
     from game.geo import GeoMap
@@ -87,6 +88,7 @@ def main():
     for m in range(1, o.mois + 1):
         t0 = time.process_time()
         jouer_mois(g)
+        carry_on(g)
         t_cpu += time.process_time() - t0
         now = [n['owner'] for n in g.nodes]
         prises += sum(1 for x, y in zip(prec, now) if x != y and x in g.factions and y in g.factions)
