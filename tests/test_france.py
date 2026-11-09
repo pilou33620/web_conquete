@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'outils'))
 
 from game import rules as R
+from game import views as V
 from game.geo import GeoMap, NONE
 from game.engine import Game
 
@@ -183,8 +184,15 @@ class France(unittest.TestCase):
         f['trade'] = {o: True for o in codes[:12] if o != '67'}
         for o in f['trade']:
             g.factions[o]['trade']['67'] = True
-        g.ais['67'].diplomacy()
-        self.assertEqual(len(f['trade']), R.TRADE_MAX)
+        moi = g.factions[g.player]
+        moi['trade'] = {o: True for o in codes[-10:] if o != g.player}
+        for o in moi['trade']:
+            g.factions[o]['trade'][g.player] = True
+        V.migrate(g)
+        self.assertLessEqual(len(f['trade']), R.TRADE_MAX)   # (ses partenaires, déjà à quatre, ont pu le laisser)
+        self.assertEqual(len(moi['trade']), R.TRADE_MAX)   # le joueur aussi, et ses accords gardés le restent des deux côtés
+        self.assertTrue(all(g.player in g.factions[o]['trade'] for o in moi['trade']))
+        self.assertLessEqual(max(len(x['trade']) for x in g.factions.values()), R.TRADE_MAX)
         autre = next(o for o in codes if o != '67' and o not in f['trade'] and g.status('67', o) != 'guerre')
         self.assertFalse(D.act(g, '67', autre, 'commerce')[0])
 

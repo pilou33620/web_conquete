@@ -232,8 +232,8 @@ banc donne autant de guerres (5 en moyenne la première année, 14 la deuxième,
 **Correction** (décision prise seul) : **quatre accords de commerce au plus par camp** (`R.TRADE_MAX`, autant qu'il y a
 d'autres camps dans le Sud-Ouest, où rien ne change donc). Un cinquième accord est refusé, au joueur comme aux IA
 (« … a déjà 4 accords commerciaux ») ; une IA n'en propose plus au-delà. Les parties de toute la France d'avant cette
-règle : chaque IA dénonce, à sa première diplomatie, ses accords en trop (elle garde ceux des camps qu'elle aime le
-plus). Les voisins sans accord se brouillent (relation médiane −35 à −40 au bout de deux ans) et se font la guerre ; le
+règle : au chargement (`views.migrate`), chaque camp, le joueur d'abord, perd ses accords en trop, sans brouille ; il
+garde ceux des camps qu'il aime le plus, et une IA ne rompt jamais celui du joueur. Les voisins sans accord se brouillent (relation médiane −35 à −40 au bout de deux ans) et se font la guerre ; le
 revenu redevient celui du pays, dépensé en régiments, remparts et constructions.
 
 Mesures (`outils/banc_france.py`, Gironde jouée par une IA, graine 1 ; « prises » : places passées d'un camp à un

@@ -60,6 +60,19 @@ def migrate(g):
             f['research'][R.TECH[old['tech']]['branch']] = old
         if not f['alive']:
             f.setdefault('dead_t', g.t)
+    # parties de toute la France d'avant R.TRADE_MAX : un accord avec presque chaque camp, joueur compris ; chacun garde
+    # ses quatre meilleurs (relations), sans brouille : c'est la règle qui change, pas un affront
+    for code in sorted(g.factions, key=lambda c: c != g.player):   # (le joueur d'abord : il garde ses préférés)
+        f = g.factions[code]
+        trop = sorted(f['trade'], key=lambda o: (o == g.player, f['rel'].get(o, 0)))[:max(0, len(f['trade']) - R.TRADE_MAX)]
+        for o in trop:
+            f['trade'].pop(o, None)
+            if o in g.factions:
+                g.factions[o]['trade'].pop(code, None)
+        g._dirty_income = g._dirty_income or bool(trop)
+        if trop and code == g.player:
+            g.log('diplo', f"Quatre accords commerciaux au plus par pays : {len(trop)} de vos accords prennent fin "
+                  f"(vous gardez ceux de vos meilleurs partenaires).", who=code, important=True)
     if g.ev_done is None:
         # sauvegarde d'avant les événements : ce qui est déjà passé ne se rejoue pas
         today = g.date().toordinal()
