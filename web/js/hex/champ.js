@@ -161,26 +161,154 @@ export class Champ {
   }
   // un arbre qui s'ouvre ; l'hiver, les feuillus sont nus (houppiers gris-brun, poudrés par neiger), les sapins blancs
   planter(x, y, z, s, sorte) {
-    return this.ouvrable(x, z, A => M.arbre(A, x, y, z, s, sorte, this.neige && sorte !== 'sapin' && sorte !== 'pin' ? choix([0x8f8a6e, 0x9a927a]) : undefined), sorte === 'sapin' ? 0.25 : 0.55);
+    const tc = this.teinteArbre(sorte);
+    return this.ouvrable(x, z, A => M.arbre(A, x, y, z, s, sorte, tc), sorte === 'sapin' ? 0.25 : 0.55);
+  }
+  // la teinte d'un arbre selon la saison : nu et gris l'hiver (poudré par neiger), roux et or l'automne
+  teinteArbre(sorte) {
+    if (sorte === 'sapin' || sorte === 'pin') return undefined;
+    if (this.neige) return choix([0x8f8a6e, 0x9a927a]);
+    if (this.m.season === 'automne') return sorte === 'peuplier' ? 0xd9c441 : choix([0xc98a3c, 0xd9a441, 0xb5651d, 0x9cae4a, 0xa8572e]);
+    return undefined;
   }
   decor() {
-    const { g } = this, L = lot(), R = g.R;
+    const { g } = this, L = lot(), R = g.R, sa = this.m.season, hiv = sa === 'hiver' || this.neige, ete = !hiv && (sa === 'été' || sa === 'ete'), aut = !hiv && sa === 'automne', prin = !hiv && sa === 'printemps';
     this.A = lot();
     this.boise = new Uint8Array(g.liste.length);
     this.arbres = [];            // [x, y] de chaque pièce qui s'ouvre, en mètres
     this.parHex = new Map();     // hexagone → numéros de ses pièces
     const arbre = (t, x, z, s, sorte) => this.planter(x, t.top, z, s, sorte);
+    // les petites pièces du détail : peu de sommets chacune, le champ en porte des milliers
+    const pastille = (r, col, x, y, z) => { const p = new THREE.PlaneGeometry(r, r); p.rotateX(-Math.PI / 2); put(L, p, col, x, y, z, rnd() * 3); };   // fleur, feuille, nénuphar
+    const touffe = (x, y, z, s, col) => put(L, cone(0.4 * s, 0.6 * s, 4), col, x, y + 0.3 * s, z, rnd() * 3);                                              // herbe, fougère
+    const buisson = (x, y, z, s, col) => { const b = caillou(s); b.scale(1.2, 0.7, 1); put(L, b, col, x, y + s * 0.4, z, rnd() * 3); };
+    const pierre = (x, y, z, s, col = 0x9c968c) => { const b = caillou(s); b.scale(1, 0.6, 0.85); put(L, b, col, x, y + s * 0.3, z, rnd() * 3); };
+    const gerbe = (x, y, z) => { put(L, cone(0.34, 0.85, 6), 0xdcb650, x, y + 0.42, z); put(L, cyl(0.2, 0.12, 0.2, 6), 0xc9a440, x, y + 0.92, z); };
+    const meule = (x, y, z, s = 1) => { const b = sphere(1.1 * s, 1); b.scale(1, 0.85, 1); put(L, b, 0xcfb45c, x, y + 0.7 * s, z); put(L, cone(0.75 * s, 0.7 * s, 8), 0xc2a650, x, y + 1.7 * s, z); };
+    const roseau = (x, y, z) => { const h = entre(1.1, 1.6); put(L, cyl(0.05, 0.07, h, 4), 0x9cae5a, x, y + h / 2, z); const q = caillou(0.1); q.scale(1, 2.4, 1); put(L, q, 0x5a3a24, x, y + h, z); };
+    const FLEURS = [0xf6f4ea, 0xf2d24a, 0xe58ab0, 0xd8463a, 0x6f8fe0];
     for (const t of g.liste) {
       semer(t.q, t.r);
       const y = t.top, rr = (k = 0.62) => { const a = rnd() * Math.PI * 2, l = Math.sqrt(rnd()) * R * k; return [t.x + Math.cos(a) * l, t.z + Math.sin(a) * l]; };
-      if (t.t === 'BOIS' || t.t === 'FORET') for (let i = 0, nb = t.t === 'FORET' ? 6 : 4; i < nb; i++) { const [x, z] = rr(); arbre(t, x, z, entre(0.85, 1.2), t.t === 'FORET' && (this.dept === '64' || rnd() < 0.4) ? 'sapin' : this.dept === '40' && rnd() < 0.6 ? 'pin' : 'feuillu'); }
-      if (t.t === 'VERGER') for (let i = 0; i < 3; i++) { const [x, z] = rr(0.55); arbre(t, x, z, 1, 'fruitier'); }
-      if (t.t === 'CHAMP') { const a = hache(t.q >> 2, t.r >> 2, 3) * Math.PI; for (let k = -2; k <= 2; k++) put(L, boite(14 - Math.abs(k) * 2.6, 0.12, 2.6), [0xe3c75b, 0xd6b24a, 0xbfae4f][(k + 9 + (t.q >> 2)) % 3], t.x + Math.sin(a) * k * 2.9, y + 0.06, t.z + Math.cos(a) * k * 2.9, a, 0); }
-      if (t.t === 'VIGNE') { const a = hache(t.q >> 2, t.r >> 2, 4) * Math.PI; for (let k = -3; k <= 3; k++) put(L, boite(12 - Math.abs(k) * 1.7, 0.8, 0.55), 0x557a2e, t.x + Math.sin(a) * k * 1.7, y + 0.4, t.z + Math.cos(a) * k * 1.7, a, 0.1); }
-      if (t.t === 'LANDE') for (let i = 0; i < 3; i++) { const [x, z] = rr(), b = sphere(entre(0.8, 1.2), 0); b.scale(1.3, 0.5, 1); put(L, b, 0x9a6f9e, x, y + 0.2, z, 0, 0.1); }
-      if (t.t === 'MARAIS') for (let i = 0; i < 2; i++) { const [x, z] = rr(); put(L, cyl(entre(1.4, 2.2), entre(1.4, 2.2), 0.06, 9), 0x46a9dd, x, y + 0.04, z, 0, 0); for (let k = 0; k < 4; k++) put(L, cyl(0.06, 0.1, 1.3, 4), 0x9cae5a, x + entre(-2, 2), y + 0.65, z + entre(-2, 2), 0, 0); }
-      if (t.t === 'ROCHE') for (let i = 0; i < 2; i++) { const [x, z] = rr(); put(L, caillou(entre(1.2, 2.4)), 0x8f8879, x, y + 0.6, z); }
-      if (t.t === 'PRE' && rnd() < 0.18) { const [x, z] = rr(); put(L, sphere(0.9, 0), 0x5fa83c, x, y + 0.5, z); }
+      const bq = t.q >> 2, br = t.r >> 2;   // la parcelle : quatre hexagones de côté, une culture, un sens de labour
+      switch (t.t) {
+        case 'BOIS': case 'FORET': {
+          const foret = t.t === 'FORET';
+          for (let i = 0, nb = foret ? 6 : 4; i < nb; i++) { const [x, z] = rr(); arbre(t, x, z, entre(0.75, 1.3), foret && (this.dept === '64' || rnd() < 0.4) ? 'sapin' : this.dept === '40' && rnd() < 0.6 ? 'pin' : 'feuillu'); }
+          // le sous-bois : de jeunes arbres, des buissons, des fougères ; une souche, un tronc couché ou un rocher moussu
+          for (let i = 0; i < (foret ? 2 : 1); i++) { const [x, z] = rr(0.85); arbre(t, x, z, entre(0.45, 0.6), 'feuillu'); }
+          for (let i = 0, n = foret ? 3 : 2; i < n; i++) { const [x, z] = rr(0.85); buisson(x, y, z, entre(0.5, 0.8), hiv ? 0x7f7a62 : choix([0x3f8a35, 0x4a9438, 0x3a7d33])); }
+          if (!hiv) for (let i = 0; i < 2; i++) { const [x, z] = rr(0.85); touffe(x, y, z, 1.1, aut ? 0xb5852e : 0x7cbf4a); }
+          const h = rnd(), [x, z] = rr(0.8);
+          if (h < 0.22) { put(L, cyl(0.3, 0.38, 0.36, 8), 0x8a6a45, x, y + 0.18, z); put(L, cyl(0.27, 0.27, 0.03, 8), 0xd9c08a, x, y + 0.37, z); }
+          else if (h < 0.36) { const tr = cyl(0.22, 0.27, entre(2.2, 3.2), 6); tr.rotateZ(Math.PI / 2); put(L, tr, 0x6b4a2e, x, y + 0.24, z, rnd() * 3); }
+          else if (h < 0.46) { const r = entre(0.5, 0.9); pierre(x, y, z, r, 0x8f8a80); buisson(x + r * 0.2, y + r * 0.35, z, r * 0.45, 0x6a9a48); }
+          if (aut) {   // champignons et feuilles mortes
+            if (rnd() < 0.35) for (let i = 0; i < 3; i++) { const [mx, mz] = rr(0.8); put(L, cyl(0.05, 0.06, 0.2, 5), 0xf1ecdd, mx, y + 0.1, mz); const c = caillou(0.14); c.scale(1, 0.6, 1); put(L, c, 0xc8402e, mx, y + 0.24, mz); }
+            for (let i = 0; i < 4; i++) { const [fx, fz] = rr(0.85); pastille(0.4, choix([0xc98a3c, 0xb5651d, 0xd9a441]), fx, y + 0.04, fz); }
+          }
+          break;
+        }
+        case 'VERGER': {
+          // les fruitiers en quinconce ; des fruits l'été et l'automne, un panier au pied, parfois une échelle
+          const a = hache(bq, br, 6) * Math.PI, cs = Math.cos(a), sn = Math.sin(a), fruit = choix([0xd8463a, 0xe8b03a, 0xc8402e]);
+          for (const [u, v] of [[-3.8, -3.2], [3.8, -3.2], [-3.8, 3.2], [3.8, 3.2], [0, 0]]) {
+            const x = t.x + cs * u - sn * v, z = t.z + sn * u + cs * v, tc = this.teinteArbre('fruitier');
+            this.ouvrable(x, z, A => {
+              M.arbre(A, x, y, z, 0.95, 'fruitier', tc);
+              if (ete || aut) for (let k = 0; k < 4; k++) { const th = rnd() * 6.3, ph = 0.3 + rnd() * 1.1; put(A, caillou(0.15), fruit, x + Math.cos(th) * Math.sin(ph) * 1.05, y + 1.43 + Math.cos(ph) * 1.05, z + Math.sin(th) * Math.sin(ph) * 1.05); }
+            });
+            if (aut && rnd() < 0.3) { put(L, cyl(0.28, 0.22, 0.26, 8), 0xb08a5a, x + 0.9, y + 0.13, z + 0.5); put(L, cyl(0.24, 0.24, 0.04, 8), fruit, x + 0.9, y + 0.27, z + 0.5); }
+            if ((ete || aut) && rnd() < 0.08) { for (const k of [-1, 1]) put(L, boite(0.07, 2.2, 0.07), 0x8a6a45, x + 0.75, y + 1.05, z + k * 0.22); for (let k = 0; k < 4; k++) put(L, boite(0.05, 0.05, 0.44), 0x8a6a45, x + 0.75, y + 0.4 + k * 0.45, z); }
+          }
+          for (let i = 0; i < 2; i++) { const [x, z] = rr(0.85); touffe(x, y, z, 0.8, hiv ? 0x9aa07a : 0x5fa83c); }
+          break;
+        }
+        case 'CHAMP': {
+          const a = hache(bq, br, 3) * Math.PI, h = hache(bq, br, 5), sn = Math.sin(a), cs = Math.cos(a);
+          // la culture de la parcelle, selon la saison : labours, blé en herbe, blé mûr, foin et ses meules, chaume et ses gerbes
+          const sorte = hiv ? 'labour' : prin ? (h < 0.5 ? 'labour' : 'vert') : ete ? (h < 0.6 ? 'ble' : h < 0.85 ? 'foin' : 'chaume') : h < 0.5 ? 'chaume' : 'labour';
+          if (sorte === 'labour') for (let k = -3; k <= 3; k++) put(L, boite(13 - Math.abs(k) * 1.7, 0.1, 0.75), k % 2 ? 0x8a6a45 : 0x7c5c3a, t.x + sn * k * 2, y + 0.05, t.z + cs * k * 2, a);
+          else {
+            const [hh, cols] = { vert: [0.16, [0x8fc452, 0x84bb4a, 0x97c95a]], ble: [0.4, [0xe3c75b, 0xd6b24a, 0xdcbc52]], foin: [0.1, [0xa9c85a, 0x9cbc52, 0xb4cf62]], chaume: [0.06, [0xd2c188, 0xc8b67a, 0xd9c990]] }[sorte];
+            for (let k = -2; k <= 2; k++) put(L, boite(14 - Math.abs(k) * 2.6, hh, 2.6), cols[(k + 9 + bq) % 3], t.x + sn * k * 2.9, y + hh / 2, t.z + cs * k * 2.9, a);
+          }
+          if (sorte === 'chaume') for (let k = -1; k <= 1; k += 2) for (let u = -1; u <= 1; u++) { if (rnd() < 0.25) continue; gerbe(t.x + sn * k * 2.9 + cs * u * 3.2, y, t.z + cs * k * 2.9 - sn * u * 3.2); }
+          if (sorte === 'foin') for (let i = 0, n = 1 + (rnd() < 0.4); i < n; i++) { const [x, z] = rr(0.5); meule(x, y, z, entre(0.8, 1)); }
+          if (sorte === 'ble') for (let i = 0; i < 4; i++) { const [x, z] = rr(0.9); pastille(0.3, rnd() < 0.6 ? 0xd8463a : 0x6f8fe0, x, y + 0.42, z); }   // coquelicots, bleuets
+          if ((sorte === 'ble' || sorte === 'vert') && rnd() < 0.04) {   // un épouvantail
+            const [x, z] = rr(0.4);
+            put(L, boite(0.1, 1.7, 0.1), 0x6b4a2e, x, y + 0.85, z, a); put(L, boite(1.1, 0.09, 0.09), 0x6b4a2e, x, y + 1.25, z, a); put(L, boite(0.5, 0.62, 0.2), 0x7a5040, x, y + 1.0, z, a);
+            put(L, caillou(0.19), 0xd9c48a, x, y + 1.62, z); put(L, cyl(0.28, 0.28, 0.05, 8), 0x4a3828, x, y + 1.78, z); put(L, cyl(0.13, 0.15, 0.16, 8), 0x4a3828, x, y + 1.88, z);
+          }
+          break;
+        }
+        case 'VIGNE': {
+          // les rangs, leurs échalas ; feuilles rousses et grappes à l'automne, ceps nus l'hiver ; de loin en loin une cabane
+          const a = hache(bq, br, 4) * Math.PI, sn = Math.sin(a), cs = Math.cos(a), hh = hiv ? 0.4 : 0.8, col = hiv ? 0x6b5236 : aut ? [0xb5852e, 0x9a7a2e, 0xa8572e][(bq + br + 9) % 3] : 0x557a2e;
+          for (let k = -3; k <= 3; k++) {
+            const len = 12 - Math.abs(k) * 1.7, cx = t.x + sn * k * 1.7, cz = t.z + cs * k * 1.7;
+            put(L, boite(len, hh, hiv ? 0.2 : 0.55), col, cx, y + hh / 2, cz, a);
+            for (const e of [-1, 1]) put(L, boite(0.12, 1.1, 0.12), 0x7a5233, cx + cs * e * len / 2, y + 0.55, cz - sn * e * len / 2, a);
+            if (aut && k % 2 === 0) for (const e of [-0.25, 0.2]) put(L, caillou(0.16), 0x5a2a6a, cx + cs * e * len + sn * 0.3, y + 0.5, cz - sn * e * len + cs * 0.3);
+          }
+          if (rnd() < 0.05) { const B = lot(), [x, z] = rr(0.3); M.maison(B, this.st, 0, 0, 0, { s: 0.5, details: false }); transfere(B, L, x, y, z, a); }
+          break;
+        }
+        case 'LANDE': {
+          // bruyère, ajoncs en fleur, fougères, une pierre ; dans les Landes, un pin de loin en loin
+          for (let i = 0; i < 3; i++) { const [x, z] = rr(), b = sphere(entre(0.8, 1.2), 0); b.scale(1.3, 0.5, 1); put(L, b, hiv ? 0x8a7a80 : 0x9a6f9e, x, y + 0.2, z); }
+          for (let i = 0; i < 2; i++) { const [x, z] = rr(0.8), s = entre(0.6, 0.85); buisson(x, y, z, s, 0x6f8f3e); if (!hiv) for (let k = 0; k < 2; k++) put(L, caillou(0.12), 0xf0cf3a, x + entre(-0.4, 0.4) * s, y + s * 0.75, z + entre(-0.4, 0.4) * s); }
+          if (!hiv) for (let i = 0; i < 2; i++) { const [x, z] = rr(0.85); touffe(x, y, z, 1, aut ? 0xb5852e : 0x8aa84a); }
+          if (rnd() < 0.2) { const [x, z] = rr(); pierre(x, y, z, entre(0.3, 0.6)); }
+          if (this.dept === '40' && rnd() < 0.25) { const [x, z] = rr(0.5); arbre(t, x, z, entre(0.8, 1.05), 'pin'); }
+          break;
+        }
+        case 'MARAIS': {
+          // mares à nénuphars, roseaux à quenouilles, herbes ; parfois un arbre mort
+          for (let i = 0; i < 2; i++) {
+            const [x, z] = rr(), r = entre(1.4, 2.2); put(L, cyl(r, r, 0.06, 9), 0x46a9dd, x, y + 0.04, z);
+            if (!hiv) for (let k = 0; k < 2; k++) pastille(0.5, 0x5f9a4a, x + entre(-0.6, 0.6) * r, y + 0.09, z + entre(-0.6, 0.6) * r);
+            for (let k = 0; k < 4; k++) { const a = rnd() * 6.3; roseau(x + Math.cos(a) * r * 1.05, y, z + Math.sin(a) * r * 1.05); }
+          }
+          for (let i = 0; i < 3; i++) { const [x, z] = rr(0.85); touffe(x, y, z, 1, hiv ? 0x9aa07a : 0x7fae58); }
+          if (rnd() < 0.12) { const [x, z] = rr(0.5); put(L, cyl(0.16, 0.26, 2.6, 5), 0x6b5a48, x, y + 1.3, z); for (const k of [-1, 1]) { const b = boite(0.1, 1.1, 0.1); b.rotateZ(k * 0.9); put(L, b, 0x6b5a48, x + k * 0.45, y + 2.1, z, rnd()); } }
+          break;
+        }
+        case 'ROCHE':
+          for (let i = 0; i < 2; i++) { const [x, z] = rr(); put(L, caillou(entre(1.2, 2.4)), 0x8f8879, x, y + 0.6, z, rnd() * 3); }
+          for (let i = 0; i < 4; i++) { const [x, z] = rr(0.85); pierre(x, y, z, entre(0.3, 0.7), choix([0x8f8879, 0x9c968c, 0x7f7a70])); }
+          if (!hiv && rnd() < 0.5) { const [x, z] = rr(0.7); buisson(x, y, z, 0.5, 0x6a9a48); }
+          break;
+        case 'SABLE': {
+          const [x, z] = rr(0.4), d = sphere(2.2, 1); d.scale(1.4, 0.25, 0.9); put(L, d, 0xf0e2b0, x, y, z, rnd() * 3);
+          for (let i = 0; i < 3; i++) { const [px, pz] = rr(0.85); pierre(px, y, pz, entre(0.15, 0.3), 0xb9ad98); }
+          break;
+        }
+        case 'GUE':   // les pierres du gué affleurent
+          for (let i = 0; i < 5; i++) { const [x, z] = rr(0.7); pierre(x, this.sol(t) - 0.05, z, entre(0.4, 0.7), 0xa39d92); }
+          break;
+        case 'ROUTE': case 'CHEMIN':
+          // une borne au bord de la route ; plus rarement un calvaire
+          if (rnd() < 0.07) { const [x, z] = rr(0.85); put(L, boite(0.32, 0.6, 0.32), 0xddd6c2, x, y + 0.3, z, rnd()); put(L, boite(0.34, 0.12, 0.34), 0xb8452f, x, y + 0.66, z, 0); }
+          else if (rnd() < 0.015) { const [x, z] = rr(0.8), a = rnd() * 3; put(L, boite(0.9, 0.4, 0.9), 0xc9bb98, x, y + 0.2, z, a); put(L, boite(0.18, 2, 0.18), 0xc9bb98, x, y + 1.4, z, a); put(L, boite(0.85, 0.16, 0.16), 0xc9bb98, x, y + 1.95, z, a); }
+          break;
+        case 'PRE': {
+          // herbes, fleurs des prés au printemps et l'été ; un buisson, une pierre, une meule de foin de loin en loin
+          for (let i = 0, n = 2 + (rnd() * 3 | 0); i < n; i++) { const [x, z] = rr(0.85); touffe(x, y, z, entre(0.7, 1.2), hiv ? 0x9aa07a : aut ? choix([0x8fa84a, 0xa8a850]) : choix([0x5fa83c, 0x6db844, 0x4f9a37])); }
+          if (prin || ete) for (let i = 0, n = prin ? 7 : 4; i < n; i++) { const [x, z] = rr(0.88); pastille(0.32, choix(FLEURS), x, y + 0.05, z); }
+          const h = rnd(), [x, z] = rr();
+          if (h < 0.12) buisson(x, y, z, entre(0.6, 0.9), hiv ? 0x7f7a62 : 0x4f9a37);
+          else if (h < 0.17 && ete) meule(x, y, z, 0.8);
+          else if (h < 0.24) pierre(x, y, z, entre(0.3, 0.6));
+          break;
+        }
+      }
+      // des roseaux au bord de l'eau, du côté de la terre
+      if (!this.estEau(t) && t.t !== 'BATI' && t.t !== 'ROUTE' && t.t !== 'MUR' && t.t !== 'PORTE') {
+        const e = g.voisins(t).find(v => this.estEau(v) && v.t !== 'GUE');
+        if (e) for (let i = 0; i < 3; i++) { const k = entre(0.78, 0.9), lat = entre(-0.35, 0.35); roseau(t.x + (e.x - t.x) * k * 0.5 - (e.z - t.z) * lat * 0.5, y, t.z + (e.z - t.z) * k * 0.5 + (e.x - t.x) * lat * 0.5); }
+      }
     }
     this.neiger(L.g); fige(L, this.racine);
   }

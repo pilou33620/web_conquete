@@ -36,6 +36,12 @@ quitte l'ombrage « cartoon » pour un rendu doux, sur la carte comme en bataill
 - **Après les coups** (`battle/errants.js`, dessinés par `troupes3d.js`) : chevaux sans cavalier, blessés qui rampent ou
   s'en vont en boitant, brancardiers ; l'épave d'une pièce démontée reste sur place (`champ.js`, `DEBRIS.epave`).
   Affichage seul, sans effet sur les règles.
+- **Décor du champ de bataille** (`champ.js`, `decor`) : chaque parcelle porte sa culture selon la saison (labours, blé
+  en herbe, blé mûr et ses coquelicots, foin et ses meules, chaume et ses gerbes), parfois un épouvantail ; sous-bois
+  (jeunes arbres, buissons, fougères, souches, troncs couchés, rochers moussus, champignons et feuilles mortes à
+  l'automne) ; vergers en quinconce, fruits, paniers, échelles ; vignes à échalas, rousses et chargées de grappes à
+  l'automne, ceps nus l'hiver ; landes à bruyère et ajoncs ; marais à nénuphars et quenouilles ; fleurs des prés ;
+  roseaux au bord de l'eau, pierres du gué, bornes et calvaires au bord des routes. Les arbres roussissent à l'automne.
 - **Vie de la carte** : passants, charrettes et bêtes se posent sur le relief du plateau (`ambient.js`, `sc.haut`).
 
 Règles ajoutées le même jour (moteur) : la fumée de la poudre noire gêne le tir (`battle.py`, `SMOKE_*`), un bataillon
