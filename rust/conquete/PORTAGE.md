@@ -69,6 +69,7 @@ a.pop("rg") / a.del("rg") / a.setdefault("k", list![]) / a.update(&autre)
 l.push(x) / l.extend(&m) / l.insert(i, x) / l.remove(&x) / l.pop_last() / l.pop(0) / l.index_of(&x)
 l.sort_by_key(|r| r.at("n").f()) / l.slice(Some(1), None) / l.len() / l.at(-1)
 d.items() / d.keys() / d.values() / v.iter() / v.pair() / v.triple() / v.xy()
+u.atf("x")  u.ati("id")  u.ats("name")  u.atb("seen")  a.getb("qrt")   // u['x'] en f64, i64, String, bool ; bool(a.get('qrt'))
 v.f()  v.i()  v.s()  v.truthy()  v.is_none()  v.or(defaut)      // float, int, &str, « if v », « v or defaut »
 &a + &b, &a * 2.0, a / b, a.floordiv(b), a % b                  // les règles de Python (int + float = float, / rend un float)
 v == "texte", v == 3, v < 2.5, v.is(&w)                         // ==, <, is
@@ -115,6 +116,42 @@ Un seul écart d'un dernier bit, ou un tirage de plus, et toute la suite de la p
     `{x:,}` → `py::milliers` ; `str(float)` → `py::repr_f` ; `s.capitalize()` → `py::capitalize`.
 16. `json.load` → `py::json::loads` ; `json.dumps(o, separators=(',', ':'), ensure_ascii=False)` →
     `py::json::dumps_compact` ; un flottant relu est celui qui a été écrit.
+
+## Les deux grands ensembles : la bataille et la campagne
+
+Leurs fichiers s'appellent les uns les autres dans tous les sens. Ils se portent en deux temps : d'abord le
+**squelette** (constantes, structs, et la signature de chaque fonction avec un corps `todo!()`), qui compile ; puis
+les **corps**, à plusieurs en parallèle, chacun dans ses fichiers. Une signature du squelette ne se change pas sans
+le signaler : d'autres l'appellent déjà.
+
+Conventions communes aux deux ensembles :
+
+- **Les objets du jeu restent des `Val`** : une unité tactique (`Unit`, classe à `__slots__` en Python) est un dict
+  dont les clés sont ses attributs (`u.x` → `u.atf("x")`, `u.state == 'deroute'` → `u.at("state") == "deroute"`,
+  `u.men -= p` → `u.dec("men", p)`) ; armées, villes, camps, régiments, ordres, mémoire de l'IA sont déjà des dict.
+  Les méthodes et propriétés d'`Unit` deviennent des fonctions de `units.rs` : `U::alive(&u)`, `U::valid(&u)`,
+  `U::size(&u)`, `U::view(&u, …)`, et `U::Unit(&kw)` la construit.
+- **`Game` et `TacticalBattle` sont des structs**, passés en `&mut` : `g: &mut Game`, `b: &mut TacticalBattle`.
+  Leurs attributs sont des champs du même nom : `f64`, `i64`, `bool`, `String` quand c'est un simple nombre ou
+  texte jamais `None` ; **`Val` pour tout conteneur et pour tout ce qui peut valoir `None`** ; `Vec<u8>`,
+  `Vec<f32>`… pour les grilles ; `Random` pour un hasard ; `Rc<GeoMap>` pour la carte (partagée).
+  Deux attributs qui désignent le même objet en Python (`self.t = self.map.t`) n'en font qu'un en Rust : on écrit
+  `self.map.t`.
+- Les méthodes gardent leur nom dans `impl` ; `&mut self` sauf lecture pure évidente.
+- **Types des paramètres** : positions, angles, durées, facteurs → `f64` ; numéros, rangs, camps (0 / 1), cases →
+  `i64` ; drapeaux → `bool` ; codes et sortes (`code`, `kind`, `typ`) → `&str` ; tout objet du jeu, toute liste,
+  tout dict, et **tout paramètre qui peut recevoir `None`** → `&Val`. Un paramètre à valeur par défaut reste un
+  paramètre (Rust n'a pas de défaut) : le commentaire de la fonction dit sa valeur par défaut, l'appelant la passe.
+  Une suite de paramètres optionnels nommés (`**kw`, ou plus de trois défauts rarement donnés) → un `kw: &Val`
+  (dict) dont le commentaire liste les clés.
+- **Retours** : un type natif s'il est sûr, un tuple Rust pour plusieurs valeurs, `Val` pour un objet du jeu, une
+  collection ou ce qui peut être `None`.
+- Un objet qui en contient un autre et l'appelle en retour (`g.ais[code]` qui agit sur `g`, `g.tactical` que le
+  pont fait avancer avec `g`) : on le **sort** de son champ le temps de l'appel (`let mut tb = g.tactical.take()…`)
+  puis on le remet.
+- Un gros fichier Python se découpe en parties, dans l'ordre du Python : `battle/mod.rs` (constantes, struct,
+  création) puis `battle/<partie>.rs`, chacune avec son `impl`. L'en-tête de chaque partie dit les lignes du
+  Python qu'elle porte. Chaque partie est remplie par une seule personne.
 
 ## Erreurs
 

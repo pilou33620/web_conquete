@@ -434,6 +434,31 @@ impl Val {
             _ => None,
         }
     }
+    /// `v[k]` en flottant : `u.atf("x")` pour `u.x` ou `u['x']`.
+    #[track_caller]
+    pub fn atf(&self, k: impl Cle) -> f64 {
+        self.at(k).f()
+    }
+    /// `v[k]` en entier.
+    #[track_caller]
+    pub fn ati(&self, k: impl Cle) -> i64 {
+        self.at(k).i()
+    }
+    /// `v[k]` en texte (à soi).
+    #[track_caller]
+    pub fn ats(&self, k: impl Cle) -> String {
+        self.at(k).string()
+    }
+    /// `bool(v[k])` : la véracité de `v[k]` (`if u.seen:`).
+    #[track_caller]
+    pub fn atb(&self, k: impl Cle) -> bool {
+        self.at(k).truthy()
+    }
+    /// `bool(d.get(k))` : faux si la clé manque (`if a.get('qrt'):`).
+    #[track_caller]
+    pub fn getb(&self, k: impl Cle) -> bool {
+        self.get(k).truthy()
+    }
     /// `d.get(k)` : None si la clé manque. (Sur None lui-même : None, pour `(d.get('a') or {}).get('b')`.)
     #[track_caller]
     pub fn get(&self, k: impl Cle) -> Val {
