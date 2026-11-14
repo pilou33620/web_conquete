@@ -361,16 +361,22 @@ function creerUnite(src) {
   ETI.appendChild(u.el); majEti(u); placer(u, 0);
   return u;
 }
-const MX = new THREE.Matrix4(), QX = new THREE.Quaternion(), PX = new THREE.Vector3(), SX = new THREE.Vector3(K, K, K), YX = new THREE.Vector3(0, 1, 0);
+const EU = new THREE.Euler(), MX = new THREE.Matrix4(), QX = new THREE.Quaternion(), PX = new THREE.Vector3(), SX = new THREE.Vector3(K, K, K), YX = new THREE.Vector3(0, 1, 0);
 function placer(u, temps) {
   const fx = Math.cos(u.dir), fy = Math.sin(u.dir);
-  QX.setFromAxisAngle(YX, -u.dir);
+  const cav = u.cls === 'cavalerie', vite = cav ? 13 : 9;
   for (const { m, figs } of u.meshes.values()) {
     let n = 0;
     for (const f of figs) {
       if (f.mort) continue;
       const mx = u.x + fx * f.a - fy * f.c, my = u.y + fy * f.a + fx * f.c, [x, z] = mVers(mx, my);
-      const saut = u.bouge ? Math.abs(Math.sin(temps * (u.cls === 'cavalerie' ? 13 : 9) + f.a + f.c)) * (u.cls === 'cavalerie' ? .35 : .15) : 0;
+      const ph = temps * vite + f.a + f.c, saut = u.bouge ? Math.abs(Math.sin(ph)) * (cav ? .35 : .15) : 0;
+      // en marche : balancement du pas (roulis), buste penché ; cheval qui tangue ; au repos : à peine un souffle ; recul après la salve
+      let rx = 0, rz = 0;
+      if (u.bouge) { if (cav) rz = Math.sin(ph) * .1; else { rx = Math.sin(ph) * .07; rz = -.05; } }
+      else rx = Math.sin(temps * 1.3 + f.c * .7) * .015;
+      if (u.feu > 0 && f.a > -1 && !cav) rz += .14 * u.feu;
+      QX.setFromEuler(EU.set(rx, -u.dir, rz, 'YXZ'));
       f.x = x; f.z = z;
       m.setMatrixAt(n++, MX.compose(PX.set(x, solEn(x, z) + saut, z), QX, SX));
     }
@@ -391,8 +397,20 @@ function abattre(u) {
   while (trop-- > 0 && cand.length) {
     const f = cand.pop(); f.mort = true;
     const pm = poolMorts(u.side); if (pm.count >= MAX_MORTS) continue;
-    QM.setFromAxisAngle(YX, -u.dir + hasard(-.6, .6)).multiply(QT.setFromAxisAngle(ZX, Math.PI / 2 * (Math.random() < .5 ? 1 : -1)));
-    pm.setMatrixAt(pm.count++, MX.compose(PX.set(f.x, solEn(f.x, f.z) + .3, f.z), QM, SX)); pm.instanceMatrix.needsUpdate = true;
+    CHUTES.push({ pm, i: pm.count++, x: f.x, z: f.z, cap: -u.dir + hasard(-.6, .6), sens: Math.random() < .7 ? 1 : -1, t0: temps, d: hasard(.55, .8) });
+  }
+  majChutes();
+}
+// la chute : le soldat bascule (en arrière le plus souvent), accélère, rebondit à peine, puis reste couché
+const CHUTES = [];
+function majChutes() {
+  for (let j = CHUTES.length - 1; j >= 0; j--) {
+    const c = CHUTES[j], k = clamp((temps - c.t0) / c.d, 0, 1);
+    const a = k < .8 ? (k / .8) ** 2 : 1 - Math.sin((k - .8) / .2 * Math.PI) * .07, o = .7 * a;
+    QM.setFromAxisAngle(YX, c.cap).multiply(QT.setFromAxisAngle(ZX, c.sens * a * Math.PI / 2));
+    const px = c.x - c.sens * o * Math.cos(c.cap), pz = c.z + c.sens * o * Math.sin(c.cap);
+    c.pm.setMatrixAt(c.i, MX.compose(PX.set(px, solEn(px, pz) + .3 * a, pz), QM, SX)); c.pm.instanceMatrix.needsUpdate = true;
+    if (k >= 1) CHUTES.splice(j, 1);
   }
 }
 function retirer(u) {
@@ -690,7 +708,7 @@ function boucle(now) {
     temps += dt; ia(dt, temps);
     for (const u of UNITES) if (u.vivant) pas(u, dt);
     for (const u of UNITES) if (u.vivant) { placer(u, temps); if (u.morale < u.morale0 && !u.fuit && !u.feu) u.morale = Math.min(u.morale0, u.morale + dt * .4); }
-    majBoulets(dt); verifierFin();
+    majBoulets(dt); majChutes(); verifierFin();
     if ((tFiche -= dtR) <= 0) { tFiche = .5; majForces(); if (choisi?.vivant) { majFiche(); majChoix(); } for (const u of UNITES) if (u.vivant) majEti(u); }
   }
   majSprites(dtR);

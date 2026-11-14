@@ -645,7 +645,8 @@ async function marcher(a, chemin, ms) {
   for (const t of chemin) {
     const p0 = a.g.position.clone(), p1 = lieuDe(t);
     a.g.scale.setScalar(t.lieu ? 1 : 1.25);
-    await animer(ms, k => { a.g.position.lerpVectors(p0, p1, k); a.g.position.y += Math.sin(k * Math.PI) * .8; });
+    await animer(ms, k => { a.g.position.lerpVectors(p0, p1, k); a.g.position.y += Math.abs(Math.sin(k * Math.PI * 3)) * .25; a.g.rotation.x = Math.sin(k * Math.PI * 6) * .03; });   // petits pas cadencés, léger roulis
+    a.g.rotation.x = 0;
   }
 }
 const FUMEE = new THREE.IcosahedronGeometry(1, 1);
