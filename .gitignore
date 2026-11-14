@@ -7,3 +7,7 @@ saves/*.tmp
 .claude/worktrees/
 logs/
 captures-3d/
+
+# Rust : compilation et exécutables (compilés ici ou téléchargés)
+/target/
+/bin/
