@@ -4,47 +4,79 @@
 // une par figure, aux couleurs et à la tenue de l'époque (tenue). Rendu instancié : un maillage par modèle et par tenue,
 // ses contours à part ; ce qui bouge est une pièce à part, que la pose fait pivoter : jambes (des hommes et des chevaux),
 // fusil, bras armé du sabre ou de l'épée, refouloir des servants. Les tués restent couchés au sol.
-import { THREE, MAT, CONT, lot, put, fusion, boite, cyl, cone, sphere, clamp } from './moteur.js';
+import { THREE, MAT, CONT, lot, put, fusion, boite, cyl, cone, sphere, caillou, clamp } from './moteur.js';
 import { R, tenue } from '../battle/troupes2d.js';
 
 const H = 1.8;   // un homme, en mètres (la figurine est agrandie comme les figures 2D : fs)
-const NOIR = 0x2a2522, CHAIR = 0xf0c9a0, CUIR = 0x6b4d31, BRONZE = 0xb9893a, BLANC = 0xf2efe6;
+const NOIR = 0x2a2522, CHAIR = 0xf0c9a0, CUIR = 0x6b4d31, BRONZE = 0xc9933c, BLANC = 0xf2efe6, POUDRE = 0xe9e5dc, BRUN = 0x3a2a1f, OR = 0xe8b94a, FER = 0x8d9196, CHAMOIS = 0xe3cf9f;
+// (figurines du rendu doux, d'après dev/figurines.js : basques et retroussis, revers, buffleteries croisées, giberne,
+// bras et parements, col, cheveux poudrés ou bruns, coiffures galonnées, guêtres et souliers, roues à rayons)
+const tourne = (geo, rx = 0, rz = 0) => { if (rx) geo.rotateX(rx); if (rz) geo.rotateZ(rz); return geo; };
+const clairDe = c => { const k = new THREE.Color(c); return k.r * 0.3 + k.g * 0.59 + k.b * 0.11; };
 
 // ---------------------------------------------------------------- modèles (un mètre par unité, regard vers +x)
 function coiffe(L, tete, col) {
   const y = 1.66;
   switch (tete) {
-    case 'ourson': put(L, cyl(0.13, 0.16, 0.36, 8), NOIR, 0, y + 0.18, 0, 0, 0.03); break;
-    case 'shako': put(L, cyl(0.13, 0.11, 0.24, 8), NOIR, 0, y + 0.12, 0, 0, 0.03); put(L, boite(0.08, 0.02, 0.14), NOIR, 0.12, y + 0.02, 0, 0, 0); break;
-    case 'kepi': put(L, cyl(0.12, 0.12, 0.13, 8), 0xa8302a, 0, y + 0.07, 0, 0, 0.03); put(L, boite(0.08, 0.02, 0.14), NOIR, 0.12, y + 0.01, 0, 0, 0); break;
-    case 'casque': put(L, sphere(0.14, 1), BRONZE, 0, y + 0.04, 0, 0, 0.03); put(L, boite(0.24, 0.08, 0.04), NOIR, -0.02, y + 0.17, 0, 0, 0); break;
-    case 'rond': put(L, cyl(0.22, 0.22, 0.04, 10), 0x5b4632, 0, y + 0.02, 0, 0, 0.02); put(L, cyl(0.11, 0.12, 0.12, 8), 0x5b4632, 0, y + 0.09, 0, 0, 0); break;
-    case 'tricorne': put(L, cone(0.26, 0.14, 3), NOIR, 0, y + 0.06, 0, Math.PI / 2, 0.03); break;
-    default: put(L, boite(0.16, 0.13, 0.42), NOIR, 0, y + 0.05, 0, 0, 0.03);   // bicorne, porté en bataille
+    case 'ourson': put(L, cyl(0.13, 0.16, 0.38, 10), NOIR, 0, y + 0.19, 0); put(L, boite(0.02, 0.15, 0.14), OR, 0.15, y + 0.1, 0); break;
+    case 'shako': put(L, cyl(0.135, 0.115, 0.25, 10), NOIR, 0, y + 0.125, 0); put(L, boite(0.09, 0.02, 0.15), NOIR, 0.13, y + 0.02, 0); put(L, boite(0.02, 0.09, 0.08), OR, 0.125, y + 0.12, 0); break;
+    case 'kepi': put(L, cyl(0.12, 0.125, 0.13, 10), 0xa8302a, 0, y + 0.07, 0); put(L, cyl(0.127, 0.127, 0.04, 10), NOIR, 0, y + 0.02, 0); put(L, boite(0.09, 0.02, 0.15), NOIR, 0.13, y + 0.01, 0); break;
+    case 'casque': put(L, sphere(0.14, 1), BRONZE, 0, y + 0.04, 0); put(L, boite(0.26, 0.09, 0.04), NOIR, -0.02, y + 0.18, 0); put(L, boite(0.05, 0.3, 0.03), NOIR, -0.17, y + 0.02, 0); break;
+    case 'rond': put(L, cyl(0.23, 0.23, 0.035, 12), 0x5b4632, 0, y + 0.02, 0); put(L, cyl(0.11, 0.12, 0.13, 10), 0x5b4632, 0, y + 0.09, 0); break;
+    // le tricorne : trois cornes, un galon blanc, la calotte, la cocarde
+    case 'tricorne': put(L, cyl(0.285, 0.285, 0.02, 3), BLANC, 0, y + 0.015, 0, Math.PI / 2); put(L, cyl(0.27, 0.27, 0.06, 3), NOIR, 0, y + 0.045, 0, Math.PI / 2); put(L, cyl(0.12, 0.125, 0.11, 10), NOIR, -0.01, y + 0.09, 0); put(L, caillou(0.03), BLANC, 0.15, y + 0.08, 0.1); break;
+    default: put(L, boite(0.13, 0.2, 0.48), NOIR, 0, y + 0.1, 0); put(L, sphere(0.13, 1).scale(1, 0.55, 1), NOIR, 0, y + 0.03, 0); put(L, caillou(0.035), BLANC, 0.07, y + 0.13, 0.12);   // bicorne, porté en bataille
   }
-  if (col) put(L, sphere(0.04, 0), col, 0.04, y + 0.28, 0, 0, 0);   // pompon, plumet
+  if (col) put(L, caillou(0.05), col, 0.04, y + 0.3, 0);   // pompon, plumet
+}
+// le buste d'un homme à pied ou à cheval, les pieds (ou la selle) à dy : basques, habit, veste, revers, buffleteries,
+// épaulettes, col, tête et cheveux ; bras : les côtés (+1 droite, −1 gauche) dont le bras pend le long du corps
+function buste(L, t, dy, bras, habit = t.habit) {
+  const y = dy;
+  put(L, boite(0.3, 0.3, 0.44), habit, -0.03, y + 0.9, 0);
+  if (t.revers) for (const c of [-1, 1]) put(L, boite(0.03, 0.24, 0.14), t.revers, -0.18, y + 0.86, c * 0.12);   // retroussis
+  put(L, boite(0.28, 0.46, 0.4), habit, 0, y + 1.24, 0);
+  if (t.revers) { put(L, boite(0.02, 0.42, 0.15), CHAMOIS, 0.145, y + 1.12, 0); for (const c of [-1, 1]) put(L, boite(0.02, 0.3, 0.05), t.revers, 0.146, y + 1.3, c * 0.1); }
+  if (t.buff) { for (const c of [-1, 1]) put(L, tourne(boite(0.02, 0.66, 0.045), c * 0.58), t.buff, 0.153, y + 1.22, 0); put(L, boite(0.08, 0.14, 0.22), NOIR, -0.17, y + 1.0, 0); }
+  if (t.ceinture) put(L, boite(0.31, 0.07, 0.43), t.ceinture, 0, y + 1.04, 0);
+  if (t.tablier) put(L, boite(0.02, 0.5, 0.3), t.tablier, 0.16, y + 0.98, 0);
+  if (t.epaul) for (const c of [-1, 1]) put(L, boite(0.11, 0.04, 0.12), t.epaul, 0, y + 1.49, c * 0.2);
+  for (const c of bras) { put(L, boite(0.1, 0.42, 0.1), habit, 0, y + 1.24, c * 0.25); put(L, boite(0.115, 0.08, 0.115), t.revers || habit, 0, y + 1.07, c * 0.25); put(L, caillou(0.055), CHAIR, 0.01, y + 1.0, c * 0.25); }
+  put(L, boite(0.13, 0.05, 0.14), NOIR, 0, y + 1.49, 0);
+  put(L, sphere(0.12, 1), CHAIR, 0.01, y + 1.57, 0);
+}
+// les cheveux : poudrés et noués en queue sous le tricorne et le bicorne, bruns et courts ensuite
+function cheveux(L, tete, dy = 0, dx = 0) {
+  const vieux = tete === 'tricorne' || tete === 'bicorne' || tete === 'ourson' || tete == null, c = vieux ? POUDRE : BRUN;
+  put(L, sphere(0.112, 1), c, dx - 0.035, dy + 1.585, 0);
+  if (vieux) { put(L, boite(0.05, 0.15, 0.055), c, dx - 0.13, dy + 1.5, 0); put(L, boite(0.055, 0.04, 0.06), NOIR, dx - 0.135, dy + 1.54, 0); }
 }
 function pieton(t, role) {
   const L = lot(), habit = t.habit;   // (les jambes sont à part : jambe(), elles marchent)
-  put(L, boite(0.3, 0.62, 0.42), habit, 0, 1.13, 0, 0, 0.04);
-  if (t.revers) put(L, boite(0.02, 0.4, 0.16), t.revers, 0.16, 1.2, 0, 0, 0);
-  if (t.buff) { const b = boite(0.02, 0.7, 0.05); b.rotateX(0.6); put(L, b, t.buff, 0.16, 1.13, 0, 0, 0); }
-  if (t.sacOn && role === R.H) put(L, boite(0.14, 0.32, 0.32), t.sac, -0.2, 1.18, 0, 0, 0.03);
-  put(L, sphere(0.12, 1), CHAIR, 0, 1.55, 0, 0, 0.03);
-  coiffe(L, role === R.OFFICIER ? t.teteOff : t.tete, t.plume || t.pompon);
-  if (role === R.TAMBOUR) { const d = cyl(0.14, 0.14, 0.2, 10); d.rotateX(Math.PI / 2); put(L, d, BLANC, 0.18, 0.95, 0.12, 0, 0.03); }
-  if (role === R.DRAPEAU) { put(L, cyl(0.025, 0.025, 2.6, 5), CUIR, 0.1, 1.3, 0.2, 0, 0); put(L, boite(0.02, 0.6, 0.9), t.drap || habit, 0.1, 2.25, 0.66, 0, 0.02); put(L, boite(0.025, 0.25, 0.35), BLANC, 0.1, 2.25, 0.66, 0, 0); }
+  // l'officier garde son bras droit pour l'épée (lame), le tambour ses deux bras pour les baguettes
+  buste(L, t, 0, role === R.OFFICIER ? [-1] : role === R.TAMBOUR ? [] : [-1, 1]);
+  if (role === R.OFFICIER) { put(L, boite(0.02, 0.07, 0.14), OR, 0.15, 1.44, 0); put(L, tourne(boite(0.03, 0.07, 0.44), 0.5), OR, 0.15, 1.1, 0); }   // hausse-col, écharpe
+  if (t.sacOn && role === R.H) { put(L, boite(0.14, 0.32, 0.32), t.sac, -0.21, 1.22, 0); put(L, tourne(cyl(0.07, 0.07, 0.36, 8), Math.PI / 2), t.couv || 0xbdb6a3, -0.21, 1.43, 0); }
+  const tete = role === R.OFFICIER ? t.teteOff : t.tete;
+  cheveux(L, tete); coiffe(L, tete, t.plume || t.pompon);
+  if (role === R.TAMBOUR) { put(L, tourne(cyl(0.15, 0.15, 0.22, 12), Math.PI / 2 - 0.3), BLANC, 0.2, 0.95, 0.1); for (const k of [-1, 1]) put(L, tourne(cyl(0.155, 0.155, 0.03, 12), Math.PI / 2 - 0.3), habit, 0.2 , 0.95 + k * 0.03, 0.1 + k * 0.1); }
+  // le drapeau d'ordonnance : la croix blanche sur l'étoffe aux couleurs du régiment
+  if (role === R.DRAPEAU) { put(L, cyl(0.025, 0.025, 2.7, 6), CUIR, 0.1, 1.35, 0.2); put(L, caillou(0.05), OR, 0.1, 2.74, 0.2); put(L, boite(0.02, 0.72, 1), t.drap || habit, 0.1, 2.28, 0.72); put(L, boite(0.026, 0.13, 1), BLANC, 0.1, 2.28, 0.72); put(L, boite(0.026, 0.72, 0.13), BLANC, 0.1, 2.28, 0.72); }
   return L;
 }
 function cheval(L, robe) {   // (les jambes sont à part : jambeCheval(), hanches à 0,86 m, elles trottent)
-  put(L, boite(1.7, 0.62, 0.52), robe, 0, 1.15, 0, 0, 0.04);
-  const cou = boite(0.42, 0.72, 0.32); cou.rotateZ(-0.55); put(L, cou, robe, 0.95, 1.55, 0, 0, 0.04);
-  put(L, boite(0.56, 0.26, 0.24), robe, 1.25, 1.83, 0, 0, 0.03);
-  put(L, boite(0.12, 0.6, 0.08), NOIR, -0.92, 1.05, 0, 0, 0);   // queue
+  const crin = new THREE.Color(robe).multiplyScalar(0.45);
+  put(L, sphere(0.31, 1).scale(2.75, 1, 0.84), robe, 0, 1.15, 0);
+  put(L, sphere(0.3, 1).scale(1, 1.02, 0.8), robe, 0.58, 1.2, 0); put(L, sphere(0.31, 1).scale(1.05, 1, 0.84), robe, -0.58, 1.19, 0);   // poitrail, croupe
+  put(L, tourne(boite(0.36, 0.76, 0.28), 0, -0.55), robe, 0.95, 1.56, 0);
+  put(L, tourne(boite(0.5, 0.22, 0.22), 0, -0.6), robe, 1.27, 1.84, 0); put(L, tourne(boite(0.16, 0.16, 0.19), 0, -0.6), crin, 1.44, 1.7, 0);   // tête, naseaux
+  for (const c of [-1, 1]) put(L, boite(0.05, 0.11, 0.05), robe, 1.12, 2.02, c * 0.07);   // oreilles
+  put(L, tourne(boite(0.07, 0.62, 0.06), 0, -0.55), crin, 0.86, 1.68, 0);   // crinière
+  put(L, tourne(boite(0.1, 0.62, 0.1), 0, 0.3), crin, -0.95, 1.04, 0);   // queue
 }
 // le bras gauche tendu vers l'encolure et les rênes, de la main à la bouche du cheval (cavalier, postillon)
 function renes(L, habit, z = -0.15) {
-  const b = boite(0.09, 0.42, 0.09); b.rotateZ(-1.05); put(L, b, habit, 0.12, 1.86, z, 0, 0.02); put(L, sphere(0.05, 0), CHAIR, 0.3, 1.76, z, 0, 0);
+  const b = boite(0.09, 0.42, 0.09); b.rotateZ(-1.05); put(L, b, habit, 0.12, 1.86, z, 0, 0.02); put(L, caillou(0.05), CHAIR, 0.3, 1.76, z);
   const r = boite(0.95, 0.025, 0.025); r.rotateZ(-0.06); put(L, r, NOIR, 0.78, 1.74, z * 0.6, 0, 0);
 }
 // le postillon, monté sur le cheval de gauche de la paire (troupes2d : monte) : chapeau rond, rênes et fouet
@@ -61,48 +93,70 @@ function postillon(t) {
 // le bras du tambour, l'épaule à l'origine : bras et baguette vers +y (la pose le fait battre)
 function baguette(habit) { const L = lot(); put(L, boite(0.09, 0.42, 0.09), habit, 0, 0.21, 0, 0, 0.02); put(L, boite(0.025, 0.34, 0.025), 0xd8c08a, 0, 0.56, 0, 0, 0); return L; }
 function cavalier(t, role) {
-  const L = lot(); cheval(L, t.chevaux?.[1] || 0x6b4a2c);
+  const L = lot(), chef = role === R.CAV_GEN || role === R.CAV_OFF; cheval(L, t.chevaux?.[1] || 0x6b4a2c);
   renes(L, t.habit);
-  put(L, boite(0.9, 0.06, 0.62), t.chabraque || t.habit, -0.05, 1.48, 0, 0, 0);
-  put(L, boite(0.3, 0.62, 0.42), t.habit, -0.05, 1.82, 0, 0, 0.04);
-  put(L, boite(0.18, 0.5, 0.12), t.culotte || BLANC, 0, 1.45, 0.3, 0, 0); put(L, boite(0.18, 0.5, 0.12), t.culotte || BLANC, 0, 1.45, -0.3, 0, 0);
-  put(L, sphere(0.12, 1), CHAIR, -0.05, 2.25, 0, 0, 0.03);
-  const C = lot(); coiffe(C, role === R.CAV_GEN || role === R.CAV_OFF ? t.teteOff || t.tete : t.tete, t.plume); greffer(L, C, -0.05, 0.62, 0);
-  const f = boite(0.05, 0.85, 0.07); f.rotateZ(-0.9); put(L, f, 0x8d9196, -0.2, 1.25, -0.34, 0, 0.02);   // le fourreau, à gauche (le sabre : lame())
-  if (role === R.CAV_GEN) { put(L, cyl(0.025, 0.025, 2.4, 5), CUIR, -0.4, 2.2, 0.3, 0, 0); put(L, boite(0.02, 0.5, 0.8), t.drap || t.habit, -0.4, 3.1, 0.7, 0, 0.02); }
+  put(L, boite(0.92, 0.07, 0.66), t.chabraque || t.habit, -0.05, 1.48, 0); put(L, boite(0.96, 0.03, 0.7), t.galon || BLANC, -0.05, 1.45, 0);
+  // (le bras droit est le sabre : lame() ; le gauche tient les rênes)
+  buste(L, t, 0.62, [], t.habit);
+  for (const c of [-1, 1]) { put(L, boite(0.4, 0.14, 0.13), t.culotte || BLANC, 0.08, 1.5, c * 0.27); put(L, boite(0.14, 0.52, 0.14), NOIR, 0.2, 1.2, c * 0.31); }   // cuisses, bottes
+  if (chef) { put(L, tourne(boite(0.03, 0.07, 0.44), 0.5), OR, 0.15, 1.72, 0); for (const c of [-1, 1]) put(L, boite(0.12, 0.05, 0.13), OR, 0, 2.11, c * 0.2); }
+  const tete = chef ? t.teteOff || t.tete : t.tete, C = lot();
+  cheveux(C, tete); coiffe(C, tete, t.plume); greffer(L, C, 0, 0.62, 0);
+  const f = boite(0.05, 0.85, 0.07); f.rotateZ(-0.9); put(L, f, FER, -0.2, 1.25, -0.34);   // le fourreau, à gauche (le sabre : lame())
+  if (role === R.CAV_GEN) { put(L, cyl(0.025, 0.025, 2.4, 6), CUIR, -0.4, 2.2, 0.3); put(L, boite(0.02, 0.56, 0.84), t.drap || t.habit, -0.4, 3.08, 0.72); put(L, boite(0.026, 0.11, 0.84), BLANC, -0.4, 3.08, 0.72); put(L, boite(0.026, 0.56, 0.11), BLANC, -0.4, 3.08, 0.72); }
   return L;
 }
 function attelage(t) { const L = lot(); cheval(L, t.chevaux?.[0] || 0x6b4a2c); return L; }
+// une roue de bois cerclée de fer, dans le plan xy (l'essieu selon z), de rayon r
+function roue(L, r, x, y, z) {
+  put(L, tourne(cyl(r, r, 0.07, 16), Math.PI / 2), CUIR, x, y, z);
+  put(L, new THREE.TorusGeometry(r * 0.96, 0.045, 6, 18), FER, x, y, z + Math.sign(z || 1) * 0.02);
+  put(L, tourne(cyl(0.1, 0.1, 0.2, 8), Math.PI / 2), FER, x, y, z);
+  for (let k = 0; k < 4; k++) put(L, tourne(boite(0.045, r * 1.8, 0.035), 0, k * Math.PI / 4), 0x7a5233, x, y, z + Math.sign(z || 1) * 0.03);
+}
 function piece(t) {
-  const L = lot();
-  for (const k of [-1, 1]) { const r = cyl(0.55, 0.55, 0.08, 12); r.rotateX(Math.PI / 2); put(L, r, CUIR, 0, 0.55, k * 0.42, 0, 0.03); }
-  const f = cyl(0.12, 0.17, 1.8, 10); f.rotateZ(Math.PI / 2); put(L, f, t.mit ? 0x36393d : BRONZE, 0.35, 0.82, 0, 0, 0.04);
-  const fl = boite(1.6, 0.18, 0.3); fl.rotateZ(0.3); put(L, fl, t.affut || 0x5f6b3e, -0.75, 0.48, 0, 0, 0.03);
+  const L = lot(), fut = t.mit ? 0x36393d : BRONZE, affut = t.affut || 0x5f6b3e;
+  for (const k of [-1, 1]) roue(L, 0.55, 0, 0.55, k * 0.44);
+  put(L, boite(0.12, 0.1, 0.84), affut, 0, 0.55, 0);   // essieu
+  for (const k of [-1, 1]) put(L, tourne(boite(1.55, 0.2, 0.08), 0, 0.3), affut, -0.72, 0.5, k * 0.15);   // flasques
+  put(L, boite(0.3, 0.1, 0.36), affut, -1.42, 0.3, 0); put(L, boite(0.06, 0.08, 0.3), FER, -1.52, 0.36, 0);   // crosse, anneau
+  // le tube : renflé à la culasse, la bouche cerclée, le bouton de culasse, les tourillons
+  put(L, tourne(cyl(0.11, 0.17, 1.8, 12), 0, -Math.PI / 2 + 0.04), fut, 0.35, 0.84, 0);
+  put(L, tourne(cyl(0.135, 0.135, 0.07, 12), 0, -Math.PI / 2), fut, 1.24, 0.875, 0); put(L, sphere(0.085, 1), fut, -0.6, 0.8, 0);
+  for (const k of [-1, 1]) put(L, boite(0.1, 0.05, 0.06), fut, 0.25, 0.84, k * 0.17);
   return L;
 }
 function voiture(t, bache) {
   const L = lot();
-  put(L, boite(1.9, 0.6, 1), t.caisse || 0x5f6b3e, 0, 0.9, 0, 0, 0.04);
-  if (bache) { const b = cyl(0.55, 0.55, 1.8, 8); b.rotateZ(Math.PI / 2); put(L, b, t.bache || 0xece4cb, 0, 1.25, 0, 0, 0.03); }
-  for (const a of [-0.6, 0.6]) for (const k of [-1, 1]) { const r = cyl(0.42, 0.42, 0.08, 10); r.rotateX(Math.PI / 2); put(L, r, CUIR, a, 0.42, k * 0.55, 0, 0.03); }
+  put(L, boite(1.9, 0.6, 1), t.caisse || 0x5f6b3e, 0, 0.9, 0);
+  if (bache) put(L, tourne(cyl(0.55, 0.55, 1.8, 12), 0, Math.PI / 2), t.bache || 0xece4cb, 0, 1.25, 0);
+  for (const a of [-0.6, 0.6]) for (const k of [-1, 1]) roue(L, 0.42, a, 0.42, k * 0.55);
   return L;
 }
 // une jambe, la hanche à l'origine : elle pend vers le bas et pivote autour de la hanche (le pas)
-function jambe(col) { const L = lot(); put(L, boite(0.11, 0.84, 0.12), col, 0, -0.42, 0, 0, 0.03); return L; }
+// (culotte jusqu'au genou, guêtre dessous si g, soulier)
+function jambe(col, g) {
+  const L = lot();
+  put(L, boite(0.12, g ? 0.44 : 0.78, 0.13), col, 0, g ? -0.22 : -0.39, 0);
+  if (g) put(L, boite(0.115, 0.36, 0.125), g, 0, -0.6, 0);
+  put(L, boite(0.21, 0.07, 0.12), NOIR, 0.04, -0.805, 0); return L;
+}
 // une jambe de cheval, la hanche à l'origine, et son sabot
 function jambeCheval(robe) { const L = lot(); put(L, boite(0.14, 0.78, 0.14), robe, 0, -0.39, 0, 0, 0.03); put(L, boite(0.16, 0.08, 0.16), NOIR, 0, -0.82, 0, 0, 0); return L; }
 // le bras armé, l'épaule à l'origine : bras, main, garde et lame vers +y ; la pose le fait pivoter autour de l'épaule
 function lame(habit, long) {
-  const L = lot(); put(L, boite(0.1, 0.48, 0.1), habit, 0, 0.24, 0, 0, 0.03); put(L, sphere(0.06, 0), CHAIR, 0, 0.5, 0, 0, 0);
+  const L = lot(); put(L, boite(0.1, 0.48, 0.1), habit, 0, 0.24, 0, 0, 0.03); put(L, caillou(0.06), CHAIR, 0, 0.5, 0);
   put(L, boite(0.05, 0.04, 0.16), BRONZE, 0, 0.56, 0, 0, 0); put(L, boite(0.025, long, 0.06), 0xdfe3e6, 0, 0.58 + long / 2, 0, 0, 0.02); return L;
 }
 // le refouloir (l'écouvillon au bout), les mains à l'origine, la hampe vers +x
 function refouloir() { const L = lot(); put(L, boite(1.7, 0.05, 0.05), CUIR, 0.75, 0, 0, 0, 0.02); const b = cyl(0.08, 0.08, 0.22, 6); b.rotateZ(Math.PI / 2); put(L, b, NOIR, 1.6, 0, 0, 0, 0.02); return L; }
 // ajoute au lot L les pièces du lot J, décalées de (x, y, z)
 function greffer(L, J, x, y, z) { for (const k of ['g', 'o']) for (const geo of J[k]) { geo.translate(x, y, z); L[k].push(geo); } }
-function fusil() { const L = lot(); put(L, boite(0.05, 1.45, 0.05), CUIR, 0, 0, 0, 0, 0.02); put(L, boite(0.02, 0.35, 0.02), 0xc8ccd0, 0, 0.88, 0, 0, 0); return L; }
+function fusil() { const L = lot(); put(L, boite(0.07, 0.5, 0.05), CUIR, 0, -0.48, 0); put(L, boite(0.035, 1.0, 0.035), FER, 0, 0.22, 0); put(L, boite(0.016, 0.3, 0.016), 0xc8ccd0, 0, 0.87, 0); return L; }   // crosse, canon, baïonnette
 
-// ---------------------------------------------------------------- un maillage instancié (et ses contours)
+const guetre = t => (t.tete === 'tricorne' ? BLANC : clairDe(t.culotte || BLANC) > 0.7 ? NOIR : null);
+
+// ---------------------------------------------------------------- un maillage instancié
 class Lot3D {
   constructor(parent, L, cap = 256) { this.parent = parent; this.geo = fusion(L.g); this.geoO = fusion(L.o); this.cap = 0; this.n = 0; this.agrandir(cap); }
   agrandir(cap) {
@@ -171,8 +225,8 @@ export class Troupes3D {
           // (le corps pivote aux hanches, pour rester sur ses jambes)
           this.sous('p' + lr + '|' + cle, () => pieton(t, lr), x, y, a, s, 0.84 * Math.sin(rz), pas + 0.84 * (1 - Math.cos(rz)), 0, rz);
           // les jambes : chacune balance d'avant en arrière au rythme du pas (d.legs, la phase du pas des figures 2D)
-          const sw = d.legs != null ? Math.sin(d.legs) * 0.5 : 0, cj = 'j|' + (t.culotte || BLANC);
-          for (const c of [-1, 1]) this.sous(cj, () => jambe(t.culotte || BLANC), x, y, a, s, 0, 0.84 + pas, c * 0.07, c * sw);
+          const sw = d.legs != null ? Math.sin(d.legs) * 0.5 : 0, gu = guetre(t), cj = 'j|' + (t.culotte || BLANC) + '|' + gu;
+          for (const c of [-1, 1]) this.sous(cj, () => jambe(t.culotte || BLANC, gu), x, y, a, s, 0, 0.84 + pas, c * 0.08, c * sw);
           // le fusil selon la pose : à l'épaule, en joue, baïonnette en avant, à la baguette, posé
           if (role === R.H || role === R.PIQUE) {
             let fx = 0.05, fy = 1.3, fz = 0.22, rz = 0;
@@ -221,7 +275,7 @@ export class Troupes3D {
       if (!l) {
         const L = d.k === 'cheval' ? attelage(t) : pieton(t, R.H), robe = t.chevaux?.[0] || 0x6b4a2c;
         if (d.k === 'cheval') for (const [fx, fz] of JC) greffer(L, jambeCheval(robe), fx, 0.86, fz);
-        else for (const c of [-1, 1]) greffer(L, jambe(t.culotte || BLANC), 0, 0.84, c * 0.07);
+        else for (const c of [-1, 1]) greffer(L, jambe(t.culotte || BLANC, guetre(t)), 0, 0.84, c * 0.08);
         l = new Lot3D(this.grp, L, 64); this.morts.set(cle, l);
       }
       if (l.n >= 4000) continue;

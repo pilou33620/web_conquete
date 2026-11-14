@@ -7,13 +7,13 @@
 // tournent) ont leur modèle. Toits crevés, incendies et ruines suivent l'état envoyé par le serveur (bati) ; brèches
 // et barricades refont l'enceinte. Les troupes (hex/troupes3d.js) et les effets, la vie, l'interface (calques 2D)
 // viennent par-dessus.
-import { THREE, DEGRADE, MAT, CONT, Scene3D, Grille, lot, put, fige, fusion, jeter, transfere, boite, cyl, cone, sphere, ruban, hache, semer, rnd, entre, choix, toit, pavillon } from './moteur.js';
+import { THREE, MAT, CONT, Scene3D, Grille, tuiles, lot, put, fige, fusion, jeter, transfere, boite, cyl, cone, sphere, caillou, ruban, hache, semer, rnd, entre, choix, toit, pavillon } from './moteur.js';
 import * as M from './modeles.js';
 import { CELL_NAMES } from '../battle/formes.js';
 
 const SOL = {
-  PRE: 0x84c450, CHAMP: 0xc9c65c, VIGNE: 0xb4b660, LANDE: 0xaaa762, BOIS: 0x6aa843, FORET: 0x4e8a34, MARAIS: 0x6f9e6a, EAU: 0xd2c88f, GUE: 0xd2c88f,
-  ROUTE: 0xcfc3a3, CHEMIN: 0xd9c79a, BATI: 0xcfc3a3, MUR: 0xbfb39a, BRECHE: 0xa79a7a, PORTE: 0xcfc3a3, SABLE: 0xead9a2, ROCHE: 0x9c968c, BARRICADE: 0xb59a6a, VERGER: 0x8cc45a,
+  PRE: 0x78c447, CHAMP: 0x9fc552, VIGNE: 0xa9c457, LANDE: 0x9cb45e, BOIS: 0x5aa83d, FORET: 0x4a9636, MARAIS: 0x6fa35e, EAU: 0xd9d0a0, GUE: 0xe3d9ae,
+  ROUTE: 0xd8c79a, CHEMIN: 0xc9c27a, BATI: 0xcdbf9a, MUR: 0xbfb39a, BRECHE: 0xa79a7a, PORTE: 0xcdbf9a, SABLE: 0xead9a2, ROCHE: 0x9c968c, BARRICADE: 0xb59a6a, VERGER: 0x84c452,
 };
 const EAU_Y = -0.5, REL = 0.5;   // relief : la moitié des hauteurs du moteur
 const TRACES = new Set(['ROUTE', 'CHEMIN', 'GUE']);
@@ -35,7 +35,7 @@ function ajoure(base, tex) {
 }
 // débris du combat (vue.js, casualties), en mètres, à l'échelle des tués : tricorne, fusil, havresac, roue brisée
 const DEBRIS = {
-  chapeau: L => { put(L, cyl(0.27, 0.27, 0.05, 3), 0x24211e, 0, 0.03, 0, 0, 0.02); put(L, sphere(0.15, 0), 0x2e2a26, 0, 0.1, 0, 0, 0.02); },
+  chapeau: L => { put(L, cyl(0.27, 0.27, 0.05, 3), 0x24211e, 0, 0.03, 0, 0, 0.02); put(L, caillou(0.15), 0x2e2a26, 0, 0.1, 0, 0, 0.02); },
   fusil: L => { put(L, boite(1.45, 0.06, 0.09), 0x6b4a2e, 0, 0.04, 0, 0, 0.02); put(L, boite(1, 0.04, 0.035), 0xc8ccd0, 0.3, 0.09, 0, 0, 0); },
   sac: L => { put(L, boite(0.42, 0.16, 0.34), 0x8a6a4a, 0, 0.08, 0, 0, 0.02); const r = cyl(0.08, 0.08, 0.46, 6); r.rotateZ(Math.PI / 2); put(L, r, 0x9aa0a8, 0, 0.2, -0.1, 0, 0.02); },
   roue: L => {
@@ -47,7 +47,7 @@ const DEBRIS = {
   trou: L => {
     put(L, cyl(1, 0.8, 0.1, 10), 0x3b2e21, 0, 0.05, 0, 0, 0);
     const b = new THREE.TorusGeometry(1, 0.22, 4, 10); b.rotateX(Math.PI / 2); b.scale(1, 0.6, 1); put(L, b, 0x7a5a3a, 0, 0.06, 0, 0, 0);
-    for (let k = 0; k < 4; k++) put(L, sphere(0.2, 0), 0x6b4e32, Math.cos(k * 1.7) * 1.55, 0.08, Math.sin(k * 1.7) * 1.55, 0, 0);
+    for (let k = 0; k < 4; k++) put(L, caillou(0.2), 0x6b4e32, Math.cos(k * 1.7) * 1.55, 0.08, Math.sin(k * 1.7) * 1.55, 0, 0);
   },
 };
 const MX = new THREE.Matrix4(), QX = new THREE.Quaternion(), PX = new THREE.Vector3(), SX = new THREE.Vector3(), AXE = new THREE.Vector3(0, 1, 0);
@@ -69,7 +69,7 @@ export class Champ {
     this.neige = !!terrain.pal?.neige || m.weather === 'neige';   // sol enneigé : l'hiver (comme decor2d.js), ou s'il neige
     this.echantillonner();
     this.tuiles();
-    const eau = new THREE.Mesh(new THREE.PlaneGeometry(terrain.W / g.f + 600, terrain.H / g.f + 600), new THREE.MeshToonMaterial({ color: 0x3fa6dc, gradientMap: DEGRADE, transparent: true, opacity: 0.72 }));
+    const eau = new THREE.Mesh(new THREE.PlaneGeometry(terrain.W / g.f + 600, terrain.H / g.f + 600), new THREE.MeshStandardMaterial({ color: 0x45aee0, roughness: 0.6, metalness: 0, transparent: true, opacity: 0.78 }));
     eau.rotation.x = -Math.PI / 2; eau.position.set(terrain.W / g.f / 2, EAU_Y, terrain.H / g.f / 2); this.racine.add(eau);
     this.decor(); this.traces(); this.batiments(); this.murs(); this.barricades(); this.figerArbres();
     this.ambiance(m.weather, m.season);
@@ -77,7 +77,7 @@ export class Champ {
   ambiance(meteo, saison) {
     const gris = meteo === 'pluie' || meteo === 'brouillard' || meteo === 'nuages' || meteo === 'orage' || meteo === 'tempete' || meteo === 'neige';
     const s = this.sc;
-    s.ciel.intensity = gris ? 1.35 : 1.5; s.soleil.intensity = gris ? 2.1 : 2.6;
+    s.ciel.intensity = gris ? 1.25 : 1.1; s.soleil.intensity = gris ? 2.1 : 3.1;
     s.soleil.color.set(gris ? 0xe6ecf0 : saison === 'automne' ? 0xffe2b8 : 0xfff0d4);
     s.sale = true;
   }
@@ -105,19 +105,17 @@ export class Champ {
   // hauteur du sol (m) sous un point du champ : les figures s'y posent, les calques 2D aussi
   hauteur(x, y) { const t = this.g.en(x, y); return t ? this.sol(t) * this.f : 0; }
   tuiles() {
-    const { g } = this, L = lot(), saison = this.m.season, c = new THREE.Color();
+    const { g } = this, saison = this.m.season, c = new THREE.Color();
+    const { geo: geoSol, nu } = tuiles(g, -12, t => this.estEau(t)), co = geoSol.attributes.color;
     for (const t of g.liste) {
-      const bas = -12, h = t.top - bas;
-      const geo = put(L, cyl(g.R * 0.965, g.R, h, 6), SOL[t.t] || SOL.PRE, t.x, bas + h / 2, t.z, 0, 0);
       semer(t.q, t.r);
       c.set(SOL[t.t] || SOL.PRE).offsetHSL((rnd() - 0.5) * 0.015, 0, (rnd() - 0.5) * 0.05);
       if (this.neige && !this.estEau(t)) c.lerp(new THREE.Color(0xf1f4f6), 0.72);
       else if (saison === 'automne' && (t.t === 'BOIS' || t.t === 'FORET' || t.t === 'PRE')) c.lerp(new THREE.Color(0xc98a3c), 0.2);
       else if ((saison === 'été' || saison === 'ete') && (t.t === 'CHAMP' || t.t === 'PRE')) c.lerp(new THREE.Color(0xd8c45a), 0.2);
-      const nr = geo.attributes.normal, co = geo.attributes.color;
-      for (let i = 0; i < co.count; i++) { const k = nr.getY(i) > 0.5 ? 1 : 0.62; co.setXYZ(i, c.r * k, c.g * k, c.b * k); }
+      for (let k = t.v0; k < t.v1; k++) co.setXYZ(k, c.r * nu[k], c.g * nu[k], c.b * nu[k]);
     }
-    fige(L, this.racine, { contour: false });
+    const sol = new THREE.Mesh(geoSol, MAT); sol.castShadow = sol.receiveShadow = true; this.racine.add(sol);
     // la grille : le contour de chaque hexagone (calque « Grille »)
     const p = [];
     for (const t of g.liste) for (let i = 0; i < 3; i++) { const a = Math.PI / 180 * (60 * i - 30), b = a + Math.PI / 3; p.push(t.x + g.R * Math.cos(a), t.top + 0.2, t.z + g.R * Math.sin(a), t.x + g.R * Math.cos(b), t.top + 0.2, t.z + g.R * Math.sin(b)); }
@@ -154,11 +152,11 @@ export class Champ {
       const y = t.top, rr = (k = 0.62) => { const a = rnd() * Math.PI * 2, l = Math.sqrt(rnd()) * R * k; return [t.x + Math.cos(a) * l, t.z + Math.sin(a) * l]; };
       if (t.t === 'BOIS' || t.t === 'FORET') for (let i = 0, nb = t.t === 'FORET' ? 6 : 4; i < nb; i++) { const [x, z] = rr(); arbre(t, x, z, entre(0.85, 1.2), t.t === 'FORET' && (this.dept === '64' || rnd() < 0.4) ? 'sapin' : this.dept === '40' && rnd() < 0.6 ? 'pin' : 'feuillu'); }
       if (t.t === 'VERGER') for (let i = 0; i < 3; i++) { const [x, z] = rr(0.55); arbre(t, x, z, 1, 'fruitier'); }
-      if (t.t === 'CHAMP') { const a = hache(t.q >> 2, t.r >> 2, 3) * Math.PI; for (let k = -2; k <= 2; k++) put(L, boite(14 - Math.abs(k) * 2.6, 0.3, 2.6), [0xe3c75b, 0xd6b24a, 0xbfae4f][(k + 9 + (t.q >> 2)) % 3], t.x + Math.sin(a) * k * 2.9, y + 0.15, t.z + Math.cos(a) * k * 2.9, a, 0); }
+      if (t.t === 'CHAMP') { const a = hache(t.q >> 2, t.r >> 2, 3) * Math.PI; for (let k = -2; k <= 2; k++) put(L, boite(14 - Math.abs(k) * 2.6, 0.12, 2.6), [0xe3c75b, 0xd6b24a, 0xbfae4f][(k + 9 + (t.q >> 2)) % 3], t.x + Math.sin(a) * k * 2.9, y + 0.06, t.z + Math.cos(a) * k * 2.9, a, 0); }
       if (t.t === 'VIGNE') { const a = hache(t.q >> 2, t.r >> 2, 4) * Math.PI; for (let k = -3; k <= 3; k++) put(L, boite(12 - Math.abs(k) * 1.7, 0.8, 0.55), 0x557a2e, t.x + Math.sin(a) * k * 1.7, y + 0.4, t.z + Math.cos(a) * k * 1.7, a, 0.1); }
       if (t.t === 'LANDE') for (let i = 0; i < 3; i++) { const [x, z] = rr(), b = sphere(entre(0.8, 1.2), 0); b.scale(1.3, 0.5, 1); put(L, b, 0x9a6f9e, x, y + 0.2, z, 0, 0.1); }
       if (t.t === 'MARAIS') for (let i = 0; i < 2; i++) { const [x, z] = rr(); put(L, cyl(entre(1.4, 2.2), entre(1.4, 2.2), 0.06, 9), 0x46a9dd, x, y + 0.04, z, 0, 0); for (let k = 0; k < 4; k++) put(L, cyl(0.06, 0.1, 1.3, 4), 0x9cae5a, x + entre(-2, 2), y + 0.65, z + entre(-2, 2), 0, 0); }
-      if (t.t === 'ROCHE') for (let i = 0; i < 2; i++) { const [x, z] = rr(); put(L, sphere(entre(1.2, 2.4), 0), 0x8f8879, x, y + 0.6, z); }
+      if (t.t === 'ROCHE') for (let i = 0; i < 2; i++) { const [x, z] = rr(); put(L, caillou(entre(1.2, 2.4)), 0x8f8879, x, y + 0.6, z); }
       if (t.t === 'PRE' && rnd() < 0.18) { const [x, z] = rr(); put(L, sphere(0.9, 0), 0x5fa83c, x, y + 0.5, z); }
     }
     this.neiger(L.g); fige(L, this.racine);
@@ -427,7 +425,7 @@ export class Champ {
     const { g } = this, pos = [], uv = [], W = piet.w * piet.res, H = piet.h * piet.res;
     for (const t of g.liste) {
       if (this.estEau(t)) continue;
-      const y = t.top + 0.03, c = [0, 1, 2, 3, 4, 5].map(i => g.coin(t, i, 0.965));
+      const y = t.top + 0.03, c = [0, 1, 2, 3, 4, 5].map(i => g.coin(t, i, 0.86));   // (le dessus plat de la tuile, en deçà du biseau)
       for (let i = 0; i < 6; i++) for (const [x, z] of [[t.x, t.z], c[(i + 1) % 6], c[i]]) { pos.push(x, y, z); uv.push(x * this.f / W, 1 - z * this.f / H); }
     }
     const geo = new THREE.BufferGeometry();

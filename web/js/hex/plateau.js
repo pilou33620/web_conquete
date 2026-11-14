@@ -5,20 +5,20 @@
 // d'après l'état de la partie (camp qui les tient, remparts, agrandissements, siège) : plus grands et plus détaillés que
 // sur la maquette, à la manière de leur pays. Les territoires sont une teinte des hexagones et un liseré aux couleurs du
 // camp. Tout le reste (vie des pays, armées, interface, ciel) reste dessiné par les calques 2D au-dessus (map.js).
-import { THREE, DEGRADE, Scene3D, Grille, lot, put, fige, jeter, transfere, boite, cyl, cone, sphere, ruban, hache, bruit, semer, rnd, entre, choix, K, C } from './moteur.js';
+import { THREE, MAT, Scene3D, Grille, tuiles, lot, put, fige, jeter, transfere, boite, cyl, cone, sphere, caillou, ruban, hache, bruit, semer, rnd, entre, choix, K, C } from './moteur.js';
 import * as M from './modeles.js';
 import { phylloxera } from '../epoque.js';
 
 const GEO = ['mer', 'eau', 'plaine', 'foret', 'lande', 'marais', 'colline', 'montagne', 'haute', 'dunes', 'vigne'];
 // couleurs et hauteurs (unités du plateau ; le relief reste bas pour que les calques 2D tombent juste)
 const TERR = {
-  mer: { nom: 'Océan', col: 0x1d5a86, h: -4, eau: 1 }, cote: { nom: 'Côte', col: 0xe6d49a, h: -2, eau: 1 }, eau: { nom: 'Étang, estuaire', col: 0xd2c88f, h: -2, eau: 1 },
-  plaine: { nom: 'Plaine cultivée', col: 0xc9c65c, h: 0 }, prairie: { nom: 'Prairie', col: 0x84c450, h: 0 }, foret: { nom: 'Forêt', col: 0x5d9b3a, h: 0.15 },
-  lande: { nom: 'Lande de pins', col: 0xaaa762, h: 0.1 }, marais: { nom: 'Marais', col: 0x6f9e6a, h: -0.1 }, colline: { nom: 'Collines', col: 0xa2b65a, h: 1.1 },
-  montagne: { nom: 'Montagne', col: 0x8f8879, h: 2 }, haute: { nom: 'Haute montagne', col: 0xa29b8e, h: 3 }, dunes: { nom: 'Dunes', col: 0xead9a2, h: 0.35 },
-  vigne: { nom: 'Vignoble', col: 0xb4b660, h: 0.12 }, ville: { nom: 'Ville', col: 0xd6cbab, h: 0.25 },
+  mer: { nom: 'Océan', col: 0x1f5b9a, h: -4, eau: 1 }, cote: { nom: 'Côte', col: 0xe9dba6, h: -2, eau: 1 }, eau: { nom: 'Étang, estuaire', col: 0xd9d0a0, h: -2, eau: 1 },
+  plaine: { nom: 'Plaine cultivée', col: 0xa5cb4f, h: 0 }, prairie: { nom: 'Prairie', col: 0x74c243, h: 0 }, foret: { nom: 'Forêt', col: 0x52a23a, h: 0.15 },
+  lande: { nom: 'Lande de pins', col: 0xa2ba5c, h: 0.1 }, marais: { nom: 'Marais', col: 0x71a660, h: -0.1 }, colline: { nom: 'Collines', col: 0x8ec04d, h: 1.1 },
+  montagne: { nom: 'Montagne', col: 0x86ad5c, h: 2 }, haute: { nom: 'Haute montagne', col: 0xa3a596, h: 3 }, dunes: { nom: 'Dunes', col: 0xf0dca0, h: 0.35 },
+  vigne: { nom: 'Vignoble', col: 0xabc859, h: 0.12 }, ville: { nom: 'Ville', col: 0xd3cfa0, h: 0.25 },
 };
-const EAU_Y = -0.7, PARCHEMIN = new THREE.Color(0xdcc79a), NEIGE = new THREE.Color(0xf1f4f6), ROUX = new THREE.Color(0xc98a3c), BLOND = new THREE.Color(0xd8c45a);
+const EAU_Y = -0.7, FOND_MER = new THREE.Color(0x123f74), PARCHEMIN = new THREE.Color(0xdcc79a), NEIGE = new THREE.Color(0xf1f4f6), ROUX = new THREE.Color(0xc98a3c), BLOND = new THREE.Color(0xd8c45a);
 // le paysage des siècles (epoque.js, 2c) : pinède semée sur la lande, marais drainé, vigne roussie par le phylloxéra
 const PINEDE = new THREE.Color(0x6f9445), DRAINE = new THREE.Color(0x8fbf58), ROUSSI = new THREE.Color(0x9c7a48);
 // la carte d'époque (map.js, majPapier) : les teintes au lavis de Cassini (papier, bois gris-vert), puis de l'état-major
@@ -46,7 +46,7 @@ export class Plateau {
     this.rivieres();
     for (const t of g.liste) t.top = TERR[t.t].h + (t.t === 'montagne' || t.t === 'haute' ? (hache(t.q, t.r, 9) - 0.5) * 0.8 : 0);
     this.tuiles();
-    const eau = new THREE.Mesh(new THREE.PlaneGeometry(mp.W / g.f + 400, mp.H / g.f + 400), new THREE.MeshToonMaterial({ color: 0x3fa6dc, gradientMap: DEGRADE, transparent: true, opacity: 0.72 }));
+    const eau = new THREE.Mesh(new THREE.PlaneGeometry(mp.W / g.f + 400, mp.H / g.f + 400), new THREE.MeshStandardMaterial({ color: 0x45aee0, roughness: 0.6, metalness: 0, transparent: true, opacity: 0.78 }));
     eau.rotation.x = -Math.PI / 2; eau.position.set(mp.W / g.f / 2, EAU_Y, mp.H / g.f / 2); eau.receiveShadow = true; this.racine.add(eau);
     // le décor des pays et les routes se bâtissent par paquets ; les places, d'après l'état de la partie
     // (par morceaux, que le paysage des siècles refait un à un : paysage)
@@ -149,17 +149,25 @@ export class Plateau {
 
   // ---------------------------------------------------------------- les tuiles (un seul maillage, recoloré selon la saison)
   tuiles() {
-    const { g } = this, L = lot();
+    const { g } = this;
     this.base = [];
+    // la mer s'assombrit vers le large : distance à la terre, d'hexagone en hexagone
+    const large = new Map(), file = g.liste.filter(t => !this.estEau(t));
+    for (const t of file) large.set(t, 0);
+    for (let i = 0; i < file.length; i++) for (const v of g.voisins(file[i])) if (!large.has(v)) { large.set(v, large.get(file[i]) + 1); file.push(v); }
     for (const t of g.liste) {
-      const d = TERR[t.t], bas = -8, h = t.top - bas;
-      put(L, cyl(g.R * 0.965, g.R, h, 6), d.col, t.x, bas + h / 2, t.z, 0, 0);
+      const d = TERR[t.t];
       semer(t.q, t.r);
       const c = new THREE.Color(d.col).offsetHSL((rnd() - 0.5) * 0.015, 0, (rnd() - 0.5) * 0.05);
+      if (t.t === 'mer') c.lerp(FOND_MER, Math.min(1, ((large.get(t) ?? 9) - 2) / 5));
       if (!t.jeu && !this.estEau(t)) c.lerp(PARCHEMIN, 0.55);
       this.base.push(c);
     }
-    this.grpTuiles = fige(L, this.racine, { contour: false });
+    // (l'eau sans biseau : sous la nappe, le fond reste uni)
+    const { geo, nu } = tuiles(g, -8, t => this.estEau(t));
+    this.nu = nu;
+    const m = new THREE.Mesh(geo, MAT); m.castShadow = m.receiveShadow = true;
+    this.grpTuiles = new THREE.Group(); this.grpTuiles.add(m); this.racine.add(this.grpTuiles);
     this.colorer('printemps', false);
   }
   // les tuiles à la saison : neige l'hiver (partout en montagne, en plaine s'il a neigé), roux l'automne, blé mûr l'été
@@ -168,7 +176,7 @@ export class Plateau {
     const cle = saison + (neige ? '+' : '') + '|' + (this.versionPays || 0) + '|' + (this.era || '');
     if (cle === this.saison) return;
     this.saison = cle;
-    const geo = this.grpTuiles.children[0].geometry, co = geo.attributes.color, nr = geo.attributes.normal, n = co.count / this.g.liste.length, c = new THREE.Color();
+    const geo = this.grpTuiles.children[0].geometry, co = geo.attributes.color, nu = this.nu, c = new THREE.Color();
     this.g.liste.forEach((t, i) => {
       c.copy(this.base[i]);
       if (this.era) c.lerp(new THREE.Color(PAPIER[this.era][t.t] ?? PAPIER[this.era].fond), 0.82);
@@ -180,7 +188,7 @@ export class Plateau {
         else if ((saison === 'été' || saison === 'ete') && (t.t === 'plaine' || t.t === 'prairie')) c.lerp(BLOND, 0.22);
         else if (t.t === 'haute') c.lerp(NEIGE, 0.5);
       }
-      for (let k = i * n; k < (i + 1) * n; k++) { const f = nr.getY(k) > 0.5 ? 1 : 0.62; co.setXYZ(k, c.r * f, c.g * f, c.b * f); }
+      for (let k = t.v0; k < t.v1; k++) co.setXYZ(k, c.r * nu[k], c.g * nu[k], c.b * nu[k]);
     });
     co.needsUpdate = true; this.sc.sale = true;
   }
@@ -227,7 +235,7 @@ export class Plateau {
         put(L, cyl(3.15, 3.15, 0.1, 12), 0x46a9dd, x, t.top + 0.06, z, rnd(), 0);
         for (let k = 0; k < 3; k++) { const a = rnd() * 6.3; put(L, cyl(0.06, 0.1, 1.1, 4), 0x9cae5a, x + Math.cos(a) * 3.3, t.top + 0.55, z + Math.sin(a) * 3.3, 0, 0); }
       }
-      if (t.lieu || this.estEau(t)) { if (t.t === 'cote') { semer(t.q, t.r); if (rnd() < 0.2) put(L, sphere(entre(0.8, 1.4), 0), 0x9b958a, t.x + entre(-4, 4), t.top + 0.6, t.z + entre(-4, 4)); } continue; }
+      if (t.lieu || this.estEau(t)) { if (t.t === 'cote') { semer(t.q, t.r); if (rnd() < 0.2) put(L, caillou(entre(0.8, 1.4)), 0x9b958a, t.x + entre(-4, 4), t.top + 0.6, t.z + entre(-4, 4)); } continue; }
       semer(t.q, t.r);
       const fane = !t.jeu, y = t.top, peu = t.riv ? 0.5 : 1, pays = t.pays;
       const pres = this.pres(t);
@@ -545,17 +553,18 @@ export class Plateau {
     for (const t of g.liste) {
       if (t.fac < 0) continue;
       const col = colors[codes[t.fac]] || '#999';
-      put(T, cyl(g.R * 0.97, g.R * 0.97, 0.08, 6), col, t.x, Math.max(t.top, 0) + 0.12, t.z, 0, 0);
+      put(T, cyl(g.R * 0.86, g.R * 0.86, 0.08, 6), col, t.x, Math.max(t.top, 0) + 0.12, t.z, 0, 0);   // (le dessus plat, en deçà du biseau)
       for (const v of g.voisins(t)) {
-        if (v.fac === t.fac || this.estEau(v)) continue;
-        const [a, b] = g.bordCommun(t, v), y = Math.max(t.top, 0) + 0.2, ins = p => [p[0] + (t.x - p[0]) * 0.1, y, p[1] + (t.z - p[1]) * 0.1];
-        put(B, ruban([ins(a), ins(b)], 0.6), col, 0, 0, 0, 0, 0);
+        if (v.fac === t.fac || this.estEau(v) || (v.fac < 0 && v.jeu)) continue;   // (pas de liseré autour d'un hexagone du pays que personne ne tient : rivière, étang)
+        const [a, b] = g.bordCommun(t, v), y = Math.max(t.top, 0) + 0.2, ins = p => [p[0] + (t.x - p[0]) * 0.17, y, p[1] + (t.z - p[1]) * 0.17];
+        put(B, ruban([ins(a), ins(b)], 0.62), new THREE.Color(col).multiplyScalar(0.45), 0, 0, 0, 0, 0);
+        put(B, ruban([ins(a), ins(b)].map(p => [p[0], p[1] + 0.04, p[2]]), 0.36), col, 0, 0, 0, 0, 0);
       }
     }
     jeter(this.grpTeinte); jeter(this.grpBords);
     const geo = T.g.length ? (fige(T, null, { contour: false }).children[0]) : null;
-    if (geo) { geo.material = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.2, depthWrite: false }); geo.castShadow = geo.receiveShadow = false; this.grpTeinte = new THREE.Group(); this.grpTeinte.add(geo); this.racine.add(this.grpTeinte); }
-    this.grpBords = fige(B, this.racine, { ombre: false, contour: false });
+    if (geo) { geo.material = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.14, depthWrite: false }); geo.castShadow = geo.receiveShadow = false; this.grpTeinte = new THREE.Group(); this.grpTeinte.add(geo); this.racine.add(this.grpTeinte); }
+    this.grpBords = fige(B, this.racine, { mat: new THREE.MeshBasicMaterial({ vertexColors: true }), ombre: false });   // (sans ombrage : la couleur du camp, franche)
     this.sc.sale = true;
   }
 

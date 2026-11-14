@@ -1,5 +1,6 @@
-// Le moteur du rendu en plateau d'hexagones (SPEC-HEX.md), repris de web_power (js/03-moteur-3d.js) : ombrage
-// « cartoon » à trois tons, contours sombres (une copie gonflée de chaque pièce, faces arrière), lots de pièces fusionnés
+// Le moteur du rendu en plateau d'hexagones (SPEC-HEX.md), repris de web_power (js/03-moteur-3d.js) puis passé au
+// rendu « doux » (maquettes dev/carte-douce.html et dev/bataille-douce.html, validées le 14/11/2026) : ombrage lisse,
+// plus de contours sombres, tuiles au bord biseauté et aux teintes nuancées, volumes ronds, lots de pièces fusionnés
 // en un seul maillage. La scène vit SOUS le canevas 2D du jeu : la caméra est orthographique, inclinée d'un angle fixe,
 // et calée sur la caméra 2D ({x, y, z} : centre en unités du jeu, z en pixels CSS par unité), si bien que le sol se
 // projette par une simple affinité : sx = (x − cx)·z + vw/2, sy = (y − cy)·z·K + vh/2 − h·z·C. Les calques 2D (vie,
@@ -33,16 +34,17 @@ export const choix = l => l[(rnd() * l.length) | 0];
 const degrade = new THREE.DataTexture(new Uint8Array([105, 190, 255]), 3, 1, THREE.RedFormat);
 degrade.minFilter = degrade.magFilter = THREE.NearestFilter; degrade.needsUpdate = true;
 export const DEGRADE = degrade;
-export const MAT = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: degrade });
+export const MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0 });
+// (le matériau des contours d'avant : plus rien ne s'en sert depuis le rendu doux, put ne fait plus de contour)
 export const CONT = new THREE.MeshBasicMaterial({ color: 0x24180f, side: THREE.BackSide });
 export const PARTAGES = new Set([MAT, CONT]);
 
 // ------------------------------------------------------------------ lots de pièces
-// un lot : ses pièces (g) et leurs contours (o), fusionnés à la fin par fige()
+// un lot : ses pièces (g), fusionnées à la fin par fige() (o : les contours d'avant, toujours vide)
 export const lot = () => ({ g: [], o: [] });
-const VA = new THREE.Vector3(), VB = new THREE.Vector3(), COUL = new THREE.Color();
-// une pièce de couleur unie, tournée de ry, posée en (x, y, z) ; ep : épaisseur du contour (0 : sans contour)
-export function put(L, geo, col, x = 0, y = 0, z = 0, ry = 0, ep = 0.26) {
+const COUL = new THREE.Color();
+// une pièce de couleur unie, tournée de ry, posée en (x, y, z) (ep : l'épaisseur du contour d'avant, sans effet)
+export function put(L, geo, col, x = 0, y = 0, z = 0, ry = 0) {
   if (geo.index) geo = geo.toNonIndexed();
   for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
   if (!geo.attributes.normal) geo.computeVertexNormals();
@@ -53,12 +55,6 @@ export function put(L, geo, col, x = 0, y = 0, z = 0, ry = 0, ep = 0.26) {
   for (let i = 0; i < n; i++) { a[i * 3] = COUL.r; a[i * 3 + 1] = COUL.g; a[i * 3 + 2] = COUL.b; }
   geo.setAttribute('color', new THREE.BufferAttribute(a, 3));
   L.g.push(geo);
-  if (ep) {
-    const o = geo.clone(); o.computeBoundingBox(); o.boundingBox.getCenter(VA); o.boundingBox.getSize(VB);
-    o.translate(-VA.x, -VA.y, -VA.z);
-    o.scale((VB.x + 2 * ep) / Math.max(VB.x, 1e-3), (VB.y + 2 * ep) / Math.max(VB.y, 1e-3), (VB.z + 2 * ep) / Math.max(VB.z, 1e-3));
-    o.translate(VA.x, VA.y, VA.z); o.deleteAttribute('color'); L.o.push(o);
-  }
   return geo;
 }
 // verse le lot src dans L, tourné de ry puis posé en (x, y, z), à l'échelle s
@@ -98,10 +94,15 @@ export function jeter(obj) {
 }
 
 // ------------------------------------------------------------------ formes
+// (ombrage lisse : les volumes à peu de pans gardent des faces franches, sinon un prisme paraît gonflé)
+const pans = geo => { const g = geo.toNonIndexed(); g.computeVertexNormals(); geo.dispose(); return g; };
 export const boite = (w, h, d) => new THREE.BoxGeometry(w, h, d);
-export const cyl = (rt, rb, h, s = 10) => new THREE.CylinderGeometry(rt, rb, h, s);
-export const cone = (r, h, s = 8) => new THREE.ConeGeometry(r, h, s);
-export const sphere = (r, d = 1) => new THREE.IcosahedronGeometry(r, d);
+export const cyl = (rt, rb, h, s = 10, ...r) => { const g = new THREE.CylinderGeometry(rt, rb, h, s, ...r); return s <= 6 ? pans(g) : g; };
+export const cone = (r, h, s = 8) => { const g = new THREE.ConeGeometry(r, h, s); return s <= 6 ? pans(g) : g; };
+// boule lisse (houppiers, têtes, haies) : toujours ronde, même demandée à 20 faces
+export const sphere = (r, d = 1) => new THREE.IcosahedronGeometry(r, Math.max(1, d));
+// caillou à facettes (rochers, mottes, petites pièces)
+export const caillou = r => new THREE.IcosahedronGeometry(r, 0);
 // toit à deux pans : w de large (le pignon, selon x), d de long (le faîtage, selon z), h de haut ; posé sur y
 // (le prisme de web_power était couché, la pointe vers +x : ici la pointe est en haut)
 export function toit(L, w, d, h, col, x, y, z, ry = 0, ep = 0.2) {
@@ -126,6 +127,41 @@ export function ruban(pts, larg) {
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(pos.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
   return geo;
+}
+
+// ------------------------------------------------------------------ les tuiles du rendu doux
+// Tous les hexagones de la grille g en un seul maillage : le dessus (t.top), un bord biseauté, un flanc là où le voisin
+// est plus bas (ou absent : jusqu'à `bas`). plat(t) : sans biseau (l'eau). Chaque hexagone garde ses sommets
+// [t.v0, t.v1[ ; `nu` donne à chaque sommet sa nuance (le dessus varie doucement d'un endroit à l'autre, les flancs
+// sont plus sombres) : la couleur d'un sommet est celle de son hexagone × nu.
+const VOISIN = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];   // derrière le bord i (entre les coins i et i + 1)
+const BISEAU = 0.3, DEDANS = 0.86;
+export function tuiles(g, bas = -8, plat = () => false) {
+  const P = [], N = [], nuL = [];
+  const tri = (a, b, c, nx, ny, nz, k) => { P.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); for (let i = 0; i < 3; i++) N.push(nx, ny, nz); nuL.push(k, k, k); };
+  const CO = [0, 1, 2, 3, 4, 5].map(i => { const a = Math.PI / 180 * (60 * i - 30); return [Math.cos(a), Math.sin(a)]; });
+  for (const t of g.liste) {
+    t.v0 = P.length / 3;
+    const y = t.top, yb = y - (plat(t) ? 0 : BISEAU), k = 0.9 + 0.2 * bruit(t.x * 0.012, t.z * 0.012, 3);
+    const I = CO.map(([c, s]) => [t.x + c * g.R * DEDANS, y, t.z + s * g.R * DEDANS]), E = CO.map(([c, s]) => [t.x + c * g.R, yb, t.z + s * g.R]);
+    const nu = p => k * (0.94 + 0.12 * bruit(p[0] * 0.07, p[2] * 0.07, 5));
+    for (let i = 0; i < 6; i++) {
+      const j = (i + 1) % 6, m = Math.PI / 3 * i, cx = Math.cos(m), sz = Math.sin(m);
+      P.push(t.x, y, t.z, ...I[j], ...I[i]); for (let v = 0; v < 3; v++) N.push(0, 1, 0); nuL.push(nu([t.x, 0, t.z]), nu(I[j]), nu(I[i]));
+      // le biseau : sa normale penche vers le dehors
+      const by = 0.98, bh = 0.2;
+      P.push(...I[j], ...E[i], ...I[i], ...I[j], ...E[j], ...E[i]); for (let v = 0; v < 6; v++) N.push(cx * bh, by, sz * bh);
+      nuL.push(nu(I[j]), nu(E[i]) * 0.95, nu(I[i]), nu(I[j]), nu(E[j]) * 0.95, nu(E[i]) * 0.95);
+      const n = g.get(t.q + VOISIN[i][0], t.r + VOISIN[i][1]), fond = n ? n.top - (plat(n) ? 0 : BISEAU) : bas;
+      if (fond < yb - 0.01) { const A = [E[i][0], fond, E[i][2]], B = [E[j][0], fond, E[j][2]]; tri(E[j], A, E[i], cx, 0, sz, 0.62); tri(E[j], B, A, cx, 0, sz, 0.5); }
+    }
+    t.v1 = P.length / 3;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(P.length), 3));
+  return { geo, nu: Float32Array.from(nuL) };
 }
 
 // ------------------------------------------------------------------ grille d'hexagones (pointe en haut, comme web_power)
@@ -184,10 +220,11 @@ export class Scene3D {
     this.cv = canvas; this.ombreMax = ombreMax;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 0.95;
     this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(fond);
     this.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, -5000, 5000);
-    this.ciel = new THREE.HemisphereLight(0xeef7ff, 0x7d8466, 1.5); this.scene.add(this.ciel);
-    this.soleil = new THREE.DirectionalLight(0xfff0d4, 2.6); this.soleil.castShadow = true;
+    this.ciel = new THREE.HemisphereLight(0xdff1ff, 0x4d6a32, 1.1); this.scene.add(this.ciel);
+    this.soleil = new THREE.DirectionalLight(0xfff1d6, 3.1); this.soleil.castShadow = true;
     this.soleil.shadow.mapSize.set(2048, 2048); this.soleil.shadow.bias = -0.0006; this.soleil.shadow.normalBias = 0.4;
     this.scene.add(this.soleil, this.soleil.target);
     this.monde = new THREE.Group(); this.scene.add(this.monde);
