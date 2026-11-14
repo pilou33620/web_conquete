@@ -12,3 +12,4 @@ indexmap = "2"   # les dict de Python : l'ordre d'insertion est gardé
 # float_roundtrip : un flottant relu est, au bit près, celui qui a été écrit (sans cela, serde_json se trompe parfois du dernier bit)
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 sha2 = "0.10"    # random.Random("texte") : la graine passe par SHA-512, comme en Python
+sha1 = "0.10"    # rules.py : le profil et le caractère des départements générés viennent d'un SHA-1 de leur code
