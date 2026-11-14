@@ -353,7 +353,11 @@ function creerUnite(src) {
   const groupes = new Map();
   for (const f of u.figs) { const cleG = f.k === 'cavalier' || f.k === 'general' ? f.k + f.robe : f.k; if (!groupes.has(cleG)) groupes.set(cleG, []); groupes.get(cleG).push(f); }
   for (const [cg, figs] of groupes) {
-    const f0 = figs[0], m = new THREE.InstancedMesh(figurine(f0.k, u.coat, f0.k === 'general' ? 'bicorne' : u.coiffe, f0.robe), MAT_FIG, figs.length);
+    // géométrie partagée (mêmes tampons), plus le pas propre à ce régiment
+    const f0 = figs[0], g0 = figurine(f0.k, u.coat, f0.k === 'general' ? 'bicorne' : u.coiffe, f0.robe), geo = new THREE.BufferGeometry();
+    for (const k in g0.attributes) geo.setAttribute(k, g0.attributes[k]);
+    geo.boundingSphere = g0.boundingSphere; geo.setAttribute('aPas', new THREE.InstancedBufferAttribute(new Float32Array(figs.length * 2), 2));
+    const m = new THREE.InstancedMesh(geo, MAT_FIG, figs.length);
     m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; scene.add(m); u.meshes.set(cg, { m, figs });
     figs.forEach(f => f.mesh = cg);
   }
@@ -378,9 +382,10 @@ function placer(u, temps) {
       if (u.feu > 0 && f.a > -1 && !cav) rz += .14 * u.feu;
       QX.setFromEuler(EU.set(rx, -u.dir, rz, 'YXZ'));
       f.x = x; f.z = z;
+      m.geometry.attributes.aPas.setXY(n, ph, u.bouge ? (cav ? .55 : .45) : 0);
       m.setMatrixAt(n++, MX.compose(PX.set(x, solEn(x, z) + saut, z), QX, SX));
     }
-    m.count = n; m.instanceMatrix.needsUpdate = true;
+    m.count = n; m.instanceMatrix.needsUpdate = true; m.geometry.attributes.aPas.needsUpdate = true;
   }
 }
 // pertes : les figurines tombent et restent sur le terrain

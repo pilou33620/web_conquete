@@ -14,13 +14,13 @@ const BOX = new THREE.BoxGeometry(1, 1, 1), SPH = new THREE.IcosahedronGeometry(
 const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), P = new THREE.Vector3(), S = new THREE.Vector3();
 
 class Fig {
-  constructor() { this.P = []; this.N = []; this.C = []; }
+  constructor() { this.P = []; this.N = []; this.C = []; this.J = []; this.jambe = [0, 0]; }   // jambe : (sens, hauteur du pivot) des pièces qui marchent
   // une pièce : géométrie de base, couleur, position, échelle (sx, sy, sz), rotation (rx, ry, rz)
   p(geo, col, x, y, z, sx, sy, sz, rx = 0, ry = 0, rz = 0) {
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
     g.applyMatrix4(M.compose(P.set(x, y, z), Q.setFromEuler(E.set(rx, ry, rz)), S.set(sx, sy, sz)));
     const p = g.attributes.position.array, n = g.attributes.normal.array, c = new THREE.Color(col);
-    for (let i = 0; i < p.length; i += 3) { this.P.push(p[i], p[i + 1], p[i + 2]); this.N.push(n[i], n[i + 1], n[i + 2]); this.C.push(c.r, c.g, c.b); }
+    for (let i = 0; i < p.length; i += 3) { this.P.push(p[i], p[i + 1], p[i + 2]); this.N.push(n[i], n[i + 1], n[i + 2]); this.C.push(c.r, c.g, c.b); this.J.push(...this.jambe); }
     g.dispose(); return this;
   }
   geo() {
@@ -28,6 +28,7 @@ class Fig {
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.P, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.N, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.C, 3));
+    g.setAttribute('aJambe', new THREE.Float32BufferAttribute(this.J, 2));
     g.computeBoundingSphere(); return g;
   }
 }
@@ -46,8 +47,9 @@ function tete(f, y, coiffe, dx = 0) {
     .p(CYL, NOIR, dx - .01, h + .05, 0, .24, .12, .24).p(SPH0, BLANC, dx + .15, h + .03, .1, .05, .05, .03);
 }
 function corps(f, coat, y0 = 0) {
-  f.p(BOX, NOIR, .03, y0 + .04, .1, .24, .08, .12).p(BOX, NOIR, .03, y0 + .04, -.1, .24, .08, .12)            // souliers
-    .p(BOX, BLANC, 0, y0 + .3, .1, .13, .44, .13).p(BOX, BLANC, 0, y0 + .3, -.1, .13, .44, .13)               // guêtres
+  f.jambe = [1, y0 + .55]; f.p(BOX, NOIR, .03, y0 + .04, .1, .24, .08, .12).p(BOX, BLANC, 0, y0 + .3, .1, .13, .44, .13);    // soulier et guêtre
+  f.jambe = [-1, y0 + .55]; f.p(BOX, NOIR, .03, y0 + .04, -.1, .24, .08, .12).p(BOX, BLANC, 0, y0 + .3, -.1, .13, .44, .13);
+  f.jambe = [0, 0]; f
     .p(BOX, BLANC2, 0, y0 + .6, 0, .2, .2, .34)                                                                // culotte
     .p(BOX, coat, -.02, y0 + .62, 0, .3, .34, .42).p(BOX, BLANC, -.17, y0 + .58, .11, .03, .28, .14).p(BOX, BLANC, -.17, y0 + .58, -.11, .03, .28, .14)   // basques et retroussis
     .p(BOX, coat, 0, y0 + 1.0, 0, .28, .44, .38)                                                               // habit
@@ -91,7 +93,8 @@ function cheval(f, robe, coat) {
     .p(BOX, robe, .58, 1.42, 0, .22, .58, .2, 0, 0, -.55).p(BOX, robe, .84, 1.62, 0, .42, .17, .17, 0, 0, -.75).p(BOX, crin, .97, 1.5, 0, .14, .13, .15, 0, 0, -.75)
     .p(BOX, robe, .72, 1.8, .05, .04, .1, .04).p(BOX, robe, .72, 1.8, -.05, .04, .1, .04)
     .p(BOX, crin, .52, 1.5, 0, .06, .5, .05, 0, 0, -.55).p(BOX, crin, -.68, .95, 0, .08, .48, .08, 0, 0, .35);
-  for (const [x, z] of [[.4, .13], [.4, -.13], [-.4, .13], [-.4, -.13]]) f.p(BOX, robe, x, .42, z, .09, .64, .09).p(BOX, NOIR, x + .01, .035, z, .1, .07, .1);
+  for (const [x, z] of [[.4, .13], [.4, -.13], [-.4, .13], [-.4, -.13]]) { f.jambe = [Math.sign(x * z), .75]; f.p(BOX, robe, x, .42, z, .09, .64, .09).p(BOX, NOIR, x + .01, .035, z, .1, .07, .1); }   // au trot : jambes en diagonale
+  f.jambe = [0, 0];
   f.p(BOX, coat, -.04, 1.33, 0, .58, .07, .66).p(BOX, BLANC, -.04, 1.3, 0, .6, .04, .68);   // tapis de selle
 }
 function cavalier(coat, coiffe, robe, general) {
@@ -143,3 +146,13 @@ export function figurine(sorte, coat = 0xc0392b, coiffe = 'tricorne', robe = ROB
 // coiffure selon l'époque : tricorne jusqu'aux années 1780, bicorne ensuite ; bonnet à poil des grenadiers
 export const coiffeDe = (annee, type) => type === 'grenadiers' || type === 'sapeurs' ? 'bonnet' : type === 'milice' ? 'rond' : annee < 1786 ? 'tricorne' : 'bicorne';
 export const MAT_FIG = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .78, metalness: 0 });
+// les jambes balancent autour de la hanche selon aPas (phase, amplitude) de chaque instance ; sans aPas (amplitude 0), la figurine reste immobile
+MAT_FIG.onBeforeCompile = sh => {
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aJambe;\nattribute vec2 aPas;')
+    .replace('#include <begin_vertex>', `#include <begin_vertex>
+    if (aJambe.x != 0.0) {
+      float an = aJambe.x * sin(aPas.x) * aPas.y, co = cos(an), si = sin(an);
+      vec2 p = vec2(transformed.x, transformed.y - aJambe.y);
+      transformed.xy = vec2(p.x * co - p.y * si, p.x * si + p.y * co + aJambe.y);
+    }`);
+};
