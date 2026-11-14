@@ -135,8 +135,13 @@ Un seul écart d'un dernier bit, ou un tirage de plus, et toute la suite de la p
    (`commun.empreinte(o)` = `py::json::empreinte(&v)`), plus quelques valeurs lisibles. Une référence : 1 Mo au plus.
    Pour chercher un écart, le jumeau et un essai peuvent écrire la forme complète (`commun.canon` /
    `dumps_ref`) dans un dossier temporaire et on compare les deux textes.
+   Préférer la forme **ordonnée** (`commun.canon_ordre` / `empreinte_ordre` = `dumps_ref_ordre` /
+   `empreinte_ordre`) : elle vérifie aussi l'ordre des clés des dict, qu'une boucle suit.
 4. Hasard : `commun.tracer_hasard(fichier)` côté Python, `CONQUETE_TRACE_HASARD=fichier` côté Rust ; le premier
    tirage qui diffère (valeur, ou tirage en trop) donne la ligne des deux côtés.
 5. Lancer : `cargo test -p conquete` (depuis la racine du dépôt).
+
+Tous les modules existent déjà, vides (`//! À porter : …`), et sont déclarés dans `lib.rs` et `tactics/mod.rs` :
+on remplit le sien sans toucher aux autres.
 
 Un module n'est porté que lorsque ses essais passent contre les références du jumeau.

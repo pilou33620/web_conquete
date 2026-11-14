@@ -54,6 +54,16 @@ pub fn dumps_canon(v: &Val) -> String {
 pub fn dumps_ref(v: &Val) -> String {
     dumps_avec(v, Ecriture { compact: true, sort_keys: true, nombres_ref: true, ..Default::default() })
 }
+/// Comme `dumps_ref`, mais les clés restent dans leur ordre d'insertion (`canon_ordre` du jumeau) : à préférer
+/// pour les constantes et les états du jeu, où une boucle sur un dict suit cet ordre.
+pub fn dumps_ref_ordre(v: &Val) -> String {
+    dumps_avec(v, Ecriture { compact: true, nombres_ref: true, ..Default::default() })
+}
+/// L'empreinte SHA-256 de `dumps_ref_ordre(v)` : `empreinte_ordre` du jumeau.
+pub fn empreinte_ordre(v: &Val) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(dumps_ref_ordre(v).as_bytes()).iter().map(|o| format!("{o:02x}")).collect()
+}
 /// L'empreinte SHA-256 (hexadécimale) de `dumps_ref(v)` : `empreinte` du jumeau.
 pub fn empreinte(v: &Val) -> String {
     use sha2::{Digest, Sha256};

@@ -43,6 +43,16 @@ def empreinte(o):
     return hashlib.sha256(canon(o).encode('utf-8')).hexdigest()
 
 
+def canon_ordre(o):
+    """Comme canon, mais les clés des dict restent dans leur ordre d'insertion : il fait partie de ce qu'on vérifie
+    (une boucle sur un dict le suit). py::json::dumps_ref_ordre en Rust."""
+    return json.dumps(_plat(o), ensure_ascii=False, separators=(',', ':'))
+
+
+def empreinte_ordre(o):
+    return hashlib.sha256(canon_ordre(o).encode('utf-8')).hexdigest()
+
+
 def ecrire(nom, ref):
     """Range une référence : rust/conquete/tests/references/<nom>.json (compacte, flottants à la repr)."""
     with open(os.path.join(REFS, nom + '.json'), 'w', encoding='utf-8') as f:
