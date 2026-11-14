@@ -44,7 +44,7 @@ button:focus-visible { outline: 3px solid var(--or); outline-offset: 2px; }
 .trp { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 3px; padding: 2px 7px 2px 5px; border-radius: 6px; background: color-mix(in srgb, var(--c) 82%, #0b1622); border: 1.5px solid rgba(255,255,255,.75); color: #fff; font: 700 13px var(--titre); font-variant-numeric: tabular-nums; will-change: transform; filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
 .trp svg { width: 12px; height: 12px; fill: #fff; }
 .trp::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 2px; height: 6px; background: rgba(255,255,255,.8); }
-.eti { position: absolute; left: 0; top: 0; padding: 1px 7px; border-radius: 8px; background: rgba(12, 28, 46, .62); color: var(--creme); font: 600 11px var(--titre); white-space: nowrap; will-change: transform; }
+.eti { border-left: 4px solid var(--c, transparent); position: absolute; left: 0; top: 0; padding: 1px 7px; border-radius: 8px; background: rgba(12, 28, 46, .62); color: var(--creme); font: 600 11px var(--titre); white-space: nowrap; will-change: transform; }
 
 /* interface flottante */
 .hud { position: absolute; z-index: 4; display: flex; gap: 8px; align-items: flex-start; }
@@ -62,7 +62,7 @@ button:focus-visible { outline: 3px solid var(--or); outline-offset: 2px; }
 .tresor b { font: 700 18px var(--titre); color: var(--or); font-variant-numeric: tabular-nums; }
 .bas { position: absolute; z-index: 4; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 10px; align-items: flex-end; justify-content: space-between; pointer-events: none; }
 .bas > * { pointer-events: auto; }
-.fiche { flex: 0 1 380px; min-width: 0; padding: 12px 14px 14px; }
+.fiche { flex: 0 1 380px; min-width: 0; max-height: 46vh; overflow-y: auto; padding: 12px 14px 14px; }
 .fiche h2 { margin: 0; font: 600 21px var(--titre); text-wrap: balance; display: flex; align-items: center; gap: 8px; }
 .fiche h2 i { width: 12px; height: 12px; border-radius: 50%; background: var(--c); border: 2px solid #fff; flex: none; }
 .fiche .sous { color: var(--doux); font-weight: 700; font-size: 13px; margin-top: 2px; }
@@ -73,6 +73,12 @@ button:focus-visible { outline: 3px solid var(--or); outline-offset: 2px; }
 .fiche .acts button { flex: 1 1 0; min-height: 38px; border-radius: 10px; border: 1px solid var(--trait); background: rgba(255,255,255,.08); font-weight: 800; font-size: 13px; cursor: pointer; }
 .jouer { flex: none; min-height: 52px; padding: 0 22px; border: 0; border-radius: 16px; background: linear-gradient(180deg, var(--or), var(--or2)); color: #3a2205; font: 700 17px var(--titre); box-shadow: 0 4px 0 #a95f0c, 0 8px 18px rgba(0,0,0,.3); cursor: pointer; }
 .jouer:active { transform: translateY(2px); box-shadow: 0 2px 0 #a95f0c; }
+.flot { position: absolute; left: 0; top: 0; z-index: 3; font: 700 17px var(--titre); color: #fff; white-space: nowrap; text-shadow: 0 2px 0 rgba(0,0,0,.55), 0 0 8px rgba(0,0,0,.4); pointer-events: none; }
+.flot.mal { color: #ffb4a6; } .flot.bien { color: var(--or); }
+.fiche ul { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; font-weight: 700; line-height: 1.5; }
+.fiche .aide { margin-top: 8px; color: var(--doux); font-size: 12.5px; font-weight: 700; }
+.fiche .acts button:disabled { opacity: .45; cursor: default; }
+.jouer:disabled { filter: grayscale(.7); opacity: .7; cursor: default; }
 .toast { position: absolute; z-index: 6; left: 50%; top: calc(70px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); padding: 8px 16px; font-weight: 800; font-size: 14px; white-space: nowrap; }
 
 /* écran-titre */
@@ -89,7 +95,6 @@ button:focus-visible { outline: 3px solid var(--or); outline-offset: 2px; }
 @media (max-width: 640px) {
   .camp small { display: none; }
   .tresor { gap: 10px; padding: 7px 10px; } .tresor b { font-size: 15px; }
-  .tresor .rec { display: none; }
   .bas { flex-direction: column; align-items: stretch; }
   .fiche { flex: none; }
 }
@@ -104,7 +109,7 @@ button:focus-visible { outline: 3px solid var(--or); outline-offset: 2px; }
 
   <div class="hud haut" id="hud" hidden>
     <div class="camp verre" style="--c:#c0392b"><span class="blason"><svg viewBox="0 0 24 24"><path d="M3 18h18l-2-9-4 4-3-7-3 7-4-4z"/></svg></span><span><b>Gironde</b><small id="date">Janvier 1700 · Le Négoce bordelais</small></span></div>
-    <div class="tresor verre" title="Valeurs d'exemple"><div><small>LIVRES</small><b>48 600</b></div><div class="rec"><small>RECRUES</small><b>1 150</b></div></div>
+    <div class="tresor verre"><div><small>LIVRES</small><b id="or">6 000</b></div><div class="rec"><small>PLACES</small><b id="places">0</b></div></div>
   </div>
   <div class="bas" id="bas" hidden>
     <div class="fiche verre" id="fiche" hidden></div>
@@ -231,7 +236,7 @@ for (const [d, f] of Object.entries(FACTIONS)) {
   ls.slice(0, d === MOI ? 3 : 2).forEach((n, i) => {
     const t = [1, 0, 2, 5, 3, 4].map(k => vois(n.tuile, k)).find(v => v && !estEau(v) && !v.lieu && !v.armee);
     if (!t) return;
-    const a = { d, f, n: i ? 10 + (hache(t.q, t.r) * 4 | 0) : 15, t, nom: (i ? 'Colonne de ' : 'Armée de ') + n.n }; t.armee = a; ARMEES.push(a);
+    const a = { d, f, n: i ? 10 + (hache(t.q, t.r) * 4 | 0) : 15, t, nom: (i ? 'Colonne de ' : 'Armée de ') + n.n, pm: false }; t.armee = a; ARMEES.push(a);
   });
 }
 
@@ -377,18 +382,6 @@ function lieu(t) {
     fanion(x + 3.8, y, z - 3.6, teinte(col), 10);
   }
 }
-function armee(a) {
-  const t = a.t, y = t.top, col = new THREE.Color(a.f.col), rang = 4, files = 3;
-  for (let i = 0; i < rang; i++) for (let j = 0; j < files; j++) {
-    const x = t.x + (i - 1.5) * 1.5, z = t.z + (j - 1) * 1.6 + 1.5;
-    poser('boite', x, y, z, .75, 1.15, .5, 0, col); poser('boite', x, y + 1.15, z, .3, .12, .3, 0, 0xf1c9a0);
-    poser('boule', x, y + 1.5, z, .3, .3, .3, 0, 0xf1c9a0); poser('boite', x, y + 1.72, z, .6, .2, .5, 0, 0x22252e);
-    poser('boite', x + .38, y + .6, z - .1, .07, 1.7, .07, 0, 0x4a3a2a);
-  }
-  poser('boite', t.x - 3.5, y, t.z - 1.4, .14, 4.4, .14, 0, 0x6b5236); poser('boite', t.x - 2.7, y + 3.3, t.z - 1.4, 1.6, 1, .1, 0, col);
-  for (let k = 0; k < 2; k++) { poser('boite', t.x + 3 + k * 2.2, y + .5, t.z - 3.3, 1.8, .55, .55, .2, 0x3c3b3a); poser('tour', t.x + 3 + k * 2.2, y, t.z - 2.8, .45, .35, .45, 0, 0x6b5236); }
-}
-
 // ============================================================ construction du plateau
 function couleurSol(t, x, z) {
   const c = new THREE.Color(TER[t.lieu && t.t === 'ville' ? 'plaine' : t.t].col);
@@ -424,7 +417,6 @@ function construire() {
     if (t.dj > 6) continue;
     semer(t); FANE = t.fane;
     if (t.lieu) { lieu(t); continue; }
-    if (t.armee) { armee(t.armee); continue; }
     const peu = (t.riv ? .5 : 1) * (FANE > .4 ? .5 : 1), rr = (k = .72) => { const a = rnd() * Math.PI * 2, l = Math.sqrt(rnd()) * R * k; return [t.x + Math.cos(a) * l, t.z + Math.sin(a) * l]; };
     const nb = k => Math.round(k * peu);
     switch (t.t) {
@@ -566,63 +558,334 @@ const ETI = $('#etiquettes'), V = new THREE.Vector3();
 const COURONNE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h18l-2-9-4 4-3-7-3 7-4-4z"/></svg>';
 const BOUCLIER = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/></svg>';
 const niveau = n => n.t === 'capitale' ? 4 : n.t === 'village' ? 1 : n.p >= 8000 ? 3 : 2;
+const NOMF = d => FACTIONS[d] ? FACTIONS[d].nom : NOM_DEP[d] || 'Neutres';
+const COLF = d => FACTIONS[d] ? FACTIONS[d].col : NEUTRE;
 const ETIQ = [];
 for (const n of LIEUX) {
   if (!n.tuile || n.tuile.dj > 3) continue;
-  const fac = FACTIONS[n.d], el = document.createElement('div');
+  const fac = FACTIONS[n.d], el = document.createElement('div'), t = n.tuile, h = n.t === 'capitale' ? 15 : n.t === 'village' ? 6 : 11;
   if (n.t === 'village') { if (!fac) continue; el.className = 'eti'; el.textContent = n.n; }
-  else {
-    el.className = 'ban ' + (n.t === 'capitale' ? 'cap' : 'vil'); el.style.setProperty('--c', fac ? fac.col : NEUTRE);
-    el.innerHTML = `<span class="ligne"><span class="niv">${niveau(n)}</span><span class="nom">${n.t === 'capitale' ? COURONNE : ''}${esc(n.n)}</span></span><span class="pips">${[1, 2, 3, 4].map(k => `<i class="${k <= (n.f || 0) ? 'on' : ''}"></i>`).join('')}</span>`;
-  }
-  ETI.appendChild(el);
-  ETIQ.push({ el, t: n.tuile, h: n.t === 'capitale' ? 15 : n.t === 'village' ? 6 : 11, seuil: n.t === 'capitale' ? 9e9 : n.t === 'village' ? 240 : fac ? 760 : 420, centre: true });
+  else el.className = 'ban ' + (n.t === 'capitale' ? 'cap' : 'vil');
+  n.own = n.d; n.el = el; majBan(n); ETI.appendChild(el);
+  ETIQ.push({ el, pos: () => V.set(t.x, t.top + h, t.z), seuil: n.t === 'capitale' ? 9e9 : n.t === 'village' ? 240 : fac ? 760 : 420 });
 }
-for (const a of ARMEES) {
-  const el = document.createElement('div'); el.className = 'trp'; el.style.setProperty('--c', a.f.col); el.innerHTML = BOUCLIER + a.n;
-  ETI.appendChild(el); ETIQ.push({ el, t: a.t, h: 6, seuil: 900, centre: true });
+function majBan(n) {
+  n.el.style.setProperty('--c', COLF(n.own));
+  if (n.t !== 'village') n.el.innerHTML = `<span class="ligne"><span class="niv">${niveau(n)}</span><span class="nom">${n.t === 'capitale' ? COURONNE : ''}${esc(n.n)}</span></span><span class="pips">${[1, 2, 3, 4].map(k => `<i class="${k <= (n.f || 0) ? 'on' : ''}"></i>`).join('')}</span>`;
+  const e = ETIQ.find(e => e.el === n.el); if (e) e.w = 0;
 }
-function majEtiquettes() {
-  for (const e of ETIQ) {
+function flot(x, y, z, txt, genre = '') {
+  const el = document.createElement('div'); el.className = 'flot ' + genre; el.textContent = txt; ETI.appendChild(el);
+  ETIQ.push({ el, pos: () => V.set(x, y, z), seuil: 9e9, vie: 1600, t0: performance.now() }); demander();
+}
+function majEtiquettes(now = performance.now()) {
+  for (let i = ETIQ.length - 1; i >= 0; i--) {
+    const e = ETIQ[i];
+    let dy = 0;
+    if (e.vie) { const k = (now - e.t0) / e.vie; if (k >= 1) { e.el.remove(); ETIQ.splice(i, 1); continue; } dy = -40 * k; e.el.style.opacity = String(Math.min(1, 3 - 3 * k)); }
     if (distc > e.seuil || intro) { e.el.hidden = true; continue; }
-    V.set(e.t.x, e.t.top + e.h, e.t.z).project(cam);
+    e.pos().project(cam);
     if (V.z > 1 || Math.abs(V.x) > 1.15 || Math.abs(V.y) > 1.15) { e.el.hidden = true; continue; }
     e.el.hidden = false;
     if (!e.w) { e.w = e.el.offsetWidth; e.hh = e.el.offsetHeight; }
-    e.el.style.transform = `translate(${Math.round((V.x + 1) / 2 * ZW - e.w / 2)}px, ${Math.round((1 - V.y) / 2 * ZH - e.hh)}px)`;
+    e.el.style.transform = `translate(${Math.round((V.x + 1) / 2 * ZW - e.w / 2)}px, ${Math.round((1 - V.y) / 2 * ZH - e.hh + dy)}px)`;
   }
 }
 
-// ============================================================ choix, fiche
-const fiche = $('#fiche');
-function choisir(t) {
-  choix.visible = !!t && !estEau(t);
-  if (!t) { fiche.hidden = true; demander(); return; }
-  if (!estEau(t)) choix.position.set(t.x, t.top + .14, t.z);
-  const fac = FACTIONS[t.dep], nd = t.dep ? NOM_DEP[t.dep] || t.dep : estEau(t) ? '' : 'Espagne';
-  let h;
-  if (t.lieu) {
-    const n = t.lieu, f = FACTIONS[n.d];
-    h = `<h2 style="--c:${f ? f.col : NEUTRE}"><i></i>${esc(n.n)}</h2><div class="sous">${TYPE[n.t]} · ${esc(f ? f.nom + ' · ' + f.titre : NOM_DEP[n.d] || 'Hors jeu')}</div>
-      <dl><dt>Population</dt><dd>${nf(n.p)} hab.</dd><dt>Remparts</dt><dd>${n.f ? n.f + ' / 4' : 'aucun'}</dd><dt>Garnison</dt><dd>${nf(n.t === 'capitale' ? 1200 : n.t === 'village' ? 40 : 300)} hommes</dd></dl>
-      ${n.d === MOI ? '<div class="acts"><button type="button">Recruter</button><button type="button">Fortifier</button><button type="button">Commercer</button></div>' : ''}`;
-  } else if (t.armee) {
-    const a = t.armee;
-    h = `<h2 style="--c:${a.f.col}"><i></i>${esc(a.nom)}</h2><div class="sous">${esc(a.f.nom)} · en garnison</div>
-      <dl><dt>Bataillons</dt><dd>${a.n}</dd><dt>Hommes</dt><dd>${nf(a.n * 480)}</dd><dt>Canons</dt><dd>${Math.round(a.n / 5)}</dd></dl>
-      ${a.d === MOI ? '<div class="acts"><button type="button">Marcher</button><button type="button">Assiéger</button><button type="button">Camper</button></div>' : ''}`;
-  } else {
-    h = `<h2>${esc(TER[t.t].nom)}</h2><div class="sous">${esc(estEau(t) ? 'Eaux' : nd + (fac ? ' · ' + fac.titre : ' · hors des cinq pays'))}</div>`;
+// ============================================================ partie : règles d'exemple
+// shortcut: règles simplifiées pour la maquette (pas le moteur Python du jeu) ; à remplacer par les appels au serveur.
+const BASE_GAR = n => ({ village: 2, ville: 4, fort: 6, capitale: 8 })[n.t] + 2 * (n.f || 0);
+const REVENU = { village: 40, ville: 200, fort: 150, capitale: 800 };
+const PRIX_RECRUE = 1500, PRIX_REMPART = 2500, PAS = 3;
+for (const n of LIEUX) { n.own = n.d; n.gar = BASE_GAR(n); }
+const etat = { or: 6000, orIA: {}, sel: null, portee: null, occupe: false, fini: false, mois: 0 };
+for (const d in FACTIONS) etat.orIA[d] = 3000;
+const hexDist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
+const marchable = t => !!t && !estEau(t) && t.dj <= 3 && t.bord >= 2;
+const hasard = (a, b) => a + Math.random() * (b - a);
+
+// --- armées en volume, mobiles
+const MATS = {}, matDe = c => MATS[c] || (MATS[c] = new THREE.MeshStandardMaterial({ color: c, roughness: .8 }));
+const G = {
+  corps: enBas(new THREE.BoxGeometry(.75, 1.15, .5)), tete: new THREE.IcosahedronGeometry(.3, 1), chap: new THREE.BoxGeometry(.62, .2, .5),
+  fusil: enBas(new THREE.BoxGeometry(.07, 1.7, .07)), hampe: enBas(new THREE.BoxGeometry(.14, 4.6, .14)), drap: new THREE.BoxGeometry(1.7, 1.05, .1),
+  canon: new THREE.CylinderGeometry(.26, .32, 1.9, 8).rotateZ(Math.PI / 2), roue: new THREE.CylinderGeometry(.45, .45, .16, 10).rotateX(Math.PI / 2),
+};
+function modeleArmee(a) {
+  if (a.g) { scene.remove(a.g); a.g.traverse(o => o.isInstancedMesh && o.dispose()); }
+  const g = new THREE.Group(), nb = clamp(Math.round(a.n * .8), 3, 12), M = new THREE.Matrix4(), pos = [];
+  for (let i = 0; i < nb; i++) pos.push([(i % 4 - 1.5) * 1.5, ((i / 4 | 0) - 1) * 1.6 + 1.2]);
+  const rang = (geo, col, dy, dx = 0) => { const m = new THREE.InstancedMesh(geo, matDe(col), nb); pos.forEach((p, i) => m.setMatrixAt(i, M.makeTranslation(p[0] + dx, dy, p[1]))); m.castShadow = true; g.add(m); };
+  rang(G.corps, a.f.col, 0); rang(G.tete, 0xf1c9a0, 1.5); rang(G.chap, 0x22252e, 1.76); rang(G.fusil, 0x4a3a2a, .45, .38);
+  const seul = (geo, col, x, y, z) => { const m = new THREE.Mesh(geo, matDe(col)); m.position.set(x, y, z); m.castShadow = true; g.add(m); };
+  seul(G.hampe, 0x6b5236, -3.4, 0, -1.6); seul(G.drap, a.f.col, -2.5, 4, -1.6);
+  if (a.n >= 6) { seul(G.canon, 0x3c3b3a, 3.5, .7, -2.6); seul(G.roue, 0x6b5236, 3.2, .45, -2.15); }
+  if (a.g) g.position.copy(a.g.position); else g.position.copy(lieuDe(a.t));
+  g.scale.setScalar(a.t.lieu ? .8 : 1);
+  a.g = g; scene.add(g); demander();
+}
+const lieuDe = t => new THREE.Vector3(t.x + (t.lieu ? 5.5 : 0), t.top, t.z + (t.lieu ? 5 : 0));   // dans une ville, l'armée campe à côté des maisons
+function nouvelleArmee(a, deja) {
+  if (!deja) ARMEES.push(a);
+  a.t.armee = a; modeleArmee(a);
+  a.el = document.createElement('div'); a.el.className = 'trp'; a.el.style.setProperty('--c', a.f.col); ETI.appendChild(a.el);
+  a.eti = { el: a.el, pos: () => V.set(a.g.position.x, a.g.position.y + 6.5, a.g.position.z), seuil: 900 }; ETIQ.push(a.eti); majArmee(a);
+}
+function majArmee(a) { a.el.innerHTML = BOUCLIER + a.n; a.el.style.opacity = a.d === MOI && a.pm ? '.6' : '1'; a.eti.w = 0; modeleArmee(a); }
+function detruire(a) {
+  a.n = 0; scene.remove(a.g); a.el.remove(); ETIQ.splice(ETIQ.indexOf(a.eti), 1); ARMEES.splice(ARMEES.indexOf(a), 1);
+  if (a.t.armee === a) a.t.armee = null;
+  if (etat.sel === a) selectionner(null);
+}
+
+// --- animations
+const ANIMS = [];
+const animer = (ms, fn) => new Promise(res => { ANIMS.push({ t0: performance.now(), ms, fn, res }); demander(); });
+async function marcher(a, chemin, ms) {
+  for (const t of chemin) {
+    const p0 = a.g.position.clone(), p1 = lieuDe(t);
+    a.g.scale.setScalar(t.lieu ? .8 : 1);
+    await animer(ms, k => { a.g.position.lerpVectors(p0, p1, k); a.g.position.y += Math.sin(k * Math.PI) * .8; });
   }
-  fiche.innerHTML = h; fiche.hidden = false;
-  fiche.querySelectorAll('.acts button').forEach(b => b.onclick = () => dire('Maquette : ordre « ' + b.textContent + ' » à brancher sur le jeu'));
+}
+const FUMEE = new THREE.IcosahedronGeometry(1, 1);
+function fumee(x, y, z) {
+  const mat = new THREE.MeshStandardMaterial({ color: 0xf4f1ea, transparent: true, roughness: 1, depthWrite: false }), g = new THREE.Group();
+  for (let i = 0; i < 7; i++) { const m = new THREE.Mesh(FUMEE, mat); m.position.set(hasard(-3, 3), hasard(1, 3), hasard(-3, 3)); g.add(m); }
+  g.position.set(x, y, z); scene.add(g);
+  return animer(1100, k => { g.children.forEach((m, i) => m.scale.setScalar(1 + k * (2 + i % 3))); g.position.y = y + k * 3; mat.opacity = 1 - k; if (k >= 1) { scene.remove(g); mat.dispose(); } });
+}
+
+// --- déplacements
+function portee(a) {   // cases atteignables ce mois-ci : Map case -> case précédente ; s'arrête sur une cible ennemie
+  const prec = new Map([[a.t, null]]), dist = new Map([[a.t, 0]]), file = [a.t];
+  for (let i = 0; i < file.length; i++) {
+    const t = file[i]; if (dist.get(t) >= PAS) continue;
+    for (const n of voisins(t)) {
+      if (prec.has(n) || !marchable(n)) continue;
+      if (n.armee && n.armee.d === a.d) continue;
+      prec.set(n, t); dist.set(n, dist.get(t) + 1);
+      if (!n.armee && !(n.lieu && n.lieu.own !== a.d)) file.push(n);
+    }
+  }
+  prec.delete(a.t); return prec;
+}
+function chemin(prec, t) { const c = []; while (t) { c.unshift(t); t = prec.get(t); } return c; }
+function cheminVers(a, but) {   // pour l'IA : plus court chemin, tronqué à PAS cases
+  if (but.armee && but.armee.d === a.d) return [];
+  const prec = new Map([[a.t, null]]), file = [a.t];
+  for (let i = 0; i < file.length && !prec.has(but); i++) for (const n of voisins(file[i])) {
+    if (prec.has(n) || !marchable(n)) continue;
+    if (n !== but && (n.armee || (n.lieu && n.lieu.own !== a.d))) continue;
+    prec.set(n, file[i]); file.push(n);
+  }
+  if (!prec.has(but)) return [];
+  const c = []; for (let t = but; t && t !== a.t; t = prec.get(t)) c.unshift(t);
+  return c.slice(0, PAS);
+}
+const DEFENSE = { foret: 1.1, colline: 1.15, montagne: 1.3, haute: 1.4, marais: 1.05 };
+function force(a, t, defend) {
+  let k = defend ? DEFENSE[t.t] || 1 : 1;
+  if (defend && t.lieu && t.lieu.own === a.d) k *= 1.25 + .05 * (t.lieu.f || 0);
+  return a.n * k * hasard(.8, 1.2);
+}
+async function executer(a, route, rapport, ms) {
+  const dest = route[route.length - 1], ennemi = dest.armee && dest.armee.d !== a.d ? dest.armee : null;
+  const avant = ennemi ? route.slice(0, -1) : route;
+  a.t.armee = null;
+  await marcher(a, avant, ms);
+  if (avant.length) a.t = avant[avant.length - 1];
+  a.t.armee = a;
+  if (ennemi) {
+    await fumee((a.t.x + dest.x) / 2, dest.top, (a.t.z + dest.z) / 2);
+    const fa = force(a, a.t, false), fe = force(ennemi, dest, true), na = a.n, ne = ennemi.n;
+    if (fa > fe) {
+      ennemi.n -= Math.ceil(ne * .6 + 1); a.n = Math.max(1, a.n - Math.ceil(ne * .25));
+      flot(dest.x, dest.top + 8, dest.z, 'Victoire !', a.d === MOI ? 'bien' : 'mal');
+      rapport.push(`${NOMF(a.d)} bat ${NOMF(ennemi.d)} près de ${nomPres(dest)}`);
+      if (ennemi.n <= 2 || !retraite(ennemi)) { rapport.push(`${ennemi.nom} est anéantie`); detruire(ennemi); }
+      else majArmee(ennemi);
+      majArmee(a);
+      a.t.armee = null; await marcher(a, [dest], ms); a.t = dest; a.t.armee = a;
+    } else {
+      a.n -= Math.ceil(na * .5 + 1); ennemi.n = Math.max(1, ennemi.n - Math.ceil(na * .2));
+      flot(a.t.x, a.t.top + 8, a.t.z, 'Repoussée', a.d === MOI ? 'mal' : 'bien');
+      rapport.push(`${NOMF(ennemi.d)} repousse ${NOMF(a.d)} près de ${nomPres(dest)}`);
+      majArmee(ennemi);
+      if (a.n <= 0) { detruire(a); return; }
+      majArmee(a); return;
+    }
+  }
+  const l = a.t.lieu;
+  if (l && l.own !== a.d) await assaut(a, l, avant.length > 1 ? avant[avant.length - 2] : null, rapport, ms);
+}
+function retraite(a) {
+  const n = voisins(a.t).filter(v => marchable(v) && !v.armee && !(v.lieu && v.lieu.own !== a.d)).sort(() => Math.random() - .5)[0];
+  if (!n) return false;
+  a.t.armee = null; a.t = n; n.armee = a; a.g.position.copy(lieuDe(n)); a.g.scale.setScalar(n.lieu ? .8 : 1); return true;
+}
+async function assaut(a, l, recul, rapport, ms) {
+  const t = l.tuile;
+  await fumee(t.x, t.top, t.z);
+  if (a.n * hasard(.85, 1.15) > l.gar) {
+    const avant = l.own; l.own = a.d; a.n = Math.max(1, a.n - Math.ceil(l.gar / 2)); l.gar = Math.ceil(BASE_GAR(l) / 2);
+    majBan(l); majArmee(a);
+    flot(t.x, t.top + 12, t.z, l.n + ' prise !', a.d === MOI ? 'bien' : 'mal');
+    rapport.push(`${NOMF(a.d)} prend ${l.n} ${avant !== a.d ? '(à ' + NOMF(avant) + ')' : ''}`);
+  } else {
+    const pertes = Math.ceil(a.n / 3); l.gar = Math.max(1, l.gar - Math.floor(a.n / 3)); a.n -= pertes;
+    flot(t.x, t.top + 12, t.z, l.n + ' tient bon', a.d === MOI ? 'mal' : 'bien');
+    rapport.push(`${l.n} résiste à ${NOMF(a.d)}`);
+    if (a.n <= 0) { detruire(a); return; }
+    majArmee(a);
+    if (recul && !recul.armee) { a.t.armee = null; await marcher(a, [recul], ms); a.t = recul; recul.armee = a; }
+  }
+}
+const nomPres = t => { let best = null, bd = 9e9; for (const n of LIEUX) if (n.tuile && n.t !== 'village') { const d = hexDist(n.tuile, t); if (d < bd) { bd = d; best = n; } } return best ? best.n : 'la campagne'; };
+
+// --- sélection et ordres du joueur
+const PORTEE = { marche: null, cible: null };
+const DISQUE = new THREE.CylinderGeometry(R * .86, R * .86, .1, 6);
+function montrerPortee(prec) {
+  for (const k of ['marche', 'cible']) if (PORTEE[k]) { scene.remove(PORTEE[k]); PORTEE[k].dispose(); PORTEE[k] = null; }
+  if (!prec) return demander();
+  const cases = [...prec.keys()], cib = cases.filter(t => t.armee || (t.lieu && t.lieu.own !== MOI)), mar = cases.filter(t => !cib.includes(t)), M = new THREE.Matrix4();
+  for (const [k, liste, col, op] of [['marche', mar, 0xffffff, .3], ['cible', cib, 0xff5a3c, .45]]) {
+    if (!liste.length) continue;
+    const m = new THREE.InstancedMesh(DISQUE, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, depthWrite: false }), liste.length);
+    liste.forEach((t, i) => m.setMatrixAt(i, M.makeTranslation(t.x, t.top + .25, t.z))); m.renderOrder = 2; scene.add(m); PORTEE[k] = m;
+  }
   demander();
 }
+function selectionner(a) {
+  etat.sel = a; etat.portee = a && !a.pm ? portee(a) : null; montrerPortee(etat.portee);
+  choix.visible = !!a; if (a) choix.position.set(a.t.x, a.t.top + .14, a.t.z);
+}
+async function choisir(t) {
+  if (etat.occupe || etat.fini || intro) return;
+  if (etat.sel && etat.portee && t && etat.portee.has(t)) {
+    const a = etat.sel, route = chemin(etat.portee, t).filter(x => x !== a.t);
+    a.pm = true; selectionner(null); etat.occupe = true; $('#jouer').disabled = true;
+    const rapport = [];
+    await executer(a, route, rapport, 230);
+    if (a.n > 0) majArmee(a);
+    etat.occupe = false; $('#jouer').disabled = false; majHud();
+    if (rapport.length) dire(rapport[rapport.length - 1]);
+    if (!verifierFin()) montrerFiche(a.n > 0 ? a.t : t);
+    return;
+  }
+  const a = t && t.armee;
+  selectionner(a && a.d === MOI ? a : null);
+  if (!a || a.d !== MOI) { choix.visible = !!t && !estEau(t); if (choix.visible) choix.position.set(t.x, t.top + .14, t.z); }
+  montrerFiche(t); demander();
+}
+
+// --- fiche
+const fiche = $('#fiche');
+function montrerFiche(t) {
+  if (!t) { fiche.hidden = true; return; }
+  const fac = FACTIONS[t.dep], nd = t.dep ? NOM_DEP[t.dep] || t.dep : estEau(t) ? '' : 'Espagne', a = t.armee, n = t.lieu;
+  let h = '';
+  if (a) {
+    h += `<h2 style="--c:${a.f.col}"><i></i>${esc(a.nom)}</h2><div class="sous">${esc(a.f.nom)}${n ? ' · à ' + esc(n.n) : ''}</div>
+      <dl><dt>Bataillons</dt><dd>${a.n}</dd><dt>Hommes</dt><dd>${nf(a.n * 480)}</dd><dt>Canons</dt><dd>${Math.round(a.n / 5)}</dd></dl>`;
+    if (a.d === MOI) h += `<div class="aide">${a.pm ? 'Cette armée a déjà marché ce mois-ci.' : 'Touchez une case blanche pour marcher (3 cases), rouge pour attaquer.'}</div>`;
+  }
+  if (n) {
+    const moi = n.own === MOI;
+    h += `${a ? '<div style="height:10px"></div>' : ''}<h2 style="--c:${COLF(n.own)}"><i></i>${esc(n.n)}</h2><div class="sous">${TYPE[n.t]} · tenue par ${esc(NOMF(n.own))}</div>
+      <dl><dt>Population</dt><dd>${nf(n.p)} hab.</dd><dt>Remparts</dt><dd>${n.f ? n.f + ' / 4' : 'aucun'}</dd><dt>Garnison</dt><dd>${n.gar} bataillons</dd><dt>Revenu</dt><dd>${nf(REVENU[n.t])} livres / mois</dd></dl>`;
+    if (moi) h += `<div class="acts"><button type="button" id="b-rec" ${etat.or < PRIX_RECRUE || (a && a.d !== MOI) ? 'disabled' : ''}>Recruter 3 bat. · ${nf(PRIX_RECRUE)}</button><button type="button" id="b-rem" ${etat.or < PRIX_REMPART || (n.f || 0) >= 4 ? 'disabled' : ''}>Remparts · ${nf(PRIX_REMPART)}</button></div>`;
+  }
+  if (!a && !n) h = `<h2>${esc(TER[t.t].nom)}</h2><div class="sous">${esc(estEau(t) ? 'Eaux' : nd + (fac ? ' · ' + fac.titre : ' · hors des cinq pays'))}</div>${DEFENSE[t.t] ? `<div class="aide">Terrain défensif : +${Math.round((DEFENSE[t.t] - 1) * 100)} % en défense</div>` : ''}`;
+  fiche.innerHTML = h; fiche.hidden = false;
+  const rec = $('#b-rec'), rem = $('#b-rem');
+  if (rec) rec.onclick = () => {
+    etat.or -= PRIX_RECRUE;
+    if (t.armee) { t.armee.n += 3; majArmee(t.armee); }
+    else nouvelleArmee({ d: MOI, f: FACTIONS[MOI], n: 3, t, nom: 'Levée de ' + n.n, pm: true });
+    flot(t.x, t.top + 10, t.z, '+3 bataillons', 'bien'); majHud(); montrerFiche(t);
+  };
+  if (rem) rem.onclick = () => { etat.or -= PRIX_REMPART; n.f = (n.f || 0) + 1; n.gar += 2; majBan(n); flot(t.x, t.top + 12, t.z, 'Remparts renforcés', 'bien'); majHud(); montrerFiche(t); };
+}
+function montrerRapport(titre, lignes) {
+  fiche.innerHTML = `<h2>${esc(titre)}</h2><ul>${(lignes.length ? lignes : ['Un mois calme sur toute l\'Aquitaine.']).slice(-7).map(l => `<li>${esc(l)}</li>`).join('')}</ul>`;
+  fiche.hidden = false;
+}
 let toastT = 0;
-function dire(txt) { const el = $('#toast'); el.textContent = txt; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 2200); }
+function dire(txt) { const el = $('#toast'); el.textContent = txt; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 2600); }
+function majHud() {
+  $('#or').textContent = nf(etat.or);
+  $('#places').textContent = LIEUX.filter(n => n.tuile && n.own === MOI && n.t !== 'village').length;
+}
+
+// --- fin du mois : les autres pays jouent, puis revenus
 const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-let mois = 0;
-$('#jouer').onclick = () => { mois++; $('#date').textContent = `${MOIS[mois % 12]} ${1700 + (mois / 12 | 0)} · Le Négoce bordelais`; dire('Le mois de ' + MOIS[mois % 12].toLowerCase() + ' commence'); };
+function butIA(a) {
+  let best = null, bs = 9e9;
+  for (const n of LIEUX) {
+    if (!n.tuile || n.own === a.d || !marchable(n.tuile) || n.gar > a.n * 1.1) continue;
+    const d = hexDist(a.t, n.tuile); if (d > 14) continue;
+    const s = d + n.gar * .35 - (n.t === 'capitale' ? 3 : 0) + (n.t === 'village' ? 2 : 0);
+    if (s < bs) { bs = s; best = n.tuile; }
+  }
+  for (const e of ARMEES) {
+    if (e.d === a.d || e.n > a.n * .9) continue;
+    const d = hexDist(a.t, e.t), s = d + 1; if (d <= 6 && s < bs) { bs = s; best = e.t; }
+  }
+  return best;
+}
+async function tourIA(rapport) {
+  for (const a of ARMEES.filter(a => a.d !== MOI)) {
+    if (a.n <= 0 || etat.fini || !ARMEES.includes(a)) continue;
+    if (a.n < 5 || Math.random() < .25) { a.n += 1; majArmee(a); continue; }   // repos : l'armée se renforce
+    const but = butIA(a); if (!but) continue;
+    const route = cheminVers(a, but); if (!route.length) continue;
+    await executer(a, route, rapport, 140);
+    if (verifierFin()) return;
+  }
+  // revenus et levées des autres pays
+  for (const d in FACTIONS) {
+    if (d === MOI) continue;
+    etat.orIA[d] += LIEUX.reduce((s, n) => s + (n.tuile && n.own === d ? REVENU[n.t] : 0), 0);
+    while (etat.orIA[d] >= PRIX_RECRUE) {
+      etat.orIA[d] -= PRIX_RECRUE;
+      const siens = ARMEES.filter(a => a.d === d);
+      if (siens.length >= 3 || !siens.length && !LIEUX.some(n => n.own === d && n.t === 'capitale')) { if (siens.length) { const f = siens.sort((x, y) => x.n - y.n)[0]; f.n += 3; majArmee(f); } continue; }
+      const cap = LIEUX.find(n => n.own === d && n.tuile && n.t !== 'village' && !n.tuile.armee);
+      if (cap) nouvelleArmee({ d, f: FACTIONS[d], n: 3, t: cap.tuile, nom: 'Levée de ' + cap.n, pm: false });
+    }
+  }
+}
+$('#jouer').onclick = async () => {
+  if (etat.occupe || etat.fini) return;
+  etat.occupe = true; $('#jouer').disabled = true; selectionner(null); fiche.hidden = true;
+  const rapport = [];
+  dire('Les autres pays jouent…');
+  await tourIA(rapport);
+  if (etat.fini) return;
+  const gain = LIEUX.reduce((s, n) => s + (n.tuile && n.own === MOI ? REVENU[n.t] : 0), 0);
+  etat.or += gain;
+  for (const n of LIEUX) n.gar = Math.min(BASE_GAR(n), n.gar + 1);
+  for (const a of ARMEES) { a.pm = false; if (a.d === MOI) majArmee(a); }
+  etat.mois++;
+  const nom = `${MOIS[etat.mois % 12]} ${1700 + (etat.mois / 12 | 0)}`;
+  $('#date').textContent = nom + ' · Le Négoce bordelais';
+  rapport.push(`Le trésor reçoit ${nf(gain)} livres`);
+  montrerRapport('Rapport · ' + nom, rapport);
+  etat.occupe = false; $('#jouer').disabled = false; majHud();
+};
+function verifierFin() {
+  const caps = LIEUX.filter(n => n.t === 'capitale' && FACTIONS[n.d]);
+  const gagne = caps.every(n => n.own === MOI), perdu = LIEUX.find(n => n.n === 'Bordeaux').own !== MOI && !ARMEES.some(a => a.d === MOI);
+  if (!gagne && !perdu) return false;
+  etat.fini = true; intro = true;
+  $('#intro h1').textContent = gagne ? 'Victoire' : 'Défaite';
+  $('#intro .tag').textContent = gagne ? `Les cinq chefs-lieux sont à vous, en ${etat.mois + 1} mois` : 'Bordeaux est tombée et vos armées sont dispersées';
+  $('#cinq').innerHTML = ''; $('#entrer').textContent = 'Rejouer'; $('#entrer').onclick = () => location.reload();
+  $('#intro').classList.remove('part'); $('#hud').hidden = true; $('#bas').hidden = true; demander();
+  return true;
+}
 
 // ============================================================ écran-titre
 let intro = true;
@@ -630,6 +893,7 @@ $('#cinq').innerHTML = Object.values(FACTIONS).map(f => `<span style="--c:${f.co
 $('#entrer').onclick = () => {
   intro = false; $('#intro').classList.add('part'); $('#hud').hidden = false; $('#bas').hidden = false;
   const b = LIEUX.find(n => n.n === 'Bordeaux').tuile; volerVers(b.x + 10, b.z + 25, 260, 2200);
+  montrerRapport('Janvier 1700', ['Vous tenez la Gironde. Prenez les quatre autres chefs-lieux : Périgueux, Mont-de-Marsan, Agen et Pau.', 'Touchez une de vos armées (fanion rouge) pour la faire marcher.', 'Recrutez et renforcez les remparts depuis vos villes.']);
 };
 
 // ============================================================ boucle
@@ -641,11 +905,15 @@ function boucle(now) {
     cible.x = anim.a[0] + (anim.b[0] - anim.a[0]) * e; cible.z = anim.a[1] + (anim.b[1] - anim.a[1]) * e; distc = anim.a[2] + (anim.b[2] - anim.a[2]) * e;
     majCam(); if (k >= 1) anim = null;
   } else if (derive && intro) { cible.z -= dt * .02; if (cible.z <= BZ[0] + 200) cible.z = BZ[1] - 150; majCam(); }
-  if (sale) { renderer.render(scene, cam); majEtiquettes(); sale = false; }
+  for (let i = ANIMS.length - 1; i >= 0; i--) { const A = ANIMS[i], k = clamp((now - A.t0) / A.ms, 0, 1); A.fn(k); if (k >= 1) { ANIMS.splice(i, 1); A.res(); } }
+  if (ANIMS.length || ETIQ.some(e => e.vie)) demander();
+  if (sale) { renderer.render(scene, cam); majEtiquettes(now); sale = false; }
   requestAnimationFrame(boucle);
 }
 setTimeout(() => {
   construire();
+  for (const a of ARMEES) nouvelleArmee(a, true);
+  majHud();
   const c = LIEUX.find(n => n.n === 'Bordeaux').tuile;
   cible.set(c.x + 120, 0, BZ[1] - 300); distc = 700;
   redim(); $('#chargement').hidden = true; requestAnimationFrame(boucle);
