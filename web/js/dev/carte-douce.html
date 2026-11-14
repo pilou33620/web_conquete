@@ -135,6 +135,7 @@ button:focus-visible { outline: 3px solid var(--or); outline-offset: 2px; }
 <script type="importmap">{ "imports": { "three": "../../vendor/three/three.module.js" } }</script>
 <script type="module">
 import * as THREE from 'three';
+import { figurine, MAT_FIG } from './figurines.js';
 const $ = s => document.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -605,23 +606,22 @@ const marchable = t => !!t && !estEau(t) && t.dj <= 3 && t.bord >= 2;
 const hasard = (a, b) => a + Math.random() * (b - a);
 
 // --- armées en volume, mobiles
-const MATS = {}, matDe = c => MATS[c] || (MATS[c] = new THREE.MeshStandardMaterial({ color: c, roughness: .8 }));
-const G = {
-  corps: enBas(new THREE.BoxGeometry(.75, 1.15, .5)), tete: new THREE.IcosahedronGeometry(.3, 1), chap: new THREE.BoxGeometry(.62, .2, .5),
-  fusil: enBas(new THREE.BoxGeometry(.07, 1.7, .07)), hampe: enBas(new THREE.BoxGeometry(.14, 4.6, .14)), drap: new THREE.BoxGeometry(1.7, 1.05, .1),
-  canon: new THREE.CylinderGeometry(.26, .32, 1.9, 8).rotateZ(Math.PI / 2), roue: new THREE.CylinderGeometry(.45, .45, .16, 10).rotateX(Math.PI / 2),
-};
+// troupes : figurines détaillées (figurines.js), en ordre de bataille face à la caméra
 function modeleArmee(a) {
   if (a.g) { scene.remove(a.g); a.g.traverse(o => o.isInstancedMesh && o.dispose()); }
-  const g = new THREE.Group(), nb = clamp(Math.round(a.n * .8), 3, 12), M = new THREE.Matrix4(), pos = [];
-  for (let i = 0; i < nb; i++) pos.push([(i % 4 - 1.5) * 1.5, ((i / 4 | 0) - 1) * 1.6 + 1.2]);
-  const rang = (geo, col, dy, dx = 0) => { const m = new THREE.InstancedMesh(geo, matDe(col), nb); pos.forEach((p, i) => m.setMatrixAt(i, M.makeTranslation(p[0] + dx, dy, p[1]))); m.castShadow = true; g.add(m); };
-  rang(G.corps, a.f.col, 0); rang(G.tete, 0xf1c9a0, 1.5); rang(G.chap, 0x22252e, 1.76); rang(G.fusil, 0x4a3a2a, .45, .38);
-  const seul = (geo, col, x, y, z) => { const m = new THREE.Mesh(geo, matDe(col)); m.position.set(x, y, z); m.castShadow = true; g.add(m); };
-  seul(G.hampe, 0x6b5236, -3.4, 0, -1.6); seul(G.drap, a.f.col, -2.5, 4, -1.6);
-  if (a.n >= 6) { seul(G.canon, 0x3c3b3a, 3.5, .7, -2.6); seul(G.roue, 0x6b5236, 3.2, .45, -2.15); }
+  const g = new THREE.Group(), nb = clamp(Math.round(a.n * .8), 3, 12), M = new THREE.Matrix4(), col = a.f.col;
+  const poses = { fusilier: [], officier: [[2, -1.7]], drapeau: [[1.8, .1]], tambour: [[1.7, 1.5]], canon: [], artilleur: [], cavalier: [] };
+  for (let i = 0; i < nb; i++) poses.fusilier.push([.7 - (i / 4 | 0) * 1.15, ((i % 4) - 1.5) * .95]);
+  if (a.n >= 6) { poses.canon.push([.6, 3.7]); poses.artilleur.push([-.9, 3.2], [-.8, 4.3]); }
+  if (a.n >= 10) poses.cavalier.push([.4, -3.9], [-1.6, -3.7]);
+  for (const [k, pts] of Object.entries(poses)) {
+    if (!pts.length) continue;
+    const m = new THREE.InstancedMesh(figurine(k, col, 'tricorne'), MAT_FIG, pts.length);
+    pts.forEach(([x, z], i) => m.setMatrixAt(i, M.makeTranslation(x, 0, z))); m.castShadow = true; m.receiveShadow = true; g.add(m);
+  }
+  g.rotation.y = -Math.PI / 2 + .5;   // de trois quarts, vers la caméra
   if (a.g) g.position.copy(a.g.position); else g.position.copy(lieuDe(a.t));
-  g.scale.setScalar(a.t.lieu ? .8 : 1);
+  g.scale.setScalar(a.t.lieu ? 1 : 1.25);
   a.g = g; scene.add(g); demander();
 }
 const lieuDe = t => new THREE.Vector3(t.x + (t.lieu ? 5.5 : 0), t.top, t.z + (t.lieu ? 5 : 0));   // dans une ville, l'armée campe à côté des maisons
@@ -644,7 +644,7 @@ const animer = (ms, fn) => new Promise(res => { ANIMS.push({ t0: performance.now
 async function marcher(a, chemin, ms) {
   for (const t of chemin) {
     const p0 = a.g.position.clone(), p1 = lieuDe(t);
-    a.g.scale.setScalar(t.lieu ? .8 : 1);
+    a.g.scale.setScalar(t.lieu ? 1 : 1.25);
     await animer(ms, k => { a.g.position.lerpVectors(p0, p1, k); a.g.position.y += Math.sin(k * Math.PI) * .8; });
   }
 }
@@ -722,7 +722,7 @@ async function executer(a, route, rapport, ms) {
 function retraite(a) {
   const n = voisins(a.t).filter(v => marchable(v) && !v.armee && !(v.lieu && v.lieu.own !== a.d)).sort(() => Math.random() - .5)[0];
   if (!n) return false;
-  a.t.armee = null; a.t = n; n.armee = a; a.g.position.copy(lieuDe(n)); a.g.scale.setScalar(n.lieu ? .8 : 1); return true;
+  a.t.armee = null; a.t = n; n.armee = a; a.g.position.copy(lieuDe(n)); a.g.scale.setScalar(n.lieu ? 1 : 1.25); return true;
 }
 async function assaut(a, l, recul, rapport, ms) {
   const t = l.tuile;
