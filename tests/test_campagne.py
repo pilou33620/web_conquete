@@ -2188,6 +2188,31 @@ class ChampsDeBataille(unittest.TestCase):
         self.assertTrue(all(n.get('lv') is None for n in V.player_state(g)['nodes']), "l'événement n'a pas eu lieu")
 
 
+
+class BoueApresLaPluie(unittest.TestCase):
+    """Après la pluie, chemins et routes de terre restent boueux quelques jours : on y marche moins vite."""
+
+    def test_la_boue_dure_puis_seche(self):
+        from game import rules as R
+        g = partie()
+        z = g.zone_of(g.geo.nodes[0]['x'], g.geo.nodes[0]['y'])
+        x, y = g.geo.nodes[0]['x'], g.geo.nodes[0]['y']
+        self.assertEqual(g.mud_k(x, y), 1.0)
+        g.weather[z] = dict(kind='pluie', left=1)
+        g.new_day()   # un jour de pluie : la boue est là, mais c'est la pluie qui ralentit (pas deux fois)
+        self.assertEqual(g.weather[z].get('mud'), 1 if g.season() == 'été' else R.MUD_DAYS)
+        g.weather[z].update(kind='soleil', left=9, mud=R.MUD_DAYS)
+        self.assertEqual(g.mud_k(x, y), R.MUD_MOVE)
+        self.assertEqual(g.mud_k(x, y, paved=True), 1.0, 'une route royale est empierrée')
+        g.weather[z]['kind'] = 'pluie'
+        self.assertEqual(g.mud_k(x, y), 1.0, 'sous la pluie, la météo le compte déjà')
+        g.weather[z]['kind'] = 'soleil'
+        for _ in range(R.MUD_DAYS):
+            g.new_day()
+            g.weather[z].update(kind='soleil', left=9)   # (le tirage du temps ne doit pas ramener la pluie dans l'essai)
+        self.assertEqual(g.mud_k(x, y), 1.0, 'trois jours de soleil : les chemins ont séché')
+
+
 if __name__ == '__main__':
     unittest.main()
 

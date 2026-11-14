@@ -501,7 +501,7 @@ def player_state(g, since=0):
                               tn=TT.tours_left(g, x['until']), town=x.get('town'), kind=x.get('kind'),
                               choices=[dict(label=c['label'], desc=c['desc'], ok=EV.affordable(g, p, c['fx']))
                                        for c in x['choices']]) for x in g.pending_ev],
-                weather={z: dict(kind=w['kind'], left=w['left']) for z, w in g.weather.items()},
+                weather={z: dict(kind=w['kind'], left=w['left'], mud=w.get('mud', 0)) for z, w in g.weather.items()},
                 me=mine, factions=facs, nodes=nodes, armies=armies, battles=battles,
                 events=[e for e in g.events if e['seq'] > since], seq=g.seq,
                 proposals=[dict(id=x['id'], frm=x['frm'], action=x['action'], amount=x['amount'], give=x['give'],

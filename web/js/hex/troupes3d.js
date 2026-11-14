@@ -6,6 +6,7 @@
 // fusil, bras armé du sabre ou de l'épée, refouloir des servants. Les tués restent couchés au sol.
 import { THREE, MAT, CONT, lot, put, fusion, boite, cyl, cone, sphere, caillou, clamp } from './moteur.js';
 import { R, tenue } from '../battle/troupes2d.js';
+import { E } from '../battle/errants.js';
 
 const H = 1.8;   // un homme, en mètres (la figurine est agrandie comme les figures 2D : fs)
 const NOIR = 0x2a2522, CHAIR = 0xf0c9a0, CUIR = 0x6b4d31, BRONZE = 0xc9933c, BLANC = 0xf2efe6, POUDRE = 0xe9e5dc, BRUN = 0x3a2a1f, OR = 0xe8b94a, FER = 0x8d9196, CHAMOIS = 0xe3cf9f;
@@ -152,6 +153,10 @@ function lame(habit, long) {
 function refouloir() { const L = lot(); put(L, boite(1.7, 0.05, 0.05), CUIR, 0.75, 0, 0, 0, 0.02); const b = cyl(0.08, 0.08, 0.22, 6); b.rotateZ(Math.PI / 2); put(L, b, NOIR, 1.6, 0, 0, 0, 0.02); return L; }
 // ajoute au lot L les pièces du lot J, décalées de (x, y, z)
 function greffer(L, J, x, y, z) { for (const k of ['g', 'o']) for (const geo of J[k]) { geo.translate(x, y, z); L[k].push(geo); } }
+// un homme entier (buste et jambes), pour ceux qui ne marchent pas au pas du régiment : blessés, brancardiers
+function homme(t) { const L = pieton({ ...t, sacOn: false }, R.H); for (const c of [-1, 1]) greffer(L, jambe(t.culotte || BLANC, guetre(t)), 0, 0.84, c * 0.08); return L; }
+// le brancard : deux hampes, la toile
+function brancard() { const L = lot(); for (const c of [-1, 1]) put(L, boite(2.3, 0.05, 0.05), CUIR, 0, 0, c * 0.28); put(L, boite(1.8, 0.03, 0.54), 0xd9d2bd, 0, -0.01, 0); return L; }
 function fusil() { const L = lot(); put(L, boite(0.07, 0.5, 0.05), CUIR, 0, -0.48, 0); put(L, boite(0.035, 1.0, 0.035), FER, 0, 0.22, 0); put(L, boite(0.016, 0.3, 0.016), 0xc8ccd0, 0, 0.87, 0); return L; }   // crosse, canon, baïonnette
 
 const guetre = t => (t.tete === 'tricorne' ? BLANC : clairDe(t.culotte || BLANC) > 0.7 ? NOIR : null);
@@ -207,7 +212,7 @@ export class Troupes3D {
     for (const [fx, fz, pt, pg] of JC) this.sous('jc|' + robe, fab, x, y, a, s, fx, 0.86 + dy, fz, k && Math.sin(d.gait + (gal ? pg : pt)) * k);
   }
   // une image : units (vue.js), couleurs des camps, temps (s), visible(x, y, marge)
-  image(units, colors, time, visible) {
+  image(units, colors, time, visible, errants) {
     for (const l of this.lots.values()) l.n = 0;
     const list = this.tr.preparer(units, time), fs = this.tr.fs;
     for (const u of list) {
@@ -263,7 +268,34 @@ export class Troupes3D {
         else if (role === R.AVANT || role === R.CAISSON) this.lotDe('v' + role + '|' + cle, () => voiture(t, role === R.CAISSON)).poser(this.mat(x, y, a, s * (role === R.AVANT ? 0.8 : 1), pas * s));
       });
     }
+    if (errants) this.errants(errants, colors, visible);
     for (const l of this.lots.values()) l.fin();
+  }
+  // ce qui erre après les coups (battle/errants.js) : chevaux sans cavalier, blessés qui rampent ou boitent, gisants,
+  // brancardiers et leur brancard
+  errants(liste, colors, visible) {
+    const s = this.tr.fs * 0.75;
+    for (const e of liste) {
+      if (!visible(e.x, e.y, 20)) continue;
+      const col = colors[e.side] || '#888', t = this.tenueDe(col, 'ligne'), cle = col + '|ligne', c = Math.cos(e.a), sn = Math.sin(e.a);
+      if (e.k === E.CHEVAL) {
+        const robe = t.chevaux?.[0] || 0x6b4a2c, d = { gait: e.v ? e.ph : null, amp: e.v > 6 ? 2.6 : 1 }   /* (la robe du modèle : attelage) */, pas = e.v ? Math.abs(Math.sin(e.ph)) * 0.05 * d.amp : 0;
+        // (il broute : l'encolure basse)
+        this.lotDe('a|' + cle, () => attelage(t)).poser(this.mat(e.x, e.y, e.a, s, pas * s, 0, e.v ? 0 : -0.16));
+        this.jambesCheval(e.x, e.y, e.a, s, pas, d, robe);
+      } else if (e.k === E.BRANCARD) {
+        // deux porteurs l'un derrière l'autre, le brancard entre eux (et le blessé dessus au retour)
+        const pas = Math.abs(Math.sin(e.ph)) * 0.05;
+        for (const k of [-1, 1]) this.lotDe('hm|' + cle, () => homme(t)).poser(this.mat(e.x + c * k * 1.15 * s, e.y + sn * k * 1.15 * s, e.a, s, pas * s));
+        this.lotDe('br', brancard).poser(this.mat(e.x, e.y, e.a, s, 0.78 * s));
+        if (e.charge) this.lotDe('hm|' + cle, () => homme(t)).poser(this.mat(e.x - c * 0.85 * s, e.y - sn * 0.85 * s, e.a, s, 0.98 * s, 0, -Math.PI / 2));
+      } else {
+        // à plat ventre, il se traîne ; couché sur le flanc, il attend ; debout, il s'en va en boitant, penché
+        const rampe = e.k === E.RAMPE, gis = e.k === E.GISANT;
+        this.lotDe('hm|' + cle, () => homme(t)).poser(this.mat(e.x, e.y, e.a, s, (rampe || gis ? 0.2 : Math.abs(Math.sin(e.ph)) * 0.06) * s,
+          gis ? Math.PI / 2 : rampe ? Math.sin(e.ph) * 0.12 : 0, rampe ? -Math.PI / 2 : gis ? 0 : -0.2 + Math.sin(e.ph) * 0.06));
+      }
+    }
   }
   // les tués et les chevaux tombés (decals de troupes2d.kill) : couchés au sol, pour toute la bataille
   tomber(decals) {

@@ -22,6 +22,8 @@ import { champDeVision, OEIL } from './visibilite.js';
 import { Champ } from '../hex/champ.js';
 import { Troupes3D } from '../hex/troupes3d.js';
 import { K as HEX_K } from '../hex/moteur.js';
+import { Son } from '../son.js';
+import { Errants } from './errants.js';
 
 // le rendu en plateau d'hexagones 3D (SPEC-HEX), le seul proposé ; sans WebGL, la vue de dessus d'origine (load)
 export function plateauVoulu() { return true; }
@@ -85,6 +87,9 @@ export function voileDoux(vu, cols, rows, F = 4, r = 4) {
   }
   return { a, w, h };
 }
+
+// le son de chaque effet du serveur (son.js)
+const SONS_FX = { salve: 'salve', canon: 'canon', mitraille: 'mitraille', explosion: 'explosion', charge: 'charge', deroute: 'deroute', drapeau: 'drapeau' };
 
 export class BattleView {
   // api : {get(url), post(url, body)} ; root : élément qui recevra la vue
@@ -152,6 +157,7 @@ export class BattleView {
       try {
         this.champ = new Champ(this.cv3, m, this.terrain);
         this.t3 = new Troupes3D(this.champ, this.troupes, m.year);
+        this.errants = new Errants(this.terrain.W, this.terrain.H);
         if (m.bati?.length) this.champ.bati(m.bati);
         this.champ.boue(this.piet);   // (la boue d'avant comprise : importée plus haut)
         this.k = HEX_K;
@@ -277,6 +283,8 @@ export class BattleView {
         this.units.set(id, u);
       } else {
         if (u.men > s.men && s.men >= 0 && this.terrain) this.casualties(u, u.men - s.men);
+        // une pièce de moins à la batterie : son épave reste sur place
+        if (this.champ && s.pieces < u.pieces) for (let k = s.pieces; k < u.pieces; k++) { const o = (k + 0.5 - u.pieces / 2) * (u.w || 40) / u.pieces; this.champ.debris([{ k: 'epave', x: u.x - Math.sin(u.dir) * o, y: u.y + Math.cos(u.dir) * o, a: u.dir + (Math.random() - 0.5) }], this.troupes.fs); }
         const cur = { x: u.x, y: u.y, dir: u.dir };
         // pendant le déploiement, une unité qu'on vient de poser localement garde sa place jusqu'à confirmation
         const pin = u._pin && now - u._pin < 1500;
@@ -316,6 +324,8 @@ export class BattleView {
         // les éclairs et la fumée partent des bouches à feu des figures
         if (un && (f.k === 'salve' || f.k === 'canon' || f.k === 'mitraille')) un._muzzles = this.troupes.muzzles(un, time);
         this.fx.push(f, un, k * gap);
+        // le bruit du coup, au moment où il part : plus faible loin du centre de l'écran, et vu de haut
+        if (Son.on && SONS_FX[f.k]) { const r = Math.max(this.vw, this.vh) / this.cam.z / 2, vol = clamp(1.25 - Math.hypot(f.x - this.cam.x, f.y - this.cam.y) / (r * 2.5), 0.12, 1) * clamp(0.45 + this.cam.z / 4, 0.45, 1); this.fx.later(k * gap, () => Son.jouer(SONS_FX[f.k], vol)); }
         // bêtes et villageois fuient les points de chute (le boulet arrive un peu après le coup)
         if ((f.k === 'canon' || f.k === 'mitraille') && f.x2 != null) this.fx.later(k * gap + 0.6, () => this.decor.fuir(f.x2, f.y2));
         else if (f.k === 'explosion') this.fx.later(k * gap, () => this.decor.fuir(f.x, f.y));
@@ -345,6 +355,7 @@ export class BattleView {
       const a = Math.random() * TAU, r = 0.8 + Math.random() * 2.5;
       out.push({ k: art && Math.random() < 0.5 ? 'roue' : ['chapeau', 'fusil', 'sac'][(Math.random() * 3) | 0], x: d.x + Math.cos(a) * r, y: d.y + Math.sin(a) * r, a: Math.random() * TAU });
     }
+    this.errants?.pertes(u, out, clsOf(u) === 'cavalerie');   // (chevaux sans cavalier, blessés : battle/errants.js)
     if (out.length) { this.sol.stamp(out); this.t3?.tomber(out); this.champ?.debris(out, this.troupes.fs); }
   }
   // la boue, envoyée au serveur toutes les 30 s de bataille environ (gardée avec la sauvegarde)
@@ -497,7 +508,10 @@ export class BattleView {
     if (this.hex) {
       // le plateau 3D (SPEC-HEX) : sol, décor, bâtiments et troupes en 3D, dessous ; ici, la vie, les fumées, les feux
       ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, this.cv.width, this.cv.height);
-      this.t3.image(all, this.colors || [], time, view.visible);
+      // (les errants vivent au temps de la bataille : arrêtés en pause, plus vifs en accéléré)
+      this.errants.pas(Math.min(0.25, Math.max(0, time - (this.tErr ?? time))) * (this.st?.phase === 'combat' ? this.st.speed ?? 1 : 0)); this.tErr = time;
+      this.champ.heure(this.hourNum(), this.st?.light ?? 1, this.st?.weather || this.map?.weather, this.terrain.season);
+      this.t3.image(all, this.colors || [], time, view.visible, this.errants.liste);
       this.champ.image(this.cam, this.vw, this.vh, dpr, time, all);
       mark('plateau');
       this.decor.vivant(ctx, view);

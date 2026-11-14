@@ -490,6 +490,12 @@ SEASON_FOOD = {'printemps': 0.9, 'été': 1.25, 'automne': 1.35, 'hiver': 0.45}
 SEASON_ROAD = {'printemps': 0.95, 'été': 1.0, 'automne': 0.95, 'hiver': 0.82}
 SEASON_OFF = {'printemps': 0.92, 'été': 1.0, 'automne': 0.9, 'hiver': 0.72}
 
+# la boue : après la pluie, l'orage ou la tempête, routes de terre et chemins restent boueux MUD_DAYS jours (un seul
+# l'été, où tout sèche vite) et l'on y marche à MUD_MOVE de sa vitesse ; les routes royales, empierrées, n'en souffrent
+# pas. Sous la pluie même, c'est déjà compté (WEATHER, move).
+MUD_WET = ('pluie', 'orage', 'tempete')
+MUD_DAYS, MUD_MOVE = 3, 0.9
+
 WEATHER = {
     'soleil': dict(label='Ensoleillé', icon='☀️', fire=1.0, move=1.0, food=1.0, vision=1.0),
     'nuages': dict(label='Nuageux', icon='⛅', fire=1.0, move=1.0, food=1.0, vision=1.0),

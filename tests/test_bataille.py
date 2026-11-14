@@ -384,6 +384,7 @@ class ValeursChiffrees(unittest.TestCase):
         l.fat, l.reload, l.state, l.ammo, l.morale, l.form = 0.0, 0.0, 'repos', 60.0, 80.0, 'ligne'
         l.target, l.order, l.fire_mode = c.id, dict(kind='attack', target=c.id), 'free'
         c.men, c.state, c.morale = 500.0, 'repos', 80.0
+        self.tb.smoke[:] = [0.0] * len(self.tb.smoke)   # (l'air clair à chaque essai : la fumée de la salve d'avant fausserait la mesure)
         self.tb._fire(l, 2.0)
         # la Précision affichée vaut au bout portant : on y ramène le tir (la demi-justesse D50 change avec l'arme)
         return (500.0 - c.men) / self.U.precision(l, self.tb.dist(l, c))
@@ -1480,6 +1481,84 @@ class CanonsCamoufles(unittest.TestCase):
         gun.x, gun.form, gun.busy = x + 100, 'attelee', 0.0
         tb._change_form(gun, 'batterie')
         self.assertAlmostEqual(t_bois, gun.busy * BT.CAMO_SETUP, delta=0.5)
+
+
+
+class FumeeDrapeauMeteo(unittest.TestCase):
+    """La fumée de la poudre noire gêne le tir, le drapeau se perd dans la déroute au contact, le temps tourne."""
+
+    def test_la_fumee_gene_le_tir_puis_se_dissipe(self):
+        tb, u = bataille(dict(ligne=1))
+        L = u['ligne']
+        cible = ennemi(tb, L)
+        face_a_face(tb, L, cible, 250)   # (tireur et cible dans deux carrés de fumée différents)
+        self.assertEqual(tb._smoke_k(L, cible), 1.0)   # pas un coup tiré : l'air est clair
+        tb.smoke[tb._smoke_i(L.x, L.y)] = 1.0
+        tb._smoke_on = True
+        self.assertAlmostEqual(tb._smoke_k(L, cible), 1 - BT.SMOKE_K, delta=BT.SMOKE_K * 0.55)   # (± la moitié, si le milieu y est aussi)
+        tb.smoke[tb._smoke_i(L.x, L.y)] = 50.0
+        self.assertAlmostEqual(tb._smoke_k(L, cible), 1 - BT.SMOKE_MAX)   # jamais plus que le plafond
+        # plus personne ne tire : un quart d'heure après, elle est partie
+        tb.smoke[tb._smoke_i(L.x, L.y)] = 1.0
+        for x in tb.units:
+            x.ammo = 0
+        avancer(tb, 900)
+        self.assertLess(max(tb.smoke), 0.05)
+
+    def test_une_salve_laisse_de_la_fumee_sauf_la_poudre_sans_fumee(self):
+        tb, u = bataille(dict(ligne=1))
+        L = u['ligne']
+        cible = ennemi(tb, L)
+        face_a_face(tb, L, cible, 100)
+        avancer(tb, 90, jusqua=lambda: max(tb.smoke) > 0)
+        self.assertGreater(max(tb.smoke), 0)
+        L.arm = 7
+        self.assertTrue(tb._smokeless(L))
+        L.arm = 2
+        self.assertFalse(tb._smokeless(L))
+
+    def test_le_drapeau_est_pris_dans_la_deroute_au_contact(self):
+        tb, u = bataille(dict(ligne=2))
+        L = u['ligne']
+        cible = ennemi(tb, L)
+        face_a_face(tb, L, cible, 40)
+        for e in tb.units:   # (lui seul au contact : c'est lui qui prend le drapeau)
+            if e.side != L.side and e is not cible:
+                e.x, e.y = L.x - 900, L.y
+        if not cible.valid:   # (un état-major ou un chariot ne prend pas de drapeau)
+            cible.cls, cible.type = 'inf', 'ligne'
+        m0 = cible.morale
+        tb._rout(L)
+        self.assertFalse(L.flag)
+        self.assertEqual(cible.morale, min(100.0, m0 + BT.FLAG_GAIN))
+        self.assertIs(L.view(True, False).get('flag'), False)
+        self.assertTrue(any(e['k'] == 'drapeau' for e in tb.fx))
+
+    def test_le_drapeau_reste_si_l_ennemi_est_loin(self):
+        tb, u = bataille(dict(ligne=1))
+        L = u['ligne']
+        for e in tb.units:
+            if e.side != L.side:
+                e.x, e.y = L.x + 900, L.y
+        tb._rout(L)
+        self.assertTrue(L.flag)
+        self.assertNotIn('flag', L.view(True, False))
+
+    def test_le_brouillard_se_leve(self):
+        tb, u = bataille(dict(ligne=1))
+        tb.weather, tb.wx_at, tb.wx_next = 'brouillard', tb.clock + 10, 'soleil'
+        avancer(tb, 20)
+        self.assertEqual(tb.weather, 'soleil')
+        self.assertIsNone(tb.wx_at)
+        self.assertTrue(any(e['k'] == 'meteo' for e in tb.fx))
+        # le temps qui a tourné survit à la sauvegarde
+        tb2 = BT.TacticalBattle.from_dict(GEO, json.loads(json.dumps(tb.to_dict())))
+        self.assertEqual(tb2.weather, 'soleil')
+
+    def test_le_temps_prevu_ne_depend_que_de_la_graine(self):
+        a, _ = bataille(dict(ligne=1), seed=7)
+        b, _ = bataille(dict(ligne=1), seed=7)
+        self.assertEqual((a.wx_at, a.wx_next), (b.wx_at, b.wx_next))
 
 
 if __name__ == '__main__':

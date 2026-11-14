@@ -292,6 +292,21 @@ ROUT_STEADY = 60         # … s'ils sont déjà ébranlés : rien au-dessus de 
 RALLY_R, RALLY_INSP = 400.0, 100.0
 RALLY_CALM, RALLY_CALM_BATI, RALLY_ALONE = 400.0, 150.0, 700.0
 RALLY_REC, RALLY_REC_PLACE, RALLY_REC_ALONE = 0.1, 0.08, 0.04
+# le drapeau : un bataillon qui part en déroute avec l'ennemi à moins de FLAG_R m le lui abandonne ; lui-même et ses
+# voisins (ROUT_R) en sont ébranlés, le vainqueur s'enhardit ; sans drapeau, les fuyards se rallient moins vite
+FLAG_R, FLAG_SHOCK, FLAG_AMIS, FLAG_GAIN, FLAG_RALLY = 60.0, 12.0, 4.0, 8.0, 0.6
+# la fumée de la poudre noire : elle s'amasse par carrés de SMOKE_CELL m là où l'on tire (une salve de 300 fusils :
+# SMOKE_SALVE ; une pièce : SMOKE_PIECE), se dissipe en SMOKE_TAU s (plus vite sous la pluie et le vent) et gêne la
+# visée de qui tire dedans, à travers ou dessus : jusqu'à SMOKE_MAX du feu en moins. La poudre sans fumée n'en fait pas.
+# (réglé léger : à 0,25 et 35 %, les batailles de référence des bancs changeaient d'issue)
+SMOKE_CELL, SMOKE_SALVE, SMOKE_PIECE, SMOKE_K, SMOKE_MAX = 100.0, 0.3, 0.06, 0.12, 0.2
+SMOKE_TAU = {'pluie': 70.0, 'orage': 60.0, 'tempete': 35.0, 'neige': 100.0, 'brouillard': 160.0}
+SMOKE_COLS, SMOKE_ROWS = int(W // SMOKE_CELL) + 1, int(H // SMOKE_CELL) + 1
+# le temps change pendant la bataille : (probabilité, délai mini et maxi en heures, temps suivant possibles)
+WX_CHANGE = {'brouillard': (1.0, 1.0, 2.5, ('soleil', 'soleil', 'nuages')), 'nuages': (0.3, 1.0, 4.0, ('pluie',)),
+             'pluie': (0.4, 1.0, 3.0, ('nuages',)), 'orage': (0.7, 0.5, 1.5, ('pluie',))}
+WX_TXT = {'soleil': "Le brouillard se lève : le soleil perce.", 'nuages': "Le ciel se dégage.",
+          'pluie': "La pluie se met à tomber : la poudre se mouille."}
 # assaut d'une place : l'assaillant l'emporte s'il tient le cœur (au moins HEART_MEN hommes en état de combattre à
 # moins de HEART_R) sans défenseur en état de combattre à moins de HEART_FREE, pendant HEART_HOLD secondes de suite
 HEART_R, HEART_MEN, HEART_FREE, HEART_HOLD = 90.0, 150.0, 160.0, 360.0
@@ -496,6 +511,14 @@ class TacticalBattle:
         # crépuscule glissent d'autant)
         self.dusk = (DUSK.get(self.season, 19.0) - START_H) * 3600 - spec.get('h_off', 0.0)
         self.light = 1.0
+        self.smoke = [0.0] * (SMOKE_COLS * SMOKE_ROWS)
+        self._smoke_on = False
+        # (son propre hasard : le reste de la bataille se tire comme avant)
+        wr = random.Random(spec['seed'] ^ 0x3C7E)
+        self.wx_at = self.wx_next = None
+        ch = WX_CHANGE.get(self.weather)
+        if ch and wr.random() < ch[0]:
+            self.wx_at, self.wx_next = wr.uniform(ch[1], ch[2]) * 3600, wr.choice(ch[3])
         self._zones()
         self._wx_fire = 1.0
 
@@ -1407,6 +1430,7 @@ class TacticalBattle:
                 if u.state != 'deroute':
                     continue
                 k, who = self._rally_k(u, order=True)
+                k *= 1.0 if u.flag else FLAG_RALLY
                 if not k:
                     why = why or who
                     continue
@@ -1637,6 +1661,17 @@ class TacticalBattle:
         self.clock += dt
         left = self.dusk - self.clock
         self.light = 1.0 if left > 3600 else max(0.15, 0.15 + 0.85 * left / 3600)
+        if self.wx_at is not None and self.clock >= self.wx_at:
+            self._wx_turn()
+        if self._smoke_on:
+            k = math.exp(-dt / SMOKE_TAU.get(self.weather, 120.0))
+            sm = self.smoke
+            mx = 0.0
+            for i, v in enumerate(sm):
+                if v:
+                    v = sm[i] = v * k if v > 0.01 else 0.0
+                    mx = max(mx, v)
+            self._smoke_on = mx > 0.0
         self._refresh_gens()
         self._astar_left = 3
         if self.clock - self._vis_t >= VIS_DT:
@@ -1988,6 +2023,34 @@ class TacticalBattle:
         u.fat = min(100.0, max(0.0, u.fat + d * dt))
 
     # ------------------------------------------------------------------ feu
+    def _wx_turn(self):
+        """Le temps tourne : la vue, le tir et la marche suivent aussitôt (ils lisent self.weather)."""
+        self.weather, self.wx_at = self.wx_next, None
+        self.emit('meteo', W / 2, H / 2)
+        self.log(WX_TXT.get(self.weather, "Le temps change."))
+        self._update_vision()
+
+    def _smoke_i(self, x, y):
+        return min(SMOKE_ROWS - 1, max(0, int(y // SMOKE_CELL))) * SMOKE_COLS + min(SMOKE_COLS - 1, max(0, int(x // SMOKE_CELL)))
+
+    def smoke_at(self, x, y):
+        return self.smoke[self._smoke_i(x, y)]
+
+    def _smokeless(self, u):
+        """Poudre sans fumée : le fusil Lebel (arme 7) ; l'artillerie et les mitrailleuses si leur camp l'a
+        (rules.VISUALS, comme l'affichage : battle/effets.js, smokeless)."""
+        if u.cls == 'artillerie':
+            return 'sans_fumee' in ((self.spec.get('marks') or [(), ()])[u.side] or ())
+        return u.cls == 'inf' and u.arm >= 7
+
+    def _smoke_k(self, u, tg):
+        """Ce que la fumée laisse du feu de u sur tg : celle où il se tient, celle qu'il traverse, celle qui cache la
+        cible."""
+        if not self._smoke_on:
+            return 1.0
+        s = self.smoke_at(u.x, u.y) + 0.5 * self.smoke_at((u.x + tg.x) / 2, (u.y + tg.y) / 2) + 0.5 * self.smoke_at(tg.x, tg.y)
+        return 1.0 - min(SMOKE_MAX, SMOKE_K * s)
+
     def _wx_k(self, u):
         w = self.weather
         if w in ('pluie', 'orage', 'tempete'):
@@ -2451,6 +2514,11 @@ class TacticalBattle:
             cas *= 1 + md.get('carre_fire', 0.0)
         elif kind == 'mitraille':
             cas *= 1 + md.get('art_charge', 0.0)
+        cas *= self._smoke_k(u, tg)
+        if not self._smokeless(u):
+            self.smoke[self._smoke_i(u.x, u.y)] += (U.pieces(u) * SMOKE_PIECE if u.cls == 'artillerie'
+                                                    else u.men * U.FRONT.get(u.form, 1.0) / 300.0 * SMOKE_SALVE)
+            self._smoke_on = True
         u.ammo = max(0.0, u.ammo)
         u.reload = U.reload_time(u) * (VOLLEY_RELOAD if volley else 1.0)
         u.fired_t = self.clock
@@ -2920,6 +2988,27 @@ class TacticalBattle:
             self.log(f"{y.name} est capturé.", None, y.side)
 
     # ------------------------------------------------------------------ moral
+    def _flag_lost(self, u):
+        """Le bataillon qui lâche pied au contact abandonne son drapeau au plus proche ennemi."""
+        if u.cls != 'inf' or not u.flag:
+            return
+        by, bd = None, FLAG_R * FLAG_R
+        for o in self.units:
+            if o.side != u.side and o.valid:
+                d = (o.x - u.x) ** 2 + (o.y - u.y) ** 2
+                if d < bd:
+                    by, bd = o, d
+        if by is None:
+            return
+        u.flag = False
+        u.morale = max(0.0, u.morale - FLAG_SHOCK)
+        by.morale = min(100.0, by.morale + FLAG_GAIN)
+        for o in self.units:
+            if o.side == u.side and o is not u and o.valid and (o.x - u.x) ** 2 + (o.y - u.y) ** 2 < ROUT_R * ROUT_R:
+                o.morale = max(0.0, o.morale - FLAG_AMIS * (0.5 if self.general_near(o) else 1.0))
+        self.emit('drapeau', u.x, u.y, src=by.id)
+        self.log(f"{by.name} prend le drapeau de {u.name} !", None, by.side)
+
     def _rout(self, u):
         if u.state in ('deroute', 'hors'):
             return
@@ -2937,6 +3026,7 @@ class TacticalBattle:
         u.goal = None
         self.emit('deroute', u.x, u.y, src=u.id)
         self.log(f"{u.name} est en déroute !", None, u.side)
+        self._flag_lost(u)
         # la déroute ébranle les voisins déjà éprouvés (une troupe ferme la laisse passer), d'autant plus que la troupe
         # qui fuit est nombreuse ; moins près du général
         k = ROUT_MOR * min(1.5, u.men / 250.0)
@@ -2959,6 +3049,7 @@ class TacticalBattle:
             # (seulement près du général, au calme ; dans une place, par ses officiers ; sans général sur le terrain,
             # loin de l'ennemi : voir RALLY_*)
             k, who = self._rally_k(u)
+            k *= 1.0 if u.flag else FLAG_RALLY
             # (les fuyards s'arrêtent auprès du général ou, loin de tout, de leurs officiers ; dans une place, ils se
             # reprennent en courant se mettre à l'abri au fond de la ville, comme avant)
             u.halt = k > 0 and who != 'place'
@@ -3136,6 +3227,8 @@ class TacticalBattle:
             if not mine and (seen is None or u.id not in seen) and self.phase != 'fin':
                 continue
             units.append(u.view(mine, u.seen))
+            if mine and self._smoke_on and u.cls in ('inf', 'artillerie') and self.smoke_at(u.x, u.y) > 0.4:
+                units[-1]['smoke'] = round(min(SMOKE_MAX, SMOKE_K * self.smoke_at(u.x, u.y)) * 100)   # (% de feu perdu dans sa propre fumée)
             if u.cls == 'inf' and (self.ufx(u, 'entrench') or
                                    u.id in (self.spec.get('logement') or ())) and self.clock - u.still_t >= ENTRENCH_T:
                 units[-1]['dug'] = 1   # retranchée : le client dessine sa tranchée et ses gabions (SPEC-SUITE J)
@@ -3251,7 +3344,8 @@ class TacticalBattle:
                     breach_t=self.breach_t, bati=self.bati_log, barr=self.barr, barr_log=self.barr_log,
                     accel=self.accel, accel_ids=self.accel_ids, accel_t=self.accel_t, replay=self.replay, ask=self.ask,
                     end=[getattr(self, 'winner', None), getattr(self, 'disengage', None), getattr(self, 'why', None)],
-                    piet=getattr(self, 'piet', None))
+                    piet=getattr(self, 'piet', None), weather=self.weather, wx=[self.wx_at, self.wx_next],
+                    smoke=[round(v, 2) for v in self.smoke] if self._smoke_on else None)
 
     @classmethod
     def from_dict(cls, geo, d):
@@ -3276,6 +3370,10 @@ class TacticalBattle:
         tb.accel_t = d.get('accel_t', 0.0)
         tb.replay = d.get('replay')
         tb.ask = d.get('ask')
+        if d.get('weather'):   # (le temps a pu tourner depuis le début ; anciennes sauvegardes : celui du début)
+            tb.weather, (tb.wx_at, tb.wx_next) = d['weather'], d.get('wx') or (None, None)
+        if d.get('smoke') and len(d['smoke']) == len(tb.smoke):
+            tb.smoke, tb._smoke_on = list(d['smoke']), True
         tb.pound = dict(d.get('pound') or {})
         tb.breach_t = [list(x) for x in d.get('breach_t') or []]
         tb.bati_log = [list(x) for x in d.get('bati') or [] if 0 <= x[1] < N]   # (anciennes sauvegardes : intact)

@@ -11,6 +11,7 @@ import { Decouvertes } from './decouvertes.js';
 import { arbreHtml } from './arbre.js';
 import { startTechs, startRails } from './epoque.js';
 import { drawPlan } from './plan.js';
+import { Son } from './son.js';
 
 // nombres à la française : virgule décimale et vrai signe moins (−)
 const minus = s => s.replace(/^-/, '−');
@@ -422,12 +423,13 @@ export class UI {
     this.$('tb-day').textContent = st.date;
     if (st.era) this.$('tb-day').title = `${st.era.name} — ${st.era.desc}`;
     const zones = ['cote', 'interieur', 'montagne'];
-    const wsig = st.season + zones.map(z => st.weather[z].kind).join() + !!st.flood;
+    const boue = z => st.weather[z].mud > 0 && !['pluie', 'orage', 'tempete'].includes(st.weather[z].kind);   // (rules.MUD_*)
+    const wsig = st.season + zones.map(z => st.weather[z].kind + (boue(z) ? 'b' : '')).join() + !!st.flood;
     if (wsig !== this.wxSig) {   // ne réécrit la météo que si elle change
       this.wxSig = wsig;
       const wx = zones.map(z => {
         const w = this.rules.weather[st.weather[z].kind];
-        return `<span class="wx" title="${this.rules.zones[z]} : ${w.label}">${w.icon}<span>${this.rules.zones[z].split(' ')[0]}</span></span>`;
+        return `<span class="wx" title="${this.rules.zones[z]} : ${w.label}${boue(z) ? ' ; chemins boueux après la pluie (marche ralentie, sauf sur les routes royales)' : ''}">${w.icon}<span>${this.rules.zones[z].split(' ')[0]}${boue(z) ? ' · boue' : ''}</span></span>`;
       }).join('');
       this.$('tb-season').innerHTML = `<span>${this.rules.seasons[st.season]}</span>${wx}${st.flood ? '<span class="wx" title="Crue des fleuves">🌊</span>' : ''}`;
     }
@@ -972,6 +974,11 @@ export class UI {
         this.map.setTeinte(d.v);
         this.toast(this.map.teinte === 'epoque' ? 'Carte d’époque : Cassini, puis état-major.' : 'Couleurs de la nature.');
         this.modalSig = ''; this.renderModal(true);
+        break;
+      }
+      case 'son': {
+        this.toast(Son.regler(!Son.on) ? 'Son activé.' : 'Son coupé.'); setTimeout(() => Son.jouer('tambour', 0.7), 150);
+        this.modalSig = ''; this.renderModal(true); this.startOn() && this.renderStart();
         break;
       }
       case 'anim': {
@@ -1999,6 +2006,8 @@ export class UI {
   reglagesHtml() {
     return `<h3 class="section-t">Affichage</h3><div class="btns"><button class="btn" data-act="anim">${this.map.ambient.on ? 'Couper les animations de la carte' : 'Animer la carte'}</button></div>
         <p class="muted small" style="margin:4px 0 0">Moulins, fumées, oiseaux, bateaux, charrettes et troupeaux.</p>
+        <div class="btns" style="margin-top:10px"><button class="btn" data-act="son" aria-pressed="${Son.on}">${Son.on ? 'Couper le son' : 'Activer le son'}</button></div>
+        <p class="muted small" style="margin:4px 0 0">Salves, canons, tambours et clairons des batailles.</p>
         ${this.map.hex ? `<p class="small" style="margin:10px 0 4px">Teintes de la carte :</p><div class="seg wrap" role="group" aria-label="Teintes de la carte">${[['nature', 'Nature'], ['epoque', 'Carte d’époque']].map(([k, l]) =>
           `<button class="${k === this.map.teinte ? 'on' : ''}" data-act="map-teinte" data-v="${k}" aria-pressed="${k === this.map.teinte}">${l}</button>`).join('')}</div>
         <p class="muted small" style="margin:4px 0 0">${this.map.teinte === 'epoque' ? 'Le plateau au papier et à l’encre : la carte de Cassini, puis celle de l’état-major à partir de 1818.' : 'Les couleurs de la saison et du pays.'}</p>` : ''}

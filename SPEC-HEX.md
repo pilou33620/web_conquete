@@ -13,6 +13,35 @@ tuiles en relief, ombrage à trois tons, contours sombres, maisons et arbres en 
 
 Le détail des villes, des villages et des bâtiments de bataille est plus poussé que sur les maquettes.
 
+## Le rendu doux (14/11/2026)
+
+Décision du 14/11/2026, après les maquettes `web/js/dev/carte-douce.html` et `web/js/dev/bataille-douce.html` : le plateau
+quitte l'ombrage « cartoon » pour un rendu doux, sur la carte comme en bataille. La géographie, l'échelle, la caméra
+(orthographique, calée sur les calques 2D) et tout ce qui se dessine par-dessus ne changent pas.
+
+- **Matière** : ombrage lisse (`MeshStandardMaterial`), rendu filmique, plus de contours sombres (`put` n'en fait plus ;
+  c'est aussi moitié moins de sommets). Les volumes à peu de pans (toits, flèches, montagnes) gardent des faces franches,
+  les houppiers et les haies sont ronds (`sphere`), les rochers à facettes (`caillou`).
+- **Tuiles** (`moteur.js`, `tuiles`) : un seul maillage, dessus à bord biseauté, flanc seulement là où le voisin est plus
+  bas. Chaque sommet a sa nuance (le sol varie doucement d'un endroit à l'autre) ; la couleur d'une tuile se réécrit sur
+  ses sommets `[t.v0, t.v1[` (saisons, carte d'époque).
+- **Eau** : fond sans biseau sous la nappe, mer qui s'assombrit vers le large (distance à la terre).
+- **Territoires** : la teinte reste sur le dessus plat ; le liseré est double (sombre dessous, couleur du camp dessus),
+  sans ombrage. Pas de liseré autour d'un hexagone du pays que personne ne tient (rivière, étang).
+- **Troupes** (`troupes3d.js`) : mêmes pièces articulées, plus détaillées : basques et retroussis, veste, revers,
+  buffleteries croisées, giberne, bras et parements, col, cheveux poudrés ou bruns, coiffures galonnées, guêtres et
+  souliers, chevaux en volumes ronds, roues à rayons cerclées de fer, drapeau d'ordonnance à croix blanche.
+- **Soleil** (`champ.js`, `heure`) : en bataille il suit l'heure (levé à l'est, haut à midi, couché à l'ouest, plus chaud
+  le soir) et le temps qu'il fait, qui peut tourner pendant la bataille.
+- **Après les coups** (`battle/errants.js`, dessinés par `troupes3d.js`) : chevaux sans cavalier, blessés qui rampent ou
+  s'en vont en boitant, brancardiers ; l'épave d'une pièce démontée reste sur place (`champ.js`, `DEBRIS.epave`).
+  Affichage seul, sans effet sur les règles.
+- **Vie de la carte** : passants, charrettes et bêtes se posent sur le relief du plateau (`ambient.js`, `sc.haut`).
+
+Règles ajoutées le même jour (moteur) : la fumée de la poudre noire gêne le tir (`battle.py`, `SMOKE_*`), un bataillon
+qui part en déroute au contact perd son drapeau (`FLAG_*`), le temps tourne pendant la bataille (`WX_CHANGE`), la boue
+dure après la pluie en campagne (`rules.py`, `MUD_*`). Les sons sont synthétisés (`web/js/son.js`), coupés par défaut.
+
 ## Le seul rendu
 
 Depuis le 06/11/2026, le plateau est le seul rendu proposé, sur la carte comme en bataille : le choix du style de la
@@ -23,7 +52,7 @@ avec un avertissement dans la console : c'est un secours, pas un choix.
 
 | Fichier | Rôle |
 |---|---|
-| `web/js/hex/moteur.js` | Le moteur repris de web_power : matériaux toon, contours, lots fusionnés (`put`, `fige`), formes, toits, rubans, la grille d'hexagones (`Grille`), la scène sous le canevas 2D (`Scene3D`) |
+| `web/js/hex/moteur.js` | Le moteur repris de web_power, passé au rendu doux : matériau lisse, lots fusionnés (`put`, `fige`), tuiles biseautées (`tuiles`), formes, toits, rubans, la grille d'hexagones (`Grille`), la scène sous le canevas 2D (`Scene3D`) |
 | `web/js/hex/modeles.js` | Les modèles : maisons de chaque pays (portes, fenêtres, volets, colombages, cheminées), église (clocher-mur en Béarn), cathédrale, halle, château, moulin, arbres, barque, quai, enceintes selon les remparts (1 à 4), fort en étoile |
 | `web/js/hex/plateau.js` | La carte de campagne : hexagones de 4 km, terrain, rivières, étangs, routes, territoires, paysage des siècles, villes et villages d'après l'état, carte d'époque |
 | `web/js/hex/champ.js` | Le champ de bataille : hexagones de 40 m, décor, routes, ponts, haies, clôtures, bâtiments (états du serveur), enceinte, barricades, cratères |

@@ -469,6 +469,12 @@ class Game:
     def wx(self, x, y):
         return R.WEATHER[self.weather[self.zone_of(x, y)]['kind']]
 
+    def mud_k(self, x, y, paved=False):
+        """Ce que la boue laisse de la vitesse de marche ici (rules.MUD_*) : rien sur une route royale, ni sous la
+        pluie même (la météo le compte déjà)."""
+        w = self.weather[self.zone_of(x, y)]
+        return R.MUD_MOVE if w.get('mud') and not paved and w['kind'] not in R.MUD_WET else 1.0
+
     def log(self, kind, text, x=None, y=None, who=None, important=False, extra=None):
         self.seq += 1
         ev = dict(seq=self.seq, t=round(self.t, 2), date=self.date_str(), kind=kind, text=text, x=x, y=y, who=who,
@@ -623,6 +629,11 @@ class Game:
                 f['_acc'] = dict(dt=0.0, fer=0.0, bois=0.0, armes=0.0, outils=0.0)
         season = self.season()
         for z, w in self.weather.items():
+            # (la boue : refaite par chaque jour de pluie, elle sèche d'un jour par jour sans pluie)
+            if w['kind'] in R.MUD_WET:
+                w['mud'] = 1 if season == 'été' else R.MUD_DAYS
+            elif w.get('mud'):
+                w['mud'] -= 1
             w['left'] -= 1
             if w['left'] <= 0:
                 weights = dict(R.WEATHER_W[season])
@@ -2416,7 +2427,7 @@ class Game:
             if leg['kind'] == 'road':
                 e = self.geo.edges[leg['e']]
                 sp = base * (1.15 if e['royal'] else 1.0) * R.SEASON_ROAD[season] * wx['move'] \
-                    * (1 + self.mod(a['owner'], 'road_speed'))
+                    * (1 + self.mod(a['owner'], 'road_speed')) * self.mud_k(a['x'], a['y'], e['royal'])
                 if self.wx(a['x'], a['y']) is R.WEATHER['neige'] and self.zone_of(a['x'], a['y']) == 'montagne':
                     sp *= 0.6
                 if e['id'] in self.cut_edges():
@@ -2489,7 +2500,7 @@ class Game:
                 rv = self.geo.river[self.geo.cell(a['x'], a['y'])] if self.geo.cell(a['x'], a['y']) >= 0 else 0
                 if rv:
                     mult *= 0.5 if rv >= 2 else 0.75
-                sp = base * mult * R.SEASON_OFF[season] * wx['move']
+                sp = base * mult * R.SEASON_OFF[season] * wx['move'] * self.mud_k(a['x'], a['y'])
                 if season == 'hiver' and tname in ('Montagne', 'Haute montagne'):
                     sp *= 0.5
                 sp = max(sp, 1.0)

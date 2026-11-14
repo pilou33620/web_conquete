@@ -8,6 +8,7 @@
 import { clamp } from './battle/formes.js';
 import { VIE, preparer, majEtat, dessinerSol, dessinerDessus, avancer, ventDe } from './carte/vie.js';
 import { meteoEn } from './carte/ambiance.js';
+import { C as HEX_C } from './hex/moteur.js';
 const T = { OCEAN: 0 };
 const TAU = Math.PI * 2;
 const frac = v => v - Math.floor(v);
@@ -107,7 +108,8 @@ export class Ambient {
       fx: [], max: 400, ventA: Math.atan2(-0.002, 0.004),
       // (k : l'aplatissement de la vue inclinée du plateau, SPEC-HEX ; 1 en vue verticale)
       monde(g) { const m = this.m, k = this.k; g.setTransform(m, 0, 0, m * k, -this.cx * m + this.W / 2, -this.cy * m * k + this.H / 2); },
-      fig(g, x, y, a) { const m = this.m, k = this.k, c = Math.cos(a) * m, s = Math.sin(a) * m; g.setTransform(c, s * k, -s, c * k, (x - this.cx) * m + this.W / 2, (y - this.cy) * m * k + this.H / 2); },
+      // (haut : la hauteur du relief du plateau sous la figure, déjà projetée à l'écran, en km ; nul en vue verticale)
+      fig(g, x, y, a) { const m = this.m, k = this.k, c = Math.cos(a) * m, s = Math.sin(a) * m; g.setTransform(c, s * k, -s, c * k, (x - this.cx) * m + this.W / 2, (y - this.cy) * m * k + this.H / 2 - (this.haut ? this.haut(x, y) * m : 0)); },
     };
     this.build();
     preparer(map);
@@ -175,6 +177,8 @@ export class Ambient {
     const mp = this.map, c = mp.cam, d = mp.dpr, sc = this.sc;
     if (this.on) this.t += dt;
     Object.assign(sc, { z: c.z, d, m: c.z * d, k: mp.K, cx: c.x, cy: c.y, W: mp.vw * d, H: mp.vh * d, cssW: mp.vw, cssH: mp.vh, time: this.t, on: this.on });
+    // sur le plateau, passants, charrettes et bêtes se posent sur le relief, comme les villes et les armées (map.toScreen)
+    sc.haut = mp.hex ? this.hautPlateau ||= ((x, y) => mp.plateau.hauteur(x, y) * HEX_C) : null;
     const hw = mp.vw / 2 / c.z + 0.5, hh = mp.vh / 2 / c.z / mp.K + 0.5;
     return [c.x - hw, c.y - hh, c.x + hw, c.y + hh];
   }

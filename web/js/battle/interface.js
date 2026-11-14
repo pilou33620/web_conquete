@@ -10,6 +10,7 @@ import { ORDER_LABEL, ordresHtml, aide as aideArme, arme } from './doctrine.js';
 import { figureKind, drawPortrait } from '../portraits.js';
 import { valeursHtml } from '../valeurs.js';
 import { Ordres } from './ordres.js';
+import { Son } from '../son.js';
 
 const WX_ICON = {
   soleil: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
@@ -24,6 +25,7 @@ WX_ICON.tempete = WX_ICON.orage;
 const svg = body => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 const I = {
   pause: '<svg viewBox="0 0 24 20"><rect x="7" y="3" width="3.6" height="14" rx="1" fill="currentColor"/><rect x="13.4" y="3" width="3.6" height="14" rx="1" fill="currentColor"/></svg>',
+  son: svg('<path d="M4 9.5v5h3.5l4.5 4v-13l-4.5 4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>'), muet: svg('<path d="M4 9.5v5h3.5l4.5 4v-13l-4.5 4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>'),
   journal: ICON.journal, aide: svg('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.6 2.6 0 1 1 3.6 2.4c-.7.3-1.1.9-1.1 1.6v.6"/><circle cx="12" cy="17.2" r=".6" fill="currentColor"/>'),
   retraite: svg('<path d="M10 6 4 12l6 6"/><path d="M4 12h11a5 5 0 0 1 5 5v1"/>'), auto: svg('<path d="M5 4l9 8-9 8z"/><path d="M15 4v16M19 4v16"/>'),
   close: ICON.close, couvert: svg('<path d="M12 3 4 20h16z"/><path d="M8 14h8"/>'),
@@ -57,6 +59,7 @@ export class BattleUI {
           <button class="bt-btn bt-menu" data-a="menu" hidden title="Quitter la bataille et revenir au menu principal" aria-label="Revenir au menu principal">Menu</button>
           <button class="bt-ib" data-a="journal" aria-label="Journal de la bataille" title="Journal">${I.journal}</button>
           <button class="bt-ib" data-a="aide" aria-label="Aide" title="Aide">${I.aide}</button>
+          <button class="bt-ib" data-a="son" aria-label="Son" aria-pressed="${Son.on}" title="${Son.on ? 'Couper le son' : 'Activer le son'}">${Son.on ? I.son : I.muet}</button>
           <button class="bt-btn" data-a="auto" title="Confier la suite à vos officiers, en accéléré">${I.auto}<span>Finir auto.</span></button>
           <button class="bt-btn danger" data-a="decrocher" title="Faire retraite">${I.retraite}<span>Décrocher</span></button>
         </div>
@@ -160,8 +163,8 @@ export class BattleUI {
     // journal
     for (const txt of st.log || []) this.addLog(txt);
     // fin
-    if (st.phase === 'fin' && !this.recapShown && (st.result || prev?.phase !== 'fin')) { this.recapShown = true; setTimeout(() => this.recap(st.result || {}), 900); }
-    if (prev && prev.phase === 'deploiement' && st.phase === 'combat') { this.toast('La bataille est engagée !', 'good'); v.showCover = false; }
+    if (st.phase === 'fin' && !this.recapShown && (st.result || prev?.phase !== 'fin')) { this.recapShown = true; if (st.result && (st.result.won ?? st.result.winner === this.v.me)) Son.jouer('victoire', 0.8); setTimeout(() => this.recap(st.result || {}), 900); }
+    if (prev && prev.phase === 'deploiement' && st.phase === 'combat') { Son.jouer('tambour', 0.8); this.toast('La bataille est engagée !', 'good'); v.showCover = false; }
     this.ordres.update(st, prev);
     this.renderDock();
     this.renderPanel();
@@ -330,6 +333,8 @@ export class BattleUI {
         <dt>Portée</dt><dd>${u.range ? fmt(u.range[0]) + ' m' : '—'}</dd>
       </dl>
       <div class="bp-note">${am} · ${rg}<button class="bp-vl ${this.showVals ? 'on' : ''}" data-a="valeurs" aria-expanded="${!!this.showVals}">Valeurs</button></div>${this.showVals ? valeursHtml(u.stats) : ''}
+      ${u.smoke ? `<p class="bp-help">Dans la fumée de ses propres salves : son feu y perd ${u.smoke} %. Elle se dissipe en deux minutes ; cessez le feu un instant, ou avancez de cent mètres.</p>` : ''}
+      ${u.flag === false ? '<p class="bp-help">Son drapeau a été pris : elle se ralliera plus lentement.</p>' : ''}
       ${u.camo ? '<p class="bp-help">Camouflée dans le bois : l’ennemi ne la voit qu’à moins de 250 m (500 m quand elle tire). En échange, les arbres gênent son tir (−35 %) et sa mise en batterie (plus longue de moitié).</p>' : ''}
       ${u.form === 'maisons' ? `<p class="bp-help">Dans les maisons${u.seen ? '' : ', <b>cachée</b>'} : l’ennemi ne la voit qu’à moins de 120 m (60 s après qu’elle a tiré). Elle tire par les fenêtres (60 % des hommes), se défend mieux au corps à corps, et les cavaliers n’y chargent pas.</p>` : ''}
       ${u.order === 'barricade' ? '<p class="bp-help">Elle se barricade (4 min, 2 pour des sapeurs) : un ennemi à moins de 150 m interrompt le travail.</p>' : ''}
@@ -369,7 +374,9 @@ export class BattleUI {
           <dt>Portée</dt><dd>${u.range ? fmt(u.range[0]) + ' m' : '—'}</dd>
         </dl>
         <div class="bp-note">${am} · ${rg}<button class="bp-vl ${this.showVals ? 'on' : ''}" data-a="valeurs" aria-expanded="${!!this.showVals}">Valeurs</button></div>${this.showVals ? valeursHtml(u.stats) : ''}
-        ${u.camo ? '<p class="bp-help">Camouflée dans le bois : l’ennemi ne la voit qu’à moins de 250 m (500 m quand elle tire). En échange, les arbres gênent son tir (−35 %) et sa mise en batterie (plus longue de moitié).</p>' : ''}`;
+        ${u.smoke ? `<p class="bp-help">Dans la fumée de ses propres salves : son feu y perd ${u.smoke} %. Elle se dissipe en deux minutes ; cessez le feu un instant, ou avancez de cent mètres.</p>` : ''}
+      ${u.flag === false ? '<p class="bp-help">Son drapeau a été pris : elle se ralliera plus lentement.</p>' : ''}
+      ${u.camo ? '<p class="bp-help">Camouflée dans le bois : l’ennemi ne la voit qu’à moins de 250 m (500 m quand elle tire). En échange, les arbres gênent son tir (−35 %) et sa mise en batterie (plus longue de moitié).</p>' : ''}`;
     }
     // formations communes (pas pendant l'accéléré : ce sont vos officiers qui commandent)
     const forms = cls === 'mix' || v.st?.accel ? [] : FORMS[cls] || [];
@@ -515,6 +522,8 @@ export class BattleUI {
       case 'feedtog': this.setFeed(this.feedOff); break;
       case 'dscroll': { const d = this.$('.bt-dock'); d.scrollBy({ left: +b.dataset.d * d.clientWidth * 0.75, behavior: 'smooth' }); break; }
       case 'aide': this.tips(true); break;
+      // (le clic est le geste que le navigateur attend pour ouvrir le son ; un roulement de tambour le confirme)
+      case 'son': { const on = Son.regler(!Son.on); b.innerHTML = on ? I.son : I.muet; b.setAttribute('aria-pressed', on); b.title = on ? 'Couper le son' : 'Activer le son'; this.toast(on ? 'Son activé.' : 'Son coupé.'); setTimeout(() => Son.jouer('tambour', 0.7), 150); break; }
       case 'decrocher': this.confirm('Décrocher ?', 'Toute l’armée rompt le combat et quitte le champ de bataille. L’ennemi reste maître du terrain ; vos blessés restent en arrière.', 'Décrocher', async () => {
         const r = await v.cmd('withdraw');
         if (!r.ok) return;

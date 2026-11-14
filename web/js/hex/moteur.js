@@ -229,7 +229,10 @@ export class Scene3D {
     this.scene.add(this.soleil, this.soleil.target);
     this.monde = new THREE.Group(); this.scene.add(this.monde);
     this.sale = true; this.cle = '';
+    this.vers = [-0.9, 1.6, -0.55];   // d'où vient le soleil (x vers l'est, y vers le haut, z vers le sud) : du nord-ouest
   }
+  // tourne le soleil (hex/champ.js, heure) ; les ombres suivent à la prochaine image
+  soleilVers(x, y, z) { this.vers = [x, y, z]; this.cle = ''; }
   // cale la caméra 3D sur la caméra 2D : cam {x, y, z}, écran vw × vh (pixels CSS), dpr
   caler(cam, vw, vh, dpr) {
     const w = Math.round(vw * dpr), h = Math.round(vh * dpr);
@@ -245,7 +248,7 @@ export class Scene3D {
     // le soleil du nord-ouest suit la vue ; ses ombres couvrent l'écran, au plus ombreMax de chaque côté
     const r = Math.min(this.ombreMax, Math.max(hw, hh / K) * 1.15), s = this.soleil, sc = s.shadow.camera;
     s.target.position.set(cam.x, 0, cam.y);
-    s.position.set(cam.x - r * 0.9, r * 1.6, cam.y - r * 0.55);
+    s.position.set(cam.x + r * this.vers[0], r * this.vers[1], cam.y + r * this.vers[2]);
     sc.left = -r * 1.2; sc.right = r * 1.2; sc.top = r * 1.2; sc.bottom = -r * 1.2; sc.near = 0.01; sc.far = r * 5; sc.updateProjectionMatrix();
   }
   rendre(force = false) {

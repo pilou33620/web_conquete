@@ -182,7 +182,7 @@ SLOTS = ('id', 'side', 'owner', 'type', 'cls', 'light', 'name', 'men', 'men0', '
          'morale0', 'fat', 'ammo', 'ammo0', 'arm', 'x', 'y', 'dir', 'form', 'state', 'order', 'seen', 'target',
          'path', 'goal', 'reload', 'busy', 'next_form', 'fire_mode', 'fired_t', 'melee_with', 'rally_t', 'lost',
          'killed', 'captured', 'fought', 'army', 'src', 'nid', 'gen', 'ctrl', 'charge_v', 'spotted_t', 'stuck',
-         'rout_seen', 'hit_t', 'wounded', 'group', 'gname', 'halt', 'shot', 'prio', 'still_t', 'stop')
+         'rout_seen', 'hit_t', 'wounded', 'group', 'gname', 'halt', 'shot', 'prio', 'still_t', 'stop', 'flag')
 
 
 class Unit:
@@ -231,6 +231,7 @@ class Unit:
         self.shot = 'auto'     # artillerie : projectile ordonné ('auto', 'boulet', 'mitraille')
         self.prio = None       # artillerie : cible de prédilection ('artillerie' : contre-batterie)
         self.stop = 'bonne'    # profil d'arrêt de l'ordre « attaquer » du joueur (STOPS, stop_dist)
+        self.flag = True       # le drapeau du régiment (infanterie) : pris par l'ennemi, il manque au ralliement
         for k, v in kw.items():
             setattr(self, k, v)
 
@@ -294,6 +295,8 @@ class Unit:
                 out['halt'] = bool(self.halt)   # (les fuyards se sont arrêtés : on les rallie)
         if self.gen:
             out['gen'] = self.gen
+        if not self.flag:
+            out['flag'] = False   # (drapeau pris : le client ne dessine plus le porte-drapeau)
         return out
 
 

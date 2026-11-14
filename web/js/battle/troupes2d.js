@@ -214,6 +214,8 @@ export function disposition(u, per = 1, fs = 1) {
   // éparpillement de la déroute (chacun pour soi, bien au-delà de l'emprise) ; la cavalerie plus loin
   const sx = (24 + d * 1.5) * (cls === 'cavalerie' ? 1.4 : 1), sy = (16 + w * 0.4) * (cls === 'cavalerie' ? 1.4 : 1);
   for (const f of F) if (f.role <= R.CAV_GEN) { f.jx = (rnd() - 0.5) * sx; f.jy = (rnd() - 0.5) * sy; }
+  // (drapeau pris par l'ennemi, battle.py _flag_lost : le porte-drapeau n'est plus qu'un homme du rang)
+  if (u.flag === false) for (const f of F) if (f.role === R.DRAPEAU) f.role = R.H;
   return F;
 }
 
@@ -497,7 +499,7 @@ export class Troupes2D {
   // disposition du régiment à jour (nouvelle formation, pertes, budget) ; les hommes courent de l'ancienne à la nouvelle
   entree(u, t) {
     const id = String(u.id), cls = clsOf(u), [w0, d0] = emprise(u);
-    const key = `${u.form}|${Math.round((u.men || 0) / this.per)}|${(u.w || w0) | 0}|${(u.d || d0) | 0}|${u.type}|${this.per}|${u.rempart ? 1 : 0}|${u.pieces ?? ''}`;
+    const key = `${u.form}|${Math.round((u.men || 0) / this.per)}|${(u.w || w0) | 0}|${(u.d || d0) | 0}|${u.type}|${this.per}|${u.rempart ? 1 : 0}|${u.pieces ?? ''}|${u.flag === false ? 'sd' : ''}`;
     let e = this.lays.get(id);
     if (!e || e.key !== key) {
       const old = e, figs = disposition(u, this.per, this.fs);

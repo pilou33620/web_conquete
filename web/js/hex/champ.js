@@ -19,7 +19,7 @@ const EAU_Y = -0.5, REL = 0.5;   // relief : la moitié des hauteurs du moteur
 const TRACES = new Set(['ROUTE', 'CHEMIN', 'GUE']);
 const TOITS = { ardoise: 0x5b5866, chaume: 0xb89a5a, lauze: 0x7a7268 };
 const NOBLE = new Set(['cathedrale', 'eglise', 'caserne', 'poudriere', 'hopital', 'couvent', 'hotel', 'halle', 'chateau', 'forge', 'scierie', 'sechoir', 'moulin']);
-const NEIGE = new THREE.Color(0xf4f7fa);
+const NEIGE = new THREE.Color(0xf4f7fa), CHAUD = new THREE.Color(0xffb46a);
 // un matériau dont les pièces s'ajourent arbre par arbre (attribut aHex : le numéro de l'arbre ; texture : ouverture 0–255) :
 // une trame de Bayer 4×4 fait sauter jusqu'aux trois quarts des pixels, le bois reste lisible et les troupes paraissent
 function ajoure(base, tex) {
@@ -42,6 +42,14 @@ const DEBRIS = {
     const j = new THREE.TorusGeometry(0.62, 0.07, 4, 12, 4.4); j.rotateX(Math.PI / 2); put(L, j, 0x5a3a24, 0, 0.07, 0, 0, 0.02);   // la jante, un morceau en moins
     put(L, cyl(0.13, 0.13, 0.14, 8), 0x3a2a1b, 0, 0.07, 0, 0, 0.02);
     for (const a of [0.3, 1.5, 2.7, 3.9]) { const b = boite(0.58, 0.05, 0.06); b.translate(0.3, 0, 0); put(L, b, 0x6b4a2e, 0, 0.07, 0, a, 0); }
+  },
+  // une pièce démontée : le tube à terre, l'affût brisé, une roue couchée et l'autre debout de travers
+  epave: L => {
+    const tube = cyl(0.11, 0.17, 1.8, 12); tube.rotateZ(Math.PI / 2 - 0.12); tube.rotateY(0.5); put(L, tube, 0xc9933c, 0.3, 0.2, 0.25);
+    for (const k of [-1, 1]) { const f = boite(1.5, 0.2, 0.08); f.rotateZ(k * 0.12); put(L, f, 0x5f6b3e, -0.5, 0.14, k * 0.3, k * 0.25); }
+    const r1 = cyl(0.55, 0.55, 0.07, 14); put(L, r1, 0x6b4d31, -0.2, 0.05, -0.9);
+    const r2 = cyl(0.55, 0.55, 0.07, 14); r2.rotateX(Math.PI / 2 - 0.5); put(L, r2, 0x6b4d31, 0.5, 0.45, 0.85);
+    put(L, boite(0.5, 0.18, 0.4), 0x3a2a1b, -1.1, 0.09, 0.1, 0.4);
   },
   // le cratère, rayon 1 : le trou de terre noire, la terre rejetée en bourrelet, des mottes
   trou: L => {
@@ -79,6 +87,21 @@ export class Champ {
     const s = this.sc;
     s.ciel.intensity = gris ? 1.25 : 1.1; s.soleil.intensity = gris ? 2.1 : 3.1;
     s.soleil.color.set(gris ? 0xe6ecf0 : saison === 'automne' ? 0xffe2b8 : 0xfff0d4);
+    s.sale = true;
+  }
+  // l'heure qu'il est (8 à 21) et la lumière du moteur (1, puis moins dans la dernière heure) : le soleil se lève à
+  // l'est, passe haut à midi, se couche à l'ouest (les ombres tournent et s'allongent), sa couleur chauffe le soir ;
+  // le temps qu'il fait peut avoir tourné (battle.py, _wx_turn)
+  heure(h, lum = 1, meteo, saison) {
+    const cle = `${Math.round(h * 6)}|${Math.round(lum * 20)}|${meteo}`;
+    if (cle === this.cleHeure) return;
+    this.cleHeure = cle;
+    if (meteo && meteo !== this.meteoVue) { this.meteoVue = meteo; this.ambiance(meteo, saison); this.i0 = this.c0 = null; }
+    const s = this.sc, a = Math.min(1, Math.max(0, (h - 6) / 14)) * Math.PI, haut = Math.sin(a);   // a : 0 à l'est, π à l'ouest
+    this.i0 ??= [s.ciel.intensity, s.soleil.intensity]; this.c0 ??= s.soleil.color.clone();
+    s.soleilVers(Math.cos(a) * 1.1, 0.55 + haut * 1.25, -0.45);
+    s.soleil.color.copy(this.c0).lerp(CHAUD, (1 - haut) * 0.6);
+    s.ciel.intensity = this.i0[0] * (0.55 + 0.45 * lum); s.soleil.intensity = this.i0[1] * (0.35 + 0.65 * haut) * (0.4 + 0.6 * lum);
     s.sale = true;
   }
   u(m) { return m / this.f; }

@@ -175,6 +175,7 @@ class Maisons(unittest.TestCase):
             u.form, u.reload, u.ammo, u.target, u.dir, u.fat = form, 0.0, 50.0, e.id, 0.0, 0.0
             e.men = e.men0 = 500.0
             lost = e.lost
+            tb.smoke[:] = [0.0] * len(tb.smoke)   # (l'air clair : la fumée de la salve d'avant fausserait le rapport)
             tb._fire(u, BT.DT)
             return e.lost - lost
         k = salve('maisons') / salve('ligne')
