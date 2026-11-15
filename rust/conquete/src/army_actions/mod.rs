@@ -15,13 +15,12 @@
 //!     negociation.rs  lignes  859 à 1582   délai de grâce et passages, ralliement négocié, contribution, blocus,
 //!                                          commandes, vues, IA
 //!
-//! SQUELETTE : les constantes sont portées ; les corps sont des `todo!()`. Une signature ne se change pas sans le
-//! signaler (PORTAGE.md).
+//! Une signature ne se change pas sans le signaler (PORTAGE.md).
 //! Dans tout le module : `a`, `b` = une armée (dict de g.armies) ; `n` = une place (dict de g.nodes) ; `gn` = son lieu
 //! (dict de geo.nodes) ; `x` = n['aa'] ; `r` = un régiment ; `code` = le camp qui agit ; `o` = un autre camp (ou
 //! R::NEUTRAL) ; `nid` = un numéro de place ; `ai` = l'IA de campagne (ai::AI), dont `ai.g` est le `g` passé à côté.
 //! `(bool, String)` : (ok, message) d'une commande.
-#![allow(unused_imports, unused_variables)] // squelette : à retirer quand les corps sont portés
+#![allow(unused_imports)]
 
 use crate::engine::Game;
 use crate::geo::TERRAIN;
@@ -114,45 +113,78 @@ pub const NOTICE_CD: i64 = 60;
 /// Python : `clamp(v, a, b)`.
 // game/army_actions.py, lignes 86 à 87
 pub fn clamp(v: f64, a: f64, b: f64) -> f64 {
-    todo!()
+    let m = if v < b { v } else { b };
+    if m > a { m } else { a }
 }
 
 /// Python : `node_aa(n)`.
 /// Rend n['aa'], ou un dict vide NEUF (qu'on ne range pas dans la place : l'écrire ne sert à rien).
 // game/army_actions.py, lignes 90 à 91
 pub fn node_aa(n: &Val) -> Val {
-    todo!()
+    n.get("aa").or(dict! {})
 }
 
 /// Python : `aa(n)`.
 /// Rend n['aa'] (créé s'il manque).
 // game/army_actions.py, lignes 94 à 95
 pub fn aa(n: &Val) -> Val {
-    todo!()
+    n.setdefault("aa", dict! {})
 }
 
 /// Tours d'attente qui restent avant de pouvoir recommencer (0 : c'est possible).
 /// Python : `cd_left(g, n, k)`.
 // game/army_actions.py, lignes 98 à 100
 pub fn cd_left(g: &Game, n: &Val, k: &str) -> i64 {
-    todo!()
+    TT::tours_left(g, node_aa(n).get_or("cd", dict! {}).get_or(k, -1).f())
 }
 
 /// Python : `set_cd(g, n, k, tours, code)`.
 // game/army_actions.py, lignes 103 à 104
 pub fn set_cd(g: &mut Game, n: &Val, k: &str, tours: i64, code: &str) {
-    todo!()
+    aa(n).setdefault("cd", dict! {}).set(k, TT::deadline(g, tours, &[code]));
 }
 
 /// Python : `place(g, nid)`.
 // game/army_actions.py, lignes 107 à 108
 pub fn place(g: &Game, nid: i64) -> String {
-    todo!()
+    g.geo.nodes.at(nid).ats("name")
 }
 
 /// Anciennes sauvegardes : ni travaux, ni droits de passage, ni quartiers.
 /// Python : `migrate(g)`.
 // game/army_actions.py, lignes 111 à 118
 pub fn migrate(g: &mut Game) {
-    todo!()
+    for f in g.factions.values() {
+        f.setdefault("passage", dict! {});
+    }
+    for a in g.armies.values() {
+        for k in ["tr", "hold", "qrt", "rg"] {
+            a.setdefault(k, false);
+        }
+        a.pop("trx"); // ancien passage forcé « quitte à provoquer un incident »
+    }
+}
+
+// ------------------------------------------------------------------ aides du portage (absentes du socle)
+
+/// `max(a, b)` de Python sur deux valeurs : le premier gagne en cas d'égalité, chacun garde son type (int / float).
+pub(crate) fn vmax(a: impl Into<Val>, b: impl Into<Val>) -> Val {
+    let (a, b) = (a.into(), b.into());
+    if b > a { b } else { a }
+}
+
+/// `min(a, b)` de Python sur deux valeurs : le premier gagne en cas d'égalité.
+pub(crate) fn vmin(a: impl Into<Val>, b: impl Into<Val>) -> Val {
+    let (a, b) = (a.into(), b.into());
+    if b < a { b } else { a }
+}
+
+/// Les arguments `x, y, who` de `g.log`.
+pub(crate) fn lieu(xy: (f64, f64), who: impl Into<Val>) -> Val {
+    dict! {"x" => xy.0, "y" => xy.1, "who" => who.into()}
+}
+
+/// Les arguments `x, y, who, important` de `g.log`.
+pub(crate) fn lieu_imp(xy: (f64, f64), who: impl Into<Val>, important: bool) -> Val {
+    dict! {"x" => xy.0, "y" => xy.1, "who" => who.into(), "important" => important}
 }
