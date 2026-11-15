@@ -45,10 +45,7 @@ fn avaler<T>(f: impl FnOnce() -> T) -> Option<T> {
 
 /// `time.strftime('%Y-%m-%d %H:%M:%S')`. Écart : l'heure UTC (la bibliothèque standard n'a pas le fuseau local).
 fn horodatage() -> String {
-    let s = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
-    let d = crate::engine::Date::fromordinal(719163 + s.div_euclid(86400)); // 719163 : le 1er janvier 1970
-    let j = s.rem_euclid(86400);
-    format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", d.year, d.month, d.day, j / 3600, j / 60 % 60, j % 60)
+    chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string() // time.strftime : l'heure locale du poste
 }
 
 /// Python : `write(rec)`.

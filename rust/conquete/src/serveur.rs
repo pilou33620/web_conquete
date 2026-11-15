@@ -94,15 +94,6 @@ fn message(p: &(dyn std::any::Any + Send)) -> String {
     p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_default()
 }
 
-/// shortcut: tant que crue.rs, rails.rs et views.rs ne sont pas portés (corps en todo!()), les calculs faits d'avance
-/// au démarrage (routes coupées par la crue, /api/map) échoueraient et le serveur ne démarrerait pas ; ils sont
-/// tentés et l'échec est dit. À retirer (appel direct, comme le Python) une fois ces corps portés.
-fn d_avance(quoi: &str, f: impl FnOnce()) {
-    if let Err(p) = catch_unwind(AssertUnwindSafe(f)) {
-        println!("({quoi} pas encore calculé(e) : {})", message(&*p));
-    }
-}
-
 impl App {
     pub fn new(reseau: Arc<Mutex<Reseau>>) -> App {
         let t0 = Instant::now();
@@ -118,9 +109,7 @@ impl App {
             _auto_key: None,
         };
         app.geos.insert(GEO_VERSION, geo.clone()); // la carte des nouvelles parties
-        d_avance("routes coupées par la crue", || {
-            CR::spans(&geo);
-        });
+        CR::spans(&geo); // les routes que la crue coupe : calculées ici (environ 1 s) plutôt qu'au premier état en crue
         let nw = geo.edges.iter().filter(|e| e.get("kind") == "water").count();
         println!(
             "Carte prête ({:.1} s) : {} villes et villages, {} routes, {} tronçons navigables.",
@@ -129,9 +118,7 @@ impl App {
             geo.edges.len() - nw,
             nw
         );
-        d_avance("/api/map", || {
-            app.payload(&geo);
-        });
+        app.payload(&geo);
         let _ = std::fs::create_dir_all(SAVES());
         app.load_autosave();
         app

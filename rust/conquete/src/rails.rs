@@ -82,7 +82,8 @@ pub fn sections(geo: &GeoMap) -> Val {
                 continue;
             }
             let edges = _path(geo, a, b);
-            let km = py::round_n(py::sum(edges.iter().map(|e| geo.edges.at(&e).atf("len"))), 1);
+            // (sans tronçon, sum() rend l'entier 0 et round(0, 1) le garde : « 0 » et non « 0.0 » dans /api/map)
+            let km: Val = if edges.is_empty() { Val::Int(0) } else { py::round_n(py::sum(edges.iter().map(|e| geo.edges.at(&e).atf("len"))), 1).into() };
             out.set(&sid, dict! {"id" => &sid, "a" => a, "b" => b, "edges" => edges, "km" => km, "line" => &name, "year" => year});
         }
     }
