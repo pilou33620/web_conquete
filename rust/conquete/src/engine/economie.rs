@@ -148,13 +148,14 @@ impl Game {
     // engine.py, lignes 898 à 908
     pub fn frontieres(&self) -> (Val, Val) {
         let (nb, front) = (dict! {}, dict! {});
-        for e in self.geo.edges.iter() {
-            let (oa, ob) = (self.nodes.at(e.at("a")).at("owner"), self.nodes.at(e.at("b")).at("owner"));
-            if oa != ob && self.factions.has(&oa) && self.factions.has(&ob) {
-                nb.setdefault(&oa, pyset![]).push(&ob);
-                nb.setdefault(&ob, pyset![]).push(&oa);
-                front.setdefault(&oa, pyset![]).push(e.at("a"));
-                front.setdefault(&ob, pyset![]).push(e.at("b"));
+        let maitres = self.maitres();
+        for &(a, b, _) in self.geo_fixe().aretes.iter() {
+            let (oa, ob) = (&maitres[a], &maitres[b]);
+            if oa != ob && self.factions.has(oa) && self.factions.has(ob) {
+                nb.setdefault(oa, pyset![]).push(ob);
+                nb.setdefault(ob, pyset![]).push(oa);
+                front.setdefault(oa, pyset![]).push(a);
+                front.setdefault(ob, pyset![]).push(b);
             }
         }
         (nb, front)

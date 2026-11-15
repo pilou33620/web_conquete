@@ -57,8 +57,9 @@ pub fn borders(game: &mut Game, a: &str, b: &str) -> bool {
     let k = py::int(game.t * 4.0);
     if !matches!(&game._frontieres, Some((k0, _)) if *k0 == k) {
         let mut s = IndexSet::default();
-        for e in game.geo.edges.iter() {
-            let (oa, ob) = (game.nodes.at(e.at("a")).ats("owner"), game.nodes.at(e.at("b")).ats("owner"));
+        let maitres = game.maitres();
+        for &(a, b, _) in game.geo_fixe().aretes.iter() {
+            let (oa, ob) = (maitres[a].string(), maitres[b].string());
             if oa != ob {
                 s.insert((oa.clone(), ob.clone()));
                 s.insert((ob, oa));

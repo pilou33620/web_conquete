@@ -180,22 +180,26 @@ impl Game {
             arr.sort_by_key(|x| x.at("id") != *only); // (tri stable, comme list.sort)
             outer = if !arr.is_empty() && arr[0].at("id") == *only { 1 } else { 0 };
         }
+        // (les positions relevées une fois : start_battle ne déplace personne ; une armée entrée en bataille est
+        // écartée avant que sa position ne serve, comme dans le Python où les deux tests ne font que `continue`)
+        let pos: Vec<(f64, f64)> = arr.iter().map(|a| (a.atf("x"), a.atf("y"))).collect();
         for i in 0..outer {
             let a = arr[i].clone();
             if a.at("state") == "battle" {
                 continue;
             }
             for j in i + 1..n {
-                let b = arr[j].clone();
-                if b.at("state") == "battle" || a.at("state") == "battle" {
-                    continue;
-                }
-                let (dx, dy) = (a.atf("x") - b.atf("x"), a.atf("y") - b.atf("y"));
+                let (dx, dy) = (pos[i].0 - pos[j].0, pos[i].1 - pos[j].1);
                 let d2 = dx * dx + dy * dy;
                 if d2 > AMBUSH_KM * AMBUSH_KM {
                     // (la distance d'abord : des centaines d'armées sur toute la France)
                     continue;
                 }
+                let b = arr[j].clone();
+                if b.at("state") == "battle" || a.at("state") == "battle" {
+                    continue;
+                }
+                debug_assert!(pos[i] == (a.atf("x"), a.atf("y")) && pos[j] == (b.atf("x"), b.atf("y")));
                 if !self.at_war(&a.ats("owner"), &b.ats("owner")) {
                     continue;
                 }

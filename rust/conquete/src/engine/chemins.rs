@@ -136,6 +136,7 @@ impl Game {
             heapq::heappush(&mut pq, (c0, s, b0));
         }
         let mut best_goal = None;
+        let maitres = self.maitres(); // (la recherche ne prend aucune place)
         while let Some((mut d, u, b)) = heapq::heappop(&mut pq) {
             if d > *dist.get(&(u, b)).unwrap_or(&1e18) {
                 continue;
@@ -144,7 +145,7 @@ impl Game {
                 best_goal = Some((u, b));
                 break;
             }
-            let ou = self.nodes.at(u).ats("owner");
+            let ou = maitres[u as usize].string();
             let u_start = start_nodes.has(u);
             if !u_start && ou != code && !self.friendly(code, &ou) {
                 // on peut traverser un nœud hostile/neutre mais on s'y arrêtera : coût dissuasif
@@ -166,7 +167,7 @@ impl Game {
                     if ub && b == 1 && !water {
                         continue; // à bord devant des terres fermées : pas de débarquement
                     }
-                    let ov = self.nodes.at(v).ats("owner");
+                    let ov = maitres[v as usize].string();
                     if block.has(ov.as_str()) && !water && !(ov == ou && (u_start || ub)) {
                         continue; // on n'y entre pas par la route (sauf pour sortir de chez lui)
                     }

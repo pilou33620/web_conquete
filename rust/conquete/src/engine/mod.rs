@@ -183,6 +183,8 @@ pub struct Proprios {
     pub nodes: Val,
     pub vus: Vec<Val>,
     pub adresses: Vec<usize>,
+    /// Le maître de chaque place, dans l'ordre de nodes.
+    pub maitres: Rc<Vec<Val>>,
     pub par_camp: HashMap<Rc<str>, Vec<usize>, py::Fx>,
 }
 

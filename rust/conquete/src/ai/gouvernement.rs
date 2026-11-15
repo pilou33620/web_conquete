@@ -1105,14 +1105,16 @@ impl AI {
         let portee = if g.factions.len() > 5 { 150.0 } else { 220.0 };
         let fixe = g.geo_fixe();
         let mut postes = None; // (les armées au repos de chaque place : la boucle ne déplace personne)
-        for n in g.nodes.iter() {
-            let o = n.at("owner");
-            if o == code {
+        let maitres = g.maitres(); // (la boucle ne prend aucune place)
+        for (i, o) in maitres.iter().enumerate() {
+            if *o == code {
                 continue;
             }
-            if o != R::NEUTRAL && !wars.has(&o) {
+            if *o != R::NEUTRAL && !wars.has(o) {
                 continue;
             }
+            let n = g.nodes.at(i);
+            let o = o.clone();
             let nid = n.ati("id");
             let (gx, gy) = fixe.xy[nid as usize];
             let d = py::hypot(gx - a.atf("x"), gy - a.atf("y"));

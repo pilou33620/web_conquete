@@ -759,14 +759,15 @@ impl Game {
                 _ => 0,
             }
         }
-        fn releve(vus: &[Val]) -> HashMap<Rc<str>, Vec<usize>, py::Fx> {
+        fn releve(vus: &[Val]) -> (Vec<Val>, HashMap<Rc<str>, Vec<usize>, py::Fx>) {
+            let maitres: Vec<Val> = vus.iter().map(|n| n.at("owner")).collect();
             let mut par_camp: HashMap<Rc<str>, Vec<usize>, py::Fx> = HashMap::default();
-            for (i, n) in vus.iter().enumerate() {
-                if let Val::Str(o) = n.at("owner") {
-                    par_camp.entry(o).or_default().push(i);
+            for (i, o) in maitres.iter().enumerate() {
+                if let Val::Str(o) = o {
+                    par_camp.entry(o.clone()).or_default().push(i);
                 }
             }
-            par_camp
+            (maitres, par_camp)
         }
         let gen = py::generation_owner();
         {
@@ -781,13 +782,24 @@ impl Game {
                 // (vus garde les dicts en vie : une adresse relevée ne peut pas servir à un autre dict)
                 let vus = self.nodes.liste().clone();
                 let adresses = vus.iter().map(adresse).collect();
-                let par_camp = releve(&vus);
-                *c = Some(Proprios { gen, nodes: self.nodes.clone(), vus, adresses, par_camp });
+                let (maitres, par_camp) = releve(&vus);
+                *c = Some(Proprios { gen, nodes: self.nodes.clone(), vus, adresses, maitres: Rc::new(maitres), par_camp });
             }
         }
         let p = std::cell::Ref::map(self._cache_owned.borrow(), |c| c.as_ref().unwrap());
-        debug_assert!(p.par_camp == releve(&self.nodes.liste()), "une clé owner a changé sans passer par Val");
+        debug_assert!(
+            {
+                let (m, pc) = releve(&self.nodes.liste());
+                pc == p.par_camp && m.len() == p.maitres.len() && m.iter().zip(p.maitres.iter()).all(|(a, b)| a.is(b))
+            },
+            "une clé owner a changé sans passer par Val"
+        );
         p
+    }
+
+    /// Le maître de chaque place (`self.nodes[i]['owner']`), sans relire les 3 555 dicts (voir Proprios).
+    pub fn maitres(&self) -> Rc<Vec<Val>> {
+        self.proprios().maitres.clone()
     }
 
     /// Python : `mod(self, code, key, default=0.0)`.
