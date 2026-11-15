@@ -194,7 +194,7 @@ pub fn _side_plan(g: &Game, bt: &Val, si: i64) -> Val {
 /// manual : défaut false. Rend la liste des unités (dict, units.rs). `name_for` : fonction imbriquée, `count` : dict
 /// local à clés (code, type). `U::unit_name(Some(g), …)`, `U::from_reg(r, si, owner, name, army, src, nid, ctrl)`
 /// (défauts du Python : src 'campagne'…, voir units.rs). `Game::gen_title(gen)` (fonction associée).
-/// `AA.fort_eff(g, n)` : army_actions pas encore porté (supposé `AA::fort_eff(g, n) -> f64`).
+/// `AA.fort_eff(g, n)` → `AA::fort_eff(g, n, &Val::None)` (army_actions/defense.rs : `fort_eff(g: &Game, n: &Val, att: &Val) -> f64`).
 pub fn make_units(g: &mut Game, bt: &Val, manual: bool) -> Val {
     todo!()
 }
@@ -359,8 +359,8 @@ pub fn map_view(g: &mut Game, bid: &Val) -> Val {
 /// Le joueur reprend la campagne : on oublie la bataille terminée. Refus si la campagne est figée.
 ///
 /// Python (bridge.py, l. 680-691) : `def on_speed(g, v)`
-/// v : rang de vitesse demandé. `g.tac_done = {}` → None. `AA.asking(g)` : army_actions pas encore porté (supposé
-/// `AA::asking(g) -> Val`, une armée ou None ; `AA::place(g, nid) -> String`).
+/// v : rang de vitesse demandé. `g.tac_done = {}` → None. `AA::asking(g: &mut Game) -> Val` (une armée ou None),
+/// `AA::place(g: &Game, nid: i64) -> String` (army_actions).
 pub fn on_speed(g: &mut Game, v: i64) -> (bool, String) {
     todo!()
 }
