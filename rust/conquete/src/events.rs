@@ -19,15 +19,15 @@
 //!   research  1                                recherches en cours avancées de moitié
 //!   chef, vassal, refus                        crise de succession (game/familles.py)
 //!
-//! Porte game/events.py (PORTAGE.md). SQUELETTE : les constantes sont portées ; les corps sont des `todo!()`. Une
-//! signature ne se change pas sans le signaler. `ev` : un événement (dict de HIST, RANDOM ou cities.LOCAL) ;
-//! `town` : un numéro de place ou None (`&Val`) ; `datetime.date` : `engine::Date`.
-#![allow(unused_imports, unused_variables)] // squelette : à retirer quand les corps sont portés
+//! Porte game/events.py (PORTAGE.md). Une signature ne se change pas sans le signaler. `ev` : un événement
+//! (dict de HIST, RANDOM ou cities.LOCAL) ; `town` : un numéro de place ou None (`&Val`) ; `datetime.date` :
+//! `engine::Date`. Aides propres au portage (absentes du Python) : `_format` (`str.format` à clés nommées),
+//! `_a_ville`, `_join`, `_min` / `_max` (`min(a, b)` / `max(a, b)` de Python sur des valeurs).
 
 use crate::cities as CT;
 use crate::engine::{Date, Game};
 use crate::familles as FM;
-use crate::py::{self, Random, Val};
+use crate::py::{self, Val};
 use crate::rules as R;
 use crate::turns as TT;
 use crate::{dict, list, py_const, pyset, tup};
@@ -646,26 +646,30 @@ py_const!(HIST_BY_ID, {
 /// (minuscule à l'initiale seulement : les noms propres du libellé restent)
 // game/events.py, lignes 197 à 198
 pub fn _min1(s: &str) -> String {
-    todo!()
+    let mut c = s.chars();
+    match c.next() {
+        Some(p) => p.to_lowercase().chain(c).collect(),
+        None => String::new(),
+    }
 }
 
 /// Python : `_has_port(g, code)`.
 // game/events.py, lignes 200 à 201
 pub fn _has_port(g: &Game, code: &str) -> bool {
-    todo!()
+    g.owned_nodes(code).iter().any(|n| g.geo.nodes.at(n.at("id")).at("spec").has("port"))
 }
 
 /// Python : `_contrebande_ok(g, code)`.
 // game/events.py, lignes 204 à 205
 pub fn _contrebande_ok(g: &Game, code: &str) -> bool {
-    todo!()
+    _has_port(g, code) || g.factions.at(code).at("tarif") > 0i64
 }
 
 /// Une douane chère attire les contrebandiers (SPEC-MERCENAIRES.md) : 2 en tarif libre, jusqu'à 7 environ.
 /// Python : `_contrebande_w(g, code)`.
 // game/events.py, lignes 208 à 210
 pub fn _contrebande_w(g: &Game, code: &str) -> f64 {
-    todo!()
+    2.0 * (1.0 + 5.0 * g.contrebande(code))
 }
 
 // incendies, fièvres, brigands et foires touchent désormais une seule ville : voir les événements locaux (cities.py)
@@ -759,23 +763,77 @@ pub fn _RANDOM_COND(nom: &str) -> fn(&Game, &str) -> bool {
 
 // ------------------------------------------------------------------ textes
 
+/// `s.format(cle=valeur, …)` : chaque `{cle}` du texte remplacé, en un seul passage (KeyError pour une clé inconnue).
+pub(crate) fn _format(s: &str, kw: &[(&str, String)]) -> String {
+    let mut out = String::new();
+    let mut reste = s;
+    while let Some(i) = reste.find('{') {
+        out.push_str(&reste[..i]);
+        let j = reste[i..].find('}').map(|j| i + j).unwrap_or_else(|| panic!("ValueError: '}}' attendu dans {s:?}"));
+        let cle = &reste[i + 1..j];
+        match kw.iter().find(|(k, _)| *k == cle) {
+            Some((_, v)) => out.push_str(v),
+            None => panic!("KeyError: {}", py::repr_s(cle)),
+        }
+        reste = &reste[j + 1..];
+    }
+    out.push_str(reste);
+    out
+}
+
+/// `'au ' + v[3:] if v.startswith('Le ') else ('aux ' + v[4:] if v.startswith('Les ') else f"à {v}")`.
+pub(crate) fn _a_ville(v: &str) -> String {
+    if let Some(r) = v.strip_prefix("Le ") {
+        format!("au {r}")
+    } else if let Some(r) = v.strip_prefix("Les ") {
+        format!("aux {r}")
+    } else {
+        format!("à {v}")
+    }
+}
+
+/// `', '.join(l)` d'une liste de textes.
+pub(crate) fn _join(l: &Val) -> String {
+    l.iter().map(|x| x.string()).collect::<Vec<_>>().join(", ")
+}
+
+/// `min(a, b)` de Python : a, sauf si b est plus petit.
+pub(crate) fn _min(a: Val, b: Val) -> Val {
+    if b < a { b } else { a }
+}
+
+/// `max(a, b)` de Python : a, sauf si b est plus grand.
+pub(crate) fn _max(a: Val, b: Val) -> Val {
+    if b > a { b } else { a }
+}
+
 /// Python : `_fill(g, code, s, town=None)`.
 /// `s.format(nom=…, chef=…, de_chef=…, ville=…, de_ville=…, a_ville=…)` : remplacer chaque {clé} du texte.
 // game/events.py, lignes 236 à 241
 pub fn _fill(g: &Game, code: &str, s: &str, town: &Val) -> String {
-    todo!()
+    let cap = g.capital_of(code);
+    let chef = g.geo.nodes.at(&cap).ats("name");
+    let ville = if town.is_some() { g.geo.nodes.at(town).ats("name") } else { chef.clone() };
+    let a_ville = _a_ville(&ville);
+    _format(s, &[("nom", g.fname(code)), ("chef", chef.clone()), ("de_chef", R::de(&chef)), ("de_ville", R::de(&ville)), ("ville", ville), ("a_ville", a_ville)])
 }
 
 /// Python : `_pct(v)`.
 // game/events.py, lignes 244 à 245
 pub fn _pct(v: f64) -> String {
-    todo!()
+    format!("{}{} %", if v > 0.0 { "+" } else { "−" }, py::round(v * 100.0).abs())
 }
 
 /// Python : `_years(days)`.
 // game/events.py, lignes 248 à 250
 pub fn _years(days: f64) -> String {
-    todo!()
+    let y = py::round(days / 365.0);
+    if y >= 1 {
+        format!("{y} an{}", if y > 1 { "s" } else { "" })
+    } else {
+        let n = py::int(days / 30.0 + 0.5);
+        R::pl(if n > 1 { n } else { 1 }, "tour", None)
+    }
 }
 
 /// Les effets en clair, pour la fenêtre de choix et le journal.
@@ -784,13 +842,73 @@ pub fn _years(days: f64) -> String {
 /// Piège : `abs(v)` des tmod / pmod garde le type du Python (5 et non 5.0 dans le texte).
 // game/events.py, lignes 253 à 290
 pub fn describe(g: &Game, code: &str, fx: &Val, town: &Val) -> Val {
-    todo!()
+    let out = list![];
+    let signe = |v: &Val| if *v > 0i64 { "+" } else { "−" };
+    let res = fx.get("res");
+    for (k, v) in (if res.truthy() { res } else { dict! {} }).items() {
+        out.push(format!("{}{} {}", signe(&v), py::int_v(&v).abs(), R::RES_LABEL().get_or(&k, &k).s().to_lowercase()));
+    }
+    let res_pct = fx.get("res_pct");
+    for (k, v) in (if res_pct.truthy() { res_pct } else { dict! {} }).items() {
+        out.push(format!("{} {}", R::RES_LABEL().get_or(&k, &k).s().to_lowercase(), _pct(v.f())));
+    }
+    if fx.getb("stab") {
+        out.push(format!("ordre public {}", _pct(fx.atf("stab"))));
+    }
+    if fx.getb("town_stab") && town.is_some() {
+        out.push(format!("ordre public {} {}", R::de(g.geo.nodes.at(town).at("name").s()), _pct(fx.atf("town_stab"))));
+    }
+    if fx.getb("pop") {
+        out.push(format!("population {}", _pct(fx.atf("pop"))));
+    }
+    if fx.getb("town_pop") && town.is_some() {
+        out.push(format!("population {} {}", R::de(g.geo.nodes.at(town).at("name").s()), _pct(fx.atf("town_pop"))));
+    }
+    if fx.getb("weary") {
+        out.push(format!("lassitude {}{}", signe(&fx.at("weary")), py::int_v(&fx.at("weary")).abs()));
+    }
+    if fx.getb("glory") {
+        out.push(format!("prestige (histoire) {}{}", signe(&fx.at("glory")), py::int_v(&fx.at("glory")).abs()));
+    }
+    let tmod = fx.get("tmod");
+    for (k, v) in (if tmod.truthy() { tmod } else { dict! {} }).items() {
+        let val = if ABS_MODS().has(&k) { format!("{}{}", signe(&v), v.abs()) } else { _pct(v.f()) };
+        out.push(format!("{} {val} pendant {}", MOD_LABEL().get_or(&k, &k), _years(fx.get_or("days", 365).f())));
+    }
+    let pmod = fx.get("pmod");
+    for (k, v) in (if pmod.truthy() { pmod } else { dict! {} }).items() {
+        let val = if ABS_MODS().has(&k) { format!("{}{}", signe(&v), v.abs()) } else { _pct(v.f()) };
+        out.push(format!("{} {val} (durable)", MOD_LABEL().get_or(&k, &k)));
+    }
+    if fx.getb("rel") {
+        out.push(format!("relations avec les autres camps {}{}", signe(&fx.at("rel")), py::int_v(&fx.at("rel")).abs()));
+    }
+    let regs = fx.get("regs");
+    for tc in (if regs.truthy() { regs } else { list![] }).iter() {
+        let (typ, cnt) = tc.pair();
+        out.push(format!("+{cnt} {} au chef-lieu", g.unit_name(code, typ.s()).1.to_lowercase()));
+    }
+    if fx.getb("research") {
+        out.push("recherches en cours avancées de moitié");
+    }
+    if fx.getb("ville") {
+        out.extend(&CT::describe_local(g, &fx.at("ville"))); // événements locaux (game/cities.py)
+    }
+    if fx.getb("chef") {
+        out.extend(&FM::decrire(g, fx)); // crise de succession (game/familles.py)
+    }
+    if out.truthy() { out } else { list!["aucun effet"] }
 }
 
 /// Python : `affordable(g, code, fx)`.
 // game/events.py, lignes 293 à 299
 pub fn affordable(g: &Game, code: &str, fx: &Val) -> bool {
-    todo!()
+    let r = g.factions.at(code).at("res");
+    if fx.getb("ville") && !CT::local_ok(g, code, &fx.at("ville")) {
+        return false;
+    }
+    let res = fx.get("res");
+    (if res.truthy() { res } else { dict! {} }).items().iter().all(|(k, v)| &r.get_or(k, 0) + v >= 0i64)
 }
 
 // ------------------------------------------------------------------ effets
@@ -798,7 +916,96 @@ pub fn affordable(g: &Game, code: &str, fx: &Val) -> bool {
 /// Python : `apply(g, code, fx, town=None)`.
 // game/events.py, lignes 303 à 357
 pub fn apply(g: &mut Game, code: &str, fx: &Val, town: &Val) {
-    todo!()
+    let f = g.factions.at(code);
+    let r = f.at("res");
+    let res = fx.get("res");
+    for (k, v) in (if res.truthy() { res } else { dict! {} }).items() {
+        let cur = r.get_or(&k, 0);
+        // jamais sous 0 par l'événement, mais une dette (banqueroute) reste une dette
+        r.set(&k, _max(_min(cur.clone(), Val::from(0.0)), &cur + &v));
+    }
+    let res_pct = fx.get("res_pct");
+    for (k, v) in (if res_pct.truthy() { res_pct } else { dict! {} }).items() {
+        if r.get_or(&k, 0) > 0i64 {
+            r.set(&k, _max(Val::from(0.0), &r.at(&k) * &(1i64 + &v))); // (un pourcentage ne s'applique qu'à un avoir, pas à une dette)
+        }
+    }
+    let mine = g.owned_nodes(code);
+    if fx.getb("stab") {
+        for n in mine.iter() {
+            n.set("stab", _max(Val::from(0.0), _min(Val::from(1.0), &n.at("stab") + &fx.at("stab"))));
+        }
+    }
+    if fx.getb("pop") {
+        for n in mine.iter() {
+            n.set("pop", &n.get_or("pop", 0) * &(1i64 + &fx.at("pop")));
+        }
+    }
+    if town.is_some() && g.nodes.at(town).at("owner") == code {
+        let n = g.nodes.at(town);
+        if fx.getb("town_pop") {
+            n.set("pop", &n.get_or("pop", 0) * &(1i64 + &fx.at("town_pop")));
+        }
+        if fx.getb("town_stab") {
+            n.set("stab", _max(Val::from(0.0), _min(Val::from(1.0), &n.at("stab") + &fx.at("town_stab"))));
+        }
+    }
+    if fx.getb("weary") {
+        f.set("weary", _max(Val::from(0.0), _min(Val::from(100.0), &f.get_or("weary", 0) + &fx.at("weary"))));
+    }
+    if fx.getb("glory") {
+        f.set("glory", &f.get_or("glory", 0.0) + &fx.at("glory"));
+    }
+    if fx.getb("tmod") {
+        let until = g.t + &fx.get_or("days", 365);
+        for (k, v) in fx.at("tmod").items() {
+            let e = dict! {"k" => k, "v" => v, "until" => &until};
+            if fx.getb("ev") {
+                e.set("ev", fx.at("ev"));
+            }
+            f.setdefault("tmods", list![]).push(e);
+        }
+    }
+    let pmod = fx.get("pmod");
+    for (k, v) in (if pmod.truthy() { pmod } else { dict! {} }).items() {
+        let em = f.setdefault("emods", dict! {});
+        em.set(&k, &em.get_or(&k, 0) + &v);
+    }
+    if fx.getb("rel") {
+        for (o, of) in g.factions.items() {
+            if o != code {
+                let rel = of.at("rel");
+                rel.set(code, _max(Val::from(-100), _min(Val::from(100), &rel.at(code) + &fx.at("rel"))));
+            }
+        }
+    }
+    if fx.getb("regs") {
+        let cap = g.capital_of(code);
+        if g.nodes.at(&cap).at("owner") == code {
+            for tc in fx.at("regs").iter() {
+                let (typ, cnt) = tc.pair();
+                for _ in 0..cnt.i() {
+                    let reg = g.new_reg(typ.s(), &Val::None, &Val::from(code));
+                    g.nodes.at(&cap).at("garrison").push(reg);
+                }
+            }
+        }
+    }
+    if fx.getb("research") {
+        for cur in f.at("research").values() {
+            if cur.truthy() {
+                cur.scale("left", 0.5);
+            }
+        }
+    }
+    if fx.getb("ville") {
+        CT::apply_local(g, code, &fx.at("ville"));
+    }
+    if fx.getb("chef") {
+        FM::appliquer(g, code, fx);
+    }
+    g.recompute_mods(code);
+    g._dirty_income = true;
 }
 
 // ------------------------------------------------------------------ déclenchement
@@ -807,7 +1014,7 @@ pub fn apply(g: &mut Game, code: &str, fx: &Val, town: &Val) {
 /// date : un tuple (année, mois, jour) : `Date::de(date).toordinal()`.
 // game/events.py, lignes 361 à 362
 pub fn _ord(date: &Val) -> i64 {
-    todo!()
+    Date::de(date).toordinal()
 }
 
 /// Appelé chaque jour : événements datés du jour, puis événements aléatoires.
@@ -816,7 +1023,55 @@ pub fn _ord(date: &Val) -> i64 {
 /// `choices(pool, poids)[0]` → `choix_pondere`), dans l'ordre des camps.
 // game/events.py, lignes 365 à 392
 pub fn tick(g: &mut Game, d: Date) {
-    todo!()
+    let today = d.toordinal();
+    let done = g.ev_done.clone();
+    for ev in HIST().iter() {
+        if done.has(ev.at("id")) {
+            continue;
+        }
+        let o = _ord(&ev.at("date"));
+        if o > today {
+            continue;
+        }
+        done.push(ev.at("id"));
+        if o < g.start_ord {
+            continue; // avant le début de la partie : c'est de l'histoire ancienne
+        }
+        for code in ev.at("who").or(R::FACTIONS()).iter() {
+            if g.factions.has(&code) && g.factions.at(&code).atb("alive") {
+                fire(g, code.s(), &ev, "hist");
+            }
+        }
+    }
+    for (code, f) in g.factions.items() {
+        let code = code.string();
+        if !f.atb("alive") {
+            continue;
+        }
+        if !f.has("ev_next") {
+            f.set("ev_next", g.t + g.rng.uniform(RANDOM_GAP.0 as f64, RANDOM_GAP.1 as f64));
+        }
+        if f.at("ev_next") > g.t {
+            continue;
+        }
+        f.set("ev_next", g.t + g.rng.uniform(RANDOM_GAP.0 as f64, RANDOM_GAP.1 as f64));
+        let season = Val::from(g.season());
+        let pool: Vec<Val> = RANDOM()
+            .iter()
+            .filter(|e| {
+                e.get_or("season", tup![&season]).has(&season)
+                    && (!e.getb("cond") || _RANDOM_COND(e.at("cond").s())(g, &code))
+            })
+            .collect();
+        if !pool.is_empty() {
+            let w: Vec<f64> = pool
+                .iter()
+                .map(|e| { let w = e.at("w"); if w.is_str() { _RANDOM_W(w.s())(g, &code) } else { w.f() } })
+                .collect();
+            let ev = g.rng.choix_pondere(&pool, &w);
+            fire(g, &code, &ev, "rand");
+        }
+    }
 }
 
 // événements qu'une technologie atténue (SPEC-TECH.md) : la clé d'effet du camp (−0,5 : moitié moins)
@@ -834,7 +1089,12 @@ py_const!(ATTENUE, dict!{
 /// e : un effet temporaire dict(k, v, until[, ev]) ; mods : un dict {effet: valeur}.
 // game/events.py, lignes 399 à 405
 pub fn tmod_value(e: &Val, mods: &Val) -> f64 {
-    todo!()
+    let mut v = e.atf("v");
+    if v < 0.0 && ATTENUE().has(e.get("ev")) {
+        let k = 1.0 + mods.get_or(ATTENUE().at(e.at("ev")), 0).f();
+        v *= if k > 0.0 { k } else { 0.0 };
+    }
+    v
 }
 
 /// L'effet d'un événement pour ce camp : ses pertes de population atténuées par ses technologies, ses effets
@@ -844,25 +1104,144 @@ pub fn tmod_value(e: &Val, mods: &Val) -> f64 {
 /// HIST) ; sinon une copie (`dict(fx, ev=ev)`, et `dict(fx['ville'], …)`).
 // game/events.py, lignes 408 à 420
 pub fn soften(g: &Game, code: &str, ev: &str, fx: &Val) -> Val {
-    todo!()
+    if !ATTENUE().has(ev) {
+        return fx.clone();
+    }
+    let k = 1.0 + g.mod_(code, ATTENUE().at(ev).s(), 0.0);
+    let k = if k > 0.0 { k } else { 0.0 };
+    let fx = fx.copy();
+    fx.set("ev", ev);
+    for p in ["pop", "town_pop"] {
+        if fx.get_or(p, 0) < 0i64 {
+            fx.scale(p, k);
+        }
+    }
+    if fx.get_or("ville", dict! {}).get_or("pop", 0) < 0i64 {
+        let v = fx.at("ville").copy();
+        v.set("pop", fx.at("ville").at("pop") * k);
+        fx.set("ville", v);
+    }
+    fx
 }
 
 /// Python : `fire(g, code, ev, kind)`.
 /// kind : 'hist' ou 'rand'.
 // game/events.py, lignes 423 à 455
 pub fn fire(g: &mut Game, code: &str, ev: &Val, kind: &str) {
-    todo!()
+    let mut town = Val::None;
+    if kind == "rand" {
+        let mine: Vec<Val> = g
+            .owned_nodes(code)
+            .iter()
+            .filter(|n| {
+                let t = g.geo.nodes.at(n.at("id")).at("type");
+                t == "capitale" || t == "ville"
+            })
+            .map(|n| n.at("id"))
+            .collect();
+        town = if !mine.is_empty() { g.rng.choice(&mine) } else { Val::None };
+        if town.is_none() {
+            return;
+        }
+    }
+    let title = _fill(g, code, ev.at("title").s(), &town);
+    let text = _fill(g, code, ev.at("text").s(), &town);
+    let gn = g.geo.nodes.at(if town.is_some() { town.clone() } else { g.capital_of(code) });
+    let id = ev.ats("id");
+    let base = if ev.getb("base") { soften(g, code, &id, &ev.at("base")) } else { Val::None };
+    if base.truthy() {
+        apply(g, code, &base, &town);
+    }
+    let cs = ev.get("choices");
+    let choices: Vec<Val> = (if cs.truthy() { cs } else { list![] })
+        .iter()
+        .map(|c| {
+            let d = c.copy();
+            d.set("fx", soften(g, code, &id, &c.at("fx")));
+            d
+        })
+        .collect();
+    let base_txt = if base.truthy() { _join(&describe(g, code, &base, &town)) } else { String::new() };
+    let xy = |kw: Val| {
+        kw.set("x", gn.at("x"));
+        kw.set("y", gn.at("y"));
+        kw
+    };
+    if choices.is_empty() {
+        if code == g.player {
+            g.log("evenement", &format!("{title} : {text} ({base_txt})."), &xy(dict! {"who" => code, "important" => true}));
+        }
+        return;
+    }
+    if code != g.player {
+        let mut ok: Vec<usize> = (0..choices.len()).filter(|&i| affordable(g, code, &choices[i].at("fx"))).collect();
+        if ok.is_empty() {
+            ok = vec![choices.len() - 1];
+        }
+        let w: Vec<f64> = ok.iter().map(|&j| choices[j].get_or("ai", 1).f()).collect();
+        let i = g.rng.choix_pondere(&ok, &w);
+        apply(g, code, &choices[i].at("fx"), &town);
+        if kind == "hist" && ev.at("who").is_some() {
+            let t = format!("{title} : {} choisit « {} ».", g.fname(code), _min1(choices[i].at("label").s()));
+            g.log("evenement", &t, &xy(dict! {"who" => code}));
+        }
+        return;
+    }
+    let pid = g.nid("e");
+    let until = TT::deadline(g, ANSWER_TOURS, &[]);
+    let date = g.date_str(&Val::None);
+    let cv: Val = choices
+        .iter()
+        .map(|c| dict! {"label" => c.at("label"), "fx" => c.at("fx"), "desc" => describe(g, code, &c.at("fx"), &town)})
+        .collect();
+    g.pending_ev.push(dict! {
+        "id" => pid, "ev" => &id, "kind" => kind, "title" => &title, "text" => &text, "town" => &town,
+        "base" => &base_txt, "until" => until, "date" => date, "choices" => cv
+    });
+    let suite = if !base_txt.is_empty() { format!(" ({base_txt})") } else { String::new() };
+    g.log("evenement", &format!("{title}. {text}{suite} Une décision vous attend."), &xy(dict! {"who" => code, "important" => true}));
+    g.alert_pause(true);
 }
 
 /// Python : `resolve(g, pid, choice, auto=False)`.
 /// pid : l'identifiant de la décision (g.nid('e')) ; auto : False par défaut (expire passe True).
 // game/events.py, lignes 458 à 471
 pub fn resolve(g: &mut Game, pid: &str, choice: i64, auto: bool) -> (bool, String) {
-    todo!()
+    let p = g.pending_ev.iter().find(|x| x.at("id") == pid);
+    let Some(p) = p else {
+        return (false, "Décision introuvable.".to_string());
+    };
+    if !(0 <= choice && (choice as usize) < p.at("choices").len()) {
+        return (false, "Choix inconnu.".to_string());
+    }
+    let c = p.at("choices").at(choice);
+    let player = g.player.clone();
+    if !auto && !affordable(g, &player, &c.at("fx")) {
+        return (false, "Vous n'en avez pas les moyens.".to_string());
+    }
+    g.pending_ev.remove(&p);
+    apply(g, &player, &c.at("fx"), &p.at("town"));
+    let t = format!(
+        "{} : {}{} ({}).",
+        p.at("title"),
+        if auto { "faute de décision, " } else { "" },
+        _min1(c.at("label").s()),
+        _join(&c.at("desc"))
+    );
+    g.log("evenement", &t, &dict! {"important" => true});
+    (true, format!("{} : {}.", p.at("title"), _min1(c.at("label").s())))
 }
 
 /// Python : `expire(g)`.
 // game/events.py, lignes 474 à 479
 pub fn expire(g: &mut Game) {
-    todo!()
+    for p in g.pending_ev.copy().iter() {
+        if g.t >= p.atf("until") {
+            let last = p.at("choices").len() as i64 - 1;
+            let player = g.player.clone();
+            let ok: Vec<i64> = (0..p.at("choices").len() as i64).filter(|&i| affordable(g, &player, &p.at("choices").at(i).at("fx"))).collect();
+            let choice = if ok.contains(&last) || ok.is_empty() { last } else { ok[ok.len() - 1] };
+            resolve(g, p.at("id").s(), choice, true);
+        }
+    }
 }

@@ -18,10 +18,10 @@
 //!   bo     {ressource: par jour}  effets durables d'un événement (un filon)
 //!   evt    date du dernier événement local
 //!
-//! Porte game/cities.py (PORTAGE.md). SQUELETTE : les constantes sont portées ; les corps sont des `todo!()`. Une
-//! signature ne se change pas sans le signaler. `n` : une place (dict de g.nodes) ; `gn` : son lieu (dict de
-//! geo.nodes) ; `chain` : une clé de CHAINS ; `ai` : l'IA de campagne (ai::AI), dont `ai.g` est le `g` passé à côté.
-#![allow(unused_imports, unused_variables)] // squelette : à retirer quand les corps sont portés
+//! Porte game/cities.py (PORTAGE.md). Une signature ne se change pas sans le signaler. `n` : une place (dict de
+//! g.nodes) ; `gn` : son lieu (dict de geo.nodes) ; `chain` : une clé de CHAINS ; `ai` : l'IA de campagne (ai::AI),
+//! dont `ai.g` est le `g` passé à côté (`ai.f` : `g.factions[ai.code]`).
+#![allow(unused_variables)] // les fonctions de poids (et fx_text, daily) gardent les paramètres du Python
 
 use crate::ai::AI;
 use crate::engine::{Date, Game};
@@ -30,7 +30,7 @@ use crate::geo::TERRAIN;
 use crate::py::{self, Val};
 use crate::rules as R;
 use crate::turns as TT;
-use crate::{dict, list, py_const, pyset, tup};
+use crate::{dict, list, py_const, tup};
 
 py_const!(SLOTS, dict!{"village" => 1, "fort" => 1, "ville" => 3, "capitale" => 5});  // +1 par niveau d'agrandissement
 py_const!(PROD, tup!["livres", "vivres", "recrues", "industrie", "fer", "bois"]);
@@ -363,7 +363,7 @@ py_const!(TM_LABEL, dict!{
 /// `f"{x:.2f}"`, sans zéros ni point final, virgule décimale.
 // game/cities.py, lignes 133 à 134
 pub fn _n(x: f64) -> String {
-    todo!()
+    format!("{x:.2}").trim_end_matches('0').trim_end_matches('.').replace('.', ",")
 }
 
 /// Effets d'un niveau, en clair : production par tour (TOUR_DAYS jours), ou par jour (temps réel).
@@ -372,7 +372,58 @@ pub fn _n(x: f64) -> String {
 /// Piège : `+{fx['xp']}`, `+{fx['milice']}` gardent le type du Python (des entiers).
 // game/cities.py, lignes 137 à 166
 pub fn fx_text(fx: &Val, star: &Val, per_day: bool) -> String {
-    todo!()
+    let out: Vec<String> = {
+        let mut out = vec![];
+        let (k_, u) = if per_day { (1.0, "/j") } else { (TT::TOUR_DAYS, "/tour") };
+        for k in PROD().iter() {
+            if fx.getb(&k) {
+                let x = fx.atf(&k) * k_;
+                let lab = if k != "livres" || x < 2.0 { FX_LABEL().ats(&k) } else { "livres".to_string() };
+                out.push(format!("+{} {lab} {u}", _n(x)));
+            }
+        }
+        if fx.getb("trade") {
+            let x = fx.atf("trade") * k_;
+            out.push(format!("+{} livre{} {u} de commerce par eau", _n(x), if x >= 2.0 { "s" } else { "" }));
+        }
+        if fx.getb("spec") {
+            out.push(format!("spécialité +{} %", py::round(fx.atf("spec") * 100.0)));
+        }
+        if fx.getb("stab") {
+            let s = fx.atf("stab");
+            out.push(format!("ordre public {}{} %", if s > 0.0 { "+" } else { "−" }, py::round(s.abs() * 100.0)));
+        }
+        if fx.getb("grow") {
+            out.push(format!("croissance +{} %", py::round(fx.atf("grow") * 100.0)));
+        }
+        if fx.getb("train") {
+            let cav = if fx.getb("cav_train") {
+                format!(" (cavalerie {} %)", py::round((fx.atf("train") + fx.get_or("cav_train", 0).f()) * 100.0))
+            } else {
+                String::new()
+            };
+            out.push(format!("régiments formés {} % plus vite{cav}", py::round(fx.atf("train") * 100.0)));
+        }
+        if fx.getb("xp") {
+            out.push(format!("régiments levés ici aguerris (+{} d’expérience)", fx.at("xp")));
+        }
+        if fx.getb("milice") {
+            out.push(format!("milice +{}", fx.at("milice")));
+        }
+        if fx.getb("research") {
+            out.push(format!("recherches +{} %", py::round(fx.atf("research") * 100.0)));
+        }
+        let ev = fx.get("ev");
+        for (k, v) in (if ev.truthy() { ev } else { dict! {} }).items() {
+            let lab = if LOCAL_BY_ID().has(&k) { LOCAL_BY_ID().at(&k).at("short") } else { k };
+            out.push(format!("{lab} {}", if v > 0i64 { "plus fréquentes" } else { "plus rares" }));
+        }
+        if fx.getb("depot") {
+            out.push("ravitaille les armées à moins de 30 km".to_string());
+        }
+        out
+    };
+    out.join(", ")
 }
 
 // ------------------------------------------------------------------ emplacements
@@ -381,46 +432,143 @@ pub fn fx_text(fx: &Val, star: &Val, per_day: bool) -> String {
 /// Rend n['slots'] (créé s'il manque : le même dict).
 // game/cities.py, lignes 170 à 174
 pub fn slots(n: &Val) -> Val {
-    todo!()
+    let s = n.get("slots");
+    if s.is_none() {
+        let s = if n.getb("depot") { dict! {"depot" => 1} } else { dict! {} };
+        n.set("slots", &s);
+        return s;
+    }
+    s
 }
 
 /// Python : `slot_count(g, n)`.
 // game/cities.py, lignes 177 à 178
 pub fn slot_count(g: &Game, n: &Val) -> i64 {
-    todo!()
+    SLOTS().ati(g.geo.nodes.at(n.at("id")).at("type")) + n.get_or("dev", 0).i()
 }
 
 /// Nom d'un niveau (1 à 3) ; les ateliers de spécialité changent de nom selon la ville.
 /// Python : `level_name(g, nid, chain, lvl)`.
 // game/cities.py, lignes 181 à 187
 pub fn level_name(g: &Game, nid: i64, chain: &str, lvl: i64) -> String {
-    todo!()
+    if chain == "specialite" {
+        let st = g.geo.nodes.at(nid).get("star");
+        let star = if st.truthy() { st.at(0) } else { Val::None };
+        if SPEC_NAMES().has(&star) {
+            return SPEC_NAMES().at(&star).at(0).ats(lvl - 1);
+        }
+    }
+    CHAINS().at(chain).at("levels").at(lvl - 1).ats("name")
 }
 
 /// Python : `level_tech(g, nid, chain, lvl)`.
 // game/cities.py, lignes 190 à 195
 pub fn level_tech(g: &Game, nid: i64, chain: &str, lvl: i64) -> Option<String> {
-    todo!()
+    let mut t = CHAINS().at(chain).at("levels").at(lvl - 1).get("tech");
+    if t == "*" {
+        let st = g.geo.nodes.at(nid).get("star");
+        let star = if st.truthy() { st.at(0) } else { Val::None };
+        t = SPEC_NAMES().get_or(&star, tup![Val::None, Val::None]).at(1);
+    }
+    if t.is_none() { None } else { Some(t.string()) }
 }
 
 /// La chaîne a-t-elle sa place ici ? (spécialité, quai)
 /// Python : `fits(g, nid, chain)`.
 // game/cities.py, lignes 198 à 206
 pub fn fits(g: &Game, nid: i64, chain: &str) -> bool {
-    todo!()
+    let gn = g.geo.nodes.at(nid);
+    let w = CHAINS().at(chain).get("where");
+    if w == "star" {
+        return gn.getb("star") && R::SPECIALTY().has(gn.at("star").at(0));
+    }
+    if w == "quai" {
+        return g.geo.ports.has(nid) && gn.at("type") != "fort";
+    }
+    true
 }
 
 /// (niveau visé, raison du refus ou None) pour bâtir ou améliorer cette chaîne ici.
 /// Python : `check(g, code, n, chain)`.
 // game/cities.py, lignes 209 à 234
 pub fn check(g: &Game, code: &str, n: &Val, chain: &str) -> (Option<i64>, Option<String>) {
-    todo!()
+    let nid = n.ati("id");
+    if !CHAINS().has(chain) {
+        return (None, Some("Bâtiment inconnu.".to_string()));
+    }
+    if !fits(g, nid, chain) {
+        return (
+            None,
+            Some(if CHAINS().at(chain).get("where") == "star" {
+                "Il faut une spécialité dans la ville.".to_string()
+            } else {
+                "Il faut un quai sur un fleuve navigable.".to_string()
+            }),
+        );
+    }
+    let s = slots(n);
+    let cur = s.get(chain);
+    // (un magasin aux vivres commandé avant les emplacements est encore une file « build »)
+    if cur == 0i64 || n.at("queue").iter().any(|q| (q.at("kind") == "slot" || q.at("kind") == "build") && q.at("what") == chain) {
+        return (None, Some("Déjà en chantier.".to_string()));
+    }
+    let lvl = if cur.is_none() { 1 } else { cur.i() + 1 };
+    let levels = CHAINS().at(chain).at("levels");
+    if lvl > levels.len() as i64 {
+        return (None, Some("Niveau maximal atteint.".to_string()));
+    }
+    if cur.is_none() && s.len() as i64 >= slot_count(g, n) {
+        return (None, Some("Plus d'emplacement libre : agrandissez la ville ou démolissez un bâtiment.".to_string()));
+    }
+    let L = levels.at(lvl - 1);
+    if n.get_or("dev", 0) < L.get_or("dev", 0) {
+        return (None, Some(format!("Il faut d'abord agrandir la ville (niveau {}).", L.at("dev"))));
+    }
+    let t = level_tech(g, nid, chain, lvl);
+    if let Some(t) = t {
+        if !t.is_empty() && !g.factions.at(code).at("techs").has(t.as_str()) {
+            return (None, Some(format!("Technologie requise : {}.", TECH_NAME(&t))));
+        }
+    }
+    (Some(lvl), None)
 }
 
 /// Python : `slot_build(g, code, nid, chain)`.
 // game/cities.py, lignes 237 à 259
 pub fn slot_build(g: &mut Game, code: &str, nid: i64, chain: &str) -> (bool, String) {
-    todo!()
+    let n = g.nodes.at(nid);
+    let gn = g.geo.nodes.at(nid);
+    if n.at("owner") != code {
+        return (false, "Cette ville ne vous appartient pas.".to_string());
+    }
+    sync(g, &n);
+    let (lvl, why) = check(g, code, &n, chain);
+    if let Some(why) = why {
+        return (false, why);
+    }
+    let lvl = lvl.unwrap();
+    if n.atb("siege") {
+        return (false, "La place est assiégée.".to_string());
+    }
+    if n.at("queue").len() >= 4 {
+        return (false, "File de production pleine.".to_string());
+    }
+    let L = CHAINS().at(chain).at("levels").at(lvl - 1);
+    let (cost, days) = (g.build_cost(code, &L.at("cost")), g.build_days(code, L.atf("days")));
+    if !g.can_pay(code, &cost) {
+        return (false, "Ressources insuffisantes.".to_string());
+    }
+    g.pay(code, &cost);
+    n.at("queue").push(dict! {"kind" => "slot", "what" => chain, "lvl" => lvl, "left" => days, "total" => days});
+    if lvl == 1 {
+        slots(&n).set(chain, 0); // l'emplacement est pris dès le début du chantier
+    }
+    let name = level_name(g, nid, chain, lvl);
+    if lvl == 1 {
+        (true, format!("{name} : chantier lancé à {}.", gn.at("name")))
+    } else {
+        (true, format!("{name} : amélioration lancée à {}.", gn.at("name")))
+    }
 }
 
 /// Fin d'un chantier d'emplacement (appelé par la file de la place).
@@ -428,20 +576,62 @@ pub fn slot_build(g: &mut Game, code: &str, nid: i64, chain: &str) -> (bool, Str
 /// q : l'élément de la file (dict(kind='slot', what, lvl, …)).
 // game/cities.py, lignes 262 à 274
 pub fn finish(g: &mut Game, n: &Val, q: &Val) {
-    todo!()
+    let (chain, lvl) = (q.ats("what"), q.ati("lvl"));
+    let s = slots(n);
+    let old = s.get(chain.as_str()).or(0).i();
+    s.set(chain.as_str(), lvl);
+    _milice(n, &chain, old, lvl);
+    if chain == "depot" {
+        n.set("depot", 1);
+    }
+    g._dirty_income = true;
+    if n.at("owner") == g.player {
+        let gn = g.geo.nodes.at(n.at("id"));
+        let t = format!("Fin des travaux à {} : {}.", gn.at("name"), level_name(g, n.ati("id"), &chain, lvl).to_lowercase());
+        g.log("eco", &t, &dict! {"x" => gn.at("x"), "y" => gn.at("y")});
+    }
 }
 
 /// Les casernes logent de la milice : on suit la différence entre deux niveaux.
 /// Python : `_milice(n, chain, old, new)`.
 // game/cities.py, lignes 277 à 284
 pub fn _milice(n: &Val, chain: &str, old: i64, new: i64) {
-    todo!()
+    let lv = CHAINS().at(chain).at("levels");
+    let a = if old > 0 { lv.at(old - 1).at("fx").get_or("milice", 0) } else { Val::from(0) };
+    let b = if new > 0 { lv.at(new - 1).at("fx").get_or("milice", 0) } else { Val::from(0) };
+    if a != b {
+        n.set("milice_max", EV::_max(Val::from(20.0), &(&n.at("milice_max") + &b) - &a));
+        n.set("milice", EV::_min(n.at("milice"), n.at("milice_max")));
+    }
 }
 
 /// Python : `demolish(g, code, nid, chain)`.
 // game/cities.py, lignes 287 à 305
 pub fn demolish(g: &mut Game, code: &str, nid: i64, chain: &str) -> (bool, String) {
-    todo!()
+    let n = g.nodes.at(nid);
+    let gn = g.geo.nodes.at(nid);
+    if n.at("owner") != code {
+        return (false, "Cette ville ne vous appartient pas.".to_string());
+    }
+    let s = slots(&n);
+    if !s.has(chain) {
+        return (false, "Aucun bâtiment de ce type ici.".to_string());
+    }
+    if n.atb("siege") {
+        return (false, "La place est assiégée.".to_string());
+    }
+    let lvl = s.pop(chain).i();
+    let q: Val = n.at("queue").iter().filter(|q| !(q.at("kind") == "slot" && q.at("what") == chain)).collect();
+    n.set("queue", q);
+    _milice(&n, chain, lvl, 0);
+    if chain == "depot" {
+        n.set("depot", 0);
+    }
+    g._dirty_income = true;
+    if lvl == 0 {
+        return (true, format!("Chantier abandonné à {} : l'emplacement est libre.", gn.at("name")));
+    }
+    (true, format!("Démolition à {} : {} ; l'emplacement est libre.", gn.at("name"), level_name(g, nid, chain, lvl).to_lowercase()))
 }
 
 /// Remet d'accord les emplacements avec la place : magasin pillé, chantier perdu à la prise de la ville,
@@ -449,7 +639,26 @@ pub fn demolish(g: &mut Game, code: &str, nid: i64, chain: &str) -> (bool, Strin
 /// Python : `sync(g, n)`.
 // game/cities.py, lignes 308 à 323
 pub fn sync(g: &mut Game, n: &Val) {
-    todo!()
+    let s = slots(n);
+    if n.getb("depot") && !s.has("depot") {
+        s.set("depot", 1);
+    } else if !n.getb("depot") && s.getb("depot") {
+        s.del("depot");
+    }
+    let zeros: Vec<Val> = s.items().into_iter().filter(|(_, v)| *v == 0i64).map(|(k, _)| k).collect();
+    for k in zeros {
+        if !n.at("queue").iter().any(|q| q.at("kind") == "slot" && q.at("what") == k) {
+            s.del(&k);
+        }
+    }
+    let p = n.get("pol");
+    if p.truthy() && p.get("o") != n.at("owner") {
+        n.del("pol");
+    }
+    if n.getb("tm") {
+        let tm: Val = n.at("tm").iter().filter(|e| e.atf("until") > g.t).collect();
+        n.set("tm", tm);
+    }
 }
 
 // ------------------------------------------------------------------ effets
@@ -459,7 +668,16 @@ pub fn sync(g: &mut Game, n: &Val) {
 /// Piège : `v * w` avec w = 1.0 rend un flottant (un int de fx devient float dans tot).
 // game/cities.py, lignes 327 à 334
 pub fn _add(tot: &Val, fx: &Val, w: f64) {
-    todo!()
+    for (k, v) in fx.items() {
+        if k == "ev" {
+            let ev = tot.setdefault("ev", dict! {});
+            for (e, x) in v.items() {
+                ev.set(&e, &ev.get_or(&e, 0) + &(&x * w));
+            }
+        } else if v.is_num() {
+            tot.set(&k, &tot.get_or(&k, 0) + &(&v * w));
+        }
+    }
 }
 
 py_const!(_EMPTY, dict!{}); // (le dict vide partagé que rendent bfx et pfx : ne pas le modifier)
@@ -479,7 +697,28 @@ py_const!(_BFX, dict!{}); // effets d'une combinaison de bâtiments (ne dépend 
 /// Rend le dict partagé de _BFX (ou _EMPTY).
 // game/cities.py, lignes 342 à 357
 pub fn bfx(n: &Val) -> Val {
-    todo!()
+    let s = n.get("slots");
+    if !s.truthy() {
+        return _EMPTY();
+    }
+    let key = Val::tuple(s.items().into_iter().map(|(c, l)| tup![c, l]).collect());
+    let mut tot = _BFX().get(&key);
+    if tot.is_none() {
+        tot = dict! {};
+        for cl in key.iter() {
+            let (c, lvl) = cl.pair();
+            if lvl > 0i64 && CHAINS().has(&c) {
+                let levels = CHAINS().at(&c).at("levels");
+                let i = if (levels.len() as i64) < lvl.i() { levels.len() as i64 } else { lvl.i() };
+                _add(&tot, &levels.at(i - 1).at("fx"), 1.0);
+            }
+        }
+        if _BFX().len() > 5000 {
+            _BFX().clear();
+        }
+        _BFX().set(&key, &tot);
+    }
+    tot
 }
 
 // (la boucle qui remplit _PFX : faite à sa création, plus haut)
@@ -488,7 +727,16 @@ pub fn bfx(n: &Val) -> Val {
 /// Python : `policy_w(g, n)`.
 // game/cities.py, lignes 364 à 370
 pub fn policy_w(g: &Game, n: &Val) -> f64 {
-    todo!()
+    let p = n.get("pol");
+    if !p.truthy() {
+        return 1.0;
+    }
+    let u = p.get("u");
+    let u = if u.truthy() { u.f() } else { TT::turn_start_after(g, p.atf("t") + POLICY_OLD_DAYS as f64) };
+    let d = u - p.atf("t");
+    let x = (g.t - p.atf("t")) / if d > 1e-6 { d } else { 1e-6 };
+    let x = if x < 1.0 { x } else { 1.0 };
+    if x > 0.0 { x } else { 0.0 }
 }
 
 /// Effets de la politique en vigueur, mêlés à ceux de la précédente pendant la transition
@@ -496,7 +744,18 @@ pub fn policy_w(g: &Game, n: &Val) -> f64 {
 /// Python : `pfx(g, n)`.
 // game/cities.py, lignes 373 à 385
 pub fn pfx(g: &Game, n: &Val) -> Val {
-    todo!()
+    let p = n.get("pol");
+    if !p.truthy() || p.get("o") != n.at("owner") {
+        return _EMPTY();
+    }
+    let w = policy_w(g, n);
+    if w >= 1.0 {
+        return _PFX().at(p.at("k"));
+    }
+    let tot = dict! {};
+    _add(&tot, &POLICIES().at(p.at("k")).at("fx"), w);
+    _add(&tot, &POLICIES().at(p.get_or("p", "equilibre")).at("fx"), 1.0 - w);
+    tot
 }
 
 /// Production de base ajoutée par les bâtiments, la politique et les événements de la place
@@ -505,39 +764,114 @@ pub fn pfx(g: &Game, n: &Val) -> Val {
 /// out : le dict de production de la place (modifié) ; rend le commerce.
 // game/cities.py, lignes 388 à 425
 pub fn node_extra(g: &Game, n: &Val, code: &str, out: &Val, trade: f64) -> f64 {
-    todo!()
+    let mut trade = trade;
+    if !(n.getb("slots") || n.getb("pol") || n.getb("tm") || n.getb("bo")) {
+        return trade;
+    }
+    let b = bfx(n);
+    let gn = g.geo.nodes.at(n.at("id"));
+    let sk = SIZE_K().atf(gn.at("type"));
+    for k in PROD().iter() {
+        if b.getb(&k) {
+            out.set(&k, &out.get_or(&k, 0) + &(&b.at(&k) * sk));
+        }
+    }
+    let bo = n.get("bo");
+    for (k, v) in (if bo.truthy() { bo } else { dict! {} }).items() {
+        out.set(&k, &out.get_or(&k, 0) + &v);
+    }
+    if b.getb("spec") && gn.getb("star") && R::SPECIALTY().has(gn.at("star").at(0)) {
+        let sp = R::SPECIALTY().at(gn.at("star").at(0));
+        let boost = if sp.getb("boost") { g.mod_(code, sp.at("boost").s(), 0.0) } else { 0.0 };
+        let k = (1.0 + boost) * (if gn.at("type") == "capitale" { R::SPECIALTY_CAPITAL } else { 1.0 }) * b.atf("spec");
+        for r in PROD().iter() {
+            if sp.has(&r) {
+                out.set(&r, &out.at(&r) + &(&sp.at(&r) * k));
+            }
+        }
+        if sp.get("boost") == "port" {
+            trade += sp.get_or("livres", 0).f() * k;
+        }
+    }
+    if b.getb("trade") {
+        out.set("livres", &out.at("livres") + &(&b.at("trade") * sk));
+        trade += b.atf("trade") * sk;
+    }
+    let mut m = pfx(g, n);
+    if n.getb("tm") {
+        m = m.copy();
+        for e in n.at("tm").iter() {
+            if e.atf("until") > g.t {
+                m.set(e.at("k"), &m.get_or(e.at("k"), 0) + &e.at("v"));
+            }
+        }
+    }
+    if m.truthy() {
+        for r in PROD().iter() {
+            let k = &(1i64 + &m.get_or(&r, 0)) + &m.get_or("prod", 0);
+            if k != 1i64 {
+                out.set(&r, &out.at(&r) * &EV::_max(Val::from(0.1), k));
+            }
+        }
+        trade *= EV::_max(Val::from(0.1), &(1i64 + &m.get_or("livres", 0)) + &m.get_or("prod", 0)).f();
+    }
+    trade
 }
 
 /// Python : `stab_bonus(g, n)`.
 // game/cities.py, lignes 428 à 435
 pub fn stab_bonus(g: &Game, n: &Val) -> f64 {
-    todo!()
+    // appelé très souvent (ordre public) : seuls l'hospice, la fabrique et la politique comptent
+    let (s, mut v) = (n.get("slots"), 0.0);
+    if s.truthy() && (s.has("hospice") || s.has("atelier")) {
+        v += bfx(n).get_or("stab", 0).f();
+    }
+    if n.getb("pol") {
+        v += pfx(g, n).get_or("stab", 0).f();
+    }
+    v
 }
 
 /// Python : `growth_k(g, n)`.
 // game/cities.py, lignes 438 à 439
 pub fn growth_k(g: &Game, n: &Val) -> f64 {
-    todo!()
+    let k = 1.0 + bfx(n).get_or("grow", 0).f() + pfx(g, n).get_or("grow", 0).f();
+    if k > 0.2 { k } else { 0.2 }
 }
 
 /// Python : `train_k(g, n, typ)`.
 // game/cities.py, lignes 442 à 445
 pub fn train_k(g: &Game, n: &Val, typ: &str) -> f64 {
-    todo!()
+    let (b, p) = (bfx(n), pfx(g, n));
+    let k = b.get_or("train", 0).f() + p.get_or("train", 0).f() + if typ == "cavalerie" { b.get_or("cav_train", 0).f() } else { 0.0 };
+    let k = 1.0 - k;
+    if k > 0.4 { k } else { 0.4 }
 }
 
 /// Python : `train_xp(g, n)`.
 /// Rend un nombre (int ou float, comme le Python : il s'ajoute à l'expérience des régiments).
 // game/cities.py, lignes 448 à 449
 pub fn train_xp(g: &Game, n: &Val) -> Val {
-    todo!()
+    &bfx(n).get_or("xp", 0) + &pfx(g, n).get_or("xp", 0)
 }
 
 /// Entretien des bâtiments d'emplacement, en livres par jour.
 /// Python : `upkeep(g, code)`.
 // game/cities.py, lignes 452 à 460
 pub fn upkeep(g: &Game, code: &str) -> f64 {
-    todo!()
+    let mut tot = 0.0;
+    for n in g.nodes.iter() {
+        if n.at("owner") == code && n.getb("slots") {
+            for (c, lvl) in n.at("slots").items() {
+                if lvl > 0i64 && CHAINS().has(&c) {
+                    let levels = CHAINS().at(&c).at("levels");
+                    let i = if (levels.len() as i64) < lvl.i() { levels.len() as i64 } else { lvl.i() };
+                    tot += levels.at(i - 1).get_or("up", 0).f();
+                }
+            }
+        }
+    }
+    tot
 }
 
 /// Un demi-point de rayonnement par niveau de bâtiment.
@@ -545,20 +879,78 @@ pub fn upkeep(g: &Game, code: &str) -> f64 {
 /// nodes : une liste de places.
 // game/cities.py, lignes 463 à 465
 pub fn prestige(nodes: &Val) -> f64 {
-    todo!()
+    let mut v = vec![];
+    for n in nodes.iter() {
+        let s = n.get("slots");
+        for x in (if s.truthy() { s } else { dict! {} }).values() {
+            v.push(EV::_max(Val::from(0), x));
+        }
+    }
+    py::sum_v(v).f() / 2.0
 }
 
 /// Python : `set_policy(g, code, nid, k, same_type=False)`.
 /// same_type : False par défaut.
 // game/cities.py, lignes 468 à 485
 pub fn set_policy(g: &mut Game, code: &str, nid: i64, k: &str, same_type: bool) -> (bool, String) {
-    todo!()
+    if !POLICIES().has(k) {
+        return (false, "Politique inconnue.".to_string());
+    }
+    let n = g.nodes.at(nid);
+    if n.at("owner") != code {
+        return (false, "Cette ville ne vous appartient pas.".to_string());
+    }
+    let typ = g.geo.nodes.at(nid).ats("type");
+    let targets: Vec<Val> = if same_type {
+        g.owned_nodes(code).iter().filter(|m| g.geo.nodes.at(m.at("id")).at("type") == typ).collect()
+    } else {
+        vec![n.clone()]
+    };
+    let mut changed = 0i64;
+    for m in &targets {
+        if _set_policy(g, m, k) {
+            changed += 1;
+        }
+    }
+    let lab = POLICIES().at(k).ats("label");
+    let name = g.geo.nodes.at(nid).ats("name");
+    if same_type {
+        let what = match typ.as_str() {
+            "village" => "tous vos villages",
+            "fort" => "toutes vos places fortes",
+            "ville" => "toutes vos villes",
+            "capitale" => "tous vos chefs-lieux",
+            _ => panic!("KeyError: {}", py::repr_s(&typ)),
+        };
+        return if changed != 0 {
+            (true, format!("Politique « {lab} » dans {} de plus ({what}).", R::pl(changed, "place", None)))
+        } else {
+            let mut c = what.chars();
+            let w = c.next().unwrap().to_uppercase().chain(c).collect::<String>();
+            (true, format!("{w} suivent déjà la politique « {lab} »."))
+        };
+    }
+    if changed == 0 {
+        return (true, format!("{name} suit déjà la politique « {lab} »."));
+    }
+    (true, format!("{name} : politique « {lab} », en place au prochain tour."))
 }
 
 /// Python : `_set_policy(g, n, k)`.
 // game/cities.py, lignes 488 à 497
 pub fn _set_policy(g: &mut Game, n: &Val, k: &str) -> bool {
-    todo!()
+    let p = n.get("pol");
+    let cur = if p.truthy() && p.get("o") == n.at("owner") { p.at("k") } else { Val::from("equilibre") };
+    if cur == k {
+        return false;
+    }
+    // en pleine transition, on repart de la politique qui dominait encore
+    let prev = if !p.truthy() || policy_w(g, n) >= 0.5 { cur } else { p.get_or("p", "equilibre") };
+    let owner = n.ats("owner");
+    let u = TT::deadline(g, POLICY_TOURS, &[owner.as_str()]);
+    n.set("pol", dict! {"k" => k, "p" => prev, "t" => g.t, "u" => u, "o" => &owner});
+    g._dirty_income = true;
+    true
 }
 
 // ------------------------------------------------------------------ chaque jour
@@ -566,21 +958,42 @@ pub fn _set_policy(g: &mut Game, n: &Val, k: &str) -> bool {
 /// Python : `daily(g, d)`.
 // game/cities.py, lignes 501 à 507
 pub fn daily(g: &mut Game, d: Date) {
-    todo!()
+    for n in g.nodes.iter() {
+        if n.getb("slots") || n.getb("depot") || n.getb("pol") || n.getb("tm") {
+            sync(g, &n);
+        }
+    }
+    research(g);
+    if !g.over.truthy() {
+        tick(g);
+    }
 }
 
 /// Jours de recherche gagnés chaque jour grâce aux collèges (au plus 0,15).
 /// Python : `college_k(g, code)`.
 // game/cities.py, lignes 510 à 512
 pub fn college_k(g: &Game, code: &str) -> f64 {
-    todo!()
+    let s = py::sum_v(g.owned_nodes(code).iter().filter(|n| n.getb("slots")).map(|n| bfx(&n).get_or("research", 0))).f();
+    if s < 0.15 { s } else { 0.15 }
 }
 
 /// Les collèges forment des savants : les recherches en cours avancent un peu plus vite (au plus +15 %).
 /// Python : `research(g)`.
 // game/cities.py, lignes 515 à 524
 pub fn research(g: &mut Game) {
-    todo!()
+    for (code, f) in g.factions.items() {
+        if !f.atb("alive") {
+            continue;
+        }
+        let k = college_k(g, code.s());
+        if k > 0.0 {
+            for cur in f.at("research").values() {
+                if cur.truthy() {
+                    cur.dec("left", k);
+                }
+            }
+        }
+    }
 }
 
 // ------------------------------------------------------------------ événements locaux
@@ -589,50 +1002,86 @@ pub fn research(g: &mut Game) {
 /// Rend la liste des voies d'eau (noms) du quai, sans la mer.
 // game/cities.py, lignes 528 à 529
 pub fn _river(g: &Game, nid: i64) -> Val {
-    todo!()
+    g.geo.ports.get_or(nid, list![]).iter().filter(|w| !g.geo.ways.at(w).atb("sea")).collect()
 }
 
 /// Python : `_hilly(g, nid)`.
 // game/cities.py, lignes 532 à 535
 pub fn _hilly(g: &Game, nid: i64) -> bool {
-    todo!()
+    let gn = g.geo.nodes.at(nid);
+    let t = TERRAIN().at(g.geo.terrain_at(gn.atf("x"), gn.atf("y"))).at(0);
+    t == "Collines" || t == "Montagne" || t == "Haute montagne"
 }
 
 /// Python : `_troops(g, n, code)`.
 // game/cities.py, lignes 538 à 543
 pub fn _troops(g: &Game, n: &Val, code: &str) -> bool {
-    todo!()
+    if n.at("owner") != code {
+        return false;
+    }
+    if n.atb("garrison") {
+        return true;
+    }
+    g.armies.values().iter().any(|a| a.at("owner") == code && a.at("at_node") == n.at("id") && a.at("state") == "idle")
 }
 
 /// Python : `_w_incendie(g, n, gn, s)`.
 /// s : la saison (g.season()).
 // game/cities.py, lignes 546 à 547
 pub fn _w_incendie(g: &Game, n: &Val, gn: &Val, s: &str) -> f64 {
-    todo!()
+    match s {
+        "été" => 1.5,
+        "hiver" => 1.2,
+        _ => 1.0,
+    }
 }
 
 /// Python : `_w_epidemie(g, n, gn, s)`.
 // game/cities.py, lignes 550 à 551
 pub fn _w_epidemie(g: &Game, n: &Val, gn: &Val, s: &str) -> f64 {
-    todo!()
+    (match s {
+        "été" => 1.5,
+        "automne" => 1.2,
+        _ => 0.9,
+    }) * (if g.geo.ports.has(n.at("id")) { 1.3 } else { 1.0 })
 }
 
 /// Python : `_w_disette(g, n, gn, s)`.
 // game/cities.py, lignes 554 à 556
 pub fn _w_disette(g: &Game, n: &Val, gn: &Val, s: &str) -> f64 {
-    todo!()
+    let f = g.factions.at(n.at("owner"));
+    let k = match s {
+        "hiver" => 1.4,
+        "printemps" => 1.6,
+        "été" => 0.6,
+        "automne" => 0.4,
+        _ => panic!("KeyError: {}", py::repr_s(s)),
+    };
+    k * (if f.getb("famine") { 3.0 } else { 1.0 })
 }
 
 /// Python : `_w_brigands(g, n, gn, s)`.
 // game/cities.py, lignes 559 à 561
 pub fn _w_brigands(g: &Game, n: &Val, gn: &Val, s: &str) -> f64 {
-    todo!()
+    let o0 = n.ats("owner");
+    let wars = g.factions.keys().iter().any(|o| *o != o0 && g.factions.at(o).atb("alive") && g.at_war(&o0, o.s()));
+    let st = 0.8 - n.atf("stab");
+    (if gn.at("type") == "village" { 1.5 } else { 1.0 }) * (1.0 + 2.0 * if st > 0.0 { st } else { 0.0 }) * (if wars { 1.3 } else { 1.0 })
 }
 
 /// Python : `_w_foire(g, n, gn, s)`.
 // game/cities.py, lignes 564 à 567
 pub fn _w_foire(g: &Game, n: &Val, gn: &Val, s: &str) -> f64 {
-    todo!()
+    let t = gn.at("type");
+    if (t == "village" || t == "fort") && !gn.atb("spec") {
+        return 0.0;
+    }
+    match s {
+        "printemps" => 1.4,
+        "automne" => 1.5,
+        "hiver" => 0.3,
+        _ => 1.0,
+    }
 }
 
 py_const!(GRANDS, tup!["Garonne", "Dordogne"]);  // les grands fleuves, ceux de la grande crue (engine : flood_until)
@@ -642,25 +1091,48 @@ py_const!(GRANDS, tup!["Garonne", "Dordogne"]);  // les grands fleuves, ceux de 
 /// Python : `_w_crue(g, n, gn, s)`.
 // game/cities.py, lignes 573 à 580
 pub fn _w_crue(g: &Game, n: &Val, gn: &Val, s: &str) -> f64 {
-    todo!()
+    if s != "printemps" || !_river(g, n.ati("id")).iter().any(|w| GRANDS().has(&w)) {
+        return 0.0;
+    }
+    if g.flooded() {
+        return 3.0;
+    }
+    if g.flood_until > 0.0 && g.date(&Val::from(g.flood_until)).year == g.date(&Val::None).year { 0.5 } else { 0.05 }
 }
 
 /// Python : `_w_refugies(g, n, gn, s)`.
 // game/cities.py, lignes 583 à 587
 pub fn _w_refugies(g: &Game, n: &Val, gn: &Val, s: &str) -> f64 {
-    todo!()
+    let t = gn.at("type");
+    if !(t == "ville" || t == "capitale") {
+        return 0.0;
+    }
+    let o0 = n.ats("owner");
+    let wars = g.factions.keys().iter().any(|o| *o != o0 && g.factions.at(o).atb("alive") && g.at_war(&o0, o.s()));
+    if wars { 3.0 } else { 0.4 }
 }
 
 /// Python : `_w_filon(g, n, gn, s)`.
 // game/cities.py, lignes 590 à 596
 pub fn _w_filon(g: &Game, n: &Val, gn: &Val, s: &str) -> f64 {
-    todo!()
+    let bo = n.get("bo");
+    if (if bo.truthy() { bo } else { dict! {} }).getb("fer") {
+        return 0.0;
+    }
+    let mut k = if _hilly(g, n.ati("id")) { 2.0 } else { 1.0 };
+    let st = gn.get("star");
+    if gn.at("spec").has("fer") || (if st.truthy() { st } else { list![""] }).at(0) == "forge" {
+        k *= 2.0;
+    }
+    k
 }
 
 /// Python : `_w_emeute(g, n, gn, s)`.
 // game/cities.py, lignes 599 à 601
 pub fn _w_emeute(g: &Game, n: &Val, gn: &Val, s: &str) -> f64 {
-    todo!()
+    let tax = g.factions.at(n.at("owner")).get_or("tax", 0.5);
+    let st = 0.8 - n.atf("stab");
+    0.4 * (1.0 + 6.0 * if st > 0.0 { st } else { 0.0 }) * (if tax > 0.6 { 2.0 } else { 1.0 })
 }
 
 // Chaque choix : res (coût ou gain du camp, multiplié selon la taille de la place), v (effets sur la ville :
@@ -909,7 +1381,22 @@ pub fn _LOCAL_WEIGHT(nom: &str) -> fn(&Game, &Val, &Val, &str) -> f64 {
 /// `s.format(ville=…, de_ville=…, a_ville=…, riviere=…)`.
 // game/cities.py, lignes 662 à 669
 pub fn _fill(g: &Game, nid: i64, s: &str) -> String {
-    todo!()
+    let gn = g.geo.nodes.at(nid);
+    let v = gn.ats("name");
+    let a_ville = EV::_a_ville(&v);
+    let riv = py::sorted_by_key(_river(g, nid).vec(), |w| !GRANDS().has(w)); // (Libourne : la Dordogne plutôt que l'Isle)
+    let r0 = if riv.is_empty() { String::new() } else { riv[0].string() };
+    let riviere = match r0.as_str() {
+        "Garonne" => "la Garonne",
+        "Dordogne" => "la Dordogne",
+        "Isle" => "l'Isle",
+        "Lot" => "le Lot",
+        "Baïse" => "la Baïse",
+        "Midouze" => "la Midouze",
+        "Adour" => "l'Adour",
+        _ => "la rivière",
+    };
+    EV::_format(s, &[("ville", v.clone()), ("de_ville", R::de(&v)), ("a_ville", a_ville), ("riviere", riviere.to_string())])
 }
 
 /// Chaque jour, chaque camp peut connaître un événement dans une de ses places.
@@ -918,7 +1405,41 @@ pub fn _fill(g: &Game, nid: i64, s: &str) -> String {
 /// Piège : busy est un set de numéros de places (ou None) : il ne sert qu'aux tests d'appartenance.
 // game/cities.py, lignes 672 à 695
 pub fn tick(g: &mut Game) {
-    todo!()
+    let st = stats(g);
+    let busy: Val = Val::set_from(g.pending_ev.iter().filter(|p| p.get("kind") == "ville").map(|p| p.get("town")).collect());
+    for (code, f) in g.factions.items() {
+        let code = code.string();
+        if !f.atb("alive") {
+            continue;
+        }
+        if code == g.player && busy.truthy() {
+            continue; // une décision locale à la fois : le joueur n'est pas assailli
+        }
+        let mine = g.owned_nodes(&code);
+        if !mine.truthy() {
+            continue;
+        }
+        let avg = py::sum_v(mine.iter().map(|n| n.at("stab"))).f() / mine.len() as f64;
+        let wars = g.factions.keys().iter().any(|o| *o != code && g.factions.at(o).atb("alive") && g.at_war(&code, o.s()));
+        let x = 0.75 - avg;
+        let p = EV_RATE * (1.0 + 2.0 * if x > 0.0 { x } else { 0.0 }) * (if wars { 1.2 } else { 1.0 });
+        if g.rng.random() >= p {
+            continue;
+        }
+        let cands: Vec<Val> = mine
+            .iter()
+            .filter(|n| !n.atb("siege") && g.t - n.get_or("evt", -1e9).f() > CITY_GAP as f64 && !busy.has(n.at("id")))
+            .collect();
+        if cands.is_empty() {
+            continue;
+        }
+        let w: Vec<f64> = cands.iter().map(|m| TOWN_W().atf(g.geo.nodes.at(m.at("id")).at("type"))).collect();
+        let n = g.rng.choix_pondere(&cands, &w);
+        if fire(g, &code, &n, &Val::None) {
+            let key = format!("ev_{}", if code == g.player { "joueur" } else { "ia" });
+            st.set(key.as_str(), &st.get_or(key.as_str(), 0) + 1i64);
+        }
+    }
 }
 
 /// La grande crue tirée (engine.monthly) : dans un camp sur deux, une place au bord de la Garonne ou de la Dordogne
@@ -926,7 +1447,27 @@ pub fn tick(g: &mut Game) {
 /// Python : `grande_crue(g)`.
 // game/cities.py, lignes 698 à 708
 pub fn grande_crue(g: &mut Game) {
-    todo!()
+    let busy: Val = Val::set_from(g.pending_ev.iter().filter(|p| p.get("kind") == "ville").map(|p| p.get("town")).collect());
+    for (code, f) in g.factions.items() {
+        let code = code.string();
+        if !f.atb("alive") || (code == g.player && busy.truthy()) {
+            continue;
+        }
+        let bords: Vec<Val> = g
+            .owned_nodes(&code)
+            .iter()
+            .filter(|n| {
+                !n.atb("siege")
+                    && g.t - n.get_or("evt", -1e9).f() > CITY_GAP as f64
+                    && _river(g, n.ati("id")).iter().any(|w| GRANDS().has(&w))
+            })
+            .collect();
+        if !bords.is_empty() && g.rng.random() < 0.5 {
+            let w: Vec<f64> = bords.iter().map(|m| TOWN_W().atf(g.geo.nodes.at(m.at("id")).at("type"))).collect();
+            let n = g.rng.choix_pondere(&bords, &w);
+            fire(g, &code, &n, &LOCAL_BY_ID().at("crue"));
+        }
+    }
 }
 
 /// Événements possibles dans cette place, avec leur poids (saison, ordre public, bâtiments, politique).
@@ -934,14 +1475,105 @@ pub fn grande_crue(g: &mut Game) {
 /// Rend les (événement de LOCAL, poids) de poids positif, dans l'ordre de LOCAL.
 // game/cities.py, lignes 711 à 724
 pub fn weights(g: &Game, n: &Val) -> Vec<(Val, f64)> {
-    todo!()
+    let gn = g.geo.nodes.at(n.at("id"));
+    let s = g.season();
+    let mods = dict! {};
+    _add(&mods, &dict! {"ev" => bfx(n).get_or("ev", dict! {})}, 1.0);
+    _add(&mods, &dict! {"ev" => pfx(g, n).get_or("ev", dict! {})}, 1.0);
+    let mods = mods.get_or("ev", dict! {});
+    let mut out = vec![];
+    for e in LOCAL().iter() {
+        let m = 1.0 + mods.get_or(e.at("id"), 0).f();
+        let w = e.atf("w") * _LOCAL_WEIGHT(e.at("weight").s())(g, n, &gn, &s) * if m > 0.1 { m } else { 0.1 };
+        if w > 0.0 {
+            out.push((e, w));
+        }
+    }
+    out
 }
 
 /// Python : `fire(g, code, n, ev=None)`.
 /// ev : None (par défaut : tiré selon weights) ou un événement de LOCAL.
 // game/cities.py, lignes 727 à 767
 pub fn fire(g: &mut Game, code: &str, n: &Val, ev: &Val) -> bool {
-    todo!()
+    let mut ev = ev.clone();
+    if ev.is_none() {
+        let ev_w = weights(g, n);
+        if ev_w.is_empty() {
+            return false;
+        }
+        let es: Vec<Val> = ev_w.iter().map(|(e, _)| e.clone()).collect();
+        let ws: Vec<f64> = ev_w.iter().map(|(_, w)| *w).collect();
+        ev = g.rng.choix_pondere(&es, &ws);
+    }
+    let nid = n.ati("id");
+    let gn = g.geo.nodes.at(nid);
+    n.set("evt", g.t);
+    n.set("lev", ev.at("id")); // le dernier événement local, que la carte montre (incendie, foire, crue…)
+    let k = SIZE_COST().atf(gn.at("type"));
+    let (title, text) = (_fill(g, nid, ev.at("title").s()), _fill(g, nid, ev.at("text").s()));
+    let id = ev.ats("id");
+    let b0 = if ev.getb("base") {
+        let b = ev.at("base").copy();
+        b.set("nid", nid);
+        EV::soften(g, code, &id, &b)
+    } else {
+        Val::None
+    };
+    if b0.truthy() {
+        apply_local(g, code, &b0);
+    }
+    let base = if b0.truthy() { EV::_join(&describe_local(g, &b0)) } else { String::new() };
+    let mut choices: Vec<(Val, Val)> = vec![];
+    for c in ev.at("choices").iter() {
+        let v = c.get_or("v", dict! {}).copy();
+        v.set("nid", nid);
+        let fx = dict! {"ville" => v};
+        if c.getb("troops") {
+            fx.at("ville").set("troops", true);
+        }
+        if c.getb("res") {
+            fx.set("res", Val::dict_from(c.at("res").items().into_iter().map(|(r, q)| (r, Val::from(py::round(q.f() * k)))).collect()));
+        }
+        let fx = EV::soften(g, code, &id, &fx);
+        choices.push((c, fx));
+    }
+    stats(g).setdefault("quoi", dict! {}).setdefault(id.as_str(), 0);
+    stats(g).at("quoi").inc(id.as_str(), 1);
+    if code != g.player {
+        let mut ok: Vec<usize> = (0..choices.len()).filter(|&i| EV::affordable(g, code, &choices[i].1)).collect();
+        if ok.is_empty() {
+            ok = vec![choices.len() - 1];
+        }
+        let rich = g.factions.at(code).at("res").at("livres") > 1500i64;
+        let wts: Vec<f64> = ok
+            .iter()
+            .map(|&i| {
+                let r = choices[i].1.get("res");
+                let neg = (if r.truthy() { r } else { dict! {} }).get_or("livres", 0) < 0i64;
+                choices[i].0.get_or("ai", 1).f() * if rich && neg { 2.0 } else { 1.0 }
+            })
+            .collect();
+        let i = g.rng.choix_pondere(&ok, &wts);
+        EV::apply(g, code, &choices[i].1, &Val::None);
+        return true;
+    }
+    let pid = g.nid("e");
+    let until = TT::deadline(g, EV::ANSWER_TOURS, &[]);
+    let date = g.date_str(&Val::None);
+    let cv: Val = choices
+        .iter()
+        .map(|(c, fx)| dict! {"label" => c.at("label"), "fx" => fx, "desc" => EV::describe(g, code, fx, &Val::from(nid))})
+        .collect();
+    g.pending_ev.push(dict! {
+        "id" => pid, "ev" => &id, "kind" => "ville", "title" => &title, "text" => &text, "town" => nid,
+        "base" => &base, "until" => until, "date" => date, "choices" => cv
+    });
+    let suite = if !base.is_empty() { format!(" ({base})") } else { String::new() };
+    let t = format!("{title}. {text}{suite} Une décision vous attend.");
+    g.log("evenement", &t, &dict! {"x" => gn.at("x"), "y" => gn.at("y"), "who" => code, "important" => true});
+    g.alert_pause(true);
+    true
 }
 
 /// Ce choix est-il possible ? (place toujours à nous, garnison sur place si on l'envoie)
@@ -949,46 +1581,96 @@ pub fn fire(g: &mut Game, code: &str, n: &Val, ev: &Val) -> bool {
 /// v : l'effet `ville` (dict(nid, …)).
 // game/cities.py, lignes 770 à 775
 pub fn local_ok(g: &Game, code: &str, v: &Val) -> bool {
-    todo!()
+    let n = g.nodes.at(v.at("nid"));
+    if n.at("owner") != code {
+        return true; // la place est perdue : le choix ne fait plus rien, mais on peut le prendre
+    }
+    !v.getb("troops") || _troops(g, &n, code)
 }
 
 /// Taux par jour du moteur, dits par tour en tour par tour (×TOUR_DAYS), par jour en temps réel.
 /// Python : `per_k(g)`.
 // game/cities.py, lignes 778 à 780
 pub fn per_k(g: &Game) -> f64 {
-    todo!()
+    if g.tour.atb("on") { TT::TOUR_DAYS } else { 1.0 }
 }
 
 /// Python : `per_txt(g)`.
 // game/cities.py, lignes 783 à 784
 pub fn per_txt(g: &Game) -> &'static str {
-    todo!()
+    if g.tour.atb("on") { "par tour" } else { "par jour" }
 }
 
 /// Durée d'un effet d'événement local, écrite en jours dans LOCAL_EVENTS : en tours entiers (30 à 120 jours → 1 à 4).
 /// Python : `tours_of(days)`.
 // game/cities.py, lignes 787 à 789
 pub fn tours_of(days: f64) -> i64 {
-    todo!()
+    let n = py::int(days / 30.0 + 0.5);
+    if n > 1 { n } else { 1 }
 }
 
 /// Python : `apply_local(g, code, v)`.
 // game/cities.py, lignes 792 à 805
 pub fn apply_local(g: &mut Game, code: &str, v: &Val) {
-    todo!()
+    let n = g.nodes.at(v.at("nid"));
+    if n.at("owner") != code {
+        return;
+    }
+    if v.getb("pop") {
+        n.set("pop", &n.get_or("pop", 0) * &(1i64 + &v.at("pop")));
+    }
+    if v.getb("stab") {
+        n.set("stab", EV::_max(Val::from(0.0), EV::_min(Val::from(1.0), &n.at("stab") + &v.at("stab"))));
+    }
+    let tm = v.get("tm");
+    for (k, x) in (if tm.truthy() { tm } else { dict! {} }).items() {
+        let until = TT::deadline(g, tours_of(v.get_or("days", 60).f()), &[code]);
+        n.setdefault("tm", list![]).push(dict! {"k" => k, "v" => x, "until" => until});
+    }
+    let add = v.get("add");
+    for (k, x) in (if add.truthy() { add } else { dict! {} }).items() {
+        let bo = n.setdefault("bo", dict! {});
+        bo.set(&k, py::round_n((&bo.get_or(&k, 0) + &x).f(), 3));
+    }
+    g._dirty_income = true;
 }
 
 /// Python : `_pct(v)`.
 // game/cities.py, lignes 808 à 809
 pub fn _pct(v: f64) -> String {
-    todo!()
+    format!("{}{} %", if v > 0.0 { "+" } else { "−" }, py::round(v * 100.0).abs())
 }
 
 /// Python : `describe_local(g, v)`.
 /// Rend une liste de textes.
 // game/cities.py, lignes 812 à 826
 pub fn describe_local(g: &Game, v: &Val) -> Val {
-    todo!()
+    let name = g.geo.nodes.at(v.at("nid")).ats("name");
+    let out = list![];
+    if v.getb("troops") {
+        out.push("exige une garnison ou une armée au repos dans la place");
+    }
+    if v.getb("pop") {
+        out.push(format!("population {} {}", R::de(&name), _pct(v.atf("pop"))));
+    }
+    if v.getb("stab") {
+        out.push(format!("ordre public {} {}", R::de(&name), _pct(v.atf("stab"))));
+    }
+    let tm = v.get("tm");
+    for (k, x) in (if tm.truthy() { tm } else { dict! {} }).items() {
+        let n = tours_of(v.get_or("days", 60).f());
+        out.push(format!("{} {} {} pendant {}", TM_LABEL().get_or(&k, &k), R::de(&name), _pct(x.f()), R::pl(n, "tour", None)));
+    }
+    let add = v.get("add");
+    for (k, x) in (if add.truthy() { add } else { dict! {} }).items() {
+        out.push(format!(
+            "+{} {} {} à {name} (durable)",
+            _n(x.f() * per_k(g)),
+            R::RES_LABEL().get_or(&k, &k).s().to_lowercase(),
+            per_txt(g)
+        ));
+    }
+    out
 }
 
 /// Compteurs de la session (simulations) : non sauvegardés.
@@ -996,7 +1678,7 @@ pub fn describe_local(g: &Game, v: &Val) -> Val {
 /// Rend g.city_stats (le même dict).
 // game/cities.py, lignes 829 à 833
 pub fn stats(g: &Game) -> Val {
-    todo!()
+    g.city_stats.clone()
 }
 
 // ------------------------------------------------------------------ IA
@@ -1012,7 +1694,37 @@ py_const!(AI_TASTE, dict!{
 /// Python : `_ai_value(g, ai, n, chain, lvl, mult)`.
 // game/cities.py, lignes 843 à 869
 pub fn _ai_value(g: &Game, ai: &AI, n: &Val, chain: &str, lvl: i64, mult: f64) -> f64 {
-    todo!()
+    let f = g.factions.at(ai.code.as_str()); // ai.f
+    let code = ai.code.as_str();
+    let gn = g.geo.nodes.at(n.at("id"));
+    let levels = CHAINS().at(chain).at("levels");
+    let L = levels.at(lvl - 1);
+    let prev = if lvl > 1 { levels.at(lvl - 2).at("fx") } else { dict! {} };
+    let fx = Val::dict_from(L.at("fx").items().into_iter().filter(|(_, v)| v.is_num()).map(|(k, v)| (k.clone(), &v - &prev.get_or(&k, 0))).collect());
+    let x = |k: &str| fx.get_or(k, 0).f();
+    let hungry = f.at("income").get_or("vivres", 0) < 5i64 || f.getb("famine");
+    let mut val = x("livres") + x("trade");
+    val += x("vivres") * if hungry { 0.9 } else { 0.35 };
+    val += x("industrie") * 0.6 + (x("fer") + x("bois")) * 0.5;
+    val += x("recrues") * (0.4 + 0.4 * ai.pers.atf("aggr"));
+    val *= SIZE_K().atf(gn.at("type"));
+    if fx.getb("spec") && gn.getb("star") && R::SPECIALTY().has(gn.at("star").at(0)) {
+        let sp = R::SPECIALTY().at(gn.at("star").at(0));
+        let s = |k: &str| sp.get_or(k, 0).f();
+        let boost = if sp.getb("boost") { g.mod_(code, sp.at("boost").s(), 0.0) } else { 0.0 };
+        let kk = (1.0 + boost) * if gn.at("type") == "capitale" { R::SPECIALTY_CAPITAL } else { 1.0 };
+        val += x("spec") * kk * (s("livres") + 0.4 * s("vivres") + 0.5 * (s("fer") + s("bois")) + 0.6 * s("industrie") + 0.4 * s("recrues"));
+    }
+    val *= mult;
+    let t = gn.at("type");
+    val += x("stab") * (if n.atf("stab") < 0.8 { 40.0 } else { 8.0 }) + x("grow") * 1.5;
+    val += x("train") * (if t == "capitale" || t == "fort" { 3.0 } else { 1.0 }) + x("research") * 30.0;
+    val -= L.get_or("up", 0).f() - if lvl > 1 { levels.at(lvl - 2).get_or("up", 0).f() } else { 0.0 };
+    val *= AI_TASTE().get_or(ai.pers.at("tech"), dict! {}).get_or(chain, 1.0).f();
+    if chain == "marche" || chain == "quai" || chain == "specialite" {
+        val *= 0.7 + 0.5 * ai.pers.atf("trade");
+    }
+    val
 }
 
 /// Bâtir ou améliorer un bâtiment d'emplacement, là où il rapporte le plus pour ce qu'il coûte.
@@ -1022,21 +1734,119 @@ pub fn _ai_value(g: &Game, ai: &AI, n: &Val, chain: &str, lvl: i64, mult: f64) -
 /// Piège : `cands.sort(key=lambda c: -c[0])` est stable (py::sorted_by_key / Val::sort_by_key).
 // game/cities.py, lignes 872 à 913
 pub fn ai_build(g: &mut Game, ai: &mut AI, budget: f64, wars: &Val) -> f64 {
-    todo!()
+    let code = ai.code.clone();
+    let mut budget = budget;
+    if budget < 150.0 || g.t < ai._ct_clock {
+        return budget;
+    }
+    ai._ct_clock = g.t + 12.0; // un coup d'œil sur les chantiers toutes les deux semaines environ
+    let mut cands: Vec<(f64, Val, Val, Val, f64)> = vec![];
+    for n in g.owned_nodes(&code).iter() {
+        let gn = g.geo.nodes.at(n.at("id"));
+        if n.atb("siege") || n.at("queue").len() >= 2 || (wars.truthy() && ai.threat_at(g, n.ati("id"), 45.0, &Val::None, &Val::None) > 0.0) {
+            continue;
+        }
+        if gn.at("type") == "village" && !gn.atb("spec") {
+            continue; // les simples villages gardent leur emplacement (un magasin aux vivres, en guerre)
+        }
+        let mut mult: Option<f64> = None;
+        for chain in CHAIN_ORDER().iter() {
+            if chain == "depot" || (gn.at("type") == "fort" && chain != "caserne") {
+                continue; // le magasin aux vivres suit la guerre (AI.build_depot) ; une place forte loge des troupes
+            }
+            let (lvl, why) = check(g, &code, &n, chain.s());
+            if why.is_some() {
+                continue;
+            }
+            let lvl = lvl.unwrap();
+            let m = match mult {
+                Some(m) => m,
+                None => {
+                    let st = n.atf("stab");
+                    let m = g.pop_factor(&n) * (if st > 0.3 { st } else { 0.3 }) * (0.7 + 0.3 * g.assim(&n));
+                    mult = Some(m);
+                    m
+                }
+            };
+            let cost = g.build_cost(&code, &CHAINS().at(&chain).at("levels").at(lvl - 1).at("cost"));
+            let price = py::sum_v(cost.items().into_iter().map(|(k, v)| &v * &(if k == "livres" { Val::from(1) } else { Val::from(1.6) }))).f();
+            let val = _ai_value(g, ai, &n, chain.s(), lvl, m) * g.assim(&n);
+            if val > 0.0 {
+                cands.push((val / price, n.clone(), chain, cost, price));
+            }
+        }
+    }
+    let cands = py::sorted_by_key(cands, |c| -c.0);
+    let mut built = 0;
+    let slow = if ai.idle_money(g) > 0.0 { 1.0 / 4000.0 } else { 1.0 / 1500.0 }; // (un trésor qui dort attend dix ans, sinon quatre)
+    for (ratio, n, chain, cost, _price) in cands {
+        if built >= (if wars.truthy() { 1 } else { 2 }) || budget < 150.0 || ratio < slow {
+            break; // au-delà de quatre ans pour se rembourser, on attend
+        }
+        let Some(extra) = ai.provide(g, &cost, budget) else {
+            continue;
+        };
+        if slot_build(g, &code, n.ati("id"), chain.s()).0 {
+            budget -= cost.get_or("livres", 0).f() + extra;
+            built += 1;
+            let st = stats(g).setdefault("bati", dict! {});
+            st.set(code.as_str(), &st.get_or(code.as_str(), 0) + 1i64);
+        }
+    }
+    budget
 }
 
 /// Place de négoce : port, quai, vignoble ou spécialité vendue au loin.
 /// Python : `_trading(g, nid)`.
 // game/cities.py, lignes 916 à 921
 pub fn _trading(g: &Game, nid: i64) -> bool {
-    todo!()
+    let gn = g.geo.nodes.at(nid);
+    let st = gn.get("star");
+    let star = if st.truthy() { st.at(0) } else { Val::None };
+    let b = R::SPECIALTY().get_or(&star, dict! {}).get("boost");
+    gn.at("spec").has("port") || gn.at("spec").has("vin") || g.geo.ports.has(nid) || b == "port" || b == "vin"
 }
 
 /// Choisir l'orientation de chaque ville (les villages restent en équilibre), sans revenir sans cesse dessus.
 /// Python : `ai_policies(ai)`.
 // game/cities.py, lignes 924 à 954
 pub fn ai_policies(g: &mut Game, ai: &mut AI) {
-    todo!()
+    let code = ai.code.clone();
+    let f = g.factions.at(code.as_str()); // ai.f
+    let wars = ai.wars(g);
+    let viv = f.at("income").get_or("vivres", 0);
+    let rec = f.at("res").at("recrues");
+    for n in g.owned_nodes(&code).iter() {
+        let gn = g.geo.nodes.at(n.at("id"));
+        if gn.at("type") == "village" || n.atb("siege") {
+            continue;
+        }
+        let p = n.get("pol");
+        let cur = if p.truthy() && p.get("o") == code { p.at("k") } else { Val::from("equilibre") };
+        if p.truthy() && p.get("o") == code && g.t - p.atf("t") < 240.0 {
+            continue;
+        }
+        let o = R::NODE_BASE().at(gn.at("type"));
+        let typ = gn.at("type");
+        // on ne quitte une politique qu'une fois sa raison bien passée (pas d'allers-retours)
+        let k = if n.atf("stab") < (if cur == "fetes" { 0.75 } else { 0.6 }) {
+            "fetes"
+        } else if wars.truthy() && rec < (if cur == "recrutement" { 800i64 } else { 400 }) && (typ == "capitale" || typ == "ville") {
+            "recrutement"
+        } else if wars.truthy() && (typ == "fort" || ai.threat_at(g, n.ati("id"), 40.0, &Val::None, &Val::None) > 0.0) {
+            "armes"
+        } else if (viv < (if cur == "grenier" { 15i64 } else { 0 }) || f.getb("famine")) && (o.at("vivres") >= 1.3 || gn.at("spec").has("ble")) {
+            "grenier"
+        } else if _trading(g, n.ati("id")) && ai.pers.atf("trade") >= 0.5 {
+            "commerce" // les places de négoce des camps marchands
+        } else {
+            "equilibre"
+        };
+        if _set_policy(g, &n, k) {
+            let st = stats(g).setdefault("pol", dict! {});
+            st.set(k, &st.get_or(k, 0) + 1i64);
+        }
+    }
 }
 
 // ------------------------------------------------------------------ vues et sauvegardes
@@ -1045,18 +1855,73 @@ pub fn ai_policies(g: &mut Game, ai: &mut AI) {
 /// Python : `migrate(g)`.
 // game/cities.py, lignes 958 à 961
 pub fn migrate(g: &mut Game) {
-    todo!()
+    for n in g.nodes.iter() {
+        slots(&n);
+    }
 }
 
 /// Ce que le joueur voit de ses propres places : emplacements, politique, effets d'événements.
 /// Python : `node_view(g, n)`.
 // game/cities.py, lignes 964 à 978
 pub fn node_view(g: &Game, n: &Val) -> Val {
-    todo!()
+    let sl: Val = slots(n).items().into_iter().map(|(k, v)| list![k, v]).collect();
+    let d = dict! {"sl" => sl, "sn" => slot_count(g, n)};
+    let p = n.get("pol");
+    if p.truthy() && p.get("o") == n.at("owner") && (p.at("k") != "equilibre" || policy_w(g, n) < 1.0) {
+        let u = p.get("u");
+        let u = if u.truthy() { u.f() } else { TT::turn_start_after(g, p.atf("t") + POLICY_OLD_DAYS as f64) };
+        d.set("pol", list![p.at("k"), p.get_or("p", "equilibre"), py::round_n(policy_w(g, n), 2), TT::tours_left(g, u)]);
+    }
+    let tm0 = n.get("tm");
+    let tm: Vec<Val> = (if tm0.truthy() { tm0 } else { list![] }).iter().filter(|e| e.atf("until") > g.t).collect();
+    if !tm.is_empty() || n.getb("bo") {
+        let l = list![];
+        for e in &tm {
+            l.push(format!("{} {} jusqu'au {}", TM_LABEL().get_or(e.at("k"), e.at("k")), _pct(e.atf("v")), g.date_str(&e.at("until"))));
+        }
+        let bo = n.get("bo");
+        for (k, x) in (if bo.truthy() { bo } else { dict! {} }).items() {
+            l.push(format!(
+                "+{} {} {} ({})",
+                _n(x.f() * per_k(g)),
+                R::RES_LABEL().get_or(&k, &k).s().to_lowercase(),
+                per_txt(g),
+                if k == "fer" { "filon" } else { "durable" }
+            ));
+        }
+        d.set("tm", l);
+    }
+    if g.pending_ev.iter().any(|p| p.get("kind") == "ville" && p.get("town") == n.at("id")) {
+        d.set("ev", 1);
+    }
+    d
 }
 
 /// Python : `rules_payload()`.
 // game/cities.py, lignes 981 à 991
 pub fn rules_payload() -> Val {
-    todo!()
+    let chains = dict! {};
+    for (k, c) in CHAINS().items() {
+        let levels: Val = c
+            .at("levels")
+            .iter()
+            .map(|L| {
+                dict! {
+                    "name" => L.at("name"), "cost" => L.at("cost"), "days" => L.at("days"), "dev" => L.get_or("dev", 0),
+                    "tech" => L.get("tech"), "up" => L.get_or("up", 0), "txt" => fx_text(&L.at("fx"), &Val::None, false),
+                    "txtj" => fx_text(&L.at("fx"), &Val::None, true)
+                }
+            })
+            .collect();
+        chains.set(&k, dict! {"name" => c.at("name"), "icon" => c.at("icon"), "desc" => c.at("desc"), "where" => c.get("where"), "levels" => levels});
+    }
+    let spec_names = Val::dict_from(SPEC_NAMES().items().into_iter().map(|(k, v)| (k, dict! {"names" => v.at(0), "tech" => v.at(1)})).collect());
+    let policies = Val::dict_from(
+        POLICIES().items().into_iter().map(|(k, p)| (k, dict! {"label" => p.at("label"), "pro" => p.at("pro"), "con" => p.at("con")})).collect(),
+    );
+    let tech_names = Val::dict_from(R::TECH().values().into_iter().map(|t| (t.at("id"), t.at("name"))).collect());
+    dict! {
+        "slots" => SLOTS(), "size_k" => SIZE_K(), "chains" => chains, "order" => CHAIN_ORDER(), "spec_names" => spec_names,
+        "policies" => policies, "policy_order" => POLICY_ORDER(), "tech_names" => tech_names
+    }
 }
