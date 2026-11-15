@@ -1,4 +1,4 @@
-//! Porte game/tactics/units.py (SQUELETTE : les constantes et `Unit` sont portés, les autres corps sont à écrire).
+//! Porte game/tactics/units.py.
 //!
 //! Unités tactiques : une par régiment de campagne (et par compagnie de milice d'une place), plus l'état-major.
 //!
@@ -20,7 +20,6 @@
 //! `u.dec("men", p)`. Un attribut jamais posé (`id`, `side`, `men`… d'une `Unit()` nue) est une clé absente.
 //! Ses méthodes et propriétés sont les fonctions `alive`, `valid`, `size`, `to_dict`, `from_dict`, `view` de ce
 //! module ; `Unit(&kw)` la construit. Types des attributs : voir le commentaire de `Unit`.
-#![allow(unused_variables, unused_imports)] // (squelette : à retirer une fois les corps écrits)
 
 use crate::engine::Game;
 use crate::py::{self, Val};
@@ -83,7 +82,14 @@ py_const!(STATE_LABEL, dict!{"repos" => "Au repos", "marche" => "En marche", "fe
 /// Python (units.py, l. 74-79) : `def cls_of(typ)`
 /// Rend 'inf', 'cavalerie', 'artillerie', 'general' ou 'chariot'.
 pub fn cls_of(typ: &str) -> String {
-    todo!()
+    if typ == "general" || typ == "chariot" {
+        return typ.to_string();
+    }
+    if typ == "milice" {
+        return "inf".to_string();
+    }
+    let units = R::UNITS();
+    if units.has(typ) { units.at(typ).ats("cls") } else { "inf".to_string() }
 }
 
 /// Portées d'un régiment (dict de campagne ou unité tactique) : (efficace, maximale, mitraille ou None), en mètres.
@@ -95,7 +101,21 @@ pub fn cls_of(typ: &str) -> String {
 /// (ils partent tels quels au client : `range` de la vue, `por` de la fiche) ; le troisième est un `Val::Int`
 /// ou `Val::None`.
 pub fn ranges(reg: &Val) -> (i64, i64, Val) {
-    todo!()
+    let typ = reg.ats("type");
+    let arm = reg.get("arm").or(0).i();
+    let cls = cls_of(&typ);
+    if typ == "mitrailleuses" {
+        return (MIT_RANGE.0, MIT_RANGE.1, Val::None);
+    }
+    if cls == "artillerie" {
+        let (e, m, g) = ART_RANGE[0.max(arm.min(ART_RANGE.len() as i64 - 1)) as usize];
+        return (e, m, Val::from(g));
+    }
+    if cls == "cavalerie" || cls == "general" || cls == "chariot" {
+        return (CAV_RANGE.0, CAV_RANGE.1, Val::None);
+    }
+    let (e, m) = INF_RANGE[0.max(arm.min(INF_RANGE.len() as i64 - 1)) as usize];
+    (e, m, Val::None)
 }
 
 /// Distance où la justesse du feu tombe de moitié (m).
@@ -103,7 +123,13 @@ pub fn ranges(reg: &Val) -> (i64, i64, Val) {
 /// Python (units.py, l. 99-105) : `def d50(u)`
 /// u : unité (lit type, cls, arm).
 pub fn d50(u: &Val) -> i64 {
-    todo!()
+    if u.at("type") == "mitrailleuses" {
+        return MIT_D50;
+    }
+    if u.at("cls") == "inf" {
+        return INF_D50[0.max(u.ati("arm").min(INF_D50.len() as i64 - 1)) as usize];
+    }
+    CAV_D50
 }
 
 /// Part des coups qui portent à d mètres, rapportée au bout portant (1 à 0 m, moitié à D50).
@@ -111,7 +137,7 @@ pub fn d50(u: &Val) -> i64 {
 /// Python (units.py, l. 108-110) : `def precision(u, d)`
 /// u : unité ; d : distance (m). `(d / d50) ** 2` → `py::pow(…, 2.0)`.
 pub fn precision(u: &Val, d: f64) -> f64 {
-    todo!()
+    1.0 / (1.0 + py::pow(d / d50(u) as f64, 2.0))
 }
 
 pub const BOUT_K: f64 = 0.6; // « bout portant » : là où precision() vaut encore 0,6 (65 m au fusil 1777) ; canons : la mitraille
@@ -124,7 +150,12 @@ py_const!(STOPS, tup!["max", "bonne", "bout"]);
 /// u : unité. Le Python rend un int (`g or 0`, ou `e`) ou un float ; ici toujours un f64 (il ne sert qu'à des
 /// calculs et à des arrondis : fire_zones, stop_dist).
 pub fn bout_portant(u: &Val) -> f64 {
-    todo!()
+    let (e, _mx, g) = ranges(u);
+    if u.at("cls") == "artillerie" && u.at("type") != "mitrailleuses" {
+        return g.or(0).f();
+    }
+    let b = d50(u) as f64 * (1.0 / BOUT_K - 1.0).sqrt();
+    if b < e as f64 { b } else { e as f64 }
 }
 
 /// Où s'arrête une troupe qui attaque selon son profil : 'max' (95 % de la portée maximale : harcèlement de loin),
@@ -134,33 +165,102 @@ pub fn bout_portant(u: &Val) -> f64 {
 /// u : unité (`getattr(u, 'fire_mode', None)` → `u.get("fire_mode")`) ; stop : 'max', 'bonne' ou 'bout' (STOPS ;
 /// toute autre valeur vaut 'bonne').
 pub fn stop_dist(u: &Val, stop: &str) -> f64 {
-    todo!()
+    let (e, mx, _g) = ranges(u);
+    let mut want = if stop == "max" {
+        mx as f64 * 0.95
+    } else if stop == "bout" {
+        bout_portant(u) * 0.9
+    } else {
+        e as f64 * 0.9
+    };
+    if u.get("fire_mode") == "volley" {
+        // (la salve ne part qu'à 85 % de la portée efficace : battle.VOLLEY_RANGE)
+        let v = e as f64 * 0.8;
+        if v < want {
+            want = v;
+        }
+    }
+    want
 }
 
 /// Python (units.py, l. 136-145) : `def reload_time(u)`
 /// u : unité (lit type, cls, arm, xp, fat ; stats.rs l'appelle sur une `Unit` presque nue). Secondes de bataille.
 pub fn reload_time(u: &Val) -> f64 {
-    todo!()
+    let arm = || u.ati("arm");
+    let base = if u.at("type") == "mitrailleuses" {
+        MIT_RELOAD
+    } else if u.at("cls") == "artillerie" {
+        ART_RELOAD[0.max(arm().min(ART_RELOAD.len() as i64 - 1)) as usize]
+    } else if u.at("cls") == "inf" {
+        INF_RELOAD[0.max(arm().min(INF_RELOAD.len() as i64 - 1)) as usize]
+    } else {
+        CAV_RELOAD
+    };
+    base as f64 * (1.1 - 0.25 * u.atf("xp") / 100.0) * (1.0 + 0.25 * u.atf("fat") / 100.0)
 }
 
 /// Python (units.py, l. 148-149) : `def ammo0_of(cls)`
 pub fn ammo0_of(cls: &str) -> i64 {
-    todo!()
+    AMMO0().get_or(cls, 20).i()
 }
 
 /// Python (units.py, l. 152-153) : `def pieces(u)`
 /// u : unité (lit men). Pièces encore servies : 1 à PIECES.
 pub fn pieces(u: &Val) -> i64 {
-    todo!()
+    1.max(py::int((PIECES as f64 * u.atf("men") / ART_MEN as f64 - 0.2).ceil()))
 }
 
 /// (largeur, profondeur) en mètres de l'unité dans sa formation.
 ///
 /// Python (units.py, l. 156-178) : `def footprint(u)`
 /// u : unité (lit men, men_nom, form, cls). Le Python mêle int et float (`16, 16`, `(30, 60 * k)`) : ici des f64
-/// (la vue les arrondit ; seul le JSON voit « 16.0 » au lieu de « 16 »).
+/// (la vue passe par footprint_v, qui garde les types du Python : « 16 » et non « 16.0 »).
 pub fn footprint(u: &Val) -> (f64, f64) {
-    todo!()
+    let (w, d) = footprint_v(u);
+    (w.f(), d.f())
+}
+
+/// footprint avec les types du Python (16 et non 16.0) : la vue (`w`, `d`) les laisse voir. (Aide hors du socle.)
+fn footprint_v(u: &Val) -> (Val, Val) {
+    let men_nom = u.atf("men_nom");
+    let k = u.atf("men") / if men_nom > 1.0 { men_nom } else { 1.0 };
+    let k = if k > 0.25 { k } else { 0.25 };
+    let f = u.at("form");
+    let cls = u.at("cls");
+    let fv = |a: f64, b: f64| (Val::from(a), Val::from(b));
+    let iv = |a: i64, b: i64| (Val::from(a), Val::from(b));
+    if cls == "artillerie" {
+        let p = pieces(u) as f64 / PIECES as f64;
+        return if f == "batterie" { (Val::from(80.0 * p + 10.0), Val::from(30)) } else { (Val::from(30), Val::from(30.0 + 40.0 * p)) };
+    }
+    if cls == "general" {
+        return iv(16, 16);
+    }
+    if cls == "chariot" {
+        return iv(12, 24);
+    }
+    if cls == "cavalerie" {
+        return if f == "ligne" { (Val::from(100.0 * k), Val::from(15)) } else { (Val::from(30), Val::from(60.0 * k)) };
+    }
+    if f == "colonne" {
+        return (Val::from(40), Val::from(50.0 * k));
+    }
+    if f == "maisons" {
+        return iv(40, 40);
+    }
+    if f == "carre" {
+        let s = 45.0 * k.sqrt();
+        return fv(s, s);
+    }
+    if f == "tirailleurs" {
+        return (Val::from(220.0 * k), Val::from(30));
+    }
+    (Val::from(120.0 * k), Val::from(12))
+}
+
+/// `round(v, nd)` de Python : un int reste un int, un float est arrondi (`py::round_n`). (Aide hors du socle.)
+fn round_v(v: &Val, nd: i32) -> Val {
+    if v.is_int() { v.clone() } else { Val::from(py::round_n(v.f(), nd)) }
 }
 
 py_const!(SLOTS, tup!["id", "side", "owner", "type", "cls", "light", "name", "men", "men0", "men_nom", "xp", "xp0", "morale",
@@ -255,7 +355,7 @@ pub fn Unit(kw: &Val) -> Val {
 /// Python (units.py, l. 239-241) : `def alive(self)`
 /// Propriété `u.alive` → `U::alive(&u)`.
 pub fn alive(u: &Val) -> bool {
-    todo!()
+    u.at("state") != "hors" && u.atf("men") >= 1.0
 }
 
 /// En état de combattre (ni en déroute, ni hors de combat) ; l'état-major ne compte pas.
@@ -263,13 +363,14 @@ pub fn alive(u: &Val) -> bool {
 /// Python (units.py, l. 243-246) : `def valid(self)`
 /// Propriété `u.valid` → `U::valid(&u)`.
 pub fn valid(u: &Val) -> bool {
-    todo!()
+    let (state, cls) = (u.at("state"), u.at("cls"));
+    state != "hors" && state != "deroute" && u.atf("men") >= 1.0 && cls != "general" && cls != "chariot"
 }
 
 /// Python (units.py, l. 248-249) : `def size(self)`
 /// `u.size()` → `U::size(&u)` : footprint(u).
 pub fn size(u: &Val) -> (f64, f64) {
-    todo!()
+    footprint(u)
 }
 
 /// Python (units.py, l. 251-254) : `def to_dict(self)`
@@ -277,14 +378,29 @@ pub fn size(u: &Val) -> (f64, f64) {
 /// jamais posé : AttributeError en Python, KeyError ici), `path` en listes [x, y] arrondies au dixième ; les
 /// autres valeurs sont les mêmes objets que ceux de l'unité (order, goal, gen).
 pub fn to_dict(u: &Val) -> Val {
-    todo!()
+    let d = Val::dict();
+    for k in SLOTS().iter() {
+        d.set(&k, u.at(&k));
+    }
+    d.set("path", u.at("path").iter().map(|p| list![round_v(&p.at(0), 1), round_v(&p.at(1), 1)]).collect::<Val>());
+    d
 }
 
 /// Python (units.py, l. 256-265) : `def from_dict(cls, d)`
 /// `Unit.from_dict(d)` → `U::from_dict(&d)`. d : dict d'une sauvegarde. Rend une unité neuve (`Unit(&dict!{})`
 /// puis les clés de SLOTS présentes dans d ; `path` en tuples, `goal` recopié en liste).
 pub fn from_dict(d: &Val) -> Val {
-    todo!()
+    let u = Unit(&dict! {});
+    for k in SLOTS().iter() {
+        if d.has(&k) {
+            u.set(&k, d.at(&k));
+        }
+    }
+    u.set("path", d.get("path").or(list![]).iter().map(|p| p.to_tuple()).collect::<Val>());
+    if u.at("goal").is_some() {
+        u.set("goal", u.at("goal").to_list());
+    }
+    u
 }
 
 /// Ce que le client reçoit de cette unité (contrat, § 6).
@@ -293,7 +409,58 @@ pub fn from_dict(d: &Val) -> Val {
 /// `u.view(mine, seen)` → `U::view(&u, mine, seen)`. mine : l'unité est à qui regarde (ou pas de camp) ;
 /// seen_by_foe : l'ennemi la voit (`u.seen`). Rend un dict pour le client ; `range` : [e, m] + [g] si g (entiers).
 pub fn view(u: &Val, mine: bool, seen_by_foe: bool) -> Val {
-    todo!()
+    let (w, d) = footprint_v(u);
+    let (e, m, g) = ranges(u);
+    let range = list![e, m];
+    if g.truthy() {
+        range.push(&g);
+    }
+    let out = dict! {
+        "id" => u.at("id"), "side" => u.at("side"), "type" => u.at("type"), "cls" => u.at("cls"), "name" => u.at("name"),
+        "men" => py::round(u.atf("men")), "men0" => py::round(u.atf("men0")), "x" => round_v(&u.at("x"), 1),
+        "y" => round_v(&u.at("y"), 1), "dir" => round_v(&u.at("dir"), 3), "form" => u.at("form"), "state" => u.at("state"),
+        "morale" => py::round(u.atf("morale")), "fat" => py::round(u.atf("fat")), "xp" => py::round(u.atf("xp")),
+        "ammo" => round_v(&u.at("ammo"), 1), "ammo0" => u.at("ammo0"), "arm" => u.at("arm"), "range" => range,
+        "w" => round_v(&w, 1), "d" => round_v(&d, 1), "owner" => u.at("owner"), "group" => u.at("group"),
+        "gname" => u.at("gname"),
+    };
+    let art = u.at("cls") == "artillerie";
+    if art {
+        out.set("pieces", pieces(u));
+    }
+    if mine {
+        out.set("seen", seen_by_foe);
+        out.set("fire", u.at("fire_mode"));
+        out.set("stop", u.at("stop"));
+        if art {
+            out.set("shot", u.at("shot"));
+            out.set("prio", u.at("prio"));
+        }
+        if u.atb("target") {
+            out.set("target", u.at("target"));
+        }
+        if u.atb("order") {
+            out.set("order", u.at("order").get("kind"));
+        }
+        if u.atf("busy") > 0.0 {
+            out.set("busy", py::round(u.atf("busy")));
+        }
+        let path = u.at("path");
+        if path.truthy() {
+            let pts: Val = path.slice(None, Some(12)).iter().map(|p| list![py::round(p.at(0).f()), py::round(p.at(1).f())]).collect();
+            out.set("path", pts);
+        }
+        if u.at("state") == "deroute" {
+            out.set("halt", u.atb("halt")); // (les fuyards se sont arrêtés : on les rallie)
+        }
+    }
+    if u.atb("gen") {
+        out.set("gen", u.at("gen"));
+    }
+    if !u.atb("flag") {
+        out.set("flag", false); // (drapeau pris : le client ne dessine plus le porte-drapeau)
+    }
+    out
 }
 
 // de 1760 à 1860, les régiments de cavalerie sont tour à tour dragons (habit vert : web/js/battle/formes.js, uniform),
@@ -307,7 +474,23 @@ py_const!(CAV_NAMES, tup!["dragons", "ch. à cheval", "hussards"]);
 /// (texte ; `owner in g.factions`) ; typ : type de troupe ; idx : rang (1, 2, …).
 /// Lit `g.factions`, `g.unit_name(owner, typ)[1]` et `g.date().year` (engine).
 pub fn unit_name(g: Option<&Game>, owner: &Val, typ: &str, idx: i64) -> String {
-    todo!()
+    if typ == "general" {
+        return "État-major".to_string();
+    }
+    let mut short = match g {
+        Some(g) if g.factions.has(owner) => g.unit_name(owner.s(), typ).1,
+        _ => {
+            let units = R::UNITS();
+            if units.has(typ) { units.at(typ).ats("short") } else { "Milice".to_string() }
+        }
+    };
+    if let Some(g) = g {
+        if typ == "cavalerie" && (1760..1860).contains(&g.date(&Val::None).year) {
+            let noms = CAV_NAMES();
+            short = noms.at(py::mod_i(idx - 1, noms.len() as i64)).string();
+        }
+    }
+    format!("{idx}{} {short}", if idx == 1 { "er" } else { "e" })
 }
 
 /// Unité tactique tirée d'un régiment de campagne (munitions et fatigue reprises de la campagne).
@@ -317,21 +500,46 @@ pub fn unit_name(g: Option<&Game>, owner: &Val, typ: &str, idx: i64) -> String {
 /// de l'armée ou None (défaut None) ; src : 'reg' (défaut), 'garnison', 'rempart' ; nid : place ou None (défaut
 /// None) ; ctrl : 'ia' (défaut) ou 'joueur'. Rend l'unité (`Unit(&dict!{…})`, x = y = 0.0).
 pub fn from_reg(reg: &Val, side: i64, owner: &Val, name: &str, army: &Val, src: &str, nid: &Val, ctrl: &str) -> Val {
-    todo!()
+    let typ = reg.ats("type");
+    let cls = cls_of(&typ);
+    let a0 = ammo0_of(&cls);
+    let units = R::UNITS();
+    let nom = if units.has(&typ) { py::float_v(&units.at(&typ).at("men")) } else { 300.0 };
+    let light = units.get_or(&typ, Val::dict()).get("light").truthy();
+    let form = if cls == "artillerie" { "attelee" } else if light { "tirailleurs" } else { "ligne" };
+    let n = py::float_v(&reg.at("n"));
+    let xp = py::float_v(&reg.get_or("xp", 0));
+    let morale = py::float_v(&reg.get_or("morale", 70));
+    Unit(&dict! {"id" => reg.at("id"), "side" => side, "owner" => owner, "type" => &typ, "cls" => &cls, "light" => light,
+        "name" => name, "men" => n, "men0" => n, "men_nom" => nom, "xp" => xp, "xp0" => xp, "morale" => morale,
+        "morale0" => morale, "fat" => py::float_v(&reg.get_or("fat", 0.0)),
+        "ammo" => (a0 * reg.get_or("ammo", 100.0)) / 100.0, "ammo0" => a0, "arm" => py::int_v(&reg.get("arm").or(0)),
+        "x" => 0.0, "y" => 0.0, "form" => form, "army" => army, "src" => src, "nid" => nid, "ctrl" => ctrl})
 }
 
 /// Python (units.py, l. 335-339) : `def milice(uid, side, owner, men, morale, arm, name, nid, ctrl='ia')`
 /// uid : id de l'unité (texte 'm…') ; arm : génération d'armes de l'infanterie du camp ; ctrl : 'ia' par défaut.
 /// Rend l'unité.
 pub fn milice(uid: &Val, side: i64, owner: &Val, men: f64, morale: f64, arm: i64, name: &str, nid: &Val, ctrl: &str) -> Val {
-    todo!()
+    let a0 = AMMO0().ati("inf");
+    Unit(&dict! {"id" => uid, "side" => side, "owner" => owner, "type" => "milice", "cls" => "inf", "name" => name,
+        "men" => men, "men0" => men, "men_nom" => 300.0, "xp" => 10.0, "xp0" => 10.0, "morale" => morale,
+        "morale0" => morale, "ammo" => a0 as f64, "ammo0" => a0, "arm" => arm, "form" => "ligne", "src" => "milice",
+        "nid" => nid, "ctrl" => ctrl})
 }
 
 /// Python (units.py, l. 342-347) : `def general(uid, side, owner, gen, army, ctrl='ia')`
 /// gen : le général de campagne (dict : name, trait, lvl) ; army : id de son armée ; ctrl : 'ia' par défaut.
 /// Rend l'unité d'état-major (son `gen` : dict {name, trait, lvl, rank}, rank tiré de R::GENERAL_RANKS()).
 pub fn general(uid: &Val, side: i64, owner: &Val, gen: &Val, army: &Val, ctrl: &str) -> Val {
-    todo!()
+    let ranks = R::GENERAL_RANKS();
+    let lvl = gen.get_or("lvl", 1);
+    let i = 0.max((ranks.len() as i64 - 1).min(lvl.i() - 1));
+    Unit(&dict! {"id" => uid, "side" => side, "owner" => owner, "type" => "general", "cls" => "general",
+        "name" => format!("État-major {}", gen.get_or("name", "")).trim().to_string(),
+        "men" => 30.0, "men0" => 30.0, "men_nom" => 30.0, "xp" => 50.0, "xp0" => 50.0, "morale" => 90.0, "morale0" => 90.0,
+        "ammo" => 20.0, "ammo0" => 20, "arm" => 0, "form" => "colonne", "src" => "general", "army" => army, "ctrl" => ctrl,
+        "gen" => dict! {"name" => gen.get("name"), "trait" => gen.get("trait"), "lvl" => &lvl, "rank" => ranks.at(i)}})
 }
 
 /// Chariot de munitions d'une armée : recomplète les régiments proches ; se capture ou se détruit.
@@ -340,7 +548,9 @@ pub fn general(uid: &Val, side: i64, owner: &Val, gen: &Val, army: &Val, ctrl: &
 /// Python (units.py, l. 350-355) : `def wagon(uid, side, owner, army, name, ctrl='ia')`
 /// ctrl : 'ia' par défaut. Rend l'unité.
 pub fn wagon(uid: &Val, side: i64, owner: &Val, army: &Val, name: &str, ctrl: &str) -> Val {
-    todo!()
+    Unit(&dict! {"id" => uid, "side" => side, "owner" => owner, "type" => "chariot", "cls" => "chariot", "name" => name,
+        "men" => 20.0, "men0" => 20.0, "men_nom" => 20.0, "xp" => 0.0, "xp0" => 0.0, "morale" => 60.0, "morale0" => 60.0,
+        "ammo" => 100.0, "ammo0" => 100, "arm" => 0, "form" => "colonne", "src" => "chariot", "army" => army, "ctrl" => ctrl})
 }
 
 #[cfg(test)]
