@@ -52,6 +52,30 @@ voies navigables et côtes au-delà du Sud-Ouest, vérifier la fluidité sur iPa
 - Pays d'époque (Angleterre, Espagne, Portugal, Prusse, Autriche, Russie, Empire ottoman, Provinces-Unies, États
   italiens, Suède, Maroc, régences d'Alger, de Tunis…) et leurs villes principales.
 - Échelle à trancher : 17 millions de cases à 1 km, c'est trop pour un iPad ou un Raspberry.
+- **Villes : les 25 plus grandes de chaque pays** (demande du 15/11/2026), capitale comprise, avec leur population
+  vers 1790 (l'année des données du mode France). Exemple, la France, d'après les populations déjà dans le jeu
+  (`places_france.json`, et `places.rs` pour le Sud-Ouest) :
+
+  | # | Ville | Habitants | # | Ville | Habitants |
+  |---|---|---|---|---|---|
+  | 1 | Paris (capitale) | 600 000 | 14 | Metz | 36 000 |
+  | 2 | Lyon | 145 000 | 15 | Angers | 33 000 |
+  | 3 | Bordeaux | 110 000 | 16 | Montpellier | 32 000 |
+  | 4 | Marseille | 106 000 | 17 | Caen | 31 000 |
+  | 5 | Nantes | 80 000 | 18 | Reims | 31 000 |
+  | 6 | Rouen | 72 000 | 19 | Brest | 30 000 |
+  | 7 | Lille | 62 000 | 20 | Rennes | 30 000 |
+  | 8 | Toulouse | 52 000 | 21 | Nancy | 30 000 |
+  | 9 | Versailles | 51 000 | 22 | Besançon | 28 000 |
+  | 10 | Strasbourg | 49 000 | 23 | Toulon | 28 000 |
+  | 11 | Orléans | 48 000 | 24 | Troyes | 26 000 |
+  | 12 | Nîmes | 41 000 | 25 | Avignon (papale jusqu'en 1791) | 26 000 |
+  | 13 | Amiens | 40 000 | | | |
+
+  À corriger au passage dans le mode France : quelques places ont gardé une population d'aujourd'hui réduite au lieu
+  d'un chiffre de 1790, et passeraient sinon devant ces villes : Nice (114 476 ; comté de Nice, savoyard jusqu'en
+  1792), Annecy (42 277 ; Savoie), Saint-Denis (47 705), Boulogne-Billancourt, Argenteuil, Mulhouse (république
+  alliée des Suisses jusqu'en 1798), Tourcoing, Aulnay-sous-Bois.
 
 ## Risques
 
