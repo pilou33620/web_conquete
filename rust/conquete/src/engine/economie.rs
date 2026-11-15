@@ -177,11 +177,6 @@ impl Game {
         let season = self.season();
         self.compute_blockades();
         let (nb, front) = self.frontieres();
-        // (les places de chaque camp en un seul passage : toute la France a 2 000 places et 89 camps)
-        let mut par_camp: HashMap<String, Vec<Val>> = HashMap::new();
-        for n in self.nodes.iter() {
-            par_camp.entry(n.ats("owner")).or_default().push(n);
-        }
         for (code_v, f) in self.factions.items() {
             let code = code_v.s();
             if !f.atb("alive") {
@@ -190,7 +185,7 @@ impl Game {
             let (tb, cov) = self.tools_bonus(code);
             let ai = 1.0 + self.mod_(code, "ai_income", 0.0);
             let tot = dict! {"livres" => 0.0, "vivres" => 0.0, "recrues" => 0.0, "industrie" => 0.0, "fer" => 0.0, "bois" => 0.0};
-            let own = par_camp.get(code).cloned().unwrap_or_default();
+            let own = self.owned(code); // (relevées d'un seul passage : voir Proprios)
             let mut food0 = R::SEASON_FOOD().atf(&season);
             if season == "hiver" {
                 food0 += self.mod_(code, "winter_food", 0.0);
