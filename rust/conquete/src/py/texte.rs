@@ -15,6 +15,7 @@ pub fn repr_f(x: f64) -> String {
     let (mantisse, exp) = e.split_once('e').unwrap();
     let chiffres: String = mantisse.chars().filter(|c| *c != '.').collect();
     let decpt: i32 = exp.parse::<i32>().unwrap() + 1; // rang de la virgule dans les chiffres
+    let (chiffres, decpt) = moitie_au_pair(x.abs(), chiffres, decpt);
     let n = chiffres.len() as i32;
     let corps = if decpt <= -4 || decpt > 16 {
         let e10 = decpt - 1;
@@ -32,6 +33,46 @@ pub fn repr_f(x: f64) -> String {
     } else {
         corps
     }
+}
+
+/// Quand x tombe exactement à mi-chemin de deux écritures les plus courtes (0.69455718994140625 entre …062 et
+/// …063), Python prend celle qui finit par un chiffre pair, Rust l'autre : on refait le choix de Python.
+/// Cela n'arrive qu'à un flottant de peu de bits (une valeur venue d'un `array('f')`, une fraction de 2^k).
+fn moitie_au_pair(x: f64, chiffres: String, decpt: i32) -> (String, i32) {
+    let n = chiffres.len();
+    if n < 15 {
+        return (chiffres, decpt);
+    }
+    // x = m · 2^-f exactement, m impair : son écriture décimale exacte est m · 5^f, avec f décimales
+    let bits = x.to_bits();
+    let (e, frac) = (((bits >> 52) & 0x7ff) as i32, bits & ((1u64 << 52) - 1));
+    if e == 0 {
+        return (chiffres, decpt);
+    }
+    let (mut m, mut f) = (frac | (1u64 << 52), 1075 - e);
+    while m & 1 == 0 {
+        m >>= 1;
+        f -= 1;
+    }
+    if !(1..=27).contains(&f) {
+        return (chiffres, decpt);
+    }
+    let exact = m as u128 * 5u128.pow(f as u32);
+    if exact.to_string().len() != n + 1 {
+        return (chiffres, decpt); // pas à mi-chemin : l'écriture exacte n'a pas juste un chiffre de plus
+    }
+    let t = exact / 10;
+    let t = if t & 1 == 1 { t + 1 } else { t };
+    let mut c = t.to_string();
+    let dp = decpt + (c.len() - n) as i32;
+    while c.len() > 1 && c.ends_with('0') {
+        c.pop();
+    }
+    // (sous une puissance de 2, l'écart d'en bas est moitié moindre : l'écriture paire peut ne pas relire x)
+    if format!("0.{c}e{dp}").parse::<f64>() != Ok(x) {
+        return (chiffres, decpt);
+    }
+    (c, dp)
 }
 
 /// `repr(s)` d'un texte : entre apostrophes (entre guillemets s'il contient une apostrophe et pas de guillemet).

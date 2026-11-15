@@ -33,7 +33,10 @@ xs = [0.5, 1.5, 2.5, -0.5, -1.5, 2.675, 1.005, 0.125, 1e-9, 123456.789, -2.5, 3.
 xs += [g.uniform(-1000, 1000) for _ in range(300)] + [g.random() * 10 ** g.randint(-8, 12) for _ in range(300)]
 xs += [round(g.uniform(0, 50), 1) + 0.05 for _ in range(100)] + [k / 8 for k in range(-40, 40)]
 ref['round'] = [[x, round(x) if abs(x) < 1e15 else 0, round(x, 1), round(x, 2), round(x, 3), round(x, -1) if abs(x) < 1e15 else 0.0] for x in xs]
-ref['repr'] = [[x, repr(x)] for x in xs + [0.0, -0.0, 1e16, 1e15, 1e-4, 1e-5, 123456789012345678.0, 0.1, 1 / 3, 2.0 ** 70, 1.5e-7]]
+import struct
+f32 = [struct.unpack('f', struct.pack('f', g.uniform(-1, 1) * 10 ** g.randint(-3, 4)))[0] for _ in range(3000)]
+dya = [g.randint(1, 1 << g.randint(1, 53)) / 2.0 ** g.randint(0, 60) for _ in range(3000)]
+ref['repr'] = [[x, repr(x)] for x in xs + f32 + dya + [0.69455718994140625, 0.0, -0.0, 1e16, 1e15, 1e-4, 1e-5, 123456789012345678.0, 0.1, 1 / 3, 2.0 ** 70, 1.5e-7]]
 
 sommes = []
 for _ in range(200):
