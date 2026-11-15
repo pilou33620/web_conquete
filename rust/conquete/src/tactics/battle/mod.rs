@@ -1,6 +1,6 @@
 //! Porte game/tactics/battle.py, lignes 1 à 523 : l'aide-mémoire, les constantes, les fonctions du module, la classe
 //! `TacticalBattle` (ses attributs) et sa création (`__init__` → `TacticalBattle::new`).
-//! SQUELETTE : les constantes et le struct sont portés, les corps sont à écrire (`todo!()`).
+//! (Les autres parties ci-dessous peuvent être encore à porter : le `allow` plus bas reste pour elles.)
 //!
 //! Les méthodes sont réparties, dans l'ordre du Python, entre :
 //! - `aides.rs`  (l. 525-1097)  : zones et bords ; terrain : aides ; unités : aides ; journal et effets ;
@@ -280,7 +280,7 @@ pub const PIET_MAX: i64 = 200000; // taille au plus de l'image de la boue (data 
 /// Python (battle.py, l. 241-243) : `def valid_piet(v)`
 /// v : ce qu'envoie le client (n'importe quelle valeur ; `len(v)` : en caractères, `Val::len`).
 pub fn valid_piet(v: &Val) -> bool {
-    todo!()
+    v.is_str() && v.s().starts_with("data:image/png;base64,") && v.len() as i64 <= PIET_MAX
 }
 
 py_const!(HEIGHT, dict!{"inf" => 2.5, "artillerie" => 3.0, "cavalerie" => 3.5, "general" => 3.5, "chariot" => 3.0}); // canons : officiers à cheval, caissons
@@ -468,7 +468,13 @@ py_const!(FORM_TIME, dict!{"ligne" => 50, "colonne" => 40, "carre" => 60, "tirai
 /// Python (battle.py, l. 386-393) : `def grape_k(d, grape)`
 /// d : distance (m) ; grape : portée de mitraille (m ; l'entier de units::ranges, `as f64`).
 pub fn grape_k(d: f64, grape: f64) -> f64 {
-    todo!()
+    let k = 0.3 * grape / if d > 1.0 { d } else { 1.0 };
+    let mut k = if k < 1.0 { k } else { 1.0 };
+    if d < GRAPE_CLOSE {
+        let m = 1.0 + (GRAPE_CLOSE - d) / 100.0;
+        k *= if m < GRAPE_POINT { m } else { GRAPE_POINT };
+    }
+    k
 }
 
 /// Le boulet perd vite en justesse avec la distance : plein effet jusqu'au quart de la portée efficace, à peu près
@@ -477,7 +483,9 @@ pub fn grape_k(d: f64, grape: f64) -> f64 {
 /// Python (battle.py, l. 396-399) : `def ball_k(d, e)`
 /// d : distance (m) ; e : portée efficace (m).
 pub fn ball_k(d: f64, e: f64) -> f64 {
-    todo!()
+    let v = 1.2 - 0.75 * d / if e > 1.0 { e } else { 1.0 };
+    let v = if v > 0.12 { v } else { 0.12 };
+    if v < 1.0 { v } else { 1.0 }
 }
 
 /// Zones de tir d'une unité, pour le client (vue de mes unités) : [[clé, de, à (m), effet], ...], clé 'bout' (ou
@@ -487,25 +495,49 @@ pub fn ball_k(d: f64, e: f64) -> f64 {
 /// Python (battle.py, l. 402-420) : `def fire_zones(u)`
 /// u : unité. Rend une liste de listes [clé (texte), de (entier), à (entier), effet (flottant, 3 décimales)].
 pub fn fire_zones(u: &Val) -> Val {
-    todo!()
+    let (e, mx, g) = U::ranges(u);
+    let (e, mx) = (e as f64, mx as f64);
+    let b = U::bout_portant(u);
+    let canon = u.at("cls") == "artillerie" && u.at("type") != "mitrailleuses";
+    let eff = |d: f64| -> f64 {
+        if canon {
+            if g.truthy() && d <= g.f() {
+                return P_MITRAILLE * grape_k(d, g.f()) * VUL_GRAPE().atf("ligne");
+            }
+            return P_BOULET * ball_k(d, e) * VUL_BALL().atf("ligne");
+        }
+        U::precision(u, d)
+    };
+    let first = if canon { "mitraille" } else { "bout" };
+    let zs: Vec<(&str, f64, f64)> = [(first, 0.0, b), ("efficace", b, e), ("longue", e, mx)].into_iter().filter(|z| z.2 > z.1).collect();
+    let rf = eff((zs[0].1 + zs[0].2) / 2.0);
+    zs.iter().map(|&(k, a, z)| list![k, py::round(a), py::round(z), py::round_n(eff((a + z) / 2.0) / rf, 3)]).collect()
 }
 
 /// Python (battle.py, l. 423-424) : `def ang_diff(a, b)`
 /// Écart entre deux angles, de 0 à π. Le `%` de Python → `py::mod_f`.
 pub fn ang_diff(a: f64, b: f64) -> f64 {
-    todo!()
+    (py::mod_f(a - b + std::f64::consts::PI, 2.0 * std::f64::consts::PI) - std::f64::consts::PI).abs()
 }
 
 /// Python (battle.py, l. 427-429) : `def fmt_hour(clock)`
 /// clock : secondes de bataille (0 = START_H). Rend « 8 h 05 » (`//` et `%` : `py::floordiv_i`, `py::mod_i`).
 pub fn fmt_hour(clock: f64) -> String {
-    todo!()
+    let m = py::int(START_H * 60.0 + clock / 60.0);
+    format!("{} h {:02}", py::floordiv_i(m, 60), py::mod_i(m, 60))
 }
 
 /// Python (battle.py, l. 432-437) : `def move_class(u)`
 /// u : unité. Rend 'art', 'cav', 'light' ou 'inf' (les clés de COST et de FCOST_K).
 pub fn move_class(u: &Val) -> &'static str {
-    todo!()
+    let cls = u.at("cls");
+    if cls == "artillerie" || cls == "chariot" {
+        return "art";
+    }
+    if cls == "cavalerie" || cls == "general" {
+        return "cav";
+    }
+    if u.atb("light") { "light" } else { "inf" }
 }
 
 /// Une table de coûts de marche (`costs`) : une case par numéro, `None` infranchissable ; partagée, jamais modifiée
@@ -653,6 +685,117 @@ impl TacticalBattle {
     /// `Random::new(seed ^ 0x3C7E)` à part pour le temps (`random()` seulement si WX_CHANGE a ce temps, puis
     /// `uniform`, puis `choice`). `self._zones()` à la fin.
     pub fn new(geo: Rc<GeoMap>, spec: &Val, units: &Val, ai_sides: &Val) -> TacticalBattle {
-        todo!()
+        let map = TR::generate(&geo, spec);
+    let units = units.to_list();
+    let by_id = Val::dict();
+    for u in units.iter() {
+        by_id.set(u.at("id"), &u);
+    }
+    let chaume = Val::new_set();
+    for b in map.buildings.iter() {
+        if b.get("toit") == "chaume" {
+            chaume.push(TR::cell_of(b.atf("x"), b.atf("y")));
+        }
+    }
+    let mut tb = TacticalBattle {
+        spec: spec.clone(),
+        bid: spec.ats("bid"),
+        geo: geo.clone(),
+        map,
+        weather: spec.get_or("weather", "soleil").string(),
+        season: spec.get_or("season", "été").string(),
+        difficulty: spec.get_or("difficulty", "normal").string(),
+        me: spec.get("me"), // camp du joueur (None : bataille entre IA)
+        units,
+        by_id,
+        phase: "deploiement".to_string(),
+        clock: 0.0,
+        speed: 1,
+        seq: 0,
+        fx: list![],
+        logs: list![],
+        result: Val::None,
+        ai_sides: ai_sides.to_list(),
+        seen_by: list![Val::new_set(), Val::new_set()],
+        withdrawing: list![false, false],
+        withdraw_t: list![0.0, 0.0],
+        hold_t: 0.0,
+        siege_t: Val::None,                // heure du premier coup des canons de l'assaillant sur le rempart
+        prisoners: list![0.0, 0.0],        // hommes de ce camp faits prisonniers
+        ai_mem: Val::dict(),               // mémoire de l'IA (types JSON seulement : enregistrée avec la bataille)
+        accel: false,                      // « Finir automatiquement » : les officiers jouent la suite en accéléré…
+        accel_ids: list![],                // … avec ces unités du joueur (rendues s'il reprend le commandement)…
+        accel_t: 0.0,                      // … depuis cette heure de bataille
+        replay: Val::None,                 // « Donner mes ordres » : la bataille défile, réglée par bridge (orders.py)…
+        ask: Val::None,                    // … et s'arrête au moment décisif, en attendant la réponse du joueur
+        _acc: 0.0,
+        _vis_t: -99.0,
+        _ai_t: -99.0,
+        _cost_cache: HashMap::new(),
+        _path_cache: HashMap::new(),
+        _astar_left: 6,
+        _los_cache: HashMap::new(),
+        pound: Val::dict(),                // coups encaissés par secteur de l'enceinte (canons de l'assaillant)
+        breaches: list![],                 // brèches ouvertes pendant la bataille : [mur, x, y, rayon]
+        breach_t: list![],                 // … et quand : [heure de bataille (s), secteur] (journal des batailles)
+        piet: Val::None,                   // la boue laissée par les troupes (image PNG du navigateur, SPEC-SUITE F8)
+        bati: vec![0u8; N as usize],       // état de chaque case bâtie (BATI_*) : 0 intacte, 1 touchée, 2 feu, 3 ruine
+        bati_log: list![],                 // … ses changements : [seq, case, état, heure de bataille (s)]
+        barr: list![],                     // barricades dressées : {u: troupe, s: 'v' ville, 'b' abattis, None terre,
+                                           // pts: [[x, y], [x, y]], c: [[case, type d'avant], …]}
+        barr_log: list![],                 // … leurs cases posées ou renversées : [seq, case, type, type d'avant]
+        barr_prev: Val::dict(),            // cases de barricade debout : type d'avant
+        feu: Val::dict(),                  // cases en feu : heure où le feu a pris
+        _feu_t: -99.0,
+        chaume,
+        rng: Random::new(0), // (posé plus bas, à sa place dans l'ordre du Python)
+        wind: Val::None,
+        dusk: 0.0,
+        light: 1.0,
+        smoke: vec![0.0; (SMOKE_COLS * SMOKE_ROWS) as usize],
+        _smoke_on: false,
+        wx_at: Val::None,
+        wx_next: Val::None,
+        _wx_fire: 0.0,
+        edges: Val::None,
+        zones: Val::None,
+        ai_zones: Val::None,
+        _gens: Val::None,
+        _traits: Val::None,
+        winner: Val::None,
+        disengage: Val::None,
+        why: Val::None,
+    };
+    // la ville garde les ruines des combats passés (nodes[].deg) : autant de maisons en ruine dès le début
+    let deg = spec.get("place").or(Val::dict()).get_or("deg", 0.0);
+    if deg.truthy() {
+        // (par quartiers, comme l'incendie les a pris : un tirage par îlot de 80 m, un peu de hasard par maison)
+        let cs = tb.cases_ville();
+        let sd = spec.ati("seed");
+        let cs = py::sorted_by_key(cs, |&c| 0.7 * TR::_hash((c % COLS) / 4, (c / COLS) / 4, sd) + 0.3 * TR::_hash(c, 7, sd));
+        let n = py::round(deg.f() * cs.len() as f64).clamp(0, cs.len() as i64) as usize;
+        for &c in &cs[..n] {
+            tb.bati[c as usize] = 3;
+        }
+    }
+    let seed = spec.ati("seed");
+    let mut rng = Random::new(seed ^ 0x5A5A);
+    let wa = rng.random() * 6.283;
+    tb.rng = rng;
+    tb.wind = list![py::round_n(wa.cos(), 2), py::round_n(wa.sin(), 2)];
+    // (h_off : « Donner mes ordres », l'heure de l'attaque ; l'horloge part toujours de 0, l'heure affichée et le
+    // crépuscule glissent d'autant)
+    tb.dusk = (DUSK().get_or(tb.season.as_str(), 19.0).f() - START_H) * 3600.0 - spec.get_or("h_off", 0.0).f();
+    tb.light = 1.0;
+    // (son propre hasard : le reste de la bataille se tire comme avant)
+    let mut wr = Random::new(seed ^ 0x3C7E);
+    let ch = WX_CHANGE().get(tb.weather.as_str());
+    if ch.truthy() && wr.random() < ch.at(0).f() {
+        tb.wx_at = Val::from(wr.uniform(ch.at(1).f(), ch.at(2).f()) * 3600.0);
+        tb.wx_next = wr.choice(&ch.at(3).vec());
+    }
+    tb._zones();
+    tb._wx_fire = 1.0;
+    tb
     }
 }
