@@ -100,8 +100,33 @@ impl Val {
         Val::Set(Rc::new(RefCell::new(v.into_iter().collect())))
     }
     pub fn str(s: &str) -> Val {
-        Val::Str(Rc::from(s))
+        Val::Str(texte(s))
     }
+}
+
+/// Les textes courts (clés des dict, codes des camps, états…) sont partagés : un seul exemplaire de « owner » pour
+/// les 3 555 places de la carte, qui reste dans le cache du processeur, et `==` qui s'arrête dès que c'est le même.
+/// (Comme les textes internés de Python ; un texte long — message, journal — garde son exemplaire.)
+const INTERNE_MAX: usize = 24;
+thread_local! {
+    static INTERNES: RefCell<std::collections::HashSet<Rc<str>, Fx>> = RefCell::new(Default::default());
+}
+#[inline]
+fn texte(s: &str) -> Rc<str> {
+    if s.len() > INTERNE_MAX {
+        return Rc::from(s);
+    }
+    INTERNES.with(|t| {
+        let mut t = t.borrow_mut();
+        match t.get(s) {
+            Some(r) => r.clone(),
+            None => {
+                let r: Rc<str> = Rc::from(s);
+                t.insert(r.clone());
+                r
+            }
+        }
+    })
 }
 
 macro_rules! depuis {
@@ -110,7 +135,7 @@ macro_rules! depuis {
 depuis! {
     bool => |x| Val::Bool(x), i64 => |x| Val::Int(x), i32 => |x| Val::Int(x as i64), u8 => |x| Val::Int(x as i64),
     u32 => |x| Val::Int(x as i64), usize => |x| Val::Int(x as i64), f64 => |x| Val::Float(x),
-    &str => |x| Val::Str(Rc::from(x)), String => |x| Val::Str(Rc::from(x)), &String => |x| Val::Str(Rc::from(x.as_str())),
+    &str => |x| Val::str(x), String => |x| Val::str(&x), &String => |x| Val::str(x),
     Rc<str> => |x| Val::Str(x), &Val => |x| x.clone(), Vec<Val> => |x| Val::list(x),
 }
 impl<T: Into<Val>> From<Option<T>> for Val {
@@ -189,6 +214,25 @@ fn hacher_num<H: Hasher>(n: Num, h: &mut H) {
         }
     }
 }
+/// `a == b` entre textes : les clés du jeu sont courtes (« owner », « regs »), comparées sans appeler memcmp.
+#[inline(always)]
+pub fn meme_texte(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    let n = a.len();
+    if n != b.len() {
+        return false;
+    }
+    let mot = |x: &[u8], i: usize| u64::from_le_bytes(x[i..i + 8].try_into().unwrap());
+    let demi = |x: &[u8], i: usize| u32::from_le_bytes(x[i..i + 4].try_into().unwrap());
+    match n {
+        0 => true,
+        1..=3 => a[0] == b[0] && a[n / 2] == b[n / 2] && a[n - 1] == b[n - 1],
+        4..=8 => demi(a, 0) == demi(b, 0) && demi(a, n - 4) == demi(b, n - 4),
+        9..=16 => mot(a, 0) == mot(b, 0) && mot(a, n - 8) == mot(b, n - 8),
+        _ => a == b,
+    }
+}
+
 fn hacher_str<H: Hasher>(s: &str, h: &mut H) {
     3u8.hash(h);
     s.hash(h)
@@ -225,13 +269,35 @@ impl Hash for CleStr<'_> {
     }
 }
 impl Equivalent<Val> for CleStr<'_> {
+    #[inline]
     fn equivalent(&self, k: &Val) -> bool {
-        matches!(k, Val::Str(s) if &**s == self.0)
+        matches!(k, Val::Str(s) if meme_texte(s, self.0))
     }
 }
+// Les dict d'une même sorte (places, armées, régiments, camps) rangent leurs clés dans le même ordre : le rang où
+// une clé écrite dans le code (« owner ») a été trouvée la dernière fois est essayé d'abord, sans hacher ni sonder
+// la table. (Indexé par l'adresse du texte ; la clé trouvée à ce rang est toujours vérifiée.)
+thread_local! {
+    static RANGS: [std::cell::Cell<u32>; 1024] = const { [const { std::cell::Cell::new(u32::MAX) }; 1024] };
+}
+#[inline]
+fn chercher_str<'a>(m: &'a Table, k: &str) -> Option<&'a Val> {
+    let case = ((k.as_ptr() as usize >> 3) ^ k.len()) & 1023;
+    let r = RANGS.with(|t| t[case].get());
+    if let Some((Val::Str(s), v)) = m.get_index(r as usize) {
+        if meme_texte(s, k) {
+            return Some(v);
+        }
+    }
+    let (i, _, v) = m.get_full(&CleStr(k))?;
+    RANGS.with(|t| t[case].set(i as u32));
+    Some(v)
+}
+
 impl Cle for &str {
+    #[inline]
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
-        m.get(&CleStr(self))
+        chercher_str(m, self)
     }
     fn val(&self) -> Val {
         Val::str(self)
@@ -241,6 +307,7 @@ impl Cle for &str {
     }
 }
 impl Cle for &String {
+    #[inline]
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
         m.get(&CleStr(self))
     }
@@ -252,6 +319,7 @@ impl Cle for &String {
     }
 }
 impl Cle for String {
+    #[inline]
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
         m.get(&CleStr(self))
     }
@@ -271,8 +339,12 @@ macro_rules! cle_entiere {
 }
 cle_entiere!(i64, i32, usize);
 impl Cle for &Val {
+    #[inline]
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
-        m.get(*self)
+        match self {
+            Val::Str(s) => chercher_str(m, s), // (un texte court est partagé : son adresse ne change pas)
+            _ => m.get(*self),
+        }
     }
     fn val(&self) -> Val {
         (*self).clone()
@@ -286,8 +358,9 @@ impl Cle for &Val {
     }
 }
 impl Cle for Val {
+    #[inline]
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
-        m.get(self)
+        (&self).dans(m)
     }
     fn val(&self) -> Val {
         self.clone()
@@ -346,6 +419,7 @@ impl Val {
         matches!(self, Val::Dict(_))
     }
     /// `a is b` : le même objet (ou la même valeur simple).
+    #[inline]
     pub fn is(&self, o: &Val) -> bool {
         match (self, o) {
             (Val::List(a), Val::List(b)) => Rc::ptr_eq(a, b),
@@ -455,17 +529,25 @@ impl Val {
     }
 
     /// `v[k]` : la clé d'un dict, l'indice d'une liste, d'un tuple ou d'un texte. Absent : KeyError, IndexError.
+    #[inline]
     #[track_caller]
     pub fn at(&self, k: impl Cle) -> Val {
         match self.try_at(&k) {
             Some(v) => v,
-            None => match self {
-                Val::Dict(_) => panic!("KeyError: {}", k.val().repr()),
-                Val::List(_) | Val::Tuple(_) | Val::Str(_) => panic!("IndexError: indice {} hors de {}", k.val().repr(), self.repr_court()),
-                _ => panic!("TypeError: '{}' object is not subscriptable (clé {})", self.type_name(), k.val().repr()),
-            },
+            None => self.manque(&k.val()),
         }
     }
+    #[cold]
+    #[inline(never)]
+    #[track_caller]
+    fn manque(&self, k: &Val) -> ! {
+        match self {
+            Val::Dict(_) => panic!("KeyError: {}", k.repr()),
+            Val::List(_) | Val::Tuple(_) | Val::Str(_) => panic!("IndexError: indice {} hors de {}", k.repr(), self.repr_court()),
+            _ => panic!("TypeError: '{}' object is not subscriptable (clé {})", self.type_name(), k.repr()),
+        }
+    }
+    #[inline]
     fn try_at(&self, k: &impl Cle) -> Option<Val> {
         match self {
             Val::Dict(d) => k.dans(&d.borrow()).cloned(),
@@ -507,19 +589,39 @@ impl Val {
         self.get(k).truthy()
     }
     /// `d.get(k)` : None si la clé manque. (Sur None lui-même : None, pour `(d.get('a') or {}).get('b')`.)
+    #[inline]
     #[track_caller]
     pub fn get(&self, k: impl Cle) -> Val {
         match self {
             Val::Dict(d) => k.dans(&d.borrow()).cloned().unwrap_or(Val::None),
-            _ => panic!("AttributeError: '{}' object has no attribute 'get' (clé {})", self.type_name(), k.val().repr()),
+            _ => self.sans_get(&k.val()),
         }
     }
+    #[cold]
+    #[inline(never)]
+    #[track_caller]
+    fn sans_get(&self, k: &Val) -> ! {
+        panic!("AttributeError: '{}' object has no attribute 'get' (clé {})", self.type_name(), k.repr())
+    }
     /// `d.get(k, defaut)`.
+    #[inline]
     #[track_caller]
     pub fn get_or(&self, k: impl Cle, defaut: impl Into<Val>) -> Val {
         match self {
             Val::Dict(d) => k.dans(&d.borrow()).cloned().unwrap_or_else(|| defaut.into()),
-            _ => panic!("AttributeError: '{}' object has no attribute 'get' (clé {})", self.type_name(), k.val().repr()),
+            _ => self.sans_get(&k.val()),
+        }
+    }
+    /// `v[k] == x` (x un texte), sans copier la valeur.
+    #[inline]
+    #[track_caller]
+    pub fn at_is(&self, k: impl Cle, x: &str) -> bool {
+        match self {
+            Val::Dict(d) => match k.dans(&d.borrow()) {
+                Some(v) => matches!(v, Val::Str(s) if meme_texte(s, x)),
+                None => self.manque(&k.val()),
+            },
+            _ => self.at(k) == x,
         }
     }
     /// `k in v` : clé d'un dict, élément d'une liste, d'un tuple ou d'un set, morceau d'un texte.
@@ -556,6 +658,23 @@ impl Val {
             Val::Set(s) => s.borrow().iter().cloned().collect(),
             Val::Str(s) => s.chars().map(|c| Val::from(c.to_string())).collect(),
             _ => panic!("TypeError: '{}' object is not iterable", self.type_name()),
+        }
+    }
+    /// Les éléments d'une liste, empruntés le temps du parcours (sans copie) : le corps ne doit pas modifier la
+    /// liste (sinon : panique « already borrowed », jamais un résultat faux).
+    #[track_caller]
+    pub fn liste(&self) -> std::cell::Ref<'_, Vec<Val>> {
+        match self {
+            Val::List(l) => l.borrow(),
+            _ => panic!("TypeError: une liste était attendue, pas {}", self.type_name()),
+        }
+    }
+    /// La table d'un dict, empruntée de même (`d.values()`, `d.items()` sans copie).
+    #[track_caller]
+    pub fn table(&self) -> std::cell::Ref<'_, Table> {
+        match self {
+            Val::Dict(d) => d.borrow(),
+            _ => panic!("TypeError: un dict était attendu, pas {}", self.type_name()),
         }
     }
     #[track_caller]
@@ -678,16 +797,46 @@ impl Val {
 }
 
 // ------------------------------------------------------------------ écrire
+thread_local! {
+    static GEN_OWNER: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+/// Change chaque fois qu'une clé « owner » est écrite ou retirée dans un dict (ou qu'un dict est vidé) : le moteur
+/// garde les places de chaque camp tant qu'il ne change pas (Game::owned).
+pub fn generation_owner() -> u64 {
+    GEN_OWNER.with(|g| g.get())
+}
+#[inline]
+fn touche(k: &Val) {
+    if matches!(k, Val::Str(s) if meme_texte(s, "owner")) {
+        GEN_OWNER.with(|g| g.set(g.get() + 1));
+    }
+}
+thread_local! {
+    static GEN_LISTES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+/// Change chaque fois qu'une liste, n'importe laquelle, est modifiée (Game::proprios : tant qu'il ne change pas,
+/// la liste des places tient les mêmes dicts sans qu'il faille les recompter).
+pub fn generation_listes() -> u64 {
+    GEN_LISTES.with(|g| g.get())
+}
+#[inline]
+fn ecrire_liste(l: &Liste) -> std::cell::RefMut<'_, Vec<Val>> {
+    GEN_LISTES.with(|g| g.set(g.get() + 1));
+    l.borrow_mut()
+}
+
 impl Val {
     /// `v[k] = x` : sur un dict (la clé est créée) ou une liste (l'indice doit exister).
     #[track_caller]
     pub fn set(&self, k: impl Cle, x: impl Into<Val>) {
         match self {
             Val::Dict(d) => {
-                d.borrow_mut().insert(k.val(), x.into());
+                let k = k.val();
+                touche(&k);
+                d.borrow_mut().insert(k, x.into());
             }
             Val::List(l) => {
-                let mut l = l.borrow_mut();
+                let mut l = ecrire_liste(l);
                 let n = l.len();
                 match k.indice().and_then(|i| rang(i, n)) {
                     Some(i) => l[i] = x.into(),
@@ -724,7 +873,9 @@ impl Val {
                     return v.clone();
                 }
                 let v = defaut.into();
-                d.borrow_mut().insert(k.val(), v.clone());
+                let k = k.val();
+                touche(&k);
+                d.borrow_mut().insert(k, v.clone());
                 v
             }
             _ => panic!("AttributeError: '{}' object has no attribute 'setdefault'", self.type_name()),
@@ -734,9 +885,13 @@ impl Val {
     #[track_caller]
     pub fn pop(&self, k: impl Cle) -> Val {
         match self {
-            Val::Dict(d) => d.borrow_mut().shift_remove(&k.val()).unwrap_or(Val::None),
+            Val::Dict(d) => {
+                let k = k.val();
+                touche(&k);
+                d.borrow_mut().shift_remove(&k).unwrap_or(Val::None)
+            }
             Val::List(l) => {
-                let mut l = l.borrow_mut();
+                let mut l = ecrire_liste(l);
                 let n = l.len();
                 match k.indice().and_then(|i| rang(i, n)) {
                     Some(i) => l.remove(i),
@@ -756,6 +911,7 @@ impl Val {
     pub fn del(&self, k: impl Cle) {
         match self {
             Val::Dict(d) => {
+                touche(&k.val());
                 if d.borrow_mut().shift_remove(&k.val()).is_none() {
                     panic!("KeyError: {}", k.val().repr())
                 }
@@ -770,7 +926,7 @@ impl Val {
     #[track_caller]
     pub fn pop_last(&self) -> Val {
         match self {
-            Val::List(l) => l.borrow_mut().pop().unwrap_or_else(|| panic!("IndexError: pop from empty list")),
+            Val::List(l) => ecrire_liste(l).pop().unwrap_or_else(|| panic!("IndexError: pop from empty list")),
             _ => panic!("AttributeError: '{}' object has no attribute 'pop'", self.type_name()),
         }
     }
@@ -780,6 +936,7 @@ impl Val {
         match self {
             Val::Dict(d) => {
                 let paires = autre.items();
+                paires.iter().for_each(|(k, _)| touche(k));
                 d.borrow_mut().extend(paires)
             }
             Val::Set(s) => {
@@ -793,7 +950,7 @@ impl Val {
     #[track_caller]
     pub fn push(&self, x: impl Into<Val>) {
         match self {
-            Val::List(l) => l.borrow_mut().push(x.into()),
+            Val::List(l) => ecrire_liste(l).push(x.into()),
             Val::Set(s) => {
                 s.borrow_mut().insert(x.into());
             }
@@ -805,7 +962,7 @@ impl Val {
     pub fn extend(&self, autre: &Val) {
         let v = autre.vec();
         match self {
-            Val::List(l) => l.borrow_mut().extend(v),
+            Val::List(l) => ecrire_liste(l).extend(v),
             _ => panic!("AttributeError: '{}' object has no attribute 'extend'", self.type_name()),
         }
     }
@@ -814,7 +971,7 @@ impl Val {
     pub fn insert(&self, i: i64, x: impl Into<Val>) {
         match self {
             Val::List(l) => {
-                let mut l = l.borrow_mut();
+                let mut l = ecrire_liste(l);
                 let n = l.len() as i64;
                 let j = if i < 0 { (i + n).max(0) } else { i.min(n) };
                 l.insert(j as usize, x.into())
@@ -834,7 +991,7 @@ impl Val {
     pub fn discard(&self, x: &Val) -> bool {
         match self {
             Val::List(l) => {
-                let mut l = l.borrow_mut();
+                let mut l = ecrire_liste(l);
                 match l.iter().position(|e| e == x) {
                     Some(i) => {
                         l.remove(i);
@@ -859,8 +1016,11 @@ impl Val {
     /// `l.clear()`, `d.clear()`, `s.clear()`.
     pub fn clear(&self) {
         match self {
-            Val::List(l) => l.borrow_mut().clear(),
-            Val::Dict(d) => d.borrow_mut().clear(),
+            Val::List(l) => ecrire_liste(l).clear(),
+            Val::Dict(d) => {
+                touche(&Val::str("owner"));
+                d.borrow_mut().clear()
+            }
             Val::Set(s) => s.borrow_mut().clear(),
             _ => panic!("AttributeError: '{}' object has no attribute 'clear'", self.type_name()),
         }
@@ -869,14 +1029,14 @@ impl Val {
     #[track_caller]
     pub fn replace_all(&self, v: Vec<Val>) {
         match self {
-            Val::List(l) => *l.borrow_mut() = v,
+            Val::List(l) => *ecrire_liste(l) = v,
             _ => panic!("TypeError: '{}' object does not support slice assignment", self.type_name()),
         }
     }
     /// `l.reverse()`.
     pub fn reverse(&self) {
         match self {
-            Val::List(l) => l.borrow_mut().reverse(),
+            Val::List(l) => ecrire_liste(l).reverse(),
             _ => panic!("AttributeError: '{}' object has no attribute 'reverse'", self.type_name()),
         }
     }
@@ -891,7 +1051,7 @@ impl Val {
         match self {
             Val::List(l) => {
                 let v = super::sorted_by_key(l.borrow().clone(), f);
-                *l.borrow_mut() = v
+                *ecrire_liste(l) = v
             }
             _ => panic!("AttributeError: '{}' object has no attribute 'sort'", self.type_name()),
         }
@@ -903,7 +1063,7 @@ impl PartialEq for Val {
     fn eq(&self, o: &Val) -> bool {
         match (self, o) {
             (Val::None, Val::None) => true,
-            (Val::Str(a), Val::Str(b)) => a == b,
+            (Val::Str(a), Val::Str(b)) => Rc::ptr_eq(a, b) || meme_texte(a, b),
             (Val::List(a), Val::List(b)) => Rc::ptr_eq(a, b) || *a.borrow() == *b.borrow(),
             (Val::Tuple(a), Val::Tuple(b)) => a == b,
             (Val::Dict(a), Val::Dict(b)) => {
@@ -960,18 +1120,21 @@ macro_rules! comparer_avec {
 }
 comparer_avec!(i64, f64, bool);
 impl PartialEq<&str> for Val {
+    #[inline]
     fn eq(&self, o: &&str) -> bool {
-        matches!(self, Val::Str(s) if &**s == *o)
+        matches!(self, Val::Str(s) if meme_texte(s, o))
     }
 }
 impl PartialEq<str> for Val {
+    #[inline]
     fn eq(&self, o: &str) -> bool {
-        matches!(self, Val::Str(s) if &**s == o)
+        matches!(self, Val::Str(s) if meme_texte(s, o))
     }
 }
 impl PartialEq<String> for Val {
+    #[inline]
     fn eq(&self, o: &String) -> bool {
-        matches!(self, Val::Str(s) if &**s == o.as_str())
+        matches!(self, Val::Str(s) if meme_texte(s, o))
     }
 }
 

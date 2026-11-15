@@ -818,10 +818,10 @@ pub fn cell_mask(g: &Game, owners: &Val) -> Option<Vec<u8>> {
         tag.set(o, i + 1);
     }
     let mut m = vec![0u8; 65536]; // (indexé par les valeurs de geo.cellnode, sur deux octets ; geo.NONE compris)
-    for n in g.nodes.iter() {
-        let t = tag.get(n.at("owner"));
+    for (i, o) in g.maitres().iter().enumerate() {
+        let t = tag.get(o);
         if t.truthy() {
-            m[n.ati("id") as usize] = t.i() as u8;
+            m[g.nodes.at(i).ati("id") as usize] = t.i() as u8;
         }
     }
     Some(m)

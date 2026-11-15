@@ -14,7 +14,7 @@ impl Game {
     // engine.py, lignes 820 à 824
     pub fn tools_bonus(&self, code: &str) -> (f64, f64) {
         let f = self.factions.at(code);
-        let nn = self.owned_nodes(code).len().max(1);
+        let nn = self.owned(code).len().max(1);
         let x = f.at("res").atf("outils") / (3.0 * nn as f64);
         let cov = if x < 1.0 { x } else { 1.0 };
         (1.0 + (0.30 + self.mod_(code, "tools_max", 0.0)) * cov, cov)
@@ -148,13 +148,14 @@ impl Game {
     // engine.py, lignes 898 à 908
     pub fn frontieres(&self) -> (Val, Val) {
         let (nb, front) = (dict! {}, dict! {});
-        for e in self.geo.edges.iter() {
-            let (oa, ob) = (self.nodes.at(e.at("a")).at("owner"), self.nodes.at(e.at("b")).at("owner"));
-            if oa != ob && self.factions.has(&oa) && self.factions.has(&ob) {
-                nb.setdefault(&oa, pyset![]).push(&ob);
-                nb.setdefault(&ob, pyset![]).push(&oa);
-                front.setdefault(&oa, pyset![]).push(e.at("a"));
-                front.setdefault(&ob, pyset![]).push(e.at("b"));
+        let maitres = self.maitres();
+        for &(a, b, _) in self.geo_fixe().aretes.iter() {
+            let (oa, ob) = (&maitres[a], &maitres[b]);
+            if oa != ob && self.factions.has(oa) && self.factions.has(ob) {
+                nb.setdefault(oa, pyset![]).push(ob);
+                nb.setdefault(ob, pyset![]).push(oa);
+                front.setdefault(oa, pyset![]).push(a);
+                front.setdefault(ob, pyset![]).push(b);
             }
         }
         (nb, front)
@@ -176,11 +177,6 @@ impl Game {
         let season = self.season();
         self.compute_blockades();
         let (nb, front) = self.frontieres();
-        // (les places de chaque camp en un seul passage : toute la France a 2 000 places et 89 camps)
-        let mut par_camp: HashMap<String, Vec<Val>> = HashMap::new();
-        for n in self.nodes.iter() {
-            par_camp.entry(n.ats("owner")).or_default().push(n);
-        }
         for (code_v, f) in self.factions.items() {
             let code = code_v.s();
             if !f.atb("alive") {
@@ -189,7 +185,7 @@ impl Game {
             let (tb, cov) = self.tools_bonus(code);
             let ai = 1.0 + self.mod_(code, "ai_income", 0.0);
             let tot = dict! {"livres" => 0.0, "vivres" => 0.0, "recrues" => 0.0, "industrie" => 0.0, "fer" => 0.0, "bois" => 0.0};
-            let own = par_camp.get(code).cloned().unwrap_or_default();
+            let own = self.owned(code); // (relevées d'un seul passage : voir Proprios)
             let mut food0 = R::SEASON_FOOD().atf(&season);
             if season == "hiver" {
                 food0 += self.mod_(code, "winter_food", 0.0);
@@ -364,10 +360,7 @@ impl Game {
     // engine.py, lignes 1037 à 1150
     pub fn economy(&mut self, dt: f64) {
         // places tenues par chacun (plafond des casernes, voir recruit_cap) : un seul passage sur la carte
-        let mut held_n: HashMap<String, i64> = HashMap::new();
-        for n in self.nodes.iter() {
-            *held_n.entry(n.ats("owner")).or_insert(0) += 1;
-        }
+        let held_n: HashMap<String, i64, py::Fx> = self.proprios().par_camp.iter().map(|(o, ix)| (o.to_string(), ix.len() as i64)).collect();
         for (code_v, f) in self.factions.items() {
             let code = code_v.s();
             if !f.atb("alive") {
@@ -488,7 +481,7 @@ impl Game {
             }
         }
         // ce qui ne dépend que du maître de la place (rien ne le change dans cette boucle)
-        let mut per: HashMap<String, (Val, f64, f64, f64, f64)> = HashMap::new();
+        let mut per: HashMap<String, (Val, f64, f64, f64, f64), py::Fx> = HashMap::default();
         for n in self.nodes.iter() {
             if n.atb("siege") {
                 continue;
@@ -729,7 +722,7 @@ impl Game {
     /// Python : `recruit_cap(self, code)`.
     // engine.py, lignes 1261 à 1262
     pub fn recruit_cap(&self, code: &str) -> i64 {
-        3000 + 250 * self.owned_nodes(code).len() as i64
+        3000 + 250 * self.owned(code).len() as i64
     }
 
     /// Recrues venues d'ailleurs (échange, prisonniers) : pas au-delà de ce que les casernes peuvent loger.
@@ -753,7 +746,7 @@ impl Game {
         let f = self.factions.at(code);
         if f.get_or("_nn_t", -1) != py::int(self.t) {
             f.set("_nn_t", py::int(self.t));
-            f.set("_nn", self.owned_nodes(code).len().max(1));
+            f.set("_nn", self.owned(code).len().max(1));
         }
         false
     }
@@ -841,10 +834,8 @@ impl Game {
     // engine.py, lignes 1318 à 1324
     pub fn all_regs(&self, code: &str) -> Val {
         let mut v = vec![];
-        for n in self.nodes.iter() {
-            if n.at("owner") == code {
-                v.extend(n.at("garrison").iter());
-            }
+        for n in self.owned(code) {
+            v.extend(n.at("garrison").iter());
         }
         for a in self.armies.values() {
             if a.at("owner") == code {

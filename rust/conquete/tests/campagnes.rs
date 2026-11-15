@@ -278,9 +278,9 @@ fn rejouer(geo: &Rc<GeoMap>, p: &Val, mois: Option<usize>) -> Result<(), String>
     Ok(())
 }
 
-/// Par défaut, les parties de la géographie 3 (toute la France : un mois y coûte 20 à 60 s) ne sont comparées qu'à
-/// leur création, sauf g3_1790_ia et g3_1813_ordres qui jouent leur premier mois ; CONQUETE_CAMPAGNES_LONGUES=1 les
-/// joue en entier (une dizaine de minutes).
+/// Par défaut, les parties de la géographie 3 (toute la France : un mois y coûte 2 à 5 s en release, davantage dans
+/// les essais) ne sont comparées qu'à leur création, sauf g3_1790_ia et g3_1813_ordres qui jouent leur premier mois ;
+/// CONQUETE_CAMPAGNES_LONGUES=1 les joue en entier (cinq minutes environ).
 fn partie(nom: &str) {
     let r = reference();
     let p = r.at("parties").iter().find(|p| p.at("nom") == nom).unwrap();

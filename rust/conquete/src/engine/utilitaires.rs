@@ -81,7 +81,9 @@ impl Game {
     // engine.py, lignes 181 à 184
     pub fn known_man(&self, code: &Val, cls: &str) -> Val {
         let techs = if self.factions.has(code) { self.factions.at(code).at("techs") } else { tup![] };
-        R::MANEUVERS().items().into_iter().filter(|(t, c)| *c == cls && techs.has(t)).map(|(t, _)| t).collect()
+        let man = R::MANEUVERS();
+        let v: Val = man.table().iter().filter(|(t, c)| **c == cls && techs.has(*t)).map(|(t, _)| t.clone()).collect();
+        v
     }
 
     /// Technologies du camp qui ne servent pas encore à ce régiment : manœuvres pas apprises, armes plus récentes
@@ -95,7 +97,8 @@ impl Game {
             return list![];
         }
         let (techs, cls, man) = (self.factions.at(code).at("techs"), u.at("cls"), r.get_or("man", tup![]));
-        let lag: Val = R::MANEUVERS().items().into_iter().filter(|(t, c)| *c == cls && techs.has(t) && !man.has(t)).map(|(t, _)| t).collect();
+        let mans = R::MANEUVERS();
+        let lag: Val = mans.table().iter().filter(|(t, c)| **c == cls && techs.has(*t) && !man.has(*t)).map(|(t, _)| t.clone()).collect();
         if R::ARMS().has(&cls) && !u.atb("arm_name") {
             let arm = r.get_or("arm", 0);
             for (i, a) in R::ARMS().at(&cls).iter().enumerate() {
@@ -725,7 +728,88 @@ impl Game {
     /// Rend une liste neuve de places (dict de self.nodes).
     // engine.py, lignes 532 à 533
     pub fn owned_nodes(&self, code: &str) -> Val {
-        self.nodes.iter().filter(|n| n.at("owner") == code).collect()
+        Val::list(self.owned(code))
+    }
+
+    /// Les places du camp, dans l'ordre de self.nodes (`[n for n in self.nodes if n['owner'] == code]`), sans
+    /// reparcourir les 3 555 places de la carte à chaque fois : gardées dans _cache_owned (voir Proprios).
+    pub fn owned(&self, code: &str) -> Vec<Val> {
+        let p = self.proprios();
+        p.par_camp.get(code).map_or(vec![], |ix| ix.iter().map(|&i| p.vus[i].clone()).collect())
+    }
+
+    /// Les rangs dans self.nodes des places du camp, croissants (voir owned).
+    pub fn owned_ix(&self, code: &str) -> Vec<usize> {
+        self.proprios().par_camp.get(code).cloned().unwrap_or_default()
+    }
+
+    /// Les tableaux de la carte (voir GeoFixe), refaits si la carte n'est plus la même (`Rc::ptr_eq`).
+    pub fn geo_fixe(&self) -> Rc<GeoFixe> {
+        let mut c = self._cache_geo.borrow_mut();
+        if !matches!(&*c, Some((geo, _)) if Rc::ptr_eq(geo, &self.geo)) {
+            let xy = self.geo.nodes.iter().map(|gn| (gn.atf("x"), gn.atf("y"))).collect();
+            let aretes = self.geo.edges.iter().map(|e| (e.at("a").u(), e.at("b").u(), e.get("kind") == "water")).collect();
+            *c = Some((self.geo.clone(), Rc::new(GeoFixe { xy, aretes })));
+        }
+        c.as_ref().unwrap().1.clone()
+    }
+
+    /// Les places de chaque camp, à jour (voir Proprios) : à lâcher avant tout appel qui pourrait les redemander.
+    pub fn proprios(&self) -> std::cell::Ref<'_, Proprios> {
+        fn adresse(v: &Val) -> usize {
+            match v {
+                Val::Dict(d) => Rc::as_ptr(d) as *const u8 as usize,
+                _ => 0,
+            }
+        }
+        fn releve(vus: &[Val]) -> (Vec<Val>, HashMap<Rc<str>, Vec<usize>, py::Fx>) {
+            let maitres: Vec<Val> = vus.iter().map(|n| n.at("owner")).collect();
+            let mut par_camp: HashMap<Rc<str>, Vec<usize>, py::Fx> = HashMap::default();
+            for (i, o) in maitres.iter().enumerate() {
+                if let Val::Str(o) = o {
+                    par_camp.entry(o.clone()).or_default().push(i);
+                }
+            }
+            (maitres, par_camp)
+        }
+        let gen = py::generation_owner();
+        {
+            let mut c = self._cache_owned.borrow_mut();
+            let listes = py::generation_listes();
+            let bon = c.as_ref().is_some_and(|c| {
+                c.gen == gen && c.nodes.is(&self.nodes) && (c.listes.get() == listes || {
+                    // (une liste a changé depuis : la nôtre tient-elle toujours les mêmes dicts ?)
+                    let l = self.nodes.liste();
+                    let memes = l.len() == c.adresses.len() && l.iter().zip(&c.adresses).all(|(a, &b)| adresse(a) == b);
+                    if memes {
+                        c.listes.set(listes);
+                    }
+                    memes
+                })
+            });
+            if !bon {
+                // (vus garde les dicts en vie : une adresse relevée ne peut pas servir à un autre dict)
+                let vus = self.nodes.liste().clone();
+                let adresses = vus.iter().map(adresse).collect();
+                let (maitres, par_camp) = releve(&vus);
+                let listes = Cell::new(listes);
+                *c = Some(Proprios { gen, listes, nodes: self.nodes.clone(), vus, adresses, maitres: Rc::new(maitres), par_camp });
+            }
+        }
+        let p = std::cell::Ref::map(self._cache_owned.borrow(), |c| c.as_ref().unwrap());
+        debug_assert!(
+            {
+                let (m, pc) = releve(&self.nodes.liste());
+                pc == p.par_camp && m.len() == p.maitres.len() && m.iter().zip(p.maitres.iter()).all(|(a, b)| a.is(b))
+            },
+            "une clé owner a changé sans passer par Val"
+        );
+        p
+    }
+
+    /// Le maître de chaque place (`self.nodes[i]['owner']`), sans relire les 3 555 dicts (voir Proprios).
+    pub fn maitres(&self) -> Rc<Vec<Val>> {
+        self.proprios().maitres.clone()
     }
 
     /// Python : `mod(self, code, key, default=0.0)`.

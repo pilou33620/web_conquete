@@ -165,10 +165,31 @@ impl indexmap::Equivalent<(String, String)> for Paire<'_> {
 /// landes ou marais, collines ou montagnes).
 pub type NodeStatic = (Val, Val, bool, bool, bool);
 
+/// Ce que la carte ne change jamais, relevé une fois en tableaux (Game::geo_fixe) : la position de chaque lieu, et
+/// chaque arête (a, b, fluviale ou maritime).
+pub struct GeoFixe {
+    pub xy: Vec<(f64, f64)>,
+    pub aretes: Vec<(usize, usize, bool)>,
+}
+
 /// `class Game`. Les attributs de `__init__`, les attributs de classe (`_cache_…`), ceux que engine.py pose en
 /// route (`getattr(self, …, défaut)` : ils ont ici leur défaut dès la création) et ceux que les autres fichiers
 /// lui posent (bridge, army_actions, cities, diplomacy, outils/simuler). Les attributs sauvegardés sont ceux de
 /// `views::SAVE_KEYS`, plus `diplo` et `_blockade`.
+/// Les places de chaque camp, relevées d'un seul passage sur la carte (Game::owned) : bonnes tant qu'aucune clé
+/// « owner » n'a été écrite (`py::generation_owner`) et que `nodes` est la même liste, des mêmes dicts.
+pub struct Proprios {
+    pub gen: u64,
+    /// `py::generation_listes` quand les adresses ont été vérifiées pour la dernière fois.
+    pub listes: Cell<u64>,
+    pub nodes: Val,
+    pub vus: Vec<Val>,
+    pub adresses: Vec<usize>,
+    /// Le maître de chaque place, dans l'ordre de nodes.
+    pub maitres: Rc<Vec<Val>>,
+    pub par_camp: HashMap<Rc<str>, Vec<usize>, py::Fx>,
+}
+
 pub struct Game {
     // caches de calcul (jamais sauvegardés) : date du jour, année et croissance séculaire du jour, chefs-lieux
     /// (ordinal du jour, sa date) ; None : à refaire. (skirmish.py le remet à None : `g._cache_date.set(None)`.)
@@ -184,6 +205,10 @@ pub struct Game {
     /// (le dict de `_pcache` qui a servi, la part de chaque place dans la croissance) : voir pop_factor ;
     /// refait quand `_pcache` n'est plus ce dict-là (`Val::is`).
     pub _cache_rel: RefCell<Option<(Val, Vec<f64>)>>,
+    /// Les places de chaque camp : voir owned.
+    pub _cache_owned: RefCell<Option<Proprios>>,
+    /// (la carte, ses tableaux) : voir geo_fixe.
+    pub _cache_geo: RefCell<Option<(Rc<GeoMap>, Rc<GeoFixe>)>>,
 
     // ================================================================== création
     /// La carte (partagée avec le serveur et les batailles).
@@ -226,7 +251,7 @@ pub struct Game {
     pub flood_until: f64,
     /// {(a, b) avec a < b: 'paix' | 'guerre' | 'alliance'}, dans l'ordre d'insertion (la sauvegarde le suit).
     /// Table native : at_war est appelé des millions de fois par mois. Chercher avec `Paire(a, b)`.
-    pub diplo: IndexMap<(String, String), String>,
+    pub diplo: IndexMap<(String, String), String, py::Fx>,
     /// Prix du marché : {ressource: prix} (copie de R::MARKET_BASE()).
     pub market: Val,
     pub _dirty_income: bool,
@@ -269,7 +294,7 @@ pub struct Game {
     /// Temps écoulé depuis le dernier paquet d'évolutions lentes (economy).
     pub _slow_dt: f64,
     /// faction_power : (quart de journée, {code: puissance}).
-    pub _forces: RefCell<Option<(i64, HashMap<String, f64>)>>,
+    pub _forces: RefCell<Option<(i64, HashMap<String, f64, py::Fx>)>>,
 
     // ------------------------------------------------------------------ posés par les autres fichiers
     /// bridge.py : la bataille tactique en cours (`g.tactical = {bid: tb}` en Python : une seule à la fois, sa clé
@@ -289,7 +314,7 @@ pub struct Game {
     /// army_actions.py : set des numéros des places où une armée est en quartiers (vide au départ).
     pub _aa_qn: Val,
     /// diplomacy.py (borders) : (quart de journée, paires (a, b) de camps voisins, dans les deux sens).
-    pub _frontieres: Option<(i64, IndexSet<(String, String)>)>,
+    pub _frontieres: Option<(i64, IndexSet<(String, String), py::Fx>)>,
     /// cities.py : compteurs des événements de ville (dict, vide au départ ; jamais sauvegardé).
     pub city_stats: Val,
     /// outils/simuler.py : le joueur d'origine a été éliminé.
@@ -308,6 +333,8 @@ impl Game {
             _cache_cap: RefCell::new(None),
             _cache_ns: RefCell::new(None),
             _cache_rel: RefCell::new(None),
+            _cache_owned: RefCell::new(None),
+            _cache_geo: RefCell::new(None),
             geo,
             player: String::new(),
             scenario: "1790".to_string(),
@@ -328,7 +355,7 @@ impl Game {
             _blockade: pyset![],
             over: Val::None,
             flood_until: -1.0,
-            diplo: IndexMap::new(),
+            diplo: IndexMap::default(),
             market: dict! {},
             _dirty_income: true,
             _last_day: -1,
@@ -548,7 +575,7 @@ mod essais {
 
     #[test]
     fn paire_trouve_la_cle() {
-        let mut diplo: IndexMap<(String, String), String> = IndexMap::new();
+        let mut diplo: IndexMap<(String, String), String, py::Fx> = IndexMap::default();
         diplo.insert(("24".to_string(), "33".to_string()), "guerre".to_string());
         assert_eq!(diplo.get(&Paire("24", "33")).map(String::as_str), Some("guerre"));
         assert!(diplo.get(&Paire("33", "24")).is_none());
