@@ -365,10 +365,7 @@ impl Game {
     // engine.py, lignes 1037 à 1150
     pub fn economy(&mut self, dt: f64) {
         // places tenues par chacun (plafond des casernes, voir recruit_cap) : un seul passage sur la carte
-        let mut held_n: HashMap<String, i64> = HashMap::new();
-        for n in self.nodes.iter() {
-            *held_n.entry(n.ats("owner")).or_insert(0) += 1;
-        }
+        let held_n: HashMap<String, i64, py::Fx> = self.proprios().par_camp.iter().map(|(o, ix)| (o.to_string(), ix.len() as i64)).collect();
         for (code_v, f) in self.factions.items() {
             let code = code_v.s();
             if !f.atb("alive") {
@@ -489,7 +486,7 @@ impl Game {
             }
         }
         // ce qui ne dépend que du maître de la place (rien ne le change dans cette boucle)
-        let mut per: HashMap<String, (Val, f64, f64, f64, f64)> = HashMap::new();
+        let mut per: HashMap<String, (Val, f64, f64, f64, f64), py::Fx> = HashMap::default();
         for n in self.nodes.iter() {
             if n.atb("siege") {
                 continue;

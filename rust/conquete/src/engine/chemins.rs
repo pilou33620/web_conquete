@@ -137,6 +137,7 @@ impl Game {
         }
         let mut best_goal = None;
         let maitres = self.maitres(); // (la recherche ne prend aucune place)
+        let fixe = self.geo_fixe();
         while let Some((mut d, u, b)) = heapq::heappop(&mut pq) {
             if d > *dist.get(&(u, b)).unwrap_or(&1e18) {
                 continue;
@@ -160,9 +161,8 @@ impl Game {
                 d += 30.0; // en sortant de ses terres par la route, au plus court
             }
             for eid in geo.adj.at(u).iter() {
-                let e = geo.edges.at(&eid);
-                let v = if e.at("a") == u { e.ati("b") } else { e.ati("a") };
-                let water = e.get("kind") == "water";
+                let (ea, eb, water) = fixe.aretes[eid.u()];
+                let v = if ea as i64 == u { eb as i64 } else { ea as i64 };
                 if bloque {
                     if ub && b == 1 && !water {
                         continue; // à bord devant des terres fermées : pas de débarquement
@@ -174,6 +174,7 @@ impl Game {
                 } else if !self.passable_node(code, v, &goal_v, tr, &Val::None) {
                     continue;
                 }
+                let e = geo.edges.at(&eid);
                 let nb = if water { 1 } else { 0 };
                 let mut nd = d + self.edge_cost(code, &e, &Val::from(u), speed);
                 if water && b != 1 {

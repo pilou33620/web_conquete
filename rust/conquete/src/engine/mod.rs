@@ -180,6 +180,8 @@ pub struct GeoFixe {
 /// « owner » n'a été écrite (`py::generation_owner`) et que `nodes` est la même liste, des mêmes dicts.
 pub struct Proprios {
     pub gen: u64,
+    /// `py::generation_listes` quand les adresses ont été vérifiées pour la dernière fois.
+    pub listes: Cell<u64>,
     pub nodes: Val,
     pub vus: Vec<Val>,
     pub adresses: Vec<usize>,

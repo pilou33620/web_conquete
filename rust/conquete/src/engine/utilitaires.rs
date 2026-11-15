@@ -81,7 +81,9 @@ impl Game {
     // engine.py, lignes 181 à 184
     pub fn known_man(&self, code: &Val, cls: &str) -> Val {
         let techs = if self.factions.has(code) { self.factions.at(code).at("techs") } else { tup![] };
-        R::MANEUVERS().items().into_iter().filter(|(t, c)| *c == cls && techs.has(t)).map(|(t, _)| t).collect()
+        let man = R::MANEUVERS();
+        let v: Val = man.table().iter().filter(|(t, c)| **c == cls && techs.has(*t)).map(|(t, _)| t.clone()).collect();
+        v
     }
 
     /// Technologies du camp qui ne servent pas encore à ce régiment : manœuvres pas apprises, armes plus récentes
@@ -95,7 +97,8 @@ impl Game {
             return list![];
         }
         let (techs, cls, man) = (self.factions.at(code).at("techs"), u.at("cls"), r.get_or("man", tup![]));
-        let lag: Val = R::MANEUVERS().items().into_iter().filter(|(t, c)| *c == cls && techs.has(t) && !man.has(t)).map(|(t, _)| t).collect();
+        let mans = R::MANEUVERS();
+        let lag: Val = mans.table().iter().filter(|(t, c)| **c == cls && techs.has(*t) && !man.has(*t)).map(|(t, _)| t.clone()).collect();
         if R::ARMS().has(&cls) && !u.atb("arm_name") {
             let arm = r.get_or("arm", 0);
             for (i, a) in R::ARMS().at(&cls).iter().enumerate() {
@@ -772,18 +775,25 @@ impl Game {
         let gen = py::generation_owner();
         {
             let mut c = self._cache_owned.borrow_mut();
+            let listes = py::generation_listes();
             let bon = c.as_ref().is_some_and(|c| {
-                c.gen == gen && c.nodes.is(&self.nodes) && {
+                c.gen == gen && c.nodes.is(&self.nodes) && (c.listes.get() == listes || {
+                    // (une liste a changé depuis : la nôtre tient-elle toujours les mêmes dicts ?)
                     let l = self.nodes.liste();
-                    l.len() == c.adresses.len() && l.iter().zip(&c.adresses).all(|(a, &b)| adresse(a) == b)
-                }
+                    let memes = l.len() == c.adresses.len() && l.iter().zip(&c.adresses).all(|(a, &b)| adresse(a) == b);
+                    if memes {
+                        c.listes.set(listes);
+                    }
+                    memes
+                })
             });
             if !bon {
                 // (vus garde les dicts en vie : une adresse relevée ne peut pas servir à un autre dict)
                 let vus = self.nodes.liste().clone();
                 let adresses = vus.iter().map(adresse).collect();
                 let (maitres, par_camp) = releve(&vus);
-                *c = Some(Proprios { gen, nodes: self.nodes.clone(), vus, adresses, maitres: Rc::new(maitres), par_camp });
+                let listes = Cell::new(listes);
+                *c = Some(Proprios { gen, listes, nodes: self.nodes.clone(), vus, adresses, maitres: Rc::new(maitres), par_camp });
             }
         }
         let p = std::cell::Ref::map(self._cache_owned.borrow(), |c| c.as_ref().unwrap());

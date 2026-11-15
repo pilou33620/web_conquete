@@ -811,6 +811,19 @@ fn touche(k: &Val) {
         GEN_OWNER.with(|g| g.set(g.get() + 1));
     }
 }
+thread_local! {
+    static GEN_LISTES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+/// Change chaque fois qu'une liste, n'importe laquelle, est modifiée (Game::proprios : tant qu'il ne change pas,
+/// la liste des places tient les mêmes dicts sans qu'il faille les recompter).
+pub fn generation_listes() -> u64 {
+    GEN_LISTES.with(|g| g.get())
+}
+#[inline]
+fn ecrire_liste(l: &Liste) -> std::cell::RefMut<'_, Vec<Val>> {
+    GEN_LISTES.with(|g| g.set(g.get() + 1));
+    l.borrow_mut()
+}
 
 impl Val {
     /// `v[k] = x` : sur un dict (la clé est créée) ou une liste (l'indice doit exister).
@@ -823,7 +836,7 @@ impl Val {
                 d.borrow_mut().insert(k, x.into());
             }
             Val::List(l) => {
-                let mut l = l.borrow_mut();
+                let mut l = ecrire_liste(l);
                 let n = l.len();
                 match k.indice().and_then(|i| rang(i, n)) {
                     Some(i) => l[i] = x.into(),
@@ -878,7 +891,7 @@ impl Val {
                 d.borrow_mut().shift_remove(&k).unwrap_or(Val::None)
             }
             Val::List(l) => {
-                let mut l = l.borrow_mut();
+                let mut l = ecrire_liste(l);
                 let n = l.len();
                 match k.indice().and_then(|i| rang(i, n)) {
                     Some(i) => l.remove(i),
@@ -913,7 +926,7 @@ impl Val {
     #[track_caller]
     pub fn pop_last(&self) -> Val {
         match self {
-            Val::List(l) => l.borrow_mut().pop().unwrap_or_else(|| panic!("IndexError: pop from empty list")),
+            Val::List(l) => ecrire_liste(l).pop().unwrap_or_else(|| panic!("IndexError: pop from empty list")),
             _ => panic!("AttributeError: '{}' object has no attribute 'pop'", self.type_name()),
         }
     }
@@ -937,7 +950,7 @@ impl Val {
     #[track_caller]
     pub fn push(&self, x: impl Into<Val>) {
         match self {
-            Val::List(l) => l.borrow_mut().push(x.into()),
+            Val::List(l) => ecrire_liste(l).push(x.into()),
             Val::Set(s) => {
                 s.borrow_mut().insert(x.into());
             }
@@ -949,7 +962,7 @@ impl Val {
     pub fn extend(&self, autre: &Val) {
         let v = autre.vec();
         match self {
-            Val::List(l) => l.borrow_mut().extend(v),
+            Val::List(l) => ecrire_liste(l).extend(v),
             _ => panic!("AttributeError: '{}' object has no attribute 'extend'", self.type_name()),
         }
     }
@@ -958,7 +971,7 @@ impl Val {
     pub fn insert(&self, i: i64, x: impl Into<Val>) {
         match self {
             Val::List(l) => {
-                let mut l = l.borrow_mut();
+                let mut l = ecrire_liste(l);
                 let n = l.len() as i64;
                 let j = if i < 0 { (i + n).max(0) } else { i.min(n) };
                 l.insert(j as usize, x.into())
@@ -978,7 +991,7 @@ impl Val {
     pub fn discard(&self, x: &Val) -> bool {
         match self {
             Val::List(l) => {
-                let mut l = l.borrow_mut();
+                let mut l = ecrire_liste(l);
                 match l.iter().position(|e| e == x) {
                     Some(i) => {
                         l.remove(i);
@@ -1003,7 +1016,7 @@ impl Val {
     /// `l.clear()`, `d.clear()`, `s.clear()`.
     pub fn clear(&self) {
         match self {
-            Val::List(l) => l.borrow_mut().clear(),
+            Val::List(l) => ecrire_liste(l).clear(),
             Val::Dict(d) => {
                 touche(&Val::str("owner"));
                 d.borrow_mut().clear()
@@ -1016,14 +1029,14 @@ impl Val {
     #[track_caller]
     pub fn replace_all(&self, v: Vec<Val>) {
         match self {
-            Val::List(l) => *l.borrow_mut() = v,
+            Val::List(l) => *ecrire_liste(l) = v,
             _ => panic!("TypeError: '{}' object does not support slice assignment", self.type_name()),
         }
     }
     /// `l.reverse()`.
     pub fn reverse(&self) {
         match self {
-            Val::List(l) => l.borrow_mut().reverse(),
+            Val::List(l) => ecrire_liste(l).reverse(),
             _ => panic!("AttributeError: '{}' object has no attribute 'reverse'", self.type_name()),
         }
     }
@@ -1038,7 +1051,7 @@ impl Val {
         match self {
             Val::List(l) => {
                 let v = super::sorted_by_key(l.borrow().clone(), f);
-                *l.borrow_mut() = v
+                *ecrire_liste(l) = v
             }
             _ => panic!("AttributeError: '{}' object has no attribute 'sort'", self.type_name()),
         }

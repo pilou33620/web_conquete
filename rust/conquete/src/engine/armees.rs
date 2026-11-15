@@ -585,10 +585,9 @@ impl Game {
     // engine.py, lignes 1818 à 1827
     pub fn hegemon(&self) -> Val {
         let cnt = Val::dict();
-        for n in self.nodes.iter() {
-            let o = n.at("owner");
-            if self.factions.has(&o) {
-                cnt.set(&o, &cnt.get_or(&o, 0) + 1);
+        for o in self.maitres().iter() {
+            if self.factions.has(o) {
+                cnt.set(o, &cnt.get_or(o, 0) + 1);
             }
         }
         if cnt.len() < 3 {
