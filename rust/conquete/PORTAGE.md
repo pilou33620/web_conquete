@@ -182,3 +182,19 @@ Tous les modules existent déjà, vides (`//! À porter : …`), et sont déclar
 on remplit le sien sans toucher aux autres.
 
 Un module n'est porté que lorsque ses essais passent contre les références du jumeau.
+
+## Porter les corps (bataille, campagne)
+
+Le squelette est en place : chaque fonction a sa signature, son commentaire, la signature Python d'origine et ses
+lignes, et un corps `todo!()`. Porter un corps :
+
+- Remplacer le `todo!()` par la traduction ligne à ligne du corps Python (règles et pièges plus haut). Les notes de
+  pièges de l'en-tête du fichier et du commentaire de la fonction sont à lire avant.
+- **Ne pas changer une signature** d'un autre fichier que les siens. Si c'est vraiment nécessaire (le Python ne
+  peut pas s'écrire autrement), faire le plus petit changement, corriger ses appelants, et le signaler.
+- On appelle librement les fonctions des autres parties, même encore en `todo!()` : elles seront portées en
+  parallèle. On compile (`cargo check -p conquete`) ; on ne peut pas encore tout exécuter.
+- **Vérifier ce qui peut l'être tout de suite** : une fonction qui ne dépend que de son entrée (calcul, texte,
+  table) se compare au Python par un petit jumeau, comme les modules feuilles. Le reste sera vérifié de bout en
+  bout (batailles et campagnes entières rejouées à la même graine, état comparé pas à pas) une fois tout porté.
+- À la fin d'une part, **plus aucun `todo!()`** dans ses fichiers, et `cargo test -p conquete` passe.
