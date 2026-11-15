@@ -14,8 +14,55 @@ use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 pub type Liste = Rc<RefCell<Vec<Val>>>;
-pub type Dico = Rc<RefCell<IndexMap<Val, Val>>>;
-pub type Ens = Rc<RefCell<IndexSet<Val>>>;
+pub type Dico = Rc<RefCell<Table>>;
+pub type Ens = Rc<RefCell<IndexSet<Val, Fx>>>;
+/// La table d'un dict.
+pub type Table = IndexMap<Val, Val, Fx>;
+
+/// Le hachage des clés des dict et des sets : FxHash (celui de rustc), bien plus rapide que SipHash sur les petites
+/// clés du jeu (« owner », « regs »…), qui se cherchent des millions de fois par mois. L'ordre de parcours est celui
+/// d'insertion (IndexMap) : il ne dépend pas du hachage.
+pub type Fx = std::hash::BuildHasherDefault<FxHasher>;
+#[derive(Default, Clone, Copy)]
+pub struct FxHasher(u64);
+impl FxHasher {
+    #[inline]
+    fn mot(&mut self, w: u64) {
+        self.0 = (self.0.rotate_left(5) ^ w).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+    }
+}
+impl Hasher for FxHasher {
+    #[inline]
+    fn write(&mut self, mut b: &[u8]) {
+        while b.len() >= 8 {
+            self.mot(u64::from_le_bytes(b[..8].try_into().unwrap()));
+            b = &b[8..];
+        }
+        if b.len() >= 4 {
+            self.mot(u32::from_le_bytes(b[..4].try_into().unwrap()) as u64);
+            b = &b[4..];
+        }
+        for &x in b {
+            self.mot(x as u64);
+        }
+    }
+    #[inline]
+    fn write_u8(&mut self, x: u8) {
+        self.mot(x as u64)
+    }
+    #[inline]
+    fn write_u64(&mut self, x: u64) {
+        self.mot(x)
+    }
+    #[inline]
+    fn write_usize(&mut self, x: usize) {
+        self.mot(x as u64)
+    }
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
 
 #[derive(Clone, Default)]
 pub enum Val {
@@ -41,13 +88,13 @@ impl Val {
         Val::Tuple(Rc::new(v))
     }
     pub fn dict() -> Val {
-        Val::Dict(Rc::new(RefCell::new(IndexMap::new())))
+        Val::Dict(Rc::new(RefCell::new(Table::default())))
     }
     pub fn dict_from(paires: Vec<(Val, Val)>) -> Val {
         Val::Dict(Rc::new(RefCell::new(paires.into_iter().collect())))
     }
     pub fn new_set() -> Val {
-        Val::Set(Rc::new(RefCell::new(IndexSet::new())))
+        Val::Set(Rc::new(RefCell::new(IndexSet::default())))
     }
     pub fn set_from(v: Vec<Val>) -> Val {
         Val::Set(Rc::new(RefCell::new(v.into_iter().collect())))
@@ -167,7 +214,7 @@ impl Hash for Val {
 
 /// Une clé de dict ou un indice de liste : `&str`, entier, ou une `Val`.
 pub trait Cle {
-    fn dans<'a>(&self, m: &'a IndexMap<Val, Val>) -> Option<&'a Val>;
+    fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val>;
     fn val(&self) -> Val;
     fn indice(&self) -> Option<i64>;
 }
@@ -183,7 +230,7 @@ impl Equivalent<Val> for CleStr<'_> {
     }
 }
 impl Cle for &str {
-    fn dans<'a>(&self, m: &'a IndexMap<Val, Val>) -> Option<&'a Val> {
+    fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
         m.get(&CleStr(self))
     }
     fn val(&self) -> Val {
@@ -194,7 +241,7 @@ impl Cle for &str {
     }
 }
 impl Cle for &String {
-    fn dans<'a>(&self, m: &'a IndexMap<Val, Val>) -> Option<&'a Val> {
+    fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
         m.get(&CleStr(self))
     }
     fn val(&self) -> Val {
@@ -205,7 +252,7 @@ impl Cle for &String {
     }
 }
 impl Cle for String {
-    fn dans<'a>(&self, m: &'a IndexMap<Val, Val>) -> Option<&'a Val> {
+    fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
         m.get(&CleStr(self))
     }
     fn val(&self) -> Val {
@@ -217,14 +264,14 @@ impl Cle for String {
 }
 macro_rules! cle_entiere {
     ($($t:ty),*) => { $(impl Cle for $t {
-        fn dans<'a>(&self, m: &'a IndexMap<Val, Val>) -> Option<&'a Val> { m.get(&Val::Int(*self as i64)) }
+        fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> { m.get(&Val::Int(*self as i64)) }
         fn val(&self) -> Val { Val::Int(*self as i64) }
         fn indice(&self) -> Option<i64> { Some(*self as i64) }
     })* };
 }
 cle_entiere!(i64, i32, usize);
 impl Cle for &Val {
-    fn dans<'a>(&self, m: &'a IndexMap<Val, Val>) -> Option<&'a Val> {
+    fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
         m.get(*self)
     }
     fn val(&self) -> Val {
@@ -239,7 +286,7 @@ impl Cle for &Val {
     }
 }
 impl Cle for Val {
-    fn dans<'a>(&self, m: &'a IndexMap<Val, Val>) -> Option<&'a Val> {
+    fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
         m.get(self)
     }
     fn val(&self) -> Val {

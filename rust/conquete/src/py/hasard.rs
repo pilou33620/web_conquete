@@ -28,6 +28,18 @@ pub fn vider_trace() {
     })
 }
 
+/// Recommence la trace (le fichier est vidé) : pour ne relever que les tirages d'un moment (un mois de campagne).
+pub fn recommencer_trace() {
+    TRACE.with(|t| {
+        if t.borrow_mut().take().is_some() {
+            // (l'ancienne trace vidée et fermée d'abord : sinon elle écrirait sa fin dans le fichier recommencé)
+            *t.borrow_mut() = std::env::var_os("CONQUETE_TRACE_HASARD")
+                .and_then(|f| std::fs::File::create(f).ok())
+                .map(std::io::BufWriter::new);
+        }
+    })
+}
+
 const N: usize = 624;
 const M: usize = 397;
 

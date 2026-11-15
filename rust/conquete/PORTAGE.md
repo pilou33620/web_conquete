@@ -110,7 +110,9 @@ Un seul écart d'un dernier bit, ou un tirage de plus, et toute la suite de la p
 13. **Parcourir un `set`.** L'ordre d'un set d'entiers de CPython n'est ni l'ordre d'insertion ni l'ordre trié.
     Si le Python parcourt un set et que l'ordre peut changer le résultat (somme de flottants, premier trouvé,
     tirage au hasard, liste rendue), **le signaler dans le compte rendu** avec la ligne ; un set de textes est
-    déjà parcouru dans un ordre qui change d'un lancement à l'autre en Python (rien à reproduire).
+    déjà parcouru dans un ordre qui change d'un lancement à l'autre en Python (rien à reproduire ; un jumeau qui
+    joue des parties entières se lance avec PYTHONHASHSEED=0, comme outils/jumeau/campagnes_ref.py, et l'essai Rust
+    compare l'endroit concerné sans tenir compte de cet ordre).
 14. Un dict garde l'ordre d'insertion (`Val` aussi, y compris après un `pop`).
 15. `f"{x:.1f}"` → `format!("{:.1}", x)` (même arrondi) ; `{n:02d}` → `{:02}` ; `{x:+.0f}` → `{:+.0}` ;
     `{x:,}` → `py::milliers` ; `str(float)` → `py::repr_f` ; `s.capitalize()` → `py::capitalize`.
