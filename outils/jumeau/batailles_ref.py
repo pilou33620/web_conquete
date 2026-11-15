@@ -15,6 +15,7 @@ Trois façons de mener une bataille (`mode`) :
   ordre tiré au sort tous les 25 pas (tb.order, who='joueur' : toutes les sortes d'ordres, y compris d'impossibles),
   parfois « Finir automatiquement » puis reprend la main, parfois fait décrocher son camp. Ses actes sont rangés
   (`actes` : [pas, sorte, arguments…, réponse]) et rejoués tels quels par l'essai Rust, qui compare les réponses ;
+- 'campagne' : comme 'ia', mais une bataille de campagne (de_campagne : bridge.create, armées plus nombreuses) ;
 - 'ordres' : « Donner mes ordres » (bridge.create_orders) : des ordres tirés au sort (`ordres`, nettoyés par
   orders.clean avec `livres`), puis ce que fait bridge.set_orders(go=True) (sans la partie) ; au moment décisif
   (tb.ask), la réponse est 'go' ou 'wait' selon le pas (pas // PAS impair : 'go').
@@ -25,9 +26,10 @@ AVANT le déploiement (les unités pas encore placées sont à x = y = 0.0, comm
 (l'aller-retour des sauvegardes). Les deux côtés relisent cet état (TacticalBattle.from_dict : la carte se refait de la
 graine, battle.rng repart de la sienne), engagent la bataille si besoin (relue), puis font les mêmes pas (tb.step()) ;
 `relu` : l'empreinte ordonnée de from_dict(depart).to_dict() (l'aller-retour des sauvegardes, avant tout pas) ;
+`fenetre` ('ordres') : l'empreinte ordonnée de la fenêtre des ordres et du plan (fenetre) avant d'engager ;
 `emp` : les 16 premiers chiffres de commun.empreinte_ordre(dict(etat=tb.to_dict(), vue=tb.view(0, since))) tous les
-PAS pas (le premier au pas 0 ; since : tb.seq à l'empreinte d'avant), puis à la fin le résultat (tb.result) et
-tb.result_view(0).
+PAS pas (le premier au pas 0 ; since : tb.seq à l'empreinte d'avant), puis à la fin le résultat (tb.result),
+tb.result_view(0) et l'empreinte de tb.map_view() (`carte`).
 """
 import json
 import os
@@ -108,6 +110,8 @@ BATAILLES = [
                                units=dict(ligne=3, artillerie=1, mitrailleuses=1, legere=1)), None, 'ordres'),
     ('1790_ordres_reprise', dict(me='47', foe='33', era='1790', seed=34,
                                  units=dict(ligne=2, legere=2, cavalerie=1, artillerie=2)), 500, 'ordres'),
+    ('1813_campagne', dict(era='1813', attaque=True, seed=3, fois=3), None, 'campagne'),
+    ('1870_campagne', dict(era='1870', attaque=False, seed=6, fois=2), None, 'campagne'),
 ]
 
 
@@ -136,8 +140,23 @@ def tiree(k):
     return f'x{k}', body, reprise, rng.choice(['ia', 'ia', 'joueur', 'ordres'])
 
 
+def de_campagne(body):
+    """Une bataille de campagne en rase campagne (tests/fabrique.py : bataille_de_campagne), les régiments des deux
+    armées multipliés par body['fois'] : bridge.create(manual=False), l'IA des deux camps."""
+    import copy
+    sys.path.insert(0, os.path.join(commun.RACINE, 'tests'))
+    import fabrique
+    g, bt = fabrique.bataille_de_campagne(body['era'], body['attaque'], body['seed'])
+    for s_ in bt['sides']:
+        for aid in s_['armies']:
+            a = g.armies[aid]
+            a['regs'] = [dict(copy.deepcopy(r), id=f"{r['id']}x{k}") for k in range(body['fois']) for r in a['regs']]
+    return TB.create(g, bt, manual=False)
+
+
 def neuve(body, mode):
-    """La bataille de skirmish.new : pas encore déployée ('ia', 'joueur'), ou déployée par create_orders ('ordres')."""
+    """La bataille de skirmish.new : pas encore déployée ('ia', 'joueur'), ou déployée par create_orders ('ordres') ;
+    'campagne' : une bataille de campagne (de_campagne), pas encore déployée, menée comme 'ia'."""
     if mode == 'ordres':
         g, bid = S.new(GEO, body)
         assert g is not None, bid
@@ -145,11 +164,14 @@ def neuve(body, mode):
     deploy = TB.default_deploy
     TB.default_deploy = lambda tb, s: None
     try:
-        g, bid = S.new(GEO, dict(body, mode='manuel'))
+        if mode == 'campagne':
+            tb = de_campagne(body)
+        else:
+            g, bid = S.new(GEO, dict(body, mode='manuel'))
+            assert g is not None, bid
+            tb = g.tactical[bid]
     finally:
         TB.default_deploy = deploy
-    assert g is not None, bid
-    tb = g.tactical[bid]
     k = 0
     for u in tb.units:
         u.ctrl = 'ia'
@@ -183,11 +205,25 @@ def engager(tb, raw):
     tb.log("Vos officiers engagent la bataille selon vos ordres.")
 
 
-def relue(depart, ordres):
-    """L'état de départ relu, engagé si besoin : ce que fait l'essai Rust."""
+def fenetre(tb, raw):
+    """La fenêtre des ordres (bridge.orders_view, sans la partie, avec les ordres tirés nettoyés) et le plan de la
+    position ennemie (bridge.plan_view)."""
+    me = tb.me
+    o = OR.clean(tb, me, raw, LIVRES)
+    return dict(groups=OR.groups(tb, me, LIVRES), tabs=OR.TABS, orders=o, advice=OR.advise(tb, me, o),
+                report=OR.report(tb, me), place=bool(tb.place_info()), side=me, arrows=OR.arrows(tb, me, o),
+                plan=TB.plan_view(tb))
+
+
+def relue(depart, ordres, fen=None):
+    """L'état de départ relu, engagé si besoin : ce que fait l'essai Rust. fen : une liste où ranger la fenêtre des
+    ordres ('ordres')."""
     tb = BT.TacticalBattle.from_dict(GEO, json.loads(depart))
     if tb.phase == 'deploiement':
         if tb.spec.get('mode') == 'ordres':
+            f = fenetre(tb, ordres)
+            if fen is not None:
+                fen.append(f)
             engager(tb, ordres)
         else:
             for s in (0, 1):
@@ -261,7 +297,8 @@ def empreinte(tb, since):
 
 
 def jouer(nom, mode, depart, ordres, jusqua=None):
-    tb = relue(depart, ordres)
+    fen = []
+    tb = relue(depart, ordres, fen)
     rng = random.Random(f'joueur{nom}')
     emp, actes = [], []
     n = since = 0
@@ -284,6 +321,7 @@ def jouer(nom, mode, depart, ordres, jusqua=None):
         tb.step()
         n += 1
     return dict(pas=n, emp=emp, actes=actes, phase=tb.phase, clock=tb.clock, fin=commun.empreinte_ordre(tb.to_dict()),
+                carte=commun.empreinte_ordre(tb.map_view()), fenetre=commun.empreinte_ordre(fen[0]) if fen else None,
                 result=tb.result, view=tb.result_view(0) if tb.result else None)
 
 

@@ -69,11 +69,27 @@ fn empreinte(tb: &TacticalBattle, since: i64) -> Val {
     dict! {"etat" => tb.to_dict(), "vue" => tb.view(&Val::from(0), since)}
 }
 
-/// L'état de départ relu, engagé si besoin (outils/jumeau/batailles_ref.py : relue).
-fn relue(geo: &Rc<GeoMap>, depart: &Val, ordres: &Val) -> TacticalBattle {
+/// La fenêtre des ordres et le plan (outils/jumeau/batailles_ref.py : fenetre).
+fn fenetre(tb: &mut TacticalBattle, raw: &Val) -> Val {
+    let me = tb.me.i();
+    let o = OR::clean(tb, me, raw, &Val::from(LIVRES));
+    let groups = OR::groups(tb, me, &Val::from(LIVRES));
+    let advice = OR::advise(tb, me, &o);
+    let report = OR::report(tb, me);
+    let place = tb.place_info().truthy();
+    let arrows = OR::arrows(tb, me, &o);
+    let plan = TB::plan_view(tb);
+    dict! {"groups" => groups, "tabs" => OR::TABS(), "orders" => &o, "advice" => advice, "report" => report,
+        "place" => place, "side" => me, "arrows" => arrows, "plan" => plan}
+}
+
+/// L'état de départ relu, engagé si besoin (outils/jumeau/batailles_ref.py : relue) ; la fenêtre des ordres
+/// ('ordres') dans fen.
+fn relue(geo: &Rc<GeoMap>, depart: &Val, ordres: &Val, fen: &mut Option<Val>) -> TacticalBattle {
     let mut tb = TacticalBattle::from_dict(geo.clone(), depart).unwrap();
     if tb.phase == "deploiement" {
         if tb.spec.get("mode") == "ordres" {
+            *fen = Some(fenetre(&mut tb, ordres));
             engager(&mut tb, ordres);
             return tb;
         }
@@ -105,7 +121,11 @@ fn rejouer(geo: &Rc<GeoMap>, c: &Val) {
         let (n, p) = v.split_once(':')?;
         (n == nom).then(|| p.parse::<i64>().unwrap())
     });
-    let mut tb = relue(geo, &depart, &c.at("ordres"));
+    let mut fen = None;
+    let mut tb = relue(geo, &depart, &c.at("ordres"), &mut fen);
+    if let Some(f) = &fen {
+        assert_eq!(json::empreinte_ordre(f), c.ats("fenetre"), "{nom} : fenêtre des ordres ({})", json::dumps_ref_ordre(f));
+    }
     let emp = c.at("emp");
     let actes = c.at("actes");
     let mut ia = 0;
@@ -148,6 +168,7 @@ fn rejouer(geo: &Rc<GeoMap>, c: &Val) {
     assert_eq!(tb.phase, c.ats("phase"), "{nom} : phase");
     assert_eq!(tb.clock.to_bits(), c.atf("clock").to_bits(), "{nom} : heure");
     assert_eq!(json::empreinte_ordre(&tb.to_dict()), c.ats("fin"), "{nom} : état final");
+    assert_eq!(json::empreinte_ordre(&tb.map_view()), c.ats("carte"), "{nom} : map_view");
     assert_eq!(json::dumps_ref_ordre(&tb.result), json::dumps_ref_ordre(&c.at("result")), "{nom} : résultat");
     if tb.result.truthy() {
         assert_eq!(json::dumps_ref_ordre(&tb.result_view(&Val::from(0))), json::dumps_ref_ordre(&c.at("view")), "{nom} : result_view");
@@ -180,6 +201,8 @@ batailles! {
     b1813_ordres_def => "1813_ordres_def",
     b1870_ordres_place => "1870_ordres_place",
     b1790_ordres_reprise => "1790_ordres_reprise",
+    b1813_campagne => "1813_campagne",
+    b1870_campagne => "1870_campagne",
 }
 
 /// Des batailles tirées au sort, hors de la référence : `python3 outils/jumeau/batailles_ref.py balayage <n> <k0>
@@ -200,7 +223,34 @@ fn balayage() {
     assert!(ko.is_empty(), "{} sur {} :\n{}", ko.len(), r.len(), ko.join("\n"));
 }
 
+/// Le temps des batailles de la référence (sans joueur), pas seuls, sans empreinte : `cargo test --release --test
+/// batailles chrono -- --ignored --nocapture` (à comparer à la même mesure en Python).
+#[test]
+#[ignore]
+fn chrono() {
+    let geo = geo();
+    let (mut tot, mut npas) = (0.0, 0);
+    let seule = std::env::var("CONQUETE_CHRONO").ok(); // (une seule bataille : pour un profileur)
+    for c in reference().iter().filter(|c| c.at("actes").len() == 0 && seule.as_ref().map_or(true, |s| c.at("nom") == s.as_str())) {
+        let t0 = std::time::Instant::now();
+        let mut tb = relue(&geo, &json::loads(c.at("depart").s()).unwrap(), &c.at("ordres"), &mut None);
+        let mut n = 0;
+        while tb.phase == "combat" && n < LIMITE {
+            if tb.ask.truthy() {
+                OR::answer(&mut tb, if (n / PAS) % 2 == 1 { "go" } else { "wait" });
+            }
+            tb.step(2.0);
+            n += 1;
+        }
+        let dt = t0.elapsed().as_secs_f64();
+        println!("{} {n} {dt:.3}", c.ats("nom"));
+        tot += dt;
+        npas += n;
+    }
+    println!("total {tot:.2} s {npas} pas {:.3} ms/pas", tot / npas as f64 * 1000.0);
+}
+
 #[test]
 fn toutes_les_batailles_ont_leur_essai() {
-    assert_eq!(reference().len(), 21);
+    assert_eq!(reference().len(), 23);
 }
