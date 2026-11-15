@@ -339,8 +339,12 @@ macro_rules! cle_entiere {
 }
 cle_entiere!(i64, i32, usize);
 impl Cle for &Val {
+    #[inline]
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
-        m.get(*self)
+        match self {
+            Val::Str(s) => chercher_str(m, s), // (un texte court est partagé : son adresse ne change pas)
+            _ => m.get(*self),
+        }
     }
     fn val(&self) -> Val {
         (*self).clone()
@@ -354,8 +358,9 @@ impl Cle for &Val {
     }
 }
 impl Cle for Val {
+    #[inline]
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
-        m.get(self)
+        (&self).dans(m)
     }
     fn val(&self) -> Val {
         self.clone()
