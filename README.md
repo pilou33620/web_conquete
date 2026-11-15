@@ -481,7 +481,7 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   après 40 s), la caméra suivant l'action. Un bandeau raconte les grands gestes ; des **étiquettes** sur la carte
   marquent charges, carrés, mêlées et déroutes ; chaque grand moment laisse un **repère** sur la barre de la journée,
   qu'on touche pour y ramener la caméra. « ×1 / ×2 / ×4 » règlent la vitesse, « Passer » la finit au plus vite.
-  Le récapitulatif ajoute les pertes par arme et ce qui a décidé la journée. Banc : `python3 outils/banc_ia.py --ordres '{"man": "double"}'`.
+  Le récapitulatif ajoute les pertes par arme et ce qui a décidé la journée. Banc : `target/release/banc_ia --ordres '{"man": "double"}'` (après `cargo build --release -p conquete --bins`).
 - **Canons camouflés.** Une batterie postée dans un bois (pas en forêt : les pièces n'y passent pas) ne se voit qu'à
   moins de 250 m, 500 m quand elle tire (la fumée reste sous les arbres) ; en échange, les troncs gênent son tir
   (−35 %) et sa mise en batterie est plus longue de moitié. Vaut pour vous comme pour l'ennemi, dans tous les modes ;
@@ -772,11 +772,11 @@ Tout marche seul avec les réglages par défaut ; on intervient quand on veut, d
 Chaque bataille terminée (automatique, sur ordres, entre IA ou du mode Bataille) ajoute une ligne à
 `logs/batailles.jsonl` (non suivi par git ; mis de côté dans `batailles.1.jsonl` au-delà de 20 Mo) : date, saison,
 météo, terrain, place, fortification et canons du rempart, forces des deux camps, durée, brèches ouvertes et à quelle
-heure, vainqueur, pertes, prisonniers, prise de la place. `python3 outils/bilan.py` (option `--depuis AAAA-MM-JJ`) en
+heure, vainqueur, pertes, prisonniers, prise de la place. `target/release/bilan` (option `--depuis AAAA-MM-JJ`) en
 tire des tableaux : taux de prise des places selon leur fortification, temps pour ouvrir une brèche, places prises avec
 ou sans brèche, batailles automatiques face à celles sur ordres, résultats du mode Bataille.
 
-**Banc d'équilibre de la campagne** : `python3 outils/simuler.py --parties 6 --epoque 1790 --annees 30 --proc 2` fait
+**Banc d'équilibre de la campagne** : `target/release/simuler --parties 6 --epoque 1790 --annees 30 --proc 2` fait
 jouer des campagnes aux IA seules (le camp du joueur compris), sur des graines fixes, et donne pour chacune les guerres
 et leur durée, les places de chaque camp, l'écart entre le premier et le dernier, les camps en vie, les technologies, le
 trésor et les hommes sous les armes. Environ 20 s de calcul par année et par partie sur le Raspberry Pi ; la mesure
@@ -819,7 +819,7 @@ game/waterways.py    voies navigables (fleuves, estuaire, cabotage) et blocus
 game/ai.py           IA des départements
 game/cities.py       villes : emplacements et bâtiments, politique de la ville, événements locaux
 game/diplomacy.py    diplomatie et commerce
-game/battle_log.py   journal des batailles (logs/batailles.jsonl) ; outils/bilan.py en fait le bilan
+game/battle_log.py   journal des batailles (logs/batailles.jsonl) ; l'outil bilan en fait le bilan
 game/views.py        état envoyé au navigateur (brouillard de guerre), sauvegardes
 game/tactics/        batailles sur ordres ou commandées : carte de bataille (terrain.py), unités (units.py), simulation
                      (battle.py), IA qui livre la bataille (ai.py), vos ordres et leurs flèches (orders.py), raccord avec la

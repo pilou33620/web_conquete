@@ -4,8 +4,9 @@
 #   court : sans le banc long (1700 à 1890, environ une heure de plus)
 cd "$(dirname "$0")/.." || exit 1
 D=/tmp/banc-arbre; mkdir -p $D
+cargo build -q --release -p conquete --bins || exit 1
 run() {  # nom, options
-  python3 outils/simuler.py $2 --proc 2 > $D/$1.txt 2>&1
+  target/release/simuler $2 --proc 2 > $D/$1.txt 2>&1
   { echo "== $1 ($2)"; grep -E '^moyenne|trouvée' $D/$1.txt; echo; } >> $D/resume.txt
 }
 : > $D/resume.txt
