@@ -725,7 +725,7 @@ impl Game {
     /// Rend une liste neuve de places (dict de self.nodes).
     // engine.py, lignes 532 à 533
     pub fn owned_nodes(&self, code: &str) -> Val {
-        self.nodes.iter().filter(|n| n.at("owner") == code).collect()
+        self.nodes.liste().iter().filter(|n| n.at_is("owner", code)).cloned().collect()
     }
 
     /// Python : `mod(self, code, key, default=0.0)`.
