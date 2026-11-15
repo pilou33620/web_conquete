@@ -19,6 +19,13 @@ let skirmishBid = null;   // mode Bataille : la bataille isolée en cours (au re
 let epoch = 0, lost = false;   // epoch : change à chaque resetUI, pour jeter les réponses d'une ancienne partie
 let bootVer, bootGeo, reloading = false;  // version du serveur et géographie de la carte au chargement de la page
 
+// recharger la page : pas location.reload(), que Safari renvoie comme la requête d'origine, sans le cookie de session
+// du launcher (jeu ouvert depuis Internet par son relais, /o/<id>/) : on retombait sur sa page de connexion. Une
+// adresse neuve, demandée par la page elle-même, emporte le cookie.
+function recharger() {
+  location.replace(location.pathname + '?r=' + Date.now() + location.hash);
+}
+
 // le serveur a été relancé sur une nouvelle version, ou la partie chargée a une autre carte (geo.py, VERSION) : cette
 // page tourne encore avec l'ancien code ou l'autre carte
 function checkVersion(ver, geo) {
@@ -26,7 +33,7 @@ function checkVersion(ver, geo) {
   if (reloading || bootVer === undefined || !carte && (!ver || ver === bootVer)) return reloading;
   reloading = true;
   ui && ui.toast(carte ? 'Cette partie a sa propre carte : la page va se recharger.' : 'Nouvelle version du jeu installée : la page va se recharger.', 'good');
-  setTimeout(() => location.reload(), 2500);   // la partie est sur le serveur : rien n'est perdu
+  setTimeout(recharger, 2500);   // la partie est sur le serveur : rien n'est perdu
   return true;
 }
 
@@ -68,7 +75,7 @@ const REPRISE = 'conquete.reprise';
 function autreCarte(r, tuto = false) {
   if (r.geo == null || r.geo === bootGeo) return false;
   try { sessionStorage.setItem(REPRISE, tuto ? 'tuto' : '1'); } catch (e) { /* sans stockage : l'écran de départ, « Reprendre » */ }
-  location.reload();
+  recharger();
   return true;
 }
 
