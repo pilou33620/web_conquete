@@ -135,7 +135,7 @@ def tiree(k):
     v = rng.choice([2, 2, 2, 3])
     codes = [c for c in R.FACTIONS if c in geo(v).playable_codes]
     return (f'x{k}', v, rng.choice(codes), rng.choice(['facile', 'normal', 'difficile']), rng.randrange(1 << 30),
-            rng.choice(['1700', '1790', '1813', '1870']), rng.choice(['ia', 'rien']), 24 if v == 2 else 4)
+            rng.choice(['1700', '1790', '1813', '1870']), rng.choice(['ia', 'rien', 'ordres']), 24 if v == 2 else 4)
 
 
 def neuve(p):

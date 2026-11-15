@@ -8,9 +8,15 @@
 //! juste à la création et à chaque fin de mois. Un écart dit la partie, le mois et le premier champ de to_dict qui
 //! diffère. Les escarmouches (skirmish::new, puis la bataille jusqu'au bout) aussi.
 //!
-//! Ce qui varie en Python d'un lancement à l'autre (le jumeau tourne avec PYTHONHASHSEED=0) : aucun des deux endroits
-//! connus n'a fait d'écart dans ces parties (rails::sabotage : l'ordre de deux lignes du journal ; compute_income :
-//! le dernier bit de `_douane`, qui n'est pas sauvegardé).
+//! Ce qui varie en Python d'un lancement à l'autre (parcours de sets de textes ; le jumeau tourne avec
+//! PYTHONHASHSEED=0) :
+//! - rails.py sabotage écrit une ligne du journal par camp concerné (`for who in {code} | {…}`) : leur ordre change
+//!   avec PYTHONHASHSEED (g2_1870_ia, à partir du mois 23) ; le journal est comparé ces lignes rangées par camp
+//!   (journal(), le même dans le jumeau), rien d'autre n'est touché ;
+//! - engine.py compute_income additionne (`sum`) le commerce frontalier des voisins, un set de codes (`_douane`, puis
+//!   le revenu en livres) : la somme de Python est compensée et il y a au plus 8 voisins ; refaite dans tous les ordres
+//!   (toutes les permutations jusqu'à 6 voisins, 300 ordres tirés au-delà) à chacun des 67 000 appels de 8 parties
+//!   (géographies 1, 2 et 3), elle n'a jamais changé d'un bit. Rien n'est donc masqué pour `_douane`.
 //!
 //! Pour chercher un écart (dans `<dossier>` = $CONQUETE_DIAG) :
 //! - `python3 outils/jumeau/campagnes_ref.py <nom> <mois>` écrit l'empreinte après chaque pas du mois suivant
@@ -272,13 +278,14 @@ fn rejouer(geo: &Rc<GeoMap>, p: &Val, mois: Option<usize>) -> Result<(), String>
     Ok(())
 }
 
-/// Les parties de la géographie 3 (toute la France) ne jouent que leur premier mois, sauf avec
-/// CONQUETE_CAMPAGNES_LONGUES=1 (elles prennent alors plusieurs minutes : un mois y coûte 20 à 60 s).
+/// Par défaut, les parties de la géographie 3 (toute la France : un mois y coûte 20 à 60 s) ne sont comparées qu'à
+/// leur création, sauf g3_1790_ia et g3_1813_ordres qui jouent leur premier mois ; CONQUETE_CAMPAGNES_LONGUES=1 les
+/// joue en entier (une dizaine de minutes).
 fn partie(nom: &str) {
     let r = reference();
     let p = r.at("parties").iter().find(|p| p.at("nom") == nom).unwrap();
     let longues = std::env::var_os("CONQUETE_CAMPAGNES_LONGUES").is_some();
-    let mois = (p.ati("geo") == 3 && !longues).then_some(1);
+    let mois = (p.ati("geo") == 3 && !longues).then(|| ["g3_1790_ia", "g3_1813_ordres"].contains(&nom) as usize);
     if let Err(e) = rejouer(&geo(p.ati("geo")), &p, mois) {
         panic!("{e}");
     }
