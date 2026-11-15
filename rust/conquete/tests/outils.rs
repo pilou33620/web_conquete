@@ -71,7 +71,7 @@ fn sha256(texte: &str) -> String {
 
 #[test]
 fn carte_hex() {
-    assert_eq!(sha256(&lancer(env!("CARGO_BIN_EXE_carte_hex"), &[])), "21ea0b2941f34d1ace8368e92f30704e99dc541ff0cda74137bc38bcbec44444");
+    assert_eq!(sha256(&lancer(env!("CARGO_BIN_EXE_carte_hex"), &[])), "8ff1f433780422ad7bbcd0631e2ffdbd00a6f0da9af743c2bf353c094a3f2b52");
 }
 
 #[test]

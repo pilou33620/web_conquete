@@ -16,7 +16,7 @@
 //! `Vec` natifs et toute la génération se calcule en nombres natifs. Les fichiers de données sources sont embarqués ;
 //! seul le cache (map_cache*.json, le même fichier et le même format que le Python) se lit et s'écrit dans `data_dir()`.
 
-use crate::places::{CITY_POP, CITY_SPECIALTIES, EXTRA_ROADS, EXTRA_ROADS_2, FERRIES, NO_ROADS_2, PLACES, ROYAL_ROUTES};
+use crate::places::{CITY_POP, POP_1790_FR, CITY_SPECIALTIES, EXTRA_ROADS, EXTRA_ROADS_2, FERRIES, NO_ROADS_2, PLACES, ROYAL_ROUTES};
 use crate::py::{self, heapq, json, Val};
 use crate::{dict, list, py_const, tup};
 use indexmap::IndexMap;
@@ -724,7 +724,7 @@ impl GeoMap {
                 }
                 slugs.insert(slug.clone());
                 self.nodes.push(dict! {"id" => k, "slug" => slug, "name" => name, "x" => py::round_n(x, 2), "y" => py::round_n(y, 2), "dept" => &p[3], "type" => &p[4],
-                "spec" => p[5].to_list(), "fort" => &p[6], "pop0" => &p[7]});
+                "spec" => p[5].to_list(), "fort" => &p[6], "pop0" => POP_1790_FR().get_or(format!("{}|{}", name.s(), p[3].s()).as_str(), &p[7])});
                 self.by_name.setdefault(name, k); // (les noms des tables, Sud-Ouest d'abord : la place écrite à la main)
             }
         }

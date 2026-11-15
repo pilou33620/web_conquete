@@ -448,3 +448,64 @@ fn chrono() {
         println!("mois {m} : {:.2} s", t.elapsed().as_secs_f64());
     }
 }
+
+/// Refait les empreintes des parties et escarmouches de la géographie 3 (toute la France) avec le moteur Rust, quand
+/// ses données changent exprès (populations de 1790, trajectoires des villes : 15/11/2026). Les géographies 1 et 2 ne
+/// sont pas touchées : elles restent comparées aux références du jumeau Python.
+/// `CONQUETE_REFAIRE_GEO3=1 cargo test --release -p conquete --test campagnes refaire_geo3 -- --ignored`
+#[test]
+#[ignore]
+fn refaire_geo3() {
+    if std::env::var_os("CONQUETE_REFAIRE_GEO3").is_none() {
+        return;
+    }
+    let chemin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/references/campagnes.json");
+    let texte = std::fs::read_to_string(&chemin).unwrap();
+    let r = json::loads(&texte).unwrap();
+    assert_eq!(json::dumps_compact(&r), texte.trim_end(), "le fichier ne se réécrit pas à l'identique");
+    let g3 = geo(3);
+    let emp = |g: &mut Game| {
+        let d = etat(g);
+        let cles = dict! {};
+        for (k, v) in d.items() {
+            cles.set(k, json::empreinte_ordre(&v)[..8].to_string());
+        }
+        conquete::list![json::empreinte_ordre(&d)[..16].to_string(), cles]
+    };
+    for p in r.at("parties").iter().filter(|p| p.ati("geo") == 3) {
+        let n = p.at("emp").len();
+        let mut g = neuve(&g3, &p);
+        let mut l = vec![emp(&mut g)];
+        for _ in 1..n {
+            jouer_mois(&mut g, &p.ats("mode"));
+            l.push(emp(&mut g));
+        }
+        p.set("emp", l.into_iter().collect::<Val>());
+        p.set("over", g.over.truthy());
+        eprintln!("{} : {n} empreintes", p.ats("nom"));
+    }
+    for e in r.at("escarmouches").iter().filter(|e| e.ati("geo") == 3) {
+        let (g, bid) = S::new(g3.clone(), &e.at("body"));
+        let mut g = g.unwrap_or_else(|| panic!("{} : {bid}", e.ats("nom")));
+        e.set("neuve", json::empreinte_ordre(&V::to_dict(&mut g)));
+        let mut tb = g.tactical.take().unwrap();
+        e.set("fenetre", json::empreinte_ordre(&TB::orders_view(&g, &mut tb)));
+        e.set("set_orders", TB::set_orders(&mut g, &mut tb, &e.at("ordres"), true, true));
+        g.tactical = Some(tb);
+        while let Some(tb) = g.tactical.as_mut() {
+            if tb.ask.truthy() {
+                OR::answer(tb, "go");
+            }
+            S::tick(&mut g, 0.1);
+        }
+        let tb = g.tac_done.as_ref().unwrap();
+        let view = tb.result.truthy().then(|| Val::from(json::empreinte_ordre(&tb.result_view(&Val::from(0))))).unwrap_or(Val::None);
+        e.set("phase", tb.phase.clone());
+        e.set("clock", tb.clock);
+        e.set("result", tb.result.clone());
+        e.set("view", view);
+        e.set("fin", json::empreinte_ordre(&V::to_dict(&mut g)));
+        eprintln!("{} : refaite", e.ats("nom"));
+    }
+    std::fs::write(&chemin, json::dumps_compact(&r) + if texte.ends_with('\n') { "\n" } else { "" }).unwrap();
+}

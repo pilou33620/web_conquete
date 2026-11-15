@@ -358,3 +358,25 @@ py_const!(CITY_POP, dict!{
     "Fort Médoc" => 300, "Beynac" => 600, "Domme" => 1500, "Hautefort" => 1000, "Penne-d'Agenais" => 2000,
     "Navarrenx" => 1300, "Saint-Jean-Pied-de-Port" => 1500, "Urdos" => 400,
 });
+
+// Carte de France (géographie 3) : population vers 1790 des places dont l'outil de la carte (historique git) avait
+// gardé un chiffre d'aujourd'hui réduit (banlieues de Paris, villes neuves du XIXe siècle, Nice et la Savoie…).
+// Estimations à quelques milliers près ; clé « nom|département » (des homonymes : deux Saint-Nazaire).
+py_const!(POP_1790_FR, dict!{
+    "Nice|06" => 25000, "Annecy|74" => 5000, "Chambéry|73" => 12000, "Aix-les-Bains|73" => 2000, "Menton|06" => 3000,
+    "Antibes|06" => 5000, "Grasse|06" => 12000, "Perpignan|66" => 12000, "Ajaccio|20" => 5000, "Bastia|20" => 9000,
+    "Mulhouse|68" => 6000, "Colmar|68" => 13000, "Belfort|68" => 4500, "Tourcoing|59" => 12000, "Maubeuge|59" => 5000,
+    "Calais|62" => 7000, "Boulogne-sur-Mer|62" => 11000, "Lens|62" => 2000, "Saint-Quentin|02" => 10000,
+    "Saint-Denis|75" => 5000, "Boulogne-Billancourt|75" => 2000, "Aulnay-sous-Bois|75" => 1000, "Rueil-Malmaison|75" => 3000,
+    "Saint-Maur-des-Fossés|75" => 1000, "Noisy-le-Grand|75" => 1000, "Antony|75" => 1000, "Argenteuil|78" => 5000,
+    "Cergy|78" => 1000, "Massy|78" => 1000, "Corbeil-Essonnes|78" => 4000, "Chelles|77" => 1500, "Meaux|77" => 7000,
+    "Melun|77" => 5000, "Saint-Nazaire|44" => 3000, "La Roche-sur-Yon|85" => 1000, "Les Sables-d'Olonne|85" => 5000,
+    "Cholet|49" => 8000, "Lorient|56" => 20000, "Vannes|56" => 10000, "Quimper|29" => 7000, "Saint-Malo|35" => 12000,
+    "Laval|53" => 14000, "Évreux|27" => 8000, "Beauvais|60" => 12000, "Blois|41" => 12000, "Bourges|18" => 16000,
+    "Niort|79" => 15000, "Montauban|82" => 24000, "Albi|81" => 10000, "Carcassonne|11" => 15000, "Narbonne|11" => 9000,
+    "Béziers|34" => 14000, "Agde|34" => 7000, "Sète|34" => 7000, "Alès|30" => 9000, "Orange|84" => 7000,
+    "Martigues|13" => 6000, "Aubagne|13" => 6000, "Fréjus|83" => 2500, "Hyères|83" => 6000, "Valence|26" => 8000,
+    "Chalon-sur-Saône|71" => 10000, "Le Creusot|71" => 1500, "Montceau-les-Mines|71" => 800, "Brive-la-Gaillarde|19" => 6000,
+    "Charleville-Mézières|08" => 9000, "Vichy|03" => 1000, "Montluçon|03" => 4000, "Roanne|42" => 7000,
+    "Rive-de-Gier|42" => 3500, "Decazeville|12" => 600, "Lourdes|65" => 3000, "Royan|17" => 2500, "Trouville-sur-Mer|14" => 1000,
+});

@@ -808,7 +808,18 @@ py_const!(POP_WHY, dict!{
     "ameriques" => "on émigre vers les Amériques",
     "lande" => "bergers et échassiers vivent chichement de la lande",
     "pins" => "les pins et la résine font vivre la lande",
-    "remparts" => "les remparts ne font plus vivre la place"
+    "remparts" => "les remparts ne font plus vivre la place",
+    // (carte de France : les villes qui naissent ou explosent au XIXe siècle)
+    "capitale_fr" => "gares, usines et grands travaux : la France entière monte à Paris",
+    "grande_ville" => "chemins de fer, usines et faubourgs : toute la région y afflue",
+    "industrie" => "filatures et usines vident les campagnes alentour",
+    "mines" => "houillères et hauts fourneaux font sortir une ville de terre",
+    "grand_port" => "paquebots, docks et chemin de fer font la fortune du port",
+    "port_neuf" => "un port neuf et ses chantiers navals sortent des marais",
+    "arsenal" => "l’arsenal et la flotte de guerre font grandir le port",
+    "ville_neuve" => "ville neuve tracée sur ordre de l’Empereur, préfecture",
+    "pelerinage" => "les apparitions de 1858 amènent les pèlerins par trains entiers",
+    "banlieue_paris" => "Paris déborde : usines, gares et lotissements gagnent la banlieue"
 });
 
 
@@ -872,7 +883,58 @@ fn POP_CURVES_base() -> Val { dict!{
     "rural_40" => _rural(1857, 1.25, 1.18, "exode", "plein"), "rural_47" => _rural(1846, 1.12, 0.85, "exode", "plein"),
     "rural_64" => _rural(1846, 1.18, 0.98, "ameriques", "plein"),
     "pins" => list![tup![1700, 0.85, "lande"], tup![1790, 1.0, "lande"], tup![1857, 1.15, "pins"], tup![1900, 1.6, "pins"]],
-    "fort" => list![tup![1700, 1.05, "remparts"], tup![1790, 1.0, "remparts"], tup![1900, 0.92, "remparts"]]
+    "fort" => list![tup![1700, 1.05, "remparts"], tup![1790, 1.0, "remparts"], tup![1900, 0.92, "remparts"]],
+    // --- carte de France : rapport à 1790 d'après les recensements (1801, 1831, 1851, 1872, 1901), à quelques % près ---
+    // Paris : ~510 000 en 1700, 600 000 en 1790, 1 050 000 en 1851, 1 700 000 après l'annexion de 1860, 2 700 000 en 1901
+    "paris" => list![tup![1700, 0.85, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 0.91, "paix"], tup![1831, 1.3, "capitale_fr"],
+             tup![1851, 1.75, "capitale_fr"], tup![1861, 2.8, "capitale_fr"], tup![1872, 3.0, "capitale_fr"], tup![1900, 4.5, "capitale_fr"]],
+    "lyon" => list![tup![1700, 0.67, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 0.75, "paix"], tup![1831, 1.03, "industrie"],
+            tup![1852, 1.75, "grande_ville"], tup![1872, 2.2, "grande_ville"], tup![1900, 3.2, "grande_ville"]],
+    "marseille" => list![tup![1700, 0.85, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 1.05, "paix"], tup![1831, 1.4, "grand_port"],
+                 tup![1851, 1.85, "grand_port"], tup![1872, 2.95, "grand_port"], tup![1900, 4.6, "grand_port"]],
+    "grande_ville" => list![tup![1700, 0.85, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 0.95, "paix"], tup![1831, 1.2, "grande_ville"],
+                    tup![1851, 1.5, "grande_ville"], tup![1872, 2.0, "grande_ville"], tup![1900, 2.8, "grande_ville"]],
+    "lille" => list![tup![1700, 0.85, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 0.9, "paix"], tup![1851, 1.22, "industrie"],
+             tup![1860, 2.0, "industrie"], tup![1872, 2.5, "industrie"], tup![1900, 3.4, "industrie"]],
+    "industrie" => list![tup![1700, 0.85, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 1.0, "paix"], tup![1831, 1.6, "industrie"],
+                 tup![1851, 2.4, "industrie"], tup![1872, 3.6, "industrie"], tup![1900, 5.0, "industrie"]],
+    // Mulhouse : ~6 000 âmes à sa réunion (1798), 30 000 en 1851, 90 000 en 1901 (indiennes et filatures)
+    "mulhouse" => list![tup![1700, 0.6, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 1.0, "industrie"], tup![1831, 2.2, "industrie"],
+                tup![1851, 4.8, "industrie"], tup![1872, 9.0, "industrie"], tup![1900, 15.0, "industrie"]],
+    // Saint-Étienne : 18 000 en 1790, 56 000 en 1851, 147 000 en 1901 (houille, armes, rubans)
+    "saint_etienne" => list![tup![1700, 0.7, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 0.9, "mines"], tup![1831, 1.85, "mines"],
+                     tup![1851, 3.1, "mines"], tup![1872, 6.0, "mines"], tup![1900, 8.2, "mines"]],
+    // bourgs devenus villes de la mine ou des forges (Le Creusot des Schneider, Decazeville, Montceau, le bassin du Nord)
+    "mines" => list![tup![1700, 0.9, "bourg"], tup![1790, 1.0, "bourg"], tup![1831, 1.6, "mines"], tup![1851, 5.0, "mines"],
+             tup![1872, 12.0, "mines"], tup![1900, 18.0, "mines"]],
+    "mines_tard" => list![tup![1700, 0.9, "bourg"], tup![1790, 1.0, "bourg"], tup![1851, 1.4, "bourg"], tup![1872, 4.0, "mines"],
+                  tup![1900, 13.0, "mines"]],
+    "forges_fr" => list![tup![1700, 0.9, "bourg"], tup![1790, 1.0, "bourg"], tup![1831, 1.4, "forges"], tup![1851, 3.0, "forges"],
+                 tup![1872, 5.0, "forges"], tup![1900, 8.5, "forges"]],
+    // Le Havre : 20 000 en 1790, 130 000 en 1901 (paquebots transatlantiques, coton) ; Boulogne, Calais (tulles)
+    "grand_port" => list![tup![1700, 0.8, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 0.85, "blocus"], tup![1831, 1.3, "grand_port"],
+                  tup![1851, 2.2, "grand_port"], tup![1872, 4.0, "grand_port"], tup![1900, 6.0, "grand_port"]],
+    // Saint-Nazaire : un bourg de 3 000 âmes, puis les bassins (1856) et les chantiers de Penhoët : 35 000 en 1901
+    "saint_nazaire" => list![tup![1700, 0.9, "bourg"], tup![1790, 1.0, "bourg"], tup![1851, 1.3, "bourg"], tup![1857, 2.0, "port_neuf"],
+                     tup![1872, 6.0, "port_neuf"], tup![1900, 12.0, "port_neuf"]],
+    "arsenal" => list![tup![1700, 0.9, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 0.8, "blocus"], tup![1831, 1.5, "arsenal"],
+               tup![1851, 2.2, "arsenal"], tup![1872, 2.6, "arsenal"], tup![1900, 3.4, "arsenal"]],
+    // La Roche-sur-Yon : un village jusqu'à la ville neuve de Napoléon (1804), 13 000 habitants en 1901
+    "roche_sur_yon" => list![tup![1700, 1.0, "bourg"], tup![1790, 1.0, "bourg"], tup![1804, 1.0, "ville_neuve"], tup![1811, 2.5, "ville_neuve"],
+                     tup![1851, 6.5, "ville_neuve"], tup![1900, 13.0, "ville_neuve"]],
+    // Nice, Menton : comté de Nice ; les hivernants anglais et russes, puis le chemin de fer (1864)
+    "riviera" => list![tup![1700, 0.85, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 0.75, "paix"], tup![1851, 1.35, "hivernants"],
+               tup![1872, 2.1, "hivernants"], tup![1900, 4.2, "hivernants"]],
+    "thermes_fr" => list![tup![1700, 0.9, "bourg"], tup![1790, 1.0, "bourg"], tup![1831, 1.2, "thermes"], tup![1851, 1.6, "thermes"],
+                  tup![1872, 4.0, "thermes"], tup![1900, 12.0, "thermes"]],
+    "bains_fr" => list![tup![1700, 0.9, "bourg"], tup![1790, 1.0, "bourg"], tup![1851, 1.6, "bains"], tup![1872, 3.0, "bains"], tup![1900, 4.5, "bains"]],
+    "lourdes" => list![tup![1700, 0.9, "bourg"], tup![1790, 1.0, "bourg"], tup![1851, 1.4, "bourg"], tup![1858, 1.4, "pelerinage"],
+               tup![1872, 1.8, "pelerinage"], tup![1900, 2.9, "pelerinage"]],
+    "banlieue_paris" => list![tup![1700, 0.8, "defrichement"], tup![1790, 1.0, "plein"], tup![1831, 1.3, "banlieue_paris"],
+                      tup![1851, 1.9, "banlieue_paris"], tup![1872, 3.4, "banlieue_paris"], tup![1900, 6.0, "banlieue_paris"]],
+    // Saint-Denis, Boulogne-Billancourt : les usines de la Plaine et des bords de Seine (60 000 et 30 000 en 1901)
+    "banlieue_usines" => list![tup![1700, 0.8, "defrichement"], tup![1790, 1.0, "plein"], tup![1831, 1.6, "banlieue_paris"],
+                       tup![1851, 3.0, "banlieue_paris"], tup![1872, 6.5, "banlieue_paris"], tup![1900, 12.0, "banlieue_paris"]]
 } }
 // trajectoires particulières (les autres places suivent celle de leur type et de leur pays)
 py_const!(POP_PLACE, dict!{
@@ -885,7 +947,23 @@ py_const!(POP_PLACE, dict!{
     "Périgueux" => "perigueux", "Bergerac" => "bergerac", "Mont-de-Marsan" => "montdemarsan", "Dax" => "dax",
     "Morcenx" => "gare", "Labouheyre" => "gare", "Agen" => "agen", "Villeneuve-sur-Lot" => "villeneuve", "Marmande" => "marmande",
     "Fumel" => "forges", "Pau" => "pau", "Bayonne" => "bayonne", "Biarritz" => "biarritz", "Saint-Jean-de-Luz" => "stjeandeluz",
-    "Hendaye" => "hendaye", "Mauléon" => "mauleon", "Oloron-Sainte-Marie" => "oloron", "Salies-de-Béarn" => "salies"
+    "Hendaye" => "hendaye", "Mauléon" => "mauleon", "Oloron-Sainte-Marie" => "oloron", "Salies-de-Béarn" => "salies",
+    // carte de France (clé « nom|département » : des homonymes d'un département à l'autre)
+    "Paris|75" => "paris", "Lyon|69" => "lyon", "Marseille|13" => "marseille", "Lille|59" => "lille",
+    "Toulouse|31" => "grande_ville", "Reims|51" => "grande_ville",
+    "Limoges|87" => "grande_ville", "Nancy|54" => "grande_ville", "Grenoble|38" => "grande_ville", "Le Mans|72" => "grande_ville",
+    "Tourcoing|59" => "industrie", "Roanne|42" => "industrie", "Calais|62" => "industrie", "Rive-de-Gier|42" => "industrie",
+    "Mulhouse|68" => "mulhouse", "Saint-Étienne|42" => "saint_etienne",
+    "Le Creusot|71" => "mines", "Decazeville|12" => "mines",
+    "Montceau-les-Mines|71" => "mines_tard", "Lens|62" => "mines_tard", "Montluçon|03" => "forges_fr",
+    "Le Havre|76" => "grand_port", "Boulogne-sur-Mer|62" => "grand_port", "Saint-Nazaire|44" => "saint_nazaire",
+    "Toulon|83" => "arsenal", "Brest|29" => "arsenal", "Lorient|56" => "arsenal", "La Roche-sur-Yon|85" => "roche_sur_yon",
+    "Nice|06" => "riviera", "Menton|06" => "riviera", "Vichy|03" => "thermes_fr", "Aix-les-Bains|73" => "bains_fr",
+    "Royan|17" => "bains_fr", "Trouville-sur-Mer|14" => "bains_fr", "Lourdes|65" => "lourdes",
+    "Saint-Denis|75" => "banlieue_usines", "Boulogne-Billancourt|75" => "banlieue_usines", "Argenteuil|78" => "banlieue_paris",
+    "Aulnay-sous-Bois|75" => "banlieue_paris", "Rueil-Malmaison|75" => "banlieue_paris", "Saint-Maur-des-Fossés|75" => "banlieue_paris",
+    "Noisy-le-Grand|75" => "banlieue_paris", "Antony|75" => "banlieue_paris", "Cergy|78" => "banlieue_paris",
+    "Massy|78" => "banlieue_paris", "Corbeil-Essonnes|78" => "banlieue_paris", "Chelles|77" => "banlieue_paris"
 });
 pub const POP_TREND_K: f64 = 0.25;   // une place qui grandit plus vite que la moyenne produit un peu plus (racine quatrième)
 pub const POP_EXCESS: f64 = 0.05;   // part de l'excédent qui s'en va chaque mois quand la place est trop pleine
@@ -912,7 +990,10 @@ py_const!(POP_CURVES, {
 
 /// Trajectoire de population d'un lieu (nœud de la carte).
 pub fn pop_curve(gn: &Val) -> Val {
-    let mut key = POP_PLACE().get(gn.at("name"));
+    let mut key = POP_PLACE().get(format!("{}|{}", gn.at("name").s(), gn.at("dept").s()).as_str());
+    if key.is_none() {
+        key = POP_PLACE().get(gn.at("name"));
+    }
     if key.is_none() {
         let (typ, dept) = (gn.at("type"), gn.at("dept"));
         if typ == "fort" {

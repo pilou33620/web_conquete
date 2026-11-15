@@ -150,3 +150,16 @@ fn build() {
     assert!(R::UNITS().is(&R::UNITS()));
     assert!(R::UNITS().at("suisses").at("terrain").is(&R::UNITS().at("ligne").at("terrain")));
 }
+
+/// Carte de France : une trajectoire se cherche d'abord par « nom|département » (deux Saint-Nazaire), puis par nom.
+#[test]
+fn trajectoire_par_departement() {
+    let noeud = |nom: &str, dept: &str, typ: &str| conquete::dict! {"name" => nom, "dept" => dept, "type" => typ, "spec" => conquete::list![]};
+    let nazaire = R::pop_curve(&noeud("Saint-Nazaire", "44", "ville"));
+    assert_eq!(json::dumps_ref_ordre(&nazaire), json::dumps_ref_ordre(&R::POP_CURVES().at("saint_nazaire")));
+    let autre = R::pop_curve(&noeud("Saint-Nazaire", "66", "village"));
+    assert_eq!(json::dumps_ref_ordre(&autre), json::dumps_ref_ordre(&R::POP_CURVES().at("rural_fr")));
+    // (le Sud-Ouest garde ses clés par nom)
+    let bx = R::pop_curve(&noeud("Bordeaux", "33", "capitale"));
+    assert_eq!(json::dumps_ref_ordre(&bx), json::dumps_ref_ordre(&R::POP_CURVES().at("bordeaux")));
+}

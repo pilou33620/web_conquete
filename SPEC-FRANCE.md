@@ -72,10 +72,24 @@ voies navigables et côtes au-delà du Sud-Ouest, vérifier la fluidité sur iPa
   | 12 | Nîmes | 41 000 | 25 | Avignon (papale jusqu'en 1791) | 26 000 |
   | 13 | Amiens | 40 000 | | | |
 
-  À corriger au passage dans le mode France : quelques places ont gardé une population d'aujourd'hui réduite au lieu
-  d'un chiffre de 1790, et passeraient sinon devant ces villes : Nice (114 476 ; comté de Nice, savoyard jusqu'en
-  1792), Annecy (42 277 ; Savoie), Saint-Denis (47 705), Boulogne-Billancourt, Argenteuil, Mulhouse (république
-  alliée des Suisses jusqu'en 1798), Tourcoing, Aulnay-sous-Bois.
+- **Les villes changent avec l'époque** (demande du 15/11/2026) : la liste des 25 suit les dates de la partie. Des
+  villes y entrent au XIXe siècle (en France : Saint-Étienne, Roubaix, Le Havre, Saint-Nazaire, Mulhouse…), d'autres
+  en sortent. Une ville neuve existe sur la carte dès le départ, comme un bourg, et grandit selon sa trajectoire.
+
+Fait dans le mode France le 15/11/2026 :
+- populations de 1790 corrigées (`POP_1790_FR`, `places.rs`) pour 70 places dont l'outil de la carte avait gardé un
+  chiffre d'aujourd'hui réduit : Nice (114 476 → 25 000), Annecy, la banlieue de Paris (Saint-Denis, Boulogne…),
+  Mulhouse, Perpignan, Saint-Nazaire, La Roche-sur-Yon… Le fichier `places_france.json` ne change pas : la carte n'est
+  pas refaite et les parties sauvegardées restent valables ;
+- trajectoires d'époque (`POP_CURVES`, `POP_PLACE` par « nom|département », `rules.rs`) : Paris (4,5 fois 1790 en 1900),
+  Lyon, Marseille, Lille, les villes des mines et des forges (Saint-Étienne, Le Creusot, Decazeville, Montceau, Lens,
+  Montluçon), des usines (Mulhouse, Tourcoing, Roanne, Calais), des ports (Le Havre, Boulogne,
+  Saint-Nazaire), des arsenaux (Toulon, Brest, Lorient), des eaux et des bains (Vichy, Aix-les-Bains, Royan, Trouville,
+  Nice, Menton), Lourdes, La Roche-sur-Yon (ville neuve de 1804), la banlieue de Paris.
+
+Reste à faire : les autres places de la carte de France gardent un chiffre d'aujourd'hui réduit (moins de 14 000
+habitants, l'ordre de grandeur reste plausible). Roubaix, Dunkerque, Cherbourg, Cannes manquent sur la carte : les
+ajouter change les numéros des places, donc une géographie 4 (la 3 figée pour les parties en cours).
 
 ## Risques
 
