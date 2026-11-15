@@ -127,14 +127,27 @@ impl Date {
 
 // ------------------------------------------------------------------ fonctions de module
 pub fn ordinal(n: i64) -> String {
-    todo!()
+    if n == 1 { "1re".to_string() } else { format!("{n}e") }
 }
 
 /// Valeur d'une courbe [(année, valeur, …)] interpolée à l'année y, et l'étiquette du segment en cours.
 /// pts : une liste de tuples (année, valeur) ou (année, valeur, étiquette) — `R::POP_ERA()`, `R::pop_curve(gn)`.
 /// Rend (valeur, étiquette) ; l'étiquette est `Val::None` quand le point n'en a pas.
 pub fn curve_at(pts: &Val, y: f64) -> (f64, Val) {
-    todo!()
+    let etiquette = |p: &Val| if p.len() > 2 { p.at(2) } else { Val::None };
+    let p0 = pts.at(0);
+    if y <= p0.atf(0) {
+        return (p0.atf(1), etiquette(&p0));
+    }
+    let v = pts.vec();
+    for w in v.windows(2) {
+        let (a, b) = (&w[0], &w[1]);
+        if y < b.atf(0) {
+            return (a.atf(1) + (b.atf(1) - a.atf(1)) * (y - a.atf(0)) / (b.atf(0) - a.atf(0)), etiquette(a));
+        }
+    }
+    let p = pts.at(-1);
+    (p.atf(1), etiquette(&p))
 }
 
 // ------------------------------------------------------------------ la partie
@@ -356,7 +369,153 @@ impl Game {
     /// (Le Python finit par `from .ai import AI` : `self.ais = {c: AI(self, c) …}` pour tous les camps sauf le joueur.)
     // engine.py, lignes 54 à 152
     pub fn new(geo: Rc<GeoMap>, player: &str, difficulty: &Val, seed: &Val, scenario: &Val) -> Game {
-        todo!()
+        let mut g = Game::__new__(geo.clone());
+        g.player = player.to_string();
+        g.scenario = if R::SCENARIOS().has(scenario) { scenario.string() } else { "1790".to_string() };
+        g.start_ord = Date::de(&R::SCENARIOS().at(&g.scenario).at("date")).toordinal();
+        g.difficulty = if R::DIFFICULTY().has(difficulty) { difficulty.string() } else { "normal".to_string() };
+        g.seed = if seed.is_some() { seed.i() } else { py::graine_hasard() };
+        g.rng = Random::new(g.seed);
+        g.t = 0.0;
+        g.speed_idx = 0;
+        g.uid = 1;
+        g.seq = 0;
+        g.flood_until = -1.0;
+        g.market = R::MARKET_BASE().copy();
+        g._dirty_income = true;
+        g._last_day = -1;
+        g.weather = Val::dict_from(R::ZONES().keys().into_iter().map(|z| (z, dict! {"kind" => "soleil", "left" => 2})).collect());
+        g.y_mont = geo.xy(43.2, 0.0).1;
+        g.x_cote = geo.xy(44.0, -0.95).0;
+
+        g.factions = dict! {};
+        // les camps de cette carte : toute la France (géographie 3), ou les cinq départements du Sud-Ouest (1 et 2)
+        let codes: Vec<String> = R::FACTIONS().keys().into_iter().filter(|c| geo.playable_codes.has(c)).map(|c| c.string()).collect();
+        for code in &codes {
+            let res = dict! {"livres" => 500, "vivres" => 400, "fer" => 80, "bois" => 120, "armes" => 160, "outils" => 40, "recrues" => 900};
+            let income = Val::dict_from(R::RESOURCES().iter().map(|r| (r, Val::from(0.0))).collect());
+            let research = Val::dict_from(R::BRANCHES().iter().map(|b| (b, Val::None)).collect());
+            let mut rel = vec![];
+            for o in &codes {
+                if o != code {
+                    rel.push((Val::from(o), Val::from(g.rng.randint(-15, 25))));
+                }
+            }
+            let f = dict! {
+                "code" => code, "alive" => true, "res" => res, "income" => income, "slider" => 0.5, "research" => research,
+                "techs" => list![], "rel" => Val::dict_from(rel), "trade" => dict! {}, "truce" => dict! {},
+                "overlord" => Val::None, "war_since" => dict! {}, "mods" => dict! {}, "army_count" => 0,
+                "stats" => dict! {"won" => 0, "lost" => 0, "captured" => 0, "killed" => 0},
+                "start_nodes" => 0, "alerts" => dict! {}, "tax" => 0.5, "intel" => dict! {}, "prisoners" => dict! {},
+                "weary" => 0.0, "prestige" => 0.0, "treaties" => dict! {},
+                "tarif" => 0, "douaniers" => false,   // douane (SPEC-MERCENAIRES.md)
+                "last_war" => -2.0 * 365.0, "refu" => 0.0   // au départ, de vieilles rancunes : les premières guerres viennent vite
+            };
+            g.factions.set(code, f);
+            let maison = FM::nouvelle(&g, code); // famille dirigeante (game/familles.py)
+            g.factions.at(code).set("maison", maison);
+        }
+        for a in &codes {
+            for b in &codes {
+                if a < b {
+                    g.diplo.insert((a.clone(), b.clone()), "paix".to_string());
+                }
+            }
+        }
+
+        g.nodes = list![];
+        for n in geo.nodes.iter() {
+            let typ = n.at("type");
+            let base = R::NODE_BASE().at(&typ);
+            let owner = if typ == "capitale" || typ == "ville" { n.at("dept") } else { Val::from(R::NEUTRAL) };
+            let fort0 = if typ == "capitale" {
+                let f = n.at("fort");
+                if Val::from(2) > f { Val::from(2) } else { f }
+            } else {
+                n.at("fort")
+            };
+            let mm = &base.at("milice") + &(40 * &fort0);
+            let milice = if owner != R::NEUTRAL { mm.clone() } else { Val::from(py::int(mm.f() * g.rng.uniform(0.55, 1.0))) };
+            let nid = n.ati("id");
+            let nd = dict! {
+                "id" => n.at("id"), "owner" => &owner, "milice" => milice.f(), "milice_max" => &mm, "fort" => fort0,
+                "dev" => 0, "pop" => n.atf("pop0") * g.pop_trend(nid, &Val::None), "assim" => 1.0,
+                "stab" => 1.0, "garrison" => list![], "queue" => list![], "siege" => Val::None, "last_seen" => dict! {},
+                "depot" => 0, "rf" => 0
+            };
+            nd.set("ph", list![py::int(nd.atf("pop"))]); // population des douze derniers mois
+            g.nodes.push(nd);
+            if owner != R::NEUTRAL {
+                g.factions.at(&owner).inc("start_nodes", 1);
+            }
+        }
+        let sc = R::SCENARIOS().at(&g.scenario);
+        if sc.getb("techs_before") {
+            let tb = sc.at("techs_before");
+            for f in g.factions.values() {
+                // avec leurs prérequis, même datés après (le gemmage de 1740 suppose les semis de pins)
+                let tech = R::TECH();
+                let mut known: IndexSet<Val> = tech.keys().into_iter().filter(|t| R::TECH_YEAR().at(t) <= tb).collect();
+                loop {
+                    let missing: Vec<Val> = known
+                        .iter()
+                        .flat_map(|t| tech.at(t).at("req").vec())
+                        .filter(|q| !known.contains(q))
+                        .collect();
+                    if missing.is_empty() {
+                        break;
+                    }
+                    known.extend(missing);
+                }
+                f.set("techs", Val::list(tech.keys().into_iter().filter(|t| known.contains(t)).collect()));
+            }
+        }
+        // (les techniques de l'époque d'abord : les premières troupes en ont les armes)
+        for code in &codes {
+            let cap = g.capital_of(code);
+            let c = Val::from(code);
+            let garrison = list![g.new_reg("ligne", &Val::None, &c), g.new_reg("ligne", &Val::None, &c), g.new_reg("cavalerie", &Val::None, &c)];
+            g.nodes.at(&cap).set("garrison", garrison);
+            let gn = geo.nodes.at(&cap);
+            let (gx, gy) = (gn.atf("x"), gn.atf("y"));
+            let regs: Val = ["ligne", "legere", "cavalerie"].iter().map(|t| g.new_reg(t, &Val::None, &c)).collect();
+            g.create_army(code, gx, gy, &regs, &cap, &Val::None, &Val::None);
+            g.recompute_mods(code);
+        }
+        g.era_id = g.era().at("id");
+        TB::ensure(&mut g); // batailles tactiques : réglage, bataille en cours
+        g.pending_ev = list![]; // décisions qui attendent le joueur
+        g.tour = TT::new_state(true); // tour par tour, mois par mois (game/turns.py)
+        g.rails = dict! {}; // voies ferrées : {tronçon: dict(done, cut[, by, left, total])} (game/rails.py)
+        // une partie qui commence tard trouve ouvertes les lignes de son époque (en 1870 : Bordeaux–Bayonne, –Sète…)
+        if sc.getb("techs_before") {
+            for (sid, sec) in RL::sections(&g.geo).items() {
+                let y = sec.at("year");
+                if y > 0i64 && y < sc.at("date").at(0) {
+                    g.rails.set(sid, dict! {"done" => true, "cut" => Val::None});
+                }
+            }
+        }
+        g.ev_done = list![]; // événements datés déjà passés
+        if g.scenario == "1790" {
+            let t = format!("4 mars 1790 : l'Assemblée crée les départements. Vous gouvernez {}.", g.fname(player));
+            g.log("info", &t, &dict! {"important" => true});
+        } else {
+            let t = format!("{} — {}. Vous gouvernez {}.", g.date_str(&Val::None), g.era().at("name"), g.fname(player));
+            g.log("info", &t, &dict! {"important" => true});
+        }
+        let t = format!(
+            "Objectif : prendre tous les chefs-lieux (ou obtenir la soumission de leurs {}s), ou être le plus prestigieux à la fin de 1899.",
+            g.dept_word()
+        );
+        g.log("info", &t, &dict! {});
+        let mut ais = IndexMap::new();
+        for c in codes.iter().filter(|c| *c != player) {
+            ais.insert(c.clone(), Some(AI::new(&g, c)));
+        }
+        g.ais = ais;
+        g.compute_income();
+        g
     }
 }
 
