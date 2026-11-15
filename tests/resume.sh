@@ -1,12 +1,11 @@
 #!/bin/sh
-# Toute la suite (tests/lancer.py) en une fois, avec un bilan court : le journal complet va dans /tmp/tests-conquete.log,
-# l'écran ne reçoit que les échecs et une ligne de bilan. Échecs connus (le Pi est plus lent qu'un PC) : ignorés.
+# Toute la suite en une fois, avec un bilan court : le journal complet va dans /tmp/tests-conquete.log,
+# l'écran ne reçoit que les échecs et une ligne de bilan.
 #   sh tests/resume.sh
 cd "$(dirname "$0")/.." || exit 1
 LOG=/tmp/tests-conquete.log
-CONNUS='test_vite ('
-timeout 1500 python3 tests/lancer.py > "$LOG" 2>&1
-NOUV=$(grep -E '^(FAIL|ERROR):|^not ok|✖' "$LOG" | grep -v "$CONNUS" | sort -u | head -30)
-PY=$(grep -E '^Ran [0-9]+ tests' "$LOG" | tail -1)
+{ cargo test -p conquete 2>&1; echo "== node"; node --test --test-reporter=dot tests/*.test.mjs 2>&1; } > "$LOG"
+NOUV=$(grep -E '^test .* FAILED|^---- .* stdout ----|panicked at|^not ok|✖' "$LOG" | sort -u | head -30)
+RS=$(grep -E '^test result:' "$LOG" | awk '{ok+=$4; ko+=$6} END {print ok " essais Rust réussis, " ko " échoués"}')
 if [ -n "$NOUV" ]; then echo "ÉCHECS :"; echo "$NOUV"; echo "(détails : $LOG)"; fi
-echo "Bilan : ${PY:-python ?} (+ banc js) ; $( [ -n "$NOUV" ] && echo 'À CORRIGER' || echo 'OK (échecs connus ignorés)')"
+echo "Bilan : $RS (+ banc js) ; $( [ -n "$NOUV" ] && echo 'À CORRIGER' || echo 'OK')"

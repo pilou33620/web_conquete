@@ -18,12 +18,9 @@ if [ "$1" = "--retirer" ]; then
 fi
 
 PORT="${1:-8790}"
-PY="$(command -v python3 || true)"
-if [ -z "$PY" ]; then
-  echo "Python 3 est introuvable. Installez-le avec : sudo apt install python3"
-  exit 1
-fi
-"$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' || { echo "Python 3.8 ou plus récent est nécessaire."; exit 1; }
+# l'exécutable du jeu, une première fois tout de suite (compilé si cargo est là, sinon téléchargé) :
+# une erreur se voit ici plutôt que dans le journal du service
+( cd "$DIR" && . ./binaires.sh && obtenir_binaires ) || { echo "Impossible d'obtenir l'exécutable du jeu (voir ci-dessus)."; exit 1; }
 
 sudo tee "$UNIT" > /dev/null <<UNITEOF
 [Unit]
@@ -34,7 +31,7 @@ Wants=network-online.target
 [Service]
 User=$(id -un)
 WorkingDirectory=$DIR
-ExecStart=$PY $DIR/server.py --lan --port $PORT --no-browser
+ExecStart=/bin/sh $DIR/lancer.sh --lan --port $PORT --no-browser
 Restart=on-failure
 RestartSec=5
 

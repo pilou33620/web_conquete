@@ -1178,6 +1178,8 @@ fn _relaunch(info: &serde_json::Value, argv: &[String]) {
     println!("Redémarrage du jeu avec la nouvelle version…\n");
     let _ = std::io::stdout().flush();
     if std::env::var("CONQUETE_RELANCEUR").as_deref() == Ok("1") {
+        // le script qui reboucle relance un nouveau processus : l'annonce passe par un fichier (relu par auto_update)
+        let _ = std::fs::write(ROOT().join(".maj-annonce.json"), info.to_string());
         std::process::exit(75);
     }
     let Ok(exe) = std::env::current_exe() else { return };
@@ -1198,7 +1200,9 @@ fn _relaunch(info: &serde_json::Value, argv: &[String]) {
 /// Au démarrage : récupère la dernière version sur GitHub (avance rapide seulement) puis relance le jeu.
 /// patient : Raspberry Pi / machine sans écran, où le Wi-Fi peut arriver après le service.
 pub fn auto_update(enabled: bool, patient: bool, argv: &[String]) {
-    let relaunched = std::env::var(MAJ_ENV).ok();
+    let annonce = ROOT().join(".maj-annonce.json");
+    let relaunched = std::env::var(MAJ_ENV).ok().or_else(|| std::fs::read_to_string(&annonce).ok());
+    let _ = std::fs::remove_file(&annonce);
     std::env::remove_var(MAJ_ENV);
     if which("git").is_none() {
         return _set_update("pas_git", "Mise à jour automatique impossible : git n'est pas installé.", "", None);

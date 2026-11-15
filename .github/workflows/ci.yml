@@ -1,0 +1,27 @@
+name: bancs d'essai
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  essais:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # node : les bancs de l'interface (tests/*.test.mjs) et la comparaison des plans de ville au JavaScript
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # le moteur, le serveur et leurs bancs : chaque module comparé au Python d'origine (références figées),
+      # batailles et campagnes entières rejouées au bit près, bancs du jeu, serveur en boîte noire
+      - name: Moteur et serveur (Rust)
+        run: cargo test -p conquete
+
+      - name: Interface (node)
+        run: node --test --test-reporter=dot tests/*.test.mjs

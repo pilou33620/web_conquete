@@ -11,3 +11,4 @@ captures-3d/
 # Rust : compilation et exécutables (compilés ici ou téléchargés)
 /target/
 /bin/
+.maj-annonce.json
