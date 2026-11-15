@@ -1,5 +1,5 @@
 //! Porte game/tactics/ai.py, lignes 1 à 297 : la docstring du module (l'aide-mémoire de l'IA, plus bas) et les
-//! constantes. SQUELETTE : les constantes sont portées, les corps des fonctions sont à écrire (`todo!()`).
+//! constantes. Les constantes sont portées ; les corps des fonctions sont dans les parties ci-dessous.
 //!
 //! Les fonctions sont réparties, dans l'ordre du Python, entre :
 //! - `deploiement.rs` (l. 298-1294) : outils ; lecture du terrain ; plan ; déploiement ; places ;
