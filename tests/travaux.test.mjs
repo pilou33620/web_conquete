@@ -22,7 +22,7 @@ const { surChemin } = await import('../web/js/carte/lib.js');
 
 const racine = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 // (avec cut : les routes que la crue coupe, la liste que le serveur envoie pendant la crue)
-const m = JSON.parse(execFileSync('python3', ['-c', 'import json,sys; from game.geo import GeoMap; from game import crue; g = GeoMap(2); m = g.client_payload(); m["cut"] = [[k, *s] for k, l in crue.spans(g).items() for s in l]; sys.stdout.write(json.dumps(m))'], { cwd: racine, maxBuffer: 64 << 20 }).toString());
+const m = JSON.parse(execFileSync('cargo', ['run', '-q', '-p', 'conquete', '--bin', 'carte_json', '--', '2', '--cut'], { cwd: racine, maxBuffer: 64 << 20 }).toString());   // (la carte du moteur Rust : rust/conquete/src/bin/carte_json.rs)
 const dec = s => Uint8Array.from(Buffer.from(s, 'base64'));
 const edges = m.edges.map(e => { const cum = [0]; for (let i = 1; i < e.pts.length; i++) cum.push(cum[i - 1] + Math.hypot(e.pts[i][0] - e.pts[i - 1][0], e.pts[i][1] - e.pts[i - 1][1])); return { ...e, cum }; });
 const nom = x => m.nodes.find(n => n.name === x);

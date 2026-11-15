@@ -1,4 +1,4 @@
-// Le plan des villes vu par villes.js, pour tests/test_plan_ville.py (qui le compare au portage Python) :
+// Le plan des villes vu par villes.js, pour rust/conquete/tests/bancs_plans.rs (qui le compare au moteur Rust) :
 //   node tests/plan_ville_js.mjs carte.json états.json  →  JSON sur la sortie
 // carte.json : GeoMap().client_payload() ; états.json : [[id, année, f|null, pop|null, d], …]
 // (sans arguments, sous node --test tests/*.mjs, il ne fait rien)

@@ -1,4 +1,4 @@
-// Le plan organique des villes vu par villes.js (planOrganique), pour tests/test_plan_organique.py (qui le compare au
+// Le plan organique des villes vu par villes.js (planOrganique), pour rust/conquete/tests/bancs_plans.rs (qui le compare au
 // portage Python) :  node tests/plan_organique_js.mjs carte.json états.json  →  JSON sur la sortie
 // carte.json : GeoMap().client_payload() ; états.json : [[id, année, f|null, pop|null, d], …]
 // (sans arguments, sous node --test tests/*.mjs, il ne fait rien)

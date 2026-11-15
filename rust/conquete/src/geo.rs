@@ -39,9 +39,6 @@ const GEO_V1: &str = include_str!("../../../game/data/geo_v1.json");
 const GEO_V2: &str = include_str!("../../../game/data/geo_v2.json");
 const GEO_V3: &str = include_str!("../../../game/data/geo.json");
 const PLACES_FRANCE: &str = include_str!("../../../game/data/places_france.json");
-/// Le texte de geo.py : le Python le compte dans l'empreinte des sources du cache (_src_hash). Tant que les deux
-/// moteurs partagent le cache, l'empreinte doit être la même ; quand le Python sera retiré, figer ici une constante.
-const GEO_PY: &[u8] = include_bytes!("../../../game/geo.py");
 
 pub const CACHE_VERSION: i64 = 8;
 pub const VERSION: i64 = 3; // 3 : toute la France (outils/france.py) ; 2 et 1 : le Sud-Ouest des anciennes parties
@@ -750,7 +747,8 @@ impl GeoMap {
         h.extend(EXTRA_ROADS().repr().as_bytes());
         h.extend((&EXTRA_ROADS_2() + &NO_ROADS_2()).repr().as_bytes());
         h.extend(CACHE_VERSION.to_string().as_bytes());
-        h.extend(GEO_PY); // (le Python compte le texte de geo.py : le même ici, pour que le cache serve aux deux moteurs)
+        // (le Python comptait aussi le texte de geo.py : depuis son retrait, le 15/11/2026, l'empreinte change une fois et
+        // les caches écrits avant sont refaits au premier lancement, quelques secondes)
         sha1_hex(&h)
     }
 
