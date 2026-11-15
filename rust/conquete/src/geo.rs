@@ -41,7 +41,7 @@ const GEO_V3: &str = include_str!("../../../game/data/geo.json");
 const PLACES_FRANCE: &str = include_str!("../../../game/data/places_france.json");
 
 pub const CACHE_VERSION: i64 = 8;
-pub const VERSION: i64 = 3; // 3 : toute la France (outils/france.py) ; 2 et 1 : le Sud-Ouest des anciennes parties
+pub const VERSION: i64 = 3; // 3 : toute la France (données faites une fois par outils/france.py, retiré le 15/11/2026 : voir l'historique git) ; 2 et 1 : le Sud-Ouest des anciennes parties
 
 pub const LAT_REF: f64 = 44.25;
 /// `KX` du module Python (cos n'est pas une fonction constante en Rust : c'est une fonction).
@@ -119,7 +119,7 @@ pub const VINEYARDS: [(f64, f64, f64); 13] = [
 ];
 
 
-// ---------------------------------------------------------------- géographie 3 : toute la France (outils/france.py)
+// ---------------------------------------------------------------- géographie 3 : toute la France (données faites une fois par outils/france.py, retiré le 15/11/2026 : voir l'historique git)
 // relief : des lignes de crête (lat, lon) et des massifs isolés, en « hauteur » du jeu (> 0,42 collines, > 0,80 montagne,
 // > 1,55 haute montagne) ; le Sud-Ouest garde son relief écrit à la main (_elev)
 pub const CRETES: [(f64, f64, &[(f64, f64)]); 5] = [   // (amplitude, demi-largeur en degrés, crête)
@@ -707,7 +707,7 @@ impl GeoMap {
             self.nodes.push(n);
             self.by_name.set(name, k);
         }
-        // (géographie 3) les places des autres départements, générées par outils/france.py, avec leur population
+        // (géographie 3) les places des autres départements, générées par l'outil de la carte de France (historique git), avec leur population
         if self.version >= 3 {
             let gen = json::loads(PLACES_FRANCE).expect("places_france.json");
             let mut slugs: HashSet<String> = self.nodes.iter().map(|n| n.at("slug").string()).collect();

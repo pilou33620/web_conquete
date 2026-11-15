@@ -24,7 +24,7 @@ l'échelle de l'Europe reste à trancher (France détaillée et reste plus gross
 
 ## Étape 1 : la France entière (mode « France ») — faite le 07/11/2026, branche `claude/france`
 
-- **Données** (`outils/france.py`, sources npm : Highcharts, @etalab, GeoNames `cities.json`, Natural Earth) :
+- **Données** (`outils/france.py`, retiré du dépôt le 15/11/2026 et gardé dans l'historique git ; sources npm : Highcharts, @etalab, GeoNames `cities.json`, Natural Earth) :
   89 départements de 1790 (la Seine, la Seine-et-Oise, la Corse réunies ; Belfort avec le Haut-Rhin), 1 942 places
   générées (chef-lieu, 7 villes, 16 villages répartis par département ; populations de 1790 pour les grandes villes,
   places fortes de Vauban), 67 rivières nommées (tracées le long des surfaces d'eau de Natural Earth entre des points
