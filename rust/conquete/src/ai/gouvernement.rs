@@ -1104,11 +1104,11 @@ impl AI {
         let mut cands: Vec<(f64, i64)> = vec![];
         let portee = if g.factions.len() > 5 { 150.0 } else { 220.0 };
         for n in g.nodes.iter() {
-            let o = n.ats("owner");
+            let o = n.at("owner");
             if o == code {
                 continue;
             }
-            if o != R::NEUTRAL && !wars.has(o.as_str()) {
+            if o != R::NEUTRAL && !wars.has(&o) {
                 continue;
             }
             let nid = n.ati("id");
@@ -1193,7 +1193,8 @@ impl AI {
             return (block, Val::None); // rien de fermé : tout se rejoint (le réseau des routes est d'un seul tenant)
         }
         // (seules comptent les places des camps fermés : les villages qui changent de main ailleurs n'y font rien)
-        let fermees: Vec<i64> = g.nodes.iter().enumerate().filter(|(_, n)| block.has(n.at("owner"))).map(|(i, _)| i as i64).collect();
+        let mut fermees: Vec<i64> = block.iter().flat_map(|o| g.owned_ix(o.s())).map(|i| i as i64).collect();
+        fermees.sort_unstable(); // (l'ordre des places : chacune n'a qu'un maître)
         if let Some(c) = &self._cache_reach {
             if c.0 == block && c.1 == fermees {
                 return (block, c.2.clone());

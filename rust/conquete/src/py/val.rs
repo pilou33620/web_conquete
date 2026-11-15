@@ -274,10 +274,30 @@ impl Equivalent<Val> for CleStr<'_> {
         matches!(k, Val::Str(s) if meme_texte(s, self.0))
     }
 }
+/// Les dict d'une même sorte (places, armées, régiments, camps) rangent leurs clés dans le même ordre : le rang où
+/// une clé écrite dans le code (« owner ») a été trouvée la dernière fois est essayé d'abord, sans hacher ni sonder
+/// la table. (Indexé par l'adresse du texte ; la clé trouvée à ce rang est toujours vérifiée.)
+thread_local! {
+    static RANGS: [std::cell::Cell<u32>; 1024] = const { [const { std::cell::Cell::new(u32::MAX) }; 1024] };
+}
+#[inline]
+fn chercher_str<'a>(m: &'a Table, k: &str) -> Option<&'a Val> {
+    let case = ((k.as_ptr() as usize >> 3) ^ k.len()) & 1023;
+    let r = RANGS.with(|t| t[case].get());
+    if let Some((Val::Str(s), v)) = m.get_index(r as usize) {
+        if meme_texte(s, k) {
+            return Some(v);
+        }
+    }
+    let (i, _, v) = m.get_full(&CleStr(k))?;
+    RANGS.with(|t| t[case].set(i as u32));
+    Some(v)
+}
+
 impl Cle for &str {
     #[inline]
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
-        m.get(&CleStr(self))
+        chercher_str(m, self)
     }
     fn val(&self) -> Val {
         Val::str(self)
@@ -394,6 +414,7 @@ impl Val {
         matches!(self, Val::Dict(_))
     }
     /// `a is b` : le même objet (ou la même valeur simple).
+    #[inline]
     pub fn is(&self, o: &Val) -> bool {
         match (self, o) {
             (Val::List(a), Val::List(b)) => Rc::ptr_eq(a, b),

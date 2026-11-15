@@ -573,7 +573,7 @@ impl Game {
         {
             let mut c = self._forces.borrow_mut();
             if c.as_ref().map_or(true, |c| c.0 != k) {
-                *c = Some((k, HashMap::new()));
+                *c = Some((k, HashMap::default()));
             }
             if let Some(p) = c.as_ref().unwrap().1.get(code) {
                 return *p;
