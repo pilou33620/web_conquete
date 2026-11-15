@@ -188,9 +188,16 @@ async function boot() {
     showStart();
   };
   ui.onStartTap = e => {
-    if (!e.hit || e.hit.kind !== 'node') return;
-    if (ui.startMode === 'bataille') ui.skPickNode(e.hit.id);
-    else ui.pickDept(payload.map.nodes[e.hit.id].dept);
+    if (e.hit && e.hit.kind === 'node') {
+      if (ui.startMode === 'bataille') ui.skPickNode(e.hit.id);
+      else ui.pickDept(payload.map.nodes[e.hit.id].dept);
+      return;
+    }
+    if (ui.startMode === 'bataille' || !(e.x >= 0 && e.x < map.W && e.y >= 0 && e.y < map.H)) return;
+    // touché ailleurs que sur une ville : le département sous le doigt
+    // shortcut: toWorld ne tient pas compte du relief du plateau 3D (quelques cases d'écart en montagne), assez pour un département
+    const c = map.deptCodes[map.dept[Math.floor(e.y) * map.W + Math.floor(e.x)] - 1];
+    if (c && ui.rules.factions[c] && (payload.map.playable || Object.keys(ui.rules.factions)).includes(c)) ui.pickDept(c);
   };
   // mode Bataille : une bataille isolée, sans campagne (la campagne en cours reste telle quelle sur le serveur)
   ui.skOpts = payload.skirmish || null;

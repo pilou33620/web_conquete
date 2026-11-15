@@ -2085,7 +2085,7 @@ export class UI {
         const reste = ok.filter(c => !rangés.has(c)).sort(parNom);   // (une carte sans codes de départements : Aquitaine…)
         return groupes + (reste.length ? (groupes ? `<optgroup label="Autres">${reste.map(opt).join('')}</optgroup>` : reste.map(opt).join('')) : '');
       })()}
-    </select><p class="muted small" style="margin:4px 0 0">ou touchez une de ses villes sur la carte</p>`;
+    </select><p class="muted small" style="margin:4px 0 0">ou touchez-le sur la carte</p>`;
     const cards = Object.entries(this.rules.factions).filter(([code]) => jouables.length <= 5 || code === this.startDept).map(([code, f]) => `
       <button class="dept-card ${this.startDept === code ? 'on' : ''}" data-act="pick-dept" data-v="${code}">
         ${coat(f.color, code)}<div class="dn">${esc(sc.names[code] || f.name)}<small>${f.capital}</small></div><div class="dd">${f.title}</div>
