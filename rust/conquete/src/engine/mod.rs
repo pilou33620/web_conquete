@@ -165,6 +165,13 @@ impl indexmap::Equivalent<(String, String)> for Paire<'_> {
 /// landes ou marais, collines ou montagnes).
 pub type NodeStatic = (Val, Val, bool, bool, bool);
 
+/// Ce que la carte ne change jamais, relevé une fois en tableaux (Game::geo_fixe) : la position de chaque lieu, et
+/// chaque arête (a, b, fluviale ou maritime).
+pub struct GeoFixe {
+    pub xy: Vec<(f64, f64)>,
+    pub aretes: Vec<(usize, usize, bool)>,
+}
+
 /// `class Game`. Les attributs de `__init__`, les attributs de classe (`_cache_…`), ceux que engine.py pose en
 /// route (`getattr(self, …, défaut)` : ils ont ici leur défaut dès la création) et ceux que les autres fichiers
 /// lui posent (bridge, army_actions, cities, diplomacy, outils/simuler). Les attributs sauvegardés sont ceux de
@@ -175,6 +182,7 @@ pub struct Proprios {
     pub gen: u64,
     pub nodes: Val,
     pub vus: Vec<Val>,
+    pub adresses: Vec<usize>,
     pub par_camp: HashMap<Rc<str>, Vec<usize>, py::Fx>,
 }
 
@@ -195,6 +203,8 @@ pub struct Game {
     pub _cache_rel: RefCell<Option<(Val, Vec<f64>)>>,
     /// Les places de chaque camp : voir owned.
     pub _cache_owned: RefCell<Option<Proprios>>,
+    /// (la carte, ses tableaux) : voir geo_fixe.
+    pub _cache_geo: RefCell<Option<(Rc<GeoMap>, Rc<GeoFixe>)>>,
 
     // ================================================================== création
     /// La carte (partagée avec le serveur et les batailles).
@@ -320,6 +330,7 @@ impl Game {
             _cache_ns: RefCell::new(None),
             _cache_rel: RefCell::new(None),
             _cache_owned: RefCell::new(None),
+            _cache_geo: RefCell::new(None),
             geo,
             player: String::new(),
             scenario: "1790".to_string(),

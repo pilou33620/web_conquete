@@ -1103,6 +1103,8 @@ impl AI {
         let expand = self.pers.atf("expand");
         let mut cands: Vec<(f64, i64)> = vec![];
         let portee = if g.factions.len() > 5 { 150.0 } else { 220.0 };
+        let fixe = g.geo_fixe();
+        let mut postes = None; // (les armées au repos de chaque place : la boucle ne déplace personne)
         for n in g.nodes.iter() {
             let o = n.at("owner");
             if o == code {
@@ -1112,13 +1114,15 @@ impl AI {
                 continue;
             }
             let nid = n.ati("id");
-            let gn = g.geo.nodes.at(nid);
-            let d = py::hypot(gn.atf("x") - a.atf("x"), gn.atf("y") - a.atf("y"));
+            let (gx, gy) = fixe.xy[nid as usize];
+            let d = py::hypot(gx - a.atf("x"), gy - a.atf("y"));
             if d > portee {
                 // (toute la France : pas des milliers de places à juger)
                 continue;
             }
-            let dfn = g.node_defense_power(nid, true);
+            let gn = g.geo.nodes.at(nid);
+            let postes = postes.get_or_insert_with(|| g.armies_au_repos());
+            let dfn = g.node_defense_power_avec(nid, true, Some(postes));
             let mut need = dfn * (if o == R::NEUTRAL { 1.25 } else { 1.3 });
             if n.at("fort") >= 1i64 && a.at("regs").iter().any(|r| r.at("type") == "artillerie") {
                 need /= 1.0 + 0.25 * n.atf("fort");
@@ -1193,14 +1197,21 @@ impl AI {
             return (block, Val::None); // rien de fermé : tout se rejoint (le réseau des routes est d'un seul tenant)
         }
         // (seules comptent les places des camps fermés : les villages qui changent de main ailleurs n'y font rien)
-        let mut fermees: Vec<i64> = block.iter().flat_map(|o| g.owned_ix(o.s())).map(|i| i as i64).collect();
+        let mut fermees: Vec<i64> = {
+            let p = g.proprios();
+            block.iter().flat_map(|o| p.par_camp.get(o.s()).cloned().unwrap_or_default()).map(|i| i as i64).collect()
+        };
         fermees.sort_unstable(); // (l'ordre des places : chacune n'a qu'un maître)
         if let Some(c) = &self._cache_reach {
             if c.0 == block && c.1 == fermees {
                 return (block, c.2.clone());
             }
         }
-        let owners: Vec<Val> = g.nodes.iter().map(|n| n.at("owner")).collect();
+        // (block.has(owner) de chaque place : celles de fermees)
+        let mut bloque = vec![false; g.nodes.len()];
+        for &i in &fermees {
+            bloque[i as usize] = true;
+        }
         let mut parent: Vec<usize> = (0..g.nodes.len()).collect();
 
         fn find(parent: &mut [usize], mut x: usize) -> usize {
@@ -1210,9 +1221,8 @@ impl AI {
             }
             x
         }
-        for e in g.geo.edges.iter() {
-            let (ea, eb) = (e.at("a").u(), e.at("b").u());
-            if e.get("kind") != "water" && (block.has(&owners[ea]) || block.has(&owners[eb])) {
+        for &(ea, eb, eau) in g.geo_fixe().aretes.iter() {
+            if !eau && (bloque[ea] || bloque[eb]) {
                 continue;
             }
             // (`parent[find(a)] = find(b)` : Python évalue d'abord la droite)

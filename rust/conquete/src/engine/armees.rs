@@ -520,6 +520,29 @@ impl Game {
     /// Python : `node_defense_power(self, nid, include_armies=True)`.
     // engine.py, lignes 1800 à 1816
     pub fn node_defense_power(&mut self, nid: i64, include_armies: bool) -> f64 {
+        self.node_defense_power_avec(nid, include_armies, None)
+    }
+
+    /// Les armées au repos (`state == 'idle'`) de chaque place, dans l'ordre de self.armies : pour plusieurs
+    /// node_defense_power de suite sans que personne ne bouge entre-temps.
+    pub fn armies_au_repos(&self) -> HashMap<i64, Vec<Val>, py::Fx> {
+        let mut m: HashMap<i64, Vec<Val>, py::Fx> = HashMap::default();
+        for a in self.armies.table().values() {
+            // (`a.at_node == nid` : un entier, ou un nombre qui lui est égal)
+            let k = match a.at("at_node").num() {
+                Some(py::Num::I(i)) => i,
+                Some(py::Num::F(f)) if f.fract() == 0.0 => f as i64,
+                _ => continue,
+            };
+            if a.at("state") == "idle" {
+                m.entry(k).or_default().push(a.clone());
+            }
+        }
+        m
+    }
+
+    /// node_defense_power, avec les armées au repos déjà rangées par place (armies_au_repos) ou non.
+    pub fn node_defense_power_avec(&self, nid: i64, include_armies: bool, postes: Option<&HashMap<i64, Vec<Val>, py::Fx>>) -> f64 {
         let n = self.nodes.at(nid);
         let code = n.ats("owner");
         let gn = self.geo.nodes.at(nid);
@@ -536,9 +559,20 @@ impl Game {
         p *= fb;
         p += self.fort_guns_power(&n, &tname, 1.0) * R::FORT_GUNS_AUTO; // les canons du rempart
         if include_armies {
-            for a in self.armies.values() {
-                if a.at("at_node") == nid && a.at("state") == "idle" && self.friendly(&a.ats("owner"), &code) {
-                    p += self.army_power(&a, &tname) * fb;
+            match postes {
+                Some(m) => {
+                    for a in m.get(&nid).map_or(&[][..], |v| &v[..]) {
+                        if self.friendly(&a.ats("owner"), &code) {
+                            p += self.army_power(a, &tname) * fb;
+                        }
+                    }
+                }
+                None => {
+                    for a in self.armies.values() {
+                        if a.at("at_node") == nid && a.at("state") == "idle" && self.friendly(&a.ats("owner"), &code) {
+                            p += self.army_power(&a, &tname) * fb;
+                        }
+                    }
                 }
             }
         }

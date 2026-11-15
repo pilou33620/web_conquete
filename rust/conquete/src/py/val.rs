@@ -274,9 +274,9 @@ impl Equivalent<Val> for CleStr<'_> {
         matches!(k, Val::Str(s) if meme_texte(s, self.0))
     }
 }
-/// Les dict d'une même sorte (places, armées, régiments, camps) rangent leurs clés dans le même ordre : le rang où
-/// une clé écrite dans le code (« owner ») a été trouvée la dernière fois est essayé d'abord, sans hacher ni sonder
-/// la table. (Indexé par l'adresse du texte ; la clé trouvée à ce rang est toujours vérifiée.)
+// Les dict d'une même sorte (places, armées, régiments, camps) rangent leurs clés dans le même ordre : le rang où
+// une clé écrite dans le code (« owner ») a été trouvée la dernière fois est essayé d'abord, sans hacher ni sonder
+// la table. (Indexé par l'adresse du texte ; la clé trouvée à ce rang est toujours vérifiée.)
 thread_local! {
     static RANGS: [std::cell::Cell<u32>; 1024] = const { [const { std::cell::Cell::new(u32::MAX) }; 1024] };
 }

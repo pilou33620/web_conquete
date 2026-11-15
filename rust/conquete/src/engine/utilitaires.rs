@@ -731,40 +731,63 @@ impl Game {
     /// Les places du camp, dans l'ordre de self.nodes (`[n for n in self.nodes if n['owner'] == code]`), sans
     /// reparcourir les 3 555 places de la carte à chaque fois : gardées dans _cache_owned (voir Proprios).
     pub fn owned(&self, code: &str) -> Vec<Val> {
-        let ix = self.owned_ix(code);
-        let l = self.nodes.liste();
-        ix.into_iter().map(|i| l[i].clone()).collect()
+        let p = self.proprios();
+        p.par_camp.get(code).map_or(vec![], |ix| ix.iter().map(|&i| p.vus[i].clone()).collect())
     }
 
     /// Les rangs dans self.nodes des places du camp, croissants (voir owned).
     pub fn owned_ix(&self, code: &str) -> Vec<usize> {
-        let gen = py::generation_owner();
-        let mut c = self._cache_owned.borrow_mut();
-        let bon = c.as_ref().is_some_and(|c| {
-            c.gen == gen && c.nodes.is(&self.nodes) && {
-                let l = self.nodes.liste();
-                l.len() == c.vus.len() && l.iter().zip(&c.vus).all(|(a, b)| a.is(b))
+        self.proprios().par_camp.get(code).cloned().unwrap_or_default()
+    }
+
+    /// Les tableaux de la carte (voir GeoFixe), refaits si la carte n'est plus la même (`Rc::ptr_eq`).
+    pub fn geo_fixe(&self) -> Rc<GeoFixe> {
+        let mut c = self._cache_geo.borrow_mut();
+        if !matches!(&*c, Some((geo, _)) if Rc::ptr_eq(geo, &self.geo)) {
+            let xy = self.geo.nodes.iter().map(|gn| (gn.atf("x"), gn.atf("y"))).collect();
+            let aretes = self.geo.edges.iter().map(|e| (e.at("a").u(), e.at("b").u(), e.get("kind") == "water")).collect();
+            *c = Some((self.geo.clone(), Rc::new(GeoFixe { xy, aretes })));
+        }
+        c.as_ref().unwrap().1.clone()
+    }
+
+    /// Les places de chaque camp, à jour (voir Proprios) : à lâcher avant tout appel qui pourrait les redemander.
+    pub fn proprios(&self) -> std::cell::Ref<'_, Proprios> {
+        fn adresse(v: &Val) -> usize {
+            match v {
+                Val::Dict(d) => Rc::as_ptr(d) as *const u8 as usize,
+                _ => 0,
             }
-        });
-        if !bon {
-            let vus = self.nodes.liste().clone();
+        }
+        fn releve(vus: &[Val]) -> HashMap<Rc<str>, Vec<usize>, py::Fx> {
             let mut par_camp: HashMap<Rc<str>, Vec<usize>, py::Fx> = HashMap::default();
             for (i, n) in vus.iter().enumerate() {
                 if let Val::Str(o) = n.at("owner") {
                     par_camp.entry(o).or_default().push(i);
                 }
             }
-            *c = Some(Proprios { gen, nodes: self.nodes.clone(), vus, par_camp });
+            par_camp
         }
-        let v = c.as_ref().unwrap().par_camp.get(code).cloned().unwrap_or_default();
-        debug_assert!(
-            {
-                let l = self.nodes.liste();
-                v == (0..l.len()).filter(|&i| l[i].at_is("owner", code)).collect::<Vec<_>>()
-            },
-            "owned({code}) : une clé owner a changé sans passer par Val"
-        );
-        v
+        let gen = py::generation_owner();
+        {
+            let mut c = self._cache_owned.borrow_mut();
+            let bon = c.as_ref().is_some_and(|c| {
+                c.gen == gen && c.nodes.is(&self.nodes) && {
+                    let l = self.nodes.liste();
+                    l.len() == c.adresses.len() && l.iter().zip(&c.adresses).all(|(a, &b)| adresse(a) == b)
+                }
+            });
+            if !bon {
+                // (vus garde les dicts en vie : une adresse relevée ne peut pas servir à un autre dict)
+                let vus = self.nodes.liste().clone();
+                let adresses = vus.iter().map(adresse).collect();
+                let par_camp = releve(&vus);
+                *c = Some(Proprios { gen, nodes: self.nodes.clone(), vus, adresses, par_camp });
+            }
+        }
+        let p = std::cell::Ref::map(self._cache_owned.borrow(), |c| c.as_ref().unwrap());
+        debug_assert!(p.par_camp == releve(&self.nodes.liste()), "une clé owner a changé sans passer par Val");
+        p
     }
 
     /// Python : `mod(self, code, key, default=0.0)`.
