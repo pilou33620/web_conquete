@@ -7,8 +7,8 @@ rust/conquete/tests/terrain.rs.
 Chaque carte est faite sur la vraie carte de campagne (GeoMap, géographie 3 ou 2 : `gv`) ; l'essai Rust la refait sur
 la GeoMap de geo.rs (vérifiée par ailleurs identique à celle de Python).
 
-Les cartes de version 9 avec une place (spec['place'], ou un lieu à moins de 1,3 km) passent par terrain_ville.py, porté
-plus tard : elles ne sont pas ici.
+Les cartes de version 9 avec une place (spec['place'], ou un lieu à moins de 1,3 km) passent par terrain_ville.py : elles
+sont dans terrain_ville_ref.py (tests/references/terrain_ville.json).
 """
 import math
 import os
