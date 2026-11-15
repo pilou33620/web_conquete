@@ -39,7 +39,7 @@ async function poll() {
     st = await api.get(`/api/state?since=${seq}`);
   } catch (e) {
     // un seul message par coupure
-    if (!lost && ep === epoch) ui && ui.toast('Connexion au serveur perdue. Relancez « python server.py ».', 'bad');
+    if (!lost && ep === epoch) ui && ui.toast('Connexion au serveur perdue. Relancez le jeu (lancer.sh ou lancer.bat).', 'bad');
     lost = true;
     return;
   } finally {
@@ -103,8 +103,8 @@ async function showStart(info) {
   if (!info) ui.toast('Serveur injoignable : liste des sauvegardes indisponible.', 'bad');
   if (info && info.update) checkVersion(info.update.version);
   ui.showStart(info || { saves: [], running: false });
-  const side = window.innerWidth > 760 ? Math.min(470, Math.max(320, window.innerWidth * 0.33)) : 0;
-  map.fitAll(false, side, 20);
+  const { left, bottom } = ui.startFree();
+  map.fitAll(false, left, 20, bottom);
 }
 
 async function boot() {
@@ -113,7 +113,7 @@ async function boot() {
   try {
     payload = await api.get('/api/map');
   } catch (e) {
-    lt.textContent = 'Impossible de joindre le serveur. Lancez « python server.py » puis rechargez la page.';
+    lt.textContent = 'Impossible de joindre le serveur. Lancez le jeu (lancer.sh ou lancer.bat) puis rechargez la page.';
     return;
   }
   bootVer = payload.ver;
@@ -199,7 +199,7 @@ async function boot() {
   };
   let info;
   try { info = await api.get('/api/saves'); } catch (e) {
-    lt.textContent = 'Le serveur ne répond plus. Relancez « python server.py » puis rechargez la page.';
+    lt.textContent = 'Le serveur ne répond plus. Relancez le jeu (lancer.sh ou lancer.bat) puis rechargez la page.';
     return;
   }
   document.getElementById('loading').hidden = true;

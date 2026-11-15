@@ -549,17 +549,6 @@ impl App {
         std::fs::rename(&tmp, &path) // écriture atomique : une coupure de courant ne corrompt pas la sauvegarde
     }
 
-    /// Adresses à taper sur l'iPad ou un autre appareil du réseau local.
-    pub fn net_info(&self) -> Val {
-        let schema = GARDE().schema();
-        let r = self.reseau.lock().unwrap().clone();
-        let urls: Val = r.ips.iter().map(|ip| Val::from(format!("{schema}://{ip}:{}", r.port))).collect();
-        if r.lan {
-            urls.push(format!("{schema}://{}.local:{}", appairage::nom_poste(), r.port));
-        }
-        dict! {"lan" => r.lan, "port" => r.port as i64, "urls" => if r.lan { urls } else { list![] }, "host" => appairage::nom_poste()}
-    }
-
     /// Sauvegarde automatique au début de chaque mois de jeu (et à la fin de la partie).
     pub fn autosave_tick(&mut self) {
         let g = self.game.as_deref().unwrap();
@@ -679,7 +668,7 @@ impl App {
                 return json_(st, 200);
             }
             if path == "/api/saves" {
-                return json_(dict! {"saves" => self.list_saves(), "running" => self.game.is_some(), "net" => self.net_info(),
+                return json_(dict! {"saves" => self.list_saves(), "running" => self.game.is_some(),
                     "update" => UPDATE.lock().unwrap().val()}, 200);
             }
             return json_(dict! {"ok" => false, "msg" => "Route inconnue."}, 404);

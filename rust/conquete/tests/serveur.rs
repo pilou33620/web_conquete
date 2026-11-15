@@ -215,7 +215,6 @@ fn serveur_local() {
     let s: Value = serde_json::from_slice(&rep).unwrap();
     assert_eq!(saves_rangees(&s["saves"]), r["saves"]["saves"]);
     assert_eq!(s["running"], json!(false));
-    assert_eq!((&s["net"]["lan"], &s["net"]["port"], &s["net"]["urls"]), (&json!(false), &json!(jeu.port), &json!([])));
     assert!(s["update"]["status"].is_string() && s["update"]["msg"].is_string());
     assert!(r["illisible"].as_bool().unwrap());
     assert!(!jeu.dossier.join("saves/sauvegarde-automatique.json").exists());
@@ -282,10 +281,9 @@ fn appairage_d_un_autre_appareil() {
     let jeton = std::fs::read_to_string(jeu.dossier.join("jeton.txt")).unwrap().trim().to_string();
     let biscuit = entete(&h, "Set-Cookie").unwrap().split(';').next().unwrap().to_string();
     assert_eq!(biscuit, format!("websuite_jeton={jeton}"));
-    // appairé : le jeu répond, et donne ses adresses réseau
+    // appairé : le jeu répond
     let (st, _, rep) = jeu.req("GET", "/api/saves", b"", &[("Cookie", &biscuit)]);
     assert_eq!(st, 200);
-    let s: Value = serde_json::from_slice(&rep).unwrap();
-    assert_eq!((&s["net"]["lan"], &s["net"]["port"]), (&json!(true), &json!(jeu.port)));
+    assert!(serde_json::from_slice::<Value>(&rep).unwrap()["saves"].is_array());
     assert!(jeu.dossier.join("adresse-reseau.txt").exists());
 }

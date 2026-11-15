@@ -235,9 +235,6 @@ span.turn-why { padding: 8px 10px; }
 .linkish { background: none; border: 0; padding: 0; text-align: left; color: var(--laiton-clair); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .chip.water { border-color: #8fc3ee; color: #cfe8ff; }
 #zoombar .zb.on { background: var(--prusse-2); border-color: var(--laiton); }
-.net-urls { display: flex; flex-direction: column; gap: 4px; }
-.net-urls code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 15px; padding: 4px 8px; border: 1px solid var(--hair);
-  border-radius: 6px; background: rgba(0,0,0,.2); color: var(--laiton-clair); user-select: text; -webkit-user-select: text; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
 .row .lab { font-size: 14.5px; color: var(--papier-2); min-width: 70px; }
 .units-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }

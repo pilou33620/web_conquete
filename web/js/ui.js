@@ -27,6 +27,14 @@ const pctChg = (now, before) => {
 };
 // « de » élidé, comme côté serveur (rules.de) : de Dordogne, d’Agen, du Bugue
 const de = n => /^Le /.test(n) ? 'du ' + n.slice(3) : /^Les /.test(n) ? 'des ' + n.slice(4) : /^[aeiouyhâàéèêîïôöûü]/i.test(n) ? `d’${n}` : `de ${n}`;
+// les départements de l'écran de départ, rangés par région d'aujourd'hui (plus simple à chercher que 89 noms à la suite)
+const REGIONS = {
+  'Auvergne-Rhône-Alpes': '01 03 07 15 26 38 42 43 63 69 73 74', 'Bourgogne-Franche-Comté': '21 25 39 58 70 71 89 90',
+  'Bretagne': '22 29 35 56', 'Centre-Val de Loire': '18 28 36 37 41 45', 'Corse': '20 2A 2B', 'Grand Est': '08 10 51 52 54 55 57 67 68 88',
+  'Hauts-de-France': '02 59 60 62 80', 'Île-de-France': '75 77 78 91 92 93 94 95', 'Normandie': '14 27 50 61 76',
+  'Nouvelle-Aquitaine': '16 17 19 23 24 33 40 47 64 79 86 87', 'Occitanie': '09 11 12 30 31 32 34 46 48 65 66 81 82',
+  'Pays de la Loire': '44 49 53 72 85', 'Provence-Alpes-Côte d’Azur': '04 05 06 13 83 84',
+};
 const STATUS = { paix: 'En paix', guerre: 'En guerre', alliance: 'Alliés', self: 'Vous' };
 const TYPE_LABEL = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' };
 const RES_ORDER = ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'];
@@ -1705,7 +1713,6 @@ export class UI {
     let r;
     try { r = await this.api.get('/api/saves'); } catch (e) { this.toast('Serveur injoignable : liste des sauvegardes indisponible.', 'bad'); return; }
     this.saves = r.saves;
-    this.net = r.net;
     this.modalSig = '';
     if (this.modal === 'menu') this.renderModal(true);
   }
@@ -1952,7 +1959,6 @@ export class UI {
         <h3 class="section-t">Batailles</h3><div class="seg wrap">${[['demander', 'Toujours demander'], ['auto_petites', 'Escarmouches automatiques'], ['auto', 'Toujours automatiques']].map(([k, l]) =>
           `<button class="${(this.st.settings || {}).battles === k ? 'on' : ''}" data-act="tac-set" data-v="${k}">${l}</button>`).join('')}</div>
         <p class="muted small" style="margin:4px 0 0">Donner ses ordres et regarder ses officiers livrer la bataille, la commander soi-même, ou laisser le général la résoudre.</p>
-        <h3 class="section-t">Jouer depuis un autre appareil</h3>${this.netHtml(this.net)}
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Comment jouer</h3>
         <div class="btns" style="margin:4px 0 8px"><button class="btn" data-act="tuto-start">Revoir le tutoriel</button></div>
@@ -1981,7 +1987,7 @@ export class UI {
         </ul>
       </div></div>`;
     const tr = this.st.tour || {};
-    return [html, JSON.stringify([(this.saves || []).map(s => s.name), me.stats, this.net, tr.on])];
+    return [html, JSON.stringify([(this.saves || []).map(s => s.name), me.stats, tr.on])];
   }
 
   // menu ☰ : le tour par tour, et en réglage avancé le temps réel d'origine
@@ -1992,14 +1998,6 @@ export class UI {
         <p class="muted small" style="margin:0 0 6px">Temps réel avec pause : choisissez la vitesse en haut (espace pour la pause).</p>`}
         <p class="small" style="margin:10px 0 0"><b>Réglage avancé</b></p>
         <div class="btns" style="margin-top:4px"><button class="btn" data-act="turn-mode" data-v="${tr.on ? '0' : '1'}">${tr.on ? 'Jouer en temps réel (avec pause)' : 'Revenir au tour par tour'}</button></div>`;
-  }
-
-  netHtml(net) {
-    if (!net) return '<p class="muted small">…</p>';
-    if (!net.lan) return `<p class="muted small">Le jeu n’est ouvert qu’à cet ordinateur. Relancez le serveur avec <code>--lan</code> (ou « lancer-reseau ») pour jouer depuis l’iPad.</p>`;
-    if (!net.urls.length) return '<p class="muted small">Réseau pas encore disponible.</p>';
-    return `<p class="small" style="margin:0 0 4px">Sur l’iPad ou un téléphone connecté au même Wi-Fi, ouvrez :</p>
-      <div class="net-urls">${net.urls.map(u => `<code>${esc(u)}</code>`).join('')}</div>`;
   }
 
   // réglages de cet appareil (animations, style de la carte, qualité des batailles) : menu de la partie et écran de départ
@@ -2035,13 +2033,23 @@ export class UI {
   startOn() { return !this.$('start').hidden; }
   hideStart() { this.$('start').hidden = true; this.map.highlightDept = null; this.map.selection = null; }
 
+  // la part de l'écran que le panneau de départ laisse à la carte : à sa droite sur grand écran, au-dessus sur téléphone
+  startFree() {
+    const r = this.$('start').querySelector('.start-side')?.getBoundingClientRect();
+    if (!r) return { left: 0, bottom: 0 };
+    return window.innerWidth > 760 ? { left: r.right, bottom: 0 } : { left: 0, bottom: Math.max(0, window.innerHeight - r.top) };
+  }
+  // centre la carte sur (x, y) dans cette part libre, k unités de carte dans son plus petit côté
+  startMoveTo(x, y, k) {
+    const { left, bottom } = this.startFree(), z = Math.min(window.innerWidth - left, window.innerHeight - bottom) / k;
+    this.map.moveTo(x - left / 2 / z, y + bottom / 2 / (z * this.map.K), z);
+  }
+
   pickDept(code) {
     this.startDept = code;
     this.map.highlightDept = code;
     const cap = this.md.nodes.find(n => n.type === 'capitale' && n.dept === code);
-    const side = window.innerWidth > 760 ? Math.min(470, window.innerWidth * 0.4) : 0;
-    const z = Math.min(window.innerWidth - side, window.innerHeight) / 120;
-    this.map.moveTo(cap.x - side / 2 / z, cap.y, z);
+    this.startMoveTo(cap.x, cap.y, 120);
     this.renderStart();
   }
 
@@ -2066,7 +2074,17 @@ export class UI {
     const jouables = this.md.playable || Object.keys(this.rules.factions), nomDe = c => sc.names[c] || this.rules.factions[c]?.name || c;
     const choixDept = `<select class="dept-sel" data-dept-sel="1" aria-label="${sc.word === 'province' ? 'Province' : 'Département'}">
       <option value="">${sc.word === 'province' ? 'Choisir une province…' : 'Choisir un département…'}</option>
-      ${jouables.filter(c => this.rules.factions[c]).sort((a, b) => nomDe(a).localeCompare(nomDe(b), 'fr')).map(c => `<option value="${c}" ${c === this.startDept ? 'selected' : ''}>${esc(nomDe(c))} (${c})</option>`).join('')}
+      ${(() => {
+        const opt = c => `<option value="${c}" ${c === this.startDept ? 'selected' : ''}>${esc(nomDe(c))} (${c})</option>`, parNom = (a, b) => nomDe(a).localeCompare(nomDe(b), 'fr');
+        const ok = jouables.filter(c => this.rules.factions[c]), rangés = new Set();
+        const groupes = Object.entries(REGIONS).map(([r, l]) => {
+          const cs = ok.filter(c => l.split(' ').includes(c)).sort(parNom);
+          cs.forEach(c => rangés.add(c));
+          return cs.length ? `<optgroup label="${esc(r)}">${cs.map(opt).join('')}</optgroup>` : '';
+        }).join('');
+        const reste = ok.filter(c => !rangés.has(c)).sort(parNom);   // (une carte sans codes de départements : Aquitaine…)
+        return groupes + (reste.length ? (groupes ? `<optgroup label="Autres">${reste.map(opt).join('')}</optgroup>` : reste.map(opt).join('')) : '');
+      })()}
     </select><p class="muted small" style="margin:4px 0 0">ou touchez une de ses villes sur la carte</p>`;
     const cards = Object.entries(this.rules.factions).filter(([code]) => jouables.length <= 5 || code === this.startDept).map(([code, f]) => `
       <button class="dept-card ${this.startDept === code ? 'on' : ''}" data-act="pick-dept" data-v="${code}">
@@ -2087,7 +2105,6 @@ export class UI {
       <div class="start-actions">
         <button class="btn primary" data-act="start-game" ${this.startDept ? '' : 'disabled'}>${this.startDept ? `Commencer avec ${esc(sc.names[this.startDept] || this.rules.factions[this.startDept].name)} en ${sc.year}` : (sc.word === 'province' ? 'Choisissez une province' : 'Choisissez un département')}</button>
         ${saves ? `<div class="section-t">Parties sauvegardées${info.saves.length > 5 ? ` <span class="muted small">(${info.saves.length})</span>` : ''}</div><div class="saves scroll">${saves}</div>` : ''}
-        ${info.net && info.net.lan && info.net.urls.length ? `<div class="section-t">Sur le réseau local</div>${this.netHtml(info.net)}` : ''}
         <details class="start-reglages"><summary class="section-t">Réglages</summary>${this.reglagesHtml()}</details>
         ${this.versionHtml(info.update)}
         <div class="ver-line">Rivières et position des villes : © les contributeurs d’OpenStreetMap (ODbL), via Overture Maps</div>
@@ -2134,11 +2151,7 @@ export class UI {
   skMark() {
     const id = this.startMode === 'bataille' && this.sk.place !== '' ? +this.sk.place : null;
     this.map.selection = id != null ? { kind: 'node', id } : null;
-    if (id != null) {
-      const n = this.md.nodes[id], side = window.innerWidth > 760 ? Math.min(470, window.innerWidth * 0.4) : 0;
-      const z = Math.min(window.innerWidth - side, window.innerHeight) / 90;
-      this.map.moveTo(n.x - side / 2 / z, n.y, z);
-    }
+    if (id != null) this.startMoveTo(this.md.nodes[id].x, this.md.nodes[id].y, 90);
   }
   // touché sur la carte de l'écran de départ, en mode Bataille : le lieu de la bataille
   skPickNode(id) {

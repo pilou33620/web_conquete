@@ -620,7 +620,7 @@ export class MapView {
     this.cv.height = Math.round(h * dpr);
     this.vw = w; this.vh = h;
   }
-  minZoom() { return Math.min(this.vw / this.W, this.vh / (this.H * this.K)) * 0.8; }
+  minZoom() { return Math.min(this.vw / this.W, this.vh / (this.H * this.K)) * 0.6; }   // (0,6 : sur un téléphone en hauteur, toute la France tient dans la bande au-dessus du panneau de départ)
 
   armyScreen(d) {
     let [x, y] = this.toScreen(d.x, d.y);
@@ -650,10 +650,10 @@ export class MapView {
     return Math.max(s * 0.62 + 4, outer + 4) + 3;
   }
 
-  fitAll(instant, left = 0, top = 60) {
-    const aw = this.vw - left, ah = this.vh - top;
+  fitAll(instant, left = 0, top = 60, bottom = 0) {
+    const aw = this.vw - left, ah = this.vh - top - bottom;
     const z = Math.min(aw / this.W, ah / (this.H * this.K)) * 0.96;
-    const cx = this.W / 2 - (left / 2) / z, cy = this.H / 2 - (top / 2) / (z * this.K) + 4;
+    const cx = this.W / 2 - (left / 2) / z, cy = this.H / 2 - ((top - bottom) / 2) / (z * this.K) + 4;
     this.moveTo(cx, cy, z, instant);
   }
   moveTo(x, y, z, instant = false, dur = 650) {
