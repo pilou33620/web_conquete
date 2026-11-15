@@ -1,0 +1,26 @@
+52 batailles : 48 de campagne (27 automatiques, 21 commandées), 4 du mode Bataille.
+
+== Assauts de places (campagne), selon le niveau de fortification
+   fort  mode       n   canons  prise  rapport forces  pertes att. %  pertes déf. %  jours
+   0     auto       17  0,0     65 %   1,44            8              20             1,02 
+   0     commandee  9   0,0     56 %   0,95            3              3              0,00 
+   1     auto       8   1,0     12 %   0,96            10             4              0,54 
+   1     commandee  4   1,0     25 %   6,04            12             7              0,00 
+   2     auto       2   2,0     100 %  4,42            3              21             0,45 
+
+== Brèches au canon (assauts joués sur le champ de bataille)
+   fort  n   canons rempart  avec brèche  1re brèche (min)  brèches  prise avec / sans brèche  durée (min)
+   0     10  0,0             0 %          —                 —        — / 60 %                  47         
+   1     4   1,0             100 %        63                1,2      25 % / —                  136        
+   2     1   2,0             100 %        41                1,0      0 % / —                   61         
+
+== Batailles automatiques et commandées (campagne)
+   bataille       mode       n   l’assaillant gagne  décrochage  pertes att./déf.  prisonniers
+   rase campagne  commandee  8   0 %                 88 %        4,11              5          
+   assaut         auto       27  52 %                37 %        1,60              5          
+   assaut         commandee  13  46 %                54 %        4,48              1          
+
+== Mode Bataille (vue du joueur)
+   type        rôle     n  victoires  vos pertes  pertes ennemies  finies auto.  durée (min)
+   bataille    attaque  2  0 %        96          76               0 %           103        
+   forteresse  attaque  1  0 %        318         28               0 %           61         

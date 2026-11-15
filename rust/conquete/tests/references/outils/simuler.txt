@@ -1,0 +1,11 @@
+2 parties depuis 1700, 1 ans, graines 3 à 4
+graine  fin                 guerres  durée  écart  vivants  techs  trésor  hommes  rails  places / erreur
+     3  1er mars 1701             0    0.0     42        5    0.0    8014    3358      0  24:65 33:23 40:44 47:48 64:43
+     4  1er mars 1701             1    6.0     29        5    0.0    3101    3341      0  24:47 33:27 40:56 47:48 64:45
+moyenne                         0.5    3.0   35.5      5.0    0.0  5557.5  3349.5    0.0  erreurs : 0
+mois de banqueroute / de famine (tous camps) : 0 / 0
+crues de ville (tous camps) : 3 en 2 ans de jeu
+gribeauval  trouvée en cours de partie par 0 camps sur 10
+percussion  trouvée en cours de partie par 0 camps sur 10
+lahitte     trouvée en cours de partie par 0 camps sur 10
+chassepot   trouvée en cours de partie par 0 camps sur 10
