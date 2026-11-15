@@ -725,7 +725,41 @@ impl Game {
     /// Rend une liste neuve de places (dict de self.nodes).
     // engine.py, lignes 532 à 533
     pub fn owned_nodes(&self, code: &str) -> Val {
-        self.nodes.liste().iter().filter(|n| n.at_is("owner", code)).cloned().collect()
+        Val::list(self.owned(code))
+    }
+
+    /// Les places du camp, dans l'ordre de self.nodes (`[n for n in self.nodes if n['owner'] == code]`), sans
+    /// reparcourir les 3 555 places de la carte à chaque fois : gardées dans _cache_owned (voir Proprios).
+    pub fn owned(&self, code: &str) -> Vec<Val> {
+        let gen = py::generation_owner();
+        let mut c = self._cache_owned.borrow_mut();
+        let bon = c.as_ref().is_some_and(|c| {
+            c.gen == gen && c.nodes.is(&self.nodes) && {
+                let l = self.nodes.liste();
+                l.len() == c.vus.len() && l.iter().zip(&c.vus).all(|(a, b)| a.is(b))
+            }
+        });
+        if !bon {
+            let vus = self.nodes.liste().clone();
+            let mut par_camp: HashMap<Rc<str>, Vec<usize>> = HashMap::new();
+            for (i, n) in vus.iter().enumerate() {
+                if let Val::Str(o) = n.at("owner") {
+                    par_camp.entry(o).or_default().push(i);
+                }
+            }
+            *c = Some(Proprios { gen, nodes: self.nodes.clone(), vus, par_camp });
+        }
+        let c = c.as_ref().unwrap();
+        let v: Vec<Val> = c.par_camp.get(code).map_or(vec![], |ix| ix.iter().map(|&i| c.vus[i].clone()).collect());
+        debug_assert!(
+            {
+                let l = self.nodes.liste();
+                let w: Vec<&Val> = l.iter().filter(|n| n.at_is("owner", code)).collect();
+                w.len() == v.len() && w.iter().zip(&v).all(|(a, b)| a.is(b))
+            },
+            "owned({code}) : une clé owner a changé sans passer par Val"
+        );
+        v
     }
 
     /// Python : `mod(self, code, key, default=0.0)`.

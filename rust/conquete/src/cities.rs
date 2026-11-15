@@ -860,8 +860,8 @@ pub fn train_xp(g: &Game, n: &Val) -> Val {
 // game/cities.py, lignes 452 à 460
 pub fn upkeep(g: &Game, code: &str) -> f64 {
     let mut tot = 0.0;
-    for n in g.nodes.iter() {
-        if n.at("owner") == code && n.getb("slots") {
+    for n in g.owned(code) {
+        if n.getb("slots") {
             for (c, lvl) in n.at("slots").items() {
                 if lvl > 0i64 && CHAINS().has(&c) {
                     let levels = CHAINS().at(&c).at("levels");

@@ -594,13 +594,11 @@ impl Game {
             }
         }
         let mut mk: Option<f64> = None;
-        for n in self.nodes.iter() {
-            if n.at("owner") == code {
-                // les armes de la milice : les mêmes dans toutes ses places
-                let m = *mk.get_or_insert_with(|| self.milice_k(code));
-                let gar = py::sum(n.at("garrison").iter().map(|r| self.reg_power(code, &r, "Plaine", 1.0, false, &Val::None)).collect::<Vec<_>>());
-                p += n.atf("milice") * R::MILICE_POWER * m * 0.5 + gar;
-            }
+        for n in self.owned(code) {
+            // les armes de la milice : les mêmes dans toutes ses places
+            let m = *mk.get_or_insert_with(|| self.milice_k(code));
+            let gar = py::sum(n.at("garrison").iter().map(|r| self.reg_power(code, &r, "Plaine", 1.0, false, &Val::None)).collect::<Vec<_>>());
+            p += n.atf("milice") * R::MILICE_POWER * m * 0.5 + gar;
         }
         p
     }

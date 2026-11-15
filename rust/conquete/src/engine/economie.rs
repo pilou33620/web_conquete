@@ -14,7 +14,7 @@ impl Game {
     // engine.py, lignes 820 à 824
     pub fn tools_bonus(&self, code: &str) -> (f64, f64) {
         let f = self.factions.at(code);
-        let nn = self.owned_nodes(code).len().max(1);
+        let nn = self.owned(code).len().max(1);
         let x = f.at("res").atf("outils") / (3.0 * nn as f64);
         let cov = if x < 1.0 { x } else { 1.0 };
         (1.0 + (0.30 + self.mod_(code, "tools_max", 0.0)) * cov, cov)
@@ -729,7 +729,7 @@ impl Game {
     /// Python : `recruit_cap(self, code)`.
     // engine.py, lignes 1261 à 1262
     pub fn recruit_cap(&self, code: &str) -> i64 {
-        3000 + 250 * self.owned_nodes(code).len() as i64
+        3000 + 250 * self.owned(code).len() as i64
     }
 
     /// Recrues venues d'ailleurs (échange, prisonniers) : pas au-delà de ce que les casernes peuvent loger.
@@ -753,7 +753,7 @@ impl Game {
         let f = self.factions.at(code);
         if f.get_or("_nn_t", -1) != py::int(self.t) {
             f.set("_nn_t", py::int(self.t));
-            f.set("_nn", self.owned_nodes(code).len().max(1));
+            f.set("_nn", self.owned(code).len().max(1));
         }
         false
     }
@@ -841,10 +841,8 @@ impl Game {
     // engine.py, lignes 1318 à 1324
     pub fn all_regs(&self, code: &str) -> Val {
         let mut v = vec![];
-        for n in self.nodes.iter() {
-            if n.at("owner") == code {
-                v.extend(n.at("garrison").iter());
-            }
+        for n in self.owned(code) {
+            v.extend(n.at("garrison").iter());
         }
         for a in self.armies.values() {
             if a.at("owner") == code {

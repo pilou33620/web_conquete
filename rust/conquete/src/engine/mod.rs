@@ -169,6 +169,15 @@ pub type NodeStatic = (Val, Val, bool, bool, bool);
 /// route (`getattr(self, …, défaut)` : ils ont ici leur défaut dès la création) et ceux que les autres fichiers
 /// lui posent (bridge, army_actions, cities, diplomacy, outils/simuler). Les attributs sauvegardés sont ceux de
 /// `views::SAVE_KEYS`, plus `diplo` et `_blockade`.
+/// Les places de chaque camp, relevées d'un seul passage sur la carte (Game::owned) : bonnes tant qu'aucune clé
+/// « owner » n'a été écrite (`py::generation_owner`) et que `nodes` est la même liste, des mêmes dicts.
+pub struct Proprios {
+    pub gen: u64,
+    pub nodes: Val,
+    pub vus: Vec<Val>,
+    pub par_camp: HashMap<Rc<str>, Vec<usize>>,
+}
+
 pub struct Game {
     // caches de calcul (jamais sauvegardés) : date du jour, année et croissance séculaire du jour, chefs-lieux
     /// (ordinal du jour, sa date) ; None : à refaire. (skirmish.py le remet à None : `g._cache_date.set(None)`.)
@@ -184,6 +193,8 @@ pub struct Game {
     /// (le dict de `_pcache` qui a servi, la part de chaque place dans la croissance) : voir pop_factor ;
     /// refait quand `_pcache` n'est plus ce dict-là (`Val::is`).
     pub _cache_rel: RefCell<Option<(Val, Vec<f64>)>>,
+    /// Les places de chaque camp : voir owned.
+    pub _cache_owned: RefCell<Option<Proprios>>,
 
     // ================================================================== création
     /// La carte (partagée avec le serveur et les batailles).
@@ -308,6 +319,7 @@ impl Game {
             _cache_cap: RefCell::new(None),
             _cache_ns: RefCell::new(None),
             _cache_rel: RefCell::new(None),
+            _cache_owned: RefCell::new(None),
             geo,
             player: String::new(),
             scenario: "1790".to_string(),

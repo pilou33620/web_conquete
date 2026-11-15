@@ -771,13 +771,30 @@ impl Val {
 }
 
 // ------------------------------------------------------------------ écrire
+thread_local! {
+    static GEN_OWNER: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+/// Change chaque fois qu'une clé « owner » est écrite ou retirée dans un dict (ou qu'un dict est vidé) : le moteur
+/// garde les places de chaque camp tant qu'il ne change pas (Game::owned).
+pub fn generation_owner() -> u64 {
+    GEN_OWNER.with(|g| g.get())
+}
+#[inline]
+fn touche(k: &Val) {
+    if matches!(k, Val::Str(s) if meme_texte(s, "owner")) {
+        GEN_OWNER.with(|g| g.set(g.get() + 1));
+    }
+}
+
 impl Val {
     /// `v[k] = x` : sur un dict (la clé est créée) ou une liste (l'indice doit exister).
     #[track_caller]
     pub fn set(&self, k: impl Cle, x: impl Into<Val>) {
         match self {
             Val::Dict(d) => {
-                d.borrow_mut().insert(k.val(), x.into());
+                let k = k.val();
+                touche(&k);
+                d.borrow_mut().insert(k, x.into());
             }
             Val::List(l) => {
                 let mut l = l.borrow_mut();
@@ -817,7 +834,9 @@ impl Val {
                     return v.clone();
                 }
                 let v = defaut.into();
-                d.borrow_mut().insert(k.val(), v.clone());
+                let k = k.val();
+                touche(&k);
+                d.borrow_mut().insert(k, v.clone());
                 v
             }
             _ => panic!("AttributeError: '{}' object has no attribute 'setdefault'", self.type_name()),
@@ -827,7 +846,11 @@ impl Val {
     #[track_caller]
     pub fn pop(&self, k: impl Cle) -> Val {
         match self {
-            Val::Dict(d) => d.borrow_mut().shift_remove(&k.val()).unwrap_or(Val::None),
+            Val::Dict(d) => {
+                let k = k.val();
+                touche(&k);
+                d.borrow_mut().shift_remove(&k).unwrap_or(Val::None)
+            }
             Val::List(l) => {
                 let mut l = l.borrow_mut();
                 let n = l.len();
@@ -849,6 +872,7 @@ impl Val {
     pub fn del(&self, k: impl Cle) {
         match self {
             Val::Dict(d) => {
+                touche(&k.val());
                 if d.borrow_mut().shift_remove(&k.val()).is_none() {
                     panic!("KeyError: {}", k.val().repr())
                 }
@@ -873,6 +897,7 @@ impl Val {
         match self {
             Val::Dict(d) => {
                 let paires = autre.items();
+                paires.iter().for_each(|(k, _)| touche(k));
                 d.borrow_mut().extend(paires)
             }
             Val::Set(s) => {
@@ -953,7 +978,10 @@ impl Val {
     pub fn clear(&self) {
         match self {
             Val::List(l) => l.borrow_mut().clear(),
-            Val::Dict(d) => d.borrow_mut().clear(),
+            Val::Dict(d) => {
+                touche(&Val::str("owner"));
+                d.borrow_mut().clear()
+            }
             Val::Set(s) => s.borrow_mut().clear(),
             _ => panic!("AttributeError: '{}' object has no attribute 'clear'", self.type_name()),
         }
