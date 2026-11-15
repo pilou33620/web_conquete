@@ -1,5 +1,10 @@
 # Spec : tutoriel interactif (campagne et bataille)
 
+> **Note du 15/11/2026.** Le moteur du jeu est passé de Python à Rust. Les fichiers `game/*.py` et `game/tactics/*.py`
+> (et `server.py`) cités dans les specs (`SPEC*.md`) et les plans (`tasks/*.md`), écrits avant, correspondent aux
+> modules de `rust/conquete/src/` du même nom (`game/turns.py` → `rust/conquete/src/turns.rs`, `game/tactics/x.py` →
+> `rust/conquete/src/tactics/x.rs` ; `server.py` → `rust/conquete/src/serveur.rs`). Voir `rust/conquete/PORTAGE.md`.
+
 ## Objectif
 
 Apprendre à jouer à quelqu'un qui découvre le jeu (sur l'iPad comme sur le PC) sans lire le README.

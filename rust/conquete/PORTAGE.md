@@ -1,5 +1,29 @@
 # Portage du moteur Python en Rust
 
+## État (15/11/2026)
+
+**Tout est porté**, le serveur et les outils compris, et le jeu se lance par l'exécutable Rust. Ce qui a été vérifié,
+au bit près, contre le Python d'origine :
+
+- chaque module contre son jumeau Python (`outils/jumeau/*_ref.py`) ;
+- les batailles : 25 batailles de référence et 410 tirées au sort, rejouées jusqu'au bout ;
+- la campagne : 29 campagnes de référence (310 mois) et 24 tirées au sort (439 mois) ;
+- les 383 bancs du jeu (`tests/test_*.py`), portés dans `tests/bancs_*.rs` ;
+- `/api/map` : la réponse du serveur est identique à l'octet.
+
+**Maintenant que le Python est retiré :**
+
+- Les jumeaux Python et le Python du jeu (`server.py`, `game/*.py`) ne sont plus dans le dépôt ; les tableaux de
+  correspondance et les règles plus bas restent le guide des conventions du code.
+- Les références (`tests/references/`) restent : elles figent le comportement du jeu. Un essai qui s'en écarte
+  signale une régression.
+- Un **changement volontaire d'une règle du jeu** fait échouer la référence concernée. L'essai donne l'écart (la
+  valeur, l'empreinte, ou le premier mois, la première bataille qui diffère) ; on vérifie que c'est bien l'effet
+  voulu, puis on met la référence à jour : soit on la régénère avec le moteur Rust (on lui fait écrire, sur les mêmes
+  cas, la nouvelle valeur ou la nouvelle empreinte dans `tests/references/<module>.json`, comme le jumeau le faisait ;
+  aucun essai ne le fait encore tout seul), soit on corrige à la main la valeur attendue. Le
+  commit dit pourquoi la référence a changé.
+
 Le jeu était écrit en Python (`server.py`, `game/`, `game/tactics/`). Il est porté en Rust, comme les outils de
 WEB·SUITE : plus de Python à installer, un seul exécutable, et un moteur bien plus rapide (la carte se prépare en
 quelques secondes au lieu d'une minute et demie sur un petit poste).

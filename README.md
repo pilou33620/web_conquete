@@ -4,27 +4,35 @@ Deux siècles de guerres, de commerce et de diplomatie dans l’ancienne Aquitai
 
 Jeu de stratégie au tour par tour, mois par mois, sur la carte de l'ancienne Aquitaine, à l'époque des mousquets,
 de la cavalerie et de l'artillerie : vous donnez vos ordres, puis le mois se joue sous vos yeux.
-Le temps réel avec pause d'origine reste disponible en réglage avancé. Le moteur tourne en Python sur un petit serveur local ; l'interface est une
+Le temps réel avec pause d'origine reste disponible en réglage avancé. Le moteur, écrit en Rust, tourne sur un petit serveur local ; l'interface est une
 page web (HTML, CSS, JavaScript) qui s'ouvre dans le navigateur.
 
 ## Lancer le jeu
 
-Il faut seulement **Python 3.8 ou plus récent**. Aucune bibliothèque à installer.
+Rien à installer : le script de lancement prend l'exécutable du jeu (`bin/conquete`, `bin\conquete.exe` sous Windows)
+par `binaires.sh` (`binaires.cmd` sous Windows). Si Rust (`cargo`) est installé, il le compile sur place (la première
+fois prend quelques minutes ; la compilation récupère aussi la caisse commune `web_tools_commun`, du dépôt web_suite).
+Sinon il le télécharge, une fois par version, depuis la publication GitHub « binaires » (Linux x86_64 et aarch64,
+macOS sur puce Apple, Windows x86_64), recompilée à chaque envoi sur main, et refuse l'archive si son empreinte
+SHA-256 n'est pas celle publiée avec elle. Il faut seulement `git` (pour les mises à jour) et `curl` (déjà présent
+sur Windows 10 et 11, macOS et Raspberry Pi OS).
 
 | Système | Commande |
 |---|---|
-| Windows | double-clic sur `lancer.bat` (ou `python server.py`) |
-| Linux, macOS | `./lancer.sh` (ou `python3 server.py`) |
-| Android (Termux) | `pkg install python` puis `python server.py --no-browser`, et ouvrir `http://127.0.0.1:8790` dans Chrome |
+| Windows | double-clic sur `lancer.bat` |
+| Linux, macOS | `./lancer.sh` (un Mac à processeur Intel n'a pas d'exécutable publié : installer Rust, https://rustup.rs, pour le compiler) |
 | Raspberry Pi | `./lancer.sh` (sans navigateur, ouvert au réseau local, adresse affichée), ou `sh raspberry/installer.sh` pour un démarrage automatique à l'allumage (voir plus bas) |
-| iPad (Pyto) | exécuter `server.py`, puis ouvrir `http://127.0.0.1:8790` dans Safari |
+| Android (Termux) | aucun exécutable Android n'est publié : `pkg install rust git`, puis `./lancer.sh --no-browser` (le jeu se compile au premier lancement, c'est long), et ouvrir `http://127.0.0.1:8790` dans Chrome |
+| iPad | l'iPad ne fait plus tourner le jeu (Pyto lançait l'ancien serveur en Python ; il n'y a pas d'exécutable pour l'iPad) : il joue par le réseau, sur le jeu lancé sur un Raspberry Pi ou un PC de la maison (voir plus bas) |
 
-Options : `--lan` (ouvre le jeu aux autres appareils du réseau local), `--local` (cette machine seulement),
-`--port 8790`, `--no-browser`, `--browser`, `--no-update`. Sous Windows, `lancer-reseau.bat` lance directement le jeu en mode réseau.
+Options (à donner au script ou à l'exécutable) : `--lan` (ouvre le jeu aux autres appareils du réseau local), `--local`
+(cette machine seulement), `--port 8790`, `--no-browser`, `--browser`, `--no-update`. Sous Windows, `lancer-reseau.bat`
+lance directement le jeu en mode réseau ; ailleurs, `./lancer.sh --lan`.
 
 **Mise à jour automatique.** Si le jeu a été installé avec `git clone`, le serveur cherche une nouvelle version sur GitHub
-à chaque démarrage : il l'installe (avance rapide seulement, sauvegardes intactes), affiche les nouveautés et se relance
-tout seul. Sans Internet, ou si la clé SSH / le jeton manque, il démarre simplement avec la version actuelle (aucune invite
+à chaque démarrage : il l'installe (`git pull` en avance rapide seulement, sauvegardes intactes), affiche les nouveautés
+et se relance tout seul : il rend la main au script de lancement, qui reprend l'exécutable de la nouvelle version
+(recompilé, ou retéléchargé) puis relance le jeu. Sans Internet, ou si la clé SSH / le jeton manque, il démarre simplement avec la version actuelle (aucune invite
 de mot de passe ne bloque le démarrage). Sur un Raspberry Pi, il patiente jusqu'à 40 secondes que le Wi-Fi arrive.
 Si des fichiers ont été modifiés à la main, la mise à jour est mise de côté et la console explique quoi faire.
 L'écran d'accueil indique la version et le résultat de la vérification ; une page restée ouverte sur l'iPad se recharge
@@ -41,7 +49,7 @@ s'ouvre au réseau local et affiche en grand les adresses à taper depuis l'iPad
       http://raspberrypi.local:8790
 ```
 
-Ces adresses sont aussi écrites dans `adresse-reseau.txt` (à côté de `server.py`), réaffichées si le Wi-Fi change
+Ces adresses sont aussi écrites dans `adresse-reseau.txt` (à la racine du jeu), réaffichées si le Wi-Fi change
 d'adresse, et visibles dans le jeu (écran d'accueil et menu ☰, rubrique « Jouer depuis un autre appareil »).
 
 ## Jouer sur l'iPad avec le jeu installé sur un Raspberry Pi
@@ -53,7 +61,8 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
    Les mises à jour s'installent ensuite toutes seules à chaque démarrage du Raspberry (ou avec
    `sudo systemctl restart web_conquete`).
 2. Sur le Raspberry : `cd web_conquete && sh raspberry/installer.sh`
-   Le script crée le service `web_conquete` (systemd) : le jeu démarre à chaque allumage et redémarre s'il plante.
+   Le script obtient d'abord l'exécutable du jeu (téléchargé, ou compilé si Rust est installé), puis crée le
+   service `web_conquete` (systemd) : le jeu démarre à chaque allumage et redémarre s'il plante.
    (Un autre appareil entre une fois le code d'appairage, affiché par le serveur, puis passe en HTTPS sur le même port.)
    Il affiche l'adresse à taper sur l'iPad, par exemple `http://192.168.1.42:8790` ou `http://raspberrypi.local:8790`.
    Autre port : `sh raspberry/installer.sh 8800`. Désinstaller : `sh raspberry/installer.sh --retirer`.
@@ -61,7 +70,8 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
    Le jeu s'ouvre alors en plein écran avec son icône, comme une application.
 
 À savoir :
-- Python 3.8+ suffit (déjà présent sur Raspberry Pi OS). Le Raspberry ne fait que la simulation ; le dessin de la carte
+- Rien à installer sur Raspberry Pi OS 64 bits : l'exécutable Linux aarch64 est téléchargé. Sur un système 32 bits,
+  aucun exécutable n'est publié : installez Rust (https://rustup.rs), le jeu se compile alors sur le Raspberry. Le Raspberry ne fait que la simulation ; le dessin de la carte
   se fait sur l'iPad.
 - Il n'y a qu'une partie à la fois par serveur : l'ordinateur et l'iPad qui se connectent au même Raspberry
   voient et commandent la même partie. On peut donc commencer sur l'ordinateur et continuer sur l'iPad.
@@ -76,7 +86,7 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
 - Commandes utiles : `sudo systemctl status web_conquete`, `sudo systemctl restart web_conquete`,
   `journalctl -u web_conquete -f`.
 
-Au premier lancement (et après une mise à jour du calcul de la carte, `game/geo.py`), la carte est calculée
+Au premier lancement (et après une mise à jour du calcul de la carte, `rust/conquete/src/geo.rs`), la carte est calculée
 (environ 5 secondes sur un PC, 15 à 30 secondes sur un Raspberry Pi),
 puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git). Une partie sauvegardée avant les rivières
 affinées garde sa carte d'alors (`game/data/geo_v1.json`, en cache dans `map_cache_v1.json`, calculée la première fois
@@ -256,7 +266,7 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   Les villes sont les plus peuplées aujourd'hui (hors banlieues collées au chef-lieu), les villages sont de vraies communes
   réparties sur tout le territoire (Saint-Émilion, Margaux, Sare, Saint-Palais, Pontenx-les-Forges…).
 - Rivières et position des villes : © les contributeurs d'OpenStreetMap (ODbL), via Overture Maps. `game/data/geo.json`
-  (les rivières) et la place des villes au bord de l'eau dans `game/places.py` forment une base de données dérivée,
+  (les rivières) et la place des villes au bord de l'eau dans `rust/conquete/src/places.rs` forment une base de données dérivée,
   sous licence ODbL (Open Database License, https://opendatacommons.org/licenses/odbl/).
 - Vous commencez avec votre chef-lieu et vos 9 villes. Les 165 villages et les places fortes sont indépendants :
   ralliez-les avec une armée nettement plus forte que leur milice pour gagner des revenus.
@@ -456,7 +466,7 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   montre aussi un **petit plan de la position** (`web/js/plan.js`) : la vraie carte de la bataille, tournée pour que vos
   troupes soient en bas, vos régiments, et l'ennemi tel que vos éclaireurs le voient (sinon sa zone, hachurée).
   Une partie enregistrée en pleine bataille la reprend dans son mode (sur ordres ou à la main).
-- **« Donner mes ordres »** (`game/tactics/orders.py`, `web/js/battle/ordres.js`) : le champ de bataille s'ouvre
+- **« Donner mes ordres »** (`rust/conquete/src/tactics/orders.rs`, `web/js/battle/ordres.js`) : le champ de bataille s'ouvre
   **vu de dessus**, et une fenêtre propose vos ordres en quatre onglets. **Manœuvre** : l'objectif de la journée
   (battre son armée, la position clé, couper sa retraite, l'user), la manœuvre (en attaque : assaut frontal, ordre
   oblique avant 1789, percée au centre après 1789, enveloppement d'une aile, double enveloppement avec un général de
@@ -481,7 +491,7 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
   après 40 s), la caméra suivant l'action. Un bandeau raconte les grands gestes ; des **étiquettes** sur la carte
   marquent charges, carrés, mêlées et déroutes ; chaque grand moment laisse un **repère** sur la barre de la journée,
   qu'on touche pour y ramener la caméra. « ×1 / ×2 / ×4 » règlent la vitesse, « Passer » la finit au plus vite.
-  Le récapitulatif ajoute les pertes par arme et ce qui a décidé la journée. Banc : `target/release/banc_ia --ordres '{"man": "double"}'` (après `cargo build --release -p conquete --bins`).
+  Le récapitulatif ajoute les pertes par arme et ce qui a décidé la journée. Banc : `bin/banc_ia --ordres '{"man": "double"}'` (voir « Outils »).
 - **Canons camouflés.** Une batterie postée dans un bois (pas en forêt : les pièces n'y passent pas) ne se voit qu'à
   moins de 250 m, 500 m quand elle tire (la fumée reste sous les arbres) ; en échange, les troncs gênent son tir
   (−35 %) et sa mise en batterie est plus longue de moitié. Vaut pour vous comme pour l'ennemi, dans tous les modes ;
@@ -515,7 +525,7 @@ place, remparts intacts, reçoit 5 régiments de renfort : 2 batteries, des sape
 15 régiments contre une garnison de 7 et la milice ; il faut escalader les murs). Lieu, saison et météo se
 règlent ou se tirent **au hasard** ; on peut aussi toucher une ville sur la carte. L'ennemi aligne autant de régiments,
 tirés au sort. Un choix « Le commandement » la fait livrer **sur ordres** ou **commander à la main**, comme en campagne, puis « Retour au menu ». Elle n'est pas enregistrée et
-ne touche pas à la campagne en cours (`game/tactics/skirmish.py`).
+ne touche pas à la campagne en cours (`rust/conquete/src/tactics/skirmish.rs`).
 
 #### Regarder la bataille
 - **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît **vu de
@@ -772,11 +782,11 @@ Tout marche seul avec les réglages par défaut ; on intervient quand on veut, d
 Chaque bataille terminée (automatique, sur ordres, entre IA ou du mode Bataille) ajoute une ligne à
 `logs/batailles.jsonl` (non suivi par git ; mis de côté dans `batailles.1.jsonl` au-delà de 20 Mo) : date, saison,
 météo, terrain, place, fortification et canons du rempart, forces des deux camps, durée, brèches ouvertes et à quelle
-heure, vainqueur, pertes, prisonniers, prise de la place. `target/release/bilan` (option `--depuis AAAA-MM-JJ`) en
+heure, vainqueur, pertes, prisonniers, prise de la place. `bin/bilan` (option `--depuis AAAA-MM-JJ`) en
 tire des tableaux : taux de prise des places selon leur fortification, temps pour ouvrir une brèche, places prises avec
 ou sans brèche, batailles automatiques face à celles sur ordres, résultats du mode Bataille.
 
-**Banc d'équilibre de la campagne** : `target/release/simuler --parties 6 --epoque 1790 --annees 30 --proc 2` fait
+**Banc d'équilibre de la campagne** : `bin/simuler --parties 6 --epoque 1790 --annees 30 --proc 2` fait
 jouer des campagnes aux IA seules (le camp du joueur compris), sur des graines fixes, et donne pour chacune les guerres
 et leur durée, les places de chaque camp, l'écart entre le premier et le dernier, les camps en vie, les technologies, le
 trésor et les hommes sous les armes. Environ 20 s de calcul par année et par partie sur le Raspberry Pi ; la mesure
@@ -807,23 +817,31 @@ réel, Échap pour annuler, + et − pour zoomer.
 
 ## Organisation du code
 ```
-server.py            serveur HTTP local + boucle de simulation (10 pas par seconde)
-game/turns.py        tour par tour : tour des IA d'un coup, arrêts, temps en tours (work, deadline), récapitulatif
-game/geo.py          carte : projection, grilles de terrain, réseau routier, recherche de chemin A* (avec terres interdites)
-game/places.py       les 223 villes, villages et places fortes, routes royales
+lancer.sh, lancer.bat lancement du jeu (lancer-reseau.bat : ouvert au réseau local) ; relance après une mise à jour
+binaires.sh, .cmd    l'exécutable du jeu dans bin/ : compilé si cargo est là, sinon téléchargé (publication « binaires »)
 raspberry/           installation en service sur Raspberry Pi
-game/rules.py        départements, unités, technologies, généraux, formations, météo
-game/engine.py       simulation : économie, impôts, armées, gabares, combats par phases, sièges, espions
-game/army_actions.py actions d’armée : barricades, quartiers, garde bourgeoise, réquisition, traversée, terres fermées et droit de passage, blocus
-game/waterways.py    voies navigables (fleuves, estuaire, cabotage) et blocus
-game/ai.py           IA des départements
-game/cities.py       villes : emplacements et bâtiments, politique de la ville, événements locaux
-game/diplomacy.py    diplomatie et commerce
-game/battle_log.py   journal des batailles (logs/batailles.jsonl) ; l'outil bilan en fait le bilan
-game/views.py        état envoyé au navigateur (brouillard de guerre), sauvegardes
-game/tactics/        batailles sur ordres ou commandées : carte de bataille (terrain.py), unités (units.py), simulation
-                     (battle.py), IA qui livre la bataille (ai.py), vos ordres et leurs flèches (orders.py), raccord avec la
-                     campagne et plan de la position (bridge.py)
+rust/conquete/       le moteur et le serveur, en Rust (caisse conquete ; PORTAGE.md : le portage depuis Python et les
+                     conventions du code). Dans src/ :
+  serveur.rs         serveur HTTP local + boucle de simulation (10 pas par seconde) ; HTTPS, appairage et jeton :
+                     caisse commune web_tools_commun (dépôt web_suite)
+  turns.rs           tour par tour : tour des IA d'un coup, arrêts, temps en tours (work, deadline), récapitulatif
+  geo.rs             carte : projection, grilles de terrain, réseau routier, recherche de chemin A* (avec terres interdites)
+  places.rs          les 223 villes, villages et places fortes, routes royales
+  rules.rs           départements, unités, technologies, généraux, formations, météo
+  engine/            simulation : économie, impôts, armées, gabares, combats par phases, sièges, espions
+  army_actions/      actions d’armée : barricades, quartiers, garde bourgeoise, réquisition, traversée, terres fermées et droit de passage, blocus
+  waterways.rs       voies navigables (fleuves, estuaire, cabotage) et blocus
+  ai/                IA des départements
+  cities.rs          villes : emplacements et bâtiments, politique de la ville, événements locaux
+  diplomacy.rs       diplomatie et commerce
+  battle_log.rs      journal des batailles (logs/batailles.jsonl) ; l'outil bilan en fait le bilan
+  views.rs           état envoyé au navigateur (brouillard de guerre), sauvegardes
+  tactics/           batailles sur ordres ou commandées : carte de bataille (terrain.rs), unités (units.rs), simulation
+                     (battle/), IA qui livre la bataille (ai/), vos ordres et leurs flèches (orders.rs), raccord avec la
+                     campagne et plan de la position (bridge.rs)
+  py/                ce que Python faisait tout seul (hasard, arrondis, JSON…), pour un portage au bit près
+  bin/               les exécutables : conquete (le jeu) et les outils (voir « Outils »)
+game/data/           données de la carte (rivières, villes de France), embarquées dans l'exécutable ; cache de la carte
 web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/peintre.js (worker qui peint les tuiles de la carte), js/dev/banc.js (banc de la carte sur la machine du joueur : adresse terminée par #banc), js/lot.js (lot de dessins : les petites figures de la carte dessinées d'un coup), js/ambient.js (animations
                      de la carte), js/towns.js (dessin des villes), js/ui.js, js/plan.js (plan de la position dans la fenêtre de bataille),
                      js/tuto.js (tutoriel), js/main.js
@@ -852,20 +870,24 @@ tests/               bancs d'essai (voir « Tests » ci-dessous)
 ## Tests
 
 Des bancs d'essai vérifient en moins d'une minute ce qui demanderait des heures de jeu : batailles, campagne,
-serveur et interface. Aucune bibliothèque à installer (Python standard, et Node pour l'interface, facultatif).
+serveur et interface. Il faut Rust (`cargo`) pour le moteur et le serveur, et Node pour l'interface (facultatif).
+La CI (`.github/workflows/ci.yml`) les lance à chaque envoi.
 
 ```bash
-python3 tests/lancer.py                          # tout (environ 40 s sur un Raspberry Pi)
-python3 tests/test_bataille.py                   # un seul banc Python
-node --test tests/*.mjs                         # l'interface seule
+sh tests/resume.sh                               # tout, avec un bilan court (journal complet : /tmp/tests-conquete.log)
+cargo test -p conquete                           # le moteur et le serveur
+cargo test -p conquete --test bancs_bataille     # un seul banc
+node --test tests/*.test.mjs                     # l'interface seule
 ```
 
 | Fichier | Ce qu'il vérifie |
 |---|---|
-| `tests/test_bataille.py` | ordres propres à chaque arme (acceptés ou refusés), salve puis baïonnette, harcèlement, canons sans munitions, régiment anéanti, bataille jusqu'au bout et rechargement en plein combat ; « Donner mes ordres » de bout en bout (choix verrouillés, redéploiement, heure, moment décisif, récapitulatif), flèches de manœuvre, plan de la position, vitesses du film, mode Bataille sur ordres ; « Commander la bataille » (déploiement, ordre de marche, vitesses, fin automatique et reprise, décrocher, sauvegarde), banc de quelques jeux d'ordres ; canons camouflés dans un bois |
-| `tests/test_campagne.py` | votre tour puis celui des IA (d'un coup, arrêts, reprise), villes neutres, temps en tours (production, recherche, échéances, actions d'armée, sièges, arrivée), retraite une fois par tour, dettes et événements, prix du marché, sauvegarde (IA comprises) |
-| `tests/test_cartes.py` | cartes de bataille : même graine, même carte ; plus de parcelles en quadrillage (moins de 30 % de bords en longues droites) ; vergers près des maisons, jamais sur le glacis ; moins d'une demi-seconde par carte |
-| `tests/test_serveur.py` | un vrai serveur HTTP sur un port libre : requêtes mal formées, fichiers hors de `web/`, ordres pendant le tour des IA, sauvegardes (dossier temporaire, les vraies ne sont pas touchées) |
+| `rust/conquete/tests/<module>.rs` (`geo.rs`, `rules.rs`, `tours.rs`, `batailles.rs`, `campagnes.rs`…) | le portage au bit près : chaque module rend exactement ce que rendait le Python d'origine, figé dans `rust/conquete/tests/references/` ; batailles et campagnes entières rejouées à la même graine (voir `rust/conquete/PORTAGE.md`) |
+| `rust/conquete/tests/outils.rs` | les outils (voir « Outils ») : même sortie que leurs originaux Python sur un cas court |
+| `rust/conquete/tests/bancs_bataille.rs` | ordres propres à chaque arme (acceptés ou refusés), salve puis baïonnette, harcèlement, canons sans munitions, régiment anéanti, bataille jusqu'au bout et rechargement en plein combat ; « Donner mes ordres » de bout en bout (choix verrouillés, redéploiement, heure, moment décisif, récapitulatif), flèches de manœuvre, plan de la position, vitesses du film, mode Bataille sur ordres ; « Commander la bataille » (déploiement, ordre de marche, vitesses, fin automatique et reprise, décrocher, sauvegarde), banc de quelques jeux d'ordres ; canons camouflés dans un bois |
+| `rust/conquete/tests/bancs_campagne.rs` | votre tour puis celui des IA (d'un coup, arrêts, reprise), villes neutres, temps en tours (production, recherche, échéances, actions d'armée, sièges, arrivée), retraite une fois par tour, dettes et événements, prix du marché, sauvegarde (IA comprises) |
+| `rust/conquete/tests/bancs_cartes.rs` | cartes de bataille : même graine, même carte ; plus de parcelles en quadrillage (moins de 30 % de bords en longues droites) ; vergers près des maisons, jamais sur le glacis ; moins d'une demi-seconde par carte |
+| `rust/conquete/tests/bancs_serveur.rs` | un vrai serveur HTTP (l'exécutable `conquete`) sur un port libre : requêtes mal formées, fichiers hors de `web/`, ordres pendant le tour des IA, sauvegardes (dossier temporaire, les vraies ne sont pas touchées) |
 | `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, fiche du régiment (camouflage compris), ordres par arme et panneau de la bataille commandée, fenêtre de bataille à trois choix, barre du tour, tutoriel et bulles de bataille |
 | `tests/camera.test.mjs` | caméra des batailles vues de dessus : allers-retours écran ↔ terrain exacts, centre et sens des axes, point gardé sous le doigt au zoom, bornes |
 | `tests/troupes2d.test.mjs` | soldats vus de dessus : rangs de la ligne, plafond par régiment et figure pour plusieurs hommes, carré à quatre faces, colonne, tirailleurs, déroute, cavalerie, batterie, général, chariot, bouches à feu, tués dans l'emprise, tenues de l'époque, disposition stable d'une image à l'autre |
@@ -881,14 +903,33 @@ node --test tests/*.mjs                         # l'interface seule
 | `tests/portraits.test.mjs` | portraits des régiments : la même figure en bataille et en campagne (piquiers avant la baïonnette, pièce de son époque, cavalier pour le général) |
 | `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse |
 | `tests/pietinement.test.mjs` | piétinement : rien au repos ni sous un général, un tiers de boue au passage d'un régiment de ligne, plus sous la cavalerie et l'artillerie, double sous la pluie, mêlée sur place |
-| `tests/test_degats.py` | dégâts aux bâtiments : un boulet sur une maison, le feu qui gagne puis laisse des ruines, occupants chassés, couvert selon l'état, vue à travers une ruine, même graine même incendie, `bati` depuis `since` et carte complète, sauvegarde ; canons du défenseur sur l'enceinte et qui tirent de là |
-| `tests/test_villes.py` | villes et places : tailles du village à la capitale, nature et toit de chaque bâtiment, place bastionnée, murs qui ferment la ville, pas de maison sur une rue, brèche du siège, même graine même ville, temps de génération |
+| `rust/conquete/tests/bancs_degats.rs` | dégâts aux bâtiments : un boulet sur une maison, le feu qui gagne puis laisse des ruines, occupants chassés, couvert selon l'état, vue à travers une ruine, même graine même incendie, `bati` depuis `since` et carte complète, sauvegarde ; canons du défenseur sur l'enceinte et qui tirent de là |
+| `rust/conquete/tests/bancs_villes.rs` | villes et places : tailles du village à la capitale, nature et toit de chaque bâtiment, place bastionnée, murs qui ferment la ville, pas de maison sur une rue, brèche du siège, même graine même ville, temps de génération |
 
-**Essayer une nouvelle fonctionnalité sans jouer.** `tests/fabrique.py` fabrique une situation en une ligne : une
-partie (`partie('64', '1870')`), un ou plusieurs mois joués (`jouer_mois(g, 3)`), une bataille déjà engagée avec les
-régiments voulus (`bataille(dict(ligne=2, cavalerie=1))`), un ennemi placé à 200 m en vue (`face_a_face`), quelques
-secondes de bataille (`avancer(tb, 60)`). Les batailles sont tirées avec une graine fixe : même graine, même
-bataille. Les essais n'écrivent pas dans `logs/batailles.jsonl` (`WEB_CONQUETE_NOLOG=1`).
+D'autres bancs du jeu suivent le même modèle (`rust/conquete/tests/bancs_*.rs` : maisons occupées et barricades,
+douane, familles, toute la France, généraux, mercenaires, plans des villes).
+
+**Essayer une nouvelle fonctionnalité sans jouer.** `rust/conquete/tests/fabrique/mod.rs` fabrique une situation en
+une ligne : une partie (`partie("64", "1870", 1, "normal")`), un ou plusieurs mois joués (`jouer_mois(&mut g, 3)`), une
+bataille déjà engagée avec les régiments voulus (`bataille(dict! {"ligne" => 2, "cavalerie" => 1})`), un ennemi placé
+à 200 m en vue (`face_a_face`), quelques secondes de bataille (`avancer(&mut tb, 60.0)`). Les batailles sont tirées
+avec une graine fixe : même graine, même bataille. Les essais n'écrivent pas dans `logs/batailles.jsonl`
+(`WEB_CONQUETE_NOLOG=1`).
+
+## Outils
+
+Des exécutables à part, à lancer depuis la racine du jeu : dans `bin/` une fois le jeu lancé par `lancer.sh` ou
+`lancer.bat` (`bin\banc_ia.exe`… sous Windows), ou dans `target/release/` après
+`cargo build --release -p conquete --bins`. `--help` donne les options de chacun.
+
+```bash
+bin/banc_ia --graines 2 --epoques 1790 --lieux bataille   # banc de l'IA de bataille, batailles IA contre IA (--ordres, --tweak, --journal)
+bin/simuler --parties 6 --epoque 1790 --annees 30 --proc 2 # banc d'équilibre de la campagne (voir plus haut)
+bin/bilan --depuis 2026-10-12                              # bilan du journal des batailles (logs/batailles.jsonl)
+bin/carte_hex > web/js/dev/carte-hex-data.js               # la carte sur une grille d'hexagones (maquette web/js/dev/carte-hex.html)
+bin/bataille_hex > web/js/dev/bataille-hex-data.js         # des batailles sur hexagones (maquette web/js/dev/bataille-hex.html)
+sh outils/banc_compare.sh <commit>                         # le banc d'équilibre sur un ancien commit et sur le code actuel
+```
 
 ## Sources des données
 Contours des départements et des communes : [france-geojson](https://github.com/gregoiredavid/france-geojson) (données IGN, Licence Ouverte).
