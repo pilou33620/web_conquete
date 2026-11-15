@@ -128,6 +128,7 @@ fn rejouer(geo: &Rc<GeoMap>, c: &Val) {
     }
     let emp = c.at("emp");
     let actes = c.at("actes");
+    let limite = c.get_or("limite", LIMITE).i();
     let mut ia = 0;
     let (mut n, mut since) = (0i64, 0i64);
     loop {
@@ -148,7 +149,7 @@ fn rejouer(geo: &Rc<GeoMap>, c: &Val) {
                 panic!("{nom} : premier écart entre le pas {} et le pas {n} (empreinte {} au lieu de {attendu})", n - PAS, &e[..16]);
             }
         }
-        if tb.phase != "combat" || n >= LIMITE {
+        if tb.phase != "combat" || n >= limite {
             break;
         }
         if tb.ask.truthy() {
@@ -203,6 +204,8 @@ batailles! {
     b1790_ordres_reprise => "1790_ordres_reprise",
     b1813_campagne => "1813_campagne",
     b1870_campagne => "1870_campagne",
+    bx5034_longue => "x5034",
+    bx5035_nuit => "x5035",
 }
 
 /// Des batailles tirées au sort, hors de la référence : `python3 outils/jumeau/batailles_ref.py balayage <n> <k0>
@@ -252,5 +255,5 @@ fn chrono() {
 
 #[test]
 fn toutes_les_batailles_ont_leur_essai() {
-    assert_eq!(reference().len(), 23);
+    assert_eq!(reference().len(), 25);
 }

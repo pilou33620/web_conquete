@@ -54,7 +54,10 @@ from game.tactics import skirmish as S  # noqa: E402
 
 GEO = GeoMap(2)
 PAS = 10          # une empreinte tous les PAS pas
-LIMITE = 3000     # pas au plus par bataille (6 000 s de bataille)
+LIMITE = int(os.environ.get('CONQUETE_LIMITE', 3000))   # pas au plus par bataille (6 000 s de bataille ; rangé : limite)
+# des batailles tirées au sort (tiree) jouées jusqu'au bout dans la référence, même au-delà de LIMITE (x5035 : jusqu'à
+# la nuit)
+LONGUES = {'x5034': 30000, 'x5035': 30000}
 ACTE = 25         # le joueur agit tous les ACTE pas
 LIVRES = 100      # le trésor du joueur (orders.clean : les faux déserteurs coûtent orders.FEINT_COST)
 # (bridge.set_orders : le texte de la ruse des faux déserteurs)
@@ -308,7 +311,7 @@ def jouer(nom, mode, depart, ordres, jusqua=None):
         if n % PAS == 0:
             emp.append(empreinte(tb, since)[:16])
             since = tb.seq
-        if tb.phase != 'combat' or n >= LIMITE:
+        if tb.phase != 'combat' or n >= LONGUES.get(nom, LIMITE):
             if jusqua is not None:   # (reprise d'une bataille finie avant : son état final)
                 return tb, since
             break
@@ -352,7 +355,7 @@ def main():
             s.write(commun.canon_ordre(dict(etat=tb.to_dict(), vue=tb.view(0, since))))
         print(f, os.path.join(SORTIE, 'hasard_py.txt'))
         return
-    liste, sortie = BATAILLES, None
+    liste, sortie = BATAILLES + [tiree(int(k[1:])) for k in LONGUES], None
     if sys.argv[1:2] == ['balayage']:
         n, k0, sortie = int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
         liste = [tiree(k) for k in range(k0, k0 + n)]
@@ -366,7 +369,7 @@ def main():
         r = jouer(nom, mode, depart, ordres)
         print(nom, mode, r['pas'], r['phase'], r['result'] and r['result']['why'], len(r['actes']), 'actes')
         relu = commun.empreinte_ordre(BT.TacticalBattle.from_dict(GEO, json.loads(depart)).to_dict())
-        ref.append(dict(nom=nom, mode=mode, depart=depart, ordres=ordres, relu=relu, **r))
+        ref.append(dict(nom=nom, mode=mode, depart=depart, ordres=ordres, relu=relu, limite=LONGUES.get(nom, LIMITE), **r))
     if sortie:
         with open(sortie, 'w', encoding='utf-8') as f:
             json.dump(ref, f, ensure_ascii=False, separators=(',', ':'))
