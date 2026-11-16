@@ -51,7 +51,11 @@ voies navigables et côtes au-delà du Sud-Ouest, vérifier la fluidité sur iPa
 
 - Pays d'époque (Angleterre, Espagne, Portugal, Prusse, Autriche, Russie, Empire ottoman, Provinces-Unies, États
   italiens, Suède, Maroc, régences d'Alger, de Tunis…) et leurs villes principales.
-- Échelle à trancher : 17 millions de cases à 1 km, c'est trop pour un iPad ou un Raspberry.
+- **Échelle : décidée le 16/11/2026, cases de 4 à 5 km** pour la carte d'Europe (à 1 km, 17 millions de cases : trop
+  pour un iPhone, un iPad ou un Raspberry). Étendue d'environ 4 500 × 3 900 km (de l'Atlantique à l'Oural et à la
+  Caspienne, du Sahara à la Scandinavie) : 5 km font environ 700 000 cases, moins que la carte de France ; 4 km en font
+  1,1 million, autant qu'elle. On part sur 5 km, et 4 km si le Raspberry suit. La carte de France à 1 km reste celle du
+  mode France ; on choisit le mode sur l'écran de départ.
 - **Villes : les 25 plus grandes de chaque pays** (demande du 15/11/2026), capitale comprise, avec leur population
   vers 1790 (l'année des données du mode France). Exemple, la France, d'après les populations déjà dans le jeu
   (`places_france.json`, et `places.rs` pour le Sud-Ouest) :
