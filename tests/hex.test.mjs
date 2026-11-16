@@ -42,3 +42,31 @@ test('caméra des batailles avec l’aplatissement k', () => {
   // sans k : la vue de dessus d'avant
   assert.deepEqual(toScreen({ x: 0, y: 0, z: 1 }, { vw: 10, vh: 10 }, 1, 1), [6, 6, 1]);
 });
+
+// Les remparts s'ouvrent là où les routes les traversent (modeles.js, enceinte) : sans cela une route de la carte passe
+// à travers un mur plein et la porte est dessinée à côté, sans que rien ne plante.
+test('remparts : aucune route ne traverse un mur, une tour ou un bastion', async () => {
+  const { enceinte, lot } = await import('../web/js/hex/modeles.js').then(async M => ({ enceinte: M.enceinte, lot: (await import('../web/js/hex/moteur.js')).lot }));
+  let vus = 0;
+  for (const [rad, nb] of [[7.5, 1], [19, 2], [27, 2], [34, 2]]) for (let niveau = 1; niveau <= 4; niveau++) for (let g = 0; g < 12; g++) {
+    // des routes droites du cœur vers le dehors, un point tous les 0,8
+    const routes = [];
+    for (let k = 0; k < nb; k++) { const a = g * 0.53 + k * (1.9 + g * 0.11), b = a + 0.25 * Math.sin(g + k); for (let d = 0; d < rad * 1.6; d += 0.8) routes.push([Math.cos(a) * 2 + Math.cos(b) * d, Math.sin(a) * 2 + Math.sin(b) * d, k === 0]); }
+    const L = lot(); enceinte(L, niveau, rad, routes);
+    for (const geo of [...L.g, ...L.o]) {
+      const p = geo.attributes.position; let bas = Infinity, haut = -Infinity;
+      for (let i = 0; i < p.count; i++) { bas = Math.min(bas, p.getY(i)); haut = Math.max(haut, p.getY(i)); }
+      if (bas > 0.5 || haut < 1) continue;   // (le fossé, plat, et le parapet, posé sur le mur, ne barrent rien)
+      for (let i = 0; i < p.count; i += 3) {
+        const [x1, z1, x2, z2, x3, z3] = [p.getX(i), p.getZ(i), p.getX(i + 1), p.getZ(i + 1), p.getX(i + 2), p.getZ(i + 2)], aire = (x2 - x1) * (z3 - z1) - (x3 - x1) * (z2 - z1);
+        if (Math.abs(aire) < 1e-9) continue;
+        for (const [x, z] of routes) {
+          const u = ((x - x1) * (z3 - z1) - (x3 - x1) * (z - z1)) / aire, v = ((x2 - x1) * (z - z1) - (x - x1) * (z2 - z1)) / aire;
+          assert.ok(!(u > 1e-6 && v > 1e-6 && u + v < 1 - 1e-6), `route sous un ouvrage (rayon ${rad}, niveau ${niveau}, tirage ${g})`);
+        }
+        vus++;
+      }
+    }
+  }
+  assert.ok(vus > 1000);
+});

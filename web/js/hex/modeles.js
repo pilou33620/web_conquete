@@ -173,12 +173,35 @@ export function fanion(L, col, x, y, z, h = 7) {
 
 // ------------------------------------------------------------------ enceintes
 // enceinte en anneau de rayon rad autour de (0, 0) selon le niveau des remparts (1 à 4) ; `portes` : les points des
-// routes alentour ([x, z], tous les 0,8) : une porte s'ouvre là où une route traverse le mur, pile sur elle. 1 : mur et tours rondes ; 2 : remparts épais, tours plus hautes ; 3 : tracé bastionné
+// routes alentour ([x, z, royale], tous les 0,8) : le mur s'ouvre là où une route le traverse, pile sur elle (une porte à
+// deux tours pour une route royale, une simple poterne pour un chemin), et le polygone se tourne pour que ses angles
+// (tours, bastions) tombent le plus loin possible des routes. 1 : mur et tours rondes ; 2 : remparts épais, tours plus hautes ; 3 : tracé bastionné
 // avec fossé ; 4 : bastions, demi-lunes et glacis à la Vauban.
 export const pansEnceinte = (niveau, rad) => (niveau >= 3 ? 5 + (rad > 12 ? 1 : 0) : 8);
 export function enceinte(L, niveau, rad, portes = []) {
-  const n = pansEnceinte(niveau, rad), H = niveau >= 2 ? 1.9 : 1.4, ep = niveau >= 2 ? 1.1 : 0.7;
-  const coins = Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2 + Math.PI / n; return [Math.cos(a) * rad, Math.sin(a) * rad, a]; });
+  let n = pansEnceinte(niveau, rad);
+  const H = niveau >= 2 ? 1.9 : 1.4, ep = niveau >= 2 ? 1.1 : 0.7;
+  // les angles (tours, bastions) se posent entre les routes : dans chaque arc libre entre deux passages voisins, autant
+  // d'angles qu'il en faut pour des pans d'au plus un n-ième de tour ; aucun si l'arc est trop court pour un ouvrage
+  const w = Math.PI * 2 / n, T = Math.PI * 2, libre = (niveau >= 3 ? 6.6 : 3.6) / rad;
+  const pass = portes.filter(([x, z]) => { const r = Math.hypot(x, z); return r > rad * Math.cos(w / 2) - 0.6 && r < rad + (niveau >= 3 ? rad * 0.06 + 2.6 : 1.8); }).map(([x, z]) => (Math.atan2(z, x) + T) % T).sort((p, q) => p - q);
+  const arcs = pass.map((a, i) => [a, i + 1 < pass.length ? pass[i + 1] - a : pass[0] + T - a]);
+  let angles = [];   // [angle, nu] ; nu : un angle sans ouvrage (ni tour ni bastion), faute de place entre deux routes
+  for (const [a, arc] of arcs) if (arc >= libre) { const k = Math.max(1, Math.ceil(arc / w - 1e-9)); for (let j = 0; j < k; j++) angles.push([(a + (j + 0.5) * arc / k) % T, false]); }
+  // là où les routes sont trop serrées pour un ouvrage, le mur tourne quand même (au milieu du plus grand arc), sans tour :
+  // sans cela un pan trop long couperait la ville
+  for (let tour = 0; tour < 24 && pass.length; tour++) {
+    angles.sort((p, q) => p[0] - q[0]);
+    const trou = angles.length < 3 ? [0, T] : angles.map((p, i) => [p[0], (i + 1 < angles.length ? angles[i + 1][0] : angles[0][0] + T) - p[0]]).sort((p, q) => q[1] - p[1])[0];
+    if (angles.length >= 3 && trou[1] <= w * 1.3) break;
+    const dans = arcs.filter(([a, arc]) => arc < libre && ((a + arc / 2 - trou[0]) % T + T) % T < trou[1] && !angles.some(p => Math.abs(p[0] - (a + arc / 2) % T) < 1e-6)).sort((p, q) => q[1] - p[1])[0];
+    if (!dans) break;
+    angles.push([(dans[0] + dans[1] / 2) % T, true]);
+  }
+  angles.sort((p, q) => p[0] - q[0]);
+  if (angles.length < 3) angles = Array.from({ length: n }, (_, i) => [i * w + w / 2, false]);
+  const coins = angles.map(([a, nu]) => [Math.cos(a) * rad, Math.sin(a) * rad, a, nu]);
+  n = coins.length;
   if (niveau >= 3) {   // fossé (et glacis) : un anneau plus sombre au pied
     const fos = new THREE.RingGeometry(rad * 0.98, rad * (niveau >= 4 ? 1.42 : 1.26), n * 4); fos.rotateX(-Math.PI / 2);
     put(L, fos, niveau >= 4 ? 0x6f9a52 : 0x5f8a4a, 0, 0.04, 0, Math.PI / n, 0);
@@ -188,28 +211,45 @@ export function enceinte(L, niveau, rad, portes = []) {
     const mid = Math.atan2((az + bz) / 2, (ax + bx) / 2), mx = (ax + bx) / 2, mz = (az + bz) / 2;
     // où les routes traversent ce pan (distance le long du mur) : une porte à chaque fois, écartée des tours d'angle
     const dx = (bx - ax) / l, dz = (bz - az) / l, ou = [];
-    for (const [px, pz] of portes) {
-      const s = (px - ax) * dx + (pz - az) * dz;
-      if (s > 0 && s < l && Math.abs((px - ax) * dz - (pz - az) * dx) < 0.5) ou.push(Math.min(l - 2.6, Math.max(2.6, s)));
+    // (une traversée : deux points voisins d'une route de part et d'autre du pan, ou un peu au-delà de ses bouts pour
+    // qu'une route dans l'angle ouvre les deux pans ; une route en biais ouvre le mur sur toute sa largeur, pas une route
+    // qui le longe sans le franchir)
+    for (const [px, pz, royale] of portes) {   // (et une route qui frôle le mur : ouvert là où elle est dessous)
+      const sp = (px - ax) * dx + (pz - az) * dz;
+      if (sp > -0.8 && sp < l + 0.8 && Math.abs((px - ax) * dz - (pz - az) * dx) < ep / 2 + 0.25) ou.push([Math.min(l, Math.max(0, sp)), royale]);
     }
-    ou.sort((p, q) => p - q);
+    for (let k = 1; k < portes.length; k++) {
+      const [px, pz, royale] = portes[k - 1], [qx, qz] = portes[k];
+      if (Math.hypot(qx - px, qz - pz) > 1) continue;   // (deux routes différentes)
+      const c0 = (px - ax) * dz - (pz - az) * dx, c1 = (qx - ax) * dz - (qz - az) * dx;
+      if (c0 * c1 > 0 || c0 === c1) continue;
+      const t = c0 / (c0 - c1), s0 = (px - ax) * dx + (pz - az) * dz, s1 = (qx - ax) * dx + (qz - az) * dz, sc = s0 + (s1 - s0) * t;
+      if (sc < -0.8 || sc > l + 0.8) continue;
+      const biais = Math.min(2.2, 0.8 * Math.abs((s1 - s0) / (c1 - c0)));
+      for (const v of [sc - biais, sc + biais]) ou.push([Math.min(l, Math.max(0, v)), royale]);
+    }
+    ou.sort((p, q) => p[0] - q[0]);
     let deb = 0;
     const mur = fin => { if (fin - deb > 0.3) put(L, boite(fin - deb + 0.2, H, ep), niveau >= 3 ? 0xcdb98c : PIERRE2, ax + dx * (deb + fin) / 2, H / 2, az + dz * (deb + fin) / 2, a, 0.14); };
     for (let i0 = 0; i0 < ou.length;) {
-      // (deux routes qui passent à moins de 6,5 l'une de l'autre : une seule porte, plus large, pour les deux)
-      let i1 = i0; while (i1 + 1 < ou.length && ou[i1 + 1] - ou[i1] < 6.5) i1++;
-      const s0 = ou[i0], s1 = ou[i1]; i0 = i1 + 1;
-      mur(s0 - 2.2);
-      // la porte : deux tours de part et d'autre, un passage
-      for (const k of [-1, 1]) { const s = k < 0 ? s0 : s1, px = ax + dx * (s + k * 1.4), pz = az + dz * (s + k * 1.4); put(L, cyl(0.8, 0.9, H + 1.2, 8), PIERRE, px, (H + 1.2) / 2, pz, 0, 0.12); put(L, cone(1, 1.3, 8), ARDOISE, px, H + 1.85, pz, 0, 0.1); }
-      deb = s1 + 2.2;
+      // (deux routes qui passent à moins de 4,6 l’une de l’autre : une seule porte, plus large, pour les deux)
+      let i1 = i0; while (i1 + 1 < ou.length && ou[i1 + 1][0] - ou[i1][0] < 4.6) i1++;
+      const s0 = ou[i0][0], s1 = ou[i1][0], royale = ou.slice(i0, i1 + 1).some(o => o[1]), vide = royale ? 1.3 : 0.9; i0 = i1 + 1;
+      mur(s0 - vide);
+      // la porte : deux tours de part et d'autre du passage (sauf là où la tour d'angle en tient lieu) ; la poterne : rien
+      if (royale) for (const k of [-1, 1]) {
+        const s = (k < 0 ? s0 : s1) + k * 1.4, px = ax + dx * s, pz = az + dz * s;
+        if (s > 1.8 && s < l - 1.8 && !portes.some(([x, z]) => Math.hypot(x - px, z - pz) < 1.15)) {   /* ni sur une autre route */ put(L, cyl(0.8, 0.9, H + 1.2, 8), PIERRE, px, (H + 1.2) / 2, pz, 0, 0.12); put(L, cone(1, 1.3, 8), ARDOISE, px, H + 1.85, pz, 0, 0.1); }
+      }
+      deb = s1 + vide;
     }
     mur(l);
+    const ouvert = ou.length > 0;
     if (niveau >= 3) {   // le bastion : une pointe de flèche au saillant, parapet gazonné
-      const b = cone(2.4, H + 0.2, 4); put(L, b, 0xc4b083, ax * 1.06, (H + 0.2) / 2, az * 1.06, -coins[i][2] + Math.PI / 4, 0.14);
+      if (!coins[i][3]) put(L, cone(2.4, H + 0.2, 4), 0xc4b083, ax * 1.06, (H + 0.2) / 2, az * 1.06, -coins[i][2] + Math.PI / 4, 0.14);
       put(L, boite(l + 0.2, 0.4, ep * 0.7), 0x8fae5a, mx, H + 0.2, mz, a, 0.08);
-      if (niveau >= 4) { const dl = cone(1.8, H * 0.8, 3); put(L, dl, 0xc4b083, Math.cos(mid) * rad * 1.22, H * 0.4, Math.sin(mid) * rad * 1.22, -mid + Math.PI / 2, 0.12); }
-    } else {
+      if (niveau >= 4 && !ouvert && !portes.some(([x, z]) => Math.hypot(x - Math.cos(mid) * rad * 1.22, z - Math.sin(mid) * rad * 1.22) < 2.6)) { const dl = cone(1.8, H * 0.8, 3); put(L, dl, 0xc4b083, Math.cos(mid) * rad * 1.22, H * 0.4, Math.sin(mid) * rad * 1.22, -mid + Math.PI / 2, 0.12); }
+    } else if (!coins[i][3]) {
       put(L, cyl(0.85, 0.95, H + 0.9, 10), PIERRE, ax, (H + 0.9) / 2, az, 0, 0.12);
       if (niveau >= 2) put(L, cone(1.1, 1.4, 10), ARDOISE, ax, H + 1.6, az, 0, 0.1);
       else for (let k = 0; k < 4; k++) put(L, boite(0.3, 0.3, 0.3), PIERRE, ax + Math.cos(k * 1.57) * 0.7, H + 1.05, az + Math.sin(k * 1.57) * 0.7, 0, 0);   // merlons

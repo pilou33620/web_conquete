@@ -454,12 +454,12 @@ export class Plateau {
     const voies = mp.edges.filter(e => e.a === n.id || e.b === n.id).map(e => g.suivre(e.a === n.id ? e.pts : e.pts.slice().reverse(), 2.25, 0).map(p => [p[0], p[2]]).filter(p => Math.hypot(p[0] - t0.x, p[1] - t0.z) < 26));
     // et toutes celles qui passent près (rien ne se bâtit dessus)
     const pres = [];
-    for (const e of mp.edges) { if (!e.pts.some(p => Math.hypot(p[0] / g.f - t0.x, p[1] / g.f - t0.z) < 44)) continue; for (const [x, , z] of g.suivre(e.pts, 0.8, 0)) if (Math.hypot(x - t0.x, z - t0.z) < 40) pres.push([x, z]); }
-    // ni sur un mur d'enceinte, le sien ou celui d'une place voisine (à 1,6 du pan : l'apothème du polygone)
+    for (const e of mp.edges) { if (!e.pts.some(p => Math.hypot(p[0] / g.f - t0.x, p[1] / g.f - t0.z) < 44)) continue; for (const [x, , z] of g.suivre(e.pts, 0.8, 0)) if (Math.hypot(x - t0.x, z - t0.z) < 40) pres.push([x, z, e.royal]); }
+    // ni sur un mur d'enceinte, le sien ou celui d'une place voisine (la couronne où passe le polygone, qui se tourne selon les routes)
     const murs = [...this.lieux.values()].map(o => this.murDe(o)).filter(m => m && Math.hypot(m.x - t0.x, m.z - t0.z) < m.rad + 32);
     const surMur = (x, z) => murs.some(m => {
-      const w = Math.PI * 2 / m.n, r = Math.hypot(x - m.x, z - m.z), a = Math.atan2(z - m.z, x - m.x), p = a - Math.round(a / w) * w;
-      return Math.abs(r * Math.cos(p) - m.rad * Math.cos(w / 2)) < 1.6;
+      const r = Math.hypot(x - m.x, z - m.z);
+      return r > m.rad * Math.cos(Math.PI / m.n) - 1.6 && r < m.rad + 1.6;
     });
     const surRue = (x, z) => surMur(x, z) || pres.some(([px, pz]) => (px - x) * (px - x) + (pz - z) * (pz - z) < 2.3);
     // ce que l'état abîme (comme la carte d'avant, villes.js degats) : maisons brûlées par l'incendie, ruines du siège en
@@ -567,7 +567,7 @@ export class Plateau {
       M.eglise(L, st, ox, oz, rnd() * 6, 0.65, n.dept);
       for (let k = 0; k < 3; k++) { const a = rnd() * 6.3, r = entre(6.5, 8.5), ax = ox + Math.cos(a) * r, az = oz + Math.sin(a) * r; if (sec(ax, az, 1) && !surRue(t0.x + ax, t0.z + az)) M.arbre(L, ax, 0, az, 0.7, 'fruitier'); }
       if (rnd() < 0.35) { const mx = entre(-7, 7), mz = entre(-7, 7); if (sec(mx, mz, 1.5) && !surRue(t0.x + mx, t0.z + mz)) M.moulin(L, mx, mz, rnd() * 6, 0.75, rnd(), L.tourn); }
-      if (f) M.enceinte(L, Math.min(f, 2), 7.5, pres.map(([x, z]) => [x - t0.x, z - t0.z]));
+      if (f) M.enceinte(L, Math.min(f, 2), 7.5, pres.map(([x, z, r]) => [x - t0.x, z - t0.z, r]));
     } else {
       // la ville : place au centre (église ou cathédrale, halle, fontaine), rues vers les routes, maisons serrées au cœur,
       // faubourgs plus lâches sur les hexagones voisins, enceinte selon les remparts
@@ -586,7 +586,7 @@ export class Plateau {
       if (manque > 0) for (const h of new Set(l.hex.flatMap(x => g.voisins(x)))) { if (manque <= 0) break; if (!h.lieu && !this.estEau(h)) manque = combler(h, manque, 1, 0); }
       if (f) {   // l'enceinte entoure le cœur et les faubourgs voisins : centrée sur eux
         const m = this.murDe(l), cx = m.x - t0.x, cz = m.z - t0.z, rad = m.rad, E = lot();
-        M.enceinte(E, f, rad, pres.map(([x, z]) => [x - t0.x - cx, z - t0.z - cz]));
+        M.enceinte(E, f, rad, pres.map(([x, z, r]) => [x - t0.x - cx, z - t0.z - cz, r]));
         for (const k of ['g', 'o']) for (const geo of E[k]) { geo.translate(cx, 0, cz); L[k].push(geo); }
       }
       if ((n.quai || (n.spec || []).includes('port')) && n.type !== 'fort') {
