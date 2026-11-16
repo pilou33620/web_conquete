@@ -242,15 +242,47 @@ export function majEtat(st) {
 // De loin (moins d'un pixel par unité), les figures se dessinent en deux ou trois taches : les jambes, les bras, les
 // fusils et les épaulettes n'y feraient pas un pixel, et coûteraient le gros de l'image au zoom de la vie.
 let SIMPLE = false;
+// Sur le plateau en relief, les gens, les bêtes et les voitures sont dessinés debout, de profil, comme des pions posés
+// sur la carte (vus du dessus, à plat, ils avaient l'air couchés). debout : le repère de la figure, redressé à l'écran
+// (tourné vers la droite ou la gauche selon sa marche).
+const DEBOUT = true;
+const SOL = 'rgba(20,20,10,.28)', CUIR = '#3a2a1b';
+function debout(g, x, y, fn, a = 0) {
+  const m = g.getTransform && g.getTransform();
+  if (!m) return false;   // (un contexte sans repère : le dessin à plat)
+  const k = Math.max(Math.hypot(m.a, m.b), Math.hypot(m.c, m.d)), vers = m.a * Math.cos(a) + m.c * Math.sin(a) < 0 ? -1 : 1;
+  g.save(); g.setTransform(k * vers, 0, 0, k, m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f); fn(); g.restore();
+  return true;
+}
+function pion(g, habit, coiffe, pas = 0) {
+  E(g, SOL, .3, .2, 1.7, .6);
+  const j = Math.sin(pas) * .7; T(g, '#33291f', .7, -.3, -1.8, -.3 + j, 0); T(g, '#33291f', .7, .3, -1.8, .3 - j, 0);
+  RR(g, habit, -1.15, -4.7, 2.3, 3.2, .9); C(g, '#e6bd95', 0, -5.5, .95); RR(g, coiffe ? '#f2efe6' : '#2c2622', -1.1, -6.7, 2.2, 1, .45);
+}
+function chevalD(g, c, pas = 0, cornes = false) {
+  E(g, SOL, .4, .2, 4, .8);
+  for (const [x, d] of [[-2.2, 0], [-1.4, 1.6], [1.6, 3.1], [2.4, 4.7]]) T(g, sombre(c, .25), .65, x, -1.9, x + Math.sin(pas + d) * .7, 0);
+  E(g, c, 0, -2.9, 3.3, 1.45); E(g, c, 3.1, -4.3, 1.5, .85, -.7); E(g, c, 4.2, -5, 1.15, .6, .35); T(g, sombre(c, .3), .6, -3.2, -3.2, -4, -1.5);
+  if (cornes) T(g, '#efe6cc', .4, 4, -5.6, 4.7, -6.4);
+}
+function voiture(g, caisse, toit, haut = 3.2) {
+  E(g, SOL, 0, .3, 7.5, 1.1);
+  RR(g, caisse, -6.5, -1.9 - haut, 13, haut, .7); if (toit) RR(g, toit, -5.6, -3.4 - haut, 11.2, 2, .9);
+  for (const x of [-3.9, 3.9]) { C(g, CUIR, x, -1.6, 1.7); C(g, '#b89a6a', x, -1.6, .55); }
+  T(g, CUIR, .5, 6.5, -2.4, 11, -2.6);
+}
 function fantassin(g, L, f, p) {
+  if (DEBOUT && debout(g, 0, 0, () => pion(g, f.habit || L.habit, L.tete === 'coiffe', p && p.legs))) return;
   if (!SIMPLE) return fantassin0(g, L, f, p);
   RR(g, f.habit || L.habit, -1.35, -2.15, 2.7, 4.3, 1.2); C(g, L.tete === 'coiffe' ? '#f2efe6' : '#3a2b1c', 0, 0, 1.3);
 }
 function cheval(g, c, p) {
+  if (DEBOUT && debout(g, 0, 0, () => chevalD(g, c, p && p.gait))) return;
   if (!SIMPLE) return cheval0(g, c, p);
   E(g, c, 0, 0, 5.3, 2.05); E(g, c, 5.8, 0, 2.4, 1.05);
 }
 function cavalier(g, L, f, p, postillon) {
+  if (DEBOUT && debout(g, 0, 0, () => { RR(g, f.habit || L.habit, -1.3, -7.3, 2.3, 3.2, .9); C(g, '#e6bd95', -.15, -8.1, .95); RR(g, '#2c2622', -1.25, -9.3, 2.2, 1, .45); })) return;
   if (!SIMPLE) return cavalier0(g, L, f, p, postillon);
   E(g, f.habit || L.habit, -.4, 0, 1.45, 2.05); C(g, '#3a2b1c', 0, 0, 1);
 }
@@ -263,30 +295,38 @@ PAL.lauze ??= ['#8a8478', '#6a655c', '#4f4b44'];
 if (!SPR.fen) sprite('fen', '255,214,140');   // (les lanternes de LUM ; ciel.js les allume)
 function marcheur(g, k, pas, bagage) { const c = CIVILS[k % CIVILS.length]; fantassin(g, c.L, { role: 'h', habit: c.habit }, { legs: pas, arme: 'aucun' }); if (bagage) C(g, '#b9a37a', -2.1, 0, 1.4); }
 function charrette(g, pas, boeufs, k) {
+  if (DEBOUT && debout(g, 0, 0, () => voiture(g, '#8a6a45', ['#b8a27a', '#d6ba5c', '#6b8fb5'][k % 3], 1.6))) { g.save(); g.translate(15, 0); if (!debout(g, 0, 0, () => chevalD(g, boeufs ? '#d2bf95' : '#6b4a2c', pas, boeufs))) cheval(g, '#6b4a2c', { gait: pas }); g.restore(); return; }
   if (!SIMPLE) for (const x of [-4, 4]) { RR(g, '#3a2a1b', x - 2, -3.7, 4, 1, .4); RR(g, '#3a2a1b', x - 2, 2.7, 4, 1, .4); }
   T(g, '#5b4127', .6, 6, 0, 10, 0); RR(g, '#8a6a45', -6.5, -2.9, 13, 5.8, .6);
   RR(g, ['#b8a27a', '#d6ba5c', '#6b8fb5'][k % 3], -5.5, -2.2, 10, 4.4, .5);
   for (const y of boeufs ? [-2.4, 2.4] : [0]) { g.save(); g.translate(15, y); cheval(g, boeufs ? '#d2bf95' : '#6b4a2c', { gait: pas, bob: 0 }); if (boeufs) { T(g, '#efe6cc', .35, 7.7, -.6, 8.3, -1.4); T(g, '#efe6cc', .35, 7.7, .6, 8.3, 1.4); } g.restore(); }
 }
 function diligence(g, pas) {
+  if (DEBOUT && debout(g, 0, 0, () => voiture(g, '#2f4a3a', '#b9a37a'))) { for (const x of [15, 24]) { g.save(); g.translate(x, 0); cheval(g, x === 15 ? '#6b4a2c' : '#3f2d1f', { gait: pas + x }); g.restore(); } return; }
   for (const x of [-5, 5]) { RR(g, '#e3c04f', x - 2.2, -4.2, 4.4, 1, .4); RR(g, '#e3c04f', x - 2.2, 3.2, 4.4, 1, .4); }
   RR(g, '#2f4a3a', -7, -3.4, 14, 6.8, 1.2); RR(g, '#1c1b1d', -6, -2.8, 9, 5.6, 1); RR(g, '#b9a37a', -6.4, -2.4, 4, 4.8, .6);
   for (const x of [15, 26]) for (const y of [-2.6, 2.6]) { g.save(); g.translate(x, y); cheval(g, x === 15 ? '#6b4a2c' : '#3f2d1f', { gait: pas + x, bob: 0 }); g.restore(); }
 }
 function mallePoste(g, pas) {
+  if (DEBOUT && debout(g, 0, 0, () => voiture(g, '#c9a12c', '#2a2a2e'))) { for (const x of [16, 25]) { g.save(); g.translate(x, 0); cheval(g, x === 16 ? '#6b4a2c' : '#8b6a47', { gait: pas * 1.5 + x }); if (x === 16) cavalier(g, LCIV, { habit: '#2f4f9c' }, { sabre: 0, bob: 0 }, true); g.restore(); } return; }
   for (const x of [-5, 5]) { RR(g, '#1c1b1d', x - 2.2, -4.2, 4.4, 1, .4); RR(g, '#1c1b1d', x - 2.2, 3.2, 4.4, 1, .4); }
   RR(g, '#c9a12c', -7.5, -3.4, 15, 6.8, 1.2); RR(g, '#2a2a2e', -6.5, -2.6, 8, 5.2, .8); RR(g, '#7a6a4f', 2.5, -2.6, 4, 5.2, .5);   // caisse jaune, impériale bâchée, coffre des dépêches
   for (const x of [16, 27]) for (const y of [-2.6, 2.6]) { g.save(); g.translate(x, y); cheval(g, x === 16 ? '#6b4a2c' : '#8b6a47', { gait: pas * 1.5 + x + y, bob: 0 }); if (x === 16 && y < 0) cavalier(g, LCIV, { habit: '#2f4f9c' }, { sabre: 0, bob: 0 }, true); g.restore(); }
 }
 function convoiFunebre(g, pas) {
+  if (DEBOUT && debout(g, 0, 0, () => { voiture(g, '#2a2420', null, 1.2); RR(g, '#5b4127', -4.5, -4.6, 9, 1.5, .4); })) {
+    g.save(); g.translate(13, 0); cheval(g, '#2e2119', { gait: pas * .6 }); g.restore();
+    for (let m = 0; m < 3; m++) { g.save(); g.translate(-10 - m * 4, 0); fantassin(g, CIVILS[m].L, { role: 'h', habit: '#1f1d1d' }, { legs: pas * .6 + m, arme: 'aucun' }); g.restore(); }
+    return;
+  }
   RR(g, '#2a2420', -6, -2.6, 12, 5.2, .6); RR(g, '#5b4127', -4.5, -1.4, 9, 2.8, .4); T(g, '#efe6cc', .4, -1, 0, 2, 0); T(g, '#efe6cc', .4, 0, -1, 0, 1);
   g.save(); g.translate(13, 0); cheval(g, '#2e2119', { gait: pas * .6, bob: 0 }); g.restore();
   for (let m = 0; m < 3; m++) { g.save(); g.translate(-10 - m * 4, (m % 2 ? 1.5 : -1.5)); fantassin(g, CIVILS[m].L, { role: 'h', habit: '#1f1d1d' }, { legs: pas * .6 + m, arme: 'aucun' }); g.restore(); }
 }
-function mouton(g, x, y, a, c = '#efeade') { if (!SIMPLE) E(g, OMBRE, x + .8, y + 1, 1.9, 1.2, a); E(g, c, x, y, 1.9, 1.2, a); C(g, '#2c2a28', x + Math.cos(a) * 2, y + Math.sin(a) * 2, .6); }
-function vache(g, x, y, a, robe) { E(g, OMBRE, x + 1, y + 1.3, 4.3, 1.9, a); E(g, robe, x, y, 4.3, 1.9, a); E(g, sombre(robe, .1), x + Math.cos(a) * 4.6, y + Math.sin(a) * 4.6, 1.4, .95, a); }
-function chien(g, x, y, a, t) { E(g, 'rgba(20,20,10,.3)', x + .5, y + .7, 1.8, .8, a); E(g, '#3a2c22', x, y, 1.8, .75, a); C(g, '#2a1f18', x + Math.cos(a) * 1.9, y + Math.sin(a) * 1.9, .6); T(g, '#3a2c22', .4, x - Math.cos(a) * 1.7, y - Math.sin(a) * 1.7, x - Math.cos(a + Math.sin(t * 8) * .5) * 3, y - Math.sin(a + Math.sin(t * 8) * .5) * 3); }
-const brebis = (g, c) => { if (SIMPLE) { E(g, c, -.3, 0, 1.9, 1.3); C(g, '#2c2a28', 1.9, 0, .6); return; } for (const [cx, cy] of [[-1, -.6], [-1, .6], [.4, -.7], [.4, .7], [-.3, 0]]) C(g, c, cx, cy, .9); C(g, '#2c2a28', 1.9, 0, .6); };
+function mouton(g, x, y, a, c = '#efeade') { if (DEBOUT && debout(g, x, y, () => { E(g, SOL, .2, .15, 1.8, 0.50); for (const x of [-0.99, 0.99]) T(g, '#2c2a28', .45, x, -0.99, x, 0); E(g, c, 0, -1.49, 1.8, 1.1); C(g, '#2c2a28', 1.89, -1.93, 0.61); }, a)) return; if (!SIMPLE) E(g, OMBRE, x + .8, y + 1, 1.9, 1.2, a); E(g, c, x, y, 1.9, 1.2, a); C(g, '#2c2a28', x + Math.cos(a) * 2, y + Math.sin(a) * 2, .6); }
+function vache(g, x, y, a, robe) { const c = robe; if (DEBOUT && debout(g, x, y, () => { E(g, SOL, .2, .15, 3.6, 0.72); for (const x of [-1.98, 1.98]) T(g, '#2c2a28', .45, x, -1.44, x, 0); E(g, c, 0, -2.16, 3.6, 1.6); C(g, sombre(c, .1), 3.78, -2.80, 0.88); }, a)) return; E(g, OMBRE, x + 1, y + 1.3, 4.3, 1.9, a); E(g, robe, x, y, 4.3, 1.9, a); E(g, sombre(robe, .1), x + Math.cos(a) * 4.6, y + Math.sin(a) * 4.6, 1.4, .95, a); }
+function chien(g, x, y, a, t) { const c = '#3a2c22'; if (DEBOUT && debout(g, x, y, () => { E(g, SOL, .2, .15, 1.5, 0.32); for (const x of [-0.83, 0.83]) T(g, '#2c2a28', .45, x, -0.63, x, 0); E(g, c, 0, -0.94, 1.5, 0.7); C(g, '#2a1f18', 1.58, -1.22, 0.39); }, a)) return; E(g, 'rgba(20,20,10,.3)', x + .5, y + .7, 1.8, .8, a); E(g, '#3a2c22', x, y, 1.8, .75, a); C(g, '#2a1f18', x + Math.cos(a) * 1.9, y + Math.sin(a) * 1.9, .6); T(g, '#3a2c22', .4, x - Math.cos(a) * 1.7, y - Math.sin(a) * 1.7, x - Math.cos(a + Math.sin(t * 8) * .5) * 3, y - Math.sin(a + Math.sin(t * 8) * .5) * 3); }
+const brebis = (g, c) => { if (DEBOUT && debout(g, 0, 0, () => { E(g, SOL, .2, .15, 1.8, 0.50); for (const x of [-0.99, 0.99]) T(g, '#2c2a28', .45, x, -0.99, x, 0); E(g, c, 0, -1.49, 1.8, 1.1); C(g, '#2c2a28', 1.89, -1.93, 0.61); })) return; if (SIMPLE) { E(g, c, -.3, 0, 1.9, 1.3); C(g, '#2c2a28', 1.9, 0, .6); return; } for (const [cx, cy] of [[-1, -.6], [-1, .6], [.4, -.7], [.4, .7], [-.3, 0]]) C(g, c, cx, cy, .9); C(g, '#2c2a28', 1.9, 0, .6); };
 function etal(g, k) {
   const c = ['#c8322b', '#e3c04f', '#2f4f9c', '#3f8a3c', '#8a5a44'][k % 5];
   RR(g, 'rgba(20,20,10,.3)', -2.6, -1.6, 7, 5, .4); RR(g, c, -3.5, -2.5, 7, 5, .4);

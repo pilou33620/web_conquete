@@ -336,7 +336,7 @@ export class Plateau {
         // l'herbe : des plaques plus sombres et plus claires, une haie de bocage, quelques bêtes au pré
         for (let i = 0; i < 4; i++) { const [x, z] = rr(0.7), b = cyl(entre(1.6, 3), entre(1.6, 3), 0.05, 9); b.scale(1.4, 1, 0.8); put(L, b, col(choix([0x62b23c, 0x86cf50, 0x6ab840])), x, y + 0.03 + i * 0.004, z, rnd() * 3); }
         if (!t.riv) { const [x, z] = rr(0.3), ha = rnd() * 3; for (let k = -3; k <= 3; k++) put(L, sphere(0.55, 0), col(0x3f8a34), x + Math.cos(ha) * k * 0.95, y + 0.35, z + Math.sin(ha) * k * 0.95); }
-        if (t.jeu && rnd() < 0.6) for (let i = 0; i < 3; i++) { const [x, z] = rr(0.55); put(L, boite(0.75, 0.42, 0.36), choix([0xf2efe6, 0x7a5236, 0x2e2a28]), x, y + 0.42, z, rnd() * 3); }
+        if (t.jeu && rnd() < 0.6) for (let i = 0; i < 3; i++) { const [x, z] = rr(0.55), ra = rnd() * 6.3, robe = choix([0xf2efe6, 0x7a5236, 0x9a6a42]), ux = Math.cos(ra), uz = -Math.sin(ra); put(L, boite(0.8, 0.36, 0.34), robe, x, y + 0.46, z, ra); put(L, boite(0.24, 0.24, 0.22), robe, x + ux * 0.5, y + 0.62, z + uz * 0.5, ra); for (const k of [-0.28, 0.28]) put(L, boite(0.1, 0.3, 0.26), 0x3a3028, x + ux * k, y + 0.15, z + uz * k, ra); }
         if (!t.riv && rnd() < 0.5) { const [x, z] = rr(); M.arbre(L, x, y, z, 0.8); }
         if (t.riv) for (let i = 0; i < 3; i++) { const [x, z] = rr(0.7); M.arbre(L, x, y, z, 0.75, 'peuplier'); }   // peupliers au bord de l'eau
         if (t.jeu && !t.riv && rnd() < 0.25) this.ferme(L, t, rr(0.45));
