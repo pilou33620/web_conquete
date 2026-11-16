@@ -15,7 +15,7 @@ function etapes(ui) {
   const nom = ui.rules.factions[me].name;
   const tour = st.tour && st.tour.on;
   return [
-    { at: '#topbar', txt: `Bienvenue ! Vous gouvernez ${nom}. En haut : la date et vos ressources (touchez-en une pour le détail). Ce guide vous montre l’essentiel ; « Passer » le ferme, le menu ☰ le rouvre.` },
+    { at: '#topbar', txt: `Bienvenue ! Vous gouvernez : ${nom}. En haut : la date et vos ressources (touchez-en une pour le détail). Ce guide vous montre l’essentiel ; « Passer » le ferme, le menu ☰ le rouvre.` },
     { txt: 'Touchez une de vos armées pour la choisir.', go: mine && [mine.x, mine.y], need: () => !!mine, done: () => selMine('army') },
     { txt: 'Touchez maintenant un lieu sur la carte, puis « Marcher par les routes ». Glisser depuis l’armée trace votre propre itinéraire.', need: () => selMine('army'), done: f => f.has('move') || f.has('path') },
     { txt: `Touchez votre chef-lieu, ${cap ? cap.name : ''}.`, go: cap && [cap.x, cap.y], unsel: true, need: () => !!cap && st.nodes[cap.id]?.o === me, done: () => selMine('node') },

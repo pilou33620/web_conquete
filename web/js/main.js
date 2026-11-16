@@ -136,6 +136,7 @@ async function boot() {
   ui.onRefresh = () => setTimeout(poll, 60);
   ui.modes = payload.modes || [];
   ui.geo = payload.geo;
+  if (payload.geo >= 3) Object.assign(payload.rules.zones, { cote: 'Côte', montagne: 'Montagne' });   // (« Côte atlantique », « Pyrénées » : noms de la carte d'Aquitaine)
   ui.onPickGeo = recharger;
   // bataille tactique : ouverte au choix « Commander la bataille » (ui.js) ou quand l'état l'annonce (poll)
   bataille = new Bataille({
