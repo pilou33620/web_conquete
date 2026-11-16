@@ -271,6 +271,29 @@ function voiture(g, caisse, toit, haut = 3.2) {
   for (const x of [-3.9, 3.9]) { C(g, CUIR, x, -1.6, 1.7); C(g, '#b89a6a', x, -1.6, .55); }
   T(g, CUIR, .5, 6.5, -2.4, 11, -2.6);
 }
+const poly = (g, c, pts) => { g.fillStyle = c; g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); g.fill(); };
+// un bateau de profil : coque, mâts et voiles (L : la demi-longueur) ; à vapeur : cheminée, roue à aubes, rouf blanc
+function bateauD(g, L, mats, coque, vapeur) {
+  E(g, 'rgba(20,30,40,.3)', 0, .5, L, .9);
+  poly(g, coque, [[-L, -2], [L + 1.6, -2], [L * .7, .6], [-L * .85, .6]]); T(g, sombre(coque, .2), .4, -L, -2, L + 1.6, -2);
+  if (vapeur) { RR(g, '#e8e0cc', -L * .55, -4.2, L * .9, 2.2, .4); RR(g, '#1c1b1d', L * .1, -7.6, 1.3, 3.6, .3); C(g, '#5a3d22', -L * .1, -1.2, 2.1); C(g, '#8a6a45', -L * .1, -1.2, .7); return; }
+  for (const x of mats) { T(g, '#4a3a28', .45, x, -2, x, -11.5); poly(g, '#ece4cc', [[x + .4, -11], [x + 4.4, -6.4], [x + .4, -3.4]]); }
+}
+function charrueD(g) { T(g, '#5b4127', .6, -2.4, -2.4, 4, -1.4); T(g, '#5b4127', .5, -2.4, -2.4, -3.8, -4.6); poly(g, '#3a3a3c', [[-.6, -1.9], [1.4, -1.7], [.2, .2]]); C(g, CUIR, 3.2, -.8, .8); }
+function etalD(g, c, k) {
+  E(g, SOL, 0, .3, 4.2, .8);
+  for (const x of [-3.2, 3.2]) T(g, '#5b4127', .45, x, 0, x, -5.6);
+  RR(g, '#8a6a45', -3.6, -2.6, 7.2, .7, .2);
+  for (let i = 0; i < 4; i++) C(g, ['#d6ba5c', '#9a4a3a', '#6b8f3a', '#e8dcc0'][(k + i) % 4], -2.6 + i * 1.7, -3.1, .65);
+  poly(g, c, [[-4.2, -5.4], [4.2, -5.4], [3.4, -7.2], [-3.4, -7.2]]); for (let i = 0; i < 3; i++) poly(g, '#f1eee4', [[-3 + i * 2.6, -5.4], [-2 + i * 2.6, -5.4], [-1.9 + i * 2.4, -7.2], [-2.8 + i * 2.4, -7.2]]);
+}
+// un moulin à vent de face : tour, toit, quatre ailes qui tournent
+function moulinD(g, t) {
+  E(g, SOL, 2, .6, 9, 2);
+  poly(g, '#d8cdb5', [[-5, 0], [5, 0], [3.6, -15], [-3.6, -15]]); poly(g, '#5a5f6a', [[-4.4, -15], [4.4, -15], [0, -20.5]]); RR(g, '#5b4127', -1, -4, 2, 4, .3);
+  for (let k = 0; k < 4; k++) { const a = t * .9 + k * Math.PI / 2, x = Math.cos(a) * 13, y = -15 + Math.sin(a) * 13; T(g, '#4a3a28', 1, 0, -15, x, y); T(g, '#efe8d6', 2.2, Math.cos(a) * 4, -15 + Math.sin(a) * 4, x, y); }
+  C(g, CUIR, 0, -15, 1.2);
+}
 function fantassin(g, L, f, p) {
   if (DEBOUT && debout(g, 0, 0, () => pion(g, f.habit || L.habit, L.tete === 'coiffe', p && p.legs))) return;
   if (!SIMPLE) return fantassin0(g, L, f, p);
@@ -329,6 +352,7 @@ function chien(g, x, y, a, t) { const c = '#3a2c22'; if (DEBOUT && debout(g, x, 
 const brebis = (g, c) => { if (DEBOUT && debout(g, 0, 0, () => { E(g, SOL, .2, .15, 1.8, 0.50); for (const x of [-0.99, 0.99]) T(g, '#2c2a28', .45, x, -0.99, x, 0); E(g, c, 0, -1.49, 1.8, 1.1); C(g, '#2c2a28', 1.89, -1.93, 0.61); })) return; if (SIMPLE) { E(g, c, -.3, 0, 1.9, 1.3); C(g, '#2c2a28', 1.9, 0, .6); return; } for (const [cx, cy] of [[-1, -.6], [-1, .6], [.4, -.7], [.4, .7], [-.3, 0]]) C(g, c, cx, cy, .9); C(g, '#2c2a28', 1.9, 0, .6); };
 function etal(g, k) {
   const c = ['#c8322b', '#e3c04f', '#2f4f9c', '#3f8a3c', '#8a5a44'][k % 5];
+  if (DEBOUT && debout(g, 0, 0, () => etalD(g, c, k))) return;
   RR(g, 'rgba(20,20,10,.3)', -2.6, -1.6, 7, 5, .4); RR(g, c, -3.5, -2.5, 7, 5, .4);
   for (let i = 0; i < 3; i++) RR(g, '#f1eee4', -3.5 + .7 + i * 2.2, -2.5, 1, 5, 0);
   for (let i = 0; i < 4; i++) C(g, ['#d6ba5c', '#9a4a3a', '#6b8f3a', '#e8dcc0'][(k + i) % 4], -2.6 + i * 1.7, 3.4, .7);
@@ -352,6 +376,7 @@ function brigands(g, t, proie) {
 // moulin vu d'en haut (new.js moulinVu) : les ailes tournent dans un plan vertical face au vent, on les voit de profil ;
 // leur ombre au sol, une croix de biais, montre qu'elles tournent. En unités de l'intérieur (180 par km).
 function moulinVu(g, x, y, t, wa = .35, L = 17, H = 12) {
+  if (DEBOUT && debout(g, x, y, () => moulinD(g, t))) return;
   const dx = Math.cos(wa), dy = Math.sin(wa), px = -dy, py = dx, sx = .34, sy = .45;
   const hx0 = x - dx * 4.5, hy0 = y - dy * 4.5;
   const bras = [0, 1, 2, 3].map(k => t * .9 + k * Math.PI / 2);
@@ -410,8 +435,10 @@ function labour(sc, g, x, y, t, h) {
   figK(sc, g, x + Math.cos(a0) * (s - L / 2), y + Math.sin(a0) * (s - L / 2), a0 + (aller ? 0 : Math.PI));
   const pas = t * 1.2 * TAU;
   for (const yy of [-2.4, 2.4]) { g.save(); g.translate(9, yy); cheval(g, '#d2bf95', { gait: pas + yy, bob: 0 }); T(g, '#efe6cc', .35, 7.7, -.6, 8.3, -1.4); T(g, '#efe6cc', .35, 7.7, .6, 8.3, 1.4); g.restore(); }
-  T(g, '#5b4127', .5, 3, 0, 1, 0); charrue(g, 0, 0, 0); g.save(); g.translate(-6, 0); marcheur(g, 2, pas, false); g.restore();
-  for (let m = 0; m < 4; m++) { const ox = -12 - m * 3 + Math.sin(t * 2 + m) * 1.5, oy = Math.cos(t * 1.7 + m * 2) * 3; g.strokeStyle = '#f4f2ea'; g.lineWidth = .5; g.beginPath(); g.moveTo(ox - 1, oy - 1.4); g.quadraticCurveTo(ox, oy - .2, ox + .5, oy); g.quadraticCurveTo(ox, oy + .2, ox - 1, oy + 1.4); g.stroke(); }   // les mouettes derrière la charrue
+  T(g, '#5b4127', .5, 3, 0, 1, 0); if (!(DEBOUT && debout(g, 0, 0, () => charrueD(g)))) charrue(g, 0, 0, 0); g.save(); g.translate(-6, 0); marcheur(g, 2, pas, false); g.restore();
+  for (let m = 0; m < 4; m++) { const ox = -12 - m * 3 + Math.sin(t * 2 + m) * 1.5, oy = Math.cos(t * 1.7 + m * 2) * 3;
+    // (les mouettes derrière la charrue : en vol, ailes ouvertes, au-dessus du sillon)
+    if (DEBOUT && debout(g, ox, oy, () => { const b = Math.sin(t * 6 + m) * .5; g.strokeStyle = '#f4f2ea'; g.lineWidth = .5; g.beginPath(); g.moveTo(-1.5, -4 - b); g.quadraticCurveTo(-.7, -4.9, 0, -4); g.quadraticCurveTo(.7, -4.9, 1.5, -4 - b); g.stroke(); })) continue; g.strokeStyle = '#f4f2ea'; g.lineWidth = .5; g.beginPath(); g.moveTo(ox - 1, oy - 1.4); g.quadraticCurveTo(ox, oy - .2, ox + .5, oy); g.quadraticCurveTo(ox, oy + .2, ox - 1, oy + 1.4); g.stroke(); }   // les mouettes derrière la charrue
 }
 function vendanges(sc, g, x, y, t, h) {
   figK(sc, g, x, y, h < .2 ? Math.PI / 2 : 0);
@@ -551,7 +578,11 @@ function eaux(sc, g, x0, y0, x1, y1, epoque) {
     if (b.mer && tempete(p)) continue;   // la tempête garde les navires au port
     const a = p.a + (b.v < 0 ? Math.PI : 0);
     sc.monde(g); g.save(); g.translate(p.x, p.y); g.rotate(a); g.scale(k, k);
-    if (!b.mer && epoque?.vapeur?.(p.x, p.y, b.ph)) {   // (epoque.js) un vapeur à roues sur les fleuves d'un camp qui a les vapeurs
+    const vap = !b.mer && epoque?.vapeur?.(p.x, p.y, b.ph);
+    if (DEBOUT && debout(g, 0, 0, () => bateauD(g, b.mer ? 10 : 7.5, vap ? [] : b.mer ? [-5, -.5, 4] : [-.5], vap ? '#2f2a26' : '#5b4127', vap))) {
+      g.restore();
+      if (vap && sc.on && Math.random() < .08) fumee(sc, p.x, p.y, 0, 0, 1.2 * k, 5 * k, 4, .4, 'n');
+    } else if (vap) {   // (epoque.js) un vapeur à roues sur les fleuves d'un camp qui a les vapeurs
       E(g, 'rgba(20,30,40,.3)', 1.5, 2, 9, 2.4); E(g, '#2f2a26', 0, 0, 9, 2.4); RR(g, '#e8e0cc', -5, -1.4, 7, 2.8, .5);
       for (const s of [-1, 1]) { RR(g, '#5a3d22', -1.8, s * 2.2 - 1, 3.6, 2, .6); }
       C(g, '#7a2a22', 2.6, 0, .9); C(g, '#1c1b1d', 2.6, 0, .5);
@@ -570,6 +601,7 @@ function eaux(sc, g, x0, y0, x1, y1, epoque) {
     const a = Math.atan2(Math.cos(ang) * .6, -Math.sin(ang));
     sc.monde(g); g.save(); g.translate(x, y); g.rotate(a); g.scale(k, k);
     for (let i = 0; i < 9; i++) { const aa = Math.PI * .5 + i / 8 * Math.PI; C(g, '#efe6cc', -6 + Math.cos(aa) * 7, Math.sin(aa) * 7, .45); }   // les flotteurs du filet
+    if (DEBOUT && debout(g, 0, 0, () => bateauD(g, b.pinasse ? 5.5 : 7, [0], b.pinasse ? '#2f4a5a' : '#5b4127'))) { g.restore(); if (soir) LUM.push({ x, y, r: .02, a: .8, spr: 'fen' }); continue; }
     E(g, 'rgba(20,30,40,.3)', 1.2, 1.6, b.pinasse ? 6 : 8, 1.8); E(g, b.pinasse ? '#2f4a5a' : '#5b4127', 0, 0, b.pinasse ? 6 : 8, 1.8); E(g, '#8a6a45', 0, 0, b.pinasse ? 5 : 7, 1.1);
     C(g, '#7a6a4f', -1.5, 0, .9); C(g, '#5d6b86', 2, 0, .9);
     g.restore();
@@ -683,6 +715,7 @@ function nuages(sc, g, x0, y0, x1, y1) {
 // un oiseau : deux ailes en croissant, ajoutées au tracé p en pixels de l'écran
 function oiseau(p, sc, x, y, a, s, fl) {
   const m = sc.m, ox = (x - sc.cx) * m + sc.W / 2, oy = (y - sc.cy) * m * (sc.k || 1) + sc.H / 2, c = Math.cos(a) * s * m, sn = Math.sin(a) * s * m;
+  if (DEBOUT) { const w = s * m, b = fl * w * .45; p.moveTo(ox - w, oy - b); p.quadraticCurveTo(ox - w / 2, oy - b - w * .4, ox, oy); p.quadraticCurveTo(ox + w / 2, oy - b - w * .4, ox + w, oy - b); return; }
   const P = (u, v) => [ox + u * c - v * sn, oy + u * sn + v * c];
   const [ax, ay] = P(-.5, -1 + fl * .4), [bx, by] = P(0, -.2), [cx, cy] = P(.35, 0), [dx, dy] = P(0, .2), [ex, ey] = P(-.5, 1 - fl * .4);
   p.moveTo(ax, ay); p.quadraticCurveTo(bx, by, cx, cy); p.quadraticCurveTo(dx, dy, ex, ey);
