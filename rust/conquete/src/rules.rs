@@ -919,12 +919,18 @@ fn POP_CURVES_base() -> Val { dict!{
                      tup![1872, 6.0, "port_neuf"], tup![1900, 12.0, "port_neuf"]],
     "arsenal" => list![tup![1700, 0.9, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 0.8, "blocus"], tup![1831, 1.5, "arsenal"],
                tup![1851, 2.2, "arsenal"], tup![1872, 2.6, "arsenal"], tup![1900, 3.4, "arsenal"]],
+    // Cherbourg : 11 000 en 1790, la digue et l'arsenal (1803-1858) : 28 000 en 1851, 43 000 en 1901
+    "cherbourg" => list![tup![1700, 0.7, "paix"], tup![1790, 1.0, "arsenal"], tup![1801, 1.05, "arsenal"], tup![1831, 1.65, "arsenal"],
+                 tup![1851, 2.55, "arsenal"], tup![1872, 3.2, "arsenal"], tup![1900, 3.9, "arsenal"]],
     // La Roche-sur-Yon : un village jusqu'à la ville neuve de Napoléon (1804), 13 000 habitants en 1901
     "roche_sur_yon" => list![tup![1700, 1.0, "bourg"], tup![1790, 1.0, "bourg"], tup![1804, 1.0, "ville_neuve"], tup![1811, 2.5, "ville_neuve"],
                      tup![1851, 6.5, "ville_neuve"], tup![1900, 13.0, "ville_neuve"]],
     // Nice, Menton : comté de Nice ; les hivernants anglais et russes, puis le chemin de fer (1864)
     "riviera" => list![tup![1700, 0.85, "paix"], tup![1790, 1.0, "guerres"], tup![1801, 0.75, "paix"], tup![1851, 1.35, "hivernants"],
                tup![1872, 2.1, "hivernants"], tup![1900, 4.2, "hivernants"]],
+    // Cannes : un bourg de pêcheurs de 3 000 âmes, lord Brougham en 1834, le chemin de fer en 1863 : 10 000 en 1872, 30 000 en 1901
+    "cannes" => list![tup![1700, 0.9, "bourg"], tup![1790, 1.0, "bourg"], tup![1834, 1.3, "hivernants"], tup![1851, 1.8, "hivernants"],
+              tup![1872, 3.4, "hivernants"], tup![1900, 10.0, "hivernants"]],
     "thermes_fr" => list![tup![1700, 0.9, "bourg"], tup![1790, 1.0, "bourg"], tup![1831, 1.2, "thermes"], tup![1851, 1.6, "thermes"],
                   tup![1872, 4.0, "thermes"], tup![1900, 12.0, "thermes"]],
     "bains_fr" => list![tup![1700, 0.9, "bourg"], tup![1790, 1.0, "bourg"], tup![1851, 1.6, "bains"], tup![1872, 3.0, "bains"], tup![1900, 4.5, "bains"]],
@@ -954,6 +960,7 @@ py_const!(POP_PLACE, dict!{
     "Limoges|87" => "grande_ville", "Nancy|54" => "grande_ville", "Grenoble|38" => "grande_ville", "Le Mans|72" => "grande_ville",
     "Tourcoing|59" => "industrie", "Roanne|42" => "industrie", "Calais|62" => "industrie", "Rive-de-Gier|42" => "industrie",
     "Mulhouse|68" => "mulhouse", "Saint-Étienne|42" => "saint_etienne",
+    "Roubaix|59" => "mulhouse", "Cherbourg|50" => "cherbourg", "Cannes|06" => "cannes", // (géographie 4 ; Roubaix, 8 000 âmes en 1790 et 124 000 en 1901, suit la courbe de Mulhouse)
     "Le Creusot|71" => "mines", "Decazeville|12" => "mines",
     "Montceau-les-Mines|71" => "mines_tard", "Lens|62" => "mines_tard", "Montluçon|03" => "forges_fr",
     "Le Havre|76" => "grand_port", "Boulogne-sur-Mer|62" => "grand_port", "Saint-Nazaire|44" => "saint_nazaire",

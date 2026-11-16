@@ -312,7 +312,7 @@ fn dossier() -> PathBuf {
 /// Une géographie : générée, puis relue de son cache, puis (si on l'a) relue du cache écrit par Python.
 fn geographie(v: i64) {
     let r = reference().at("cartes").at(v.to_string());
-    let cache = dossier().join(format!("map_cache{}.json", if v == geo::VERSION { String::new() } else { format!("_v{v}") }));
+    let cache = dossier().join(format!("map_cache{}.json", if v == 3 { String::new() } else { format!("_v{v}") }));
     let _ = std::fs::remove_file(&cache); // (jamais de cache : la carte comparée est une carte générée)
     assert_eq!(geo::data_dir(), dossier());
     let t = std::time::Instant::now();

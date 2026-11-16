@@ -88,7 +88,7 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
 
 Au premier lancement (et après une mise à jour du calcul de la carte, `rust/conquete/src/geo.rs`), la carte est calculée
 (environ 5 secondes sur un PC, 15 à 30 secondes sur un Raspberry Pi),
-puis mise en cache dans `game/data/map_cache.json` (fichier ignoré par git). Une partie sauvegardée avant les rivières
+puis mise en cache dans `game/data/map_cache_v4.json` (fichier ignoré par git ; `map_cache.json` pour une partie de la carte de France d'avant, géographie 3). Une partie sauvegardée avant les rivières
 affinées garde sa carte d'alors (`game/data/geo_v1.json`, en cache dans `map_cache_v1.json`, calculée la première fois
 qu'on la charge).
 

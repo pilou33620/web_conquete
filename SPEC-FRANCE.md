@@ -89,8 +89,8 @@ voies navigables et côtes au-delà du Sud-Ouest, vérifier la fluidité sur iPa
   - pêche et course : Dieppe, Fécamp, Honfleur, Granville, Boulogne, Calais, Concarneau, Douarnenez, Paimpol,
     Les Sables-d'Olonne, Morlaix (sans l'étiquette) ;
   - Méditerranée : Antibes, Agde, Ajaccio, Bastia ; Cannes et Port-Vendres absentes.
-  À faire dans le mode France avec la géographie 4 : ajouter Cherbourg, Dunkerque, Cannes, Port-Vendres (et Roubaix),
-  étiqueter `port` Rochefort, Nantes, Saint-Nazaire, Morlaix.
+  Fait le 16/11/2026 avec la géographie 4 (`game/data/places_france_v4.json`) : Cherbourg, Dunkerque, Cannes,
+  Port-Vendres (et Roubaix) ajoutées, `port` posé sur Rochefort, Nantes, Morlaix (Saint-Nazaire l'avait déjà).
 
 Fait dans le mode France le 15/11/2026 :
 - populations de 1790 corrigées (`POP_1790_FR`, `places.rs`) pour 70 places dont l'outil de la carte avait gardé un
@@ -104,8 +104,12 @@ Fait dans le mode France le 15/11/2026 :
   Nice, Menton), Lourdes, La Roche-sur-Yon (ville neuve de 1804), la banlieue de Paris.
 
 Reste à faire : les autres places de la carte de France gardent un chiffre d'aujourd'hui réduit (moins de 14 000
-habitants, l'ordre de grandeur reste plausible). Roubaix, Dunkerque, Cherbourg, Cannes manquent sur la carte : les
-ajouter change les numéros des places, donc une géographie 4 (la 3 figée pour les parties en cours).
+habitants, l'ordre de grandeur reste plausible).
+
+Fait le 16/11/2026, géographie 4 (la carte des nouvelles parties ; la 3 est figée pour les parties en cours, son cache
+reste `map_cache.json`, celui de la 4 est `map_cache_v4.json`) : Roubaix, Cherbourg, Dunkerque, Cannes et Port-Vendres
+ajoutées à la fin de la liste des places (celles de la 3 gardent leur numéro), avec leurs trajectoires (Roubaix sur la
+courbe de Mulhouse, `cherbourg`, `cannes` ; Dunkerque et Port-Vendres sur la courbe ordinaire).
 
 ## Risques
 

@@ -10,7 +10,9 @@
 //! cartes de bataille) : 1, les données d'avant (data/geo_v1.json, figé, avec la place d'alors des villes déplacées depuis) ;
 //! 2, les rivières d'OpenStreetMap (Overture, octobre 2026 : leur cours principal, simplifié à 60 m, chaque affluent
 //! raccordé à sa rivière) et les villes au bord de l'eau à leur vraie place (places.py). Une modification du calcul de ce
-//! fichier change aussi la carte des anciennes parties.
+//! fichier change aussi la carte des anciennes parties. 3, toute la France (geo.json, places_france.json), figée ; 4, la
+//! carte des nouvelles parties : la 3, puis places_france_v4.json (des places ajoutées à la fin, pour que celles de la 3
+//! gardent leur numéro, et des étiquettes). Le cache de la 3 reste map_cache.json, les autres ont leur suffixe (_v4…).
 //!
 //! En Rust : les nœuds, les arêtes et ce que le reste du moteur lit par clé restent des `Val` ; les grilles sont des
 //! `Vec` natifs et toute la génération se calcule en nombres natifs. Les fichiers de données sources sont embarqués ;
@@ -39,9 +41,10 @@ const GEO_V1: &str = include_str!("../../../game/data/geo_v1.json");
 const GEO_V2: &str = include_str!("../../../game/data/geo_v2.json");
 const GEO_V3: &str = include_str!("../../../game/data/geo.json");
 const PLACES_FRANCE: &str = include_str!("../../../game/data/places_france.json");
+const PLACES_FRANCE_V4: &str = include_str!("../../../game/data/places_france_v4.json"); // (géographie 4 : les ajouts et les étiquettes)
 
 pub const CACHE_VERSION: i64 = 8;
-pub const VERSION: i64 = 3; // 3 : toute la France (données faites une fois par outils/france.py, retiré le 15/11/2026 : voir l'historique git) ; 2 et 1 : le Sud-Ouest des anciennes parties
+pub const VERSION: i64 = 4; // 4 : la 3 et cinq places de plus à la fin de la liste (Roubaix, Cherbourg, Dunkerque, Cannes, Port-Vendres), quatre étiquettes port (places_france_v4.json) ; 3 : toute la France (données faites une fois par outils/france.py, retiré le 15/11/2026 : voir l'historique git) ; 2 et 1 : le Sud-Ouest des anciennes parties
 
 pub const LAT_REF: f64 = 44.25;
 /// `KX` du module Python (cos n'est pas une fonction constante en Rust : c'est une fonction).
@@ -571,9 +574,9 @@ pub struct GeoMap {
 impl GeoMap {
     /// `GeoMap(version)` ; `GeoMap()` : `GeoMap::new(VERSION)`.
     pub fn new(version: i64) -> GeoMap {
-        let suffixe = if version == VERSION { String::new() } else { format!("_v{version}") };
+        let suffixe = if version == 3 { String::new() } else { format!("_v{version}") }; // (la 3 garde map_cache.json : son cache et ses références ne bougent pas)
         let texte = match suffixe.as_str() {
-            "" => GEO_V3,
+            "" | "_v4" => GEO_V3,
             "_v1" => GEO_V1,
             "_v2" => GEO_V2,
             _ => panic!("FileNotFoundError: geo{suffixe}.json"),
@@ -710,8 +713,10 @@ impl GeoMap {
         // (géographie 3) les places des autres départements, générées par l'outil de la carte de France (historique git), avec leur population
         if self.version >= 3 {
             let gen = json::loads(PLACES_FRANCE).expect("places_france.json");
+            // (géographie 4) les places ajoutées, à la fin : celles de la 3 gardent leur numéro
+            let v4 = if self.version >= 4 { json::loads(PLACES_FRANCE_V4).expect("places_france_v4.json") } else { dict! {"ajouts" => list![], "etiquettes" => Val::dict()} };
             let mut slugs: HashSet<String> = self.nodes.iter().map(|n| n.at("slug").string()).collect();
-            for place in gen.iter() {
+            for place in gen.iter().chain(v4.at("ajouts").iter()) {
                 let p = place.vec(); // (name, lat, lon, dept, typ, spec, fort, pop0)
                 assert!(p.len() == 8, "ValueError: 8 valeurs attendues, {} reçues", p.len());
                 let name = &p[0];
@@ -726,6 +731,15 @@ impl GeoMap {
                 self.nodes.push(dict! {"id" => k, "slug" => slug, "name" => name, "x" => py::round_n(x, 2), "y" => py::round_n(y, 2), "dept" => &p[3], "type" => &p[4],
                 "spec" => p[5].to_list(), "fort" => &p[6], "pop0" => POP_1790_FR().get_or(format!("{}|{}", name.s(), p[3].s()).as_str(), &p[7])});
                 self.by_name.setdefault(name, k); // (les noms des tables, Sud-Ouest d'abord : la place écrite à la main)
+            }
+            // (géographie 4) les étiquettes de plus, par « nom|département »
+            for (cle, tags) in v4.at("etiquettes").items() {
+                let n = self.nodes.iter().find(|n| format!("{}|{}", n.at("name").s(), n.at("dept").s()) == cle.s()).unwrap_or_else(|| panic!("KeyError: {}", cle.s()));
+                for t in tags.iter() {
+                    if !n.at("spec").has(&t) {
+                        n.at("spec").push(t);
+                    }
+                }
             }
         }
     }
@@ -742,6 +756,9 @@ impl GeoMap {
         h.extend(PLACES().repr().as_bytes());
         if self.version >= 3 {
             h.extend(PLACES_FRANCE.as_bytes());
+        }
+        if self.version >= 4 {
+            h.extend(PLACES_FRANCE_V4.as_bytes());
         }
         h.extend(ROYAL_ROUTES().repr().as_bytes());
         h.extend(EXTRA_ROADS().repr().as_bytes());

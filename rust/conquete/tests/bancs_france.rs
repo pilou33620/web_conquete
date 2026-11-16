@@ -24,7 +24,7 @@ fn jouables(geo: &GeoMap) -> BTreeSet<String> {
 #[test]
 fn tous_les_departements_jouables() {
     let geo = france();
-    assert_eq!(geo.version, 3);
+    assert_eq!(geo.version, 4);
     let codes = jouables(&geo);
     assert_eq!(codes.len(), 89);
     assert!(["33", "75", "69", "13", "20", "67"].iter().all(|c| codes.contains(*c)));
