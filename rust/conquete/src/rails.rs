@@ -10,7 +10,7 @@
 //! (dict de sections), `st` : son état (dict de g.rails).
 
 use crate::engine::Game;
-use crate::geo::GeoMap;
+use crate::geo::{GeoMap, VERSION_EUROPE};
 use crate::py::{self, heapq, Val};
 use crate::rules as R;
 use crate::turns as TT;
@@ -71,12 +71,14 @@ pub fn sections(geo: &GeoMap) -> Val {
         return _SECTIONS().at(cle);
     }
     let out = dict! {};
-    for line in R::RAIL_LINES().iter() {
+    // (géographie 5 : les lignes historiques sont celles du Sud-Ouest ; chaque pays reçoit les siennes)
+    let lignes = if geo.version == VERSION_EUROPE { _lignes_europe(geo) } else { R::RAIL_LINES() };
+    for line in lignes.iter() {
         let (name, towns, _) = line.triple();
         let towns = towns.vec();
         for w in towns.windows(2) {
             let (ta, tb, year) = (w[0].at(0), w[1].at(0), w[1].at(1));
-            let (a, b) = (geo.by_name.ati(&ta), geo.by_name.ati(&tb));
+            let (a, b) = if ta.is_str() { (geo.by_name.ati(&ta), geo.by_name.ati(&tb)) } else { (ta.i(), tb.i()) };
             let sid = format!("{}-{}", a.min(b), a.max(b));
             if out.has(&sid) {
                 continue;
@@ -88,6 +90,33 @@ pub fn sections(geo: &GeoMap) -> Val {
         }
     }
     _SECTIONS().set(cle, out.clone());
+    out
+}
+
+pub const RAIL_VILLES_5: usize = 8; // (géographie 5) villes de chaque pays que ses lignes desservent, les plus peuplées
+
+/// (géographie 5) Les lignes d'un réseau généré, dans la forme de R::RAIL_LINES : dans chaque pays, de la capitale à ses
+/// plus grandes villes, la plus peuplée d'abord, chacune raccordée à la ville déjà desservie la plus proche ; ouverture
+/// de 1837 (la première) à 1885, cinq ans plus tard à chaque ville.
+fn _lignes_europe(geo: &GeoMap) -> Val {
+    let out = list![];
+    for code in &geo.dept_codes {
+        let du_pays: Vec<Val> = geo.nodes.iter().filter(|n| n.at("dept") == code.as_str()).collect();
+        let Some(cap) = du_pays.iter().find(|n| n.at("type") == "capitale") else { continue };
+        let villes = py::sorted_by_key(du_pays.iter().filter(|n| n.at("type") == "ville").cloned().collect::<Vec<_>>(), |n| (-n.ati("pop0"), n.ati("id")));
+        let mut desservies = vec![cap.clone()];
+        for (k, v) in villes.into_iter().take(RAIL_VILLES_5).enumerate() {
+            let d2 = |n: &Val| py::pow(n.atf("x") - v.atf("x"), 2.0) + py::pow(n.atf("y") - v.atf("y"), 2.0);
+            let de = desservies.iter().min_by(|a, b| d2(a).partial_cmp(&d2(b)).unwrap()).unwrap().clone();
+            if _path(geo, de.ati("id"), v.ati("id")).is_empty() {
+                continue; // (une île : pas de voie sous la mer)
+            }
+            let an = (1837 + 5 * k as i64).min(1885);
+            // (les villes par leur numéro : sur cette carte, deux places peuvent porter le même nom)
+            out.push(tup![format!("{}–{}", cap.at("name").s(), v.at("name").s()), list![tup![de.at("id"), 0], tup![v.at("id"), an]], list![]]);
+            desservies.push(v);
+        }
+    }
     out
 }
 
@@ -408,9 +437,9 @@ pub fn client_payload(geo: &GeoMap) -> Val {
     let sections_ = sections(geo)
         .values()
         .into_iter()
-        .map(|s| list![s.at("id"), s.at("a"), s.at("b"), s.at("edges"), s.at("km"), s.at("line"), s.at("year")])
+        .map(|s| list![s.at("id"), s.at("a"), s.at("b"), s.at("edges"), if geo.km_case == 1.0 { s.at("km") } else { Val::from(py::round_n(s.atf("km") * geo.km_case, 1)) }, s.at("line"), s.at("year")]) // (affiché en km : des cases de 5 km en Europe)
         .collect::<Val>();
-    let exits_ = exits()
+    let exits_ = (if geo.version == VERSION_EUROPE { list![] } else { exits() }) // (géographie 5 : aucune sortie dessinée)
         .iter()
         .map(|x| {
             let (t, td) = x.pair();

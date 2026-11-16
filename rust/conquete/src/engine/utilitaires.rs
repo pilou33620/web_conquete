@@ -437,7 +437,7 @@ impl Game {
     // engine.py, lignes 380 à 382
     pub fn era(&self) -> Val {
         let y = self.date(&Val::None).year;
-        let eras = R::ERAS();
+        let eras = if self.europe() { R::ERAS_EUROPE() } else { R::ERAS() };
         if Val::from(y) >= eras.at(0).at("year") {
             eras.iter().filter(|e| e.at("year") <= y).last().unwrap()
         } else {
@@ -542,13 +542,24 @@ impl Game {
     /// Python : `pays_de(self)`.
     // engine.py, lignes 435 à 437
     pub fn pays_de(&self) -> &'static str {
+        if self.europe() {
+            return "d'Europe";
+        }
         if self.factions.len() > 5 { "de France" } else { "d'Aquitaine" }
     }
 
     /// Python : `dept_word(self)`.
     // engine.py, lignes 439 à 440
     pub fn dept_word(&self) -> &'static str {
+        if self.europe() {
+            return "pays";
+        }
         if self.departements() { "département" } else { "province" }
+    }
+
+    /// La partie se joue-t-elle sur la carte d'Europe (géographie 5 : chaque camp est un pays) ?
+    pub fn europe(&self) -> bool {
+        self.geo.version == crate::geo::VERSION_EUROPE
     }
 
     /// Python : `faction_name(self, code)`.
@@ -593,6 +604,18 @@ impl Game {
     /// 'montagne', 'cote' ou 'interieur'.
     // engine.py, lignes 462 à 467
     pub fn zone_of(&self, x: f64, y: f64) -> &'static str {
+        if self.europe() {
+            // (géographie 5 : d'après la carte, et non les Pyrénées et la côte d'Aquitaine) en montagne ; à deux cases de la mer
+            let geo = &self.geo;
+            let t = geo.terrain_at(x, y);
+            if t == crate::geo::T_MONTAGNE || t == crate::geo::T_HAUTE {
+                return "montagne";
+            }
+            if [(2.0, 0.0), (-2.0, 0.0), (0.0, 2.0), (0.0, -2.0), (1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)].iter().any(|d| geo.terrain_at(x + d.0, y + d.1) == crate::geo::T_OCEAN) {
+                return "cote";
+            }
+            return "interieur";
+        }
         if y > self.y_mont {
             return "montagne";
         }
@@ -1252,7 +1275,8 @@ impl Game {
             a.set("des", 0.0);
             a.set("des_why", Val::None);
         }
-        if d.month == 3 && self.rng.random() < 0.2 {
+        // (géographie 5 : pas de grande crue, c'est celle de la Garonne et de la Dordogne)
+        if d.month == 3 && !self.europe() && self.rng.random() < 0.2 {
             // une grande crue un printemps sur cinq environ
             self.flood_until = self.t + self.rng.randint(21, 42) as f64;
             self.log(

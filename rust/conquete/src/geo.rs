@@ -13,6 +13,10 @@
 //! fichier change aussi la carte des anciennes parties. 3, toute la France (geo.json, places_france.json), figée ; 4, la
 //! carte des nouvelles parties : la 3, puis places_france_v4.json (des places ajoutées à la fin, pour que celles de la 3
 //! gardent leur numéro, et des étiquettes). Le cache de la 3 reste map_cache.json, les autres ont leur suffixe (_v4…).
+//! 5 (VERSION_EUROPE), la carte du mode « Europe » : l'Europe et l'Afrique du Nord de 1700, un pays par camp (europe.json,
+//! places_europe.json : outils/europe.mjs), des cases de 5 km. Le moteur compte toujours en cases : seule la projection
+//! (KX, KY de la carte, km_case) sait qu'une case y vaut 5 km. Elle n'est pas la carte par défaut (VERSION reste 4) et
+//! ne se fait qu'à la demande.
 //!
 //! En Rust : les nœuds, les arêtes et ce que le reste du moteur lit par clé restent des `Val` ; les grilles sont des
 //! `Vec` natifs et toute la génération se calcule en nombres natifs. Les fichiers de données sources sont embarqués ;
@@ -42,9 +46,14 @@ const GEO_V2: &str = include_str!("../../../game/data/geo_v2.json");
 const GEO_V3: &str = include_str!("../../../game/data/geo.json");
 const PLACES_FRANCE: &str = include_str!("../../../game/data/places_france.json");
 const PLACES_FRANCE_V4: &str = include_str!("../../../game/data/places_france_v4.json"); // (géographie 4 : les ajouts et les étiquettes)
+const GEO_EUROPE: &str = include_str!("../../../game/data/europe.json"); // (géographie 5 : l'Europe et l'Afrique du Nord, outils/europe.mjs)
+const PLACES_EUROPE: &str = include_str!("../../../game/data/places_europe.json");
 
 pub const CACHE_VERSION: i64 = 8;
 pub const VERSION: i64 = 4; // 4 : la 3 et cinq places de plus à la fin de la liste (Roubaix, Cherbourg, Dunkerque, Cannes, Port-Vendres), quatre étiquettes port (places_france_v4.json) ; 3 : toute la France (données faites une fois par outils/france.py, retiré le 15/11/2026 : voir l'historique git) ; 2 et 1 : le Sud-Ouest des anciennes parties
+
+pub const VERSION_EUROPE: i64 = 5; // la carte du mode « Europe » (SPEC-FRANCE.md, étape 2) : europe.json, places_europe.json, cases de 5 km
+pub const GEN_EUROPE: i64 = 1; // (à augmenter quand le calcul de la carte 5 change : relief, végétation, routes ; son cache est alors refait)
 
 pub const LAT_REF: f64 = 44.25;
 /// `KX` du module Python (cos n'est pas une fonction constante en Rust : c'est une fonction).
@@ -179,6 +188,70 @@ pub const ROUTES_ROYALES_3: [&[&str]; 24] = [   // les grandes routes de poste p
     &["Lille", "Douai", "Cambrai", "Saint-Quentin", "Laon", "Reims", "Châlons-en-Champagne"],
 ];
 pub const MARAIS_3: [(f64, f64, f64); 6] = [(46.35, -1.00, 18.0), (43.55, 4.55, 20.0), (47.35, -2.25, 8.0), (46.00, 5.00, 15.0), (46.90, -2.00, 10.0), (49.30, -1.20, 9.0)];
+
+// ---------------------------------------------------------------- géographie 5 : l'Europe et l'Afrique du Nord (outils/europe.mjs), cases de 5 km
+// relief : comme la France (CRETES, MASSIFS), en degrés ; écrit à la main d'après la géographie réelle
+pub const CRETES_5: &[(f64, f64, &[(f64, f64)])] = &[   // (amplitude, demi-largeur en degrés, crête)
+    (1.60, 0.50, &[(44.10, 7.60), (44.60, 6.90), (45.30, 6.90), (45.90, 7.30), (46.40, 8.30), (46.60, 9.80), (46.90, 11.20), (47.10, 12.60), (47.30, 14.00), (47.50, 15.30)]),   // Alpes
+    (1.45, 0.30, &[(43.20, -1.60), (42.80, -0.30), (42.65, 1.00), (42.45, 2.50)]),   // Pyrénées
+    (0.95, 0.28, &[(42.90, -7.20), (43.10, -5.00), (43.00, -3.50)]),   // monts Cantabriques
+    (0.85, 0.22, &[(40.30, -6.00), (40.60, -4.50), (41.10, -3.30)]),   // Système central (Gredos, Guadarrama)
+    (0.75, 0.28, &[(42.00, -3.00), (41.00, -2.00), (40.30, -1.20)]),   // Système ibérique
+    (1.05, 0.28, &[(36.80, -5.20), (37.05, -3.30), (37.60, -2.20), (38.30, -1.00)]),   // cordillères Bétiques, Sierra Nevada
+    (0.55, 0.22, &[(38.00, -6.50), (38.40, -4.00), (38.50, -2.80)]),   // Sierra Morena
+    (0.95, 0.28, &[(44.40, 8.80), (44.30, 10.00), (43.80, 11.60), (43.00, 12.90), (42.30, 13.60), (41.50, 14.50), (40.60, 15.60), (39.80, 16.20), (38.90, 16.50), (38.10, 15.90)]),   // Apennins
+    (0.75, 0.22, &[(37.90, 13.30), (37.85, 14.60)]),   // Sicile (Madonies, Nébrodes)
+    (1.10, 0.18, &[(41.70, 9.15), (42.00, 9.05), (42.40, 9.00), (42.70, 9.20)]),   // Corse
+    (1.00, 0.45, &[(45.60, 14.30), (44.80, 15.60), (44.00, 16.80), (43.30, 18.20), (42.60, 19.50), (41.80, 20.20), (40.50, 20.80), (39.50, 21.30), (38.60, 22.00)]),   // Alpes dinariques, Pinde
+    (0.90, 0.25, &[(43.40, 22.50), (42.80, 24.00), (42.75, 25.50), (42.80, 27.00)]),   // Balkans (Stara Planina)
+    (1.00, 0.38, &[(48.30, 17.30), (49.20, 19.50), (49.20, 21.00), (48.90, 22.50), (48.20, 24.30), (47.30, 25.30), (46.30, 26.10), (45.60, 26.20), (45.40, 25.00), (45.40, 23.50), (44.90, 22.30)]),   // Carpates
+    (0.60, 0.20, &[(50.40, 12.40), (50.70, 13.90)]),   // monts Métallifères
+    (0.70, 0.22, &[(50.80, 15.00), (50.30, 16.70), (50.10, 17.30)]),   // Sudètes
+    (0.65, 0.22, &[(49.60, 12.60), (48.80, 13.80)]),   // forêt de Bohême
+    (1.25, 0.60, &[(58.60, 7.30), (59.80, 7.60), (61.00, 8.30), (62.00, 9.50), (63.00, 12.00)]),   // Alpes scandinaves
+    (0.80, 0.45, &[(56.40, -4.80), (57.00, -4.50), (57.80, -4.80)]),   // Highlands
+    (0.50, 0.25, &[(53.30, -1.80), (54.60, -2.30)]),   // Pennines
+    (0.65, 0.20, &[(46.25, 5.95), (46.60, 6.15), (47.00, 6.55), (47.40, 7.00)]),   // Jura
+    (0.65, 0.18, &[(47.85, 7.00), (48.10, 7.05), (48.40, 7.18), (48.70, 7.20)]),   // Vosges
+    (0.65, 0.18, &[(47.80, 8.00), (48.70, 8.30)]),   // Forêt-Noire
+    (1.40, 0.42, &[(30.90, -8.80), (31.40, -7.00), (32.20, -5.00), (32.60, -3.80)]),   // Haut Atlas
+    (0.90, 0.28, &[(35.00, -5.20), (35.00, -3.80)]),   // Rif
+    (0.80, 0.32, &[(35.00, -1.00), (36.00, 2.00), (36.50, 4.50), (36.60, 6.50), (36.50, 8.50)]),   // Atlas tellien
+    (0.80, 0.28, &[(32.80, -0.50), (34.00, 2.50), (35.20, 6.00)]),   // Atlas saharien
+    (1.20, 0.38, &[(36.80, 29.50), (37.00, 31.50), (36.90, 33.50), (37.50, 35.30), (38.00, 37.00), (38.50, 39.50), (38.30, 42.00), (37.80, 44.50)]),   // Taurus
+    (1.10, 0.38, &[(41.20, 32.50), (41.00, 35.00), (40.60, 37.50), (40.60, 39.50), (40.90, 41.50)]),   // chaîne Pontique
+    (1.70, 0.45, &[(44.30, 38.50), (43.60, 40.80), (43.10, 43.00), (42.60, 45.50)]),   // Caucase
+    (1.00, 0.18, &[(33.30, 35.70), (34.50, 36.20)]),   // mont Liban
+    (0.90, 0.15, &[(35.25, 23.90), (35.20, 25.50)]),   // Crète
+];
+pub const MASSIFS_5: &[(f64, f64, f64, f64)] = &[   // (lat, lon, amplitude, rayon en degrés)
+    (45.30, 3.00, 0.55, 1.20), (45.06, 2.75, 0.80, 0.30), (44.40, 3.80, 0.70, 0.40),   // Massif central, Cantal, Cévennes
+    (50.20, 5.80, 0.55, 0.70), (51.75, 10.70, 0.80, 0.20), (50.60, 10.80, 0.60, 0.30), (48.40, 9.50, 0.50, 0.40),   // Ardenne et Eifel, Harz, Thuringe, Jura souabe
+    (49.20, 20.00, 0.70, 0.25), (46.50, 22.80, 0.90, 0.50),   // Tatras, monts Apuseni
+    (41.70, 24.30, 1.00, 0.70), (42.10, 23.50, 1.10, 0.30), (41.50, 21.50, 0.80, 0.80), (37.50, 22.20, 0.90, 0.50),   // Rhodopes, Rila, Macédoine, Péloponnèse
+    (37.75, 15.00, 1.20, 0.20), (40.00, 9.30, 0.90, 0.50),   // Etna, Sardaigne
+    (56.90, -3.50, 0.90, 0.50), (52.50, -3.60, 0.85, 0.50), (54.50, -3.10, 0.80, 0.20), (53.00, -6.40, 0.60, 0.20), (52.00, -9.70, 0.80, 0.30),   // Grampians, Galles, Cumbria, Wicklow, Kerry
+    (61.50, 14.00, 0.50, 1.50),   // Norrland
+    (40.00, -4.00, 0.30, 2.30),   // Meseta
+    (33.30, -5.00, 1.00, 0.60), (35.30, 6.60, 1.00, 0.40), (34.30, 2.00, 0.30, 2.00), (35.60, 9.00, 0.70, 0.50),   // Moyen Atlas, Aurès, hauts plateaux, dorsale tunisienne
+    (39.00, 33.50, 0.50, 3.00), (39.50, 41.50, 0.80, 2.00), (41.00, 43.50, 0.90, 0.80),   // plateau anatolien, hautes terres d'Arménie, Petit Caucase
+    (44.60, 34.20, 1.00, 0.25), (34.90, 32.90, 0.90, 0.25), (29.00, 34.00, 0.90, 0.70),   // monts de Crimée, Troodos, Sinaï
+    (45.10, 10.50, -0.35, 1.00), (47.00, 20.50, -0.30, 1.50), (44.30, 26.00, -0.30, 1.00), (48.50, 7.75, -0.50, 0.20),   // plaine du Pô, plaine hongroise, Valachie, fossé rhénan
+    (41.60, -0.80, -0.40, 0.60), (37.50, -5.50, -0.40, 0.60),   // vallées de l'Èbre et du Guadalquivir
+];
+pub const MARAIS_5: &[(f64, f64, f64)] = &[   // (lat, lon, rayon en km)
+    (52.00, 27.50, 150.0), (45.20, 29.30, 55.0), (52.30, 4.90, 70.0), (43.50, 4.55, 25.0), (44.95, 12.30, 30.0), (37.00, -6.35, 30.0),   // Pripet, delta du Danube, Pays-Bas, Camargue, delta du Pô, Marismas
+    (52.60, 0.10, 30.0), (53.80, 21.50, 60.0), (42.60, 11.10, 25.0), (41.40, 13.00, 18.0), (59.80, 30.80, 40.0), (31.35, 31.20, 35.0),   // Fens, Mazurie, Maremme, marais Pontins, Ingrie, lacs du delta du Nil
+    (45.30, 37.80, 40.0), (46.50, 32.60, 35.0), (53.40, 7.50, 35.0), (54.20, 19.00, 25.0), (53.30, -8.00, 60.0),   // delta du Kouban, bouches du Dniepr, Frise, delta de la Vistule, tourbières d'Irlande
+];
+pub const LANDES_5: &[(f64, f64, f64)] = &[(44.20, -0.80, 65.0), (53.00, 10.20, 35.0), (56.00, 8.80, 50.0), (57.20, -4.50, 90.0)];   // landes de Gascogne, de Lunebourg, du Jutland, Highlands
+pub const VIGNES_5: &[(f64, f64, f64)] = &[   // (lat, lon, rayon en km)
+    (44.90, -0.40, 60.0), (47.00, 4.80, 40.0), (49.00, 4.00, 35.0), (47.30, 0.50, 50.0), (49.90, 7.50, 50.0), (48.20, 7.40, 30.0),   // Bordelais, Bourgogne, Champagne, Loire, Rhin et Moselle, Alsace
+    (41.15, -7.60, 45.0), (42.40, -2.50, 40.0), (36.70, -6.10, 30.0), (48.10, 21.40, 30.0), (43.40, 11.30, 60.0), (44.70, 8.00, 45.0), (45.50, 11.50, 40.0),   // Douro, Rioja, Xérès, Tokaj, Toscane, Piémont, Vénétie
+];
+pub const ROYALES_5: usize = 6; // routes de poste : de chaque capitale à ses six plus grandes villes
+pub const GABRIEL_5: f64 = 100.0; // (cases) les places voisines se cherchent jusque-là (40 sur les cartes au kilomètre) : la Russie, le Sahara
+pub const RELIER_5: f64 = 250.0; // (cases) et un morceau du réseau se raccorde jusque-là, par la terre (60 ailleurs)
 
 // ------------------------------------------------------------------ aides hors du socle (privées)
 /// `math.radians(x)`.
@@ -542,6 +615,10 @@ pub struct GeoMap {
     pub lat0: f64,
     pub lat1: f64,
     pub KX: f64,
+    /// (cases par degré de latitude : KY du module, divisé par km_case)
+    pub KY: f64,
+    /// Kilomètres par case : 1, ou 5 pour la carte d'Europe. Le moteur compte en cases ; seule la projection en tient compte.
+    pub km_case: f64,
     /// Un set de codes de départements (textes).
     pub playable_codes: Val,
     pub W: i64,
@@ -579,12 +656,16 @@ impl GeoMap {
             "" | "_v4" => GEO_V3,
             "_v1" => GEO_V1,
             "_v2" => GEO_V2,
+            "_v5" => GEO_EUROPE,
             _ => panic!("FileNotFoundError: geo{suffixe}.json"),
         };
         let src = json::loads(texte).expect("geo.json");
         let b = src.at("bounds");
         let (lon0, lon1, lat0, lat1) = (b.at("lon0").f(), b.at("lon1").f(), b.at("lat0").f(), b.at("lat1").f());
-        let KX = 111.32 * radians(src.get_or("lat_ref", LAT_REF).f()).cos(); // (le parallèle de référence de la carte)
+        let km_case = src.get_or("km_case", 1).f();
+        // (le parallèle de référence de la carte ; cases par degré : pour les cartes au kilomètre, x / 1.0 ne change pas un bit)
+        let KX = 111.32 * radians(src.get_or("lat_ref", LAT_REF).f()).cos() / km_case;
+        let KY_ = KY / km_case;
         let playable_codes = Val::new_set();
         for (c, d) in src.at("depts").items() {
             if d.get("playable").truthy() {
@@ -592,7 +673,7 @@ impl GeoMap {
             }
         }
         let W = py::int(((lon1 - lon0) * KX).ceil());
-        let H = py::int(((lat1 - lat0) * KY).ceil());
+        let H = py::int(((lat1 - lat0) * KY_).ceil());
         let mut dept_codes: Vec<String> = src.at("depts").keys().iter().map(Val::string).collect();
         dept_codes.sort();
         assert!(dept_codes.len() <= 255, "ValueError: byte must be in range(0, 256)");
@@ -607,6 +688,8 @@ impl GeoMap {
             lat0,
             lat1,
             KX,
+            KY: KY_,
+            km_case,
             playable_codes,
             W,
             H,
@@ -644,11 +727,11 @@ impl GeoMap {
 
     // ------------------------------------------------------------ projection
     pub fn xy(&self, lat: f64, lon: f64) -> Pt {
-        ((lon - self.lon0) * self.KX, (self.lat1 - lat) * KY)
+        ((lon - self.lon0) * self.KX, (self.lat1 - lat) * self.KY)
     }
 
     pub fn lat_of(&self, y: f64) -> f64 {
-        self.lat1 - y / KY
+        self.lat1 - y / self.KY
     }
 
     pub fn lon_of(&self, x: f64) -> f64 {
@@ -693,6 +776,28 @@ impl GeoMap {
     fn _build_nodes(&mut self) {
         self.nodes = list![];
         self.by_name = Val::dict();
+        if self.version == VERSION_EUROPE {
+            // (géographie 5) les places d'Europe, faites par outils/europe.mjs : les seules de cette carte
+            let mut slugs: HashSet<String> = HashSet::new();
+            for (k, place) in json::loads(PLACES_EUROPE).expect("places_europe.json").iter().enumerate() {
+                let p = place.vec(); // (name, lat, lon, pays, typ, spec, fort, pop0)
+                assert!(p.len() == 8, "ValueError: 8 valeurs attendues, {} reçues", p.len());
+                let name = &p[0];
+                let (x, y) = self.xy(p[1].f(), p[2].f());
+                let mut slug = slugify(name.s());
+                if slugs.contains(&slug) {
+                    slug = format!("{slug}-{}", p[3].s().to_lowercase()); // (homonymes : Alexandrie, Monastir, Gallipoli, Marbourg)
+                }
+                assert!(slugs.insert(slug.clone()), "ValueError: deux places « {slug} »");
+                // (spec : les spécialités que le jeu connaît, R::SPEC ; les autres étiquettes, arsenal, commerce, peche, le
+                // rôle d'un port en vue d'un mode naval, sont gardées à part dans « roles » et ne comptent pour rien)
+                let (spec, roles): (Vec<Val>, Vec<Val>) = p[5].iter().partition(|t| crate::rules::SPEC().has(t));
+                self.nodes.push(dict! {"id" => k, "slug" => slug, "name" => name, "x" => py::round_n(x, 2), "y" => py::round_n(y, 2), "dept" => &p[3], "type" => &p[4],
+                "spec" => Val::list(spec), "roles" => Val::list(roles), "fort" => &p[6], "pop0" => &p[7]});
+                self.by_name.setdefault(name, k);
+            }
+            return;
+        }
         let places = self.src.get_or("places", Val::dict());
         for (k, place) in PLACES().iter().enumerate() {
             let p = place.vec(); // (name, lat, lon, dept, typ, spec, fort)
@@ -753,6 +858,12 @@ impl GeoMap {
     pub fn _src_hash(&self) -> String {
         let mut h: Vec<u8> = vec![];
         h.extend(json::dumps_avec(&self.src, json::Ecriture { ascii: true, sort_keys: true, ..Default::default() }).as_bytes());
+        if self.version == VERSION_EUROPE {
+            // (géographie 5 : sa source, ses places, la version de son calcul ; aucune table du Sud-Ouest)
+            h.extend(PLACES_EUROPE.as_bytes());
+            h.extend(format!("europe{GEN_EUROPE}/{CACHE_VERSION}").as_bytes());
+            return sha1_hex(&h);
+        }
         h.extend(PLACES().repr().as_bytes());
         if self.version >= 3 {
             h.extend(PLACES_FRANCE.as_bytes());
@@ -967,6 +1078,10 @@ impl GeoMap {
             let (i, j) = (c % Wu, c / Wu);
             let (x, y) = (i as f64 + 0.5, j as f64 + 0.5);
             let (lat, lon) = (self.lat_of(y), self.lon_of(x));
+            if self.version == VERSION_EUROPE {
+                terrain[c] = GeoMap::_terrain5(x, y, lat, lon, d_ocean[c], d_riv[c]);
+                continue;
+            }
             let mut e = (if v3 { GeoMap::_elev3(lat, lon) } else { GeoMap::_elev(lat, lon) }) + (fbm(x / 22.0, y / 22.0, 11, 4) - 0.5) * 0.42;
             if lat < 43.35 || (v3 && e > 0.8) {
                 // (les vallées des montagnes sont creusées par leurs rivières)
@@ -1127,6 +1242,125 @@ impl GeoMap {
         e
     }
 
+    /// (géographie 5) Le relief de l'Europe et de l'Afrique du Nord, sur le modèle de _elev3 : lignes de crête et massifs
+    /// (CRETES_5, MASSIFS_5), en « hauteur » du jeu.
+    pub fn _elev5(lat: f64, lon: f64) -> f64 {
+        let cl = radians(lat).cos();
+        let mut e = 0.0;
+        for &(amp, w, pts) in CRETES_5.iter() {
+            let d = py::min_f(pts.windows(2).map(|ab| _dseg(lat, lon * cl, ab[0].0, ab[0].1 * cl, ab[1].0, ab[1].1 * cl))).unwrap();
+            e += amp * (-py::pow(d / w, 2.0)).exp() + amp * 0.3 * (-py::pow(d / (w * 2.2), 2.0)).exp();
+        }
+        for &(la, lo, amp, r) in MASSIFS_5.iter() {
+            e += amp * (-((py::pow(lat - la, 2.0) + py::pow((lon - lo) * cl, 2.0)) / (r * r))).exp();
+        }
+        e
+    }
+
+    /// (géographie 5) Le terrain d'une case de 5 km : relief (_elev5), puis végétation par grandes régions, avec les seuls
+    /// types de terrain du jeu : dunes pour le désert, lande pour la steppe, marais, forêts (taïga, forêts d'Europe
+    /// centrale), vigne autour de la Méditerranée. (x, y) : le centre de la case ; d_ocean, d_riv : distance en cases à
+    /// la mer (12 au plus) et à une rivière (5 au plus).
+    pub fn _terrain5(x: f64, y: f64, lat: f64, lon: f64, d_ocean: u8, d_riv: u8) -> u8 {
+        // (le relief se creuse de cols et se hérisse de sommets : un bruit le module)
+        let mut e = GeoMap::_elev5(lat, lon) * (0.7 + 0.6 * fbm(x / 5.0, y / 5.0, 17, 2)) + (fbm(x / 7.0, y / 7.0, 11, 4) - 0.5) * 0.5;
+        if e > 0.8 {
+            e -= 0.6 * (-py::pow(d_riv as f64 / 1.2, 2.0)).exp(); // (les vallées des montagnes sont creusées par leurs rivières)
+        }
+        if e > 1.55 {
+            return HAUTE;
+        }
+        if e > 0.80 {
+            return MONTAGNE;
+        }
+        let t = if e > 0.42 { COLLINES } else { PLAINE };
+        let n1 = fbm(x / 7.0, y / 7.0, 3, 3);
+        let n2 = fbm(x / 9.0, y / 9.0, 7, 4); // (les forêts : par grandes taches)
+        // (les limites des climats ondulent : un degré de bruit)
+        let la = lat + (fbm(x / 9.0, y / 9.0, 5, 3) - 0.5) * 1.2;
+        let lo = lon + (fbm(x / 9.0, y / 9.0, 6, 3) - 0.5) * 1.5;
+        let dans = |v: f64, a: f64, b: f64| a <= v && v < b;
+        let km = |la0: f64, lo0: f64| py::hypot((lat - la0) * KY, (lon - lo0) * 111.32 * radians(lat).cos()); // (distance à un point, en km)
+        // le désert : Sahara au sud de l'Atlas, Libye hors du littoral, Égypte hors de la vallée et du delta du Nil,
+        // Sinaï, Arabie et désert de Syrie ; une rivière y fait une oasis
+        let delta_nil = dans(lat, 30.0, 31.6) && dans(lon, 30.0, 32.3) && (lon - 31.2).abs() < (lat - 29.9) * 0.9;
+        let limite = if lo < -6.0 { 30.6 } else if lo < 0.0 { 30.6 + (lo + 6.0) / 6.0 * 3.0 } else if lo < 9.0 { 33.6 } else { 33.2 }; // (le pied sud de l'Atlas)
+        let desert = if lo < 11.5 {
+            la < limite && d_ocean > 6
+        } else if lo < 25.0 {
+            la < 32.2 && d_ocean > 6 && km(32.6, 21.6) > 150.0 // (Tripolitaine et Cyrénaïque : la côte reste verte)
+        } else if lo < 34.3 {
+            la < 31.4 && d_ocean > 2 && !delta_nil
+        } else {
+            (la < 31.0 && d_ocean > 8) || (lo > 37.0 && la < 35.4 && lat < 36.0) || (lo > 39.5 && la < 36.2 && lat < 36.4)
+        };
+        if desert && d_riv > 2 {
+            return DUNES;
+        }
+        // les marais (lat, lon, rayon en km)
+        if t == PLAINE {
+            for &(la0, lo0, r) in MARAIS_5.iter() {
+                let dd = km(la0, lo0);
+                if dd < r && n1 > 0.34 + 0.25 * dd / r {
+                    return MARAIS;
+                }
+            }
+            if la > 60.0 && lo > 21.0 && n2 > 0.66 {
+                return MARAIS; // (tourbières de Finlande et de Carélie)
+            }
+        }
+        // la steppe (lande) : steppe pontique et caspienne, puszta de Hongrie, Meseta, plateau anatolien, hauts plateaux
+        // du Maghreb, steppe de Syrie ; landes de Gascogne, de Lunebourg, du Jutland, des Highlands
+        let steppe = (lo > 28.5 && dans(la, 44.4, 49.2 + (lo - 28.5) * 0.1) && e < 0.42)
+            || (lo > 38.0 && dans(la, 43.6, 46.5) && e < 0.42)
+            || (dans(la, 46.0, 48.0) && dans(lo, 19.3, 21.9) && e < 0.3)
+            || (dans(la, 38.7, 41.9) && dans(lo, -6.2, -1.4))
+            || (dans(la, 37.4, 40.1) && dans(lo, 30.8, 36.4) && d_ocean > 10)
+            || (lo < 11.5 && la < 35.3 && lon < 10.0 && d_ocean > 8)
+            || (lo > 36.6 && dans(la, 33.0, 37.0) && d_ocean > 10)
+            || (dans(lo, 11.5, 34.3) && la < 32.2 && d_ocean > 2 && !delta_nil && d_riv > 2);
+        if steppe && n1 > 0.32 {
+            return LANDE;
+        }
+        for &(la0, lo0, r) in LANDES_5.iter() {
+            if km(la0, lo0) < r && n1 > 0.38 {
+                return LANDE;
+            }
+        }
+        // les forêts : taïga du nord, forêts mêlées d'Europe centrale et de Russie, massifs boisés
+        if !steppe && !desert {
+            let taiga = la > 57.6 && lo > 4.0;
+            let centrale = dans(la, 47.5, 57.6) && lo > 8.0;
+            if taiga && n2 < 0.64 {
+                return FORET;
+            }
+            if centrale && n2 < 0.36 + 0.10 * min2(1.0, max2(0.0, (lo - 10.0) / 20.0)) {
+                return FORET;
+            }
+            if t == COLLINES && dans(la, 42.0, 57.0) && dans(lo, -9.0, 32.0) && n2 < 0.52 {
+                return FORET;
+            }
+        }
+        // la vigne : les rivages de la Méditerranée (pas le golfe de Gascogne, ni la mer Noire au nord), et les grands
+        // vignobles de l'intérieur
+        if !desert {
+            let v = fbm(x / 4.0, y / 4.0, 9, 3);
+            let med = d_ocean <= 10 && dans(la, 35.0, 45.3) && dans(lo, -9.6, 36.6) && !(la > 42.9 && lo < -1.0) && !(lo > 27.5 && la > 41.6) && !(la < 37.3 && lo > 11.5);
+            if med && v > (if la < 37.3 { 0.62 } else { 0.50 }) {
+                return VIGNE;
+            }
+            for &(la0, lo0, r) in VIGNES_5.iter() {
+                if km(la0, lo0) < r && v > 0.46 {
+                    return VIGNE;
+                }
+            }
+        }
+        if !steppe && !desert && fbm(x / 6.0, y / 6.0, 13, 3) > 0.70 {
+            return FORET;
+        }
+        t
+    }
+
     // ------------------------------------------------------------ routes
     /// (En Python : margin=1.2. Rend un entier ou un flottant : ici toujours un flottant, de même valeur.)
     pub fn _water_on_segment(&self, a: Pt, b: Pt, margin: f64) -> f64 {
@@ -1142,8 +1376,8 @@ impl GeoMap {
             let c = self.cell(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t);
             if c < 0 || matches!(self.terrain[c as usize], OCEAN | EAU) || !self.jouable[self.dept[c as usize] as usize] {
                 bad += 1.0;
-            } else if self.terrain[c as usize] == HAUTE {
-                bad += 0.25;
+            } else if self.terrain[c as usize] == HAUTE && self.version != VERSION_EUROPE {
+                bad += 0.25; // (géographie 5 : une case de haute montagne de 5 km a ses cols, la route y passe)
             }
         }
         bad
@@ -1171,13 +1405,16 @@ impl GeoMap {
             }
             out
         };
+        let europe = self.version == VERSION_EUROPE;
+        let portee = if europe { GABRIEL_5 } else { 40.0 };
+        let terres: Vec<u32> = if europe { self._terres(&P) } else { vec![] };
         for a in 0..n {
-            for b in proches(P[a].0, P[a].1, 40.0) {
+            for b in proches(P[a].0, P[a].1, portee) {
                 if b <= a {
                     continue;
                 }
                 let d = dist(P[a], P[b]);
-                if d > 40.0 {
+                if d > portee {
                     continue;
                 }
                 let (mx, my) = ((P[a].0 + P[b].0) / 2.0, (P[a].1 + P[b].1) / 2.0);
@@ -1185,12 +1422,28 @@ impl GeoMap {
                 if proches(mx, my, d / 2.0).into_iter().any(|c| c != a && c != b && py::pow(P[c].0 - mx, 2.0) + py::pow(P[c].1 - my, 2.0) < r2) {
                     continue;
                 }
-                if self._water_on_segment(P[a], P[b], 1.2) < 1.0 {
-                    pairs.insert((a, b), Info::default());
+                // (géographie 5 : un seul point d'eau sur le trajet, le fond d'une baie, n'empêche pas la route ; entre deux
+                // terres, un détroit d'une case, Sund, Messine, Bosphore : un bac)
+                if self._water_on_segment(P[a], P[b], 1.2) < (if europe { 2.0 } else { 1.0 }) {
+                    pairs.insert((a, b), Info { royal: false, ferry: europe && terres[a] != terres[b], drop: false });
                 }
             }
         }
-        if self.version >= 3 {
+        if europe {
+            // (géographie 5) les routes de poste : de chaque capitale à ses plus grandes villes, par le plus court chemin
+            // du réseau (une île que la terre ne relie pas n'en a pas : voies de mer, waterways.rs)
+            self._ensure_connected(&mut pairs, &P);
+            for code in &self.dept_codes {
+                let du_pays: Vec<Val> = self.nodes.iter().filter(|n| n.at("dept") == code.as_str()).collect();
+                let Some(cap) = du_pays.iter().find(|n| n.at("type") == "capitale").map(|n| n.at("id").u()) else { continue };
+                let villes = py::sorted_by_key(du_pays.iter().filter(|n| n.at("type") == "ville").collect::<Vec<_>>(), |n| (-n.at("pop0").i(), n.at("id").i()));
+                for v in villes.into_iter().take(ROYALES_5) {
+                    for k in GeoMap::_chemin(&pairs, &P, cap, v.at("id").u()) {
+                        pairs[&k].royal = true;
+                    }
+                }
+            }
+        } else if self.version >= 3 {
             // les grandes routes royales de la France : le plus court chemin du réseau, entre leurs villes
             self._ensure_connected(&mut pairs, &P);
             for route in ROUTES_ROYALES_3.iter() {
@@ -1202,7 +1455,9 @@ impl GeoMap {
                 }
             }
         }
-        for route in ROYAL_ROUTES().iter() {
+        // (géographie 5 : aucune des tables du Sud-Ouest, routes royales, chemins ajoutés ou retirés, bac de Blaye)
+        let sud_ouest = |t: Val| if europe { list![] } else { t };
+        for route in sud_ouest(ROYAL_ROUTES()).iter() {
             let ids: Vec<usize> = route.iter().map(|nm| self.by_name.at(&nm).u()).collect();
             for ab in ids.windows(2) {
                 let (a, b) = (ab[0], ab[1]);
@@ -1216,9 +1471,9 @@ impl GeoMap {
                 }
             }
         }
-        let mut extra = EXTRA_ROADS().vec();
+        let mut extra = sud_ouest(EXTRA_ROADS()).vec();
         if self.version >= 2 {
-            extra.extend(EXTRA_ROADS_2().vec());
+            extra.extend(sud_ouest(EXTRA_ROADS_2()).vec());
         }
         for route in extra {
             let (na, nb) = route.pair();
@@ -1230,7 +1485,7 @@ impl GeoMap {
             }
         }
         if self.version >= 2 {
-            for route in NO_ROADS_2().iter() {
+            for route in sud_ouest(NO_ROADS_2()).iter() {
                 let (na, nb) = route.pair();
                 let (a, b) = (self.by_name.at(&na).u(), self.by_name.at(&nb).u());
                 pairs.shift_remove(&(a.min(b), a.max(b)));
@@ -1351,7 +1606,7 @@ impl GeoMap {
             };
             let path = &paths[eid];
             if info.ferry {
-                e.set("river", "Gironde");
+                e.set("river", if europe { "Détroit" } else { "Gironde" });
                 e.set("rrank", 1);
                 e.set("cx", py::round_n((P[a].0 + P[b].0) / 2.0, 2));
                 e.set("cy", py::round_n((P[a].1 + P[b].1) / 2.0, 2));
@@ -1634,6 +1889,57 @@ impl GeoMap {
         }
     }
 
+    /// (géographie 5) La terre de chaque place : les cases sèches du jeu numérotées par remplissage (0 : dans l'eau).
+    fn _terres(&self, P: &[Pt]) -> Vec<u32> {
+        let (W, H) = (self.W as usize, self.H as usize);
+        let sec = |c: usize| !matches!(self.terrain[c], OCEAN | EAU) && self.jouable[self.dept[c] as usize];
+        let mut lab = vec![0u32; W * H];
+        let mut suivant = 0;
+        let mut taille: Vec<usize> = vec![0]; // (cases de chaque terre)
+        for c0 in 0..W * H {
+            if lab[c0] != 0 || !sec(c0) {
+                continue;
+            }
+            suivant += 1;
+            lab[c0] = suivant;
+            taille.push(0);
+            let mut pile = vec![c0];
+            while let Some(c) = pile.pop() {
+                taille[suivant as usize] += 1;
+                let (i, j) = (c % W, c / W);
+                for nc in [(i + 1 < W).then(|| c + 1), (i > 0).then(|| c - 1), (j + 1 < H).then(|| c + W), (j > 0).then(|| c - W)].into_iter().flatten() {
+                    if lab[nc] == 0 && sec(nc) {
+                        lab[nc] = suivant;
+                        pile.push(nc);
+                    }
+                }
+            }
+        }
+        // une place sur un îlot de moins de six cases (une ville dans sa lagune, sur une flèche de sable, à un détroit que
+        // la grille a ouvert sous elle) tient à la plus grande terre à deux cases d'elle
+        P.iter()
+            .map(|&(x, y)| {
+                let c = self.cell(x, y);
+                if c < 0 {
+                    return 0;
+                }
+                let mut l = lab[c as usize];
+                if taille[l as usize] < 6 {
+                    let (i, j) = (c % self.W, c / self.W);
+                    for dj in -2..=2 {
+                        for di in -2..=2 {
+                            let v = self.cell((i + di) as f64, (j + dj) as f64);
+                            if v >= 0 && taille[lab[v as usize] as usize] >= 6 && taille[lab[v as usize] as usize] > taille[l as usize] {
+                                l = lab[v as usize];
+                            }
+                        }
+                    }
+                }
+                l
+            })
+            .collect()
+    }
+
     fn _ensure_connected(&self, pairs: &mut Pairs, P: &[Pt]) {
         if self.version >= 3 {
             return self._relier(pairs, P);
@@ -1676,6 +1982,10 @@ impl GeoMap {
         for (i, &(x, y)) in P.iter().enumerate() {
             cases.entry((case(x), case(y))).or_default().push(i);
         }
+        let portee = if self.version == VERSION_EUROPE { RELIER_5 } else { 60.0 };
+        // (géographie 5) deux places se raccordent si elles sont sur la même terre, même si la ligne droite passe sur une
+        // baie ou un fjord (le tracé de la route fait le tour) : la terre de chaque place, numérotée par remplissage
+        let terre: Vec<u32> = if self.version == VERSION_EUROPE { self._terres(P) } else { vec![] };
         let mut isoles: HashSet<usize> = HashSet::new();
         loop {
             let mut parent: Vec<usize> = (0..n).collect();
@@ -1701,13 +2011,13 @@ impl GeoMap {
                 let mut cand: Vec<(f64, usize, usize)> = vec![];
                 for &a in membres {
                     let (x, y) = P[a];
-                    for ci in case(x - 60.0)..=case(x + 60.0) {
-                        for cj in case(y - 60.0)..=case(y + 60.0) {
+                    for ci in case(x - portee)..=case(x + portee) {
+                        for cj in case(y - portee)..=case(y + portee) {
                             if let Some(l) = cases.get(&(ci, cj)) {
                                 for &b in l {
                                     if find(&mut parent, b) != r {
                                         let d = dist(P[a], P[b]);
-                                        if d < 60.0 {
+                                        if d < portee {
                                             cand.push((d, a, b));
                                         }
                                     }
@@ -1717,7 +2027,7 @@ impl GeoMap {
                     }
                 }
                 cand.sort_by(|x, y| x.partial_cmp(y).unwrap());
-                let ok = cand.iter().find(|&&(_, a, b)| self._water_on_segment(P[a], P[b], 1.2) < 1.0);
+                let ok = cand.iter().find(|&&(_, a, b)| if terre.is_empty() { self._water_on_segment(P[a], P[b], 1.2) < 1.0 } else { terre[a] != 0 && terre[a] == terre[b] });
                 if let Some(&(_, a, b)) = ok {
                     pairs.insert((a.min(b), a.max(b)), Info::default());
                     relie = true;
@@ -2069,7 +2379,7 @@ impl GeoMap {
         let mut playable = self.playable_codes.vec();
         playable.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let b = self.src.at("bounds");
-        dict! {"W" => self.W, "H" => self.H, "lon0" => b.at("lon0"), "lat1" => b.at("lat1"), "KX" => self.KX, "KY" => KY, "playable" => playable,
+        dict! {"W" => self.W, "H" => self.H, "lon0" => b.at("lon0"), "lat1" => b.at("lat1"), "KX" => self.KX, "KY" => self.KY, "playable" => playable,
         "y_mont" => self.xy(43.2, 0.0).1, "x_cote" => self.xy(44.0, -0.95).0, "y_spain" => self.xy(43.36, 0.0).1,
         "terrain" => b64encode(&self.terrain),
         "dept" => b64encode(&self.dept),

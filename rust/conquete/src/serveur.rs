@@ -33,7 +33,7 @@ use crate::crue as CR;
 use crate::diplomacy as D;
 use crate::engine::Game;
 use crate::events as EV;
-use crate::geo::{GeoMap, VERSION as GEO_VERSION};
+use crate::geo::{GeoMap, VERSION as GEO_VERSION, VERSION_EUROPE};
 use crate::py::{self, json, Val};
 use crate::rails as RL;
 use crate::rules as R;
@@ -89,6 +89,11 @@ pub struct App {
     pub _auto_key: Option<(usize, i64, i64, bool)>,
 }
 
+/// Les cartes des nouvelles parties (R::MODES) : la France (4), l'Europe (5).
+fn modes() -> Vec<i64> {
+    R::MODES().iter().map(|m| m.ati("geo")).collect()
+}
+
 /// Rend le message d'une exception (panique) du moteur : « KeyError: 'node' », « not yet implemented »…
 fn message(p: &(dyn std::any::Any + Send)) -> String {
     p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_default()
@@ -140,8 +145,11 @@ impl App {
         if !self.static_.contains_key(&geo.version) {
             let map = geo.client_payload().copy();
             map.set("rails", RL::client_payload(geo));
-            let payload = dict! {"map" => map, "rules" => V::rules_payload(), "skirmish" => SK::options(&self.geo),
-                "ver" => UPDATE.lock().unwrap().version.clone(), "geo" => geo.version};
+            // (chaque carte a ses camps, ses textes et ses places de bataille ; modes : les cartes des nouvelles parties,
+            // pour l'écran de départ ; km_case : ce que vaut une case, 1 ou 5 km)
+            let payload = dict! {"map" => map, "rules" => V::rules_payload_carte(geo.version == VERSION_EUROPE), "skirmish" => SK::options(geo),
+                "ver" => UPDATE.lock().unwrap().version.clone(), "geo" => geo.version, "modes" => R::MODES(),
+                "km_case" => py::int(geo.km_case)};
             let raw = json::dumps_compact(&payload).into_bytes();
             let gz = gzip(&raw, 6);
             self.static_.insert(geo.version, (Arc::new(raw), Arc::new(gz)));
@@ -639,7 +647,15 @@ impl App {
         if !d.post {
             let path = d.chemin.as_str();
             if path == "/api/map" {
-                let geo = self.game.as_ref().map(|g| g.geo.clone()).unwrap_or_else(|| self.geo.clone()); // (la carte de la partie en cours)
+                // (?geo=4 ou 5 : la carte d'un mode de jeu, pour l'écran de départ ; sinon celle de la partie en cours, ou la
+                // carte par défaut. La carte d'Europe se fait à la première demande.)
+                let geo = match q(&d.requete, "geo") {
+                    Some(v) => match v.trim().parse::<i64>() {
+                        Ok(v) if modes().contains(&v) => self.geo_for(v),
+                        _ => return json_(dict! {"ok" => false, "msg" => "Carte inconnue."}, 400),
+                    },
+                    None => self.game.as_ref().map(|g| g.geo.clone()).unwrap_or_else(|| self.geo.clone()), // (la carte de la partie en cours)
+                };
                 let (raw, gz) = self.payload(&geo);
                 return Rendu::Carte(raw, gz);
             }
@@ -678,18 +694,35 @@ impl App {
         if path == "/api/load" {
             return json_(self.load(&body.get("name")), 200);
         }
+        if path == "/api/new" || path == "/api/skirmish" {
+            // (geo : la carte du mode choisi, 4 sans rien dire, 5 pour l'Europe)
+            let v = body.get("geo");
+            if v.is_some() && !(matches!(v, Val::Int(_)) && modes().contains(&v.i())) {
+                return json_(dict! {"ok" => false, "msg" => "Carte inconnue."}, 400);
+            }
+        }
+        let geo_du_corps = |app: &mut App| if body.get("geo").is_some() { app.geo_for(body.at("geo").i()) } else { app.geo.clone() };
         if path == "/api/new" {
             let dept = body.get("dept");
-            if !R::FACTIONS().has(&dept) {
-                return json_(dict! {"ok" => false, "msg" => "Département inconnu."}, 400);
+            // (le camp doit être de cette carte : un pays sur celle d'Europe, un département sur celle de France ; un refus
+            // ne fait pas préparer la carte)
+            let europe = body.get("geo") == VERSION_EUROPE;
+            let inconnu = || json_(dict! {"ok" => false, "msg" => if europe { "Pays inconnu." } else { "Département inconnu." }}, 400);
+            if !R::FACTIONS().has(&dept) || R::PAYS_EUROPE().has(&dept) != europe {
+                return inconnu();
+            }
+            let geo = geo_du_corps(self);
+            if !geo.playable_codes.has(&dept) {
+                return inconnu();
             }
             let seed = if body.getb("seed") { _int(&body.at("seed")).map(Val::from).unwrap_or(Val::None) } else { Val::None };
-            self.game = Some(Box::new(Game::new(self.geo.clone(), dept.s(), &body.get_or("difficulty", "normal"), &seed, &body.get_or("scenario", "1790"))));
-            return json_(dict! {"ok" => true, "geo" => self.geo.version}, 200);
+            self.game = Some(Box::new(Game::new(geo.clone(), dept.s(), &body.get_or("difficulty", "normal"), &seed, &body.get_or("scenario", "1790"))));
+            return json_(dict! {"ok" => true, "geo" => geo.version}, 200);
         }
         if path == "/api/skirmish" {
             // mode Bataille : une bataille isolée, sans campagne
-            let (sk, bid) = match catch_unwind(AssertUnwindSafe(|| SK::new(self.geo.clone(), &body))) {
+            let geo = geo_du_corps(self);
+            let (sk, bid) = match catch_unwind(AssertUnwindSafe(|| SK::new(geo, &body))) {
                 Ok(r) => r,
                 Err(_) => return json_(dict! {"ok" => false, "msg" => "La bataille n’a pas pu être préparée."}, 200),
             };

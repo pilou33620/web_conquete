@@ -103,7 +103,9 @@ impl AI {
     /// `AI(game, code)`.
     // game/ai.py, lignes 34 à 46
     pub fn new(g: &Game, code: &str) -> AI {
-        let mut rng = Random::new(g.seed * 7 + py::int_v(&Val::from(code)) + py::int(g.t * 1000.0)); // (un chargement ne rejoue pas les mêmes dés)
+        // (un pays d'Europe a un code de deux lettres : ses octets font le nombre)
+        let num = if code.bytes().all(|o| o.is_ascii_digit()) { py::int_v(&Val::from(code)) } else { code.bytes().fold(0i64, |n, o| n * 256 + o as i64) };
+        let mut rng = Random::new(g.seed * 7 + num + py::int(g.t * 1000.0)); // (un chargement ne rejoue pas les mêmes dés)
         let diplo_clock = 5.0 + rng.random() * 5.0;
         let spend_clock = 3.0 + rng.random() * 3.0;
         // impôts allégés quand le trésor déborde (repris d'une sauvegarde : on garde le niveau atteint)

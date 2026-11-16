@@ -104,7 +104,9 @@ fn bataille(geo: &Rc<GeoMap>, sc: &(&str, &str, Option<&str>, &str, Option<&str>
     let pts = |l: &Val| -> Val { l.iter().map(|p| r1(&p)).collect() };
     let noms = |l: &[&str]| -> Val { l.iter().map(|s| Val::from(*s)).collect() };
     let factions = Val::dict();
-    for (k, f) in R::FACTIONS().items() {
+    for k in R::camps(false) {
+        // (les camps de la carte de ces batailles, la France : pas les pays d'Europe)
+        let f = R::FACTIONS().at(&k);
         factions.set(k, dict! {"nom" => f.at("name"), "col" => f.at("color")});
     }
     dict! {

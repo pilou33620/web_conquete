@@ -23,7 +23,10 @@ Mesures, par partie puis en moyenne : erreurs (« fin » n'en est pas une : si l
 monde continue, vu d'un autre camp en vie),
 guerres déclarées et leur durée (mois), places de chaque camp à la fin
 et écart entre le premier et le dernier, camps encore en vie, technologies trouvées, trésor, hommes sous les armes et tronçons de voie ferrée ouverts.
---proc en joue plusieurs à la fois.";
+--proc en joue plusieurs à la fois.
+--geo 5 joue sur la carte d'Europe (2 par défaut : le Sud-Ouest) ; --joueur le camp vu (33, ou FR en Europe) ;
+--suivi ML,RU écrit chaque année les places, le trésor, les vivres et les hommes de ces camps ; --recit 1 écrit au fil des
+mois les guerres déclarées, les traités et les capitulations (sur la sortie d'erreur, avec le temps de chaque année).";
 
 const GRANDES_ARMES: [&str; 4] = ["gribeauval", "percussion", "lahitte", "chassepot"];
 const EPOQUES: [&str; 4] = ["1700", "1790", "1813", "1870"];
@@ -89,8 +92,8 @@ struct Mesures {
 }
 
 /// Une partie de `mois` tours jouée par les IA seules ; rend ses mesures.
-fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64) -> Mesures {
-    let mut g = Game::new(geo.clone(), "33", &Val::from("normal"), &Val::from(seed), &Val::from(epoque));
+fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64, joueur: &str, suivi: &[String], recit: bool) -> Mesures {
+    let mut g = Game::new(geo.clone(), joueur, &Val::from("normal"), &Val::from(seed), &Val::from(epoque));
     let ai = AI::new(&g, &g.player.clone());
     g.ais.insert(g.player.clone(), Some(ai)); // le camp du joueur joué par une IA, comme les autres
     let mut codes: Vec<String> = g.factions.keys().iter().map(Val::string).collect();
@@ -101,12 +104,30 @@ fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64) -> Mesures {
     let mut before: Vec<bool> = pairs.iter().map(|p| g.at_war(p.0, p.1)).collect();
     let mut err = None;
     let vivant = |g: &Game, c: &str| g.factions.at(c).at("alive").truthy();
-    for _ in 0..mois {
+    let (mut vu, mut chrono) = (g.seq, std::time::Instant::now());
+    for m in 0..mois {
+        // (le suivi et le récit : hors des mesures, pour lire une longue partie de contrôle)
+        if m % 12 == 0 && (recit || !suivi.is_empty()) {
+            eprintln!("== {} (graine {seed}) : {} camps en vie, {} guerres en cours, {:.1} s pour l'année passée ; cours : {}", g.date_str(&Val::None), codes.iter().filter(|c| vivant(&g, c)).count(), before.iter().filter(|&&w| w).count(), chrono.elapsed().as_secs_f64(), g.market);
+            chrono = std::time::Instant::now();
+            for c in suivi.iter().filter(|c| g.factions.has(c.as_str())) {
+                let f = g.factions.at(c.as_str());
+                let hommes = py::sum_v(g.armies.values().iter().filter(|a| a.at("owner") == c.as_str()).map(|a| py::sum_v(a.at("regs").iter().map(|r| r.at("n")))));
+                eprintln!("   {c} {} : {} places, {:.0} livres ({:+.1}/j), {:.0} vivres ({:+.1}/j), {:.0} recrues, {} hommes en campagne, {} techniques{}", g.fname(c), g.nodes.iter().filter(|n| n.at("owner") == c.as_str()).count(),
+                    f.at("res").atf("livres"), f.at("income").atf("livres"), f.at("res").atf("vivres"), f.at("income").atf("vivres"), f.at("res").atf("recrues"), hommes, f.at("techs").len(), if vivant(&g, c) { "" } else { " (disparu)" });
+            }
+        }
         if let Err(p) = catch_unwind(AssertUnwindSafe(|| play_month(&mut g))) {
             err = Some(message(&*p)); // une erreur est une mesure : la partie s'arrête là, le banc continue
             break;
         }
         carry_on(&mut g);
+        if recit {
+            for e in g.events.iter().filter(|e| e.ati("seq") > vu && (e.at("kind") == "capitulation" || e.ats("text").contains("déclare la guerre") || e.ats("text").contains("soulève"))) {
+                eprintln!("   {} : {}", e.at("date"), e.at("text"));
+            }
+            vu = g.seq;
+        }
         if g.over.truthy() {
             break;
         }
@@ -122,7 +143,7 @@ fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64) -> Mesures {
         let texte = if g.over.is_dict() { g.over.get_or("text", "").to_string() } else { "partie terminée".to_string() };
         err = Some(format!("fin : {texte}")); // (pas une erreur)
     } else if err.is_none() && g.lost_player {
-        err = Some(format!("fin : la Gironde a disparu, vu ensuite depuis {}", g.player)); // (pas une erreur)
+        err = Some(format!("fin : {} a disparu, vu ensuite depuis {}", if joueur == "33" { "la Gironde" } else { joueur }, g.player)); // (pas une erreur)
     }
     let n = codes.len() as f64;
     let max = places.iter().map(|p| p.1).max().unwrap();
@@ -166,14 +187,18 @@ fn mean(rows: &[Mesures], k: fn(&Mesures) -> f64) -> String {
 
 fn main() {
     std::env::set_var("WEB_CONQUETE_NOLOG", "1"); // (tests/fabrique.py : le banc n'écrit pas dans logs/batailles.jsonl)
-    let a = Args::parse(AIDE, &["parties", "epoque", "annees", "graine", "proc"]);
+    let a = Args::parse(AIDE, &["parties", "epoque", "annees", "graine", "proc", "geo", "joueur", "suivi", "recit"]);
+    let v_geo = a.i("geo", 2);
+    let joueur = a.s("joueur", if v_geo == conquete::geo::VERSION_EUROPE { "FR" } else { "33" });
+    let suivi: Vec<String> = a.s("suivi", "").split(',').filter(|c| !c.is_empty()).map(str::to_string).collect();
+    let recit = a.i("recit", 0) != 0;
     let (parties, annees, graine, proc) = (a.i("parties", 3), a.i("annees", 30), a.i("graine", 1), a.i("proc", 1));
     let epoque = a.s("epoque", "1790");
     if !EPOQUES.contains(&epoque.as_str()) {
         commun::erreur(&format!("argument --epoque: invalid choice: '{epoque}' (choose from '1700', '1790', '1813', '1870')"));
     }
     let jobs: Vec<i64> = (0..parties).map(|i| graine + i).collect();
-    let rows = par_map(&jobs, proc.max(1) as usize, || commun::geo(2), |geo, &s| simulate(geo, s, &epoque, annees * 12));
+    let rows = par_map(&jobs, proc.max(1) as usize, || commun::geo(v_geo), |geo, &s| simulate(geo, s, &epoque, annees * 12, &joueur, &suivi, recit));
     println!("{parties} parties depuis {epoque}, {annees} ans, graines {graine} à {}", graine + parties - 1);
     println!("graine  fin                 guerres  durée  écart  vivants  techs  trésor  hommes  rails  places / erreur");
     for r in &rows {

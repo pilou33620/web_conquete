@@ -197,6 +197,10 @@ pub fn spans(geo: &GeoMap) -> Val {
     if geo._crue.borrow().is_some() {
         return geo._crue.borrow().clone();
     }
+    if geo.version == crate::geo::VERSION_EUROPE {
+        *geo._crue.borrow_mut() = dict! {}; // (géographie 5 : aucune route coupée, la crue est celle de la Garonne et de la Dordogne)
+        return geo._crue.borrow().clone();
+    }
     let m = geo.client_payload();
     let T = _Terre::new(geo, &m.at("rivers"));
     let places: Vec<(f64, f64, f64)> = m.at("nodes").iter().map(|n| (n.atf("x"), n.atf("y"), _rayon(&n) + 0.5)).collect();

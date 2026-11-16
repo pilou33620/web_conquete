@@ -524,17 +524,21 @@ impl Game {
             }
         }
         g.ev_done = list![]; // événements datés déjà passés
-        if g.scenario == "1790" {
+        if g.scenario == "1790" && !g.europe() {
             let t = format!("4 mars 1790 : l'Assemblée crée les départements. Vous gouvernez {}.", g.fname(player));
             g.log("info", &t, &dict! {"important" => true});
         } else {
             let t = format!("{} — {}. Vous gouvernez {}.", g.date_str(&Val::None), g.era().at("name"), g.fname(player));
             g.log("info", &t, &dict! {"important" => true});
         }
-        let t = format!(
-            "Objectif : prendre tous les chefs-lieux (ou obtenir la soumission de leurs {}s), ou être le plus prestigieux à la fin de 1899.",
-            g.dept_word()
-        );
+        let t = if g.europe() {
+            "Objectif : prendre toutes les capitales (ou obtenir la soumission de leurs pays), ou être le plus prestigieux à la fin de 1899.".to_string()
+        } else {
+            format!(
+                "Objectif : prendre tous les chefs-lieux (ou obtenir la soumission de leurs {}s), ou être le plus prestigieux à la fin de 1899.",
+                g.dept_word()
+            )
+        };
         g.log("info", &t, &dict! {});
         let mut ais = IndexMap::new();
         for c in codes.iter().filter(|c| *c != player) {

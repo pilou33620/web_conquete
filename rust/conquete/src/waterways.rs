@@ -9,7 +9,7 @@
 //! En Rust : les voies se calculent en nombres natifs (`Voie`, `Port`), puis sont rangées sur la carte en `Val`
 //! (geo.ways, geo.ports…), comme le reste du moteur les lit.
 
-use crate::geo::{GeoMap, Pt};
+use crate::geo::{GeoMap, Pt, VERSION_EUROPE};
 use crate::py::{self, Val};
 use crate::{dict, list, py_const};
 use std::collections::HashMap;
@@ -157,8 +157,13 @@ struct Arete {
     len: f64,
 }
 
-/// Ajoute les arêtes fluviales et maritimes à geo.edges ; renseigne geo.ways, geo.ports, geo.down_nodes.
-pub fn build(geo: &mut GeoMap) -> Val {
+/// (privé) `ways[nom]`.
+fn voie<'a>(ways: &'a [Voie], nom: &str) -> &'a Voie {
+    ways.iter().find(|w| w.name == nom).unwrap_or_else(|| panic!("KeyError: {nom:?}"))
+}
+
+/// (privé) Les voies du Sud-Ouest (WAYS), leurs ports et leurs quais, triés le long de chaque voie.
+fn voies_sud_ouest(geo: &GeoMap, P: &[Pt]) -> Vec<Voie> {
     let mut rivers: HashMap<String, Vec<Val>> = HashMap::new();
     for r in geo.src.at("rivers").iter() {
         rivers.entry(r.at("name").string()).or_default().push(r);
@@ -191,10 +196,6 @@ pub fn build(geo: &mut GeoMap) -> Val {
         }
         ways.push(Voie { name: w.name, label: LABEL().get_or(w.name, w.name).string(), pts, cum, into: w.into, sea: w.sea, low_water: w.low_water, tidal_s, ports: vec![] });
     }
-    fn voie<'a>(ways: &'a [Voie], nom: &str) -> &'a Voie {
-        ways.iter().find(|w| w.name == nom).unwrap_or_else(|| panic!("KeyError: {nom:?}"))
-    }
-    let P: Vec<Pt> = geo.nodes.iter().map(|n| (n.at("x").f(), n.at("y").f())).collect();
     // ports et quais
     // (`taken`, le set des (lieu, voie) déjà pris en Python, ne refuse jamais rien : chaque paire n'est vue qu'une fois)
     for name in ["Garonne", "Dordogne", "Isle", "Lot", "Baïse", "Midouze", "Adour"] {
@@ -225,6 +226,126 @@ pub fn build(geo: &mut GeoMap) -> Val {
         w.ports = py::sorted_by_key(std::mem::take(&mut w.ports), |p| p.s);
         // deux lieux au même endroit de la rive : on garde l'ordre, rien à faire
     }
+    ways
+}
+
+pub const RIVER_PORT_5: f64 = 1.5; // (géographie 5, en cases de 5 km) une place à moins de 7 km d'un fleuve y a son quai
+
+/// (privé, géographie 5) Les voies d'eau de la carte d'Europe : chaque fleuve de rang 1 (son plus long tracé), navigable entre
+/// les places de ses rives ; et les voies de mer : chaque morceau du réseau des routes que la terre ne relie pas aux
+/// autres (une île) reçoit une traversée, de son port le plus proche d'un port d'un autre morceau, le plus petit d'abord.
+fn voies_europe(geo: &GeoMap, P: &[Pt]) -> Vec<Voie> {
+    let cumul = |pts: &[Pt]| {
+        let mut cum = vec![0.0];
+        for pq in pts.windows(2) {
+            cum.push(cum.last().unwrap() + dist(pq[0], pq[1]));
+        }
+        cum
+    };
+    // shortcut: les noms des voies vivent autant que le programme (une poignée de textes par carte faite) ; à revoir si les cartes se font à la chaîne
+    let nom = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+    let mut ways: Vec<Voie> = vec![];
+    let mut traces: Vec<(String, Vec<Pt>)> = vec![];
+    for r in geo.src.at("rivers").iter() {
+        if r.at("rank") != 1 {
+            continue;
+        }
+        let pts: Vec<Pt> = r.at("pts").iter().map(|p| geo.xy(p.at(1).f(), p.at(0).f())).collect();
+        match traces.iter_mut().find(|t| r.at("name") == t.0.as_str()) {
+            Some(t) => {
+                if pts.len() > t.1.len() {
+                    t.1 = pts
+                }
+            }
+            None => traces.push((r.at("name").string(), pts)),
+        }
+    }
+    for (name, pts) in traces {
+        if pts.len() < 2 {
+            continue;
+        }
+        let cum = cumul(&pts);
+        let mut ports: Vec<Port> = vec![];
+        for (id, &p) in P.iter().enumerate() {
+            let (d, s, q) = _project(&pts, &cum, p);
+            if d <= RIVER_PORT_5 {
+                ports.push(Port { node: id, s, q, spur: vec![] });
+            }
+        }
+        if ports.len() < 2 {
+            continue; // (personne à relier)
+        }
+        let ports = py::sorted_by_key(ports, |p| p.s);
+        ways.push(Voie { name: nom(name.clone()), label: name, pts, cum, into: None, sea: false, low_water: false, tidal_s: None, ports });
+    }
+    // les voies de mer
+    let n = P.len();
+    let mut parent: Vec<usize> = (0..n).collect();
+    fn find(parent: &mut [usize], mut x: usize) -> usize {
+        while parent[x] != x {
+            parent[x] = parent[parent[x]];
+            x = parent[x];
+        }
+        x
+    }
+    for e in geo.edges.iter() {
+        let (ra, rb) = (find(&mut parent, e.at("a").u()), find(&mut parent, e.at("b").u()));
+        parent[ra] = rb;
+    }
+    let port: Vec<bool> = geo.nodes.iter().map(|nd| nd.at("spec").has("port")).collect();
+    loop {
+        let mut comps: Vec<Vec<usize>> = vec![];
+        let mut rang: HashMap<usize, usize> = HashMap::new();
+        for i in 0..n {
+            let r = find(&mut parent, i);
+            let k = *rang.entry(r).or_insert_with(|| {
+                comps.push(vec![]);
+                comps.len() - 1
+            });
+            comps[k].push(i);
+        }
+        if comps.len() <= 1 {
+            break;
+        }
+        let ile = comps.iter().min_by_key(|c| (c.len(), c[0])).unwrap();
+        let r = find(&mut parent, ile[0]);
+        // d'un port de l'île (sinon de n'importe laquelle de ses places) à un port d'ailleurs
+        let d_ici: Vec<usize> = if ile.iter().any(|&a| port[a]) { ile.iter().copied().filter(|&a| port[a]).collect() } else { ile.clone() };
+        let mut best: Option<(f64, usize, usize)> = None;
+        for &a in &d_ici {
+            for b in 0..n {
+                if port[b] && find(&mut parent, b) != r {
+                    let d = dist(P[a], P[b]);
+                    if best.is_none_or(|m| d < m.0) {
+                        best = Some((d, a, b));
+                    }
+                }
+            }
+        }
+        let Some((d, a, b)) = best else { break };
+        let label = format!("Mer : {} – {}", geo.nodes.at(a).at("name").s(), geo.nodes.at(b).at("name").s());
+        ways.push(Voie {
+            name: nom(label.clone()),
+            label,
+            pts: vec![P[a], P[b]],
+            cum: vec![0.0, d],
+            into: None,
+            sea: true,
+            low_water: false,
+            tidal_s: None,
+            ports: vec![Port { node: a, s: 0.0, q: P[a], spur: vec![] }, Port { node: b, s: d, q: P[b], spur: vec![] }],
+        });
+        let rb = find(&mut parent, b);
+        parent[r] = rb;
+    }
+    ways
+}
+
+/// Ajoute les arêtes fluviales et maritimes à geo.edges ; renseigne geo.ways, geo.ports, geo.down_nodes.
+pub fn build(geo: &mut GeoMap) -> Val {
+    let P: Vec<Pt> = geo.nodes.iter().map(|n| (n.at("x").f(), n.at("y").f())).collect();
+    // (géographie 5 : les fleuves de rang 1 et les voies de mer vers les îles ; ailleurs, les voies du Sud-Ouest)
+    let ways: Vec<Voie> = if geo.version == VERSION_EUROPE { voies_europe(geo, &P) } else { voies_sud_ouest(geo, &P) };
     // arêtes
     let mut eid = geo.edges.len();
     let mut new: Vec<Arete> = vec![];

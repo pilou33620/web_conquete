@@ -370,7 +370,7 @@ impl Game {
         if !self.era_id.truthy() {
             self.era_id = self.era().at("id");
         }
-        if d == Date::de(&R::DEPT_DATE()) && self.t > 0.5 {
+        if d == Date::de(&R::DEPT_DATE()) && self.t > 0.5 && !self.europe() {
             self.log(
                 "info",
                 "4 mars 1790 : l'Assemblée crée les départements. Les provinces deviennent la Gironde, \
@@ -459,7 +459,7 @@ impl Game {
             let text = format!(
                 "Votre {} a été {} de la carte : la partie est perdue.",
                 self.dept_word(),
-                if self.departements() { "rayé" } else { "rayée" }
+                if self.departements() || self.europe() { "rayé" } else { "rayée" }
             );
             self.over = dict! {"result" => "defaite", "t" => self.t, "text" => &text};
             self.speed_idx = 0;
@@ -477,7 +477,7 @@ impl Game {
         }
         if ok {
             let years = self.t / 365.25;
-            let tout = if self.factions.len() > 5 { "Toute la France" } else { "Toute l'Aquitaine" };
+            let tout = if self.europe() { "Toute l'Europe" } else if self.factions.len() > 5 { "Toute la France" } else { "Toute l'Aquitaine" };
             let text = format!("{tout} reconnaît votre autorité ({years:.1} ans de campagne).");
             self.over = dict! {"result" => "victoire", "t" => self.t, "text" => &text};
             self.speed_idx = 0;

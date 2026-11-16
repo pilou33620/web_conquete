@@ -1091,7 +1091,8 @@ py_const!(GRANDS, tup!["Garonne", "Dordogne"]);  // les grands fleuves, ceux de 
 /// Python : `_w_crue(g, n, gn, s)`.
 // game/cities.py, lignes 573 à 580
 pub fn _w_crue(g: &Game, n: &Val, gn: &Val, s: &str) -> f64 {
-    if s != "printemps" || !_river(g, n.ati("id")).iter().any(|w| GRANDS().has(&w)) {
+    // (géographie 5 : toutes les voies d'eau douce y sont de grands fleuves)
+    if s != "printemps" || !_river(g, n.ati("id")).iter().any(|w| g.europe() || GRANDS().has(&w)) {
         return 0.0;
     }
     if g.flooded() {
@@ -1394,6 +1395,7 @@ pub fn _fill(g: &Game, nid: i64, s: &str) -> String {
         "Baïse" => "la Baïse",
         "Midouze" => "la Midouze",
         "Adour" => "l'Adour",
+        _ if g.europe() && !r0.is_empty() => "le fleuve",
         _ => "la rivière",
     };
     EV::_format(s, &[("ville", v.clone()), ("de_ville", R::de(&v)), ("a_ville", a_ville), ("riviere", riviere.to_string())])

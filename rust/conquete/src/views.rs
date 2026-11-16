@@ -271,6 +271,13 @@ pub fn from_dict(geo: Rc<GeoMap>, d: &Val) -> Result<Game, String> {
 /// (b['cost'](l), b['days'](l) : R::BUILD_cost, R::BUILD_days.)
 // views.py, lignes 141 à 166
 pub fn rules_payload() -> Val {
+    rules_payload_carte(false)
+}
+
+/// Les règles pour la page d'une carte : ses seuls camps, et les textes de son mode (géographie 5, europe : les pays,
+/// « Europe, 1700 », le mot « pays » ; sinon les départements, et la réponse d'avant les pays, au caractère près).
+pub fn rules_payload_carte(europe: bool) -> Val {
+    let camps = Val::dict_from(R::camps(europe).into_iter().map(|c| { let f = R::FACTIONS().at(&c); (c, f) }).collect());
     let build = Val::dict_from(
         R::BUILD()
             .items()
@@ -292,8 +299,9 @@ pub fn rules_payload() -> Val {
     for (k, sc) in R::SCENARIOS().items() {
         let d = Date::de(&sc.at("date"));
         let dept = d >= Date::de(&R::DEPT_DATE());
+        let sc = if europe { let e = sc.copy(); e.update(&R::SCENARIOS_EUROPE().at(&k)); e } else { sc };
         let names = Val::dict_from(
-            R::FACTIONS()
+            camps
                 .items()
                 .into_iter()
                 .map(|(c, f)| {
@@ -304,7 +312,7 @@ pub fn rules_payload() -> Val {
         );
         scen.set(k, dict! {"title" => sc.at("title"), "campaign" => sc.at("campaign"), "intro" => sc.at("intro"),
                            "year" => d.year, "techs_before" => sc.get("techs_before"),
-                           "word" => if dept { "département" } else { "province" }, "names" => names});
+                           "word" => if europe { "pays" } else if dept { "département" } else { "province" }, "names" => names});
     }
     let techs: Val = R::TECH()
         .values()
@@ -330,8 +338,8 @@ pub fn rules_payload() -> Val {
     );
     let lbl = |d: Val, k: &str| Val::dict_from(d.items().into_iter().map(|(c, v)| (c, v.at(k))).collect());
     dict! {
-        "factions" => R::FACTIONS(), "units" => R::UNITS(), "unit_order" => R::UNIT_ORDER(), "techs" => techs, "fort" => fort,
-        "scenarios" => scen, "scenario_order" => R::SCENARIOS().keys(), "eras" => R::ERAS(), "unit_year" => R::UNIT_YEAR(),
+        "factions" => camps, "units" => R::UNITS(), "unit_order" => R::UNIT_ORDER(), "techs" => techs, "fort" => fort,
+        "scenarios" => scen, "scenario_order" => R::SCENARIOS().keys(), "eras" => if europe { R::ERAS_EUROPE() } else { R::ERAS() }, "unit_year" => R::UNIT_YEAR(),
         "fast_speed" => R::FAST_SPEED, "arms" => arms, "specialty" => R::SPECIALTY(),
         "specialty_capital" => R::SPECIALTY_CAPITAL, "dev" => dev, "branches" => R::BRANCHES(), "man_days" => R::MAN_DAYS,
         "deg_prod" => R::DEG_PROD, "visuals" => R::VISUALS(), "build" => build, "node_base" => R::NODE_BASE(),

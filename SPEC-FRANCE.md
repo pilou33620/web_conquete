@@ -111,6 +111,67 @@ reste `map_cache.json`, celui de la 4 est `map_cache_v4.json`) : Roubaix, Cherbo
 ajoutées à la fin de la liste des places (celles de la 3 gardent leur numéro), avec leurs trajectoires (Roubaix sur la
 courbe de Mulhouse, `cherbourg`, `cannes` ; Dunkerque et Port-Vendres sur la courbe ordinaire).
 
+### Le moteur du mode Europe : fait le 16/11/2026 (géographie 5)
+
+Données (`outils/europe.mjs`, voir `outils/EUROPE.md`) : `game/data/europe.json` (32 pays de 1700, fleuves, lacs),
+`places_europe.json` (1 258 places), `pays_europe.json` (les camps), `epoques_europe.json` (172 trajectoires de villes).
+Le moteur Rust les embarque et sait jouer sur cette carte ; la page (écran de départ, dessin de la carte) est le lot suivant.
+
+- **Carte** (`geo.rs`, `GeoMap::new(5)`) : 867 × 733 cases de 5 km, cache `map_cache_v5.json`, faite en 4 s environ à la
+  première demande (jamais au démarrage du serveur). Le moteur compte en cases et ses règles ne changent pas (une armée
+  fait ses 22 cases par jour, 110 km sur cette carte) : seule la projection tient compte des 5 km (`KX`, `KY` par carte,
+  `km_case`). Relief par lignes de crête et massifs (`_elev5` : Alpes, Pyrénées, Carpates, Balkans, Alpes dinariques,
+  Apennins, Alpes scandinaves, Highlands, Massif central, sierras d'Espagne, Atlas, Taurus, chaîne Pontique, Caucase…),
+  végétation avec les terrains du jeu (`_terrain5` : dunes pour le désert, lande pour la steppe, marais du Pripet, du
+  delta du Danube, des Pays-Bas, taïga et forêts d'Europe centrale, vigne autour de la Méditerranée). Routes : places
+  voisines jusqu'à 100 cases, routes de poste de chaque capitale à ses six plus grandes villes, un bac aux détroits
+  d'une case (Sund, Messine, Petit Belt, Bosphore).
+- **Îles** (`waterways.rs`) : chaque terre que la route ne relie pas reçoit une voie de mer, de port à port (Douvres –
+  Calais, Belfast – Greenock, Palma – Tarragone, La Canée – Nauplie, Larnaca – Tripoli de Syrie, Malte par Gozo et
+  Licata, la Sardaigne par Bonifacio, la Corse par l'île d'Elbe…) : 28 traversées, que les armées prennent comme le
+  cabotage du Sud-Ouest (embarquement, 55 cases par jour, tempêtes). Tout le réseau est d'un seul tenant. Les fleuves de
+  rang 1 (21 : Danube, Rhin, Volga, Nil…) sont navigables entre les places de leurs rives.
+- **Camps** (`rules.rs`) : les 32 pays entrent dans `FACTIONS` après les départements (familles, armées types, IA) ; une
+  partie ne connaît que les camps de sa carte. Le mot du camp est « pays » ; `SCENARIOS_EUROPE` et `ERAS_EUROPE` donnent
+  les textes vus d'Europe (« Europe, 1700 »…), aux mêmes dates et avec les mêmes techniques qu'en France.
+- **Trajectoires** : `pop_curve` lit d'abord `epoques_europe.json` (« Nom|PAYS »), sinon une ville ou une campagne
+  ordinaires d'Europe (`POP_EUROPE`). Les coefficients vont de 0,002 (Saint-Pétersbourg en 1700) à 1 000 (Lodz en 1900) :
+  la population suit, la production n'en prend que la racine quatrième (× 5,6 au plus) : rien à borner.
+- **Ce qui était propre à la France** : chemins de fer générés (dans chaque pays, de la capitale à ses huit plus grandes
+  villes, de 1837 à 1885) ; événements datés (l'histoire de France) remplacés par les seuls événements sans date ; pas
+  de grande crue ni de routes coupées ; crue locale au bord de tout fleuve navigable ; ni spécialités phares des villes,
+  ni voies et bacs du Sud-Ouest ; zones de météo d'après la carte (montagne, côte à deux cases de la mer) ; le chef d'un
+  pays est son « Souverain ». Les étiquettes `arsenal`, `commerce`, `peche` sont gardées à part (`roles` d'une place).
+- **Serveur** : `GET /api/map?geo=4|5` (la carte d'un mode pour l'écran de départ ; 400 sinon), champs `modes` et
+  `km_case` ; `POST /api/new` et `/api/skirmish` avec `geo` (4 par défaut) ; un camp d'une autre carte est refusé (400).
+  Les sauvegardes gardent leur carte (`geo: 5`) et reprennent au redémarrage.
+- **Données corrigées** : la capitale de la Russie est Moscou (`outils/europe/villes.json`). Saint-Pétersbourg, un
+  hameau de 440 âmes en 1700 collé à la frontière, tombait dans les premières années et la Russie finissait absorbée
+  par la Courlande.
+- **Essais** : `rust/conquete/tests/europe.rs` (carte, pays, réseau, trajectoires, parties, 24 mois deux fois à la même
+  graine, sauvegarde, escarmouches, bataille de campagne) et `tests/bancs_serveur.rs` (`mode_europe`, reprise au
+  redémarrage). Les références des géographies 1 à 3 n'ont pas bougé.
+- **Mesures** (release, machine de développement) : carte faite en 4 s ; `/api/map?geo=5` : 7,4 Mo, 1,07 Mo compressé
+  (France : 14,6 Mo et 1,9 Mo) ; un mois de campagne avec 32 IA : 1,5 s vers 1700, 3 à 4 s vers 1850 (France, 89 camps :
+  2 à 3 s en 1700, 3,5 à 4,5 s en 1870).
+
+Reste à faire :
+- **la page** : écran de départ (choix du mode par `modes`, `/api/map?geo=5`), dessin de la carte à 5 km, distances
+  affichées (multiplier par `km_case`), styles des villes par pays, ligne des crédits (Natural Earth, GeoNames) ;
+- **l'équilibre** (une partie de contrôle de 1700 à 1725 : 167 guerres déclarées, 40 traités, 6 pays absorbés, dont la
+  France par la Grande-Bretagne et les Habsbourg par les États pontificaux) : les armées traversent l'Europe
+  en quelques semaines, comme elles traversaient la France (c'est la règle des cases) ; les petits pays (Malte,
+  Wurtemberg) entretiennent 4 000 à 10 000 hommes avec le plancher de vivres d'un camp, sont souvent en disette et
+  entassent 50 000 à 380 000 livres (le cours des vivres, tenu par 32 acheteurs, reste à 0,85, au-dessus du prix que
+  les IA acceptent, 0,78) ; tous les camps partent avec les mêmes réserves et la même armée de 740 hommes, Malte comme
+  la Russie, et Malte finit avec 22 places ;
+- **le champ de bataille** tiré de la carte compte une case pour un kilomètre : en Europe, le terrain des cases voisines
+  et une rivière à 5 km s'y retrouvent à 1 km ;
+- textes restés français : noms de familles et de généraux, « chef-lieu » dans quelques messages, descriptions des
+  techniques (« les vapeurs de la Garonne ») ; les distances en « km » de ces textes sont des cases ;
+- cabotage libre de port à port, mode naval ; spécialités des places d'Europe (blé, fer, bois, vin) ; 4 km par case si
+  le Raspberry suit.
+
 ## Risques
 
 - La taille : carte, mémoire du navigateur, temps de tour du serveur sur Raspberry.

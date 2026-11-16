@@ -443,3 +443,107 @@ fn une_ancienne_sauvegarde_garde_sa_carte() {
     let brut = app.payload(&geo2).0;
     assert_eq!(json::loads(std::str::from_utf8(&brut).unwrap()).unwrap().at("geo"), 1, "la page reçoit la carte de la partie");
 }
+
+// ================================================================== Mode Europe (géographie 5, SPEC-FRANCE.md étape 2)
+
+/// Le contrat de la page : /api/map?geo=, /api/new et /api/skirmish avec « geo », le camp d'une autre carte refusé, la
+/// sauvegarde d'une partie d'Europe rechargée sur sa carte.
+#[test]
+fn mode_europe() {
+    let jeu = Jeu::lancer("europe");
+    let carte = |chemin: &str| -> (u16, Value) {
+        let (st, txt) = jeu.get(chemin);
+        (st, serde_json::from_str(&txt).unwrap())
+    };
+    // sans partie : la carte par défaut, la France ; les deux modes sont annoncés
+    let (st, fr) = carte("/api/map");
+    assert_eq!((st, &fr["geo"], &fr["km_case"]), (200, &json!(4), &json!(1)));
+    assert_eq!(fr["modes"], json!([{"geo": 4, "nom": "France", "mot": "département"}, {"geo": 5, "nom": "Europe", "mot": "pays"}]));
+    assert_eq!(fr["rules"]["factions"].as_object().unwrap().len(), 89);
+    assert_eq!(carte("/api/map?geo=4").1["geo"], json!(4));
+    // la carte d'Europe, faite à la première demande
+    let t = Instant::now();
+    let (st, eu) = carte("/api/map?geo=5");
+    eprintln!("/api/map?geo=5, première demande : {:.1} s", t.elapsed().as_secs_f64());
+    assert_eq!((st, &eu["geo"], &eu["km_case"], &eu["modes"]), (200, &json!(5), &json!(5), &fr["modes"]));
+    assert_eq!(eu.as_object().unwrap().keys().collect::<Vec<_>>(), fr.as_object().unwrap().keys().collect::<Vec<_>>());
+    assert_eq!((eu["map"]["W"].as_i64(), eu["map"]["H"].as_i64(), eu["map"]["nodes"].as_array().unwrap().len()), (Some(867), Some(733), 1258));
+    let camps = eu["rules"]["factions"].as_object().unwrap();
+    assert!(camps.len() == 32 && camps.contains_key("RU") && !camps.contains_key("33"));
+    assert_eq!(eu["rules"]["scenarios"]["1700"]["title"], json!("Europe, 1700"));
+    assert_eq!(eu["rules"]["scenarios"]["1700"]["word"], json!("pays"));
+    assert_eq!(eu["map"]["playable"].as_array().unwrap().len(), 32);
+    let places = eu["skirmish"]["places"].as_array().unwrap();
+    assert!(places.iter().any(|p| p["name"] == "Vienne") && !fr["skirmish"]["places"].as_array().unwrap().iter().any(|p| p["name"] == "Moscou"));
+    // seules les cartes des nouvelles parties se demandent
+    for mauvais in ["/api/map?geo=3", "/api/map?geo=1", "/api/map?geo=6", "/api/map?geo=europe", "/api/map?geo=5.0"] {
+        assert_eq!(jeu.get(mauvais).0, 400, "{mauvais}");
+    }
+    assert_eq!(carte("/api/map?geo=").1["geo"], json!(4), "un paramètre vide ne demande rien");
+    // une partie : le camp doit être de la carte
+    let nouvelle = |corps: Value| -> (u16, Value) {
+        let (st, txt) = jeu.post("/api/new", &corps);
+        (st, serde_json::from_str(&txt).unwrap())
+    };
+    assert_eq!(nouvelle(json!({"dept": "33", "geo": 5})).0, 400, "un département sur la carte d'Europe");
+    assert_eq!(nouvelle(json!({"dept": "FR"})).0, 400, "un pays sur la carte de France");
+    assert_eq!(nouvelle(json!({"dept": "FR", "geo": 4})).0, 400);
+    assert_eq!(nouvelle(json!({"dept": "FR", "geo": 3})).0, 400, "une carte figée");
+    assert_eq!(nouvelle(json!({"dept": "FR", "geo": "5"})).0, 400);
+    let s: Value = serde_json::from_str(&jeu.get("/api/saves").1).unwrap();
+    assert_eq!(s["running"], json!(false), "un refus ne crée pas de partie");
+    assert_eq!(nouvelle(json!({"dept": "ML", "geo": 5, "seed": 3, "scenario": "1700"})), (200, json!({"ok": true, "geo": 5})));
+    let st = jeu.etat();
+    assert_eq!((&st["geo"], &st["word"]), (&json!(5), &json!("pays")));
+    assert_eq!(carte("/api/map").1["geo"], json!(5), "la carte de la partie en cours");
+    assert_eq!(carte("/api/map?geo=4").1["geo"], json!(4), "l'écran de départ peut toujours demander l'autre");
+    // un mois de jeu, puis la sauvegarde
+    assert_eq!(jeu.cmd(json!({"cmd": "tour", "action": "go"}))["ok"], json!(true));
+    let (_st, txt) = jeu.post("/api/save", &json!({"name": "malte"}));
+    assert_eq!(serde_json::from_str::<Value>(&txt).unwrap()["ok"], json!(true), "{txt}");
+    assert_eq!(nouvelle(json!({"dept": "33", "seed": 1})), (200, json!({"ok": true, "geo": 4})));
+    assert_eq!(carte("/api/map").1["geo"], json!(4));
+    let (_st, txt) = jeu.post("/api/load", &json!({"name": "malte"}));
+    let r: Value = serde_json::from_str(&txt).unwrap();
+    assert_eq!((&r["ok"], &r["geo"]), (&json!(true), &json!(5)), "{txt}");
+    assert_eq!(jeu.etat()["geo"], json!(5));
+    // le mode Bataille sur la carte d'Europe
+    let bataille = |corps: Value| -> Value { serde_json::from_str(&jeu.post("/api/skirmish", &corps).1).unwrap() };
+    let unites = json!({"ligne": 2, "cavalerie": 1, "artillerie": 1});
+    let r = bataille(json!({"me": "PR", "foe": "AU", "geo": 5, "era": "1790", "seed": 4, "units": unites}));
+    assert_eq!(r["ok"], json!(true), "{r}");
+    let (st, txt) = jeu.get(&format!("/api/tactic_map?bid={}", r["bid"].as_str().unwrap()));
+    assert_eq!(st, 200, "{txt}");
+    assert_eq!(bataille(json!({"me": "33", "geo": 5, "units": unites}))["ok"], json!(false), "un département en Europe");
+    assert_eq!(bataille(json!({"me": "PR", "units": unites}))["ok"], json!(false), "un pays en France");
+    assert_eq!(jeu.post("/api/skirmish", &json!({"me": "PR", "geo": 2, "units": unites})).0, 400);
+}
+
+/// Une partie d'Europe reprend au redémarrage du serveur (sauvegarde automatique), sur sa carte.
+#[test]
+fn une_partie_d_europe_reprend_au_redemarrage() {
+    let _r = racine_temp();
+    let europe = geo(conquete::geo::VERSION_EUROPE);
+    let mut app = app_vide();
+    app.geos.insert(5, europe.clone());
+    app.game = Some(Box::new(Game::new(europe.clone(), "SE", &Val::from("normal"), &Val::from(2), &Val::from("1700"))));
+    let avant = V::to_dict(app.game.as_deref_mut().unwrap());
+    app.write_save(AUTOSAVE, true).unwrap();
+    let mut apres = app_vide(); // (le serveur relancé : sa carte par défaut, aucune partie)
+    apres.geos.insert(5, europe.clone());
+    apres.load_autosave();
+    let g = apres.game.as_deref_mut().expect("la partie n'a pas été reprise");
+    assert_eq!((g.geo.version, g.player.as_str()), (5, "SE"));
+    // (le chargement complète la sauvegarde, emplacements des places, revenus du jour : on compare ce qui fait la partie)
+    let apres_d = V::to_dict(g);
+    for k in ["player", "seed", "t", "uid", "seq", "events", "scenario", "geo", "diplo", "market", "tour"] {
+        assert_eq!(json::dumps(&apres_d.at(k)), json::dumps(&avant.at(k)), "{k}");
+    }
+    let places = |d: &Val| d.at("nodes").iter().map(|n| (n.ats("owner"), n.atf("pop"), n.atf("milice"), n.at("garrison").len())).collect::<Vec<_>>();
+    assert_eq!(places(&apres_d), places(&avant));
+    assert_eq!(apres_d.at("armies").keys(), avant.at("armies").keys());
+    let geo2 = g.geo.clone();
+    let brut = apres.payload(&geo2).0;
+    let p = json::loads(std::str::from_utf8(&brut).unwrap()).unwrap();
+    assert_eq!((p.ati("geo"), p.ati("km_case"), p.at("rules").at("factions").len()), (5, 5, 32));
+}

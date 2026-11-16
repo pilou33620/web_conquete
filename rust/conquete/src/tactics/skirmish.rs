@@ -226,7 +226,10 @@ pub fn _count(units: &Val, allowed: &Val) -> (Val, String) {
 /// `randrange(1 << 30)` (bid).
 pub fn new(geo: Rc<GeoMap>, body: &Val) -> (Option<Game>, String) {
     let me = body.get("me");
-    if !R::FACTIONS().has(&me) {
+    // (les camps de cette carte : les pays sur celle d'Europe, les départements sur les autres)
+    let europe = geo.version == crate::geo::VERSION_EUROPE;
+    let de_la_carte = |c: &Val| R::FACTIONS().has(c) && R::PAYS_EUROPE().has(c) == europe;
+    if !de_la_carte(&me) {
         return (None, "Choisissez votre camp.".to_string());
     }
     let me = me.string();
@@ -245,8 +248,8 @@ pub fn new(geo: Rc<GeoMap>, body: &Val) -> (Option<Game>, String) {
         _ => panic!("TypeError: graine invalide {}", seed.repr()),
     };
     let mut foe = body.get("foe");
-    if !R::FACTIONS().has(&foe) || foe == me {
-        let cs: Vec<Val> = R::FACTIONS().keys().into_iter().filter(|c| *c != me).collect();
+    if !de_la_carte(&foe) || foe == me {
+        let cs: Vec<Val> = R::camps(europe).into_iter().filter(|c| *c != me).collect();
         foe = rng.choice(&cs);
     }
     let foe = foe.string();

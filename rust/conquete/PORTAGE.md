@@ -1,6 +1,6 @@
 # Portage du moteur Python en Rust
 
-## État (15/11/2026)
+## État (16/11/2026)
 
 **Tout est porté**, le serveur et les outils compris, et le jeu se lance par l'exécutable Rust. Ce qui a été vérifié,
 au bit près, contre le Python d'origine :
@@ -10,6 +10,18 @@ au bit près, contre le Python d'origine :
 - la campagne : 29 campagnes de référence (310 mois) et 24 tirées au sort (439 mois) ;
 - les 383 bancs du jeu (`tests/test_*.py`), portés dans `tests/bancs_*.rs` ;
 - `/api/map` : la réponse du serveur est identique à l'octet.
+
+**Depuis le portage, sans jumeau Python** (16/11/2026) : la **géographie 5**, la carte du mode « Europe »
+(`SPEC-FRANCE.md`, étape 2). Elle n'a jamais existé en Python : rien ne la compare à un jumeau, ce sont ses propres
+essais qui la tiennent (`tests/europe.rs`, `mode_europe` dans `tests/bancs_serveur.rs`). Ce qu'elle a changé dans le
+moteur est gardé par `geo.version == 5` (`VERSION_EUROPE`, `Game::europe()`), ou par l'appartenance d'un camp aux pays
+(`R::PAYS_EUROPE`) : `geo.rs` (projection par carte `KX`, `KY`, `km_case` ; `_elev5`, `_terrain5`, routes), `waterways.rs`
+(`voies_europe` : fleuves de rang 1, voies de mer des îles), `rails.rs` (`_lignes_europe`), `rules.rs` (les pays dans
+`FACTIONS`, `SCENARIOS_EUROPE`, `ERAS_EUROPE`, `EPOQUES_EUROPE`, `camps()`), `views.rs` (`rules_payload_carte`),
+`serveur.rs` (`?geo=`, `geo` dans `/api/new` et `/api/skirmish`, `modes`, `km_case`). Les géographies 1 à 4 ne changent pas
+d'un bit : toutes les références des cartes, des campagnes et des batailles sont restées telles quelles. Références mises
+à jour, parce que les tables s'étendent : `rules.json` (`FACTIONS`, `PROVINCES`, `MAISON_NOMS` : 32 pays de plus) et
+`serveur.json` (`/api/map` : les champs `modes` et `km_case`, 106 octets de plus).
 
 **Maintenant que le Python est retiré :**
 

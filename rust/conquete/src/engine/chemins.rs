@@ -455,7 +455,7 @@ impl Game {
                 }
                 let legs = self.plan_route(a, node.i(), block);
                 if !legs.truthy() {
-                    let terr = if self.departements() { "d’un département" } else { "d’une province" };
+                    let terr = if self.europe() { "d’un pays" } else if self.departements() { "d’un département" } else { "d’une province" };
                     return err(&format!("Aucun chemin par les routes (territoire {terr} en paix ?). Essayez à travers champs."));
                 }
                 return (legs, dict! {"node" => &node}, Val::None);

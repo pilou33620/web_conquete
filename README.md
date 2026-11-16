@@ -310,6 +310,17 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   carte gravée de Cassini jusqu'en 1817 (papier, hachures, bois en petits arbres, lignes d'eau le long des côtes,
   noms à l'encre), puis la carte d'état-major aquarellée (bois vert-jaune, vignes lie-de-vin, grandes routes ocre).
 
+### Le mode Europe (en cours)
+
+Un second mode de jeu, par pays, sur une carte de l'Europe et de l'Afrique du Nord vers 1700 (`SPEC-FRANCE.md`, étape 2) :
+32 pays (France, Grande-Bretagne, Espagne, Monarchie de Habsbourg, Russie, Empire ottoman, Prusse, Suède, Venise, les
+régences d'Alger, de Tunis et de Tripoli, l'Ordre de Malte…), 1 258 places, des cases de 5 km (la géographie 5 du
+moteur). Le serveur sait déjà créer, jouer, sauvegarder une partie et livrer une bataille sur cette carte
+(`POST /api/new` avec `"geo": 5`, `GET /api/map?geo=5`) ; l'écran de départ et le dessin de la carte dans la page
+restent à faire. Les règles sont celles de la campagne de France (elles comptent en cases) ; les îles se gagnent par
+des traversées de port à port, les grands fleuves sont navigables, chaque pays a ses routes de poste et, au XIXe
+siècle, ses chemins de fer.
+
 ### Armées et terrain
 - Infanterie de ligne, infanterie légère (voltigeurs), cavalerie, artillerie. Chaque régiment a ses effectifs, son moral et son expérience.
 - **Par les routes** : environ 21 km par jour au printemps (infanterie), les routes royales encore plus. Les grands fleuves
@@ -883,6 +894,7 @@ node --test tests/*.test.mjs                     # l'interface seule
 | Fichier | Ce qu'il vérifie |
 |---|---|
 | `rust/conquete/tests/<module>.rs` (`geo.rs`, `rules.rs`, `tours.rs`, `batailles.rs`, `campagnes.rs`…) | le portage au bit près : chaque module rend exactement ce que rendait le Python d'origine, figé dans `rust/conquete/tests/references/` ; batailles et campagnes entières rejouées à la même graine (voir `rust/conquete/PORTAGE.md`) |
+| `rust/conquete/tests/europe.rs` | le mode Europe (géographie 5) : la carte se fait et se relit, 32 pays, réseau d'un seul tenant (îles par mer), trajectoires des villes, parties aux quatre débuts, 24 mois avec 32 IA deux fois à la même graine, sauvegarde, escarmouches et bataille de campagne |
 | `rust/conquete/tests/outils.rs` | les outils (voir « Outils ») : même sortie que leurs originaux Python sur un cas court |
 | `rust/conquete/tests/bancs_bataille.rs` | ordres propres à chaque arme (acceptés ou refusés), salve puis baïonnette, harcèlement, canons sans munitions, régiment anéanti, bataille jusqu'au bout et rechargement en plein combat ; « Donner mes ordres » de bout en bout (choix verrouillés, redéploiement, heure, moment décisif, récapitulatif), flèches de manœuvre, plan de la position, vitesses du film, mode Bataille sur ordres ; « Commander la bataille » (déploiement, ordre de marche, vitesses, fin automatique et reprise, décrocher, sauvegarde), banc de quelques jeux d'ordres ; canons camouflés dans un bois |
 | `rust/conquete/tests/bancs_campagne.rs` | votre tour puis celui des IA (d'un coup, arrêts, reprise), villes neutres, temps en tours (production, recherche, échéances, actions d'armée, sièges, arrivée), retraite une fois par tour, dettes et événements, prix du marché, sauvegarde (IA comprises) |
@@ -925,6 +937,7 @@ Des exécutables à part, à lancer depuis la racine du jeu : dans `bin/` une fo
 ```bash
 bin/banc_ia --graines 2 --epoques 1790 --lieux bataille   # banc de l'IA de bataille, batailles IA contre IA (--ordres, --tweak, --journal)
 bin/simuler --parties 6 --epoque 1790 --annees 30 --proc 2 # banc d'équilibre de la campagne (voir plus haut)
+bin/simuler --geo 5 --parties 1 --epoque 1700 --annees 25 --suivi ML,RU --recit 1   # une partie de contrôle du mode Europe : guerres, traités, places et trésor de Malte et de la Russie, année par année
 bin/bilan --depuis 2026-10-12                              # bilan du journal des batailles (logs/batailles.jsonl)
 bin/carte_hex > web/js/dev/carte-hex-data.js               # la carte sur une grille d'hexagones (maquette web/js/dev/carte-hex.html)
 bin/bataille_hex > web/js/dev/bataille-hex-data.js         # des batailles sur hexagones (maquette web/js/dev/bataille-hex.html)
@@ -936,3 +949,11 @@ Contours des départements et des communes : [france-geojson](https://github.com
 Population des communes : INSEE via [@etalab/decoupage-administratif](https://github.com/etalab/decoupage-administratif).
 Fleuves et lacs : [Natural Earth](https://www.naturalearthdata.com/) (domaine public), complétés à la main pour l'Isle, la Vézère,
 la Dronne, les gaves, la Midouze, la Leyre, la Nive et l'estuaire de la Gironde.
+
+Mode Europe (`game/data/europe.json`, `places_europe.json`, `pays_europe.json`, `epoques_europe.json`, faits par
+`outils/europe.mjs`, voir `outils/EUROPE.md`) : contours des pays, fleuves et lacs de
+[Natural Earth](https://www.naturalearthdata.com/) (domaine public) ; régions de la
+Highcharts Map Collection (`@highcharts/map-collection` 2.3.3, déjà utilisée pour la France) pour les frontières d'époque ;
+coordonnées des villes de [GeoNames](https://www.geonames.org/) (CC BY 4.0). Frontières de 1700-1750, populations et
+caractère des pays : des estimations écrites à la main. La ligne d'attribution OpenStreetMap de la page concerne la
+carte de France (rivières et places du Sud-Ouest) ; la carte d'Europe ne reprend rien d'OpenStreetMap.

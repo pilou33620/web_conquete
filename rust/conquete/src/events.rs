@@ -1025,7 +1025,9 @@ pub fn _ord(date: &Val) -> i64 {
 pub fn tick(g: &mut Game, d: Date) {
     let today = d.toordinal();
     let done = g.ev_done.clone();
-    for ev in HIST().iter() {
+    // (géographie 5 : l'histoire datée est celle de la France et de ses provinces ; les pays d'Europe n'ont que les
+    // événements sans date, plus bas)
+    for ev in (if g.europe() { list![] } else { HIST() }).iter() {
         if done.has(ev.at("id")) {
             continue;
         }

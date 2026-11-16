@@ -161,9 +161,17 @@ fn _v(m1: f64, m2: f64, hue: f64) -> f64 {
 }
 
 
+// (géographie 5, SPEC-FRANCE.md étape 2) les pays d'Europe et d'Afrique du Nord de 1700, par code de deux lettres, avec
+// les clés d'un camp : game/data/pays_europe.json, écrit par outils/europe.mjs
+py_const!(PAYS_EUROPE, py::json::loads(include_str!("../../../game/data/pays_europe.json")).expect("pays_europe.json"));
 py_const!(FACTIONS, {
     let FACTIONS = FACTIONS_base();
     _generer_departements(&FACTIONS);
+    // (les pays à la fin : les départements gardent leur rang ; une partie ne connaît que les camps de sa carte)
+    for (c, p) in PAYS_EUROPE().items() {
+        assert!(!FACTIONS.has(&c), "pays_europe.json : le code {c} est celui d'un département");
+        FACTIONS.set(c, p);
+    }
     FACTIONS
 });
 
@@ -748,6 +756,45 @@ py_const!(SCENARIOS, dict!{
                  "intro" => concat!("La France déclare la guerre à la Prusse. Chemins de fer et fusils Chassepot : ",
                        "un autre siècle commence."), "techs_before" => 1866}
 });
+// (géographie 5) les époques et les débuts de partie vus d'Europe : mêmes clés, mêmes dates et mêmes techniques que
+// ERAS et SCENARIOS (le moteur lit celles-là) ; seuls les textes changent
+py_const!(ERAS_EUROPE, list![
+    dict!{"id" => "louis14", "year" => 1700, "name" => "Le Grand Siècle finissant",
+         "desc" => "Louis XIV, Pierre le Grand, Charles XII : mousquets à mèche et à silex, derniers piquiers, places de Vauban et de Coehoorn."},
+    dict!{"id" => "lumieres", "year" => 1715, "name" => "Le siècle des Lumières",
+         "desc" => "Guerres de succession et guerre de Sept Ans : l’équilibre des puissances, le négoce des ports, les despotes éclairés."},
+    dict!{"id" => "revolution", "year" => 1789, "name" => "La Révolution",
+         "desc" => "La France en révolution contre les rois coalisés : levée en masse, la nation en armes."},
+    dict!{"id" => "empire", "year" => 1804, "name" => "L’Europe de Napoléon",
+         "desc" => "D’Austerlitz à Moscou : les aigles traversent le continent, l’Espagne et la Russie se soulèvent."},
+    dict!{"id" => "restauration", "year" => 1815, "name" => "Le Concert européen",
+         "desc" => "Le congrès de Vienne redessine les frontières ; premiers bateaux à vapeur, premiers chemins de fer."},
+    dict!{"id" => "second_empire", "year" => 1848, "name" => "Le printemps des peuples",
+         "desc" => "Révolutions de 1848, guerre de Crimée, unités italienne et allemande : chemins de fer et télégraphe électrique."},
+    dict!{"id" => "troisieme", "year" => 1870, "name" => "L’âge des empires",
+         "desc" => "Guerre de 1870, armées de conscrits, acier et canons se chargeant par la culasse."}
+]);
+py_const!(SCENARIOS_EUROPE, dict!{
+    "1700" => dict!{"title" => "Europe, 1700", "campaign" => "Grande campagne 1700 – 1899",
+                 "intro" => concat!("Le roi d’Espagne va mourir sans héritier et Charles XII de Suède entre en guerre : menez votre pays à travers deux siècles, ",
+                       "de la Succession d’Espagne à l’âge des empires. Le plus prestigieux en 1900 l’emporte.")},
+    "1790" => dict!{"title" => "Europe, 1790", "campaign" => "Depuis la Révolution",
+                 "intro" => concat!("La Révolution ébranle la France et les rois s’inquiètent. Choisissez votre pays, ralliez ses campagnes, ",
+                       "puis prenez les capitales voisines par les armes, le commerce ou la diplomatie.")},
+    "1813" => dict!{"title" => "Europe, 1813", "campaign" => "La fin de l’Empire",
+                 "intro" => "La Grande Armée revient de Russie ; l’Europe entière se lève pour la bataille des Nations."},
+    "1870" => dict!{"title" => "Europe, 1870", "campaign" => "La guerre de 1870",
+                 "intro" => concat!("La France déclare la guerre à la Prusse. Chemins de fer et fusils se chargeant par la culasse : ",
+                       "un autre siècle commence.")}
+});
+// (les modes de jeu, pour l'écran de départ : la carte, son nom, le mot d'un camp)
+py_const!(MODES, list![dict!{"geo" => 4, "nom" => "France", "mot" => "département"}, dict!{"geo" => 5, "nom" => "Europe", "mot" => "pays"}]);
+
+/// Les camps d'une carte, dans l'ordre de FACTIONS : les pays (géographie 5) ou les départements (les autres).
+pub fn camps(europe: bool) -> Vec<Val> {
+    FACTIONS().keys().into_iter().filter(|c| PAYS_EUROPE().has(c) == europe).collect()
+}
+
 // traités : un camp dont le chef-lieu tombe signe la paix au lieu de disparaître, sauf s'il est déjà écrasé
 pub const TREATY_TRUCE: i64 = 60;   // trêve imposée par un traité (tours : cinq ans)
 pub const TREATY_CRUSHED: f64 = 0.25;   // absorbé si ce camp ne tient plus que ce quart de ses places de départ (ou 3 places)
@@ -995,8 +1042,19 @@ py_const!(POP_CURVES, {
 });
 
 
+// (géographie 5) les trajectoires des villes d'Europe, par « nom|pays » : [[année, population / celle de 1790, étiquette de
+// POP_WHY], …] (game/data/epoques_europe.json, outils/europe.mjs) ; les autres places : une ville, une campagne ordinaires
+// d'un continent dont la population double au XIXe siècle
+py_const!(EPOQUES_EUROPE, py::json::loads(include_str!("../../../game/data/epoques_europe.json")).expect("epoques_europe.json"));
+py_const!(POP_EUROPE, dict!{"ville" => _town(1.35, 1.9, "ville"), "rural" => _rural(1871, 1.4, 1.5, "plein", "plein")});
+
 /// Trajectoire de population d'un lieu (nœud de la carte).
 pub fn pop_curve(gn: &Val) -> Val {
+    if PAYS_EUROPE().has(gn.at("dept")) {
+        // (géographie 5 : jamais les tables de la France, même pour Bordeaux ou Paris)
+        let cv = EPOQUES_EUROPE().get(format!("{}|{}", gn.at("name").s(), gn.at("dept").s()).as_str());
+        return cv.or_else(|| POP_EUROPE().at(if gn.at("type") == "village" { "rural" } else { "ville" }));
+    }
     let mut key = POP_PLACE().get(format!("{}|{}", gn.at("name").s(), gn.at("dept").s()).as_str());
     if key.is_none() {
         key = POP_PLACE().get(gn.at("name"));

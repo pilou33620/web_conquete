@@ -46,3 +46,11 @@ de 25 km de la mer, d'un lac ou d'un fleuve ; aucun point habité à plus de 150
 le cadre, finis à la mer, à un lac, à un confluent ou au bord du cadre ; époques : place connue, 4 à 8 points de 1700 à
 1900, 1790 = 1, étiquettes du jeu ; pays : clés de `mods` lues par le moteur, capitale existante, couleurs distinctes
 entre voisins ; 900 à 1 400 places ; les quatre fichiers relus comme du JSON.
+
+## Dans le jeu
+
+Le moteur Rust embarque les quatre fichiers à la compilation (`include_str!` : `geo.rs`, `rules.rs`) : après un
+lancement de l'outil, on recompile. La carte du jeu (géographie 5, `GeoMap::new(5)`) se refait alors toute seule, en
+4 s environ : l'empreinte de son cache `game/data/map_cache_v5.json` suit `europe.json` et `places_europe.json`. Quand
+c'est le calcul de la carte qui change (relief, végétation, routes : `geo.rs`), on augmente `GEN_EUROPE`.
+`cargo test -p conquete --test europe` vérifie la carte, les pays et les trajectoires.
