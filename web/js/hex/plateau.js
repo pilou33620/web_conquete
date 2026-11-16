@@ -315,14 +315,28 @@ export class Plateau {
       if (t.t === 'plaine' && !t.riv) {   // champs en lanières, et parfois une ferme à cour avec sa haie
         const a = hache(t.q >> 1, t.r >> 1, 3) * Math.PI;
         // (le maïs de Chalosse et du Béarn, haut et vert ; la luzerne et la betterave de l'assolement)
-        for (let i = 0; i < 4 + (pays & 2 ? 1 : 0); i++) {
-          const [x, z] = rr(), mais = pays & 1 && i % 2 === 0, cul = mais ? 0x8fae3e : choix(pays & 2 ? [0xe3c75b, 0xa9c457, 0x7f9c4f, 0x4f8a3a, 0xb6a46a] : [0xe3c75b, 0xd6b24a, 0xa9c457, 0xc9a55a]), h = mais ? 1.1 : 0.5;
-          put(L, boite(entre(3, 5), h, entre(1.6, 2.6)), col(cul), x, y + h / 2, z, a + entre(-0.2, 0.2), 0.15);
-          if (mais) for (let k = -1; k <= 1; k++) put(L, boite(entre(3, 4.6), 0.12, 0.12), 0xd6c25a, x + Math.sin(a) * k * 0.6, y + h + 0.06, z + Math.cos(a) * k * 0.6, a, 0);   // panicules
+        // un parcellaire : trois lanières côte à côte, chacune coupée en deux parcelles ; le blé se reconnaît à son or,
+        // ses sillons clairs et ses gerbes ; labours bruns, prés verts, orge pâle (maïs, luzerne et betterave selon l'époque)
+        const ux = Math.cos(a), uz = -Math.sin(a), vx = Math.sin(a), vz = Math.cos(a);
+        const cultures = ['ble', 'ble', 'ble', 'labour', 'pre', 'orge', ...(pays & 1 ? ['mais', 'mais'] : []), ...(pays & 2 ? ['luzerne', 'betterave'] : [])];
+        for (const k of [-1, 0, 1]) {
+          const demi = k ? 5 : 7.6, coupe = entre(-0.35, 0.35) * demi;
+          for (const [u0, u1] of [[-demi, coupe - 0.15], [coupe + 0.15, demi]]) {
+            const cu = choix(cultures), l = u1 - u0, m = (u0 + u1) / 2, x = t.x + ux * m + vx * k * 4.8, z = t.z + uz * m + vz * k * 4.8;
+            const [cul, h] = { ble: [0xe8c44e, 0.42], labour: [0x9c7b50, 0.08], pre: [0x86c04a, 0.1], orge: [0xd3d272, 0.3], mais: [0x7fa63a, 0.9], luzerne: [0x4f8a3a, 0.2], betterave: [0x7f9c4f, 0.22] }[cu];
+            put(L, boite(l, h, 4.3), col(cul), x, y + h / 2, z, a);
+            // les rangs : sillons du labour, andains clairs du blé, panicules du maïs
+            if (cu === 'ble' || cu === 'labour' || cu === 'mais') for (let r = -1; r <= 1; r++) put(L, boite(l - 0.4, 0.05, 0.3), col(cu === 'ble' ? 0xf4dc7c : cu === 'mais' ? 0xd6c25a : 0x7c5e3a), x + vx * r * 1.3, y + h + 0.02, z + vz * r * 1.3, a);
+            if (cu === 'ble' && rnd() < 0.5) for (let g2 = 0; g2 < 3; g2++) put(L, cone(0.32, 0.7, 5), col(0xd9a93a), x + ux * entre(-0.4, 0.4) * l + vx * entre(-1.6, 1.6), y + h + 0.35, z + uz * entre(-0.4, 0.4) * l + vz * entre(-1.6, 1.6));   // gerbes
+          }
         }
         if (t.jeu && rnd() < 0.3) this.ferme(L, t, rr(0.45));
       }
       if (t.t === 'prairie') {
+        // l'herbe : des plaques plus sombres et plus claires, une haie de bocage, quelques bêtes au pré
+        for (let i = 0; i < 4; i++) { const [x, z] = rr(0.7), b = cyl(entre(1.6, 3), entre(1.6, 3), 0.05, 9); b.scale(1.4, 1, 0.8); put(L, b, col(choix([0x62b23c, 0x86cf50, 0x6ab840])), x, y + 0.03 + i * 0.004, z, rnd() * 3); }
+        if (!t.riv) { const [x, z] = rr(0.3), ha = rnd() * 3; for (let k = -3; k <= 3; k++) put(L, sphere(0.55, 0), col(0x3f8a34), x + Math.cos(ha) * k * 0.95, y + 0.35, z + Math.sin(ha) * k * 0.95); }
+        if (t.jeu && rnd() < 0.6) for (let i = 0; i < 3; i++) { const [x, z] = rr(0.55); put(L, boite(0.75, 0.42, 0.36), choix([0xf2efe6, 0x7a5236, 0x2e2a28]), x, y + 0.42, z, rnd() * 3); }
         if (!t.riv && rnd() < 0.5) { const [x, z] = rr(); M.arbre(L, x, y, z, 0.8); }
         if (t.riv) for (let i = 0; i < 3; i++) { const [x, z] = rr(0.7); M.arbre(L, x, y, z, 0.75, 'peuplier'); }   // peupliers au bord de l'eau
         if (t.jeu && !t.riv && rnd() < 0.25) this.ferme(L, t, rr(0.45));
