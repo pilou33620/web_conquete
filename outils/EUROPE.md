@@ -54,3 +54,12 @@ lancement de l'outil, on recompile. La carte du jeu (géographie 5, `GeoMap::new
 4 s environ : l'empreinte de son cache `game/data/map_cache_v5.json` suit `europe.json` et `places_europe.json`. Quand
 c'est le calcul de la carte qui change (relief, végétation, routes : `geo.rs`), on augmente `GEN_EUROPE`.
 `cargo test -p conquete --test europe` vérifie la carte, les pays et les trajectoires.
+
+## Ce qui est écrit dans le moteur, pas dans les données
+
+Les moyens de départ des pays (armée de paix réelle à chaque début, trésor : `MOYENS_EUROPE`), leurs maisons
+(`MAISONS_EUROPE`) et les noms de leurs familles culturelles (`CULTURES`) sont dans `rust/conquete/src/rules.rs` ; les
+bacs nommés des détroits (`BACS_5`, Grand et Petit Belt, Øresund) dans `geo.rs`, les traversées de mer connues
+(`MERS_5`, Stockholm – Mariehamn – Åbo, Kiel – Copenhague, Stralsund – Ystad) dans `waterways.rs`. Un nom de place qui
+change dans `outils/europe/villes.json` doit y être changé aussi (les essais de `tests/europe.rs` le signalent). Un pays
+ajouté à `PAYS` doit entrer dans `MOYENS_EUROPE` et `MAISONS_EUROPE` (sans quoi il part avec les moyens d'un département).

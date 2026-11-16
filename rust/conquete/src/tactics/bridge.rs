@@ -352,7 +352,7 @@ pub fn make_spec(g: &mut Game, bt: &Val) -> Val {
     let mut lieu = Val::None; // (bataille rangée tout près d'un lieu : son état, pour dessiner la ville de son plan, terrain_ville)
     if place.is_none() {
         let (d, nid) = py::min_by_key(g.geo.nodes.iter().map(|gn| (py::hypot(gn.atf("x") - bx, gn.atf("y") - by), gn.ati("id"))), |p| *p).unwrap();
-        if d < 1.3 {
+        if d < 1.3 / g.geo.km_case {
             let n = g.nodes.at(nid);
             lieu = dict! {"nid" => nid, "f" => n.at("fort"), "pop" => py::int_v(&n.get_or("pop", g.geo.nodes.at(nid).at("pop0"))),
                 "d" => n.get_or("dev", 0)};

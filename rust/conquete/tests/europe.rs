@@ -163,7 +163,7 @@ fn trente_deux_pays_une_capitale_chacun_et_tout_est_relie() {
     }
     for nom in ["Paris", "Moscou", "Constantinople", "Lisbonne", "Naples", "Alger", "Le Caire", "Messine", "Copenhague", "Stockholm"] {
         let id = geo.by_name.at(nom).u();
-        assert!(par_route.contains(&id) || nom == "Copenhague" || nom == "Stockholm" || nom == "Messine", "{nom} n'est pas relié au continent par la route");
+        assert!(par_route.contains(&id), "{nom} n'est pas relié au continent par la route (bacs compris)");
         assert!(geo.adj.at(id).len() >= 1);
     }
     // les voies de mer sont des arêtes d'eau, de port à port ; les fleuves de rang 1 sont navigables
@@ -238,12 +238,18 @@ fn une_partie_pour_trois_pays_a_chaque_debut() {
             for (c, f) in g.factions.items() {
                 let cap = g.capital_of(c.s());
                 assert_eq!(g.nodes.at(&cap).at("owner"), c, "{c} tient sa capitale");
-                assert_eq!(g.nodes.at(&cap).at("garrison").len(), 3);
+                assert!(g.nodes.at(&cap).at("garrison").len() >= 1, "{c} : une garnison à sa capitale");
                 assert!(g.armies.values().iter().any(|a| a.at("owner") == c), "{c} a son armée");
                 assert!(f.ati("start_nodes") >= 1 && f.at("maison").at("chef").ats("nom").len() > 3);
                 assert!(f.at("income").values().iter().all(|v| v.f().is_finite()), "{c} : revenus");
             }
             assert_eq!(g.fname(pays), R::FACTIONS().at(pays).ats("name"));
+            // des noms de chez eux, écrits à la française : maisons et généraux russes en Russie, français en France
+            for a in g.armies.values().iter().filter(|a| a.at("owner") == "RU" && a.get("gen").truthy()) {
+                assert!(R::surnames("RU").has(a.at("gen").at("name")) && R::surnames("RU").has("Souvorov"), "{}", a.at("gen").at("name"));
+            }
+            assert!(R::MAISON_NOMS().at("RU").has(g.factions.at("RU").at("maison").at("nom")));
+            assert!(R::prenoms("RU").has("Pierre") && R::surnames("FR").is(&R::SURNAMES()) && R::surnames("33").is(&R::SURNAMES()));
             let journal = json::dumps(&g.events);
             assert!(!journal.contains("département") && !journal.contains("chefs-lieux"), "{pays} {debut} : {journal}");
             // les lignes ouvertes avant le début de la partie le sont déjà (les premières : 1837)
@@ -373,6 +379,20 @@ fn les_regles_d_une_carte_ne_donnent_que_ses_camps() {
     for (a, b) in eu.at("eras").iter().zip(fr.at("eras").iter()) {
         assert_eq!((a.at("id"), a.at("year")), (b.at("id"), b.at("year")));
     }
+    // les distances des règles sont des cases : 5 km en Europe (le texte de la France ne change pas) ; la portée des
+    // canons La Hitte se compte sur le champ de bataille, en vrais kilomètres
+    let desc = |p: &Val, id: &str| p.at("techs").iter().find(|t| t.at("id") == id).unwrap().ats("desc");
+    for (id, fr_, eu_) in [("hussards", "vision +6 km", "vision +30 km"), ("aerostiers", "vision +3 km", "vision +15 km"), ("chappe", "villes +10 km", "villes +50 km"),
+        ("telegraphe", "villes +15 km, des armées +4 km", "villes +75 km, des armées +20 km"), ("telephone", "villes +10 km", "villes +50 km"), ("lahitte", "à 3 km", "à 3 km"),
+        ("vauban", "dans le chef-lieu", "dans la capitale")] {
+        assert!(desc(&fr, id).contains(fr_) && desc(&eu, id).contains(eu_), "{id} : {} / {}", desc(&fr, id), desc(&eu, id));
+    }
+    assert!(eu.at("spy").at("espionner").ats("desc").contains("(70 km)") && fr.at("spy").at("espionner").ats("desc").contains("(14 km)"));
+    assert!(eu.at("build").at("depot").ats("desc").contains("moins de 150 km") && fr.at("build").at("depot").ats("desc").contains("moins de 30 km"));
+    let depot = |p: &Val| p.at("cities").at("chains").at("depot").at("levels").at(0).ats("txt");
+    assert!(depot(&eu).contains("150 km") && depot(&fr).contains("30 km"), "{}", depot(&eu));
+    assert!(R::SPY().at("espionner").ats("desc").contains("(14 km)"), "la table des règles n'est pas touchée");
+    assert_eq!(V::km_carte("vision +6 km, à 3 km, (14 km), à moins de 30 km, 1 500 mètres", 5.0), "vision +30 km, à 3 km, (70 km), à moins de 150 km, 1 500 mètres");
     // chaque pays a tout ce qu'un camp reçoit
     for c in R::camps(true) {
         let f = R::FACTIONS().at(&c);
@@ -385,7 +405,8 @@ fn les_regles_d_une_carte_ne_donnent_que_ses_camps() {
 
 /// Une bataille de campagne livrée sur le champ de bataille (« Donner mes ordres »), jusqu'au bout : les armées de départ
 /// de la France et des Pays-Bas du Sud, doublées, se rencontrent en rase campagne (tests/fabrique_campagne :
-/// bataille_de_campagne). Le champ est tiré de la carte : une case y compte pour un kilomètre, comme sur les autres cartes.
+/// bataille_de_campagne). Le champ est tiré de la carte à son échelle : une case y vaut 5 km (voir
+/// le_champ_de_bataille_lit_la_carte_a_cinq_km_par_case).
 #[test]
 fn bataille_de_campagne_jouee_jusqu_au_bout() {
     use conquete::tactics::bridge as TB;
@@ -447,4 +468,106 @@ fn bataille_de_campagne_jouee_jusqu_au_bout() {
     // et le mois reprend
     TT::go(&mut g);
     jouer_mois(&mut g);
+}
+
+/// Les hommes d'un camp, armées et garnisons.
+fn hommes(g: &Game, c: &str) -> f64 {
+    let regs = |l: Val| l.iter().map(|r| r.atf("n")).sum::<f64>();
+    g.armies.values().iter().filter(|a| a.at("owner") == c).map(|a| regs(a.at("regs"))).sum::<f64>()
+        + g.nodes.iter().filter(|n| n.at("owner") == c).map(|n| regs(n.at("garrison"))).sum::<f64>()
+}
+
+/// Les moyens de départ suivent la puissance des pays (R::MOYENS_EUROPE) : la Russie arme bien plus que Malte, la
+/// Grande-Bretagne a le plus gros trésor, la Prusse grandit entre 1700 et 1790 ; le plancher de production suit le poids
+/// du pays. Une partie de France ne change pas : six régiments et 500 livres par département.
+#[test]
+fn moyens_de_depart_a_l_echelle_des_pays() {
+    let geo = geo();
+    let g = Game::new(geo.clone(), "FR", &Val::from("normal"), &Val::from(1), &Val::from("1700"));
+    let livres = |g: &Game, c: &str| g.factions.at(c).at("res").atf("livres");
+    let (ru, ml, fr, pr, gb) = (hommes(&g, "RU"), hommes(&g, "ML"), hommes(&g, "FR"), hommes(&g, "PR"), hommes(&g, "GB"));
+    eprintln!("1700 : RU {ru}, ML {ml}, FR {fr}, PR {pr}, GB {gb} hommes");
+    assert!(ru > 12.0 * ml && fr > 2.0 * pr && fr > 3.0 * gb && ru > 2.0 * pr, "RU {ru}, ML {ml}, FR {fr}, PR {pr}, GB {gb}");
+    assert!(ml <= 400.0 && fr >= 3500.0, "Malte {ml}, France {fr}");
+    assert!(livres(&g, "GB") > livres(&g, "FR") && livres(&g, "FR") > 5.0 * livres(&g, "ML") && livres(&g, "NL") > livres(&g, "RU"));
+    let plancher = |c: &str| g.factions.at(c).at("_floor").at("livres").atf("min");
+    assert!(plancher("ML") * 5.0 <= plancher("RU") && plancher("RU") == 20.0, "plancher : Malte {}, Russie {}", plancher("ML"), plancher("RU"));
+    // en 1790, la Prusse et la Russie ont grandi, la Suède a baissé
+    let g90 = Game::new(geo.clone(), "FR", &Val::from("normal"), &Val::from(1), &Val::from("1790"));
+    assert!(hommes(&g90, "PR") > 3.0 * pr && hommes(&g90, "RU") > 1.5 * ru && hommes(&g90, "SE") < hommes(&g, "SE"));
+    // chaque pays a une armée en campagne et une garnison à sa capitale, et les grandes villes produisent plus
+    for c in R::camps(true) {
+        assert!(g.armies.values().iter().any(|a| a.at("owner") == c) && g.nodes.at(g.capital_of(c.s())).at("garrison").len() >= 1, "{c}");
+    }
+    let mut g = g;
+    let prod = |g: &mut Game, nom: &str| { let n = g.nodes.at(geo.by_name.at(nom)); let o = n.at("owner").string(); g.node_output(&n, &o).atf("livres") };
+    assert!(prod(&mut g, "Paris") > 3.0 * prod(&mut g, "Bakhtchissaraï"), "Paris {} / Bakhtchissaraï {}", prod(&mut g, "Paris"), prod(&mut g, "Bakhtchissaraï"));
+    // la France des départements : rien de changé
+    let gf = Game::new(carte(4), "33", &Val::from("normal"), &Val::from(1), &Val::from("1790"));
+    for c in ["33", "75", "13"] {
+        assert_eq!((hommes(&gf, c), livres(&gf, c)), (1540.0, 500.0), "{c}");
+    }
+}
+
+/// Le champ de bataille lit la carte de campagne à son échelle : sur la carte d'Europe, une case vaut 5 km, et un fleuve à
+/// deux cases (10 km) n'est pas sur un champ de 3 km sur 2 ; à un dixième de case (500 m), il y est.
+#[test]
+fn le_champ_de_bataille_lit_la_carte_a_cinq_km_par_case() {
+    use conquete::tactics::terrain as TR;
+    let geo = geo();
+    let danube = geo.src.at("rivers").iter().filter(|r| r.at("name") == "Danube").max_by_key(|r| r.at("pts").len()).unwrap();
+    let pts: Vec<(f64, f64)> = danube.at("pts").iter().map(|p| { let (lon, lat) = p.xy(); geo.xy(lat, lon) }).collect();
+    let k = pts.len() / 2;
+    let (p, q) = (pts[k], pts[k + 1]);
+    let l = ((q.0 - p.0).powi(2) + (q.1 - p.1).powi(2)).sqrt();
+    let n = (-(q.1 - p.1) / l, (q.0 - p.0) / l); // (en travers du fleuve)
+    let champ = |d: f64| {
+        let spec = dict! {"seed" => 11, "cx" => p.0 + d * n.0, "cy" => p.1 + d * n.1, "season" => "ete", "weather" => "soleil", "year" => 1790, "carte" => TR::VERSION};
+        TR::generate(&geo, &spec).rivers.iter().any(|r| r.get("name") == "Danube")
+    };
+    assert!(champ(0.1), "le Danube à 500 m doit couler sur le champ de bataille");
+    assert!(!champ(2.0), "le Danube à 10 km n'est pas sur le champ de bataille");
+    assert_eq!(geo.km_case, 5.0);
+}
+
+/// La Scandinavie tient au continent par ses détroits (bacs du Grand et du Petit Belt, de l'Øresund) et la Suède à la
+/// Finlande par la mer d'Åland ; la Finlande tient à la Russie par la terre (Carélie). (La carte s'arrête au 62e parallèle :
+/// le fond du golfe de Botnie, par où la Suède touche la Finlande, est hors du cadre.)
+#[test]
+fn la_scandinavie_tient_au_continent_par_ses_detroits() {
+    let geo = geo();
+    let id = |nom: &str| geo.by_name.at(nom).u();
+    let arete = |a: &str, b: &str| geo.edges.iter().find(|e| { let (x, y) = (e.at("a").u(), e.at("b").u()); (x, y) == (id(a), id(b)) || (x, y) == (id(b), id(a)) });
+    for (detroit, a, b) in conquete::geo::BACS_5 {
+        let e = arete(a, b).unwrap_or_else(|| panic!("pas de bac {a} – {b}"));
+        assert!(e.atb("ferry") && e.at("river") == detroit, "{a} – {b} : {e}");
+    }
+    for (a, b) in [("Stockholm", "Mariehamn"), ("Mariehamn", "Åbo"), ("Kiel", "Copenhague"), ("Stralsund", "Ystad")] {
+        let e = arete(a, b).unwrap_or_else(|| panic!("pas de voie de mer {a} – {b}"));
+        assert!(e.get("kind") == "water" && e.get("sea").truthy(), "{a} – {b}");
+    }
+    assert!(arete("Revel", "Helsingfors").is_none(), "pas de route à travers le golfe de Finlande");
+    // par la route, bacs compris (sans les voies de mer)
+    let par_route = atteintes(&geo, false);
+    for nom in ["Copenhague", "Stockholm", "Christiania", "Göteborg", "Bergen", "Malmö", "Helsingfors", "Åbo"] {
+        assert!(par_route.contains(&id(nom)), "{nom} n'est pas relié au continent par la route");
+    }
+    // la Finlande par la terre seule, sans bac : de Moscou à Helsingfors
+    let mut vus: HashSet<usize> = HashSet::from([id("Moscou")]);
+    let mut pile = vec![id("Moscou")];
+    while let Some(n) = pile.pop() {
+        for eid in geo.adj.at(n).iter() {
+            let e = geo.edges.at(&eid);
+            if e.get("kind") == "water" || e.atb("ferry") {
+                continue;
+            }
+            let m = if e.at("a").u() == n { e.at("b").u() } else { e.at("a").u() };
+            if vus.insert(m) {
+                pile.push(m);
+            }
+        }
+    }
+    assert!(vus.contains(&id("Helsingfors")) && vus.contains(&id("Åbo")) && !vus.contains(&id("Stockholm")));
+    // Bornholm n'est plus le seul lien : une voie de mer de Rønne, et pas vers Colberg
+    assert!(arete("Rønne", "Colberg").is_none());
 }

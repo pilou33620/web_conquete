@@ -37,18 +37,18 @@ pub fn nouvelle(g: &Game, code: &str) -> Val {
     let mut rnd = _rng(g, code, "maison");
     let y = g.date(&Val::None).year;
     let nom = rnd.choice(&R::MAISON_NOMS().at(code).vec());
-    let prenom = rnd.choice(&R::PRENOMS().vec());
+    let prenom = rnd.choice(&R::prenoms(code).vec());
     let ne = y - rnd.randint(28, 52);
     let chef = dict! {"nom" => format!("{prenom} {nom}"), "ne" => ne, "trait" => _trait(&mut rnd)};
     let m = dict! {"nom" => &nom, "chef" => &chef, "conjoint" => Val::None, "heritiers" => list![], "liens" => dict! {}};
     if rnd.random() < 0.7 {
-        let pf = rnd.choice(&R::PRENOMS_F().vec());
-        let sn = rnd.choice(&R::SURNAMES().vec());
+        let pf = rnd.choice(&R::prenoms_f(code).vec());
+        let sn = rnd.choice(&R::surnames(code).vec());
         m.set("conjoint", dict! {"nom" => format!("{pf} {sn}"), "de" => Val::None});
         let lo = if chef.ati("ne") + 20 >= y - 20 { chef.ati("ne") + 20 } else { y - 20 };
         let mut her = vec![];
         for _ in 0..rnd.randint(0, 3) {
-            let p = rnd.choice(&R::PRENOMS().vec());
+            let p = rnd.choice(&R::prenoms(code).vec());
             her.push(dict! {"nom" => format!("{p} {nom}"), "ne" => rnd.randint(lo, y)});
         }
         m.set("heritiers", Val::list(py::sorted_by_key(her, |h| h.ati("ne"))));
@@ -120,7 +120,7 @@ pub fn marier(g: &mut Game, a: &str, b: &str) {
     let mut noms = vec![];
     for (x, o) in [(a, b), (b, a)] {
         let (m, p) = (g.factions.at(x).at("maison"), epoux(g, x));
-        let prenom = _rng(g, x, &format!("mariage-{o}")).choice(&R::PRENOMS_F().vec());
+        let prenom = _rng(g, x, &format!("mariage-{o}")).choice(&R::prenoms_f(o).vec());
         let c = dict! {"nom" => format!("{prenom} {}", g.factions.at(o).at("maison").at("nom")), "de" => o};
         if p.is(&m.at("chef")) {
             m.set("conjoint", &c);
@@ -178,7 +178,7 @@ pub fn annuel(g: &mut Game) {
             && (m.at("heritiers").len() as i64) < R::HERITIERS_MAX
             && rnd.random() < R::NAISSANCE_P
         {
-            let p = rnd.choice(&R::PRENOMS().vec());
+            let p = rnd.choice(&R::prenoms(&code).vec());
             m.at("heritiers").push(dict! {"nom" => format!("{p} {}", m.at("nom")), "ne" => y});
             if code == g.player {
                 let t = format!("Naissance dans votre maison : {}.", m.at("heritiers").at(-1).at("nom"));
@@ -250,7 +250,7 @@ pub fn crise(g: &mut Game, code: &str, chef: &Val, rnd: &mut Random) {
     let choices = list![];
     if pret.truthy() {
         let mp = g.factions.at(&pret).at("maison");
-        let nom = format!("{} {}", rnd.choice(&R::PRENOMS().vec()), mp.at("nom"));
+        let nom = format!("{} {}", rnd.choice(&R::prenoms(pret.s()).vec()), mp.at("nom"));
         let label = format!("Reconnaître le prétendant {nom} : vassalité envers {}", g.fname(pret.s()));
         let ne = y - rnd.randint(20, 40);
         let chef_ = dict! {"nom" => &nom, "ne" => ne, "trait" => _trait(rnd), "maison" => mp.at("nom")};
@@ -260,7 +260,7 @@ pub fn crise(g: &mut Game, code: &str, chef: &Val, rnd: &mut Random) {
     }
     let nom = rnd.choice(&autres);
     let label = format!("Faire élire un notable, {nom}");
-    let prenom = rnd.choice(&R::PRENOMS().vec());
+    let prenom = rnd.choice(&R::prenoms(code).vec());
     let ne = y - rnd.randint(35, 55);
     let chef_ = dict! {"nom" => format!("{prenom} {nom}"), "ne" => ne, "trait" => _trait(rnd), "maison" => &nom};
     let fx = dict! {"res" => dict! {"livres" => -300}, "chef" => chef_};
@@ -269,7 +269,7 @@ pub fn crise(g: &mut Game, code: &str, chef: &Val, rnd: &mut Random) {
     }
     choices.push(dict! {"label" => label, "fx" => fx, "ai" => 2});
     let label = format!("Appeler un cousin de la maison {}", m.at("nom"));
-    let prenom = rnd.choice(&R::PRENOMS().vec());
+    let prenom = rnd.choice(&R::prenoms(code).vec());
     let ne = y - rnd.randint(25, 45);
     let chef_ = dict! {"nom" => format!("{prenom} {}", m.at("nom")), "ne" => ne, "trait" => _trait(rnd)};
     let fx = dict! {"stab" => -0.08, "chef" => chef_};

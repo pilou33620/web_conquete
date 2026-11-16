@@ -308,7 +308,7 @@ pub fn new(geo: Rc<GeoMap>, body: &Val) -> (Option<Game>, String) {
             nid = Some(rng.choice(&c));
         }
         let n = nodes.at(nid.unwrap());
-        (bx, by) = _open_ground(&geo, &mut rng, n.atf("x"), n.atf("y"), 3.5, 6.0);
+        (bx, by) = _open_ground(&geo, &mut rng, n.atf("x"), n.atf("y"), 3.5 / geo.km_case, 6.0 / geo.km_case); // (de 3,5 à 6 km : des cases de 5 km en Europe)
     }
     for z in g.weather.keys() {
         g.weather.set(&z, dict! {"kind" => &weather, "left" => 5});
@@ -329,7 +329,7 @@ pub fn new(geo: Rc<GeoMap>, body: &Val) -> (Option<Game>, String) {
         def_types = mine.clone();
         att_types = _foe_units(&mut rng, &era, &foe, if place { ASSAULT_UNITS } else { mine.len() as i64 }, place);
     }
-    let (ax, ay) = _open_ground(&geo, &mut rng, bx, by, 1.2, 2.0);
+    let (ax, ay) = _open_ground(&geo, &mut rng, bx, by, 1.2 / geo.km_case, 2.0 / geo.km_case);
     let regs: Val = att_types.iter().map(|t| g.new_reg(t.s(), &Val::None, &Val::from(att_code.as_str()))).collect();
     let att = g.create_army(&att_code, ax, ay, &regs, &Val::None, &Val::None, &Val::None);
     let sides = list![dict! {"owner" => &att_code, "armies" => list![att.at("id")], "node" => Val::None}];

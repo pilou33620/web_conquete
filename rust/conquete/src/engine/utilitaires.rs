@@ -339,11 +339,11 @@ impl Game {
             return (false, format!("N'existe pas encore (vers {}).", R::UNIT_YEAR().at(typ)));
         }
         if R::hors_service(typ_s, y) {
-            return (false, "Plus au service de France.".to_string());
+            return (false, (if self.europe() { "Plus en service." } else { "Plus au service de France." }).to_string());
         }
         if R::MERCS().has(typ) {
             if Val::from(nid) != self.capital_of(code) && !gn.at("spec").has("port") {
-                return (false, "Se loue au chef-lieu ou dans un port.".to_string());
+                return (false, (if self.europe() { "Se loue à la capitale ou dans un port." } else { "Se loue au chef-lieu ou dans un port." }).to_string());
             }
             if self.merc_count(code) >= R::MERC_MAX {
                 return (false, format!("Au plus {} régiments étrangers.", R::MERC_MAX));

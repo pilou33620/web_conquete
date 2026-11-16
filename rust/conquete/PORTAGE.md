@@ -22,6 +22,13 @@ moteur est gardé par `geo.version == 5` (`VERSION_EUROPE`, `Game::europe()`), o
 d'un bit : toutes les références des cartes, des campagnes et des batailles sont restées telles quelles. Références mises
 à jour, parce que les tables s'étendent : `rules.json` (`FACTIONS`, `PROVINCES`, `MAISON_NOMS` : 32 pays de plus) et
 `serveur.json` (`/api/map` : les champs `modes` et `km_case`, 106 octets de plus).
+Corrections du mode Europe (16/11/2026, `SPEC-FRANCE.md`) : moyens de départ par pays (`MOYENS_EUROPE`,
+`regiments_europe`), plancher, production selon la taille des villes (`taille_europe`), commerce, achats de vivres et
+levées des IA, capitulation ; champ de bataille à `km_case` (`tactics/terrain.rs`, `terrain_ville.rs`, `bridge.rs`,
+`skirmish.rs` : une multiplication ou une division par 1 sur les cartes au kilomètre, les batailles n'y changent pas au
+bit près) ; textes des règles en cases × 5 (`km_carte`) ; noms par famille culturelle (`R::prenoms`, `prenoms_f`,
+`surnames` rendent les tables d'avant pour la France et les départements) ; bacs et traversées de Scandinavie. Seule
+référence touchée : `rules.json`, l'empreinte de `MAISON_NOMS` (les huit maisons des 32 pays, françaises avant).
 
 **Maintenant que le Python est retiré :**
 

@@ -37,7 +37,10 @@ impl Game {
         let gn = self.geo.nodes.at(nid);
         let base = R::NODE_BASE().at(gn.at("type"));
         let ter = self.geo.terrain_at(gn.atf("x"), gn.atf("y"));
-        let b0 = Val::dict_from(PROD_KEYS().iter().map(|k| (k.clone(), base.get_or(&k, 0))).collect());
+        let mut b0 = Val::dict_from(PROD_KEYS().iter().map(|k| (k.clone(), base.get_or(&k, 0))).collect());
+        if let Some(k) = self.taille_europe(&gn) {
+            b0 = Val::dict_from(b0.items().into_iter().map(|(r, v)| (r, Val::from(v.f() * k))).collect());
+        }
         let nom = TERRAIN().at(ter).at(0);
         let st = (
             gn.clone(),
@@ -72,6 +75,13 @@ impl Game {
         }
     }
 
+    /// (géographie 5) Ce que produit une ville ou une capitale selon sa taille : elles vont de 3 000 à 950 000 habitants,
+    /// et une grande ville produit plus qu'un bourg tatar, selon la racine de sa population, de 0,4 à 2,5 fois une ville
+    /// de 25 000 habitants (base et spécialités, port et vignoble). None ailleurs (villages, cartes de France).
+    pub fn taille_europe(&self, gn: &Val) -> Option<f64> {
+        (self.europe() && (gn.at("type") == "ville" || gn.at("type") == "capitale")).then(|| (gn.atf("pop0") / 25000.0).sqrt().clamp(0.4, 2.5))
+    }
+
     /// Python : `node_output(self, n, code)`.
     /// Rend un dict {ressource: production par jour} (les clés de PROD_KEYS, plus celles des spécialités).
     // engine.py, lignes 852 à 896
@@ -80,15 +90,22 @@ impl Game {
         let (gn, b0, quai, lande, mont) = self.node_static(nid);
         let out = b0.copy();
         let mut trade = 0.0;
+        let taille = self.taille_europe(&gn);
         for s in gn.at("spec").iter() {
             for (k, v) in R::SPEC().at(&s).items() {
                 if k != "label" {
                     let mut bonus = 1.0;
                     if s == "vin" {
                         bonus += self.mod_(code, "vin", 0.0);
+                        if let Some(t) = taille {
+                            bonus *= t;
+                        }
                     }
                     if s == "port" {
                         bonus += self.mod_(code, "port", 0.0);
+                        if let Some(t) = taille {
+                            bonus *= t;
+                        }
                         trade += v.f() * bonus;
                     }
                     out.set(&k, &out.get_or(&k, 0) + &(&v * bonus));
@@ -217,7 +234,10 @@ impl Game {
             if self.nodes.at(self.capital_of(code)).at("owner") == code {
                 let food = R::SEASON_FOOD().atf(&season) + if season == "hiver" { self.mod_(code, "winter_food", 0.0) } else { 0.0 };
                 let traits = R::FACTIONS().at(code).at("mods");
+                // (géographie 5 : le minimum d'un pays suit son poids, Malte n'a pas celui de la Russie)
+                let poids = R::moyens_europe(code, "1700").filter(|_| self.europe()).map(|m| Val::from(m.2));
                 for (k, v) in R::FLOOR().items() {
+                    let v = poids.as_ref().map_or(v.clone(), |p| &v * p);
                     let mn = &(&v * &(1 + &traits.get_or(&k, 0))) * &(if k == "vivres" { Val::from(food) } else { Val::from(1) });
                     let d = (&mn - &tot.at(&k)).f();
                     let mn_r = if mn.is_int() { mn.clone() } else { Val::from(py::round_n(mn.f(), 2)) };
@@ -236,10 +256,16 @@ impl Game {
                 }
                 // sa douane rogne nos gains
                 let m = (1.0 + self.mod_(code, "trade", 0.0)) * (1.0 - 1.5 * R::TARIFS().at(of.at("tarif")).atf(1));
-                let gl = of.get_or("_gross_livres", 0).f();
-                trade_l += 0.06 * (if gl > 0.0 { gl } else { 0.0 }) * m + 1.0 * m;
+                let mut gl = of.get_or("_gross_livres", 0).f();
                 let sp = R::FACTIONS().at(&o).ats("specialty");
-                let gs = of.get_or(format!("_gross_{sp}"), 0).f();
+                let mut gs = of.get_or(format!("_gross_{sp}"), 0).f();
+                if self.europe() {
+                    // (géographie 5 : un échange se mesure au plus petit des deux ; Malte ne tire pas 6 % du revenu de la
+                    // Grande-Bretagne de chacun de ses traités)
+                    gl = gl.min(tot.atf("livres"));
+                    gs = gs.min(tot.get_or(&sp, 0.0).f().max(tot.atf("livres") / 4.0));
+                }
+                trade_l += 0.06 * (if gl > 0.0 { gl } else { 0.0 }) * m + 1.0 * m;
                 trade_s.set(&sp, &trade_s.get_or(&sp, 0) + 0.05 * (if gs > 0.0 { gs } else { 0.0 }) * m);
             }
             f.set("_gross_livres", tot.at("livres"));

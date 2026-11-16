@@ -79,9 +79,10 @@ impl Game {
                 used.push(a.at("gen").at("name"));
             }
         }
-        let mut names: Vec<Val> = R::SURNAMES().iter().filter(|s| !used.has(s)).collect();
+        let noms = R::surnames(code); // (géographie 5 : les généraux d'un pays portent des noms de chez lui)
+        let mut names: Vec<Val> = noms.iter().filter(|s| !used.has(s)).collect();
         if names.is_empty() {
-            names = R::SURNAMES().vec();
+            names = noms.vec();
         }
         let id = self.gid(code);
         let name = self.rng.choice(&names);

@@ -187,7 +187,7 @@ pub fn openable(g: &Game, code: &str, sid: &str) -> (bool, String) {
     }
     let net = network(g, code);
     if !(net.has(sec.at("a")) || net.has(sec.at("b"))) {
-        return (false, "Le réseau part de votre chef-lieu : reliez d'abord l'une des deux villes.".to_string());
+        return (false, format!("Le réseau part de votre {} : reliez d'abord l'une des deux villes.", if g.europe() { "capitale" } else { "chef-lieu" }));
     }
     if works(g, code).len() as i64 >= RAIL_MAX_WORKS {
         return (false, format!("Déjà {RAIL_MAX_WORKS} chantiers de voie ferrée en cours."));

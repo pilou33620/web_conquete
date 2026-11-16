@@ -230,6 +230,14 @@ fn voies_sud_ouest(geo: &GeoMap, P: &[Pt]) -> Vec<Voie> {
 }
 
 pub const RIVER_PORT_5: f64 = 1.5; // (géographie 5, en cases de 5 km) une place à moins de 7 km d'un fleuve y a son quai
+/// (géographie 5) Les traversées de mer connues, de port en port, posées avant celles qu'on cherche au plus court : la
+/// poste de Stockholm à Åbo par les Åland, les paquebots de Kiel à Copenhague et de Stralsund à Ystad. (Les bacs des
+/// détroits, Øresund, Grand et Petit Belt, sont des routes : geo.rs, BACS_5.)
+pub const MERS_5: [(&str, &[&str]); 3] = [
+    ("Mer d'Åland", &["Stockholm", "Mariehamn", "Åbo"]),
+    ("Baltique", &["Kiel", "Copenhague"]),
+    ("Baltique", &["Stralsund", "Ystad"]),
+];
 
 /// (privé, géographie 5) Les voies d'eau de la carte d'Europe : chaque fleuve de rang 1 (son plus long tracé), navigable entre
 /// les places de ses rives ; et les voies de mer : chaque morceau du réseau des routes que la terre ne relie pas aux
@@ -291,6 +299,22 @@ fn voies_europe(geo: &GeoMap, P: &[Pt]) -> Vec<Voie> {
     for e in geo.edges.iter() {
         let (ra, rb) = (find(&mut parent, e.at("a").u()), find(&mut parent, e.at("b").u()));
         parent[ra] = rb;
+    }
+    // d'abord les traversées connues (MERS_5), puis, pour ce qui reste à part, le plus proche couple de ports
+    for (mer, noms) in MERS_5 {
+        let ids: Vec<usize> = noms.iter().filter(|nm| geo.by_name.has(**nm)).map(|nm| geo.by_name.at(*nm).u()).collect();
+        if ids.len() < 2 {
+            continue;
+        }
+        let pts: Vec<Pt> = ids.iter().map(|&i| P[i]).collect();
+        let cum = cumul(&pts);
+        let label = format!("{mer} : {}", ids.iter().map(|&i| geo.nodes.at(i).ats("name")).collect::<Vec<_>>().join(" – "));
+        let ports = ids.iter().zip(&cum).map(|(&i, &s)| Port { node: i, s, q: P[i], spur: vec![] }).collect();
+        for ab in ids.windows(2) {
+            let (ra, rb) = (find(&mut parent, ab[0]), find(&mut parent, ab[1]));
+            parent[ra] = rb;
+        }
+        ways.push(Voie { name: nom(label.clone()), label, pts, cum, into: None, sea: true, low_water: false, tidal_s: None, ports });
     }
     let port: Vec<bool> = geo.nodes.iter().map(|nd| nd.at("spec").has("port")).collect();
     loop {

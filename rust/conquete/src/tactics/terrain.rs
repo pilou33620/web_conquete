@@ -599,6 +599,8 @@ pub fn generate(geo: &GeoMap, spec: &Val) -> BattleMap {
     let mut rng = Random::new(seed);
     let mut m = BattleMap::new();
     let (cx, cy) = (spec.at("cx").f(), spec.at("cy").f());
+    // (ce que vaut une case de la carte de campagne : 1 km, ou 5 en Europe ; le champ se lit à cette échelle)
+    let km = geo.km_case;
 
     // ---------------------------------------------------------- la place, ou le lieu tout près d'une bataille rangée
     let mut pl = spec.get("place");
@@ -606,7 +608,7 @@ pub fn generate(geo: &GeoMap, spec: &Val) -> BattleMap {
         let mut best: Option<(f64, Val)> = None;
         for gn in geo.nodes.clone().iter() {
             let d = py::hypot(gn.at("x").f() - cx, gn.at("y").f() - cy);
-            if d < 1.3 && best.as_ref().is_none_or(|b| d < b.0) {
+            if d < 1.3 / km && best.as_ref().is_none_or(|b| d < b.0) {
                 best = Some((d, gn));
             }
         }
@@ -637,16 +639,16 @@ pub fn generate(geo: &GeoMap, spec: &Val) -> BattleMap {
     let (gt, gW, gH) = (&geo.terrain[..], geo.W, geo.H);
     let mut biome = vec![0u8; NU];
     for j in 0..RU {
-        let yk0 = cy + ((j as f64 + 0.5) * CELLF - HF / 2.0) / (1000.0 * k);
+        let yk0 = cy + ((j as f64 + 0.5) * CELLF - HF / 2.0) / (1000.0 * k * km);
         let base = j * CU;
         for i in 0..CU {
             let c = base + i;
-            let mut X = cx + ((i as f64 + 0.5) * CELLF - WF / 2.0) / (1000.0 * k) + (jx[c] - 0.5) * 0.9;
-            let mut Y = yk0 + (jy[c] - 0.5) * 0.9;
+            let mut X = cx + ((i as f64 + 0.5) * CELLF - WF / 2.0) / (1000.0 * k * km) + (jx[c] - 0.5) * 0.9 / km;
+            let mut Y = yk0 + (jy[c] - 0.5) * 0.9 / km;
             if let Some(l) = &L {
                 if py::hypot((i as f64 + 0.5) * CELLF - l.pos.0, (j as f64 + 0.5) * CELLF - l.pos.1) < l.r_eau {
                     // (autour de la ville, la mer et les étangs du plan : sans le tremblé, le rivage lissé de l'intérieur)
-                    (X, Y) = (X - (jx[c] - 0.5) * 0.9, Y - (jy[c] - 0.5) * 0.9);
+                    (X, Y) = (X - (jx[c] - 0.5) * 0.9 / km, Y - (jy[c] - 0.5) * 0.9 / km);
                     let (ii, jj) = (py::int(X), py::int(Y));
                     let b = if 0 <= ii && ii < gW && 0 <= jj && jj < gH { gt[(jj * gW + ii) as usize] as i64 } else { T_OCEAN };
                     let eau = b == T_OCEAN || b == G_EAU;
@@ -710,7 +712,7 @@ pub fn generate(geo: &GeoMap, spec: &Val) -> BattleMap {
             .map(|p| {
                 let (lon, lat) = p.xy();
                 let (x, y) = geo.xy(lat, lon);
-                to_m(x, y, cx, cy, k)
+                to_m(x, y, cx, cy, k * km)
             })
             .collect();
         // segments qui approchent du champ de bataille
@@ -813,17 +815,17 @@ pub fn generate(geo: &GeoMap, spec: &Val) -> BattleMap {
             // (la route du plan, par ses rues et sa porte, puis tout droit vers l'autre lieu)
             let l = L.as_ref().unwrap();
             let Q = if e.at("a") == pl.at("nid") { &B } else { &A };
-            let pb = to_m(Q.at("x").f(), Q.at("y").f(), cx, cy, k);
+            let pb = to_m(Q.at("x").f(), Q.at("y").f(), cx, cy, k * km);
             let loin = py::hypot(pb.0 - l.pos.0, pb.1 - l.pos.1) * 0.85;
             let mut head: Vec<Pt> = route.iter().copied().filter(|p| py::hypot(p.0 - l.pos.0, p.1 - l.pos.1) < loin).collect();
             let suite = _meander(_densify(&[head[head.len() - 1], pb], 50.0), &mut rng, 18.0, 700.0, None);
             head.extend_from_slice(&suite[1..]);
             head
         } else {
-            if _seg_dist(cx, cy, A.at("x").f(), A.at("y").f(), B.at("x").f(), B.at("y").f()) > 2.0 / k {
+            if _seg_dist(cx, cy, A.at("x").f(), A.at("y").f(), B.at("x").f(), B.at("y").f()) > 2.0 / (k * km) {
                 continue;
             }
-            let (pa, pb) = (to_m(A.at("x").f(), A.at("y").f(), cx, cy, k), to_m(B.at("x").f(), B.at("y").f(), cx, cy, k));
+            let (pa, pb) = (to_m(A.at("x").f(), A.at("y").f(), cx, cy, k * km), to_m(B.at("x").f(), B.at("y").f(), cx, cy, k * km));
             let dense = _densify(&[pa, pb], 50.0);
             _meander(dense, &mut rng, 18.0, 700.0, None)
         };
@@ -939,7 +941,7 @@ pub fn generate(geo: &GeoMap, spec: &Val) -> BattleMap {
         if year < an {
             for gn in nodes.iter() {
                 if gn.at("name") == v {
-                    bacs.push((to_m(gn.at("x").f(), gn.at("y").f(), cx, cy, k), rv));
+                    bacs.push((to_m(gn.at("x").f(), gn.at("y").f(), cx, cy, k * km), rv));
                 }
             }
         }

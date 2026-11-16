@@ -124,7 +124,10 @@ impl Game {
             let left = self.owned_nodes(&old).len() as i64;
             let crushed = py_max(3, &lf.at("start_nodes") * R::TREATY_CRUSHED);
             let tr = lf.get_or("treaties", dict! {}).get_or(code, -1e9);
-            if Val::from(left) <= crushed || self.t - tr.f() < R::TREATY_AGAIN as f64 || !self.factions.has(code) {
+            // (géographie 5 : une seconde défaite face au même vainqueur n'est fatale qu'à un pays déjà réduit de moitié ; la
+            // France qui garde soixante places signe un traité, elle ne passe pas tout entière à l'Angleterre)
+            let encore = self.t - tr.f() < R::TREATY_AGAIN as f64 && (!self.europe() || Val::from(left) <= &lf.at("start_nodes") * 0.5);
+            if Val::from(left) <= crushed || encore || !self.factions.has(code) {
                 self.capitulate(&old, code);
             } else {
                 self.treaty(&old, code, nid);

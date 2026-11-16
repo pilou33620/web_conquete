@@ -53,7 +53,7 @@ pub const CACHE_VERSION: i64 = 8;
 pub const VERSION: i64 = 4; // 4 : la 3 et cinq places de plus à la fin de la liste (Roubaix, Cherbourg, Dunkerque, Cannes, Port-Vendres), quatre étiquettes port (places_france_v4.json) ; 3 : toute la France (données faites une fois par outils/france.py, retiré le 15/11/2026 : voir l'historique git) ; 2 et 1 : le Sud-Ouest des anciennes parties
 
 pub const VERSION_EUROPE: i64 = 5; // la carte du mode « Europe » (SPEC-FRANCE.md, étape 2) : europe.json, places_europe.json, cases de 5 km
-pub const GEN_EUROPE: i64 = 1; // (à augmenter quand le calcul de la carte 5 change : relief, végétation, routes ; son cache est alors refait)
+pub const GEN_EUROPE: i64 = 2; // (à augmenter quand le calcul de la carte 5 change : relief, végétation, routes ; son cache est alors refait)
 
 pub const LAT_REF: f64 = 44.25;
 /// `KX` du module Python (cos n'est pas une fonction constante en Rust : c'est une fonction).
@@ -250,6 +250,11 @@ pub const VIGNES_5: &[(f64, f64, f64)] = &[   // (lat, lon, rayon en km)
     (41.15, -7.60, 45.0), (42.40, -2.50, 40.0), (36.70, -6.10, 30.0), (48.10, 21.40, 30.0), (43.40, 11.30, 60.0), (44.70, 8.00, 45.0), (45.50, 11.50, 40.0),   // Douro, Rioja, Xérès, Tokaj, Toscane, Piémont, Vénétie
 ];
 pub const ROYALES_5: usize = 6; // routes de poste : de chaque capitale à ses six plus grandes villes
+/// (géographie 5) Les bacs des détroits connus, d'une place à l'autre (le passage le plus court entre deux terres ne se
+/// trouve pas toujours entre deux places voisines : le Grand Belt de Korsør à Nyborg relie Roskilde à Odense) ; leur nom
+/// remplace « Détroit » sur l'arête.
+pub const BACS_5: [(&str, &str, &str); 4] =
+    [("Grand Belt", "Roskilde", "Odense"), ("Petit Belt", "Odense", "Fredericia"), ("Øresund", "Copenhague", "Malmö"), ("Øresund", "Elseneur", "Helsingborg")];
 pub const GABRIEL_5: f64 = 100.0; // (cases) les places voisines se cherchent jusque-là (40 sur les cartes au kilomètre) : la Russie, le Sahara
 pub const RELIER_5: f64 = 250.0; // (cases) et un morceau du réseau se raccorde jusque-là, par la terre (60 ailleurs)
 
@@ -1432,6 +1437,10 @@ impl GeoMap {
         if europe {
             // (géographie 5) les routes de poste : de chaque capitale à ses plus grandes villes, par le plus court chemin
             // du réseau (une île que la terre ne relie pas n'en a pas : voies de mer, waterways.rs)
+            for (_, na, nb) in BACS_5 {
+                let (a, b) = (self.by_name.at(na).u(), self.by_name.at(nb).u());
+                pairs.insert((a.min(b), a.max(b)), Info { royal: false, ferry: true, drop: false });
+            }
             self._ensure_connected(&mut pairs, &P);
             for code in &self.dept_codes {
                 let du_pays: Vec<Val> = self.nodes.iter().filter(|n| n.at("dept") == code.as_str()).collect();
@@ -1606,7 +1615,9 @@ impl GeoMap {
             };
             let path = &paths[eid];
             if info.ferry {
-                e.set("river", if europe { "Détroit" } else { "Gironde" });
+                let (na, nb) = (self.nodes.at(a).ats("name"), self.nodes.at(b).ats("name"));
+                let nomme = BACS_5.iter().find(|t| [t.1, t.2] == [na.as_str(), nb.as_str()] || [t.2, t.1] == [na.as_str(), nb.as_str()]);
+                e.set("river", if europe { nomme.map_or("Détroit", |t| t.0) } else { "Gironde" });
                 e.set("rrank", 1);
                 e.set("cx", py::round_n((P[a].0 + P[b].0) / 2.0, 2));
                 e.set("cy", py::round_n((P[a].1 + P[b].1) / 2.0, 2));
@@ -2027,7 +2038,17 @@ impl GeoMap {
                     }
                 }
                 cand.sort_by(|x, y| x.partial_cmp(y).unwrap());
-                let ok = cand.iter().find(|&&(_, a, b)| if terre.is_empty() { self._water_on_segment(P[a], P[b], 1.2) < 1.0 } else { terre[a] != 0 && terre[a] == terre[b] });
+                let ok = if terre.is_empty() {
+                    cand.iter().find(|&&(_, a, b)| self._water_on_segment(P[a], P[b], 1.2) < 1.0)
+                } else {
+                    // (la route fait le tour de la baie, mais le jeu compte la ligne droite : entre deux places de la même terre,
+                    // celle qui passe le moins sur l'eau, chaque case d'eau comptant triple ; pas de Revel – Helsingfors à
+                    // travers le golfe de Finlande quand la Carélie relie la Finlande par la terre)
+                    // shortcut: seuls les 200 plus proches candidats sont pesés (le calcul de l'eau est long) ; à élargir si une
+                    // terre lointaine reste mal raccordée
+                    let cout = |&&(d, a, b): &&(f64, usize, usize)| d + 1.2 * self._water_on_segment(P[a], P[b], 1.2);
+                    cand.iter().filter(|&&(_, a, b)| terre[a] != 0 && terre[a] == terre[b]).take(200).min_by(|x, y| cout(x).partial_cmp(&cout(y)).unwrap())
+                };
                 if let Some(&(_, a, b)) = ok {
                     pairs.insert((a.min(b), a.max(b)), Info::default());
                     relie = true;

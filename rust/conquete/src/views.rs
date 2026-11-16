@@ -337,6 +337,28 @@ pub fn rules_payload_carte(europe: bool) -> Val {
             .collect(),
     );
     let lbl = |d: Val, k: &str| Val::dict_from(d.items().into_iter().map(|(c, v)| (c, v.at(k))).collect());
+    let (spy, cities) = (R::SPY(), CT::rules_payload());
+    let (spy, cities) = if europe {
+        // (géographie 5 : les distances des règles se comptent en cases, de 5 km ici ; le texte montré suit la carte)
+        // (et une capitale n'est pas un chef-lieu : Vauban)
+        let km = |v: &Val, k: &str| v.set(k, km_carte(v.at(k).s(), 5.0).replace("le chef-lieu", "la capitale"));
+        for t in techs.iter() {
+            km(&t, "desc");
+        }
+        km(&build.at("depot"), "desc");
+        let spy = spy.deepcopy();
+        km(&spy.at("espionner"), "desc");
+        for c in cities.at("chains").values() {
+            km(&c, "desc");
+            for l in c.at("levels").iter() {
+                km(&l, "txt");
+                km(&l, "txtj");
+            }
+        }
+        (spy, cities)
+    } else {
+        (spy, cities)
+    };
     dict! {
         "factions" => camps, "units" => R::UNITS(), "unit_order" => R::UNIT_ORDER(), "techs" => techs, "fort" => fort,
         "scenarios" => scen, "scenario_order" => R::SCENARIOS().keys(), "eras" => if europe { R::ERAS_EUROPE() } else { R::ERAS() }, "unit_year" => R::UNIT_YEAR(),
@@ -348,12 +370,36 @@ pub fn rules_payload_carte(europe: bool) -> Val {
         "difficulty" => lbl(R::DIFFICULTY(), "label"), "neutral_color" => R::NEUTRAL_COLOR,
         "seasons" => R::SEASON_LABEL(), "traits" => R::GENERAL_TRAITS(), "ranks" => R::GENERAL_RANKS(),
         "talents" => R::GENERAL_TALENTS(), "rancon" => R::GENERAL_RANCON(), "formations" => R::FORMATIONS(),
-        "formation_speed" => R::FORMATION_SPEED(), "plans" => R::PLANS(), "phases" => R::PHASES(), "spy" => R::SPY(),
+        "formation_speed" => R::FORMATION_SPEED(), "plans" => R::PLANS(), "phases" => R::PHASES(), "spy" => spy,
         "spy_tours" => R::SPY_INTEL_TOURS, "tax_labels" => R::TAX_LABELS(),
         "water" => dict! {"speed" => R::WATER_SPEED, "sea" => R::SEA_SPEED, "embark" => R::EMBARK_DAYS,
                           "quai" => R::QUAI_LIVRES, "blockade" => R::BLOCKADE_K},
-        "cities" => CT::rules_payload()
+        "cities" => cities
     }
+}
+
+/// Un texte de règles sur une carte dont la case vaut km_case km : les distances de la carte de campagne (« +6 km », « (14 km) »,
+/// « à moins de 30 km ») sont des cases, multipliées ici. Une portée de canon (« à 3 km », La Hitte) se compte sur le champ
+/// de bataille, en vrais kilomètres : elle ne change pas.
+pub fn km_carte(t: &str, km_case: f64) -> String {
+    let mut out = String::new();
+    let mut reste = t;
+    while let Some(i) = reste.find(" km") {
+        let avant = &reste[..i];
+        let debut = avant.trim_end_matches(|c: char| c.is_ascii_digit()).len();
+        let (tete, nombre) = avant.split_at(debut);
+        let campagne = !nombre.is_empty() && (tete.ends_with('+') || tete.ends_with('(') || tete.ends_with("de "));
+        out.push_str(tete);
+        if campagne {
+            out.push_str(&py::int(nombre.parse::<f64>().unwrap() * km_case).to_string());
+        } else {
+            out.push_str(nombre);
+        }
+        out.push_str(" km");
+        reste = &reste[i + 3..];
+    }
+    out.push_str(reste);
+    out
 }
 
 /// Python : `_gen(g)`.

@@ -308,7 +308,9 @@ impl AI {
         if r.at("vivres") < 250i64 && f.at("income").at("vivres") < 0i64 && budget - spent > 300.0 {
             let room = g.granary_cap(code) - r.atf("vivres");
             let q = py::min_f([500.0, room, (budget - spent) * 0.3 / g.market.atf("vivres")]).unwrap();
-            spent += self.buy(g, "vivres", q, 1.3);
+            // (géographie 5 : trente-deux pays au marché tiennent les vivres plus haut, vers 0,85 et plus l'hiver ; la disette
+            // menace, on paie jusqu'à deux fois le cours ordinaire)
+            spent += self.buy(g, "vivres", q, if g.europe() { 2.0 } else { 1.3 });
         }
         if (self.menace || r.atf("livres") > FLOOD * res) && r.at("recrues") < 600i64 && budget - spent > 300.0 {
             let regs: Vec<Val> = g.all_regs(code).iter().filter(|x| !R::UNITS().at(x.at("type")).at("garrison_only").truthy()).collect();
@@ -659,7 +661,8 @@ impl AI {
         if !self.menace && f.at("res").atf("livres") < FLOOD * self.reserve(g) {
             surplus = 0; // en paix et sans voisin menaçant, l'armée s'en tient à ce que paie le revenu
         }
-        let income_cap = py::int(gross * (0.5 + 0.25 * aggr) / 2.6).max(5);
+        // (géographie 5 : un micro-État n'entretient pas cinq régiments que son revenu ne paie pas)
+        let income_cap = py::int(gross * (0.5 + 0.25 * aggr) / 2.6).max(if g.europe() { 2 } else { 5 });
         // régiments que l'argent qui dort paie quatre ans (solde et rations moyennes de l'armée), tant que le revenu en
         // livres et en vivres reste positif (personne ne les licencie ensuite)
         let up = f.get("_upkeep").or(dict! {});
@@ -668,11 +671,20 @@ impl AI {
         let per_reg = if pr > 1.0 { pr } else { 1.0 };
         let rich = f.at("income").at("livres") > 3i64 && f.at("income").at("vivres") > 0i64;
         let funded = if rich { py::int(self.idle_money(g) / ((4 * 365) as f64 * per_reg)) } else { 0 };
-        let target = (time_target + surplus).min(income_cap + surplus / 2) + funded;
+        let mut target = (time_target + surplus).min(income_cap + surplus / 2) + funded;
+        if g.europe() {
+            // (géographie 5 : une armée marche sur son ventre ; l'or ne lève pas plus de régiments que la récolte du pays
+            // n'en nourrit, 1,5 vivre par jour chacun, et deux : la Grande-Bretagne n'aligne pas deux fois l'armée de la France)
+            target = target.min(py::int(f.get_or("_gross_vivres", 0.0).f() / 1.5) + 2);
+        }
         if self.regs_total(g) >= target {
             return;
         }
         if f.at("income").at("livres") < 0.5 && f.at("res").at("livres") < 400i64 {
+            return;
+        }
+        // (géographie 5 : pas de régiment de plus quand les greniers sont vides et que l'armée mange plus qu'on ne récolte)
+        if g.europe() && f.at("income").at("vivres") < 0i64 && f.at("res").at("vivres") < 300i64 {
             return;
         }
         // en guerre, sans recrues mais riche : des régiments étrangers (g.recruit vérifie époque, lieu, plafond, coût)

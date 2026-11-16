@@ -151,6 +151,30 @@ pub fn curve_at(pts: &Val, y: f64) -> (f64, Val) {
 }
 
 // ------------------------------------------------------------------ la partie
+/// (géographie 5) Les régiments de départ d'un pays, d'après R::MOYENS_EUROPE : un régiment pour 10 000 hommes réels en
+/// 1700, 15 000 en 1790, 20 000 en 1813, 25 000 en 1870 (les armées de l'époque grandissent plus vite que ce que rapportent
+/// les places du jeu : sans cela, la Russie et l'Autriche de 1790 partiraient en déficit), 30 au plus. Rend [garnison de
+/// la capitale, garnisons des plus grandes villes (un régiment chacune), puis les armées de campagne (dix régiments au
+/// plus chacune)]. Un micro-État garde une demi-garnison à sa capitale et un petit corps (voir Game::new).
+pub fn regiments_europe(code: &str, scenario: &str) -> Vec<Vec<&'static str>> {
+    let Some((armee, _, _)) = R::moyens_europe(code, scenario) else { return vec![] };
+    let par_regiment = match scenario { "1790" => 15.0, "1813" => 20.0, "1870" => 25.0, _ => 10.0 };
+    let n = ((armee / par_regiment).round() as usize).clamp(1, 30);
+    let n_cap = ((n as f64 * 0.2).round() as usize).max(1);
+    let n_places = (n as f64 * 0.15).round() as usize;
+    let n_champ = n.saturating_sub(n_cap + n_places).max(1);
+    let cavaliers = R::FACTIONS().at(code).at("mods").get_or("cav_power", 0.0).f() >= 0.15; // la steppe, le Maghreb, la Pologne
+    let suite: &[&'static str] = if cavaliers {
+        &["cavalerie", "cavalerie", "ligne", "cavalerie", "legere"]
+    } else {
+        &["ligne", "legere", "cavalerie", "ligne", "ligne", "cavalerie", "artillerie", "ligne", "legere", "ligne"]
+    };
+    let mut out = vec![vec!["ligne"; n_cap], vec!["ligne"; n_places]];
+    let champ: Vec<&'static str> = (0..n_champ).map(|i| suite[i % suite.len()]).collect();
+    out.extend(champ.chunks(10).map(<[_]>::to_vec));
+    out
+}
+
 /// Une paire de codes, pour chercher dans `Game::diplo` (et `Game::_frontieres`) sans rien allouer :
 /// `self.diplo.get(&Paire(a, b))`. (Même hachage que la clé `(String, String)`.)
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
@@ -420,6 +444,13 @@ impl Game {
         let codes: Vec<String> = R::FACTIONS().keys().into_iter().filter(|c| geo.playable_codes.has(c)).map(|c| c.string()).collect();
         for code in &codes {
             let res = dict! {"livres" => 500, "vivres" => 400, "fer" => 80, "bois" => 120, "armes" => 160, "outils" => 40, "recrues" => 900};
+            if let Some((_, tresor, _)) = R::moyens_europe(code, &g.scenario).filter(|_| g.europe()) {
+                // (géographie 5) des réserves à la mesure du pays : son trésor, et vivres, recrues, armes pour ses régiments
+                let n = regiments_europe(code, &g.scenario).iter().map(|v| v.len()).sum::<usize>() as i64;
+                for (k, v) in [("livres", py::round(500.0 * tresor)), ("vivres", 100 + 50 * n), ("armes", 40 + 20 * n), ("recrues", 300 + 100 * n)] {
+                    res.set(k, v);
+                }
+            }
             let income = Val::dict_from(R::RESOURCES().iter().map(|r| (r, Val::from(0.0))).collect());
             let research = Val::dict_from(R::BRANCHES().iter().map(|b| (b, Val::None)).collect());
             let mut rel = vec![];
@@ -461,7 +492,11 @@ impl Game {
             } else {
                 n.at("fort")
             };
-            let mm = &base.at("milice") + &(40 * &fort0);
+            // (géographie 5 : la milice d'une ville suit sa taille, comme sa production : Le Caire n'est pas un bourg)
+            let mm = match g.taille_europe(&n) {
+                Some(k) => Val::from(py::round(base.atf("milice") * k)) + &(40 * &fort0),
+                None => &base.at("milice") + &(40 * &fort0),
+            };
             let milice = if owner != R::NEUTRAL { mm.clone() } else { Val::from(py::int(mm.f() * g.rng.uniform(0.55, 1.0))) };
             let nid = n.ati("id");
             let nd = dict! {
@@ -501,6 +536,38 @@ impl Game {
         for code in &codes {
             let cap = g.capital_of(code);
             let c = Val::from(code);
+            let europe = regiments_europe(code, &g.scenario);
+            if g.europe() && !europe.is_empty() {
+                // (géographie 5) garnisons et armées à la mesure du pays : la capitale, ses plus grandes villes, puis les
+                // armées de campagne à la capitale et dans les plus grandes villes
+                let mk = |g: &mut Game, l: &[&str]| -> Val { l.iter().map(|t| g.new_reg(t, &Val::None, &c)).collect() };
+                let garrison = mk(&mut g, &europe[0]);
+                // (un micro-État, Malte, la Courlande : quelques centaines d'hommes en tout, un sur trente-trois)
+                let hommes = R::moyens_europe(code, &g.scenario).unwrap().0 * 1000.0 / 33.0;
+                if hommes < 100.0 {
+                    garrison.at(0).set("n", 150.0);
+                }
+                g.nodes.at(&cap).set("garrison", garrison);
+                let villes = py::sorted_by_key(
+                    geo.nodes.iter().filter(|n| n.at("dept") == code.as_str() && n.at("type") == "ville").collect::<Vec<_>>(),
+                    |n| (-n.at("pop0").i(), n.at("id").i()),
+                );
+                for (n, t) in villes.iter().zip(&europe[1]) {
+                    let r = mk(&mut g, &[t]);
+                    g.nodes.at(n.at("id")).set("garrison", r);
+                }
+                for (k, l) in europe[2..].iter().enumerate() {
+                    let regs = mk(&mut g, l);
+                    if europe[2..].len() == 1 && l.len() == 1 && hommes < regs.at(0).atf("max") {
+                        regs.at(0).set("n", py::round_n(hommes.max(60.0), 0));
+                    }
+                    let lieu = if k == 0 { cap.clone() } else { villes.get(k - 1).map_or(cap.clone(), |n| n.at("id")) };
+                    let gn = geo.nodes.at(&lieu);
+                    g.create_army(code, gn.atf("x"), gn.atf("y"), &regs, &lieu, &Val::None, &Val::None);
+                }
+                g.recompute_mods(code);
+                continue;
+            }
             let garrison = list![g.new_reg("ligne", &Val::None, &c), g.new_reg("ligne", &Val::None, &c), g.new_reg("cavalerie", &Val::None, &c)];
             g.nodes.at(&cap).set("garrison", garrison);
             let gn = geo.nodes.at(&cap);

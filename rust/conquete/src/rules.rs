@@ -795,6 +795,53 @@ pub fn camps(europe: bool) -> Vec<Val> {
     FACTIONS().keys().into_iter().filter(|c| PAYS_EUROPE().has(c) == europe).collect()
 }
 
+// (géographie 5) Les moyens de départ de chaque pays, à l'échelle de sa puissance réelle : armée sur pied en temps de paix
+// (milliers d'hommes) au début de 1700, 1790, 1813 et 1870, et trésor (multiple des 500 livres d'un département).
+// Estimations de mémoire, ordres de grandeur (les pays de 1700 restent tous en jeu aux débuts plus tardifs : on leur
+// donne l'armée de leur dernier état connu). Dans le jeu, un régiment (~300 hommes) pour 10 000 hommes réels : voir
+// `moyens_europe`.
+pub const MOYENS_EUROPE: [(&str, [f64; 4], f64); 32] = [
+    ("FR", [150.0, 170.0, 400.0, 400.0], 3.0), // la plus grande armée d'Europe
+    ("GB", [30.0, 45.0, 250.0, 180.0], 4.5), // petite armée, mais le plus riche
+    ("RU", [110.0, 300.0, 450.0, 700.0], 1.4),
+    ("AU", [100.0, 300.0, 250.0, 280.0], 2.0),
+    ("OT", [120.0, 150.0, 150.0, 200.0], 2.5),
+    ("ES", [30.0, 80.0, 100.0, 100.0], 2.2),
+    ("PR", [40.0, 190.0, 230.0, 400.0], 1.4),
+    ("SE", [70.0, 50.0, 40.0, 40.0], 1.2),
+    ("DK", [30.0, 70.0, 40.0, 40.0], 1.2),
+    ("NL", [45.0, 40.0, 20.0, 60.0], 3.5), // les banquiers de l'Europe
+    ("PL", [30.0, 60.0, 50.0, 30.0], 0.6),
+    ("PT", [20.0, 40.0, 50.0, 30.0], 1.5),
+    ("NA", [20.0, 30.0, 40.0, 60.0], 1.0),
+    ("SA", [25.0, 40.0, 30.0, 70.0], 0.9),
+    ("VE", [20.0, 10.0, 10.0, 10.0], 1.4),
+    ("BA", [20.0, 30.0, 50.0, 60.0], 0.8),
+    ("SX", [25.0, 30.0, 30.0, 30.0], 1.0),
+    ("HA", [15.0, 25.0, 20.0, 20.0], 0.8),
+    ("CH", [15.0, 20.0, 15.0, 30.0], 0.8),
+    ("IT", [10.0, 10.0, 30.0, 30.0], 1.0),
+    ("WE", [15.0, 15.0, 20.0, 20.0], 0.6),
+    ("BE", [15.0, 15.0, 15.0, 40.0], 0.6),
+    ("MA", [40.0, 30.0, 30.0, 30.0], 0.6),
+    ("CR", [40.0, 20.0, 20.0, 20.0], 0.3), // la horde : des cavaliers, peu d'argent
+    ("AL", [15.0, 15.0, 15.0, 10.0], 0.5),
+    ("TU", [10.0, 10.0, 10.0, 10.0], 0.4),
+    ("TR", [5.0, 5.0, 5.0, 5.0], 0.25),
+    ("GE", [5.0, 5.0, 5.0, 5.0], 1.0),
+    ("PO", [5.0, 5.0, 5.0, 10.0], 0.8),
+    ("WU", [5.0, 6.0, 15.0, 20.0], 0.4),
+    ("CO", [2.0, 2.0, 2.0, 2.0], 0.2),
+    ("ML", [1.5, 2.0, 1.5, 1.5], 0.4), // l'Ordre : quelques centaines de chevaliers, 1 à 2 000 soldats
+];
+
+/// Les moyens de départ d'un pays (géographie 5) : (armée en milliers d'hommes au début choisi, trésor, poids). Le poids,
+/// de 0,1 à 1, mesure le pays de 1700 (60 000 hommes et plus : 1) ; il règle le plancher de production (FLOOR).
+pub fn moyens_europe(code: &str, scenario: &str) -> Option<(f64, f64, f64)> {
+    let k = ["1700", "1790", "1813", "1870"].iter().position(|s| *s == scenario).unwrap_or(1);
+    MOYENS_EUROPE.iter().find(|m| m.0 == code).map(|m| (m.1[k], m.2, (m.1[0] / 60.0).clamp(0.1, 1.0)))
+}
+
 // traités : un camp dont le chef-lieu tombe signe la paix au lieu de disparaître, sauf s'il est déjà écrasé
 pub const TREATY_TRUCE: i64 = 60;   // trêve imposée par un traité (tours : cinq ans)
 pub const TREATY_CRUSHED: f64 = 0.25;   // absorbé si ce camp ne tient plus que ce quart de ses places de départ (ou 3 places)
@@ -1275,8 +1322,139 @@ py_const!(MAISON_NOMS, {
     for (_k, _c) in codes.iter().enumerate() {
         MAISON_NOMS.set(_c, (0..8).map(|i| _NOMS.at((_k * 7 + i * 5) % _NOMS.len())).collect::<Val>());
     }
+    // (géographie 5 : les pays ont leurs maisons, la régnante de 1700 d'abord ; écrites à la française)
+    for (c, noms) in MAISONS_EUROPE {
+        MAISON_NOMS.set(c, noms.iter().map(|n| Val::from(*n)).collect::<Val>());
+    }
     MAISON_NOMS
 });
+const MAISONS_EUROPE: [(&str, [&str; 8]); 32] = [
+    ("AL", ["Mezzomorto", "Baba Hassan", "Hadj Moustafa", "Ali Chaouch", "Kurd Abdi", "Baba Ali", "Hussein", "Omar Agha"]),
+    ("AU", ["Habsbourg", "Lorraine", "Liechtenstein", "Esterházy", "Schwarzenberg", "Kaunitz", "Metternich", "Lobkowicz"]),
+    ("BA", ["Wittelsbach", "Montgelas", "Törring", "Preysing", "Seinsheim", "Arco", "La Rosée", "Oettingen"]),
+    ("BE", ["d'Arenberg", "de Ligne", "de Croÿ", "de Mérode", "d'Ursel", "de Lannoy", "de Lalaing", "de Trazegnies"]),
+    ("CH", ["de Watteville", "d'Erlach", "de Diesbach", "de Reding", "Pfyffer", "de Salis", "de Steiger", "Escher"]),
+    ("CO", ["Kettler", "Biron", "Medem", "Keyserling", "Korff", "Fircks", "Lieven", "Behr"]),
+    ("CR", ["Giray", "Chirine", "Mansour", "Baryn", "Argyn", "Sedjeut", "Nogaï", "Kiptchak"]),
+    ("DK", ["Oldenbourg", "Rantzau", "Ahlefeldt", "Reventlow", "Bernstorff", "Moltke", "Danneskiold", "Holstein"]),
+    ("ES", ["Bourbon", "Alvarez de Toledo", "Medinaceli", "Osuna", "Grimaldo", "Ensenada", "Aranda", "Floridablanca"]),
+    ("FR", ["Bourbon", "d'Orléans", "de Noailles", "de Villars", "de Vendôme", "de Choiseul", "de Broglie", "de Rohan"]),
+    ("GB", ["Stuart", "Hanovre", "Churchill", "Russell", "Cavendish", "Pitt", "Pelham", "Walpole"]),
+    ("GE", ["Doria", "Spinola", "Grimaldi", "Durazzo", "Brignole", "Pallavicini", "De Mari", "Lomellini"]),
+    ("HA", ["Brunswick-Lunebourg", "Münchhausen", "Bernstorff", "Platen", "Hardenberg", "Grote", "Busche", "Wangenheim"]),
+    ("IT", ["Médicis", "Lorraine", "Strozzi", "Corsini", "Riccardi", "Borromée", "Visconti", "Litta"]),
+    ("MA", ["Alaouite", "Saâdien", "Er-Riffi", "Ben Ali", "Ouazzani", "Glaoui", "Mtougui", "Goundafi"]),
+    ("ML", ["Perellos", "Zondadari", "Vilhena", "Despuig", "Pinto", "Ximenes", "de Rohan", "Hompesch"]),
+    ("NA", ["Bourbon-Sicile", "Caracciolo", "Pignatelli", "Carafa", "Colonna", "Ruffo", "Tanucci", "Acton"]),
+    ("NL", ["Orange-Nassau", "Heinsius", "De Witt", "Bentinck", "Van Haren", "Fagel", "Van Slingelandt", "Van Hogendorp"]),
+    ("OT", ["Osman", "Köprülü", "Kara Moustafa", "Damad", "Çandarlı", "Sokollu", "Djezzar", "Tchapanoğlou"]),
+    ("PL", ["Wettin", "Sobieski", "Leszczyński", "Poniatowski", "Czartoryski", "Radziwiłł", "Potocki", "Lubomirski"]),
+    ("PO", ["Albani", "Orsini", "Colonna", "Barberini", "Corsini", "Rezzonico", "Braschi", "Chigi"]),
+    ("PR", ["Hohenzollern", "Dohna", "Finckenstein", "Hardenberg", "Stein", "Bismarck", "Arnim", "Schulenburg"]),
+    ("PT", ["Bragance", "Pombal", "Cadaval", "Távora", "Aveiro", "Palmela", "Saldanha", "Sá da Bandeira"]),
+    ("RU", ["Romanov", "Narychkine", "Galitzine", "Dolgorouki", "Troubetskoï", "Menchikov", "Orlov", "Volkonski"]),
+    ("SA", ["Savoie", "Carignan", "San Martino", "Solaro", "Thaon de Revel", "Cavour", "d'Azeglio", "Balbo"]),
+    ("SE", ["Deux-Ponts", "Vasa", "De la Gardie", "Oxenstierna", "Brahe", "Wrangel", "Horn", "Bernadotte"]),
+    ("SX", ["Wettin", "Brühl", "Flemming", "Schönburg", "Einsiedel", "Löser", "Bünau", "Vitzthum"]),
+    ("TR", ["Karamanli", "Djerbi", "Gurgi", "Mukni", "Ben Châbane", "Arnaout", "Dghiss", "Siala"]),
+    ("TU", ["Husseinite", "Mouradite", "Ben Ayed", "Khaznadar", "Djellouli", "Ben Diaf", "Kheireddine", "Lasram"]),
+    ("VE", ["Mocenigo", "Morosini", "Contarini", "Grimani", "Dandolo", "Foscari", "Loredan", "Manin"]),
+    ("WE", ["Neubourg", "Plettenberg", "Fürstenberg", "Metternich", "Salm", "Wied", "Nesselrode", "Spee"]),
+    ("WU", ["Wurtemberg", "Grävenitz", "Montmartin", "Zeppelin", "Leutrum", "Gemmingen", "Phull", "Normann"]),
+];
+
+/// (géographie 5) Les prénoms, prénoms féminins et noms (généraux, épouses) d'une grande famille culturelle d'Europe,
+/// écrits à la française. La France garde PRENOMS, PRENOMS_F et SURNAMES, comme les départements.
+struct Culture {
+    prenoms: &'static [&'static str],
+    prenoms_f: &'static [&'static str],
+    noms: &'static [&'static str],
+}
+const CULTURES: [(&str, Culture); 10] = [
+    ("britannique", Culture {
+        prenoms: &["Georges", "Guillaume", "Jacques", "Charles", "Henri", "Édouard", "Thomas", "Jean", "Richard", "Robert"],
+        prenoms_f: &["Anne", "Marie", "Élisabeth", "Caroline", "Charlotte", "Sarah"],
+        noms: &["Marlborough", "Wellesley", "Moore", "Wolfe", "Clive", "Howe", "Cornwallis", "Abercromby", "Burgoyne", "Raglan", "Napier", "Hill", "Paget", "Graham", "Campbell", "Stanhope"],
+    }),
+    ("allemande", Culture {
+        prenoms: &["Frédéric", "Guillaume", "Charles", "Léopold", "Ferdinand", "Maximilien", "Jean", "Ernest", "Auguste", "Louis"],
+        prenoms_f: &["Sophie", "Marie-Thérèse", "Élisabeth", "Louise", "Wilhelmine", "Charlotte"],
+        noms: &["Blücher", "Gneisenau", "Scharnhorst", "Seydlitz", "Ziethen", "Schwerin", "Daun", "Laudon", "Lacy", "Mack", "Clausewitz", "Moltke", "Roon", "Yorck", "Bülow", "Kleist"],
+    }),
+    ("russe", Culture {
+        prenoms: &["Pierre", "Alexis", "Ivan", "Alexandre", "Nicolas", "Michel", "Paul", "Dimitri", "Fédor", "Boris"],
+        prenoms_f: &["Catherine", "Élisabeth", "Anne", "Marie", "Nathalie", "Sophie"],
+        noms: &["Souvorov", "Koutouzov", "Cheremetiev", "Roumiantsev", "Bagration", "Barclay de Tolly", "Miloradovitch", "Platov", "Bennigsen", "Potemkine", "Repnine", "Saltykov", "Apraxine", "Golitsyne", "Skobelev", "Gourko"],
+    }),
+    ("espagnole", Culture {
+        prenoms: &["Philippe", "Charles", "Ferdinand", "Jean", "Joseph", "Antoine", "François", "Pierre", "Diègue", "Louis"],
+        prenoms_f: &["Marie", "Isabelle", "Élisabeth", "Barbe", "Thérèse", "Louise"],
+        noms: &["Castaños", "Palafox", "Cuesta", "Blake", "Ricardos", "O'Reilly", "Gálvez", "Espartero", "Prim", "Narváez", "Montemar", "Santa Cruz", "Mina", "Ballesteros"],
+    }),
+    ("portugaise", Culture {
+        prenoms: &["Jean", "Pierre", "Joseph", "Antoine", "Emmanuel", "François", "Louis", "Michel"],
+        prenoms_f: &["Marie", "Anne", "Isabelle", "Thérèse", "Françoise", "Béatrice"],
+        noms: &["Saldanha", "Silveira", "Freire", "Sousa", "Pereira", "Almeida", "Mascarenhas", "Noronha", "Lencastre", "Lippe"],
+    }),
+    ("italienne", Culture {
+        prenoms: &["Victor-Amédée", "Charles-Emmanuel", "Jean", "Joseph", "François", "Pierre", "Antoine", "Ferdinand", "Côme", "Laurent"],
+        prenoms_f: &["Marie", "Anne", "Lucrèce", "Victoire", "Clotilde", "Béatrice"],
+        noms: &["Montecuccoli", "Caracciolo", "Pignatelli", "Doria", "Spinola", "Colloredo", "Pepe", "Cialdini", "La Marmora", "Cadorna", "Garibaldi", "Bava", "Fanti", "Durando"],
+    }),
+    ("ottomane", Culture {
+        prenoms: &["Moustafa", "Ahmed", "Mahmoud", "Sélim", "Osman", "Méhémet", "Ali", "Hassan", "Ibrahim", "Soliman"],
+        prenoms_f: &["Fatma", "Aïcha", "Hatice", "Mihrimah", "Esma", "Zeynep"],
+        noms: &["Köprülü", "Baltadji", "Topal Osman", "Hekimoğlou", "Djezzar", "Kara Moustafa", "Hussein Pacha", "Réchid", "Omer Pacha", "Alemdar", "Halil Pacha", "Ali Pacha"],
+    }),
+    ("scandinave", Culture {
+        prenoms: &["Charles", "Frédéric", "Christian", "Gustave", "Adolphe", "Ulric", "Jean", "Éric", "Magnus", "Olaf"],
+        prenoms_f: &["Ulrique-Éléonore", "Christine", "Louise", "Sophie", "Ingrid", "Hedvige"],
+        noms: &["Stenbock", "Rehnskiöld", "Lewenhaupt", "Horn", "Armfelt", "Klingspor", "Adlercreutz", "Tordenskjold", "Rantzau", "Ahlefeldt", "Schulin", "Löwenörn"],
+    }),
+    ("polonaise", Culture {
+        prenoms: &["Jean", "Auguste", "Stanislas", "Casimir", "Michel", "Joseph", "Adam", "Thadée", "Ladislas", "Jérôme"],
+        prenoms_f: &["Marie", "Hedwige", "Anne", "Sophie", "Isabelle", "Constance"],
+        noms: &["Poniatowski", "Kosciuszko", "Dombrowski", "Sobieski", "Jablonowski", "Lubomirski", "Potocki", "Sieniawski", "Branicki", "Chlopicki", "Skrzynecki", "Pulaski"],
+    }),
+    ("neerlandaise", Culture {
+        prenoms: &["Guillaume", "Maurice", "Jean", "Henri", "Frédéric", "Antoine", "Adrien", "Corneille", "Jacques", "Pierre"],
+        prenoms_f: &["Marie", "Anne", "Wilhelmine", "Louise", "Amélie", "Catherine"],
+        noms: &["Ouwerkerk", "Slangenburg", "Tilly", "Coehoorn", "Fagel", "Van der Dussen", "Chassé", "Van Heutsz", "Bentinck", "Van Haren", "De Ruyter", "Van Ghent"],
+    }),
+];
+
+/// La famille culturelle d'un pays (géographie 5), None pour la France et les départements.
+fn culture(code: &str) -> Option<&'static Culture> {
+    let k = match code {
+        "GB" => "britannique",
+        "AU" | "PR" | "BA" | "SX" | "HA" | "WU" | "WE" | "CH" | "CO" => "allemande",
+        "RU" => "russe",
+        "ES" => "espagnole",
+        "PT" => "portugaise",
+        "NA" | "SA" | "VE" | "GE" | "PO" | "IT" | "ML" => "italienne",
+        "OT" | "CR" | "AL" | "TU" | "TR" | "MA" => "ottomane",
+        "SE" | "DK" => "scandinave",
+        "PL" => "polonaise",
+        "NL" | "BE" => "neerlandaise",
+        _ => return None,
+    };
+    CULTURES.iter().find(|c| c.0 == k).map(|c| &c.1)
+}
+fn liste(l: &[&str]) -> Val {
+    l.iter().map(|n| Val::from(*n)).collect()
+}
+/// Les prénoms d'un camp : ceux de sa famille culturelle (un pays d'Europe), sinon PRENOMS.
+pub fn prenoms(code: &str) -> Val {
+    culture(code).map_or_else(PRENOMS, |c| liste(c.prenoms))
+}
+/// Les prénoms féminins d'un camp (PRENOMS_F pour la France et les départements).
+pub fn prenoms_f(code: &str) -> Val {
+    culture(code).map_or_else(PRENOMS_F, |c| liste(c.prenoms_f))
+}
+/// Les noms des généraux et des familles d'un camp (SURNAMES pour la France et les départements).
+pub fn surnames(code: &str) -> Val {
+    culture(code).map_or_else(SURNAMES, |c| liste(c.noms))
+}
 py_const!(PRENOMS, list!["Jean", "Pierre", "Bernard", "Arnaud", "Guillaume", "Raymond", "Jacques", "Joseph", "Gaston", "Henri", "Louis",
            "Antoine", "Étienne", "Bertrand", "Armand", "François"]);
 py_const!(PRENOMS_F, list!["Marie", "Jeanne", "Catherine", "Marguerite", "Anne", "Louise", "Madeleine", "Isabeau", "Françoise", "Thérèse"]);

@@ -149,26 +149,98 @@ Le moteur Rust les embarque et sait jouer sur cette carte ; la page (écran de d
   hameau de 440 âmes en 1700 collé à la frontière, tombait dans les premières années et la Russie finissait absorbée
   par la Courlande.
 - **Essais** : `rust/conquete/tests/europe.rs` (carte, pays, réseau, trajectoires, parties, 24 mois deux fois à la même
-  graine, sauvegarde, escarmouches, bataille de campagne) et `tests/bancs_serveur.rs` (`mode_europe`, reprise au
+  graine, sauvegarde, escarmouches, bataille de campagne ; depuis les corrections : moyens de départ, champ de bataille
+  à 5 km par case, Scandinavie reliée, textes des règles) et `tests/bancs_serveur.rs` (`mode_europe`, reprise au
   redémarrage). Les références des géographies 1 à 3 n'ont pas bougé.
 - **Mesures** (release, machine de développement) : carte faite en 4 s ; `/api/map?geo=5` : 7,4 Mo, 1,07 Mo compressé
   (France : 14,6 Mo et 1,9 Mo) ; un mois de campagne avec 32 IA : 1,5 s vers 1700, 3 à 4 s vers 1850 (France, 89 camps :
   2 à 3 s en 1700, 3,5 à 4,5 s en 1870).
 
+### Corrections du mode Europe : faites le 16/11/2026 (géographie 5, `GEN_EUROPE` = 2)
+
+Demande du joueur : un équilibre réaliste, le champ de bataille à l'échelle, les distances des textes, tout en français,
+la Scandinavie reliée. Tout est gardé par `Game::europe()` ou la géographie 5 : les références des géographies 1 à 4 ne
+bougent pas.
+
+1. **Équilibre** (`rules.rs` : `MOYENS_EUROPE`, `moyens_europe` ; `engine/mod.rs` : `regiments_europe`, `Game::new`).
+   Chaque pays a son armée de paix réelle (milliers d'hommes, au début de 1700, 1790, 1813, 1870) et son trésor
+   (multiple des 500 livres d'un département). Un régiment (~300 hommes) pour 10 000 hommes réels en 1700, 15 000 en 1790,
+   20 000 en 1813, 25 000 en 1870, 30 au plus ; un cinquième en garnison à la capitale, 15 % dans les plus grandes
+   villes, le reste en armées de dix régiments au plus (capitale, puis plus grandes villes) ; Malte et la
+   Courlande : une demi-garnison et un petit corps (un homme sur trente-trois). Vivres, recrues et armes suivent le nombre
+   de régiments. Le plancher de production (`FLOOR`) est multiplié par le poids du pays (armée de 1700 / 60 000, de
+   0,1 à 1). Les villes produisent et lèvent leur milice selon leur taille (racine de la population / 25 000, de 0,4 à
+   2,5 : base, port et vignoble ; `Game::taille_europe`). Le commerce d'un traité se mesure au plus petit des deux
+   partenaires. Les IA paient les vivres jusqu'à deux fois le cours ordinaire en disette, ne lèvent plus de régiment quand
+   les greniers sont vides et la récolte déficitaire, s'accordent au moins 2 régiments quel que soit leur revenu (5
+   en France : un micro-État n'en paie pas cinq) et, trésor compris, pas plus que leur récolte n'en nourrit (vivres
+   produits / 1,5, plus deux : une armée marche sur son ventre, et la Grande-Bretagne n'aligne plus deux fois l'armée de
+   la France). Une seconde défaite face au même vainqueur n'est fatale qu'à un pays réduit de
+   moitié (la France ne passe plus tout entière à l'Angleterre parce que Paris est tombé deux fois). Tableau et parties
+   de contrôle plus bas.
+2. **Champ de bataille** (`tactics/terrain.rs`, `terrain_ville.rs`, `bridge.rs`, `skirmish.rs`) : la génération lit la
+   carte de campagne à `km_case` km par case (tremblé des bords, lieu tout proche à 1,3 km, routes à 2 km, place et
+   bords mouillés de la ville, terrain d'une escarmouche à 3,5–6 km) : en Europe, un fleuve à 10 km n'est plus sur un
+   champ de 3 km sur 2. Sur les cartes au kilomètre, les multiplications par 1 laissent les batailles identiques au bit.
+3. **Distances** (`views.rs` : `rules_payload_carte`, `km_carte`) : les règles comptent en cases ; pour l'Europe, le
+   texte servi multiplie par 5 les distances de la carte de campagne (hussards +30 km, aérostiers +15 km, Chappe +50 km,
+   télégraphe +75 et +20 km, téléphone +50 km, espion 70 km, magasin aux vivres 150 km). La portée des canons La Hitte
+   (« à 3 km ») se compte sur le champ de bataille, en vrais kilomètres : inchangée. Le texte de la France est le même.
+   La page n'a qu'une distance calculée (`ui.js`, tronçons de voie ferrée) : déjà en km réels (`rails.rs`).
+4. **En français partout** : « capitale » au lieu de « chef-lieu » pour un pays (politiques des villes, régiments étrangers,
+   chemins de fer, effets des événements, Vauban) ; le legs d'un négociant va « au pays », pas « à la province » ; les
+   régiments étrangers « plus en service ». Noms : `MAISON_NOMS` des 32 pays (la maison régnante de 1700 d'abord :
+   Romanov, Habsbourg, Hohenzollern, Osman, Giray…), et dix familles culturelles (britannique, allemande, russe,
+   espagnole, portugaise, italienne, ottomane, scandinave, polonaise, néerlandaise) pour les prénoms, les épouses et les
+   généraux (`R::prenoms`, `prenoms_f`, `surnames` : Souvorov, Koutouzov, Cheremetiev… en Russie). La France et les
+   départements gardent leurs noms.
+5. **Scandinavie** (`geo.rs` : `BACS_5`, `_relier` ; `waterways.rs` : `MERS_5`) : bacs nommés du Grand Belt
+   (Roskilde – Odense), du Petit Belt (Odense – Fredericia), de l'Øresund (Copenhague – Malmö, Elseneur – Helsingborg) ;
+   voies de mer de Stockholm à Åbo par Mariehamn, de Kiel à Copenhague, de Stralsund à Ystad. Bornholm n'est plus le seul
+   lien (Rønne – Colberg disparaît). La Finlande tient à la Russie par la terre (Vyborg, la Carélie) ; le fond du golfe de
+   Botnie est au-delà du 62e parallèle, hors de la carte : pas de route de Suède en Finlande par la Laponie. `_relier`
+   préfère la liaison qui passe le moins sur l'eau : plus de « route » Revel – Helsingfors à travers le golfe de Finlande.
+
+Moyens de départ (régiments et hommes en armées et garnisons ; trésor en livres en 1700 ; un département de France :
+6 régiments, 1 540 hommes, 500 livres) :
+
+| Pays | Armée réelle (milliers) 1700 / 1790 / 1813 / 1870 | Régiments (hommes) 1700 | 1790 | 1813 | 1870 | Trésor | Plancher |
+|---|---|---|---|---|---|---|---|
+| France | 150 / 170 / 400 / 400 | 15 (4 000) | 11 (2 860) | 20 (5 340) | 16 (4 300) | 1 500 | 1 |
+| Empire ottoman | 120 / 150 / 150 / 200 | 12 (3 160) | 10 (2 740) | 8 (2 240) | 8 (2 240) | 1 250 | 1 |
+| Russie | 110 / 300 / 450 / 700 | 11 (2 860) | 20 (5 340) | 23 (6 240) | 28 (7 460) | 700 | 1 |
+| Habsbourg | 100 / 300 / 250 / 280 | 10 (2 740) | 20 (5 340) | 13 (3 460) | 11 (2 860) | 1 000 | 1 |
+| Suède | 70 / 50 / 40 / 40 | 7 (1 940) | 3 (840) | 2 (600) | 2 (600) | 600 | 1 |
+| Provinces-Unies | 45 / 40 / 20 / 60 | 5 (1 340) | 3 (840) | 2 (600) | 2 (600) | 1 750 | 0,75 |
+| Prusse | 40 / 190 / 230 / 400 | 4 (1 140) | 13 (3 460) | 12 (3 160) | 16 (4 300) | 700 | 0,67 |
+| Maroc, Crimée | 40 / 30 (20) / … | 4 (1 000) | 2 (500) | 2 (500) | 2 (500) | 300, 150 | 0,67 |
+| Grande-Bretagne | 30 / 45 / 250 / 180 | 3 (840) | 3 (840) | 13 (3 460) | 7 (1 940) | 2 250 | 0,5 |
+| Espagne, Danemark, Pologne | 30 / 80, 70, 60 / … | 3 (700–840) | 4–5 | 2–5 | 2–4 | 1 100, 600, 300 | 0,5 |
+| Savoie, Saxe | 25 / 40, 30 / … | 3 (840) | 2–3 | 2 | 2–3 | 450, 500 | 0,42 |
+| Portugal, Naples, Venise, Bavière | 20 / … | 2 (600) | 2–3 | 2–3 | 2 | 750, 500, 700, 400 | 0,33 |
+| Hanovre, Suisse, Westphalie, Pays-Bas du Sud, Alger | 15 / … | 2 (600) | 2 | 2 | 2 | 250 à 400 | 0,25 |
+| Toscane et Milanais, Tunis | 10 / … | 2 (600) | 2 | 2 | 2 | 500, 200 | 0,17 |
+| Tripoli, Gênes, États pontificaux, Wurtemberg | 5 / … | 2 (452) | 2 | 2 | 2 | 125 à 500 | 0,1 |
+| Courlande, Malte | 2, 1,5 | 2 (210) | 2 (211) | 2 | 2 | 100, 200 | 0,1 |
+
+Parties de contrôle (`simuler --geo 5`, IA partout, release) :
+
+| Partie | Avant (0 → 30 ans) | Après |
+|---|---|---|
+| 1700 → 1730, graines 1 et 2 | France absorbée deux fois par la Grande-Bretagne (1715, 1717), les Habsbourg par les États pontificaux (1719), l'Empire ottoman par la Crimée (1720), l'Espagne par le Portugal (1723) ; Crimée à 154 places, Malte à 22 places et 300 000 livres | aucune grande puissance absorbée pour de bon : France 49 et 48 places, Grande-Bretagne 64 et 73, Russie 106 et 76, Empire ottoman 152 et 158, Espagne 52 et 50 ; les Habsbourg tombent une fois devant les Ottomans (1711) et se relèvent (25 places en 1730) ; tombent Malte, la Westphalie, la Suisse, la Saxe ; Crimée 48 et 7 places, Malte 0 |
+| 1790 → 1820, graines 1 et 2 | (Russie absorbée par la Crimée en 1829 dans la partie de contrôle d'avant) | 30 et 32 pays en vie : France 50 et 38 places, Russie 95 et 116, Habsbourg 68 et 66, Prusse 84 et 43, Empire ottoman 82 et 118 ; tombent le Hanovre (à la Prusse, 1804) et la Suisse (1816) ; Malte 11 et 8 places |
+
+Les petits pays lèvent encore, avec les années, 4 000 à 8 000 hommes (le quart des grandes puissances) ; mois de
+banqueroute et de famine, tous camps, en 1700 – 1730 : 533 et 1 160 sur 23 040 mois-camps (2 et 1 200 avant : les
+pays pauvres ont désormais un plancher à leur mesure). Sur d'autres graines (versions intermédiaires), la France est
+encore tombée devant une coalition (1716, 1723) : le hasard des guerres compte.
+
 Reste à faire :
 - **la page** : écran de départ (choix du mode par `modes`, `/api/map?geo=5`), dessin de la carte à 5 km, distances
   affichées (multiplier par `km_case`), styles des villes par pays, ligne des crédits (Natural Earth, GeoNames) ;
-- **l'équilibre** (une partie de contrôle de 1700 à 1725 : 167 guerres déclarées, 40 traités, 6 pays absorbés, dont la
-  France par la Grande-Bretagne et les Habsbourg par les États pontificaux) : les armées traversent l'Europe
-  en quelques semaines, comme elles traversaient la France (c'est la règle des cases) ; les petits pays (Malte,
-  Wurtemberg) entretiennent 4 000 à 10 000 hommes avec le plancher de vivres d'un camp, sont souvent en disette et
-  entassent 50 000 à 380 000 livres (le cours des vivres, tenu par 32 acheteurs, reste à 0,85, au-dessus du prix que
-  les IA acceptent, 0,78) ; tous les camps partent avec les mêmes réserves et la même armée de 740 hommes, Malte comme
-  la Russie, et Malte finit avec 22 places ;
-- **le champ de bataille** tiré de la carte compte une case pour un kilomètre : en Europe, le terrain des cases voisines
-  et une rivière à 5 km s'y retrouvent à 1 km ;
-- textes restés français : noms de familles et de généraux, « chef-lieu » dans quelques messages, descriptions des
-  techniques (« les vapeurs de la Garonne ») ; les distances en « km » de ces textes sont des cases ;
+- les armées traversent l'Europe en quelques semaines, comme elles traversaient la France (c'est la règle des cases) ;
+- textes : descriptions des techniques propres à la France (« les vapeurs de la Garonne »), événements locaux d'esprit
+  français (faux-sauniers, octroi) ; les régiments n'ont pas de nom dans le jeu (rien à traduire) ;
 - cabotage libre de port à port, mode naval ; spécialités des places d'Europe (blé, fer, bois, vin) ; 4 km par case si
   le Raspberry suit.
 

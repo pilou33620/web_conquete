@@ -186,10 +186,11 @@ pub struct Lieu {
 }
 
 impl Lieu {
-    pub fn new(V: Val, O: Val, k: f64, n: &Val, cx: f64, cy: f64, K: Rc<PV::Carte>) -> Lieu {
+    /// km : ce que vaut une case de la carte de campagne (1 km, ou 5 en Europe : GeoMap::km_case).
+    pub fn new(V: Val, O: Val, k: f64, km: f64, n: &Val, cx: f64, cy: f64, K: Rc<PV::Carte>) -> Lieu {
         let Mk = PV::M * k;
         let (nx, ny) = (n.atf("x"), n.atf("y"));
-        let pos = (WF / 2.0 + (nx - cx) * 1000.0 * k, HF / 2.0 + (ny - cy) * 1000.0 * k);
+        let pos = (WF / 2.0 + (nx - cx) * 1000.0 * k * km, HF / 2.0 + (ny - cy) * 1000.0 * k * km);
         let u = |p: Pt| -> Pt { (IC.0 + (p.0 - nx) * SF, IC.1 + (p.1 - ny) * SF) };
         let mut ilots = vec![];
         if O.truthy() {
@@ -279,10 +280,11 @@ pub fn preparer(geo: &GeoMap, spec: &Val, pl: &Val, cx: f64, cy: f64) -> Lieu {
     // (près de l'eau, battle._zones peut faire venir l'assaillant par un autre bord, plus sec : place pour lui partout)
     let K = PV::carte_de(geo);
     let (nx, ny) = (n.atf("x"), n.atf("y"));
-    let mouille = [0.8, 1.6, 2.4].iter().any(|&d| (0..12).map(|q| q as f64 * PI / 6.0).any(|a| K.eauK(nx + a.cos() * d, ny + a.sin() * d) > 0.5));
+    let km = geo.km_case; // (une case : 1 km, ou 5 en Europe)
+    let mouille = [0.8, 1.6, 2.4].iter().any(|&d| (0..12).map(|q| q as f64 * PI / 6.0).any(|a| K.eauK(nx + a.cos() * d / km, ny + a.sin() * d / km) > 0.5));
     for _ in 0..4 {
         // (la place se rapproche du centre quand la carte rétrécit)
-        let (px, py_) = (WF / 2.0 + (nx - cx) * 1000.0 * k, HF / 2.0 + (ny - cy) * 1000.0 * k);
+        let (px, py_) = (WF / 2.0 + (nx - cx) * 1000.0 * k * km, HF / 2.0 + (ny - cy) * 1000.0 * k * km);
         let lim = if pl.get("battle").truthy() {
             let room = [("O", px), ("E", WF - px), ("N", py_), ("S", HF - py_)];
             py::min_f(room.iter().map(|&(e, v)| v - (if e == e0 || mouille { DEPLOI } else { 20.0 }))).unwrap()
@@ -291,7 +293,7 @@ pub fn preparer(geo: &GeoMap, spec: &Val, pl: &Val, cx: f64, cy: f64) -> Lieu {
         };
         k = pmax(0.12, pmin(1.0, lim / r));
     }
-    Lieu::new(V, O, k, &n, cx, cy, K)
+    Lieu::new(V, O, k, km, &n, cx, cy, K)
 }
 
 /// Les routes de la place jusqu'au bord de la scène, en mètres, pour chaque arête de la place : le tracé même de

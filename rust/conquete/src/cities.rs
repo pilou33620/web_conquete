@@ -919,6 +919,7 @@ pub fn set_policy(g: &mut Game, code: &str, nid: i64, k: &str, same_type: bool) 
             "village" => "tous vos villages",
             "fort" => "toutes vos places fortes",
             "ville" => "toutes vos villes",
+            "capitale" if g.europe() => "toutes vos capitales",
             "capitale" => "tous vos chefs-lieux",
             _ => panic!("KeyError: {}", py::repr_s(&typ)),
         };
