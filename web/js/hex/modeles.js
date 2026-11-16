@@ -172,13 +172,12 @@ export function fanion(L, col, x, y, z, h = 7) {
 }
 
 // ------------------------------------------------------------------ enceintes
-// enceinte en anneau de rayon rad autour de (0, 0) selon le niveau des remparts (1 à 4) ; portes tournées vers `portes`
-// (angles des routes qui entrent). 1 : mur et tours rondes ; 2 : remparts épais, tours plus hautes ; 3 : tracé bastionné
+// enceinte en anneau de rayon rad autour de (0, 0) selon le niveau des remparts (1 à 4) ; `portes` : les points des
+// routes alentour ([x, z], tous les 0,8) : une porte s'ouvre là où une route traverse le mur, pile sur elle. 1 : mur et tours rondes ; 2 : remparts épais, tours plus hautes ; 3 : tracé bastionné
 // avec fossé ; 4 : bastions, demi-lunes et glacis à la Vauban.
 export function enceinte(L, niveau, rad, portes = []) {
   const n = niveau >= 3 ? 5 + (rad > 12 ? 1 : 0) : 8, H = niveau >= 2 ? 1.9 : 1.4, ep = niveau >= 2 ? 1.1 : 0.7;
   const coins = Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2 + Math.PI / n; return [Math.cos(a) * rad, Math.sin(a) * rad, a]; });
-  const porteA = a => portes.some(p => Math.abs(Math.atan2(Math.sin(a - p), Math.cos(a - p))) < Math.PI / n * 0.55);
   if (niveau >= 3) {   // fossé (et glacis) : un anneau plus sombre au pied
     const fos = new THREE.RingGeometry(rad * 0.98, rad * (niveau >= 4 ? 1.42 : 1.26), n * 4); fos.rotateX(-Math.PI / 2);
     put(L, fos, niveau >= 4 ? 0x6f9a52 : 0x5f8a4a, 0, 0.04, 0, Math.PI / n, 0);
@@ -186,11 +185,23 @@ export function enceinte(L, niveau, rad, portes = []) {
   for (let i = 0; i < n; i++) {
     const [ax, az] = coins[i], [bx, bz] = coins[(i + 1) % n], l = Math.hypot(bx - ax, bz - az), a = -Math.atan2(bz - az, bx - ax);
     const mid = Math.atan2((az + bz) / 2, (ax + bx) / 2), mx = (ax + bx) / 2, mz = (az + bz) / 2;
-    if (porteA(mid)) {   // la porte : deux tours de part et d'autre, un passage
-      for (const k of [-1, 1]) { const px = mx + Math.cos(-a) * k * 1.4, pz = mz + Math.sin(-a) * k * 1.4; put(L, cyl(0.8, 0.9, H + 1.2, 8), PIERRE, px, (H + 1.2) / 2, pz, 0, 0.12); put(L, cone(1, 1.3, 8), ARDOISE, px, H + 1.85, pz, 0, 0.1); }
-      const lm = l / 2 - 2.2, u = (l / 2 + 2.2) / 2;
-      if (lm > 0.3) for (const k of [-1, 1]) put(L, boite(lm, H, ep), niveau >= 3 ? 0xcdb98c : PIERRE2, mx + Math.cos(-a) * k * u, H / 2, mz + Math.sin(-a) * k * u, a, 0.12);
-    } else put(L, boite(l + 0.2, H, ep), niveau >= 3 ? 0xcdb98c : PIERRE2, mx, H / 2, mz, a, 0.14);
+    // où les routes traversent ce pan (distance le long du mur) : une porte à chaque fois, écartée des tours d'angle
+    const dx = (bx - ax) / l, dz = (bz - az) / l, ou = [];
+    for (const [px, pz] of portes) {
+      const s = (px - ax) * dx + (pz - az) * dz;
+      if (s > 0 && s < l && Math.abs((px - ax) * dz - (pz - az) * dx) < 0.5) ou.push(Math.min(l - 2.6, Math.max(2.6, s)));
+    }
+    ou.sort((p, q) => p - q);
+    let deb = 0;
+    const mur = fin => { if (fin - deb > 0.3) put(L, boite(fin - deb + 0.2, H, ep), niveau >= 3 ? 0xcdb98c : PIERRE2, ax + dx * (deb + fin) / 2, H / 2, az + dz * (deb + fin) / 2, a, 0.14); };
+    for (const s of ou) {
+      if (s < deb + 2.2) continue;   // (la même route, ou une porte déjà là)
+      mur(s - 2.2);
+      // la porte : deux tours de part et d'autre, un passage
+      for (const k of [-1, 1]) { const px = ax + dx * (s + k * 1.4), pz = az + dz * (s + k * 1.4); put(L, cyl(0.8, 0.9, H + 1.2, 8), PIERRE, px, (H + 1.2) / 2, pz, 0, 0.12); put(L, cone(1, 1.3, 8), ARDOISE, px, H + 1.85, pz, 0, 0.1); }
+      deb = s + 2.2;
+    }
+    mur(l);
     if (niveau >= 3) {   // le bastion : une pointe de flèche au saillant, parapet gazonné
       const b = cone(2.4, H + 0.2, 4); put(L, b, 0xc4b083, ax * 1.06, (H + 0.2) / 2, az * 1.06, -coins[i][2] + Math.PI / 4, 0.14);
       put(L, boite(l + 0.2, 0.4, ep * 0.7), 0x8fae5a, mx, H + 0.2, mz, a, 0.08);
