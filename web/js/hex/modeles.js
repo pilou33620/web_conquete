@@ -154,6 +154,9 @@ export function arbre(L, x, y, z, s = 1, sorte = 'feuillu', teinte) {
   if (sorte === 'fruitier') { put(L, cyl(0.18 * s, 0.24 * s, 1 * s, 5), BOIS, x, y + 0.5 * s, z); put(L, sphere(1.1 * s, 0), teinte ?? 0x6fb447, x, y + 1.5 * s, z); return; }
   put(L, cyl(0.3 * s, 0.4 * s, 1.4 * s, 5), BOIS, x, y + 0.7 * s, z);
   put(L, sphere(1.9 * s, 0), teinte ?? choix([0x5fae3e, 0x74b83f, 0x4f9a37]), x, y + 2.9 * s, z);
+  // un houppier en bouquet : une seconde boule, plus petite et plus claire, sur le côté
+  const a = rnd() * 6.3;
+  put(L, sphere(1.3 * s, 0), teinte ?? choix([0x86c44a, 0x9ccb4c, 0x69b542]), x + Math.cos(a) * 1.2 * s, y + 3.6 * s, z + Math.sin(a) * 1.2 * s);
 }
 // barque (gabare de la Garonne, pinasse d'Arcachon) : coque, mât, voile
 export function barque(L, x, y, z, ry, s = 1, voile = true) {

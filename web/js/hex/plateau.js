@@ -46,7 +46,7 @@ export class Plateau {
     this.rivieres();
     for (const t of g.liste) t.top = TERR[t.t].h + (t.t === 'montagne' || t.t === 'haute' ? (hache(t.q, t.r, 9) - 0.5) * 0.8 : 0);
     this.tuiles();
-    const eau = new THREE.Mesh(new THREE.PlaneGeometry(mp.W / g.f + 400, mp.H / g.f + 400), new THREE.MeshStandardMaterial({ color: 0x45aee0, roughness: 0.6, metalness: 0, transparent: true, opacity: 0.78 }));
+    const eau = this.nappe = new THREE.Mesh(new THREE.PlaneGeometry(mp.W / g.f + 400, mp.H / g.f + 400), new THREE.MeshStandardMaterial({ map: this.texMer(), roughness: 0.6, metalness: 0, transparent: true }));
     eau.rotation.x = -Math.PI / 2; eau.position.set(mp.W / g.f / 2, EAU_Y, mp.H / g.f / 2); eau.receiveShadow = true; this.racine.add(eau);
     // le décor des pays et les routes se bâtissent par paquets ; les places, d'après l'état de la partie
     // (par morceaux, que le paysage des siècles refait un à un : paysage)
@@ -147,6 +147,38 @@ export class Plateau {
   // une rivière passe-t-elle sur l'hexagone ou un voisin ?
   pres(t) { return this.eau.has(t.i) || this.g.voisins(t).some(h => this.eau.has(h.i)); }
 
+  // la mer peinte sur la nappe : turquoise sur les hauts-fonds au bord des côtes, bleu profond au large, en dégradé
+  // continu (la distance à la terre, d'hexagone en hexagone, adoucie : plus de marches d'hexagones). 1 px pour 2 km.
+  texMer() {
+    const { mp, g } = this, w = Math.ceil(mp.W / 2), h = Math.ceil(mp.H / 2);
+    let d = new Float32Array(w * h), e = new Float32Array(w * h);
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const t = g.en(i * 2 + 1, j * 2 + 1); d[j * w + i] = t ? Math.min(this.large.get(t) ?? 8, 8) : 8; }
+    for (let n = 0; n < 2; n++) {   // adouci : deux moyennes sur 5 px, en large puis en haut
+      for (const [dx, dy] of [[1, 0], [0, 1]]) {
+        for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+          let s = 0;
+          for (let k = -2; k <= 2; k++) s += d[Math.min(h - 1, Math.max(0, j + k * dy)) * w + Math.min(w - 1, Math.max(0, i + k * dx))];
+          e[j * w + i] = s / 5;
+        }
+        [d, e] = [e, d];
+      }
+    }
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const cx = cv.getContext('2d'), im = cx.createImageData(w, h), c = new THREE.Color();
+    const RAMPE = [[0, 0xa6e4d6], [0.9, 0x55c4d6], [2.2, 0x2f8fd2], [5, 0x1f62b4], [8, 0x1c55a4]].map(([v, col]) => [v, new THREE.Color(col)]);
+    for (let k = 0; k < w * h; k++) {
+      const v = d[k], i = Math.max(1, RAMPE.findIndex(r => r[0] >= v)), [a, ca] = RAMPE[i - 1], [b, cb] = RAMPE[i];
+      c.copy(ca).lerp(cb, Math.min(1, (v - a) / (b - a)));
+      im.data[k * 4] = c.r * 255; im.data[k * 4 + 1] = c.g * 255; im.data[k * 4 + 2] = c.b * 255; im.data[k * 4 + 3] = 255;
+    }
+    cx.putImageData(im, 0, 0);
+    const tex = new THREE.CanvasTexture(cv), P = mp.W / g.f + 400, Q = mp.H / g.f + 400;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    // (la nappe déborde de 200 de chaque côté : la peinture ne couvre que la carte, son bord se prolonge au-delà)
+    tex.repeat.set(P / (mp.W / g.f), Q / (mp.H / g.f)); tex.offset.set(-200 / (mp.W / g.f), -200 / (mp.H / g.f));
+    return this.merTex = tex;
+  }
+
   // ---------------------------------------------------------------- les tuiles (un seul maillage, recoloré selon la saison)
   tuiles() {
     const { g } = this;
@@ -155,6 +187,7 @@ export class Plateau {
     const large = new Map(), file = g.liste.filter(t => !this.estEau(t));
     for (const t of file) large.set(t, 0);
     for (let i = 0; i < file.length; i++) for (const v of g.voisins(file[i])) if (!large.has(v)) { large.set(v, large.get(file[i]) + 1); file.push(v); }
+    this.large = large;
     for (const t of g.liste) {
       const d = TERR[t.t];
       semer(t.q, t.r);
@@ -194,7 +227,13 @@ export class Plateau {
   }
 
   // la carte d'époque : 'cassini', 'etatmajor' ou null (les couleurs de la nature)
-  papier(era) { if (era !== this.era) { this.era = era; this.colorer(); this.sc.sale = true; } }
+  papier(era) {
+    if (era === this.era) return;
+    this.era = era; this.colorer();
+    // (sur la carte d'époque, la mer redevient un lavis clair qui laisse voir le papier)
+    const m = this.nappe.material; m.map = era ? null : this.merTex; m.color.set(era ? 0x45aee0 : 0xffffff); m.opacity = era ? 0.78 : 1; m.needsUpdate = true;
+    this.sc.sale = true;
+  }
 
   // ---------------------------------------------------------------- le paysage des siècles (epoque.js, 2c)
   // les marques du camp qui tient l'hexagone (territoire) : le paysage suit le maître, comme sur la carte d'avant
