@@ -2256,6 +2256,10 @@ fn combat(techs: &[&str], emods: Val) -> (Game, Val, f64) {
     let bt = g.battles.values().remove(0);
     bt.set("mode", "auto");
     g.resolve_battle_now(&bt);
+    if bt.get("mode") == "poursuite" {
+        // (le joueur vainqueur a de la cavalerie : la bataille attend son choix ; il tient le terrain)
+        assert!(TB::command(&mut g, &dict! {"sub" => "pursue", "bid" => bt.at("id"), "v" => false}).atb("ok"));
+    }
     let n = py::sum(a.at("regs").iter().map(|r| r.atf("n")));
     (g, a, n)
 }
