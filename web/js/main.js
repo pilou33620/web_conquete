@@ -22,8 +22,9 @@ let bootVer, bootGeo, reloading = false;  // version du serveur et géographie d
 // recharger la page : pas location.reload(), que Safari renvoie comme la requête d'origine, sans le cookie de session
 // du launcher (jeu ouvert depuis Internet par son relais, /o/<id>/) : on retombait sur sa page de connexion. Une
 // adresse neuve, demandée par la page elle-même, emporte le cookie.
-function recharger() {
-  location.replace(location.pathname + '?r=' + Date.now() + location.hash);
+// geo : la carte à montrer (France ou Europe, écran de départ) ; sans elle, celle de la partie en cours
+function recharger(geo) {
+  location.replace(location.pathname + '?r=' + Date.now() + (geo ? '&geo=' + geo : '') + location.hash);
 }
 
 // le serveur a été relancé sur une nouvelle version, ou la partie chargée a une autre carte (geo.py, VERSION) : cette
@@ -32,6 +33,7 @@ function checkVersion(ver, geo) {
   const carte = geo != null && geo !== bootGeo;
   if (reloading || bootVer === undefined || !carte && (!ver || ver === bootVer)) return reloading;
   reloading = true;
+  if (carte) try { sessionStorage.setItem(REPRISE, '1'); } catch (e) { /* sans stockage : l'écran de départ, « Reprendre » */ }
   ui && ui.toast(carte ? 'Cette partie a sa propre carte : la page va se recharger.' : 'Nouvelle version du jeu installée : la page va se recharger.', 'good');
   setTimeout(recharger, 2500);   // la partie est sur le serveur : rien n'est perdu
   return true;
@@ -116,9 +118,11 @@ async function showStart(info) {
 
 async function boot() {
   const lt = document.getElementById('loading-text');
+  const voulue = +new URLSearchParams(location.search).get('geo') || 0;   // carte choisie à l'écran de départ
   let payload;
   try {
-    payload = await api.get('/api/map');
+    payload = await api.get('/api/map' + (voulue ? '?geo=' + voulue : ''));
+    if (payload.ok === false) payload = await api.get('/api/map');   // (carte inconnue dans l'adresse)
   } catch (e) {
     lt.textContent = 'Impossible de joindre le serveur. Lancez le jeu (lancer.sh ou lancer.bat) puis rechargez la page.';
     return;
@@ -130,6 +134,9 @@ async function boot() {
   map = new MapView(document.getElementById('map'), payload);
   ui = new UI(map, payload.rules, payload.map, api);
   ui.onRefresh = () => setTimeout(poll, 60);
+  ui.modes = payload.modes || [];
+  ui.geo = payload.geo;
+  ui.onPickGeo = recharger;
   // bataille tactique : ouverte au choix « Commander la bataille » (ui.js) ou quand l'état l'annonce (poll)
   bataille = new Bataille({
     api, map,
@@ -149,7 +156,7 @@ async function boot() {
   ui.onStartGame = async (dept, difficulty, scenario) => {
     if (!dept) return;
     let r;
-    try { r = await api.post('/api/new', { dept, difficulty, scenario }); } catch (e) { return ui.toast('Serveur injoignable : la partie n’a pas pu commencer.', 'bad'); }
+    try { r = await api.post('/api/new', { dept, difficulty, scenario, geo: bootGeo }); } catch (e) { return ui.toast('Serveur injoignable : la partie n’a pas pu commencer.', 'bad'); }
     if (!r.ok) return ui.toast(r.msg, 'bad');
     if (autreCarte(r, !Tuto.vu())) return;
     resetUI();
@@ -203,7 +210,7 @@ async function boot() {
   ui.skOpts = payload.skirmish || null;
   ui.onStartSkirmish = async cfg => {
     let r;
-    try { r = await api.post('/api/skirmish', cfg); } catch (e) { return ui.toast('Serveur injoignable : la bataille n’a pas pu commencer.', 'bad'); }
+    try { r = await api.post('/api/skirmish', { ...cfg, geo: bootGeo }); } catch (e) { return ui.toast('Serveur injoignable : la bataille n’a pas pu commencer.', 'bad'); }
     if (!r.ok) return ui.toast(r.msg, 'bad');
     resetUI();
     ui.hideStart();
@@ -224,7 +231,7 @@ async function boot() {
     if (reprise === 'tuto') ui.tuto.start();
     return;
   }
-  await intro(map, payload.map.nodes);
+  if (!voulue) await intro(map, payload.map.nodes);
   await showStart(info);
   announceUpdate(info.update);
 }

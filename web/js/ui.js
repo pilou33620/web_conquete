@@ -28,6 +28,7 @@ const pctChg = (now, before) => {
 // « de » élidé, comme côté serveur (rules.de) : de Dordogne, d’Agen, du Bugue
 const de = n => /^Le /.test(n) ? 'du ' + n.slice(3) : /^Les /.test(n) ? 'des ' + n.slice(4) : /^[aeiouyhâàéèêîïôöûü]/i.test(n) ? `d’${n}` : `de ${n}`;
 // les départements de l'écran de départ, rangés par région d'aujourd'hui (plus simple à chercher que 89 noms à la suite)
+const UN = { province: 'une province', département: 'un département', pays: 'un pays' };
 const REGIONS = {
   'Auvergne-Rhône-Alpes': '01 03 07 15 26 38 42 43 63 69 73 74', 'Bourgogne-Franche-Comté': '21 25 39 58 70 71 89 90',
   'Bretagne': '22 29 35 56', 'Centre-Val de Loire': '18 28 36 37 41 45', 'Corse': '20 2A 2B', 'Grand Est': '08 10 51 52 54 55 57 67 68 88',
@@ -530,7 +531,7 @@ export class UI {
     if (r === 'outils') rows.push(['Bonus des outils', '+' + Math.round((me.tools_bonus - 1) * 100) + ' %']);
     if (r === 'fer' || r === 'bois') rows.push(['Consommés par les ateliers', 'oui']);
     const fl = me.floor && me.floor[r];
-    if (fl) rows.push([this.st.word === 'province' ? 'Minimum garanti de la province' : 'Minimum garanti du département', fmt1(this.per(fl.min)) + ' ' + this.perU + (fl.add > 0.05 ? ` (+${fmt1(this.per(fl.add))} en ce moment)` : '')]);
+    if (fl) rows.push([this.st.word === 'province' ? 'Minimum garanti de la province' : this.st.word === 'pays' ? 'Minimum garanti du pays' : 'Minimum garanti du département', fmt1(this.per(fl.min)) + ' ' + this.perU + (fl.add > 0.05 ? ` (+${fmt1(this.per(fl.add))} en ce moment)` : '')]);
     const help = {
       livres: 'Monnaie : solde, recrutement, recherches, constructions.',
       vivres: 'Nourrissent les troupes. Récoltes fortes en été et en automne, faibles en hiver.',
@@ -1008,6 +1009,7 @@ export class UI {
       // écran de départ
       case 'pick-dept': this.pickDept(d.v); break;
       case 'pick-diff': this.startDiff = d.v; this.renderStart(); break;
+      case 'pick-geo': if (+d.v !== this.geo && this.onPickGeo) { this.toast('Chargement de la carte…'); this.onPickGeo(+d.v); } break;
       case 'pick-scen': this.startScen = d.v; this.map.showPreview(d.v); this.renderStart(); break;
       case 'start-game': this.onStartGame && this.onStartGame(this.startDept, this.startDiff, this.startScen); break;
       case 'resume': this.onResume && this.onResume(); break;
@@ -1184,7 +1186,7 @@ export class UI {
     const DE = st.word === 'province'
       ? { '33': 'de la Guyenne', '24': 'du Périgord', '40': 'des Landes de Gascogne', '47': 'de l’Agenais', '64': 'du Béarn et du Pays basque' }
       : { '33': 'de la Gironde', '24': 'de la Dordogne', '40': 'des Landes', '47': 'du Lot-et-Garonne', '64': 'des Basses-Pyrénées' };
-    const typeLab = gn.type === 'capitale' ? `Chef-lieu ${DE[gn.dept]}` : TYPE_LABEL[gn.type];
+    const typeLab = gn.type === 'capitale' ? (st.word === 'pays' ? 'Capitale' : `Chef-lieu${DE[gn.dept] ? ' ' + DE[gn.dept] : ''}`) : TYPE_LABEL[gn.type];
     const terr = this.md.terrain_names[this.map.terrain[Math.floor(gn.y) * this.md.W + Math.floor(gn.x)]];
     const sub = ns.o === gn.dept && gn.type === 'capitale' ? typeLab : gn.type === 'capitale' ? `${typeLab}, tenu par ${oname}` : `${typeLab}, ${oname}`;
     let h = `<div class="p-head">${ns.o === 'neutre' ? coat('#8d8a7a', '—') : coat(col, ns.o)}<div><div class="p-title">${esc(gn.name)}</div>
@@ -1779,7 +1781,7 @@ export class UI {
       let acts = '';
       const btn = (v, l, cls = '') => `<button class="btn ${cls}" data-act="diplo" data-to="${f.code}" data-v="${v}">${l}</button>`;
       if (f.over === me) {
-        acts += `<div class="muted small">${this.st.word === 'province' ? 'Cette province' : 'Ce département'} vous verse un tribut et combat vos ennemis.</div>`;
+        acts += `<div class="muted small">${this.st.word === 'province' ? 'Cette province' : this.st.word === 'pays' ? 'Ce pays' : 'Ce département'} vous verse un tribut et combat vos ennemis.</div>`;
       } else if (f.st === 'guerre') {
         acts += `<div class="row"><input class="amount" type="number" min="0" step="50" value="0" id="amt-paix-${f.code}" aria-label="Tribut offert"><span class="muted small">livres offertes</span>${btn('paix', 'Proposer la paix')}</div>`;
         acts += `<div class="btns">${btn('soumission', 'Exiger la soumission', 'danger')}</div>`;
@@ -2072,8 +2074,8 @@ export class UI {
     // (toute la France : la liste des départements de la carte, par nom ; la fiche de celui qu'on a choisi ; on peut aussi
     // toucher une de ses villes sur la carte)
     const jouables = this.md.playable || Object.keys(this.rules.factions), nomDe = c => sc.names[c] || this.rules.factions[c]?.name || c;
-    const choixDept = `<select class="dept-sel" data-dept-sel="1" aria-label="${sc.word === 'province' ? 'Province' : 'Département'}">
-      <option value="">${sc.word === 'province' ? 'Choisir une province…' : 'Choisir un département…'}</option>
+    const choixDept = `<select class="dept-sel" data-dept-sel="1" aria-label="${sc.word}">
+      <option value="">${sc.word === 'département' ? 'Choisir un département…' : `Choisir ${UN[sc.word] || sc.word}…`}</option>
       ${(() => {
         const opt = c => `<option value="${c}" ${c === this.startDept ? 'selected' : ''}>${esc(nomDe(c))} (${c})</option>`, parNom = (a, b) => nomDe(a).localeCompare(nomDe(b), 'fr');
         const ok = jouables.filter(c => this.rules.factions[c]), rangés = new Set();
@@ -2103,7 +2105,7 @@ export class UI {
       <div class="dept-list">${cards}</div>
       <div class="row"><span class="lab">Difficulté</span><span class="seg">${diffs}</span></div>
       <div class="start-actions">
-        <button class="btn primary" data-act="start-game" ${this.startDept ? '' : 'disabled'}>${this.startDept ? `Commencer avec ${esc(sc.names[this.startDept] || this.rules.factions[this.startDept].name)} en ${sc.year}` : (sc.word === 'province' ? 'Choisissez une province' : 'Choisissez un département')}</button>
+        <button class="btn primary" data-act="start-game" ${this.startDept ? '' : 'disabled'}>${this.startDept ? `Commencer avec ${esc(sc.names[this.startDept] || this.rules.factions[this.startDept].name)} en ${sc.year}` : `Choisissez ${UN[sc.word] || 'un département'}`}</button>
         ${saves ? `<div class="section-t">Parties sauvegardées${info.saves.length > 5 ? ` <span class="muted small">(${info.saves.length})</span>` : ''}</div><div class="saves scroll">${saves}</div>` : ''}
         <details class="start-reglages"><summary class="section-t">Réglages</summary>${this.reglagesHtml()}</details>
         ${this.versionHtml(info.update)}
@@ -2126,8 +2128,10 @@ export class UI {
 
   // ------------------------------------------------------------------ mode Bataille (écran de départ)
   modeTabs() {
-    if (!this.skOpts) return '';
-    return `<div class="seg mode-tabs" role="tablist">${[['campagne', 'Campagne'], ['bataille', 'Bataille']].map(([k, l]) =>
+    const cartes = (this.modes || []).length > 1 ? `<div class="row"><span class="lab">Carte</span><span class="seg">${this.modes.map(m =>
+      `<button class="${m.geo === this.geo ? 'on' : ''}" data-act="pick-geo" data-v="${m.geo}">${esc(m.nom)}</button>`).join('')}</span></div>` : '';
+    if (!this.skOpts) return cartes;
+    return cartes + `<div class="seg mode-tabs" role="tablist">${[['campagne', 'Campagne'], ['bataille', 'Bataille']].map(([k, l]) =>
       `<button role="tab" aria-selected="${this.startMode === k}" class="${this.startMode === k ? 'on' : ''}" data-act="start-mode" data-v="${k}">${l}</button>`).join('')}</div>`;
   }
   skUnits() {
