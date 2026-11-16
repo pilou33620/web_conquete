@@ -163,3 +163,41 @@ fn trajectoire_par_departement() {
     let bx = R::pop_curve(&noeud("Bordeaux", "33", "capitale"));
     assert_eq!(json::dumps_ref_ordre(&bx), json::dumps_ref_ordre(&R::POP_CURVES().at("bordeaux")));
 }
+
+/// Refait les entrées des constantes qui ont changé exprès, ou qui sont nouvelles (la bataille par stratégie,
+/// SPEC-BATAILLE.md : 16/11/2026), avec leur liste ; les autres ne sont pas touchées.
+/// `CONQUETE_REFAIRE_RULES=1 cargo test --release -p conquete --test rules refaire -- --ignored`
+#[test]
+#[ignore]
+fn refaire() {
+    if std::env::var_os("CONQUETE_REFAIRE_RULES").is_none() {
+        return;
+    }
+    let chemin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/references/rules.json");
+    let texte = std::fs::read_to_string(&chemin).unwrap();
+    let r = json::loads(&texte).unwrap();
+    assert_eq!(json::dumps_compact(&r), texte.trim_end(), "le fichier ne se réécrit pas à l'identique");
+    let cs = R::constantes();
+    for (nom, v) in &cs {
+        let canon = json::dumps_ref_ordre(v);
+        let repr = sha(&trie(v).repr());
+        let a = r.at("constantes").get(*nom);
+        if !a.truthy() {
+            r.at("constantes").set(*nom, conquete::dict! {"canon" => canon, "repr" => repr});
+            eprintln!("{nom} : nouvelle");
+            continue;
+        }
+        let forme = if a.has("canon") { a.at("canon") == canon.as_str() } else { a.at("empreinte") == json::empreinte_ordre(v).as_str() };
+        if !forme || a.at("repr") != repr.as_str() {
+            if a.has("canon") {
+                a.set("canon", canon);
+            } else {
+                a.set("empreinte", json::empreinte_ordre(v));
+            }
+            a.set("repr", repr);
+            eprintln!("{nom} : refaite");
+        }
+    }
+    r.set("noms", cs.iter().map(|(n, _)| Val::from(*n)).collect::<Val>());
+    std::fs::write(&chemin, json::dumps_compact(&r) + if texte.ends_with('\n') { "\n" } else { "" }).unwrap();
+}

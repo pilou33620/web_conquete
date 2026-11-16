@@ -38,7 +38,6 @@ use crate::py::{self, json, Val};
 use crate::rails as RL;
 use crate::rules as R;
 use crate::tactics::bridge as TB;
-use crate::tactics::skirmish as SK;
 use crate::turns as TT;
 use crate::views as V;
 use crate::{dict, list};
@@ -84,7 +83,6 @@ pub struct App {
     pub static_: HashMap<i64, (Arc<Vec<u8>>, Arc<Vec<u8>>)>,
     pub geo: Rc<GeoMap>,
     pub game: Option<Box<Game>>,
-    pub skirmish: Option<Box<Game>>, // mode Bataille : une partie jetable, à côté de la campagne (game/tactics/skirmish.py)
     pub reseau: Arc<Mutex<Reseau>>,
     pub _auto_key: Option<(usize, i64, i64, bool)>,
 }
@@ -109,7 +107,6 @@ impl App {
             static_: HashMap::new(),
             geo: geo.clone(),
             game: None,
-            skirmish: None,
             reseau,
             _auto_key: None,
         };
@@ -147,7 +144,7 @@ impl App {
             map.set("rails", RL::client_payload(geo));
             // (chaque carte a ses camps, ses textes et ses places de bataille ; modes : les cartes des nouvelles parties,
             // pour l'écran de départ ; km_case : ce que vaut une case, 1 ou 5 km)
-            let payload = dict! {"map" => map, "rules" => V::rules_payload_carte(geo.version == VERSION_EUROPE), "skirmish" => SK::options(geo),
+            let payload = dict! {"map" => map, "rules" => V::rules_payload_carte(geo.version == VERSION_EUROPE),
                 "ver" => UPDATE.lock().unwrap().version.clone(), "geo" => geo.version, "modes" => R::MODES(),
                 "km_case" => py::int(geo.km_case)};
             let raw = json::dumps_compact(&payload).into_bytes();
@@ -176,14 +173,8 @@ impl App {
             let now = Instant::now();
             let dt = (now - last).as_secs_f64().min(0.3);
             last = now;
-            if let Some(sk) = self.skirmish.as_deref_mut() {
-                if catch_unwind(AssertUnwindSafe(|| SK::tick(sk, dt))).is_err() {
-                    sk.tactical = None;
-                }
-            }
             if let Some(g) = self.game.as_deref_mut() {
                 let ok = catch_unwind(AssertUnwindSafe(|| {
-                    TB::tick(g, dt); // bataille tactique en cours (pas fixes, ×0 à ×4)
                     g.advance(dt);
                 }))
                 .is_ok()
@@ -230,13 +221,6 @@ impl App {
     }
 
     fn command_(&mut self, body: &Val) -> Result<Val, String> {
-        if body.is_dict() && body.get("cmd") == "tac" && SK::owns(self.skirmish.as_deref(), &body.get("bid")) {
-            let res = TB::command(self.skirmish.as_deref_mut().unwrap(), body); // mode Bataille (une commande mal formée reçoit aussi une réponse)
-            if body.get("sub") == "close" {
-                self.skirmish = None;
-            }
-            return Ok(res);
-        }
         let Some(g) = self.game.as_deref_mut() else {
             return Ok(dict! {"ok" => false, "msg" => "Aucune partie en cours."});
         };
@@ -279,10 +263,12 @@ impl App {
             return Ok(Self::_r(TT::command(g, &st(body.get("action")), &body.get("value"))));
         }
         if c == "tac" {
-            return Ok(TB::command(g, body)); // batailles tactiques (choix, déploiement, ordres, vitesse…)
+            return Ok(TB::command(g, body)); // batailles : réglage, stratégie du joueur, poursuite (SPEC-BATAILLE.md)
         }
-        if ["retreat", "split", "merge", "split_type", "garrison", "move", "path"].contains(&c) && TB::army_locked(g, &a) {
-            return Ok(dict! {"ok" => false, "msg" => "Cette armée se bat sur le champ de bataille : donnez-y vos ordres."});
+        if c == "apercu" {
+            // rapport de forces estimé contre une armée ou une place ennemie, sans donner l'ordre
+            let cible = body.get("target");
+            return Ok(g.apercu(p, &a, &cible));
         }
         if ["move", "path", "assault", "arrive"].contains(&c) {
             // tour par tour : les ordres de marche se donnent pendant son tour
@@ -343,8 +329,8 @@ impl App {
             let ar = if a.is_str() { g.armies.get(&a) } else { Val::None };
             let res = AA::choose(g, p, &ar, &st(body.get("value")));
             let out = Self::_r(res);
-            if out.getb("ok") && ar.truthy() && g.tactical.as_ref().is_some_and(|tb| ar.get("battle") == tb.bid.as_str()) {
-                out.set("bid", ar.at("battle")); // « Commander la bataille » : le champ de bataille s'ouvre
+            if out.getb("ok") && ar.truthy() && ar.get("battle").truthy() {
+                out.set("bid", ar.at("battle")); // l'assaut : la bataille qui attend (ou non) la stratégie du joueur
             }
             TT::settle(g); // après un choix sans combat, l'armée reprend sa route
             return Ok(out);
@@ -669,20 +655,6 @@ impl App {
                 st.set("ver", ver()); // le client recharge la page si le serveur a changé de version
                 return json_(st, 200);
             }
-            if path == "/api/tactic" || path == "/api/tactic_map" {
-                let bid = Val::from(q(&d.requete, "bid").unwrap_or_default());
-                let since = since();
-                // mode Bataille, ou campagne
-                let g = if SK::owns(self.skirmish.as_deref(), &bid) { self.skirmish.as_deref_mut() } else { self.game.as_deref_mut() };
-                let Some(g) = g else {
-                    return json_(dict! {"ok" => false, "msg" => "Aucune partie en cours."}, 404);
-                };
-                let st = if path == "/api/tactic" { TB::battle_view(g, &bid, since) } else { TB::map_view(g, &bid) };
-                if st.is_none() {
-                    return json_(dict! {"ok" => false, "msg" => "Aucune bataille tactique."}, 404);
-                }
-                return json_(st, 200);
-            }
             if path == "/api/saves" {
                 return json_(dict! {"saves" => self.list_saves(), "running" => self.game.is_some(),
                     "update" => UPDATE.lock().unwrap().val()}, 200);
@@ -694,7 +666,7 @@ impl App {
         if path == "/api/load" {
             return json_(self.load(&body.get("name")), 200);
         }
-        if path == "/api/new" || path == "/api/skirmish" {
+        if path == "/api/new" {
             // (geo : la carte du mode choisi, 4 sans rien dire, 5 pour l'Europe)
             let v = body.get("geo");
             if v.is_some() && !(matches!(v, Val::Int(_)) && modes().contains(&v.i())) {
@@ -718,19 +690,6 @@ impl App {
             let seed = if body.getb("seed") { _int(&body.at("seed")).map(Val::from).unwrap_or(Val::None) } else { Val::None };
             self.game = Some(Box::new(Game::new(geo.clone(), dept.s(), &body.get_or("difficulty", "normal"), &seed, &body.get_or("scenario", "1790"))));
             return json_(dict! {"ok" => true, "geo" => geo.version}, 200);
-        }
-        if path == "/api/skirmish" {
-            // mode Bataille : une bataille isolée, sans campagne
-            let geo = geo_du_corps(self);
-            let (sk, bid) = match catch_unwind(AssertUnwindSafe(|| SK::new(geo, &body))) {
-                Ok(r) => r,
-                Err(_) => return json_(dict! {"ok" => false, "msg" => "La bataille n’a pas pu être préparée."}, 200),
-            };
-            let Some(sk) = sk else {
-                return json_(dict! {"ok" => false, "msg" => bid}, 200);
-            };
-            self.skirmish = Some(Box::new(sk));
-            return json_(dict! {"ok" => true, "bid" => bid}, 200);
         }
         if path == "/api/cmd" {
             return json_(self.command(&body), 200);

@@ -633,10 +633,23 @@ pub fn blockade_tick(g: &mut Game, n: &Val, bes: &Val, dt: f64) {
             g.retreat(&b);
         }
     }
+    // … la garnison aussi : ses régiments sortent avec armes et bagages et se replient vers la place amie la plus
+    // proche (les miliciens rentrent chez eux) ; ses hommes sont sauvés (SPEC-BATAILLE.md)
+    let mut saufs = 0;
+    if g.factions.has(&o) && g.factions.at(&o).atb("alive") && n.atb("garrison") {
+        let regs = n.at("garrison");
+        saufs = py::round(py::sum(regs.iter().map(|r| r.atf("n"))));
+        n.set("garrison", list![]);
+        let b = g.create_army(&o, gn.atf("x"), gn.atf("y"), &regs, &Val::from(nid), &Val::None, &Val::None);
+        g.retreat(&b);
+    }
     n.set("siege", Val::None);
     if g.player == by || g.player == o || (g.factions.has(&o) && g.friendly(&g.player, &o)) {
-        let texte = format!("{}, affamée, ouvre ses portes à {}.", gn.at("name"), g.fname(&by));
-        g.log("capture", &texte, &au_lieu(&gn, &by, true));
+        let honneurs = if saufs > 0 { format!(" La garnison sort avec les honneurs de la guerre ({saufs} hommes).") } else { String::new() };
+        let texte = format!("{}, affamée, ouvre ses portes à {}.{honneurs}", gn.at("name"), g.fname(&by));
+        let kw = au_lieu(&gn, &by, true);
+        kw.set("extra", dict! {"capitulation" => dict! {"node" => nid, "par" => &by, "de" => &o, "honneurs" => true, "saufs" => saufs}});
+        g.log("capture", &texte, &kw);
     }
     g.capture(nid, &by, true);
     for b in bes.iter() {

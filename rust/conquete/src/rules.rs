@@ -1491,12 +1491,14 @@ py_const!(PLANS, dict!{
     "harcelement" => dict!{"label" => "Harcèlement", "desc" => "Escarmouches : pertes réduites des deux côtés, on décroche au bout d’un jour."}
 });
 py_const!(FORMATION_SPEED, dict!{"ligne" => 1.0, "colonne" => 1.1, "carre" => 0.6, "tirailleurs" => 0.95});
-py_const!(PHASES, dict!{"canonnade" => "Canonnade", "fusillade" => "Fusillade", "charge" => "Charge"});
-// poids de chaque arme selon la phase
+// les quatre phases d'une bataille (SPEC-BATAILLE.md) ; une embuscade commence à la fusillade
+py_const!(PHASES, dict!{"escarmouche" => "Escarmouche", "canonnade" => "Canonnade", "fusillade" => "Fusillade", "charge" => "Charge"});
+// poids de chaque arme (rules.ARMES) selon la phase : chacune pèse surtout dans la sienne
 py_const!(PHASE_W, dict!{
-    "canonnade" => dict!{"artillerie" => 1.0, "inf" => 0.35, "cavalerie" => 0.1},
-    "fusillade" => dict!{"artillerie" => 0.8, "inf" => 1.0, "cavalerie" => 0.45},
-    "charge" => dict!{"artillerie" => 0.5, "inf" => 1.0, "cavalerie" => 1.25}
+    "escarmouche" => dict!{"art" => 0.2, "inf" => 0.15, "cav" => 0.1, "tir" => 1.0, "grenadiers" => 0.1},
+    "canonnade" => dict!{"art" => 1.0, "inf" => 0.35, "cav" => 0.1, "tir" => 0.5, "grenadiers" => 0.3},
+    "fusillade" => dict!{"art" => 0.8, "inf" => 1.0, "cav" => 0.45, "tir" => 0.8, "grenadiers" => 1.0},
+    "charge" => dict!{"art" => 0.5, "inf" => 1.0, "cav" => 1.25, "tir" => 0.5, "grenadiers" => 1.4}
 });
 py_const!(OPEN_TERRAIN, tup!["Plaine", "Vignoble", "Lande", "Collines"]);
 // résolution automatique (engine.update_battles, end_battle), recalée sur les batailles jouées sur le champ de bataille
@@ -1514,6 +1516,130 @@ pub const PURSUIT_CAV: f64 = 0.05; pub const PURSUIT_FOOT: f64 = 0.02;
 pub const PRISON_LOSS: f64 = 0.07; pub const PRISON_ASSAULT: f64 = 0.2; pub const PRISON_CAUGHT: f64 = 0.15;
 // usure : le vaincu, même en bon ordre, perd cette part de ses hommes en traînards pendant la retraite (désertions)
 pub const LOSER_STRAGGLE: f64 = 0.05;
+
+// ------------------------------------------------------------------ la bataille par stratégie (SPEC-BATAILLE.md)
+// Cinq armes et le général. Chaque sorte de régiment est classée dans une arme (ARME_DE ; tout le reste : infanterie).
+// Les grenadiers (ajout du 16/11/2026) sont l'infanterie d'élite de choc : peu nombreux et chers (UNITS), un feu de ligne
+// égal à celui de l'infanterie, le choc à la charge (PHASE_W), l'assaut et la tenue d'un ouvrage (GREN_*, STRATS), un
+// moral qui plie en dernier ; médiocres en harcèlement. Ce qui touche l'infanterie (fusils, manœuvres) les touche aussi.
+py_const!(ARMES, dict!{"inf" => "Infanterie", "cav" => "Cavalerie", "art" => "Artillerie", "tir" => "Tirailleurs", "grenadiers" => "Grenadiers"});
+py_const!(ARME_DE, dict!{"legere" => "tir", "chasseurs" => "tir", "cavalerie" => "cav", "royal_allemand" => "cav",
+           "artillerie" => "art", "mitrailleuses" => "art", "grenadiers" => "grenadiers"});
+// grenadiers : à l'assaut d'une position, d'une ville ou d'un fort (assaillant) ; à la défense d'un ouvrage (défenseur
+// d'une position, d'une ville ou d'un fort) ; ce que les pertes du camp ôtent à leur moral, au lieu de 1
+pub const GREN_ASSAUT: f64 = 1.3; pub const GREN_OUVRAGE: f64 = 1.25; pub const GREN_MORAL: f64 = 0.6;
+/// L'arme d'une sorte de régiment ('milice' et les sortes inconnues : infanterie).
+pub fn arme_de(typ: &str) -> &'static str {
+    match typ {
+        "legere" | "chasseurs" => "tir",
+        "cavalerie" | "royal_allemand" => "cav",
+        "artillerie" | "mitrailleuses" => "art",
+        "grenadiers" => "grenadiers",
+        _ => "inf",
+    }
+}
+/// Rang d'une arme dans les tableaux de puissance (engine.update_battles) : artillerie, infanterie, cavalerie,
+/// tirailleurs, grenadiers.
+pub const N_ARMES: usize = 5;
+pub const ARMES_RANG: [&str; N_ARMES] = ["art", "inf", "cav", "tir", "grenadiers"];
+pub fn rang_arme(arme: &str) -> usize {
+    ARMES_RANG.iter().position(|a| *a == arme).unwrap_or(1)
+}
+// une stratégie : ce qu'elle change à chaque arme (m), à ses propres pertes (pertes), les stratégies adverses qu'elle
+// contre (bat : CONTRE), la découverte qu'elle exige (tech)
+fn _s(nom: &str, desc: &str, m: Val, pertes: f64, bat: Val, tech: Val) -> Val {
+    dict!{"label" => nom, "desc" => desc, "m" => m, "pertes" => pertes, "bat" => bat, "tech" => tech}
+}
+py_const!(STRATS, dict!{
+    // (l'assaut frontal engage tout le monde : +10 % à chaque arme ; sans cela, hors ses deux contres, rien ne le
+    // recommandait jamais : parties de contrôle du 16/11/2026)
+    "frontal" => _s("Assaut frontal", "Toutes les armes ensemble, droit devant.", dict!{"inf" => 1.1, "cav" => 1.1, "art" => 1.1, "tir" => 1.1, "grenadiers" => 1.25}, 1.0,
+                    list!["repli", "faubourgs"], Val::None),
+    "prep" => _s("Préparation d’artillerie", "Les canons pilonnent d’abord, l’infanterie attend.", dict!{"art" => 1.45, "inf" => 0.95, "grenadiers" => 0.95}, 0.85,
+                 list!["tenir", "remparts", "bastions", "carres"], Val::None),
+    "debord" => _s("Débordement", "La cavalerie tourne l’ennemi, le centre est plus léger. Hors terrain ouvert, elle s’empêtre.",
+                   dict!{"cav" => 1.6, "inf" => 0.9, "grenadiers" => 0.9}, 1.0, list!["embus", "feurem", "contre"], Val::None),
+    "harcel" => _s("Harcèlement", "Les tirailleurs usent l’ennemi sans s’engager à fond ; on décroche au bout d’un jour.",
+                   dict!{"tir" => 1.6, "inf" => 0.8, "cav" => 0.8, "grenadiers" => 0.6}, 0.6, list!["carres", "tenir"], Val::None),
+    "colonnes" => _s("Attaque en colonnes", "Choc à la baïonnette en colonnes serrées.", dict!{"inf" => 1.3, "tir" => 1.1, "grenadiers" => 1.5}, 1.15,
+                     list!["embus", "faubourgs"], Val::from("ordre_mixte")),
+    "tenir" => _s("Tenir la ligne", "Défense ferme sur place, feu nourri, moral plus solide.", dict!{"inf" => 1.15, "grenadiers" => 1.2}, 0.8,
+                  list!["frontal", "colonnes"], Val::None),
+    "carres" => _s("Former les carrés", "L’infanterie se ferme à la cavalerie, mais souffre du canon.", dict!{"inf" => 1.05, "grenadiers" => 1.05}, 1.1,
+                   list!["debord", "coup"], Val::None),
+    "contre" => _s("Contre-attaque", "Encaisser, puis charger quand l’ennemi s’essouffle.", dict!{"cav" => 1.3, "inf" => 1.1, "grenadiers" => 1.25}, 1.1,
+                   list!["prep", "harcel", "bombarder"], Val::None),
+    "embus" => _s("Embuscade de tirailleurs", "Les tirailleurs attendent à couvert et fusillent de flanc.", dict!{"tir" => 1.7}, 0.9,
+                  list!["frontal", "tourner"], Val::None),
+    "repli" => _s("Repli en bon ordre", "Céder le terrain pour sauver l’armée : on décroche après la canonnade.",
+                  dict!{"inf" => 0.6, "cav" => 0.8, "art" => 0.5, "tir" => 0.9, "grenadiers" => 0.6}, 0.45, list![], Val::None),
+    "coup" => _s("Coup de main", "Cavalerie et tirailleurs enlèvent la position par surprise.", dict!{"cav" => 1.35, "tir" => 1.35, "art" => 0.6, "grenadiers" => 1.2}, 0.9,
+                 list!["tenir", "embus"], Val::None),
+    "bombarder" => _s("Bombarder puis monter", "Le canon écrase la position avant l’assaut.", dict!{"art" => 1.5, "grenadiers" => 1.3}, 0.9, list!["tenir", "carres"], Val::None),
+    "tourner" => _s("Tourner la position", "Une partie de l’armée contourne par les flancs.", dict!{"cav" => 1.3, "inf" => 1.1, "grenadiers" => 1.1}, 1.0,
+                    list!["tenir", "contre"], Val::None),
+    "remparts" => _s("Tenir les remparts", "Toute la garnison sur les murs.", dict!{"inf" => 1.2, "art" => 1.1, "grenadiers" => 1.3}, 0.7,
+                     list!["frontal", "colonnes", "debord"], Val::None),
+    "faubourgs" => _s("Défendre les faubourgs", "Les tirailleurs se battent maison par maison.", dict!{"tir" => 1.7, "inf" => 1.05}, 0.95,
+                      list!["harcel", "debord"], Val::None),
+    "sortie" => _s("Faire une sortie", "Sortir des murs et bousculer les assiégeants.", dict!{"cav" => 1.5, "inf" => 1.15, "grenadiers" => 1.3}, 1.3,
+                   list!["prep", "harcel"], Val::None),
+    "feurem" => _s("Feu des remparts", "L’artillerie de la place répond aux batteries ennemies.", dict!{"art" => 1.6}, 0.85, list!["prep", "frontal"], Val::None),
+    "bastions" => _s("Tenir les bastions", "Chaque bastion couvre ses voisins de son feu.", dict!{"inf" => 1.2, "art" => 1.25, "grenadiers" => 1.35}, 0.65,
+                     list!["frontal", "colonnes", "debord"], Val::None),
+    "nuit" => _s("Sortie de nuit", "Enclouer les canons ennemis à la faveur de l’obscurité.", dict!{"tir" => 1.5, "inf" => 1.1, "grenadiers" => 1.1}, 1.1, list!["prep"], Val::None),
+    "bout" => _s("Tenir jusqu’au bout", "Aucune reddition : la garnison se bat jusqu’au dernier.", dict!{"inf" => 1.3, "art" => 1.1, "tir" => 1.2, "grenadiers" => 1.4}, 1.5,
+                 list!["harcel", "frontal"], Val::None)
+});
+pub const CONTRE: f64 = 1.2;   // une stratégie qui contre celle d'en face : +20 %
+py_const!(STRATS_TENACES, tup!["tenir", "remparts", "bastions", "bout"]);   // le moral y tient mieux sous les pertes
+py_const!(STRATS_FLANC, tup!["debord", "tourner"]);   // la cavalerie plus nombreuse en terrain ouvert prend l'ennemi de flanc
+// les situations, déduites de l'état (engine.situation), jamais choisies : rase campagne ; position (le défenseur est
+// retranché : ouvrage de campagne, barricades d'une place ouverte) ; ville (place à remparts) ; fort. Les stratégies de
+// l'assaillant (att) et du défenseur (def). L'avantage du défenseur n'est pas un chiffre de plus : il vient du terrain
+// (geo.TERRAIN), du retranchement et des remparts, comme avant.
+py_const!(SITUATIONS, {
+    let (attaque, defense) = (list!["frontal", "prep", "debord", "harcel", "colonnes"], list!["tenir", "carres", "contre", "embus", "repli"]);
+    dict!{
+        "campagne" => dict!{"label" => "Rase campagne", "att" => "J’attaque", "def" => "Je défends",
+                            "desc" => "Bataille en rase campagne : le défenseur a l’avantage du terrain.", "s_att" => &attaque, "s_def" => &defense},
+        "position" => dict!{"label" => "Prise de position", "att" => "Prise de position", "def" => "Défense de position",
+                            "desc" => "Le défenseur est retranché : il faut lui prendre sa position.",
+                            "s_att" => list!["coup", "bombarder", "tourner", "harcel"], "s_def" => list!["tenir", "carres", "contre", "embus"]},
+        "ville" => dict!{"label" => "Ville", "att" => "Attaque de ville", "def" => "Défense de ville",
+                         "desc" => "Assaut d’une ville : ses remparts couvrent le défenseur.", "s_att" => &attaque,
+                         "s_def" => list!["remparts", "faubourgs", "sortie", "feurem"]},
+        "fort" => dict!{"label" => "Fort", "att" => "Attaque de fort", "def" => "Défense de fort",
+                        "desc" => "Assaut d’un fort : ses bastions couvrent le défenseur.", "s_att" => &attaque,
+                        "s_def" => list!["bastions", "feurem", "nuit", "bout"]}
+    }
+});
+// les découvertes qui pèsent au combat, par arme (leurs effets : TECH et ARMS ; le journal de bataille les cite)
+py_const!(TECH_ARME, dict!{
+    "inf" => list!["baionnette", "fusil1777", "tir_rang", "feu_peloton", "ordre_mixte", "percussion", "minie", "chassepot", "gras", "lebel", "retranchements"],
+    "cav" => list!["hussards", "cuirassiers"],
+    "art" => list!["valliere", "gribeauval", "art_cheval", "valee", "lahitte", "debange", "canon75", "melinite"],
+    "tir" => list!["voltigeurs", "minie"],
+    "grenadiers" => list!["baionnette", "fusil1777", "tir_rang", "feu_peloton", "ordre_mixte", "percussion", "minie", "chassepot", "gras", "lebel", "retranchements"]
+});
+// temps et sol (en plus du feu : WEATHER) : la charge de cavalerie s'embourbe ou glisse ; le brouillard sert les
+// embuscades (attaque en embuscade ou par surprise, stratégie « embus ») et gêne la reconnaissance
+pub const BOUE_CHARGE: f64 = 0.8; pub const NEIGE_CHARGE: f64 = 0.85; pub const BROUILLARD_EMBUS: f64 = 1.15;
+// renforts : une armée amie libre à moins de RENFORT_KM (deux hexagones) rejoint la bataille quand la charge commence
+pub const RENFORT_KM: f64 = 8.0;
+// reconnaissance : chance que la stratégie ennemie annoncée soit la vraie ; base, puis la part de cavalerie (jusqu'à
+// RECO_CAV pour RECO_CAV_PART de cavaliers), les hussards, un général éclaireur ; un espion dans la place : RECO_ESPION.
+// Sans cavalerie ni espion : rien n'est annoncé.
+pub const RECO_BASE: f64 = 0.45; pub const RECO_CAV: f64 = 0.25; pub const RECO_CAV_PART: f64 = 0.15; pub const RECO_HUSSARDS: f64 = 0.1;
+pub const RECO_ECLAIREUR: f64 = 0.1; pub const RECO_ESPION: f64 = 0.85; pub const RECO_MAX: f64 = 0.9; pub const RECO_BROUILLARD: f64 = 0.2;
+// poursuite choisie par le vainqueur qui a de la cavalerie : part des vaincus rattrapés (PURSUIT_CAV s'ils décrochent en
+// bon ordre, le double s'ils sont rompus), au prix de la fatigue de ses hommes ; s'il tient le terrain, seuls les
+// débris d'une armée rompue sont ramassés (PURSUIT_FOOT)
+pub const POURSUITE_FAT: f64 = 35.0; pub const POURSUITE_FAT_MAX: f64 = 60.0;
+// prises : canons (PRISE_CANONS pièces par batterie perdue par le vaincu rompu ou chassé de sa place) et drapeaux (un
+// par régiment anéanti ou pris), comptés au prestige du vainqueur
+pub const PRISE_CANONS: i64 = 8; pub const PRESTIGE_CANON: f64 = 0.1; pub const PRESTIGE_DRAPEAU: f64 = 0.5;
+pub const VETERANS_XP: i64 = 8; pub const VETERANS_XP_VAINCU: i64 = 3;   // expérience gagnée par les régiments survivants
 
 // ------------------------------------------------------------------ espions, impôts, fleuves
 py_const!(SPY, dict!{
@@ -1600,7 +1726,17 @@ pub fn constantes() -> Vec<(&'static str, Val)> {
         ("WD_LOSS", Val::from(WD_LOSS)), ("WD_RATIO", Val::from(WD_RATIO)), ("WD_EVEN_LOSS", Val::from(WD_EVEN_LOSS)),
         ("WD_PLACE_LOSS", Val::from(WD_PLACE_LOSS)), ("WD_DEF", Val::from(WD_DEF)), ("PURSUIT_CAV", Val::from(PURSUIT_CAV)),
         ("PURSUIT_FOOT", Val::from(PURSUIT_FOOT)), ("PRISON_LOSS", Val::from(PRISON_LOSS)), ("PRISON_ASSAULT", Val::from(PRISON_ASSAULT)),
-        ("PRISON_CAUGHT", Val::from(PRISON_CAUGHT)), ("LOSER_STRAGGLE", Val::from(LOSER_STRAGGLE)), ("SPY", SPY()),
+        ("PRISON_CAUGHT", Val::from(PRISON_CAUGHT)), ("LOSER_STRAGGLE", Val::from(LOSER_STRAGGLE)), ("ARMES", ARMES()), ("ARME_DE", ARME_DE()), ("GREN_ASSAUT", Val::from(GREN_ASSAUT)), ("GREN_OUVRAGE", Val::from(GREN_OUVRAGE)),
+        ("GREN_MORAL", Val::from(GREN_MORAL)), ("STRATS", STRATS()),
+        ("CONTRE", Val::from(CONTRE)), ("STRATS_TENACES", STRATS_TENACES()), ("STRATS_FLANC", STRATS_FLANC()), ("SITUATIONS", SITUATIONS()),
+        ("TECH_ARME", TECH_ARME()), ("BOUE_CHARGE", Val::from(BOUE_CHARGE)), ("NEIGE_CHARGE", Val::from(NEIGE_CHARGE)),
+        ("BROUILLARD_EMBUS", Val::from(BROUILLARD_EMBUS)), ("RENFORT_KM", Val::from(RENFORT_KM)), ("RECO_BASE", Val::from(RECO_BASE)),
+        ("RECO_CAV", Val::from(RECO_CAV)), ("RECO_CAV_PART", Val::from(RECO_CAV_PART)), ("RECO_HUSSARDS", Val::from(RECO_HUSSARDS)),
+        ("RECO_ECLAIREUR", Val::from(RECO_ECLAIREUR)), ("RECO_ESPION", Val::from(RECO_ESPION)), ("RECO_MAX", Val::from(RECO_MAX)),
+        ("RECO_BROUILLARD", Val::from(RECO_BROUILLARD)), ("POURSUITE_FAT", Val::from(POURSUITE_FAT)),
+        ("POURSUITE_FAT_MAX", Val::from(POURSUITE_FAT_MAX)), ("PRISE_CANONS", Val::from(PRISE_CANONS)),
+        ("PRESTIGE_CANON", Val::from(PRESTIGE_CANON)), ("PRESTIGE_DRAPEAU", Val::from(PRESTIGE_DRAPEAU)),
+        ("VETERANS_XP", Val::from(VETERANS_XP)), ("VETERANS_XP_VAINCU", Val::from(VETERANS_XP_VAINCU)), ("SPY", SPY()),
         ("SPY_INTEL_TOURS", Val::from(SPY_INTEL_TOURS)), ("WATER_SPEED", Val::from(WATER_SPEED)), ("SEA_SPEED", Val::from(SEA_SPEED)),
         ("EMBARK_DAYS", Val::from(EMBARK_DAYS)), ("DISEMBARK_DAYS", Val::from(DISEMBARK_DAYS)), ("RIVER_FIRE_KM", Val::from(RIVER_FIRE_KM)),
         ("QUAI_LIVRES", Val::from(QUAI_LIVRES)), ("BLOCKADE_K", Val::from(BLOCKADE_K)), ("TAX_LABELS", TAX_LABELS()), ("TARIFS", TARIFS()),

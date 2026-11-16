@@ -46,6 +46,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 mod armees;
+mod strategie;
 mod batailles;
 mod chemins;
 mod economie;

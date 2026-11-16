@@ -89,6 +89,10 @@ struct Mesures {
     fam: i64,
     crues: i64,
     armes: Vec<Vec<i64>>, // dans l'ordre de GRANDES_ARMES
+    // les batailles (traces : Game.sites), par situation : [nombre, victoires de l'assaillant, décrochages, pertes de
+    // l'assaillant, pertes du défenseur] ; et par stratégie : [fois choisie, victoires]
+    bat: std::collections::BTreeMap<String, [i64; 5]>,
+    strats: std::collections::BTreeMap<String, [i64; 2]>,
 }
 
 /// Une partie de `mois` tours jouée par les IA seules ; rend ses mesures.
@@ -105,6 +109,8 @@ fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64, joueur: &str, 
     let mut err = None;
     let vivant = |g: &Game, c: &str| g.factions.at(c).at("alive").truthy();
     let (mut vu, mut chrono) = (g.seq, std::time::Instant::now());
+    let (mut bat, mut strats) = (std::collections::BTreeMap::<String, [i64; 5]>::new(), std::collections::BTreeMap::<String, [i64; 2]>::new());
+    let mut traces: std::collections::HashSet<String> = Default::default(); // (les traces déjà comptées : elles restent 120 jours)
     for m in 0..mois {
         // (le suivi et le récit : hors des mesures, pour lire une longue partie de contrôle)
         if m % 12 == 0 && (recit || !suivi.is_empty()) {
@@ -122,6 +128,28 @@ fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64, joueur: &str, 
             break;
         }
         carry_on(&mut g);
+        let mut encore = std::collections::HashSet::new();
+        for s in g.sites.iter() {
+            let cle = format!("{} {} {}", s.at("x"), s.at("y"), s.at("t"));
+            if !traces.contains(&cle) {
+                let b = bat.entry(s.get_or("s", "campagne").string()).or_default();
+                let w = s.get("w") == 0i64;
+                b[0] += 1;
+                b[1] += w as i64;
+                b[2] += s.get("d").truthy() as i64;
+                b[3] += s.at("l").ati(0);
+                b[4] += s.at("l").ati(1);
+                for (si, st) in s.get_or("st", conquete::list![]).iter().enumerate() {
+                    if st.is_str() {
+                        let e = strats.entry(st.string()).or_default();
+                        e[0] += 1;
+                        e[1] += (w == (si == 0)) as i64;
+                    }
+                }
+            }
+            encore.insert(cle);
+        }
+        traces = encore;
         if recit {
             for e in g.events.iter().filter(|e| e.ati("seq") > vu && (e.at("kind") == "capitulation" || e.ats("text").contains("déclare la guerre") || e.ats("text").contains("soulève"))) {
                 eprintln!("   {} : {}", e.at("date"), e.at("text"));
@@ -162,6 +190,8 @@ fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64, joueur: &str, 
         // (army_men en valeur : une somme d'entiers reste exacte, comme en Python)
         hommes: py::round(py::sum_v(g.armies.values().iter().map(|a| py::sum_v(a.at("regs").iter().map(|r| r.at("n"))))).f() / n),
         lignes: g.rails.values().iter().filter(|st| st.get("done").truthy()).count() as i64, // tronçons de voie ferrée ouverts
+        bat,
+        strats,
         bq, // mois de banqueroute et de famine, tous camps
         fam,
         crues: g.city_stats.get_or("quoi", Val::dict()).get_or("crue", 0).i(), // crues de ville, tous camps
@@ -235,6 +265,25 @@ fn main() {
         rows.iter().map(|r| r.bq).sum::<i64>(),
         rows.iter().map(|r| r.fam).sum::<i64>()
     );
+    // les batailles (SPEC-BATAILLE.md) : leurs issues par situation, et ce que vaut chaque stratégie
+    let mut bat = std::collections::BTreeMap::<String, [i64; 5]>::new();
+    let mut strats = std::collections::BTreeMap::<String, [i64; 2]>::new();
+    for r in &rows {
+        for (k, v) in &r.bat {
+            let e = bat.entry(k.clone()).or_default();
+            (0..5).for_each(|i| e[i] += v[i]);
+        }
+        for (k, v) in &r.strats {
+            let e = strats.entry(k.clone()).or_default();
+            (0..2).for_each(|i| e[i] += v[i]);
+        }
+    }
+    let pc = |a: i64, b: i64| if b > 0 { py::round(100.0 * a as f64 / b as f64) } else { 0 };
+    println!("batailles : {} ; par situation (nombre, assaillant vainqueur, vaincu qui décroche, pertes moyennes assaillant / défenseur) :", bat.values().map(|v| v[0]).sum::<i64>());
+    for (k, v) in &bat {
+        println!("  {k:<9} {:>6}  {:>3} %  {:>3} %  {:>6} / {}", v[0], pc(v[1], v[0]), pc(v[2], v[0]), v[3] / v[0].max(1), v[4] / v[0].max(1));
+    }
+    println!("stratégies (fois choisie, victoires) : {}", strats.iter().map(|(k, v)| format!("{k} {} ({} %)", v[0], pc(v[1], v[0]))).collect::<Vec<_>>().join(", "));
     println!("crues de ville (tous camps) : {} en {} ans de jeu", rows.iter().map(|r| r.crues).sum::<i64>(), parties * annees);
     for (k, t) in GRANDES_ARMES.iter().enumerate() {
         let ys: Vec<i64> = rows.iter().flat_map(|r| r.armes[k].iter().copied()).collect();

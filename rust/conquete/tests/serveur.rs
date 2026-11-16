@@ -108,10 +108,6 @@ impl Jeu {
         }
     }
 
-    fn texte_sortie(&self) -> String {
-        self.sortie.lock().unwrap().join("\n")
-    }
-
     /// Une requête brute : (statut, en-têtes, corps). Statut 0 : connexion fermée sans réponse.
     fn brut(&self, octets: &[u8]) -> (u16, Vec<(String, String)>, Vec<u8>) {
         let mut c = TcpStream::connect(("127.0.0.1", self.port)).unwrap();
@@ -248,15 +244,10 @@ fn serveur_local() {
         assert_eq!(degzip(&gz), brut);
     }
 
-    // mode Bataille, à la même graine : le même identifiant de bataille
+    // le mode Bataille n'est plus servi (SPEC-BATAILLE.md) : la route a disparu
     let e = &r["escarmouche"];
-    let (st, _, rep) = jeu.req("POST", "/api/skirmish", e["body"].to_string().as_bytes(), &[]);
-    let rep = String::from_utf8_lossy(&rep).into_owned();
-    if jeu.texte_sortie().contains("not yet implemented") && (st == 500 || rep.contains("n’a pas pu être préparée")) {
-        eprintln!("bataille du mode Bataille pas encore comparée (corps manquants) : {rep}");
-    } else {
-        assert_eq!((st as u64, rep.as_str()), (e["status"].as_u64().unwrap(), e["text"].as_str().unwrap()));
-    }
+    let (st, _, _) = jeu.req("POST", "/api/skirmish", e["body"].to_string().as_bytes(), &[]);
+    assert_eq!(st, 404);
 }
 
 #[test]

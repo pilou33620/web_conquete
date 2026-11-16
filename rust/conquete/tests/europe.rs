@@ -444,26 +444,30 @@ fn bataille_de_campagne_jouee_jusqu_au_bout() {
         }
     }
     let bt = g.battles.values().into_iter().find(|bt| bt.get("mode") == "attente").expect("pas de bataille en attente");
+    // (SPEC-BATAILLE.md) plus de champ de bataille : le joueur choisit sa stratégie, la bataille se règle par phases
     let r = TB::command(&mut g, &dict! {"sub" => "choose", "bid" => bt.at("id"), "mode" => "ordres"});
-    assert!(r.atb("ok"), "{r}");
-    let tb = g.tactical.take().unwrap();
-    let ordres = dict! {};
-    for gr in OR::groups(&tb, tb.me.i(), &TB::_livres(&g, &tb)).iter() {
-        ordres.set(gr.at("key"), gr.at("opts").at(0).at("v"));
-    }
-    g.tactical = Some(tb);
-    assert!(TB::map_view(&mut g, &bt.at("id")).is_some(), "la carte du champ de bataille");
-    let r = TB::command(&mut g, &dict! {"sub" => "orders", "orders" => ordres, "go" => true, "skip" => true});
+    assert!(!r.atb("ok"), "{r}");
+    assert_eq!(bt.at("sit"), "campagne");
+    let st = V::player_state(&mut g, 0);
+    let vue = st.at("battles").iter().find(|b| b.at("id") == bt.at("id")).unwrap();
+    let choix = vue.at("choix").iter().find(|c| c.at("why") == "").unwrap().at("id");
+    let r = TB::command(&mut g, &dict! {"sub" => "choose", "bid" => bt.at("id"), "strat" => &choix});
     assert!(r.atb("ok"), "{r}");
     let mut n = 0;
-    while let Some(tb) = g.tactical.as_mut() {
-        if tb.ask.truthy() {
-            OR::answer(tb, "go");
+    while g.battles.has(bt.at("id")) {
+        if bt.get("mode") == "poursuite" {
+            assert!(TB::command(&mut g, &dict! {"sub" => "pursue", "bid" => bt.at("id"), "v" => true}).atb("ok"));
+        } else {
+            TT::advance(&mut g, 0.1);
+            if g.tour.at("stop").truthy() && g.speed_idx == 0 && !TB::en_attente(&bt) {
+                TT::go(&mut g);
+            }
         }
-        TB::tick(&mut g, 0.1);
         n += 1;
-        assert!(n < 1000000, "la bataille ne finit pas");
+        assert!(n < 100000, "la bataille ne finit pas");
     }
+    let fin = g.events.iter().filter(|e| e.at("kind") == "battle_end" && e.get("bid") == bt.at("id")).last().expect("le résultat au journal");
+    assert!(fin.at("journal").len() >= 1 && fin.at("strats").at(0) == choix, "{fin}");
     assert!(!g.battles.has(bt.at("id")) || g.battles.at(bt.at("id")).get("mode") != "attente", "la bataille est finie");
     // et le mois reprend
     TT::go(&mut g);

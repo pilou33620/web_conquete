@@ -9,10 +9,9 @@ use conquete::diplomacy as D;
 use conquete::engine::Game;
 use conquete::py::{json, Val};
 use conquete::rules as R;
-use conquete::tactics::bridge as TB;
 use conquete::views as V;
 use conquete::{dict, list};
-use fabrique_campagne::{armee, armee_de, bataille_de_campagne, partie, partie_avec};
+use fabrique_campagne::{armee, armee_de, partie, partie_avec};
 
 fn xp(g: &mut Game, a: &Val, n: f64) {
     g.general_xp(a, &Val::from(n), false);
@@ -155,25 +154,6 @@ fn tirage_selon_le_trait() {
         compte.insert(trait_, n);
     }
     assert!(compte["audacieux"] as f64 > compte["prudent"] as f64 * 1.6);
-}
-
-/// Le sort de l'état-major décide de celui du général (bridge.finish) : pris, il part chez le vainqueur.
-#[test]
-fn etat_major_pris_en_bataille_commandee() {
-    let (mut g, bt) = bataille_de_campagne("1813", true, 3);
-    assert!(TB::command(&mut g, &dict! {"sub" => "choose", "bid" => bt.at("id"), "mode" => "manuel"}).atb("ok"));
-    let mut tb = g.tactical.take().unwrap();
-    assert_eq!(tb.bid, bt.ats("id"));
-    let em = tb.units.iter().find(|u| u.at("cls") == "general" && u.at("side") == 0).unwrap();
-    let a = g.armies.at(em.at("army"));
-    let gen = a.at("gen");
-    em.set("captured", 30.0);
-    em.set("men", 0.0);
-    tb.finish(1, false, "essai");
-    let vainqueur = tb.units.iter().find(|x| x.at("side") == 1).unwrap().at("owner");
-    TB::finish(&mut g, tb);
-    let captifs: Vec<Val> = g.factions.at(&vainqueur).get_or("captifs", list![]).iter().map(|c| c.at("gen")).collect();
-    assert!(captifs.contains(&gen));
 }
 
 // ------------------------------------------------------------------ Captifs

@@ -326,3 +326,32 @@ fn partie_sans_le_reste() {
         assert_eq!(vu.len(), attendu.len());
     }
 }
+
+/// Refait les « vu » de la référence avec le moteur Rust, quand les règles changent exprès (la bataille par stratégie,
+/// SPEC-BATAILLE.md : 16/11/2026) : seules les mesures qui diffèrent sont réécrites, les cas ne sont pas touchés.
+/// `CONQUETE_REFAIRE_CAMPAGNE3=1 cargo test --release -p conquete --test campagne3 refaire -- --ignored`
+#[test]
+#[ignore]
+fn refaire() {
+    if std::env::var_os("CONQUETE_REFAIRE_CAMPAGNE3").is_none() {
+        return;
+    }
+    let chemin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/references/campagne3.json");
+    let texte = std::fs::read_to_string(&chemin).unwrap();
+    let r = json::loads(&texte).unwrap();
+    assert_eq!(json::dumps_compact(&r), texte.trim_end(), "le fichier ne se réécrit pas à l'identique");
+    let geo = geo();
+    for (i, j) in r.at("jeux").iter().enumerate() {
+        let vu = mesurer(&geo, &j.at("cas"));
+        let attendu = j.at("vu");
+        exc_rattrapees(&vu.at("ordres"), &attendu.at("ordres"));
+        exc_rattrapees(&vu.at("marche").at(0), &attendu.at("marche").at(0));
+        for k in attendu.keys() {
+            if json::dumps_ref_ordre(&vu.at(&k)) != json::dumps_ref_ordre(&attendu.at(&k)) {
+                attendu.set(&k, json::loads(&json::dumps_compact(&vu.at(&k))).unwrap());
+                eprintln!("cas {i}, {k} : refait");
+            }
+        }
+    }
+    std::fs::write(&chemin, json::dumps_compact(&r) + if texte.ends_with('\n') { "\n" } else { "" }).unwrap();
+}

@@ -30,16 +30,9 @@ fn somme_ou_1(it: impl IntoIterator<Item = Val>) -> f64 {
     if s == 0.0 { 1.0 } else { s }
 }
 
-/// Rang d'une arme dans les dict de puissance d'update_battles (ordre d'insertion du Python).
-const ARMES: [&str; 3] = ["artillerie", "inf", "cavalerie"];
-fn rang_arme(cls: &str) -> usize {
-    match cls {
-        "artillerie" => 0,
-        "inf" => 1,
-        "cavalerie" => 2,
-        _ => panic!("KeyError: {}", py::repr_s(cls)),
-    }
-}
+/// La classe (unit_vul : 'artillerie', 'inf', 'cavalerie') dont frappe chaque arme de rules.ARMES_RANG : les
+/// tirailleurs et les grenadiers frappent comme l'infanterie.
+const CLS_ARME: [&str; R::N_ARMES] = ["artillerie", "inf", "cavalerie", "inf", "inf"];
 
 impl Game {
     // ------------------------------------------------------------------ visibilité
@@ -505,7 +498,8 @@ impl Game {
         }
         self.battles.set(&bid, &bt);
         bt.set("log0", BL::snapshot(self, &bt)); // forces au début, pour le journal des batailles (logs/)
-        TB::on_battle_start(self, &bt); // bataille du joueur : elle attend son choix (à la main, sur ordres ou automatique)
+        TB::on_battle_start(self, &bt); // bataille du joueur : elle attend sa stratégie (ou son général la choisit)
+        self.engager_strategies(&bt); // situation, stratégie des autres camps, reconnaissance (strategie.rs)
         let gname = self.place_name(gx, gy);
         let p = self.player.clone();
         if code_a == p || code_d == p || p == code_a || p == code_d {
@@ -564,11 +558,14 @@ impl Game {
     }
 
     /// Python : `battle_phase(self, bt)`.
-    /// 'canonnade', 'fusillade' ou 'charge'.
+    /// 'escarmouche', 'canonnade', 'fusillade' ou 'charge' (rules.PHASES) ; une embuscade commence à la fusillade.
     // engine.py, lignes 3006 à 3014
     pub fn battle_phase(&self, bt: &Val) -> &'static str {
         let age = self.t - bt.atf("t0");
         let mor = bt.get_or("mor", list![100, 100]);
+        if age < 0.1 && !bt.atb("ambush") {
+            return "escarmouche"; // (les tirailleurs ouvrent le feu : SPEC-BATAILLE.md)
+        }
         if age < 0.25 && !bt.atb("ambush") {
             return "canonnade";
         }
@@ -655,8 +652,16 @@ impl Game {
     /// Python : `choose_formation(self, a, bt, si, phase)`.
     // engine.py, lignes 3056 à 3065
     pub fn choose_formation(&self, a: &Val, bt: &Val, si: i64, phase: &str) -> &'static str {
+        // (la stratégie du camp commande : « Former les carrés », « Attaque en colonnes » à la charge)
+        let strat = bt.at("sides").at(si).get("strat");
+        if strat == "carres" {
+            return "carre";
+        }
+        if strat == "colonnes" && phase == "charge" {
+            return "colonne";
+        }
         let (_, cav, art) = self.foe_mix(bt, si);
-        if phase == "canonnade" {
+        if phase == "canonnade" || phase == "escarmouche" {
             return if art > 0.12 { "tirailleurs" } else { "ligne" };
         }
         if phase == "fusillade" {
@@ -674,50 +679,25 @@ impl Game {
         if si == 0 { "colonne" } else { "ligne" }
     }
 
-    /// Formation et plan choisis par l'IA (ou le général) au début d'une bataille.
+    /// Formation choisie par le général au début d'une bataille. Le plan de l'ancienne résolution (a['pl'], rules.PLANS)
+    /// a laissé la place à la stratégie du camp (strategie.rs : choose_strategy).
     /// Python : `choose_tactics(self, a, bt, si)`.
     // engine.py, lignes 3067 à 3089
     pub fn choose_tactics(&mut self, a: &Val, bt: &Val, si: i64) {
-        let (foe, _cav, _art) = self.foe_mix(bt, si);
-        let regs = a.at("regs").vec();
-        let mine = somme_ou_1(regs.iter().map(|r| r.at("n")));
-        let my_art = somme(regs.iter().filter(|r| r.at("type") == "artillerie").map(|r| r.at("n"))) / mine;
-        let my_cav = somme(regs.iter().filter(|r| r.at("type") == "cavalerie").map(|r| r.at("n"))) / mine;
         let ph = bt.get("phase");
         let phase = if ph.truthy() { ph.string() } else { self.battle_phase(bt).to_string() };
-        let fm = self.choose_formation(a, bt, si, &phase);
-        let terrain = bt.ats("terrain");
-        let my_pow = self.army_power(a, &terrain);
-        let mut foe_pow = py::sum(foe.iter().map(|u| {
-            let (o, r, x) = u.triple();
-            self.reg_power(o.s(), &r, &terrain, 1.0, false, &x)
-        })) + 1.0;
-        let sides = bt.at("sides");
-        if sides.at(1 - si).at("node").is_some() {
-            let n = self.nodes.at(sides.at(1 - si).at("node"));
-            foe_pow += n.atf("milice") * R::MILICE_POWER * self.milice_k(&n.ats("owner")) * (1.0 + 0.35 * n.atf("fort"));
-        }
-        let pl = if my_pow < 0.5 * foe_pow && sides.at(si).at("node").is_none() {
-            "harcelement"
-        } else if my_art >= 0.08 && (si == 0 || bt.at("node").is_some()) {
-            "artillerie"
-        } else if my_cav >= 0.25 && R::OPEN_TERRAIN().has(&bt.at("terrain")) {
-            "debordement"
-        } else if si == 1 && my_pow < foe_pow {
-            "tenir"
-        } else {
-            "frontal"
-        };
-        a.set("fm", fm);
-        a.set("pl", pl);
+        a.set("fm", self.choose_formation(a, bt, si, &phase));
     }
 
-    /// Résolution automatique (choix « Automatique », batailles sans le joueur), par pas de campagne : pertes typées
-    /// selon la phase, les formations et les plans, puis la fin, recalée sur les batailles jouées sur le champ de
-    /// bataille. En rase campagne, le camp dominé (battle_yield) ou dont le moral casse se retire en bon ordre ; seule une
-    /// armée presque anéantie (moins de 18 % de ses hommes) est mise en déroute et poursuivie. Devant une place,
-    /// l'assaillant dominé décroche, mais un assaut brisé reflue en désordre ; le défenseur ne décroche jamais : il rend
-    /// la place s'il cède. Au bout de 4 jours, le plus puissant l'emporte.
+    /// Résolution d'une bataille par stratégie (SPEC-BATAILLE.md), par pas de campagne : quatre phases (escarmouche,
+    /// canonnade, fusillade, charge) où chaque arme pèse surtout dans la sienne (rules.PHASE_W), pertes typées selon la
+    /// phase, les formations et la stratégie de chaque camp (rules.STRATS : ce qu'elle change à chaque arme, à ses
+    /// propres pertes, et les stratégies adverses qu'elle contre), puis la fin. En rase campagne, le camp dominé
+    /// (battle_yield) ou dont le moral casse se retire en bon ordre ; seule une armée presque anéantie (moins de 18 %
+    /// de ses hommes) est mise en déroute. Devant une place, l'assaillant dominé décroche, mais un assaut brisé reflue
+    /// en désordre ; le défenseur ne décroche jamais : il rend la place s'il cède. Au bout de 4 jours, le plus puissant
+    /// l'emporte. Quand la charge commence, les armées amies proches entrent en ligne (renforts). Chaque phase laisse
+    /// une ligne au journal de la bataille. Si le joueur vainqueur peut poursuivre, la bataille attend son choix.
     /// Python : `update_battles(self, dt, only=None)`.
     /// only : None, ou l'identifiant de la seule bataille à faire avancer.
     // engine.py, lignes 3091 à 3283
@@ -729,7 +709,7 @@ impl Game {
             }
             let bt = self.battles.get(&bid);
             if !bt.truthy() || !TB::is_auto(&bt) {
-                continue; // (bataille en attente du choix, ou commandée sur le champ de bataille)
+                continue; // (bataille en attente de la stratégie du joueur, ou de son choix de poursuite)
             }
             let sides = bt.at("sides");
             let (s0, s1) = sides.pair();
@@ -739,10 +719,15 @@ impl Game {
                 self.dissolve_battle(&bt); // capitulation ou paix survenue pendant ce même pas de temps
                 continue;
             }
+            self.completer_strategies(&bt); // (ancienne sauvegarde, ou joueur qui laisse faire son général)
             let age = self.t - bt.atf("t0");
             let phase = self.battle_phase(&bt);
+            self.journal_phase(&bt, phase); // le journal : une ligne par phase
             if bt.get("phase") != phase {
-                // les généraux laissés libres adaptent leur formation à la nouvelle phase
+                if phase == "charge" {
+                    self.renforts(&bt); // les armées amies proches entrent en ligne pour la dernière phase
+                }
+                // les généraux adaptent leur formation à la nouvelle phase
                 for si in 0..2i64 {
                     for aid in sides.at(si).at("armies").iter() {
                         let a = self.armies.get(&aid);
@@ -759,13 +744,31 @@ impl Game {
             bt.set("phase", phase);
             TB::auto_battle_tick(self, &bt, dt); // munitions consommées, fatigue
             let wxf = self.wx(bt.atf("x"), bt.atf("y")).atf("fire");
+            let brouillard = if self.weather.at(self.zone_of(bt.atf("x"), bt.atf("y"))).at("kind") == "brouillard" { R::BROUILLARD_EMBUS } else { 1.0 };
+            let sol = if phase == "charge" { self.sol_charge(&bt) } else { 1.0 }; // boue, neige : la charge s'y brise
             let terrain = bt.ats("terrain");
             let open_ground = R::OPEN_TERRAIN().has(&bt.at("terrain"));
             let cover = bt.atb("cover");
             let pw_ph = R::PHASE_W().at(phase);
-            let phw: [f64; 3] = [pw_ph.atf("artillerie"), pw_ph.atf("inf"), pw_ph.atf("cavalerie")];
-            // P : puissance par arme (artillerie, inf, cavalerie), dans l'ordre des dict du Python
-            let mut P = [[0.0f64; 3]; 2];
+            let phw: [f64; R::N_ARMES] = R::ARMES_RANG.map(|a| pw_ph.atf(a));
+            // la stratégie de chaque camp : ce qu'elle change à chaque arme, son contre, ses propres pertes
+            let ids = [s0.ats("strat"), s1.ats("strat")];
+            let mut stm = [[1.0f64; R::N_ARMES]; 2];
+            // les grenadiers : à l'assaut d'une position, d'une ville ou d'un fort, et pour y tenir
+            let gren = if bt.get_or("sit", "campagne") == "campagne" { [1.0, 1.0] } else { [R::GREN_ASSAUT, R::GREN_OUVRAGE] };
+            let (mut ck, mut pertes) = ([1.0f64; 2], [1.0f64; 2]);
+            for su in 0..2 {
+                let s = R::STRATS().at(ids[su].as_str());
+                for (i, a) in R::ARMES_RANG.iter().enumerate() {
+                    stm[su][i] = Game::strat_m(&ids[su], a, open_ground);
+                }
+                if s.at("bat").has(ids[1 - su].as_str()) {
+                    ck[su] = R::CONTRE;
+                }
+                pertes[su] = s.atf("pertes");
+            }
+            // P : puissance par arme (rules.ARMES_RANG : artillerie, infanterie, cavalerie, tirailleurs, grenadiers)
+            let mut P = [[0.0f64; R::N_ARMES]; 2];
             let targets = [list![], list![]]; // (poids, type, formation, protégé, objet, armée)
             let mut men = [0.0f64, 0.0];
             // part de cavalerie de chaque camp (le carré fusille les escadrons qui le chargent)
@@ -774,7 +777,7 @@ impl Game {
                 let us = self.side_units(&bt, si);
                 let regs: Vec<Val> = us.iter().map(|u| u.at(1)).collect();
                 let tot = somme_ou_1(regs.iter().map(|r| r.at("n")));
-                cs[si as usize] = somme(regs.iter().filter(|r| r.at("type") == "cavalerie").map(|r| r.at("n"))) / tot;
+                cs[si as usize] = somme(regs.iter().filter(|r| R::arme_de(r.at("type").s()) == "cav").map(|r| r.at("n"))) / tot;
             }
             let cav_share = list![cs[0], cs[1]];
             bt.set("cav", &cav_share);
@@ -800,12 +803,14 @@ impl Game {
                     fb = 1.0 + 0.35 * fort_eff + (if o != R::NEUTRAL { self.mod_(&o, "fort_bonus", 0.0) } else { 0.0 });
                     wall = 1.0 / (1.0 + 0.55 * fort_eff); // les remparts abritent les défenseurs
                 }
+                let flanc = R::STRATS_FLANC().has(ids[su].as_str());
                 for u in units.iter() {
                     let (owner_v, r, a) = u.triple();
                     let owner = owner_v.s();
                     let cls = Game::arm_class(r.at("type").s());
-                    let ci = rang_arme(&cls);
-                    let (fm, pl, tr) = (a.get_or("fm", "ligne"), a.get_or("pl", "frontal"), self.gen_trait(&a));
+                    let arme = R::arme_de(r.at("type").s());
+                    let ci = R::rang_arme(arme);
+                    let (fm, tr) = (a.get_or("fm", "ligne"), self.gen_trait(&a));
                     let mut rp = self.reg_power(owner, &r, &terrain, wxf, cover, &a);
                     let rm = self.reg_mods(owner, &r, &Val::None);
                     let rmg = |k: &str| rm.get_or(k, 0.0).f();
@@ -823,25 +828,17 @@ impl Game {
                     } else if phase == "charge" {
                         rp *= 1.0 + rmg(if cls == "cavalerie" { "cav_charge" } else { "art_charge" });
                     }
-                    if pl == "artillerie" {
-                        if cls == "artillerie" && phase != "charge" {
-                            rp *= 1.4;
-                        } else if cls == "inf" && phase == "canonnade" {
-                            rp *= 0.8;
+                    // la stratégie du camp, et son contre
+                    rp *= stm[su][ci] * ck[su];
+                    if arme == "cav" {
+                        rp *= sol;
+                        if flanc && open_ground && (phase == "fusillade" || phase == "charge") && cs[su] > cs[1 - su] * 1.2 {
+                            flank[su] = true;
                         }
-                    } else if pl == "debordement" {
-                        if cls == "cavalerie" && phase != "canonnade" {
-                            rp *= if open_ground { 1.6 } else { 0.8 };
-                            if open_ground && cs[su] > cs[1 - su] * 1.2 {
-                                flank[su] = true;
-                            }
-                        } else if cls == "inf" {
-                            rp *= 0.92;
-                        }
-                    } else if pl == "tenir" {
-                        rp *= if si == 1 || bt.at("node").is_some() { 0.9 } else { 0.65 };
-                    } else if pl == "harcelement" {
-                        rp *= 0.6;
+                    } else if arme == "tir" && ids[su] == "embus" {
+                        rp *= brouillard;
+                    } else if arme == "grenadiers" {
+                        rp *= gren[su];
                     }
                     if tr == "audacieux" && si == 0 {
                         rp *= 1.12;
@@ -856,9 +853,9 @@ impl Game {
                             rp *= 0.8;
                         }
                         if bt.atb("ambush") && age < 0.35 {
-                            rp *= 1.8 + self.mod_(owner, "ambush", 0.0) + (if tr == "eclaireur" { 0.25 } else { 0.0 });
+                            rp *= (1.8 + self.mod_(owner, "ambush", 0.0) + (if tr == "eclaireur" { 0.25 } else { 0.0 })) * brouillard;
                         } else if bt.atb("surprise") && age < 0.2 {
-                            rp *= 1.3;
+                            rp *= 1.3 * brouillard;
                         }
                     }
                     let swift = 1.0 - self.mod_(owner, "fm_swift", 0.0);
@@ -868,14 +865,7 @@ impl Game {
                     }
                     P[su][ci] += rp;
                     men[su] += r.atf("n");
-                    let mut recv = 1.0;
-                    if pl == "tenir" {
-                        recv *= if si == 1 { 0.8 } else { 0.9 };
-                    } else if pl == "harcelement" {
-                        recv *= 0.6;
-                    } else if pl == "artillerie" && phase == "canonnade" {
-                        recv *= 0.85;
-                    }
+                    let mut recv = pertes[su];
                     if tr == "prudent" && si == 1 {
                         recv *= 0.88;
                     } else if tr == "audacieux" {
@@ -887,21 +877,25 @@ impl Game {
                 }
                 if node.is_some() {
                     let o = node.ats("owner");
-                    P[su][1] += node.atf("milice") * R::MILICE_POWER * self.milice_k(&o) * fb * phw[1] * 1.05;
+                    P[su][1] += node.atf("milice") * R::MILICE_POWER * self.milice_k(&o) * fb * phw[1] * 1.05 * stm[su][1] * ck[su];
                     men[su] += node.atf("milice");
-                    targets[su].push(tup![node.at("milice"), "milice", "ligne", protected, &node, Val::None, wall]);
+                    targets[su].push(tup![node.at("milice"), "milice", "ligne", protected, &node, Val::None, wall * pertes[su]]);
                     if o != R::NEUTRAL {
                         for r in node.at("garrison").iter() {
-                            let cls = Game::arm_class(r.at("type").s());
-                            let ci = rang_arme(&cls);
-                            P[su][ci] += self.reg_power(&o, &r, &terrain, wxf, false, &Val::None) * fb * phw[ci]
+                            let ci = R::rang_arme(R::arme_de(r.at("type").s()));
+                            P[su][ci] += self.reg_power(&o, &r, &terrain, wxf, false, &Val::None) * fb * phw[ci] * stm[su][ci] * ck[su]
+                                * (if r.at("type") == "grenadiers" { gren[su] } else { 1.0 })
                                 * (if r.at("type") == "garde" { R::GARDE_HOME } else { 1.0 });
                             men[su] += r.atf("n");
-                            targets[su].push(tup![r.at("n"), r.at("type"), "ligne", protected, &r, Val::None, wall]);
+                            targets[su].push(tup![r.at("n"), r.at("type"), "ligne", protected, &r, Val::None, wall * pertes[su]]);
                         }
                     }
                     // les canons du rempart (servants à l'abri des murs : ils ne comptent pas parmi les pertes)
-                    P[su][0] += self.fort_guns_power(&node, &terrain, wxf) * R::FORT_GUNS_AUTO * phw[0];
+                    P[su][0] += self.fort_guns_power(&node, &terrain, wxf) * R::FORT_GUNS_AUTO * phw[0] * stm[su][0] * ck[su];
+                }
+                if flank[su] {
+                    let t = format!("La cavalerie prend l’ennemi de flanc ({})", self.fname(&side.ats("owner")));
+                    self.journal_note(&bt, Val::from(si), &t);
                 }
             }
             // pertes typées : chaque arme frappe selon la vulnérabilité des cibles
@@ -917,7 +911,7 @@ impl Game {
                 let owner_si = sides.at(si).ats("owner");
                 let cas = 1.0 + (if owner_si != R::NEUTRAL { self.mod_(&owner_si, "casualties", 0.0) } else { 0.0 });
                 let mut dmg_j = vec![0.0f64; tgv.len()];
-                for (ci, cls) in ARMES.iter().enumerate() {
+                for (ci, cls) in CLS_ARME.iter().enumerate() {
                     let pw = P[1 - su][ci];
                     if pw <= 0.0 {
                         continue;
@@ -941,6 +935,7 @@ impl Game {
                 let mt = if men[su] > 1.0 { men[su] } else { 1.0 };
                 _lost_now[su] = self.apply_typed_losses(&bt, si, tg, &dmg_j, mt, if flank[1 - su] { 1.35 } else { 1.0 });
             }
+            self.journal_pas(&bt, &P, dt); // le journal de la phase : puissance par arme
             let mor = list![self.side_morale(&bt, 0), self.side_morale(&bt, 1)];
             bt.set("mor", &mor);
             // fin ?
@@ -951,29 +946,28 @@ impl Game {
                 let wiped = m_now < 10.0 || m_now < side.atf("men0") * 0.18;
                 if wiped || mor.atf(si) < 12.0 {
                     res = Val::from(1 - si);
-                    // en rase campagne, une armée ébranlée se retire comme dans les batailles commandées (ses fuyards la
-                    // rejoignent) : seuls les débris d'une armée presque anéantie sont poursuivis ; devant une place,
-                    // l'assaut brisé reflue en désordre
+                    // en rase campagne, une armée ébranlée se retire (ses fuyards la rejoignent) : seuls les débris
+                    // d'une armée presque anéantie sont rompus ; devant une place, l'assaut brisé reflue en désordre
                     disengage = bt.at("node").is_none() && !wiped;
                     break;
                 }
             }
             let pv = || {
-                let d = |p: &[f64; 3]| dict! {"artillerie" => p[0], "inf" => p[1], "cavalerie" => p[2]};
+                let d = |p: &[f64; R::N_ARMES]| dict! {"art" => p[0], "inf" => p[1], "cav" => p[2], "tir" => p[3], "grenadiers" => p[4]};
                 list![d(&P[0]), d(&P[1])]
             };
             if res.is_none() {
                 (res, disengage) = self.battle_yield(&bt, &pv());
             }
-            if res.is_none() && age > 1.0 {
+            if res.is_none() {
+                // « Repli en bon ordre » : on décroche après la canonnade ; « Harcèlement » : au bout d'un jour, si
+                // l'ennemi tient mieux
                 for si in 0..2i64 {
                     let side = sides.at(si);
-                    let arms: Vec<Val> =
-                        side.at("armies").iter().filter(|x| self.armies.has(x)).map(|x| self.armies.at(&x)).collect();
+                    let su = si as usize;
                     if side.at("node").is_none()
-                        && !arms.is_empty()
-                        && arms.iter().all(|x| x.get("pl") == "harcelement")
-                        && mor.at(si) <= mor.at(1 - si)
+                        && side.at("armies").iter().any(|x| self.armies.has(&x))
+                        && ((ids[su] == "repli" && age > 0.25) || (ids[su] == "harcel" && age > 1.0 && mor.at(si) <= mor.at(1 - si)))
                     {
                         (res, disengage) = (Val::from(1 - si), true);
                         break;
@@ -987,6 +981,14 @@ impl Game {
                 disengage = sides.at(1 - w).at("node").is_none();
             }
             if res.is_some() {
+                if self.poursuite_a_choisir(&bt, res.i()) {
+                    // le joueur vainqueur a de la cavalerie : poursuivre ou tenir le terrain ? (tac « pursue »)
+                    self.journal_clore(&bt);
+                    bt.set("fin", list![&res, disengage]);
+                    bt.set("mode", "poursuite");
+                    self.speed_idx = 0;
+                    continue;
+                }
                 self.end_battle(&bt, res.i(), disengage);
             }
         }
@@ -1001,8 +1003,8 @@ impl Game {
         let (bid, t0) = (bt.at("id"), self.t);
         let essai = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             for _ in 0..py::int(8.0 / SUBSTEP) {
-                if !self.battles.has(&bid) {
-                    break;
+                if !self.battles.has(&bid) || !TB::is_auto(bt) {
+                    break; // (finie, ou elle attend le choix de la poursuite)
                 }
                 self.t += SUBSTEP;
                 self.update_battles(SUBSTEP, &bid);
@@ -1076,6 +1078,7 @@ impl Game {
     pub fn apply_typed_losses(&mut self, bt: &Val, si: i64, tg: &Val, dmg_j: &[f64], men_total: f64, shock: f64) -> f64 {
         let side = bt.at("sides").at(si);
         let frac_side = py::sum(dmg_j.iter().copied()) / men_total * shock; // pris de flanc, le moral s'effondre plus vite
+        let tenace = R::STRATS_TENACES().has(&side.get("strat"));
         let mut total = 0.0;
         for (t, &d) in tg.iter().zip(dmg_j) {
             let (typ, obj, a) = (t.at(1), t.at(4), t.at(5));
@@ -1093,13 +1096,16 @@ impl Game {
                     obj.set("wnd", &obj.get_or("wnd", 0.0) + &(&loss * self.mod_(&o, "wounded", 0.0)));
                 }
                 let mut k = if a.is_some() { 230.0 } else { 150.0 };
+                if tenace {
+                    k *= 0.7; // (« Tenir la ligne », les remparts, les bastions : le moral tient mieux)
+                }
                 if a.is_some() {
-                    if a.get("pl") == "tenir" {
-                        k *= 0.7;
-                    }
                     if self.gen_trait(&a) == "inspirant" {
                         k *= 0.85;
                     }
+                }
+                if typ == "grenadiers" {
+                    k *= R::GREN_MORAL; // (l'élite plie en dernier)
                 }
                 obj.set("morale", py_max(0.0, &obj.at("morale") - frac_side * k));
             }
@@ -1179,6 +1185,27 @@ impl Game {
         let loser = 1 - winner;
         let sides = bt.at("sides");
         let (W, L) = (sides.at(winner), sides.at(loser));
+        self.completer_strategies(bt); // (retraite ordonnée avant tout choix : le journal dit quand même les stratégies)
+        self.journal_clore(bt);
+        // poursuite : le choix du joueur (tac « pursue »), sinon celui du général vainqueur
+        let pursue = !bt.has("tac") && { let c = bt.get("pursue"); if c.is_some() { c.truthy() && self.poursuite_possible(bt, winner) } else { self.poursuite_ia(bt, winner) } };
+        let pese = self.pese_final(bt);
+        // prises : un drapeau par régiment vaincu anéanti, les canons des batteries perdues (comptés plus bas si le
+        // vaincu est rompu ou chassé de sa place)
+        let (mut drapeaux, mut canons) = (0i64, 0i64);
+        for aid in L.at("armies").iter() {
+            let a = self.armies.get(&aid);
+            if a.truthy() && a.has("ro") {
+                let ids = Val::set_from(a.at("regs").iter().map(|r| r.at("id")).collect());
+                for e in a.at("ro").iter().filter(|e| !ids.has(e.at(0))) {
+                    drapeaux += 1;
+                    if R::arme_de(e.at(1).s()) == "art" {
+                        canons += R::PRISE_CANONS;
+                    }
+                }
+            }
+        }
+        let sorts = list![]; // le sort des généraux : [camp, nom, 'blesse' | 'tue' | 'pris']
         let nd = sides.iter().map(|s| s.at("node")).find(|n| n.is_some()).unwrap_or(Val::None);
         if nd.is_some() && !bt.has("tac") {
             let n = self.nodes.at(&nd);
@@ -1211,11 +1238,14 @@ impl Game {
         }
         let mut caught = 0.0; // hommes rattrapés pendant la poursuite
         let gname = self.place_name(bt.atf("x"), bt.atf("y"));
-        let has_cav = self.side_units(bt, winner).iter().any(|u| u.at(1).at("type") == "cavalerie");
         let w_owner = W.ats("owner");
         if !disengage && L.at("node").is_some() {
             // prise de la place, avant la retraite des vaincus (sinon ils se replieraient dans la place perdue)
             let nid = L.ati("node");
+            // (les drapeaux de sa garnison, ses batteries et les canons du rempart sont pris avec elle)
+            let n = self.nodes.at(nid);
+            drapeaux += n.at("garrison").len() as i64;
+            canons += R::PRISE_CANONS * (n.at("garrison").iter().filter(|r| R::arme_de(r.at("type").s()) == "art").count() as i64 + self.fort_guns(&n));
             self.nodes.at(nid).set("milice", 0);
             self.nodes.at(nid).set("garrison", list![]);
             self.capture(nid, &w_owner, false);
@@ -1252,6 +1282,9 @@ impl Game {
                         let assaut = sides.at(si).at("node").is_none() && sides.at(1 - si).at("node").is_some();
                         let quoi = if si == winner || disengage { "victoire" } else { "defaite" };
                         let sort = self.risques_general(&a, quoi, assaut);
+                        if sort.is_some() {
+                            sorts.push(list![si, gen.at("name"), &sort]);
+                        }
                         if sort == "blesse" {
                             self.blesser_general(&a, &Val::None);
                         } else if sort == "tue" {
@@ -1263,8 +1296,12 @@ impl Game {
                 }
                 if si == winner {
                     for r in a.at("regs").iter() {
-                        r.set("xp", py_min(100, &r.at("xp") + 8));
+                        r.set("xp", py_min(100, &r.at("xp") + R::VETERANS_XP)); // les survivants s'aguerrissent
                         r.set("morale", py_max(r.at("morale"), 35));
+                        if pursue {
+                            let fat = r.get_or("fat", 0.0).f() + R::POURSUITE_FAT; // la poursuite épuise hommes et chevaux
+                            r.set("fat", if fat < 100.0 { fat } else { 100.0 });
+                        }
                     }
                     a.set("state", if a.atb("path") { "move" } else { "idle" });
                     a.set("assault", false);
@@ -1294,12 +1331,18 @@ impl Game {
                         }
                     }
                 } else {
-                    // poursuite d'un vaincu rompu (déjà faite sur le champ de bataille d'une bataille commandée)
-                    let mut pursuit = if disengage || tac_bt {
+                    // poursuite (rules.PURSUIT_*) : la cavalerie lancée aux trousses du vaincu en rattrape une part, le
+                    // double s'il est rompu ; si le vainqueur tient le terrain, seuls les débris d'une armée rompue sont
+                    // ramassés (déjà faite sur le champ de bataille d'une ancienne bataille commandée)
+                    let mut pursuit = if tac_bt {
+                        0.0
+                    } else if pursue {
+                        R::PURSUIT_CAV * (if disengage { 1.0 } else { 2.0 })
+                    } else if disengage {
                         0.0
                     } else {
-                        (if has_cav { R::PURSUIT_CAV } else { R::PURSUIT_FOOT }) * (1.0 + self.mod_(&a.ats("owner"), "retreat", 0.0))
-                    };
+                        R::PURSUIT_FOOT
+                    } * (1.0 + self.mod_(&a.ats("owner"), "retreat", 0.0));
                     if self.gen_trait(&a) == "prudent" {
                         pursuit *= 0.5;
                     }
@@ -1311,6 +1354,7 @@ impl Game {
                         gone += r.atf("n") * R::LOSER_STRAGGLE;
                         r.scale("n", 1.0 - R::LOSER_STRAGGLE);
                         r.set("morale", py_max(r.at("morale"), 18));
+                        r.set("xp", py_min(100, &r.at("xp") + R::VETERANS_XP_VAINCU)); // (on apprend aussi d'une défaite)
                     }
                     if gone > 0.0 {
                         a.set("des", &a.get_or("des", 0.0) + gone);
@@ -1375,8 +1419,21 @@ impl Game {
                 );
             }
         }
-        if bt.at("node").is_none() {
-            // champ de bataille : la carte y montre blessés et tombes (décor seulement)
+        // prises : les canons ne se prennent qu'à un vaincu rompu ou chassé de sa place ; drapeaux et canons comptent au
+        // prestige du vainqueur (sa gloire : prestige_parts « histoire ») et à son bilan
+        if disengage {
+            canons = 0;
+        }
+        if (drapeaux > 0 || canons > 0) && self.factions.has(&W.at("owner")) {
+            let f_ = self.factions.at(&W.at("owner"));
+            f_.set("glory", f_.get_or("glory", 0.0).f() + R::PRESTIGE_DRAPEAU * drapeaux as f64 + R::PRESTIGE_CANON * canons as f64);
+            let st = f_.at("stats");
+            st.set("drapeaux", &st.get_or("drapeaux", 0) + drapeaux);
+            st.set("canons", &st.get_or("canons", 0) + canons);
+        }
+        {
+            // trace de la bataille : la carte y montre blessés et tombes pendant SITE_DAYS jours (décor seulement) ; n : la
+            // place, s'il y en a une ; s : la situation ; st : les stratégies des deux camps ; d : le vaincu a décroché
             let t = self.t;
             self.sites = self.sites.iter().filter(|x| t - x.atf("t") < SITE_DAYS as f64).collect();
             // (le vainqueur et ses prisonniers : la colonne vers l'arrière)
@@ -1384,7 +1441,8 @@ impl Game {
                 "x" => py::round_n(bt.atf("x"), 2), "y" => py::round_n(bt.atf("y"), 2), "t" => py::round_n(self.t, 2),
                 "l" => sides.iter().map(|x| Val::from(py::int(x.atf("lost")))).collect::<Val>(),
                 "o" => sides.iter().map(|x| x.at("owner")).collect::<Val>(),
-                "w" => winner, "p" => py::int_v(&py_max(0, &prisoners))
+                "w" => winner, "p" => py::int_v(&py_max(0, &prisoners)), "n" => bt.at("node"), "s" => bt.get_or("sit", "campagne"),
+                "st" => sides.iter().map(|x| x.get("strat")).collect::<Val>(), "d" => disengage
             });
         }
         if W.at("node").is_some() {
@@ -1427,7 +1485,20 @@ impl Game {
             if prisoners > 0i64 {
                 txt += &format!(" Prisonniers : {prisoners}.");
             }
-            let extra = dict! {"win" => won, "a" => s0.at("owner"), "d" => s1.at("owner"), "la" => la, "ld" => ld};
+            if pursue {
+                txt += " Le vainqueur poursuit.";
+            }
+            if drapeaux > 0 || canons > 0 {
+                txt += &format!(" Prises : {}.", [(drapeaux, "drapeau", "drapeaux"), (canons, "canon", "canons")].iter().filter(|x| x.0 > 0)
+                    .map(|x| format!("{} {}", x.0, if x.0 > 1 { x.2 } else { x.1 })).collect::<Vec<_>>().join(", "));
+            }
+            // le résultat pour la page (SPEC-BATAILLE.md) : situation, stratégies (celle de l'ennemi se découvre ici),
+            // journal par phase, ce qui a pesé, poursuite, prises, sort des généraux
+            let extra = dict! {"win" => won, "a" => s0.at("owner"), "d" => s1.at("owner"), "la" => la, "ld" => ld,
+                "bid" => bt.at("id"), "node" => bt.at("node"), "sit" => bt.get_or("sit", "campagne"), "w" => winner, "repli" => disengage,
+                "strats" => list![s0.get("strat"), s1.get("strat")], "journal" => bt.get_or("journal", list![]), "pese" => pese,
+                "poursuite" => pursue, "prisonniers" => py::int_v(&py_max(0, &prisoners)),
+                "prises" => dict! {"drapeaux" => drapeaux, "canons" => canons}, "generaux" => sorts};
             self.log(
                 "battle_end",
                 &txt,
@@ -1526,7 +1597,7 @@ impl Game {
                 }
                 a.set("battle", Val::None);
                 self.retreat(&a);
-                if bt.get("mode") == "attente" && !TB::involves_player(self, &bt) {
+                if TB::en_attente(&bt) && !TB::involves_player(self, &bt) {
                     bt.set("mode", "auto"); // (elle ne le concerne plus : la campagne ne l'attend plus)
                 }
                 let sides = bt.at("sides");

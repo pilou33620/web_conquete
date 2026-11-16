@@ -184,6 +184,16 @@ pub fn migrate(g: &mut Game) {
         bt.setdefault("mor", list![100, 100]);
         bt.setdefault("phase", "fusillade");
         bt.setdefault("landing", false);
+        // avant la bataille par stratégie (SPEC-BATAILLE.md) : une bataille qui attendait le joueur, ou qu'il menait
+        // sur le champ de bataille, lui demande sa stratégie ; les autres la reçoivent de leurs généraux au premier pas
+        if !bt.has("sit") {
+            let m = bt.get("mode");
+            if m == "attente" || m == "ordres" || m == "manuel" {
+                bt.set("mode", "attente");
+                bt.pop("tac");
+                g.engager_strategies(&bt);
+            }
+        }
     }
 }
 
@@ -374,7 +384,13 @@ pub fn rules_payload_carte(europe: bool) -> Val {
         "spy_tours" => R::SPY_INTEL_TOURS, "tax_labels" => R::TAX_LABELS(),
         "water" => dict! {"speed" => R::WATER_SPEED, "sea" => R::SEA_SPEED, "embark" => R::EMBARK_DAYS,
                           "quai" => R::QUAI_LIVRES, "blockade" => R::BLOCKADE_K},
-        "cities" => cities
+        "cities" => cities,
+        // la bataille par stratégie (SPEC-BATAILLE.md) ; « formations » ne sert plus qu'à nommer la formation d'une armée,
+        // « plans » n'a plus cours
+        "armes" => R::ARMES(), "arme_de" => Val::dict_from(R::UNITS().keys().into_iter().map(|u| { let a = R::arme_de(u.s()); (u, Val::from(a)) }).collect()),
+        "strats" => R::STRATS(), "situations" => R::SITUATIONS(), "contre" => R::CONTRE, "phase_w" => R::PHASE_W(),
+        "tech_arme" => R::TECH_ARME(), "renfort_km" => R::RENFORT_KM,
+        "poursuite" => dict! {"cav" => R::PURSUIT_CAV, "fatigue" => R::POURSUITE_FAT}
     }
 }
 
@@ -753,7 +769,7 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
         let d = dict! {"id" => a.at("id"), "o" => &owner, "name" => a.at("name"), "x" => _round_v(&a.at("x"), 2),
                        "y" => _round_v(&a.at("y"), 2), "st" => a.at("state"), "sk" => a.at("stance"), "h" => a.at("hidden"),
                        "n" => a.at("at_node"), "men" => py::round(g.army_men(&a)), "gen" => _gen(&a.get("gen")),
-                       "fm" => a.get_or("fm", "ligne")};
+                       "fm" => a.get_or("fm", "ligne"), "armes" => Game::armes_de(&a.at("regs"))}; // armes : effectifs par arme (rules.ARMES)
         if a.getb("boat") {
             d.set("boat", 1);
         }
@@ -829,6 +845,9 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
         if !involved && !seen(bt.atf("x"), bt.atf("y")) {
             continue;
         }
+        // (SPEC-BATAILLE.md) moi : le camp du joueur (0, 1) ou None ; la stratégie ennemie reste cachée jusqu'à la fin
+        let moi = g.camp_du_joueur(&bt);
+        let mode = bt.get_or("mode", "auto");
         let sides = list![];
         for (i, s) in bt.at("sides").iter().enumerate() {
             let i = i as i64;
@@ -839,7 +858,7 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
                     let k = 1.0 - g.mod_(a.at("owner").s(), "fm_swift", 0.0);
                     let reorg = g.t - a.get_or("fm_t", -9).f() < 0.1 * (if k > 0.2 { k } else { 0.2 });
                     tac.push(dict! {"id" => &aid, "name" => a.at("name"), "fm" => a.get_or("fm", "ligne"),
-                                    "pl" => a.get_or("pl", "frontal"), "gen" => _gen(&a.get("gen")), "reorg" => reorg});
+                                    "gen" => _gen(&a.get("gen")), "reorg" => reorg});
                 }
             }
             let mix = dict! {};
@@ -854,14 +873,34 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
             let men = py::round(g.side_men(&bt, i));
             let lost = py::round(s.atf("lost"));
             let mor = py::round(g.side_morale(&bt, i));
+            // armes : effectifs engagés par arme ; strat : sa stratégie, si le joueur la connaît (la sienne, ou celle de
+            // l'ennemi une fois la bataille décidée) ; renf : les armées venues en renfort
+            let connue = moi == Some(i) || (moi.is_some() && mode == "poursuite");
             sides.push(dict! {"o" => s.at("owner"), "men" => men, "lost" => lost, "mor" => mor, "armies" => s.at("armies"),
-                              "tac" => tac, "mix" => mix});
+                              "tac" => tac, "mix" => mix, "armes" => g.armes_camp(&bt, i),
+                              "strat" => if connue { s.get("strat") } else { Val::None }, "renf" => s.get_or("renf", list![])});
         }
-        battles.push(dict! {"id" => bt.at("id"), "x" => _round_v(&bt.at("x"), 2), "y" => _round_v(&bt.at("y"), 2),
+        let d = dict! {"id" => bt.at("id"), "x" => _round_v(&bt.at("x"), 2), "y" => _round_v(&bt.at("y"), 2),
                             "node" => bt.at("node"), "amb" => bt.at("ambush"), "age" => py::round_n(g.t - bt.atf("t0"), 2),
                             "terrain" => bt.at("terrain"), "phase" => bt.get_or("phase", "fusillade"),
                             "land" => bt.getb("landing"), "river" => bt.get_or("river", 0), "sides" => sides,
-                            "mode" => bt.get_or("mode", "auto")});
+                            "mode" => &mode, "sit" => bt.get_or("sit", "campagne"), "moi" => moi, "ouvrage" => g.ouvrage(&bt),
+                            "meteo" => g.weather.at(g.zone_of(bt.atf("x"), bt.atf("y"))).at("kind"),
+                            "journal" => bt.get_or("journal", list![]), "pese" => bt.get_or("pese", list![])};
+        if let (Some(si), true) = (moi, mode == "attente") {
+            // la bataille attend la stratégie du joueur : ses choix ({id, why} : why vide si permise), celle que son
+            // général prendrait, et ce que la reconnaissance annonce de l'ennemi ({strat, p}, ou None)
+            let choix: Val = g.strats_dispo(&bt, si, &p).into_iter().map(|(id, why)| dict! {"id" => id, "why" => why}).collect();
+            d.set("choix", choix);
+            d.set("defaut", g.choose_strategy(&bt, si));
+            let reco = bt.get("reco");
+            d.set("reco", if reco.truthy() { dict! {"strat" => reco.at(0), "p" => reco.at(1)} } else { Val::None });
+        }
+        if mode == "poursuite" {
+            let fin = bt.at("fin");
+            d.set("fin", dict! {"w" => fin.at(0), "repli" => fin.at(1)}); // la bataille est gagnée : poursuivre ou tenir ?
+        }
+        battles.push(d);
     }
 
     let facs = list![];
@@ -994,7 +1033,6 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
             "amount" => x.at("amount"), "give" => x.at("give"), "get" => x.at("get"), "date" => x.at("date")}).collect::<Val>(),
         "market" => dict! {"prices" => &g.market, "spread" => if has_port { list![1.15, 0.85] } else { list![1.4, 0.6] }}
     };
-    out.set("tac", TB::tac_view(g));
     out.set("settings", g.settings.copy());
     out.set("flood", g.t < g.flood_until);
     out.set("tour", TT::view(g));
@@ -1012,8 +1050,8 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
         }
         out.set("cut", l);
     }
-    // champs de bataille récents vus du joueur : x, y, âge (jours), pertes et camps des deux côtés, vainqueur (0, 1 ;
-    // None : ancienne sauvegarde), prisonniers
+    // traces des batailles récentes vues du joueur : x, y, âge (jours), pertes et camps des deux côtés, vainqueur (0, 1 ;
+    // None : ancienne sauvegarde), prisonniers, place (ou None), situation
     let sites = list![];
     for s in g.sites.iter() {
         if g.t - s.atf("t") < SITE_DAYS as f64 && (s.at("o").has(p.as_str()) || seen(s.atf("x"), s.atf("y"))) {
@@ -1022,6 +1060,8 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
             e.extend(&s.at("o"));
             e.push(s.get("w"));
             e.push(s.get_or("p", 0));
+            e.push(s.get("n")); // la place (None en rase campagne) et la situation (SPEC-BATAILLE.md)
+            e.push(s.get_or("s", "campagne"));
             sites.push(e);
         }
     }

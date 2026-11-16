@@ -26,7 +26,6 @@ use conquete::tactics::terrain::{self as TR, CELL, COLS, ROWS, T_BARRICADE, T_BO
 use conquete::tactics::units as U;
 use conquete::{dict, list};
 use fabrique::*;
-use std::collections::BTreeSet;
 use std::f64::consts::PI;
 
 fn ids(u: &Val) -> Val {
@@ -1585,96 +1584,6 @@ fn TB_view(g: &mut Game, bid: &str) -> Val {
     TB::battle_view(g, &Val::from(bid), 0)
 }
 
-/// `TB.command(g, dict(sub=…, bid=…, **p))` : la réponse.
-fn commande(g: &mut Game, sub: &str, bid: &Val, p: Val) -> Val {
-    let body = dict! {"sub" => sub, "bid" => bid};
-    body.update(&p);
-    TB::command(g, &body)
-}
-fn ok(r: &Val) -> bool {
-    r.at("ok").truthy()
-}
-
-/// (Python : la méthode CommanderLaBataille.commandee) La partie, la bataille de campagne commandée à la main, et un
-/// fantassin du joueur.
-fn commandee() -> (Game, Val, Val) {
-    let (mut g, bt) = bataille_de_campagne("1813", true, 3);
-    let bid = bt.at("id");
-    let r = commande(&mut g, "choose", &bid, dict! {"mode" => "manuel"});
-    assert!(ok(&r), "{}", r.get("msg"));
-    assert_eq!(bt.at("mode"), "manuel");
-    assert_ne!(tb(&mut g).spec.get("mode"), "ordres");
-    assert!(!TB::battle_view(&mut g, &bid, 0).has("ordres"), "pas de fenêtre des ordres");
-    let t = tb(&mut g);
-    let u = t.units.iter().find(|x| x.at("side") == t.me && x.at("ctrl") == "joueur" && x.at("cls") == "inf").unwrap();
-    (g, bt, u)
-}
-
-#[test]
-fn deploiement_marche_et_fin_automatique() {
-    let (mut g, bt, u) = commandee();
-    let bid = bt.at("id");
-    let me = tb(&mut g).me.i();
-    let z = tb(&mut g).zone(me);
-    let (cx, cy) = ((z.atf(0) + z.atf(2)) / 2.0, (z.atf(1) + z.atf(3)) / 2.0);
-    assert!(ok(&commande(&mut g, "deploy", &bid, dict! {"units" => ids(&u), "x" => cx, "y" => cy, "dir" => 0.5})));
-    assert!(py::pow(py::pow(u.atf("x") - cx, 2.0) + py::pow(u.atf("y") - cy, 2.0), 0.5) < 80.0, "placé à la main dans sa zone");
-    assert!(ok(&commande(&mut g, "start", &bid, dict! {})));
-    assert_eq!(tb(&mut g).phase, "combat");
-    // ordre de marche vers son arrière (loin de l'ennemi), à la vitesse ×4
-    let (x0, y0) = (u.atf("x"), u.atf("y"));
-    let (tx, ty) = (u.atf("x") - 300.0 * u.atf("dir").cos(), u.atf("y") - 300.0 * u.atf("dir").sin());
-    let r = commande(&mut g, "order", &bid, dict! {"units" => ids(&u), "kind" => "move", "x" => tx, "y" => ty});
-    assert!(ok(&r), "{}", r.get("msg"));
-    assert!(!ok(&commande(&mut g, "speed", &bid, dict! {"v" => 3})), "vitesse invalide");
-    assert!(ok(&commande(&mut g, "speed", &bid, dict! {"v" => 4})));
-    let c0 = tb(&mut g).clock;
-    for _ in 0..10 {
-        TB::tick(&mut g, 0.1);
-    }
-    assert!(tb(&mut g).clock > c0, "le temps tourne à sa vitesse");
-    let d2 = |x: f64, y: f64| py::pow(x - tx, 2.0) + py::pow(y - ty, 2.0);
-    assert!(d2(u.atf("x"), u.atf("y")) < d2(x0, y0), "le régiment marche");
-    // « Finir auto. », reprise du commandement, puis les officiers achèvent la bataille
-    assert!(ok(&commande(&mut g, "autofinish", &bid, dict! {})));
-    assert!(tb(&mut g).accel && u.at("ctrl") == "ia");
-    assert!(!ok(&commande(&mut g, "speed", &bid, dict! {"v" => 1})), "pas de vitesse en accéléré");
-    assert!(ok(&commande(&mut g, "resume", &bid, dict! {})));
-    assert!(!tb(&mut g).accel && tb(&mut g).speed == 0 && u.at("ctrl") == "joueur", "commandement rendu, en pause");
-    commande(&mut g, "autofinish", &bid, dict! {});
-    TB::resolve_now(&mut g);
-    assert_eq!(g.tac_done.as_ref().unwrap().phase, "fin");
-    assert!(g.tactical.is_none());
-}
-
-#[test]
-fn decrocher() {
-    let (mut g, bt, _u) = commandee();
-    let bid = bt.at("id");
-    commande(&mut g, "start", &bid, dict! {});
-    assert!(ok(&commande(&mut g, "withdraw", &bid, dict! {})));
-    let t = tb(&mut g);
-    assert!(t.withdrawing.at(&t.me).truthy());
-    assert!(ok(&commande(&mut g, "autofinish", &bid, dict! {})));
-    TB::resolve_now(&mut g);
-    assert_eq!(g.tac_done.as_ref().unwrap().phase, "fin");
-}
-
-#[test]
-fn sauvegarde_reprend_dans_son_mode() {
-    let (mut g, bt, u) = commandee();
-    let bid = bt.at("id");
-    commande(&mut g, "start", &bid, dict! {});
-    let d = dict! {};
-    TB::save_into(&mut g, &d);
-    TB::load_from(&mut g, &par_json(&d));
-    let tb2 = tb(&mut g);
-    assert_eq!(tb2.phase, "combat");
-    assert!(!tb2.accel, "la bataille commandée reprend à la main, pas en accéléré");
-    assert_eq!(tb2.by_id.at(u.at("id")).at("ctrl"), "joueur");
-    assert!(ok(&commande(&mut g, "speed", &bid, dict! {"v" => 2})));
-}
-
 #[test]
 fn mode_bataille_a_la_main() {
     let (mut g, bid) = escarmouche_g(&dict! {"me" => "33", "foe" => "24", "era" => "1813", "units" => dict!{"ligne" => 2, "cavalerie" => 1}, "seed" => 1, "mode" => "manuel"});
@@ -1689,116 +1598,12 @@ fn mode_bataille_a_la_main() {
 // eux, sous ses yeux, et s'arrêtent au moment décisif s'il l'a demandé.
 
 #[test]
-fn de_bout_en_bout() {
-    let (mut g, bt) = bataille_de_campagne("1813", true, 3);
-    let bid = bt.at("id");
-    let r = commande(&mut g, "choose", &bid, dict! {"mode" => "ordres"});
-    assert!(ok(&r), "{}", r.repr());
-    {
-        let t = tb(&mut g);
-        assert_eq!((t.spec.at("mode"), t.phase.as_str(), t.me.clone()), (Val::from("ordres"), "deploiement", Val::from(0)));
-    }
-    let v = TB::battle_view(&mut g, &bid, 0);
-    let o = v.at("ordres");
-    assert_eq!(o.at("tabs").iter().map(|t| t.at(0)).collect::<Val>(), list!["man", "armes", "res", "ruse"]);
-    let keys: BTreeSet<String> = o.at("groups").iter().map(|gr| gr.ats("key")).collect();
-    for k in ["obj", "man", "wing", "inf", "cav", "art", "res", "resWhen", "ruse", "hour", "mood"] {
-        assert!(keys.contains(k), "{k}");
-    }
-    assert!(o.at("advice").has("verdict"));
-    // un choix verrouillé (l'ordre oblique en 1813) est refusé : la valeur par défaut reste
-    let r = commande(&mut g, "orders", &bid, dict! {"orders" => dict!{"man" => "oblique"}});
-    assert!(ok(&r));
-    assert_eq!(r.at("ordres").at("orders").at("man"), "frontal");
-    // un ordre de commandement ordinaire est refusé : ses officiers commandent
-    assert!(!ok(&commande(&mut g, "start", &bid, dict! {})));
-    let want = dict! {"man" => "enveloppement", "wing" => "gauche", "resWhen" => "demande", "hour" => "aube", "cav" => "aile"};
-    let r = commande(&mut g, "orders", &bid, dict! {"orders" => want, "go" => true});
-    assert!(ok(&r), "{}", r.repr());
-    {
-        let t = tb(&mut g);
-        assert_eq!((t.phase.as_str(), t.spec.at("h_off")), ("combat", Val::from(-2.5 * 3600.0)));
-        assert!(t.view(&Val::from(0), 0).at("hour").s().starts_with("5 h"));
-        let mem = t.ai_mem.at("s0");
-        assert_eq!((mem.at("plan"), mem.at("flank")), (Val::from("debordement"), Val::from(-1)));
-        assert!(t.units.iter().filter(|u| u.at("side") == 0 && u.at("cls") == "cavalerie").all(|u| mem.at("wing").at(u.at("id")) == -1));
-    }
-    let mut asked = false;
-    for _ in 0..20000 {
-        if g.tactical.is_none() {
-            break;
-        }
-        TB::tick(&mut g, 0.1);
-        if g.tactical.as_ref().is_some_and(|t| t.ask.truthy()) {
-            asked = true;
-            assert!(TB::battle_view(&mut g, &bid, 0).has("ask"));
-            let n = tb(&mut g).clock;
-            TB::tick(&mut g, 0.1);
-            assert_eq!(tb(&mut g).clock, n, "la bataille attend la réponse");
-            assert!(ok(&commande(&mut g, "answer", &bid, dict! {"v" => "go"})));
-        }
-    }
-    assert!(g.tactical.is_none(), "la bataille est finie et reportée en campagne");
-    assert!(asked, "la réserve est partie au moment décisif, sur l’ordre du joueur");
-    let res = g.tac_done.as_ref().unwrap().result_view(&Val::from(0));
-    assert_eq!(res.at("arms").iter().map(|a| a.at(0)).collect::<Val>(), list!["Infanterie", "Cavalerie", "Artillerie"]);
-    assert!(res.at("decisive").is_list());
-}
-
-#[test]
-fn plan_fleches_et_vitesses() {
-    let (mut g, bt) = bataille_de_campagne("1813", true, 3);
-    let bid = bt.at("id");
-    let r = commande(&mut g, "preview", &bid, dict! {});
-    let p = r.at("plan");
-    assert_eq!(p.at("t").len() as i64, p.ati("cols") * p.ati("rows"));
-    assert!(p.at("units").iter().any(|u| u.at("s") == p.at("me")), "vos troupes sur le plan");
-    let pre: *const TacticalBattle = &**g.tac_preview.as_ref().unwrap();
-    commande(&mut g, "choose", &bid, dict! {"mode" => "ordres"});
-    assert!(std::ptr::eq(tb(&mut g), pre), "la bataille du plan est celle des ordres");
-    let r = commande(&mut g, "orders", &bid, dict! {"orders" => dict!{"man" => "enveloppement", "ruse" => "feinte", "art" => "grande"}});
-    let kinds: BTreeSet<String> = r.at("ordres").at("arrows").iter().map(|a| a.ats("k")).collect();
-    assert!(kinds.contains("main") && kinds.contains("fix"), "{kinds:?}");
-    assert!(!ok(&commande(&mut g, "choose", &bid, dict! {"mode" => "manuel"})), "le mode est déjà choisi");
-    commande(&mut g, "orders", &bid, dict! {"orders" => dict!{}, "go" => true});
-    assert!(ok(&commande(&mut g, "replay", &bid, dict! {"k" => 4})));
-    assert_eq!(TB::battle_view(&mut g, &bid, 0).at("replay").at("k"), 4);
-    for sub in ["deploy", "order", "speed", "autofinish", "resume", "withdraw"] {
-        assert!(!ok(&commande(&mut g, sub, &bid, dict! {})), "{sub}");
-    }
-}
-
-#[test]
 fn le_mode_bataille_se_livre_sur_ordres() {
     let (mut g, bid) = escarmouche_g(&dict! {"me" => "33", "foe" => "24", "era" => "1813", "units" => dict!{"ligne" => 2, "cavalerie" => 1}, "seed" => 1});
     let t = tb(&mut g);
     assert_eq!(t.spec.at("mode"), "ordres");
     assert!(t.units.iter().all(|u| u.at("ctrl") == "ia"));
     assert!(TB_view(&mut g, &bid).has("ordres"));
-}
-
-#[test]
-fn retour_a_la_fenetre_de_bataille() {
-    let (mut g, bt) = bataille_de_campagne("1790", false, 3);
-    let bid = bt.at("id");
-    commande(&mut g, "choose", &bid, dict! {"mode" => "ordres"});
-    assert!(ok(&commande(&mut g, "cancel", &bid, dict! {})));
-    assert!(g.tactical.is_none());
-    assert_eq!(bt.at("mode"), "attente");
-}
-
-#[test]
-fn la_cavalerie_et_la_reserve_suivent_les_ordres() {
-    let (mut g, bt) = bataille_de_campagne("1813", true, 3);
-    let bid = bt.at("id");
-    commande(&mut g, "choose", &bid, dict! {"mode" => "ordres"});
-    let cav: Vec<Val> = tb(&mut g).units.iter().filter(|u| u.at("side") == 0 && u.at("cls") == "cavalerie").collect();
-    for (c, w) in [("aile", 1), ("reserve", 0)] {
-        commande(&mut g, "orders", &bid, dict! {"orders" => dict!{"cav" => c, "wing" => "droite", "man" => "frontal"}});
-        let mem = tb(&mut g).ai_mem.at("s0");
-        let ws: BTreeSet<i64> = cav.iter().map(|u| mem.at("wing").ati(u.at("id"))).collect();
-        assert_eq!(ws, BTreeSet::from([w]), "{c}");
-    }
 }
 
 /// Quelques jeux d'ordres joués jusqu'au bout, IA contre IA : pas d'erreur, une issue.

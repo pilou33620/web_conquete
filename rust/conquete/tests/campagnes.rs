@@ -79,36 +79,30 @@ fn decider(g: &mut Game, mode: &str) {
     }
 }
 
-/// 'ordres' : les batailles du joueur, comme le serveur les mène (outils/jumeau/campagnes_ref.py : batailler) ; true si
-/// elle a agi (le mois attend).
+/// 'ordres' : les batailles du joueur, comme le serveur les mène depuis la bataille par stratégie (SPEC-BATAILLE.md) :
+/// une fois sur trois « le général décide », sinon une stratégie permise tirée au sort (un hasard propre à la
+/// bataille) ; la poursuite, à pile ou face. true si elle a agi (le mois attend).
 fn batailler(g: &mut Game, mode: &str) -> bool {
     if mode != "ordres" {
         return false;
     }
-    if let Some(tb) = g.tactical.as_mut() {
-        if tb.ask.truthy() {
-            OR::answer(tb, "go");
-        }
-        TB::tick(g, 0.1);
-        if g.tactical.is_none() {
-            TT::go(g); // la bataille finie : « Continuer le mois »
-        }
-        return true;
-    }
-    let Some(bt) = g.battles.values().into_iter().find(|b| b.get("mode") == "attente") else { return false };
+    let Some(bt) = g.battles.values().into_iter().find(TB::en_attente) else { return false };
     let mut rng = Random::new_str(&format!("choix{}", bt.at("id")));
-    let choix = if rng.random() < 1.0 / 3.0 { "auto" } else { "ordres" };
-    let r = TB::command(g, &dict! {"sub" => "choose", "bid" => bt.at("id"), "mode" => choix});
-    if r.atb("ok") && choix == "ordres" {
-        let tb = g.tactical.take().unwrap();
-        let raw = dict! {};
-        for gr in OR::groups(&tb, tb.me.i(), &TB::_livres(g, &tb)).iter() {
-            let opts = gr.at("opts");
-            raw.set(gr.at("key"), opts.at(rng.choice_i(opts.len())).at("v"));
+    let p = g.player.clone();
+    let r = if bt.get("mode") == "poursuite" {
+        TB::command(g, &dict! {"sub" => "pursue", "bid" => bt.at("id"), "v" => rng.random() < 0.5})
+    } else {
+        let permises: Vec<String> = match g.camp_du_joueur(&bt) {
+            Some(si) if rng.random() >= 1.0 / 3.0 => g.strats_dispo(&bt, si, &p).into_iter().filter(|(_, why)| why.is_empty()).map(|(id, _)| id).collect(),
+            _ => vec![],
+        };
+        if permises.is_empty() {
+            TB::command(g, &dict! {"sub" => "choose", "bid" => bt.at("id"), "mode" => "auto"})
+        } else {
+            TB::command(g, &dict! {"sub" => "choose", "bid" => bt.at("id"), "strat" => permises[rng.choice_i(permises.len())].as_str()})
         }
-        g.tactical = Some(tb);
-        TB::command(g, &dict! {"sub" => "orders", "orders" => raw, "go" => true, "skip" => true});
-    }
+    };
+    assert!(r.atb("ok"), "{r}");
     true
 }
 
@@ -456,7 +450,10 @@ fn chrono() {
 #[test]
 #[ignore]
 fn refaire_geo3() {
-    if std::env::var_os("CONQUETE_REFAIRE_GEO3").is_none() {
+    // (CONQUETE_REFAIRE_CAMPAGNES=1 : les parties de toutes les géographies, quand les règles changent exprès — la
+    // bataille par stratégie, SPEC-BATAILLE.md, 16/11/2026 ; les escarmouches, elles, restent celles de la géographie 3)
+    let toutes = std::env::var_os("CONQUETE_REFAIRE_CAMPAGNES").is_some();
+    if std::env::var_os("CONQUETE_REFAIRE_GEO3").is_none() && !toutes {
         return;
     }
     let chemin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/references/campagnes.json");
@@ -472,9 +469,9 @@ fn refaire_geo3() {
         }
         conquete::list![json::empreinte_ordre(&d)[..16].to_string(), cles]
     };
-    for p in r.at("parties").iter().filter(|p| p.ati("geo") == 3) {
+    for p in r.at("parties").iter().filter(|p| toutes || p.ati("geo") == 3) {
         let n = p.at("emp").len();
-        let mut g = neuve(&g3, &p);
+        let mut g = neuve(&if p.ati("geo") == 3 { g3.clone() } else { geo(p.ati("geo")) }, &p);
         let mut l = vec![emp(&mut g)];
         for _ in 1..n {
             jouer_mois(&mut g, &p.ats("mode"));
@@ -484,7 +481,7 @@ fn refaire_geo3() {
         p.set("over", g.over.truthy());
         eprintln!("{} : {n} empreintes", p.ats("nom"));
     }
-    for e in r.at("escarmouches").iter().filter(|e| e.ati("geo") == 3) {
+    for e in r.at("escarmouches").iter().filter(|e| e.ati("geo") == 3 && !toutes) {
         let (g, bid) = S::new(g3.clone(), &e.at("body"));
         let mut g = g.unwrap_or_else(|| panic!("{} : {bid}", e.ats("nom")));
         e.set("neuve", json::empreinte_ordre(&V::to_dict(&mut g)));

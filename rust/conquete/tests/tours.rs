@@ -395,6 +395,9 @@ fn pas(g: &mut Game) -> bool {
             if bt.get("mode") == "attente" {
                 bt.set("mode", "auto");
             }
+            if bt.get("mode") == "poursuite" {
+                TB::command(g, &dict! {"sub" => "pursue", "bid" => bt.at("id"), "v" => true}); // (le joueur vainqueur poursuit)
+            }
         }
         TT::go(g);
     }
@@ -469,4 +472,103 @@ fn rules_payload_comme_python() {
     if let Some(p) = en_attente("rules_payload", V::rules_payload) {
         assert_eq!(json::empreinte_ordre(&j(&p)), r.ats("rules_payload"));
     }
+}
+
+/// Refait, avec le moteur Rust, ce que la référence attend des batailles et des vues, quand les règles changent exprès
+/// (la bataille par stratégie, SPEC-BATAILLE.md : 16/11/2026) : to_dict, résultats des opérations et état final,
+/// aller-retour et vues de chaque cas, vieille sauvegarde, fin du mois, rules_payload. Les sauvegardes des cas, les
+/// opérations et la crue ne sont pas touchées ; seul ce qui diffère est réécrit.
+/// `CONQUETE_REFAIRE_TOURS=1 cargo test --release -p conquete --test tours refaire -- --ignored`
+#[test]
+#[ignore]
+fn refaire() {
+    if std::env::var_os("CONQUETE_REFAIRE_TOURS").is_none() {
+        return;
+    }
+    std::env::set_var("WEB_CONQUETE_NOLOG", "1");
+    let chemin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/references/tours.json");
+    let texte = std::fs::read_to_string(&chemin).unwrap();
+    let r = json::loads(&texte).unwrap();
+    assert_eq!(json::dumps_compact(&r), texte.trim_end(), "le fichier ne se réécrit pas à l'identique");
+    let geo = geo();
+    let emp = |v: &Val| Val::from(json::empreinte_ordre(&j(v)));
+    // (une valeur n'est réécrite que si elle diffère : `quoi` le dit)
+    let poser = |d: &Val, k: &dyn Fn() -> Val, cle: Val, quoi: &str| {
+        let v = j(&k());
+        if json::dumps_ref(&v) != json::dumps_ref(&d.at(&cle)) {
+            d.set(&cle, v);
+            eprintln!("{quoi} : refait");
+        }
+    };
+    for c in r.at("cas").iter() {
+        let nom = c.ats("nom");
+        let mut g = assembler(&geo, &c.at("save"));
+        let d = emp(&V::to_dict(&mut g));
+        poser(&c, &|| d.clone(), Val::from("to_dict"), &format!("« {nom} » to_dict"));
+        let mut g = assembler(&geo, &c.at("save"));
+        for (i, op) in c.at("ops").iter().enumerate() {
+            let got = jouer(&mut g, &op);
+            poser(&c.at("res"), &|| got.clone(), Val::from(i as i64), &format!("« {nom} » opération {i} {op}"));
+        }
+        let fin = final_(&g);
+        for k in c.at("fin").keys() {
+            poser(&c.at("fin"), &|| fin.at(&k), k.clone(), &format!("« {nom} » état final, {k}"));
+        }
+        let mut g = V::from_dict(geo.clone(), &c.at("save").deepcopy()).unwrap();
+        let rt = j(&V::to_dict(&mut g));
+        poser(&c, &|| rt.at("ai_state"), Val::from("retour_ai"), &format!("« {nom} » ai_state"));
+        poser(&c, &|| Val::from(json::empreinte_ordre(&rt)), Val::from("retour"), &format!("« {nom} » retour"));
+        let ps = j(&V::player_state(&mut g, 0));
+        for k in c.at("vue_parts").keys() {
+            if !ps.has(&k) {
+                c.at("vue_parts").pop(&k); // (un champ que la vue n'envoie plus : « tac », la bataille tactique)
+                eprintln!("« {nom} » player_state, {k} : retiré");
+                continue;
+            }
+            poser(&c.at("vue_parts"), &|| Val::from(json::empreinte_ordre(&ps.at(&k))), k.clone(), &format!("« {nom} » player_state, {k}"));
+        }
+        poser(&c, &|| Val::from(json::empreinte_ordre(&ps)), Val::from("vue"), &format!("« {nom} » player_state"));
+        let since = c.at("save").ati("seq") - 3;
+        let vs = emp(&V::player_state(&mut g, since));
+        poser(&c, &|| vs.clone(), Val::from("vue_since"), &format!("« {nom} » player_state(since)"));
+    }
+    let v = r.at("vieille");
+    let s = r.at("cas").at(0).at("save").deepcopy();
+    for k in v.at("cles").iter() {
+        s.pop(&k);
+    }
+    let a = s.at("armies").values()[0].clone();
+    for k in ["fm", "pl", "fm_t", "emb", "mp"] {
+        a.pop(k);
+    }
+    let mut g = V::from_dict(geo.clone(), &s).unwrap();
+    let vr = emp(&V::to_dict(&mut g));
+    poser(&v, &|| vr.clone(), Val::from("retour"), "vieille sauvegarde");
+    let m = r.at("mois");
+    let mut g = V::from_dict(geo.clone(), &r.at("cas").at(0).at("save").deepcopy()).unwrap();
+    TT::go(&mut g);
+    let mut n = 1;
+    while !pas(&mut g) {
+        n += 1;
+    }
+    let fin = final_(&g);
+    for k in m.at("fin").keys() {
+        poser(&m.at("fin"), &|| fin.at(&k), k.clone(), &format!("fin du mois, {k}"));
+    }
+    poser(&m, &|| Val::from(n), Val::from("pas"), "pas du tour des IA");
+    poser(&m, &|| g.tour.at("recap"), Val::from("recap"), "bilan du mois");
+    let vue = emp(&V::player_state(&mut g, 0));
+    poser(&m, &|| vue.clone(), Val::from("vue"), "player_state au tour du joueur");
+    let o = m.at("ordre");
+    let (ok, msg) = g.order_move("33", &o.at(0), &dict! {"node" => o.at(1)});
+    poser(&o, &|| list![ok, msg.clone()], Val::from(2), "ordre de marche");
+    let st = TT::settle(&mut g);
+    poser(&m, &|| st.clone(), Val::from("settle"), "settle");
+    let apres = final_(&g);
+    for k in m.at("apres").keys() {
+        poser(&m.at("apres"), &|| apres.at(&k), k.clone(), &format!("après settle, {k}"));
+    }
+    poser(&m, &|| g.armies.at(o.at(0)).get("trail"), Val::from("trail"), "trajet de la marche");
+    poser(&r, &|| emp(&V::rules_payload()), Val::from("rules_payload"), "rules_payload");
+    std::fs::write(&chemin, json::dumps_compact(&r) + if texte.ends_with('\n') { "\n" } else { "" }).unwrap();
 }

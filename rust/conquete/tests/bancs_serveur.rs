@@ -277,7 +277,8 @@ fn arrivee_devant_une_ville() {
     assert!(r["msg"].as_str().unwrap().contains("choisir"));
     let d = vue_armee(&jeu.etat(), &aid);
     assert_eq!(d["ask"]["n"], json!(mer));
-    assert_eq!(d["ask"]["c"]["ordres"], json!(""), "l’assaut est toujours permis");
+    assert_eq!(d["ask"]["c"]["assaut"], json!(""), "l’assaut est toujours permis");
+    assert!(d["ask"]["c"].get("ordres").is_none() && d["ask"]["c"].get("manuel").is_none(), "plus de champ de bataille");
     let b = g.armies.values().into_iter().find(|x| x.at("owner") != g.player).unwrap().ats("id");
     for corps in [
         json!({"cmd": "arrive", "army": aid, "value": "piller"}),
@@ -301,7 +302,6 @@ fn app_vide() -> App {
         static_: HashMap::new(),
         geo: GEO(),
         game: None,
-        skirmish: None,
         reseau: Arc::new(Mutex::new(Reseau::default())),
         _auto_key: None,
     }
@@ -446,7 +446,7 @@ fn une_ancienne_sauvegarde_garde_sa_carte() {
 
 // ================================================================== Mode Europe (géographie 5, SPEC-FRANCE.md étape 2)
 
-/// Le contrat de la page : /api/map?geo=, /api/new et /api/skirmish avec « geo », le camp d'une autre carte refusé, la
+/// Le contrat de la page : /api/map?geo=, /api/new avec « geo » (/api/skirmish n'existe plus), le camp d'une autre carte refusé, la
 /// sauvegarde d'une partie d'Europe rechargée sur sa carte.
 #[test]
 fn mode_europe() {
@@ -473,8 +473,7 @@ fn mode_europe() {
     assert_eq!(eu["rules"]["scenarios"]["1700"]["title"], json!("Europe, 1700"));
     assert_eq!(eu["rules"]["scenarios"]["1700"]["word"], json!("pays"));
     assert_eq!(eu["map"]["playable"].as_array().unwrap().len(), 32);
-    let places = eu["skirmish"]["places"].as_array().unwrap();
-    assert!(places.iter().any(|p| p["name"] == "Vienne") && !fr["skirmish"]["places"].as_array().unwrap().iter().any(|p| p["name"] == "Moscou"));
+    assert!(eu.get("skirmish").is_none() && fr.get("skirmish").is_none(), "le mode Bataille n'est plus proposé");
     // seules les cartes des nouvelles parties se demandent
     for mauvais in ["/api/map?geo=3", "/api/map?geo=1", "/api/map?geo=6", "/api/map?geo=europe", "/api/map?geo=5.0"] {
         assert_eq!(jeu.get(mauvais).0, 400, "{mauvais}");
@@ -507,16 +506,11 @@ fn mode_europe() {
     let r: Value = serde_json::from_str(&txt).unwrap();
     assert_eq!((&r["ok"], &r["geo"]), (&json!(true), &json!(5)), "{txt}");
     assert_eq!(jeu.etat()["geo"], json!(5));
-    // le mode Bataille sur la carte d'Europe
-    let bataille = |corps: Value| -> Value { serde_json::from_str(&jeu.post("/api/skirmish", &corps).1).unwrap() };
+    // le mode Bataille et le champ de bataille ne sont plus servis (SPEC-BATAILLE.md)
     let unites = json!({"ligne": 2, "cavalerie": 1, "artillerie": 1});
-    let r = bataille(json!({"me": "PR", "foe": "AU", "geo": 5, "era": "1790", "seed": 4, "units": unites}));
-    assert_eq!(r["ok"], json!(true), "{r}");
-    let (st, txt) = jeu.get(&format!("/api/tactic_map?bid={}", r["bid"].as_str().unwrap()));
-    assert_eq!(st, 200, "{txt}");
-    assert_eq!(bataille(json!({"me": "33", "geo": 5, "units": unites}))["ok"], json!(false), "un département en Europe");
-    assert_eq!(bataille(json!({"me": "PR", "units": unites}))["ok"], json!(false), "un pays en France");
-    assert_eq!(jeu.post("/api/skirmish", &json!({"me": "PR", "geo": 2, "units": unites})).0, 400);
+    assert_eq!(jeu.post("/api/skirmish", &json!({"me": "PR", "foe": "AU", "geo": 5, "era": "1790", "seed": 4, "units": unites})).0, 404);
+    assert_eq!(jeu.get("/api/tactic_map?bid=esc0").0, 404);
+    assert_eq!(jeu.get("/api/tactic?bid=esc0").0, 404);
 }
 
 /// Une partie d'Europe reprend au redémarrage du serveur (sauvegarde automatique), sur sa carte.

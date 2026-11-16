@@ -48,6 +48,9 @@ fn jouer_reste(g: &mut Game) -> Vec<String> {
                 if bt.get("mode") == "attente" {
                     TB::command(g, &dict! {"sub" => "choose", "bid" => bt.at("id"), "mode" => "auto"});
                 }
+                if bt.get("mode") == "poursuite" {
+                    TB::command(g, &dict! {"sub" => "pursue", "bid" => bt.at("id"), "v" => true});
+                }
             }
             TT::go(g);
         }
@@ -863,6 +866,52 @@ fn choisir(g: &mut Game, a: &Val, quoi: &str) -> (bool, String) {
     AA::choose(g, &p, a, quoi)
 }
 
+/// L'assaut depuis la fenêtre d'arrivée, puis, si la bataille attend le joueur, « le général décide » (stratégie, et
+/// pas de poursuite) : la bataille se règle sur-le-champ, comme l'ancien choix « automatique ».
+fn assaut(g: &mut Game, a: &Val) -> (bool, String) {
+    let r = choisir(g, a, "assaut");
+    let bid = a.get("battle");
+    if r.0 && bid.truthy() {
+        if g.battles.get(&bid).truthy() && g.battles.at(&bid).get("mode") == "attente" {
+            assert!(TB::command(g, &dict! {"sub" => "choose", "bid" => &bid, "mode" => "auto"}).atb("ok"));
+        }
+        if g.battles.get(&bid).truthy() && g.battles.at(&bid).get("mode") == "poursuite" {
+            assert!(TB::command(g, &dict! {"sub" => "pursue", "bid" => &bid, "v" => false}).atb("ok"));
+        }
+    }
+    r
+}
+
+/// (SPEC-BATAILLE.md) L'assaut engage la bataille, qui attend la stratégie du joueur ; les anciens choix du champ de
+/// bataille (« ordres », « manuel ») ne sont plus proposés ni acceptés.
+#[test]
+fn l_assaut_attend_la_strategie() {
+    let mut g = arrivee();
+    let a = devant(&mut g, "Mérignac", 1);
+    let c = AA::ask_choices(&mut g, &a);
+    assert!(c.get("assaut") == "" && !c.has("ordres") && !c.has("manuel") && !c.has("auto"));
+    for vieux in ["ordres", "manuel", "auto"] {
+        assert_eq!(choisir(&mut g, &a, vieux), (false, "Choix inconnu.".to_string()));
+    }
+    let (ok, msg) = choisir(&mut g, &a, "assaut");
+    assert!(ok && msg.contains("stratégie"), "{msg}");
+    let bt = g.battles.at(a.at("battle"));
+    assert_eq!(bt.get("mode"), "attente");
+    assert!(g.tactical.is_none() && !a.get("ask").truthy());
+    let r = TB::command(&mut g, &dict! {"sub" => "choose", "bid" => bt.at("id"), "mode" => "ordres"});
+    assert!(!r.atb("ok"), "le champ de bataille n'existe plus");
+    let r = TB::command(&mut g, &dict! {"sub" => "choose", "bid" => bt.at("id"), "strat" => "frontal"});
+    assert!(r.atb("ok"), "{}", r.get("msg"));
+    assert!(bt.get("mode") != "attente");
+    // réglage « toujours automatique » : l'assaut ne demande rien
+    let mut g = arrivee();
+    g.settings.set("battles", "auto");
+    let a = devant(&mut g, "Mérignac", 1);
+    let (ok, msg) = choisir(&mut g, &a, "assaut");
+    assert!(ok, "{msg}");
+    assert!(!g.battles.values().iter().any(|b| TB::en_attente(b)));
+}
+
 #[test]
 fn le_cas_du_rapport() {
     // Bordeaux scindée en trois, une marche par détachement, dans les deux ordres : chaque arrivée devant une ville
@@ -935,22 +984,10 @@ fn devant(g: &mut Game, nom: &str, n: usize) -> Val {
 }
 
 #[test]
-fn donner_mes_ordres() {
-    let mut g = arrivee();
-    let a = devant(&mut g, "Mérignac", 1);
-    let (ok, msg) = choisir(&mut g, &a, "ordres");
-    assert!(ok, "{msg}");
-    let bt = g.battles.at(a.at("battle"));
-    assert!(bt.get("mode") != "attente", "pas de seconde fenêtre : le choix est fait");
-    assert!(g.tactical.is_some(), "le champ de bataille de l’assaut");
-    assert!(!a.get("ask").truthy());
-}
-
-#[test]
 fn resolution_automatique() {
     let mut g = arrivee();
     let a = devant(&mut g, "Mérignac", 1);
-    let (ok, msg) = choisir(&mut g, &a, "auto");
+    let (ok, msg) = assaut(&mut g, &a);
     assert!(ok, "{msg}");
     TT::settle(&mut g);
     assert!(!g.battles.truthy(), "réglée sur-le-champ");
@@ -1047,8 +1084,8 @@ fn le_rapport_de_bout_en_bout() {
                 break;
             }
             assert!(!g.battles.values().iter().any(|bt| bt.get("mode") == "attente"));
-            let quoi = if AA::ask_choices(&mut g, &a).get("rallier") == "" { "rallier" } else { "auto" };
-            let (ok, msg) = choisir(&mut g, &a, quoi);
+            let quoi = if AA::ask_choices(&mut g, &a).get("rallier") == "" { "rallier" } else { "assaut" };
+            let (ok, msg) = if quoi == "assaut" { assaut(&mut g, &a) } else { choisir(&mut g, &a, quoi) };
             assert!(ok, "{msg}");
             TT::settle(&mut g);
         }
@@ -1069,7 +1106,7 @@ fn un_choix_perime_est_leve() {
     assert_eq!(par_la_route(&mut g, &p, &a, cap, Val::None).0, Some(true));
     TT::settle(&mut g);
     assert!(AA::asking(&mut g).is_none());
-    assert!(!choisir(&mut g, &a, "auto").0);
+    assert!(!choisir(&mut g, &a, "assaut").0);
     assert!(!g.battles.truthy());
     // deux détachements devant Mérignac : l'un la rallie, le choix de l'autre tombe (la ville est à nous)
     let mut g = arrivee();
@@ -1085,7 +1122,7 @@ fn un_choix_perime_est_leve() {
     }
     assert!(choisir(&mut g, &a, "rallier").0);
     assert!(AA::asking(&mut g).is_none());
-    assert!(!choisir(&mut g, &b, "auto").0, "pas d’assaut contre sa propre ville");
+    assert!(!choisir(&mut g, &b, "assaut").0, "pas d’assaut contre sa propre ville");
 }
 
 /// `a['at_node'], a['path'], a['state'], a['tr'], a['hold'] = None, [], state, tr, False` puis la position de nid.
@@ -1143,7 +1180,7 @@ fn apres_un_assaut_en_chemin_elle_repart_au_tour_suivant() {
     for r in a.at("regs").iter() {
         r.scale("n", 4); // (une victoire nette)
     }
-    assert!(choisir(&mut g, &a, "auto").0);
+    assert!(assaut(&mut g, &a).0);
     TT::settle(&mut g);
     assert_eq!(g.nodes.at(vil).at("owner"), g.player);
     assert_eq!(TT::march_left(&g, &a), 0.0, "la bataille finit la marche du tour");
@@ -1159,34 +1196,10 @@ fn un_assaut_sur_une_bataille_en_cours_la_rejoint() {
     let (a, b) = (d.remove(0), d.remove(0));
     marcher(&mut g, &a, "Mérignac", Val::None);
     marcher(&mut g, &b, "Mérignac", Val::None);
-    assert!(choisir(&mut g, &a, "ordres").0);
-    assert!(choisir(&mut g, &b, "auto").0);
+    assert!(choisir(&mut g, &a, "assaut").0);
+    assert!(choisir(&mut g, &b, "assaut").0);
     assert_eq!(g.battles.len(), 1, "une seule bataille devant Mérignac");
     assert_eq!(b.at("battle"), a.at("battle"));
-}
-
-#[test]
-fn commander_quand_une_autre_bataille_se_livre() {
-    let mut g = arrivee();
-    let mut d = detachements(&mut g, 2);
-    let (a, b) = (d.remove(0), d.remove(0));
-    marcher(&mut g, &a, "Mérignac", Val::None);
-    marcher(&mut g, &b, "Léognan", Val::None); // (arrêtée à Villenave-d'Ornon)
-    assert!(choisir(&mut g, &a, "ordres").0);
-    let (ok, msg) = choisir(&mut g, &b, "ordres");
-    assert!(!ok);
-    assert!(msg.contains("déjà en cours"));
-    assert!(b.get("ask").truthy(), "le choix reste ouvert");
-    assert_eq!(g.battles.len(), 1);
-}
-
-#[test]
-fn commander_meme_en_resolution_automatique() {
-    let mut g = arrivee();
-    g.settings.set("battles", "auto");
-    let a = devant(&mut g, "Mérignac", 1);
-    assert!(choisir(&mut g, &a, "ordres").0);
-    assert!(g.tactical.is_some());
 }
 
 #[test]
@@ -1239,7 +1252,7 @@ fn un_autre_prend_la_ville_d_assaut_l_armee_qui_attendait_repart() {
     for r in b.at("regs").iter() {
         r.scale("n", 4);
     }
-    assert!(choisir(&mut g, &b, "auto").0);
+    assert!(assaut(&mut g, &b).0);
     TT::settle(&mut g); // (comme le serveur après la commande)
     assert_eq!(g.nodes.at(idx(&g, "Villenave-d'Ornon")).at("owner"), g.player);
     assert_eq!(a.at("ask").at("node"), idx(&g, "Léognan"), "la ville prise, elle reprend sa route tout de suite");
@@ -2251,7 +2264,7 @@ fn combat(techs: &[&str], emods: Val) -> (Game, Val, f64) {
 fn la_croix_rouge_rend_un_quart_des_blesses() {
     let (_g0, _a0, sans) = combat(&[], dict! {"casualties" => -0.05}); // (les mêmes pertes, sans les blessés qui reviennent)
     let (_g1, a1, avec_cr) = combat(&["croix_rouge"], Val::None);
-    assert!(avec_cr > sans, "les blessés soignés reviennent aux régiments");
+    assert!(avec_cr > sans, "les blessés soignés reviennent aux régiments : {avec_cr} / {sans}");
     for r in a1.at("regs").iter() {
         assert!(r.at("n") <= r.at("max"));
         assert!(!r.has("wnd"));
@@ -2937,7 +2950,7 @@ fn champ_de_bataille_et_derniere_bataille() {
     assert_eq!(s.at("o"), bt.at("sides").iter().map(|x| x.at("owner")).collect::<Val>());
     let st = V::player_state(&mut g, 0);
     assert!(s.at("w") == 1i64 && s.at("p") >= py::int(320.0 * R::PRISON_LOSS), "le vainqueur et ses prisonniers");
-    assert_eq!(st.at("sites"), list![list![s.at("x"), s.at("y"), 0, 320, 150, s.at("o").at(0), s.at("o").at(1), 1, s.at("p")]], "sa propre bataille : vue");
+    assert_eq!(st.at("sites"), list![list![s.at("x"), s.at("y"), 0, 320, 150, s.at("o").at(0), s.at("o").at(1), 1, s.at("p"), Val::None, "campagne"]], "sa propre bataille : vue");
     let lb: BTreeMap<String, Val> = st.at("factions").iter().map(|f| (f.ats("code"), f.get("lb"))).collect();
     let moi_vaincu = if s.at("o").at(1) != p.as_str() { 0 } else { 1 };
     assert_eq!(lb[&p], list![moi_vaincu, 0, s.at("x"), s.at("y")], "avec son lieu (estafettes)");
@@ -2955,7 +2968,7 @@ fn champ_de_bataille_et_derniere_bataille() {
     g3.sites = list![dict! {"x" => 1.0, "y" => 2.0, "t" => g3.t, "l" => list![5, 5], "o" => s.at("o")}];
     g3.factions.at(&foe).set("lb", list![1, g3.t]);
     let st3 = V::player_state(&mut g3, 0);
-    assert_eq!(st3.at("sites").at(0).slice(Some(7), None), list![Val::None, 0]);
+    assert_eq!(st3.at("sites").at(0).slice(Some(7), None), list![Val::None, 0, Val::None, "campagne"]);
     assert_eq!(st3.at("factions").iter().find(|f| f.at("code") == foe).unwrap().at("lb"), list![1, 0]);
     // la bataille de deux autres camps : vue seulement à portée de vue
     g.sites.push(dict! {"x" => -500.0, "y" => -500.0, "t" => g.t, "l" => list![10, 10], "o" => list!["40", "47"]});

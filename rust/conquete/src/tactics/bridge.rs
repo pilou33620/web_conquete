@@ -31,7 +31,7 @@ use crate::engine::Game;
 use crate::py::{self, Val};
 use crate::rules as R;
 use crate::tactics::ai as AI;
-use crate::tactics::battle::{valid_piet, TacticalBattle, ACCEL_FX, ACCEL_LEVEL};
+use crate::tactics::battle::{TacticalBattle, ACCEL_FX, ACCEL_LEVEL};
 use crate::tactics::orders as OR;
 use crate::tactics::stats as ST;
 use crate::tactics::terrain as TR;
@@ -115,7 +115,14 @@ pub fn ensure(g: &mut Game) {
 
 /// Python (bridge.py, l. 68-69) : `def waiting(g)`
 pub fn waiting(g: &Game) -> bool {
-    g.battles.values().iter().any(|bt| bt.get("mode") == "attente")
+    g.battles.values().iter().any(en_attente)
+}
+
+/// La bataille attend le joueur : sa stratégie ('attente'), ou son choix de poursuivre ou non ('poursuite').
+/// (SPEC-BATAILLE.md ; pas de jumeau Python.)
+pub fn en_attente(bt: &Val) -> bool {
+    let m = bt.get("mode");
+    m == "attente" || m == "poursuite"
 }
 
 /// La campagne est figée : bataille tactique en cours, ou bataille en attente du choix du joueur.
@@ -926,28 +933,19 @@ pub fn save_into(g: &mut Game, d: &Val) {
 }
 
 /// Python (bridge.py, l. 594-608) : `def load_from(g, d)`
-/// `try: TacticalBattle.from_dict(…) except Exception` : `TacticalBattle::from_dict` rend `Err` si la sauvegarde
-/// est illisible. `traceback.print_exc()` → `eprintln!`. Une seule bataille (g.tactical : Option).
+/// Depuis la bataille par stratégie (SPEC-BATAILLE.md), plus aucune bataille ne se livre sur le champ de bataille : la
+/// bataille tactique d'une ancienne sauvegarde (d['tactical']) n'est pas relue, et la bataille de campagne qu'elle
+/// menait (mode 'ordres' ou 'manuel') redemande au joueur sa stratégie.
 pub fn load_from(g: &mut Game, d: &Val) {
     g.settings = d.get("settings").or(dict! {}).copy();
     g.tactical = None;
     g.tac_done = None;
     ensure(g);
-    for (bid, x) in d.get("tactical").or(dict! {}).items() {
-        if g.battles.has(&bid) {
-            match TacticalBattle::from_dict(g.geo.clone(), &x) {
-                Ok(tb) => g.tactical = Some(Box::new(tb)), // (sur ordres ou à la main : elle reprend ainsi)
-                Err(e) => {
-                    eprintln!("bataille {bid} illisible : {e}");
-                    g.battles.at(&bid).set("mode", "attente"); // bataille illisible : on redemande au joueur
-                }
-            }
-        }
-    }
     for bt in g.battles.values() {
         let m = bt.get("mode");
-        if (m == "ordres" || m == "manuel") && !g.tactical.as_ref().is_some_and(|tb| bt.at("id") == tb.bid.as_str()) {
+        if m == "ordres" || m == "manuel" {
             bt.set("mode", "attente");
+            bt.pop("tac");
         }
     }
 }
@@ -1095,7 +1093,7 @@ pub fn on_speed(g: &mut Game, v: i64) -> (bool, String) {
     }
     if v > 0 && frozen(g) {
         let msg = if waiting(g) {
-            "Une bataille attend vos ordres : commandez-la ou laissez la résolution automatique."
+            "Une bataille attend vos ordres : choisissez votre stratégie (ou la poursuite)."
         } else {
             "Une bataille est en cours sur le champ de bataille."
         };
@@ -1120,15 +1118,11 @@ pub fn army_locked(g: &Game, aid: &Val) -> bool {
     bt.truthy() && (bt.get("mode") == "ordres" || bt.get("mode") == "manuel")
 }
 
-/// Sous-commandes `tac` (contrat, § 6). Renvoie {ok, msg}.
+/// Sous-commandes `tac` : `settings` (réglage des batailles), `choose` (la stratégie du joueur) et `pursue` (poursuivre
+/// ou tenir le terrain). Renvoie {ok, msg}. Les sous-commandes du champ de bataille (preview, deploy, orders, replay…)
+/// n'existent plus : SPEC-BATAILLE.md.
 ///
 /// Python (bridge.py, l. 703-797) : `def command(g, body)`
-/// body : la commande du navigateur (dict). Rend {ok, msg…}. Les sous-commandes qui agissent sur la bataille en cours
-/// la sortent de g.tactical et l'y remettent (sauf cancel ; _manual_command la reçoit en propre).
-/// `g.tactical[bt['id']] = tb` → `g.tactical = Some(tb)` ; `g.tac_preview.pop(bt['id'], None)` : la bataille préparée
-/// si son bid est bt['id'] ; `g.tac_preview = {bt['id']: tb}` : la garder, et rendre `plan_view` (tb reste dans
-/// tac_preview). Une valeur invalide du navigateur (KeyError, ValueError…) panique : le serveur rattrape toute
-/// erreur d'une commande, comme server.py (« Commande invalide (…) »).
 pub fn command(g: &mut Game, body: &Val) -> Val {
     ensure(g);
     let sub = body.get("sub");
@@ -1138,148 +1132,62 @@ pub fn command(g: &mut Game, body: &Val) -> Val {
             return dict! {"ok" => false, "msg" => "Réglage inconnu."};
         }
         g.settings.set("battles", &v);
-        let msg = dict! {"demander" => "Toujours demander avant une bataille.",
-            "auto" => "Batailles toujours résolues automatiquement.",
-            "auto_petites" => "Escarmouches résolues automatiquement."}
+        let msg = dict! {"demander" => "Vous choisirez la stratégie de chaque bataille.",
+            "auto" => "Vos généraux choisissent toujours la stratégie.",
+            "auto_petites" => "Vos généraux règlent seuls les escarmouches."}
         .at(&v);
         return dict! {"ok" => true, "msg" => msg};
     }
-    // la bataille préparée pour cette bataille de campagne (tac_preview), sortie de son champ
-    let preparee = |g: &mut Game, bt: &Val| -> Option<Box<TacticalBattle>> {
-        if g.tac_preview.as_ref().is_some_and(|tb| bt.at("id") == tb.bid.as_str()) {
-            g.tac_preview.take()
-        } else {
-            None
-        }
-    };
-    if sub == "preview" {
-        // la fenêtre de bataille s'ouvre : la bataille se prépare (carte, ennemi déployé) pour en montrer le plan
-        let bt = g.battles.get(body.get("bid"));
-        if !bt.truthy() || bt.get("mode") != "attente" {
-            return dict! {"ok" => false, "msg" => "Aucune bataille en attente."};
-        }
-        let tb = match preparee(g, &bt) {
-            Some(tb) => Some(tb),
-            None => create_orders(g, &bt),
-        };
-        let Some(mut tb) = tb else {
-            return dict! {"ok" => false, "msg" => "Vous n'avez pas de troupes dans cette bataille."};
-        };
-        let plan = plan_view(&mut tb);
-        g.tac_preview = Some(tb);
-        return dict! {"ok" => true, "plan" => plan};
-    }
     if sub == "choose" {
+        // la stratégie du joueur (SPEC-BATAILLE.md) : `strat` (rules.STRATS, parmi celles de la situation), ou
+        // `mode: "auto"` pour laisser le général choisir. Les anciens modes « ordres » et « manuel » sont refusés.
         let bt = g.battles.get(body.get("bid"));
         if !bt.truthy() || bt.get("mode") != "attente" {
             return dict! {"ok" => false, "msg" => "Aucune bataille en attente."};
         }
-        let mode = body.get("mode");
-        let pre = preparee(g, &bt);
-        if mode == "auto" {
-            bt.set("mode", "auto");
-            if TT::planning(g) {
-                TT::settle(g); // tour par tour : le général règle la bataille sur-le-champ, puis les marches suspendues reprennent
-                return dict! {"ok" => true, "msg" => "Le général a commandé la bataille."};
-            }
-            return dict! {"ok" => true, "msg" => "Le général commande : résolution automatique."};
+        let (mode, strat) = (body.get("mode"), body.get("strat"));
+        if mode == "manuel" || mode == "ordres" {
+            return dict! {"ok" => false, "msg" => "Les batailles ne se livrent plus sur le champ de bataille : choisissez une stratégie."};
         }
-        if mode != "manuel" && mode != "ordres" {
-            return dict! {"ok" => false, "msg" => "Mode inconnu."};
-        }
-        if g.tactical.is_some() {
-            return dict! {"ok" => false, "msg" => "Une autre bataille est déjà en cours."};
-        }
-        let tb = if mode == "ordres" {
-            match pre {
-                Some(tb) => Some(tb),
-                None => create_orders(g, &bt),
-            }
-        } else {
-            Some(create(g, &bt, true))
-        };
-        let tb = match tb {
-            Some(tb) if tb.me.is_some() => tb,
-            _ => {
-                bt.set("mode", "auto");
+        let mut msg = "Le général choisit sa stratégie et livre bataille.".to_string();
+        if strat.is_some() {
+            let Some(si) = g.camp_du_joueur(&bt) else {
                 return dict! {"ok" => false, "msg" => "Vous n'avez pas de troupes dans cette bataille."};
+            };
+            let dispo = g.strats_dispo(&bt, si, &g.player.clone());
+            match dispo.iter().find(|(id, _)| strat == id.as_str()) {
+                None => return dict! {"ok" => false, "msg" => "Stratégie inconnue dans cette situation."},
+                Some((_, why)) if !why.is_empty() => return dict! {"ok" => false, "msg" => why.as_str()},
+                _ => {}
             }
-        };
-        bt.set("mode", &mode);
-        g.tactical = Some(tb);
-        g.tac_done = None;
-        let msg = if mode == "ordres" { "Donnez vos ordres." } else { "Déployez vos troupes." };
+            bt.at("sides").at(si).set("strat", &strat);
+            msg = format!("{} : la bataille s'engage.", R::STRATS().at(&strat).at("label"));
+        } else if mode != "auto" {
+            return dict! {"ok" => false, "msg" => "Choisissez une stratégie."};
+        }
+        bt.set("mode", "auto");
+        if TT::planning(g) {
+            TT::settle(g); // tour par tour : la bataille se règle sur-le-champ, puis les marches suspendues reprennent
+        }
         return dict! {"ok" => true, "msg" => msg, "bid" => bt.at("id")};
     }
-    if sub == "close" {
-        g.tac_done = None;
-        return dict! {"ok" => true};
+    if sub == "pursue" {
+        // après la victoire : poursuivre (`v` vrai) ou tenir le terrain
+        let bt = g.battles.get(body.get("bid"));
+        if !bt.truthy() || bt.get("mode") != "poursuite" {
+            return dict! {"ok" => false, "msg" => "Aucune poursuite à décider."};
+        }
+        let v = body.getb("v");
+        let fin = bt.at("fin");
+        bt.set("pursue", v);
+        bt.set("mode", "auto");
+        g.end_battle(&bt, fin.ati(0), fin.atb(1));
+        if TT::planning(g) {
+            TT::settle(g);
+        }
+        return dict! {"ok" => true, "msg" => if v { "La cavalerie se lance à la poursuite." } else { "L'armée tient le terrain." }, "bid" => bt.at("id")};
     }
-    // (une seule bataille en cours : celle de body['bid'] s'il la nomme, sinon la première, c'est la même)
-    let Some(mut tb) = g.tactical.take() else {
-        return dict! {"ok" => false, "msg" => "Aucune bataille en cours."};
-    };
-    let r = 'r: {
-        if sub == "piet" {
-            // la boue laissée par les troupes, gardée avec la bataille (SPEC-SUITE F8) : rien d'autre ne la lit
-            let png = body.get("png");
-            if !valid_piet(&png) {
-                break 'r dict! {"ok" => false, "msg" => "Image invalide."};
-            }
-            tb.piet = png;
-            break 'r dict! {"ok" => true};
-        }
-        if sub == "unit" {
-            // la fiche d'un de vos régiments : « Occuper les maisons » (là où il est), « Barricader » ; vos officiers l'y
-            // laissent (ai._tenue) ; à la main, il y reste
-            let kind = body.get("kind");
-            if !(kind == "maisons" || kind == "barricade") || !tup![0, 1].has(&tb.me) {
-                break 'r dict! {"ok" => false, "msg" => "Ordre inconnu."};
-            }
-            let me = tb.me.i();
-            let (ok, msg) = tb.order(me, &list![body.get("id")], body.at("kind").s(), "any", &dict! {});
-            break 'r dict! {"ok" => ok, "msg" => msg};
-        }
-        if tb.spec.get("mode") != "ordres" {
-            return _manual_command(g, tb, &sub, body);
-        }
-        if sub == "orders" {
-            break 'r set_orders(g, &mut tb, &body.get("orders"), body.getb("go"), body.getb("skip"));
-        }
-        if sub == "cancel" {
-            // retour à la fenêtre de bataille : la bataille n'a pas commencé, on l'oublie
-            if tb.phase != "deploiement" {
-                break 'r dict! {"ok" => false, "msg" => "La bataille est déjà engagée."};
-            }
-            let bt = g.battles.get(tb.bid.as_str());
-            if bt.truthy() {
-                bt.set("mode", "attente");
-            }
-            return dict! {"ok" => true};
-        }
-        if sub == "answer" {
-            let ok = OR::answer(&mut tb, if body.get("v") == "go" { "go" } else { "wait" });
-            break 'r dict! {"ok" => ok, "msg" => if ok { "" } else { "Aucune question en attente." }};
-        }
-        if sub == "replay" {
-            if tb.replay.is_none() {
-                break 'r dict! {"ok" => false, "msg" => "La bataille n'est pas engagée."};
-            }
-            if tup![1, 2, 4].has(&body.get("k")) {
-                tb.replay.set("k", body.at("k"));
-            }
-            if body.getb("skip") {
-                tb.replay.set("skip", true);
-                if tb.ask.truthy() {
-                    OR::answer(&mut tb, "go");
-                }
-            }
-            break 'r dict! {"ok" => true};
-        }
-        dict! {"ok" => false, "msg" => "Commande de bataille inconnue."}
-    };
-    g.tactical = Some(tb);
-    r
+    dict! {"ok" => false, "msg" => "Commande de bataille inconnue."}
 }
 
 /// Commandes d'une bataille commandée à la main (« Commander la bataille »).

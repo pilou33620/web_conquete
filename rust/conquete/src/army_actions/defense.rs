@@ -978,7 +978,7 @@ pub fn ask_choices(g: &mut Game, a: &Val) -> Val {
     let n = g.nodes.at(nid);
     let neutral = n.at("owner") == R::NEUTRAL;
     let x = options(g, a, nid).or(dict! {});
-    let out = dict! {"ordres" => "", "manuel" => "", "auto" => ""};
+    let out = dict! {"assaut" => ""}; // (l'escalade d'une place à remparts ; la stratégie se choisit quand la bataille s'engage)
     if neutral {
         let fort = strong(g, a, nid);
         out.set("rallier", if fort { "" } else { "Armée trop faible : il faut trois fois la défense de la place" });
@@ -1035,17 +1035,14 @@ pub fn choose(g: &mut Game, code: &str, a: &Val, what: &str) -> (bool, String) {
         a.pop("ask");
         return (true, format!("La {} attend devant {}.", a.at("name"), place(g, nid)));
     }
-    if what == "manuel" || what == "ordres" || what == "auto" {
-        // l'assaut tout de suite, même sur une place à remparts (les canons y ouvrent des brèches) ; le mode est déjà
-        // choisi : pas de seconde fenêtre. Une bataille finit la marche du tour
+    if what == "assaut" {
+        // l'assaut tout de suite, même sur une place à remparts (l'escalade) : la bataille s'engage et attend la
+        // stratégie du joueur, comme toute bataille (SPEC-BATAILLE.md). Une bataille finit la marche du tour
         let bt = g.battles.values().into_iter().find(|b| b.at("node") == nid).unwrap_or(Val::None);
         if bt.truthy()
             && !(g.friendly(code, &bt.at("sides").at(0).ats("owner")) && g.hostile(code, &bt.at("sides").at(1).ats("owner")))
         {
             return (false, format!("Une bataille se livre déjà devant {}.", place(g, nid)));
-        }
-        if (what == "manuel" || what == "ordres") && !bt.truthy() && g.tactical.is_some() {
-            return (false, "Une autre bataille est déjà en cours.".to_string());
         }
         a.pop("ask");
         a.set("hold", false);
@@ -1061,10 +1058,8 @@ pub fn choose(g: &mut Game, code: &str, a: &Val, what: &str) -> (bool, String) {
             return (true, format!("La {} rejoint l'assaut {}.", a.at("name"), R::de(&gn.ats("name"))));
         }
         g.start_battle(&list![a], &list![], gn.atf("x"), gn.atf("y"), &Val::from(nid), false, false);
-        let bt = g.battles.at(a.at("battle"));
-        bt.set("mode", "attente");
-        let r = TB::command(g, &dict! {"sub" => "choose", "bid" => bt.at("id"), "mode" => what});
-        return (r.atb("ok"), format!("{}", r.at("msg")));
+        let attend = g.battles.get(a.at("battle")).get("mode") == "attente";
+        return (true, if attend { format!("Assaut {} : choisissez votre stratégie.", R::de(&gn.ats("name"))) } else { "À l'assaut !".to_string() });
     }
     if what == "rallier" {
         a.pop("ask");

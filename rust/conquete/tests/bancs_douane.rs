@@ -185,7 +185,6 @@ fn app_vide() -> App {
         static_: HashMap::new(),
         geo: GEO(),
         game: None,
-        skirmish: None,
         reseau: Arc::new(Mutex::new(Reseau::default())),
         _auto_key: None,
     }

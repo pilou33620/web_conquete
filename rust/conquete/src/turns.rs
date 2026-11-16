@@ -700,7 +700,7 @@ pub fn _settled(g: &Game) -> bool {
 /// Rend dict(bt, ev) : deux listes d'identifiants.
 // game/turns.py, lignes 478 à 482
 pub fn _scan(g: &Game) -> Val {
-    let bt: Val = g.battles.values().into_iter().filter(|b| b.get("mode") == "attente").map(|b| b.at("id")).collect();
+    let bt: Val = g.battles.values().into_iter().filter(TB::en_attente).map(|b| b.at("id")).collect();
     bt.sort();
     dict! {"bt" => bt, "ev" => g.pending_ev.iter().map(|x| x.at("id")).collect::<Val>()}
 }
@@ -731,7 +731,11 @@ pub fn _candidates(g: &mut Game, old: &Val, cur: &Val) -> Val {
         let owners: Vec<Val> = bt.at("sides").iter().map(|s| s.at("owner")).collect();
         let kind = if bt.getb("ambush") { "Embuscade" } else if bt.at("node").is_some() { "Assaut" } else { "Bataille" };
         let lieu = g.place_name(bt.atf("x"), bt.atf("y"));
-        let txt = format!("{kind} {lieu} : {} attaque {}.", g.fname(owners[0].s()), g.fname(owners[1].s()));
+        let txt = if bt.get("mode") == "poursuite" {
+            format!("Victoire {lieu} : poursuivre l'ennemi, ou tenir le terrain ?")
+        } else {
+            format!("{kind} {lieu} : {} attaque {}.", g.fname(owners[0].s()), g.fname(owners[1].s()))
+        };
         out.push(dict! {"kind" => "bataille", "text" => txt, "x" => bt.at("x"), "y" => bt.at("y"), "sel" => list!["battle", &bid]});
     }
     out
