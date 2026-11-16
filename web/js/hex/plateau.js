@@ -433,6 +433,15 @@ export class Plateau {
     const places = [...this.lieux.values()].filter(l => l.grp && l.vu !== now).sort((a, b) => a.vu - b.vu);
     for (let n = places.length + [...this.lieux.values()].filter(l => l.grp && l.vu === now).length; n > MAXL && places.length; n--) { const l = places.shift(); jeter(l.grp); l.grp = null; l.bati = null; this.sc.sale = true; }
   }
+  // le mur d'enceinte d'une place fortifiée (centre et rayon en unités du plateau, nombre de pans : M.enceinte), ou rien
+  murDe(l) {
+    const f = l.ns?.f || 0, n = l.n;
+    if (!f || n.type === 'fort') return null;
+    if (n.type === 'village') return { x: l.t.x, z: l.t.z, rad: 7.5, n: M.pansEnceinte(Math.min(f, 2), 7.5) };
+    const x = l.hex.reduce((a, h) => a + h.x, 0) / l.hex.length, z = l.hex.reduce((a, h) => a + h.z, 0) / l.hex.length;
+    const rad = Math.max(...l.hex.map(h => Math.hypot(h.x - x, h.z - z))) + 9.5;
+    return { x, z, rad, n: M.pansEnceinte(f, rad) };
+  }
   batirLieu(l, ns) {
     const { mp, g } = this, n = l.n, t0 = l.t, st = M.style(n.dept), L = lot();
     const f = ns?.f || 0, dev = ns?.d || 0, dmg = ns?.sg ? ns.sg.dmg || 0 : 0;
@@ -446,7 +455,13 @@ export class Plateau {
     // et toutes celles qui passent près (rien ne se bâtit dessus)
     const pres = [];
     for (const e of mp.edges) { if (!e.pts.some(p => Math.hypot(p[0] / g.f - t0.x, p[1] / g.f - t0.z) < 44)) continue; for (const [x, , z] of g.suivre(e.pts, 0.8, 0)) if (Math.hypot(x - t0.x, z - t0.z) < 40) pres.push([x, z]); }
-    const surRue = (x, z) => pres.some(([px, pz]) => (px - x) * (px - x) + (pz - z) * (pz - z) < 2.3);
+    // ni sur un mur d'enceinte, le sien ou celui d'une place voisine (à 1,6 du pan : l'apothème du polygone)
+    const murs = [...this.lieux.values()].map(o => this.murDe(o)).filter(m => m && Math.hypot(m.x - t0.x, m.z - t0.z) < m.rad + 32);
+    const surMur = (x, z) => murs.some(m => {
+      const w = Math.PI * 2 / m.n, r = Math.hypot(x - m.x, z - m.z), a = Math.atan2(z - m.z, x - m.x), p = a - Math.round(a / w) * w;
+      return Math.abs(r * Math.cos(p) - m.rad * Math.cos(w / 2)) < 1.6;
+    });
+    const surRue = (x, z) => surMur(x, z) || pres.some(([px, pz]) => (px - x) * (px - x) + (pz - z) * (pz - z) < 2.3);
     // ce que l'état abîme (comme la carte d'avant, villes.js degats) : maisons brûlées par l'incendie, ruines du siège en
     // cours et des combats passés (dg), toits noircis par le canon
     const feu = ns?.lv?.[0] === 'incendie', deg = Math.max(dmg * 0.22, ns?.dg || 0);
@@ -570,8 +585,7 @@ export class Plateau {
       // une ville que l'eau serre : ce qui n'a pas trouvé place déborde en faubourg sur les hexagones voisins libres
       if (manque > 0) for (const h of new Set(l.hex.flatMap(x => g.voisins(x)))) { if (manque <= 0) break; if (!h.lieu && !this.estEau(h)) manque = combler(h, manque, 1, 0); }
       if (f) {   // l'enceinte entoure le cœur et les faubourgs voisins : centrée sur eux
-        const cx = l.hex.reduce((a, h) => a + h.x, 0) / l.hex.length - t0.x, cz = l.hex.reduce((a, h) => a + h.z, 0) / l.hex.length - t0.z;
-        const rad = Math.max(...l.hex.map(h => Math.hypot(h.x - t0.x - cx, h.z - t0.z - cz))) + 9.5, E = lot();
+        const m = this.murDe(l), cx = m.x - t0.x, cz = m.z - t0.z, rad = m.rad, E = lot();
         M.enceinte(E, f, rad, pres.map(([x, z]) => [x - t0.x - cx, z - t0.z - cz]));
         for (const k of ['g', 'o']) for (const geo of E[k]) { geo.translate(cx, 0, cz); L[k].push(geo); }
       }

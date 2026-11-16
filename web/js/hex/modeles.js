@@ -175,8 +175,9 @@ export function fanion(L, col, x, y, z, h = 7) {
 // enceinte en anneau de rayon rad autour de (0, 0) selon le niveau des remparts (1 à 4) ; `portes` : les points des
 // routes alentour ([x, z], tous les 0,8) : une porte s'ouvre là où une route traverse le mur, pile sur elle. 1 : mur et tours rondes ; 2 : remparts épais, tours plus hautes ; 3 : tracé bastionné
 // avec fossé ; 4 : bastions, demi-lunes et glacis à la Vauban.
+export const pansEnceinte = (niveau, rad) => (niveau >= 3 ? 5 + (rad > 12 ? 1 : 0) : 8);
 export function enceinte(L, niveau, rad, portes = []) {
-  const n = niveau >= 3 ? 5 + (rad > 12 ? 1 : 0) : 8, H = niveau >= 2 ? 1.9 : 1.4, ep = niveau >= 2 ? 1.1 : 0.7;
+  const n = pansEnceinte(niveau, rad), H = niveau >= 2 ? 1.9 : 1.4, ep = niveau >= 2 ? 1.1 : 0.7;
   const coins = Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2 + Math.PI / n; return [Math.cos(a) * rad, Math.sin(a) * rad, a]; });
   if (niveau >= 3) {   // fossé (et glacis) : un anneau plus sombre au pied
     const fos = new THREE.RingGeometry(rad * 0.98, rad * (niveau >= 4 ? 1.42 : 1.26), n * 4); fos.rotateX(-Math.PI / 2);
@@ -194,12 +195,14 @@ export function enceinte(L, niveau, rad, portes = []) {
     ou.sort((p, q) => p - q);
     let deb = 0;
     const mur = fin => { if (fin - deb > 0.3) put(L, boite(fin - deb + 0.2, H, ep), niveau >= 3 ? 0xcdb98c : PIERRE2, ax + dx * (deb + fin) / 2, H / 2, az + dz * (deb + fin) / 2, a, 0.14); };
-    for (const s of ou) {
-      if (s < deb + 2.2) continue;   // (la même route, ou une porte déjà là)
-      mur(s - 2.2);
+    for (let i0 = 0; i0 < ou.length;) {
+      // (deux routes qui passent à moins de 6,5 l'une de l'autre : une seule porte, plus large, pour les deux)
+      let i1 = i0; while (i1 + 1 < ou.length && ou[i1 + 1] - ou[i1] < 6.5) i1++;
+      const s0 = ou[i0], s1 = ou[i1]; i0 = i1 + 1;
+      mur(s0 - 2.2);
       // la porte : deux tours de part et d'autre, un passage
-      for (const k of [-1, 1]) { const px = ax + dx * (s + k * 1.4), pz = az + dz * (s + k * 1.4); put(L, cyl(0.8, 0.9, H + 1.2, 8), PIERRE, px, (H + 1.2) / 2, pz, 0, 0.12); put(L, cone(1, 1.3, 8), ARDOISE, px, H + 1.85, pz, 0, 0.1); }
-      deb = s + 2.2;
+      for (const k of [-1, 1]) { const s = k < 0 ? s0 : s1, px = ax + dx * (s + k * 1.4), pz = az + dz * (s + k * 1.4); put(L, cyl(0.8, 0.9, H + 1.2, 8), PIERRE, px, (H + 1.2) / 2, pz, 0, 0.12); put(L, cone(1, 1.3, 8), ARDOISE, px, H + 1.85, pz, 0, 0.1); }
+      deb = s1 + 2.2;
     }
     mur(l);
     if (niveau >= 3) {   // le bastion : une pointe de flèche au saillant, parapet gazonné
