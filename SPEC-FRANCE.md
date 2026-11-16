@@ -75,6 +75,18 @@ voies navigables et côtes au-delà du Sud-Ouest, vérifier la fluidité sur iPa
 - **Les villes changent avec l'époque** (demande du 15/11/2026) : la liste des 25 suit les dates de la partie. Des
   villes y entrent au XIXe siècle (en France : Saint-Étienne, Roubaix, Le Havre, Saint-Nazaire, Mulhouse…), d'autres
   en sortent. Une ville neuve existe sur la carte dès le départ, comme un bourg, et grandit selon sa trajectoire.
+- **Les villes côtières aussi** (demande du 16/11/2026), en vue d'un mode naval plus tard : en plus des 25, les ports
+  qui comptent à l'époque, même petits, chacun avec son rôle : arsenal (flotte de guerre), commerce (colonies, coton,
+  vin), pêche ou course (corsaires). Chacun porte l'étiquette `port` (déjà lue par le jeu : gabares, blocus, cabotage).
+  Pour la France, d'après la carte actuelle (168 places étiquetées `port`) :
+  - arsenaux : Brest, Toulon, Lorient, Rochefort (sans l'étiquette), Cherbourg (absente de la carte) ;
+  - commerce : Marseille, Bordeaux, Nantes (sans l'étiquette), Le Havre, La Rochelle, Saint-Malo, Bayonne, Sète,
+    Saint-Nazaire (sans l'étiquette, port neuf de 1856), Dunkerque (absente) ;
+  - pêche et course : Dieppe, Fécamp, Honfleur, Granville, Boulogne, Calais, Concarneau, Douarnenez, Paimpol,
+    Les Sables-d'Olonne, Morlaix (sans l'étiquette) ;
+  - Méditerranée : Antibes, Agde, Ajaccio, Bastia ; Cannes et Port-Vendres absentes.
+  À faire dans le mode France avec la géographie 4 : ajouter Cherbourg, Dunkerque, Cannes, Port-Vendres (et Roubaix),
+  étiqueter `port` Rochefort, Nantes, Saint-Nazaire, Morlaix.
 
 Fait dans le mode France le 15/11/2026 :
 - populations de 1790 corrigées (`POP_1790_FR`, `places.rs`) pour 70 places dont l'outil de la carte avait gardé un
