@@ -600,6 +600,7 @@ impl Game {
             }
             let (dx, dy) = (a.atf("x") - bx, a.atf("y") - by);
             let ao = a.ats("owner");
+            // shortcut: on ne regarde pas si une voie ferrée du camp passe près du champ de bataille ; à lier à rails.rs si cela compte
             let rail = self.effet_camp(&ao, "renfort"); // (chemins de fer militaires : on accourt de plus loin)
             let km = R::RENFORT_KM * if rail.is_some() { rail.atf("renfort") } else { 1.0 };
             let d2 = dx * dx + dy * dy;
