@@ -13,6 +13,8 @@ import { Z, nuit } from './carte/ambiance.js';
 import { Guerre, rayonMurs } from './carte/guerre.js';
 import { Travaux } from './carte/travaux.js';
 import { Ciel } from './carte/ciel.js';
+import { Combat } from './carte/combat.js';
+import { armeImage } from './icons.js';
 import * as ambiance from './carte/ambiance.js';
 import { terre, EAU, SABLE, LARG_RIVIERE } from './carte/terre.js';
 import { Plateau } from './hex/plateau.js';
@@ -125,8 +127,8 @@ function darken(h, t) { return shade(h, t, 0); }
 // arme d'un type de régiment ('inf', 'cavalerie', 'artillerie') et ordre dispersé, d'après les règles (repli pour les anciennes règles)
 export const unitCls = (rules, t) => rules.units[t]?.cls || (t === 'cavalerie' || t === 'artillerie' ? t : 'inf');
 export const unitLight = (rules, t) => rules.units[t]?.light ?? t === 'legere';
-const CLS_ORDER = { inf: 0, cavalerie: 1, artillerie: 2 };
-const TYPE_DOT = { ligne: '#f1ead8', legere: '#bfe39a', grenadiers: '#9fb8e8', chasseurs: '#7fd6b0', sapeurs: '#d6a878', garde: '#f0b8c8', cavalerie: '#e6c97f', artillerie: '#ff9a7a' };
+// les cinq armes sur le jeton d'une armée (SPEC-BATAILLE.md) : la teinte de chaque icône
+const ARME_COL = { inf: '#f1ead8', cav: '#e6c97f', art: '#ff9a7a', tir: '#bfe39a', grenadiers: '#9fb8e8' };
 
 export class MapView {
   constructor(canvas, payload) {
@@ -2002,6 +2004,7 @@ export class MapView {
     this.epoque.teinte(ctx);
     this.guerreDe().sol(ctx, performance.now() / 1000);
   }
+  combatDe() { return this.combat || (this.combat = new Combat(this)); }   // les petites batailles sur l'hexagone (carte/combat.js)
   guerreDe() { if (!this.guerre) { this.guerre = new Guerre(this); this.guerre.travaux = new Travaux(this.guerre); } return this.guerre; }
   cielDe() { return this.ciel || (this.ciel = new Ciel(this)); }
 
@@ -2537,7 +2540,7 @@ export class MapView {
       if (a.h) ctx.globalAlpha = 0.62;
       if (a.rail && a.n == null) this.drawTrain(ctx, a, d, col, sel, time);
       else if (a.boat && a.n == null) this.drawBoat(ctx, a, d, col, sel, time);
-      else if (vie) this.drawLife(ctx, a, sel);
+      else if (vie || (detailed && a.st === 'battle')) this.drawLife(ctx, a, sel);   // (en bataille : la petite scène la montre, carte/combat.js)
       else if (detailed) this.drawFormation(ctx, a, d, col, sel, time);
       else this.drawToken(ctx, a, d, col, sel, time);
       ctx.restore();
@@ -2583,18 +2586,17 @@ export class MapView {
     ctx.font = '700 14px "EB Garamond", Georgia, serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(fmtMen(a.men), 2.5, 0.5);
-    // types
-    const types = {};
-    for (const r of a.regs) types[r[1]] = (types[r[1]] || 0) + 1;
-    const order = Object.keys(types).sort((p, q) => CLS_ORDER[unitCls(this.rules, p)] - CLS_ORDER[unitCls(this.rules, q)] || this.rules.unit_order.indexOf(p) - this.rules.unit_order.indexOf(q));
-    let px = -((Object.keys(types).length - 1) * 8) / 2;
-    for (const t of order) {
-      if (!types[t]) continue;
-      ctx.fillStyle = '#202326';
-      ctx.beginPath(); ctx.arc(px, h / 2 + 5, 4.2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = TYPE_DOT[t] || TYPE_DOT[unitCls(this.rules, t) === 'inf' ? 'ligne' : unitCls(this.rules, t)];
-      ctx.beginPath(); ctx.arc(px, h / 2 + 5, 2.8, 0, Math.PI * 2); ctx.fill();
-      px += 8;
+    // les armes de l'armée (armies[].armes, sinon d'après ses régiments) : une icône par arme présente, sous la plaque
+    const AR = this.rules.armes || ARME_COL, de = this.rules.arme_de || {};
+    const armes = a.armes || (a.regs || []).reduce((o, r) => { const k = de[r[1]] || 'inf'; o[k] = (o[k] || 0) + (r[2] || 1); return o; }, {});
+    const pres = Object.keys(AR).filter(k => armes[k] > 0);
+    let px = -((pres.length - 1) * 15) / 2;
+    for (const k of pres) {
+      ctx.fillStyle = 'rgba(32,35,38,0.94)'; ctx.beginPath(); ctx.arc(px, h / 2 + 8, 7.2, 0, Math.PI * 2); ctx.fill();
+      const im = armeImage(k, ARME_COL[k] || '#f1ead8');
+      if (im) ctx.drawImage(im, px - 5.5, h / 2 + 2.5, 11, 11);
+      else { ctx.fillStyle = ARME_COL[k] || '#f1ead8'; ctx.beginPath(); ctx.arc(px, h / 2 + 8, 2.8, 0, Math.PI * 2); ctx.fill(); }   // (l'image n'est pas encore chargée)
+      px += 15;
     }
     if (a.wn?.length) this.warnMark(ctx, w / 2 - 1, -h / 2 + 1);
     if (a.st === 'battle') {
@@ -2912,13 +2914,13 @@ export class MapView {
     for (const b of (this.state || this.preview).battles) {
       const [x, y] = this.toScreen(b.x, b.y);
       if (x < -100 || y < -100 || x > this.vw + 100 || y > this.vh + 100) continue;
-      // fumée (de près, celle de carte/guerre.js : les salves, les batteries)
-      if (z < Z.VIE && !nuit() && Math.random() < dt * 9) {
+      // de loin : un peu de fumée et le signe de la bataille ; de plus près, sa petite scène (carte/combat.js)
+      if (z < 5.5 && !nuit() && Math.random() < dt * 9) {
         const r = 1.6;
         this.particles.push({ type: 'smoke', x: b.x + (Math.random() - 0.5) * r * 2, y: b.y + (Math.random() - 0.5) * r * 1.4,
                               life: 0, max: 2.2 + Math.random(), size: 0.5 + Math.random() * 0.6 });
       }
-      if (z < Z.VIE && !nuit() && Math.random() < dt * 14) {
+      if (z < 5.5 && !nuit() && Math.random() < dt * 14) {
         this.particles.push({ type: 'spark', x: b.x + (Math.random() - 0.5) * 2.4, y: b.y + (Math.random() - 0.5) * 1.6, life: 0, max: 0.15 });
       }
       if (z < 5.5) {
@@ -2933,8 +2935,9 @@ export class MapView {
         ctx.restore();
       }
     }
-    // le nuage de la bataille, les lignes face à face, les villages pillés, les fumées (carte/guerre.js)
-    if (this.state) this.guerreDe().dessus(ctx, dt, time);
+    // la petite scène de chaque bataille et les traces des champs de bataille (carte/combat.js) ; les villages
+    // pillés, les fêtes, les fumées (carte/guerre.js)
+    if (this.state) { ctx.save(); this.combatDe().dessiner(ctx, dt, time); ctx.restore(); this.guerreDe().dessus(ctx, dt, time); }
   }
 
   drawParticles(ctx, dt) {

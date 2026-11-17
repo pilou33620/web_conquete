@@ -1,6 +1,5 @@
 import { MapView } from './map.js';
 import { UI } from './ui.js';
-import { Bataille } from './battle/bataille.js';
 import { Tuto } from './tuto.js';
 import { intro } from './intro.js';
 
@@ -14,8 +13,6 @@ for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEv
 document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
 
 let ui, map, seq = 0, polling = false, running = false, timer = null;
-let bataille = null;   // vue de bataille tactique : pendant qu'elle est ouverte, la campagne n'est plus interrogée
-let skirmishBid = null;   // mode Bataille : la bataille isolée en cours (au retour, l'écran de départ)
 let epoch = 0, lost = false;   // epoch : change à chaque resetUI, pour jeter les réponses d'une ancienne partie
 let bootVer, bootGeo, reloading = false;  // version du serveur et géographie de la carte au chargement de la page
 
@@ -40,7 +37,7 @@ function checkVersion(ver, geo) {
 }
 
 async function poll() {
-  if (!running || polling || (bataille && bataille.active)) return;
+  if (!running || polling) return;
   polling = true;
   const ep = epoch, cs = ui.cmdSeq;   // cs : un ordre envoyé pendant la requête rend cet état périmé
   let st;
@@ -67,8 +64,6 @@ async function poll() {
   if (!st || !st.me) return;
   seq = st.seq;
   try { ui.update(st); } catch (e) { console.error(e); }
-  // une bataille tactique du joueur se livre : la carte zoome vers elle et la vue de bataille prend la main
-  if (bataille && bataille.wants(st.tac)) bataille.enter(st.tac, st);
 }
 
 // la partie lancée ou chargée a une autre carte que cette page : on recharge, et la page reprend la partie (et le tutoriel
@@ -88,7 +83,6 @@ function startPolling() {
 }
 
 function resetUI() {
-  if (bataille && bataille.active) bataille.abort();
   epoch++;
   running = false;
   seq = 0;
@@ -138,22 +132,6 @@ async function boot() {
   ui.geo = payload.geo;
   if (payload.geo >= 3) Object.assign(payload.rules.zones, { cote: 'Côte', montagne: 'Montagne' });   // (« Côte atlantique », « Pyrénées » : noms de la carte d'Aquitaine)
   ui.onPickGeo = recharger;
-  // bataille tactique : ouverte au choix « Commander la bataille » (ui.js) ou quand l'état l'annonce (poll)
-  bataille = new Bataille({
-    api, map,
-    onEnd: (res, bid, msg) => {
-      if (skirmishBid && bid === skirmishBid) {
-        skirmishBid = null;
-        if (msg) ui.toast(msg, 'bad');
-        showStart();
-        return;
-      }
-      if (msg) ui.toast(msg, 'bad');
-      else if (res && res.title) ui.toast(`${res.title} — la campagne attend vos ordres.`, res.won ? 'good' : '');
-      setTimeout(poll, 60);
-    },
-  });
-  ui.onTactic = bid => { if (bid != null && bataille.wants({ bid, phase: 'deploiement' })) bataille.enter({ bid, phase: 'deploiement' }, ui.st); };
   ui.onStartGame = async (dept, difficulty, scenario) => {
     if (!dept) return;
     let r;
@@ -197,27 +175,14 @@ async function boot() {
   };
   ui.onStartTap = e => {
     if (e.hit && e.hit.kind === 'node') {
-      if (ui.startMode === 'bataille') ui.skPickNode(e.hit.id);
-      else ui.pickDept(payload.map.nodes[e.hit.id].dept);
+      ui.pickDept(payload.map.nodes[e.hit.id].dept);
       return;
     }
-    if (ui.startMode === 'bataille' || !(e.x >= 0 && e.x < map.W && e.y >= 0 && e.y < map.H)) return;
+    if (!(e.x >= 0 && e.x < map.W && e.y >= 0 && e.y < map.H)) return;
     // touché ailleurs que sur une ville : le département sous le doigt
     // shortcut: toWorld ne tient pas compte du relief du plateau 3D (quelques cases d'écart en montagne), assez pour un département
     const c = map.deptCodes[map.dept[Math.floor(e.y) * map.W + Math.floor(e.x)] - 1];
     if (c && ui.rules.factions[c] && (payload.map.playable || Object.keys(ui.rules.factions)).includes(c)) ui.pickDept(c);
-  };
-  // mode Bataille : une bataille isolée, sans campagne (la campagne en cours reste telle quelle sur le serveur)
-  ui.skOpts = payload.skirmish || null;
-  ui.onStartSkirmish = async cfg => {
-    let r;
-    try { r = await api.post('/api/skirmish', { ...cfg, geo: bootGeo }); } catch (e) { return ui.toast('Serveur injoignable : la bataille n’a pas pu commencer.', 'bad'); }
-    if (!r.ok) return ui.toast(r.msg, 'bad');
-    resetUI();
-    ui.hideStart();
-    skirmishBid = String(r.bid);
-    bataille.closed.delete(skirmishBid);
-    bataille.enter({ bid: r.bid, phase: 'deploiement' }, null);
   };
   let info;
   try { info = await api.get('/api/saves'); } catch (e) {

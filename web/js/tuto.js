@@ -33,7 +33,7 @@ function etapes(ui) {
     ] : [
       { at: '#tb-speed', txt: 'Temps réel : la pause et les vitesses sont ici (espace, touches 1 à 6).' },
     ]),
-    { txt: 'Les batailles : « Donner mes ordres » pour choisir votre plan, vos ruses et l’heure, puis regarder vos officiers la livrer ; « Commander la bataille » pour la mener vous-même (des bulles vous guideront sur le terrain) ; ou laissez-la à votre général. Bonne campagne !' },
+    { txt: 'Les batailles se livrent sur la carte : quand une de vos armées rencontre l’ennemi ou attaque une place, choisissez votre stratégie (chacune en contre d’autres) ou laissez faire votre général ; vainqueur, décidez de la poursuite. Bonne campagne !' },
   ];
 }
 

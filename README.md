@@ -470,177 +470,24 @@ vous prévient d'un blocus ou d'une contribution sur vos places et des troupes q
 - Bouton « Détacher la cavalerie / l'artillerie / l'infanterie » : une arme entière forme sa propre armée,
   par exemple pour envoyer la cavalerie en reconnaissance ou déborder par un autre chemin.
 
-### Batailles sur ordres ou commandées
-- Quand une bataille concerne vos armées ou vos places (assauts compris), la campagne s'arrête et une fenêtre propose
-  **« Donner mes ordres »**, **« Commander la bataille »** ou **« Résolution automatique »** (réglage dans le menu ☰ :
-  toujours demander, escarmouches automatiques, toujours automatiques). Les batailles entre IA se résolvent toujours seules. La fenêtre
-  montre aussi un **petit plan de la position** (`web/js/plan.js`) : la vraie carte de la bataille, tournée pour que vos
-  troupes soient en bas, vos régiments, et l'ennemi tel que vos éclaireurs le voient (sinon sa zone, hachurée).
-  Une partie enregistrée en pleine bataille la reprend dans son mode (sur ordres ou à la main).
-- **« Donner mes ordres »** (`rust/conquete/src/tactics/orders.rs`, `web/js/battle/ordres.js`) : le champ de bataille s'ouvre
-  **vu de dessus**, et une fenêtre propose vos ordres en quatre onglets. **Manœuvre** : l'objectif de la journée
-  (battre son armée, la position clé, couper sa retraite, l'user), la manœuvre (en attaque : assaut frontal, ordre
-  oblique avant 1789, percée au centre après 1789, enveloppement d'une aile, double enveloppement avec un général de
-  division ou une nette supériorité, fixer et déborder avec assez de cavalerie, usure ; en défense : tenir, tenir puis
-  contre-attaquer, contre-pente de 1789 à 1849, défense avancée, contre-offensive, usure ; devant une place : assaut à
-  la brèche, pilonner d'abord, escalade sans attendre, ou défendre la place, sorties, tenir les murs) et l'aile
-  d'effort. **Les armes** : la marche de l'infanterie (colonnes, ligne, ordre mixte avec la technologie, ordre
-  dispersé), les légers (écran, couverts, avec la ligne), la cavalerie (aile, réserve, écran, raid sur les arrières),
-  l'artillerie (contre-batterie, préparation, grande batterie, appui jusqu'au bout). **Réserve et imprévus** : sa
-  taille, sa place, quand l'engager (quand l'ennemi plie, pour boucher les trous, ou **« Me demander »** : la bataille
-  s'arrête au moment décisif et vous dites « Maintenant ! » ou « Attendre un quart d'heure »), que faire si sa
-  cavalerie charge ou si sa réserve se montre. **Ruse et heure** : feinte, marche par le bois, feux de camp, faux
-  déserteurs (60 livres), fausse retraite ; l'heure de l'attaque (aube à 5 h 30, surprise mais fatigue ; matin ;
-  après-midi) ; l'attitude (prudent, équilibré, audacieux). Un choix impossible est grisé avec sa raison (époque,
-  général, terrain, cavalerie, livres). À chaque choix, vos troupes se redéploient sur la carte, et l'avis de votre
-  général (points forts, risques, estimation) tient compte de ce que vos éclaireurs savent de l'ennemi : son général
-  et son caractère, son intention probable (si vous avez assez de cavaliers et de légers), ses armes. Des **flèches de
-  manœuvre** dessinent le plan au sol : l'effort principal, la troupe qui fixe, la feinte, la marche par le bois, le
-  raid de la cavalerie, la contre-attaque, le tir de l'artillerie.
-  « Engager la bataille » : vos officiers la livrent selon vos ordres, avec les vraies règles, et elle **défile sous
-  vos yeux** en une vingtaine à une quarantaine de secondes (une escarmouche plus vite ; ×2 de lui-même après 25 s, ×4
-  après 40 s), la caméra suivant l'action. Un bandeau raconte les grands gestes ; des **étiquettes** sur la carte
-  marquent charges, carrés, mêlées et déroutes ; chaque grand moment laisse un **repère** sur la barre de la journée,
-  qu'on touche pour y ramener la caméra. « ×1 / ×2 / ×4 » règlent la vitesse, « Passer » la finit au plus vite.
-  Le récapitulatif ajoute les pertes par arme et ce qui a décidé la journée. Banc : `bin/banc_ia --ordres '{"man": "double"}'` (voir « Outils »).
-- **Canons camouflés.** Une batterie postée dans un bois (pas en forêt : les pièces n'y passent pas) ne se voit qu'à
-  moins de 250 m, 500 m quand elle tire (la fumée reste sous les arbres) ; en échange, les troncs gênent son tir
-  (−35 %) et sa mise en batterie est plus longue de moitié. Vaut pour vous comme pour l'ennemi, dans tous les modes ;
-  le panneau du régiment le rappelle.
-- La **résolution automatique** (et toute bataille entre IA) se joue sur la carte de campagne, en quelques heures à
-  quelques jours, et finit comme une bataille que vos officiers mènent jusqu'au bout : en rase campagne, le camp dominé
-  ou ébranlé décroche en bon ordre (passé environ 12 % de pertes face à un ennemi nettement plus fort, 19 % à forces
-  voisines ; le défenseur tient mieux que sa seule force) ; le défenseur d'une place ne décroche pas, il la rend, et un
-  assaut brisé reflue en désordre. Seule une armée presque anéantie est poursuivie ; il y a peu de prisonniers
-  (davantage à l'assaut d'une place), et le vaincu perd encore quelques traînards dans sa retraite. Pertes,
-  prisonniers et vainqueurs sont du même ordre dans les deux modes (mesuré bataille par bataille).
-- Sur ordres, la bataille se livre sur une carte de 3 × 2 km tirée du terrain de la campagne : relief, bois, champs, vignes, haies, clôtures et
-  murets, routes, rivières avec gués et ponts, fermes, et la ville avec ses remparts, ses portes et la brèche du siège.
-  La ville est celle de la carte de campagne : mêmes rues, mêmes îlots, mêmes routes et mêmes remparts (bastions et
-  demi-lunes compris), avec ses églises, sa halle, ses couvents, ses casernes et ses hôtels sur leurs îlots.
-  Le paysage est composé comme une vraie campagne : des parcelles aux formes variées qui suivent les routes et les
-  courbes de niveau, des **vergers** autour des maisons (couvert léger, ils ralentissent un peu et gênent un peu la
-  vue ; jamais sur le glacis d'une place forte), des prés le long de l'eau, pas de labours sur les pentes fortes, des
-  bois aux lisières découpées avec leurs clairières, des bosquets, des haies au bord des parcelles et des chemins qui
-  les longent jusqu'aux fermes et aux hameaux.
-  Chaque régiment a son expérience, son endurance, la portée de ses armes et ses munitions (un chariot par armée les
-  recomplète) ; les bois cachent les troupes, la nuit arrête le combat.
-- Munitions et fatigue restent d'une bataille à l'autre : elles se
-  recomplètent en campagne (vite chez soi, peu en pays ennemi).
-
-#### Mode Bataille (sans campagne)
-L'écran d'accueil a deux onglets : **Campagne** (la partie habituelle) et **Bataille**, pour livrer une bataille isolée.
-On y choisit l'époque (1700, 1790, 1813, 1870), son camp, l'adversaire (ou au hasard), jusqu'à **10 régiments**, et le type
-de bataille : **bataille rangée** en rase campagne ou **place forte**, en attaquant ou en défenseur (l'assaillant d'une
-place, remparts intacts, reçoit 5 régiments de renfort : 2 batteries, des sapeurs, des grenadiers et de la ligne, soit
-15 régiments contre une garnison de 7 et la milice ; il faut escalader les murs). Lieu, saison et météo se
-règlent ou se tirent **au hasard** ; on peut aussi toucher une ville sur la carte. L'ennemi aligne autant de régiments,
-tirés au sort. Un choix « Le commandement » la fait livrer **sur ordres** ou **commander à la main**, comme en campagne, puis « Retour au menu ». Elle n'est pas enregistrée et
-ne touche pas à la campagne en cours (`rust/conquete/src/tactics/skirmish.rs`).
-
-#### Regarder la bataille
-- **L'entrée.** La carte de campagne plonge vers le lieu du combat, puis le champ de bataille apparaît **vu de
-  dessus, à plat**, dans le style de Champs de Plaine : parcelles striées (chaume, blé, labour, pré, colza, friche,
-  jachère) avec leurs tournières et leurs bottes, haies bocagères en boules, chemins de terre, **routes royales
-  empierrées** (ornières, fossés, bornes, rangs d'ormes), rues pavées en ville, rivières à ripisylve, collines lisibles
-  par un ombrage doux éclairé du nord-ouest ; saisons et neige. Le décor est de l'époque et de la région : église
-  romane, cathédrale gothique, église à dôme (après 1630), ferme à cour, longère, mas, colombages, hôtel particulier,
-  halle, moulins qui tournent, caserne, poudrière, gare et immeubles haussmanniens seulement après leur date ; toits
-  d'ardoise, de tuile plate, de tuile canal ou de chaume selon le département et le moteur des villes. Les villes ont
-  leurs îlots de maisons serrées le long des rues, leur grand-place, leur mur médiéval à tours rondes ou leur **tracé
-  bastionné** (bastions, courtines, demi-lunes, fossé, chemin couvert, glacis), leurs portes et leurs brèches. Les bois
-  sont des houppiers ronds et des sapins, qui s'ouvrent au-dessus d'un régiment pour laisser voir ses hommes ; des bêtes
-  paissent au pré et fuient les boulets, les villageois quittent les maisons, les cheminées fument. Un boulet crève un
-  toit, le feu prend (plus vite sur le chaume), gagne les maisons voisines et laisse des ruines qui couvent.
-  Chaque régiment est fait de **soldats dessinés vus d'en haut, un par homme** tant que la qualité graphique le permet,
-  en uniforme français de l'époque (justaucorps gris-blanc sous Louis XIV, habit bleu national puis impérial, capote
-  et pantalon garance en 1870, dragons en vert de 1760 à 1860) ; les coiffures suivent l'époque (tricorne, bicorne,
-  shako, képi, bonnet à poil). Il se tient dans l'emprise de sa formation : ligne sur deux ou trois rangs, colonne,
-  carré à quatre faces, tirailleurs par deux, avec porte-drapeau, officier et tambour ; chaque homme a son ombre.
-  Les hommes sont **animés** : marche, charge à la baïonnette, feu (en joue, recul, rechargement à la baguette),
-  mêlée, déroute, repos ; la cavalerie au pas, au trot, au galop, sabre au clair ; l'artillerie recule au coup, ses
-  servants écouvillonnent, avec avant-train et chevaux (sauf sur un rempart) ; mitrailleuses, général et état-major,
-  caissons. De loin, un régiment devient un bloc aux couleurs de son camp, à la forme de sa formation. Les tués
-  restent au sol toute la bataille (un boulet fauche une file). La fumée des salves forme des taches pâles qui
-  dérivent au vent, les éclairs partent des bouches des fusils et des pièces, les boulets volent en cloche avec leur
-  ombre, ricochent et projettent la terre ; la poussière suit les charges ; les incendies jettent une fumée noire et
-  des braises ; avec la poudre B, plus que l'éclair et un voile à peine visible. Au-dessus de chaque régiment, un
-  fanion à la manière d'Ultimate General porte le pictogramme de son arme et son effectif (barré et pâli s'il est en
-  déroute) ; le général a son médaillon. Le temps, la saison et l'heure se voient : pluie, brouillard, neige, orage,
-  ombres des nuages qui passent, lumière dorée du matin, couchant puis nuit.
-- **Le déploiement.** Vos officiers placent vos troupes selon vos ordres, dans votre moitié du champ de bataille (sauf
-  une bande neutre de 400 m au milieu) ; devant une place, l'assaillant reste à 450 m de l'enceinte, le défenseur tient
-  la place et 250 m autour. L'ennemi se déploie plus en retrait : les armées ne commencent pas au contact. Une place
-  forte a ses **canons du rempart** : une batterie fixe par niveau de fortification (1 à 3), immobile ; ils tirent,
-  peuvent être pris, et comptent aussi dans la résolution automatique (à moitié : `rules.FORT_GUNS_AUTO`). Les canons
-  de l'assaillant **ouvrent des brèches** en battant le rempart (une petite heure pour deux batteries contre une place
-  ordinaire) ; l'assaillant laisse d'abord ses canons travailler, puis lance ses colonnes dans la brèche dès qu'elle
-  s'ouvre ; sans brèche, il finit par escalader.
-- **La fiche d'un régiment.** Touchez un régiment (le vôtre ou l'ennemi) : sa fiche donne son arme, son effectif, son
-  état, ses valeurs et, pour une batterie dans un bois, son camouflage ; « Ligne de vue » montre ce qu'il voit.
-- **Déroutes et ralliement.** Une troupe en déroute fuit vers son bord de la carte. Elle ne se reforme **qu'auprès
-  de son général**, loin de l'ennemi (à plus de 400 m, 500 m pour un général inspirant) ; vos officiers vont la
-  chercher. Dans une place, les officiers rallient leurs hommes sans le général ; sans général sur le terrain, ils
-  n'arrêtent les fuyards que très loin de l'ennemi. Ceux qui atteignent le bord quittent la bataille et retrouvent
-  leur armée en campagne.
-- **Le canon.** La mitraille est terrible à bout portant : sous 150 m, la gerbe encore serrée fauche des files
-  entières (à 50 m, elle tue plus que deux bataillons qui font feu). Aborder une batterie de face coûte très cher ;
-  prenez-la de flanc, ou faites-la taire d'abord.
-- **La vue.** Pendant le film, la caméra suit l'action (« Caméra : vue d'ensemble » la fige au-dessus du champ) ; on
-  peut toujours la prendre : glisser pour se déplacer (avec élan), pincer pour zoomer ; à la souris, molette pour
-  zoomer ; flèches du clavier. La vue est toujours de dessus, le nord en haut : elle ne pivote pas. La **mini-carte** (en bas à
-  droite) montre la part de terrain vue et se touche pour s'y rendre.
-- **Lire la bataille**, comme dans Ultimate General : le régiment choisi est cerné d'un anneau lumineux ; entre deux
-  régiments ennemis au contact, une **ligne de front** ondule au sol, à la couleur de chaque camp de son côté ; le
-  bouton **« Ligne de vue »** de la fiche d'un régiment assombrit tout ce qu'il ne voit pas (crêtes, bois,
-  bâti et vergers, la même règle que le moteur, haies mises à part). Au fil des pertes, des débris jonchent le sol
-  (chapeaux, fusils, havresacs, roues brisées près des pièces) et les trous d'obus restent ; la boue laissée par les
-  troupes (plus sous la cavalerie et l'artillerie, deux fois plus sous la pluie) est gardée avec la bataille : une
-  bataille rechargée retrouve ses traces, ses toits crevés, ses feux et ses ruines.
-  Le décor suit l'époque et les technologies des deux camps : poteaux télégraphiques et voie ferrée le long de la
-  grand-route, cheminées d'usine à l'horizon, ambulances à l'arrière (à croix rouge après la convention de Genève),
-  ballon captif au-dessus de l'état-major des aérostiers, parapet de terre devant l'infanterie retranchée. Les
-  cultures aussi : vignes « en foule » (ceps épars, sans rangs) jusqu'aux plants greffés, puis en rangs palissés ;
-  maïs dans la moitié des champs de Chalosse et du Béarn l'été et l'automne ; pins des Landes semés en lignes après
-  la loi de 1857.
-- **En haut** : l'heure (et la nuit qui approche), le temps, le rapport de forces (l'ennemi : seulement ce que
-  vous en voyez) et le journal (repliable, et complet derrière son bouton).
-- **La fin.** Le récapitulatif donne victoire ou défaite, pertes des deux camps, prisonniers, expérience, et les
-  pertes de chaque régiment ; « Retour à la carte » ramène la campagne, que vous relancez quand vous voulez.
-- **Qualité graphique** (menu ☰, section Affichage, ou fenêtre du journal de bataille) : **Basse** (appareils
-  anciens : image moins fine, 3 000 figures, peu de fumée, décor allégé, sans ombres des troupes), **Moyenne**
-  (tablettes et téléphones modestes : 6 000 figures), **Haute** (iPad récent : écran Retina, sol détaillé jusqu'à
-  16 pixels par mètre, 10 000 figures, ombres des troupes), **Ultra** (ordinateurs : 20 000 figures, plus de fumée,
-  tout le décor). Au-delà, chaque figure compte plusieurs hommes. Chaque niveau fixe aussi le zoom le plus rapproché
-  et la mémoire laissée aux tuiles du sol et aux figures. Au premier lancement, elle est choisie d'après l'appareil,
-  puis baisse d'elle-même d'un cran si la bataille saccade (moins de 26 images par seconde) ; un choix fait à la main
-  est gardé tel quel. Elle est enregistrée sur l'appareil et s'applique tout de suite, sans quitter la bataille. Le
-  dessin est fait sur un seul canevas 2D (ni WebGL ni Three.js) : tout navigateur récent l'affiche.
-- Clavier : flèches ou ZQSD pour la vue, + et − zoom, Échap referme la fiche.
-
-#### Commander la bataille
-« Commander la bataille » vous laisse mener chaque régiment, sur le même champ de bataille vu de dessus.
-- **Le déploiement.** Vos troupes sont dans la zone dorée. Glissez un régiment pour le placer, glissez depuis le sol
-  pour fixer l'emplacement et l'orientation de la ligne, pivotez-le avec ses boutons, choisissez sa formation.
-  **« Couverts »** met en évidence bois (vert), hauteurs (or), bâti et murs (bleu). Puis **« Engager la bataille »**.
-- **Choisir.** Touchez un régiment (sur le terrain, son fanion ou sa carte en bas) ; **appui long puis glisser**
-  pour un cadre de sélection (maj + clic ou maj + glisser à la souris) ; touchez le titre d'un groupe pour toute
-  la brigade. Double appui sur une carte : la vue s'y rend.
-- **Ordonner.** Régiment choisi : **touchez le sol** pour qu'il y aille ; **glissez depuis le régiment** pour tracer
-  sa route (flèche courbe et silhouette à l'arrivée) ; **glissez depuis le sol** pour fixer le point d'arrivée et le
-  sens de la ligne ; **touchez un ennemi** pour l'attaquer (clic droit : marche ou attaque). Le panneau du régiment
-  donne sa formation, tenir, rallier, retraite, « Occuper les maisons », « Barricader », et des ordres **propres à
-  chaque arme** (`web/js/battle/doctrine.js`) : feu à volonté, en salve, « Salve + baïonnette » et « Baïonnette ! »
-  pour la ligne et les grenadiers ; harceler pour les tirailleurs ; charger, poursuivre et galop pour la cavalerie ;
-  boulet, mitraille, contre-batterie et brèche pour l'artillerie.
-- **Déroutes.** Un cercle doré marque autour de votre état-major la zone où il rallie les fuyards : il faut aller les
-  chercher.
-- **Le temps.** Temps réel avec pause sous la mini-carte : pause, ×1, ×2, ×4 (espace, 1, 2, 4 au clavier ; à ×1 une
-  seconde vaut 18 secondes de bataille).
-- **« Finir auto. »** confie la suite à vos officiers : la bataille continue en accéléré sous un bandeau « Les
-  généraux poursuivent la bataille… », **« Reprendre le commandement »** vous rend la main, bataille en pause.
-  **« Décrocher »** fait quitter le terrain à toute l'armée. Chacun avec confirmation.
-- Clavier : C charger, H tenir, F feu, R rallier, V ligne de vue, Échap désélectionner, Ctrl + A tout choisir.
+### Batailles par stratégie
+Il n’y a plus de champ de bataille à part (SPEC-BATAILLE.md) : toutes les batailles se règlent sur la carte de campagne.
+- Quand une bataille concerne vos armées ou vos places (assauts compris), la campagne s’arrête et une fenêtre montre
+  la **situation** (rase campagne, prise de position, ville, fort), le terrain, la météo, l’ouvrage éventuel, les
+  **deux camps avec leurs effectifs par arme** (infanterie, cavalerie, artillerie, tirailleurs, grenadiers) et ce que
+  la **reconnaissance** annonce du plan ennemi. Vous choisissez une **stratégie** (chacune en contre d’autres, +20 % ;
+  celles que vous ne pouvez pas prendre sont grisées, avec la raison), ou « Laisser faire le général ». Réglage dans le
+  menu ☰ : toujours demander, escarmouches automatiques, toujours automatiques. Les batailles entre IA se règlent seules.
+- La bataille passe par quatre **phases** (escarmouche, canonnade, fusillade, charge). Une **petite scène** se joue sur
+  l’hexagone (`web/js/carte/combat.js`), différente selon la situation : lignes face à face, redoute, défenseurs sur le
+  rempart d’une ville ou d’un fort. Le panneau de la bataille et la fenêtre du résultat donnent le **journal par phase**,
+  **ce qui a pesé**, les pertes, les prisonniers, les prises (drapeaux, canons) et le sort des généraux.
+- Vainqueur avec de la cavalerie, vous décidez de la **poursuite** : « Poursuivre » (plus de pertes chez le vaincu, vos
+  hommes s’épuisent) ou « Laisser partir ».
+- **Avant d’attaquer**, la bulle de l’ordre de marche vers une armée ou une place ennemie montre le rapport de forces
+  (« estimé » sans renseignement sûr), la situation, le terrain et les effectifs. **Devant une place** : donner
+  l’assaut (escalade), assiéger (ouvrir la brèche), bloquer (blocus), ou rallier, négocier, rançonner, attendre.
+- Les champs de bataille des quatre derniers mois laissent une **trace** sur leur hexagone.
 
 ### Voies ferrées et trains
 - Avec la technologie « Chemins de fer » (vers 1841), le panneau d'une ville propose les **tronçons** de voie ferrée

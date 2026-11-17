@@ -68,3 +68,30 @@ export function coat(color, code, size = 1) {
     <text x="20" y="33" text-anchor="middle" font-family="IM Fell English, Georgia, serif" font-size="15" fill="#fff8e6">${code}</text>
   </svg>`;
 }
+
+// Les cinq armes (SPEC-BATAILLE.md) et le général : silhouettes pleines, lisibles en tout petit (jetons de la carte,
+// fenêtres de bataille). d : la couleur des détails posés sur la silhouette.
+const ARME_CORPS = {
+  inf: d => `<path fill="currentColor" d="M7.5 19.5h10L16.6 9H8.4z"/><rect fill="currentColor" x="5" y="19" width="15" height="2.6" rx="1.2"/><ellipse fill="currentColor" cx="12.5" cy="5" rx="2.3" ry="3"/><rect fill="${d}" opacity=".85" x="8.2" y="12.5" width="8.6" height="1.6"/>`,
+  cav: d => `<path fill="currentColor" d="M6.5 21.5c.3-4.2 1.3-7 3.4-9.6L8.3 9.3l3-1.4 1.2-4.4 2 2.6c3.4 1.3 5.6 4.6 6 8.4l-2.7 1.7-2.9-3.2-2.4 1.5c1.6 2.2 2.6 4.4 2.9 7z"/><circle fill="${d}" cx="14.6" cy="8.6" r=".9"/>`,
+  art: () => '<rect fill="currentColor" x="5" y="7.2" width="17" height="4.6" rx="2.2" transform="rotate(-16 13 9.5)"/><circle fill="none" stroke="currentColor" stroke-width="2.4" cx="9.5" cy="16" r="5.2"/><circle fill="currentColor" cx="9.5" cy="16" r="1.5"/><path stroke="currentColor" stroke-width="1.2" d="M9.5 11v10M4.5 16h10"/>',
+  tir: () => '<circle fill="none" stroke="currentColor" stroke-width="2.2" cx="12" cy="12" r="6.6"/><circle fill="currentColor" cx="12" cy="12" r="2"/><path stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
+  // la grenade enflammée des bonnets à poil
+  grenadiers: d => `<circle fill="currentColor" cx="12" cy="15.6" r="6.4"/><rect fill="currentColor" x="10" y="7.4" width="4" height="3" rx=".8"/><path fill="currentColor" d="M12 7.6C8.6 5.6 10.4 3 12.3 1c0 1.9 3.3 2.9 1.5 6.6z"/><path fill="none" stroke="${d}" stroke-width="1.3" stroke-linecap="round" opacity=".85" d="M8.6 14.4a3.8 3.8 0 0 1 2.6-2.6"/>`,
+  gen: () => '<path fill="currentColor" d="M1.5 17.5C4 7.5 20 7.5 22.5 17.5c-6.6-3-14.4-3-21 0z"/><circle fill="#ffe08a" cx="12" cy="11.6" r="1.9"/>',
+};
+export const armeSvg = (k, d = '#fff') => `<svg class="ic-arme" viewBox="0 0 24 24" aria-hidden="true">${(ARME_CORPS[k] || ARME_CORPS.inf)(d)}</svg>`;
+// pour un canevas : l'icône d'une arme peinte dans une couleur (une image par arme et par couleur ; null hors navigateur,
+// et tant qu'elle n'est pas chargée, drawImage ne dessine rien)
+const ARME_IMG = new Map();
+export function armeImage(k, col, d = '#202326') {
+  if (typeof Image === 'undefined') return null;
+  const cle = k + col + d;
+  let im = ARME_IMG.get(cle);
+  if (!im) {
+    im = new Image();
+    im.src = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" style="color:${col}">${(ARME_CORPS[k] || ARME_CORPS.inf)(d)}</svg>`);
+    ARME_IMG.set(cle, im);
+  }
+  return im.complete && im.naturalWidth ? im : null;
+}

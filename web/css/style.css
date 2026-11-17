@@ -600,21 +600,6 @@ table.grid.vl-tab td:first-child, table.grid.vl-tab th:first-child { text-align:
 .slot-opt small.why { color: #ffb3a6; opacity: 1; }
 body.modal-event #proposals { display: none; }   /* une décision à prendre : les propositions attendront */
 /* écran de départ : onglets Campagne / Bataille, et le mode Bataille */
-.mode-tabs { display: flex; }
-.mode-tabs button { flex: 1; font-family: var(--f-titre); font-size: 18px; padding: 7px 10px; }
-.sk-l { font-family: var(--f-titre); font-size: 17px; color: var(--laiton-clair); margin-bottom: -6px; }
-.sk-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; box-shadow: 0 0 0 1px rgba(0,0,0,.4); }
-.sk-help { margin: -6px 0 0; }
-.sk-place { flex: 1; min-width: 0; font: inherit; font-size: 15px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--hair);
-  background: rgba(0,0,0,.25); color: var(--papier); }
-.sk-units { display: flex; flex-direction: column; gap: 5px; }
-.sk-unit { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px;
-  border: 1px solid var(--hair); background: rgba(0,0,0,.18); }
-.sk-unit.on { border-color: var(--laiton); background: rgba(200,162,83,.12); }
-.sk-unit small { display: block; color: var(--papier-2); font-size: 13px; line-height: 1.25; }
-.sk-ctr { display: inline-flex; align-items: center; gap: 6px; }
-.sk-ctr b { min-width: 1.4em; text-align: center; font-size: 17px; }
-.sk-ctr .btn { min-width: 36px; padding: 4px 0; font-size: 18px; }
 
 /* ------------------------------------------------------------- cinématique d'ouverture (intro.js) */
 #intro { position: absolute; inset: 0; z-index: 55; cursor: pointer; display: grid; place-items: center;
@@ -637,8 +622,32 @@ body.modal-event #proposals { display: none; }   /* une décision à prendre : l
 @keyframes in-titre { from { opacity: 0; transform: scale(1.15); letter-spacing: .3em; } to { opacity: 1; transform: none; } }
 .in-passer { position: absolute; right: 16px; bottom: calc(11vh + 10px); font-size: 14px; color: var(--papier-2); opacity: .7; }
 /* le plan de la position ennemie, dans la fenêtre de bataille (plan.js) */
-.bt-plan { margin: 10px 0 0; }
-.bt-plan canvas { display: block; width: 100%; max-width: 480px; aspect-ratio: 3 / 2; margin: 0 auto; border-radius: 3px; background: #1d2226;
-  box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 0 0 3px rgba(200,162,83,.35); }
-.bt-plan figcaption { text-align: center; margin-top: 5px; }
-.bt-plan canvas.tall { aspect-ratio: 2 / 3; max-width: 230px; }
+/* la bataille par stratégie (strategie.js) : les deux camps, leurs armes, les stratégies, le journal */
+.ic-arme { width: 1.15em; height: 1.15em; vertical-align: -0.2em; }
+.bt-forces { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
+.bt-camp { border-left: 3px solid var(--c, var(--laiton)); padding-left: 9px; min-width: 0; }
+.bt-camp > b { display: block; font-size: 16px; overflow-wrap: anywhere; }
+.bt-camp > small { display: block; color: var(--papier-2); font-size: 13.5px; }
+.bt-armes { display: grid; grid-template-columns: 1fr auto; gap: 1px 10px; margin: 4px 0; font-size: 14.5px; font-variant-numeric: tabular-nums; }
+.bt-armes dt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bt-armes dd { margin: 0; text-align: right; }
+.bt-ouvrage, .bt-reco { margin: 6px 0; padding: 6px 10px; border: 1px solid var(--hair); border-radius: 7px; background: rgba(0,0,0,.18); font-size: 14.5px; }
+.bt-reco.muted { border-style: dashed; }
+.bt-strats { margin-top: 6px; }
+.bt-strat small, .bt-strat em { display: block; font-weight: 400; }
+.bt-strat em { font-style: normal; font-size: 13px; color: var(--papier-2); margin-top: 2px; }
+.bt-strat b i { font-weight: 400; font-size: 13px; color: var(--laiton-clair); }
+.bt-strat em.bon { color: #c6e6b8; } .bt-strat em.mauvais { color: #ffb3a6; }
+.bt-strat[aria-checked="true"] { border-color: var(--laiton); background: rgba(200,162,83,.2); box-shadow: inset 4px 0 0 var(--laiton); }
+.bt-strat:disabled { opacity: .5; }
+.bt-go .btn { flex: 1 1 200px; }
+.bt-journal { width: 100%; font-size: 14px; margin: 6px 0; font-variant-numeric: tabular-nums; }
+.bt-journal th { text-align: left; font-weight: 600; } .bt-journal td, .bt-journal th { padding: 2px 8px 2px 0; vertical-align: top; }
+.bt-note span { display: block; }
+.bt-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; box-shadow: 0 0 0 1px rgba(0,0,0,.4); }
+.bt-pese { font-size: 14.5px; margin: 6px 0; } .bt-pese ul { margin: 3px 0 0; padding-left: 4px; list-style: none; }
+.bt-rapport { display: flex; flex-direction: column; gap: 4px; font-size: 14px; padding: 0 4px; }
+.bt-jauge { height: 7px; border-radius: 4px; background: var(--cire); overflow: hidden; } .bt-jauge i { display: block; height: 100%; background: #5d86c9; }
+.bt-apercu .bt-forces { margin: 6px 4px 2px; gap: 8px; }
+#bubble .bt-apercu { max-width: 290px; } #bubble .bt-camp > b { font-size: 14px; } #bubble .bt-armes { font-size: 13px; }
+@media (max-width: 520px) { .bt-forces { gap: 8px; } .bt-armes { font-size: 13.5px; } .bt-journal { font-size: 13px; } }

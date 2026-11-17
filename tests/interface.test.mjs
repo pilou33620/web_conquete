@@ -202,31 +202,88 @@ test('barre du tour : bloquée tant qu’une bataille attend votre choix', () =>
   assert.ok(h.includes('disabled'));
 });
 
-test('barre du tour : bloquée tant qu’une armée attend votre choix devant une ville', () => {
-  const h = barre({ phase: 'ordres' }, { armies: [{ id: 'a1', ask: { n: 0, c: { manuel: '', auto: '', attendre: '' } } }] });
+test('barre du tour : bloquée tant que vous n’avez pas décidé de la poursuite', () => {
+  const h = barre({ phase: 'ordres' }, { battles: [{ id: 'b1', mode: 'poursuite' }] });
   assert.ok(h.includes('disabled'));
 });
 
-test('fenêtre de bataille : trois choix (ordres, à la main, automatique)', () => {
-  const ui = Object.create(UI.prototype);
-  ui.md = { nodes: [] };
-  ui.api = { post: () => new Promise(() => {}) };
-  ui.plans = { b1: { err: 'x' } };
-  ui.st = { names: {}, battles: [{ id: 'b1', mode: 'attente', node: null, terrain: 'Plaine', sides: [{ o: '33', men: 1 }, { o: '24', men: 1 }] }] };
-  const [h] = ui.battleModal();
-  for (const v of ['ordres', 'manuel', 'auto']) assert.ok(h.includes(`data-act="tac-choose" data-id="b1" data-v="${v}"`), v);
+test('barre du tour : bloquée tant qu’une armée attend votre choix devant une ville', () => {
+  const h = barre({ phase: 'ordres' }, { armies: [{ id: 'a1', ask: { n: 0, c: { assaut: '', attendre: '' } } }] });
+  assert.ok(h.includes('disabled'));
 });
 
-test('fenêtre d’arrivée devant une ville : les choix permis, les autres grisés avec leur raison', () => {
+// règles comme les envoie /api/map (SPEC-BATAILLE.md), réduites à ce que les fenêtres lisent
+const REGLES = {
+  factions: { 33: { name: 'Gironde', color: '#2f55b0' }, 24: { name: 'Dordogne', color: '#c8322c' } },
+  armes: { inf: 'Infanterie', cav: 'Cavalerie', art: 'Artillerie', tir: 'Tirailleurs', grenadiers: 'Grenadiers' },
+  phases: { escarmouche: 'Escarmouche', canonnade: 'Canonnade', fusillade: 'Fusillade', charge: 'Charge' },
+  weather: { soleil: { icon: '☀', label: 'Soleil' } }, poursuite: { cav: 0.05, fatigue: 35 }, techs: [{ id: 'ordre_mixte', name: 'Ordre mixte' }],
+  situations: { campagne: { label: 'Rase campagne', att: 'J’attaque', def: 'Je défends', desc: 'Bataille en rase campagne.', s_att: ['frontal', 'prep', 'colonnes'], s_def: ['tenir', 'contre'] } },
+  strats: {
+    frontal: { label: 'Assaut frontal', desc: 'Droit devant.', m: { inf: 1.1 }, pertes: 1, bat: ['repli'], tech: null },
+    prep: { label: 'Préparation d’artillerie', desc: 'Les canons d’abord.', m: { art: 1.45 }, pertes: 0.85, bat: ['tenir'], tech: null },
+    colonnes: { label: 'Attaque en colonnes', desc: 'Le choc.', m: { grenadiers: 1.5 }, pertes: 1.2, bat: [], tech: 'ordre_mixte' },
+    tenir: { label: 'Tenir la ligne', desc: '', m: {}, pertes: 1, bat: ['frontal'], tech: null }, contre: { label: 'Contre-attaque', desc: '', m: {}, pertes: 1, bat: ['prep'], tech: null },
+  },
+};
+const camp = (o, extra = {}) => ({ o, men: 740, lost: 0, mor: 80, armies: [], tac: [], armes: { inf: 300, cav: 200, art: 0, tir: 240, grenadiers: 0 }, strat: null, renf: [], ...extra });
+const bataille = (extra = {}) => ({ id: 'b1', mode: 'attente', node: null, terrain: 'Plaine', sit: 'campagne', moi: 0, meteo: 'soleil', ouvrage: null, journal: [], pese: [], age: 0, phase: 'escarmouche',
+  sides: [camp('33'), camp('24')], choix: [{ id: 'frontal', why: '' }, { id: 'prep', why: '' }, { id: 'colonnes', why: 'Découverte requise : <Ordre mixte>' }], defaut: 'prep', reco: { strat: 'tenir', p: 0.8 }, ...extra });
+function uiBataille(b) {
   const ui = Object.create(UI.prototype);
-  ui.md = { nodes: [{ id: 0, name: '<Mérignac>' }] };
-  ui.st = { armies: [{ id: 'a1', name: '1re Armée', ask: { n: 0, c: { ordres: '', manuel: '', auto: '', rallier: 'Armée trop faible <b>', attendre: '' } } }] };
+  ui.md = { nodes: [] }; ui.rules = REGLES;
+  ui.st = { names: {}, me: { code: '33' }, battles: [b] };
+  return ui;
+}
+
+test('fenêtre de bataille : les stratégies du contrat, celle du général présélectionnée, « Laisser faire le général »', () => {
+  const ui = uiBataille(bataille());
+  const [h] = ui.battleModal();
+  for (const v of ['frontal', 'prep', 'colonnes']) assert.ok(h.includes(`data-act="strat-pick" data-v="${v}"`), v);
+  assert.ok(/aria-checked="true" data-act="strat-pick" data-v="prep"/.test(h), 'le choix du général est présélectionné');
+  assert.ok(h.includes('data-act="tac-choose" data-id="b1" data-v="prep"'), '« Livrer bataille » envoie la stratégie choisie');
+  assert.ok(h.includes('data-act="tac-choose" data-id="b1" data-v="auto"') && h.includes('Laisser faire le général'));
+  assert.ok(/data-v="colonnes" disabled/.test(h) && h.includes('Découverte requise : &lt;Ordre mixte&gt;'), 'stratégie refusée : grisée, avec sa raison (échappée)');
+  assert.ok(h.includes('Tirailleurs') && h.includes('Cavalerie') && !h.includes('Grenadiers</dt>'), 'les armes présentes, pas les autres');
+  assert.ok(h.includes('Reconnaissance') && h.includes('Tenir la ligne') && h.includes('80 %'), 'ce que la reconnaissance annonce');
+  assert.ok(h.includes('Contre le plan annoncé'), 'la préparation d’artillerie contre « Tenir la ligne »');
+  for (const vieux of ['Donner mes ordres', 'Commander la bataille', 'data-v="ordres"', 'data-v="manuel"']) assert.ok(!h.includes(vieux), vieux);
+  ui.stratSel.id = 'frontal';
+  assert.ok(ui.battleModal()[0].includes('data-act="tac-choose" data-id="b1" data-v="frontal"'), 'la stratégie touchée remplace celle du général');
+});
+
+test('fenêtre de bataille : la poursuite (stratégie ennemie révélée, journal, deux choix)', () => {
+  const b = bataille({ mode: 'poursuite', fin: { w: 0, repli: true }, sides: [camp('33', { strat: 'prep', lost: 12 }), camp('24', { strat: 'tenir', lost: 90 })],
+    journal: [{ ph: 'canonnade', l: [2, 30], p: [{}, {}], w: [{ c: 0, t: 'Artillerie : avantage à <Gironde>' }] }], pese: [{ c: 0, t: 'Votre stratégie contrait la sienne' }] });
+  const [h] = uiBataille(b).battleModal();
+  assert.ok(h.includes('data-act="tac-pursue" data-id="b1" data-v="1"') && h.includes('data-act="tac-pursue" data-id="b1" data-v="0"'));
+  assert.ok(h.includes('Poursuivre') && h.includes('Laisser partir') && h.includes('Tenir la ligne') && h.includes('Canonnade'));
+  assert.ok(h.includes('avantage à &lt;Gironde&gt;') && h.includes('Ce qui a pesé'));
+});
+
+test('commandes de bataille : tac choose {strat} ou {mode: auto}, tac pursue {v}', async () => {
+  const ui = uiBataille(bataille()), vus = [];
+  ui.btSuivies = new Set(); ui.closeModal = () => {};
+  ui.cmd = body => { vus.push(body); return Promise.resolve({ ok: true }); };
+  ui.action('tac-choose', { id: 'b1', v: 'prep' }); ui.action('tac-choose', { id: 'b1', v: 'auto' }); ui.action('tac-pursue', { id: 'b1', v: '0' });
+  await Promise.resolve();
+  assert.deepEqual(vus, [{ cmd: 'tac', sub: 'choose', bid: 'b1', strat: 'prep' }, { cmd: 'tac', sub: 'choose', bid: 'b1', mode: 'auto' }, { cmd: 'tac', sub: 'pursue', bid: 'b1', v: false }]);
+  assert.ok(ui.btSuivies.has('b1'), 'le résultat de cette bataille s’ouvrira à sa fin');
+});
+
+test('fenêtre d’arrivée devant une ville : assaut, siège, blocus ; les choix refusés grisés avec leur raison', () => {
+  const ui = Object.create(UI.prototype);
+  ui.md = { nodes: [{ id: 0, name: '<Mérignac>' }] }; ui.rules = REGLES;
+  ui.api = { post: () => new Promise(() => {}) };
+  ui.st = { date: '1er mai 1790', armies: [{ id: 'a1', name: '1re Armée', ask: { n: 0, c: { assaut: '', assieger: 'Pas de canons <b>', bloquer: '', rallier: 'Armée trop faible <b>', attendre: '' } } }] };
   const [h] = ui.arriveeModal();
   assert.ok(h.includes('Devant &lt;Mérignac&gt;'), 'nom échappé');
-  for (const v of ['ordres', 'manuel', 'auto', 'rallier', 'attendre']) assert.ok(h.includes(`data-act="arrive" data-id="a1" data-v="${v}"`), v);
-  assert.ok(h.includes('Donner mes ordres') && h.includes('Commander la bataille') && h.includes('Résolution automatique'));
+  for (const v of ['assaut', 'assieger', 'bloquer', 'rallier', 'attendre']) assert.ok(h.includes(`data-act="arrive" data-id="a1" data-v="${v}"`), v);
+  assert.ok(h.includes('escalade') && h.includes('brèche') && h.includes('blocus'));
   assert.ok(/data-v="rallier" disabled/.test(h) && h.includes('Armée trop faible &lt;b&gt;'), 'rallier grisé, avec sa raison (échappée)');
-  assert.ok(!h.includes('data-v="assieger"'), 'un choix absent n’est pas proposé');
+  assert.ok(/data-v="assieger" disabled/.test(h) && h.includes('Pas de canons &lt;b&gt;'));
+  assert.ok(!h.includes('data-v="contribution"'), 'un choix absent n’est pas proposé');
+  for (const vieux of ['Donner mes ordres', 'Commander la bataille', 'Résolution automatique']) assert.ok(!h.includes(vieux), vieux);
 });
 
 // ------------------------------------------------------------------ tutoriel de la campagne

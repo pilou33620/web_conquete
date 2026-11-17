@@ -7,6 +7,7 @@ import { C, E, T, RR, PG, TAU, SPR, toile, avant, bat, caisson, cavalier, cheval
 import { AMB, LUM, U, Z, bivouac, nuit } from './ambiance.js';
 import { S as SU, IC, carteDe, etatVille, lieuxPlan, planDe } from './villes.js';
 import { LARG_RIVIERE } from './terre.js';
+import { lieuTrace } from './combat.js';
 
 export const VENT = [0.004, -0.002];   // km/s : le vent d'ouest emporte les fumées vers l'est
 const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -788,52 +789,11 @@ export class Guerre {
     this.batailles.set(b.id, B);
     return B;
   }
-  // de loin, le nuage de la bataille qui monte et dérive sous le vent ; de près les lignes face à face, les salves,
-  // les batteries, les charges de cavalerie (phase « charge »), les tombés
-  bataille(sc, g, b) {
-    const B = this.batailleDe(b), z = sc.z, t = sc.time, noir = nuit();
-    if (!noir) { sc.monde(g); for (let k = 0; k < 12; k++) { const d = mod(t * 0.02 + k * 0.35, 4.2), r = Math.max(0.5 + d * 0.55, 7 / z), x = B.x + (hash2(k, 1, 105) - 0.5) * 1.6 + d * 0.9, y = B.y + (hash2(k, 2, 105) - 0.5) * 0.8 - d * 0.45; g.globalAlpha = 0.34 * (1 - d / 4.2); g.drawImage(SPR.f, x - r, y - r, 2 * r, 2 * r); } g.globalAlpha = 1; }
-    if (z < 18 || !this.dans(sc, B.x, B.y, 2.5)) return;   // (de loin, le nuage ; les salves se voient de près)
-    const ph = b.phase || 'fusillade', ecart = ph === 'canonnade' ? 0.42 : ph === 'charge' ? 0.22 : 0.3, vie = z >= Z.VIE;
-    for (const u of B.unites) {
-      const s = b.sides[u.i], L = this.look(s.o, u.type);
-      const charge = u.k === 'cav' && ph === 'charge' && !noir ? Math.max(0, Math.sin(t * 0.04 + u.ph)) * 0.18 * 3 : 0;
-      const v = u.sg * Math.max(0.05, u.v * ecart - charge * 0.5);
-      const x = B.x + B.ux * u.u + B.nx * v, y = B.y + B.uy * u.u + B.ny * v, face = Math.atan2(-u.sg * B.ny, -u.sg * B.nx), fx = Math.cos(face), fy = Math.sin(face);
-      if (noir) { for (const o of [-0.1, 0.1]) LUM.push({ x: x - fx * 0.2 + B.ux * o, y: y - fy * 0.2 + B.uy * o, r: 0.05, a: 0.9 }); }
-      else if ((u.k === 'canons' || (u.k === 'bat' && ph !== 'canonnade')) && t - u.tir > (u.k === 'canons' ? 5 : 7)) {
-        u.tir = t; const w = u.k === 'canons' ? 0.08 : 0.26, nb = u.k === 'canons' ? 3 : 6;
-        for (let i = 0; i < nb; i++) { const o = (i / (nb - 1) - 0.5) * w, px = x + fx * 0.015 - fy * o, py = y + fy * 0.015 + fx * o; this.fumee(px, py, fx * 0.003, fy * 0.003, 0.008, u.k === 'canons' ? 0.13 : 0.07, 9, 0.5); this.eclairs.push({ x: px, y: py, t0: t }); }
-      }
-      if (!vie || !this.dans(sc, x, y, 0.5)) continue;
-      const tire = t - u.tir < 1.2, force = clamp(s.men / Math.max(1, s.men + s.lost), 0.35, 1);
-      if (u.k === 'bat') {
-        const n = Math.round(22 * force), arme = ph === 'charge' ? 'baio' : ph === 'canonnade' ? 'epaule' : tire ? 'joue' : 'recharge', q = arme === 'recharge' ? Math.floor(mod(t * 3, TAU) / TAU * 6) : 0;
-        this.poser(sc, g, x, y, face, this.tampon(sc, `${L.cle}|bat|${n}|${arme}|${q}`, 5, n * 1.25 + 3, gg => { for (let r = 0; r < 2; r++) for (let i = 0; i < n; i++) { gg.save(); gg.translate(-r * 2.8 + 1.4, (i - (n - 1) / 2) * 2.5); fantassin(gg, L, { role: 'h' }, { legs: null, arme, ext: arme === 'baio' ? 0.6 : q * TAU / 6 + i }); gg.restore(); } }));
-      }
-      else if (u.k === 'canons') for (const o of [-6, 0, 6]) { this.figK(sc, g, ...versMonde(x, y, face, 0, o), face); piece(g, L, { recul: tire ? 2 : 0 }); }
-      else {
-        const q = charge > 0.02 ? phase(t * 14) : null, sabre = charge > 0.05 ? 1 : 0;
-        this.poser(sc, g, x, y, face, this.tampon(sc, `${L.cle}|esc|${q}|${sabre}`, 13, 23, gg => { for (let r = 0; r < 2; r++) for (let i = 0; i < 10; i++) { gg.save(); gg.translate(-r * 7 + 3.5, (i - 4.5) * 4.2); cheval(gg, L.chevaux[(i + r) % 5], { gait: q == null ? null : q + i, bob: 0 }); cavalier(gg, L, { habit: L.habit }, { sabre, bob: 0 }); gg.restore(); } }));
-      }
-    }
-    // les tombés, de chaque camp à proportion de ses pertes
-    if (vie) {
-      const l0 = b.sides[0].lost || 0, l1 = b.sides[1].lost || 0, n = clamp(Math.round((l0 + l1) / 20), 4, 60), c0 = this.look(b.sides[0].o, 'ligne').habit, c1 = this.look(b.sides[1].o, 'ligne').habit;
-      for (let k = 0; k < n; k++) {
-        const x = B.x + B.ux * (hash2(k, 1, 107) - 0.5) * 1.4 + B.nx * (hash2(k, 2, 107) - 0.5) * 0.5, y = B.y + B.uy * (hash2(k, 1, 107) - 0.5) * 1.4 + B.ny * (hash2(k, 2, 107) - 0.5) * 0.5;
-        if (!this.dans(sc, x, y)) continue;
-        this.figK(sc, g, x, y, k * 2.1); E(g, hash2(k, 3, 107) * (l0 + l1) < l0 ? c0 : c1, 0, 0, 2.4, 1.1); C(g, '#e2b996', 2.4, 0, 0.7);
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------- par-dessus : batailles, pillages, fumées
+  // ---------------------------------------------------------------- par-dessus : pillages, fêtes, fumées (les batailles : carte/combat.js)
   dessus(ctx, dt, time) {
     const mp = this.map, st = mp.state; if (!st || mp.papierVu()) return;
     const sc = this.scene(time), g = ctx;
     ctx.save();
-    for (const b of st.battles) this.bataille(sc, g, b);
     this.pillages(sc, g, st);
     this.fetes(sc, g);
     this.travaux?.dessiner(sc, g);   // chantiers, produits, cordons, grands travaux, crue, feux (lot H)
@@ -861,7 +821,9 @@ export class Guerre {
     const mp = this.map, st = mp.state;
     if (this.ar?.st === st) return this.ar;
     const me = st.me?.code, ar = this.ar = { st, sites: [], fetes: new Map(), recrues: [], rv: new Map(), routes: new Map(), lx: new Map(), estafettes: [] };
-    for (const [x, y, age, l0, l1, o0, o1, w, pris] of st.sites || []) {
+    for (const [x0, y0, age, l0, l1, o0, o1, w, pris, place] of st.sites || []) {
+      // (devant une place : le champ de bataille est hors de ses murs, comme sa marque sur l'hexagone, carte/combat.js)
+      const [x, y] = lieuTrace(x0, y0, place != null && mp.nodes[place] ? mp.plateau?.rayon(mp.nodes[place]) || 1 : 0);
       const h = (x * 100 | 0) ^ (y * 37 | 0), S = { x, y, age, tombes: tombes(x, y, l0 + l1), convois: [],
         pt: Array.from({ length: 40 }, (_, k) => [x + (hash2(k, h, 153) - 0.5) * 2.2, y + (hash2(k, h, 154) - 0.5) * 1.1, 0.09, 0.05, hash2(k, h, 155) * 3]) };
       const dep = age < JOURS.blesses ? plusProche(mp, st, x, y, () => true) : null;

@@ -1,7 +1,6 @@
 import { ICON, speedIcon, coat } from './icons.js';
 import { esc, clamp } from './battle/formes.js';
 import { fmtMen, unitCls, toursTxt, partTour, TOUR_DAYS } from './map.js';
-import { QUALITES, QUALITE_LABEL, QUALITE_AIDE, qualite, setQualite } from './battle/qualite.js';
 import { Tuto } from './tuto.js';
 import { UnitArt } from './battle/unites.js';
 import { profil } from './battle/qualite.js';
@@ -10,11 +9,13 @@ import { valeursTable } from './valeurs.js';
 import { Decouvertes } from './decouvertes.js';
 import { arbreHtml } from './arbre.js';
 import { startTechs, startRails } from './epoque.js';
-import { drawPlan } from './plan.js';
+import * as BT from './strategie.js';
 import { Son } from './son.js';
 
 // nombres à la française : virgule décimale et vrai signe moins (−)
 const minus = s => s.replace(/^-/, '−');
+// une bataille du joueur qui attend sa décision : sa stratégie, ou la poursuite (SPEC-BATAILLE.md)
+const enAttente = b => b.mode === 'attente' || b.mode === 'poursuite';
 const fmt = n => minus((Math.round(n) || 0).toLocaleString('fr-FR'));   // || 0 : pas de « −0 »
 const fmt1 = n => minus(((Math.abs(n) >= 10 ? Math.round(n) : Math.round(n * 10) / 10) || 0).toLocaleString('fr-FR'));
 const fmt2 = n => minus((Math.round(n * 100) / 100 || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -71,10 +72,7 @@ export class UI {
     this.startDept = null;
     this.startDiff = 'normal';
     this.startScen = (rules.scenario_order || ['1790'])[0];
-    this.startMode = 'campagne';   // écran de départ : « campagne » ou « bataille » (mode Bataille, bataille isolée)
-    this.skOpts = null;            // choix du mode Bataille (serveur : game/tactics/skirmish.py, via main.js)
-    this.sk = { mode: 'ordres', me: null, foe: '', era: '1790', kind: 'bataille', role: 'att', place: '', season: '', weather: '', units: {} };
-    try { Object.assign(this.sk, JSON.parse(localStorage.getItem('conquete.bataille') || '{}')); } catch (e) { /* réglages perdus */ }
+    this.btSuivies = new Set();    // les batailles dont le joueur a choisi la stratégie : leur résultat s'ouvre à la fin
     this.overShown = false;
     try { this.trMode = localStorage.getItem('conquete.traverse') === '1'; } catch (e) { this.trMode = false; }
     map.trMode = this.trMode;
@@ -258,12 +256,15 @@ export class UI {
       if (this.modal !== 'event') this.openModal('event');
     }
     if (this.modal === 'event' && !(st.pending || []).length) this.closeModal();
-    // une bataille du joueur attend : donner ses ordres, ou la laisser au général (résolution automatique)
-    const waitBt = (st.battles || []).find(b => b.mode === 'attente');
+    // une bataille du joueur attend : sa stratégie, puis la poursuite s'il l'a gagnée (la campagne est figée)
+    const waitBt = (st.battles || []).find(enAttente);
     if (waitBt && !st.over && (!this.modal || this.modal === 'bataille')) { if (this.modal !== 'bataille') this.openModal('bataille'); }
     else if (this.modal === 'bataille' && !waitBt) this.closeModal();
+    // la bataille dont vous aviez choisi la stratégie est finie : son résultat (pertes, prises, journal par phase)
+    const fini = !waitBt && this.finBt;
+    if (fini && !st.over && !this.modal) this.openModal('resultat');
     // une de vos armées est arrivée devant une place : à vous de choisir (une fenêtre à la fois, après les batailles)
-    const asked = !waitBt && (st.armies || []).find(a => a.ask);
+    const asked = !waitBt && !fini && (st.armies || []).find(a => a.ask);
     if (asked && !st.over && (!this.modal || this.modal === 'arrivee')) { if (this.modal !== 'arrivee') this.openModal('arrivee'); }
     else if (this.modal === 'arrivee' && !asked) this.closeModal();
     // un de vos généraux est promu : le talent à choisir (SPEC-GENERAUX.md)
@@ -274,57 +275,53 @@ export class UI {
     this.tuto.check();
   }
 
+  // ce que strategie.js lit pour écrire une bataille : règles, noms des camps, places, camp du joueur
+  ctxBt() { return { rules: this.rules, names: this.st.names || {}, nodes: this.md.nodes, me: this.st.me?.code }; }
+  // la bataille qui attend : le choix de la stratégie (« attente »), puis poursuivre ou non (« poursuite »)
   battleModal() {
-    const b = (this.st.battles || []).find(x => x.mode === 'attente');
+    const b = (this.st.battles || []).find(enAttente);
     if (!b) return ['<p class="muted">Aucune bataille en attente.</p>', 'none'];
-    const nm = o => esc(this.st.names[o] || 'Les insurgés');
-    const side = s => `<b>${nm(s.o)}</b> : ${fmt(s.men)} hommes${Object.entries(s.mix || {}).map(([k, v]) => ` · ${fmt(v)} ${k}`).join('')}`;
-    const place = b.node != null && this.md.nodes[b.node] ? this.md.nodes[b.node].name : null;
-    // le plan de la position ennemie : la bataille se prépare sur le serveur à l'ouverture de la fenêtre (une fois)
-    this.plans = this.plans || {};
-    const plan = this.plans[b.id];
-    if (!plan && this.planReq !== b.id) {
-      this.planReq = b.id;
-      this.api.post('/api/cmd', { cmd: 'tac', sub: 'preview', bid: b.id }).then(r => {
-        this.plans[b.id] = r?.ok ? r.plan : { err: r?.msg || 'Plan indisponible.' };
-        if (this.modal === 'bataille') this.renderModal(true);
-      }, () => { this.planReq = null; });
+    if (b.mode === 'poursuite') return [BT.poursuiteHtml(this.ctxBt(), b), b.id + '|poursuite'];
+    if (this.stratSel?.bid !== b.id) this.stratSel = { bid: b.id, id: null };
+    return [BT.choixHtml(this.ctxBt(), b, this.stratSel.id), JSON.stringify([b.id, this.stratSel.id, b.choix, b.reco, b.sides.map(s => s.men)])];
+  }
+  // le résultat de la dernière bataille livrée (événement battle_end), ou de celle rouverte depuis le journal
+  resultatModal() {
+    const ev = this.finBt;
+    return ev ? [BT.resultatHtml(this.ctxBt(), ev), 'fin' + ev.seq] : ['<p class="muted">Aucune bataille à raconter.</p>', 'none'];
+  }
+  // l'aperçu d'une attaque (commande apercu), demandé une fois par cible et par jour : null tant qu'il n'est pas revenu
+  apercuDe(army, target, apres) {
+    const cle = army + JSON.stringify(target) + this.st.date, A = this.apercus || (this.apercus = new Map());
+    if (!A.has(cle)) {
+      A.set(cle, null);
+      if (A.size > 30) A.delete(A.keys().next().value);
+      this.api.post('/api/cmd', { cmd: 'apercu', army, target }).then(r => { if (r?.ok) { A.set(cle, r); apres(); } }).catch(() => { /* aperçu indisponible : on s'en passe */ });
     }
-    const pcap = !plan ? 'Les éclaireurs reviennent…' : plan.err ? esc(plan.err) : plan.seen
-      ? 'Rapport des éclaireurs : la position ennemie (en haut), vos troupes (en bas).'
-      : 'Trop peu d’éclaireurs (cavaliers, légers) : la position ennemie est devinée (hachures).';
-    const html = `<h2 class="m-title" id="m-title">${b.amb ? 'Embuscade' : b.node != null ? 'Assaut' : 'Bataille'}${place ? ' — ' + esc(place) : ''}</h2>
-      <p class="m-sub">${esc(b.terrain)}${b.river ? ', rivière' : ''}. ${side(b.sides[0])} attaque ; ${side(b.sides[1])}.</p>
-      <figure class="bt-plan"><canvas role="img" aria-label="Plan de la bataille : la position ennemie"></canvas><figcaption class="muted small">${pcap}</figcaption></figure>
-      <div class="ev-choices"><button class="btn primary ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="ordres"><b>Donner mes ordres</b><small>Votre plan, vos ruses ; vos officiers la livrent sous vos yeux, vue de dessus</small></button>
-        <button class="btn ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="manuel"><b>Commander la bataille</b><small>Disposez et menez vos troupes sur le champ de bataille</small></button>
-        <button class="btn ev-choice" data-act="tac-choose" data-id="${b.id}" data-v="auto"><b>Résolution automatique</b><small>Le général décide ; la bataille se joue avec la campagne</small></button></div>
-      <p class="muted small">La campagne reste en pause tant que vous n’avez pas choisi. Réglage dans le menu ☰.</p>`;
-    return [html, `${b.id}|${plan ? 1 : 0}`];
+    return A.get(cle);
   }
 
-  // devant une place : assaut (à la main ou automatique), rallier, négocier, assiéger, bloquer, contribution, attendre
+  // devant une place : assaut (escalade), rallier, négocier, assiéger (brèche), bloquer (blocus), contribution, attendre
   arriveeModal() {
     const a = (this.st.armies || []).find(x => x.ask);
     if (!a) return ['<p class="muted">Aucune armée n’attend vos ordres.</p>', 'none'];
     const name = this.md.nodes[a.ask.n]?.name || '';
     const L = {
-      ordres: ['Donner mes ordres', 'L’assaut selon votre plan, livré par vos officiers sous vos yeux'],
-      manuel: ['Commander la bataille', 'L’assaut : disposez et menez vos troupes sur le champ de bataille'],
-      auto: ['Résolution automatique', 'L’assaut, réglé par le général'],
+      assaut: ['Donner l’assaut (escalade)', 'Vos troupes escaladent les remparts sans attendre : vous choisissez la stratégie, la bataille se livre aussitôt'],
       rallier: ['Rallier', 'La place se rallie sans combat'],
       negocier: ['Négocier le ralliement', 'Pourparlers avec les notables, réponse au prochain tour'],
-      assieger: ['Assiéger', 'Le siège bat les remparts à chaque tour ; l’assaut part de lui-même à la brèche'],
-      bloquer: ['Bloquer et affamer', 'Remparts intacts, vivres coupés : la faim la pousse à se rendre'],
+      assieger: ['Assiéger (ouvrir la brèche)', 'Le canon bat les remparts à chaque tour ; l’assaut part de lui-même à la brèche'],
+      bloquer: ['Bloquer (blocus)', 'Remparts intacts, vivres coupés : la faim pousse la place à se rendre, sa garnison sort avec les honneurs'],
       contribution: ['Exiger une contribution', 'Rançonner la place puis la laisser'],
       attendre: ['Attendre devant la place', 'Halte : les actions restent dans le panneau de l’armée'],
     };
     const btns = Object.entries(a.ask.c).filter(([k]) => L[k]).map(([k, why]) =>
-      `<button class="btn ${k === 'ordres' ? 'primary ' : ''}ev-choice" data-act="arrive" data-id="${esc(a.id)}" data-v="${k}"${why ? ' disabled' : ''}><b>${L[k][0]}</b><small>${esc(why || L[k][1])}</small></button>`).join('');
+      `<button class="btn ${k === 'assaut' ? 'primary ' : ''}ev-choice" data-act="arrive" data-id="${esc(a.id)}" data-v="${k}"${why ? ' disabled' : ''}><b>${L[k][0]}</b><small>${esc(why || L[k][1])}</small></button>`).join('');
+    const ap = this.apercuDe(a.id, { node: a.ask.n }, () => { if (this.modal === 'arrivee') this.renderModal(true); });
     const html = `<h2 class="m-title" id="m-title">Devant ${esc(name)}</h2>
       <p class="m-sub">La ${esc(a.name)} est arrivée devant la place. Que fait-elle ?</p>
-      <div class="ev-choices">${btns}</div>`;
-    return [html, `${a.id}|${JSON.stringify(a.ask)}`];
+      ${ap ? BT.apercuHtml(this.ctxBt(), ap, this.st.nodes?.[a.ask.n]?.o) : ''}<div class="ev-choices">${btns}</div>`;
+    return [html, `${a.id}|${JSON.stringify(a.ask)}|${ap ? 1 : 0}`];
   }
 
   onEvent(ev, initial) {
@@ -332,6 +329,10 @@ export class UI {
     if (this.events.length > 600) this.events.splice(0, 100);
     if (initial) return;
     this.decouv.onEvent(ev, initial);
+    if (ev.kind === 'battle_end') this.map.combatDe?.().fin(ev);   // la petite scène rejoue la bataille sur son hexagone
+    if (ev.kind === 'battle_end' && this.btSuivies.has(String(ev.bid))) { this.btSuivies.delete(String(ev.bid)); this.finBt = ev; }
+    // une place affamée se rend : la garnison sort avec les honneurs (SPEC-BATAILLE.md)
+    if (ev.kind === 'capture' && ev.capitulation) this.toast(ev.text, ev.capitulation.par === this.st.me.code ? 'good' : ev.capitulation.de === this.st.me.code ? 'bad' : '');
     if (ev.kind === 'tech_ia') this.toast(ev.text);   // (une découverte d'une IA : un bandeau, le jeu continue)
     if (ev.coins) this.map.spawnCoins(this.st.me.code);
     const toastKinds = ['tech', 'eco', 'meteo', 'fin', 'info', 'diplo', 'revolte', 'siege', 'armee', 'espion', 'rail'];
@@ -339,9 +340,7 @@ export class UI {
   }
 
   renderSpeed(v) {
-    // une bataille se livre sur le champ de bataille : la campagne ne peut pas reprendre
-    const tac = this.st && this.st.tac && this.st.tac.phase !== 'fin';
-    for (const b of this.$('tb-speed').children) { b.classList.toggle('on', +b.dataset.v === v); b.disabled = !!tac && +b.dataset.v > 0; }
+    for (const b of this.$('tb-speed').children) b.classList.toggle('on', +b.dataset.v === v);
   }
 
   // ------------------------------------------------------------------ tour par tour
@@ -358,8 +357,8 @@ export class UI {
     const until = `jusqu’au ${esc(tr.end || '')}`;
     const nextTurn = esc(tr.end || '');
     const stop = tr.stop;
-    // une bataille attend le choix du joueur, ou se livre sur le champ de bataille : le mois ne reprend pas
-    const held = (this.st.tac && this.st.tac.phase !== 'fin') || (this.st.battles || []).some(b => b.mode === 'attente') ||
+    // une bataille attend le choix du joueur (stratégie, poursuite) : le mois ne reprend pas
+    const held = (this.st.battles || []).some(enAttente) ||
       (this.st.armies || []).some(a => a.ask);
     const sig = [tr.phase, tr.end, stop ? stop.text + stop.date + stop.more : '', !!this.st.over, held].join('|');
     if (sig !== tb.dataset.sig) {
@@ -742,7 +741,10 @@ export class UI {
         if (el && seq === this.etaSeq && r.ok && r.tn != null) el.textContent = `Par les routes : arrivée ${r.tn ? toursTxt(r.tn) : 'ce tour-ci'} (estimation).`;
       }).catch(() => { /* estimation indisponible : la bulle s'en passe */ });
     }
-    b.innerHTML = `<div class="bt">${esc(title)}</div>${this.trSeg(this.trMode, 'trmode')}
+    // avant d'attaquer une armée ou une place qui n'est pas à nous : le rapport de forces, la situation, les effectifs
+    const cible = !army ? null : enemy ? { army: enemy.id } : hs && !this.isMine(hs.o) ? { node: hitNode.id } : null;
+    const ap = cible && this.apercuDe(army.id, cible, () => { if (!b.hidden && this.bubbleArgs?.[0] === e) this.showBubble(...this.bubbleArgs); });
+    b.innerHTML = `<div class="bt">${esc(title)}</div>${ap ? BT.apercuHtml(this.ctxBt(), ap, enemy ? enemy.o : hs.o) : ''}${this.trSeg(this.trMode, 'trmode')}
       <div class="bh">${peace && !this.trMode && !cw.target ? 'En paix : on n’y entre qu’en traversant.' : TR_HELP[+this.trMode]}</div>${closedTxt}${eta}
       ${withTrail ? `<button class="btn primary" data-act="go-trail">Suivre mon tracé</button>` : ''}
       <button class="btn ${withTrail ? '' : 'primary'}" data-act="go" data-mode="route" ${target}>Marcher par les routes</button>
@@ -791,8 +793,7 @@ export class UI {
       case 'close-panel': this.select(null); break;
       case 'tuto-next': this.tuto.next(); break;
       case 'tuto-skip': this.tuto.stop(); break;
-      case 'tuto-start':   // menu ☰ : tout le tutoriel, campagne et bulles de bataille
-        try { for (const k of ['conquete.bataille.aide', 'conquete.bataille.aide.vues']) localStorage.removeItem(k); } catch (e) { /* stockage indisponible */ }
+      case 'tuto-start':   // menu ☰ : le tutoriel de la campagne
         this.closeModal();
         this.tuto.start();
         break;
@@ -851,7 +852,6 @@ export class UI {
       case 'selnode': this.select({ kind: 'node', id: +d.node }); break;
       case 'selarmy': this.select({ kind: 'army', id: d.id }); break;
       case 'selbattle': this.select({ kind: 'battle', id: d.id }); break;
-      case 'tactic': if (this.onTactic) this.onTactic(d.id); break;
       case 'mode': this.cmd({ cmd: 'mode', army: sel.id, value: d.v }, false); break;
       case 'evchoice': this.cmd({ cmd: 'event', id: d.id, choice: +d.v }).then(r => { if (r && r.ok && (this.st.pending || []).length <= 1) this.closeModal(); }); break;
       case 'rearm': this.cmd(d.node != null ? { cmd: 'rearm', node: +d.node } : { cmd: 'rearm', army: sel.id }); break;
@@ -967,14 +967,19 @@ export class UI {
       }
       case 'arrive':
         this.cmd({ cmd: 'arrive', army: d.id, value: d.v }).then(r => {
-          if (r && r.ok) { this.closeModal(); if (r.bid && this.onTactic) this.onTactic(r.bid); }   // (à la main ou sur ordres)
+          if (r && r.ok) this.closeModal();   // (l'assaut : la fenêtre de la stratégie s'ouvre au prochain état)
         });
         break;
-      case 'tac-choose':
-        this.cmd({ cmd: 'tac', sub: 'choose', bid: d.id, mode: d.v }, d.v === 'auto').then(r => {
-          if (r && r.ok) { this.closeModal(); if (d.v !== 'auto' && this.onTactic) this.onTactic(r.bid); }
+      case 'strat-pick': if (this.stratSel) { this.stratSel.id = d.v; this.renderModal(true); } break;
+      case 'tac-choose':   // la stratégie choisie, ou « auto » : le général choisit (SPEC-BATAILLE.md)
+        this.cmd({ cmd: 'tac', sub: 'choose', bid: d.id, ...(d.v === 'auto' ? { mode: 'auto' } : { strat: d.v }) }).then(r => {
+          if (r && r.ok) { this.btSuivies.add(String(d.id)); this.closeModal(); }
         });
         break;
+      case 'tac-pursue':
+        this.cmd({ cmd: 'tac', sub: 'pursue', bid: d.id, v: d.v === '1' }).then(r => { if (r && r.ok) { this.btSuivies.add(String(d.id)); this.closeModal(); } });
+        break;
+      case 'bt-detail': this.finBt = this.events.find(e => e.seq === +d.v) || null; if (this.finBt) this.openModal('resultat'); break;
       case 'tac-set':
         this.st.settings = { battles: d.v };
         this.cmd({ cmd: 'tac', sub: 'settings', battles: d.v }).then(() => { this.modalSig = ''; this.renderModal(true); });
@@ -996,13 +1001,6 @@ export class UI {
         this.modalSig = ''; this.renderModal(true); this.startOn() && this.renderStart();
         break;
       }
-      case 'bt-qualite': {   // qualité graphique des batailles (enregistrée sur cet appareil)
-        if (!QUALITE_LABEL[d.v]) break;
-        setQualite(d.v);
-        this.toast(`Qualité graphique des batailles : ${QUALITE_LABEL[d.v].toLowerCase()}.`);
-        this.modalSig = ''; this.renderModal(true); this.startOn() && this.renderStart();
-        break;
-      }
       case 'mainmenu': this.closeModal(); this.onNewGame && this.onNewGame(); break;   // (la partie reste en cours : « Reprendre » depuis le menu)
       case 'newgame': if (confirm('Abandonner la partie en cours et revenir à l’écran de départ ?')) this.onNewGame && this.onNewGame(); break;
       case 'selnode-modal': this.closeModal(); this.select({ kind: 'node', id: +d.node }); this.action('center', {}); break;
@@ -1013,30 +1011,6 @@ export class UI {
       case 'pick-scen': this.startScen = d.v; this.map.showPreview(d.v); this.renderStart(); break;
       case 'start-game': this.onStartGame && this.onStartGame(this.startDept, this.startDiff, this.startScen); break;
       case 'resume': this.onResume && this.onResume(); break;
-      case 'start-mode': this.startMode = d.v; this.map.highlightDept = d.v === 'bataille' ? this.sk.me : this.startDept; this.skMark(); this.renderStart(); break;
-      // mode Bataille
-      case 'sk-set': {
-        const k = d.k, sk = this.sk;
-        sk[k] = d.v;
-        if (k === 'me') { this.map.highlightDept = d.v; if (sk.foe === d.v) sk.foe = ''; }
-        if (k === 'kind' && sk.place && !this.skPlaceOk(+sk.place)) sk.place = '';
-        if (k === 'season' && sk.weather && d.v && !(sk.weather in this.skOpts.weather_w[d.v])) sk.weather = '';
-        if (k === 'kind') this.skMark();
-        this.renderStart();
-        break;
-      }
-      case 'sk-unit': {
-        const n = this.skCount(), u = this.sk.units, k = +d.d;
-        if (k > 0 && n >= this.skOpts.max) { this.toast(`Au plus ${this.skOpts.max} régiments.`); break; }
-        u[d.v] = Math.max(0, (u[d.v] || 0) + k);
-        this.renderStart();
-        break;
-      }
-      case 'sk-start': {
-        try { localStorage.setItem('conquete.bataille', JSON.stringify(this.sk)); } catch (e) { /* tant pis */ }
-        this.onStartSkirmish && this.onStartSkirmish({ ...this.sk, difficulty: this.startDiff });
-        break;
-      }
       default: break;
     }
   }
@@ -1522,7 +1496,7 @@ export class UI {
       if (wn.includes('solde')) h += `<div class="warnline">Solde impayée : le moral chute et les soldats désertent.</div>`;
       if (wn.includes('faim')) h += `<div class="warnline">Vivres épuisés : le moral chute et les soldats désertent.</div>`;
       if (a.des > 0) h += `<div class="warnline">Déserteurs ce mois-ci : ${fmt(a.des)}</div>`;
-      h += this.cardsHtml(a.regs, me, true) + `<div class="reg-list">${a.regs.map(r => this.regRow(r, me, true)).join('')}</div>`;
+      h += BT.armesHtml(this.ctxBt(), a.armes) + this.cardsHtml(a.regs, me, true) + `<div class="reg-list">${a.regs.map(r => this.regRow(r, me, true)).join('')}</div>`;
       h += this.valeursDetails(this.valeursRegs(a.regs), 'Valeurs des régiments (en bataille)');
       const canAct = a.st !== 'battle';
       if (!canAct) this.fightMemo = { army: a.id, name: a.name, x: a.x, y: a.y, seq: this.events.length ? this.events[this.events.length - 1].seq : 0, mine: [] };
@@ -1643,31 +1617,29 @@ export class UI {
   battlePanel(id) {
     const b = this.st.battles.find(x => x.id === id);
     if (!b) return [null, ''];
-    const me = this.st.me.code;
+    const me = this.st.me.code, C = this.ctxBt();
     const phases = Object.entries(this.rules.phases);
     const pi = phases.findIndex(([k]) => k === b.phase);
-    let h = `<div class="p-head">${ICON.swords.replace('<svg', '<svg style="width:32px;height:32px;color:var(--laiton-clair)"')}<div><div class="p-title">${b.amb ? 'Embuscade' : b.node != null ? 'Assaut de ' + esc(this.md.nodes[b.node].name) : 'Bataille'}</div><div class="p-sub">Terrain : ${b.terrain}, depuis ${Math.round(b.age * 24)} h</div></div></div>
+    let h = `<div class="p-head">${ICON.swords.replace('<svg', '<svg style="width:32px;height:32px;color:var(--laiton-clair)"')}<div><div class="p-title">${BT.titreBataille(C, b)}</div><div class="p-sub">depuis ${Math.round(b.age * 24)} h</div></div></div>
+      ${BT.contexteHtml(C, b)}
       <div class="phases">${phases.map(([k, l], i) => `<span class="ph ${i === pi ? 'on' : i < pi ? 'done' : ''}">${l}</span>`).join('<span class="ph-sep">›</span>')}</div>
-      <div class="muted small">${{ canonnade: 'Les batteries ouvrent le feu : l’artillerie domine, les carrés et les colonnes souffrent.', fusillade: 'Feux de salve : la ligne et les voltigeurs font la différence, la cavalerie attend son heure.', charge: 'Charges et corps à corps : la cavalerie et les colonnes décident, le carré tient bon.' }[b.phase] || ''}
-      ${b.land ? ' Les troupes débarquent sous le feu (attaque affaiblie).' : ''}${b.river >= 2 ? ' L’attaquant doit franchir la rivière.' : ''}</div>`;
-    const MIX = { inf: 'infanterie', cavalerie: 'cavalerie', artillerie: 'artillerie', milice: 'milice' };
+      <div class="muted small">${{ escarmouche: 'Les tirailleurs se cherchent en avant des lignes.', canonnade: 'Les batteries ouvrent le feu : l’artillerie domine, les carrés et les colonnes souffrent.', fusillade: 'Feux de salve : la ligne et les tirailleurs font la différence, la cavalerie attend son heure.', charge: 'Charges et corps à corps : la cavalerie, les grenadiers et les colonnes décident, le carré tient bon.' }[b.phase] || ''}</div>`;
+    if (enAttente(b) && b.moi != null) h += `<div class="btns"><button class="btn primary" data-act="modal" data-v="bataille">${b.mode === 'poursuite' ? 'Poursuivre ou non' : 'Choisir ma stratégie'}</button></div>`;
     b.sides.forEach((s, i) => {
       const f = this.rules.factions[s.o];
-      h += `<div class="section-t" style="color:${f ? f.color : '#ccc'}">${i === 0 ? 'Attaque' : 'Défense'} : ${f ? f.name : 'Insurgés'}</div>
-        <dl class="kv"><dt>Hommes engagés</dt><dd>${fmt(s.men)}</dd><dt>Pertes</dt><dd>${fmt(s.lost)}</dd><dt>Moral</dt><dd>${s.mor}</dd></dl>
-        <div class="bar green"><i style="width:${s.mor}%"></i></div>
-        <div class="chips">${Object.entries(s.mix || {}).filter(([, v]) => v > 0).map(([k, v]) => `<span class="chip">${fmt(v)} ${MIX[k] || this.rules.units[k]?.short?.toLowerCase() || k}</span>`).join('')}</div>`;
+      h += `<div class="section-t" style="color:${f ? f.color : '#ccc'}">${i === 0 ? 'Attaque' : 'Défense'} : ${esc(BT.nomCamp(C, s.o))}</div>
+        <dl class="kv"><dt>Hommes engagés</dt><dd>${fmt(s.men)}</dd><dt>Pertes</dt><dd>${fmt(s.lost)}</dd><dt>Moral</dt><dd>${s.mor}</dd>${s.strat ? `<dt>Stratégie</dt><dd>${esc(this.rules.strats?.[s.strat]?.label || s.strat)}</dd>` : ''}</dl>
+        <div class="bar green"><i style="width:${s.mor}%"></i></div>${BT.armesHtml(C, s.armes)}${s.renf?.length ? `<div class="muted small">Renforts : ${esc(s.renf.join(', '))}</div>` : ''}`;
       for (const t of s.tac || []) {
         const mine = s.o === me;
         h += `<div class="tac-army">${mine ? `<button class="linkish" data-act="selarmy" data-id="${t.id}">${esc(t.name)}</button>` : `<b>${esc(t.name)}</b>`}
-          <span class="muted small">${t.gen ? esc(t.gen.rank + ' ' + t.gen.name) + ' (' + this.rules.traits[t.gen.trait].label.toLowerCase() + '), ' : ''}en ${this.rules.formations[t.fm].label.toLowerCase()}, ${this.rules.plans[t.pl].label.toLowerCase()}${t.reorg ? ', se réorganise' : ''}</span></div>`;
+          <span class="muted small">${t.gen ? esc(t.gen.rank + ' ' + t.gen.name) + ' (' + this.rules.traits[t.gen.trait].label.toLowerCase() + '), ' : ''}en ${(this.rules.formations[t.fm]?.label || t.fm).toLowerCase()}${t.reorg ? ', se réorganise' : ''}</span></div>`;
       }
     });
-    const mineIn = b.sides.flatMap(s => s.o === me ? (s.tac || []) : []);
+    if (b.journal?.length || b.pese?.length) h += `<div class="section-t">Journal de la bataille</div>${BT.journalHtml(C, b.journal, b.pese, b.sides.map(s => s.o))}`;
     const lastSeq = this.events.length ? this.events[this.events.length - 1].seq : 0;
     this.fightMemo = { id, x: b.x, y: b.y, seq: lastSeq, mine: b.sides.flatMap(s => s.o === me ? [...(s.armies || []), ...(s.tac || []).map(t => t.id)] : []) };
-    if (b.mode === 'ordres' || b.mode === 'manuel') h += `<div class="btns"><button class="btn primary" data-act="tactic" data-id="${b.id}">${b.mode === 'manuel' ? 'Commander la bataille' : 'Voir la bataille'}</button></div>`;
-    return [h, JSON.stringify([b.phase, b.sides.map(s => [s.men, s.lost, s.mor, (s.tac || []).map(t => [t.fm, t.pl, t.reorg])])])];
+    return [h, JSON.stringify([b.phase, b.mode, b.journal?.length, b.sides.map(s => [s.men, s.lost, s.mor, s.strat, (s.tac || []).map(t => [t.fm, t.reorg])])])];
   }
 
   // ------------------------------------------------------------------ décisions (événements)
@@ -1704,6 +1676,7 @@ export class UI {
     if (a) this.cmd({ cmd: 'arrive', army: a.id, value: 'attendre' });
   }
   closeModal() {
+    if (this.modal === 'resultat') this.finBt = null;   // (lu : il ne se rouvre pas)
     this.modal = null;
     this.$('modal').hidden = true;
     document.body.classList.remove('modal-open', 'modal-event');
@@ -1731,7 +1704,7 @@ export class UI {
     if (!force && ae && card.contains(ae) && (/^(SELECT|TEXTAREA)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !['range', 'checkbox'].includes(ae.type)))) return;
     const fn = { tech: this.techModal, diplo: this.diploModal, commerce: this.commerceModal, production: this.prodModal,
                  journal: this.journalModal, menu: this.menuModal, fin: this.endModal, event: this.eventModal,
-                 bataille: this.battleModal, arrivee: this.arriveeModal, promotion: this.promotionModal, generaux: this.generauxModal, decouverte: () => this.decouv.html() }[k];
+                 bataille: this.battleModal, resultat: this.resultatModal, arrivee: this.arriveeModal, promotion: this.promotionModal, generaux: this.generauxModal, decouverte: () => this.decouv.html() }[k];
     const [html, sig] = fn.call(this);
     if (!force && sig === this.modalSig) return;
     this.modalSig = sig;
@@ -1745,8 +1718,6 @@ export class UI {
     card.scrollTop = scroll;
     for (const b of this.$('rail').children) b.classList.toggle('on', b.dataset.v === k);
     if (k === 'decouverte') this.decouv.anime();
-    const pl = k === 'bataille' && card.querySelector('.bt-plan canvas'), b = (this.st.battles || []).find(x => x.mode === 'attente');
-    if (pl && b && this.plans?.[b.id]?.t) drawPlan(pl, this.plans[b.id]);
   }
 
   techModal() {
@@ -1930,7 +1901,7 @@ export class UI {
     const tabs = [['all', 'Tout'], ['battle', 'Guerre'], ['diplo', 'Diplomatie'], ['eco', 'Économie'], ['hist', 'Histoire']].map(([k, l]) =>
       `<button class="btn ${k === f ? 'primary' : ''}" data-act="jtab" data-v="${k}">${l}</button>`).join('');
     const html = `<h2 class="m-title" id="m-title">Journal de campagne</h2><div class="tabs">${tabs}</div><div class="journal">${evs.map(e =>
-      `<div class="ev ${e.important ? 'imp' : ''}" ${e.x != null ? `data-act="goto" data-x="${e.x}" data-y="${e.y}" style="cursor:pointer"` : ''}><span class="when">${e.date}</span><span class="what">${esc(e.text)}</span></div>`).join('') || '<p class="muted">Rien à signaler pour l’instant.</p>'}</div>`;
+      `<div class="ev ${e.important ? 'imp' : ''}" ${e.x != null ? `data-act="goto" data-x="${e.x}" data-y="${e.y}" style="cursor:pointer"` : ''}><span class="when">${e.date}</span><span class="what">${esc(e.text)}${e.kind === 'battle_end' && e.journal ? ` <button class="linkish" data-act="bt-detail" data-v="${e.seq}">Détail</button>` : ''}</span></div>`).join('') || '<p class="muted">Rien à signaler pour l’instant.</p>'}</div>`;
     return [html, f + this.events.length];
   }
 
@@ -1960,7 +1931,7 @@ export class UI {
         ${this.reglagesHtml()}
         <h3 class="section-t">Batailles</h3><div class="seg wrap">${[['demander', 'Toujours demander'], ['auto_petites', 'Escarmouches automatiques'], ['auto', 'Toujours automatiques']].map(([k, l]) =>
           `<button class="${(this.st.settings || {}).battles === k ? 'on' : ''}" data-act="tac-set" data-v="${k}">${l}</button>`).join('')}</div>
-        <p class="muted small" style="margin:4px 0 0">Donner ses ordres et regarder ses officiers livrer la bataille, la commander soi-même, ou laisser le général la résoudre.</p>
+        <p class="muted small" style="margin:4px 0 0">Choisir soi-même la stratégie de chaque bataille, ou laisser le général la régler (toutes, ou seulement les escarmouches).</p>
       </div><div>
         <h3 class="section-t" style="border:0;padding:0">Comment jouer</h3>
         <div class="btns" style="margin:4px 0 8px"><button class="btn" data-act="tuto-start">Revoir le tutoriel</button></div>
@@ -1973,8 +1944,8 @@ export class UI {
           <li>Les routes sont rapides. À travers champs, l’armée peut se cacher dans les bois, landes, marais ou montagnes et tendre une embuscade (posture « Embuscade »), mais avance plus lentement, s’use et perd son ravitaillement.</li>
           <li>Ralliez les villages indépendants avec une armée bien plus forte que leur milice. Les places fortifiées se prennent par siège : l’artillerie ouvre la brèche plus vite. Les remparts ont quatre niveaux (le quatrième, les bastions à la Vauban, après la technologie du même nom, dans le chef-lieu et les places fortes) ; ils coûtent un entretien et perdent un niveau quand la place est prise de force.</li>
           <li><b>Deux siècles</b> : la grande campagne part de 1700 (ou de 1790, 1813, 1870) et s’achève fin 1899 ; le plus prestigieux l’emporte. Les provinces deviennent départements en 1790 ; technologies et unités n’apparaissent qu’à leur époque. ${this.st.tour && this.st.tour.on ? '' : 'Vitesses ×10 et ×30 (touches 5 et 6) pour les années de paix : guerres, batailles et grandes propositions remettent en pause.'}</li>
-          <li><b>Tour par tour</b> : chaque tour est un mois. Pendant votre tour, vos ordres s’exécutent tout de suite : vos armées marchent sous vos yeux (dans la limite de leur marche du tour, ou jusqu’au contact de l’ennemi), les batailles et les assauts se livrent aussitôt, les achats sont payés. Touchez « Tour suivant » : les IA jouent leur tour d’un coup (une ou deux secondes), puis c’est de nouveau à vous, au 1er du mois suivant, avec le bilan du mois écoulé. Le tour des IA ne s’arrête que si vous devez choisir : une IA vous attaque (livrer la bataille ou la laisser au général), ou une décision vous attend ; votre choix fait, il reprend tout seul. Le reste (armées ennemies sur vos terres, sièges, guerres, propositions) est dans le bilan du mois.</li>
-          <li><b>Tactique</b> : chaque armée a un général (trait et grade). Une bataille passe par la canonnade, la fusillade puis la charge. Devant une bataille, choisissez : donner des ordres, commander à la main ou laisser faire le général.</li>
+          <li><b>Tour par tour</b> : chaque tour est un mois. Pendant votre tour, vos ordres s’exécutent tout de suite : vos armées marchent sous vos yeux (dans la limite de leur marche du tour, ou jusqu’au contact de l’ennemi), les batailles et les assauts se livrent aussitôt, les achats sont payés. Touchez « Tour suivant » : les IA jouent leur tour d’un coup (une ou deux secondes), puis c’est de nouveau à vous, au 1er du mois suivant, avec le bilan du mois écoulé. Le tour des IA ne s’arrête que si vous devez choisir : une IA vous attaque (votre stratégie, ou celle du général), ou une décision vous attend ; votre choix fait, il reprend tout seul. Le reste (armées ennemies sur vos terres, sièges, guerres, propositions) est dans le bilan du mois.</li>
+          <li><b>Tactique</b> : chaque armée a un général (trait et grade). Une bataille passe par la canonnade, la fusillade puis la charge. Elle se livre sur la carte : escarmouche, canonnade, fusillade puis charge. Devant une bataille, choisissez votre stratégie (chacune en contre d’autres), ou laissez faire le général ; vainqueur, vous décidez de la poursuite.</li>
           <li><b>Événements</b> : aux grandes dates (Grand Hiver, Révolution, Blocus continental, phylloxéra…) et au gré des imprévus, une fenêtre vous demande un choix ; chaque option affiche ses effets. Vos choix nourrissent l’« histoire » de votre prestige. Sans réponse avant la fin du tour suivant, l’option la plus prudente s’applique.</li>
           <li><b>Armement par époque</b> : des piquiers et mousquets de 1700 au Chassepot et au Lebel, des canons de bronze au canon de 75. Chaque régiment garde les armes et les manœuvres (feu de rang, ordre mixte, cuirassiers…) reçues à sa levée, affichées à côté de son nom : après une découverte, modernisez les régiments en retard dans une de vos places (bouton « Moderniser » : armes, fer pour l’artillerie, et livres pour les manœuvres ; un tiers de tour d’exercice, que l’armée perd si elle part avant). Les noms des troupes changent avec l’époque : milice bourgeoise puis Garde nationale, miquelets puis chasseurs basques…</li>
           <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>
@@ -2010,10 +1981,7 @@ export class UI {
         <p class="muted small" style="margin:4px 0 0">Salves, canons, tambours et clairons des batailles.</p>
         ${this.map.hex ? `<p class="small" style="margin:10px 0 4px">Teintes de la carte :</p><div class="seg wrap" role="group" aria-label="Teintes de la carte">${[['nature', 'Nature'], ['epoque', 'Carte d’époque']].map(([k, l]) =>
           `<button class="${k === this.map.teinte ? 'on' : ''}" data-act="map-teinte" data-v="${k}" aria-pressed="${k === this.map.teinte}">${l}</button>`).join('')}</div>
-        <p class="muted small" style="margin:4px 0 0">${this.map.teinte === 'epoque' ? 'Le plateau au papier et à l’encre : la carte de Cassini, puis celle de l’état-major à partir de 1818.' : 'Les couleurs de la saison et du pays.'}</p>` : ''}
-        <p class="small" style="margin:10px 0 4px">Qualité graphique des batailles :</p><div class="seg wrap" role="group" aria-label="Qualité graphique des batailles">${QUALITES.map(k =>
-          `<button class="${k === qualite().q ? 'on' : ''}" data-act="bt-qualite" data-v="${k}" aria-pressed="${k === qualite().q}" title="${QUALITE_AIDE[k]}">${QUALITE_LABEL[k]}</button>`).join('')}</div>
-        <p class="muted small" style="margin:4px 0 0">${qualite().auto ? 'Choisie d’après cet appareil ; elle baisse d’elle-même si la bataille saccade.' : QUALITE_AIDE[qualite().q]}</p>`;
+        <p class="muted small" style="margin:4px 0 0">${this.map.teinte === 'epoque' ? 'Le plateau au papier et à l’encre : la carte de Cassini, puis celle de l’état-major à partir de 1818.' : 'Les couleurs de la saison et du pays.'}</p>` : ''}`;
   }
 
   endModal() {
@@ -2056,17 +2024,16 @@ export class UI {
   }
 
   // l'écran de départ est redessiné à chaque choix (un régiment de plus, une option…) : le panneau garde son défilement
-  // au lieu de remonter en haut, tant qu'on reste dans le même onglet (Campagne ou Bataille)
+  // au lieu de remonter en haut
   renderStart() {
-    const root = this.$('start'), sel = '.start-side, .scroll', same = this.startDrawn === this.startMode;
+    const root = this.$('start'), sel = '.start-side, .scroll', same = !!this.startDrawn;
     const keep = same ? [...root.querySelectorAll(sel)].map(e => e.scrollTop) : [], ouvert = root.querySelector('details.start-reglages')?.open;
     this.drawStart();
     if (ouvert) root.querySelector('details.start-reglages').open = true;   // (un réglage touché ne replie pas le bloc)
-    this.startDrawn = this.startMode;
+    this.startDrawn = true;
     root.querySelectorAll(sel).forEach((e, i) => { if (keep[i]) e.scrollTop = keep[i]; });
   }
   drawStart() {
-    if (this.startMode === 'bataille' && this.skOpts) return this.renderSkirmish();
     const info = this.startInfo || { saves: [], running: false };
     const scs = this.rules.scenarios || {};
     const sc = scs[this.startScen] || { title: 'Aquitaine, 1790', intro: '', names: {}, word: 'département' };
@@ -2126,103 +2093,10 @@ export class UI {
     return `<p class="muted small start-era">Déjà acquis : <b>${known.size} technologies</b>${top.length ? `, dont ${esc(top.join(', '))}` : ''}${rails ? ` ; <b>${rails} tronçons de voie ferrée</b> ouverts` : ''}. La carte les montre déjà.</p>`;
   }
 
-  // ------------------------------------------------------------------ mode Bataille (écran de départ)
+  // le choix de la carte (France, Europe…), quand le serveur en propose plusieurs
   modeTabs() {
-    const cartes = (this.modes || []).length > 1 ? `<div class="row"><span class="lab">Carte</span><span class="seg">${this.modes.map(m =>
+    return (this.modes || []).length > 1 ? `<div class="row"><span class="lab">Carte</span><span class="seg">${this.modes.map(m =>
       `<button class="${m.geo === this.geo ? 'on' : ''}" data-act="pick-geo" data-v="${m.geo}">${esc(m.nom)}</button>`).join('')}</span></div>` : '';
-    if (!this.skOpts) return cartes;
-    return cartes + `<div class="seg mode-tabs" role="tablist">${[['campagne', 'Campagne'], ['bataille', 'Bataille']].map(([k, l]) =>
-      `<button role="tab" aria-selected="${this.startMode === k}" class="${this.startMode === k ? 'on' : ''}" data-act="start-mode" data-v="${k}">${l}</button>`).join('')}</div>`;
-  }
-  skUnits() {
-    const o = this.skOpts, sk = this.sk;
-    const l = (o.units[sk.era] || o.units['1790'])[sk.kind === 'forteresse' && sk.role === 'def' ? 'garrison' : 'field'];
-    return l.filter(t => !this.rules.units[t].where || this.rules.units[t].where.includes(sk.me));
-  }
-  skCount() { return Object.values(this.sk.units).reduce((a, k) => a + (k > 0 ? k : 0), 0); }
-  // régiments devenus indisponibles (époque, camp, rôle) : retirés ; dix au plus
-  skClamp() {
-    const ok = new Set(this.skUnits());
-    for (const t of Object.keys(this.sk.units)) if (!ok.has(t)) delete this.sk.units[t];
-    let over = this.skCount() - this.skOpts.max;
-    for (const t of Object.keys(this.sk.units).reverse()) { while (over > 0 && this.sk.units[t] > 0) { this.sk.units[t]--; over--; } }
-  }
-  skPlaceOk(id) {
-    const n = this.md.nodes[id];
-    return !!n && (this.sk.kind !== 'forteresse' || (this.skOpts.places.find(p => p.id === id)?.fort || 0) >= 1);
-  }
-  // le lieu choisi, marqué et montré sur la carte
-  skMark() {
-    const id = this.startMode === 'bataille' && this.sk.place !== '' ? +this.sk.place : null;
-    this.map.selection = id != null ? { kind: 'node', id } : null;
-    if (id != null) this.startMoveTo(this.md.nodes[id].x, this.md.nodes[id].y, 90);
-  }
-  // touché sur la carte de l'écran de départ, en mode Bataille : le lieu de la bataille
-  skPickNode(id) {
-    if (!this.skPlaceOk(id)) { this.toast('Choisissez une place forte (ville fortifiée ou fort) pour un assaut.'); return; }
-    this.sk.place = String(id);
-    this.skMark();
-    this.renderStart();
-  }
-  renderSkirmish() {
-    const info = this.startInfo || { saves: [], running: false };
-    const o = this.skOpts, sk = this.sk, R = this.rules, F = R.factions;
-    if (sk.me && !F[sk.me]) sk.me = null;
-    this.skClamp();
-    const scs = R.scenarios || {}, sc = scs[sk.era] || scs['1790'];
-    const fname = c => (sc && sc.names[c]) || F[c].name;
-    const seg = (k, items, wrap) => `<span class="seg${wrap ? ' wrap' : ''}">${items.map(([v, l, t]) =>
-      `<button class="${String(sk[k]) === String(v) ? 'on' : ''}" data-act="sk-set" data-k="${k}" data-v="${esc(v)}"${t ? ` title="${esc(t)}"` : ''}>${l}</button>`).join('')}</span>`;
-    const dot = c => `<i class="sk-dot" style="background:${F[c].color}"></i>`;
-    const eras = (R.scenario_order || []).map(k => [k, k, scs[k].campaign]);
-    const camps = Object.keys(F).map(c => [c, dot(c) + esc(fname(c))]);
-    const foes = [['', 'Au hasard']].concat(Object.keys(F).filter(c => c !== sk.me).map(c => [c, dot(c) + esc(fname(c))]));
-    const fort = sk.kind === 'forteresse';
-    const places = o.places.filter(p => !fort || p.fort >= 1);
-    const cur = sk.place !== '' ? this.md.nodes[+sk.place] : null;
-    const extra = cur && !places.some(p => p.id === cur.id) ? `<option value="${cur.id}" selected>${esc(cur.name)}</option>` : '';
-    const placeSel = `<select class="sk-place" aria-label="Lieu de la bataille"><option value="">Au hasard</option>${extra}${places.map(p =>
-      `<option value="${p.id}" ${String(p.id) === String(sk.place) ? 'selected' : ''}>${esc(p.name)}${fort ? ` (${'★'.repeat(Math.min(3, p.fort))})` : ''}</option>`).join('')}</select>`;
-    const seasons = [['', 'Au hasard']].concat(o.seasons.map(k => [k, R.seasons[k]]));
-    const wk = sk.season ? Object.keys(o.weather_w[sk.season]) : Object.keys(R.weather);
-    const weathers = [['', 'Au hasard']].concat(wk.map(k => [k, `${R.weather[k].icon} ${R.weather[k].label}`]));
-    const n = this.skCount();
-    const units = this.skUnits().map(t => {
-      const u = R.units[t], k = sk.units[t] || 0;
-      return `<div class="sk-unit ${k ? 'on' : ''}"><div><b>${esc(u.name)}</b><small>${esc(u.desc || '')}</small></div>
-        <span class="sk-ctr"><button class="btn" data-act="sk-unit" data-v="${t}" data-d="-1" ${k ? '' : 'disabled'} aria-label="Un de moins">−</button><b>${k}</b><button class="btn" data-act="sk-unit" data-v="${t}" data-d="1" ${n >= o.max ? 'disabled' : ''} aria-label="Un de plus">+</button></span></div>`;
-    }).join('');
-    const foeTxt = !fort ? 'L’ennemi aligne autant de régiments que vous, tirés au sort, avec son général.'
-      : sk.role === 'def' ? `Vous tenez la place, remparts intacts, avec la milice ; l’ennemi monte à l’assaut avec ${o.assault_units} régiments, dont son parc de siège.`
-        : `La garnison ennemie : ${o.garrison_units} régiments et la milice, derrière des remparts intacts (il faut les escalader). Renforts d’assaut : +${o.assault_bonus} régiments en plus des vôtres (2 batteries, sapeurs, grenadiers, ligne).`;
-    const diffs = Object.entries(R.difficulty).map(([k, l]) => `<button class="${k === this.startDiff ? 'on' : ''}" data-act="pick-diff" data-v="${k}">${l}</button>`).join('');
-    const ready = sk.me && n > 0;
-    this.$('start').innerHTML = `<div class="start-side">
-      <div class="cartouche"><h1>Conquête</h1><div class="campaign">Mode bataille</div><p>Une bataille, sans campagne : choisissez vos régiments, le reste se tire au sort ou se règle ci-dessous.</p></div>
-      ${this.modeTabs()}
-      ${info.running ? '<button class="btn" data-act="resume">Reprendre la campagne en cours</button>' : ''}
-      <div class="row"><span class="lab">Époque</span>${seg('era', eras)}</div>
-      <div class="sk-l">Votre camp</div>${seg('me', camps, true)}
-      <div class="sk-l">L’adversaire</div>${seg('foe', foes, true)}
-      <div class="sk-l">La bataille</div>${seg('kind', [['bataille', 'Bataille rangée', 'En rase campagne'], ['forteresse', 'Place forte', 'Assaut ou défense d’une place fortifiée']])}
-      ${seg('role', [['att', fort ? 'Vous attaquez la place' : 'Vous attaquez'], ['def', fort ? 'Vous la défendez' : 'Vous défendez']])}
-      <div class="row"><span class="lab">Lieu</span>${placeSel}</div>
-      <p class="muted small sk-help">${fort ? 'Au hasard parmi les places fortes, ou touchez une place sur la carte.' : 'Le combat se livre dans la campagne voisine. Touchez aussi une ville ou un village sur la carte.'}</p>
-      <div class="row"><span class="lab">Saison</span>${seg('season', seasons, true)}</div>
-      <div class="row"><span class="lab">Météo</span>${seg('weather', weathers, true)}</div>
-      <div class="sk-l">Le commandement</div>${seg('mode', [['ordres', 'Donner mes ordres', 'Votre plan, vos ruses ; vos officiers la livrent sous vos yeux'], ['manuel', 'Commander la bataille', 'Disposez et menez vous-même chaque régiment']])}
-      <div class="sk-l">Vos régiments <span class="muted">${n} / ${o.max}</span></div>
-      <div class="sk-units">${units}</div>
-      <p class="muted small sk-help">${foeTxt}</p>
-      <div class="row"><span class="lab">Difficulté</span><span class="seg">${diffs}</span></div>
-      <div class="start-actions">
-        <button class="btn primary" data-act="sk-start" ${ready ? '' : 'disabled'}>${!sk.me ? 'Choisissez votre camp' : !n ? 'Choisissez vos régiments' : 'Livrer bataille'}</button>
-        <details class="start-reglages"><summary class="section-t">Réglages</summary>${this.reglagesHtml()}</details>
-        ${this.versionHtml(info.update)}
-        <div class="ver-line">Rivières et position des villes : © les contributeurs d’OpenStreetMap (ODbL), via Overture Maps</div>
-      </div></div>`;
-    const sel = this.$('start').querySelector('select.sk-place');
-    sel.addEventListener('change', () => { sk.place = sel.value; this.skMark(); this.renderStart(); });
   }
 
   // ligne discrète : version du jeu et résultat de la recherche de mise à jour au démarrage du serveur
