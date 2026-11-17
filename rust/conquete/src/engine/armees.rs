@@ -24,8 +24,8 @@ impl Game {
             "path" => list![], "target" => Val::None, "state" => "idle", "stance" => "normal", "mode" => "route",
             "supply" => 1.0, "battle" => Val::None, "grace" => 0.0, "hidden" => false, "onroad" => node.is_some(),
             "edge" => Val::None, "assault" => false, "ai" => Val::None, "viol" => 0.0, "gen" => gen, "fm" => "ligne",
-            "pl" => "frontal", "fm_t" => -9.0, "tac_auto" => true, "landing" => false, "boat" => false, "rx" => true,
-            "des" => 0.0, "depot" => Val::None, "tr" => false, "hold" => false, "qrt" => false, "mp" => Val::None};
+            "fm_t" => -9.0, "landing" => false, "boat" => false, "des" => 0.0, "depot" => Val::None, "tr" => false,
+            "hold" => false, "qrt" => false, "mp" => Val::None};
         self.armies.set(&aid, &a);
         a
     }

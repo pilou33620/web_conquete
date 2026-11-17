@@ -68,10 +68,6 @@ impl Random {
         }
         Random::par_tableau(&cle)
     }
-    /// `random.Random()` : graine prise à l'horloge et à l'adresse d'une variable (pas de dé rejouable).
-    pub fn new_hasard() -> Random {
-        Random::new(graine_hasard())
-    }
 
     fn init(s: u32) -> [u32; N] {
         let mut mt = [0u32; N];

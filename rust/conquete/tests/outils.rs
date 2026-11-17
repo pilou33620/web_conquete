@@ -1,14 +1,12 @@
-//! Les outils (src/bin : bilan, banc_ia, simuler, carte_hex, bataille_hex) contre leurs originaux Python (outils/*.py) :
+//! Les outils (src/bin : bilan, simuler, carte_hex) contre leurs originaux Python (outils/*.py) :
 //! chaque exécutable est lancé sur un cas court et sa sortie comparée à celle que l'outil Python a écrite sur le même cas
-//! (tests/references/outils/ ; pour les deux exports, trop gros, leur SHA-256).
+//! (tests/references/outils/ ; pour l'export, trop gros, son SHA-256).
 //!
 //! Les sorties Python ont été écrites ainsi, de la racine du dépôt :
 //! - bilan.txt : `python3 outils/bilan.py bilan_journal.jsonl` ; le journal vient de quatre escarmouches et de deux
 //!   campagnes 'ordres' (1813, 10 mois ; 1700, 8 mois) de outils/jumeau/campagnes_ref.py, journal des batailles ouvert ;
-//! - banc_ia.txt : `python3 outils/banc_ia.py --graines 1 --epoques 1790 --lieux bataille --proc 2` (la colonne cpu,
-//!   le temps de calcul, n'est pas comparée) ;
 //! - simuler.txt : `python3 outils/simuler.py --parties 2 --epoque 1700 --annees 1 --graine 3 --proc 2` ;
-//! - carte_hex, bataille_hex : `python3 outils/carte_hex.py | sha256sum` (de même bataille_hex.py).
+//! - carte_hex : `python3 outils/carte_hex.py | sha256sum`.
 
 use sha2::{Digest, Sha256};
 use std::process::Command;
@@ -37,28 +35,6 @@ fn bilan() {
     assert_eq!(lancer(env!("CARGO_BIN_EXE_bilan"), &[journal.to_str().unwrap()]), reference("bilan.txt"));
 }
 
-/// Le temps de calcul (colonne cpu des lignes de bataille, fin de la ligne de bilan) n'est pas comparé.
-fn sans_cpu(texte: &str) -> String {
-    let mut out = vec![];
-    for l in texte.lines() {
-        let c: Vec<char> = l.chars().collect();
-        if let Some(k) = l.find(" ; cpu moy.") {
-            out.push(l[..k].to_string());
-        } else if c.len() >= 81 && !l.starts_with("époque") && !l.contains("ERREUR") && c[..2] != [' ', ' '] {
-            out.push(c[..76].iter().chain(&c[81..]).collect());
-        } else {
-            out.push(l.to_string());
-        }
-    }
-    out.join("\n")
-}
-
-#[test]
-fn banc_ia() {
-    let rs = lancer(env!("CARGO_BIN_EXE_banc_ia"), &["--graines", "1", "--epoques", "1790", "--lieux", "bataille", "--proc", "2"]);
-    assert_eq!(sans_cpu(&rs), sans_cpu(&reference("banc_ia.txt")));
-}
-
 #[test]
 fn simuler() {
     let rs = lancer(env!("CARGO_BIN_EXE_simuler"), &["--parties", "2", "--epoque", "1700", "--annees", "1", "--graine", "3", "--proc", "2"]);
@@ -72,9 +48,4 @@ fn sha256(texte: &str) -> String {
 #[test]
 fn carte_hex() {
     assert_eq!(sha256(&lancer(env!("CARGO_BIN_EXE_carte_hex"), &[])), "1bd4355993d6b5422fd82adc5dd4b06af47af38e57754e72a53c2a12690da08b");
-}
-
-#[test]
-fn bataille_hex() {
-    assert_eq!(sha256(&lancer(env!("CARGO_BIN_EXE_bataille_hex"), &[])), "18f7e549356d45082038f6760d6e43a166e55fb180f76cd64567fe9a6343da33");
 }

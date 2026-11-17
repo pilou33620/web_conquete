@@ -14,9 +14,8 @@ use crate::geo::GeoMap;
 use crate::py::{self, Random, Val};
 use crate::rails as RL;
 use crate::rules as R;
-use crate::tactics::bridge as TB;
-use crate::tactics::stats as ST;
-use crate::tactics::units as TU;
+use crate::engine::raccord as TB;
+use crate::fiche as ST;
 use crate::turns as TT;
 use crate::{dict, list, py_const, tup};
 use crate::ai::AI;
@@ -89,7 +88,7 @@ pub fn to_dict(g: &mut Game) -> Val {
     d.set("ai_state", ai_state);
     d.set("version", 2);
     d.set("geo", g.geo.version); // la géographie de la partie (geo.VERSION) : une ancienne partie garde la sienne
-    TB::save_into(g, &d); // réglage des batailles et bataille tactique en cours
+    TB::save_into(g, &d); // réglage des batailles
     d
 }
 
@@ -150,10 +149,13 @@ pub fn migrate(g: &mut Game) {
         }
         let gid = g.gid(&owner); // (l'argument de setdefault est toujours calculé)
         gen.setdefault("id", gid);
-        let defauts = dict! {"fm" => "ligne", "pl" => "frontal", "fm_t" => -9.0, "tac_auto" => true, "landing" => false,
-                             "boat" => false, "rail" => false, "emb" => 0.0, "rx" => true, "des" => 0.0, "depot" => Val::None};
+        let defauts = dict! {"fm" => "ligne", "fm_t" => -9.0, "landing" => false, "boat" => false, "rail" => false, "emb" => 0.0,
+                             "des" => 0.0, "depot" => Val::None};
         for (k, v) in defauts.items() {
             a.setdefault(k, v);
+        }
+        for k in ["pl", "tac_auto", "rx", "_rx_bt"] {
+            a.pop(k); // (réglages du champ de bataille tactique d'une ancienne sauvegarde : supprimé, SPEC-BATAILLE.md)
         }
         for r in a.at("regs").iter() {
             let cls = R::UNITS().at(r.at("type")).ats("cls");
@@ -380,7 +382,7 @@ pub fn rules_payload_carte(europe: bool) -> Val {
         "difficulty" => lbl(R::DIFFICULTY(), "label"), "neutral_color" => R::NEUTRAL_COLOR,
         "seasons" => R::SEASON_LABEL(), "traits" => R::GENERAL_TRAITS(), "ranks" => R::GENERAL_RANKS(),
         "talents" => R::GENERAL_TALENTS(), "rancon" => R::GENERAL_RANCON(), "formations" => R::FORMATIONS(),
-        "formation_speed" => R::FORMATION_SPEED(), "plans" => R::PLANS(), "phases" => R::PHASES(), "spy" => spy,
+        "formation_speed" => R::FORMATION_SPEED(), "phases" => R::PHASES(), "spy" => spy,
         "spy_tours" => R::SPY_INTEL_TOURS, "tax_labels" => R::TAX_LABELS(),
         "water" => dict! {"speed" => R::WATER_SPEED, "sea" => R::SEA_SPEED, "embark" => R::EMBARK_DAYS,
                           "quai" => R::QUAI_LIVRES, "blockade" => R::BLOCKADE_K},
@@ -505,7 +507,7 @@ pub fn _modern(g: &Game, code: &str, regs: &Val) -> Val {
            "dr" => (if left > 0.0 { left } else { 0.0 }).ceil() as i64}
 }
 
-/// Technologies de combat d'un régiment, comme en bataille (bridge.make_spec) : la fiche les compte.
+/// Technologies de combat d'un régiment, comme en bataille : la fiche les compte.
 /// Python : `_tech(g, code, r)`.
 /// Rend un dict {effet: valeur}.
 // views.py, lignes 215 à 218
@@ -527,13 +529,13 @@ pub fn _lag(g: &Game, code: &str, r: &Val) -> i64 {
     }
 }
 
-/// … munitions (%), fatigue, portée efficace (m), valeurs chiffrées (stats.py)
+/// … munitions (%), fatigue, portée efficace (m), valeurs chiffrées (fiche.rs)
 /// Python : `_reg(r, trait=None, swift=0.0, mods=None, lag=0)`.
 /// trait_ (`trait` en Python, mot réservé) : le trait du général, ou None ; mods : un dict, ou None. Rend une liste.
 // views.py, lignes 226 à 230
 pub fn _reg(r: &Val, trait_: &Val, swift: f64, mods: &Val, lag: i64) -> Val {
     list![r.at("id"), r.at("type"), py::round(r.atf("n")), r.at("max"), py::round(r.atf("xp")), py::round(r.atf("morale")),
-          r.get("arm"), py::round(r.get_or("ammo", 100.0).f()), py::round(r.get_or("fat", 0.0).f()), TU::ranges(r).0,
+          r.get("arm"), py::round(r.get_or("ammo", 100.0).f()), py::round(r.get_or("fat", 0.0).f()), ST::ranges(r).0,
           ST::stats(r.at("type").s(), &r.get("arm").or(0), r.atf("xp"), trait_, false, swift, mods), r.get_or("man", list![]), lag]
 }
 

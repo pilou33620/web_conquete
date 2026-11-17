@@ -1483,13 +1483,6 @@ py_const!(FORMATIONS, dict!{
     "carre" => dict!{"label" => "Carré", "desc" => "Repousse la cavalerie (−65 % de dégâts), mais l’artillerie y fait des ravages ; marche lente. Le former prend un moment : surprise pendant la manœuvre, l’infanterie est très exposée aux cavaliers."},
     "tirailleurs" => dict!{"label" => "Tirailleurs", "desc" => "Ordre dispersé : moins exposé aux canons, efficace à couvert, fragile face aux cavaliers."}
 });
-py_const!(PLANS, dict!{
-    "frontal" => dict!{"label" => "Assaut frontal", "desc" => "Engagement classique, toutes armes ensemble."},
-    "artillerie" => dict!{"label" => "Préparation d’artillerie", "desc" => "Les canons pilonnent d’abord (+40 %) pendant que l’infanterie s’abrite."},
-    "debordement" => dict!{"label" => "Débordement", "desc" => "La cavalerie tourne l’ennemi (+50 % en terrain ouvert), le centre est plus léger."},
-    "tenir" => dict!{"label" => "Tenir la position", "desc" => "Défense acharnée : pertes −20 %, moral plus solide, mais moins d’attaque."},
-    "harcelement" => dict!{"label" => "Harcèlement", "desc" => "Escarmouches : pertes réduites des deux côtés, on décroche au bout d’un jour."}
-});
 py_const!(FORMATION_SPEED, dict!{"ligne" => 1.0, "colonne" => 1.1, "carre" => 0.6, "tirailleurs" => 0.95});
 // les quatre phases d'une bataille (SPEC-BATAILLE.md) ; une embuscade commence à la fusillade
 py_const!(PHASES, dict!{"escarmouche" => "Escarmouche", "canonnade" => "Canonnade", "fusillade" => "Fusillade", "charge" => "Charge"});
@@ -1721,7 +1714,7 @@ pub fn constantes() -> Vec<(&'static str, Val)> {
         ("MAISON_NOMS", MAISON_NOMS()), ("PRENOMS", PRENOMS()), ("PRENOMS_F", PRENOMS_F()), ("MAISON_TITRES", MAISON_TITRES()),
         ("MAISON_TRAITS", MAISON_TRAITS()), ("MARIAGE_REL", Val::from(MARIAGE_REL)), ("MARIAGE_AGE", Val::from(MARIAGE_AGE)),
         ("NAISSANCE_P", Val::from(NAISSANCE_P)), ("NAISSANCE_AGE", Val::from(NAISSANCE_AGE)), ("HERITIERS_MAX", Val::from(HERITIERS_MAX)),
-        ("CRISE_JOURS", Val::from(CRISE_JOURS)), ("PARJURE_JOURS", Val::from(PARJURE_JOURS)), ("FORMATIONS", FORMATIONS()), ("PLANS", PLANS()),
+        ("CRISE_JOURS", Val::from(CRISE_JOURS)), ("PARJURE_JOURS", Val::from(PARJURE_JOURS)), ("FORMATIONS", FORMATIONS()),
         ("FORMATION_SPEED", FORMATION_SPEED()), ("PHASES", PHASES()), ("PHASE_W", PHASE_W()), ("OPEN_TERRAIN", OPEN_TERRAIN()),
         ("WD_LOSS", Val::from(WD_LOSS)), ("WD_RATIO", Val::from(WD_RATIO)), ("WD_EVEN_LOSS", Val::from(WD_EVEN_LOSS)),
         ("WD_PLACE_LOSS", Val::from(WD_PLACE_LOSS)), ("WD_DEF", Val::from(WD_DEF)), ("PURSUIT_CAV", Val::from(PURSUIT_CAV)),

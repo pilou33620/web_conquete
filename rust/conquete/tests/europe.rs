@@ -1,6 +1,6 @@
 //! La géographie 5, la carte du mode « Europe » (SPEC-FRANCE.md, étape 2) : game/data/europe.json, places_europe.json,
 //! pays_europe.json, epoques_europe.json (outils/europe.mjs). La carte se fait et se relit, ses 32 pays se jouent, une
-//! campagne et une escarmouche vont au bout, une sauvegarde se relit.
+//! campagne va au bout, une sauvegarde se relit.
 //! (Le cache de la carte dans CARGO_TARGET_TMPDIR/geo, comme tests/geo4.rs ; le serveur : tests/bancs_serveur.rs.)
 
 use conquete::ai::AI;
@@ -9,8 +9,6 @@ use conquete::events as E;
 use conquete::geo::{GeoMap, T_EAU, T_OCEAN, VERSION_EUROPE};
 use conquete::py::{json, Val};
 use conquete::rules as R;
-use conquete::tactics::orders as OR;
-use conquete::tactics::skirmish as S;
 use conquete::turns as TT;
 use conquete::views as V;
 use conquete::dict;
@@ -319,48 +317,6 @@ fn campagne_de_24_mois_deux_fois_la_meme() {
 }
 
 #[test]
-fn escarmouches_jouees_jusqu_au_bout() {
-    let geo = geo();
-    let opts = S::options(&geo);
-    assert!(opts.at("places").len() > 500 && opts.at("places").iter().all(|p| p.at("name").is_str()));
-    let londres = geo.by_name.at("Londres");
-    for (k, corps) in [
-        dict! {"me" => "FR", "foe" => "PR", "era" => "1790", "seed" => 5, "units" => dict! {"ligne" => 2, "legere" => 1, "cavalerie" => 1, "artillerie" => 1}},
-        dict! {"me" => "OT", "era" => "1700", "seed" => 6, "kind" => "forteresse", "units" => dict! {"ligne" => 3, "artillerie" => 2}},
-        dict! {"me" => "GB", "foe" => "FR", "era" => "1870", "seed" => 7, "kind" => "village", "role" => "def", "place" => &londres, "units" => dict! {"ligne" => 2, "artillerie" => 1}},
-        dict! {"me" => "ML", "foe" => "TU", "era" => "1813", "seed" => 8, "season" => "hiver", "units" => dict! {"ligne" => 2, "cavalerie" => 1}},
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let (g, bid) = S::new(geo.clone(), &corps);
-        let mut g = g.unwrap_or_else(|| panic!("escarmouche {k} : {bid}"));
-        let mut tb = g.tactical.take().unwrap();
-        let ordres = dict! {};
-        for gr in OR::groups(&tb, tb.me.i(), &conquete::tactics::bridge::_livres(&g, &tb)).iter() {
-            ordres.set(gr.at("key"), gr.at("opts").at(0).at("v"));
-        }
-        let rep = conquete::tactics::bridge::set_orders(&mut g, &mut tb, &ordres, true, true);
-        assert!(rep.atb("ok"), "escarmouche {k} : {rep}");
-        g.tactical = Some(tb);
-        let mut n = 0;
-        while let Some(tb) = g.tactical.as_mut() {
-            if tb.ask.truthy() {
-                OR::answer(tb, "go");
-            }
-            S::tick(&mut g, 0.1);
-            n += 1;
-            assert!(n < 1000000, "escarmouche {k} : la bataille ne finit pas");
-        }
-        let tb = g.tac_done.as_ref().unwrap_or_else(|| panic!("escarmouche {k} : pas de résultat"));
-        assert_eq!(tb.phase, "fin", "escarmouche {k}");
-    }
-    // un camp d'une autre carte est refusé, ici et là-bas
-    assert!(S::new(geo.clone(), &dict! {"me" => "33", "units" => dict! {"ligne" => 2}}).0.is_none());
-    assert!(S::new(carte(4), &dict! {"me" => "FR", "units" => dict! {"ligne" => 2}}).0.is_none());
-}
-
-#[test]
 fn les_regles_d_une_carte_ne_donnent_que_ses_camps() {
     let (fr, eu) = (V::rules_payload_carte(false), V::rules_payload_carte(true));
     assert_eq!(json::dumps(&fr), json::dumps(&V::rules_payload()));
@@ -409,7 +365,7 @@ fn les_regles_d_une_carte_ne_donnent_que_ses_camps() {
 /// le_champ_de_bataille_lit_la_carte_a_cinq_km_par_case).
 #[test]
 fn bataille_de_campagne_jouee_jusqu_au_bout() {
-    use conquete::tactics::bridge as TB;
+    use conquete::engine::raccord as TB;
     let geo = geo();
     let mut g = Game::new(geo.clone(), "FR", &Val::from("normal"), &Val::from(3), &Val::from("1813"));
     let armee = |g: &Game, c: &str| g.armies.values().into_iter().find(|a| a.at("owner") == c).unwrap();
@@ -511,27 +467,6 @@ fn moyens_de_depart_a_l_echelle_des_pays() {
     for c in ["33", "75", "13"] {
         assert_eq!((hommes(&gf, c), livres(&gf, c)), (1540.0, 500.0), "{c}");
     }
-}
-
-/// Le champ de bataille lit la carte de campagne à son échelle : sur la carte d'Europe, une case vaut 5 km, et un fleuve à
-/// deux cases (10 km) n'est pas sur un champ de 3 km sur 2 ; à un dixième de case (500 m), il y est.
-#[test]
-fn le_champ_de_bataille_lit_la_carte_a_cinq_km_par_case() {
-    use conquete::tactics::terrain as TR;
-    let geo = geo();
-    let danube = geo.src.at("rivers").iter().filter(|r| r.at("name") == "Danube").max_by_key(|r| r.at("pts").len()).unwrap();
-    let pts: Vec<(f64, f64)> = danube.at("pts").iter().map(|p| { let (lon, lat) = p.xy(); geo.xy(lat, lon) }).collect();
-    let k = pts.len() / 2;
-    let (p, q) = (pts[k], pts[k + 1]);
-    let l = ((q.0 - p.0).powi(2) + (q.1 - p.1).powi(2)).sqrt();
-    let n = (-(q.1 - p.1) / l, (q.0 - p.0) / l); // (en travers du fleuve)
-    let champ = |d: f64| {
-        let spec = dict! {"seed" => 11, "cx" => p.0 + d * n.0, "cy" => p.1 + d * n.1, "season" => "ete", "weather" => "soleil", "year" => 1790, "carte" => TR::VERSION};
-        TR::generate(&geo, &spec).rivers.iter().any(|r| r.get("name") == "Danube")
-    };
-    assert!(champ(0.1), "le Danube à 500 m doit couler sur le champ de bataille");
-    assert!(!champ(2.0), "le Danube à 10 km n'est pas sur le champ de bataille");
-    assert_eq!(geo.km_case, 5.0);
 }
 
 /// La Scandinavie tient au continent par ses détroits (bacs du Grand et du Petit Belt, de l'Øresund) et la Suède à la

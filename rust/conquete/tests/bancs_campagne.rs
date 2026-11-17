@@ -25,7 +25,7 @@ use conquete::events as E;
 use conquete::py::{self, json, Random, Val};
 use conquete::rails as RL;
 use conquete::rules as R;
-use conquete::tactics::bridge as TB;
+use conquete::engine::raccord as TB;
 use conquete::turns as TT;
 use conquete::views as V;
 use conquete::{dict, list};
@@ -897,7 +897,7 @@ fn l_assaut_attend_la_strategie() {
     assert!(ok && msg.contains("stratégie"), "{msg}");
     let bt = g.battles.at(a.at("battle"));
     assert_eq!(bt.get("mode"), "attente");
-    assert!(g.tactical.is_none() && !a.get("ask").truthy());
+    assert!(!a.get("ask").truthy());
     let r = TB::command(&mut g, &dict! {"sub" => "choose", "bid" => bt.at("id"), "mode" => "ordres"});
     assert!(!r.atb("ok"), "le champ de bataille n'existe plus");
     let r = TB::command(&mut g, &dict! {"sub" => "choose", "bid" => bt.at("id"), "strat" => "frontal"});
@@ -1964,6 +1964,7 @@ fn lit_un_effet(ligne: &str) -> bool {
             .any(|m| ligne.contains(m))
         || mot("rm.get(")
         || mot("rm.get_or(")
+        || mot("rmg(") // (update_battles : `rmg = |k| rm.get_or(k, 0.0)`)
 }
 
 fn sources(d: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
@@ -1992,6 +1993,9 @@ fn chaque_effet_est_lu_par_le_moteur() {
     }
     lus.extend(E::ATTENUE().values().iter().map(|v| v.string())); // (lus par events.soften et recompute_mods, par la table)
     lus.insert("rail_troops".into()); // (les armées prendront le train en phase 2, avec les voies ferrées de la carte)
+    // le champ de bataille tactique lisait ces trois effets ; la bataille par stratégie ne les reprend pas encore
+    // (SPEC-BATAILLE.md, « Suite ») : aérostiers (hors sa vision), retranchements de campagne, obus à la mélinite
+    lus.extend(["balloon", "entrench", "shell"].map(String::from));
     let oublies: BTreeSet<String> =
         R::TECH().values().iter().flat_map(|t| t.at("fx").keys()).map(|k| k.string()).filter(|k| !lus.contains(k)).collect();
     assert!(oublies.is_empty(), "effets de technologies que le moteur ne lit nulle part : {oublies:?}");

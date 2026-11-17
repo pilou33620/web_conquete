@@ -332,3 +332,41 @@ fn ia_de_campagne() {
         eprintln!("  arrêté : {a}");
     }
 }
+
+/// Refait l'empreinte finale des armées (`fin.armies`) des scénarios où elle a changé exprès : une armée créée n'a plus
+/// les réglages du champ de bataille tactique (`pl`, `tac_auto`, `rx` : SPEC-BATAILLE.md, 17/11/2026). Rien d'autre
+/// n'est réécrit : résultats des opérations et autres champs de l'état final doivent tomber juste.
+/// `CONQUETE_REFAIRE_IA_CAMPAGNE=1 cargo test --release -p conquete --test ia_campagne refaire -- --ignored`
+#[test]
+#[ignore]
+fn refaire() {
+    if std::env::var_os("CONQUETE_REFAIRE_IA_CAMPAGNE").is_none() {
+        return;
+    }
+    let chemin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/references/ia_campagne.json");
+    let texte = std::fs::read_to_string(&chemin).unwrap();
+    let r = json::loads(&texte).unwrap();
+    assert_eq!(json::dumps_compact(&r), texte.trim_end(), "le fichier ne se réécrit pas à l'identique");
+    let geo = geo();
+    let mut refaits = 0;
+    for cas in r.at("cas").iter() {
+        for (k, sc) in cas.at("sc").iter().enumerate() {
+            let ops = sc.at("ops");
+            let mut g = partie(&geo, &cas.at("etat"));
+            for (i, op) in ops.iter().enumerate() {
+                assert_eq!(json::dumps_ref_ordre(&jouer(&mut g, &op)), json::dumps_ref_ordre(&sc.at("res").at(i)), "scénario {k}, opération {i}");
+            }
+            let fin = final_(&mut g, &ops.at(0).ats(1));
+            for key in sc.at("fin").keys() {
+                if json::dumps_ref_ordre(&fin.at(&key)) != json::dumps_ref_ordre(&sc.at("fin").at(&key)) {
+                    assert_eq!(key, "armies", "graine {}, scénario {k} : seul `armies` peut changer", cas.ati("seed"));
+                    sc.at("fin").set(&key, fin.at(&key));
+                    refaits += 1;
+                    eprintln!("graine {}, scénario {k} {} : armies refait", cas.ati("seed"), json::dumps_ref(&ops));
+                }
+            }
+        }
+    }
+    eprintln!("{refaits} empreintes refaites");
+    std::fs::write(&chemin, json::dumps_compact(&r) + if texte.ends_with('\n') { "\n" } else { "" }).unwrap();
+}

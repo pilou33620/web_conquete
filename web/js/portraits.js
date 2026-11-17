@@ -1,5 +1,5 @@
-// Portraits des régiments, sur les cartes en portrait à la manière d'Ultimate General : en bataille (interface.js)
-// comme sur la carte de campagne (ui.js). La figure du type de soldat (unites.js), à l'uniforme de l'année et aux
+// Portraits des régiments, sur les cartes en portrait à la manière d'Ultimate General,
+// sur la carte de campagne (ui.js). La figure du type de soldat (unites.js), à l'uniforme de l'année et aux
 // couleurs du camp, dessinée dans un repère de 56 × 64 mis à l'échelle de la hauteur du canevas (calée en bas,
 // centrée ; en portrait, les côtés sont rognés).
 import { uniform, GUN_MODELS } from './battle/formes.js';

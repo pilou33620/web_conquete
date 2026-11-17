@@ -1,4 +1,4 @@
-// Primitives de dessin vu de dessus des maquettes (web/js/dev/carte-vivante.html, battle/dev/maquette-2d.html) :
+// Primitives de dessin vu de dessus des maquettes (web/js/dev/carte-vivante.html) :
 // formes, couleurs, figures (fantassins, cavaliers, pièces, chevaux), bâtiments, fumées. Reprises telles quelles pour
 // que la carte de campagne dessine comme la maquette validée ; marche aussi dans un worker (OffscreenCanvas).
 // (sous Node, pour les tests : ni document ni OffscreenCanvas, toile() rend null et les images d'avance sont sautées)

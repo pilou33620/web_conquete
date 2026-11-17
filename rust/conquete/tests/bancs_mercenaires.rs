@@ -9,7 +9,6 @@ use conquete::diplomacy as D;
 use conquete::engine::{Date, Game};
 use conquete::py::Val;
 use conquete::rules as R;
-use conquete::tactics::skirmish as S;
 use conquete::views as V;
 use fabrique_campagne::{armee, partie_avec};
 use std::collections::BTreeSet;
@@ -54,9 +53,6 @@ fn chacun_a_son_epoque() {
         let ok: BTreeSet<String> = ok.iter().map(|s| s.to_string()).collect();
         assert_eq!(got, ok, "{annee}");
     }
-    // (le mode Bataille aussi)
-    assert!(S::units_for("1813", false).iter().filter(|t| R::MERCS().has(t)).count() == 0);
-    assert!(S::units_for("1870", false).has("legion"));
 }
 
 // ------------------------------------------------------------------ Levee

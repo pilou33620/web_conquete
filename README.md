@@ -102,8 +102,8 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
    reprend d'elle-même au tour suivant ; la bulle de l'ordre annonce l'arrivée). Une bataille contre une armée se
    livre sur-le-champ ; achats, constructions et recherches sont payés tout de suite.
    **Devant une ville qui n'est pas à vous** (sa destination, ou une ville sur sa route), l'armée s'arrête et une
-   fenêtre vous demande quoi faire, quel que soit le réglage des batailles : **donner vos ordres**, **commander la bataille** ou la
-   **résolution automatique** (l'assaut tout de suite, même contre des remparts : vos canons y ouvrent des brèches),
+   fenêtre vous demande quoi faire, quel que soit le réglage des batailles : **donner l'assaut** (tout de suite, par escalade, même contre des
+   remparts ; voir « Batailles par stratégie »),
    **rallier** (ville neutre, armée au moins trois fois plus forte que sa défense), **négocier** le ralliement,
    **assiéger** (place à remparts : l'assaut part de lui-même à la brèche, pendant le tour des IA), **bloquer et
    affamer**, **exiger une contribution**, ou **attendre** devant la place (« Rallier ou attaquer », dans le panneau
@@ -701,25 +701,14 @@ rust/conquete/       le moteur et le serveur, en Rust (caisse conquete ; PORTAGE
   bin/               les exécutables : conquete (le jeu) et les outils (voir « Outils »)
 game/data/           données de la carte (rivières, villes de France), embarquées dans l'exécutable ; cache de la carte
 web/                 interface : index.html, css/style.css, js/map.js (rendu canvas), js/peintre.js (worker qui peint les tuiles de la carte), js/dev/banc.js (banc de la carte sur la machine du joueur : adresse terminée par #banc), js/lot.js (lot de dessins : les petites figures de la carte dessinées d'un coup), js/ambient.js (animations
-                     de la carte), js/towns.js (dessin des villes), js/ui.js, js/plan.js (plan de la position dans la fenêtre de bataille),
+                     de la carte), js/towns.js (dessin des villes), js/ui.js, js/strategie.js (fenêtre de bataille : choix de la
+                     stratégie, poursuite, résultat), js/carte/combat.js (la petite bataille dessinée sur son hexagone),
                      js/tuto.js (tutoriel), js/main.js
 web/js/hex/          rendu en plateau d'hexagones 3D, style web_power, par défaut (SPEC-HEX.md) : moteur.js (moteur et caméra
-                     inclinée), modeles.js (maisons de chaque pays, églises, enceintes…), plateau.js (carte de campagne),
-                     champ.js (champ de bataille), troupes3d.js (figurines) ; le seul rendu (l'ancien, en secours sans WebGL)
-web/js/battle/       vue de bataille de dessus, sur un canevas 2D (SPEC-2D.md) : bataille.js (entrée et sortie depuis
-                     la campagne), vue.js (calques dans l'ordre, boucle, interrogation du serveur, tracés au sol),
-                     camera.js (caméra verticale, passage écran ↔ terrain), terrain.js (peinture du sol,
-                     altitudes, données du décor), textures.js (motifs du sol), sol2d.js (le sol en tuiles par
-                     niveau de zoom, tués et cratères peints dedans), pietinement.js (la boue laissée par les
-                     troupes), decor2d.js et decor2d-dessin.js (bâtiments d'époque, enceintes, ponts, bois, feu
-                     et ruines, vie des champs), troupes2d.js (les soldats vus de dessus, sprites mis en cache,
-                     dispositions des rangs, tués, bouches à feu), effets.js (fumées, tirs, boulets, météo, lumière
-                     de l'heure), heures.js (table des heures ; logique pure, testée), fanions.js (fanions et
-                     médaillons), unites.js (figurines peintes des cartes d'unités), visibilite.js (ligne de vue ;
-                     logique pure, testée), qualite.js (qualité graphique), commandes.js (gestes au doigt, à la
-                     souris et au clavier ; à la main : choisir, déployer, ordonner), doctrine.js (ordres par arme), ordres.js (fenêtre des ordres, flèches, film : étiquettes, repères, vitesses),
-                     interface.js (barres, panneaux, récapitulatif), formes.js (constantes et outils communs),
-                     css/bataille.css ; dev/maquette-2d.html : la maquette de référence du rendu (page autonome)
+                     inclinée), modeles.js (maisons de chaque pays, églises, enceintes…), plateau.js (carte de campagne) ; le seul rendu (l'ancien, en secours sans WebGL)
+web/js/battle/       ce qui reste de l'ancienne vue de bataille et sert à la campagne : formes.js (outils communs : uniformes
+                     d'époque, nombres, texte échappé, couleurs), unites.js (figurines peintes des cartes de régiment et des
+                     armées de la carte), qualite.js (mémoire laissée à ces figurines selon l'appareil)
 web/vendor/three/    Three.js r186 (licence MIT), copié tel quel pour la carte de campagne : le jeu marche hors ligne
 saves/               parties sauvegardées (JSON)
 tests/               bancs d'essai (voir « Tests » ci-dessous)
@@ -747,21 +736,13 @@ node --test tests/*.test.mjs                     # l'interface seule
 | `rust/conquete/tests/bancs_campagne.rs` | votre tour puis celui des IA (d'un coup, arrêts, reprise), villes neutres, temps en tours (production, recherche, échéances, actions d'armée, sièges, arrivée), retraite une fois par tour, dettes et événements, prix du marché, sauvegarde (IA comprises) |
 | `rust/conquete/tests/bancs_cartes.rs` | cartes de bataille : même graine, même carte ; plus de parcelles en quadrillage (moins de 30 % de bords en longues droites) ; vergers près des maisons, jamais sur le glacis ; moins d'une demi-seconde par carte |
 | `rust/conquete/tests/bancs_serveur.rs` | un vrai serveur HTTP (l'exécutable `conquete`) sur un port libre : requêtes mal formées, fichiers hors de `web/`, ordres pendant le tour des IA, sauvegardes (dossier temporaire, les vraies ne sont pas touchées) |
-| `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, fiche du régiment (camouflage compris), ordres par arme et panneau de la bataille commandée, fenêtre de bataille à trois choix, barre du tour, tutoriel et bulles de bataille |
-| `tests/camera.test.mjs` | caméra des batailles vues de dessus : allers-retours écran ↔ terrain exacts, centre et sens des axes, point gardé sous le doigt au zoom, bornes |
-| `tests/troupes2d.test.mjs` | soldats vus de dessus : rangs de la ligne, plafond par régiment et figure pour plusieurs hommes, carré à quatre faces, colonne, tirailleurs, déroute, cavalerie, batterie, général, chariot, bouches à feu, tués dans l'emprise, tenues de l'époque, disposition stable d'une image à l'autre |
-| `tests/sol2d.test.mjs` | sol en tuiles : niveaux de zoom, mémoire bornée, repli sur une tuile plus grossière, tués et cratères peints dans les seules tuiles touchées, tuiles repeintes après une brèche, piétinement relu au bon endroit |
-| `tests/decor2d.test.mjs` | décor : bâtiments déduits des cases sans données du moteur, gare et immeubles après leur date, toits selon la contrée, touché / en feu / ruine, feuillage ouvert au-dessus des régiments, mur médiéval, tracé bastionné, brèche refaite, bêtes et villageois qui fuient |
-| `tests/effets.test.mjs` | effets : chaque genre d'effet du serveur se dessine, éclairs et fumée aux bouches des figures (ou au front), plafonds de particules, trous gardés, poudre sans fumée, lumière de chaque heure dans des bornes sûres |
-| `tests/visibilite.test.mjs` | ligne de vue du navigateur : rase campagne vue, crête et bois épais qui bouchent, lisière qui voit dehors, la même dans les deux sens, champ de vision borné |
+| `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, tableau des valeurs, barre du tour, fenêtre de bataille (stratégies, poursuite), arrivée devant une ville, tutoriel, voie ferrée, arbre des technologies |
 | `tests/decouvertes.test.mjs` | découvertes : chaque technologie a sa famille de vignette animée |
 | `tests/epoque.test.mjs` | la carte selon l'époque : drapeau de chaque période, chapeaux des passants, phylloxéra de 1875 aux plants greffés |
 | `tests/lot.test.mjs` | lot de dessins de la carte (moulins, voyageurs, habitants, drapeaux) : un tracé par style et par rang, l'ordre de chaque figure gardé, points placés (miroir compris), aucune figure reliée à une autre |
 | `tests/secours.test.mjs` | tuiles de secours de la carte : un niveau de zoom auquel il manque une tuile est sauté en entier (plus de bandes noires) |
 | `tests/frontieres.test.mjs` | frontières de la carte de campagne : les segments des carrés marchants raboutés en lignes continues, sans perdre ni doubler un point, puis découpés en morceaux qui se recouvrent |
 | `tests/portraits.test.mjs` | portraits des régiments : la même figure en bataille et en campagne (piquiers avant la baïonnette, pièce de son époque, cavalier pour le général) |
-| `tests/heures.test.mjs` | table des heures : rangée de 5 h à 22 h, pas de saut quand l'horloge tourne ni quand la lumière baisse |
-| `tests/pietinement.test.mjs` | piétinement : rien au repos ni sous un général, un tiers de boue au passage d'un régiment de ligne, plus sous la cavalerie et l'artillerie, double sous la pluie, mêlée sur place |
 | `rust/conquete/tests/bancs_degats.rs` | dégâts aux bâtiments : un boulet sur une maison, le feu qui gagne puis laisse des ruines, occupants chassés, couvert selon l'état, vue à travers une ruine, même graine même incendie, `bati` depuis `since` et carte complète, sauvegarde ; canons du défenseur sur l'enceinte et qui tirent de là |
 | `rust/conquete/tests/bancs_villes.rs` | villes et places : tailles du village à la capitale, nature et toit de chaque bâtiment, place bastionnée, murs qui ferment la ville, pas de maison sur une rue, brèche du siège, même graine même ville, temps de génération |
 

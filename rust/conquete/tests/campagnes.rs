@@ -2,11 +2,10 @@
 //! batailles tactiques) : tests/references/campagnes.json est écrit par le jumeau outils/jumeau/campagnes_ref.py (voir
 //! son en-tête). Chaque partie est refaite de sa graine (Game::new), puis jouée mois par mois comme le Python
 //! (tests/fabrique.py jouer_mois : turns::go, turns::advance, interruptions acceptées d'office ; mode 'ia' : le camp du
-//! joueur gouverné par une IA, qui prend aussi ses décisions ; 'ordres' : le joueur prend ses décisions et livre ses
-//! batailles, « le général commande » ou « Donner mes ordres » puis la bataille tactique jusqu'au bout : le pont des
-//! batailles en campagne ; 'rien' : il ne fait rien) ; l'empreinte ordonnée de views::to_dict doit tomber
+//! joueur gouverné par une IA, qui prend aussi ses décisions ; 'ordres' : le joueur prend ses décisions et choisit la
+//! stratégie de ses batailles (batailler) ; 'rien' : il ne fait rien) ; l'empreinte ordonnée de views::to_dict doit tomber
 //! juste à la création et à chaque fin de mois. Un écart dit la partie, le mois et le premier champ de to_dict qui
-//! diffère. Les escarmouches (skirmish::new, puis la bataille jusqu'au bout) aussi.
+//! diffère.
 //!
 //! Ce qui varie en Python d'un lancement à l'autre (parcours de sets de textes ; le jumeau tourne avec
 //! PYTHONHASHSEED=0) :
@@ -34,9 +33,7 @@ use conquete::events as E;
 use conquete::geo::GeoMap;
 use conquete::dict;
 use conquete::py::{self, json, Random, Val};
-use conquete::tactics::bridge as TB;
-use conquete::tactics::orders as OR;
-use conquete::tactics::skirmish as S;
+use conquete::engine::raccord as TB;
 use conquete::turns as TT;
 use conquete::views as V;
 use std::rc::Rc;
@@ -161,9 +158,6 @@ fn jouer_mois_pas(g: &mut Game, mode: &str, rappel: &mut dyn FnMut(&mut Game, i6
     while !g.tour.at("end").is_none() && !g.over.truthy() {
         decider(g, mode);
         if batailler(g, mode) {
-            while g.tactical.is_some() {
-                batailler(g, mode); // (la bataille tactique d'un coup : bridge::tick avance selon un budget de temps)
-            }
             if rappel(g, n) {
                 return;
             }
@@ -308,44 +302,6 @@ fn toutes_les_parties_ont_leur_essai() {
     }
 }
 
-// ------------------------------------------------------------------ escarmouches
-fn escarmouche(nom: &str) {
-    let r = reference();
-    let e = r.at("escarmouches").iter().find(|e| e.at("nom") == nom).unwrap();
-    let geo = geo(e.ati("geo"));
-    let (g, bid) = S::new(geo, &e.at("body"));
-    let mut g = g.unwrap_or_else(|| panic!("{nom} : {bid}"));
-    assert_eq!(json::empreinte_ordre(&V::to_dict(&mut g)), e.ats("neuve"), "{nom} : skirmish.new");
-    let mut tb = g.tactical.take().unwrap();
-    assert_eq!(json::empreinte_ordre(&TB::orders_view(&g, &mut tb)), e.ats("fenetre"), "{nom} : fenêtre des ordres");
-    let raw = e.at("ordres"); // (tirés au sort par le jumeau, à part : rangés dans la référence)
-    let rep = TB::set_orders(&mut g, &mut tb, &raw, true, true);
-    assert_eq!(json::dumps_ref_ordre(&rep), json::dumps_ref_ordre(&e.at("set_orders")), "{nom} : set_orders");
-    g.tactical = Some(tb);
-    let mut n = 0;
-    while let Some(tb) = g.tactical.as_mut() {
-        if tb.ask.truthy() {
-            OR::answer(tb, "go");
-        }
-        S::tick(&mut g, 0.1);
-        n += 1;
-        assert!(n < 1000000);
-    }
-    let tb = g.tac_done.as_ref().unwrap();
-    let (phase, clock, result) = (tb.phase.clone(), tb.clock, tb.result.clone());
-    let view = result.truthy().then(|| json::empreinte_ordre(&tb.result_view(&Val::from(0))));
-    assert_eq!(phase, e.ats("phase"), "{nom} : phase");
-    assert_eq!(clock.to_bits(), e.atf("clock").to_bits(), "{nom} : heure de la fin");
-    assert_eq!(json::dumps_ref_ordre(&result), json::dumps_ref_ordre(&e.at("result")), "{nom} : résultat");
-    assert_eq!(view.map(Val::from).unwrap_or(Val::None), e.at("view"), "{nom} : result_view");
-    assert_eq!(json::empreinte_ordre(&V::to_dict(&mut g)), e.ats("fin"), "{nom} : la partie à la fin");
-}
-
-macro_rules! escarmouches {
-    ($($nom:ident),* $(,)?) => { $( #[test] fn $nom() { escarmouche(stringify!($nom)); } )* };
-}
-escarmouches!(e2_1790, e2_1813_place, e2_1870_village_def, e2_1700_hiver, e3_1790, e3_1870_place, e3_1813_def);
-
 // ------------------------------------------------------------------ diagnostic et balayage
 #[test]
 #[ignore]
@@ -443,7 +399,7 @@ fn chrono() {
     }
 }
 
-/// Refait les empreintes des parties et escarmouches de la géographie 3 (toute la France) avec le moteur Rust, quand
+/// Refait les empreintes des parties de la géographie 3 (toute la France) avec le moteur Rust, quand
 /// ses données changent exprès (populations de 1790, trajectoires des villes : 15/11/2026). Les géographies 1 et 2 ne
 /// sont pas touchées : elles restent comparées aux références du jumeau Python.
 /// `CONQUETE_REFAIRE_GEO3=1 cargo test --release -p conquete --test campagnes refaire_geo3 -- --ignored`
@@ -451,7 +407,7 @@ fn chrono() {
 #[ignore]
 fn refaire_geo3() {
     // (CONQUETE_REFAIRE_CAMPAGNES=1 : les parties de toutes les géographies, quand les règles changent exprès — la
-    // bataille par stratégie, SPEC-BATAILLE.md, 16/11/2026 ; les escarmouches, elles, restent celles de la géographie 3)
+    // bataille par stratégie, SPEC-BATAILLE.md, 16/11/2026)
     let toutes = std::env::var_os("CONQUETE_REFAIRE_CAMPAGNES").is_some();
     if std::env::var_os("CONQUETE_REFAIRE_GEO3").is_none() && !toutes {
         return;
@@ -480,29 +436,6 @@ fn refaire_geo3() {
         p.set("emp", l.into_iter().collect::<Val>());
         p.set("over", g.over.truthy());
         eprintln!("{} : {n} empreintes", p.ats("nom"));
-    }
-    for e in r.at("escarmouches").iter().filter(|e| e.ati("geo") == 3 && !toutes) {
-        let (g, bid) = S::new(g3.clone(), &e.at("body"));
-        let mut g = g.unwrap_or_else(|| panic!("{} : {bid}", e.ats("nom")));
-        e.set("neuve", json::empreinte_ordre(&V::to_dict(&mut g)));
-        let mut tb = g.tactical.take().unwrap();
-        e.set("fenetre", json::empreinte_ordre(&TB::orders_view(&g, &mut tb)));
-        e.set("set_orders", TB::set_orders(&mut g, &mut tb, &e.at("ordres"), true, true));
-        g.tactical = Some(tb);
-        while let Some(tb) = g.tactical.as_mut() {
-            if tb.ask.truthy() {
-                OR::answer(tb, "go");
-            }
-            S::tick(&mut g, 0.1);
-        }
-        let tb = g.tac_done.as_ref().unwrap();
-        let view = tb.result.truthy().then(|| Val::from(json::empreinte_ordre(&tb.result_view(&Val::from(0))))).unwrap_or(Val::None);
-        e.set("phase", tb.phase.clone());
-        e.set("clock", tb.clock);
-        e.set("result", tb.result.clone());
-        e.set("view", view);
-        e.set("fin", json::empreinte_ordre(&V::to_dict(&mut g)));
-        eprintln!("{} : refaite", e.ats("nom"));
     }
     std::fs::write(&chemin, json::dumps_compact(&r) + if texte.ends_with('\n') { "\n" } else { "" }).unwrap();
 }

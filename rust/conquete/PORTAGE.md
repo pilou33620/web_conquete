@@ -30,6 +30,16 @@ bit près) ; textes des règles en cases × 5 (`km_carte`) ; noms par famille cu
 `surnames` rendent les tables d'avant pour la France et les départements) ; bacs et traversées de Scandinavie. Seule
 référence touchée : `rules.json`, l'empreinte de `MAISON_NOMS` (les huit maisons des 32 pays, françaises avant).
 
+**Champ de bataille tactique supprimé** (17/11/2026, `SPEC-BATAILLE.md`) : le module `tactics` (le portage de
+`game/tactics/`, 23 000 lignes), les binaires `banc_ia` et `bataille_hex`, leurs essais (`bancs_bataille`, `bancs_abris`,
+`bancs_cartes`, `bancs_degats`, `bancs_plans`, `bancs_villes`, `batailles`, `plans`, `pont`, `terrain`, `terrain_ville`,
+`unites`, `ia`, `ia2`, les escarmouches de `campagnes`) et leurs références n'existent plus. Ce qui servait à la campagne
+est dans `engine/raccord.rs` (l'ancien `bridge.rs` : réglage des batailles, munitions et fatigue, commande `tac`) et
+`fiche.rs` (la fiche chiffrée des régiments : `stats.rs` et ce qu'il lisait de `units.rs`), gardés par
+`tests/fiche.rs` contre les valeurs du Python (`references/fiche.json`, recopiées de `unites.json` et `pont.json`). Les
+mentions de `tactics/`, des batailles de référence et du champ de bataille dans la suite de ce document décrivent le
+portage tel qu'il a été fait.
+
 **Maintenant que le Python est retiré :**
 
 - Les jumeaux Python et le Python du jeu (`server.py`, `game/*.py`) ne sont plus dans le dépôt ; les tableaux de
@@ -62,7 +72,7 @@ restent.
 | Python | Rust |
 |---|---|
 | `game/x.py` | `rust/conquete/src/x.rs` (même nom) |
-| `game/tactics/x.py` | `rust/conquete/src/tactics/x.rs` |
+| `game/tactics/x.py` | supprimé avec le champ de bataille tactique (restes : `engine/raccord.rs`, `fiche.rs`) |
 | `server.py`, `appairage.py` | `rust/conquete/src/serveur.rs` + la caisse commune `web_tools_commun` (dépôt web_suite) |
 | ce que Python faisait tout seul | `rust/conquete/src/py/` (le **socle**) |
 | jumeaux (provisoires) | `outils/jumeau/*.py` |
@@ -223,7 +233,7 @@ Conventions communes aux deux ensembles :
    tirage qui diffère (valeur, ou tirage en trop) donne la ligne des deux côtés.
 5. Lancer : `cargo test -p conquete` (depuis la racine du dépôt).
 
-Tous les modules existent déjà, vides (`//! À porter : …`), et sont déclarés dans `lib.rs` et `tactics/mod.rs` :
+Tous les modules existent déjà, vides (`//! À porter : …`), et sont déclarés dans `lib.rs` :
 on remplit le sien sans toucher aux autres.
 
 Un module n'est porté que lorsque ses essais passent contre les références du jumeau.

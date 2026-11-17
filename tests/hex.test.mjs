@@ -6,7 +6,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Grille, K, versEcran, versJeu } from '../web/js/hex/moteur.js';
-import { toScreen, toWorld, anchor } from '../web/js/battle/camera.js';
 
 test('la grille retrouve l’hexagone sous chaque point', () => {
   const g = new Grille(272, 337, 4);
@@ -29,18 +28,6 @@ test('vue inclinée : aller-retour exact écran ↔ terrain', () => {
   // le centre de la caméra est au centre de l'écran ; le sol est aplati de K sur la verticale
   assert.deepEqual(versEcran(cam, 1200, 800, 120, 80), [600, 400]);
   assert.ok(Math.abs(versEcran(cam, 1200, 800, 120, 90)[1] - (400 + 10 * 7 * K)) < 1e-9);
-});
-
-test('caméra des batailles avec l’aplatissement k', () => {
-  const vp = { vw: 1000, vh: 700, k: K }, cam = { x: 1500, y: 1000, z: 0.8 };
-  const [sx, sy] = toScreen(cam, vp, 1700, 1210), [x, y] = toWorld(cam, vp, sx, sy);
-  assert.ok(Math.abs(x - 1700) < 1e-9 && Math.abs(y - 1210) < 1e-9);
-  // l'ancrage garde le point du terrain sous le doigt
-  anchor(cam, vp, 1700, 1210, 100, 650);
-  const [ax, ay] = toScreen(cam, vp, 1700, 1210);
-  assert.ok(Math.abs(ax - 100) < 1e-9 && Math.abs(ay - 650) < 1e-9);
-  // sans k : la vue de dessus d'avant
-  assert.deepEqual(toScreen({ x: 0, y: 0, z: 1 }, { vw: 10, vh: 10 }, 1, 1), [6, 6, 1]);
 });
 
 // Les remparts s'ouvrent là où les routes les traversent (modeles.js, enceinte) : sans cela une route de la carte passe

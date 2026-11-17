@@ -289,52 +289,11 @@ impl Game {
         a.set("ro", a.at("regs").iter().map(|r| list![r.at("id"), r.at("type")]).collect::<Val>());
         a.set("state", "battle");
         a.set("battle", bt.at("id"));
-        if a.at("owner") != self.player.as_str() || a.get_or("tac_auto", true).truthy() {
-            self.choose_tactics(a, bt, si);
-        }
+        self.choose_tactics(a, bt, si);
         if a.at("owner") == self.player.as_str() {
             let pn = self.place_name(bt.atf("x"), bt.atf("y"));
             let t = format!("{} rejoint la bataille {}.", a.at("name"), pn);
             self.log("battle", &t, &dict! {"x" => bt.at("x"), "y" => bt.at("y"), "who" => a.at("owner")});
-        }
-    }
-
-    /// Réflexe du carré : une infanterie commandée à la main forme d'elle-même le carré quand les escadrons chargent.
-    /// Les vétérans le forment vite ; les conscrits tardent, et la manœuvre est le moment le plus dangereux.
-    /// Python : `square_reflex(self, bt, phase, cav_share, dt)`.
-    /// cav_share : liste [part de cavalerie du camp 0, du camp 1].
-    // engine.py, lignes 2853 à 2877
-    pub fn square_reflex(&mut self, bt: &Val, phase: &str, cav_share: &Val, dt: f64) {
-        if phase == "canonnade" {
-            return;
-        }
-        for si in 0..2i64 {
-            if cav_share.atf(1 - si) < 0.3 {
-                continue;
-            }
-            for aid in bt.at("sides").at(si).at("armies").iter() {
-                let a = self.armies.get(&aid);
-                if !a.truthy() || a.get_or("tac_auto", true).truthy() || !a.get_or("rx", true).truthy() || a.get("fm") == "carre" {
-                    continue;
-                }
-                let inf: Vec<Val> = a.at("regs").iter().filter(|r| Game::arm_class(r.at("type").s()) == "inf").collect();
-                if inf.is_empty() {
-                    continue;
-                }
-                let men = py::sum_v(inf.iter().map(|r| r.at("n"))).or(1.0).f();
-                let xp = somme(inf.iter().map(|r| &r.at("n") * &r.at("xp"))) / men;
-                let mor = somme(inf.iter().map(|r| &r.at("n") * &r.at("morale"))) / men;
-                if self.rng.random() < dt * 4.0 * (0.5 + xp / 100.0 + mor / 200.0) {
-                    a.set("fm", "carre");
-                    let k = xp / 100.0;
-                    a.set("fm_t", self.t - 0.1 * (if k < 0.8 { k } else { 0.8 })); // les vétérans se forment plus vite
-                    if a.at("owner") == self.player.as_str() && a.get("_rx_bt") != bt.at("id") {
-                        a.set("_rx_bt", bt.at("id"));
-                        let t = format!("Les escadrons chargent : l'infanterie de la {} forme le carré !", a.at("name"));
-                        self.log("battle", &t, &dict! {"x" => bt.at("x"), "y" => bt.at("y"), "who" => a.at("owner")});
-                    }
-                }
-            }
         }
     }
 
@@ -491,9 +450,7 @@ impl Game {
         bt.set("mor", list![100, 100]);
         for (si, lst) in [(0i64, att), (1, de)] {
             for a in lst.iter() {
-                if a.at("owner") != self.player.as_str() || a.get_or("tac_auto", true).truthy() {
-                    self.choose_tactics(&a, &bt, si);
-                }
+                self.choose_tactics(&a, &bt, si);
             }
         }
         self.battles.set(&bid, &bt);
@@ -679,8 +636,7 @@ impl Game {
         if si == 0 { "colonne" } else { "ligne" }
     }
 
-    /// Formation choisie par le général au début d'une bataille. Le plan de l'ancienne résolution (a['pl'], rules.PLANS)
-    /// a laissé la place à la stratégie du camp (strategie.rs : choose_strategy).
+    /// Formation choisie par le général au début d'une bataille (la stratégie du camp : strategie.rs, choose_strategy).
     /// Python : `choose_tactics(self, a, bt, si)`.
     // engine.py, lignes 3067 à 3089
     pub fn choose_tactics(&mut self, a: &Val, bt: &Val, si: i64) {
@@ -731,7 +687,7 @@ impl Game {
                 for si in 0..2i64 {
                     for aid in sides.at(si).at("armies").iter() {
                         let a = self.armies.get(&aid);
-                        if a.truthy() && (a.at("owner") != self.player.as_str() || a.get_or("tac_auto", true).truthy()) {
+                        if a.truthy() {
                             let fm = self.choose_formation(&a, &bt, si, phase);
                             if a.get("fm") != fm {
                                 a.set("fm", fm);
@@ -779,9 +735,7 @@ impl Game {
                 let tot = somme_ou_1(regs.iter().map(|r| r.at("n")));
                 cs[si as usize] = somme(regs.iter().filter(|r| R::arme_de(r.at("type").s()) == "cav").map(|r| r.at("n"))) / tot;
             }
-            let cav_share = list![cs[0], cs[1]];
-            bt.set("cav", &cav_share);
-            self.square_reflex(&bt, phase, &cav_share, dt);
+            bt.set("cav", list![cs[0], cs[1]]);
             let mut flank = [false, false];
             for si in 0..2i64 {
                 let su = si as usize;
@@ -1162,22 +1116,9 @@ impl Game {
         if w > 0.0 { tot / w } else { 0.0 }
     }
 
-    /// La bataille tactique de ce bid, sortie de son champ (TB.find : en cours, puis finie) : (où elle était, elle).
-    /// (bt['id'] n'est jamais vide : le cas `not bid` de find ne se présente pas.)
-    fn sortir_tac(&mut self, bid: &Val) -> (u8, Option<Box<TacticalBattle>>) {
-        TB::ensure(self);
-        if self.tactical.as_ref().is_some_and(|tb| *bid == tb.bid.as_str()) {
-            return (1, self.tactical.take());
-        }
-        if self.tac_done.as_ref().is_some_and(|tb| *bid == tb.bid.as_str()) {
-            return (2, self.tac_done.take());
-        }
-        (0, None)
-    }
-
-    /// Fin d'une bataille, automatique ou commandée (bridge.finish) : prise de la place (sauf décrochage), retraite du
-    /// vaincu (poursuivi s'il est rompu, en bon ordre s'il décroche ; il y perd des traînards : rules.LOSER_STRAGGLE),
-    /// prisonniers (ceux du champ de bataille pour une bataille commandée), lassitude et bilan des deux camps, journal.
+    /// Fin d'une bataille : prise de la place (sauf décrochage), retraite du vaincu (poursuivi s'il est rompu, en bon
+    /// ordre s'il décroche ; il y perd des traînards : rules.LOSER_STRAGGLE), prisonniers, lassitude et bilan des deux
+    /// camps, journal.
     /// Python : `end_battle(self, bt, winner, disengage=False)`.
     /// winner : 0 ou 1.
     // engine.py, lignes 3383 à 3535
@@ -1188,7 +1129,7 @@ impl Game {
         self.completer_strategies(bt); // (retraite ordonnée avant tout choix : le journal dit quand même les stratégies)
         self.journal_clore(bt);
         // poursuite : le choix du joueur (tac « pursue »), sinon celui du général vainqueur
-        let pursue = !bt.has("tac") && { let c = bt.get("pursue"); if c.is_some() { c.truthy() && self.poursuite_possible(bt, winner) } else { self.poursuite_ia(bt, winner) } };
+        let pursue = { let c = bt.get("pursue"); if c.is_some() { c.truthy() && self.poursuite_possible(bt, winner) } else { self.poursuite_ia(bt, winner) } };
         let pese = self.pese_final(bt);
         // prises : un drapeau par régiment vaincu anéanti, les canons des batteries perdues (comptés plus bas si le
         // vaincu est rompu ou chassé de sa place)
@@ -1207,11 +1148,11 @@ impl Game {
         }
         let sorts = list![]; // le sort des généraux : [camp, nom, 'blesse' | 'tue' | 'pris']
         let nd = sides.iter().map(|s| s.at("node")).find(|n| n.is_some()).unwrap_or(Val::None);
-        if nd.is_some() && !bt.has("tac") {
+        if nd.is_some() {
             let n = self.nodes.at(&nd);
-            self.damage_town(&n, R::DEG_ASSAUT); // (une bataille commandée a compté ses maisons : bridge.finish)
+            self.damage_town(&n, R::DEG_ASSAUT);
         }
-        // régiments restés sur le champ de bataille (bataille commandée ou non)
+        // régiments restés sur le champ de bataille
         let mut tous = W.at("armies").vec();
         tous.extend(L.at("armies").vec());
         for aid in &tous {
@@ -1261,7 +1202,6 @@ impl Game {
                 }
             }
         }
-        let tac_bt = bt.getb("tac");
         for si in 0..2i64 {
             for aid in sides.at(si).at("armies").iter() {
                 let a = self.armies.get(&aid);
@@ -1277,21 +1217,18 @@ impl Game {
                     let etats = gen.get_or("etats", list![]).copy();
                     etats.push(list![self.date_str(&Val::None), &gname, issue]);
                     gen.set("etats", etats.slice(Some(-12), None));
-                    if !tac_bt {
-                        // (une bataille commandée : le sort de l'état-major, bridge.finish)
-                        let assaut = sides.at(si).at("node").is_none() && sides.at(1 - si).at("node").is_some();
-                        let quoi = if si == winner || disengage { "victoire" } else { "defaite" };
-                        let sort = self.risques_general(&a, quoi, assaut);
-                        if sort.is_some() {
-                            sorts.push(list![si, gen.at("name"), &sort]);
-                        }
-                        if sort == "blesse" {
-                            self.blesser_general(&a, &Val::None);
-                        } else if sort == "tue" {
-                            self.tuer_general(&a);
-                        } else if sort == "pris" {
-                            self.capturer_general(&a, &sides.at(1 - si).at("owner"), true);
-                        }
+                    let assaut = sides.at(si).at("node").is_none() && sides.at(1 - si).at("node").is_some();
+                    let quoi = if si == winner || disengage { "victoire" } else { "defaite" };
+                    let sort = self.risques_general(&a, quoi, assaut);
+                    if sort.is_some() {
+                        sorts.push(list![si, gen.at("name"), &sort]);
+                    }
+                    if sort == "blesse" {
+                        self.blesser_general(&a, &Val::None);
+                    } else if sort == "tue" {
+                        self.tuer_general(&a);
+                    } else if sort == "pris" {
+                        self.capturer_general(&a, &sides.at(1 - si).at("owner"), true);
                     }
                 }
                 if si == winner {
@@ -1333,10 +1270,8 @@ impl Game {
                 } else {
                     // poursuite (rules.PURSUIT_*) : la cavalerie lancée aux trousses du vaincu en rattrape une part, le
                     // double s'il est rompu ; si le vainqueur tient le terrain, seuls les débris d'une armée rompue sont
-                    // ramassés (déjà faite sur le champ de bataille d'une ancienne bataille commandée)
-                    let mut pursuit = if tac_bt {
-                        0.0
-                    } else if pursue {
+                    // ramassés
+                    let mut pursuit = if pursue {
                         R::PURSUIT_CAV * (if disengage { 1.0 } else { 2.0 })
                     } else if disengage {
                         0.0
@@ -1363,7 +1298,7 @@ impl Game {
                     self.prune(&a);
                     if !a.atb("regs") {
                         // (armée anéantie : son général tombe, est pris, ou rentre blessé à la réserve)
-                        let sort = if !tac_bt { self.risques_general(&a, "aneantie", false) } else { Val::None };
+                        let sort = self.risques_general(&a, "aneantie", false);
                         if sort == "pris" {
                             self.capturer_general(&a, &W.at("owner"), false);
                         } else if sort != "tue" && a.getb("gen") && !a.at("gen").getb("interim") {
@@ -1381,25 +1316,10 @@ impl Game {
                 }
             }
         }
-        let tac = bt.get("tac"); // bataille menée à la main : ses prisonniers, déjà faits sur le champ de bataille
-        if tac.truthy() {
-            for si in 0..2i64 {
-                let (taker, n_) = (sides.at(1 - si).at("owner"), tac.at("prisoners").at(si));
-                if n_ > 0i64 && self.factions.has(&taker) {
-                    let pr = self.factions.at(&taker).setdefault("prisoners", dict! {});
-                    let o = sides.at(si).at("owner");
-                    pr.set(&o, &pr.get_or(&o, 0) + &n_);
-                }
-            }
-        }
         // (dans les rues d'une place, assaillants repoussés ou défenseurs cernés se rendent plus souvent)
-        let prisoners = if tac.truthy() {
-            tac.at("prisoners").at(loser)
-        } else {
-            let k = if bt.at("node").is_none() { R::PRISON_LOSS } else { R::PRISON_ASSAULT };
-            Val::from(py::int(L.atf("lost") * k + caught * R::PRISON_CAUGHT))
-        };
-        if prisoners > 0i64 && self.factions.has(&W.at("owner")) && !tac.truthy() {
+        let k = if bt.at("node").is_none() { R::PRISON_LOSS } else { R::PRISON_ASSAULT };
+        let prisoners = Val::from(py::int(L.atf("lost") * k + caught * R::PRISON_CAUGHT));
+        if prisoners > 0i64 && self.factions.has(&W.at("owner")) {
             let pr = self.factions.at(&W.at("owner")).setdefault("prisoners", dict! {});
             let o = L.at("owner");
             pr.set(&o, &pr.get_or(&o, 0) + &prisoners);
@@ -1455,13 +1375,7 @@ impl Game {
         }
         self.battles.pop(bt.at("id"));
         // journal des batailles (logs/)
-        let (ou, tb) = if tac_bt { self.sortir_tac(&bt.at("id")) } else { (0, None) };
-        BL::campaign_end(self, bt, winner, disengage, prisoners.f(), tb.as_deref());
-        match ou {
-            1 => self.tactical = tb,
-            2 => self.tac_done = tb,
-            _ => {}
-        }
+        BL::campaign_end(self, bt, winner, disengage, prisoners.f());
         let p = self.player.clone();
         let (wo, lo) = (W.ats("owner"), L.ats("owner"));
         if p == wo || p == lo || [&W, &L].iter().any(|s| self.friendly(&p, &s.ats("owner"))) {

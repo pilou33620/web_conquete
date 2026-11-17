@@ -36,8 +36,7 @@ use crate::geo::{GeoMap, TERRAIN, T_LANDE, T_MARAIS, T_PLAINE};
 use crate::py::{self, heapq, Random, Val};
 use crate::rails as RL;
 use crate::rules as R;
-use crate::tactics::battle::TacticalBattle;
-use crate::tactics::bridge as TB;
+use self::raccord as TB;
 use crate::turns as TT;
 use crate::{dict, list, py_const, pyset, tup};
 use indexmap::{IndexMap, IndexSet};
@@ -51,6 +50,7 @@ mod batailles;
 mod chemins;
 mod economie;
 mod prise;
+pub mod raccord;
 mod utilitaires;
 
 pub const SUBSTEP: f64 = 0.05; // jours
@@ -199,7 +199,7 @@ pub struct GeoFixe {
 
 /// `class Game`. Les attributs de `__init__`, les attributs de classe (`_cache_…`), ceux que engine.py pose en
 /// route (`getattr(self, …, défaut)` : ils ont ici leur défaut dès la création) et ceux que les autres fichiers
-/// lui posent (bridge, army_actions, cities, diplomacy, outils/simuler). Les attributs sauvegardés sont ceux de
+/// lui posent (raccord, army_actions, cities, diplomacy, outils/simuler). Les attributs sauvegardés sont ceux de
 /// `views::SAVE_KEYS`, plus `diplo` et `_blockade`.
 /// Les places de chaque camp, relevées d'un seul passage sur la carte (Game::owned) : bonnes tant qu'aucune clé
 /// « owner » n'a été écrite (`py::generation_owner`) et que `nodes` est la même liste, des mêmes dicts.
@@ -217,7 +217,7 @@ pub struct Proprios {
 
 pub struct Game {
     // caches de calcul (jamais sauvegardés) : date du jour, année et croissance séculaire du jour, chefs-lieux
-    /// (ordinal du jour, sa date) ; None : à refaire. (skirmish.py le remet à None : `g._cache_date.set(None)`.)
+    /// (ordinal du jour, sa date) ; None : à refaire.
     pub _cache_date: Cell<Option<(i64, Date)>>,
     /// (date, année décimale).
     pub _cache_year: Cell<Option<(Date, f64)>>,
@@ -322,15 +322,7 @@ pub struct Game {
     pub _forces: RefCell<Option<(i64, HashMap<String, f64, py::Fx>)>>,
 
     // ------------------------------------------------------------------ posés par les autres fichiers
-    /// bridge.py : la bataille tactique en cours (`g.tactical = {bid: tb}` en Python : une seule à la fois, sa clé
-    /// est `tb.bid`). On la sort de son champ le temps de la faire avancer avec la partie.
-    pub tactical: Option<Box<TacticalBattle>>,
-    /// bridge.py : la bataille tactique finie, gardée pour être relue (`g.tac_done = {bid: tb}`).
-    pub tac_done: Option<Box<TacticalBattle>>,
-    /// bridge.py : la bataille préparée pour le plan de la fenêtre de bataille, jamais enregistrée
-    /// (`g.tac_preview = {bid: tb}`).
-    pub tac_preview: Option<Box<TacticalBattle>>,
-    /// bridge.py : réglages du joueur, dict(battles=…) ; None avant TB.ensure.
+    /// raccord.rs : réglages du joueur, dict(battles=…) ; None avant TB::ensure.
     pub settings: Val,
     /// army_actions.py (tick) : temps écoulé depuis le dernier quart de jour.
     pub _aa_dt: f64,
@@ -401,9 +393,6 @@ impl Game {
             _att_dt: 0.0,
             _slow_dt: 0.0,
             _forces: RefCell::new(None),
-            tactical: None,
-            tac_done: None,
-            tac_preview: None,
             settings: Val::None,
             _aa_dt: 0.0,
             _aa_day: -1,
@@ -578,7 +567,7 @@ impl Game {
             g.recompute_mods(code);
         }
         g.era_id = g.era().at("id");
-        TB::ensure(&mut g); // batailles tactiques : réglage, bataille en cours
+        TB::ensure(&mut g); // batailles : le réglage du joueur
         g.pending_ev = list![]; // décisions qui attendent le joueur
         g.tour = TT::new_state(true); // tour par tour, mois par mois (game/turns.py)
         g.rails = dict! {}; // voies ferrées : {tronçon: dict(done, cut[, by, left, total])} (game/rails.py)

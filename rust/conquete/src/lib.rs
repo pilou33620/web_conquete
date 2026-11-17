@@ -14,12 +14,13 @@ pub mod diplomacy;
 pub mod engine;
 pub mod events;
 pub mod familles;
+pub mod fiche;
 pub mod geo;
 pub mod places;
 pub mod rails;
 pub mod rules;
 pub mod serveur;
-pub mod tactics;
+
 pub mod turns;
 pub mod views;
 pub mod waterways;

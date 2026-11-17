@@ -1,7 +1,7 @@
 # Spec : la bataille par stratégie (16/11/2026)
 
-État : **moteur fait le 16/11/2026** (lot 1). La page (animation sur l'hexagone, fenêtres) est le lot 2 : elle se lit
-sur le contrat de la fin de ce document.
+État : **moteur fait le 16/11/2026** (lot 1) ; l'ancien champ de bataille tactique est supprimé depuis le 17/11/2026
+(dernière section). La page (animation sur l'hexagone, fenêtres) est le lot 2 : elle se lit sur le contrat plus bas.
 
 ## Décision du joueur
 
@@ -17,14 +17,14 @@ Le moteur réglait déjà seul les batailles sans le joueur (`engine/batailles.r
 
 | # | Point | Existait (où) | Repris | Ajouté |
 |---|---|---|---|---|
-| 1 | Plus de bataille tactique | Modes « ordres » et « manuel » (`tactics/bridge.rs` `command`), mode Bataille (`tactics/skirmish.rs`, `/api/skirmish`, `/api/tactic`, `/api/tactic_map`), réglage `settings.battles` (demander, auto, auto_petites) | Le réglage ; l'attente du choix (`mode: "attente"`, la campagne figée : `bridge::frozen`) | Les modes et les routes sont refusés ; une sauvegarde avec bataille tactique redemande la stratégie (`bridge::load_from`, `views::migrate`) |
+| 1 | Plus de bataille tactique | Modes « ordres » et « manuel » (`tactics/bridge.rs` `command`), mode Bataille (`tactics/skirmish.rs`, `/api/skirmish`, `/api/tactic`, `/api/tactic_map`), réglage `settings.battles` (demander, auto, auto_petites) | Le réglage ; l'attente du choix (`mode: "attente"`, la campagne figée : `raccord::frozen`) | Les modes et les routes sont refusés ; une sauvegarde avec bataille tactique redemande la stratégie (`raccord::load_from`, `views::migrate`) |
 | 2 | Cinq armes | Trois classes (`rules.UNIT_CLS` : inf, cavalerie, artillerie) et `LIGHT_UNITS` (légère, chasseurs) | Les classes (armement, vulnérabilités `unit_vul`) | `rules.ARMES`, `ARME_DE`, `arme_de` : légère et chasseurs sont les **tirailleurs**, les **grenadiers** une arme à part (ajout du 16/11/2026) ; effectifs par arme dans les vues |
 | 3 | Situations | Place ou non (`bt['node']`), remparts (`n['fort']`), ouvrages provisoires (`army_actions` : barricades, redoutes, `works_level`), posture « retranchée » d'une armée (+20 %) | Tout | `engine::situation` (campagne, position, ville, fort), `ouvrage` ; `rules.SITUATIONS` |
 | 4 | Stratégies | Cinq plans par armée (`rules.PLANS`, `a['pl']`, `choose_tactics`), formations par phase (`choose_formation`) | Les formations (la stratégie les commande : carrés, colonnes) ; les effets des plans passent dans les stratégies (préparation d'artillerie, débordement en terrain ouvert, tenir, harcèlement qui décroche au bout d'un jour) | `rules.STRATS` (20 stratégies, contres +20 % `CONTRE`, découverte exigée), par camp (`side['strat']`) ; choix du joueur (`tac choose`), des IA (`choose_strategy`) |
 | 5 | Phases, journal | Trois phases selon l'âge de la bataille et le moral (`battle_phase`, `rules.PHASES`, `PHASE_W`) ; un journal technique dans `logs/` (`battle_log.rs`) | Les phases et leur durée | L'**escarmouche** (premier dixième de jour) ; poids par arme (`PHASE_W`) ; journal par phase dans la bataille (`bt['journal']`), rendu avec le résultat |
 | 6 | Technologies | Armement par régiment (`rules.ARMS` : ×0,85 à ×2,05 pour les fusils, ×0,85 à ×2,3 pour les canons), manœuvres (`MANEUVERS`, `REG_KEYS` : feu de rang +12 %, feu de peloton, ordre mixte, hussards, cuirassiers, artillerie à cheval, voltigeurs…) | Tout, sans changer les chiffres : l'armement fait déjà de gros écarts | `rules.TECH_ARME` (les découvertes de chaque arme, citées au journal) ; l'ordre mixte ouvre « Attaque en colonnes » |
 | 7 | Terrain | `geo.TERRAIN` (bonus de défense : forêt +10 %, collines +15 %, montagne +30 % ; couvert), terrain par sorte de régiment (`UNITS[..]['terrain']` : légère ×1,3 en forêt, cavalerie ×0,55 en forêt, ×1,0 en vignoble contre ×1,4 en plaine), rivière à franchir (assaillant −15 %), débarquement | Tout | Rien de chiffré ; le journal le dit (`pese_depart`) |
-| 8 | Temps, moral, fatigue | Feu selon le temps (`rules.WEATHER` : pluie ×0,75, neige ×0,8, brouillard ×0,85), boue (`mud_k`, marche), moral et expérience dans `reg_power`, fatigue et munitions (`bridge::reg_k`, `army_tick`), ravitaillement (×0,75 à ×1), moral plancher après une défaite | Tout | La charge freinée par la boue (`BOUE_CHARGE` ×0,8) et la neige (`NEIGE_CHARGE` ×0,85) ; le brouillard sert les embuscades (`BROUILLARD_EMBUS` ×1,15) et gêne la reconnaissance |
+| 8 | Temps, moral, fatigue | Feu selon le temps (`rules.WEATHER` : pluie ×0,75, neige ×0,8, brouillard ×0,85), boue (`mud_k`, marche), moral et expérience dans `reg_power`, fatigue et munitions (`raccord::reg_k`, `army_tick`), ravitaillement (×0,75 à ×1), moral plancher après une défaite | Tout | La charge freinée par la boue (`BOUE_CHARGE` ×0,8) et la neige (`NEIGE_CHARGE` ×0,85) ; le brouillard sert les embuscades (`BROUILLARD_EMBUS` ×1,15) et gêne la reconnaissance |
 | 9 | Renforts, reconnaissance | Une armée amie à moins de 3 km d'une bataille la rejoint (`detect_contacts`, `join_battle`) ; espions (`intel_active`), hussards, général éclaireur | `join_battle` ; les espions | `engine::renforts` : à la charge, les armées amies libres à moins de `RENFORT_KM` (8 km, deux hexagones) entrent en ligne ; `engine::reconnaissance` (`RECO_*`) |
 | 10 | Après la bataille | Poursuite automatique d'un vaincu rompu (`PURSUIT_CAV`, `PURSUIT_FOOT`), prisonniers (`PRISON_*`, échange et rachat : `diplomacy`), sort et expérience du général (`risques_general`, `general_xp`, SPEC-GENERAUX.md), +8 d'expérience aux régiments vainqueurs | Tout | Le **choix** de la poursuite (`tac pursue`, `POURSUITE_FAT`) ; **prises** : drapeaux et canons au prestige (`PRISE_CANONS`, `PRESTIGE_*`) ; +3 d'expérience aux vaincus survivants |
 | 11 | Sièges | Fenêtre d'arrivée devant une place (`army_actions::ask_choices`, `choose`) : assiéger (brèche au canon, `update_sieges`), bloquer (`blockade`, famine `blockade_tick`), assaut ; reddition d'une place affamée | Tout | Le choix « assaut » remplace « ordres », « manuel », « auto » ; à la reddition, **la garnison sort avec les honneurs** et se replie (ses hommes sont sauvés) |
@@ -81,8 +81,8 @@ un bonus de plus les aurait doublés.
 - `skirmish` n'existe plus. `rules` gagne : `armes` `{inf, cav, art, tir, grenadiers → libellé}`, `arme_de` `{sorte de régiment →
   arme}`, `strats` `{id → {label, desc, m: {arme → ×}, pertes, bat: [ids], tech: id | null}}`, `situations` `{campagne |
   position | ville | fort → {label, att, def, desc, s_att: [ids], s_def: [ids]}}`, `contre` (1.2), `phase_w`,
-  `tech_arme`, `renfort_km`, `poursuite` `{cav, fatigue}`. `phases` a quatre entrées, dans l'ordre. `plans` n'a plus
-  cours (encore envoyé, à retirer avec l'ancienne page) ; `formations` ne sert plus qu'à nommer la formation.
+  `tech_arme`, `renfort_km`, `poursuite` `{cav, fatigue}`. `phases` a quatre entrées, dans l'ordre. `plans` n'est plus
+  envoyé ; `formations` ne sert plus qu'à nommer la formation.
 
 ### `/api/state`
 - `tac` n'existe plus. `settings.battles` : `demander` | `auto` | `auto_petites` (inchangé).
@@ -117,11 +117,29 @@ un bonus de plus les aurait doublés.
 
 ## Suite
 
-- Supprimer le module `tactics` (20 000 lignes) : il n'est plus appelé en jeu, mais `bridge.rs` porte encore les
-  munitions et la fatigue de campagne (`reg_k`, `march_k`, `army_tick`, `campaign_tick`, `auto_battle_tick`), le réglage
-  des batailles, `on_battle_start`, `en_attente`, `command` : à déplacer d'abord dans `engine`. Avec lui : les binaires
-  `banc_ia` et `bataille_hex`, les essais `bancs_bataille`, `batailles`, `plans`, `pont`, `terrain`, `terrain_ville`,
-  `unites`, `bancs_plans`, `bancs_abris`, les escarmouches de `campagnes.rs`, et leurs références.
-- Retirer `rules.PLANS`, `a['pl']`, `a['tac_auto']`, `a['rx']`, `square_reflex` (plus jamais déclenché), les champs
-  `Game.tactical`, `tac_done`, `tac_preview`, et `rules.formations` / `plans` de `/api/map` quand la page ne les lit plus.
+- `rules.formations` de `/api/map` : à retirer quand la page ne le lit plus (`ui.js` et `map.js` y prennent encore le
+  libellé de la formation).
+- Trois technologies n'avaient d'effet que sur le champ de bataille tactique et n'en ont plus : les aérostiers (`balloon`,
+  hors leur vision de campagne), les retranchements de campagne (`entrench`) et les obus à la mélinite (`shell`). À
+  reprendre dans la bataille par stratégie, ou à retirer de l'arbre (`tests/bancs_campagne.rs`,
+  `chaque_effet_est_lu_par_le_moteur`, les excuse en attendant).
 - « L'armée qui poursuit s'éloigne » : seule la fatigue est comptée ; elle ne quitte pas son hexagone.
+
+## Suppression du champ de bataille tactique (17/11/2026)
+
+Le module `tactics` (23 000 lignes : carte de bataille, unités, IA de combat, ordres, mode Bataille) est supprimé, avec
+les binaires `banc_ia` et `bataille_hex`, ses essais et leurs références. Ce qui servait encore à la campagne a changé
+de place, sans changer de comportement :
+
+- `engine/raccord.rs` (l'ancien `tactics/bridge.rs`) : réglage `settings.battles`, attente du joueur (`en_attente`,
+  `frozen`, `on_battle_start`), munitions et fatigue de campagne (`reg_k`, `march_k`, `army_tick`, `campaign_tick`,
+  `auto_battle_tick`), sauvegarde et migration (`save_into`, `load_from`, `migrate`), `on_speed`, commande `tac`
+  (`settings`, `choose`, `pursue`) ;
+- `fiche.rs` (les anciens `tactics/stats.rs` et, pour ce qu'il en lisait, `tactics/units.rs`) : la fiche chiffrée des
+  régiments envoyée à la page (`stats`, `ranges`, `unit_name`).
+
+Retirés avec lui : `rules.PLANS` et `plans` de `/api/map`, `square_reflex`, les champs `Game.tactical`, `tac_done`,
+`tac_preview`, les réglages d'armée `pl`, `tac_auto`, `rx`, la clé `tactical` des sauvegardes, la clé `plan` du journal
+des batailles (`logs/`). Une ancienne sauvegarde se charge toujours : sa bataille tactique n'est pas relue (la bataille
+de campagne redemande une stratégie) et les anciens réglages d'armée sont retirés au chargement
+(`tests/bancs_strategie.rs`, `une_ancienne_sauvegarde_se_charge…` ; `tests/tours.rs`, le cas « joueur »).

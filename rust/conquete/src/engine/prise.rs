@@ -1133,12 +1133,9 @@ impl Game {
         b.set("onroad", a.at("onroad"));
         b.set("edge", if a.atb("edge") { a.at("edge").copy() } else { Val::None });
         b.set("fm", a.get_or("fm", "ligne"));
-        b.set("pl", a.get_or("pl", "frontal"));
-        b.set("tac_auto", a.get_or("tac_auto", true));
         b.set("stance", a.at("stance"));
         b.set("supply", a.at("supply"));
         b.set("mp", a.get("mp"));
-        b.set("rx", a.get_or("rx", true));
         b.set("hold", a.get_or("hold", false)); // (détachée d'une armée en halte devant une place : en halte aussi)
         if a.at("state") == "siege" {
             b.set("state", "siege");

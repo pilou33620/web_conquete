@@ -27,7 +27,6 @@ use conquete::geo::GeoMap;
 use conquete::py::{json, Val};
 use conquete::rails as RL;
 use conquete::serveur::{self as SV, App, Reseau, AUTOSAVE};
-use conquete::tactics::terrain as TR;
 use conquete::views as V;
 use conquete::{dict, list};
 use fabrique_campagne::{armee, geo, partie, GEO};
@@ -409,7 +408,7 @@ fn une_ancienne_sauvegarde_garde_sa_carte() {
         .map(|c| u16::from_ne_bytes([c[0], c[1]]))
         .map(|v| if v == 0xFFFF { 255 } else { u8::try_from(v).expect("ValueError: bytes must be in range(0, 256)") })
         .collect();
-    p.set("cellnode", TR::b64(&octets));
+    p.set("cellnode", conquete::geo::b64encode(&octets));
     let texte = json::dumps_avec(&list![&p, RL::client_payload(&ancienne)], json::Ecriture { ascii: true, sort_keys: true, ..Default::default() });
     let mut h = Sha1::new();
     h.update(texte.as_bytes());

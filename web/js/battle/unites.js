@@ -1,6 +1,6 @@
-// Vue tactique : petites figurines peintes (fantassin, cavalier, pièce, caisson) des cartes d'unités de la barre du
-// bas, en cache (par camp, habit, type, sens, pose et taille en pixels physiques : nettes sur un écran Retina), bornées en
-// mémoire par la qualité. Les régiments du champ de bataille : troupes2d.js, leurs fanions : fanions.js.
+// Petites figurines peintes (fantassin, cavalier, pièce, caisson) des cartes de régiment et des armées de la carte,
+// en cache (par camp, habit, type, sens, pose et taille en pixels physiques : nettes sur un écran Retina), bornées en
+// mémoire par la qualité (qualite.js).
 import { TAU, TILT, OMBRE, mixHex, uniform } from './formes.js';
 
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', BRONZE = '#b08a3e', GOLD = '#d6b65a';
@@ -43,8 +43,6 @@ export class UnitArt {
     this.q = q;
     this.year = 1800;   // année de la bataille (coiffures) ; la vue la donne d'après la carte
   }
-  setQuality(q) { this.q = q; this.trim(); }
-  setYear(y) { if (y && y !== this.year) { this.year = y; this.clear(); } }
   clear() { for (const s of this.sprites.values()) s.cv.width = s.cv.height = 0; this.sprites.clear(); this.bytes = 0; }
   trim() {
     for (const [k, s] of this.sprites) {

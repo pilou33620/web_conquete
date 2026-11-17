@@ -11,8 +11,6 @@
 use super::*;
 use crate::ai::AI;
 use crate::diplomacy as D;
-use crate::tactics::bridge as TB;
-use crate::tactics::units as U;
 
 /// Le nom du terrain en (x, y) d'un lieu : `TERRAIN[g.geo.terrain_at(gn['x'], gn['y'])][0]`.
 fn terrain_name(g: &Game, gn: &Val) -> String {
@@ -636,7 +634,7 @@ pub fn relever(g: &mut Game, code: &str, a: &Val) -> (bool, String) {
         if ids.has(r.at("id")) {
             // le nom que lui donnera la bataille
             let rang = 1 + regs[..i].iter().filter(|q| q.at("type") == r.at("type")).count() as i64;
-            nms.push(U::unit_name(Some(&*g), &Val::from(code), r.at("type").s(), rang));
+            nms.push(crate::fiche::unit_name(g, &Val::from(code), r.at("type").s(), rang));
         }
     }
     let (_ok, msg) = rangs(g, code, a, true);

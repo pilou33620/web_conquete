@@ -1,4 +1,4 @@
-// Figurines « douces » des maquettes (carte-douce.html, bataille-douce.html) : soldats du XVIIIe siècle en volumes simples,
+// Figurines « douces » des maquettes (carte-douce.html) : soldats du XVIIIe siècle en volumes simples,
 // couleurs par sommet, une géométrie fusionnée par sorte de figurine (pour des InstancedMesh).
 // Repère : la figurine regarde vers +x, y vers le haut, en mètres (un homme : 1,75 m).
 import * as THREE from 'three';

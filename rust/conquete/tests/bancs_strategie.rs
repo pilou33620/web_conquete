@@ -14,7 +14,7 @@ use conquete::diplomacy as D;
 use conquete::engine::{Game, SUBSTEP};
 use conquete::py::{self, json, Val};
 use conquete::rules as R;
-use conquete::tactics::bridge as TB;
+use conquete::engine::raccord as TB;
 use conquete::turns as TT;
 use conquete::views as V;
 use conquete::{dict, list};
@@ -960,7 +960,10 @@ fn une_ancienne_sauvegarde_se_charge_et_ses_batailles_finissent_par_strategie() 
     vieille.set("tac", dict! {"prisoners" => list![0, 0]});
     d.set("tactical", dict! {bid.s() => dict! {"bid" => &bid, "phase" => "combat", "units" => list![]}});
     for a in d.at("armies").values() {
-        a.set("pl", "debordement"); // (l'ancien plan : ignoré)
+        // (les anciens réglages du champ de bataille : retirés au chargement)
+        a.set("pl", "debordement");
+        a.set("tac_auto", false);
+        a.set("rx", true);
     }
     for s in d.at("sites").iter() {
         s.pop("n");
@@ -969,7 +972,8 @@ fn une_ancienne_sauvegarde_se_charge_et_ses_batailles_finissent_par_strategie() 
         s.pop("d");
     }
     let mut g2 = V::from_dict(GEO(), &d).expect("la sauvegarde se charge");
-    assert!(g2.tactical.is_none(), "la bataille tactique n'est pas relue");
+    assert!(g2.armies.values().iter().all(|a| !a.has("pl") && !a.has("tac_auto") && !a.has("rx")), "anciens réglages retirés");
+    assert!(!V::to_dict(&mut g2).has("tactical"), "la bataille tactique n'est ni relue ni réécrite");
     let bt2 = g2.battles.at(&bid);
     assert_eq!((bt2.at("mode"), bt2.at("sit")), (Val::from("attente"), Val::from("campagne")));
     assert!(!bt2.has("tac") && bt2.at("sides").at(1).at("strat").is_some() && bt2.at("sides").at(0).at("strat").is_none());

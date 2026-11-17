@@ -16,7 +16,7 @@ use conquete::engine::Game;
 use conquete::geo::GeoMap;
 use conquete::py::{self, json, Random, Val};
 use conquete::rails as RL;
-use conquete::tactics::bridge as TB;
+use conquete::engine::raccord as TB;
 use conquete::turns as TT;
 use conquete::views as V;
 use conquete::{dict, list};
@@ -294,7 +294,7 @@ fn jouer(g: &mut Game, op: &Val) -> Val {
         }
         // journal des batailles
         "snapshot" => BL::snapshot(g, &g.battles.at(arg(0))),
-        "tactical" => g.tactical.as_deref().map_or(Val::None, BL::tactical),
+        "tactical" => Val::None, // (le journal d'une bataille tactique : il n'y en a plus, SPEC-BATAILLE.md)
         _ => panic!("opération inconnue : {nom}"),
     }
 }

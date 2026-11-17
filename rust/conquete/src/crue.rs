@@ -8,7 +8,6 @@
 
 use crate::geo::GeoMap;
 use crate::py::{self, Val};
-use crate::tactics::jsmath;
 use crate::{dict, list, tup};
 
 pub const DELAY: f64 = 1.0;  // jours : passer la partie noyée d'une route coupée, à gué ou par un détour (quelle que soit sa longueur)
@@ -185,7 +184,8 @@ pub fn _rayon(n: &Val) -> f64 {
     let v = 2.1 * p.sqrt() - 36.0;
     let v = if 20.0 >= v { 20.0 } else { v };
     let v = if 262.0 <= v { 262.0 } else { v };
-    jsmath::jround(v / 4.0) as f64 * 4.0 / 180.0
+    let (q, f) = (v / 4.0, (v / 4.0).floor());
+    (if q - f >= 0.5 { f + 1.0 } else { f }) * 4.0 / 180.0 // (Math.round : au plus proche, les moitiés vers +∞)
 }
 
 /// {arête : [(début, fin) en km le long de son tracé, …]} : les routes que la crue coupe.

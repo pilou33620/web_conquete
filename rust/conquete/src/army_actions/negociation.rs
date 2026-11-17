@@ -10,8 +10,6 @@
 use super::*;
 use crate::ai::AI;
 use crate::diplomacy as D;
-use crate::tactics::bridge as TB;
-use crate::tactics::units as U;
 
 /// Les arguments `x, y, who` de `g.log` pris à l'armée a (`a['x'], a['y']`).
 fn chez(a: &Val, who: impl Into<Val>, important: bool) -> Val {

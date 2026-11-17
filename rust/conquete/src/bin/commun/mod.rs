@@ -1,6 +1,5 @@
-//! Ce que les outils (banc_ia, simuler, bilan, carte_hex, bataille_hex) ont en commun : la ligne de commande (comme
-//! argparse), la carte, les parties jouées sur plusieurs fils (à la place de multiprocessing.Pool) et le temps de calcul
-//! d'un fil (time.process_time d'un processus du Pool). Inclus par chaque outil (`mod commun;`).
+//! Ce que les outils (simuler, bilan) ont en commun : la ligne de commande (comme argparse), la carte, les parties
+//! jouées sur plusieurs fils (à la place de multiprocessing.Pool). Inclus par chaque outil (`mod commun;`).
 #![allow(dead_code)]
 
 use conquete::geo::GeoMap;
@@ -103,31 +102,3 @@ pub fn message(p: &(dyn std::any::Any + Send)) -> String {
     p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_else(|| "panique".to_string())
 }
 
-/// `time.process_time()` d'un processus du Pool : le temps de calcul de ce fil, en secondes.
-#[cfg(target_os = "linux")]
-pub fn cpu() -> f64 {
-    #[repr(C)]
-    struct Timespec {
-        s: std::ffi::c_long,
-        ns: std::ffi::c_long,
-    }
-    extern "C" {
-        fn clock_gettime(horloge: i32, t: *mut Timespec) -> i32;
-    }
-    const CLOCK_THREAD_CPUTIME_ID: i32 = 3;
-    let mut t = Timespec { s: 0, ns: 0 };
-    unsafe { clock_gettime(CLOCK_THREAD_CPUTIME_ID, &mut t) };
-    t.s as f64 + t.ns as f64 * 1e-9
-}
-
-/// shortcut: hors de Linux, le temps écoulé (pas le temps de calcul du fil) ; à remplacer si le banc y sert.
-#[cfg(not(target_os = "linux"))]
-pub fn cpu() -> f64 {
-    static T0: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
-    T0.get_or_init(std::time::Instant::now).elapsed().as_secs_f64()
-}
-
-/// `s[:n]` d'un texte (en caractères).
-pub fn tronque(s: &str, n: usize) -> String {
-    s.chars().take(n).collect()
-}

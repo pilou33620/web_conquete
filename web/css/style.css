@@ -288,7 +288,7 @@ span.turn-why { padding: 8px 10px; }
 #bubble .seg.conduct button { flex: 1; }
 #bubble .bh { font-size: 12.5px; line-height: 1.25; color: var(--papier-2); opacity: .85; max-width: 250px; padding: 0 4px; }
 /* tutoriel de la campagne (tuto.js) : au-dessus de la carte et des panneaux, sous la bulle de marche, les messages
-   et les fenêtres ; caché pendant une bataille */
+   et les fenêtres */
 #tuto { position: fixed; z-index: 29; padding: 12px 14px 10px; background: rgba(36,39,42,.97); border: 1px solid var(--laiton); border-radius: 10px;
   box-shadow: 0 8px 26px var(--ombre); font-size: 15.5px; line-height: 1.35; animation: toast-in .3s ease-out; }
 #tuto p { margin: 0 0 8px; }
@@ -298,7 +298,6 @@ span.turn-why { padding: 8px 10px; }
   border-right: 1px solid var(--laiton); border-bottom: 1px solid var(--laiton); transform: rotate(45deg); }
 #tuto.up::after { bottom: auto; top: -8px; transform: rotate(225deg); }
 #tuto.free::after { display: none; }
-body.en-bataille #tuto { display: none; }
 .tuto-n { position: absolute; left: 14px; bottom: 18px; font-size: 12.5px; color: var(--papier-2); }
 #tooltip { position: absolute; z-index: 50; background: var(--nuit); border: 1px solid var(--hair); border-radius: 6px; padding: 7px 10px; font-size: 14px;
   max-width: 300px; pointer-events: none; box-shadow: 0 4px 14px var(--ombre); }
@@ -621,7 +620,6 @@ body.modal-event #proposals { display: none; }   /* une décision à prendre : l
   animation: in-titre 1.8s ease-out 9.2s both; }
 @keyframes in-titre { from { opacity: 0; transform: scale(1.15); letter-spacing: .3em; } to { opacity: 1; transform: none; } }
 .in-passer { position: absolute; right: 16px; bottom: calc(11vh + 10px); font-size: 14px; color: var(--papier-2); opacity: .7; }
-/* le plan de la position ennemie, dans la fenêtre de bataille (plan.js) */
 /* la bataille par stratégie (strategie.js) : les deux camps, leurs armes, les stratégies, le journal */
 .ic-arme { width: 1.15em; height: 1.15em; vertical-align: -0.2em; }
 .bt-forces { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }

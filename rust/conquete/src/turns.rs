@@ -39,7 +39,7 @@ use crate::crue as CR;
 use crate::engine::{Date, Game, SUBSTEP};
 use crate::py::{self, Val};
 use crate::rules as R;
-use crate::tactics::bridge as TB;
+use crate::engine::raccord as TB;
 use crate::{dict, list, py_const, pyset, tup};
 
 /// `round(v, n)` d'une valeur : un entier reste un entier, comme en Python (aide du portage).
@@ -669,7 +669,7 @@ pub fn watch(g: &mut Game, dt: f64, seq0: i64) {
 }
 
 /// La raison de l'arrêt a disparu (bataille réglée ou jouée, décision prise) : le tour des IA peut reprendre seul.
-/// (Game.advance ne vient pas jusqu'ici tant qu'une bataille attend le joueur ou se livre sur le champ de bataille.)
+/// (Game.advance ne vient pas jusqu'ici tant qu'une bataille attend le joueur.)
 /// Python : `_settled(g)`.
 // game/turns.py, lignes 460 à 475
 pub fn _settled(g: &Game) -> bool {

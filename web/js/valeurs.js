@@ -14,7 +14,6 @@ export const VALEURS = [   // clé, nom, abrégé, aide
   ['dis', 'Discipline', 'Disc.', 'Tenue sous le feu : le moral perdu à chaque homme tombé est divisé d’autant. Le général tout proche aide encore.'],
   ['car', 'Former le carré', 'Carré', 'Secondes pour former le carré devant la cavalerie (l’expérience et l’ordre mixte l’abrègent).'],
 ];
-const SANS_BARRE = new Set(['rec', 'por', 'jus', 'mun', 'vit', 'car']);
 const num = (x, d = 0) => d ? x.toFixed(d).replace('.', ',').replace(/^-/, '−') : fmt(x);
 const sg = (x, d) => (x > 0 ? '+' : '−') + num(Math.abs(x), d);
 
@@ -25,17 +24,6 @@ export function valeur(k, v) {
   if (k === 'jus') return `${fmt(v)} m`;
   const d = k === 'vit' ? 1 : 0, u = k === 'rec' || k === 'car' ? ' s' : '';
   return `${num(v[0] + v[1] + v[2], d)}${u}${v[1] ? `<small class="vl-x" title="Expérience">${sg(v[1], d)}</small>` : ''}${v[2] ? `<small class="vl-g" title="Général">${sg(v[2], d)}</small>` : ''}`;
-}
-
-// fiche d'un régiment (bataille) : nom, barre (base en papier, expérience en laiton, général en vert), valeur ;
-// la barre pleine vaut 80 (un vétéran de cavalerie en mêlée, un fusil rayé de vétérans)
-export function valeursHtml(s) {
-  if (!s) return '';
-  return `<div class="vl" aria-label="Valeurs du régiment">${VALEURS.filter(([k]) => s[k] != null).map(([k, nom, , aide]) => {
-    const v = s[k], bar = SANS_BARRE.has(k) ? '<span></span>'
-      : `<span class="vl-b">${v.map((x, i) => `<i class="${['', 'x', 'g'][i]}" style="width:${Math.max(0, Math.min(100, x / 0.8))}%"></i>`).join('')}</span>`;
-    return `<span class="vl-n" title="${esc(aide)}">${nom}</span>${bar}<span class="vl-v">${valeur(k, v)}</span>`;
-  }).join('')}</div>`;
 }
 
 // tableau comparatif (campagne) : rows = [[nom, valeurs], …] ; « — » quand l'arme n'a pas cette valeur ; la portée

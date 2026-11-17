@@ -1,10 +1,10 @@
 // Le moteur du rendu en plateau d'hexagones (SPEC-HEX.md), repris de web_power (js/03-moteur-3d.js) puis passé au
-// rendu « doux » (maquettes dev/carte-douce.html et dev/bataille-douce.html, validées le 14/11/2026) : ombrage lisse,
+// rendu « doux » (maquette dev/carte-douce.html, validée le 14/11/2026) : ombrage lisse,
 // plus de contours sombres, tuiles au bord biseauté et aux teintes nuancées, volumes ronds, lots de pièces fusionnés
 // en un seul maillage. La scène vit SOUS le canevas 2D du jeu : la caméra est orthographique, inclinée d'un angle fixe,
 // et calée sur la caméra 2D ({x, y, z} : centre en unités du jeu, z en pixels CSS par unité), si bien que le sol se
 // projette par une simple affinité : sx = (x − cx)·z + vw/2, sy = (y − cy)·z·K + vh/2 − h·z·C. Les calques 2D (vie,
-// armées, interface) dessinent avec ce même K (map.js, battle/vue.js) et tombent pile sur le plateau.
+// armées, interface) dessinent avec ce même K (map.js) et tombent pile sur le plateau.
 import * as THREE from '../../vendor/three/three.module.js';
 
 export { THREE };
@@ -31,9 +31,6 @@ export const entre = (a, b) => a + rnd() * (b - a);
 export const choix = l => l[(rnd() * l.length) | 0];
 
 // ------------------------------------------------------------------ matériaux
-const degrade = new THREE.DataTexture(new Uint8Array([105, 190, 255]), 3, 1, THREE.RedFormat);
-degrade.minFilter = degrade.magFilter = THREE.NearestFilter; degrade.needsUpdate = true;
-export const DEGRADE = degrade;
 export const MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0 });
 // (le matériau des contours d'avant : plus rien ne s'en sert depuis le rendu doux, put ne fait plus de contour)
 export const CONT = new THREE.MeshBasicMaterial({ color: 0x24180f, side: THREE.BackSide });
@@ -231,8 +228,6 @@ export class Scene3D {
     this.sale = true; this.cle = '';
     this.vers = [-0.9, 1.6, -0.55];   // d'où vient le soleil (x vers l'est, y vers le haut, z vers le sud) : du nord-ouest
   }
-  // tourne le soleil (hex/champ.js, heure) ; les ombres suivent à la prochaine image
-  soleilVers(x, y, z) { this.vers = [x, y, z]; this.cle = ''; }
   // cale la caméra 3D sur la caméra 2D : cam {x, y, z}, écran vw × vh (pixels CSS), dpr
   caler(cam, vw, vh, dpr) {
     const w = Math.round(vw * dpr), h = Math.round(vh * dpr);

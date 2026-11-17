@@ -1,6 +1,6 @@
 //! Journal des batailles, pour régler l'équilibre : une ligne JSON par bataille dans logs/batailles.jsonl.
 //!
-//! Toutes les batailles y passent : résolues automatiquement (y compris entre IA), commandées, et celles du mode Bataille.
+//! Toutes les batailles de campagne y passent (y compris entre IA).
 //! Chaque ligne donne le contexte (date, saison, météo, terrain, place et fortification), les forces des deux camps au
 //! début, le déroulement (durée, brèches ouvertes au canon) et le résultat (vainqueur, pertes, prisonniers, prise de la
 //! place). outils/bilan.py en tire des tableaux. Le journal ne doit jamais gêner la partie : une erreur d'écriture est
@@ -15,7 +15,6 @@ use crate::army_actions as AA;
 use crate::engine::Game;
 use crate::py::{self, json, Val};
 use crate::rules as R;
-use crate::tactics::battle::TacticalBattle;
 use crate::{dict, list};
 use std::io::Write;
 use std::path::PathBuf;
@@ -114,7 +113,6 @@ pub fn snapshot(g: &Game, bt: &Val) -> Val {
                     let gen = a.at("gen");
                     d.at("gens").push(list![gen.get("trait"), gen.get_or("lvl", 1)]);
                 }
-                d.set("plan", a.get("pl"));
                 d.set("fm", a.get("fm"));
             }
             if s.at("node").is_some() {
@@ -151,16 +149,16 @@ pub fn snapshot(g: &Game, bt: &Val) -> Val {
     .unwrap_or(Val::None)
 }
 
-/// Fin d'une bataille de campagne (engine.end_battle) : automatique, ou commandée (tb : la bataille tactique).
-/// Python : `campaign_end(g, bt, winner, disengage, prisoners, tb=None)`.
-/// winner : 0 ou 1 ; prisoners : écrit `int(prisoners)` ; tb : la bataille tactique (TB.find), ou None.
+/// Fin d'une bataille de campagne (engine.end_battle).
+/// Python : `campaign_end(g, bt, winner, disengage, prisoners)`.
+/// winner : 0 ou 1 ; prisoners : écrit `int(prisoners)`.
 // game/battle_log.py, lignes 94 à 108
-pub fn campaign_end(g: &Game, bt: &Val, winner: i64, disengage: bool, prisoners: f64, tb: Option<&TacticalBattle>) {
+pub fn campaign_end(g: &Game, bt: &Val, winner: i64, disengage: bool, prisoners: f64) {
     avaler(|| {
         let rec = bt.get("log0").or(dict! {}).copy();
         let sides = bt.at("sides");
         rec.update(&dict! {
-            "kind" => "campagne", "mode" => if bt.getb("tac") { "commandee" } else { "auto" }, "id" => bt.at("id"),
+            "kind" => "campagne", "mode" => "auto", "id" => bt.at("id"),
             "days" => py::round_n(g.t - bt.get_or("t0", g.t).f(), 3), "winner" => winner,
             "winner_owner" => sides.at(winner).at("owner"), "disengage" => disengage,
             "captured" => !disengage && sides.at(1 - winner).at("node").is_some() && winner == 0,
@@ -168,69 +166,7 @@ pub fn campaign_end(g: &Game, bt: &Val, winner: i64, disengage: bool, prisoners:
             "lost" => sides.iter().map(|s| Val::from(py::round(s.atf("lost")))).collect::<Val>(),
             "prisoners" => py::int(prisoners), "assault" => bt.at("node").is_some()
         });
-        if let Some(tb) = tb {
-            rec.set("tac", tactical(tb));
-        }
         write(&rec);
     });
 }
 
-// ================================================================== batailles tactiques
-
-/// Déroulement d'une bataille tactique : durée, brèches, pertes et état des unités à la fin.
-/// Python : `tactical(tb)`.
-/// Rend un dict. (`getattr(tb, 'breach_t', [])` : champ de TacticalBattle.)
-// game/battle_log.py, lignes 112 à 138
-pub fn tactical(tb: &TacticalBattle) -> Val {
-    let r = tb.result.or(dict! {});
-    let sides = list![];
-    let units = tb.units.vec();
-    let combat = |u: &Val| !(u.at("cls") == "general" || u.at("cls") == "chariot");
-    for s in 0..2i64 {
-        let us: Vec<&Val> = units.iter().filter(|u| u.at("side") == s).collect();
-        let comp = dict! {};
-        for u in &us {
-            if !combat(u) {
-                continue;
-            }
-            let k = if u.at("src") == "rempart" { Val::from("rempart") } else { u.at("type") };
-            comp.set(&k, &comp.get_or(&k, 0) + &Val::from(1));
-        }
-        let fight: Vec<&Val> = us.iter().copied().filter(|u| combat(u)).collect();
-        let men = py::sum_v(fight.iter().map(|u| {
-            let m = u.at("men");
-            if m > 0.0 { m } else { Val::from(0.0) }
-        }));
-        sides.push(dict! {
-            "comp" => comp, "men0" => py::round(py::sum_v(fight.iter().map(|u| u.at("men0"))).f()), "men" => py::round(men.f()),
-            "routed" => fight.iter().filter(|u| u.at("state") == "deroute").count(),
-            "out" => fight.iter().filter(|u| u.at("state") == "hors").count(),
-            "ctrl" => if us.iter().any(|u| u.at("ctrl") == "joueur") { "joueur" } else { "ia" }
-        });
-    }
-    let pl = tb.place_info();
-    dict! {
-        "clock" => py::round(tb.clock), "accel" => tb.accel, "accel_t" => if tb.accel { Some(py::round(tb.accel_t)) } else { None },
-        "weather" => &tb.weather, "season" => &tb.season, "year" => tb.spec.get("year"), "difficulty" => &tb.difficulty,
-        "place" => if pl.truthy() { dict! {"fort" => pl.at("fort"), "r" => pl.at("r")} } else { Val::None },
-        "guns" => units.iter().filter(|u| u.at("src") == "rempart").count(),
-        "breaches" => tb.breach_t.iter().map(|b| list![py::round(b.atf(0)), b.at(1)]).collect::<Val>(),
-        "winner" => r.get("winner"), "disengage" => r.getb("disengage"), "why" => r.get("why"),
-        "lost" => r.get_or("lost", list![0, 0]).iter().map(|x| Val::from(py::round(x.f()))).collect::<Val>(),
-        "prisoners" => r.get_or("prisoners", list![0, 0]).iter().map(|x| Val::from(py::round(x.f()))).collect::<Val>(),
-        "me" => &tb.me, "sides" => sides
-    }
-}
-
-/// Fin d'une bataille du mode Bataille (game/tactics/skirmish.py).
-/// Python : `skirmish_end(tb)`.
-// game/battle_log.py, lignes 141 à 149
-pub fn skirmish_end(tb: &TacticalBattle) {
-    avaler(|| {
-        let sp = &tb.spec;
-        write(&dict! {"kind" => "bataille", "mode" => "bataille", "id" => &tb.bid, "title" => sp.get("title"),
-                      "year" => sp.get("year"), "season" => sp.get("season"), "weather" => sp.get("weather"),
-                      "owners" => sp.get("owners"), "difficulty" => sp.get("difficulty"), "sk" => sp.get("sk"),
-                      "tac" => tactical(tb)});
-    });
-}
