@@ -637,12 +637,12 @@ Tout marche seul avec les réglages par défaut ; on intervient quand on veut, d
 - Marché des négociants : meilleurs prix si vous tenez un port.
 
 ### Journal des batailles (pour l'équilibre)
-Chaque bataille terminée (automatique, sur ordres, entre IA ou du mode Bataille) ajoute une ligne à
+Chaque bataille terminée (celles du joueur comme celles des IA) ajoute une ligne à
 `logs/batailles.jsonl` (non suivi par git ; mis de côté dans `batailles.1.jsonl` au-delà de 20 Mo) : date, saison,
 météo, terrain, place, fortification et canons du rempart, forces des deux camps, durée, brèches ouvertes et à quelle
 heure, vainqueur, pertes, prisonniers, prise de la place. `bin/bilan` (option `--depuis AAAA-MM-JJ`) en
 tire des tableaux : taux de prise des places selon leur fortification, temps pour ouvrir une brèche, places prises avec
-ou sans brèche, batailles automatiques face à celles sur ordres, résultats du mode Bataille.
+ou sans brèche.
 
 **Banc d'équilibre de la campagne** : `bin/simuler --parties 6 --epoque 1790 --annees 30 --proc 2` fait
 jouer des campagnes aux IA seules (le camp du joueur compris), sur des graines fixes, et donne pour chacune les guerres
@@ -694,9 +694,7 @@ rust/conquete/       le moteur et le serveur, en Rust (caisse conquete ; PORTAGE
   diplomacy.rs       diplomatie et commerce
   battle_log.rs      journal des batailles (logs/batailles.jsonl) ; l'outil bilan en fait le bilan
   views.rs           état envoyé au navigateur (brouillard de guerre), sauvegardes
-  tactics/           batailles sur ordres ou commandées : carte de bataille (terrain.rs), unités (units.rs), simulation
-                     (battle/), IA qui livre la bataille (ai/), vos ordres et leurs flèches (orders.rs), raccord avec la
-                     campagne et plan de la position (bridge.rs)
+  engine/strategie.rs  la bataille par stratégie, réglée sur la carte de campagne (voir SPEC-BATAILLE.md)
   py/                ce que Python faisait tout seul (hasard, arrondis, JSON…), pour un portage au bit près
   bin/               les exécutables : conquete (le jeu) et les outils (voir « Outils »)
 game/data/           données de la carte (rivières, villes de France), embarquées dans l'exécutable ; cache de la carte
@@ -729,12 +727,11 @@ node --test tests/*.test.mjs                     # l'interface seule
 
 | Fichier | Ce qu'il vérifie |
 |---|---|
-| `rust/conquete/tests/<module>.rs` (`geo.rs`, `rules.rs`, `tours.rs`, `batailles.rs`, `campagnes.rs`…) | le portage au bit près : chaque module rend exactement ce que rendait le Python d'origine, figé dans `rust/conquete/tests/references/` ; batailles et campagnes entières rejouées à la même graine (voir `rust/conquete/PORTAGE.md`) |
-| `rust/conquete/tests/europe.rs` | le mode Europe (géographie 5) : la carte se fait et se relit, 32 pays, réseau d'un seul tenant (îles par mer), trajectoires des villes, parties aux quatre débuts, 24 mois avec 32 IA deux fois à la même graine, sauvegarde, escarmouches et bataille de campagne |
+| `rust/conquete/tests/<module>.rs` (`geo.rs`, `rules.rs`, `tours.rs`, `campagnes.rs`…) | le portage au bit près : chaque module rend exactement ce que rendait le Python d'origine, figé dans `rust/conquete/tests/references/` ; batailles et campagnes entières rejouées à la même graine (voir `rust/conquete/PORTAGE.md`) |
+| `rust/conquete/tests/europe.rs` | le mode Europe (géographie 5) : la carte se fait et se relit, 32 pays, réseau d'un seul tenant (îles par mer), trajectoires des villes, parties aux quatre débuts, 24 mois avec 32 IA deux fois à la même graine, sauvegarde et bataille de campagne |
 | `rust/conquete/tests/outils.rs` | les outils (voir « Outils ») : même sortie que leurs originaux Python sur un cas court |
-| `rust/conquete/tests/bancs_bataille.rs` | ordres propres à chaque arme (acceptés ou refusés), salve puis baïonnette, harcèlement, canons sans munitions, régiment anéanti, bataille jusqu'au bout et rechargement en plein combat ; « Donner mes ordres » de bout en bout (choix verrouillés, redéploiement, heure, moment décisif, récapitulatif), flèches de manœuvre, plan de la position, vitesses du film, mode Bataille sur ordres ; « Commander la bataille » (déploiement, ordre de marche, vitesses, fin automatique et reprise, décrocher, sauvegarde), banc de quelques jeux d'ordres ; canons camouflés dans un bois |
+| `rust/conquete/tests/bancs_strategie.rs` | la bataille par stratégie : situations, stratégies permises et contres, cinq armes dont les grenadiers, phases et journal, renforts, reconnaissance, poursuite, prises, sort des généraux, assaut, blocus, capitulation, aperçu, anciennes sauvegardes |
 | `rust/conquete/tests/bancs_campagne.rs` | votre tour puis celui des IA (d'un coup, arrêts, reprise), villes neutres, temps en tours (production, recherche, échéances, actions d'armée, sièges, arrivée), retraite une fois par tour, dettes et événements, prix du marché, sauvegarde (IA comprises) |
-| `rust/conquete/tests/bancs_cartes.rs` | cartes de bataille : même graine, même carte ; plus de parcelles en quadrillage (moins de 30 % de bords en longues droites) ; vergers près des maisons, jamais sur le glacis ; moins d'une demi-seconde par carte |
 | `rust/conquete/tests/bancs_serveur.rs` | un vrai serveur HTTP (l'exécutable `conquete`) sur un port libre : requêtes mal formées, fichiers hors de `web/`, ordres pendant le tour des IA, sauvegardes (dossier temporaire, les vraies ne sont pas touchées) |
 | `tests/interface.test.mjs` | sans navigateur (`tests/dom.mjs`) : chargement de tous les modules, tableau des valeurs, barre du tour, fenêtre de bataille (stratégies, poursuite), arrivée devant une ville, tutoriel, voie ferrée, arbre des technologies |
 | `tests/decouvertes.test.mjs` | découvertes : chaque technologie a sa famille de vignette animée |
@@ -743,8 +740,6 @@ node --test tests/*.test.mjs                     # l'interface seule
 | `tests/secours.test.mjs` | tuiles de secours de la carte : un niveau de zoom auquel il manque une tuile est sauté en entier (plus de bandes noires) |
 | `tests/frontieres.test.mjs` | frontières de la carte de campagne : les segments des carrés marchants raboutés en lignes continues, sans perdre ni doubler un point, puis découpés en morceaux qui se recouvrent |
 | `tests/portraits.test.mjs` | portraits des régiments : la même figure en bataille et en campagne (piquiers avant la baïonnette, pièce de son époque, cavalier pour le général) |
-| `rust/conquete/tests/bancs_degats.rs` | dégâts aux bâtiments : un boulet sur une maison, le feu qui gagne puis laisse des ruines, occupants chassés, couvert selon l'état, vue à travers une ruine, même graine même incendie, `bati` depuis `since` et carte complète, sauvegarde ; canons du défenseur sur l'enceinte et qui tirent de là |
-| `rust/conquete/tests/bancs_villes.rs` | villes et places : tailles du village à la capitale, nature et toit de chaque bâtiment, place bastionnée, murs qui ferment la ville, pas de maison sur une rue, brèche du siège, même graine même ville, temps de génération |
 
 D'autres bancs du jeu suivent le même modèle (`rust/conquete/tests/bancs_*.rs` : maisons occupées et barricades,
 douane, familles, toute la France, généraux, mercenaires, plans des villes).
@@ -759,16 +754,14 @@ avec une graine fixe : même graine, même bataille. Les essais n'écrivent pas 
 ## Outils
 
 Des exécutables à part, à lancer depuis la racine du jeu : dans `bin/` une fois le jeu lancé par `lancer.sh` ou
-`lancer.bat` (`bin\banc_ia.exe`… sous Windows), ou dans `target/release/` après
+`lancer.bat` (`bin\simuler.exe`… sous Windows), ou dans `target/release/` après
 `cargo build --release -p conquete --bins`. `--help` donne les options de chacun.
 
 ```bash
-bin/banc_ia --graines 2 --epoques 1790 --lieux bataille   # banc de l'IA de bataille, batailles IA contre IA (--ordres, --tweak, --journal)
 bin/simuler --parties 6 --epoque 1790 --annees 30 --proc 2 # banc d'équilibre de la campagne (voir plus haut)
 bin/simuler --geo 5 --parties 1 --epoque 1700 --annees 25 --suivi ML,RU --recit 1   # une partie de contrôle du mode Europe : guerres, traités, places et trésor de Malte et de la Russie, année par année
 bin/bilan --depuis 2026-10-12                              # bilan du journal des batailles (logs/batailles.jsonl)
 bin/carte_hex > web/js/dev/carte-hex-data.js               # la carte sur une grille d'hexagones (maquette web/js/dev/carte-hex.html)
-bin/bataille_hex > web/js/dev/bataille-hex-data.js         # des batailles sur hexagones (maquette web/js/dev/bataille-hex.html)
 sh outils/banc_compare.sh <commit>                         # le banc d'équilibre sur un ancien commit et sur le code actuel
 ```
 
