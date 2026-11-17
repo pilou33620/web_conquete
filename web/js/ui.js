@@ -739,7 +739,7 @@ export class UI {
       const where = enemy ? { x: enemy.x, y: enemy.y } : hitNode ? { node: hitNode.id } : { x: e.x, y: e.y };
       this.api.post('/api/cmd', { cmd: 'eta', army: army.id, mode: 'route', ...where }).then(r => {
         const el = document.getElementById('bubble-eta');
-        if (el && seq === this.etaSeq && r.ok && r.tn != null) el.textContent = `Par les routes : arrivée ${r.tn ? toursTxt(r.tn) : 'ce tour-ci'} (estimation).`;
+        if (el && seq === this.etaSeq && r.ok && r.tn != null) { el.textContent = `Par les routes : arrivée ${r.tn ? toursTxt(r.tn) : 'ce tour-ci'} (estimation).`; this.cadrerBulle(); }
       }).catch(() => { /* estimation indisponible : la bulle s'en passe */ });
     }
     // avant d'attaquer une armée ou une place qui n'est pas à nous : le rapport de forces, la situation, les effectifs
@@ -756,8 +756,12 @@ export class UI {
     b.style.left = clamp(e.sx, 110, window.innerWidth - 110) + 'px';
     b.style.top = Math.max(e.sy, 230) + 'px';
     b.hidden = false;
-    // avec cinq boutons, la bulle peut sortir de l'écran : on la ramène entière dans la fenêtre
-    const r = b.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+    this.cadrerBulle();
+  }
+  // avec cinq boutons et l'aperçu, la bulle peut sortir de l'écran : on la ramène entière dans la fenêtre (aussi quand
+  // l'arrivée estimée s'y ajoute après coup)
+  cadrerBulle() {
+    const b = this.$('bubble'), r = b.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
     const dx = r.left < 6 ? 6 - r.left : r.right > W - 6 ? Math.max(6 - r.left, W - 6 - r.right) : 0;
     const dy = r.top < 6 ? 6 - r.top : r.bottom > H - 6 ? Math.max(6 - r.top, H - 6 - r.bottom) : 0;
     if (dx) b.style.left = (parseFloat(b.style.left) + dx) + 'px';
