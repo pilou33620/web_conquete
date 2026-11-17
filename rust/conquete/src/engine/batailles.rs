@@ -719,7 +719,13 @@ impl Game {
                     stm[su][i] = Game::strat_m(&ids[su], a, open_ground);
                 }
                 if s.at("bat").has(ids[1 - su].as_str()) {
-                    ck[su] = R::CONTRE;
+                    // (les aérostiers d'en face éventent la manœuvre : le contre ne joue pas)
+                    let ballon = self.effet_camp(&sides.at(1 - su as i64).ats("owner"), "evente");
+                    if ballon.is_some() {
+                        self.note_effet(&bt, 1 - su as i64, &ballon);
+                    } else {
+                        ck[su] = R::CONTRE;
+                    }
                 }
                 pertes[su] = s.atf("pertes");
             }
@@ -737,9 +743,11 @@ impl Game {
             }
             bt.set("cav", list![cs[0], cs[1]]);
             let mut flank = [false, false];
+            let sit = bt.get_or("sit", "campagne").string();
             for si in 0..2i64 {
                 let su = si as usize;
                 let side = sides.at(si);
+                let mut joue = 0u32; // les découvertes qui ont joué pour ce camp (rules.TECH_BATAILLE : un bit par ligne)
                 let kept: Val = side
                     .at("armies")
                     .iter()
@@ -768,7 +776,10 @@ impl Game {
                     let mut rp = self.reg_power(owner, &r, &terrain, wxf, cover, &a);
                     let rm = self.reg_mods(owner, &r, &Val::None);
                     let rmg = |k: &str| rm.get_or(k, 0.0).f();
-                    rp *= (0.75 + 0.25 * a.atf("supply")) * phw[ci] * fb;
+                    // ce que ses découvertes y changent : puissance, pertes, moral
+                    let ([ek, ep, em], vus) = self.effets_tech(owner, &r, si, &sit, Some(phase), Some(&ids[su]));
+                    joue |= vus;
+                    rp *= (0.75 + 0.25 * a.atf("supply")) * phw[ci] * fb * ek;
                     if cls == "inf" {
                         if fm == "ligne" {
                             rp *= if phase == "fusillade" { 1.2 + rmg("ligne_fire") } else { 1.05 };
@@ -819,7 +830,7 @@ impl Game {
                     }
                     P[su][ci] += rp;
                     men[su] += r.atf("n");
-                    let mut recv = pertes[su];
+                    let mut recv = pertes[su] * ep;
                     if tr == "prudent" && si == 1 {
                         recv *= 0.88;
                     } else if tr == "audacieux" {
@@ -827,25 +838,35 @@ impl Game {
                     }
                     // (le même calcul que plus haut : fm_t n'a pas bougé entre-temps)
                     let fm_t = if fm == "carre" && reorg { Val::from("carre_forme") } else { fm.clone() };
-                    targets[su].push(tup![r.at("n"), r.at("type"), fm_t, protected, &r, &a, recv * wall]);
+                    targets[su].push(tup![r.at("n"), r.at("type"), fm_t, protected, &r, &a, recv * wall, em]);
                 }
                 if node.is_some() {
                     let o = node.ats("owner");
-                    P[su][1] += node.atf("milice") * R::MILICE_POWER * self.milice_k(&o) * fb * phw[1] * 1.05 * stm[su][1] * ck[su];
+                    // (la milice a les découvertes de son camp, comme ses armes : milice_k)
+                    let ([ek, ep, _], vus) = self.effets_tech(&o, &dict! {"type" => "milice"}, si, &sit, Some(phase), Some(&ids[su]));
+                    joue |= vus;
+                    P[su][1] += node.atf("milice") * R::MILICE_POWER * self.milice_k(&o) * fb * phw[1] * 1.05 * stm[su][1] * ck[su] * ek;
                     men[su] += node.atf("milice");
-                    targets[su].push(tup![node.at("milice"), "milice", "ligne", protected, &node, Val::None, wall * pertes[su]]);
+                    targets[su].push(tup![node.at("milice"), "milice", "ligne", protected, &node, Val::None, wall * pertes[su] * ep, 1.0]);
                     if o != R::NEUTRAL {
                         for r in node.at("garrison").iter() {
                             let ci = R::rang_arme(R::arme_de(r.at("type").s()));
-                            P[su][ci] += self.reg_power(&o, &r, &terrain, wxf, false, &Val::None) * fb * phw[ci] * stm[su][ci] * ck[su]
+                            let ([ek, ep, em], vus) = self.effets_tech(&o, &r, si, &sit, Some(phase), Some(&ids[su]));
+                            joue |= vus;
+                            P[su][ci] += self.reg_power(&o, &r, &terrain, wxf, false, &Val::None) * fb * phw[ci] * stm[su][ci] * ck[su] * ek
                                 * (if r.at("type") == "grenadiers" { gren[su] } else { 1.0 })
                                 * (if r.at("type") == "garde" { R::GARDE_HOME } else { 1.0 });
                             men[su] += r.atf("n");
-                            targets[su].push(tup![r.at("n"), r.at("type"), "ligne", protected, &r, Val::None, wall * pertes[su]]);
+                            targets[su].push(tup![r.at("n"), r.at("type"), "ligne", protected, &r, Val::None, wall * pertes[su] * ep, em]);
                         }
                     }
                     // les canons du rempart (servants à l'abri des murs : ils ne comptent pas parmi les pertes)
                     P[su][0] += self.fort_guns_power(&node, &terrain, wxf) * R::FORT_GUNS_AUTO * phw[0] * stm[su][0] * ck[su];
+                }
+                if joue != 0 {
+                    for (_, l) in R::TECH_BATAILLE().iter().enumerate().filter(|(i, _)| joue & (1 << i) != 0) {
+                        self.note_effet(&bt, si, &l);
+                    }
                 }
                 if flank[su] {
                     let t = format!("La cavalerie prend l’ennemi de flanc ({})", self.fname(&side.ats("owner")));
@@ -1061,6 +1082,7 @@ impl Game {
                 if typ == "grenadiers" {
                     k *= R::GREN_MORAL; // (l'élite plie en dernier)
                 }
+                k *= if t.len() > 7 { t.atf(7) } else { 1.0 }; // (ce que ses découvertes y changent : rules.TECH_BATAILLE)
                 obj.set("morale", py_max(0.0, &obj.at("morale") - frac_side * k));
             }
             total += loss.f();

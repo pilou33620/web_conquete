@@ -293,9 +293,11 @@ impl Game {
         let tot: f64 = armes.values().iter().map(|v| v.f()).sum::<f64>().max(1.0);
         let cav = armes.atf("cav") / tot;
         let mut p = 0.0;
-        if cav > 0.0 {
-            p = R::RECO_BASE + R::RECO_CAV * (cav / R::RECO_CAV_PART).min(1.0);
-            if self.factions.at(&self.player).at("techs").has("hussards") {
+        // (les aérostiers : le ballon voit sans cavalerie, et mieux avec elle)
+        let ballon = self.effet_camp(&self.player, "reco");
+        if cav > 0.0 || ballon.is_some() {
+            p = R::RECO_BASE + R::RECO_CAV * (cav / R::RECO_CAV_PART).min(1.0) + if ballon.is_some() { ballon.atf("reco") } else { 0.0 };
+            if cav > 0.0 && self.factions.at(&self.player).at("techs").has("hussards") {
                 p += R::RECO_HUSSARDS;
             }
             if bt.at("sides").at(si).at("armies").iter().any(|aid| self.gen_trait(&self.armies.get(&aid)) == "eclaireur") {
@@ -391,7 +393,7 @@ impl Game {
     /// Une note de plus pour la phase en cours (renforts, prise de flanc…).
     pub fn journal_note(&self, bt: &Val, camp: Val, texte: &str) {
         let jw = bt.setdefault("jw", list![]);
-        if !jw.iter().any(|n| n.at("t") == texte) {
+        if !jw.iter().any(|n| n.at("t") == texte && n.at("c") == camp) {
             jw.push(dict! {"c" => camp, "t" => texte});
         }
     }
@@ -446,7 +448,9 @@ impl Game {
         }
         if ecart > 0.0 {
             let nom = R::ARMES().ats(R::ARMES_RANG[arme]);
-            w.push(dict! {"c" => qui, "t" => format!("{nom} : avantage à {}", self.fname(&sides.at(qui).ats("owner")))});
+            // (« à les insurgés », « à le Portugal » : aux, au)
+            let t = format!("{nom} : avantage à {}", self.fname(&sides.at(qui).ats("owner"))).replace(" à les ", " aux ").replace(" à le ", " au ");
+            w.push(dict! {"c" => qui, "t" => t});
         }
         w.extend(&bt.get_or("jw", list![]));
         bt.at("journal").push(dict! {"ph" => &ph, "l" => l, "p" => p, "w" => w});
@@ -462,7 +466,8 @@ impl Game {
         let strat = |si: i64| sides.at(si).get("strat");
         for si in 0..2i64 {
             let (s, o) = (strat(si), strat(1 - si));
-            if s.truthy() && o.truthy() && R::STRATS().at(&s).at("bat").has(&o) {
+            // (éventé par les aérostiers d'en face, le contre ne joue pas : leur ligne le dit déjà)
+            if s.truthy() && o.truthy() && R::STRATS().at(&s).at("bat").has(&o) && self.effet_camp(&sides.at(1 - si).ats("owner"), "evente").is_none() {
                 let t = format!("« {} » contre « {} » ({})", R::STRATS().at(&s).at("label"), R::STRATS().at(&o).at("label"), pct(R::CONTRE));
                 out.push(dict! {"c" => si, "t" => t});
             }
@@ -512,6 +517,71 @@ impl Game {
         out
     }
 
+    // ------------------------------------------------------------------ découvertes (rules.TECH_BATAILLE)
+    /// La ligne de rules.TECH_BATAILLE qui donne l'effet de camp `cle` (evente, reco, renfort) à ce camp, ou None.
+    pub fn effet_camp(&self, code: &str, cle: &str) -> Val {
+        if !self.factions.has(code) {
+            return Val::None;
+        }
+        let (techs, mods) = (self.factions.at(code).at("techs"), self.factions.at(code).at("mods"));
+        // (une ligne liée à un effet chiffré de la découverte, `fx`, joue tant que cet effet vaut pour le camp)
+        let a = |l: &Val| if l.has("fx") { mods.get_or(l.at("fx"), 0.0).f() > 0.0 } else { techs.has(&l.at("tech")) };
+        R::TECH_BATAILLE().iter().find(|l| l.has(cle) && a(l)).unwrap_or(Val::None)
+    }
+
+    /// Ce que les découvertes du camp `code` changent à son régiment r dans une bataille : ([puissance, pertes,
+    /// moral], les lignes de rules.TECH_BATAILLE qui ont joué : un bit par ligne). role : 0 assaillant, 1 défenseur ;
+    /// phase et strat : None avant la bataille (aperçu) : les lignes qui en dépendent ne jouent pas. Une manœuvre que
+    /// le régiment n'a pas apprise ne joue pas pour lui (reg_mods : l'effet `fx` de la ligne lui manque).
+    pub fn effets_tech(&self, code: &str, r: &Val, role: i64, sit: &str, phase: Option<&str>, strat: Option<&str>) -> ([f64; 3], u32) {
+        let (mut k, mut vus) = ([1.0f64; 3], 0u32);
+        if !self.factions.has(code) {
+            return (k, vus);
+        }
+        let techs = self.factions.at(code).at("techs");
+        let typ = r.ats("type");
+        let mut rm: Option<Val> = None;
+        for (i, l) in R::TECH_BATAILLE().iter().enumerate() {
+            if !techs.has(&l.at("tech")) || !(l.has("k") || l.has("pertes") || l.has("moral")) {
+                continue;
+            }
+            let parmi = |cle: &str, v: Option<&str>| !l.has(cle) || v.is_some_and(|v| l.at(cle).has(v));
+            if !parmi("armes", Some(R::arme_de(&typ))) || !parmi("types", Some(&typ)) || !parmi("sit", Some(sit)) || !parmi("strat", strat) {
+                continue;
+            }
+            if (l.has("phase") && phase.is_none_or(|p| l.at("phase") != p)) || (l.has("role") && l.at("role") != role) {
+                continue;
+            }
+            if l.has("fx") && rm.get_or_insert_with(|| self.reg_mods(code, r, &Val::None)).get_or(l.at("fx"), 0.0).f() <= 0.0 {
+                continue;
+            }
+            for (j, cle) in ["k", "pertes", "moral"].iter().enumerate() {
+                k[j] *= l.get_or(*cle, 1.0).f();
+            }
+            vus |= 1 << i;
+        }
+        (k, vus)
+    }
+
+    /// Une découverte a joué pour le camp `si` : la phase en cours du journal et « ce qui a pesé » le disent, une
+    /// fois par camp (la page y ajoute le nom du camp). `l` : la ligne de rules.TECH_BATAILLE. (Ce qui dessert le camp
+    /// sert l'autre.)
+    pub fn note_effet(&self, bt: &Val, si: i64, l: &Val) {
+        let t = l.at("t");
+        let c = Val::from(if l.get_or("k", 1.0).f() < 1.0 { 1 - si } else { si });
+        self.journal_note(bt, c.clone(), t.s());
+        let pese = bt.setdefault("pese", list![]);
+        if !pese.iter().any(|n| n.at("t") == t && n.at("c") == c) {
+            pese.push(dict! {"c" => c, "t" => t});
+        }
+    }
+
+    /// La puissance d'une armée (army_power) avec ce que ses découvertes y changent d'emblée dans cette situation.
+    fn army_power_bataille(&self, a: &Val, tname: &str, role: i64, sit: &str) -> f64 {
+        let o = a.ats("owner");
+        py::sum(a.at("regs").iter().map(|r| self.reg_power(&o, &r, tname, 1.0, false, a) * self.effets_tech(&o, &r, role, sit, None, None).0[0]))
+    }
+
     // ------------------------------------------------------------------ renforts
     /// Quand la charge commence : les armées amies libres à moins de rules.RENFORT_KM rejoignent la bataille (une
     /// fois par bataille). Libres : à l'arrêt ou en marche, ni en siège, ni en retraite, ni à bord, ni enfermées dans
@@ -529,14 +599,17 @@ impl Game {
                 continue;
             }
             let (dx, dy) = (a.atf("x") - bx, a.atf("y") - by);
-            if dx * dx + dy * dy > R::RENFORT_KM * R::RENFORT_KM {
+            let ao = a.ats("owner");
+            let rail = self.effet_camp(&ao, "renfort"); // (chemins de fer militaires : on accourt de plus loin)
+            let km = R::RENFORT_KM * if rail.is_some() { rail.atf("renfort") } else { 1.0 };
+            let d2 = dx * dx + dy * dy;
+            if d2 > km * km {
                 continue;
             }
             let nid = a.at("at_node");
             if nid.is_some() && self.nodes.at(&nid).at("siege").truthy() {
                 continue;
             }
-            let ao = a.ats("owner");
             for si in 0..2i64 {
                 let (side, other) = (sides.at(si), sides.at(1 - si));
                 if self.friendly(&ao, &side.ats("owner")) && self.hostile(&ao, &other.ats("owner")) {
@@ -544,6 +617,9 @@ impl Game {
                     side.setdefault("renf", list![]).push(a.at("name"));
                     let t = format!("Renforts : la {} entre en ligne ({})", a.at("name"), self.fname(&ao));
                     self.journal_note(bt, Val::from(si), &t);
+                    if d2 > R::RENFORT_KM * R::RENFORT_KM {
+                        self.note_effet(bt, si, &rail);
+                    }
                     break;
                 }
             }
@@ -600,9 +676,9 @@ impl Game {
             (x, y) = (b.atf("x"), b.atf("y"));
             let tt = TERRAIN().at(self.geo.terrain_at(x, y));
             let retranche = b.at("stance") == "retranche";
-            theirs = self.army_power(&b, tt.at(0).s()) * tt.atf(3) * (if retranche { 1.2 } else { 1.0 });
-            lui = dict! {"men" => py::round(self.army_men(&b)), "armes" => Game::armes_de(&b.at("regs"))};
             sit = if retranche { "position" } else { "campagne" };
+            theirs = self.army_power_bataille(&b, tt.at(0).s(), 1, sit) * tt.atf(3) * (if retranche { 1.2 } else { 1.0 });
+            lui = dict! {"men" => py::round(self.army_men(&b)), "armes" => Game::armes_de(&b.at("regs"))};
             sur = true;
         } else if cible.is_dict() && self.valid_node(&cible.get("node")) {
             let nid = cible.at("node").i();
@@ -632,7 +708,8 @@ impl Game {
             return non("Cible inconnue.");
         }
         let tname = TERRAIN().at(self.geo.terrain_at(x, y)).ats(0);
-        let mine = self.army_power(&a, &tname);
+        // (avec ce que les découvertes y changent d'emblée : rules.TECH_BATAILLE, hors phase et stratégie)
+        let mine = self.army_power_bataille(&a, &tname, 0, sit);
         let ratio = mine / theirs.max(1.0);
         let mot = if ratio >= 1.4 {
             "net avantage"

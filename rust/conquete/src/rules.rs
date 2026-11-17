@@ -468,8 +468,8 @@ py_const!(TECHS, list![
     tup!["minie", "militaire", "Fusil rayé (balle Minié)", "Le canon rayé porte à 400 mètres : armement ×1,40, tirailleurs +10 % à couvert.", 1375, 63, list!["percussion"], dict!{"legere_cover" => 0.1}],
     tup!["lahitte", "militaire", "Canons rayés La Hitte", "Obus oblongs, tir précis à 3 km : artillerie ×1,55.", 1375, 63, list!["valee"], dict!{}],
     tup!["chassepot", "militaire", "Fusil Chassepot", "Chargement par la culasse, 1 200 mètres : armement ×1,70. On tire couché, cinq coups à la minute.", 1625, 70, list!["minie"], dict!{"ligne_fire" => 0.1}],
-    tup!["mitrailleuse", "militaire", "Mitrailleuse de Reffye", "25 canons tournés à la manivelle : on peut lever des batteries de mitrailleuses, feu roulant à 1 200 mètres, redoutable contre l’infanterie à découvert.", 1250, 56, list!["lahitte"], dict!{}],
-    tup!["service_mil", "militaire", "Service militaire obligatoire", "Loi de 1872 : chaque classe passe sous les drapeaux. Recrues +25 %, recrutement −15 % de livres, moral +5.", 1375, 63, list!["levee"], dict!{"recrues" => 0.25, "recruit_cost" => -0.15, "morale" => 5}],
+    tup!["mitrailleuse", "militaire", "Mitrailleuse de Reffye", "25 canons tournés à la manivelle : on peut lever des batteries de mitrailleuses, feu roulant à 1 200 mètres, redoutable contre l’infanterie à découvert (+50 % à la fusillade en rase campagne et devant une position), impuissant contre les remparts (−40 % à l'assaut d'une ville ou d'un fort).", 1250, 56, list!["lahitte"], dict!{}],
+    tup!["service_mil", "militaire", "Service militaire obligatoire", "Loi de 1872 : chaque classe passe sous les drapeaux. Recrues +25 %, recrutement −15 % de livres, moral +5. En bataille, des classes instruites et encadrées : le moral cède 20 % moins vite sous les pertes.", 1375, 63, list!["levee"], dict!{"recrues" => 0.25, "recruit_cost" => -0.15, "morale" => 5}],
     tup!["gras", "militaire", "Fusil Gras (cartouche métallique)", "La douille de laiton ne s'enraye plus : armement ×1,82.", 1500, 63, list!["chassepot"], dict!{}],
     tup!["debange", "militaire", "Canons de Bange", "Acier et culasse étanche : artillerie ×1,85, les sièges avancent 25 % plus vite.", 1750, 70, list!["lahitte"], dict!{"siege_speed" => 0.25}],
     tup!["lebel", "militaire", "Fusil Lebel et poudre sans fumée", "Magasin de huit cartouches, poudre B de Vieille : armement ×2,05, plus de nuage pour trahir le tireur (embuscades +20 %).", 1875, 77, list!["gras"], dict!{"ambush" => 0.2}],
@@ -477,19 +477,19 @@ py_const!(TECHS, list![
     tup!["hussards", "militaire", "Hussards et éclaireurs", "Cavalerie +15 %, vision +6 km, débusque les embuscades.", 625, 35, list![], dict!{"cav_power" => 0.15, "vision" => 6, "detect" => 3}],
     tup!["voltigeurs", "militaire", "Tirailleurs et voltigeurs", "Embuscades +30 %, infanterie légère +20 % à couvert.", 750, 42, list!["baionnette"], dict!{"ambush" => 0.3, "legere_cover" => 0.2}],
     tup!["vauban", "militaire", "Fortifications à la Vauban", "Défense des places +15 %, milice +25 %, bastions (fortifications niveau 4) dans le chef-lieu et les places fortes.", 750, 42, list![], dict!{"fort_bonus" => 0.15, "milice" => 0.25}],
-    tup!["levee", "militaire", "Levée en masse", "Recrutement −25 % de livres, formation −30 %, recrues +20 %.", 1125, 56, list!["fusil1777"], dict!{"recruit_cost" => -0.25, "train" => -0.3, "recrues" => 0.2}],
+    tup!["levee", "militaire", "Levée en masse", "Recrutement −25 % de livres, formation −30 %, recrues +20 %. En bataille, la masse emporte tout : infanterie +15 % à la charge.", 1125, 56, list!["fusil1777"], dict!{"recruit_cost" => -0.25, "train" => -0.3, "recrues" => 0.2}],
     tup!["divisions", "militaire", "Système divisionnaire", "Toutes armes +8 %, moral +10, retraites moins coûteuses.", 1500, 70, list!["gribeauval", "levee"], dict!{"all_power" => 0.08, "morale" => 10, "retreat" => -0.5}],
     tup!["tir_rang", "militaire", "Feu de rang (tir en ligne)", "Les trois rangs tirent ensemble : infanterie en ligne +12 % en fusillade.", 625, 35, list!["baionnette"], dict!{"ligne_fire" => 0.12}],
     tup!["feu_peloton", "militaire", "Feu de peloton", "Feux roulants par pelotons : ligne encore +10 % en fusillade, le carré fusille mieux les escadrons (+30 %).", 875, 49, list!["tir_rang"], dict!{"ligne_fire" => 0.1, "carre_fire" => 0.3}],
     tup!["ordre_mixte", "militaire", "Ordre mixte (Guibert)", "Lignes et colonnes combinées : colonne +15 % à la charge, changements de formation deux fois plus rapides.", 750, 42, list!["tir_rang"], dict!{"colonne_charge" => 0.15, "fm_swift" => 0.5}],
     tup!["cuirassiers", "militaire", "Cuirassiers et carabiniers", "Cavalerie lourde cuirassée : cavalerie +20 % pendant la charge.", 875, 49, list!["hussards"], dict!{"cav_charge" => 0.2}],
     tup!["art_cheval", "militaire", "Artillerie à cheval", "Batteries montées : artillerie +10 %, plus rapide, et efficace jusque dans la charge (+30 %).", 1000, 56, list!["gribeauval"], dict!{"art_power" => 0.1, "art_speed" => 0.2, "art_charge" => 0.3}],
-    tup!["genie", "militaire", "Corps du génie et sapeurs", "Tranchées et mines : les sièges avancent 40 % plus vite.", 875, 49, list!["vauban"], dict!{"siege_speed" => 0.4}],
-    tup!["aerostiers", "militaire", "Aérostiers (Fleurus)", "Un ballon captif au-dessus de l'état-major : en bataille, tout ennemi à 1 500 mètres du général est vu ; vision +3 km.", 875, 49, list!["genie"], dict!{"balloon" => 1500, "vision" => 3}],
-    tup!["retranchements", "militaire", "Retranchements de campagne", "La pelle avant le fusil : en bataille, l'infanterie arrêtée depuis cinq minutes se retranche et perd 25 % d'hommes de moins sous le feu.", 1250, 56, list!["genie"], dict!{"entrench" => 0.25}],
+    tup!["genie", "militaire", "Corps du génie et sapeurs", "Tranchées et mines : les sièges avancent 40 % plus vite. À l'assaut d'une position, d'une ville ou d'un fort, les approches sont couvertes : pertes de l'assaillant −20 %.", 875, 49, list!["vauban"], dict!{"siege_speed" => 0.4}],
+    tup!["aerostiers", "militaire", "Aérostiers (Fleurus)", "Un ballon captif au-dessus de l'état-major : en bataille, la manœuvre ennemie est éventée (sa stratégie ne contre plus la vôtre : il perd ses +20 %) ; la reconnaissance est plus sûre (+20 %) et possible sans cavalerie ; vision +3 km.", 875, 49, list!["genie"], dict!{"balloon" => 1500, "vision" => 3}],
+    tup!["retranchements", "militaire", "Retranchements de campagne", "La pelle avant le fusil : l'infanterie qui défend une position, une ville ou un fort se retranche (+20 %, pertes −25 %) ; en rase campagne, « Tenir la ligne » creuse ses tranchées-abris (pertes −20 %).", 1250, 56, list!["genie"], dict!{"entrench" => 0.25}],
     tup!["dynamite", "militaire", "Dynamite (Nobel)", "Les sapeurs font sauter les murs : à l'assaut, une brèche de plus ; les sièges avancent 20 % plus vite.", 1250, 56, list!["genie"], dict!{"breach" => 1, "siege_speed" => 0.2}],
-    tup!["melinite", "militaire", "Obus à la mélinite", "L'obus explosif perce murs et abris : le couvert protège moitié moins des pièces de ce camp.", 1625, 70, list!["dynamite", "debange"], dict!{"shell" => 0.5}],
-    tup!["rail_militaire", "militaire", "Chemins de fer militaires", "Les régiments voyagent en wagons : les armées prendront le train sur les lignes de leur camp (avec les voies ferrées de la carte).", 1375, 63, list!["chemins_fer"], dict!{"rail_troops" => 1}],
+    tup!["melinite", "militaire", "Obus à la mélinite", "L'obus explosif perce murs et abris : à l'assaut d'une position, d'une ville ou d'un fort, artillerie +50 %.", 1625, 70, list!["dynamite", "debange"], dict!{"shell" => 0.5}],
+    tup!["rail_militaire", "militaire", "Chemins de fer militaires", "Les régiments voyagent en wagons : les armées prendront le train sur les lignes de leur camp (avec les voies ferrées de la carte). En bataille, les renforts accourent de deux fois plus loin (16 km au lieu de 8).", 1375, 63, list!["chemins_fer"], dict!{"rail_troops" => 1}],
 
     tup!["ponts_chaussees", "civil", "Corps des Ponts et Chaussées", "Routes entretenues : +15 % de vitesse sur route.", 500, 35, list![], dict!{"road_speed" => 0.15}],
     tup!["ponts", "civil", "Ponts de pierre", "Plus de bac : les fleuves se franchissent sans délai.", 750, 42, list!["ponts_chaussees"], dict!{"bridges" => 1}],
@@ -1609,11 +1609,39 @@ py_const!(SITUATIONS, {
 });
 // les découvertes qui pèsent au combat, par arme (leurs effets : TECH et ARMS ; le journal de bataille les cite)
 py_const!(TECH_ARME, dict!{
-    "inf" => list!["baionnette", "fusil1777", "tir_rang", "feu_peloton", "ordre_mixte", "percussion", "minie", "chassepot", "gras", "lebel", "retranchements"],
+    "inf" => list!["baionnette", "fusil1777", "tir_rang", "feu_peloton", "ordre_mixte", "percussion", "minie", "chassepot", "gras", "lebel"],
     "cav" => list!["hussards", "cuirassiers"],
-    "art" => list!["valliere", "gribeauval", "art_cheval", "valee", "lahitte", "debange", "canon75", "melinite"],
+    "art" => list!["valliere", "gribeauval", "art_cheval", "valee", "lahitte", "debange", "canon75"],
     "tir" => list!["voltigeurs", "minie"],
-    "grenadiers" => list!["baionnette", "fusil1777", "tir_rang", "feu_peloton", "ordre_mixte", "percussion", "minie", "chassepot", "gras", "lebel", "retranchements"]
+    "grenadiers" => list!["baionnette", "fusil1777", "tir_rang", "feu_peloton", "ordre_mixte", "percussion", "minie", "chassepot", "gras", "lebel"]
+});
+// ce que les découvertes militaires changent à une bataille, en plus de l'armement (ARMS) et de leurs effets chiffrés
+// (TECH fx). Une ligne : la découverte (tech) ; ses conditions, toutes facultatives : armes (ARMES), types (sortes de
+// régiment), phase, role (0 assaillant, 1 défenseur), sit (SITUATIONS), strat (la stratégie du camp) ; ses effets : k
+// (puissance), pertes (ses propres pertes), moral (ce que ses pertes ôtent à son moral), ou, pour tout le camp : evente
+// (la stratégie ennemie ne le contre plus), reco (chance de la reconnaissance, possible sans cavalerie), renfort (rayon
+// des renforts ×) ; t : ce qu'en disent le journal et « ce qui a pesé ». fx : la ligne joue si cet effet (TECH fx) vaut
+// pour le régiment, au lieu de la seule découverte du camp : une manœuvre (MANEUVERS, REG_KEYS) ne joue que pour les
+// régiments qui l'ont apprise ; la milice a celles de son camp (comme ses armes), les canons du rempart n'en profitent pas.
+py_const!(TECH_BATAILLE, {
+    let ouvrages = list!["position", "ville", "fort"];
+    let pied = list!["inf", "tir", "grenadiers"];
+    list![
+        dict!{"tech" => "levee", "armes" => list!["inf"], "phase" => "charge", "k" => 1.15, "t" => "Levée en masse : infanterie +15 % à la charge"},
+        dict!{"tech" => "service_mil", "moral" => 0.8, "t" => "Service militaire : le moral cède 20 % moins vite"},
+        dict!{"tech" => "genie", "role" => 0, "sit" => &ouvrages, "pertes" => 0.8, "t" => "Génie : approches couvertes, pertes de l’assaillant −20 %"},
+        dict!{"tech" => "retranchements", "fx" => "entrench", "armes" => &pied, "role" => 1, "sit" => &ouvrages, "k" => 1.2, "pertes" => 0.75,
+              "t" => "Retranchements de campagne : défenseur +20 %, pertes −25 %"},
+        dict!{"tech" => "retranchements", "fx" => "entrench", "armes" => &pied, "role" => 1, "sit" => list!["campagne"], "strat" => list!["tenir"], "pertes" => 0.8,
+              "t" => "Retranchements de campagne : tranchées-abris, pertes −20 %"},
+        dict!{"tech" => "melinite", "fx" => "shell", "armes" => list!["art"], "role" => 0, "sit" => &ouvrages, "k" => 1.5, "t" => "Obus à la mélinite : artillerie +50 % contre les ouvrages"},
+        dict!{"tech" => "mitrailleuse", "types" => list!["mitrailleuses"], "phase" => "fusillade", "sit" => list!["campagne", "position"], "k" => 1.5,
+              "t" => "Mitrailleuses : feu roulant, +50 % à la fusillade"},
+        dict!{"tech" => "mitrailleuse", "types" => list!["mitrailleuses"], "role" => 0, "sit" => list!["ville", "fort"], "k" => 0.6,
+              "t" => "Mitrailleuses : impuissantes contre les remparts (−40 %)"},
+        dict!{"tech" => "aerostiers", "fx" => "balloon", "evente" => 1.0, "reco" => 0.2, "t" => "Aérostiers : la manœuvre ennemie est éventée"},
+        dict!{"tech" => "rail_militaire", "renfort" => 2.0, "t" => "Chemins de fer militaires : renforts venus par le rail"}
+    ]
 });
 // temps et sol (en plus du feu : WEATHER) : la charge de cavalerie s'embourbe ou glisse ; le brouillard sert les
 // embuscades (attaque en embuscade ou par surprise, stratégie « embus ») et gêne la reconnaissance
@@ -1722,7 +1750,7 @@ pub fn constantes() -> Vec<(&'static str, Val)> {
         ("PRISON_CAUGHT", Val::from(PRISON_CAUGHT)), ("LOSER_STRAGGLE", Val::from(LOSER_STRAGGLE)), ("ARMES", ARMES()), ("ARME_DE", ARME_DE()), ("GREN_ASSAUT", Val::from(GREN_ASSAUT)), ("GREN_OUVRAGE", Val::from(GREN_OUVRAGE)),
         ("GREN_MORAL", Val::from(GREN_MORAL)), ("STRATS", STRATS()),
         ("CONTRE", Val::from(CONTRE)), ("STRATS_TENACES", STRATS_TENACES()), ("STRATS_FLANC", STRATS_FLANC()), ("SITUATIONS", SITUATIONS()),
-        ("TECH_ARME", TECH_ARME()), ("BOUE_CHARGE", Val::from(BOUE_CHARGE)), ("NEIGE_CHARGE", Val::from(NEIGE_CHARGE)),
+        ("TECH_ARME", TECH_ARME()), ("TECH_BATAILLE", TECH_BATAILLE()), ("BOUE_CHARGE", Val::from(BOUE_CHARGE)), ("NEIGE_CHARGE", Val::from(NEIGE_CHARGE)),
         ("BROUILLARD_EMBUS", Val::from(BROUILLARD_EMBUS)), ("RENFORT_KM", Val::from(RENFORT_KM)), ("RECO_BASE", Val::from(RECO_BASE)),
         ("RECO_CAV", Val::from(RECO_CAV)), ("RECO_CAV_PART", Val::from(RECO_CAV_PART)), ("RECO_HUSSARDS", Val::from(RECO_HUSSARDS)),
         ("RECO_ECLAIREUR", Val::from(RECO_ECLAIREUR)), ("RECO_ESPION", Val::from(RECO_ESPION)), ("RECO_MAX", Val::from(RECO_MAX)),

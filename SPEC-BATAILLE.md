@@ -22,7 +22,7 @@ Le moteur réglait déjà seul les batailles sans le joueur (`engine/batailles.r
 | 3 | Situations | Place ou non (`bt['node']`), remparts (`n['fort']`), ouvrages provisoires (`army_actions` : barricades, redoutes, `works_level`), posture « retranchée » d'une armée (+20 %) | Tout | `engine::situation` (campagne, position, ville, fort), `ouvrage` ; `rules.SITUATIONS` |
 | 4 | Stratégies | Cinq plans par armée (`rules.PLANS`, `a['pl']`, `choose_tactics`), formations par phase (`choose_formation`) | Les formations (la stratégie les commande : carrés, colonnes) ; les effets des plans passent dans les stratégies (préparation d'artillerie, débordement en terrain ouvert, tenir, harcèlement qui décroche au bout d'un jour) | `rules.STRATS` (20 stratégies, contres +20 % `CONTRE`, découverte exigée), par camp (`side['strat']`) ; choix du joueur (`tac choose`), des IA (`choose_strategy`) |
 | 5 | Phases, journal | Trois phases selon l'âge de la bataille et le moral (`battle_phase`, `rules.PHASES`, `PHASE_W`) ; un journal technique dans `logs/` (`battle_log.rs`) | Les phases et leur durée | L'**escarmouche** (premier dixième de jour) ; poids par arme (`PHASE_W`) ; journal par phase dans la bataille (`bt['journal']`), rendu avec le résultat |
-| 6 | Technologies | Armement par régiment (`rules.ARMS` : ×0,85 à ×2,05 pour les fusils, ×0,85 à ×2,3 pour les canons), manœuvres (`MANEUVERS`, `REG_KEYS` : feu de rang +12 %, feu de peloton, ordre mixte, hussards, cuirassiers, artillerie à cheval, voltigeurs…) | Tout, sans changer les chiffres : l'armement fait déjà de gros écarts | `rules.TECH_ARME` (les découvertes de chaque arme, citées au journal) ; l'ordre mixte ouvre « Attaque en colonnes » |
+| 6 | Technologies | Armement par régiment (`rules.ARMS` : ×0,85 à ×2,05 pour les fusils, ×0,85 à ×2,3 pour les canons), manœuvres (`MANEUVERS`, `REG_KEYS` : feu de rang +12 %, feu de peloton, ordre mixte, hussards, cuirassiers, artillerie à cheval, voltigeurs…) | Tout, sans changer les chiffres : l'armement fait déjà de gros écarts | `rules.TECH_ARME` (les découvertes de chaque arme, citées au journal) ; l'ordre mixte ouvre « Attaque en colonnes » ; `rules.TECH_BATAILLE` (17/11/2026 : chaque découverte militaire pèse, voir plus bas) |
 | 7 | Terrain | `geo.TERRAIN` (bonus de défense : forêt +10 %, collines +15 %, montagne +30 % ; couvert), terrain par sorte de régiment (`UNITS[..]['terrain']` : légère ×1,3 en forêt, cavalerie ×0,55 en forêt, ×1,0 en vignoble contre ×1,4 en plaine), rivière à franchir (assaillant −15 %), débarquement | Tout | Rien de chiffré ; le journal le dit (`pese_depart`) |
 | 8 | Temps, moral, fatigue | Feu selon le temps (`rules.WEATHER` : pluie ×0,75, neige ×0,8, brouillard ×0,85), boue (`mud_k`, marche), moral et expérience dans `reg_power`, fatigue et munitions (`raccord::reg_k`, `army_tick`), ravitaillement (×0,75 à ×1), moral plancher après une défaite | Tout | La charge freinée par la boue (`BOUE_CHARGE` ×0,8) et la neige (`NEIGE_CHARGE` ×0,85) ; le brouillard sert les embuscades (`BROUILLARD_EMBUS` ×1,15) et gêne la reconnaissance |
 | 9 | Renforts, reconnaissance | Une armée amie à moins de 3 km d'une bataille la rejoint (`detect_contacts`, `join_battle`) ; espions (`intel_active`), hussards, général éclaireur | `join_battle` ; les espions | `engine::renforts` : à la charge, les armées amies libres à moins de `RENFORT_KM` (8 km, deux hexagones) entrent en ligne ; `engine::reconnaissance` (`RECO_*`) |
@@ -73,7 +73,72 @@ un bonus de plus les aurait doublés.
   par drapeau, +0,1 par canon (`f['glory']`), comptés au bilan (`stats.drapeaux`, `stats.canons`).
 - **Reconnaissance** : chance que l'annonce soit vraie = 45 % + jusqu'à 25 % selon la part de cavalerie (plein à 15 %
   de cavaliers) + 10 % (hussards) + 10 % (général éclaireur) − 20 % (brouillard), 85 % avec un espion dans la place,
-  90 % au plus. Sans cavalerie ni espion : rien n'est annoncé.
+  90 % au plus. Sans cavalerie ni espion : rien n'est annoncé. Les aérostiers : +20 %, et le ballon suffit sans
+  cavalerie (45 % + 20 %).
+
+## Les découvertes militaires dans la bataille (17/11/2026)
+
+Demande du joueur : **chaque** découverte militaire de l'arbre (les deux branches « infanterie » et « artillerie » de
+`rules.TECHS`, de 1700 à 1900 : 32 découvertes) a un effet réel et visible dans la bataille par stratégie. Trois
+n'en avaient plus depuis la fin du champ de bataille tactique (aérostiers, retranchements, mélinite), quatre n'en
+avaient jamais eu en bataille (génie, levée en masse, service militaire, chemins de fer militaires), et la mitrailleuse
+promettait un effet (« redoutable contre l'infanterie à découvert ») que rien ne donnait.
+
+Mécanisme : une seule table, `rules.TECH_BATAILLE`. Une ligne = une découverte, ses conditions (armes, sortes de
+régiment, phase, rôle, situation, stratégie du camp : toutes facultatives) et son effet : `k` (puissance), `pertes`
+(ses propres pertes), `moral` (ce que ses pertes ôtent à son moral), ou, pour tout le camp, `evente`, `reco`,
+`renfort`. `engine::effets_tech` la lit pour chaque régiment à chaque pas (armées, garnison et milice de la place ; pas les
+canons du rempart) ; `effet_camp` pour les trois effets de camp. Une manœuvre (`rules.MANEUVERS` : retranchements,
+mélinite) ne joue que pour les régiments qui l'ont apprise (« Moderniser »). Joueur et IA passent par le même chemin.
+
+Ce qui se voit : chaque ligne qui joue écrit son texte (`t`, avec le camp qu'elle sert : `c`) dans la phase en cours du journal
+(`journal[].w`) et dans « ce qui a pesé » (`pese`, pendant la bataille et au résultat) ; l'aperçu (`apercu`) compte
+dans le rapport les lignes qui ne dépendent ni de la phase ni de la stratégie (mélinite, retranchements, mitrailleuses
+devant des remparts) ; la reconnaissance montre sa chance ; la description de la découverte (`rules.tech[].desc`) dit
+l'effet. Les autres découvertes restent citées par la ligne « Découvertes : … » (`rules.TECH_ARME`).
+
+| Découverte | Avant, dans une bataille par stratégie | Maintenant |
+|---|---|---|
+| Fusil et baïonnette (`baionnette`) | Armement de l'infanterie ×1,00 au lieu de ×0,85 ; permet les grenadiers | Inchangé |
+| Fusil 1777 (`fusil1777`) | Armement ×1,10 | Inchangé |
+| Fusil à percussion (`percussion`) | Armement ×1,22 ; la pluie gêne 60 % moins le feu | Inchangé |
+| Fusil rayé Minié (`minie`) | Armement ×1,40 ; tirailleurs +10 % à couvert | Inchangé |
+| Chassepot (`chassepot`) | Armement ×1,70 ; ligne +10 % à la fusillade | Inchangé |
+| Fusil Gras (`gras`) | Armement ×1,82 | Inchangé |
+| Lebel (`lebel`) | Armement ×2,05 ; embuscades +20 % | Inchangé |
+| Système Vallière (`valliere`) | Artillerie ×0,95 au lieu de ×0,85 | Inchangé |
+| Gribeauval (`gribeauval`) | Artillerie ×1,15 (et marche plus rapide) | Inchangé |
+| Système Valée (`valee`) | Artillerie ×1,30 | Inchangé |
+| Canons rayés La Hitte (`lahitte`) | Artillerie ×1,55 | Inchangé |
+| Canons de Bange (`debange`) | Artillerie ×1,85 (sièges +25 %) | Inchangé |
+| Canon de 75 (`canon75`) | Artillerie ×2,30 | Inchangé |
+| Hussards (`hussards`) | Cavalerie +15 % (manœuvre) ; reconnaissance +10 % ; débusque les embuscades | Inchangé |
+| Cuirassiers (`cuirassiers`) | Cavalerie +20 % à la charge (manœuvre) | Inchangé |
+| Tirailleurs et voltigeurs (`voltigeurs`) | Embuscades +30 % ; légère +20 % à couvert (manœuvre) | Inchangé |
+| Feu de rang (`tir_rang`) | Ligne +12 % à la fusillade (manœuvre) | Inchangé |
+| Feu de peloton (`feu_peloton`) | Ligne +10 % à la fusillade, carré +30 % contre les escadrons (manœuvre) | Inchangé |
+| Ordre mixte (`ordre_mixte`) | Ouvre « Attaque en colonnes » ; colonne +15 % à la charge ; formations deux fois plus vite | Inchangé |
+| Artillerie à cheval (`art_cheval`) | Artillerie +10 %, +30 % à la charge (manœuvre) | Inchangé |
+| Fortifications à la Vauban (`vauban`) | Défense des places +15 % (remparts), milice +25 % | Inchangé |
+| Système divisionnaire (`divisions`) | Toutes armes +8 %, retraites moins coûteuses | Inchangé |
+| École d'état-major (`etat_major`) | Toutes armes +5 % | Inchangé |
+| Dynamite (`dynamite`) | À l'assaut, une brèche de plus (remparts −42 %) | Inchangé |
+| **Levée en masse** (`levee`) | Rien (recrutement seulement) | Infanterie +15 % à la charge |
+| **Service militaire** (`service_mil`) | Rien (recrues, coût ; le « moral +5 » ne relève que le plafond du moral au repos) | Le moral cède 20 % moins vite sous les pertes (toutes armes) |
+| **Corps du génie** (`genie`) | Rien (vitesse des sièges seulement) | Assaillant d'une position, d'une ville ou d'un fort : pertes −20 % |
+| **Aérostiers** (`aerostiers`) | Rien (vision de campagne +3 km ; l'effet tactique `balloon` n'était plus lu) | La manœuvre ennemie est éventée : la stratégie adverse ne contre plus la vôtre (il perd ses +20 %) ; reconnaissance +20 %, possible sans cavalerie |
+| **Retranchements de campagne** (`retranchements`) | Rien (`entrench` n'était plus lu) | Manœuvre : infanterie, tirailleurs et grenadiers qui défendent une position (redoute, barricades), une ville ou un fort : +20 %, pertes −25 % ; en rase campagne, le défenseur qui choisit « Tenir la ligne » : pertes −20 % |
+| **Obus à la mélinite** (`melinite`) | Rien (`shell` n'était plus lu) | Manœuvre : artillerie de l'assaillant +50 % contre une position, une ville ou un fort |
+| **Mitrailleuse de Reffye** (`mitrailleuse`) | Permet de lever des batteries (arme « artillerie », puissance 2,2) ; rien de l'effet décrit | Les batteries de mitrailleuses : +50 % à la fusillade en rase campagne et devant une position ; −40 % à l'assaut d'une ville ou d'un fort |
+| **Chemins de fer militaires** (`rail_militaire`) | Rien (transport de campagne seulement) | Les renforts accourent de deux fois plus loin (16 km au lieu de 8) |
+
+Les clés d'effet `balloon`, `entrench` et `shell` restent dans `rules.TECHS` (les références figées les comptent dans
+les effets des camps) et sont de nouveau lues : la ligne de la table qui les nomme (`fx`) ne joue que si l'effet vaut
+pour le régiment (`reg_mods`) ou pour le camp. `retranchements` et `melinite` sortent de `TECH_ARME` (elles ont leur
+propre ligne dans « ce qui a pesé »).
+Raccourci connu : les renforts « par le rail » ne regardent pas s'il y a une voie ferrée près du champ de bataille.
+Essais : `tests/bancs_strategie.rs`, `chaque_decouverte_militaire_pese_dans_la_bataille` (pour chacune des 32, la même
+bataille avec et sans elle) ; `tests/bancs_campagne.rs`, `chaque_effet_est_lu_par_le_moteur` (sans excuse).
 
 ## Contrat pour la page
 
@@ -94,7 +159,9 @@ un bonus de plus les aurait doublés.
   assaillant, 1 défenseur, `null` si vous n'y êtes pas) ; `ouvrage` (`null` ou `{type: fort | remparts | barricade |
   redoute, camp: 1, niv, breche}`) ; `meteo` ; `journal` (lignes des phases finies) ; `pese` (`[{c, t}]`) ;
   `sides[].armes`, `sides[].strat` (la vôtre ; celle de l'ennemi seulement quand `mode` vaut `poursuite`),
-  `sides[].renf` (noms des armées venues en renfort) ; `sides[].tac[]` n'a plus `pl`.
+  `sides[].renf` (noms des armées venues en renfort) ; `sides[].tac[]` n'a plus `pl`. Depuis le 17/11/2026, `pese`
+  grandit pendant la bataille : chaque découverte qui joue (`rules.TECH_BATAILLE`) y ajoute sa ligne `{c, t}`, la même
+  que dans `journal[].w` (aucun champ nouveau).
   En `attente` : `choix` `[{id, why}]`, `defaut` (ce que votre général choisirait), `reco` (`null` ou `{strat, p}`).
   En `poursuite` : `fin` `{w, repli}`.
 - `sites[]` (traces, 120 jours) : `[x, y, âge en jours, pertes assaillant, pertes défenseur, assaillant, défenseur,
@@ -119,10 +186,6 @@ un bonus de plus les aurait doublés.
 
 - `rules.formations` de `/api/map` : à retirer quand la page ne le lit plus (`ui.js` et `map.js` y prennent encore le
   libellé de la formation).
-- Trois technologies n'avaient d'effet que sur le champ de bataille tactique et n'en ont plus : les aérostiers (`balloon`,
-  hors leur vision de campagne), les retranchements de campagne (`entrench`) et les obus à la mélinite (`shell`). À
-  reprendre dans la bataille par stratégie, ou à retirer de l'arbre (`tests/bancs_campagne.rs`,
-  `chaque_effet_est_lu_par_le_moteur`, les excuse en attendant).
 - « L'armée qui poursuit s'éloigne » : seule la fatigue est comptée ; elle ne quitte pas son hexagone.
 
 ## Suppression du champ de bataille tactique (17/11/2026)

@@ -1993,9 +1993,8 @@ fn chaque_effet_est_lu_par_le_moteur() {
     }
     lus.extend(E::ATTENUE().values().iter().map(|v| v.string())); // (lus par events.soften et recompute_mods, par la table)
     lus.insert("rail_troops".into()); // (les armées prendront le train en phase 2, avec les voies ferrées de la carte)
-    // le champ de bataille tactique lisait ces trois effets ; la bataille par stratégie ne les reprend pas encore
-    // (SPEC-BATAILLE.md, « Suite ») : aérostiers (hors sa vision), retranchements de campagne, obus à la mélinite
-    lus.extend(["balloon", "entrench", "shell"].map(String::from));
+    // (lus par effets_tech et effet_camp, par la table des découvertes en bataille : aérostiers, retranchements, mélinite)
+    lus.extend(R::TECH_BATAILLE().iter().filter(|l| l.has("fx")).map(|l| l.ats("fx")));
     let oublies: BTreeSet<String> =
         R::TECH().values().iter().flat_map(|t| t.at("fx").keys()).map(|k| k.string()).filter(|k| !lus.contains(k)).collect();
     assert!(oublies.is_empty(), "effets de technologies que le moteur ne lit nulle part : {oublies:?}");

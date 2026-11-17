@@ -1070,6 +1070,138 @@ fn les_grenadiers_infanterie_d_elite_de_choc() {
     let _ = &mut g;
 }
 
+// ================================================================== chaque découverte militaire pèse dans la bataille
+/// Donne une découverte au joueur et recalcule ses effets.
+fn avec_tech(g: &mut Game, tech: &str) {
+    g.factions.at("33").at("techs").push(tech);
+    g.recompute_mods("33");
+}
+
+/// La bataille type de la découverte `tech`, avec ou sans elle : ce qu'elle vaut pour le joueur (plus c'est grand,
+/// mieux c'est pour lui) et « ce qui a pesé ». Les deux camps repartent sans aucune découverte ; les régiments sont
+/// armés et instruits comme à leur levée.
+fn bataille_type(tech: &str, avec: bool) -> (f64, Val) {
+    // (le joueur attaque, situation, stratégies de l'assaillant et du défenseur, âge de la bataille, mesure)
+    let (attaque, sit, s0, s1, age, quoi) = match tech {
+        "baionnette" | "fusil1777" | "percussion" | "minie" | "chassepot" | "gras" | "lebel" | "tir_rang" | "feu_peloton" => {
+            (true, "campagne", "frontal", "contre", 0.5, "inf")
+        }
+        "valliere" | "gribeauval" | "valee" | "lahitte" | "debange" | "canon75" | "art_cheval" => (true, "campagne", "frontal", "contre", 0.15, "art"),
+        "mitrailleuse" => (true, "campagne", "frontal", "contre", 0.5, "art"),
+        "etat_major" | "divisions" => (true, "campagne", "frontal", "contre", 0.5, "tout"),
+        "hussards" => (true, "campagne", "frontal", "contre", 0.5, "cav"),
+        "cuirassiers" => (true, "campagne", "frontal", "contre", 2.0, "cav"),
+        "voltigeurs" => (true, "campagne", "frontal", "contre", 0.5, "tir"),
+        "levee" => (true, "campagne", "frontal", "contre", 2.0, "inf"),
+        "ordre_mixte" => (true, "campagne", "colonnes", "contre", 2.0, "inf"),
+        "service_mil" => (true, "campagne", "frontal", "contre", 0.5, "moral"),
+        "genie" => (true, "ville", "frontal", "remparts", 0.5, "pertes"),
+        "melinite" => (true, "ville", "prep", "remparts", 0.15, "art"),
+        "retranchements" => (false, "position", "coup", "contre", 0.5, "inf"),
+        "aerostiers" => (true, "campagne", "frontal", "tenir", 0.5, "ennemi"), // (« tenir » contre « frontal »)
+        "vauban" => (false, "place", "frontal", "remparts", 0.5, "tout"),
+        "dynamite" => (true, "place", "frontal", "remparts", 0.5, "ennemi"),
+        "rail_militaire" => (true, "campagne", "frontal", "contre", 2.0, "renfort"),
+        _ => panic!("{tech} : une découverte militaire sans bataille type"),
+    };
+    let mut g = partie();
+    for code in ["33", FOE] {
+        g.factions.at(code).set("techs", if avec && code == "33" { list![tech] } else { list![] });
+        g.recompute_mods(code);
+    }
+    let (a, b) = camps(&mut g);
+    if tech == "mitrailleuse" {
+        a.at("regs").push(g.new_reg("mitrailleuses", &Val::None, &Val::from("33")));
+    }
+    for (k, code) in [(&a, "33"), (&b, FOE)] {
+        for r in k.at("regs").iter() {
+            let cls = Game::arm_class(r.at("type").s());
+            if R::ARMS().has(cls.as_str()) {
+                r.set("arm", g.arm_level(code, &cls));
+            }
+            r.set("man", g.known_man(&Val::from(code), &cls));
+            r.set("morale", 80.0);
+        }
+    }
+    let (moi, att, de) = if attaque { (0, &a, &b) } else { (1, &b, &a) };
+    if sit == "place" {
+        // devant une place à remparts : celle du défenseur, sans son armée
+        let tenant = if attaque { FOE } else { "33" };
+        let n = g.nodes.iter().find(|n| n.at("owner") == tenant && n.at("fort") >= 1i64).unwrap();
+        let (x, y) = g.node_xy(n.ati("id"));
+        g.start_battle(&list![att], &list![], x, y, &n.at("id"), false, false);
+    } else {
+        g.start_battle(&list![att], &list![de], a.atf("x"), a.atf("y"), &Val::None, false, false);
+    }
+    let bt = g.battles.at(att.at("battle"));
+    if sit != "place" {
+        bt.set("sit", sit);
+    }
+    if tech == "voltigeurs" {
+        bt.set("cover", true);
+    }
+    if quoi == "renfort" {
+        autre_armee(&mut g, "33", &bt, R::RENFORT_KM + 4.0);
+    }
+    bt.set("t0", g.t - age);
+    let p = un_pas(&mut g, &bt, s0, s1);
+    let rang = |arme: &str| R::rang_arme(arme);
+    let v = match quoi {
+        "tout" => somme(&p[moi]),
+        "ennemi" => -somme(&p[1 - moi]),
+        "pertes" => -bt.at("sides").at(moi).atf("lost"),
+        "moral" => a.at("regs").iter().find(|r| r.at("type") == "ligne").unwrap().atf("morale") - 80.0,
+        "renfort" => bt.at("sides").at(moi).get_or("renf", list![]).len() as f64,
+        arme => p[moi][rang(arme)],
+    };
+    (v, bt.get_or("pese", list![]))
+}
+
+/// Toute découverte militaire de l'arbre (1700 à 1900) change le résultat de sa bataille type, dans le bon sens, et
+/// celles de rules.TECH_BATAILLE le disent dans « ce qui a pesé ».
+#[test]
+fn chaque_decouverte_militaire_pese_dans_la_bataille() {
+    let militaires: Vec<String> =
+        R::TECH().values().iter().filter(|t| t.at("branch") == "infanterie" || t.at("branch") == "artillerie").map(|t| t.ats("id")).collect();
+    assert_eq!(militaires.len(), 32);
+    for tech in &militaires {
+        let ((sans, _), (avec, pese)) = (bataille_type(tech, false), bataille_type(tech, true));
+        assert!(avec > sans + 0.03 * sans.abs(), "{tech} : {avec} avec, {sans} sans");
+        let dits: Vec<String> = R::TECH_BATAILLE().iter().filter(|l| l.at("tech") == tech.as_str()).map(|l| l.ats("t")).collect();
+        assert!(dits.is_empty() || pese.iter().any(|n| dits.iter().any(|t| n.ats("t").starts_with(t.as_str()))), "{tech} : rien dans ce qui a pesé ({pese})");
+    }
+    // la description montrée au joueur dit l'effet en bataille de chaque ligne de la table
+    for l in R::TECH_BATAILLE().iter() {
+        let desc = R::TECH().at(l.at("tech")).ats("desc");
+        assert!(["bataille", "assaut", "défend", "fusillade"].iter().any(|m| desc.contains(m)), "{} : {desc}", l.at("tech"));
+    }
+    // une manœuvre non apprise ne joue pas : la mélinite du camp sans l'exercice du régiment
+    let mut g = partie();
+    let art = g.new_reg("artillerie", &Val::None, &Val::from("33"));
+    avec_tech(&mut g, "melinite");
+    assert_eq!(g.effets_tech("33", &art, 0, "ville", None, None).0[0], 1.0);
+    art.set("man", list!["melinite"]);
+    assert_eq!(g.effets_tech("33", &art, 0, "ville", None, None).0[0], 1.5);
+    assert_eq!(g.effets_tech("33", &art, 1, "ville", None, None).0[0], 1.0, "le défenseur n'y gagne rien");
+    // l'aperçu avant d'attaquer une place en tient compte
+    let (a, _b) = camps(&mut g);
+    let n = g.nodes.iter().find(|n| n.at("owner") == FOE && n.at("fort") >= 1i64).unwrap();
+    g.factions.at("33").at("intel").set(n.at("id").to_string(), g.t + 10.0); // (un espion : le rapport est sûr, à deux décimales)
+    let canons = || a.at("regs").iter().filter(|r| r.at("type") == "artillerie");
+    canons().for_each(|r| r.set("man", list![])); // (pas encore exercés)
+    let sans = g.apercu("33", &a.at("id"), &dict! {"node" => n.at("id")}).atf("ratio");
+    canons().for_each(|r| r.set("man", list!["melinite"]));
+    let avec = g.apercu("33", &a.at("id"), &dict! {"node" => n.at("id")}).atf("ratio");
+    assert!(avec > sans, "aperçu : {avec} avec la mélinite, {sans} sans");
+    // les aérostiers : une reconnaissance sans cavalerie, et plus sûre avec elle
+    let (mut g, bt, a, _b) = duel(true);
+    let p0 = g.reconnaissance(&bt, 0).atf(1);
+    avec_tech(&mut g, "aerostiers");
+    proche(g.reconnaissance(&bt, 0).atf(1), (p0 + 0.2).min(R::RECO_MAX), "reconnaissance avec le ballon");
+    a.set("regs", a.at("regs").iter().filter(|r| r.at("type") != "cavalerie").collect::<Val>());
+    proche(g.reconnaissance(&bt, 0).atf(1), R::RECO_BASE + 0.2, "le ballon seul");
+}
+
 /// Les exemples du contrat (SPEC-BATAILLE.md), imprimés tels que le serveur les envoie :
 /// `cargo test --release -p conquete --test bancs_strategie exemples_du_contrat -- --ignored --nocapture`
 #[test]

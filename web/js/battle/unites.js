@@ -6,7 +6,7 @@ import { TAU, TILT, OMBRE, mixHex, uniform } from './formes.js';
 const SKIN = '#e2b996', HAT = '#1f1b18', WHITE = '#f3efe4', WOOD = '#6e5134', IRON = '#2c2c2a', BRONZE = '#b08a3e', GOLD = '#d6b65a';
 const AFFUT = '#5f6b3e';   // affûts peints en vert olive
 // la pièce de chaque génération (formes.gunModel), comme en 3D : [fût, affût, longueur, épaisseur du fût, bouclier]
-const CARD_GUNS = { ancien: ['#b08a3e', '#7d5c38', 1.25, 0.38], gribeauval: ['#b08a3e', AFFUT, 1, 0.34], valee: ['#b08a3e', AFFUT, 1, 0.34],
+export const CARD_GUNS = { ancien: ['#b08a3e', '#7d5c38', 1.25, 0.38], gribeauval: ['#b08a3e', AFFUT, 1, 0.34], valee: ['#b08a3e', AFFUT, 1, 0.34],
   lahitte: ['#9c7a38', AFFUT, 1.05, 0.29], bange: ['#36393d', '#4f5458', 1.15, 0.27], 75: ['#36393d', '#4f5458', 1.35, 0.19, true],
   reffye: ['#b08a3e', AFFUT, 0.75, 0.46] };   // (la mitrailleuse : un fût court et gros, qui enferme ses 25 canons)
 const HORSES = ['#6b4a2c', '#3f2d1f', '#8b6a47', '#54402e'];
