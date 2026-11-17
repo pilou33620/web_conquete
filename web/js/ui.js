@@ -256,13 +256,14 @@ export class UI {
       if (this.modal !== 'event') this.openModal('event');
     }
     if (this.modal === 'event' && !(st.pending || []).length) this.closeModal();
+    // la bataille dont vous aviez choisi la stratégie est finie : son résultat (pertes, prises, journal par phase),
+    // avant la bataille suivante s'il y en a une
+    const fini = this.finBt;
+    if (fini && !st.over && !this.modal) this.openModal('resultat');
     // une bataille du joueur attend : sa stratégie, puis la poursuite s'il l'a gagnée (la campagne est figée)
     const waitBt = (st.battles || []).find(enAttente);
     if (waitBt && !st.over && (!this.modal || this.modal === 'bataille')) { if (this.modal !== 'bataille') this.openModal('bataille'); }
     else if (this.modal === 'bataille' && !waitBt) this.closeModal();
-    // la bataille dont vous aviez choisi la stratégie est finie : son résultat (pertes, prises, journal par phase)
-    const fini = !waitBt && this.finBt;
-    if (fini && !st.over && !this.modal) this.openModal('resultat');
     // une de vos armées est arrivée devant une place : à vous de choisir (une fenêtre à la fois, après les batailles)
     const asked = !waitBt && !fini && (st.armies || []).find(a => a.ask);
     if (asked && !st.over && (!this.modal || this.modal === 'arrivee')) { if (this.modal !== 'arrivee') this.openModal('arrivee'); }
@@ -1664,7 +1665,7 @@ export class UI {
     this.modalSig = '';
     this.$('modal').hidden = false;
     document.body.classList.add('modal-open');
-    document.body.classList.toggle('modal-event', kind === 'event');   // une décision : rien ne doit masquer ses choix
+    document.body.classList.toggle('modal-event', ['event', 'bataille', 'arrivee', 'resultat'].includes(kind));   // une décision : rien ne doit masquer ses choix
     this.renderModal(true);
     if (kind === 'menu') this.refreshSaves();
     this.tuto.check();

@@ -6,6 +6,7 @@ import { armeSvg } from './icons.js';
 
 const fmt = n => (Math.round(n) || 0).toLocaleString('fr-FR').replace(/^-/, '−');
 const fois = v => '×' + String(Math.round(v * 100) / 100).replace('.', ',');
+const perte = n => (Math.round(n) > 0 ? '−' + fmt(n) : '0');
 const pct = v => Math.round(v * 100) + ' %';
 const OUVRAGE = { fort: 'Fort', remparts: 'Remparts', barricade: 'Barricades', redoute: 'Redoute' };
 const SORT = { blesse: 'blessé', tue: 'tué', pris: 'fait prisonnier' };
@@ -46,7 +47,7 @@ export function contexteHtml(C, b) {
   const S = C.rules.situations?.[b.sit], W = C.rules.weather?.[b.meteo], o = b.ouvrage;
   const role = !S ? '' : b.moi === 1 ? S.def : b.moi === 0 ? S.att : S.label;
   const l = [role, b.terrain, b.river >= 2 ? 'rivière à franchir' : b.river ? 'rivière' : '', b.land ? 'débarquement sous le feu' : '', W ? `${W.icon || ''} ${W.label}`.trim() : ''].filter(Boolean);
-  const ouv = o ? `<p class="bt-ouvrage"><b>${OUVRAGE[o.type] || esc(o.type)}</b> tenu par ${esc(nomCamp(C, b.sides[o.camp]?.o))} : force ${fois(1 + (o.niv || 0))}${o.breche > 0 ? `, brèche ouverte à ${pct(o.breche)}` : ''}.</p>` : '';
+  const ouv = o ? `<p class="bt-ouvrage"><b>${OUVRAGE[o.type] || esc(o.type)}</b> (défenseur : ${esc(nomCamp(C, b.sides[o.camp]?.o))}) : force ${fois(1 + (o.niv || 0))}${o.breche > 0 ? `, brèche ouverte à ${pct(o.breche)}` : ''}.</p>` : '';
   return `<p class="m-sub">${l.map(esc).join(' · ')}.${S ? ' ' + esc(S.desc) : ''}</p>${ouv}`;
 }
 
@@ -83,11 +84,12 @@ export function choixHtml(C, b, voulue) {
 
 // le journal par phase (lignes des phases finies) et ce qui a pesé ; camps : les deux propriétaires [assaillant, défenseur]
 export function journalHtml(C, journal, pese, camps) {
-  const nom = i => esc(nomCamp(C, camps[i])), pastille = c => `<i class="bt-dot" style="background:${couleur(C, camps[c])}"></i>`;
-  const lignes = (journal || []).map(j => `<tr><th>${esc(C.rules.phases?.[j.ph] || j.ph)}</th><td>−${fmt(j.l?.[0])}</td><td>−${fmt(j.l?.[1])}</td>
+  // (c : le camp que le fait avantage ; sans camp, le temps qu'il fait ou le terrain : une pastille neutre)
+  const nom = i => esc(nomCamp(C, camps[i])), pastille = c => `<i class="bt-dot" style="background:${c === 0 || c === 1 ? couleur(C, camps[c]) : '#8d8a7a'}"></i>`;
+  const lignes = (journal || []).map(j => `<tr><th>${esc(C.rules.phases?.[j.ph] || j.ph)}</th><td>${perte(j.l?.[0])}</td><td>${perte(j.l?.[1])}</td>
     <td class="bt-note">${(j.w || []).map(w => `<span>${pastille(w.c)}${esc(w.t)}</span>`).join('')}</td></tr>`).join('');
   const table = lignes ? `<table class="grid bt-journal"><thead><tr><th>Phase</th><th>${nom(0)}</th><th>${nom(1)}</th><th>Ce qui s’est passé</th></tr></thead><tbody>${lignes}</tbody></table>` : '';
-  const poids = (pese || []).length ? `<div class="bt-pese"><b>Ce qui a pesé</b><ul>${pese.map(p => `<li>${pastille(p.c)}${esc(p.t)} <span class="muted">(${nom(p.c)})</span></li>`).join('')}</ul></div>` : '';
+  const poids = (pese || []).length ? `<div class="bt-pese"><b>Ce qui a pesé</b><ul>${pese.map(p => `<li>${pastille(p.c)}${esc(p.t)}${p.c === 0 || p.c === 1 ? ` <span class="muted">(${nom(p.c)})</span>` : ''}</li>`).join('')}</ul></div>` : '';
   return table + poids;
 }
 
@@ -95,7 +97,7 @@ export function journalHtml(C, journal, pese, camps) {
 export function poursuiteHtml(C, b) {
   const w = b.fin?.w ?? b.moi, P = C.rules.poursuite || {}, perdant = b.sides[1 - w], repli = !!b.fin?.repli;
   return `<h2 class="m-title" id="m-title">Victoire${b.node != null && C.nodes[b.node] ? ' — ' + esc(C.nodes[b.node].name) : ''}</h2>
-    <p class="m-sub">${esc(nomCamp(C, perdant.o))} ${repli ? 'décroche en bon ordre' : 'est rompu et s’enfuit'}. Sa stratégie : « ${esc(nomStrat(C, perdant.strat))} » ; la vôtre : « ${esc(nomStrat(C, b.sides[w].strat))} ».</p>
+    <p class="m-sub">Vaincu : ${esc(nomCamp(C, perdant.o))}, ${repli ? 'qui décroche en bon ordre' : 'rompu, en fuite'}. Sa stratégie : « ${esc(nomStrat(C, perdant.strat))} » ; la vôtre : « ${esc(nomStrat(C, b.sides[w].strat))} ».</p>
     ${campsBataille(C, b, true)}${journalHtml(C, b.journal, b.pese, b.sides.map(s => s.o))}
     <div class="section-t">Poursuivre l’ennemi ?</div>
     <div class="ev-choices"><button class="btn primary ev-choice" data-act="tac-pursue" data-id="${esc(b.id)}" data-v="1"><b>Poursuivre</b><small>Votre cavalerie sabre les fuyards : ${pct((P.cav || 0.05) * (repli ? 1 : 2))} des vaincus de plus hors de combat, mais vos hommes s’épuisent (fatigue +${fmt(P.fatigue || 35)}).</small></button>
@@ -111,7 +113,7 @@ export function resultatHtml(C, ev) {
   const pr = ev.prises || {}, prises = [pr.drapeaux ? `${fmt(pr.drapeaux)} ${pr.drapeaux > 1 ? 'drapeaux' : 'drapeau'}` : '', pr.canons ? `${fmt(pr.canons)} ${pr.canons > 1 ? 'canons' : 'canon'}` : ''].filter(Boolean);
   const gens = (ev.generaux || []).map(([c, n, s]) => `<li>${esc(n)} (${esc(nomCamp(C, camps[c]))}) : ${SORT[s] || esc(s)}</li>`).join('');
   return `<h2 class="m-title" id="m-title">${titre}${lieu ? ' — ' + esc(lieu) : ''}</h2>
-    <p class="m-sub">${vq != null ? `${esc(nomCamp(C, vq))} l’emporte` : 'Sans vainqueur'}${ev.w != null ? `, ${esc(nomCamp(C, camps[1 - ev.w]))} ${ev.repli ? 'décroche en bon ordre' : 'est battu'}` : ''}${ev.poursuite ? ' ; le vainqueur poursuit' : ''}.</p>
+    <p class="m-sub">${vq != null ? `Vainqueur : ${esc(nomCamp(C, vq))} ; vaincu : ${esc(nomCamp(C, camps[1 - ev.w]))}${ev.repli ? ', qui décroche en bon ordre' : ''}` : 'Sans vainqueur'}${ev.poursuite ? ' ; le vainqueur poursuit' : ''}.</p>
     <dl class="kv bt-bilan"><dt>Pertes : ${esc(nomCamp(C, ev.a))} (attaque)</dt><dd>${fmt(ev.la)}</dd><dt>Pertes : ${esc(nomCamp(C, ev.d))} (défense)</dt><dd>${fmt(ev.ld)}</dd>
       ${ev.prisonniers ? `<dt>Prisonniers</dt><dd>${fmt(ev.prisonniers)}</dd>` : ''}${prises.length ? `<dt>Prises${vq != null ? ' (' + esc(nomCamp(C, vq)) + ')' : ''}</dt><dd>${prises.join(', ')}</dd>` : ''}</dl>
     ${gens ? `<div class="bt-pese"><b>Généraux</b><ul>${gens}</ul></div>` : ''}${strats}${journalHtml(C, ev.journal, ev.pese, camps)}

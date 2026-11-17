@@ -14,15 +14,17 @@ const TAILLE = 0.7;                  // les figures, réduites comme sur la maqu
 export const PAS = 1.7, FIN = 5;     // secondes : une phase rejouée, puis la fin (le vaincu décroche) avant que la scène s'efface
 const TRACE_JOURS = 120;
 
+// le rayon d'une place sur le plateau (km), pour se poser hors de ses maisons et de ses murs
+export const rayonDe = (mp, n) => (n.type === 'village' ? 1 : n.type === 'fort' ? 1.7 : mp.plateau?.rayon(n) || 1.7);
 const hacher = s => { let h = 2166136261; for (const c of String(s)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
 
 // ------------------------------------------------------------------ ce qui se calcule sans dessin
 // combien de figures pour un camp, d'après ses effectifs par arme : { inf, gren (parmi inf), tir, cav, art }
 export function figurines(armes, men = 0) {
   const a = armes || {}, pied = (a.inf || 0) + (a.grenadiers || 0);
-  const out = { inf: pied > 0 ? clamp(Math.round(pied / 350), 2, 8) : 0, gren: 0, tir: a.tir > 0 ? (a.tir > 400 ? 2 : 1) : 0, cav: a.cav > 0 ? (a.cav > 300 ? 2 : 1) : 0, art: a.art > 0 ? 1 : 0 };
+  const out = { inf: pied > 0 ? clamp(Math.round(pied / 100), 3, 8) : 0, gren: 0, tir: a.tir > 0 ? (a.tir > 400 ? 2 : 1) : 0, cav: a.cav > 0 ? (a.cav > 300 ? 2 : 1) : 0, art: a.art > 0 ? 1 : 0 };
   if (a.grenadiers > 0) out.gren = clamp(Math.round(out.inf * a.grenadiers / pied), 1, out.inf);
-  if (!out.inf && !out.tir && !out.cav && !out.art && men > 0) out.inf = 2;   // (une milice sans détail)
+  if (!out.inf && !out.tir && !out.cav && !out.art && men > 0) out.inf = 3;   // (une milice sans détail)
   return out;
 }
 // le déroulé d'une scène : [{ ph, t }] (la phase et l'heure où elle commence). ajouter : les phases pas encore montrées,
@@ -124,21 +126,33 @@ export class Combat {
   }
 
   creer(b) {
-    const mp = this.map, n = b.node != null ? mp.nodes[b.node] : null, sens = hacher(b.id) & 1 ? 1 : -1, K = mp.K || 1;
+    // (une bataille rangée livrée devant une place, par une armée qui s'y tenait : la scène se pose hors de la place)
+    const tenue = b.node == null && (b.sides || []).flatMap(s => s.armies || []).map(id => this.map.disp.get(id)?.a?.n).find(v => v != null);
+    const mp = this.map, n = b.node != null ? mp.nodes[b.node] : tenue != null ? mp.nodes[tenue] : null, K = mp.K || 1;
+    // l'assaillant du côté d'où il est venu (la marche de son armée), sinon d'un côté tiré du nom de la bataille
+    const venu = (b.sides?.[0]?.armies || []).map(id => mp.disp.get(id)?.a?.trl?.[0]).find(Boolean), dx = venu ? b.x - venu[0] : 0;
+    const sens = Math.abs(dx) > 0.5 ? Math.sign(dx) : hacher(b.id) & 1 ? 1 : -1;
     // D : du camp 0 (l'assaillant) vers le camp 1 (le défenseur), à l'écran ; de profil, les figures se lisent mieux
-    const S = { id: String(b.id), x: b.x, y: b.y, sit: b.sit || 'campagne', D: [0.92 * sens, -0.39], def: 1, figs: [], parts: [], script: [], perdant: null, pertes: [0, 0],
+    const S = { id: String(b.id), bx: b.x, by: b.y, camps: b.sides.map(s => s.o), x: b.x, y: b.y, sit: b.sit || 'campagne', D: [0.92 * sens, -0.39], def: 1, figs: [], parts: [], script: [], perdant: null, pertes: [0, 0],
                 cols: b.sides.map(s => mp.colors[s.o] || '#8d8a7a'), n0: b.sides.map(s => (s.men || 0) + (s.lost || 0)),
                 nb: b.sides.map(s => figurines(s.armes, s.men)), q: 0, place: null, redoute: null };
     if (n && (S.sit === 'ville' || S.sit === 'fort')) {
       // la place du plateau : le fort en étoile (1,6 km aux pointes), ou l'enceinte de la ville ; on en garnit le rempart
-      S.x = n.x; S.y = n.y; S.place = S.sit === 'fort' ? 1.2 : Math.max(0.9, (mp.plateau?.rayon(n) || 1.7) * 0.93);
+      // (là où le plateau l'a bâtie : sur sa tuile, qui n'est pas toujours le point de la carte, et son enceinte autour de ses hexagones)
+      const pl = mp.plateau, l = pl?.lieux.get(n.id), m = l && S.sit === 'ville' ? pl.murDe(l) : null, f = pl?.g.f || 1;
+      [S.x, S.y] = m ? [m.x * f, m.z * f] : l ? [l.t.x * f, l.t.z * f] : [n.x, n.y];
+      S.place = S.sit === 'fort' ? 1.15 : m ? m.rad * f * 0.95 : Math.max(0.9, rayonDe(mp, n) * 0.93);
     } else {
-      if (n) { const r = (mp.plateau?.rayon(n) || 0.8) + 1; S.x = n.x - S.D[0] * r; S.y = n.y - S.D[1] * r / K; }   // une place ouverte : devant ses maisons
+      if (n) { const r = rayonDe(mp, n) + 1; S.x = n.x - S.D[0] * r; S.y = n.y - S.D[1] * r / K; }   // une place ouverte : devant ses maisons
       if (b.ouvrage || S.sit === 'position') S.redoute = { nom: b.ouvrage?.type === 'barricade' ? 'Barricade' : 'Redoute' };
     }
     this.scenes.set(S.id, S);
     return S;
   }
+
+  // une armée est-elle montrée par une scène ? (en bataille, ou sa bataille vient de finir et se rejoue : map.js ne
+  // dessine pas ses régiments par-dessus)
+  montre(a) { for (const S of this.scenes.values()) if (S.camps.includes(a.o) && Math.hypot(S.bx - a.x, S.by - a.y) < 2.5) return true; return false; }
 
   // le rempart tenu par le défenseur, en unités de la scène : l'arc de la place tourné vers l'assaillant, ou les trois
   // pans de la redoute qui lui font face
@@ -302,7 +316,7 @@ export class Combat {
   traces(ctx, st, z) {
     const mp = this.map, s = clamp(z * 0.09, 0.75, 1.5);
     for (const [x, y, age, , , o0, o1, w, , place] of st.sites || []) {
-      const n = place != null ? mp.nodes[place] : null, [tx, ty] = lieuTrace(x, y, n ? mp.plateau?.rayon(n) || 1 : 0);
+      const n = place != null ? mp.nodes[place] : null, [tx, ty] = lieuTrace(x, y, n ? rayonDe(mp, n) : 0);
       if ([...this.scenes.values()].some(S => Math.hypot(S.x - x, S.y - y) < 4)) continue;   // (la scène se joue encore)
       const [sx, sy] = mp.toScreen(tx, ty);
       if (sx < -20 || sy < -20 || sx > mp.vw + 20 || sy > mp.vh + 20) continue;

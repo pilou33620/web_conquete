@@ -7,7 +7,7 @@ import { C, E, T, RR, PG, TAU, SPR, toile, avant, bat, caisson, cavalier, cheval
 import { AMB, LUM, U, Z, bivouac, nuit } from './ambiance.js';
 import { S as SU, IC, carteDe, etatVille, lieuxPlan, planDe } from './villes.js';
 import { LARG_RIVIERE } from './terre.js';
-import { lieuTrace } from './combat.js';
+import { lieuTrace, rayonDe } from './combat.js';
 
 export const VENT = [0.004, -0.002];   // km/s : le vent d'ouest emporte les fumées vers l'est
 const hash2 = (i, j, k = 0) => { let n = (Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263) + Math.imul(k | 0, 1442695041)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -823,7 +823,7 @@ export class Guerre {
     const me = st.me?.code, ar = this.ar = { st, sites: [], fetes: new Map(), recrues: [], rv: new Map(), routes: new Map(), lx: new Map(), estafettes: [] };
     for (const [x0, y0, age, l0, l1, o0, o1, w, pris, place] of st.sites || []) {
       // (devant une place : le champ de bataille est hors de ses murs, comme sa marque sur l'hexagone, carte/combat.js)
-      const [x, y] = lieuTrace(x0, y0, place != null && mp.nodes[place] ? mp.plateau?.rayon(mp.nodes[place]) || 1 : 0);
+      const [x, y] = lieuTrace(x0, y0, place != null && mp.nodes[place] ? rayonDe(mp, mp.nodes[place]) : 0);
       const h = (x * 100 | 0) ^ (y * 37 | 0), S = { x, y, age, tombes: tombes(x, y, l0 + l1), convois: [],
         pt: Array.from({ length: 40 }, (_, k) => [x + (hash2(k, h, 153) - 0.5) * 2.2, y + (hash2(k, h, 154) - 0.5) * 1.1, 0.09, 0.05, hash2(k, h, 155) * 3]) };
       const dep = age < JOURS.blesses ? plusProche(mp, st, x, y, () => true) : null;

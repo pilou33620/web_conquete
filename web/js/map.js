@@ -2540,7 +2540,7 @@ export class MapView {
       if (a.h) ctx.globalAlpha = 0.62;
       if (a.rail && a.n == null) this.drawTrain(ctx, a, d, col, sel, time);
       else if (a.boat && a.n == null) this.drawBoat(ctx, a, d, col, sel, time);
-      else if (vie || (detailed && a.st === 'battle')) this.drawLife(ctx, a, sel);   // (en bataille : la petite scène la montre, carte/combat.js)
+      else if (vie || (detailed && (a.st === 'battle' || this.combatDe().montre(a)))) this.drawLife(ctx, a, sel);   // (en bataille : la petite scène la montre, carte/combat.js)
       else if (detailed) this.drawFormation(ctx, a, d, col, sel, time);
       else this.drawToken(ctx, a, d, col, sel, time);
       ctx.restore();
