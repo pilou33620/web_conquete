@@ -649,5 +649,6 @@ body.modal-event #proposals { display: none; }   /* une décision à prendre : l
 .bt-rapport { display: flex; flex-direction: column; gap: 4px; font-size: 14px; padding: 0 4px; }
 .bt-jauge { height: 7px; border-radius: 4px; background: var(--cire); overflow: hidden; } .bt-jauge i { display: block; height: 100%; background: #5d86c9; }
 .bt-apercu .bt-forces { margin: 6px 4px 2px; gap: 8px; }
-#bubble .bt-apercu { max-width: 290px; } #bubble .bt-camp > b { font-size: 14px; } #bubble .bt-armes { font-size: 13px; }
+#bubble .bt-apercu { max-width: 290px; } #bubble .bt-armes dt span { display: none; }   /* (dans la bulle : l'icône et le nombre) */
+#bubble .bt-armes { grid-template-columns: auto auto; justify-content: start; gap: 1px 6px; } #bubble .bt-camp > b { font-size: 14px; } #bubble .bt-armes { font-size: 13px; }
 @media (max-width: 520px) { .bt-forces { gap: 8px; } .bt-armes { font-size: 13.5px; } .bt-journal { font-size: 13px; } }

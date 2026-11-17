@@ -25,7 +25,7 @@ export function titreBataille(C, b) {
 export function armesHtml(C, armes) {
   const L = C.rules.armes || {};
   const l = Object.keys(L).filter(k => armes?.[k] > 0);
-  return l.length ? `<dl class="bt-armes">${l.map(k => `<dt>${armeSvg(k)} ${esc(L[k])}</dt><dd>${fmt(armes[k])}</dd>`).join('')}</dl>` : '';
+  return l.length ? `<dl class="bt-armes">${l.map(k => `<dt title="${esc(L[k])}">${armeSvg(k)} <span>${esc(L[k])}</span></dt><dd>${fmt(armes[k])}</dd>`).join('')}</dl>` : '';
 }
 
 // un camp : son nom, son rôle, ses hommes et ses armes ; extra : ce qui s'ajoute dessous (général, renforts, pertes)
