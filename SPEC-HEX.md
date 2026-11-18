@@ -13,6 +13,33 @@ tuiles en relief, ombrage à trois tons, contours sombres, maisons et arbres en 
 
 Le détail des villes, des villages et des bâtiments de bataille est plus poussé que sur les maquettes.
 
+## Le moteur commun web_engine (18/11/2026)
+
+Décision du 18/11/2026 : tout le moteur graphique du plateau passe sur la bibliothèque commune **web_engine**
+(<https://github.com/pilou33620/web_engine>, `lib/`), celle de web_royaumes et de web_power. Elle est copiée dans
+`web/graphismes/` (partie `rendu`, avec three.js r186) par `outils/maj-graphismes.sh`, vérifiée en CI
+(`--verifier`) et mise à jour chaque lundi par `.github/workflows/graphismes.yml`. **Les graphismes se modifient dans
+web_engine, jamais dans `web/graphismes/`.** Le rendu doux ci-dessous (moteur.js, modeles.js) est retiré ; le plateau
+prend le style de web_engine : ombrage toon à trois tons, contours bruns, hexagones séparés et étagés, mer translucide,
+forêts de sapins et feuillus, massifs de roche, parcellaire et épouvantails, rivières en rubans de sable et d'eau,
+bâtiments d'époque (Ancien Régime, Lumières, Empire, Révolution industrielle) aux couleurs du camp.
+
+- **Adaptateur** (`web/js/hex/plateau.js`) : même interface pour `map.js` qu'avant (`image`, `hauteur`, `rayon`,
+  `territoire`, `colorer`, `papier`, `majLieux`, `lieux`, `g.f`). Il ne dessine rien : il traduit la carte et l'état.
+- **Carte** (`web/js/hex/carte-moteur.js`) : les cases de 1 km au format de carte du moteur (terrain, forêts, champs,
+  rivières). Le moteur bâtit toute sa carte d'un coup et vise quelques milliers de cases : on ne lui donne qu'une
+  **fenêtre** autour de la caméra (1,5 fois l'écran, au plus 1 500 cases), en hexagones de 4 km de près, puis 8, 16 et
+  32 km en s'éloignant (la France entière tient en hexagones de 32 km). La fenêtre est refaite quand la vue en sort ou
+  qu'on zoome assez pour un niveau plus fin, une fois la caméra posée (0,5 à 1 s de calcul, surtout les arbres).
+- **Caméra** : celle du moteur est en perspective ; l'adaptateur lui donne à chaque image la vue orthographique
+  inclinée du jeu (ci-dessous), si bien que rien ne change pour les calques 2D. La boucle du moteur continue d'animer,
+  mais l'image n'est dessinée que par la boucle de `map.js`, et seulement quand quelque chose a changé.
+- **Places** : le cœur (palais, église, maison, citadelle) sur l'hexagone de la place, des quartiers sur les voisins
+  pour les grandes villes, une tour si elle est fortifiée, la version incendiée après un pillage.
+- **Perdu pour l'instant** (à ajouter dans web_engine si on le veut) : le paysage des siècles sur le plateau (pinèdes,
+  marais drainés, vigne roussie), les enceintes dessinées autour des villes, la teinte des territoires (restent les
+  liserés), les étangs plus petits qu'un hexagone, la mer qui fonce vers le large.
+
 ## Le rendu doux (14/11/2026)
 
 Décision du 14/11/2026, après les maquettes `web/js/dev/carte-douce.html` et `web/js/dev/bataille-douce.html` : le plateau
@@ -58,12 +85,12 @@ avec un avertissement dans la console : c'est un secours, pas un choix.
 
 | Fichier | Rôle |
 |---|---|
-| `web/js/hex/moteur.js` | Le moteur repris de web_power, passé au rendu doux : matériau lisse, lots fusionnés (`put`, `fige`), tuiles biseautées (`tuiles`), formes, toits, rubans, la grille d'hexagones (`Grille`), la scène sous le canevas 2D (`Scene3D`) |
-| `web/js/hex/modeles.js` | Les modèles : maisons de chaque pays (portes, fenêtres, volets, colombages, cheminées), église (clocher-mur en Béarn), cathédrale, halle, château, moulin, arbres, barque, quai, enceintes selon les remparts (1 à 4), fort en étoile |
-| `web/js/hex/plateau.js` | La carte de campagne : hexagones de 4 km, terrain, rivières, étangs, routes, territoires, paysage des siècles, villes et villages d'après l'état, carte d'époque |
+| `web/graphismes/` | La bibliothèque graphique web_engine (copie, ne pas modifier ici) : `rendu/` (scène, plateau, modèles…) et `three/` |
+| `web/js/hex/grille.js` | La grille d'hexagones (`Grille`) et la projection inclinée (`K`, `C`, `versEcran`, `versJeu`), sans three.js |
+| `web/js/hex/carte-moteur.js` | La carte du jeu au format du moteur : niveaux de détail (`Niveau`), fenêtre (`cadrer`, `fenetre`) |
+| `web/js/hex/plateau.js` | L'adaptateur : la carte de campagne dessinée par le moteur web_engine, caméra calée sur celle du jeu |
 | `web/js/hex/champ.js` | Le champ de bataille : hexagones de 40 m, décor, routes, ponts, haies, clôtures, bâtiments (états du serveur), enceinte, barricades, cratères |
 | `web/js/hex/troupes3d.js` | Les troupes en figurines 3D instanciées, posées par la logique de `battle/troupes2d.js` |
-| `web/js/dev/modeles-hex.html` | Galerie des modèles |
 
 ## Comment les calques 2D tombent sur le plateau
 

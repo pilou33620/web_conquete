@@ -1,0 +1,78 @@
+# Bibliothèque graphique web_engine
+
+La bibliothèque graphique commune des jeux. Elle vit dans `web_engine/lib/`, et chaque jeu en garde une copie dans son propre dossier `graphismes/`.
+
+- **Une seule source :** on modifie les graphismes **uniquement dans web_engine**. Les jeux reçoivent la nouvelle version par une commande, ou par la demande de fusion automatique du lundi.
+- **Pourquoi une copie plutôt qu'un sous-module ou un CDN :** le jeu continue de marcher hors ligne (Raspberry Pi, réseau local), avec un simple `git pull` ou un zip. Un sous-module ne suivrait pas les mises à jour par `git pull`, et un CDN couperait le jeu hors ligne.
+- **Version :** elle figure dans `package.json` ; les changements sont décrits dans `CHANGELOG.md`. Dans un jeu, `graphismes/VERSION.json` indique la version et le commit de web_engine installés.
+
+## Contenu
+
+**Tous les rendus sont dans un seul dossier, `rendu/`.** Un seul moteur, celui du style web_royaumes, dessine le terrain, la nature (forêts, montagnes, rivières, champs, mer), la météo, l'heure du jour, la vie, les bâtiments anciens (1700 → 1816) et les bâtiments modernes (1900 → 2035). Les bâtiments modernes reprennent les modèles de web_power, qui ne fournit que ceux-là.
+
+| Partie | Contenu | A besoin de |
+|---|---|---|
+| `rendu/` | tous les rendus, en modules ES (détail ci-dessous) ; `rendu.css` ; `img/` (illustrations des événements, SVG), `icons/` (icônes de l'application, PNG) | `three` |
+| `three/` | three.js r186 (`three.module.js`, `three.core.js`) et `addons/utils/BufferGeometryUtils.js` : une bibliothèque tierce, pas un rendu | — |
+
+| Module de `rendu/` | Rôle |
+|---|---|
+| `scene.js`, `toon.js` | la scène, la caméra et la lumière ; l'ombrage toon et les contours, les briques des modèles (`lot`, `put`, `fige`, `boite`, `cyl`, `cone`, `sphere`) |
+| `plateau.js` | le terrain et la nature : cases, mer, rivières, forêts, collines, montagnes, champs, saisons et neige |
+| `modeles.js` | les bâtiments anciens (styles Ancien Régime, Lumières, Empire, Révolution industrielle) et les armées |
+| `modernes.js` | les bâtiments modernes : installations électriques, lignes (`pylone`, `BAT.ligne15`…`ligne400`), eau, déchets, quartiers, fermes ; leur catalogue (`INSTALLATIONS`, `QUARTIERS`) et les époques modernes (`EPOQUES`) |
+| `monde.js`, `vie.js`, `quartiers.js` | ce qui vit sur le plateau : bâtiments posés, fumées, drapeaux, habitants, bêtes, bateaux, vie des quartiers |
+| `meteo.js`, `routes.js`, `etiquettes.js` | le temps et l'heure du jour ; les routes ; les bannières et étiquettes HTML |
+| `remparts.js`, `forts.js`, `sieges.js`, `marine.js`, `espions.js`, `brouillard.js`, `guerre_commun.js` | la guerre : remparts, forts, sièges, flottes, espions, brouillard de guerre |
+
+### Mise en route
+
+- **La page :** le moteur démarre à l'import de `scene.js`. La page doit contenir `<canvas id="carte">`, `<div id="etiquettes">` et `<div id="eclair">`, et charger `rendu/rendu.css`.
+- **Une partie complète :** on donne au moteur une carte et un état de partie au format du serveur de web_royaumes, dans l'ordre de `appliquer()` de son `main.js` :
+
+```js
+import * as plateau from './graphismes/rendu/plateau.js';
+import { initMonde, synchroniser } from './graphismes/rendu/monde.js';
+import { majVie } from './graphismes/rendu/vie.js';
+import { majQuartiers } from './graphismes/rendu/quartiers.js';
+import { appliquerMeteo } from './graphismes/rendu/meteo.js';
+
+initMonde(regles); plateau.construire(carte);
+plateau.majEtat(etat); plateau.majSaison(etat.saison, etat.meteo.neige_sol); synchroniser(etat);
+majVie(etat); majQuartiers(etat); appliquerMeteo(etat.meteo, etat.saison);
+```
+
+- **Les bâtiments modernes :**
+
+```js
+import { BAT, QBAT, bFerme, modele, animer, INSTALLATIONS, EPOQUES } from './graphismes/rendu/modernes.js';
+const m = modele(BAT.nucleaire, 1);   // à l'échelle du plateau (une case de 10 → 1) ; modele(…, { chantier: true }) : en travaux
+m.groupe.position.set(x, y, z); scene.add(m.groupe);
+animer(m, { pop: true });             // fumées, éoliennes au vent, fenêtres la nuit, courant des lignes, rebond de construction
+const en1960 = INSTALLATIONS.filter(t => t.an <= 1960 && !(t.fin && t.fin < 1960));
+```
+
+- **Un modèle neuf :** utilisez les briques de `toon.js`, en unités de 10 par case, puis ramenez le groupe à l'échelle du plateau (× 0,1, `ECH_BAT`).
+- **Exemples complets :** `web_engine/carte-test/carte.js` (toutes les époques sur une carte) et `web_engine/galerie/web_royaumes/monde.html`.
+
+## Jeux qui utilisent la bibliothèque
+
+| Jeu | Dossier | `PARTIES` |
+|---|---|---|
+| web_royaumes | `web/graphismes/` | `rendu` (servi par le serveur Rust) |
+| web_power | `graphismes/` | `rendu` (le moteur unique depuis la 2.3.0 : le jeu dessine dans un groupe à son échelle, voir son `js/01-moteur.js`) |
+
+## Utiliser la bibliothèque dans un jeu
+
+1. **Copier le script :** placez `web_engine/outils/jeu/maj-graphismes.sh` dans `outils/` du jeu, puis réglez deux lignes : `PARTIES=`, les parties dont le jeu a besoin (leurs dépendances suivent toutes seules), et `DEST=`, si le dossier servi n'est pas la racine (par exemple `DEST=web/graphismes`).
+2. **Installer :** lancez `bash outils/maj-graphismes.sh`. Le dossier est créé avec ces parties seulement, et `VERSION.json`. Commitez-le.
+3. **Charger :** importez les modules depuis ce dossier (voir plus haut).
+4. **Vérifier en CI :** ajoutez une étape `bash outils/maj-graphismes.sh --verifier`. Elle échoue si quelqu'un modifie les graphismes dans le jeu au lieu de web_engine.
+5. **Recevoir les mises à jour :** copiez `web_engine/outils/jeu/graphismes.yml` dans `.github/workflows/`. Chaque lundi, ou à la demande, il ouvre une demande de fusion, **seulement si l'une des parties du jeu a changé**. Une version qui ne touche pas ses parties ne lui propose rien.
+
+## Faire évoluer la bibliothèque
+
+1. **Modifier :** changez `lib/` dans web_engine.
+2. **Vérifier :** `node outils/verifier.mjs` (la galerie et la carte test utilisent `lib/`).
+3. **Versionner :** augmentez la version dans `lib/package.json` et décrivez le changement dans `lib/CHANGELOG.md`.
+4. **Publier :** poussez sur main. Les jeux reçoivent la demande de fusion le lundi suivant, ou tout de suite avec `bash outils/maj-graphismes.sh` (ou le bouton « Run workflow » de l'action « graphismes »).

@@ -18,7 +18,7 @@ import { armeImage } from './icons.js';
 import * as ambiance from './carte/ambiance.js';
 import { terre, EAU, SABLE, LARG_RIVIERE } from './carte/terre.js';
 import { Plateau } from './hex/plateau.js';
-import { K as HEX_K, C as HEX_C } from './hex/moteur.js';
+import { K as HEX_K, C as HEX_C } from './hex/grille.js';
 const TILE = 256;
 function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 function rgb(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
@@ -364,10 +364,9 @@ export class MapView {
     if (this.plateau) return true;
     if (this.plateauKo) return false;
     try {
-      const c = this.cv3 = document.createElement('canvas');
-      c.id = 'map3d'; c.setAttribute('aria-hidden', 'true');
-      this.cv.parentNode.insertBefore(c, this.cv);
-      this.plateau = new Plateau(this, c);
+      // (le canevas du moteur graphique web_engine, posé sous celui-ci par hex/plateau.js)
+      this.cv3 = document.getElementById('carte');
+      this.plateau = new Plateau(this, this.cv3);
     } catch (e) {
       console.warn('Plateau 3D indisponible, carte classique', e);
       this.plateauKo = true; this.cv3?.remove(); this.cv3 = null; this.plateau = null;

@@ -5,7 +5,7 @@
 // par towns.js debout sur des panneaux, leurs noms sur des plaques d'ardoise, un ciel et une brume lointaine.
 // Caméra : glisser pour se déplacer, molette ou pincement pour zoomer (la vue se couche en zoomant), clic droit glissé
 // pour pivoter. Les clics du jeu (villes, armées) ne sont pas encore branchés.
-import * as THREE from '../vendor/three/three.module.js';
+import * as THREE from '../graphismes/three/three.module.js';
 import { MapView } from './map.js';
 import { TownArt } from './towns.js';
 

@@ -23,5 +23,9 @@ jobs:
       - name: Moteur et serveur (Rust)
         run: cargo test -p conquete
 
+      # les graphismes viennent de web_engine : web/graphismes/ ne se modifie pas dans le jeu (SPEC-HEX.md)
+      - name: Graphismes (web_engine)
+        run: bash outils/maj-graphismes.sh --verifier
+
       - name: Interface (node)
         run: node --test --test-reporter=dot tests/*.test.mjs

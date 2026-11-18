@@ -702,12 +702,13 @@ web/                 interface : index.html, css/style.css, js/map.js (rendu can
                      de la carte), js/towns.js (dessin des villes), js/ui.js, js/strategie.js (fenêtre de bataille : choix de la
                      stratégie, poursuite, résultat), js/carte/combat.js (la petite bataille dessinée sur son hexagone),
                      js/tuto.js (tutoriel), js/main.js
-web/js/hex/          rendu en plateau d'hexagones 3D, style web_power, par défaut (SPEC-HEX.md) : moteur.js (moteur et caméra
-                     inclinée), modeles.js (maisons de chaque pays, églises, enceintes…), plateau.js (carte de campagne) ; le seul rendu (l'ancien, en secours sans WebGL)
+web/js/hex/          rendu en plateau d'hexagones 3D par le moteur commun web_engine (SPEC-HEX.md) : grille.js (grille et caméra
+                     inclinée), carte-moteur.js (carte du jeu au format du moteur), plateau.js (adaptateur) ; le seul rendu (l'ancien, en secours sans WebGL)
 web/js/battle/       ce qui reste de l'ancienne vue de bataille et sert à la campagne : formes.js (outils communs : uniformes
                      d'époque, nombres, texte échappé, couleurs), unites.js (figurines peintes des cartes de régiment et des
                      armées de la carte), qualite.js (mémoire laissée à ces figurines selon l'appareil)
-web/vendor/three/    Three.js r186 (licence MIT), copié tel quel pour la carte de campagne : le jeu marche hors ligne
+web/graphismes/      bibliothèque graphique web_engine (rendu/ et three.js r186), copiée par outils/maj-graphismes.sh : ne pas la
+                     modifier ici mais dans web_engine (vérifié en CI) ; le jeu marche hors ligne
 saves/               parties sauvegardées (JSON)
 tests/               bancs d'essai (voir « Tests » ci-dessous)
 ```

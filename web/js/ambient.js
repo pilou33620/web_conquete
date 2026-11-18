@@ -8,7 +8,7 @@
 import { clamp } from './battle/formes.js';
 import { VIE, preparer, majEtat, dessinerSol, dessinerDessus, avancer, ventDe } from './carte/vie.js';
 import { meteoEn } from './carte/ambiance.js';
-import { C as HEX_C } from './hex/moteur.js';
+import { C as HEX_C } from './hex/grille.js';
 const T = { OCEAN: 0 };
 const TAU = Math.PI * 2;
 const frac = v => v - Math.floor(v);
