@@ -3,19 +3,21 @@
 // foret, rivieres…). Sans three.js : testé par tests/hex.test.mjs.
 //
 // Le moteur est fait pour des cartes de quelques milliers de cases, toutes bâties d'un coup (décor par case). La France
-// en hexagones de 4 km en compte près de 92 000 : le plateau ne bâtit qu'une fenêtre autour de la caméra, et de loin des
-// hexagones plus grands (niveaux de détail PAS : 4, 8, 16 puis 32 km d'un bord plat à l'autre), pour ne jamais dépasser
-// MAXC cases.
+// d'un coup, le décor (arbres, parcelles) coûte cher : le plateau ne bâtit qu'une fenêtre autour de la caméra. La
+// géographie doit rester lisible de loin (côtes, fleuves, pays) : les hexagones gardent donc la taille des anciennes
+// versions du jeu (4 cases d'un bord plat à l'autre) aussi longtemps que possible ; de loin c'est le décor qui s'allège
+// (NIVEAUX : un arbre par hexagone de forêt, pas de parcelles, les massifs restent), et les hexagones ne grossissent
+// qu'en dernier (l'Europe entière : 8 cases).
 import { Grille, SQ3, bruit } from './grille.js';
 
-export const PAS = [4, 8, 16, 32];
-export const MAXC = 1500;     // cases bâties au plus par le moteur (≈ 0,5 à 1 s pour les bâtir, surtout les arbres)
+// du plus fin au plus large : taille des hexagones, décor allégé ?, cases bâties au plus par le moteur
+export const NIVEAUX = [{ pas: 4, leger: false, max: 1500 }, { pas: 4, leger: true, max: 12000 }, { pas: 8, leger: true, max: 12000 }, { pas: 16, leger: true, max: 12000 }];
 const MARGE = 1.5;            // la fenêtre couvre l'écran × MARGE : on peut glisser un peu sans rebâtir
 // terrains du jeu (map.js, T) → terrains du moteur : 0 mer, 1 haut-fond, 2 lac, 3 sable, 4 plaine, 5 colline, 6 montagne
 const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
 const VERS = [0, 2, 4, 4, 4, 4, 5, 6, 6, 3, 4];
 // rivières montrées selon la taille des hexagones (rang 1 : les fleuves)
-const RANG_MAX = { 4: 3, 8: 2, 16: 1, 32: 1 };
+const RANG_MAX = { 4: 3, 8: 3, 16: 2 };
 
 // l'hexagone (indice ligne × colonnes + colonne) sous un point du jeu, ou −1 hors de la grille
 export function indexEn(g, x, y) {
@@ -30,9 +32,9 @@ export function indexEn(g, x, y) {
 // Un niveau de détail : toute la carte du jeu en hexagones de `pas` km, au vocabulaire du moteur.
 // mp : { W, H, terrain, playable, m: { rivers } } (la carte de map.js)
 export class Niveau {
-  constructor(mp, pas) {
+  constructor(mp, pas, leger = false) {
     const g = this.g = new Grille(mp.W, mp.H, pas), n = g.liste.length, W = mp.W, H = mp.H;
-    this.pas = pas; this.u = pas / SQ3;   // u : km par unité du moteur (rayon d'un hexagone = 1)
+    this.pas = pas; this.leger = leger; this.u = pas / SQ3;   // u : km par unité du moteur (rayon d'un hexagone = 1)
     const cnt = new Uint16Array(n * 11), jeu = new Uint16Array(n), terre = new Uint16Array(n);
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
       const h = indexEn(g, i + 0.5, j + 0.5); if (h < 0) continue;
@@ -55,7 +57,7 @@ export class Niveau {
       // arbres comptés par le moteur (0 à 6 par case) : la part des bois, et quelques arbres épars dans les prés
       arbres[h] = b === T.FORET ? 6 : b === T.LANDE ? 3 : Math.min(6, Math.round(bois * 6 + (bruit(t.col * 0.4, t.row * 0.4, 9) > 0.7 ? 1 : 0)));
       if (b === T.MARAIS) arbres[h] = Math.max(arbres[h], 1);
-      if (pas > 4) arbres[h] = Math.ceil(arbres[h] / 2);   // (de loin, moitié moins d'arbres : ce sont eux qui coûtent)
+      if (leger) arbres[h] = foret[h];   // (de loin, un arbre par hexagone de forêt : ce sont eux qui coûtent)
     }
     // la côte : la mer au bord des terres devient haut-fond (le sable sous l'eau translucide)
     for (let h = 0; h < n; h++) if (ter[h] === 0 && g.voisins(g.liste[h]).some(v => ter[v.i] >= 3)) ter[h] = 1;
@@ -79,12 +81,14 @@ export class Niveau {
   estEau(h) { return this.terrain[h] < 3; }
 }
 
-// Le niveau de détail pour un écran de vw × vh px à z px par km (vue aplatie de k sur la verticale) : le plus fin dont
-// la fenêtre tient en MAXC cases. Rend { pas, l, h } (colonnes et lignes de la fenêtre).
-export function choisirPas(vw, vh, z, k) {
-  for (const pas of PAS) {
-    const d = dims(pas, vw, vh, z, k);
-    if (d.l * d.h <= MAXC || pas === PAS[PAS.length - 1]) return { pas, ...d };
+// Le niveau de détail pour un écran de vw × vh px à z px par case (vue aplatie de k sur la verticale) sur une carte de
+// W × H cases : le plus fin dont la fenêtre tient dans son maximum de cases. Rend { niv, pas, leger, l, h } (rang dans
+// NIVEAUX, colonnes et lignes de la fenêtre).
+export function choisirPas(vw, vh, z, k, W = Infinity, H = Infinity) {
+  for (let niv = 0; niv < NIVEAUX.length; niv++) {
+    const { pas, leger, max } = NIVEAUX[niv], d = dims(pas, vw, vh, z, k);
+    d.l = Math.min(d.l, Math.floor(W / pas) + 1); d.h = Math.min(d.h, Math.floor(H / (1.5 * pas / SQ3)) + 1);
+    if (d.l * d.h <= max || niv === NIVEAUX.length - 1) return { niv, pas, leger, ...d };
   }
 }
 function dims(pas, vw, vh, z, k) {

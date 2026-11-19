@@ -62,30 +62,31 @@ export class Plateau {
     this.st = null; this.cleCam = ''; this.tCam = 0; this.tRendu = 0; this.sale = true;
   }
 
-  niveau(pas) {
-    let N = this.niveaux.get(pas);
-    if (!N) { N = new Niveau(this.mp, pas); this.placer(N); this.niveaux.set(pas, N); }
+  niveau(pas, leger) {
+    const cle = pas + (leger ? 'l' : '');
+    let N = this.niveaux.get(cle);
+    if (!N) { N = new Niveau(this.mp, pas, leger); this.placer(N); this.niveaux.set(cle, N); }
     return N;
   }
   // chaque place sur son hexagone, les grandes villes sur quelques voisins ; de loin, seules les plus grandes
   placer(N) {
-    const g = N.g, p = N.pas; N.places = new Map(); N.ville = new Set();
+    const g = N.g, p = N.pas, loin = N.leger; N.places = new Map(); N.ville = new Set();
     const ordre = this.mp.nodes.slice().sort((a, b) => RANG[a.type] - RANG[b.type] || (b.pop0 || 0) - (a.pop0 || 0));
     for (const n of ordre) {
-      if (n.type === 'village' && p > 8 || n.type === 'ville' && p > 16 && (n.pop0 || 0) < 20000) continue;
+      if (loin && (n.type === 'village' || n.type === 'ville' && (p > 4 || (n.pop0 || 0) < 7000))) continue;   // (de loin, les grandes seulement)
       let h = indexEn(g, n.x, n.y);
       if (h < 0) continue;
       const libres = k => g.voisins(g.liste[k]).map(v => v.i).filter(v => !N.ville.has(v) && !N.estEau(v));
       if (N.ville.has(h) || N.estEau(h)) h = libres(h).sort((a, b) => dist(g, a, n) - dist(g, b, n))[0] ?? -1;
       if (h < 0) continue;
-      const nb = p >= 16 ? 0 : n.type === 'capitale' ? (n.pop0 > 50000 ? 6 : 2) : n.type === 'ville' && n.pop0 > 7000 ? 1 : 0;
+      const nb = loin ? 0 : n.type === 'capitale' ? (n.pop0 > 50000 ? 6 : 2) : n.type === 'ville' && n.pop0 > 7000 ? 1 : 0;
       const hex = [h, ...libres(h).slice(0, nb)];
       for (const k of hex) N.ville.add(k);
       N.places.set(n.id, { n, hex });
     }
     // fermes et moulins dans les campagnes cultivées, à l'écart des places (de près seulement)
     N.campagne = [];
-    if (p <= 8) for (const t of g.liste) {
+    if (!loin) for (const t of g.liste) {
       const k = t.i, r = hache(t.col, t.row, 31);
       if (r >= FERMES + MOULINS || !N.fertile[k] || N.riviere[k] || N.ville.has(k) || g.voisins(t).some(v => N.ville.has(v.i))) continue;
       N.campagne.push([k, r < FERMES ? 'ferme' : 'moulin']); N.ville.add(k);
@@ -93,11 +94,18 @@ export class Plateau {
   }
 
   // ---------------------------------------------------------------- la fenêtre bâtie par le moteur
-  batir(pas, cx, cy, l, h) {
-    const N = this.niveau(pas), f = cadrer(N, cx, cy, l, h);
-    this.N = N; this.fen = f; this.g.f = f.u / 10;
-    this.C = fenetre(N, f, N.ville);
-    E.P.construire(this.C);
+  batir(v, cx, cy) {
+    const N = this.niveau(v.pas, v.leger), f = cadrer(N, cx, cy, v.l, v.h);
+    this.N = N; this.fen = f; f.niv = v.niv; this.g.f = f.u / 10;
+    const C = this.C = fenetre(N, f, N.ville), n = C.l * C.h;
+    this.routes = [];
+    if (N.leger) {
+      // de loin, pas de parcelles : le moteur n'en trace pas sur une case où passe une route, et l'état ne peut le dire
+      // qu'après construire(). Le premier passage est donc fait à vide (tuiles seules), le vrai par etatMoteur().
+      const { arbres, foret, fertile } = C, vide = new Array(n).fill(0);
+      Object.assign(C, { arbres: vide, foret: vide, fertile: vide }); E.P.construire(C); Object.assign(C, { arbres, foret, fertile });
+      for (let i = 0; i < n; i += 2) this.routes.push([i, Math.min(i + 1, n - 1)]);
+    } else E.P.construire(C);
     this.etatMoteur();
     this.lieuxDu(N);
     this.batirVilles();
@@ -120,7 +128,7 @@ export class Plateau {
       }
       this.codes.forEach((c, id) => royaumes.push({ id, couleur: this.colors[c] || '#999999' }));
     }
-    E.P.majEtat({ cases: { arbres: C.arbres, foret: C.foret, proprio }, batiments: [], routes: [], forts: [], royaumes,
+    E.P.majEtat({ cases: { arbres: C.arbres, foret: C.foret, proprio }, batiments: [], routes: this.routes, forts: [], royaumes,
       saison: this.saison, meteo: { neige_sol: this.neige } });
     this.sale = true;
   }
@@ -213,12 +221,12 @@ export class Plateau {
     const now = performance.now(), cle = `${cam.x.toFixed(3)}|${cam.y.toFixed(3)}|${cam.z.toFixed(4)}|${vw}|${vh}`;
     if (cle !== this.cleCam) { this.cleCam = cle; this.tCam = now; this.sale = true; }
     const hx = vw / 2 / cam.z, hy = vh / 2 / (cam.z * K), v = [cam.x - hx, cam.x + hx, cam.y - hy, cam.y + hy];
-    const voulu = choisirPas(vw, vh, cam.z, K), f = this.fen;
-    const dehors = !f || !couvre(f, ...v), detail = f && voulu.pas < f.pas;   // (en zoomant, plus fin ; en dézoomant, la vue sort de la fenêtre)
+    const voulu = choisirPas(vw, vh, cam.z, K, this.mp.W, this.mp.H), f = this.fen;
+    const dehors = !f || !couvre(f, ...v), detail = f && voulu.niv < f.niv;   // (en zoomant, plus fin ; en dézoomant, la vue sort de la fenêtre)
     if (dehors || detail) {
       // pendant un geste on garde la fenêtre (sauf si la vue en sort tout entière) : on rebâtit quand la caméra se pose
       const loin = !f || v[1] < f.x0 || v[0] > f.x1 || v[3] < f.y0 || v[2] > f.y1;
-      if (loin || now - this.tCam > 250) this.batir(voulu.pas, cam.x, cam.y, voulu.l, voulu.h);
+      if (loin || now - this.tCam > 250) this.batir(voulu, cam.x, cam.y);
     }
     if (!this.sale && !(anim && now - this.tRendu > 66) && now - this.tRendu < 250) return false;
     this.caler(cam, vw, vh);

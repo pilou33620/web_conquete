@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Grille, K, versEcran, versJeu } from '../web/js/hex/grille.js';
-import { Niveau, MAXC, PAS, choisirPas, cadrer, couvre, fenetre, indexEn } from '../web/js/hex/carte-moteur.js';
+import { Niveau, NIVEAUX, choisirPas, cadrer, couvre, fenetre, indexEn } from '../web/js/hex/carte-moteur.js';
 
 test('la grille retrouve l’hexagone sous chaque point', () => {
   const g = new Grille(272, 337, 4);
@@ -53,5 +53,9 @@ test('carte du moteur : indice d’hexagone, fenêtre alignée, taille bornée',
     for (const ch of C.rivieres) for (const i of ch) assert.ok(i >= 0 && i < f.l * f.h && C.riviere[i] === 1);
     assert.ok(couvre(f, f.x0, f.x1, f.y0, f.y1));
   }
-  for (const z of [0.5, 1, 3, 8, 30, 240]) { const c = choisirPas(1400, 900, z, K); assert.ok(c.l * c.h <= MAXC || c.pas === PAS[PAS.length - 1]); }
+  for (const z of [0.5, 1, 3, 8, 30, 240]) { const c = choisirPas(1400, 900, z, K); assert.ok(c.l * c.h <= NIVEAUX[c.niv].max || c.niv === NIVEAUX.length - 1); }
+  // la géographie reste fine de loin : l'Aquitaine entière (272 × 337) en hexagones de 4, l'Europe entière (867 × 733) de 8
+  assert.equal(choisirPas(1400, 900, 2.5, K, 272, 337).pas, 4);
+  assert.equal(choisirPas(1400, 900, 1.25, K, 867, 733).pas, 8);
+  assert.equal(choisirPas(1400, 900, 30, K, 867, 733).leger, false);
 });
