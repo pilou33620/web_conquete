@@ -10,7 +10,7 @@
 //   sur le plateau. Son canevas (#carte) est sous celui du jeu, qui garde les gestes.
 // - Rendu : la boucle du moteur continue d'animer, mais l'image n'est dessinée que par image(), appelée par la boucle
 //   de map.js, et seulement quand quelque chose a changé.
-import { K, C, SQ3, clamp } from './grille.js';
+import { K, C, SQ3, clamp, hache } from './grille.js';
 import { Niveau, choisirPas, cadrer, couvre, fenetre, indexEn } from './carte-moteur.js';
 
 export { K, C };
@@ -39,9 +39,12 @@ if (PAGE) try {
 
 const RANG = { capitale: 0, fort: 1, ville: 2, village: 3 };
 const SAISON = { hiver: 0, printemps: 1, 'été': 2, ete: 2, automne: 3 };
-// les bâtiments des places (catalogue de graphismes/rendu/modeles.js) : le cœur, puis les quartiers autour
-const COEUR = { capitale: 'palais', ville: 'eglise', village: 'maison', fort: 'citadelle' };
-const QUARTIERS = ['cathedrale', 'immeuble', 'marche', 'hotel_particulier', 'maison_pierre', 'theatre'];
+// seuls les bâtiments de web_engine qui ont un sens vus de haut sur la carte de campagne (on n'y bâtit pas une ville
+// pièce à pièce) : grande ville (immeubles au cœur, maisons de pierre autour), petite ville, village, fort, et dans
+// les campagnes des fermes et des moulins
+const COEUR = { capitale: 'immeuble', ville: 'maison', village: 'cabane', fort: 'citadelle' };
+const QUARTIERS = ['maison_pierre'];
+const FERMES = 0.06, MOULINS = 0.02;   // part des hexagones cultivés qui portent une ferme, un moulin
 const epoqueDe = an => an < 1750 ? 'ancien' : an < 1789 ? 'lumieres' : an < 1816 ? 'empire' : 'industrie';
 const D = 400;   // recul de la caméra orthographique (unités du moteur)
 
@@ -79,6 +82,13 @@ export class Plateau {
       const hex = [h, ...libres(h).slice(0, nb)];
       for (const k of hex) N.ville.add(k);
       N.places.set(n.id, { n, hex });
+    }
+    // fermes et moulins dans les campagnes cultivées, à l'écart des places (de près seulement)
+    N.campagne = [];
+    if (p <= 8) for (const t of g.liste) {
+      const k = t.i, r = hache(t.col, t.row, 31);
+      if (r >= FERMES + MOULINS || !N.fertile[k] || N.riviere[k] || N.ville.has(k) || g.voisins(t).some(v => N.ville.has(v.i))) continue;
+      N.campagne.push([k, r < FERMES ? 'ferme' : 'moulin']); N.ville.add(k);
     }
   }
 
@@ -145,12 +155,18 @@ export class Plateau {
       const ns = this.lieux.get(id)?.ns, couleur = this.colors[ns?.o] || this.mp.rules?.neutral_color || '#8d8a7a', ruine = ns?.lv?.[0] === 'incendie';
       p.hex.forEach((k, j) => {
         if (loc[j] < 0) return;
-        const cle = j === 0 ? COEUR[p.n.type] || 'maison' : ns?.f && j === 1 ? 'tour' : QUARTIERS[(j - 1) % QUARTIERS.length];
+        const cle = j === 0 ? COEUR[p.n.type] || 'maison' : QUARTIERS[(j - 1) % QUARTIERS.length];
         const b = E.M.maillageBatiment({ cle, couleur, epoque, saison: this.saison, neige: this.neige, ruine: ruine && j === 0 });
         const [x, z] = this.centre(N, k);
         b.mesh.position.set(x - f.ox, E.P.dessus(loc[j]), z - f.oz);
         this.villes.add(b.mesh);
       });
+    }
+    for (const [k, cle] of N.campagne) {
+      const i = this.local(k); if (i < 0) continue;
+      const b = E.M.maillageBatiment({ cle, epoque, saison: this.saison, neige: this.neige }), [x, z] = this.centre(N, k);
+      b.mesh.position.set(x - f.ox, E.P.dessus(i), z - f.oz);
+      this.villes.add(b.mesh);
     }
     this.sale = true;
   }
