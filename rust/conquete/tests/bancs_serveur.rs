@@ -454,12 +454,12 @@ fn mode_europe() {
         let (st, txt) = jeu.get(chemin);
         (st, serde_json::from_str(&txt).unwrap())
     };
-    // sans partie : la carte par défaut, la France ; les deux modes sont annoncés
+    // sans partie : la carte par défaut, l'Aquitaine ; les deux modes sont annoncés
     let (st, fr) = carte("/api/map");
-    assert_eq!((st, &fr["geo"], &fr["km_case"]), (200, &json!(4), &json!(1)));
-    assert_eq!(fr["modes"], json!([{"geo": 4, "nom": "France", "mot": "département"}, {"geo": 5, "nom": "Europe", "mot": "pays"}]));
+    assert_eq!((st, &fr["geo"], &fr["km_case"]), (200, &json!(2), &json!(1)));
+    assert_eq!(fr["modes"], json!([{"geo": 2, "nom": "Aquitaine", "mot": "département"}, {"geo": 5, "nom": "Europe", "mot": "pays"}]));
     assert_eq!(fr["rules"]["factions"].as_object().unwrap().len(), 89);
-    assert_eq!(carte("/api/map?geo=4").1["geo"], json!(4));
+    assert_eq!(carte("/api/map?geo=2").1["geo"], json!(2));
     // la carte d'Europe, faite à la première demande
     let t = Instant::now();
     let (st, eu) = carte("/api/map?geo=5");
@@ -474,18 +474,19 @@ fn mode_europe() {
     assert_eq!(eu["map"]["playable"].as_array().unwrap().len(), 32);
     assert!(eu.get("skirmish").is_none() && fr.get("skirmish").is_none(), "le mode Bataille n'est plus proposé");
     // seules les cartes des nouvelles parties se demandent
-    for mauvais in ["/api/map?geo=3", "/api/map?geo=1", "/api/map?geo=6", "/api/map?geo=europe", "/api/map?geo=5.0"] {
+    for mauvais in ["/api/map?geo=4", "/api/map?geo=3", "/api/map?geo=1", "/api/map?geo=6", "/api/map?geo=europe", "/api/map?geo=5.0"] {
         assert_eq!(jeu.get(mauvais).0, 400, "{mauvais}");
     }
-    assert_eq!(carte("/api/map?geo=").1["geo"], json!(4), "un paramètre vide ne demande rien");
+    assert_eq!(carte("/api/map?geo=").1["geo"], json!(2), "un paramètre vide ne demande rien");
     // une partie : le camp doit être de la carte
     let nouvelle = |corps: Value| -> (u16, Value) {
         let (st, txt) = jeu.post("/api/new", &corps);
         (st, serde_json::from_str(&txt).unwrap())
     };
     assert_eq!(nouvelle(json!({"dept": "33", "geo": 5})).0, 400, "un département sur la carte d'Europe");
-    assert_eq!(nouvelle(json!({"dept": "FR"})).0, 400, "un pays sur la carte de France");
-    assert_eq!(nouvelle(json!({"dept": "FR", "geo": 4})).0, 400);
+    assert_eq!(nouvelle(json!({"dept": "FR"})).0, 400, "un pays sur la carte d'Aquitaine");
+    assert_eq!(nouvelle(json!({"dept": "FR", "geo": 2})).0, 400);
+    assert_eq!(nouvelle(json!({"dept": "33", "geo": 4})).0, 400, "la France n'est plus proposée");
     assert_eq!(nouvelle(json!({"dept": "FR", "geo": 3})).0, 400, "une carte figée");
     assert_eq!(nouvelle(json!({"dept": "FR", "geo": "5"})).0, 400);
     let s: Value = serde_json::from_str(&jeu.get("/api/saves").1).unwrap();
@@ -494,13 +495,13 @@ fn mode_europe() {
     let st = jeu.etat();
     assert_eq!((&st["geo"], &st["word"]), (&json!(5), &json!("pays")));
     assert_eq!(carte("/api/map").1["geo"], json!(5), "la carte de la partie en cours");
-    assert_eq!(carte("/api/map?geo=4").1["geo"], json!(4), "l'écran de départ peut toujours demander l'autre");
+    assert_eq!(carte("/api/map?geo=2").1["geo"], json!(2), "l'écran de départ peut toujours demander l'autre");
     // un mois de jeu, puis la sauvegarde
     assert_eq!(jeu.cmd(json!({"cmd": "tour", "action": "go"}))["ok"], json!(true));
     let (_st, txt) = jeu.post("/api/save", &json!({"name": "malte"}));
     assert_eq!(serde_json::from_str::<Value>(&txt).unwrap()["ok"], json!(true), "{txt}");
-    assert_eq!(nouvelle(json!({"dept": "33", "seed": 1})), (200, json!({"ok": true, "geo": 4})));
-    assert_eq!(carte("/api/map").1["geo"], json!(4));
+    assert_eq!(nouvelle(json!({"dept": "33", "geo": 2, "seed": 1})), (200, json!({"ok": true, "geo": 2})));
+    assert_eq!(carte("/api/map").1["geo"], json!(2));
     let (_st, txt) = jeu.post("/api/load", &json!({"name": "malte"}));
     let r: Value = serde_json::from_str(&txt).unwrap();
     assert_eq!((&r["ok"], &r["geo"]), (&json!(true), &json!(5)), "{txt}");

@@ -741,18 +741,18 @@ py_const!(ERAS, list![
          "desc" => "Guerre de 1870, armée moderne, phylloxéra dans les vignes."}
 ]);
 py_const!(SCENARIOS, dict!{
-    "1700" => dict!{"date" => tup![1700, 3, 1], "title" => "France, 1700", "campaign" => "Grande campagne 1700 – 1899",
-                 "intro" => concat!("Louis XIV règne. Les provinces du royaume se disputent la France : traversez deux siècles, ",
+    "1700" => dict!{"date" => tup![1700, 3, 1], "title" => "Aquitaine, 1700", "campaign" => "Grande campagne 1700 – 1899",
+                 "intro" => concat!("Louis XIV règne. Les pays d’Aquitaine se disputent la province : traversez deux siècles, ",
                        "de la Guerre de Succession d’Espagne à la IIIe République. Le plus prestigieux en 1900 l’emporte."),
                  "techs_before" => Val::None},
-    "1790" => dict!{"date" => tup![1790, 3, 4], "title" => "France, 1790", "campaign" => "Depuis la Révolution",
+    "1790" => dict!{"date" => tup![1790, 3, 4], "title" => "Aquitaine, 1790", "campaign" => "Depuis la Révolution",
                  "intro" => concat!("L’Assemblée vient de créer les départements. Choisissez le vôtre, ralliez ses villages, ",
                        "puis prenez les chefs-lieux voisins par les armes, le commerce ou la diplomatie."),
                  "techs_before" => 1778},
-    "1813" => dict!{"date" => tup![1813, 6, 1], "title" => "France, 1813", "campaign" => "La fin de l’Empire",
+    "1813" => dict!{"date" => tup![1813, 6, 1], "title" => "Aquitaine, 1813", "campaign" => "La fin de l’Empire",
                  "intro" => "L’Empire vacille, la guerre d’Espagne tourne mal : la frontière des Pyrénées s’embrase.",
                  "techs_before" => 1806},
-    "1870" => dict!{"date" => tup![1870, 7, 19], "title" => "France, 1870", "campaign" => "La guerre de 1870",
+    "1870" => dict!{"date" => tup![1870, 7, 19], "title" => "Aquitaine, 1870", "campaign" => "La guerre de 1870",
                  "intro" => concat!("La France déclare la guerre à la Prusse. Chemins de fer et fusils Chassepot : ",
                        "un autre siècle commence."), "techs_before" => 1866}
 });
@@ -788,7 +788,7 @@ py_const!(SCENARIOS_EUROPE, dict!{
                        "un autre siècle commence.")}
 });
 // (les modes de jeu, pour l'écran de départ : la carte, son nom, le mot d'un camp)
-py_const!(MODES, list![dict!{"geo" => 4, "nom" => "France", "mot" => "département"}, dict!{"geo" => 5, "nom" => "Europe", "mot" => "pays"}]);
+py_const!(MODES, list![dict!{"geo" => 2, "nom" => "Aquitaine", "mot" => "département"}, dict!{"geo" => 5, "nom" => "Europe", "mot" => "pays"}]);
 
 /// Les camps d'une carte, dans l'ordre de FACTIONS : les pays (géographie 5) ou les départements (les autres).
 pub fn camps(europe: bool) -> Vec<Val> {

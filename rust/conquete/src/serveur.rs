@@ -33,7 +33,7 @@ use crate::crue as CR;
 use crate::diplomacy as D;
 use crate::engine::Game;
 use crate::events as EV;
-use crate::geo::{GeoMap, VERSION as GEO_VERSION, VERSION_EUROPE};
+use crate::geo::{GeoMap, VERSION_EUROPE};
 use crate::py::{self, json, Val};
 use crate::rails as RL;
 use crate::rules as R;
@@ -87,7 +87,7 @@ pub struct App {
     pub _auto_key: Option<(usize, i64, i64, bool)>,
 }
 
-/// Les cartes des nouvelles parties (R::MODES) : la France (4), l'Europe (5).
+/// Les cartes des nouvelles parties (R::MODES) : l'Aquitaine (2, la première : celle de l'écran de départ), l'Europe (5).
 fn modes() -> Vec<i64> {
     R::MODES().iter().map(|m| m.ati("geo")).collect()
 }
@@ -101,7 +101,7 @@ impl App {
     pub fn new(reseau: Arc<Mutex<Reseau>>) -> App {
         let t0 = Instant::now();
         println!("Préparation de la carte de l'Aquitaine…");
-        let geo = Rc::new(GeoMap::new(GEO_VERSION));
+        let geo = Rc::new(GeoMap::new(modes()[0]));
         let mut app = App {
             geos: HashMap::new(),
             static_: HashMap::new(),
@@ -110,7 +110,7 @@ impl App {
             reseau,
             _auto_key: None,
         };
-        app.geos.insert(GEO_VERSION, geo.clone()); // la carte des nouvelles parties
+        app.geos.insert(geo.version, geo.clone()); // la carte des nouvelles parties
         CR::spans(&geo); // les routes que la crue coupe : calculées ici (environ 1 s) plutôt qu'au premier état en crue
         let nw = geo.edges.iter().filter(|e| e.get("kind") == "water").count();
         println!(

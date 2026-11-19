@@ -329,7 +329,7 @@ fn les_regles_d_une_carte_ne_donnent_que_ses_camps() {
         assert_eq!(sc.at("names").len(), 32);
         assert_eq!(sc.at("techs_before"), fr.at("scenarios").at(&k).at("techs_before"));
         assert_eq!(sc.at("year"), fr.at("scenarios").at(&k).at("year"));
-        assert!(fr.at("scenarios").at(&k).ats("title").starts_with("France"));
+        assert!(fr.at("scenarios").at(&k).ats("title").starts_with("Aquitaine"));
     }
     assert_eq!(eu.at("eras").len(), fr.at("eras").len());
     for (a, b) in eu.at("eras").iter().zip(fr.at("eras").iter()) {
