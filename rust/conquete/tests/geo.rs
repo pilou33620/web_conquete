@@ -1,5 +1,5 @@
 //! La géographie (places, geo, waterways) contre Python : tests/references/geo.json est écrit par le jumeau
-//! outils/jumeau/geo_ref.py. Les trois cartes sont GÉNÉRÉES (dans un dossier de travail vide de tout cache), comparées,
+//! outils/jumeau/geo_ref.py (la carte de France, géographie 3, retirée le 22/11/2026). Les deux cartes sont GÉNÉRÉES (dans un dossier de travail vide de tout cache), comparées,
 //! puis relues du cache qu'elles viennent d'écrire et comparées encore.
 //!
 //! - CONQUETE_CACHE_PYTHON=dossier : relit aussi les caches écrits par Python (geo_ref.py --caches dossier) ;
@@ -74,10 +74,6 @@ fn fonctions_et_constantes() {
         "CACHE_VERSION" => geo::CACHE_VERSION, "VERSION" => geo::VERSION, "LAT_REF" => geo::LAT_REF, "KX" => geo::KX(), "KY" => geo::KY, "NONE" => geo::NONE,
         "TERRAIN" => geo::TERRAIN(), "PLAYABLE" => geo::PLAYABLE(), "LANDES_POLY" => pts_val(&geo::LANDES_POLY), "FORESTS" => t4(&geo::FORESTS),
         "VINEYARDS" => t3(&geo::VINEYARDS),
-        "CRETES" => geo::CRETES.iter().map(|&(a, w, l)| list![a, w, pts_val(l)]).collect::<Val>(),
-        "MASSIFS" => t4(&geo::MASSIFS), "FORETS_3" => t4(&geo::FORETS_3), "VIGNES_3" => t3(&geo::VIGNES_3),
-        "ROUTES_ROYALES_3" => geo::ROUTES_ROYALES_3.iter().map(|l| l.iter().map(|&s| Val::from(s)).collect::<Val>()).collect::<Val>(),
-        "MARAIS_3" => t3(&geo::MARAIS_3),
         "T" => list![geo::T_OCEAN, geo::T_EAU, geo::T_PLAINE, geo::T_FORET, geo::T_LANDE, geo::T_MARAIS, geo::T_COLLINES, geo::T_MONTAGNE, geo::T_HAUTE, geo::T_DUNES, geo::T_VIGNE],
         "ESTUARY" => pts_val(&waterways::ESTUARY), "COAST" => pts_val(&waterways::COAST), "LABEL" => waterways::LABEL(),
         "SEA_PORTS" => Val::dict_from(waterways::SEA_PORTS.iter().map(|&(n, l)| (Val::from(n), pts_val(l))).collect()),
@@ -151,7 +147,7 @@ fn fonctions_et_constantes() {
     }
     for c in r.at("_elev").iter() {
         let (la, lo) = (c.at(0).f(), c.at(1).f());
-        pareil("_elev", &list![GeoMap::_elev(la, lo), GeoMap::_elev3(la, lo)], &list![c.at(2), c.at(3)]);
+        pareil("_elev", &Val::from(GeoMap::_elev(la, lo)), &c.at(2)); // (c.at(3) : _elev3, la France retirée)
     }
     let c = r.at("_b16");
     let l16: Vec<u16> = c.at(0).iter().map(|x| x.i() as u16).collect();
@@ -298,7 +294,7 @@ fn verifie(g: &GeoMap, r: &Val, d_ou: &str) {
     }
 }
 
-/// Le dossier de travail des caches (CONQUETE_DATA), le même pour les trois essais.
+/// Le dossier de travail des caches (CONQUETE_DATA), le même pour les deux essais.
 fn dossier() -> PathBuf {
     static UNE_FOIS: std::sync::Once = std::sync::Once::new();
     let d = Path::new(env!("CARGO_TARGET_TMPDIR")).join("geo");
@@ -312,7 +308,7 @@ fn dossier() -> PathBuf {
 /// Une géographie : générée, puis relue de son cache, puis (si on l'a) relue du cache écrit par Python.
 fn geographie(v: i64) {
     let r = reference().at("cartes").at(v.to_string());
-    let cache = dossier().join(format!("map_cache{}.json", if v == 3 { String::new() } else { format!("_v{v}") }));
+    let cache = dossier().join(format!("map_cache_v{v}.json"));
     let _ = std::fs::remove_file(&cache); // (jamais de cache : la carte comparée est une carte générée)
     assert_eq!(geo::data_dir(), dossier());
     let t = std::time::Instant::now();
@@ -353,8 +349,4 @@ fn geographie_1() {
 #[test]
 fn geographie_2() {
     geographie(2)
-}
-#[test]
-fn geographie_3() {
-    geographie(3)
 }

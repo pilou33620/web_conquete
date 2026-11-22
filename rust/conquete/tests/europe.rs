@@ -1,7 +1,8 @@
 //! La géographie 5, la carte du mode « Europe » (SPEC-FRANCE.md, étape 2) : game/data/europe.json, places_europe.json,
 //! pays_europe.json, epoques_europe.json (outils/europe.mjs). La carte se fait et se relit, ses 32 pays se jouent, une
 //! campagne va au bout, une sauvegarde se relit.
-//! (Le cache de la carte dans CARGO_TARGET_TMPDIR/geo, comme tests/geo4.rs ; le serveur : tests/bancs_serveur.rs.)
+//! (Le cache de la carte dans CARGO_TARGET_TMPDIR/geo, comme tests/geo.rs ; le serveur : tests/bancs_serveur.rs ; ce que
+//! tout théâtre doit avoir : tests/theatres.rs.)
 
 use conquete::ai::AI;
 use conquete::engine::Game;
@@ -101,7 +102,7 @@ fn la_carte_se_fait_et_se_relit() {
         (faite, relue)
     };
     assert_eq!((faite.version, faite.suffixe.as_str(), faite.km_case), (5, "_v5", 5.0));
-    assert_ne!(faite._src_hash(), carte(4)._src_hash());
+    assert_ne!(faite._src_hash(), carte(2)._src_hash());
     assert_eq!((faite.W, faite.H), (867, 733), "la grille visée par outils/europe.mjs");
     assert_eq!(faite._src_hash(), relue._src_hash());
     assert!(faite.terrain == relue.terrain && faite.dept == relue.dept && faite.river == relue.river && faite.road == relue.road && faite.cellnode == relue.cellnode);
@@ -132,7 +133,7 @@ fn trente_deux_pays_une_capitale_chacun_et_tout_est_relie() {
     let geo = geo();
     assert_eq!(geo.nodes.len(), 1258);
     assert_eq!(geo.playable_codes.len(), 32);
-    let pays = R::camps(true);
+    let pays = R::camps(VERSION_EUROPE);
     assert_eq!(pays.len(), 32);
     for c in &pays {
         assert!(geo.playable_codes.has(c), "{c} n'est pas jouable");
@@ -141,9 +142,9 @@ fn trente_deux_pays_une_capitale_chacun_et_tout_est_relie() {
         assert_eq!(caps[0].at("name"), R::FACTIONS().at(c).at("capital"), "{c}");
         assert!(geo.nodes.iter().filter(|n| n.at("dept") == *c).count() >= 3, "{c} : au moins trois places");
     }
-    // un camp de France n'est pas de cette carte, et inversement
-    assert!(R::camps(false).iter().all(|c| !geo.playable_codes.has(c)));
-    assert_eq!(R::camps(false).len(), 89);
+    // un département d'Aquitaine n'est pas de cette carte, et inversement
+    assert!(R::camps(2).iter().all(|c| !geo.playable_codes.has(c)));
+    assert_eq!(R::camps(2).len(), 5);
     // chaque place est sur une case de terre de son pays, et dans une étiquette que le jeu connaît ou ignore sans planter
     for n in geo.nodes.iter() {
         let (x, y) = (n.atf("x"), n.atf("y"));
@@ -201,8 +202,8 @@ fn trajectoires_des_villes() {
     for n in geo.nodes.iter() {
         let cv = R::pop_curve(&n);
         let cle = format!("{}|{}", n.at("name").s(), n.at("dept").s());
-        if !R::EPOQUES_EUROPE().has(cle.as_str()) {
-            assert!(cv.is(&R::POP_EUROPE().at(if n.at("type") == "village" { "rural" } else { "ville" })), "{cle}");
+        if !R::EPOQUES().has(cle.as_str()) {
+            assert!(cv.is(&R::POP_PAYS().at(if n.at("type") == "village" { "rural" } else { "ville" })), "{cle}");
         }
         // toutes les étiquettes sont connues de la page, tous les coefficients sont positifs et finis
         for p in cv.iter() {
@@ -212,7 +213,8 @@ fn trajectoires_des_villes() {
     }
     assert!(!R::pop_curve(&geo.nodes.at(geo.by_name.at("Bordeaux"))).is(&R::POP_CURVES().at("bordeaux")));
     // chaque clé d'epoques_europe.json est une place de la carte
-    for cle in R::EPOQUES_EUROPE().keys() {
+    let pays = R::pays(VERSION_EUROPE);
+    for cle in R::EPOQUES().keys().into_iter().filter(|k| pays.has(k.s().rsplit('|').next().unwrap())) {
         assert!(geo.nodes.iter().any(|n| format!("{}|{}", n.at("name").s(), n.at("dept").s()) == cle.s()), "{cle} : place inconnue");
     }
     // la production suit la racine quatrième de la trajectoire : même Lodz en 1900 (× 1 000) reste dans un ordre sensé
@@ -310,7 +312,7 @@ fn campagne_de_24_mois_deux_fois_la_meme() {
     let ecarts: Vec<String> = da.keys().iter().filter(|k| *k != "ai_state").filter_map(|k| premier(&da.at(k), &dr.get(k), k.string())).collect();
     assert!(ecarts.is_empty() && da.len() == dr.len(), "une sauvegarde relue n'est pas l'état sauvegardé : {ecarts:?}");
     assert!(dr.at("ai_state").len() == 31 && dr.at("ai_state").items().iter().all(|(c, v)| json::dumps(v) == json::dumps(&da.at("ai_state").at(c))), "les IA relues");
-    assert!(V::from_dict(carte(4), &json::loads(&texte).unwrap()).is_err(), "jamais sur la carte de France");
+    assert!(V::from_dict(carte(2), &json::loads(&texte).unwrap()).is_err(), "jamais sur la carte d'Aquitaine");
     // et la partie relue continue
     jouer_mois(&mut relue);
     assert!(relue.t > a.t);
@@ -318,9 +320,9 @@ fn campagne_de_24_mois_deux_fois_la_meme() {
 
 #[test]
 fn les_regles_d_une_carte_ne_donnent_que_ses_camps() {
-    let (fr, eu) = (V::rules_payload_carte(false), V::rules_payload_carte(true));
+    let (fr, eu) = (V::rules_payload_carte(2), V::rules_payload_carte(VERSION_EUROPE));
     assert_eq!(json::dumps(&fr), json::dumps(&V::rules_payload()));
-    assert_eq!((fr.at("factions").len(), eu.at("factions").len()), (89, 32));
+    assert_eq!((fr.at("factions").len(), eu.at("factions").len()), (5, 32));
     assert!(eu.at("factions").has("RU") && !eu.at("factions").has("33") && !fr.at("factions").has("RU"));
     assert_eq!(eu.at("scenario_order"), fr.at("scenario_order"));
     for (k, sc) in eu.at("scenarios").items() {
@@ -350,7 +352,7 @@ fn les_regles_d_une_carte_ne_donnent_que_ses_camps() {
     assert!(R::SPY().at("espionner").ats("desc").contains("(14 km)"), "la table des règles n'est pas touchée");
     assert_eq!(V::km_carte("vision +6 km, à 3 km, (14 km), à moins de 30 km, 1 500 mètres", 5.0), "vision +30 km, à 3 km, (70 km), à moins de 150 km, 1 500 mètres");
     // chaque pays a tout ce qu'un camp reçoit
-    for c in R::camps(true) {
+    for c in R::camps(VERSION_EUROPE) {
         let f = R::FACTIONS().at(&c);
         for k in ["name", "short", "capital", "color", "adj", "title", "pros", "cons", "mods", "personality", "specialty"] {
             assert!(f.has(k), "{c} : {k}");
@@ -437,9 +439,9 @@ fn hommes(g: &Game, c: &str) -> f64 {
         + g.nodes.iter().filter(|n| n.at("owner") == c).map(|n| regs(n.at("garrison"))).sum::<f64>()
 }
 
-/// Les moyens de départ suivent la puissance des pays (R::MOYENS_EUROPE) : la Russie arme bien plus que Malte, la
+/// Les moyens de départ suivent la puissance des pays (« moyens » de pays_europe.json) : la Russie arme bien plus que Malte, la
 /// Grande-Bretagne a le plus gros trésor, la Prusse grandit entre 1700 et 1790 ; le plancher de production suit le poids
-/// du pays. Une partie de France ne change pas : six régiments et 500 livres par département.
+/// du pays. Une partie d'Aquitaine ne change pas : six régiments et 500 livres par département.
 #[test]
 fn moyens_de_depart_a_l_echelle_des_pays() {
     let geo = geo();
@@ -456,15 +458,15 @@ fn moyens_de_depart_a_l_echelle_des_pays() {
     let g90 = Game::new(geo.clone(), "FR", &Val::from("normal"), &Val::from(1), &Val::from("1790"));
     assert!(hommes(&g90, "PR") > 3.0 * pr && hommes(&g90, "RU") > 1.5 * ru && hommes(&g90, "SE") < hommes(&g, "SE"));
     // chaque pays a une armée en campagne et une garnison à sa capitale, et les grandes villes produisent plus
-    for c in R::camps(true) {
+    for c in R::camps(VERSION_EUROPE) {
         assert!(g.armies.values().iter().any(|a| a.at("owner") == c) && g.nodes.at(g.capital_of(c.s())).at("garrison").len() >= 1, "{c}");
     }
     let mut g = g;
     let prod = |g: &mut Game, nom: &str| { let n = g.nodes.at(geo.by_name.at(nom)); let o = n.at("owner").string(); g.node_output(&n, &o).atf("livres") };
     assert!(prod(&mut g, "Paris") > 3.0 * prod(&mut g, "Bakhtchissaraï"), "Paris {} / Bakhtchissaraï {}", prod(&mut g, "Paris"), prod(&mut g, "Bakhtchissaraï"));
-    // la France des départements : rien de changé
-    let gf = Game::new(carte(4), "33", &Val::from("normal"), &Val::from(1), &Val::from("1790"));
-    for c in ["33", "75", "13"] {
+    // les départements d'Aquitaine : rien de changé
+    let gf = Game::new(carte(2), "33", &Val::from("normal"), &Val::from(1), &Val::from("1790"));
+    for c in ["33", "24", "64"] {
         assert_eq!((hommes(&gf, c), livres(&gf, c)), (1540.0, 500.0), "{c}");
     }
 }

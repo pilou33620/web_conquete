@@ -815,8 +815,8 @@ pub fn _fill(g: &Game, code: &str, s: &str, town: &Val) -> String {
     let chef = g.geo.nodes.at(&cap).ats("name");
     let ville = if town.is_some() { g.geo.nodes.at(town).ats("name") } else { chef.clone() };
     let a_ville = _a_ville(&ville);
-    // (géographie 5 : un pays n'est pas une province)
-    let s = &(if g.europe() { s.replace("à la province", "au pays") } else { s.to_string() });
+    // (un théâtre : un pays n'est pas une province)
+    let s = &(if g.theatre() { s.replace("à la province", "au pays") } else { s.to_string() });
     _format(s, &[("nom", g.fname(code)), ("chef", chef.clone()), ("de_chef", R::de(&chef)), ("de_ville", R::de(&ville)), ("ville", ville), ("a_ville", a_ville)])
 }
 
@@ -888,7 +888,7 @@ pub fn describe(g: &Game, code: &str, fx: &Val, town: &Val) -> Val {
     let regs = fx.get("regs");
     for tc in (if regs.truthy() { regs } else { list![] }).iter() {
         let (typ, cnt) = tc.pair();
-        out.push(format!("+{cnt} {} {}", g.unit_name(code, typ.s()).1.to_lowercase(), if g.europe() { "à la capitale" } else { "au chef-lieu" }));
+        out.push(format!("+{cnt} {} {}", g.unit_name(code, typ.s()).1.to_lowercase(), if g.theatre() { "à la capitale" } else { "au chef-lieu" }));
     }
     if fx.getb("research") {
         out.push("recherches en cours avancées de moitié");
@@ -1027,9 +1027,9 @@ pub fn _ord(date: &Val) -> i64 {
 pub fn tick(g: &mut Game, d: Date) {
     let today = d.toordinal();
     let done = g.ev_done.clone();
-    // (géographie 5 : l'histoire datée est celle de la France et de ses provinces ; les pays d'Europe n'ont que les
+    // (un théâtre : l'histoire datée est celle de la France et de ses provinces ; les pays d'Europe n'ont que les
     // événements sans date, plus bas)
-    for ev in (if g.europe() { list![] } else { HIST() }).iter() {
+    for ev in (if g.theatre() { list![] } else { HIST() }).iter() {
         if done.has(ev.at("id")) {
             continue;
         }

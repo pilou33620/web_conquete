@@ -24,7 +24,8 @@ monde continue, vu d'un autre camp en vie),
 guerres déclarées et leur durée (mois), places de chaque camp à la fin
 et écart entre le premier et le dernier, camps encore en vie, technologies trouvées, trésor, hommes sous les armes et tronçons de voie ferrée ouverts.
 --proc en joue plusieurs à la fois.
---geo 5 joue sur la carte d'Europe (2 par défaut : le Sud-Ouest) ; --joueur le camp vu (33, ou FR en Europe) ;
+--geo 5 joue sur la carte d'Europe, un autre numéro sur son théâtre (2 par défaut : le Sud-Ouest) ; --joueur le camp vu
+(33, FR en Europe, le premier pays d'un autre théâtre) ;
 --suivi ML,RU écrit chaque année les places, le trésor, les vivres et les hommes de ces camps ; --recit 1 écrit au fil des
 mois les guerres déclarées, les traités et les capitulations (sur la sortie d'erreur, avec le temps de chaque année).";
 
@@ -219,7 +220,13 @@ fn main() {
     std::env::set_var("WEB_CONQUETE_NOLOG", "1"); // (tests/fabrique.py : le banc n'écrit pas dans logs/batailles.jsonl)
     let a = Args::parse(AIDE, &["parties", "epoque", "annees", "graine", "proc", "geo", "joueur", "suivi", "recit"]);
     let v_geo = a.i("geo", 2);
-    let joueur = a.s("joueur", if v_geo == conquete::geo::VERSION_EUROPE { "FR" } else { "33" });
+    // (le camp vu : FR en Europe, le premier pays d'un autre théâtre, 33 dans le Sud-Ouest)
+    let defaut = match conquete::geo::theatre(v_geo) {
+        Some(t) if t.geo == conquete::geo::VERSION_EUROPE => "FR".to_string(),
+        Some(_) => conquete::rules::camps(v_geo).first().map_or_else(String::new, |c| c.string()),
+        None => "33".to_string(),
+    };
+    let joueur = a.s("joueur", &defaut);
     let suivi: Vec<String> = a.s("suivi", "").split(',').filter(|c| !c.is_empty()).map(str::to_string).collect();
     let recit = a.i("recit", 0) != 0;
     let (parties, annees, graine, proc) = (a.i("parties", 3), a.i("annees", 30), a.i("graine", 1), a.i("proc", 1));

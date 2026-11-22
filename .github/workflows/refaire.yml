@@ -1,0 +1,46 @@
+name: références refaites (temporaire, branche claude/theatres)
+
+# Temporaire : refait les références que le retrait de la France change exprès (FACTIONS, PROVINCES, MAISON_NOMS,
+# rules_payload, /api/map de la carte par défaut) et les dépose en artefact. Retiré au commit suivant.
+on:
+  push:
+    branches: [claude/theatres]
+
+permissions:
+  contents: read
+
+jobs:
+  refaire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Règles et tours
+        shell: bash
+        run: |
+          CONQUETE_REFAIRE_RULES=1 cargo test --locked -p conquete --test rules refaire -- --ignored --nocapture
+          CONQUETE_REFAIRE_TOURS=1 cargo test --locked -p conquete --test tours refaire -- --ignored --nocapture
+      - name: /api/map de la carte par défaut
+        shell: bash
+        run: |
+          cargo build --locked -p conquete --bin conquete
+          (target/debug/conquete --local --no-browser --no-update --port 8791 > /tmp/serveur.log 2>&1 &)
+          for i in $(seq 1 150); do curl -sf -o /tmp/map.json http://127.0.0.1:8791/api/map && break; sleep 2; done
+          tail -5 /tmp/serveur.log
+          python3 - <<'EOF'
+          import hashlib, json
+          brut = open('/tmp/map.json', 'rb').read()
+          v = json.loads(brut)
+          p = 'rust/conquete/tests/references/serveur.json'
+          t = open(p, encoding='utf8').read()
+          r = json.loads(t)
+          m = r['map']
+          m.update(octets=len(brut), sha256=hashlib.sha256(brut).hexdigest(), geo=v['geo'], noeuds=len(v['map']['nodes']),
+                   cles=list(v.keys()), cles_carte=list(v['map'].keys()), ver=v['ver'])
+          open(p, 'w', encoding='utf8').write(json.dumps(r, ensure_ascii=False, separators=(',', ':')) + ('\n' if t.endswith('\n') else ''))
+          print(m)
+          EOF
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: references
+          path: rust/conquete/tests/references/*.json

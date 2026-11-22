@@ -339,11 +339,11 @@ impl Game {
             return (false, format!("N'existe pas encore (vers {}).", R::UNIT_YEAR().at(typ)));
         }
         if R::hors_service(typ_s, y) {
-            return (false, (if self.europe() { "Plus en service." } else { "Plus au service de France." }).to_string());
+            return (false, (if self.theatre() { "Plus en service." } else { "Plus au service de France." }).to_string());
         }
         if R::MERCS().has(typ) {
             if Val::from(nid) != self.capital_of(code) && !gn.at("spec").has("port") {
-                return (false, (if self.europe() { "Se loue à la capitale ou dans un port." } else { "Se loue au chef-lieu ou dans un port." }).to_string());
+                return (false, (if self.theatre() { "Se loue à la capitale ou dans un port." } else { "Se loue au chef-lieu ou dans un port." }).to_string());
             }
             if self.merc_count(code) >= R::MERC_MAX {
                 return (false, format!("Au plus {} régiments étrangers.", R::MERC_MAX));
@@ -437,7 +437,7 @@ impl Game {
     // engine.py, lignes 380 à 382
     pub fn era(&self) -> Val {
         let y = self.date(&Val::None).year;
-        let eras = if self.europe() { R::ERAS_EUROPE() } else { R::ERAS() };
+        let eras = if self.theatre() { R::ERAS_EUROPE() } else { R::ERAS() };
         if Val::from(y) >= eras.at(0).at("year") {
             eras.iter().filter(|e| e.at("year") <= y).last().unwrap()
         } else {
@@ -538,28 +538,25 @@ impl Game {
         self.date(&Val::None) >= Date::de(&R::DEPT_DATE())
     }
 
-    /// « de France » (toute la France) ou « d'Aquitaine » (les anciennes parties du Sud-Ouest).
+    /// « d'Aquitaine », ou celui du théâtre (« d'Europe »).
     /// Python : `pays_de(self)`.
     // engine.py, lignes 435 à 437
     pub fn pays_de(&self) -> &'static str {
-        if self.europe() {
-            return "d'Europe";
-        }
-        if self.factions.len() > 5 { "de France" } else { "d'Aquitaine" }
+        self.geo.theatre.map_or("d'Aquitaine", |t| t.de)
     }
 
     /// Python : `dept_word(self)`.
     // engine.py, lignes 439 à 440
     pub fn dept_word(&self) -> &'static str {
-        if self.europe() {
+        if self.theatre() {
             return "pays";
         }
         if self.departements() { "département" } else { "province" }
     }
 
-    /// La partie se joue-t-elle sur la carte d'Europe (géographie 5 : chaque camp est un pays) ?
-    pub fn europe(&self) -> bool {
-        self.geo.version == crate::geo::VERSION_EUROPE
+    /// La partie se joue-t-elle sur un théâtre (l'Europe… : chaque camp est un pays) ?
+    pub fn theatre(&self) -> bool {
+        self.geo.theatre.is_some()
     }
 
     /// Python : `faction_name(self, code)`.
@@ -604,8 +601,8 @@ impl Game {
     /// 'montagne', 'cote' ou 'interieur'.
     // engine.py, lignes 462 à 467
     pub fn zone_of(&self, x: f64, y: f64) -> &'static str {
-        if self.europe() {
-            // (géographie 5 : d'après la carte, et non les Pyrénées et la côte d'Aquitaine) en montagne ; à deux cases de la mer
+        if self.theatre() {
+            // (un théâtre : d'après la carte, et non les Pyrénées et la côte d'Aquitaine) en montagne ; à deux cases de la mer
             let geo = &self.geo;
             let t = geo.terrain_at(x, y);
             if t == crate::geo::T_MONTAGNE || t == crate::geo::T_HAUTE {
@@ -1275,8 +1272,8 @@ impl Game {
             a.set("des", 0.0);
             a.set("des_why", Val::None);
         }
-        // (géographie 5 : pas de grande crue, c'est celle de la Garonne et de la Dordogne)
-        if d.month == 3 && !self.europe() && self.rng.random() < 0.2 {
+        // (un théâtre : pas de grande crue, c'est celle de la Garonne et de la Dordogne)
+        if d.month == 3 && !self.theatre() && self.rng.random() < 0.2 {
             // une grande crue un printemps sur cinq environ
             self.flood_until = self.t + self.rng.randint(21, 42) as f64;
             self.log(

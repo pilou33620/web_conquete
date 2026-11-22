@@ -79,7 +79,7 @@ impl Game {
                 used.push(a.at("gen").at("name"));
             }
         }
-        let noms = R::surnames(code); // (géographie 5 : les généraux d'un pays portent des noms de chez lui)
+        let noms = R::surnames(code); // (un théâtre : les généraux d'un pays portent des noms de chez lui)
         let mut names: Vec<Val> = noms.iter().filter(|s| !used.has(s)).collect();
         if names.is_empty() {
             names = noms.vec();

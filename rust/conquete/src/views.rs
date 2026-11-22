@@ -283,13 +283,14 @@ pub fn from_dict(geo: Rc<GeoMap>, d: &Val) -> Result<Game, String> {
 /// (b['cost'](l), b['days'](l) : R::BUILD_cost, R::BUILD_days.)
 // views.py, lignes 141 à 166
 pub fn rules_payload() -> Val {
-    rules_payload_carte(false)
+    rules_payload_carte(crate::geo::VERSION)
 }
 
-/// Les règles pour la page d'une carte : ses seuls camps, et les textes de son mode (géographie 5, europe : les pays,
-/// « Europe, 1700 », le mot « pays » ; sinon les départements, et la réponse d'avant les pays, au caractère près).
-pub fn rules_payload_carte(europe: bool) -> Val {
-    let camps = Val::dict_from(R::camps(europe).into_iter().map(|c| { let f = R::FACTIONS().at(&c); (c, f) }).collect());
+/// Les règles pour la page d'une carte (sa géographie) : ses seuls camps, et les textes de son mode (un théâtre : ses
+/// pays, « Europe, 1700 », le mot « pays » ; sinon les départements, et la réponse d'avant les pays, au caractère près).
+pub fn rules_payload_carte(geo: i64) -> Val {
+    let theatre = crate::geo::theatre(geo);
+    let camps = Val::dict_from(R::camps(geo).into_iter().map(|c| { let f = R::FACTIONS().at(&c); (c, f) }).collect());
     let build = Val::dict_from(
         R::BUILD()
             .items()
@@ -311,7 +312,18 @@ pub fn rules_payload_carte(europe: bool) -> Val {
     for (k, sc) in R::SCENARIOS().items() {
         let d = Date::de(&sc.at("date"));
         let dept = d >= Date::de(&R::DEPT_DATE());
-        let sc = if europe { let e = sc.copy(); e.update(&R::SCENARIOS_EUROPE().at(&k)); e } else { sc };
+        let sc = match theatre {
+            Some(t) => {
+                let e = sc.copy();
+                e.update(&R::SCENARIOS_EUROPE().at(&k));
+                if t.geo != crate::geo::VERSION_EUROPE {
+                    e.set("title", format!("{}, {}", t.nom, k.s()));
+                    e.set("intro", R::INTRO_THEATRE);
+                }
+                e
+            }
+            None => sc,
+        };
         let names = Val::dict_from(
             camps
                 .items()
@@ -324,7 +336,7 @@ pub fn rules_payload_carte(europe: bool) -> Val {
         );
         scen.set(k, dict! {"title" => sc.at("title"), "campaign" => sc.at("campaign"), "intro" => sc.at("intro"),
                            "year" => d.year, "techs_before" => sc.get("techs_before"),
-                           "word" => if europe { "pays" } else if dept { "département" } else { "province" }, "names" => names});
+                           "word" => theatre.map_or(if dept { "département" } else { "province" }, |t| t.mot), "names" => names});
     }
     let techs: Val = R::TECH()
         .values()
@@ -350,8 +362,8 @@ pub fn rules_payload_carte(europe: bool) -> Val {
     );
     let lbl = |d: Val, k: &str| Val::dict_from(d.items().into_iter().map(|(c, v)| (c, v.at(k))).collect());
     let (spy, cities) = (R::SPY(), CT::rules_payload());
-    let (spy, cities) = if europe {
-        // (géographie 5 : les distances des règles se comptent en cases, de 5 km ici ; le texte montré suit la carte)
+    let (spy, cities) = if theatre.is_some() {
+        // (un théâtre : les distances des règles se comptent en cases, de 5 km ici ; le texte montré suit la carte)
         // (et une capitale n'est pas un chef-lieu : Vauban)
         let km = |v: &Val, k: &str| v.set(k, km_carte(v.at(k).s(), 5.0).replace("le chef-lieu", "la capitale"));
         for t in techs.iter() {
@@ -373,7 +385,7 @@ pub fn rules_payload_carte(europe: bool) -> Val {
     };
     dict! {
         "factions" => camps, "units" => R::UNITS(), "unit_order" => R::UNIT_ORDER(), "techs" => techs, "fort" => fort,
-        "scenarios" => scen, "scenario_order" => R::SCENARIOS().keys(), "eras" => if europe { R::ERAS_EUROPE() } else { R::ERAS() }, "unit_year" => R::UNIT_YEAR(),
+        "scenarios" => scen, "scenario_order" => R::SCENARIOS().keys(), "eras" => if theatre.is_some() { R::ERAS_EUROPE() } else { R::ERAS() }, "unit_year" => R::UNIT_YEAR(),
         "fast_speed" => R::FAST_SPEED, "arms" => arms, "specialty" => R::SPECIALTY(),
         "specialty_capital" => R::SPECIALTY_CAPITAL, "dev" => dev, "branches" => R::BRANCHES(), "man_days" => R::MAN_DAYS,
         "deg_prod" => R::DEG_PROD, "visuals" => R::VISUALS(), "build" => build, "node_base" => R::NODE_BASE(),

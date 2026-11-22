@@ -197,8 +197,8 @@ pub fn spans(geo: &GeoMap) -> Val {
     if geo._crue.borrow().is_some() {
         return geo._crue.borrow().clone();
     }
-    if geo.version == crate::geo::VERSION_EUROPE {
-        *geo._crue.borrow_mut() = dict! {}; // (géographie 5 : aucune route coupée, la crue est celle de la Garonne et de la Dordogne)
+    if geo.theatre.is_some() {
+        *geo._crue.borrow_mut() = dict! {}; // (un théâtre : aucune route coupée, la crue est celle de la Garonne et de la Dordogne)
         return geo._crue.borrow().clone();
     }
     let m = geo.client_payload();

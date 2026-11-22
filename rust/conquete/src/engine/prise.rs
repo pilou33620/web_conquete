@@ -124,9 +124,9 @@ impl Game {
             let left = self.owned_nodes(&old).len() as i64;
             let crushed = py_max(3, &lf.at("start_nodes") * R::TREATY_CRUSHED);
             let tr = lf.get_or("treaties", dict! {}).get_or(code, -1e9);
-            // (géographie 5 : une seconde défaite face au même vainqueur n'est fatale qu'à un pays déjà réduit de moitié ; la
+            // (un théâtre : une seconde défaite face au même vainqueur n'est fatale qu'à un pays déjà réduit de moitié ; la
             // France qui garde soixante places signe un traité, elle ne passe pas tout entière à l'Angleterre)
-            let encore = self.t - tr.f() < R::TREATY_AGAIN as f64 && (!self.europe() || Val::from(left) <= &lf.at("start_nodes") * 0.5);
+            let encore = self.t - tr.f() < R::TREATY_AGAIN as f64 && (!self.theatre() || Val::from(left) <= &lf.at("start_nodes") * 0.5);
             if Val::from(left) <= crushed || encore || !self.factions.has(code) {
                 self.capitulate(&old, code);
             } else {
@@ -373,7 +373,7 @@ impl Game {
         if !self.era_id.truthy() {
             self.era_id = self.era().at("id");
         }
-        if d == Date::de(&R::DEPT_DATE()) && self.t > 0.5 && !self.europe() {
+        if d == Date::de(&R::DEPT_DATE()) && self.t > 0.5 && !self.theatre() {
             self.log(
                 "info",
                 "4 mars 1790 : l'Assemblée crée les départements. Les provinces deviennent la Gironde, \
@@ -462,7 +462,7 @@ impl Game {
             let text = format!(
                 "Votre {} a été {} de la carte : la partie est perdue.",
                 self.dept_word(),
-                if self.departements() || self.europe() { "rayé" } else { "rayée" }
+                if self.departements() || self.theatre() { "rayé" } else { "rayée" }
             );
             self.over = dict! {"result" => "defaite", "t" => self.t, "text" => &text};
             self.speed_idx = 0;
@@ -480,7 +480,7 @@ impl Game {
         }
         if ok {
             let years = self.t / 365.25;
-            let tout = if self.europe() { "Toute l'Europe" } else if self.factions.len() > 5 { "Toute la France" } else { "Toute l'Aquitaine" };
+            let tout = self.geo.theatre.map_or("Toute l'Aquitaine", |t| t.tout);
             let text = format!("{tout} reconnaît votre autorité ({years:.1} ans de campagne).");
             self.over = dict! {"result" => "victoire", "t" => self.t, "text" => &text};
             self.speed_idx = 0;

@@ -28,15 +28,7 @@ const pctChg = (now, before) => {
 };
 // « de » élidé, comme côté serveur (rules.de) : de Dordogne, d’Agen, du Bugue
 const de = n => /^Le /.test(n) ? 'du ' + n.slice(3) : /^Les /.test(n) ? 'des ' + n.slice(4) : /^[aeiouyhâàéèêîïôöûü]/i.test(n) ? `d’${n}` : `de ${n}`;
-// les départements de l'écran de départ, rangés par région d'aujourd'hui (plus simple à chercher que 89 noms à la suite)
 const UN = { province: 'une province', département: 'un département', pays: 'un pays' };
-const REGIONS = {
-  'Auvergne-Rhône-Alpes': '01 03 07 15 26 38 42 43 63 69 73 74', 'Bourgogne-Franche-Comté': '21 25 39 58 70 71 89 90',
-  'Bretagne': '22 29 35 56', 'Centre-Val de Loire': '18 28 36 37 41 45', 'Corse': '20 2A 2B', 'Grand Est': '08 10 51 52 54 55 57 67 68 88',
-  'Hauts-de-France': '02 59 60 62 80', 'Île-de-France': '75 77 78 91 92 93 94 95', 'Normandie': '14 27 50 61 76',
-  'Nouvelle-Aquitaine': '16 17 19 23 24 33 40 47 64 79 86 87', 'Occitanie': '09 11 12 30 31 32 34 46 48 65 66 81 82',
-  'Pays de la Loire': '44 49 53 72 85', 'Provence-Alpes-Côte d’Azur': '04 05 06 13 83 84',
-};
 const STATUS = { paix: 'En paix', guerre: 'En guerre', alliance: 'Alliés', self: 'Vous' };
 const TYPE_LABEL = { capitale: 'Chef-lieu', ville: 'Ville', village: 'Village', fort: 'Place forte' };
 const RES_ORDER = ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'];
@@ -1785,9 +1777,10 @@ export class UI {
         </div><div class="dact">${acts}</div></div>`;
     }).join('');
     const neu = pris.neutre || 0;
+    const terre = (this.modes || []).find(m => m.geo === this.geo)?.le || 'l’Aquitaine';   // (« l’Europe » : le théâtre de la partie)
     const hegLine = !st.heg ? '' : `<p class="small" style="color:#ffcf85;margin:0 0 8px">${st.heg === st.me.code
-      ? `Vous dominez ${Object.keys(st.factions || {}).length > 5 ? 'la France' : 'l’Aquitaine'} : les autres camps se méfient de vous et se liguent contre vous dès que vous êtes en guerre.`
-      : `${esc(this.rules.factions[st.heg].name)} domine ${Object.keys(st.factions || {}).length > 5 ? 'la France' : 'l’Aquitaine'} : les autres camps s’en méfient et entrent volontiers dans ses guerres, dans le camp adverse.`}</p>`;
+      ? `Vous dominez ${esc(terre)} : les autres camps se méfient de vous et se liguent contre vous dès que vous êtes en guerre.`
+      : `${esc(this.rules.factions[st.heg].name)} domine ${esc(terre)} : les autres camps s’en méfient et entrent volontiers dans ses guerres, dans le camp adverse.`}</p>`;
     const neuLine = neu ? `<div class="row" style="margin-bottom:8px"><span class="small">Vous détenez ${fmt(neu)} miliciens insurgés prisonniers${st.me.prisoner_upkeep ? `, nourris ${fmt1(this.per(st.me.prisoner_upkeep))} vivres ${this.perU} pour tous vos prisonniers` : ''}.</span>${enrollBtn('neutre', neu, 'Enrôler')}</div>` : '';
     // droits de passage : qui nous laisse passer, à qui nous laissons passer (sinon, terres fermées)
     const others = st.factions.filter(f => f.code !== me && f.alive);
@@ -2043,21 +2036,14 @@ export class UI {
     const scs = this.rules.scenarios || {};
     const sc = scs[this.startScen] || { title: 'Aquitaine, 1790', intro: '', names: {}, word: 'département' };
     const scenBtns = (this.rules.scenario_order || []).map(k => `<button class="${k === this.startScen ? 'on' : ''}" data-act="pick-scen" data-v="${k}" title="${esc(scs[k].campaign)}">${k}</button>`).join('');
-    // (toute la France : la liste des départements de la carte, par nom ; la fiche de celui qu'on a choisi ; on peut aussi
-    // toucher une de ses villes sur la carte)
+    // (un théâtre : la liste des pays de la carte, par nom ; la fiche de celui qu'on a choisi ; on peut aussi toucher une
+    // de ses villes sur la carte)
     const jouables = this.md.playable || Object.keys(this.rules.factions), nomDe = c => sc.names[c] || this.rules.factions[c]?.name || c;
     const choixDept = `<select class="dept-sel" data-dept-sel="1" aria-label="${sc.word}">
       <option value="">${sc.word === 'département' ? 'Choisir un département…' : `Choisir ${UN[sc.word] || sc.word}…`}</option>
       ${(() => {
         const opt = c => `<option value="${c}" ${c === this.startDept ? 'selected' : ''}>${esc(nomDe(c))} (${c})</option>`, parNom = (a, b) => nomDe(a).localeCompare(nomDe(b), 'fr');
-        const ok = jouables.filter(c => this.rules.factions[c]), rangés = new Set();
-        const groupes = Object.entries(REGIONS).map(([r, l]) => {
-          const cs = ok.filter(c => l.split(' ').includes(c)).sort(parNom);
-          cs.forEach(c => rangés.add(c));
-          return cs.length ? `<optgroup label="${esc(r)}">${cs.map(opt).join('')}</optgroup>` : '';
-        }).join('');
-        const reste = ok.filter(c => !rangés.has(c)).sort(parNom);   // (une carte sans codes de départements : Aquitaine…)
-        return groupes + (reste.length ? (groupes ? `<optgroup label="Autres">${reste.map(opt).join('')}</optgroup>` : reste.map(opt).join('')) : '');
+        return jouables.filter(c => this.rules.factions[c]).sort(parNom).map(opt).join('');
       })()}
     </select><p class="muted small" style="margin:4px 0 0">ou touchez-le sur la carte</p>`;
     const cards = Object.entries(this.rules.factions).filter(([code]) => jouables.length <= 5 || code === this.startDept).map(([code, f]) => `
@@ -2098,7 +2084,7 @@ export class UI {
     return `<p class="muted small start-era">Déjà acquis : <b>${known.size} technologies</b>${top.length ? `, dont ${esc(top.join(', '))}` : ''}${rails ? ` ; <b>${rails} tronçons de voie ferrée</b> ouverts` : ''}. La carte les montre déjà.</p>`;
   }
 
-  // le choix de la carte (France, Europe…), quand le serveur en propose plusieurs
+  // le choix de la carte (Aquitaine, Europe…), quand le serveur en propose plusieurs
   modeTabs() {
     return (this.modes || []).length > 1 ? `<div class="row"><span class="lab">Carte</span><span class="seg">${this.modes.map(m =>
       `<button class="${m.geo === this.geo ? 'on' : ''}" data-act="pick-geo" data-v="${m.geo}">${esc(m.nom)}</button>`).join('')}</span></div>` : '';

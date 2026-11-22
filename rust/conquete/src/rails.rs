@@ -10,7 +10,7 @@
 //! (dict de sections), `st` : son état (dict de g.rails).
 
 use crate::engine::Game;
-use crate::geo::{GeoMap, VERSION_EUROPE};
+use crate::geo::GeoMap;
 use crate::py::{self, heapq, Val};
 use crate::rules as R;
 use crate::turns as TT;
@@ -71,8 +71,8 @@ pub fn sections(geo: &GeoMap) -> Val {
         return _SECTIONS().at(cle);
     }
     let out = dict! {};
-    // (géographie 5 : les lignes historiques sont celles du Sud-Ouest ; chaque pays reçoit les siennes)
-    let lignes = if geo.version == VERSION_EUROPE { _lignes_europe(geo) } else { R::RAIL_LINES() };
+    // (un théâtre : les lignes historiques sont celles du Sud-Ouest ; chaque pays reçoit les siennes)
+    let lignes = if geo.theatre.is_some() { _lignes_theatre(geo) } else { R::RAIL_LINES() };
     for line in lignes.iter() {
         let (name, towns, _) = line.triple();
         let towns = towns.vec();
@@ -93,12 +93,12 @@ pub fn sections(geo: &GeoMap) -> Val {
     out
 }
 
-pub const RAIL_VILLES_5: usize = 8; // (géographie 5) villes de chaque pays que ses lignes desservent, les plus peuplées
+pub const RAIL_VILLES_5: usize = 8; // (un théâtre) villes de chaque pays que ses lignes desservent, les plus peuplées
 
-/// (géographie 5) Les lignes d'un réseau généré, dans la forme de R::RAIL_LINES : dans chaque pays, de la capitale à ses
+/// (un théâtre) Les lignes d'un réseau généré, dans la forme de R::RAIL_LINES : dans chaque pays, de la capitale à ses
 /// plus grandes villes, la plus peuplée d'abord, chacune raccordée à la ville déjà desservie la plus proche ; ouverture
 /// de 1837 (la première) à 1885, cinq ans plus tard à chaque ville.
-fn _lignes_europe(geo: &GeoMap) -> Val {
+fn _lignes_theatre(geo: &GeoMap) -> Val {
     let out = list![];
     for code in &geo.dept_codes {
         let du_pays: Vec<Val> = geo.nodes.iter().filter(|n| n.at("dept") == code.as_str()).collect();
@@ -187,7 +187,7 @@ pub fn openable(g: &Game, code: &str, sid: &str) -> (bool, String) {
     }
     let net = network(g, code);
     if !(net.has(sec.at("a")) || net.has(sec.at("b"))) {
-        return (false, format!("Le réseau part de votre {} : reliez d'abord l'une des deux villes.", if g.europe() { "capitale" } else { "chef-lieu" }));
+        return (false, format!("Le réseau part de votre {} : reliez d'abord l'une des deux villes.", if g.theatre() { "capitale" } else { "chef-lieu" }));
     }
     if works(g, code).len() as i64 >= RAIL_MAX_WORKS {
         return (false, format!("Déjà {RAIL_MAX_WORKS} chantiers de voie ferrée en cours."));
@@ -437,9 +437,9 @@ pub fn client_payload(geo: &GeoMap) -> Val {
     let sections_ = sections(geo)
         .values()
         .into_iter()
-        .map(|s| list![s.at("id"), s.at("a"), s.at("b"), s.at("edges"), if geo.km_case == 1.0 { s.at("km") } else { Val::from(py::round_n(s.atf("km") * geo.km_case, 1)) }, s.at("line"), s.at("year")]) // (affiché en km : des cases de 5 km en Europe)
+        .map(|s| list![s.at("id"), s.at("a"), s.at("b"), s.at("edges"), if geo.km_case == 1.0 { s.at("km") } else { Val::from(py::round_n(s.atf("km") * geo.km_case, 1)) }, s.at("line"), s.at("year")]) // (affiché en km : des cases de 5 km dans un théâtre)
         .collect::<Val>();
-    let exits_ = (if geo.version == VERSION_EUROPE { list![] } else { exits() }) // (géographie 5 : aucune sortie dessinée)
+    let exits_ = (if geo.theatre.is_some() { list![] } else { exits() }) // (un théâtre : aucune sortie dessinée)
         .iter()
         .map(|x| {
             let (t, td) = x.pair();

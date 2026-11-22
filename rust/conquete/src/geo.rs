@@ -8,21 +8,19 @@
 //!
 //! Versions de la géographie (VERSION, notée dans la sauvegarde : une partie garde la sienne, ses routes, ses crues et ses
 //! cartes de bataille) : 1, les données d'avant (data/geo_v1.json, figé, avec la place d'alors des villes déplacées depuis) ;
-//! 2, les rivières d'OpenStreetMap (Overture, octobre 2026 : leur cours principal, simplifié à 60 m, chaque affluent
-//! raccordé à sa rivière) et les villes au bord de l'eau à leur vraie place (places.py). Une modification du calcul de ce
-//! fichier change aussi la carte des anciennes parties. 3, toute la France (geo.json, places_france.json), figée ; 4, la
-//! carte des nouvelles parties : la 3, puis places_france_v4.json (des places ajoutées à la fin, pour que celles de la 3
-//! gardent leur numéro, et des étiquettes). Le cache de la 3 reste map_cache.json, les autres ont leur suffixe (_v4…).
-//! 5 (VERSION_EUROPE), la carte du mode « Europe » : l'Europe et l'Afrique du Nord de 1700, un pays par camp (europe.json,
-//! places_europe.json : outils/europe.mjs), des cases de 5 km. Le moteur compte toujours en cases : seule la projection
-//! (KX, KY de la carte, km_case) sait qu'une case y vaut 5 km. Elle n'est pas la carte par défaut (VERSION reste 4) et
-//! ne se fait qu'à la demande.
+//! 2, l'Aquitaine (la carte par défaut) : les rivières d'OpenStreetMap (Overture, octobre 2026 : leur cours principal,
+//! simplifié à 60 m, chaque affluent raccordé à sa rivière) et les villes au bord de l'eau à leur vraie place (places.py).
+//! Une modification du calcul de ce fichier change aussi la carte des anciennes parties. 3 et 4, toute la France, sont
+//! retirées depuis le 22/11/2026 (historique git) : leurs sauvegardes ne se chargent plus. À partir de 5, les théâtres
+//! (THEATRES : l'Europe, 5, puis les autres), chacun une carte à part de cases de 5 km, un pays par camp. Le moteur compte
+//! toujours en cases : seule la projection (KX, KY de la carte, km_case) sait qu'une case y vaut 5 km. Un théâtre ne se
+//! fait qu'à la demande.
 //!
 //! En Rust : les nœuds, les arêtes et ce que le reste du moteur lit par clé restent des `Val` ; les grilles sont des
 //! `Vec` natifs et toute la génération se calcule en nombres natifs. Les fichiers de données sources sont embarqués ;
 //! seul le cache (map_cache*.json, le même fichier et le même format que le Python) se lit et s'écrit dans `data_dir()`.
 
-use crate::places::{CITY_POP, POP_1790_FR, CITY_SPECIALTIES, EXTRA_ROADS, EXTRA_ROADS_2, FERRIES, NO_ROADS_2, PLACES, ROYAL_ROUTES};
+use crate::places::{CITY_POP, CITY_SPECIALTIES, EXTRA_ROADS, EXTRA_ROADS_2, FERRIES, NO_ROADS_2, PLACES, ROYAL_ROUTES};
 use crate::py::{self, heapq, json, Val};
 use crate::{dict, list, py_const, tup};
 use indexmap::IndexMap;
@@ -43,17 +41,60 @@ pub fn data_dir() -> std::path::PathBuf {
 // les fichiers de données sources (game/data), embarqués
 const GEO_V1: &str = include_str!("../../../game/data/geo_v1.json");
 const GEO_V2: &str = include_str!("../../../game/data/geo_v2.json");
-const GEO_V3: &str = include_str!("../../../game/data/geo.json");
-const PLACES_FRANCE: &str = include_str!("../../../game/data/places_france.json");
-const PLACES_FRANCE_V4: &str = include_str!("../../../game/data/places_france_v4.json"); // (géographie 4 : les ajouts et les étiquettes)
-const GEO_EUROPE: &str = include_str!("../../../game/data/europe.json"); // (géographie 5 : l'Europe et l'Afrique du Nord, outils/europe.mjs)
-const PLACES_EUROPE: &str = include_str!("../../../game/data/places_europe.json");
 
 pub const CACHE_VERSION: i64 = 8;
-pub const VERSION: i64 = 4; // 4 : la 3 et cinq places de plus à la fin de la liste (Roubaix, Cherbourg, Dunkerque, Cannes, Port-Vendres), quatre étiquettes port (places_france_v4.json) ; 3 : toute la France (données faites une fois par outils/france.py, retiré le 15/11/2026 : voir l'historique git) ; 2 et 1 : le Sud-Ouest des anciennes parties
+pub const VERSION: i64 = 2; // 2 : l'Aquitaine (la carte par défaut) ; 1 : le Sud-Ouest des anciennes parties ; 3 et 4 (toute la France) retirées le 22/11/2026
 
-pub const VERSION_EUROPE: i64 = 5; // la carte du mode « Europe » (SPEC-FRANCE.md, étape 2) : europe.json, places_europe.json, cases de 5 km
-pub const GEN_EUROPE: i64 = 2; // (à augmenter quand le calcul de la carte 5 change : relief, végétation, routes ; son cache est alors refait)
+pub const VERSION_EUROPE: i64 = 5; // le théâtre d'Europe (SPEC-FRANCE.md, étape 2) : ce qui ne vaut que pour lui (BACS_5, relief et climats écrits à la main, MERS_5)
+pub const GEN_THEATRE: i64 = 2; // (à augmenter quand le calcul de la carte d'un théâtre change : relief, végétation, routes ; son cache est alors refait)
+
+// ---------------------------------------------------------------- les théâtres
+// Un théâtre : une carte à part, à 5 km la case, un pays par camp ; le joueur le choisit sur l'écran de départ (R::MODES).
+// Pour ajouter un théâtre <id> :
+//   1. outils/theatre.mjs écrit ses fichiers dans game/data : <id>.json (la carte, même forme que europe.json),
+//      places_<id>.json, pays_<id>.json (les clés d'un camp, puis "moyens", "maisons", "culture"), epoques_<id>.json et
+//      cultures_<id>.json (ses cultures nouvelles, ou {}) ; codes des pays : trois lettres, la première celle du théâtre ;
+//   2. une ligne dans THEATRES ci-dessous : le numéro de géographie suivant, l'id, le nom affiché, « pays », « d'<nom> »,
+//      « l’<nom> », « Toute l'<nom> » et les cinq fichiers par include_str! ;
+//   3. recompiler : ses pays entrent dans R::FACTIONS, le théâtre à l'écran de départ ; sa carte se fait à la première
+//      demande (cache game/data/map_cache_v<geo>.json, empreinte sur ses fichiers). `cargo test -p conquete --test
+//      theatres` vérifie qu'il se charge.
+// Ce qui est propre à l'Europe (bacs BACS_5, traversées MERS_5, relief et climats de _terrain5) reste attaché à
+// VERSION_EUROPE ; un autre théâtre prend le calcul générique (_terrain_theatre, réseaux de routes et de rails générés).
+pub struct Theatre {
+    pub geo: i64,
+    pub id: &'static str,
+    pub nom: &'static str,
+    /// Le mot d'un camp à l'écran de départ.
+    pub mot: &'static str,
+    /// « d'Europe » (Game::pays_de).
+    pub de: &'static str,
+    /// « l’Europe » (la page : « Vous dominez l’Europe »).
+    pub le: &'static str,
+    /// « Toute l'Europe » (la fin de la partie).
+    pub tout: &'static str,
+    pub carte: &'static str,
+    pub places: &'static str,
+    pub pays: &'static str,
+    pub epoques: &'static str,
+    pub cultures: &'static str,
+}
+pub const THEATRES: &[Theatre] = &[
+    Theatre { geo: 5, id: "europe", nom: "Europe", mot: "pays", de: "d'Europe", le: "l’Europe", tout: "Toute l'Europe",
+        carte: include_str!("../../../game/data/europe.json"), places: include_str!("../../../game/data/places_europe.json"),
+        pays: include_str!("../../../game/data/pays_europe.json"), epoques: include_str!("../../../game/data/epoques_europe.json"),
+        cultures: include_str!("../../../game/data/cultures_europe.json") },
+];
+
+/// Le théâtre de cette géographie (None pour l'Aquitaine et les anciennes cartes).
+pub fn theatre(version: i64) -> Option<&'static Theatre> {
+    THEATRES.iter().find(|t| t.geo == version)
+}
+
+/// Une géographie que le jeu sait encore faire (1, 2 et les théâtres) : une sauvegarde d'une autre est refusée.
+pub fn connue(version: i64) -> bool {
+    version == 1 || version == 2 || theatre(version).is_some()
+}
 
 pub const LAT_REF: f64 = 44.25;
 /// `KX` du module Python (cos n'est pas une fonction constante en Rust : c'est une fonction).
@@ -88,7 +129,7 @@ py_const!(TERRAIN, dict!{
     T_DUNES => tup!["Dunes", 0.35, false, 1.0],
     T_VIGNE => tup!["Vignoble", 0.60, false, 1.05],
 });
-py_const!(PLAYABLE, list!["33", "24", "40", "47", "64"]); // (géographies 1 et 2 ; depuis la 3, toute la France : GeoMap.playable_codes)
+py_const!(PLAYABLE, list!["33", "24", "40", "47", "64"]); // (géographies 1 et 2 ; un théâtre : GeoMap.playable_codes)
 pub const NONE: i64 = 0xFFFF; // cellnode : case sans lieu (eau, hors du jeu)
 
 // les types de terrain dans une grille d'octets
@@ -131,66 +172,9 @@ pub const VINEYARDS: [(f64, f64, f64); 13] = [
 ];
 
 
-// ---------------------------------------------------------------- géographie 3 : toute la France (données faites une fois par outils/france.py, retiré le 15/11/2026 : voir l'historique git)
-// relief : des lignes de crête (lat, lon) et des massifs isolés, en « hauteur » du jeu (> 0,42 collines, > 0,80 montagne,
-// > 1,55 haute montagne) ; le Sud-Ouest garde son relief écrit à la main (_elev)
-pub const CRETES: [(f64, f64, &[(f64, f64)]); 5] = [   // (amplitude, demi-largeur en degrés, crête)
-    (2.20, 0.26, &[(43.95, 7.25), (44.15, 6.95), (44.50, 6.70), (44.90, 6.60), (45.30, 6.90), (45.83, 6.86), (46.20, 6.65)]),   // Alpes
-    (2.10, 0.26, &[(43.10, -1.60), (42.98, -0.80), (42.80, 0.00), (42.70, 0.70), (42.62, 1.50), (42.52, 2.20), (42.48, 2.90)]),   // Pyrénées
-    (0.95, 0.22, &[(46.25, 5.95), (46.60, 6.15), (47.00, 6.55), (47.40, 7.00)]),   // Jura
-    (1.00, 0.18, &[(47.85, 7.00), (48.10, 7.05), (48.40, 7.18), (48.70, 7.20)]),   // Vosges
-    (1.60, 0.18, &[(41.70, 9.15), (42.00, 9.05), (42.40, 9.00), (42.70, 9.20)]),   // Corse
-];
-pub const MASSIFS: [(f64, f64, f64, f64); 38] = [   // (lat, lon, amplitude, rayon en degrés)
-    (45.30, 3.00, 0.55, 1.20), (45.06, 2.75, 1.20, 0.22), (45.53, 2.81, 1.15, 0.18), (45.80, 2.95, 0.45, 0.12),
-    (44.90, 4.20, 0.90, 0.20), (44.85, 3.45, 0.40, 0.30), (44.60, 3.00, 0.35, 0.28), (44.25, 3.75, 0.70, 0.30),
-    (43.45, 2.30, 0.45, 0.18), (45.70, 1.90, 0.25, 0.45), (47.15, 4.00, 0.55, 0.25), (45.60, 3.80, 0.60, 0.18),
-    (45.65, 4.45, 0.35, 0.22), (45.00, 4.35, 0.55, 0.28), (45.45, 3.60, 0.45, 0.22), (46.10, 4.50, 0.40, 0.18),
-    (45.90, 3.25, -0.70, 0.28),   // la Limagne
-    (45.00, 5.50, 0.85, 0.22), (45.35, 5.80, 0.85, 0.18), (45.65, 6.15, 0.85, 0.18), (44.17, 5.28, 1.00, 0.12),
-    (43.80, 5.40, 0.55, 0.30), (43.53, 5.60, 0.55, 0.15), (43.25, 6.35, 0.60, 0.25), (43.48, 6.85, 0.50, 0.15),
-    (44.40, 5.20, 0.70, 0.35), (43.95, 6.20, 0.85, 0.35),   // Baronnies, Préalpes de Digne
-    (48.40, -3.90, 0.55, 0.20), (48.20, -3.60, 0.45, 0.22), (48.75, -0.55, 0.50, 0.40), (48.40, -0.30, 0.42, 0.30),
-    (49.85, 4.70, 0.75, 0.30), (49.15, 5.00, 0.45, 0.18), (47.20, 4.75, 0.50, 0.30), (47.80, 5.20, 0.48, 0.45),
-    (48.90, 7.40, 0.60, 0.20),
-    (42.70, 2.90, -1.60, 0.22), (43.20, 3.10, -0.80, 0.30),   // la plaine du Roussillon, le bas Languedoc
-];
-pub const FORETS_3: [(f64, f64, f64, f64); 30] = [   // (lat, lon, rayon km, densité)
-    (47.95, 2.15, 18.0, 0.85), (48.40, 2.68, 10.0, 0.90), (49.37, 2.88, 10.0, 0.90), (48.65, 1.82, 10.0, 0.85), (49.25, 3.05, 8.0, 0.80),
-    (49.18, 2.48, 7.0, 0.80), (47.55, 1.90, 30.0, 0.60), (48.15, 3.75, 12.0, 0.70), (47.12, 5.68, 10.0, 0.85), (48.20, 6.90, 35.0, 0.70),
-    (48.90, 7.40, 20.0, 0.75), (48.85, 7.85, 8.0, 0.85), (49.15, 5.00, 14.0, 0.75), (49.85, 4.70, 25.0, 0.75), (47.15, 4.00, 22.0, 0.70),
-    (46.65, 2.75, 9.0, 0.90), (47.80, 0.40, 8.0, 0.85), (46.80, 6.20, 40.0, 0.60), (48.00, -2.20, 8.0, 0.70), (45.00, 3.20, 60.0, 0.35),
-    (44.20, 3.70, 25.0, 0.55), (45.70, 1.90, 40.0, 0.40), (43.25, 6.35, 15.0, 0.70), (43.48, 6.85, 8.0, 0.70), (42.20, 9.10, 35.0, 0.50),
-    (49.43, 1.47, 10.0, 0.80), (49.95, 1.45, 8.0, 0.80), (49.60, 3.40, 9.0, 0.80), (48.50, 0.75, 14.0, 0.60), (45.40, 6.30, 45.0, 0.45),
-];
-pub const VIGNES_3: [(f64, f64, f64); 21] = [   // (lat, lon, rayon km)
-    (49.05, 4.00, 18.0), (47.05, 4.85, 14.0), (47.80, 3.80, 6.0), (46.10, 4.60, 12.0), (46.35, 4.75, 8.0), (44.25, 4.80, 18.0),
-    (44.06, 4.85, 6.0), (48.15, 7.30, 14.0), (47.33, 2.83, 6.0), (47.40, 0.85, 10.0), (47.25, -0.20, 12.0), (47.10, -1.40, 12.0),
-    (45.69, -0.33, 18.0), (43.40, 3.20, 35.0), (42.65, 2.80, 15.0), (43.45, 6.20, 20.0), (46.75, 5.60, 8.0), (45.55, 5.95, 6.0),
-    (44.45, 1.30, 8.0), (43.90, 1.90, 8.0), (42.60, 9.35, 6.0),
-];
-pub const ROUTES_ROYALES_3: [&[&str]; 24] = [   // les grandes routes de poste partant de Paris, et quelques transversales
-    &["Paris", "Orléans", "Blois", "Tours", "Poitiers", "Angoulême", "Bordeaux"],
-    &["Paris", "Melun", "Sens", "Auxerre", "Dijon", "Chalon-sur-Saône", "Mâcon", "Lyon"],
-    &["Lyon", "Vienne", "Valence", "Montélimar", "Orange", "Avignon", "Aix-en-Provence", "Marseille"],
-    &["Aix-en-Provence", "Brignoles", "Toulon"], &["Aix-en-Provence", "Fréjus", "Antibes", "Nice"],
-    &["Paris", "Senlis", "Compiègne", "Péronne", "Arras", "Lille"], &["Paris", "Beauvais", "Amiens", "Abbeville", "Boulogne-sur-Mer", "Calais"],
-    &["Paris", "Pontoise", "Rouen", "Le Havre"], &["Rouen", "Lisieux", "Caen", "Bayeux", "Saint-Lô", "Coutances"],
-    &["Paris", "Meaux", "Château-Thierry", "Épernay", "Châlons-en-Champagne", "Verdun", "Metz"],
-    &["Châlons-en-Champagne", "Vitry-le-François", "Saint-Dizier", "Toul", "Nancy", "Lunéville", "Saverne", "Strasbourg"],
-    &["Paris", "Versailles", "Chartres", "Le Mans", "Laval", "Rennes", "Saint-Brieuc", "Morlaix", "Brest"],
-    &["Le Mans", "Angers", "Nantes"], &["Rennes", "Vannes", "Lorient", "Quimper"],
-    &["Paris", "Étampes", "Orléans", "Vierzon", "Châteauroux", "Limoges", "Brive-la-Gaillarde", "Cahors", "Montauban", "Toulouse"],
-    &["Toulouse", "Castelnaudary", "Carcassonne", "Narbonne", "Béziers", "Montpellier", "Nîmes", "Avignon"], &["Narbonne", "Perpignan"],
-    &["Lyon", "Bourg-en-Bresse"], &["Dijon", "Dole", "Besançon", "Belfort", "Mulhouse", "Colmar", "Strasbourg"],
-    &["Lyon", "Roanne", "Moulins", "Nevers", "Montargis", "Fontainebleau", "Paris"], &["Lyon", "Bourgoin-Jallieu", "Grenoble"],
-    &["Clermont-Ferrand", "Riom", "Moulins"], &["Paris", "Provins", "Troyes", "Chaumont", "Langres", "Dijon"],
-    &["Lille", "Douai", "Cambrai", "Saint-Quentin", "Laon", "Reims", "Châlons-en-Champagne"],
-];
-pub const MARAIS_3: [(f64, f64, f64); 6] = [(46.35, -1.00, 18.0), (43.55, 4.55, 20.0), (47.35, -2.25, 8.0), (46.00, 5.00, 15.0), (46.90, -2.00, 10.0), (49.30, -1.20, 9.0)];
-
 // ---------------------------------------------------------------- géographie 5 : l'Europe et l'Afrique du Nord (outils/europe.mjs), cases de 5 km
-// relief : comme la France (CRETES, MASSIFS), en degrés ; écrit à la main d'après la géographie réelle
+// relief : des lignes de crête (lat, lon) et des massifs isolés, en « hauteur » du jeu (> 0,42 collines, > 0,80 montagne,
+// > 1,55 haute montagne), en degrés ; écrit à la main d'après la géographie réelle
 pub const CRETES_5: &[(f64, f64, &[(f64, f64)])] = &[   // (amplitude, demi-largeur en degrés, crête)
     (1.60, 0.50, &[(44.10, 7.60), (44.60, 6.90), (45.30, 6.90), (45.90, 7.30), (46.40, 8.30), (46.60, 9.80), (46.90, 11.20), (47.10, 12.60), (47.30, 14.00), (47.50, 15.30)]),   // Alpes
     (1.45, 0.30, &[(43.20, -1.60), (42.80, -0.30), (42.65, 1.00), (42.45, 2.50)]),   // Pyrénées
@@ -613,6 +597,8 @@ const NBRS: [(i64, i64, f64); 8] = [(1, 0, 1.0), (-1, 0, 1.0), (0, 1, 1.0), (0, 
 
 pub struct GeoMap {
     pub version: i64,
+    /// Le théâtre de cette carte (None : l'Aquitaine, les anciennes cartes).
+    pub theatre: Option<&'static Theatre>,
     pub suffixe: String,
     pub src: Val,
     pub lon0: f64,
@@ -622,7 +608,7 @@ pub struct GeoMap {
     pub KX: f64,
     /// (cases par degré de latitude : KY du module, divisé par km_case)
     pub KY: f64,
-    /// Kilomètres par case : 1, ou 5 pour la carte d'Europe. Le moteur compte en cases ; seule la projection en tient compte.
+    /// Kilomètres par case : 1, ou 5 pour un théâtre. Le moteur compte en cases ; seule la projection en tient compte.
     pub km_case: f64,
     /// Un set de codes de départements (textes).
     pub playable_codes: Val,
@@ -656,15 +642,16 @@ pub struct GeoMap {
 impl GeoMap {
     /// `GeoMap(version)` ; `GeoMap()` : `GeoMap::new(VERSION)`.
     pub fn new(version: i64) -> GeoMap {
-        let suffixe = if version == 3 { String::new() } else { format!("_v{version}") }; // (la 3 garde map_cache.json : son cache et ses références ne bougent pas)
-        let texte = match suffixe.as_str() {
-            "" | "_v4" => GEO_V3,
-            "_v1" => GEO_V1,
-            "_v2" => GEO_V2,
-            "_v5" => GEO_EUROPE,
-            _ => panic!("FileNotFoundError: geo{suffixe}.json"),
+        let suffixe = format!("_v{version}");
+        let theatre = theatre(version);
+        let texte = match (version, theatre) {
+            (1, _) => GEO_V1,
+            (2, _) => GEO_V2,
+            (_, Some(t)) => t.carte,
+            // (3 et 4 : la carte de France, retirée le 22/11/2026 ; le serveur refuse ces sauvegardes avant : geo::connue)
+            _ => panic!("FileNotFoundError: géographie {version} inconnue"),
         };
-        let src = json::loads(texte).expect("geo.json");
+        let src = json::loads(texte).unwrap_or_else(|e| panic!("carte de la géographie {version} : {e}"));
         let b = src.at("bounds");
         let (lon0, lon1, lat0, lat1) = (b.at("lon0").f(), b.at("lon1").f(), b.at("lat0").f(), b.at("lat1").f());
         let km_case = src.get_or("km_case", 1).f();
@@ -686,6 +673,7 @@ impl GeoMap {
         jouable.extend(dept_codes.iter().map(|c| playable_codes.has(c)));
         let mut g = GeoMap {
             version,
+            theatre,
             suffixe,
             src,
             lon0,
@@ -781,10 +769,10 @@ impl GeoMap {
     fn _build_nodes(&mut self) {
         self.nodes = list![];
         self.by_name = Val::dict();
-        if self.version == VERSION_EUROPE {
-            // (géographie 5) les places d'Europe, faites par outils/europe.mjs : les seules de cette carte
+        if let Some(t) = self.theatre {
+            // (un théâtre) ses places, faites par outils/europe.mjs ou outils/theatre.mjs : les seules de cette carte
             let mut slugs: HashSet<String> = HashSet::new();
-            for (k, place) in json::loads(PLACES_EUROPE).expect("places_europe.json").iter().enumerate() {
+            for (k, place) in json::loads(t.places).unwrap_or_else(|e| panic!("places_{}.json : {e}", t.id)).iter().enumerate() {
                 let p = place.vec(); // (name, lat, lon, pays, typ, spec, fort, pop0)
                 assert!(p.len() == 8, "ValueError: 8 valeurs attendues, {} reçues", p.len());
                 let name = &p[0];
@@ -820,38 +808,6 @@ impl GeoMap {
             self.nodes.push(n);
             self.by_name.set(name, k);
         }
-        // (géographie 3) les places des autres départements, générées par l'outil de la carte de France (historique git), avec leur population
-        if self.version >= 3 {
-            let gen = json::loads(PLACES_FRANCE).expect("places_france.json");
-            // (géographie 4) les places ajoutées, à la fin : celles de la 3 gardent leur numéro
-            let v4 = if self.version >= 4 { json::loads(PLACES_FRANCE_V4).expect("places_france_v4.json") } else { dict! {"ajouts" => list![], "etiquettes" => Val::dict()} };
-            let mut slugs: HashSet<String> = self.nodes.iter().map(|n| n.at("slug").string()).collect();
-            for place in gen.iter().chain(v4.at("ajouts").iter()) {
-                let p = place.vec(); // (name, lat, lon, dept, typ, spec, fort, pop0)
-                assert!(p.len() == 8, "ValueError: 8 valeurs attendues, {} reçues", p.len());
-                let name = &p[0];
-                let k = self.nodes.len();
-                let (x, y) = self.xy(p[1].f(), p[2].f());
-                let mut slug = slugify(name.s());
-                if slugs.contains(&slug) {
-                    // (homonymes d'un département à l'autre : Saint-Martin, Langon…)
-                    slug = format!("{slug}-{}", p[3].s().to_lowercase());
-                }
-                slugs.insert(slug.clone());
-                self.nodes.push(dict! {"id" => k, "slug" => slug, "name" => name, "x" => py::round_n(x, 2), "y" => py::round_n(y, 2), "dept" => &p[3], "type" => &p[4],
-                "spec" => p[5].to_list(), "fort" => &p[6], "pop0" => POP_1790_FR().get_or(format!("{}|{}", name.s(), p[3].s()).as_str(), &p[7])});
-                self.by_name.setdefault(name, k); // (les noms des tables, Sud-Ouest d'abord : la place écrite à la main)
-            }
-            // (géographie 4) les étiquettes de plus, par « nom|département »
-            for (cle, tags) in v4.at("etiquettes").items() {
-                let n = self.nodes.iter().find(|n| format!("{}|{}", n.at("name").s(), n.at("dept").s()) == cle.s()).unwrap_or_else(|| panic!("KeyError: {}", cle.s()));
-                for t in tags.iter() {
-                    if !n.at("spec").has(&t) {
-                        n.at("spec").push(t);
-                    }
-                }
-            }
-        }
     }
 
     /// (privé) Les (x, y) des lieux, en nombres natifs.
@@ -863,19 +819,13 @@ impl GeoMap {
     pub fn _src_hash(&self) -> String {
         let mut h: Vec<u8> = vec![];
         h.extend(json::dumps_avec(&self.src, json::Ecriture { ascii: true, sort_keys: true, ..Default::default() }).as_bytes());
-        if self.version == VERSION_EUROPE {
-            // (géographie 5 : sa source, ses places, la version de son calcul ; aucune table du Sud-Ouest)
-            h.extend(PLACES_EUROPE.as_bytes());
-            h.extend(format!("europe{GEN_EUROPE}/{CACHE_VERSION}").as_bytes());
+        if let Some(t) = self.theatre {
+            // (un théâtre : sa source, ses places, la version de son calcul ; aucune table du Sud-Ouest)
+            h.extend(t.places.as_bytes());
+            h.extend(format!("{}{GEN_THEATRE}/{CACHE_VERSION}", t.id).as_bytes());
             return sha1_hex(&h);
         }
         h.extend(PLACES().repr().as_bytes());
-        if self.version >= 3 {
-            h.extend(PLACES_FRANCE.as_bytes());
-        }
-        if self.version >= 4 {
-            h.extend(PLACES_FRANCE_V4.as_bytes());
-        }
         h.extend(ROYAL_ROUTES().repr().as_bytes());
         h.extend(EXTRA_ROADS().repr().as_bytes());
         h.extend((&EXTRA_ROADS_2() + &NO_ROADS_2()).repr().as_bytes());
@@ -1008,7 +958,7 @@ impl GeoMap {
         }
 
         let y_spain = self.xy(43.36, 0.0).1;
-        let mut hors = vec![0u8; N]; // (géographie 3) les terres des pays voisins, hors du jeu
+        let mut hors = vec![0u8; N]; // (un théâtre) les terres hors du jeu
         for l in self.src.get_or("lands", list![]).iter() {
             raster_ring(W, H, &self.pts_lonlat(&l.at("ring")), &mut |c| hors[c] = 1);
         }
@@ -1019,7 +969,7 @@ impl GeoMap {
             if water[c] != 0 {
                 terrain[c] = EAU;
             } else if dept[c] == 0 {
-                if self.version >= 3 {
+                if self.theatre.is_some() {
                     if hors[c] != 0 {
                         terrain[c] = PLAINE;
                     } else {
@@ -1070,11 +1020,8 @@ impl GeoMap {
         let mut in_landes = vec![0u8; N];
         raster_ring(W, H, &landes, &mut |c| in_landes[c] = 1);
 
-        let v3 = self.version >= 3;
-        let (forets_3, vignes_3): (&[(f64, f64, f64, f64)], &[(f64, f64, f64)]) = if v3 { (&FORETS_3, &VIGNES_3) } else { (&[], &[]) };
-        let forests: Vec<(Pt, f64, f64)> = FORESTS.iter().chain(forets_3).map(|&(la, lo, r, d)| (self.xy(la, lo), r, d)).collect();
-        let vines: Vec<(Pt, f64)> = VINEYARDS.iter().chain(vignes_3).map(|&(la, lo, r)| (self.xy(la, lo), r)).collect();
-        let marais3: Vec<(Pt, f64)> = MARAIS_3.iter().map(|&(la, lo, r)| (self.xy(la, lo), r)).collect();
+        let forests: Vec<(Pt, f64, f64)> = FORESTS.iter().map(|&(la, lo, r, d)| (self.xy(la, lo), r, d)).collect();
+        let vines: Vec<(Pt, f64)> = VINEYARDS.iter().map(|&(la, lo, r)| (self.xy(la, lo), r)).collect();
 
         for c in 0..N {
             if terrain[c] == OCEAN || terrain[c] == EAU {
@@ -1083,15 +1030,15 @@ impl GeoMap {
             let (i, j) = (c % Wu, c / Wu);
             let (x, y) = (i as f64 + 0.5, j as f64 + 0.5);
             let (lat, lon) = (self.lat_of(y), self.lon_of(x));
-            if self.version == VERSION_EUROPE {
-                terrain[c] = GeoMap::_terrain5(x, y, lat, lon, d_ocean[c], d_riv[c]);
+            if self.theatre.is_some() {
+                terrain[c] = if self.version == VERSION_EUROPE { GeoMap::_terrain5(x, y, lat, lon, d_ocean[c], d_riv[c]) } else { GeoMap::_terrain_theatre(x, y) };
                 continue;
             }
-            let mut e = (if v3 { GeoMap::_elev3(lat, lon) } else { GeoMap::_elev(lat, lon) }) + (fbm(x / 22.0, y / 22.0, 11, 4) - 0.5) * 0.42;
-            if lat < 43.35 || (v3 && e > 0.8) {
+            let mut e = GeoMap::_elev(lat, lon) + (fbm(x / 22.0, y / 22.0, 11, 4) - 0.5) * 0.42;
+            if lat < 43.35 {
                 // (les vallées des montagnes sont creusées par leurs rivières)
                 e -= 0.6 * (-py::pow(d_riv[c] as f64 / 2.6, 2.0)).exp();
-            } else if !v3 {
+            } else {
                 e = min2(e, 0.78);
             }
             if e > 1.55 {
@@ -1105,12 +1052,11 @@ impl GeoMap {
             let mut t = if e > 0.42 { COLLINES } else { PLAINE };
             let n1 = fbm(x / 7.0, y / 7.0, 3, 3);
             let do_ = d_ocean[c];
-            let aquit = !v3 || (lon < -0.9 && lat < 45.65); // (géographie 3 : les dunes et la forêt du littoral aquitain)
-            if do_ <= 2 && lat > 43.55 && (aquit || (lat > 50.2 && lon < 2.6) || (46.0 < lat && lat < 46.9 && lon < -1.2)) {
+            if do_ <= 2 && lat > 43.55 {
                 terrain[c] = DUNES;
                 continue;
             }
-            if do_ <= 7 && lat > 43.6 && n1 > 0.22 && aquit {
+            if do_ <= 7 && lat > 43.6 && n1 > 0.22 {
                 terrain[c] = FORET;
                 continue;
             }
@@ -1131,14 +1077,6 @@ impl GeoMap {
             }
             if d_adour[c] <= 2 && lon < -0.55 && (t == PLAINE || t == LANDE) {
                 t = if n1 > 0.35 { MARAIS } else { t };
-            }
-            if v3 && (t == PLAINE || t == COLLINES) {
-                for &((mx, my), r) in &marais3 {
-                    if py::hypot(x - mx, y - my) < r && n1 > 0.3 {
-                        t = MARAIS;
-                        break;
-                    }
-                }
             }
             if t == PLAINE || t == COLLINES {
                 for &((fx, fy), r, dens) in &forests {
@@ -1225,29 +1163,7 @@ impl GeoMap {
         e
     }
 
-    /// Le relief de toute la France : les Pyrénées et le Sud-Ouest de _elev (là seulement), les crêtes et les massifs.
-    pub fn _elev3(lat: f64, lon: f64) -> f64 {
-        let cl = radians(lat).cos();
-        let sw = min2(1.0, max2(0.0, (1.9 - lon) / 0.5)) * min2(1.0, max2(0.0, (46.1 - lat) / 0.4)); // (le Sud-Ouest d'avant)
-        // (le Sud-Ouest d'avant sans ses Pyrénées, qui montaient sans fin vers le sud : ici une ligne de crête, CRETES)
-        let pyr = if lon > -1.0 {
-            let base = 43.20 + 0.03 * (lon + 1.0) + 0.05 * (lon * 7.3).sin() + 0.03 * (lon * 19.0 + 1.0).sin();
-            max2(0.0, base - lat) / 0.21
-        } else {
-            max2(0.0, 43.36 + 0.04 * (lon * 9.0).sin() - lat) / 0.30 + (if lat < 43.45 { 0.18 } else { 0.0 })
-        };
-        let mut e = max2(0.0, GeoMap::_elev(lat, lon) - pyr) * sw;
-        for &(amp, w, pts) in CRETES.iter() {
-            let d = py::min_f(pts.windows(2).map(|ab| _dseg(lat, lon * cl, ab[0].0, ab[0].1 * cl, ab[1].0, ab[1].1 * cl))).unwrap();
-            e += amp * (-py::pow(d / w, 2.0)).exp() + amp * 0.3 * (-py::pow(d / (w * 2.2), 2.0)).exp();
-        }
-        for &(la, lo, amp, r) in MASSIFS.iter() {
-            e += amp * (-((py::pow(lat - la, 2.0) + py::pow((lon - lo) * cl, 2.0)) / (r * r))).exp();
-        }
-        e
-    }
-
-    /// (géographie 5) Le relief de l'Europe et de l'Afrique du Nord, sur le modèle de _elev3 : lignes de crête et massifs
+    /// (géographie 5) Le relief de l'Europe et de l'Afrique du Nord : lignes de crête et massifs
     /// (CRETES_5, MASSIFS_5), en « hauteur » du jeu.
     pub fn _elev5(lat: f64, lon: f64) -> f64 {
         let cl = radians(lat).cos();
@@ -1366,6 +1282,15 @@ impl GeoMap {
         t
     }
 
+    /// (un théâtre sans relief ni climats écrits à la main) Le terrain d'une case de 5 km : plaine, collines et forêts par
+    /// taches, au gré du bruit.
+    pub fn _terrain_theatre(x: f64, y: f64) -> u8 {
+        if fbm(x / 6.0, y / 6.0, 13, 3) > 0.66 {
+            return FORET;
+        }
+        if fbm(x / 12.0, y / 12.0, 19, 3) > 0.62 { COLLINES } else { PLAINE }
+    }
+
     // ------------------------------------------------------------ routes
     /// (En Python : margin=1.2. Rend un entier ou un flottant : ici toujours un flottant, de même valeur.)
     pub fn _water_on_segment(&self, a: Pt, b: Pt, margin: f64) -> f64 {
@@ -1381,8 +1306,8 @@ impl GeoMap {
             let c = self.cell(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t);
             if c < 0 || matches!(self.terrain[c as usize], OCEAN | EAU) || !self.jouable[self.dept[c as usize] as usize] {
                 bad += 1.0;
-            } else if self.terrain[c as usize] == HAUTE && self.version != VERSION_EUROPE {
-                bad += 0.25; // (géographie 5 : une case de haute montagne de 5 km a ses cols, la route y passe)
+            } else if self.terrain[c as usize] == HAUTE && self.theatre.is_none() {
+                bad += 0.25; // (un théâtre : une case de haute montagne de 5 km a ses cols, la route y passe)
             }
         }
         bad
@@ -1410,9 +1335,11 @@ impl GeoMap {
             }
             out
         };
-        let europe = self.version == VERSION_EUROPE;
-        let portee = if europe { GABRIEL_5 } else { 40.0 };
-        let terres: Vec<u32> = if europe { self._terres(&P) } else { vec![] };
+        let theatre = self.theatre.is_some();
+        // (les bacs nommés des détroits : l'Europe seulement)
+        let bacs: &[(&str, &str, &str)] = if self.version == VERSION_EUROPE { &BACS_5 } else { &[] };
+        let portee = if theatre { GABRIEL_5 } else { 40.0 };
+        let terres: Vec<u32> = if theatre { self._terres(&P) } else { vec![] };
         for a in 0..n {
             for b in proches(P[a].0, P[a].1, portee) {
                 if b <= a {
@@ -1427,18 +1354,18 @@ impl GeoMap {
                 if proches(mx, my, d / 2.0).into_iter().any(|c| c != a && c != b && py::pow(P[c].0 - mx, 2.0) + py::pow(P[c].1 - my, 2.0) < r2) {
                     continue;
                 }
-                // (géographie 5 : un seul point d'eau sur le trajet, le fond d'une baie, n'empêche pas la route ; entre deux
+                // (un théâtre : un seul point d'eau sur le trajet, le fond d'une baie, n'empêche pas la route ; entre deux
                 // terres, un détroit d'une case, Sund, Messine, Bosphore : un bac)
-                if self._water_on_segment(P[a], P[b], 1.2) < (if europe { 2.0 } else { 1.0 }) {
-                    pairs.insert((a, b), Info { royal: false, ferry: europe && terres[a] != terres[b], drop: false });
+                if self._water_on_segment(P[a], P[b], 1.2) < (if theatre { 2.0 } else { 1.0 }) {
+                    pairs.insert((a, b), Info { royal: false, ferry: theatre && terres[a] != terres[b], drop: false });
                 }
             }
         }
-        if europe {
-            // (géographie 5) les routes de poste : de chaque capitale à ses plus grandes villes, par le plus court chemin
+        if theatre {
+            // (un théâtre) les routes de poste : de chaque capitale à ses plus grandes villes, par le plus court chemin
             // du réseau (une île que la terre ne relie pas n'en a pas : voies de mer, waterways.rs)
-            for (_, na, nb) in BACS_5 {
-                let (a, b) = (self.by_name.at(na).u(), self.by_name.at(nb).u());
+            for (_, na, nb) in bacs {
+                let (a, b) = (self.by_name.at(*na).u(), self.by_name.at(*nb).u());
                 pairs.insert((a.min(b), a.max(b)), Info { royal: false, ferry: true, drop: false });
             }
             self._ensure_connected(&mut pairs, &P);
@@ -1452,20 +1379,9 @@ impl GeoMap {
                     }
                 }
             }
-        } else if self.version >= 3 {
-            // les grandes routes royales de la France : le plus court chemin du réseau, entre leurs villes
-            self._ensure_connected(&mut pairs, &P);
-            for route in ROUTES_ROYALES_3.iter() {
-                let ids: Vec<usize> = route.iter().filter(|nm| self.by_name.has(**nm)).map(|nm| self.by_name.at(*nm).u()).collect();
-                for ab in ids.windows(2) {
-                    for k in GeoMap::_chemin(&pairs, &P, ab[0], ab[1]) {
-                        pairs[&k].royal = true;
-                    }
-                }
-            }
         }
-        // (géographie 5 : aucune des tables du Sud-Ouest, routes royales, chemins ajoutés ou retirés, bac de Blaye)
-        let sud_ouest = |t: Val| if europe { list![] } else { t };
+        // (un théâtre : aucune des tables du Sud-Ouest, routes royales, chemins ajoutés ou retirés, bac de Blaye)
+        let sud_ouest = |t: Val| if theatre { list![] } else { t };
         for route in sud_ouest(ROYAL_ROUTES()).iter() {
             let ids: Vec<usize> = route.iter().map(|nm| self.by_name.at(&nm).u()).collect();
             for ab in ids.windows(2) {
@@ -1616,8 +1532,8 @@ impl GeoMap {
             let path = &paths[eid];
             if info.ferry {
                 let (na, nb) = (self.nodes.at(a).ats("name"), self.nodes.at(b).ats("name"));
-                let nomme = BACS_5.iter().find(|t| [t.1, t.2] == [na.as_str(), nb.as_str()] || [t.2, t.1] == [na.as_str(), nb.as_str()]);
-                e.set("river", if europe { nomme.map_or("Détroit", |t| t.0) } else { "Gironde" });
+                let nomme = bacs.iter().find(|t| [t.1, t.2] == [na.as_str(), nb.as_str()] || [t.2, t.1] == [na.as_str(), nb.as_str()]);
+                e.set("river", if theatre { nomme.map_or("Détroit", |t| t.0) } else { "Gironde" });
                 e.set("rrank", 1);
                 e.set("cx", py::round_n((P[a].0 + P[b].0) / 2.0, 2));
                 e.set("cy", py::round_n((P[a].1 + P[b].1) / 2.0, 2));
@@ -1952,7 +1868,7 @@ impl GeoMap {
     }
 
     fn _ensure_connected(&self, pairs: &mut Pairs, P: &[Pt]) {
-        if self.version >= 3 {
+        if self.theatre.is_some() {
             return self._relier(pairs, P);
         }
         let n = P.len();
@@ -1983,8 +1899,8 @@ impl GeoMap {
         }
     }
 
-    /// (géographie 3) Relie les morceaux du réseau : le plus petit d'abord, à la place la plus proche d'un autre morceau (à moins de
-    /// 60 km, sans eau entre elles) ; une île que rien ne relie reste à part (Corse, Belle-Île…).
+    /// (un théâtre) Relie les morceaux du réseau : le plus petit d'abord, à la place la plus proche d'un autre morceau (à moins de
+    /// RELIER_5 cases, sur la même terre) ; une île que rien ne relie reste à part (voies de mer : waterways.rs).
     fn _relier(&self, pairs: &mut Pairs, P: &[Pt]) {
         let n = P.len();
         const G: f64 = 20.0;
@@ -1993,10 +1909,10 @@ impl GeoMap {
         for (i, &(x, y)) in P.iter().enumerate() {
             cases.entry((case(x), case(y))).or_default().push(i);
         }
-        let portee = if self.version == VERSION_EUROPE { RELIER_5 } else { 60.0 };
-        // (géographie 5) deux places se raccordent si elles sont sur la même terre, même si la ligne droite passe sur une
-        // baie ou un fjord (le tracé de la route fait le tour) : la terre de chaque place, numérotée par remplissage
-        let terre: Vec<u32> = if self.version == VERSION_EUROPE { self._terres(P) } else { vec![] };
+        let portee = RELIER_5;
+        // deux places se raccordent si elles sont sur la même terre, même si la ligne droite passe sur une baie ou un fjord
+        // (le tracé de la route fait le tour) : la terre de chaque place, numérotée par remplissage
+        let terre: Vec<u32> = self._terres(P);
         let mut isoles: HashSet<usize> = HashSet::new();
         loop {
             let mut parent: Vec<usize> = (0..n).collect();
@@ -2038,17 +1954,13 @@ impl GeoMap {
                     }
                 }
                 cand.sort_by(|x, y| x.partial_cmp(y).unwrap());
-                let ok = if terre.is_empty() {
-                    cand.iter().find(|&&(_, a, b)| self._water_on_segment(P[a], P[b], 1.2) < 1.0)
-                } else {
-                    // (la route fait le tour de la baie, mais le jeu compte la ligne droite : entre deux places de la même terre,
-                    // celle qui passe le moins sur l'eau, chaque case d'eau comptant triple ; pas de Revel – Helsingfors à
-                    // travers le golfe de Finlande quand la Carélie relie la Finlande par la terre)
-                    // shortcut: seuls les 200 plus proches candidats sont pesés (le calcul de l'eau est long) ; à élargir si une
-                    // terre lointaine reste mal raccordée
-                    let cout = |&&(d, a, b): &&(f64, usize, usize)| d + 1.2 * self._water_on_segment(P[a], P[b], 1.2);
-                    cand.iter().filter(|&&(_, a, b)| terre[a] != 0 && terre[a] == terre[b]).take(200).min_by(|x, y| cout(x).partial_cmp(&cout(y)).unwrap())
-                };
+                // (la route fait le tour de la baie, mais le jeu compte la ligne droite : entre deux places de la même terre,
+                // celle qui passe le moins sur l'eau, chaque case d'eau comptant triple ; pas de Revel – Helsingfors à
+                // travers le golfe de Finlande quand la Carélie relie la Finlande par la terre)
+                // shortcut: seuls les 200 plus proches candidats sont pesés (le calcul de l'eau est long) ; à élargir si une
+                // terre lointaine reste mal raccordée
+                let cout = |&&(d, a, b): &&(f64, usize, usize)| d + 1.2 * self._water_on_segment(P[a], P[b], 1.2);
+                let ok = cand.iter().filter(|&&(_, a, b)| terre[a] != 0 && terre[a] == terre[b]).take(200).min_by(|x, y| cout(x).partial_cmp(&cout(y)).unwrap());
                 if let Some(&(_, a, b)) = ok {
                     pairs.insert((a.min(b), a.max(b)), Info::default());
                     relie = true;

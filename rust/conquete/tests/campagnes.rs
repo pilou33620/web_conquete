@@ -16,6 +16,7 @@
 //!   le revenu en livres) : la somme de Python est compensée et il y a au plus 8 voisins ; refaite dans tous les ordres
 //!   (toutes les permutations jusqu'à 6 voisins, 300 ordres tirés au-delà) à chacun des 67 000 appels de 8 parties
 //!   (géographies 1, 2 et 3), elle n'a jamais changé d'un bit. Rien n'est donc masqué pour `_douane`.
+//!   (Les parties de la géographie 3, toute la France, sont retirées avec elle le 22/11/2026.)
 //!
 //! Pour chercher un écart (dans `<dossier>` = $CONQUETE_DIAG) :
 //! - `python3 outils/jumeau/campagnes_ref.py <nom> <mois>` écrit l'empreinte après chaque pas du mois suivant
@@ -266,15 +267,10 @@ fn rejouer(geo: &Rc<GeoMap>, p: &Val, mois: Option<usize>) -> Result<(), String>
     Ok(())
 }
 
-/// Par défaut, les parties de la géographie 3 (toute la France : un mois y coûte 2 à 5 s en release, davantage dans
-/// les essais) ne sont comparées qu'à leur création, sauf g3_1790_ia et g3_1813_ordres qui jouent leur premier mois ;
-/// CONQUETE_CAMPAGNES_LONGUES=1 les joue en entier (cinq minutes environ).
 fn partie(nom: &str) {
     let r = reference();
     let p = r.at("parties").iter().find(|p| p.at("nom") == nom).unwrap();
-    let longues = std::env::var_os("CONQUETE_CAMPAGNES_LONGUES").is_some();
-    let mois = (p.ati("geo") == 3 && !longues).then(|| ["g3_1790_ia", "g3_1813_ordres"].contains(&nom) as usize);
-    if let Err(e) = rejouer(&geo(p.ati("geo")), &p, mois) {
+    if let Err(e) = rejouer(&geo(p.ati("geo")), &p, None) {
         panic!("{e}");
     }
 }
@@ -283,19 +279,18 @@ macro_rules! parties {
     ($($nom:ident),* $(,)?) => { $( #[test] fn $nom() { partie(stringify!($nom)); } )* };
 }
 parties!(
-    g2_1790_ia, g2_1700_ia, g2_1813_rien, g2_1870_ia, g3_1790_ia, g2_1813_ordres, g2_1790_ordres, g2_1700_ordres,
-    g2_1870_ordres, g3_1813_ordres, g2_1790_rien, g2_1700_rien, g2_1813_ia,
-    g2_1870_rien, g3_1700_rien, g3_1813_ia, g3_1870_ia, g3_1790_rien, g1_1790_ia, c2_1700, c2_1790, c2_1813, c2_1870,
-    c3_1700, c3_1790, c3_1813, c3_1870, c1_1870, c1_1700,
+    g2_1790_ia, g2_1700_ia, g2_1813_rien, g2_1870_ia, g2_1813_ordres, g2_1790_ordres, g2_1700_ordres,
+    g2_1870_ordres, g2_1790_rien, g2_1700_rien, g2_1813_ia,
+    g2_1870_rien, g1_1790_ia, c2_1700, c2_1790, c2_1813, c2_1870, c1_1870, c1_1700,
 );
 
 #[test]
 fn toutes_les_parties_ont_leur_essai() {
     let noms = [
-        "g2_1790_ia", "g2_1700_ia", "g2_1813_rien", "g2_1870_ia", "g3_1790_ia", "g2_1813_ordres", "g2_1790_ordres",
-        "g2_1700_ordres", "g2_1870_ordres", "g3_1813_ordres", "g2_1790_rien", "g2_1700_rien",
-        "g2_1813_ia", "g2_1870_rien", "g3_1700_rien", "g3_1813_ia", "g3_1870_ia", "g3_1790_rien", "g1_1790_ia", "c2_1700",
-        "c2_1790", "c2_1813", "c2_1870", "c3_1700", "c3_1790", "c3_1813", "c3_1870", "c1_1870", "c1_1700",
+        "g2_1790_ia", "g2_1700_ia", "g2_1813_rien", "g2_1870_ia", "g2_1813_ordres", "g2_1790_ordres",
+        "g2_1700_ordres", "g2_1870_ordres", "g2_1790_rien", "g2_1700_rien",
+        "g2_1813_ia", "g2_1870_rien", "g1_1790_ia", "c2_1700",
+        "c2_1790", "c2_1813", "c2_1870", "c1_1870", "c1_1700",
     ];
     for p in reference().at("parties").iter() {
         assert!(noms.contains(&p.at("nom").s()), "{} : pas d'essai", p.at("nom"));
@@ -360,12 +355,11 @@ fn diagnostic() {
 fn balayage() {
     let Ok(f) = std::env::var("CONQUETE_BALAYAGE_CAMPAGNES") else { return };
     let b = json::loads(&std::fs::read_to_string(f).unwrap()).unwrap();
-    let (mut g2, mut g3) = (None, None);
+    let mut g2 = None;
     let mut ecarts = vec![];
     for p in b.iter() {
         let geo = match p.ati("geo") {
             2 => g2.get_or_insert_with(|| geo(2)).clone(),
-            3 => g3.get_or_insert_with(|| geo(3)).clone(),
             v => geo(v),
         };
         if let Err(e) = rejouer(&geo, &p, None) {
@@ -399,24 +393,19 @@ fn chrono() {
     }
 }
 
-/// Refait les empreintes des parties de la géographie 3 (toute la France) avec le moteur Rust, quand
-/// ses données changent exprès (populations de 1790, trajectoires des villes : 15/11/2026). Les géographies 1 et 2 ne
-/// sont pas touchées : elles restent comparées aux références du jumeau Python.
-/// `CONQUETE_REFAIRE_GEO3=1 cargo test --release -p conquete --test campagnes refaire_geo3 -- --ignored`
+/// Refait les empreintes des parties avec le moteur Rust, quand les règles changent exprès (la bataille par stratégie,
+/// SPEC-BATAILLE.md, 16/11/2026).
+/// `CONQUETE_REFAIRE_CAMPAGNES=1 cargo test --release -p conquete --test campagnes refaire -- --ignored`
 #[test]
 #[ignore]
-fn refaire_geo3() {
-    // (CONQUETE_REFAIRE_CAMPAGNES=1 : les parties de toutes les géographies, quand les règles changent exprès — la
-    // bataille par stratégie, SPEC-BATAILLE.md, 16/11/2026)
-    let toutes = std::env::var_os("CONQUETE_REFAIRE_CAMPAGNES").is_some();
-    if std::env::var_os("CONQUETE_REFAIRE_GEO3").is_none() && !toutes {
+fn refaire() {
+    if std::env::var_os("CONQUETE_REFAIRE_CAMPAGNES").is_none() {
         return;
     }
     let chemin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/references/campagnes.json");
     let texte = std::fs::read_to_string(&chemin).unwrap();
     let r = json::loads(&texte).unwrap();
     assert_eq!(json::dumps_compact(&r), texte.trim_end(), "le fichier ne se réécrit pas à l'identique");
-    let g3 = geo(3);
     let emp = |g: &mut Game| {
         let d = etat(g);
         let cles = dict! {};
@@ -425,9 +414,9 @@ fn refaire_geo3() {
         }
         conquete::list![json::empreinte_ordre(&d)[..16].to_string(), cles]
     };
-    for p in r.at("parties").iter().filter(|p| toutes || p.ati("geo") == 3) {
+    for p in r.at("parties").iter() {
         let n = p.at("emp").len();
-        let mut g = neuve(&if p.ati("geo") == 3 { g3.clone() } else { geo(p.ati("geo")) }, &p);
+        let mut g = neuve(&geo(p.ati("geo")), &p);
         let mut l = vec![emp(&mut g)];
         for _ in 1..n {
             jouer_mois(&mut g, &p.ats("mode"));

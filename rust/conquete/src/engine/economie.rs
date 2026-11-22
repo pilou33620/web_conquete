@@ -38,7 +38,7 @@ impl Game {
         let base = R::NODE_BASE().at(gn.at("type"));
         let ter = self.geo.terrain_at(gn.atf("x"), gn.atf("y"));
         let mut b0 = Val::dict_from(PROD_KEYS().iter().map(|k| (k.clone(), base.get_or(&k, 0))).collect());
-        if let Some(k) = self.taille_europe(&gn) {
+        if let Some(k) = self.taille_pays(&gn) {
             b0 = Val::dict_from(b0.items().into_iter().map(|(r, v)| (r, Val::from(v.f() * k))).collect());
         }
         let nom = TERRAIN().at(ter).at(0);
@@ -75,11 +75,11 @@ impl Game {
         }
     }
 
-    /// (géographie 5) Ce que produit une ville ou une capitale selon sa taille : elles vont de 3 000 à 950 000 habitants,
+    /// (un théâtre) Ce que produit une ville ou une capitale selon sa taille : elles vont de 3 000 à 950 000 habitants,
     /// et une grande ville produit plus qu'un bourg tatar, selon la racine de sa population, de 0,4 à 2,5 fois une ville
     /// de 25 000 habitants (base et spécialités, port et vignoble). None ailleurs (villages, cartes de France).
-    pub fn taille_europe(&self, gn: &Val) -> Option<f64> {
-        (self.europe() && (gn.at("type") == "ville" || gn.at("type") == "capitale")).then(|| (gn.atf("pop0") / 25000.0).sqrt().clamp(0.4, 2.5))
+    pub fn taille_pays(&self, gn: &Val) -> Option<f64> {
+        (self.theatre() && (gn.at("type") == "ville" || gn.at("type") == "capitale")).then(|| (gn.atf("pop0") / 25000.0).sqrt().clamp(0.4, 2.5))
     }
 
     /// Python : `node_output(self, n, code)`.
@@ -90,7 +90,7 @@ impl Game {
         let (gn, b0, quai, lande, mont) = self.node_static(nid);
         let out = b0.copy();
         let mut trade = 0.0;
-        let taille = self.taille_europe(&gn);
+        let taille = self.taille_pays(&gn);
         for s in gn.at("spec").iter() {
             for (k, v) in R::SPEC().at(&s).items() {
                 if k != "label" {
@@ -234,8 +234,8 @@ impl Game {
             if self.nodes.at(self.capital_of(code)).at("owner") == code {
                 let food = R::SEASON_FOOD().atf(&season) + if season == "hiver" { self.mod_(code, "winter_food", 0.0) } else { 0.0 };
                 let traits = R::FACTIONS().at(code).at("mods");
-                // (géographie 5 : le minimum d'un pays suit son poids, Malte n'a pas celui de la Russie)
-                let poids = R::moyens_europe(code, "1700").filter(|_| self.europe()).map(|m| Val::from(m.2));
+                // (un théâtre : le minimum d'un pays suit son poids, Malte n'a pas celui de la Russie)
+                let poids = R::moyens_pays(code, "1700").filter(|_| self.theatre()).map(|m| Val::from(m.2));
                 for (k, v) in R::FLOOR().items() {
                     let v = poids.as_ref().map_or(v.clone(), |p| &v * p);
                     let mn = &(&v * &(1 + &traits.get_or(&k, 0))) * &(if k == "vivres" { Val::from(food) } else { Val::from(1) });
@@ -259,8 +259,8 @@ impl Game {
                 let mut gl = of.get_or("_gross_livres", 0).f();
                 let sp = R::FACTIONS().at(&o).ats("specialty");
                 let mut gs = of.get_or(format!("_gross_{sp}"), 0).f();
-                if self.europe() {
-                    // (géographie 5 : un échange se mesure au plus petit des deux ; Malte ne tire pas 6 % du revenu de la
+                if self.theatre() {
+                    // (un théâtre : un échange se mesure au plus petit des deux ; Malte ne tire pas 6 % du revenu de la
                     // Grande-Bretagne de chacun de ses traités)
                     gl = gl.min(tot.atf("livres"));
                     gs = gs.min(tot.get_or(&sp, 0.0).f().max(tot.atf("livres") / 4.0));

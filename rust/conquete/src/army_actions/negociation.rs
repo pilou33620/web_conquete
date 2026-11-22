@@ -480,7 +480,7 @@ pub fn contribution(g: &mut Game, code: &str, a: &Val) -> (bool, String) {
         let texte = format!("{} rançonne {}.", g.fname(code), place(g, nid));
         g.log("siege", &texte, &au_lieu(&gn, code, false));
     }
-    let who = if o == R::NEUTRAL { (if g.europe() { "Toutes les cours s'en indignent" } else { "Tous les départements s'en indignent" }).to_string() } else { format!("{} ne l'oubliera pas", g.fname(&o)) };
+    let who = if o == R::NEUTRAL { (if g.theatre() { "Toutes les cours s'en indignent" } else { "Tous les départements s'en indignent" }).to_string() } else { format!("{} ne l'oubliera pas", g.fname(&o)) };
     (true, format!("Contribution exigée {} : {txt}. {who}.", R::de(&place(g, nid))))
 }
 

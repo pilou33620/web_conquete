@@ -229,7 +229,7 @@ fn voies_sud_ouest(geo: &GeoMap, P: &[Pt]) -> Vec<Voie> {
     ways
 }
 
-pub const RIVER_PORT_5: f64 = 1.5; // (géographie 5, en cases de 5 km) une place à moins de 7 km d'un fleuve y a son quai
+pub const RIVER_PORT_5: f64 = 1.5; // (un théâtre, en cases de 5 km) une place à moins de 7 km d'un fleuve y a son quai
 /// (géographie 5) Les traversées de mer connues, de port en port, posées avant celles qu'on cherche au plus court : la
 /// poste de Stockholm à Åbo par les Åland, les paquebots de Kiel à Copenhague et de Stralsund à Ystad. (Les bacs des
 /// détroits, Øresund, Grand et Petit Belt, sont des routes : geo.rs, BACS_5.)
@@ -239,10 +239,10 @@ pub const MERS_5: [(&str, &[&str]); 3] = [
     ("Baltique", &["Stralsund", "Ystad"]),
 ];
 
-/// (privé, géographie 5) Les voies d'eau de la carte d'Europe : chaque fleuve de rang 1 (son plus long tracé), navigable entre
+/// (privé) Les voies d'eau d'un théâtre : chaque fleuve de rang 1 (son plus long tracé), navigable entre
 /// les places de ses rives ; et les voies de mer : chaque morceau du réseau des routes que la terre ne relie pas aux
 /// autres (une île) reçoit une traversée, de son port le plus proche d'un port d'un autre morceau, le plus petit d'abord.
-fn voies_europe(geo: &GeoMap, P: &[Pt]) -> Vec<Voie> {
+fn voies_theatre(geo: &GeoMap, P: &[Pt]) -> Vec<Voie> {
     let cumul = |pts: &[Pt]| {
         let mut cum = vec![0.0];
         for pq in pts.windows(2) {
@@ -300,8 +300,9 @@ fn voies_europe(geo: &GeoMap, P: &[Pt]) -> Vec<Voie> {
         let (ra, rb) = (find(&mut parent, e.at("a").u()), find(&mut parent, e.at("b").u()));
         parent[ra] = rb;
     }
-    // d'abord les traversées connues (MERS_5), puis, pour ce qui reste à part, le plus proche couple de ports
-    for (mer, noms) in MERS_5 {
+    // d'abord les traversées connues (MERS_5, en Europe), puis, pour ce qui reste à part, le plus proche couple de ports
+    let mers: &[(&str, &[&str])] = if geo.version == VERSION_EUROPE { &MERS_5 } else { &[] };
+    for &(mer, noms) in mers {
         let ids: Vec<usize> = noms.iter().filter(|nm| geo.by_name.has(**nm)).map(|nm| geo.by_name.at(*nm).u()).collect();
         if ids.len() < 2 {
             continue;
@@ -368,8 +369,8 @@ fn voies_europe(geo: &GeoMap, P: &[Pt]) -> Vec<Voie> {
 /// Ajoute les arêtes fluviales et maritimes à geo.edges ; renseigne geo.ways, geo.ports, geo.down_nodes.
 pub fn build(geo: &mut GeoMap) -> Val {
     let P: Vec<Pt> = geo.nodes.iter().map(|n| (n.at("x").f(), n.at("y").f())).collect();
-    // (géographie 5 : les fleuves de rang 1 et les voies de mer vers les îles ; ailleurs, les voies du Sud-Ouest)
-    let ways: Vec<Voie> = if geo.version == VERSION_EUROPE { voies_europe(geo, &P) } else { voies_sud_ouest(geo, &P) };
+    // (un théâtre : les fleuves de rang 1 et les voies de mer vers les îles ; ailleurs, les voies du Sud-Ouest)
+    let ways: Vec<Voie> = if geo.theatre.is_some() { voies_theatre(geo, &P) } else { voies_sud_ouest(geo, &P) };
     // arêtes
     let mut eid = geo.edges.len();
     let mut new: Vec<Arete> = vec![];

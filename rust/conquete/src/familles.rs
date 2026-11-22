@@ -59,8 +59,8 @@ pub fn nouvelle(g: &Game, code: &str) -> Val {
 /// Python : `titre(g)`.
 // game/familles.py, lignes 36 à 38
 pub fn titre(g: &Game) -> String {
-    if g.europe() {
-        return "Souverain".to_string(); // (géographie 5 : ni gouverneur ni préfet à la tête d'un pays)
+    if g.theatre() {
+        return "Souverain".to_string(); // (un théâtre : ni gouverneur ni préfet à la tête d'un pays)
     }
     let y = g.date(&Val::None).year;
     let t: Vec<Val> = R::MAISON_TITRES().iter().filter(|p| p.ati(0) <= y).map(|p| p.at(1)).collect();

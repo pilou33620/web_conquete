@@ -443,6 +443,25 @@ fn une_ancienne_sauvegarde_garde_sa_carte() {
     assert_eq!(json::loads(std::str::from_utf8(&brut).unwrap()).unwrap().at("geo"), 1, "la page reçoit la carte de la partie");
 }
 
+/// Une partie de la carte de France (géographies 3 et 4, retirées le 22/11/2026) ne se charge plus : un message clair,
+/// pas d'erreur interne ; reprise au démarrage, elle est mise de côté.
+#[test]
+fn une_partie_de_france_est_refusee() {
+    let _r = racine_temp();
+    let mut app = app_vide();
+    let mut g = Game::new(GEO(), "33", &Val::from("normal"), &Val::from(1), &Val::from("1790"));
+    let d = V::to_dict(&mut g);
+    d.set("geo", 4);
+    let texte = json::dumps(&dict! {"meta" => dict! {}, "game" => &d});
+    std::fs::write(SV::SAVES().join("france.json"), &texte).unwrap();
+    let r = app.load(&Val::from("france"));
+    assert!(!r.atb("ok") && r.ats("msg").contains("carte de France"), "{r}");
+    assert!(app.game.is_none());
+    std::fs::write(SV::SAVES().join(format!("{AUTOSAVE}.json")), &texte).unwrap();
+    app.load_autosave();
+    assert!(app.game.is_none() && !SV::SAVES().join(format!("{AUTOSAVE}.json")).exists(), "mise de côté");
+}
+
 // ================================================================== Mode Europe (géographie 5, SPEC-FRANCE.md étape 2)
 
 /// Le contrat de la page : /api/map?geo=, /api/new avec « geo » (/api/skirmish n'existe plus), le camp d'une autre carte refusé, la
@@ -454,12 +473,12 @@ fn mode_europe() {
         let (st, txt) = jeu.get(chemin);
         (st, serde_json::from_str(&txt).unwrap())
     };
-    // sans partie : la carte par défaut, la France ; les deux modes sont annoncés
+    // sans partie : la carte par défaut, l'Aquitaine ; les modes sont annoncés (la France retirée le 22/11/2026)
     let (st, fr) = carte("/api/map");
-    assert_eq!((st, &fr["geo"], &fr["km_case"]), (200, &json!(4), &json!(1)));
-    assert_eq!(fr["modes"], json!([{"geo": 4, "nom": "France", "mot": "département"}, {"geo": 5, "nom": "Europe", "mot": "pays"}]));
-    assert_eq!(fr["rules"]["factions"].as_object().unwrap().len(), 89);
-    assert_eq!(carte("/api/map?geo=4").1["geo"], json!(4));
+    assert_eq!((st, &fr["geo"], &fr["km_case"]), (200, &json!(2), &json!(1)));
+    assert_eq!(fr["modes"], json!([{"geo": 2, "nom": "Aquitaine", "mot": "département"}, {"geo": 5, "nom": "Europe", "mot": "pays", "le": "l’Europe"}]));
+    assert_eq!(fr["rules"]["factions"].as_object().unwrap().len(), 5);
+    assert_eq!(carte("/api/map?geo=2").1["geo"], json!(2));
     // la carte d'Europe, faite à la première demande
     let t = Instant::now();
     let (st, eu) = carte("/api/map?geo=5");
@@ -474,18 +493,19 @@ fn mode_europe() {
     assert_eq!(eu["map"]["playable"].as_array().unwrap().len(), 32);
     assert!(eu.get("skirmish").is_none() && fr.get("skirmish").is_none(), "le mode Bataille n'est plus proposé");
     // seules les cartes des nouvelles parties se demandent
-    for mauvais in ["/api/map?geo=3", "/api/map?geo=1", "/api/map?geo=6", "/api/map?geo=europe", "/api/map?geo=5.0"] {
+    for mauvais in ["/api/map?geo=3", "/api/map?geo=4", "/api/map?geo=1", "/api/map?geo=6", "/api/map?geo=europe", "/api/map?geo=5.0"] {
         assert_eq!(jeu.get(mauvais).0, 400, "{mauvais}");
     }
-    assert_eq!(carte("/api/map?geo=").1["geo"], json!(4), "un paramètre vide ne demande rien");
+    assert_eq!(carte("/api/map?geo=").1["geo"], json!(2), "un paramètre vide ne demande rien");
     // une partie : le camp doit être de la carte
     let nouvelle = |corps: Value| -> (u16, Value) {
         let (st, txt) = jeu.post("/api/new", &corps);
         (st, serde_json::from_str(&txt).unwrap())
     };
     assert_eq!(nouvelle(json!({"dept": "33", "geo": 5})).0, 400, "un département sur la carte d'Europe");
-    assert_eq!(nouvelle(json!({"dept": "FR"})).0, 400, "un pays sur la carte de France");
-    assert_eq!(nouvelle(json!({"dept": "FR", "geo": 4})).0, 400);
+    assert_eq!(nouvelle(json!({"dept": "FR"})).0, 400, "un pays sur la carte d'Aquitaine");
+    assert_eq!(nouvelle(json!({"dept": "FR", "geo": 2})).0, 400);
+    assert_eq!(nouvelle(json!({"dept": "33", "geo": 4})).0, 400, "la carte de France, retirée");
     assert_eq!(nouvelle(json!({"dept": "FR", "geo": 3})).0, 400, "une carte figée");
     assert_eq!(nouvelle(json!({"dept": "FR", "geo": "5"})).0, 400);
     let s: Value = serde_json::from_str(&jeu.get("/api/saves").1).unwrap();
@@ -494,13 +514,13 @@ fn mode_europe() {
     let st = jeu.etat();
     assert_eq!((&st["geo"], &st["word"]), (&json!(5), &json!("pays")));
     assert_eq!(carte("/api/map").1["geo"], json!(5), "la carte de la partie en cours");
-    assert_eq!(carte("/api/map?geo=4").1["geo"], json!(4), "l'écran de départ peut toujours demander l'autre");
+    assert_eq!(carte("/api/map?geo=2").1["geo"], json!(2), "l'écran de départ peut toujours demander l'autre");
     // un mois de jeu, puis la sauvegarde
     assert_eq!(jeu.cmd(json!({"cmd": "tour", "action": "go"}))["ok"], json!(true));
     let (_st, txt) = jeu.post("/api/save", &json!({"name": "malte"}));
     assert_eq!(serde_json::from_str::<Value>(&txt).unwrap()["ok"], json!(true), "{txt}");
-    assert_eq!(nouvelle(json!({"dept": "33", "seed": 1})), (200, json!({"ok": true, "geo": 4})));
-    assert_eq!(carte("/api/map").1["geo"], json!(4));
+    assert_eq!(nouvelle(json!({"dept": "33", "seed": 1})), (200, json!({"ok": true, "geo": 2})));
+    assert_eq!(carte("/api/map").1["geo"], json!(2));
     let (_st, txt) = jeu.post("/api/load", &json!({"name": "malte"}));
     let r: Value = serde_json::from_str(&txt).unwrap();
     assert_eq!((&r["ok"], &r["geo"]), (&json!(true), &json!(5)), "{txt}");

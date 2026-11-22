@@ -34,7 +34,7 @@ use crate::crue as CR;
 use crate::diplomacy as D;
 use crate::engine::Game;
 use crate::events as EV;
-use crate::geo::{GeoMap, VERSION as GEO_VERSION, VERSION_EUROPE};
+use crate::geo::{self as GEO, GeoMap, VERSION as GEO_VERSION};
 use crate::py::{self, json, Val};
 use crate::rails as RL;
 use crate::rules as R;
@@ -88,7 +88,7 @@ pub struct App {
     pub _auto_key: Option<(usize, i64, i64, bool)>,
 }
 
-/// Les cartes des nouvelles parties (R::MODES) : la France (4), l'Europe (5).
+/// Les cartes des nouvelles parties (R::MODES) : l'Aquitaine (2), puis les théâtres (l'Europe, 5…).
 fn modes() -> Vec<i64> {
     R::MODES().iter().map(|m| m.ati("geo")).collect()
 }
@@ -145,7 +145,7 @@ impl App {
             map.set("rails", RL::client_payload(geo));
             // (chaque carte a ses camps, ses textes et ses places de bataille ; modes : les cartes des nouvelles parties,
             // pour l'écran de départ ; km_case : ce que vaut une case, 1 ou 5 km)
-            let payload = dict! {"map" => map, "rules" => V::rules_payload_carte(geo.version == VERSION_EUROPE),
+            let payload = dict! {"map" => map, "rules" => V::rules_payload_carte(geo.version),
                 "ver" => UPDATE.lock().unwrap().version.clone(), "geo" => geo.version, "modes" => R::MODES(),
                 "km_case" => py::int(geo.km_case)};
             let raw = json::dumps_compact(&payload).into_bytes();
@@ -571,7 +571,11 @@ impl App {
             if data.at("game").get("over").truthy() {
                 return Ok(());
             }
-            let geo = self.geo_for(data.at("game").get_or("geo", 1).i());
+            let v = data.at("game").get_or("geo", 1).i();
+            if !GEO::connue(v) {
+                return Err(format!("Sauvegarde automatique sur une carte retirée du jeu (géographie {v} : la France)."));
+            }
+            let geo = self.geo_for(v);
             self.game = Some(Box::new(V::from_dict(geo, &data.at("game"))?));
             println!("Partie reprise depuis la sauvegarde automatique ({}, {}).", data.at("meta").get("faction"), data.at("meta").get("date"));
             Ok(())
@@ -600,13 +604,20 @@ impl App {
         if !path.exists() {
             return dict! {"ok" => false, "msg" => "Sauvegarde introuvable."};
         }
+        // (une partie sur la carte de France, géographies 3 et 4 retirées le 22/11/2026 : refusée, avec ce message)
+        const RETIREE: &str = "Cette partie se jouait sur la carte de France, retirée du jeu : elle ne peut plus se charger.";
         let lu = catch_unwind(AssertUnwindSafe(|| -> Result<Game, String> {
             let data = json::loads(&std::fs::read_to_string(&path).map_err(|e| e.to_string())?)?;
-            let geo = self.geo_for(data.at("game").get_or("geo", 1).i());
+            let v = data.at("game").get_or("geo", 1).i();
+            if !GEO::connue(v) {
+                return Err(RETIREE.to_string());
+            }
+            let geo = self.geo_for(v);
             V::from_dict(geo, &data.at("game"))
         }));
         let game = match lu {
             Ok(Ok(g)) => g,
+            Ok(Err(e)) if e == RETIREE => return dict! {"ok" => false, "msg" => RETIREE},
             Ok(Err(e)) => {
                 eprintln!("{e}");
                 return dict! {"ok" => false, "msg" => "Sauvegarde illisible ou abîmée."};
@@ -634,8 +645,8 @@ impl App {
         if !d.post {
             let path = d.chemin.as_str();
             if path == "/api/map" {
-                // (?geo=4 ou 5 : la carte d'un mode de jeu, pour l'écran de départ ; sinon celle de la partie en cours, ou la
-                // carte par défaut. La carte d'Europe se fait à la première demande.)
+                // (?geo=2, 5… : la carte d'un mode de jeu, pour l'écran de départ ; sinon celle de la partie en cours, ou la
+                // carte par défaut. Un théâtre se fait à la première demande.)
                 let geo = match q(&d.requete, "geo") {
                     Some(v) => match v.trim().parse::<i64>() {
                         Ok(v) if modes().contains(&v) => self.geo_for(v),
@@ -668,7 +679,7 @@ impl App {
             return json_(self.load(&body.get("name")), 200);
         }
         if path == "/api/new" {
-            // (geo : la carte du mode choisi, 4 sans rien dire, 5 pour l'Europe)
+            // (geo : la carte du mode choisi, l'Aquitaine sans rien dire, 5 pour l'Europe…)
             let v = body.get("geo");
             if v.is_some() && !(matches!(v, Val::Int(_)) && modes().contains(&v.i())) {
                 return json_(dict! {"ok" => false, "msg" => "Carte inconnue."}, 400);
@@ -677,11 +688,11 @@ impl App {
         let geo_du_corps = |app: &mut App| if body.get("geo").is_some() { app.geo_for(body.at("geo").i()) } else { app.geo.clone() };
         if path == "/api/new" {
             let dept = body.get("dept");
-            // (le camp doit être de cette carte : un pays sur celle d'Europe, un département sur celle de France ; un refus
+            // (le camp doit être de cette carte : un pays de son théâtre, un département sur celle d'Aquitaine ; un refus
             // ne fait pas préparer la carte)
-            let europe = body.get("geo") == VERSION_EUROPE;
-            let inconnu = || json_(dict! {"ok" => false, "msg" => if europe { "Pays inconnu." } else { "Département inconnu." }}, 400);
-            if !R::FACTIONS().has(&dept) || R::PAYS_EUROPE().has(&dept) != europe {
+            let theatre = body.get("geo").is_some() && GEO::theatre(body.at("geo").i()).is_some();
+            let inconnu = || json_(dict! {"ok" => false, "msg" => if theatre { "Pays inconnu." } else { "Département inconnu." }}, 400);
+            if !R::FACTIONS().has(&dept) || R::est_pays(&dept) != theatre {
                 return inconnu();
             }
             let geo = geo_du_corps(self);

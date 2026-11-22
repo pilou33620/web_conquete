@@ -2,8 +2,8 @@
 //!
 //! Les constantes portent le nom du Python. Un nombre ou un texte est un `pub const` (`R::FORT_MAX`, `R::NEUTRAL`) ;
 //! un dict, une liste, un tuple ou un set est un `py_const!`, qu'on appelle (`R::UNITS()`, `R::TECH()`) : il rend à
-//! chaque appel le même objet, tel que le Python le laisse à la fin de l'import (FACTIONS avec les départements
-//! générés, UNITS avec les régiments étrangers, TECH avec ses étages et ses durées…). `constantes()` les rend toutes.
+//! chaque appel le même objet, tel que le Python le laisse à la fin de l'import (FACTIONS avec les pays des théâtres,
+//! UNITS avec les régiments étrangers, TECH avec ses étages et ses durées…). `constantes()` les rend toutes.
 //!
 //! Une exception : BUILD. Ses entrées tenaient deux lambdas (`cost`, `days`), qu'une valeur ne peut pas tenir :
 //! `BUILD()` garde `name`, `max` et `desc`, et `BUILD[quoi]['cost'](lvl)` s'écrit `BUILD_cost(quoi, lvl)`,
@@ -33,7 +33,7 @@ py_const!(RESOURCES, list!["livres", "vivres", "fer", "bois", "armes", "outils",
 py_const!(RES_LABEL, dict!{"livres" => "Livres", "vivres" => "Vivres", "fer" => "Fer", "bois" => "Bois", "armes" => "Armes", "outils" => "Outils", "recrues" => "Recrues"});
 
 // ------------------------------------------------------------------ départements
-// (la table telle qu'elle est écrite ici ; FACTIONS() la rend complétée par _generer_departements, plus bas)
+// (la table telle qu'elle est écrite ici ; FACTIONS() la rend complétée par les pays des théâtres, plus bas)
 fn FACTIONS_base() -> Val { dict!{
     "33" => dict!{"name" => "Gironde", "short" => "Gironde", "capital" => "Bordeaux", "color" => "#c0392b", "adj" => "girondin",
                "title" => "Le Négoce bordelais",
@@ -66,111 +66,26 @@ fn FACTIONS_base() -> Val { dict!{
                "mods" => dict!{"inf_power" => 0.12, "mountain" => 0.25, "livres" => 0.1, "industrie" => -0.1, "trade" => -0.15, "vivres" => -0.1},
                "personality" => dict!{"aggr" => 0.7, "trade" => 0.4, "expand" => 0.7, "tech" => "militaire"}, "specialty" => "recrues"}
 } }
-// (géographie 3, SPEC-FRANCE.md) les autres départements de la France, générés d'après la carte (game/data/geo.json) et
-// leurs places (places_france.json) : le chef-lieu, une couleur bien à eux, un des cinq profils des départements écrits
-// à la main ci-dessus selon leur pays (ports, forges, grenier, vignoble, montagne)
-fn _generer_departements(FACTIONS: &Val) {
-    // (geo.json et places_france.json sont embarqués à la compilation au lieu d'être lus au lancement ; un fichier
-    // illisible faisait renoncer le Python : OSError, KeyError, ValueError)
-    let (Ok(geo), Ok(places)) = (py::json::loads(include_str!("../../../game/data/geo.json")), py::json::loads(include_str!("../../../game/data/places_france.json"))) else {
-        return;
-    };
-    if !geo.is_dict() || !geo.has("depts") {
-        return;
-    }
-    let depts = geo.at("depts");
-    let caps = Val::dict();
-    for p in places.iter() {
-        if p.at(4) == "capitale" {
-            caps.set(p.at(3), p.at(0));
-        }
-    }
-    let PROFILS = dict!{
-        "negoce" => tup!["Le Négoce de {cap}", list!["Port et marchés : +20 % de livres", "Accords commerciaux +20 %"], list!["Milice bourgeoise : infanterie −6 %"],
-                   dict!{"livres" => 0.2, "trade" => 0.2, "inf_power" => -0.06}, dict!{"aggr" => 0.45, "trade" => 0.9, "expand" => 0.6, "tech" => "civil"}, "livres"],
-        "forges" => tup!["Les Forges de {nom}", list!["Forges : +35 % de fer", "Artillerie −15 %"], list!["Livres −10 %"],
-                   dict!{"fer" => 0.35, "art_cost" => -0.15, "livres" => -0.1}, dict!{"aggr" => 0.55, "trade" => 0.5, "expand" => 0.7, "tech" => "industriel"}, "fer"],
-        "grenier" => tup!["Le Grenier de {nom}", list!["Blé : +30 % de vivres", "Recrues +10 %"], list!["Plaine ouverte : fortifications −10 %"],
-                    dict!{"vivres" => 0.3, "recrues" => 0.1, "fort_bonus" => -0.1}, dict!{"aggr" => 0.4, "trade" => 0.75, "expand" => 0.6, "tech" => "agricole"}, "vivres"],
-        "vignoble" => tup!["Les Vignobles de {nom}", list!["Vins : +25 % de revenus viticoles", "Livres +10 %"], list!["Recrues −10 %"],
-                     dict!{"vin" => 0.25, "livres" => 0.1, "recrues" => -0.1}, dict!{"aggr" => 0.4, "trade" => 0.85, "expand" => 0.55, "tech" => "civil"}, "livres"],
-        "montagne" => tup!["Les Montagnards de {nom}", list!["Infanterie +10 %", "Combat et marche en montagne +25 %"], list!["Commerce −15 %", "Vivres −10 %"],
-                     dict!{"inf_power" => 0.1, "mountain" => 0.25, "trade" => -0.15, "vivres" => -0.1}, dict!{"aggr" => 0.65, "trade" => 0.4, "expand" => 0.7, "tech" => "militaire"}, "recrues"]
-    };
-    let PAYS = dict!{   // départements dont le profil est connu ; les autres, au hasard (stable) parmi grenier, négoce, vignoble
-        "forges" => pyset!["59", "62", "57", "54", "42", "71", "18", "58", "52", "08", "55", "03"],
-        "montagne" => pyset!["05", "04", "73", "74", "38", "09", "65", "66", "15", "43", "48", "63", "20", "25", "39", "88", "06", "12", "19", "23"],
-        "negoce" => pyset!["75", "13", "44", "76", "29", "17", "69", "83", "34", "35", "56", "22", "50", "14", "80"],
-        "vignoble" => pyset!["51", "21", "89", "16", "11", "30", "84", "26", "37", "49", "68", "67", "81", "82", "46", "32"]
-    };
-    let utilises = Val::list(FACTIONS.values().iter().map(|f| f.at("color")).collect());
-    let codes = py::sorted_by_key(depts.keys().into_iter().filter(|c| !FACTIONS.has(c)).collect(), |c| c.clone());
-    for (k, code) in codes.iter().enumerate() {
-        let nom = depts.at(code).at("name");
-        // int(hashlib.sha1(code.encode()).hexdigest()[:8], 16) : les quatre premiers octets du SHA-1, poids fort devant
-        let d = <sha1::Sha1 as sha1::Digest>::digest(code.s().as_bytes());
-        let h = u32::from_be_bytes([d[0], d[1], d[2], d[3]]) as i64;
-        let prof = match PAYS.items().into_iter().find(|(_, cs)| cs.has(code)) {
-            Some((p, _)) => p,
-            None => Val::from(["grenier", "negoce", "vignoble"][(h % 3) as usize]),
-        };
-        let (titre, pros, cons, mods, pers, spec) = {
-            let v = PROFILS.at(&prof).vec();
-            (v[0].clone(), v[1].clone(), v[2].clone(), v[3].clone(), v[4].clone(), v[5].clone())
-        };
-        // couleurs : l'angle d'or sur le cercle des teintes, deux luminosités en alternance
-        let (r, g, b) = hls_to_rgb(py::mod_f(k as f64 * 0.381966, 1.0), if k % 2 != 0 { 0.42 } else { 0.55 }, 0.62);
-        let col = format!("#{:02x}{:02x}{:02x}", py::int(r * 255.0), py::int(g * 255.0), py::int(b * 255.0));
-        let cap = caps.get_or(code, &nom);
-        let personality = pers.copy();   // dict(pers, aggr=…)
-        personality.set("aggr", py::round_n(pers.at("aggr").f() + ((h >> 8) % 21 - 10) as f64 / 100.0, 2));
-        FACTIONS.set(code, dict!{"name" => &nom, "short" => if nom.len() <= 11 { nom.clone() } else { nom.slice(None, Some(10)) + Val::from(".") }, "capital" => &cap, "color" => &col,
-                              "adj" => nom.s().to_lowercase(), "title" => titre.s().replace("{cap}", cap.s()).replace("{nom}", nom.s()), "pros" => pros.to_list(), "cons" => cons.to_list(),
-                              "mods" => mods.copy(), "personality" => personality,
-                              "specialty" => spec});
-        utilises.push(&col);
-    }
+// (les théâtres, geo::THEATRES : 3 et 4, toute la France et ses départements générés, retirées le 22/11/2026) les pays de
+// chaque théâtre, par numéro de géographie : game/data/pays_<id>.json, écrit par outils/europe.mjs ou outils/theatre.mjs ;
+// chaque pays a les clés d'un camp, puis "moyens" (moyens_pays), "maisons" (MAISON_NOMS) et "culture" (prenoms…)
+py_const!(PAYS, Val::dict_from(crate::geo::THEATRES.iter().map(|t| (Val::from(t.geo), py::json::loads(t.pays).unwrap_or_else(|e| panic!("pays_{}.json : {e}", t.id)))).collect()));
+/// Les pays du théâtre de cette géographie (un dict vide ailleurs).
+pub fn pays(geo: i64) -> Val {
+    PAYS().get_or(geo, Val::dict())
 }
-
-/// `colorsys.hls_to_rgb(h, l, s)`, opération par opération.
-fn hls_to_rgb(h: f64, l: f64, s: f64) -> (f64, f64, f64) {
-    const ONE_THIRD: f64 = 1.0 / 3.0;
-    if s == 0.0 {
-        return (l, l, l);
-    }
-    let m2 = if l <= 0.5 { l * (1.0 + s) } else { l + s - (l * s) };
-    let m1 = 2.0 * l - m2;
-    (_v(m1, m2, h + ONE_THIRD), _v(m1, m2, h), _v(m1, m2, h - ONE_THIRD))
+/// Ce code est-il celui d'un pays (d'un théâtre) ? Les codes sont uniques sur tous les théâtres.
+pub fn est_pays(code: &Val) -> bool {
+    PAYS().values().iter().any(|p| p.has(code))
 }
-
-/// `colorsys._v`.
-fn _v(m1: f64, m2: f64, hue: f64) -> f64 {
-    const ONE_SIXTH: f64 = 1.0 / 6.0;
-    const TWO_THIRD: f64 = 2.0 / 3.0;
-    let hue = py::mod_f(hue, 1.0);
-    if hue < ONE_SIXTH {
-        return m1 + (m2 - m1) * hue * 6.0;
-    }
-    if hue < 0.5 {
-        return m2;
-    }
-    if hue < TWO_THIRD {
-        return m1 + (m2 - m1) * (TWO_THIRD - hue) * 6.0;
-    }
-    m1
-}
-
-
-// (géographie 5, SPEC-FRANCE.md étape 2) les pays d'Europe et d'Afrique du Nord de 1700, par code de deux lettres, avec
-// les clés d'un camp : game/data/pays_europe.json, écrit par outils/europe.mjs
-py_const!(PAYS_EUROPE, py::json::loads(include_str!("../../../game/data/pays_europe.json")).expect("pays_europe.json"));
 py_const!(FACTIONS, {
     let FACTIONS = FACTIONS_base();
-    _generer_departements(&FACTIONS);
-    // (les pays à la fin : les départements gardent leur rang ; une partie ne connaît que les camps de sa carte)
-    for (c, p) in PAYS_EUROPE().items() {
-        assert!(!FACTIONS.has(&c), "pays_europe.json : le code {c} est celui d'un département");
-        FACTIONS.set(c, p);
+    // (les pays après les départements : ceux-ci gardent leur rang ; une partie ne connaît que les camps de sa carte)
+    for p in PAYS().values() {
+        for (c, f) in p.items() {
+            assert!(!FACTIONS.has(&c), "pays : le code {c} est déjà pris");
+            FACTIONS.set(c, f);
+        }
     }
     FACTIONS
 });
@@ -719,7 +634,7 @@ fn PROVINCES_base() -> Val { dict!{
 } }
 py_const!(PROVINCES, {
     let PROVINCES = PROVINCES_base();
-    for (_c, _f) in FACTIONS().items() {   // (les départements générés : la province porte le nom du département)
+    for (_c, _f) in FACTIONS().items() {   // (les pays des théâtres : la province porte le nom du pays)
         PROVINCES.setdefault(&_c, dict!{"name" => _f.at("name"), "title" => _f.at("name")});
     }
     PROVINCES
@@ -756,7 +671,7 @@ py_const!(SCENARIOS, dict!{
                  "intro" => concat!("La France déclare la guerre à la Prusse. Chemins de fer et fusils Chassepot : ",
                        "un autre siècle commence."), "techs_before" => 1866}
 });
-// (géographie 5) les époques et les débuts de partie vus d'Europe : mêmes clés, mêmes dates et mêmes techniques que
+// (les théâtres) les époques et les débuts de partie vus d'Europe (les autres théâtres aussi, INTRO_THEATRE à part) : mêmes clés, mêmes dates et mêmes techniques que
 // ERAS et SCENARIOS (le moteur lit celles-là) ; seuls les textes changent
 py_const!(ERAS_EUROPE, list![
     dict!{"id" => "louis14", "year" => 1700, "name" => "Le Grand Siècle finissant",
@@ -787,59 +702,44 @@ py_const!(SCENARIOS_EUROPE, dict!{
                  "intro" => concat!("La France déclare la guerre à la Prusse. Chemins de fer et fusils se chargeant par la culasse : ",
                        "un autre siècle commence.")}
 });
-// (les modes de jeu, pour l'écran de départ : la carte, son nom, le mot d'un camp)
-py_const!(MODES, list![dict!{"geo" => 4, "nom" => "France", "mot" => "département"}, dict!{"geo" => 5, "nom" => "Europe", "mot" => "pays"}]);
+// (un théâtre autre que l'Europe : le titre « <nom>, <année> » et ce texte, au lieu de ceux de SCENARIOS_EUROPE)
+pub const INTRO_THEATRE: &str = "Choisissez votre pays, ralliez ses campagnes, puis prenez les capitales voisines par les armes, le commerce ou la diplomatie. Le plus prestigieux en 1900 l’emporte.";
+// (les modes de jeu, pour l'écran de départ : la carte, son nom, le mot d'un camp ; l'Aquitaine, puis les théâtres, avec
+// « l’Europe » pour les textes de la page)
+py_const!(MODES, {
+    let m = list![dict!{"geo" => 2, "nom" => "Aquitaine", "mot" => "département"}];
+    for t in crate::geo::THEATRES {
+        m.push(dict!{"geo" => t.geo, "nom" => t.nom, "mot" => t.mot, "le" => t.le});
+    }
+    m
+});
 
-/// Les camps d'une carte, dans l'ordre de FACTIONS : les pays (géographie 5) ou les départements (les autres).
-pub fn camps(europe: bool) -> Vec<Val> {
-    FACTIONS().keys().into_iter().filter(|c| PAYS_EUROPE().has(c) == europe).collect()
+/// Les camps d'une carte, dans l'ordre de FACTIONS : les pays de son théâtre, ou les départements (l'Aquitaine, les
+/// anciennes cartes).
+pub fn camps(geo: i64) -> Vec<Val> {
+    let p = pays(geo);
+    if crate::geo::theatre(geo).is_some() {
+        FACTIONS().keys().into_iter().filter(|c| p.has(c)).collect()
+    } else {
+        FACTIONS().keys().into_iter().filter(|c| !est_pays(c)).collect()
+    }
 }
 
-// (géographie 5) Les moyens de départ de chaque pays, à l'échelle de sa puissance réelle : armée sur pied en temps de paix
-// (milliers d'hommes) au début de 1700, 1790, 1813 et 1870, et trésor (multiple des 500 livres d'un département).
-// Estimations de mémoire, ordres de grandeur (les pays de 1700 restent tous en jeu aux débuts plus tardifs : on leur
-// donne l'armée de leur dernier état connu). Dans le jeu, un régiment (~300 hommes) pour 10 000 hommes réels : voir
-// `moyens_europe`.
-pub const MOYENS_EUROPE: [(&str, [f64; 4], f64); 32] = [
-    ("FR", [150.0, 170.0, 400.0, 400.0], 3.0), // la plus grande armée d'Europe
-    ("GB", [30.0, 45.0, 250.0, 180.0], 4.5), // petite armée, mais le plus riche
-    ("RU", [110.0, 300.0, 450.0, 700.0], 1.4),
-    ("AU", [100.0, 300.0, 250.0, 280.0], 2.0),
-    ("OT", [120.0, 150.0, 150.0, 200.0], 2.5),
-    ("ES", [30.0, 80.0, 100.0, 100.0], 2.2),
-    ("PR", [40.0, 190.0, 230.0, 400.0], 1.4),
-    ("SE", [70.0, 50.0, 40.0, 40.0], 1.2),
-    ("DK", [30.0, 70.0, 40.0, 40.0], 1.2),
-    ("NL", [45.0, 40.0, 20.0, 60.0], 3.5), // les banquiers de l'Europe
-    ("PL", [30.0, 60.0, 50.0, 30.0], 0.6),
-    ("PT", [20.0, 40.0, 50.0, 30.0], 1.5),
-    ("NA", [20.0, 30.0, 40.0, 60.0], 1.0),
-    ("SA", [25.0, 40.0, 30.0, 70.0], 0.9),
-    ("VE", [20.0, 10.0, 10.0, 10.0], 1.4),
-    ("BA", [20.0, 30.0, 50.0, 60.0], 0.8),
-    ("SX", [25.0, 30.0, 30.0, 30.0], 1.0),
-    ("HA", [15.0, 25.0, 20.0, 20.0], 0.8),
-    ("CH", [15.0, 20.0, 15.0, 30.0], 0.8),
-    ("IT", [10.0, 10.0, 30.0, 30.0], 1.0),
-    ("WE", [15.0, 15.0, 20.0, 20.0], 0.6),
-    ("BE", [15.0, 15.0, 15.0, 40.0], 0.6),
-    ("MA", [40.0, 30.0, 30.0, 30.0], 0.6),
-    ("CR", [40.0, 20.0, 20.0, 20.0], 0.3), // la horde : des cavaliers, peu d'argent
-    ("AL", [15.0, 15.0, 15.0, 10.0], 0.5),
-    ("TU", [10.0, 10.0, 10.0, 10.0], 0.4),
-    ("TR", [5.0, 5.0, 5.0, 5.0], 0.25),
-    ("GE", [5.0, 5.0, 5.0, 5.0], 1.0),
-    ("PO", [5.0, 5.0, 5.0, 10.0], 0.8),
-    ("WU", [5.0, 6.0, 15.0, 20.0], 0.4),
-    ("CO", [2.0, 2.0, 2.0, 2.0], 0.2),
-    ("ML", [1.5, 2.0, 1.5, 1.5], 0.4), // l'Ordre : quelques centaines de chevaliers, 1 à 2 000 soldats
-];
-
-/// Les moyens de départ d'un pays (géographie 5) : (armée en milliers d'hommes au début choisi, trésor, poids). Le poids,
-/// de 0,1 à 1, mesure le pays de 1700 (60 000 hommes et plus : 1) ; il règle le plancher de production (FLOOR).
-pub fn moyens_europe(code: &str, scenario: &str) -> Option<(f64, f64, f64)> {
+/// Les moyens de départ d'un pays (un théâtre) : (armée en milliers d'hommes au début choisi, trésor, poids), d'après son
+/// champ "moyens" de pays_<id>.json : [[armée sur pied en temps de paix, en milliers d'hommes, au début de 1700, 1790,
+/// 1813 et 1870], trésor (multiple des 500 livres d'un département)] ; estimations, ordres de grandeur (les pays de 1700
+/// restent tous en jeu aux débuts plus tardifs : on leur donne l'armée de leur dernier état connu). Dans le jeu, un
+/// régiment (~300 hommes) pour 10 000 hommes réels : voir engine::regiments_pays. Le poids, de 0,1 à 1, mesure le pays de
+/// 1700 (60 000 hommes et plus : 1) ; il règle le plancher de production (FLOOR). None pour un département.
+pub fn moyens_pays(code: &str, scenario: &str) -> Option<(f64, f64, f64)> {
+    let f = FACTIONS().get(code);
+    let m = if f.is_dict() { f.get("moyens") } else { Val::None };
+    if !m.is_list() {
+        return None;
+    }
     let k = ["1700", "1790", "1813", "1870"].iter().position(|s| *s == scenario).unwrap_or(1);
-    MOYENS_EUROPE.iter().find(|m| m.0 == code).map(|m| (m.1[k], m.2, (m.1[0] / 60.0).clamp(0.1, 1.0)))
+    let armee = m.at(0);
+    Some((armee.atf(k), m.atf(1), (armee.atf(0) / 60.0).clamp(0.1, 1.0)))
 }
 
 // traités : un camp dont le chef-lieu tombe signe la paix au lieu de disparaître, sauf s'il est déjà écrasé
@@ -1089,18 +989,24 @@ py_const!(POP_CURVES, {
 });
 
 
-// (géographie 5) les trajectoires des villes d'Europe, par « nom|pays » : [[année, population / celle de 1790, étiquette de
-// POP_WHY], …] (game/data/epoques_europe.json, outils/europe.mjs) ; les autres places : une ville, une campagne ordinaires
-// d'un continent dont la population double au XIXe siècle
-py_const!(EPOQUES_EUROPE, py::json::loads(include_str!("../../../game/data/epoques_europe.json")).expect("epoques_europe.json"));
-py_const!(POP_EUROPE, dict!{"ville" => _town(1.35, 1.9, "ville"), "rural" => _rural(1871, 1.4, 1.5, "plein", "plein")});
+// (les théâtres) les trajectoires de leurs villes, par « nom|pays » : [[année, population / celle de 1790, étiquette de
+// POP_WHY], …] (game/data/epoques_<id>.json, tous les théâtres ensemble : les codes des pays sont uniques) ; les autres
+// places : une ville, une campagne ordinaires d'un continent dont la population double au XIXe siècle
+py_const!(EPOQUES, {
+    let d = Val::dict();
+    for t in crate::geo::THEATRES {
+        d.update(&py::json::loads(t.epoques).unwrap_or_else(|e| panic!("epoques_{}.json : {e}", t.id)));
+    }
+    d
+});
+py_const!(POP_PAYS, dict!{"ville" => _town(1.35, 1.9, "ville"), "rural" => _rural(1871, 1.4, 1.5, "plein", "plein")});
 
 /// Trajectoire de population d'un lieu (nœud de la carte).
 pub fn pop_curve(gn: &Val) -> Val {
-    if PAYS_EUROPE().has(gn.at("dept")) {
-        // (géographie 5 : jamais les tables de la France, même pour Bordeaux ou Paris)
-        let cv = EPOQUES_EUROPE().get(format!("{}|{}", gn.at("name").s(), gn.at("dept").s()).as_str());
-        return cv.or_else(|| POP_EUROPE().at(if gn.at("type") == "village" { "rural" } else { "ville" }));
+    if est_pays(&gn.at("dept")) {
+        // (un théâtre : jamais les tables de la France, même pour Bordeaux ou Paris)
+        let cv = EPOQUES().get(format!("{}|{}", gn.at("name").s(), gn.at("dept").s()).as_str());
+        return cv.or_else(|| POP_PAYS().at(if gn.at("type") == "village" { "rural" } else { "ville" }));
     }
     let mut key = POP_PLACE().get(format!("{}|{}", gn.at("name").s(), gn.at("dept").s()).as_str());
     if key.is_none() {
@@ -1302,7 +1208,7 @@ py_const!(SURNAMES, list!["Labat", "Dufau", "Lacoste", "Darricau", "Etcheverry",
             "Mauriac", "Lafon", "Delpech", "Marty", "Roumégoux", "Sudre", "Bouyssou", "Vialle", "Escande", "Fabre"]);
 
 // ------------------------------------------------------------------ familles dirigeantes (game/familles.py)
-// (la table telle qu'elle est écrite ici ; MAISON_NOMS() la rend complétée plus bas : les départements générés)
+// (la table telle qu'elle est écrite ici ; MAISON_NOMS() la rend complétée plus bas : les pays des théâtres)
 fn MAISON_NOMS_base() -> Val { dict!{
     "33" => list!["de Ségur", "de Pontac", "de Lur-Saluces", "Pichon", "Ducos", "Boyer-Fonfrède", "Nairac", "Gradis"],
     "24" => list!["de Bourdeille", "de Salignac", "de Beynac", "de Hautefort", "de Biron", "Maine de Biran", "Lagrange-Chancel", "Fournier"],
@@ -1310,61 +1216,22 @@ fn MAISON_NOMS_base() -> Val { dict!{
     "47" => list!["de Lacépède", "de Durfort", "de Fumel", "Lacuée", "de Raymond", "Boudon", "de Nort", "Lafont"],
     "64" => list!["de Gramont", "Etcheverry", "de Gassion", "de Navailles", "Harispe", "Garat", "d’Abbadie", "Larralde"]
 } }
-// (les départements générés : huit noms tirés d'une liste de familles de notables et de noblesse de province)
-py_const!(_NOMS, list!["de Rohan", "de Montmorency", "de La Rochefoucauld", "de Noailles", "de Polignac", "de Broglie", "de Choiseul",
-         "de Beauvau", "d'Harcourt", "de Clermont-Tonnerre", "de Castellane", "de Crussol", "de Villeneuve", "de Sabran",
-         "Leroux", "Dupont", "Lefebvre", "Moreau", "Girard", "Mercier", "Bonnet", "Lambert", "Fontaine", "Rousseau", "Vincent",
-         "Morel", "Fournier", "Garnier", "Chevalier", "Perrin", "Robin", "Masson", "Gauthier", "Roussel", "Blanchard", "Picard"]);
 py_const!(MAISON_NOMS, {
     let MAISON_NOMS = MAISON_NOMS_base();
-    let _NOMS = _NOMS();
-    let codes = py::sorted_by_key(FACTIONS().keys().into_iter().filter(|c| !MAISON_NOMS.has(c)).collect(), |c| c.clone());
-    for (_k, _c) in codes.iter().enumerate() {
-        MAISON_NOMS.set(_c, (0..8).map(|i| _NOMS.at((_k * 7 + i * 5) % _NOMS.len())).collect::<Val>());
-    }
-    // (géographie 5 : les pays ont leurs maisons, la régnante de 1700 d'abord ; écrites à la française)
-    for (c, noms) in MAISONS_EUROPE {
-        MAISON_NOMS.set(c, noms.iter().map(|n| Val::from(*n)).collect::<Val>());
+    // (les pays des théâtres : leurs maisons, la régnante de 1700 d'abord, écrites à la française : "maisons" de
+    // pays_<id>.json ; sans elles, des noms de leur culture)
+    for p in PAYS().values() {
+        for (c, f) in p.items() {
+            let noms = f.get("maisons");
+            MAISON_NOMS.set(&c, if noms.is_list() && !noms.is_empty() { noms.copy() } else { surnames(c.s()).slice(None, Some(8)) });
+        }
     }
     MAISON_NOMS
 });
-const MAISONS_EUROPE: [(&str, [&str; 8]); 32] = [
-    ("AL", ["Mezzomorto", "Baba Hassan", "Hadj Moustafa", "Ali Chaouch", "Kurd Abdi", "Baba Ali", "Hussein", "Omar Agha"]),
-    ("AU", ["Habsbourg", "Lorraine", "Liechtenstein", "Esterházy", "Schwarzenberg", "Kaunitz", "Metternich", "Lobkowicz"]),
-    ("BA", ["Wittelsbach", "Montgelas", "Törring", "Preysing", "Seinsheim", "Arco", "La Rosée", "Oettingen"]),
-    ("BE", ["d'Arenberg", "de Ligne", "de Croÿ", "de Mérode", "d'Ursel", "de Lannoy", "de Lalaing", "de Trazegnies"]),
-    ("CH", ["de Watteville", "d'Erlach", "de Diesbach", "de Reding", "Pfyffer", "de Salis", "de Steiger", "Escher"]),
-    ("CO", ["Kettler", "Biron", "Medem", "Keyserling", "Korff", "Fircks", "Lieven", "Behr"]),
-    ("CR", ["Giray", "Chirine", "Mansour", "Baryn", "Argyn", "Sedjeut", "Nogaï", "Kiptchak"]),
-    ("DK", ["Oldenbourg", "Rantzau", "Ahlefeldt", "Reventlow", "Bernstorff", "Moltke", "Danneskiold", "Holstein"]),
-    ("ES", ["Bourbon", "Alvarez de Toledo", "Medinaceli", "Osuna", "Grimaldo", "Ensenada", "Aranda", "Floridablanca"]),
-    ("FR", ["Bourbon", "d'Orléans", "de Noailles", "de Villars", "de Vendôme", "de Choiseul", "de Broglie", "de Rohan"]),
-    ("GB", ["Stuart", "Hanovre", "Churchill", "Russell", "Cavendish", "Pitt", "Pelham", "Walpole"]),
-    ("GE", ["Doria", "Spinola", "Grimaldi", "Durazzo", "Brignole", "Pallavicini", "De Mari", "Lomellini"]),
-    ("HA", ["Brunswick-Lunebourg", "Münchhausen", "Bernstorff", "Platen", "Hardenberg", "Grote", "Busche", "Wangenheim"]),
-    ("IT", ["Médicis", "Lorraine", "Strozzi", "Corsini", "Riccardi", "Borromée", "Visconti", "Litta"]),
-    ("MA", ["Alaouite", "Saâdien", "Er-Riffi", "Ben Ali", "Ouazzani", "Glaoui", "Mtougui", "Goundafi"]),
-    ("ML", ["Perellos", "Zondadari", "Vilhena", "Despuig", "Pinto", "Ximenes", "de Rohan", "Hompesch"]),
-    ("NA", ["Bourbon-Sicile", "Caracciolo", "Pignatelli", "Carafa", "Colonna", "Ruffo", "Tanucci", "Acton"]),
-    ("NL", ["Orange-Nassau", "Heinsius", "De Witt", "Bentinck", "Van Haren", "Fagel", "Van Slingelandt", "Van Hogendorp"]),
-    ("OT", ["Osman", "Köprülü", "Kara Moustafa", "Damad", "Çandarlı", "Sokollu", "Djezzar", "Tchapanoğlou"]),
-    ("PL", ["Wettin", "Sobieski", "Leszczyński", "Poniatowski", "Czartoryski", "Radziwiłł", "Potocki", "Lubomirski"]),
-    ("PO", ["Albani", "Orsini", "Colonna", "Barberini", "Corsini", "Rezzonico", "Braschi", "Chigi"]),
-    ("PR", ["Hohenzollern", "Dohna", "Finckenstein", "Hardenberg", "Stein", "Bismarck", "Arnim", "Schulenburg"]),
-    ("PT", ["Bragance", "Pombal", "Cadaval", "Távora", "Aveiro", "Palmela", "Saldanha", "Sá da Bandeira"]),
-    ("RU", ["Romanov", "Narychkine", "Galitzine", "Dolgorouki", "Troubetskoï", "Menchikov", "Orlov", "Volkonski"]),
-    ("SA", ["Savoie", "Carignan", "San Martino", "Solaro", "Thaon de Revel", "Cavour", "d'Azeglio", "Balbo"]),
-    ("SE", ["Deux-Ponts", "Vasa", "De la Gardie", "Oxenstierna", "Brahe", "Wrangel", "Horn", "Bernadotte"]),
-    ("SX", ["Wettin", "Brühl", "Flemming", "Schönburg", "Einsiedel", "Löser", "Bünau", "Vitzthum"]),
-    ("TR", ["Karamanli", "Djerbi", "Gurgi", "Mukni", "Ben Châbane", "Arnaout", "Dghiss", "Siala"]),
-    ("TU", ["Husseinite", "Mouradite", "Ben Ayed", "Khaznadar", "Djellouli", "Ben Diaf", "Kheireddine", "Lasram"]),
-    ("VE", ["Mocenigo", "Morosini", "Contarini", "Grimani", "Dandolo", "Foscari", "Loredan", "Manin"]),
-    ("WE", ["Neubourg", "Plettenberg", "Fürstenberg", "Metternich", "Salm", "Wied", "Nesselrode", "Spee"]),
-    ("WU", ["Wurtemberg", "Grävenitz", "Montmartin", "Zeppelin", "Leutrum", "Gemmingen", "Phull", "Normann"]),
-];
 
-/// (géographie 5) Les prénoms, prénoms féminins et noms (généraux, épouses) d'une grande famille culturelle d'Europe,
-/// écrits à la française. La France garde PRENOMS, PRENOMS_F et SURNAMES, comme les départements.
+/// (les théâtres) Les prénoms, prénoms féminins et noms (généraux, épouses) d'une grande famille culturelle, écrits à la
+/// française : le champ "culture" d'un pays (pays_<id>.json) est une de ces clés, une clé de cultures_<id>.json (les
+/// cultures d'un théâtre, même forme), ou « francaise » : PRENOMS, PRENOMS_F et SURNAMES, comme les départements.
 struct Culture {
     prenoms: &'static [&'static str],
     prenoms_f: &'static [&'static str],
@@ -1423,37 +1290,46 @@ const CULTURES: [(&str, Culture); 10] = [
     }),
 ];
 
-/// La famille culturelle d'un pays (géographie 5), None pour la France et les départements.
-fn culture(code: &str) -> Option<&'static Culture> {
-    let k = match code {
-        "GB" => "britannique",
-        "AU" | "PR" | "BA" | "SX" | "HA" | "WU" | "WE" | "CH" | "CO" => "allemande",
-        "RU" => "russe",
-        "ES" => "espagnole",
-        "PT" => "portugaise",
-        "NA" | "SA" | "VE" | "GE" | "PO" | "IT" | "ML" => "italienne",
-        "OT" | "CR" | "AL" | "TU" | "TR" | "MA" => "ottomane",
-        "SE" | "DK" => "scandinave",
-        "PL" => "polonaise",
-        "NL" | "BE" => "neerlandaise",
-        _ => return None,
-    };
-    CULTURES.iter().find(|c| c.0 == k).map(|c| &c.1)
+// (les cultures nouvelles des théâtres : game/data/cultures_<id>.json, tous les théâtres ensemble)
+py_const!(CULTURES_THEATRES, {
+    let d = Val::dict();
+    for t in crate::geo::THEATRES {
+        d.update(&py::json::loads(t.cultures).unwrap_or_else(|e| panic!("cultures_{}.json : {e}", t.id)));
+    }
+    d
+});
+/// Cette culture est-elle connue (« francaise », CULTURES ou celles des théâtres) ?
+pub fn culture_connue(k: &str) -> bool {
+    k == "francaise" || CULTURES.iter().any(|c| c.0 == k) || CULTURES_THEATRES().get(k).is_dict()
+}
+/// (privé) Les noms d'un camp (quoi : prenoms, prenoms_f ou noms) : ceux de sa culture, sinon le défaut (la France, les
+/// départements, une culture inconnue).
+fn noms_culture(code: &str, quoi: &str, defaut: fn() -> Val) -> Val {
+    let f = FACTIONS().get(code);
+    let k = if f.is_dict() { f.get("culture") } else { Val::None };
+    if !k.is_str() {
+        return defaut();
+    }
+    if let Some((_, c)) = CULTURES.iter().find(|c| c.0 == k.s()) {
+        return liste(match quoi { "prenoms" => c.prenoms, "prenoms_f" => c.prenoms_f, _ => c.noms });
+    }
+    let c = CULTURES_THEATRES().get(&k);
+    if c.is_dict() && c.get(quoi).is_list() { c.at(quoi) } else { defaut() }
 }
 fn liste(l: &[&str]) -> Val {
     l.iter().map(|n| Val::from(*n)).collect()
 }
-/// Les prénoms d'un camp : ceux de sa famille culturelle (un pays d'Europe), sinon PRENOMS.
+/// Les prénoms d'un camp : ceux de sa culture (un pays), sinon PRENOMS.
 pub fn prenoms(code: &str) -> Val {
-    culture(code).map_or_else(PRENOMS, |c| liste(c.prenoms))
+    noms_culture(code, "prenoms", PRENOMS)
 }
 /// Les prénoms féminins d'un camp (PRENOMS_F pour la France et les départements).
 pub fn prenoms_f(code: &str) -> Val {
-    culture(code).map_or_else(PRENOMS_F, |c| liste(c.prenoms_f))
+    noms_culture(code, "prenoms_f", PRENOMS_F)
 }
 /// Les noms des généraux et des familles d'un camp (SURNAMES pour la France et les départements).
 pub fn surnames(code: &str) -> Val {
-    culture(code).map_or_else(SURNAMES, |c| liste(c.noms))
+    noms_culture(code, "noms", SURNAMES)
 }
 py_const!(PRENOMS, list!["Jean", "Pierre", "Bernard", "Arnaud", "Guillaume", "Raymond", "Jacques", "Joseph", "Gaston", "Henri", "Louis",
            "Antoine", "Étienne", "Bertrand", "Armand", "François"]);

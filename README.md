@@ -106,7 +106,9 @@ Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doiv
 
 Au premier lancement (et après une mise à jour du calcul de la carte, `rust/conquete/src/geo.rs`), la carte est calculée
 (environ 5 secondes sur un PC, 15 à 30 secondes sur un Raspberry Pi),
-puis mise en cache dans `game/data/map_cache_v4.json` (fichier ignoré par git ; `map_cache.json` pour une partie de la carte de France d'avant, géographie 3). Une partie sauvegardée avant les rivières
+puis mise en cache dans `game/data/map_cache_v2.json` (fichier ignoré par git ; un théâtre, l'Europe…, a le sien,
+`map_cache_v5.json`…, fait à sa première demande). La carte de France (géographies 3 et 4) est retirée depuis le
+22/11/2026 : ses parties ne se chargent plus. Une partie sauvegardée avant les rivières
 affinées garde sa carte d'alors (`game/data/geo_v1.json`, en cache dans `map_cache_v1.json`, calculée la première fois
 qu'on la charge).
 
@@ -328,9 +330,11 @@ Chaque tour est un mois, à la manière de Civilization ou d'Empire : Total War,
   carte gravée de Cassini jusqu'en 1817 (papier, hachures, bois en petits arbres, lignes d'eau le long des côtes,
   noms à l'encre), puis la carte d'état-major aquarellée (bois vert-jaune, vignes lie-de-vin, grandes routes ocre).
 
-### Le mode Europe (en cours)
+### Les théâtres : l'Europe, puis d'autres (en cours)
 
-Un second mode de jeu, par pays, sur une carte de l'Europe et de l'Afrique du Nord vers 1700 (`SPEC-FRANCE.md`, étape 2) :
+L'écran de départ propose l'Aquitaine (par département) et les théâtres, chacun une carte à part, par pays (la table
+`THEATRES` de `rust/conquete/src/geo.rs` dit comment en ajouter un ; leurs données : `outils/theatre.mjs`). Le premier,
+l'Europe et l'Afrique du Nord vers 1700 (`SPEC-FRANCE.md`, étape 2) :
 32 pays (France, Grande-Bretagne, Espagne, Monarchie de Habsbourg, Russie, Empire ottoman, Prusse, Suède, Venise, les
 régences d'Alger, de Tunis et de Tripoli, l'Ordre de Malte…), 1 258 places, des cases de 5 km (la géographie 5 du
 moteur). Le serveur sait déjà créer, jouer, sauvegarder une partie et livrer une bataille sur cette carte
@@ -749,6 +753,7 @@ node --test tests/*.test.mjs                     # l'interface seule
 | Fichier | Ce qu'il vérifie |
 |---|---|
 | `rust/conquete/tests/<module>.rs` (`geo.rs`, `rules.rs`, `tours.rs`, `campagnes.rs`…) | le portage au bit près : chaque module rend exactement ce que rendait le Python d'origine, figé dans `rust/conquete/tests/references/` ; batailles et campagnes entières rejouées à la même graine (voir `rust/conquete/PORTAGE.md`) |
+| `rust/conquete/tests/theatres.rs` | chaque théâtre de la table se charge : sa carte, ses pays (moyens, maisons, culture), une capitale par pays, l'écran de départ |
 | `rust/conquete/tests/europe.rs` | le mode Europe (géographie 5) : la carte se fait et se relit, 32 pays, réseau d'un seul tenant (îles par mer), trajectoires des villes, parties aux quatre débuts, 24 mois avec 32 IA deux fois à la même graine, sauvegarde et bataille de campagne |
 | `rust/conquete/tests/outils.rs` | les outils (voir « Outils ») : même sortie que leurs originaux Python sur un cas court |
 | `rust/conquete/tests/bancs_strategie.rs` | la bataille par stratégie : situations, stratégies permises et contres, cinq armes dont les grenadiers, phases et journal, renforts, reconnaissance, poursuite, prises, sort des généraux, assaut, blocus, capitulation, aperçu, anciennes sauvegardes |
@@ -763,7 +768,7 @@ node --test tests/*.test.mjs                     # l'interface seule
 | `tests/portraits.test.mjs` | portraits des régiments : la même figure en bataille et en campagne (piquiers avant la baïonnette, pièce de son époque, cavalier pour le général) |
 
 D'autres bancs du jeu suivent le même modèle (`rust/conquete/tests/bancs_*.rs` : maisons occupées et barricades,
-douane, familles, toute la France, généraux, mercenaires, plans des villes).
+douane, familles, généraux, mercenaires, plans des villes).
 
 **Essayer une nouvelle fonctionnalité sans jouer.** `rust/conquete/tests/fabrique/mod.rs` fabrique une situation en
 une ligne : une partie (`partie("64", "1870", 1, "normal")`), un ou plusieurs mois joués (`jouer_mois(&mut g, 3)`), une

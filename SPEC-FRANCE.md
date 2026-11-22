@@ -1,5 +1,15 @@
 # Spec : toute la France, puis l'Europe
 
+**Mise à jour du 22/11/2026 (décision du joueur) : la France est retirée.** L'écran de départ propose l'Aquitaine
+(géographie 2, les cinq départements du Sud-Ouest, la carte par défaut) et les théâtres : l'Europe (géographie 5), puis
+l'Amérique, l'Inde, la Guinée, le Brésil, Madagascar et les Indes orientales (6 à 11, quand leurs données seront
+écrites par `outils/theatre.mjs`), chacun une carte à part de cases de 5 km, un pays par camp. Ajouter un théâtre : une
+ligne dans la table `THEATRES` de `rust/conquete/src/geo.rs` et ses fichiers (`<id>.json`, `places_<id>.json`,
+`pays_<id>.json` avec les moyens, les maisons et la culture de chaque pays, `epoques_<id>.json`, `cultures_<id>.json`).
+Les géographies 3 et 4, leurs données (`geo.json`, `places_france*.json`), les départements générés et leurs essais
+sont retirés (historique git) : une partie sur la carte de France est refusée au chargement, avec un message. Ce qui
+suit est l'histoire de l'étape 1 et de l'étape 2.
+
 ## Pourquoi
 
 Demande du 07/11/2026 : une grosse mise à jour.

@@ -152,13 +152,13 @@ pub fn curve_at(pts: &Val, y: f64) -> (f64, Val) {
 }
 
 // ------------------------------------------------------------------ la partie
-/// (géographie 5) Les régiments de départ d'un pays, d'après R::MOYENS_EUROPE : un régiment pour 10 000 hommes réels en
+/// (un théâtre) Les régiments de départ d'un pays, d'après ses moyens (R::moyens_pays) : un régiment pour 10 000 hommes réels en
 /// 1700, 15 000 en 1790, 20 000 en 1813, 25 000 en 1870 (les armées de l'époque grandissent plus vite que ce que rapportent
 /// les places du jeu : sans cela, la Russie et l'Autriche de 1790 partiraient en déficit), 30 au plus. Rend [garnison de
 /// la capitale, garnisons des plus grandes villes (un régiment chacune), puis les armées de campagne (dix régiments au
 /// plus chacune)]. Un micro-État garde une demi-garnison à sa capitale et un petit corps (voir Game::new).
-pub fn regiments_europe(code: &str, scenario: &str) -> Vec<Vec<&'static str>> {
-    let Some((armee, _, _)) = R::moyens_europe(code, scenario) else { return vec![] };
+pub fn regiments_pays(code: &str, scenario: &str) -> Vec<Vec<&'static str>> {
+    let Some((armee, _, _)) = R::moyens_pays(code, scenario) else { return vec![] };
     let par_regiment = match scenario { "1790" => 15.0, "1813" => 20.0, "1870" => 25.0, _ => 10.0 };
     let n = ((armee / par_regiment).round() as usize).clamp(1, 30);
     let n_cap = ((n as f64 * 0.2).round() as usize).max(1);
@@ -430,13 +430,13 @@ impl Game {
         g.x_cote = geo.xy(44.0, -0.95).0;
 
         g.factions = dict! {};
-        // les camps de cette carte : toute la France (géographie 3), ou les cinq départements du Sud-Ouest (1 et 2)
+        // les camps de cette carte : les pays d'un théâtre, ou les cinq départements du Sud-Ouest (1 et 2)
         let codes: Vec<String> = R::FACTIONS().keys().into_iter().filter(|c| geo.playable_codes.has(c)).map(|c| c.string()).collect();
         for code in &codes {
             let res = dict! {"livres" => 500, "vivres" => 400, "fer" => 80, "bois" => 120, "armes" => 160, "outils" => 40, "recrues" => 900};
-            if let Some((_, tresor, _)) = R::moyens_europe(code, &g.scenario).filter(|_| g.europe()) {
-                // (géographie 5) des réserves à la mesure du pays : son trésor, et vivres, recrues, armes pour ses régiments
-                let n = regiments_europe(code, &g.scenario).iter().map(|v| v.len()).sum::<usize>() as i64;
+            if let Some((_, tresor, _)) = R::moyens_pays(code, &g.scenario).filter(|_| g.theatre()) {
+                // (un théâtre) des réserves à la mesure du pays : son trésor, et vivres, recrues, armes pour ses régiments
+                let n = regiments_pays(code, &g.scenario).iter().map(|v| v.len()).sum::<usize>() as i64;
                 for (k, v) in [("livres", py::round(500.0 * tresor)), ("vivres", 100 + 50 * n), ("armes", 40 + 20 * n), ("recrues", 300 + 100 * n)] {
                     res.set(k, v);
                 }
@@ -482,8 +482,8 @@ impl Game {
             } else {
                 n.at("fort")
             };
-            // (géographie 5 : la milice d'une ville suit sa taille, comme sa production : Le Caire n'est pas un bourg)
-            let mm = match g.taille_europe(&n) {
+            // (un théâtre : la milice d'une ville suit sa taille, comme sa production : Le Caire n'est pas un bourg)
+            let mm = match g.taille_pays(&n) {
                 Some(k) => Val::from(py::round(base.atf("milice") * k)) + &(40 * &fort0),
                 None => &base.at("milice") + &(40 * &fort0),
             };
@@ -526,14 +526,14 @@ impl Game {
         for code in &codes {
             let cap = g.capital_of(code);
             let c = Val::from(code);
-            let europe = regiments_europe(code, &g.scenario);
-            if g.europe() && !europe.is_empty() {
-                // (géographie 5) garnisons et armées à la mesure du pays : la capitale, ses plus grandes villes, puis les
+            let du_pays = regiments_pays(code, &g.scenario);
+            if g.theatre() && !du_pays.is_empty() {
+                // (un théâtre) garnisons et armées à la mesure du pays : la capitale, ses plus grandes villes, puis les
                 // armées de campagne à la capitale et dans les plus grandes villes
                 let mk = |g: &mut Game, l: &[&str]| -> Val { l.iter().map(|t| g.new_reg(t, &Val::None, &c)).collect() };
-                let garrison = mk(&mut g, &europe[0]);
+                let garrison = mk(&mut g, &du_pays[0]);
                 // (un micro-État, Malte, la Courlande : quelques centaines d'hommes en tout, un sur trente-trois)
-                let hommes = R::moyens_europe(code, &g.scenario).unwrap().0 * 1000.0 / 33.0;
+                let hommes = R::moyens_pays(code, &g.scenario).unwrap().0 * 1000.0 / 33.0;
                 if hommes < 100.0 {
                     garrison.at(0).set("n", 150.0);
                 }
@@ -542,13 +542,13 @@ impl Game {
                     geo.nodes.iter().filter(|n| n.at("dept") == code.as_str() && n.at("type") == "ville").collect::<Vec<_>>(),
                     |n| (-n.at("pop0").i(), n.at("id").i()),
                 );
-                for (n, t) in villes.iter().zip(&europe[1]) {
+                for (n, t) in villes.iter().zip(&du_pays[1]) {
                     let r = mk(&mut g, &[t]);
                     g.nodes.at(n.at("id")).set("garrison", r);
                 }
-                for (k, l) in europe[2..].iter().enumerate() {
+                for (k, l) in du_pays[2..].iter().enumerate() {
                     let regs = mk(&mut g, l);
-                    if europe[2..].len() == 1 && l.len() == 1 && hommes < regs.at(0).atf("max") {
+                    if du_pays[2..].len() == 1 && l.len() == 1 && hommes < regs.at(0).atf("max") {
                         regs.at(0).set("n", py::round_n(hommes.max(60.0), 0));
                     }
                     let lieu = if k == 0 { cap.clone() } else { villes.get(k - 1).map_or(cap.clone(), |n| n.at("id")) };
@@ -581,14 +581,14 @@ impl Game {
             }
         }
         g.ev_done = list![]; // événements datés déjà passés
-        if g.scenario == "1790" && !g.europe() {
+        if g.scenario == "1790" && !g.theatre() {
             let t = format!("4 mars 1790 : l'Assemblée crée les départements. Vous gouvernez {}.", g.fname(player));
             g.log("info", &t, &dict! {"important" => true});
         } else {
             let t = format!("{} — {}. Vous gouvernez {}.", g.date_str(&Val::None), g.era().at("name"), g.fname(player));
             g.log("info", &t, &dict! {"important" => true});
         }
-        let t = if g.europe() {
+        let t = if g.theatre() {
             "Objectif : prendre toutes les capitales (ou obtenir la soumission de leurs pays), ou être le plus prestigieux à la fin de 1899.".to_string()
         } else {
             format!(
