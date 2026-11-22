@@ -16,16 +16,17 @@
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::net::{ToSocketAddrs, UdpSocket};
+use std::net::{IpAddr, ToSocketAddrs, UdpSocket};
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::rc::Rc;
 use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use web_tools_commun::appairage::{self, Garde};
-use web_tools_commun::serveur::{params, Reponse, Requete, Serveur};
+use web_tools_commun::production;
+use web_tools_commun::serveur::{decoder_chemin, params, Reponse, Requete, Serveur};
 
 use crate::army_actions as AA;
 use crate::cities as CT;
@@ -853,7 +854,7 @@ fn appel(r: &Requete, jeu: &mpsc::Sender<Demande>, post: bool, corps: Vec<u8>) -
 }
 
 /// mimetypes.guess_type du Python, pour les fichiers de web/ (et .js en application/javascript, comme main()).
-/// shortcut: une table des types courants au lieu de /etc/mime.types ; un type manquant part en octet-stream.
+/// Liste blanche : une extension absente de la table n'est pas servie (404).
 fn guess_type(chemin: &Path) -> Option<&'static str> {
     let ext = chemin.extension()?.to_str()?.to_ascii_lowercase();
     Some(match ext.as_str() {
@@ -870,7 +871,6 @@ fn guess_type(chemin: &Path) -> Option<&'static str> {
         "ico" => "image/vnd.microsoft.icon",
         "webp" => "image/webp",
         "txt" => "text/plain",
-        "py" => "text/x-python",
         "wasm" => "application/wasm",
         "woff" => "font/woff",
         "woff2" => "font/woff2",
@@ -881,33 +881,25 @@ fn guess_type(chemin: &Path) -> Option<&'static str> {
     })
 }
 
-/// Un fichier de web/ (jamais au-dehors : « .. » qui en sortirait est refusé, comme os.path.normpath le faisait).
+/// Un fichier de web/ (jamais au-dehors) : chemin décodé par decoder_chemin (un « + » reste un « + »), chaque segment
+/// ordinaire et sans point en tête (ni « .. », ni fichier caché), une extension de la table de guess_type ; sinon 404.
 fn fichier(path: &str) -> Reponse {
-    let path = if path == "/" || path.is_empty() { "/index.html" } else { path };
-    let mut parts: Vec<&str> = Vec::new();
-    for p in path.trim_start_matches('/').split(|c| c == '/' || (cfg!(windows) && c == '\\')) {
-        match p {
-            "" | "." => {}
-            ".." => {
-                if parts.pop().is_none() {
-                    return Reponse::new(404, "text/plain", "Not found");
-                }
-            }
-            p if cfg!(windows) && p.contains(':') => return Reponse::new(404, "text/plain", "Not found"),
-            p => parts.push(p),
-        }
+    let introuvable = || Reponse::new(404, "text/plain", "Not found");
+    let rel = decoder_chemin(if path == "/" || path.is_empty() { "index.html" } else { path.trim_start_matches('/') });
+    let p = Path::new(&rel);
+    let sur = p.components().all(|c| matches!(c, Component::Normal(s) if !s.to_string_lossy().starts_with('.') && !s.to_string_lossy().contains(':')));
+    let Some(ctype) = guess_type(p) else { return introuvable() };
+    let full = WEB().join(p);
+    if !sur || !full.is_file() {
+        return introuvable();
     }
-    let full = parts.iter().fold(WEB(), |c, p| c.join(p));
-    if parts.is_empty() || !full.is_file() {
-        return Reponse::new(404, "text/plain", "Not found");
-    }
-    let mut ctype = guess_type(&full).unwrap_or("application/octet-stream").to_string();
+    let mut ctype = ctype.to_string();
     if ctype.starts_with("text/") || ctype == "application/javascript" {
         ctype += "; charset=utf-8";
     }
     match std::fs::read(&full) {
         Ok(b) => _send(200, b, &ctype, None),
-        Err(_) => Reponse::new(404, "text/plain", "Not found"),
+        Err(_) => introuvable(),
     }
 }
 
@@ -1045,6 +1037,8 @@ pub fn watch_network(reseau: Arc<Mutex<Reseau>>, local_url: String) {
 
 // ---------------------------------------------------------------------- mise à jour automatique
 pub const MAJ_ENV: &str = "CONQUETE_MAJ"; // posée lors de la relance après une mise à jour (évite une boucle)
+/// Le dépôt, d'où vient aussi l'archive de production web_conquete-prod (publication « binaires »).
+const DEPOT: &str = "https://github.com/pilou33620/web_conquete";
 
 /// état exposé au client (écran de départ) : version = hash court du commit, date = sa date
 pub struct Update {
@@ -1185,6 +1179,9 @@ pub fn auto_update(enabled: bool, patient: bool, argv: &[String]) {
     let relaunched = std::env::var(MAJ_ENV).ok().or_else(|| std::fs::read_to_string(&annonce).ok());
     let _ = std::fs::remove_file(&annonce);
     std::env::remove_var(MAJ_ENV);
+    if production::est_copie_prod(ROOT()) {
+        return maj_production(enabled, relaunched.is_some(), argv);
+    }
     if which("git").is_none() {
         return _set_update("pas_git", "Mise à jour automatique impossible : git n'est pas installé.", "", None);
     }
@@ -1320,6 +1317,38 @@ pub fn auto_update(enabled: bool, patient: bool, argv: &[String]) {
     _relaunch(&serde_json::json!({"de": old, "a": new, "n": behind}), argv);
 }
 
+/// Copie de production (archive web_conquete-prod : ni .git ni sources) : la mise à jour vient de la publication
+/// « binaires », par la caisse commune. Seuls les fichiers de l'archive sont remplacés : saves/, logs/ et le cache de
+/// la carte (game/data) restent. Mis à jour : code 75, demarrer_WEB_CONQUETE relance la nouvelle version.
+fn maj_production(enabled: bool, relaunched: bool, argv: &[String]) {
+    // la version : le commit dont viennent les exécutables (bin/commit, posé par la CI)
+    let commit = std::fs::read_to_string(ROOT().join("bin").join("commit")).unwrap_or_default();
+    let cur: String = commit.trim().chars().take(7).collect();
+    UPDATE.lock().unwrap().version = Some(cur.clone()).filter(|c| !c.is_empty());
+    if relaunched {
+        let news = Some((vec!["Nouvelle version du jeu.".to_string()], 1));
+        return _set_update("mis_a_jour", &format!("Mise à jour installée (version {cur})."), "", news);
+    }
+    if !enabled {
+        return _set_update("desactive", &format!("Vérification des mises à jour désactivée (--no-update). Version {cur}."), "", None);
+    }
+    println!("Recherche d'une mise à jour sur GitHub (copie de production)…");
+    match production::maj_archive(ROOT(), DEPOT, "web_conquete", &|t| println!("Mises à jour : {t}")) {
+        Ok(production::Maj::MisAJour) if std::env::var("CONQUETE_RELANCEUR").as_deref() == Ok("1") => {
+            _relaunch(&serde_json::json!({}), argv)
+        }
+        Ok(production::Maj::MisAJour) => _set_update("bloque", "Nouvelle version installée : relancez le jeu pour en profiter.", "", None),
+        Ok(production::Maj::AJour) => _set_update("a_jour", &format!("Le jeu est à jour (version {cur})."), "", None),
+        Ok(production::Maj::HorsLigne) => _set_update(
+            "hors_ligne",
+            &format!("Mise à jour non vérifiée : GitHub injoignable. Le jeu démarre avec la version {cur}."),
+            "",
+            None,
+        ),
+        Err(e) => _set_update("bloque", &format!("Mise à jour non installée ({e}). Le jeu démarre avec la version {cur}."), "", None),
+    }
+}
+
 // ---------------------------------------------------------------------- ligne de commande
 
 const USAGE: &str = "usage: conquete [-h] [--host HOST] [--port PORT] [--lan] [--local] [--no-browser] [--browser]\n                [--no-update]";
@@ -1411,6 +1440,8 @@ pub fn main() {
     };
     // (geo::data_dir() et git travaillent depuis la racine du jeu)
     let _ = std::env::set_current_dir(ROOT());
+    // le cache de la carte (game/data) : absent d'une copie de production, il y est créé au premier lancement
+    let _ = std::fs::create_dir_all(crate::geo::data_dir());
     let rpi = is_raspberry();
     let auto = rpi || is_headless(); // Raspberry Pi ou machine sans écran : réseau local, pas de navigateur
     let host = if args.local {
@@ -1420,21 +1451,32 @@ pub fn main() {
     } else {
         args.host.clone().unwrap_or_else(|| "127.0.0.1".into())
     };
-    // shortcut: le serveur commun (web_tools_commun) n'écoute que sur toutes les interfaces ou sur 127.0.0.1 ; une
-    // adresse précise (--host 192.168.1.20) demande une ouverture de plus dans cette caisse.
-    let reseau = match host.as_str() {
-        "0.0.0.0" | "" | "::" => true,
-        "127.0.0.1" | "localhost" | "::1" => false,
-        autre => {
-            eprintln!("{USAGE}\nconquete: error: argument --host: {autre} : seules toutes les interfaces (0.0.0.0) ou 127.0.0.1 sont possibles");
-            std::process::exit(2);
-        }
+    // --host : toutes les interfaces (0.0.0.0, ::) ou la boucle locale par Serveur::ouvrir ; une autre adresse du poste
+    // (192.168.1.20, fd7a:…) par Serveur::ouvrir_sur, sur elle seule. Hors boucle locale, c'est le mode réseau (garde active).
+    let (ip, reseau): (Option<IpAddr>, bool) = match host.as_str() {
+        "0.0.0.0" | "" | "::" => (None, true),
+        "127.0.0.1" | "localhost" => (None, false),
+        autre => match autre.parse::<IpAddr>() {
+            Ok(ip) => (Some(ip.to_canonical()), !ip.to_canonical().is_loopback()),
+            Err(_) => {
+                eprintln!("{USAGE}\nconquete: error: argument --host: {autre} n'est pas une adresse IP");
+                std::process::exit(2);
+            }
+        },
     };
     let open_browser = args.browser || (!args.no_browser && !auto);
     // le port d'abord : si le jeu tourne déjà, on s'arrête avant de mettre à jour le code sous ses pieds
     // (la socket n'est pas héritée par exec : le serveur relancé après une mise à jour la rouvre)
-    let srv = match Serveur::ouvrir(args.port, reseau, 1) {
+    let ouvert = match ip {
+        Some(ip) => Serveur::ouvrir_sur(ip, args.port, 1),
+        None => Serveur::ouvrir(args.port, reseau, 1),
+    };
+    let srv = match ouvert {
         Ok(s) => s,
+        Err(e) if ip.is_some() => {
+            println!("\nImpossible d'écouter sur {host}, port {} ({e}). Le jeu tourne peut-être déjà : essayez --port 8791.", args.port);
+            std::process::exit(1);
+        }
         Err(_) => {
             // (le serveur commun ne rend pas la raison d'un refus : on la redemande au système)
             let ip = if reseau { "0.0.0.0" } else { "127.0.0.1" };
@@ -1447,7 +1489,14 @@ pub fn main() {
     let _ = GARDE_.set(Garde::new("Conquête", reseau, None, None));
     GARDE().brancher(&srv);
     let lan = reseau;
-    let net = Arc::new(Mutex::new(Reseau { port: srv.port(), lan, ips: if lan { lan_addresses() } else { Vec::new() } }));
+    // une seule adresse (--host 192.168.1.20) : c'est elle qu'on annonce, et le navigateur l'ouvre
+    let seule = ip.map(|ip| if ip.is_ipv6() { format!("[{ip}]") } else { ip.to_string() });
+    let ips = match &seule {
+        Some(s) if lan => vec![s.clone()],
+        None if lan => lan_addresses(),
+        _ => Vec::new(),
+    };
+    let net = Arc::new(Mutex::new(Reseau { port: srv.port(), lan, ips }));
     // l'App vit dans le fil du jeu (le moteur n'a qu'un fil) : elle y est créée, puis la boucle du temps de jeu y tourne
     let (jeu, demandes) = mpsc::channel::<Demande>();
     let (pret, attendre) = mpsc::channel();
@@ -1461,10 +1510,14 @@ pub fn main() {
         std::process::exit(1); // (la préparation de la carte a échoué : son erreur est déjà affichée)
     }
     let port = srv.port();
-    let url = if lan { format!("http://127.0.0.1:{port}") } else { format!("http://{host}:{port}") };
+    let url = match &seule {
+        Some(s) => format!("http://{s}:{port}"),
+        None if lan => format!("http://127.0.0.1:{port}"),
+        None => format!("http://{host}:{port}"),
+    };
     banner(&net.lock().unwrap().clone(), &url, if rpi { "Raspberry Pi" } else if auto && !args.lan { "sans écran" } else { "" });
     GARDE().annoncer();
-    if lan {
+    if lan && seule.is_none() {
         let (n3, u) = (net.clone(), url.clone());
         std::thread::spawn(move || watch_network(n3, u));
     }
@@ -1495,6 +1548,19 @@ mod essais {
         assert_eq!(parse_args(&[]).unwrap().port, 8790);
         for refuse in [&["--port"][..], &["--port", "x"], &["--inconnu"], &["--lan=1"]] {
             assert_eq!(parse_args(&args(refuse)), Err(2), "{refuse:?}");
+        }
+    }
+
+    #[test]
+    fn fichiers_de_web() {
+        // seuls les fichiers de web/ d'une extension connue sortent ; le chemin est décodé (%6d = m)
+        let code = |p: &str| fichier(p).code;
+        for ok in ["/", "/index.html", "/js/main.js", "/js/%6dain.js", "/manifest.webmanifest"] {
+            assert_eq!(code(ok), 200, "{ok}");
+        }
+        let refus = ["/../Cargo.toml", "/%2e%2e/Cargo.toml", "/js/../../Cargo.toml", "/graphismes/README.md", "/graphismes/three/LICENSE", "/js/", "/.git/HEAD", "/js/.absent.js"];
+        for non in refus {
+            assert_eq!(code(non), 404, "{non}");
         }
     }
 

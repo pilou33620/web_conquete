@@ -1,14 +1,3 @@
 #!/bin/sh
-# Conquête (Linux, macOS, Raspberry Pi) : obtient l'exécutable du jeu (binaires.sh) puis le lance.
-#   ./lancer.sh [--port 8790] [--lan | --local] [--no-browser | --browser] [--no-update]
-cd "$(dirname "$0")" || exit 1
-. ./binaires.sh
-# Le jeu sort avec le code 75 quand il vient de se mettre à jour (git pull) :
-# on reprend l'exécutable de la nouvelle version, puis on le relance.
-export CONQUETE_RELANCEUR=1
-while :; do
-  obtenir_binaires && bin/conquete "$@"
-  code=$?
-  [ "$code" -eq 75 ] || break
-done
-exit "$code"
+# Ancien nom, garde pour les raccourcis, services et lanceurs existants : voir demarrer_WEB_CONQUETE.sh.
+exec sh "$(dirname "$0")/demarrer_WEB_CONQUETE.sh" "$@"

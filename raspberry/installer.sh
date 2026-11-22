@@ -20,7 +20,7 @@ fi
 PORT="${1:-8790}"
 # l'exécutable du jeu, une première fois tout de suite (compilé si cargo est là, sinon téléchargé) :
 # une erreur se voit ici plutôt que dans le journal du service
-( cd "$DIR" && . ./binaires.sh && obtenir_binaires ) || { echo "Impossible d'obtenir l'exécutable du jeu (voir ci-dessus)."; exit 1; }
+( cd "$DIR" && . ./scripts/binaires.sh && obtenir_binaires ) || { echo "Impossible d'obtenir l'exécutable du jeu (voir ci-dessus)."; exit 1; }
 
 sudo tee "$UNIT" > /dev/null <<UNITEOF
 [Unit]
@@ -31,7 +31,7 @@ Wants=network-online.target
 [Service]
 User=$(id -un)
 WorkingDirectory=$DIR
-ExecStart=/bin/sh $DIR/lancer.sh --lan --port $PORT --no-browser
+ExecStart=/bin/sh $DIR/demarrer_WEB_CONQUETE.sh --lan --port $PORT --no-browser
 Restart=on-failure
 RestartSec=5
 

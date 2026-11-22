@@ -14,6 +14,7 @@ serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 sha2 = "0.10"    # random.Random("texte") : la graine passe par SHA-512, comme en Python
 sha1 = "0.10"    # rules.py : le profil et le caractère des départements générés viennent d'un SHA-1 de leur code
 # Serveur HTTP/HTTPS et appairage : communs aux web tools (dépôt web_suite), à la place de http.server et d'appairage.py
-web_tools_commun = { git = "https://github.com/pilou33620/web_suite", rev = "8adfcd95d71e13d913087676c723dc1327fc17c1" }
+# feature production : mise à jour sans git de la copie de production (archive web_conquete-prod)
+web_tools_commun = { git = "https://github.com/pilou33620/web_suite", rev = "a9d9d90638718302b92ee862bbd415c16bb218fc", features = ["production"] }
 flate2 = "1"     # gzip.compress de server.py (/api/map, /api/state)
 chrono = { version = "0.4", default-features = false, features = ["clock"] } # time.strftime : le nom d'une sauvegarde mise de côté (déjà tiré par la caisse commune)

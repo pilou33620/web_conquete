@@ -1,3 +1,2 @@
-@echo off
-rem Ouvre le jeu aux autres appareils du reseau local (iPad, telephone).
-call "%~dp0lancer.bat" --lan
+@rem Ouvre le jeu aux autres appareils du reseau local (iPad, telephone) : voir demarrer_WEB_CONQUETE.cmd.
+@call "%~dp0demarrer_WEB_CONQUETE.cmd" --lan

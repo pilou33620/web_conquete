@@ -1,8 +1,14 @@
 name: exécutables
 
-# Compile l'exécutable du jeu pour chaque système et le dépose dans la publication « binaires » :
-# conquete-<système>.tar.gz (.zip sous Windows) et son empreinte SHA-256, que binaires.sh et
-# binaires.cmd prennent sur un poste sans cargo (Raspberry Pi, PC sans Rust).
+# Compile les exécutables du jeu pour chaque système et les dépose dans la publication « binaires »,
+# en deux archives par système, chacune avec son empreinte SHA-256 (.sha256) :
+# - conquete-<système>.tar.gz (.zip sous Windows) : les exécutables seuls (le jeu et ses outils :
+#   simuler, bilan…), que scripts/binaires.sh et scripts/binaires.cmd prennent sur un clone git sans
+#   cargo (Raspberry Pi, PC sans Rust) ;
+# - web_conquete-prod-<système> : la production, sans git ni sources — bin/, la page (web/),
+#   demarrer_WEB_CONQUETE.*, scripts/, README. Jamais les données de l'utilisateur (saves/, logs/,
+#   cache de la carte). C'est l'archive que la copie de production cherche pour se mettre à jour
+#   (web_tools_commun::production).
 on:
   push:
     branches: [main]
@@ -31,7 +37,8 @@ jobs:
       - if: contains(matrix.cible, 'musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
-      - run: cargo build --release -p conquete --bins --target ${{ matrix.cible }}
+      # --locked : Cargo.lock doit être complet (exécutables reproductibles)
+      - run: cargo build --locked --release -p conquete --bins --target ${{ matrix.cible }}
 
       - name: Archive (les exécutables et le commit dont ils viennent)
         shell: bash
@@ -51,6 +58,43 @@ jobs:
             tar -czf conquete-${{ matrix.nom }}.tar.gz -C bin .
           fi
 
+      - name: Archive de production (exécutables, page, scripts de démarrage)
+        shell: bash
+        run: |
+          P=prod/web_conquete
+          mkdir -p $P
+          cp -r bin scripts web demarrer_WEB_CONQUETE.sh demarrer_WEB_CONQUETE.cmd README.md $P/
+          if [ "${{ runner.os }}" = Windows ]; then
+            (cd prod && 7z a ../web_conquete-prod-${{ matrix.nom }}.zip web_conquete)
+          else
+            tar -czf web_conquete-prod-${{ matrix.nom }}.tar.gz -C prod web_conquete
+          fi
+
+      # Avant la publication : décompressée dans un dossier vide, l'archive démarre et sert la page.
+      # (au premier lancement, la carte est calculée avant que le serveur réponde : jusqu'à 5 minutes)
+      - name: Essai de l'archive de production (dossier vide, démarrage, page en 200)
+        if: matrix.nom == 'linux-x86_64'
+        shell: bash
+        run: |
+          essai=$(mktemp -d)
+          tar -xzf web_conquete-prod-linux-x86_64.tar.gz -C "$essai"
+          cd "$essai/web_conquete"
+          test ! -e .git && test ! -e Cargo.toml && test ! -e rust && test ! -e saves && test ! -e game
+          setsid sh demarrer_WEB_CONQUETE.sh --no-update --local --port 18790 --no-browser > journal.txt 2>&1 < /dev/null &
+          groupe=$!
+          code=000
+          fin=$((SECONDS + 300))
+          while [ $SECONDS -lt $fin ]; do
+            code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' http://127.0.0.1:18790/ || true)
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          kill -TERM -- -$groupe 2>/dev/null || true
+          if [ "$code" != 200 ]; then
+            echo "La page ne répond pas (code $code). Journal :"; cat journal.txt; exit 1
+          fi
+          echo "archive de production : démarrée, page en 200, arrêtée"
+
       - name: Publication
         shell: bash
         env:
@@ -59,9 +103,9 @@ jobs:
           # les quatre compilations arrivent ensemble : une seule crée la publication
           gh release view binaires >/dev/null 2>&1 \
             || gh release create binaires --title "Exécutables" \
-                 --notes "Exécutables du jeu, recompilés à chaque envoi sur main, pris par binaires.sh et binaires.cmd." \
+                 --notes "Exécutables du jeu, recompilés à chaque envoi sur main. conquete-<système> : pris par scripts/binaires.sh et scripts/binaires.cmd. web_conquete-prod-<système> : la production complète (exécutables, page, scripts de démarrage), à décompresser puis lancer par demarrer_WEB_CONQUETE." \
             || true
-          for f in conquete-${{ matrix.nom }}.*; do
+          for f in conquete-${{ matrix.nom }}.* web_conquete-prod-${{ matrix.nom }}.*; do
             (sha256sum "$f" 2>/dev/null || shasum -a 256 "$f") | cut -d" " -f1 > "$f.sha256"
           done
-          gh release upload binaires conquete-${{ matrix.nom }}.* --clobber
+          gh release upload binaires conquete-${{ matrix.nom }}.* web_conquete-prod-${{ matrix.nom }}.* --clobber

@@ -10,3 +10,11 @@ captures-3d/
 /target/
 /bin/
 .maj-annonce.json
+
+# Cache les lanceurs Windows sous Linux (écrit par demarrer_WEB_CONQUETE.sh)
+.hidden
+# Restes d'une mise à jour de la copie de production (web_tools_commun::production)
+.maj/
+.maj.zip
+.maj.tar.gz
+*.ancien

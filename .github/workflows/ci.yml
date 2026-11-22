@@ -21,7 +21,7 @@ jobs:
       # le moteur, le serveur et leurs bancs : chaque module comparé au Python d'origine (références figées),
       # batailles et campagnes entières rejouées au bit près, bancs du jeu, serveur en boîte noire
       - name: Moteur et serveur (Rust)
-        run: cargo test -p conquete
+        run: cargo test --locked -p conquete
 
       # les graphismes viennent de web_engine : web/graphismes/ ne se modifie pas dans le jeu (SPEC-HEX.md)
       - name: Graphismes (web_engine)

@@ -45,7 +45,7 @@ async function poll() {
     st = await api.get(`/api/state?since=${seq}`);
   } catch (e) {
     // un seul message par coupure
-    if (!lost && ep === epoch) ui && ui.toast('Connexion au serveur perdue. Relancez le jeu (lancer.sh ou lancer.bat).', 'bad');
+    if (!lost && ep === epoch) ui && ui.toast('Connexion au serveur perdue. Relancez le jeu (demarrer_WEB_CONQUETE).', 'bad');
     lost = true;
     return;
   } finally {
@@ -118,7 +118,7 @@ async function boot() {
     payload = await api.get('/api/map' + (voulue ? '?geo=' + voulue : ''));
     if (payload.ok === false) payload = await api.get('/api/map');   // (carte inconnue dans l'adresse)
   } catch (e) {
-    lt.textContent = 'Impossible de joindre le serveur. Lancez le jeu (lancer.sh ou lancer.bat) puis rechargez la page.';
+    lt.textContent = 'Impossible de joindre le serveur. Lancez le jeu (demarrer_WEB_CONQUETE) puis rechargez la page.';
     return;
   }
   bootVer = payload.ver;
@@ -186,7 +186,7 @@ async function boot() {
   };
   let info;
   try { info = await api.get('/api/saves'); } catch (e) {
-    lt.textContent = 'Le serveur ne répond plus. Relancez le jeu (lancer.sh ou lancer.bat) puis rechargez la page.';
+    lt.textContent = 'Le serveur ne répond plus. Relancez le jeu (demarrer_WEB_CONQUETE) puis rechargez la page.';
     return;
   }
   document.getElementById('loading').hidden = true;

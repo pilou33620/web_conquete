@@ -7,10 +7,20 @@ de la cavalerie et de l'artillerie : vous donnez vos ordres, puis le mois se jou
 Le temps réel avec pause d'origine reste disponible en réglage avancé. Le moteur, écrit en Rust, tourne sur un petit serveur local ; l'interface est une
 page web (HTML, CSS, JavaScript) qui s'ouvre dans le navigateur.
 
-## Lancer le jeu
+## Installer et lancer le jeu
 
-Rien à installer : le script de lancement prend l'exécutable du jeu (`bin/conquete`, `bin\conquete.exe` sous Windows)
-par `binaires.sh` (`binaires.cmd` sous Windows). Si Rust (`cargo`) est installé, il le compile sur place (la première
+**Pour jouer : l'archive de production.** Sans git ni Rust : télécharger l'archive de son système dans la
+publication GitHub « binaires » (https://github.com/pilou33620/web_conquete/releases/tag/binaires) —
+`web_conquete-prod-windows-x86_64.zip`, `web_conquete-prod-linux-x86_64.tar.gz`,
+`web_conquete-prod-linux-aarch64.tar.gz` (Raspberry Pi OS 64 bits) ou `web_conquete-prod-macos-aarch64.tar.gz`
+(Mac à puce Apple) —, la décompresser où l'on veut, puis lancer `demarrer_WEB_CONQUETE` dans le dossier
+`web_conquete/` obtenu. Elle contient les exécutables (`bin/`), la page (`web/`), les scripts de démarrage et ce
+README ; ni sources ni historique. Elle se met à jour toute seule au démarrage (voir plus bas), sans jamais toucher aux
+sauvegardes (`saves/`).
+
+**Pour développer : git.** `git clone https://github.com/pilou33620/web_conquete.git`, puis `demarrer_WEB_CONQUETE`.
+Le script prend l'exécutable du jeu (`bin/conquete`, `bin\conquete.exe` sous Windows) par `scripts/binaires.sh`
+(`scripts\binaires.cmd` sous Windows). Si Rust (`cargo`) est installé, il le compile sur place (la première
 fois prend quelques minutes ; la compilation récupère aussi la caisse commune `web_tools_commun`, du dépôt web_suite).
 Sinon il le télécharge, une fois par version, depuis la publication GitHub « binaires » (Linux x86_64 et aarch64,
 macOS sur puce Apple, Windows x86_64), recompilée à chaque envoi sur main, et refuse l'archive si son empreinte
@@ -19,17 +29,24 @@ sur Windows 10 et 11, macOS et Raspberry Pi OS).
 
 | Système | Commande |
 |---|---|
-| Windows | double-clic sur `lancer.bat` |
-| Linux, macOS | `./lancer.sh` (un Mac à processeur Intel n'a pas d'exécutable publié : installer Rust, https://rustup.rs, pour le compiler) |
-| Raspberry Pi | `./lancer.sh` (sans navigateur, ouvert au réseau local, adresse affichée), ou `sh raspberry/installer.sh` pour un démarrage automatique à l'allumage (voir plus bas) |
-| Android (Termux) | aucun exécutable Android n'est publié : `pkg install rust git`, puis `./lancer.sh --no-browser` (le jeu se compile au premier lancement, c'est long), et ouvrir `http://127.0.0.1:8790` dans Chrome |
+| Windows | double-clic sur `demarrer_WEB_CONQUETE.cmd` |
+| Linux, macOS | `./demarrer_WEB_CONQUETE.sh` (un Mac à processeur Intel n'a pas d'exécutable publié : installer Rust, https://rustup.rs, pour le compiler) |
+| Raspberry Pi | `./demarrer_WEB_CONQUETE.sh` (sans navigateur, ouvert au réseau local, adresse affichée), ou `sh raspberry/installer.sh` pour un démarrage automatique à l'allumage (voir plus bas) |
+| Android (Termux) | aucun exécutable Android n'est publié : `pkg install rust git`, puis `./demarrer_WEB_CONQUETE.sh --no-browser` (le jeu se compile au premier lancement, c'est long), et ouvrir `http://127.0.0.1:8790` dans Chrome |
 | iPad | l'iPad ne fait plus tourner le jeu (Pyto lançait l'ancien serveur en Python ; il n'y a pas d'exécutable pour l'iPad) : il joue par le réseau, sur le jeu lancé sur un Raspberry Pi ou un PC de la maison (voir plus bas) |
 
-Options (à donner au script ou à l'exécutable) : `--lan` (ouvre le jeu aux autres appareils du réseau local), `--local`
-(cette machine seulement), `--port 8790`, `--no-browser`, `--browser`, `--no-update`. Sous Windows, `lancer-reseau.bat`
-lance directement le jeu en mode réseau ; ailleurs, `./lancer.sh --lan`.
+En cas d'erreur au démarrage, la fenêtre (ou le terminal) reste ouverte avec la raison. Les anciens noms `lancer.sh`,
+`lancer.bat` et `lancer-reseau.bat` restent, en relais vers `demarrer_WEB_CONQUETE`.
 
-**Mise à jour automatique.** Si le jeu a été installé avec `git clone`, le serveur cherche une nouvelle version sur GitHub
+Options (à donner au script ou à l'exécutable) : `--lan` (ouvre le jeu aux autres appareils du réseau local), `--local`
+(cette machine seulement), `--host ADRESSE` (n'écouter que sur cette adresse IP du poste ; `0.0.0.0` : tout le réseau),
+`--port 8790`, `--no-browser`, `--browser`, `--no-update`. Sous Windows, `lancer-reseau.bat` lance directement le jeu
+en mode réseau ; ailleurs, `./demarrer_WEB_CONQUETE.sh --lan`.
+
+**Mise à jour automatique.** Copie de production (l'archive) : au démarrage, le serveur compare l'empreinte de
+l'archive publiée à celle de la sienne ; si elle a changé, il la télécharge, vérifie son SHA-256, remplace seulement les
+fichiers de l'archive (sauvegardes, journaux et cache de la carte restent) puis se relance. Sans Internet, il démarre
+avec la version actuelle. Clone git : le serveur cherche une nouvelle version sur GitHub
 à chaque démarrage : il l'installe (`git pull` en avance rapide seulement, sauvegardes intactes), affiche les nouveautés
 et se relance tout seul : il rend la main au script de lancement, qui reprend l'exécutable de la nouvelle version
 (recompilé, ou retéléchargé) puis relance le jeu. Sans Internet, ou si la clé SSH / le jeton manque, il démarre simplement avec la version actuelle (aucune invite
@@ -57,7 +74,8 @@ d'adresse, et visibles dans le jeu (écran d'accueil et menu ☰, rubrique « Jo
 Le Raspberry fait tourner la partie, l'iPad sert d'écran tactile. Les deux doivent être sur le même Wi-Fi.
 
 1. Récupérez le jeu sur le Raspberry : `git clone https://github.com/pilou33620/web_conquete.git`
-   (dépôt privé : utilisez une clé SSH ou un jeton d'accès GitHub), ou copiez le dossier par clé USB ou `scp`.
+   (ou l'archive de production `web_conquete-prod-linux-aarch64.tar.gz`, décompressée), ou copiez le dossier par clé
+   USB ou `scp`.
    Les mises à jour s'installent ensuite toutes seules à chaque démarrage du Raspberry (ou avec
    `sudo systemctl restart web_conquete`).
 2. Sur le Raspberry : `cd web_conquete && sh raspberry/installer.sh`
@@ -675,8 +693,10 @@ réel, Échap pour annuler, + et − pour zoomer.
 
 ## Organisation du code
 ```
-lancer.sh, lancer.bat lancement du jeu (lancer-reseau.bat : ouvert au réseau local) ; relance après une mise à jour
-binaires.sh, .cmd    l'exécutable du jeu dans bin/ : compilé si cargo est là, sinon téléchargé (publication « binaires »)
+demarrer_WEB_CONQUETE.sh, .cmd  lancement du jeu ; relance après une mise à jour (code 75), fenêtre ouverte en cas
+                     d'erreur (lancer.sh, lancer.bat, lancer-reseau.bat : anciens noms, en relais)
+scripts/binaires.sh, .cmd  les exécutables dans bin/ : compilés si cargo est là, sinon téléchargés (publication
+                     « binaires ») ; rien à faire dans une copie de production
 raspberry/           installation en service sur Raspberry Pi
 rust/conquete/       le moteur et le serveur, en Rust (caisse conquete ; PORTAGE.md : le portage depuis Python et les
                      conventions du code). Dans src/ :
@@ -721,7 +741,7 @@ La CI (`.github/workflows/ci.yml`) les lance à chaque envoi.
 
 ```bash
 sh tests/resume.sh                               # tout, avec un bilan court (journal complet : /tmp/tests-conquete.log)
-cargo test -p conquete                           # le moteur et le serveur
+cargo test --locked -p conquete                  # le moteur et le serveur (comme la CI)
 cargo test -p conquete --test bancs_bataille     # un seul banc
 node --test tests/*.test.mjs                     # l'interface seule
 ```
@@ -754,8 +774,8 @@ avec une graine fixe : même graine, même bataille. Les essais n'écrivent pas 
 
 ## Outils
 
-Des exécutables à part, à lancer depuis la racine du jeu : dans `bin/` une fois le jeu lancé par `lancer.sh` ou
-`lancer.bat` (`bin\simuler.exe`… sous Windows), ou dans `target/release/` après
+Des exécutables à part, à lancer depuis la racine du jeu : dans `bin/` une fois le jeu lancé par
+`demarrer_WEB_CONQUETE` (`bin\simuler.exe`… sous Windows), ou dans `target/release/` après
 `cargo build --release -p conquete --bins`. `--help` donne les options de chacun.
 
 ```bash
