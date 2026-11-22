@@ -45,7 +45,11 @@ fn sha256(texte: &str) -> String {
     Sha256::digest(texte.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// La carte par défaut (l'Aquitaine depuis le 22/11/2026) sur sa grille d'hexagones : exactement le fichier de la page
+/// web/js/dev/carte-hex-data.js (que `carte_hex > web/js/dev/carte-hex-data.js` écrit).
 #[test]
 fn carte_hex() {
-    assert_eq!(sha256(&lancer(env!("CARGO_BIN_EXE_carte_hex"), &[])), "1bd4355993d6b5422fd82adc5dd4b06af47af38e57754e72a53c2a12690da08b");
+    let page = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/js/dev/carte-hex-data.js");
+    let attendu = std::fs::read_to_string(page).unwrap();
+    assert_eq!(sha256(&lancer(env!("CARGO_BIN_EXE_carte_hex"), &[])), sha256(&attendu));
 }

@@ -19,7 +19,7 @@ let bootVer, bootGeo, reloading = false;  // version du serveur et géographie d
 // recharger la page : pas location.reload(), que Safari renvoie comme la requête d'origine, sans le cookie de session
 // du launcher (jeu ouvert depuis Internet par son relais, /o/<id>/) : on retombait sur sa page de connexion. Une
 // adresse neuve, demandée par la page elle-même, emporte le cookie.
-// geo : la carte à montrer (France ou Europe, écran de départ) ; sans elle, celle de la partie en cours
+// geo : la carte à montrer (Aquitaine ou un théâtre, écran de départ) ; sans elle, celle de la partie en cours
 function recharger(geo) {
   location.replace(location.pathname + '?r=' + Date.now() + (geo ? '&geo=' + geo : '') + location.hash);
 }
