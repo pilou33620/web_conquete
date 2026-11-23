@@ -59,6 +59,10 @@ pub fn borders(game: &mut Game, a: &str, b: &str) -> bool {
         let mut s = IndexSet::default();
         let maitres = game.maitres();
         for &(a, b, _) in game.geo_fixe().aretes.iter() {
+            // (deux places du même maître, le cas de presque toutes les routes : écartées sans fabriquer leurs textes)
+            if matches!((&maitres[a], &maitres[b]), (Val::Str(x), Val::Str(y)) if x == y) {
+                continue;
+            }
             let (oa, ob) = (maitres[a].string(), maitres[b].string());
             if oa != ob {
                 s.insert((oa.clone(), ob.clone()));

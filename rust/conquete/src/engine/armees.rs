@@ -586,10 +586,23 @@ impl Game {
     // engine.py, lignes 1818 à 1827
     pub fn hegemon(&self) -> Val {
         let cnt = Val::dict();
-        for o in self.maitres().iter() {
-            if self.factions.has(o) {
-                cnt.set(o, &cnt.get_or(o, 0) + 1);
+        // (compté par suites de places du même maître, dans l'ordre de la carte : les camps entrent dans cnt dans le
+        // même ordre, avec les mêmes nombres, sans un passage dans le dict par place)
+        let mut suite: Option<(&Val, i64)> = None;
+        let maitres = self.maitres();
+        for o in maitres.iter().map(Some).chain([None]) {
+            if let (Some((p, n)), Some(o)) = (&mut suite, o) {
+                if *p == o {
+                    *n += 1;
+                    continue;
+                }
             }
+            if let Some((p, n)) = suite.take() {
+                if self.factions.has(p) {
+                    cnt.set(p, &cnt.get_or(p, 0) + n);
+                }
+            }
+            suite = o.map(|o| (o, 1));
         }
         if cnt.len() < 3 {
             return Val::None;
