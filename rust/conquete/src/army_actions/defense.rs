@@ -113,7 +113,7 @@ pub fn force_ratio(g: &mut Game, code: &str, nid: i64) -> f64 {
         g.armies
             .values()
             .iter()
-            .filter(|b| b.at("owner") == code && b.at("at_node") == nid && (b.at("state") == "idle" || b.at("state") == "siege"))
+            .filter(|b| b.at("owner") == code && b.at("at_node") == nid && (b.at_is("state", "idle") || b.at_is("state", "siege")))
             .map(|b| g.army_power(b, &tname)),
     );
     let d = g.node_defense_power(nid, true);
@@ -190,7 +190,7 @@ pub fn fortify_info(g: &Game, a: &Val, nid: i64) -> (&'static str, f64, i64, f64
     let cur = node_aa(&n).get_or("bar", 0.0).f();
     let frac = if 1.0 - cur > 0.3 { 1.0 - cur } else { 0.3 };
     let men = g.army_men(a);
-    let sap = py::sum_v(a.at("regs").iter().filter(|r| r.at("type") == "sapeurs").map(|r| r.at("n"))).f();
+    let sap = py::sum_v(a.at("regs").iter().filter(|r| r.at_is("type", "sapeurs")).map(|r| r.at("n"))).f();
     let work = BAR_WORK().atf(gn.at("type")) * (if kind == "red" { RED_WORK } else { 1.0 }) * frac;
     let m = men + BAR_SAPEUR as f64 * sap;
     let days = clamp(work / if m > 1.0 { m } else { 1.0 }, BAR_DAYS.0, BAR_DAYS.1);
@@ -254,7 +254,7 @@ pub fn works_tick(g: &mut Game, n: &Val, x: &Val, dt: f64) {
     x.del("bw");
     x.set("bar", 1.0);
     if wc == g.player {
-        let txt = if w.at("kind") == "bar" { "la place pourra soutenir un siège" } else { "la défense en est un peu renforcée" };
+        let txt = if w.at_is("kind", "bar") { "la place pourra soutenir un siège" } else { "la défense en est un peu renforcée" };
         let texte = format!(
             "{} achevées à {} : {txt}, le temps qu'elles durent (environ trois tours).",
             py::capitalize(works_name(n, &w.at("kind"))),
@@ -280,9 +280,9 @@ pub fn wear_tick(g: &mut Game, n: &Val, x: &Val, dt: f64) {
     if s.truthy() && !s.getb("blocus") && !s.getb("occupy") {
         let mut guns = 0i64;
         for b in g.armies.values() {
-            if b.at("at_node") == nid && b.at("owner") == s.at("by") && (b.at("state") == "siege" || b.at("state") == "battle") {
+            if b.at("at_node") == nid && b.at("owner") == s.at("by") && (b.at_is("state", "siege") || b.at_is("state", "battle")) {
                 for r in b.at("regs").iter() {
-                    if r.at("type") == "artillerie" {
+                    if r.at_is("type", "artillerie") {
                         guns += 1;
                     }
                 }
@@ -349,7 +349,7 @@ pub fn quarters_tick(g: &mut Game, dt: f64) {
             || a.at("state") != "idle"
             || a.getb("boat")
             || g.nodes.at(&nid).at("owner") != code
-            || g.nodes.at(&nid).at("siege").truthy()
+            || g.nodes.at(&nid).atb("siege")
         {
             a.set("qrt", false);
             g._dirty_income = true;
@@ -399,7 +399,7 @@ pub fn rangs_place(g: &Game, code: &str, a: &Val) -> (Option<i64>, String) {
         return (None, why);
     }
     let nid = nid.unwrap();
-    if g.geo.nodes.at(nid).at("type") == "village" && !g.nodes.at(nid).getb("depot") {
+    if g.geo.nodes.at(nid).at_is("type", "village") && !g.nodes.at(nid).getb("depot") {
         return (None, "Il faut une ville ou un magasin : les conscrits se rassemblent au dépôt.".to_string());
     }
     let f = g.factions.at(code);
@@ -748,7 +748,7 @@ pub fn requisition(g: &mut Game, code: &str, a: &Val) -> (bool, String) {
     if rec != 0 {
         got.push(format!("{rec} recrues"));
     }
-    if gain.at("livres").truthy() {
+    if gain.atb("livres") {
         got.push(format!("{} livres", gain.at("livres")));
     }
     (
@@ -854,7 +854,7 @@ pub fn arrive(g: &mut Game, a: &Val, nid: i64, ask: bool) -> Option<bool> {
     let war = o != R::NEUTRAL && g.at_war(&code, &o);
     if o != R::NEUTRAL && !war {
         // voisin en paix (droit de passage, gabare devant ses quais, sortie de ses terres) : on ne fait que passer
-        if a.at("path").truthy() {
+        if a.atb("path") {
             return Some(false);
         }
         a.set("state", "idle");
@@ -867,10 +867,10 @@ pub fn arrive(g: &mut Game, a: &Val, nid: i64, ask: bool) -> Option<bool> {
         }
         return Some(true);
     }
-    if a.at("state") == "retreat" || !(a.getb("tr") || a.getb("hold")) {
+    if a.at_is("state", "retreat") || !(a.getb("tr") || a.getb("hold")) {
         return None;
     }
-    if a.at("path").truthy() && a.getb("tr") {
+    if a.atb("path") && a.getb("tr") {
         return if war { None } else { Some(false) }; // une place ennemie tenue barre la route ; les neutres se traversent
     }
     let s = n.at("siege");
@@ -932,7 +932,7 @@ pub fn ask_alive(g: &mut Game, a: &Val) -> Val {
         return Val::None;
     }
     let (code, o) = (a.ats("owner"), g.nodes.at(k.at("node")).ats("owner"));
-    let here = a.at("at_node") == k.at("node") && a.at("state") == "idle" && !a.at("battle").truthy();
+    let here = a.at("at_node") == k.at("node") && a.at_is("state", "idle") && !a.atb("battle");
     if here && !g.friendly(&code, &o) && (o == R::NEUTRAL || g.at_war(&code, &o)) {
         return k;
     }
@@ -1002,7 +1002,7 @@ pub fn ask_choices(g: &mut Game, a: &Val) -> Val {
 /// k : le choix en attente (a['ask']).
 // game/army_actions.py, lignes 729 à 732
 pub fn resume(g: &mut Game, a: &Val, k: &Val) {
-    if k.at("path").truthy() && g.armies.has(a.at("id")) && a.at("state") == "idle" {
+    if k.atb("path") && g.armies.has(a.at("id")) && a.at_is("state", "idle") {
         a.set("path", k.at("path"));
         a.set("target", k.at("target"));
         a.set("state", "move");
@@ -1109,10 +1109,10 @@ pub fn crossed(g: &Game, path: &Val, target: &Val, owners: &Val, skip: &Val) -> 
     };
     let legs = path.vec();
     for (i, leg) in legs.iter().enumerate() {
-        if leg.at("kind") == "road" {
+        if leg.at_is("kind", "road") {
             if g.geo.edges.at(leg.at("e")).get("kind") == "water" {
                 let nxt = if i + 1 < legs.len() { legs[i + 1].clone() } else { Val::None };
-                if nxt.truthy() && nxt.at("kind") == "road" && g.geo.edges.at(nxt.at("e")).get("kind") == "water" {
+                if nxt.truthy() && nxt.at_is("kind", "road") && g.geo.edges.at(nxt.at("e")).get("kind") == "water" {
                     continue; // toujours à bord
                 }
             }

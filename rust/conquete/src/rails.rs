@@ -102,8 +102,8 @@ fn _lignes_theatre(geo: &GeoMap) -> Val {
     let out = list![];
     for code in &geo.dept_codes {
         let du_pays: Vec<Val> = geo.nodes.iter().filter(|n| n.at("dept") == code.as_str()).collect();
-        let Some(cap) = du_pays.iter().find(|n| n.at("type") == "capitale") else { continue };
-        let villes = py::sorted_by_key(du_pays.iter().filter(|n| n.at("type") == "ville").cloned().collect::<Vec<_>>(), |n| (-n.ati("pop0"), n.ati("id")));
+        let Some(cap) = du_pays.iter().find(|n| n.at_is("type", "capitale")) else { continue };
+        let villes = py::sorted_by_key(du_pays.iter().filter(|n| n.at_is("type", "ville")).cloned().collect::<Vec<_>>(), |n| (-n.ati("pop0"), n.ati("id")));
         let mut desservies = vec![cap.clone()];
         for (k, v) in villes.into_iter().take(RAIL_VILLES_5).enumerate() {
             let d2 = |n: &Val| py::pow(n.atf("x") - v.atf("x"), 2.0) + py::pow(n.atf("y") - v.atf("y"), 2.0);
@@ -396,7 +396,7 @@ pub fn _on_section(g: &Game, a: &Val) -> Val {
 pub fn sabotage(g: &mut Game) {
     for a in g.armies.values() {
         let code = a.ats("owner");
-        if !g.factions.has(&code) || a.getb("boat") || a.getb("rail") || a.at("state") == "retreat" {
+        if !g.factions.has(&code) || a.getb("boat") || a.getb("rail") || a.at_is("state", "retreat") {
             continue;
         }
         if a.at("at_node").is_some() && g.friendly(&code, g.nodes.at(a.at("at_node")).at("owner").s()) {

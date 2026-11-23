@@ -723,7 +723,7 @@ pub fn check(g: &Game, code: &str, n: &Val, chain: &str) -> (Option<i64>, Option
     let s = slots(n);
     let cur = s.get(chain);
     // (un magasin aux vivres commandé avant les emplacements est encore une file « build »)
-    if cur == 0i64 || n.at("queue").iter().any(|q| (q.at("kind") == "slot" || q.at("kind") == "build") && q.at("what") == chain) {
+    if cur == 0i64 || n.at("queue").iter().any(|q| (q.at_is("kind", "slot") || q.at_is("kind", "build")) && q.at("what") == chain) {
         return (None, Some("Déjà en chantier.".to_string()));
     }
     let lvl = if cur.is_none() { 1 } else { cur.i() + 1 };
@@ -835,7 +835,7 @@ pub fn demolish(g: &mut Game, code: &str, nid: i64, chain: &str) -> (bool, Strin
         return (false, "La place est assiégée.".to_string());
     }
     let lvl = s.pop(chain).i();
-    let q: Val = n.at("queue").iter().filter(|q| !(q.at("kind") == "slot" && q.at("what") == chain)).collect();
+    let q: Val = n.at("queue").iter().filter(|q| !(q.at_is("kind", "slot") && q.at("what") == chain)).collect();
     n.set("queue", q);
     _milice(&n, chain, lvl, 0);
     if chain == "depot" {
@@ -861,7 +861,7 @@ pub fn sync(g: &mut Game, n: &Val) {
     }
     let zeros: Vec<Val> = s.items().into_iter().filter(|(_, v)| *v == 0i64).map(|(k, _)| k).collect();
     for k in zeros {
-        if !n.at("queue").iter().any(|q| q.at("kind") == "slot" && q.at("what") == k) {
+        if !n.at("queue").iter().any(|q| q.at_is("kind", "slot") && q.at("what") == k) {
             s.del(&k);
         }
     }
@@ -997,7 +997,7 @@ pub fn node_extra(g: &Game, n: &Val, code: &str, out: &Val, trade: f64) -> f64 {
     if b.getb("spec") && gn.getb("star") && R::SPECIALTY().has(gn.at("star").at(0)) {
         let sp = R::SPECIALTY().at(gn.at("star").at(0));
         let boost = if sp.getb("boost") { g.mod_(code, sp.at("boost").s(), 0.0) } else { 0.0 };
-        let k = (1.0 + boost) * (if gn.at("type") == "capitale" { R::SPECIALTY_CAPITAL } else { 1.0 }) * b.atf("spec");
+        let k = (1.0 + boost) * (if gn.at_is("type", "capitale") { R::SPECIALTY_CAPITAL } else { 1.0 }) * b.atf("spec");
         for r in PROD().iter() {
             if sp.has(&r) {
                 out.set(&r, &out.at(&r) + &(&sp.at(&r) * k));
@@ -1238,7 +1238,7 @@ pub fn _troops(g: &Game, n: &Val, code: &str) -> bool {
     if n.atb("garrison") {
         return true;
     }
-    g.armies.values().iter().any(|a| a.at("owner") == code && a.at("at_node") == n.at("id") && a.at("state") == "idle")
+    g.armies.values().iter().any(|a| a.at("owner") == code && a.at("at_node") == n.at("id") && a.at_is("state", "idle"))
 }
 
 /// Python : `_w_incendie(g, n, gn, s)`.
@@ -1282,7 +1282,7 @@ pub fn _w_brigands(g: &Game, n: &Val, gn: &Val, s: &str) -> f64 {
     let o0 = n.ats("owner");
     let wars = g.factions.keys().iter().any(|o| *o != o0 && g.factions.at(o).atb("alive") && g.at_war(&o0, o.s()));
     let st = 0.8 - n.atf("stab");
-    (if gn.at("type") == "village" { 1.5 } else { 1.0 }) * (1.0 + 2.0 * if st > 0.0 { st } else { 0.0 }) * (if wars { 1.3 } else { 1.0 })
+    (if gn.at_is("type", "village") { 1.5 } else { 1.0 }) * (1.0 + 2.0 * if st > 0.0 { st } else { 0.0 }) * (if wars { 1.3 } else { 1.0 })
 }
 
 /// Python : `_w_foire(g, n, gn, s)`.
@@ -1930,7 +1930,7 @@ pub fn _ai_value(g: &Game, ai: &AI, n: &Val, chain: &str, lvl: i64, mult: f64) -
         let sp = R::SPECIALTY().at(gn.at("star").at(0));
         let s = |k: &str| sp.get_or(k, 0).f();
         let boost = if sp.getb("boost") { g.mod_(code, sp.at("boost").s(), 0.0) } else { 0.0 };
-        let kk = (1.0 + boost) * if gn.at("type") == "capitale" { R::SPECIALTY_CAPITAL } else { 1.0 };
+        let kk = (1.0 + boost) * if gn.at_is("type", "capitale") { R::SPECIALTY_CAPITAL } else { 1.0 };
         val += x("spec") * kk * (s("livres") + 0.4 * s("vivres") + 0.5 * (s("fer") + s("bois")) + 0.6 * s("industrie") + 0.4 * s("recrues"));
     }
     val *= mult;
@@ -1968,7 +1968,7 @@ pub fn ai_besoin_mil(g: &Game, code: &str) -> Option<(i64, String)> {
         vus.push(r.clone());
         let (chain, lvl) = r.pair();
         let a = |n: &Val| {
-            niveau(n, chain.s()) >= lvl.i() || n.at("queue").iter().any(|q| q.at("kind") == "slot" && q.at("what") == chain)
+            niveau(n, chain.s()) >= lvl.i() || n.at("queue").iter().any(|q| q.at_is("kind", "slot") && q.at("what") == chain)
         };
         if villes.iter().any(a) {
             continue;
@@ -2011,12 +2011,12 @@ pub fn ai_build(g: &mut Game, ai: &mut AI, budget: f64, wars: &Val) -> f64 {
         if n.atb("siege") || n.at("queue").len() >= 2 || (wars.truthy() && ai.threat_at(g, n.ati("id"), 45.0, &Val::None, &Val::None) > 0.0) {
             continue;
         }
-        if gn.at("type") == "village" && !gn.atb("spec") {
+        if gn.at_is("type", "village") && !gn.atb("spec") {
             continue; // les simples villages gardent leur emplacement (un magasin aux vivres, en guerre)
         }
         let mut mult: Option<f64> = None;
         for chain in CHAIN_ORDER().iter() {
-            if chain == "depot" || (gn.at("type") == "fort" && chain != "caserne") {
+            if chain == "depot" || (gn.at_is("type", "fort") && chain != "caserne") {
                 continue; // le magasin aux vivres suit la guerre (AI.build_depot) ; une place forte loge des troupes
             }
             let (lvl, why) = check(g, &code, &n, chain.s());
@@ -2083,7 +2083,7 @@ pub fn ai_policies(g: &mut Game, ai: &mut AI) {
     let rec = f.at("res").at("recrues");
     for n in g.owned_nodes(&code).iter() {
         let gn = g.geo.nodes.at(n.at("id"));
-        if gn.at("type") == "village" || n.atb("siege") {
+        if gn.at_is("type", "village") || n.atb("siege") {
             continue;
         }
         let p = n.get("pol");

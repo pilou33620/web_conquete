@@ -535,7 +535,7 @@ impl Game {
                 Some(py::Num::F(f)) if f.fract() == 0.0 => f as i64,
                 _ => continue,
             };
-            if a.at("state") == "idle" {
+            if a.at_is("state", "idle") {
                 m.entry(k).or_default().push(a.clone());
             }
         }
@@ -552,7 +552,7 @@ impl Game {
         let tname = TERRAIN().at(self.geo.terrain_at(gn.atf("x"), gn.atf("y"))).ats(0);
         let mut p = n.atf("milice") * R::MILICE_POWER * self.milice_k(&code);
         if code != R::NEUTRAL {
-            let garde = |r: &Val| if r.at("type") == "garde" { R::GARDE_HOME } else { 1.0 };
+            let garde = |r: &Val| if r.at_is("type", "garde") { R::GARDE_HOME } else { 1.0 };
             p += py::sum(
                 n.at("garrison").iter().map(|r| self.reg_power(&code, &r, &tname, 1.0, false, &Val::None) * garde(&r)).collect::<Vec<_>>(),
             );
@@ -570,7 +570,7 @@ impl Game {
                 }
                 None => {
                     for a in self.armies.values() {
-                        if a.at("at_node") == nid && a.at("state") == "idle" && self.friendly(&a.ats("owner"), &code) {
+                        if a.at("at_node") == nid && a.at_is("state", "idle") && self.friendly(&a.ats("owner"), &code) {
                             p += self.army_power(&a, &tname) * fb;
                         }
                     }

@@ -276,7 +276,7 @@ pub fn eta(g: &Game, a: &Val, legs: &Val) -> Option<i64> {
     let (mut km, mut rail, mut x, mut y) = (0.0, 0.0, a.atf("x"), a.atf("y"));
     let mut on = a.getb("rail");
     for leg in legs.iter() {
-        if leg.at("kind") == "road" {
+        if leg.at_is("kind", "road") {
             let e = g.geo.edges.at(leg.at("e"));
             let k = e.atf("len") - leg.atf("pos");
             if leg.getb("rail") {
@@ -398,7 +398,7 @@ pub fn march_now(g: &mut Game, a: &Val, days: &Val) -> f64 {
     let mut left = if days.is_none() { mp0 } else { days.f() };
     let mut spent = 0.0;
     let t0 = g.t;
-    let hot = Val::dict_from(g.weather.items().into_iter().map(|(z, w)| (z, Val::from(w.at("kind") == "canicule"))).collect());
+    let hot = Val::dict_from(g.weather.items().into_iter().map(|(z, w)| (z, Val::from(w.at_is("kind", "canicule")))).collect());
     let mut trail: Vec<(Val, Val)> = vec![(a.at("x"), a.at("y"))];
     let mut fought = false;
     a.pop("took"); // (une place ralliée plus tôt ne compte que pour la marche où elle l'a été)
@@ -406,8 +406,8 @@ pub fn march_now(g: &mut Game, a: &Val, days: &Val) -> f64 {
         for _ in 0..py::int(40.0 / MARCH_STEP) {
             if left <= 1e-6
                 || !g.armies.has(&aid)
-                || !(a.at("state") == "move" || a.at("state") == "retreat")
-                || !a.at("path").truthy()
+                || !(a.at_is("state", "move") || a.at_is("state", "retreat"))
+                || !a.atb("path")
             {
                 break;
             }
@@ -429,7 +429,7 @@ pub fn march_now(g: &mut Game, a: &Val, days: &Val) -> f64 {
             TB::army_tick(g, a, used, &hot); // la marche fatigue les hommes comme pendant le tour des IA
             g.update_hidden();
             g.detect_contacts(&aid);
-            if g.armies.has(&aid) && (a.at("state") == "battle" || a.pop("took").truthy()) {
+            if g.armies.has(&aid) && (a.at_is("state", "battle") || a.pop("took").truthy()) {
                 fought = true; // attaquer, être arrêté au contact ou rallier une place termine la marche du tour
                 break;
             }
@@ -471,7 +471,7 @@ pub fn settle(g: &mut Game) -> Val {
     }
     AA::asking(g); // (choix devant une place devenus caducs : levés ; la place prise, l'armée reprend sa route)
     for a in g.armies.values() {
-        if a.at("owner") == g.player.as_str() && a.at("state") == "move" && a.at("path").truthy() && march_left(g, &a) > 1e-6 {
+        if a.at("owner") == g.player.as_str() && a.at_is("state", "move") && a.atb("path") && march_left(g, &a) > 1e-6 {
             if TB::frozen(g) {
                 break; // une bataille attend le joueur : les autres armées ne bougent pas avant qu'elle soit réglée
             }
@@ -482,8 +482,8 @@ pub fn settle(g: &mut Game) -> Val {
     resolve_autos(g);
     for a in g.armies.values() {
         if a.at("owner") == g.player.as_str()
-            && a.at("state") == "retreat"
-            && a.at("path").truthy()
+            && a.at_is("state", "retreat")
+            && a.atb("path")
             && !a.getb("rt")
             && !TB::frozen(g)
         {
@@ -657,7 +657,7 @@ pub fn watch(g: &mut Game, dt: f64, seq0: i64) {
     let best = cands.at(0);
     g.speed_idx = 0;
     let rest = cands.slice(Some(1), None);
-    let next: Val = rest.iter().filter(|c| c.at("kind") == "decision").map(|c| c.at("ev")).collect();
+    let next: Val = rest.iter().filter(|c| c.at_is("kind", "decision")).map(|c| c.at("ev")).collect();
     tr.set(
         "stop",
         dict! {"kind" => best.at("kind"), "text" => best.at("text"), "x" => best.get("x"), "y" => best.get("y"),
@@ -675,10 +675,10 @@ pub fn watch(g: &mut Game, dt: f64, seq0: i64) {
 // game/turns.py, lignes 460 à 475
 pub fn _settled(g: &Game) -> bool {
     let st = g.tour.at("stop");
-    if !st.truthy() || st.at("kind") == "fin" || (st.at("kind") == "decision" && !st.getb("ev")) {
+    if !st.truthy() || st.at_is("kind", "fin") || (st.at_is("kind", "decision") && !st.getb("ev")) {
         return false; // (partie chargée en plein tour des IA : on attend « Continuer »)
     }
-    if st.at("kind") == "decision" {
+    if st.at_is("kind", "decision") {
         if g.pending_ev.iter().any(|x| x.at("id") == st.at("ev")) {
             return false;
         }
@@ -850,7 +850,7 @@ pub fn incoming(g: &Game, p: &str) -> Val {
         }
         let path = a.at("path");
         for (k, leg) in path.iter().enumerate() {
-            let nd = if leg.at("kind") == "road" {
+            let nd = if leg.at_is("kind", "road") {
                 Some(leg.ati("to"))
             } else {
                 let (x, y) = leg.at("pts").at(-1).xy();

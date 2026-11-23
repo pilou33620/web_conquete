@@ -48,8 +48,8 @@ impl Game {
             let (x, y) = (a.atf("x"), a.atf("y"));
             let ter = self.geo.terrain_at(x, y);
             let cover = TERRAIN().at(ter).atb(2);
-            let fog = self.weather.at(self.zone_of(x, y)).at("kind") == "brouillard";
-            let has_art = a.at("regs").iter().any(|r| r.at("type") == "artillerie");
+            let fog = self.weather.at(self.zone_of(x, y)).at_is("kind", "brouillard");
+            let has_art = a.at("regs").iter().any(|r| r.at_is("type", "artillerie"));
             let stealth = self.mod_(&a.ats("owner"), "stealth", 0.0) > 0.0;
             let stance = a.at("stance");
             if cover && (stance == "embuscade" || !has_art || stealth) {
@@ -93,7 +93,7 @@ impl Game {
         }
         for a in self.armies.values() {
             if side.has(&a.at("owner")) {
-                let cav = if a.at("regs").iter().any(|rg| rg.at("type") == "cavalerie") { 8.0 } else { 0.0 };
+                let cav = if a.at("regs").iter().any(|rg| rg.at_is("type", "cavalerie")) { 8.0 } else { 0.0 };
                 let r = 15.0 + av + cav;
                 let (x, y) = (a.atf("x"), a.atf("y"));
                 srcs.push(tup![a.at("x"), a.at("y"), r * self.wx(x, y).atf("vision")]);
@@ -178,7 +178,7 @@ impl Game {
         let pos: Vec<(f64, f64)> = arr.iter().map(|a| (a.atf("x"), a.atf("y"))).collect();
         for i in 0..outer {
             let a = arr[i].clone();
-            if a.at("state") == "battle" {
+            if a.at_is("state", "battle") {
                 continue;
             }
             for j in i + 1..n {
@@ -189,7 +189,7 @@ impl Game {
                     continue;
                 }
                 let b = arr[j].clone();
-                if b.at("state") == "battle" || a.at("state") == "battle" {
+                if b.at_is("state", "battle") || a.at_is("state", "battle") {
                     continue;
                 }
                 debug_assert!(pos[i] == (a.atf("x"), a.atf("y")) && pos[j] == (b.atf("x"), b.atf("y")));
@@ -199,9 +199,9 @@ impl Game {
                 let mut amb: Option<(Val, Val)> = None;
                 for (x, y) in [(&a, &b), (&b, &a)] {
                     let ys = y.at("state");
-                    if x.at("stance") == "embuscade"
+                    if x.at_is("stance", "embuscade")
                         && x.atb("hidden")
-                        && x.at("state") == "idle"
+                        && x.at_is("state", "idle")
                         && (ys == "move" || ys == "retreat")
                         && !y.atb("hidden")
                     {
@@ -217,14 +217,14 @@ impl Game {
                     let (gx, gy) = (y.atf("x"), y.atf("y"));
                     self.start_battle(&list![x], &list![y], gx, gy, &Val::None, true, false);
                 } else if d2 <= CONTACT_KM * CONTACT_KM {
-                    if a.at("state") == "siege" && b.at("state") == "siege" {
+                    if a.at_is("state", "siege") && b.at_is("state", "siege") {
                         continue;
                     }
                     if self.behind_walls(&a, &b) || self.behind_walls(&b, &a) {
                         continue;
                     }
                     let surprise = a.atb("hidden") || b.atb("hidden");
-                    let (att, de) = if a.at("state") == "move" || a.atb("hidden") { (&a, &b) } else { (&b, &a) };
+                    let (att, de) = if a.at_is("state", "move") || a.atb("hidden") { (&a, &b) } else { (&b, &a) };
                     let (gx, gy) = ((a.atf("x") + b.atf("x")) / 2.0, (a.atf("y") + b.atf("y")) / 2.0);
                     let sur = surprise && att.atb("hidden");
                     self.start_battle(&list![att], &list![de], gx, gy, &Val::None, false, sur);
@@ -237,7 +237,7 @@ impl Game {
                 if only.is_some() && a.at("id") != *only {
                     continue;
                 }
-                if a.at("state") == "battle"
+                if a.at_is("state", "battle")
                     || !a.atb("regs")
                     || self.t < a.atf("grace")
                     || (a.getb("boat") && a.at("at_node").is_none())
@@ -363,7 +363,7 @@ impl Game {
             // (sans fenêtre de choix : ce n'est pas une arrivée en marche)
             a.set("state", "idle");
             self.arrive_node(&a, nid.i(), false);
-            if a.at("state") == "siege" || a.atb("battle") {
+            if a.at_is("state", "siege") || a.atb("battle") {
                 for bt in self.battles.values() {
                     if bt.at("node").is_some() {
                         battle_nodes.push(bt.at("node"));
@@ -386,7 +386,7 @@ impl Game {
             code_d = self.nodes.at(node).ats("owner");
             for a in self.armies.values() {
                 if a.at("at_node") == *node
-                    && a.at("state") == "idle"
+                    && a.at_is("state", "idle")
                     && a.at("owner") != code_a
                     && self.friendly(&a.ats("owner"), &code_d)
                     && !de.has(&a)
@@ -600,8 +600,8 @@ impl Game {
         let foe = self.side_units(bt, 1 - si);
         let regs: Vec<Val> = foe.iter().map(|u| u.at(1)).collect();
         let tot = somme_ou_1(regs.iter().map(|r| r.at("n")));
-        let cav = somme(regs.iter().filter(|r| r.at("type") == "cavalerie").map(|r| r.at("n"))) / tot;
-        let art = somme(regs.iter().filter(|r| r.at("type") == "artillerie").map(|r| r.at("n"))) / tot;
+        let cav = somme(regs.iter().filter(|r| r.at_is("type", "cavalerie")).map(|r| r.at("n"))) / tot;
+        let art = somme(regs.iter().filter(|r| r.at_is("type", "artillerie")).map(|r| r.at("n"))) / tot;
         (foe, cav, art)
     }
 
@@ -700,7 +700,7 @@ impl Game {
             bt.set("phase", phase);
             TB::auto_battle_tick(self, &bt, dt); // munitions consommées, fatigue
             let wxf = self.wx(bt.atf("x"), bt.atf("y")).atf("fire");
-            let brouillard = if self.weather.at(self.zone_of(bt.atf("x"), bt.atf("y"))).at("kind") == "brouillard" { R::BROUILLARD_EMBUS } else { 1.0 };
+            let brouillard = if self.weather.at(self.zone_of(bt.atf("x"), bt.atf("y"))).at_is("kind", "brouillard") { R::BROUILLARD_EMBUS } else { 1.0 };
             let sol = if phase == "charge" { self.sol_charge(&bt) } else { 1.0 }; // boue, neige : la charge s'y brise
             let terrain = bt.ats("terrain");
             let open_ground = R::OPEN_TERRAIN().has(&bt.at("terrain"));
@@ -809,7 +809,7 @@ impl Game {
                         rp *= 1.12;
                     }
                     if si == 1 {
-                        rp *= bt.atf("defbonus") * (if a.at("stance") == "retranche" { 1.2 } else { 1.0 });
+                        rp *= bt.atf("defbonus") * (if a.at_is("stance", "retranche") { 1.2 } else { 1.0 });
                     } else {
                         if bt.atf("river") >= 2.0 {
                             rp *= 0.85;
@@ -854,8 +854,8 @@ impl Game {
                             let ([ek, ep, em], vus) = self.effets_tech(&o, &r, si, &sit, Some(phase), Some(&ids[su]));
                             joue |= vus;
                             P[su][ci] += self.reg_power(&o, &r, &terrain, wxf, false, &Val::None) * fb * phw[ci] * stm[su][ci] * ck[su] * ek
-                                * (if r.at("type") == "grenadiers" { gren[su] } else { 1.0 })
-                                * (if r.at("type") == "garde" { R::GARDE_HOME } else { 1.0 });
+                                * (if r.at_is("type", "grenadiers") { gren[su] } else { 1.0 })
+                                * (if r.at_is("type", "garde") { R::GARDE_HOME } else { 1.0 });
                             men[su] += r.atf("n");
                             targets[su].push(tup![r.at("n"), r.at("type"), "ligne", protected, &r, Val::None, wall * pertes[su] * ep, em]);
                         }
@@ -1516,7 +1516,7 @@ impl Game {
         if !a.truthy() || a.at("owner") != code {
             return (false, "Armée introuvable.".to_string());
         }
-        if a.at("state") == "battle" {
+        if a.at_is("state", "battle") {
             let bt = self.battles.get(a.at("battle"));
             if bt.truthy() && bt.atb("ambush") && self.t - bt.atf("t0") < 0.3 {
                 return (false, "Prise en embuscade, l'armée ne peut pas encore se dégager !".to_string());
@@ -1545,7 +1545,7 @@ impl Game {
                 return (true, "Retraite ordonnée.".to_string());
             }
         }
-        if a.at("state") == "siege" {
+        if a.at_is("state", "siege") {
             self.end_siege_for(&a);
         }
         let here = a.at("at_node");
@@ -1553,7 +1553,7 @@ impl Game {
         if !self.armies.has(aid) {
             return (true, "L'armée, cernée, se débande.".to_string());
         }
-        if a.at("state") == "idle" && a.at("at_node") == here {
+        if a.at_is("state", "idle") && a.at("at_node") == here {
             return (false, "Aucune place amie libre où se replier : l'armée reste sur place.".to_string());
         }
         (true, "Retraite ordonnée.".to_string())

@@ -70,7 +70,7 @@ impl AI {
         }
         self.build_depot(g);
         if r.at("livres") > 900i64 {
-            let own: Vec<Val> = g.owned_nodes(&code).iter().filter(|n| !n.at("queue").truthy() && !n.at("siege").truthy()).collect();
+            let own: Vec<Val> = g.owned_nodes(&code).iter().filter(|n| !n.atb("queue") && !n.atb("siege")).collect();
             let own = py::sorted_by_key(own, |n| {
                 let gn = g.geo.nodes.at(n.at("id"));
                 (-VALUE().at(gn.at("type")).i(), -(gn.at("spec").len() as i64))
@@ -82,7 +82,7 @@ impl AI {
                 }
                 let nid = n.ati("id");
                 let gn = g.geo.nodes.at(nid);
-                if (gn.at("type") == "capitale" || gn.at("type") == "ville" || gn.at("spec").truthy())
+                if (gn.at_is("type", "capitale") || gn.at_is("type", "ville") || gn.atb("spec"))
                     && n.at("dev") < (if r.at("livres") > 3000i64 { 3i64 } else { 2 })
                 {
                     if g.build(&code, nid, &Val::from("dev")).0 {
@@ -90,7 +90,7 @@ impl AI {
                         continue;
                     }
                 }
-                if (self.threat_at(g, nid, 35.0, &Val::None, &Val::None) > 0.0 || gn.at("type") == "capitale")
+                if (self.threat_at(g, nid, 35.0, &Val::None, &Val::None) > 0.0 || gn.at_is("type", "capitale"))
                     && n.at("fort") < g.fort_max(&code, nid)
                 {
                     if g.build(&code, nid, &Val::from("fort")).0 {
@@ -110,7 +110,7 @@ impl AI {
         if !wars.truthy() || f.at("res").at("livres") < 600i64 || f.at("res").at("bois") < 80i64 {
             return;
         }
-        let own: Vec<Val> = g.owned_nodes(code).iter().filter(|n| !n.at("siege").truthy() && n.at("queue").len() < 3).collect();
+        let own: Vec<Val> = g.owned_nodes(code).iter().filter(|n| !n.atb("siege") && n.at("queue").len() < 3).collect();
         if own.is_empty() || own.iter().any(|n| self.threat_at(g, n.ati("id"), 60.0, &Val::None, &Val::None) > 0.0 && n.get("depot").truthy()) {
             return;
         }
@@ -120,7 +120,7 @@ impl AI {
             py::min_f(foes.iter().map(|p| py::dist(x, y, p.0, p.1))).expect("ValueError: min() arg is an empty sequence")
         })
         .unwrap();
-        if !front.get("depot").truthy() && !front.at("queue").iter().any(|q| q.at("what") == "depot") {
+        if !front.get("depot").truthy() && !front.at("queue").iter().any(|q| q.at_is("what", "depot")) {
             g.build(code, front.ati("id"), &Val::from("depot"));
         }
     }
@@ -241,7 +241,7 @@ impl AI {
         let pa = if fp > 1.0 { fp } else { 1.0 };
         for (o, of) in g.factions.items() {
             let o = o.s();
-            if o == code || !of.at("alive").truthy() || g.friendly(code, o) || of.at("overlord") == code {
+            if o == code || !of.atb("alive") || g.friendly(code, o) || of.at("overlord") == code {
                 continue;
             }
             if (f.at("rel").at(o) < -30i64 || g.faction_power(o) > 0.8 * pa) && D::borders(g, code, o) {
@@ -313,7 +313,7 @@ impl AI {
             spent += self.buy(g, "vivres", q, if g.theatre() { 2.0 } else { 1.3 });
         }
         if (self.menace || r.atf("livres") > FLOOD * res) && r.at("recrues") < 600i64 && budget - spent > 300.0 {
-            let regs: Vec<Val> = g.all_regs(code).iter().filter(|x| !R::UNITS().at(x.at("type")).at("garrison_only").truthy()).collect();
+            let regs: Vec<Val> = g.all_regs(code).iter().filter(|x| !R::UNITS().at(x.at("type")).atb("garrison_only")).collect();
             let short = py::sum_v(regs.iter().map(|x| &x.at("max") - &x.at("n"))).f();
             if short > 0.15 * py::sum_v(regs.iter().map(|x| x.at("max"))).f() {
                 let room = (g.recruit_cap(code) as f64) - r.atf("recrues");
@@ -363,9 +363,9 @@ impl AI {
             .iter()
             .filter(|n| {
                 n.get_or("deg", 0) >= 0.1
-                    && !n.at("siege").truthy()
+                    && !n.atb("siege")
                     && n.at("queue").len() < 3
-                    && !n.at("queue").iter().any(|q| q.at("kind") == "build" && q.at("what") == "repar")
+                    && !n.at("queue").iter().any(|q| q.at_is("kind", "build") && q.at_is("what", "repar"))
             })
             .collect();
         for n in py::sorted_by_key(cands, |n| -n.atf("deg")) {
@@ -399,13 +399,13 @@ impl AI {
         for n in g.owned_nodes(code).iter() {
             let nid = n.ati("id");
             let gn = g.geo.nodes.at(nid);
-            if gn.at("type") == "village" && !gn.at("spec").truthy() {
+            if gn.at_is("type", "village") && !gn.atb("spec") {
                 continue;
             }
             if n.at("dev") >= R::BUILD().at("dev").at("max")
-                || n.at("siege").truthy()
+                || n.atb("siege")
                 || n.at("queue").len() >= 2
-                || n.at("queue").iter().any(|q| q.at("kind") == "build" && q.at("what") == "dev")
+                || n.at("queue").iter().any(|q| q.at_is("kind", "build") && q.at_is("what", "dev"))
             {
                 continue;
             }
@@ -472,7 +472,7 @@ impl AI {
         for (o, of) in g.factions.items() {
             let o = o.s();
             if o != code
-                && of.at("alive").truthy()
+                && of.atb("alive")
                 && !g.friendly(&code, o)
                 && of.at("overlord") != code.as_str()
                 && f.at("overlord") != o
@@ -498,9 +498,9 @@ impl AI {
         for n in own.iter() {
             let nid = n.ati("id");
             let typ = g.geo.nodes.at(nid).ats("type");
-            if n.at("siege").truthy()
+            if n.atb("siege")
                 || n.at("queue").len() >= 2
-                || n.at("queue").iter().any(|q| q.at("kind") == "build" && q.at("what") == "fort")
+                || n.at("queue").iter().any(|q| q.at_is("kind", "build") && q.at_is("what", "fort"))
             {
                 continue;
             }
@@ -560,7 +560,7 @@ impl AI {
         let heg = g.hegemon();
         for (o, of) in g.factions.items() {
             let o = o.string();
-            if o == code || !of.at("alive").truthy() || g.status(&code, &o) != "paix" || Val::from(g.t) < self.cool.get_or(tup![&o, "cadeau"], 0) {
+            if o == code || !of.atb("alive") || g.status(&code, &o) != "paix" || Val::from(g.t) < self.cool.get_or(tup![&o, "cadeau"], 0) {
                 continue;
             }
             if of.at("rel").at(&code) >= 0i64 || !(g.faction_power(&o) > 1.2 * pa || heg == o) || !D::borders(g, &code, &o) {
@@ -631,7 +631,7 @@ impl AI {
     /// Python : `regs_total(self)`.
     // game/ai.py, lignes 639 à 641
     pub fn regs_total(&self, g: &Game) -> i64 {
-        g.all_regs(&self.code).iter().filter(|r| !R::UNITS().at(r.at("type")).at("garrison_only").truthy()).count() as i64
+        g.all_regs(&self.code).iter().filter(|r| !R::UNITS().at(r.at("type")).atb("garrison_only")).count() as i64
     }
 
     /// Python : `wars(self)`.
@@ -641,7 +641,7 @@ impl AI {
         g.factions
             .keys()
             .into_iter()
-            .filter(|o| *o != self.code.as_str() && g.at_war(&self.code, o.s()) && g.factions.at(o).at("alive").truthy())
+            .filter(|o| *o != self.code.as_str() && g.at_war(&self.code, o.s()) && g.factions.at(o).atb("alive"))
             .collect()
     }
 
@@ -716,7 +716,7 @@ impl AI {
             .iter()
             .filter(|n| {
                 let t = g.geo.nodes.at(n.at("id")).at("type");
-                (t == "capitale" || t == "ville") && !n.at("siege").truthy() && n.at("queue").len() < 2
+                (t == "capitale" || t == "ville") && !n.atb("siege") && n.at("queue").len() < 2
             })
             .collect();
         let vt = Val::from(&typ);
@@ -743,12 +743,12 @@ impl AI {
         if f.at("res").at("livres") < 250i64 || !self.wars(g).truthy() {
             return;
         }
-        let gardes = g.all_regs(code).iter().filter(|r| r.at("type") == "garde").count();
+        let gardes = g.all_regs(code).iter().filter(|r| r.at_is("type", "garde")).count();
         if gardes >= 3.max(g.owned_nodes(code).len() / 5) {
             return;
         }
         for n in g.owned_nodes(code).iter() {
-            if n.at("siege").truthy() || n.at("queue").truthy() || n.at("garrison").iter().filter(|r| r.at("type") == "garde").count() >= 2 {
+            if n.atb("siege") || n.atb("queue") || n.at("garrison").iter().filter(|r| r.at_is("type", "garde")).count() >= 2 {
                 continue;
             }
             let nid = n.ati("id");
@@ -769,7 +769,7 @@ impl AI {
     // game/ai.py, lignes 712 à 715
     pub fn foes(&self, g: &Game) -> Val {
         let code = self.code.as_str();
-        g.armies.values().into_iter().filter(|a| !a.at("hidden").truthy() && g.at_war(code, a.at("owner").s())).collect()
+        g.armies.values().into_iter().filter(|a| !a.atb("hidden") && g.at_war(code, a.at("owner").s())).collect()
     }
 
     /// Puissance des armées ennemies à moins de radius km de la place. foes : self.foes() déjà relevé, et power :
@@ -800,7 +800,7 @@ impl AI {
         for a in g.armies.values() {
             // la distance d'abord (appelée pour chaque place à chaque réflexion : l'état de guerre coûte plus cher)
             let (dx, dy) = (a.atf("x") - x, a.atf("y") - y);
-            if a.at("hidden").truthy()
+            if a.atb("hidden")
                 || py::loin(dx, dy, r2)
                 || !(py::pow(dx, 2.0) + py::pow(dy, 2.0) < r2)
                 || !g.at_war(code, a.at("owner").s())
@@ -821,14 +821,14 @@ impl AI {
         let code = self.code.clone();
         // 1) former des armées avec les garnisons
         for n in g.owned_nodes(&code).iter() {
-            if !n.at("garrison").truthy() || n.at("siege").truthy() {
+            if !n.atb("garrison") || n.atb("siege") {
                 continue;
             }
             let nid = n.ati("id");
             let gn = g.geo.nodes.at(nid);
             let threat = self.threat_at(g, nid, 35.0, &Val::None, &Val::None);
             let at_war = self.wars(g).truthy();
-            let keep = if gn.at("type") == "capitale" {
+            let keep = if gn.at_is("type", "capitale") {
                 if threat > 0.0 || at_war { 3 } else { 2 }
             } else if threat > 0.0 {
                 1
@@ -845,7 +845,7 @@ impl AI {
                 .armies
                 .values()
                 .into_iter()
-                .filter(|a| a.at("owner") == code && a.at("at_node") == nid && a.at("state") == "idle")
+                .filter(|a| a.at("owner") == code && a.at("at_node") == nid && a.at_is("state", "idle"))
                 .collect();
             if !here.is_empty() {
                 g.form_army(&code, nid, &ids, &here[0].at("id"));
@@ -855,7 +855,7 @@ impl AI {
         }
         // 2) regrouper les armées au repos côte à côte
         let idle: Vec<Val> =
-            g.armies.values().into_iter().filter(|a| a.at("owner") == code && a.at("state") == "idle" && a.at("stance") != "embuscade").collect();
+            g.armies.values().into_iter().filter(|a| a.at("owner") == code && a.at_is("state", "idle") && a.at("stance") != "embuscade").collect();
         for (i, a) in idle.iter().enumerate() {
             if !g.armies.has(a.at("id")) {
                 continue;
@@ -870,7 +870,7 @@ impl AI {
         let mine: Vec<Val> = g.armies.values().into_iter().filter(|a| a.at("owner") == code).collect();
         let taken = dict! {};
         for a in &mine {
-            if a.at("target").truthy() && a.at("state") == "move" && a.at("target").get("node").is_some() {
+            if a.atb("target") && a.at_is("state", "move") && a.at("target").get("node").is_some() {
                 let nd = a.at("target").at("node");
                 taken.set(&nd, &taken.get_or(&nd, 0) + 1);
             }
@@ -899,7 +899,7 @@ impl AI {
     // game/ai.py, lignes 782 à 876
     pub fn army_think(&mut self, g: &mut Game, a: &Val, taken: &Val) {
         let code = self.code.clone();
-        if a.at("state") == "battle" {
+        if a.at_is("state", "battle") {
             let bt = g.battles.get(a.at("battle"));
             if bt.truthy() {
                 let si = if bt.at("sides").at(0).at("armies").has(a.at("id")) { 0 } else { 1 };
@@ -911,7 +911,7 @@ impl AI {
             }
             return;
         }
-        if a.at("state") == "siege" {
+        if a.at_is("state", "siege") {
             let nid = a.at("at_node");
             if nid.is_none() {
                 return;
@@ -920,7 +920,7 @@ impl AI {
             let n = g.nodes.at(nid);
             let dp = g.node_defense_power(nid, true);
             let ratio = g.army_power(a, "Plaine") / if dp > 1.0 { dp } else { 1.0 };
-            let _has_art = a.at("regs").iter().any(|r| r.at("type") == "artillerie");
+            let _has_art = a.at("regs").iter().any(|r| r.at_is("type", "artillerie"));
             let s = n.at("siege");
             let dur = g.t - if s.truthy() { s.atf("since") } else { g.t };
             let dmg = if s.truthy() { s.atf("dmg") } else { 0.0 };
@@ -935,10 +935,10 @@ impl AI {
             }
             return;
         }
-        if a.at("state") == "move" || a.at("state") == "retreat" {
+        if a.at_is("state", "move") || a.at_is("state", "retreat") {
             let tgt = a.at("target").or(dict! {});
             let nid = tgt.get("node");
-            if nid.is_some() && a.at("state") == "move" {
+            if nid.is_some() && a.at_is("state", "move") {
                 let o = g.nodes.at(&nid).ats("owner");
                 if o != code && o != R::NEUTRAL && !g.at_war(&code, &o) && !g.friendly(&code, &o) {
                     a.set("path", list![]);
@@ -949,7 +949,7 @@ impl AI {
         }
         // au repos
         let ai = a.at("ai").or(dict! {});
-        if a.at("stance") == "embuscade" {
+        if a.at_is("stance", "embuscade") {
             if Val::from(g.t) < ai.get_or("until", 0) && self.wars(g).truthy() {
                 return;
             }
@@ -1015,11 +1015,11 @@ impl AI {
             return;
         }
         // embuscade
-        let n_legere = a.at("regs").iter().filter(|r| r.at("type") == "legere").count();
+        let n_legere = a.at("regs").iter().filter(|r| r.at_is("type", "legere")).count();
         let amb_chance = 0.12 + (if code == "40" { 0.25 } else { 0.0 }) + 0.08 * n_legere as f64;
         if wars.truthy()
             && self.rng.random() < amb_chance
-            && !a.at("regs").iter().any(|r| R::UNITS().at(r.at("type")).at("cls") == "artillerie")
+            && !a.at("regs").iter().any(|r| R::UNITS().at(r.at("type")).at_is("cls", "artillerie"))
         {
             if self.try_ambush(g, a, &wars) {
                 return;
@@ -1053,7 +1053,7 @@ impl AI {
     pub fn rally_node(&self, g: &Game) -> Val {
         let code = self.code.as_str();
         let wars = self.wars(g);
-        let own: Vec<i64> = g.owned_nodes(code).iter().filter(|n| !n.at("siege").truthy()).map(|n| n.ati("id")).collect();
+        let own: Vec<i64> = g.owned_nodes(code).iter().filter(|n| !n.atb("siege")).map(|n| n.ati("id")).collect();
         if own.is_empty() {
             return Val::None;
         }
@@ -1098,7 +1098,7 @@ impl AI {
         let mut best: Option<(f64, i64)> = None;
         for n in g.owned_nodes(&self.code).iter() {
             let gn = g.geo.nodes.at(n.at("id"));
-            if !(gn.at("type") == "capitale" || gn.at("type") == "ville") || n.at("siege").truthy() {
+            if !(gn.at_is("type", "capitale") || gn.at_is("type", "ville")) || n.atb("siege") {
                 continue;
             }
             let d = py::hypot(gn.atf("x") - a.atf("x"), gn.atf("y") - a.atf("y"));
@@ -1146,10 +1146,10 @@ impl AI {
             let postes = postes.get_or_insert_with(|| g.armies_au_repos());
             let dfn = g.node_defense_power_avec(nid, true, Some(postes));
             let mut need = dfn * (if o == R::NEUTRAL { 1.25 } else { 1.3 });
-            if n.at("fort") >= 1i64 && a.at("regs").iter().any(|r| r.at("type") == "artillerie") {
+            if n.at("fort") >= 1i64 && a.at("regs").iter().any(|r| r.at_is("type", "artillerie")) {
                 need /= 1.0 + 0.25 * n.atf("fort");
             }
-            if n.at("siege").truthy() && n.at("siege").at("by") == code.as_str() {
+            if n.atb("siege") && n.at("siege").at("by") == code.as_str() {
                 need *= 0.5;
             }
             if p_army < need {
@@ -1166,7 +1166,7 @@ impl AI {
                 }
             } else {
                 val *= 1.3;
-                if gn.at("type") == "capitale" {
+                if gn.at_is("type", "capitale") {
                     val *= 1.8;
                 }
             }
@@ -1278,10 +1278,10 @@ impl AI {
             let starts = pyset![comp.at(a.at("at_node"))];
             return (comp, starts);
         }
-        if a.at("edge").truthy() && a.get("boat").truthy() && g.geo.edges.at(a.at("edge").at("e")).get("kind") == "water" {
+        if a.atb("edge") && a.get("boat").truthy() && g.geo.edges.at(a.at("edge").at("e")).get("kind") == "water" {
             return (Val::None, Val::None); // à flot : l'eau est libre, engine.plan_route en décidera
         }
-        if a.at("edge").truthy() {
+        if a.atb("edge") {
             // sur une route ou un fleuve : on repart par un bout ouvert ; un bout fermé ne sert que pour sortir des
             // terres où l'on se trouve (cas non filtré) ; sans aucun bout praticable, tout ordre serait refusé
             let e = g.geo.edges.at(a.at("edge").at("e"));
@@ -1370,7 +1370,7 @@ impl AI {
         let heg = g.hegemon();
         for (o, of) in g.factions.items() {
             let o = o.string();
-            if o == code || !of.at("alive").truthy() {
+            if o == code || !of.atb("alive") {
                 continue;
             }
             let rel = f.at("rel").at(&o);
@@ -1414,7 +1414,7 @@ impl AI {
                 let x = f.at("res").atf("livres") * 0.1;
                 self.propose(g, &o, "mariage", py::int(if 150.0 < x { 150.0 } else { x }), &Val::None, &Val::None);
             }
-            if f.at("overlord").truthy() {
+            if f.atb("overlord") {
                 continue;
             }
             let fo = g.faction_power(&o);

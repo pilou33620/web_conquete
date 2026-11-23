@@ -42,7 +42,7 @@ impl Game {
         if nd.is_some() {
             let n = self.nodes.at(&nd);
             if n.at("fort") >= 1i64 {
-                return if self.geo.nodes.at(&nd).at("type") == "fort" { "fort" } else { "ville" };
+                return if self.geo.nodes.at(&nd).at_is("type", "fort") { "fort" } else { "ville" };
             }
             if AA::works_level(&n) > 0.0 {
                 return "position";
@@ -303,7 +303,7 @@ impl Game {
             if bt.at("sides").at(si).at("armies").iter().any(|aid| self.gen_trait(&self.armies.get(&aid)) == "eclaireur") {
                 p += R::RECO_ECLAIREUR;
             }
-            if self.weather.at(self.zone_of(bt.atf("x"), bt.atf("y"))).at("kind") == "brouillard" {
+            if self.weather.at(self.zone_of(bt.atf("x"), bt.atf("y"))).at_is("kind", "brouillard") {
                 p -= R::RECO_BROUILLARD;
             }
         }
@@ -368,10 +368,10 @@ impl Game {
             note(Val::None, format!("{} : feu {}", wx.at("label"), pct(wx.atf("fire"))));
         }
         if self.sol_charge(bt) < 1.0 {
-            let quoi = if w.at("kind") == "neige" { "Neige" } else { "Boue" };
+            let quoi = if w.at_is("kind", "neige") { "Neige" } else { "Boue" };
             note(Val::None, format!("{quoi} : charge de cavalerie {}", pct(self.sol_charge(bt))));
         }
-        if w.at("kind") == "brouillard" {
+        if w.at_is("kind", "brouillard") {
             note(Val::None, "Brouillard : embuscades favorisées, reconnaissance gênée".to_string());
         }
         out
@@ -381,7 +381,7 @@ impl Game {
     /// la pluie, neige.
     pub fn sol_charge(&self, bt: &Val) -> f64 {
         let w = self.weather.at(self.zone_of(bt.atf("x"), bt.atf("y")));
-        if w.at("kind") == "neige" {
+        if w.at_is("kind", "neige") {
             R::NEIGE_CHARGE
         } else if w.getb("mud") || R::MUD_WET().has(w.at("kind")) {
             R::BOUE_CHARGE
@@ -608,7 +608,7 @@ impl Game {
                 continue;
             }
             let nid = a.at("at_node");
-            if nid.is_some() && self.nodes.at(&nid).at("siege").truthy() {
+            if nid.is_some() && self.nodes.at(&nid).atb("siege") {
                 continue;
             }
             for si in 0..2i64 {
@@ -676,7 +676,7 @@ impl Game {
             }
             (x, y) = (b.atf("x"), b.atf("y"));
             let tt = TERRAIN().at(self.geo.terrain_at(x, y));
-            let retranche = b.at("stance") == "retranche";
+            let retranche = b.at_is("stance", "retranche");
             sit = if retranche { "position" } else { "campagne" };
             theirs = self.army_power_bataille(&b, tt.at(0).s(), 1, sit) * tt.atf(3) * (if retranche { 1.2 } else { 1.0 });
             lui = dict! {"men" => py::round(self.army_men(&b)), "armes" => Game::armes_de(&b.at("regs"))};
@@ -694,7 +694,7 @@ impl Game {
             armes.inc("inf", py::round(n.atf("milice")));
             let mut men = n.atf("milice") + py::sum(n.at("garrison").iter().map(|r| r.atf("n")));
             for d in self.armies.values() {
-                if d.at("at_node") == nid && d.at("state") == "idle" && self.friendly(&d.ats("owner"), &o) {
+                if d.at("at_node") == nid && d.at_is("state", "idle") && self.friendly(&d.ats("owner"), &o) {
                     men += self.army_men(&d);
                     for (k, v) in Game::armes_de(&d.at("regs")).items() {
                         armes.inc(k.s(), v);

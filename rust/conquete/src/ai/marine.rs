@@ -82,7 +82,7 @@ fn construire(g: &mut Game, ai: &AI, code: &str, ports: &[(i64, i64)], mes: &[Va
     }
     let en_chantier: i64 = ports
         .iter()
-        .map(|(nid, _)| g.nodes.at(*nid).at("queue").iter().filter(|q| q.at("kind") == "navire").count() as i64)
+        .map(|(nid, _)| g.nodes.at(*nid).at("queue").iter().filter(|q| q.at_is("kind", "navire")).count() as i64)
         .sum();
     let n = mes.iter().map(de_guerre).sum::<i64>() + en_chantier;
     let voulu = (2 + ports.len() as i64 / 5 + guerre as i64).min(6);

@@ -1541,7 +1541,7 @@ impl GeoMap {
                 0.35,
                 1,
             );
-            if r.at("name") == "Adour" {
+            if r.at_is("name", "Adour") {
                 raster_line(W, H, &pts, &mut |c| adour.push(c), 0.35, 1);
             }
         }
@@ -1926,8 +1926,8 @@ impl GeoMap {
             self._ensure_connected(&mut pairs, &P);
             for code in &self.dept_codes {
                 let du_pays: Vec<Val> = self.nodes.iter().filter(|n| n.at("dept") == code.as_str()).collect();
-                let Some(cap) = du_pays.iter().find(|n| n.at("type") == "capitale").map(|n| n.at("id").u()) else { continue };
-                let villes = py::sorted_by_key(du_pays.iter().filter(|n| n.at("type") == "ville").collect::<Vec<_>>(), |n| (-n.at("pop0").i(), n.at("id").i()));
+                let Some(cap) = du_pays.iter().find(|n| n.at_is("type", "capitale")).map(|n| n.at("id").u()) else { continue };
+                let villes = py::sorted_by_key(du_pays.iter().filter(|n| n.at_is("type", "ville")).collect::<Vec<_>>(), |n| (-n.at("pop0").i(), n.at("id").i()));
                 for v in villes.into_iter().take(ROYALES_5) {
                     for k in GeoMap::_chemin(&pairs, &P, cap, v.at("id").u()) {
                         pairs[&k].royal = true;

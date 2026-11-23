@@ -60,7 +60,7 @@ impl Game {
     pub fn strikes(&mut self, code: &str, mine: &Val) {
         for n in mine.iter() {
             let gn = self.geo.nodes.at(n.at("id"));
-            if (gn.at("type") == "ville" || gn.at("type") == "capitale") && n.atf("stab") < R::STRIKE_STAB {
+            if (gn.at_is("type", "ville") || gn.at_is("type", "capitale")) && n.atf("stab") < R::STRIKE_STAB {
                 let until = TT::deadline(self, 1, &[code]);
                 n.setdefault("tm", list![]).push(dict! {"k" => "industrie", "v" => -1.0, "until" => until});
                 self._dirty_income = true;
@@ -79,7 +79,7 @@ impl Game {
     /// et une grande ville produit plus qu'un bourg tatar, selon la racine de sa population, de 0,4 à 2,5 fois une ville
     /// de 25 000 habitants (base et spécialités, port et vignoble). None ailleurs (villages, cartes de France).
     pub fn taille_pays(&self, gn: &Val) -> Option<f64> {
-        (self.theatre() && (gn.at("type") == "ville" || gn.at("type") == "capitale")).then(|| (gn.atf("pop0") / 25000.0).sqrt().clamp(0.4, 2.5))
+        (self.theatre() && (gn.at_is("type", "ville") || gn.at_is("type", "capitale"))).then(|| (gn.atf("pop0") / 25000.0).sqrt().clamp(0.4, 2.5))
     }
 
     /// Python : `node_output(self, n, code)`.
@@ -117,7 +117,7 @@ impl Game {
             let sp = R::SPECIALTY().at(star.at(0));
             let boost = sp.get("boost");
             let a = if boost.truthy() { Val::from(1.0 + self.mod_(code, boost.s(), 0.0)) } else { Val::from(1) };
-            let k = &a * &(if gn.at("type") == "capitale" { Val::from(R::SPECIALTY_CAPITAL) } else { Val::from(1) });
+            let k = &a * &(if gn.at_is("type", "capitale") { Val::from(R::SPECIALTY_CAPITAL) } else { Val::from(1) });
             for r in ["livres", "vivres", "recrues", "industrie", "fer", "bois"] {
                 if sp.has(r) {
                     out.set(r, &out.at(r) + &(&sp.at(r) * &k));
@@ -132,7 +132,7 @@ impl Game {
             trade += R::QUAI_LIVRES;
         }
         let trade = CT::node_extra(self, n, code, &out, trade); // bâtiments, politique, événements de la ville
-        if gn.at("type") == "ville" || gn.at("type") == "capitale" {
+        if gn.at_is("type", "ville") || gn.at_is("type", "capitale") {
             out.scale("livres", 1.0 + self.mod_(code, "city_livres", 0.0)); // éclairage au gaz : les villes travaillent le soir
         }
         let rb = RL::town_bonus(self, nid); // voies ferrées ouvertes : industrie et commerce
@@ -551,7 +551,7 @@ impl Game {
                 let mut t = tgt0;
                 t -= 0.2 * (1.0 - self.assim(&n)) + weary;
                 let friends = held.get(&n.ati("id")).is_some_and(|s| s.iter().any(|o| self.friendly(&code, o.s())));
-                if n.atb("garrison") || friends || self.geo.nodes.at(n.at("id")).at("type") == "capitale" {
+                if n.atb("garrison") || friends || self.geo.nodes.at(n.at("id")).at_is("type", "capitale") {
                     t += 0.15;
                 }
                 t += AA::stab_bonus(self, &n);
@@ -998,7 +998,7 @@ impl Game {
         }
         let what = what.s();
         let lvl = if what == "fort" { n.ati("fort") } else { n.ati("dev") };
-        let pending = n.at("queue").iter().filter(|q| q.at("kind") == "build" && q.at("what") == what).count() as i64;
+        let pending = n.at("queue").iter().filter(|q| q.at_is("kind", "build") && q.at("what") == what).count() as i64;
         let top = if what == "fort" { self.fort_max(code, nid) } else { b.ati("max") };
         if lvl + pending >= top {
             if what == "fort" && top < R::BASTION_LEVEL && R::BASTION_TYPES().has(gn.at("type")) {
@@ -1067,7 +1067,7 @@ impl Game {
         if n.atb("siege") {
             return (false, "On ne rebâtit pas une ville assiégée.".to_string());
         }
-        if n.at("queue").iter().any(|x| x.at("kind") == "build" && x.at("what") == "repar") {
+        if n.at("queue").iter().any(|x| x.at_is("kind", "build") && x.at_is("what", "repar")) {
             return (false, "Les réparations sont déjà en chantier.".to_string());
         }
         if n.at("queue").len() >= 4 {
@@ -1103,7 +1103,7 @@ impl Game {
                 n.at("queue").pop(0);
                 let gn = self.geo.nodes.at(n.at("id"));
                 let (gx, gy) = (gn.at("x"), gn.at("y"));
-                if q.at("kind") == "unit" {
+                if q.at_is("kind", "unit") {
                     let owner = n.ats("owner");
                     let what = q.ats("what");
                     let reg = self.new_reg(&what, &Val::None, &Val::from(&owner));
@@ -1115,9 +1115,9 @@ impl Game {
                         let t = format!("Régiment levé à {} : {}.", gn.at("name"), self.unit_name(&owner, &what).0.to_lowercase());
                         self.log("armee", &t, &dict! {"x" => &gx, "y" => &gy});
                     }
-                } else if q.at("kind") == "slot" {
+                } else if q.at_is("kind", "slot") {
                     CT::finish(self, &n, &q); // bâtiment d'emplacement
-                } else if q.at("kind") == "navire" {
+                } else if q.at_is("kind", "navire") {
                     super::marine::lancer(self, &n, &q); // navire (SPEC-EMPIRE, module 2)
                 } else {
                     let what = q.ats("what");

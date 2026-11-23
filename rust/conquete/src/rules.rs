@@ -516,7 +516,7 @@ py_const!(MILITAIRE_INF, pyset!["baionnette", "fusil1777", "percussion", "minie"
                  "etat_major", "service_mil", "rail_militaire"]);
 fn TECH_branches(TECH: &Val) {
     for _t in TECH.values() {
-        if _t.at("branch") == "militaire" {
+        if _t.at_is("branch", "militaire") {
             _t.set("branch", if MILITAIRE_INF().has(_t.at("id")) { "infanterie" } else { "artillerie" });
         }
     }
@@ -1041,7 +1041,7 @@ pub fn pop_curve(gn: &Val) -> Val {
     if est_pays(&gn.at("dept")) {
         // (un théâtre : jamais les tables de la France, même pour Bordeaux ou Paris)
         let cv = EPOQUES().get(format!("{}|{}", gn.at("name").s(), gn.at("dept").s()).as_str());
-        return cv.or_else(|| POP_PAYS().at(if gn.at("type") == "village" { "rural" } else { "ville" }));
+        return cv.or_else(|| POP_PAYS().at(if gn.at_is("type", "village") { "rural" } else { "ville" }));
     }
     let mut key = POP_PLACE().get(format!("{}|{}", gn.at("name").s(), gn.at("dept").s()).as_str());
     if key.is_none() {

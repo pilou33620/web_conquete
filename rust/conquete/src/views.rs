@@ -583,7 +583,7 @@ pub fn _reg(r: &Val, trait_: &Val, swift: f64, mods: &Val, lag: i64) -> Val {
 pub fn _legs(a: &Val) -> Val {
     let out = list![];
     for leg in a.at("path").iter() {
-        if leg.at("kind") == "road" {
+        if leg.at_is("kind", "road") {
             let d = dict! {"e" => leg.at("e"), "frm" => leg.at("frm"), "to" => leg.at("to"), "pos" => _round_v(&leg.at("pos"), 2)};
             if leg.getb("rail") {
                 d.set("r", 1);
@@ -662,7 +662,7 @@ pub const LB_DAYS: i64 = 40; // la dernière bataille d'un camp (fêtes, deuil d
 /// `CHOLERA_T` : l'ordinal de la date de l'événement 'cholera' de EV::HIST() (calculé une fois par fil).
 pub fn CHOLERA_T() -> i64 {
     thread_local! { static T: i64 = {
-        let e = EV::HIST().iter().find(|e| e.at("id") == "cholera").expect("StopIteration: pas d'événement 'cholera' dans EV::HIST()");
+        let e = EV::HIST().iter().find(|e| e.at_is("id", "cholera")).expect("StopIteration: pas d'événement 'cholera' dans EV::HIST()");
         Date::de(&e.at("date")).toordinal()
     }; }
     T.with(|t| *t)
@@ -791,7 +791,7 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
         }
         if n.getb("lev") && g.t - n.get_or("evt", -1e9).f() < LEV_DAYS as f64 {
             d.set("lv", list![n.at("lev"), py::round(g.t - n.atf("evt"))]); // événement local récent et son âge en jours
-        } else if cholera.is_some() && (gn.at("type") == "ville" || gn.at("type") == "capitale") {
+        } else if cholera.is_some() && (gn.at_is("type", "ville") || gn.at_is("type", "capitale")) {
             d.set("lv", list!["epidemie", cholera]); // le choléra de 1832 frappe toutes les villes : la carte le montre comme une épidémie
         }
         let (gx, gy) = (gn.atf("x"), gn.atf("y"));
@@ -835,7 +835,7 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
             d.set("sp", py::round_n(g.army_speed(&a), 1));
             if g.tour.atb("on") {
                 d.set("mp", py::round_n(TT::march_left(g, &a), 1)); // jours de marche qui restent ce tour
-                if a.at("path").truthy() && a.at("state") == "move" {
+                if a.atb("path") && a.at_is("state", "move") {
                     d.set("eta", TT::eta(g, &a, &Val::None)); // arrivée dans tant de tours (estimation)
                 }
                 if a.getb("trail") {
@@ -1125,7 +1125,7 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
 pub fn _popy(g: &Game, p: &str) -> Val {
     let mine = g.owned_nodes(p);
     let towns: Val = mine.iter().filter(|n| g.geo.nodes.at(n.at("id")).at("type") != "village").collect();
-    let fields: Val = mine.iter().filter(|n| g.geo.nodes.at(n.at("id")).at("type") == "village").collect();
+    let fields: Val = mine.iter().filter(|n| g.geo.nodes.at(n.at("id")).at_is("type", "village")).collect();
     let rnd = |v: (f64, f64)| list![py::int(py::round_n(v.0, -1)), py::int(py::round_n(v.1, -1))];
     let months = mine.iter().map(|n| {
         let ph = n.get("ph");

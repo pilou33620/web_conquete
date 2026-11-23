@@ -91,7 +91,7 @@ pub fn war_refusal(game: &Game, a: &str, b: &str) -> Option<String> {
         return Some("Déjà en guerre.".to_string());
     }
     let fa = game.factions.at(a);
-    if fa.at("overlord").truthy() {
+    if fa.atb("overlord") {
         return Some("Un vassal ne déclare pas la guerre seul.".to_string());
     }
     if game.factions.at(b).at("overlord") == a {
@@ -202,7 +202,7 @@ pub fn make_peace(game: &mut Game, a: &str, b: &str) {
     }
     for ar in game.armies.values() {
         if ar.at("owner") == a || ar.at("owner") == b {
-            if ar.at("state") == "siege" && ar.at("at_node").is_some() && game.nodes.at(ar.at("at_node")).at("siege").is_none() {
+            if ar.at_is("state", "siege") && ar.at("at_node").is_some() && game.nodes.at(ar.at("at_node")).at("siege").is_none() {
                 ar.set("state", "idle");
             }
             let tgt = ar.get("target").or(dict! {}).get("node");
@@ -210,7 +210,7 @@ pub fn make_peace(game: &mut Game, a: &str, b: &str) {
                 let to = game.nodes.at(&tgt).at("owner");
                 if (to == a || to == b) && to != ar.at("owner") {
                     ar.set("path", list![]); // la marche contre l'ancien ennemi s'arrête
-                    if ar.at("state") == "move" {
+                    if ar.at_is("state", "move") {
                         ar.set("state", "idle");
                     }
                 }
@@ -712,7 +712,7 @@ pub fn answer(game: &mut Game, pid: &Val, accept: bool) -> (bool, String) {
     let ff = game.factions.at(&frm).at("res");
     let action = p.ats("action");
     let give_l = if action == "echange" && p.at("give").at(0) == "livres" { p.at("give").at(1) } else { Val::from(0) };
-    if p.at("amount").truthy() && ff.at("livres") < &p.at("amount") + &give_l {
+    if p.atb("amount") && ff.at("livres") < &p.at("amount") + &give_l {
         return (false, format!("{} n'a plus de quoi payer le tribut promis.", game.fname(&frm)));
     }
     if action == "echange" {

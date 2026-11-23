@@ -103,10 +103,10 @@ pub fn ranges(reg: &Val) -> (i64, i64, Val) {
 /// Python (units.py, l. 99-105) : `def d50(u)`
 /// u : unité (lit type, cls, arm).
 pub fn d50(u: &Val) -> i64 {
-    if u.at("type") == "mitrailleuses" {
+    if u.at_is("type", "mitrailleuses") {
         return MIT_D50;
     }
-    if u.at("cls") == "inf" {
+    if u.at_is("cls", "inf") {
         return INF_D50[0.max(u.ati("arm").min(INF_D50.len() as i64 - 1)) as usize];
     }
     CAV_D50
@@ -124,11 +124,11 @@ pub fn precision(u: &Val, d: f64) -> f64 {
 /// u : unité (lit type, cls, arm, xp, fat ; la fiche l'appelle sur un dict presque nu). Secondes de bataille.
 pub fn reload_time(u: &Val) -> f64 {
     let arm = || u.ati("arm");
-    let base = if u.at("type") == "mitrailleuses" {
+    let base = if u.at_is("type", "mitrailleuses") {
         MIT_RELOAD
-    } else if u.at("cls") == "artillerie" {
+    } else if u.at_is("cls", "artillerie") {
         ART_RELOAD[0.max(arm().min(ART_RELOAD.len() as i64 - 1)) as usize]
-    } else if u.at("cls") == "inf" {
+    } else if u.at_is("cls", "inf") {
         INF_RELOAD[0.max(arm().min(INF_RELOAD.len() as i64 - 1)) as usize]
     } else {
         CAV_RELOAD
