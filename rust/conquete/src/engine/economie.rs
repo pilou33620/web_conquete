@@ -321,6 +321,8 @@ impl Game {
             tot.dec("livres", &up_f);
             let up_b = CT::upkeep(self, code); // bâtiments d'emplacement
             tot.dec("livres", up_b);
+            let up_n = super::marine::entretien(self, code); // navires (SPEC-EMPIRE, module 2)
+            tot.dec("livres", up_n);
             let up_p = py::sum_v(f.get_or("prisoners", dict! {}).values()).f() * R::PRISONER_FOOD;
             tot.dec("vivres", up_p);
             let up_d = if f.atb("douaniers") { front.get_or(code, tup![]).len() as f64 * R::DOUANIERS_L } else { 0.0 };
@@ -364,6 +366,9 @@ impl Game {
                 dict! {"vivres" => up_v * k_up, "livres" => up_l * k_up, "forts" => &up_f, "prisoners" => up_p, "batiments" => up_b},
             );
             f.at("_upkeep").set("douaniers", up_d);
+            if up_n > 0.0 {
+                f.at("_upkeep").set("navires", up_n); // (SPEC-EMPIRE, module 2)
+            }
             f.set("_trade", trade_s.copy());
             let tr = f.at("_trade");
             tr.set("livres", &tr.get_or("livres", 0) + trade_l);
@@ -1112,6 +1117,8 @@ impl Game {
                     }
                 } else if q.at("kind") == "slot" {
                     CT::finish(self, &n, &q); // bâtiment d'emplacement
+                } else if q.at("kind") == "navire" {
+                    super::marine::lancer(self, &n, &q); // navire (SPEC-EMPIRE, module 2)
                 } else {
                     let what = q.ats("what");
                     if what == "fort" {

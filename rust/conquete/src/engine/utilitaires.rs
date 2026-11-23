@@ -919,6 +919,7 @@ impl Game {
         self.economy(dt);
         self.update_queues(dt);
         self.move_armies(dt);
+        super::marine::tick(self, dt); // les flottes (SPEC-EMPIRE, module 2)
         self.land_check(dt);
         self.river_fire(dt);
         self.update_spies();

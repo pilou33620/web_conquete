@@ -879,6 +879,9 @@ impl Game {
                     a.set("edge", dict! {"e" => e.at("id"), "frm" => leg.at("frm"), "pos" => leg.at("pos")});
                     a.set("onroad", true);
                     a.set("at_node", Val::None);
+                    if e.atb("sea") {
+                        super::marine::intercepte(self, a); // une flotte ennemie surprend le cabotage (SPEC-EMPIRE, module 2)
+                    }
                 }
                 continue;
             }

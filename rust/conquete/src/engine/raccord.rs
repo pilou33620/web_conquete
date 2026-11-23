@@ -58,7 +58,7 @@ pub fn ensure(g: &mut Game) {
 
 /// Python (bridge.py, l. 68-69) : `def waiting(g)`
 pub fn waiting(g: &Game) -> bool {
-    g.battles.values().iter().any(en_attente)
+    g.battles.values().iter().any(en_attente) || crate::engine::navale::en_attente(g) // (SPEC-EMPIRE, module 2)
 }
 
 /// La bataille attend le joueur : sa stratégie ('attente'), ou son choix de poursuivre ou non ('poursuite').
@@ -325,6 +325,9 @@ pub fn command(g: &mut Game, body: &Val) -> Val {
             "auto_petites" => "Vos généraux règlent seuls les escarmouches."}
         .at(&v);
         return dict! {"ok" => true, "msg" => msg};
+    }
+    if sub == "choose" && g.navales.has(&body.get("bid")) {
+        return crate::engine::navale::choisir(g, body); // bataille navale (SPEC-EMPIRE, module 2)
     }
     if sub == "choose" {
         // la stratégie du joueur (SPEC-BATAILLE.md) : `strat` (rules.STRATS, parmi celles de la situation), ou

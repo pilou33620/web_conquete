@@ -360,6 +360,7 @@ pub fn begin_turn(g: &mut Game) {
         a.set("mp", Val::None);
         a.set("rt", false);
     }
+    crate::engine::marine::debut_tour(g); // les flottes (SPEC-EMPIRE, module 2)
     settle(g);
 }
 
@@ -701,6 +702,7 @@ pub fn _settled(g: &Game) -> bool {
 // game/turns.py, lignes 478 à 482
 pub fn _scan(g: &Game) -> Val {
     let bt: Val = g.battles.values().into_iter().filter(TB::en_attente).map(|b| b.at("id")).collect();
+    bt.extend(&crate::engine::navale::en_attente_ids(g)); // batailles navales (SPEC-EMPIRE, module 2)
     bt.sort();
     dict! {"bt" => bt, "ev" => g.pending_ev.iter().map(|x| x.at("id")).collect::<Val>()}
 }
@@ -724,7 +726,7 @@ pub fn _candidates(g: &mut Game, old: &Val, cur: &Val) -> Val {
         }
     }
     for bid in cur.at("bt").iter() {
-        let bt = g.battles.get(&bid);
+        let bt = g.battles.get(&bid).or_else(|| g.navales.get(&bid)); // (SPEC-EMPIRE, module 2 : une bataille navale)
         if !bt.truthy() || old.at("bt").has(&bid) {
             continue;
         }

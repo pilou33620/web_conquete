@@ -67,6 +67,8 @@ pub fn to_dict(g: &mut Game) -> Val {
     let blockade = g._blockade.to_list();
     blockade.sort();
     d.set("blockade", blockade);
+    d.set("flottes", &g.flottes); // (SPEC-EMPIRE, module 2) les flottes et les batailles navales en attente
+    d.set("navales", &g.navales);
     // horloges des IA : sans elles, un chargement relance aussitôt leur diplomatie et leurs propositions
     let ai_state = dict! {};
     for (c, ai) in g.ais.iter() {
@@ -238,6 +240,8 @@ pub fn from_dict(geo: Rc<GeoMap>, d: &Val) -> Result<Game, String> {
     g.rails = v("rails");
     g.sites = v("sites");
     g._blockade = d.get_or("blockade", list![]).to_set();
+    g.flottes = d.get_or("flottes", dict! {}); // (SPEC-EMPIRE, module 2) : une sauvegarde d'avant n'en a pas
+    g.navales = d.get_or("navales", dict! {});
     g.diplo = d.at("diplo").iter().map(|e| ((e.ats(0), e.ats(1)), e.ats(2))).collect();
     g.rng = Random::new(g.seed + py::int(g.t * 1000.0));
     g.speed_idx = 0;
@@ -404,7 +408,9 @@ pub fn rules_payload_carte(geo: i64) -> Val {
         "armes" => R::ARMES(), "arme_de" => Val::dict_from(R::UNITS().keys().into_iter().map(|u| { let a = R::arme_de(u.s()); (u, Val::from(a)) }).collect()),
         "strats" => R::STRATS(), "situations" => R::SITUATIONS(), "contre" => R::CONTRE, "phase_w" => R::PHASE_W(),
         "tech_arme" => R::TECH_ARME(), "renfort_km" => R::RENFORT_KM,
-        "poursuite" => dict! {"cav" => R::PURSUIT_CAV, "fatigue" => R::POURSUITE_FAT}
+        "poursuite" => dict! {"cav" => R::PURSUIT_CAV, "fatigue" => R::POURSUITE_FAT},
+        // la marine (SPEC-EMPIRE, module 2)
+        "navires" => R::NAVIRES(), "navire_ordre" => R::NAVIRE_ORDRE(), "strats_nav" => R::STRATS_NAV(), "phases_nav" => R::PHASES_NAV()
     }
 }
 
@@ -1050,6 +1056,7 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
     out.set("settings", g.settings.copy());
     out.set("flood", g.t < g.flood_until);
     out.set("tour", TT::view(g));
+    crate::engine::marine::vue(g, &out, &*seen); // flottes, blocus, batailles navales (SPEC-EMPIRE, module 2)
     // les routes que la crue coupe (pendant la crue seulement) : [arête, début, fin] des tronçons noyés, en km
     // le long du tracé
     let cut = g.cut_edges();
