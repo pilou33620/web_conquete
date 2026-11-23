@@ -1,5 +1,5 @@
 {
-"_note": "Villes et ports du théâtre « Côte du Brésil » vers 1790. ESTIMATIONS écrites de mémoire (dénombrements portugais des années 1770-1800, ordres de grandeur seulement : à 20 ou 30 % près, plus pour l'intérieur ; les villes de l'or comptent leur paroisse). Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un camp est sa capitale. Les points de commerce d'Empire: Total War sont les ports « port commerce ». Dans les terres des nations autochtones, les places sont des missions et des forts portugais de 1750-1800 (aucune ville autochtone fixe n'est connue) ; coordonnées @lat,lon à quelques km près.",
+"_note": "Villes et ports du théâtre « Côte du Brésil » vers 1790. ESTIMATIONS écrites de mémoire (dénombrements portugais des années 1770-1800, ordres de grandeur seulement : à 20 ou 30 % près, plus pour l'intérieur ; les villes de l'or comptent leur paroisse). Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un camp est sa capitale. Les points de commerce d'Empire: Total War sont les ports « port commerce ». Dans les terres des nations autochtones, les places sont des missions et des forts portugais de 1750-1800 (aucune ville autochtone fixe n'est connue) ; coordonnées @lat,lon à quelques km près. Vérifié le 23/11/2026 d'après : recensements de l'Empire du Brésil de 1872, et de 1890 et 1900 (IBGE, Estatísticas históricas do Brasil) ; recensement de Rio de 1799 ; Salvador en 1780 et 1807 ; São Paulo en 1836 ; Wikipédia en (Paramaribo : 18 000 en 1790, 15 265 en 1831) ; K. V. Paiva da Silva, thèse UFPE (Pernambouc, recensements de 1773, 1782 et 1788) ; Mathias et I. del Nero da Costa (Vila Rica, recensement de 1804) ; Morton, JLAS 1975 (troupes de Bahia) ; Cambridge (International Review of Social History, Paramaribo vers 1750) ; listes des gouverneurs (Wikipédia pt). Restent des estimations : villes de 1790 hors Rio et Salvador (Recife, São Luís, Belém, São Paulo, villes de l'or : Costa, Vila Rica 1719-1826, non lu), points de 1700 et 1750, nations amérindiennes, Guyane française, armées.",
 "BPT": [
 "Salvador | | 50 | port commerce | 3", "Cachoeira | | 10 | | 0", "Santo Amaro | Santo Amaro/@-12.55,-38.71 | 6 | | 0", "Maragogipe | Maragogipe/Maragojipe | 4 | port | 0",
 "Jaguaripe | @-13.11,-38.89 | 3 | port | 0", "Nazaré | Nazaré/@-13.03,-39.01 | 4 | | 0", "Ilhéus | | 3 | port commerce | 1", "Porto Seguro | | 2 | port | 0",
@@ -9,7 +9,7 @@
 "Feira de Santana | | 2 | | 0", "Itapicuru | @-11.32,-38.23 | 2 | | 0", "Barra | Barra/@-11.09,-43.14 | 1 | | 0"
 ],
 "BPE": [
-"Recife | | 25 | port commerce | 2", "Olinda | | 8 | | 1", "Igarassu | | 4 | | 0", "Goiana | | 6 | | 0",
+"Recife | | 25 | port commerce | 2", "Olinda | | 12 | | 1", "Igarassu | | 4 | | 0", "Goiana | | 6 | | 0",
 "Paraíba | João Pessoa | 6 | port commerce | 1", "Natal | Natal/@-5.79,-35.21 | 4 | port commerce | 2", "Fortaleza | | 3 | port | 1", "Aquiraz | | 2 | | 0",
 "Aracati | | 5 | port commerce | 0", "Penedo | | 5 | port | 0", "Alagoas | Marechal Deodoro | 4 | | 0", "Porto Calvo | | 3 | | 0",
 "Sirinhaém | Sirinhaém/@-8.59,-35.11 | 3 | | 0", "Vitória de Santo Antão | | 3 | | 0", "Mamanguape | | 2 | | 0", "Garanhuns | | 2 | | 0",
@@ -42,7 +42,7 @@
 "Atibaia | | 2 | | 0", "Bragança Paulista | | 2 | | 0", "Antonina | | 1 | port | 0", "Lapa | Lapa/@-25.77,-49.72 | 1 | | 0"
 ],
 "BMG": [
-"Vila Rica | Ouro Preto | 20 | | 1", "Mariana | Mariana/@-20.38,-43.42 | 7 | | 0", "São João del-Rei | São João del Rei | 8 | | 0", "Sabará | @-19.89,-43.81 | 8 | | 0",
+"Vila Rica | Ouro Preto | 11 | | 1", "Mariana | Mariana/@-20.38,-43.42 | 7 | | 0", "São João del-Rei | São João del Rei | 8 | | 0", "Sabará | @-19.89,-43.81 | 8 | | 0",
 "Vila do Príncipe | Serro | 6 | | 0", "Tijuco | Diamantina | 6 | | 0", "São José del-Rei | Tiradentes | 4 | | 0", "Caeté | | 3 | | 0",
 "Pitangui | | 3 | | 0", "Paracatu | | 5 | | 0", "Minas Novas | | 3 | | 0", "Barbacena | Barbacena/@-21.23,-43.77 | 3 | | 0",
 "Campanha | Campanha/@-21.84,-45.40 | 3 | | 0", "Congonhas | | 2 | | 0", "Queluz | Conselheiro Lafaiete | 2 | | 0", "Tamanduá | Itapecerica/@-20.47,-45.13 | 2 | | 0",
@@ -66,7 +66,7 @@
 "Nioaque | @-21.14,-55.83 | 0.2 | | 0"
 ],
 "BNL": [
-"Paramaribo | | 12 | port commerce | 2", "Nieuw-Amsterdam | @5.88,-55.08 | 0.5 | port arsenal | 3", "Jodensavanne | @5.43,-54.98 | 0.5 | | 0", "Stabroek | Georgetown | 2 | port commerce | 1",
+"Paramaribo | | 18 | port commerce | 2", "Nieuw-Amsterdam | @5.88,-55.08 | 0.5 | port arsenal | 3", "Jodensavanne | @5.43,-54.98 | 0.5 | | 0", "Stabroek | Georgetown | 2 | port commerce | 1",
 "Berbice | New Amsterdam/@6.25,-57.52 | 1.5 | port commerce | 1", "Kykoveral | @6.40,-58.62 | 0.3 | port | 1", "Coronie | @5.87,-56.30 | 0.5 | port | 0"
 ],
 "BFR": [

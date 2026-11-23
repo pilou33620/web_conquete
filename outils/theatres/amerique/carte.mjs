@@ -28,9 +28,10 @@
 // les îles espagnoles forment un camp « Cuba » distinct de la Nouvelle-Espagne ; Panamá (du Pérou en 1700) est rattaché
 // à la Nouvelle-Espagne faute de camp pour la Terre Ferme. Une région ne sert qu'à placer sa capitale : la frontière
 // tracée est celle des camps, par états des États-Unis et provinces du Canada, avec des retouches (lon, lat).
-// Îles : les Petites Antilles sont gardées ; les Bermudes (un chapelet d'îlots), Saint-Eustache, Saba, Navassa, Clipperton
-// et les bancs de récifs, trop petits pour la grille, disparaissent (Saint-Eustache, l'entrepôt des années 1780, n'a donc
-// pas de place) ; les Antilles danoises (Saint-Thomas) restent hors jeu.
+// Îles : les Petites Antilles sont gardées ; les Bermudes (un chapelet d'îlots), Saint-Eustache (l'entrepôt des années
+// 1780), Saba, Grand Turk, Saint-Barthélemy, les îles de la Madeleine et l'île du Carmen, trop petites pour la grille,
+// gardent chacune une case de terre et leur place (ILES, en fin de fichier) ; Navassa, Clipperton et les bancs de récifs
+// disparaissent ; les Antilles danoises (Saint-Thomas) restent hors jeu.
 
 // ------------------------------------------------------------------ les camps de 1700
 // « ~Nom » : terre hors jeu (lands) : la Terre Ferme (Colombie, Venezuela), les Guyanes, les Rocheuses…
@@ -41,7 +42,7 @@ const ENTIERS = {
   Dominica: 'AFR', 'Saint Lucia': 'AFR', 'St. Vin. and Gren.': 'AFR', Grenada: 'AFR', // îles caraïbes « neutres », réclamées par la France
   Cuba: 'ACU', 'USNB Guantanamo Bay': 'ACU', 'Dominican Rep.': 'ACU', 'Puerto Rico': 'ACU', 'Trinidad and Tobago': 'ACU',
   Mexico: 'AES', Guatemala: 'AES', Belize: 'AES', Honduras: 'AES', 'El Salvador': 'AES', Nicaragua: 'AES', 'Costa Rica': 'AES', Panama: 'AES',
-  Netherlands: 'ANL', Curaçao: 'ANL', Aruba: 'ANL', 'Sint Maarten': 'ANL', // (Netherlands : dans le cadre, Bonaire ; Saint-Eustache et Saba trop petites)
+  Netherlands: 'ANL', Curaçao: 'ANL', Aruba: 'ANL', 'Sint Maarten': 'ANL', // (Netherlands : dans le cadre, Bonaire ; Saint-Eustache et Saba : ILES)
   Colombia: '~Terre Ferme', Venezuela: '~Terre Ferme', Guyana: '~Guyanes', Suriname: '~Guyanes',
   'U.S. Virgin Is.': '~Antilles danoises', 'U.S. Minor Outlying Is.': '~Navassa',
   'Clipperton I.': '~Récifs', 'Bajo Nuevo Bank': '~Récifs', 'Serranilla Bank': '~Récifs',
@@ -140,7 +141,7 @@ const PAYS = {
     ['Terres neuves : vivres +20 %', 'Colons nombreux : recrues +15 %', 'Forêts : bois +20 %'],
     ['Milices : infanterie −5 %', 'Fortifications −10 %'],
     { vivres: 0.2, recrues: 0.15, bois: 0.2, inf_power: -0.05, fort_bonus: -0.1 }, [0.5, 0.75, 0.85, 'agricole'], 'vivres',
-    [[2, 3, 35, 37], 1.5], ['Penn', 'Winthrop', 'Calvert', 'Livingston', 'Byrd', 'Randolph', 'Adams', 'Washington'], 'americaine'),
+    [[2, 1.5, 35, 37], 1.5], ['Penn', 'Winthrop', 'Calvert', 'Livingston', 'Byrd', 'Randolph', 'Adams', 'Washington'], 'americaine'),
   AFR: P('Nouvelle-France', 'N.-France', 'canadien', '#2b3fc4', "Le Canada, l'Acadie et les Îles",
     ['Coureurs des bois et petite guerre : embuscades +25 %', 'Alliances indiennes : diplomatie +10', 'Sucre de Saint-Domingue : accords commerciaux +15 %'],
     ['Colonie peu peuplée : recrues −30 %'],
@@ -160,7 +161,7 @@ const PAYS = {
     ['El Morro et la Cabaña : fortifications +20 %', "L'Arsenal de La Havane : ports +20 %", 'Tabac et sucre : accords commerciaux +10 %'],
     ['Îles et garnisons : recrues −20 %'],
     { fort_bonus: 0.2, port: 0.2, trade: 0.1, recrues: -0.2 }, [0.4, 0.7, 0.4, 'militaire'], 'livres',
-    [[3, 6, 10, 80], 1.5], ['Bourbon', 'de Córdoba', 'Güemes y Horcasitas', 'de Prado', 'de Ricla', 'de las Casas', 'de Someruelos', 'Tacón'], 'espagnole'),
+    [[3, 6, 10, 55], 1.5], ['Bourbon', 'de Córdoba', 'Güemes y Horcasitas', 'de Prado', 'de Ricla', 'de las Casas', 'de Someruelos', 'Tacón'], 'espagnole'),
   ANL: P('Antilles des Provinces-Unies', 'Prov.-Unies', 'hollandais', '#e67e22', 'Les Rouliers des Caraïbes',
     ['Ports francs : accords commerciaux +35 %', 'Compagnie des Indes occidentales : livres +15 %', 'Ports +15 %'],
     ['Quelques îles : recrues −35 %', 'Vivres −20 %'],
@@ -255,4 +256,11 @@ export default {
   NE: { rivieres: ['ne_10m_rivers_north_america'], lacs: ['ne_10m_lakes_north_america'] },
   PAYS,
   CULTURES,
+  // îles trop petites pour la grille, gardées chacune par une case de terre (outil : ILES) : [lon, lat, camp, nom]
+  ILES: [
+    [-62.986, 17.483, 'ANL', 'Saint-Eustache'], [-63.249, 17.626, 'ANL', 'Saba'],
+    [-64.678, 32.382, 'AGB', 'Bermudes'], [-71.142, 21.461, 'AGB', 'Grand Turk'],
+    [-62.850, 17.896, 'AFR', 'Saint-Barthélemy'], [-61.839, 47.244, 'AFR', 'Îles de la Madeleine'],
+    [-91.830, 18.646, 'AES', 'Île du Carmen'],
+  ],
 };

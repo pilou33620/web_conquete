@@ -157,4 +157,6 @@ export default {
   NE: { rivieres: [], lacs: [] }, // les fichiers globaux de 10 m suffisent
   PAYS,
   CULTURES,
+  // îles trop petites pour la grille, gardées chacune par une case de terre (outil : ILES) : [lon, lat, camp, nom]
+  ILES: [[70.982, 20.714, 'IGO', 'Diu']],
 };

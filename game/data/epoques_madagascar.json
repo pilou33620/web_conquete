@@ -1,5 +1,5 @@
 {
-"Antananarivo|MME": [[1700,0.333,"bourg"],[1750,0.533,"ville"],[1790,1,"ville"],[1820,1.667,"ville"],[1850,3.333,"grande_ville"],[1880,5,"grande_ville"],[1900,3.333,"guerres"]],
+"Antananarivo|MME": [[1700,0.333,"bourg"],[1750,0.533,"ville"],[1790,1,"ville"],[1820,0.8,"ville"],[1850,3.333,"grande_ville"],[1880,5,"grande_ville"],[1900,3.333,"guerres"]],
 "Ambohimanga|MME": [[1700,0.6,"bourg"],[1790,1,"ville"],[1820,0.8,"bourg"],[1900,0.4,"declin"]],
 "Fianarantsoa|MBE": [[1700,0.667,"bourg"],[1790,1,"bourg"],[1831,1.667,"ville_neuve"],[1870,2.667,"ville"],[1900,3.333,"ville"]],
 "Majunga|MSA": [[1700,0.143,"bourg"],[1750,0.571,"port_neuf"],[1790,1,"ville"],[1830,0.857,"guerres"],[1870,1.143,"ville"],[1900,1.429,"grand_port"]],
@@ -17,8 +17,8 @@
 "Quelimane|MPT": [[1700,0.333,"bourg"],[1790,1,"bourg"],[1850,1.333,"bourg"],[1900,2,"port_neuf"]],
 "Inhambane|MPT": [[1700,0.333,"bourg"],[1790,1,"bourg"],[1850,1.333,"bourg"],[1900,1.667,"bourg"]],
 "Lourenço Marques|MPT": [[1700,0.4,"bourg"],[1790,1,"bourg"],[1850,2,"bourg"],[1880,6,"port_neuf"],[1895,10,"gare"],[1900,20,"grand_port"]],
-"Mombasa|MOM": [[1700,0.8,"guerres"],[1750,1,"ville"],[1790,1,"ville"],[1840,0.8,"declin"],[1870,1.2,"ville"],[1900,2.5,"gare"]],
-"Zanzibar|MOM": [[1700,0.375,"bourg"],[1750,0.625,"ville"],[1790,1,"ville"],[1840,5,"grand_port"],[1870,10,"grand_port"],[1900,7.5,"grand_port"]],
+"Mombasa|MOM": [[1700,0.8,"guerres"],[1750,1,"ville"],[1790,1,"ville"],[1840,0.8,"declin"],[1870,1.2,"ville"],[1900,1.8,"gare"]],
+"Zanzibar|MOM": [[1700,0.6,"bourg"],[1750,0.6,"ville"],[1790,1,"ville"],[1840,4,"grand_port"],[1870,16,"grand_port"],[1900,7,"grand_port"]],
 "Kilwa|MOM": [[1700,0.5,"declin"],[1776,1.25,"port_neuf"],[1790,1,"ville"],[1850,0.25,"declin"],[1900,0.125,"declin"]],
 "Danangombe|MRZ": [[1700,0.833,"ville"],[1790,1,"ville"],[1835,0.167,"guerres"],[1900,0.083,"declin"]],
 "Mankhamba|MMV": [[1700,1.6,"ville"],[1790,1,"declin"],[1850,0.4,"declin"],[1900,0.2,"declin"]]

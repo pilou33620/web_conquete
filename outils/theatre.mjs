@@ -219,6 +219,22 @@ const poches = []; // [centre lon, lat, mailles]
     if (vers !== e) for (const c of comp) L[c] = vers;
   }
 }
+// îles forcées (carte.mjs, ILES : [[lon, lat, code, nom], …]) : une île trop petite pour la grille, rendue à la mer
+// ci-dessus, garde la case de KM km du point, entière (les 3 × 3 mailles de la case) : son contour est le carré de la
+// case, dont raster_ring (geo.rs) prend le centre ; toutes les vérifications qui suivent la voient comme une terre.
+{
+  const forcees = [], deja = [];
+  for (const [lon, lat, code, nom] of CARTE.ILES || []) {
+    const i = Math.floor(gx(lon) / F), j = Math.floor(gy(lat) / F);
+    if (!PAYS[code] || typeof nom !== 'string' || !(i >= 0 && i < W && j >= 0 && j < H)) stop(`ILES : [${lon}, ${lat}, ${code}, ${nom}] : pays inconnu, nom absent ou point hors du cadre`);
+    const e = etiq(code), maille = (di, dj) => (j * F + dj) * GW + i * F + di;
+    let avant = 0;
+    for (let dj = 0; dj < F; dj++) for (let di = 0; di < F; di++) { avant += L[maille(di, dj)] === e; L[maille(di, dj)] = e; }
+    (avant === F * F ? deja : forcees).push(`${nom} (${code})`);
+  }
+  if (forcees.length) console.log(`îles forcées (une case de terre) : ${forcees.join(', ')}`);
+  if (deja.length) console.log(`ILES déjà à l'échelle de la grille (inutiles) : ${deja.join(', ')}`);
+}
 
 // ------------------------------------------------------------------ 2. des mailles aux contours
 // Les arêtes entre deux étiquettes différentes forment des arcs (d'un nœud, où trois frontières se rejoignent, au
@@ -471,6 +487,14 @@ const recap = {};
     return out;
   };
   const presDe = (lon, lat, r, quoi) => { const i0 = Math.floor(fx(lon)), j0 = Math.floor(fy(lat)); for (let j = j0 - r; j <= j0 + r; j++) for (let i = i0 - r; i <= i0 + r; i++) if (i < 0 || j < 0 || i >= W || j >= H ? quoi(0) : quoi(caseDe[j * W + i])) return true; return false; };
+  // [lat, lon] arrondis à 1e-4° ; si l'arrondi passe dans une case d'autre sorte (un bourg au rivage tombait en mer),
+  // arrondis vers le centre de la case, qu'ils ne quittent pas. (Une case voisine du même pays reste admise : l'Europe.)
+  const arr4 = (lon, lat) => {
+    const o = Math.round(lon * 1e4) / 1e4, a = Math.round(lat * 1e4) / 1e4;
+    if (codeCase(o, a) === codeCase(lon, lat)) return [a, o];
+    const x = fx(lon), y = fy(lat);
+    return [(y % 1 < 0.5 ? Math.floor : Math.ceil)(lat * 1e4) / 1e4, (x % 1 < 0.5 ? Math.ceil : Math.floor)(lon * 1e4) / 1e4];
+  };
   const dRiv = p => { let m = 1e9; for (const r of rivers) for (const q of r.pts) m = Math.min(m, km(q, p)); return m; };
   const villes = lire(path.join(DOSSIER, 'villes.json'));
   const defauts = [], deplacees = [], portsLoin = [];
@@ -516,7 +540,7 @@ const recap = {};
       const pop = Math.round((800 + 3200 * Math.min(1, Math.max(0, (Math.log10(Math.max(c.population, 1000)) - 3) / 3))) / 100) * 100; // 800 à 4 000 âmes
       liste.push({ nom: c.name, lon, lat, pop, etiq: [], fort: 0, type: 'village', bourg: true });
     }
-    for (const v of liste) places.push([v.nom, Math.round(v.lat * 1e4) / 1e4, Math.round(v.lon * 1e4) / 1e4, code, v.type, v.etiq, v.fort, v.pop]);
+    for (const v of liste) places.push([v.nom, ...arr4(v.lon, v.lat), code, v.type, v.etiq, v.fort, v.pop]);
     recap[code] = { villes: liste.filter(v => v.type !== 'village').length, ports: liste.filter(v => v.etiq.includes('port')).length,
       bourgs: liste.filter(v => v.type === 'village').length, pop25: [liste[0], ...parPop.slice(0, 24)].reduce((s, v) => s + v.pop, 0), loin: 0, max: 0 };
     PAYS[code].capital = liste[0].nom;

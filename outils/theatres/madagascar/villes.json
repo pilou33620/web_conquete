@@ -1,5 +1,5 @@
 {
-"_note": "Villes et ports du Détroit de Madagascar vers 1790. ESTIMATIONS écrites de mémoire (récits de voyageurs, ordres de grandeur ; très incertain : la plupart des chiffres sont à un facteur 2 près). Les coordonnées @lat,lon (lieux d'époque inconnus de GeoNames : ruines, capitales disparues, comptoirs) sont de mémoire, à 10 km près. Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un pays est sa capitale. Les points de commerce d'Empire: Total War sont des places « port commerce ».",
+"_note": "Villes et ports du Détroit de Madagascar vers 1790. ESTIMATIONS écrites de mémoire (récits de voyageurs, ordres de grandeur ; très incertain : la plupart des chiffres sont à un facteur 2 près). Les coordonnées @lat,lon (lieux d'époque inconnus de GeoNames : ruines, capitales disparues, comptoirs) sont de mémoire, à 10 km près. Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un pays est sa capitale. Les points de commerce d'Empire: Total War sont des places « port commerce ». Vérifié le 23/11/2026 d'après : Reclus (Géographie universelle, Afrique t. IV) pour Antananarivo ; Sheriff (Slaves, Spices and Ivory in Zanzibar, 1987) ; recensement de Zanzibar de 1910 et de Mombasa (Horsey 1897) ; Wikipédia en (Timelines d'Antananarivo, Port-Louis, Zanzibar, Mombasa ; Imerina, Boina, Menabe, Betsimisaraka, sultans des Comores) ; Britannica (Mahajanga). Restent des estimations : Saint-Denis et Saint-Paul, Quelimane, Inhambane, Ibo, Kilwa, Mutsamudu, Ambohimanga, côte est, intérieur du continent.",
 "MME": [
 "Antananarivo | | 15 | | 1", "Ambohimanga | @-18.76,47.56 | 5 | | 2", "Betafo | | 3 | | 1", "Arivonimamo | | 1.5 | | 0",
 "Ambatolampy | | 1 | | 0", "Miarinarivo | | 1 | | 0"
@@ -45,7 +45,7 @@
 "Lourenço Marques | Maputo | 0.5 | port commerce | 1", "Zumbo | @-15.62,30.45 | 0.8 | | 1"
 ],
 "MOM": [
-"Mombasa | | 10 | port commerce | 3", "Zanzibar | | 8 | port commerce | 1", "Kilwa | @-8.96,39.51 | 4 | port commerce | 1", "Pemba | Chake Chake | 3 | port | 0",
+"Mombasa | | 10 | port commerce | 3", "Zanzibar | | 5 | port commerce | 1", "Kilwa | @-8.96,39.51 | 4 | port commerce | 1", "Pemba | Chake Chake | 3 | port | 0",
 "Malindi | | 1 | port | 0", "Pangani | | 3 | port | 0", "Tanga | | 2 | port | 0", "Bagamoyo | | 1 | port | 0",
 "Lindi | | 2 | port | 0", "Mikindani | @-10.28,40.12 | 2 | port | 0", "Mafia | Kilindoni | 2 | port | 0", "Vanga | @-4.66,39.22 | 2 | port | 0",
 "Saadani | @-6.04,38.78 | 1 | port | 0"

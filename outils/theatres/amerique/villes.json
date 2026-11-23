@@ -1,12 +1,13 @@
 {
-"_note": "Villes et ports du théâtre Amérique vers 1790. ESTIMATIONS écrites de mémoire (recensement des États-Unis de 1790, recensement de Revillagigedo pour la Nouvelle-Espagne, ordres de grandeur connus pour le Canada et les Antilles), à quelques milliers près ; très incertaines pour les villages amérindiens (quelques centaines d'âmes, coordonnées @lat,lon de mémoire). Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un pays est sa capitale ; les capitales des régions d'Empire: Total War (1700) sont toutes là (voir carte.mjs). Un lieu fondé après 1700 (Détroit, Pittsburgh, Nashville…) est une place du camp qui tient sa région en 1700. Étiquettes : port (lue par le jeu), arsenal, commerce, peche (rôle du port, pour le futur mode naval). Les villes au bord de la mer reçoivent « port » d'office.",
+"_note": "Villes et ports du théâtre Amérique vers 1790. ESTIMATIONS écrites de mémoire (recensement des États-Unis de 1790, recensement de Revillagigedo pour la Nouvelle-Espagne, ordres de grandeur connus pour le Canada et les Antilles), à quelques milliers près ; très incertaines pour les villages amérindiens (quelques centaines d'âmes, coordonnées @lat,lon de mémoire). Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un pays est sa capitale ; les capitales des régions d'Empire: Total War (1700) sont toutes là (voir carte.mjs). Un lieu fondé après 1700 (Détroit, Pittsburgh, Nashville…) est une place du camp qui tient sa région en 1700. Étiquettes : port (lue par le jeu), arsenal, commerce, peche (rôle du port, pour le futur mode naval). Les villes au bord de la mer reçoivent « port » d'office. Vérifié le 23/11/2026 d'après : recensements des États-Unis de 1790 à 1900 ; Bridenbaugh (villes coloniales 1700-1750) ; Statistique Canada (Québec 1608-2008), Hare (1974) et dénombrement de Québec de 1795, recensements du Canada 1831-1901 ; censo de Revillagigedo (1790-1793) et padrón de Veracruz de 1791 ; recensements cubains de 1774 et 1791 (EcuRed) ; Ducœurjoly (Saint-Domingue, 1789) ; Wikipédia (guerre de Dix Ans, First American Regiment). Restent des estimations : villes des Antilles françaises, néerlandaises et britanniques, Santo Domingo, Amérique centrale, villages amérindiens, points de 1700 et 1750 des villes espagnoles.",
 "AGB": [
 "Kingston | @17.97,-76.79 | 26 | port commerce | 2", "Bridgetown | @13.10,-59.62 | 15 | port commerce | 2", "Spanish Town | @17.99,-76.96 | 5 | | 0", "Saint-Jean d'Antigua | @17.12,-61.85 | 4 | port arsenal | 1",
 "Basseterre | @17.30,-62.72 | 3 | port | 2", "Saint-Jean de Terre-Neuve | @47.56,-52.71 | 3 | port peche | 2", "Nassau | @25.06,-77.35 | 2.5 | port | 1",
 "Port Royal | @17.94,-76.84 | 2 | port arsenal | 3", "Montego Bay | @18.47,-77.92 | 2 | port | 0", "Falmouth | @18.49,-77.65 | 1.5 | port | 0", "Speightstown | @13.25,-59.64 | 1.5 | port | 0",
 "Charlestown | @17.14,-62.62 | 1 | port | 0", "Plymouth | @16.71,-62.22 | 1 | port | 0", "Road Town | @18.43,-64.62 | 0.5 | port | 0", "Bonavista | @48.65,-53.11 | 0.5 | port peche | 0",
 "Fort Albany | @52.20,-81.68 | 0.2 | port commerce | 1", "York Factory | @57.00,-92.30 | 0.1 | port commerce | 1", "Fort Churchill | @58.80,-94.21 | 0.1 | port | 2", "Moose Factory | @51.26,-80.61 | 0.1 | port | 1",
-"Fort Rupert | @51.49,-78.75 | 0.1 | port | 0", "Fort Severn | @56.00,-87.63 | 0.1 | port | 0", "Cumberland House | @53.96,-102.27 | 0.1 | port | 0", "Norway House | @53.98,-97.84 | 0.1 | port | 0"
+"Fort Rupert | @51.49,-78.75 | 0.1 | port | 0", "Fort Severn | @56.00,-87.63 | 0.1 | port | 0", "Cumberland House | @53.96,-102.27 | 0.1 | port | 0", "Norway House | @53.98,-97.84 | 0.1 | port | 0",
+"Saint-Georges des Bermudes | @32.382,-64.678 | 2 | port commerce | 2", "Grand Turk | @21.461,-71.142 | 0.5 | port commerce | 0"
 ],
 "ATC": [
 "Philadelphie | Philadelphia | 42 | port commerce | 1", "New York | New York City | 33 | port commerce | 1", "Boston | | 18 | port commerce | 1", "Charleston | @32.78,-79.93 | 16 | port commerce | 2",
@@ -15,10 +16,10 @@
 "Hartford | @41.76,-72.68 | 4 | | 0", "Richmond | @37.54,-77.43 | 3.8 | | 0", "Lancaster | @40.04,-76.31 | 3.7 | | 0", "Albany | @42.65,-73.75 | 3.5 | port | 1",
 "Schenectady | @42.81,-73.94 | 3.5 | | 1", "Norfolk | @36.85,-76.29 | 3 | port arsenal | 1", "Kingston | @41.93,-74.00 | 3 | | 0", "York | @39.96,-76.73 | 2.9 | | 0",
 "Alexandria | @38.80,-77.05 | 2.7 | port | 0", "New Bern | @35.11,-77.04 | 2.5 | port | 0", "Wilmington | @39.75,-75.55 | 2.5 | port | 0", "Savannah | @32.08,-81.09 | 2.3 | port commerce | 1",
-"Williamsburg | @37.27,-76.71 | 2 | | 0", "Annapolis | @38.98,-76.49 | 2 | port | 0", "Trenton | @40.22,-74.76 | 1.9 | | 0", "Augusta | @33.47,-81.97 | 1.1 | | 0", "Hatteras | @35.2676,-75.5424 | 0.1 | port peche | 0", "Roanoke | @35.91,-75.67 | 0.2 | port | 0"
+"Williamsburg | @37.27,-76.71 | 1.3 | | 0", "Annapolis | @38.98,-76.49 | 2 | port | 0", "Trenton | @40.22,-74.76 | 1.9 | | 0", "Augusta | @33.47,-81.97 | 1.1 | | 0", "Hatteras | @35.2676,-75.5424 | 0.1 | port peche | 0", "Roanoke | @35.91,-75.67 | 0.2 | port | 0"
 ],
 "AFR": [
-"Québec | Québec | 12 | port arsenal | 3", "Cap-Français | @19.76,-72.20 | 15 | port commerce | 2", "Saint-Pierre | @14.74,-61.18 | 15 | port commerce | 1", "Port-au-Prince | @18.54,-72.34 | 9 | port commerce | 1",
+"Québec | Québec | 10 | port arsenal | 3", "Cap-Français | @19.76,-72.20 | 15 | port commerce | 2", "Saint-Pierre | @14.74,-61.18 | 15 | port commerce | 1", "Port-au-Prince | @18.54,-72.34 | 9 | port commerce | 1",
 "Montréal | Montréal | 9 | port commerce | 2", "Fort-Royal | @14.60,-61.07 | 7 | port arsenal | 3", "Pointe-à-Pitre | @16.24,-61.53 | 6 | port commerce | 1", "Basse-Terre | @15.99,-61.73 | 5 | port | 2",
 "Halifax | @44.65,-63.57 | 5 | port arsenal | 3", "Les Cayes | @18.19,-73.75 | 4 | port | 0", "Saint-Marc | @19.11,-72.70 | 3 | port | 0", "Jacmel | @18.23,-72.53 | 2.5 | port | 0",
 "Jérémie | @18.65,-74.12 | 2 | port | 0", "Léogâne | @18.51,-72.63 | 2 | port | 0", "Saint-Georges | @12.05,-61.75 | 2 | port | 2", "Gonaïves | @19.45,-72.69 | 1.5 | port | 0",
@@ -26,7 +27,8 @@
 "Trois-Rivières | @46.35,-72.55 | 1.2 | port | 1", "Fort-Dauphin | @19.67,-71.84 | 1 | port | 1", "Kingstown | @13.16,-61.23 | 1 | port | 0", "Môle-Saint-Nicolas | @19.81,-73.38 | 0.7 | port arsenal | 2",
 "Port-Royal | @44.74,-65.52 | 0.6 | port | 2", "Louisbourg | @45.92,-59.97 | 0.5 | port arsenal | 4", "Charlottetown | @46.24,-63.13 | 0.5 | port | 0", "Cataracoui | @44.23,-76.48 | 0.5 | port | 2",
 "Chambly | @45.45,-73.29 | 0.5 | | 2", "Saint-Pierre-et-Miquelon | @46.78,-56.18 | 0.5 | port peche | 1", "Plaisance | @47.24,-53.96 | 0.3 | port peche | 2", "Gaspé | @48.83,-64.48 | 0.3 | port peche | 0",
-"Tadoussac | @48.14,-69.72 | 0.2 | port | 0", "Sault-Sainte-Marie | @46.52,-84.33 | 0.2 | port | 0", "Kaministiquia | @48.38,-89.25 | 0.2 | port commerce | 1", "Témiscamingue | @47.31,-79.46 | 0.1 | port | 0"
+"Tadoussac | @48.14,-69.72 | 0.2 | port | 0", "Sault-Sainte-Marie | @46.52,-84.33 | 0.2 | port | 0", "Kaministiquia | @48.38,-89.25 | 0.2 | port commerce | 1", "Témiscamingue | @47.31,-79.46 | 0.1 | port | 0",
+"Saint-Barthélemy | @17.896,-62.850 | 1 | port commerce | 0", "Havre-Aubert | @47.244,-61.839 | 0.3 | port peche | 0"
 ],
 "ALO": [
 "La Nouvelle-Orléans | @29.95,-90.07 | 5.3 | port commerce | 2", "Mobile | @30.69,-88.04 | 1.5 | port | 1", "Natchez | @31.56,-91.40 | 1.5 | port | 1", "Saint-Louis | @38.63,-90.20 | 1 | port commerce | 1",
@@ -40,11 +42,12 @@
 "Oaxaca | Oaxaca | 19 | | 0", "Valladolid | Morelia | 18 | | 0", "San Luis Potosí | San Luis Potosí | 12 | | 0", "San Salvador | San Salvador | 12 | | 0",
 "Durango | Victoria de Durango | 11 | | 0", "Chihuahua | @28.64,-106.09 | 11 | | 0", "Aguascalientes | @21.88,-102.29 | 8 | | 0", "León | @12.43,-86.88 | 8 | | 0",
 "Granada | @11.93,-85.96 | 8 | port | 1", "Campeche | Campeche | 7 | port | 3", "Saltillo | @25.42,-101.00 | 7 | | 0", "Xalapa | Xalapa de Enríquez | 7 | | 0",
-"Panamá | @8.95,-79.53 | 7 | port commerce | 3", "Veracruz | @19.20,-96.14 | 7 | port arsenal | 3", "Antigua Guatemala | @14.56,-90.73 | 6 | | 0", "Tegucigalpa | @14.08,-87.21 | 6 | | 0",
+"Panamá | @8.95,-79.53 | 7 | port commerce | 3", "Veracruz | @19.20,-96.14 | 4.6 | port arsenal | 3", "Antigua Guatemala | @14.56,-90.73 | 6 | | 0", "Tegucigalpa | @14.08,-87.21 | 6 | | 0",
 "El Paso del Norte | @31.74,-106.48 | 5 | | 1", "Santa Fe | @35.69,-105.94 | 4.5 | | 1", "Acapulco | Acapulco de Juárez | 4 | port commerce | 2", "Ciudad Real | @16.74,-92.64 | 4 | | 0",
 "Monterrey | @25.67,-100.31 | 3 | | 0", "Comayagua | @14.46,-87.64 | 3 | | 0", "Cartago | @9.86,-83.92 | 3 | | 0", "San Antonio | @29.42,-98.49 | 1.5 | | 1",
 "Albuquerque | @35.08,-106.65 | 1.5 | | 0", "Portobelo | @9.55,-79.65 | 1 | port | 3", "Laredo | @27.51,-99.50 | 0.7 | | 0", "La Bahía | @28.66,-97.39 | 0.6 | | 2",
-"Omoa | @15.78,-88.04 | 0.5 | port arsenal | 3", "Nacogdoches | @31.60,-94.65 | 0.5 | | 0"
+"Omoa | @15.78,-88.04 | 0.5 | port arsenal | 3", "Nacogdoches | @31.60,-94.65 | 0.5 | | 0",
+"Le Carmen | @18.646,-91.830 | 2 | port | 2"
 ],
 "ACU": [
 "La Havane | Havana | 51 | port arsenal | 4", "Santiago de Cuba | @20.02,-75.82 | 20 | port | 2", "Puerto Príncipe | @21.38,-77.92 | 20 | | 0", "Santo Domingo | @18.47,-69.89 | 20 | port | 3",
@@ -55,7 +58,8 @@
 ],
 "ANL": [
 "Willemstad | @12.11,-68.93 | 8 | port commerce | 3", "Philipsburg | @18.03,-63.05 | 0.5 | port | 0", "Kralendijk | @12.15,-68.27 | 0.3 | port | 0",
-"Oranjestad | @12.52,-70.03 | 0.3 | port | 0"
+"Oranjestad | @12.52,-70.03 | 0.3 | port | 0",
+"Saint-Eustache | @17.483,-62.986 | 6 | port commerce | 2", "Saba | @17.626,-63.249 | 1 | port | 0"
 ],
 "AIR": [
 "Onontagué | @42.96,-76.10 | 0.4 | | 1", "Vincennes | @38.68,-87.53 | 0.8 | port | 1", "Chenussio | @42.80,-77.82 | 0.6 | | 0", "Oneida | @43.06,-75.65 | 0.6 | | 0",

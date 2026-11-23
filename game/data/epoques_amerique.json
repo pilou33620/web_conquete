@@ -8,7 +8,7 @@
 "Richmond|ATC": [[1700,0.026,"bourg"],[1737,0.053,"ville_neuve"],[1790,1,"ville"],[1830,4.211,"ville"],[1860,10,"ville"],[1900,22.368,"industrie"]],
 "Albany|ATC": [[1700,0.286,"bourg"],[1750,0.571,"ville"],[1790,1,"ville"],[1830,6.857,"ville"],[1860,17.714,"ville"],[1900,26.857,"ville"]],
 "Norfolk|ATC": [[1700,0.067,"bourg"],[1775,2,"ville"],[1776,0.167,"guerres"],[1790,1,"arsenal"],[1830,3.333,"arsenal"],[1860,5,"arsenal"],[1900,15.667,"arsenal"]],
-"Williamsburg|ATC": [[1700,0.1,"bourg"],[1750,0.75,"ville"],[1790,1,"declin"],[1850,0.75,"declin"],[1900,1,"bourg"]],
+"Williamsburg|ATC": [[1700,0.154,"bourg"],[1750,1.154,"ville"],[1790,1,"declin"],[1850,1.154,"declin"],[1900,1.538,"bourg"]],
 "Savannah|ATC": [[1700,0.043,"bourg"],[1733,0.087,"ville_neuve"],[1790,1,"ville"],[1830,3.174,"ville"],[1860,9.565,"ville"],[1900,23.478,"ville"]],
 "Kingston|AGB": [[1700,0.115,"ville_neuve"],[1750,0.577,"ville"],[1790,1,"grand_port"],[1830,1.269,"grand_port"],[1870,1.346,"declin"],[1900,1.808,"ville"]],
 "Bridgetown|AGB": [[1700,0.667,"ville"],[1750,0.8,"ville"],[1790,1,"grand_port"],[1850,1.333,"ville"],[1900,1.4,"ville"]],
@@ -17,7 +17,7 @@
 "Saint-Jean de Terre-Neuve|AGB": [[1700,0.167,"bourg"],[1750,0.5,"ville"],[1790,1,"ville"],[1830,5,"ville"],[1870,7.667,"ville"],[1900,10,"ville"]],
 "Nassau|AGB": [[1700,0.2,"bourg"],[1750,0.4,"bourg"],[1790,1,"ville"],[1850,2.8,"ville"],[1900,4.8,"ville"]],
 "Fort Albany|AGB": [[1700,0.25,"bourg"],[1790,1,"bourg"],[1850,1,"bourg"],[1900,1.5,"bourg"]],
-"Québec|AFR": [[1700,0.167,"ville"],[1750,0.667,"ville"],[1759,0.417,"guerres"],[1790,1,"ville"],[1830,2.25,"grand_port"],[1871,5,"grand_port"],[1900,5.75,"ville"]],
+"Québec|AFR": [[1700,0.2,"ville"],[1750,0.8,"ville"],[1759,0.5,"guerres"],[1790,1,"ville"],[1830,2.7,"grand_port"],[1871,6,"grand_port"],[1900,6.9,"ville"]],
 "Montréal|AFR": [[1700,0.167,"bourg"],[1750,0.444,"ville"],[1790,1,"ville"],[1831,3,"ville"],[1851,6.444,"grande_ville"],[1871,11.889,"industrie"],[1900,29.778,"industrie"]],
 "Cap-Français|AFR": [[1700,0.067,"bourg"],[1750,0.533,"ville"],[1790,1,"grand_port"],[1793,0.2,"guerres"],[1830,0.533,"declin"],[1900,1.667,"ville"]],
 "Port-au-Prince|AFR": [[1700,0.011,"bourg"],[1749,0.056,"ville_neuve"],[1790,1,"ville"],[1830,2.778,"ville"],[1870,4.444,"ville"],[1900,6.667,"ville"]],
@@ -40,7 +40,7 @@
 "Zacatecas|AES": [[1700,1,"mines"],[1750,0.8,"mines"],[1790,1,"mines"],[1830,1.2,"mines"],[1900,1.28,"mines"]],
 "Guatemala|AES": [[1700,0.04,"bourg"],[1776,0.2,"ville_neuve"],[1790,1,"ville"],[1850,1.6,"ville"],[1900,2.88,"ville"]],
 "Antigua Guatemala|AES": [[1700,5,"ville"],[1750,5.833,"ville"],[1773,5,"ville"],[1790,1,"declin"],[1850,1.5,"declin"],[1900,1.667,"declin"]],
-"Veracruz|AES": [[1700,0.714,"arsenal"],[1750,0.857,"arsenal"],[1790,1,"arsenal"],[1830,0.857,"guerres"],[1870,1.429,"grand_port"],[1900,4.143,"grand_port"]],
+"Veracruz|AES": [[1700,1.087,"arsenal"],[1750,1.043,"arsenal"],[1790,1,"arsenal"],[1830,1.304,"guerres"],[1870,2.174,"grand_port"],[1900,6.304,"grand_port"]],
 "Acapulco|AES": [[1700,0.75,"grand_port"],[1790,1,"grand_port"],[1830,0.75,"declin"],[1900,1.25,"declin"]],
 "San Salvador|AES": [[1700,0.667,"ville"],[1790,1,"ville"],[1850,1.667,"ville"],[1900,4.167,"ville"]],
 "Panamá|AES": [[1700,1.143,"ville"],[1750,1,"ville"],[1790,1,"ville"],[1850,1.429,"gare"],[1900,3.571,"ville"]],
@@ -73,5 +73,6 @@
 "Palo Duro|APL": [[1700,0.667,"bourg"],[1790,1,"bourg"],[1850,1,"bourg"],[1900,0.333,"declin"]],
 "Zuñi|APU": [[1700,0.938,"ville"],[1750,1,"ville"],[1790,1,"ville"],[1850,0.813,"ville"],[1900,0.938,"ville"]],
 "Acoma|APU": [[1700,1,"ville"],[1790,1,"ville"],[1850,0.5,"declin"],[1900,0.625,"bourg"]],
-"Taos|APU": [[1700,1.2,"ville"],[1790,1,"ville"],[1850,0.8,"ville"],[1900,0.8,"ville"]]
+"Taos|APU": [[1700,1.2,"ville"],[1790,1,"ville"],[1850,0.8,"ville"],[1900,0.8,"ville"]],
+"Saint-Eustache|ANL": [[1700,0.167,"bourg"],[1750,0.333,"ville"],[1780,1.333,"grand_port"],[1790,1,"declin"],[1840,0.333,"declin"],[1900,0.25,"declin"]]
 }

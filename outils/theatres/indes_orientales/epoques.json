@@ -1,12 +1,12 @@
 {
-"_note": "Trajectoires de population, 1700-1900. ESTIMATIONS écrites de mémoire (VOC, Raffles, recensements coloniaux néerlandais, espagnols et britanniques de la fin du XIXe siècle), très incertaines avant 1850. « Nom|PAYS » : [année, population en milliers, étiquette]. La valeur de 1790 doit être celle de villes.json.",
-"Batavia|ONL": [[1700,70,"ville"],[1740,80,"guerres"],[1790,100,"grande_ville"],[1815,60,"declin"],[1850,90,"grande_ville"],[1880,100,"grande_ville"],[1900,115,"grande_ville"]],
+"_note": "Trajectoires de population, 1700-1900. ESTIMATIONS écrites de mémoire (VOC, Raffles, recensements coloniaux néerlandais, espagnols et britanniques de la fin du XIXe siècle), très incertaines avant 1850. « Nom|PAYS » : [année, population en milliers, étiquette]. La valeur de 1790 doit être celle de villes.json. Vérifié le 23/11/2026 d'après : Raffles (History of Java, 1817, recensement de 1815) ; recensement de Batavia de 1847 ; recensements des Indes néerlandaises (1905) et des Philippines (1903) ; Gealogo (Philippine Studies, 2011) pour Manille ; Spenser St John (Brunei, 1856) ; Trocki (Riau) ; Wikipédia en (Batavia, Johor Sultanate, Francis Light, Kampong Ayer). Restent des estimations : villes de Java avant 1815 hors Batavia, Sumatra, Bornéo, Célèbes, Moluques, Cebu et Vigan.",
+"Batavia|ONL": [[1700,70,"ville"],[1740,80,"guerres"],[1790,100,"grande_ville"],[1815,60,"declin"],[1850,60,"grande_ville"],[1880,100,"grande_ville"],[1900,115,"grande_ville"]],
 "Malacca|ONL": [[1700,6,"ville"],[1790,8,"ville"],[1830,12,"ville"],[1871,15,"ville"],[1900,20,"ville"]],
 "Ambon|ONL": [[1700,8,"ville"],[1790,10,"ville"],[1850,12,"ville"],[1900,12,"ville"]],
 "Makassar|ONL": [[1700,8,"ville"],[1790,12,"ville"],[1850,20,"grand_port"],[1900,25,"grand_port"]],
 "Padang|ONL": [[1700,5,"bourg"],[1790,8,"ville"],[1850,20,"ville"],[1900,50,"grand_port"]],
 "Surakarta|OMT": [[1700,5,"bourg"],[1745,40,"ville_neuve"],[1790,90,"grande_ville"],[1815,105,"grande_ville"],[1870,100,"grande_ville"],[1900,110,"grande_ville"]],
-"Yogyakarta|OMT": [[1700,3,"bourg"],[1755,20,"ville_neuve"],[1790,70,"grande_ville"],[1830,60,"guerres"],[1870,60,"ville"],[1900,60,"ville"]],
+"Yogyakarta|OMT": [[1700,3,"bourg"],[1755,20,"ville_neuve"],[1790,70,"grande_ville"],[1830,60,"guerres"],[1870,60,"ville"],[1900,80,"ville"]],
 "Semarang|OMT": [[1700,10,"ville"],[1790,20,"ville"],[1850,40,"grand_port"],[1873,50,"gare"],[1900,90,"grand_port"]],
 "Surabaya|OMT": [[1700,15,"ville"],[1790,25,"ville"],[1850,60,"arsenal"],[1878,90,"gare"],[1900,150,"grand_port"]],
 "Banten|OBT": [[1700,60,"ville"],[1750,40,"declin"],[1790,25,"ville"],[1813,8,"guerres"],[1900,3,"declin"]],
@@ -19,7 +19,7 @@
 "Singapour|OJO": [[1700,0.2,"bourg"],[1790,0.2,"bourg"],[1819,1,"port_neuf"],[1830,17,"port_neuf"],[1850,60,"grand_port"],[1871,97,"grand_port"],[1900,230,"grand_port"]],
 "Pulau Pinang|OKD": [[1700,0.1,"bourg"],[1786,1,"port_neuf"],[1790,10,"port_neuf"],[1820,20,"grand_port"],[1871,60,"grand_port"],[1900,95,"grand_port"]],
 "Patani|OPA": [[1700,15,"ville"],[1790,10,"declin"],[1850,8,"bourg"],[1900,10,"bourg"]],
-"Brunei|OBR": [[1700,40,"ville"],[1790,25,"declin"],[1850,15,"declin"],[1900,10,"declin"]],
+"Brunei|OBR": [[1700,40,"ville"],[1790,25,"declin"],[1850,25,"declin"],[1900,10,"declin"]],
 "Jolo|OSU": [[1700,4,"ville"],[1790,6,"ville"],[1850,8,"ville"],[1876,4,"guerres"],[1900,5,"bourg"]],
 "Cotabato|OMG": [[1700,10,"ville"],[1790,10,"ville"],[1860,5,"declin"],[1900,4,"bourg"]],
 "Manille|OES": [[1700,40,"ville"],[1762,50,"guerres"],[1790,60,"grande_ville"],[1830,100,"grande_ville"],[1870,150,"grande_ville"],[1900,190,"grande_ville"]],
@@ -27,5 +27,6 @@
 "Iloilo|OES": [[1700,3,"bourg"],[1790,6,"ville"],[1855,10,"port_neuf"],[1900,20,"grand_port"]],
 "Banjarmasin|OBJ": [[1700,10,"ville"],[1790,12,"ville"],[1860,10,"guerres"],[1900,15,"ville"]],
 "Pontianak|OSB": [[1700,0.1,"bourg"],[1771,1,"ville_neuve"],[1790,8,"ville"],[1850,12,"ville"],[1900,20,"ville"]],
-"Dili|OPT": [[1700,1,"bourg"],[1769,2,"ville_neuve"],[1790,3,"bourg"],[1850,3,"bourg"],[1900,4,"bourg"]]
+"Dili|OPT": [[1700,1,"bourg"],[1769,2,"ville_neuve"],[1790,3,"bourg"],[1850,3,"bourg"],[1900,4,"bourg"]],
+"Banda Neira|ONL": [[1700,4,"ville"],[1790,3,"declin"],[1850,2.5,"declin"],[1900,2,"declin"]]
 }

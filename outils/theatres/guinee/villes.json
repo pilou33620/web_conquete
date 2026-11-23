@@ -1,5 +1,5 @@
 {
-"_note": "Villes et ports du théâtre « Côte de l'Ivoire » vers 1790. ESTIMATIONS écrites de mémoire (récits de traitants et de voyageurs, ordres de grandeur seulement : à 30 ou 50 % près pour les villes de l'intérieur). Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un camp est sa capitale (celle de 1700 : Savi, ruinée en 1727, reste une place). Les points de commerce d'Empire: Total War sont les ports « port commerce ». Coordonnées @lat,lon : lieux d'époque inconnus de GeoNames, à quelques km près.",
+"_note": "Villes et ports du théâtre « Côte de l'Ivoire » vers 1790. ESTIMATIONS écrites de mémoire (récits de traitants et de voyageurs, ordres de grandeur seulement : à 30 ou 50 % près pour les villes de l'intérieur). Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un camp est sa capitale (celle de 1700 : Savi, ruinée en 1727, reste une place). Les points de commerce d'Empire: Total War sont les ports « port commerce ». Coordonnées @lat,lon : lieux d'époque inconnus de GeoNames, à quelques km près. Vérifié le 23/11/2026 d'après : Wilks (Asante in the Nineteenth Century, 1989) et Bowdich (1817) pour Kumasi ; Law (Ouidah, 2004 ; The Oyo Empire) ; Agbaje-Williams (Old Oyo, 1983) ; Feinberg (Elmina, 1989) ; Lovejoy et Richardson (Bonny, 2004) ; Latham (Old Calabar) ; Y. Person (Porto-Novo) ; Binger (Kong, 1892) ; recensements de Lagos (1866-1901) et de la Côte de l'Or (1891, Statesman's Year-Book 1899) ; Britannica 1911 et 1922 ; Wikipédia fr/en (Kong, Abomey, Kumasi, Benin City, Savi Hweda). Restent des estimations : la plupart des villes hors des capitales, les points de 1700, São Tomé, le Cameroun.",
 "GVE": [
 "Port Loko | @8.77,-12.79 | 3 | | 0", "Freetown | | 1.2 | port commerce | 0", "Sherbro | Bonthe/@7.53,-12.50 | 1 | port commerce | 0", "Gallinas | @6.96,-11.58 | 1.5 | port commerce | 0",
 "Cap Mount | Robertsport/@6.75,-11.37 | 1 | port commerce | 0", "Cap Mesurado | Monrovia | 1 | port commerce | 0", "Grand Bassa | Buchanan | 1 | port | 0", "Sinoe | Greenville/@5.01,-9.04 | 0.8 | port | 0",
@@ -41,7 +41,7 @@
 "Sokodé | | 2 | | 0", "Bassar | | 3 | | 0", "Sansanné-Mango | Sansanné-Mango/Mango/@10.36,0.47 | 2 | | 0", "Bolgatanga | | 1 | | 0"
 ],
 "GHU": [
-"Savi | @6.44,2.07 | 1 | | 0", "Ouidah | | 12 | port commerce | 1", "Porto-Novo | | 10 | port commerce | 1", "Badagry | | 4 | port commerce | 0",
+"Savi | @6.44,2.07 | 1 | | 0", "Ouidah | | 8 | port commerce | 1", "Porto-Novo | | 10 | port commerce | 1", "Badagry | | 4 | port commerce | 0",
 "Grand-Popo | | 3 | port commerce | 0", "Petit-Popo | Aného/Aneho | 3 | port commerce | 0", "Glidji | @6.26,1.61 | 1.5 | | 0", "Athiémé | @6.58,1.67 | 1 | | 0",
 "Comè | | 1 | | 0"
 ],
@@ -81,7 +81,8 @@
 "Elmina | | 12 | port commerce | 3", "Axim | | 3 | port commerce | 1", "Shama | @5.01,-1.63 | 2 | port commerce | 1", "Apam | | 1.5 | port commerce | 1"
 ],
 "GGB": [
-"Cape Coast | | 8 | port commerce | 2", "Anomabu | @5.17,-1.12 | 4 | port commerce | 1", "Dixcove | @4.80,-1.95 | 1.5 | port commerce | 1", "Winneba | | 3 | port commerce | 1"
+"Cape Coast | | 8 | port commerce | 2", "Anomabu | @5.17,-1.12 | 4 | port commerce | 1", "Dixcove | @4.80,-1.95 | 1.5 | port commerce | 1", "Winneba | | 3 | port commerce | 1",
+"Île de Bance | @8.570,-13.041 | 0.2 | port commerce | 2"
 ],
 "GDN": [
 "Christiansborg | @5.552,-0.165 | 3 | port commerce | 2", "Ningo | @5.76,0.18 | 1 | port commerce | 1", "Ada | Ada Foah/@5.79,0.63 | 2 | port commerce | 1", "Keta | | 3 | port commerce | 1"

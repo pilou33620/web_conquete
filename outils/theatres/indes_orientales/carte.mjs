@@ -18,7 +18,7 @@
 //  - Jambi va à Palembang (OPL) ; Siak, Kampar et Indragiri, dépendances de Johor en 1700, à Johor-Riau (OJO).
 //  - Le nord-est de Bornéo (Sabah à l'est de 116,6° E), cédé par Brunei au sultan de Sulu en 1704, va à Sulu (OSU).
 //  - Petites îles : Ternate, Tidore et Saparua sont à l'échelle (plus de 14 km²) ; les îles Banda (la muscade) sont trop
-//    petites pour la grille et rendues à la mer : la VOC garde Ambon et Saparua.
+//    petites pour la grille : une case forcée (ILES, en fin de fichier) garde Banda Neira à la VOC, avec Ambon et Saparua.
 
 const LAT_REF = 4;
 const KX = 111.32 * Math.cos(LAT_REF * Math.PI / 180), KY = 110.95; // comme geo.rs
@@ -142,7 +142,7 @@ const PAYS = {
 // moyens de départ (armée de paix en milliers d'hommes au début de 1700, 1790, 1813 et 1870 ; trésor en multiples des
 // 500 livres d'un département) : estimations de mémoire, ordres de grandeur (levées, garnisons, auxiliaires)
 const MOYENS = {
-  ONL: [[6, 8, 15, 30], 3], // garnisons de la Compagnie, puis l'armée de Daendels et la KNIL
+  ONL: [[9, 8, 15, 30], 3], // garnisons de la Compagnie, puis l'armée de Daendels et la KNIL
   OMT: [[30, 25, 15, 5], 1.2],
   OBT: [[8, 5, 3, 1], 0.6],
   OBL: [[15, 15, 12, 10], 0.6],
@@ -160,7 +160,7 @@ const MOYENS = {
   OBR: [[8, 5, 3, 1], 0.6],
   OSU: [[10, 10, 10, 8], 0.6],
   OMG: [[10, 8, 8, 5], 0.5],
-  OES: [[3, 5, 7, 12], 1.5],
+  OES: [[1.5, 5, 7, 12], 1.5],
   OBJ: [[8, 6, 6, 4], 0.6],
   OKU: [[5, 4, 4, 3], 0.4],
   OSB: [[4, 4, 4, 3], 0.4],
@@ -185,7 +185,7 @@ const MAISONS = {
   OKD: ['Mahawangsa', 'Muhammad Jiwa', 'Abdullah Mukarram', 'Ahmad Tajuddin', 'Dziauddin', 'Tunku Kudin', 'Tunku Ismail', 'Laksamana Kedah'],
   OPA: ['Kelantan', 'Inderawangsa', 'Long Yunus', 'Long Muhammad', 'Tuan Sulong', 'Bendang Badang', 'Nik Dah', 'Datuk Pengkalan'],
   OBR: ['Bolkiah', 'Muhyiddin', 'Kamaluddin', 'Omar Ali Saifuddin', 'Indera Mahkota', 'Pengiran Usop', 'Pengiran Muda Hashim', 'Brooke'],
-  OSU: ['Kiram', 'Shahabuddin', 'Badaruddin', 'Alimuddin', 'Azimuddin', 'Israel', 'Datu Teteng', 'Jamalul Alam'],
+  OSU: ['Shahabuddin', 'Kiram', 'Badaruddin', 'Alimuddin', 'Azimuddin', 'Israel', 'Datu Teteng', 'Jamalul Alam'],
   OMG: ['Kudarat', 'Barahaman', 'Kahar ud-Din', 'Bayan ul-Anwar', 'Pahar ud-Din', 'Kibad Sahriyal', 'Datu Uto', 'Mangigin'],
   OES: ['Bourbon', 'Cruzat y Góngora', 'Arandía', 'Anda y Salazar', 'Basco y Vargas', 'Aguilar', 'Raón', 'Ovando'],
   OBJ: ['Suriansyah', 'Tahmidullah', 'Tamjidullah', 'Sulaiman', 'Adam', 'Hidayatullah', 'Antasari', 'Kotawaringin'],
@@ -232,4 +232,6 @@ export default {
   NE: { rivieres: [], lacs: [] },
   PAYS,
   CULTURES,
+  // îles trop petites pour la grille, gardées chacune par une case de terre (outil : ILES) : [lon, lat, camp, nom]
+  ILES: [[129.896, -4.525, 'ONL', 'Îles Banda']],
 };

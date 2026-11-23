@@ -1,9 +1,10 @@
 {
-"_note": "Villes et ports des Indes orientales vers 1790. ESTIMATIONS écrites de mémoire (récits de la VOC et des voyageurs, Raffles pour Java ; très incertain hors de Java et de Manille : la plupart des chiffres sont à un facteur 2 près). Les coordonnées @lat,lon (lieux d'époque inconnus de GeoNames ou homonymes) sont de mémoire, à 10 km près. Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un pays est sa capitale. Les points de commerce d'Empire: Total War (épices, comptoirs) sont des places « port commerce ».",
+"_note": "Villes et ports des Indes orientales vers 1790. ESTIMATIONS écrites de mémoire (récits de la VOC et des voyageurs, Raffles pour Java ; très incertain hors de Java et de Manille : la plupart des chiffres sont à un facteur 2 près). Les coordonnées @lat,lon (lieux d'époque inconnus de GeoNames ou homonymes) sont de mémoire, à 10 km près. Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un pays est sa capitale. Les points de commerce d'Empire: Total War (épices, comptoirs) sont des places « port commerce ». Vérifié le 23/11/2026 d'après : Raffles (History of Java, 1817, recensement de 1815) ; recensement de Batavia de 1847 ; recensements des Indes néerlandaises (1905) et des Philippines (1903) ; Gealogo (Philippine Studies, 2011) pour Manille ; Spenser St John (Brunei, 1856) ; Trocki (Riau) ; Wikipédia en (Batavia, Johor Sultanate, Francis Light, Kampong Ayer). Restent des estimations : villes de Java avant 1815 hors Batavia, Sumatra, Bornéo, Célèbes, Moluques, Cebu et Vigan.",
 "ONL": [
 "Batavia | Jakarta | 100 | port commerce | 3", "Malacca | | 8 | port commerce | 3", "Ambon | | 10 | port commerce | 2",
 "Makassar | | 12 | port commerce | 2", "Padang | | 8 | port commerce | 1", "Kupang | | 3 | port | 1", "Cirebon | | 10 | port | 1",
-"Buitenzorg | Bogor | 3 | | 0", "Bandung | | 2 | | 0", "Manado | | 2 | port | 1", "Saparua | @-3.57,128.66 | 2 | port | 1"
+"Buitenzorg | Bogor | 3 | | 0", "Bandung | | 2 | | 0", "Manado | | 2 | port | 1", "Saparua | @-3.57,128.66 | 2 | port | 1",
+"Banda Neira | @-4.525,129.896 | 3 | port commerce | 3"
 ],
 "OMT": [
 "Surakarta | | 90 | | 2", "Yogyakarta | | 70 | | 2", "Semarang | | 20 | port commerce | 2", "Surabaya | | 25 | port commerce | 2",

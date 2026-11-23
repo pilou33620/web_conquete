@@ -194,6 +194,7 @@
 ["Bandung",-6.9222,107.6069,"ONL","ville",[],0,2000],
 ["Manado",1.4822,124.8489,"ONL","ville",["port"],1,2000],
 ["Saparua",-3.5805,128.6365,"ONL","ville",["port"],1,2000],
+["Banda Neira",-4.525,129.896,"ONL","ville",["port","commerce"],3,3000],
 ["Werinama",-3.5029,130.1105,"ONL","village",[],0,800],
 ["Namrole",-3.8455,126.7262,"ONL","village",[],0,800],
 ["Cimerak",-7.7507,108.4399,"ONL","village",[],0,800],

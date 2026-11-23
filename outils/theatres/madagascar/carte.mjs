@@ -141,16 +141,16 @@ const MOYENS = {
   MBE: [[6, 5, 4, 2], 0.3],
   MAM: [[3, 3, 3, 2], 0.25],
   MAN: [[5, 5, 5, 4], 0.25],
-  MMN: [[15, 12, 10, 6], 0.4], // les Sakalava, première puissance de l'île vers 1700
+  MMN: [[15, 12, 10, 10], 0.4], // les Sakalava, première puissance de l'île vers 1700
   MSA: [[15, 12, 10, 5], 0.6],
   MBT: [[8, 10, 8, 4], 0.4],
   MPI: [[1.5, 0.5, 0.5, 0.5], 0.4], // quelques centaines de forbans vers 1700
   MCO: [[2, 2, 2, 2], 0.3],
-  MFR: [[0.5, 3, 4, 2], 0.6],
+  MFR: [[0.5, 3, 1.5, 2], 0.6],
   MPT: [[1, 2, 3, 3], 0.6], // garnisons et cipayes des prazos
   MOM: [[3, 3, 4, 5], 0.8],
   MMV: [[15, 10, 8, 6], 0.4],
-  MRZ: [[15, 12, 10, 4], 0.5],
+  MRZ: [[4, 3, 3, 2], 0.5],
   MTS: [[5, 5, 5, 3], 0.25],
 };
 // maisons (la régnante de 1700 d'abord, écrites à la française) : dynasties, lignages et grandes familles ; plusieurs noms
@@ -162,7 +162,7 @@ const MAISONS = {
   MAN: ['Zafiraminia', 'Zafimanara', 'Andriantsiambany', 'Maroserana', 'Zafimanely', 'Andrianmanindry', 'Tsiongaly', 'Ramaka'],
   MMN: ['Maroserana', 'Andriandahifotsy', 'Volamena', 'Zafimbolafotsy', 'Andriamandresy', 'Ramitraho', 'Toera', 'Kamamy'],
   MSA: ['Volamena', 'Andriamandisoarivo', 'Andrianiveniarivo', 'Andriamahatindriarivo', 'Andrianahevenarivo', 'Ravahiny', 'Andriantsoli', 'Tsimandroho'],
-  MBT: ['Zana-Malata', 'Ratsimilaho', 'Tsikoa', 'Ramanano', 'Zanahary', 'Iavy', 'Zakavola', 'Bety'],
+  MBT: ['Tsikoa', 'Ratsimilaho', 'Zana-Malata', 'Ramanano', 'Zanahary', 'Iavy', 'Zakavola', 'Bety'],
   MPI: ['Tew', 'Baldridge', 'Avery', 'Misson', 'Kidd', 'England', 'Plantain', 'La Buse'],
   MCO: ['El-Masela', 'Abdallah', 'Alaoui', 'Chirazi', 'Mouigni Mkou', 'Salim', 'Ahmed', 'Andriantsoli'],
   MFR: ['Compagnie des Indes', 'La Bourdonnais', 'Poivre', 'Dumas', 'Decaen', 'Souillac', 'Malartic', 'de Bouvet'],
@@ -203,4 +203,6 @@ export default {
   NE: { rivieres: [], lacs: [] },
   PAYS,
   CULTURES,
+  // îles trop petites pour la grille, gardées chacune par une case de terre (outil : ILES) : [lon, lat, camp, nom]
+  ILES: [[40.736, -15.034, 'MPT', 'Île de Mozambique'], [40.60, -12.35, 'MPT', 'Ibo']],
 };

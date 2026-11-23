@@ -57,7 +57,7 @@ export default {
   PAYS: { CODE: { name, short, color, adj, title, pros, cons, mods, personality: { aggr, trade, expand, tech }, specialty,
                   moyens: [[a1700, a1790, a1813, a1870], tresor], maisons: [8 noms], culture: '<clé>' } },
   CULTURES: { '<clé>': { prenoms: [...], prenoms_f: [...], noms: [...] } },
-  // facultatifs : defaut, espace, NOM_LAC, PORTS_ADMIS (ci-dessous)
+  // facultatifs : defaut, espace, NOM_LAC, PORTS_ADMIS, ILES (ci-dessous)
 }
 ```
 
@@ -74,6 +74,11 @@ export default {
   d'environnement `ESPACE` l'emporte) ; c'est le réglage du nombre de places.
 - `NOM_LAC` (facultatif) : nom de lac Natural Earth → nom affiché. `PORTS_ADMIS` (facultatif) : `"Nom|CODE"` des ports
   sur un estuaire trop étroit pour la carte.
+- `ILES` (facultatif, à la fin de l'objet) : `[[lon, lat, 'CODE', 'Nom'], …]`, des îles trop petites pour la grille
+  (Saint-Eustache, les îles Banda) : la case de `KM` km du point devient une terre du pays, entière (son contour est le
+  carré de la case, que `raster_ring` de `geo.rs` remplit par son centre). On y met une place de `villes.json` au même
+  point (un bourg y prend l'étiquette `port` à la main : seules les villes la reçoivent d'office). L'outil nomme les îles forcées, et celles qui
+  étaient déjà à l'échelle (inutiles).
 - `culture` : une des clés du moteur (`britannique`, `allemande`, `russe`, `espagnole`, `portugaise`, `italienne`,
   `ottomane`, `scandinave`, `polonaise`, `neerlandaise` ; `francaise` : les noms des départements) ou une clé de
   `CULTURES`, qui ne contient que les cultures nouvelles.
@@ -113,7 +118,7 @@ relus comme du JSON.
 Le moteur Rust embarque les fichiers à la compilation (`include_str!` : `geo.rs`, `rules.rs`) : après un lancement de
 l'outil, on recompile. La carte du jeu (géographie 5 pour l'Europe, `GeoMap::new(5)`) se refait alors toute seule, en
 4 s environ : l'empreinte de son cache `game/data/map_cache_v5.json` suit `europe.json` et `places_europe.json`. Quand
-c'est le calcul de la carte qui change (relief, végétation, routes : `geo.rs`), on augmente `GEN_EUROPE`.
+c'est le calcul de la carte qui change (relief, végétation, routes : `geo.rs`), on augmente `GEN_THEATRE` (geo.rs : il refait le cache de tous les théâtres).
 `cargo test -p conquete --test europe` vérifie la carte, les pays et les trajectoires de l'Europe.
 
 ## Ce qui est écrit dans le moteur, pas dans les données (Europe)

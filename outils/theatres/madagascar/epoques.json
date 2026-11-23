@@ -1,6 +1,6 @@
 {
-"_note": "Trajectoires de population, 1700-1900. ESTIMATIONS écrites de mémoire (récits de voyageurs, recensements coloniaux de la fin du XIXe siècle), très incertaines avant 1850. « Nom|PAYS » : [année, population en milliers, étiquette]. La valeur de 1790 doit être celle de villes.json.",
-"Antananarivo|MME": [[1700,5,"bourg"],[1750,8,"ville"],[1790,15,"ville"],[1820,25,"ville"],[1850,50,"grande_ville"],[1880,75,"grande_ville"],[1900,50,"guerres"]],
+"_note": "Trajectoires de population, 1700-1900. ESTIMATIONS écrites de mémoire (récits de voyageurs, recensements coloniaux de la fin du XIXe siècle), très incertaines avant 1850. « Nom|PAYS » : [année, population en milliers, étiquette]. La valeur de 1790 doit être celle de villes.json. Vérifié le 23/11/2026 d'après : Reclus (Géographie universelle, Afrique t. IV) pour Antananarivo ; Sheriff (Slaves, Spices and Ivory in Zanzibar, 1987) ; recensement de Zanzibar de 1910 et de Mombasa (Horsey 1897) ; Wikipédia en (Timelines d'Antananarivo, Port-Louis, Zanzibar, Mombasa ; Imerina, Boina, Menabe, Betsimisaraka, sultans des Comores) ; Britannica (Mahajanga). Restent des estimations : Saint-Denis et Saint-Paul, Quelimane, Inhambane, Ibo, Kilwa, Mutsamudu, Ambohimanga, côte est, intérieur du continent.",
+"Antananarivo|MME": [[1700,5,"bourg"],[1750,8,"ville"],[1790,15,"ville"],[1820,12,"ville"],[1850,50,"grande_ville"],[1880,75,"grande_ville"],[1900,50,"guerres"]],
 "Ambohimanga|MME": [[1700,3,"bourg"],[1790,5,"ville"],[1820,4,"bourg"],[1900,2,"declin"]],
 "Fianarantsoa|MBE": [[1700,2,"bourg"],[1790,3,"bourg"],[1831,5,"ville_neuve"],[1870,8,"ville"],[1900,10,"ville"]],
 "Majunga|MSA": [[1700,1,"bourg"],[1750,4,"port_neuf"],[1790,7,"ville"],[1830,6,"guerres"],[1870,8,"ville"],[1900,10,"grand_port"]],
@@ -18,8 +18,8 @@
 "Quelimane|MPT": [[1700,1,"bourg"],[1790,3,"bourg"],[1850,4,"bourg"],[1900,6,"port_neuf"]],
 "Inhambane|MPT": [[1700,1,"bourg"],[1790,3,"bourg"],[1850,4,"bourg"],[1900,5,"bourg"]],
 "Lourenço Marques|MPT": [[1700,0.2,"bourg"],[1790,0.5,"bourg"],[1850,1,"bourg"],[1880,3,"port_neuf"],[1895,5,"gare"],[1900,10,"grand_port"]],
-"Mombasa|MOM": [[1700,8,"guerres"],[1750,10,"ville"],[1790,10,"ville"],[1840,8,"declin"],[1870,12,"ville"],[1900,25,"gare"]],
-"Zanzibar|MOM": [[1700,3,"bourg"],[1750,5,"ville"],[1790,8,"ville"],[1840,40,"grand_port"],[1870,80,"grand_port"],[1900,60,"grand_port"]],
+"Mombasa|MOM": [[1700,8,"guerres"],[1750,10,"ville"],[1790,10,"ville"],[1840,8,"declin"],[1870,12,"ville"],[1900,18,"gare"]],
+"Zanzibar|MOM": [[1700,3,"bourg"],[1750,3,"ville"],[1790,5,"ville"],[1840,20,"grand_port"],[1870,80,"grand_port"],[1900,35,"grand_port"]],
 "Kilwa|MOM": [[1700,2,"declin"],[1776,5,"port_neuf"],[1790,4,"ville"],[1850,1,"declin"],[1900,0.5,"declin"]],
 "Danangombe|MRZ": [[1700,5,"ville"],[1790,6,"ville"],[1835,1,"guerres"],[1900,0.5,"declin"]],
 "Mankhamba|MMV": [[1700,8,"ville"],[1790,5,"declin"],[1850,2,"declin"],[1900,1,"declin"]]

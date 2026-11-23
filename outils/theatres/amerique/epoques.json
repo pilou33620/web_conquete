@@ -1,5 +1,5 @@
 {
-"_note": "Trajectoires de population, 1700-1900. ESTIMATIONS écrites de mémoire (recensements des États-Unis de 1790 à 1900, du Canada de 1851 à 1901, de Revillagigedo en Nouvelle-Espagne, ordres de grandeur connus pour les Antilles), à quelques milliers près, très incertaines avant 1790 et pour les villages amérindiens. « Nom|PAYS » : [année, population en milliers, étiquette]. Un lieu fondé après 1700 part d'un hameau (« bourg ») à sa place. La valeur de 1790 doit être celle de villes.json ; l'outil en tire les coefficients (population / population de 1790) d'epoques_amerique.json.",
+"_note": "Trajectoires de population, 1700-1900. ESTIMATIONS écrites de mémoire (recensements des États-Unis de 1790 à 1900, du Canada de 1851 à 1901, de Revillagigedo en Nouvelle-Espagne, ordres de grandeur connus pour les Antilles), à quelques milliers près, très incertaines avant 1790 et pour les villages amérindiens. « Nom|PAYS » : [année, population en milliers, étiquette]. Un lieu fondé après 1700 part d'un hameau (« bourg ») à sa place. La valeur de 1790 doit être celle de villes.json ; l'outil en tire les coefficients (population / population de 1790) d'epoques_amerique.json. Vérifié le 23/11/2026 d'après : recensements des États-Unis de 1790 à 1900 ; Bridenbaugh (villes coloniales 1700-1750) ; Statistique Canada (Québec 1608-2008), Hare (1974) et dénombrement de Québec de 1795, recensements du Canada 1831-1901 ; censo de Revillagigedo (1790-1793) et padrón de Veracruz de 1791 ; recensements cubains de 1774 et 1791 (EcuRed) ; Ducœurjoly (Saint-Domingue, 1789) ; Wikipédia (guerre de Dix Ans, First American Regiment). Restent des estimations : villes des Antilles françaises, néerlandaises et britanniques, Santo Domingo, Amérique centrale, villages amérindiens, points de 1700 et 1750 des villes espagnoles.",
 "Philadelphie|ATC": [[1700,5,"ville"],[1750,15,"ville"],[1790,42,"grand_port"],[1810,92,"grand_port"],[1830,160,"grande_ville"],[1850,340,"industrie"],[1870,674,"industrie"],[1900,1294,"industrie"]],
 "New York|ATC": [[1700,5,"ville"],[1750,13,"ville"],[1790,33,"grand_port"],[1810,96,"grand_port"],[1830,202,"grand_port"],[1850,516,"grande_ville"],[1870,942,"grande_ville"],[1900,3437,"grande_ville"]],
 "Boston|ATC": [[1700,7,"ville"],[1750,15,"ville"],[1775,16,"guerres"],[1790,18,"grand_port"],[1830,61,"grand_port"],[1850,137,"grande_ville"],[1870,251,"grande_ville"],[1900,561,"industrie"]],
@@ -9,7 +9,7 @@
 "Richmond|ATC": [[1700,0.1,"bourg"],[1737,0.2,"ville_neuve"],[1790,3.8,"ville"],[1830,16,"ville"],[1860,38,"ville"],[1900,85,"industrie"]],
 "Albany|ATC": [[1700,1,"bourg"],[1750,2,"ville"],[1790,3.5,"ville"],[1830,24,"ville"],[1860,62,"ville"],[1900,94,"ville"]],
 "Norfolk|ATC": [[1700,0.2,"bourg"],[1775,6,"ville"],[1776,0.5,"guerres"],[1790,3,"arsenal"],[1830,10,"arsenal"],[1860,15,"arsenal"],[1900,47,"arsenal"]],
-"Williamsburg|ATC": [[1700,0.2,"bourg"],[1750,1.5,"ville"],[1790,2,"declin"],[1850,1.5,"declin"],[1900,2,"bourg"]],
+"Williamsburg|ATC": [[1700,0.2,"bourg"],[1750,1.5,"ville"],[1790,1.3,"declin"],[1850,1.5,"declin"],[1900,2,"bourg"]],
 "Savannah|ATC": [[1700,0.1,"bourg"],[1733,0.2,"ville_neuve"],[1790,2.3,"ville"],[1830,7.3,"ville"],[1860,22,"ville"],[1900,54,"ville"]],
 "Kingston|AGB": [[1700,3,"ville_neuve"],[1750,15,"ville"],[1790,26,"grand_port"],[1830,33,"grand_port"],[1870,35,"declin"],[1900,47,"ville"]],
 "Bridgetown|AGB": [[1700,10,"ville"],[1750,12,"ville"],[1790,15,"grand_port"],[1850,20,"ville"],[1900,21,"ville"]],
@@ -18,7 +18,7 @@
 "Saint-Jean de Terre-Neuve|AGB": [[1700,0.5,"bourg"],[1750,1.5,"ville"],[1790,3,"ville"],[1830,15,"ville"],[1870,23,"ville"],[1900,30,"ville"]],
 "Nassau|AGB": [[1700,0.5,"bourg"],[1750,1,"bourg"],[1790,2.5,"ville"],[1850,7,"ville"],[1900,12,"ville"]],
 "Fort Albany|AGB": [[1700,0.05,"bourg"],[1790,0.2,"bourg"],[1850,0.2,"bourg"],[1900,0.3,"bourg"]],
-"Québec|AFR": [[1700,2,"ville"],[1750,8,"ville"],[1759,5,"guerres"],[1790,12,"ville"],[1830,27,"grand_port"],[1871,60,"grand_port"],[1900,69,"ville"]],
+"Québec|AFR": [[1700,2,"ville"],[1750,8,"ville"],[1759,5,"guerres"],[1790,10,"ville"],[1830,27,"grand_port"],[1871,60,"grand_port"],[1900,69,"ville"]],
 "Montréal|AFR": [[1700,1.5,"bourg"],[1750,4,"ville"],[1790,9,"ville"],[1831,27,"ville"],[1851,58,"grande_ville"],[1871,107,"industrie"],[1900,268,"industrie"]],
 "Cap-Français|AFR": [[1700,1,"bourg"],[1750,8,"ville"],[1790,15,"grand_port"],[1793,3,"guerres"],[1830,8,"declin"],[1900,25,"ville"]],
 "Port-au-Prince|AFR": [[1700,0.1,"bourg"],[1749,0.5,"ville_neuve"],[1790,9,"ville"],[1830,25,"ville"],[1870,40,"ville"],[1900,60,"ville"]],
@@ -41,7 +41,7 @@
 "Zacatecas|AES": [[1700,25,"mines"],[1750,20,"mines"],[1790,25,"mines"],[1830,30,"mines"],[1900,32,"mines"]],
 "Guatemala|AES": [[1700,1,"bourg"],[1776,5,"ville_neuve"],[1790,25,"ville"],[1850,40,"ville"],[1900,72,"ville"]],
 "Antigua Guatemala|AES": [[1700,30,"ville"],[1750,35,"ville"],[1773,30,"ville"],[1790,6,"declin"],[1850,9,"declin"],[1900,10,"declin"]],
-"Veracruz|AES": [[1700,5,"arsenal"],[1750,6,"arsenal"],[1790,7,"arsenal"],[1830,6,"guerres"],[1870,10,"grand_port"],[1900,29,"grand_port"]],
+"Veracruz|AES": [[1700,5,"arsenal"],[1750,4.8,"arsenal"],[1790,4.6,"arsenal"],[1830,6,"guerres"],[1870,10,"grand_port"],[1900,29,"grand_port"]],
 "Acapulco|AES": [[1700,3,"grand_port"],[1790,4,"grand_port"],[1830,3,"declin"],[1900,5,"declin"]],
 "San Salvador|AES": [[1700,8,"ville"],[1790,12,"ville"],[1850,20,"ville"],[1900,50,"ville"]],
 "Panamá|AES": [[1700,8,"ville"],[1750,7,"ville"],[1790,7,"ville"],[1850,10,"gare"],[1900,25,"ville"]],
@@ -74,5 +74,6 @@
 "Palo Duro|APL": [[1700,0.2,"bourg"],[1790,0.3,"bourg"],[1850,0.3,"bourg"],[1900,0.1,"declin"]],
 "Zuñi|APU": [[1700,1.5,"ville"],[1750,1.6,"ville"],[1790,1.6,"ville"],[1850,1.3,"ville"],[1900,1.5,"ville"]],
 "Acoma|APU": [[1700,0.8,"ville"],[1790,0.8,"ville"],[1850,0.4,"declin"],[1900,0.5,"bourg"]],
-"Taos|APU": [[1700,0.6,"ville"],[1790,0.5,"ville"],[1850,0.4,"ville"],[1900,0.4,"ville"]]
+"Taos|APU": [[1700,0.6,"ville"],[1790,0.5,"ville"],[1850,0.4,"ville"],[1900,0.4,"ville"]],
+"Saint-Eustache|ANL": [[1700,1,"bourg"],[1750,2,"ville"],[1780,8,"grand_port"],[1790,6,"declin"],[1840,2,"declin"],[1900,1.5,"declin"]]
 }

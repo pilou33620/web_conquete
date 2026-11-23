@@ -74,7 +74,7 @@ const PAYS = {
     ['Farma', 'Massaquoi', 'Caulker', 'Tucker', 'Cleveland', 'Rogers', 'Naimbanna', 'Bai Bureh'], 'mande'),
   GKO: P('Royaume de Kong', 'Kong', 'dioula', '#5b2c6f', 'Les Marchands dioula', ['Caravanes de la kola et du sel : accords commerciaux +25 %', 'Écoles coraniques : recherche +10 %'], ['Cité marchande : infanterie −8 %'],
     { trade: 0.25, research_speed: 0.1, inf_power: -0.08 }, [0.35, 0.85, 0.45, 'civil'], 'livres', [[8, 10, 10, 10], 0.4],
-    ['Ouattara', 'Saganogo', 'Baro', 'Kamagaté', 'Touré', 'Cissé', 'Timité', 'Diabaté'], 'mande'),
+    ['Traoré', 'Ouattara', 'Saganogo', 'Baro', 'Kamagaté', 'Touré', 'Cissé', 'Timité'], 'mande'),
   GAN: P('Royaumes agni et baoulé', 'Agni-Baoulé', 'agni', '#e59866', 'Le Sanwi et les lagunes', ["Or de l'Indénié : livres +15 %", 'Lagunes : ports +10 %'], ['Royaumes jeunes : recrues −10 %'],
     { livres: 0.15, port: 0.1, recrues: -0.1 }, [0.3, 0.7, 0.4, 'civil'], 'livres', [[5, 8, 8, 8], 0.3],
     ['Amalaman', 'Aka Essoin', 'Ano Assoman', 'Kadio', 'Boa Kouassi', 'Amon Ndoufou', 'Assié', 'Aka Simadou'], 'akan'),
@@ -164,4 +164,6 @@ export default {
   cadre: { LON0: -13.6, LON1: 12.6, LAT0: -0.3, LAT1: 11.2, LAT_REF: 5.5, KM: 5 },
   places: [100, 320],
   ENTIERS, COUPES, DETROITS, FLEUVES, NE, PORTS_ADMIS, PAYS, CULTURES,
+  // îles trop petites pour la grille, gardées chacune par une case de terre (outil : ILES) : [lon, lat, camp, nom]
+  ILES: [[-13.041, 8.570, 'GGB', 'Île de Bance']],
 };
