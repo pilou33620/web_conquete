@@ -893,6 +893,8 @@ pub struct GeoMap {
     pub _rivf: Option<Vec<u8>>,
     /// cell_costs : calculé une fois.
     pub _ccost: OnceCell<Vec<Option<f64>>>,
+    /// Les étendues d'eau (marine::etendues) : calculées une fois, à la première recherche de chemin sur l'eau.
+    pub _etendues: OnceCell<Option<Vec<u32>>>,
     /// Le calcul de crue.py (`geo._crue`), rangé sur la carte : None tant qu'il n'est pas fait.
     pub _crue: RefCell<Val>,
     /// (privé, pour la vitesse) `dept_codes[d - 1] in playable_codes` pour chaque valeur d de la grille dept (faux pour 0).
@@ -974,6 +976,7 @@ impl GeoMap {
             adj: Val::dict(),
             _rivf: None,
             _ccost: OnceCell::new(),
+            _etendues: OnceCell::new(),
             _crue: RefCell::new(Val::None),
             jouable,
             parties: vec![],
@@ -1163,6 +1166,7 @@ impl GeoMap {
             adj: Val::dict(),
             _rivf: None,
             _ccost: OnceCell::new(),
+            _etendues: OnceCell::new(),
             _crue: RefCell::new(Val::None),
             jouable,
             parties,

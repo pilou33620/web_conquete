@@ -63,6 +63,55 @@ thread_local! {
     static TAMPON: std::cell::RefCell<(Vec<u32>, Vec<u32>, Vec<u32>, u32)> = const { std::cell::RefCell::new((vec![], vec![], vec![], 0)) };
 }
 
+/// Le cadre où se cherche un chemin sur l'eau parti de la case (x, y) : la partie (théâtre de la carte monde) qui la
+/// contient (son rang), sinon toute la carte (None).
+fn partie_de(geo: &GeoMap, x: i64, y: i64) -> Option<usize> {
+    geo.parties.iter().position(|p| p.ox <= x && x < p.ox + p.W && p.oy <= y && y < p.oy + p.H)
+}
+
+/// Les étendues d'eau de la carte : pour chaque case de mer, le numéro (à partir de 1) de l'eau d'un seul tenant où elle
+/// est (8 voisins, sans sortir de sa partie), 0 à terre ; None si des parties se chevauchent (le cadre d'une case ne
+/// dirait plus celui de la recherche). Sert à chemin_mer : une case d'une autre étendue ne s'atteint pas, inutile de
+/// parcourir les 400 000 cases de la sienne pour le savoir.
+fn etendues(geo: &GeoMap) -> Option<&Vec<u32>> {
+    geo._etendues
+        .get_or_init(|| {
+            for (i, p) in geo.parties.iter().enumerate() {
+                for q in &geo.parties[i + 1..] {
+                    if p.ox < q.ox + q.W && q.ox < p.ox + p.W && p.oy < q.oy + q.H && q.oy < p.oy + p.H {
+                        return None;
+                    }
+                }
+            }
+            let (w, h) = (geo.W, geo.H);
+            let cadre: Vec<Option<usize>> = if geo.parties.is_empty() { vec![] } else { (0..w * h).map(|c| partie_de(geo, c % w, c / w)).collect() };
+            let meme = |a: usize, b: usize| cadre.is_empty() || cadre[a] == cadre[b];
+            let mut num = vec![0u32; (w * h) as usize];
+            let mut n = 0;
+            let mut pile = vec![];
+            for c0 in 0..(w * h) as usize {
+                if num[c0] != 0 || !est_mer(geo, c0 as i64 % w, c0 as i64 / w) {
+                    continue;
+                }
+                n += 1;
+                num[c0] = n;
+                pile.push(c0);
+                while let Some(c) = pile.pop() {
+                    let (x, y) = (c as i64 % w, c as i64 / w);
+                    for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)] {
+                        let v = ((y + dy) * w + x + dx) as usize;
+                        if est_mer(geo, x + dx, y + dy) && num[v] == 0 && meme(c, v) {
+                            num[v] = n;
+                            pile.push(v);
+                        }
+                    }
+                }
+            }
+            Some(num)
+        })
+        .as_ref()
+}
+
 /// Plus court chemin sur l'eau, d'une case à l'autre (8 voisins, A*) : les cases à parcourir sans celle du départ, ou
 /// None. La case de départ peut être à terre (une flotte au quai), pas celle d'arrivée.
 pub fn chemin_mer(geo: &GeoMap, de: (i64, i64), vers: (i64, i64)) -> Option<Vec<(i64, i64)>> {
@@ -80,13 +129,26 @@ pub fn chemin_mer(geo: &GeoMap, de: (i64, i64), vers: (i64, i64)) -> Option<Vec<
         return None;
     }
     // (SPEC-EMPIRE, module 7) la carte monde : on ne passe d'un théâtre à l'autre que par une route maritime (ordre « route »)
-    let cadre = match geo.parties.iter().find(|p| p.ox <= de.0 && de.0 < p.ox + p.W && p.oy <= de.1 && de.1 < p.oy + p.H) {
+    let partie = partie_de(geo, de.0, de.1);
+    let cadre = match partie.map(|i| &geo.parties[i]) {
         Some(p) => (p.ox, p.oy, p.ox + p.W, p.oy + p.H),
         None => (0, 0, geo.W, geo.H),
     };
     let dedans = |x: i64, y: i64| cadre.0 <= x && x < cadre.2 && cadre.1 <= y && y < cadre.3;
     if !dedans(vers.0, vers.1) {
         return None;
+    }
+    // l'arrivée n'est dans aucune des étendues d'eau que touche le départ : le chemin n'existe pas (la recherche le dirait
+    // aussi, après avoir parcouru toute l'étendue du départ). Pas sur la carte monde hors des théâtres : le cadre y est
+    // toute la carte, les étendues non.
+    if let Some(num) = etendues(geo).filter(|_| partie.is_some() || geo.parties.is_empty()) {
+        let e = num[but];
+        let touche = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+            .iter()
+            .any(|&(dx, dy)| est_mer(geo, de.0 + dx, de.1 + dy) && dedans(de.0 + dx, de.1 + dy) && num[((de.1 + dy) * w + de.0 + dx) as usize] == e);
+        if !touche {
+            return None;
+        }
     }
     let h = |c: usize| {
         let (dx, dy) = (((c as i64 % w) - vers.0).unsigned_abs() as u32, ((c as i64 / w) - vers.1).unsigned_abs() as u32);
