@@ -112,6 +112,37 @@ fn etendues(geo: &GeoMap) -> Option<&Vec<u32>> {
         .as_ref()
 }
 
+/// La file de chemin_mer : les cases sortent par (f, numéro) croissants, comme d'un tas de paires (f, numéro), mais
+/// rangées par f dans 32 seaux (petits tas de numéros) : l'heuristique est cohérente, un f poussé n'est jamais plus petit
+/// que le dernier sorti, ni plus grand de plus de 28 (un pas de 14, l'heuristique qui change de 14 au plus).
+struct Seaux {
+    seaux: Vec<BinaryHeap<Reverse<u32>>>,
+    f: u32,
+    n: usize,
+}
+impl Seaux {
+    fn new(f: u32) -> Seaux {
+        Seaux { seaux: (0..32).map(|_| BinaryHeap::new()).collect(), f, n: 0 }
+    }
+    fn push(&mut self, f: u32, c: u32) {
+        assert!(self.f <= f && f < self.f + 32, "chemin_mer : heuristique incohérente");
+        self.seaux[(f & 31) as usize].push(Reverse(c));
+        self.n += 1;
+    }
+    fn pop(&mut self) -> Option<(u32, u32)> {
+        if self.n == 0 {
+            return None;
+        }
+        loop {
+            if let Some(Reverse(c)) = self.seaux[(self.f & 31) as usize].pop() {
+                self.n -= 1;
+                return Some((self.f, c));
+            }
+            self.f += 1;
+        }
+    }
+}
+
 /// Plus court chemin sur l'eau, d'une case à l'autre (8 voisins, A*) : les cases à parcourir sans celle du départ, ou
 /// None. La case de départ peut être à terre (une flotte au quai), pas celle d'arrivée.
 pub fn chemin_mer(geo: &GeoMap, de: (i64, i64), vers: (i64, i64)) -> Option<Vec<(i64, i64)>> {
@@ -150,6 +181,7 @@ pub fn chemin_mer(geo: &GeoMap, de: (i64, i64), vers: (i64, i64)) -> Option<Vec<
             return None;
         }
     }
+    let borne = (cadre.0.max(0), cadre.1.max(0), cadre.2.min(geo.W), cadre.3.min(geo.H));
     let h = |c: usize| {
         let (dx, dy) = (((c as i64 % w) - vers.0).unsigned_abs() as u32, ((c as i64 / w) - vers.1).unsigned_abs() as u32);
         10 * dx.max(dy) + 4 * dx.min(dy)
@@ -169,12 +201,12 @@ pub fn chemin_mer(geo: &GeoMap, de: (i64, i64), vers: (i64, i64)) -> Option<Vec<
             *num = 1;
         }
         let num = *num;
-        let mut tas = BinaryHeap::new();
+        let mut tas = Seaux::new(h(s));
         cout[s] = 0;
         marque[s] = num;
-        tas.push(Reverse((h(s), s as u32)));
+        tas.push(h(s), s as u32);
         let mut vus = 0;
-        while let Some(Reverse((_, c))) = tas.pop() {
+        while let Some((f, c)) = tas.pop() {
             let c = c as usize;
             if c == but {
                 let mut out = vec![];
@@ -190,18 +222,27 @@ pub fn chemin_mer(geo: &GeoMap, de: (i64, i64), vers: (i64, i64)) -> Option<Vec<
             if vus > 400_000 {
                 return None;
             }
+            if f != cout[c] + h(c) {
+                // (case déjà sortie par un meilleur chemin : l'heuristique est cohérente, ses voisins n'y gagneraient rien)
+                continue;
+            }
             let (x, y) = ((c as i64) % w, (c as i64) / w);
             for (dx, dy, pas) in [(1, 0, 10), (-1, 0, 10), (0, 1, 10), (0, -1, 10), (1, 1, 14), (1, -1, 14), (-1, 1, 14), (-1, -1, 14)] {
-                if !est_mer(geo, x + dx, y + dy) || !dedans(x + dx, y + dy) {
+                // (est_mer et dedans : le cadre ramené à la carte vaut les bornes de est_mer)
+                let (nx, ny) = (x + dx, y + dy);
+                if !(borne.0 <= nx && nx < borne.2 && borne.1 <= ny && ny < borne.3) {
                     continue;
                 }
-                let v = ((y + dy) * w + x + dx) as usize;
+                let v = (ny * w + nx) as usize;
+                if geo.terrain[v] as i64 > T_EAU {
+                    continue;
+                }
                 let nc = cout[c] + pas;
                 if marque[v] != num || nc < cout[v] {
                     marque[v] = num;
                     cout[v] = nc;
                     venu[v] = c as u32;
-                    tas.push(Reverse((nc + h(v), v as u32)));
+                    tas.push(nc + h(v), v as u32);
                 }
             }
         }
