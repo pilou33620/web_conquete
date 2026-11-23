@@ -784,7 +784,8 @@ impl AI {
         let r2 = radius * radius;
         if foes.is_some() {
             for a in foes.iter() {
-                if py::pow(a.atf("x") - x, 2.0) + py::pow(a.atf("y") - y, 2.0) < r2 {
+                let (dx, dy) = (a.atf("x") - x, a.atf("y") - y);
+                if !py::loin(dx, dy, r2) && py::pow(dx, 2.0) + py::pow(dy, 2.0) < r2 {
                     let mut pw = power.get(a.at("id"));
                     if pw.is_none() {
                         pw = Val::from(g.army_power(&a, "Plaine"));
@@ -798,8 +799,10 @@ impl AI {
         let code = self.code.as_str();
         for a in g.armies.values() {
             // la distance d'abord (appelée pour chaque place à chaque réflexion : l'état de guerre coûte plus cher)
+            let (dx, dy) = (a.atf("x") - x, a.atf("y") - y);
             if a.at("hidden").truthy()
-                || !(py::pow(a.atf("x") - x, 2.0) + py::pow(a.atf("y") - y, 2.0) < r2)
+                || py::loin(dx, dy, r2)
+                || !(py::pow(dx, 2.0) + py::pow(dy, 2.0) < r2)
                 || !g.at_war(code, a.at("owner").s())
             {
                 continue;
@@ -1072,7 +1075,7 @@ impl AI {
         let pts: Vec<(f64, f64)> = targets.iter().map(|&t| g.node_xy(t)).collect();
         for &i in &own {
             let (x, y) = g.node_xy(i);
-            let mut d = py::min_f(pts.iter().map(|&(tx, ty)| py::hypot(x - tx, y - ty))).unwrap();
+            let mut d = py::min_hypot(x, y, &pts).unwrap();
             let typ = g.geo.nodes.at(i).ats("type");
             d -= match typ.as_str() {
                 "capitale" => 6.0,
@@ -1129,7 +1132,11 @@ impl AI {
             let o = o.clone();
             let nid = n.ati("id");
             let (gx, gy) = fixe.xy[nid as usize];
-            let d = py::hypot(gx - a.atf("x"), gy - a.atf("y"));
+            let (dx, dy) = (gx - a.atf("x"), gy - a.atf("y"));
+            if py::loin(dx, dy, portee * portee) {
+                continue;
+            }
+            let d = py::hypot(dx, dy);
             if d > portee {
                 // (toute la France : pas des milliers de places à juger)
                 continue;

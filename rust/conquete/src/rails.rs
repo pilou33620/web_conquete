@@ -325,10 +325,15 @@ pub fn town_bonus(g: &Game, nid: i64) -> f64 {
 /// Python : `near_station(g, code, x, y)`.
 // game/rails.py, lignes 189 à 196
 pub fn near_station(g: &Game, code: &str, x: f64, y: f64) -> bool {
+    // (aucun tronçon ouvert, comme avant le chemin de fer : pas de gare, inutile de parcourir les villes de la carte)
+    if !g.rails.keys().iter().any(|sid| open_(g, sid.s())) {
+        return false;
+    }
     let r2 = py::pow(R::RAIL_STATION_KM, 2.0);
     for (nid, sids) in by_town(&g.geo).items() {
         let gn = g.geo.nodes.at(&nid);
-        if py::pow(gn.atf("x") - x, 2.0) + py::pow(gn.atf("y") - y, 2.0) <= r2 && sids.iter().any(|sid| usable(g, code, sid.s())) {
+        let (dx, dy) = (gn.atf("x") - x, gn.atf("y") - y);
+        if !py::loin(dx, dy, r2) && py::pow(dx, 2.0) + py::pow(dy, 2.0) <= r2 && sids.iter().any(|sid| usable(g, code, sid.s())) {
             return true;
         }
     }

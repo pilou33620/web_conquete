@@ -32,6 +32,13 @@ pub fn round_n(x: f64, n: i32) -> f64 {
 pub fn pow(x: f64, y: f64) -> f64 {
     x.powf(std::hint::black_box(y))
 }
+/// `pow(dx, 2.0) + pow(dy, 2.0) > r2` à coup sûr (et donc aussi `hypot(dx, dy) > sqrt(r2)`), vu sur les carrés faits
+/// à la main, bien plus vite que pow : avec une marge relative de 1e-9, bien au-delà de l'écart d'un ulp entre `x * x` et
+/// `pow(x, 2)`. Faux ne dit rien : refaire alors le calcul exact. Pour écarter vite les points lointains d'une boucle.
+#[inline]
+pub fn loin(dx: f64, dy: f64, r2: f64) -> bool {
+    dx * dx + dy * dy > r2 * (1.0 + 1e-9) + 1e-300
+}
 /// `a ** n` entre entiers (n >= 0), exact.
 #[track_caller]
 pub fn pow_i(a: i64, n: u32) -> i64 {
@@ -179,6 +186,19 @@ pub fn sum_v(it: impl IntoIterator<Item = Val>) -> Val {
 pub fn hypot(x: f64, y: f64) -> f64 {
     norme(&mut [x.abs(), y.abs()])
 }
+/// `min(math.hypot(x - px, y - py) for px, py in pts)`, le même flottant, sans calculer hypot (lent : celui de CPython)
+/// pour chaque point : les carrés des distances écartent d'abord les points plus loin que le plus proche (avec une marge
+/// relative de 1e-9, bien au-delà des arrondis : hypot se trompe de moins d'un ulp). None si pts est vide.
+pub fn min_hypot(x: f64, y: f64, pts: &[(f64, f64)]) -> Option<f64> {
+    let d2 = |&(px, py): &(f64, f64)| (x - px) * (x - px) + (y - py) * (y - py);
+    let m = pts.iter().map(d2).fold(f64::INFINITY, f64::min);
+    if !m.is_finite() {
+        return min_f(pts.iter().map(|&(px, py)| hypot(x - px, y - py))); // (vide, ou des NaN, des infinis : sans détour)
+    }
+    let seuil = m * (1.0 + 1e-9);
+    min_f(pts.iter().filter(|p| d2(p) <= seuil).map(|&(px, py)| hypot(x - px, y - py)))
+}
+
 /// `math.hypot(x, y, z)`.
 pub fn hypot3(x: f64, y: f64, z: f64) -> f64 {
     norme(&mut [x.abs(), y.abs(), z.abs()])
