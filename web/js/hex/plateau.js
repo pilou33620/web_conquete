@@ -37,6 +37,7 @@ if (PAGE) try {
   r.render = () => {};   // la boucle du moteur ne dessine plus : image() le fait, caméra calée
   E = { S, P, M, R, V, W, rendre: () => rendre(S.scene, S.camera) };
   S.cam.auto = false;
+  P.decorProgressif(6);   // (le décor se pose par morceaux de 6 ms par image : changer de vue n'arrête plus l'image)
 } catch (e) {
   console.warn('Moteur graphique web_engine indisponible', e);
   cv?.remove(); cv = null;
@@ -284,6 +285,7 @@ export class Plateau {
     // animations permises : une image à chaque tour de la boucle (30 par seconde au plus en qualité légère), comme dans
     // les jeux de web_engine ; animations coupées (réglage, mouvement réduit) : seulement quand quelque chose a changé
     const pas = anim ? (E.S.qualite.niveau === 'leger' ? 30 : 0) : Infinity;
+    if (E.P.decorEnCours()) this.sale = true;   // (le décor arrive par morceaux : chacun se montre)
     if (!this.sale && now - this.tRendu < pas) return false;
     this.majClimat(cam);
     this.caler(cam, vw, vh);
