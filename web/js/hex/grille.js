@@ -64,7 +64,7 @@ export class Grille {
     return out;
   }
 }
-const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+export const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 
 // projection écran ↔ jeu de la caméra inclinée (les calques 2D)
 export const versEcran = (cam, vw, vh, x, y, h = 0) => [(x - cam.x) * cam.z + vw / 2, (y - cam.y) * cam.z * K + vh / 2 - h * cam.z * C];

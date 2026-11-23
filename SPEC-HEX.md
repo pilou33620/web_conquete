@@ -36,6 +36,12 @@ bâtiments d'époque (Ancien Régime, Lumières, Empire, Révolution industriell
   mais l'image n'est dessinée que par la boucle de `map.js`, et seulement quand quelque chose a changé.
 - **Places** : le cœur (palais, église, maison, citadelle) sur l'hexagone de la place, des quartiers sur les voisins
   pour les grandes villes, une tour si elle est fortifiée, la version incendiée après un pillage.
+- **Routes** (23/11/2026) : les routes du jeu (`map.edges`) passent d'hexagone en hexagone (`carte-moteur.js`, `routesDe`)
+  et sont tracées par `graphismes/rendu/routes.js` (chemins de terre, routes royales bordées d'arbres) sur les hexagones
+  de 4 cases ; jamais sur l'eau, sans bout dans le vide, une seule fois par paire. Un pont seulement là où le serveur en a
+  un (`e.bx`, `e.ponts`) hors des places : ni au gué, ni au bac, ni le long d'une rivière, ni dans une ville. Pas de ferme
+  ni de moulin sur une route ; pas de champs sur un hexagone de route (le moteur les y poserait par-dessus). Sur la carte
+  de l'Europe (hexagones de 20 km), les villes n'ont pas de quartiers sur les voisins.
 - **Perdu pour l'instant** (à ajouter dans web_engine si on le veut) : le paysage des siècles sur le plateau (pinèdes,
   marais drainés, vigne roussie), les enceintes dessinées autour des villes, la teinte des territoires (restent les
   liserés), les étangs plus petits qu'un hexagone, la mer qui fonce vers le large.

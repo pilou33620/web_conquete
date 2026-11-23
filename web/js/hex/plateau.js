@@ -11,7 +11,7 @@
 // - Rendu : la boucle du moteur continue d'animer, mais l'image n'est dessinée que par image(), appelée par la boucle
 //   de map.js, et seulement quand quelque chose a changé.
 import { K, C, SQ3, clamp, hache } from './grille.js';
-import { Niveau, choisirPas, cadrer, couvre, fenetre, indexEn } from './carte-moteur.js';
+import { Niveau, choisirPas, cadrer, couvre, fenetre, indexEn, routesDe } from './carte-moteur.js';
 
 export { K, C };
 
@@ -27,10 +27,10 @@ if (!cv && carte2d) {
 // sans WebGL, scene.js échoue à l'import : la carte classique prend le relais (map.js, initPlateau)
 let E = null;
 if (PAGE) try {
-  const [S, P, M] = await Promise.all(['scene', 'plateau', 'modeles'].map(m => import(`../../graphismes/rendu/${m}.js`)));
+  const [S, P, M, R] = await Promise.all(['scene', 'plateau', 'modeles', 'routes'].map(m => import(`../../graphismes/rendu/${m}.js`)));
   const r = S.renderer, rendre = r.render.bind(r);
   r.render = () => {};   // la boucle du moteur ne dessine plus : image() le fait, caméra calée
-  E = { S, P, M, rendre: () => rendre(S.scene, S.camera) };
+  E = { S, P, M, R, rendre: () => rendre(S.scene, S.camera) };
   S.cam.auto = false;
 } catch (e) {
   console.warn('Moteur graphique web_engine indisponible', e);
@@ -71,6 +71,9 @@ export class Plateau {
   // chaque place sur son hexagone, les grandes villes sur quelques voisins ; de loin, seules les plus grandes
   placer(N) {
     const g = N.g, p = N.pas, loin = N.leger; N.places = new Map(); N.ville = new Set();
+    // des quartiers sur les voisins seulement quand l'hexagone est petit devant la ville : sur la carte de l'Europe (cases de
+    // 5 km, hexagones de 20 km), Paris en couvrait 7 (60 km) et chaque ville de 7 000 âmes 2, prenant la place des voisines
+    const quartiers = !loin && p * 111.32 / (this.mp.m?.KY || 111.32) <= 6;
     const ordre = this.mp.nodes.slice().sort((a, b) => RANG[a.type] - RANG[b.type] || (b.pop0 || 0) - (a.pop0 || 0));
     for (const n of ordre) {
       if (loin && (n.type === 'village' || n.type === 'ville' && (p > 4 || (n.pop0 || 0) < 7000))) continue;   // (de loin, les grandes seulement)
@@ -79,16 +82,19 @@ export class Plateau {
       const libres = k => g.voisins(g.liste[k]).map(v => v.i).filter(v => !N.ville.has(v) && !N.estEau(v));
       if (N.ville.has(h) || N.estEau(h)) h = libres(h).sort((a, b) => dist(g, a, n) - dist(g, b, n))[0] ?? -1;
       if (h < 0) continue;
-      const nb = loin ? 0 : n.type === 'capitale' ? (n.pop0 > 50000 ? 6 : 2) : n.type === 'ville' && n.pop0 > 7000 ? 1 : 0;
+      const nb = !quartiers ? 0 : n.type === 'capitale' ? (n.pop0 > 50000 ? 6 : 2) : n.type === 'ville' && n.pop0 > 7000 ? 1 : 0;
       const hex = [h, ...libres(h).slice(0, nb)];
       for (const k of hex) N.ville.add(k);
       N.places.set(n.id, { n, hex });
     }
-    // fermes et moulins dans les campagnes cultivées, à l'écart des places (de près seulement)
+    // les routes, d'hexagone en hexagone (sur les hexagones de 4 cases seulement : plus loin, ce ne serait que des traits)
+    N.routes = p === 4 ? routesDe(N, this.mp.edges || [], N.places, N.ville) : { paires: [], sansPont: new Set() };
+    const surRoute = new Set(N.routes.paires.flatMap(([a, b]) => [a, b]));
+    // fermes et moulins dans les campagnes cultivées, à l'écart des places et des routes (de près seulement)
     N.campagne = [];
     if (!loin) for (const t of g.liste) {
       const k = t.i, r = hache(t.col, t.row, 31);
-      if (r >= FERMES + MOULINS || !N.fertile[k] || N.riviere[k] || N.ville.has(k) || g.voisins(t).some(v => N.ville.has(v.i))) continue;
+      if (r >= FERMES + MOULINS || !N.fertile[k] || N.riviere[k] || surRoute.has(k) || N.ville.has(k) || g.voisins(t).some(v => N.ville.has(v.i))) continue;
       N.campagne.push([k, r < FERMES ? 'ferme' : 'moulin']); N.ville.add(k);
     }
   }
@@ -97,16 +103,20 @@ export class Plateau {
   batir(v, cx, cy) {
     const N = this.niveau(v.pas, v.leger), f = cadrer(N, cx, cy, v.l, v.h);
     this.N = N; this.fen = f; f.niv = v.niv; this.g.f = f.u / 10;
-    const C = this.C = fenetre(N, f, N.ville), n = C.l * C.h;
-    this.routes = [];
+    const C = this.C = fenetre(N, f, N.ville, N.routes.sansPont), n = C.l * C.h;
+    // les routes de la fenêtre (indices de la fenêtre) : le moteur les trace (routes.js) et n'y met pas de champs
+    this.chemins = N.routes.paires.map(([a, b, niv]) => [this.local(a), this.local(b), niv]).filter(([a, b]) => a >= 0 && b >= 0);
+    this.routes = this.chemins;
     if (N.leger) {
       // de loin, pas de parcelles : le moteur n'en trace pas sur une case où passe une route, et l'état ne peut le dire
       // qu'après construire(). Le premier passage est donc fait à vide (tuiles seules), le vrai par etatMoteur().
       const { arbres, foret, fertile } = C, vide = new Array(n).fill(0);
       Object.assign(C, { arbres: vide, foret: vide, fertile: vide }); E.P.construire(C); Object.assign(C, { arbres, foret, fertile });
+      this.routes = [];
       for (let i = 0; i < n; i += 2) this.routes.push([i, Math.min(i + 1, n - 1)]);
     } else E.P.construire(C);
     this.etatMoteur();
+    E.R.majRoutes(this.chemins);   // (après l'état : le moteur pose les routes sur les hauteurs des cases)
     this.lieuxDu(N);
     this.batirVilles();
     this.sale = true;
@@ -128,7 +138,9 @@ export class Plateau {
       }
       this.codes.forEach((c, id) => royaumes.push({ id, couleur: this.colors[c] || '#999999' }));
     }
-    E.P.majEtat({ cases: { arbres: C.arbres, foret: C.foret, proprio }, batiments: [], routes: this.routes, forts: [], royaumes,
+    // (les hexagones des places et des fermes sont bâtis : le moteur n'y met ni décor ni buisson sous le bâtiment)
+    const batiments = [...this.N.ville].map(k => ({ case: this.local(k) })).filter(b => b.case >= 0);
+    E.P.majEtat({ cases: { arbres: C.arbres, foret: C.foret, proprio }, batiments, routes: this.routes, forts: [], royaumes,
       saison: this.saison, meteo: { neige_sol: this.neige } });
     this.sale = true;
   }

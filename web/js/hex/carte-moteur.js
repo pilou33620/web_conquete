@@ -8,7 +8,7 @@
 // versions du jeu (4 cases d'un bord plat à l'autre) aussi longtemps que possible ; de loin c'est le décor qui s'allège
 // (NIVEAUX : un arbre par hexagone de forêt, pas de parcelles, les massifs restent), et les hexagones ne grossissent
 // qu'en dernier (l'Europe entière : 8 cases).
-import { Grille, SQ3, bruit } from './grille.js';
+import { Grille, SQ3, bruit, DIRS } from './grille.js';
 
 // du plus fin au plus large : taille des hexagones, décor allégé ?, cases bâties au plus par le moteur
 export const NIVEAUX = [{ pas: 4, leger: false, max: 1500 }, { pas: 4, leger: true, max: 12000 }, { pas: 8, leger: true, max: 12000 }, { pas: 16, leger: true, max: 12000 }];
@@ -81,6 +81,60 @@ export class Niveau {
   estEau(h) { return this.terrain[h] < 3; }
 }
 
+// Les routes de la carte (mp.edges, sans les voies d'eau) en paires d'hexagones voisins [a, b, niveau] pour le moteur
+// (graphismes/rendu/routes.js : 1 chemin de terre, 3 route royale bordée d'arbres), chacune une seule fois (les troncs
+// communs de geo.rs ne se tracent pas deux fois). Jamais sur l'eau ; chaque route part de l'hexagone où sa place est
+// bâtie (places : id → { hex }, Plateau.placer), même quand la place a dû quitter l'eau. Rend aussi `sansPont` : les
+// hexagones de rivière où passe une route sans pont du serveur (e.bx, e.ponts) ; routes.js poserait un pont sur toute
+// case de rivière où passe une route : ce sont les gués, les rivières que la route longe, les bacs, et les places (ville).
+export function routesDe(N, edges, places = new Map(), ville = new Set()) {
+  const g = N.g, n = g.liste.length, paires = new Map(), pontes = new Set(), bacs = new Set();
+  const vois = h => {   // (les voisins par le calcul : Grille.voisins passe par des clés en texte, trop lent ici)
+    const t = g.liste[h], o = [];
+    for (const [a, b] of DIRS) { const r = t.r + b, c = t.q + a + (r - (r & 1)) / 2; if (r >= 0 && r < g.rows && c >= 0 && c < g.cols) o.push(r * g.cols + c); }
+    return o;
+  };
+  const lier = (a, b, niv) => { const k = Math.min(a, b) * n + Math.max(a, b); paires.set(k, Math.max(paires.get(k) || 0, niv)); };
+  for (const e of edges) {
+    if (e.kind === 'water' || e.pts.length < 2) continue;
+    // (le pont du serveur, sur l'hexagone de rivière où il tombe, ou sur ceux d'à côté s'il tombe juste hors du ruban)
+    for (const [x, y] of [...(e.bx != null ? [[e.bx, e.by]] : []), ...(e.ponts || [])]) {
+      const h = indexEn(g, x, y);
+      if (h >= 0) for (const k of N.riviere[h] ? [h] : vois(h).filter(v => N.riviere[v])) pontes.add(k);
+    }
+    const niv = e.royal ? 3 : 1, ch = [], pousser = h => { if (h >= 0 && !N.estEau(h) && h !== ch[ch.length - 1]) ch.push(h); };
+    pousser(places.get(e.a)?.hex[0] ?? -1);
+    for (let a = 0; a < e.pts.length - 1; a++) {
+      const [ax, ay] = e.pts[a], [bx, by] = e.pts[a + 1], nb = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / (N.pas / 4)));
+      for (let s = a ? 1 : 0; s <= nb; s++) pousser(indexEn(g, ax + (bx - ax) * s / nb, ay + (by - ay) * s / nb));
+    }
+    pousser(places.get(e.b)?.hex[0] ?? -1);
+    for (let k = 1; k < ch.length; k++) {
+      const a = ch[k - 1], b = ch[k], va = vois(a);
+      if (e.ferry) for (const h of [a, b]) bacs.add(h);
+      if (va.includes(b)) { lier(a, b, niv); continue; }
+      // (le tracé passe par un coin, ou saute l'eau : par un voisin commun à terre, sinon la route s'interrompt)
+      const c = va.find(v => !N.estEau(v) && vois(v).includes(b));
+      if (c != null) { lier(a, c, niv); lier(c, b, niv); }
+    }
+  }
+  // pas de route qui finit dans le vide (coupée par la mer, ou vers une place que la vue de loin ne bâtit pas) : on
+  // retire les bouts, d'hexagone en hexagone, jusqu'à une place ou un carrefour
+  const de = new Map(), coeurs = new Set([...places.values()].map(p => p.hex[0])), bouts = [];
+  for (const [k] of paires) for (const h of [Math.floor(k / n), k % n]) { if (!de.has(h)) de.set(h, new Set()); de.get(h).add(k); }
+  for (const [h, ks] of de) if (ks.size === 1 && !coeurs.has(h)) bouts.push(h);
+  while (bouts.length) {
+    const h = bouts.pop(), [k] = de.get(h);
+    if (k == null) continue;
+    const v = Math.floor(k / n) === h ? k % n : Math.floor(k / n);
+    paires.delete(k); de.get(h).delete(k); de.get(v).delete(k);
+    if (de.get(v).size === 1 && !coeurs.has(v)) bouts.push(v);
+  }
+  const sansPont = new Set();
+  for (const [k] of paires) for (const h of [Math.floor(k / n), k % n]) if (N.riviere[h] && (!pontes.has(h) || bacs.has(h) || ville.has(h))) sansPont.add(h);
+  return { paires: [...paires].map(([k, niv]) => [Math.floor(k / n), k % n, niv]), sansPont };
+}
+
 // Le niveau de détail pour un écran de vw × vh px à z px par case (vue aplatie de k sur la verticale) sur une carte de
 // W × H cases : le plus fin dont la fenêtre tient dans son maximum de cases. Rend { niv, pas, leger, l, h } (rang dans
 // NIVEAUX, colonnes et lignes de la fenêtre).
@@ -114,8 +168,9 @@ export function couvre(f, x0, x1, y0, y1) {
 }
 
 // La carte du moteur pour la fenêtre f du niveau N (indices de la fenêtre : ligne × l + colonne). ville : les hexagones
-// des places (on y bâtit : ni arbres, ni champs). gl(i) : l'hexagone de la grille entière sous la case i de la fenêtre.
-export function fenetre(N, f, ville = new Set()) {
+// des places (on y bâtit : ni arbres, ni champs) ; sansPont : les hexagones de rivière où le moteur ne doit pas poser de
+// pont (routesDe). gl(i) : l'hexagone de la grille entière sous la case i de la fenêtre.
+export function fenetre(N, f, ville = new Set(), sansPont = new Set()) {
   const { c0, r0, l, h } = f, n = l * h, G = N.g.cols;
   const gl = i => (r0 + ((i / l) | 0)) * G + c0 + (i % l);
   const C = { l, h, version: 1, terrain: new Array(n), riviere: new Array(n), fertile: new Array(n), poissons: new Array(n).fill(0),
@@ -123,7 +178,7 @@ export function fenetre(N, f, ville = new Set()) {
   for (let i = 0; i < n; i++) {
     const k = gl(i), v = ville.has(k);
     C.terrain[i] = v && N.terrain[k] >= 3 ? 4 : N.terrain[k];
-    C.riviere[i] = N.riviere[k]; C.fertile[i] = v ? 0 : N.fertile[k];
+    C.riviere[i] = sansPont.has(k) ? 0 : N.riviere[k]; C.fertile[i] = v ? 0 : N.fertile[k];
     C.arbres[i] = v ? 0 : N.arbres[k]; C.foret[i] = v ? 0 : N.foret[k];
   }
   // les rivières coupées au bord de la fenêtre
