@@ -180,6 +180,13 @@ py_const!(UNIT_ORDER, {
     l.extend(&MERCS());   // *MERCS
     l
 });
+// (SPEC-EMPIRE, module 4) bâtiment exigé pour lever un type d'unité : (chaîne de cities::CHAINS, niveau) ; la ligne,
+// la Garde nationale (la milice) et les régiments étrangers n'en demandent aucun
+py_const!(UNIT_REQ, dict!{
+    "cavalerie" => tup!["haras", 1], "artillerie" => tup!["fonderie", 1], "mitrailleuses" => tup!["fonderie", 3],
+    "legere" => tup!["ecole_militaire", 1], "chasseurs" => tup!["ecole_militaire", 1], "grenadiers" => tup!["ecole_militaire", 1],
+    "sapeurs" => tup!["ecole_militaire", 1],
+});
 py_const!(UNIT_CLS, dict!{"cavalerie" => "cavalerie", "artillerie" => "artillerie", "mitrailleuses" => "artillerie",
             "royal_allemand" => "cavalerie"});   // tout le reste est de l'infanterie
 py_const!(LIGHT_UNITS, tup!["legere", "chasseurs"]);

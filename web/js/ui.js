@@ -1307,6 +1307,7 @@ export class UI {
     const C = this.rules.cities, ch = C.chains[k];
     if (ch.where === 'star' && !(gn.star && this.rules.specialty[gn.star[0]])) return { why: 'Il faut une spécialité dans la ville', hide: true };
     if (ch.where === 'quai' && !(gn.quai && gn.type !== 'fort')) return { why: 'Il faut un quai sur un fleuve navigable', hide: true };
+    if (ns.chains && !ns.chains.some(c => c.id === k)) return { why: 'Pas de place pour ce bâtiment ici', hide: true }; // port de mer, colonie (SPEC-EMPIRE, module 4)
     const cur = (ns.sl.find(s => s[0] === k) || [])[1];
     if (cur === 0 || (ns.q || []).some(q => (q.kind === 'slot' || q.kind === 'build') && q.what === k)) return { why: 'Déjà en chantier' };
     const lvl = cur == null ? 1 : cur + 1;

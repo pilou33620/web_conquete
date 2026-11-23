@@ -38,6 +38,7 @@ pub const POLICY_TOURS: i64 = 1;  // transition d'une politique à l'autre
 pub const POLICY_OLD_DAYS: i64 = 18;  // (sauvegardes d'avant les tours : transition en jours)
 pub const EV_RATE: f64 = 1.0 / 85.0; // chance quotidienne d'un événement local, pour un camp (un tous les deux à trois mois)
 pub const CITY_GAP: i64 = 240;  // une même place n'a pas deux événements à moins de huit mois d'écart
+pub const COLLEGE_MAX: f64 = 0.25; // (SPEC-EMPIRE, module 4) recherches au plus +25 % (0,15 avant les universités)
 py_const!(SIZE_COST, dict!{"village" => 0.5, "fort" => 0.6, "ville" => 1.0, "capitale" => 1.8});  // coûts et gains des événements selon la taille
 py_const!(TOWN_W, dict!{"capitale" => 3.0, "ville" => 3.0, "fort" => 1.0, "village" => 0.6});  // places touchées : surtout les villes
 /// `TECH_NAME = lambda t: R.TECH[t]['name']`.
@@ -64,12 +65,14 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Marché",
                 "cost" => dict!{"livres" => 120, "bois" => 40},
+                "bat" => "marche",
                 "days" => 14,
                 "fx" => dict!{"livres" => 0.1},
             },
             dict!{
                 "name" => "Halle couverte",
                 "cost" => dict!{"livres" => 260, "bois" => 80, "outils" => 15},
+                "bat" => "marche",
                 "days" => 22,
                 "dev" => 1,
                 "up" => 0.05,
@@ -78,6 +81,7 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Bourse de commerce",
                 "cost" => dict!{"livres" => 520, "bois" => 100, "fer" => 40, "outils" => 30},
+                "bat" => "banque",
                 "days" => 32,
                 "dev" => 2,
                 "tech" => "escompte",
@@ -94,12 +98,14 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Moulins",
                 "cost" => dict!{"livres" => 100, "bois" => 50},
+                "bat" => "moulin",
                 "days" => 12,
                 "fx" => dict!{"vivres" => 0.2},
             },
             dict!{
                 "name" => "Minoterie",
                 "cost" => dict!{"livres" => 220, "bois" => 80, "fer" => 20, "outils" => 15},
+                "bat" => "moulin",
                 "days" => 20,
                 "dev" => 1,
                 "up" => 0.05,
@@ -108,6 +114,7 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Greniers d’abondance",
                 "cost" => dict!{"livres" => 400, "bois" => 120, "fer" => 40},
+                "bat" => "grenier",
                 "days" => 30,
                 "tech" => "greniers",
                 "up" => 0.1,
@@ -124,12 +131,14 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Atelier",
                 "cost" => dict!{"livres" => 140, "bois" => 50},
+                "bat" => "manufacture",
                 "days" => 15,
                 "fx" => dict!{"spec" => 0.2},
             },
             dict!{
                 "name" => "Maison",
                 "cost" => dict!{"livres" => 300, "bois" => 80, "outils" => 20},
+                "bat" => "manufacture",
                 "days" => 24,
                 "dev" => 1,
                 "up" => 0.05,
@@ -138,6 +147,7 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Grande maison",
                 "cost" => dict!{"livres" => 560, "bois" => 110, "fer" => 30, "outils" => 30},
+                "bat" => "manufacture",
                 "days" => 34,
                 "dev" => 2,
                 "tech" => "*",
@@ -154,12 +164,14 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Atelier",
                 "cost" => dict!{"livres" => 130, "bois" => 50, "fer" => 20},
+                "bat" => "forge",
                 "days" => 15,
                 "fx" => dict!{"industrie" => 0.1},
             },
             dict!{
                 "name" => "Manufacture",
                 "cost" => dict!{"livres" => 300, "bois" => 80, "fer" => 40, "outils" => 20},
+                "bat" => "manufacture",
                 "days" => 25,
                 "dev" => 1,
                 "tech" => "manufactures",
@@ -169,6 +181,7 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Fabrique",
                 "cost" => dict!{"livres" => 600, "bois" => 100, "fer" => 80, "outils" => 40},
+                "bat" => "usine",
                 "days" => 36,
                 "dev" => 2,
                 "tech" => "vapeur",
@@ -185,6 +198,7 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Caserne",
                 "cost" => dict!{"livres" => 140, "bois" => 60},
+                "bat" => "caserne",
                 "days" => 16,
                 "up" => 0.1,
                 "fx" => dict!{"recrues" => 0.1, "train" => 0.15, "milice" => 40},
@@ -192,6 +206,7 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Quartier de cavalerie",
                 "cost" => dict!{"livres" => 280, "bois" => 90, "fer" => 30},
+                "bat" => "caserne",
                 "days" => 24,
                 "dev" => 1,
                 "tech" => "haras",
@@ -201,6 +216,7 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "École militaire",
                 "cost" => dict!{"livres" => 550, "bois" => 120, "fer" => 60},
+                "bat" => "caserne",
                 "days" => 35,
                 "dev" => 2,
                 "tech" => "divisions",
@@ -217,6 +233,7 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Hospice",
                 "cost" => dict!{"livres" => 120, "bois" => 40},
+                "bat" => "hopital",
                 "days" => 14,
                 "up" => 0.05,
                 "fx" => dict!{"stab" => 0.03, "grow" => 0.1, "ev" => dict!{"epidemie" => -0.25}},
@@ -224,6 +241,7 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Hôtel-Dieu",
                 "cost" => dict!{"livres" => 260, "bois" => 70, "outils" => 20},
+                "bat" => "hopital",
                 "days" => 22,
                 "dev" => 1,
                 "up" => 0.15,
@@ -232,6 +250,7 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Collège",
                 "cost" => dict!{"livres" => 480, "bois" => 90, "outils" => 30},
+                "bat" => "ecole",
                 "days" => 30,
                 "dev" => 2,
                 "up" => 0.25,
@@ -253,12 +272,14 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Cale et entrepôts",
                 "cost" => dict!{"livres" => 120, "bois" => 60},
+                "bat" => "entrepot",
                 "days" => 14,
                 "fx" => dict!{"trade" => 0.1},
             },
             dict!{
                 "name" => "Chantier de gabares",
                 "cost" => dict!{"livres" => 260, "bois" => 100, "fer" => 20},
+                "bat" => "port",
                 "days" => 22,
                 "dev" => 1,
                 "tech" => "gabares",
@@ -268,6 +289,7 @@ py_const!(CHAINS, dict!{
             dict!{
                 "name" => "Arsenal",
                 "cost" => dict!{"livres" => 520, "bois" => 140, "fer" => 60},
+                "bat" => "arsenal",
                 "days" => 34,
                 "dev" => 2,
                 "tech" => "armureries",
@@ -281,11 +303,131 @@ py_const!(CHAINS, dict!{
         "icon" => "depot",
         "desc" => format!("{}.", R::BUILD().at("depot").at("desc")),
         "levels" => list![
-            dict!{"name" => "Magasin aux vivres", "cost" => R::BUILD_cost("depot", 0), "days" => R::BUILD_days("depot", 0), "fx" => dict!{"depot" => 1}},
+            dict!{"name" => "Magasin aux vivres", "cost" => R::BUILD_cost("depot", 0), "bat" => "grenier", "days" => R::BUILD_days("depot", 0), "fx" => dict!{"depot" => 1}},
+        ],
+    },
+    // (SPEC-EMPIRE, module 4) chaînes d'Empire : les trois premières ouvrent le recrutement (R::UNIT_REQ)
+    "haras" => dict!{
+        "name" => "Haras",
+        "icon" => "recrues",
+        "desc" => "Haras et remontes : il en faut un pour lever de la cavalerie ; cavaliers formés plus vite.",
+        "levels" => list![
+            dict!{"name" => "Haras", "cost" => dict!{"livres" => 140, "bois" => 50}, "bat" => "haras", "days" => 16, "up" => 0.1,
+                  "fx" => dict!{"cav_train" => 0.15}},
+            dict!{"name" => "Haras royal", "cost" => dict!{"livres" => 300, "bois" => 80, "fer" => 20}, "bat" => "haras", "days" => 24, "dev" => 1,
+                  "up" => 0.2, "fx" => dict!{"recrues" => 0.05, "cav_train" => 0.25}},
+            dict!{"name" => "École de cavalerie", "cost" => dict!{"livres" => 560, "bois" => 100, "fer" => 40}, "bat" => "haras", "days" => 34,
+                  "dev" => 2, "tech" => "hussards", "up" => 0.3, "fx" => dict!{"recrues" => 0.1, "cav_train" => 0.35}},
+        ],
+    },
+    "fonderie" => dict!{
+        "name" => "Fonderie",
+        "icon" => "outils",
+        "desc" => "Fonderies et arsenaux : il en faut une pour lever de l'artillerie (un arsenal pour les mitrailleuses).",
+        "levels" => list![
+            dict!{"name" => "Fonderie", "cost" => dict!{"livres" => 150, "bois" => 40, "fer" => 30}, "bat" => "fonderie", "days" => 18, "up" => 0.1,
+                  "fx" => dict!{"industrie" => 0.05, "art_train" => 0.15}},
+            dict!{"name" => "Fonderie de canons", "cost" => dict!{"livres" => 320, "bois" => 60, "fer" => 60, "outils" => 15}, "bat" => "armurerie",
+                  "days" => 26, "dev" => 1, "up" => 0.2, "fx" => dict!{"industrie" => 0.1, "art_train" => 0.25}},
+            dict!{"name" => "Arsenal", "cost" => dict!{"livres" => 620, "bois" => 100, "fer" => 100, "outils" => 30}, "bat" => "arsenal", "days" => 38,
+                  "dev" => 2, "tech" => "gribeauval", "up" => 0.35, "fx" => dict!{"industrie" => 0.2, "art_train" => 0.35}},
+        ],
+    },
+    "ecole_militaire" => dict!{
+        "name" => "École militaire",
+        "icon" => "recrues",
+        "desc" => "Salles d'armes et écoles : il en faut une pour lever infanterie légère, chasseurs, grenadiers et sapeurs.",
+        "levels" => list![
+            dict!{"name" => "Salle d’armes", "cost" => dict!{"livres" => 150, "bois" => 50}, "bat" => "ecole_militaire", "days" => 18, "up" => 0.1,
+                  "fx" => dict!{"train" => 0.05, "xp" => 5}},
+            dict!{"name" => "École royale militaire", "cost" => dict!{"livres" => 340, "bois" => 80, "fer" => 20}, "bat" => "ecole_militaire",
+                  "days" => 28, "dev" => 1, "up" => 0.25, "fx" => dict!{"train" => 0.1, "xp" => 10}},
+            dict!{"name" => "École polytechnique", "cost" => dict!{"livres" => 650, "bois" => 110, "fer" => 40, "outils" => 30},
+                  "bat" => "ecole_militaire", "days" => 40, "dev" => 2, "tech" => "levee", "up" => 0.4, "fx" => dict!{"train" => 0.15, "xp" => 20}},
+        ],
+    },
+    "universite" => dict!{
+        "name" => "Savoir",
+        "icon" => "scale",
+        "desc" => "Collèges et académies : recherches plus rapides, un peu d'ordre public.",
+        "levels" => list![
+            dict!{"name" => "Collège", "cost" => dict!{"livres" => 150, "bois" => 40}, "bat" => "ecole", "days" => 18, "up" => 0.1,
+                  "fx" => dict!{"research" => 0.05, "stab" => 0.01}},
+            dict!{"name" => "Université", "cost" => dict!{"livres" => 330, "bois" => 70, "outils" => 15}, "bat" => "universite", "days" => 28,
+                  "dev" => 1, "up" => 0.2, "fx" => dict!{"research" => 0.1, "stab" => 0.02}},
+            dict!{"name" => "Académie des sciences", "cost" => dict!{"livres" => 620, "bois" => 90, "outils" => 30}, "bat" => "academie",
+                  "days" => 40, "dev" => 2, "up" => 0.35, "fx" => dict!{"research" => 0.18, "stab" => 0.03}},
+        ],
+    },
+    "eglise" => dict!{
+        "name" => "Église",
+        "icon" => "scale",
+        "desc" => "Paroisses et cathédrales : ordre public, natalité, moins d'émeutes.",
+        "levels" => list![
+            dict!{"name" => "Paroisse", "cost" => dict!{"livres" => 110, "bois" => 40}, "bat" => "eglise", "days" => 14, "up" => 0.05,
+                  "fx" => dict!{"stab" => 0.02, "grow" => 0.05}},
+            dict!{"name" => "Séminaire", "cost" => dict!{"livres" => 250, "bois" => 70}, "bat" => "seminaire", "days" => 22, "dev" => 1, "up" => 0.1,
+                  "fx" => dict!{"stab" => 0.04, "grow" => 0.1, "ev" => dict!{"emeute" => -0.3}}},
+            dict!{"name" => "Cathédrale", "cost" => dict!{"livres" => 600, "bois" => 120, "fer" => 20}, "bat" => "cathedrale", "days" => 45,
+                  "dev" => 2, "up" => 0.2, "fx" => dict!{"stab" => 0.07, "grow" => 0.15, "ev" => dict!{"emeute" => -0.6}}},
+        ],
+    },
+    "port" => dict!{
+        "name" => "Port de mer",
+        "icon" => "anchor",
+        "where" => "mer",
+        "desc" => "Port de commerce, chantier naval, arsenal de marine : commerce par mer ; le chantier bâtit les navires.",
+        "levels" => list![
+            dict!{"name" => "Port de commerce", "cost" => dict!{"livres" => 160, "bois" => 70}, "bat" => "port", "days" => 18, "up" => 0.05,
+                  "fx" => dict!{"trade" => 0.15}},
+            dict!{"name" => "Chantier naval", "cost" => dict!{"livres" => 340, "bois" => 140, "fer" => 30}, "bat" => "chantier_naval", "days" => 30,
+                  "dev" => 1, "up" => 0.15, "fx" => dict!{"trade" => 0.25}},
+            dict!{"name" => "Arsenal de marine", "cost" => dict!{"livres" => 650, "bois" => 200, "fer" => 80, "outils" => 30}, "bat" => "cale_seche",
+                  "days" => 45, "dev" => 2, "up" => 0.3, "fx" => dict!{"trade" => 0.35, "industrie" => 0.1}},
+        ],
+    },
+    "douane" => dict!{
+        "name" => "Douane",
+        "icon" => "livres",
+        "where" => "quai",
+        "desc" => "Bureau des douanes, entrepôt, compagnie de commerce : droits sur ce qui passe au quai.",
+        "levels" => list![
+            dict!{"name" => "Bureau des douanes", "cost" => dict!{"livres" => 130, "bois" => 30}, "bat" => "douane", "days" => 14, "up" => 0.05,
+                  "fx" => dict!{"livres" => 0.12}},
+            dict!{"name" => "Entrepôt", "cost" => dict!{"livres" => 280, "bois" => 80}, "bat" => "entrepot", "days" => 22, "dev" => 1, "up" => 0.1,
+                  "fx" => dict!{"livres" => 0.2, "trade" => 0.05}},
+            dict!{"name" => "Compagnie de commerce", "cost" => dict!{"livres" => 560, "bois" => 100, "outils" => 20}, "bat" => "comptoir", "days" => 34,
+                  "dev" => 2, "tech" => "escompte", "up" => 0.2, "fx" => dict!{"livres" => 0.3, "trade" => 0.1}},
+        ],
+    },
+    "phare" => dict!{
+        "name" => "Phare",
+        "icon" => "anchor",
+        "where" => "mer",
+        "desc" => "Un phare sur la côte : moins de naufrages, navires plus sûrs à l'entrée du port.",
+        "levels" => list![
+            dict!{"name" => "Phare", "cost" => dict!{"livres" => 180, "bois" => 40, "fer" => 20}, "bat" => "phare", "days" => 20, "up" => 0.05,
+                  "fx" => dict!{"trade" => 0.05, "phare" => 1}},
+        ],
+    },
+    "plantation" => dict!{
+        "name" => "Plantation",
+        "icon" => "vivres",
+        "where" => "colonie",
+        "desc" => "Plantations des colonies : des livres, et la denrée coloniale de la place.",
+        "levels" => list![
+            // bat : plantation_<denrée> (bat_de) ; denree : quantité produite, lue par le commerce (module 7)
+            dict!{"name" => "Plantation", "cost" => dict!{"livres" => 120, "bois" => 40}, "bat" => "plantation", "days" => 16, "up" => 0.05,
+                  "fx" => dict!{"livres" => 0.1, "denree" => 1}},
+            dict!{"name" => "Grande plantation", "cost" => dict!{"livres" => 260, "bois" => 70}, "bat" => "plantation", "days" => 24, "dev" => 1,
+                  "up" => 0.1, "fx" => dict!{"livres" => 0.2, "denree" => 2}},
+            dict!{"name" => "Sucrerie", "cost" => dict!{"livres" => 520, "bois" => 100, "fer" => 40, "outils" => 20}, "bat" => "plantation", "days" => 34,
+                  "dev" => 2, "tech" => "vapeur", "up" => 0.15, "fx" => dict!{"livres" => 0.3, "denree" => 3}},
         ],
     },
 });
-py_const!(CHAIN_ORDER, list!["marche", "moulins", "specialite", "atelier", "caserne", "hospice", "quai", "depot"]);
+py_const!(CHAIN_ORDER, list!["marche", "moulins", "specialite", "atelier", "caserne", "hospice", "quai", "depot",
+                             "haras", "fonderie", "ecole_militaire", "universite", "eglise", "port", "douane", "phare", "plantation"]);
 py_const!(SIZE_K, dict!{"village" => 0.5, "fort" => 0.5, "ville" => 1.0, "capitale" => 1.5});  // production des bâtiments selon la taille de la place
 
 // noms des ateliers de spécialité (trois niveaux) et technologie du dernier niveau
@@ -404,6 +546,13 @@ pub fn fx_text(fx: &Val, star: &Val, per_day: bool) -> String {
             };
             out.push(format!("régiments formés {} % plus vite{cav}", py::round(fx.atf("train") * 100.0)));
         }
+        // (SPEC-EMPIRE, module 4) haras et fonderies
+        if fx.getb("cav_train") && !fx.getb("train") {
+            out.push(format!("cavaliers formés {} % plus vite", py::round(fx.atf("cav_train") * 100.0)));
+        }
+        if fx.getb("art_train") {
+            out.push(format!("artilleurs formés {} % plus vite", py::round(fx.atf("art_train") * 100.0)));
+        }
         if fx.getb("xp") {
             out.push(format!("régiments levés ici aguerris (+{} d’expérience)", fx.at("xp")));
         }
@@ -420,6 +569,12 @@ pub fn fx_text(fx: &Val, star: &Val, per_day: bool) -> String {
         }
         if fx.getb("depot") {
             out.push("ravitaille les armées à moins de 30 km".to_string());
+        }
+        if fx.getb("phare") {
+            out.push("moins de naufrages".to_string());
+        }
+        if fx.getb("denree") {
+            out.push(format!("denrée coloniale ×{}", fx.at("denree")));
         }
         out
     };
@@ -485,7 +640,64 @@ pub fn fits(g: &Game, nid: i64, chain: &str) -> bool {
     if w == "quai" {
         return g.geo.ports.has(nid) && gn.at("type") != "fort";
     }
+    if w == "mer" {
+        return port_de_mer(g, nid) && gn.at("type") != "fort";
+    }
+    if w == "colonie" {
+        return est_colonie(g, nid);
+    }
     true
+}
+
+/// (SPEC-EMPIRE, module 4) Port sur la mer : un de ses quais donne sur une voie d'eau marine (pas un quai de fleuve).
+pub fn port_de_mer(g: &Game, nid: i64) -> bool {
+    g.geo.ports.get_or(nid, list![]).iter().any(|w| g.geo.ways.at(w).atb("sea"))
+}
+
+/// (SPEC-EMPIRE, module 4) Place hors d'Europe (plantations) : son champ `theatre` quand la géographie le donne (la
+/// carte « monde »), sinon le théâtre de la carte (ni l'Europe ni l'Aquitaine).
+pub fn est_colonie(g: &Game, nid: i64) -> bool {
+    let t = g.geo.nodes.at(nid).get("theatre");
+    if t.truthy() {
+        return t != "europe";
+    }
+    g.geo.theatre.is_some_and(|t| t.id != "europe")
+}
+
+/// (SPEC-EMPIRE, module 4) Le chantier naval de la place a-t-il ce niveau (chaîne `port` achevée) ? Pour la marine.
+pub fn chantier_ok(g: &Game, nid: i64, lvl: i64) -> bool {
+    niveau(&g.nodes.at(nid), "port") >= lvl
+}
+
+/// Niveau achevé d'une chaîne dans la place (0 : absente ou en chantier), sans créer `slots` (lu à chaque levée).
+pub fn niveau(n: &Val, chain: &str) -> i64 {
+    let s = n.get("slots");
+    if s.is_none() { 0 } else { s.get_or(chain, 0).i() }
+}
+
+/// (SPEC-EMPIRE, module 4) Raison du refus quand le type d'unité exige un bâtiment que la place n'a pas (R::UNIT_REQ).
+/// Un chantier en cours (niveau 0) ne compte pas.
+pub fn unit_req_why(g: &Game, nid: i64, typ: &str) -> Option<String> {
+    let r = R::UNIT_REQ().get(typ);
+    if r.is_none() {
+        return None;
+    }
+    let (chain, lvl) = r.pair();
+    if niveau(&g.nodes.at(nid), chain.s()) >= lvl.i() {
+        return None;
+    }
+    Some(format!("Bâtiment requis dans la ville : {}.", level_name(g, nid, chain.s(), lvl.i()).to_lowercase()))
+}
+
+/// (SPEC-EMPIRE, module 4) Clé web_engine du bâtiment de ce niveau (les plantations selon la denrée de la place).
+pub fn bat_de(g: &Game, nid: i64, chain: &str, lvl: i64) -> String {
+    let b = CHAINS().at(chain).at("levels").at(lvl.max(1) - 1).ats("bat");
+    if chain == "plantation" {
+        // shortcut: sucre faute de denrée sur la place ; le commerce (module 7) posera `denree` sur les places coloniales
+        let d = g.geo.nodes.at(nid).get("denree");
+        return format!("{b}_{}", if d.truthy() { d.string() } else { "sucre".to_string() });
+    }
+    b
 }
 
 /// (niveau visé, raison du refus ou None) pour bâtir ou améliorer cette chaîne ici.
@@ -499,10 +711,11 @@ pub fn check(g: &Game, code: &str, n: &Val, chain: &str) -> (Option<i64>, Option
     if !fits(g, nid, chain) {
         return (
             None,
-            Some(if CHAINS().at(chain).get("where") == "star" {
-                "Il faut une spécialité dans la ville.".to_string()
-            } else {
-                "Il faut un quai sur un fleuve navigable.".to_string()
+            Some(match CHAINS().at(chain).get("where").s() {
+                "star" => "Il faut une spécialité dans la ville.".to_string(),
+                "mer" => "Il faut un port de mer.".to_string(),
+                "colonie" => "Seulement dans les colonies.".to_string(),
+                _ => "Il faut un quai sur un fleuve navigable.".to_string(),
             }),
         );
     }
@@ -821,9 +1034,9 @@ pub fn node_extra(g: &Game, n: &Val, code: &str, out: &Val, trade: f64) -> f64 {
 /// Python : `stab_bonus(g, n)`.
 // game/cities.py, lignes 428 à 435
 pub fn stab_bonus(g: &Game, n: &Val) -> f64 {
-    // appelé très souvent (ordre public) : seuls l'hospice, la fabrique et la politique comptent
+    // appelé très souvent (ordre public) : seuls l'hospice, la fabrique, l'église, le collège et la politique comptent
     let (s, mut v) = (n.get("slots"), 0.0);
-    if s.truthy() && (s.has("hospice") || s.has("atelier")) {
+    if s.truthy() && (s.has("hospice") || s.has("atelier") || s.has("eglise") || s.has("universite")) {
         v += bfx(n).get_or("stab", 0).f();
     }
     if n.getb("pol") {
@@ -843,7 +1056,8 @@ pub fn growth_k(g: &Game, n: &Val) -> f64 {
 // game/cities.py, lignes 442 à 445
 pub fn train_k(g: &Game, n: &Val, typ: &str) -> f64 {
     let (b, p) = (bfx(n), pfx(g, n));
-    let k = b.get_or("train", 0).f() + p.get_or("train", 0).f() + if typ == "cavalerie" { b.get_or("cav_train", 0).f() } else { 0.0 };
+    let k = b.get_or("train", 0).f() + p.get_or("train", 0).f() + if typ == "cavalerie" { b.get_or("cav_train", 0).f() } else { 0.0 }
+        + if R::UNITS().at(typ).get("cls") == "artillerie" { b.get_or("art_train", 0).f() } else { 0.0 }; // (SPEC-EMPIRE, module 4) fonderies
     let k = 1.0 - k;
     if k > 0.4 { k } else { 0.4 }
 }
@@ -970,15 +1184,15 @@ pub fn daily(g: &mut Game, d: Date) {
     }
 }
 
-/// Jours de recherche gagnés chaque jour grâce aux collèges (au plus 0,15).
+/// Jours de recherche gagnés chaque jour grâce aux collèges et universités (au plus COLLEGE_MAX).
 /// Python : `college_k(g, code)`.
 // game/cities.py, lignes 510 à 512
 pub fn college_k(g: &Game, code: &str) -> f64 {
     let s = py::sum_v(g.owned_nodes(code).iter().filter(|n| n.getb("slots")).map(|n| bfx(&n).get_or("research", 0))).f();
-    if s < 0.15 { s } else { 0.15 }
+    if s < COLLEGE_MAX { s } else { COLLEGE_MAX }
 }
 
-/// Les collèges forment des savants : les recherches en cours avancent un peu plus vite (au plus +15 %).
+/// Les collèges forment des savants : les recherches en cours avancent un peu plus vite (au plus +25 %).
 /// Python : `research(g)`.
 // game/cities.py, lignes 515 à 524
 pub fn research(g: &mut Game) {
@@ -1721,13 +1935,48 @@ pub fn _ai_value(g: &Game, ai: &AI, n: &Val, chain: &str, lvl: i64, mult: f64) -
     val *= mult;
     let t = gn.at("type");
     val += x("stab") * (if n.atf("stab") < 0.8 { 40.0 } else { 8.0 }) + x("grow") * 1.5;
-    val += x("train") * (if t == "capitale" || t == "fort" { 3.0 } else { 1.0 }) + x("research") * 30.0;
+    val += x("train") * (if t == "capitale" || t == "fort" { 3.0 } else { 1.0 })
+        + if college_k(g, code) < COLLEGE_MAX { x("research") * 30.0 } else { 0.0 }; // (au-delà du plafond, un collège ne sert plus)
     val -= L.get_or("up", 0).f() - if lvl > 1 { levels.at(lvl - 2).get_or("up", 0).f() } else { 0.0 };
     val *= AI_TASTE().get_or(ai.pers.at("tech"), dict! {}).get_or(chain, 1.0).f();
     if chain == "marche" || chain == "quai" || chain == "specialite" {
         val *= 0.7 + 0.5 * ai.pers.atf("trade");
     }
     val
+}
+
+/// (SPEC-EMPIRE, module 4) Le premier bâtiment qu'exige le mélange d'armes de l'IA (ai::MIX, R::UNIT_REQ) et qu'aucune
+/// de ses villes n'a ni n'a en chantier : (place, chaîne), dans son meilleur chef-lieu qui peut le bâtir (le chef-lieu,
+/// sinon la ville la plus peuplée). Sans place libre, rien : l'IA lève alors de la ligne.
+pub fn ai_besoin_mil(g: &Game, code: &str) -> Option<(i64, String)> {
+    let villes: Vec<Val> = g
+        .owned_nodes(code)
+        .iter()
+        .filter(|n| {
+            let t = g.geo.nodes.at(n.at("id")).at("type");
+            (t == "capitale" || t == "ville") && !n.atb("siege")
+        })
+        .collect();
+    let villes = py::sorted_by_key(villes, |n| (g.geo.nodes.at(n.at("id")).at("type") != "capitale", -n.atf("pop")));
+    let mut vus: Vec<Val> = vec![];
+    for typ in crate::ai::MIX().get_or(code, list![]).iter() {
+        let r = R::UNIT_REQ().get(&typ);
+        if r.is_none() || vus.contains(&r) {
+            continue;
+        }
+        vus.push(r.clone());
+        let (chain, lvl) = r.pair();
+        let a = |n: &Val| {
+            niveau(n, chain.s()) >= lvl.i() || n.at("queue").iter().any(|q| q.at("kind") == "slot" && q.at("what") == chain)
+        };
+        if villes.iter().any(a) {
+            continue;
+        }
+        if let Some(n) = villes.iter().find(|n| n.at("queue").len() < 2 && check(g, code, n, chain.s()).1.is_none()) {
+            return Some((n.ati("id"), chain.string()));
+        }
+    }
+    None
 }
 
 /// Bâtir ou améliorer un bâtiment d'emplacement, là où il rapporte le plus pour ce qu'il coûte.
@@ -1743,6 +1992,18 @@ pub fn ai_build(g: &mut Game, ai: &mut AI, budget: f64, wars: &Val) -> f64 {
         return budget;
     }
     ai._ct_clock = g.t + 12.0; // un coup d'œil sur les chantiers toutes les deux semaines environ
+    // (SPEC-EMPIRE, module 4) d'abord le bâtiment qui manque au mélange d'armes de l'IA (haras, fonderie, école)
+    let mut mil = 0;
+    if let Some((nid, chain)) = ai_besoin_mil(g, &code) {
+        let lvl = check(g, &code, &g.nodes.at(nid), &chain).0.unwrap();
+        let cost = g.build_cost(&code, &CHAINS().at(&chain).at("levels").at(lvl - 1).at("cost"));
+        if let Some(extra) = ai.provide(g, &cost, budget) {
+            if slot_build(g, &code, nid, &chain).0 {
+                budget -= cost.get_or("livres", 0).f() + extra;
+                mil = 1;
+            }
+        }
+    }
     let mut cands: Vec<(f64, Val, Val, Val, f64)> = vec![];
     for n in g.owned_nodes(&code).iter() {
         let gn = g.geo.nodes.at(n.at("id"));
@@ -1780,7 +2041,7 @@ pub fn ai_build(g: &mut Game, ai: &mut AI, budget: f64, wars: &Val) -> f64 {
         }
     }
     let cands = py::sorted_by_key(cands, |c| -c.0);
-    let mut built = 0;
+    let mut built = mil;
     let slow = if ai.idle_money(g) > 0.0 { 1.0 / 4000.0 } else { 1.0 / 1500.0 }; // (un trésor qui dort attend dix ans, sinon quatre)
     for (ratio, n, chain, cost, _price) in cands {
         if built >= (if wars.truthy() { 1 } else { 2 }) || budget < 150.0 || ratio < slow {
@@ -1863,12 +2124,46 @@ pub fn migrate(g: &mut Game) {
     }
 }
 
+/// (SPEC-EMPIRE, module 4) Emplacements d'une place pour l'écran : `slots` {chaîne: niveau}, `slot_max`, et les chaînes
+/// qui ont leur place ici, `chains` : [{id, nom, niveau, max, possible, raison, cout, tours, bat}] (cout et tours : le
+/// prochain niveau, null au niveau maximal ; tours en fraction de tour ; bat : clé web_engine du niveau bâti, ou du
+/// premier niveau s'il n'y a encore rien).
+pub fn chains_view(g: &Game, n: &Val) -> Val {
+    let (nid, code) = (n.ati("id"), n.ats("owner"));
+    let s = slots(n);
+    let l = list![];
+    if !g.factions.has(code.as_str()) {
+        return dict! {"slots" => s.copy(), "slot_max" => slot_count(g, n), "chains" => l}; // (place neutre : rien à bâtir)
+    }
+    for chain in CHAIN_ORDER().iter() {
+        let c = chain.s();
+        if !fits(g, nid, c) {
+            continue;
+        }
+        let levels = CHAINS().at(c).at("levels");
+        let niveau = s.get_or(c, 0).i();
+        let (lvl, why) = check(g, &code, n, c);
+        let next = lvl.unwrap_or(niveau + 1);
+        let (cout, tours) = if next <= levels.len() as i64 {
+            let L = levels.at(next - 1);
+            (g.build_cost(&code, &L.at("cost")), Val::from(py::round_n(g.build_days(&code, L.atf("days")) / TT::TOUR_DAYS, 2)))
+        } else {
+            (Val::None, Val::None)
+        };
+        l.push(dict! {"id" => c, "nom" => CHAINS().at(c).at("name"), "niveau" => niveau, "max" => levels.len(),
+                      "possible" => why.is_none(), "raison" => Val::from(why), "cout" => cout, "tours" => tours,
+                      "bat" => bat_de(g, nid, c, niveau)});
+    }
+    dict! {"slots" => s.copy(), "slot_max" => slot_count(g, n), "chains" => l}
+}
+
 /// Ce que le joueur voit de ses propres places : emplacements, politique, effets d'événements.
 /// Python : `node_view(g, n)`.
 // game/cities.py, lignes 964 à 978
 pub fn node_view(g: &Game, n: &Val) -> Val {
     let sl: Val = slots(n).items().into_iter().map(|(k, v)| list![k, v]).collect();
     let d = dict! {"sl" => sl, "sn" => slot_count(g, n)};
+    d.update(&chains_view(g, n)); // (SPEC-EMPIRE, module 4)
     let p = n.get("pol");
     if p.truthy() && p.get("o") == n.at("owner") && (p.at("k") != "equilibre" || policy_w(g, n) < 1.0) {
         let u = p.get("u");
@@ -1912,7 +2207,7 @@ pub fn rules_payload() -> Val {
                 dict! {
                     "name" => L.at("name"), "cost" => L.at("cost"), "days" => L.at("days"), "dev" => L.get_or("dev", 0),
                     "tech" => L.get("tech"), "up" => L.get_or("up", 0), "txt" => fx_text(&L.at("fx"), &Val::None, false),
-                    "txtj" => fx_text(&L.at("fx"), &Val::None, true)
+                    "txtj" => fx_text(&L.at("fx"), &Val::None, true), "bat" => L.get("bat")
                 }
             })
             .collect();

@@ -2338,6 +2338,7 @@ fn levee_avec_la_technologie_seulement() {
         techs.remove(&Val::from("mitrailleuse"));
     }
     let m = Val::from("mitrailleuses");
+    CT::slots(&g.nodes.at(ville(&g, "33"))).set("fonderie", 3); // l'arsenal qu'elles exigent (SPEC-EMPIRE)
     let (ok, why) = g.can_recruit("33", ville(&g, "33"), &m);
     assert!(!ok);
     assert!(why.contains("Mitrailleuse"));
@@ -3304,4 +3305,65 @@ fn l_ia_ne_fonce_pas_sur_la_percussion() {
         let annee = R::TECH_YEAR().atf(t.as_str()) - R::TECH().at(t.as_str()).atf("days") / 360.0 - AIM::AI_AHEAD as f64;
         assert!(annee <= 1700.0, "{t}");
     }
+}
+
+// ================================================================== Bâtiments d'Empire
+// SPEC-EMPIRE.md, module 4 : le recrutement dépend des bâtiments de la place (R::UNIT_REQ), les ports de mer, l'IA
+// qui bâtit ce qu'il faut à son mélange d'armes.
+
+#[test]
+fn cavalerie_refusee_sans_haras_puis_levee() {
+    let g = partie();
+    let cap = ville(&g, "33");
+    let cav = Val::from("cavalerie");
+    let (ok, why) = g.can_recruit("33", cap, &cav);
+    assert!(!ok);
+    assert!(why.contains("haras"), "{why}");
+    assert!(g.can_recruit("33", cap, &Val::from("ligne")).0, "la ligne ne demande rien");
+    CT::slots(&g.nodes.at(cap)).set("haras", 0); // un chantier ne suffit pas
+    assert!(!g.can_recruit("33", cap, &cav).0);
+    CT::slots(&g.nodes.at(cap)).set("haras", 1);
+    assert!(g.can_recruit("33", cap, &cav).0);
+}
+
+#[test]
+fn port_de_mer_refuse_sur_un_quai_de_fleuve() {
+    let g = partie();
+    let quais: Vec<i64> = g.geo.ports.keys().iter().map(|k| k.i()).filter(|&i| g.geo.nodes.at(i).at("type") != "fort").collect();
+    let fleuve = *quais.iter().find(|&&i| !CT::port_de_mer(&g, i)).expect("un quai de fleuve");
+    let mer = *quais.iter().find(|&&i| CT::port_de_mer(&g, i)).expect("un port de mer");
+    let n = g.nodes.at(fleuve);
+    n.set("owner", "33"); // (la vue est celle des places du joueur)
+    let (lvl, why) = CT::check(&g, "33", &n, "port");
+    assert_eq!((lvl, why.as_deref()), (None, Some("Il faut un port de mer.")));
+    assert!(CT::fits(&g, fleuve, "douane"), "la douane va sur tout quai");
+    assert!(CT::fits(&g, mer, "port") && CT::fits(&g, mer, "phare"));
+    assert!(!CT::fits(&g, fleuve, "plantation") && !CT::est_colonie(&g, fleuve), "pas de colonie en Aquitaine");
+    // la vue de la place ne propose que les chaînes qui y ont leur place
+    let v = CT::chains_view(&g, &n);
+    let ids: Vec<String> = v.at("chains").iter().map(|c| c.ats("id")).collect();
+    assert!(ids.contains(&"douane".to_string()) && !ids.contains(&"port".to_string()), "{ids:?}");
+    let haras = v.at("chains").iter().find(|c| c.at("id") == "haras").unwrap();
+    assert_eq!((haras.ati("niveau"), haras.ati("max"), haras.ats("bat")), (0, 3, "haras".to_string()));
+}
+
+#[test]
+fn l_ia_batit_un_haras_pour_sa_cavalerie() {
+    let mut g = partie();
+    let code = "24";
+    let res = g.factions.at(code).at("res");
+    for (k, v) in [("livres", 20000), ("bois", 2000), ("fer", 1000), ("outils", 500)] {
+        res.set(k, v);
+    }
+    let mut ai = AI::new(&g, code);
+    let a_un_haras = |g: &Game| g.owned_nodes(code).iter().any(|n| CT::slots(&n).has("haras"));
+    assert!(!a_un_haras(&g));
+    CT::ai_build(&mut g, &mut ai, 20000.0, &list![]);
+    // son mélange d'armes commence par l'infanterie légère : l'école militaire d'abord, dans le chef-lieu
+    assert!(CT::slots(&g.nodes.at(g.capital_of(code))).has("ecole_militaire"));
+    for _ in 0..3 {
+        ai._ct_clock = 0.0;
+        CT::ai_build(&mut g, &mut ai, 20000.0, &list![]);
+    }
+    assert!(a_un_haras(&g), "un haras en chantier");
 }
