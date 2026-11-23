@@ -693,9 +693,8 @@ pub fn unit_req_why(g: &Game, nid: i64, typ: &str) -> Option<String> {
 pub fn bat_de(g: &Game, nid: i64, chain: &str, lvl: i64) -> String {
     let b = CHAINS().at(chain).at("levels").at(lvl.max(1) - 1).ats("bat");
     if chain == "plantation" {
-        // shortcut: sucre faute de denrée sur la place ; le commerce (module 7) posera `denree` sur les places coloniales
-        let d = g.geo.nodes.at(nid).get("denree");
-        return format!("{b}_{}", if d.truthy() { d.string() } else { "sucre".to_string() });
+        // (SPEC-EMPIRE, module 7) la denrée de la place d'après sa géographie ; sucre hors des théâtres coloniaux
+        return format!("{b}_{}", crate::engine::commerce::denree_place(&g.geo, nid).unwrap_or("sucre"));
     }
     b
 }

@@ -419,3 +419,103 @@ tests/*.test.mjs` aussi (100). Références refaites : `campagnes.json`, `ia_cam
 chantier dès le premier mois), `tours.json` (vue et `rules_payload`), `serveur.json` (`/api/map`). Banc `simuler`
 (release, IA seules, graine 1, aucune erreur) : Europe 1790 sur 3 ans 61,0 / 61,2 s avant, 65,2 / 63,2 s après
 (+3 à +7 %) ; Aquitaine 1790 sur 10 ans 21,2 s avant, 22,4 s après (+6 %).
+
+### Module 7 (R3, commerce-moteur) — 23/11/2026
+
+**Fait** (`engine/commerce.rs`, `ai/commerce.rs`, ordres dans `engine/marine.rs`, casus belli dans `diplomacy.rs`, essais
+`tests/commerce.rs`) :
+- **État** `g.commerce` (un seul champ, sauvegardé s'il n'est pas vide ; une ancienne sauvegarde se charge) : `comptoirs`
+  (faits de `g.geo.comptoirs` : `{id, nom, x, y, theatre, denree, places: 3, navires: [{flotte, owner}]}`), `routes`
+  (`{id: {id, proprio, partenaire, de, vers, chemin, boite, ports, valeur, coupee}}`), `marche` (`{denrée: {prix, offre,
+  demande}}`) et `en_mer` (`{fid: flotte}` : les flottes en traversée, sorties de `g.flottes`). Écart : la spec disait
+  `g.comptoirs` ; tout est sous `g.commerce` pour ne toucher qu'un champ de `Game`.
+- **Denrées** `rules.DENREES` (`sucre, tabac, cafe, coton, the, epices, indigo, ivoire, fourrures` : `nom`, `prix` de base
+  en livres par jour pour une unité vendue), `DENREE_DEMANDE` (6 unités), `DENREE_PRIX` (0,4 à 2 × la base),
+  `PLANTATION_K`, `COMPTOIR_PLACES`, `COMPTOIR_FLUTES`, `ROUTE_BASE`, `ROUTE_PART`, `CORSAIRE_PART`, `CORSAIRE_PRISE`,
+  `CORSAIRE_INCIDENT`, `INCIDENT_REL`, `CASUS_BELLI_TOURS` (hors de `rules::constantes()` : `rules.json` n'a pas bougé).
+- **Denrée d'une place** `commerce::denree_place(geo, nid)` : d'après son théâtre, sa latitude et sa longitude (Amérique :
+  fourrures au nord du 44e parallèle, tabac, coton, indigo, puis café / sucre aux Antilles ; Inde : thé, indigo, coton,
+  épices ; Brésil, Guinée, Madagascar, Indes orientales aussi) ; None en Europe et en Aquitaine. `cities::bat_de` la lit
+  (`plantation_<denrée>`, sucre hors des théâtres coloniaux).
+- **Production** : `fx.denree` de la chaîne `plantation` (1, 2, 3 unités, `commerce::production`), vendue seulement par un
+  camp qui a un port de mer non bloqué ou une route ouverte ; chaque flotte d'un comptoir vend une unité par flûte (4 au
+  plus). **Prix** mondial par denrée, refait chaque mois : `base × (demande / offre)^0,5`, borné.
+- **Revenu** (livres par jour, `f._mer {plantations, comptoirs, routes, corsaires}`, refait chaque mois, et quand un accord
+  naît ou qu'un marchand s'installe) : plantations `unités × prix × PLANTATION_K`, comptoirs `unités × prix`, routes
+  ouvertes `ROUTE_BASE + ROUTE_PART × min(revenu brut des deux camps)` pour chacun, part des corsaires. `compute_income`
+  l'ajoute au commerce du camp (`_trade.livres`, la ligne « Commerce » de la page) ; le détail est dans la vue (`me.mer`).
+- **Comptoirs** : ordre `commerce` (`cible` = id du comptoir, des flûtes exigées) : la flotte s'y rend et, arrivée à une
+  case près, y prend une place s'il en reste (sinon elle attend). Une flotte de guerre en guerre avec un des marchands sur
+  le comptoir le dispute (pas de revenu) et la bataille navale s'engage (`navale::rencontre`, au mois ou dès qu'elle
+  approche) ; le vaincu se replie et perd sa place.
+- **Routes commerciales** : chaque accord `commerce` entre deux camps qui ont un port de mer (`commerce::port_de_mer` :
+  un mouillage et un quai marin) fait une route entre leurs ports les plus peuplés **d'un même théâtre** (celui de la
+  capitale de l'un, puis de l'autre, puis un autre où ils ont tous deux un port), chemin `marine::chemin_mer`. Le chemin
+  n'est cherché qu'à la naissance de l'accord (`diplomacy::apply` → `commerce::accord`) ou quand un des deux ports change
+  de main (ou, sans chemin, quand le nombre de ports des deux camps change) ; la route disparaît avec l'accord. Elle est
+  **coupée** si un de ses ports est bloqué (`g._blockade`), ou si une flotte armée en guerre avec l'un des deux camps,
+  ou un corsaire qui vise l'un d'eux, est à une case près du chemin (boîte englobante d'abord).
+- **Corsaires** : ordre `corsaire` (`cible` = code d'un camp, **obligatoire** désormais ; flûtes seules refusées) ; la
+  flotte coupe les routes de la cible où elle se trouve, sans guerre, prend `CORSAIRE_PART` de leur valeur, parfois un
+  marchand (une flûte ajoutée à sa flotte, 20 % par route et par mois) ; chaque mois où elle a pillé, 35 % de risque
+  d'**incident** : relation de la victime −15, **casus belli** pour la victime (`f.cb {camp: échéance}`, 12 tours). Une
+  guerre déclarée avec un casus belli ne fâche pas les autres camps (`declare_war`, le casus belli sert une fois) ; l'IA
+  qui en tient un déclare plus volontiers la guerre (`gouvernement.rs`, si elle est la plus forte).
+- **Traversées** (ordre `route`, `route` = id de `g.geo.routes_mer`) : refusé si la route part d'un autre théâtre ; la
+  flotte gagne la case `de`, puis quitte la carte (`g.commerce.en_mer`, `en_mer: {route, arrivee}` = le 1er du mois
+  `tours` mois plus tard, `TT::month_end`) et réapparaît sur la case `vers` (dans `marine::tick` et au début du tour du
+  joueur), sans ordre, avec l'armée à bord ; une flotte ennemie qui l'attend l'attaque. Pendant la traversée rien ne la
+  voit ni ne la combat, elle ne reçoit pas d'ordre, son entretien court. `marine::chemin_mer` reste désormais dans le
+  cadre du théâtre de départ sur la carte monde (avant, une flotte pouvait traverser les bandes d'océan entre deux cartes).
+- **IA** (`ai/commerce.rs`, tous les dix jours, hasard propre) : flûtes mêlées à une flotte de guerre séparées, flottes
+  de flûtes envoyées au comptoir libre le plus proche de leur théâtre, une flûte en chantier quand un comptoir est libre
+  dans un théâtre où elle a un port et que l'argent dort (1 à 3 flottes marchandes) ; corsaires rares (5 % par coup d'œil,
+  en paix avec tous, contre le pire rival, relation < −25, qui a une route dans son théâtre ; six mois au plus, fin à la
+  guerre ou si la relation remonte) ; sur la carte monde, une métropole (`R::COLONIES`) dont une colonie est en guerre
+  envoie au plus une fois l'an une flotte de guerre de ses ports d'Europe, avec l'armée qui attend au port si elle tient
+  à bord ; à l'arrivée, la flotte gagne le port ami le plus proche et l'armée débarque. Les accords commerciaux : la
+  diplomatie des IA les proposait déjà à ses voisins en paix (`gouvernement.rs`), chaque accord fait sa route.
+  `ai/marine.rs` laisse les corsaires et les traversées à `ai/commerce.rs`.
+- **Vue** (`views::player_state`, `commerce::vue`) : `comptoirs: [{id, nom, case: [x, y], denree, places, navires:
+  [{flotte, proprio}], dispute}]`, `routes_mer: [{id, chemin: [[x, y]…], proprio, partenaire, de, vers, valeur,
+  coupee: null | "blocus" | "ennemi" | "corsaire"}]` (la coupure est recalculée à chaque vue), `marche: {denrée: {prix,
+  offre, demande}}`, `en_mer: [{id, proprio, route, arrivee (tours restants), date, navires, armee}]` (le joueur et ses
+  alliés), `me.mer: {plantations, comptoirs, routes, corsaires}` (livres par jour, déjà comptées dans `me.trade.livres`),
+  `factions[].cb: true` quand le joueur tient un casus belli contre ce camp ; `rules_payload` : `denrees`. Les balises
+  `sorties` restent dans /api/map. Commandes : aucune nouvelle, `{cmd: "flotte", sub: "ordre", flotte, ordre:
+  "commerce", cible: id du comptoir}`, `{…, ordre: "corsaire", cible: code}`, `{…, ordre: "route", route: id}` ;
+  une flotte en mer répond « La flotte est en mer… ».
+
+**Écarts, raccourcis** :
+- Sur les théâtres seulement (Europe, théâtres coloniaux, monde) : l'Aquitaine n'a ni routes ni denrées (`g.theatre()`),
+  ses parties et leurs références ne bougent pas (sa vue a les nouvelles clés, vides).
+- Le revenu est un taux par jour refait chaque mois (comme le reste de l'économie), pas une somme versée au 1er.
+- Une route ne relie que deux ports d'un même théâtre ; pas de route Europe–Amérique par la haute mer.
+- Les corsaires ne pillent que les routes (pas les comptoirs) ; un corsaire du joueur ne va pas seul sur les routes : on
+  le mène sur le ruban de la route.
+- Les comptoirs de la carte monde seulement (les théâtres coloniaux joués à part n'en ont pas) ; les plantations
+  produisent partout hors d'Europe.
+- L'IA ne ramène pas ses flottes d'expédition en Europe ; elle n'arme pas de corsaire contre le joueur plus qu'un autre.
+- Le moteur d'armée ne fait pas « arriver » sur une place une armée posée sur la case même de la place (chemin hors route
+  d'un seul point) : débarquer à côté (l'essai de la traversée le fait).
+
+**Essais** : `tests/commerce.rs` (6 essais, carte monde, IA retirées sauf pour l'essai de l'IA) : plantation et denrée de
+sa place (Québec fourrures, Cochin épices, Paris rien ; `bat_de`), prix qui baisse quand tout le monde plante la même
+denrée (et bornes), flûtes qui vont au comptoir de Mogador et y rapportent (vue, `me.mer`), route née d'un accord puis
+coupée par un blocus et par un corsaire (part du corsaire, flûtes refusées en course), incident et casus belli (vue,
+guerre qui ne fâche pas un camp lointain), traversée Brest → Amérique (la flotte quitte la carte, en mer dans la vue,
+entretien, sauvegardée et relue en pleine traversée, arrivée au bout du compte de tours avec l'armée à bord, qui débarque
+et prend une place), IA (flûtes au comptoir ; expédition vers une colonie en guerre avec l'armée du port).
+`cargo test --locked -p conquete` passe en entier. Références refaites : `tours.json` (vue et `rules_payload` :
+`denrees`, nouvelles clés), `serveur.json` (/api/map : 1 487 130 octets, empreinte refaite). `campagnes.json`,
+`ia_campagne.json`, `actions.json`, `monde.json` inchangées (Aquitaine non touchée, carte monde non touchée).
+
+**Banc** (`CONQUETE_BANC_GEO=13 cargo test --release -p conquete --test monde banc -- --ignored --nocapture`, machine
+partagée et chargée par d'autres agents, chiffres bruités) : avant le module 2,25 / 2,65 / 3,02 / 3,34 / 3,39 / 3,18 s
+(17,8 s les six mois). Même binaire avec et sans le commerce (interrupteur provisoire, retiré), deux fois chacun : sans
+18,3 et 16,8 s, avec 19,2 et 19,1 s (+9 % en moyenne). Le coût propre du commerce, mesuré en le chronométrant : 0,45 s
+sur six mois (2,5 %) : accords (chemins des nouvelles routes, 0,18 s le premier mois), `mois` (0,1 s), IA (0,02 s) ;
+le reste de l'écart vient de parties qui divergent (les IA plus riches font davantage). Allègement fait en route : les
+ports de mer de la carte relevés une fois par carte, `revenus` recalculé à l'accord seulement pour le joueur.
+Gains faciles pour le tour des IA : aucun de sûr relevé ici sans profileur (pas de `perf` sur cette machine).
+

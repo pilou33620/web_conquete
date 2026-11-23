@@ -54,6 +54,7 @@ pub mod raccord;
 mod utilitaires;
 pub mod marine; // les flottes (SPEC-EMPIRE, module 2)
 pub mod navale; // les batailles navales (SPEC-EMPIRE, module 2)
+pub mod commerce; // le commerce maritime (SPEC-EMPIRE, module 7)
 
 pub const SUBSTEP: f64 = 0.05; // jours
 pub const ATTRITION_STEP: f64 = 0.25; // jours : pas de l'usure, des désertions et du ravitaillement des armées
@@ -341,6 +342,8 @@ pub struct Game {
     /// (SPEC-EMPIRE, module 2) {fid: flotte} (voir marine.rs) et {bid: bataille navale} (voir navale.rs), sauvegardés.
     pub flottes: Val,
     pub navales: Val,
+    /// (SPEC-EMPIRE, module 7) comptoirs, routes commerciales, marché des denrées, flottes en traversée (voir commerce.rs), sauvegardé.
+    pub commerce: Val,
 }
 
 impl Game {
@@ -407,6 +410,7 @@ impl Game {
             lost_player: false,
             flottes: dict! {}, // (SPEC-EMPIRE, module 2)
             navales: dict! {},
+            commerce: dict! {}, // (SPEC-EMPIRE, module 7)
         }
     }
 

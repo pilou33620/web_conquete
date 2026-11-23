@@ -1650,6 +1650,30 @@ pub const REPARE_JOUR: f64 = 0.02;   // coque réparée par jour au port ami (+5
 pub const BLOCUS_CASES: f64 = 3.0;   // une flotte bloque le port dont elle est à moins de tant de cases
 pub const CONTACT_MER: f64 = 2.0;   // cases : deux flottes ennemies (ou une flotte et une armée en cabotage) se rencontrent
 
+// ------------------------------------------------------------------ le commerce maritime (SPEC-EMPIRE, module 7)
+// Les denrées coloniales : nom, prix de base (livres par jour pour une unité vendue : une plantation de niveau 1 en
+// produit une, chaque flûte d'un comptoir une). Le prix du mois : base × (demande / offre)^0,5, borné (DENREE_PRIX).
+fn _d(nom: &str, prix: f64) -> Val {
+    dict!{"nom" => nom, "prix" => prix}
+}
+py_const!(DENREES, dict!{
+    "sucre" => _d("Sucre", 2.0), "tabac" => _d("Tabac", 1.8), "cafe" => _d("Café", 2.0), "coton" => _d("Coton", 1.6),
+    "the" => _d("Thé", 2.2), "epices" => _d("Épices", 2.5), "indigo" => _d("Indigo", 1.8), "ivoire" => _d("Ivoire", 2.2),
+    "fourrures" => _d("Fourrures", 1.8)
+});
+pub const DENREE_DEMANDE: f64 = 6.0;   // unités que le monde achète chaque mois au prix de base, pour chaque denrée
+pub const DENREE_PRIX: (f64, f64) = (0.4, 2.0);   // bornes du prix (× le prix de base)
+pub const PLANTATION_K: f64 = 0.5;   // une unité de plantation rapporte la moitié d'une unité de comptoir (la place a ses frais)
+pub const COMPTOIR_PLACES: i64 = 3;   // flottes marchandes par comptoir
+pub const COMPTOIR_FLUTES: i64 = 4;   // flûtes d'une flotte qui comptent au comptoir
+pub const ROUTE_BASE: f64 = 1.0;   // livres par jour d'une route commerciale, pour chacun des deux camps…
+pub const ROUTE_PART: f64 = 0.02;   // … plus tant du revenu du plus petit des deux
+pub const CORSAIRE_PART: f64 = 0.5;   // part du revenu d'une route coupée que prend le corsaire
+pub const CORSAIRE_PRISE: f64 = 0.2;   // chance par mois et par route pillée de prendre un marchand (une flûte)
+pub const CORSAIRE_INCIDENT: f64 = 0.35;   // chance par mois d'un incident diplomatique quand le corsaire a pillé
+pub const INCIDENT_REL: i64 = 15;   // relation perdue par la victime à chaque incident
+pub const CASUS_BELLI_TOURS: i64 = 12;   // durée du casus belli offert par un incident
+
 
 pub fn tax_label(v: f64) -> String {
     for (lim, lab) in TAX_LABELS().iter().map(|t| t.pair()) {

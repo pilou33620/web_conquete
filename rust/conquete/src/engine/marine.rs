@@ -79,6 +79,15 @@ pub fn chemin_mer(geo: &GeoMap, de: (i64, i64), vers: (i64, i64)) -> Option<Vec<
     if de.0 < 0 || de.1 < 0 || de.0 >= geo.W || de.1 >= geo.H {
         return None;
     }
+    // (SPEC-EMPIRE, module 7) la carte monde : on ne passe d'un théâtre à l'autre que par une route maritime (ordre « route »)
+    let cadre = match geo.parties.iter().find(|p| p.ox <= de.0 && de.0 < p.ox + p.W && p.oy <= de.1 && de.1 < p.oy + p.H) {
+        Some(p) => (p.ox, p.oy, p.ox + p.W, p.oy + p.H),
+        None => (0, 0, geo.W, geo.H),
+    };
+    let dedans = |x: i64, y: i64| cadre.0 <= x && x < cadre.2 && cadre.1 <= y && y < cadre.3;
+    if !dedans(vers.0, vers.1) {
+        return None;
+    }
     let h = |c: usize| {
         let (dx, dy) = (((c as i64 % w) - vers.0).unsigned_abs() as u32, ((c as i64 / w) - vers.1).unsigned_abs() as u32);
         10 * dx.max(dy) + 4 * dx.min(dy)
@@ -121,7 +130,7 @@ pub fn chemin_mer(geo: &GeoMap, de: (i64, i64), vers: (i64, i64)) -> Option<Vec<
             }
             let (x, y) = ((c as i64) % w, (c as i64) / w);
             for (dx, dy, pas) in [(1, 0, 10), (-1, 0, 10), (0, 1, 10), (0, -1, 10), (1, 1, 14), (1, -1, 14), (-1, 1, 14), (-1, -1, 14)] {
-                if !est_mer(geo, x + dx, y + dy) {
+                if !est_mer(geo, x + dx, y + dy) || !dedans(x + dx, y + dy) {
                     continue;
                 }
                 let v = ((y + dy) * w + x + dx) as usize;
@@ -265,6 +274,9 @@ fn nouvelle(g: &mut Game, owner: &str, (x, y): (i64, i64), a_quai: &Val) -> Val 
 /// Une flotte du camp, ou l'erreur à rendre au joueur.
 fn a_moi(g: &Game, code: &str, fid: &Val) -> Result<Val, (bool, String)> {
     let f = if fid.is_str() { g.flottes.get(fid) } else { Val::None };
+    if !f.truthy() && super::commerce::est_en_mer(g, fid) {
+        return Err((false, "La flotte est en mer, loin de toute carte : elle attend d'arriver.".to_string())); // (SPEC-EMPIRE, module 7)
+    }
     if !f.truthy() || f.at("owner") != code {
         return Err((false, "Flotte introuvable.".to_string()));
     }
@@ -356,7 +368,7 @@ pub fn lancer(g: &mut Game, n: &Val, q: &Val) {
 /// g.armies le temps de la traversée).
 pub fn entretien(g: &Game, code: &str) -> f64 {
     let mut s = 0.0;
-    for f in g.flottes.values() {
+    for f in g.flottes.values().into_iter().chain(super::commerce::en_mer(g)) {
         if f.at("owner") != code {
             continue;
         }
@@ -413,6 +425,7 @@ pub fn avancer(g: &mut Game, f: &Val, jours: f64) -> f64 {
         }
         f.pop("vers");
     }
+    super::commerce::au_bout(g, f); // comptoir, départ d'une traversée (SPEC-EMPIRE, module 7)
     jours.min(fait / v)
 }
 
@@ -539,6 +552,7 @@ pub fn replier(g: &mut Game, f: &Val) {
 /// Le pas de la campagne (Game::step) : les flottes qui ne sont pas en pause avancent, celles qui mouillent dans un port
 /// ami se réparent, celles qui mouillent dans un port perdu en sortent ; le journal note les blocus qui commencent.
 pub fn tick(g: &mut Game, dt: f64) {
+    super::commerce::traversees(g); // les flottes qui arrivent d'un autre théâtre (SPEC-EMPIRE, module 7)
     if !g.flottes.truthy() {
         return;
     }
@@ -569,6 +583,7 @@ pub fn tick(g: &mut Game, dt: f64) {
 
 /// Début du tour du joueur (TT::begin_turn) : ses flottes retrouvent leurs jours de mer et reprennent leur route.
 pub fn debut_tour(g: &mut Game) {
+    super::commerce::traversees(g); // (SPEC-EMPIRE, module 7)
     for f in g.flottes.values() {
         f.set("mp", Val::None);
         if f.at("owner") == g.player && f.atb("chemin") && g.flottes.has(f.at("id")) {
@@ -759,10 +774,11 @@ pub fn separer(g: &mut Game, code: &str, fid: &Val, navires: &Val) -> (bool, Str
     (true, format!("Nouvelle flotte de {} navires.", nb_navires(&n)), n.at("id"))
 }
 
-/// Commande « ordre » : blocus (node : le port ennemi visé, la flotte s'y rend), commerce (cible : un comptoir, R3),
-/// corsaire (cible : le camp dont on pille les routes, R3 ; pas avec des flûtes seules), route (route : une route
-/// maritime vers un autre théâtre, R4), ou "" pour aucun. Les ordres commerce, corsaire et route sont gardés tels quels :
-/// les modules commerce et monde les exécutent.
+/// Commande « ordre » : blocus (node : le port ennemi visé, la flotte s'y rend), commerce (cible : l'id d'un comptoir, des
+/// flûtes s'y rendent et y prennent une place), corsaire (cible : le camp dont on pille les routes ; pas avec des flûtes
+/// seules ; la flotte reste où elle est, le joueur la mène sur les routes), route (route : l'id d'une route maritime vers
+/// un autre théâtre ; la flotte gagne sa case de départ et quitte la carte), ou "" pour aucun. Commerce, corsaire et
+/// route : voir commerce.rs (SPEC-EMPIRE, module 7).
 pub fn ordre(g: &mut Game, code: &str, fid: &Val, body: &Val) -> (bool, String) {
     let f = match a_moi(g, code, fid) {
         Ok(f) => f,
@@ -802,17 +818,55 @@ pub fn ordre(g: &mut Game, code: &str, fid: &Val, body: &Val) -> (bool, String) 
                 return (false, "Des flûtes ne font pas la course : il faut des navires armés.".to_string());
             }
             let c = body.get("cible");
-            if c.is_some() && (!g.factions.has(&c) || c == code) {
+            if !c.is_str() || !g.factions.has(&c) || c == code {
                 return (false, "Camp inconnu.".to_string());
             }
             f.update(&dict! {"ordre" => "corsaire", "cible" => c, "route" => Val::None});
             (true, "La flotte fait la course.".to_string())
         }
+        "commerce" => {
+            // (SPEC-EMPIRE, module 7) des flûtes vers un comptoir : elles y prennent une place (commerce.rs)
+            let c = super::commerce::comptoir(g, &body.get("cible"));
+            if !c.truthy() {
+                return (false, "Choisissez un comptoir.".to_string());
+            }
+            if !f.at("navires").has("flute") {
+                return (false, "Il faut des flûtes pour commercer.".to_string());
+            }
+            let (ok, msg) = deplacer(g, code, fid, &Val::None, &Val::from(c.atf("x") + 0.5), &Val::from(c.atf("y") + 0.5));
+            if !ok {
+                return (false, msg);
+            }
+            if g.flottes.has(fid) {
+                f.update(&dict! {"ordre" => "commerce", "cible" => c.at("id"), "route" => Val::None});
+                if !f.atb("chemin") && !f.getb("bataille") {
+                    super::commerce::au_bout(g, &f);
+                }
+            }
+            (true, format!("Comptoir {} : {msg}", R::de(&c.ats("nom"))))
+        }
         _ => {
-            // commerce et route : gardés pour les modules commerce (R3) et monde (R4)
+            // (SPEC-EMPIRE, module 7) route : la flotte gagne la case de départ de la route maritime, puis quitte la carte
             let r = body.get("route");
-            f.update(&dict! {"ordre" => &o, "cible" => body.get("cible"), "route" => if r.is_str() { r } else { Val::None }});
-            (true, if o == "commerce" { "La flotte part commercer.".to_string() } else { "La flotte prend la route.".to_string() })
+            let Some(route) = (if r.is_str() { crate::geo::route_mer(&g.geo, r.s()) } else { None }) else {
+                return (false, "Route maritime inconnue.".to_string());
+            };
+            let (dx, dy) = (route.at("de").at(0).f() + 0.5, route.at("de").at(1).f() + 0.5);
+            if g.geo.theatre_case(f.atf("x") + 0.5, f.atf("y") + 0.5) != g.geo.theatre_case(dx, dy) {
+                return (false, "Cette route part d'un autre théâtre.".to_string());
+            }
+            let (ok, msg) = deplacer(g, code, fid, &Val::None, &Val::from(dx), &Val::from(dy));
+            if !ok {
+                return (false, msg);
+            }
+            if !g.flottes.has(fid) {
+                return (true, msg);
+            }
+            f.update(&dict! {"ordre" => "route", "cible" => Val::None, "route" => route.at("id")});
+            if !f.atb("chemin") && super::commerce::partir(g, &f) {
+                return (true, format!("La flotte prend la mer {} : elle arrivera dans {}.", route.ats("nom"), R::pl(route.ati("tours"), "tour", None)));
+            }
+            (true, format!("La flotte fait voile vers le large ({}) : {msg}", route.ats("nom")))
         }
     }
 }

@@ -72,6 +72,9 @@ pub fn to_dict(g: &mut Game) -> Val {
         d.set("flottes", &g.flottes);
         d.set("navales", &g.navales);
     }
+    if g.commerce.truthy() {
+        d.set("commerce", &g.commerce); // (SPEC-EMPIRE, module 7)
+    }
     // horloges des IA : sans elles, un chargement relance aussitôt leur diplomatie et leurs propositions
     let ai_state = dict! {};
     for (c, ai) in g.ais.iter() {
@@ -245,6 +248,7 @@ pub fn from_dict(geo: Rc<GeoMap>, d: &Val) -> Result<Game, String> {
     g._blockade = d.get_or("blockade", list![]).to_set();
     g.flottes = d.get_or("flottes", dict! {}); // (SPEC-EMPIRE, module 2) : une sauvegarde d'avant n'en a pas
     g.navales = d.get_or("navales", dict! {});
+    g.commerce = d.get_or("commerce", dict! {}); // (SPEC-EMPIRE, module 7)
     g.diplo = d.at("diplo").iter().map(|e| ((e.ats(0), e.ats(1)), e.ats(2))).collect();
     g.rng = Random::new(g.seed + py::int(g.t * 1000.0));
     g.speed_idx = 0;
@@ -422,7 +426,8 @@ pub fn rules_payload_carte(geo: i64) -> Val {
         "tech_arme" => R::TECH_ARME(), "renfort_km" => R::RENFORT_KM,
         "poursuite" => dict! {"cav" => R::PURSUIT_CAV, "fatigue" => R::POURSUITE_FAT},
         // la marine (SPEC-EMPIRE, module 2)
-        "navires" => R::NAVIRES(), "navire_ordre" => R::NAVIRE_ORDRE(), "strats_nav" => R::STRATS_NAV(), "phases_nav" => R::PHASES_NAV()
+        "navires" => R::NAVIRES(), "navire_ordre" => R::NAVIRE_ORDRE(), "strats_nav" => R::STRATS_NAV(), "phases_nav" => R::PHASES_NAV(),
+        "denrees" => R::DENREES() // le commerce maritime (SPEC-EMPIRE, module 7)
     }
 }
 
@@ -952,6 +957,9 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
             "pr" => if !moi { py::int_v(&f.get_or("prisoners", dict! {}).get_or(&p, 0)) } else { 0 },
             "prestige" => g.prestige(&code), "weary" => py::int_v(&f.get_or("weary", 0)), "maison" => FM::vue(g, &code)
         };
+        if !moi && crate::engine::commerce::casus_belli(g, &p, &code) {
+            fd.set("cb", true); // (SPEC-EMPIRE, module 7) un incident de corsaires nous offre un casus belli contre lui
+        }
         fd.update(&AA::view_passage(g, &p, &code));
         facs.push(&fd);
         let lb = f.get("lb");
@@ -1069,6 +1077,7 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
     out.set("flood", g.t < g.flood_until);
     out.set("tour", TT::view(g));
     crate::engine::marine::vue(g, &out, &*seen); // flottes, blocus, batailles navales (SPEC-EMPIRE, module 2)
+    crate::engine::commerce::vue(g, &out); // comptoirs, routes commerciales, marché, traversées (SPEC-EMPIRE, module 7)
     // les routes que la crue coupe (pendant la crue seulement) : [arête, début, fin] des tronçons noyés, en km
     // le long du tracé
     let cut = g.cut_edges();
