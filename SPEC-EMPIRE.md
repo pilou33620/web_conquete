@@ -248,3 +248,60 @@ a_quai, armee: {id, effectif} | null, ordre}]`, `blocus: [{flotte, ville, lieu: 
 ## État
 
 (à remplir par chaque module : ce qui est fait, ce qui ne l'est pas, écarts à la spec)
+
+### Module 3 (R4, la campagne mondiale) — 23/11/2026
+
+**Fait.**
+- Géographie **13 « Monde »** (`geo::VERSION_MONDE` ; 12 reste la carte inconnue des essais) : `GeoMap::monde` fait ou
+  relit (cache `map_cache_v5/6/7.json`) les cartes de l'Amérique, de l'Europe et de l'Inde, et les pose d'ouest en est,
+  chacune à sa latitude (KY est le même partout), avec 20 cases d'océan vide entre deux : grille de 2 607 × 1 254 cases,
+  2 382 places, 4 509 arêtes. Rien n'est recalculé : grilles recopiées (codes des pays renumérotés), places, arêtes, voies
+  d'eau, ports et tracés de la page décalés. Aucune arête ne relie deux théâtres. Pas de cache propre.
+- Tout ce qui supposait une seule projection : `GeoMap.parties` (un théâtre posé : décalage, taille, `lon0`, `lat1`, `KX`,
+  numéros de ses places, ses pays) ; `xy` et `lon_of` prennent la projection du théâtre de la longitude ; `lat_of` vaut à
+  une demi-case près. `km_case` (5) et `KY` sont communs. Le relief, la végétation, les climats et les routes restent ceux
+  de chaque théâtre (calculés avec sa projection). Les saisons et la météo du moteur ne dépendent pas de la latitude
+  (calendrier commun, trois zones côte / intérieur / montagne d'après le terrain de la case) : l'Inde et l'Amérique les ont
+  donc comme dans leur partie à part. Distances, chemins, frontières (`diplomacy::borders` par les arêtes) : en cases, sans
+  changement. La mini-carte et les frontières de la page : `depts`, `rivers`, `waters` déjà en cases.
+- Théâtre de chaque place (`"theatre"` dans `geo.nodes`, carte monde seulement), `geo.theatre_de(nid)` (toute carte : le
+  théâtre de la carte, celui de la partie sur la carte monde, None en Aquitaine), `geo.theatre_case(x, y)` (None entre
+  deux cartes), `rules::theatre_du_pays(code)`.
+- Routes maritimes `geo.routes_mer : [{id, de: [x, y], vers: [x, y], tours, nom}]`, ids `europe-amerique` (2 tours,
+  « vers l'Amérique ») et retour `amerique-europe` (« vers l'Europe »), `europe-inde` / `inde-europe` (4 tours, « … (route
+  du Cap) »), `amerique-inde` / `inde-amerique` (5 tours) ; chaque bout est une case d'océan à moins de 12 cases du bord de
+  sa carte (`ROUTES_MER`, en lat/lon). `geo::route_mer(&geo, id)`. Balises `geo.sorties : [{case: [x, y], nom, route}]`
+  (une par départ).
+- Comptoirs `geo.comptoirs : [{id, nom, x, y, theatre, denree}]` (`COMPTOIRS`) : dix cases d'océan au large d'une côte :
+  Amérique (Îles du Vent sucre, Saint-Domingue café, Chesapeake tabac, Géorgie coton, golfe du Saint-Laurent fourrures),
+  Inde (Malabar épices, Ceylan épices, golfe de Cambay indigo, bouches du Gange thé), route du Cap (Mogador ivoire : la
+  grille d'Europe s'arrête au Maroc, le Cap n'y est pas). R3 en fait `g.comptoirs` (places, navires).
+- Camps : les 52 pays des trois théâtres (`rules::pays(13)`, dans l'ordre de `FACTIONS`). **Décision sur les colonies** :
+  les données ont des pays coloniaux distincts (codes uniques par théâtre, pas de France ni d'Angleterre en Inde) ; on ne
+  les fond pas dans leur métropole (elle perdrait leur armée et leur gouvernement). Lien explicite `rules::COLONIES` :
+  Nouvelle-France et Louisiane → France, Amérique britannique et Treize Colonies → Grande-Bretagne, Nouvelle-Espagne et
+  Cuba → Espagne, Antilles et Ceylan néerlandais → Provinces-Unies, État portugais des Indes → Portugal. Sur la carte
+  monde, chacune commence **vassale** de sa métropole (`overlord`, alliance, relations à 60) : tribut, guerres de la
+  métropole, victoire comptée avec elle (règles des vassaux existantes). Les autres pays restent indépendants. Une partie
+  jouée avec une colonie en fait un vassal (il ne déclare pas la guerre seul).
+- Écran de départ : « Monde » ajouté à `R::MODES` (geo 13, après les théâtres) : `/api/map?geo=13` et `/api/new` avec
+  `geo: 13` marchent sans autre changement du serveur. `/api/map` de la carte monde porte en plus `map.theatres : [{id,
+  nom, cadre: [x, y, largeur, hauteur], lon0, lat1, KX, pays: [codes]}]` (le sélecteur de théâtre), `map.routes_mer`,
+  `map.sorties`, `map.comptoirs`, et chaque place son `theatre` ; `rules.factions[code]` y a `theatre` et `metropole`
+  (code ou null). Les autres cartes ne changent pas, sauf la liste `modes` de leur /api/map (référence `serveur.json` refaite : octets et empreinte). /api/map de la carte monde : 24,5 Mo
+  avant gzip (les grilles en base64).
+- Essais `tests/monde.rs` (carte, routes, comptoirs, camps, une partie de quatre tours sauvée et relue, référence
+  `tests/references/monde.json` refaite par `refaire_monde`, banc ignoré `banc_tours_des_ia`).
+
+**Mesures** (cette machine, 4 cœurs, `--release`, partie de 1700, le joueur en France) : carte monde 0,4 s depuis les
+caches des trois théâtres (7,4 s sans eux : les trois cartes se font) ; partie créée en 0,08 s ; un tour des IA (un mois, 52 camps) 3,1 / 3,7 / 3,9 / 3,7 / 5,0 /
+6,2 s sur six mois, contre 1,3 à 3,3 s pour l'Europe seule (32 camps), 0,3 à 0,7 s pour l'Amérique et 0,2 à 0,5 s pour
+l'Inde. Le profil est plat : le coût est celui des camps et de leurs armées (IA, économie, sièges, batailles), la
+géographie (chemins A*, routes) n'y pèse pas.
+
+**Pas fait / écarts.**
+- Objectif d'un tour des IA sous 3 s **non atteint** (3 à 6 s) : il faudrait alléger les boucles par camp de l'IA et de
+  l'économie (`ai/`, `engine/economie.rs`), fichiers d'autres modules ; à reprendre après la fusion.
+- Mousson, saisons inversées : pas de météo par théâtre (le moteur n'en a pas) ; la météo est commune aux trois cartes.
+- Le passage d'une flotte par une route (ordre `route`, la flotte « en mer » et son tour d'arrivée) : R2.
+- Le sélecteur de théâtre et la mini-carte à trois cadres : P2 (les données sont dans /api/map).
