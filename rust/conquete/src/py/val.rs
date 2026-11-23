@@ -12,6 +12,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
 
 pub type Liste = Rc<RefCell<Vec<Val>>>;
 pub type Dico = Rc<RefCell<Table>>;
@@ -276,21 +277,23 @@ impl Equivalent<Val> for CleStr<'_> {
 }
 // Les dict d'une même sorte (places, armées, régiments, camps) rangent leurs clés dans le même ordre : le rang où
 // une clé écrite dans le code (« owner ») a été trouvée la dernière fois est essayé d'abord, sans hacher ni sonder
-// la table. (Indexé par l'adresse du texte ; la clé trouvée à ce rang est toujours vérifiée.)
-thread_local! {
-    static RANGS: [std::cell::Cell<u32>; 1024] = const { [const { std::cell::Cell::new(u32::MAX) }; 1024] };
-}
+// la table. (Indexé par l'adresse du texte ; la clé trouvée à ce rang est toujours vérifiée.) Deux rangs par clé, les
+// deux derniers trouvés : « owner » n'a pas le même rang dans une place et dans une armée. Un simple indice partagé par
+// les fils (atomique, sans ordre : une lecture vaut un `mov`), pas un thread_local, plus lent à atteindre.
+static RANGS: [[AtomicU32; 2]; 1024] = [const { [const { AtomicU32::new(u32::MAX) }, const { AtomicU32::new(u32::MAX) }] }; 1024];
 #[inline]
 fn chercher_str<'a>(m: &'a Table, k: &str) -> Option<&'a Val> {
-    let case = ((k.as_ptr() as usize >> 3) ^ k.len()) & 1023;
-    let r = RANGS.with(|t| t[case].get());
-    if let Some((Val::Str(s), v)) = m.get_index(r as usize) {
-        if meme_texte(s, k) {
-            return Some(v);
+    let case = &RANGS[((k.as_ptr() as usize >> 3) ^ k.len()) & 1023];
+    for r in case {
+        if let Some((Val::Str(s), v)) = m.get_index(r.load(Relaxed) as usize) {
+            if meme_texte(s, k) {
+                return Some(v);
+            }
         }
     }
     let (i, _, v) = m.get_full(&CleStr(k))?;
-    RANGS.with(|t| t[case].set(i as u32));
+    case[1].store(case[0].load(Relaxed), Relaxed);
+    case[0].store(i as u32, Relaxed);
     Some(v)
 }
 

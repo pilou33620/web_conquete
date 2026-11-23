@@ -316,6 +316,9 @@ pub fn usable(g: &Game, code: &str, sid: &str) -> bool {
 /// Python : `town_bonus(g, nid)`.
 // game/rails.py, lignes 183 à 186
 pub fn town_bonus(g: &Game, nid: i64) -> f64 {
+    if !g.rails.truthy() {
+        return 0.0; // (aucun tronçon commencé, donc aucun d'ouvert : RAIL_TOWN_BONUS × 0)
+    }
     let k = by_town(&g.geo).get(nid).or(list![]).iter().filter(|sid| open_(g, sid.s())).count();
     let v = R::RAIL_TOWN_BONUS * k as f64;
     if v < R::RAIL_TOWN_MAX { v } else { R::RAIL_TOWN_MAX }
