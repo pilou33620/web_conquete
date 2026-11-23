@@ -121,6 +121,15 @@ l'outil, on recompile. La carte du jeu (géographie 5 pour l'Europe, `GeoMap::ne
 c'est le calcul de la carte qui change (relief, végétation, routes : `geo.rs`), on augmente `GEN_THEATRE` (geo.rs : il refait le cache de tous les théâtres).
 `cargo test -p conquete --test europe` vérifie la carte, les pays et les trajectoires de l'Europe.
 
+## La carte monde (géographie 13, SPEC-EMPIRE.md module 3)
+
+L'outil n'écrit rien pour elle : `GeoMap::new(13)` (`geo.rs`, `GeoMap::monde`) fait ou relit les cartes de l'Amérique (6),
+de l'Europe (5) et de l'Inde (7) et les pose côte à côte, d'ouest en est, à leur latitude, sur une grille de 2 607 × 1 254
+cases (`MER_MONDE` cases d'océan vide entre deux). Changer un de ces théâtres change donc la carte monde : refaire sa
+référence (`CONQUETE_REFAIRE_MONDE=1 cargo test --release -p conquete --test monde refaire_monde -- --ignored`). Les routes
+maritimes (`ROUTES_MER`) et les comptoirs en mer (`COMPTOIRS`) y sont écrits en latitude et longitude, chacun sur la case
+d'océan la plus proche ; `cargo test -p conquete --test monde` les vérifie.
+
 ## Ce qui est écrit dans le moteur, pas dans les données (Europe)
 
 Les noms des familles culturelles du moteur (`CULTURES`) sont dans `rust/conquete/src/rules.rs` (les moyens et les maisons

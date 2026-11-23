@@ -14,7 +14,8 @@
 //! retirées depuis le 22/11/2026 (historique git) : leurs sauvegardes ne se chargent plus. À partir de 5, les théâtres
 //! (THEATRES : l'Europe, 5, puis les autres), chacun une carte à part de cases de 5 km, un pays par camp. Le moteur compte
 //! toujours en cases : seule la projection (KX, KY de la carte, km_case) sait qu'une case y vaut 5 km. Un théâtre ne se
-//! fait qu'à la demande.
+//! fait qu'à la demande. 13, la carte monde (VERSION_MONDE, SPEC-EMPIRE.md) : l'Amérique, l'Europe et l'Inde posées sur une
+//! même grille (GeoMap::monde), chacune avec sa projection (parties).
 //!
 //! En Rust : les nœuds, les arêtes et ce que le reste du moteur lit par clé restent des `Val` ; les grilles sont des
 //! `Vec` natifs et toute la génération se calcule en nombres natifs. Les fichiers de données sources sont embarqués ;
@@ -111,12 +112,74 @@ pub const THEATRES: &[Theatre] = &[
         cultures: include_str!("../../../game/data/cultures_indes_orientales.json") },
 ];
 
-/// Le théâtre de cette géographie (None pour l'Aquitaine et les anciennes cartes).
+/// Le théâtre de cette géographie (None pour l'Aquitaine et les anciennes cartes ; MONDE pour la carte monde).
 pub fn theatre(version: i64) -> Option<&'static Theatre> {
+    if version == VERSION_MONDE {
+        return Some(&MONDE);
+    }
     THEATRES.iter().find(|t| t.geo == version)
 }
 
-/// Une géographie que le jeu sait encore faire (1, 2 et les théâtres) : une sauvegarde d'une autre est refusée.
+// ---------------------------------------------------------------- la carte monde (SPEC-EMPIRE, module 3)
+// Une seule partie pour les théâtres de THEATRES_MONDE : leurs cartes, faites (ou relues de leur cache) comme pour une partie
+// à part, posées côte à côte sur une même grille, d'ouest en est, chacune à sa latitude (KY est le même partout : la ligne y
+// d'une case dit sa latitude, à une demi-case près), avec MER_MONDE cases d'océan vide entre deux. Le moteur compte en
+// cases et n'en sait rien : aucune route ni voie d'eau ne relie deux cartes ; seules les routes maritimes (routes_mer, que
+// suivent les flottes) passent de l'une à l'autre. Chaque place porte son théâtre ("theatre"), chaque case aussi
+// (theatre_case), chaque pays (rules::theatre_du_pays).
+pub const VERSION_MONDE: i64 = 13; // (12 : la carte inconnue des essais, tests/bancs_serveur.rs)
+/// Les théâtres de la carte monde, d'ouest en est (et l'ordre de leurs places dans geo.nodes).
+pub const THEATRES_MONDE: [i64; 3] = [6, 5, 7];
+pub const MER_MONDE: i64 = 20; // cases d'océan vide entre deux cartes (100 km)
+/// Le « théâtre » de la carte monde, pour ce qui ne veut qu'un nom (Game::pays_de, la fin de la partie, l'écran de
+/// départ) : ses fichiers sont ceux des trois théâtres réunis.
+pub static MONDE: Theatre = Theatre { geo: VERSION_MONDE, id: "monde", nom: "Monde", mot: "pays", de: "du monde", le: "le monde",
+    tout: "Le monde entier", carte: "", places: "", pays: "{}", epoques: "{}", cultures: "{}" };
+/// Les routes maritimes entre les théâtres : (théâtre, lat, lon au bord de sa carte) des deux bouts, tours de mer, nom à
+/// l'aller, nom au retour. Chaque bout est la case d'océan la plus proche du point ; chaque route se fait dans les deux sens.
+pub const ROUTES_MER: &[((&str, f64, f64), (&str, f64, f64), i64, &str, &str)] = &[
+    (("europe", 47.0, -10.6), ("amerique", 42.0, -52.5), 2, "vers l'Amérique", "vers l'Europe"),
+    (("europe", 29.6, -10.8), ("inde", 6.2, 60.4), 4, "vers l'Inde (route du Cap)", "vers l'Europe (route du Cap)"),
+    (("amerique", 7.6, -52.5), ("inde", 6.2, 92.5), 5, "vers l'Inde", "vers l'Amérique"),
+];
+/// Les comptoirs en mer (le commerce, SPEC-EMPIRE module 7) : (id, nom, théâtre, lat, lon d'une côte, denrée) ; le comptoir
+/// est sur la case d'océan la plus proche. Les denrées d'après les productions d'époque.
+pub const COMPTOIRS: &[(&str, &str, &str, f64, f64, &str)] = &[
+    ("antilles", "Îles du Vent", "amerique", 14.6, -61.0, "sucre"),
+    ("saint-domingue", "Saint-Domingue", "amerique", 19.9, -72.8, "cafe"),
+    ("chesapeake", "Baie de la Chesapeake", "amerique", 37.0, -75.9, "tabac"),
+    ("georgie", "Côte de Géorgie", "amerique", 31.5, -81.1, "coton"),
+    ("saint-laurent", "Golfe du Saint-Laurent", "amerique", 49.2, -64.5, "fourrures"),
+    ("malabar", "Côte de Malabar", "inde", 11.0, 75.8, "epices"),
+    ("ceylan", "Côte de Ceylan", "inde", 6.9, 79.85, "epices"),
+    ("gujarat", "Golfe de Cambay", "inde", 21.2, 72.6, "indigo"),
+    ("bengale", "Bouches du Gange", "inde", 21.8, 89.0, "the"),
+    ("mogador", "Mogador", "europe", 31.5, -9.8, "ivoire"),
+];
+
+/// (la carte monde) Un théâtre posé sur la grille : son décalage en cases, sa taille, sa projection, ses places.
+pub struct Partie {
+    pub theatre: &'static Theatre,
+    pub ox: i64,
+    pub oy: i64,
+    pub W: i64,
+    pub H: i64,
+    pub lon0: f64,
+    pub lon1: f64,
+    pub lat1: f64,
+    pub KX: f64,
+    /// Les numéros de ses places dans geo.nodes.
+    pub noeuds: std::ops::Range<i64>,
+    /// Les codes de ses pays, triés.
+    pub pays: Vec<String>,
+}
+
+/// La route maritime de ce numéro (geo.routes_mer : {id, de: [x, y], vers: [x, y], tours, nom}), ou None.
+pub fn route_mer(geo: &GeoMap, id: &str) -> Option<Val> {
+    geo.routes_mer.iter().find(|r| r.at("id") == id)
+}
+
+/// Une géographie que le jeu sait encore faire (1, 2, les théâtres et le monde) : une sauvegarde d'une autre est refusée.
 pub fn connue(version: i64) -> bool {
     version == 1 || version == 2 || theatre(version).is_some()
 }
@@ -811,11 +874,23 @@ pub struct GeoMap {
     pub _crue: RefCell<Val>,
     /// (privé, pour la vitesse) `dept_codes[d - 1] in playable_codes` pour chaque valeur d de la grille dept (faux pour 0).
     jouable: Vec<bool>,
+    // (SPEC-EMPIRE, module 3 : la carte monde ; vides sur les autres cartes)
+    /// Les théâtres posés sur la grille, d'ouest en est.
+    pub parties: Vec<Partie>,
+    /// Les routes maritimes entre théâtres : [{id, de: [x, y], vers: [x, y], tours, nom}] (cases de la grille).
+    pub routes_mer: Val,
+    /// Les balises d'horizon (un départ de route maritime) : [{case: [x, y], nom, route}].
+    pub sorties: Val,
+    /// Les comptoirs en mer : [{id, nom, x, y, theatre, denree}] (une case d'océan).
+    pub comptoirs: Val,
 }
 
 impl GeoMap {
     /// `GeoMap(version)` ; `GeoMap()` : `GeoMap::new(VERSION)`.
     pub fn new(version: i64) -> GeoMap {
+        if version == VERSION_MONDE {
+            return GeoMap::monde();
+        }
         let suffixe = format!("_v{version}");
         let theatre = theatre(version);
         let texte = match (version, theatre) {
@@ -878,6 +953,10 @@ impl GeoMap {
             _ccost: OnceCell::new(),
             _crue: RefCell::new(Val::None),
             jouable,
+            parties: vec![],
+            routes_mer: list![],
+            sorties: list![],
+            comptoirs: list![],
         };
         g._build_nodes();
         g._load_or_generate();
@@ -892,16 +971,268 @@ impl GeoMap {
         g
     }
 
+    /// (SPEC-EMPIRE, module 3) La carte monde : celles de THEATRES_MONDE, faites ou relues de leur cache (GeoMap::new), posées
+    /// sur une grille ; leurs places, arêtes, voies d'eau et tracés décalés, sans rien recalculer. Elle n'a pas de cache à elle.
+    fn monde() -> GeoMap {
+        let cartes: Vec<GeoMap> = THEATRES_MONDE.iter().map(|&v| GeoMap::new(v)).collect();
+        let (KY_, km_case) = (cartes[0].KY, cartes[0].km_case);
+        let lat1 = cartes.iter().map(|c| c.lat1).fold(f64::MIN, f64::max);
+        let (mut ox, mut n0) = (0, 0);
+        let mut parties = vec![];
+        for c in &cartes {
+            assert!(c.km_case == km_case && c.KY == KY_, "{} : une autre échelle", c.version);
+            let n = c.nodes.len() as i64;
+            let mut pays: Vec<String> = c.playable_codes.iter().map(|v| v.string()).collect();
+            pays.sort();
+            parties.push(Partie { theatre: c.theatre.unwrap(), ox, oy: py::int(((lat1 - c.lat1) * KY_).round()), W: c.W, H: c.H,
+                lon0: c.lon0, lon1: c.lon1, lat1: c.lat1, KX: c.KX, noeuds: n0..n0 + n, pays });
+            ox += c.W + MER_MONDE;
+            n0 += n;
+        }
+        assert!(n0 < NONE, "trop de places pour cellnode");
+        let (W, H) = (ox - MER_MONDE, parties.iter().map(|p| p.oy + p.H).max().unwrap());
+        let mut dept_codes: Vec<String> = cartes.iter().flat_map(|c| c.dept_codes.iter().cloned()).collect();
+        dept_codes.sort();
+        let n_codes = dept_codes.len();
+        dept_codes.dedup();
+        assert!(dept_codes.len() == n_codes && n_codes <= 255, "codes des pays : pris deux fois, ou plus de 255");
+        let N = (W * H) as usize;
+        let (mut terrain, mut dept, mut river, mut road, mut cellnode) = (vec![OCEAN; N], vec![0u8; N], vec![0u8; N], vec![0u8; N], vec![NONE as u16; N]);
+        let playable_codes = Val::new_set();
+        let (nodes, by_name, edges, ways, edge_cum, ports, down_nodes) = (list![], Val::dict(), list![], Val::dict(), Val::dict(), Val::dict(), Val::dict());
+        let (depts, rivers, waters) = (Val::dict(), list![], list![]);
+        let mut slugs: HashSet<String> = HashSet::new();
+        // (un point [x, y, …] décalé : arrondi au centième comme les tracés des arêtes ; un point (x, y) des voies, tel quel)
+        let decale = |q: &Val, dx: f64, dy: f64| -> Val {
+            let v = q.vec();
+            let mut out = vec![Val::from(py::round_n(v[0].f() + dx, 2)), Val::from(py::round_n(v[1].f() + dy, 2))];
+            out.extend(v[2..].iter().cloned());
+            Val::list(out)
+        };
+        let decale_pt = |q: &Val, dx: f64, dy: f64| -> Val { Val::from((q.at(0).f() + dx, q.at(1).f() + dy)) };
+        for (c, p) in cartes.iter().zip(&parties) {
+            let (dx, dy, noff, eoff) = (p.ox as f64, p.oy as f64, p.noeuds.start, edges.len() as i64);
+            // les grilles, chaque pays à son rang parmi tous les codes
+            let rang: Vec<u8> = std::iter::once(0).chain(c.dept_codes.iter().map(|d| dept_codes.binary_search(d).unwrap() as u8 + 1)).collect();
+            for j in 0..c.H {
+                let (s, d) = ((j * c.W) as usize, ((j + p.oy) * W + p.ox) as usize);
+                for i in 0..c.W as usize {
+                    terrain[d + i] = c.terrain[s + i];
+                    dept[d + i] = rang[c.dept[s + i] as usize];
+                    river[d + i] = c.river[s + i];
+                    road[d + i] = c.road[s + i];
+                    let v = c.cellnode[s + i];
+                    cellnode[d + i] = if v as i64 == NONE { v } else { v + noff as u16 };
+                }
+            }
+            for code in c.playable_codes.iter() {
+                playable_codes.push(code);
+            }
+            // les places (deux homonymes de théâtres différents : Guadalajara, Valladolid… le second slug prend le théâtre)
+            for n in c.nodes.iter() {
+                let m = n.copy();
+                let id = n.ati("id") + noff;
+                let mut slug = n.ats("slug");
+                if !slugs.insert(slug.clone()) {
+                    slug = format!("{slug}-{}", p.theatre.id);
+                    assert!(slugs.insert(slug.clone()), "deux places « {slug} »");
+                }
+                for (k, v) in [("id", Val::from(id)), ("slug", Val::from(slug)), ("x", Val::from(py::round_n(n.atf("x") + dx, 2))),
+                    ("y", Val::from(py::round_n(n.atf("y") + dy, 2))), ("theatre", Val::from(p.theatre.id))] {
+                    m.set(k, v);
+                }
+                by_name.setdefault(&n.at("name"), id);
+                nodes.push(m);
+            }
+            // les arêtes (routes, bacs, voies d'eau) et leurs longueurs cumulées
+            for (k, e) in c.edges.iter().enumerate() {
+                assert!(e.ati("id") == k as i64, "arêtes : numéros");
+                let f = e.copy();
+                f.set("id", k as i64 + eoff);
+                f.set("a", e.ati("a") + noff);
+                f.set("b", e.ati("b") + noff);
+                if e.get("down").is_some() {
+                    f.set("down", e.ati("down") + noff);
+                }
+                for (cx, d) in [("cx", dx), ("cy", dy), ("bx", dx), ("by", dy)] {
+                    if e.get(cx).is_some() {
+                        f.set(cx, py::round_n(e.atf(cx) + d, 2));
+                    }
+                }
+                if e.has("ponts") {
+                    f.set("ponts", e.at("ponts").iter().map(|q| decale(&q, dx, dy)).collect::<Val>());
+                }
+                f.set("pts", e.at("pts").iter().map(|q| decale(&q, dx, dy)).collect::<Val>());
+                edge_cum.set(k as i64 + eoff, c.edge_cum.at(k as i64));
+                edges.push(f);
+            }
+            for (nom, w) in c.ways.items() {
+                assert!(!ways.has(&nom), "deux voies d'eau « {nom} »");
+                let v = w.copy();
+                v.set("pts", w.at("pts").iter().map(|q| decale_pt(&q, dx, dy)).collect::<Val>());
+                v.set("ports", w.at("ports").iter().map(|q| {
+                    let r = q.copy();
+                    r.set("node", q.ati("node") + noff);
+                    r.set("q", decale_pt(&q.at("q"), dx, dy));
+                    r.set("spur", q.at("spur").iter().map(|s| decale_pt(&s, dx, dy)).collect::<Val>());
+                    r
+                }).collect::<Val>());
+                ways.set(nom, v);
+            }
+            for (nid, l) in c.ports.items() {
+                ports.set(nid.i() + noff, l);
+            }
+            for (nid, l) in c.down_nodes.items() {
+                down_nodes.set(nid.i() + noff, l.iter().map(|x| Val::from(x.i() + noff)).collect::<Val>());
+            }
+            // les tracés pour la page (frontières, fleuves, lacs), déjà projetés par le théâtre
+            let (d0, r0, w0) = c.traces_client();
+            for (code, d) in d0.items() {
+                let e = d.copy();
+                e.set("rings", d.at("rings").iter().map(|r| r.iter().map(|q| decale(&q, dx, dy)).collect::<Val>()).collect::<Val>());
+                depts.set(code, e);
+            }
+            for r in r0.iter() {
+                let e = r.copy();
+                e.set("pts", r.at("pts").iter().map(|q| decale(&q, dx, dy)).collect::<Val>());
+                rivers.push(e);
+            }
+            for w in w0.iter() {
+                let e = w.copy();
+                e.set("ring", w.at("ring").iter().map(|q| decale(&q, dx, dy)).collect::<Val>());
+                waters.push(e);
+            }
+        }
+        let mut jouable = vec![false];
+        jouable.extend(dept_codes.iter().map(|c| playable_codes.has(c)));
+        let lat0 = cartes.iter().map(|c| c.lat0).fold(f64::MAX, f64::min);
+        let (lon0, lon1) = (parties[0].lon0, parties[parties.len() - 1].lon1);
+        // (bounds et KX n'ont pas de sens sur toute la grille : ceux du premier théâtre ; chaque partie a sa projection, xy)
+        let src = dict! {"bounds" => dict!{"lon0" => lon0, "lon1" => lon1, "lat0" => lat0, "lat1" => lat1}, "depts" => depts, "rivers" => rivers, "waters" => waters};
+        let g = GeoMap {
+            version: VERSION_MONDE,
+            theatre: Some(&MONDE),
+            suffixe: format!("_v{VERSION_MONDE}"),
+            src,
+            lon0,
+            lon1,
+            lat0,
+            lat1,
+            KX: parties[0].KX,
+            KY: KY_,
+            km_case,
+            playable_codes,
+            W,
+            H,
+            dept_codes,
+            nodes,
+            by_name,
+            terrain,
+            dept,
+            river,
+            road,
+            cellnode,
+            edges,
+            ways,
+            edge_cum,
+            ports,
+            down_nodes,
+            adj: Val::dict(),
+            _rivf: None,
+            _ccost: OnceCell::new(),
+            _crue: RefCell::new(Val::None),
+            jouable,
+            parties,
+            routes_mer: list![],
+            sorties: list![],
+            comptoirs: list![],
+        };
+        for i in 0..g.nodes.len() {
+            g.adj.set(i, list![]);
+        }
+        for e in g.edges.iter() {
+            g.adj.at(&e.at("a")).push(e.at("id"));
+            g.adj.at(&e.at("b")).push(e.at("id"));
+        }
+        // les routes maritimes (dans les deux sens), leurs balises d'horizon, les comptoirs
+        for &((ta, la, oa), (tb, lb, ob), tours, aller, retour) in ROUTES_MER {
+            let (ca, cb) = (g.case_de_mer(ta, la, oa), g.case_de_mer(tb, lb, ob));
+            for (de, vers, a, b, nom) in [(ca, cb, ta, tb, aller), (cb, ca, tb, ta, retour)] {
+                let id = format!("{a}-{b}");
+                g.routes_mer.push(dict! {"id" => &id, "de" => list![de.0, de.1], "vers" => list![vers.0, vers.1], "tours" => tours, "nom" => nom});
+                g.sorties.push(dict! {"case" => list![de.0, de.1], "nom" => nom, "route" => id});
+            }
+        }
+        for &(id, nom, t, lat, lon, denree) in COMPTOIRS {
+            let (x, y) = g.case_de_mer(t, lat, lon);
+            g.comptoirs.push(dict! {"id" => id, "nom" => nom, "x" => x, "y" => y, "theatre" => t, "denree" => denree});
+        }
+        g
+    }
+
+    /// (la carte monde) La case d'océan la plus proche de ce point (lat, lon) du théâtre, dans son cadre : [colonne, ligne].
+    fn case_de_mer(&self, theatre: &str, lat: f64, lon: f64) -> (i64, i64) {
+        let p = self.parties.iter().find(|p| p.theatre.id == theatre).unwrap_or_else(|| panic!("théâtre {theatre} absent"));
+        let (i0, j0) = (py::int(p.ox as f64 + (lon - p.lon0) * p.KX), py::int(p.oy as f64 + (p.lat1 - lat) * self.KY));
+        for r in 0..80 {
+            let mut best: Option<(i64, i64, i64)> = None; // (distance², ligne, colonne) : la plus proche, puis la première
+            for j in j0 - r..=j0 + r {
+                for i in i0 - r..=i0 + r {
+                    let dedans = p.ox <= i && i < p.ox + p.W && p.oy <= j && j < p.oy + p.H;
+                    if (i - i0).abs().max((j - j0).abs()) != r || !dedans || self.terrain[(j * self.W + i) as usize] != OCEAN {
+                        continue;
+                    }
+                    let d2 = (i - i0).pow(2) + (j - j0).pow(2);
+                    if best.is_none_or(|b| (d2, j, i) < b) {
+                        best = Some((d2, j, i));
+                    }
+                }
+            }
+            if let Some((_, j, i)) = best {
+                return (i, j);
+            }
+        }
+        panic!("pas d'océan près de ({lat}, {lon}) en {theatre}")
+    }
+
+    /// Le théâtre d'une place (« europe », « amerique »…) : celui de sa carte, ou sur la carte monde celui de la partie où elle
+    /// est (son champ "theatre") ; None sur la carte d'Aquitaine.
+    pub fn theatre_de(&self, nid: i64) -> Option<&'static str> {
+        if self.parties.is_empty() {
+            return self.theatre.map(|t| t.id);
+        }
+        self.parties.iter().find(|p| p.noeuds.contains(&nid)).map(|p| p.theatre.id)
+    }
+
+    /// Le théâtre d'une case (x, y) : celui de la carte, ou sur la carte monde celui de la partie (None entre deux cartes).
+    pub fn theatre_case(&self, x: f64, y: f64) -> Option<&'static str> {
+        if self.cell(x, y) < 0 {
+            return None;
+        }
+        if self.parties.is_empty() {
+            return self.theatre.map(|t| t.id);
+        }
+        self.parties.iter().find(|p| p.ox as f64 <= x && x < (p.ox + p.W) as f64 && p.oy as f64 <= y && y < (p.oy + p.H) as f64).map(|p| p.theatre.id)
+    }
+
     // ------------------------------------------------------------ projection
     pub fn xy(&self, lat: f64, lon: f64) -> Pt {
+        // (la carte monde : la projection du théâtre de cette longitude, décalée ; leurs longitudes ne se chevauchent pas)
+        if let Some(p) = self.parties.iter().find(|p| p.lon0 <= lon && lon <= p.lon1) {
+            return (p.ox as f64 + (lon - p.lon0) * p.KX, p.oy as f64 + (p.lat1 - lat) * self.KY);
+        }
         ((lon - self.lon0) * self.KX, (self.lat1 - lat) * self.KY)
     }
 
+    /// (la carte monde : la latitude à une demi-case près, les théâtres étant posés à leur latitude)
     pub fn lat_of(&self, y: f64) -> f64 {
         self.lat1 - y / self.KY
     }
 
     pub fn lon_of(&self, x: f64) -> f64 {
+        if let Some(p) = self.parties.iter().find(|p| p.ox as f64 <= x && x < (p.ox + p.W) as f64) {
+            return p.lon0 + (x - p.ox as f64) / p.KX;
+        }
         self.lon0 + x / self.KX
     }
 
@@ -2536,7 +2867,12 @@ impl GeoMap {
     }
 
     // ------------------------------------------------------------ export client
-    pub fn client_payload(&self) -> Val {
+    /// (privé) Les tracés de la page, en cases : départements ou pays (leurs contours), fleuves, lacs. (La carte monde les a
+    /// déjà, faits par ses théâtres.)
+    fn traces_client(&self) -> (Val, Val, Val) {
+        if !self.parties.is_empty() {
+            return (self.src.at("depts"), self.src.at("rivers"), self.src.at("waters"));
+        }
         let depts = Val::dict();
         for (code, d) in self.src.at("depts").items() {
             depts.set(
@@ -2548,10 +2884,15 @@ impl GeoMap {
         let rivers: Val =
             self.src.at("rivers").iter().map(|r| dict! {"name" => r.at("name"), "rank" => r.at("rank"), "pts" => self.pts_lonlat(&r.at("pts")).iter().map(|&p| l2(p)).collect::<Val>()}).collect();
         let waters: Val = self.src.at("waters").iter().map(|w| dict! {"name" => w.at("name"), "ring" => self.pts_lonlat(&w.at("ring")).iter().map(|&p| l2(p)).collect::<Val>()}).collect();
+        (depts, rivers, waters)
+    }
+
+    pub fn client_payload(&self) -> Val {
+        let (depts, rivers, waters) = self.traces_client();
         let mut playable = self.playable_codes.vec();
         playable.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let b = self.src.at("bounds");
-        dict! {"W" => self.W, "H" => self.H, "lon0" => b.at("lon0"), "lat1" => b.at("lat1"), "KX" => self.KX, "KY" => self.KY, "playable" => playable,
+        let out = dict! {"W" => self.W, "H" => self.H, "lon0" => b.at("lon0"), "lat1" => b.at("lat1"), "KX" => self.KX, "KY" => self.KY, "playable" => playable,
         "y_mont" => self.xy(43.2, 0.0).1, "x_cote" => self.xy(44.0, -0.95).0, "y_spain" => self.xy(43.36, 0.0).1,
         "terrain" => b64encode(&self.terrain),
         "dept" => b64encode(&self.dept),
@@ -2561,7 +2902,17 @@ impl GeoMap {
         "nodes" => &self.nodes, "edges" => &self.edges,
         "ways" => self.ways.values().iter().map(|w| dict!{"name" => w.at("name"), "label" => w.at("label"), "sea" => w.at("sea"),
                    "pts" => w.at("pts").iter().map(|p| l2(p.xy())).collect::<Val>()}).collect::<Val>(),
-        "terrain_names" => Val::dict_from(TERRAIN().items().into_iter().map(|(k, v)| (k, v.at(0))).collect())}
+        "terrain_names" => Val::dict_from(TERRAIN().items().into_iter().map(|(k, v)| (k, v.at(0))).collect())};
+        // (SPEC-EMPIRE, module 3) la carte monde : ses théâtres et leur cadre en cases [x, y, largeur, hauteur] (le sélecteur de
+        // théâtre de la page), leur projection, leurs pays ; les routes maritimes, leurs balises d'horizon, les comptoirs
+        if !self.parties.is_empty() {
+            out.set("theatres", self.parties.iter().map(|p| dict! {"id" => p.theatre.id, "nom" => p.theatre.nom, "cadre" => list![p.ox, p.oy, p.W, p.H],
+                "lon0" => p.lon0, "lat1" => p.lat1, "KX" => p.KX, "pays" => p.pays.iter().map(Val::from).collect::<Val>()}).collect::<Val>());
+            for (k, v) in [("routes_mer", &self.routes_mer), ("sorties", &self.sorties), ("comptoirs", &self.comptoirs)] {
+                out.set(k, v);
+            }
+        }
+        out
     }
 }
 
