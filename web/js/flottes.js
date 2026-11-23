@@ -3,12 +3,17 @@
 // (choix dans la fenêtre des batailles, strategie.js, puis la scène jouée par phases). Les navires sont dessinés par
 // graphismes/rendu/marine.js (via hex/marine.js) ; ici, rien que du HTML et l'anneau de sélection en 2D.
 // Contrat du moteur : state.flottes, state.blocus, batailles `naval: true` ; commandes {cmd: "flotte", sub, …}.
+// Commerce maritime (module 7, page P3) : comptoirs, course, traversées dans la fenêtre de flotte ; le panneau « Commerce
+// maritime » (fenêtre Commerce : marché des denrées, revenus `me.mer`, routes, flottes en mer). Contrat : state.comptoirs,
+// routes_mer, marche, en_mer, me.mer ; rules.denrees.
 import { esc } from './battle/formes.js';
 import { ICON } from './icons.js';
 import { partTour } from './map.js';
 import * as BT from './strategie.js';
 
 const fmt = n => (Math.round(n) || 0).toLocaleString('fr-FR');
+const fmt1 = n => ((Math.abs(n) >= 10 ? Math.round(n) : Math.round(n * 10) / 10) || 0).toLocaleString('fr-FR');
+const COUPEE = { blocus: 'coupée par un blocus', ennemi: 'coupée par une flotte ennemie', corsaire: 'coupée par un corsaire' };
 const PORTS = ['', 'port de commerce', 'chantier naval', 'arsenal de marine'];   // (marine.rs peut_construire)
 const ORDRE = { '': 'Aucun ordre', blocus: 'Blocus', commerce: 'Commerce', corsaire: 'Course (corsaire)', route: 'En route vers un autre théâtre' };
 // la scène de la bataille navale : durée de chaque phase (ms)
@@ -19,6 +24,7 @@ export class Flottes {
     this.ui = ui;
     this.vise = null;    // ordre qui attend un toucher sur la carte : { id, mode: 'voile' | 'blocus' | 'debarquer' }
     this.scene = null;   // bataille navale montrée : { bid, b (sa vue), ev (sa fin), k (phase), t }
+    this.prix = {};      // denrée → { prix, avant } : le prix du marché au dernier état et celui d'avant son dernier changement
   }
   get st() { return this.ui.st; }
   get R() { return this.ui.rules; }
@@ -95,7 +101,7 @@ export class Flottes {
   // ------------------------------------------------------------------ fenêtre de la flotte (ui.renderPanel)
   panneau(id) {
     const f = this.get(id);
-    if (!f) return [null, ''];
+    if (!f) return this.enMerHtml(id);
     const R = this.R, st = this.st, own = this.mienne(f), fac = R.factions[f.proprio] || {}, N = R.navires || {};
     const ou = f.bataille ? 'Engagée dans une bataille navale' : f.ordre === 'route' ? ORDRE.route : f.chemin?.length ? `En mer, ${f.chemin.length} ${f.chemin.length > 1 ? 'cases' : 'case'} à parcourir`
       : f.a_quai != null ? `À quai à ${esc(this.nomPlace(f.a_quai))}` : 'Au mouillage';
@@ -132,33 +138,114 @@ export class Flottes {
     // ordres
     b.push(`<button class="btn primary" data-act="fl-viser" data-id="${esc(f.id)}" data-v="voile">Faire voile…<small>touchez la mer ou un port</small></button>`,
       `<button class="btn" data-act="fl-viser" data-id="${esc(f.id)}" data-v="blocus">Bloquer un port ennemi…</button>`);
-    const comptoirs = this.ui.md.comptoirs || [];
-    if (comptoirs.length) b.push(`<label class="fl-sel">Commerce vers <select data-fl-ordre="commerce" data-id="${esc(f.id)}"><option value="">un comptoir…</option>${comptoirs.map(c => `<option value="${esc(c.id)}">${esc(c.nom)} (${esc(c.denree)})</option>`).join('')}</select></label>`);
-    else b.push(`<button class="btn" data-act="fl-ordre" data-id="${esc(f.id)}" data-v="commerce">Commercer</button>`);
-    const guerre = st.factions.filter(x => x.st === 'guerre'), armes = types.some(t => t !== 'flute');
-    b.push(`<label class="fl-sel">Course contre <select data-fl-ordre="corsaire" data-id="${esc(f.id)}" ${armes ? '' : 'disabled title="Des flûtes ne font pas la course : il faut des navires armés"'}><option value="">un ennemi…</option>${guerre.map(x => `<option value="${esc(x.code)}">${esc(R.factions[x.code]?.name || x.code)}</option>`).join('')}</select></label>`);
+    // course : contre tout camp vivant qui n'est ni allié ni vassal (sans guerre déclarée : incidents)
+    const proies = st.factions.filter(x => x.code !== me && x.alive && x.st !== 'alliance' && x.over !== me), armes = types.some(t => t !== 'flute');
+    b.push(`<label class="fl-sel">Course contre <select data-fl-ordre="corsaire" data-id="${esc(f.id)}" ${armes ? '' : 'disabled title="Des flûtes ne font pas la course : il faut des navires armés"'}><option value="">un camp…</option>${proies.map(x => `<option value="${esc(x.code)}">${esc(R.factions[x.code]?.name || x.code)}${x.st === 'guerre' ? ' (en guerre)' : ''}</option>`).join('')}</select></label>`);
     const routes = this.routesDe(f);
-    if (routes.length) b.push(`<label class="fl-sel">Route <select data-fl-ordre="route" data-id="${esc(f.id)}"><option value="">vers un autre théâtre…</option>${routes.map(r => `<option value="${esc(r.id)}">${esc(r.nom)} (${r.tours} tours)</option>`).join('')}</select></label>`);
+    if (routes.length) b.push(`<label class="fl-sel">Route <select data-fl-ordre="route" data-id="${esc(f.id)}"><option value="">vers un autre théâtre…</option>${routes.map(r => `<option value="${esc(r.id)}">${esc(r.nom)} (${r.tours} ${r.tours > 1 ? 'tours' : 'tour'} en mer)</option>`).join('')}</select></label>`);
     if (f.ordre) b.push(`<button class="btn" data-act="fl-ordre" data-id="${esc(f.id)}" data-v="">Lever l’ordre</button>`);
     // fusionner, séparer
     for (const o of this.liste().filter(o => o.id !== f.id && this.mienne(o) && o.case[0] === f.case[0] && o.case[1] === f.case[1]))
       b.push(`<button class="btn" data-act="fl-fusionner" data-id="${esc(f.id)}" data-v="${esc(o.id)}">Fusionner avec la flotte voisine<small>${this.nb(o)} navires</small></button>`);
     if (this.nb(f) > 1) for (const t of types) b.push(`<button class="btn" data-act="fl-separer" data-id="${esc(f.id)}" data-v="${esc(t)}">Détacher : ${esc(N[t]?.nom || t)}</button>`);
     h += `<div class="section-t">Ordres</div><div class="btns">${b.join('')}</div>
-      <p class="muted small">Commerce, course et routes vers les autres théâtres sont acceptés ; leurs effets arrivent avec le module du commerce.</p>
+      <p class="muted small">La course pille les routes commerciales du camp visé sans guerre déclarée ; contre un camp en paix, chaque mois de pillage risque un incident diplomatique : sa relation baisse et il tient un casus belli contre vous.${f.ordre === 'route' ? ' La flotte prend la mer en atteignant la balise ; pendant la traversée, elle ne reçoit pas d’ordre.' : ''}</p>
+      ${this.comptoirsHtml(f, types)}
       <div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
-    return [h, JSON.stringify(f) + st.armies.filter(a => a.n === f.a_quai).length];
+    return [h, JSON.stringify([f, st.comptoirs, st.marche]) + st.armies.filter(a => a.n === f.a_quai).length];
+  }
+  // la fenêtre d'une flotte en traversée (state.en_mer) : hors de la carte, sans ordre jusqu'à l'arrivée
+  enMerHtml(id) {
+    const e = (this.st.en_mer || []).find(x => x.id === id);
+    if (!e) return [null, ''];
+    const fac = this.R.factions[e.proprio] || {}, n = this.nb(e);
+    return [`<div class="p-head">${ICON.anchor.replace('<svg', `<svg style="width:32px;height:32px;color:${fac.color || '#ccc'}"`)}<div><div class="p-title">Flotte</div>
+      <div class="p-sub">${esc(BT.nomCamp(this.ui.ctxBt(), e.proprio))}, ${n} ${n > 1 ? 'navires' : 'navire'}</div></div></div>
+      <div class="p-state">En mer, arrivée ${this.arriveeTxt(e)}</div>
+      <p class="small">${esc(this.route(e.route)?.nom || 'Traversée')} : ${esc(BT.naviresTxt(this.ui.ctxBt(), e.navires))}${e.armee ? `, ${fmt(e.armee.effectif)} hommes à bord` : ''}.</p>
+      <p class="muted small">Pendant la traversée, la flotte ne reçoit pas d’ordre ; personne ne la voit ni ne la combat. Elle reparaît au bout de sa route, sans ordre, l’armée à bord.</p>`, JSON.stringify(e)];
+  }
+  arriveeTxt(e) { return `${e.arrivee > 1 ? `dans ${e.arrivee} tours` : e.arrivee === 1 ? 'au prochain tour' : 'ce tour'} (${e.date})`; }
+  // les comptoirs du théâtre de la flotte : denrée et son prix, places prises (par qui), disputé ; « Commercer » y mène
+  // la flotte (des flûtes exigées)
+  comptoirsHtml(f, types) {
+    const st = this.st, t = this.theatreDe(f.case);
+    const l = (st.comptoirs || []).filter(c => !t || this.dans(t, c.case));
+    if (!l.length) return '';
+    const flutes = types.includes('flute'), D = this.R.denrees || {};
+    const rows = l.map(c => {
+      const px = st.marche?.[c.denree]?.prix, libres = c.places - c.navires.length, ici = f.ordre === 'commerce' && f.cible === c.id;
+      const qui = c.navires.map(n => `<i class="fl-pav" style="background:${this.ui.map.colors[n.proprio] || '#888'}" title="${esc(this.R.factions[n.proprio]?.name || n.proprio)}"></i>`).join('');
+      return `<tr><td>${esc(c.nom)}</td><td>${esc(D[c.denree]?.nom || c.denree)}${px != null ? ` <span class="muted small">${fmt1(this.ui.per(px))} l.</span>` : ''}</td>
+        <td>${c.dispute ? '<span class="chip war">disputé</span>' : `${qui}${libres > 0 ? ` ${libres} libre${libres > 1 ? 's' : ''}` : ' complet'}`}</td>
+        <td>${ici ? '<span class="chip ally">en cours</span>' : `<button class="btn" data-act="fl-commerce" data-id="${esc(f.id)}" data-v="${esc(c.id)}" ${flutes ? '' : 'disabled title="Il faut des flûtes pour commercer"'}>Commercer</button>`}</td></tr>`;
+    }).join('');
+    return `<div class="section-t">Comptoirs${t ? ` · ${esc(t.nom)}` : ''}</div><div class="tbl-wrap"><table class="grid fl-compo"><thead><tr><th>Comptoir</th><th>Denrée, prix</th><th>Places</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="muted small">Chaque flûte d’une flotte au comptoir vend une unité de sa denrée au prix du marché mondial (livres ${this.ui.perU === '/tour' ? 'par tour' : 'par jour'}, 4 flûtes au plus) ; trois flottes par comptoir.</p>`;
   }
   nomCible(f) {
     if (f.ordre === 'commerce') return (this.ui.md.comptoirs || []).find(c => c.id === f.cible)?.nom || f.cible;
     if (f.ordre === 'corsaire') return this.R.factions[f.cible]?.name || f.cible;
-    return f.route || f.cible;
+    const r = this.route(f.route);
+    return r ? `${r.nom} (${r.tours} ${r.tours > 1 ? 'tours' : 'tour'} en mer)` : f.route || f.cible;
   }
+  route(id) { return (this.ui.md.routes_mer || []).find(r => r.id === id); }
+  // les théâtres de la carte Monde (cadres en cases)
+  dans(t, [x, y]) { return x >= t.cadre[0] && y >= t.cadre[1] && x < t.cadre[0] + t.cadre[2] && y < t.cadre[1] + t.cadre[3]; }
+  theatreDe(c) { return (this.ui.md.theatres || []).find(t => this.dans(t, c)); }
   // les routes maritimes qui partent du théâtre de la flotte (carte Monde)
   routesDe(f) {
-    const T = this.ui.md.theatres || [], dans = (t, [x, y]) => x >= t.cadre[0] && y >= t.cadre[1] && x < t.cadre[0] + t.cadre[2] && y < t.cadre[1] + t.cadre[3];
-    const t = T.find(t => dans(t, f.case));
-    return t ? (this.ui.md.routes_mer || []).filter(r => dans(t, r.de)) : [];
+    const t = this.theatreDe(f.case);
+    return t ? (this.ui.md.routes_mer || []).filter(r => this.dans(t, r.de)) : [];
+  }
+
+  // ------------------------------------------------------------------ commerce maritime (fenêtre Commerce, ui.commerceModal)
+  // à chaque état : le prix d'avant de chaque denrée (la flèche de tendance)
+  majPrix(st) {
+    for (const [d, m] of Object.entries(st.marche || {})) {
+      const p = this.prix[d];
+      if (!p) this.prix[d] = { prix: m.prix, avant: m.prix };
+      else if (Math.abs(p.prix - m.prix) > 1e-6) { p.avant = p.prix; p.prix = m.prix; }
+    }
+  }
+  // le panneau : marché mondial des denrées, revenus, routes commerciales du joueur (cadrer la carte dessus), flottes en mer
+  commerceHtml() {
+    const st = this.st, R = this.R, me = st.me.code, mer = st.me.mer || {}, D = R.denrees || {}, per = v => fmt1(this.ui.per(v)), u = this.ui.perU;
+    const routes = (st.routes_mer || []).filter(r => r.proprio === me || r.partenaire === me), enMer = st.en_mer || [];
+    if (!(st.comptoirs || []).length && !routes.length && !enMer.length && !Object.values(mer).some(v => v > 0)) return ['', ''];
+    const fn = c => esc(R.factions[c]?.name || c), place = id => esc(this.nomPlace(id));
+    const fl = d => { const p = this.prix[d]; return !p || Math.abs(p.prix - p.avant) < 1e-3 ? '' : p.prix > p.avant ? ' <span class="fl-hausse" title="En hausse">▲</span>' : ' <span class="fl-baisse" title="En baisse">▼</span>'; };
+    const marche = Object.entries(st.marche || {}).map(([d, m]) => `<tr><td>${esc(D[d]?.nom || d)}</td><td>${per(m.prix)}${fl(d)}</td><td>${fmt1(m.offre)}</td><td>${fmt1(m.demande)}</td></tr>`).join('');
+    const total = ['plantations', 'comptoirs', 'routes', 'corsaires'].reduce((s, k) => s + (mer[k] || 0), 0);
+    const rts = routes.map(r => {
+      const autre = r.proprio === me ? r.partenaire : r.proprio;
+      return `<tr><td>${place(r.de)} – ${place(r.vers)}<div class="muted small">avec ${fn(autre)}</div></td><td>${per(r.valeur)}</td>
+        <td>${r.coupee ? `<span class="chip war">${COUPEE[r.coupee] || 'coupée'}</span>` : '<span class="chip ally">ouverte</span>'}</td>
+        <td><button class="btn" data-act="fl-cadrer" data-v="${esc(r.id)}">Voir</button></td></tr>`;
+    }).join('');
+    const flottes = enMer.map(e => `<li>${e.proprio === me ? '' : `${fn(e.proprio)} : `}${esc(BT.naviresTxt(this.ui.ctxBt(), e.navires))}${e.armee ? `, ${fmt(e.armee.effectif)} hommes à bord` : ''} —
+      ${esc(this.route(e.route)?.nom || 'traversée')} : en mer, arrivée ${esc(this.arriveeTxt(e))} <button class="btn" data-act="fl-voir" data-v="${esc(e.id)}">Fenêtre</button></li>`).join('');
+    const html = `<h3 class="section-t">Commerce maritime</h3>
+      <p class="small">Revenu de la mer : <b>+${per(total)} livres ${u}</b> (déjà compté dans le commerce) — plantations +${per(mer.plantations || 0)}, comptoirs +${per(mer.comptoirs || 0)}, routes +${per(mer.routes || 0)}, corsaires +${per(mer.corsaires || 0)}.</p>
+      <div class="two"><div>
+        <div class="tbl-wrap"><table class="grid"><thead><tr><th>Denrée</th><th>Prix mondial</th><th>Offre</th><th>Demande</th></tr></thead><tbody>${marche}</tbody></table></div>
+        <p class="muted small">Prix en livres ${u} pour une unité vendue ; il baisse quand l’offre dépasse la demande (plantations et comptoirs du monde entier).</p>
+      </div><div>
+        <h4 class="small" style="margin:0 0 4px">Vos routes commerciales</h4>
+        ${rts ? `<div class="tbl-wrap"><table class="grid"><thead><tr><th>Route</th><th>Valeur ${u}</th><th>État</th><th></th></tr></thead><tbody>${rts}</tbody></table></div>` : '<p class="muted small">Aucune : un accord commercial avec un camp qui a un port de mer ouvre une route entre vos deux ports.</p>'}
+        <h4 class="small" style="margin:10px 0 4px">Flottes en mer</h4>
+        ${flottes ? `<ul class="small">${flottes}</ul>` : '<p class="muted small">Aucune flotte en traversée.</p>'}
+      </div></div>`;
+    return [html, JSON.stringify([st.marche, mer, routes.map(r => [r.id, r.valeur, r.coupee]), enMer.map(e => [e.id, e.arrivee]), Object.values(this.prix)])];
+  }
+  // cadre la carte sur une route commerciale (et ferme la fenêtre pour la montrer)
+  cadrer(id) {
+    const ch = (this.st.routes_mer || []).find(r => r.id === id)?.chemin;
+    if (!ch?.length) return;
+    const m = this.ui.map, xs = ch.map(p => p[0]), ys = ch.map(p => p[1]);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    m.moveTo((x0 + x1) / 2 + 0.5, (y0 + y1) / 2 + 0.5, Math.min(m.vw / ((x1 - x0 + 4) * 1.3), m.vh / ((y1 - y0 + 4) * 1.3 * (m.K || 1))));
+    this.ui.closeModal();
   }
 
   // ------------------------------------------------------------------ chantier naval (ui.nodePanel, place portuaire à soi)
@@ -189,6 +276,9 @@ export class Flottes {
       case 'fl-fusionner': this.cmd('fusionner', { flotte: id, autre: d.v }); break;
       case 'fl-separer': this.cmd('separer', { flotte: id, navires: { [d.v]: 1 } }, false).then(r => { if (r.ok && r.id) this.ui.select({ kind: 'flotte', id: r.id }); }); break;
       case 'fl-ordre': this.cmd('ordre', { flotte: id, ordre: d.v }); break;
+      case 'fl-commerce': this.cmd('ordre', { flotte: id, ordre: 'commerce', cible: d.v }); break;
+      case 'fl-cadrer': this.cadrer(d.v); break;
+      case 'fl-voir': this.ui.closeModal(); this.ui.select({ kind: 'flotte', id: d.v }); break;
       case 'fl-passer': this.finir(); break;
       default: return false;
     }
