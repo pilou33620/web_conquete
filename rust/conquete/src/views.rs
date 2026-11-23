@@ -1080,7 +1080,7 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
     out.set("flood", g.t < g.flood_until);
     out.set("tour", TT::view(g));
     crate::engine::marine::vue(g, &out, &*seen); // flottes, blocus, batailles navales (SPEC-EMPIRE, module 2)
-    crate::engine::commerce::vue(g, &out); // comptoirs, routes commerciales, marché, traversées (SPEC-EMPIRE, module 7)
+    crate::engine::commerce::vue(g, &out, &*seen); // comptoirs, routes commerciales, marché, traversées (SPEC-EMPIRE, module 7)
     // les routes que la crue coupe (pendant la crue seulement) : [arête, début, fin] des tronçons noyés, en km
     // le long du tracé
     let cut = g.cut_edges();

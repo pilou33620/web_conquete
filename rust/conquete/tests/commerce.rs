@@ -271,6 +271,36 @@ fn une_route_commerciale_nait_d_un_accord_puis_se_coupe() {
     assert!(!C::casus_belli(&g, "FR", &x), "le casus belli sert une fois");
 }
 
+/// Dans une partie, sans rien forcer : un corsaire posé sur une route commerciale y prend un marchand en quelques tours,
+/// et l'événement porte ce que la page joue (le corsaire, la route, la victime).
+#[test]
+fn un_corsaire_sur_une_route_prend_un_marchand_en_quelques_tours() {
+    let mut g = partie("FR");
+    let b = autre_port(&g, &["FR"]);
+    D::apply(&mut g, "FR", &b, "commerce", 0, &Val::None, &Val::None);
+    let id = if "FR" < b.as_str() { format!("FR-{b}") } else { format!("{b}-FR") };
+    let r = g.commerce.at("routes").at(&id);
+    let x = autre_port(&g, &["FR", &b]);
+    let xp = g.owned_nodes(&x).iter().map(|n| n.ati("id")).find(|&n| C::port_de_mer(&g, n)).unwrap();
+    let e = flotte(&mut g, &x, xp, &["corvette"]);
+    let (ok, msg) = M::ordre(&mut g, &x, &e.at("id"), &dict! {"ordre" => "corsaire", "cible" => "FR"});
+    assert!(ok, "{msg}");
+    let ch = r.at("chemin");
+    let m = ch.at(ch.len() as i64 / 2);
+    e.update(&dict! {"x" => m.at(0), "y" => m.at(1), "a_quai" => Val::None});
+    let pris = |g: &Game| g.events.iter().find(|ev| ev.ats("text").contains("prennent un navire marchand"));
+    let mut tours = 0;
+    while pris(&g).is_none() {
+        tours += 1;
+        assert!(tours <= 6, "aucun marchand pris en six tours");
+        jouer_mois(&mut g);
+    }
+    let ev = pris(&g).unwrap();
+    assert_eq!((ev.at("corsaire"), ev.at("route"), ev.at("victime")), (e.at("id"), Val::from(id.as_str()), Val::from("FR")), "{ev}");
+    assert!(e.at("navires").at("flute").i() >= 1, "le marchand pris rejoint la flotte du corsaire");
+    eprintln!("marchand pris au tour {tours}");
+}
+
 #[test]
 fn traversee_de_l_europe_a_l_amerique_avec_une_armee() {
     let mut g = partie("FR");
@@ -298,6 +328,12 @@ fn traversee_de_l_europe_a_l_amerique_avec_une_armee() {
         assert!(n < 4, "la flotte n'a pas pris la mer ({}, {})", f.at("x"), f.at("y"));
     }
     assert!(C::est_en_mer(&g, &fid) && !g.armies.has(&aid));
+    // la vue montre le départ (ceux de tout camp que le joueur voit), pour que la page le joue
+    let dep = V::player_state(&mut g, 0).at("departs");
+    let d = dep.iter().find(|d| d.at("id") == fid).expect("le départ n'est pas dans la vue");
+    assert_eq!(json::dumps(&d.at("case")), json::dumps(&list![dx, dy]));
+    assert_eq!((d.at("proprio"), d.at("route")), (Val::from("FR"), Val::from("europe-amerique")));
+    assert_eq!(d.at("navires").at("flute"), 2i64);
     assert!(!M::commande(&mut g, "FR", &dict! {"sub" => "deplacer", "flotte" => &fid, "x" => 10.0, "y" => 10.0}).atb("ok"), "en mer, pas d'ordre");
     let em = V::player_state(&mut g, 0).at("en_mer");
     let e = em.iter().find(|e| e.at("id") == fid).expect("la flotte en mer n'est pas dans la vue");
@@ -321,20 +357,17 @@ fn traversee_de_l_europe_a_l_amerique_avec_une_armee() {
         assert_eq!((f.ati("x"), f.ati("y")), (vx, vy));
         assert_eq!(f.at("armee"), aid, "l'armée arrive avec la flotte");
         assert!(!C::est_en_mer(g, &fid));
+        // l'arrivée dans la vue ; le départ, d'avant le dernier tour des IA, n'y est plus
+        let v = V::player_state(g, 0);
+        let a = v.at("arrivees").iter().find(|a| a.at("id") == fid).expect("l'arrivée n'est pas dans la vue");
+        assert_eq!(json::dumps(&a.at("case")), json::dumps(&list![vx, vy]));
+        assert_eq!((a.at("proprio"), a.at("route")), (Val::from("FR"), Val::from("europe-amerique")));
+        assert!(!v.at("departs").iter().any(|d| d.at("id") == fid));
     }
     // en Amérique : la flotte gagne la côte devant une place (sans défense), l'armée débarque et la prend
     let f = g.flottes.at(&fid);
     let cible = (0..g.nodes.len() as i64)
         .filter(|&n| g.geo.theatre_de(n) == Some("amerique") && M::case_port(&g.geo, n).is_some())
-        .filter(|&n| {
-            // (pas un îlot : de la terre autour de la place pour y débarquer à côté)
-            let (x, y) = g.node_xy(n);
-            let couts = g.geo.cell_costs();
-            (-2..=2).flat_map(|j| (-2..=2).map(move |i| (i, j))).filter(|&(i, j)| {
-                let c = g.geo.cell(x + i as f64, y + j as f64);
-                c >= 0 && couts[c as usize].is_some()
-            }).count() >= 12
-        })
         .filter_map(|n| {
             let c = M::case_port(&g.geo, n).unwrap();
             M::chemin_mer(&g.geo, (vx, vy), c).map(|ch| (ch.len(), n))
@@ -353,12 +386,12 @@ fn traversee_de_l_europe_a_l_amerique_avec_une_armee() {
         jouer_mois(&mut g);
     }
     assert!(!f.atb("chemin"), "la flotte n'arrive pas devant {}", g.geo.nodes.at(cible).at("name"));
-    // (à terre, à l'écart de la place : une armée posée sur la case même de la place n'y « arrive » jamais)
+    // (sur la case même de la place)
     let (px, py) = g.node_xy(cible);
-    let (fx, fy) = (f.atf("x") + 0.5, f.atf("y") + 0.5);
-    let k = 1.2 / (fx - px).hypot(fy - py).max(0.1);
-    let (ok, msg) = M::debarquer(&mut g, "FR", &fid, &Val::from(px + k * (fx - px)), &Val::from(py + k * (fy - py)));
+    let (ok, msg) = M::debarquer(&mut g, "FR", &fid, &Val::from(px), &Val::from(py));
     assert!(ok, "{msg}");
+    let a = g.armies.at(&aid);
+    assert_eq!(g.geo.cell(a.atf("x"), a.atf("y")), g.geo.cell(px, py), "l'armée n'a pas débarqué sur la case de la place");
     jouer_mois(&mut g);
     for _ in 0..3 {
         if g.nodes.at(cible).at("owner") == "FR" {

@@ -620,8 +620,8 @@ chantier dès le premier mois), `tours.json` (vue et `rules_payload`), `serveur.
   une flotte en mer répond « La flotte est en mer… ».
 
 **Écarts, raccourcis** :
-- Sur les théâtres seulement (Europe, théâtres coloniaux, monde) : l'Aquitaine n'a ni routes ni denrées (`g.theatre()`),
-  ses parties et leurs références ne bougent pas (sa vue a les nouvelles clés, vides).
+- ~~Sur les théâtres seulement~~ : l'Aquitaine a désormais routes, corsaires et marché (voir « Suite » plus bas) ; ni
+  comptoirs ni plantations.
 - Le revenu est un taux par jour refait chaque mois (comme le reste de l'économie), pas une somme versée au 1er.
 - Une route ne relie que deux ports d'un même théâtre ; pas de route Europe–Amérique par la haute mer.
 - Les corsaires ne pillent que les routes (pas les comptoirs) ; un corsaire du joueur ne va pas seul sur les routes : on
@@ -629,8 +629,8 @@ chantier dès le premier mois), `tours.json` (vue et `rules_payload`), `serveur.
 - Les comptoirs de la carte monde seulement (les théâtres coloniaux joués à part n'en ont pas) ; les plantations
   produisent partout hors d'Europe.
 - L'IA ne ramène pas ses flottes d'expédition en Europe ; elle n'arme pas de corsaire contre le joueur plus qu'un autre.
-- Le moteur d'armée ne fait pas « arriver » sur une place une armée posée sur la case même de la place (chemin hors route
-  d'un seul point) : débarquer à côté (l'essai de la traversée le fait).
+- ~~Le moteur d'armée ne fait pas « arriver » sur une place une armée posée sur la case même de la place~~ : corrigé (voir
+  « Suite » plus bas) ; l'essai de la traversée débarque sur la case de la place.
 
 **Essais** : `tests/commerce.rs` (6 essais, carte monde, IA retirées sauf pour l'essai de l'IA) : plantation et denrée de
 sa place (Québec fourrures, Cochin épices, Paris rien ; `bat_de`), prix qui baisse quand tout le monde plante la même
@@ -652,6 +652,65 @@ le reste de l'écart vient de parties qui divergent (les IA plus riches font dav
 ports de mer de la carte relevés une fois par carte, `revenus` recalculé à l'accord seulement pour le joueur.
 Gains faciles pour le tour des IA : aucun de sûr relevé ici sans profileur (pas de `perf` sur cette machine).
 
+
+#### Suite (R3, commerce-moteur) — 23/11/2026
+
+**Fait.**
+- **Commerce maritime en Aquitaine** (géographies 1 et 2, demande du joueur) : plus de garde `g.theatre()` dans
+  `commerce::accord`, `mois`, `revenus`, `vue`. Chaque accord commercial entre deux camps qui ont un port de mer (mouillage)
+  fait sa route entre leurs ports les plus peuplés (Bordeaux, Bayonne…), coupée par blocus, flotte ennemie ou corsaire ;
+  le marché a ses prix (sans offre : au plafond). Pas de comptoirs (`g.geo.comptoirs` vide : ceux de la carte Monde) ni de
+  plantations (`denree_place` rend None hors des théâtres coloniaux, `cities::est_colonie` faux). L'IA y arme des
+  corsaires comme ailleurs (`ai/commerce.rs` inchangé : `theatre_case` vaut None partout, la comparaison tient). Les
+  chiffres du commerce sont ceux des théâtres (le banc ne demande pas de les baisser, voir plus bas).
+- **Défaut des armées corrigé** (`engine/chemins.rs`, `move_army`) : une étape hors route d'un seul point (l'armée déjà sur
+  la case de la place visée, débarquée là) était retirée sans `arrive_node` ; elle arrive désormais comme au bout d'un
+  chemin plus long (prise d'une place ennemie sans défense, siège, bataille…). Essai `tests/marine.rs`
+  `une_armee_debarquee_sur_la_case_d_une_place_y_arrive_et_la_prend` ; `tests/commerce.rs` débarque sur la case de la
+  place.
+- **Abordages** : `CORSAIRE_PRISE` 0,2 → 0,4 par mois et par route pillée (un corsaire posé sur une route prend en général
+  un marchand dans les 2 ou 3 tours : 64 % en deux tours, 78 % en trois). Essai `tests/commerce.rs`
+  `un_corsaire_sur_une_route_prend_un_marchand_en_quelques_tours` : une partie jouée tour par tour, sans rien injecter,
+  produit l'événement « Des corsaires … prennent un navire marchand … » avec `corsaire`, `route`, `victime`.
+  `tests/partie_commerce.rs` garantit un abordage au premier tour (course en cours `jusqua`, rancune du corsaire contre la
+  France, graine de la partie choisie pour que le tirage du 1er du mois réussisse).
+- **Départs et arrivées de tous les camps** (`g.commerce.mouvements`, noté par `commerce::partir` et `traversees`, oublié
+  au-delà de la période) ; vue :
+  - `departs: [{id, proprio, case: [x, y], route, navires}]` : les flottes qui ont quitté la carte par une route maritime
+    (`case` = case de départ de la route, `navires` = {type: nombre} au départ) ;
+  - `arrivees: [{id, proprio, case: [x, y], route}]` : celles qui y sont apparues (`case` = case d'arrivée) ;
+  - période : après le 1er du mois d'avant (exclu), c'est-à-dire le dernier tour des IA (une arrivée du 1er du mois, au
+    début du tour du joueur, en fait partie), le tour du joueur et le tour des IA s'il se joue ;
+  - visibilité : comme les flottes (`marine::vue`) : celles du joueur et de ses alliés, et les autres si la case est vue
+    (`seen` de `views::player_state`, le brouillard des armées).
+- Outil `tests/actions.rs` `refaire` (`CONQUETE_REFAIRE_ACTIONS=1 cargo test --release -p conquete --test actions refaire
+  -- --ignored --nocapture`) : réécrit les résultats et l'état final qui diffèrent, écrit chaque différence, et dit si les
+  camps sans `_mer` sont ceux de la référence.
+- `simuler --suivi` écrit aussi le revenu brut en livres et celui du commerce maritime de chaque camp suivi.
+
+**Essais** : `tests/marine.rs` (`le_commerce_maritime_en_aquitaine` : route née d'un accord entre deux camps d'Aquitaine,
+revenu, marché, ni comptoir ni plantation, corsaire qui la coupe ; l'armée débarquée sur la case d'une place),
+`tests/commerce.rs` (abordage en partie ; départ puis arrivée dans `departs` / `arrivees`, le départ oublié après le
+tour). `cargo test --locked -p conquete` passe en entier, `node --test tests/*.test.mjs` aussi (107).
+
+**Références refaites** : `actions.json` (seule différence : `_mer` des camps, les camps sans `_mer` identiques à la
+référence, pour les trois graines), `campagnes.json` (parties d'Aquitaine), `tours.json` (vues : `departs`, `arrivees`,
+routes d'Aquitaine ; factions de fin du mois), `outils/simuler.txt` (graine 3 diverge). Inchangées : `ia_campagne.json`,
+`monde.json`, `serveur.json` (/api/map ne bouge pas), `campagne1.json`, `campagne3.json`.
+
+**Banc** (Aquitaine, `simuler --parties 2 --epoque 1700 --annees 51 --graine 1 --proc 2 --suivi 24,33,40,47,64`, avant :
+la branche sans ces changements, même suivi ; revenu brut en livres par jour, hors commerce) :
+
+| | 1720 avant | 1720 après | 1750 avant | 1750 après |
+|---|---|---|---|---|
+| camps vivants (graines 1 + 2) | 3 + 4 | 4 + 4 | 2 + 2 | 2 + 4 |
+| revenu brut moyen d'un camp vivant | 160 | 154 (−4 %) | 222 | 226 (+2 %) |
+| commerce maritime (le camp qui en tire le plus) | 0 | 4,7 (2,8 % de son brut) | 0 | 5,5 (2,5 %) |
+| commerce maritime / brut de tous les camps vivants | 0 | 1,3 à 1,4 % | 0 | 0 à 1,7 % |
+
+Les parties divergent vite (guerres, camps disparus : guerres déclarées 27,5 → 23 en moyenne, trésor et hommes de fin
+très différents d'une graine à l'autre), les écarts de revenu moyen sont du bruit ; l'effet propre du commerce reste sous
+3 % du revenu de chaque camp, loin des 15 % : les chiffres des théâtres sont gardés pour l'Aquitaine.
 
 #### Page (P3) — 23/11/2026
 

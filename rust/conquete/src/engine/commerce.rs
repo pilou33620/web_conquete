@@ -12,8 +12,11 @@
 //!
 //! Le revenu se calcule une fois par mois (`mois`) en livres par jour, rangé dans `f._mer` {plantations, comptoirs, routes,
 //! corsaires} ; compute_income l'ajoute au commerce du camp. Le calcul reste léger : les chemins des routes ne se
-//! recherchent que quand l'accord naît ou qu'un de leurs ports change de main. Sur les théâtres seulement (l'Europe, les
-//! colonies, le monde) : l'Aquitaine n'a ni routes ni denrées.
+//! recherchent que quand l'accord naît ou qu'un de leurs ports change de main. En Aquitaine aussi (routes entre ses ports
+//! de mer, corsaires, marché) ; mais ni comptoirs (ceux de la carte monde) ni plantations (pas de denrée hors des
+//! théâtres coloniaux).
+//! - mouvements : [{sens: "depart" | "arrivee", id, proprio, case [x, y], route, navires, t}] : les flottes qui ont quitté
+//!   la carte par une route maritime ou y sont apparues depuis le début du dernier tour des IA (vue `departs`, `arrivees`).
 
 use super::marine as M;
 use super::*;
@@ -192,9 +195,6 @@ fn faire_route(g: &mut Game, a: &str, b: &str, ports: &HashMap<String, Vec<i64>>
 
 /// Un accord commercial vient d'être signé (diplomacy::apply) : sa route naît tout de suite.
 pub fn accord(g: &mut Game, a: &str, b: &str) {
-    if !g.theatre() {
-        return; // (le commerce maritime est celui des théâtres : l'Aquitaine n'a ni routes ni denrées)
-    }
     let ports = ports_par_camp(g);
     faire_route(g, a, b, &ports);
     if a == g.player || b == g.player {
@@ -324,9 +324,6 @@ fn unites(f: &Val) -> f64 {
 /// Le mois du commerce (Game::monthly) : routes tenues à jour, comptoirs disputés (bataille navale), corsaires (pillage,
 /// marchands pris, incidents), marché et revenus.
 pub fn mois(g: &mut Game) {
-    if !g.theatre() {
-        return; // (pas en Aquitaine)
-    }
     let c = etat(g);
     let ports = ports_par_camp(g);
     // les routes : une par accord commercial vivant ; refaite si un port a changé de main
@@ -422,9 +419,6 @@ pub fn casus_belli(g: &Game, a: &str, b: &str) -> bool {
 /// route ouverte), comptoirs, routes ouvertes, pillage des corsaires. Refait chaque mois, et quand un accord naît ou
 /// qu'un marchand s'installe.
 pub fn revenus(g: &mut Game) {
-    if !g.theatre() {
-        return;
-    }
     let c = etat(g);
     let routes = c.at("routes");
     let mut ouvertes: HashMap<String, f64> = HashMap::new(); // revenu des routes ouvertes, par camp
@@ -539,12 +533,31 @@ pub fn partir(g: &mut Game, f: &Val) -> bool {
     let c = etat(g);
     g.flottes.pop(f.at("id"));
     c.at("en_mer").set(f.at("id"), f);
+    noter(g, "depart", f, &route.at("id"));
     let o = f.ats("owner");
     if o == g.player {
         let t = format!("Votre flotte prend la mer {} : arrivée le {}.", route.ats("nom"), g.date_str(&Val::from(arrivee)));
         g.log("armee", &t, &dict! {"x" => f.at("x"), "y" => f.at("y")});
     }
     true
+}
+
+/// La vue montre les départs et les arrivées d'après ce jour (exclu) : le 1er du mois d'avant, c'est-à-dire le dernier tour
+/// des IA (ce qui arrive au 1er du mois, au début du tour du joueur, en fait partie), le tour du joueur et, s'il se joue,
+/// le tour des IA en cours.
+fn debut_recent(g: &Game) -> f64 {
+    TT::month_end(g, &Val::from(g.t), -1)
+}
+
+/// Une flotte quitte la carte par une route maritime, ou y arrive : noté pour la vue (`departs`, `arrivees`) ; les
+/// mouvements d'avant la période montrée sont oubliés.
+fn noter(g: &mut Game, sens: &str, f: &Val, route: &Val) {
+    let debut = debut_recent(g);
+    let c = etat(g);
+    let l: Val = c.get_or("mouvements", list![]).iter().filter(|m| m.atf("t") > debut).collect();
+    l.push(dict! {"sens" => sens, "id" => f.at("id"), "proprio" => f.at("owner"), "case" => list![f.at("x"), f.at("y")], "route" => route,
+                  "navires" => f.at("navires").copy(), "t" => g.t});
+    c.set("mouvements", l);
 }
 
 /// Les traversées finies (marine::tick, marine::debut_tour) : la flotte réapparaît sur la case d'arrivée de sa route, avec
@@ -569,6 +582,7 @@ pub fn traversees(g: &mut Game) {
             f.set("mp", Val::None);
         }
         g.flottes.set(f.at("id"), &f);
+        noter(g, "arrivee", &f, &route.as_ref().map_or(Val::None, |r| r.at("id")));
         let o = f.ats("owner");
         if o == g.player {
             let nom = route.map_or(String::new(), |r| format!(" ({})", r.ats("nom")));
@@ -581,9 +595,11 @@ pub fn traversees(g: &mut Game) {
 
 // ================================================================== vue
 /// La vue pour la page (views::player_state) : `comptoirs`, `routes_mer` (les routes commerciales), `marche`, `en_mer`
-/// (les flottes en traversée du joueur et de ses alliés), et `me.mer` (le revenu du commerce maritime, livres par jour).
-pub fn vue(g: &mut Game, out: &Val) {
-    let c = if g.theatre() { etat(g) } else { dict! {"comptoirs" => list![], "routes" => dict!{}, "marche" => dict!{}, "en_mer" => dict!{}} };
+/// (les flottes en traversée du joueur et de ses alliés), `departs` et `arrivees` (les flottes de tout camp parties en
+/// mer ou arrivées depuis le début du dernier tour des IA, celles que le joueur voit : les siennes, ses alliés, ou une
+/// case que ses troupes voient, `seen`), et `me.mer` (le revenu du commerce maritime, livres par jour).
+pub fn vue(g: &mut Game, out: &Val, seen: &dyn Fn(f64, f64) -> bool) {
+    let c = etat(g);
     let p = g.player.clone();
     let comptoirs = list![];
     for cp in c.at("comptoirs").iter() {
@@ -624,6 +640,24 @@ pub fn vue(g: &mut Game, out: &Val) {
             "date" => g.date_str(&t), "navires" => f.at("navires"),
             "armee" => if a.truthy() { dict!{"id" => a.at("id"), "effectif" => py::round(M::effectif(&a))} } else { Val::None }});
     }
+    let (departs, arrivees) = (list![], list![]);
+    let debut = debut_recent(g);
+    for m in c.get_or("mouvements", list![]).iter() {
+        let o = m.ats("proprio");
+        let case = m.at("case");
+        if m.atf("t") <= debut || (!g.friendly(&p, &o) && !seen(case.atf(0) + 0.5, case.atf(1) + 0.5)) {
+            continue;
+        }
+        let d = dict! {"id" => m.at("id"), "proprio" => &o, "case" => &case, "route" => m.at("route")};
+        if m.at("sens") == "depart" {
+            d.set("navires", m.at("navires"));
+            departs.push(d);
+        } else {
+            arrivees.push(d);
+        }
+    }
+    out.set("departs", departs);
+    out.set("arrivees", arrivees);
     out.set("comptoirs", comptoirs);
     out.set("routes_mer", routes);
     out.set("marche", marche);

@@ -300,3 +300,61 @@ fn tout_mouillage_peut_batir_un_port() {
         assert!(conquete::cities::fits(&g, n, "port"), "{} ne peut pas bâtir de port", g.geo.nodes.at(n).at("name"));
     }
 }
+
+/// Le commerce maritime en Aquitaine aussi (SPEC-EMPIRE, module 7) : un accord commercial entre deux camps qui ont un
+/// port de mer fait sa route, qu'un corsaire coupe ; le marché a ses prix ; ni comptoir ni plantation.
+#[test]
+fn le_commerce_maritime_en_aquitaine() {
+    use conquete::engine::commerce as C;
+    let mut g = partie();
+    let p = g.player.clone();
+    let a_un_port = |g: &Game, c: &str| g.owned_nodes(c).iter().any(|n| C::port_de_mer(g, n.ati("id")));
+    assert!(a_un_port(&g, &p));
+    let b = g.factions.keys().into_iter().map(|c| c.string()).find(|c| *c != p && a_un_port(&g, c)).expect("pas d'autre camp avec un port de mer");
+    D::apply(&mut g, &p, &b, "commerce", 0, &Val::None, &Val::None);
+    let vue = V::player_state(&mut g, 0);
+    let r = vue.at("routes_mer").iter().find(|r| r.at("proprio") == p.as_str() || r.at("partenaire") == p.as_str()).expect("pas de route commerciale");
+    assert!(r.at("chemin").len() > 1 && r.at("coupee").is_none() && r.atf("valeur") > 0.0, "{r}");
+    assert!(g.factions.at(&p).at("_mer").atf("routes") > 0.0);
+    assert!(vue.at("comptoirs").len() == 0 && vue.at("marche").at("sucre").atf("prix") > 0.0, "ni comptoir, un marché");
+    assert!(vue.has("en_mer") && vue.has("departs") && vue.has("arrivees"));
+    assert!(C::denree_place(&g.geo, g.capital_of(&p).i()).is_none(), "pas de plantation en Aquitaine");
+    // un corsaire d'un troisième camp sur la route la coupe
+    let x = g.factions.keys().into_iter().map(|c| c.string()).find(|c| *c != p && *c != b && a_un_port(&g, c));
+    if let Some(x) = x {
+        let xp = g.owned_nodes(&x).iter().map(|n| n.ati("id")).find(|&n| M::case_port(&g.geo, n).is_some()).unwrap();
+        let e = flotte(&mut g, &x, xp, &["corvette"]);
+        assert!(M::ordre(&mut g, &x, &e.at("id"), &dict! {"ordre" => "corsaire", "cible" => p.as_str()}).0);
+        let m = r.at("chemin").at(r.at("chemin").len() as i64 / 2);
+        e.update(&dict! {"x" => m.at(0), "y" => m.at(1), "a_quai" => Val::None});
+        let r2 = V::player_state(&mut g, 0).at("routes_mer").iter().find(|q| q.at("id") == r.at("id")).unwrap();
+        assert_eq!(r2.at("coupee"), "corsaire");
+    }
+}
+
+/// Une armée posée sur la case même d'une place (débarquée là) y arrive quand on l'y envoie, et la prend si elle est
+/// ennemie et sans défense, comme une armée qui arrive par la route (avant, son chemin hors route d'un seul point
+/// s'achevait sans arrivée).
+#[test]
+fn une_armee_debarquee_sur_la_case_d_une_place_y_arrive_et_la_prend() {
+    let mut g = partie();
+    let p = g.player.clone();
+    guerre(&mut g);
+    let ar = armee(&g);
+    let nid = (0..g.nodes.len() as i64)
+        .find(|&n| {
+            g.nodes.at(n).at("owner") == FOE && g.geo.nodes.at(n).at("type") != "capitale"
+                && !g.armies.values().iter().any(|a| a.at("at_node") == n)
+        })
+        .expect("pas de place ennemie");
+    g.nodes.at(nid).update(&dict! {"milice" => 0.0, "milice_max" => 0, "garrison" => list![], "fort" => 0});
+    let (nx, ny) = g.node_xy(nid);
+    // au milieu de la case de la place, hors du nœud (comme marine::debarquer sur la côte)
+    ar.update(&dict! {"x" => nx.floor() + 0.5, "y" => ny.floor() + 0.5, "at_node" => Val::None, "state" => "idle", "path" => list![], "onroad" => false});
+    let (ok, msg) = g.order_move(&p, &ar.at("id"), &dict! {"node" => nid, "mode" => "champs"});
+    assert_eq!(ok, Some(true), "{msg}");
+    assert_eq!(ar.at("path").at(-1).at("pts").len(), 1, "le chemin hors route n'a qu'un point");
+    TT::settle(&mut g);
+    assert_eq!(ar.at("at_node"), nid, "l'armée n'est pas arrivée sur la place");
+    assert_eq!(g.nodes.at(nid).at("owner"), p.as_str(), "la place n'est pas prise");
+}

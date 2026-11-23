@@ -120,8 +120,8 @@ fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64, joueur: &str, 
             for c in suivi.iter().filter(|c| g.factions.has(c.as_str())) {
                 let f = g.factions.at(c.as_str());
                 let hommes = py::sum_v(g.armies.values().iter().filter(|a| a.at("owner") == c.as_str()).map(|a| py::sum_v(a.at("regs").iter().map(|r| r.at("n")))));
-                eprintln!("   {c} {} : {} places, {:.0} livres ({:+.1}/j), {:.0} vivres ({:+.1}/j), {:.0} recrues, {} hommes en campagne, {} techniques{}", g.fname(c), g.nodes.iter().filter(|n| n.at("owner") == c.as_str()).count(),
-                    f.at("res").atf("livres"), f.at("income").atf("livres"), f.at("res").atf("vivres"), f.at("income").atf("vivres"), f.at("res").atf("recrues"), hommes, f.at("techs").len(), if vivant(&g, c) { "" } else { " (disparu)" });
+                eprintln!("   {c} {} : {} places, {:.0} livres ({:+.1}/j ; brut {:.1}/j, plus le commerce maritime {:.1}/j), {:.0} vivres ({:+.1}/j), {:.0} recrues, {} hommes en campagne, {} techniques{}", g.fname(c), g.nodes.iter().filter(|n| n.at("owner") == c.as_str()).count(),
+                    f.at("res").atf("livres"), f.at("income").atf("livres"), f.get_or("_gross_livres", 0).f(), conquete::engine::commerce::revenu(&f), f.at("res").atf("vivres"), f.at("income").atf("vivres"), f.at("res").atf("recrues"), hommes, f.at("techs").len(), if vivant(&g, c) { "" } else { " (disparu)" });
             }
         }
         if let Err(p) = catch_unwind(AssertUnwindSafe(|| play_month(&mut g))) {

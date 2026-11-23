@@ -286,19 +286,74 @@ fn comparer() {
             assert_eq!(json::dumps_ref_ordre(&obtenu), json::dumps_ref_ordre(&attendu), "graine {seed}, opération {i} : {op:?}");
         }
         let fin = cas.at("fin");
-        let qn = g._aa_qn.to_list();
-        qn.sort();
-        let diplo: Val = g.diplo.iter().map(|((a, b), s)| list![list![a, b], s]).collect();
-        let n = g.events.len() as i64;
-        let vu = dict! {
-            "factions" => json::empreinte_ordre(&g.factions), "nodes" => json::empreinte_ordre(&g.nodes),
-            "armies" => json::empreinte_ordre(&g.armies), "events" => json::empreinte_ordre(&g.events),
-            "proposals" => json::empreinte_ordre(&g.proposals), "diplo" => diplo, "qn" => qn,
-            "aa" => list![g._aa_dt, g._aa_day], "n_events" => n,
-            "last_events" => g.events.slice(Some(-12), None).iter().map(|e| e.at("text")).collect::<Val>()
-        };
+        let vu = etat_final(&g);
         for k in fin.keys() {
             assert_eq!(json::dumps_ref_ordre(&vu.at(&k)), json::dumps_ref_ordre(&fin.at(&k)), "graine {seed}, état final : {k}");
         }
     }
+}
+
+/// Ce que l'on compare de l'état final d'un cas (les clés de `fin`).
+fn etat_final(g: &Game) -> Val {
+    let qn = g._aa_qn.to_list();
+    qn.sort();
+    let diplo: Val = g.diplo.iter().map(|((a, b), s)| list![list![a, b], s]).collect();
+    let n = g.events.len() as i64;
+    dict! {
+        "factions" => json::empreinte_ordre(&g.factions), "nodes" => json::empreinte_ordre(&g.nodes),
+        "armies" => json::empreinte_ordre(&g.armies), "events" => json::empreinte_ordre(&g.events),
+        "proposals" => json::empreinte_ordre(&g.proposals), "diplo" => diplo, "qn" => qn,
+        "aa" => list![g._aa_dt, g._aa_day], "n_events" => n,
+        "last_events" => g.events.slice(Some(-12), None).iter().map(|e| e.at("text")).collect::<Val>()
+    }
+}
+
+/// Refait tests/references/actions.json quand une règle du moteur change ce que donnent ces opérations (le jumeau Python
+/// ne suit plus) : les états de départ et les opérations restent ; les résultats et l'état final qui diffèrent sont
+/// réécrits d'après le moteur, et chaque différence est écrite sur la sortie d'erreur, à relire (seules des différences
+/// attendues doivent apparaître).
+/// `CONQUETE_REFAIRE_ACTIONS=1 cargo test --release -p conquete --test actions refaire -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn refaire() {
+    if std::env::var_os("CONQUETE_REFAIRE_ACTIONS").is_none() {
+        return;
+    }
+    let chemin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/references/actions.json");
+    let texte = std::fs::read_to_string(&chemin).unwrap();
+    let r = json::loads(&texte).unwrap();
+    assert_eq!(json::dumps_compact(&r), texte.trim_end(), "le fichier ne se réécrit pas à l'identique");
+    let j = |v: &Val| json::loads(&json::dumps_compact(v)).unwrap();
+    let geo = geo();
+    for cas in r.at("cas").iter() {
+        let seed = cas.ati("seed");
+        let mut g = partie(&geo, &cas.at("etat"));
+        let res = cas.at("res");
+        for (i, op) in cas.at("ops").iter().enumerate() {
+            let obtenu = j(&jouer(&mut g, &op));
+            let attendu = res.at(i as i64);
+            if json::dumps_ref_ordre(&obtenu) != json::dumps_ref_ordre(&attendu) {
+                eprintln!("graine {seed}, opération {i} {op:?} :\n  avant : {}\n  après : {}", json::dumps_compact(&attendu), json::dumps_compact(&obtenu));
+                res.set(i as i64, obtenu);
+            }
+        }
+        let fin = cas.at("fin");
+        let vu = j(&etat_final(&g));
+        // (pour relire : les camps sans leur revenu du commerce maritime, `_mer`, sont-ils ceux d'avant ?)
+        let sans_mer = g.factions.deepcopy();
+        for f in sans_mer.values() {
+            f.pop("_mer");
+        }
+        if fin.has("factions") && vu.at("factions") != fin.at("factions") {
+            let pareil = Val::from(json::empreinte_ordre(&sans_mer)) == fin.at("factions");
+            eprintln!("graine {seed} : camps sans `_mer` {}", if pareil { "identiques à la référence" } else { "différents de la référence" });
+        }
+        for k in fin.keys() {
+            if json::dumps_ref_ordre(&vu.at(&k)) != json::dumps_ref_ordre(&fin.at(&k)) {
+                eprintln!("graine {seed}, état final, {k} :\n  avant : {}\n  après : {}", json::dumps_compact(&fin.at(&k)), json::dumps_compact(&vu.at(&k)));
+                fin.set(&k, vu.at(&k));
+            }
+        }
+    }
+    std::fs::write(&chemin, json::dumps_compact(&r) + if texte.ends_with('\n') { "\n" } else { "" }).unwrap();
 }

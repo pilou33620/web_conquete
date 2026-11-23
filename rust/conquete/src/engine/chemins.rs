@@ -954,6 +954,12 @@ impl Game {
                 let i = leg.ati("i");
                 if i >= pts.len() as i64 {
                     a.at("path").pop(0);
+                    // chemin d'un seul point (l'armée est déjà sur la case de la place visée, débarquée là par exemple) :
+                    // elle y arrive quand même, comme au bout d'un chemin plus long
+                    let tgt = a.at("target").or(dict! {});
+                    if !a.atb("path") && tgt.get("node").is_some() && self.arrive_node(a, tgt.ati("node"), true) {
+                        break;
+                    }
                     continue;
                 }
                 let (tx, ty) = pts.at(i).xy();
