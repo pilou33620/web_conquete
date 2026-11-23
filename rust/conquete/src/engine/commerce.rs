@@ -100,9 +100,9 @@ pub fn prix_du_mois(g: &Game, denree: &str) -> f64 {
 }
 
 // ================================================================== ports et routes
-/// Un port de mer : un mouillage (marine::case_port) et un quai sur une voie d'eau marine.
+/// Un port de mer (cities::port_de_mer : un mouillage des flottes, ou un quai sur une voie d’eau marine).
 pub fn port_de_mer(g: &Game, nid: i64) -> bool {
-    M::case_port(&g.geo, nid).is_some() && CT::port_de_mer(g, nid)
+    CT::port_de_mer(g, nid)
 }
 
 thread_local! {

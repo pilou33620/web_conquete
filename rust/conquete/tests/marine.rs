@@ -287,3 +287,16 @@ fn l_ia_arme_une_flotte_et_bloque_le_port_ennemi() {
     assert_eq!(f.at("ordre"), "blocus", "l'IA en guerre ne bloque pas");
     assert_eq!(g.nodes.at(f.at("cible")).at("owner"), g.player.as_str());
 }
+
+#[test]
+fn tout_mouillage_peut_batir_un_port() {
+    // (un port de mer sans quai sur une voie d'eau marine, comme Brest sur la carte d'Europe, bâtit quand même son port)
+    let g = partie();
+    let mouillages: Vec<i64> = (0..g.nodes.len() as i64)
+        .filter(|&n| M::case_port(&g.geo, n).is_some() && g.geo.nodes.at(n).at("type") != "fort")
+        .collect();
+    assert!(!mouillages.is_empty());
+    for n in mouillages {
+        assert!(conquete::cities::fits(&g, n, "port"), "{} ne peut pas bâtir de port", g.geo.nodes.at(n).at("name"));
+    }
+}

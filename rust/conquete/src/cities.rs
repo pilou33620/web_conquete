@@ -651,7 +651,9 @@ pub fn fits(g: &Game, nid: i64, chain: &str) -> bool {
 
 /// (SPEC-EMPIRE, module 4) Port sur la mer : un de ses quais donne sur une voie d'eau marine (pas un quai de fleuve).
 pub fn port_de_mer(g: &Game, nid: i64) -> bool {
-    g.geo.ports.get_or(nid, list![]).iter().any(|w| g.geo.ways.at(w).atb("sea"))
+    // un mouillage en mer (celui des flottes) suffit : la plupart des ports de mer des théâtres (Brest, Alger…) n'ont pas
+    // de quai sur une voie d'eau marine
+    crate::engine::marine::case_port(&g.geo, nid).is_some() || g.geo.ports.get_or(nid, list![]).iter().any(|w| g.geo.ways.at(w).atb("sea"))
 }
 
 /// (SPEC-EMPIRE, module 4) Place hors d'Europe (plantations) : son champ `theatre` quand la géographie le donne (la
