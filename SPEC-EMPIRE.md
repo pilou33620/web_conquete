@@ -248,3 +248,57 @@ a_quai, armee: {id, effectif} | null, ordre}]`, `blocus: [{flotte, ville, lieu: 
 ## État
 
 (à remplir par chaque module : ce qui est fait, ce qui ne l'est pas, écarts à la spec)
+
+### Module 2 (R2, marine-moteur) — 23/11/2026
+
+**Fait** (`engine/marine.rs`, `engine/navale.rs`, `ai/marine.rs`, banc `tests/marine.rs`) :
+- `rules.NAVIRES` (`flute`, `corvette`, `fregate`, `vaisseau`, `vapeur`, `fregate_helice`, `vaisseau_helice`,
+  `cuirasse` : `nom, canons, coque, vitesse` (cases par jour, échelle de `SEA_SPEED`), `transport, equipage, cout,
+  jours, entretien` (livres par jour), `port` (niveau de la chaîne « port »), `tech, desc`), `NAVIRE_ORDRE`,
+  `rules.STRATS_NAV` (`ligne, couper, abordage, demater, rompre, brulot` : `label, desc, m {approche, bordees,
+  abordage}, pertes, bat`), `PHASES_NAV`, `PRESTIGE_NAVIRE`, `PRESTIGE_COULE`, `REPARE_JOUR`, `BLOCUS_CASES`,
+  `CONTACT_MER`. Technologies prises dans `rules.TECHS` : `fonderie` (vaisseau), `vapeur_fluviale` (vapeur),
+  `outillage` (frégate à hélice), `lahitte` (vaisseau à hélice), `acier` (cuirassé). Elles ne sont pas (encore) dans
+  `rules::constantes()` : la référence `rules.json` n'a pas bougé.
+- `g.flottes` `{fid: {id, owner, x, y, navires, pv, amiral, dest, chemin, a_quai, armee, ordre, route, cible}}` comme la
+  spec (plus `cible`, et des clés de travail : `bord` = le dict de l'armée embarquée, sortie de `g.armies` pendant la
+  traversée ; `vers`, `mp`, `prog`, `bataille`, `bloque`). `g.navales` : les batailles navales en attente. Les deux
+  sont sauvegardés (clés `flottes`, `navales`, écrites seulement s'il y en a) ; une ancienne sauvegarde se charge.
+- Construction : file de la place (`kind: "navire"`), fin de chantier dans `update_queues` (le navire rejoint la
+  flotte au quai, sinon une flotte neuve avec un amiral). Entretien dans `compute_income` (`_upkeep.navires`, avec la
+  solde de l'armée à bord).
+- Mouvement : A* sur les cases d'eau (océan, eau), vitesse du plus lent, météo de la zone (tempête ×0,12 ; vapeurs
+  moins gênés), arrivée au quai d'une place amie. Tour par tour : pendant le tour du joueur ses flottes partent tout de
+  suite (jours de mer du mois), restent en place pendant le tour des IA, reprennent leur route au début du tour.
+- Transport (embarquer à quai, capacité ; débarquer au quai ou sur la côte à deux cases) ; cabotage des armées seules
+  gardé, mais une flotte ennemie à `CONTACT_MER` l'intercepte (10 à 60 % des hommes perdus, retour au port de départ).
+- Blocus : port ajouté à `g._blockade` (plus de commerce), flottes du port retenues (sauf pour attaquer les
+  bloqueurs), vivres d'une place aussi bloquée sur terre épuisés deux fois plus vite (`blockade_tick`), journal.
+- Batailles navales : approche (premier feu, démâtage, fuite), trois bordées (brûlot d'abord), abordage (prises), vent,
+  coulés / pris / fuite, armée à bord au prorata de la place perdue, expérience de l'amiral, prestige (`glory`),
+  repli du vaincu vers un port ami ; attente du joueur (`mode: "attente"`, `{cmd: "tac", sub: "choose", bid, strat}`
+  ou `mode: "auto"`), qui fige la campagne et arrête le tour des IA comme une bataille terrestre ; IA :
+  `navale::choisir_strat`.
+- Réparation au port ami (+50 % par niveau de la chaîne « port » au-delà du premier).
+- IA (`ai/marine.rs`, tous les dix jours) : petite flotte de guerre si ports et argent qui dort, escorte des armées en
+  cabotage, blocus du port ennemi le plus peuplé en guerre, retour au port.
+- Commandes `/api/cmd` `{cmd: "flotte", sub, …}` : `construire {node, type}`, `deplacer {flotte, node | x, y}`,
+  `fusionner {flotte, autre}`, `separer {flotte, navires: {type: n}}` (rend `id`), `embarquer {flotte, army}`,
+  `debarquer {flotte, x?, y?}`, `ordre {flotte, ordre: "" | "blocus" | "commerce" | "corsaire" | "route", node?
+  (blocus), cible? (comptoir, camp chassé), route?}`.
+- Vue : `flottes: [{id, proprio, case, navires, chemin, a_quai, armee: {id, effectif} | null, ordre, pv, bataille}]`
+  (les siennes en plus : `cible, route, mp, amiral, vitesse, capacite`), `blocus: [{flotte, ville, lieu}]`, batailles
+  navales dans `battles` (`naval: true`, `sides[].navires`, `navires0`, `feu`, `armee`, `amiral`, `phase`, `vent`,
+  `journal` `[{ph, l, p, w}]`, `choix`, `defaut`) ; fin de bataille : événement `battle_end` avec `naval: true,
+  coules, pris, vent` (et `interception: true` pour un cabotage surpris) ; `rules_payload` : `navires, navire_ordre,
+  strats_nav, phases_nav`.
+
+**Écarts, raccourcis** :
+- `marine::niveau_port` lit `slots(n)["port"]` ; tant que la chaîne `port` n'est pas dans `CT::CHAINS`, toute place
+  portuaire (étiquette `port` et une case d'eau à 10 km) compte pour un port de niveau 1 au moins. **À remplacer par
+  `CT::chantier_ok(g, nid, niveau)` à la fusion du module 4.**
+- Une bataille navale se règle d'un coup (pas de durée en heures) ; la page montre le journal par phase.
+- L'IA ne fait pas embarquer ses armées sur ses flottes (elle garde le cabotage) ; l'escorte va au port d'arrivée.
+- `commerce`, `corsaire`, `route` sont acceptés et gardés, sans effet (R3, R4). La traversée entre théâtres et
+  « les flûtes ne peuvent pas être corsaires » (refusé dès maintenant) relèvent de R3 / R4.
+- Phare (vitesse au départ) : non fait (chaîne de R1).

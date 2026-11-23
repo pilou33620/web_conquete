@@ -479,6 +479,13 @@ pub fn deplacer(g: &mut Game, code: &str, fid: &Val, node: &Val, x: &Val, y: &Va
     let Some(ch) = chemin_mer(&geo, case(&f), but) else {
         return (false, "Aucune route de mer ne mène là.".to_string());
     };
+    if ch.is_empty() && vers.is_none() && f.get("a_quai").is_some() {
+        // (sortir du port sur la case même du mouillage : attaquer les bloqueurs qui y sont)
+        f.set("a_quai", Val::None);
+        if navale::rencontre(g, &f) {
+            return (true, "L'ennemi en vue : la bataille navale s'engage.".to_string());
+        }
+    }
     f.set("chemin", ch.iter().map(|&(cx, cy)| list![cx, cy]).collect::<Val>());
     f.set("dest", list![but.0, but.1]);
     f.set("prog", 0.0);

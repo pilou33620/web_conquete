@@ -67,8 +67,11 @@ pub fn to_dict(g: &mut Game) -> Val {
     let blockade = g._blockade.to_list();
     blockade.sort();
     d.set("blockade", blockade);
-    d.set("flottes", &g.flottes); // (SPEC-EMPIRE, module 2) les flottes et les batailles navales en attente
-    d.set("navales", &g.navales);
+    // (SPEC-EMPIRE, module 2) les flottes et les batailles navales en attente, s'il y en a
+    if g.flottes.truthy() || g.navales.truthy() {
+        d.set("flottes", &g.flottes);
+        d.set("navales", &g.navales);
+    }
     // horloges des IA : sans elles, un chargement relance aussitôt leur diplomatie et leurs propositions
     let ai_state = dict! {};
     for (c, ai) in g.ais.iter() {
