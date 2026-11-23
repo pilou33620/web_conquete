@@ -277,7 +277,7 @@ fn l_ia_arme_une_flotte_et_bloque_le_port_ennemi() {
     }
     g.update_queues(0.01);
     let f = g.flottes.values().into_iter().find(|f| f.at("owner") == FOE).expect("pas de flotte de l'IA");
-    ai.cool.set(conquete::tup!["marine", "pas"], 0.0);
+    ai.marine_clock = 0.0;
     conquete::ai::marine::jouer(&mut g, &mut ai);
     *g.ais.get_mut(FOE).unwrap() = Some(ai);
     assert_eq!(f.at("ordre"), "blocus", "l'IA en guerre ne bloque pas");

@@ -21,11 +21,10 @@ fn de_guerre(f: &Val) -> i64 {
 }
 
 pub fn jouer(g: &mut Game, ai: &mut AI) {
-    let cle = tup!["marine", "pas"];
-    if ai.cool.get_or(&cle, 0.0).f() > g.t {
+    if ai.marine_clock > g.t {
         return;
     }
-    ai.cool.set(&cle, g.t + PAS);
+    ai.marine_clock = g.t + PAS;
     let code = ai.code.clone();
     let ports: Vec<(i64, i64)> = g
         .owned_nodes(&code)

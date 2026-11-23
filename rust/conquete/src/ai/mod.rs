@@ -97,6 +97,8 @@ pub struct AI {
     /// recalculées quand la carte politique change : (terres fermées : un set, places des camps fermés, composante de
     /// chaque place : une liste).
     pub _cache_reach: Option<(Val, Vec<i64>, Val)>,
+    /// (SPEC-EMPIRE, module 2) prochain coup d'œil sur les flottes (ai/marine.rs ; pas sauvegardé).
+    pub marine_clock: f64,
 }
 
 impl AI {
@@ -130,6 +132,7 @@ impl AI {
             _rally: Val::None,
             _nb: Val::None,
             _cache_reach: None,
+            marine_clock: 0.0,
         }
     }
 
