@@ -3,6 +3,7 @@ import { Ambient, locomotive, voiture } from './ambient.js';
 import { clamp, hexRgb } from './battle/formes.js';
 import { TownArt } from './towns.js';
 import { PONTS_DATES } from './carte/villes.js';
+import { fusionRoutes, surTrace } from './carte/fusion-routes.js';
 import { UnitArt } from './battle/unites.js';
 import { profil } from './battle/qualite.js';
 import { uniform } from './battle/formes.js';
@@ -227,22 +228,6 @@ export class MapView {
       for (let i = 1; i < e.pts.length; i++) e.cum.push(e.cum[i - 1] + Math.hypot(e.pts[i][0] - e.pts[i - 1][0], e.pts[i][1] - e.pts[i - 1][1]));
       const xs = e.pts.map(q => q[0]), ys = e.pts.map(q => q[1]);
       e.box = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
-      if (e.water) continue;
-      e.path = new Path2D();
-      e.pts.forEach((q, k) => k ? e.path.lineTo(q[0], q[1]) : e.path.moveTo(q[0], q[1]));
-      // les ponts : celui de la règle (bx), puis ceux des autres grandes rivières que le tracé passe (geo.py, ponts) ; chacun
-      // suit le segment du tracé qui franchit l'eau ; an : son année, celle de la ville la plus proche (un bac avant)
-      if (e.bx != null) e.passes ??= [[e.bx, e.by, e.river, e.rrank], ...(e.ponts || [])].map(([x, y, river, rank]) => {
-        const v = Math.hypot(A.x - x, A.y - y) < Math.hypot(B.x - x, B.y - y) ? A : B, o = { x, y, rank, a: 0, an: 0 };
-        if (Math.hypot(v.x - x, v.y - y) < 5) o.an = PONTS_DATES.find(([n, r]) => n === v.name && r === river)?.[2] || 0;
-        let best = 1e9;
-        for (let i = 1; i < e.pts.length; i++) {
-          // (la distance au segment, pas à son milieu : un long segment qui passe sur le pont perdait contre un court voisin)
-          const [p, q] = [e.pts[i - 1], e.pts[i]], dx = q[0] - p[0], dy = q[1] - p[1], u = clamp(((x - p[0]) * dx + (y - p[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1), d = Math.hypot(p[0] + dx * u - x, p[1] + dy * u - y);
-          if (d < best) { best = d; o.a = Math.atan2(q[1] - p[1], q[0] - p[0]); }
-        }
-        return o;
-      });
     }
     // voies navigables découpées en tronçons avec leur emprise : chaque tuile ne trace que ce qui la traverse
     this.wayPaths = [];
@@ -1510,7 +1495,36 @@ export class MapView {
     return cv;
   }
 
+  // les tracés dessinés des routes, au premier dessin de la carte de secours (pas sur le plateau) : les routes presque
+  // confondues n'en font qu'une (carte/fusion-routes.js) ; e.pts, le tracé du jeu, ne change pas
+  prepRoutes() {
+    const traces = fusionRoutes(this.edges);
+    this.edges.forEach((e, k) => {
+      if (e.water) return;
+      const A = this.nodes[e.a], B = this.nodes[e.b], tr = traces[k];
+      e.path = new Path2D();
+      tr.forEach((q, i) => i ? e.path.lineTo(q[0], q[1]) : e.path.moveTo(q[0], q[1]));
+      // les ponts : celui de la règle (bx), puis ceux des autres grandes rivières que le tracé passe (geo.py, ponts), reportés
+      // sur le tracé dessiné ; chacun suit le segment qui franchit l'eau ; an : son année, celle de la ville la plus proche
+      // (un bac avant)
+      if (e.bx != null) e.passes ??= [[e.bx, e.by, e.river, e.rrank], ...(e.ponts || [])].map(([x, y, river, rank]) => {
+        ({ x, y } = surTrace(tr, x, y));
+        const v = Math.hypot(A.x - x, A.y - y) < Math.hypot(B.x - x, B.y - y) ? A : B, o = { x, y, rank, a: 0, an: 0 };
+        if (Math.hypot(v.x - x, v.y - y) < 5) o.an = PONTS_DATES.find(([n, r]) => n === v.name && r === river)?.[2] || 0;
+        let best = 1e9;
+        for (let i = 1; i < tr.length; i++) {
+          // (la distance au segment, pas à son milieu : un long segment qui passe sur le pont perdait contre un court voisin)
+          const [p, q] = [tr[i - 1], tr[i]], dx = q[0] - p[0], dy = q[1] - p[1], u = clamp(((x - p[0]) * dx + (y - p[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1), d = Math.hypot(p[0] + dx * u - x, p[1] + dy * u - y);
+          if (d < best) { best = d; o.a = Math.atan2(q[1] - p[1], q[0] - p[0]); }
+        }
+        return o;
+      });
+    });
+    this.routesPretes = true;
+  }
+
   drawRoads(g, L, x0, y0, span) {
+    if (!this.routesPretes) this.prepRoutes();
     const vis = ({ box: b }) => b[2] > x0 - 1 && b[0] < x0 + span + 1 && b[3] > y0 - 1 && b[1] < y0 + span + 1;
     const es = this.edges.filter(e => !e.water && vis(e)), P = L > PAPIER_L ? null : PAPIER[this.era];
     g.lineCap = 'round'; g.lineJoin = 'round';

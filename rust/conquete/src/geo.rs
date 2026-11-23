@@ -46,7 +46,8 @@ pub const CACHE_VERSION: i64 = 8;
 pub const VERSION: i64 = 2; // 2 : l'Aquitaine (la carte par défaut) ; 1 : le Sud-Ouest des anciennes parties ; 3 et 4 (toute la France) retirées le 22/11/2026
 
 pub const VERSION_EUROPE: i64 = 5; // le théâtre d'Europe (SPEC-FRANCE.md, étape 2) : ce qui ne vaut que pour lui (BACS_5, relief et climats écrits à la main, MERS_5)
-pub const GEN_THEATRE: i64 = 2; // (à augmenter quand le calcul de la carte d'un théâtre change : relief, végétation, routes ; son cache est alors refait)
+pub const GEN_THEATRE: i64 = 3; // (3 : routes hors de l'eau, ponts sur leur tracé, routes doublées confondues, 23/11/2026)
+// (à augmenter quand le calcul de la carte d'un théâtre change : relief, végétation, routes ; son cache est alors refait)
 
 // ---------------------------------------------------------------- les théâtres
 // Un théâtre : une carte à part, à 5 km la case, un pays par camp ; le joueur le choisit sur l'écran de départ (R::MODES).
@@ -265,6 +266,9 @@ pub const BACS_5: [(&str, &str, &str); 4] =
     [("Grand Belt", "Roskilde", "Odense"), ("Petit Belt", "Odense", "Fredericia"), ("Øresund", "Copenhague", "Malmö"), ("Øresund", "Elseneur", "Helsingborg")];
 pub const GABRIEL_5: f64 = 100.0; // (cases) les places voisines se cherchent jusque-là (40 sur les cartes au kilomètre) : la Russie, le Sahara
 pub const RELIER_5: f64 = 250.0; // (cases) et un morceau du réseau se raccorde jusque-là, par la terre (60 ailleurs)
+pub const EAU_ROUTE_5: f64 = 400.0; // (un théâtre) coût d'une demi-case d'eau pour le tracé d'une route (40 ailleurs : elle coupait les baies)
+pub const EAU_MAX_5: f64 = 0.3; // (cases) une route d'un théâtre ne passe pas plus sur l'eau, hors de ses bouts ; sinon c'est un bac
+pub const FUSION_5: (f64, f64) = (0.6, 0.5); // (cases) écart et longueur à partir desquels deux routes d'un théâtre se confondent (_fusionne)
 
 // ------------------------------------------------------------------ aides hors du socle (privées)
 /// `math.radians(x)`.
@@ -535,6 +539,152 @@ pub fn _troncs(paires: &[((usize, usize), Info)], paths: &mut [Vec<Pt>], ecart: 
             }
             faits.entry(bout).or_default().push(line);
         }
+    }
+}
+
+/// (un théâtre) Deux routes qui vont côte à côte sur des kilomètres se dessinaient en double : _troncs (géographie 2, figée)
+/// ne les fusionne que depuis leur place commune et s'arrête au premier écart. Ici chaque route (royales d'abord) reprend le
+/// tracé d'une route déjà posée partout où elle la longe, à moins d'`ecart` et à peu près parallèle, sur au moins `mini`,
+/// où qu'elles se rejoignent et autant de fois qu'il le faut. (web/js/carte/fusion-routes.js fait de même au dessin de la
+/// carte de secours, pour l'Aquitaine.)
+pub fn _fusionne(paires: &[((usize, usize), Info)], paths: &mut [Vec<Pt>], ecart: f64, mini: f64) {
+    let abscisses = |pts: &[Pt]| -> Vec<f64> {
+        let mut cum = vec![0.0];
+        for q in pts.windows(2) {
+            cum.push(cum.last().unwrap() + dist(q[0], q[1]));
+        }
+        cum
+    };
+    let ordre = py::sorted_by_key((0..paires.len()).collect::<Vec<_>>(), |&k| (!paires[k].1.royal, k));
+    let mut poses: Vec<(Vec<Pt>, Vec<f64>)> = vec![]; // les tracés posés et leurs abscisses
+    let mut grille: HashMap<(i64, i64), Vec<(usize, usize)>> = HashMap::new(); // case -> (tracé posé, segment) qui la touchent
+    for k in ordre {
+        if paires[k].1.ferry {
+            continue;
+        }
+        let line = paths[k].clone();
+        let cum = abscisses(&line);
+        // échantillons tous les 0,2 case : (abscisse, point, tracé posé longé, abscisse sur lui)
+        let mut ech: Vec<(f64, Pt, Option<(usize, f64)>)> = vec![];
+        let mut prec: Option<usize> = None;
+        for (i, qr) in line.windows(2).enumerate() {
+            let (q, r) = (qr[0], qr[1]);
+            let L = cum[i + 1] - cum[i];
+            if L == 0.0 {
+                continue;
+            }
+            let (ux, uy) = ((r.0 - q.0) / L, (r.1 - q.1) / L);
+            let n = (L / 0.2).ceil() as usize;
+            for s in 0..n {
+                let t = L * s as f64 / n as f64;
+                let p = (q.0 + ux * t, q.1 + uy * t);
+                let (ci, cj) = (p.0.floor() as i64, p.1.floor() as i64);
+                let mut best: Option<(usize, f64, f64)> = None; // (tracé, distance, abscisse sur lui)
+                for di in -1..=1 {
+                    for dj in -1..=1 {
+                        for &(ro, sg) in grille.get(&(ci + di, cj + dj)).map_or(&[][..], |v| v.as_slice()) {
+                            let (pts, pc) = &poses[ro];
+                            let (a, lg) = (pts[sg], pc[sg + 1] - pc[sg]);
+                            if lg == 0.0 {
+                                continue;
+                            }
+                            let (vx, vy) = ((pts[sg + 1].0 - a.0) / lg, (pts[sg + 1].1 - a.1) / lg);
+                            if (ux * vx + uy * vy).abs() < 0.9 {
+                                continue;
+                            }
+                            let u = ((p.0 - a.0) * vx + (p.1 - a.1) * vy).clamp(0.0, lg);
+                            let d = py::hypot(a.0 + vx * u - p.0, a.1 + vy * u - p.1);
+                            // (le tracé déjà suivi l'emporte tant qu'il reste assez près : deux tracés déjà confondus alterneraient)
+                            let pref = |r: usize| (Some(r) == prec) as i8;
+                            if d <= ecart && best.is_none_or(|(br, bd, _)| pref(ro) > pref(br) || pref(ro) == pref(br) && d < bd) {
+                                best = Some((ro, d, pc[sg] + u));
+                            }
+                        }
+                    }
+                }
+                prec = best.map(|b| b.0);
+                ech.push((cum[i] + t, p, best.map(|(ro, _, sf)| (ro, sf))));
+            }
+        }
+        // les passages qui longent un même tracé sur au moins mini prennent ce tracé : (premier et dernier échantillon)
+        let mut runs: Vec<(usize, usize)> = vec![];
+        let mut i = 0;
+        while i < ech.len() {
+            let Some((ro, _)) = ech[i].2 else {
+                i += 1;
+                continue;
+            };
+            let mut j = i;
+            while j + 1 < ech.len() && ech[j + 1].2.is_some_and(|(r, _)| r == ro) {
+                j += 1;
+            }
+            if ech[j].0 - ech[i].0 >= mini {
+                runs.push((i, j));
+            }
+            i = j + 1;
+        }
+        if !runs.is_empty() {
+            let mut out = vec![line[0]];
+            let pousse = |out: &mut Vec<Pt>, p: Pt| {
+                if dist(*out.last().unwrap(), p) > 1e-9 {
+                    out.push(p);
+                }
+            };
+            // (on quitte le tracé à son point d'échantillon et on y revient par un court raccord, presque en travers : un
+            // long biseau vers l'autre route la longerait encore ; entre deux passages qui se suivent, pas de raccord)
+            let (mut fin, mut sortie, mut dernier): (f64, Option<Pt>, Option<usize>) = (0.0, None, None);
+            for &(i, j) in &runs {
+                let ((s0, p0, a), (s1, p1, b)) = (ech[i], ech[j]);
+                let ((ro, sf0), (_, sf1)) = (a.unwrap(), b.unwrap());
+                if dernier.is_none_or(|d| d + 1 != i) {
+                    if let Some(q) = sortie {
+                        pousse(&mut out, q);
+                    }
+                    for v in 1..line.len() - 1 {
+                        if cum[v] > fin && cum[v] < s0 {
+                            pousse(&mut out, line[v]);
+                        }
+                    }
+                    pousse(&mut out, p0);
+                }
+                let (pts, pc) = &poses[ro];
+                let mut m = crate::waterways::_cut(pts, pc, sf0.min(sf1), sf0.max(sf1));
+                if sf1 < sf0 {
+                    m.reverse();
+                }
+                for p in m {
+                    pousse(&mut out, p);
+                }
+                (fin, sortie, dernier) = (s1, Some(p1), Some(j));
+            }
+            if let Some(q) = sortie {
+                pousse(&mut out, q);
+            }
+            for v in 1..line.len() {
+                if cum[v] > fin {
+                    pousse(&mut out, line[v]);
+                }
+            }
+            // (les bouts restent sur leurs places)
+            if out.len() < 2 {
+                out.push(*line.last().unwrap());
+            } else {
+                *out.last_mut().unwrap() = *line.last().unwrap();
+            }
+            paths[k] = out;
+        }
+        let ro = poses.len();
+        let pts = paths[k].clone();
+        for sg in 0..pts.len().saturating_sub(1) {
+            let (a, b) = (pts[sg], pts[sg + 1]);
+            for ci in a.0.min(b.0).floor() as i64..=a.0.max(b.0).floor() as i64 {
+                for cj in a.1.min(b.1).floor() as i64..=a.1.max(b.1).floor() as i64 {
+                    grille.entry((ci, cj)).or_default().push((ro, sg));
+                }
+            }
+        }
+        let pc = abscisses(&pts);
+        poses.push((pts, pc));
     }
 }
 
@@ -1337,6 +1487,29 @@ impl GeoMap {
         bad
     }
 
+    /// (un théâtre) La plus longue traversée d'eau (mer, lac) d'un tracé, en cases, hors de sa première et de sa dernière case
+    /// (un port au bord de l'eau) ; échantillons tous les 0,2 case, comme tests/mesure-villes-chemins.mjs.
+    pub fn eau_du_trace(&self, pts: &[Pt]) -> f64 {
+        let total: f64 = pts.windows(2).map(|q| dist(q[0], q[1])).sum();
+        let (mut d, mut run, mut pire) = (0.0, 0.0, 0.0f64);
+        for q in pts.windows(2) {
+            let l = dist(q[0], q[1]);
+            let n = (l / 0.2).ceil().max(1.0);
+            for s in 0..n as usize {
+                let t = s as f64 / n;
+                let c = self.cell(q[0].0 + (q[1].0 - q[0].0) * t, q[0].1 + (q[1].1 - q[0].1) * t);
+                if d >= 1.0 && total - d >= 1.0 && c >= 0 && matches!(self.terrain[c as usize], OCEAN | EAU) {
+                    run += l / n;
+                } else {
+                    pire = pire.max(run);
+                    run = 0.0;
+                }
+                d += l / n;
+            }
+        }
+        pire.max(run)
+    }
+
     fn _build_roads(&mut self) {
         let P = self.noeuds_xy();
         let mut pairs: Pairs = IndexMap::new();
@@ -1535,9 +1708,24 @@ impl GeoMap {
         let cost_royal = self._road_costs(0.0); // routes royales : tirées au cordeau
         let mut paires: Vec<((usize, usize), Info)> = pairs.iter().map(|(k, v)| (*k, *v)).collect();
         paires.sort_by_key(|p| p.0);
-        let mut paths: Vec<Vec<Pt>> =
-            paires.iter().map(|&((a, b), info)| if info.ferry { vec![P[a], P[b]] } else { self._road_path(P[a], P[b], if info.royal { &cost_royal } else { &cost_chemin }) }).collect();
-        if self.version >= 2 {
+        let cout_de = |info: Info| if info.royal { &cost_royal } else { &cost_chemin };
+        let mut paths: Vec<Vec<Pt>> = paires.iter().map(|&((a, b), info)| if info.ferry { vec![P[a], P[b]] } else { self._road_path(P[a], P[b], cout_de(info), 0.35) }).collect();
+        if theatre {
+            // (un théâtre) une route qui passe encore sur l'eau : refaite dans une fenêtre plus large (le tour de la baie en
+            // sortait) ; si l'eau reste, c'est une traversée (un îlot que _terres rattache à la terre voisine, Gozo) : un bac
+            for k in 0..paires.len() {
+                let ((a, b), info) = paires[k];
+                if info.ferry || self.eau_du_trace(&paths[k]) <= EAU_MAX_5 {
+                    continue;
+                }
+                paths[k] = self._road_path(P[a], P[b], cout_de(info), 1.5);
+                if self.eau_du_trace(&paths[k]) > EAU_MAX_5 {
+                    paires[k].1.ferry = true;
+                    paths[k] = vec![P[a], P[b]];
+                }
+            }
+            _fusionne(&paires, &mut paths, FUSION_5.0, FUSION_5.1);
+        } else if self.version >= 2 {
             _troncs(&paires, &mut paths, 0.35, 0.5);
         }
         let aucune = |_: &str| false;
@@ -1547,13 +1735,16 @@ impl GeoMap {
             "river" => Val::None, "rrank" => 0, "cx" => Val::None, "cy" => Val::None};
             // le jeu (rivière à franchir, longueur) reste celui de la ligne droite ; seul le tracé dessiné change
             let droite = [P[a], P[b]];
+            let path = &paths[eid];
             let best = if self.version >= 2 {
                 let p = pair(&droite);
                 crossing(&droite, &|nom| p.contains(nom))
             } else {
                 crossing(&droite, &aucune)
             };
-            let path = &paths[eid];
+            // (un théâtre : la ligne droite ne franchit rien, ou une rivière un nombre pair de fois, mais le tracé passe un
+            // fleuve, Le Havre – Honfleur et la Seine, Hanovre – Brême et la Weser : c'est ce passage qui compte, avec son pont)
+            let best = best.or_else(|| if theatre && !info.ferry { crossing(path, &aucune) } else { None });
             if info.ferry {
                 let (na, nb) = (self.nodes.at(a).ats("name"), self.nodes.at(b).ats("name"));
                 let nomme = bacs.iter().find(|t| [t.1, t.2] == [na.as_str(), nb.as_str()] || [t.2, t.1] == [na.as_str(), nb.as_str()]);
@@ -1584,7 +1775,9 @@ impl GeoMap {
                     for seg in path.windows(2) {
                         for (ri, it) in coupes(seg[0], seg[1]) {
                             let name = rivers[ri].name.as_str();
-                            if name != rivers[ori].name && !ponts.iter().any(|q| q.at(2) == name) {
+                            // (un théâtre : chaque passage a son pont, même d'une rivière déjà passée à plus d'une case et demie)
+                            let pres = |x: f64, y: f64| !theatre || py::hypot(x - it.0, y - it.1) < 1.5;
+                            if !(name == rivers[ori].name && pres(oit.0, oit.1)) && !ponts.iter().any(|q| q.at(2) == name && pres(q.at(0).f(), q.at(1).f())) {
                                 ponts.push(list![py::round_n(it.0, 2), py::round_n(it.1, 2), name, rivers[ri].rank]);
                             }
                         }
@@ -1701,7 +1894,14 @@ impl GeoMap {
             let (i, j) = (c % W, c / W);
             let c1 = j / fu * W0 + i / fu; // (la case du km : terrain, département, bruit)
             let t = self.terrain[c1];
-            let mut k = if self.jouable[self.dept[c1] as usize] { terr(t) } else { 40.0 };
+            // (un théâtre : l'eau presque interdite ; à 40, une route de 5 km la case coupait une baie plutôt que d'en faire le tour)
+            let mut k = if self.theatre.is_some() && matches!(t, OCEAN | EAU) {
+                EAU_ROUTE_5
+            } else if self.jouable[self.dept[c1] as usize] {
+                terr(t)
+            } else {
+                40.0
+            };
             k += if riv[c] != 0 {
                 [25.0, 10.0, 3.0][3 - riv[c] as usize]
             } else if near[c] <= 2 {
@@ -1722,13 +1922,14 @@ impl GeoMap {
         cost
     }
 
-    /// Tracé d'une route de A à B : A* sur la grille (coûts de _road_costs), puis simplifié et lissé.
-    fn _road_path(&self, A: Pt, B: Pt, cost: &[f64]) -> Vec<Pt> {
+    /// Tracé d'une route de A à B : A* sur la grille (coûts de _road_costs), puis simplifié et lissé. marge : la fenêtre de
+    /// recherche déborde de la boîte de A et B de marge fois leur distance (0,35 ; un théâtre en reprend une plus grande).
+    fn _road_path(&self, A: Pt, B: Pt, cost: &[f64], marge: f64) -> Vec<Pt> {
         let (fr, riv) = self.riv_route();
         let frf = fr as f64;
         let (W, H) = (self.W * fr, self.H * fr);
         let (si, sj, gi, gj) = (py::int(A.0 * frf), py::int(A.1 * frf), py::int(B.0 * frf), py::int(B.1 * frf));
-        let m = py::int(0.35 * dist(A, B)).max(6) * fr;
+        let m = py::int(marge * dist(A, B)).max(6) * fr;
         let (i0, i1) = ((si.min(gi) - m).max(0), (si.max(gi) + m).min(W - 1));
         let (j0, j1) = ((sj.min(gj) - m).max(0), (sj.max(gj) + m).min(H - 1));
         let (start, goal) = (sj * W + si, gj * W + gi);
@@ -1738,6 +1939,18 @@ impl GeoMap {
         let ici = |i: i64, j: i64| ((j - j0) * lw + (i - i0)) as usize;
         let mut g = vec![1e18; (lw * (j1 - j0 + 1)) as usize];
         let mut prev: Vec<i64> = vec![-1; g.len()];
+        // (un théâtre : à moins d'une case de ses bouts, la route garde l'ancien coût de l'eau, un port au bord de l'eau)
+        let theatre = self.theatre.is_some();
+        let cout = |n: i64| -> f64 {
+            let k = cost[n as usize];
+            if theatre && k > EAU_ROUTE_5 / 2.0 {
+                let (i, j) = (n % W, n / W);
+                if py::hypot((i - si) as f64, (j - sj) as f64) <= frf || py::hypot((i - gi) as f64, (j - gj) as f64) <= frf {
+                    return 40.0;
+                }
+            }
+            k
+        };
         g[ici(si, sj)] = 0.0;
         let mut pq = vec![(0.0, start)];
         while let Some((_f, c)) = heapq::heappop(&mut pq) {
@@ -1752,10 +1965,10 @@ impl GeoMap {
                     continue;
                 }
                 let n = nj * W + ni;
-                let mut k = if n != goal { cost[n as usize] } else { 1.0 };
+                let mut k = if n != goal { cout(n) } else { 1.0 };
                 if di != 0 && dj != 0 {
                     // en diagonale, on ne se glisse pas entre deux cases d'un fleuve
-                    k = max2(max2(k, cost[(j * W + ni) as usize]), cost[(nj * W + i) as usize]);
+                    k = max2(max2(k, cout(j * W + ni)), cout(nj * W + i));
                 }
                 let ng = gc + s * k;
                 if ng < g[ici(ni, nj)] {
@@ -1813,10 +2026,12 @@ impl GeoMap {
         }
         let pts = out;
 
-        // échantillons sur un fleuve : le lissage ne doit pas en ajouter
+        // échantillons sur un fleuve (un théâtre : ou sur l'eau, ses coins arrondis coupaient les baies) : le lissage ne
+        // doit pas en ajouter
+        let mouille = |c: usize| theatre && matches!(self.terrain[((c as i64 / W) / fr * self.W + (c as i64 % W) / fr) as usize], OCEAN | EAU);
         let wet = |line: &[Pt]| -> i64 {
             let mut n = 0;
-            raster_line(self.W, self.H, line, &mut |c| n += (riv[c] >= 2) as i64, 0.3 / frf, fr);
+            raster_line(self.W, self.H, line, &mut |c| n += (riv[c] >= 2 || mouille(c)) as i64, 0.3 / frf, fr);
             n
         };
         let mut smooth = pts.clone();
