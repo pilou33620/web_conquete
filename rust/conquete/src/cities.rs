@@ -972,6 +972,28 @@ pub fn pfx(g: &Game, n: &Val) -> Val {
     tot
 }
 
+/// `pfx(g, n).get_or(cle, 0)` pour une clé nombre (pas « ev »), sans fabriquer le dict mêlé d'une politique en transition :
+/// les deux mêmes additions, dans le même ordre (0, puis la nouvelle politique × w, puis l'ancienne × (1 - w)).
+pub fn pfx_cle(g: &Game, n: &Val, cle: &str) -> Val {
+    debug_assert!(cle != "ev");
+    let p = n.get("pol");
+    if !p.truthy() || p.get("o") != n.at("owner") {
+        return Val::Int(0);
+    }
+    let w = policy_w(g, n);
+    if w >= 1.0 {
+        return _PFX().at(p.at("k")).get_or(cle, 0);
+    }
+    let mut v: Option<Val> = None;
+    for (fx, k) in [(POLICIES().at(p.at("k")).at("fx"), w), (POLICIES().at(p.get_or("p", "equilibre")).at("fx"), 1.0 - w)] {
+        let x = fx.get(cle);
+        if x.is_num() {
+            v = Some(&v.unwrap_or(Val::Int(0)) + &(&x * k));
+        }
+    }
+    v.unwrap_or(Val::Int(0))
+}
+
 /// Production de base ajoutée par les bâtiments, la politique et les événements de la place
 /// (avant population, ordre public et outils). Renvoie la part de commerce, sensible au blocus.
 /// Python : `node_extra(g, n, code, out, trade)`.
@@ -1041,7 +1063,7 @@ pub fn stab_bonus(g: &Game, n: &Val) -> f64 {
         v += bfx(n).get_or("stab", 0).f();
     }
     if n.getb("pol") {
-        v += pfx(g, n).get_or("stab", 0).f();
+        v += pfx_cle(g, n, "stab").f();
     }
     v
 }
@@ -1049,7 +1071,7 @@ pub fn stab_bonus(g: &Game, n: &Val) -> f64 {
 /// Python : `growth_k(g, n)`.
 // game/cities.py, lignes 438 à 439
 pub fn growth_k(g: &Game, n: &Val) -> f64 {
-    let k = 1.0 + bfx(n).get_or("grow", 0).f() + pfx(g, n).get_or("grow", 0).f();
+    let k = 1.0 + bfx(n).get_or("grow", 0).f() + pfx_cle(g, n, "grow").f();
     if k > 0.2 { k } else { 0.2 }
 }
 
@@ -1067,7 +1089,7 @@ pub fn train_k(g: &Game, n: &Val, typ: &str) -> f64 {
 /// Rend un nombre (int ou float, comme le Python : il s'ajoute à l'expérience des régiments).
 // game/cities.py, lignes 448 à 449
 pub fn train_xp(g: &Game, n: &Val) -> Val {
-    &bfx(n).get_or("xp", 0) + &pfx(g, n).get_or("xp", 0)
+    &bfx(n).get_or("xp", 0) + &pfx_cle(g, n, "xp")
 }
 
 /// Entretien des bâtiments d'emplacement, en livres par jour.
