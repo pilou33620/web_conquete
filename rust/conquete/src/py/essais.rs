@@ -216,3 +216,16 @@ fn valeurs() {
     assert_eq!(max_by_key(vec![(1, 'a'), (3, 'b'), (3, 'c')], |p| p.0), Some((3, 'b')));
     assert_eq!(min_by_key(vec![(1, 'a'), (1, 'b')], |p| p.0), Some((1, 'a')));
 }
+
+/// min_hypot rend, au bit près, le min des hypot de tous les points (points pseudo-aléatoires, ex aequo compris).
+#[test]
+fn plus_proche() {
+    let mut r = Random::new(7);
+    for _ in 0..200 {
+        let pts: Vec<(f64, f64)> = (0..r.randint(1, 40)).map(|_| (r.uniform(-500.0, 500.0), (r.randint(-3, 3) as f64) * 0.1)).collect();
+        let (x, y) = (r.uniform(-500.0, 500.0), 0.0);
+        let tous = min_f(pts.iter().map(|&(px, py)| hypot(x - px, y - py))).unwrap();
+        assert!(bits(min_hypot(x, y, &pts).unwrap(), tous));
+    }
+    assert_eq!(min_hypot(0.0, 0.0, &[]), None);
+}

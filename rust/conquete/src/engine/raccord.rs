@@ -98,7 +98,7 @@ pub fn small_battle(g: &Game, bt: &Val) -> bool {
     }
     let d = bt.at("sides").at(1);
     let nd = d.at("node");
-    if nd.is_some() && !d.atb("armies") && g.geo.nodes.at(&nd).at("type") == "village" && !g.nodes.at(&nd).atb("garrison") {
+    if nd.is_some() && !d.atb("armies") && g.geo.nodes.at(&nd).at_is("type", "village") && !g.nodes.at(&nd).atb("garrison") {
         return true; // contre la seule milice d'un village
     }
     false
@@ -166,7 +166,7 @@ pub fn march_k(a: &Val) -> f64 {
 /// a : armée ; dt : jours ; hot : dict zone → bool (canicule), fait par campaign_tick. `g.zone_of(x, y)` rend un texte.
 /// `g.geo.node_of_cell(x, y)` rend `Option<i64>`. d est un entier, `d *= 1.5` en fait un flottant.
 pub fn army_tick(g: &mut Game, a: &Val, dt: f64, hot: &Val) {
-    if a.at("state") == "battle" {
+    if a.at_is("state", "battle") {
         return;
     }
     let code = a.ats("owner");
@@ -204,7 +204,7 @@ pub fn army_tick(g: &mut Game, a: &Val, dt: f64, hot: &Val) {
 ///
 /// Python (bridge.py, l. 164-174) : `def campaign_tick(g, dt)`
 pub fn campaign_tick(g: &mut Game, dt: f64) {
-    let hot = Val::dict_from(g.weather.items().into_iter().map(|(z, w)| (z, Val::from(w.at("kind") == "canicule"))).collect());
+    let hot = Val::dict_from(g.weather.items().into_iter().map(|(z, w)| (z, Val::from(w.at_is("kind", "canicule")))).collect());
     for a in g.armies.values() {
         army_tick(g, &a, dt, &hot);
     }

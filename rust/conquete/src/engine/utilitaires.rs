@@ -314,7 +314,7 @@ impl Game {
     /// Python : `has_sapeurs(self, a)`.
     // engine.py, lignes 313 à 314
     pub fn has_sapeurs(&self, a: &Val) -> bool {
-        a.at("regs").iter().any(|r| r.at("type") == "sapeurs")
+        a.at("regs").iter().any(|r| r.at_is("type", "sapeurs"))
     }
 
     /// (possible, raison) : ce lieu peut-il lever ce régiment (sans compter le coût) ?
@@ -328,10 +328,10 @@ impl Game {
         }
         let typ_s = typ.s();
         let gn = self.geo.nodes.at(nid);
-        if gn.at("type") == "village" && typ_s != "garde" {
+        if gn.at_is("type", "village") && typ_s != "garde" {
             return (false, "Un village ne lève que la Garde nationale.".to_string());
         }
-        if gn.at("type") == "fort" && u.at("cls") != "inf" {
+        if gn.at_is("type", "fort") && u.at("cls") != "inf" {
             return (false, "Un fort ne lève que de l'infanterie.".to_string());
         }
         let y = self.date(&Val::None).year;
@@ -369,8 +369,8 @@ impl Game {
         let a = self.all_regs(code).iter().filter(|r| R::MERCS().has(r.at("type"))).count() as i64;
         let mut b = 0i64;
         for n in self.nodes.iter() {
-            if n.at("owner") == code {
-                b += n.at("queue").iter().filter(|q| q.at("kind") == "unit" && R::MERCS().has(q.at("what"))).count() as i64;
+            if n.at_is("owner", &code) {
+                b += n.at("queue").iter().filter(|q| q.at_is("kind", "unit") && R::MERCS().has(q.at("what"))).count() as i64;
             }
         }
         a + b
@@ -387,7 +387,7 @@ impl Game {
         }
         let d = &c.as_ref().unwrap().1;
         if !d.has(code) {
-            let cap = self.geo.nodes.iter().find(|n| n.at("dept") == code && n.at("type") == "capitale").map(|n| n.at("id"));
+            let cap = self.geo.nodes.iter().find(|n| n.at_is("dept", &code) && n.at_is("type", "capitale")).map(|n| n.at("id"));
             d.set(code, Val::from(cap));
         }
         d.at(code)
@@ -506,7 +506,7 @@ impl Game {
                             .filter(|(r, _)| *r == "livres" || *r == "vivres" || *r == "industrie")
                             .map(|(_, v)| v),
                     );
-                    let mul = if gn.at("type") == "capitale" { Val::from(R::SPECIALTY_CAPITAL) } else { Val::from(1) };
+                    let mul = if gn.at_is("type", "capitale") { Val::from(R::SPECIALTY_CAPITAL) } else { Val::from(1) };
                     k = &k + &(&s * &mul);
                 }
                 num += k.f() * py::pow(m, R::POP_TREND_K);
@@ -1117,13 +1117,13 @@ impl Game {
             }
             let held = Val::new_set();
             for a in self.armies.values() {
-                if a.at("owner") == code && a.at("at_node").is_some() {
+                if a.at_is("owner", &code) && a.at("at_node").is_some() {
                     held.push(a.at("at_node"));
                 }
             }
             for n in mine.iter() {
                 let gn = self.geo.nodes.at(n.at("id"));
-                if gn.at("type") == "capitale" || n.atb("garrison") || held.has(n.at("id")) || n.atb("siege") {
+                if gn.at_is("type", "capitale") || n.atb("garrison") || held.has(n.at("id")) || n.atb("siege") {
                     continue;
                 }
                 if n.atf("stab") < 0.45 && self.rng.random() < (0.45 - n.atf("stab")) * 0.5 * (1.0 + self.mod_(code, "revolt", 0.0)) {
@@ -1228,7 +1228,7 @@ impl Game {
                 -R::WEARY_PEACE
             };
             // surextension : tenir des pays qui ne vous aiment pas épuise
-            let unruly = self.nodes.iter().filter(|n| n.at("owner") == code && n.get_or("assim", 1.0) < 0.5).count();
+            let unruly = self.nodes.iter().filter(|n| n.at_is("owner", &code) && n.get_or("assim", 1.0) < 0.5).count();
             delta += R::WEARY_PER_UNRULY * unruly as f64;
             if delta > 0.0 {
                 delta *= 1.0 + self.mod_(code, "weariness", 0.0); // suffrage universel

@@ -12,6 +12,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
 
 pub type Liste = Rc<RefCell<Vec<Val>>>;
 pub type Dico = Rc<RefCell<Table>>;
@@ -259,6 +260,8 @@ impl Hash for Val {
 /// Une clé de dict ou un indice de liste : `&str`, entier, ou une `Val`.
 pub trait Cle {
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val>;
+    /// Le rang de la clé dans la table, si elle y est (pour récrire sa valeur sans refaire la clé).
+    fn place(&self, m: &Table) -> Option<usize>;
     fn val(&self) -> Val;
     fn indice(&self) -> Option<i64>;
 }
@@ -276,28 +279,39 @@ impl Equivalent<Val> for CleStr<'_> {
 }
 // Les dict d'une même sorte (places, armées, régiments, camps) rangent leurs clés dans le même ordre : le rang où
 // une clé écrite dans le code (« owner ») a été trouvée la dernière fois est essayé d'abord, sans hacher ni sonder
-// la table. (Indexé par l'adresse du texte ; la clé trouvée à ce rang est toujours vérifiée.)
-thread_local! {
-    static RANGS: [std::cell::Cell<u32>; 1024] = const { [const { std::cell::Cell::new(u32::MAX) }; 1024] };
+// la table. (Indexé par l'adresse du texte ; la clé trouvée à ce rang est toujours vérifiée.) Deux rangs par clé, les
+// deux derniers trouvés : « owner » n'a pas le même rang dans une place et dans une armée. Un simple indice partagé par
+// les fils (atomique, sans ordre : une lecture vaut un `mov`), pas un thread_local, plus lent à atteindre.
+static RANGS: [[AtomicU32; 2]; 1024] = [const { [const { AtomicU32::new(u32::MAX) }, const { AtomicU32::new(u32::MAX) }] }; 1024];
+#[inline]
+fn chercher_rang(m: &Table, k: &str) -> Option<usize> {
+    let case = &RANGS[((k.as_ptr() as usize >> 3) ^ k.len()) & 1023];
+    for r in case {
+        let r = r.load(Relaxed) as usize;
+        if let Some((Val::Str(s), _)) = m.get_index(r) {
+            if meme_texte(s, k) {
+                return Some(r);
+            }
+        }
+    }
+    let i = m.get_index_of(&CleStr(k))?;
+    case[1].store(case[0].load(Relaxed), Relaxed);
+    case[0].store(i as u32, Relaxed);
+    Some(i)
 }
 #[inline]
 fn chercher_str<'a>(m: &'a Table, k: &str) -> Option<&'a Val> {
-    let case = ((k.as_ptr() as usize >> 3) ^ k.len()) & 1023;
-    let r = RANGS.with(|t| t[case].get());
-    if let Some((Val::Str(s), v)) = m.get_index(r as usize) {
-        if meme_texte(s, k) {
-            return Some(v);
-        }
-    }
-    let (i, _, v) = m.get_full(&CleStr(k))?;
-    RANGS.with(|t| t[case].set(i as u32));
-    Some(v)
+    chercher_rang(m, k).map(|i| &m[i])
 }
 
 impl Cle for &str {
     #[inline]
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
         chercher_str(m, self)
+    }
+    #[inline]
+    fn place(&self, m: &Table) -> Option<usize> {
+        chercher_rang(m, self)
     }
     fn val(&self) -> Val {
         Val::str(self)
@@ -311,6 +325,9 @@ impl Cle for &String {
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
         m.get(&CleStr(self))
     }
+    fn place(&self, m: &Table) -> Option<usize> {
+        m.get_index_of(&CleStr(self))
+    }
     fn val(&self) -> Val {
         Val::str(self)
     }
@@ -323,6 +340,9 @@ impl Cle for String {
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
         m.get(&CleStr(self))
     }
+    fn place(&self, m: &Table) -> Option<usize> {
+        m.get_index_of(&CleStr(self))
+    }
     fn val(&self) -> Val {
         Val::str(self)
     }
@@ -333,6 +353,7 @@ impl Cle for String {
 macro_rules! cle_entiere {
     ($($t:ty),*) => { $(impl Cle for $t {
         fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> { m.get(&Val::Int(*self as i64)) }
+        fn place(&self, m: &Table) -> Option<usize> { m.get_index_of(&Val::Int(*self as i64)) }
         fn val(&self) -> Val { Val::Int(*self as i64) }
         fn indice(&self) -> Option<i64> { Some(*self as i64) }
     })* };
@@ -344,6 +365,13 @@ impl Cle for &Val {
         match self {
             Val::Str(s) => chercher_str(m, s), // (un texte court est partagé : son adresse ne change pas)
             _ => m.get(*self),
+        }
+    }
+    #[inline]
+    fn place(&self, m: &Table) -> Option<usize> {
+        match self {
+            Val::Str(s) => chercher_rang(m, s),
+            _ => m.get_index_of(*self),
         }
     }
     fn val(&self) -> Val {
@@ -361,6 +389,10 @@ impl Cle for Val {
     #[inline]
     fn dans<'a>(&self, m: &'a Table) -> Option<&'a Val> {
         (&self).dans(m)
+    }
+    #[inline]
+    fn place(&self, m: &Table) -> Option<usize> {
+        (&self).place(m)
     }
     fn val(&self) -> Val {
         self.clone()
@@ -566,12 +598,12 @@ impl Val {
     /// `v[k]` en flottant : `u.atf("x")` pour `u.x` ou `u['x']`.
     #[track_caller]
     pub fn atf(&self, k: impl Cle) -> f64 {
-        self.at(k).f()
+        self.lire(&k, Val::f)
     }
     /// `v[k]` en entier.
     #[track_caller]
     pub fn ati(&self, k: impl Cle) -> i64 {
-        self.at(k).i()
+        self.lire(&k, Val::i)
     }
     /// `v[k]` en texte (à soi).
     #[track_caller]
@@ -581,12 +613,30 @@ impl Val {
     /// `bool(v[k])` : la véracité de `v[k]` (`if u.seen:`).
     #[track_caller]
     pub fn atb(&self, k: impl Cle) -> bool {
-        self.at(k).truthy()
+        self.lire(&k, Val::truthy)
+    }
+    /// `lire(v[k])`, sans copier la valeur d'un dict (ni compter puis décompter sa référence) : pour atf, ati, atb.
+    #[inline]
+    #[track_caller]
+    fn lire<R>(&self, k: &impl Cle, lire: impl FnOnce(&Val) -> R) -> R {
+        match self {
+            Val::Dict(d) => match k.dans(&d.borrow()) {
+                Some(v) => lire(v),
+                None => self.manque(&k.val()),
+            },
+            _ => match self.try_at(k) {
+                Some(v) => lire(&v),
+                None => self.manque(&k.val()),
+            },
+        }
     }
     /// `bool(d.get(k))` : faux si la clé manque (`if a.get('qrt'):`).
     #[track_caller]
     pub fn getb(&self, k: impl Cle) -> bool {
-        self.get(k).truthy()
+        match self {
+            Val::Dict(d) => k.dans(&d.borrow()).is_some_and(Val::truthy),
+            _ => self.sans_get(&k.val()),
+        }
     }
     /// `d.get(k)` : None si la clé manque. (Sur None lui-même : None, pour `(d.get('a') or {}).get('b')`.)
     #[inline]
@@ -831,9 +881,20 @@ impl Val {
     pub fn set(&self, k: impl Cle, x: impl Into<Val>) {
         match self {
             Val::Dict(d) => {
-                let k = k.val();
-                touche(&k);
-                d.borrow_mut().insert(k, x.into());
+                let mut t = d.borrow_mut();
+                match k.place(&t) {
+                    // (clé déjà là : la valeur est récrite à son rang, comme le ferait insert, sans refaire la clé)
+                    Some(i) => {
+                        let (cle, v) = t.get_index_mut(i).unwrap();
+                        touche(cle);
+                        *v = x.into();
+                    }
+                    None => {
+                        let k = k.val();
+                        touche(&k);
+                        t.insert(k, x.into());
+                    }
+                }
             }
             Val::List(l) => {
                 let mut l = ecrire_liste(l);
@@ -849,19 +910,19 @@ impl Val {
     /// `d[k] += x` (ou `l[i] += x`), avec les règles de Python (int + float = float).
     #[track_caller]
     pub fn inc(&self, k: impl Cle, x: impl Into<Val>) {
-        let v = &self.at(&k.val()) + &x.into();
+        let v = &self.lire(&k, Val::clone) + &x.into();
         self.set(k, v)
     }
     /// `d[k] -= x`.
     #[track_caller]
     pub fn dec(&self, k: impl Cle, x: impl Into<Val>) {
-        let v = &self.at(&k.val()) - &x.into();
+        let v = &self.lire(&k, Val::clone) - &x.into();
         self.set(k, v)
     }
     /// `d[k] *= x`.
     #[track_caller]
     pub fn scale(&self, k: impl Cle, x: impl Into<Val>) {
-        let v = &self.at(&k.val()) * &x.into();
+        let v = &self.lire(&k, Val::clone) * &x.into();
         self.set(k, v)
     }
     /// `d.setdefault(k, defaut)` : la valeur déjà là, sinon `defaut`, qui est alors rangé.

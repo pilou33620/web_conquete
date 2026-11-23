@@ -943,7 +943,7 @@ pub fn apply(g: &mut Game, code: &str, fx: &Val, town: &Val) {
             n.set("pop", &n.get_or("pop", 0) * &(1i64 + &fx.at("pop")));
         }
     }
-    if town.is_some() && g.nodes.at(town).at("owner") == code {
+    if town.is_some() && g.nodes.at(town).at_is("owner", &code) {
         let n = g.nodes.at(town);
         if fx.getb("town_pop") {
             n.set("pop", &n.get_or("pop", 0) * &(1i64 + &fx.at("town_pop")));
@@ -983,7 +983,7 @@ pub fn apply(g: &mut Game, code: &str, fx: &Val, town: &Val) {
     }
     if fx.getb("regs") {
         let cap = g.capital_of(code);
-        if g.nodes.at(&cap).at("owner") == code {
+        if g.nodes.at(&cap).at_is("owner", &code) {
             for tc in fx.at("regs").iter() {
                 let (typ, cnt) = tc.pair();
                 for _ in 0..cnt.i() {
@@ -1211,7 +1211,7 @@ pub fn fire(g: &mut Game, code: &str, ev: &Val, kind: &str) {
 /// pid : l'identifiant de la décision (g.nid('e')) ; auto : False par défaut (expire passe True).
 // game/events.py, lignes 458 à 471
 pub fn resolve(g: &mut Game, pid: &str, choice: i64, auto: bool) -> (bool, String) {
-    let p = g.pending_ev.iter().find(|x| x.at("id") == pid);
+    let p = g.pending_ev.iter().find(|x| x.at_is("id", &pid));
     let Some(p) = p else {
         return (false, "Décision introuvable.".to_string());
     };

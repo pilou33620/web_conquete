@@ -40,14 +40,14 @@ impl Game {
         }
         AA::on_capture(self, nid);
         n.set("owner", code);
-        n.set("assim", if gn.at("dept") == code { 1.0 } else if peaceful { 0.3 } else { 0.0 });
+        n.set("assim", if gn.at_is("dept", &code) { 1.0 } else if peaceful { 0.3 } else { 0.0 });
         n.set("stab", if peaceful { 0.6 } else { 0.35 });
         n.set("garrison", list![]);
         n.set("queue", list![]);
         n.set("siege", Val::None);
         for b in self.armies.values() {
             // (ses assiégeants ne restent pas en siège devant une place qui n'en est plus)
-            if b.at("at_node") == nid && b.at("state") == "siege" {
+            if b.at("at_node") == nid && b.at_is("state", "siege") {
                 b.set("state", if b.atb("path") { "move" } else { "idle" });
             }
         }
@@ -119,7 +119,7 @@ impl Game {
                 }
             }
         }
-        if gn.at("type") == "capitale" && self.factions.has(old.as_str()) && gn.at("dept") == old {
+        if gn.at_is("type", "capitale") && self.factions.has(old.as_str()) && gn.at_is("dept", &old) {
             let lf = self.factions.at(old.as_str());
             let left = self.owned_nodes(&old).len() as i64;
             let crushed = py_max(3, &lf.at("start_nodes") * R::TREATY_CRUSHED);
@@ -158,7 +158,7 @@ impl Game {
         let ceded = self
             .nodes
             .iter()
-            .filter(|x| x.at("owner") == winner && self.geo.nodes.at(x.at("id")).at("dept") == loser)
+            .filter(|x| x.at_is("owner", &winner) && self.geo.nodes.at(x.at("id")).at_is("dept", &loser))
             .count();
         let livres = lf.at("res").atf("livres");
         let l0 = if 0.0 < livres { livres } else { 0.0 };
@@ -224,7 +224,7 @@ impl Game {
                 .iter()
                 .find(|n| {
                     let gn = self.geo.nodes.at(n.at("id"));
-                    gn.at("type") == "capitale" && gn.at("dept") == code
+                    gn.at_is("type", "capitale") && gn.at_is("dept", &code)
                 })
                 .expect("StopIteration");
             let owner = cap.ats("owner");
@@ -235,7 +235,7 @@ impl Game {
                 self.armies
                     .values()
                     .into_iter()
-                    .filter(|a| a.at("owner") == owner && a.at("at_node").is_some())
+                    .filter(|a| a.at_is("owner", &owner) && a.at("at_node").is_some())
                     .map(|a| a.at("at_node"))
                     .collect(),
             );
@@ -326,7 +326,7 @@ impl Game {
             }
         }
         for n in self.nodes.iter() {
-            if n.at("owner") == loser {
+            if n.at_is("owner", &loser) {
                 n.set("owner", winner);
                 if self.geo.nodes.at(n.at("id")).at("dept") != winner {
                     n.set("assim", 0.0); // le pays absorbé garde le souvenir de sa liberté
@@ -338,7 +338,7 @@ impl Game {
                 n.set("siege", Val::None);
             }
         }
-        let ids: Vec<Val> = self.armies.values().into_iter().filter(|a| a.at("owner") == loser).map(|a| a.at("id")).collect();
+        let ids: Vec<Val> = self.armies.values().into_iter().filter(|a| a.at_is("owner", &loser)).map(|a| a.at("id")).collect();
         for aid in ids {
             let a = self.armies.pop(&aid);
             if a.atb("battle") && self.battles.has(&a.at("battle")) {
@@ -351,7 +351,7 @@ impl Game {
         }
         for f in self.factions.values() {
             f.at("trade").pop(loser);
-            if f.at("overlord") == loser {
+            if f.at_is("overlord", &loser) {
                 f.set("overlord", Val::None);
             }
         }
@@ -404,7 +404,7 @@ impl Game {
             return dict! {"territoire" => 0, "population" => 0, "richesse" => 0, "villes" => 0, "savoir" => 0, "armes" => 0, "histoire" => 0};
         }
         let mine = self.owned_nodes(code);
-        let caps = mine.iter().filter(|n| self.geo.nodes.at(n.at("id")).at("type") == "capitale").count() as i64;
+        let caps = mine.iter().filter(|n| self.geo.nodes.at(n.at("id")).at_is("type", "capitale")).count() as i64;
         let livres = f.at("res").atf("livres");
         let inc = f.at("income").get_or("livres", 0).f();
         let rich = (if 0.0 < livres { livres } else { 0.0 }) / 1500.0;
@@ -473,7 +473,7 @@ impl Game {
         for code in self.factions.keys() {
             let cap = self.capital_of(code.s());
             let o = self.nodes.at(cap).at("owner");
-            if o == p || (self.factions.has(&o) && self.factions.at(&o).at("overlord") == p) {
+            if o == p || (self.factions.has(&o) && self.factions.at(&o).at_is("overlord", &p)) {
                 continue;
             }
             ok = false;
@@ -581,7 +581,7 @@ impl Game {
                 if tn == "Montagne" || tn == "Haute montagne" || tn == "Collines" {
                     let regs = a.at("regs").vec();
                     let men = py::sum_v(regs.iter().map(|r| r.at("n"))).or(1.0).f();
-                    let share = somme(regs.iter().filter(|r| r.at("type") == "chasseurs").map(|r| r.at("n"))) / men;
+                    let share = somme(regs.iter().filter(|r| r.at_is("type", "chasseurs")).map(|r| r.at("n"))) / men;
                     base *= 1.0 - 0.7 * share; // les montagnards connaissent les cols
                 }
                 if season == "été" && tn == "Marais" {
@@ -608,7 +608,7 @@ impl Game {
             if famine {
                 rate += 0.012;
             }
-            if self.weather.at(self.zone_of(ax, ay)).at("kind") == "canicule" && a.at("state") == "move" {
+            if self.weather.at(self.zone_of(ax, ay)).at_is("kind", "canicule") && a.at_is("state", "move") {
                 rate += 0.002;
             }
             let x = 1.0 + self.mod_(&code, "attrition", 0.0);
@@ -643,7 +643,7 @@ impl Game {
                 }
             }
             self.prune(&a);
-            if a.at("state") == "idle" && !(unpaid || hungry) {
+            if a.at_is("state", "idle") && !(unpaid || hungry) {
                 if friendly_land {
                     let top = 100.0 + self.mod_(&code, "morale", 0.0);
                     for r in a.at("regs").iter() {
@@ -698,14 +698,15 @@ impl Game {
             let (bx, by) = (b.atf("x"), b.atf("y"));
             let bo = b.ats("owner");
             for x in self.armies.values() {
-                if x.is(&b) || x.getb("boat") || x.at("state") == "battle" {
+                if x.is(&b) || x.getb("boat") || x.at_is("state", "battle") {
                     continue;
                 }
-                if py::pow(x.atf("x") - bx, 2.0) + py::pow(x.atf("y") - by, 2.0) > r2 || !self.at_war(&x.ats("owner"), &bo) {
+                let (dx, dy) = (x.atf("x") - bx, x.atf("y") - by);
+                if py::loin(dx, dy, r2) || py::pow(dx, 2.0) + py::pow(dy, 2.0) > r2 || !self.at_war(&x.ats("owner"), &bo) {
                     continue;
                 }
                 let f = somme(x.at("regs").iter().map(|r| {
-                    if r.at("type") == "artillerie" {
+                    if r.at_is("type", "artillerie") {
                         Val::from(1.0)
                     } else if Game::arm_class(r.at("type").s()) == "inf" {
                         Val::from(0.15)
@@ -732,6 +733,9 @@ impl Game {
                 );
             }
             for (n, nx, ny) in forts.as_ref().unwrap() {
+                if py::loin(nx - bx, ny - by, rn2) {
+                    continue;
+                }
                 let no = n.at("owner");
                 if py::pow(nx - bx, 2.0) + py::pow(ny - by, 2.0) <= rn2 && self.factions.has(&no) && self.at_war(no.s(), &bo) {
                     fire += n.atf("fort");
@@ -910,7 +914,7 @@ impl Game {
                         .armies
                         .values()
                         .iter()
-                        .filter(|a| a.at("owner") == o && py::hypot(a.atf("x") - x0, a.atf("y") - y0) < 14.0)
+                        .filter(|a| a.at_is("owner", &o) && py::hypot(a.atf("x") - x0, a.atf("y") - y0) < 14.0)
                         .count();
                     let t = format!(
                         "Rapport d'espion sur {name} : milice {}, garnison {}, remparts niveau {}, {near} armée(s) aux environs.",
@@ -1120,7 +1124,7 @@ impl Game {
     // engine.py, lignes 4240 à 4263
     pub fn split(&mut self, code: &str, aid: &Val, reg_ids: &Val) -> (bool, String) {
         let a = self.armies.get(aid);
-        if !a.truthy() || a.at("owner") != code || a.at("state") == "battle" {
+        if !a.truthy() || a.at("owner") != code || a.at_is("state", "battle") {
             return (false, "Impossible de scinder cette armée maintenant.".to_string());
         }
         if a.getb("boat") && a.at("at_node").is_none() {
@@ -1143,7 +1147,7 @@ impl Game {
         b.set("supply", a.at("supply"));
         b.set("mp", a.get("mp"));
         b.set("hold", a.get_or("hold", false)); // (détachée d'une armée en halte devant une place : en halte aussi)
-        if a.at("state") == "siege" {
+        if a.at_is("state", "siege") {
             b.set("state", "siege");
         }
         (true, b.ats("id"))
@@ -1193,7 +1197,7 @@ impl Game {
         if !a.truthy() || !b.truthy() || a.at("owner") != code || b.at("owner") != code || a.is(&b) {
             return (false, "Armées introuvables.".to_string());
         }
-        if py::hypot(a.atf("x") - b.atf("x"), a.atf("y") - b.atf("y")) > 3.0 || a.at("state") == "battle" || b.at("state") == "battle" {
+        if py::hypot(a.atf("x") - b.atf("x"), a.atf("y") - b.atf("y")) > 3.0 || a.at_is("state", "battle") || b.at_is("state", "battle") {
             return (false, "Les armées doivent être côte à côte et hors combat.".to_string());
         }
         if b.getb("boat") || a.getb("boat") {
@@ -1246,7 +1250,7 @@ impl Game {
         if *stance == "embuscade" && !TERRAIN().at(self.geo.terrain_at(a.atf("x"), a.atf("y"))).atb(2) {
             return (false, "Il faut un couvert (forêt, lande, marais, montagne) pour tendre une embuscade.".to_string());
         }
-        if a.at("state") == "move" {
+        if a.at_is("state", "move") {
             a.set("path", list![]);
             a.set("state", "idle");
         }

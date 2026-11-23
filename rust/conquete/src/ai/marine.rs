@@ -33,7 +33,7 @@ pub fn jouer(g: &mut Game, ai: &mut AI) {
         .map(|n| (n.ati("id"), M::niveau_port(g, n.ati("id"))))
         .filter(|x| x.1 > 0)
         .collect();
-    let mes: Vec<Val> = g.flottes.values().into_iter().filter(|f| f.at("owner") == code.as_str()).collect();
+    let mes: Vec<Val> = g.flottes.values().into_iter().filter(|f| f.at_is("owner", &code)).collect();
     if ports.is_empty() && mes.is_empty() {
         return;
     }
@@ -82,7 +82,7 @@ fn construire(g: &mut Game, ai: &AI, code: &str, ports: &[(i64, i64)], mes: &[Va
     }
     let en_chantier: i64 = ports
         .iter()
-        .map(|(nid, _)| g.nodes.at(*nid).at("queue").iter().filter(|q| q.at("kind") == "navire").count() as i64)
+        .map(|(nid, _)| g.nodes.at(*nid).at("queue").iter().filter(|q| q.at_is("kind", "navire")).count() as i64)
         .sum();
     let n = mes.iter().map(de_guerre).sum::<i64>() + en_chantier;
     let voulu = (2 + ports.len() as i64 / 5 + guerre as i64).min(6);

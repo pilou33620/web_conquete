@@ -54,7 +54,7 @@ pub fn land_tick(g: &mut Game, a: &Val, dt: f64) {
         }
         return;
     }
-    if a.at("state") == "move" && a.at("edge").truthy() && a.get("ex") != o {
+    if a.at_is("state", "move") && a.atb("edge") && a.get("ex") != o {
         // une route entre deux places ouvertes peut frôler ses campagnes : ce n'est pas y entrer
         let e = g.geo.edges.at(a.at("edge").at("e"));
         if !closed_to(g, &code, &g.nodes.at(e.at("a")).ats("owner")) && !closed_to(g, &code, &g.nodes.at(e.at("b")).ats("owner")) {
@@ -77,7 +77,7 @@ pub fn land_tick(g: &mut Game, a: &Val, dt: f64) {
             g.log("armee", &texte, &chez(a, &o, true));
         }
     }
-    if cl.at("rt") <= g.t && !(a.at("state") == "move" && a.get("ex") == o) {
+    if cl.at("rt") <= g.t && !(a.at_is("state", "move") && a.get("ex") == o) {
         cl.set("rt", py::round_n(g.t + 1.0, 2)); // au plus une tentative par jour
         way_out(g, a, &o);
     }
@@ -95,12 +95,12 @@ pub fn land_tick(g: &mut Game, a: &Val, dt: f64) {
 /// Python : `way_out(g, a, o)`.
 // game/army_actions.py, lignes 903 à 920
 pub fn way_out(g: &mut Game, a: &Val, o: &str) -> bool {
-    if a.at("state") == "retreat" {
+    if a.at_is("state", "retreat") {
         return true;
     }
     let code = a.ats("owner");
     let mine = code == g.player;
-    if a.at("state") == "move" && g.reroute(a) {
+    if a.at_is("state", "move") && g.reroute(a) {
         if mine {
             let texte = format!("La {} change d'itinéraire pour quitter les terres {}.", a.at("name"), R::de(&g.fname(o)));
             g.log("armee", &texte, &dict! {"x" => a.at("x"), "y" => a.at("y"), "who" => &code});
@@ -147,7 +147,7 @@ pub fn incident(g: &mut Game, a: &Val, o: &str) {
         let texte = format!("Incident : des troupes {} s'attardent sur vos terres sans droit de passage.", R::de(&g.fname(&code)));
         g.log("diplo", &texte, &chez(a, &code, true));
     }
-    if o == g.player || fo.at("overlord").truthy() || fo.at("truce").has(&code) {
+    if o == g.player || fo.atb("overlord") || fo.at("truce").has(&code) {
         return;
     }
     // l'IA peut très mal le prendre
@@ -309,7 +309,7 @@ pub fn negotiate(g: &mut Game, code: &str, a: &Val) -> (bool, String) {
     if n.at("owner") != R::NEUTRAL {
         return (false, "On ne négocie le ralliement que d'une place indépendante.".to_string());
     }
-    if n.at("siege").truthy() {
+    if n.atb("siege") {
         return (false, "La place est déjà investie.".to_string());
     }
     if node_aa(&n).has("ng") {
@@ -349,7 +349,7 @@ pub fn neg_tick(g: &mut Game, n: &Val, x: &Val, dt: f64) {
         x.del("ng");
         return;
     }
-    if !a.truthy() || a.at("at_node") != nid || a.at("state") != "idle" || n.at("owner") != R::NEUTRAL || n.at("siege").truthy() {
+    if !a.truthy() || a.at("at_node") != nid || a.at("state") != "idle" || n.at("owner") != R::NEUTRAL || n.atb("siege") {
         x.del("ng");
         f.at("res").inc("livres", ng.at("price"));
         if code == g.player {
@@ -459,8 +459,8 @@ pub fn contribution(g: &mut Game, code: &str, a: &Val) -> (bool, String) {
     set_cd(g, &n, "ctb", CTB_CD, code);
     // puis on laisse la place : siège levé, halte devant ses portes
     for b in g.armies.values() {
-        if b.at("at_node") == nid && b.at("owner") == code && (b.at("state") == "idle" || b.at("state") == "siege") {
-            if b.at("state") == "siege" {
+        if b.at("at_node") == nid && b.at("owner") == code && (b.at_is("state", "idle") || b.at_is("state", "siege")) {
+            if b.at_is("state", "siege") {
                 g.end_siege_for(&b);
             }
             b.set("hold", true);
@@ -469,7 +469,7 @@ pub fn contribution(g: &mut Game, code: &str, a: &Val) -> (bool, String) {
         }
     }
     let s = n.at("siege");
-    if s.truthy() && s.at("by") == code {
+    if s.truthy() && s.at_is("by", &code) {
         n.set("siege", Val::None);
     }
     let txt = format!("{} livres et {} vivres", gain.at("livres"), gain.at("vivres"));
@@ -495,7 +495,7 @@ pub fn defenders(g: &Game, n: &Val) -> f64 {
         g.armies
             .values()
             .iter()
-            .filter(|b| b.at("at_node") == n.at("id") && b.at("state") == "idle" && g.friendly(&b.ats("owner"), &o))
+            .filter(|b| b.at("at_node") == n.at("id") && b.at_is("state", "idle") && g.friendly(&b.ats("owner"), &o))
             .map(|b| g.army_men(b)),
     );
     men
@@ -535,7 +535,7 @@ pub fn blockade(g: &mut Game, code: &str, a: &Val) -> (bool, String) {
     let m0 = py::round(defenders(g, &n));
     n.set("siege", dict! {"by" => code, "dmg" => 0.0, "since" => py::round_n(g.t, 2), "blocus" => true, "food" => &food, "m0" => m0});
     for b in g.armies.values() {
-        if b.at("at_node") == nid && b.at("owner") == code && (b.at("state") == "idle" || b.at("state") == "siege") {
+        if b.at("at_node") == nid && b.at("owner") == code && (b.at_is("state", "idle") || b.at_is("state", "siege")) {
             b.set("state", "siege");
             b.set("hold", false);
             b.set("assault", false);
@@ -569,7 +569,7 @@ pub fn blockade(g: &mut Game, code: &str, a: &Val) -> (bool, String) {
 pub fn bombard(g: &mut Game, code: &str, a: &Val) -> (bool, String) {
     let nid = a.at("at_node");
     let n = if nid.is_some() { g.nodes.at(&nid) } else { Val::None };
-    if !n.truthy() || !n.at("siege").truthy() || n.at("siege").at("by") != code || !n.at("siege").getb("blocus") {
+    if !n.truthy() || !n.atb("siege") || n.at("siege").at("by") != code || !n.at("siege").getb("blocus") {
         return (false, "Cette armée ne bloque aucune place.".to_string());
     }
     if !walled(&n) {
@@ -611,7 +611,7 @@ pub fn blockade_tick(g: &mut Game, n: &Val, bes: &Val, dt: f64) {
     let o = n.ats("owner");
     if famine {
         for b in g.armies.values() {
-            if b.at("at_node") == nid && b.at("state") == "idle" && g.friendly(&b.ats("owner"), &o) {
+            if b.at("at_node") == nid && b.at_is("state", "idle") && g.friendly(&b.ats("owner"), &o) {
                 for r in b.at("regs").iter() {
                     r.scale("n", 1.0 - 0.01 * dt);
                     r.set("morale", vmax(5, &r.at("morale") - 2.0 * dt));
@@ -627,7 +627,7 @@ pub fn blockade_tick(g: &mut Game, n: &Val, bes: &Val, dt: f64) {
     // reddition : la garnison obtient les honneurs de la guerre et se retire
     let by = s.ats("by");
     for b in g.armies.values() {
-        if b.at("at_node") == nid && b.at("state") == "idle" && g.friendly(&b.ats("owner"), &o) {
+        if b.at("at_node") == nid && b.at_is("state", "idle") && g.friendly(&b.ats("owner"), &o) {
             for r in b.at("regs").iter() {
                 r.scale("n", 0.75);
             }
@@ -666,14 +666,14 @@ pub fn blockade_tick(g: &mut Game, n: &Val, bes: &Val, dt: f64) {
 // game/army_actions.py, lignes 1262 à 1272
 pub fn own_place(g: &Game, code: &str, a: &Val, siege_ok: bool) -> (Option<i64>, Option<String>) {
     let nid = a.at("at_node");
-    if nid.is_none() || a.at("state") != "idle" || a.getb("boat") || a.at("battle").truthy() {
+    if nid.is_none() || a.at("state") != "idle" || a.getb("boat") || a.atb("battle") {
         return (None, Some("L'armée doit être à l'arrêt dans une de vos places.".to_string()));
     }
     let n = g.nodes.at(&nid);
     if n.at("owner") != code {
         return (None, Some("L'armée doit être à l'arrêt dans une de vos places.".to_string()));
     }
-    if n.at("siege").truthy() && !siege_ok {
+    if n.atb("siege") && !siege_ok {
         return (None, Some("La place est assiégée.".to_string()));
     }
     (Some(nid.i()), None)
@@ -685,8 +685,8 @@ pub fn own_place(g: &Game, code: &str, a: &Val, siege_ok: bool) -> (Option<i64>,
 // game/army_actions.py, lignes 1275 à 1284
 pub fn foreign_place(g: &Game, code: &str, a: &Val, siege_ok: bool) -> (Option<i64>, Option<String>) {
     let nid = a.at("at_node");
-    let etat = a.at("state") == "idle" || (siege_ok && a.at("state") == "siege");
-    if nid.is_none() || !etat || a.getb("boat") || a.at("battle").truthy() {
+    let etat = a.at_is("state", "idle") || (siege_ok && a.at_is("state", "siege"));
+    if nid.is_none() || !etat || a.getb("boat") || a.atb("battle") {
         return (None, Some("L'armée doit se tenir devant la place.".to_string()));
     }
     let o = g.nodes.at(&nid).ats("owner");
@@ -724,7 +724,7 @@ pub fn conquer(g: &mut Game, code: &str, a: &Val) -> (bool, String) {
         return (true, format!("{} se rallie à vous.", place(g, nid)));
     }
     let s = g.nodes.at(nid).at("siege");
-    (true, if a.at("state") == "siege" && s.truthy() && s.getb("occupy") { "Ralliement en cours." } else { "À l'attaque !" }.to_string())
+    (true, if a.at_is("state", "siege") && s.truthy() && s.getb("occupy") { "Ralliement en cours." } else { "À l'attaque !" }.to_string())
 }
 
 /// `ACTIONS = dict(fortify=fortify, garde=garde, req=requisition, neg=negotiate, ctb=contribution, blocus=blockade,
@@ -829,7 +829,7 @@ pub fn view_army(g: &mut Game, a: &Val, d: &Val, own: bool) {
         let c = ask_choices(g, a);
         d.set("ask", dict! {"n" => nd, "c" => c}); // fenêtre d'arrivée devant une place (ui.js)
     }
-    if a.getb("dt") && a.at("path").truthy() {
+    if a.getb("dt") && a.atb("path") {
         d.set("dt", a.at("dt").iter().map(|o| Val::from(g.fname(o.s()))).collect::<Val>()); // terres fermées contournées
     }
     let cl = a.get("cl");
@@ -837,7 +837,7 @@ pub fn view_army(g: &mut Game, a: &Val, d: &Val, own: bool) {
         d.set("cl", list![g.fname(cl.at("o").s()), TT::tours_left(g, cl.atf("until"))]); // sur des terres fermées : tours de grâce
     }
     let nid = a.at("at_node");
-    if nid.is_none() || !(a.at("state") == "idle" || a.at("state") == "siege") || a.getb("boat") || a.at("battle").truthy() {
+    if nid.is_none() || !(a.at_is("state", "idle") || a.at_is("state", "siege")) || a.getb("boat") || a.atb("battle") {
         return;
     }
     let ax = options(g, a, nid.i());
@@ -853,7 +853,7 @@ pub fn options(g: &mut Game, a: &Val, nid: i64) -> Val {
     let n = g.nodes.at(nid);
     let res = g.factions.at(&code).at("res");
     let x = node_aa(&n);
-    if n.at("owner") == code {
+    if n.at_is("owner", &code) {
         if a.at("state") != "idle" {
             return Val::None;
         }
@@ -970,7 +970,7 @@ pub fn options(g: &mut Game, a: &Val, nid: i64) -> Val {
             out.set("bl", dict! {"food" => TT::tours_left(g, s.atf("since") + s.atf("food")), "walled" => walled(&n)});
         }
     }
-    if a.getb("hold") && a.at("state") == "idle" {
+    if a.getb("hold") && a.at_is("state", "idle") {
         out.set("conq", 1);
     }
     out
@@ -1017,7 +1017,7 @@ pub fn ai_step(g: &mut Game, ai: &mut AI) {
             continue;
         }
         let nid = a.at("at_node");
-        if nid.is_none() || a.at("state") != "idle" || a.getb("boat") || a.at("battle").truthy() {
+        if nid.is_none() || a.at("state") != "idle" || a.getb("boat") || a.atb("battle") {
             continue;
         }
         let nid = nid.i();
@@ -1063,7 +1063,7 @@ pub fn ai_step(g: &mut Game, ai: &mut AI) {
             if !tired || res.at("vivres") < 120i64 || f.getb("famine") {
                 quarters(g, &code, &a, false);
             }
-        } else if tired && !n.at("siege").truthy() && res.at("vivres") > 300i64 && !f.getb("famine") && f.at("income").at("vivres") > -3i64 {
+        } else if tired && !n.atb("siege") && res.at("vivres") > 300i64 && !f.getb("famine") && f.at("income").at("vivres") > -3i64 {
             quarters(g, &code, &a, true);
         }
         if a.getb("morts") && !a.getb("rg") && res.at("livres") > 800i64 {
@@ -1078,9 +1078,9 @@ pub fn ai_step(g: &mut Game, ai: &mut AI) {
     if f.getb("famine") || (res.at("vivres") < 100i64 && f.at("income").at("vivres") < 0i64) {
         let mut cands: Vec<(Val, Val)> = vec![];
         for a in g.armies.values() {
-            if a.at("owner") == code && a.at("state") == "idle" && a.at("at_node").is_some() && !a.getb("boat") {
+            if a.at_is("owner", &code) && a.at_is("state", "idle") && a.at("at_node").is_some() && !a.getb("boat") {
                 let n = g.nodes.at(a.at("at_node"));
-                if n.at("owner") == code && !n.at("siege").truthy() && n.at("stab") >= 0.65 && cd_left(g, &n, "req") <= 0 {
+                if n.at_is("owner", &code) && !n.atb("siege") && n.at("stab") >= 0.65 && cd_left(g, &n, "req") <= 0 {
                     cands.push((n.get_or("pop", 0), a));
                 }
             }
@@ -1111,7 +1111,7 @@ pub fn ai_passage(g: &mut Game, ai: &mut AI, wars: &Val) {
     for nid in vieux {
         refused.del(&nid); // vieux refus : oubliés
     }
-    if (!wars.truthy() && !refused.truthy()) || f.at("overlord").truthy() || ai.cool.get_or(tup!["aa", "route"], -1) > g.t {
+    if (!wars.truthy() && !refused.truthy()) || f.atb("overlord") || ai.cool.get_or(tup!["aa", "route"], -1) > g.t {
         return;
     }
     ai.cool.set(tup!["aa", "route"], g.t + 15.0);
@@ -1187,13 +1187,13 @@ pub fn ai_siege(g: &mut Game, ai: &mut AI, a: &Val, ratio: f64) -> bool {
         .armies
         .values()
         .into_iter()
-        .filter(|b| b.at("at_node") == nid && b.at("owner") == code && b.at("state") == "siege")
+        .filter(|b| b.at("at_node") == nid && b.at("owner") == code && b.at_is("state", "siege"))
         .collect();
     if dur > 2.0
         && n.at("fort") >= 2i64
         && 0.9 <= ratio
         && ratio < 3.0
-        && !besiegers.iter().any(|b| b.at("regs").iter().any(|r| r.at("type") == "artillerie"))
+        && !besiegers.iter().any(|b| b.at("regs").iter().any(|r| r.at_is("type", "artillerie")))
     {
         if blockade(g, &code, a).0 {
             return true;

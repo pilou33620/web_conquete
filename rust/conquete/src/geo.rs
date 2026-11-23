@@ -176,7 +176,7 @@ pub struct Partie {
 
 /// La route maritime de ce numéro (geo.routes_mer : {id, de: [x, y], vers: [x, y], tours, nom}), ou None.
 pub fn route_mer(geo: &GeoMap, id: &str) -> Option<Val> {
-    geo.routes_mer.iter().find(|r| r.at("id") == id)
+    geo.routes_mer.iter().find(|r| r.at_is("id", &id))
 }
 
 /// Une géographie que le jeu sait encore faire (1, 2, les théâtres et le monde) : une sauvegarde d'une autre est refusée.
@@ -893,6 +893,8 @@ pub struct GeoMap {
     pub _rivf: Option<Vec<u8>>,
     /// cell_costs : calculé une fois.
     pub _ccost: OnceCell<Vec<Option<f64>>>,
+    /// Les étendues d'eau (marine::etendues) : calculées une fois, à la première recherche de chemin sur l'eau.
+    pub _etendues: OnceCell<Option<Vec<u32>>>,
     /// Le calcul de crue.py (`geo._crue`), rangé sur la carte : None tant qu'il n'est pas fait.
     pub _crue: RefCell<Val>,
     /// (privé, pour la vitesse) `dept_codes[d - 1] in playable_codes` pour chaque valeur d de la grille dept (faux pour 0).
@@ -974,6 +976,7 @@ impl GeoMap {
             adj: Val::dict(),
             _rivf: None,
             _ccost: OnceCell::new(),
+            _etendues: OnceCell::new(),
             _crue: RefCell::new(Val::None),
             jouable,
             parties: vec![],
@@ -1163,6 +1166,7 @@ impl GeoMap {
             adj: Val::dict(),
             _rivf: None,
             _ccost: OnceCell::new(),
+            _etendues: OnceCell::new(),
             _crue: RefCell::new(Val::None),
             jouable,
             parties,
@@ -1537,7 +1541,7 @@ impl GeoMap {
                 0.35,
                 1,
             );
-            if r.at("name") == "Adour" {
+            if r.at_is("name", "Adour") {
                 raster_line(W, H, &pts, &mut |c| adour.push(c), 0.35, 1);
             }
         }
@@ -1921,9 +1925,9 @@ impl GeoMap {
             }
             self._ensure_connected(&mut pairs, &P);
             for code in &self.dept_codes {
-                let du_pays: Vec<Val> = self.nodes.iter().filter(|n| n.at("dept") == code.as_str()).collect();
-                let Some(cap) = du_pays.iter().find(|n| n.at("type") == "capitale").map(|n| n.at("id").u()) else { continue };
-                let villes = py::sorted_by_key(du_pays.iter().filter(|n| n.at("type") == "ville").collect::<Vec<_>>(), |n| (-n.at("pop0").i(), n.at("id").i()));
+                let du_pays: Vec<Val> = self.nodes.iter().filter(|n| n.at_is("dept", &code)).collect();
+                let Some(cap) = du_pays.iter().find(|n| n.at_is("type", "capitale")).map(|n| n.at("id").u()) else { continue };
+                let villes = py::sorted_by_key(du_pays.iter().filter(|n| n.at_is("type", "ville")).collect::<Vec<_>>(), |n| (-n.at("pop0").i(), n.at("id").i()));
                 for v in villes.into_iter().take(ROYALES_5) {
                     for k in GeoMap::_chemin(&pairs, &P, cap, v.at("id").u()) {
                         pairs[&k].royal = true;

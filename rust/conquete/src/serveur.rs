@@ -161,7 +161,7 @@ impl App {
         loop {
             let g = self.game.as_deref();
             // tour des IA en cours : il se calcule d'un coup, par tranches (turns.BUDGET), sans attendre entre elles
-            let pause = if g.is_some_and(|g| g.tour.at("on").truthy() && g.tour.at("end").is_some() && g.speed_idx != 0) { 0.02 } else { 0.1 };
+            let pause = if g.is_some_and(|g| g.tour.atb("on") && g.tour.at("end").is_some() && g.speed_idx != 0) { 0.02 } else { 0.1 };
             let fin = Instant::now() + Duration::from_secs_f64(pause);
             loop {
                 let reste = fin.saturating_duration_since(Instant::now());
@@ -240,7 +240,7 @@ impl App {
             if g.over.truthy() {
                 return Ok(dict! {"ok" => false, "msg" => "La partie est terminée."});
             }
-            if g.tour.at("on").truthy() {
+            if g.tour.atb("on") {
                 // tour par tour : tout passe par « tour » (le tour des IA ne s'arrête pas à la main)
                 return Ok(dict! {"ok" => false, "msg" => "Tour par tour : touchez « Tour suivant » en haut."});
             }
@@ -309,7 +309,7 @@ impl App {
         }
         if c == "conduct" {
             let ar = g.armies.get(&a);
-            if ar.truthy() && ar.at("owner") == p {
+            if ar.truthy() && ar.at_is("owner", &p) {
                 ar.set("tr", body.getb("value"));
                 return Ok(dict! {"ok" => true, "msg" => if ar.atb("tr") { "L’armée traversera sans combattre en chemin." }
                     else { "L’armée ralliera ou attaquera les places sur sa route." }});
@@ -321,7 +321,7 @@ impl App {
         }
         if c == "retreat" {
             let ar = g.armies.get(&a);
-            if g.tour.at("on").truthy() && g.tour.at("end").is_some() && ar.truthy() && ar.at("state") != "battle" {
+            if g.tour.atb("on") && g.tour.at("end").is_some() && ar.truthy() && ar.at("state") != "battle" {
                 return Ok(dict! {"ok" => false, "msg" => "C'est le tour des IA : seule une armée au combat peut se replier."});
             }
             let res = g.order_retreat(p, &a);
@@ -398,7 +398,7 @@ impl App {
             "mode" => {
                 let ar = g.armies.get(&a);
                 let v = body.get("value");
-                if ar.truthy() && ar.at("owner") == p && (v == "route" || v == "champs") {
+                if ar.truthy() && ar.at_is("owner", &p) && (v == "route" || v == "champs") {
                     ar.set("mode", body.at("value"));
                     return Ok(dict! {"ok" => true});
                 }
@@ -424,7 +424,7 @@ impl App {
                 let ar = g.armies.get(&a);
                 let name: String = st(body.get_or("value", "")).chars().take(40).collect();
                 let name = name.trim();
-                if ar.truthy() && ar.at("owner") == p && !name.is_empty() {
+                if ar.truthy() && ar.at_is("owner", &p) && !name.is_empty() {
                     ar.set("name", name);
                     return Ok(dict! {"ok" => true});
                 }
@@ -446,14 +446,14 @@ impl App {
     /// Ordre de marche : en tour par tour, l'armée part tout de suite. Le message dit où elle en est.
     fn _marched(g: &mut Game, aid: &Val, res: impl Res) -> Val {
         let out = Self::_r(res);
-        if !out.getb("ok") || !g.tour.at("on").truthy() {
+        if !out.getb("ok") || !g.tour.atb("on") {
             return out;
         }
         let used = TT::settle(g);
         let a = g.armies.get(aid);
         if used.has(aid) && a.is_some() {
             let left = TT::march_left(g, &a);
-            if a.at("state") == "battle" {
+            if a.at_is("state", "battle") {
                 out.set("msg", "Au contact de l’ennemi : la bataille s’engage.");
             } else if a.getb("ask") {
                 out.set("msg", format!("Devant {} : à vous de choisir.", AA::place(g, a.at("ask").ati("node"))));
@@ -461,7 +461,7 @@ impl App {
                 let eta = TT::eta(g, &a, &Val::None);
                 let quand = if eta == Some(1) { "au prochain tour".to_string() } else { format!("dans {} tours", Val::from(eta)) };
                 out.set("msg", format!("En marche : l’armée a fini sa marche du tour, arrivée {quand} (estimation)."));
-            } else if a.at("state") == "siege" {
+            } else if a.at_is("state", "siege") {
                 out.set("msg", "Arrivée : le siège commence.");
             } else {
                 out.set("msg", format!("Arrivée à destination{}", if left > 0.5 { " : elle peut encore marcher ce tour." } else { ", sa marche du tour est finie." }));

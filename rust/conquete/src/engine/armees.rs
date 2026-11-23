@@ -116,7 +116,7 @@ impl Game {
         let f = self.factions.at(code);
         let out = list![];
         for a in self.armies.values() {
-            if a.at("owner") == code && a.getb("gen") && !a.at("gen").getb("interim") {
+            if a.at_is("owner", &code) && a.getb("gen") && !a.at("gen").getb("interim") {
                 out.push(a.at("gen"));
             }
         }
@@ -237,7 +237,7 @@ impl Game {
                 let gen = b.at("gen");
                 gen.pop("retour");
                 let a = self.armies.get(&b.at("armee"));
-                if a.truthy() && a.at("owner") == code.as_str() {
+                if a.truthy() && a.at_is("owner", &code) {
                     let ag = a.get("gen");
                     if ag.truthy() && !ag.getb("interim") {
                         self.reserver(&code, &ag);
@@ -373,7 +373,7 @@ impl Game {
         let a = self.armies.get(aid);
         let res = self.factions.at(code).get_or("generaux", list![]);
         let gen = res.iter().find(|x| x.get("id") == gid && !x.getb("retour"));
-        let Some(gen) = gen.filter(|_| a.truthy() && a.at("owner") == code) else {
+        let Some(gen) = gen.filter(|_| a.truthy() && a.at_is("owner", &code)) else {
             return (false, "Général ou armée introuvable.".to_string());
         };
         let an = a.at("at_node");
@@ -535,7 +535,7 @@ impl Game {
                 Some(py::Num::F(f)) if f.fract() == 0.0 => f as i64,
                 _ => continue,
             };
-            if a.at("state") == "idle" {
+            if a.at_is("state", "idle") {
                 m.entry(k).or_default().push(a.clone());
             }
         }
@@ -552,7 +552,7 @@ impl Game {
         let tname = TERRAIN().at(self.geo.terrain_at(gn.atf("x"), gn.atf("y"))).ats(0);
         let mut p = n.atf("milice") * R::MILICE_POWER * self.milice_k(&code);
         if code != R::NEUTRAL {
-            let garde = |r: &Val| if r.at("type") == "garde" { R::GARDE_HOME } else { 1.0 };
+            let garde = |r: &Val| if r.at_is("type", "garde") { R::GARDE_HOME } else { 1.0 };
             p += py::sum(
                 n.at("garrison").iter().map(|r| self.reg_power(&code, &r, &tname, 1.0, false, &Val::None) * garde(&r)).collect::<Vec<_>>(),
             );
@@ -570,7 +570,7 @@ impl Game {
                 }
                 None => {
                     for a in self.armies.values() {
-                        if a.at("at_node") == nid && a.at("state") == "idle" && self.friendly(&a.ats("owner"), &code) {
+                        if a.at("at_node") == nid && a.at_is("state", "idle") && self.friendly(&a.ats("owner"), &code) {
                             p += self.army_power(&a, &tname) * fb;
                         }
                     }
@@ -586,10 +586,23 @@ impl Game {
     // engine.py, lignes 1818 à 1827
     pub fn hegemon(&self) -> Val {
         let cnt = Val::dict();
-        for o in self.maitres().iter() {
-            if self.factions.has(o) {
-                cnt.set(o, &cnt.get_or(o, 0) + 1);
+        // (compté par suites de places du même maître, dans l'ordre de la carte : les camps entrent dans cnt dans le
+        // même ordre, avec les mêmes nombres, sans un passage dans le dict par place)
+        let mut suite: Option<(&Val, i64)> = None;
+        let maitres = self.maitres();
+        for o in maitres.iter().map(Some).chain([None]) {
+            if let (Some((p, n)), Some(o)) = (&mut suite, o) {
+                if *p == o {
+                    *n += 1;
+                    continue;
+                }
             }
+            if let Some((p, n)) = suite.take() {
+                if self.factions.has(p) {
+                    cnt.set(p, &cnt.get_or(p, 0) + n);
+                }
+            }
+            suite = o.map(|o| (o, 1));
         }
         if cnt.len() < 3 {
             return Val::None;
@@ -623,7 +636,7 @@ impl Game {
     pub fn _faction_power(&self, code: &str) -> f64 {
         let mut p = 0.0;
         for a in self.armies.values() {
-            if a.at("owner") == code {
+            if a.at_is("owner", &code) {
                 p += self.army_power(&a, "Plaine");
             }
         }

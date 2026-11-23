@@ -101,9 +101,9 @@ pub const RAIL_VILLES_5: usize = 8; // (un théâtre) villes de chaque pays que 
 fn _lignes_theatre(geo: &GeoMap) -> Val {
     let out = list![];
     for code in &geo.dept_codes {
-        let du_pays: Vec<Val> = geo.nodes.iter().filter(|n| n.at("dept") == code.as_str()).collect();
-        let Some(cap) = du_pays.iter().find(|n| n.at("type") == "capitale") else { continue };
-        let villes = py::sorted_by_key(du_pays.iter().filter(|n| n.at("type") == "ville").cloned().collect::<Vec<_>>(), |n| (-n.ati("pop0"), n.ati("id")));
+        let du_pays: Vec<Val> = geo.nodes.iter().filter(|n| n.at_is("dept", &code)).collect();
+        let Some(cap) = du_pays.iter().find(|n| n.at_is("type", "capitale")) else { continue };
+        let villes = py::sorted_by_key(du_pays.iter().filter(|n| n.at_is("type", "ville")).cloned().collect::<Vec<_>>(), |n| (-n.ati("pop0"), n.ati("id")));
         let mut desservies = vec![cap.clone()];
         for (k, v) in villes.into_iter().take(RAIL_VILLES_5).enumerate() {
             let d2 = |n: &Val| py::pow(n.atf("x") - v.atf("x"), 2.0) + py::pow(n.atf("y") - v.atf("y"), 2.0);
@@ -141,7 +141,7 @@ pub const RAIL_MAX_WORKS: i64 = 2;  // chantiers de voie ferrée menés en même
 /// Python : `_owned(g, code, sec)`.
 // game/rails.py, lignes 70 à 71
 pub fn _owned(g: &Game, code: &str, sec: &Val) -> bool {
-    g.nodes.at(sec.at("a")).at("owner") == code && g.nodes.at(sec.at("b")).at("owner") == code
+    g.nodes.at(sec.at("a")).at_is("owner", &code) && g.nodes.at(sec.at("b")).at_is("owner", &code)
 }
 
 /// Villes reliées au réseau de ce camp : son chef-lieu, et les villes des tronçons achevés qu'il tient en entier.
@@ -316,6 +316,9 @@ pub fn usable(g: &Game, code: &str, sid: &str) -> bool {
 /// Python : `town_bonus(g, nid)`.
 // game/rails.py, lignes 183 à 186
 pub fn town_bonus(g: &Game, nid: i64) -> f64 {
+    if !g.rails.truthy() {
+        return 0.0; // (aucun tronçon commencé, donc aucun d'ouvert : RAIL_TOWN_BONUS × 0)
+    }
     let k = by_town(&g.geo).get(nid).or(list![]).iter().filter(|sid| open_(g, sid.s())).count();
     let v = R::RAIL_TOWN_BONUS * k as f64;
     if v < R::RAIL_TOWN_MAX { v } else { R::RAIL_TOWN_MAX }
@@ -325,10 +328,15 @@ pub fn town_bonus(g: &Game, nid: i64) -> f64 {
 /// Python : `near_station(g, code, x, y)`.
 // game/rails.py, lignes 189 à 196
 pub fn near_station(g: &Game, code: &str, x: f64, y: f64) -> bool {
+    // (aucun tronçon ouvert, comme avant le chemin de fer : pas de gare, inutile de parcourir les villes de la carte)
+    if !g.rails.keys().iter().any(|sid| open_(g, sid.s())) {
+        return false;
+    }
     let r2 = py::pow(R::RAIL_STATION_KM, 2.0);
     for (nid, sids) in by_town(&g.geo).items() {
         let gn = g.geo.nodes.at(&nid);
-        if py::pow(gn.atf("x") - x, 2.0) + py::pow(gn.atf("y") - y, 2.0) <= r2 && sids.iter().any(|sid| usable(g, code, sid.s())) {
+        let (dx, dy) = (gn.atf("x") - x, gn.atf("y") - y);
+        if !py::loin(dx, dy, r2) && py::pow(dx, 2.0) + py::pow(dy, 2.0) <= r2 && sids.iter().any(|sid| usable(g, code, sid.s())) {
             return true;
         }
     }
@@ -388,7 +396,7 @@ pub fn _on_section(g: &Game, a: &Val) -> Val {
 pub fn sabotage(g: &mut Game) {
     for a in g.armies.values() {
         let code = a.ats("owner");
-        if !g.factions.has(&code) || a.getb("boat") || a.getb("rail") || a.at("state") == "retreat" {
+        if !g.factions.has(&code) || a.getb("boat") || a.getb("rail") || a.at_is("state", "retreat") {
             continue;
         }
         if a.at("at_node").is_some() && g.friendly(&code, g.nodes.at(a.at("at_node")).at("owner").s()) {

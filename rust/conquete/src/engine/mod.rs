@@ -564,7 +564,7 @@ impl Game {
                 }
                 g.nodes.at(&cap).set("garrison", garrison);
                 let villes = py::sorted_by_key(
-                    geo.nodes.iter().filter(|n| n.at("dept") == code.as_str() && n.at("type") == "ville").collect::<Vec<_>>(),
+                    geo.nodes.iter().filter(|n| n.at_is("dept", &code) && n.at_is("type", "ville")).collect::<Vec<_>>(),
                     |n| (-n.at("pop0").i(), n.at("id").i()),
                 );
                 for (n, t) in villes.iter().zip(&du_pays[1]) {

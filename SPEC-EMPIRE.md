@@ -938,3 +938,66 @@ s'ouvre, phare de nuit).
   attendent dans la file derrière un autre.
 - Un chantier qui commence fait encore glisser les bâtiments des chaînes suivantes d'un hexagone (placement dans l'ordre des
   chaînes, comme en P1) ; il ne bouge plus quand il s'achève.
+
+### Vitesse du tour des IA (24/11/2026)
+
+**Mesure.** Banc `banc_tours_des_ia` (`tests/monde.rs`, ignoré) : `CONQUETE_BANC_GEO=13 cargo test --release -p conquete
+--test monde banc -- --ignored --nocapture` (2 : Aquitaine, 5 : Europe, 13 : Monde ; `CONQUETE_BANC_MOIS=2` pour moins
+de mois). Il donne en plus le temps de création de la partie, le temps processeur du fil (`/proc/thread-self/schedstat`,
+moins sensible aux autres programmes que l'horloge : la machine était partagée et chargée) et l'empreinte de la
+sauvegarde au bout des six mois, qui ne doit pas bouger. Pas de `perf` ici : profils faits avec callgrind (valgrind),
+sur un profil cargo `profilage` déclaré par l'environnement (`CARGO_PROFILE_PROFILAGE_INHERITS=release`,
+`..._DEBUG=line-tables-only`, `..._STRIP=false`, puis `cargo test --profile profilage`).
+
+**Points chauds trouvés** (Monde, six mois, 121 milliards d'instructions avant) : `marine::chemin_mer` 19 % (routes
+commerciales des accords : une route sans chemin parcourait les 400 000 cases de l'étendue d'eau du départ avant de
+renoncer), `rails::near_station` 11 % (usure des armées hors de chez elles : toutes les villes à gare de la carte
+relues, `pow` compris, alors qu'aucun tronçon n'est ouvert en 1700), les lectures de dict par texte (`chercher_str`)
+20 à 25 % de tout, `rally_node` 6 % (`hypot` de CPython pour chaque paire place-cible), `pick_target` 7 %,
+`compute_income` 8 %, `economy` 10 %, `menaced` 4 % (`borders` refaisait chaque quart de jour deux textes par route
+de la carte). Le reste est plat : chaque fonction de 1 à 4 %.
+
+**Fait** (aucun résultat ne change : mêmes tirages, mêmes flottants, même ordre des dict) :
+- `chemin_mer` : les étendues d'eau de la carte relevées une fois (`GeoMap::_etendues`, 8 voisins, sans sortir de sa
+  partie) : un port d'une autre étendue est refusé tout de suite ; file de la recherche rangée par seaux de f (même ordre
+  de sortie (f, numéro) que le tas), sorties périmées sans revoir leurs voisins (heuristique cohérente). Comparé à
+  l'ancienne recherche sur 740 trajets des cartes Monde et Europe : mêmes chemins, au bit près.
+- Distances : `py::loin` (carrés faits à la main, marge relative de 1e-9) écarte les points lointains avant le calcul
+  exact (`pow`, `hypot`) dans `near_station`, `threat_at`, `pick_target`, `river_fire` ; `py::min_hypot` pour
+  `rally_node` (essai `plus_proche` : même flottant que le min de tous les `hypot`). Pas de gare ni de bonus de rail
+  sans tronçon.
+- Dict (`py/val.rs`) : deux rangs retenus par clé écrite dans le code, dans un indice atomique partagé (plus de
+  `thread_local`) ; `atf`, `ati`, `atb`, `getb` sans copier la valeur ; `set` / `inc` / `dec` / `scale` récrivent une
+  clé déjà là à son rang sans refaire ni hacher la clé ; `v.at(k) == "texte"` → `v.at_is(k, "texte")`,
+  `v.at(k).truthy()` → `v.atb(k)`, `v.at(k) == code` → `v.at_is(k, &code)` (remplacements mécaniques, textes seulement,
+  vérifiés par le compilateur ; hors commerce et chemins).
+- `borders` ne fabrique plus les textes des routes intérieures ; `hegemon` compte par suites de places du même maître ;
+  `besiegers` lit la place une fois ; `pfx_cle` (une valeur de la politique en transition sans fabriquer le dict
+  mêlé) ; l'ordre public par quart de jour lit le maître sans `String` ; `node_output` multiplie sa copie sur place.
+
+**Temps** (`--release`, cette machine de 4 cœurs, chargée par un autre agent ; moyenne des six mois, deux essais
+alternés avant / après, empreintes identiques) :
+
+| | avant | après |
+|---|---|---|
+| Monde (52 camps), un tour des IA | 3,45 / 3,51 s | 2,46 / 2,45 s (−30 %) |
+| Europe (32 camps) | 1,84 / 1,75 s | 1,10 / 1,09 s (−39 %) |
+| Aquitaine (5 camps) | 0,10 / 0,12 s | 0,10 / 0,10 s |
+| création d'une partie Monde | 0,06 s | 0,03 s |
+
+Instructions du banc Monde (six mois, callgrind) : 121 → 75 milliards. `cargo test --locked -p conquete` passe sans
+rien refaire, `tests/references/*` identiques à l'octet.
+
+**Pas atteint** : la cible de 1,5 s sur la carte Monde (2,45 s). **Pistes non faites** :
+- `chemin_mer` coûte encore ~0,16 s par tour sur la carte Monde (0,09 s en Europe) : à f égal, la recherche sort la
+  plus petite case d'abord et parcourt tout le plateau de cases à f égal (en pleine mer, l'heuristique est exacte).
+  Départager par le g le plus grand irait dix fois plus vite, mais change le tracé des routes : interdit ici.
+- Les dict de `Val` : 20 à 25 % des instructions restent des recherches de clé par texte et des comptes de références.
+  Le vrai gain serait des structures typées pour les places, armées et camps (gros chantier : sauvegardes, vues).
+- `faction_power` : compter tous les camps d'un seul passage sur les armées changerait des valeurs (chaque camp est
+  compté quand on le demande, les armées bougent entre deux demandes).
+- Les chemins des armées (`order_move`, `road_route` : ~7 %, `engine/chemins.rs`) n'ont pas été touchés (autre
+  chantier).
+- `compute_income` (~11 %) : une version en flottants de `node_output` / `node_extra` serait exacte (petits entiers) mais
+  demande de récrire `node_extra` (aussi lu par la vue).
+- Pas de mesure sur Raspberry Pi.

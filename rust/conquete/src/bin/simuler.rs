@@ -37,7 +37,7 @@ fn carry_on(g: &mut Game) -> bool {
     if !(g.over.is_dict() && g.over.get("result") == "defaite") {
         return false;
     }
-    let mut alive: Vec<Val> = g.factions.keys().into_iter().filter(|c| g.factions.at(c).at("alive").truthy()).collect();
+    let mut alive: Vec<Val> = g.factions.keys().into_iter().filter(|c| g.factions.at(c).atb("alive")).collect();
     alive.sort_by(|a, b| a.s().cmp(b.s()));
     if alive.len() < 2 {
         return false;
@@ -66,7 +66,7 @@ fn play_month(g: &mut Game) {
             E::resolve(g, x.at("id").s(), ok.unwrap_or(n - 1), true);
         }
         TT::advance(g, 1.0);
-        if g.tour.at("stop").truthy() {
+        if g.tour.atb("stop") {
             TT::go(g);
         }
     }
@@ -108,7 +108,7 @@ fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64, joueur: &str, 
     let (mut starts, mut war_months, mut bq, mut fam) = (0, 0, 0, 0);
     let mut before: Vec<bool> = pairs.iter().map(|p| g.at_war(p.0, p.1)).collect();
     let mut err = None;
-    let vivant = |g: &Game, c: &str| g.factions.at(c).at("alive").truthy();
+    let vivant = |g: &Game, c: &str| g.factions.at(c).atb("alive");
     let (mut vu, mut chrono) = (g.seq, std::time::Instant::now());
     let (mut bat, mut strats) = (std::collections::BTreeMap::<String, [i64; 5]>::new(), std::collections::BTreeMap::<String, [i64; 2]>::new());
     let mut traces: std::collections::HashSet<String> = Default::default(); // (les traces déjà comptées : elles restent 120 jours)
@@ -152,7 +152,7 @@ fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64, joueur: &str, 
         }
         traces = encore;
         if recit {
-            for e in g.events.iter().filter(|e| e.ati("seq") > vu && (e.at("kind") == "capitulation" || e.ats("text").contains("déclare la guerre") || e.ats("text").contains("soulève"))) {
+            for e in g.events.iter().filter(|e| e.ati("seq") > vu && (e.at_is("kind", "capitulation") || e.ats("text").contains("déclare la guerre") || e.ats("text").contains("soulève"))) {
                 eprintln!("   {} : {}", e.at("date"), e.at("text"));
             }
             vu = g.seq;
@@ -167,7 +167,7 @@ fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64, joueur: &str, 
         war_months += now.iter().filter(|&&w| w).count() as i64;
         before = now;
     }
-    let places: Vec<(String, i64)> = codes.iter().map(|c| (c.clone(), g.nodes.iter().filter(|n| n.at("owner") == c.as_str()).count() as i64)).collect();
+    let places: Vec<(String, i64)> = codes.iter().map(|c| (c.clone(), g.nodes.iter().filter(|n| n.at_is("owner", &c)).count() as i64)).collect();
     if err.is_none() && g.over.truthy() {
         let texte = if g.over.is_dict() { g.over.get_or("text", "").to_string() } else { "partie terminée".to_string() };
         err = Some(format!("fin : {texte}")); // (pas une erreur)

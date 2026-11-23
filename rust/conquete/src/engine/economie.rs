@@ -60,7 +60,7 @@ impl Game {
     pub fn strikes(&mut self, code: &str, mine: &Val) {
         for n in mine.iter() {
             let gn = self.geo.nodes.at(n.at("id"));
-            if (gn.at("type") == "ville" || gn.at("type") == "capitale") && n.atf("stab") < R::STRIKE_STAB {
+            if (gn.at_is("type", "ville") || gn.at_is("type", "capitale")) && n.atf("stab") < R::STRIKE_STAB {
                 let until = TT::deadline(self, 1, &[code]);
                 n.setdefault("tm", list![]).push(dict! {"k" => "industrie", "v" => -1.0, "until" => until});
                 self._dirty_income = true;
@@ -79,7 +79,7 @@ impl Game {
     /// et une grande ville produit plus qu'un bourg tatar, selon la racine de sa population, de 0,4 à 2,5 fois une ville
     /// de 25 000 habitants (base et spécialités, port et vignoble). None ailleurs (villages, cartes de France).
     pub fn taille_pays(&self, gn: &Val) -> Option<f64> {
-        (self.theatre() && (gn.at("type") == "ville" || gn.at("type") == "capitale")).then(|| (gn.atf("pop0") / 25000.0).sqrt().clamp(0.4, 2.5))
+        (self.theatre() && (gn.at_is("type", "ville") || gn.at_is("type", "capitale"))).then(|| (gn.atf("pop0") / 25000.0).sqrt().clamp(0.4, 2.5))
     }
 
     /// Python : `node_output(self, n, code)`.
@@ -117,7 +117,7 @@ impl Game {
             let sp = R::SPECIALTY().at(star.at(0));
             let boost = sp.get("boost");
             let a = if boost.truthy() { Val::from(1.0 + self.mod_(code, boost.s(), 0.0)) } else { Val::from(1) };
-            let k = &a * &(if gn.at("type") == "capitale" { Val::from(R::SPECIALTY_CAPITAL) } else { Val::from(1) });
+            let k = &a * &(if gn.at_is("type", "capitale") { Val::from(R::SPECIALTY_CAPITAL) } else { Val::from(1) });
             for r in ["livres", "vivres", "recrues", "industrie", "fer", "bois"] {
                 if sp.has(r) {
                     out.set(r, &out.at(r) + &(&sp.at(r) * &k));
@@ -132,7 +132,7 @@ impl Game {
             trade += R::QUAI_LIVRES;
         }
         let trade = CT::node_extra(self, n, code, &out, trade); // bâtiments, politique, événements de la ville
-        if gn.at("type") == "ville" || gn.at("type") == "capitale" {
+        if gn.at_is("type", "ville") || gn.at_is("type", "capitale") {
             out.scale("livres", 1.0 + self.mod_(code, "city_livres", 0.0)); // éclairage au gaz : les villes travaillent le soir
         }
         let rb = RL::town_bonus(self, nid); // voies ferrées ouvertes : industrie et commerce
@@ -156,7 +156,14 @@ impl Game {
         if mont {
             mult *= 1.0 + self.mod_(code, "mountain_prod", 0.0);
         }
-        Val::dict_from(out.items().into_iter().map(|(k, v)| (k, &v * mult)).collect())
+        // (out est à nous seuls, une copie : multiplié sur place, mêmes clés dans le même ordre, plutôt que recopié)
+        if let Val::Dict(d) = &out {
+            for v in d.borrow_mut().values_mut() {
+                let x = &*v * mult;
+                *v = x;
+            }
+        }
+        out
     }
 
     /// Douane : les camps voisins de chacun (frontière commune) et ses places frontalières.
@@ -231,7 +238,7 @@ impl Game {
             }
             // minimum garanti par le département (tant que le chef-lieu tient)
             f.set("_floor", dict! {});
-            if self.nodes.at(self.capital_of(code)).at("owner") == code {
+            if self.nodes.at(self.capital_of(code)).at_is("owner", &code) {
                 let food = R::SEASON_FOOD().atf(&season) + if season == "hiver" { self.mod_(code, "winter_food", 0.0) } else { 0.0 };
                 let traits = R::FACTIONS().at(code).at("mods");
                 // (un théâtre : le minimum d'un pays suit son poids, Malte n'a pas celui de la Russie)
@@ -300,7 +307,7 @@ impl Game {
                 f.set("_tribute", 0);
             }
             let tribs = py::sum_v(
-                self.factions.values().into_iter().filter(|v| v.at("overlord") == code && v.atb("alive")).map(|v| v.at("_tribute")),
+                self.factions.values().into_iter().filter(|v| v.at_is("overlord", &code) && v.atb("alive")).map(|v| v.at("_tribute")),
             );
             tot.inc("livres", tribs);
             // entretien
@@ -429,7 +436,8 @@ impl Game {
             r.inc("outils", want_t * ka);
             r.dec("fer", (want_a + want_t * 0.5 * kc) * ka);
             r.dec("bois", (want_a * 0.5 + want_t * kc) * ka);
-            let acc = f.setdefault("_acc", dict! {"dt" => 0.0, "fer" => 0.0, "bois" => 0.0, "armes" => 0.0, "outils" => 0.0});
+            // (setdefault sans fabriquer à chaque pas le dict par défaut, presque toujours inutile)
+            let acc = if f.has("_acc") { f.at("_acc") } else { f.setdefault("_acc", dict! {"dt" => 0.0, "fer" => 0.0, "bois" => 0.0, "armes" => 0.0, "outils" => 0.0}) };
             acc.inc("dt", dt);
             acc.inc("fer", &(&gross_fer * dt) - (want_a + want_t * 0.5 * kc) * ka);
             acc.inc("bois", &(&gross_bois * dt) - (want_a * 0.5 + want_t * kc) * ka);
@@ -517,24 +525,33 @@ impl Game {
             if n.atb("siege") {
                 continue;
             }
-            let code = n.ats("owner");
-            let pc = match per.get(&code) {
+            // (le maître lu sans fabriquer son texte : un String par place et par quart de jour sinon)
+            let (code_v, texte);
+            code_v = n.at("owner");
+            let code: &str = match &code_v {
+                Val::Str(c) => c,
+                _ => {
+                    texte = code_v.string();
+                    &texte
+                }
+            };
+            let pc = match per.get(code) {
                 Some(pc) => pc.clone(),
                 None => {
                     let pc = if code == R::NEUTRAL {
                         (Val::from(1 + 0), 1.0, 0.0, 1.0, 1.0)
                     } else {
-                        let fc = self.factions.at(&code);
+                        let fc = self.factions.at(code);
                         let x = 0.5 - fc.get_or("tax", 0.5).f();
                         (
-                            Val::from(1.0 + self.mod_(&code, "milice", 0.0)),
-                            targets.get_or(&code, 1.0).f(),
+                            Val::from(1.0 + self.mod_(code, "milice", 0.0)),
+                            targets.get_or(code, 1.0).f(),
                             fc.get_or("weary", 0).f() / 250.0,
                             1.0 + (if x > 0.0 { x } else { 0.0 }) * 2.0,
-                            1.0 + self.mod_(&code, "stab", 0.0),
+                            1.0 + self.mod_(code, "stab", 0.0),
                         )
                     };
-                    per.insert(code.clone(), pc.clone());
+                    per.insert(code.to_string(), pc.clone());
                     pc
                 }
             };
@@ -550,8 +567,8 @@ impl Game {
             } else {
                 let mut t = tgt0;
                 t -= 0.2 * (1.0 - self.assim(&n)) + weary;
-                let friends = held.get(&n.ati("id")).is_some_and(|s| s.iter().any(|o| self.friendly(&code, o.s())));
-                if n.atb("garrison") || friends || self.geo.nodes.at(n.at("id")).at("type") == "capitale" {
+                let friends = held.get(&n.ati("id")).is_some_and(|s| s.iter().any(|o| self.friendly(code, o.s())));
+                if n.atb("garrison") || friends || self.geo.nodes.at(n.at("id")).at_is("type", "capitale") {
                     t += 0.15;
                 }
                 t += AA::stab_bonus(self, &n);
@@ -571,7 +588,7 @@ impl Game {
             }
             // renfort des garnisons
             if code != R::NEUTRAL && n.atb("garrison") {
-                self.replenish(&code, &n.at("garrison"), dt, 0.04);
+                self.replenish(code, &n.at("garrison"), dt, 0.04);
             }
         }
     }
@@ -869,7 +886,7 @@ impl Game {
             v.extend(n.at("garrison").iter());
         }
         for a in self.armies.values() {
-            if a.at("owner") == code {
+            if a.at_is("owner", &code) {
                 v.extend(a.at("regs").iter());
             }
         }
@@ -998,7 +1015,7 @@ impl Game {
         }
         let what = what.s();
         let lvl = if what == "fort" { n.ati("fort") } else { n.ati("dev") };
-        let pending = n.at("queue").iter().filter(|q| q.at("kind") == "build" && q.at("what") == what).count() as i64;
+        let pending = n.at("queue").iter().filter(|q| q.at_is("kind", "build") && q.at_is("what", &what)).count() as i64;
         let top = if what == "fort" { self.fort_max(code, nid) } else { b.ati("max") };
         if lvl + pending >= top {
             if what == "fort" && top < R::BASTION_LEVEL && R::BASTION_TYPES().has(gn.at("type")) {
@@ -1067,7 +1084,7 @@ impl Game {
         if n.atb("siege") {
             return (false, "On ne rebâtit pas une ville assiégée.".to_string());
         }
-        if n.at("queue").iter().any(|x| x.at("kind") == "build" && x.at("what") == "repar") {
+        if n.at("queue").iter().any(|x| x.at_is("kind", "build") && x.at_is("what", "repar")) {
             return (false, "Les réparations sont déjà en chantier.".to_string());
         }
         if n.at("queue").len() >= 4 {
@@ -1103,7 +1120,7 @@ impl Game {
                 n.at("queue").pop(0);
                 let gn = self.geo.nodes.at(n.at("id"));
                 let (gx, gy) = (gn.at("x"), gn.at("y"));
-                if q.at("kind") == "unit" {
+                if q.at_is("kind", "unit") {
                     let owner = n.ats("owner");
                     let what = q.ats("what");
                     let reg = self.new_reg(&what, &Val::None, &Val::from(&owner));
@@ -1115,9 +1132,9 @@ impl Game {
                         let t = format!("Régiment levé à {} : {}.", gn.at("name"), self.unit_name(&owner, &what).0.to_lowercase());
                         self.log("armee", &t, &dict! {"x" => &gx, "y" => &gy});
                     }
-                } else if q.at("kind") == "slot" {
+                } else if q.at_is("kind", "slot") {
                     CT::finish(self, &n, &q); // bâtiment d'emplacement
-                } else if q.at("kind") == "navire" {
+                } else if q.at_is("kind", "navire") {
                     super::marine::lancer(self, &n, &q); // navire (SPEC-EMPIRE, module 2)
                 } else {
                     let what = q.ats("what");
