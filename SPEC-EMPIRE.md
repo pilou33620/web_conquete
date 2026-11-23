@@ -302,3 +302,9 @@ a_quai, armee: {id, effectif} | null, ordre}]`, `blocus: [{flotte, ville, lieu: 
 - `commerce`, `corsaire`, `route` sont acceptés et gardés, sans effet (R3, R4). La traversée entre théâtres et
   « les flûtes ne peuvent pas être corsaires » (refusé dès maintenant) relèvent de R3 / R4.
 - Phare (vitesse au départ) : non fait (chaîne de R1).
+
+**Essais** : `tests/marine.rs` (8 essais) ; `cargo test --locked -p conquete` passe en entier, `node --test
+tests/*.test.mjs` aussi (100). Références refaites : `campagnes.json`, `ia_campagne.json` (les IA mettent des navires en
+chantier dès le premier mois), `tours.json` (vue et `rules_payload`), `serveur.json` (`/api/map`). Banc `simuler`
+(release, IA seules, graine 1, aucune erreur) : Europe 1790 sur 3 ans 61,0 / 61,2 s avant, 65,2 / 63,2 s après
+(+3 à +7 %) ; Aquitaine 1790 sur 10 ans 21,2 s avant, 22,4 s après (+6 %).
