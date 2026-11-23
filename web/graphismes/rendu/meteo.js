@@ -1,11 +1,15 @@
 // Le temps qu'il fait et l'heure du jour, rendus : pluie, neige, brouillard, orage (éclairs), nuages et leur ombre,
 // arc-en-ciel, vent, glace sur l'eau ; cycle lent du jour et de la nuit (indépendant des tours), aube et crépuscule dorés.
 // La lumière passe par l'objet `lumiere` de scene.js, que la caméra fait suivre en douceur.
-import { THREE, scene, chaqueImage, cam, camera, lumiere, hemi, hache } from './scene.js';
+import { THREE, scene, chaqueImage, cam, camera, lumiere, hemi, hache, qualite } from './scene.js';
 import * as P from './plateau.js';
-import * as M from './monde.js';
-import { climat } from './vie.js';
+import { climat, MONDE, bouffee } from './vie.js';
 import { toon } from './toon.js';
+import './boue.js';      // routes mouillées, crue, eau sale, traces de boue
+import './ambiance.js';  // brume du matin sur l'eau, feuilles d'automne, givre sur les toits
+import './nuit.js';      // étoiles, lune, lucioles, reflets sur la mer, lumières des villes dans les rivières
+import './faune.js';     // oiseaux migrateurs, bancs de poissons
+import './eau.js';       // vagues sur les côtes, écume des cascades, sillages
 
 const groupe = new THREE.Group();
 scene.add(groupe);
@@ -90,11 +94,19 @@ const matEclair = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: tr
 const eclair = new THREE.Line(new THREE.BufferGeometry(), matEclair);
 groupe.add(eclair);
 let prochainEclair = 4, flash = 0;
-function foudre() {
-  const x = cam.x + (Math.random() - 0.5) * cam.d * 1.2, z = cam.z + (Math.random() - 0.5) * cam.d * 0.8;
+const glace = { v: 0, cible: 0, vue: -1 };
+/** La foudre frappe ce point (repère du plateau) : éclair, flash, étincelles et fumée (web_power : un pylône pendant l'orage). */
+export function foudreSur(x, y, z) {
+  foudre({ x, y, z });
+  for (let k = 0; k < 4; k++) setTimeout(() => bouffee(x + (Math.random() - 0.5) * 0.1, y, z + (Math.random() - 0.5) * 0.1, k ? 'noire' : 'blanche', 0.5), k * 80);
+}
+function foudre(cible) {
+  const x = cible ? cible.x : cam.x + (Math.random() - 0.5) * cam.d * 1.2, z = cible ? cible.z : cam.z + (Math.random() - 0.5) * cam.d * 0.8, y0 = cible ? cible.y : 0.3;
   const pts = [];
-  let px = x, pz = z;
-  for (let y = 14; y >= 0.3; y -= 1.4) { pts.push(new THREE.Vector3(px, y, pz)); px += (Math.random() - 0.5) * 0.9; pz += (Math.random() - 0.5) * 0.9; }
+  let px = x + (cible ? (Math.random() - 0.5) * 3 : 0), pz = z + (cible ? (Math.random() - 0.5) * 3 : 0);
+  // de haut en bas ; vers une cible, le zigzag se resserre pour finir pile sur elle
+  for (let y = 14; y >= y0; y -= 1.4) { const k = cible ? (y - y0) / (14 - y0) : 1; pts.push(new THREE.Vector3(px, y, pz)); px += (Math.random() - 0.5) * 0.9 * k + (x - px) * (1 - k) * 0.5; pz += (Math.random() - 0.5) * 0.9 * k + (z - pz) * (1 - k) * 0.5; }
+  if (cible) pts.push(new THREE.Vector3(x, y0, z));
   eclair.geometry.dispose();
   eclair.geometry = new THREE.BufferGeometry().setFromPoints(pts);
   matEclair.opacity = 1;
@@ -154,11 +166,19 @@ export function appliquerMeteo(m, saison) {
     nuages: { soleil: 3, nuages: 10, pluie: 14, orage: 16, brouillard: 2, neige: 13, gel: 4, canicule: 1, tempete: 16 }[g] ?? 6,
     gris: { pluie: 0.6, orage: 0.85, tempete: 0.8, neige: 0.35, brouillard: 0.3 }[g] ?? 0,
     oiseaux: !tombe, neigeSol: (m.neige_sol ?? 0) > 0.3,
+    // effets de jeu (web_royaumes les envoie dans etat.meteo) : poudre mouillée (tir < 1), forte pluie (crue),
+    // champs secs : 1 jaunis (canicule, début de sécheresse), 2 grillés (sécheresse au-delà de 1, qui coûte les récoltes)
+    poudre: m.tir ?? (tombe && !neigeTombe ? 0.8 : 1),
+    pluieForte: (g === 'orage' || g === 'tempete' || (m.pluie ?? 0) > 0.6) && !neigeTombe,
+    sec: saison === 0 ? 0 : (m.secheresse ?? 0) > 1 ? 2 : g === 'canicule' || (m.secheresse ?? 0) > 0.6 ? 1 : 0,
   });
+  if (typeof P.secher === 'function') P.secher(climat.sec);
   // glace sur l'eau, vent sur la mer et dans les ailes
-  if (typeof P.geler === 'function') P.geler(gel);
-  else if (P.U) { P.U.gel.value = gel; P.U.vent.value = 0.15 + v * (g === 'tempete' ? 1.4 : 0.8); P.U.vague.value = 0.7 + v * (g === 'tempete' ? 2.5 : 1.2); }
-  if (M.vent) { M.vent.v = g === 'tempete' ? 1 : v; M.vent.dir = -(m.direction || 0); }
+  // la glace prend peu à peu sur l'eau (et fond de même) ; l'hiver, une pellicule dès qu'il fait moins de 3 °C
+  glace.cible = saison === 0 && m.temperature < 3 ? Math.max(gel, 0.3) : gel;
+  if (P.U?.dir) { P.U.vent.value = climat.vent; P.U.dir.value = climat.dir; }  // les arbres plient dans le sens du vent (plateau.js)
+  if (typeof P.geler !== 'function' && P.U) { P.U.gel.value = gel; P.U.vent.value = 0.15 + v * (g === 'tempete' ? 1.4 : 0.8); P.U.vague.value = 0.7 + v * (g === 'tempete' ? 2.5 : 1.2); }
+  if (MONDE.vent) { MONDE.vent.v = g === 'tempete' ? 1 : v; MONDE.vent.dir = -(m.direction || 0); }
   TEMPS.sombre = { nuages: 0.8, pluie: 0.55, orage: 0.42, brouillard: 0.6, tempete: 0.45, neige: 0.7, gel: 0.9 }[g] ?? 1;
   TEMPS.brume = { brouillard: 0.45, tempete: 0.75, neige: 0.8, pluie: 0.9, orage: 0.85 }[g] ?? 1;
   TEMPS.gris = g === 'brouillard' ? 0.85 : 0;
@@ -182,17 +202,27 @@ function majLumiere(t) {
   const mix = (cle, cible) => { const A = L.jour[cle], B = L.aube[cle], D = L.nuit[cle]; return cible.setRGB(A.r * j + B.r * a + D.r * n, A.g * j + B.g * a + D.g * n, A.b * j + B.b * a + D.b * n); };
   mix('sol', lumiere.couleurSoleil);
   if (TEMPS.teinte != null) lumiere.couleurSoleil.lerp(_c.setHex(TEMPS.teinte), 0.5 * j);
-  if (lumiere.couleurHemi) mix('hemi', lumiere.couleurHemi);
+  if (climat.pollution) lumiere.couleurSoleil.lerp(_c.setHex(0xe0b860), 0.6 * climat.pollution * (j + a));  // ciel jauni (web_power : charbon)
+  if (lumiere.couleurHemi) { mix('hemi', lumiere.couleurHemi); if (climat.pollution) lumiere.couleurHemi.lerp(_c.setHex(0xd2bc80), 0.4 * climat.pollution); }
   mix('fond', lumiere.ciel);
   const clarte = j + a * 0.7 + n * 0.25;
   if (s < 0.9) lumiere.ciel.lerp(GRIS, (1 - s) * 0.6 * clarte);
   if (TEMPS.gris) lumiere.ciel.lerp(_c.copy(BRUME).multiplyScalar(clarte), TEMPS.gris);
-  lumiere.brume = TEMPS.brume;
+  if (climat.pollution) lumiere.ciel.lerp(_c.setHex(0xb9a46e).multiplyScalar(clarte), 0.5 * climat.pollution);
+  lumiere.brume = TEMPS.brume * (1 - 0.45 * (climat.pollution || 0));  // la pollution voile le lointain
   lumiere.hauteurSoleil = TEMPS.hautSaison * (L.jour.el * j + L.aube.el * a + L.nuit.el * n);
+  // fin de journée : lumière plus chaude, soleil plus bas, ombres plus longues (le dernier quart du jour)
+  if (phase === 'jour' && p > JOUR_S * 0.75) {
+    const k = (p - JOUR_S * 0.75) / (JOUR_S * 0.25);
+    lumiere.couleurSoleil.lerp(_c.setHex(0xffb066), 0.5 * k * s);
+    lumiere.hauteurSoleil *= 1 - 0.55 * k;
+  }
 }
 
 chaqueImage((dt, t) => {
   tForce += dt;
+  glace.v += (glace.cible - glace.v) * Math.min(1, dt * 0.04);
+  if (typeof P.geler === 'function' && Math.abs(glace.v - glace.vue) > 0.005) { glace.vue = glace.v; P.geler(glace.v); }
   climat.eclair = Math.max(0, (climat.eclair || 0) - dt * 5);
   majLumiere(t);
   const a = Math.min(1, dt * 0.8);
@@ -207,7 +237,7 @@ chaqueImage((dt, t) => {
       p[o + 1] -= v; p[o + 4] -= v;
       if (p[o + 4] < 0) { const x = (Math.random() - 0.5) * BOITE, z = (Math.random() - 0.5) * BOITE, y = HAUT; p[o] = x; p[o + 1] = y; p[o + 2] = z; p[o + 3] = x - dx; p[o + 4] = y - 0.35; p[o + 5] = z - dz; }
     }
-    pluieGeo.attributes.position.needsUpdate = true;
+    pluieGeo.attributes.position.needsUpdate = true; pluieGeo.setDrawRange(0, Math.round(NP * Math.min(1, qualite.part)) * 2);
     pluie.position.set(cam.x, 0, cam.z);
   }
   // neige
@@ -244,7 +274,7 @@ chaqueImage((dt, t) => {
     g.position.set(u.x, u.y, u.z);
   });
   // arc-en-ciel, face à la caméra, à la taille du regard
-  ARC.visible = climat.arc && climat.heure === 'jour' && !climat.pluie;
+  ARC.visible = (climat.arc || climat.apresPluie) && climat.heure === 'jour' && !climat.pluie && !climat.neige && climat.gel < 0.05;  // apresPluie : boue.js, juste après une averse
   if (ARC.visible) {
     const k = cam.d / 9.5;
     _v.set(cam.x - camera.position.x, 0, cam.z - camera.position.z).normalize();

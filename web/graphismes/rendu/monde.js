@@ -6,7 +6,12 @@ import { maillageBatiment, maillageChantier, maillageArmee, maillageGarde, palie
 import { dessus, solEn, hauteurEn, carte, degager } from './plateau.js';
 import { toon, lot, put, fige } from './toon.js';
 import { etiquette, balayer, banniere, effet, deplacer, masquer } from './etiquettes.js';
-import { bouffee } from './vie.js';
+import { bouffee, climat, MONDE } from './vie.js';
+import { trace, humidite } from './boue.js';
+import { toitsDe } from './ambiance.js';
+import { modele, animer } from './modernes.js';
+import { chantierVivant } from './chantiers.js';
+import { envol } from './faune.js';
 import { majRemparts } from './remparts.js';
 import { preparerSieges, majSieges, jouerSieges, campArmee, casesOuvrages } from './sieges.js';
 import { majForts } from './forts.js';
@@ -34,6 +39,15 @@ export const palierRoyaume = id => paliers[id] || 0;
 export const estArrete = b => arretes.has(b.id);
 /** Le bâtiment posé (id de l'état) : { mesh (son groupe, matrice monde à jour), rel (relevés : fenêtres, portes, toits, lanternes…) } ou undefined. */
 export const batiPose = id => batis.get(id);
+toitsDe(() => batis);  // le givre des toits (ambiance.js) suit les bâtiments posés
+/** Pour une vitrine hors partie : anime un bâtiment déjà posé dans la scène (ailes du moulin, drapeaux, cheminées, fumées) ; id libre, unique. */
+export function animerPose(id, mesh, anim, couleur) { mesh.updateMatrixWorld(true); creerParts({ id }, mesh, anim, couleur, false); }
+/** Retire ce que animerPose a posé. */
+export function oublierPose(id) {
+  for (const a of parts.ailes) if (a.batiment === id) groupe.remove(a.pivot);
+  for (const d of parts.drapeaux) if (d.batiment === id) { groupe.remove(d.obj); d.obj.geometry.dispose(); }
+  viderParts(id);
+}
 
 function viderParts(p) {
   for (const k of ['ailes', 'drapeaux', 'cheminees', 'fumees']) parts[k] = parts[k].filter(x => x.batiment !== p);
@@ -100,7 +114,7 @@ export function synchroniser(etat) {
     const cle = `${b.cle}|${couleurs[b.proprio]}|${etat.epoque.cle}|${etat.saison}|${etat.meteo.neige_sol > 0.3 ? 1 : 0}|${niveau}|${b.reste > 0 ? b.reste : 0}|${b.proprio}|${arret ? 1 : 0}${ruine ? 1 : 0}`;
     const ex = batis.get(b.id);
     if (ex && ex.cle === cle) continue;
-    if (ex) { groupe.remove(ex.mesh); if (ex.chantier) groupe.remove(ex.chantier); viderParts(b.id); }
+    if (ex) { groupe.remove(ex.mesh); if (ex.chantier) { groupe.remove(ex.chantier); ex.chantier.clear(); } viderParts(b.id); }  // clear : les ouvriers du chantier cessent d'être animés
     const { mesh, anim, boites, rel } = maillageBatiment({ cle: b.cle, couleur: couleurs[b.proprio], epoque: etat.epoque.cle, saison: etat.saison, neige: etat.meteo.neige_sol, niveau, ruine });
     const { x, z } = posCase(b.case), y = dessus(b.case);
     mesh.position.set(x, y, z);
@@ -112,7 +126,9 @@ export function synchroniser(etat) {
       chantier = maillageChantier();
       chantier.position.set(x, y, z);
       chantier.rotation.y = b.face || 0;
-      groupe.add(chantier);
+      // le chantier vit : échafaudages à la hauteur des travaux, ouvriers, chèvre de levage (déjà à l'échelle 0,1 du chantier)
+      const vie = modele(chantierVivant(fait, { w: 4, d: 3.5, haut: 2.2, ancien: true }), b.id); vie.groupe.scale.setScalar(1); chantier.add(vie.groupe);
+      groupe.add(chantier); animer(vie);
     }
     groupe.add(mesh);
     mesh.updateMatrixWorld();
@@ -122,7 +138,7 @@ export function synchroniser(etat) {
   }
   for (const [id, ex] of batis) {
     if (vus.has(id)) continue;
-    groupe.remove(ex.mesh); if (ex.chantier) groupe.remove(ex.chantier);
+    groupe.remove(ex.mesh); if (ex.chantier) { groupe.remove(ex.chantier); ex.chantier.clear(); }
     viderParts(id);
     batis.delete(id);
   }
@@ -142,14 +158,14 @@ export function synchroniser(etat) {
     ids.add(a.id);
     majArmee(a, false);
   }
-  for (const [id, a] of armees) if (!ids.has(id) && !a.anim) { groupe.remove(a.mesh); armees.delete(id); }
+  for (const [id, a] of armees) if (!ids.has(id) && !a.anim) { groupe.remove(a.mesh); a.mesh.userData.drapeau?.geometry.dispose(); armees.delete(id); }
   balayerArmees(ids);
   // forts et retranchements (après les armées : la tranchée se creuse devant l'armée là où elle se tient)
   majForts(etat, R);
 }
 
 function balayerArmees(ids) {
-  for (const [id, a] of armees) if (!ids.has(id) && !a.anim) { groupe.remove(a.mesh); armees.delete(id); }
+  for (const [id, a] of armees) if (!ids.has(id) && !a.anim) { groupe.remove(a.mesh); a.mesh.userData.drapeau?.geometry.dispose(); armees.delete(id); }
   balayer('a');
 }
 
@@ -163,7 +179,7 @@ function majArmee(a, fantome) {
   let v = armees.get(a.id);
   const { x, z } = posCase(a.case);
   if (!v || v.cle !== cle) {
-    if (v) groupe.remove(v.mesh);
+    if (v) { groupe.remove(v.mesh); v.mesh.userData.drapeau?.geometry.dispose(); }
     const mesh = (garde?.compacte ? maillageGarde : maillageArmee)(couleurs[a.proprio], paliers[a.proprio] || 0);
     const old = v;
     mesh.rotation.y = old ? old.mesh.rotation.y : 0.5;
@@ -303,7 +319,10 @@ chaqueImage((dt, t) => {
     c.fait = true;
     const { x, z } = posCase(c.case), y = dessus(c.case);
     effet(x, y + 0.9, z, '⚔️');
-    for (let k = 0; k < 7; k++) setTimeout(() => bouffee(x + (Math.random() - 0.5) * 0.7, y + 0.15, z + (Math.random() - 0.5) * 0.7, 'poudre'), k * 90);
+    // poudre mouillée (climat.poudre < 1) : un coup sur deux rate, à peine une fumerolle, et une goutte au-dessus de la mêlée
+    const mouillee = climat.poudre < 1;
+    for (let k = 0; k < 7; k++) setTimeout(() => bouffee(x + (Math.random() - 0.5) * 0.7, y + 0.15, z + (Math.random() - 0.5) * 0.7, 'poudre', mouillee && k % 2 ? 0.3 : undefined), k * 90);
+    if (mouillee) setTimeout(() => effet(x + 0.3, y + 1.1, z, '💧'), 350);
     setTimeout(() => effet(x, y + 1.3, z, c.vainqueur === 0 ? '🏆' : (c.attaquant === 0 || c.defenseur === 0) ? '💀' : '🏳️'), 700);
   }
   for (const [id, v] of armees) {
@@ -314,9 +333,34 @@ chaqueImage((dt, t) => {
       v.x = lerp(p.x, q.x, r); v.z = lerp(p.z, q.z, r);
       v.mesh.rotation.y = -Math.atan2(q.z - p.z, q.x - p.x) + Math.PI / 2;
       v.pas = (v.pas || 0) + dt * 14;
+      // une armée qui passe près d'un bois en fait s'envoler les oiseaux
+      const ci = a.trajet[i], Cc = carte();
+      if (Cc && (Cc.foret?.[ci] || Cc.arbres?.[ci] > 0) && Math.random() < dt * 0.8) envol(v.x + (Math.random() - 0.5) * 0.4, solEn(v.x, v.z), v.z + (Math.random() - 0.5) * 0.4);
+      // sous la pluie, l'armée laisse des traces de boue derrière elle (deux files : la troupe et les canons)
+      if ((climat.pluie && !climat.neige) || humidite.v > 0.25) {
+        const d = Math.hypot(v.x - (v.tx ?? v.x), v.z - (v.tz ?? v.z));
+        if (v.tx === undefined || d > 0.07) {
+          const ry = v.mesh.rotation.y, c = Math.cos(ry), sn = Math.sin(ry), cote = (v.nt = (v.nt || 0) + 1) % 2 ? 0.12 : -0.12;
+          if (hauteurEn(v.x, v.z) > -0.1) trace(v.x + c * cote, solEn(v.x, v.z), v.z - sn * cote, ry);
+          v.tx = v.x; v.tz = v.z;
+        }
+      }
     }
     const bob = v.anim ? Math.abs(Math.sin(v.pas || 0)) * 0.04 : 0;
     v.mesh.position.set(v.x, solEn(v.x, v.z) + 0.02 + bob, v.z);
+    // en marche par temps sec, l'armée soulève de la poussière derrière elle
+    if (v.anim && !climat.pluie && !climat.neige && !(climat.neigeSol > 0.3) && humidite.v < 0.25 && Math.random() < dt * 5) {
+      const ry = v.mesh.rotation.y, d = 0.25 + Math.random() * 0.15;
+      bouffee(v.x - Math.sin(ry) * d + (Math.random() - 0.5) * 0.25, solEn(v.x, v.z) + 0.03, v.z - Math.cos(ry) * d + (Math.random() - 0.5) * 0.25, 'poussiere', 0.6 + climat.sec * 0.3);
+    }
+    // son drapeau flotte dans le sens du vent (climat.dir, en radians, 0 = +x), d'autant plus qu'il souffle fort
+    const dr = v.mesh.userData.drapeau;
+    if (dr && v.mesh.visible) {
+      dr.rotation.y = -(climat.dir || 0) - v.mesh.rotation.y;
+      const pos = dr.geometry.attributes.position, f = 0.2 + Math.min(1.2, climat.vent ?? 0.3);
+      for (let k = 0; k < pos.count; k++) { const u = pos.getX(k) / 1.6; pos.setZ(k, Math.sin(t * (4 + f * 5) - u * 5 + id) * u * 0.28 * f); }
+      pos.needsUpdate = true;
+    }
     deplacer('a' + id, v.x, 0.95, v.z);
     // une armée qui débarque attend sur la case d'eau de sa flotte : marine.js montre ses soldats sur le pont et dans les chaloupes
     const eau = hauteurEn(v.x, v.z) < -0.1;
@@ -340,3 +384,6 @@ export function posArmee(id) { const v = armees.get(id); return v ? { x: v.x, z:
 export function listeArmees() {
   return [...armees].map(([id, v]) => ({ id, proprio: v.proprio, groupe: v.mesh, enMarche: !!(v.marche || v.anim) }));
 }
+
+// la vie et la météo (vie.js, meteo.js) se servent des bâtiments, des armées et du vent quand monde.js est chargé
+Object.assign(MONDE, { estArrete, listeArmees, parts, vent });

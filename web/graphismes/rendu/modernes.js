@@ -4,9 +4,10 @@
 //
 //   import { BAT, QBAT, bFerme, modele, INSTALLATIONS, QUARTIERS, EPOQUES } from './modernes.js';
 //   const { groupe, fumees, rotors } = modele(BAT.nucleaire, 1);   // groupe à l'échelle du plateau (× 0,1)
-import { THREE, chaqueImage } from './scene.js';
+import { THREE, chaqueImage, pres } from './scene.js';
 import { lot, put, fige, boite, cyl, cone, sphere, degrade, CONT } from './toon.js';
 import { climat, bouffee } from './vie.js';
+import { reflets, eteint } from './crises.js';
 
 const R = 10, SQ3 = Math.sqrt(3);
 // le hasard reproductible de web_power (01-outils.js) : les variantes (couleurs des maisons, des champs…) suivent la graine
@@ -34,7 +35,10 @@ function eolienne(L, ex, x, z, h = 13, base = 0) {
   put(L, boite(1.1, 1.1, 2.4), 0xf6f6f1, x, h + .3, z - .4); ex.rotors.push([x, h + .3, z + .95]);
 }
 // une pièce animée, dessinée à part autour de l'origine (dessin(P)), posée en (x, y, z) et animée par animer() :
-// a = 'tourne' (v rad/s autour de axe), 'oscille' (± amp rad), 'glisse' (± amp le long de axe), 'pulse' (échelle 1 ± amp), 'clignote' ;
+// a = 'tourne' (v rad/s autour de axe), 'oscille' (± amp rad), 'glisse' (± amp le long de axe), 'pulse' (échelle 1 ± amp), 'clignote',
+// 'marche' (glisse en sautillant, comme une troupe au pas), 'coule' (avance de -amp à +amp puis repart du début : eau, flèches),
+// 'chemin' (axe = liste de points [x, y, z, visible] parcourus en boucle en 1/v s, la pièce tournée vers où elle va ; visible = 0 la cache sur ce tronçon),
+// 'rare' (une scène qui n'apparaît qu'une fraction amp du temps, toutes les 1/v s, et s'agite pendant ce temps : clins d'œil) ;
 // v : vitesse, ph : décalage. Sans ex.pieces (modèle dessiné hors de modele()), la pièce est posée immobile dans L.
 function piece(L, ex, dessin, x, y, z, a, axe = 'y', amp = 1, v = 1, ph = 0) {
   if (ex?.pieces) { ex.pieces.push({ dessin, pos: [x, y, z], a, axe, amp, v, ph }); return; }
@@ -70,6 +74,7 @@ const BAT = {
     for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) {
       const x = i * 3.1 + (j & 1) * .2, z = j * 2.9; if (Math.hypot(x, z) > 7.3) continue;
       piece(L, ex, P => { const p = boite(2.7, .22, 1.9); p.rotateX(.5); put(P, p, 0x2d4f92, 0, 0, 0, 0, .16); }, x, 1.1, z, 'oscille', 'x', .25, .3); put(L, boite(.2, .9, .2), 0x8d96a0, x, .45, z, 0, 0);
+      ex?.reflets?.push([x, 1.3, z]);  // l'éclat du soleil sur le panneau (crises.js)
     }
     put(L, boite(1.5, 1.4, 1.2), 0xf1efe6, 6.2, .7, -1.5);
     piece(L, ex, P => { put(P, boite(1.6, .6, .8), 0xf6f6f1, 0, .5, 0); put(P, boite(.6, .45, .75), 0xd9e8f2, .4, .95, 0, 0, .08); }, 0, 0, 1.45, 'glisse', 'x', 4, .2);
@@ -432,7 +437,20 @@ export const QUARTIERS = [{"cle": "centre", "nom": "Centre-ville"}, {"cle": "res
 export const EPOQUES = [{"an": 1900, "nom": "Les pionniers", "txt": "L’électricité éclaire les rues et fait tourner les premiers ateliers. Petites usines au charbon et au fil de l’eau, réseau en 15 kV."}, {"an": 1920, "nom": "L’entre-deux-guerres", "txt": "Le 63 kV relie les vallées et les premiers grands barrages sortent de terre."}, {"an": 1935, "nom": "Le réseau régional", "txt": "Le 225 kV et les postes de transformation arrivent. L’interconnexion avec la région voisine ouvre en 1938."}, {"an": 1946, "nom": "La reconstruction", "txt": "Après la guerre, la demande s’envole : grandes centrales au charbon, fioul et barrages."}, {"an": 1960, "nom": "Les Trente Glorieuses", "txt": "La consommation double tous les dix ans. Le 400 kV et les turbines à combustion font leur apparition."}, {"an": 1974, "nom": "Le choc pétrolier", "txt": "Le prix du fioul quadruple. Le programme nucléaire est lancé."}, {"an": 1990, "nom": "Le marché", "txt": "Cycles combinés au gaz, échanges entre régions et premiers parcs éoliens."}, {"an": 2005, "nom": "Le climat", "txt": "La taxe carbone arrive ; le solaire et l’éolien se développent."}, {"an": 2020, "nom": "La transition", "txt": "Le charbon doit fermer avant 2032. Batteries et éolien en mer."}, {"an": 2035, "nom": "Le futur", "txt": "Petits réacteurs, hydrogène, et peut-être la fusion."}];
 
 /** semer({ q, r }) : la graine des variantes (couleurs des maisons, des champs…) avant d'appeler soi-même un dessin de BAT ou QBAT. */
-export { BAT, QBAT, bFerme, rotor, pylone, semer };
+/** Une décharge qui déborde, à poser par-dessus BAT.decharge (mêmes unités, même centre) : des tas d'ordures et des sacs
+ *  qui passent la clôture, des goélands en plus ; n : 1 presque pleine, 2 pleine. Dessin (L, ex), comme ceux de BAT. */
+function debordDecharge(n = 1) {
+  return (L, ex) => {
+    const nb = n >= 2 ? 16 : 7, SACS = [0x2f2c2a, 0x5c7184, 0xe9e3d3, 0xd9573b, 0x3f7fb5, 0xf2c94c];
+    for (let i = 0; i < nb; i++) {
+      const a = i / nb * Math.PI * 2 + entre(-0.2, 0.2), r = entre(6.4, n >= 2 ? 9.4 : 8.2), x = Math.cos(a) * r, z = Math.sin(a) * r;
+      const tas = sphere(entre(0.9, 1.6), 1); tas.scale(1, entre(0.35, 0.55), 0.85); put(L, tas, i % 3 ? 0x8a6f4a : 0x7a7466, x, 0.2, z, a, 0.12);
+      for (let k = 0; k < 3; k++) put(L, boite(0.55, 0.45, 0.5), SACS[(i + k) % SACS.length], x + entre(-0.9, 0.9), 0.45 + entre(0, 0.3), z + entre(-0.9, 0.9), entre(0, 3), 0.06);
+    }
+    oiseaux(L, ex, 2, 1.5, 4.5, 4, n >= 2 ? 6 : 3, 0xf6f6f1, 0.8);
+  };
+}
+export { BAT, QBAT, bFerme, rotor, pylone, semer, piece, oiseaux, fum, arbreVent, arbre, toit, sol, debordDecharge };
 
 // ------------------------------------------------------------------ assemblage et animations (celles de web_power : 08-installations, 14-superpositions, 24-ciel, 25-boucle)
 const CHANT = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: degrade, transparent: true, opacity: .42, depthWrite: false });
@@ -451,7 +469,7 @@ const PART = new THREE.SphereGeometry(.55, 8, 6), MPART = new THREE.MeshBasicMat
  *  chantier : le modèle en transparence sous une grue, comme pendant les travaux dans web_power. */
 export function modele(dessin, graine = 1, { chantier = false } = {}) {
   semer({ q: graine, r: 7 });
-  const L = lot(), ex = { fum: [], rotors: [], courant: [], pieces: [] };
+  const L = lot(), ex = { fum: [], rotors: [], courant: [], pieces: [], reflets: [] };
   dessin(L, ex);
   const groupe = fige(L, null, chantier ? CHANT : undefined);
   const rotors = ex.rotors.map(r => {
@@ -466,7 +484,7 @@ export function modele(dessin, graine = 1, { chantier = false } = {}) {
     const G = lot(), eg = { pieces: [] }; BAT.grue(G, eg); groupe.add(fige(G)); pieces = faire(eg.pieces);
   }
   let lumieres = null;
-  if (Object.values(QBAT).includes(dessin)) {  // fenêtres et réverbères : 5 points par quartier, comme majLumieres()
+  if (Object.values(QBAT).includes(dessin) || ex.lumiere) {  // ex.lumiere : un dessin d'habitation qui s'éclaire aussi la nuit  // fenêtres et réverbères : 5 points par quartier, comme majLumieres()
     const pos = [], col = [];
     for (let k = 0; k < 5; k++) { pos.push((rnd() - .5) * 14, 1.5 + rnd() * 5, (rnd() - .5) * 12); col.push(1, k % 3 ? .74 : .9, k % 3 ? .36 : .65); }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -477,6 +495,7 @@ export function modele(dessin, graine = 1, { chantier = false } = {}) {
     return ps;
   }).flat();
   groupe.scale.setScalar(1 / R);
+  if (!chantier && ex.reflets.length) reflets(groupe, ex.reflets);
   return { groupe, fumees: chantier ? [] : ex.fum, rotors: chantier ? [] : rotors, lumieres, courant, pieces };
 }
 
@@ -499,13 +518,25 @@ chaqueImage(dt => {
     if (!groupe.parent) { ANIMES.splice(i, 1); continue; }
     for (const f of a.fum) if ((f.t -= dt) < 0) { f.t = f.genre === 'blanche' ? .55 : .7; bouffee(f.p.x, f.p.y, f.p.z, f.genre); }
     for (const r of rotors) r.rotation.z -= dt * 2 * (.5 + climat.vent * 1.5);
-    if (lumieres) { lumieres.visible = nuit > .05; MLUM.opacity = nuit; }
-    for (const p of pieces) {
+    if (lumieres) { lumieres.visible = nuit > .05 && !eteint(groupe.matrixWorld.elements[12], groupe.matrixWorld.elements[14]); MLUM.opacity = nuit; }  // blackout : la vague éteint les fenêtres
+    const loin = pieces.length && !pres(groupe.matrixWorld.elements[12], groupe.matrixWorld.elements[14]);  // qualité : au loin, les pièces se figent
+    if (!loin) for (const p of pieces) {
       const f = Math.sin(maintenant / 1000 * p.v + p.ph);
       if (p.a === 'tourne') p.o.rotation[p.axe] += dt * p.v;
       else if (p.a === 'oscille') p.o.rotation[p.axe] = f * p.amp;
       else if (p.a === 'glisse') p.o.position[p.axe] = p.base + f * p.amp;
       else if (p.a === 'pulse') p.o.scale.setScalar(1 + f * p.amp);
+      else if (p.a === 'marche') { p.o.position[p.axe] = p.base + f * p.amp; p.o.position.y = p.pos[1] + Math.abs(Math.sin(maintenant / 1000 * 6)) * .3; }
+      else if (p.a === 'chemin') {
+        const c = p.axe, u = ((maintenant / 1000 * p.v + p.ph) % 1) * c.length, i = u | 0, k = u - i, A = c[i], B = c[(i + 1) % c.length];
+        p.o.position.set(A[0] + (B[0] - A[0]) * k, A[1] + (B[1] - A[1]) * k, A[2] + (B[2] - A[2]) * k);
+        if (B[0] !== A[0] || B[2] !== A[2]) p.o.rotation.y = Math.atan2(A[2] - B[2], B[0] - A[0]);
+        p.o.visible = A[3] !== 0;
+      } else if (p.a === 'rare') {
+        const t = maintenant / 1000; p.o.visible = (t * p.v + p.ph) % 1 < p.amp;
+        if (p.o.visible) { const j = p.pos[0] * 1.7 + p.pos[2] * 2.3; p.o.rotation.y = Math.sin(t * 9 + j) * .6; p.o.position.y = p.pos[1] + Math.abs(Math.sin(t * 12 + j)) * .3; }
+      }
+      else if (p.a === 'coule') p.o.position[p.axe] = p.base + (((maintenant / 1000 * p.v + p.ph) % 1) - .5) * 2 * p.amp;
       else p.o.visible = f > 0;
     }
     for (const p of courant) { p.userData.u = (p.userData.u + dt * .5) % 1; p.position.z = (p.userData.u - .5) * 17; }

@@ -8,7 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DEST=web/graphismes
-PARTIES="rendu"   # parties de la bibliothèque : rendu (tous les rendus ; prend three avec lui), three (voir graphismes/README.md)
+PARTIES="ancien"  # parties de la bibliothèque (voir graphismes/README.md) : ancien (1700-1816 : monde, quartiers ; prend socle, moderne, antique, guerre et three) ; pas defense (tower defense)
 DEPOT=https://github.com/pilou33620/web_engine.git
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 git clone -q "$DEPOT" "$TMP/web_engine"

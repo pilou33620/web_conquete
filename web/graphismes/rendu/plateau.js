@@ -3,8 +3,8 @@
 // rivières en rubans de sable et d'eau ; liserés des territoires ; surbrillances.
 // Trois familles figées (tuiles, décor, rivières), reconstruites seulement quand la carte, la saison, la neige,
 // les arbres, le bâti ou les routes changent.
-import { THREE, scene, geo, posCase, voisin, hache, caseA } from './scene.js';
-import { toon, put, fige, lot, cyl as cyl0, cone as cone0, sphere as sphere0, boite as boite0, jeter, fusion, degrade } from './toon.js';
+import { THREE, scene, geo, posCase, voisin, hache, caseA, chaqueImage } from './scene.js';
+import { toon, put, fige, lot, cyl as cyl0, cone as cone0, sphere as sphere0, boite as boite0, jeter, fusion, degrade, CONT } from './toon.js';
 
 // formes mises en cache (non indexées) : le décor en réutilise des milliers à chaque reconstruction
 const memo = new Map();
@@ -19,17 +19,32 @@ const dome = r => forme(function dome(r) { return sphere0(r, 1).scale(1, 0.38, 1
 const arrondi = v => Math.round(v * 200) / 200; // tailles arrondies au demi-centième : le cache sert
 
 /** Gardé pour compatibilité (anciens shaders) : t et vent servent encore à l'animation, gel suit geler(). */
-export const U = { t: { value: 0 }, vent: { value: 0.3 }, gel: { value: 0 }, vague: { value: 1 } };
+export const U = { t: { value: 0 }, vent: { value: 0.3 }, gel: { value: 0 }, vague: { value: 1 }, dir: { value: 0 } };
+// le vent dans les arbres : les sommets portent leur souplesse (0 au pied, 1 à la cime) et le shader les pousse dans le sens du vent
+// (U.dir, U.vent tenus par meteo.js), en rafales décalées d'un arbre à l'autre. Les ombres, elles, restent immobiles.
+function auVent(mat) {
+  const m = mat.clone();
+  m.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, { uT: U.t, uVent: U.vent, uDir: U.dir });
+    sh.vertexShader = 'attribute float souple;\nuniform float uT;\nuniform float uVent;\nuniform float uDir;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      float ph = uT * 1.7 + transformed.x * 2.3 + transformed.z * 1.9;
+      float rafale = (sin(ph) * 0.65 + sin(ph * 2.6 + 1.3) * 0.2 + 0.35) * (0.25 + uVent) * souple * souple * 0.05;
+      transformed.x += rafale * cos(uDir); transformed.z += rafale * sin(uDir);`);
+  };
+  m.customProgramCacheKey = () => 'auVent';
+  return m;
+}
 export const TERRE = t => t >= 3;
 
 const R = 1, EP = 0.022, S0 = 0.11, MER = -0.15; // S0 : le décor de web_power ramené à des cases de 1
 const groupe = new THREE.Group();
 scene.add(groupe);
 
-let C = null, H = [], familles = [], eau = null, glace = null, liseres = null, surb = null, anneau = null, points = null;
-let saison = 2, neige = 0, gel = 0;
-let E = { arbres: [], foret: [], bati: new Set(), routes: new Set(), forts: new Set() }; // état du mois : ce qui change le décor (un fort dégage sa case d'arbres et de buttes)
+let C = null, H = [], HM = [], VB = [], familles = [], eau = null, glace = null, liseres = null, surb = null, anneau = null, points = null;
+let saison = 2, neige = 0, gel = 0, sec = 0;  // sec : 0, 1 champs jaunis, 2 grillés (meteo.js, d'après la sécheresse)
+let E = { arbres: [], foret: [], bati: new Set(), routes: new Set(), traces: new Map(), sigRoutes: '', forts: new Set() }; // état du mois : ce qui change le décor (un fort dégage sa case d'arbres et de buttes ; traces : case → tracé de ses routes)
 let rivPts = new Map(); // case → points des rivières qui la traversent (pour y écarter arbres et rochers)
+let cascades = [];      // pied des cascades { x, y, z } : leur écume (eau.js)
 let degages = new Set(); // cases des ouvrages de siège et des garnisons (sieges.js, monde.js) : ni arbres, ni buttes, ni champs, comme la case d'un fort
 const degage = i => E.forts.has(i) || degages.has(i);
 
@@ -38,7 +53,19 @@ export const carte = () => C;
 /** Le dessus d'une case, là où l'on pose un bâtiment ou une armée. */
 export const dessus = i => Math.max(H[i] ?? 0, 0.02);
 /** Hauteur du sol au point (x, z) : celle de la case la plus proche (−0,55 hors de la carte). */
-export function hauteurEn(x, z) { if (!C) return 0; const i = caseA(x, z); return i < 0 ? -0.55 : H[i]; }
+export function hauteurEn(x, z) {
+  if (!C) return 0; const i = caseA(x, z); if (i < 0) return -0.55;
+  const hm = HM[i]; if (!hm) return H[i];
+  // sur la pente d'une colline : du replat (rayon RI) vers le bord le plus proche
+  const q = posCase(i), dx = x - q.x, dz = z - q.z; let k = 0, m = -1;
+  for (let b = 0; b < 6; b++) { const a = (b + 0.5) * Math.PI / 3, v = dx * Math.sin(a) + dz * Math.cos(a); if (v > m) { m = v; k = b; } }
+  const r = m / (R * 0.866); return r <= RI ? H[i] : H[i] + (hm[k] - H[i]) * Math.min(1, (r - RI) / (1 - RI));
+}
+/** Hauteur du sol au milieu du bord commun de deux cases voisines (le haut d'une pente, ou d'une falaise) : où passe une route. */
+export function bordEntre(a, b) {
+  const h = (i, n) => { const k = VB[i]?.indexOf(n) ?? -1; return k >= 0 && HM[i] ? HM[i][k] : H[i] ?? 0; };
+  return Math.max(h(a, b), h(b, a));
+}
 /** Où poser quelque chose : le dessus de la case, ou la surface de l'eau. */
 export const solEn = (x, z) => Math.max(hauteurEn(x, z), MER);
 
@@ -50,7 +77,28 @@ const TERR = {
   bati: [0x84c450, 0], // comme les villes de web_power : une prairie, recouverte par la dalle du bâtiment
 };
 const EAUX = new Set(['mer', 'hautfond', 'lac']);
+// ------------------------------------------------------------------ biomes : marais, désert, toundra
+// Déduits de la carte (marais : pré sans culture au bord d'un lac ou d'une rivière ; désert : sable loin de la mer ;
+// toundra : terres prises entre des montagnes), donnés par la carte du jeu (carte.biome[i]) ou imposés avec poserBiomes().
+const TEINTE_BIO = { marais: new THREE.Color(0x6f8a4c), desert: new THREE.Color(0xe9c27c), toundra: new THREE.Color(0xa9ab8c) };
+let BIO_JEU = new Map(), BIO = [];
+/** Biomes imposés par le jeu : { case: 'marais' | 'desert' | 'toundra' | null } (null : celui de la carte). Refait le décor. */
+export function poserBiomes(cases) { BIO_JEU = new Map(Object.entries(cases || {}).map(([i, b]) => [+i, b])); if (C) rebatir(); }
+/** Le biome d'une case ('marais', 'desert', 'toundra') ou null. */
+export const biome = i => BIO[i] || null;
+/** Les cases d'un biome (ambiance.js y fait bouger les dunes). */
+export const casesBiome = nom => BIO.reduce((l, b, i) => (b === nom && l.push(i), l), []);
+function deduireBiome(i, g0) {
+  if (BIO_JEU.has(i)) return BIO_JEU.get(i);
+  if (C.biome) return C.biome[i] || null;  // la carte du jeu donne ses biomes (générateur de web_royaumes)
+  const t = C.terrain[i], vs = []; for (let d = 0; d < 6; d++) { const n = voisin(i, d); if (n >= 0) vs.push(C.terrain[n]); }
+  if (t === 3 && !vs.some(v => v <= 1)) return 'desert';
+  if (g0 === 'prairie' && !E.routes.has(i) && !degage(i) && (vs.includes(2) || (C.riviere[i] && vs.some(v => v <= 2))) && hache(i, 90) < 0.7) return 'marais';
+  if ((t === 4 || t === 5) && g0 !== 'bati' && vs.filter(v => v === 6).length >= 2) return 'toundra';
+  return null;
+}
 const TEINTES = [0xe2e9f2, 0xf0fbe8, 0xfff4d8, 0xffd8a8].map(c => new THREE.Color(c)); // hiver, printemps, été, automne
+const PAILLE = new THREE.Color(0xffd890);
 const BLANC = new THREE.Color(0xf4f7fb);
 const boise = i => E.foret[i] || E.arbres[i] > 0;
 /** Plaine cultivée : fertile, sans arbres, hors rivière. */
@@ -81,6 +129,11 @@ const matRiv = toon(0x46a9dd, { polygonOffset: true, polygonOffsetFactor: -2, po
 /** Le matériau du sol et de son décor (blanc : les couleurs sont dans les sommets) : un jeu le teinte, par exemple pour
  *  assombrir la carte sous ses réseaux (vues de web_power). MAT_RIV : celui des rivières. */
 export const MAT_SOL = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: degrade });
+const MAT_VENT = auVent(MAT_SOL), CONT_VENT = auVent(CONT);
+chaqueImage((dt, t) => { U.t.value = t; MAT_VENT.color.copy(MAT_SOL.color); });
+/** Les berges de sable des rivières : boue.js les recouvre d'eau trouble pendant une crue (couleur recopiée de MAT_SOL sinon). */
+export const MAT_BERGE = MAT_SOL.clone();
+const MAT_CONTOUR = new THREE.LineBasicMaterial({ color: 0x14130f, transparent: true, opacity: 0.55 });  // le trait entre les cases
 export { matRiv as MAT_RIV };
 
 // ------------------------------------------------------------------ construction
@@ -91,7 +144,7 @@ export function construire(carteServeur) {
   familles = [];
   const N = C.l * C.h;
   H = new Array(N).fill(0);
-  E = { arbres: C.arbres.slice(), foret: C.foret.slice(), bati: new Set(), routes: new Set(), forts: new Set() };
+  E = { arbres: C.arbres.slice(), foret: C.foret.slice(), bati: new Set(), routes: new Set(), traces: new Map(), sigRoutes: '', forts: new Set() };
   // la mer : un plan translucide sur toute la carte, qui recouvre aussi les lacs
   const marge = 4, lx = Math.sqrt(3) * (C.l + 0.5) + 2 * marge, lz = 1.5 * (C.h - 1) + 2 + 2 * marge;
   eau = new THREE.Mesh(new THREE.PlaneGeometry(lx, lz), matMer);
@@ -114,34 +167,128 @@ const hexagone = r => new THREE.CircleGeometry(r, 6).rotateX(-Math.PI / 2).rotat
 
 function rebatir() {
   for (const f of familles) jeter(f);
-  const N = C.l * C.h, TU = lot(), DE = lot(), RS = lot(), RE = lot();
+  const N = C.l * C.h, TU = lot(), DE = lot(), RS = lot(), RE = lot(), bords = [];
   for (let i = 0; i < N; i++) H[i] = TERR[genre(i)][1];
+  for (let i = 0; i < N; i++) BIO[i] = deduireBiome(i, genre(i));
+  relief(N);
   rivieres(RS, RE);
-  const teinte = TEINTES[saison] || TEINTES[2];
+  const teinte = (TEINTES[saison] || TEINTES[2]).clone().lerp(PAILLE, Math.min(sec, 2) * 0.22);  // l'herbe sèche avec la sécheresse
   for (let i = 0; i < N; i++) {
     const g0 = genre(i), [col, top] = TERR[g0], { x, z, c, r } = posCase(i), bas = -1, h = top - bas;
-    const g = cyl(R * 0.965, R, h, 6).clone();
-    g.translate(x, bas + h / 2, z);
+    const g = tuile(i, x, z, top, bas, h);  // le dessus à pleine taille : les cases se touchent
     const k = new THREE.Color(col).offsetHSL((hache(c, r, 1) - 0.5) * 0.015, 0, (hache(c, r, 2) - 0.5) * 0.05);
-    if (!EAUX.has(g0)) { k.multiply(teinte); if (neige) k.lerp(BLANC, neige * 0.6); }
+    if (BIO[i]) k.lerp(TEINTE_BIO[BIO[i]], 0.6);
+    if (!EAUX.has(g0)) { k.multiply(teinte); if (neige) k.lerp(BLANC, neige * (BIO[i] === 'toundra' ? 0.85 : BIO[i] === 'desert' ? 0.3 : 0.6)); }
     const n = g.attributes.normal, a = new Float32Array(n.count * 3);
     for (let v = 0; v < n.count; v++) { const f = n.getY(v) > 0.5 ? 1 : 0.62; a.set([k.r * f, k.g * f, k.b * f], v * 3); } // flancs plus sombres
     g.setAttribute('color', new THREE.BufferAttribute(a, 3));
     TU.g.push(g);
+    if (!EAUX.has(g0)) for (let k = 0; k < 6; k++) {  // le contour de la case : un fin trait sombre entre deux cases de terre
+      const a = k * Math.PI / 3, b = a + Math.PI / 3;
+      const hc = coins(i, top);
+      bords.push(x + Math.sin(a) * R, hc[k] + 0.004, z + Math.cos(a) * R, x + Math.sin(b) * R, hc[(k + 1) % 6] + 0.004, z + Math.cos(b) * R);
+    }
     if (g0 !== 'bati') decor(DE, i, g0, top, x, z, c, r);
   }
-  familles = [fige(TU, groupe, MAT_SOL), fige(DE, groupe, MAT_SOL), fige(RS, groupe, MAT_SOL), fige(RE, groupe, matRiv)];
+  const traits = new THREE.BufferGeometry(); traits.setAttribute('position', new THREE.Float32BufferAttribute(bords, 3));
+  const contours = new THREE.LineSegments(traits, MAT_CONTOUR); groupe.add(contours);
+  const decorF = fige(DE, groupe, MAT_SOL);
+  for (const m of decorF.children) if (m.geometry.attributes.souple) m.material = m.material === MAT_SOL ? MAT_VENT : CONT_VENT;
+  familles = [fige(TU, groupe, MAT_SOL), decorF, fige(RS, groupe, MAT_BERGE), fige(RE, groupe, matRiv), contours];
   teinterEaux();
 }
 
 const p = (L, g, col, x, y, z, ry = 0, ep = EP) => put(L, g, col, x, y, z, ry, ep);
+
+// ------------------------------------------------------------------ relief : les collines descendent en pente douce vers les cases
+// plus basses (sur le quart extérieur de la case : le replat central, où l'on bâtit, garde sa hauteur) ; les montagnes gardent
+// un bord à pic, habillé de rochers (falaises). HM[i] : hauteur au milieu de chaque bord k (entre les coins k et k+1, coin k au cap 60k°).
+const RI = 0.75;
+const COLLINES = new Set(['colline', 'collineBoisee']);
+function relief(N) {
+  for (let i = 0; i < N; i++) {
+    const q = posCase(i), vb = [-1, -1, -1, -1, -1, -1];
+    for (let d = 0; d < 6; d++) { const n = voisin(i, d); if (n < 0) continue; const o = posCase(n), a = Math.atan2(o.x - q.x, o.z - q.z); vb[(((Math.round((a - Math.PI / 6) / (Math.PI / 3))) % 6) + 6) % 6] = n; }
+    VB[i] = vb; HM[i] = null;
+    const g0 = genre(i); if (!COLLINES.has(g0)) continue;
+    const hb = vb.map(n => n < 0 || EAUX.has(genre(n)) || H[n] >= H[i] - 0.05 ? H[i] : H[n] + (H[i] - H[n]) * 0.3);
+    if (hb.some(h => h < H[i])) HM[i] = hb;
+  }
+}
+/** Hauteur des six coins extérieurs d'une case : le plus bas des deux bords qui s'y touchent. */
+const coins = (i, top) => HM[i] ? HM[i].map((h, k) => Math.min(h, HM[i][(k + 5) % 6])) : [top, top, top, top, top, top];
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _n = new THREE.Vector3();
+/** Le prisme d'une case ; avec une pente, un replat hexagonal, un anneau incliné et des flancs à la hauteur de chaque coin. */
+function tuile(i, x, z, top, bas, h) {
+  if (!HM[i]) { const g = cyl(R, R, h, 6).clone(); g.translate(x, bas + h / 2, z); return g; }
+  const hc = coins(i, top), pos = [];
+  const tri = (A, B, D, nx, ny, nz) => { // dans l'ordre qui tourne la face vers (nx, ny, nz)
+    _n.crossVectors(_a.set(B[0] - A[0], B[1] - A[1], B[2] - A[2]), _b.set(D[0] - A[0], D[1] - A[1], D[2] - A[2]));
+    pos.push(...A, ...(_n.x * nx + _n.y * ny + _n.z * nz >= 0 ? [...B, ...D] : [...D, ...B]));
+  };
+  for (let k = 0; k < 6; k++) {
+    const a0 = k * Math.PI / 3, a1 = a0 + Math.PI / 3, s0 = Math.sin(a0), c0 = Math.cos(a0), s1 = Math.sin(a1), c1 = Math.cos(a1), k1 = (k + 1) % 6;
+    const I0 = [x + s0 * R * RI, top, z + c0 * R * RI], I1 = [x + s1 * R * RI, top, z + c1 * R * RI];
+    const O0 = [x + s0 * R, hc[k], z + c0 * R], O1 = [x + s1 * R, hc[k1], z + c1 * R], B0 = [x + s0 * R, bas, z + c0 * R], B1 = [x + s1 * R, bas, z + c1 * R];
+    tri([x, top, z], I0, I1, 0, 1, 0); tri(I0, O0, O1, 0, 1, 0); tri(I0, O1, I1, 0, 1, 0);
+    tri(O0, B0, B1, s0 + s1, 0, c0 + c1); tri(O0, B1, O1, s0 + s1, 0, c0 + c1);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+  return g;
+}
+/** Falaises : des pans de roche taillée contre le flanc d'une montagne, du dessus de la case voisine (plus basse) jusqu'au sommet. */
+function falaises(L, i, x, z, top) {
+  for (let k = 0; k < 6; k++) {
+    const n = VB[i]?.[k]; if (n == null || n < 0 || EAUX.has(genre(n)) || H[n] > top - 0.1) continue;
+    const a0 = k * Math.PI / 3, a1 = a0 + Math.PI / 3, mx = (Math.sin(a0) + Math.sin(a1)) / 2, mz = (Math.cos(a0) + Math.cos(a1)) / 2, ry = (k + 0.5) * Math.PI / 3, hf = top - H[n];
+    for (let j = 0; j < 3; j++) {
+      const u = (j + 0.5) / 3, px = Math.sin(a0) + (Math.sin(a1) - Math.sin(a0)) * u, pz = Math.cos(a0) + (Math.cos(a1) - Math.cos(a0)) * u;
+      const w = arrondi(0.24 + hache(i, k * 3 + j, 91) * 0.1), hh = arrondi(hf * (0.7 + hache(i, k * 3 + j, 92) * 0.35));
+      p(L, bosseler(boite(w, hh, 0.07), 0.035, i * 13 + k * 3 + j), nv(j === 1 ? ROCHE : ROCHE2, 0.2), x + px * R + mx * 0.02, H[n] + hh / 2, z + pz * R + mz * 0.02, ry, 0.006);
+    }
+  }
+}
+/** Les points ([x, z]) du tracé des rivières, par case ; et les cases bâties (villes, fermes) : la nuit s'y reflète (nuit.js). */
+export const pointsRiviere = () => rivPts;
+export const casesBaties = () => E.bati;
+/** Le pied des cascades ({ x, y, z }) : l'écume s'y forme (eau.js). */
+export const piedsCascades = () => cascades;
 export const presRiviere = (i, x, z) => (rivPts.get(i) || []).some(v => (v[0] - x) ** 2 + (v[1] - z) ** 2 < 0.13);
-/** Un point au hasard (stable) dans la case, à l'écart des rivières. */
+/** Le point de passage des routes dans la case, un peu décalé du centre : le tracé ondule d'une case à l'autre. */
+export const passage = i => { const q = posCase(i); return [q.x + (hache(q.c, q.r, 17) - 0.5) * 0.3, q.z + (hache(q.c, q.r, 19) - 0.5) * 0.3]; };
+/** Le tracé des routes de la case i vers ses voisines vs (routes.js le dessine, le décor s'en écarte) : des lignes de points
+ *  [x, z, b, u], b le bord d'où part le point (indice dans vs), u de 0 au milieu de ce bord à 1 au point de passage.
+ *  Deux voisines : un virage, courbe du milieu d'un bord au milieu de l'autre par le point de passage ; sinon une ligne
+ *  droite de chaque bord au point de passage. */
+export function traceRoute(i, vs) {
+  const c = passage(i), M = vs.map(v => { const q = passage(v); return [(c[0] + q[0]) / 2, (c[1] + q[1]) / 2]; });
+  if (vs.length === 2) {
+    const [A, B] = M, pts = [];
+    for (let k = 0; k <= 10; k++) {
+      const t = k / 10, u = 1 - t;
+      pts.push([u * u * A[0] + 2 * u * t * c[0] + t * t * B[0], u * u * A[1] + 2 * u * t * c[1] + t * t * B[1], t < 0.5 ? 0 : 1, t < 0.5 ? t * 2 : (1 - t) * 2]);
+    }
+    return [pts];
+  }
+  return M.map((m, b) => Array.from({ length: 6 }, (_, k) => [m[0] + (c[0] - m[0]) * k / 5, m[1] + (c[1] - m[1]) * k / 5, b, k / 5]));
+}
+// le ruban le plus large (route impériale la plus usée, routes.js : 0,1 × 1,6 de demi-largeur) et une marge : le pied d'un arbre
+export const ECART_ROUTE = 0.2;
+const d2Segment = (x, z, [ax, az], [bx, bz]) => {
+  const dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+  return (ax + dx * t - x) ** 2 + (az + dz * t - z) ** 2;
+};
+/** Le point (x, z) de la case i tombe-t-il sur le ruban d'une de ses routes ? */
+export const presRoute = (i, x, z) => (E.traces.get(i) || []).some(l => l.some((a, k) => k && d2Segment(x, z, l[k - 1], a) < ECART_ROUTE ** 2));
+/** Un point au hasard (stable) dans la case, à l'écart des rivières et des routes ; une case de route a quatre essais de plus
+ *  (tirés à part : les points des autres cases ne bougent pas), pour que sa forêt reste aussi dense. */
 function auHasard(i, x, z, k, sel, rayon = 0.62) {
-  for (let essai = 0; essai < 4; essai++) {
-    const an = hache(i, k * 4 + essai, sel) * Math.PI * 2, l = Math.sqrt(hache(i, k * 4 + essai, sel + 1)) * rayon;
+  const essais = E.traces.has(i) ? 8 : 4;
+  for (let essai = 0; essai < essais; essai++) {
+    const j = k * 4 + essai % 4, s = sel + (essai >> 2) * 500;
+    const an = hache(i, j, s) * Math.PI * 2, l = Math.sqrt(hache(i, j, s + 1)) * rayon;
     const px = x + Math.cos(an) * l, pz = z + Math.sin(an) * l;
-    if (!presRiviere(i, px, pz)) return [px, pz];
+    if (!presRiviere(i, px, pz) && !presRoute(i, px, pz)) return [px, pz];
   }
   return null;
 }
@@ -151,6 +298,12 @@ const FEUILLES = {
 // arbres et montagnes : proposition 1 de maquettes/web_engine/arbres-montagnes.html (validée le 18/11/2026)
 const VERTS = [0x3e7f34, 0x356f30, 0x4a8a3c];
 function arbre(L, x, y, z, s, i, k, conif) {
+  const g0 = L.g.length, o0 = L.o.length;
+  arbre0(L, x, y, z, s, i, k, conif);
+  // la souplesse de chaque sommet : sa hauteur au-dessus du pied de l'arbre, rapportée à la hauteur de l'arbre
+  for (const g of [...L.g.slice(g0), ...L.o.slice(o0)]) { const P = g.attributes.position, a = new Float32Array(P.count); for (let v = 0; v < P.count; v++) a[v] = Math.min(1, Math.max(0, (P.getY(v) - y) / (4.6 * s))); g.setAttribute('souple', new THREE.BufferAttribute(a, 1)); }
+}
+function arbre0(L, x, y, z, s, i, k, conif) {
   const ry = hache(i, k, 25) * 6;
   p(L, cyl(0.2 * s, 0.32 * s, 1.5 * s, 5), 0x6e4a2c, x, y + 0.75 * s, z);
   if (conif) {
@@ -187,15 +340,18 @@ const ROCHE = 0x8a8173, ROCHE2 = 0x7a7266, PICS = [[0, -0.05, 1.15], [-0.38, 0.1
 const GISEMENTS = { pierre: 0xd0cbbf, fer: 0xb0603a, charbon: 0x2e2e33, or: 0xf0c43a };
 const W = 0.46, D = 0.24, JEU = 0.04; // parcellaire de la maquette
 function decor(L, i, g0, y, x, z, c, r) {
-  const t = C.terrain[i];
+  const t = C.terrain[i], bio = BIO[i];
+  if (g0 === 'montagne') falaises(L, i, x, z, y);
+  if (bio === 'marais') marais(L, i, x, z, y);
+  if (bio === 'toundra') toundra(L, i, x, z, y);
   // arbres : la forêt (autant que la case en porte) ou quelques arbres épars
   // (le moteur compte 0 à 6 arbres par case : on en dessine 11/6 fois plus, plus serrés, et des buissons en forêt)
-  const n0 = t >= 4 && t <= 5 && !degage(i) ? (E.arbres[i] | 0) : 0, nb = Math.round(n0 * 11 / 6);
+  const n0 = t >= 4 && t <= 5 && !degage(i) && bio !== 'desert' ? (E.arbres[i] | 0) : 0, nb = Math.round(n0 * 11 / 6);
   for (let k = 0; k < nb; k++) {
     const q = auHasard(i, x, z, k, 21, 0.66);
     if (!q) continue;
     const s = arrondi((0.62 + hache(i, k, 23) * 0.55) * S0);
-    arbre(L, q[0], y, q[1], s, i, k, hache(i, k, 24) < (t === 5 ? 0.75 : 0.5));
+    arbre(L, q[0], y, q[1], s, i, k, bio === 'toundra' || hache(i, k, 24) < (t === 5 ? 0.75 : 0.5));
   }
   for (let k = 0; k < (n0 >= 4 ? n0 - 2 : 0); k++) {
     const q = auHasard(i, x, z, k, 41, 0.7);
@@ -227,7 +383,7 @@ function decor(L, i, g0, y, x, z, c, r) {
     // au pied du relief : deux rochers et des cailloux de la couleur du minerai
     const l = g0 === 'montagne' ? 0.66 : 0.5;
     let an = hache(i, 60) * Math.PI * 2;
-    for (let e = 0; e < 5 && presRiviere(i, x + Math.cos(an) * l, z + Math.sin(an) * l); e++) an += Math.PI / 3; // à l'écart de la rivière
+    for (let e = 0; e < 5 && (presRiviere(i, x + Math.cos(an) * l, z + Math.sin(an) * l) || presRoute(i, x + Math.cos(an) * l, z + Math.sin(an) * l)); e++) an += Math.PI / 3; // à l'écart de la rivière et de la route
     const gx = x + Math.cos(an) * l, gz = z + Math.sin(an) * l;
     for (let k = 0; k < 2; k++) p(L, sphere(arrondi((0.6 + hache(i, k, 61) * 0.3) * S0), 0), nv(0x9b958a, 0.4), gx + (k - 0.5) * 0.12, y + 0.05, gz + (hache(i, k, 62) - 0.5) * 0.08, hache(i, k, 63) * 3);
     const col = GISEMENTS[C.gisement[i]] ?? 0x9c9c94;
@@ -236,7 +392,7 @@ function decor(L, i, g0, y, x, z, c, r) {
   if (champ(i)) {
     // parcellaire : trois bandes de deux parcelles, alignées sur une direction de la case, avec leurs sillons
     const an = (hache(c, r, 7) * 3 | 0) * Math.PI / 3, ca = Math.cos(an), sa = Math.sin(an);
-    const CC = saison === 0 ? (neige > 0.3 ? [0xeef2f6, 0xe4eaef] : [0xa08a5a, 0x8f7a4f]) : saison === 1 ? [0x9fd35a, 0x86c24a, 0xb5d86a] : saison === 3 ? [0xc9a35a, 0xa8803f, 0x9b7d4a] : [0xe3c75b, 0xd6b24a, 0xa9c457, 0xc9b24a];
+    const CC = sec === 3 ? [0x8a6e4a, 0x7a6040, 0x806848] : saison !== 0 && sec === 2 ? [0xa8824a, 0x94703e, 0x8a6a3c] : saison !== 0 && sec === 1 ? [0xd8c060, 0xc9ad4e, 0xbfa452] : saison === 0 ? (neige > 0.3 ? [0xeef2f6, 0xe4eaef] : [0xa08a5a, 0x8f7a4f]) : saison === 1 ? [0x9fd35a, 0x86c24a, 0xb5d86a] : saison === 3 ? [0xc9a35a, 0x6e4e32, 0xa8803f, 0x7a5a3a] : [0xe3c75b, 0xd6b24a, 0xa9c457, 0xc9b24a];
     const poser = (w, h, d, col, lx, lz) => p(L, boite(w, h, d), col, x + lx * ca + lz * sa, y + h / 2, z - lx * sa + lz * ca, an, 0);
     if (hache(c, r, 12) < 0.35) { // épouvantail
       const ex = x + 0.05 * sa, ez = z + 0.05 * ca;
@@ -248,6 +404,10 @@ function decor(L, i, g0, y, x, z, c, r) {
     for (let b = -1; b <= 1; b++) for (const cote of [-1, 1]) {
       const col = new THREE.Color(CC[hache(c * 7 + b, r * 5 + cote, 9) * CC.length | 0]), lx = cote * (W + JEU) / 2, lz = b * (D + JEU);
       poser(W, 0.03, D, col.getHex(), lx, lz);
+      if (saison === 2 && b === 1 && cote === -1 && hache(c, r, 14) < 0.7) for (const gg of [-0.12, 0.12]) { // meules de foin, l'été
+        const gx = lx + gg; p(L, cone(0.06, 0.11, 8), 0xd8b45a, x + gx * ca + (lz) * sa, y + 0.085, z - gx * sa + (lz) * ca, 0, 0.004);
+        p(L, sphere(0.025, 0), 0xc9a24a, x + gx * ca + lz * sa, y + 0.14, z - gx * sa + lz * ca, 0, 0);
+      }
       if (saison === 2 && b === 0 && cote === 1) for (const gg of [-0.15, 0, 0.15]) { // gerbes
         const gx = lx + gg;
         p(L, cone(0.03, 0.08, 6), 0xe3c75b, x + gx * ca + lz * sa, y + 0.07, z - gx * sa + lz * ca, 0, 0.004);
@@ -255,8 +415,30 @@ function decor(L, i, g0, y, x, z, c, r) {
       if (saison !== 0) for (const sl of [-1, 0, 1]) poser(W * 0.9, 0.034, 0.018, col.clone().multiplyScalar(0.8).getHex(), lx, lz + sl * D / 3); // sillons
     }
   }
-  if (g0 === 'prairie' && !nb && !degage(i) && hache(i, 70) < 0.5) { const q = auHasard(i, x, z, 0, 71); if (q) p(L, sphere(S0, 0), saison === 3 ? 0x8fa03c : saison === 0 ? nv(0x7d8a5a, 0.5) : 0x5fa83c, q[0], y + 0.7 * S0, q[1]); }
+  if (saison === 1 && !bio && (g0 === 'prairie' || g0 === 'colline') && !nb && !degage(i)) for (let k = 0; k < 9; k++) { // fleurs des prés au printemps
+    const q = auHasard(i, x, z, 0, 120 + k); if (q) p(L, sphere(0.012, 0), [0xff6b9a, 0xffd34d, 0xffffff, 0xb57bff][k % 4], q[0], y + 0.012, q[1], 0, 0);
+  }
+  if (g0 === 'prairie' && !bio && !nb && !degage(i) && hache(i, 70) < 0.5) { const q = auHasard(i, x, z, 0, 71); if (q) p(L, sphere(S0, 0), saison === 3 ? 0x8fa03c : saison === 0 ? nv(0x7d8a5a, 0.5) : 0x5fa83c, q[0], y + 0.7 * S0, q[1]); }
   if (g0 === 'hautfond' && hache(i, 72) < 0.3) { const q = auHasard(i, x, z, 0, 73); if (q) p(L, sphere(arrondi((0.8 + hache(i, 74) * 0.6) * S0), 0), 0x9b958a, q[0], y + 0.6 * S0, q[1]); }
+}
+
+/** Marais : des mares sombres et des touffes de roseaux (massettes brunes au bout), jaunis l'automne, secs l'hiver. */
+function marais(L, i, x, z, y) {
+  for (let k = 0; k < 4; k++) { const q = auHasard(i, x, z, k, 95, 0.55); if (!q) continue; const s = arrondi(0.1 + hache(i, k, 96) * 0.09); p(L, cyl(s, s, 0.004, 9), gel > 0.3 ? 0xd6e6ee : 0x3f6a6a, q[0], y + 0.003, q[1], 0, 0); }
+  const tige = saison === 0 ? nv(0xa89a6a, 0.3) : saison === 3 ? 0xb59a52 : 0x6f8f3a;
+  for (let k = 0; k < 9; k++) {
+    const q = auHasard(i, x, z, k, 97, 0.7); if (!q) continue;
+    for (let j = 0; j < 5; j++) {
+      const dx = (hache(i, k * 5 + j, 98) - 0.5) * 0.05, dz = (hache(i, k * 5 + j, 99) - 0.5) * 0.05, hh = arrondi(0.05 + hache(i, k * 5 + j, 100) * 0.04);
+      p(L, cyl(0.0025, 0.0035, hh, 4), tige, q[0] + dx, y + hh / 2, q[1] + dz, 0, 0);
+      if (j % 2 === 0) p(L, cyl(0.006, 0.006, 0.016, 5), 0x6b4423, q[0] + dx, y + hh - 0.004, q[1] + dz, 0, 0);
+    }
+  }
+}
+/** Toundra : lichens gris-vert à ras du sol, cailloux, herbe rase en touffes. */
+function toundra(L, i, x, z, y) {
+  for (let k = 0; k < 10; k++) { const q = auHasard(i, x, z, k, 101, 0.75); if (!q) continue; const s = arrondi(0.025 + hache(i, k, 102) * 0.03); p(L, sphere(s, 0).clone().scale(1, 0.35, 1), nv([0x9aa58a, 0xb7b39a, 0x8c9a7c][k % 3], 0.6), q[0], y + 0.004, q[1], 0, 0.004); }
+  for (let k = 0; k < 4; k++) { const q = auHasard(i, x, z, k, 103, 0.7); if (!q) continue; p(L, sphere(arrondi(0.03 + hache(i, k, 104) * 0.02), 0), nv(0x8e877a, 0.4), q[0], y + 0.015, q[1], hache(i, k, 105) * 3); }
 }
 
 /** Centres monde des six parcelles d'une case cultivée (même tracé que le décor), ou null. */
@@ -286,7 +468,7 @@ export function ruban(pts, larg, y = 0) {
   return g;
 }
 function rivieres(RS, RE) {
-  rivPts = new Map();
+  rivPts = new Map(); cascades = [];
   const sable = saison === 0 && neige > 0.3 ? 0xe8ecef : 0xdccf96;
   const niveau = i => Math.max(H[i], MER);
   for (const ch of C.rivieres || []) ch.forEach((i, n) => {
@@ -305,12 +487,20 @@ function rivieres(RS, RE) {
     if (ap != null && niveau(ap) < H[i] - 0.05) {
       const q = posCase(ap), dh = H[i] - niveau(ap);
       p(RE, boite(0.03, dh, 2 * w), 0xffffff, B[0], niveau(ap) + dh / 2 + 0.012, B[1], -Math.atan2(q.z - k.z, q.x - k.x), 0);
+      cascades.push({ x: B[0], y: niveau(ap) + 0.02, z: B[1] });
     }
   });
 }
+const RIV_CRUE = new THREE.Color(0x8f8460), RIV_SALE = new THREE.Color(0x6f7f45);
+let crue = 0, sale = 0;
 function teinterEaux() {
-  matRiv.color.copy(RIV).lerp(RIV_HIVER, Math.max(gel, saison === 0 ? neige : 0)).lerp(RIV_GEL, gel * 0.6);
+  matRiv.color.copy(RIV).lerp(RIV_HIVER, Math.max(gel, saison === 0 ? neige : 0)).lerp(RIV_GEL, gel * 0.6).lerp(RIV_CRUE, crue * 0.7).lerp(RIV_SALE, sale * 0.65);
 }
+/** Crue (0 à 1 : eau trouble et boueuse) et pollution de l'eau (0 à 1 : vert brun) des rivières ; boue.js les tient à jour. */
+export function teinterRivieres(c, s) { crue = c; sale = s; teinterEaux(); }
+/** La sécheresse du décor : 0, 1 (champs jaunis, herbe pâle), 2 (champs grillés) ou 3 (champs vides : la famine, chroniques.js) ;
+ *  le décor ne se refait que si elle change. */
+export function secher(v) { v = v | 0; if (v === sec) return; sec = v; if (C) rebatir(); }
 /** Le gel (0 à 1) : l'eau des rivières et des lacs pâlit puis blanchit, la mer un peu. */
 export function geler(v) {
   gel = U.gel.value = Math.max(0, Math.min(1, v || 0));
@@ -333,10 +523,13 @@ const memes = (a, b) => a.size === b.size && [...a].every(v => b.has(v));
 export function majEtat(etat) {
   if (!C) return;
   const cs = etat.cases, bati = new Set(etat.batiments.map(b => b.case));
-  const routes = new Set((etat.routes || []).flatMap(r => [r[0], r[1]])), forts = new Set((etat.forts || []).map(f => f.case));
+  const forts = new Set((etat.forts || []).map(f => f.case)), liens = new Map();
+  for (const [a, b] of etat.routes || []) for (const [u, v] of [[a, b], [b, a]]) { if (!liens.has(u)) liens.set(u, []); liens.get(u).push(v); }
+  const routes = new Set(liens.keys()), sigRoutes = [...liens].map(([i, vs]) => i + ':' + vs).sort().join(' ');
   const nq = Math.round((etat.meteo?.neige_sol || 0) * 10) / 10;
-  const change = !pareil(cs.arbres, E.arbres) || !pareil(cs.foret, E.foret) || !memes(bati, E.bati) || !memes(routes, E.routes) || !memes(forts, E.forts) || etat.saison !== saison || nq !== neige;
-  E = { arbres: cs.arbres.slice(), foret: cs.foret.slice(), bati, routes, forts };
+  const change = !pareil(cs.arbres, E.arbres) || !pareil(cs.foret, E.foret) || !memes(bati, E.bati) || sigRoutes !== E.sigRoutes || !memes(forts, E.forts) || etat.saison !== saison || nq !== neige;
+  const traces = sigRoutes === E.sigRoutes ? E.traces : new Map([...liens].map(([i, vs]) => [i, traceRoute(i, vs)]));
+  E = { arbres: cs.arbres.slice(), foret: cs.foret.slice(), bati, routes, traces, sigRoutes, forts };
   saison = etat.saison; neige = nq;
   if (change) rebatir();
   territoires(etat);
@@ -355,12 +548,14 @@ function territoires(etat) {
   for (let i = 0; i < pr.length; i++) {
     const o = pr[i];
     if (o < 0) continue;
-    const { x, z } = posCase(i), y = Math.max(H[i], MER) + 0.02;
+    const { x, z } = posCase(i), hc = coins(i, H[i]);
+    // sur la pente d'une colline, le liseré descend avec le sol (coin k de coin() = coin 2 − k du relief)
+    const y = (r, k) => Math.max(H[i] + (hc[((2 - k) % 6 + 6) % 6] - H[i]) * Math.max(0, (r - RI) / (1 - RI)), MER) + 0.02;
     for (let k = 0; k < 6; k++) {
       const v = voisin(i, k);
       if (v >= 0 && pr[v] === o) continue;
       for (const [r1, r2, dy, cc] of [[0.95, 0.78, 0, sombre], [0.93, 0.84, 0.004, couleurs[o] || gris]]) {
-        const A = coin(x, z, r1, k, y + dy), B = coin(x, z, r1, k + 1, y + dy), A2 = coin(x, z, r2, k, y + dy), B2 = coin(x, z, r2, k + 1, y + dy);
+        const A = coin(x, z, r1, k, y(r1, k) + dy), B = coin(x, z, r1, k + 1, y(r1, k + 1) + dy), A2 = coin(x, z, r2, k, y(r2, k) + dy), B2 = coin(x, z, r2, k + 1, y(r2, k + 1) + dy);
         pos.push(...A, ...B, ...B2, ...A, ...B2, ...A2);
         for (let w = 0; w < 6; w++) cols.push(cc.r, cc.g, cc.b);
       }

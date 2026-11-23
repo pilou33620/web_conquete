@@ -12,7 +12,8 @@ import { THREE, scene, posCase, caseA, voisins, hache, chaqueImage } from './sce
 import { lot, put, fige, toon, boite, cyl, cone, sphere } from './toon.js';
 import { carte, dessus, solEn, presRiviere } from './plateau.js';
 import { maillageCache, maillageArmee, fantassin, canon, PALIERS } from './modeles.js';
-import { bouffee } from './vie.js';
+import { bouffee, climat } from './vie.js';
+const _qv = new THREE.Quaternion(), _ev = new THREE.Euler();
 import { infoRemparts, STYLE_REMP, BRONZE, lisse, putR, ryDe, contourGroupe, decale, RE } from './remparts.js';
 import { couleurDe, palierRoyaume } from './monde.js';
 
@@ -272,7 +273,7 @@ function choisirCamp(s, ville, C, bati, murees, chez, etat) {
   return { cible: w0, O, u, plan, o, cases, id: ++numero };
 }
 let emprise = null;
-/** L'emprise au sol de l'armée la plus large (palier 5, avec son fourgon), en unités du modèle. */
+/** L'emprise au sol de l'armée la plus large (palier 5), en unités du modèle. */
 function empriseArmee() { if (!emprise) { const g = maillageArmee('#888', 5).children[0].geometry; g.computeBoundingBox(); emprise = g.boundingBox; } return emprise; }
 /** Un boyau en zigzag entre les abscisses sa et sb du chemin, les crochets réduits (ou effacés) là où le terrain manque. */
 function zigzag(o, PL, sa, sb, A = 0.12) {
@@ -515,5 +516,10 @@ chaqueImage((dt, t) => {
   for (const e of eclats) { const f = Math.min(1, e.vie / 0.1); pa.setXYZ(n, e.x, e.y, e.z); ca.setXYZ(n++, f, 0.82 * f, 0.38 * f); }
   ECLATS.geometry.setDrawRange(0, n); pa.needsUpdate = ca.needsUpdate = true;
   // les drapeaux des sièges et des forts
-  for (const f of pavillons) { const p = f.geometry.attributes.position, wd = f.userData.w; for (let i = 0; i < p.count; i++) { const u = p.getX(i) / wd; p.setZ(i, Math.sin(t * 6 - u * 5 + f.userData.ph) * u * 0.16 * wd); } p.needsUpdate = true; }
+  // (ils flottent dans le sens du vent : climat.dir est un cap du plateau, on retranche celui de leur parent)
+  const fv = 0.4 + Math.min(1.2, climat.vent ?? 0.3);
+  for (const f of pavillons) {
+    if (f.parent) { f.parent.getWorldQuaternion(_qv); f.rotation.y = -(climat.dir || 0) - _ev.setFromQuaternion(_qv, 'YXZ').y; }
+    const p = f.geometry.attributes.position, wd = f.userData.w; for (let i = 0; i < p.count; i++) { const u = p.getX(i) / wd; p.setZ(i, Math.sin(t * (4 + fv * 3) - u * 5 + f.userData.ph) * u * 0.13 * fv * wd); } p.needsUpdate = true;
+  }
 });

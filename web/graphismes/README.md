@@ -12,18 +12,34 @@ La bibliothèque graphique commune des jeux. Elle vit dans `web_engine/lib/`, et
 
 | Partie | Contenu | A besoin de |
 |---|---|---|
-| `rendu/` | tous les rendus, en modules ES (détail ci-dessous) ; `rendu.css` ; `img/` (illustrations des événements, SVG), `icons/` (icônes de l'application, PNG) | `three` |
-| `three/` | three.js r186 (`three.module.js`, `three.core.js`) et `addons/utils/BufferGeometryUtils.js` : une bibliothèque tierce, pas un rendu | — |
+| `three` | `three/` : three.js r186 (`three.module.js`, `three.core.js`) et `addons/utils/BufferGeometryUtils.js` : une bibliothèque tierce, pas un rendu | — |
+| `socle` | `rendu/` : `scene` (et le réglage de qualité), `toon`, `plateau`, `meteo`, `vie`, `boue`, `ambiance`, `nuit`, `faune`, `eau`, `routes`, `brouillard`, `etiquettes`, `rendu.css` | `three` |
+| `moderne` | `rendu/modernes.js`, `rendu/chantiers.js`, `rendu/rail.js` | `socle` |
+| `antique` | `rendu/antiques.js` | `moderne` |
+| `ancien` | `rendu/` : `modeles`, `monde`, `quartiers`, `animations`, `chroniques`, `img/` (illustrations des événements, SVG), `icons/` (icônes de l'application, PNG) | `socle`, `moderne`, `antique`, `guerre` |
+| `guerre` | `rendu/` : `guerre_commun`, `remparts`, `forts`, `sieges`, `marine`, `espions` | `ancien` |
+| `defense` | `rendu/defense.js` : le tower defense (tours, ennemis, projectiles, effets, villes à défendre) | `ancien` |
+| `rendu` | tout (les jeux d'avant la 2.15.0) | toutes |
+
+Depuis la 2.15.0, **les parties sont des listes de fichiers de `rendu/`** (dans `outils/installer.sh`) : un jeu qui prend moins de parties a moins
+de fichiers, mais les chemins d'import ne changent pas (`graphismes/rendu/…`). Le socle ne dépend ni de `monde.js` ni de la guerre :
+`monde.js` s'inscrit lui-même auprès de `vie.js` (`MONDE`) et de `ambiance.js` (`toitsDe`) quand il est chargé. L'installateur vérifie
+que chaque import d'un fichier installé trouve son fichier, et échoue sinon.
 
 | Module de `rendu/` | Rôle |
 |---|---|
 | `scene.js`, `toon.js` | la scène, la caméra et la lumière ; l'ombrage toon et les contours, les briques des modèles (`lot`, `put`, `fige`, `boite`, `cyl`, `cone`, `sphere`) |
-| `plateau.js` | le terrain et la nature : cases, mer, rivières, forêts, collines, montagnes, champs, saisons et neige |
+| `plateau.js` | le terrain et la nature : cases, mer, rivières, forêts (les arbres ploient au vent), collines, montagnes, champs, saisons et neige |
 | `modeles.js` | les bâtiments anciens (styles Ancien Régime, Lumières, Empire, Révolution industrielle) et les armées |
-| `modernes.js` | les bâtiments modernes : installations électriques, lignes (`pylone`, `BAT.ligne15`…`ligne400`), eau, déchets, quartiers, fermes ; leur catalogue (`INSTALLATIONS`, `QUARTIERS`) et les époques modernes (`EPOQUES`) |
+| `modernes.js` | les bâtiments modernes : installations électriques, lignes (`pylone`, `BAT.ligne15`…`ligne400`), eau, déchets, quartiers, fermes ; leur catalogue (`INSTALLATIONS`, `QUARTIERS`) et les époques modernes (`EPOQUES`) ; les parties mobiles (`piece`) et leur animation (`modele`, `animer`) |
+| `animations.js` | la vie des bâtiments anciens hors partie : `animationsAncien(cle, epoque, boites, couleur)`, une recette par bâtiment (artisans, porteurs, passants, charrettes, bêtes, soldats, wagonnets, train) posée dans ses espaces libres ; `bivouacAncien(palier, couleur)`, l'armée au repos ; animés par `modele()` et `animer()` |
+| `antiques.js` | l'Antiquité : bâtiments gaulois (bois, torchis, chaume) et romains, armées gauloises et romaines (`ANT`), leur catalogue (`ANTIQUES`) ; assemblés et animés par `modele()` et `animer()` de `modernes.js` |
+| `traces.js`, `chroniques.js` | les traces de bataille ; les grands événements de web_royaumes (incendies, épidémies, couronnements, révoltes, mariages, fêtes) |
+| `crises.js` | les crises de web_power : panaches, chutes des barrages, reflets des panneaux solaires, blackout |
 | `monde.js`, `vie.js`, `quartiers.js` | ce qui vit sur le plateau : bâtiments posés, fumées, drapeaux, habitants, bêtes, bateaux, vie des quartiers |
-| `meteo.js`, `routes.js`, `etiquettes.js` | le temps et l'heure du jour ; les routes ; les bannières et étiquettes HTML |
+| `meteo.js`, `routes.js`, `boue.js`, `ambiance.js`, `nuit.js`, `faune.js`, `eau.js`, `etiquettes.js` | le temps et l'heure du jour ; les routes ; la pluie (routes boueuses et mouillées, flaques, crue, eau sale, traces de boue des armées) ; brume du matin, feuilles d'automne, givre sur les toits ; les bannières et étiquettes HTML. Les effets suivent `climat` (vie.js) : un jeu peut y poser `pollution` et `eauSale` |
 | `remparts.js`, `forts.js`, `sieges.js`, `marine.js`, `espions.js`, `brouillard.js`, `guerre_commun.js` | la guerre : remparts, forts, sièges, flottes, espions, brouillard de guerre |
+| `defense.js` | le tower defense, dans le style du moteur : les quinze époques (`ERES`) en cinq styles, `tour(role, ere, niveau, { pop })` (tête qui pivote, animations au repos) et `tirer(t)` (recul, fumée, éclair), `ennemi(genre, ere)`, `avancer(e, d, dt)` (jambes, roues, hélices), `abattre(e)`, `toucher(e)`, `piege(role, ere)` et `declencher(p)` (pièges animés), `projectile(genre)` et `suivreTir(p)`, effets (`explosion`, `eclat`, `eclaboussure`, `rayon`, `chute`), `anneauPortee`, `barreVie`, `batimentVille` |
 
 ### Mise en route
 
@@ -59,8 +75,9 @@ const en1960 = INSTALLATIONS.filter(t => t.an <= 1960 && !(t.fin && t.fin < 1960
 
 | Jeu | Dossier | `PARTIES` |
 |---|---|---|
-| web_royaumes | `web/graphismes/` | `rendu` (servi par le serveur Rust) |
-| web_power | `graphismes/` | `rendu` (le moteur unique depuis la 2.3.0 : le jeu dessine dans un groupe à son échelle, voir son `js/01-moteur.js`) |
+| web_royaumes | `web/graphismes/` | `ancien guerre` (donc tout ; servi par le serveur Rust) |
+| web_defense | `graphismes/` | `defense` (donc tout ; le jeu est statique : une page et ses modules) |
+| web_power | `graphismes/` | `moderne` (avec `socle` et `three` ; le moteur unique depuis la 2.3.0 : le jeu dessine dans un groupe à son échelle, voir son `js/01-moteur.js`) |
 
 ## Utiliser la bibliothèque dans un jeu
 

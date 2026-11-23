@@ -2,17 +2,22 @@
 // travaux des champs, métiers des bâtiments, fêtes, armées (exercice, tambour, bivouac), train, fenêtres et lanternes la nuit.
 // Tout est décor : rien ici ne touche aux règles. Les personnages sont de petits modèles en boîtes (unités de web_power,
 // réduits par ECH), regroupés par modèle en InstancedMesh ; ils ne sont reconstruits que quand l'état change (majVie).
-import { THREE, scene, posCase, chaqueImage, hache, cam, voisins } from './scene.js';
+import { THREE, scene, posCase, chaqueImage, hache, cam, voisins, qualite } from './scene.js';
 import * as P from './plateau.js';
-import * as M from './monde.js';
+// ce que monde.js (bâtiments et armées de web_royaumes) prête à la vie ; il s'y inscrit lui-même : sans lui (web_power), rien
+export const MONDE = {};
 import { MAT, CONT, toon, put, fige, lot, fusion, boite, cyl, cone, sphere, jeter } from './toon.js';
 
 /** Le temps qu'il fait et l'heure du jour (tenus à jour par meteo.js). */
-export const climat = { genre: 'soleil', froid: true, vent: 0.3, dir: 0, nuages: 3, gris: 0, oiseaux: true, pluie: false, neige: false, gel: 0, saison: 2, heure: 'jour', jour: 1, aube: 0, nuit: 0, arc: false };
+export const climat = { genre: 'soleil', froid: true, vent: 0.3, dir: 0, nuages: 3, gris: 0, oiseaux: true, pluie: false, neige: false, gel: 0, saison: 2, heure: 'jour', jour: 1, aube: 0, nuit: 0, arc: false,
+  // effets posés par meteo.js (sec, poudre, pluieForte), boue.js (apresPluie) ou par le jeu (pollution, eauSale : web_power), de 0 à 1
+  sec: 0, poudre: 1, pluieForte: false, apresPluie: false, pollution: 0, eauSale: 0, famine: false };
 const ECH = 0.04, ECH_BAT = 0.1, DALLE = 0.025, MER = -0.15;
 const JOUR = () => climat.heure !== 'nuit';
 const PLUIE = () => climat.pluie;
 const dehors = () => JOUR() && !PLUIE();
+// le marché se tient le matin : on remballe dans l'après-midi (le jour du cycle dure 300 s, meteo.js)
+const MATIN = () => climat.phase === 'aube' || (climat.phase === 'jour' && (climat.p || 0) < 170);
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _v = new THREE.Vector3(), _c = new THREE.Color(), _e = new THREE.Euler();
 const tache = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), d = g.createRadialGradient(32, 32, 0, 32, 32, 32); d.addColorStop(0, 'rgba(255,255,255,1)'); d.addColorStop(0.35, 'rgba(255,255,255,.6)'); d.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = d; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
 
@@ -23,7 +28,10 @@ FUM.count = 0; FUM.frustumCulled = false; FUM.setColorAt(0, _c.set(0xffffff)); s
 const bouffees = [];
 const TEINTE = { blanche: new THREE.Color(0xf6f4ee), noire: new THREE.Color(0x55504a), poudre: new THREE.Color(0xf4f1ea), poussiere: new THREE.Color(0xb59a74) };
 /** Une bouffée de fumée : genre 'blanche', 'noire', 'poudre' ou 'poussiere' (travaux, impacts) ; k : taille (salves de l'armée). */
+/** Efface toutes les fumées en cours (une vitrine qui change ce qu'elle montre). */
+export function viderFumees() { bouffees.length = 0; }
 export function bouffee(x, y, z, genre = 'blanche', k) {
+  if (qualite.part < 1 && genre !== 'poudre' && Math.random() > qualite.part) return;  // qualité légère : moins de fumées
   if (bouffees.length >= NFUM) bouffees.shift();
   bouffees.push({ x, y, z, age: 0, c: TEINTE[genre] || TEINTE.blanche, k: k ?? (genre === 'poudre' ? 2.6 : 1), vie: genre === 'poudre' ? 2.2 : 3 });
 }
@@ -210,6 +218,14 @@ function parcellesRepli(i, C, bati, foret) {
 }
 
 // ------------------------------------------------------------------ fêtes, arc-en-ciel : ce qui dépend du mois précédent
+/** Une corde à linge entre deux piquets ; les draps se soulèvent sous le vent. */
+const DRAPS = [0xf6f2ea, 0x9fc4e8, 0xf2d6d6, 0xf6f2ea, 0xe8d38a].map(c => toon(c, { side: THREE.DoubleSide })), DRAP = new THREE.PlaneGeometry(0.045, 0.05).translate(0, -0.025, 0);
+function cordeLinge(x, y, z, cap, quand) {
+  const L = lot(); for (const o of [-0.13, 0.13]) put(L, new THREE.BoxGeometry(0.008, 0.12, 0.008), 0x8b5a2b, o, 0.06, 0, 0, 0.003); put(L, new THREE.BoxGeometry(0.26, 0.003, 0.003), 0xe9e2d0, 0, 0.115, 0, 0, 0);
+  const linge = fige(L, VIE); linge.position.set(x, y, z); linge.rotation.y = cap;
+  const draps = [0, 1, 2, 3].map(j => { const m = new THREE.Mesh(DRAP, DRAPS[(j + Math.round(x * 7)) % DRAPS.length]); m.position.set(-0.09 + j * 0.06, 0.113, 0); linge.add(m); return m; });
+  ajoute(linge, t => draps.forEach((m, j) => { m.rotation.x = Math.sin(t * (2 + climat.vent * 3) + j) * (0.15 + climat.vent * 0.5); }), quand);
+}
 const memo = { niveaux: new Map(), statuts: new Map(), fetes: new Map(), tour: -1, genre: null, arc: false };
 function fetesDuMois(etat, rapport) {
   if (etat.tour < memo.tour) { memo.niveaux.clear(); memo.statuts.clear(); memo.fetes.clear(); memo.genre = null; }
@@ -222,13 +238,14 @@ function fetesDuMois(etat, rapport) {
     memo.statuts.set(r.id, r.statut);
   }
   if ((rapport?.evenements || []).some(e => /Paix signée|Alliance/.test(e.texte || ''))) feter(cap);
+  if ((rapport?.combats || []).some(c => c.vainqueur === 0 && (c.attaquant === 0 || c.defenseur === 0))) feter(cap);  // une bataille gagnée : la capitale fête la victoire
   const actives = new Set([...memo.fetes].filter(([, t]) => t >= etat.tour).map(([id]) => id));
   // la victoire, et chaque septembre (mois 8) la fête des vendanges dans toutes les villes du joueur
   if (etat.fin?.victoire || etat.mois === 8) for (const v of etat.villes) if (v.proprio === 0) actives.add(v.id);
   // arc-en-ciel : un beau mois après un mois pluvieux, ou parfois au hasard
   if (etat.tour !== memo.tour) {
     const g = etat.meteo?.genre, beau = ['soleil', 'nuages', 'canicule'].includes(g);
-    memo.arc = beau && (['pluie', 'orage', 'tempete'].includes(memo.genre) || hache(etat.tour, 61) < 0.1);
+    memo.arc = beau && (['pluie', 'orage', 'tempete'].includes(memo.genre) || hache(etat.tour, 61) < 0.3);
     memo.genre = g; memo.tour = etat.tour;
   }
   climat.arc = memo.arc;
@@ -248,7 +265,7 @@ export function majVie(etat, rapport) {
   const fetes = fetesDuMois(etat, rapport);
   const C = P.carte();
   const train = (etat.joueur?.techs || []).includes('chemin_fer');
-  const sig = JSON.stringify([etat.batiments.map(b => [b.id, b.cle, b.case, b.reste, b.face, b.ville, M.estArrete(b)]), etat.routes, etat.saison, etat.epoque?.cle, [...fetes], train, etat.villes.map(v => [v.id, v.case])]);
+  const sig = JSON.stringify([etat.batiments.map(b => [b.id, b.cle, b.case, b.reste, b.face, b.ville, MONDE.estArrete?.(b)]), etat.routes, etat.saison, etat.epoque?.cle, [...fetes], train, etat.villes.map(v => [v.id, v.case])]);
   if (sig === sigVie && C === carteVue) return;
   sigVie = sig; carteVue = C;
   epoque = etat.epoque?.cle || 'ancien';
@@ -262,7 +279,7 @@ function reconstruire(etat, C, fetes, train) {
   bles = []; lucioles = []; if (BLE) BLE.userData.sig = -1; lampes = []; RAIL = null;
   if (!C) { installerPools(); return; }
   const N = C.l * C.h, A = (nom, s) => acteur(nom, s);
-  const bats = etat.batiments.filter(b => b.reste === 0 && !M.estArrete(b)); // un bâtiment arrêté (faubourg assiégé, pillé, saboté) ne vit plus
+  const bats = etat.batiments.filter(b => b.reste === 0 && !MONDE.estArrete?.(b)); // un bâtiment arrêté (faubourg assiégé, pillé, saboté) ne vit plus
   const bati = new Set(etat.batiments.map(b => b.case));
   const foret = etat.cases?.foret || C.foret || [], proprio = etat.cases?.proprio || [];
   const terre = i => i >= 0 && P.TERRE(C.terrain[i]);
@@ -330,7 +347,7 @@ function reconstruire(etat, C, fetes, train) {
     const k = posCase(b.case), q = posCase(e), f = b.cle === 'port' ? 0.75 : 0.62, x = k.x + (q.x - k.x) * f, z = k.z + (q.z - k.z) * f, cap = -Math.atan2(q.z - k.z, q.x - k.x) + Math.PI / 2, ph = hache(b.id, 4) * 6;
     ajoute(A(b.cle === 'port' ? 'bateau' : 'barque', b.cle === 'port' ? 0.05 : 0.035), (t, dt, o) => {
       o.position.set(x + Math.sin(t * 0.2 + ph) * 0.04, MER - 0.01 + Math.sin(t * 1.3) * 0.006, z + Math.cos(t * 0.17 + ph) * 0.04); o.rotation.set(Math.sin(t * 1.1) * 0.05 * (1 + climat.vent), cap + Math.sin(t * 0.1 + ph) * 0.3, 0);
-    }, () => JOUR() && climat.genre !== 'tempete' && climat.genre !== 'orage' && climat.gel < 0.5);
+    }, () => JOUR() && !PLUIE() && climat.genre !== 'tempete' && climat.genre !== 'orage' && climat.gel < 0.5);  // le bétail rentre aussi sous la pluie
   }
 
   // ---- un vol d'oiseaux en V qui traverse le regard
@@ -361,6 +378,12 @@ function reconstruire(etat, C, fetes, train) {
       const q = c(b, cote); champ(nom, s, q.x, q.z, y, pc.an, { ...ex, ph: ph(b * 3 + cote) });
     }
     for (let n = 0; n < 3; n++) { const q = c(n - 1, 1); champ('corbeau', [3, 0], q.x, q.z, y, pc.an, { geste: 'sautille', v: 0.6, L: 0.3, ph: n * 2.3 + i }); }
+    // le soir, les paysans rentrent au village le plus proche (pendant le crépuscule, 30 s)
+    const q0 = pc.centres[0], v0 = etat.villes.map(v => posCase(v.case)).sort((A, B) => (A.x - q0.x) ** 2 + (A.z - q0.z) ** 2 - ((B.x - q0.x) ** 2 + (B.z - q0.z) ** 2))[0];
+    if (v0 && climat.saison !== 0) for (let n = 0; n < 2; n++) ajoute(A(n ? 'semeur' : 'faucheur'), (t, dt, o) => {
+      const u = Math.min(1, (climat.p || 0) / 28), x = q0.x + (v0.x - q0.x) * u + n * 0.04, z = q0.z + (v0.z - q0.z) * u;
+      o.position.set(x, P.solEn(x, z) + 0.03 + Math.abs(Math.sin(t * 7 + n)) * 0.006, z); o.rotation.y = Math.atan2(v0.x - q0.x, v0.z - q0.z);
+    }, () => climat.phase === 'crepuscule' && !PLUIE());
     // blés qui ondulent : 4 × 3 épis par parcelle
     const ca = Math.cos(pc.an), sa = Math.sin(pc.an), W = pc.W || 0.46, D = pc.D || 0.24;
     for (const q of pc.centres) for (let a = 0; a < 4; a++) for (let b = 0; b < 3; b++) {
@@ -397,8 +420,8 @@ function reconstruire(etat, C, fetes, train) {
       } break;
       case 'marche': { // un marché proche du regard : quartiers.js a ses marchands et ses clients
         const loin = () => !PROCHES.has(b.id);
-        for (const [sx, sz] of [[-3.2, -2.6], [3, -2.8], [-3, 3], [3.2, 2.8]]) fixe('marchand', sx * 1.28, sz * 1.28, capB(R, -sx, -sz), 1.5, () => JOUR() && loin());
-        ['cliente', 'client', 'cliente2', 'client'].forEach((nom, i) => ronde(nom, ECH, 0, 0, 2.1, 0.12, i * 1.6, { arret: true }, () => dehors() && loin()));
+        for (const [sx, sz] of [[-3.2, -2.6], [3, -2.8], [-3, 3], [3.2, 2.8]]) fixe('marchand', sx * 1.28, sz * 1.28, capB(R, -sx, -sz), 1.5, () => MATIN() && loin());
+        ['cliente', 'client', 'cliente2', 'client'].forEach((nom, i) => ronde(nom, ECH, 0, 0, 2.1, 0.12, i * 1.6, { arret: true }, () => MATIN() && !PLUIE() && loin()));
         break;
       }
       case 'hotel': {
@@ -471,7 +494,7 @@ function reconstruire(etat, C, fetes, train) {
       const q = t * (lent ? 0.15 : 0.5) + ph, an = q + Math.sin(q * 0.7) * 2;
       o.position.set(p.x + Math.cos(an) * r * 0.5, y, p.z + Math.sin(an) * r * 0.5);
       o.rotation.set(0, -an - Math.PI / 2, Math.sin(t * (lent ? 0.8 : 5) + ph) > 0.4 ? -0.5 : 0);
-    }, JOUR);
+    }, dehors);  // poules et moutons à l'abri la nuit et sous la pluie
   }
 
   // ---- la rivière la plus proche de la capitale : lavandières et linge, patineurs quand elle gèle
@@ -487,10 +510,7 @@ function reconstruire(etat, C, fetes, train) {
         const x = rive.x + dx * o, z = rive.z + dz * o, cp = -Math.atan2(-pz, -px), ph = o * 30;
         ajoute(A('lavandiere'), (t, dt, a) => { a.position.set(x, y + 0.005, z); a.rotation.set(0, cp, -Math.max(0, Math.sin(t * 1.8 + ph)) * 0.8 - 0.3); }, () => dehors() && climat.saison !== 0);
       }
-      const L = lot(); for (const o of [-0.13, 0.13]) put(L, new THREE.BoxGeometry(0.008, 0.12, 0.008), 0x8b5a2b, o, 0.06, 0, 0, 0.003); put(L, new THREE.BoxGeometry(0.26, 0.003, 0.003), 0xe9e2d0, 0, 0.115, 0, 0, 0);
-      const linge = fige(L, VIE); linge.position.set(kr.x + px * 0.4, y, kr.z + pz * 0.4); linge.rotation.y = -Math.atan2(dz, dx);
-      const draps = [0xf6f2ea, 0x9fc4e8, 0xf2d6d6, 0xf6f2ea].map((c, j) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.045, 0.05).translate(0, -0.025, 0), toon(c, { side: THREE.DoubleSide })); m.position.set(-0.09 + j * 0.06, 0.113, 0); linge.add(m); return m; });
-      ajoute(linge, t => draps.forEach((m, j) => { m.rotation.x = Math.sin(t * (2 + climat.vent * 3) + j) * (0.15 + climat.vent * 0.5); }), () => climat.saison !== 0 && !PLUIE());
+      cordeLinge(kr.x + px * 0.4, y, kr.z + pz * 0.4, -Math.atan2(dz, dx), () => climat.saison !== 0 && !PLUIE());
       const seg = rv.slice(Math.max(0, k - 5), k + 6).filter(terre);
       if (seg.length > 2) {
         const ch = cheminLisse(seg.map(j => { const p = posCase(j); return [p.x, p.z]; })), yp = Math.max(0, P.dessus(seg[0])) + 0.012;
@@ -499,6 +519,32 @@ function reconstruire(etat, C, fetes, train) {
           o.position.set(p.x, yp, p.z); o.rotation.set(0, p.cap + (sens ? 0 : Math.PI), Math.sin(t * 2 + n * 2.2) * 0.25);
         }, () => climat.saison === 0 && climat.gel > 0.3 && dehors());
       }
+    }
+  }
+
+  // ---- la foule des villes : des passants entre la place et les quartiers voisins, plus nombreux dans les grandes villes
+  // (population si le jeu la donne, sinon le rang de la ville et ses bâtiments) ; personne sous la pluie ni dans une ville assiégée
+  const PASSANTS = ['cliente', 'client', 'paysan', 'cliente2', 'enfant1', 'client', 'cliente', 'marchand'];
+  for (const v of etat.villes) {
+    const autour = voisins(v.case).filter(n => bati.has(n) && terre(n)), nb = etat.batiments.filter(b => b.ville === v.id).length;
+    const n = Math.min(18, Math.round(v.pop ? 2 + Math.sqrt(v.pop) / 6 : 2 + (v.niveau || 1) * 2 + nb / 2 + (v.capitale ? 4 : 0)));
+    const pts = [v.case, ...autour].map(i => posCase(i));
+    for (let k = 0; k < n; k++) {
+      // chacun va de la place vers un quartier voisin et revient, en flânant de côté
+      const a = pts[0], b = pts[1 + (k % Math.max(1, pts.length - 1))] || { x: a.x + Math.cos(k * 2.4) * 0.6, z: a.z + Math.sin(k * 2.4) * 0.6 };
+      const ph = hache(v.case, k, 71) * 6.28, vit = 0.08 + hache(v.case, k, 72) * 0.06, ec = (hache(v.case, k, 73) - 0.5) * 0.5, nom = PASSANTS[(k + v.case) % PASSANTS.length];
+      const px = -(b.z - a.z), pz = b.x - a.x;
+      ajoute(A(nom, nom.startsWith('enfant') ? ECH * 0.75 : ECH), (t, dt, o) => {
+        const u = (Math.sin(t * vit + ph) + 1) / 2 * 0.8 + 0.1, sens = Math.cos(t * vit + ph) >= 0 ? 1 : -1, cote = ec + Math.sin(t * 0.3 + ph) * 0.06;
+        const x = a.x + (b.x - a.x) * u + px * cote * 0.35, z = a.z + (b.z - a.z) * u + pz * cote * 0.35;
+        o.position.set(x, P.solEn(x, z) + DALLE + Math.abs(Math.sin(t * 7 + ph)) * 0.003, z); o.rotation.y = -Math.atan2((b.z - a.z) * sens, (b.x - a.x) * sens);
+      }, () => dehors() && !v.assiegee);
+    }
+    // ---- du linge qui sèche entre deux maisons (pas l'hiver, ni sous la pluie)
+    for (let j = 0; j < Math.min(3, 1 + (v.niveau || 1) / 2 | 0); j++) {
+      const i = j === 0 ? v.case : autour[j - 1]; if (i == null) break;
+      const q = posCase(i), an = hache(i, j, 74) * 6.28, x = q.x + Math.cos(an) * 0.62, z = q.z + Math.sin(an) * 0.62;
+      cordeLinge(x, P.solEn(x, z), z, an + Math.PI / 2, () => climat.saison !== 0 && !PLUIE() && JOUR());
     }
   }
 
@@ -589,7 +635,7 @@ const LIGNE = Array.from({ length: 6 }, (_, i) => [-3.4 + i * 1.15 + 0.42, 2.7, 
 const feux = [];
 function majArmees(t, dt) {
   feux.length = 0;
-  const liste = typeof M.listeArmees === 'function' ? M.listeArmees() : [], vus = new Set();
+  const liste = MONDE.listeArmees?.() || [], vus = new Set();
   for (const a of liste) {
     const g = a.groupe; if (!g) continue;
     vus.add(a.id);
@@ -611,7 +657,8 @@ function majArmees(t, dt) {
     else if (!a.enMarche && JOUR() && g.visible) {
       // exercice de temps en temps : salve de la ligne, puis des canons
       const per = 40, cy = (t + hache(a.id, 7) * per) % per, av = cy - dt;
-      const salve = (pts, k) => { for (const [lx, ly, lz] of pts) { _v.set(lx, ly, lz).applyMatrix4(g.matrixWorld); bouffee(_v.x, _v.y, _v.z, 'blanche', k); } };
+      // poudre mouillée (climat.poudre < 1) : des coups ratent, à peine une fumerolle
+      const salve = (pts, k) => { for (const [lx, ly, lz] of pts) { _v.set(lx, ly, lz).applyMatrix4(g.matrixWorld); const rate = climat.poudre < 1 && Math.random() < 0.45; bouffee(_v.x, _v.y, _v.z, 'blanche', rate ? k * 0.25 : k); } };
       if (av < 1 && cy >= 1) salve(LIGNE, 1.6);
       if (av < 2.5 && cy >= 2.5) salve(CANONS, 3);
     }
@@ -627,17 +674,19 @@ function majParticules(t, dt) {
   etincelles.forEach((e, i) => ETINC.setMatrixAt(i, _m.makeTranslation(e.x, e.y, e.z)));
   ETINC.instanceMatrix.needsUpdate = true;
   // blés qui ondulent (printemps : courts et verts ; été : hauts et dorés)
-  const vb = (climat.saison === 1 || climat.saison === 2) && bles.length > 0;
+  const vb = (climat.saison === 1 || climat.saison === 2) && bles.length > 0 && !climat.famine;  // famine : les champs sont vides
   if (vb && (!BLE || BLE.instanceMatrix.count < bles.length)) { if (BLE) { scene.remove(BLE); BLE.dispose(); } BLE = new THREE.InstancedMesh(BLE_GEO, BLE_MAT, Math.ceil(bles.length * 1.3)); BLE.frustumCulled = false; BLE.castShadow = false; BLE.setColorAt(0, _c); scene.add(BLE); }
   if (BLE) BLE.visible = vb;
   if (vb) {
-    const C = climat.saison === 1 ? [0x9fd35a, 0x86c24a, 0xb5d86a] : [0xe3c75b, 0xd6b24a, 0xa9c457, 0xc9b24a], h = climat.saison === 1 ? 0.55 : 1, V = Math.min(1.4, climat.vent);
+    // champs secs : jaunis (canicule), puis grillés et plus courts (sécheresse)
+    const C = climat.sec === 2 ? [0xb08a4a, 0x9a7440, 0xa8864e] : climat.sec === 1 ? [0xd8c060, 0xc9b050, 0xd2b85a] : climat.saison === 1 ? [0x9fd35a, 0x86c24a, 0xb5d86a] : [0xe3c75b, 0xd6b24a, 0xa9c457, 0xc9b24a];
+    const h = (climat.saison === 1 ? 0.55 : 1) * (climat.sec === 2 ? 0.6 : 1), V = Math.min(1.4, climat.vent);
     bles.forEach((b, i) => {
       const pench = Math.sin(t * 2.2 + b.x * 4 + b.z * 3) * 0.12 * (0.4 + V) + V * 0.12;
       _q.setFromEuler(_e.set(pench * 0.5, 0, pench, 'XYZ')); _m.compose(_p.set(b.x, b.y, b.z), _q, _s.set(1, h, 1)); BLE.setMatrixAt(i, _m);
     });
     // les couleurs ne changent qu'avec la saison ou les champs
-    if (BLE.userData.sig !== bles.length * 4 + climat.saison) { BLE.userData.sig = bles.length * 4 + climat.saison; bles.forEach((b, i) => BLE.setColorAt(i, _c.setHex(C[b.ci * C.length | 0]).multiplyScalar(1.08))); BLE.instanceColor.needsUpdate = true; }
+    if (BLE.userData.sig !== bles.length * 16 + climat.saison * 4 + climat.sec) { BLE.userData.sig = bles.length * 16 + climat.saison * 4 + climat.sec; bles.forEach((b, i) => BLE.setColorAt(i, _c.setHex(C[b.ci * C.length | 0]).multiplyScalar(1.08))); BLE.instanceColor.needsUpdate = true; }
     BLE.count = bles.length; BLE.instanceMatrix.needsUpdate = true;
   }
   // feuilles mortes à l'automne, autour du regard
@@ -679,12 +728,13 @@ export function partFoyers() {
   let part = ph === 'aube' ? 1 : ph === 'crepuscule' ? 0.75 : ph === 'nuit' ? 0.3 : 0.45;
   if (hiver) part = Math.max(part, ph === 'nuit' ? 0.7 : 1); else if (climat.saison === 3) part += 0.15; else if (climat.saison === 2) part *= 0.5;
   if (climat.genre === 'canicule') part = 0.06;
-  return { part, pas: hiver ? 0.55 : 0.85, k: hiver ? 1.15 : 0.9 };
+  const gel = Math.min(1, climat.gel || 0);  // plus il gèle, plus on chauffe : fumées serrées et épaisses
+  return { part, pas: hiver ? 0.42 - gel * 0.12 : 0.85, k: hiver ? 1.35 + gel * 0.3 : 0.9 };
 }
 
 chaqueImage((dt, t) => {
   horlogeT = t;
-  const parts = M.parts;
+  const parts = MONDE.parts;
   if (parts) {
     const { part, pas, k } = partFoyers();
     for (const c of parts.cheminees || []) {

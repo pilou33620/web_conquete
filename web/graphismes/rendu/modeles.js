@@ -437,7 +437,40 @@ const BATR = {
     for (const o of [-0.35, 0.35]) put(L, boite(0.08, 0.06, 5.6), 0x8a8f96, -1.5 + o, 0.3, 4, 0, 0); for (let z = 1.6; z < 6.8; z += 0.6) put(L, boite(1, 0.06, 0.2), 0x5b3a1e, -1.5, 0.26, z, 0, 0);
     put(L, cone(1.6, 1.4, 7), MINERAI[CLE] ?? 0x6a5a4a, 3, 0.7, 3, 0, 0.12); maison(L, ex, 3.6, -2.6, 0.4, 0.85, E);
   },
-  pecheur(L, ex, E) { solQ(L, 0xd9cfa0); maison(L, ex, -2.6, -1.5, 0.3, 1, E); for (const [x, z] of [[-3.6, 3], [-2.6, 3.6]]) put(L, cyl(0.5, 0.5, 1.1, 10), 0x8a5a2b, x, 0.55, z, 0, 0.12); put(L, boite(5.6, 0.3, 1.4), 0x8b5a2b, 3.6, 0.3, 0.4, 0, 0.1); for (const x of [1.4, 3.6, 5.8]) put(L, boite(0.25, 1.4, 0.25), 0x5b3a1e, x, -0.2, 1.2, 0, 0); for (const x of [0.4, 2.4]) put(L, boite(0.12, 1.8, 0.12), 0x8b5a2b, x, 0.9, -3, 0, 0); put(L, boite(2.2, 1.2, 0.05), 0xd9d2bc, 1.4, 1.2, -3, 0, 0); },
+  // cabane de pêcheur (maquette pecheur-propositions.html, mélange P1 et P3) : cabane sur pilotis au bord de l'eau (+x, le serveur
+  // la tourne vers sa case d'eau), jetée en L avec deux barques, étal de la criée sous son auvent rayé, filets et séchoir sur la grève
+  pecheur(L, ex, E) {
+    solQ(L, 0xd9cfa0);
+    const PL = 0xa87a4a, FONCE = 0x5b3a1e, CH = EPOQUE === 'ancien' ? 0xc9a14f : E.toits[0];
+    const pieu = (x, z, h = 2.6) => put(L, boite(0.3, h, 0.3), FONCE, x, 0, z, 0, 0);
+    const barque = (x, z, ry) => { put(L, boite(3, 0.55, 1.2), 0x6b4a2b, x, -1.25, z, ry, 0.06); put(L, boite(2.4, 0.1, 0.9), PL, x, -1, z, ry, 0); };
+    // la cabane sur pilotis, son plancher et l'échelle
+    for (const [x, z] of [[1.6, -3.4], [5, -3.4], [1.6, 0], [5, 0]]) pieu(x, z);
+    put(L, boite(4.6, 0.3, 4.4), PL, 3.3, 1.3, -1.7, 0, 0.08);
+    put(L, boite(3.6, 2, 3.4), 0x9a7448, 3.3, 2.45, -1.8, 0, 0.1); toit(L, 4.4, 4, 1.8, CH, 3.3, 3.45, -1.8);
+    put(L, boite(0.7, 1.3, 0.08), BOIS, 2.6, 2.1, -0.08, 0, 0); REL?.portes.push({ x: 2.6, z: -0.06, ry: 0, w: 0.7, h: 1.3 });
+    put(L, boite(0.6, 0.5, 0.08), VITRE, 4.2, 2.6, -0.08, 0, 0);
+    for (let k = 0; k < 4; k++) put(L, boite(0.9, 0.1, 0.2), PL, 0.6, 0.3 + k * 0.35, -0.1 - k * 0.25, 0, 0);
+    // la jetée en L, qui dépasse le rivage (bord de case vers 8,7), et ses deux barques
+    put(L, boite(5.4, 0.3, 1.3), PL, 8.1, 0.3, 0.6, 0, 0.1); put(L, boite(1.3, 0.3, 4.6), PL, 10.2, 0.3, 2.3, 0, 0.1);
+    for (const x of [6, 8.4]) for (const z of [0.05, 1.15]) pieu(x, z);
+    for (const z of [2.2, 3.6]) for (const x of [9.7, 10.7]) pieu(x, z);
+    barque(8.2, 2.6, 0.06); barque(8.4, -1.2, -0.1);
+    // la criée : étal, poissons, auvent rayé, caisses
+    put(L, boite(3, 0.9, 1.2), PL, -1.6, 0.45, 3, 0, 0.06);
+    for (const x of [-3, -0.2]) for (const z of [2.4, 3.6]) put(L, boite(0.12, 2.2, 0.12), FONCE, x, 1.1, z, 0, 0);
+    for (let k = 0; k < 4; k++) put(L, boite(0.78, 0.08, 1.5), k % 2 ? 0xf2efe6 : 0x3f6f9a, -2.65 + k * 0.78, 2.25, 3, 0, 0.02);
+    for (let k = 0; k < 5; k++) put(L, boite(0.4, 0.12, 0.2), 0xb9c4c8, -2.7 + k * 0.5, 0.96, 3, 0, 0.02);
+    for (const [x, z] of [[0.9, 1.6], [1.5, 1.9], [1.2, 1.1]]) put(L, boite(0.6, 0.4, 0.5), 0x8a6a42, x, 0.2, z, 0.3, 0.04);
+    // sur la grève : filet tendu, séchoir à poissons, casiers et tonneau
+    for (const k of [-1.5, 1.5]) put(L, boite(0.14, 2, 0.14), FONCE, -4.2 + k * 0.96, 1, 0.2 - k * 0.3, 0.3, 0);
+    put(L, boite(3, 1.4, 0.04), 0x6a7a6a, -4.2, 1.15, 0.2, 0.3, 0); put(L, boite(3.1, 0.08, 0.08), 0xd9c9a0, -4.2, 1.85, 0.2, 0.3, 0);
+    for (const k of [-1.2, 1.2]) put(L, boite(0.14, 2.2, 0.14), FONCE, -3.4 + k * 0.92, 1.1, -3.6 - k * -0.47, -0.5, 0);
+    put(L, boite(2.6, 0.08, 0.08), BOIS, -3.4, 2.1, -3.6, -0.5, 0);
+    for (let i = 0; i < 6; i++) { const u = -1 + 2 * i / 5; put(L, boite(0.12, 0.55, 0.22), 0xb9c4c8, -3.4 + u * 0.97, 1.7, -3.6 + u * 0.5, -0.5, 0.02); }
+    for (const [x, y, z] of [[-0.6, 0, -4.4], [0.2, 0, -4.8], [-0.2, 0.55, -4.6]]) { put(L, cyl(0.4, 0.45, 0.55, 8), 0x8a6a42, x, y + 0.28, z, 0, 0.06); put(L, cyl(0.42, 0.42, 0.06, 8), FONCE, x, y + 0.58, z, 0, 0); }
+    put(L, cyl(0.45, 0.45, 1, 10), 0x8a5a2b, -5.6, 0.5, 2.6, 0, 0.1);
+  },
   bucheron(L, ex, E) {
     solQ(L, 0xb3c27a); maison(L, ex, -2.4, -2.4, 0.3, 1, E);
     for (let i = 0; i < 5; i++) { const b = cyl(0.45, 0.45, 3.4, 8); b.rotateZ(Math.PI / 2); put(L, b, 0xa0703f, 3 + (i % 2) * 0.2, 0.45 + (i >> 1) * 0.8, 1.6 + (i % 2) * 0.9, 0.3, 0.12); }
@@ -744,7 +777,7 @@ function assembler(cle, fn) {
   try { fn(L, ex); } finally { REL = null; }
   // l'emprise au sol de chaque pièce qui dépasse du sol de la case : où une armée ne peut pas se tenir (monde.js : garnisons)
   const boites = [];
-  for (const p of L.g) { p.computeBoundingBox(); const b = p.boundingBox; if (b.max.y > 0.32) boites.push([b.min.x, b.max.x, b.min.z, b.max.z]); }
+  for (const p of L.g) { p.computeBoundingBox(); const b = p.boundingBox; if (b.max.y > 0.32) boites.push([b.min.x, b.max.x, b.min.z, b.max.z, b.max.y]); }
   const anim = [
     ...ex.fum.map(a => (a[3] === true ? { type: 'fumee', noire: true, pos: a.slice(0, 3) } : a[3] === 'fumee' ? { type: 'fumee', noire: false, pos: a.slice(0, 3) } : { type: 'cheminee', pos: a.slice(0, 3) })),
     ...ex.ailes.map(pos => ({ type: 'ailes', pos })),
@@ -778,7 +811,7 @@ function noircir(L) {
   }
 }
 /** Le bâtiment posé au centre de sa case : { mesh: THREE.Group à l'échelle 0,1, anim: [{ type, pos (coordonnées locales), noire?, couleur? }],
- *  boites: emprises au sol des pièces [x0, x1, z0, z1] (coordonnées locales) }.
+ *  boites: emprises au sol des pièces [x0, x1, z0, z1, hauteur] (coordonnées locales) }.
  *  ruine : la version incendiée, plus basse et noircie, sans drapeau ni fumée. */
 export function maillageBatiment({ cle, couleur = '#2f5fa8', epoque = 'ancien', saison = 2, neige = 0, niveau = 1, ruine = false }) {
   const n = neige > 0.3, ep = EPOQUES[epoque] ? epoque : 'ancien';
@@ -822,7 +855,7 @@ export const PALIERS = [
   { date: '1765 · Système Gribeauval', nom: 'Artillerie moderne', tete: 'tricorne', habit: 'long', piques: false, baionnette: true, grenadiers: true, cav: 'dragon', art: 'gribeauval' },
   { date: '1793 · Levée en masse', nom: 'Les armées de la nation', tete: 'bicorne', habit: 'court', piques: false, baionnette: true, grenadiers: true, cav: 'cuirassier', hussard: true, art: 'gribeauval' },
   { date: '1825 · Fusil à percussion', nom: 'Capotes et pantalons garance', tete: 'shako', habit: 'capote', pantalon: GARANCE, piques: false, baionnette: true, chasseurs: true, cav: 'cuirassier', lanciers: true, art: 'gribeauval' },
-  { date: '1832 · Chemin de fer', nom: 'Le train des équipages', tete: 'kepi', habit: 'capote', pantalon: GARANCE, piques: false, baionnette: true, chasseurs: true, cav: 'cuirassier', lanciers: true, art: 'gribeauval', fourgon: true },
+  { date: '1832 · Chemin de fer', nom: 'Le train des équipages', tete: 'kepi', habit: 'capote', pantalon: GARANCE, piques: false, baionnette: true, chasseurs: true, cav: 'cuirassier', lanciers: true, art: 'gribeauval' },
 ];
 /** Les technologies qui font passer d'un palier au suivant (palier = indice de la plus avancée possédée, 0 sans aucune). */
 export const TECHS_PALIER = [null, 'silex', 'gribeauval', 'levee_masse', 'percussion', 'chemin_fer'];
@@ -877,40 +910,56 @@ export function canon(L, P, x, z) {
     for (const dx of [-0.45, 0.45]) cheval(L, x + dx, z - 4.3);
   } else for (let i = 0; i < 3; i++) put(L, sphere(0.16, 0), FER, x - 0.3 + i * 0.3, 0.16, z - 1.7, 0, 0);
 }
-function fourgon(L, x, z) {
-  put(L, boite(1.5, 0.5, 2.6), 0x8a6a4a, x, 0.9, z, 0, 0.05);
-  put(L, new THREE.CylinderGeometry(0.78, 0.78, 2.6, 12, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2), 0xe9e2d0, x, 1.15, z, 0, 0.05);
-  for (const [dx, dz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) { const r = cyl(0.42, 0.42, 0.12, 12); r.rotateZ(Math.PI / 2); put(L, r, 0x4a3420, x + dx, 0.42, z + dz, 0, 0.05); }
-  cheval(L, x, z + 2.7);
-}
 /** La ligne (piquiers au centre au départ, grenadiers au bout ensuite), le drapeau et son porteur : le cœur de l'armée et de la garde. */
 function ligne(L, P, roy) {
   for (let i = 0; i < 6; i++) fantassin(L, P, -3.4 + i * 1.15, 2.4, roy, P.piques && (i === 2 || i === 3) ? 'piquier' : P.grenadiers && i === 5 ? 'grenadier' : 'ligne');
-  put(L, boite(0.14, 4.6, 0.14), 0x4a3420, -0.2, 2.3, 0.4, 0, 0.05);
-  put(L, boite(0.05, 1.1, 1.6), roy, -0.2, 3.95, 1.25, 0, 0.04); put(L, boite(0.06, 0.25, 1.6), BLANC, -0.2, 3.95, 1.25, 0, 0); put(L, boite(0.06, 1.1, 0.25), BLANC, -0.2, 3.95, 1.25, 0, 0);
+  put(L, boite(0.14, 4.6, 0.14), 0x4a3420, -0.2, 2.3, 0.4, 0, 0.05); // la hampe ; le drapeau, qui flotte au vent, est ajouté par maillageGarde
   fantassin(L, P, 0.2, 0.4, roy);
 }
+/** n rangs de c fantassins, le premier en z0, les suivants derrière ; piquiers au centre au départ, grenadier au bout ensuite. */
+function rangs(L, P, roy, n, c, x0, z0, ecart) {
+  for (let r = 0; r < n; r++) for (let i = 0; i < c; i++) {
+    const centre = i === (c >> 1) - 1 || i === c >> 1;
+    fantassin(L, P, x0 + i * ecart, z0 - r * ecart, roy, P.piques && centre ? 'piquier' : P.grenadiers && i === c - 1 ? 'grenadier' : 'ligne');
+  }
+}
+/** Le grand bataillon : trois lignes de huit, le drapeau derrière ; l'officier et la cavalerie à l'arrière, l'artillerie sur le flanc droit. */
 function armee(L, P, roy) {
-  ligne(L, P, roy); // devant
-  if (P.chasseurs) { fantassin(L, P, -2.6, 4.6, roy, 'chasseur'); fantassin(L, P, 1.4, 5.0, roy, 'chasseur'); } // tirailleurs en avant
-  // la cavalerie, derrière
-  const cav = [P.cav, P.hussard ? 'hussard' : P.lanciers ? 'lancier' : P.cav, P.cav];
-  cav.forEach((g, i) => cavalier(L, P, -2.6 + i * 2, -2.8, roy, g));
-  // l'artillerie, sur le flanc
-  canon(L, P, 5.4, 1.8); canon(L, P, 7.2, 1.2);
-  fantassin(L, P, 4.4, 0.4, roy); fantassin(L, P, 6.4, 0, roy);
-  // l'officier
-  cavalier(L, P, -1.6, 0, roy, P.cav === 'cuirassier' ? 'officier' : P.cav);
-  if (P.fourgon) fourgon(L, -5.8, -3); // sur le flanc gauche, à l'écart des attelages
+  rangs(L, P, roy, 3, 8, -4.4, 3.6, 1.15);
+  put(L, boite(0.14, 4.6, 0.14), 0x4a3420, -0.4, 2.3, 0.1, 0, 0.05); // la hampe ; le drapeau, qui flotte au vent, est ajouté par maillageArmee
+  fantassin(L, P, 0, 0.1, roy); // le porte-drapeau
+  if (P.chasseurs) { fantassin(L, P, -3.4, 5.6, roy, 'chasseur'); fantassin(L, P, 0.6, 5.9, roy, 'chasseur'); fantassin(L, P, 3.6, 5.5, roy, 'chasseur'); } // tirailleurs en avant
+  cavalier(L, P, -2.2, -1.4, roy, P.cav === 'cuirassier' ? 'officier' : P.cav); // l'officier
+  [P.cav, P.hussard ? 'hussard' : P.lanciers ? 'lancier' : P.cav, P.cav].forEach((g, i) => cavalier(L, P, -0.2 + i * 2, -2, roy, g)); // la cavalerie, à côté de lui
+  canon(L, P, 5.8, 1.8); canon(L, P, 7.6, 1.2); fantassin(L, P, 4.8, 0.4, roy); fantassin(L, P, 6.8, 0, roy); // l'artillerie et ses servants
 }
 /** L'armée d'un royaume (icône fixe, face à +z local) : THREE.Group à l'échelle 0,1. */
 export function maillageArmee(couleur, palier = 0) {
   const p = Math.max(0, Math.min(5, palier | 0));
-  return groupe(enCache(`armee|${couleur}|${p}`, L => armee(L, PALIERS[p], couleur)));
+  return drapeauArmee(groupe(enCache(`armee|${couleur}|${p}`, L => armee(L, PALIERS[p], couleur))), couleur, -0.4, 0.1);
 }
 /** La garde d'une petite place (la garnison d'une enceinte trop étroite pour l'armée entière) : la ligne et le drapeau, sans cavalerie
- *  ni canons ni fourgon (même repère que l'armée : la vie y fait tirer la même salve). */
+ *  ni canons (même repère que l'armée : la vie y fait tirer la même salve). */
 export function maillageGarde(couleur, palier = 0) {
   const p = Math.max(0, Math.min(5, palier | 0));
-  return groupe(enCache(`garde|${couleur}|${p}`, L => ligne(L, PALIERS[p], couleur)));
+  return drapeauArmee(groupe(enCache(`garde|${couleur}|${p}`, L => ligne(L, PALIERS[p], couleur))), couleur, -0.2, 0.4);
+}
+// le drapeau de l'armée : aux couleurs du royaume, croix blanche, il flotte dans le sens du vent (monde.js l'anime : userData.drapeau)
+const TEX_DRAP = new Map();
+function texDrapeau(couleur) {
+  let t = TEX_DRAP.get(couleur);
+  if (!t) {
+    const c = document.createElement('canvas'); c.width = 32; c.height = 22; const g = c.getContext('2d');
+    g.fillStyle = new THREE.Color(couleur).getStyle(); g.fillRect(0, 0, 32, 22); g.fillStyle = '#f2efe6'; g.fillRect(13, 0, 5, 22); g.fillRect(0, 8.5, 32, 5);
+    t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; TEX_DRAP.set(couleur, t);
+  }
+  return t;
+}
+const MAT_DRAP = new Map();
+function drapeauArmee(grp, couleur, x, z) {
+  let mat = MAT_DRAP.get(couleur);
+  if (!mat) { mat = new THREE.MeshLambertMaterial({ map: texDrapeau(couleur), side: THREE.DoubleSide }); MAT_DRAP.set(couleur, mat); }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.1, 6, 1).translate(0.8, 0, 0), mat);
+  m.position.set(x, 3.95, z); m.castShadow = true; grp.add(m); grp.userData.drapeau = m;
+  return grp;
 }
