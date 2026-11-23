@@ -32,10 +32,12 @@ let E = null;
 if (PAGE) try {
   // (vie : gens, bêtes, charrettes et bateaux du moteur ; faune : oiseaux migrateurs, poissons ; eau : vagues des côtes)
   // (monde : animerPose, les ailes des moulins, les drapeaux et les fumées des cheminées des bâtiments posés)
-  const [S, P, M, R, V, W] = await Promise.all(['scene', 'plateau', 'modeles', 'routes', 'vie', 'monde', 'faune', 'eau'].map(m => import(`../../graphismes/rendu/${m}.js`)));
+  // (modernes, animations, toon : les habitants et les pièces mobiles des bâtiments des emplacements, SPEC-EMPIRE module 4)
+  const [S, P, M, R, V, W, , , MO, A, T] = await Promise.all(['scene', 'plateau', 'modeles', 'routes', 'vie', 'monde', 'faune', 'eau', 'modernes', 'animations', 'toon']
+    .map(m => import(`../../graphismes/rendu/${m}.js`)));
   const r = S.renderer, rendre = r.render.bind(r);
   r.render = () => {};   // la boucle du moteur ne dessine plus : image() le fait, caméra calée
-  E = { S, P, M, R, V, W, rendre: () => rendre(S.scene, S.camera) };
+  E = { S, P, M, R, V, W, MO, A, T, rendre: () => rendre(S.scene, S.camera), rendreScene: rendre };
   S.cam.auto = false;
   P.decorProgressif(6);   // (le décor se pose par morceaux de 6 ms par image : changer de vue n'arrête plus l'image)
 } catch (e) {
@@ -56,6 +58,10 @@ const D = 400;   // recul de la caméra orthographique (unités du moteur)
 // l'heure du jeu (carte/ambiance.js) dans le vocabulaire du moteur (vie.js, climat : qui est dehors, fenêtres, lucioles)
 const HEURE = { matin: ['jour', 'aube', 0.3, 0], midi: ['jour', 'jour', 0, 0], soir: ['aube', 'crepuscule', 1, 0.2], nuit: ['nuit', 'nuit', 0, 1] };
 const NIV_VILLE = { capitale: 4, fort: 2, ville: 3, village: 1 };
+// (SPEC-EMPIRE, module 4) les bâtiments des emplacements qui se posent au bord de l'eau (côté +x du modèle, tourné vers elle)
+const MER = new Set(['port', 'chantier_naval', 'cale_seche', 'phare']);
+const PRES_PX = 90;   // largeur d'un hexagone à l'écran (px) à partir de laquelle les bâtiments des emplacements s'animent
+const VIG = 128;      // côté des vignettes des bâtiments (px de l'image), pour le panneau de la place
 
 export class Plateau {
   // mp : la carte (map.js) ; canvas : le canevas du moteur (#carte)
@@ -69,6 +75,10 @@ export class Plateau {
     this.fen = null; this.saison = 2; this.neige = 0; this.era = null;
     this.fac = null; this.codes = null; this.colors = {};
     this.st = null; this.cleCam = ''; this.tCam = 0; this.tRendu = 0; this.sale = true;
+    this.emp = []; this.sigEmp = ''; this.posesEmp = [];   // bâtiments des emplacements : [place, hexagone, clé, eau], leurs poses
+    this.habitants = new E.S.THREE.Group(); E.S.scene.add(this.habitants);
+    this.vies = new Map(); this.animSale = false;           // clé → modèle animé (modernes.js) des bâtiments à l'écran
+    this.vignettes = new Map();                             // clé, couleur, époque → image du bâtiment
   }
 
   niveau(pas, leger) {
@@ -106,6 +116,38 @@ export class Plateau {
       if (r >= FERMES + MOULINS || !N.fertile[k] || N.riviere[k] || surRoute.has(k) || N.ville.has(k) || g.voisins(t).some(v => N.ville.has(v.i))) continue;
       N.campagne.push([k, r < FERMES ? 'ferme' : 'moulin']); N.ville.add(k);
     }
+    // (SPEC-EMPIRE, module 4) les hexagones où poser les bâtiments des emplacements de chaque place : libres (ni place, ni
+    // ferme, ni eau, ni rivière, ni route), autour d'elle puis un cran plus loin ; [hexagone, hexagone d'eau voisin ou −1]
+    if (!loin) for (const p of N.places.values()) {
+      const vu = new Set(p.hex), anneaux = [];
+      let bord = p.hex;
+      for (let r = 0; r < 2; r++) {
+        const suivant = [];
+        for (const k of bord) for (const v of g.voisins(g.liste[k])) if (!vu.has(v.i)) { vu.add(v.i); suivant.push(v.i); }
+        anneaux.push(...suivant); bord = suivant;
+      }
+      p.autour = anneaux.filter(k => !N.ville.has(k) && !N.estEau(k) && !N.riviere[k] && !surRoute.has(k))
+        .map(k => [k, g.voisins(g.liste[k]).find(v => N.estEau(v.i))?.i ?? -1]);
+    }
+  }
+  // les bâtiments achevés des emplacements des places, posés autour d'elles : [id de la place, hexagone, clé web_engine,
+  // hexagone d'eau voisin ou −1]. Seules les places dont la vue donne les emplacements (`chains` : celles du joueur) en ont ;
+  // ceux du bord de l'eau d'abord, sur les hexagones qui la touchent. De près seulement (hexagones de 4 cases, décor complet).
+  emplacements() {
+    const N = this.N, out = [], pris = new Set();
+    if (!N || N.leger || !this.st?.nodes) return out;
+    for (const [id, p] of N.places) {
+      const chs = this.st.nodes[id]?.chains;
+      if (!chs || !p.autour) continue;
+      const bats = chs.filter(c => c.niveau > 0 && c.bat).map(c => c.bat).sort((a, b) => MER.has(b) - MER.has(a));
+      const libres = p.autour.filter(([k]) => !pris.has(k));
+      for (const bat of bats) {
+        const j = MER.has(bat) ? Math.max(0, libres.findIndex(([, eau]) => eau >= 0)) : 0, h = libres.splice(j, 1)[0];
+        if (!h) break;
+        pris.add(h[0]); out.push([id, h[0], bat, MER.has(bat) ? h[1] : -1]);
+      }
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------- la fenêtre bâtie par le moteur
@@ -172,7 +214,8 @@ export class Plateau {
       this.codes.forEach((c, id) => royaumes.push({ id, couleur: this.colors[c] || '#999999' }));
     }
     // (les hexagones des places et des fermes sont bâtis : le moteur n'y met ni décor ni buisson sous le bâtiment)
-    const batiments = [...this.N.ville].map(k => ({ case: this.local(k) })).filter(b => b.case >= 0);
+    this.emp = this.emplacements(); this.sigEmp = this.emp.map(e => e[1]).join();
+    const batiments = [...this.N.ville, ...this.emp.map(e => e[1])].map(k => ({ case: this.local(k) })).filter(b => b.case >= 0);
     // (pour la vie du moteur, une case de terre du jeu est habitée même sans camp : bêtes dans les prés, fleurs)
     this.habite = proprio.map((o, i) => o >= 0 ? o : this.N.jeu[C.gl(i)] && !this.N.estEau(C.gl(i)) ? 99 : -1);
     return { cases: { arbres: C.arbres, foret: C.foret, proprio }, batiments, routes: this.routes, forts: [], royaumes,
@@ -187,7 +230,8 @@ export class Plateau {
     }
     for (const id of [...this.lieux.keys()]) if (!N.places.has(id)) this.lieux.delete(id);
   }
-  cleLieu(ns) { return ns ? `${ns.o}|${ns.f || 0}|${ns.lv?.[0] === 'incendie' ? 1 : 0}` : '-'; }
+  // (avec les bâtiments achevés de ses emplacements : la place n'est rebâtie que si ce qu'on y voit change)
+  cleLieu(ns) { return ns ? `${ns.o}|${ns.f || 0}|${ns.lv?.[0] === 'incendie' ? 1 : 0}|${ns.chains?.filter(c => c.niveau > 0).map(c => c.bat) || ''}` : '-'; }
   majLieux(st) {
     if (!st) return;
     this.st = st;
@@ -226,8 +270,102 @@ export class Plateau {
       b.mesh.position.set(x - f.ox, E.P.dessus(i), z - f.oz);
       this.villes.add(b.mesh); animer(b, this.mp.rules?.neutral_color || '#8d8a7a');
     }
+    // (SPEC-EMPIRE, module 4) les bâtiments des emplacements, comme le village d'essai de web_engine (batiments-empire.html) ;
+    // quand leurs hexagones changent, le décor du moteur est refait dessous (majEtat), au plus quand un chantier s'achève
+    if (this.emplacements().map(e => e[1]).join() !== this.sigEmp) this.etatMoteur();
+    this.posesEmp = [];
+    for (const [id, k, cle, eau] of this.emp) {
+      const i = this.local(k); if (i < 0) continue;
+      const ns = this.lieux.get(id)?.ns, couleur = this.colors[ns?.o] || this.mp.rules?.neutral_color || '#8d8a7a', ruine = ns?.lv?.[0] === 'incendie';
+      const b = E.M.maillageBatiment({ cle, couleur, epoque, saison: this.saison, neige: this.neige, ruine }), [x, z] = this.centre(N, k);
+      // (le modèle a l'eau du côté +x : tourné vers l'hexagone d'eau voisin)
+      const [ex, ez] = eau >= 0 ? this.centre(N, eau) : [x + 1, z], rot = Math.atan2(z - ez, ex - x);
+      b.mesh.position.set(x - f.ox, E.P.dessus(i), z - f.oz); b.mesh.rotation.y = rot;
+      this.villes.add(b.mesh); animer(b, couleur);
+      if (!ruine) this.posesEmp.push({ cle: `${k}|${cle}|${couleur}|${epoque}`, k, bat: cle, couleur, epoque, boites: b.boites, x, z, y: b.mesh.position.y, rot });
+    }
+    this.animSale = true;
     this.majVie();
     this.sale = true;
+  }
+  // les habitants et les pièces mobiles des bâtiments des emplacements (animations.js de web_engine) : seulement de tout près
+  // (hexagone d'au moins PRES_PX à l'écran), animations permises, et pour les bâtiments à l'écran ; chaque modèle est assemblé
+  // une fois, un seul par image (10 à 15 ms chacun), et jeté quand il sort de la vue. Rend vrai s'il en reste à assembler.
+  animes(cam, vw, vh, anim) {
+    const N = this.N, voulu = new Map();
+    if (anim && N && !N.leger && N.pas * cam.z >= PRES_PX) {
+      const hx = vw / 2 / cam.z + N.pas, hy = vh / 2 / (cam.z * K) + N.pas;
+      for (const p of this.posesEmp) {
+        const t = N.g.liste[p.k];
+        if (Math.abs(t.gx - cam.x) < hx && Math.abs(t.gy - cam.y) < hy) voulu.set(p.cle, p);
+      }
+    }
+    for (const [cle, m] of this.vies) if (!voulu.has(cle)) { E.T.jeter(m.groupe); this.vies.delete(cle); }
+    let budget = 1;
+    for (const [cle, p] of voulu) {
+      let m = this.vies.get(cle);
+      if (!m) {
+        if (!budget--) return true;
+        m = E.MO.modele(E.A.animationsAncien(p.bat, p.epoque, p.boites, p.couleur), p.k);
+        this.vies.set(cle, m); this.habitants.add(m.groupe); m.groupe.rotation.y = p.rot;
+        m.groupe.position.set(p.x - this.fen.ox, p.y, p.z - this.fen.oz);
+        E.MO.animer(m);
+      } else m.groupe.position.set(p.x - this.fen.ox, p.y, p.z - this.fen.oz);   // (la fenêtre a pu être refaite : son origine bouge)
+    }
+    this.sale = true;
+    return false;
+  }
+
+  // la vignette d'un bâtiment (clé web_engine) pour le panneau de la place : une image (data: PNG à fond transparent)
+  // rendue par le moteur dans un coin de son canevas, aussitôt redessiné, et gardée ; null tant que le plateau n'est pas prêt,
+  // undefined pour « plus tard » : deux nouvelles par tranche de 50 ms, la liste des chaînes se remplit sans figer la page
+  vignette(cle, couleur = '#8d8a7a', an = 1700) {
+    const epoque = epoqueDe(an), k = `${cle}|${couleur}|${epoque}`;
+    if (this.vignettes.has(k)) return this.vignettes.get(k);
+    const r = E.S.renderer, T = E.S.THREE, px = VIG, cote = px / r.getPixelRatio(), H = r.domElement.height;
+    if (!this.fen || r.domElement.width < px || H < px) return null;
+    const now = performance.now();
+    if (now - (this.vigT || 0) > 50) { this.vigT = now; this.vigN = 0; }
+    if (this.vigN++ >= 2) return undefined;
+    if (!this.vigScene) {
+      const sc = new T.Scene(), soleil = new T.DirectionalLight(0xfff0d4, 2.6);
+      soleil.position.set(4, 8, 6); sc.add(new T.HemisphereLight(0xeef7ff, 0x7d8466, 1.5), soleil);
+      this.vigScene = { sc, cam: new T.OrthographicCamera(-1, 1, 1, -1, 0.1, 50) };
+    }
+    const { sc, cam } = this.vigScene, { mesh } = E.M.maillageBatiment({ cle, couleur, epoque });
+    sc.add(mesh);
+    const bb = new T.Box3().setFromObject(mesh), c = bb.getCenter(new T.Vector3()), R = bb.getSize(new T.Vector3()).length() / 2 * 0.9;
+    Object.assign(cam, { left: -R, right: R, top: R, bottom: -R });
+    cam.position.copy(c).add(new T.Vector3(1, 0.85, 1.25).setLength(20)); cam.lookAt(c); cam.updateProjectionMatrix();
+    // deux rendus, sur fond noir puis blanc : leur écart donne la transparence (bords adoucis compris)
+    const vp = r.getViewport(new T.Vector4()), ci = r.getScissor(new T.Vector4()), test = r.getScissorTest();
+    r.setViewport(0, 0, cote, cote); r.setScissor(0, 0, cote, cote); r.setScissorTest(true);
+    const [noir, blanc] = [0x000000, 0xffffff].map(fond => {
+      sc.background = new T.Color(fond); E.rendreScene(sc, cam);
+      const c2 = document.createElement('canvas'); c2.width = c2.height = px;
+      const g = c2.getContext('2d', { willReadFrequently: true });
+      g.drawImage(r.domElement, 0, H - px, px, px, 0, 0, px, px);
+      return { c2, g, d: g.getImageData(0, 0, px, px) };
+    });
+    r.setViewport(vp); r.setScissor(ci); r.setScissorTest(test);
+    sc.remove(mesh);
+    const a = noir.d.data, b = blanc.d.data, bo = [px, px, 0, 0];
+    for (let i = 0; i < a.length; i += 4) {
+      const al = 1 - (b[i] - a[i] + b[i + 1] - a[i + 1] + b[i + 2] - a[i + 2]) / 765;
+      for (let j = 0; j < 3; j++) a[i + j] = al > 0.01 ? Math.min(255, a[i + j] / al) : 0;
+      a[i + 3] = Math.round(al * 255);
+      if (al > 0.04) { const x = (i >> 2) % px, y = (i >> 2) / px | 0; bo[0] = Math.min(bo[0], x); bo[1] = Math.min(bo[1], y); bo[2] = Math.max(bo[2], x + 1); bo[3] = Math.max(bo[3], y + 1); }
+    }
+    noir.g.putImageData(noir.d, 0, 0);
+    // recadrée sur le bâtiment, au carré
+    const l = Math.max(bo[2] - bo[0], bo[3] - bo[1], 1), out = blanc.c2, g2 = blanc.g;
+    g2.clearRect(0, 0, px, px);
+    g2.drawImage(noir.c2, (bo[0] + bo[2] - l) / 2, (bo[1] + bo[3] - l) / 2, l, l, 0, 0, px, px);
+    const url = out.toDataURL('image/png');
+    this.vignettes.set(k, url);
+    // (le canevas ne garde pas son image : la vue est redessinée avant que le navigateur ne la montre)
+    queueMicrotask(() => { E.rendre(); this.sale = true; });
+    return url;
   }
 
   // ---------------------------------------------------------------- ce que le jeu demande au plateau (map.js)
@@ -270,7 +408,7 @@ export class Plateau {
   // la caméra du moteur est calée sur celle du jeu, et l'image dessinée si quelque chose a changé
   image(cam, vw, vh, dpr, budget = 8, anim = false) {
     const now = performance.now(), cle = `${cam.x.toFixed(3)}|${cam.y.toFixed(3)}|${cam.z.toFixed(4)}|${vw}|${vh}`;
-    if (cle !== this.cleCam) { this.cleCam = cle; this.tCam = now; this.sale = true; }
+    if (cle !== this.cleCam) { this.cleCam = cle; this.tCam = now; this.sale = true; this.animSale = true; }
     const hx = vw / 2 / cam.z, hy = vh / 2 / (cam.z * K), v = [cam.x - hx, cam.x + hx, cam.y - hy, cam.y + hy];
     const voulu = choisirPas(vw, vh, cam.z, K, this.mp.W, this.mp.H), f = this.fen;
     const dehors = !f || !couvre(f, ...v), detail = f && voulu.niv < f.niv;   // (en zoomant, plus fin ; en dézoomant, la vue sort de la fenêtre)
@@ -285,6 +423,7 @@ export class Plateau {
     // animations permises : une image à chaque tour de la boucle (30 par seconde au plus en qualité légère), comme dans
     // les jeux de web_engine ; animations coupées (réglage, mouvement réduit) : seulement quand quelque chose a changé
     const pas = anim ? (E.S.qualite.niveau === 'leger' ? 30 : 0) : Infinity;
+    if (this.animSale) this.animSale = this.animes(cam, vw, vh, anim);   // (la vue ou les bâtiments ont changé)
     if (E.P.decorEnCours()) this.sale = true;   // (le décor arrive par morceaux : chacun se montre)
     if (!this.sale && now - this.tRendu < pas) return false;
     this.majClimat(cam);
@@ -306,6 +445,6 @@ export class Plateau {
     S.scene.fog.near = 1e5; S.scene.fog.far = 2e5;
   }
   pret() { return !!this.fen; }
-  dispose() { E.S.scene.remove(this.villes); }
+  dispose() { E.S.scene.remove(this.villes); E.S.scene.remove(this.habitants); }
 }
 const dist = (g, k, n) => Math.hypot(g.liste[k].gx - n.x, g.liste[k].gy - n.y);

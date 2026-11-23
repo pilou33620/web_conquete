@@ -415,6 +415,9 @@ pub fn rules_payload_carte(geo: i64) -> Val {
         "water" => dict! {"speed" => R::WATER_SPEED, "sea" => R::SEA_SPEED, "embark" => R::EMBARK_DAYS,
                           "quai" => R::QUAI_LIVRES, "blockade" => R::BLOCKADE_K},
         "cities" => cities,
+        // (SPEC-EMPIRE, module 4) le bâtiment qu'exige chaque type d'unité, {type: [chaîne, niveau]} : la page ouvre
+        // l'emplacement à bâtir depuis la carte d'une unité refusée
+        "unit_req" => R::UNIT_REQ(),
         // la bataille par stratégie (SPEC-BATAILLE.md) ; « formations » ne sert plus qu'à nommer la formation d'une armée,
         // « plans » n'a plus cours
         "armes" => R::ARMES(), "arme_de" => Val::dict_from(R::UNITS().keys().into_iter().map(|u| { let a = R::arme_de(u.s()); (u, Val::from(a)) }).collect()),

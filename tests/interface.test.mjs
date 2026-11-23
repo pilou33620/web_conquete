@@ -108,6 +108,29 @@ test('effets des bâtiments : par tour, ou par jour en temps réel', () => {
   assert.ok(ui.slotFx({ type: 'ville' }, L).includes('/j') && !ui.slotFx({ type: 'ville' }, L).includes('/tour'));
 });
 
+// (SPEC-EMPIRE, module 4) les emplacements d'après la vue du moteur : slot_max cases, ce qui est possible et ses raisons
+test('emplacements : cases libres « Bâtir… », niveau / max, prix et raisons de la vue', () => {
+  const ui = Object.create(UI.prototype);
+  const niv = (name, cost) => ({ name, cost, days: 15, txt: '+1 /tour', up: 0 });
+  ui.rules = { res_label: { livres: 'Livres', bois: 'Bois' }, cities: { size_k: { ville: 1 }, spec_names: {}, policies: { equilibre: { label: 'Équilibre', pro: 'rien' } }, policy_order: ['equilibre'],
+    chains: { haras: { name: 'Haras', icon: 'cav', levels: [niv('Haras'), niv('Haras royal'), niv('École de cavalerie')] }, eglise: { name: 'Église', icon: 'x', levels: [niv('Paroisse')] } } } };
+  ui.map = { plateau: null, colors: {} };
+  ui.st = { tour: { on: true }, me: { code: '33', res: { livres: 500, bois: 100 }, mods: {} }, year: 1790 };
+  const ns = { slots: { haras: 1 }, slot_max: 3, chains: [
+    { id: 'haras', nom: 'Haras', niveau: 1, max: 3, possible: false, raison: 'Technologie requise : Hussards.', cout: { livres: 300 }, tours: 1, bat: 'haras' },
+    { id: 'eglise', nom: 'Église', niveau: 0, max: 1, possible: true, raison: null, cout: { livres: 110, bois: 40 }, tours: 0.47, bat: 'eglise' }] };
+  const gn = { type: 'ville' };
+  let h = ui.cityHtml(1, gn, ns, [], false);
+  assert.equal((h.match(/Bâtir…/g) || []).length, 2);
+  assert.ok(h.includes('1 / 3') && h.includes('(1 / 3)'));
+  ui.slotSel = { node: 1, i: 1 };
+  h = ui.cityHtml(1, gn, ns, [], false);
+  assert.ok(/data-act="slot-build" data-v="eglise" >/.test(h) && h.includes('110 livres') && !h.includes('data-v="haras" >'));
+  ui.slotSel = { node: 1, i: 0 };
+  h = ui.cityHtml(1, gn, ns, [], false);
+  assert.ok(h.includes('Améliorer : Haras royal') && /data-v="haras" disabled/.test(h) && h.includes('Technologie requise : Hussards.') && h.includes('Démolir'));
+});
+
 test('barre du tour : bloquée tant qu’une bataille attend votre choix', () => {
   const h = barre({ phase: 'ordres' }, { battles: [{ id: 'b1', mode: 'attente' }] });
   assert.ok(h.includes('disabled'));

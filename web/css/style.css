@@ -587,7 +587,8 @@ table.grid.vl-tab td:first-child, table.grid.vl-tab th:first-child { text-align:
   border: 1px solid var(--hair); border-radius: 7px; background: rgba(0,0,0,.2); color: var(--papier); font-size: 12.5px; line-height: 1.1; text-align: center; }
 .slot svg { width: 22px; height: 22px; color: var(--laiton-clair); }
 .slot .si { font-size: 19px; line-height: 22px; color: var(--laiton-clair); }
-.slot .pips i { width: 7px; height: 7px; }
+.slot .niv { font-size: 11px; color: var(--papier-2); }
+.slot img.sv { width: 40px; height: 40px; margin: -4px 0 -2px; }
 .slot .sw { font-size: 11px; font-style: italic; color: var(--laiton-clair); }
 .slot.empty { border-style: dashed; color: var(--papier-2); background: rgba(0,0,0,.1); }
 .slot.on { outline: 2px solid var(--laiton-clair); background: rgba(200,162,83,.16); }
@@ -595,8 +596,15 @@ table.grid.vl-tab td:first-child, table.grid.vl-tab th:first-child { text-align:
 .slot:hover { border-color: var(--laiton); }
 .slot-box { margin: 6px 0 2px; padding: 8px; border: 1px solid var(--hair); border-radius: 8px; background: rgba(0,0,0,.14); }
 .slot-opts { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
-.slot-opt { text-align: left; white-space: normal; }
-.slot-opt small.why { color: #ffb3a6; opacity: 1; }
+.slot-opt { text-align: left; white-space: normal; display: flex; align-items: center; gap: 8px; }
+.slot-opt > span { flex: 1; display: flex; flex-direction: column; }
+.slot-opt img.sv { width: 44px; height: 44px; flex: none; }
+.slot-opt.on { outline: 2px solid var(--laiton-clair); }
+.slot-opt small.why, .unit-card .why { color: #ffb3a6; opacity: 1; }
+/* une arme refusée faute de bâtiment : grisée, avec de quoi ouvrir l'emplacement à bâtir */
+.unit-card.manque { cursor: default; opacity: .78; filter: saturate(.4); }
+.unit-card.manque:hover { border-color: var(--hair); }
+.unit-card.manque .linkish { grid-column: 2; justify-self: start; }
 body.modal-event #proposals { display: none; }   /* une décision à prendre : les propositions attendront */
 /* écran de départ : onglets Campagne / Bataille, et le mode Bataille */
 

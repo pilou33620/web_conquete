@@ -356,9 +356,57 @@ les armes (moyenne par camp) 10 636 → 11 165 en 1720 (+5 %), 11 007 → 11 231
 part de cavalerie et d'artillerie (un peu plus de ligne au début, le temps des premiers haras et fonderies).
 
 **Pas fait** :
-- La page (P1) : le panneau de la place lit encore `sl` / `sn` / `rules.cities` ; `chains` et `bat` sont prêts.
+- ~~La page (P1)~~ : faite, ci-dessous.
 - Les navires (`chantier_ok` est là pour R2), la production des denrées (`denree`, R3), l'effet du phare.
 - Pas de banc sur la carte d'Europe ni sur un théâtre colonial.
+
+#### Page (P1) — 23/11/2026
+
+**Fait** (`web/js/ui.js`, `web/js/hex/plateau.js`, `web/css/style.css`, une ligne dans `views.rs`) :
+- Panneau de la place (`cityHtml`) : lit `slots`, `slot_max` et `chains` de la vue (plus `sl` / `sn`, ni le calcul côté
+  page `slotCheck`, supprimé). `slot_max` cases : libre (« + Bâtir… ») ou occupée (vignette, nom du niveau,
+  `niveau / max`, « en chantier »). Une case libre ouvre la liste des chaînes qui ont leur place ici, les possibles
+  d'abord : vignette, prix (`cout`), durée (`tours`, en part de tour), effets du niveau, et la raison du moteur
+  (`raison`) ou de la page (file pleine, siège, ressources) quand le bouton est grisé. Une case occupée : effets,
+  « Améliorer : <niveau suivant> » (prix, durée, raison) ou « Niveau maximal atteint. », « Démolir » / « Abandonner le
+  chantier ». Commandes inchangées : `slot_build`, `slot_demolish`.
+- Vignettes : `Plateau.vignette(clé, couleur, an)` rend le `maillageBatiment` du moteur dans un coin de son canevas
+  (scène à part, caméra orthographique, deux rendus sur fond noir puis blanc pour la transparence, recadrage), en garde
+  l'image (`data:` PNG) par clé, couleur du camp et époque, et redessine la vue aussitôt. Deux nouvelles par tranche de
+  50 ms (environ 25 ms chacune sous Chromium sans GPU) : le panneau se redessine pour les suivantes. Sans plateau
+  (carte classique, pas de WebGL) : l'icône de la chaîne.
+- Recrutement : les armes refusées faute de bâtiment (`rules.unit_req`, ajouté à `rules_payload` : `{type: [chaîne,
+  niveau]}`, copie de `R::UNIT_REQ`) restent dans la grille, grisées, avec la raison du moteur (`rw`, « Bâtiment requis
+  dans la ville : haras. ») et un lien « Bâtir… » (« Améliorer… », « Voir le chantier… ») qui ouvre l'emplacement de la
+  chaîne (sinon le premier libre) avec cette chaîne en évidence ; sans emplacement libre, la raison du moteur en toast.
+  Les armes qui attendent une technologie restent dans « Plus tard ».
+- Plateau : autour de chaque place dont la vue donne `chains` (les siennes ; celles des autres camps : rien), les
+  bâtiments des chaînes achevées (`bat`, niveau ≥ 1) sont posés comme le village d'essai de web_engine
+  (`maillageBatiment` + `animerPose`), à l'époque et à la couleur du camp, ruinés si la place est incendiée, sur les
+  hexagones libres autour d'elle puis un cran plus loin (ni place, ni ferme, ni eau, ni rivière, ni route : choisis
+  une fois par niveau de détail, `placer`). Port, chantier naval, cale sèche et phare d'abord, sur un hexagone qui
+  touche l'eau, tournés vers elle (le modèle a l'eau du côté +x). De près seulement (hexagones de 4 cases, décor
+  complet). Ces hexagones passent au moteur comme bâtis (pas d'arbres dessous) : le décor n'est refait que quand ils
+  changent. Une place n'est rebâtie que si ses bâtiments achevés changent (`cleLieu`).
+- Habitants et pièces mobiles (`modele(animationsAncien(…))` + `animer`) : seulement quand un hexagone fait au moins
+  90 px à l'écran (`PRES_PX`), animations permises, et pour les bâtiments à l'écran ; un modèle assemblé par image
+  (10 à 15 ms chacun sans GPU), jeté (`jeter`) dès qu'il sort de la vue. Le tri des bâtiments à animer ne tourne que
+  quand la caméra ou les bâtiments changent (5 µs).
+- Essai : `tests/interface.test.mjs` (« emplacements… ») ; références : `tours.json` (empreinte de `rules_payload`), `serveur.json` (`/api/map`, taille et
+  empreinte).
+
+**Vérifié** dans Chromium (Aquitaine 1790, Gironde) : Bordeaux, « Bâtir… » depuis la carte de la cavalerie, haras
+bâti, tour suivant, cavalerie levable, haras posé sur le plateau (avec ses chevaux de tout près) ; La Teste-de-Buch :
+port et phare au bord du bassin d'Arcachon. Aucune erreur de console.
+
+**Écarts, pas fait** :
+- Les bâtiments en chantier ne se voient pas sur le plateau (`maillageChantier` existe dans web_engine, non branché).
+- Les bâtiments d'une place se déplacent quand une chaîne plus haut dans `CHAIN_ORDER` s'ajoute (placement dans
+  l'ordre des chaînes) ; une grande place entourée de routes et de villages peut n'avoir que quelques hexagones libres :
+  les bâtiments en trop ne sont pas posés.
+- Sur la carte d'Europe (hexagones de 20 km), un bâtiment occupe un hexagone entier comme sur l'Aquitaine.
+- La fluidité n'a pu être mesurée que sous Chromium sans GPU (2 images par seconde, avec ou sans bâtiments) : à
+  vérifier sur le Raspberry Pi.
 
 ### Module 2 (R2, marine-moteur) — 23/11/2026
 
