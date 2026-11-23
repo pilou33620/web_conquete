@@ -1,224 +1,91 @@
 #!/usr/bin/env node
-// La géographie du mode « Europe » (SPEC-FRANCE.md, étape 2) : l'Europe et l'Afrique du Nord au milieu du XVIIIe siècle,
-// à 5 km la case. Écrit game/data/europe.json, places_europe.json, pays_europe.json et epoques_europe.json.
+// La géographie d'un « théâtre » (Europe, Amérique, Inde, théâtres commerciaux), à KM km la case. Écrit dans game/data
+// <id>.json, places_<id>.json, pays_<id>.json, epoques_<id>.json et cultures_<id>.json.
 //
-// Usage :  node outils/europe.mjs <dossier node_modules> [--apercu carte.svg]
-// Sources et préparation du dossier de travail : outils/EUROPE.md. Déterministe : deux lancements, mêmes fichiers.
-// Entrées écrites à la main (estimations, à quelques milliers près) : outils/europe/villes.json (villes et ports de 1790),
-// outils/europe/epoques.json (populations de 1700 à 1900) ; ci-dessous : frontières, fleuves, caractère des pays.
+// Usage :  node outils/theatre.mjs <id> <dossier node_modules> [--apercu carte.svg] [--sortie dossier]
+// Sources, préparation du dossier de travail et interface d'un théâtre : outils/THEATRES.md. Déterministe : deux
+// lancements, mêmes fichiers. Entrées écrites à la main (estimations) : outils/theatres/<id>/carte.mjs (cadre,
+// frontières, fleuves, caractère des pays), villes.json (villes et ports de 1790), epoques.json (populations de 1700 à 1900).
 //
-// Méthode : tout passe par une grille fine (un tiers de case, 1,67 km). Chaque maille de terre (pays Natural Earth)
-// reçoit un pays de 1750 d'après le pays d'aujourd'hui, sa région (Highcharts) ou une retouche écrite ci-dessous ; les
+// Méthode : tout passe par une grille fine (un tiers de case). Chaque maille de terre (pays Natural Earth)
+// reçoit un pays d'époque d'après le pays d'aujourd'hui, sa région (Highcharts) ou une retouche de carte.mjs ; les
 // contours sont ensuite retracés sur la grille et simplifiés arc par arc : deux pays voisins partagent exactement les
 // mêmes points, il n'y a ni trou ni recouvrement. À la fin, l'outil refait le calcul du moteur (geo.rs : raster_ring,
-// trous bouchés, lacs, terres hors jeu) à 5 km et vérifie tout ce qu'il écrit ; il s'arrête au premier défaut.
+// trous bouchés, lacs, terres hors jeu) à KM km et vérifie tout ce qu'il écrit ; il s'arrête au premier défaut.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ICI = path.dirname(fileURLToPath(import.meta.url));
-const DATA = path.join(ICI, '..', 'game', 'data');
-const NM = process.argv[2];
-const APERCU = process.argv.includes('--apercu') ? process.argv[process.argv.indexOf('--apercu') + 1] : null;
+const arg = o => process.argv.includes(o) ? process.argv[process.argv.indexOf(o) + 1] : null;
+const [ID, NM] = process.argv.slice(2);
+const APERCU = arg('--apercu'), DATA = arg('--sortie') || path.join(ICI, '..', 'game', 'data');
 const stop = msg => { console.error('ERREUR : ' + msg); process.exit(1); };
-if (!NM || !fs.existsSync(path.join(NM, 'world-atlas'))) stop('usage : node outils/europe.mjs <dossier node_modules> [--apercu carte.svg] (voir outils/EUROPE.md)');
+if (!ID || !NM || !fs.existsSync(path.join(NM, 'world-atlas'))) stop('usage : node outils/theatre.mjs <id> <dossier node_modules> [--apercu carte.svg] [--sortie dossier] (voir outils/THEATRES.md)');
+// les théâtres : numéro de géographie du moteur, initiale des codes de pays (deux lettres en Europe, sinon trois)
+const THEATRES = { europe: [5, ''], amerique: [6, 'A'], inde: [7, 'I'], guinee: [8, 'G'], bresil: [9, 'B'], madagascar: [10, 'M'], indes_orientales: [11, 'O'] };
+if (!THEATRES[ID]) stop(`théâtre inconnu : ${ID} (connus : ${Object.keys(THEATRES).join(', ')})`);
+const DOSSIER = path.join(ICI, 'theatres', ID);
+for (const f of ['carte.mjs', 'villes.json', 'epoques.json']) if (!fs.existsSync(path.join(DOSSIER, f))) stop(`il manque ${path.join(DOSSIER, f)}`);
+if (!fs.existsSync(DATA)) stop(`dossier de sortie absent : ${DATA}`);
+const CARTE = (await import(pathToFileURL(path.join(DOSSIER, 'carte.mjs')))).default;
 const NE = path.join(NM, '..', 'natural-earth');
 const lire = f => JSON.parse(fs.readFileSync(f, 'utf8'));
 const lireNE = f => {
-  const p = path.join(NE, f);
-  if (!fs.existsSync(p)) stop(`il manque ${p} (Natural Earth, voir outils/EUROPE.md)`);
+  const p = path.join(NE, f.endsWith('.geojson') ? f : f + '.geojson');
+  if (!fs.existsSync(p)) stop(`il manque ${p} (Natural Earth, voir outils/THEATRES.md)`);
   return lire(p).features.filter(x => x.geometry);
 };
 
+// ------------------------------------------------------------------ la carte du théâtre (carte.mjs)
+const { ENTIERS, COUPES, DETROITS, FLEUVES, PAYS, CULTURES = {}, NOM_LAC = {}, PORTS_ADMIS = [] } = CARTE;
+const { LON0, LON1, LAT0, LAT1, LAT_REF, KM } = CARTE.cadre || {};
+if (CARTE.id !== ID || CARTE.geo !== THEATRES[ID][0]) stop(`carte.mjs : id ${CARTE.id} et geo ${CARTE.geo} attendus ${ID} et ${THEATRES[ID][0]}`);
+if (![LON0, LON1, LAT0, LAT1, LAT_REF, KM].every(Number.isFinite) || LON0 >= LON1 || LAT0 >= LAT1 || LON0 < -180 || LON1 > 180 || LAT0 < -85 || LAT1 > 85) stop('carte.mjs : cadre { LON0, LON1, LAT0, LAT1, LAT_REF, KM } invalide');
+if (!Array.isArray(CARTE.places) || !(CARTE.places[0] > 0 && CARTE.places[1] >= CARTE.places[0])) stop('carte.mjs : places [min, max] invalide');
+if (!ENTIERS || !COUPES || !Array.isArray(DETROITS) || !Array.isArray(FLEUVES) || !PAYS) stop('carte.mjs : il faut ENTIERS, COUPES, DETROITS, FLEUVES et PAYS');
+// la terre d'un pays Natural Earth absent de ENTIERS et de COUPES : carte.defaut (« ~Hors jeu » par exemple), sinon arrêt
+const DEFAUT = CARTE.defaut || null;
+const NE_LACS = ['ne_10m_lakes', ...(CARTE.NE?.lacs || [])], NE_RIVIERES = ['ne_10m_rivers_lake_centerlines', ...(CARTE.NE?.rivieres || [])];
+const SORTIES = { carte: ID + '.json', places: `places_${ID}.json`, pays: `pays_${ID}.json`, epoques: `epoques_${ID}.json`, cultures: `cultures_${ID}.json` };
+
 // ------------------------------------------------------------------ étendue et grilles
-const LON0 = -11, LON1 = 45, LAT0 = 29, LAT1 = 62, LAT_REF = 46, KM = 5;
 const KX = 111.32 * Math.cos(LAT_REF * Math.PI / 180), KY = 110.95; // comme geo.rs
-const W = Math.ceil((LON1 - LON0) * KX / KM), H = Math.ceil((LAT1 - LAT0) * KY / KM); // cases de 5 km
+const W = Math.ceil((LON1 - LON0) * KX / KM), H = Math.ceil((LAT1 - LAT0) * KY / KM); // cases de KM km
+if (W * H > 1.3e6) console.warn(`ATTENTION : ${W} × ${H} = ${(W * H / 1e6).toFixed(2)} million de cases (plus de 1,3) : carte lente et lourde pour le moteur`);
 const F = 3, GW = W * F, GH = H * F, N = GW * GH; // grille fine
 const gx = lon => (lon - LON0) * KX / KM * F, gy = lat => (LAT1 - lat) * KY / KM * F;
 const lonDe = x => LON0 + x * KM / F / KX, latDe = y => LAT1 - y * KM / F / KY;
 const km = (a, b) => Math.hypot((a[0] - b[0]) * KX, (a[1] - b[1]) * KY); // distance entre deux [lon, lat]
 const dansCadre = p => p[0] >= LON0 && p[0] <= LON1 && p[1] >= LAT0 && p[1] <= LAT1;
-
-// ------------------------------------------------------------------ les pays de 1750
-// Estimations et choix d'auteur : les frontières sont celles du milieu du XVIIIe siècle, approchées par les pays et
-// les régions d'aujourd'hui. « ~Nom » : terre hors jeu (lands).
-const ENTIERS = {
-  'United Kingdom': 'GB', Ireland: 'GB', 'Isle of Man': 'GB', Jersey: 'GB', Guernsey: 'GB', Gibraltar: 'GB',
-  Andorra: 'ES', Portugal: 'PT', Netherlands: 'NL', Belgium: 'BE', Luxembourg: 'BE', Switzerland: 'CH', Monaco: 'FR',
-  'San Marino': 'PO', Vatican: 'PO', Austria: 'AU', Czechia: 'AU', Slovakia: 'AU', Hungary: 'AU', Slovenia: 'AU', Liechtenstein: 'AU',
-  Lithuania: 'PL', Belarus: 'PL', Estonia: 'RU', Sweden: 'SE', Finland: 'SE', 'Åland': 'SE',
-  Denmark: 'DK', Norway: 'DK', 'Faeroe Is.': 'DK',
-  Turkey: 'OT', Bulgaria: 'OT', Albania: 'OT', Macedonia: 'OT', Kosovo: 'OT', Montenegro: 'OT', 'Bosnia and Herz.': 'OT', Moldova: 'OT',
-  Cyprus: 'OT', 'N. Cyprus': 'OT', 'Cyprus U.N. Buffer Zone': 'OT', Dhekelia: 'OT', Akrotiri: 'OT',
-  Syria: 'OT', Lebanon: 'OT', Israel: 'OT', Palestine: 'OT',
-  Morocco: 'MA', Tunisia: 'TU',
-  Iraq: '~Mésopotamie', Iran: '~Perse', 'Saudi Arabia': '~Arabie', Georgia: '~Caucase', Armenia: '~Caucase', Azerbaijan: '~Caucase', Malta: 'ML',
-};
-// pays coupés : carte de régions Highcharts (facultative), région → pays, pays par défaut, retouche (lon, lat, région)
-const sousDvina = (lon, lat) => lat < 56.95 - (lon - 24.1) * 0.45; // au sud-ouest de la Dvina, de Riga à Dunabourg
-const COUPES = {
-  France: { carte: 'fr/fr-all-all', regions: { Savoy: 'SA', 'Upper Savoy': 'SA', 'Haute-Corse': 'GE', 'South Corsica': 'GE' }, defaut: 'FR', // la Corse, génoise jusqu'en 1768
-    retouche: (lon, lat, r) => r === 'Maritime Alps' && lon > 7.2 ? 'SA' : null }, // le comté de Nice, à l'est du Var
-  Spain: { defaut: 'ES', retouche: (lon, lat) => lon > -5.42 && lon < -5.30 && lat > 36.10 && lat < 36.20 ? 'GB' : null }, // Gibraltar
-  Italy: { carte: 'it/it-all', defaut: 'NA',
-    regions: { Piemonte: 'SA', "Valle d'Aosta / Vallée d'Aoste": 'SA', 'Sardigna/Sardegna': 'SA', Veneto: 'VE', 'Friuli-Venezia Giulia': 'VE',
-      Liguria: 'GE', Toscana: 'IT', Lombardia: 'IT', 'Emilia-Romagna': 'PO', Lazio: 'PO', Umbria: 'PO', Marche: 'PO', 'Trentino-Alto Adige/Südtirol': 'AU' },
-    retouche: (lon, lat, r) =>
-      r === 'Emilia-Romagna' && lon < 11.15 ? 'IT' // Parme, Plaisance, Modène, Reggio
-      : r === 'Lombardia' && lon > 9.4 && lat >= 46.02 ? 'CH' // la Valteline aux Grisons
-      : r === 'Lombardia' && lon > 9.45 && lat > 45.42 ? 'VE' // Bergame et Brescia
-      : r === 'Friuli-Venezia Giulia' && lon > 13.45 && lat < 46.0 ? 'AU' // Gorizia et Trieste
-      : r === 'Lazio' && lon > 13.45 && lat < 41.62 ? 'NA' // Gaète et la Terre de Labour
-      : null },
-  Germany: { carte: 'de/de-all', defaut: 'HA',
-    regions: { Bayern: 'BA', Sachsen: 'SX', 'Thüringen': 'SX', Brandenburg: 'PR', Berlin: 'PR', 'Sachsen-Anhalt': 'PR', 'Schleswig-Holstein': 'DK',
-      'Baden-Württemberg': 'WU', 'Nordrhein-Westfalen': 'WE', 'Rheinland-Pfalz': 'WE', Saarland: 'WE', Hessen: 'WE' } },
-  Poland: { carte: 'pl/pl-all', defaut: 'PL',
-    regions: { 'West Pomeranian': 'PR', Lubusz: 'PR', 'Lower Silesian': 'PR', Opole: 'PR', Silesian: 'PR', 'Warmian-Masurian': 'PR' } },
-  Ukraine: { carte: 'ua/ua-all', defaut: 'PL',
-    regions: { Odessa: 'OT', Kherson: 'CR', Mykolayiv: 'CR', Crimea: 'CR', Sevastopol: 'CR', Zaporizhzhya: 'CR', Chernivtsi: 'OT', Transcarpathia: 'AU',
-      Sumy: 'RU', "Donets'k": 'RU', "Dnipropetrovs'k": 'RU', Kharkiv: 'RU', "Luhans'k": 'RU', Poltava: 'RU', Chernihiv: 'RU',
-      Kiev: 'RU', 'Kiev City': 'RU', Kirovohrad: 'RU' } },
-  Croatia: { carte: 'hr/hr-all', defaut: 'AU',
-    regions: { Istarska: 'VE', Zadarska: 'VE', 'Šibensko-Kninska': 'VE', 'Splitsko-Dalmatinska': 'VE', 'Dubrovacko-Neretvanska': 'VE' } },
-  Greece: { carte: 'gr/gr-all', defaut: 'OT', regions: { 'Ionioi Nisoi': 'VE' } },
-  Romania: { carte: 'ro/ro-all', defaut: 'OT',
-    regions: Object.fromEntries(['Caras-Severin', 'Timis', 'Arad', 'Bihor', 'Satu Mare', 'Maramures', 'Salaj', 'Cluj', 'Bistrita-Nasaud', 'Alba',
-      'Hunedoara', 'Mures', 'Sibiu', 'Brasov', 'Covasna', 'Harghita'].map(r => [r, 'AU'])) },
-  Serbia: { carte: 'rs/rs-all', defaut: 'OT',
-    regions: Object.fromEntries(['Južno-Backi', 'Zapadno-Backi', 'Severno-Backi', 'Severno-Banatski', 'Srednje-Banatski', 'Južno-Banatski', 'Sremski'].map(r => [r, 'AU'])) },
-  Latvia: { defaut: 'RU', retouche: (lon, lat) => lon > 26 ? 'PL' : sousDvina(lon, lat) ? 'CO' : null }, // Latgale ; Courlande
-  Russia: { defaut: 'RU', retouche: (lon, lat) => lon < 23 ? 'PR' : lat < 46.3 ? (lon > 32.3 && lon < 36.7 && lat > 44.3 ? 'CR' : '~Caucase') : null }, // Königsberg ; la Crimée ; le Kouban
-  Algeria: { defaut: 'AL', retouche: (lon, lat) => lat < 32.3 ? '~Sahara' : null },
-  Libya: { defaut: 'TR', retouche: (lon, lat) => lat < 30 ? '~Sahara' : null },
-  Egypt: { defaut: 'OT', retouche: (lon, lat) => lon < 29.3 && lat < 30.6 ? '~Sahara' : null },
-  Jordan: { defaut: 'OT', retouche: (lon) => lon > 37 ? '~Arabie' : null },
-};
-// détroits rouverts sur 7,5 km de large (la grille les fermerait) : la mer Noire, la Baltique restent des mers ouvertes
-const DETROITS = [
-  ['Bosphore', [[29.14, 41.25], [29.07, 41.12], [29.0, 41.0], [28.97, 40.93]]],
-  ['Dardanelles', [[26.72, 40.45], [26.6, 40.33], [26.4, 40.2], [26.38, 40.1], [26.18, 40.02]]],
-  ['Sund', [[12.62, 56.1], [12.68, 56.0], [12.8, 55.85], [12.85, 55.6]]],
-  ['Petit Belt', [[9.75, 55.62], [9.72, 55.52], [9.85, 55.4], [9.95, 55.25], [10.0, 55.1]]],
-  ['Messine', [[15.66, 38.3], [15.62, 38.2], [15.58, 38.05]]],
-  ['Kertch', [[36.6, 45.45], [36.6, 45.3], [36.45, 45.15]]],
-];
-
-// ------------------------------------------------------------------ fleuves : estimations (source et embouchure, à 30 km près)
-// [nom, rang (1 fleuve, 2 grande rivière, 3 rivière), [lon, lat] vers la source, [lon, lat] à l'embouchure ou au confluent,
-// noms Natural Earth admis pour ces deux points (facultatif, quand un autre cours d'eau passe plus près)].
-// Le tracé est celui de Natural Earth (lignes de 10 m), suivi d'un point à l'autre ; à défaut, des points écrits de mémoire.
-const FLEUVES = [
-  ['Danube', 1, [8.3, 48.0], [29.65, 45.15]], ['Rhin', 1, [9.4, 46.8], [4.1, 51.97]], ['Elbe', 1, [15.8, 50.5], [9.8, 53.55]],
-  ['Oder', 1, [17.6, 49.7], [14.6, 53.6], /^Oder$/], ['Vistule', 1, [18.9, 49.6], [18.95, 54.35]], ['Niémen', 1, [27.0, 53.4], [21.3, 55.3]],
-  ['Dvina', 1, [32.5, 56.85], [24.05, 57.05]], ['Dniepr', 1, [33.7, 55.85], [32.6, 46.55]], ['Dniestr', 1, [22.9, 49.2], [30.45, 46.1]],
-  ['Don', 1, [38.3, 54.0], [39.4, 47.1]], ['Volga', 1, [32.6, 57.0], [45.2, 56.1]], ['Basse Volga', 1, [45.6, 50.5], [45.3, 48.5]],
-  ['Tage', 1, [-1.8, 40.5], [-8.8, 39.1], /^(Tajo|Tejo)$/], ['Èbre', 1, [-4.2, 43.0], [0.87, 40.72]], ['Douro', 1, [-2.9, 42.0], [-8.65, 41.15]],
-  ['Guadalquivir', 1, [-2.9, 38.0], [-6.3, 36.85]], ['Guadiana', 2, [-3.2, 39.2], [-7.4, 37.2]],
-  ['Loire', 1, [4.2, 44.85], [-2.1, 47.28]], ['Seine', 1, [4.7, 47.5], [0.3, 49.45]], ['Rhône', 1, [8.3, 46.6], [4.8, 43.35], /^Rh.?ne$/],
-  ['Garonne', 1, [0.9, 42.65], [-0.5, 44.9], /^Garonne$/], ['Dordogne', 2, [2.8, 45.55], [-0.5, 45.02]], ['Marne', 2, [5.4, 47.85], [2.42, 48.82]],
-  ['Saône', 2, [6.2, 48.1], [4.83, 45.73]], ['Moselle', 2, [6.9, 47.95], [7.6, 50.36]], ['Meuse', 2, [5.6, 48.0], [4.3, 51.75]],
-  ['Escaut', 2, [3.3, 50.0], [4.25, 51.35]], ['Pô', 1, [7.1, 44.7], [12.5, 44.97]], ['Adige', 2, [10.6, 46.8], [12.3, 45.15]],
-  ['Tibre', 2, [12.1, 43.8], [12.23, 41.74]], ['Arno', 3, [11.7, 43.4], [10.28, 43.68]],
-  ['Tamise', 2, [-2.0, 51.7], [0.5, 51.48]], ['Severn', 2, [-3.7, 52.5], [-2.5, 51.7]], ['Trent', 3, [-2.2, 53.05], [-0.7, 53.7]],
-  ['Shannon', 2, [-8.0, 54.2], [-8.9, 52.6]],
-  ['Weser', 2, [10.9, 50.5], [8.5, 53.5]], ['Main', 2, [11.5, 49.95], [8.3, 50.0]], ['Inn', 2, [9.7, 46.4], [13.47, 48.57]],
-  ['Vltava', 3, [13.6, 49.0], [14.47, 50.35]], ['Warta', 2, [19.5, 50.5], [14.63, 52.6]], ['Bug', 2, [24.9, 49.9], [20.7, 52.42]],
-  ['Drave', 2, [12.3, 46.7], [18.9, 45.55]], ['Save', 2, [13.75, 46.45], [20.45, 44.82]], ['Tisza', 2, [24.2, 48.05], [20.25, 45.15]],
-  ['Mureș', 3, [25.6, 46.65], [20.2, 46.25]], ['Olt', 3, [25.8, 46.7], [24.8, 43.72]], ['Prout', 2, [24.6, 48.3], [28.2, 45.47]],
-  ['Morava', 2, [21.3, 42.3], [21.03, 44.7]], ['Drina', 3, [19.5, 42.75], [19.37, 44.9]], ['Maritsa', 2, [23.8, 42.25], [26.05, 40.73]],
-  ['Vardar', 2, [20.9, 41.8], [22.72, 40.5]],
-  ['Boug méridional', 2, [26.5, 49.6], [31.75, 47.1], /^Southern Bug$/],
-  ['Donets', 2, [36.9, 51.0], [40.9, 47.6]], ['Oka', 2, [36.2, 52.4], [44.0, 56.3]], ['Neva', 2, [31.0, 59.95], [30.25, 59.93]],
-  ['Volkhov', 3, [31.3, 58.45], [32.33, 60.1]], ['Glomma', 2, [11.6, 61.5], [10.95, 59.2]], ['Dalälven', 2, [14.6, 61.0], [17.45, 60.63]],
-  ['Göta älv', 3, [12.3, 58.38], [11.9, 57.7]],
-  ['Kızılırmak', 2, [38.4, 39.9], [35.95, 41.72]], ['Sakarya', 2, [31.0, 39.0], [30.65, 41.12]], ['Euphrate', 1, [38.8, 38.9], [45.2, 31.3], /^(Firat|Al Furat|Euphrates)$/],
-  ['Jourdain', 3, [35.6, 33.2], [35.55, 31.76]],
-  ['Nil', 1, [31.0, 28.5], [30.4, 31.45]], ['Nil (branche de Damiette)', 2, [31.15, 30.2], [31.83, 31.52]],
-  ['Moulouya', 2, [-5.3, 32.6], [-2.35, 35.1]], ['Sebou', 2, [-5.0, 33.2], [-6.65, 34.27]], ['Oum Er-Rbia', 2, [-5.1, 33.0], [-8.33, 33.3]],
-  // absents de Natural Earth : points connus du cours, de la source à l'embouchure (de mémoire, à quelques km près)
-  ['Chélif', 2, [[2.9, 35.2], [2.75, 35.88], [2.55, 36.15], [2.22, 36.26], [1.85, 36.22], [1.33, 36.17], [0.9, 36.05], [0.55, 36.0], [0.13, 36.04]]],
-  ['Medjerda', 2, [[7.95, 36.28], [8.43, 36.45], [8.78, 36.5], [8.97, 36.61], [9.45, 36.55], [9.6, 36.65], [9.84, 36.83], [10.2, 37.03]]],
-];
 const LAC_MIN_KM2 = 100; // lacs gardés (Natural Earth, hors retenues modernes)
 const LIEN_KM = 6; // raccord entre deux tronçons de Natural Earth
 
 // ------------------------------------------------------------------ les pays : le format des camps du jeu (rules.rs, FACTIONS)
-// Choix d'auteur, dans le ton des départements du mode France. mods : seulement des clés que le moteur lit déjà.
+// mods : seulement des clés que le moteur lit déjà ; cultures connues du moteur (rules.rs, CULTURES ; la France : les
+// noms des départements)
 const CLES_MODS = ['livres', 'vivres', 'fer', 'bois', 'recrues', 'trade', 'vin', 'industrie', 'port', 'upkeep', 'inf_power', 'cav_power', 'art_power', 'art_cost',
   'cav_cost', 'fort_bonus', 'road_speed', 'mountain', 'ambush', 'marsh_attr', 'stealth', 'attrition', 'research_speed', 'siege_speed', 'morale', 'diplo'];
-const P = (name, short, adj, color, title, pros, cons, mods, [aggr, trade, expand, tech], specialty) =>
-  ({ name, short, capital: '', color, adj, title, pros, cons, mods, personality: { aggr, trade, expand, tech }, specialty });
-const PAYS = {
-  FR: P('Royaume de France', 'France', 'français', '#2b3fc4', 'Le Grand Royaume', ['Royaume le plus peuplé : recrues +15 %', 'Corps royal de l\'artillerie : artillerie +10 %', 'Places de Vauban : fortifications +10 %'], ['Finances obérées : livres −10 %'],
-    { recrues: 0.15, art_power: 0.1, fort_bonus: 0.1, livres: -0.1 }, [0.65, 0.6, 0.7, 'militaire'], 'recrues'),
-  GB: P('Royaume de Grande-Bretagne', 'G.-Bretagne', 'britannique', '#c0392b', 'La Maîtresse des mers', ['Négoce des Indes : accords commerciaux +30 %', 'Ports +20 %', 'Manufactures : industrie +20 %'], ['Petite armée de terre : recrues −20 %'],
-    { trade: 0.3, port: 0.2, industrie: 0.2, recrues: -0.2 }, [0.5, 0.95, 0.6, 'industriel'], 'livres'),
-  ES: P("Royaume d'Espagne", 'Espagne', 'espagnol', '#e0a526', "L'Empire des Indes", ['Argent des Amériques : livres +15 %', 'Guérilla : embuscades +20 %'], ['Industrie −15 %', 'Routes de montagne −5 %'],
-    { livres: 0.15, ambush: 0.2, industrie: -0.15, road_speed: -0.05 }, [0.5, 0.6, 0.55, 'civil'], 'livres'),
-  PT: P('Royaume de Portugal', 'Portugal', 'portugais', '#1e8449', "Le Comptoir de l'Atlantique", ['Or du Brésil : accords commerciaux +25 %', 'Vins de Porto : +20 % de revenus viticoles'], ['Petit royaume : recrues −15 %'],
-    { trade: 0.25, vin: 0.2, recrues: -0.15 }, [0.3, 0.9, 0.4, 'civil'], 'livres'),
-  NL: P('Provinces-Unies', 'Prov.-Unies', 'hollandais', '#e67e22', 'Les Rouliers des mers', ["Bourse d'Amsterdam : livres +25 %", 'Accords commerciaux +25 %', 'Digues et inondations : fortifications +10 %'], ['Milice bourgeoise : infanterie −8 %', 'Recrues −15 %'],
-    { livres: 0.25, trade: 0.25, fort_bonus: 0.1, inf_power: -0.08, recrues: -0.15 }, [0.3, 0.95, 0.4, 'civil'], 'livres'),
-  BE: P('Pays-Bas du Sud', 'Pays-Bas S.', 'belge', '#f4d03f', 'Les Bonnes Villes de Flandre et de Brabant', ['Villes drapières : industrie +15 %', 'Riches campagnes : vivres +15 %'], ['Souverain lointain : recrues −10 %'],
-    { industrie: 0.15, vivres: 0.15, recrues: -0.1 }, [0.3, 0.8, 0.4, 'industriel'], 'vivres'),
-  CH: P('Confédération des XIII cantons', 'Suisse', 'suisse', '#a93226', 'Les Cantons et leurs régiments', ['Infanterie +12 %', 'Combat et marche en montagne +25 %'], ['Commerce −10 %', 'Vivres −10 %'],
-    { inf_power: 0.12, mountain: 0.25, trade: -0.1, vivres: -0.1 }, [0.35, 0.5, 0.3, 'militaire'], 'recrues'),
-  SA: P('États de Savoie', 'Savoie', 'savoyard', '#7f8c8d', 'Les Portiers des Alpes', ['Combat et marche en montagne +20 %', 'Citadelles : fortifications +15 %'], ['Livres −10 %'],
-    { mountain: 0.2, fort_bonus: 0.15, livres: -0.1 }, [0.55, 0.5, 0.7, 'militaire'], 'recrues'),
-  VE: P('République de Venise', 'Venise', 'vénitien', '#148f77', 'La Sérénissime', ['Négoce du Levant : accords commerciaux +25 %', "L'Arsenal : ports +15 %"], ['République vieillie : recrues −20 %', 'Infanterie −6 %'],
-    { trade: 0.25, port: 0.15, recrues: -0.2, inf_power: -0.06 }, [0.2, 0.9, 0.3, 'civil'], 'livres'),
-  GE: P('République de Gênes', 'Gênes', 'génois', '#d35400', 'La Superbe', ['Banque de Saint-Georges : livres +25 %', 'Ports +15 %'], ['Corse rebelle : recrues −20 %', 'Vivres −10 %'],
-    { livres: 0.25, port: 0.15, recrues: -0.2, vivres: -0.1 }, [0.25, 0.9, 0.25, 'civil'], 'livres'),
-  IT: P('Toscane et Milanais', 'Toscane-Mil.', 'toscan', '#af7ac5', 'Les Soyeux et les Banquiers', ['Soieries et banque : livres +20 %', 'Plaine du Pô : vivres +15 %'], ['États divisés : recrues −15 %', 'Infanterie −6 %'],
-    { livres: 0.2, vivres: 0.15, recrues: -0.15, inf_power: -0.06 }, [0.3, 0.85, 0.4, 'civil'], 'livres'),
-  PO: P('États pontificaux', 'États pont.', 'pontifical', '#f7e9a0', 'Le Patrimoine de saint Pierre', ['Prestige du Saint-Siège : diplomatie +15'], ['Soldats du pape : infanterie −10 %', 'Industrie −15 %'],
-    { diplo: 15, inf_power: -0.1, industrie: -0.15 }, [0.15, 0.6, 0.2, 'civil'], 'vivres'),
-  NA: P('Royaume de Naples et de Sicile', 'Naples', 'napolitain', '#5dade2', 'Les Deux-Siciles', ['Blé de Sicile et des Pouilles : vivres +25 %', 'Vins +15 %'], ['Industrie −20 %', 'Routes −5 %'],
-    { vivres: 0.25, vin: 0.15, industrie: -0.2, road_speed: -0.05 }, [0.3, 0.6, 0.35, 'agricole'], 'vivres'),
-  BA: P('Électorat de Bavière', 'Bavière', 'bavarois', '#2e86c1', 'La Maison de Wittelsbach', ['Riches campagnes : vivres +20 %', 'Recrues +10 %'], ['Commerce −10 %'],
-    { vivres: 0.2, recrues: 0.1, trade: -0.1 }, [0.45, 0.55, 0.55, 'agricole'], 'vivres'),
-  SX: P('Électorat de Saxe', 'Saxe', 'saxon', '#7dcea0', 'Les Mines et les Foires de Saxe', ["Mines de l'Erzgebirge : fer +30 %", 'Foires de Leipzig : accords commerciaux +15 %', 'Manufactures : industrie +10 %'], ['Petite armée : recrues −10 %'],
-    { fer: 0.3, trade: 0.15, industrie: 0.1, recrues: -0.1 }, [0.35, 0.75, 0.4, 'industriel'], 'fer'),
-  HA: P('Électorat de Hanovre', 'Hanovre', 'hanovrien', '#6c8ebf', 'Les Guelfes et les villes de la Hanse', ['Hambourg et Brême : ports +15 %', 'Mines du Harz : fer +15 %'], ['Sables et landes : vivres −10 %'],
-    { port: 0.15, fer: 0.15, vivres: -0.1 }, [0.35, 0.75, 0.4, 'civil'], 'livres'),
-  WU: P('Duché de Wurtemberg', 'Wurtemberg', 'wurtembergeois', '#8e44ad', 'Le Cercle de Souabe', ['Vignobles du Neckar et du Rhin : +20 % de revenus viticoles', 'Recrues +10 %'], ['Princes désunis : livres −10 %'],
-    { vin: 0.2, recrues: 0.1, livres: -0.1 }, [0.35, 0.6, 0.4, 'agricole'], 'vivres'),
-  WE: P('Cercles de Westphalie et du Rhin', 'Westphalie', 'westphalien', '#1d6b3a', 'Les Électeurs ecclésiastiques', ['Foires de Francfort : accords commerciaux +15 %', 'Troupes à louer : recrues +10 %'], ['Princes désunis : entretien des troupes +10 %'],
-    { trade: 0.15, recrues: 0.1, upkeep: 0.1 }, [0.3, 0.7, 0.35, 'civil'], 'recrues'),
-  PR: P('Royaume de Prusse', 'Prusse', 'prussien', '#34495e', "L'Armée qui possède un État", ['Discipline : infanterie +15 %', 'Système des cantons : recrues +15 %', 'Entretien des troupes −10 %'], ['Sables du Brandebourg : vivres −15 %', 'Livres −10 %'],
-    { inf_power: 0.15, recrues: 0.15, upkeep: -0.1, vivres: -0.15, livres: -0.1 }, [0.8, 0.45, 0.85, 'militaire'], 'recrues'),
-  AU: P('Monarchie de Habsbourg', 'Autriche', 'autrichien', '#e8e8e8', "La Maison d'Autriche", ['Hussards et Croates : cavalerie +12 %', 'Peuples nombreux : recrues +10 %'], ['Lourde administration : entretien des troupes +10 %', 'Routes −5 %'],
-    { cav_power: 0.12, recrues: 0.1, upkeep: 0.1, road_speed: -0.05 }, [0.5, 0.6, 0.6, 'civil'], 'recrues'),
-  PL: P('République des Deux Nations', 'Pologne', 'polonais', '#e74c8b', 'La République nobiliaire', ['Cavalerie nationale : cavalerie +15 %', 'Greniers de la Vistule : vivres +25 %'], ['Liberum veto : livres −15 %', 'Fortifications −15 %', 'Industrie −15 %'],
-    { cav_power: 0.15, vivres: 0.25, livres: -0.15, fort_bonus: -0.15, industrie: -0.15 }, [0.3, 0.55, 0.3, 'agricole'], 'vivres'),
-  CO: P('Duché de Courlande', 'Courlande', 'courlandais', '#1abc9c', 'Les Ducs de Mitau', ['Bois et mâts de la Baltique : bois +25 %', 'Ports +10 %'], ['Petit duché : recrues −20 %'],
-    { bois: 0.25, port: 0.1, recrues: -0.2 }, [0.2, 0.75, 0.2, 'civil'], 'bois'),
-  RU: P('Empire de Russie', 'Russie', 'russe', '#27632a', "L'Empire des tsars", ['Masses paysannes : recrues +25 %', 'Général Hiver : usure −20 %', 'Forêts : bois +20 %'], ['Immensité : routes −10 %', 'Industrie −10 %'],
-    { recrues: 0.25, attrition: -0.2, bois: 0.2, road_speed: -0.1, industrie: -0.1 }, [0.7, 0.45, 0.9, 'militaire'], 'recrues'),
-  SE: P('Royaume de Suède', 'Suède', 'suédois', '#f5b041', 'Les Carolins et le fer de Dalécarlie', ['Fer de Bergslagen : fer +35 %', 'Forêts : bois +25 %', 'Infanterie +8 %'], ['Pays peu peuplé : recrues −20 %', 'Vivres −15 %'],
-    { fer: 0.35, bois: 0.25, inf_power: 0.08, recrues: -0.2, vivres: -0.15 }, [0.5, 0.6, 0.5, 'industriel'], 'fer'),
-  DK: P('Royaume de Danemark et de Norvège', 'Danemark', 'danois', '#922b21', 'Les Gardiens du Sund', ['Péage du Sund : livres +15 %', 'Bois et mâts de Norvège : bois +30 %', 'Ports +10 %'], ['Recrues −15 %'],
-    { livres: 0.15, bois: 0.3, port: 0.1, recrues: -0.15 }, [0.3, 0.8, 0.35, 'civil'], 'bois'),
-  OT: P('Empire ottoman', 'Ottomans', 'ottoman', '#6b8e23', 'La Sublime Porte', ['Sipahis : cavalerie +12 %', 'Empire immense : recrues +20 %', 'Caravanes du Levant : accords commerciaux +10 %'], ['Artillerie vieillie : −10 %', 'Industrie −20 %', 'Savoirs lents à venir : recherche −15 %'],
-    { cav_power: 0.12, recrues: 0.2, trade: 0.1, art_power: -0.1, industrie: -0.2, research_speed: -0.15 }, [0.6, 0.55, 0.6, 'militaire'], 'recrues'),
-  CR: P('Khanat de Crimée', 'Crimée', 'tatar', '#c39bd3', 'La Horde des Giray', ['Cavaliers tatars : cavalerie +15 %', 'Razzias : embuscades +30 %', 'Gens de la steppe : usure −20 %'], ['Ni canons ni remparts : artillerie −15 %, fortifications −15 %', 'Industrie −30 %'],
-    { cav_power: 0.15, ambush: 0.3, attrition: -0.2, art_power: -0.15, fort_bonus: -0.15, industrie: -0.3 }, [0.8, 0.35, 0.5, 'militaire'], 'recrues'),
-  MA: P('Empire chérifien', 'Maroc', 'marocain', '#a04000', 'Le Makhzen des sultans alaouites', ['Cavaliers des tribus : cavalerie +15 %', "Gens de l'Atlas : montagne +20 %", 'Embuscades +20 %'], ['Industrie −25 %', 'Commerce −15 %'],
-    { cav_power: 0.15, mountain: 0.2, ambush: 0.2, industrie: -0.25, trade: -0.15 }, [0.5, 0.4, 0.4, 'militaire'], 'recrues'),
-  AL: P("Régence d'Alger", 'Alger', 'algérois', '#45b39d', "Les Corsaires d'Alger", ['Course : ports +25 %', 'Janissaires : infanterie +8 %', 'Embuscades +15 %'], ['Industrie −25 %', 'Nid de pirates : diplomatie −10'],
-    { port: 0.25, inf_power: 0.08, ambush: 0.15, industrie: -0.25, diplo: -10 }, [0.7, 0.5, 0.4, 'militaire'], 'livres'),
-  TU: P('Régence de Tunis', 'Tunis', 'tunisien', '#f1948a', 'Le Beylik de Tunis', ['Huile, blé et chéchias : accords commerciaux +15 %', 'Vivres +15 %', 'Ports +10 %'], ['Industrie −20 %', 'Recrues −15 %'],
-    { trade: 0.15, vivres: 0.15, port: 0.1, industrie: -0.2, recrues: -0.15 }, [0.35, 0.75, 0.3, 'civil'], 'vivres'),
-  TR: P('Régence de Tripoli', 'Tripoli', 'tripolitain', '#5b2c6f', 'Les Corsaires de Barbarie', ['Course : ports +20 %', 'Caravanes du Sahara : accords commerciaux +15 %', 'Gens du désert : usure −20 %'], ['Vivres −25 %', 'Industrie −25 %', 'Recrues −15 %'],
-    { port: 0.2, trade: 0.15, attrition: -0.2, vivres: -0.25, industrie: -0.25, recrues: -0.15 }, [0.55, 0.6, 0.3, 'militaire'], 'livres'),
-  ML: P('Ordre de Saint-Jean de Jérusalem', 'Malte', 'maltais', '#111111', 'Les Chevaliers de Malte', ['Bastions de La Valette : fortifications +25 %', 'Galères de la Religion : ports +20 %', 'Chevaliers : infanterie +10 %'], ['Une île : recrues −30 %', 'Vivres −20 %'],
-    { fort_bonus: 0.25, port: 0.2, inf_power: 0.1, recrues: -0.3, vivres: -0.2 }, [0.4, 0.6, 0.1, 'militaire'], 'livres'),
-};
+const CULTURES_MOTEUR = ['britannique', 'allemande', 'russe', 'espagnole', 'portugaise', 'italienne', 'ottomane', 'scandinave', 'polonaise', 'neerlandaise', 'francaise'];
+{
+  const motif = THEATRES[ID][1] ? new RegExp(`^${THEATRES[ID][1]}[A-Z]{2}$`) : /^[A-Z]{2}$/;
+  const textes = l => Array.isArray(l) && l.length && l.every(s => typeof s === 'string' && s.trim());
+  for (const [k, c] of Object.entries(CULTURES)) {
+    if (CULTURES_MOTEUR.includes(k)) stop(`CULTURES : « ${k} » existe déjà dans le moteur, ne pas la redéfinir`);
+    if (!/^[a-z_]+$/.test(k) || !c || !textes(c.prenoms) || !textes(c.prenoms_f) || !textes(c.noms)) stop(`CULTURES : « ${k} » : clé en minuscules et listes prenoms, prenoms_f, noms non vides`);
+  }
+  for (const [c, p] of Object.entries(PAYS)) {
+    if (!motif.test(c)) stop(`code de pays ${c} : ${THEATRES[ID][1] ? `trois majuscules commençant par ${THEATRES[ID][1]}` : 'deux majuscules'}`);
+    if (!p || typeof p.name !== 'string' || !p.mods || !p.personality || !Array.isArray(p.pros) || !Array.isArray(p.cons)) stop(`${c} : il faut name, short, color, adj, title, pros, cons, mods, personality, specialty`);
+    if (!CULTURES_MOTEUR.includes(p.culture) && !CULTURES[p.culture]) stop(`${c} : culture « ${p.culture} » inconnue (ni dans le moteur ni dans CULTURES)`);
+    if (!Array.isArray(p.maisons) || p.maisons.length !== 8 || !textes(p.maisons)) stop(`${c} : il faut 8 maisons`);
+    const m = p.moyens;
+    if (!Array.isArray(m) || m.length !== 2 || !Array.isArray(m[0]) || m[0].length !== 4 || !m[0].every(v => Number.isFinite(v) && v >= 0) || !(m[1] > 0))
+      stop(`${c} : moyens [[armée 1700, 1790, 1813, 1870], trésor] attendus, lu ${JSON.stringify(m)}`);
+  }
+}
 const NOM_PAYS = Object.fromEntries(Object.entries(PAYS).map(([c, p]) => [c, p.name]));
-
 // ------------------------------------------------------------------ outils de géométrie
 function topo(f, objet) {
   const t = lire(f), tr = t.transform;
@@ -274,7 +141,7 @@ const arr3 = v => Math.round(v * 1000) / 1000;
 
 // ------------------------------------------------------------------ 1. la grille des pays
 const NOMS = ['']; // étiquette → code de pays ou « ~terre hors jeu » ; 0 : la mer
-const etiq = code => { let k = NOMS.indexOf(code); if (k < 0) { k = NOMS.length; NOMS.push(code); } return k; };
+const etiq = code => { let k = NOMS.indexOf(code); if (k < 0) { k = NOMS.length; NOMS.push(code); } if (k >= 250) stop('plus de 250 pays et terres hors jeu'); return k; };
 const L = new Uint8Array(N);
 {
   const pays = topo(path.join(NM, 'world-atlas', 'countries-10m.json'), 'countries');
@@ -286,8 +153,11 @@ const L = new Uint8Array(N);
     for (const pl of polys) remplir(pl, gx, gy, GW, GH, c => { C[c] = noms.length - 1; });
   }
   const vus = new Set(C);
-  for (const k of vus) if (k && !ENTIERS[noms[k]] && !COUPES[noms[k]]) stop(`pays Natural Earth sans règle : ${noms[k]}`);
-  for (let c = 0; c < N; c++) if (C[c] && ENTIERS[noms[C[c]]]) L[c] = etiq(ENTIERS[noms[C[c]]]);
+  const sans = [...vus].filter(k => k && !ENTIERS[noms[k]] && !COUPES[noms[k]]).map(k => noms[k]).sort();
+  if (sans.length && !DEFAUT) stop(`pays Natural Earth sans règle (ENTIERS, COUPES ou carte.defaut) : ${sans.join(', ')}`);
+  if (sans.length) console.log(`pays Natural Earth sans règle, mis à « ${DEFAUT} » : ${sans.join(', ')}`);
+  const regle = noms.map(n => ENTIERS[n] || (!COUPES[n] && DEFAUT));
+  for (let c = 0; c < N; c++) if (C[c] && regle[C[c]]) L[c] = etiq(regle[C[c]]);
   for (const [nom, regle] of Object.entries(COUPES)) {
     const k = noms.indexOf(nom);
     if (k < 0) stop(`pays à couper absent de Natural Earth : ${nom}`);
@@ -424,10 +294,8 @@ if (poches.length) console.log('poches de mer fermées, rendues comme des lacs :
 // ------------------------------------------------------------------ 3. lacs
 const waters = [];
 {
-  const NOM_LAC = { IJsselmeer: 'Zuiderzee', Pihkva: 'Lac de Pskov', Syvach: 'Sivach', 'Lake Milh': 'Lac Milh', 'Côme': 'Lac de Côme', Garde: 'Lac de Garde', Constance: 'Lac de Constance',
-    'Neuchâtel': 'Lac de Neuchâtel', Zurich: 'Lac de Zurich', 'Tibériade': 'Lac de Tibériade', Van: 'Lac de Van' };
   const vus = [];
-  for (const f of ['ne_10m_lakes.geojson', 'ne_10m_lakes_europe.geojson']) {
+  for (const f of NE_LACS) {
     for (const x of lireNE(f)) {
       const p = x.properties;
       if (p.featurecla === 'Reservoir' && !/Il.?men/.test((p.name_fr || '') + (p.name || ''))) continue; // retenues du XXe siècle
@@ -460,7 +328,7 @@ const rivers = [];
   const lien = (a, b) => { if (a === b) return; const d = km([X[a], Y[a]], [X[b], Y[b]]); adj[a].push([b, d]); adj[b].push([a, d]); };
   const bouts = [];
   let nl = 0;
-  for (const f of ['ne_10m_rivers_lake_centerlines.geojson', 'ne_10m_rivers_europe.geojson']) {
+  for (const f of NE_RIVIERES) {
     for (const x of lireNE(f)) {
       for (const l of x.geometry.type === 'LineString' ? [x.geometry.coordinates] : x.geometry.coordinates) {
         if (!l.some(p => p[0] > LON0 - 3 && p[0] < LON1 + 3 && p[1] > LAT0 - 3 && p[1] < LAT1 + 3)) continue;
@@ -525,7 +393,7 @@ const rivers = [];
   const defauts = [];
   for (const r of rivers) {
     const fin = r.pts[r.pts.length - 1], x = gx(fin[0]), y = gy(fin[1]);
-    let ok = eau(x, y) || r._coupe && (fin[0] > LON1 - 0.3 || fin[1] < LAT0 + 0.3);
+    let ok = eau(x, y) || r._coupe && (fin[0] < LON0 + 0.3 || fin[0] > LON1 - 0.3 || fin[1] < LAT0 + 0.3 || fin[1] > LAT1 - 0.3);
     if (!ok) for (const o of rivers) { if (o !== r) for (let k = 0; k + 1 < o.pts.length && !ok; k++) ok = dSeg(fin, o.pts[k], o.pts[k + 1]) < 8; }
     if (!ok) for (const lac of waters) { if (lac.ring.some(q => km(q, fin) < 8)) { ok = true; break; } }
     if (!ok) {
@@ -583,7 +451,7 @@ const codeCase = (lon, lat) => { const i = Math.floor(fx(lon)), j = Math.floor(f
 // ------------------------------------------------------------------ 6. places
 // [nom, lat, lon, pays, type, étiquettes, remparts, population de 1790], comme places_france.json
 const ROLES = ['arsenal', 'commerce', 'peche'];
-const ESPACE_KM = Number(process.env.ESPACE || 115); // un bourg GeoNames est ajouté quand aucune place du pays n'est plus près
+const ESPACE_KM = Number(process.env.ESPACE || CARTE.espace || 115); // un bourg GeoNames est ajouté quand aucune place du pays n'est plus près
 const places = [];
 const recap = {};
 {
@@ -604,7 +472,7 @@ const recap = {};
   };
   const presDe = (lon, lat, r, quoi) => { const i0 = Math.floor(fx(lon)), j0 = Math.floor(fy(lat)); for (let j = j0 - r; j <= j0 + r; j++) for (let i = i0 - r; i <= i0 + r; i++) if (i < 0 || j < 0 || i >= W || j >= H ? quoi(0) : quoi(caseDe[j * W + i])) return true; return false; };
   const dRiv = p => { let m = 1e9; for (const r of rivers) for (const q of r.pts) m = Math.min(m, km(q, p)); return m; };
-  const villes = lire(path.join(ICI, 'europe', 'villes.json'));
+  const villes = lire(path.join(DOSSIER, 'villes.json'));
   const defauts = [], deplacees = [], portsLoin = [];
   for (const c of Object.keys(villes)) if (c !== '_note' && !CODES.includes(c)) stop(`villes.json : pays inconnu ${c}`);
   for (const code of CODES) {
@@ -635,8 +503,8 @@ const recap = {};
     for (const v of liste) {
       const cote = presDe(v.lon, v.lat, 1, t => t === 0);
       if (v.type !== 'village' && cote && !v.etiq.includes('port')) v.etiq.unshift('port'); // toute ville côtière est un port
-      // (Glasgow sur la Clyde, Nikolaïev sur le liman du Boug : estuaires trop étroits pour la carte)
-      if (v.etiq.includes('port') && !presDe(v.lon, v.lat, 5, t => t < 2) && dRiv([v.lon, v.lat]) > 12 && !['Glasgow|GB', 'Nikolaïev|CR'].includes(v.nom + '|' + code)) portsLoin.push(`${v.nom}|${code}`);
+      // (PORTS_ADMIS de carte.mjs : estuaires trop étroits pour la carte)
+      if (v.etiq.includes('port') && !presDe(v.lon, v.lat, 5, t => t < 2) && dRiv([v.lon, v.lat]) > 12 && !PORTS_ADMIS.includes(v.nom + '|' + code)) portsLoin.push(`${v.nom}|${code}`);
     }
     // bourgs de complément : les villes d'aujourd'hui les plus peuplées, là où aucune place du pays n'est à moins de ESPACE_KM
     const k = 3 + CODES.indexOf(code), noms = new Set(liste.map(v => norm(v.nom)));
@@ -690,7 +558,7 @@ const recap = {};
 const epoques = {};
 {
   const ETIQ = ['paix', 'guerres', 'ville', 'bourg', 'declin', 'grande_ville', 'capitale_fr', 'industrie', 'mines', 'grand_port', 'port_neuf', 'arsenal', 'ville_neuve', 'hivernants', 'thermes', 'bains', 'forges', 'gare'];
-  const src = lire(path.join(ICI, 'europe', 'epoques.json')), pop = new Map(places.map(p => [p[0] + '|' + p[3], p[7]]));
+  const src = lire(path.join(DOSSIER, 'epoques.json')), pop = new Map(places.map(p => [p[0] + '|' + p[3], p[7]]));
   for (const [cle, pts] of Object.entries(src)) {
     if (cle === '_note') continue;
     const p0 = pop.get(cle);
@@ -722,10 +590,14 @@ const epoques = {};
 // ------------------------------------------------------------------ sorties
 const ecrire = (f, o) => { fs.writeFileSync(path.join(DATA, f), o); JSON.parse(fs.readFileSync(path.join(DATA, f), 'utf8')); return `${f} ${(o.length / 1024).toFixed(0)} Ko`; };
 const tailles = [
-  ecrire('europe.json', JSON.stringify(geo) + '\n'),
-  ecrire('places_europe.json', '[\n' + places.map(p => JSON.stringify(p)).join(',\n') + '\n]\n'),
-  ecrire('pays_europe.json', '{\n' + CODES.map(c => JSON.stringify(c) + ': ' + JSON.stringify(PAYS[c])).join(',\n') + '\n}\n'),
-  ecrire('epoques_europe.json', '{\n' + Object.entries(epoques).map(([k, v]) => JSON.stringify(k) + ': ' + JSON.stringify(v)).join(',\n') + '\n}\n'),
+  ecrire(SORTIES.carte, JSON.stringify(geo) + '\n'),
+  ecrire(SORTIES.places, '[\n' + places.map(p => JSON.stringify(p)).join(',\n') + '\n]\n'),
+  ecrire(SORTIES.pays, '{\n' + CODES.map(c => { // l'ordre des clés du jeu, quel que soit celui de carte.mjs
+    const { name, short, capital, color, adj, title, pros, cons, mods, personality: { aggr, trade, expand, tech }, specialty, moyens, maisons, culture } = PAYS[c];
+    return JSON.stringify(c) + ': ' + JSON.stringify({ name, short, capital, color, adj, title, pros, cons, mods, personality: { aggr, trade, expand, tech }, specialty, moyens, maisons, culture });
+  }).join(',\n') + '\n}\n'),
+  ecrire(SORTIES.epoques, '{\n' + Object.entries(epoques).map(([k, v]) => JSON.stringify(k) + ': ' + JSON.stringify(v)).join(',\n') + '\n}\n'),
+  ecrire(SORTIES.cultures, Object.keys(CULTURES).length ? '{\n' + Object.entries(CULTURES).map(([k, v]) => JSON.stringify(k) + ': ' + JSON.stringify(v)).join(',\n') + '\n}\n' : '{}\n'),
 ];
 if (APERCU) {
   const E = 2, X = lon => (fx(lon) * E).toFixed(1), Y = lat => (fy(lat) * E).toFixed(1), d = r => 'M' + r.map(p => X(p[0]) + ' ' + Y(p[1])).join('L') + 'Z';
@@ -745,5 +617,5 @@ if (APERCU) {
 console.log(`\n${places.length} places, ${Object.keys(epoques).length} trajectoires d'époque, ${rivers.length} fleuves, ${waters.length} lacs, ${geo.lands.length} terres hors jeu`);
 console.log('pays  villes  ports  bourgs  pop. des 25  aire (cases)  cases à > 150 km (désert)  place la plus loin d\'un lieu habité');
 for (const c of CODES) { const r = recap[c]; console.log(`${c}  ${String(r.villes).padStart(6)} ${String(r.ports).padStart(6)} ${String(r.bourgs).padStart(7)} ${String(r.pop25).padStart(12)} ${String(aires[c]).padStart(13)} ${String(r.loin).padStart(12)} ${(r.max.toFixed(0) + ' km').padStart(22)}  ${PAYS[c].name}`); }
-if (places.length < 900 || places.length > 1400) stop(`${places.length} places : on en vise 900 à 1 400 (régler ESPACE_KM)`);
+if (places.length < CARTE.places[0] || places.length > CARTE.places[1]) stop(`${places.length} places : on en vise ${CARTE.places[0]} à ${CARTE.places[1]} (régler carte.espace ou ESPACE, aujourd'hui ${ESPACE_KM} km)`);
 console.log('écrit : ' + tailles.join(' ; '));

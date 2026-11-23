@@ -123,7 +123,7 @@ courbe de Mulhouse, `cherbourg`, `cannes` ; Dunkerque et Port-Vendres sur la cou
 
 ### Le moteur du mode Europe : fait le 16/11/2026 (géographie 5)
 
-Données (`outils/europe.mjs`, voir `outils/EUROPE.md`) : `game/data/europe.json` (32 pays de 1700, fleuves, lacs),
+Données (`outils/theatre.mjs europe`, voir `outils/THEATRES.md`) : `game/data/europe.json` (32 pays de 1700, fleuves, lacs),
 `places_europe.json` (1 258 places), `pays_europe.json` (les camps), `epoques_europe.json` (172 trajectoires de villes).
 Le moteur Rust les embarque et sait jouer sur cette carte ; la page (écran de départ, dessin de la carte) est le lot suivant.
 
@@ -155,7 +155,7 @@ Le moteur Rust les embarque et sait jouer sur cette carte ; la page (écran de d
 - **Serveur** : `GET /api/map?geo=4|5` (la carte d'un mode pour l'écran de départ ; 400 sinon), champs `modes` et
   `km_case` ; `POST /api/new` et `/api/skirmish` avec `geo` (4 par défaut) ; un camp d'une autre carte est refusé (400).
   Les sauvegardes gardent leur carte (`geo: 5`) et reprennent au redémarrage.
-- **Données corrigées** : la capitale de la Russie est Moscou (`outils/europe/villes.json`). Saint-Pétersbourg, un
+- **Données corrigées** : la capitale de la Russie est Moscou (`outils/theatres/europe/villes.json`). Saint-Pétersbourg, un
   hameau de 440 âmes en 1700 collé à la frontière, tombait dans les premières années et la Russie finissait absorbée
   par la Courlande.
 - **Essais** : `rust/conquete/tests/europe.rs` (carte, pays, réseau, trajectoires, parties, 24 mois deux fois à la même
