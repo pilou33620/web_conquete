@@ -221,6 +221,7 @@ fn une_partie_monde_se_joue() {
 fn banc_tours_des_ia() {
     // (CONQUETE_BANC_GEO=13 : une seule carte)
     let seule: Option<i64> = std::env::var("CONQUETE_BANC_GEO").ok().and_then(|s| s.parse().ok());
+    let mois: usize = std::env::var("CONQUETE_BANC_MOIS").ok().and_then(|s| s.parse().ok()).unwrap_or(6); // (6 par défaut)
     for v in [2, 5, 6, 7, VERSION_MONDE].into_iter().filter(|v| seule.is_none_or(|s| s == *v)) {
         let geo = carte(v);
         let pays = match v { 2 => "33", 6 => "AFR", 7 => "IMO", _ => "FR" }; // (2 : l'Aquitaine, la Gironde)
@@ -230,7 +231,7 @@ fn banc_tours_des_ia() {
         let ai = AI::new(&g, pays);
         g.ais.insert(pays.to_string(), Some(ai));
         let (mut tps, mut cpu) = (vec![], 0.0);
-        for _ in 0..6 {
+        for _ in 0..mois {
             let (t, c) = (std::time::Instant::now(), temps_processeur());
             jouer_mois(&mut g);
             tps.push(format!("{:.2}", t.elapsed().as_secs_f64()));
@@ -243,7 +244,7 @@ fn banc_tours_des_ia() {
             "géographie {v} ({} camps) : partie créée en {creee:.2} s, tours des IA {} s (moyenne {moy:.2} s, processeur {:.2} s), empreinte {emp}",
             g.factions.len(),
             tps.join(", "),
-            cpu / 6.0
+            cpu / mois as f64
         );
     }
 }
