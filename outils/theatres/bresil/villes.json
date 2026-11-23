@@ -1,0 +1,76 @@
+{
+"_note": "Villes et ports du théâtre « Côte du Brésil » vers 1790. ESTIMATIONS écrites de mémoire (dénombrements portugais des années 1770-1800, ordres de grandeur seulement : à 20 ou 30 % près, plus pour l'intérieur ; les villes de l'or comptent leur paroisse). Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un camp est sa capitale. Les points de commerce d'Empire: Total War sont les ports « port commerce ». Dans les terres des nations autochtones, les places sont des missions et des forts portugais de 1750-1800 (aucune ville autochtone fixe n'est connue) ; coordonnées @lat,lon à quelques km près.",
+"BPT": [
+"Salvador | | 50 | port commerce | 3", "Cachoeira | | 10 | | 0", "Santo Amaro | Santo Amaro/@-12.55,-38.71 | 6 | | 0", "Maragogipe | Maragogipe/Maragojipe | 4 | port | 0",
+"Jaguaripe | @-13.11,-38.89 | 3 | port | 0", "Nazaré | Nazaré/@-13.03,-39.01 | 4 | | 0", "Ilhéus | | 3 | port commerce | 1", "Porto Seguro | | 2 | port | 0",
+"Camamu | | 3 | port | 0", "Valença | Valença/@-13.37,-39.07 | 3 | port | 0", "Caravelas | @-17.73,-39.27 | 2 | port | 0", "Vitória | Vitória/@-20.32,-40.34 | 6 | port commerce | 1",
+"Guarapari | | 1 | port | 0", "São Cristóvão | São Cristóvão/@-11.01,-37.21 | 5 | | 0", "Estância | | 4 | | 0", "Laranjeiras | Laranjeiras/@-10.80,-37.17 | 3 | | 0",
+"Jacobina | | 4 | | 0", "Rio de Contas | @-13.58,-41.81 | 5 | | 0", "Caetité | | 2 | | 0", "Juazeiro | Juazeiro/@-9.41,-40.50 | 2 | | 0",
+"Feira de Santana | | 2 | | 0", "Itapicuru | @-11.32,-38.23 | 2 | | 0", "Barra | Barra/@-11.09,-43.14 | 1 | | 0"
+],
+"BPE": [
+"Recife | | 25 | port commerce | 2", "Olinda | | 8 | | 1", "Igarassu | | 4 | | 0", "Goiana | | 6 | | 0",
+"Paraíba | João Pessoa | 6 | port commerce | 1", "Natal | Natal/@-5.79,-35.21 | 4 | port commerce | 2", "Fortaleza | | 3 | port | 1", "Aquiraz | | 2 | | 0",
+"Aracati | | 5 | port commerce | 0", "Penedo | | 5 | port | 0", "Alagoas | Marechal Deodoro | 4 | | 0", "Porto Calvo | | 3 | | 0",
+"Sirinhaém | Sirinhaém/@-8.59,-35.11 | 3 | | 0", "Vitória de Santo Antão | | 3 | | 0", "Mamanguape | | 2 | | 0", "Garanhuns | | 2 | | 0",
+"Icó | | 4 | | 0", "Crato | Crato/@-7.23,-39.41 | 3 | | 0", "Sobral | | 4 | | 0", "Russas | | 2 | | 0",
+"Quixeramobim | | 2 | | 0", "Açu | Açu/Assu/@-5.58,-36.91 | 2 | | 0", "Caicó | | 2 | | 0", "Pombal | Pombal/@-6.77,-37.80 | 2 | | 0",
+"Sousa | Sousa/@-6.76,-38.23 | 2 | | 0", "Granja | | 2 | | 0", "Viçosa do Ceará | | 2 | | 0", "Campina Grande | | 2 | | 0"
+],
+"BMA": [
+"São Luís | | 17 | port commerce | 2", "Belém | Belém/@-1.46,-48.49 | 12 | port commerce | 2", "Alcântara | | 5 | port | 0", "Caxias | Caxias/@-4.86,-43.36 | 5 | | 0",
+"Santarém | Santarém/@-2.44,-54.71 | 3 | port | 1", "Macapá | | 3 | port | 3", "Cametá | | 4 | port | 0", "Bragança | Bragança/@-1.05,-46.77 | 2 | | 0",
+"Vigia | Vigia/@-0.86,-48.14 | 3 | port | 0", "Gurupá | | 1.5 | port | 1", "Óbidos | | 2 | port | 1", "Itapecuru-Mirim | Itapecuru Mirim/@-3.39,-44.36 | 2 | | 0",
+"Viana | Viana/@-3.22,-44.99 | 2 | | 0", "Icatu | | 2 | | 0", "Mazagão | | 2 | | 0", "Monte Alegre | Monte Alegre/@-2.0,-54.07 | 1.5 | | 0",
+"Chaves | Chaves/@-0.16,-49.99 | 1 | port | 0", "Soure | | 1.5 | port | 0", "Oeiras | Oeiras/@-7.02,-42.13 | 4 | | 0", "Parnaíba | Parnaíba/@-2.90,-41.78 | 3 | port commerce | 0",
+"Campo Maior | Campo Maior/@-4.83,-42.17 | 2 | | 0", "Valença do Piauí | | 1 | | 0", "Jerumenha | @-7.09,-43.50 | 1 | | 0", "Pastos Bons | | 1 | | 0",
+"Serpa | Itacoatiara | 1 | port | 0", "Souzel | @-2.80,-52.20 | 0.5 | | 0"
+],
+"BRJ": [
+"Rio de Janeiro | | 40 | port commerce | 2", "Praia Grande | Niterói | 3 | port | 1", "Campos | Campos dos Goytacazes/Campos | 6 | | 0", "Cabo Frio | | 3 | port | 1",
+"Angra dos Reis | | 4 | port | 0", "Paraty | Paraty/Parati | 5 | port commerce | 0", "Macaé | | 2 | port | 0", "Magé | @-22.65,-43.04 | 3 | | 0",
+"Itaguaí | | 2 | | 0", "Resende | Resende/@-22.47,-44.45 | 2 | | 0", "Maricá | | 2 | | 0", "São João da Barra | | 2 | port | 0",
+"Saquarema | | 1 | | 0", "Itaboraí | | 1 | | 0"
+],
+"BSP": [
+"São Paulo | | 12 | | 0", "Santos | Santos/@-23.95,-46.33 | 4 | port commerce | 1", "Paranaguá | | 4 | port commerce | 1", "Curitiba | | 3 | | 0",
+"Itu | Itu/@-23.26,-47.30 | 4 | | 0", "Sorocaba | | 5 | | 0", "Taubaté | | 5 | | 0", "Guaratinguetá | | 4 | | 0",
+"Mogi das Cruzes | | 3 | | 0", "Jundiaí | | 3 | | 0", "Ubatuba | | 2 | port | 0", "São Sebastião | São Sebastião/@-23.80,-45.40 | 2 | port | 0",
+"Iguape | | 3 | port | 0", "Cananéia | | 2 | port | 0", "Laguna | Laguna/@-28.48,-48.78 | 2 | port | 0", "Desterro | Florianópolis | 5 | port arsenal | 2",
+"São Francisco do Sul | | 2 | port | 1", "Castro | Castro/@-24.79,-50.01 | 2 | | 0", "Porto Feliz | | 2 | | 0", "Campinas | | 2 | | 0",
+"Lorena | | 2 | | 0", "Pindamonhangaba | | 3 | | 0", "Lages | Lages/@-27.82,-50.33 | 1 | | 0", "Itanhaém | | 1.5 | port | 0",
+"Atibaia | | 2 | | 0", "Bragança Paulista | | 2 | | 0", "Antonina | | 1 | port | 0", "Lapa | Lapa/@-25.77,-49.72 | 1 | | 0"
+],
+"BMG": [
+"Vila Rica | Ouro Preto | 20 | | 1", "Mariana | Mariana/@-20.38,-43.42 | 7 | | 0", "São João del-Rei | São João del Rei | 8 | | 0", "Sabará | @-19.89,-43.81 | 8 | | 0",
+"Vila do Príncipe | Serro | 6 | | 0", "Tijuco | Diamantina | 6 | | 0", "São José del-Rei | Tiradentes | 4 | | 0", "Caeté | | 3 | | 0",
+"Pitangui | | 3 | | 0", "Paracatu | | 5 | | 0", "Minas Novas | | 3 | | 0", "Barbacena | Barbacena/@-21.23,-43.77 | 3 | | 0",
+"Campanha | Campanha/@-21.84,-45.40 | 3 | | 0", "Congonhas | | 2 | | 0", "Queluz | Conselheiro Lafaiete | 2 | | 0", "Tamanduá | Itapecerica/@-20.47,-45.13 | 2 | | 0",
+"Baependi | | 2 | | 0", "Itabira | | 2 | | 0", "Montes Claros | | 1.5 | | 0", "Januária | | 1 | | 0",
+"Lavras | | 1 | | 0", "Formiga | | 1 | | 0"
+],
+"BGO": [
+"Vila Boa | Goiás/@-15.93,-50.14 | 8 | | 0", "Meia Ponte | Pirenópolis | 5 | | 0", "Natividade | Natividade/@-11.71,-47.72 | 3 | | 0", "Santa Luzia | Luziânia | 3 | | 0",
+"Pilar de Goiás | @-14.76,-49.58 | 3 | | 0", "Crixás | | 2 | | 0", "Arraias | | 2 | | 0", "Porto Real | Porto Nacional/@-10.71,-48.42 | 1 | port | 0",
+"Cavalcante | Cavalcante/@-13.80,-47.46 | 2 | | 0", "Jaraguá | Jaraguá/@-15.76,-49.33 | 2 | | 0", "Santa Cruz de Goiás | @-17.32,-48.48 | 2 | | 0", "Corumbá de Goiás | @-15.92,-48.81 | 1 | | 0"
+],
+"BMT": [
+"Cuiabá | | 6 | | 0", "Vila Maria | Cáceres/@-16.07,-57.68 | 1 | | 1", "Diamantino | | 2 | | 0", "Poconé | | 2 | | 0",
+"Chapada | Chapada dos Guimarães | 1 | | 0", "Rosário Oeste | | 1 | | 0"
+],
+"BTU": [
+"Maués | | 1 | | 0", "Parintins | Parintins/@-2.63,-56.74 | 0.8 | port | 0", "Aveiro | @-3.61,-55.33 | 0.5 | | 0", "Itaituba | | 0.5 | port | 0"
+],
+"BGU": [
+"Albuquerque | Corumbá/@-19.0,-57.65 | 0.5 | port | 1", "Coimbra | @-19.92,-57.79 | 0.3 | port | 2", "Miranda | Miranda/@-20.24,-56.38 | 0.3 | | 0", "Camapuã | | 0.3 | | 0",
+"Nioaque | @-21.14,-55.83 | 0.2 | | 0"
+],
+"BNL": [
+"Paramaribo | | 12 | port commerce | 2", "Nieuw-Amsterdam | @5.88,-55.08 | 0.5 | port arsenal | 3", "Jodensavanne | @5.43,-54.98 | 0.5 | | 0", "Stabroek | Georgetown | 2 | port commerce | 1",
+"Berbice | New Amsterdam/@6.25,-57.52 | 1.5 | port commerce | 1", "Kykoveral | @6.40,-58.62 | 0.3 | port | 1", "Coronie | @5.87,-56.30 | 0.5 | port | 0"
+],
+"BFR": [
+"Cayenne | | 3 | port commerce | 2", "Kourou | | 0.5 | port | 0", "Sinnamary | Sinnamary/@5.38,-52.96 | 0.5 | port | 0", "Approuague | @4.32,-51.97 | 0.3 | port | 0",
+"Oyapock | Saint-Georges/@3.89,-51.80 | 0.3 | port | 1"
+]
+}

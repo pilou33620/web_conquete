@@ -1,0 +1,64 @@
+{
+"_note": "Villes et ports du Détroit de Madagascar vers 1790. ESTIMATIONS écrites de mémoire (récits de voyageurs, ordres de grandeur ; très incertain : la plupart des chiffres sont à un facteur 2 près). Les coordonnées @lat,lon (lieux d'époque inconnus de GeoNames : ruines, capitales disparues, comptoirs) sont de mémoire, à 10 km près. Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un pays est sa capitale. Les points de commerce d'Empire: Total War sont des places « port commerce ».",
+"MME": [
+"Antananarivo | | 15 | | 1", "Ambohimanga | @-18.76,47.56 | 5 | | 2", "Betafo | | 3 | | 1", "Arivonimamo | | 1.5 | | 0",
+"Ambatolampy | | 1 | | 0", "Miarinarivo | | 1 | | 0"
+],
+"MBE": [
+"Fianarantsoa | | 3 | | 1", "Ambositra | | 2 | | 0", "Ambalavao | | 2 | | 1", "Ihosy | | 1.5 | | 0"
+],
+"MAM": [
+"Vohipeno | @-22.36,47.85 | 4 | | 1", "Farafangana | | 2 | port | 0", "Manakara | | 1 | port | 0", "Mananjary | | 2 | port | 0",
+"Vangaindrano | @-23.35,47.60 | 1.5 | | 0"
+],
+"MAN": [
+"Fort-Dauphin | Tolanaro/@-25.03,46.98 | 3 | port commerce | 1", "Tuléar | Toliara | 2 | port | 0", "Saint-Augustin | @-23.55,43.77 | 1 | port commerce | 0", "Ambovombe | @-25.17,46.08 | 2 | | 0",
+"Ampanihy | @-24.69,44.75 | 1 | | 0", "Betroka | @-23.27,46.10 | 1 | | 0"
+],
+"MMN": [
+"Mahabo | @-20.38,44.67 | 4 | | 1", "Morondava | | 2 | port | 0", "Belo-sur-Tsiribihina | Belo sur Tsiribihina | 2 | | 0", "Maintirano | | 1.5 | port | 0",
+"Morombe | @-21.75,43.37 | 1 | port | 0"
+],
+"MSA": [
+"Marovoay | | 6 | | 1", "Majunga | Mahajanga | 7 | port commerce | 1", "Analalava | @-14.63,47.76 | 1 | port | 0", "Nosy Be | Hell-Ville | 1 | port | 0",
+"Soalala | @-16.10,45.31 | 1 | port | 0", "Ambanja | @-13.68,48.45 | 1 | | 0", "Diego-Suarez | Antsiranana | 0.5 | port | 0", "Antsohihy | @-14.88,47.99 | 1 | | 0"
+],
+"MBT": [
+"Foulpointe | Mahavelona | 4 | port commerce | 1", "Tamatave | Toamasina | 2 | port commerce | 0", "Fénérive | Fenoarivo Atsinanana | 2 | port | 0", "Vohémar | @-13.36,50.00 | 2 | port commerce | 0",
+"Antalaha | | 1 | port | 0", "Mananara | | 1.5 | port | 0", "Mahanoro | | 1 | port | 0", "Vatomandry | @-19.33,48.98 | 1 | port | 0",
+"Ambatondrazaka | | 2 | | 0", "Moramanga | | 1 | | 0", "Andevoranto | @-18.95,49.10 | 1 | port | 0"
+],
+"MPI": [
+"Sainte-Marie | Ambodifotatra | 1.5 | port commerce | 1", "Maroantsetra | | 1.5 | port | 0", "Rantabe | @-15.70,49.62 | 0.5 | port | 0"
+],
+"MCO": [
+"Mutsamudu | Moutsamoudou | 4 | port commerce | 2", "Domoni | | 3 | port | 1", "Moroni | | 3 | port | 1", "Iconi | @-11.77,43.25 | 2 | port | 1",
+"Fomboni | | 1.5 | port | 0", "Tsingoni | | 1.5 | | 1", "Dzaoudzi | | 0.5 | port | 0", "Mitsamiouli | | 1 | port | 0"
+],
+"MFR": [
+"Port-Louis | | 15 | port arsenal | 2", "Saint-Denis | | 6 | port commerce | 1", "Saint-Paul | | 5 | port | 0", "Saint-Pierre | @-21.34,55.48 | 3 | port | 0",
+"Saint-Benoît | Saint-Benoit | 2 | port | 0", "Grand Port | @-20.38,57.72 | 1 | port | 1", "Pamplemousses | @-20.10,57.57 | 2 | | 0"
+],
+"MPT": [
+"Mozambique | Ilha de Mocambique | 6 | port commerce | 3", "Quelimane | | 3 | port commerce | 1", "Sena | @-17.45,35.03 | 2 | | 1", "Tete | | 3 | | 1",
+"Sofala | @-20.15,34.72 | 1 | port | 1", "Inhambane | | 3 | port commerce | 1", "Ibo | @-12.35,40.60 | 3 | port commerce | 2", "Angoche | @-16.23,39.90 | 3 | port | 0",
+"Lourenço Marques | Maputo | 0.5 | port commerce | 1", "Zumbo | @-15.62,30.45 | 0.8 | | 1"
+],
+"MOM": [
+"Mombasa | | 10 | port commerce | 3", "Zanzibar | | 8 | port commerce | 1", "Kilwa | @-8.96,39.51 | 4 | port commerce | 1", "Pemba | Chake Chake | 3 | port | 0",
+"Malindi | | 1 | port | 0", "Pangani | | 3 | port | 0", "Tanga | | 2 | port | 0", "Bagamoyo | | 1 | port | 0",
+"Lindi | | 2 | port | 0", "Mikindani | @-10.28,40.12 | 2 | port | 0", "Mafia | Kilindoni | 2 | port | 0", "Vanga | @-4.66,39.22 | 2 | port | 0",
+"Saadani | @-6.04,38.78 | 1 | port | 0"
+],
+"MMV": [
+"Mankhamba | @-14.20,34.60 | 5 | | 1", "Lundu | @-16.40,35.15 | 4 | | 1", "Mano | @-14.60,32.75 | 3 | | 1"
+],
+"MRZ": [
+"Danangombe | @-19.88,29.37 | 6 | | 3", "Naletale | @-19.63,29.53 | 2 | | 2", "Masekesa | @-18.94,32.87 | 2 | | 1", "Grand Zimbabwe | @-20.27,30.93 | 1 | | 2",
+"Dambarare | @-17.28,30.95 | 0.5 | | 0"
+],
+"MTS": [
+"Tembe | @-26.35,32.55 | 3 | | 0", "Manhiça | @-25.40,32.80 | 2 | | 0", "Chibuto | @-24.69,33.53 | 2 | | 0", "Inharrime | @-24.48,35.02 | 2 | | 0",
+"Massinga | @-23.33,35.38 | 2 | | 0", "Vilankulo | @-22.00,35.32 | 2 | port | 0"
+]
+}

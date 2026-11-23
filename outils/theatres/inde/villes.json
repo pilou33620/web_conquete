@@ -1,0 +1,69 @@
+{
+"_note": "Villes et ports du théâtre Inde vers 1790. ESTIMATIONS écrites de mémoire (ordres de grandeur de Chandler et de Bairoch, recensements britanniques de 1872 et de 1901 remontés), à quelques milliers près ; très incertaines hors des grandes villes. Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un pays est sa capitale ; les capitales des régions d'Empire: Total War (1700) sont toutes là. Les comptoirs européens sans camp (Bombay, Madras, Calcutta, Pondichéry, Chandernagor, Cochin, Tellicherry…) sont des places du camp qui tient leur région. Étiquettes : port (lue par le jeu), arsenal, commerce, peche (rôle du port, pour le futur mode naval). Les villes au bord de la mer reçoivent « port » d'office.",
+"IMO": [
+"Delhi | Delhi/@28.656,77.231 | 150 | | 2", "Lucknow | | 240 | | 0", "Bénarès | Varanasi | 180 | | 0", "Hyderabad | @17.36,78.47 | 200 | | 1",
+"Patna | | 160 | | 1", "Calcutta | Kolkata | 200 | port commerce | 2", "Murshidabad | | 150 | | 0", "Dacca | Dhaka | 150 | | 0",
+"Surate | Surat | 150 | port commerce | 2", "Ahmedabad | | 100 | | 2", "Faizabad | @26.775,82.14 | 100 | | 0", "Jaipur | | 100 | | 2",
+"Srinagar | | 100 | | 1", "Ujjain | | 80 | | 1", "Nagpur | | 80 | | 1", "Baroda | Vadodara | 70 | | 1",
+"Farrukhabad | | 60 | | 1", "Bareilly | | 60 | | 0", "Agra | | 60 | | 3", "Aurangabad | @19.88,75.34 | 60 | | 2",
+"Burhanpur | | 50 | | 2", "Bharatpur | | 50 | | 3", "Gwalior | | 50 | | 4", "Mathura | | 40 | | 0",
+"Cuttack | | 40 | | 2", "Moradabad | | 40 | | 0", "Ahmadnagar | | 40 | | 3", "Jodhpur | | 40 | | 3",
+"Udaipur | @24.58,73.71 | 40 | | 2", "Allahabad | Prayagraj/Allahabad | 40 | | 3", "Hyderabad du Sind | @25.39,68.37 | 40 | | 2", "Burdwan | Barddhaman | 40 | | 0",
+"Thatta | | 30 | | 1", "Masulipatam | Machilipatnam | 30 | port commerce | 1", "Bhuj | | 30 | | 2", "Chittagong | Chattogram/Chittagong | 30 | port commerce | 1",
+"Bhagalpur | | 30 | | 0", "Monghyr | | 30 | | 2", "Shikarpur | @27.96,68.64 | 30 | | 0", "Broach | Bharuch | 30 | port commerce | 2",
+"Jamnagar | | 30 | port | 2", "Bikaner | | 30 | | 2", "Indore | | 30 | | 0", "Ajmer | | 25 | | 3",
+"Cambay | Khambhat | 25 | port commerce | 1", "Gaya | | 25 | | 0", "Ellichpur | Achalpur | 25 | | 2", "Puri | | 25 | port | 0",
+"Junagadh | | 20 | | 3", "Bhopal | | 20 | | 1", "Sagar | @23.84,78.74 | 20 | | 1", "Vizagapatam | Visakhapatnam | 20 | port commerce | 1",
+"Rajahmundry | Rajahmundry/Rajamahendravaram | 20 | | 1", "Kurnool | | 20 | | 2", "Jabalpur | | 20 | | 0", "Mandvi | @22.83,69.35 | 20 | port commerce | 0",
+"Jammu | | 20 | | 2", "Chandernagor | Chandannagar | 15 | port commerce | 1", "Balasore | Baleshwar/Balasore | 15 | port | 0", "Karachi | | 15 | port commerce | 1",
+"Jaisalmer | | 15 | | 3", "Golconde | @17.383,78.401 | 10 | | 4", "Daulatabad | @19.94,75.22 | 5 | | 4", "Asirgarh | @21.47,76.29 | 3 | | 4"
+],
+"IMA": [
+"Satara | | 30 | | 3", "Madras | Chennai | 250 | port commerce | 3", "Poona | Pune | 150 | | 1", "Bombay | Mumbai | 120 | port commerce arsenal | 2",
+"Tanjore | | 80 | | 2", "Trichinopoly | Tiruchirappalli | 80 | | 3", "Arcot | | 40 | | 2", "Pondichéry | Puducherry/Pondicherry | 40 | port commerce | 3",
+"Conjeveram | Kanchipuram | 40 | | 0", "Madura | Madurai | 40 | | 2", "Kumbakonam | | 40 | | 0", "Kolhapur | | 30 | | 2",
+"Sholapur | Solapur | 25 | | 2", "Tinnevelly | Tirunelveli | 25 | | 0", "Bijapur | Vijayapura/Bijapur | 20 | | 3", "Hubli | | 20 | | 0",
+"Vellore | | 20 | | 3", "Cuddalore | | 20 | port commerce | 2", "Coimbatore | | 20 | | 1", "Chidambaram | | 20 | | 0",
+"Belgaum | Belagavi/Belgaum | 15 | | 3", "Dharwar | @15.46,75.01 | 15 | | 2", "Miraj | @16.82,74.65 | 15 | | 1", "Negapatam | | 15 | port commerce | 1",
+"Dindigul | | 15 | | 3", "Salem | | 15 | | 0", "Junnar | | 15 | | 2", "Bassein | @19.33,72.81 | 10 | port | 3",
+"Tranquebar | @11.03,79.85 | 10 | port commerce | 1", "Tuticorin | Thoothukudi/Tuticorin | 10 | port peche | 0", "Kalyan | | 10 | port | 0", "Thana | Thane | 10 | port | 1",
+"Rajapur | @16.65,73.52 | 10 | port | 0", "Karikal | Karaikal | 10 | port commerce | 1", "Ratnagiri | | 8 | port peche | 1", "Gheria | @16.56,73.34 | 5 | port arsenal | 3",
+"Kolaba | Alibag | 5 | port arsenal | 2", "Raigad | @18.234,73.44 | 2 | | 4", "Gingee | Gingee/Senji | 3 | | 4"
+],
+"IMY": [
+"Seringapatam | Shrirangapattana/Srirangapatna | 150 | | 3", "Bangalore | Bengaluru/Bangalore | 60 | | 2", "Calicut | Kozhikode/Calicut | 40 | port commerce | 1", "Cochin | Kochi/Cochin | 30 | port commerce | 2",
+"Mangalore | Mangaluru/Mangalore | 30 | port arsenal | 1", "Trivandrum | Thiruvananthapuram/Trivandrum | 30 | | 1", "Sira | | 25 | | 1", "Bednur | @13.82,75.04 | 20 | | 2",
+"Cannanore | Kannur/Cannanore | 20 | port | 2", "Quilon | Kollam/Quilon | 20 | port commerce | 0", "Palghat | Palakkad/Palghat | 20 | | 2", "Mysore | Mysuru/Mysore | 15 | | 1",
+"Chitaldroog | Chitradurga | 15 | | 3", "Tellicherry | Thalassery/Tellicherry | 15 | port commerce | 2", "Alleppey | Alappuzha/Alleppey | 15 | port | 0", "Trichur | Thrissur/Trichur | 15 | | 0",
+"Kolar | | 10 | | 1", "Tumkur | Tumakuru/Tumkur | 10 | | 0", "Shimoga | Shivamogga/Shimoga | 10 | | 0", "Kottayam | | 10 | | 0",
+"Hassan | | 8 | | 0", "Mercara | Madikeri/Mercara | 8 | | 2", "Honavar | | 8 | port | 1", "Karwar | | 8 | port | 1",
+"Bhatkal | | 8 | port | 0", "Padmanabhapuram | @8.25,77.33 | 5 | | 2"
+],
+"IPU": [
+"Lahore | | 80 | | 2", "Amritsar | | 60 | | 1", "Multan | | 50 | | 3", "Patiala | | 30 | | 2",
+"Sialkot | | 25 | | 1", "Jalandhar | | 25 | | 0", "Kasur | | 25 | | 0", "Dera Ghazi Khan | | 25 | | 0",
+"Gujrat | | 20 | | 0", "Gujranwala | | 20 | | 1", "Bahawalpur | | 20 | | 1", "Sirhind | @30.64,76.39 | 20 | | 1",
+"Jhang | Jhang Sadr/Jhang | 15 | | 0", "Wazirabad | | 15 | | 0", "Ludhiana | | 15 | | 1", "Hoshiarpur | | 15 | | 0",
+"Rawalpindi | | 10 | | 0", "Jhelum | | 10 | | 0", "Batala | | 10 | | 0", "Kapurthala | | 10 | | 1",
+"Nabha | | 10 | | 1", "Bathinda | Bathinda/Bhatinda | 10 | | 2", "Firozpur | Ferozepore | 10 | | 1", "Pakpattan | | 10 | | 0",
+"Anandpur | Anandpur Sahib/Anandpur | 5 | | 2", "Attock | @33.89,72.24 | 5 | | 3", "Rohtas | @32.97,73.58 | 2 | | 4"
+],
+"IAF": [
+"Kandahar | | 60 | | 2", "Kaboul | Kabul | 80 | | 3", "Hérat | Herat | 60 | | 3", "Peshawar | | 60 | | 2",
+"Dera Ismaïl Khan | Dera Ismail Khan | 20 | | 1", "Kalat | @29.03,66.59 | 15 | | 3", "Ghazni | | 10 | | 3", "Jalalabad | | 10 | | 1",
+"Kohat | | 10 | | 1", "Charikar | | 10 | | 0", "Farah | | 10 | | 2", "Mardan | | 10 | | 0",
+"Bannu | | 8 | | 1", "Sibi | | 8 | | 1", "Quetta | | 5 | | 1", "Mastung | | 5 | | 0",
+"Khuzdar | | 5 | | 1", "Girishk | @31.81,64.57 | 5 | | 2", "Kalat-i-Ghilzai | Qalat/@32.11,66.91 | 5 | | 3", "Chitral | | 5 | | 1",
+"Bela | @26.23,66.31 | 5 | | 0", "Bamiyan | Bamyan/@34.82,67.83 | 3 | | 1", "Gwadar | | 3 | port peche | 0", "Sonmiani | @25.42,66.59 | 3 | port | 0"
+],
+"IGO": [
+"Goa | @15.501,73.912 | 20 | port commerce | 2", "Margao | Madgaon/Margao | 15 | | 0", "Panjim | Panaji/Panjim | 10 | port commerce | 1", "Mapuça | @15.59,73.81 | 10 | | 0",
+"Mormugão | Vasco da Gama/Mormugao | 5 | port | 2", "Ponda | | 5 | | 0", "Aguada | @15.492,73.773 | 1 | port | 3"
+],
+"ICY": [
+"Colombo | | 50 | port commerce | 3", "Kandy | | 30 | | 1", "Jaffna | | 20 | port commerce | 3", "Galle | | 15 | port commerce | 3",
+"Negombo | | 10 | port peche | 1", "Matara | | 10 | port | 2", "Trincomalee | | 8 | port arsenal | 3", "Batticaloa | | 5 | port | 2",
+"Kurunegala | | 5 | | 0", "Mannar | @8.98,79.91 | 5 | port | 2", "Kalutara | | 5 | port | 1", "Ratnapura | | 5 | | 0",
+"Badulla | | 5 | | 0", "Kalpitiya | @8.23,79.77 | 3 | port | 2", "Hambantota | @6.124,81.12 | 3 | port peche | 0", "Anuradhapura | | 2 | | 0"
+]
+}

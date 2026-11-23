@@ -798,9 +798,13 @@ Fleuves et lacs : [Natural Earth](https://www.naturalearthdata.com/) (domaine pu
 la Dronne, les gaves, la Midouze, la Leyre, la Nive et l'estuaire de la Gironde.
 
 Mode Europe (`game/data/europe.json`, `places_europe.json`, `pays_europe.json`, `epoques_europe.json`, faits par
-`outils/europe.mjs`, voir `outils/EUROPE.md`) : contours des pays, fleuves et lacs de
+`outils/theatre.mjs europe`, voir `outils/THEATRES.md`) : contours des pays, fleuves et lacs de
 [Natural Earth](https://www.naturalearthdata.com/) (domaine public) ; régions de la
 Highcharts Map Collection (`@highcharts/map-collection` 2.3.3, déjà utilisée pour la France) pour les frontières d'époque ;
 coordonnées des villes de [GeoNames](https://www.geonames.org/) (CC BY 4.0). Frontières de 1700-1750, populations et
 caractère des pays : des estimations écrites à la main. La ligne d'attribution OpenStreetMap de la page concerne la
 carte de France (rivières et places du Sud-Ouest) ; la carte d'Europe ne reprend rien d'OpenStreetMap.
+
+Autres théâtres (Amérique, Inde, Côte de l'Ivoire, Côte du Brésil, détroit de Madagascar, Indes orientales ; mêmes
+outils et mêmes sources, `outils/theatres/<id>/`) : découpage en camps et régions repris de la grande campagne
+d'Empire: Total War (choix du joueur, 22/11/2026), géographie réelle ; populations, moyens et maisons estimés de mémoire.

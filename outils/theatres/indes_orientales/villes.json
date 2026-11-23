@@ -1,0 +1,112 @@
+{
+"_note": "Villes et ports des Indes orientales vers 1790. ESTIMATIONS écrites de mémoire (récits de la VOC et des voyageurs, Raffles pour Java ; très incertain hors de Java et de Manille : la plupart des chiffres sont à un facteur 2 près). Les coordonnées @lat,lon (lieux d'époque inconnus de GeoNames ou homonymes) sont de mémoire, à 10 km près. Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un pays est sa capitale. Les points de commerce d'Empire: Total War (épices, comptoirs) sont des places « port commerce ».",
+"ONL": [
+"Batavia | Jakarta | 100 | port commerce | 3", "Malacca | | 8 | port commerce | 3", "Ambon | | 10 | port commerce | 2",
+"Makassar | | 12 | port commerce | 2", "Padang | | 8 | port commerce | 1", "Kupang | | 3 | port | 1", "Cirebon | | 10 | port | 1",
+"Buitenzorg | Bogor | 3 | | 0", "Bandung | | 2 | | 0", "Manado | | 2 | port | 1", "Saparua | @-3.57,128.66 | 2 | port | 1"
+],
+"OMT": [
+"Surakarta | | 90 | | 2", "Yogyakarta | | 70 | | 2", "Semarang | | 20 | port commerce | 2", "Surabaya | | 25 | port commerce | 2",
+"Kediri | | 10 | | 0", "Madiun | | 6 | | 0", "Pasuruan | | 10 | port | 0", "Gresik | | 10 | port commerce | 0",
+"Tuban | | 6 | port | 0", "Jepara | | 6 | port | 1", "Demak | | 4 | | 0", "Kudus | | 8 | | 0",
+"Pekalongan | | 8 | port | 0", "Tegal | | 6 | port | 0", "Rembang | | 6 | port | 0", "Bangkalan | | 8 | port | 0",
+"Sumenep | | 10 | port | 0", "Pamekasan | | 6 | | 0", "Magelang | | 3 | | 0", "Banyumas | | 4 | | 0",
+"Ponorogo | | 5 | | 0", "Malang | | 3 | | 0", "Probolinggo | | 4 | port | 0", "Lasem | | 5 | port | 0"
+],
+"OBT": [
+"Banten | @-6.04,106.16 | 25 | port commerce | 2", "Pandeglang | | 2 | | 0", "Labuan | @-6.38,105.83 | 1.5 | port | 0", "Anyer | @-6.06,105.88 | 1 | port | 0",
+"Teluk Betung | Bandar Lampung | 2 | port | 0", "Menggala | | 2 | | 0", "Krui | | 1 | port | 0"
+],
+"OBL": [
+"Klungkung | | 10 | | 2", "Gianyar | | 6 | | 1", "Badung | Denpasar | 8 | | 1", "Tabanan | | 6 | | 1",
+"Buleleng | Singaraja | 8 | port | 1", "Karangasem | Amlapura | 8 | port | 1", "Bangli | | 4 | | 1", "Blambangan | Banyuwangi | 4 | port | 1",
+"Cakranegara | @-8.59,116.14 | 8 | | 1"
+],
+"OGO": [
+"Watampone | | 10 | | 2", "Gowa | Sungguminasa | 6 | | 1", "Sengkang | | 8 | | 1", "Parepare | | 4 | port | 0",
+"Bulukumba | | 3 | port | 0", "Buton | @-5.47,122.62 | 8 | port commerce | 2", "Kendari | | 2 | port | 0", "Kolaka | | 1.5 | port | 0",
+"Majene | | 3 | port | 0", "Mamuju | | 2 | port | 0", "Bima | | 10 | port commerce | 1", "Sumbawa Besar | | 5 | port | 0",
+"Dompu | | 3 | | 0"
+],
+"OTE": [
+"Ternate | | 6 | port commerce | 2", "Gorontalo | | 6 | port | 1", "Tolitoli | | 2 | port | 0", "Banggai | Luwuk | 2 | port | 0",
+"Palu | | 3 | port | 0", "Donggala | | 2 | port | 0", "Poso | | 1.5 | port | 0", "Tondano | | 4 | | 0",
+"Tobelo | | 2 | port | 0", "Jailolo | | 2 | port | 0", "Bacan | Labuha | 2 | port | 0", "Sanana | | 1.5 | port | 0"
+],
+"OTI": [
+"Soasio | @0.68,127.43 | 5 | port commerce | 2", "Weda | | 1.5 | port | 0", "Maba | | 1 | port | 0", "Onin | Fakfak | 1 | port commerce | 0",
+"Namatota | Kaimana | 1 | port | 0", "Salawati | @-1.05,130.90 | 1 | port | 0"
+],
+"OAC": [
+"Aceh | Banda Aceh | 30 | port commerce | 2", "Pidie | Sigli | 8 | port | 0", "Pasai | Lhokseumawe | 5 | port | 0", "Meulaboh | | 3 | port | 0",
+"Singkil | | 2 | port | 0", "Barus | | 3 | port commerce | 0", "Deli | Medan | 3 | | 0", "Tapaktuan | @3.26,97.18 | 2 | port | 0",
+"Tapanuli | Sibolga | 2 | port | 0", "Padangsidempuan | | 2 | | 0", "Asahan | Tanjungbalai | 3 | port | 0", "Nias | Gunungsitoli | 2 | port | 0"
+],
+"OMI": [
+"Pagaruyung | Batusangkar/@-0.47,100.62 | 6 | | 1", "Bukittinggi | | 4 | | 0", "Padang Panjang | @-0.46,100.40 | 3 | | 0", "Solok | | 4 | | 0",
+"Painan | | 3 | port | 0", "Pariaman | | 5 | port | 0", "Payakumbuh | | 4 | | 0", "Indrapura | @-2.05,100.98 | 2 | port commerce | 0"
+],
+"OPL": [
+"Palembang | | 30 | port commerce | 2", "Jambi | @-1.60,103.61 | 8 | port commerce | 1", "Muntok | | 4 | port | 1", "Pangkalpinang | | 2 | port | 0",
+"Lahat | | 2 | | 0", "Baturaja | | 2 | | 0", "Sekayu | | 2 | | 0", "Tanjung Pandan | | 1.5 | port | 0"
+],
+"OGB": [
+"Bencoolen | Bengkulu | 8 | port commerce | 2", "Manna | | 2 | port | 0", "Mukomuko | | 2 | port | 1"
+],
+"OJO": [
+"Riau | Tanjung Pinang | 12 | port commerce | 1", "Johor | Kota Tinggi | 3 | | 1", "Lingga | @-0.21,104.61 | 3 | port | 0", "Singapour | @1.36,103.82 | 0.2 | port | 0",
+"Pahang | Pekan | 4 | port | 0", "Terengganu | Kuala Terengganu | 8 | port commerce | 0", "Siak | Siak Sri Indrapura | 5 | port | 0", "Senapelan | Pekanbaru | 1 | | 0",
+"Kuala Selangor | | 3 | port | 1", "Klang | | 2 | | 0", "Sungai Ujong | Seremban | 2 | | 0", "Kuantan | | 1.5 | port | 0",
+"Bengkalis | | 2 | port | 0", "Indragiri | Rengat | 3 | | 0"
+],
+"OPK": [
+"Kuala Kangsar | | 4 | | 1", "Teluk Intan | | 3 | | 0", "Lumut | | 1 | port | 0"
+],
+"OKD": [
+"Alor Setar | | 8 | | 1", "Kuala Kedah | | 3 | port commerce | 1", "Perlis | Kangar | 2 | | 0", "Pulau Pinang | George Town | 10 | port commerce | 1",
+"Satun | | 1.5 | port | 0"
+],
+"OPA": [
+"Patani | Pattani | 10 | port commerce | 1", "Kelantan | Kota Bharu | 6 | port | 0", "Yala | | 2 | | 0", "Narathiwat | | 2 | port | 0"
+],
+"OBR": [
+"Brunei | Bandar Seri Begawan | 25 | port commerce | 1", "Sarawak | Kuching | 1 | port | 0", "Bintulu | | 1 | port | 0", "Limbang | | 2 | | 0",
+"Mukah | | 2 | port | 0", "Papar | | 1.5 | port | 0", "Sibu | | 1 | | 0"
+],
+"OSU": [
+"Jolo | | 6 | port commerce | 1", "Siasi | | 1.5 | port | 0", "Bongao | | 1 | port | 0", "Lahad Datu | | 1 | port | 0",
+"Basilan | @6.70,121.97 | 2 | port | 0", "Kudat | | 0.5 | port | 0"
+],
+"OMG": [
+"Cotabato | | 10 | port commerce | 1", "Lanao | @8.00,124.29 | 6 | | 1", "Buayan | @7.05,124.45 | 2 | | 1", "Davao | | 1 | port | 0",
+"Pagadian | | 1 | port | 0", "Mati | | 1 | port | 0"
+],
+"OES": [
+"Manille | Manila | 60 | port commerce | 3", "Cebu | @10.30,123.90 | 8 | port commerce | 1", "Iloilo | | 6 | port | 1", "Vigan | | 10 | port | 0",
+"Nueva Segovia | @18.20,121.66 | 2 | | 1", "Cavite | @14.48,120.90 | 6 | port arsenal | 2", "Nueva Cáceres | Naga | 6 | | 0", "Albay | @13.14,123.74 | 5 | port | 0",
+"Zamboanga | | 4 | port | 3", "Tacloban | | 2 | port | 0", "Dumaguete | | 2 | port | 0", "Cagayan de Oro | | 3 | port | 0",
+"Butuan | | 2 | port | 0", "Tandag | | 2 | port | 1", "Surigao | | 2 | port | 0", "Calapan | | 2 | port | 0",
+"Lingayen | | 5 | port | 0", "Bacolor | | 8 | | 0", "Batangas | | 8 | port | 0", "Laoag | | 10 | | 0",
+"Tuguegarao | | 4 | | 0", "Tagbilaran | @9.65,123.85 | 4 | port | 0", "Romblon | | 2 | port | 0", "Taytay | @10.82,119.52 | 1.5 | port | 1",
+"Iligan | | 2 | port | 1", "Dapitan | | 2 | port | 0", "Capiz | @11.58,122.75 | 4 | port | 0", "Catbalogan | | 3 | port | 0",
+"Masbate | | 1.5 | port | 0"
+],
+"OBJ": [
+"Banjarmasin | | 12 | port commerce | 1", "Martapura | | 8 | | 1", "Kotawaringin | | 3 | | 0", "Sampit | | 2 | | 0",
+"Kuala Kapuas | | 2 | | 0", "Pulau Laut | @-3.24,116.22 | 1.5 | port | 0", "Amuntai | | 4 | | 0"
+],
+"OKU": [
+"Tenggarong | @-0.42,116.98 | 5 | | 1", "Samarinda | | 3 | port commerce | 0", "Berau | @2.15,117.49 | 2 | | 0", "Bulungan | Tanjung Selor | 1.5 | port | 0",
+"Pasir | @-1.91,116.19 | 2 | port | 0"
+],
+"OSB": [
+"Sambas | | 6 | port | 1", "Pontianak | | 8 | port commerce | 1", "Sukadana | | 3 | port | 0", "Mempawah | | 4 | port | 0",
+"Landak | Ngabang | 2 | | 0", "Sanggau | | 2 | | 0", "Sintang | | 2 | | 0", "Matan | Ketapang | 2 | port | 0",
+"Singkawang | | 3 | | 0"
+],
+"OPT": [
+"Dili | | 3 | port commerce | 1", "Lifau | @-9.20,124.28 | 2 | port | 1", "Larantuka | | 4 | port commerce | 1", "Sikka | Maumere | 2 | port | 0",
+"Ende | | 3 | port | 0", "Atambua | | 1 | | 0", "Manatuto | @-8.51,126.01 | 1 | port | 0", "Baucau | @-8.47,126.45 | 1.5 | | 0",
+"Sumba | Waingapu | 1.5 | port | 0", "Alor | Kalabahi | 1 | port | 0", "Viqueque | | 1 | | 0"
+]
+}

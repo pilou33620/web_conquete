@@ -1,0 +1,93 @@
+{
+"_note": "Villes et ports du théâtre « Côte de l'Ivoire » vers 1790. ESTIMATIONS écrites de mémoire (récits de traitants et de voyageurs, ordres de grandeur seulement : à 30 ou 50 % près pour les villes de l'intérieur). Une ligne : « nom français | nom(s) GeoNames, séparés par /, ou @lat,lon | population en milliers | étiquettes | remparts 0-4 ». La première ligne d'un camp est sa capitale (celle de 1700 : Savi, ruinée en 1727, reste une place). Les points de commerce d'Empire: Total War sont les ports « port commerce ». Coordonnées @lat,lon : lieux d'époque inconnus de GeoNames, à quelques km près.",
+"GVE": [
+"Port Loko | @8.77,-12.79 | 3 | | 0", "Freetown | | 1.2 | port commerce | 0", "Sherbro | Bonthe/@7.53,-12.50 | 1 | port commerce | 0", "Gallinas | @6.96,-11.58 | 1.5 | port commerce | 0",
+"Cap Mount | Robertsport/@6.75,-11.37 | 1 | port commerce | 0", "Cap Mesurado | Monrovia | 1 | port commerce | 0", "Grand Bassa | Buchanan | 1 | port | 0", "Sinoe | Greenville/@5.01,-9.04 | 0.8 | port | 0",
+"Cap des Palmes | Harper | 1 | port | 0", "Tabou | | 1 | port | 0", "Sassandra | | 1 | port commerce | 0", "Grand-Lahou | | 2 | port commerce | 0",
+"Falaba | @9.85,-11.32 | 3 | | 1", "Bopolu | Bopolu/@7.07,-10.49 | 2 | | 0", "Kenema | | 1 | | 0", "Daloa | | 1 | | 0",
+"Man | | 1 | | 0", "Gagnoa | | 1 | | 0"
+],
+"GKO": [
+"Kong | | 15 | | 2", "Korhogo | | 4 | | 0", "Odienné | | 4 | | 1", "Séguéla | | 2 | | 0",
+"Touba | | 2 | | 0", "Boundiali | | 2 | | 0", "Mankono | | 2 | | 0", "Ferkessédougou | | 1 | | 0"
+],
+"GAN": [
+"Krinjabo | @5.47,-3.18 | 3 | | 1", "Assinie | Assinie-Mafia/@5.14,-3.28 | 2 | port commerce | 0", "Grand-Bassam | | 2 | port commerce | 0", "Jacqueville | | 1 | port | 0",
+"Sakassou | | 4 | | 0", "Bouaké | | 3 | | 0", "Abengourou | | 3 | | 0", "Tiassalé | | 2 | | 0",
+"Dabou | | 1 | | 0", "Toumodi | | 1 | | 0", "Bouaflé | | 1 | | 0", "Dimbokro | | 1 | | 0"
+],
+"GDY": [
+"Abankeseso | @5.95,-1.82 | 3 | | 0", "Dunkwa | Dunkwa/@5.96,-1.78 | 2 | | 0", "Tarkwa | | 2 | | 0", "Sekondi | Sekondi-Takoradi/@4.94,-1.71 | 2 | port commerce | 0",
+"Princes Town | @4.79,-2.13 | 0.6 | port commerce | 0", "Beyin | @5.0,-2.58 | 1 | port commerce | 0", "Wiawso | Sefwi Wiawso/@6.21,-2.49 | 2 | | 0", "Enchi | @5.82,-2.82 | 1 | | 0",
+"Takoradi | | 1 | port | 0", "Prestea | | 1 | | 0"
+],
+"GAS": [
+"Kumasi | | 15 | | 0", "Mampong | Mampong/@7.06,-1.40 | 4 | | 0", "Juaben | @6.80,-1.42 | 4 | | 0", "Bekwai | | 3 | | 0",
+"Kokofu | @6.50,-1.51 | 3 | | 0", "Ejisu | @6.72,-1.47 | 2 | | 0", "Offinso | @6.93,-1.67 | 2 | | 0", "Techiman | | 3 | | 0",
+"Wenchi | @7.74,-2.10 | 2 | | 0", "Kintampo | | 2 | | 0", "Bondoukou | | 5 | | 1", "Bouna | | 4 | | 1"
+],
+"GFA": [
+"Mankessim | @5.27,-1.02 | 4 | | 0", "Saltpond | | 2 | port commerce | 0", "Komenda | @5.05,-1.49 | 2 | port commerce | 0", "Kormantin | @5.21,-1.05 | 1.5 | port commerce | 0",
+"Abura Dunkwa | @5.33,-1.16 | 2 | | 0", "Assin Fosu | Assin Foso/@5.70,-1.27 | 1.5 | | 0", "Agona Swedru | Swedru/@5.53,-0.70 | 1.5 | | 0", "Ajumako | @5.38,-0.96 | 1.5 | | 0"
+],
+"GAK": [
+"Nyanaoase | @5.80,-0.33 | 3 | | 0", "Accra | | 10 | port commerce | 0", "Akropong | Akropong/@5.97,-0.09 | 3 | | 0", "Kibi | Kyebi/Kibi/@6.17,-0.55 | 3 | | 0",
+"Akwamufie | @6.27,0.06 | 2 | | 0", "Ho | | 2 | | 0", "Kpandu | | 2 | | 0", "Anloga | | 3 | port | 0",
+"Atakpamé | | 3 | | 0", "Notsé | Notse/@6.95,1.17 | 2 | | 0", "Kpalimé | | 1 | | 0", "Hohoe | | 1 | | 0"
+],
+"GDG": [
+"Yendi | | 6 | | 0", "Salaga | | 8 | | 0", "Tamale | | 2 | | 0", "Daboya | @9.53,-1.38 | 2 | | 0",
+"Gambaga | @10.53,-0.44 | 2 | | 0", "Wa | | 4 | | 0", "Bole | @9.03,-2.49 | 2 | | 0", "Kete Krachi | Kete-Krachi/@7.80,-0.04 | 2 | | 0",
+"Sokodé | | 2 | | 0", "Bassar | | 3 | | 0", "Sansanné-Mango | Sansanné-Mango/Mango/@10.36,0.47 | 2 | | 0", "Bolgatanga | | 1 | | 0"
+],
+"GHU": [
+"Savi | @6.44,2.07 | 1 | | 0", "Ouidah | | 12 | port commerce | 1", "Porto-Novo | | 10 | port commerce | 1", "Badagry | | 4 | port commerce | 0",
+"Grand-Popo | | 3 | port commerce | 0", "Petit-Popo | Aného/Aneho | 3 | port commerce | 0", "Glidji | @6.26,1.61 | 1.5 | | 0", "Athiémé | @6.58,1.67 | 1 | | 0",
+"Comè | | 1 | | 0"
+],
+"GDA": [
+"Abomey | | 24 | | 1", "Allada | | 5 | | 0", "Cana | @7.10,2.10 | 4 | | 0", "Zagnanado | | 2 | | 0",
+"Savalou | | 3 | | 0", "Dassa-Zoumé | | 2 | | 0", "Covè | | 2 | | 0", "Aplahoué | | 1 | | 0"
+],
+"GOY": [
+"Oyo-Ile | @8.94,4.37 | 60 | | 2", "Ilorin | | 10 | | 1", "Ogbomosho | Ogbomoso/@8.13,4.24 | 10 | | 1", "Ife | Ile-Ife | 12 | | 1",
+"Ilesa | | 10 | | 1", "Oshogbo | Osogbo/@7.77,4.56 | 5 | | 0", "Iseyin | | 8 | | 0", "Saki | | 8 | | 0",
+"Ijebu-Ode | | 12 | | 1", "Kétou | | 5 | | 1", "Sakété | | 2 | | 0", "Igboho | | 3 | | 0",
+"Ado-Ekiti | | 8 | | 0", "Offa | | 4 | | 0", "Ede | | 4 | | 0", "Iwo | | 4 | | 0"
+],
+"GBE": [
+"Bénin | Benin City | 15 | | 2", "Lagos | | 5 | port commerce | 0", "Warri | | 3 | port commerce | 0", "Gwato | @6.24,5.43 | 1 | port commerce | 0",
+"Akure | | 5 | | 0", "Ondo | | 5 | | 0", "Owo | | 6 | | 0", "Agbor | Agbor/Boji-Boji Owa | 3 | | 0",
+"Asaba | | 3 | | 0", "Uromi | | 2 | | 0", "Epe | | 2 | port | 0", "Ughelli | | 2 | | 0"
+],
+"GAR": [
+"Arochukwu | | 5 | | 0", "Bende | | 3 | | 0", "Awka | | 4 | | 0", "Nri | @6.15,6.98 | 2 | | 0",
+"Onitsha | | 5 | port | 0", "Owerri | | 3 | | 0", "Uburu | @5.97,7.73 | 2 | | 0", "Abakaliki | | 2 | | 0",
+"Nsukka | | 2 | | 0", "Okigwe | | 1 | | 0"
+],
+"GDL": [
+"Bonny | @4.45,7.17 | 5 | port commerce | 0", "Calabar | | 6 | port commerce | 0", "Elem Kalabari | @4.70,6.83 | 3 | port commerce | 0", "Nembe | @4.54,6.40 | 3 | port commerce | 0",
+"Creek Town | @5.06,8.29 | 2 | port | 0", "Okrika | | 2 | port | 0", "Ikot Ekpene | | 1 | | 0", "Ikom | | 1 | | 0"
+],
+"GDU": [
+"Douala | | 5 | port commerce | 0", "Bimbia | @3.99,9.27 | 1 | port commerce | 0", "Buéa | Buea | 1 | | 0", "Edéa | | 2 | | 0",
+"Yabassi | | 1 | | 0", "Kumba | | 1 | | 0"
+],
+"GBM": [
+"Foumban | | 8 | | 1", "Bandjoun | | 3 | | 0", "Bafut | @6.08,10.10 | 3 | | 0", "Mankon | Bamenda | 3 | | 0",
+"Kumbo | | 3 | | 0", "Bangangté | | 2 | | 0", "Dschang | | 1 | | 0"
+],
+"GNL": [
+"Elmina | | 12 | port commerce | 3", "Axim | | 3 | port commerce | 1", "Shama | @5.01,-1.63 | 2 | port commerce | 1", "Apam | | 1.5 | port commerce | 1"
+],
+"GGB": [
+"Cape Coast | | 8 | port commerce | 2", "Anomabu | @5.17,-1.12 | 4 | port commerce | 1", "Dixcove | @4.80,-1.95 | 1.5 | port commerce | 1", "Winneba | | 3 | port commerce | 1"
+],
+"GDN": [
+"Christiansborg | @5.552,-0.165 | 3 | port commerce | 2", "Ningo | @5.76,0.18 | 1 | port commerce | 1", "Ada | Ada Foah/@5.79,0.63 | 2 | port commerce | 1", "Keta | | 3 | port commerce | 1"
+],
+"GPT": [
+"São Tomé | | 4 | port commerce | 1", "Santo António | Santo António/@1.64,7.42 | 2 | port commerce | 1", "Trindade | | 1 | | 0", "Neves | @0.36,6.55 | 1 | port | 0",
+"Santa Isabel | Malabo | 0.5 | port | 0"
+]
+}
