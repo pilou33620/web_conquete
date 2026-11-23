@@ -9,9 +9,12 @@
 //   orthographique du jeu (grille.js : K, C), si bien que les calques 2D (vie, armées, interface, map.js) tombent pile
 //   sur le plateau. Son canevas (#carte) est sous celui du jeu, qui garde les gestes.
 // - Rendu : la boucle du moteur continue d'animer, mais l'image n'est dessinée que par image(), appelée par la boucle
-//   de map.js, et seulement quand quelque chose a changé.
+//   de map.js : à chaque image si les animations sont permises, sinon seulement quand quelque chose a changé.
+// - Vie : celle du moteur (vie.js, faune.js, eau.js), dans son style : passants, charrettes, bêtes, travaux des champs,
+//   bateaux, oiseaux, vagues ; la vie dessinée en 2D (carte/vie.js) ne sert plus qu'à la carte classique.
 import { K, C, SQ3, clamp, hache } from './grille.js';
 import { Niveau, choisirPas, cadrer, couvre, fenetre, indexEn, routesDe } from './carte-moteur.js';
+import { AMB, meteoEn } from '../carte/ambiance.js';
 
 export { K, C };
 
@@ -27,10 +30,12 @@ if (!cv && carte2d) {
 // sans WebGL, scene.js échoue à l'import : la carte classique prend le relais (map.js, initPlateau)
 let E = null;
 if (PAGE) try {
-  const [S, P, M, R] = await Promise.all(['scene', 'plateau', 'modeles', 'routes'].map(m => import(`../../graphismes/rendu/${m}.js`)));
+  // (vie : gens, bêtes, charrettes et bateaux du moteur ; faune : oiseaux migrateurs, poissons ; eau : vagues des côtes)
+  // (monde : animerPose, les ailes des moulins, les drapeaux et les fumées des cheminées des bâtiments posés)
+  const [S, P, M, R, V, W] = await Promise.all(['scene', 'plateau', 'modeles', 'routes', 'vie', 'monde', 'faune', 'eau'].map(m => import(`../../graphismes/rendu/${m}.js`)));
   const r = S.renderer, rendre = r.render.bind(r);
   r.render = () => {};   // la boucle du moteur ne dessine plus : image() le fait, caméra calée
-  E = { S, P, M, R, rendre: () => rendre(S.scene, S.camera) };
+  E = { S, P, M, R, V, W, rendre: () => rendre(S.scene, S.camera) };
   S.cam.auto = false;
 } catch (e) {
   console.warn('Moteur graphique web_engine indisponible', e);
@@ -47,6 +52,9 @@ const QUARTIERS = ['maison_pierre'];
 const FERMES = 0.06, MOULINS = 0.02;   // part des hexagones cultivés qui portent une ferme, un moulin
 const epoqueDe = an => an < 1750 ? 'ancien' : an < 1789 ? 'lumieres' : an < 1816 ? 'empire' : 'industrie';
 const D = 400;   // recul de la caméra orthographique (unités du moteur)
+// l'heure du jeu (carte/ambiance.js) dans le vocabulaire du moteur (vie.js, climat : qui est dehors, fenêtres, lucioles)
+const HEURE = { matin: ['jour', 'aube', 0.3, 0], midi: ['jour', 'jour', 0, 0], soir: ['aube', 'crepuscule', 1, 0.2], nuit: ['nuit', 'nuit', 0, 1] };
+const NIV_VILLE = { capitale: 4, fort: 2, ville: 3, village: 1 };
 
 export class Plateau {
   // mp : la carte (map.js) ; canvas : le canevas du moteur (#carte)
@@ -104,30 +112,54 @@ export class Plateau {
     const N = this.niveau(v.pas, v.leger), f = cadrer(N, cx, cy, v.l, v.h);
     this.N = N; this.fen = f; f.niv = v.niv; this.g.f = f.u / 10;
     const C = this.C = fenetre(N, f, N.ville, N.routes.sansPont), n = C.l * C.h;
+    // (le moteur reçoit l'état avec la carte : il ne bâtit le décor qu'une fois, la moitié du temps d'arrêt quand la vue change)
     // les routes de la fenêtre (indices de la fenêtre) : le moteur les trace (routes.js) et n'y met pas de champs
     this.chemins = N.routes.paires.map(([a, b, niv]) => [this.local(a), this.local(b), niv]).filter(([a, b]) => a >= 0 && b >= 0);
     this.routes = this.chemins;
     if (N.leger) {
-      // de loin, pas de parcelles : le moteur n'en trace pas sur une case où passe une route, et l'état ne peut le dire
-      // qu'après construire(). Le premier passage est donc fait à vide (tuiles seules), le vrai par etatMoteur().
-      const { arbres, foret, fertile } = C, vide = new Array(n).fill(0);
-      Object.assign(C, { arbres: vide, foret: vide, fertile: vide }); E.P.construire(C); Object.assign(C, { arbres, foret, fertile });
+      // de loin, pas de parcelles : le moteur n'en trace pas sur une case où passe une route (routes de l'état, pas tracées)
       this.routes = [];
       for (let i = 0; i < n; i += 2) this.routes.push([i, Math.min(i + 1, n - 1)]);
-    } else E.P.construire(C);
-    this.etatMoteur();
+    }
+    E.P.construire(C, this.etatDuMoteur());
     E.R.majRoutes(this.chemins);   // (après l'état : le moteur pose les routes sur les hauteurs des cases)
     this.lieuxDu(N);
     this.batirVilles();
     this.sale = true;
+  }
+  // la vie du moteur (vie.js) : passants des places, charrettes des routes, travaux des champs, fermes et moulins, bêtes,
+  // bateaux. Seulement de près (hexagones de 4 cases, décor complet) : de loin, on ne verrait pas les figures.
+  majVie() {
+    if (!this.C) return;
+    const N = this.N, villes = [], batiments = [], an = this.st?.year || this.mp.epoque?.year || 1700;
+    const proprio = o => Math.max(-1, this.codes?.indexOf?.(o) ?? -1);
+    if (!N.leger) {
+      for (const [id, p] of N.places) {
+        const ns = this.lieux.get(id)?.ns, c = this.local(p.hex[0]);
+        if (c < 0) continue;
+        villes.push({ id, case: c, proprio: proprio(ns?.o), capitale: p.n.type === 'capitale', niveau: NIV_VILLE[p.n.type] || 1,
+          pop: ns?.pop ?? p.n.pop0, assiegee: !!(ns?.sg || ns?.bk) });
+        p.hex.forEach((k, j) => { const i = this.local(k); if (i >= 0) batiments.push({ id: id * 8 + j, cle: j ? 'maison_pierre' : COEUR[p.n.type] || 'maison', case: i, reste: 0, face: 0, ville: id, proprio: proprio(ns?.o) }); });
+      }
+      for (const [k, cle] of N.campagne) { const i = this.local(k); if (i >= 0) batiments.push({ id: 5e5 + k, cle, case: i, reste: 0, face: 0, proprio: -1 }); }
+    }
+    E.V.majVie({ batiments, villes, routes: N.leger ? [] : this.chemins.map(([a, b]) => [a, b]), saison: this.saison, tour: 0, mois: 0,
+      epoque: { cle: epoqueDe(an) }, royaumes: (this.codes || []).map((c, id) => ({ id, couleur: this.colors[c] || '#999999' })),
+      cases: { foret: this.C.foret, proprio: this.habite || [] }, meteo: { genre: 'soleil' } });
+  }
+  // l'heure et le temps qu'il fait sous la caméra, pour la vie du moteur
+  majClimat(cam) {
+    const c = E.V.climat, [heure, phase, aube, nuit] = HEURE[AMB.heure] || HEURE.midi, k = meteoEn(cam.x, cam.y);
+    Object.assign(c, { heure, phase, aube, nuit, genre: k, pluie: ['pluie', 'orage', 'tempete'].includes(k), neige: k === 'neige',
+      vent: k === 'tempete' ? 1.4 : k === 'orage' ? 1 : k === 'pluie' ? 0.6 : 0.3, gel: this.neige ? 0.6 : 0, saison: this.saison });
   }
   // centre d'un hexagone de la grille entière, en unités du moteur (grille entière : la fenêtre en est décalée de ox, oz)
   centre(N, k) { const t = N.g.liste[k]; return [t.x / 10, t.z / 10]; }
   local(k) { const G = this.N.g.cols, c = k % G - this.fen.c0, r = ((k / G) | 0) - this.fen.r0; return c >= 0 && r >= 0 && c < this.fen.l && r < this.fen.h ? r * this.fen.l + c : -1; }
 
   // ce que l'état change au plateau du moteur : saison, neige, territoires (liserés aux couleurs des camps)
-  etatMoteur() {
-    if (!this.C) return;
+  etatMoteur() { if (this.C) { E.P.majEtat(this.etatDuMoteur()); this.sale = true; } }
+  etatDuMoteur() {
     const C = this.C, n = C.l * C.h, proprio = new Array(n).fill(-1), W = this.mp.W, royaumes = [];
     if (this.fac) {
       for (let i = 0; i < n; i++) {
@@ -140,9 +172,10 @@ export class Plateau {
     }
     // (les hexagones des places et des fermes sont bâtis : le moteur n'y met ni décor ni buisson sous le bâtiment)
     const batiments = [...this.N.ville].map(k => ({ case: this.local(k) })).filter(b => b.case >= 0);
-    E.P.majEtat({ cases: { arbres: C.arbres, foret: C.foret, proprio }, batiments, routes: this.routes, forts: [], royaumes,
-      saison: this.saison, meteo: { neige_sol: this.neige } });
-    this.sale = true;
+    // (pour la vie du moteur, une case de terre du jeu est habitée même sans camp : bêtes dans les prés, fleurs)
+    this.habite = proprio.map((o, i) => o >= 0 ? o : this.N.jeu[C.gl(i)] && !this.N.estEau(C.gl(i)) ? 99 : -1);
+    return { cases: { arbres: C.arbres, foret: C.foret, proprio }, batiments, routes: this.routes, forts: [], royaumes,
+      saison: this.saison, meteo: { neige_sol: this.neige } };
   }
   // les places de ce niveau (combat.js et guerre.js y posent sièges et batailles), en unités du plateau (10 par hexagone)
   lieuxDu(N) {
@@ -168,6 +201,10 @@ export class Plateau {
   // les bâtiments des places de la fenêtre, aux couleurs du camp qui les tient et au style de l'année
   batirVilles() {
     for (const o of [...this.villes.children]) this.villes.remove(o);   // (géométries partagées, gardées par le cache du moteur)
+    for (const id of this.poses || []) E.W.oublierPose(id);
+    this.poses = [];
+    // (ids numériques : le moteur en tire la phase des fumées et des drapeaux)
+    const animer = (b, couleur) => { const id = 1e6 + this.poses.length; this.poses.push(id); E.W.animerPose(id, b.mesh, b.anim, couleur); };
     const N = this.N, f = this.fen, an = this.st?.year || this.mp.epoque?.year || 1700, epoque = epoqueDe(an);
     for (const [id, p] of N.places) {
       const loc = p.hex.map(k => this.local(k));
@@ -179,15 +216,16 @@ export class Plateau {
         const b = E.M.maillageBatiment({ cle, couleur, epoque, saison: this.saison, neige: this.neige, ruine: ruine && j === 0 });
         const [x, z] = this.centre(N, k);
         b.mesh.position.set(x - f.ox, E.P.dessus(loc[j]), z - f.oz);
-        this.villes.add(b.mesh);
+        this.villes.add(b.mesh); animer(b, couleur);
       });
     }
     for (const [k, cle] of N.campagne) {
       const i = this.local(k); if (i < 0) continue;
       const b = E.M.maillageBatiment({ cle, epoque, saison: this.saison, neige: this.neige }), [x, z] = this.centre(N, k);
       b.mesh.position.set(x - f.ox, E.P.dessus(i), z - f.oz);
-      this.villes.add(b.mesh);
+      this.villes.add(b.mesh); animer(b, this.mp.rules?.neutral_color || '#8d8a7a');
     }
+    this.majVie();
     this.sale = true;
   }
 
@@ -238,9 +276,16 @@ export class Plateau {
     if (dehors || detail) {
       // pendant un geste on garde la fenêtre (sauf si la vue en sort tout entière) : on rebâtit quand la caméra se pose
       const loin = !f || v[1] < f.x0 || v[0] > f.x1 || v[3] < f.y0 || v[2] > f.y1;
-      if (loin || now - this.tCam > 250) this.batir(voulu, cam.x, cam.y);
+      // en dézoomant, la fenêtre est bâtie pour une vue 1,6 fois plus large (au même niveau de détail) : le cran suivant
+      // tombe encore dedans, au lieu d'arrêter l'image une fois de plus
+      const large = f && cam.z < f.z ? choisirPas(vw, vh, cam.z / 1.6, K, this.mp.W, this.mp.H) : voulu;
+      if (loin || now - this.tCam > 250) { this.batir(large.niv === voulu.niv ? large : voulu, cam.x, cam.y); this.fen.z = cam.z; }
     }
-    if (!this.sale && !(anim && now - this.tRendu > 66) && now - this.tRendu < 250) return false;
+    // animations permises : une image à chaque tour de la boucle (30 par seconde au plus en qualité légère), comme dans
+    // les jeux de web_engine ; animations coupées (réglage, mouvement réduit) : seulement quand quelque chose a changé
+    const pas = anim ? (E.S.qualite.niveau === 'leger' ? 30 : 0) : Infinity;
+    if (!this.sale && now - this.tRendu < pas) return false;
+    this.majClimat(cam);
     this.caler(cam, vw, vh);
     E.rendre();
     this.sale = false; this.tRendu = now;

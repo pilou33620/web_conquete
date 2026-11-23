@@ -188,6 +188,9 @@ export class Ambient {
     const z = this.map.cam.z, zoom = this.map.zooming();   // (pendant un zoom, les petites figures qui bougent attendent)
     if (st !== this.st) { this.st = st; majEtat(st); }
     const [x0, y0, x1, y1] = this.scene(dt), sc = this.sc;
+    // sur le plateau (SPEC-HEX), la vie est celle du moteur web_engine, dans son style (hex/plateau.js, majVie) : gens,
+    // bêtes, charrettes, bateaux, oiseaux, vagues. Les figures dessinées ici ne servent plus qu'à la carte classique.
+    if (this.map.hex) return;
     if (this.on) {
       if (z >= 3.5 && z < 18 && !zoom) this.drawFlows(ctx, this.t);   // (de plus près, la rivière peinte par les tuiles suffit)
       if (z >= 3) this.drawSea(ctx, this.t);
@@ -201,6 +204,7 @@ export class Ambient {
 
   // ------------------------------------------------------------------ au-dessus des villes (marchés, fumées, nuages, oiseaux)
   over(ctx, dt, time, st) {
+    if (this.map.hex) return;
     const [x0, y0, x1, y1] = this.scene(0);
     ctx.save();
     dessinerDessus(this.sc, ctx, x0, y0, x1, y1);
