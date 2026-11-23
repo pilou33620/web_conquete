@@ -31,10 +31,11 @@ if (!cv && carte2d) {
 let E = null;
 if (PAGE) try {
   // (vie : gens, bêtes, charrettes et bateaux du moteur ; faune : oiseaux migrateurs, poissons ; eau : vagues des côtes)
-  const [S, P, M, R, V] = await Promise.all(['scene', 'plateau', 'modeles', 'routes', 'vie', 'faune', 'eau'].map(m => import(`../../graphismes/rendu/${m}.js`)));
+  // (monde : animerPose, les ailes des moulins, les drapeaux et les fumées des cheminées des bâtiments posés)
+  const [S, P, M, R, V, W] = await Promise.all(['scene', 'plateau', 'modeles', 'routes', 'vie', 'monde', 'faune', 'eau'].map(m => import(`../../graphismes/rendu/${m}.js`)));
   const r = S.renderer, rendre = r.render.bind(r);
   r.render = () => {};   // la boucle du moteur ne dessine plus : image() le fait, caméra calée
-  E = { S, P, M, R, V, rendre: () => rendre(S.scene, S.camera) };
+  E = { S, P, M, R, V, W, rendre: () => rendre(S.scene, S.camera) };
   S.cam.auto = false;
 } catch (e) {
   console.warn('Moteur graphique web_engine indisponible', e);
@@ -138,9 +139,9 @@ export class Plateau {
         if (c < 0) continue;
         villes.push({ id, case: c, proprio: proprio(ns?.o), capitale: p.n.type === 'capitale', niveau: NIV_VILLE[p.n.type] || 1,
           pop: ns?.pop ?? p.n.pop0, assiegee: !!(ns?.sg || ns?.bk) });
-        p.hex.forEach((k, j) => { const i = this.local(k); if (i >= 0) batiments.push({ id: `${id}.${j}`, cle: j ? 'maison_pierre' : COEUR[p.n.type] || 'maison', case: i, reste: 0, face: 0, ville: id, proprio: proprio(ns?.o) }); });
+        p.hex.forEach((k, j) => { const i = this.local(k); if (i >= 0) batiments.push({ id: id * 8 + j, cle: j ? 'maison_pierre' : COEUR[p.n.type] || 'maison', case: i, reste: 0, face: 0, ville: id, proprio: proprio(ns?.o) }); });
       }
-      for (const [k, cle] of N.campagne) { const i = this.local(k); if (i >= 0) batiments.push({ id: `c${k}`, cle, case: i, reste: 0, face: 0, proprio: -1 }); }
+      for (const [k, cle] of N.campagne) { const i = this.local(k); if (i >= 0) batiments.push({ id: 5e5 + k, cle, case: i, reste: 0, face: 0, proprio: -1 }); }
     }
     E.V.majVie({ batiments, villes, routes: N.leger ? [] : this.chemins.map(([a, b]) => [a, b]), saison: this.saison, tour: 0, mois: 0,
       epoque: { cle: epoqueDe(an) }, royaumes: (this.codes || []).map((c, id) => ({ id, couleur: this.colors[c] || '#999999' })),
@@ -200,6 +201,10 @@ export class Plateau {
   // les bâtiments des places de la fenêtre, aux couleurs du camp qui les tient et au style de l'année
   batirVilles() {
     for (const o of [...this.villes.children]) this.villes.remove(o);   // (géométries partagées, gardées par le cache du moteur)
+    for (const id of this.poses || []) E.W.oublierPose(id);
+    this.poses = [];
+    // (ids numériques : le moteur en tire la phase des fumées et des drapeaux)
+    const animer = (b, couleur) => { const id = 1e6 + this.poses.length; this.poses.push(id); E.W.animerPose(id, b.mesh, b.anim, couleur); };
     const N = this.N, f = this.fen, an = this.st?.year || this.mp.epoque?.year || 1700, epoque = epoqueDe(an);
     for (const [id, p] of N.places) {
       const loc = p.hex.map(k => this.local(k));
@@ -211,14 +216,14 @@ export class Plateau {
         const b = E.M.maillageBatiment({ cle, couleur, epoque, saison: this.saison, neige: this.neige, ruine: ruine && j === 0 });
         const [x, z] = this.centre(N, k);
         b.mesh.position.set(x - f.ox, E.P.dessus(loc[j]), z - f.oz);
-        this.villes.add(b.mesh);
+        this.villes.add(b.mesh); animer(b, couleur);
       });
     }
     for (const [k, cle] of N.campagne) {
       const i = this.local(k); if (i < 0) continue;
       const b = E.M.maillageBatiment({ cle, epoque, saison: this.saison, neige: this.neige }), [x, z] = this.centre(N, k);
       b.mesh.position.set(x - f.ox, E.P.dessus(i), z - f.oz);
-      this.villes.add(b.mesh);
+      this.villes.add(b.mesh); animer(b, this.mp.rules?.neutral_color || '#8d8a7a');
     }
     this.majVie();
     this.sale = true;
@@ -271,7 +276,10 @@ export class Plateau {
     if (dehors || detail) {
       // pendant un geste on garde la fenêtre (sauf si la vue en sort tout entière) : on rebâtit quand la caméra se pose
       const loin = !f || v[1] < f.x0 || v[0] > f.x1 || v[3] < f.y0 || v[2] > f.y1;
-      if (loin || now - this.tCam > 250) this.batir(voulu, cam.x, cam.y);
+      // en dézoomant, la fenêtre est bâtie pour une vue 1,6 fois plus large (au même niveau de détail) : le cran suivant
+      // tombe encore dedans, au lieu d'arrêter l'image une fois de plus
+      const large = f && cam.z < f.z ? choisirPas(vw, vh, cam.z / 1.6, K, this.mp.W, this.mp.H) : voulu;
+      if (loin || now - this.tCam > 250) { this.batir(large.niv === voulu.niv ? large : voulu, cam.x, cam.y); this.fen.z = cam.z; }
     }
     // animations permises : une image à chaque tour de la boucle (30 par seconde au plus en qualité légère), comme dans
     // les jeux de web_engine ; animations coupées (réglage, mouvement réduit) : seulement quand quelque chose a changé

@@ -51,6 +51,11 @@ bâtiments d'époque (Ancien Régime, Lumières, Empire, Révolution industriell
   change si elles sont coupées. La molette zoome en glissant (160 ms, le point sous la souris reste fixe), et le moteur reçoit
   l'état avec la carte (`construire(C, etat)`, web_engine 2.26.0) : il ne bâtit le décor qu'une fois, si bien que le temps
   d'arrêt quand la vue change de niveau de détail baisse de 35 à 60 %.
+- **Plus de vie, moins d'arrêts** (23/11/2026, web_engine 2.27.0) : voyageurs entre les villes (charrettes, cavaliers, piétons),
+  troupeaux de moutons avec berger et chien, barques sur les rivières ; les bâtiments posés sont animés par `animerPose`
+  (graphismes/rendu/monde.js : fumées des cheminées, drapeaux, ailes des moulins). Le décor se bâtit 2 à 3,5 fois plus vite qu'en
+  2.25.1 (`toon.js`) ; en dézoomant, la fenêtre est bâtie pour une vue 1,6 fois plus large au même niveau de détail, ce qui
+  épargne une reconstruction sur quatre environ.
 - **Perdu pour l'instant** (à ajouter dans web_engine si on le veut) : le paysage des siècles sur le plateau (pinèdes,
   marais drainés, vigne roussie), les enceintes dessinées autour des villes, la teinte des territoires (restent les
   liserés), les étangs plus petits qu'un hexagone, la mer qui fonce vers le large.
