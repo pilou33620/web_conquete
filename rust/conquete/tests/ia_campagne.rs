@@ -367,7 +367,8 @@ fn refaire() {
             let fin = final_(&mut g, &ops.at(0).ats(1));
             for key in sc.at("fin").keys() {
                 if json::dumps_ref_ordre(&fin.at(&key)) != json::dumps_ref_ordre(&sc.at("fin").at(&key)) {
-                    assert!(tout || key == "armies", "graine {}, scénario {k} : seul `armies` peut changer", cas.ati("seed"));
+                    // (armies : SPEC-BATAILLE.md ; nodes et factions : un navire mis en chantier par l'IA, SPEC-EMPIRE module 2)
+                    assert!(tout || ["armies", "nodes", "factions"].contains(&key.s()), "graine {}, scénario {k} : {key} ne peut pas changer", cas.ati("seed"));
                     sc.at("fin").set(&key, fin.at(&key));
                     refaits += 1;
                     eprintln!("graine {}, scénario {k} {} : {key} refait", cas.ati("seed"), json::dumps_ref(&ops));

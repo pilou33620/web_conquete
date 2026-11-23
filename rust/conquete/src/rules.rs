@@ -1595,6 +1595,61 @@ pub const DOUANE_VOL: f64 = 0.06;   // part du revenu brut d'un voisin que prend
 pub const DOUANIERS_L: f64 = 0.15;   // solde des douaniers : livres par jour et par place frontalière
 pub const DOUANE_REL: f64 = 0.25;   // relations des voisins : tant par niveau de tarif et par mois
 
+// ------------------------------------------------------------------ la marine (SPEC-EMPIRE, module 2)
+// Les navires (les types que web_engine/marine.js dessine) : canons (feu d'une bordée), coque (points de coque d'un
+// navire), vitesse (cases par jour, à l'échelle de SEA_SPEED), transport (hommes embarqués), équipage (hommes à
+// l'abordage), cout, jours (de chantier, comme un régiment), entretien (livres par jour), port (niveau de la chaîne
+// « port » exigé dans la place), tech (découverte exigée, de rules.TECHS)
+fn _n(nom: &str, canons: i64, coque: i64, vitesse: i64, transport: i64, equipage: i64, cout: Val, jours: i64, entretien: f64,
+      port: i64, tech: Val, desc: &str) -> Val {
+    dict!{"nom" => nom, "canons" => canons, "coque" => coque, "vitesse" => vitesse, "transport" => transport, "equipage" => equipage,
+          "cout" => cout, "jours" => jours, "entretien" => entretien, "port" => port, "tech" => tech, "desc" => desc}
+}
+py_const!(NAVIRES, dict!{
+    "flute" => _n("Flûte", 8, 40, 40, 600, 60, dict!{"livres" => 300, "bois" => 80}, 20, 1.0, 1, Val::None,
+                  "Navire de charge : transporte une armée, commerce aux comptoirs ; presque sans canons."),
+    "corvette" => _n("Corvette", 20, 60, 55, 150, 120, dict!{"livres" => 450, "bois" => 100, "fer" => 20}, 25, 1.8, 1, Val::None,
+                     "Petit navire de guerre, rapide : éclaire, escorte, fait la course."),
+    "fregate" => _n("Frégate", 40, 100, 50, 250, 250, dict!{"livres" => 800, "bois" => 160, "fer" => 40}, 40, 3.5, 2, Val::None,
+                    "Le navire à tout faire des escadres : assez de canons pour la ligne, assez vite pour la course."),
+    "vaisseau" => _n("Vaisseau de ligne", 74, 180, 40, 400, 600, dict!{"livres" => 1500, "bois" => 300, "fer" => 80}, 60, 7.0, 3, Val::from("fonderie"),
+                     "Le soixante-quatorze : deux ponts de canons, le maître des batailles en ligne."),
+    "vapeur" => _n("Vapeur à roues", 6, 70, 60, 500, 80, dict!{"livres" => 700, "bois" => 60, "fer" => 80}, 30, 3.0, 2, Val::from("vapeur_fluviale"),
+                   "Avance sans le vent : transports et remorquage, peu de canons."),
+    "fregate_helice" => _n("Frégate à hélice", 50, 130, 65, 300, 300, dict!{"livres" => 1300, "bois" => 120, "fer" => 140}, 45, 5.0, 2, Val::from("outillage"),
+                           "Voiles et machine à hélice : la frégate qui ne craint plus le calme."),
+    "vaisseau_helice" => _n("Vaisseau à hélice", 90, 220, 60, 500, 700, dict!{"livres" => 2200, "bois" => 200, "fer" => 250}, 70, 9.0, 3, Val::from("lahitte"),
+                            "Le Napoléon et ses frères : un vaisseau de ligne à vapeur, canons rayés."),
+    "cuirasse" => _n("Cuirassé", 40, 400, 65, 200, 500, dict!{"livres" => 3000, "fer" => 500}, 80, 12.0, 3, Val::from("acier"),
+                     "Coque de fer et d'acier, grosses pièces en tourelle : les boulets ricochent dessus.")
+});
+py_const!(NAVIRE_ORDRE, list!["flute", "corvette", "fregate", "vaisseau", "vapeur", "fregate_helice", "vaisseau_helice", "cuirasse"]);
+// les stratégies d'une bataille navale (comme STRATS) : ce qu'elle change à chaque phase (m : approche, bordees, abordage),
+// à ses propres pertes, les stratégies qu'elle contre (bat : CONTRE, +20 %)
+fn _sn(nom: &str, desc: &str, m: Val, pertes: f64, bat: Val) -> Val {
+    dict!{"label" => nom, "desc" => desc, "m" => m, "pertes" => pertes, "bat" => bat}
+}
+py_const!(STRATS_NAV, dict!{
+    "ligne" => _sn("Ligne de file", "Les navires se suivent et canonnent bord à bord : la bataille des bordées.",
+                   dict!{"bordees" => 1.25, "abordage" => 0.8}, 0.9, list!["abordage", "brulot"]),
+    "couper" => _sn("Couper la ligne", "Foncer à travers la ligne ennemie pour la prendre en enfilade : risqué, décisif.",
+                    dict!{"bordees" => 1.15, "abordage" => 1.2}, 1.25, list!["ligne"]),
+    "abordage" => _sn("Abordage", "Grappins et sabres : on prend les navires plutôt que de les couler. Fort contre les petits.",
+                      dict!{"bordees" => 0.7, "abordage" => 1.6}, 1.1, list!["demater"]),
+    "demater" => _sn("Feu à démâter", "Viser la mâture : l'ennemi ralenti ne peut plus s'enfuir.",
+                     dict!{"approche" => 1.3, "bordees" => 0.95}, 0.9, list!["rompre", "couper"]),
+    "rompre" => _sn("Rompre le combat", "Échapper à l'ennemi : réussit selon la vitesse et le vent.",
+                    dict!{"bordees" => 0.5, "abordage" => 0.4}, 0.5, list!["abordage"]),
+    "brulot" => _sn("Brûlot", "Sacrifier un navire en feu lancé sur l'ennemi serré.",
+                    dict!{"bordees" => 0.95, "abordage" => 0.9}, 1.0, list!["couper"])
+});
+py_const!(PHASES_NAV, list!["approche", "bordees", "abordage"]);
+pub const PRESTIGE_NAVIRE: f64 = 0.5;   // prestige d'un navire pris (abordage)
+pub const PRESTIGE_COULE: f64 = 0.2;   // … et d'un navire ennemi coulé
+pub const REPARE_JOUR: f64 = 0.02;   // coque réparée par jour au port ami (+50 % par niveau de la chaîne « port » au-delà du premier)
+pub const BLOCUS_CASES: f64 = 3.0;   // une flotte bloque le port dont elle est à moins de tant de cases
+pub const CONTACT_MER: f64 = 2.0;   // cases : deux flottes ennemies (ou une flotte et une armée en cabotage) se rencontrent
+
 
 pub fn tax_label(v: f64) -> String {
     for (lim, lab) in TAX_LABELS().iter().map(|t| t.pair()) {

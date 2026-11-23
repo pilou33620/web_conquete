@@ -266,6 +266,9 @@ impl App {
         if c == "tac" {
             return Ok(TB::command(g, body)); // batailles : réglage, stratégie du joueur, poursuite (SPEC-BATAILLE.md)
         }
+        if c == "flotte" {
+            return Ok(crate::engine::marine::commande(g, p, body)); // les flottes (SPEC-EMPIRE, module 2)
+        }
         if c == "apercu" {
             // rapport de forces estimé contre une armée ou une place ennemie, sans donner l'ordre
             let cible = body.get("target");

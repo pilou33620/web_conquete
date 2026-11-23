@@ -595,6 +595,9 @@ pub fn blockade_tick(g: &mut Game, n: &Val, bes: &Val, dt: f64) {
         g.start_battle(bes, &list![], gn.atf("x"), gn.atf("y"), &Val::from(nid), false, false);
         return;
     }
+    if crate::engine::marine::bloque(g, nid) {
+        s.dec("food", dt); // (SPEC-EMPIRE, module 2) bloquée aussi par mer : les vivres s'épuisent deux fois plus vite
+    }
     let el = g.t - s.atf("since");
     let famine = s.at("food") < el;
     let (km, kg, kmor) = if famine { (0.03, 0.025, 3.0) } else { (0.004, 0.002, 0.5) };

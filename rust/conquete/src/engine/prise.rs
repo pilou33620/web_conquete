@@ -788,7 +788,13 @@ impl Game {
                 }
             }
         }
+        // (SPEC-EMPIRE, module 2) les ports bloqués par une flotte : ni commerce, ni messages de blocus fluvial (marine.rs les écrit)
+        let nav = super::marine::blocus_ports(self);
         let old = self._blockade.clone();
+        for nid in nav.iter() {
+            out.push(&nid);
+            old.push(&nid);
+        }
         let au_joueur = |n: &i64| self.nodes.at(*n).at("owner") == self.player;
         let mut cut: Vec<i64> = out.iter().filter(|n| !old.has(n)).map(|n| n.i()).collect();
         cut.sort();

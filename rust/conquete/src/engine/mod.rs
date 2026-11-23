@@ -52,6 +52,8 @@ mod economie;
 mod prise;
 pub mod raccord;
 mod utilitaires;
+pub mod marine; // les flottes (SPEC-EMPIRE, module 2)
+pub mod navale; // les batailles navales (SPEC-EMPIRE, module 2)
 
 pub const SUBSTEP: f64 = 0.05; // jours
 pub const ATTRITION_STEP: f64 = 0.25; // jours : pas de l'usure, des désertions et du ravitaillement des armées
@@ -336,6 +338,9 @@ pub struct Game {
     pub city_stats: Val,
     /// outils/simuler.py : le joueur d'origine a été éliminé.
     pub lost_player: bool,
+    /// (SPEC-EMPIRE, module 2) {fid: flotte} (voir marine.rs) et {bid: bataille navale} (voir navale.rs), sauvegardés.
+    pub flottes: Val,
+    pub navales: Val,
 }
 
 impl Game {
@@ -400,6 +405,8 @@ impl Game {
             _frontieres: None,
             city_stats: dict! {},
             lost_player: false,
+            flottes: dict! {}, // (SPEC-EMPIRE, module 2)
+            navales: dict! {},
         }
     }
 
