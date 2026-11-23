@@ -247,7 +247,7 @@ impl Game {
                 }
             }
             // commerce
-            let mut trade_l = 0.0;
+            let mut trade_l = super::commerce::revenu(&f); // commerce maritime (SPEC-EMPIRE, module 7)
             let trade_s = dict! {};
             for o in f.at("trade").iter() {
                 let of = self.factions.get(&o);

@@ -112,6 +112,9 @@ pub fn declare_war(game: &mut Game, a: &str, b: &str, quiet: bool) -> (bool, Str
         return (false, why);
     }
     let was_ally = game.status(a, b) == "alliance";
+    // (SPEC-EMPIRE, module 7) un casus belli (incident de corsaires) : les autres camps ne s'en fâchent pas
+    let cb = crate::engine::commerce::casus_belli(game, a, b);
+    game.factions.at(a).get_or("cb", dict! {}).pop(b);
     game.set_status(a, b, "guerre");
     game.factions.at(a).set("last_war", game.t);
     game.factions.at(b).set("last_war", game.t);
@@ -130,10 +133,10 @@ pub fn declare_war(game: &mut Game, a: &str, b: &str, quiet: bool) -> (bool, Str
         if game.at_war(&o, b) {
             rel.set(a, vmin(100, &rel.at(a) + 8i64));
         } else {
-            rel.set(a, vmax(-100, &rel.at(a) - if was_ally { 14 } else { 7 }));
+            rel.set(a, vmax(-100, &rel.at(a) - if cb { 0 } else if was_ally { 14 } else { 7 }));
         }
     }
-    let texte = format!("{} déclare la guerre à {} !", game.fname(a), game.fname(b));
+    let texte = format!("{} déclare la guerre à {} !{}", game.fname(a), game.fname(b), if cb { format!(" (casus belli : les corsaires {})", R::de(&game.fname(b))) } else { String::new() });
     game.log("diplo", &texte, &dict! {"who" => a, "important" => true});
     FM::guerre(game, a, b); // contre une maison alliée par mariage : l'ordre public en pâtit
     if game.player == a || game.player == b {
@@ -663,6 +666,7 @@ pub fn apply(game: &mut Game, frm: &str, to: &str, action: &str, amount: i64, gi
             let texte = format!("Accord commercial entre {} et {}.", game.fname(frm), game.fname(to));
             let important = frm == game.player || to == game.player;
             game.log("diplo", &texte, &dict! {"who" => frm, "important" => important});
+            crate::engine::commerce::accord(game, frm, to); // la route commerciale par mer (SPEC-EMPIRE, module 7)
         }
         "echange" => {
             let ((gr, gq), (wr, wq)) = (give.pair(), get.pair());

@@ -139,6 +139,7 @@ fn ia(code: &str) -> AI {
         _nb: Val::None,
         _cache_reach: None,
         marine_clock: 0.0, // (SPEC-EMPIRE, module 2)
+        commerce_clock: 0.0, // (SPEC-EMPIRE, module 7)
     }
 }
 

@@ -1448,7 +1448,9 @@ impl AI {
                     let weak_target = en_guerre(g) && pa > 1.3 * po && self.rng.random() < aggr * 0.25 * pace;
                     // coalition : quand la puissance dominante est déjà en guerre, ses voisins se joignent à l'hallali
                     let coalition = heg == o.as_str() && en_guerre(g) && self.rng.random() < aggr * 0.2;
-                    let want = want || coalition;
+                    // (SPEC-EMPIRE, module 7) un casus belli (incident de corsaires) : l'occasion d'une guerre sans fâcher personne
+                    let cb = crate::engine::commerce::casus_belli(g, &code, &o) && pa > po && self.rng.random() < aggr * 0.3;
+                    let want = want || coalition || cb;
                     if want || weak_target {
                         D::declare_war(g, &code, &o, false);
                         wars = self.wars(g);

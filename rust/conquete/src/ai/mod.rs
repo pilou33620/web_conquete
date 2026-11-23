@@ -27,6 +27,7 @@ use crate::{dict, list, py_const, pyset, tup};
 
 mod gouvernement;
 pub mod marine; // les flottes des IA (SPEC-EMPIRE, module 2)
+pub mod commerce; // marchands, corsaires, expéditions des IA (SPEC-EMPIRE, module 7)
 
 pub const AI_AHEAD: i64 = 5;  // ans d'avance au plus sur l'histoire pour une recherche des IA (SPEC-ARBRE.md)
 
@@ -99,6 +100,8 @@ pub struct AI {
     pub _cache_reach: Option<(Val, Vec<i64>, Val)>,
     /// (SPEC-EMPIRE, module 2) prochain coup d'œil sur les flottes (ai/marine.rs ; pas sauvegardé).
     pub marine_clock: f64,
+    /// (SPEC-EMPIRE, module 7) prochain coup d'œil sur le commerce maritime (ai/commerce.rs ; pas sauvegardé).
+    pub commerce_clock: f64,
 }
 
 impl AI {
@@ -133,6 +136,7 @@ impl AI {
             _nb: Val::None,
             _cache_reach: None,
             marine_clock: 0.0,
+            commerce_clock: 0.0,
         }
     }
 
@@ -204,6 +208,7 @@ impl AI {
             self.spend(g);
         }
         marine::jouer(g, self); // les flottes (SPEC-EMPIRE, module 2)
+        commerce::jouer(g, self); // marchands, corsaires, expéditions (SPEC-EMPIRE, module 7)
         if g.t >= self.diplo_clock {
             self.diplo_clock = g.t + 8.0 + self.rng.random() * 5.0;
             self.diplomacy(g);

@@ -50,6 +50,9 @@ pub fn jouer(g: &mut Game, ai: &mut AI) {
         if o == "blocus" && cible.is_some() && g.at_war(&code, g.nodes.at(&cible).at("owner").s()) {
             continue; // (blocus en cours)
         }
+        if o == "corsaire" || o == "route" {
+            continue; // (SPEC-EMPIRE, module 7) ai/commerce.rs les mène
+        }
         if o == "blocus" {
             f.set("ordre", "");
         }
