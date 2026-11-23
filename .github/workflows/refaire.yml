@@ -14,22 +14,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Règles et tours
-        shell: bash
-        run: |
-          CONQUETE_REFAIRE_RULES=1 cargo test --locked -p conquete --test rules refaire -- --ignored --nocapture
-          CONQUETE_REFAIRE_TOURS=1 cargo test --locked -p conquete --test tours refaire -- --ignored --nocapture
       - name: /api/map de la carte par défaut
         shell: bash
         run: |
           cargo build --locked -p conquete --bin conquete
-          (target/debug/conquete --local --no-browser --no-update --port 8791 > /tmp/serveur.log 2>&1 &)
+          # (comme tests/serveur.rs : hors du dépôt git, la page servie n'a pas de version)
+          mkdir -p /tmp/jeu/saves && cp -r web /tmp/jeu/
+          (cd /tmp/jeu && CONQUETE_DATA=$GITHUB_WORKSPACE/game/data WEB_TOOLS_JETON_FICHIER=/tmp/jeu/jeton.txt WEB_TOOLS_HTTP=1 $GITHUB_WORKSPACE/target/debug/conquete --local --no-browser --no-update --port 8791 > /tmp/serveur.log 2>&1 &)
           for i in $(seq 1 150); do curl -sf -o /tmp/map.json http://127.0.0.1:8791/api/map && break; sleep 2; done
           tail -5 /tmp/serveur.log
           python3 - <<'EOF'
           import hashlib, json
           brut = open('/tmp/map.json', 'rb').read()
           v = json.loads(brut)
+          assert v['ver'] is None, v['ver']
           p = 'rust/conquete/tests/references/serveur.json'
           t = open(p, encoding='utf8').read()
           r = json.loads(t)

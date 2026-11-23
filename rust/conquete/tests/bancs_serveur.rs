@@ -476,7 +476,10 @@ fn mode_europe() {
     // sans partie : la carte par défaut, l'Aquitaine ; les modes sont annoncés (la France retirée le 22/11/2026)
     let (st, fr) = carte("/api/map");
     assert_eq!((st, &fr["geo"], &fr["km_case"]), (200, &json!(2), &json!(1)));
-    assert_eq!(fr["modes"], json!([{"geo": 2, "nom": "Aquitaine", "mot": "département"}, {"geo": 5, "nom": "Europe", "mot": "pays", "le": "l’Europe"}]));
+    let mut modes = vec![json!({"geo": 2, "nom": "Aquitaine", "mot": "département"})];
+    modes.extend(conquete::geo::THEATRES.iter().map(|t| json!({"geo": t.geo, "nom": t.nom, "mot": t.mot, "le": t.le})));
+    assert_eq!(fr["modes"], json!(modes));
+    assert_eq!(modes.len(), 8); // l'Aquitaine, l'Europe et les six théâtres d'Empire
     assert_eq!(fr["rules"]["factions"].as_object().unwrap().len(), 5);
     assert_eq!(carte("/api/map?geo=2").1["geo"], json!(2));
     // la carte d'Europe, faite à la première demande
