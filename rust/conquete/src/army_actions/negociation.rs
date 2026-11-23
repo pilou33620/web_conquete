@@ -469,7 +469,7 @@ pub fn contribution(g: &mut Game, code: &str, a: &Val) -> (bool, String) {
         }
     }
     let s = n.at("siege");
-    if s.truthy() && s.at("by") == code {
+    if s.truthy() && s.at_is("by", &code) {
         n.set("siege", Val::None);
     }
     let txt = format!("{} livres et {} vivres", gain.at("livres"), gain.at("vivres"));
@@ -853,7 +853,7 @@ pub fn options(g: &mut Game, a: &Val, nid: i64) -> Val {
     let n = g.nodes.at(nid);
     let res = g.factions.at(&code).at("res");
     let x = node_aa(&n);
-    if n.at("owner") == code {
+    if n.at_is("owner", &code) {
         if a.at("state") != "idle" {
             return Val::None;
         }
@@ -1078,9 +1078,9 @@ pub fn ai_step(g: &mut Game, ai: &mut AI) {
     if f.getb("famine") || (res.at("vivres") < 100i64 && f.at("income").at("vivres") < 0i64) {
         let mut cands: Vec<(Val, Val)> = vec![];
         for a in g.armies.values() {
-            if a.at("owner") == code && a.at_is("state", "idle") && a.at("at_node").is_some() && !a.getb("boat") {
+            if a.at_is("owner", &code) && a.at_is("state", "idle") && a.at("at_node").is_some() && !a.getb("boat") {
                 let n = g.nodes.at(a.at("at_node"));
-                if n.at("owner") == code && !n.atb("siege") && n.at("stab") >= 0.65 && cd_left(g, &n, "req") <= 0 {
+                if n.at_is("owner", &code) && !n.atb("siege") && n.at("stab") >= 0.65 && cd_left(g, &n, "req") <= 0 {
                     cands.push((n.get_or("pop", 0), a));
                 }
             }

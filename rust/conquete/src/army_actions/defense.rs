@@ -95,7 +95,7 @@ pub fn stab_bonus(g: &Game, n: &Val) -> f64 {
 pub fn extra_food(g: &Game, code: &str) -> f64 {
     let mut v = 0.0;
     for a in g.armies.values() {
-        if a.at("owner") == code && a.getb("qrt") {
+        if a.at_is("owner", &code) && a.getb("qrt") {
             v += py::sum_v(a.at("regs").iter().map(|r| &R::UNITS().at(r.at("type")).at("upkeep_v") * &r.at("n") / 100i64)).f() * QRT_FOOD;
         }
     }
@@ -874,7 +874,7 @@ pub fn arrive(g: &mut Game, a: &Val, nid: i64, ask: bool) -> Option<bool> {
         return if war { None } else { Some(false) }; // une place ennemie tenue barre la route ; les neutres se traversent
     }
     let s = n.at("siege");
-    if s.truthy() && s.at("by") == code {
+    if s.truthy() && s.at_is("by", &code) {
         return None; // nos troupes l'investissent déjà : on se joint à elles
     }
     if ask && asks(g, a) {
@@ -1016,7 +1016,7 @@ pub fn resume(g: &mut Game, a: &Val, k: &Val) {
 /// TB.command rend un dict(ok, msg).
 // game/army_actions.py, lignes 735 à 790
 pub fn choose(g: &mut Game, code: &str, a: &Val, what: &str) -> (bool, String) {
-    let k = if a.truthy() && a.at("owner") == code { ask_alive(g, a) } else { Val::None };
+    let k = if a.truthy() && a.at_is("owner", &code) { ask_alive(g, a) } else { Val::None };
     if !k.truthy() {
         return (false, "Cette armée n'attend pas d'ordre devant une place.".to_string());
     }

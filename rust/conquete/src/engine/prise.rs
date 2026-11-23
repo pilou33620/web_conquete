@@ -40,7 +40,7 @@ impl Game {
         }
         AA::on_capture(self, nid);
         n.set("owner", code);
-        n.set("assim", if gn.at("dept") == code { 1.0 } else if peaceful { 0.3 } else { 0.0 });
+        n.set("assim", if gn.at_is("dept", &code) { 1.0 } else if peaceful { 0.3 } else { 0.0 });
         n.set("stab", if peaceful { 0.6 } else { 0.35 });
         n.set("garrison", list![]);
         n.set("queue", list![]);
@@ -119,7 +119,7 @@ impl Game {
                 }
             }
         }
-        if gn.at_is("type", "capitale") && self.factions.has(old.as_str()) && gn.at("dept") == old {
+        if gn.at_is("type", "capitale") && self.factions.has(old.as_str()) && gn.at_is("dept", &old) {
             let lf = self.factions.at(old.as_str());
             let left = self.owned_nodes(&old).len() as i64;
             let crushed = py_max(3, &lf.at("start_nodes") * R::TREATY_CRUSHED);
@@ -158,7 +158,7 @@ impl Game {
         let ceded = self
             .nodes
             .iter()
-            .filter(|x| x.at("owner") == winner && self.geo.nodes.at(x.at("id")).at("dept") == loser)
+            .filter(|x| x.at_is("owner", &winner) && self.geo.nodes.at(x.at("id")).at_is("dept", &loser))
             .count();
         let livres = lf.at("res").atf("livres");
         let l0 = if 0.0 < livres { livres } else { 0.0 };
@@ -224,7 +224,7 @@ impl Game {
                 .iter()
                 .find(|n| {
                     let gn = self.geo.nodes.at(n.at("id"));
-                    gn.at_is("type", "capitale") && gn.at("dept") == code
+                    gn.at_is("type", "capitale") && gn.at_is("dept", &code)
                 })
                 .expect("StopIteration");
             let owner = cap.ats("owner");
@@ -235,7 +235,7 @@ impl Game {
                 self.armies
                     .values()
                     .into_iter()
-                    .filter(|a| a.at("owner") == owner && a.at("at_node").is_some())
+                    .filter(|a| a.at_is("owner", &owner) && a.at("at_node").is_some())
                     .map(|a| a.at("at_node"))
                     .collect(),
             );
@@ -326,7 +326,7 @@ impl Game {
             }
         }
         for n in self.nodes.iter() {
-            if n.at("owner") == loser {
+            if n.at_is("owner", &loser) {
                 n.set("owner", winner);
                 if self.geo.nodes.at(n.at("id")).at("dept") != winner {
                     n.set("assim", 0.0); // le pays absorbé garde le souvenir de sa liberté
@@ -338,7 +338,7 @@ impl Game {
                 n.set("siege", Val::None);
             }
         }
-        let ids: Vec<Val> = self.armies.values().into_iter().filter(|a| a.at("owner") == loser).map(|a| a.at("id")).collect();
+        let ids: Vec<Val> = self.armies.values().into_iter().filter(|a| a.at_is("owner", &loser)).map(|a| a.at("id")).collect();
         for aid in ids {
             let a = self.armies.pop(&aid);
             if a.atb("battle") && self.battles.has(&a.at("battle")) {
@@ -351,7 +351,7 @@ impl Game {
         }
         for f in self.factions.values() {
             f.at("trade").pop(loser);
-            if f.at("overlord") == loser {
+            if f.at_is("overlord", &loser) {
                 f.set("overlord", Val::None);
             }
         }
@@ -473,7 +473,7 @@ impl Game {
         for code in self.factions.keys() {
             let cap = self.capital_of(code.s());
             let o = self.nodes.at(cap).at("owner");
-            if o == p || (self.factions.has(&o) && self.factions.at(&o).at("overlord") == p) {
+            if o == p || (self.factions.has(&o) && self.factions.at(&o).at_is("overlord", &p)) {
                 continue;
             }
             ok = false;
@@ -914,7 +914,7 @@ impl Game {
                         .armies
                         .values()
                         .iter()
-                        .filter(|a| a.at("owner") == o && py::hypot(a.atf("x") - x0, a.atf("y") - y0) < 14.0)
+                        .filter(|a| a.at_is("owner", &o) && py::hypot(a.atf("x") - x0, a.atf("y") - y0) < 14.0)
                         .count();
                     let t = format!(
                         "Rapport d'espion sur {name} : milice {}, garnison {}, remparts niveau {}, {near} armée(s) aux environs.",

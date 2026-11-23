@@ -101,7 +101,7 @@ pub const RAIL_VILLES_5: usize = 8; // (un théâtre) villes de chaque pays que 
 fn _lignes_theatre(geo: &GeoMap) -> Val {
     let out = list![];
     for code in &geo.dept_codes {
-        let du_pays: Vec<Val> = geo.nodes.iter().filter(|n| n.at("dept") == code.as_str()).collect();
+        let du_pays: Vec<Val> = geo.nodes.iter().filter(|n| n.at_is("dept", &code)).collect();
         let Some(cap) = du_pays.iter().find(|n| n.at_is("type", "capitale")) else { continue };
         let villes = py::sorted_by_key(du_pays.iter().filter(|n| n.at_is("type", "ville")).cloned().collect::<Vec<_>>(), |n| (-n.ati("pop0"), n.ati("id")));
         let mut desservies = vec![cap.clone()];
@@ -141,7 +141,7 @@ pub const RAIL_MAX_WORKS: i64 = 2;  // chantiers de voie ferrée menés en même
 /// Python : `_owned(g, code, sec)`.
 // game/rails.py, lignes 70 à 71
 pub fn _owned(g: &Game, code: &str, sec: &Val) -> bool {
-    g.nodes.at(sec.at("a")).at("owner") == code && g.nodes.at(sec.at("b")).at("owner") == code
+    g.nodes.at(sec.at("a")).at_is("owner", &code) && g.nodes.at(sec.at("b")).at_is("owner", &code)
 }
 
 /// Villes reliées au réseau de ce camp : son chef-lieu, et les villes des tronçons achevés qu'il tient en entier.

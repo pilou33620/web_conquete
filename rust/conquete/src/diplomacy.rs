@@ -94,7 +94,7 @@ pub fn war_refusal(game: &Game, a: &str, b: &str) -> Option<String> {
     if fa.atb("overlord") {
         return Some("Un vassal ne déclare pas la guerre seul.".to_string());
     }
-    if game.factions.at(b).at("overlord") == a {
+    if game.factions.at(b).at_is("overlord", &a) {
         return Some(format!("{} est votre vassal : un lien de vassalité ne se rompt pas ainsi.", game.fname(b)));
     }
     if fa.at("truce").has(b) {
@@ -148,10 +148,10 @@ pub fn declare_war(game: &mut Game, a: &str, b: &str, quiet: bool) -> (bool, Str
         if !f.atb("alive") || o == a || o == b {
             continue;
         }
-        if f.at("overlord") == b && f.at("truce").has(a) {
+        if f.at_is("overlord", &b) && f.at("truce").has(a) {
             continue; // une trêve signée se respecte, même pour secourir un allié
         }
-        if f.at("overlord") == b
+        if f.at_is("overlord", &b)
             || (game.status(&o, b) == "alliance"
                 && f.at("rel").at(b) > 15i64
                 && !game.at_war(&o, a)
@@ -165,7 +165,7 @@ pub fn declare_war(game: &mut Game, a: &str, b: &str, quiet: bool) -> (bool, Str
             game.factions.at(a).at("war_since").set(&o, game.t);
             let texte = format!("{} honore son alliance et entre en guerre contre {}.", game.fname(&o), game.fname(a));
             game.log("diplo", &texte, &dict! {"who" => &o, "important" => true});
-        } else if f.at("overlord") == a && !game.at_war(&o, b) && !f.at("truce").has(b) {
+        } else if f.at_is("overlord", &a) && !game.at_war(&o, b) && !f.at("truce").has(b) {
             game.set_status(&o, b, "guerre");
             f.at("trade").pop(b);
             f.at("war_since").set(b, game.t);
@@ -201,7 +201,7 @@ pub fn make_peace(game: &mut Game, a: &str, b: &str) {
         }
     }
     for ar in game.armies.values() {
-        if ar.at("owner") == a || ar.at("owner") == b {
+        if ar.at_is("owner", &a) || ar.at_is("owner", &b) {
             if ar.at_is("state", "siege") && ar.at("at_node").is_some() && game.nodes.at(ar.at("at_node")).at("siege").is_none() {
                 ar.set("state", "idle");
             }
@@ -240,7 +240,7 @@ pub fn held(game: &Game, a: &str, b: &str) -> i64 {
 /// Rend une liste de captifs dict(gen, de) (les mêmes objets que f['captifs'] : rendre_general les y retire).
 // game/diplomacy.py, lignes 134 à 136
 pub fn captifs(game: &Game, a: &str, b: &str) -> Val {
-    let l: Vec<Val> = game.factions.at(a).get_or("captifs", list![]).iter().filter(|c| c.at("de") == b).collect();
+    let l: Vec<Val> = game.factions.at(a).get_or("captifs", list![]).iter().filter(|c| c.at_is("de", &b)).collect();
     Val::list(py::sorted_by_key(l, |c| -c.at("gen").at("lvl")))
 }
 
@@ -531,7 +531,7 @@ pub fn act(game: &mut Game, frm: &str, to: &Val, action: &Val, amount: &Val, giv
         if game.status(frm, &to) != "alliance" {
             return (Some(false), "Pas d'alliance à rompre.".to_string());
         }
-        if game.factions.at(&to).at("overlord") == frm || f.at("overlord") == to {
+        if game.factions.at(&to).at_is("overlord", &frm) || f.at_is("overlord", &to) {
             return (Some(false), "Un lien de vassalité ne se rompt pas ainsi.".to_string());
         }
         game.set_status(frm, &to, "paix");

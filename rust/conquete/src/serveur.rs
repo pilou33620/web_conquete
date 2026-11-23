@@ -309,7 +309,7 @@ impl App {
         }
         if c == "conduct" {
             let ar = g.armies.get(&a);
-            if ar.truthy() && ar.at("owner") == p {
+            if ar.truthy() && ar.at_is("owner", &p) {
                 ar.set("tr", body.getb("value"));
                 return Ok(dict! {"ok" => true, "msg" => if ar.atb("tr") { "L’armée traversera sans combattre en chemin." }
                     else { "L’armée ralliera ou attaquera les places sur sa route." }});
@@ -398,7 +398,7 @@ impl App {
             "mode" => {
                 let ar = g.armies.get(&a);
                 let v = body.get("value");
-                if ar.truthy() && ar.at("owner") == p && (v == "route" || v == "champs") {
+                if ar.truthy() && ar.at_is("owner", &p) && (v == "route" || v == "champs") {
                     ar.set("mode", body.at("value"));
                     return Ok(dict! {"ok" => true});
                 }
@@ -424,7 +424,7 @@ impl App {
                 let ar = g.armies.get(&a);
                 let name: String = st(body.get_or("value", "")).chars().take(40).collect();
                 let name = name.trim();
-                if ar.truthy() && ar.at("owner") == p && !name.is_empty() {
+                if ar.truthy() && ar.at_is("owner", &p) && !name.is_empty() {
                     ar.set("name", name);
                     return Ok(dict! {"ok" => true});
                 }

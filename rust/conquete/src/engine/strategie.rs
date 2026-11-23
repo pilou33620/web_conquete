@@ -99,7 +99,7 @@ impl Game {
         let p = self.player.as_str();
         (0..2i64).find(|&si| {
             let s = bt.at("sides").at(si);
-            s.at("owner") == p || s.at("armies").iter().any(|aid| self.armies.get(&aid).get("owner") == p)
+            s.at_is("owner", &p) || s.at("armies").iter().any(|aid| self.armies.get(&aid).get("owner") == p)
         })
     }
 
@@ -671,7 +671,7 @@ impl Game {
         let (lui, theirs, sit, x, y, sur);
         let b = if cible.is_dict() && cible.get("army").is_str() { self.armies.get(cible.at("army")) } else { Val::None };
         if b.truthy() {
-            if b.at("owner") == code || !self.visible_armies(code).0.has(b.at("id")) {
+            if b.at_is("owner", &code) || !self.visible_armies(code).0.has(b.at("id")) {
                 return non("Armée ennemie hors de vue.");
             }
             (x, y) = (b.atf("x"), b.atf("y"));

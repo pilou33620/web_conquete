@@ -33,7 +33,7 @@ pub fn jouer(g: &mut Game, ai: &mut AI) {
         .map(|n| (n.ati("id"), M::niveau_port(g, n.ati("id"))))
         .filter(|x| x.1 > 0)
         .collect();
-    let mes: Vec<Val> = g.flottes.values().into_iter().filter(|f| f.at("owner") == code.as_str()).collect();
+    let mes: Vec<Val> = g.flottes.values().into_iter().filter(|f| f.at_is("owner", &code)).collect();
     if ports.is_empty() && mes.is_empty() {
         return;
     }

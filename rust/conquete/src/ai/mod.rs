@@ -228,15 +228,15 @@ impl AI {
         let code = self.code.as_str();
         let mut groups: Vec<(&str, Val, Val)> = vec![];
         for a in g.armies.values() {
-            if a.at("owner") == code && a.at_is("state", "idle") && a.at("at_node").is_some() {
+            if a.at_is("owner", &code) && a.at_is("state", "idle") && a.at("at_node").is_some() {
                 let n = g.nodes.at(a.at("at_node"));
-                if n.at("owner") == code && !n.atb("siege") {
+                if n.at_is("owner", &code) && !n.atb("siege") {
                     groups.push(("army", a.at("id"), a.at("regs")));
                 }
             }
         }
         for n in g.nodes.iter() {
-            if n.at("owner") == code && n.atb("garrison") && !n.atb("siege") {
+            if n.at_is("owner", &code) && n.atb("garrison") && !n.atb("siege") {
                 groups.push(("node", n.at("id"), n.at("garrison")));
             }
         }
@@ -458,7 +458,7 @@ impl AI {
         if gap == 0 || Val::from(g.t) < self.cool.get_or(tup!["rearm", a.at("id")], -1) {
             return false;
         }
-        if a.at("at_node").is_some() && g.nodes.at(a.at("at_node")).at("owner") == code {
+        if a.at("at_node").is_some() && g.nodes.at(a.at("at_node")).at_is("owner", &code) {
             return false; // déjà dans une de nos places : l'arsenal y a donné ce qu'il pouvait
         }
         // le détour n'en vaut la peine que si l'arsenal peut réarmer une bonne part de l'armée
@@ -515,7 +515,7 @@ impl AI {
         if !wars.truthy() || f.at("res").at("livres") < 450i64 || self.rng.random() > 0.35 {
             return;
         }
-        let mine: Vec<Val> = g.armies.values().into_iter().filter(|a| a.at("owner") == code).collect();
+        let mine: Vec<Val> = g.armies.values().into_iter().filter(|a| a.at_is("owner", &code)).collect();
         let mut cands: Vec<(f64, i64)> = vec![];
         for n in g.nodes.iter() {
             if !wars.has(n.at("owner")) || n.at("fort") < 2i64 {

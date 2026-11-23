@@ -684,7 +684,7 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
         .keys()
         .into_iter()
         .map(|c| c.string())
-        .filter(|c| g.friendly(&p, c) || g.factions.at(c).at("overlord") == p.as_str() || me.at("overlord") == c.as_str())
+        .filter(|c| g.friendly(&p, c) || g.factions.at(c).at_is("overlord", &p) || me.at_is("overlord", &c))
         .collect();
     side.insert(p.clone());
 
@@ -995,7 +995,7 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
     for (code, f) in g.factions.items() {
         if code != p.as_str() {
             for c in f.get_or("captifs", list![]).iter() {
-                if c.at("de") == p.as_str() {
+                if c.at_is("de", &p) {
                     let x = _gen(&c.at("gen"));
                     x.set("par", &code);
                     pris.push(x);
@@ -1027,7 +1027,7 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
         "unit_costs" => Val::dict_from(R::UNITS().keys().into_iter().map(|u| { let c = g.unit_cost(&p, u.s()); (u, c) }).collect()),
         "unit_days" => Val::dict_from(R::UNITS().keys().into_iter().map(|u| { let d = py::round_n(g.unit_days(&p, u.s()), 1); (u, Val::from(d)) }).collect()),
         "floor" => me.get_or("_floor", dict! {}), "tax" => me.get_or("tax", 0.5), "order" => _order(g, &p),
-        "spies" => g.spies.iter().filter(|s| s.at("by") == p.as_str())
+        "spies" => g.spies.iter().filter(|s| s.at_is("by", &p))
             .map(|s| dict! {"node" => s.at("node"), "kind" => s.at("kind"), "tn" => TT::tours_left(g, s.atf("done"))}).collect::<Val>(),
         "has_port" => has_port, "famine" => me.getb("famine"), "banqueroute" => me.getb("banqueroute"),
         "stats" => Val::dict_from(me.at("stats").items().into_iter().map(|(k, v)| (k, Val::from(py::int_v(&v)))).collect()),
@@ -1143,7 +1143,7 @@ pub fn _order(g: &Game, p: &str) -> Val {
         return dict! {"avg" => 0, "unrest" => list![], "risk" => list![], "target" => 1};
     }
     let held: Val = Val::set_from(
-        g.armies.values().into_iter().filter(|a| a.at("owner") == p && a.at("at_node").is_some()).map(|a| a.at("at_node")).collect(),
+        g.armies.values().into_iter().filter(|a| a.at_is("owner", &p) && a.at("at_node").is_some()).map(|a| a.at("at_node")).collect(),
     );
     let (unrest, risk) = (list![], list![]);
     for n in mine.iter() {

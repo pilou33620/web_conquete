@@ -844,7 +844,7 @@ pub fn incoming(g: &Game, p: &str) -> Val {
             continue;
         }
         if let Some(here) = g.geo.node_of_cell(a.atf("x"), a.atf("y")) {
-            if g.nodes.at(here).at("owner") == p {
+            if g.nodes.at(here).at_is("owner", &p) {
                 continue; // (déjà sur vos terres : le bilan le dit autrement)
             }
         }
@@ -857,7 +857,7 @@ pub fn incoming(g: &Game, p: &str) -> Val {
                 g.geo.node_of_cell(x, y)
             };
             if let Some(nd) = nd {
-                if g.nodes.at(nd).at("owner") == p {
+                if g.nodes.at(nd).at_is("owner", &p) {
                     if eta(g, &a, &path.slice(None, Some(k as i64 + 1))).unwrap_or(0) <= 1 {
                         out.push(&a);
                     }
@@ -900,7 +900,7 @@ pub fn _recap(g: &mut Game) -> Val {
             continue;
         }
         let nd = g.geo.node_of_cell(a.atf("x"), a.atf("y"));
-        if nd.is_some_and(|nd| g.nodes.at(nd).at("owner") == p.as_str()) && (foes.len() as i64) < MAX_ITEMS {
+        if nd.is_some_and(|nd| g.nodes.at(nd).at_is("owner", &p)) && (foes.len() as i64) < MAX_ITEMS {
             let w = _where(g, a.atf("x"), a.atf("y"));
             let text = format!("Armée ennemie sur vos terres ({}, {} hommes), {}.", g.fname(&o), py::int(g.army_men(&a)), w);
             foes.push(dict! {"id" => a.at("id"), "x" => a.at("x"), "y" => a.at("y"), "text" => text});

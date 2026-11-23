@@ -1099,7 +1099,7 @@ pub fn vue(g: &mut Game, out: &Val, seen: &dyn Fn(f64, f64) -> bool) {
     let blocus = list![];
     for (f, nid) in blocus_actifs(g) {
         let o = f.ats("owner");
-        if g.friendly(&p, &o) || g.nodes.at(nid).at("owner") == p || seen(f.atf("x") + 0.5, f.atf("y") + 0.5) {
+        if g.friendly(&p, &o) || g.nodes.at(nid).at_is("owner", &p) || seen(f.atf("x") + 0.5, f.atf("y") + 0.5) {
             blocus.push(dict! {"flotte" => f.at("id"), "ville" => nid, "lieu" => list![f.at("x"), f.at("y")]});
         }
     }

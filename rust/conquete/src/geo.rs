@@ -176,7 +176,7 @@ pub struct Partie {
 
 /// La route maritime de ce numéro (geo.routes_mer : {id, de: [x, y], vers: [x, y], tours, nom}), ou None.
 pub fn route_mer(geo: &GeoMap, id: &str) -> Option<Val> {
-    geo.routes_mer.iter().find(|r| r.at("id") == id)
+    geo.routes_mer.iter().find(|r| r.at_is("id", &id))
 }
 
 /// Une géographie que le jeu sait encore faire (1, 2, les théâtres et le monde) : une sauvegarde d'une autre est refusée.
@@ -1925,7 +1925,7 @@ impl GeoMap {
             }
             self._ensure_connected(&mut pairs, &P);
             for code in &self.dept_codes {
-                let du_pays: Vec<Val> = self.nodes.iter().filter(|n| n.at("dept") == code.as_str()).collect();
+                let du_pays: Vec<Val> = self.nodes.iter().filter(|n| n.at_is("dept", &code)).collect();
                 let Some(cap) = du_pays.iter().find(|n| n.at_is("type", "capitale")).map(|n| n.at("id").u()) else { continue };
                 let villes = py::sorted_by_key(du_pays.iter().filter(|n| n.at_is("type", "ville")).collect::<Vec<_>>(), |n| (-n.at("pop0").i(), n.at("id").i()));
                 for v in villes.into_iter().take(ROYALES_5) {

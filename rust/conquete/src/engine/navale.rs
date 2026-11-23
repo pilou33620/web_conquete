@@ -197,8 +197,8 @@ pub fn rencontre(g: &mut Game, f: &Val) -> bool {
     let ennemi = g.flottes.values().into_iter().find(|b| pres(b) && g.at_war(&o, b.at("owner").s()));
     let Some(e) = ennemi else { return false };
     let eo = e.ats("owner");
-    let att: Val = g.flottes.values().into_iter().filter(|b| b.at("owner") == o.as_str() && (b.is(f) || pres(b))).map(|b| b.at("id")).collect();
-    let def: Val = g.flottes.values().into_iter().filter(|b| b.at("owner") == eo.as_str() && pres(b)).map(|b| b.at("id")).collect();
+    let att: Val = g.flottes.values().into_iter().filter(|b| b.at_is("owner", &o) && (b.is(f) || pres(b))).map(|b| b.at("id")).collect();
+    let def: Val = g.flottes.values().into_iter().filter(|b| b.at_is("owner", &eo) && pres(b)).map(|b| b.at("id")).collect();
     engager(g, &att, &def, x, y);
     true
 }

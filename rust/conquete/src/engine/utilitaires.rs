@@ -369,7 +369,7 @@ impl Game {
         let a = self.all_regs(code).iter().filter(|r| R::MERCS().has(r.at("type"))).count() as i64;
         let mut b = 0i64;
         for n in self.nodes.iter() {
-            if n.at("owner") == code {
+            if n.at_is("owner", &code) {
                 b += n.at("queue").iter().filter(|q| q.at_is("kind", "unit") && R::MERCS().has(q.at("what"))).count() as i64;
             }
         }
@@ -387,7 +387,7 @@ impl Game {
         }
         let d = &c.as_ref().unwrap().1;
         if !d.has(code) {
-            let cap = self.geo.nodes.iter().find(|n| n.at("dept") == code && n.at_is("type", "capitale")).map(|n| n.at("id"));
+            let cap = self.geo.nodes.iter().find(|n| n.at_is("dept", &code) && n.at_is("type", "capitale")).map(|n| n.at("id"));
             d.set(code, Val::from(cap));
         }
         d.at(code)
@@ -1117,7 +1117,7 @@ impl Game {
             }
             let held = Val::new_set();
             for a in self.armies.values() {
-                if a.at("owner") == code && a.at("at_node").is_some() {
+                if a.at_is("owner", &code) && a.at("at_node").is_some() {
                     held.push(a.at("at_node"));
                 }
             }
@@ -1228,7 +1228,7 @@ impl Game {
                 -R::WEARY_PEACE
             };
             // surextension : tenir des pays qui ne vous aiment pas épuise
-            let unruly = self.nodes.iter().filter(|n| n.at("owner") == code && n.get_or("assim", 1.0) < 0.5).count();
+            let unruly = self.nodes.iter().filter(|n| n.at_is("owner", &code) && n.get_or("assim", 1.0) < 0.5).count();
             delta += R::WEARY_PER_UNRULY * unruly as f64;
             if delta > 0.0 {
                 delta *= 1.0 + self.mod_(code, "weariness", 0.0); // suffrage universel

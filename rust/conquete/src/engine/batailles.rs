@@ -76,7 +76,7 @@ impl Game {
                 .into_iter()
                 .filter(|c| {
                     let cs = c.s();
-                    self.friendly(code, cs) || self.factions.at(c).at("overlord") == code || ov_code == *c
+                    self.friendly(code, cs) || self.factions.at(c).at_is("overlord", &code) || ov_code == *c
                 })
                 .collect(),
         );
@@ -346,7 +346,7 @@ impl Game {
             let n = self.nodes.at(&nid);
             let ns = n.at("siege");
             let (ao, no) = (a.ats("owner"), n.ats("owner"));
-            if ns.truthy() && ns.at("by") == ao && st == "siege" {
+            if ns.truthy() && ns.at_is("by", &ao) && st == "siege" {
                 continue;
             }
             if st == "idle" && !self.hostile(&ao, &no) {

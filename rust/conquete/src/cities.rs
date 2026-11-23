@@ -723,7 +723,7 @@ pub fn check(g: &Game, code: &str, n: &Val, chain: &str) -> (Option<i64>, Option
     let s = slots(n);
     let cur = s.get(chain);
     // (un magasin aux vivres commandé avant les emplacements est encore une file « build »)
-    if cur == 0i64 || n.at("queue").iter().any(|q| (q.at_is("kind", "slot") || q.at_is("kind", "build")) && q.at("what") == chain) {
+    if cur == 0i64 || n.at("queue").iter().any(|q| (q.at_is("kind", "slot") || q.at_is("kind", "build")) && q.at_is("what", &chain)) {
         return (None, Some("Déjà en chantier.".to_string()));
     }
     let lvl = if cur.is_none() { 1 } else { cur.i() + 1 };
@@ -835,7 +835,7 @@ pub fn demolish(g: &mut Game, code: &str, nid: i64, chain: &str) -> (bool, Strin
         return (false, "La place est assiégée.".to_string());
     }
     let lvl = s.pop(chain).i();
-    let q: Val = n.at("queue").iter().filter(|q| !(q.at_is("kind", "slot") && q.at("what") == chain)).collect();
+    let q: Val = n.at("queue").iter().filter(|q| !(q.at_is("kind", "slot") && q.at_is("what", &chain))).collect();
     n.set("queue", q);
     _milice(&n, chain, lvl, 0);
     if chain == "depot" {
@@ -1117,7 +1117,7 @@ pub fn set_policy(g: &mut Game, code: &str, nid: i64, k: &str, same_type: bool) 
     }
     let typ = g.geo.nodes.at(nid).ats("type");
     let targets: Vec<Val> = if same_type {
-        g.owned_nodes(code).iter().filter(|m| g.geo.nodes.at(m.at("id")).at("type") == typ).collect()
+        g.owned_nodes(code).iter().filter(|m| g.geo.nodes.at(m.at("id")).at_is("type", &typ)).collect()
     } else {
         vec![n.clone()]
     };
@@ -1238,7 +1238,7 @@ pub fn _troops(g: &Game, n: &Val, code: &str) -> bool {
     if n.atb("garrison") {
         return true;
     }
-    g.armies.values().iter().any(|a| a.at("owner") == code && a.at("at_node") == n.at("id") && a.at_is("state", "idle"))
+    g.armies.values().iter().any(|a| a.at_is("owner", &code) && a.at("at_node") == n.at("id") && a.at_is("state", "idle"))
 }
 
 /// Python : `_w_incendie(g, n, gn, s)`.

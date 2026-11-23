@@ -116,7 +116,7 @@ impl Game {
         let f = self.factions.at(code);
         let out = list![];
         for a in self.armies.values() {
-            if a.at("owner") == code && a.getb("gen") && !a.at("gen").getb("interim") {
+            if a.at_is("owner", &code) && a.getb("gen") && !a.at("gen").getb("interim") {
                 out.push(a.at("gen"));
             }
         }
@@ -237,7 +237,7 @@ impl Game {
                 let gen = b.at("gen");
                 gen.pop("retour");
                 let a = self.armies.get(&b.at("armee"));
-                if a.truthy() && a.at("owner") == code.as_str() {
+                if a.truthy() && a.at_is("owner", &code) {
                     let ag = a.get("gen");
                     if ag.truthy() && !ag.getb("interim") {
                         self.reserver(&code, &ag);
@@ -373,7 +373,7 @@ impl Game {
         let a = self.armies.get(aid);
         let res = self.factions.at(code).get_or("generaux", list![]);
         let gen = res.iter().find(|x| x.get("id") == gid && !x.getb("retour"));
-        let Some(gen) = gen.filter(|_| a.truthy() && a.at("owner") == code) else {
+        let Some(gen) = gen.filter(|_| a.truthy() && a.at_is("owner", &code)) else {
             return (false, "Général ou armée introuvable.".to_string());
         };
         let an = a.at("at_node");
@@ -623,7 +623,7 @@ impl Game {
     pub fn _faction_power(&self, code: &str) -> f64 {
         let mut p = 0.0;
         for a in self.armies.values() {
-            if a.at("owner") == code {
+            if a.at_is("owner", &code) {
                 p += self.army_power(&a, "Plaine");
             }
         }

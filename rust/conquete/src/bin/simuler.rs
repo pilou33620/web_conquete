@@ -119,8 +119,8 @@ fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64, joueur: &str, 
             chrono = std::time::Instant::now();
             for c in suivi.iter().filter(|c| g.factions.has(c.as_str())) {
                 let f = g.factions.at(c.as_str());
-                let hommes = py::sum_v(g.armies.values().iter().filter(|a| a.at("owner") == c.as_str()).map(|a| py::sum_v(a.at("regs").iter().map(|r| r.at("n")))));
-                eprintln!("   {c} {} : {} places, {:.0} livres ({:+.1}/j), {:.0} vivres ({:+.1}/j), {:.0} recrues, {} hommes en campagne, {} techniques{}", g.fname(c), g.nodes.iter().filter(|n| n.at("owner") == c.as_str()).count(),
+                let hommes = py::sum_v(g.armies.values().iter().filter(|a| a.at_is("owner", &c)).map(|a| py::sum_v(a.at("regs").iter().map(|r| r.at("n")))));
+                eprintln!("   {c} {} : {} places, {:.0} livres ({:+.1}/j), {:.0} vivres ({:+.1}/j), {:.0} recrues, {} hommes en campagne, {} techniques{}", g.fname(c), g.nodes.iter().filter(|n| n.at_is("owner", &c)).count(),
                     f.at("res").atf("livres"), f.at("income").atf("livres"), f.at("res").atf("vivres"), f.at("income").atf("vivres"), f.at("res").atf("recrues"), hommes, f.at("techs").len(), if vivant(&g, c) { "" } else { " (disparu)" });
             }
         }
@@ -167,7 +167,7 @@ fn simulate(geo: &Rc<GeoMap>, seed: i64, epoque: &str, mois: i64, joueur: &str, 
         war_months += now.iter().filter(|&&w| w).count() as i64;
         before = now;
     }
-    let places: Vec<(String, i64)> = codes.iter().map(|c| (c.clone(), g.nodes.iter().filter(|n| n.at("owner") == c.as_str()).count() as i64)).collect();
+    let places: Vec<(String, i64)> = codes.iter().map(|c| (c.clone(), g.nodes.iter().filter(|n| n.at_is("owner", &c)).count() as i64)).collect();
     if err.is_none() && g.over.truthy() {
         let texte = if g.over.is_dict() { g.over.get_or("text", "").to_string() } else { "partie terminée".to_string() };
         err = Some(format!("fin : {texte}")); // (pas une erreur)

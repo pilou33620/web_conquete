@@ -231,7 +231,7 @@ impl Game {
             }
             // minimum garanti par le département (tant que le chef-lieu tient)
             f.set("_floor", dict! {});
-            if self.nodes.at(self.capital_of(code)).at("owner") == code {
+            if self.nodes.at(self.capital_of(code)).at_is("owner", &code) {
                 let food = R::SEASON_FOOD().atf(&season) + if season == "hiver" { self.mod_(code, "winter_food", 0.0) } else { 0.0 };
                 let traits = R::FACTIONS().at(code).at("mods");
                 // (un théâtre : le minimum d'un pays suit son poids, Malte n'a pas celui de la Russie)
@@ -300,7 +300,7 @@ impl Game {
                 f.set("_tribute", 0);
             }
             let tribs = py::sum_v(
-                self.factions.values().into_iter().filter(|v| v.at("overlord") == code && v.atb("alive")).map(|v| v.at("_tribute")),
+                self.factions.values().into_iter().filter(|v| v.at_is("overlord", &code) && v.atb("alive")).map(|v| v.at("_tribute")),
             );
             tot.inc("livres", tribs);
             // entretien
@@ -869,7 +869,7 @@ impl Game {
             v.extend(n.at("garrison").iter());
         }
         for a in self.armies.values() {
-            if a.at("owner") == code {
+            if a.at_is("owner", &code) {
                 v.extend(a.at("regs").iter());
             }
         }
@@ -998,7 +998,7 @@ impl Game {
         }
         let what = what.s();
         let lvl = if what == "fort" { n.ati("fort") } else { n.ati("dev") };
-        let pending = n.at("queue").iter().filter(|q| q.at_is("kind", "build") && q.at("what") == what).count() as i64;
+        let pending = n.at("queue").iter().filter(|q| q.at_is("kind", "build") && q.at_is("what", &what)).count() as i64;
         let top = if what == "fort" { self.fort_max(code, nid) } else { b.ati("max") };
         if lvl + pending >= top {
             if what == "fort" && top < R::BASTION_LEVEL && R::BASTION_TYPES().has(gn.at("type")) {

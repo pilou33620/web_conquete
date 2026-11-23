@@ -241,7 +241,7 @@ impl AI {
         let pa = if fp > 1.0 { fp } else { 1.0 };
         for (o, of) in g.factions.items() {
             let o = o.s();
-            if o == code || !of.atb("alive") || g.friendly(code, o) || of.at("overlord") == code {
+            if o == code || !of.atb("alive") || g.friendly(code, o) || of.at_is("overlord", &code) {
                 continue;
             }
             if (f.at("rel").at(o) < -30i64 || g.faction_power(o) > 0.8 * pa) && D::borders(g, code, o) {
@@ -855,7 +855,7 @@ impl AI {
         }
         // 2) regrouper les armées au repos côte à côte
         let idle: Vec<Val> =
-            g.armies.values().into_iter().filter(|a| a.at("owner") == code && a.at_is("state", "idle") && a.at("stance") != "embuscade").collect();
+            g.armies.values().into_iter().filter(|a| a.at_is("owner", &code) && a.at_is("state", "idle") && a.at("stance") != "embuscade").collect();
         for (i, a) in idle.iter().enumerate() {
             if !g.armies.has(a.at("id")) {
                 continue;
@@ -867,7 +867,7 @@ impl AI {
             }
         }
         self._rally_stale = true; // point de ralliement recalculé seulement s'il sert (voir rally)
-        let mine: Vec<Val> = g.armies.values().into_iter().filter(|a| a.at("owner") == code).collect();
+        let mine: Vec<Val> = g.armies.values().into_iter().filter(|a| a.at_is("owner", &code)).collect();
         let taken = dict! {};
         for a in &mine {
             if a.atb("target") && a.at_is("state", "move") && a.at("target").get("node").is_some() {
@@ -957,7 +957,7 @@ impl AI {
         }
         let men = g.army_men(a);
         let mx = py::sum_v(a.at("regs").iter().map(|r| r.at("max"))).f();
-        if ai.get("then") == "garrison" && a.at("at_node").is_some() && g.nodes.at(a.at("at_node")).at("owner") == code {
+        if ai.get("then") == "garrison" && a.at("at_node").is_some() && g.nodes.at(a.at("at_node")).at_is("owner", &code) {
             g.to_garrison(&code, &a.at("id"));
             return;
         }
@@ -1062,7 +1062,7 @@ impl AI {
             let neutral: Vec<i64> = g.nodes.iter().filter(|n| n.at("owner") == R::NEUTRAL).map(|n| n.ati("id")).collect();
             if neutral.is_empty() {
                 let cap = g.capital_of(code);
-                return if g.nodes.at(&cap).at("owner") == code { cap } else { Val::from(own[0]) };
+                return if g.nodes.at(&cap).at_is("owner", &code) { cap } else { Val::from(own[0]) };
             }
             targets = neutral;
         } else {
@@ -1149,7 +1149,7 @@ impl AI {
             if n.at("fort") >= 1i64 && a.at("regs").iter().any(|r| r.at_is("type", "artillerie")) {
                 need /= 1.0 + 0.25 * n.atf("fort");
             }
-            if n.atb("siege") && n.at("siege").at("by") == code.as_str() {
+            if n.atb("siege") && n.at("siege").at_is("by", &code) {
                 need *= 0.5;
             }
             if p_army < need {
@@ -1161,7 +1161,7 @@ impl AI {
                     continue; // les premières semaines, chacun rallie d'abord ses propres villages
                 }
                 val *= 0.8 + expand;
-                if gn.at("dept") == code.as_str() {
+                if gn.at_is("dept", &code) {
                     val *= 1.6;
                 }
             } else {
@@ -1445,7 +1445,7 @@ impl AI {
                     && wars.len() < 2
                     && !f.at("truce").has(&o)
                     && D::borders(g, &code, &o)
-                    && !(of.at("overlord") == code.as_str())
+                    && !(of.at_is("overlord", &code))
                     && weary < 35.0
                 {
                     let c = calm / 80.0;
@@ -1504,7 +1504,7 @@ impl AI {
             return;
         }
         self.cool.set(&k, g.t + if o == g.player { 40.0 } else { 20.0 });
-        if o == g.player && g.proposals.iter().any(|p| p.at("frm") == self.code.as_str() && p.at("action") == action) {
+        if o == g.player && g.proposals.iter().any(|p| p.at("frm") == self.code.as_str() && p.at_is("action", &action)) {
             return;
         }
         D::act(g, &self.code, &Val::from(o), &Val::from(action), &Val::from(amount), give, get);
