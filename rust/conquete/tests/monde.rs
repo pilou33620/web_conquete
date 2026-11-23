@@ -24,6 +24,15 @@ fn carte(v: i64) -> Rc<GeoMap> {
     Rc::new(GeoMap::new(v))
 }
 
+/// Les grilles compactées de /api/map (carte monde) : le format que map.js `deRle` déplie (tests/marine.test.mjs lit les
+/// mêmes octets).
+#[test]
+fn grilles_compactees() {
+    assert_eq!(geo::rle(&[0, 0, 0, 5, 5, 7], 1), "AAMFAgcB");
+    assert_eq!(geo::rle(&[0; 200], 1), "AMgB"); // (200 en LEB128 : 0xC8 0x01)
+    assert_eq!(geo::rle(&[1, 2, 1, 2, 0, 0], 2), "AQICAAAB");
+}
+
 #[test]
 fn la_carte_monde_reunit_trois_theatres() {
     let t = std::time::Instant::now();

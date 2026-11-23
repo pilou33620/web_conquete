@@ -306,6 +306,34 @@ géographie (chemins A*, routes) n'y pèse pas.
 - Le passage d'une flotte par une route (ordre `route`, la flotte « en mer » et son tour d'arrivée) : R2.
 - Le sélecteur de théâtre et la mini-carte à trois cadres : P2 (les données sont dans /api/map).
 
+#### Page (P2) — 23/11/2026
+
+**Fait.**
+- Sélecteur de théâtre et mini-carte (`web/js/monde.js`, accroché dans `main.js`) : trois boutons (Amérique, Europe, Inde,
+  dans l'ordre de `map.theatres`) qui cadrent la caméra sur `cadre`, le bouton du théâtre regardé allumé ; une mini-carte
+  (210 × 100 px, les terres de la grille, les trois cadres, la vue en cours, un toucher y mène). En haut au centre en partie,
+  en haut à droite sur l'écran de départ ; seulement sur une carte qui a `map.theatres`.
+- Balises des routes maritimes (`map.sorties`) et comptoirs (`map.comptoirs`, montrés libres en attendant la vue du
+  commerce) : dessinés par `marine.js` (champs `sorties`, `comptoirs` de `majMarine`), traduits par `web/js/hex/marine.js` ;
+  visibles dès l'écran de départ.
+- Écran de départ de la carte Monde : les 52 pays dans la liste ; la rangée « Carte » (neuf cartes) passe à la ligne
+  (`seg wrap`) au lieu de couper « Monde ». Un panneau de place demandé avant le premier état (la partie Monde le fait
+  attendre plus d'une demi-seconde) ne plante plus (`renderPanel`).
+- **Poids de /api/map?geo=13** : les quatre grilles (terrain, dept, cellnode, river) de la carte Monde partent compactées
+  (`geo::rle` : suites valeur + longueur LEB128, en base64 ; `map.rle: true` ; dépliées par `map.js` `deRle`) ; les autres
+  cartes ne changent pas (Europe : mêmes octets ; références `serveur.json`, `geo.json`… identiques ; `monde.json` refaite).
+  24,6 Mo → 3,7 Mo avant gzip, 1,22 Mo → 1,15 Mo en gzip (le serveur le sert déjà compressé, niveau 6, calculé une fois).
+  Essais : `tests/monde.rs` `grilles_compactees`, `tests/marine.test.mjs` (mêmes octets dépliés).
+- Chargement de la page jusqu'à l'écran de départ (Chromium, cette machine) : 15,3 s avec l'ancienne carte, 13,1 s avec
+  la nouvelle (mêmes conditions, carte servie par Playwright) ; 14,8 s servie par le serveur ; Europe seule 7,5 s.
+
+**Pas fait / écarts.**
+- Le temps de chargement de la carte Monde reste surtout celui de la page (peinture des tuiles de base, territoires, niveau
+  du plateau sur 3,3 millions de cases), pas celui du transfert : à reprendre dans `map.js` (hors P2).
+- La flotte « en mer » entre deux théâtres (ordre `route`, tour d'arrivée) : la page propose l'ordre (routes qui partent
+  du théâtre de la flotte), `marine.js` montre le départ à l'horizon ; l'arrivée (`jouerMoisMarine` `arrivees`) attend la
+  vue du moteur (R2 / R4).
+
 ### Module 4 (R1 bâtiments-moteur) — 23/11/2026
 
 **Fait** (`cities.rs`, `engine/utilitaires.rs` `can_recruit`, `rules.rs` `UNIT_REQ`, une ligne dans `web/js/ui.js`) :
@@ -419,3 +447,60 @@ tests/*.test.mjs` aussi (100). Références refaites : `campagnes.json`, `ia_cam
 chantier dès le premier mois), `tours.json` (vue et `rules_payload`), `serveur.json` (`/api/map`). Banc `simuler`
 (release, IA seules, graine 1, aucune erreur) : Europe 1790 sur 3 ans 61,0 / 61,2 s avant, 65,2 / 63,2 s après
 (+3 à +7 %) ; Aquitaine 1790 sur 10 ans 21,2 s avant, 22,4 s après (+6 %).
+
+#### Page (P2) — 23/11/2026
+
+**Fait.**
+- Adaptateur `web/js/hex/marine.js` (sans three.js, testé par `tests/marine.test.mjs`) : l'état du jeu → l'état de
+  `graphismes/rendu/marine.js`. Cases [x, y] du jeu → indices de case de la fenêtre que le plateau a bâtie (`indexEn`,
+  `Plateau.local`) ; une case de mer tombée sur un hexagone de terre passe à l'hexagone d'eau voisin le plus proche ; une
+  flotte hors de la fenêtre n'est pas montrée. Camps : le joueur 0 (marine.js le suppose), les autres dans l'ordre de
+  `rules.factions`, neutre 99. Places portuaires de la fenêtre (`villes`) et leur bâtiment `port` (chaîne `port`, reste 1
+  en chantier) ; blocus `{flotte, ville, lieu}` → `{par, ville, case: l'hexagone de la place}`. Appelé à chaque état
+  (`Plateau.majLieux`) et à chaque fenêtre rebâtie (sans animation). Une flotte qui change d'hexagone (ordre du joueur,
+  tour des IA) parcourt un chemin d'hexagones d'eau (`jouerMoisMarine` `mouvements`), une bataille navale réglée sans le
+  joueur y tonne (`combats`, d'après `battle_end` `naval`) ; l'état suivant n'est posé (`majMarine`) qu'après l'animation.
+- Plateau (`hex/plateau.js`) : `marine.js` importé à part (son échec laisse le plateau ; sans WebGL, la carte de secours
+  montre une pastille par flotte) ; le calque `#etiquettes` créé avant l'import du moteur (étiquettes des flottes, balises,
+  comptoirs, scène navale), et la caméra du moteur recalée sur celle du jeu juste avant qu'elles se posent
+  (`apresCamera`), sinon elles tombaient à côté. Styles repris de `rendu.css` sous `#etiquettes` (`style.css`).
+- Fenêtre de flotte (`web/js/flottes.js`, accrochée à `ui.js` : sélection, panneau, actions `fl-…`, toucher ; à `map.js` :
+  `hitTest`, anneau de sélection et route en 2D) : composition (canons, coque, transport), coque moyenne, amiral, vitesse,
+  jours de mer, capacité, ordre ; ordres : faire voile (toucher la mer ou un port ; toucher la mer avec une flotte choisie
+  suffit), bloquer un port ennemi (toucher le port), commerce vers un comptoir, course contre un camp en guerre (refusée
+  aux flûtes), route vers un autre théâtre (carte Monde : les routes qui partent du théâtre de la flotte), lever l'ordre,
+  embarquer une armée au repos dans la place du quai, débarquer (au quai, sur la côte proche, ou sur une côte touchée),
+  fusionner avec une flotte de la même case, détacher un navire.
+- Chantier naval dans le panneau d'une place portuaire à soi (`ui.js` `nodePanel`, une ligne) : les navires de
+  `rules.navires` (ceux d'une autre ère seulement à l'approche), coût, durée en tours, refus expliqué (niveau de port :
+  port de commerce / chantier naval / arsenal de marine, découverte, siège, file pleine, ressources) ; la file nomme les
+  navires.
+- Bataille navale : les batailles `naval: true` sont mises à part (`st.navales`) : ni la carte, ni la petite scène
+  terrestre ne les montrent (`map.js setState` plantait sur `sides[].armies`). En attente, la fenêtre des batailles de
+  `strategie.js`, étendue (titre, contexte : haute mer, vent, météo ; forces : navires par type, canons, amiral, armée à
+  bord ; stratégies `strats_nav` avec description, contres et effets par phase ; « Laisser faire l'amiral ») ; la caméra
+  va sur la bataille, les flottes des deux camps sont cachées et `sceneNavale` joue l'approche. Le choix fait, la scène se
+  joue par phases (approche, bordées, abordage, fin : coulés cumulés d'après le journal, pris à l'abordage) dans une
+  fenêtre posée en bas, journal par phase, « Passer au résultat » ; puis le résultat (`resultatHtml` : navires perdus,
+  navires pris). Animations coupées : le résultat directement.
+- Partie d'essai : `tests/partie_marine.rs` (ignoré ; `CONQUETE_PARTIE_MARINE=<chemin>.json`) écrit une sauvegarde
+  (France 1790 en guerre contre la Grande-Bretagne, Brest avec un chantier naval, une corvette anglaise au large).
+  Vérifié dans Chromium : frégate mise en chantier à Brest, lancée après deux tours, déplacée par toucher, bataille navale
+  (la corvette anglaise était partie bloquer Marseille), stratégie « Ligne de file », scène, victoire ; blocus anglais
+  dessiné (voiles serrées) ; aucune erreur de console.
+
+**Manque dans web_engine (noté, pas dessiné dans le jeu).**
+- `etiquettes.js` pose ses étiquettes avec la caméra de sa boucle (`placerCamera`) : une page qui cale sa propre caméra
+  doit la recaler dans un `apresCamera` enregistré avant l'import d'`etiquettes.js` ; un réglage « caméra pilotée par la
+  page » serait plus sûr.
+- `marine.js` ne masque pas les flottes de l'état sous la scène d'une bataille navale (la page le fait), et sa scène est à
+  l'échelle d'un hexagone (la page zoome à 70 px l'hexagone) ; pas de sélection ni de survol d'une flotte (la page dessine
+  l'anneau en 2D).
+- `jouerMoisMarine` anime un trajet case à case en ligne droite : la page lui donne un chemin d'hexagones d'eau.
+
+**Pas fait / écarts.**
+- Commerce, course, route : ordres proposés et acceptés, sans effet tant que R3 / R4 ne les jouent pas ; comptoirs
+  toujours libres (pas encore de `comptoirs` dans l'état).
+- Une flotte qui sort de la fenêtre pendant son mouvement saute (pas d'animation hors fenêtre) ; une bataille navale hors
+  de la fenêtre ne tonne pas.
+- L'interception d'une armée en cabotage n'a pas de scène (le résultat seulement, comme une bataille).
