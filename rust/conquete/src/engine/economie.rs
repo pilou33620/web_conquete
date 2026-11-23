@@ -156,7 +156,14 @@ impl Game {
         if mont {
             mult *= 1.0 + self.mod_(code, "mountain_prod", 0.0);
         }
-        Val::dict_from(out.items().into_iter().map(|(k, v)| (k, &v * mult)).collect())
+        // (out est à nous seuls, une copie : multiplié sur place, mêmes clés dans le même ordre, plutôt que recopié)
+        if let Val::Dict(d) = &out {
+            for v in d.borrow_mut().values_mut() {
+                let x = &*v * mult;
+                *v = x;
+            }
+        }
+        out
     }
 
     /// Douane : les camps voisins de chacun (frontière commune) et ses places frontalières.
