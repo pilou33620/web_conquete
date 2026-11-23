@@ -56,6 +56,10 @@ bâtiments d'époque (Ancien Régime, Lumières, Empire, Révolution industriell
   (graphismes/rendu/monde.js : fumées des cheminées, drapeaux, ailes des moulins). Le décor se bâtit 2 à 3,5 fois plus vite qu'en
   2.25.1 (`toon.js`) ; en dézoomant, la fenêtre est bâtie pour une vue 1,6 fois plus large au même niveau de détail, ce qui
   épargne une reconstruction sur quatre environ.
+- **Plus d'arrêt au changement de vue** (23/11/2026, web_engine 2.28.0) : le moteur pose le décor (arbres, rochers, champs)
+  par morceaux de 6 ms par image, du centre vers les bords (`decorProgressif`) ; seuls les cases, le relief, les rivières, les
+  routes et les villes sont bâtis aussitôt. Sur toute la carte de l'Aquitaine, l'arrêt passe de 1,5 s à environ 0,3 s (mesures
+  dans un conteneur sans carte graphique, plus lent qu'un PC), puis le décor se remplit en une seconde environ.
 - **Perdu pour l'instant** (à ajouter dans web_engine si on le veut) : le paysage des siècles sur le plateau (pinèdes,
   marais drainés, vigne roussie), les enceintes dessinées autour des villes, la teinte des territoires (restent les
   liserés), les étangs plus petits qu'un hexagone, la mer qui fonce vers le large.
