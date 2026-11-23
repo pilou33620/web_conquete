@@ -496,7 +496,7 @@ fn mode_europe() {
     assert_eq!(eu["map"]["playable"].as_array().unwrap().len(), 32);
     assert!(eu.get("skirmish").is_none() && fr.get("skirmish").is_none(), "le mode Bataille n'est plus proposé");
     // seules les cartes des nouvelles parties se demandent
-    for mauvais in ["/api/map?geo=3", "/api/map?geo=4", "/api/map?geo=1", "/api/map?geo=6", "/api/map?geo=europe", "/api/map?geo=5.0"] {
+    for mauvais in ["/api/map?geo=3", "/api/map?geo=4", "/api/map?geo=1", "/api/map?geo=12", "/api/map?geo=europe", "/api/map?geo=5.0"] {
         assert_eq!(jeu.get(mauvais).0, 400, "{mauvais}");
     }
     assert_eq!(carte("/api/map?geo=").1["geo"], json!(2), "un paramètre vide ne demande rien");
