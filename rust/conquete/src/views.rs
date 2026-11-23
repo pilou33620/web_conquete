@@ -688,6 +688,14 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
         .collect();
     side.insert(p.clone());
 
+    // (SPEC-EMPIRE) les flottes du joueur et de ses alliés voient la mer autour d'elles : départs, arrivées et flottes ennemies
+    // au large (pour la vue seulement : la vision des IA, vision_sources, ne change pas)
+    for f in g.flottes.values() {
+        if side.contains(f.ats("owner").as_str()) {
+            let (x, y) = (f.atf("x") + 0.5, f.atf("y") + 0.5);
+            srcs.push(tup![x, y, 20.0]); // (sans g.wx : la météo se tire à la demande, et la vue ne doit rien changer à la partie)
+        }
+    }
     let seen = _seer(&srcs, 20.0);
 
     let nodes = list![];
