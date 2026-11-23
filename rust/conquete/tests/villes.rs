@@ -44,9 +44,13 @@ fn textes_et_cumuls() {
     let e = r.at("entrees");
     let n: Val = e.at("nombres").iter().map(|x| Val::from(CT::_n(x.f()))).collect();
     pareil("_n", &n, &r.at("n"));
+    // (SPEC-EMPIRE, module 4 : le jumeau ne connaît ni les chaînes d'Empire ni `bat` ; on compare ce qu'il connaît)
+    let connues = r.at("rules").at("chains");
     let mut fxs: Vec<Val> = vec![];
-    for c in CT::CHAINS().values() {
-        fxs.extend(c.at("levels").iter().map(|l| l.at("fx")));
+    for (k, c) in CT::CHAINS().items() {
+        if connues.has(&k) {
+            fxs.extend(c.at("levels").iter().map(|l| l.at("fx")));
+        }
     }
     fxs.extend(CT::_PFX().values());
     fxs.extend(e.at("autres_fx").iter());
@@ -60,7 +64,16 @@ fn textes_et_cumuls() {
     pareil("tours_of", &y, &r.at("tours_of"));
     let m: Val = e.at("min1").iter().map(|s| Val::from(EV::_min1(s.s()))).collect();
     pareil("_min1", &m, &r.at("min1"));
-    pareil("rules_payload", &CT::rules_payload(), &r.at("rules"));
+    let rp = CT::rules_payload();
+    for (k, c) in rp.at("chains").items() {
+        if !connues.has(&k) {
+            rp.at("chains").del(&k);
+        } else {
+            c.at("levels").iter().for_each(|l| l.del("bat"));
+        }
+    }
+    rp.set("order", rp.at("order").iter().filter(|k| connues.has(k)).collect::<Val>());
+    pareil("rules_payload", &rp, &r.at("rules"));
     pareil("_PFX", &CT::_PFX(), &r.at("pfx"));
     for (i, c) in r.at("bfx").iter().enumerate() {
         pareil(&format!("bfx {i}"), &CT::bfx(&dict! {"slots" => c.at(0)}), &c.at(1));
@@ -165,7 +178,13 @@ fn jouer(g: &mut Game, op: &Val) -> Val {
             let tr = CT::node_extra(g, &nd(g, 0), a(1).s(), &out, a(2).f());
             list![tr, out]
         }
-        "node_view" => CT::node_view(g, &nd(g, 0)),
+        "node_view" => {
+            let v = CT::node_view(g, &nd(g, 0));
+            for k in ["slots", "slot_max", "chains"] {
+                v.del(k); // (SPEC-EMPIRE, module 4 : inconnus du jumeau ; vérifiés par bancs_campagne)
+            }
+            v
+        }
         "weights" => CT::weights(g, &nd(g, 0)).into_iter().map(|(e, w)| list![e.at("id"), w]).collect(),
         "w" => {
             let gn = g.geo.nodes.at(a(1));

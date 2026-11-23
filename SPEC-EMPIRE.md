@@ -305,3 +305,57 @@ géographie (chemins A*, routes) n'y pèse pas.
 - Mousson, saisons inversées : pas de météo par théâtre (le moteur n'en a pas) ; la météo est commune aux trois cartes.
 - Le passage d'une flotte par une route (ordre `route`, la flotte « en mer » et son tour d'arrivée) : R2.
 - Le sélecteur de théâtre et la mini-carte à trois cadres : P2 (les données sont dans /api/map).
+
+### Module 4 (R1 bâtiments-moteur) — 23/11/2026
+
+**Fait** (`cities.rs`, `engine/utilitaires.rs` `can_recruit`, `rules.rs` `UNIT_REQ`, une ligne dans `web/js/ui.js`) :
+- Neuf chaînes ajoutées à `CHAINS` et à la fin de `CHAIN_ORDER` : `haras`, `fonderie`, `ecole_militaire`, `universite`,
+  `eglise`, `port` (`where: mer`), `douane` (`quai`), `phare` (`mer`, un niveau), `plantation` (`colonie`). Coûts
+  110 à 650 livres, 14 à 45 jours, entretien 0,05 à 0,4 livre par jour.
+- Chaque niveau de chaque chaîne (anciennes comprises) porte `bat`, la clé web_engine ; `bat_de(g, nid, chaîne, niveau)`
+  donne `plantation_<denrée>` (denrée de la place, `sucre` tant que le commerce ne la pose pas). `rules_payload` des
+  villes rend aussi `bat` par niveau.
+- Effets : `cav_train` (haras, seul ou avec `train`), `art_train` (fonderies : artillerie et mitrailleuses, lu par
+  `train_k`), `xp` et `train` (école), `research` (collèges, plafond `COLLEGE_MAX` porté de 0,15 à 0,25), `stab` et
+  `grow` (église, université : `stab_bonus` les lit), `trade` (port, phare, douane : revenu sensible au blocus),
+  `livres` (douane, plantation). Lus nulle part encore : `phare` (naufrages, module 2) et `denree` (module 7).
+- `where` : `mer` = un quai de la place donne sur une voie d'eau marine (`port_de_mer`, d'après `g.geo.ports` et
+  `ways[].sea`) ; `colonie` = `est_colonie(g, nid)` : le champ `theatre` de la place s'il existe (carte « monde »),
+  sinon le théâtre de la carte, ni l'Europe ni l'Aquitaine.
+- `rules.UNIT_REQ` : cavalerie → haras 1 ; artillerie → fonderie 1 ; mitrailleuses → fonderie 3 (arsenal) ; légère,
+  chasseurs, grenadiers, sapeurs → école militaire 1. Lu par `can_recruit` (`cities::unit_req_why`), un seul chemin
+  pour le joueur, l'IA et la vue (`ru` / `rw`) ; refus : « Bâtiment requis dans la ville : haras. » Un chantier
+  en cours ne compte pas. Les renforts des régiments levés ne passent pas par `can_recruit` : inchangés.
+- `chantier_ok(g, nid, niveau)` pour la marine (niveau achevé de la chaîne `port`).
+- Vue d'une place du joueur (`cities::node_view`, donc sans toucher `views.rs`) : en plus de `sl` / `sn` (gardés),
+  `slots: {chaîne: niveau}`, `slot_max`, `chains: [{id, nom, niveau, max, possible, raison, cout, tours, bat}]`, la
+  liste des chaînes **qui ont leur place ici** (spécialité, quai, port de mer, colonie) ; `niveau` 0 = rien d'achevé ;
+  `possible` / `raison` = `cities::check` (sans le prix ni la file) ; `cout` (prix du camp) et `tours` (fraction de
+  tour) : le prochain niveau, `null` au maximum ; `bat` : le niveau achevé, ou le premier s'il n'y a rien.
+  La page cache déjà les chaînes absentes de `chains` (une ligne dans `slotCheck`).
+- IA : `cities::ai_build` bâtit d'abord le bâtiment qui manque à son mélange d'armes (`ai::MIX` lu dans l'ordre,
+  `ai_besoin_mil`) dans son chef-lieu, sinon sa ville la plus peuplée qui peut le bâtir ; puis les chaînes
+  économiques comme avant. `AI.recruit` levait déjà de la ligne quand aucune place ne peut lever le type tiré : pas
+  de blocage. Un collège n'a plus de valeur pour l'IA une fois le plafond de recherche atteint.
+- Sauvegardes anciennes : rien à migrer (chaîne absente = niveau 0 ; `niveau()` lit `slots` sans le créer).
+
+**Écarts** :
+- `polytechnique` et `levee_masse` n'existent pas dans `R::TECHS` : l'École polytechnique demande `levee` (Levée en masse).
+- `garde` est ici la Garde nationale (la milice des villages) : libre, comme la ligne. L'école militaire de niveau 3
+  n'ouvre donc aucun type pour l'instant. Sapeurs : école militaire 1 (la spec ne disait rien).
+- Cuirassiers, Royal-Allemand, hussards, artillerie à cheval ne sont pas des types d'unité (ce sont des techs ou des
+  mercenaires) : seuls les niveaux 1 du haras et de la fonderie comptent, plus l'arsenal pour les mitrailleuses. Les
+  mercenaires ne demandent rien.
+- Recherche des collèges : +5 / 10 / 18 % (au lieu de 10 / 20 / 35 %) et plafond 25 %, pour ne pas emballer l'IA.
+- Douane : un revenu fixe en livres (et du commerce) ; pas branchée sur `TARIFS`.
+- Pas de tech pour les niveaux du port ni pour le phare.
+
+**Banc** (`target/release/simuler --parties 8 --epoque 1700 --graine 1`, Aquitaine, avant / après) : hommes sous
+les armes (moyenne par camp) 10 636 → 11 165 en 1720 (+5 %), 11 007 → 11 231 en 1750 (+2 %) ; technologies 17,2 →
+18,1 en 1750 (collèges). Pas de baisse : aucun réglage de coût n'a été nécessaire. Le banc compte les hommes, pas la
+part de cavalerie et d'artillerie (un peu plus de ligne au début, le temps des premiers haras et fonderies).
+
+**Pas fait** :
+- La page (P1) : le panneau de la place lit encore `sl` / `sn` / `rules.cities` ; `chains` et `bat` sont prêts.
+- Les navires (`chantier_ok` est là pour R2), la production des denrées (`denree`, R3), l'effet du phare.
+- Pas de banc sur la carte d'Europe ni sur un théâtre colonial.

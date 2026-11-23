@@ -352,6 +352,10 @@ impl Game {
         if u.atb("req") && !self.factions.at(code).at("techs").has(u.at("req")) {
             return (false, format!("Technologie requise : {}.", R::TECH().at(u.at("req")).at("name")));
         }
+        // (SPEC-EMPIRE, module 4) haras, fonderie, école militaire : le bâtiment de la place (les renforts n'y passent pas)
+        if let Some(why) = CT::unit_req_why(self, nid, typ_s) {
+            return (false, why);
+        }
         if u.getb("where") && !u.at("where").has(gn.at("dept")) {
             return (false, "Se lève seulement en Pays basque et en Béarn.".to_string());
         }

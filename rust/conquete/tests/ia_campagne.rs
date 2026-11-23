@@ -337,6 +337,8 @@ fn ia_de_campagne() {
 /// les réglages du champ de bataille tactique (`pl`, `tac_auto`, `rx` : SPEC-BATAILLE.md, 17/11/2026). Rien d'autre
 /// n'est réécrit : résultats des opérations et autres champs de l'état final doivent tomber juste.
 /// `CONQUETE_REFAIRE_IA_CAMPAGNE=1 cargo test --release -p conquete --test ia_campagne refaire -- --ignored`
+/// Avec `CONQUETE_REFAIRE_IA_CAMPAGNE=tout`, tout se réécrit, résultats compris : quand une règle change ce que fait
+/// l'IA (le recrutement lié aux bâtiments, SPEC-EMPIRE.md module 4, 23/11/2026).
 #[test]
 #[ignore]
 fn refaire() {
@@ -347,6 +349,7 @@ fn refaire() {
     let texte = std::fs::read_to_string(&chemin).unwrap();
     let r = json::loads(&texte).unwrap();
     assert_eq!(json::dumps_compact(&r), texte.trim_end(), "le fichier ne se réécrit pas à l'identique");
+    let tout = std::env::var("CONQUETE_REFAIRE_IA_CAMPAGNE").unwrap() == "tout";
     let geo = geo();
     let mut refaits = 0;
     for cas in r.at("cas").iter() {
@@ -354,15 +357,20 @@ fn refaire() {
             let ops = sc.at("ops");
             let mut g = partie(&geo, &cas.at("etat"));
             for (i, op) in ops.iter().enumerate() {
-                assert_eq!(json::dumps_ref_ordre(&jouer(&mut g, &op)), json::dumps_ref_ordre(&sc.at("res").at(i)), "scénario {k}, opération {i}");
+                let v = json::loads(&json::dumps_compact(&jouer(&mut g, &op))).unwrap();
+                if json::dumps_ref_ordre(&v) != json::dumps_ref_ordre(&sc.at("res").at(i)) {
+                    assert!(tout, "scénario {k}, opération {i}");
+                    sc.at("res").set(i as i64, v);
+                    refaits += 1;
+                }
             }
             let fin = final_(&mut g, &ops.at(0).ats(1));
             for key in sc.at("fin").keys() {
                 if json::dumps_ref_ordre(&fin.at(&key)) != json::dumps_ref_ordre(&sc.at("fin").at(&key)) {
-                    assert_eq!(key, "armies", "graine {}, scénario {k} : seul `armies` peut changer", cas.ati("seed"));
+                    assert!(tout || key == "armies", "graine {}, scénario {k} : seul `armies` peut changer", cas.ati("seed"));
                     sc.at("fin").set(&key, fin.at(&key));
                     refaits += 1;
-                    eprintln!("graine {}, scénario {k} {} : armies refait", cas.ati("seed"), json::dumps_ref(&ops));
+                    eprintln!("graine {}, scénario {k} {} : {key} refait", cas.ati("seed"), json::dumps_ref(&ops));
                 }
             }
         }
