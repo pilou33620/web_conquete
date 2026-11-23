@@ -429,7 +429,8 @@ impl Game {
             r.inc("outils", want_t * ka);
             r.dec("fer", (want_a + want_t * 0.5 * kc) * ka);
             r.dec("bois", (want_a * 0.5 + want_t * kc) * ka);
-            let acc = f.setdefault("_acc", dict! {"dt" => 0.0, "fer" => 0.0, "bois" => 0.0, "armes" => 0.0, "outils" => 0.0});
+            // (setdefault sans fabriquer à chaque pas le dict par défaut, presque toujours inutile)
+            let acc = if f.has("_acc") { f.at("_acc") } else { f.setdefault("_acc", dict! {"dt" => 0.0, "fer" => 0.0, "bois" => 0.0, "armes" => 0.0, "outils" => 0.0}) };
             acc.inc("dt", dt);
             acc.inc("fer", &(&gross_fer * dt) - (want_a + want_t * 0.5 * kc) * ka);
             acc.inc("bois", &(&gross_bois * dt) - (want_a * 0.5 + want_t * kc) * ka);
@@ -517,24 +518,33 @@ impl Game {
             if n.atb("siege") {
                 continue;
             }
-            let code = n.ats("owner");
-            let pc = match per.get(&code) {
+            // (le maître lu sans fabriquer son texte : un String par place et par quart de jour sinon)
+            let (code_v, texte);
+            code_v = n.at("owner");
+            let code: &str = match &code_v {
+                Val::Str(c) => c,
+                _ => {
+                    texte = code_v.string();
+                    &texte
+                }
+            };
+            let pc = match per.get(code) {
                 Some(pc) => pc.clone(),
                 None => {
                     let pc = if code == R::NEUTRAL {
                         (Val::from(1 + 0), 1.0, 0.0, 1.0, 1.0)
                     } else {
-                        let fc = self.factions.at(&code);
+                        let fc = self.factions.at(code);
                         let x = 0.5 - fc.get_or("tax", 0.5).f();
                         (
-                            Val::from(1.0 + self.mod_(&code, "milice", 0.0)),
-                            targets.get_or(&code, 1.0).f(),
+                            Val::from(1.0 + self.mod_(code, "milice", 0.0)),
+                            targets.get_or(code, 1.0).f(),
                             fc.get_or("weary", 0).f() / 250.0,
                             1.0 + (if x > 0.0 { x } else { 0.0 }) * 2.0,
-                            1.0 + self.mod_(&code, "stab", 0.0),
+                            1.0 + self.mod_(code, "stab", 0.0),
                         )
                     };
-                    per.insert(code.clone(), pc.clone());
+                    per.insert(code.to_string(), pc.clone());
                     pc
                 }
             };
@@ -550,7 +560,7 @@ impl Game {
             } else {
                 let mut t = tgt0;
                 t -= 0.2 * (1.0 - self.assim(&n)) + weary;
-                let friends = held.get(&n.ati("id")).is_some_and(|s| s.iter().any(|o| self.friendly(&code, o.s())));
+                let friends = held.get(&n.ati("id")).is_some_and(|s| s.iter().any(|o| self.friendly(code, o.s())));
                 if n.atb("garrison") || friends || self.geo.nodes.at(n.at("id")).at_is("type", "capitale") {
                     t += 0.15;
                 }
@@ -571,7 +581,7 @@ impl Game {
             }
             // renfort des garnisons
             if code != R::NEUTRAL && n.atb("garrison") {
-                self.replenish(&code, &n.at("garrison"), dt, 0.04);
+                self.replenish(code, &n.at("garrison"), dt, 0.04);
             }
         }
     }
