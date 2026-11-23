@@ -13,11 +13,14 @@
 // - Mois joué : une flotte qui a changé de case (ordre du joueur, tour des IA) la parcourt par un chemin d'hexagones
 //   d'eau (jouerMoisMarine), une bataille navale réglée sans le joueur y tonne ; l'état suivant n'est posé (majMarine)
 //   qu'à la fin de l'animation, sans quoi les navires coulés disparaîtraient avant de couler.
-// - Commerce (module 7, page P3) : comptoirs de l'état (marchands et camp de chacun, disputé), routes commerciales
-//   (`routes_mer` : chemins de cases → hexagones de la fenêtre, coupées en rouge), traversées : une flotte du joueur qui
-//   prend la mer (ordre `route`, elle passe dans `en_mer`) gagne la balise et s'éloigne vers l'horizon ; une flotte qui
-//   réapparaît au bout de sa traversée surgit de l'horizon (`arrivees`) ; un marchand pris par un corsaire (le joueur
-//   l'est ou le subit : événement `corsaire` du moteur) se joue en abordage (`abordages`).
+// - Commerce (module 7, pages P3 et P4) : comptoirs de l'état (marchands et camp de chacun, disputé), routes commerciales
+//   (`routes_mer` : chemins de cases → hexagones de la fenêtre, coupées en rouge), traversées de tous les camps (vue
+//   `departs` / `arrivees` du moteur, chacune jouée une fois) : une flotte qu'on voyait gagne la balise de sa route et
+//   s'éloigne vers l'horizon (ordre `route`), une autre part de la balise (`departs` de jouerMoisMarine) ; une flotte qui
+//   arrive surgit de l'horizon (`arrivees`) ; balises et flottes vont du côté du théâtre de destination (carte Monde :
+//   `md.theatres`) ; un marchand pris par un corsaire (le joueur l'est ou le subit : événement `corsaire` du moteur) se
+//   joue en abordage (`abordages`).
+// - Une flotte qui sort de la fenêtre ou y entre suit son chemin jusqu'au bord (cases négatives, `sortie` / `entree`).
 import { indexEn } from './carte-moteur.js';
 import { DIRS } from './grille.js';
 
@@ -60,6 +63,14 @@ export function trajetEau(N, a, b, max = 4000) {
   return null;
 }
 
+// La direction [dx, dz] (x vers la droite, z vers le bas, comme les cases) du centre du théâtre de la carte Monde
+// (md.theatres, cadre [x, y, largeur, hauteur]) qui contient la case b, vue de la case a ; null sans théâtre (Aquitaine, Europe).
+export function versTheatre(md, a, b) {
+  const t = b && (md.theatres || []).find(({ cadre: [x, y, w, h] }) => b[0] >= x && b[0] < x + w && b[1] >= y && b[1] < y + h);
+  return t ? [t.cadre[0] + t.cadre[2] / 2 - a[0], t.cadre[1] + t.cadre[3] / 2 - a[1]] : null;
+}
+const route = (md, id) => (md.routes_mer || []).find(r => r.id === id);
+
 // Les numéros des camps pour marine.js : le joueur 0, les autres dans l'ordre de rules.factions, « neutre » 99.
 export function numeros(rules, me) {
   const ids = new Map(me ? [[me, 0]] : []);
@@ -72,7 +83,8 @@ export function numeros(rules, me) {
 // ctx : { N (niveau du plateau), local(k) (hexagone de la grille entière → indice de la fenêtre, ou −1), places (id de la
 // place → son hexagone, grille entière), md (la carte : nodes, sorties, comptoirs), rules, couleurs (camp → couleur),
 // masque (ids de flottes cachées : la scène de bataille navale les remplace) }.
-// Chaque flotte garde son hexagone de la grille entière en _h (les mouvements du mois en partent).
+// Chaque flotte garde son hexagone de la grille entière en _h (les mouvements du mois en partent) ; celles hors de la fenêtre
+// sont dans `dehors` ([{ id, proprio, _h }] : pour les voir sortir ou entrer, à retirer avant majMarine).
 export function etatMarine(st, ctx) {
   const { N, local, places, md, rules, couleurs = {}, masque } = ctx, me = st?.me?.code || null;
   const ids = numeros(rules, me), num = o => ids.get(o) ?? 99;
@@ -88,11 +100,11 @@ export function etatMarine(st, ctx) {
     const ns = st?.nodes?.[n.id], lv = (ns?.sl || []).find(s => s[0] === 'port')?.[1];
     if (lv != null) batiments.push({ id: n.id, cle: 'port', case: c, ville: n.id, proprio: num(ns.o), reste: lv > 0 ? 0 : 1, face: 0 });
   }
-  const flottes = [];
+  const flottes = [], dehors = [];
   for (const f of st?.flottes || []) {
     if (masque?.has(f.id)) continue;
     const h = hexEau(N, f.case[0], f.case[1]), c = local(h);
-    if (c < 0) continue;
+    if (c < 0) { if (h >= 0) dehors.push({ id: f.id, proprio: num(f.proprio), _h: h }); continue; }
     const chemin = [];
     for (const [x, y] of f.chemin || []) { const k = ici(x, y); if (k >= 0 && k !== c && k !== chemin[chemin.length - 1]) chemin.push(k); }
     // (ordre `route` pendant qu'elle gagne la case de départ : marine.js la cacherait aussitôt ; elle navigue comme une autre)
@@ -105,20 +117,24 @@ export function etatMarine(st, ctx) {
   }
   const armees = [];
   for (const a of st?.armies || []) { const c = local(indexEn(N.g, a.x, a.y)); if (c >= 0) armees.push({ id: a.id, proprio: num(a.o), case: c }); }
-  // les flottes du joueur qui viennent de prendre la mer (ctx.partis : id → route) : sur la case de départ de la route,
-  // ordre `route` (marine.js les mène à la balise, vers l'horizon, puis les cache)
-  for (const [id, rid] of ctx.partis || []) {
-    const e = (st?.en_mer || []).find(x => x.id === id), r = (md.routes_mer || []).find(x => x.id === rid);
-    if (!e || !r) continue;
-    const h = hexEau(N, r.de[0], r.de[1]), c = local(h);
-    if (c >= 0) flottes.push({ id, proprio: num(e.proprio), case: c, navires: e.navires, chemin: [], armee: e.armee, ordre: 'route', _h: h });
+  // les flottes qu'on voyait et qui viennent de prendre la mer (ctx.partis : id → départ de la vue, {proprio, case, route,
+  // navires}) : sur la case de départ de la route (la balise), ordre `route` (marine.js les mène à la balise, vers l'horizon
+  // du théâtre de destination, puis les cache)
+  for (const [id, d] of ctx.partis || []) {
+    const h = hexEau(N, d.case[0], d.case[1]), c = local(h), r = route(md, d.route), vers = versTheatre(md, d.case, r?.vers);
+    if (c >= 0) flottes.push({ id, proprio: num(d.proprio), case: c, navires: d.navires, chemin: [], armee: d.armee, ordre: 'route', sortie: c, ...(vers && { vers }), _h: h });
+    else if (h >= 0) dehors.push({ id, proprio: num(d.proprio), _h: h });   // (balise hors de la fenêtre : elle y va, et sort de la vue)
   }
   // comptoirs : ceux de l'état (marchands, disputé), sinon ceux de la carte, libres (écran de départ) ; balises des routes
   // vers les autres théâtres ; routes commerciales
   const comptoirs = (st?.comptoirs ? st.comptoirs.map(c => ({ id: c.id, case: ici(c.case[0], c.case[1]), denree: c.denree, navires: c.navires.map(n => ({ proprio: num(n.proprio) })), dispute: !!c.dispute }))
     : (md.comptoirs || []).map(c => ({ id: c.id, case: ici(c.x, c.y), denree: c.denree, navires: [] }))).filter(c => c.case >= 0);
-  const sorties = (md.sorties || []).map(s => ({ case: ici(s.case[0], s.case[1]), nom: s.nom })).filter(s => s.case >= 0);
-  return { royaumes, villes, batiments, flottes, blocus, armees, comptoirs, sorties, routes_mer: routesMer(st?.routes_mer, ici, num),
+  const sorties = [];
+  for (const s of md.sorties || []) {
+    const c = ici(s.case[0], s.case[1]), vers = versTheatre(md, s.case, route(md, s.route)?.vers);
+    if (c >= 0) sorties.push({ case: c, nom: s.nom, ...(vers && { vers }) });
+  }
+  return { royaumes, villes, batiments, flottes, dehors, blocus, armees, comptoirs, sorties, routes_mer: routesMer(st?.routes_mer, ici, num),
     epoque: { cle: epoqueDe(st?.year || md.epoque?.year || 1700) }, joueur: { techs: st?.me?.techs || [] } };
 }
 
@@ -139,15 +155,23 @@ export function routesMer(routes, ici, num) {
   return out;
 }
 
-// Les scènes du commerce entre deux états pour jouerMoisMarine : arrivées d'une traversée (une flotte de `enMer`, id →
-// route, qui est revenue sur la carte), abordages (événements `corsaire` du moteur, commerce.rs : le corsaire fond sur
-// la case de la route pillée la plus proche de lui). etat : celui de marine.js (flottes de la fenêtre).
-export function scenesCommerce(enMer, st, etat, ctx) {
+// Les scènes du commerce d'un état pour jouerMoisMarine. arrivees : les arrivées de la vue (moteur) pas encore jouées, dont
+// la flotte est dans la fenêtre : elle surgit par la balise de sa case d'arrivée, du côté du théâtre d'où elle vient ;
+// departs : les départs pas encore joués d'une flotte qu'on ne voyait pas (sinon : ctx.partis), depuis la balise de sa route,
+// vers le théâtre de destination ; abordages : événements `corsaire` du moteur (commerce.rs) : le corsaire fond sur la case
+// de la route pillée la plus proche de lui. etat : celui de marine.js (flottes de la fenêtre).
+export function scenesCommerce(st, etat, ctx, { arrivees: arr = [], departs: dep = [] } = {}) {
   const { N, local, md, rules } = ctx, ids = numeros(rules, st?.me?.code), ici = (x, y) => local(hexEau(N, x, y));
-  const arrivees = [], abordages = [];
-  for (const f of etat.flottes) {
-    const r = enMer.has(f.id) && (md.routes_mer || []).find(x => x.id === enMer.get(f.id));
-    if (r) { const s = ici(r.vers[0], r.vers[1]); arrivees.push(s >= 0 ? { flotte: f.id, sortie: s } : { flotte: f.id }); }
+  const arrivees = [], abordages = [], departs = [];
+  for (const a of arr) {
+    if (!etat.flottes.some(f => f.id === a.id)) continue;
+    const s = ici(a.case[0], a.case[1]), vers = versTheatre(md, a.case, route(md, a.route)?.de);
+    arrivees.push({ flotte: a.id, ...(s >= 0 && { sortie: s }), ...(vers && { vers }) });
+  }
+  for (const d of dep) {
+    const c = ici(d.case[0], d.case[1]), vers = versTheatre(md, d.case, route(md, d.route)?.vers);
+    const armee = (st?.en_mer || []).find(e => e.id === d.id)?.armee?.effectif || 0;
+    if (c >= 0) departs.push({ case: c, proprio: ids.get(d.proprio) ?? 99, navires: d.navires, sortie: c, ...(vers && { vers }), armee });
   }
   for (const e of st?.events || []) {
     const f = e.corsaire && (st.flottes || []).find(x => x.id === e.corsaire);
@@ -157,18 +181,30 @@ export function scenesCommerce(enMer, st, etat, ctx) {
     const c = ici(x, y);
     if (c >= 0) abordages.push({ flotte: f.id, case: c, proprio: ids.get(e.victime) ?? 99 });
   }
-  return { arrivees, abordages };
+  return { arrivees, abordages, departs };
 }
 
-// Les mouvements du mois pour jouerMoisMarine : chaque flotte qui a changé d'hexagone depuis `avant` (id → hexagone de la
-// grille entière), le long d'un chemin d'eau tenu dans la fenêtre.
-export function mouvements(avant, etat, N, local) {
+// Les mouvements du mois pour jouerMoisMarine : chaque flotte (de la fenêtre ou de `dehors`) qui a changé d'hexagone depuis
+// `avant` (id → hexagone de la grille entière), le long d'un chemin d'eau. Celle qui sort de la fenêtre va jusqu'au bord
+// (trajet terminé par −1, sortie : [dx, dz] de son pas vers le dehors), celle qui y entre paraît au bord (trajet commencé
+// par −1, entree : [dx, dz] vers le dehors d'où elle vient) ; celle qui passe et repasse le bord ne montre que le morceau
+// où elle finit (ou, si elle finit dehors, celui où elle commence).
+export function mouvements(avant, etat, N, local, dehors = []) {
   const out = [];
-  for (const f of etat.flottes) {
+  for (const f of [...etat.flottes, ...dehors]) {
     const h0 = avant.get(f.id);
-    if (h0 == null || h0 === f._h) continue;
-    const t = (trajetEau(N, h0, f._h) || []).map(local);
-    if (t.length > 1 && t.every(k => k >= 0)) out.push({ flotte: true, armee: f.id, proprio: f.proprio, trajet: t });
+    if (h0 == null || h0 === f._h || (local(h0) < 0 && local(f._h) < 0)) continue;   // (dehors avant et après : pas cherché)
+    const t = trajetEau(N, h0, f._h), l = t?.map(local);
+    if (!t) continue;
+    let b = l.length - 1;
+    if (l[b] < 0) { b = l.findIndex(k => k >= 0); if (b < 0) continue; while (b + 1 < l.length && l[b + 1] >= 0) b++; }
+    let a = b;
+    while (a > 0 && l[a - 1] >= 0) a--;
+    const dir = (i, j) => { const p = N.g.liste[t[i]], q = N.g.liste[t[j]]; return [q.x - p.x, q.z - p.z]; };
+    const m = { flotte: true, armee: f.id, proprio: f.proprio, trajet: l.slice(a, b + 1) };
+    if (a > 0) { m.trajet.unshift(-1); m.entree = dir(a, a - 1); }
+    if (b < l.length - 1) { m.trajet.push(-1); m.sortie = dir(b, b + 1); }
+    out.push(m);
   }
   return out;
 }
@@ -177,40 +213,47 @@ export function mouvements(avant, etat, N, local) {
 export class Marine {
   constructor(plateau, M) {
     this.p = plateau; this.M = M;
-    this.hex = new Map();        // flotte → son hexagone (grille entière) au dernier état
+    this.hex = new Map();        // flotte → son hexagone (grille entière) au dernier état, dans la fenêtre ou hors d'elle
     this.masque = new Set();     // flottes cachées pendant la scène d'une bataille navale (flottes.js)
     this.ignorer = new Set();    // batailles navales que la page montre elle-même (flottes.js) : pas de canonnade du mois
     this.sig = ''; this.attente = null; this.t = 0; this.st = null;
-    this.enMer = new Map();      // flottes en traversée au dernier état : id → route
-    this.partis = new Map();     // flottes du joueur qui viennent de prendre la mer : id → { route, t } (montrées le temps du départ)
+    this.vus = new Set();        // départs et arrivées de la vue déjà joués (`id|route|d` ou `|a`), oubliés quand la vue ne les donne plus
+    this.partis = new Map();     // flottes qu'on voyait et qui viennent de prendre la mer : id → { d (départ de la vue), t } (montrées le temps du départ)
   }
   ctx() {
     const p = this.p;
     return { N: p.N, local: k => (k < 0 ? -1 : p.local(k)), places: new Map([...p.N.places].map(([id, q]) => [id, q.hex[0]])),
-      md: p.mp.m, rules: p.mp.rules, couleurs: p.mp.colors, masque: this.masque, partis: new Map([...this.partis].map(([id, o]) => [id, o.route])) };
+      md: p.mp.m, rules: p.mp.rules, couleurs: p.mp.colors, masque: this.masque, partis: new Map([...this.partis].map(([id, o]) => [id, o.d])) };
   }
   // un nouvel état du jeu (map.setState → plateau.majLieux) ; refaire : la fenêtre a été rebâtie, tout se repose sans
   // animation (les indices de case ont changé)
   maj(st, refaire = false) {
     if (!this.p.C || !st) return;
-    const premier = !this.st;   // (le premier état porte tout le journal : rien à rejouer)
+    const premier = !this.st, joue = !premier && !refaire;   // (le premier état porte tout le journal : rien à rejouer)
     this.st = st;
-    // traversées : une flotte qui vient de passer en mer part de la balise vers l'horizon (montrée 20 s au plus ; si on la
-    // voyait, elle gagne d'abord la balise)
-    const now = performance.now(), enMer = new Map((st.en_mer || []).map(e => [e.id, e.route]));
-    for (const [id, route] of enMer) if (!this.enMer.has(id) && !premier && !refaire) this.partis.set(id, { route, t: now });
-    for (const [id, o] of this.partis) if (!enMer.has(id) || now - o.t > 20000) this.partis.delete(id);
-    const ctx = this.ctx(), etat = etatMarine(st, ctx);
-    const mv = refaire ? [] : mouvements(this.hex, etat, ctx.N, ctx.local), ids = numeros(ctx.rules, st.me?.code);
-    const combats = refaire || premier ? [] : (st.events || []).filter(e => e.kind === 'battle_end' && e.naval && e.x != null && !this.ignorer.has(String(e.bid)))
+    // traversées (vue `departs` / `arrivees`, tous les camps) : chacune jouée une fois, pas au premier état (rechargement) ;
+    // une flotte qu'on voyait et qui part gagne la balise puis l'horizon (partis, montrée 20 s au plus), une autre part de la balise
+    const now = performance.now(), cle = (d, k) => `${d.id}|${d.route}|${k}`, ctx0 = this.ctx();
+    const neufs = k => (st[k === 'd' ? 'departs' : 'arrivees'] || []).filter(d => joue && !this.vus.has(cle(d, k)));
+    const departs = [];
+    for (const d of neufs('d')) {
+      const h = this.hex.get(d.id);
+      if (h != null && ctx0.local(h) >= 0) this.partis.set(d.id, { d: { ...d, armee: (st.en_mer || []).find(e => e.id === d.id)?.armee }, t: now });
+      else departs.push(d);
+    }
+    const arrivent = neufs('a');
+    this.vus = new Set([...(st.departs || []).map(d => cle(d, 'd')), ...(st.arrivees || []).map(d => cle(d, 'a'))]);
+    for (const [id, o] of this.partis) if ((st.flottes || []).some(f => f.id === id) || now - o.t > 20000) this.partis.delete(id);
+    const ctx = this.ctx(), { dehors, ...etat } = etatMarine(st, ctx);
+    const mv = refaire ? [] : mouvements(this.hex, etat, ctx.N, ctx.local, dehors), ids = numeros(ctx.rules, st.me?.code);
+    const combats = !joue ? [] : (st.events || []).filter(e => e.kind === 'battle_end' && e.naval && e.x != null && !this.ignorer.has(String(e.bid)))
       .map(e => ({ case: ctx.local(hexEau(ctx.N, Math.floor(e.x), Math.floor(e.y))), attaquant: ids.get(e.a) ?? 99, defenseur: ids.get(e.d) ?? 99, etape: 1 }))
       .filter(c => c.case >= 0);
-    const { arrivees, abordages } = refaire || premier ? { arrivees: [], abordages: [] } : scenesCommerce(this.enMer, st, etat, ctx);
-    this.enMer = enMer;
-    this.hex = new Map(etat.flottes.map(f => [f.id, f._h]));
+    const sc = joue ? scenesCommerce(st, etat, ctx, { arrivees: arrivent, departs }) : { arrivees: [], abordages: [], departs: [] };
+    this.hex = new Map([...etat.flottes, ...dehors].map(f => [f.id, f._h]));
     if (refaire) { clearTimeout(this.t); this.attente = null; }
-    if (mv.length || combats.length || arrivees.length || abordages.length) {
-      this.M.jouerMoisMarine({ mouvements: mv, combats, arrivees, abordages }, etat, DUREE);
+    if (mv.length || combats.length || sc.arrivees.length || sc.abordages.length || sc.departs.length) {
+      this.M.jouerMoisMarine({ mouvements: mv, combats, ...sc }, etat, DUREE);
       clearTimeout(this.t);
       this.attente = etat;
       this.t = setTimeout(() => { this.poser(this.attente); this.attente = null; }, DUREE + 500);

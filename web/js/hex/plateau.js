@@ -88,6 +88,7 @@ export class Plateau {
     this.emp = []; this.sigEmp = ''; this.posesEmp = [];   // bâtiments des emplacements : [place, hexagone, clé, eau], leurs poses
     this.habitants = new E.S.THREE.Group(); E.S.scene.add(this.habitants);
     this.vies = new Map(); this.animSale = false;           // clé → modèle animé (modernes.js) des bâtiments à l'écran
+    this.chantiers = new Map();                             // clé (avancement compris) → bâtiment en chantier posé (maillageEnChantier)
     this.vignettes = new Map();                             // clé, couleur, époque → image du bâtiment
     this.marine = E.Mar ? new Marine(this, E.Mar) : null;   // (SPEC-EMPIRE, P2 : flottes, blocus, comptoirs, balises)
     calage = () => { if (this.fen && this.camJeu) this.caler(...this.camJeu); };
@@ -176,21 +177,30 @@ export class Plateau {
         .map(k => [k, g.voisins(g.liste[k]).find(v => N.estEau(v.i))?.i ?? -1]);
     }
   }
-  // les bâtiments achevés des emplacements des places, posés autour d'elles : [id de la place, hexagone, clé web_engine,
-  // hexagone d'eau voisin ou −1]. Seules les places dont la vue donne les emplacements (`chains` : celles du joueur) en ont ;
-  // ceux du bord de l'eau d'abord, sur les hexagones qui la touchent. De près seulement (hexagones de 4 cases, décor complet).
+  // les bâtiments des emplacements des places, posés autour d'elles : [id de la place, hexagone, clé web_engine, hexagone
+  // d'eau voisin ou −1, avancement du chantier (0 à 1) ou null s'il est achevé]. Seules les places dont la vue donne les
+  // emplacements (`chains` : celles du joueur) en ont ; ceux du bord de l'eau d'abord, sur les hexagones qui la touchent. Un
+  // chantier (file `q`, `kind: "slot"`) est placé comme le bâtiment qu'il sera (un niveau de plus : à la place de l'ancien).
+  // De près seulement (hexagones de 4 cases, décor complet).
   emplacements() {
-    const N = this.N, out = [], pris = new Set();
+    const N = this.N, out = [], pris = new Set(), niv = this.mp.rules?.cities?.chains || {};
     if (!N || N.leger || !this.st?.nodes) return out;
     for (const [id, p] of N.places) {
-      const chs = this.st.nodes[id]?.chains;
+      const ns = this.st.nodes[id], chs = ns?.chains;
       if (!chs || !p.autour) continue;
-      const bats = chs.filter(c => c.niveau > 0 && c.bat).map(c => c.bat).sort((a, b) => MER.has(b) - MER.has(a));
+      const bats = [];
+      for (const c of chs) {
+        const q = ns.q?.find(e => e.kind === 'slot' && e.what === c.id);
+        // (la clé du niveau en chantier : celle des règles ; la plantation a la denrée de la place, déjà dans c.bat)
+        const bat = !q ? c.bat : c.id === 'plantation' || !c.niveau ? c.bat : niv[c.id]?.levels?.[q.lvl - 1]?.bat || c.bat;
+        if (bat && (q || c.niveau > 0)) bats.push([bat, q ? Math.round(20 * (1 - q.left / (q.total || 1))) / 20 : null]);
+      }
+      bats.sort((a, b) => MER.has(b[0]) - MER.has(a[0]));
       const libres = p.autour.filter(([k]) => !pris.has(k));
-      for (const bat of bats) {
+      for (const [bat, av] of bats) {
         const j = MER.has(bat) ? Math.max(0, libres.findIndex(([, eau]) => eau >= 0)) : 0, h = libres.splice(j, 1)[0];
         if (!h) break;
-        pris.add(h[0]); out.push([id, h[0], bat, MER.has(bat) ? h[1] : -1]);
+        pris.add(h[0]); out.push([id, h[0], bat, MER.has(bat) ? h[1] : -1, av]);
       }
     }
     return out;
@@ -279,7 +289,10 @@ export class Plateau {
     for (const id of [...this.lieux.keys()]) if (!N.places.has(id)) this.lieux.delete(id);
   }
   // (avec les bâtiments achevés de ses emplacements : la place n'est rebâtie que si ce qu'on y voit change)
-  cleLieu(ns) { return ns ? `${ns.o}|${ns.f || 0}|${ns.lv?.[0] === 'incendie' ? 1 : 0}|${ns.chains?.filter(c => c.niveau > 0).map(c => c.bat) || ''}` : '-'; }
+  // (et ses chantiers, au vingtième près : refaite quand un chantier avance, pas à chaque état)
+  cleLieu(ns) {
+    return ns ? `${ns.o}|${ns.f || 0}|${ns.lv?.[0] === 'incendie' ? 1 : 0}|${ns.chains?.filter(c => c.niveau > 0).map(c => c.bat) || ''}|${ns.chains ? ns.q?.filter(e => e.kind === 'slot').map(e => `${e.what}${e.lvl}:${Math.round(20 * e.left / (e.total || 1))}`) || '' : ''}` : '-';
+  }
   majLieux(st) {
     if (!st) return;
     this.st = st;
@@ -320,19 +333,37 @@ export class Plateau {
       this.villes.add(b.mesh); animer(b, this.mp.rules?.neutral_color || '#8d8a7a');
     }
     // (SPEC-EMPIRE, module 4) les bâtiments des emplacements, comme le village d'essai de web_engine (batiments-empire.html) ;
-    // quand leurs hexagones changent, le décor du moteur est refait dessous (majEtat), au plus quand un chantier s'achève
-    if (this.emplacements().map(e => e[1]).join() !== this.sigEmp) this.etatMoteur();
+    // quand leurs hexagones changent, le décor du moteur est refait dessous (majEtat), au plus quand un chantier commence
+    // (sinon, rien que la liste : un chantier qui avance ou s'achève reste sur son hexagone)
+    const emp = this.emplacements();
+    if (emp.map(e => e[1]).join() !== this.sigEmp) this.etatMoteur(); else this.emp = emp;
     this.posesEmp = [];
-    for (const [id, k, cle, eau] of this.emp) {
+    const chantiers = new Map();
+    for (const [id, k, cle, eau, av] of this.emp) {
       const i = this.local(k); if (i < 0) continue;
       const ns = this.lieux.get(id)?.ns, couleur = this.colors[ns?.o] || this.mp.rules?.neutral_color || '#8d8a7a', ruine = ns?.lv?.[0] === 'incendie';
-      const b = E.M.maillageBatiment({ cle, couleur, epoque, saison: this.saison, neige: this.neige, ruine }), [x, z] = this.centre(N, k);
+      const [x, z] = this.centre(N, k);
       // (le modèle a l'eau du côté +x : tourné vers l'hexagone d'eau voisin)
       const [ex, ez] = eau >= 0 ? this.centre(N, eau) : [x + 1, z], rot = Math.atan2(z - ez, ex - x);
+      if (av != null) {
+        // un chantier (animations.js maillageEnChantier : le bâtiment monté jusqu'à av, échafaudage et ouvriers) : gardé tant que
+        // son avancement ne change pas, rebâti sinon (10 à 15 ms), jeté quand le chantier finit ou sort de la fenêtre
+        const c = `${k}|${cle}|${couleur}|${epoque}|${this.saison}|${this.neige}|${av}`;
+        let m = this.chantiers.get(c);
+        const neuf = !m;
+        if (neuf) { m = E.A.maillageEnChantier({ cle, couleur, epoque, saison: this.saison, neige: this.neige, av }); this.habitants.add(m.groupe); }
+        m.groupe.position.set(x - f.ox, E.P.dessus(i), z - f.oz); m.groupe.rotation.y = rot;
+        if (neuf) E.MO.animer(m);   // (après la pose : animer relève la place de ses fumées)
+        chantiers.set(c, m);
+        continue;
+      }
+      const b = E.M.maillageBatiment({ cle, couleur, epoque, saison: this.saison, neige: this.neige, ruine });
       b.mesh.position.set(x - f.ox, E.P.dessus(i), z - f.oz); b.mesh.rotation.y = rot;
       this.villes.add(b.mesh); animer(b, couleur);
       if (!ruine) this.posesEmp.push({ cle: `${k}|${cle}|${couleur}|${epoque}`, k, bat: cle, couleur, epoque, boites: b.boites, x, z, y: b.mesh.position.y, rot });
     }
+    for (const [c, m] of this.chantiers) if (!chantiers.has(c)) E.T.jeter(m.groupe);
+    this.chantiers = chantiers;
     this.animSale = true;
     this.majVie();
     this.sale = true;

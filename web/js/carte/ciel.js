@@ -139,7 +139,11 @@ export class Ciel {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     // (de loin, la carte sert à jouer : le voile s'allège pour que les noms et les chiffres restent lisibles)
     const teinte = TEINTE_HEURE[AMB.heure], fort = clamp((z - 2) / 16, 0.45, 1);
-    if (teinte) {
+    if (teinte && mp.hex) {
+      // (plateau 3D : il est sous ce canevas, transparent ; un voile « multiply » sur du transparent le couvrirait d'un aplat
+      // opaque : un voile translucide l'assombrit, et les feux du moteur, phares compris, s'y voient)
+      ctx.fillStyle = AMB.heure === 'nuit' ? `rgba(10,16,46,${0.58 * fort})` : `rgba(140,90,50,${0.14 * fort})`; ctx.fillRect(0, 0, W, H);
+    } else if (teinte) {
       ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = eclaircir(teinte, 1 - fort); ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'source-over';
       if (AMB.heure === 'nuit') { ctx.fillStyle = `rgba(8,12,34,${0.18 * fort})`; ctx.fillRect(0, 0, W, H); }
     }

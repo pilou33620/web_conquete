@@ -878,3 +878,63 @@ avertissements du rendu logiciel, `ReadPixels`, et de three.js au niveau normal,
   reste lente sans carte graphique (0,5 à 1,5 image/s) : géométrie du moteur.
 - Pas de qualité automatique quand les animations sont coupées (le plateau n'est alors dessiné qu'aux changements).
 - Les animations de la marine et des chantiers (autre agent) n'ont pas été mesurées à part.
+
+#### Page (P4) — 23/11/2026
+
+**Fait** (`web/js/hex/marine.js`, la partie « bâtiments des emplacements » de `web/js/hex/plateau.js`, une ligne de
+`web/js/carte/ciel.js`, essais `tests/marine.test.mjs` ; tout le rendu vient de web_engine 2.30.0, rien dans `web/graphismes/`) :
+- **Sortie et entrée de vue** : `mouvements()` n'exige plus que tout le chemin d'eau tienne dans la fenêtre. Les flottes hors
+  de la fenêtre sont gardées à part (`dehors` de `etatMarine`, retiré avant `majMarine`) avec leur hexagone ; une flotte qui
+  sort de la fenêtre suit son chemin jusqu'au bord (trajet terminé par −1, `sortie: [dx, dz]` de son pas vers le dehors), une
+  qui entre paraît au bord (trajet commencé par −1, `entree: [dx, dz]`) ; celle qui passe et repasse le bord ne montre que le
+  morceau où elle finit (ou commence, si elle finit dehors). Pas de chemin cherché pour une flotte dehors avant et après.
+- **Traversées de tous les camps** d'après la vue `departs` / `arrivees` (plus `en_mer`) : chacune jouée une fois (mémoire des
+  clés `id|route|sens` de la vue précédente, oubliées quand la vue ne les donne plus ; rien au premier état, donc rien au
+  rechargement, ni quand la fenêtre est rebâtie). Une flotte qu'on voyait gagne la balise de sa route puis l'horizon (ordre
+  `route`, `flottes[].sortie` = la balise ; si la balise est hors de la fenêtre : sortie de vue vers elle) ; une flotte qu'on
+  ne voyait pas (une flotte ennemie, que la page ne suit pas) part de la balise (`departs` de `jouerMoisMarine`, comme
+  `departFlotte`, avec l'effectif embarqué quand `en_mer` le donne) ; une arrivée surgit de l'horizon par la balise de sa
+  case d'arrivée. Orientation (carte Monde) : `versTheatre(md, a, b)` = direction du centre du théâtre (`md.theatres[].cadre`)
+  qui contient b, vue de a : `sorties[].vers` (théâtre de la case `vers` de la route de la balise), `flottes[].vers` et
+  `departs[].vers` (théâtre de destination), `arrivees[].vers` (théâtre de départ) ; sur l'Aquitaine et l'Europe, rien.
+- **Abordages réels** : la page joue `abordageCorsaire` sur l'événement « marchand pris » du moteur (vérifié sans rien
+  injecter sur la partie de `tests/partie_commerce.rs` : un tour, `abordages: [{flotte: "f244", …}]`, scène vue).
+- **Bâtiments en chantier** : `emplacements()` met aussi les chantiers d'emplacement de la file (`q`, `kind: "slot"`, `lvl`,
+  `left`, `total`) avec leur avancement `1 − left / total` (au vingtième), placés comme les bâtiments achevés (même ordre :
+  le chantier est sur l'hexagone que le bâtiment occupera ; une amélioration remplace l'ancien niveau sur son hexagone) ; clé
+  du niveau en chantier : `rules.cities.chains[ch].levels[lvl − 1].bat` (plantation : `bat` de la vue, avec la denrée).
+  `maillageEnChantier({cle, couleur, epoque, saison, neige, av})` posé dans le groupe des habitants, animé (`animer`), gardé
+  tant que sa clé (hexagone, bâtiment, couleur, époque, saison, avancement) ne change pas, jeté (`jeter`) sinon ; la place
+  n'est rebâtie que quand un chantier avance d'un vingtième ou s'achève (`cleLieu`), pas à chaque image. De près seulement
+  (hexagones de 4 cases), comme les bâtiments achevés ; la qualité légère est celle de web_engine (moins de figurants).
+  Défaut corrigé en route : la liste des emplacements n'était refaite que si leurs hexagones changeaient ; un chantier achevé
+  sur le même hexagone restait en chantier.
+- **Phare et barrière** : rien à changer côté page (P1 pose les bâtiments avec `animerPose` et `animationsAncien`) : le bras de
+  la barrière de la douane s'ouvre et se rabat, le phare de La Teste-de-Buch a ses faisceaux. Défaut corrigé (`ciel.js`) : le
+  voile de l'heure (matin, soir, nuit) se posait en « multiply » sur le canevas 2D, transparent au-dessus du plateau : un
+  aplat opaque cachait tout le plateau. Avec le plateau, un voile translucide (nuit : bleu nuit à 58 % de près) ; le phare
+  éclaire à travers.
+
+**Vérifié** dans Chromium (deviceScaleFactor 1, aucune erreur de console ; seuls les avertissements « GPU stall due to
+ReadPixels » du pilote logiciel, déjà là) : partie de `tests/partie_commerce.rs` (abordage réel au premier tour) ; une copie
+avec une flotte hollandaise à 16 cases de la balise Europe → Amérique, ordre `route` (départ vers l'ouest-sud-ouest, côté
+Amérique, par `departs`), et la frégate de Brest qui prend la route (elle file vers l'ouest et sort de la vue ; deux tours
+plus tard, elle surgit de l'est, côté Europe, à la balise « vers l'Europe ») ; Aquitaine 1790, Gironde : phare et douane à
+La Teste-de-Buch, collège à Bordeaux (chantiers à 0, douane à 0,7 au tour suivant, achevée au troisième, barrière qui
+s'ouvre, phare de nuit).
+
+**Manque dans web_engine (noté).**
+- Le plateau n'a pas de nuit à lui : la page n'importe pas `meteo.js` (lumière du soleil), la scène reste éclairée en plein
+  jour sous le voile 2D (fenêtres et lanternes des maisons pas plus visibles que le jour) ; le phare reste discret, son halo
+  passe sous le voile.
+- `departFlotte` est court (de la balise à 4,5 unités au-delà, 5 s) : la flotte qui part sans qu'on la voie disparaît en
+  deux secondes, et ses navires, à l'échelle des cases du Monde, sont petits de loin.
+
+**Pas fait / écarts.**
+- Sur la carte Monde, les départs ennemis ne se voient presque jamais : la case d'un départ est la balise, en haute mer au
+  bord du théâtre, et le moteur ne montre un départ ennemi que si la case est vue (`seen` : places et armées ; les flottes ne
+  voient pas). Pour l'essai, une armée française a été posée en mer près de la balise dans la sauvegarde.
+- Les chantiers en Aquitaine durent moins d'un tour (0,4 à 0,6) : on ne voit avancer d'un tour à l'autre que ceux qui
+  attendent dans la file derrière un autre.
+- Un chantier qui commence fait encore glisser les bâtiments des chaînes suivantes d'un hexagone (placement dans l'ordre des
+  chaînes, comme en P1) ; il ne bouge plus quand il s'achève.
