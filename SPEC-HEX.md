@@ -42,6 +42,15 @@ bâtiments d'époque (Ancien Régime, Lumières, Empire, Révolution industriell
   un (`e.bx`, `e.ponts`) hors des places : ni au gué, ni au bac, ni le long d'une rivière, ni dans une ville. Pas de ferme
   ni de moulin sur une route ; pas de champs sur un hexagone de route (le moteur les y poserait par-dessus). Sur la carte
   de l'Europe (hexagones de 20 km), les villes n'ont pas de quartiers sur les voisins.
+- **Vie et fluidité** (23/11/2026) : la vie du plateau est celle du moteur (`graphismes/rendu/vie.js`, `faune.js`, `eau.js`),
+  dans son style : passants des places, charrettes des routes, vaches, cerfs et sangliers des lisières, travaux des champs selon
+  la saison, fermes et moulins, bateaux et barques, oiseaux, poissons, vagues des côtes. L'adaptateur lui donne les places, les
+  bâtiments, les routes de la fenêtre (`majVie`), et l'heure et le temps sous la caméra (`majClimat`). La vie dessinée en 2D
+  (`carte/vie.js` : figures, fumées, nuages, oiseaux, écume) ne sert plus qu'à la carte classique (sans WebGL). Le plateau est
+  dessiné à chaque image quand les animations sont permises (30 images/s au plus en qualité légère), plus du tout quand rien ne
+  change si elles sont coupées. La molette zoome en glissant (160 ms, le point sous la souris reste fixe), et le moteur reçoit
+  l'état avec la carte (`construire(C, etat)`, web_engine 2.26.0) : il ne bâtit le décor qu'une fois, si bien que le temps
+  d'arrêt quand la vue change de niveau de détail baisse de 35 à 60 %.
 - **Perdu pour l'instant** (à ajouter dans web_engine si on le veut) : le paysage des siècles sur le plateau (pinèdes,
   marais drainés, vigne roussie), les enceintes dessinées autour des villes, la teinte des territoires (restent les
   liserés), les étangs plus petits qu'un hexagone, la mer qui fonce vers le large.

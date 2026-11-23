@@ -842,17 +842,19 @@ export class MapView {
     cv.addEventListener('pointerup', up);
     cv.addEventListener('pointercancel', up);
     cv.addEventListener('pointerleave', e => { if (!pts.has(e.pointerId)) this.hover = null; });
+    const now = () => performance.now();
     cv.addEventListener('wheel', e => {
       e.preventDefault();
-      this.camAnim = null;
       this.inertia = null;
-      const [sx, sy] = pos(e);
-      const w = this.toWorld(sx, sy);
+      // zoom glissé : chaque cran repart du zoom visé (pas du zoom affiché), et la caméra y va en 160 ms, le point sous la
+      // souris restant fixe ; les petits pas d'un pavé tactile s'enchaînent sans à-coups
+      const [sx, sy] = pos(e), vise = this.molette && now() - this.molette.t < 160 ? this.molette : { ...this.cam };
+      const w = [(sx - this.vw / 2) / vise.z + vise.x, (sy - this.vh / 2) / (vise.z * this.K) + vise.y];
       const f = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0016));
-      this.cam.z = clamp(this.cam.z * f, this.minZoom(), ambiance.Z.MAX);
-      this.cam.x = w[0] - (sx - this.vw / 2) / this.cam.z;
-      this.cam.y = w[1] - (sy - this.vh / 2) / (this.cam.z * this.K);
-      this.clampCam();
+      const z = clamp(vise.z * f, this.minZoom(), ambiance.Z.MAX);
+      const to = { x: w[0] - (sx - this.vw / 2) / z, y: w[1] - (sy - this.vh / 2) / (z * this.K), z };
+      this.molette = { ...to, t: now() };
+      this.camAnim = { from: { ...this.cam }, to, t0: now(), dur: 160, molette: true };
     }, { passive: false });
   }
 
@@ -1709,9 +1711,10 @@ export class MapView {
     const dt = Math.min(0.1, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
     if (this.camAnim) {
-      const a = this.camAnim, k = Math.min(1, (now - a.t0) / a.dur), e = 1 - Math.pow(1 - k, 3);
+      const a = this.camAnim, k = clamp((now - a.t0) / a.dur, 0, 1), e = 1 - Math.pow(1 - k, 3);   // (l'heure de l'image peut précéder celle du geste : pas de recul)
       const lz = Math.log(a.from.z) + (Math.log(a.to.z) - Math.log(a.from.z)) * e;
       this.cam = { x: a.from.x + (a.to.x - a.from.x) * e, y: a.from.y + (a.to.y - a.from.y) * e, z: Math.exp(lz) };
+      if (a.molette) this.clampCam();
       if (k >= 1) this.camAnim = null;
     }
     if (this.inertia) {
