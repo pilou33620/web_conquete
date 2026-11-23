@@ -701,7 +701,8 @@ impl Game {
                 if x.is(&b) || x.getb("boat") || x.at("state") == "battle" {
                     continue;
                 }
-                if py::pow(x.atf("x") - bx, 2.0) + py::pow(x.atf("y") - by, 2.0) > r2 || !self.at_war(&x.ats("owner"), &bo) {
+                let (dx, dy) = (x.atf("x") - bx, x.atf("y") - by);
+                if py::loin(dx, dy, r2) || py::pow(dx, 2.0) + py::pow(dy, 2.0) > r2 || !self.at_war(&x.ats("owner"), &bo) {
                     continue;
                 }
                 let f = somme(x.at("regs").iter().map(|r| {
@@ -732,6 +733,9 @@ impl Game {
                 );
             }
             for (n, nx, ny) in forts.as_ref().unwrap() {
+                if py::loin(nx - bx, ny - by, rn2) {
+                    continue;
+                }
                 let no = n.at("owner");
                 if py::pow(nx - bx, 2.0) + py::pow(ny - by, 2.0) <= rn2 && self.factions.has(&no) && self.at_war(no.s(), &bo) {
                     fire += n.atf("fort");

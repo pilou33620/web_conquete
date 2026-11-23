@@ -569,12 +569,12 @@ impl Val {
     /// `v[k]` en flottant : `u.atf("x")` pour `u.x` ou `u['x']`.
     #[track_caller]
     pub fn atf(&self, k: impl Cle) -> f64 {
-        self.at(k).f()
+        self.lire(k, Val::f)
     }
     /// `v[k]` en entier.
     #[track_caller]
     pub fn ati(&self, k: impl Cle) -> i64 {
-        self.at(k).i()
+        self.lire(k, Val::i)
     }
     /// `v[k]` en texte (à soi).
     #[track_caller]
@@ -584,12 +584,27 @@ impl Val {
     /// `bool(v[k])` : la véracité de `v[k]` (`if u.seen:`).
     #[track_caller]
     pub fn atb(&self, k: impl Cle) -> bool {
-        self.at(k).truthy()
+        self.lire(k, Val::truthy)
+    }
+    /// `lire(v[k])`, sans copier la valeur d'un dict (ni compter puis décompter sa référence) : pour atf, ati, atb.
+    #[inline]
+    #[track_caller]
+    fn lire<R>(&self, k: impl Cle, lire: impl FnOnce(&Val) -> R) -> R {
+        match self {
+            Val::Dict(d) => match k.dans(&d.borrow()) {
+                Some(v) => lire(v),
+                None => self.manque(&k.val()),
+            },
+            _ => lire(&self.at(k)),
+        }
     }
     /// `bool(d.get(k))` : faux si la clé manque (`if a.get('qrt'):`).
     #[track_caller]
     pub fn getb(&self, k: impl Cle) -> bool {
-        self.get(k).truthy()
+        match self {
+            Val::Dict(d) => k.dans(&d.borrow()).is_some_and(Val::truthy),
+            _ => self.sans_get(&k.val()),
+        }
     }
     /// `d.get(k)` : None si la clé manque. (Sur None lui-même : None, pour `(d.get('a') or {}).get('b')`.)
     #[inline]

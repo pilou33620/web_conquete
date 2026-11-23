@@ -1121,11 +1121,12 @@ impl AI {
         let fixe = g.geo_fixe();
         let mut postes = None; // (les armées au repos de chaque place : la boucle ne déplace personne)
         let maitres = g.maitres(); // (la boucle ne prend aucune place)
+        let guerre = wars.vec(); // (wars.has de chaque place, sans recopier la clé à chaque fois)
         for (i, o) in maitres.iter().enumerate() {
             if *o == code {
                 continue;
             }
-            if *o != R::NEUTRAL && !wars.has(o) {
+            if *o != R::NEUTRAL && !guerre.contains(o) {
                 continue;
             }
             let n = g.nodes.at(i);

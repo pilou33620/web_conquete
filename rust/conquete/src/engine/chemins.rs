@@ -1218,10 +1218,12 @@ impl Game {
     // engine.py, lignes 2647 à 2649
     pub fn besiegers(&self, n: &Val) -> Val {
         let s = n.at("siege");
+        let nid = n.at("id"); // (lu une fois, pas pour chaque armée : appelé à chaque pas pour chaque siège)
         self.armies
+            .table()
             .values()
-            .into_iter()
-            .filter(|a| a.at("at_node") == n.at("id") && a.at("state") == "siege" && a.at("owner") == s.at("by"))
+            .filter(|a| a.at("at_node") == nid && a.at_is("state", "siege") && a.at("owner") == s.at("by"))
+            .cloned()
             .collect()
     }
 
