@@ -652,3 +652,60 @@ le reste de l'écart vient de parties qui divergent (les IA plus riches font dav
 ports de mer de la carte relevés une fois par carte, `revenus` recalculé à l'accord seulement pour le joueur.
 Gains faciles pour le tour des IA : aucun de sûr relevé ici sans profileur (pas de `perf` sur cette machine).
 
+
+#### Page (P3) — 23/11/2026
+
+**Fait.**
+- Adaptateur `web/js/hex/marine.js` : comptoirs de l'état (`st.comptoirs` : marchands numérotés comme les camps,
+  `dispute`), ceux de la carte (`md.comptoirs`, libres) restant pour l'écran de départ ; routes commerciales `routes_mer`
+  traduites en chemins d'hexagones d'eau de la fenêtre (`routesMer` : sans doublon à la suite, coupées en morceaux `id#k`
+  quand le chemin sort de la fenêtre et y revient ; `coupee` passé tel quel : marine.js la dessine en rouge). Une flotte
+  encore sur la carte avec l'ordre `route` navigue comme une autre (marine.js la cacherait aussitôt) ; quand elle passe
+  dans `en_mer`, elle est montrée 20 s sur la case de départ de sa route avec l'ordre `route` : marine.js la mène de la
+  balise à l'horizon (si on la voyait, elle gagne d'abord la balise par un chemin d'eau). Une flotte de `en_mer` revenue
+  dans `flottes` surgit de l'horizon par la balise de sa case d'arrivée (`jouerMoisMarine` `arrivees`). Abordages
+  (`abordages`) : d'après l'événement du moteur.
+- Moteur (`engine/commerce.rs`, une ligne commentée) : l'événement « des corsaires prennent un navire marchand » (déjà
+  émis quand le joueur est le corsaire ou la victime) porte `corsaire` (la flotte), `route`, `victime` ; la page joue
+  l'abordage sur la case de la route pillée la plus proche du corsaire, le marchand aux couleurs de la victime.
+- Fenêtre de flotte (`flottes.js`) : comptoirs du théâtre de la flotte (denrée et prix du marché, places prises avec la
+  couleur de chaque camp, libres, complet, disputé ; « Commercer » y mène la flotte, refusé sans flûtes ; « en cours »
+  pour son comptoir) ; « Course contre » : tout camp vivant ni allié ni vassal (« en guerre » signalé), avec le rappel
+  du risque d'incident diplomatique ; routes vers un autre théâtre avec leur durée (« 2 tours en mer »), l'ordre en cours
+  nommé ; une flotte en traversée garde sa fenêtre : « En mer, arrivée dans N tours (date) », navires, armée à bord.
+- Panneau « Commerce maritime », au bas de la fenêtre Commerce (montré dès qu'il y a comptoirs, routes, flottes en mer
+  ou revenu de la mer) : revenu `me.mer` (plantations, comptoirs, routes, corsaires, par tour ou par jour), prix mondial
+  de chaque denrée avec offre, demande et une flèche de tendance (prix d'avant son dernier changement, retenu par la page
+  à chaque état : `Flottes.majPrix`), routes commerciales du joueur (ports, partenaire, valeur, ouverte ou coupée par
+  blocus / flotte ennemie / corsaire, « Voir » cadre la carte sur la route), flottes en mer du joueur et de ses alliés
+  (« Fenêtre » ouvre celle de la flotte).
+- Diplomatie : badge « Casus belli » sur le camp contre lequel le joueur en tient un (`factions[].cb`).
+- Partie d'essai : `tests/partie_commerce.rs` (ignoré ; `CONQUETE_PARTIE_COMMERCE=<chemin>.json`) : carte Monde 1700, la
+  France, accord avec la Grande-Bretagne (route Cherbourg – Aberdeen), flûtes françaises et espagnoles à Mogador, corsaire
+  espagnol sur la route française près de Cherbourg, casus belli contre l'Espagne, frégate et deux flûtes avec une armée
+  à Cherbourg. Vérifié dans Chromium : comptoir occupé (2/3), fenêtre des flûtes, panneau, route coupée en rouge et son
+  corsaire, abordage, badge, ordre `route` (départ de la balise vers l'horizon, fenêtre « en mer »), arrivée en Amérique
+  deux tours plus tard par l'horizon ; aucune erreur de console. Essais de l'adaptateur : `tests/marine.test.mjs`.
+- Défaut signalé (Brest sans son chantier naval sur le plateau, partie d'essai de la marine) : pas un défaut de la page.
+  Le plateau pose les bâtiments d'après `chains` de la vue, et `cities::chains_view` n'y met que les chaînes qui
+  « vont » à la place (`cities::fits`) ; pour la chaîne `port` (`where: mer`), `fits` exige un quai sur une voie d'eau
+  marine (`geo.ports`, `cities::port_de_mer`), que Brest n'a pas sur la carte d'Europe. La partie d'essai pose le port au
+  niveau 2 à la main ; la marine le voit (`marine::niveau_port` ne demande qu'un mouillage), la vue des emplacements non.
+  Sur la carte d'Europe, 298 des 337 places à mouillage n'ont pas ce quai (Brest, Alger, Ostende, Bergen…), 423 sur 511
+  sur la carte Monde : elles ne peuvent pas bâtir de port, donc pas de navire, et n'ont pas de route commerciale
+  (`commerce::port_de_mer`). À trancher côté moteur (R1 / R3) : `fits` « mer » sur `marine::case_port` (mouillage) ?
+  Cherbourg, qui a ce quai, montre bien son chantier naval.
+
+**Manque dans web_engine (noté, pas dessiné dans le jeu).**
+- Le ruban d'une route commerciale a une largeur fixe dans la scène : de loin (toute la Manche à l'écran), il ne se voit
+  presque plus ; seule l'étiquette « route coupée » reste lisible.
+- La flotte qui part vers l'horizon s'éloigne vers le bord de la fenêtre le plus proche de la balise (`versLarge`), pas
+  vers le théâtre où elle va (sur la carte Monde, la balise est en pleine mer) ; même chose pour l'arrivée.
+- `abordageCorsaire` sur un marchand de passage : la page ne sait pas où passe le marchand, elle donne la case de la
+  route la plus proche du corsaire.
+
+**Pas fait / écarts.**
+- Les flottes ennemies qui prennent la mer disparaissent sans scène (la vue ne donne `en_mer` que pour le joueur et ses
+  alliés) ; une flotte en mer hors de la fenêtre ne part ni n'arrive à l'écran (pas d'animation hors fenêtre).
+- La tendance des prix se compte d'un état à l'autre dans la page : elle repart de zéro au rechargement.
+- Le défaut de Brest n'est pas corrigé (moteur, voir plus haut).

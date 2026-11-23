@@ -669,6 +669,8 @@ body.modal-event #proposals { display: none; }   /* une décision à prendre : l
 .fl-compo { width: 100%; font-size: 14px; margin: 2px 0 6px; } .fl-compo td, .fl-compo th { text-align: left; }
 .fl-sel { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--papier-2); }
 .fl-sel select { flex: 1; min-width: 0; background: var(--prusse-2); color: var(--papier); border: 1px solid var(--hair); border-radius: 6px; padding: 6px; font: inherit; }
+.fl-pav { display: inline-block; width: 10px; height: 10px; margin-right: 2px; border: 1px solid #24180f; border-radius: 2px; vertical-align: -1px; }
+.fl-hausse { color: #9fdc8a; } .fl-baisse { color: #ff9a85; }
 #modal.scene { background: transparent; place-items: end center; pointer-events: none; }
 #modal.scene .modal-card { pointer-events: auto; width: min(760px, 100%); max-height: 38%; }
 #monde { position: absolute; left: 50%; transform: translateX(-50%); top: calc(var(--tb-h) + var(--safe-t) + 10px); z-index: 15; display: flex; gap: 8px; align-items: flex-start; }

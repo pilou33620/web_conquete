@@ -228,6 +228,7 @@ export class UI {
     st.navales = (st.battles || []).filter(b => b.naval); st.battles = (st.battles || []).filter(b => !b.naval);
     this.map.setState(st);
     this.flottes.majBataille(st);
+    this.flottes.majPrix(st);   // (SPEC-EMPIRE, P3 : la tendance des prix des denrées)
     if (first || renamed) {
       const f = this.rules.factions[st.me.code];
       this.$('tb-faction').innerHTML = `${coat(f.color, st.me.code)}<div><div class="fname">${esc(f.name)}</div><div class="ftitle">${esc(f.title)}</div></div>`;
@@ -1797,7 +1798,7 @@ export class UI {
         <div class="btns"><button class="btn" data-act="diplo" data-to="${f.code}" data-v="prisonniers" ${held || theirs || (st.me.generaux?.captifs || []).some(x => x.de === f.code) || (st.me.generaux?.pris || []).some(x => x.par === f.code) ? '' : 'disabled'} title="Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.">Échanger les prisonniers</button>${enrollBtn(f.code, held, 'Enrôler ses prisonniers')}</div>`;
       return `<div class="dcard">${coat(R.color, f.code)}<div>
           <div class="dn">${R.name}</div><div class="dt">${R.title}, chef-lieu ${R.capital}</div>
-          <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}${f.ps ? `<span class="chip ally" title="Vos armées peuvent traverser ses terres">Passage chez lui jusqu’au ${f.ps}</span>` : ''}${f.pg ? `<span class="chip" title="Ses armées peuvent traverser vos terres">Vous lui accordez le passage jusqu’au ${f.pg}</span>` : ''}${f.cl ? '<span class="chip" title="Sans droit de passage, vos armées ne traversent ni ses places ni ses campagnes : elles contournent, ou passent en force (déclaration de guerre)">Terres fermées</span>' : ''}</div>
+          <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.cb ? '<span class="chip war" title="Un incident de corsaires vous offre un casus belli : lui déclarer la guerre ne fâcherait personne">Casus belli</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}${f.ps ? `<span class="chip ally" title="Vos armées peuvent traverser ses terres">Passage chez lui jusqu’au ${f.ps}</span>` : ''}${f.pg ? `<span class="chip" title="Ses armées peuvent traverser vos terres">Vous lui accordez le passage jusqu’au ${f.pg}</span>` : ''}${f.cl ? '<span class="chip" title="Sans droit de passage, vos armées ne traversent ni ses places ni ses campagnes : elles contournent, ou passent en force (déclaration de guerre)">Terres fermées</span>' : ''}</div>
           <div class="row"><span class="lab">${relLabel(f.rel)} (${fmt(f.rel)})</span><div class="relbar" style="flex:1;min-width:120px"><i style="left:${relPos}%"></i></div></div>
           <div class="small">Puissance estimée ${fmt(f.power)} (vous ${fmt(myPow)}), ${f.nodes} villes et villages, ${f.techs} technologies.</div>
           ${maisonTxt(f.maison)}
@@ -1821,7 +1822,7 @@ export class UI {
       Vous laissez passer : ${list(others.filter(f => !f.cg).map(f => why(f, f.pg)))} ; vos terres sont fermées à : ${list(others.filter(f => f.cg).map(nm))}.
       <span class="muted">Sans droit de passage (ni alliance, ni guerre), on contourne ses terres, ou l’on passe en force : c’est la guerre.</span></div>`;
     const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${hegLine}${neuLine}${passLine}${maisonTxt(st.factions.find(f => f.code === me).maison)}<div class="diplo-list">${cards}</div>`;
-    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner, f.ps, f.pg, f.cl, f.cg, f.maison]),
+    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner, f.ps, f.pg, f.cl, f.cg, f.maison, f.cb]),
       pris, fmt1(st.me.prisoner_upkeep || 0), Math.round(myPow / 500), st.heg])];
   }
 
@@ -1836,6 +1837,7 @@ export class UI {
     const resOpts = sel => ['livres', 'vivres', 'fer', 'bois', 'armes', 'outils', 'recrues'].map(r => `<option value="${r}" ${r === sel ? 'selected' : ''}>${this.rules.res_label[r]}</option>`).join('');
     const trades = st.factions.filter(f => f.trade);
     const dn = me.douane, dnCout = (dn.front || 0) * dn.cout_place;   // solde des douaniers, postés ou non
+    const mer = this.flottes.commerceHtml();   // (SPEC-EMPIRE, P3) le commerce maritime : denrées, revenus, routes, flottes en mer
     const html = `<h2 class="m-title" id="m-title">Commerce</h2>
       <p class="m-sub">${me.has_port ? 'Vous tenez un port : les négociants vous font de bons prix.' : 'Sans port, les négociants prennent une forte marge. Prenez Bordeaux, Libourne, Bayonne ou un autre port pour mieux commercer.'}</p>
       <div class="two"><div>
@@ -1857,9 +1859,9 @@ export class UI {
         <div class="row"><label class="small"><input type="checkbox" data-douane="douaniers" ${dn.on ? 'checked' : ''}> Douaniers : ${fmt1(this.per(dnCout))} livres ${this.perU} (${dn.front || 0} places frontalières)</label></div>
         <p class="small">Recettes : +${fmt1(this.per(dn.recette || 0))} livres ${this.perU} · perdu en contrebande : −${fmt1(this.per(dn.contrebande || 0))}</p>
         <p class="muted small">Le tarif rapporte sur le commerce de vos voisins, mais vos partenaires gagnent moins à commercer avec vous, vos voisins vous en veulent et la contrebande grandit avec lui ; les douaniers la divisent par deux.</p>
-      </div></div>`;
+      </div></div>${mer[0]}`;
     return [html, JSON.stringify([Object.values(st.market.prices).map(p => p.toFixed(2)), Object.values(me.res).map(Math.round), partners.map(f => f.code), trades.map(f => f.code),
-      [dn.tarif, dn.on, dn.front, fmt1(this.per(dn.recette || 0)), fmt1(this.per(dn.contrebande || 0)), fmt1(this.per(dnCout))]])];
+      [dn.tarif, dn.on, dn.front, fmt1(this.per(dn.recette || 0)), fmt1(this.per(dn.contrebande || 0)), fmt1(this.per(dnCout))], mer[1]])];
   }
 
   prodModal() {

@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { installer } from './dom.mjs';
 import { Niveau, cadrer, indexEn } from '../web/js/hex/carte-moteur.js';
-import { hexEau, trajetEau, numeros, etatMarine, mouvements } from '../web/js/hex/marine.js';
+import { hexEau, trajetEau, numeros, etatMarine, mouvements, routesMer, scenesCommerce } from '../web/js/hex/marine.js';
 
 installer();
 const JS = join(dirname(fileURLToPath(import.meta.url)), '..', 'web', 'js');
@@ -84,6 +84,51 @@ test('le mois des flottes : un chemin d’eau de l’ancienne case à la nouvell
   assert.equal(mv.length, 1);
   assert.deepEqual([mv[0].flotte, mv[0].armee, mv[0].trajet[0], mv[0].trajet.at(-1)], [true, 'f1', avant.flottes[0].case, apres.flottes[0].case]);
   assert.equal(mouvements(new Map([['f1', apres.flottes[0]._h]]), apres, N, local).length, 0, 'immobile : rien à jouer');
+});
+
+test('commerce : comptoirs de l’état, routes commerciales coupées par la fenêtre', () => {
+  const tout = { ...ctx, local: k => (k < 0 ? -1 : k) };
+  const st = { year: 1700, me: { code: 'GB', techs: [] }, nodes: [], armies: [], blocus: [], flottes: [],
+    comptoirs: [{ id: 'c1', nom: 'Comptoir', case: [5, 40], denree: 'sucre', places: 3, navires: [{ flotte: 'f9', proprio: 'FR' }, { flotte: 'f8', proprio: 'GB' }], dispute: false }],
+    routes_mer: [{ id: 'FR-GB', chemin: [[2, 2], [2, 3], [2, 4], [3, 8], [3, 12]], proprio: 'FR', partenaire: 'GB', coupee: 'corsaire' }] };
+  const e = etatMarine(st, tout);
+  // le comptoir de l'état (pas celui de la carte) : ses marchands, numérotés comme les camps
+  assert.deepEqual(e.comptoirs, [{ id: 'c1', case: hexEau(N, 5, 40), denree: 'sucre', navires: [{ proprio: 1 }, { proprio: 0 }], dispute: false }]);
+  // la route : des hexagones d'eau sans doublon à la suite, coupée (marine.js la dessine en rouge)
+  assert.equal(e.routes_mer.length, 1);
+  const r = e.routes_mer[0];
+  assert.deepEqual([r.id, r.proprio, r.coupee], ['FR-GB#0', 1, 'corsaire']);
+  assert.ok(r.chemin.length >= 2 && r.chemin.every((k, i) => N.estEau(k) && k !== r.chemin[i - 1]));
+  // une route qui sort de la fenêtre et y revient : deux morceaux, aucun hexagone hors de la fenêtre
+  const ici = (x, y) => (y >= 10 && y < 20 ? -1 : hexEau(N, x, y));
+  const m = routesMer([{ id: 'r', proprio: 'FR', coupee: null, chemin: [[2, 2], [2, 6], [2, 15], [2, 25], [2, 30]] }], ici, () => 1);
+  assert.deepEqual(m.map(x => [x.id, x.chemin.length]), [['r#0', 2], ['r#1', 2]]);
+  assert.deepEqual(routesMer([{ id: 'r', chemin: [[2, 2]] }], ici, () => 1), [], 'un seul hexagone : rien');
+  // hors de la fenêtre (ctx.local du banc) : ni comptoir, ni route
+  const d = etatMarine(st, ctx);
+  assert.equal(d.comptoirs.length + d.routes_mer.length, 0);
+});
+
+test('commerce : traversée (départ vers la balise, arrivée par l’horizon) et abordage d’un corsaire', () => {
+  const tout = { ...ctx, local: k => (k < 0 ? -1 : k), md: { ...md, routes_mer: [{ id: 'europe-amerique', de: [3, 5], vers: [4, 44], tours: 2, nom: 'vers l’Amérique' }] } };
+  const flotte = (id, c, o = 'GB') => ({ id, proprio: o, case: c, navires: { fregate: 1 }, chemin: [], ordre: '' });
+  // en route vers la balise (ordre `route`, encore sur la carte) : marine.js ne doit pas la cacher
+  const enRoute = etatMarine({ year: 1700, me: { code: 'GB' }, nodes: [], armies: [], flottes: [{ ...flotte('f1', [10, 10]), ordre: 'route' }] }, tout);
+  assert.equal(enRoute.flottes[0].ordre, '');
+  // partie en mer : montrée sur la case de départ de la route, ordre `route` (vers l'horizon)
+  const st1 = { year: 1700, me: { code: 'GB' }, nodes: [], armies: [], flottes: [], en_mer: [{ id: 'f1', proprio: 'GB', route: 'europe-amerique', arrivee: 2, navires: { fregate: 1 }, armee: null }] };
+  const e1 = etatMarine(st1, { ...tout, partis: new Map([['f1', 'europe-amerique']]) });
+  assert.deepEqual(e1.flottes.map(f => [f.id, f.ordre, f.case]), [['f1', 'route', hexEau(N, 3, 5)]]);
+  assert.equal(etatMarine(st1, tout).flottes.length, 0, 'sans départ vu : rien');
+  // revenue : elle surgit par la balise de sa case d'arrivée
+  const st2 = { year: 1700, me: { code: 'GB' }, nodes: [], armies: [], flottes: [flotte('f1', [4, 44]), flotte('c1', [6, 20], 'FR')], en_mer: [],
+    routes_mer: [{ id: 'FR-GB', chemin: [[2, 2], [5, 21], [9, 30]], proprio: 'FR', partenaire: 'GB', coupee: 'corsaire' }],
+    events: [{ kind: 'eco', corsaire: 'c1', route: 'FR-GB', victime: 'GB', text: '…' }, { kind: 'eco', text: 'autre' }] };
+  const e2 = etatMarine(st2, tout), sc = scenesCommerce(new Map([['f1', 'europe-amerique']]), st2, e2, tout);
+  assert.deepEqual(sc.arrivees, [{ flotte: 'f1', sortie: hexEau(N, 4, 44) }]);
+  // l'abordage : sur la case de la route pillée la plus proche du corsaire, le marchand aux couleurs de la victime
+  assert.deepEqual(sc.abordages, [{ flotte: 'c1', case: hexEau(N, 5, 21), proprio: 0 }]);
+  assert.deepEqual(scenesCommerce(new Map(), { ...st2, events: [] }, e2, tout), { arrivees: [], abordages: [] });
 });
 
 test('les grilles compactées de la carte Monde se déplient (geo.rs rle)', () => {

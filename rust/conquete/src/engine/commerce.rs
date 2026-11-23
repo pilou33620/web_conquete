@@ -383,7 +383,9 @@ pub fn mois(g: &mut Game) {
             if o == g.player || cible == g.player {
                 let t = format!("Des corsaires {} prennent un navire marchand {} sur la route {} – {}.", R::de(&g.fname(&o)),
                     R::de(&g.fname(&cible)), g.fname(&r.ats("proprio")), g.fname(&r.ats("partenaire")));
-                g.log("eco", &t, &dict! {"x" => f.at("x"), "y" => f.at("y"), "who" => &o, "important" => cible == g.player});
+                // (page P3) corsaire, route et victime : la page y joue l'abordage (hex/marine.js scenesCommerce)
+                g.log("eco", &t, &dict! {"x" => f.at("x"), "y" => f.at("y"), "who" => &o, "important" => cible == g.player,
+                    "extra" => dict!{"corsaire" => f.at("id"), "route" => r.at("id"), "victime" => &cible}});
             }
         }
     }
