@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { installer } from './dom.mjs';
 import { Niveau, cadrer, indexEn } from '../web/js/hex/carte-moteur.js';
-import { hexEau, trajetEau, numeros, etatMarine, mouvements, routesMer, scenesCommerce } from '../web/js/hex/marine.js';
+import { hexEau, trajetEau, numeros, etatMarine, mouvements, routesMer, scenesCommerce, versTheatre } from '../web/js/hex/marine.js';
 
 installer();
 const JS = join(dirname(fileURLToPath(import.meta.url)), '..', 'web', 'js');
@@ -86,6 +86,27 @@ test('le mois des flottes : un chemin d’eau de l’ancienne case à la nouvell
   assert.equal(mouvements(new Map([['f1', apres.flottes[0]._h]]), apres, N, local).length, 0, 'immobile : rien à jouer');
 });
 
+test('une flotte qui sort de la fenêtre ou y entre suit son chemin jusqu’au bord (page P4)', () => {
+  // la fenêtre du banc : x de 12 à 36 environ ; la mer s'arrête à x = 20. Une flotte part de la côte vers le large (x = 3)
+  const st = c => ({ year: 1790, me: { code: 'GB', techs: [] }, nodes: [], armies: [], blocus: [],
+    flottes: [{ id: 'f1', proprio: 'GB', case: c, navires: { fregate: 1 }, chemin: [], ordre: '' }] });
+  const ici = etatMarine(st([18, 25]), ctx), loin = etatMarine(st([3, 25]), ctx);
+  assert.deepEqual([ici.flottes.length, loin.flottes.length, loin.dehors.length], [1, 0, 1], 'au large : hors de la fenêtre, gardée dans dehors');
+  const [s] = mouvements(new Map([['f1', ici.flottes[0]._h]]), loin, N, local, loin.dehors);
+  assert.equal(s.trajet[0], ici.flottes[0].case, 'elle part de sa case');
+  assert.equal(s.trajet.at(-1), -1, 'et finit hors de la fenêtre');
+  assert.ok(s.trajet.slice(0, -1).every(k => k >= 0) && s.trajet.length > 2, 'par les hexagones de la fenêtre');
+  assert.ok(s.sortie[0] < 0 && Math.abs(s.sortie[1]) <= Math.abs(s.sortie[0]), 'vers l’ouest');
+  assert.equal(s.entree, undefined);
+  // dans l'autre sens : elle paraît au bord ouest, puis gagne sa case
+  const [e] = mouvements(new Map([['f1', loin.dehors[0]._h]]), ici, N, local, ici.dehors);
+  assert.equal(e.trajet[0], -1);
+  assert.equal(e.trajet.at(-1), ici.flottes[0].case);
+  assert.ok(e.entree[0] < 0, 'elle vient de l’ouest');
+  // dehors avant et après : rien (pas même de chemin cherché)
+  assert.equal(mouvements(new Map([['f1', hexEau(N, 2, 2)]]), loin, N, local, loin.dehors).length, 0);
+});
+
 test('commerce : comptoirs de l’état, routes commerciales coupées par la fenêtre', () => {
   const tout = { ...ctx, local: k => (k < 0 ? -1 : k) };
   const st = { year: 1700, me: { code: 'GB', techs: [] }, nodes: [], armies: [], blocus: [], flottes: [],
@@ -109,26 +130,42 @@ test('commerce : comptoirs de l’état, routes commerciales coupées par la fen
   assert.equal(d.comptoirs.length + d.routes_mer.length, 0);
 });
 
-test('commerce : traversée (départ vers la balise, arrivée par l’horizon) et abordage d’un corsaire', () => {
-  const tout = { ...ctx, local: k => (k < 0 ? -1 : k), md: { ...md, routes_mer: [{ id: 'europe-amerique', de: [3, 5], vers: [4, 44], tours: 2, nom: 'vers l’Amérique' }] } };
+test('commerce : traversées de tous les camps (départs, arrivées, côté du théâtre) et abordage d’un corsaire', () => {
+  // une carte Monde de deux théâtres : celui du banc (x < 60) et un autre à l'est (x de 60 à 120)
+  const theatres = [{ id: 'europe', cadre: [0, 0, 60, 50] }, { id: 'inde', cadre: [60, 0, 60, 50] }];
+  const routes_mer = [{ id: 'europe-inde', de: [3, 5], vers: [70, 20], tours: 2, nom: 'vers l’Inde' }, { id: 'inde-europe', de: [70, 20], vers: [3, 5], tours: 2, nom: 'vers l’Europe' }];
+  const md2 = { ...md, theatres, routes_mer, sorties: [{ case: [3, 5], nom: 'vers l’Inde', route: 'europe-inde' }] };
+  const tout = { ...ctx, local: k => (k < 0 ? -1 : k), md: md2 };
+  assert.deepEqual(versTheatre(md2, [3, 5], [70, 20]), [87, 20], 'du centre de l’Inde vu de la balise');
+  assert.equal(versTheatre(md, [3, 5], [70, 20]), null, 'sans théâtres (Aquitaine, Europe) : rien');
   const flotte = (id, c, o = 'GB') => ({ id, proprio: o, case: c, navires: { fregate: 1 }, chemin: [], ordre: '' });
+  // la balise pointe vers l'Inde (sorties[].vers)
+  const e0 = etatMarine({ year: 1700, me: { code: 'GB' }, nodes: [], armies: [], flottes: [] }, tout);
+  assert.deepEqual(e0.sorties, [{ case: hexEau(N, 3, 5), nom: 'vers l’Inde', vers: [87, 20] }]);
   // en route vers la balise (ordre `route`, encore sur la carte) : marine.js ne doit pas la cacher
   const enRoute = etatMarine({ year: 1700, me: { code: 'GB' }, nodes: [], armies: [], flottes: [{ ...flotte('f1', [10, 10]), ordre: 'route' }] }, tout);
   assert.equal(enRoute.flottes[0].ordre, '');
-  // partie en mer : montrée sur la case de départ de la route, ordre `route` (vers l'horizon)
-  const st1 = { year: 1700, me: { code: 'GB' }, nodes: [], armies: [], flottes: [], en_mer: [{ id: 'f1', proprio: 'GB', route: 'europe-amerique', arrivee: 2, navires: { fregate: 1 }, armee: null }] };
-  const e1 = etatMarine(st1, { ...tout, partis: new Map([['f1', 'europe-amerique']]) });
-  assert.deepEqual(e1.flottes.map(f => [f.id, f.ordre, f.case]), [['f1', 'route', hexEau(N, 3, 5)]]);
+  // partie, et on la voyait (ctx.partis : le départ de la vue) : sur la balise, ordre `route`, balise et côté du théâtre
+  const dep = { id: 'f1', proprio: 'GB', case: [3, 5], route: 'europe-inde', navires: { fregate: 1 } };
+  const st1 = { year: 1700, me: { code: 'GB' }, nodes: [], armies: [], flottes: [], departs: [dep] };
+  const e1 = etatMarine(st1, { ...tout, partis: new Map([['f1', dep]]) });
+  assert.deepEqual(e1.flottes.map(f => [f.id, f.ordre, f.case, f.sortie, f.vers]), [['f1', 'route', hexEau(N, 3, 5), hexEau(N, 3, 5), [87, 20]]]);
   assert.equal(etatMarine(st1, tout).flottes.length, 0, 'sans départ vu : rien');
-  // revenue : elle surgit par la balise de sa case d'arrivée
-  const st2 = { year: 1700, me: { code: 'GB' }, nodes: [], armies: [], flottes: [flotte('f1', [4, 44]), flotte('c1', [6, 20], 'FR')], en_mer: [],
+  // partie sans qu'on la voie (une flotte ennemie) : le départ se joue depuis la balise (departFlotte), aux couleurs de son camp
+  const ennemi = { ...dep, id: 'e1', proprio: 'FR', navires: { vaisseau: 2 } };
+  assert.deepEqual(scenesCommerce(st1, e0, tout, { departs: [ennemi] }).departs,
+    [{ case: hexEau(N, 3, 5), proprio: 1, navires: { vaisseau: 2 }, sortie: hexEau(N, 3, 5), vers: [87, 20], armee: 0 }]);
+  assert.deepEqual(scenesCommerce(st1, e0, ctx, { departs: [ennemi] }).departs, [], 'balise hors de la fenêtre : rien');
+  // arrivée (vue `arrivees`) : par la balise de sa case d'arrivée, du côté du théâtre d'où elle vient ; l'abordage : sur la
+  // case de la route pillée la plus proche du corsaire, le marchand aux couleurs de la victime
+  const st2 = { year: 1700, me: { code: 'GB' }, nodes: [], armies: [], flottes: [flotte('f2', [4, 44]), flotte('c1', [6, 20], 'FR')],
+    arrivees: [{ id: 'f2', proprio: 'GB', case: [4, 44], route: 'inde-europe' }],
     routes_mer: [{ id: 'FR-GB', chemin: [[2, 2], [5, 21], [9, 30]], proprio: 'FR', partenaire: 'GB', coupee: 'corsaire' }],
     events: [{ kind: 'eco', corsaire: 'c1', route: 'FR-GB', victime: 'GB', text: '…' }, { kind: 'eco', text: 'autre' }] };
-  const e2 = etatMarine(st2, tout), sc = scenesCommerce(new Map([['f1', 'europe-amerique']]), st2, e2, tout);
-  assert.deepEqual(sc.arrivees, [{ flotte: 'f1', sortie: hexEau(N, 4, 44) }]);
-  // l'abordage : sur la case de la route pillée la plus proche du corsaire, le marchand aux couleurs de la victime
+  const e2 = etatMarine(st2, tout), sc = scenesCommerce(st2, e2, tout, { arrivees: st2.arrivees });
+  assert.deepEqual(sc.arrivees, [{ flotte: 'f2', sortie: hexEau(N, 4, 44), vers: [86, -19] }]);
   assert.deepEqual(sc.abordages, [{ flotte: 'c1', case: hexEau(N, 5, 21), proprio: 0 }]);
-  assert.deepEqual(scenesCommerce(new Map(), { ...st2, events: [] }, e2, tout), { arrivees: [], abordages: [] });
+  assert.deepEqual(scenesCommerce({ ...st2, events: [] }, e2, tout), { arrivees: [], abordages: [], departs: [] });
 });
 
 test('les grilles compactées de la carte Monde se déplient (geo.rs rle)', () => {
