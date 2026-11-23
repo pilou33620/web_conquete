@@ -72,8 +72,33 @@ fn FACTIONS_base() -> Val { dict!{
 py_const!(PAYS, Val::dict_from(crate::geo::THEATRES.iter().map(|t| (Val::from(t.geo), py::json::loads(t.pays).unwrap_or_else(|e| panic!("pays_{}.json : {e}", t.id)))).collect()));
 /// Les pays du théâtre de cette géographie (un dict vide ailleurs).
 pub fn pays(geo: i64) -> Val {
+    if geo == crate::geo::VERSION_MONDE {
+        return PAYS_MONDE(); // (SPEC-EMPIRE, module 3)
+    }
     PAYS().get_or(geo, Val::dict())
 }
+// (SPEC-EMPIRE, module 3) la carte monde : les pays de ses trois théâtres réunis (dans l'ordre de THEATRES, comme FACTIONS)
+py_const!(PAYS_MONDE, {
+    let d = Val::dict();
+    for t in crate::geo::THEATRES.iter().filter(|t| crate::geo::THEATRES_MONDE.contains(&t.geo)) {
+        d.update(&pays(t.geo));
+    }
+    d
+});
+/// (SPEC-EMPIRE, module 3) Le théâtre d'un pays (« europe », « amerique »…), None pour un département.
+pub fn theatre_du_pays(code: &str) -> Option<&'static str> {
+    crate::geo::THEATRES.iter().find(|t| pays(t.geo).has(code)).map(|t| t.id)
+}
+/// (SPEC-EMPIRE, module 3) La carte monde : chaque colonie d'Amérique et d'Inde (colonie, métropole d'Europe) y commence
+/// vassale de sa métropole (engine::Game::new) : elle garde son gouvernement (une IA, ou le joueur), son armée et ses
+/// places, paie le tribut et suit la métropole dans ses guerres. Les autres pays des théâtres restent indépendants.
+pub const COLONIES: &[(&str, &str)] = &[
+    ("AFR", "FR"), ("ALO", "FR"),   // Nouvelle-France, Louisiane
+    ("AGB", "GB"), ("ATC", "GB"),   // Amérique de la couronne britannique, Treize Colonies
+    ("AES", "ES"), ("ACU", "ES"),   // Nouvelle-Espagne, Cuba
+    ("ANL", "NL"), ("ICY", "NL"),   // Antilles des Provinces-Unies, Ceylan néerlandais
+    ("IGO", "PT"),                  // État portugais des Indes
+];
 /// Ce code est-il celui d'un pays (d'un théâtre) ? Les codes sont uniques sur tous les théâtres.
 pub fn est_pays(code: &Val) -> bool {
     PAYS().values().iter().any(|p| p.has(code))
@@ -711,6 +736,9 @@ py_const!(MODES, {
     for t in crate::geo::THEATRES {
         m.push(dict!{"geo" => t.geo, "nom" => t.nom, "mot" => t.mot, "le" => t.le});
     }
+    // (SPEC-EMPIRE, module 3) la carte monde, après les théâtres
+    let t = &crate::geo::MONDE;
+    m.push(dict!{"geo" => t.geo, "nom" => t.nom, "mot" => t.mot, "le" => t.le});
     m
 });
 

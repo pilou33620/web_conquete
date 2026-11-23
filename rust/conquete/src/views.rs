@@ -291,6 +291,15 @@ pub fn rules_payload() -> Val {
 pub fn rules_payload_carte(geo: i64) -> Val {
     let theatre = crate::geo::theatre(geo);
     let camps = Val::dict_from(R::camps(geo).into_iter().map(|c| { let f = R::FACTIONS().at(&c); (c, f) }).collect());
+    // (SPEC-EMPIRE, module 3) la carte monde : chaque pays dit son théâtre, une colonie sa métropole (R::COLONIES)
+    if geo == crate::geo::VERSION_MONDE {
+        for (c, f) in camps.items() {
+            let f = f.copy();
+            f.set("theatre", R::theatre_du_pays(c.s()));
+            f.set("metropole", R::COLONIES.iter().find(|x| x.0 == c.s()).map(|x| x.1));
+            camps.set(c, f);
+        }
+    }
     let build = Val::dict_from(
         R::BUILD()
             .items()

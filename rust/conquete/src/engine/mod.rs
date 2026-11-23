@@ -470,6 +470,20 @@ impl Game {
                 }
             }
         }
+        // (SPEC-EMPIRE, module 3) la carte monde : chaque colonie commence vassale de sa métropole (R::COLONIES)
+        if geo.version == crate::geo::VERSION_MONDE {
+            for &(col, met) in R::COLONIES {
+                if !g.factions.has(col) || !g.factions.has(met) {
+                    continue;
+                }
+                g.factions.at(col).set("overlord", met);
+                g.factions.at(col).set("_tribute", 0); // (compute_income le lit chez un vassal avant de l'avoir compté)
+                g.set_status(col, met, "alliance");
+                for (x, y) in [(col, met), (met, col)] {
+                    g.factions.at(x).at("rel").set(y, 60);
+                }
+            }
+        }
 
         g.nodes = list![];
         for n in geo.nodes.iter() {

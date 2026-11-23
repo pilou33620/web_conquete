@@ -220,9 +220,9 @@ fn main() {
     std::env::set_var("WEB_CONQUETE_NOLOG", "1"); // (tests/fabrique.py : le banc n'écrit pas dans logs/batailles.jsonl)
     let a = Args::parse(AIDE, &["parties", "epoque", "annees", "graine", "proc", "geo", "joueur", "suivi", "recit"]);
     let v_geo = a.i("geo", 2);
-    // (le camp vu : FR en Europe, le premier pays d'un autre théâtre, 33 dans le Sud-Ouest)
+    // (le camp vu : FR en Europe et sur la carte monde, le premier pays d'un autre théâtre, 33 dans le Sud-Ouest)
     let defaut = match conquete::geo::theatre(v_geo) {
-        Some(t) if t.geo == conquete::geo::VERSION_EUROPE => "FR".to_string(),
+        Some(t) if t.geo == conquete::geo::VERSION_EUROPE || t.geo == conquete::geo::VERSION_MONDE => "FR".to_string(),
         Some(_) => conquete::rules::camps(v_geo).first().map_or_else(String::new, |c| c.string()),
         None => "33".to_string(),
     };

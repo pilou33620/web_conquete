@@ -478,8 +478,9 @@ fn mode_europe() {
     assert_eq!((st, &fr["geo"], &fr["km_case"]), (200, &json!(2), &json!(1)));
     let mut modes = vec![json!({"geo": 2, "nom": "Aquitaine", "mot": "département"})];
     modes.extend(conquete::geo::THEATRES.iter().map(|t| json!({"geo": t.geo, "nom": t.nom, "mot": t.mot, "le": t.le})));
+    modes.push(json!({"geo": 13, "nom": "Monde", "mot": "pays", "le": "le monde"})); // (SPEC-EMPIRE, module 3)
     assert_eq!(fr["modes"], json!(modes));
-    assert_eq!(modes.len(), 8); // l'Aquitaine, l'Europe et les six théâtres d'Empire
+    assert_eq!(modes.len(), 9); // l'Aquitaine, l'Europe, les six théâtres d'Empire et le monde
     assert_eq!(fr["rules"]["factions"].as_object().unwrap().len(), 5);
     assert_eq!(carte("/api/map?geo=2").1["geo"], json!(2));
     // la carte d'Europe, faite à la première demande
