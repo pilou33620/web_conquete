@@ -11,7 +11,9 @@
 import { Grille, SQ3, bruit, DIRS } from './grille.js';
 
 // du plus fin au plus large : taille des hexagones, décor allégé ?, cases bâties au plus par le moteur
-export const NIVEAUX = [{ pas: 4, leger: false, max: 1500 }, { pas: 4, leger: true, max: 12000 }, { pas: 8, leger: true, max: 12000 }, { pas: 16, leger: true, max: 12000 }];
+// (sobre : seulement quand la qualité automatique allège la fenêtre, part < 1 dans choisirPas : toute la carte Monde)
+export const NIVEAUX = [{ pas: 4, leger: false, max: 1500 }, { pas: 4, leger: true, max: 12000 }, { pas: 8, leger: true, max: 12000 }, { pas: 16, leger: true, max: 12000 },
+  { pas: 32, leger: true, max: 12000, sobre: true }];
 const MARGE = 1.5;            // la fenêtre couvre l'écran × MARGE : on peut glisser un peu sans rebâtir
 // terrains du jeu (map.js, T) → terrains du moteur : 0 mer, 1 haut-fond, 2 lac, 3 sable, 4 plaine, 5 colline, 6 montagne
 const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES: 6, MONTAGNE: 7, HAUTE: 8, DUNES: 9, VIGNE: 10 };
@@ -137,12 +139,14 @@ export function routesDe(N, edges, places = new Map(), ville = new Set()) {
 
 // Le niveau de détail pour un écran de vw × vh px à z px par case (vue aplatie de k sur la verticale) sur une carte de
 // W × H cases : le plus fin dont la fenêtre tient dans son maximum de cases. Rend { niv, pas, leger, l, h } (rang dans
-// NIVEAUX, colonnes et lignes de la fenêtre).
-export function choisirPas(vw, vh, z, k, W = Infinity, H = Infinity) {
-  for (let niv = 0; niv < NIVEAUX.length; niv++) {
+// NIVEAUX, colonnes et lignes de la fenêtre). part : la part du maximum de cases permise (qualité automatique, hex/qualite.js :
+// moins de cases, des hexagones plus grands plus tôt).
+export function choisirPas(vw, vh, z, k, W = Infinity, H = Infinity, part = 1) {
+  const fin = part < 1 ? NIVEAUX.length - 1 : NIVEAUX.findLastIndex(n => !n.sobre);
+  for (let niv = 0; niv <= fin; niv++) {
     const { pas, leger, max } = NIVEAUX[niv], d = dims(pas, vw, vh, z, k);
     d.l = Math.min(d.l, Math.floor(W / pas) + 1); d.h = Math.min(d.h, Math.floor(H / (1.5 * pas / SQ3)) + 1);
-    if (d.l * d.h <= max || niv === NIVEAUX.length - 1) return { niv, pas, leger, ...d };
+    if (d.l * d.h <= max * part || niv === fin) return { niv, pas, leger, ...d };
   }
 }
 function dims(pas, vw, vh, z, k) {

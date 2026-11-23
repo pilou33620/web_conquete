@@ -102,19 +102,23 @@ function resetUI() {
   document.getElementById('feed').innerHTML = '';   // (sans quoi le fil de la partie d'avant reste affiché)
 }
 
-async function showStart(info) {
+// instant : au chargement d'une carte choisie (sans l'intro), la carte se cadre d'un coup (glissée, le plateau rebâtissait sa
+// fenêtre à l'arrivée)
+async function showStart(info, instant = false) {
   if (!info) try { info = await api.get('/api/saves'); } catch (e) { info = null; }
   if (!info) ui.toast('Serveur injoignable : liste des sauvegardes indisponible.', 'bad');
   if (info && info.update) checkVersion(info.update.version);
   ui.showStart(info || { saves: [], running: false });
   const { left, bottom } = ui.startFree();
-  map.fitAll(false, left, 20, bottom);
+  map.fitAll(instant, left, 20, bottom);
 }
 
 async function boot() {
   const lt = document.getElementById('loading-text');
   const voulue = +new URLSearchParams(location.search).get('geo') || 0;   // carte choisie à l'écran de départ
   let payload;
+  const sauves = api.get('/api/saves');   // (demandées pendant que la carte arrive)
+  sauves.catch(() => {});
   try {
     payload = await api.get('/api/map' + (voulue ? '?geo=' + voulue : ''));
     if (payload.ok === false) payload = await api.get('/api/map');   // (carte inconnue dans l'adresse)
@@ -187,7 +191,7 @@ async function boot() {
     if (c && ui.rules.factions[c] && (payload.map.playable || Object.keys(ui.rules.factions)).includes(c)) ui.pickDept(c);
   };
   let info;
-  try { info = await api.get('/api/saves'); } catch (e) {
+  try { info = await sauves; } catch (e) {
     lt.textContent = 'Le serveur ne répond plus. Relancez le jeu (demarrer_WEB_CONQUETE) puis rechargez la page.';
     return;
   }
@@ -200,7 +204,7 @@ async function boot() {
     return;
   }
   if (!voulue) await intro(map, payload.map.nodes);
-  await showStart(info);
+  await showStart(info, !!voulue);
   announceUpdate(info.update);
 }
 

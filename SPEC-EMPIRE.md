@@ -768,3 +768,113 @@ très différents d'une graine à l'autre), les écarts de revenu moyen sont du 
   alliés) ; une flotte en mer hors de la fenêtre ne part ni n'arrive à l'écran (pas d'animation hors fenêtre).
 - La tendance des prix se compte d'un état à l'autre dans la page : elle repart de zéro au rechargement.
 - Le défaut de Brest n'est pas corrigé (moteur, voir plus haut).
+
+### Chargement et fluidité de la page (24/11/2026)
+
+**Mesures** : Chromium sans carte graphique (rendu logiciel), fenêtre 1400 × 860 (chargement) ou 1280 × 800 (images),
+`deviceScaleFactor` 1, serveur local `--release` ; machine de 4 cœurs **partagée avec d'autres compilations** (charge 6 à 12) :
+les chiffres bougent de ±30 % d'un essai à l'autre, avant et après ont été mesurés en alternance. Scripts Playwright hors du
+dépôt (`charge.cjs`, `fps.cjs`, `banc-charge.sh`, `banc-fps.sh`). Le code « avant » est celui de `claude/lucid-allen-dqqpzg`
+au début de ce travail (4c65811).
+
+**Chargement** (médiane de six essais ; « écran de départ » et « première image » vus par le banc, qui ne voit la page
+qu'entre deux images, donc un peu tard ; décor posé : arbres, champs, rochers) :
+
+| Carte | Écran de départ | Première image du plateau | Décor posé |
+|---|---|---|---|
+| Monde (3,3 millions de cases) | 17,9 s → 3,9 s | 20,2 s → 6,3 s | 25 à 32 s → 10 à 15 s |
+| Europe | 9,8 s → 3,5 s | 12,0 s → 5,8 s | 11 à 21 s → 8 à 14 s |
+| Aquitaine | 7,2 s → 3,3 s | 9,1 s → 5,7 s | 9 à 16 s → 10 à 13 s |
+
+Mesuré dans la page (instants `performance.now`, un essai, charge 7) : Monde, écran de départ 14,1 s → 1,2 s, première image
+16,3 s → 4,8 s ; Europe 8,8 s → 1,0 s et 11,1 s → 4,5 s ; Aquitaine 5,6 s → 0,9 s et 7,1 s → 4,2 s. Sans carte graphique, la
+première image coûte à elle seule 2 à 3,5 s : 0,7 à 1,3 s de JavaScript (la fenêtre du plateau, `construire` et `majRoutes`
+de web_engine) et autant pour la dessiner (programmes des shaders compris).
+
+**Où allait le temps** (profil CDP de la carte Monde, avant) : plus de la moitié dans la carte classique, qui ne sert que
+sans WebGL et ne se voit jamais sur le plateau : couches de la mer et des terres (`buildBases`, `paintLand` → `terre.js`,
+3,6 s), fond de tuiles peint d'avance (`renderTile`, `prepRoutes` → `fusionRoutes`, 1,7 s), peintres (workers) qui
+recevaient les grilles (13 Mo chacun), vie 2D (`Ambient` → `carte/vie.js preparer`, 1,1 s) ; puis trois images du plateau
+dessinées sous l'écran de chargement opaque (1,3 s chacune sans carte graphique) ; 2 400 drapeaux de places dessinés à
+chaque image (`towns.js vivre`, 0,6 s).
+
+**Fait (chargement)**.
+- `map.js` : la carte classique (couches, fond de tuiles, parcelles, peintres) n'est préparée que si le plateau manque
+  (`classique()`, appelé par le secours sans WebGL) ; `repaint` et `paintLand` ne font rien sans elle. `buildProxy` sur une
+  file en tableau typé. Rien ne se dessine tant que l'écran de chargement est là.
+- `ambient.js` : la vie 2D (distance à la côte, écume, courants, `preparer`, `majEtat` de `carte/vie.js`, un tableau de
+  W × H recalculé à chaque état) ne se prépare qu'à la première image de la carte classique.
+- `main.js` : `/api/saves` est demandé en même temps que la carte ; une carte choisie (sans l'intro) se cadre d'un coup à
+  l'écran de départ (glissée, le plateau rebâtissait sa fenêtre à l'arrivée).
+- Plateau : le décor se pose par morceaux d'un quart de l'intervalle entre deux images (6 à 40 ms au lieu de 6) : sur un
+  appareil lent, le décor de la carte Monde demandait des dizaines d'images.
+
+**Images par seconde** (rendu logiciel, processeur ralenti ×4 par CDP, partie neuve 1700, après 4 s, ou 25 s en
+automatique ; loin : toute la carte, moyen : 8 px par km, près : 30 px par km sur la capitale, ses bâtiments et sa vie ;
+« léger fixé » : `?qualite=leger`, sans la qualité automatique) :
+
+| | avant | léger fixé | automatique (palier atteint : 4) |
+|---|---|---|---|
+| Aquitaine loin / moyen / près | 0,8 / 0,7 / 1,5 | 0,5 / 0,2 / 1,2 | 0,9 / 1,1 / 3,9 |
+| Europe loin / moyen / près | 0,7 / 1,0 / 1,3 | 0,6 / 0,6 / 1,2 | 1,0 / 1,2 / 6,1 |
+| Monde loin / moyen / près | 0,7 / 1,1 / 1,8 (0,7 / 1,0 / 1,2) | 0,7 / 1,0 / 1,8 | 0,5 / 1,2 / 7,0 (1,5 / 0,8 / 3,5 avec les hexagones de 32 km) |
+
+Temps de JavaScript du dessin par image (×4) : Monde loin 243 à 266 ms → 43 à 52 ms ; Europe loin 97 → 23 à 25 ms ;
+Aquitaine 21 → 15 ms. Sans carte graphique, plus de 90 % du temps d'une image est celui du rendu logiciel (le fil
+principal attend `ReadPixels` à chaque image) : le JavaScript du jeu y est de 1 à 3 ms par image sans ralenti. Les images
+« léger fixé » ne sont pas meilleures qu'avant : la page dessinait déjà en qualité légère sur cette machine (4 cœurs), le
+gain y est celui du processeur, invisible derrière le rendu logiciel. Pas de flotte au départ de ces parties : la vue « près
+d'une flotte » n'a pas été mesurée à part (la marine est dans l'image de près sur les côtes).
+
+**Fait (fluidité)**.
+- `map.js` : animations permises, le calque 2D n'est redessiné que quand le plateau l'est (30 images/s en qualité légère) ou
+  quand la caméra bouge, au lieu de 60 fois par seconde ; le temps sauté compte à l'image suivante. Les places que le plateau
+  ne bâtit pas à ce niveau de détail (villages de loin) n'ont plus de drapeau ni d'habitants dessinés à chaque image.
+- `plateau.js` : le rayon d'une place (demandé pour chaque place à chaque image) est gardé avec la fenêtre.
+- **Qualité automatique** (`web/js/hex/qualite.js`, appliquée par `plateau.js` `appliquer`) : seulement quand le plateau
+  est dessiné à chaque image (animations permises) et que le réglage est « Automatique ». Médiane des intervalles entre
+  deux images sur la dernière seconde et demie (quatre images au moins) : au-delà de **55 ms** (moins de 18 images/s)
+  pendant **3 s**, un palier plus bas ; en deçà de **36 ms** pendant **10 s**, un palier plus haut (attente doublée, jusqu'à
+  une minute, quand une remontée rechute dans les 15 s) ; 2 s sans mesure après chaque changement et 1 s après une fenêtre
+  rebâtie ; un intervalle de plus de 5 s (onglet caché) ne compte pas. Paliers :
+  0. le réglage du moteur (deviné : léger sur un Raspberry Pi, un iPad ou 4 cœurs) ;
+  1. ombres coupées (niveau léger du moteur ; sauté s'il l'est déjà) ;
+  2. définition × 0,85, habitants et pièces mobiles des bâtiments des emplacements coupés ;
+  3. définition × 0,7, décor allégé (un arbre par hexagone de forêt, pas de parcelles), fenêtre à moitié moins de cases
+     (des hexagones plus grands plus tôt) ;
+  4. définition × 0,6, plus de vie (passants, charrettes, troupeaux), fenêtre au tiers, 20 images/s au plus ; de loin, la
+     carte Monde passe en hexagones de 32 km (niveau `sobre` de `carte-moteur.js`, jamais en qualité pleine).
+  Un palier automatique ne s'enregistre pas comme un choix de l'appareil (`reglerQualite` de web_engine retient sinon le
+  niveau). Menu ☰ (et réglages de l'écran de départ) : « Qualité du plateau : Automatique / Légère / Normale / Riche »
+  (`conquete.plateau.qualite`) ; un niveau choisi coupe le régulateur ; `?qualite=` dans l'adresse aussi.
+- Essais : `tests/hex.test.mjs` (régulateur : baisse, remontée, à-coups et onglet caché ignorés, palier sauté ; `choisirPas`
+  avec moins de cases).
+
+**Vérifié** dans Chromium : Aquitaine (départ, Bordeaux de près aux paliers 0 et 4, menu, animations coupées avec une place
+choisie), Europe et Monde (départ, partie, toute la carte au palier 4) ; aucune erreur de console (seulement les
+avertissements du rendu logiciel, `ReadPixels`, et de three.js au niveau normal, `PCFSoftShadowMap`). `node --test`
+(108), `cargo test --locked -p conquete`, `outils/maj-graphismes.sh --verifier` passent.
+
+**Relève de web_engine** (non modifié ici ; gains estimés sur ces mesures) :
+- `rendu/plateau.js` (`rebatir`, `tuile`) et `rendu/toon.js` (`contour`, `fusion`) : chaque hexagone garde biseau, flancs et
+  contour à toute distance : 790 000 triangles pour toute l'Aquitaine (6 800 hexagones, 116 par hexagone), 365 000 de près
+  (288 hexagones, décor compris). Un hexagone simplifié (dessus plat, sans contour) quand il fait moins de ~15 px à l'écran,
+  ou en qualité légère, diviserait par 3 à 5 le rendu de loin, où la qualité automatique ne gagne presque rien.
+- `rendu/scene.js` : `antialias: true` fixé à la création du `WebGLRenderer` ; le multi-échantillonnage coûte cher sur un
+  Raspberry Pi et en rendu logiciel ; le choisir d'après la qualité (léger : sans) avant de créer le renderer.
+- `rendu/scene.js` `reglerQualite(n)` enregistre toujours le niveau dans `localStorage` : une option pour ne pas le retenir
+  (la page remet l'ancien choix à la main) ; un facteur de définition et un interrupteur du décor et de la vie exportés
+  éviteraient au jeu de reconstruire la fenêtre (palier 3).
+- `rendu/plateau.js` `construire` / `rendu/routes.js` `majRoutes` : 0,3 + 0,27 s pour la fenêtre de toute l'Aquitaine,
+  0,65 s pour le monde ; la moitié de la première image. Programmes des shaders compilés à la première image
+  (`compileAsync` pendant le chargement de la carte : ~0,5 à 1 s sur cette machine).
+- `rendu/scene.js` : `PCFSoftShadowMap` n'existe plus dans three.js r186 (avertissement au niveau normal).
+
+**Pas fait / écarts**.
+- Europe : écran de départ en 1 s, mais **première image du plateau en 4,5 s** (objectif 3 s non atteint ici) : le reste est
+  le rendu de la première fenêtre (web_engine, ci-dessus) et le rendu logiciel de cette machine.
+- Les images par seconde ne sont mesurées que sous Chromium sans carte graphique : elles disent ce que coûte le rendu, pas ce
+  qu'on aura sur un Raspberry Pi (carte graphique V3D) ; les seuils (55 / 36 ms) sont à vérifier sur l'appareil. La vue de loin
+  reste lente sans carte graphique (0,5 à 1,5 image/s) : géométrie du moteur.
+- Pas de qualité automatique quand les animations sont coupées (le plateau n'est alors dessiné qu'aux changements).
+- Les animations de la marine et des chantiers (autre agent) n'ont pas été mesurées à part.

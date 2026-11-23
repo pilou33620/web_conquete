@@ -204,10 +204,8 @@ export class MapView {
     const jd = Uint8Array.from([0, ...this.deptCodes.map(c => jouables.includes(c) ? 1 : 0)]);   // (par département : 1,2 million de cases)
     for (let c = 0; c < this.W * this.H; c++) this.playable[c] = jd[this.dept[c]] && this.terrain[c] > 1 ? 1 : 0;
     this.prepEdges();
-    this.buildBases();
     this.buildLandPath();
     this.buildProxy();
-    this.buildFieldCells();
     this.buildWaterNames();
     this.ambient = new Ambient(this);
     this.towns = new TownArt(this);
@@ -216,13 +214,22 @@ export class MapView {
     this.showPreview();
     this.lastFrame = performance.now();
     this.resize();
-    for (let ty = 0; ty * 128 < this.H; ty++) for (let tx = 0; tx * 128 < this.W; tx++) this.getTile(LEVELS[0], tx, ty, true);
-    if (this.style === 'plateau' && !this.initPlateau()) { this.style = 'ugar'; this.rebuildTerritory(); }
+    if (this.style === 'plateau' && !this.initPlateau()) { this.style = 'ugar'; this.rebuildTerritory(); this.classique(); }
     this.fitAll(true);
     window.addEventListener('resize', () => this.resize());
     this.bindInput();
-    this.startPainters();
+    this.chargement = document.getElementById('loading');
     requestAnimationFrame(t => this.frame(t));
+  }
+
+  // la carte classique (tuiles peintes, vue du ciel ou d'époque), secours sans WebGL : ses couches (mer, terres, relief,
+  // parcelles), le fond de tuiles et les peintres ne se préparent que si elle sert. Sur le plateau, elles coûtaient plus
+  // de la moitié du chargement de la carte Monde (3,3 millions de cases) sans jamais se voir.
+  classique() {
+    this.buildBases();
+    this.buildFieldCells();
+    for (let ty = 0; ty * 128 < this.H; ty++) for (let tx = 0; tx * 128 < this.W; tx++) this.getTile(LEVELS[0], tx, ty, true);
+    this.startPainters();
   }
 
   // largeur d'un texte dans la police courante du contexte (mise en cache)
@@ -386,12 +393,13 @@ export class MapView {
   get K() { return this.hex ? HEX_K : 1; }
 
   // tout ce que le style peint dans les couches et les tuiles
-  repaint() { this.paintOcean(); this.paintLand(); this.invalidateTiles(); this.vig = null; }
+  repaint() { this.vig = null; this.era = this.styleEra(); if (!this.landCanvas) return; this.paintOcean(); this.paintLand(); this.invalidateTiles(); }
 
   // couleur des terres (repeinte quand la saison ou la neige tombée change) : vue du ciel, le fond de la maquette
   // (carte/terre.js) ; d'époque, le papier ombré par un soleil du nord-ouest
   paintLand() {
     const P = PAPIER[this.era = this.styleEra()];
+    if (!this.landCanvas) return;   // (sur le plateau : pas de couche des terres, classique)
     if (!P) { terre(this).fond(this.landCanvas, RL); return; }
     const W = this.W, H = this.H, hf = this.hgt, R = RL, WR = W * R, HR = H * R;
     const g = this.landCanvas.getContext('2d'), img = g.createImageData(WR, HR), data = img.data;
@@ -471,12 +479,16 @@ export class MapView {
     // chaque cellule non jouable pointe vers la cellule jouable la plus proche (frontières seulement entre camps)
     const W = this.W, H = this.H, N = W * H;
     const proxy = new Int32Array(N).fill(-1);
-    const q = [];
-    for (let c = 0; c < N; c++) if (this.playable[c] && this.cellnode[c] !== 65535) { proxy[c] = c; q.push(c); }
-    for (let h = 0; h < q.length; h++) {
-      const c = q[h], i = c % W, j = (c / W) | 0;
-      const nb = [i > 0 ? c - 1 : -1, i < W - 1 ? c + 1 : -1, j > 0 ? c - W : -1, j < H - 1 ? c + W : -1];
-      for (const n of nb) if (n >= 0 && proxy[n] < 0) { proxy[n] = proxy[c]; q.push(n); }
+    const q = new Int32Array(N);   // (file en tableau typé : chaque case n'y entre qu'une fois)
+    let fin = 0;
+    for (let c = 0; c < N; c++) if (this.playable[c] && this.cellnode[c] !== 65535) { proxy[c] = c; q[fin++] = c; }
+    const voir = (n, p) => { if (proxy[n] < 0) { proxy[n] = p; q[fin++] = n; } };
+    for (let h = 0; h < fin; h++) {
+      const c = q[h], i = c % W, p = proxy[c];
+      if (i > 0) voir(c - 1, p);
+      if (i < W - 1) voir(c + 1, p);
+      if (c >= W) voir(c - W, p);
+      if (c < N - W) voir(c + W, p);
     }
     this.proxy = proxy;
   }
@@ -1780,6 +1792,8 @@ export class MapView {
         d.head += dh * Math.min(1, dt * 5);
       }
     }
+    // (sous l'écran de chargement, opaque, rien ne se dessine : chaque image du plateau y coûtait sans se voir)
+    if (this.chargement?.hidden === false) { requestAnimationFrame(t => this.frame(t)); return; }
     const t0 = performance.now();
     this.draw(dt, now / 1000);
     this.drawFog();
@@ -1805,8 +1819,13 @@ export class MapView {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const hex = this.hex, K = this.K;
     // le plateau (SPEC-HEX) se dessine sur son canevas, dessous : celui-ci reste transparent
-    if (hex) { ctx.clearRect(0, 0, this.vw, this.vh); this.plateau.image(this.cam, this.vw, this.vh, dpr, 8, this.ambient.on); }
-    else { ctx.fillStyle = '#141618'; ctx.fillRect(0, 0, this.vw, this.vh); }
+    if (hex) {
+      // (animations permises, le plateau se dessine à sa cadence, 30 images/s en qualité légère : entre deux, la caméra
+      // immobile, ce calque garde son image et son temps compte à la suivante, au lieu de tout redessiner à 60 images/s)
+      if (!this.plateau.image(this.cam, this.vw, this.vh, dpr, 8, this.ambient.on) && this.ambient.on) { this.dtReste = (this.dtReste || 0) + dt; return; }
+      dt += this.dtReste || 0; this.dtReste = 0;
+      ctx.clearRect(0, 0, this.vw, this.vh);
+    } else { ctx.fillStyle = '#141618'; ctx.fillRect(0, 0, this.vw, this.vh); }
     const [wx0, wy0] = this.toWorld(0, 0), [wx1, wy1] = this.toWorld(this.vw, this.vh);
     // fond rapide
     ctx.imageSmoothingEnabled = true;
@@ -2095,7 +2114,9 @@ export class MapView {
       const sP = this.hex ? Math.max(s, rP / 0.62) : z >= Z.PLAN && (ns.sg || ns.bk || camp.has(n.id)) ? Math.max(s, rayonMurs(this, n, ns) * z / 0.62) : s;
       if (camp.has(n.id) && z >= 2.8) this.tents(ctx, sP, n.id, this.colors[camp.get(n.id)] || col);
       if (!this.hex) this.towns.draw(ctx, n, s, col, ns, time, ns.o);
-      else this.towns.animer(ctx, n, s, col, ns, time, ns.o, this.plateau.g.f);
+      // (une place que le plateau ne bâtit pas à ce niveau de détail, un village vu de loin : ni drapeau ni habitants sur
+      // un hexagone vide ; toute la carte Monde en dessinait 2 400 à chaque image)
+      else if (rP) this.towns.animer(ctx, n, s, col, ns, time, ns.o, this.plateau.g.f);
       // siège
       // (de près : le camp, les batteries qui tirent, les incendies ; les tranchées sont au sol, carte/guerre.js)
       if (ns.sg) this.guerreDe().siege(ctx, n, ns, time);
