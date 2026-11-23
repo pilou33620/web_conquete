@@ -221,20 +221,38 @@ fn une_partie_monde_se_joue() {
 fn banc_tours_des_ia() {
     // (CONQUETE_BANC_GEO=13 : une seule carte)
     let seule: Option<i64> = std::env::var("CONQUETE_BANC_GEO").ok().and_then(|s| s.parse().ok());
-    for v in [5, 6, 7, VERSION_MONDE].into_iter().filter(|v| seule.is_none_or(|s| s == *v)) {
+    for v in [2, 5, 6, 7, VERSION_MONDE].into_iter().filter(|v| seule.is_none_or(|s| s == *v)) {
         let geo = carte(v);
-        let pays = if v == 6 { "AFR" } else if v == 7 { "IMO" } else { "FR" };
+        let pays = match v { 2 => "33", 6 => "AFR", 7 => "IMO", _ => "FR" }; // (2 : l'Aquitaine, la Gironde)
+        let t = std::time::Instant::now();
         let mut g = Game::new(geo.clone(), pays, &Val::from("normal"), &Val::from(13), &Val::from("1700"));
+        let creee = t.elapsed().as_secs_f64();
         let ai = AI::new(&g, pays);
         g.ais.insert(pays.to_string(), Some(ai));
-        let mut tps = vec![];
+        let (mut tps, mut cpu) = (vec![], 0.0);
         for _ in 0..6 {
-            let t = std::time::Instant::now();
+            let (t, c) = (std::time::Instant::now(), temps_processeur());
             jouer_mois(&mut g);
             tps.push(format!("{:.2}", t.elapsed().as_secs_f64()));
+            cpu += temps_processeur() - c;
         }
-        eprintln!("géographie {v} ({} camps) : tours des IA {} s", g.factions.len(), tps.join(", "));
+        let moy = tps.iter().map(|s| s.parse::<f64>().unwrap()).sum::<f64>() / tps.len() as f64;
+        // (l'empreinte de la sauvegarde : une optimisation ne doit pas la changer)
+        let emp = json::empreinte_ordre(&V::to_dict(&mut g));
+        eprintln!(
+            "géographie {v} ({} camps) : partie créée en {creee:.2} s, tours des IA {} s (moyenne {moy:.2} s, processeur {:.2} s), empreinte {emp}",
+            g.factions.len(),
+            tps.join(", "),
+            cpu / 6.0
+        );
     }
+}
+
+/// Le temps passé sur le processeur par ce fil, en secondes (/proc/thread-self/schedstat ; 0 ailleurs que sous Linux) :
+/// moins sensible que l'horloge aux autres programmes de la machine.
+fn temps_processeur() -> f64 {
+    let s = std::fs::read_to_string("/proc/thread-self/schedstat").unwrap_or_default();
+    s.split_whitespace().next().and_then(|x| x.parse::<f64>().ok()).unwrap_or(0.0) / 1e9
 }
 
 /// Ce que la référence garde de la carte monde : sa taille, ses théâtres, ses routes, balises et comptoirs en clair, et
