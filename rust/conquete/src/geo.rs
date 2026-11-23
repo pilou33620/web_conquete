@@ -238,6 +238,29 @@ pub fn _b16(a: &[u16]) -> Vec<u8> {
     a.iter().flat_map(|v| v.to_le_bytes()).collect()
 }
 
+/// (SPEC-EMPIRE, module 3) Une grille compactée pour la page (carte monde) : des suites (valeur sur `w` octets, longueur
+/// en LEB128), en base64 ; map.js `deRle` la déplie.
+pub fn rle(d: &[u8], w: usize) -> String {
+    let mut out = Vec::with_capacity(d.len() / 16);
+    let mut i = 0;
+    while i < d.len() {
+        let v = &d[i..i + w];
+        let mut n = 1;
+        while i + (n + 1) * w <= d.len() && &d[i + n * w..i + (n + 1) * w] == v {
+            n += 1;
+        }
+        out.extend_from_slice(v);
+        let mut k = n;
+        while k >= 128 {
+            out.push((k & 127) as u8 | 128);
+            k >>= 7;
+        }
+        out.push(k as u8);
+        i += n * w;
+    }
+    b64encode(&out)
+}
+
 /// Le tableau d'entiers de 16 bits de ces octets (array('H').frombytes : un nombre pair d'octets).
 pub fn _h16(b: &[u8]) -> Vec<u16> {
     assert!(b.len() % 2 == 0, "ValueError: bytes length not a multiple of item size");
@@ -2892,12 +2915,15 @@ impl GeoMap {
         let mut playable = self.playable_codes.vec();
         playable.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let b = self.src.at("bounds");
+        // (SPEC-EMPIRE, module 3) la carte monde, surtout de l'océan, envoie ses grilles compactées (rle) : 1 Mo au lieu de 22
+        let monde = !self.parties.is_empty();
+        let grille = |d: &[u8], w: usize| if monde { rle(d, w) } else { b64encode(d) };
         let out = dict! {"W" => self.W, "H" => self.H, "lon0" => b.at("lon0"), "lat1" => b.at("lat1"), "KX" => self.KX, "KY" => self.KY, "playable" => playable,
         "y_mont" => self.xy(43.2, 0.0).1, "x_cote" => self.xy(44.0, -0.95).0, "y_spain" => self.xy(43.36, 0.0).1,
-        "terrain" => b64encode(&self.terrain),
-        "dept" => b64encode(&self.dept),
-        "cellnode" => b64encode(&_b16(&self.cellnode)),   // (deux octets par case, petit-boutiste)
-        "river" => b64encode(&self.river),
+        "terrain" => grille(&self.terrain, 1),
+        "dept" => grille(&self.dept, 1),
+        "cellnode" => grille(&_b16(&self.cellnode), 2),   // (deux octets par case, petit-boutiste)
+        "river" => grille(&self.river, 1),
         "dept_codes" => self.dept_codes.iter().map(Val::from).collect::<Val>(), "depts" => depts, "rivers" => rivers, "waters" => waters,
         "nodes" => &self.nodes, "edges" => &self.edges,
         "ways" => self.ways.values().iter().map(|w| dict!{"name" => w.at("name"), "label" => w.at("label"), "sea" => w.at("sea"),
@@ -2905,7 +2931,8 @@ impl GeoMap {
         "terrain_names" => Val::dict_from(TERRAIN().items().into_iter().map(|(k, v)| (k, v.at(0))).collect())};
         // (SPEC-EMPIRE, module 3) la carte monde : ses théâtres et leur cadre en cases [x, y, largeur, hauteur] (le sélecteur de
         // théâtre de la page), leur projection, leurs pays ; les routes maritimes, leurs balises d'horizon, les comptoirs
-        if !self.parties.is_empty() {
+        if monde {
+            out.set("rle", true);
             out.set("theatres", self.parties.iter().map(|p| dict! {"id" => p.theatre.id, "nom" => p.theatre.nom, "cadre" => list![p.ox, p.oy, p.W, p.H],
                 "lon0" => p.lon0, "lat1" => p.lat1, "KX" => p.KX, "pays" => p.pays.iter().map(Val::from).collect::<Val>()}).collect::<Val>());
             for (k, v) in [("routes_mer", &self.routes_mer), ("sorties", &self.sorties), ("comptoirs", &self.comptoirs)] {

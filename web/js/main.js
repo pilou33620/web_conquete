@@ -2,6 +2,7 @@ import { MapView } from './map.js';
 import { UI } from './ui.js';
 import { Tuto } from './tuto.js';
 import { intro } from './intro.js';
+import { Monde } from './monde.js';
 
 const api = {
   get: u => fetch(u, { cache: 'no-store' }).then(r => r.json()),
@@ -127,6 +128,7 @@ async function boot() {
   await new Promise(r => setTimeout(r, 30));
   map = new MapView(document.getElementById('map'), payload);
   ui = new UI(map, payload.rules, payload.map, api);
+  new Monde(map, payload.map);   // (SPEC-EMPIRE, P2 : carte Monde, sélecteur de théâtre et mini-carte)
   ui.onRefresh = () => setTimeout(poll, 60);
   ui.modes = payload.modes || [];
   ui.geo = payload.geo;

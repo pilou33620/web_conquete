@@ -15,6 +15,7 @@
 import { K, C, SQ3, clamp, hache } from './grille.js';
 import { Niveau, choisirPas, cadrer, couvre, fenetre, indexEn, routesDe } from './carte-moteur.js';
 import { AMB, meteoEn } from '../carte/ambiance.js';
+import { Marine } from './marine.js';
 
 export { K, C };
 
@@ -28,10 +29,15 @@ if (!cv && carte2d) {
   carte2d.parentNode.insertBefore(cv, carte2d);
 }
 // sans WebGL, scene.js échoue à l'import : la carte classique prend le relais (map.js, initPlateau)
-let E = null;
+let E = null, calage = null;
 if (PAGE) try {
   // (vie : gens, bêtes, charrettes et bateaux du moteur ; faune : oiseaux migrateurs, poissons ; eau : vagues des côtes)
   // (monde : animerPose, les ailes des moulins, les drapeaux et les fumées des cheminées des bâtiments posés)
+  // (SPEC-EMPIRE, P2) les étiquettes HTML du moteur (etiquettes.js, importé par monde.js et marine.js) prennent leur calque
+  // #etiquettes à l'import et se posent après la caméra de la boucle du moteur : le calque d'abord, et la caméra recalée
+  // sur celle du jeu avant elles (calage), sinon elles tomberaient à côté
+  if (!document.getElementById('etiquettes')) { const d = document.createElement('div'); d.id = 'etiquettes'; carte2d?.after(d); }
+  (await import('../../graphismes/rendu/scene.js')).apresCamera(() => calage?.());
   // (modernes, animations, toon : les habitants et les pièces mobiles des bâtiments des emplacements, SPEC-EMPIRE module 4)
   const [S, P, M, R, V, W, , , MO, A, T] = await Promise.all(['scene', 'plateau', 'modeles', 'routes', 'vie', 'monde', 'faune', 'eau', 'modernes', 'animations', 'toon']
     .map(m => import(`../../graphismes/rendu/${m}.js`)));
@@ -40,6 +46,8 @@ if (PAGE) try {
   E = { S, P, M, R, V, W, MO, A, T, rendre: () => rendre(S.scene, S.camera), rendreScene: rendre };
   S.cam.auto = false;
   P.decorProgressif(6);   // (le décor se pose par morceaux de 6 ms par image : changer de vue n'arrête plus l'image)
+  // (SPEC-EMPIRE, P2) la marine du moteur (marine.js, adaptée par hex/marine.js) ; sans elle, le plateau reste
+  E.Mar = await import('../../graphismes/rendu/marine.js').catch(e => { console.warn('Marine de web_engine indisponible', e); return null; });
 } catch (e) {
   console.warn('Moteur graphique web_engine indisponible', e);
   cv?.remove(); cv = null;
@@ -79,6 +87,8 @@ export class Plateau {
     this.habitants = new E.S.THREE.Group(); E.S.scene.add(this.habitants);
     this.vies = new Map(); this.animSale = false;           // clé → modèle animé (modernes.js) des bâtiments à l'écran
     this.vignettes = new Map();                             // clé, couleur, époque → image du bâtiment
+    this.marine = E.Mar ? new Marine(this, E.Mar) : null;   // (SPEC-EMPIRE, P2 : flottes, blocus, comptoirs, balises)
+    calage = () => { if (this.fen && this.camJeu) this.caler(...this.camJeu); };
   }
 
   niveau(pas, leger) {
@@ -168,6 +178,7 @@ export class Plateau {
     E.R.majRoutes(this.chemins);   // (après l'état : le moteur pose les routes sur les hauteurs des cases)
     this.lieuxDu(N);
     this.batirVilles();
+    this.marine?.maj(this.st, true);   // (SPEC-EMPIRE, P2 : les indices de case ont changé)
     this.sale = true;
   }
   // la vie du moteur (vie.js) : passants des places, charrettes des routes, travaux des champs, fermes et moulins, bêtes,
@@ -242,6 +253,7 @@ export class Plateau {
       l.ns = ns;
     }
     if (change && this.fen) this.batirVilles();
+    try { this.marine?.maj(st); } catch (e) { console.error('Marine', e); }   // (SPEC-EMPIRE, P2 : flottes et blocus de cet état ; une erreur du rendu n'arrête pas la page)
   }
   // les bâtiments des places de la fenêtre, aux couleurs du camp qui les tient et au style de l'année
   batirVilles() {
@@ -427,6 +439,7 @@ export class Plateau {
     if (E.P.decorEnCours()) this.sale = true;   // (le décor arrive par morceaux : chacun se montre)
     if (!this.sale && now - this.tRendu < pas) return false;
     this.majClimat(cam);
+    this.camJeu = [{ x: cam.x, y: cam.y, z: cam.z }, vw, vh];   // (les étiquettes du moteur se posent avec, calage)
     this.caler(cam, vw, vh);
     E.rendre();
     this.sale = false; this.tRendu = now;

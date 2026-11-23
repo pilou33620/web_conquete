@@ -658,3 +658,21 @@ body.modal-event #proposals { display: none; }   /* une décision à prendre : l
 #bubble .bt-apercu { max-width: 290px; } #bubble .bt-armes dt span { display: none; }   /* (dans la bulle : l'icône et le nombre) */
 #bubble .bt-armes { grid-template-columns: auto auto; justify-content: start; gap: 1px 6px; } #bubble .bt-camp > b { font-size: 14px; } #bubble .bt-armes { font-size: 13px; }
 @media (max-width: 520px) { .bt-forces { gap: 8px; } .bt-armes { font-size: 13.5px; } .bt-journal { font-size: 13px; } }
+/* (SPEC-EMPIRE, P2) la marine : étiquettes du moteur web_engine (marine.js : flottes, balises des routes, bataille navale ;
+   repris de graphismes/rendu/rendu.css, sous #etiquettes : .lbl sert aussi au rail), fenêtre de flotte, scène navale,
+   sélecteur de théâtre et mini-carte de la carte Monde (monde.js) */
+#etiquettes { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+#etiquettes .lbl { position: absolute; left: 0; top: 0; will-change: transform; filter: drop-shadow(0 2px 2px rgba(0,0,0,.45)); }
+#etiquettes .arm { white-space: nowrap; font: 800 11px sans-serif; color: #fff; background: var(--c); border-radius: 6px; padding: 1px 6px; border: 1.5px solid rgba(255,255,255,.8); }
+#etiquettes .fx { font-size: 24px; animation: fx 1.8s ease-out forwards; }
+@keyframes fx { 0% { transform: scale(.3); opacity: 0 } 20% { transform: scale(1.35); opacity: 1 } 100% { transform: scale(1) translateY(-30px); opacity: 0 } }
+.fl-compo { width: 100%; font-size: 14px; margin: 2px 0 6px; } .fl-compo td, .fl-compo th { text-align: left; }
+.fl-sel { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--papier-2); }
+.fl-sel select { flex: 1; min-width: 0; background: var(--prusse-2); color: var(--papier); border: 1px solid var(--hair); border-radius: 6px; padding: 6px; font: inherit; }
+#modal.scene { background: transparent; place-items: end center; pointer-events: none; }
+#modal.scene .modal-card { pointer-events: auto; width: min(760px, 100%); max-height: 38%; }
+#monde { position: absolute; left: 50%; transform: translateX(-50%); top: calc(var(--tb-h) + var(--safe-t) + 10px); z-index: 15; display: flex; gap: 8px; align-items: flex-start; }
+#monde .seg { background: var(--panel); box-shadow: 0 4px 14px var(--ombre); }
+body:has(#start:not([hidden])) #monde { z-index: 46; top: 12px; left: auto; right: 16px; transform: none; }
+#monde canvas { display: block; width: 210px; height: 100px; border: 1px solid var(--laiton); border-radius: 6px; background: #1d3a52; cursor: pointer; box-shadow: 0 4px 14px var(--ombre); }
+@media (max-width: 760px) { #monde canvas { display: none; } }

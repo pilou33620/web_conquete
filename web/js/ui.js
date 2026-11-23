@@ -10,12 +10,15 @@ import { Decouvertes } from './decouvertes.js';
 import { arbreHtml } from './arbre.js';
 import { startTechs, startRails } from './epoque.js';
 import * as BT from './strategie.js';
+import { Flottes } from './flottes.js';
 import { Son } from './son.js';
 
 // nombres à la française : virgule décimale et vrai signe moins (−)
 const minus = s => s.replace(/^-/, '−');
 // une bataille du joueur qui attend sa décision : sa stratégie, ou la poursuite (SPEC-BATAILLE.md)
 const enAttente = b => b.mode === 'attente' || b.mode === 'poursuite';
+// … sur terre ou en mer (SPEC-EMPIRE, P2 : les batailles navales sont à part, st.navales)
+const btAttente = st => (st.battles || []).find(enAttente) || (st.navales || []).find(enAttente);
 const fmt = n => minus((Math.round(n) || 0).toLocaleString('fr-FR'));   // || 0 : pas de « −0 »
 const fmt1 = n => minus(((Math.abs(n) >= 10 ? Math.round(n) : Math.round(n * 10) / 10) || 0).toLocaleString('fr-FR'));
 const fmt2 = n => minus((Math.round(n * 100) / 100 || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -70,6 +73,10 @@ export class UI {
     map.trMode = this.trMode;
     this.$ = id => document.getElementById(id);
     this.tuto = new Tuto(this);
+    // (SPEC-EMPIRE, P2) les flottes : sélection sur la carte, fenêtre, chantier naval, bataille navale (flottes.js)
+    this.flottes = new Flottes(this);
+    map.toucheFlotte = (sx, sy, pad) => this.flottes.touche(sx, sy, pad);
+    map.dessinFlottes = ctx => this.flottes.dessin(ctx);
     this.buildStatic();
     map.onTap = e => this.onTap(e);
     map.onContext = e => this.onContext(e);
@@ -100,6 +107,7 @@ export class UI {
     document.body.addEventListener('change', e => {
       const t = e.target;
       if (t.dataset.reg) { t.checked ? this.checked.add(t.dataset.reg) : this.checked.delete(t.dataset.reg); t.closest('.reg')?.classList.toggle('sel', t.checked); }
+      if (t.dataset.flOrdre) this.flottes.choix(t);   // (ordres de flotte : commerce, course, route)
       if (t.dataset.act === 'slider') this.cmd({ cmd: 'slider', value: t.value / 100 }, false);
       if (t.dataset.act === 'tax') this.cmd({ cmd: 'tax', value: t.value / 100 }, false);
       // douane (panneau Commerce) : hors data-act, que le clic de la page n'empêche pas de cocher
@@ -216,7 +224,10 @@ export class UI {
       const u = this.rules.units[k];
       if (u && (u.name !== nm || u.short !== sh)) { u.name = nm; u.short = sh; }
     }
+    // (SPEC-EMPIRE, P2) les batailles navales à part : ni la carte ni la petite scène terrestre ne les montrent (flottes.js)
+    st.navales = (st.battles || []).filter(b => b.naval); st.battles = (st.battles || []).filter(b => !b.naval);
     this.map.setState(st);
+    this.flottes.majBataille(st);
     if (first || renamed) {
       const f = this.rules.factions[st.me.code];
       this.$('tb-faction').innerHTML = `${coat(f.color, st.me.code)}<div><div class="fname">${esc(f.name)}</div><div class="ftitle">${esc(f.title)}</div></div>`;
@@ -253,7 +264,7 @@ export class UI {
     const fini = this.finBt;
     if (fini && !st.over && !this.modal) this.openModal('resultat');
     // une bataille du joueur attend : sa stratégie, puis la poursuite s'il l'a gagnée (la campagne est figée)
-    const waitBt = (st.battles || []).find(enAttente);
+    const waitBt = btAttente(st);
     if (waitBt && !st.over && (!this.modal || this.modal === 'bataille')) { if (this.modal !== 'bataille') this.openModal('bataille'); }
     else if (this.modal === 'bataille' && !waitBt) this.closeModal();
     // une de vos armées est arrivée devant une place : à vous de choisir (une fenêtre à la fois, après les batailles)
@@ -272,7 +283,7 @@ export class UI {
   ctxBt() { return { rules: this.rules, names: this.st.names || {}, nodes: this.md.nodes, me: this.st.me?.code }; }
   // la bataille qui attend : le choix de la stratégie (« attente »), puis poursuivre ou non (« poursuite »)
   battleModal() {
-    const b = (this.st.battles || []).find(enAttente);
+    const b = btAttente(this.st);
     if (!b) return ['<p class="muted">Aucune bataille en attente.</p>', 'none'];
     if (b.mode === 'poursuite') return [BT.poursuiteHtml(this.ctxBt(), b), b.id + '|poursuite'];
     if (this.stratSel?.bid !== b.id) this.stratSel = { bid: b.id, id: null };
@@ -322,8 +333,11 @@ export class UI {
     if (this.events.length > 600) this.events.splice(0, 100);
     if (initial) return;
     this.decouv.onEvent(ev, initial);
-    if (ev.kind === 'battle_end') this.map.combatDe?.().fin(ev);   // la petite scène rejoue la bataille sur son hexagone
-    if (ev.kind === 'battle_end' && this.btSuivies.has(String(ev.bid))) { this.btSuivies.delete(String(ev.bid)); this.finBt = ev; }
+    if (ev.kind === 'battle_end' && !ev.naval) this.map.combatDe?.().fin(ev);   // la petite scène rejoue la bataille sur son hexagone
+    if (ev.kind === 'battle_end' && this.btSuivies.has(String(ev.bid))) {
+      this.btSuivies.delete(String(ev.bid));
+      if (ev.naval) this.flottes.fin(ev); else this.finBt = ev;   // (en mer : la scène par phases, puis le résultat)
+    }
     // une place affamée se rend : la garnison sort avec les honneurs (SPEC-BATAILLE.md)
     if (ev.kind === 'capture' && ev.capitulation) this.toast(ev.text, ev.capitulation.par === this.st.me.code ? 'good' : ev.capitulation.de === this.st.me.code ? 'bad' : '');
     if (ev.kind === 'tech_ia') this.toast(ev.text);   // (une découverte d'une IA : un bandeau, le jeu continue)
@@ -351,7 +365,7 @@ export class UI {
     const nextTurn = esc(tr.end || '');
     const stop = tr.stop;
     // une bataille attend le choix du joueur (stratégie, poursuite) : le mois ne reprend pas
-    const held = (this.st.battles || []).some(enAttente) ||
+    const held = !!btAttente(this.st) ||
       (this.st.armies || []).some(a => a.ask);
     const sig = [tr.phase, tr.end, stop ? stop.text + stop.date + stop.more : '', !!this.st.over, held].join('|');
     if (sig !== tb.dataset.sig) {
@@ -594,6 +608,7 @@ export class UI {
   onTap(e) {
     if (!this.st) { this.onStartTap && this.onStartTap(e); return; }
     this.hideBubble();
+    if (this.flottes.tap(e)) return;   // (SPEC-EMPIRE, P2 : ordre de flotte visé, ou la mer touchée avec une flotte choisie)
     if (this.targeting) {
       const a = this.armyById(this.targeting);
       this.stopTargeting();
@@ -760,7 +775,7 @@ export class UI {
     if (dy) b.style.top = (parseFloat(b.style.top) + dy) + 'px';
   }
   hideBubble() { this.$('bubble').hidden = true; }
-  stopTargeting() { this.targeting = null; this.map.cv.classList.remove('targeting'); }
+  stopTargeting() { this.targeting = null; this.flottes.vise = null; this.map.cv.classList.remove('targeting'); }
 
   // ------------------------------------------------------------------ actions
   action(act, d, el) {
@@ -1016,7 +1031,7 @@ export class UI {
       case 'pick-scen': this.startScen = d.v; this.map.showPreview(d.v); this.renderStart(); break;
       case 'start-game': this.onStartGame && this.onStartGame(this.startDept, this.startDiff, this.startScen); break;
       case 'resume': this.onResume && this.onResume(); break;
-      default: break;
+      default: if (act.startsWith('fl-')) this.flottes.action(act, d); break;   // (flottes.js)
     }
   }
 
@@ -1026,6 +1041,7 @@ export class UI {
     if (s.kind === 'node') { const n = this.md.nodes[s.id]; return [n.x, n.y]; }
     if (s.kind === 'army') { const d = this.map.disp.get(s.id); return d ? [d.x, d.y] : null; }
     if (s.kind === 'battle') { const b = this.st.battles.find(x => x.id === s.id); return b ? [b.x, b.y] : null; }
+    if (s.kind === 'flotte') return this.flottes.pos(s.id);
     return null;
   }
 
@@ -1033,10 +1049,12 @@ export class UI {
   renderPanel(force = false) {
     const p = this.$('panel');
     const s = this.sel;
+    if (!this.st) return;   // (partie lancée, premier état pas encore reçu : la carte Monde le fait attendre ; update() rendra le panneau)
     let html = '', sig = '';
     if (s.kind === 'node') [html, sig] = this.nodePanel(s.id);
     else if (s.kind === 'army') [html, sig] = this.armyPanel(s.id);
     else if (s.kind === 'battle') [html, sig] = this.battlePanel(s.id);
+    else if (s.kind === 'flotte') [html, sig] = this.flottes.panneau(s.id);
     if (html == null) {
       // bataille terminée : on annonce l'issue et on garde la main sur une de nos armées qui y était
       const m = this.fightMemo;
@@ -1293,9 +1311,10 @@ export class UI {
       h += `</div>`;
       h += this.railHtml(id);   // voie ferrée (game/rails.py)
       h += this.cityHtml(id, gn, ns, queue, qFull);   // emplacements et politique de la ville
+      h += this.flottes.chantierHtml(id, gn, ns);   // (SPEC-EMPIRE, P2) chantier naval d'un port de mer
       if (queue.length) {
         h += `<div class="section-t">En préparation${qFull ? ' <span class="muted small">(file pleine)</span>' : ''}</div>` + queue.map((q, i) => {
-          const lab = q.kind === 'unit' ? this.rules.units[q.what]?.name || q.what
+          const lab = q.kind === 'unit' ? this.rules.units[q.what]?.name || q.what : q.kind === 'navire' ? this.rules.navires?.[q.what]?.nom || q.what
             : q.kind === 'slot' && this.rules.cities?.chains[q.what] ? this.slotName(gn, q.what, q.lvl || 1) : this.rules.build[q.what]?.name || q.what;
           const pct = i === 0 ? Math.round((1 - q.left / q.total) * 20) * 5 : 0;   // par pas de 5 % : moins de redessins
           return `<div class="queue-item"><span>${lab}</span><span class="muted">${q.tn == null ? 'en attente (place assiégée)' : 'prêt ' + toursTxt(q.tn)}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`;
@@ -1671,7 +1690,8 @@ export class UI {
     this.modalSig = '';
     this.$('modal').hidden = false;
     document.body.classList.add('modal-open');
-    document.body.classList.toggle('modal-event', ['event', 'bataille', 'arrivee', 'resultat'].includes(kind));   // une décision : rien ne doit masquer ses choix
+    document.body.classList.toggle('modal-event', ['event', 'bataille', 'arrivee', 'resultat', 'navale'].includes(kind));   // une décision : rien ne doit masquer ses choix
+    this.$('modal').classList.toggle('scene', kind === 'navale');   // (la scène navale : la fenêtre en bas, la mer visible)
     this.renderModal(true);
     if (kind === 'menu') this.refreshSaves();
     this.tuto.check();
@@ -1711,7 +1731,7 @@ export class UI {
     if (!force && ae && card.contains(ae) && (/^(SELECT|TEXTAREA)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !['range', 'checkbox'].includes(ae.type)))) return;
     const fn = { tech: this.techModal, diplo: this.diploModal, commerce: this.commerceModal, production: this.prodModal,
                  journal: this.journalModal, menu: this.menuModal, fin: this.endModal, event: this.eventModal,
-                 bataille: this.battleModal, resultat: this.resultatModal, arrivee: this.arriveeModal, promotion: this.promotionModal, generaux: this.generauxModal, decouverte: () => this.decouv.html() }[k];
+                 bataille: this.battleModal, resultat: this.resultatModal, arrivee: this.arriveeModal, promotion: this.promotionModal, generaux: this.generauxModal, decouverte: () => this.decouv.html(), navale: () => this.flottes.sceneHtml() }[k];
     const [html, sig] = fn.call(this);
     if (!force && sig === this.modalSig) return;
     this.modalSig = sig;
@@ -2096,7 +2116,7 @@ export class UI {
 
   // le choix de la carte (Aquitaine, Europe…), quand le serveur en propose plusieurs
   modeTabs() {
-    return (this.modes || []).length > 1 ? `<div class="row"><span class="lab">Carte</span><span class="seg">${this.modes.map(m =>
+    return (this.modes || []).length > 1 ? `<div class="row"><span class="lab">Carte</span><span class="seg wrap">${this.modes.map(m =>
       `<button class="${m.geo === this.geo ? 'on' : ''}" data-act="pick-geo" data-v="${m.geo}">${esc(m.nom)}</button>`).join('')}</span></div>` : '';
   }
 

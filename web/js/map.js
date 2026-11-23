@@ -104,6 +104,20 @@ function b64(s) {
   for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
   return u;
 }
+// (SPEC-EMPIRE, module 3) une grille compactée de la carte monde (geo.rs rle) : des suites (valeur sur w octets, longueur
+// en LEB128), dépliées en n cases
+export function deRle(u, n, w = 1) {
+  const o = new Uint8Array(n * w);
+  let i = 0, j = 0;
+  while (i < u.length) {
+    const v = i;
+    i += w;
+    let k = 0, s = 0, b;
+    do { b = u[i++]; k += (b & 127) * 2 ** s; s += 7; } while (b & 128);
+    for (const fin = j + k * w; j < fin; j += w) for (let c = 0; c < w; c++) o[j + c] = u[v + c];
+  }
+  return o;
+}
 export function hash(i, j, k = 0) {
   let n = (Math.imul(i, 374761393) + Math.imul(j, 668265263) + Math.imul(k, 1442695041)) | 0;
   n = Math.imul(n ^ (n >>> 13), 1274126177);
@@ -139,8 +153,10 @@ export class MapView {
     this.rules = payload.rules;
     this.m = m;
     this.W = m.W; this.H = m.H;
-    this.terrain = b64(m.terrain); this.dept = b64(m.dept); this.river = b64(m.river);
-    this.cellnode = new Uint16Array(b64(m.cellnode).buffer);   // (deux octets par case ; 65535 : sans lieu)
+    const grille = (s, w = 1) => m.rle ? deRle(b64(s), m.W * m.H, w) : b64(s);   // (carte monde : grilles compactées)
+    this.terrain = grille(m.terrain); this.dept = grille(m.dept); this.river = grille(m.river);
+    this.cellnode = new Uint16Array(grille(m.cellnode, 2).buffer);   // (deux octets par case ; 65535 : sans lieu)
+    if (m.rle) m.terrain = this.terrain;   // (carte/villes.js relit la grille du terrain)
     this.nodes = m.nodes; this.edges = m.edges;
     this.depts = m.depts; this.deptCodes = m.dept_codes;
     this.cam = { x: m.W / 2, y: m.H / 2, z: 2 };
@@ -892,6 +908,8 @@ export class MapView {
       }
     }
     if (best) return { kind: best.kind, id: best.id, d: best.d };
+    const fl = this.state && this.toucheFlotte?.(sx, sy, pad);   // (SPEC-EMPIRE, P2 : les flottes, flottes.js)
+    if (fl) return fl;
     for (const b of st.battles) {
       const [x, y] = this.toScreen(b.x, b.y);
       const dd = Math.hypot(sx - x, sy - y - 26);
@@ -1898,6 +1916,7 @@ export class MapView {
     this.drawNodes(ctx, time, st);
     this.drawPaths(ctx);
     this.drawArmies(ctx, time);
+    this.dessinFlottes?.(ctx);   // (SPEC-EMPIRE, P2 : la flotte choisie ; les navires, marine.js sur le plateau)
     this.drawBattles(ctx, dt, time);
     this.drawParticles(ctx, dt);
     // éclats d'or des découvertes (decouvertes.js) : trois anneaux qui s'ouvrent sur le chef-lieu
