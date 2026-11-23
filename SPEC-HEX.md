@@ -113,6 +113,7 @@ avec un avertissement dans la console : c'est un secours, pas un choix.
 | `web/js/hex/grille.js` | La grille d'hexagones (`Grille`) et la projection inclinée (`K`, `C`, `versEcran`, `versJeu`), sans three.js |
 | `web/js/hex/carte-moteur.js` | La carte du jeu au format du moteur : niveaux de détail (`Niveau`), fenêtre (`cadrer`, `fenetre`) |
 | `web/js/hex/plateau.js` | L'adaptateur : la carte de campagne dessinée par le moteur web_engine, caméra calée sur celle du jeu |
+| `web/js/hex/qualite.js` | La qualité automatique du plateau : paliers (définition, ombres, habitants, décor, vie, cases, cadence) et régulateur (SPEC-EMPIRE, « Chargement et fluidité ») |
 | `web/js/hex/champ.js` | Le champ de bataille : hexagones de 40 m, décor, routes, ponts, haies, clôtures, bâtiments (états du serveur), enceinte, barricades, cratères |
 | `web/js/hex/troupes3d.js` | Les troupes en figurines 3D instanciées, posées par la logique de `battle/troupes2d.js` |
 

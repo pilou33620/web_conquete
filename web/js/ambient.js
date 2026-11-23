@@ -111,8 +111,7 @@ export class Ambient {
       // (haut : la hauteur du relief du plateau sous la figure, déjà projetée à l'écran, en km ; nul en vue verticale)
       fig(g, x, y, a) { const m = this.m, k = this.k, c = Math.cos(a) * m, s = Math.sin(a) * m; g.setTransform(c, s * k, -s, c * k, (x - this.cx) * m + this.W / 2, (y - this.cy) * m * k + this.H / 2 - (this.haut ? this.haut(x, y) * m : 0)); },
     };
-    this.build();
-    preparer(map);
+    this.pret = false;   // (build et preparer : à la première image de la carte classique, inutiles sur le plateau)
   }
 
   setOn(v) {
@@ -185,12 +184,13 @@ export class Ambient {
 
   // ------------------------------------------------------------------ sous les villes et les armées
   under(ctx, dt, time, st) {
-    const z = this.map.cam.z, zoom = this.map.zooming();   // (pendant un zoom, les petites figures qui bougent attendent)
-    if (st !== this.st) { this.st = st; majEtat(st); }
-    const [x0, y0, x1, y1] = this.scene(dt), sc = this.sc;
     // sur le plateau (SPEC-HEX), la vie est celle du moteur web_engine, dans son style (hex/plateau.js, majVie) : gens,
     // bêtes, charrettes, bateaux, oiseaux, vagues. Les figures dessinées ici ne servent plus qu'à la carte classique.
     if (this.map.hex) return;
+    if (!this.pret) { this.pret = true; this.build(); preparer(this.map); }
+    const z = this.map.cam.z, zoom = this.map.zooming();   // (pendant un zoom, les petites figures qui bougent attendent)
+    if (st !== this.st) { this.st = st; majEtat(st); }
+    const [x0, y0, x1, y1] = this.scene(dt), sc = this.sc;
     if (this.on) {
       if (z >= 3.5 && z < 18 && !zoom) this.drawFlows(ctx, this.t);   // (de plus près, la rivière peinte par les tuiles suffit)
       if (z >= 3) this.drawSea(ctx, this.t);
@@ -204,7 +204,7 @@ export class Ambient {
 
   // ------------------------------------------------------------------ au-dessus des villes (marchés, fumées, nuages, oiseaux)
   over(ctx, dt, time, st) {
-    if (this.map.hex) return;
+    if (this.map.hex || !this.pret) return;
     const [x0, y0, x1, y1] = this.scene(0);
     ctx.save();
     dessinerDessus(this.sc, ctx, x0, y0, x1, y1);

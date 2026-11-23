@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Grille, K, versEcran, versJeu } from '../web/js/hex/grille.js';
 import { Niveau, NIVEAUX, choisirPas, cadrer, couvre, fenetre, indexEn } from '../web/js/hex/carte-moteur.js';
+import { PALIERS, Regulateur } from '../web/js/hex/qualite.js';
 
 test('la grille retrouve l’hexagone sous chaque point', () => {
   const g = new Grille(272, 337, 4);
@@ -53,9 +54,46 @@ test('carte du moteur : indice d’hexagone, fenêtre alignée, taille bornée',
     for (const ch of C.rivieres) for (const i of ch) assert.ok(i >= 0 && i < f.l * f.h && C.riviere[i] === 1);
     assert.ok(couvre(f, f.x0, f.x1, f.y0, f.y1));
   }
-  for (const z of [0.5, 1, 3, 8, 30, 240]) { const c = choisirPas(1400, 900, z, K); assert.ok(c.l * c.h <= NIVEAUX[c.niv].max || c.niv === NIVEAUX.length - 1); }
+  const dernier = NIVEAUX.findLastIndex(n => !n.sobre);
+  for (const z of [0.5, 1, 3, 8, 30, 240]) { const c = choisirPas(1400, 900, z, K); assert.ok(c.l * c.h <= NIVEAUX[c.niv].max || c.niv === dernier); }
+  // la qualité automatique allège la fenêtre (part < 1) : des hexagones plus grands plus tôt, jusqu'au niveau sobre ; jamais sans elle
+  assert.equal(choisirPas(1400, 900, 0.5, K, 2607, 1254).pas, 16);
+  assert.equal(choisirPas(1400, 900, 0.5, K, 2607, 1254, 0.3).pas, 32);
+  assert.equal(choisirPas(1400, 900, 2.5, K, 272, 337, 0.3).pas, 8);
   // la géographie reste fine de loin : l'Aquitaine entière (272 × 337) en hexagones de 4, l'Europe entière (867 × 733) de 8
   assert.equal(choisirPas(1400, 900, 2.5, K, 272, 337).pas, 4);
   assert.equal(choisirPas(1400, 900, 1.25, K, 867, 733).pas, 8);
   assert.equal(choisirPas(1400, 900, 30, K, 867, 733).leger, false);
+});
+
+// qualité automatique (hex/qualite.js) : baisser quand les images se suivent lentement quelques secondes, remonter quand tout
+// va bien assez longtemps, sans osciller ; un à-coup isolé (fenêtre rebâtie) ou un onglet caché ne comptent pas
+test('qualité automatique : baisse, remonte, ne s’emballe pas', () => {
+  const r = new Regulateur(), suite = (t0, ms, dt) => { let t = t0; for (; t < t0 + ms; t += dt) r.noter(t, dt); return t; };
+  let t = suite(0, 2000, 30);
+  assert.equal(r.palier, 0);
+  t = suite(t, 12000, 6000);              // (des intervalles de plus de 5 s : onglet caché, ignorés)
+  t = suite(t, 2000, 30);
+  for (let k = 0; k < 6; k++) { r.noter(t, 400); t = suite(t + 400, 300, 30); }   // (à-coups isolés : la médiane reste bonne)
+  assert.equal(r.palier, 0);
+  t = suite(t, 2500, 80);                 // lent, moins longtemps que l'attente
+  assert.equal(r.palier, 0);
+  t = suite(t, 2000, 80);
+  assert.equal(r.palier, 1);
+  t = suite(t, 30000, 80);                // toujours lent : jusqu'au palier le plus sobre, pas au-delà
+  assert.equal(r.palier, PALIERS.length - 1);
+  t = suite(t, 9000, 33);
+  assert.equal(r.palier, PALIERS.length - 1);
+  t = suite(t, 4000, 33);                 // à l'aise dix secondes (sans compter le calme qui suit un changement) : un cran
+  assert.equal(r.palier, PALIERS.length - 2);
+  t = suite(t, 6000, 80);                 // la remontée ne tient pas : on redescend, et la prochaine attendra deux fois plus
+  assert.equal(r.palier, PALIERS.length - 1);
+  t = suite(t, 14000, 33);
+  assert.equal(r.palier, PALIERS.length - 1);
+  t = suite(t, 10000, 33);
+  assert.equal(r.palier, PALIERS.length - 2);
+  // un palier qui ne change rien sur l'appareil (sans ombres) est passé d'un coup, dans les deux sens
+  const s = new Regulateur(); s.saute = new Set([1]);
+  assert.equal(s.changer(0, 1), 2);
+  assert.equal(s.changer(0, 1), 0);
 });

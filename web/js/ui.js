@@ -1005,6 +1005,11 @@ export class UI {
         this.st.settings = { battles: d.v };
         this.cmd({ cmd: 'tac', sub: 'settings', battles: d.v }).then(() => { this.modalSig = ''; this.renderModal(true); });
         break;
+      case 'map-qualite': {   // qualité du plateau (hex/qualite.js), enregistrée sur cet appareil
+        this.map.plateau?.reglerQualite(d.v);
+        this.modalSig = ''; this.renderModal(true); this.startOn() && this.renderStart();
+        break;
+      }
       case 'map-teinte': {   // teintes du plateau (enregistrées sur cet appareil)
         this.map.setTeinte(d.v);
         this.toast(this.map.teinte === 'epoque' ? 'Carte d’époque : Cassini, puis état-major.' : 'Couleurs de la nature.');
@@ -2011,7 +2016,12 @@ export class UI {
         <p class="muted small" style="margin:4px 0 0">Salves, canons, tambours et clairons des batailles.</p>
         ${this.map.hex ? `<p class="small" style="margin:10px 0 4px">Teintes de la carte :</p><div class="seg wrap" role="group" aria-label="Teintes de la carte">${[['nature', 'Nature'], ['epoque', 'Carte d’époque']].map(([k, l]) =>
           `<button class="${k === this.map.teinte ? 'on' : ''}" data-act="map-teinte" data-v="${k}" aria-pressed="${k === this.map.teinte}">${l}</button>`).join('')}</div>
-        <p class="muted small" style="margin:4px 0 0">${this.map.teinte === 'epoque' ? 'Le plateau au papier et à l’encre : la carte de Cassini, puis celle de l’état-major à partir de 1818.' : 'Les couleurs de la saison et du pays.'}</p>` : ''}`;
+        <p class="muted small" style="margin:4px 0 0">${this.map.teinte === 'epoque' ? 'Le plateau au papier et à l’encre : la carte de Cassini, puis celle de l’état-major à partir de 1818.' : 'Les couleurs de la saison et du pays.'}</p>
+        <p class="small" style="margin:10px 0 4px">Qualité du plateau :</p><div class="seg wrap" role="group" aria-label="Qualité du plateau">${[['auto', 'Automatique'], ['leger', 'Légère'], ['normal', 'Normale'], ['riche', 'Riche']].map(([k, l]) => {
+          const on = k === (this.map.plateau.manuel || 'auto');
+          return `<button class="${on ? 'on' : ''}" data-act="map-qualite" data-v="${k}" aria-pressed="${on}">${l}</button>`;
+        }).join('')}</div>
+        <p class="muted small" style="margin:4px 0 0">${this.map.plateau.manuel ? 'Ombres, définition et animations fixées.' : 'Baisse d’elle-même la définition, les animations et le décor quand les images ralentissent, et les remonte quand tout va bien.'}</p>` : ''}`;
   }
 
   endModal() {
