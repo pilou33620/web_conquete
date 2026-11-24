@@ -4,13 +4,11 @@
 
 mod commun;
 
-use commun::{message, par_map, Args};
+use commun::{carry_on, message, par_map, play_month, Args};
 use conquete::ai::AI;
 use conquete::engine::Game;
-use conquete::events as E;
 use conquete::geo::GeoMap;
 use conquete::py::{self, Val};
-use conquete::turns as TT;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::rc::Rc;
 
@@ -31,47 +29,6 @@ mois les guerres déclarées, les traités et les capitulations (sur la sortie d
 
 const GRANDES_ARMES: [&str; 4] = ["gribeauval", "percussion", "lahitte", "chassepot"];
 const EPOQUES: [&str; 4] = ["1700", "1790", "1813", "1870"];
-
-/// Le camp du joueur rayé de la carte : le monde continue, vu d'un autre camp en vie (tous joués par les IA).
-fn carry_on(g: &mut Game) -> bool {
-    if !(g.over.is_dict() && g.over.get("result") == "defaite") {
-        return false;
-    }
-    let mut alive: Vec<Val> = g.factions.keys().into_iter().filter(|c| g.factions.at(c).atb("alive")).collect();
-    alive.sort_by(|a, b| a.s().cmp(b.s()));
-    if alive.len() < 2 {
-        return false;
-    }
-    g.player = alive[0].string();
-    g.over = Val::None;
-    g.lost_player = true;
-    true
-}
-
-/// Un « Tour suivant » ; les décisions qui attendent le joueur (événements), c'est son IA qui les prend : le premier
-/// choix qu'il peut payer, comme les IA.
-fn play_month(g: &mut Game) {
-    TT::go(g);
-    for _ in 0..3000 {
-        if carry_on(g) {
-            TT::go(g);
-        }
-        if g.tour.at("end").is_none() || g.over.truthy() {
-            return; // (partie finie : un seul camp, ou 1900)
-        }
-        for x in g.pending_ev.iter() {
-            let choices = x.at("choices");
-            let n = choices.len() as i64;
-            let ok = (0..n).find(|&i| E::affordable(g, &g.player.clone(), &choices.at(i).at("fx")));
-            E::resolve(g, x.at("id").s(), ok.unwrap_or(n - 1), true);
-        }
-        TT::advance(g, 1.0);
-        if g.tour.atb("stop") {
-            TT::go(g);
-        }
-    }
-    panic!("AssertionError: le tour des IA ne finit pas");
-}
 
 struct Mesures {
     seed: i64,
@@ -220,13 +177,7 @@ fn main() {
     std::env::set_var("WEB_CONQUETE_NOLOG", "1"); // (tests/fabrique.py : le banc n'écrit pas dans logs/batailles.jsonl)
     let a = Args::parse(AIDE, &["parties", "epoque", "annees", "graine", "proc", "geo", "joueur", "suivi", "recit"]);
     let v_geo = a.i("geo", 2);
-    // (le camp vu : FR en Europe et sur la carte monde, le premier pays d'un autre théâtre, 33 dans le Sud-Ouest)
-    let defaut = match conquete::geo::theatre(v_geo) {
-        Some(t) if t.geo == conquete::geo::VERSION_EUROPE || t.geo == conquete::geo::VERSION_MONDE => "FR".to_string(),
-        Some(_) => conquete::rules::camps(v_geo).first().map_or_else(String::new, |c| c.string()),
-        None => "33".to_string(),
-    };
-    let joueur = a.s("joueur", &defaut);
+    let joueur = a.s("joueur", &commun::joueur_defaut(v_geo));
     let suivi: Vec<String> = a.s("suivi", "").split(',').filter(|c| !c.is_empty()).map(str::to_string).collect();
     let recit = a.i("recit", 0) != 0;
     let (parties, annees, graine, proc) = (a.i("parties", 3), a.i("annees", 30), a.i("graine", 1), a.i("proc", 1));

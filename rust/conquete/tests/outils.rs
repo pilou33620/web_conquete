@@ -1,4 +1,4 @@
-//! Les outils (src/bin : bilan, simuler, carte_hex) contre leurs originaux Python (outils/*.py) :
+//! Les outils (src/bin : bilan, simuler, carte_hex ; equilibre en fin de fichier) contre leurs originaux Python (outils/*.py) :
 //! chaque exécutable est lancé sur un cas court et sa sortie comparée à celle que l'outil Python a écrite sur le même cas
 //! (tests/references/outils/ ; pour l'export, trop gros, son SHA-256).
 //!
@@ -52,4 +52,39 @@ fn carte_hex() {
     let page = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/js/dev/carte-hex-data.js");
     let attendu = std::fs::read_to_string(page).unwrap();
     assert_eq!(sha256(&lancer(env!("CARGO_BIN_EXE_carte_hex"), &[])), sha256(&attendu));
+}
+
+/// L'outil d'équilibre (SPEC-POLITIQUE.md, module 8 ; pas d'original Python) : une partie d'un an en Aquitaine dans son
+/// processus, puis la série entière réduite à cette partie : le rapport HTML et le résumé JSON sont écrits, avec les clés
+/// que lit l'assistant.
+#[test]
+fn equilibre() {
+    let exe = env!("CARGO_BIN_EXE_equilibre");
+    let j: serde_json::Value = serde_json::from_str(lancer(exe, &["--partie", "2:1700:3:1:hasard"]).trim()).unwrap();
+    assert!(j["erreur"].is_null(), "{}", j["erreur"]);
+    assert_eq!(j["x"], serde_json::json!([1700, 1701])); // le départ et la fin de l'année
+    let camp = j["camps"].as_object().unwrap().values().next().unwrap();
+    for k in ["places", "vivant", "revenus", "armee", "techs"] {
+        assert!(camp.get(k).is_some(), "série {k} absente");
+    }
+    for k in ["unites", "batiments", "detresse"] {
+        assert!(j["compteurs"].get(k).is_some(), "compteur {k} absent");
+    }
+
+    let sortie = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("equilibre");
+    let _ = std::fs::remove_dir_all(&sortie);
+    let args = ["--reglages", "aucun.toml", "--cartes", "2", "--parties", "1", "--annees", "1", "--coeurs", "1", "--sortie", sortie.to_str().unwrap()];
+    lancer(exe, &args);
+    let fichiers: Vec<std::path::PathBuf> = std::fs::read_dir(&sortie).unwrap().map(|e| e.unwrap().path()).collect();
+    let lire = |debut: &str| std::fs::read_to_string(fichiers.iter().find(|f| f.file_name().unwrap().to_string_lossy().starts_with(debut)).unwrap()).unwrap();
+    let page = lire("rapport-");
+    assert!(page.contains("<script id=\"donnees\"") && !page.contains("__DONNEES__"));
+    let resume: serde_json::Value = serde_json::from_str(&lire("resume-")).unwrap();
+    for k in ["reglages", "colonnes_camps", "cartes", "alertes", "plantages"] {
+        assert!(resume.get(k).is_some(), "clé {k} absente du résumé");
+    }
+    let carte = &resume["cartes"][0];
+    assert_eq!(carte["parties"], 1);
+    assert_eq!(carte["camps"].as_array().unwrap().len(), 5); // les cinq départements de l'Aquitaine
+    assert!(carte["compteurs"]["strategies"].is_object() && carte["temps"]["moyen_ms"].is_number());
 }

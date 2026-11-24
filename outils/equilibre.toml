@@ -1,0 +1,41 @@
+# Réglages de l'outil d'équilibre (bin/equilibre, lancé par lancer-equilibre.cmd ou lancer-equilibre.sh).
+# Voir la rubrique « Tester l'équilibre sur un PC » du README. Une ligne de commande l'emporte :
+#   bin/equilibre --parties 8 --annees 20 --cartes 2,5 --coeurs 6
+
+# Les cartes, par numéro ou par nom :
+#   2 aquitaine, 5 europe, 13 monde (Amérique + Europe + Inde),
+#   6 amerique, 7 inde, 8 guinee (Côte de l'Ivoire), 9 bresil, 10 madagascar, 11 indes_orientales
+cartes = [2, 5, 13, 6, 7, 8, 9, 10, 11]
+
+# Les époques de départ (1700, 1790, 1813, 1870) : chaque carte est jouée à chacune.
+epoques = ["1700"]
+
+# Parties par carte et par époque (graines graine, graine + 1, …), et années jouées par partie.
+parties = 32
+annees = 50
+graine = 1
+
+# Le camp « du joueur », joué lui aussi par une IA : "hasard" (un camp tiré selon la graine) ou un code (FR, 33…).
+# Les batailles navales ne sont connues que pour ce camp et ses alliés : le hasard les répartit sur tous les camps.
+joueur = "hasard"
+
+# Cœurs du PC à occuper (0 : tous). Une partie occupe un cœur ; la carte du monde demande environ 300 Mo par partie.
+coeurs = 0
+
+# Dossier du rapport (HTML) et du résumé (JSON), depuis la racine du jeu.
+sortie = "equilibre"
+
+# Une partie plus longue que cela est arrêtée et notée comme plantée (minutes).
+limite_minutes = 240
+
+# Alertes : un camp qui finit avec plus de domination_places % des places dans plus de domination_parties % des
+# parties ; un tour des IA (un mois) plus long que tour_ms millisecondes.
+domination_places = 40
+domination_parties = 50
+tour_ms = 3000
+
+# --rapide : un essai court, pour vérifier que tout marche (deux ou trois minutes).
+[rapide]
+cartes = [2, 5, 8]
+parties = 2
+annees = 2

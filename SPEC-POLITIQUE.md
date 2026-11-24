@@ -224,3 +224,57 @@ Fichiers : `diplomacy.rs` (section « SPEC-POLITIQUE, module 6 »), `engine/memo
 - **Écarts / pas fait** : l'IA n'échange pas de technologies ni de régions entre IA d'elle-même (elle les évalue quand on
   les lui propose) ; une proposition au joueur qui expire ne coûte rien ; le tribut est par tour (mois) et non annuel ;
   les propositions au joueur gouverné par son IA (simulations) sont jugées par l'IA (`attend_le_joueur`).
+
+### Module 8 (T1, outil d'équilibre) — 24/11/2026
+
+**Fait.**
+- `src/bin/equilibre.rs` : chaque partie dans son propre processus (`equilibre --partie carte:époque:graine:années:camp`,
+  qui sert aussi à rejouer une partie plantée), sur `coeurs` processus à la fois ; panique du moteur, arrêt du processus
+  ou partie plus longue que `limite_minutes` : notée (graine, carte, message, commande), les autres continuent. Cartes
+  préparées une à une avant la série (cache), grandes cartes d'abord, avancement et temps restant sur la sortie
+  d'erreur. Écrit `equilibre/rapport-<date>.html` (page autonome, données JSON inline, courbes SVG dessinées à la main,
+  thème clair / sombre / auto, onglet par carte) et `equilibre/resume-<date>.json` (≈ 10 Ko pour 3 cartes, ≈ 40 Ko pour
+  les 9 ; tableau compact par camp, compteurs, catégories, valeurs de fin, alertes, 50 plantages au plus) ; `--ouvrir`
+  ouvre le rapport.
+- `src/bin/equilibre/mesures.rs` : quatre tables, une ligne par mesure, qui lisent la partie ou sa sauvegarde
+  (`views::to_dict`, réglages des batailles remis comme avant : la partie n'est pas changée). Par camp et par an : places,
+  vivant, revenus, trésor, hommes (armées et garnisons), technologies, navires, flottes, commerce maritime, prestige ;
+  par mois : régiments apparus / disparus par type, niveaux de bâtiments bâtis, navires gagnés / perdus, batailles par
+  situation, stratégies choisies et victoires, batailles navales et leurs stratégies, sièges (commencés, finis, réussis),
+  places changées de main, guerres gagnées / perdues par camp (le camp qui a pris le plus de places à l'autre, ou l'a
+  rayé), mois de banqueroute et de famine par camp, journal par sorte ; toute la carte par an : prix du marché, prix des
+  denrées, routes (et coupées), comptoirs tenus, flottes en traversée, états diplomatiques (tous ceux qui existeront),
+  camps en vie et en guerre.
+- Nouveautés prévues, qui s'allument dès que R7/R8/R9 sauvegardent leurs champs : agents par camp (`agents` avec
+  `owner`/`proprio`), agents recrutés / perdus par type, missions finies et « agent revenu » par type
+  (`agents[id].mission.type`), mécontentement du peuple et de la noblesse (`politique.classes.*.mecontentement`),
+  changements de régime (`politique.regime`), révolutions (`politique.revolution`), ministres nommés par poste
+  (`politique.cabinet`), régime et caractère à la fin (`caractere`) avec la part des places, attitude moyenne
+  (`factions[c].attitude`, nombre ou `{valeur}`), camps nés en cours de partie (guerre civile, indépendance),
+  protectorats (état diplomatique).
+- Alertes : domination (plus de `domination_places` % des places dans plus de `domination_parties` % des parties), camp
+  toujours rayé, banqueroutes et famines (plus de 10 % des mois), unité / bâtiment / navire / stratégie jamais pris
+  (parmi ceux sans technologie requise), stratégie presque toujours perdante ou gagnante (20 fois au moins), tour des IA
+  lent (`tour_ms`), plantages ; temps moyen et pire du tour des IA par carte.
+- `outils/equilibre.toml` (lu par un petit lecteur TOML, sans dépendance) : 9 cartes, 1700, 32 parties de 50 ans, tous
+  les cœurs, camp suivi au hasard ; `[rapide]` : Aquitaine, Europe, Côte de l'Ivoire, 2 parties de 2 ans.
+- `lancer-equilibre.cmd` / `.sh` (compile ou télécharge par `scripts/binaires.*`, retélécharge si `bin/equilibre`
+  manque, lance, ouvre le rapport) ; `.github/workflows/binaires.yml` : `equilibre` vient avec `--bins`, et l'archive de
+  production prend les lanceurs et `outils/equilibre.toml`. README : « Tester l'équilibre sur un PC ».
+- `simuler` : `carry_on`, `play_month` et le camp par défaut passés dans `src/bin/commun/` (sortie inchangée) ;
+  `Args::parse_drapeaux` pour les options sans valeur. Essais : `tests/outils.rs` `equilibre` (une partie, puis la série
+  réduite : rapport et résumé écrits avec leurs clés), lecteur TOML dans le binaire.
+- `--rapide` : 1 min 24 s ici (4 cœurs virtuels qui ne valent qu'un cœur réel). Série par défaut estimée à 35 h de
+  calcul d'un cœur (Monde ≈ 45 s par année de jeu, Europe ≈ 18 s, Aquitaine ≈ 2 s, théâtres 1 à 5 s) : 2 à 5 h sur un PC
+  de 8 à 16 cœurs.
+
+**Écarts, pas fait.**
+- Batailles navales : le moteur ne les écrit au journal que si le camp suivi ou un allié y est ; elles ne sont donc
+  comptées que pour lui (le camp suivi est tiré au hasard à chaque partie pour les répartir). Les navires gagnés /
+  perdus, eux, sont comptés pour tous.
+- « Joueur absent » impossible (le moteur veut un camp du joueur) : il est joué par une IA comme les autres.
+- Unités : ni victoires ni défaites par type (le moteur ne le garde pas) ; « disparus » compte aussi les fusions.
+- Temps du tour : par mois de jeu et par partie (toutes les IA ensemble), pas par IA.
+- Missions (R7) : la réussite est devinée (agent encore là à la fin de la mission) ; à affiner quand R7 dira l'issue.
+  Les champs supposés des nouveautés sont ceux de cette spec : à vérifier après la fusion (`mesures.rs`, une ligne).
+

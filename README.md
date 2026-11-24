@@ -777,6 +777,39 @@ bataille déjà engagée avec les régiments voulus (`bataille(dict! {"ligne" =>
 avec une graine fixe : même graine, même bataille. Les essais n'écrivent pas dans `logs/batailles.jsonl`
 (`WEB_CONQUETE_NOLOG=1`).
 
+## Tester l'équilibre sur un PC
+
+Les réglages d'équilibre (`rust/conquete/src/rules.rs`) se font à partir de grandes séries de parties jouées par les IA
+seules, sur un PC puissant, sans rien à surveiller (SPEC-POLITIQUE.md, module 8).
+
+**Quoi lancer.** Sous Windows : double-cliquer `lancer-equilibre.cmd` à la racine du jeu. Sous Linux ou macOS :
+`./lancer-equilibre.sh`. Le script compile l'outil si Rust est installé, sinon il télécharge l'exécutable publié
+(comme `demarrer_WEB_CONQUETE`), joue les parties sur tous les cœurs du PC, puis ouvre le rapport dans le navigateur.
+Pour un essai de deux ou trois minutes d'abord : `lancer-equilibre.cmd --rapide` (dans une invite de commandes) ou
+`./lancer-equilibre.sh --rapide`.
+
+**Réglages** : `outils/equilibre.toml` (cartes, époques, parties par carte, années, cœurs, dossier du rapport, seuils
+des alertes). Par défaut : les neuf cartes (Aquitaine, Europe, Monde et les six théâtres), départ en 1700, 32 parties de
+50 ans par carte, tous les cœurs, le camp « du joueur » tiré au hasard et joué lui aussi par une IA. Une option de la
+ligne de commande l'emporte : `bin/equilibre --cartes 2,5 --parties 16 --annees 30 --coeurs 6`.
+
+**Combien de temps.** La série par défaut demande environ 35 heures de calcul d'un cœur : compter **2 à 5 heures sur un
+PC de 8 à 16 cœurs**. La carte du monde en prend plus de la moitié (vers 45 s par année de jeu et par partie), l'Europe
+un quart (vers 18 s), l'Aquitaine et les théâtres peu (1 à 5 s). Pour une série plus courte : `--cartes 2,5` ou
+`--parties 16`. La fenêtre écrit l'avancement et le temps qui reste ; le PC reste utilisable mais lent.
+
+**Où est le rapport.** Dans le dossier `equilibre/` (non suivi par git) : `rapport-<date>.html`, une seule page
+lisible hors ligne (alertes d'équilibre, puis par carte les camps au fil des années, ce que font les IA : unités,
+bâtiments, navires, batailles et stratégies, sièges, commerce, prix ; temps du tour des IA ; parties plantées avec la
+commande pour les rejouer, `bin/equilibre --partie carte:époque:graine:années:camp`), et `resume-<date>.json`.
+
+**Quoi envoyer à l'assistant** : le fichier `resume-<date>.json` (quelques dizaines de Ko : chiffres clés par carte et
+par camp, compteurs, alertes, plantages). Il s'en sert pour proposer les réglages ; le rapport HTML reste pour vous.
+
+Les mesures sont dans `rust/conquete/src/bin/equilibre/mesures.rs`, une ligne par mesure ; les nouveautés (agents,
+régimes et révolutions, ministres, caractère et attitude des IA, protectorats) apparaissent dans le rapport dès que le
+moteur les enregistre dans la sauvegarde.
+
 ## Outils
 
 Des exécutables à part, à lancer depuis la racine du jeu : dans `bin/` une fois le jeu lancé par
@@ -786,6 +819,7 @@ Des exécutables à part, à lancer depuis la racine du jeu : dans `bin/` une fo
 ```bash
 bin/simuler --parties 6 --epoque 1790 --annees 30 --proc 2 # banc d'équilibre de la campagne (voir plus haut)
 bin/simuler --geo 5 --parties 1 --epoque 1700 --annees 25 --suivi ML,RU --recit 1   # une partie de contrôle du mode Europe : guerres, traités, places et trésor de Malte et de la Russie, année par année
+bin/equilibre --rapide --ouvrir                            # outil d'équilibre (voir « Tester l'équilibre sur un PC »)
 bin/bilan --depuis 2026-10-12                              # bilan du journal des batailles (logs/batailles.jsonl)
 bin/carte_hex > web/js/dev/carte-hex-data.js               # la carte sur une grille d'hexagones (maquette web/js/dev/carte-hex.html)
 sh outils/banc_compare.sh <commit>                         # le banc d'équilibre sur un ancien commit et sur le code actuel

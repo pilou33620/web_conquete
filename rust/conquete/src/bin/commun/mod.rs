@@ -2,7 +2,11 @@
 //! jouées sur plusieurs fils (à la place de multiprocessing.Pool). Inclus par chaque outil (`mod commun;`).
 #![allow(dead_code)]
 
+use conquete::engine::Game;
+use conquete::events as E;
 use conquete::geo::GeoMap;
+use conquete::py::Val;
+use conquete::turns as TT;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -17,6 +21,11 @@ pub struct Args {
 
 impl Args {
     pub fn parse(aide: &str, connues: &[&str]) -> Args {
+        Args::parse_drapeaux(aide, connues, &[])
+    }
+
+    /// Comme parse, avec des drapeaux sans valeur (`--rapide`) : `a.opt("rapide")` vaut alors Some("1").
+    pub fn parse_drapeaux(aide: &str, connues: &[&str], drapeaux: &[&str]) -> Args {
         let (mut pos, mut opts) = (vec![], HashMap::new());
         let mut it = std::env::args().skip(1);
         while let Some(a) = it.next() {
@@ -32,6 +41,10 @@ impl Args {
                 Some((n, v)) => (n.to_string(), Some(v.to_string())),
                 None => (nom.to_string(), None),
             };
+            if drapeaux.contains(&nom.as_str()) && val.is_none() {
+                opts.insert(nom, "1".to_string());
+                continue;
+            }
             if !connues.contains(&nom.as_str()) {
                 erreur(&format!("unrecognized arguments: {a}"));
             }
@@ -102,3 +115,54 @@ pub fn message(p: &(dyn std::any::Any + Send)) -> String {
     p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_else(|| "panique".to_string())
 }
 
+
+// ================================================================== une partie jouée par les IA seules (simuler, equilibre)
+/// Le camp vu par défaut : FR en Europe et sur la carte monde, le premier pays d'un autre théâtre, 33 dans le Sud-Ouest.
+pub fn joueur_defaut(geo: i64) -> String {
+    match conquete::geo::theatre(geo) {
+        Some(t) if t.geo == conquete::geo::VERSION_EUROPE || t.geo == conquete::geo::VERSION_MONDE => "FR".to_string(),
+        Some(_) => conquete::rules::camps(geo).first().map_or_else(String::new, |c| c.string()),
+        None => "33".to_string(),
+    }
+}
+
+/// Le camp du joueur rayé de la carte : le monde continue, vu d'un autre camp en vie (tous joués par les IA).
+pub fn carry_on(g: &mut Game) -> bool {
+    if !(g.over.is_dict() && g.over.get("result") == "defaite") {
+        return false;
+    }
+    let mut alive: Vec<Val> = g.factions.keys().into_iter().filter(|c| g.factions.at(c).atb("alive")).collect();
+    alive.sort_by(|a, b| a.s().cmp(b.s()));
+    if alive.len() < 2 {
+        return false;
+    }
+    g.player = alive[0].string();
+    g.over = Val::None;
+    g.lost_player = true;
+    true
+}
+
+/// Un « Tour suivant » ; les décisions qui attendent le joueur (événements), c'est son IA qui les prend : le premier
+/// choix qu'il peut payer, comme les IA.
+pub fn play_month(g: &mut Game) {
+    TT::go(g);
+    for _ in 0..3000 {
+        if carry_on(g) {
+            TT::go(g);
+        }
+        if g.tour.at("end").is_none() || g.over.truthy() {
+            return; // (partie finie : un seul camp, ou 1900)
+        }
+        for x in g.pending_ev.iter() {
+            let choices = x.at("choices");
+            let n = choices.len() as i64;
+            let ok = (0..n).find(|&i| E::affordable(g, &g.player.clone(), &choices.at(i).at("fx")));
+            E::resolve(g, x.at("id").s(), ok.unwrap_or(n - 1), true);
+        }
+        TT::advance(g, 1.0);
+        if g.tour.atb("stop") {
+            TT::go(g);
+        }
+    }
+    panic!("AssertionError: le tour des IA ne finit pas");
+}
