@@ -164,3 +164,63 @@ donnée. **Coût** : chaque module ne ralentit pas le tour des IA de plus de 10 
 ## État
 
 (à remplir par chaque module : fait, pas fait, écarts)
+
+### Module 6 : diplomatie profonde (R9) — fait
+
+Fichiers : `diplomacy.rs` (section « SPEC-POLITIQUE, module 6 »), `engine/memoire.rs` (nouveau), `ai/gouvernement.rs`
+(`diplomacy`, `proposer`), points d'accroche commentés dans `rules.rs`, `views.rs`, `serveur.rs`, `engine/mod.rs`,
+`engine/utilitaires.rs` (`monthly` → `diplomacy::mois`), `engine/commerce.rs` (`incident` → mémoire). Essais :
+`tests/diplomatie.rs`.
+
+- **Caractère** : `factions[c].caractere` ∈ `rules.CARACTERES` (`agressif`, `expansionniste`, `marchand`, `prudent`,
+  `loyal`, `opportuniste`), chacun `{nom, desc, guerre, paix, alliance, commerce, fidelite, argent, region, menace,
+  rancune}`. Tiré à la création par `memoire::tirer_caractere(seed, code)` (profil `personality` du pays + bonus
+  historique `rules.CARACTERE_HISTOIRE` + hasard de la graine, sans toucher au hasard de la partie) ; posé au chargement
+  d'une sauvegarde d'avant. Il pèse : envie de guerre de l'IA (× `guerre`), scores de paix / alliance / commerce,
+  valeur de l'argent et des régions, ultimatums (`menace`), appels aux armes (`fidelite`), mauvais souvenirs (`rancune`).
+- **Mémoire** : `factions[a].memoire[b]` = `[[jour, fait, poids, demi_vie], …]` (12 au plus ; un même fait répété dans
+  le mois s'additionne), faits de `rules.MEMOIRE` : `guerre`, `trahison` (alliance rompue, guerre à un allié, rupture
+  sous ultimatum), `accord_rompu`, `aide`, `appel_refuse`, `cadeau`, `commerce`, `accord`, `mariage`, `ultimatum`,
+  `incident` (corsaires ; R7 : `memoire::retenir(g, victime, auteur, "incident", None)` pour un espion pris),
+  `tribut_impaye`, `independance_refusee`. Le poids s'efface de moitié à chaque demi-vie ; purge chaque mois.
+- **Attitude** de a envers b = `rel` (inchangée, lue par le reste du jeu) + mémoire + situation (régime semblable /
+  différent si R8 pose `factions[c].politique.regime` ; diplomate de b chez a), bornée à ±100 : `memoire::valeur(g, a, b)`
+  (les décisions de l'IA et `ai_evaluate` l'utilisent à la place de `rel`) ; `memoire::vue(g, a, b)` =
+  `{valeur, raisons: [{texte, valeur}]}` (première raison : « Relations »).
+- **Propositions composées** : `diplomacy::proposer(g, frm, cible, {donner: [...], recevoir: [...]})` (frm donne
+  `donner`, demande `recevoir`), clauses de `rules.CLAUSES` : `{type: "region", node}`, `{type: "technologie", tech}`,
+  `{type: "argent", montant}`, `{type: "tribut", montant, tours}` (montant à chaque tour, 60 tours au plus ; payé par
+  `diplomacy::mois`, `factions[c].tributs`), `passage`, `commerce`, `alliance`, `paix` (mutuelles : d'un côté ou de
+  l'autre), `protectorat` (celui qui la donne passe sous la protection de l'autre), `independance` (le protecteur la
+  donne), `cartes` (les villes de celui qui donne, vues `CARTES_TOURS` tours). L'IA évalue en livres (`valeur_clause`,
+  `evaluer` : gains − cessions × (1,15 − attitude/400 − prestige/200 − 0,15 si diplomate)) et fait au joueur une
+  **contre-proposition** (argent comptant, sinon tribut sur 12 tours, sinon sans sa cession la plus chère), qu'il
+  trouve dans ses propositions reçues (`contre_proposition: true`).
+- **Ultimatums** : `diplomacy::ultimatum(g, frm, cible, exigence)`, exigence `{type: "region", node}`,
+  `{type: "tribut", montant, tours}`, `{type: "rompre", allie}`. Une IA cède devant un camp ≥ 1,5 fois plus fort si la
+  peur couvre le prix ; refus = casus belli de 12 tours pour frm (`factions[frm].cb`, celui du module commerce). L'IA en
+  adresse à ses voisins bien plus faibles (une place qui fut à elle, sinon un tribut ; une fois l'an au plus).
+- **Appels aux armes** : `diplomacy::appel(g, frm, allie, contre)`. Quand on attaque un camp, ses alliés IA répondent si
+  leur attitude dépasse 15 − 30 × (fidélité − 0,5) ; **le joueur n'entre plus en guerre tout seul** : il reçoit l'appel.
+  Refus : souvenir `appel_refuse` chez l'appelant ; l'alliance se rompt si son attitude devient négative. L'IA appelle
+  ses alliés qui ne combattent pas encore son ennemi.
+- **Protectorats** : les vassaux (`overlord`) sont les protectorats (colonies de la carte Monde comprises) : tribut
+  (15 % des livres, inchangé), guerres suivies (inchangé) **et paix suivie** (nouveau), pas de diplomatie propre (seuls
+  guerre — refusée par `war_refusal` —, ruptures, cadeaux, prisonniers, et la paix d'une guerre à soi passent ; on traite
+  avec le protecteur) ; indépendance par la clause `independance` (`diplomacy::liberer`), demandée par une IA protégée
+  devenue forte et mécontente. La vue garde `over` (le protecteur).
+- **Diplomate présent** : `memoire::diplomate_present(g, code, chez)` lit pour l'instant `factions[code].diplomates`
+  (liste de camps, posée par les essais) : **à brancher à la fusion sur `agents::diplomate_present` (R7)**, et adapter
+  `tests/diplomatie.rs::un_diplomate_present_fait_accepter` (poster un vrai diplomate). Effets : +10 d'attitude (raison
+  « Un diplomate à notre cour »), +10 points aux scores, −15 % sur le prix des cessions.
+- **Commandes** : `{cmd: "diplo", sub: "proposer", cible, clauses: {donner, recevoir}}`, `{…, sub: "ultimatum", cible,
+  exigence}`, `{…, sub: "appel", cible, contre}`, `{…, sub: "repondre", id, accepte}` (rendent `{ok, msg, pending}`) ;
+  une autre `sub` est une action d'avant (`act`, avec `cible`) ; l'ancienne forme `{cmd: "diplo", to, action, …}` et
+  `{cmd: "answer"}` marchent toujours.
+- **Vue** : chaque camp étranger a `caractere` et `attitude: {valeur, raisons}` ; chaque proposition reçue garde ses
+  champs d'avant et, selon `action` : `"proposition"` → `clauses: {donner, recevoir}` (chaque clause avec `texte`),
+  `contre_proposition` ; `"ultimatum"` → `exigence` ; `"appel"` → `contre` ; toujours un `texte`. `rules_payload` :
+  `CARACTERES`, `CLAUSES` (clés en capitales, comme le dit la spec).
+- **Écarts / pas fait** : l'IA n'échange pas de technologies ni de régions entre IA d'elle-même (elle les évalue quand on
+  les lui propose) ; une proposition au joueur qui expire ne coûte rien ; le tribut est par tour (mois) et non annuel ;
+  les propositions au joueur gouverné par son IA (simulations) sont jugées par l'IA (`attend_le_joueur`).

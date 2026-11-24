@@ -9,6 +9,7 @@
 //! éléments : `tup![o, "passage"]`, `tup!["go", aid, node]`…).
 
 use super::*;
+use crate::engine::memoire as MEM; // (SPEC-POLITIQUE, module 6)
 
 impl AI {
     // ------------------------------------------------------------------ économie
@@ -1363,7 +1364,8 @@ impl AI {
     // game/ai.py, lignes 1088 à 1167
     pub fn diplomacy(&mut self, g: &mut Game) {
         let (code, f) = (self.code.clone(), self.f(g));
-        let aggr = self.pers.atf("aggr") * R::DIFFICULTY().at(&g.difficulty).atf("ai_aggr");
+        // (SPEC-POLITIQUE, module 6) le caractère pèse sur l'envie de guerre
+        let aggr = self.pers.atf("aggr") * R::DIFFICULTY().at(&g.difficulty).atf("ai_aggr") * MEM::trait_(g, &code, "guerre");
         let fp = g.faction_power(&code);
         let pa = if fp > 1.0 { fp } else { 1.0 };
         let mut wars = self.wars(g);
@@ -1399,7 +1401,8 @@ impl AI {
             let v = if v < 100i64 { v } else { Val::from(100) };
             let v = if v > -100i64 { v } else { Val::from(-100) };
             f.at("rel").set(&o, v);
-            let rel = f.at("rel").at(&o).f();
+            // (SPEC-POLITIQUE, module 6) on décide selon l'attitude : la relation, la mémoire, la situation
+            let rel = MEM::valeur(g, &code, &o);
             // cartel d'échange : on récupère ses hommes prisonniers
             if (D::held(g, &o, &code) >= 40 || D::captifs(g, &o, &code).truthy()) && rel > -70.0 && self.rng.random() < 0.3 {
                 self.propose(g, &o, "prisonniers", 0, &Val::None, &Val::None);
@@ -1415,6 +1418,10 @@ impl AI {
                 self.propose(g, &o, "mariage", py::int(if 150.0 < x { 150.0 } else { x }), &Val::None, &Val::None);
             }
             if f.atb("overlord") {
+                // (SPEC-POLITIQUE, module 6) un protectorat devenu fort et mécontent demande son indépendance
+                if f.at_is("overlord", &o) && rel < 10.0 && g.faction_power(&code) > 0.7 * g.faction_power(&o) && self.rng.random() < 0.05 {
+                    self.proposer(g, &o, "independance", 365.0, &dict! {"recevoir" => list![dict! {"type" => "independance"}]});
+                }
                 continue;
             }
             let fo = g.faction_power(&o);
@@ -1439,6 +1446,34 @@ impl AI {
                     self.propose(g, &o, "paix", trib, &Val::None, &Val::None);
                 } else if po < 0.3 * pa && D::lost_nodes(g, &o) >= 2 && o != g.player && self.rng.random() < 0.5 {
                     D::act(g, &code, &Val::from(&o), &Val::from("soumission"), &Val::from(0), &Val::None, &Val::None);
+                } else if pa > 1.4 * po && days > 90.0 && self.rng.random() < 0.15 {
+                    // (SPEC-POLITIQUE, module 6) vainqueur : la paix contre une indemnité
+                    let x = of.at("res").atf("livres") * 0.3;
+                    let m = py::int(if 400.0 < x { 400.0 } else { x });
+                    if m >= 20 {
+                        let cl = dict! {"donner" => list![dict! {"type" => "paix"}], "recevoir" => list![dict! {"type" => "argent", "montant" => m}]};
+                        self.proposer(g, &o, "paix_indemnite", 40.0, &cl);
+                    }
+                }
+                // (SPEC-POLITIQUE, module 6) appel aux armes : nos alliés qui ne combattent pas encore cet ennemi
+                if self.rng.random() < 0.15 {
+                    let allies: Vec<String> = g
+                        .factions
+                        .items()
+                        .into_iter()
+                        .filter(|(x, xf)| {
+                            *x != code.as_str() && *x != o.as_str() && xf.atb("alive") && g.status(&code, x.s()) == "alliance" && !g.at_war(x.s(), &o)
+                                && !xf.at("truce").has(&o) && !xf.atb("overlord")
+                        })
+                        .map(|(x, _)| x.string())
+                        .collect();
+                    for x in allies {
+                        let k = tup![&x, "appel", &o];
+                        if Val::from(g.t) >= self.cool.get_or(&k, -1) {
+                            self.cool.set(&k, g.t + 90.0);
+                            D::appel(g, &code, &Val::from(&x), &Val::from(&o));
+                        }
+                    }
                 }
             } else if st == "paix" {
                 if g.t > 120.0
@@ -1463,6 +1498,29 @@ impl AI {
                         D::declare_war(g, &code, &o, false);
                         wars = self.wars(g);
                         continue;
+                    }
+                    // (SPEC-POLITIQUE, module 6) ultimatum au voisin bien plus faible qu'on n'aime pas : une place qui fut
+                    // à nous, sinon un tribut
+                    if rel < -10.0 && pa > 2.0 * po && !of.atb("overlord") && self.rng.random() < aggr * 0.05 * pace {
+                        let k = tup![&o, "ultimatum"];
+                        if Val::from(g.t) >= self.cool.get_or(&k, -1) {
+                            self.cool.set(&k, g.t + R::ULTIMATUM_CD);
+                            let chez = g.owned_nodes(&o).iter().find(|n| {
+                                let gn = g.geo.nodes.at(n.at("id"));
+                                gn.at_is("dept", &code) && !gn.at_is("type", "capitale") && !n.at("siege").truthy()
+                            });
+                            let e = match chez {
+                                Some(n) => dict! {"type" => "region", "node" => n.at("id")},
+                                None => {
+                                    let x = of.at("res").atf("livres") * 0.02 + 10.0;
+                                    dict! {"type" => "tribut", "montant" => py::int(if 100.0 < x { 100.0 } else { x }), "tours" => 12}
+                                }
+                            };
+                            let (ok, _) = D::ultimatum(g, &code, &Val::from(&o), &e);
+                            if ok == Some(true) {
+                                continue;
+                            }
+                        }
                     }
                 }
                 if !f.at("trade").has(&o) && rel > 5.0 && self.rng.random() < self.pers.atf("trade") * 0.5 {
@@ -1493,6 +1551,20 @@ impl AI {
                 }
             }
         }
+    }
+
+    /// (SPEC-POLITIQUE, module 6) Une proposition composée à o (clauses {donner, recevoir}), au plus une par `delai` jours
+    /// pour une même sorte (cle) ; pas deux au joueur à la fois.
+    pub fn proposer(&mut self, g: &mut Game, o: &str, cle: &str, delai: f64, clauses: &Val) {
+        let k = tup![o, cle];
+        if Val::from(g.t) < self.cool.get_or(&k, -1) {
+            return;
+        }
+        self.cool.set(&k, g.t + delai);
+        if o == g.player && g.proposals.iter().any(|p| p.at("frm") == self.code.as_str() && p.at_is("action", "proposition")) {
+            return;
+        }
+        D::proposer(g, &self.code, &Val::from(o), clauses);
     }
 
     /// Python : `propose(self, o, action, amount=0, give=None, get=None)`.
