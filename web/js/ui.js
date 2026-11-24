@@ -11,6 +11,7 @@ import { arbreHtml } from './arbre.js';
 import { startTechs, startRails } from './epoque.js';
 import * as BT from './strategie.js';
 import { Flottes } from './flottes.js';
+import { Diplomatie } from './diplomatie.js';
 import { Son } from './son.js';
 
 // nombres à la française : virgule décimale et vrai signe moins (−)
@@ -77,6 +78,8 @@ export class UI {
     this.flottes = new Flottes(this);
     map.toucheFlotte = (sx, sy, pad) => this.flottes.touche(sx, sy, pad);
     map.dessinFlottes = ctx => this.flottes.dessin(ctx);
+    // (SPEC-POLITIQUE, P10) la diplomatie profonde : fiche, proposition composée, ultimatum, appel aux armes (diplomatie.js)
+    this.diplo = new Diplomatie(this);
     this.buildStatic();
     map.onTap = e => this.onTap(e);
     map.onContext = e => this.onContext(e);
@@ -251,6 +254,7 @@ export class UI {
     const pend = st.proposals.length;
     const b = this.$('badge-diplo');
     b.hidden = !pend; b.textContent = pend;
+    b.classList.toggle('alerte', this.diplo.urgent(st));   // (P10 : un ultimatum ou un appel aux armes attend)
     if (st.over && !this.overShown) { this.overShown = true; this.openModal('fin'); }
     // une décision historique ou un imprévu : la fenêtre s'ouvre d'elle-même, une fois par événement
     this.evSeen = this.evSeen || new Set();
@@ -557,20 +561,24 @@ export class UI {
     if (box.dataset.sig === sig) return;
     box.dataset.sig = sig;
     box.innerHTML = (this.st.pending || []).map(p => `<div class="sheet proposal" style="border-left-color:var(--laiton)"><div class="pt">${esc(p.title)}</div>
-        <p>Une décision vous attend (${p.tn <= 1 ? 'avant la fin du tour' : `d’ici ${p.tn} tours`}).</p><div class="btns"><button class="btn primary" data-act="modal" data-v="event">Décider</button></div></div>`).join('') + this.st.proposals.map(p => {
-      const f = this.rules.factions[p.frm];
-      let detail = '';
-      if (p.action === 'echange') detail = `Il offre ${fmt(p.give[1])} ${this.rules.res_label[p.give[0]].toLowerCase()} contre ${fmt(p.get[1])} ${this.rules.res_label[p.get[0]].toLowerCase()}.`;
-      if (p.action === 'paix' && p.amount) detail = `Il offre un tribut de ${fmt(p.amount)} livres.`;
-      if (p.action === 'commerce') detail = 'Chacun gagnera des livres et la ressource phare de l’autre.';
-      if (p.action === 'prisonniers') detail = 'Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.';
-      if (p.action === 'alliance') detail = 'Vision partagée et entrée en guerre à vos côtés si vous êtes attaqué.';
-      if (p.action === 'mariage') detail = `Relations +25 des deux côtés, alliance plus facile, droit de succession réciproque.${p.amount ? ` Il offre une dot de ${fmt(p.amount)} livres.` : ''}`;
-      if (p.action === 'passage') detail = `Sans ce droit, ses armées ne peuvent pas traverser vos terres. Accordé, il vaut un an (révocable dans la fenêtre Diplomatie).${p.amount ? ` Il offre ${fmt(p.amount)} livres.` : ''}`;
-      return `<div class="sheet proposal" style="border-left-color:${f.color}"><div class="pt">${esc(f.name)} ${esc(ACTION_LABEL[p.action] || p.action)}</div>
-        <p>${detail}</p><div class="btns"><button class="btn primary" data-act="answer" data-id="${p.id}" data-v="1">Accepter</button>
-        <button class="btn" data-act="answer" data-id="${p.id}" data-v="0">Refuser</button></div></div>`;
-    }).join('');
+        <p>Une décision vous attend (${p.tn <= 1 ? 'avant la fin du tour' : `d’ici ${p.tn} tours`}).</p><div class="btns"><button class="btn primary" data-act="modal" data-v="event">Décider</button></div></div>`).join('') + this.st.proposals.map(p => this.proposalHtml(p)).join('');
+  }
+  // une proposition reçue (sur la carte, et dans les fenêtres Diplomatie et Négocier)
+  proposalHtml(p) {
+    const neuve = this.diplo.recueHtml(p);   // (P10 : proposition composée, ultimatum, appel aux armes)
+    if (neuve) return neuve;
+    const f = this.rules.factions[p.frm];
+    let detail = '';
+    if (p.action === 'echange') detail = `Il offre ${fmt(p.give[1])} ${this.rules.res_label[p.give[0]].toLowerCase()} contre ${fmt(p.get[1])} ${this.rules.res_label[p.get[0]].toLowerCase()}.`;
+    if (p.action === 'paix' && p.amount) detail = `Il offre un tribut de ${fmt(p.amount)} livres.`;
+    if (p.action === 'commerce') detail = 'Chacun gagnera des livres et la ressource phare de l’autre.';
+    if (p.action === 'prisonniers') detail = 'Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.';
+    if (p.action === 'alliance') detail = 'Vision partagée et entrée en guerre à vos côtés si vous êtes attaqué.';
+    if (p.action === 'mariage') detail = `Relations +25 des deux côtés, alliance plus facile, droit de succession réciproque.${p.amount ? ` Il offre une dot de ${fmt(p.amount)} livres.` : ''}`;
+    if (p.action === 'passage') detail = `Sans ce droit, ses armées ne peuvent pas traverser vos terres. Accordé, il vaut un an (révocable dans la fenêtre Diplomatie).${p.amount ? ` Il offre ${fmt(p.amount)} livres.` : ''}`;
+    return `<div class="sheet proposal" style="border-left-color:${f.color}"><div class="pt">${esc(f.name)} ${esc(ACTION_LABEL[p.action] || p.action)}</div>
+      <p>${detail}</p><div class="btns"><button class="btn primary" data-act="answer" data-id="${p.id}" data-v="1">Accepter</button>
+      <button class="btn" data-act="answer" data-id="${p.id}" data-v="0">Refuser</button></div></div>`;
   }
 
   renderFeed() {
@@ -609,6 +617,7 @@ export class UI {
   onTap(e) {
     if (!this.st) { this.onStartTap && this.onStartTap(e); return; }
     this.hideBubble();
+    if (this.diplo.tap(e)) return;   // (P10 : la place d'une clause « région », touchée sur la carte)
     if (this.flottes.tap(e)) return;   // (SPEC-EMPIRE, P2 : ordre de flotte visé, ou la mer touchée avec une flotte choisie)
     if (this.targeting) {
       const a = this.armyById(this.targeting);
@@ -776,7 +785,7 @@ export class UI {
     if (dy) b.style.top = (parseFloat(b.style.top) + dy) + 'px';
   }
   hideBubble() { this.$('bubble').hidden = true; }
-  stopTargeting() { this.targeting = null; this.flottes.vise = null; this.map.cv.classList.remove('targeting'); }
+  stopTargeting() { this.targeting = null; this.flottes.vise = null; this.diplo.vise = null; this.map.cv.classList.remove('targeting'); }
 
   // ------------------------------------------------------------------ actions
   action(act, d, el) {
@@ -1037,7 +1046,9 @@ export class UI {
       case 'pick-scen': this.startScen = d.v; this.map.showPreview(d.v); this.renderStart(); break;
       case 'start-game': this.onStartGame && this.onStartGame(this.startDept, this.startDiff, this.startScen); break;
       case 'resume': this.onResume && this.onResume(); break;
-      default: if (act.startsWith('fl-')) this.flottes.action(act, d); break;   // (flottes.js)
+      default: if (act.startsWith('fl-')) this.flottes.action(act, d);   // (flottes.js)
+        else if (act.startsWith('dp-')) this.diplo.action(act, d);   // (P10 : diplomatie.js)
+        break;
     }
   }
 
@@ -1697,7 +1708,8 @@ export class UI {
     this.$('modal').hidden = false;
     document.body.classList.add('modal-open');
     document.body.classList.toggle('modal-event', ['event', 'bataille', 'arrivee', 'resultat', 'navale'].includes(kind));   // une décision : rien ne doit masquer ses choix
-    this.$('modal').classList.toggle('scene', kind === 'navale');   // (la scène navale : la fenêtre en bas, la mer visible)
+    this.$('modal').classList.toggle('scene', kind === 'navale');
+    document.body.classList.toggle('modal-diplo', kind === 'diplo' || kind === 'negocier');   // (P10 : les propositions reçues passent dans la fenêtre)   // (la scène navale : la fenêtre en bas, la mer visible)
     this.renderModal(true);
     if (kind === 'menu') this.refreshSaves();
     this.tuto.check();
@@ -1712,7 +1724,7 @@ export class UI {
     if (this.modal === 'resultat') this.finBt = null;   // (lu : il ne se rouvre pas)
     this.modal = null;
     this.$('modal').hidden = true;
-    document.body.classList.remove('modal-open', 'modal-event');
+    document.body.classList.remove('modal-open', 'modal-event', 'modal-diplo');
     for (const b of this.$('rail').children) b.classList.remove('on');
     this.tuto.check();
   }
@@ -1737,7 +1749,7 @@ export class UI {
     if (!force && ae && card.contains(ae) && (/^(SELECT|TEXTAREA)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !['range', 'checkbox'].includes(ae.type)))) return;
     const fn = { tech: this.techModal, diplo: this.diploModal, commerce: this.commerceModal, production: this.prodModal,
                  journal: this.journalModal, menu: this.menuModal, fin: this.endModal, event: this.eventModal,
-                 bataille: this.battleModal, resultat: this.resultatModal, arrivee: this.arriveeModal, promotion: this.promotionModal, generaux: this.generauxModal, decouverte: () => this.decouv.html(), navale: () => this.flottes.sceneHtml() }[k];
+                 bataille: this.battleModal, resultat: this.resultatModal, arrivee: this.arriveeModal, promotion: this.promotionModal, generaux: this.generauxModal, decouverte: () => this.decouv.html(), navale: () => this.flottes.sceneHtml(), negocier: () => this.diplo.html() }[k];
     const [html, sig] = fn.call(this);
     if (!force && sig === this.modalSig) return;
     this.modalSig = sig;
@@ -1749,7 +1761,7 @@ export class UI {
     card.innerHTML = `<button class="icon-btn close" data-act="close-modal" aria-label="Fermer">${ICON.close}</button>` + html;
     for (const [id, v] of Object.entries(vals)) { const i = document.getElementById(id); if (i && i.type !== 'range') i.value = v; }
     card.scrollTop = scroll;
-    for (const b of this.$('rail').children) b.classList.toggle('on', b.dataset.v === k);
+    for (const b of this.$('rail').children) b.classList.toggle('on', b.dataset.v === (k === 'negocier' ? 'diplo' : k));
     if (k === 'decouverte') this.decouv.anime();
   }
 
@@ -1779,7 +1791,7 @@ export class UI {
         return `<div class="dcard dead">${coat(R.color, f.code)}<div><div class="dn">${R.name}</div><div class="dt">A capitulé. Son chef-lieu appartient à ${by}.</div>
           ${held ? `<div class="small">Vous tenez ${fmt(held)} de ses soldats.</div><div class="btns">${enrollBtn(f.code, held, 'Enrôler ses prisonniers')}</div>` : ''}</div></div>`;
       }
-      const statusChip = f.over === me ? '<span class="chip ally">Votre vassal</span>' : `<span class="chip ${f.st === 'guerre' ? 'war' : f.st === 'alliance' ? 'ally' : ''}">${STATUS[f.st]}</span>`;
+      const statusChip = f.over === me ? '<span class="chip ally">Votre protectorat</span>' : `<span class="chip ${f.st === 'guerre' ? 'war' : f.st === 'alliance' ? 'ally' : ''}">${STATUS[f.st]}</span>`;
       const wars = f.wars.filter(w => w !== me).map(w => this.rules.factions[w].name);
       const relPos = Math.round((f.rel + 100) / 2);
       let acts = '';
@@ -1798,14 +1810,16 @@ export class UI {
       }
       if (f.st !== 'guerre' && f.maison && !f.maison.liens.includes(me)) acts += `<div class="row"><input class="amount" type="number" min="0" step="50" value="0" id="amt-mariage-${f.code}" aria-label="Dot offerte"><span class="muted small">livres de dot</span>${btn('mariage', 'Proposer un mariage')}</div>`;
       acts += `<div class="row"><input class="amount" type="number" min="0" step="50" value="100" id="amt-cadeau-${f.code}" aria-label="Montant du présent"><span class="muted small">livres</span>${btn('cadeau', 'Offrir un présent')}</div>`;
+      acts += this.diplo.boutonsHtml(f);   // (P10 : proposition composée, ultimatum, appel aux armes)
       const theirs = f.pr || 0;
       acts += `<div class="small">Prisonniers : vous tenez ${fmt(held)} de ses soldats, il tient ${fmt(theirs)} des vôtres.</div>
         <div class="btns"><button class="btn" data-act="diplo" data-to="${f.code}" data-v="prisonniers" ${held || theirs || (st.me.generaux?.captifs || []).some(x => x.de === f.code) || (st.me.generaux?.pris || []).some(x => x.par === f.code) ? '' : 'disabled'} title="Chacun rend les prisonniers de l’autre ; le surplus se rachète 2 livres par homme.">Échanger les prisonniers</button>${enrollBtn(f.code, held, 'Enrôler ses prisonniers')}</div>`;
       return `<div class="dcard">${coat(R.color, f.code)}<div>
           <div class="dn">${R.name}</div><div class="dt">${R.title}, chef-lieu ${R.capital}</div>
           <div class="row">${statusChip}${f.trade ? '<span class="chip ally">Accord commercial</span>' : ''}${f.cb ? '<span class="chip war" title="Un incident de corsaires vous offre un casus belli : lui déclarer la guerre ne fâcherait personne">Casus belli</span>' : ''}${f.truce ? `<span class="chip">Trêve jusqu’au ${f.truce}</span>` : ''}${f.ps ? `<span class="chip ally" title="Vos armées peuvent traverser ses terres">Passage chez lui jusqu’au ${f.ps}</span>` : ''}${f.pg ? `<span class="chip" title="Ses armées peuvent traverser vos terres">Vous lui accordez le passage jusqu’au ${f.pg}</span>` : ''}${f.cl ? '<span class="chip" title="Sans droit de passage, vos armées ne traversent ni ses places ni ses campagnes : elles contournent, ou passent en force (déclaration de guerre)">Terres fermées</span>' : ''}</div>
-          <div class="row"><span class="lab">${relLabel(f.rel)} (${fmt(f.rel)})</span><div class="relbar" style="flex:1;min-width:120px"><i style="left:${relPos}%"></i></div></div>
+          ${f.attitude ? '' : `<div class="row"><span class="lab">${relLabel(f.rel)} (${fmt(f.rel)})</span><div class="relbar" style="flex:1;min-width:120px"><i style="left:${relPos}%"></i></div></div>`}
           <div class="small">Puissance estimée ${fmt(f.power)} (vous ${fmt(myPow)}), ${f.nodes} villes et villages, ${f.techs} technologies.</div>
+          ${this.diplo.ficheHtml(f)}
           ${maisonTxt(f.maison)}
           <div class="small">Prestige ${fmt(f.prestige || 0)} (vous ${fmt(st.me.prestige || 0)})${f.weary >= 30 ? ` · <span style="color:#ff9a85">las de la guerre (${f.weary} %)</span>` : ''}</div>
           ${wars.length ? `<div class="small" style="color:#ffb3a6">En guerre contre : ${wars.join(', ')}</div>` : ''}
@@ -1826,9 +1840,9 @@ export class UI {
     const passLine = `<div class="small" style="margin:0 0 8px"><b>Droits de passage</b> · Vous laissent passer : ${list(others.filter(f => !f.cl).map(f => why(f, f.ps)))} ; terres fermées à vos armées : ${list(others.filter(f => f.cl).map(nm))}.<br>
       Vous laissez passer : ${list(others.filter(f => !f.cg).map(f => why(f, f.pg)))} ; vos terres sont fermées à : ${list(others.filter(f => f.cg).map(nm))}.
       <span class="muted">Sans droit de passage (ni alliance, ni guerre), on contourne ses terres, ou l’on passe en force : c’est la guerre.</span></div>`;
-    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${hegLine}${neuLine}${passLine}${maisonTxt(st.factions.find(f => f.code === me).maison)}<div class="diplo-list">${cards}</div>`;
+    const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${hegLine}${neuLine}${passLine}${this.diplo.recuesHtml()}${this.diplo.protectoratsHtml()}${maisonTxt(st.factions.find(f => f.code === me).maison)}<div class="diplo-list">${cards}</div>`;
     return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner, f.ps, f.pg, f.cl, f.cg, f.maison, f.cb]),
-      pris, fmt1(st.me.prisoner_upkeep || 0), Math.round(myPow / 500), st.heg])];
+      pris, fmt1(st.me.prisoner_upkeep || 0), Math.round(myPow / 500), st.heg, this.diplo.sig(), st.proposals.map(p => p.id)])];
   }
 
   commerceModal() {

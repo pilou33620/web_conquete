@@ -225,6 +225,37 @@ Fichiers : `diplomacy.rs` (section « SPEC-POLITIQUE, module 6 »), `engine/memo
   les lui propose) ; une proposition au joueur qui expire ne coûte rien ; le tribut est par tour (mois) et non annuel ;
   les propositions au joueur gouverné par son IA (simulations) sont jugées par l'IA (`attend_le_joueur`).
 
+#### Page (P10) — fait
+
+Fichiers : `web/js/diplomatie.js` (nouveau, classe `Diplomatie`), points d'accroche commentés « P10 » dans `web/js/ui.js`
+(`this.diplo`, fenêtre `negocier`, actions `dp-…`, `proposalHtml`, clic d'une place, badge) et `web/css/style.css`
+(classes `dp-…`). Essais : `tests/diplomatie.test.mjs` ; partie d'essai : `rust/conquete/tests/partie_diplomatie.rs`
+(ignoré ; `CONQUETE_PARTIE_DIPLO=$PWD/saves/essai-diplomatie.json cargo test --release -p conquete --test partie_diplomatie
+-- --ignored` : allié qui appelle aux armes, diplomate en ambassade, ultimatum, proposition composée, protectorat).
+
+- **Fiche d'un camp** (cartes de la fenêtre Diplomatie, en entier dans la fenêtre « Négocier ») : caractère (nom et
+  description de `rules.CARACTERES`), attitude en jauge colorée −100 → +100 avec ses raisons triées (repliées dans les
+  cartes ; la jauge remplace l'ancienne barre de relation quand la vue donne `attitude`), régime (`politique.regime`,
+  `rules.regimes`), relations (guerre, alliance, protectorat, accord commercial, trêve, passage, casus belli, guerres),
+  puissance comparée, diplomate en ambassade (vue `agents`, mission `ambassade`).
+- **Proposition composée** : « Vous donnez / Vous recevez », clauses ajoutées par boutons (seules celles que la situation
+  permet : paix en guerre, indépendance entre protecteur et protégé…), région sur une liste ou touchée sur la carte
+  (« Sur la carte »), technologie sur une liste, montants, tribut montant × tours ; « Proposer » → réponse du moteur, et la
+  contre-proposition (ses propositions en attente) clause par clause avec « Accepter » / « Refuser ». Pas d'estimation de
+  l'accueil : le moteur n'en donne pas.
+- **Ultimatum** (région, tribut, rupture d'alliance ; avertissement du casus belli, confirmation) et **appel aux armes**
+  (un allié contre un de vos ennemis qu'il ne combat pas).
+- **Propositions reçues** : propositions composées (vues du côté du joueur), ultimatums (menace, ce qu'on perd à céder ou à
+  refuser, puissances), appels aux armes ; réponses par `{cmd: "diplo", sub: "repondre"}` ; badge rouge qui bat quand un
+  ultimatum ou un appel attend ; dans les fenêtres Diplomatie et Négocier, elles passent dans la fenêtre (la liste
+  flottante s'efface). Les anciennes actions gardent leur affichage.
+- **Protectorats** (haut de la fenêtre Diplomatie) : les vôtres (tribut, « Accorder l'indépendance ») ; protégé : votre
+  protecteur, « Demander l'indépendance… » (la fenêtre Négocier avec la clause, à compléter).
+- **Manque dans la vue du moteur** : les technologies des autres camps (la liste « recevoir » propose celles dont vous avez
+  les prérequis ; le moteur refuse les autres), les alliances entre autres camps (rupture : liste de tous les camps), le
+  montant du tribut d'un protectorat (`_tribute`) et des tributs promis (`tributs`), l'échéance d'une proposition reçue
+  (`expires`), une estimation de l'accueil.
+
 ### Module 8 (T1, outil d'équilibre) — 24/11/2026
 
 **Fait.**
