@@ -111,6 +111,11 @@ pub fn migrate(g: &mut Game) {
         f.setdefault("tarif", 0); // douane (SPEC-MERCENAIRES.md) : libre
         f.setdefault("douaniers", false);
     }
+    for (code, f) in g.factions.items() {
+        if !f.has("caractere") {
+            f.set("caractere", crate::engine::memoire::tirer_caractere(g.seed, code.s())); // (SPEC-POLITIQUE, module 6)
+        }
+    }
     for f in g.factions.values() {
         for (k, v) in dict! {"weary" => 0.0, "prestige" => 0.0, "treaties" => dict! {}, "last_war" => 0.0, "refu" => 0.0}.items() {
             f.setdefault(k, v);
@@ -430,7 +435,8 @@ pub fn rules_payload_carte(geo: i64) -> Val {
         "poursuite" => dict! {"cav" => R::PURSUIT_CAV, "fatigue" => R::POURSUITE_FAT},
         // la marine (SPEC-EMPIRE, module 2)
         "navires" => R::NAVIRES(), "navire_ordre" => R::NAVIRE_ORDRE(), "strats_nav" => R::STRATS_NAV(), "phases_nav" => R::PHASES_NAV(),
-        "denrees" => R::DENREES() // le commerce maritime (SPEC-EMPIRE, module 7)
+        "denrees" => R::DENREES(), // le commerce maritime (SPEC-EMPIRE, module 7)
+        "CARACTERES" => R::CARACTERES(), "CLAUSES" => R::CLAUSES() // la diplomatie profonde (SPEC-POLITIQUE, module 6)
     }
 }
 
@@ -968,6 +974,11 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
             "pr" => if !moi { py::int_v(&f.get_or("prisoners", dict! {}).get_or(&p, 0)) } else { 0 },
             "prestige" => g.prestige(&code), "weary" => py::int_v(&f.get_or("weary", 0)), "maison" => FM::vue(g, &code)
         };
+        if !moi {
+            // (SPEC-POLITIQUE, module 6) son caractère, et son attitude envers nous avec ses raisons
+            fd.set("caractere", crate::engine::memoire::caractere(g, &code));
+            fd.set("attitude", crate::engine::memoire::vue(g, &code, &p));
+        }
         if !moi && crate::engine::commerce::casus_belli(g, &p, &code) {
             fd.set("cb", true); // (SPEC-EMPIRE, module 7) un incident de corsaires nous offre un casus belli contre lui
         }
@@ -1080,8 +1091,12 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
         }).collect()),
         "me" => mine, "factions" => facs, "nodes" => nodes, "armies" => armies, "battles" => battles,
         "events" => g.events.iter().filter(|e| e.ati("seq") > since).collect::<Val>(), "seq" => g.seq,
-        "proposals" => g.proposals.iter().map(|x| dict! {"id" => x.at("id"), "frm" => x.at("frm"), "action" => x.at("action"),
-            "amount" => x.at("amount"), "give" => x.at("give"), "get" => x.at("get"), "date" => x.at("date")}).collect::<Val>(),
+        "proposals" => g.proposals.iter().map(|x| {
+            let d = dict! {"id" => x.at("id"), "frm" => x.at("frm"), "action" => x.at("action"),
+                "amount" => x.at("amount"), "give" => x.at("give"), "get" => x.at("get"), "date" => x.at("date")};
+            crate::diplomacy::vue_proposition(g, &x, &d); // (SPEC-POLITIQUE, module 6) clauses, exigence, appel
+            d
+        }).collect::<Val>(),
         "market" => dict! {"prices" => &g.market, "spread" => if has_port { list![1.15, 0.85] } else { list![1.4, 0.6] }}
     };
     out.set("settings", g.settings.copy());

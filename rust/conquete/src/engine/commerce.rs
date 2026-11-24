@@ -409,6 +409,7 @@ pub fn incident(g: &mut Game, o: &str, victime: &str) {
     rel.set(o, super::batailles::py_max(-100, &rel.get_or(o, 0) - R::INCIDENT_REL)); // (la relation est souvent un flottant)
     let until = TT::deadline(g, R::CASUS_BELLI_TOURS, &[victime, o]);
     g.factions.at(victime).setdefault("cb", dict! {}).set(o, until);
+    super::memoire::retenir(g, victime, o, "incident", None); // la victime s'en souvient (SPEC-POLITIQUE, module 6)
     let t = format!("Incident en mer : des corsaires {} pillent les marchands {}. {} tient un casus belli contre {} : une déclaration de guerre ne fâcherait personne.",
         R::de(&g.fname(o)), R::de(&g.fname(victime)), g.fname(victime), g.fname(o));
     let important = o == g.player || victime == g.player;

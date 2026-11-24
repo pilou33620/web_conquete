@@ -55,6 +55,7 @@ mod utilitaires;
 pub mod marine; // les flottes (SPEC-EMPIRE, module 2)
 pub mod navale; // les batailles navales (SPEC-EMPIRE, module 2)
 pub mod commerce; // le commerce maritime (SPEC-EMPIRE, module 7)
+pub mod memoire; // caractère, mémoire et attitude des camps (SPEC-POLITIQUE, module 6)
 
 pub const SUBSTEP: f64 = 0.05; // jours
 pub const ATTRITION_STEP: f64 = 0.25; // jours : pas de l'usure, des désertions et du ravitaillement des armées
@@ -470,6 +471,7 @@ impl Game {
                 "tarif" => 0, "douaniers" => false,   // douane (SPEC-MERCENAIRES.md)
                 "last_war" => -2.0 * 365.0, "refu" => 0.0   // au départ, de vieilles rancunes : les premières guerres viennent vite
             };
+            f.set("caractere", memoire::tirer_caractere(g.seed, code)); // (SPEC-POLITIQUE, module 6)
             g.factions.set(code, f);
             let maison = FM::nouvelle(&g, code); // famille dirigeante (game/familles.py)
             g.factions.at(code).set("maison", maison);

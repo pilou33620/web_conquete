@@ -1674,6 +1674,82 @@ pub const CORSAIRE_INCIDENT: f64 = 0.35;   // chance par mois d'un incident dipl
 pub const INCIDENT_REL: i64 = 15;   // relation perdue par la victime à chaque incident
 pub const CASUS_BELLI_TOURS: i64 = 12;   // durée du casus belli offert par un incident
 
+// ------------------------------------------------------------------ (SPEC-POLITIQUE, module 6) diplomatie profonde
+// Le caractère d'un camp (factions[c].caractere, engine/memoire.rs) : guerre (envie de guerre ×), paix / alliance /
+// commerce (points ajoutés au score d'acceptation), fidelite (0 à 1 : répondre aux appels aux armes), argent (valeur
+// de l'argent et des tributs reçus ×), region (valeur des régions reçues ×), menace (points : céder à un ultimatum),
+// rancune (poids des mauvais souvenirs ×).
+fn _car(nom: &str, desc: &str, v: [f64; 9]) -> Val {
+    dict!{"nom" => nom, "desc" => desc, "guerre" => v[0], "paix" => v[1], "alliance" => v[2], "commerce" => v[3],
+          "fidelite" => v[4], "argent" => v[5], "region" => v[6], "menace" => v[7], "rancune" => v[8]}
+}
+py_const!(CARACTERES, dict!{
+    //                                                                          guerre paix  all.  com.  fid.  arg.  rég.  men.  ranc.
+    "agressif" => _car("Agressif", "Prompt à la guerre, sourd aux menaces, rancunier.", [1.4, -10.0, 0.0, -5.0, 0.5, 1.0, 1.1, -15.0, 1.3]),
+    "expansionniste" => _car("Expansionniste", "Veut des terres : une région vaut cher à ses yeux.", [1.2, -5.0, 0.0, 0.0, 0.5, 0.9, 1.6, -5.0, 1.0]),
+    "marchand" => _car("Marchand", "Préfère le commerce à la guerre ; l'argent le convainc.", [0.7, 10.0, 0.0, 20.0, 0.5, 1.3, 1.0, 5.0, 0.8]),
+    "prudent" => _car("Prudent", "Évite la guerre, cède devant plus fort, se lie peu.", [0.6, 15.0, -5.0, 5.0, 0.6, 1.0, 1.0, 15.0, 1.0]),
+    "loyal" => _car("Loyal", "Honore ses alliances et n'oublie ni l'aide ni la trahison.", [0.9, 0.0, 10.0, 5.0, 0.95, 1.0, 1.0, -10.0, 1.5]),
+    "opportuniste" => _car("Opportuniste", "Suit son intérêt du moment ; ses alliances pèsent peu.", [1.1, 5.0, -5.0, 5.0, 0.3, 1.2, 1.2, 10.0, 0.7])
+});
+// le caractère que l'histoire prête à certains pays (un bonus au tirage, pas une certitude)
+pub const CARACTERE_HISTOIRE: &[(&str, &str)] = &[
+    ("GB", "marchand"), ("NL", "marchand"), ("VE", "marchand"), ("GE", "marchand"), ("AGB", "marchand"), ("ANL", "marchand"),
+    ("ICY", "marchand"), ("PR", "agressif"), ("CR", "agressif"), ("AL", "agressif"), ("IAF", "agressif"), ("IMA", "agressif"),
+    ("APL", "agressif"), ("RU", "expansionniste"), ("FR", "expansionniste"), ("OT", "expansionniste"), ("ATC", "expansionniste"),
+    ("CH", "prudent"), ("DK", "prudent"), ("PO", "prudent"), ("AU", "prudent"), ("PT", "loyal"), ("ES", "loyal"), ("HA", "loyal"),
+    ("AFR", "loyal"), ("SA", "opportuniste"), ("BA", "opportuniste"), ("IMO", "opportuniste"), ("SX", "opportuniste"),
+];
+pub const CARACTERE_HISTOIRE_BONUS: f64 = 0.3;
+// la mémoire (engine/memoire.rs) : {fait: {texte, poids, demi_vie (jours)}} ; le poids s'efface de moitié à chaque demi-vie
+fn _fait(texte: &str, poids: f64, demi_vie: f64) -> Val {
+    dict!{"texte" => texte, "poids" => poids, "demi_vie" => demi_vie}
+}
+py_const!(MEMOIRE, dict!{
+    "guerre" => _fait("Nous a déclaré la guerre", -30.0, 1095.0),
+    "trahison" => _fait("A rompu notre alliance", -45.0, 1825.0),
+    "accord_rompu" => _fait("A dénoncé un accord", -15.0, 730.0),
+    "aide" => _fait("A combattu à nos côtés", 25.0, 1095.0),
+    "appel_refuse" => _fait("A refusé notre appel aux armes", -30.0, 1460.0),
+    "cadeau" => _fait("Nous a fait des présents", 10.0, 365.0),
+    "commerce" => _fait("Accord commercial signé", 8.0, 730.0),
+    "accord" => _fait("Accord conclu", 10.0, 730.0),
+    "mariage" => _fait("Mariage entre nos maisons", 15.0, 3650.0),
+    "ultimatum" => _fait("Nous a adressé un ultimatum", -25.0, 1460.0),
+    "incident" => _fait("Incident (corsaires, espions)", -15.0, 730.0),
+    "tribut_impaye" => _fait("N'a pas payé son tribut", -15.0, 730.0),
+    "independance_refusee" => _fait("Nous a refusé l'indépendance", -20.0, 1460.0)
+});
+pub const MEMOIRE_MAX: i64 = 12;   // faits gardés par paire de camps (les plus anciens s'en vont)
+pub const MEMOIRE_FUSION: f64 = 30.0;   // jours : un même fait répété dans ce délai s'ajoute au précédent (au plus le double du poids)
+pub const ATT_REGIME: f64 = 10.0;   // attitude : même régime (module 5) ; des régimes différents : −ATT_REGIME / 2
+pub const ATT_DIPLOMATE: f64 = 10.0;   // attitude : un diplomate de l'autre camp à notre cour (module 4)
+pub const DIPLOMATE_BONUS: f64 = 10.0;   // points d'acceptation qu'apporte un diplomate présent (paix, alliance, commerce…)
+pub const DIPLOMATE_K: f64 = 0.15;   // … et la part de ce qu'on cède qu'il fait oublier (propositions composées)
+// les clauses d'une proposition composée ({cmd: "diplo", sub: "proposer", clauses: {donner: [...], recevoir: [...]}}) :
+// champs attendus ; mutuelle : la clause lie les deux camps, de quelque côté qu'elle soit
+fn _clause(nom: &str, desc: &str, champs: Val, mutuelle: bool) -> Val {
+    dict!{"nom" => nom, "desc" => desc, "champs" => champs, "mutuelle" => mutuelle}
+}
+py_const!(CLAUSES, dict!{
+    "region" => _clause("Région", "Une place (pas la capitale) change de maître.", list!["node"], false),
+    "technologie" => _clause("Technologie", "Une technologie connue de l'un, dont l'autre a les prérequis.", list!["tech"], false),
+    "argent" => _clause("Argent", "Des livres versées tout de suite.", list!["montant"], false),
+    "tribut" => _clause("Tribut", "Des livres versées à chaque tour pendant N tours.", list!["montant", "tours"], false),
+    "passage" => _clause("Droit de passage", "Les armées de l'autre traversent nos terres.", list![], false),
+    "commerce" => _clause("Accord commercial", "Commerce entre les deux camps.", list![], true),
+    "alliance" => _clause("Alliance", "Alliance entre les deux camps.", list![], true),
+    "paix" => _clause("Paix", "Fin de la guerre et trêve.", list![], true),
+    "protectorat" => _clause("Protectorat", "Celui qui donne passe sous la protection de l'autre : tribut, guerres communes, plus de diplomatie propre.", list![], false),
+    "independance" => _clause("Indépendance", "Le protecteur rend sa liberté à son protectorat.", list![], false),
+    "cartes" => _clause("Cartes", "Les cartes de nos places : l'autre les voit quelques tours.", list![], false)
+});
+pub const CLAUSES_MAX: usize = 8;   // clauses de chaque côté
+pub const TRIBUT_TOURS_MAX: i64 = 60;
+pub const CARTES_TOURS: i64 = 6;   // ce que montrent les cartes données
+pub const ULTIMATUM_RAPPORT: f64 = 1.5;   // une IA ne cède à un ultimatum que devant un camp au moins 1,5 fois plus fort
+pub const ULTIMATUM_CD: f64 = 365.0;   // jours entre deux ultimatums d'une IA au même camp
+
 
 pub fn tax_label(v: f64) -> String {
     for (lim, lab) in TAX_LABELS().iter().map(|t| t.pair()) {

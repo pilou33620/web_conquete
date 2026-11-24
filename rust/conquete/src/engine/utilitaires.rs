@@ -1078,6 +1078,7 @@ impl Game {
         let season = self.season();
         RL::sabotage(self); // armées ennemies posées sur une voie ferrée
         super::commerce::mois(self); // routes, comptoirs, corsaires, marché des denrées (SPEC-EMPIRE, module 7)
+        crate::diplomacy::mois(self); // tributs promis, souvenirs effacés (SPEC-POLITIQUE, module 6)
         for (code, f) in self.factions.items() {
             let code = code.s();
             if !f.atb("alive") {

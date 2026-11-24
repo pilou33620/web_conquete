@@ -430,6 +430,11 @@ impl App {
                 }
                 return Ok(dict! {"ok" => false, "msg" => "Nom invalide."});
             }
+            "diplo" if body.has("sub") => {
+                // (SPEC-POLITIQUE, module 6) propositions composées, ultimatums, appels aux armes, réponses
+                let (ok, msg) = D::commande(g, p, &body);
+                return Ok(dict! {"ok" => ok == Some(true), "msg" => msg, "pending" => ok.is_none()});
+            }
             "diplo" => {
                 let give = body.get("give");
                 let get = body.get("get");
