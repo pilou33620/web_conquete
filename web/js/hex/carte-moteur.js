@@ -24,6 +24,9 @@ const RANG_MAX = { 4: 3, 8: 3, 16: 2 };
 // bras d'eau étroits (brasDEau) en hexagones de mer jusqu'aux hexagones de 4 cases ; plus loin en ruban de fleuve (des
 // hexagones de mer de 8 cases mangeraient les presqu'îles qui les bordent, le Médoc)
 const PAS_MER = 4;
+// les bras d'eau courts (moins de deux hexagones, au moins COURT_MIN hexagones de profondeur : rias, petits golfes,
+// lagunes) en ruban d'eau jusqu'aux hexagones de 8 cases ; plus loin, il y en aurait sur toute côte découpée
+const PAS_COURTS = 8, COURT_MIN = 0.75;
 
 // l'hexagone (indice ligne × colonnes + colonne) sous un point du jeu, ou −1 hors de la grille
 export function indexEn(g, x, y) {
@@ -71,6 +74,7 @@ export class Niveau {
     if (pas <= PAS_MER) {
       const places = new Set((mp.nodes || []).map(n => indexEn(g, n.x, n.y)));
       for (const ch of bras) {
+        if (ch.court) continue;
         while (ch.length && places.has(ch[ch.length - 1])) ch.pop();
         for (const h of ch) if (ter[h] >= 3) { ter[h] = 0; fertile[h] = foret[h] = arbres[h] = 0; }
       }
@@ -80,18 +84,21 @@ export class Niveau {
     // les rivières : chaînes d'hexagones voisins, d'amont en aval ; les vallées qu'elles traversent sont mises à plat
     this.rivieres = [];
     const rmax = RANG_MAX[pas] ?? 1;
-    // (plus loin, les bras d'eau en ruban, du fond vers l'eau)
-    if (pas > PAS_MER) for (const ch of bras) {
+    // (les bras d'eau en ruban, du fond vers l'eau : les longs plus loin que PAS_MER, les courts à tous les niveaux qui en
+    // ont, sauf là où passe déjà une rivière)
+    const ruban = ch => {
       ch.reverse();
       for (const h of ch) if (ter[h] >= 3) { this.riviere[h] = 1; fertile[h] = 0; }
       if (ch.length > 1) this.rivieres.push(ch);
-    }
+    };
+    if (pas > PAS_MER) for (const ch of bras) if (!ch.court) ruban(ch);
     for (const rv of mp.m.rivers || []) {
       if (rv.rank > rmax) continue;
       const ch = chaine(g, rv.pts, pas);
       for (const h of ch) if (ter[h] >= 3) { this.riviere[h] = 1; fertile[h] = 0; if (ter[h] === 6) ter[h] = rv.rank < 3 ? 4 : 5; }
       if (ch.length > 1) this.rivieres.push(ch);
     }
+    for (const ch of bras) if (ch.court && !ch.some(h => this.riviere[h])) ruban(ch);
   }
   estEau(h) { return this.terrain[h] < 3; }
 }
@@ -101,6 +108,10 @@ export class Niveau {
 // bras qui s'enfonce d'au moins deux hexagones (2 × `pas` cases), ou qui relie deux eaux d'au moins 3 hexagones que les
 // hexagones sépareraient (un détroit), donne une chaîne ; le bras le plus profond d'abord, les suivants jusqu'à la chaîne
 // qu'ils rejoignent. (Moins profond, un rivage découpé ; une eau plus petite, une flaque : de loin, ce serait partout.)
+// Jusqu'aux hexagones de PAS_COURTS cases, les bras plus courts (d'au moins COURT_MIN hexagones) donnent aussi une chaîne,
+// marquée `court` (un ruban d'eau, qui ne mange pas de terre), quand son fond est un chenal (de la terre des deux côtés)
+// loin des autres chaînes : sur une côte découpée (fjords, rias, îles), seul le plus profond de chaque groupe d'hexagones
+// voisins (pas deux fonds voisins, ni un fond contre une autre chaîne), et sans prendre un hexagone d'une autre chaîne.
 function brasDEau(g, mp, hexDe, ter, pas) {
   const { W, H, terrain } = mp, N = W * H, n = g.liste.length;
   const eau = c => terrain[c] <= T.EAU && hexDe[c] >= 0, perdue = c => eau(c) && ter[hexDe[c]] >= 3;
@@ -128,15 +139,22 @@ function brasDEau(g, mp, hexDe, ter, pas) {
     for (let m = c; m !== undefined; m = par.get(m)) { const h = hexDe[m]; if (h !== ch[ch.length - 1]) ch.push(h); if (pris?.has(h)) break; }
     return ch.reverse();
   };
-  const out = [];
-  for (const [u, v] of ponts.values()) out.push([...remonter(u), ...remonter(v).reverse()].filter((h, k, ch) => h !== ch[k - 1]));
-  const fonds = [...dist].filter(([c, d]) => d >= 2 * pas && perdue(c) && ![c - 1, c + 1, c - W, c + W].some(v => (dist.get(v) ?? -1) > d)).sort((a, b) => b[1] - a[1]);
-  const pris = new Set();
-  for (const [c] of fonds) {
-    if (pris.has(hexDe[c])) continue;
-    const ch = remonter(c, pris);
-    for (const h of ch) if (ter[h] >= 3) pris.add(h);
-    out.push(ch);
+  const out = [], pris = new Set(), proches = new Set();   // les hexagones de terre des chaînes ; eux et leurs voisins
+  const garder = (ch, court) => {
+    for (const h of ch) if (ter[h] >= 3) { pris.add(h); proches.add(h); for (const v of g.voisins(g.liste[h])) proches.add(v.i); }
+    ch.court = court; out.push(ch);
+  };
+  for (const [u, v] of ponts.values()) garder([...remonter(u), ...remonter(v).reverse()].filter((h, k, ch) => h !== ch[k - 1]), false);
+  // (un fond court entre deux terres, à deux cases au plus de part et d'autre : un chenal, pas le bord d'une côte droite)
+  const terreEn = (i, j) => i >= 0 && j >= 0 && i < W && j < H && terrain[j * W + i] > T.EAU;
+  const etroit = c => { const i = c % W, j = (c - i) / W; return [[1, 0], [0, 1], [1, 1], [1, -1]].some(([a, b]) => (terreEn(i + a, j + b) || terreEn(i + 2 * a, j + 2 * b)) && (terreEn(i - a, j - b) || terreEn(i - 2 * a, j - 2 * b))); };
+  const dmin = pas <= PAS_COURTS ? Math.ceil(COURT_MIN * pas) : 2 * pas;
+  const fonds = [...dist].filter(([c, d]) => (d >= 2 * pas || d >= dmin && etroit(c)) && perdue(c) && ![c - 1, c + 1, c - W, c + W].some(v => (dist.get(v) ?? -1) > d)).sort((a, b) => b[1] - a[1]);
+  for (const [c, d] of fonds) {
+    const court = d < 2 * pas;
+    if ((court ? proches : pris).has(hexDe[c])) continue;
+    const ch = court ? remonter(c) : remonter(c, pris);
+    if (!court || !ch.some(h => pris.has(h))) garder(ch, court);
   }
   return out;
 }

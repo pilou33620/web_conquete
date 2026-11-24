@@ -59,6 +59,25 @@ test('carte du moteur : indice d’hexagone, fenêtre alignée, taille bornée',
   assert.ok(!P4.estEau(indexEn(P4.g, 37, 10)) && P4.estEau(indexEn(P4.g, 30, 10)));
   // une côte à peine découpée (une case d'eau dans un hexagone de terre) ne bouge pas
   assert.equal(new Niveau({ ...mp, terrain: terrain.map((t, c) => c === 10 * W + 15 ? 0 : t) }, 4).terrain[indexEn(N.g, 15.5, 10.5)], N.terrain[indexEn(N.g, 15.5, 10.5)]);
+  // un golfe court (y = 40, 6 cases depuis la mer : le golfe d'Izmit) : un ruban d'eau du fond jusqu'à un hexagone d'eau,
+  // de près et à 8 cases, sans qu'aucun hexagone de terre ne devienne de la mer ; rien à 16 cases
+  const golfe = { ...mp, terrain: terrain.map((t, c) => c % W < 21 && ((c / W) | 0) === 40 ? 0 : t) };
+  for (const pas of [4, 8]) {
+    const G = new Niveau(golfe, pas), h = indexEn(G.g, 19.5, 40.5), ch = G.rivieres.find(ch => ch.includes(h));
+    assert.ok(!G.estEau(h) && G.riviere[h] === 1 && ch && G.estEau(ch[ch.length - 1]), `golfe à ${pas} cases`);
+    assert.equal(G.terrain.filter(t => t < 3).length, new Niveau(mp, pas).terrain.filter(t => t < 3).length);
+  }
+  assert.equal(new Niveau(golfe, 16).riviere[indexEn(new Niveau(golfe, 16).g, 19.5, 40.5)], 0);
+  // une côte droite, quel que soit son angle, ne gagne aucun ruban
+  for (let a = 0; a < 180; a += 15) for (const o of [0, 0.6, 1.7]) {
+    const t = a * Math.PI / 180, dr = new Uint8Array(80 * 80).map((_, c) => (c % 80 - 39.5) * Math.cos(t) + (((c / 80) | 0) - 39.5) * Math.sin(t) + o > 0 ? 2 : 0);
+    for (const pas of [4, 8]) assert.equal(new Niveau({ W: 80, H: 80, terrain: dr, playable: dr, m: { rivers: [] } }, pas).rivieres.length, 0, `côte à ${a}°`);
+  }
+  // une côte en peigne (un fjord de 5 cases sur deux lignes) : quelques rubans, jamais deux fonds voisins
+  const peigne = { ...mp, m: { rivers: [] }, terrain: terrain.map((t, c) => c % W < 20 && ((c / W) | 0) % 2 ? 0 : t) }, P = new Niveau(peigne, 4);
+  const fonds = P.rivieres.map(ch => ch[0]);
+  assert.ok(fonds.length >= 1 && fonds.length <= Math.ceil(P.g.rows / 2));
+  for (const f of fonds) assert.ok(!P.g.voisins(P.g.liste[f]).some(v => fonds.includes(v.i)));
   for (const [cx, cy] of [[30, 25], [0, 0], [59, 49], [33, 17]]) {
     const f = cadrer(N, cx, cy, 6, 5), C = fenetre(N, f);
     assert.equal(f.r0 % 2, 0);
