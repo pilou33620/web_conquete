@@ -245,13 +245,15 @@ Fichiers : `diplomacy.rs` (section « SPEC-POLITIQUE, module 6 »), `engine/memo
   rayé), mois de banqueroute et de famine par camp, journal par sorte ; toute la carte par an : prix du marché, prix des
   denrées, routes (et coupées), comptoirs tenus, flottes en traversée, états diplomatiques (tous ceux qui existeront),
   camps en vie et en guerre.
-- Nouveautés prévues, qui s'allument dès que R7/R8/R9 sauvegardent leurs champs : agents par camp (`agents` avec
-  `owner`/`proprio`), agents recrutés / perdus par type, missions finies et « agent revenu » par type
-  (`agents[id].mission.type`), mécontentement du peuple et de la noblesse (`politique.classes.*.mecontentement`),
-  changements de régime (`politique.regime`), révolutions (`politique.revolution`), ministres nommés par poste
-  (`politique.cabinet`), régime et caractère à la fin (`caractere`) avec la part des places, attitude moyenne
-  (`factions[c].attitude`, nombre ou `{valeur}`), camps nés en cours de partie (guerre civile, indépendance),
-  protectorats (état diplomatique).
+- Agents, politique, diplomatie (branchés après la fusion de R7, R8, R9) : par camp et par an, agents, agents en poste,
+  mécontentement du peuple et de la noblesse, attitude moyenne envers les camps en vie (`memoire::valeur`), souvenirs
+  gardés (`factions[c].memoire`), protectorats tenus (`overlord`) ; par mois, agents formés / perdus par type, missions
+  jouées sur-le-champ tentées / réussies par type (compteur du moteur : `g.city_stats["missions"]`, posé dans
+  `agents::ordonner`, jamais sauvegardé, sans effet sur la partie), mois de poste par mission, changements de régime,
+  révolutions et guerres civiles selon le régime (`politique.revolutions`, `politique.guerres_civiles`), ministres nommés
+  par poste, camps nés en cours de partie (camps rebelles `<code>r`) ; à la fin, régime, caractère et statut
+  (indépendant, protectorat, camp rebelle, rayé) avec la part moyenne des places ; alertes « jamais pris » pour les types
+  d'agents et les missions.
 - Alertes : domination (plus de `domination_places` % des places dans plus de `domination_parties` % des parties), camp
   toujours rayé, banqueroutes et famines (plus de 10 % des mois), unité / bâtiment / navire / stratégie jamais pris
   (parmi ceux sans technologie requise), stratégie presque toujours perdante ou gagnante (20 fois au moins), tour des IA
@@ -264,7 +266,7 @@ Fichiers : `diplomacy.rs` (section « SPEC-POLITIQUE, module 6 »), `engine/memo
 - `simuler` : `carry_on`, `play_month` et le camp par défaut passés dans `src/bin/commun/` (sortie inchangée) ;
   `Args::parse_drapeaux` pour les options sans valeur. Essais : `tests/outils.rs` `equilibre` (une partie, puis la série
   réduite : rapport et résumé écrits avec leurs clés), lecteur TOML dans le binaire.
-- `--rapide` : 1 min 24 s ici (4 cœurs virtuels qui ne valent qu'un cœur réel). Série par défaut estimée à 35 h de
+- `--rapide` : 52 s à 1 min 24 s ici (4 cœurs virtuels qui ne valent qu'un cœur réel). Série par défaut estimée à 35 h de
   calcul d'un cœur (Monde ≈ 45 s par année de jeu, Europe ≈ 18 s, Aquitaine ≈ 2 s, théâtres 1 à 5 s) : 2 à 5 h sur un PC
   de 8 à 16 cœurs.
 
@@ -275,8 +277,8 @@ Fichiers : `diplomacy.rs` (section « SPEC-POLITIQUE, module 6 »), `engine/memo
 - « Joueur absent » impossible (le moteur veut un camp du joueur) : il est joué par une IA comme les autres.
 - Unités : ni victoires ni défaites par type (le moteur ne le garde pas) ; « disparus » compte aussi les fusions.
 - Temps du tour : par mois de jeu et par partie (toutes les IA ensemble), pas par IA.
-- Missions (R7) : la réussite est devinée (agent encore là à la fin de la mission) ; à affiner quand R7 dira l'issue.
-  Les champs supposés des nouveautés sont ceux de cette spec : à vérifier après la fusion (`mesures.rs`, une ligne).
+- Missions : l'issue d'un échec (pris, tué, échappé) n'est pas distinguée ; les postes sont comptés en mois tenus, pas
+  en réussites.
 
 
 ### Module 5 : politique intérieure (R8) — fait le 24/11/2026

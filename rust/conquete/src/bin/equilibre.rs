@@ -518,6 +518,9 @@ fn libelles() -> J {
     json!({
         "unites": de(R::UNITS(), "name"), "batiments": bat, "navires": de(R::NAVIRES(), "nom"), "strategies": de(R::STRATS(), "label"),
         "strategies_nav": de(R::STRATS_NAV(), "label"), "denrees": de(R::DENREES(), "nom"),
+        "agents": de(R::AGENTS(), "nom"), "missions": de(R::MISSIONS(), "nom"), "postes": de(R::MISSIONS(), "nom"),
+        "ministres": de(R::POSTES(), "label"), "revolutions": de(R::REGIMES(), "label"), "regime": de(R::REGIMES(), "label"),
+        "caractere": de(R::CARACTERES(), "nom"),
     })
 }
 

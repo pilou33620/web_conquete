@@ -806,9 +806,9 @@ commande pour les rejouer, `bin/equilibre --partie carte:époque:graine:années:
 **Quoi envoyer à l'assistant** : le fichier `resume-<date>.json` (quelques dizaines de Ko : chiffres clés par carte et
 par camp, compteurs, alertes, plantages). Il s'en sert pour proposer les réglages ; le rapport HTML reste pour vous.
 
-Les mesures sont dans `rust/conquete/src/bin/equilibre/mesures.rs`, une ligne par mesure ; les nouveautés (agents,
-régimes et révolutions, ministres, caractère et attitude des IA, protectorats) apparaissent dans le rapport dès que le
-moteur les enregistre dans la sauvegarde.
+Les mesures sont dans `rust/conquete/src/bin/equilibre/mesures.rs`, une ligne par mesure : le rapport montre aussi les
+agents (formés, perdus, missions tentées et réussies, postes), la politique (mécontentement des classes, régimes,
+révolutions, guerres civiles, ministres) et la diplomatie (caractère des IA, attitude, souvenirs, protectorats).
 
 ## Outils
 

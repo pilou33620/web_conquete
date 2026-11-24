@@ -305,7 +305,7 @@ function carte(C, conteneur) {
   // catégories (régime, caractère…)
   for (const [id, titre] of D.meta.categories) if (C.categories[id]) {
     const t = el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Valeur"), el("th", {}, "Camps (toutes parties)"), el("th", {}, "% moyen des places"))),
-      el("tbody", {}, ...Object.entries(C.categories[id]).sort((a, b) => b[1][0] - a[1][0]).map(([k, v]) => el("tr", {}, el("td", {}, k), el("td", {}, fmt(v[0])), el("td", {}, fmt(v[1]))))));
+      el("tbody", {}, ...Object.entries(C.categories[id]).sort((a, b) => b[1][0] - a[1][0]).map(([k, v]) => el("tr", {}, el("td", {}, lib(id, k)), el("td", {}, fmt(v[0])), el("td", {}, fmt(v[1]))))));
     conteneur.append(el("h2", {}, titre), el("div", { class: "carte-bloc" }, t));
   }
   if (C.finies.length) {

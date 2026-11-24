@@ -529,6 +529,11 @@ pub fn ordonner(g: &mut Game, code: &str, id: &Val, mission: &Val, cible: &Val) 
     a.set("mission", Val::None);
     a.set("repos", TT::deadline(g, 1, &[code]));
     let ok = g.rng.random() < chance;
+    // (SPEC-POLITIQUE, module 8) missions tentées et réussies par type, pour l'outil d'équilibre : dans g.city_stats,
+    // jamais sauvegardé ; ne change rien à la partie (un dict, pas de hasard)
+    let st = g.city_stats.setdefault("missions", dict! {}).setdefault(mi.as_str(), dict! {"n" => 0, "ok" => 0});
+    st.inc("n", 1);
+    st.inc("ok", ok as i64);
     if ok {
         let msg = reussir(g, &a, &mi, cible, camp.as_deref());
         gagner_xp(g, &a, if m.atf("base") < 0.5 { 2 } else { 1 });

@@ -65,11 +65,9 @@ impl Etat<'_> {
         v.extend(conquete::engine::commerce::en_mer(self.g));
         v
     }
-    /// Les éléments d'un dict (ou d'une liste) de la sauvegarde qui appartiennent au camp c (`owner` ou `proprio`).
-    fn a_soi(&self, cle: &str, c: &str) -> Option<Vec<Val>> {
-        let v = self.d.get(cle);
-        let l = if v.is_dict() { v.values() } else if v.is_list() { v.vec() } else { return None };
-        Some(l.into_iter().filter(|x| x.is_dict() && (x.get("owner") == c || x.get("proprio") == c)).collect())
+    /// Les agents du camp (`g.agents`).
+    fn agents(&self, c: &str) -> Vec<Val> {
+        self.g.agents.values().into_iter().filter(|a| a.get("owner") == c).collect()
     }
 }
 
@@ -86,23 +84,30 @@ pub const SERIES_CAMP: &[(&str, &str, Serie)] = &[
     ("flottes", "Flottes", |e, c| Some(e.flottes().iter().filter(|f| f.at("owner") == c).count() as f64)),
     ("commerce", "Commerce maritime (livres par jour)", |e, c| Some(conquete::engine::commerce::revenu(&e.camp(c)))),
     ("prestige", "Prestige", |e, c| nombre(&e.camp(c).get("prestige"))),
-    // --- les nouveautés (SPEC-POLITIQUE) : elles s'allument quand le moteur les sauvegarde
-    ("agents", "Agents (R7)", |e, c| e.a_soi("agents", c).map(|l| l.len() as f64)),
-    ("mecontentement_peuple", "Mécontentement du peuple (R8)", |e, c| nombre(&ch(&e.camp(c), "politique.classes.peuple.mecontentement"))),
-    ("mecontentement_noblesse", "Mécontentement de la noblesse (R8)", |e, c| nombre(&ch(&e.camp(c), "politique.classes.noblesse.mecontentement"))),
-    ("attitude", "Attitude moyenne envers les autres camps (R9)", |e, c| {
-        // {autre camp: valeur} ou {autre camp: {valeur, raisons}}
-        let a = e.camp(c).get("attitude");
-        let v: Vec<f64> = if a.is_dict() { a.values().iter().filter_map(|x| nombre(x).or_else(|| nombre(&ch(x, "valeur")))).collect() } else { vec![] };
-        (!v.is_empty()).then(|| v.iter().sum::<f64>() / v.len() as f64)
+    // --- agents (SPEC-POLITIQUE, module 4), politique (module 5), diplomatie (module 6)
+    ("agents", "Agents", |e, c| Some(e.agents(c).len() as f64)),
+    ("agents_postes", "Agents en poste (université, apaiser, ambassade)", |e, c| Some(e.agents(c).iter().filter(|a| ch(a, "mission.type").is_str()).count() as f64)),
+    ("mecontentement_peuple", "Mécontentement du peuple", |e, c| nombre(&ch(&e.camp(c), "politique.classes.peuple.mecontentement"))),
+    ("mecontentement_noblesse", "Mécontentement de la noblesse", |e, c| nombre(&ch(&e.camp(c), "politique.classes.noblesse.mecontentement"))),
+    // attitude du camp envers les autres camps en vie (relation + mémoire + situation, memoire::valeur)
+    ("attitude", "Attitude moyenne envers les autres camps", |e, c| {
+        let autres: Vec<Val> = e.g.factions.keys().into_iter().filter(|b| b.s() != c && e.g.factions.at(b).atb("alive")).collect();
+        let v: Vec<f64> = autres.iter().map(|b| conquete::engine::memoire::valeur(e.g, c, b.s())).collect();
+        (!v.is_empty() && e.camp(c).atb("alive")).then(|| v.iter().sum::<f64>() / v.len() as f64)
     }),
+    ("souvenirs", "Souvenirs gardés (mémoire diplomatique)", |e, c| Some(e.camp(c).get("memoire").items_ou_rien().iter().map(|(_, l)| liste(l).len()).sum::<usize>() as f64)),
+    ("proteges", "Protectorats tenus", |e, c| Some(e.g.factions.values().iter().filter(|f| f.atb("alive") && f.get("overlord") == c).count() as f64)),
 ];
 
 // ================================================================== par camp, à la fin
 pub type Categorie = fn(&Etat, &str) -> Option<String>;
 pub const CATEGORIES_CAMP: &[(&str, &str, Categorie)] = &[
-    ("regime", "Régime à la fin (R8)", |e, c| ch(&e.camp(c), "politique.regime").is_str().then(|| ch(&e.camp(c), "politique.regime").string())),
-    ("caractere", "Caractère de l'IA (R9)", |e, c| e.camp(c).get("caractere").is_str().then(|| e.camp(c).get("caractere").string())),
+    ("regime", "Régime à la fin", |e, c| ch(&e.camp(c), "politique.regime").is_str().then(|| ch(&e.camp(c), "politique.regime").string())),
+    ("caractere", "Caractère de l'IA", |e, c| e.camp(c).get("caractere").is_str().then(|| e.camp(c).get("caractere").string())),
+    ("statut", "Statut à la fin (indépendant, protectorat, rebelle, rayé)", |e, c| {
+        let f = e.camp(c);
+        Some(if !f.atb("alive") { "rayé" } else if ch(&f, "politique.rebelle_de").is_str() { "camp rebelle" } else if f.atb("overlord") { "protectorat" } else { "indépendant" }.to_string())
+    }),
 ];
 
 // ================================================================== toute la carte, chaque année
@@ -400,58 +405,65 @@ pub const COMPTEURS: &[Compteur] = &[
                 }
             }
         } },
-    // --- les nouveautés (SPEC-POLITIQUE) : rien tant que le moteur ne les sauvegarde pas
-    Compteur { id: "agents", titre: "Agents recrutés et perdus (R7)", a: "recrutés", b: "perdus", par_camp: false, ratio: false,
-        connus: aucun,
+    // --- agents (SPEC-POLITIQUE, module 4)
+    Compteur { id: "agents", titre: "Agents formés et perdus, par type", a: "formés", b: "perdus", par_camp: false, ratio: false,
+        connus: |_| R::AGENTS().keys().iter().map(Val::string).collect(),
         f: |e, memo, fam| {
-            let v = e.d.get("agents");
-            if !v.is_dict() { return; }
-            let (plus, moins) = nouveaux(memo, v.items().into_iter().map(|(k, a)| (k.string(), a)).collect());
-            plus.iter().for_each(|a| ajoute(fam, a.get("type").to_string(), 1.0, 0.0));
-            moins.iter().for_each(|a| ajoute(fam, a.get("type").to_string(), 0.0, 1.0));
+            let (plus, moins) = nouveaux(memo, e.g.agents.items().into_iter().map(|(k, a)| (k.string(), a)).collect());
+            plus.iter().for_each(|a| ajoute(fam, a.ats("type"), 1.0, 0.0));
+            moins.iter().for_each(|a| ajoute(fam, a.ats("type"), 0.0, 1.0));
         } },
-    // une mission finie (l'agent n'en a plus) est comptée réussie si l'agent est toujours là (à affiner quand R7 dira
-    // l'issue de ses missions)
-    Compteur { id: "missions", titre: "Missions d'agents finies, et réussies (R7)", a: "finies", b: "agent revenu", par_camp: false, ratio: true, connus: aucun,
+    // les missions jouées sur-le-champ : le compteur du moteur (g.city_stats["missions"], agents::ordonner)
+    Compteur { id: "missions", titre: "Missions d'agents jouées sur-le-champ", a: "tentées", b: "réussies", par_camp: false, ratio: true,
+        connus: |_| R::MISSIONS().items().into_iter().filter(|(_, m)| !m.getb("poste")).map(|(k, _)| k.string()).collect(),
         f: |e, memo, fam| {
-            let v = e.d.get("agents");
-            if !v.is_dict() { return; }
-            let maintenant = Val::dict(); // {agent: type de mission}
-            for (k, a) in v.items() {
+            let maintenant = e.g.city_stats.get_or("missions", Val::dict());
+            for (k, v) in maintenant.items() {
+                let avant = if memo.is_dict() { memo.get(&k) } else { Val::None };
+                let (n0, r0) = if avant.is_dict() { (avant.get_or("n", 0).f(), avant.get_or("ok", 0).f()) } else { (0.0, 0.0) };
+                if memo.is_dict() {
+                    ajoute(fam, k.string(), v.get_or("n", 0).f() - n0, v.get_or("ok", 0).f() - r0);
+                }
+            }
+            *memo = maintenant.deepcopy();
+        } },
+    Compteur { id: "postes", titre: "Postes d'agents tenus (mois)", a: "mois", b: "", par_camp: false, ratio: false, connus: aucun,
+        f: |e, _, fam| {
+            for a in e.g.agents.values() {
                 let m = ch(&a, "mission.type");
-                if m.is_str() { maintenant.set(&k, m); }
-            }
-            if memo.is_dict() {
-                for (k, m) in memo.items() {
-                    if !maintenant.has(&k) {
-                        ajoute(fam, m.string(), 1.0, v.has(&k) as i64 as f64);
-                    }
+                if m.is_str() {
+                    ajoute(fam, m.string(), 1.0, 0.0);
                 }
             }
-            *memo = maintenant;
         } },
-    Compteur { id: "regimes", titre: "Changements de régime (R8)", a: "fois", b: "", par_camp: false, ratio: false, connus: aucun,
+    // --- politique intérieure (module 5)
+    Compteur { id: "regimes", titre: "Changements de régime", a: "fois", b: "", par_camp: false, ratio: false, connus: aucun,
         f: |e, memo, fam| suivre_mot(e, memo, fam, "politique.regime", |a, b| format!("{a} → {b}")) },
-    Compteur { id: "revolutions", titre: "Révolutions, selon le régime (R8)", a: "commencées", b: "", par_camp: false, ratio: false, connus: aucun,
+    // politique.revolutions et politique.guerres_civiles : les compteurs de chaque camp (éclatées, déclenchées)
+    Compteur { id: "revolutions", titre: "Révolutions et guerres civiles, selon le régime", a: "révolutions", b: "guerres civiles", par_camp: false, ratio: false, connus: aucun,
         f: |e, memo, fam| {
-            let maintenant = Val::dict();
+            let maintenant = Val::dict(); // {camp: [révolutions, guerres civiles, régime]}
             for (c, f) in e.g.factions.items() {
-                if ch(&f, "politique.revolution").truthy() {
-                    maintenant.set(&c, true);
-                    if memo.is_dict() && !memo.has(&c) {
-                        ajoute(fam, ch(&f, "politique.regime").to_string(), 1.0, 0.0);
-                    }
+                let p = f.get("politique");
+                if !p.is_dict() {
+                    continue;
                 }
+                let (r, gc) = (p.get_or("revolutions", 0).i(), p.get_or("guerres_civiles", 0).i());
+                let avant = if memo.is_dict() { memo.get(&c) } else { Val::None };
+                if avant.is_some() && (r > avant.at(0).i() || gc > avant.at(1).i()) {
+                    ajoute(fam, avant.at(2).to_string(), (r - avant.at(0).i()) as f64, (gc - avant.at(1).i()) as f64);
+                }
+                maintenant.set(&c, conquete::list![r, gc, p.get("regime")]);
             }
             *memo = maintenant;
         } },
-    Compteur { id: "ministres", titre: "Ministres nommés, par poste (R8)", a: "nominations", b: "", par_camp: false, ratio: false, connus: aucun,
+    Compteur { id: "ministres", titre: "Ministres nommés, par poste", a: "nominations", b: "", par_camp: false, ratio: false, connus: aucun,
         f: |e, memo, fam| {
             let maintenant = Val::dict(); // {"camp poste": ministre}
             for (c, f) in e.g.factions.items() {
                 for (poste, m) in ch(&f, "politique.cabinet").items_ou_rien() {
                     let k = format!("{c} {poste}");
-                    let qui = if m.is_dict() { m.get("nom").to_string() } else { m.to_string() };
+                    let qui = if m.is_dict() { m.get("id").to_string() } else { m.to_string() };
                     if memo.is_dict() && memo.get(k.as_str()).to_string() != qui {
                         ajoute(fam, poste.string(), 1.0, 0.0);
                     }
