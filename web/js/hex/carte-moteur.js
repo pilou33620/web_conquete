@@ -10,7 +10,8 @@
 // qu'en dernier (l'Europe entière : 8 cases).
 import { Grille, SQ3, bruit, DIRS } from './grille.js';
 
-// du plus fin au plus large : taille des hexagones, décor allégé ?, cases bâties au plus par le moteur
+// du plus fin au plus large : taille des hexagones, décor allégé ? (et hexagones simples de web_engine, hexagonesSimples :
+// hexagones de moins d'une trentaine de pixels), cases bâties au plus par le moteur
 // (sobre : seulement quand la qualité automatique allège la fenêtre, part < 1 dans choisirPas : toute la carte Monde)
 export const NIVEAUX = [{ pas: 4, leger: false, max: 1500 }, { pas: 4, leger: true, max: 12000 }, { pas: 8, leger: true, max: 12000 }, { pas: 16, leger: true, max: 12000 },
   { pas: 32, leger: true, max: 12000, sobre: true }];

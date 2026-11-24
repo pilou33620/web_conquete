@@ -40,11 +40,12 @@ if (PAGE) try {
   if (!document.getElementById('etiquettes')) { const d = document.createElement('div'); d.id = 'etiquettes'; carte2d?.after(d); }
   (await import('../../graphismes/rendu/scene.js')).apresCamera(() => calage?.());
   // (modernes, animations, toon : les habitants et les pièces mobiles des bâtiments des emplacements, SPEC-EMPIRE module 4)
-  const [S, P, M, R, V, W, , , MO, A, T] = await Promise.all(['scene', 'plateau', 'modeles', 'routes', 'vie', 'monde', 'faune', 'eau', 'modernes', 'animations', 'toon']
+  // (nuit : l'éclairage de l'heure du jeu, sans meteo.js : fenêtres, lueurs et feux des phares la nuit)
+  const [S, P, M, R, V, W, , , MO, A, T, N] = await Promise.all(['scene', 'plateau', 'modeles', 'routes', 'vie', 'monde', 'faune', 'eau', 'modernes', 'animations', 'toon', 'nuit']
     .map(m => import(`../../graphismes/rendu/${m}.js`)));
   const r = S.renderer, rendre = r.render.bind(r);
   r.render = () => {};   // la boucle du moteur ne dessine plus : image() le fait, caméra calée
-  E = { S, P, M, R, V, W, MO, A, T, rendre: () => rendre(S.scene, S.camera), rendreScene: rendre };
+  E = { S, P, M, R, V, W, MO, A, T, N, rendre: () => rendre(S.scene, S.camera), rendreScene: rendre };
   S.cam.auto = false;
   P.decorProgressif(6);   // (le décor se pose par morceaux de 6 ms par image : changer de vue n'arrête plus l'image)
   // (SPEC-EMPIRE, P2) la marine du moteur (marine.js, adaptée par hex/marine.js) ; sans elle, le plateau reste
@@ -64,8 +65,9 @@ const QUARTIERS = ['maison_pierre'];
 const FERMES = 0.06, MOULINS = 0.02;   // part des hexagones cultivés qui portent une ferme, un moulin
 const epoqueDe = an => an < 1750 ? 'ancien' : an < 1789 ? 'lumieres' : an < 1816 ? 'empire' : 'industrie';
 const D = 400;   // recul de la caméra orthographique (unités du moteur)
-// l'heure du jeu (carte/ambiance.js) dans le vocabulaire du moteur (vie.js, climat : qui est dehors, fenêtres, lucioles)
-const HEURE = { matin: ['jour', 'aube', 0.3, 0], midi: ['jour', 'jour', 0, 0], soir: ['aube', 'crepuscule', 1, 0.2], nuit: ['nuit', 'nuit', 0, 1] };
+// l'heure du jeu (carte/ambiance.js) dans le vocabulaire du moteur (nuit.js, eclairage : lumière de la scène, et climat : qui est
+// dehors, fenêtres, lueurs, phares, lucioles)
+const HEURE = { matin: { jour: 0.7, aube: 0.3, nuit: 0, phase: 'aube' }, midi: 'jour', soir: { aube: 1, nuit: 0.2, phase: 'crepuscule' }, nuit: 'nuit' };
 const NIV_VILLE = { capitale: 4, fort: 2, ville: 3, village: 1 };
 // (SPEC-EMPIRE, module 4) les bâtiments des emplacements qui se posent au bord de l'eau (côté +x du modèle, tourné vers elle)
 const MER = new Set(['port', 'chantier_naval', 'cale_seche', 'phare']);
@@ -111,17 +113,13 @@ export class Plateau {
   qualiteTexte() { return `${this.manuel || 'auto'} ${E.S.qualite.niveau} palier ${this.palier} ×${E.S.renderer.getPixelRatio().toFixed(2)}`; }
   // un palier de qualite.js : niveau du moteur (ombres), définition, habitants, décor, vie, cadence
   appliquer(p) {
-    const q = PALIERS[p], avant = this.q, niv = q.ombres ? this.base : 'leger';
+    const q = PALIERS[p], avant = this.q;
     this.q = q; this.palier = p;
-    if (E.S.qualite.niveau !== niv) {
-      // (reglerQualite retient le niveau comme un choix de l'appareil : un palier automatique ne doit pas l'être)
-      let garde = null;
-      try { garde = localStorage.getItem('web_engine.qualite'); } catch (e) { /* stockage indisponible */ }
-      E.S.reglerQualite(niv);
-      try { if (garde == null) localStorage.removeItem('web_engine.qualite'); else localStorage.setItem('web_engine.qualite', garde); } catch (e) { /* idem */ }
-    }
-    E.S.renderer.setPixelRatio(Math.min(devicePixelRatio, E.S.qualite.pr) * q.echelle);
-    if (q.decor !== avant.decor || q.cases !== avant.cases) this.refaire = true;   // (fenêtre rebâtie à la prochaine image)
+    // (un palier automatique n'est pas retenu comme le choix de l'appareil ; web_engine clairsème le décor et coupe la vie)
+    E.S.reglerQualite(q.ombres ? this.base : 'leger', { retenir: false, echelle: q.echelle, decor: q.decor, vie: q.vie });
+    // (fenêtre rebâtie à la prochaine image : moins de cases, ou les parcelles ôtées avec le décor clairsemé, batir ; les deux
+    // vont ensemble dans PALIERS)
+    if (q.cases !== avant.cases || q.decor !== avant.decor) this.refaire = true;
     if (q.vie !== avant.vie) this.majVie();
     this.animSale = this.sale = true;
   }
@@ -130,8 +128,6 @@ export class Plateau {
     const cle = pas + (leger ? 'l' : '');
     let N = this.niveaux.get(cle);
     if (!N) { N = new Niveau(this.mp, pas, leger); this.placer(N); this.niveaux.set(cle, N); }
-    // (qualité sans décor complet : le même niveau, un arbre par hexagone de forêt et pas de parcelles, batir)
-    if (!this.q.decor && !leger) N = N.versionSobre ||= Object.assign(Object.create(Object.getPrototypeOf(N)), N, { arbres: N.foret.slice(), sobre: true });
     return N;
   }
   // chaque place sur son hexagone, les grandes villes sur quelques voisins ; de loin, seules les plus grandes
@@ -216,11 +212,14 @@ export class Plateau {
     // les routes de la fenêtre (indices de la fenêtre) : le moteur les trace (routes.js) et n'y met pas de champs
     this.chemins = N.routes.paires.map(([a, b, niv]) => [this.local(a), this.local(b), niv]).filter(([a, b]) => a >= 0 && b >= 0);
     this.routes = this.chemins;
-    if (N.leger || N.sobre) {
-      // de loin, pas de parcelles : le moteur n'en trace pas sur une case où passe une route (routes de l'état, pas tracées)
+    if (N.leger || !this.q.decor) {
+      // de loin, pas de parcelles : le moteur n'en trace pas sur une case où passe une route (routes de l'état, pas tracées) ;
+      // ni en décor clairsemé (qualité automatique) : le clairsemé de web_engine les garde, et elles doublent alors les
+      // triangles de près sur l'Europe et le Monde
       this.routes = [];
       for (let i = 0; i < n; i += 2) this.routes.push([i, Math.min(i + 1, n - 1)]);
     }
+    E.P.hexagonesSimples(N.leger);   // (de loin, hexagones de moins d'une trentaine de pixels : sans flancs cachés ni petites pièces)
     E.P.construire(C, this.etatDuMoteur());
     E.R.majRoutes(this.chemins);   // (après l'état : le moteur pose les routes sur les hauteurs des cases)
     this.lieuxDu(N);
@@ -248,10 +247,10 @@ export class Plateau {
       epoque: { cle: epoqueDe(an) }, royaumes: (this.codes || []).map((c, id) => ({ id, couleur: this.colors[c] || '#999999' })),
       cases: { foret: this.C.foret, proprio: this.habite || [] }, meteo: { genre: 'soleil' } });
   }
-  // l'heure et le temps qu'il fait sous la caméra, pour la vie du moteur
+  // le temps qu'il fait sous la caméra, pour la vie du moteur (l'heure : eclairage, image)
   majClimat(cam) {
-    const c = E.V.climat, [heure, phase, aube, nuit] = HEURE[AMB.heure] || HEURE.midi, k = meteoEn(cam.x, cam.y);
-    Object.assign(c, { heure, phase, aube, nuit, genre: k, pluie: ['pluie', 'orage', 'tempete'].includes(k), neige: k === 'neige',
+    const c = E.V.climat, k = meteoEn(cam.x, cam.y);
+    Object.assign(c, { genre: k, pluie: ['pluie', 'orage', 'tempete'].includes(k), neige: k === 'neige',
       vent: k === 'tempete' ? 1.4 : k === 'orage' ? 1 : k === 'pluie' ? 0.6 : 0.3, gel: this.neige ? 0.6 : 0, saison: this.saison });
   }
   // centre d'un hexagone de la grille entière, en unités du moteur (grille entière : la fenêtre en est décalée de ox, oz)
@@ -508,6 +507,9 @@ export class Plateau {
     // (le décor arrive par morceaux : chacun se montre ; quand les images sont lentes, des morceaux plus gros, le quart de
     // l'intervalle entre deux images : sans carte graphique, le décor de la carte Monde demandait sinon des dizaines d'images)
     if (E.P.decorEnCours()) { this.sale = true; E.P.decorProgressif(clamp((now - this.tRendu) / 4, 6, 40)); }
+    // l'heure du jeu (sélecteur de ciel.js) : la lumière de la scène y va en deux secondes, dessinée même sans animations
+    if (AMB.heure !== this.heure) { this.heure = AMB.heure; E.N.eclairage(HEURE[AMB.heure] || 'jour'); this.tHeure = now; }
+    if (now - this.tHeure < 3000) this.sale = true;
     if (!this.sale && now - this.tRendu < pas) return false;
     // (qualité automatique : seulement quand le plateau est dessiné à chaque image, animations permises)
     if (anim && !this.manuel && this.tRendu) { const p = this.regul.noter(now, now - this.tRendu); if (p !== this.palier) this.appliquer(p); }
@@ -517,6 +519,8 @@ export class Plateau {
     this.caler(cam, vw, vh);
     E.rendre();
     this.sale = false; this.tRendu = now;
+    // (une fois la première fenêtre décorée, les programmes des shaders encore inconnus se compilent, sans attendre)
+    if (!this.chaud && !E.P.decorEnCours()) { this.chaud = true; E.S.prechauffer().catch(e => console.warn('prechauffer', e)); }
     return true;
   }
   // la caméra du moteur : orthographique, inclinée de ELEV, centrée sur la caméra du jeu, à son échelle

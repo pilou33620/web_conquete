@@ -879,6 +879,81 @@ avertissements du rendu logiciel, `ReadPixels`, et de three.js au niveau normal,
 - Pas de qualité automatique quand les animations sont coupées (le plateau n'est alors dessiné qu'aux changements).
 - Les animations de la marine et des chantiers (autre agent) n'ont pas été mesurées à part.
 
+#### web_engine 2.31.0 branché dans la page (P6) — 24/11/2026
+
+**Fait** (`web/js/hex/plateau.js`, `qualite.js`, `carte-moteur.js` (commentaire), une ligne de `web/js/carte/ciel.js` ; rien
+dans `web/graphismes/`) :
+- **Hexagones simples de loin** : `batir` appelle `E.P.hexagonesSimples(N.leger)` juste avant `construire` : les niveaux
+  `leger` de `carte-moteur.js` (hexagones de moins d'une trentaine de pixels) sont bâtis sans flancs cachés ni petites pièces,
+  le niveau fin (hexagones de 4 cases de près) reste complet. À l'écran : 0,4 % des pixels changent sur l'Aquitaine entière,
+  0,1 % sur le Monde ; de près, rien (comparaison avant / après au palier 0, `vue-*-loin-*.png`).
+- **Qualité automatique** par `E.S.reglerQualite(niveau, { retenir: false, echelle, decor, vie })` à chaque palier : plus de
+  sauvegarde et de remise de `web_engine.qualite` dans `localStorage`, plus de `setPixelRatio` à la main, plus de
+  `versionSobre` (le clairsemé de web_engine : un arbre par hexagone de forêt, ni arbres épars, ni buissons, ni fleurs). Le
+  réglage du menu ☰ reste (`reglerQualite(v)` retenu, comme avant). Vérifié : aucun palier automatique n'écrit
+  `web_engine.qualite` ; le niveau choisi au menu l'écrit.
+- **Parcelles** : le clairsemé de web_engine garde les champs, l'ancienne astuce du jeu les ôtait (routes factices de l'état,
+  comme de loin). Gardée aux paliers 3 et 4 : avec les champs, la vue de près des paliers les plus sobres passe de 41-42 k à
+  105-116 k triangles sur l'Europe et le Monde et de 12 à 5,5 images/s ; sans eux elle reste lisible (hexagones de culture
+  unis, comme au module précédent). Le décor et le nombre de cases changent ensemble dans `PALIERS` : la fenêtre est rebâtie
+  pour les deux (`refaire`), comme avant.
+- **Anticrénelage** : rien à faire ; vérifié coupé en qualité légère (`qualite.aa` et `getContextAttributes().antialias` faux).
+- **Première image** : `E.S.prechauffer()` une fois la première fenêtre dessinée et `E.P.decorEnCours()` faux, sans l'attendre.
+- **Vraie nuit du plateau** : `nuit.js` importé avec les autres modules ; à chaque changement de l'heure du jeu (`AMB.heure`,
+  sélecteur de `ciel.js`), `E.N.eclairage('jour' | 'nuit' | { jour, aube, nuit, phase })` (matin : jour 0,7 et aube 0,3 ;
+  soir : aube 1, nuit 0,2, crépuscule), et le plateau est redessiné trois secondes, même sans animations, le temps que la
+  lumière gagne sa consigne. `majClimat` ne pose plus que le temps qu'il fait. Le voile 2D de l'heure (`ciel.js`) ne se pose
+  plus sur le plateau, sauf la nuit un voile très léger (12 % au lieu de 58 %) pour les calques 2D, armées et étiquettes, que
+  la lumière 3D n'atteint pas ; la carte de secours sans WebGL garde son voile. La nuit vient de la scène : lune bleutée,
+  fenêtres allumées, lueurs des villes, faisceaux du phare de La Teste-de-Buch (`phare-nuit-*.png`).
+
+**Mesures** (même machine et même protocole que plus haut ; charge 2 à 5 ; avant = `claude/lucid-allen-dqqpzg` à d86c861,
+qui a déjà web_engine 2.31.0 sans s'en servir, donc sans anticrénelage en qualité légère des deux côtés ; serveurs avant et
+après lancés côte à côte, mesures en alternance).
+
+Chargement (médiane de quatre à cinq essais, premier essai d'une carte sur un serveur neuf écarté) :
+
+| Carte | Écran de départ | Première image (page) | Décor posé (banc) |
+|---|---|---|---|
+| Aquitaine | 0,47 s → 0,49 s | 2,06 s → 1,79 s | 4,2 s → 3,0 s |
+| Europe | 0,6 s → 0,57 s | 2,03 s → 1,83 s | 3,8 s → 3,0 s |
+| Monde | 0,8 s → 0,83 s | 2,74 s → 2,23 s | 4,1 s → 3,4 s |
+
+Images par seconde (rendu logiciel, ×4, loin / moyen / près) et triangles :
+
+| | avant | après |
+|---|---|---|
+| Aquitaine, automatique (palier 4) | 5,6 / 5,1 / 10,3 | 11,1 / 8,8 / 11,1 |
+| Aquitaine, léger fixé | 1,9 / 2,7 / 4,2 | 3,9 / 5,0 / 4,2 |
+| Europe, automatique | 2,4 / 2,4 / 8,9 | 6,7 / 5,2 / 12,3 |
+| Europe, léger fixé | 1,6 / 2,1 / 2,6 | 3,2 / 4,0 / 3,1 |
+| Monde, automatique | 4,2 / 3,0 / 9,6 | 7,1 / 4,9 / 11,5 |
+| Monde, léger fixé | 1,5 / 2,3 / 2,9 | 3,7 / 3,9 / 3,4 |
+| Triangles de loin, léger fixé (Aquitaine / Europe / Monde) | 1 505 k / 1 035 k / 1 361 k | 434 k / 532 k / 417 k |
+| Triangles de loin, automatique | 390 k / 608 k / 367 k | 101 k / 206 k / 169 k |
+| Triangles de près, automatique | 110 k / 55 k / 55 k | 86 k / 41 k / 42 k |
+
+De loin, trois à quatre fois moins de triangles (deux fois sur l'Europe, dont la vue d'ensemble est en hexagones de 8 cases,
+déjà peu détaillés) et deux à trois fois plus d'images ; de près au palier 0, rien ne change (mêmes triangles, mêmes images :
+4,2 et 4,2 en alternance) ; de près aux paliers sobres, le décor clairsemé de web_engine ôte aussi buissons et fleurs. Le
+JavaScript du dessin par image bouge peu (Aquitaine loin 12,5 → 9,6 ms ; Monde 26 → 25 ms) : sans carte graphique, le temps
+reste celui du rendu logiciel. La première image gagne 10 à 20 % (fenêtre de départ en hexagones simples), le décor posé
+0,7 à 1,2 s.
+
+**Vérifié** dans Chromium (deviceScaleFactor 1 ; aucune erreur de console) : Aquitaine et Monde de loin, Bordeaux de près
+(paliers 0 et 3), nuit, soir et matin à La Teste-de-Buch (phare et douane bâtis dans une partie d'essai), départ par
+l'horizon de la flotte hollandaise de la balise Europe → Amérique (sauvegarde de `tests/partie_commerce.rs` modifiée comme
+en P4) : la flotte file vers l'ouest-sud-ouest, navires grossis, et s'efface en 8 à 9 s. `node --test`, `cargo test --locked
+-p conquete`, `outils/maj-graphismes.sh --verifier` passent.
+
+**Pas fait / écarts**.
+- Les calques 2D (armées, étiquettes) ne suivent pas l'éclairage 3D ; la nuit, le voile léger les assombrit un peu. Les
+  lumières 2D de `ciel.js` (halos des villes, fenêtres des plans, Cordouan) se dessinent toujours par-dessus le plateau la
+  nuit, en plus de celles du moteur : non revues.
+- `prechauffer` compile d'un coup sans compilation parallèle (rendu logiciel) : une image un peu plus longue juste après le
+  décor posé, non mesurée à part.
+- Toujours rien sur un Raspberry Pi (carte graphique V3D) : les gains du rendu logiciel sont ceux de la géométrie.
+
 #### Page (P4) — 23/11/2026
 
 **Fait** (`web/js/hex/marine.js`, la partie « bâtiments des emplacements » de `web/js/hex/plateau.js`, une ligne de
