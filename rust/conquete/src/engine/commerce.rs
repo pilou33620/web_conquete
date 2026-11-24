@@ -141,7 +141,7 @@ fn ports_par_camp(g: &Game) -> HashMap<String, Vec<i64>> {
 }
 
 /// Le chemin d'une route entre les camps a et b : leurs ports principaux (les plus peuplés) dans un théâtre où ils ont
-/// tous deux un port, de préférence celui de la capitale de a, puis de b. (de, vers, chemin) ou None.
+/// tous deux un port reliés par l’eau, de préférence celui de la capitale de a, puis de b. (de, vers, chemin) ou None.
 fn tracer(g: &Game, pa: &[i64], pb: &[i64], a: &str, b: &str) -> Option<(i64, i64, Vec<(i64, i64)>)> {
     let geo = &g.geo;
     let mut theatres: Vec<Option<&'static str>> = vec![];
@@ -158,14 +158,19 @@ fn tracer(g: &Game, pa: &[i64], pb: &[i64], a: &str, b: &str) -> Option<(i64, i6
             continue;
         }
         vus.push(t);
-        let (Some(&x), Some(&y)) = (pa.iter().find(|&&n| geo.theatre_de(n) == t), pb.iter().find(|&&n| geo.theatre_de(n) == t)) else {
-            continue;
-        };
-        if let (Some(cx), Some(cy)) = (M::case_port(geo, x), M::case_port(geo, y)) {
-            if let Some(ch) = M::chemin_mer(geo, cx, cy) {
-                let mut ch = ch;
-                ch.insert(0, cx);
-                return Some((x, y, ch));
+        // les ports les plus peuplés d'abord, mais reliés par l'eau : un port de lac (Grands Lacs) ne commerce pas avec
+        // la mer, on passe au suivant (3 par camp au plus : chemin_mer refuse vite deux eaux différentes, mais peut chercher longtemps dans la même)
+        let xs: Vec<i64> = pa.iter().copied().filter(|&n| geo.theatre_de(n) == t).take(3).collect();
+        let ys: Vec<i64> = pb.iter().copied().filter(|&n| geo.theatre_de(n) == t).take(3).collect();
+        for &x in &xs {
+            for &y in &ys {
+                if let (Some(cx), Some(cy)) = (M::case_port(geo, x), M::case_port(geo, y)) {
+                    if let Some(ch) = M::chemin_mer(geo, cx, cy) {
+                        let mut ch = ch;
+                        ch.insert(0, cx);
+                        return Some((x, y, ch));
+                    }
+                }
             }
         }
     }

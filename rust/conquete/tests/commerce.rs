@@ -442,3 +442,31 @@ fn l_ia_envoie_ses_flutes_au_comptoir_et_une_expedition_aux_colonies() {
     assert_eq!(w.at("route"), "europe-amerique");
     assert_eq!(w.at("armee"), a.at("id"), "l'armée du port n'a pas embarqué");
 }
+
+/// Un port de lac, même le plus peuplé du camp, ne porte pas la route commerciale : on prend le port suivant, relié à
+/// celui du partenaire par la mer (Sandusky, sur le lac Érié, puis un port des Antilles, pour une route avec une colonie
+/// anglaise qui n'a de ports qu'en Amérique).
+#[test]
+fn la_route_commerciale_evite_un_port_de_lac() {
+    let mut g = partie("FR");
+    let place = |g: &Game, nom: &str| (0..g.nodes.len() as i64).find(|&n| g.geo.nodes.at(n).at("name") == nom).unwrap();
+    let b = "AGB";
+    let kingston = M::case_port(&g.geo, place(&g, "Kingston")).unwrap();
+    // un port de mer des Antilles qui n'est pas anglais, à moins de 200 cases de Kingston par la mer
+    let antilles = (0..g.nodes.len() as i64)
+        .find(|&n| {
+            g.nodes.at(n).at("owner") != b
+                && g.geo.theatre_de(n) == Some("amerique")
+                && C::port_de_mer(&g, n)
+                && M::case_port(&g.geo, n).and_then(|c| M::chemin_mer(&g.geo, c, kingston)).is_some_and(|ch| ch.len() < 200)
+        })
+        .expect("pas de port des Antilles");
+    let sandusky = place(&g, "Sandusky");
+    for (n, pop) in [(sandusky, 10_000_000), (antilles, 5_000_000)] {
+        g.nodes.at(n).update(&dict! {"owner" => "FR", "pop" => pop});
+    }
+    D::apply(&mut g, "FR", b, "commerce", 0, &Val::None, &Val::None);
+    let r = g.commerce.at("routes").at("AGB-FR");
+    assert!(r.at("de").is_some(), "pas de route : {r}");
+    assert!(r.at("de") != sandusky && r.at("vers") != sandusky, "la route part du lac Érié : {r}");
+}
