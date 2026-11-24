@@ -21,9 +21,9 @@ const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES
 const VERS = [0, 2, 4, 4, 4, 4, 5, 6, 6, 3, 4];
 // rivières montrées selon la taille des hexagones (rang 1 : les fleuves)
 const RANG_MAX = { 4: 3, 8: 3, 16: 2 };
-// estuaires en hexagones de mer jusqu'aux hexagones de 4 cases ; plus loin en ruban de fleuve (des hexagones de mer de
-// 8 cases mangeraient les presqu'îles qui les bordent, le Médoc)
-const PAS_ESTUAIRES = 4;
+// bras d'eau étroits (brasDEau) en hexagones de mer jusqu'aux hexagones de 4 cases ; plus loin en ruban de fleuve (des
+// hexagones de mer de 8 cases mangeraient les presqu'îles qui les bordent, le Médoc)
+const PAS_MER = 4;
 
 // l'hexagone (indice ligne × colonnes + colonne) sous un point du jeu, ou −1 hors de la grille
 export function indexEn(g, x, y) {
@@ -41,9 +41,9 @@ export class Niveau {
   constructor(mp, pas, leger = false) {
     const g = this.g = new Grille(mp.W, mp.H, pas), n = g.liste.length, W = mp.W, H = mp.H;
     this.pas = pas; this.leger = leger; this.u = pas / SQ3;   // u : km par unité du moteur (rayon d'un hexagone = 1)
-    const cnt = new Uint16Array(n * 11), jeu = new Uint16Array(n), terre = new Uint16Array(n);
+    const cnt = new Uint16Array(n * 11), jeu = new Uint16Array(n), terre = new Uint16Array(n), hexDe = new Int32Array(W * H);
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-      const h = indexEn(g, i + 0.5, j + 0.5); if (h < 0) continue;
+      const h = hexDe[j * W + i] = indexEn(g, i + 0.5, j + 0.5); if (h < 0) continue;
       const c = j * W + i, k = mp.terrain[c];
       cnt[h * 11 + k]++;
       if (k > T.EAU) { terre[h]++; jeu[h] += mp.playable[c] ? 1 : 0; }
@@ -65,13 +65,12 @@ export class Niveau {
       if (b === T.MARAIS) arbres[h] = Math.max(arbres[h], 1);
       if (leger) arbres[h] = foret[h];   // (de loin, un arbre par hexagone de forêt : ce sont eux qui coûtent)
     }
-    // les estuaires (geo.rs, estuaires : leur axe) : plus étroits qu'un hexagone, la majorité les effacerait ; de près, une
-    // chaîne d'hexagones de mer de l'embouchure au port du fond, qui reste sur son hexagone, au bord de l'eau
-    const estuaires = mp.m.estuaires || [];
-    if (pas <= PAS_ESTUAIRES && estuaires.length) {
+    // les bras d'eau plus étroits qu'un hexagone (estuaires, détroits, rias) : la majorité les effacerait ; de près, leur
+    // chaîne d'hexagones devient de la mer, jusqu'au port du fond, qui garde son hexagone au bord de l'eau
+    const bras = brasDEau(g, mp, hexDe, ter, pas);
+    if (pas <= PAS_MER) {
       const places = new Set((mp.nodes || []).map(n => indexEn(g, n.x, n.y)));
-      for (const e of estuaires) {
-        const ch = chaine(g, e.pts, pas);
+      for (const ch of bras) {
         while (ch.length && places.has(ch[ch.length - 1])) ch.pop();
         for (const h of ch) if (ter[h] >= 3) { ter[h] = 0; fertile[h] = foret[h] = arbres[h] = 0; }
       }
@@ -81,8 +80,13 @@ export class Niveau {
     // les rivières : chaînes d'hexagones voisins, d'amont en aval ; les vallées qu'elles traversent sont mises à plat
     this.rivieres = [];
     const rmax = RANG_MAX[pas] ?? 1;
-    const fleuves = pas <= PAS_ESTUAIRES ? mp.m.rivers || [] : [...mp.m.rivers || [], ...estuaires.map(e => ({ rank: 1, pts: [...e.pts].reverse() }))];
-    for (const rv of fleuves) {
+    // (plus loin, les bras d'eau en ruban, du fond vers l'eau)
+    if (pas > PAS_MER) for (const ch of bras) {
+      ch.reverse();
+      for (const h of ch) if (ter[h] >= 3) { this.riviere[h] = 1; fertile[h] = 0; }
+      if (ch.length > 1) this.rivieres.push(ch);
+    }
+    for (const rv of mp.m.rivers || []) {
       if (rv.rank > rmax) continue;
       const ch = chaine(g, rv.pts, pas);
       for (const h of ch) if (ter[h] >= 3) { this.riviere[h] = 1; fertile[h] = 0; if (ter[h] === 6) ter[h] = rv.rank < 3 ? 4 : 5; }
@@ -92,7 +96,52 @@ export class Niveau {
   estEau(h) { return this.terrain[h] < 3; }
 }
 
-// les hexagones voisins, d'un bout à l'autre, sous une ligne de points du jeu (rivière, axe d'estuaire)
+// Les bras d'eau que la majorité efface : des chaînes d'hexagones voisins, chacune de l'eau des hexagones vers le fond.
+// Les cases d'eau (mer, lac) d'un hexagone de terre sont parcourues depuis celles d'un hexagone d'eau (4 voisins) : un
+// bras qui s'enfonce d'au moins deux hexagones (2 × `pas` cases), ou qui relie deux eaux d'au moins 3 hexagones que les
+// hexagones sépareraient (un détroit), donne une chaîne ; le bras le plus profond d'abord, les suivants jusqu'à la chaîne
+// qu'ils rejoignent. (Moins profond, un rivage découpé ; une eau plus petite, une flaque : de loin, ce serait partout.)
+function brasDEau(g, mp, hexDe, ter, pas) {
+  const { W, H, terrain } = mp, N = W * H, n = g.liste.length;
+  const eau = c => terrain[c] <= T.EAU && hexDe[c] >= 0, perdue = c => eau(c) && ter[hexDe[c]] >= 3;
+  const comp = new Int32Array(n).fill(-1), taille = [];   // les eaux des hexagones : composantes des hexagones d'eau
+  for (let h0 = 0; h0 < n; h0++) {
+    if (comp[h0] >= 0 || ter[h0] >= 3) continue;
+    const file = [h0]; comp[h0] = taille.length;
+    for (let q = 0; q < file.length; q++) for (const v of g.voisins(g.liste[file[q]])) if (comp[v.i] < 0 && ter[v.i] < 3) { comp[v.i] = taille.length; file.push(v.i); }
+    taille.push(file.length);
+  }
+  const v4 = (c, f) => { const i = c % W; if (i > 0) f(c - 1); if (i < W - 1) f(c + 1); if (c >= W) f(c - W); if (c < N - W) f(c + W); };
+  const dist = new Map(), par = new Map(), qui = new Map(), file = [], ponts = new Map();
+  for (let c = 0; c < N; c++) if (perdue(c)) v4(c, v => { if (eau(v) && !perdue(v) && !dist.has(v)) { dist.set(v, 0); qui.set(v, comp[hexDe[v]]); file.push(v); } });
+  for (let q = 0; q < file.length; q++) {
+    const u = file[q];
+    v4(u, v => {
+      if (!perdue(v)) return;
+      if (!dist.has(v)) { dist.set(v, dist.get(u) + 1); par.set(v, u); qui.set(v, qui.get(u)); file.push(v); }
+      else if (qui.get(v) !== qui.get(u) && taille[qui.get(u)] >= 3 && taille[qui.get(v)] >= 3) { const k = Math.min(qui.get(u), qui.get(v)) + '|' + Math.max(qui.get(u), qui.get(v)); if (!ponts.has(k)) ponts.set(k, [u, v]); }
+    });
+  }
+  // les hexagones du fond c jusqu'à l'eau (ou jusqu'à un hexagone de `pris`), rendus de l'eau vers le fond
+  const remonter = (c, pris) => {
+    const ch = [];
+    for (let m = c; m !== undefined; m = par.get(m)) { const h = hexDe[m]; if (h !== ch[ch.length - 1]) ch.push(h); if (pris?.has(h)) break; }
+    return ch.reverse();
+  };
+  const out = [];
+  for (const [u, v] of ponts.values()) out.push([...remonter(u), ...remonter(v).reverse()].filter((h, k, ch) => h !== ch[k - 1]));
+  const fonds = [...dist].filter(([c, d]) => d >= 2 * pas && perdue(c) && ![c - 1, c + 1, c - W, c + W].some(v => (dist.get(v) ?? -1) > d)).sort((a, b) => b[1] - a[1]);
+  const pris = new Set();
+  for (const [c] of fonds) {
+    if (pris.has(hexDe[c])) continue;
+    const ch = remonter(c, pris);
+    for (const h of ch) if (ter[h] >= 3) pris.add(h);
+    out.push(ch);
+  }
+  return out;
+}
+
+// les hexagones voisins, d'un bout à l'autre, sous une ligne de points du jeu (rivière)
 function chaine(g, pts, pas) {
   const ch = [];
   for (let a = 0; a < pts.length - 1; a++) {

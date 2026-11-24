@@ -53,7 +53,7 @@ export default {
   cadre: { LON0, LON1, LAT0, LAT1, LAT_REF, KM: 5 },  // longitudes de −180 à 180, latitudes négatives au sud
   places: [min, max],                 // bornes du nombre de places (l'Europe : [900, 1400])
   ENTIERS, COUPES, DETROITS, FLEUVES,
-  ESTUAIRES,                          // facultatif (ci-dessous)
+  ESTUAIRES, PASSAGES,                // facultatifs (ci-dessous)
   NE: { rivieres: [...], lacs: [...] }, // facultatif : fichiers Natural Earth en plus des globaux
   PAYS: { CODE: { name, short, color, adj, title, pros, cons, mods, personality: { aggr, trade, expand, tech }, specialty,
                   moyens: [[a1700, a1790, a1813, a1870], tresor], maisons: [8 noms], culture: '<clé>' } },
@@ -70,10 +70,10 @@ export default {
   (« ~Hors jeu » par exemple) ; sans elle, l'outil s'arrête et nomme ces pays.
 - `DETROITS` : `[nom, [[lon, lat], …]]`, rouverts sur 7,5 km de large.
 - `ESTUAIRES` (facultatif) : `[nom, largeur en km, [[lon, lat], …]]`, l'axe d'un estuaire de la mer vers l'amont, creusé sur
-  cette largeur (la grille fermerait ou couperait un estuaire de quelques km) et arrêté à moins de 10 km du port du fond
-  (`marine::case_port` y trouve la mer). Chaque point doit tomber sur une case de mer. L'axe est écrit dans `<id>.json`
-  (`estuaires : [{ name, pts }]`) : la page y montre l'eau quand ses hexagones sont plus larges que l'estuaire
-  (`web/js/hex/carte-moteur.js`).
+  cette largeur jusqu'à moins de 10 km du port du fond (`marine::case_port` y trouve la mer), quand le bras d'eau des
+  sources s'arrête avant lui (la Tamise, la Garonne jusqu'à Bordeaux). Chaque point doit tomber sur l'eau.
+- `PASSAGES` (facultatif) : `[nom, [lon, lat] du large, [lon, lat] du fond]`, les estuaires, détroits et lagunes connus :
+  l'outil vérifie que les deux points sont sur l'eau et reliés d'eau en eau par les cases du moteur.
 - `FLEUVES` : `[nom, rang 1 à 3, [lon, lat] vers la source, [lon, lat] à l'embouchure, /noms Natural Earth admis/]`, ou
   `[nom, rang, [[lon, lat], …]]` pour un cours absent de Natural Earth.
 - `espace` (facultatif, 115 km) : un bourg GeoNames est ajouté là où aucune place du pays n'est plus près (la variable
@@ -101,14 +101,25 @@ trois majuscules avec l'initiale du théâtre), clé `culture` connue ou défini
 culture du moteur, listes non vides), 8 maisons, `moyens` de forme `[[4 nombres ≥ 0], trésor > 0]` ; tout pays Natural
 Earth du cadre a une règle (ou `defaut`) ; régions Highcharts connues ; au plus 250 pays et terres hors jeu ; il avertit
 au-delà de 1,3 million de cases.
-Géographie : il refait le calcul de `geo.rs` (contours remplis dans l'ordre des codes, trous bouchés, lacs, terres hors
-jeu) et compare à sa grille de départ (moins de 2 % d'écart) ; chaque place est dans la case de son pays et dans le
+Géographie : les bras d'eau plus étroits qu'une case (estuaires, rias, détroits), que la grille du moteur fermerait ou
+couperait en flaques (une case est de la mer quand son centre l'est), sont creusés d'une chaîne de cases de mer quand ils
+s'enfoncent de 10 km au moins ou relient deux eaux (« bras d'eau creusés », listés) ; les contours sont simplifiés sans
+faire passer un centre de case de l'autre côté du trait. Il refait le calcul de `geo.rs` (contours remplis dans l'ordre
+des codes, trous bouchés, lacs, terres hors jeu) et compare à sa grille de départ (moins de 2 % d'écart) ; `PASSAGES`
+reliés ; chaque place est dans la case de son pays et dans le
 cadre ; une capitale par pays, au moins 3 places ; pas de doublon « nom|pays » ; populations entières positives ; un port
 est à moins de 25 km de la mer, d'un lac ou d'un fleuve ; aucun point habité à plus de 150 km d'une place de son pays ;
 fleuves dans le cadre, finis à la mer, à un lac, à un confluent ou au bord du cadre ; époques : place connue, 4 à 8 points
 de 1700 à 1900, 1790 = 1, étiquettes du jeu ; pays : clés de `mods` lues par le moteur, capitale existante, couleurs
 distinctes entre voisins, chaque pays a un territoire ; nombre de places entre les bornes de `places` ; les fichiers
 relus comme du JSON.
+
+## Relevé des côtes
+
+`node outils/releve-cotes.mjs <id> [dossier]` relit `<id>.json` et `places_<id>.json` sur la grille du moteur et liste les
+passages connus coupés, les mers enclavées (sans lien avec le large) et les ports sans mouillage ou dont l'eau ne mène pas
+au large (lacs, ports de fleuve). Il ne change rien. Côté page, `web/js/hex/carte-moteur.js` (`brasDEau`) garde les bras
+d'eau plus étroits qu'un hexagone : de la mer en hexagones de 4 cases, un ruban de fleuve plus loin.
 
 ## Ajouter un théâtre
 

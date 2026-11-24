@@ -139,6 +139,19 @@ fn routes_maritimes_et_comptoirs() {
     assert!(!carte(geo::VERSION_EUROPE).client_payload().has("theatres"), "une carte de théâtre seule ne change pas");
 }
 
+/// Les bras d'eau étroits des sources gardés par la grille (outils/theatre.mjs) : sur la carte monde, les ports du fond du
+/// Saint-Laurent, de la Chesapeake, de la Delaware et de l'Hooghly mouillent sur une mer reliée au large de leur théâtre.
+#[test]
+fn les_ports_d_estuaire_ont_la_mer() {
+    let g = carte(VERSION_MONDE);
+    let port = |nom: &str| conquete::engine::marine::case_port(&g, g.by_name.at(nom).i()).unwrap_or_else(|| panic!("{nom} n'a pas la mer"));
+    for (large, noms) in [("Boston", &["Québec", "Baltimore", "Philadelphie"][..]), ("La Havane", &["La Nouvelle-Orléans"][..]), ("Bombay", &["Calcutta", "Surate"][..])] {
+        for nom in noms {
+            assert!(conquete::engine::marine::chemin_mer(&g, port(nom), port(large)).is_some(), "{nom} : sa mer n'est pas reliée au large");
+        }
+    }
+}
+
 #[test]
 fn les_camps_du_monde() {
     let camps = R::camps(VERSION_MONDE);

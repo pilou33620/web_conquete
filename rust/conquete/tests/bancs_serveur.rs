@@ -489,7 +489,7 @@ fn mode_europe() {
     eprintln!("/api/map?geo=5, première demande : {:.1} s", t.elapsed().as_secs_f64());
     assert_eq!((st, &eu["geo"], &eu["km_case"], &eu["modes"]), (200, &json!(5), &json!(5), &fr["modes"]));
     assert_eq!(eu.as_object().unwrap().keys().collect::<Vec<_>>(), fr.as_object().unwrap().keys().collect::<Vec<_>>());
-    assert_eq!((eu["map"]["W"].as_i64(), eu["map"]["H"].as_i64(), eu["map"]["nodes"].as_array().unwrap().len()), (Some(867), Some(733), 1258));
+    assert_eq!((eu["map"]["W"].as_i64(), eu["map"]["H"].as_i64(), eu["map"]["nodes"].as_array().unwrap().len()), (Some(867), Some(733), 1259));
     let camps = eu["rules"]["factions"].as_object().unwrap();
     assert!(camps.len() == 32 && camps.contains_key("RU") && !camps.contains_key("33"));
     assert_eq!(eu["rules"]["scenarios"]["1700"]["title"], json!("Europe, 1700"));
