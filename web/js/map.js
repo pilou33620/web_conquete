@@ -514,10 +514,16 @@ export class MapView {
   buildWaterNames() {
     const W = this.W, H = this.H;
     const coastAt = j => { let i = 0; while (i < W && this.terrain[j * W + i] === T.OCEAN) i++; return i; };
-    const sea = [];
-    for (const [f, txt] of [[0.36, 'Océan Atlantique'], [0.8, 'Golfe de Gascogne']]) {
+    const sea = [], m = this.m;
+    // l'océan et le golfe : sur la carte d'Aquitaine (la seule dont la côte est à l'ouest de chaque ligne), le long de sa côte ;
+    // ailleurs à leur longitude et latitude (projection du théâtre sur la carte Monde), s'ils tombent dans l'océan de la carte
+    if (m.waters.some(w => w.name === 'Estuaire de la Gironde')) for (const [f, txt] of [[0.36, 'Océan Atlantique'], [0.8, 'Golfe de Gascogne']]) {
       const j = Math.round(H * f), x = coastAt(j) * 0.48;
       if (x > 8) sea.push({ x, y: j, txt, vertical: f < 0.5 });
+    } else for (const [txt, lon, lat, vertical] of [['Océan Atlantique', -9.6, 48.5, true], ['Golfe de Gascogne', -4.5, 45.3, false]]) {
+      const t = (m.theatres || []).find(t => t.lon0 <= lon && lon <= t.lon0 + t.cadre[2] / t.KX);
+      const x = t ? t.cadre[0] + (lon - t.lon0) * t.KX : (lon - m.lon0) * m.KX, y = t ? t.cadre[1] + (t.lat1 - lat) * m.KY : (m.lat1 - lat) * m.KY;
+      if (x >= 0 && y >= 0 && x < W && y < H && this.terrain[Math.floor(y) * W + Math.floor(x)] === T.OCEAN) sea.push({ x, y, txt, vertical });
     }
     // chaque fleuve : son plus long tracé, nommé en son milieu
     const best = new Map();
@@ -540,7 +546,8 @@ export class MapView {
       if (a > Math.PI / 2) a -= Math.PI; else if (a < -Math.PI / 2) a += Math.PI;
       rivers.push({ x: (p[0] + q[0]) / 2, y: (p[1] + q[1]) / 2, a, txt: r.name, rank: r.rank });
     }
-    const lakes = this.m.waters.map(w => {
+    // (les « Bras de mer » des théâtres : des chenaux creusés sans nom propre, rivières Sainte-Marie, Sainte-Claire… ; pas de nom)
+    const lakes = this.m.waters.filter(w => w.name !== 'Bras de mer').map(w => {
       const xs = w.ring.map(p => p[0]), ys = w.ring.map(p => p[1]);
       return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2, txt: w.name, big: /Estuaire|Bassin/.test(w.name) };
     });
