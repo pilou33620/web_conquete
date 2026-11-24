@@ -1,0 +1,806 @@
+From c3682c802734a011b6e23bef65331eb748b79a3d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 24 Nov 2026 14:05:37 +0000
+Subject: [PATCH] =?UTF-8?q?Page=20des=20agents=20(P8)=20:=20travail=20en?=
+ =?UTF-8?q?=20cours,=20mis=20en=20pause=20(non=20v=C3=A9rifi=C3=A9)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013w5cvizAJceotEkd2pSpYj
+---
+ SPEC-POLITIQUE.md                    |  36 +++
+ rust/conquete/tests/partie_agents.rs |  42 ++++
+ tests/agents.test.mjs                |  46 ++++
+ web/js/agents.js                     | 340 +++++++++++++++++++++++++++
+ web/js/hex/agents.js                 |  89 +++++++
+ web/js/hex/plateau.js                |   7 +-
+ web/js/map.js                        |   3 +
+ web/js/ui.js                         |  34 ++-
+ 8 files changed, 577 insertions(+), 20 deletions(-)
+ create mode 100644 rust/conquete/tests/partie_agents.rs
+ create mode 100644 tests/agents.test.mjs
+ create mode 100644 web/js/agents.js
+ create mode 100644 web/js/hex/agents.js
+
+diff --git a/SPEC-POLITIQUE.md b/SPEC-POLITIQUE.md
+index 20392ec..40b1b98 100644
+--- a/SPEC-POLITIQUE.md
++++ b/SPEC-POLITIQUE.md
+@@ -403,3 +403,39 @@ Fichiers : `diplomacy.rs` (section « SPEC-POLITIQUE, module 6 »), `engine/memo
+   `diplomate_present`) ; pas de défense active des universités par l'IA (le contre-espionnage passif compte) ; l'entretien
+   des agents n'apparaît pas dans `me.upkeep`.
+ 
++
++#### Page (P8) — fait le 24/11/2026
++
++- **Fichiers** : `web/js/agents.js` (fenêtres, recrutement, ordres, scènes, pion de loin), `web/js/hex/agents.js`
++  (adaptateur du rendu de web_engine 2.34.0, sur le modèle de `hex/armees.js`), `tests/agents.test.mjs`, partie d'essai
++  `rust/conquete/tests/partie_agents.rs` (ignorée ; `CONQUETE_PARTIE_AGENTS=…/saves/essai-agents.json`). Points d'accroche
++  « (SPEC-POLITIQUE, P8) » : `ui.js` (sélection `kind: 'agent'`, panneau, `ag-…`, toucher et clic droit, recrutement et
++  agents dans le panneau de la place, libellé de la file), `map.js` (`toucheAgent` dans `hitTest`, `dessinAgents`),
++  `hex/plateau.js` (import de `graphismes/rendu/agents.js`, `AgentsPlateau`, `maj` chaque image, `dispose`).
++- **Plateau** : de près (même seuil `TROUPES_PX` et même échelle 0,18 que les troupes), une figurine `maillageAgent` par
++  agent (type, couleur du camp, époque du plateau, niveau, `cache`, `marche` pendant qu'il glisse vers sa nouvelle place) ;
++  dans une place, les agents se tiennent en groupe sur l'hexagone libre qui suit ceux de ses armées (`armees.place`) ; en
++  chemin, sur leur case. De loin (ou sans WebGL), un pion 2D : pastille à la couleur du camp et icône du type, bord en
++  pointillés s'il est caché, en rang à droite de sa place. Anneau de sélection, nom et niveau (étoiles) ; route de notre
++  agent choisi en pointillés.
++- **Fenêtre de notre agent** : icône, nom, type, niveau, expérience (et le seuil du niveau suivant), discrétion, repos,
++  entretien, traits et leur effet, poste en cours ; missions possibles (`possibles`) avec la chance et la description
++  (`rules.MISSIONS`) ; « Viser une autre cible… » : une mission, puis une place, une armée ou un agent touché sur la carte,
++  la chance demandée au moteur (`sub: "chance"`, ou sa raison du refus) avant « Donner l'ordre » ; se déplacer (bouton puis
++  une place, ou clic droit sur une place) ; quitter le poste ou s'arrêter (`annuler`).
++- **Mission jouée** : la scène `sceneMission` là où se tient l'agent (la carte s'en approche si elle est loin), réussie ou
++  non d'après le message du moteur (« Échec … pris » : scène « pris » ; au duel, le vainqueur nommé le premier ; deux
++  duellistes homonymes : l'état relu tranche), puis le message en bandeau (le journal du moteur garde le reste). Scènes
++  sans équivalent : inciter → sabotage, voler une technologie → espionnage, poste à l'université → diplomate reçu ;
++  dénoncer réussi → « pris » vu de l'agent étranger.
++- **Recrutement** (panneau de la place à soi, « Former un agent ») : les quatre types, `n / plafond` (`agents_camp`), coût,
++  durée, entretien ; grisé avec la raison du moteur, recalculée d'après la vue (bâtiment, plafond, siège, file, livres).
++- **Agents étrangers** : fenêtre simple (type, camp, niveau, traits, poste, démasqué) et les missions de nos agents qui le
++  visent (duel, assassinat, dénonciation) avec leur chance. Tout panneau de place liste les agents qui s'y tiennent.
++- **Ancien espion** : le bouton « Espionnage » (`cmd: "spy"`, `rules.spy`) a quitté la page ; le rapport `intel` d'une
++  place reste affiché. Le moteur garde `spy`, `g.spies`, `rules.spy`, `spy_tours` : **à retirer** (et `ns.spy`, encore lu
++  par `map.js` pour l'œil d'une place).
++- **Écarts** : pas de portrait 3D de l'agent dans sa fenêtre (une icône) ; pas de scène pour les missions des IA contre
++  nous (le journal les dit) ; la réponse `mission` du moteur n'a pas de champ de réussite ni de cible de scène (la page lit
++  le message) ; une mission ratée sans prise ni mort (« s'échappe, démasqué ») n'entre pas dans le journal du moteur ;
++  l'échelle des scènes reste celle des figurines (0,18) : petites à côté d'un hexagone, lisibles de très près.
+diff --git a/rust/conquete/tests/partie_agents.rs b/rust/conquete/tests/partie_agents.rs
+new file mode 100644
+index 0000000..e2bf256
+--- /dev/null
++++ b/rust/conquete/tests/partie_agents.rs
+@@ -0,0 +1,42 @@
++//! Une partie d'essai pour la page des agents (SPEC-POLITIQUE, module 4, page P8) : la Gironde (Aquitaine, 1790) en guerre
++//! contre les Landes, Bordeaux avec un bureau de douane, une paroisse et un collège (espion, prêtre, gentilhomme et diplomate
++//! s'y forment), de quoi payer ; Mont-de-Marsan avec des remparts (à saboter). Dans Bordeaux : un gentilhomme, un prêtre et un
++//! diplomate à nous, un gentilhomme landais (duel, dénonciation) et un espion landais démasqué (assassinat). La page y forme un
++//! espion, l'envoie saboter, livre un duel, poste le prêtre et envoie le diplomate en ambassade à Périgueux.
++//! Écrit la sauvegarde là où le dit CONQUETE_PARTIE_AGENTS (un chemin de fichier .json) :
++//! `CONQUETE_PARTIE_AGENTS=$PWD/saves/essai-agents.json cargo test --release -p conquete --test partie_agents -- --ignored`
++
++mod fabrique_campagne;
++
++use conquete::cities as CT;
++use conquete::diplomacy as D;
++use conquete::engine::agents as AG;
++use conquete::py::{json, Val};
++use conquete::views as V;
++use conquete::dict;
++use fabrique_campagne::partie;
++
++#[test]
++#[ignore]
++fn partie_agents() {
++    let Some(chemin) = std::env::var_os("CONQUETE_PARTIE_AGENTS") else { return };
++    let mut g = partie();
++    let p = g.player.clone();
++    D::declare_war(&mut g, "40", &p, true);
++    let (bdx, mdm) = (g.capital_of(&p).i(), g.capital_of("40").i());
++    let n = g.nodes.at(bdx);
++    for (ch, l) in [("douane", 1), ("eglise", 1), ("universite", 1)] {
++        CT::slots(&n).set(ch, l);
++    }
++    n.set("stab", 0.45);
++    g.nodes.at(mdm).set("fort", 1);
++    g.factions.at(&p).at("res").set("livres", 20000);
++    for t in ["gentilhomme", "pretre", "diplomate"] {
++        AG::nouvel_agent(&mut g, &p, t, bdx);
++    }
++    AG::nouvel_agent(&mut g, "40", "gentilhomme", bdx);
++    AG::nouvel_agent(&mut g, "40", "espion", bdx).set("cache", false);
++    let meta = dict! {"player" => &p, "faction" => g.fname(&p), "date" => g.date_str(&Val::None), "t" => g.t, "difficulty" => "normal", "auto" => false};
++    let data = dict! {"meta" => meta, "game" => V::to_dict(&mut g)};
++    std::fs::write(chemin, json::dumps_avec(&data, json::Ecriture::default())).unwrap();
++}
+diff --git a/tests/agents.test.mjs b/tests/agents.test.mjs
+new file mode 100644
+index 0000000..3f521bb
+--- /dev/null
++++ b/tests/agents.test.mjs
+@@ -0,0 +1,46 @@
++// Banc des agents côté page (SPEC-POLITIQUE, module 4, page P8) : node --test tests/
++//
++// POURQUOI CE BANC EXISTE. La réponse du moteur à une mission n'est qu'un message ({ok, msg}) : la page en déduit la scène à
++// jouer et si elle est réussie. Un message lu de travers jouerait un duel gagné pour un duel perdu, ou un sabotage réussi pour
++// un agent pris, sans que rien ne plante. Et le recrutement grisé doit dire la même raison que le moteur (agents::peut_recruter).
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { installer } from './dom.mjs';
++
++installer();
++const { issueMission, recrue, SCENE_MISSION } = await import('../web/js/agents.js');
++
++test('chaque mission du moteur a sa scène de web_engine', () => {
++  const scenes = new Set(['duel', 'sabotage', 'assassinat', 'espionnage', 'apaisement', 'diplomate', 'pris']);   // (TYPES_MISSION)
++  for (const m of ['espionner', 'saboter_remparts', 'saboter_batiment', 'saboter_armee', 'assassiner', 'inciter', 'duel', 'universite', 'voler_tech', 'apaiser', 'denoncer', 'ambassade'])
++    assert.ok(scenes.has(SCENE_MISSION[m]), m);
++});
++
++test('l’issue d’une mission d’après le message du moteur', () => {
++  assert.deepEqual(issueMission('saboter_remparts', 'Sabotage réussi à Mont-de-Marsan.'), { type: 'sabotage', reussite: true });
++  assert.deepEqual(issueMission('saboter_remparts', 'Échec : Jean Garat a été pris.'), { type: 'pris', reussite: false });
++  assert.deepEqual(issueMission('assassiner', 'Échec : Jean Garat a été tué à Dax.'), { type: 'assassinat', reussite: false });
++  assert.deepEqual(issueMission('espionner', 'Échec : Jean Garat s\'est échappé, démasqué.'), { type: 'espionnage', reussite: false });
++  // au duel, le vainqueur est nommé le premier
++  assert.equal(issueMission('duel', 'Duel : Paul Roux tue Jean Bel en duel.', 'Paul Roux').reussite, true);
++  assert.equal(issueMission('duel', 'Duel : Jean Bel blesse Paul Roux ; il gardera la chambre deux tours.', 'Paul Roux').reussite, false);
++  // dénoncer : l'agent étranger est emmené par les gardes
++  assert.deepEqual(issueMission('denoncer', 'Jean Garat est arrêté.'), { type: 'pris', reussite: false, eux: true });
++  assert.equal(issueMission('inconnue', 'x'), null);
++});
++
++test('recrutement : bâtiment, plafond, file, livres', () => {
++  const R = { AGENTS: {
++    espion: { cout: 120, batiments: [['douane', 1], ['port', 1], ['marche', 1]] },
++    diplomate: { cout: 200, batiments: [['capitale', 1], ['douane', 3]] },
++  } };
++  const st = { me: { code: '33', res: { livres: 150 } }, agents_camp: { espion: { n: 0, plafond: 1 }, diplomate: { n: 0, plafond: 1 } } };
++  const ville = { type: 'ville', dept: '33' }, cap = { type: 'capitale', dept: '33' };
++  assert.deepEqual(recrue(R, st, ville, { slots: { douane: 1 } }, 'espion'), { ok: true, why: '' });
++  assert.match(recrue(R, st, ville, { slots: {} }, 'espion').why, /^Il faut dans la place : douane ou port ou marche/);
++  assert.match(recrue(R, st, ville, { slots: {} }, 'diplomate').why, /votre capitale/);
++  assert.match(recrue(R, st, cap, { slots: {} }, 'diplomate').why, /Livres insuffisantes/);
++  assert.match(recrue(R, st, ville, { slots: { douane: 1 }, q: [1, 2, 3, 4] }, 'espion').why, /File de production pleine/);
++  st.agents_camp.espion.n = 1;
++  assert.match(recrue(R, st, ville, { slots: { douane: 1 } }, 'espion').why, /^Plafond atteint \(1\)/);
++});
+diff --git a/web/js/agents.js b/web/js/agents.js
+new file mode 100644
+index 0000000..9f9e093
+--- /dev/null
++++ b/web/js/agents.js
+@@ -0,0 +1,340 @@
++// Les agents côté page (SPEC-POLITIQUE, module 4, page P8) : espions, gentilshommes, prêtres et diplomates sur la carte.
++// Sélection d'un agent, sa fenêtre (traits, mission en poste, ordres, missions possibles avec leur chance de réussite),
++// recrutement dans le panneau de la place, fenêtre d'un agent étranger (et les missions de nos agents qui peuvent le viser),
++// scène de la mission jouée (sceneMission de web_engine, par hex/agents.js) puis son résultat. Les figurines sont dessinées
++// par graphismes/rendu/agents.js (via hex/agents.js) ; ici, du HTML, et de loin un pion 2D (pastille et icône du type).
++// Contrat du moteur : state.agents, state.agents_camp ; rules.AGENTS, rules.MISSIONS, rules.agent_traits, rules.agent_ordre ;
++// commandes {cmd: "agent", sub: "recruter" | "deplacer" | "mission" | "chance" | "annuler", …} qui rendent {ok, msg}.
++import { esc } from './battle/formes.js';
++import { ICON } from './icons.js';
++import { partTour } from './map.js';
++import { placer } from './hex/agents.js';
++
++const SVG = body => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
++// une icône par type (le pion de loin, la fenêtre, le recrutement)
++export const ICONE_AGENT = {
++  espion: ICON.spy,
++  gentilhomme: ICON.swords,
++  pretre: SVG('<path d="M12 3v18"/><path d="M7 8.5h10"/><path d="M8.5 21h7"/>'),
++  diplomate: ICON.diplo,
++};
++const XP = [0, 2, 5, 9, 14];   // expérience des niveaux 1 à 5 (rules.rs AGENT_XP, que rules_payload ne donne pas)
++// la scène de web_engine (TYPES_MISSION) de chaque mission ; sans scène propre, la plus proche : inciter (fumée et troubles)
++// → sabotage ; voler une technologie → espionnage ; poste à l'université → diplomate reçu (l'accueil, drapeau hissé)
++export const SCENE_MISSION = {
++  espionner: 'espionnage', saboter_remparts: 'sabotage', saboter_batiment: 'sabotage', saboter_armee: 'sabotage', inciter: 'sabotage',
++  assassiner: 'assassinat', duel: 'duel', voler_tech: 'espionnage', universite: 'diplomate', apaiser: 'apaisement', denoncer: 'pris',
++  ambassade: 'diplomate',
++};
++
++/** L'issue d'une mission d'après la réponse du moteur ({ok, msg} : le message dit ce qui s'est passé) : la scène à jouer et
++ *  si elle est réussie. nom : celui de notre agent (au duel, le vainqueur est nommé le premier). Rend null sans scène. */
++export function issueMission(mission, msg = '', nom = '') {
++  const type = SCENE_MISSION[mission];
++  if (!type) return null;
++  if (/^Échec/.test(msg)) return /a été pris/.test(msg) ? { type: 'pris', reussite: false } : { type, reussite: false };
++  if (mission === 'duel') return { type, reussite: msg.startsWith(`Duel : ${nom} `) };
++  // la dénonciation réussie : l'agent étranger est pris (les gardes l'emmènent : « pris » manqué, vu de lui)
++  if (mission === 'denoncer') return { type, reussite: false, eux: true };
++  return { type, reussite: true };
++}
++
++/** Peut-on former cet agent dans cette place ? (comme agents::peut_recruter du moteur, d'après la vue) : {ok, why}. */
++export function recrue(R, st, gn, ns, type, nomBat = (k, l) => k) {
++  const A = R.AGENTS[type], me = st.me.code, c = st.agents_camp?.[type] || { n: 0, plafond: 1 };
++  const ici = A.batiments.some(([k, l]) => k === 'capitale' ? gn.type === 'capitale' && gn.dept === me : (ns.slots?.[k] || 0) >= l);
++  if (!ici) return { ok: false, why: `Il faut dans la place : ${A.batiments.map(([k, l]) => k === 'capitale' ? 'votre capitale' : nomBat(k, l).toLowerCase()).join(' ou ')}` };
++  if (c.n >= c.plafond) return { ok: false, why: `Plafond atteint (${c.plafond}) : bâtissez d’autres ${type === 'diplomate' ? 'comptoirs' : 'bâtiments'} de niveau 2 pour en avoir plus` };
++  if (ns.sg) return { ok: false, why: 'La place est assiégée' };
++  if ((ns.q || []).length >= 4) return { ok: false, why: 'File de production pleine (4 maximum)' };
++  if ((st.me.res.livres || 0) < A.cout) return { ok: false, why: 'Livres insuffisantes' };
++  return { ok: true, why: '' };
++}
++
++// l'image d'une icône, pour le pion de loin (canevas) : blanche, gardée
++const IMG = new Map();
++function iconeImg(type) {
++  if (typeof Image === 'undefined') return null;
++  let im = IMG.get(type);
++  if (!im) {
++    im = new Image();
++    im.src = 'data:image/svg+xml,' + encodeURIComponent(ICONE_AGENT[type].replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" style="color:#fff"'));
++    IMG.set(type, im);
++  }
++  return im.complete && im.naturalWidth ? im : null;
++}
++
++export class Agents {
++  constructor(ui) {
++    this.ui = ui;
++    this.vise = null;     // ordre qui attend un toucher sur la carte : { id, mode: 'deplacer' | 'cible', mission }
++    this.essai = null;    // la chance demandée pour une cible touchée : { id, mission, cible, ok, chance, msg }
++  }
++  get st() { return this.ui.st; }
++  get R() { return this.ui.rules; }
++  get plateau() { return this.ui.map.hex ? this.ui.map.plateau?.agents || null : null; }
++  liste() { return placer(this.st?.agents || [], this.ui.md.nodes); }
++  get(id) { return this.liste().find(a => a.id === id); }
++  mien(a) { return a && a.proprio === this.st.me.code; }
++  cmd(sub, body, toast = true) { return this.ui.cmd({ cmd: 'agent', sub, ...body }, toast); }
++  nomType(t) { return this.R.AGENTS?.[t]?.nom || t; }
++  nomPlace(id) { return this.ui.md.nodes[id]?.name || ''; }
++  // ce que vise une mission : une place (numéro), une armée (« a… ») ou un agent (« ag… »)
++  nomCible(c) {
++    if (typeof c === 'number') return this.nomPlace(c);
++    const b = this.get(c);
++    if (b) return `${b.nom} (${this.nomType(b.type).toLowerCase()})`;
++    return this.ui.armyById(c)?.name || c;
++  }
++  pos(id) { const a = this.get(id); return a ? this.ou(a) : null; }
++  // l'agent sur la carte : là où le plateau pose sa figurine, sinon sa case
++  ou(a) { return this.plateau?.pos(a.id) || a.case; }
++
++  // ------------------------------------------------------------------ carte (map.js hitTest, draw)
++  // à l'écran : la figurine de près ; de loin, le pion à côté de sa place (en rang avec les autres agents qui y sont)
++  ecran(a) {
++    const m = this.ui.map, p3 = this.plateau?.pos(a.id);
++    if (p3) return [...m.toScreen(p3[0], p3[1]), true];
++    if (a.at_node == null || !this.ui.md.nodes[a.at_node]) return [...m.toScreen(a.case[0], a.case[1]), false];
++    const n = this.ui.md.nodes[a.at_node], [x, y] = m.toScreen(n.x, n.y), s = m.nodeSize(n);
++    const ici = this.liste().filter(b => b.at_node === a.at_node), i = ici.indexOf(a);
++    return [x + s * 0.5 + 10 + i * 21, y - s * 0.4, false];
++  }
++  touche(sx, sy, pad) {
++    let best = null;
++    const r3 = Math.max(10, this.plateau?.rayonPx || 0);
++    for (const a of this.liste()) {
++      const [x, y, p3] = this.ecran(a), d = Math.hypot(sx - x, sy - (p3 ? y - r3 * 0.6 : y));
++      if (d < (p3 ? r3 : 11) + pad && (!best || d < best.d)) best = { kind: 'agent', id: a.id, d };
++    }
++    return best;
++  }
++  dessin(ctx) {
++    const m = this.ui.map, s = this.ui.sel, r3 = Math.max(10, this.plateau?.rayonPx || 0);
++    ctx.save();
++    for (const a of this.liste()) {
++      const [x, y, p3] = this.ecran(a);
++      if (x < -40 || y < -40 || x > m.vw + 40 || y > m.vh + 40) continue;
++      const sel = s?.kind === 'agent' && s.id === a.id, col = m.colors[a.proprio] || '#888';
++      if (sel && a.chemin?.length) {   // la route de notre agent choisi
++        ctx.strokeStyle = 'rgba(243,217,142,0.85)'; ctx.lineWidth = 2; ctx.setLineDash([5, 6]);
++        ctx.beginPath(); ctx.moveTo(x, y);
++        for (const nid of a.chemin) { const n = this.ui.md.nodes[nid]; if (n) ctx.lineTo(...m.toScreen(n.x, n.y)); }
++        ctx.stroke(); ctx.setLineDash([]);
++      }
++      if (p3) {   // la figurine 3D : l'anneau de sélection et l'étiquette
++        if (sel) { ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(x, y, r3, r3 * 0.54, 0, 0, Math.PI * 2); ctx.stroke(); }
++        if (sel || this.mien(a) && !this.liste().some(b => b !== a && b.at_node != null && b.at_node === a.at_node)) this.etiquette(ctx, a, x, y + Math.max(12, r3 * 0.7));   // (en groupe : le nom du choisi seulement)
++        continue;
++      }
++      // le pion : pastille à la couleur du camp, l'icône du type ; caché : bord en pointillés
++      if (sel) { ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI * 2); ctx.stroke(); }
++      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(x + 1, y + 1.5, 10, 0, Math.PI * 2); ctx.fill();
++      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2); ctx.fill();
++      ctx.strokeStyle = '#f6efdc'; ctx.lineWidth = 1.5; if (a.cache) ctx.setLineDash([2.5, 2.5]);
++      ctx.stroke(); ctx.setLineDash([]);
++      const im = iconeImg(a.type);
++      if (im) ctx.drawImage(im, x - 6.5, y - 6.5, 13, 13);
++      if (sel) this.etiquette(ctx, a, x, y + 14);
++    }
++    ctx.restore();
++  }
++  // le nom et le niveau sous l'agent
++  etiquette(ctx, a, x, y) {
++    const t = `${a.nom} · ${'★'.repeat(a.niveau || 1)}`;
++    ctx.font = 'italic 500 12px "EB Garamond", Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
++    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(32,35,38,0.85)'; ctx.strokeText(t, x, y);
++    ctx.fillStyle = '#f6efdc'; ctx.fillText(t, x, y);
++  }
++
++  // ------------------------------------------------------------------ ordres par toucher (ui.onTap, ui.onContext)
++  viser(id, mode, mission, msg) {
++    this.ui.stopTargeting();
++    this.vise = { id, mode, mission };
++    this.ui.targeting = 'agent';
++    this.ui.map.cv.classList.add('targeting');
++    this.ui.toast(msg);
++  }
++  // rend vrai si le toucher était pour un ordre d'agent
++  tap(e) {
++    const v = this.vise;
++    if (!v) return false;
++    this.ui.stopTargeting();
++    const h = e.hit;
++    if (v.mode === 'deplacer') {
++      if (h?.kind !== 'node') this.ui.toast('Touchez une place.', 'bad');
++      else this.cmd('deplacer', { agent: v.id, node: h.id });
++      return true;
++    }
++    const cible = h?.kind === 'node' ? h.id : h?.kind === 'army' || h?.kind === 'agent' ? h.id : null;
++    if (cible == null) { this.ui.toast('Touchez une place, une armée ou un agent.', 'bad'); return true; }
++    this.demander(v.id, v.mission, cible);
++    return true;
++  }
++  // clic droit (ou appui long) sur une place, notre agent choisi : il y va
++  contexte(e) {
++    const s = this.ui.sel, a = s?.kind === 'agent' && this.get(s.id);
++    if (!this.mien(a) || e.hit?.kind !== 'node') return false;
++    this.cmd('deplacer', { agent: a.id, node: e.hit.id });
++    return true;
++  }
++  // la chance d'une mission sur une cible, avant l'ordre (sub « chance ») : montrée dans la fenêtre de l'agent
++  demander(id, mission, cible) {
++    this.essai = { id, mission, cible, attente: true };
++    this.ui.renderPanel(true);
++    this.cmd('chance', { agent: id, mission, cible }, false).then(r => {
++      if (this.essai?.id !== id || this.essai.cible !== cible) return;
++      this.essai = { id, mission, cible, ok: r.ok, chance: r.chance, msg: r.msg };
++      this.ui.renderPanel(true);
++    });
++  }
++
++  // ------------------------------------------------------------------ fenêtre d'un agent (ui.renderPanel)
++  tete(a) {
++    const col = this.ui.map.colors[a.proprio] || '#ccc', camp = this.R.factions[a.proprio]?.name || a.proprio;
++    return `<div class="p-head">${ICONE_AGENT[a.type].replace('<svg', `<svg style="width:34px;height:34px;color:${col}"`)}<div><div class="p-title">${esc(a.nom)}</div>
++      <div class="p-sub">${esc(this.nomType(a.type))}${this.mien(a) ? '' : ` de ${esc(camp)}`}, niveau ${a.niveau} <span style="color:var(--laiton-clair)">${'★'.repeat(a.niveau || 1)}</span></div></div></div>`;
++  }
++  traitsHtml(a) {
++    const T = this.R.agent_traits || {};
++    if (!a.traits?.length) return '<p class="muted small">Aucun trait encore : chaque niveau gagné en apporte un.</p>';
++    return `<div class="chips">${a.traits.map(t => `<span class="chip" title="${esc(T[t]?.desc || '')}">${esc(T[t]?.nom || t)}</span>`).join('')}</div>
++      <ul class="small" style="margin:4px 0 0;padding-left:18px">${a.traits.map(t => `<li><b>${esc(T[t]?.nom || t)}</b> : ${esc(T[t]?.desc || '')}</li>`).join('')}</ul>`;
++  }
++  posteTxt(a) {
++    const m = a.mission, M = this.R.MISSIONS?.[m?.type];
++    return m ? `${esc(M?.nom || m.type)} à ${esc(this.nomCible(m.cible))}${m.tours ? ` depuis ${m.tours} mois` : ''}` : '';
++  }
++  panneau(id) {
++    const a = this.get(id);
++    if (!a) return [null, ''];
++    if (!this.mien(a)) return this.etrangerHtml(a);
++    const R = this.R, MI = R.MISSIONS || {}, A = R.AGENTS[a.type];
++    const ou = a.mission ? `En poste : ${this.posteTxt(a)}` : a.chemin?.length ? `En route vers ${esc(this.nomPlace(a.dest))}${a.mp ? `, encore ${String(a.mp).replace('.', ',')} jours de route ce tour` : ' : il repartira au prochain tour'}`
++      : a.at_node != null ? `À ${esc(this.nomPlace(a.at_node))}` : 'En chemin';
++    const prochain = XP[a.niveau] ?? null;
++    let h = this.tete(a) + `<div class="p-state">${ou}</div>
++      <dl class="kv"><dt>Expérience</dt><dd>${a.xp ?? 0}${prochain != null ? ` <span class="muted small">(niveau ${a.niveau + 1} à ${prochain})</span>` : ' <span class="muted small">(niveau maximal)</span>'}</dd>
++      ${A.cache ? `<dt>Discrétion</dt><dd>${a.cache ? 'caché' : '<span style="color:#ff9a85">démasqué</span>'}</dd>` : ''}
++      ${a.repos ? `<dt>Repos</dt><dd>se remet de sa mission : il agira ${a.repos > 1 ? `dans ${a.repos} tours` : 'au prochain tour'}</dd>` : ''}
++      <dt>Entretien</dt><dd>${A.entretien} livres par mois</dd></dl>
++      <div class="section-t">Traits</div>${this.traitsHtml(a)}`;
++    // missions possibles d'ici (vue du moteur), avec leur chance
++    const poss = a.possibles || [];
++    h += `<div class="section-t">Missions possibles</div>`;
++    h += poss.length ? `<div class="btns">${poss.map(p => {
++      const M = MI[p.mission] || {}, pc = Math.round(p.chance * 100);
++      return `<button class="btn${M.poste ? '' : pc >= 60 ? ' primary' : ''}" data-act="ag-mission" data-id="${esc(a.id)}" data-v="${esc(p.mission)}" data-c="${esc(String(p.cible))}" title="${esc(M.desc || '')}">${esc(M.nom || p.mission)} : ${esc(this.nomCible(p.cible))}
++        <small>${M.poste ? 'poste (réussite assurée)' : `${pc} % de réussite`} — ${esc(M.desc || '')}</small></button>`;
++    }).join('')}</div>`
++      : `<p class="muted small">${a.mission ? 'En poste : quittez le poste pour une autre mission.' : a.chemin?.length ? 'En route : il agira une fois arrivé dans une place.' : a.repos ? 'Il se remet de sa dernière mission.' : 'Rien à faire ici : menez-le dans une place (la sienne pour un poste, une place étrangère pour espionner, saboter…), près d’une armée ou d’un agent étranger.'}</p>`;
++    // une autre cible : la chance demandée au moteur avant l'ordre
++    const miens = Object.entries(MI).filter(([, M]) => M.agent === a.type);
++    const e = this.essai?.id === a.id ? this.essai : null;
++    h += `<details class="small"${e ? ' open' : ''}><summary>Viser une autre cible…</summary><div class="btns">${miens.map(([k, M]) =>
++      `<button class="btn" data-act="ag-viser" data-id="${esc(a.id)}" data-v="${esc(k)}" title="${esc(M.desc)}">${esc(M.nom)}<small>${esc(M.desc)}</small></button>`).join('')}</div>`;
++    if (e) {
++      const M = MI[e.mission] || {};
++      h += e.attente ? '<p class="muted small">Chance demandée…</p>'
++        : `<div class="${e.ok ? '' : 'warnline'}" style="margin-top:6px">${esc(M.nom || e.mission)} : ${esc(this.nomCible(e.cible))} — ${e.ok ? `<b>${Math.round(e.chance * 100)} %</b> de réussite` : esc(e.msg || 'impossible')}</div>
++          ${e.ok ? `<div class="btns"><button class="btn primary" data-act="ag-mission" data-id="${esc(a.id)}" data-v="${esc(e.mission)}" data-c="${esc(String(e.cible))}">Donner l’ordre</button></div>` : ''}`;
++    }
++    h += '</details>';
++    // ordres
++    const b = [`<button class="btn" data-act="ag-deplacer" data-id="${esc(a.id)}">Se déplacer…<small>touchez une place (ou clic droit sur la carte)</small></button>`];
++    if (a.mission) b.push(`<button class="btn" data-act="ag-annuler" data-id="${esc(a.id)}">Quitter le poste</button>`);
++    else if (a.chemin?.length) b.push(`<button class="btn" data-act="ag-annuler" data-id="${esc(a.id)}">S’arrêter à la prochaine place</button>`);
++    h += `<div class="section-t">Ordres</div><div class="btns">${b.join('')}<button class="btn" data-act="center">Centrer la carte</button></div>
++      <p class="muted small">${esc(A.desc)} Une mission par tour ; un échec peut coûter l’agent (pris : incident diplomatique).</p>`;
++    return [h, JSON.stringify([a, e])];
++  }
++  // un agent étranger : ce qu'on en voit, et les missions de nos agents qui peuvent le viser
++  etrangerHtml(a) {
++    const MI = this.R.MISSIONS || {}, A = this.R.AGENTS[a.type] || {};
++    let h = this.tete(a);
++    h += `<div class="p-state">${a.mission ? `En poste : ${this.posteTxt(a)}` : 'Agent étranger'}${A.cache && !a.cache ? ' — démasqué' : ''}</div>
++      <p class="small">${esc(A.desc || '')}</p><div class="section-t">Traits</div>${this.traitsHtml(a)}`;
++    const contre = this.liste().filter(b => this.mien(b)).flatMap(b => (b.possibles || []).filter(p => p.cible === a.id).map(p => [b, p]));
++    h += `<div class="section-t">Vos agents</div>`;
++    h += contre.length ? `<div class="btns">${contre.map(([b, p]) => {
++      const M = MI[p.mission] || {};
++      return `<button class="btn" data-act="ag-mission" data-id="${esc(b.id)}" data-v="${esc(p.mission)}" data-c="${esc(a.id)}" title="${esc(M.desc || '')}">${esc(M.nom || p.mission)} : ${esc(b.nom)} (${esc(this.nomType(b.type).toLowerCase())})
++        <small>${Math.round(p.chance * 100)} % de réussite — ${esc(M.desc || '')}</small></button>`;
++    }).join('')}</div>`
++      : '<p class="muted small">Aucun de vos agents ne peut le viser d’ici : un gentilhomme le provoque en duel (contre un gentilhomme), un espion l’assassine, un prêtre le dénonce dans une de vos places (à moins de 6 km, dans une place).</p>';
++    h += `<div class="btns"><button class="btn" data-act="center">Centrer la carte</button></div>`;
++    return [h, JSON.stringify([a, contre.map(([b, p]) => [b.id, p.mission, p.chance])])];
++  }
++
++  // ------------------------------------------------------------------ recrutement (ui.nodePanel, place à soi)
++  recrutementHtml(gn, ns) {
++    const R = this.R, st = this.st;
++    if (!R.AGENTS) return '';
++    const nomBat = (k, l) => R.cities?.chains[k] ? this.ui.slotName(gn, k, l) : k;
++    const cartes = (R.agent_ordre || Object.keys(R.AGENTS)).map(t => {
++      const A = R.AGENTS[t], c = st.agents_camp?.[t] || { n: 0, plafond: 1 }, { ok, why } = recrue(R, st, gn, ns, t, nomBat);
++      return `<button class="btn unit-card" data-act="ag-recruter" data-v="${esc(t)}" ${ok ? '' : 'disabled'} title="${esc(why || A.desc)}">
++        ${ICONE_AGENT[t]}<span class="un">${esc(A.nom)} <span class="muted" style="font-weight:400">(${c.n} / ${c.plafond})</span></span>
++        <span class="uc">${A.cout} livres, ${partTour(A.jours)}, entretien ${A.entretien} livres par mois${why ? ` — ${esc(why)}` : ''}</span></button>`;
++    }).join('');
++    return `<div class="section-t">Former un agent</div><div class="units-grid">${cartes}</div>`;
++  }
++  // les agents dans une place (tout panneau de place) : de quoi les choisir
++  dansPlaceHtml(id) {
++    const l = this.liste().filter(a => a.at_node === id);
++    if (!l.length) return '';
++    return `<div class="section-t">Agents dans la place</div><div class="btns">${l.map(a => `<button class="btn" data-act="ag-voir" data-v="${esc(a.id)}">${ICONE_AGENT[a.type].replace('<svg', `<svg style="width:16px;height:16px;vertical-align:-3px;margin-right:4px;color:${this.ui.map.colors[a.proprio] || '#ccc'}"`)}${esc(a.nom)}<small>${esc(this.nomType(a.type))}${this.mien(a) ? '' : `, ${esc(this.R.factions[a.proprio]?.name || a.proprio)}`}${a.mission ? ` — ${esc(this.R.MISSIONS?.[a.mission.type]?.nom || '')}` : ''}</small></button>`).join('')}</div>`;
++  }
++
++  // ------------------------------------------------------------------ actions (ui.action, data-act="ag-…")
++  action(act, d) {
++    switch (act) {
++      case 'ag-recruter': this.cmd('recruter', { node: this.ui.sel.id, type: d.v }); break;
++      case 'ag-voir': this.ui.select({ kind: 'agent', id: d.v }); break;
++      case 'ag-deplacer': this.viser(d.id, 'deplacer', null, 'Touchez la place où l’envoyer.'); break;
++      case 'ag-viser': this.viser(d.id, 'cible', d.v, `${this.R.MISSIONS[d.v]?.nom || d.v} : touchez la cible (une place, une armée ou un agent).`); break;
++      case 'ag-annuler': this.cmd('annuler', { agent: d.id }); break;
++      case 'ag-mission': this.mission(d.id, d.v, /^\d+$/.test(d.c) ? +d.c : d.c); break;
++      default: return false;
++    }
++    return true;
++  }
++  // l'ordre de mission ; une mission jouée sur-le-champ : sa scène, puis son résultat (bandeau ; le journal du moteur le garde) ;
++  // la scène se joue là où se tient notre agent (sur un hexagone dégagé près de la place, la cible à portée)
++  async mission(id, mission, cible) {
++    const a = this.get(id);
++    if (!a) return;
++    const lieu = this.ou(a), autre = this.get(cible)?.proprio
++      ?? (typeof cible === 'number' ? this.st.nodes[cible]?.o : this.ui.armyById(cible)?.o);
++    const poste = this.R.MISSIONS[mission]?.poste;
++    this.essai = null;
++    const r = await this.cmd('mission', { agent: id, mission, cible }, false);
++    if (!r.ok) { this.ui.toast(r.msg || 'Ordre refusé.', 'bad'); return; }
++    const is = issueMission(mission, r.msg, a.nom), C = this.ui.map.colors;
++    // deux duellistes du même nom : le message ne dit pas qui a gagné ; le vaincu est mort ou blessé (deux tours de repos)
++    if (mission === 'duel' && this.get(cible)?.nom === a.nom) {
++      const avant = this.st;   // (l'ordre a demandé un nouvel état : on l'attend, trois secondes au plus)
++      for (let i = 0; i < 30 && this.st === avant; i++) await new Promise(f => setTimeout(f, 100));
++      const b = this.get(id);
++      if (this.st !== avant) is.reussite = !!b && b.repos < 2;
++    }
++    const nous = C[a.proprio] || '#3b6fd1', eux = C[autre] || '#8d8a7a';
++    const ms = is ? this.jouer({ id, type: is.type, x: lieu[0], y: lieu[1], reussite: is.reussite, couleurs: is.eux ? [eux, nous] : [nous, eux],
++      agent: is.eux ? this.get(cible)?.type || 'espion' : a.type }) : 0;
++    const bon = poste || !/^Échec/.test(r.msg) && (!is || is.eux || is.reussite);
++    setTimeout(() => this.ui.toast(r.msg, bon ? 'good' : 'bad'), ms ? ms * 0.8 : 0);
++  }
++  // la scène de la mission sur le plateau (hex/agents.js) ; la carte s'en approche d'abord si les figurines n'y sont pas (de loin,
++  // elle serait trop petite ; déjà de près, la vue ne bouge pas : rebâtir le plateau ferait sauter des images de la scène) ;
++  // rend sa durée (ms), 0 sans plateau
++  jouer(o) {
++    const P = this.plateau, m = this.ui.map;
++    if (!P || !m.ambient?.on) return 0;
++    const [sx, sy] = m.toScreen(o.x, o.y), z = Math.max(m.cam.z, 30), loin = !P.pres || sx < 0 || sy < 0 || sx > m.vw || sy > m.vh;
++    if (!loin) return P.scene(o);
++    m.moveTo(o.x, o.y, z);
++    const att = 700;   // (le plateau rebâtit sa fenêtre autour de la nouvelle vue avant d'y poser la scène)
++    setTimeout(() => { const p = P.pos(o.id); P.scene(p ? { ...o, x: p[0], y: p[1] } : o); }, att);   // (l'agent posé de près, s'il est encore là)
++    return att + 4000;
++  }
++}
+diff --git a/web/js/hex/agents.js b/web/js/hex/agents.js
+new file mode 100644
+index 0000000..56f1575
+--- /dev/null
++++ b/web/js/hex/agents.js
+@@ -0,0 +1,89 @@
++// Les agents de près sur le plateau (SPEC-POLITIQUE, module 4, page P8) : chacun en figurine de web_engine
++// (graphismes/rendu/agents.js, maillageAgent) à la couleur de son camp, à l'habit de l'époque, son niveau en étoiles sur le
++// socle, translucide s'il se cache, qui marche quand il se déplace ; à la même échelle et à partir du même zoom que les troupes
++// (hex/armees.js). Dans une place, les agents se tiennent ensemble sur un hexagone libre près d'elle (comme les armées au
++// bivouac) ; en chemin, là où ils sont. De loin, le pion 2D de agents.js reste. Et les scènes de mission (sceneMission).
++// Ce fichier ne dessine rien : il pose et oriente les figurines du moteur. Une par agent, gardée tant que son type, son camp,
++// son niveau et l'époque ne changent pas (marche et cache se changent sans rien rebâtir).
++import { TROUPES_PX } from './armees.js';
++
++const ECH = 0.18;    // l'échelle des troupes (hex/armees.js)
++
++// la vue ne donne at_node que pour nos agents : un agent étranger arrêté dans une place a la case de la place ; posé une
++// fois par état (nodes : les places de la carte)
++const VUS = new WeakSet();
++export function placer(liste, nodes) {
++  if (VUS.has(liste)) return liste;
++  VUS.add(liste);
++  for (const a of liste) if (a.at_node === undefined) a.at_node = nodes.find(n => Math.abs(n.x - a.case[0]) < 1e-3 && Math.abs(n.y - a.case[1]) < 1e-3)?.id ?? null;
++  return liste;
++}
++
++export class AgentsPlateau {
++  // pl : le plateau (hex/plateau.js) ; E : les modules du moteur ; Ag : graphismes/rendu/agents.js ; epoqueDe : an → époque
++  constructor(pl, E, Ag, epoqueDe) {
++    this.pl = pl; this.E = E; this.Ag = Ag; this.epoqueDe = epoqueDe;
++    this.groupe = new E.S.THREE.Group(); E.S.scene.add(this.groupe);
++    this.vues = new Map();   // id de l'agent → { grp, cle, x, y, cap } (x, y : où il est posé, en unités du jeu)
++    this.pres = false;       // les agents sont-ils des figurines (lu par agents.js)
++    this.rayonPx = 0;        // demi-largeur d'une figurine à l'écran (anneau de sélection, toucher)
++    this.finScene = 0;       // fin de la dernière scène de mission (le plateau se redessine jusque-là)
++  }
++  // chaque image, avant le rendu : rend vrai si quelque chose a bougé
++  maj(cam) {
++    const pl = this.pl, mp = pl.mp, N = pl.N, f = pl.fen, st = mp.state;
++    const pres = !!(st && f && N && !N.leger && !mp.papierVu?.() && N.pas * cam.z >= TROUPES_PX);
++    let bouge = pres !== this.pres || performance.now() < this.finScene;
++    this.pres = pres; this.groupe.visible = pres;
++    if (!pres) return bouge;
++    const Ag = this.Ag, epoque = this.epoqueDe(st.year || 1700), leger = this.E.S.qualite.niveau === 'leger';
++    this.rayonPx = 1.6 * ECH * cam.z * f.u;   // (la figurine et son socle : un peu plus de 2 unités du modèle de large)
++    const liste = placer(st.agents || [], mp.nodes), vus = new Set();
++    for (const a of liste) {
++      vus.add(a.id);
++      const couleur = mp.colors[a.proprio] || '#999999', cle = `${a.type}|${couleur}|${epoque}|${a.niveau}|${leger}`;
++      let v = this.vues.get(a.id);
++      if (!v || v.cle !== cle) {
++        if (v) Ag.jeterAgent(v.grp);
++        v = { grp: Ag.maillageAgent({ type: a.type, couleur, epoque, niveau: a.niveau, cache: !!a.cache, leger }), cle, x: v?.x, y: v?.y, cap: v?.cap ?? 0.35 };
++        v.grp.scale.setScalar(ECH); this.groupe.add(v.grp); this.vues.set(a.id, v);
++        bouge = true;
++      }
++      // vers sa place : il y glisse en marchant, tourné vers où il va ; arrêté, face à la caméra
++      let [x, y] = this.place(a, liste);
++      const marche = v.x != null && Math.hypot(x - v.x, y - v.y) > 0.03;
++      if (marche) { v.cap = Math.atan2(x - v.x, y - v.y); x = v.x + (x - v.x) * 0.12; y = v.y + (y - v.y) * 0.12; bouge = true; }
++      else if (v.x != null && v.cap !== 0.35) { v.cap = 0.35; bouge = true; }
++      const g = v.grp, X = x / f.u - f.ox, Z = y / f.u - f.oz;
++      g.userData.marche = marche; g.userData.cache = !!a.cache;
++      g.position.set(X, Math.max(this.E.P.hauteurEn(X, Z), 0), Z); g.rotation.y = v.cap;
++      v.x = x; v.y = y;
++    }
++    for (const [id, v] of this.vues) if (!vus.has(id)) { this.Ag.jeterAgent(v.grp); this.vues.delete(id); bouge = true; }
++    return bouge;
++  }
++  // où poser l'agent (unités du jeu) : en chemin, sa case ; dans une place, l'hexagone libre qui suit ceux de ses armées
++  // (hex/armees.js place), les agents de la place en petit groupe (trois par rang)
++  place(a, liste) {
++    if (a.at_node == null) return a.case;
++    const slot = (this.pl.mp.state.armies || []).filter(x => x.n === a.at_node && x.st !== 'battle').length;
++    const [cx, cy] = this.pl.armees.place({ a: { n: a.at_node }, slot, x: a.case[0], y: a.case[1] });
++    const ici = liste.filter(b => b.at_node === a.at_node), i = ici.indexOf(a), n = Math.min(3, ici.length), pas = this.pl.N.pas * 0.26;
++    const rang = Math.floor(i / 3), rangs = Math.ceil(ici.length / 3), dans = rang < rangs - 1 ? n : ici.length - rang * 3;
++    return [cx + (i % 3 - (dans - 1) / 2) * pas, cy + (rang - (rangs - 1) / 2 - 0.8) * pas * 0.8];   // (dans le haut de l'hexagone : le nom de la place, dessous, ne les cache pas)
++  }
++  // l'agent posé en figurine : où il est (unités du jeu), ou null
++  pos(id) { const v = this.pres && this.vues.get(id); return v ? [v.x, v.y] : null; }
++  // une scène de mission au point (x, y) du jeu (o : type, reussite, couleurs, agent), un peu devant le groupe des agents
++  // (dans le bas de leur hexagone) ; rend sa durée (ms)
++  scene(o) {
++    const f = this.pl.fen;
++    if (!f) return 0;
++    const X = o.x / f.u - f.ox, Z = (o.y + (this.pl.N?.pas || 4) * 0.22) / f.u - f.oz;
++    const ms = this.Ag.sceneMission({ type: o.type, position: [X, Math.max(this.E.P.hauteurEn(X, Z), 0), Z], couleurs: o.couleurs, reussite: o.reussite,
++      epoque: this.epoqueDe(this.pl.mp.state?.year || 1700), echelle: ECH, agent: o.agent });
++    this.finScene = Math.max(this.finScene, performance.now() + ms);
++    return ms;
++  }
++  dispose() { this.Ag.finirMissions(); this.E.S.scene.remove(this.groupe); }
++}
+diff --git a/web/js/hex/plateau.js b/web/js/hex/plateau.js
+index 10cde6f..86abe34 100644
+--- a/web/js/hex/plateau.js
++++ b/web/js/hex/plateau.js
+@@ -18,6 +18,7 @@ import { AMB, meteoEn } from '../carte/ambiance.js';
+ import { Marine } from './marine.js';
+ import { PALIERS, Regulateur } from './qualite.js';
+ import { ArmeesPlateau } from './armees.js';
++import { AgentsPlateau } from './agents.js';   // (SPEC-POLITIQUE, P8 : les agents de près)
+ 
+ export { K, C };
+ 
+@@ -51,6 +52,8 @@ if (PAGE) try {
+   P.decorProgressif(6);   // (le décor se pose par morceaux de 6 ms par image : changer de vue n'arrête plus l'image)
+   // (SPEC-EMPIRE, P2) la marine du moteur (marine.js, adaptée par hex/marine.js) ; sans elle, le plateau reste
+   E.Mar = await import('../../graphismes/rendu/marine.js').catch(e => { console.warn('Marine de web_engine indisponible', e); return null; });
++  // (SPEC-POLITIQUE, P8) les agents du moteur (agents.js, adaptés par hex/agents.js) ; sans eux, le pion 2D de loin reste
++  E.Ag = await import('../../graphismes/rendu/agents.js').catch(e => { console.warn('Agents de web_engine indisponibles', e); return null; });
+ } catch (e) {
+   console.warn('Moteur graphique web_engine indisponible', e);
+   cv?.remove(); cv = null;
+@@ -95,6 +98,7 @@ export class Plateau {
+     this.vignettes = new Map();                             // clé, couleur, époque → image du bâtiment
+     this.marine = E.Mar ? new Marine(this, E.Mar) : null;   // (SPEC-EMPIRE, P2 : flottes, blocus, comptoirs, balises)
+     this.armees = new ArmeesPlateau(this, E);               // les armées de près, en figurines (hex/armees.js)
++    this.agents = E.Ag ? new AgentsPlateau(this, E, E.Ag, epoqueDe) : null;   // (SPEC-POLITIQUE, P8 : les agents de près, hex/agents.js)
+     calage = () => { if (this.fen && this.camJeu) this.caler(...this.camJeu); };
+     // (qualité : le niveau du moteur choisi (?qualite=, menu) ou deviné ; en automatique, le régulateur baisse les paliers de
+     // qualite.js quand les images se suivent trop lentement, et les remonte)
+@@ -513,6 +517,7 @@ export class Plateau {
+     if (AMB.heure !== this.heure) { this.heure = AMB.heure; E.N.eclairage(HEURE[AMB.heure] || 'jour'); this.tHeure = now; }
+     if (now - this.tHeure < 3000) this.sale = true;
+     if (this.armees.maj(cam)) this.sale = true;   // (les armées de près : posées, tournées, en marche)
++    if (this.agents?.maj(cam)) this.sale = true;   // (SPEC-POLITIQUE, P8 : les agents de près, et les scènes de mission)
+     if (!this.sale && now - this.tRendu < pas) return false;
+     // (qualité automatique : seulement quand le plateau est dessiné à chaque image, animations permises)
+     if (anim && !this.manuel && this.tRendu) { const p = this.regul.noter(now, now - this.tRendu); if (p !== this.palier) this.appliquer(p); }
+@@ -539,6 +544,6 @@ export class Plateau {
+     S.scene.fog.near = 1e5; S.scene.fog.far = 2e5;
+   }
+   pret() { return !!this.fen; }
+-  dispose() { E.S.scene.remove(this.villes); E.S.scene.remove(this.habitants); E.S.scene.remove(this.armees.groupe); }
++  dispose() { E.S.scene.remove(this.villes); E.S.scene.remove(this.habitants); E.S.scene.remove(this.armees.groupe); this.agents?.dispose(); }
+ }
+ const dist = (g, k, n) => Math.hypot(g.liste[k].gx - n.x, g.liste[k].gy - n.y);
+diff --git a/web/js/map.js b/web/js/map.js
+index 7bcb60a..775fc37 100644
+--- a/web/js/map.js
++++ b/web/js/map.js
+@@ -912,6 +912,8 @@ export class MapView {
+     const pad = type === 'touch' ? 12 : type === 'pen' ? 3 : 0;
+     let best = null;
+     const st = this.state || this.preview;
++    const ag = this.state && this.toucheAgent?.(sx, sy, pad);   // (SPEC-POLITIQUE, P8 : les agents, agents.js ; petits, avant les armées)
++    if (ag) return { kind: ag.kind, id: ag.id, d: ag.d };
+     for (const a of st.armies) {
+       const d = this.disp.get(a.id);
+       if (!d || (opt.skipArmy && opt.skipArmy(a))) continue;
+@@ -1946,6 +1948,7 @@ export class MapView {
+     this.drawPaths(ctx);
+     this.drawArmies(ctx, time);
+     this.dessinFlottes?.(ctx);   // (SPEC-EMPIRE, P2 : la flotte choisie ; les navires, marine.js sur le plateau)
++    this.dessinAgents?.(ctx);    // (SPEC-POLITIQUE, P8 : pions de loin, sélection et noms ; les figurines, hex/agents.js)
+     this.drawBattles(ctx, dt, time);
+     this.drawParticles(ctx, dt);
+     // éclats d'or des découvertes (decouvertes.js) : trois anneaux qui s'ouvrent sur le chef-lieu
+diff --git a/web/js/ui.js b/web/js/ui.js
+index f037e2a..59eb868 100644
+--- a/web/js/ui.js
++++ b/web/js/ui.js
+@@ -11,6 +11,7 @@ import { arbreHtml } from './arbre.js';
+ import { startTechs, startRails } from './epoque.js';
+ import * as BT from './strategie.js';
+ import { Flottes } from './flottes.js';
++import { Agents } from './agents.js';
+ import { Son } from './son.js';
+ 
+ // nombres à la française : virgule décimale et vrai signe moins (−)
+@@ -77,6 +78,10 @@ export class UI {
+     this.flottes = new Flottes(this);
+     map.toucheFlotte = (sx, sy, pad) => this.flottes.touche(sx, sy, pad);
+     map.dessinFlottes = ctx => this.flottes.dessin(ctx);
++    // (SPEC-POLITIQUE, P8) les agents : pions et figurines sur la carte, fenêtre, recrutement, scènes de mission (agents.js)
++    this.agents = new Agents(this);
++    map.toucheAgent = (sx, sy, pad) => this.agents.touche(sx, sy, pad);
++    map.dessinAgents = ctx => this.agents.dessin(ctx);
+     this.buildStatic();
+     map.onTap = e => this.onTap(e);
+     map.onContext = e => this.onContext(e);
+@@ -610,6 +615,7 @@ export class UI {
+     if (!this.st) { this.onStartTap && this.onStartTap(e); return; }
+     this.hideBubble();
+     if (this.flottes.tap(e)) return;   // (SPEC-EMPIRE, P2 : ordre de flotte visé, ou la mer touchée avec une flotte choisie)
++    if (this.agents.tap(e)) return;    // (SPEC-POLITIQUE, P8 : ordre d'agent visé, agents.js)
+     if (this.targeting) {
+       const a = this.armyById(this.targeting);
+       this.stopTargeting();
+@@ -631,6 +637,7 @@ export class UI {
+ 
+   onContext(e) {
+     if (!this.st) return;
++    if (this.agents.contexte(e)) return;   // (SPEC-POLITIQUE, P8 : notre agent choisi va à la place touchée)
+     const cur = this.sel && this.sel.kind === 'army' ? this.armyById(this.sel.id) : null;
+     if (cur && this.isMine(cur.o)) {
+       e = this.moveTarget(e);
+@@ -776,7 +783,7 @@ export class UI {
+     if (dy) b.style.top = (parseFloat(b.style.top) + dy) + 'px';
+   }
+   hideBubble() { this.$('bubble').hidden = true; }
+-  stopTargeting() { this.targeting = null; this.flottes.vise = null; this.map.cv.classList.remove('targeting'); }
++  stopTargeting() { this.targeting = null; this.flottes.vise = null; this.agents.vise = null; this.map.cv.classList.remove('targeting'); }
+ 
+   // ------------------------------------------------------------------ actions
+   action(act, d, el) {
+@@ -877,12 +884,6 @@ export class UI {
+       case 'split-type':
+         this.cmd({ cmd: 'split_type', army: sel.id, value: d.v }, false).then(r => { if (r.ok) { this.toast('Détachement formé.', 'good'); this.select({ kind: 'army', id: r.id }); } });
+         break;
+-      case 'spy': {
+-        const sp = this.rules.spy[d.v];
+-        if (d.v === 'saboter' && !confirm(`Envoyer des saboteurs (${sp.cost} livres) ? En cas d’échec, la relation se dégrade.`)) break;
+-        this.cmd({ cmd: 'spy', node: sel.id, value: d.v });
+-        break;
+-      }
+       case 'fog': {
+         this.map.fogOn = !this.map.fogOn;
+         try { localStorage.setItem('conquete.fog', this.map.fogOn ? '1' : '0'); } catch (e) { /* stockage indisponible */ }
+@@ -1037,7 +1038,7 @@ export class UI {
+       case 'pick-scen': this.startScen = d.v; this.map.showPreview(d.v); this.renderStart(); break;
+       case 'start-game': this.onStartGame && this.onStartGame(this.startDept, this.startDiff, this.startScen); break;
+       case 'resume': this.onResume && this.onResume(); break;
+-      default: if (act.startsWith('fl-')) this.flottes.action(act, d); break;   // (flottes.js)
++      default: if (act.startsWith('fl-')) this.flottes.action(act, d); else if (act.startsWith('ag-')) this.agents.action(act, d); break;   // (flottes.js, agents.js)
+     }
+   }
+ 
+@@ -1048,6 +1049,7 @@ export class UI {
+     if (s.kind === 'army') { const d = this.map.disp.get(s.id); return d ? [d.x, d.y] : null; }
+     if (s.kind === 'battle') { const b = this.st.battles.find(x => x.id === s.id); return b ? [b.x, b.y] : null; }
+     if (s.kind === 'flotte') return this.flottes.pos(s.id);
++    if (s.kind === 'agent') return this.agents.pos(s.id);   // (SPEC-POLITIQUE, P8)
+     return null;
+   }
+ 
+@@ -1061,6 +1063,7 @@ export class UI {
+     else if (s.kind === 'army') [html, sig] = this.armyPanel(s.id);
+     else if (s.kind === 'battle') [html, sig] = this.battlePanel(s.id);
+     else if (s.kind === 'flotte') [html, sig] = this.flottes.panneau(s.id);
++    else if (s.kind === 'agent') [html, sig] = this.agents.panneau(s.id);   // (SPEC-POLITIQUE, P8 : agents.js)
+     if (html == null) {
+       // bataille terminée : on annonce l'issue et on garde la main sur une de nos armées qui y était
+       const m = this.fightMemo;
+@@ -1236,17 +1239,8 @@ export class UI {
+         h += `<div class="section-t">Rapport d’espion (jusqu’au ${ns.intel})</div>` +
+           (ns.g && ns.g.length ? `<div class="reg-list">${ns.g.map(r => this.regRow(r, ns.o, false)).join('')}</div>` : '<p class="muted small">Aucun régiment en garnison, seulement la milice.</p>');
+       }
+-      const fsn = st.factions.find(x => x.code === ns.o);
+-      const atWar = fsn && fsn.st === 'guerre';
+-      h += `<div class="section-t">Espionnage</div>`;
+-      if (ns.spy) h += `<p class="small">${ICON.spy.replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Un agent est en route (${this.rules.spy[ns.spy.kind].label.toLowerCase()}) : son rapport ${toursTxt(ns.spy.tn)}.</p>`;
+-      else {
+-        h += `<div class="btns">${Object.entries(this.rules.spy).map(([k, sp]) => {
+-          const ok = st.me.res.livres >= sp.cost && (k !== 'saboter' || (atWar && ns.f > 0));
+-          return `<button class="btn" data-act="spy" data-v="${k}" ${ok ? '' : 'disabled'} title="${esc(sp.desc)}">${sp.label}<small>${sp.cost} livres, rapport au prochain tour, ${Math.round(sp.chance * 100)} % de réussite</small></button>`;
+-        }).join('')}</div><div class="muted small">Espionner révèle la garnison et les armées alentour pendant ${this.rules.spy_tours} tours. Saboter (en guerre) ouvre une brèche dans les remparts. Un agent démasqué fâche ${this.st.word === 'province' ? 'la province visée' : 'le département visé'}.</div>`;
+-      }
+     }
++    h += this.agents.dansPlaceHtml(id);   // (SPEC-POLITIQUE, P8 : les agents dans la place ; l'espionnage passe par eux, agents.js)
+     if (own) {
+       const here = st.armies.filter(a => a.o === me && a.n === id && a.st === 'idle');
+       if (ns.g && ns.g.length) {
+@@ -1318,9 +1312,11 @@ export class UI {
+       h += this.railHtml(id);   // voie ferrée (game/rails.py)
+       h += this.cityHtml(id, gn, ns, queue, qFull);   // emplacements et politique de la ville
+       h += this.flottes.chantierHtml(id, gn, ns);   // (SPEC-EMPIRE, P2) chantier naval d'un port de mer
++      h += this.agents.recrutementHtml(gn, ns);     // (SPEC-POLITIQUE, P8) former un agent
+       if (queue.length) {
+         h += `<div class="section-t">En préparation${qFull ? ' <span class="muted small">(file pleine)</span>' : ''}</div>` + queue.map((q, i) => {
+           const lab = q.kind === 'unit' ? this.rules.units[q.what]?.name || q.what : q.kind === 'navire' ? this.rules.navires?.[q.what]?.nom || q.what
++            : q.kind === 'agent' ? this.rules.AGENTS?.[q.what]?.nom || q.what   // (SPEC-POLITIQUE, P8)
+             : q.kind === 'slot' && this.rules.cities?.chains[q.what] ? this.slotName(gn, q.what, q.lvl || 1) : this.rules.build[q.what]?.name || q.what;
+           const pct = i === 0 ? Math.round((1 - q.left / q.total) * 20) * 5 : 0;   // par pas de 5 % : moins de redessins
+           return `<div class="queue-item"><span>${lab}</span><span class="muted">${q.tn == null ? 'en attente (place assiégée)' : 'prêt ' + toursTxt(q.tn)}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`;
+@@ -1986,7 +1982,7 @@ export class UI {
+           <li><b>Armée et intendance</b> : grenadiers (infanterie d’élite), chasseurs basques (montagnards, levés au Pays basque), sapeurs (sièges, rivières) et Garde nationale (milice levée partout, qui ne quitte pas sa ville). Un magasin aux vivres ravitaille les armées alentour ; sans solde ni vivres, le moral chute et les soldats désertent. Vos prisonniers s’échangent, se rachètent ou s’enrôlent (Diplomatie). Le carré réflexe forme d’office le carré face aux charges quand vous commandez vous-même.</li>
+           <li><b>Fleuves</b> : par les routes, vos armées embarquent sur les gabares de la Garonne, de la Dordogne, du Lot, de l’Isle, de la Baïse, de la Midouze et de l’Adour, ou longent la côte (les tempêtes bloquent les navires). Les canons ennemis sur la berge tirent sur les gabares ; tenir une place en aval coupe le commerce de l’amont (blocus).</li>
+           <li><b>Frontières</b> : les terres d’un ${this.st?.word || 'département'} en paix vous sont fermées, sauf droit de passage (fenêtre Diplomatie) ou alliance. Vos armées les contournent ; sans détour possible, vous pouvez passer en force, ce qui revient à lui déclarer la guerre. Les gabares passent devant ses quais sans y débarquer. Une armée surprise sur des terres fermées (droit retiré, paix signée…) a jusqu’à la fin du tour pour en sortir.</li>
+-          <li><b>Espions</b> : depuis une place étrangère, espionnez (vision et garnison pendant deux tours, rapport au tour suivant) ou sabotez ses remparts en temps de guerre. Le brouillard de guerre (bouton œil) montre ce que vous voyez réellement.</li>
++          <li><b>Agents</b> : formez espions, gentilshommes, prêtres et diplomates dans vos places (selon leurs bâtiments), menez-les sur la carte, puis choisissez une mission dans leur fenêtre (la chance de réussite est montrée avant l’ordre) : espionner ou saboter une place ennemie, duel, poste à l’université, apaiser une place, ambassade. Le brouillard de guerre (bouton œil) montre ce que vous voyez réellement.</li>
+           <li><b>Impôts</b> (fenêtre Production) : plus d’argent tout de suite, mais l’ordre public baisse ; une ville agitée sans garnison peut se révolter.</li>
+           <li>La partie est sauvegardée automatiquement chaque mois ; elle reprend au redémarrage du serveur.</li>
+           <li>La pluie mouille la poudre, la neige ferme les cols, l’hiver vide les greniers. Les récoltes arrivent en été et en automne.</li>
+-- 
+2.43.0
+
