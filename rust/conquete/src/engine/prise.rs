@@ -216,7 +216,8 @@ impl Game {
     pub fn uprisings(&mut self) {
         for (code_v, f) in self.factions.items() {
             let code = code_v.string();
-            if f.atb("alive") || code == self.player || self.t - f.get_or("dead_t", self.t).f() < (R::REVIVE_YEARS * 365) as f64 {
+            // (SPEC-POLITIQUE, module 5) un camp rebelle vaincu ne se relève pas : il n'a pas de capitale sur la carte
+            if f.atb("alive") || code == self.player || self.t - f.get_or("dead_t", self.t).f() < (R::REVIVE_YEARS * 365) as f64 || R::est_rebelle(&code) {
                 continue;
             }
             let cap = self
@@ -979,6 +980,7 @@ impl Game {
         let x = py::round_n(v, 2);
         let x = if x < 1.0 { x } else { 1.0 };
         f.set("tax", if 0.0 < x { x } else { 0.0 });
+        super::politique::regler_impot_moyen(&f); // (SPEC-POLITIQUE, module 5) l'impôt de chaque classe suit la moyenne
         self._dirty_income = true;
         (true, format!("Impôts : {}.", R::tax_label(f.atf("tax")).to_lowercase()))
     }
@@ -1028,6 +1030,7 @@ impl Game {
             if f.getb("banqueroute") {
                 t -= 0.2;
             }
+            t -= super::politique::malus_ordre(&f); // le mécontentement des classes (SPEC-POLITIQUE, module 5)
             out.set(&code_v, t);
         }
         out

@@ -104,6 +104,7 @@ pub fn to_dict(g: &mut Game) -> Val {
 /// Python : `migrate(g)`.
 // views.py, lignes 40 à 102
 pub fn migrate(g: &mut Game) {
+    crate::engine::politique::migrer(g); // (SPEC-POLITIQUE, module 5) d'abord : les camps rebelles réinscrits avant qu'on les lise
     for f in g.factions.values() {
         f.setdefault("tax", 0.5);
         f.setdefault("intel", dict! {});
@@ -436,7 +437,9 @@ pub fn rules_payload_carte(geo: i64) -> Val {
         // la marine (SPEC-EMPIRE, module 2)
         "navires" => R::NAVIRES(), "navire_ordre" => R::NAVIRE_ORDRE(), "strats_nav" => R::STRATS_NAV(), "phases_nav" => R::PHASES_NAV(),
         "denrees" => R::DENREES(), // le commerce maritime (SPEC-EMPIRE, module 7)
-        "CARACTERES" => R::CARACTERES(), "CLAUSES" => R::CLAUSES() // la diplomatie profonde (SPEC-POLITIQUE, module 6)
+        "CARACTERES" => R::CARACTERES(), "CLAUSES" => R::CLAUSES() // la diplomatie profonde (SPEC-POLITIQUE, module 6),
+        // la politique intérieure (SPEC-POLITIQUE, module 5)
+        "regimes" => R::REGIMES(), "postes" => R::POSTES(), "ministre_traits" => R::MINISTRE_TRAITS(), "classes" => R::CLASSES()
     }
 }
 
@@ -972,7 +975,8 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
             "wars" => wars, "cap_owner" => g.nodes.at(g.capital_of(&code)).at("owner"), "techs" => f.at("techs").len(),
             "mk" => R::marks(&f.at("techs")), // marques visibles sur la carte (rules.VISUALS ; SPEC-SUITE H)
             "pr" => if !moi { py::int_v(&f.get_or("prisoners", dict! {}).get_or(&p, 0)) } else { 0 },
-            "prestige" => g.prestige(&code), "weary" => py::int_v(&f.get_or("weary", 0)), "maison" => FM::vue(g, &code)
+            "prestige" => g.prestige(&code), "weary" => py::int_v(&f.get_or("weary", 0)), "maison" => FM::vue(g, &code),
+            "politique" => crate::engine::politique::resume(g, &code) // régime et classes (SPEC-POLITIQUE, module 5)
         };
         if !moi {
             // (SPEC-POLITIQUE, module 6) son caractère, et son attitude envers nous avec ses raisons
@@ -1062,7 +1066,8 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
         "glory" => py::int_v(&me.get_or("prestige", 0)),
         "arm" => Val::dict_from(R::ARMS().keys().into_iter().map(|c| { let l = g.arm_level(&p, c.s()); (c, Val::from(l)) }).collect()),
         "unames" => Val::dict_from(R::UNITS().keys().into_iter().map(|u| { let n = g.unit_name(&p, u.s()); (u, Val::from(n)) }).collect()),
-        "effects" => _effects(g, &me)
+        "effects" => _effects(g, &me),
+        "politique" => crate::engine::politique::vue(g, &p) // (SPEC-POLITIQUE, module 5)
     };
 
     let era = g.era();

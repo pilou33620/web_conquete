@@ -28,6 +28,7 @@ use crate::{dict, list, py_const, pyset, tup};
 mod gouvernement;
 pub mod marine; // les flottes des IA (SPEC-EMPIRE, module 2)
 pub mod commerce; // marchands, corsaires, expéditions des IA (SPEC-EMPIRE, module 7)
+pub mod politique; // impôts par classe, ministres, révolutions (SPEC-POLITIQUE, module 5)
 
 pub const AI_AHEAD: i64 = 5;  // ans d'avance au plus sur l'histoire pour une recherche des IA (SPEC-ARBRE.md)
 

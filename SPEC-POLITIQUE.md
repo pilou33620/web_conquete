@@ -278,3 +278,64 @@ Fichiers : `diplomacy.rs` (section « SPEC-POLITIQUE, module 6 »), `engine/memo
 - Missions (R7) : la réussite est devinée (agent encore là à la fin de la mission) ; à affiner quand R7 dira l'issue.
   Les champs supposés des nouveautés sont ceux de cette spec : à vérifier après la fusion (`mesures.rs`, une ligne).
 
+
+### Module 5 : politique intérieure (R8) — fait le 24/11/2026
+
+- **Moteur** `engine/politique.rs`, **IA** `ai/politique.rs`, chiffres dans `rules.rs` (`REGIMES`, `CLASSES`, `POSTES`,
+  `MINISTRE_TRAITS`, `POL_*`, `SEUIL_EMEUTE` 70, `SEUIL_REVOLUTION` 80 pendant `REVOLUTION_MOIS` 4 mois,
+  `REVOLUTION_REPIT` 24 mois, `GUERRE_CIVILE_PLACES` 6, `GUERRE_CIVILE_PART` 0,35, `regime_historique`).
+- `factions[c].politique` = `{regime, cabinet: {poste: ministre|None}, candidats: [ministre], classes: {noblesse|peuple:
+  {mecontentement 0-100, impot 0-1, mois}}, choc: {classe: points}, mandat: jour|None, revolution: None|{classe, chance},
+  repit, seq, _lost, revolutions, guerres_civiles [, rebelle_de, capitale, nom, couleur]}` ; ministre = `{id, nom,
+  poste, competence 1-5, traits, ne, depuis}`. Sauvegardé avec le camp ; une ancienne sauvegarde reçoit le régime de son
+  pays à sa date et son impôt unique sur les deux classes. `f.tax` reste l'impôt du camp (moyenne des deux classes) :
+  l'économie et l'ancien réglage `{cmd: "tax"}` marchent comme avant (le réglage déplace les deux classes d'autant).
+- **Régime de départ** selon l'histoire : France absolue / constitutionnelle (1789) / république (1792) / absolue
+  (1804) / constitutionnelle (1814) / république (1848) / absolue (1852) / république (1870) ; Grande-Bretagne et Pologne
+  constitutionnelles ; Provinces-Unies, Venise, Gênes, Suisse républiques ; Suède, Espagne, Portugal, Prusse, Autriche,
+  Danemark… selon leurs dates ; un département suit la France, une colonie sa métropole ; les autres pays absolus.
+- **Mécontentement** : cible mensuelle (régime, impôt de la classe × sensibilité du régime, injustice fiscale, guerres,
+  lassitude, famine, banqueroute, églises, universités, ministres, chocs : défaites, renvois, choix d'événements) ;
+  au-delà de 55 il ôte de l'ordre public visé (`stab_targets`) ; émeutes à 70 ; révolution à 80 pendant 4 mois.
+- **Effets** : régime et cabinet passent par `recompute_mods` (absolue recrues +5 % ; constitutionnelle commerce +10 %,
+  livres +3 % ; république recherche +10 %, lassitude −10 % ; postes × compétence ; traits).
+- **Gouvernement** : ministres à vie en monarchie absolue (morts en janvier, remplacés) ; Premier ministre renouvelé
+  tous les 48 mois ou après deux défaites dans le mois (constitutionnelle) ; élections tous les 48 mois en république
+  (un peuple mécontent porte l'opposition). Trois candidats renouvelés chaque janvier ; nommer (le titulaire est renvoyé)
+  et renvoyer (choc sur la noblesse, ou le peuple pour un ministre populaire : 3 / 6 / 8 selon le régime).
+- **Révolution** : une décision d'événement (`ev: "revolution"`, fenêtre des événements existante ou commande) :
+  réprimer (chance montrée : régime, ministre de la Justice, garnisons, colère), abdiquer (la classe obtient son régime,
+  l'héritier succède), céder (un pas vers le régime voulu, ou impôt de la classe −20 % ; coûte des livres ; sans réponse,
+  on cède). Répression ratée : la révolution l'emporte ; un camp de 6 places ou plus se déchire en **guerre civile** :
+  un camp rebelle `<code>r` (« FRr », « France (républicains) ») prend 35 % des places autour de la plus grande ville après
+  la capitale, les armées qui s'y trouvent, 30 % du trésor, porte le nouveau régime, en guerre avec son pays ; le joueur
+  peut en prendre la tête (`ev: "guerre_civile"`). Les rebelles qui perdent leur capitale face à leur pays ou toutes leurs
+  places capitulent ; s'ils prennent la capitale du pays, la capitulation ou le traité ordinaires s'appliquent.
+  Le camp rebelle est inscrit dans les tables des camps du fil (`R::inscrire_rebelle`, refait au chargement).
+- **Histoire** : 14 juillet 1789 (France absolue), 22 février 1848 (France et onze pays non républicains), 4 septembre
+  1870 (France absolue) : une révolution du peuple là où il gronde (40 ou plus) ; les choix des doléances, des Trois
+  Glorieuses, de 1848 et de la Commune pèsent sur les classes (`politique::EVENEMENTS`, sans changer `HIST` ni la
+  référence du jumeau Python).
+- **IA** : répartit son impôt (la moyenne reste celle de son économie) vers la classe la moins fâchée, pourvoit les postes
+  vacants et remplace en janvier un incapable par un candidat brillant ; devant une révolution, poids selon son caractère
+  (`factions[c].caractere` du module 6 s'il existe, sinon tiré de sa personnalité).
+- **Vue** : `me.politique` = `{regime, cabinet: {poste: {id, nom, poste, competence, traits, age}|None}, candidats,
+  classes: {c: {mecontentement, impot, cible, mois, etat: calme|agitation|emeutes|revolution, raisons: [{texte, valeur}]}},
+  mandat (tours), revolution: {classe, chance, decision}|None, repit (tours), rebelle_de, rebelles (code du camp rebelle
+  de son pays en vie), seuils, revolutions, guerres_civiles}` ; `factions[i].politique` = `{regime, noblesse, peuple
+  [, rebelle: {de, nom, couleur, capitale}]}` ; règles `rules.regimes`, `rules.postes`, `rules.ministre_traits`,
+  `rules.classes` (en minuscules, comme les autres clés de `rules_payload`).
+- **Commandes** `{cmd: "politique", sub: "impot", classe, value}`, `{sub: "nommer", poste, ministre}`, `{sub: "renvoyer",
+  poste}`, `{sub: "revolution", choix: "reprimer"|"abdiquer"|"ceder"|"rejoindre"|"fidele"}`.
+- **Essais** `tests/politique.rs` (régime de départ, impôts lourds → émeutes → révolution → céder, réprimer réussi / raté,
+  guerre civile et joueur rebelle, sauvegarde du camp rebelle, rebelles qui capitulent, guerre civile entre IA sur deux
+  ans, ministre nommé / renvoyé, élections, 1789, sauvegarde et ancienne sauvegarde) ; banc ignoré `banc_revolutions`.
+  Références refaites : `campagnes.json`, `tours.json`, `serveur.json` (/api/map), `outils/simuler.txt`.
+- **Bancs** : tour des IA (`CONQUETE_BANC_GEO=13|5`, processeur) monde 2,69 s → 2,54 s, Europe 1,25 s → 1,19 s (bruit
+  d'autres travaux en parallèle ; pas de hausse mesurable). Révolutions : Aquitaine 3 parties de 30 ans (1700, 1790) :
+  0 révolution, 0 guerre civile ; Europe 2 parties de 4 ans : 0 ; une guerre civile russe forcée se joue 4 ans sans
+  erreur. Pas d'avalanche ; plutôt rares hors des dates de l'histoire et des impôts lourds du joueur.
+- **Pas fait / écarts** : les accroches d'impôt et d'ordre public sont dans `engine/prise.rs` (`set_tax`, `stab_targets`,
+  où vivent ces fonctions) et non dans `economie.rs` ; la page (P9) n'est pas faite : le camp rebelle n'est pas dans
+  `rules.factions` (sa couleur et son nom sont dans `factions[i].politique.rebelle`, son nom dans `names`) ; pas de
+  flotte donnée aux rebelles ; un camp rebelle n'a pas de `caractere` (module 6) tant que R9 ne le pose pas.

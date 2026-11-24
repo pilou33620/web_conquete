@@ -387,7 +387,8 @@ impl Game {
         }
         let d = &c.as_ref().unwrap().1;
         if !d.has(code) {
-            let cap = self.geo.nodes.iter().find(|n| n.at_is("dept", &code) && n.at_is("type", "capitale")).map(|n| n.at("id"));
+            let cap = self.geo.nodes.iter().find(|n| n.at_is("dept", &code) && n.at_is("type", "capitale")).map(|n| n.at("id"))
+                .or_else(|| super::politique::capitale_rebelle(self, code)); // (SPEC-POLITIQUE, module 5) un camp rebelle
             d.set(code, Val::from(cap));
         }
         d.at(code)
@@ -873,6 +874,7 @@ impl Game {
                 m.set(&k, &m.get_or(&k, 0) + &v);
             }
         }
+        super::politique::mods(&f, &m); // le régime et le cabinet (SPEC-POLITIQUE, module 5)
         if code != self.player {
             let d = R::DIFFICULTY().at(&self.difficulty);
             m.set("ai_income", &d.at("ai_income") - 1i64);
@@ -1268,6 +1270,7 @@ impl Game {
             self.uprisings();
             FM::annuel(self); // naissances, morts et successions des familles dirigeantes
         }
+        super::politique::mois(self, d); // classes, gouvernement, révolutions (SPEC-POLITIQUE, module 5)
         // désertions du mois écoulé
         for a in self.armies.values() {
             let des = py::int_v(&a.get_or("des", 0));
