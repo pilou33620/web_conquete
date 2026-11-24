@@ -48,6 +48,17 @@ test('carte du moteur : indice d’hexagone, fenêtre alignée, taille bornée',
   assert.equal(N.terrain[indexEn(N.g, 15, 25)] <= 1, true); // la côte (haut-fond) ou la mer
   assert.equal(N.foret[indexEn(N.g, 50, 8)], 1);
   assert.equal(N.riviere[indexEn(N.g, 40, 30)], 1);
+  // un estuaire d'une case de large (y = 10, de la mer à x = 38) : effacé par la majorité, gardé par brasDEau (de la mer en
+  // hexagones de 4 cases, un ruban de fleuve plus loin), le port du fond gardant son hexagone
+  const estu = { ...mp, terrain: terrain.map((t, c) => c % W < 38 && ((c / W) | 0) === 10 ? 0 : t) };
+  const E4 = new Niveau(estu, 4), E8 = new Niveau(estu, 8), h8 = indexEn(E8.g, 30, 10);
+  assert.ok(E4.estEau(indexEn(E4.g, 30, 10)) && E4.estEau(indexEn(E4.g, 36, 10)));
+  assert.ok(!E8.estEau(h8) && E8.riviere[h8] === 1 && E8.rivieres.some(ch => ch.includes(h8)));
+  estu.nodes = [{ x: 37, y: 10 }];
+  const P4 = new Niveau(estu, 4);
+  assert.ok(!P4.estEau(indexEn(P4.g, 37, 10)) && P4.estEau(indexEn(P4.g, 30, 10)));
+  // une côte à peine découpée (une case d'eau dans un hexagone de terre) ne bouge pas
+  assert.equal(new Niveau({ ...mp, terrain: terrain.map((t, c) => c === 10 * W + 15 ? 0 : t) }, 4).terrain[indexEn(N.g, 15.5, 10.5)], N.terrain[indexEn(N.g, 15.5, 10.5)]);
   for (const [cx, cy] of [[30, 25], [0, 0], [59, 49], [33, 17]]) {
     const f = cadrer(N, cx, cy, 6, 5), C = fenetre(N, f);
     assert.equal(f.r0 % 2, 0);

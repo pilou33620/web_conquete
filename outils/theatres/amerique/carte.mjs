@@ -87,6 +87,14 @@ const COUPES = {
 const DETROITS = [
   ['Narrows de New York', [[-74.045, 40.655], [-74.045, 40.605], [-74.03, 40.565]]], // sinon la baie de New York devient un lac
   ['Détroit de Canso', [[-61.45, 45.70], [-61.41, 45.64], [-61.37, 45.60], [-61.33, 45.55]]], // l'île du Cap-Breton (Louisbourg)
+  ['Rigolets', [[-89.80, 30.17], [-89.70, 30.17], [-89.60, 30.13]]], // le lac Pontchartrain (La Nouvelle-Orléans) et le golfe
+];
+// estuaires creusés jusqu'à moins de 10 km du port du fond (outils/THEATRES.md) : [nom, largeur en km, axe de la mer vers l'amont]
+const ESTUAIRES = [
+  ['Delaware', 7.5, [[-75.5, 39.7], [-75.4, 39.82], [-75.25, 39.87]]],
+  ['Potomac', 7.5, [[-76.3, 37.98], [-76.6, 38.15], [-76.9, 38.27], [-77.05, 38.4], [-77.1, 38.55], [-77.05, 38.7]]],
+  ['Savannah', 7.5, [[-80.80, 32.02], [-80.95, 32.06], [-81.02, 32.08]]],
+  ['lac Pontchartrain', 7.5, [[-90.05, 30.15], [-90.07, 30.04]]], // La Nouvelle-Orléans, au bord du lac
 ];
 
 // ------------------------------------------------------------------ fleuves : estimations (source et embouchure, à 30 km près)
@@ -247,12 +255,18 @@ const CULTURES = {
   },
 };
 
+// passages connus, vérifiés sur la grille (outils/theatre.mjs) : [nom, [lon, lat] du large, [lon, lat] du fond]
+const PASSAGES = [
+  ['Saint-Laurent', [-64.0, 49.3], [-71.1, 46.88]], ['baie de la Chesapeake', [-75.8, 36.95], [-76.45, 39.3]],
+  ['baie de la Delaware', [-74.9, 38.85], [-75.5, 39.7]], ['baie de New York (Hudson)', [-73.85, 40.45], [-74.0, 40.68]],
+];
+
 export default {
   id: 'amerique', geo: 6, nom: 'Amérique',
   // 1 018 × 1 199 cases = 1,22 million (beaucoup de mer) ; LAT_REF au milieu des colonies
   cadre: { LON0: -110, LON1: -52, LAT0: 7, LAT1: 61, LAT_REF: 38, KM: 5 },
   places: [500, 900], // 629 en 2026-11 (13 camps, beaucoup de déserts)
-  ENTIERS, COUPES, DETROITS, FLEUVES,
+  ENTIERS, COUPES, DETROITS, ESTUAIRES, PASSAGES, FLEUVES,
   NE: { rivieres: ['ne_10m_rivers_north_america'], lacs: ['ne_10m_lakes_north_america'] },
   PAYS,
   CULTURES,

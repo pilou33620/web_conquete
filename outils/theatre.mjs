@@ -39,7 +39,7 @@ const lireNE = f => {
 };
 
 // ------------------------------------------------------------------ la carte du théâtre (carte.mjs)
-const { ENTIERS, COUPES, DETROITS, FLEUVES, PAYS, CULTURES = {}, NOM_LAC = {}, PORTS_ADMIS = [] } = CARTE;
+const { ENTIERS, COUPES, DETROITS, FLEUVES, PAYS, CULTURES = {}, NOM_LAC = {}, PORTS_ADMIS = [], ESTUAIRES = [] } = CARTE;
 const { LON0, LON1, LAT0, LAT1, LAT_REF, KM } = CARTE.cadre || {};
 if (CARTE.id !== ID || CARTE.geo !== THEATRES[ID][0]) stop(`carte.mjs : id ${CARTE.id} et geo ${CARTE.geo} attendus ${ID} et ${THEATRES[ID][0]}`);
 if (![LON0, LON1, LAT0, LAT1, LAT_REF, KM].every(Number.isFinite) || LON0 >= LON1 || LAT0 >= LAT1 || LON0 < -180 || LON1 > 180 || LAT0 < -85 || LAT1 > 85) stop('carte.mjs : cadre { LON0, LON1, LAT0, LAT1, LAT_REF, KM } invalide');
@@ -118,8 +118,8 @@ function remplir(rings, fx, fy, gw, gh, cb) {
     }
   }
 }
-// Douglas-Peucker (sans récursion profonde)
-function rdp(pts, eps) {
+// Douglas-Peucker (sans récursion profonde) ; interdit(pts, a, b) : ce qui défend de remplacer pts[a..b] par sa corde
+function rdp(pts, eps, interdit) {
   if (pts.length < 3) return pts.slice();
   const garde = new Uint8Array(pts.length); garde[0] = garde[pts.length - 1] = 1;
   const pile = [[0, pts.length - 1]];
@@ -131,7 +131,7 @@ function rdp(pts, eps) {
       const d = n ? Math.abs(ux * (pts[i][1] - ay) - uy * (pts[i][0] - ax)) / n : Math.hypot(pts[i][0] - ax, pts[i][1] - ay);
       if (d > m) { m = d; im = i; }
     }
-    if (m > eps) { garde[im] = 1; pile.push([a, im], [im, b]); }
+    if (m > eps || im >= 0 && interdit && interdit(pts, a, b)) { garde[im] = 1; pile.push([a, im], [im, b]); }
   }
   return pts.filter((_, i) => garde[i]);
 }
@@ -180,15 +180,16 @@ const L = new Uint8Array(N);
     }
   }
 }
-// détroits rouverts
-for (const [, pts] of DETROITS) {
-  const ray = 3.75 / KM * F;
+// détroits rouverts (7,5 km de large), estuaires creusés (ESTUAIRES : [nom, largeur en km, [[lon, lat], …]])
+const CREUSE = new Uint8Array(N); // les mailles des estuaires (un fleuve peut y couler)
+for (const [pts, largeur, estuaire] of [...DETROITS.map(([, pts]) => [pts, 7.5, 0]), ...ESTUAIRES.map(([, l, pts]) => [pts, l, 1])]) {
+  const ray = largeur / 2 / KM * F;
   for (let k = 0; k + 1 < pts.length; k++) {
     const x1 = gx(pts[k][0]), y1 = gy(pts[k][1]), x2 = gx(pts[k + 1][0]), y2 = gy(pts[k + 1][1]), n = Math.ceil(Math.hypot(x2 - x1, y2 - y1) * 2);
     for (let s = 0; s <= n; s++) {
       const x = x1 + (x2 - x1) * s / n, y = y1 + (y2 - y1) * s / n;
       for (let j = Math.floor(y - ray); j <= Math.ceil(y + ray); j++) for (let i = Math.floor(x - ray); i <= Math.ceil(x + ray); i++)
-        if (i >= 0 && i < GW && j >= 0 && j < GH && Math.hypot(i + 0.5 - x, j + 0.5 - y) <= ray) L[j * GW + i] = 0;
+        if (i >= 0 && i < GW && j >= 0 && j < GH && Math.hypot(i + 0.5 - x, j + 0.5 - y) <= ray) { L[j * GW + i] = 0; CREUSE[j * GW + i] = estuaire; }
     }
   }
 }
@@ -219,6 +220,59 @@ const poches = []; // [centre lon, lat, mailles]
     if (vers !== e) for (const c of comp) L[c] = vers;
   }
 }
+// bras d'eau étroits : le moteur prend une case de mer quand son centre l'est (raster_ring) ; un bras de mer, une ria,
+// un estuaire ou un détroit plus étroit qu'une case y disparaît, ou s'y coupe en flaques. Les mailles de mer d'une case
+// de terre (« perdues ») sont parcourues depuis les cases de mer : un bras qui s'enfonce de BRAS_MIN mailles au moins, ou
+// qui relie deux eaux que la grille séparerait, est creusé d'une chaîne de cases de mer (ses 3 × 3 mailles), du fond à
+// la mer.
+const BRAS_MIN = 2 * F; // 10 km : en deçà, un rivage découpé, pas un bras
+const bras = []; // [lon, lat, cases creusées, 'bras' | 'passage']
+{
+  const caseDe = m => Math.floor(m / GW / F) * W + Math.floor(m % GW / F);
+  const centre = k => (Math.floor(k / W) * F + 1) * GW + (k % W) * F + 1;
+  const comp = new Int32Array(W * H).fill(-1); // les eaux de la grille : composantes des cases de mer (4 voisins)
+  let n = 0;
+  for (let k0 = 0; k0 < W * H; k0++) {
+    if (comp[k0] >= 0 || L[centre(k0)] !== 0) continue;
+    const file = [k0]; comp[k0] = n;
+    for (let q = 0; q < file.length; q++) {
+      const k = file[q], i = k % W;
+      for (const v of [i > 0 ? k - 1 : -1, i < W - 1 ? k + 1 : -1, k - W, k + W]) if (v >= 0 && v < W * H && comp[v] < 0 && L[centre(v)] === 0) { comp[v] = n; file.push(v); }
+    }
+    n++;
+  }
+  const perdue = m => L[m] === 0 && comp[caseDe(m)] < 0;
+  const dist = new Int32Array(N).fill(-1), par = new Int32Array(N).fill(-1), eau = new Int32Array(N).fill(-1), file = [];
+  for (let m = 0; m < N; m++) if (perdue(m)) voisins4(m, v => { if (L[v] === 0 && !perdue(v) && dist[v] < 0) { dist[v] = 0; eau[v] = comp[caseDe(v)]; file.push(v); } });
+  const ponts = new Map(); // « eau a|eau b » → [maille, maille] : la première rencontre (la plus courte)
+  for (let q = 0; q < file.length; q++) {
+    const u = file[q];
+    voisins4(u, v => {
+      if (!perdue(v)) return;
+      if (dist[v] < 0) { dist[v] = dist[u] + 1; par[v] = u; eau[v] = eau[u]; file.push(v); }
+      else if (eau[v] !== eau[u]) { const cle = Math.min(eau[u], eau[v]) + '|' + Math.max(eau[u], eau[v]); if (!ponts.has(cle)) ponts.set(cle, [u, v]); }
+    });
+  }
+  const creuser = (depart, sorte) => {
+    let neuves = 0;
+    for (let m = depart; m >= 0; m = par[m]) {
+      const k = caseDe(m);
+      if (comp[k] !== -1) continue;
+      comp[k] = -2; neuves++;
+      const i0 = (k % W) * F, j0 = Math.floor(k / W) * F;
+      for (let dj = 0; dj < F; dj++) for (let di = 0; di < F; di++) L[(j0 + dj) * GW + i0 + di] = 0;
+    }
+    if (neuves) bras.push([arr3(lonDe(depart % GW + 0.5)), arr3(latDe(Math.floor(depart / GW) + 0.5)), neuves, sorte]);
+  };
+  for (const [u, v] of ponts.values()) { creuser(u, 'passage'); creuser(v, 'passage'); }
+  for (let m = 0; m < N; m++) {
+    if (dist[m] < BRAS_MIN) continue;
+    let fond = true; voisins4(m, v => { if (dist[v] > dist[m]) fond = false; });
+    if (fond) creuser(m, 'bras');
+  }
+  const total = bras.reduce((s, b) => s + b[2], 0);
+  console.log(`bras d'eau creusés : ${bras.length} (${total} cases de mer)` + (bras.length ? ' : ' + bras.map(b => `${b[3]} ${b[0]},${b[1]} (${b[2]})`).join(' ; ') : ''));
+}
 // îles forcées (carte.mjs, ILES : [[lon, lat, code, nom], …]) : une île trop petite pour la grille, rendue à la mer
 // ci-dessus, garde la case de KM km du point, entière (les 3 × 3 mailles de la case) : son contour est le carré de la
 // case, dont raster_ring (geo.rs) prend le centre ; toutes les vérifications qui suivent la voient comme une terre.
@@ -240,6 +294,21 @@ const poches = []; // [centre lon, lat, mailles]
 // Les arêtes entre deux étiquettes différentes forment des arcs (d'un nœud, où trois frontières se rejoignent, au
 // suivant) ; chaque arc est simplifié une seule fois et sert aux deux voisins.
 const EPS = 1.1; // tolérance de simplification, en mailles (1,8 km)
+// … sans faire passer le centre d'une case de l'autre côté du trait : la grille du moteur (raster_ring, une case prise par
+// son centre) reste celle des mailles du centre, bras d'eau étroits compris
+function centreEntre(pts, a, b) {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (let k = a; k <= b; k++) { x0 = Math.min(x0, pts[k][0]); x1 = Math.max(x1, pts[k][0]); y0 = Math.min(y0, pts[k][1]); y1 = Math.max(y1, pts[k][1]); }
+  for (let Y = Math.ceil((y0 - 1.5) / F) * F + 1.5; Y < y1; Y += F) for (let X = Math.ceil((x0 - 1.5) / F) * F + 1.5; X < x1; X += F) {
+    let dedans = false;
+    for (let k = a; k <= b; k++) {
+      const p = pts[k], q = k < b ? pts[k + 1] : pts[a];
+      if ((p[1] > Y) !== (q[1] > Y) && X < p[0] + (Y - p[1]) * (q[0] - p[0]) / (q[1] - p[1])) dedans = !dedans;
+    }
+    if (dedans) return true;
+  }
+  return false;
+}
 const contours = new Map(); // étiquette → anneaux [[lon, lat], …] (extérieurs seulement)
 {
   const VW = GW + 1, lab = (i, j) => (i < 0 || j < 0 || i >= GW || j >= GH) ? 0 : L[j * GW + i];
@@ -269,8 +338,8 @@ const contours = new Map(); // étiquette → anneaux [[lon, lat], …] (extéri
     const p = a.pts;
     if (p[0][0] === p[p.length - 1][0] && p[0][1] === p[p.length - 1][1]) { // boucle : coupée au point le plus loin du départ
       let m = 0, im = 0; for (let k = 1; k < p.length - 1; k++) { const d = Math.hypot(p[k][0] - p[0][0], p[k][1] - p[0][1]); if (d > m) { m = d; im = k; } }
-      a.simple = [...rdp(p.slice(0, im + 1), EPS).slice(0, -1), ...rdp(p.slice(im), EPS)];
-    } else a.simple = rdp(p, EPS);
+      a.simple = [...rdp(p.slice(0, im + 1), EPS, centreEntre).slice(0, -1), ...rdp(p.slice(im), EPS, centreEntre)];
+    } else a.simple = rdp(p, EPS, centreEntre);
   }
   // les anneaux de chaque étiquette : ses arcs mis bout à bout, l'étiquette toujours à gauche
   const cle = p => p[1] * VW + p[0];
@@ -418,8 +487,8 @@ const rivers = [];
       if (!cible) { defauts.push(`fleuve ${r.name} : il finit à ${fin} sans mer, lac ni confluent à moins de 40 km`); continue; }
       r.pts.push(cible);
     }
-    // un fleuve ne traverse pas la mer : au plus quelques points d'estuaire
-    const enMer = r.pts.slice(0, -1).filter(p => { const c = Math.floor(gy(p[1])) * GW + Math.floor(gx(p[0])); return L[c] === 0; }).length;
+    // un fleuve ne traverse pas la mer : au plus quelques points d'estuaire (hors des estuaires creusés)
+    const enMer = r.pts.slice(0, -1).filter(p => { const c = Math.floor(gy(p[1])) * GW + Math.floor(gx(p[0])); return L[c] === 0 && !CREUSE[c]; }).length;
     if (enMer > 4 && enMer > r.pts.length * 0.1) defauts.push(`fleuve ${r.name} : ${enMer} points sur ${r.pts.length} en pleine mer`);
     if (!r.pts.every(dansCadre)) stop(`fleuve ${r.name} : hors du cadre`);
     delete r._coupe;
@@ -463,6 +532,23 @@ for (let c = 0; c < NC; c++) {
 console.log(`calcul du moteur refait : ${ecarts} cases sur ${terres} de terre diffèrent de la grille de départ (${(100 * ecarts / terres).toFixed(2)} %), ${bouchees} cases de trou bouchées`);
 if (ecarts > terres * 0.02) stop('les contours simplifiés s\'écartent de plus de 2 % de la grille de départ');
 const codeCase = (lon, lat) => { const i = Math.floor(fx(lon)), j = Math.floor(fy(lat)); if (i < 0 || j < 0 || i >= W || j >= H) return null; const v = caseDe[j * W + i]; return v > 2 ? CODES[v - 3] : v === 2 ? '~' : v === 1 ? 'lac' : 'mer'; };
+for (const [nom, , pts] of ESTUAIRES) for (const p of pts) if (codeCase(...p) !== 'mer' && codeCase(...p) !== 'lac') stop(`estuaire ${nom} : la case de [${p}] n'est pas sur l'eau (${codeCase(...p)})`);
+// passages connus (carte.mjs, PASSAGES : [nom, [lon, lat] du large, [lon, lat] du fond]) : les deux points sur l'eau (mer ou
+// lac), reliés d'eau en eau par les cases (4 voisins), comme le moteur les verra
+{
+  const eauCase = new Uint8Array(NC), file = [];
+  const marquer = k => { if (k >= 0 && k < NC && !eauCase[k] && caseDe[k] < 2) { eauCase[k] = 1; file.push(k); } };
+  const faux = [];
+  for (const [nom, large, fond] of CARTE.PASSAGES || []) {
+    const k = p => Math.floor(fy(p[1])) * W + Math.floor(fx(p[0]));
+    if (codeCase(...large) !== 'mer' && codeCase(...large) !== 'lac' || codeCase(...fond) !== 'mer' && codeCase(...fond) !== 'lac') { faux.push(`${nom} (large : ${codeCase(...large)}, fond : ${codeCase(...fond)})`); continue; }
+    eauCase.fill(0); file.length = 0; marquer(k(large));
+    for (let q = 0; q < file.length && !eauCase[k(fond)]; q++) { const c = file[q], i = c % W; if (i > 0) marquer(c - 1); if (i < W - 1) marquer(c + 1); marquer(c - W); marquer(c + W); }
+    if (!eauCase[k(fond)]) faux.push(`${nom} (coupé)`);
+  }
+  if (faux.length) stop(`passages coupés par la grille : ${faux.join(', ')}`);
+  if (CARTE.PASSAGES) console.log(`${CARTE.PASSAGES.length} passages connus vérifiés`);
+}
 
 // ------------------------------------------------------------------ 6. places
 // [nom, lat, lon, pays, type, étiquettes, remparts, population de 1790], comme places_france.json

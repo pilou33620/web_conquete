@@ -48,6 +48,8 @@ const COUPES = {
 };
 // détroits : aucun pour l'instant (le détroit de Palk et le pont d'Adam restent de la mer à 5 km)
 const DETROITS = [];
+// estuaires creusés jusqu'à moins de 10 km du port du fond (outils/THEATRES.md) : [nom, largeur en km, axe de la mer vers l'amont]
+const ESTUAIRES = [['Hooghly', 7.5, [[88.05, 21.7], [88.1, 22.0], [88.15, 22.2], [88.2, 22.4], [88.28, 22.5]]]];
 
 // ------------------------------------------------------------------ fleuves : estimations (source et embouchure, à 30 km près)
 // [nom, rang (1 fleuve, 2 grande rivière, 3 rivière), [lon, lat] vers la source, [lon, lat] à l'embouchure ou au confluent,
@@ -148,12 +150,15 @@ const CULTURES = {
   },
 };
 
+// passages connus, vérifiés sur la grille (outils/theatre.mjs) : [nom, [lon, lat] du large, [lon, lat] du fond]
+const PASSAGES = [['golfe de Cambay', [72.0, 20.8], [72.6, 21.9]], ['Hooghly (Gange)', [88.2, 21.5], [88.1, 22.2]]];
+
 export default {
   id: 'inde', geo: 7, nom: 'Inde',
   cadre: { LON0: 60, LON1: 93, LAT0: 5.5, LAT1: 38.5, LAT_REF: 22, KM: 5 },
   places: [400, 900],
   espace: 75, // bourgs GeoNames plus serrés qu'en Europe (115 km) : l'Inde de 1790 est aussi peuplée que l'Europe sur moitié moins de terre
-  ENTIERS, COUPES, DETROITS, FLEUVES,
+  ENTIERS, COUPES, DETROITS, ESTUAIRES, PASSAGES, FLEUVES,
   NE: { rivieres: [], lacs: [] }, // les fichiers globaux de 10 m suffisent
   PAYS,
   CULTURES,
