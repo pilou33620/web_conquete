@@ -16,6 +16,7 @@ export const ICON = {
   diplo: S('<path d="M5 4h11l3 3v13H5z"/><path d="M8 9h8M8 12.5h8M8 16h4"/><circle cx="16.5" cy="17" r="2.6" fill="currentColor" stroke="none"/>'),
   commerce: S('<path d="M12 3v17"/><path d="M7 20h10"/><path d="M4.5 7h15"/><path d="M6.5 7 3.5 14a3 3 0 0 0 6 0z"/><path d="M17.5 7l-3 7a3 3 0 0 0 6 0z"/>'),
   production: S('<path d="M4 9h12a4 4 0 0 0 4-4H4z"/><path d="M8 9v3a3 3 0 0 0 2 2.8V18h4v-3.2A3 3 0 0 0 16 12V9"/><path d="M7 20.5h10"/>'),
+  gouvernement: S('<path d="M4 17.5h16l1-9-5 4-4-7-4 7-5-4z"/><path d="M4 20.5h16"/><circle cx="12" cy="13.5" r="1.3" fill="currentColor"/>'),   // (couronne : SPEC-POLITIQUE, P9)
   journal: S('<path d="M5 4.5a2 2 0 0 1 2-2h12v17H7a2 2 0 0 0-2 2z"/><path d="M5 19.5v2h14"/><path d="M9 7h6M9 10.5h6"/>'),
   menu: S('<path d="M4 7h16M4 12h16M4 17h16"/>'),
   close: S('<path d="M6 6l12 12M18 6 6 18"/>'),

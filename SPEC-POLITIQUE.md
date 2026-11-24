@@ -340,6 +340,43 @@ Fichiers : `diplomacy.rs` (section « SPEC-POLITIQUE, module 6 »), `engine/memo
   `rules.factions` (sa couleur et son nom sont dans `factions[i].politique.rebelle`, son nom dans `names`) ; pas de
   flotte donnée aux rebelles ; un camp rebelle n'a pas de `caractere` (module 6) tant que R9 ne le pose pas.
 
+#### Page (P9) — fait le 24/11/2026
+
+- **`web/js/politique.js`** (classe `Politique`, `ui.pol`) ; points d'accroche commentés dans `ui.js` (rail, fenêtres,
+  écouteurs des curseurs, `update`, fenêtre des décisions, fenêtre Production, fiche Diplomatie, panneau d'une place),
+  `main.js` (`resetUI` : les camps rebelles sortent de `rules.factions`), `icons.js` (couronne), `style.css` (`.pol-*`).
+- **Fenêtre « Gouvernement »** (bouton du rail) : régime, sa description et ses effets, prochain renouvellement ou
+  élections (`mandat`), répit ; **cabinet** : un portrait par poste (`portraitGeneral` de `portraits.js`), nom, âge,
+  compétence en étoiles, effet du poste chiffré (`fx` × compétence), traits et leur effet, « Renvoyer » (avec son coût
+  pour la classe concernée, confirmation) et « Nommer… » (les candidats, leurs traits, le titulaire renvoyé) ;
+  **classes** : jauge du mécontentement avec les seuils (agitation, émeutes, révolution) et la cible, état, mois
+  au-delà du seuil de révolution, raisons (texte et valeur), **impôt de chaque classe** (deux curseurs) avec l'effet
+  attendu (rendement des impôts, mécontentement visé des deux classes, injustice fiscale comprise ; estimation sans le
+  cadastre, `estimeImpot`). Les deux curseurs remplacent aussi le curseur unique de la fenêtre Production ; le rendement
+  affiché suit l'impôt moyen (`me.tax`), comme avant.
+- **Révolution** : bouton du rail en rouge qui pulse (émeutes, révolution, décision en attente ; orange pour
+  l'agitation), avis quand l'alerte monte. **Un seul chemin pour décider** : la fenêtre des décisions existante (qui
+  s'ouvre d'elle-même) reçoit pour `ev: "revolution"` la jauge de la classe et la chance de réprimer (barre), et ce que
+  l'échec entraîne (guerre civile au-delà de 6 places) ; pour `ev: "guerre_civile"` le camp rebelle (écu, places, régime,
+  capitale). La fenêtre Gouvernement n'a pas de boutons de choix : un bandeau « Décider » y ouvre la fenêtre des décisions.
+- **Camps rebelles** : à chaque état, `politique.js` inscrit le camp de `factions[i].politique.rebelle` dans
+  `rules.factions` (fiche de son pays, son nom, sa couleur, sa capitale) et dans les couleurs de la carte : carte,
+  liserés du plateau, étiquettes, fil des nouvelles, Diplomatie, batailles le nomment et le colorent sans autre
+  changement ; l'en-tête se refait quand le joueur prend la tête des rebelles.
+- **Autres camps** : régime, mécontentement de la noblesse et du peuple (en couleur au-delà des seuils), « rebelles de… »
+  dans la fiche Diplomatie et dans le panneau d'une place étrangère.
+- **Moteur** : `pending[i].ev` ajouté à la vue (`views.rs`, une ligne : la page reconnaît une révolution) ; essai ignoré
+  `tests/partie_politique.rs` (sauvegardes d'essai : France 1790 remise en monarchie absolue au bord de la révolution,
+  et la même en guerre civile). Le zoom (`#zoombar`) se pose sous le rail selon son nombre de boutons (`--rail-n`) : le
+  septième bouton passait dessous.
+- **Essais** : `tests/politique.test.mjs` (estimation d'un impôt, camp rebelle inscrit, fenêtre, contexte, résumé) ;
+  Chromium : panneau, nommer, renvoyer, impôts par classe, révolution au tour suivant, guerre civile et camp rebelle
+  nommé et coloré, prise de tête des rebelles, iPad 1024 × 768 au toucher ; aucune erreur de console.
+- **Pas fait / manque au moteur** : `POL_IMPOT`, `POL_INJUSTICE` et le cadastre (`tax_unrest`) ne sont pas envoyés à la
+  page (l'estimation les recopie) ; « Révolution de Royaume de France » (`R::de` sur le nom long) ; la vue de
+  `me.politique.revolution` est vide pendant la décision de guerre civile (la page lit `rebelles`) ; un rail de huit ou
+  neuf boutons (avec P8 et P10) ne tient plus en hauteur sur iPad (768 px) sans le réduire.
+
 ### Module 4, R7 agents-moteur (fait)
 
 - **Fichiers** : `engine/agents.rs` (moteur, commandes, vue), `ai/agents.rs` (IA) ; `engine/prise.rs` : `rapport_espion`
