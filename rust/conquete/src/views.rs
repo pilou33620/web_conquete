@@ -1094,7 +1094,8 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
                 .collect();
             dict! {"id" => x.at("id"), "title" => x.at("title"), "text" => x.at("text"), "base" => x.at("base"),
                    "date" => x.at("date"), "tn" => TT::tours_left(g, x.atf("until")), "town" => x.get("town"),
-                   "kind" => x.get("kind"), "choices" => choices}
+                   "kind" => x.get("kind"), "choices" => choices,
+                   "ev" => x.get("ev")} // l'événement ('revolution', 'guerre_civile'…) : la page de la politique le reconnaît (SPEC-POLITIQUE, P9)
         })
         .collect();
     let out = dict! {

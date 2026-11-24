@@ -40,7 +40,8 @@ button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 .tb-res { touch-action: pan-x; }
 
 /* ------------------------------------------------------------- zoom (stylet : pas de pincement possible) */
-#zoombar { position: absolute; right: 16px; top: calc(var(--tb-h) + var(--safe-t) + 344px); display: flex; flex-direction: column; gap: 6px; z-index: 15; }
+/* (sous le rail : --rail-n, son nombre de boutons, posé par ui.js) */
+#zoombar { position: absolute; right: 16px; top: calc(var(--tb-h) + var(--safe-t) + 26px + var(--rail-n, 6) * 62px); display: flex; flex-direction: column; gap: 6px; z-index: 15; }
 #zoombar .zb { width: 42px; height: 42px; border-radius: 8px; background: var(--panel); border: 1px solid var(--hair); color: var(--laiton-clair);
   font-size: 24px; line-height: 1; display: grid; place-items: center; box-shadow: 0 3px 10px var(--ombre); }
 #zoombar .zb svg { width: 22px; height: 22px; }
@@ -718,3 +719,39 @@ body:has(#start:not([hidden])) #monde { z-index: 46; top: 12px; left: auto; righ
 body.modal-diplo #proposals { display: none; }   /* (P10 : elles sont dans la fenêtre) */
 .dp-recues { margin: 0 0 10px; }
 .dp-recues-l { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; margin-top: 4px; }
+/* (SPEC-POLITIQUE, P9) la politique intérieure (politique.js) : fenêtre Gouvernement, jauges de mécontentement, cabinet,
+   alerte de révolution (bouton du rail en rouge), contexte d'une révolution dans la fenêtre des décisions */
+#rail button.pol-alarme { border-color: #e07a6a; color: #ffb3a6; animation: pol-pouls 1.6s ease-in-out infinite; }
+@keyframes pol-pouls { 50% { box-shadow: 0 0 0 5px rgba(184, 53, 42, .45), 0 3px 10px var(--ombre); } }
+.badge.pol-orange { background: #b7792a; border-color: #f0d29c; }
+.pol-alerte { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0 10px; padding: 9px 12px; border: 1px solid #e07a6a;
+  border-left-width: 4px; border-radius: 6px; background: rgba(184, 53, 42, .16); }
+.pol-alerte .coat { width: 26px; height: 31px; flex: none; }
+.pol-alerte.pol-rev { display: block; }
+.pol-regime p { margin: 4px 0; }
+.pol-classe { padding: 8px 10px; border: 1px solid var(--hair); border-radius: 8px; background: rgba(0,0,0,.14); }
+.pol-jauge { position: relative; height: 12px; margin: 8px 0 2px; border-radius: 6px; background: rgba(255,255,255,.12); }
+.pol-jauge > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: var(--sauge); }
+.pol-jauge > i.orange { background: #c98a32; }
+.pol-jauge > i.rouge { background: var(--cire); }
+.pol-seuil { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: rgba(255, 240, 210, .55); }
+.pol-cible { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--laiton-clair); }
+.pol-graduation { font-size: 12.5px; color: var(--papier-2); margin-bottom: 6px; }
+.pol-raisons { width: 100%; font-size: 14px; margin: 4px 0 8px; }
+.pol-raisons td:last-child { text-align: right; white-space: nowrap; }
+.pol-raisons tfoot td { font-weight: 600; border-top: 1px solid var(--hair); }
+.pol-mal { color: #ff9a85; } .pol-bien { color: #9fdc8a; } .pol-moyen { color: #ffcf85; }
+.chip.pol-agitation { border-color: #c98a32; color: #ffcf85; }
+.chip.pol-emeutes, .chip.pol-revolution { border-color: #e07a6a; color: #ffb3a6; background: rgba(184, 53, 42, .25); }
+.pol-cabinet { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+.pol-poste { padding: 8px 10px; border: 1px solid var(--hair); border-radius: 8px; background: rgba(0,0,0,.14); }
+.pol-poste.vacant { border-style: dashed; }
+.pol-ph { display: grid; grid-template-columns: 64px 1fr; gap: 10px; align-items: start; }
+.pol-pl { font-family: var(--f-titre); font-size: 18px; line-height: 1.1; }
+.pol-portrait { width: 64px; height: 64px; display: block; }
+.pol-vide { width: 64px; height: 64px; border-radius: 50%; border: 1px dashed var(--hair); display: grid; place-items: center; color: var(--papier-2); font-size: 24px; }
+.pol-cands { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--hair); display: flex; flex-direction: column; gap: 8px; }
+.pol-cand { display: grid; grid-template-columns: 48px 1fr auto; gap: 8px; align-items: center; }
+.pol-cand .pol-portrait, .pol-cand .pol-vide { width: 48px; height: 48px; }
+.pol-resume { margin: 2px 0; }
+@media (max-width: 760px) { .pol-classes { grid-template-columns: 1fr; } }

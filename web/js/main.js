@@ -94,6 +94,8 @@ function resetUI() {
   ui.select(null);
   ui.closeModal();
   map.selection = null;
+  // (SPEC-POLITIQUE, P9) les camps rebelles de la partie quittée sortent des camps de la page (écran de départ)
+  for (const [c, f] of Object.entries(ui.rules.factions)) if (f.rebelle) delete ui.rules.factions[c];
   map.showPreview();
   for (const id of ['topbar', 'rail', 'feed', 'zoombar']) document.getElementById(id).hidden = true;
   document.getElementById('proposals').innerHTML = '';

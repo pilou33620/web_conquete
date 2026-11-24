@@ -13,6 +13,7 @@ import * as BT from './strategie.js';
 import { Flottes } from './flottes.js';
 import { Diplomatie } from './diplomatie.js';
 import { Son } from './son.js';
+import { Politique } from './politique.js';
 
 // nombres à la française : virgule décimale et vrai signe moins (−)
 const minus = s => s.replace(/^-/, '−');
@@ -76,6 +77,7 @@ export class UI {
     this.tuto = new Tuto(this);
     // (SPEC-EMPIRE, P2) les flottes : sélection sur la carte, fenêtre, chantier naval, bataille navale (flottes.js)
     this.flottes = new Flottes(this);
+    this.pol = new Politique(this);   // (SPEC-POLITIQUE, P9) gouvernement, impôts par classe, révolutions, camps rebelles (politique.js)
     map.toucheFlotte = (sx, sy, pad) => this.flottes.touche(sx, sy, pad);
     map.dessinFlottes = ctx => this.flottes.dessin(ctx);
     // (SPEC-POLITIQUE, P10) la diplomatie profonde : fiche, proposition composée, ultimatum, appel aux armes (diplomatie.js)
@@ -100,7 +102,8 @@ export class UI {
     this.$('btn-menu').innerHTML = ICON.menu;
     this.$('btn-menu').dataset.act = 'modal';
     this.$('btn-menu').dataset.v = 'menu';
-    const rail = [['tech', 'Technologies'], ['diplo', 'Diplomatie'], ['generaux', 'Généraux'], ['commerce', 'Commerce'], ['production', 'Production'], ['journal', 'Journal']];
+    const rail = [['tech', 'Technologies'], ['diplo', 'Diplomatie'], ['generaux', 'Généraux'], ['commerce', 'Commerce'], ['production', 'Production'], ['gouvernement', 'Gouvernement'], ['journal', 'Journal']];   // (gouvernement : politique.js)
+    document.documentElement.style.setProperty('--rail-n', rail.length);   // (le zoom se pose sous le rail, style.css)
     this.$('rail').innerHTML = rail.map(([k, l]) => `<button data-act="modal" data-v="${k}" aria-label="${l}">${ICON[k] || ICON.bicorne}<span class="lbl">${l}</span><span class="badge" id="badge-${k}" hidden></span></button>`).join('');
     this.$('tb-res').innerHTML = RES_ORDER.map(r => `<div class="res" data-res="${r}">${ICON[r]}<span class="v" id="res-${r}">0</span><span class="d" id="inc-${r}"></span></div>`).join('');
     document.body.addEventListener('click', e => {
@@ -113,6 +116,7 @@ export class UI {
       if (t.dataset.flOrdre) this.flottes.choix(t);   // (ordres de flotte : commerce, course, route)
       if (t.dataset.act === 'slider') this.cmd({ cmd: 'slider', value: t.value / 100 }, false);
       if (t.dataset.act === 'tax') this.cmd({ cmd: 'tax', value: t.value / 100 }, false);
+      if (t.dataset.polImpot) this.pol.impot(t);   // (impôt d'une classe, politique.js)
       // douane (panneau Commerce) : hors data-act, que le clic de la page n'empêche pas de cocher
       if (t.dataset.deptSel && t.value) this.pickDept(t.value);
       if (t.dataset.douane) this.cmd({ cmd: t.dataset.douane, value: t.dataset.douane === 'tarif' ? +t.value : t.checked });
@@ -123,6 +127,7 @@ export class UI {
         const l = document.getElementById('slider-val');
         if (l) l.textContent = `${v} % armes, ${100 - v} % outils`;
       }
+      if (e.target.dataset.polImpot) this.pol.apercu(e.target);
       if (e.target.dataset.live === 'tax') {
         const l = document.getElementById('tax-val');
         if (l) l.textContent = this.taxLabel(e.target.value / 100);
@@ -218,7 +223,7 @@ export class UI {
   update(st) {
     const first = !this.st;
     this.st = st;
-    let renamed = false;
+    let renamed = this.pol.camps(st);   // (les camps rebelles parmi les camps, le joueur à leur tête : politique.js)
     for (const [c, n] of Object.entries(st.names || {})) {
       if (this.rules.factions[c] && this.rules.factions[c].name !== n) { this.rules.factions[c].name = n; renamed = true; }
     }
@@ -255,6 +260,7 @@ export class UI {
     const b = this.$('badge-diplo');
     b.hidden = !pend; b.textContent = pend;
     b.classList.toggle('alerte', this.diplo.urgent(st));   // (P10 : un ultimatum ou un appel aux armes attend)
+    this.pol.alerte(st);   // (révolution qui menace : politique.js)
     if (st.over && !this.overShown) { this.overShown = true; this.openModal('fin'); }
     // une décision historique ou un imprévu : la fenêtre s'ouvre d'elle-même, une fois par événement
     this.evSeen = this.evSeen || new Set();
@@ -1048,6 +1054,7 @@ export class UI {
       case 'resume': this.onResume && this.onResume(); break;
       default: if (act.startsWith('fl-')) this.flottes.action(act, d);   // (flottes.js)
         else if (act.startsWith('dp-')) this.diplo.action(act, d);   // (P10 : diplomatie.js)
+        else if (act.startsWith('pol-')) this.pol.action(act, d);   // (politique.js)
         break;
     }
   }
@@ -1238,7 +1245,7 @@ export class UI {
     if (!own && ns.o !== 'neutre') {
       const fs = st.factions.find(f => f.code === ns.o);
       h += `<div class="row" style="margin-top:8px"><span class="chip ${fs.st === 'guerre' ? 'war' : fs.st === 'alliance' ? 'ally' : ''}">${STATUS[fs.st]}</span>
-        ${fs.st === 'paix' ? '<span class="muted small">Déclarez la guerre (Diplomatie) pour attaquer.</span>' : ''}</div>`;
+        ${fs.st === 'paix' ? '<span class="muted small">Déclarez la guerre (Diplomatie) pour attaquer.</span>' : ''}</div>${this.pol.resumeCamp(fs)}`;
     }
     if (ns.o === 'neutre') h += `<p class="muted small">Village indépendant : envoyez une armée nettement plus forte que sa milice : il se rallie aussitôt (sa marche du tour s’arrête là), sinon il faudra combattre.</p>`;
     if (!own) {
@@ -1693,16 +1700,18 @@ export class UI {
     const html = `<h2 class="m-title" id="m-title">${esc(p.title)}</h2>
       <p class="m-sub">${esc(p.date)}${all.length > 1 ? ` — décision 1 sur ${all.length}` : ''}</p>
       <p style="font-size:16px;line-height:1.5">${esc(p.text)}</p>
+      ${this.pol.contexte(p)}
       ${p.base ? `<p class="small" style="color:#ffcf85">Déjà : ${esc(p.base)}.</p>` : ''}
       ${p.town != null && this.md.nodes[p.town] ? `<div class="btns" style="margin-top:0"><button class="btn" data-act="selnode-modal" data-node="${p.town}">Voir ${esc(this.md.nodes[p.town].name)} sur la carte</button></div>` : ''}
       <div class="ev-choices">${p.choices.map((c, i) => `<button class="btn ${i === 0 ? 'primary' : ''} ev-choice" data-act="evchoice" data-id="${p.id}" data-v="${i}" ${c.ok ? '' : 'disabled title="Vous n’en avez pas les moyens"'}>
         <b>${esc(c.label)}</b><small>${c.desc.map(esc).join(' · ')}</small></button>`).join('')}</div>
       <p class="muted small">Sans réponse ${p.tn <= 1 ? 'avant la fin du tour' : `d’ici ${p.tn} tours`}, la dernière option s’appliquera.</p>`;
-    return [html, JSON.stringify([p.id, all.length, p.tn, p.choices.map(c => c.ok)])];
+    return [html, JSON.stringify([p.id, all.length, p.tn, p.choices.map(c => c.ok), this.st.me.politique?.revolution])];
   }
 
   // ------------------------------------------------------------------ fenêtres
   openModal(kind) {
+    if (kind !== this.modal) this.$('modal').firstElementChild.scrollTop = 0;   // (une autre fenêtre s'ouvre en haut)
     this.modal = kind;
     this.modalSig = '';
     this.$('modal').hidden = false;
@@ -1749,7 +1758,7 @@ export class UI {
     if (!force && ae && card.contains(ae) && (/^(SELECT|TEXTAREA)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !['range', 'checkbox'].includes(ae.type)))) return;
     const fn = { tech: this.techModal, diplo: this.diploModal, commerce: this.commerceModal, production: this.prodModal,
                  journal: this.journalModal, menu: this.menuModal, fin: this.endModal, event: this.eventModal,
-                 bataille: this.battleModal, resultat: this.resultatModal, arrivee: this.arriveeModal, promotion: this.promotionModal, generaux: this.generauxModal, decouverte: () => this.decouv.html(), navale: () => this.flottes.sceneHtml(), negocier: () => this.diplo.html() }[k];
+                 bataille: this.battleModal, resultat: this.resultatModal, arrivee: this.arriveeModal, promotion: this.promotionModal, generaux: this.generauxModal, gouvernement: () => this.pol.modal(), decouverte: () => this.decouv.html(), navale: () => this.flottes.sceneHtml(), negocier: () => this.diplo.html() }[k];
     const [html, sig] = fn.call(this);
     if (!force && sig === this.modalSig) return;
     this.modalSig = sig;
@@ -1821,6 +1830,7 @@ export class UI {
           <div class="small">Puissance estimée ${fmt(f.power)} (vous ${fmt(myPow)}), ${f.nodes} villes et villages, ${f.techs} technologies.</div>
           ${this.diplo.ficheHtml(f)}
           ${maisonTxt(f.maison)}
+          ${this.pol.resumeCamp(f)}
           <div class="small">Prestige ${fmt(f.prestige || 0)} (vous ${fmt(st.me.prestige || 0)})${f.weary >= 30 ? ` · <span style="color:#ff9a85">las de la guerre (${f.weary} %)</span>` : ''}</div>
           ${wars.length ? `<div class="small" style="color:#ffb3a6">En guerre contre : ${wars.join(', ')}</div>` : ''}
           <ul>${R.pros.map(p => `<li>${p}</li>`).join('')}${R.cons.map(p => `<li class="con">${p}</li>`).join('')}</ul>
@@ -1841,7 +1851,7 @@ export class UI {
       Vous laissez passer : ${list(others.filter(f => !f.cg).map(f => why(f, f.pg)))} ; vos terres sont fermées à : ${list(others.filter(f => f.cg).map(nm))}.
       <span class="muted">Sans droit de passage (ni alliance, ni guerre), on contourne ses terres, ou l’on passe en force : c’est la guerre.</span></div>`;
     const html = `<h2 class="m-title" id="m-title">Diplomatie</h2><p class="m-sub">La relation indique ce que chaque ${this.st.word || 'département'} pense de vous. Les présents, le commerce et les ennemis communs la font monter ; vos conquêtes près de leurs frontières la font baisser.</p>${hegLine}${neuLine}${passLine}${this.diplo.recuesHtml()}${this.diplo.protectoratsHtml()}${maisonTxt(st.factions.find(f => f.code === me).maison)}<div class="diplo-list">${cards}</div>`;
-    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner, f.ps, f.pg, f.cl, f.cg, f.maison, f.cb]),
+    return [html, JSON.stringify([st.factions.map(f => [f.code, f.st, f.rel, f.trade, f.alive, f.over, f.truce, Math.round(f.power / 500), f.wars, f.pr || 0, f.nodes, f.techs, f.cap_owner, f.ps, f.pg, f.cl, f.cg, f.maison, f.cb, f.politique]),
       pris, fmt1(st.me.prisoner_upkeep || 0), Math.round(myPow / 500), st.heg, this.diplo.sig(), st.proposals.map(p => p.id)])];
   }
 
@@ -1903,8 +1913,8 @@ export class UI {
     const html = `<h2 class="m-title" id="m-title">Production et impôts</h2><p class="m-sub">Vos ateliers transforment le fer et le bois. Les impôts remplissent le trésor, mais un pays pressuré produit moins et finit par se soulever.</p>
       <div class="two"><div>
         <h3 class="section-t" style="border:0;padding:0">${ICON.scale.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px;margin-right:6px"')}Impôts</h3>
-        <input id="tx" class="slider" type="range" min="0" max="100" step="5" value="${tax}" data-act="tax" data-live="tax" aria-label="Niveau des impôts">
-        <div class="big-slider-labels"><span>Légers</span><span id="tax-val">${this.taxLabel(me.tax)}</span><span>Écrasants</span></div>
+        ${this.pol.impotsHtml() || `<input id="tx" class="slider" type="range" min="0" max="100" step="5" value="${tax}" data-act="tax" data-live="tax" aria-label="Niveau des impôts">
+        <div class="big-slider-labels"><span>Légers</span><span id="tax-val">${this.taxLabel(me.tax)}</span><span>Écrasants</span></div>`}
         <dl class="kv" style="margin-top:10px">
           <dt>Rendement des impôts</dt><dd>${Math.round(taxK * 100)} % des livres</dd>
           <dt>Recrues</dt><dd>${me.tax < 0.5 ? '+' : me.tax > 0.5 ? '−' : ''}${Math.round(Math.abs(0.3 * (0.5 - me.tax)) * 100)} %</dd>
