@@ -377,3 +377,32 @@ fn parties() {
     }
     eprintln!("{sautees} fin(s) de partie sautée(s)");
 }
+
+/// Refait les résultats attendus des parties (`jeux[*].vu`) qui diffèrent, avec le moteur Rust, quand une règle change
+/// exprès ce qu'elles donnent (la mémoire des camps, SPEC-POLITIQUE module 6 : une succession qui mène à la guerre laisse
+/// un souvenir). Les cas et les opérations restent ; chaque différence est dite sur la sortie d'erreur, à relire.
+/// `CONQUETE_REFAIRE_VILLES=1 cargo test --release -p conquete --test villes refaire -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn refaire() {
+    if std::env::var_os("CONQUETE_REFAIRE_VILLES").is_none() {
+        return;
+    }
+    let chemin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/references/villes.json");
+    let texte = std::fs::read_to_string(&chemin).unwrap();
+    let r = json::loads(&texte).unwrap();
+    assert_eq!(json::dumps_compact(&r), texte.trim_end(), "le fichier ne se réécrit pas à l'identique");
+    let geo = geo();
+    for (i, jeu) in r.at("jeux").iter().enumerate() {
+        let mut g = partie(&geo, &jeu.at("cas"));
+        let (ops, vu) = (jeu.at("ops").vec(), jeu.at("vu"));
+        for (j, op) in ops.iter().enumerate().take(vu.len()) {
+            let res = json::loads(&json::dumps_compact(&jouer(&mut g, op))).unwrap();
+            if json::dumps_ref_ordre(&res) != json::dumps_ref_ordre(&vu.at(j as i64)) {
+                eprintln!("partie {i}, opération {j} {op:?} réécrite");
+                vu.set(j as i64, res);
+            }
+        }
+    }
+    std::fs::write(&chemin, json::dumps_compact(&r) + if texte.ends_with('\n') { "\n" } else { "" }).unwrap();
+}

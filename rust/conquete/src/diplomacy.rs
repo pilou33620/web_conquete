@@ -164,7 +164,7 @@ pub fn declare_war(game: &mut Game, a: &str, b: &str, quiet: bool) -> (bool, Str
             && !game.at_war(&o, a)
             && game.status(&o, a) != "alliance"
             && !f.at("truce").has(a);
-        if allie && o == game.player {
+        if allie && attend_le_joueur(game, &o) {
             appel(game, b, &Val::from(&o), &Val::from(a));
             continue;
         }
@@ -828,6 +828,11 @@ fn score_commerce(game: &Game, ai: &str, frm: &str) -> f64 {
     MEM::valeur(game, ai, frm) + 30.0 * R::FACTIONS().at(ai).at("personality").atf("trade") + diplo + bonus(game, ai, frm, Some("commerce"))
 }
 
+/// Ce camp est-il le joueur, qui répond lui-même (pas une simulation où son IA le gouverne) ?
+fn attend_le_joueur(game: &Game, code: &str) -> bool {
+    code == game.player && !game.ais.contains_key(code)
+}
+
 /// Le protecteur d'un camp (None : il est libre).
 pub fn protecteur(game: &Game, code: &str) -> Option<String> {
     let o = game.factions.at(code).at("overlord");
@@ -1274,7 +1279,7 @@ pub fn proposer(game: &mut Game, frm: &str, to: &Val, clauses: &Val) -> (Option<
         Ok(cl) => cl,
         Err(e) => return (Some(false), e),
     };
-    if to == game.player {
+    if attend_le_joueur(game, &to) {
         let texte = format!(
             "{} vous propose un accord (il donne {} ; il demande {})",
             game.fname(frm), texte_liste(game, &cl.at("donner")), texte_liste(game, &cl.at("recevoir"))
@@ -1288,7 +1293,7 @@ pub fn proposer(game: &mut Game, frm: &str, to: &Val, clauses: &Val) -> (Option<
         appliquer_clauses(game, frm, &to, &cl);
         return (Some(true), format!("{nom} accepte l'accord."));
     }
-    let contre = if frm == game.player { contre_proposition(game, &to, frm, &cl, bilan) } else { None };
+    let contre = if attend_le_joueur(game, frm) { contre_proposition(game, &to, frm, &cl, bilan) } else { None };
     let rel = game.factions.at(&to).at("rel");
     rel.set(frm, vmax(-100, &rel.at(frm) - 1i64));
     if let Some(c) = contre {
@@ -1381,7 +1386,7 @@ pub fn ultimatum(game: &mut Game, frm: &str, cible: &Val, exigence: &Val) -> (Op
         Err(why) => return (Some(false), why),
     };
     MEM::retenir(game, &cible, frm, "ultimatum", None);
-    if cible == game.player {
+    if attend_le_joueur(game, &cible) {
         let texte = format!("{} vous adresse un ultimatum : il exige {}, sous peine de guerre", game.fname(frm), texte_exigence(game, &e));
         au_joueur(game, frm, "ultimatum", dict! {"exigence" => e}, texte);
         return (None, "Ultimatum envoyé.".to_string());
@@ -1437,7 +1442,7 @@ pub fn appel(game: &mut Game, frm: &str, allie: &Val, contre: &Val) -> (Option<b
     if game.at_war(&allie, &contre) {
         return (Some(false), format!("{} est déjà en guerre contre {}.", game.fname(&allie), game.fname(&contre)));
     }
-    if allie == game.player {
+    if attend_le_joueur(game, &allie) {
         let texte = format!("{} vous appelle aux armes contre {}", game.fname(frm), game.fname(&contre));
         au_joueur(game, frm, "appel", dict! {"contre" => &contre}, texte);
         return (None, "Appel envoyé.".to_string());
