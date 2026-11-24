@@ -4,8 +4,9 @@
 // (menu ☰, « Qualité du plateau ») coupe ce régulateur.
 
 // Du meilleur au plus sobre. echelle : part de la définition de rendu du moteur ; ombres : celles du réglage du moteur
-// (faux : coupées) ; habitants : les habitants et pièces mobiles des bâtiments des emplacements ; decor : arbres et
-// parcelles complets (faux : un arbre par hexagone de forêt, pas de parcelles) ; vie : passants, charrettes, troupeaux ;
+// (faux : coupées) ; habitants : les habitants et pièces mobiles des bâtiments des emplacements ; decor : décor complet
+// (faux : décor clairsemé de web_engine, un arbre par hexagone de forêt, ni arbres épars, ni buissons, ni fleurs ; et pas de
+// parcelles, plateau.js batir) ; vie : passants, charrettes, troupeaux ;
 // cases : part du nombre de cases de la fenêtre (carte-moteur.js, NIVEAUX : des hexagones plus grands plus tôt, de loin) ;
 // cadence : intervalle minimal entre deux images (ms, 0 : celui du moteur).
 export const PALIERS = [
