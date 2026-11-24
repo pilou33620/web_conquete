@@ -269,6 +269,9 @@ impl App {
         if c == "flotte" {
             return Ok(crate::engine::marine::commande(g, p, body)); // les flottes (SPEC-EMPIRE, module 2)
         }
+        if c == "politique" {
+            return Ok(crate::engine::politique::commande(g, p, body)); // impôts par classe, ministres, révolution (SPEC-POLITIQUE, module 5)
+        }
         if c == "apercu" {
             // rapport de forces estimé contre une armée ou une place ennemie, sans donner l'ordre
             let cible = body.get("target");

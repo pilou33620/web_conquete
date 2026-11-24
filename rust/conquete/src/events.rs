@@ -18,6 +18,8 @@
 //!   regs      [[type, nombre]]                 régiments offerts, en garnison au chef-lieu
 //!   research  1                                recherches en cours avancées de moitié
 //!   chef, vassal, refus                        crise de succession (game/familles.py)
+//!   classes   {classe: points}                 mécontentement de la noblesse ou du peuple (SPEC-POLITIQUE, module 5)
+//!   politique {revolution, classe, chance}     révolution : réprimer, abdiquer, céder ; {jouer: camp} (engine/politique.rs)
 //!
 //! Porte game/events.py (PORTAGE.md). Une signature ne se change pas sans le signaler. `ev` : un événement
 //! (dict de HIST, RANDOM ou cities.LOCAL) ; `town` : un numéro de place ou None (`&Val`) ; `datetime.date` :
@@ -25,6 +27,7 @@
 //! `_a_ville`, `_join`, `_min` / `_max` (`min(a, b)` / `max(a, b)` de Python sur des valeurs).
 
 use crate::cities as CT;
+use crate::engine::politique as PO;
 use crate::engine::{Date, Game};
 use crate::familles as FM;
 use crate::py::{self, Val};
@@ -899,6 +902,13 @@ pub fn describe(g: &Game, code: &str, fx: &Val, town: &Val) -> Val {
     if fx.getb("chef") {
         out.extend(&FM::decrire(g, fx)); // crise de succession (game/familles.py)
     }
+    // (SPEC-POLITIQUE, module 5) les classes, une révolution
+    for (c, v) in fx.get("classes").or(dict! {}).items() {
+        out.push(format!("mécontentement {} {}{}", PO::de_classe(c.s()), signe(&v), py::int_v(&v).abs()));
+    }
+    if fx.getb("politique") {
+        out.extend(&PO::decrire(g, code, fx));
+    }
     if out.truthy() { out } else { list!["aucun effet"] }
 }
 
@@ -1005,6 +1015,12 @@ pub fn apply(g: &mut Game, code: &str, fx: &Val, town: &Val) {
     }
     if fx.getb("chef") {
         FM::appliquer(g, code, fx);
+    }
+    if fx.getb("classes") {
+        PO::choc(g, code, &fx.at("classes")); // (SPEC-POLITIQUE, module 5)
+    }
+    if fx.getb("politique") {
+        PO::appliquer(g, code, &fx.at("politique"));
     }
     g.recompute_mods(code);
     g._dirty_income = true;
@@ -1185,6 +1201,7 @@ pub fn fire(g: &mut Game, code: &str, ev: &Val, kind: &str) {
         let w: Vec<f64> = ok.iter().map(|&j| choices[j].get_or("ai", 1).f()).collect();
         let i = g.rng.choix_pondere(&ok, &w);
         apply(g, code, &choices[i].at("fx"), &town);
+        PO::evenement(g, code, &id, i); // les classes (SPEC-POLITIQUE, module 5)
         if kind == "hist" && ev.at("who").is_some() {
             let t = format!("{title} : {} choisit « {} ».", g.fname(code), _min1(choices[i].at("label").s()));
             g.log("evenement", &t, &xy(dict! {"who" => code}));
@@ -1225,6 +1242,9 @@ pub fn resolve(g: &mut Game, pid: &str, choice: i64, auto: bool) -> (bool, Strin
     }
     g.pending_ev.remove(&p);
     apply(g, &player, &c.at("fx"), &p.at("town"));
+    if p.get("ev").is_str() {
+        PO::evenement(g, &player, p.at("ev").s(), choice as usize); // les classes (SPEC-POLITIQUE, module 5)
+    }
     let t = format!(
         "{} : {}{} ({}).",
         p.at("title"),

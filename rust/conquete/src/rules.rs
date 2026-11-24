@@ -756,7 +756,7 @@ pub fn camps(geo: i64) -> Vec<Val> {
     if crate::geo::theatre(geo).is_some() {
         FACTIONS().keys().into_iter().filter(|c| p.has(c)).collect()
     } else {
-        FACTIONS().keys().into_iter().filter(|c| !est_pays(c)).collect()
+        FACTIONS().keys().into_iter().filter(|c| !est_pays(c) && !est_rebelle(c.s())).collect() // (SPEC-POLITIQUE, module 5) sans les camps rebelles inscrits
     }
 }
 
@@ -1386,6 +1386,116 @@ pub const NAISSANCE_AGE: i64 = 45;
 pub const HERITIERS_MAX: i64 = 4;   // … jusqu'à tant d'héritiers
 pub const CRISE_JOURS: i64 = 180;   // désordre d'une crise de succession (ordre public −0,1 dans tout le camp)
 pub const PARJURE_JOURS: i64 = 120;   // guerre déclarée à une maison alliée par mariage (ordre public −0,1)
+
+// ------------------------------------------------------------------ politique intérieure (SPEC-POLITIQUE, module 5)
+// engine/politique.rs. Le mécontentement d'une classe (0 à 100) tend chaque mois vers sa cible : base du régime, impôt
+// de la classe (écart à 0,5 × POL_IMPOT × sensibilité du régime), injustice fiscale, guerres, lassitude, défaites,
+// famine, banqueroute, églises et universités, ministres. fx : effets du régime sur les modificateurs du camp (comme les
+// traits du chef de la maison) ; mandat : mois entre deux renouvellements du chef du gouvernement (élections en
+// république ; 0 : ministres à vie) ; renvoi : mécontentement de la noblesse quand on renvoie un ministre ; repression :
+// chance de réprimer une révolution en plus ; but : le régime que la classe veut quand elle se soulève.
+py_const!(REGIMES, dict!{
+    "absolue" => dict!{"label" => "Monarchie absolue",
+        "desc" => "Le roi gouverne seul : la noblesse est choyée et paie peu, le peuple se fâche plus vite ; les ministres le sont à vie. Recrues +5 %.",
+        "base" => dict!{"noblesse" => 12, "peuple" => 35}, "sensible" => dict!{"noblesse" => 1.6, "peuple" => 1.3},
+        "fx" => dict!{"recrues" => 0.05}, "mandat" => 0, "renvoi" => 3, "repression" => 0.15},
+    "constitutionnelle" => dict!{"label" => "Monarchie constitutionnelle",
+        "desc" => "Le roi règne, un Premier ministre gouverne, renouvelé tous les quatre ans ou après une défaite. Commerce +10 %, livres +3 %.",
+        "base" => dict!{"noblesse" => 25, "peuple" => 25}, "sensible" => dict!{"noblesse" => 1.0, "peuple" => 1.0},
+        "fx" => dict!{"trade" => 0.1, "livres" => 0.03}, "mandat" => 48, "renvoi" => 6, "repression" => 0.0},
+    "republique" => dict!{"label" => "République",
+        "desc" => "Des élections tous les quatre ans renouvellent le gouvernement : le peuple est apaisé, la noblesse mécontente. Recherche +10 %, lassitude de la guerre −10 %.",
+        "base" => dict!{"noblesse" => 40, "peuple" => 15}, "sensible" => dict!{"noblesse" => 0.9, "peuple" => 0.8},
+        "fx" => dict!{"research_speed" => 0.1, "weariness" => -0.1}, "mandat" => 48, "renvoi" => 8, "repression" => -0.15}
+});
+py_const!(CLASSES, dict!{"noblesse" => dict!{"label" => "Noblesse", "but" => "absolue"}, "peuple" => dict!{"label" => "Peuple", "but" => "republique"}});
+// les postes du cabinet : fx par point de compétence du ministre (1 à 5) ; mec : mécontentement des deux classes par point
+py_const!(POSTES, dict!{
+    "chef" => dict!{"label" => "Chef du gouvernement", "desc" => "Ordre public et apaisement des deux classes.", "fx" => dict!{"order" => 0.006}, "mec" => -1.0},
+    "finances" => dict!{"label" => "Finances", "desc" => "Rentrées d'impôts.", "fx" => dict!{"livres" => 0.012}, "mec" => 0.0},
+    "guerre" => dict!{"label" => "Guerre", "desc" => "Recrutement.", "fx" => dict!{"recrues" => 0.015}, "mec" => 0.0},
+    "marine" => dict!{"label" => "Marine", "desc" => "Ports et arsenaux.", "fx" => dict!{"port" => 0.03}, "mec" => 0.0},
+    "justice" => dict!{"label" => "Justice et police", "desc" => "Ordre public ; aide à réprimer une révolution.", "fx" => dict!{"order" => 0.008}, "mec" => 0.0},
+    "commerce" => dict!{"label" => "Commerce et colonies", "desc" => "Gains du commerce.", "fx" => dict!{"trade" => 0.02}, "mec" => 0.0}
+});
+// traits des ministres : fx sur le camp, mec sur chaque classe
+py_const!(MINISTRE_TRAITS, dict!{
+    "integre" => dict!{"label" => "Intègre", "desc" => "Ordre public +2 %.", "fx" => dict!{"order" => 0.02}, "mec" => dict!{}},
+    "corrompu" => dict!{"label" => "Corrompu", "desc" => "Livres −3 %, le peuple gronde (+3).", "fx" => dict!{"livres" => -0.03}, "mec" => dict!{"peuple" => 3}},
+    "reformateur" => dict!{"label" => "Réformateur", "desc" => "Recherche +4 % ; peuple −4, noblesse +4.", "fx" => dict!{"research_speed" => 0.04}, "mec" => dict!{"noblesse" => 4, "peuple" => -4}},
+    "aristocrate" => dict!{"label" => "Aristocrate", "desc" => "Noblesse −5, peuple +3.", "fx" => dict!{}, "mec" => dict!{"noblesse" => -5, "peuple" => 3}},
+    "populaire" => dict!{"label" => "Populaire", "desc" => "Peuple −5.", "fx" => dict!{}, "mec" => dict!{"peuple" => -5}},
+    "econome" => dict!{"label" => "Économe", "desc" => "Soldes et rations −3 %.", "fx" => dict!{"upkeep" => -0.03}, "mec" => dict!{}},
+    "energique" => dict!{"label" => "Énergique", "desc" => "Constructions −4 %.", "fx" => dict!{"build_cost" => -0.04}, "mec" => dict!{}}
+});
+pub const POL_IMPOT: f64 = 70.0;   // mécontentement par point d'impôt au-dessus (ou au-dessous) de 0,5, avant la sensibilité du régime
+pub const POL_INJUSTICE: f64 = 15.0;   // le peuple taxé plus que la noblesse : par point d'écart
+pub const POL_VITESSE: f64 = 0.2;   // part de l'écart à la cible comblée chaque mois
+pub const POL_CHOC_OUBLI: f64 = 0.85;   // un choc (défaite, renvoi, événement) s'efface de 15 % par mois
+pub const POL_ORDRE: f64 = 55.0;   // au-delà, le mécontentement d'une classe pèse sur l'ordre public…
+pub const POL_ORDRE_K: f64 = 200.0;   // … de (mécontentement − POL_ORDRE) / POL_ORDRE_K
+pub const SEUIL_EMEUTE: f64 = 70.0;   // émeutes
+pub const SEUIL_REVOLUTION: f64 = 80.0;   // révolution quand une classe y reste REVOLUTION_MOIS mois de suite
+pub const REVOLUTION_MOIS: i64 = 4;
+pub const REVOLUTION_REPIT: i64 = 24;   // mois sans nouvelle révolution après une décision
+pub const GUERRE_CIVILE_PLACES: i64 = 6;   // en dessous, une révolution victorieuse change le régime sans guerre civile
+pub const GUERRE_CIVILE_PART: f64 = 0.35;   // part des places (et des armées qui s'y trouvent) qui passe aux rebelles
+pub const CANDIDATS: i64 = 3;   // ministres que l'on peut nommer, renouvelés chaque année
+/// Le régime d'un pays à une date, selon l'histoire : la France absolue avant 1789, constitutionnelle de 1789 à 1792,
+/// républicaine jusqu'à l'Empire… ; un département suit la France, une colonie sa métropole (culture française,
+/// britannique, néerlandaise, espagnole, portugaise), les autres pays sont des monarchies absolues.
+pub fn regime_historique(code: &str, annee: i64) -> &'static str {
+    // (code, [(depuis l'année, régime)]), du plus ancien au plus récent
+    const HISTOIRE: &[(&str, &[(i64, &str)])] = &[
+        ("FR", &[(0, "absolue"), (1789, "constitutionnelle"), (1792, "republique"), (1804, "absolue"), (1814, "constitutionnelle"),
+                 (1848, "republique"), (1852, "absolue"), (1870, "republique")]),
+        ("GB", &[(0, "constitutionnelle")]),
+        ("NL", &[(0, "republique"), (1806, "constitutionnelle")]),
+        ("VE", &[(0, "republique")]), ("GE", &[(0, "republique")]), ("CH", &[(0, "republique")]),
+        ("PL", &[(0, "constitutionnelle")]),
+        ("SE", &[(0, "absolue"), (1719, "constitutionnelle"), (1772, "absolue"), (1809, "constitutionnelle")]),
+        ("ES", &[(0, "absolue"), (1834, "constitutionnelle")]), ("PT", &[(0, "absolue"), (1834, "constitutionnelle")]),
+        ("SA", &[(0, "absolue"), (1848, "constitutionnelle")]), ("PR", &[(0, "absolue"), (1848, "constitutionnelle")]),
+        ("AU", &[(0, "absolue"), (1867, "constitutionnelle")]), ("DK", &[(0, "absolue"), (1849, "constitutionnelle")]),
+        ("BE", &[(0, "absolue"), (1831, "constitutionnelle")]), ("BA", &[(0, "absolue"), (1818, "constitutionnelle")]),
+        ("WU", &[(0, "absolue"), (1819, "constitutionnelle")]), ("SX", &[(0, "absolue"), (1831, "constitutionnelle")]),
+        ("HA", &[(0, "absolue"), (1833, "constitutionnelle")]),
+        ("ATC", &[(0, "constitutionnelle"), (1776, "republique")]),
+    ];
+    let metropole = COLONIES.iter().find(|c| c.0 == code).map(|c| c.1).or_else(|| {
+        let f = FACTIONS().get(code);
+        let cult = if f.is_dict() { f.get("culture") } else { Val::None };
+        if !cult.is_str() {
+            return (!est_pays(&Val::from(code))).then_some("FR"); // un département
+        }
+        [("francaise", "FR"), ("britannique", "GB"), ("neerlandaise", "NL"), ("espagnole", "ES"), ("portugaise", "PT")]
+            .iter().find(|c| c.0 == cult.s()).map(|c| c.1)
+    });
+    let c = if HISTOIRE.iter().any(|h| h.0 == code) { code } else { metropole.unwrap_or(code) };
+    HISTOIRE.iter().find(|h| h.0 == c).map_or("absolue", |h| h.1.iter().rev().find(|p| p.0 <= annee).map_or("absolue", |p| p.1))
+}
+/// (SPEC-POLITIQUE, module 5) Le code d'un camp rebelle né d'une guerre civile : celui de son pays suivi d'un « r »
+/// (« FRr », « 33r ») ; aucun camp de la carte ne finit par une minuscule.
+pub fn est_rebelle(code: &str) -> bool {
+    code.len() > 1 && code.ends_with('r')
+}
+/// (SPEC-POLITIQUE, module 5) Le pays d'un camp rebelle (« FRr » → « FR ») ; un autre camp est le sien.
+pub fn pays_de(code: &str) -> &str {
+    if est_rebelle(code) { code.trim_end_matches('r') } else { code }
+}
+/// (SPEC-POLITIQUE, module 5) Un camp rebelle prend la fiche de son pays (traits, caractère, culture, maisons, armée
+/// type), sous son nom et sa couleur, dans les tables des camps de ce fil (FACTIONS, PROVINCES, MAISON_NOMS) : le moteur
+/// le lit comme les autres. Sans « moyens » : son minimum garanti est celui d'un petit camp. Refait à chaque chargement.
+pub fn inscrire_rebelle(code: &str, nom: &str, couleur: &str) {
+    let f = FACTIONS().at(pays_de(code)).copy();
+    f.pop("moyens");
+    for (k, v) in [("name", nom), ("short", nom), ("color", couleur)] {
+        f.set(k, v);
+    }
+    FACTIONS().set(code, f);
+    PROVINCES().set(code, dict!{"name" => nom, "title" => nom});
+    MAISON_NOMS().set(code, MAISON_NOMS().at(pays_de(code)));
+}
 
 // ------------------------------------------------------------------ tactique
 py_const!(FORMATIONS, dict!{
