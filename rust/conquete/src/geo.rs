@@ -1026,7 +1026,7 @@ impl GeoMap {
         let (mut terrain, mut dept, mut river, mut road, mut cellnode) = (vec![OCEAN; N], vec![0u8; N], vec![0u8; N], vec![0u8; N], vec![NONE as u16; N]);
         let playable_codes = Val::new_set();
         let (nodes, by_name, edges, ways, edge_cum, ports, down_nodes) = (list![], Val::dict(), list![], Val::dict(), Val::dict(), Val::dict(), Val::dict());
-        let (depts, rivers, waters) = (Val::dict(), list![], list![]);
+        let (depts, rivers, waters, estuaires) = (Val::dict(), list![], list![], list![]);
         let mut slugs: HashSet<String> = HashSet::new();
         // (un point [x, y, …] décalé : arrondi au centième comme les tracés des arêtes ; un point (x, y) des voies, tel quel)
         let decale = |q: &Val, dx: f64, dy: f64| -> Val {
@@ -1128,13 +1128,16 @@ impl GeoMap {
                 e.set("ring", w.at("ring").iter().map(|q| decale(&q, dx, dy)).collect::<Val>());
                 waters.push(e);
             }
+            for r in c.estuaires_client().iter() {
+                estuaires.push(dict! {"name" => r.at("name"), "pts" => r.at("pts").iter().map(|q| decale(&q, dx, dy)).collect::<Val>()});
+            }
         }
         let mut jouable = vec![false];
         jouable.extend(dept_codes.iter().map(|c| playable_codes.has(c)));
         let lat0 = cartes.iter().map(|c| c.lat0).fold(f64::MAX, f64::min);
         let (lon0, lon1) = (parties[0].lon0, parties[parties.len() - 1].lon1);
         // (bounds et KX n'ont pas de sens sur toute la grille : ceux du premier théâtre ; chaque partie a sa projection, xy)
-        let src = dict! {"bounds" => dict!{"lon0" => lon0, "lon1" => lon1, "lat0" => lat0, "lat1" => lat1}, "depts" => depts, "rivers" => rivers, "waters" => waters};
+        let src = dict! {"bounds" => dict!{"lon0" => lon0, "lon1" => lon1, "lat0" => lat0, "lat1" => lat1}, "depts" => depts, "rivers" => rivers, "waters" => waters, "estuaires" => estuaires};
         let g = GeoMap {
             version: VERSION_MONDE,
             theatre: Some(&MONDE),
@@ -2914,6 +2917,16 @@ impl GeoMap {
         (depts, rivers, waters)
     }
 
+    /// (privé) Les axes des estuaires creusés (outils/theatre.mjs, ESTUAIRES), en cases : la page y montre l'eau quand ses
+    /// hexagones sont plus larges qu'eux.
+    fn estuaires_client(&self) -> Val {
+        let e = self.src.get_or("estuaires", list![]);
+        if !self.parties.is_empty() {
+            return e;
+        }
+        e.iter().map(|r| dict! {"name" => r.at("name"), "pts" => self.pts_lonlat(&r.at("pts")).iter().map(|&p| l2(p)).collect::<Val>()}).collect()
+    }
+
     pub fn client_payload(&self) -> Val {
         let (depts, rivers, waters) = self.traces_client();
         let mut playable = self.playable_codes.vec();
@@ -2933,6 +2946,10 @@ impl GeoMap {
         "ways" => self.ways.values().iter().map(|w| dict!{"name" => w.at("name"), "label" => w.at("label"), "sea" => w.at("sea"),
                    "pts" => w.at("pts").iter().map(|p| l2(p.xy())).collect::<Val>()}).collect::<Val>(),
         "terrain_names" => Val::dict_from(TERRAIN().items().into_iter().map(|(k, v)| (k, v.at(0))).collect())};
+        let estuaires = self.estuaires_client();
+        if estuaires.truthy() {
+            out.set("estuaires", estuaires); // (seulement là où il y en a : l'Aquitaine n'en a pas)
+        }
         // (SPEC-EMPIRE, module 3) la carte monde : ses théâtres et leur cadre en cases [x, y, largeur, hauteur] (le sélecteur de
         // théâtre de la page), leur projection, leurs pays ; les routes maritimes, leurs balises d'horizon, les comptoirs
         if monde {

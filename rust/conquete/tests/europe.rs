@@ -5,6 +5,7 @@
 //! tout théâtre doit avoir : tests/theatres.rs.)
 
 use conquete::ai::AI;
+use conquete::engine::marine as M;
 use conquete::engine::Game;
 use conquete::events as E;
 use conquete::geo::{GeoMap, T_EAU, T_OCEAN, VERSION_EUROPE};
@@ -511,4 +512,18 @@ fn la_scandinavie_tient_au_continent_par_ses_detroits() {
     assert!(vus.contains(&id("Helsingfors")) && vus.contains(&id("Åbo")) && !vus.contains(&id("Stockholm")));
     // Bornholm n'est plus le seul lien : une voie de mer de Rønne, et pas vers Colberg
     assert!(arete("Rønne", "Colberg").is_none());
+}
+
+/// Les estuaires creusés (outils/theatres/europe/carte.mjs, ESTUAIRES) : la Gironde est de la mer au large de Pauillac, et
+/// les ports du fond des estuaires ont leur mouillage (marine::case_port) sur une mer reliée au large (celle de Brest).
+#[test]
+fn les_estuaires_menent_la_mer_jusqu_aux_ports() {
+    let geo = geo();
+    let (x, y) = geo.xy(45.20, -0.715); // au large de Pauillac
+    assert_eq!(geo.terrain_at(x, y), T_OCEAN);
+    let port = |nom: &str| M::case_port(&geo, geo.by_name.at(nom).i()).unwrap_or_else(|| panic!("{nom} n'a pas la mer"));
+    let large = port("Brest");
+    for nom in ["Bordeaux", "Nantes", "Rouen", "Londres", "Anvers", "Rotterdam", "Hambourg", "Brême", "Séville", "Hull", "Liverpool"] {
+        assert!(M::chemin_mer(&geo, port(nom), large).is_some(), "{nom} : sa mer n'est pas reliée au large");
+    }
 }

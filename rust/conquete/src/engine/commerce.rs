@@ -401,7 +401,7 @@ pub fn mois(g: &mut Game) {
 /// Incident diplomatique : la victime des corsaires de o s'en fâche et tient un casus belli contre o.
 pub fn incident(g: &mut Game, o: &str, victime: &str) {
     let rel = g.factions.at(victime).at("rel");
-    rel.set(o, (rel.get_or(o, 0).i() - R::INCIDENT_REL).max(-100));
+    rel.set(o, super::batailles::py_max(-100, &rel.get_or(o, 0) - R::INCIDENT_REL)); // (la relation est souvent un flottant)
     let until = TT::deadline(g, R::CASUS_BELLI_TOURS, &[victime, o]);
     g.factions.at(victime).setdefault("cb", dict! {}).set(o, until);
     let t = format!("Incident en mer : des corsaires {} pillent les marchands {}. {} tient un casus belli contre {} : une déclaration de guerre ne fâcherait personne.",

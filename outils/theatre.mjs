@@ -39,7 +39,7 @@ const lireNE = f => {
 };
 
 // ------------------------------------------------------------------ la carte du théâtre (carte.mjs)
-const { ENTIERS, COUPES, DETROITS, FLEUVES, PAYS, CULTURES = {}, NOM_LAC = {}, PORTS_ADMIS = [] } = CARTE;
+const { ENTIERS, COUPES, DETROITS, FLEUVES, PAYS, CULTURES = {}, NOM_LAC = {}, PORTS_ADMIS = [], ESTUAIRES = [] } = CARTE;
 const { LON0, LON1, LAT0, LAT1, LAT_REF, KM } = CARTE.cadre || {};
 if (CARTE.id !== ID || CARTE.geo !== THEATRES[ID][0]) stop(`carte.mjs : id ${CARTE.id} et geo ${CARTE.geo} attendus ${ID} et ${THEATRES[ID][0]}`);
 if (![LON0, LON1, LAT0, LAT1, LAT_REF, KM].every(Number.isFinite) || LON0 >= LON1 || LAT0 >= LAT1 || LON0 < -180 || LON1 > 180 || LAT0 < -85 || LAT1 > 85) stop('carte.mjs : cadre { LON0, LON1, LAT0, LAT1, LAT_REF, KM } invalide');
@@ -180,15 +180,16 @@ const L = new Uint8Array(N);
     }
   }
 }
-// détroits rouverts
-for (const [, pts] of DETROITS) {
-  const ray = 3.75 / KM * F;
+// détroits rouverts (7,5 km de large), estuaires creusés (ESTUAIRES : [nom, largeur en km, [[lon, lat], …]])
+const CREUSE = new Uint8Array(N); // les mailles des estuaires (un fleuve peut y couler)
+for (const [pts, largeur, estuaire] of [...DETROITS.map(([, pts]) => [pts, 7.5, 0]), ...ESTUAIRES.map(([, l, pts]) => [pts, l, 1])]) {
+  const ray = largeur / 2 / KM * F;
   for (let k = 0; k + 1 < pts.length; k++) {
     const x1 = gx(pts[k][0]), y1 = gy(pts[k][1]), x2 = gx(pts[k + 1][0]), y2 = gy(pts[k + 1][1]), n = Math.ceil(Math.hypot(x2 - x1, y2 - y1) * 2);
     for (let s = 0; s <= n; s++) {
       const x = x1 + (x2 - x1) * s / n, y = y1 + (y2 - y1) * s / n;
       for (let j = Math.floor(y - ray); j <= Math.ceil(y + ray); j++) for (let i = Math.floor(x - ray); i <= Math.ceil(x + ray); i++)
-        if (i >= 0 && i < GW && j >= 0 && j < GH && Math.hypot(i + 0.5 - x, j + 0.5 - y) <= ray) L[j * GW + i] = 0;
+        if (i >= 0 && i < GW && j >= 0 && j < GH && Math.hypot(i + 0.5 - x, j + 0.5 - y) <= ray) { L[j * GW + i] = 0; CREUSE[j * GW + i] = estuaire; }
     }
   }
 }
@@ -418,8 +419,8 @@ const rivers = [];
       if (!cible) { defauts.push(`fleuve ${r.name} : il finit à ${fin} sans mer, lac ni confluent à moins de 40 km`); continue; }
       r.pts.push(cible);
     }
-    // un fleuve ne traverse pas la mer : au plus quelques points d'estuaire
-    const enMer = r.pts.slice(0, -1).filter(p => { const c = Math.floor(gy(p[1])) * GW + Math.floor(gx(p[0])); return L[c] === 0; }).length;
+    // un fleuve ne traverse pas la mer : au plus quelques points d'estuaire (hors des estuaires creusés)
+    const enMer = r.pts.slice(0, -1).filter(p => { const c = Math.floor(gy(p[1])) * GW + Math.floor(gx(p[0])); return L[c] === 0 && !CREUSE[c]; }).length;
     if (enMer > 4 && enMer > r.pts.length * 0.1) defauts.push(`fleuve ${r.name} : ${enMer} points sur ${r.pts.length} en pleine mer`);
     if (!r.pts.every(dansCadre)) stop(`fleuve ${r.name} : hors du cadre`);
     delete r._coupe;
@@ -434,6 +435,8 @@ for (const c of Object.keys(NOM_PAYS)) if (!CODES.includes(c)) stop(`pays sans t
 const geo = { bounds: { lon0: LON0, lon1: LON1, lat0: LAT0, lat1: LAT1 }, lat_ref: LAT_REF, km_case: KM, depts: {}, rivers, waters, lands: [] };
 for (const c of CODES) geo.depts[c] = { name: NOM_PAYS[c], playable: true, rings: contours.get(NOMS.indexOf(c)) };
 for (let e = 1; e < NOMS.length; e++) if (NOMS[e] && NOMS[e][0] === '~' && e !== POCHE) for (const ring of contours.get(e)) geo.lands.push({ name: NOMS[e].slice(1), ring });
+// (les axes des estuaires : la page y montre l'eau de près, quand ses hexagones sont plus larges qu'eux)
+if (ESTUAIRES.length) geo.estuaires = ESTUAIRES.map(([name, , pts]) => ({ name, pts }));
 
 // geo.rs, _generate, à 5 km : pays (dans l'ordre des codes), trous bouchés, lacs, terres hors jeu
 const fx = lon => (lon - LON0) * KX / KM, fy = lat => (LAT1 - lat) * KY / KM, NC = W * H;
@@ -463,6 +466,7 @@ for (let c = 0; c < NC; c++) {
 console.log(`calcul du moteur refait : ${ecarts} cases sur ${terres} de terre diffèrent de la grille de départ (${(100 * ecarts / terres).toFixed(2)} %), ${bouchees} cases de trou bouchées`);
 if (ecarts > terres * 0.02) stop('les contours simplifiés s\'écartent de plus de 2 % de la grille de départ');
 const codeCase = (lon, lat) => { const i = Math.floor(fx(lon)), j = Math.floor(fy(lat)); if (i < 0 || j < 0 || i >= W || j >= H) return null; const v = caseDe[j * W + i]; return v > 2 ? CODES[v - 3] : v === 2 ? '~' : v === 1 ? 'lac' : 'mer'; };
+for (const [nom, , pts] of ESTUAIRES) for (const p of pts) if (codeCase(...p) !== 'mer') stop(`estuaire ${nom} : la case de [${p}] n'est pas de la mer (${codeCase(...p)})`);
 
 // ------------------------------------------------------------------ 6. places
 // [nom, lat, lon, pays, type, étiquettes, remparts, population de 1790], comme places_france.json

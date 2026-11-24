@@ -21,6 +21,9 @@ const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES
 const VERS = [0, 2, 4, 4, 4, 4, 5, 6, 6, 3, 4];
 // rivières montrées selon la taille des hexagones (rang 1 : les fleuves)
 const RANG_MAX = { 4: 3, 8: 3, 16: 2 };
+// estuaires en hexagones de mer jusqu'aux hexagones de 4 cases ; plus loin en ruban de fleuve (des hexagones de mer de
+// 8 cases mangeraient les presqu'îles qui les bordent, le Médoc)
+const PAS_ESTUAIRES = 4;
 
 // l'hexagone (indice ligne × colonnes + colonne) sous un point du jeu, ou −1 hors de la grille
 export function indexEn(g, x, y) {
@@ -62,26 +65,44 @@ export class Niveau {
       if (b === T.MARAIS) arbres[h] = Math.max(arbres[h], 1);
       if (leger) arbres[h] = foret[h];   // (de loin, un arbre par hexagone de forêt : ce sont eux qui coûtent)
     }
+    // les estuaires (geo.rs, estuaires : leur axe) : plus étroits qu'un hexagone, la majorité les effacerait ; de près, une
+    // chaîne d'hexagones de mer de l'embouchure au port du fond, qui reste sur son hexagone, au bord de l'eau
+    const estuaires = mp.m.estuaires || [];
+    if (pas <= PAS_ESTUAIRES && estuaires.length) {
+      const places = new Set((mp.nodes || []).map(n => indexEn(g, n.x, n.y)));
+      for (const e of estuaires) {
+        const ch = chaine(g, e.pts, pas);
+        while (ch.length && places.has(ch[ch.length - 1])) ch.pop();
+        for (const h of ch) if (ter[h] >= 3) { ter[h] = 0; fertile[h] = foret[h] = arbres[h] = 0; }
+      }
+    }
     // la côte : la mer au bord des terres devient haut-fond (le sable sous l'eau translucide)
     for (let h = 0; h < n; h++) if (ter[h] === 0 && g.voisins(g.liste[h]).some(v => ter[v.i] >= 3)) ter[h] = 1;
     // les rivières : chaînes d'hexagones voisins, d'amont en aval ; les vallées qu'elles traversent sont mises à plat
     this.rivieres = [];
     const rmax = RANG_MAX[pas] ?? 1;
-    for (const rv of mp.m.rivers || []) {
+    const fleuves = pas <= PAS_ESTUAIRES ? mp.m.rivers || [] : [...mp.m.rivers || [], ...estuaires.map(e => ({ rank: 1, pts: [...e.pts].reverse() }))];
+    for (const rv of fleuves) {
       if (rv.rank > rmax) continue;
-      const ch = [];
-      for (let a = 0; a < rv.pts.length - 1; a++) {
-        const [ax, ay] = rv.pts[a], [bx, by] = rv.pts[a + 1], nb = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / (pas / 4)));
-        for (let s = a ? 1 : 0; s <= nb; s++) {
-          const h = indexEn(g, ax + (bx - ax) * s / nb, ay + (by - ay) * s / nb);
-          if (h >= 0 && h !== ch[ch.length - 1]) ch.push(h);
-        }
-      }
+      const ch = chaine(g, rv.pts, pas);
       for (const h of ch) if (ter[h] >= 3) { this.riviere[h] = 1; fertile[h] = 0; if (ter[h] === 6) ter[h] = rv.rank < 3 ? 4 : 5; }
       if (ch.length > 1) this.rivieres.push(ch);
     }
   }
   estEau(h) { return this.terrain[h] < 3; }
+}
+
+// les hexagones voisins, d'un bout à l'autre, sous une ligne de points du jeu (rivière, axe d'estuaire)
+function chaine(g, pts, pas) {
+  const ch = [];
+  for (let a = 0; a < pts.length - 1; a++) {
+    const [ax, ay] = pts[a], [bx, by] = pts[a + 1], nb = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / (pas / 4)));
+    for (let s = a ? 1 : 0; s <= nb; s++) {
+      const h = indexEn(g, ax + (bx - ax) * s / nb, ay + (by - ay) * s / nb);
+      if (h >= 0 && h !== ch[ch.length - 1]) ch.push(h);
+    }
+  }
+  return ch;
 }
 
 // Les routes de la carte (mp.edges, sans les voies d'eau) en paires d'hexagones voisins [a, b, niveau] pour le moteur

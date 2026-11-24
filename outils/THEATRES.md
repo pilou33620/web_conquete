@@ -53,6 +53,7 @@ export default {
   cadre: { LON0, LON1, LAT0, LAT1, LAT_REF, KM: 5 },  // longitudes de −180 à 180, latitudes négatives au sud
   places: [min, max],                 // bornes du nombre de places (l'Europe : [900, 1400])
   ENTIERS, COUPES, DETROITS, FLEUVES,
+  ESTUAIRES,                          // facultatif (ci-dessous)
   NE: { rivieres: [...], lacs: [...] }, // facultatif : fichiers Natural Earth en plus des globaux
   PAYS: { CODE: { name, short, color, adj, title, pros, cons, mods, personality: { aggr, trade, expand, tech }, specialty,
                   moyens: [[a1700, a1790, a1813, a1870], tresor], maisons: [8 noms], culture: '<clé>' } },
@@ -68,6 +69,11 @@ export default {
 - `defaut` (facultatif) : l'étiquette de la terre d'un pays Natural Earth du cadre absent de `ENTIERS` et de `COUPES`
   (« ~Hors jeu » par exemple) ; sans elle, l'outil s'arrête et nomme ces pays.
 - `DETROITS` : `[nom, [[lon, lat], …]]`, rouverts sur 7,5 km de large.
+- `ESTUAIRES` (facultatif) : `[nom, largeur en km, [[lon, lat], …]]`, l'axe d'un estuaire de la mer vers l'amont, creusé sur
+  cette largeur (la grille fermerait ou couperait un estuaire de quelques km) et arrêté à moins de 10 km du port du fond
+  (`marine::case_port` y trouve la mer). Chaque point doit tomber sur une case de mer. L'axe est écrit dans `<id>.json`
+  (`estuaires : [{ name, pts }]`) : la page y montre l'eau quand ses hexagones sont plus larges que l'estuaire
+  (`web/js/hex/carte-moteur.js`).
 - `FLEUVES` : `[nom, rang 1 à 3, [lon, lat] vers la source, [lon, lat] à l'embouchure, /noms Natural Earth admis/]`, ou
   `[nom, rang, [[lon, lat], …]]` pour un cours absent de Natural Earth.
 - `espace` (facultatif, 115 km) : un bourg GeoNames est ajouté là où aucune place du pays n'est plus près (la variable
