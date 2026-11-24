@@ -924,6 +924,7 @@ impl Game {
         self.update_queues(dt);
         self.move_armies(dt);
         super::marine::tick(self, dt); // les flottes (SPEC-EMPIRE, module 2)
+        super::agents::tick(self, dt); // les agents (SPEC-POLITIQUE, module 4)
         self.land_check(dt);
         self.river_fire(dt);
         self.update_spies();
@@ -1078,6 +1079,7 @@ impl Game {
         let season = self.season();
         RL::sabotage(self); // armées ennemies posées sur une voie ferrée
         super::commerce::mois(self); // routes, comptoirs, corsaires, marché des denrées (SPEC-EMPIRE, module 7)
+        super::agents::mois(self); // entretien et postes des agents (SPEC-POLITIQUE, module 4)
         for (code, f) in self.factions.items() {
             let code = code.s();
             if !f.atb("alive") {

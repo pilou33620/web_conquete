@@ -55,6 +55,7 @@ mod utilitaires;
 pub mod marine; // les flottes (SPEC-EMPIRE, module 2)
 pub mod navale; // les batailles navales (SPEC-EMPIRE, module 2)
 pub mod commerce; // le commerce maritime (SPEC-EMPIRE, module 7)
+pub mod agents; // les agents sur la carte (SPEC-POLITIQUE, module 4)
 
 pub const SUBSTEP: f64 = 0.05; // jours
 pub const ATTRITION_STEP: f64 = 0.25; // jours : pas de l'usure, des désertions et du ravitaillement des armées
@@ -344,6 +345,8 @@ pub struct Game {
     pub navales: Val,
     /// (SPEC-EMPIRE, module 7) comptoirs, routes commerciales, marché des denrées, flottes en traversée (voir commerce.rs), sauvegardé.
     pub commerce: Val,
+    /// (SPEC-POLITIQUE, module 4) {id: agent} (voir agents.rs), sauvegardé.
+    pub agents: Val,
 }
 
 impl Game {
@@ -411,6 +414,7 @@ impl Game {
             flottes: dict! {}, // (SPEC-EMPIRE, module 2)
             navales: dict! {},
             commerce: dict! {}, // (SPEC-EMPIRE, module 7)
+            agents: dict! {}, // (SPEC-POLITIQUE, module 4)
         }
     }
 

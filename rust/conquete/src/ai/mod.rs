@@ -28,6 +28,7 @@ use crate::{dict, list, py_const, pyset, tup};
 mod gouvernement;
 pub mod marine; // les flottes des IA (SPEC-EMPIRE, module 2)
 pub mod commerce; // marchands, corsaires, expéditions des IA (SPEC-EMPIRE, module 7)
+pub mod agents; // les agents des IA (SPEC-POLITIQUE, module 4)
 
 pub const AI_AHEAD: i64 = 5;  // ans d'avance au plus sur l'histoire pour une recherche des IA (SPEC-ARBRE.md)
 
@@ -102,6 +103,8 @@ pub struct AI {
     pub marine_clock: f64,
     /// (SPEC-EMPIRE, module 7) prochain coup d'œil sur le commerce maritime (ai/commerce.rs ; pas sauvegardé).
     pub commerce_clock: f64,
+    /// (SPEC-POLITIQUE, module 4) prochain coup d'œil sur les agents (ai/agents.rs ; pas sauvegardé).
+    pub agents_clock: f64,
 }
 
 impl AI {
@@ -137,6 +140,7 @@ impl AI {
             _cache_reach: None,
             marine_clock: 0.0,
             commerce_clock: 0.0,
+            agents_clock: 0.0,
         }
     }
 
@@ -209,10 +213,10 @@ impl AI {
         }
         marine::jouer(g, self); // les flottes (SPEC-EMPIRE, module 2)
         commerce::jouer(g, self); // marchands, corsaires, expéditions (SPEC-EMPIRE, module 7)
+        agents::jouer(g, self); // les agents, qui remplacent l'ancienne `espionage` (SPEC-POLITIQUE, module 4)
         if g.t >= self.diplo_clock {
             self.diplo_clock = g.t + 8.0 + self.rng.random() * 5.0;
             self.diplomacy(g);
-            self.espionage(g);
             self.rearm(g);
         }
     }
@@ -503,34 +507,5 @@ impl AI {
         }
         a.set("ai", dict! {"then" => "rearm"});
         true
-    }
-
-    /// Saboter les remparts d'une place ennemie que nos armées convoitent, ou espionner un voisin.
-    /// Python : `espionage(self)`.
-    /// Hasard : self.rng. `cands.sort(reverse=True)` trie des tuples (valeur, place).
-    // game/ai.py, lignes 261 à 279
-    pub fn espionage(&mut self, g: &mut Game) {
-        let (code, f) = (self.code.clone(), self.f(g));
-        let wars = self.wars(g);
-        if !wars.truthy() || f.at("res").at("livres") < 450i64 || self.rng.random() > 0.35 {
-            return;
-        }
-        let mine: Vec<Val> = g.armies.values().into_iter().filter(|a| a.at_is("owner", &code)).collect();
-        let mut cands: Vec<(f64, i64)> = vec![];
-        for n in g.nodes.iter() {
-            if !wars.has(n.at("owner")) || n.at("fort") < 2i64 {
-                continue;
-            }
-            let (x, y) = g.node_xy(n.ati("id"));
-            let d = py::min_f(mine.iter().map(|a| py::hypot(a.atf("x") - x, a.atf("y") - y))).unwrap_or(999.0);
-            if d < 70.0 {
-                let val = (VALUE().at(g.geo.nodes.at(n.at("id")).at("type")) * n.at("fort")).f() / (d + 10.0);
-                cands.push((val, n.ati("id")));
-            }
-        }
-        if !cands.is_empty() {
-            let cands = py::sorted_by_key_rev(cands, |c| *c);
-            g.spy(&code, cands[0].1, &Val::from("saboter"));
-        }
     }
 }

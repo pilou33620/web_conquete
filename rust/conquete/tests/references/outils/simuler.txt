@@ -1,15 +1,15 @@
 2 parties depuis 1700, 1 ans, graines 3 à 4
 graine  fin                 guerres  durée  écart  vivants  techs  trésor  hommes  rails  places / erreur
-     3  1er mars 1701             0    0.0     25        5    0.0    8461    3889      0  24:47 33:30 40:55 47:47 64:44
-     4  1er mars 1701             1    1.0     39        5    0.0    5309    3643      0  24:64 33:25 40:51 47:38 64:45
-moyenne                         0.5    0.5   32.0      5.0    0.0  6885.0  3766.0    0.0  erreurs : 0
+     3  1er mars 1701             0    0.0     35        5    0.0    7923    3786      0  24:58 33:23 40:50 47:49 64:43
+     4  1er mars 1701             1    6.0     38        5    0.0    3791    3258      0  24:66 33:28 40:49 47:33 64:46
+moyenne                         0.5    3.0   36.5      5.0    0.0  5857.0  3522.0    0.0  erreurs : 0
 mois de banqueroute / de famine (tous camps) : 0 / 0
-batailles : 35 ; par situation (nombre, assaillant vainqueur, vaincu qui décroche, pertes moyennes assaillant / défenseur) :
-  campagne      17   76 %    6 %      10 / 29
-  fort           8   62 %   38 %      87 / 48
-  ville         10   10 %   90 %      46 / 22
-stratégies (fois choisie, victoires) : bastions 6 (33 %), debord 14 (36 %), embus 1 (0 %), feurem 12 (83 %), prep 21 (67 %), tenir 16 (25 %)
-crues de ville (tous camps) : 3 en 2 ans de jeu
+batailles : 47 ; par situation (nombre, assaillant vainqueur, vaincu qui décroche, pertes moyennes assaillant / défenseur) :
+  campagne      22   68 %   14 %      18 / 38
+  fort          16   25 %   69 %      83 / 47
+  ville          9   22 %   56 %      48 / 25
+stratégies (fois choisie, victoires) : bastions 14 (71 %), contre 2 (50 %), debord 12 (25 %), embus 1 (0 %), feurem 11 (82 %), harcel 2 (0 %), prep 33 (55 %), tenir 19 (32 %)
+crues de ville (tous camps) : 1 en 2 ans de jeu
 gribeauval  trouvée en cours de partie par 0 camps sur 10
 percussion  trouvée en cours de partie par 0 camps sur 10
 lahitte     trouvée en cours de partie par 0 camps sur 10

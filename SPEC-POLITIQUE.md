@@ -164,3 +164,67 @@ donnée. **Coût** : chaque module ne ralentit pas le tour des IA de plus de 10 
 ## État
 
 (à remplir par chaque module : fait, pas fait, écarts)
+
+### Module 4, R7 agents-moteur (fait)
+
+- **Fichiers** : `engine/agents.rs` (moteur, commandes, vue), `ai/agents.rs` (IA) ; `engine/prise.rs` : `rapport_espion`
+  et `saboter_remparts` sortis de `resolve_spy` (l'ancien `spy` les appelle toujours). Points d'accroche « (SPEC-POLITIQUE,
+  module 4) » : `engine/mod.rs` (champ `agents`), `views.rs` (sauvegarde, vue, vision des agents du joueur, règles),
+  `serveur.rs` (`cmd: "agent"`), `turns.rs` (`debut_tour`), `engine/utilitaires.rs` (`tick` à chaque pas, `mois` chaque
+  mois), `engine/economie.rs` (fin de file `kind: "agent"` : une ligne, `update_queues` y est), `ai/mod.rs` (`agents::jouer`
+  remplace `espionage`, supprimée), `rules.rs` (chiffres). `cities.rs` n'a pas eu besoin d'être touché.
+- **`g.agents`** : `{id ("ag…"): {id, owner, type, nom, x, y, at_node (place, ou None en chemin), de (dernière place
+  quittée), dest, chemin ([nid…] sans la place où il est), prog, mp (tour par tour), xp, niveau (1 à 5), traits, mission
+  (None ou {type, cible, tours, chance} : seulement les **postes**), cache, repos (jour avant lequel il ne mène pas d'autre
+  mission)}}` ; sauvegardé sous la clé `agents` (absente d'une ancienne sauvegarde : `{}`).
+- **Recrutement** : `kind: "agent"` dans la file (`what` = type), payé tout de suite. Bâtiments (`rules.AGENTS[t].batiments`,
+  un seul suffit) : espion ← douane, port ou marché ; gentilhomme ← université (collège) ; prêtre ← église ; diplomate ←
+  capitale du camp (`capital_of`) ou douane 3 (compagnie de commerce). Plafond : 1 + places ayant un de ces bâtiments au
+  niveau 2 ou plus, au plus 4 / 3 / 5 / 3. Coût 120 / 180 / 90 / 200 livres, entretien 6 / 8 / 4 / 10 livres par mois
+  (prélevé dans `agents::mois`, pas dans `compute_income`).
+- **Mouvement** : par les routes et les voies d'eau, de place en place (Dijkstra sur `geo.adj`, longueur des tronçons),
+  `AGENT_VITESSE` = 32 par jour ; entre partout, places étrangères comprises. Tour par tour comme les flottes : pendant son
+  tour, l'agent du joueur part aussitôt (jours de route du mois, `mp`), il attend pendant le tour des IA.
+- **Caché** : l'espion naît caché ; un autre camp le voit dans une de ses places de remparts 2 ou plus, ou à moins de
+  `AGENT_DETECTE` (6) d'un de ses espions, gentilshommes ou d'une armée avec de la cavalerie (`agents::detecte`). Raté et
+  échappé, il est démasqué.
+- **Missions** (`rules.MISSIONS`) : l'agent arrêté dans une place vise la place, une armée ou un agent à moins de
+  `AGENT_PORTEE` (6). Une mission par tour (`repos`). Les postes (`universite`, `apaiser`, `ambassade`) durent jusqu'à un
+  départ ou `annuler` ; les autres se jouent sur-le-champ (aussi pour le joueur pendant son tour). Chance = base + 5 % par
+  niveau + traits + « Diplomates » (10 %) − défense (remparts 3 % par niveau, « Télégraphe Chappe » 15 %, 5 % par agent
+  du camp visé dans la place jusqu'à 15 %, cavalerie de l'armée visée 5 %, niveau et « Fine lame » de l'agent visé),
+  bornée à 5–95 % : `agents::verifier` (commande `chance`, et `possibles` dans la vue). Échec : pris 40 % (il disparaît,
+  **incident** : la relation de la victime baisse de `AGENT_REL` = 15, `agents::incident`), tué 20 %, sinon il s'échappe
+  démasqué (25 % de prendre « Bavard »). Duel raté : notre gentilhomme est tué ou blessé (deux tours de repos).
+  - espion : `espionner` (place : le rapport `intel` de toujours ; armée : son effectif et son général, `intel` sur la
+    place la plus proche), `saboter_remparts` (l'effet de l'ancien sabotage), `saboter_batiment` (le meilleur bâtiment de
+    niveau 2 ou plus perd un niveau, sinon dégâts de la ville +25 %), `saboter_armee` (moral −20, munitions ×0,6),
+    `assassiner` (un agent, ou le général d'une armée : `tuer_general`), `inciter` (ordre public −0,2) ; sabotages en
+    guerre seulement ;
+  - gentilhomme : `duel`, `universite` (poste dans sa ville à collège : les recherches en cours avancent de
+    `AGENT_RECHERCHE` = 10 % de plus, +25 % par niveau), `voler_tech` (une découverte du camp visé dont on a les prérequis) ;
+  - prêtre : `apaiser` (poste : ordre public + `AGENT_APAISE` = 0,06 par mois, +25 % par niveau), `denoncer` (un agent
+    étranger vu dans une de nos places, prêtre compris : pris, avec l'incident) ;
+  - diplomate : `ambassade` (poste dans la capitale d'un camp en paix ; relation +1 par mois jusqu'à 60 ; fermée par la
+    guerre : expulsé). **`agents::diplomate_present(g, code, chez) -> bool`** pour R9.
+- **Expérience** : +1 par mission réussie (+2 si la base est sous 50 %), +1 par six mois de poste ; niveaux à 0, 2, 5, 9,
+  14 ; chaque niveau donne un trait du type (`rules.AGENT_TRAITS` : Discret, Rusé, Fine lame, Éloquent, Pieux ; Bavard
+  par un échec).
+- **Commandes** `{cmd: "agent", sub, …}` : `recruter {node, type}`, `deplacer {agent, node}`, `mission {agent, mission,
+  cible}` (cible : numéro de place, identifiant d'armée « a… » ou d'agent « ag… »), `chance {agent, mission, cible}` (rend
+  `{ok, chance, msg}` sans donner l'ordre), `annuler {agent}` (quitte le poste, ou s'arrête à la prochaine place). Rend
+  `{ok, msg}`. Tout sauf `recruter` et `chance` est refusé pendant le tour des IA (`TT::lock_reason`).
+- **Vue** : `agents: [{id, proprio, type, nom, case: [x, y], niveau, traits, mission, cache}]` (les siens, ceux des alliés,
+  les étrangers vus ; un espion caché seulement démasqué) ; pour les siens en plus `xp, at_node, dest, chemin, mp, repos
+  (tours), possibles: [{mission, cible, chance}]` ; `agents_camp: {type: {n, plafond}}`. Les agents du joueur et de ses
+  alliés voient à 8 autour d'eux (la vue seulement). Règles : `rules.AGENTS`, `rules.MISSIONS`, `rules.agent_traits`,
+  `rules.agent_ordre`.
+- **IA** (`ai/agents.rs`, tous les 15 jours) : forme un agent si elle a coût + 400 livres (espion d'abord en guerre,
+  prêtre si une place est sous 55 % d'ordre public, puis gentilhomme, diplomate ; deux par type au plus), mène la
+  meilleure mission possible là où il est, sinon l'envoie vers sa cible (place forte ennemie convoitée, place agitée,
+  université, capitale d'un allié ou d'un voisin en paix) ; une cible injoignable est oubliée 90 jours.
+- **Écarts, pas fait** : l'ancienne commande `spy` (et `g.spies`, `rules.spy`) reste pour la page actuelle (`ui.js`) :
+  P8 la remplacera par les pions, puis elle pourra partir. Pas d'« accords secrets » ni de mariage par le diplomate (R9 lit
+  `diplomate_present`) ; pas de défense active des universités par l'IA (le contre-espionnage passif compte) ; l'entretien
+  des agents n'apparaît pas dans `me.upkeep`.
+

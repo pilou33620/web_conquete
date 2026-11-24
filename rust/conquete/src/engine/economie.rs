@@ -1136,6 +1136,8 @@ impl Game {
                     CT::finish(self, &n, &q); // bâtiment d'emplacement
                 } else if q.at_is("kind", "navire") {
                     super::marine::lancer(self, &n, &q); // navire (SPEC-EMPIRE, module 2)
+                } else if q.at_is("kind", "agent") {
+                    super::agents::former(self, &n, &q); // agent (SPEC-POLITIQUE, module 4)
                 } else {
                     let what = q.ats("what");
                     if what == "fort" {
