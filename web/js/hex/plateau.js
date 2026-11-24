@@ -17,6 +17,7 @@ import { Niveau, choisirPas, cadrer, couvre, fenetre, indexEn, routesDe } from '
 import { AMB, meteoEn } from '../carte/ambiance.js';
 import { Marine } from './marine.js';
 import { PALIERS, Regulateur } from './qualite.js';
+import { ArmeesPlateau } from './armees.js';
 
 export { K, C };
 
@@ -93,6 +94,7 @@ export class Plateau {
     this.chantiers = new Map();                             // clé (avancement compris) → bâtiment en chantier posé (maillageEnChantier)
     this.vignettes = new Map();                             // clé, couleur, époque → image du bâtiment
     this.marine = E.Mar ? new Marine(this, E.Mar) : null;   // (SPEC-EMPIRE, P2 : flottes, blocus, comptoirs, balises)
+    this.armees = new ArmeesPlateau(this, E);               // les armées de près, en figurines (hex/armees.js)
     calage = () => { if (this.fen && this.camJeu) this.caler(...this.camJeu); };
     // (qualité : le niveau du moteur choisi (?qualite=, menu) ou deviné ; en automatique, le régulateur baisse les paliers de
     // qualite.js quand les images se suivent trop lentement, et les remonte)
@@ -510,6 +512,7 @@ export class Plateau {
     // l'heure du jeu (sélecteur de ciel.js) : la lumière de la scène y va en deux secondes, dessinée même sans animations
     if (AMB.heure !== this.heure) { this.heure = AMB.heure; E.N.eclairage(HEURE[AMB.heure] || 'jour'); this.tHeure = now; }
     if (now - this.tHeure < 3000) this.sale = true;
+    if (this.armees.maj(cam)) this.sale = true;   // (les armées de près : posées, tournées, en marche)
     if (!this.sale && now - this.tRendu < pas) return false;
     // (qualité automatique : seulement quand le plateau est dessiné à chaque image, animations permises)
     if (anim && !this.manuel && this.tRendu) { const p = this.regul.noter(now, now - this.tRendu); if (p !== this.palier) this.appliquer(p); }
@@ -536,6 +539,6 @@ export class Plateau {
     S.scene.fog.near = 1e5; S.scene.fog.far = 2e5;
   }
   pret() { return !!this.fen; }
-  dispose() { E.S.scene.remove(this.villes); E.S.scene.remove(this.habitants); }
+  dispose() { E.S.scene.remove(this.villes); E.S.scene.remove(this.habitants); E.S.scene.remove(this.armees.groupe); }
 }
 const dist = (g, k, n) => Math.hypot(g.liste[k].gx - n.x, g.liste[k].gy - n.y);

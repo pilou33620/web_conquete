@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { Grille, K, versEcran, versJeu } from '../web/js/hex/grille.js';
 import { Niveau, NIVEAUX, choisirPas, cadrer, couvre, fenetre, indexEn } from '../web/js/hex/carte-moteur.js';
 import { PALIERS, Regulateur } from '../web/js/hex/qualite.js';
+import { palierDeAn, armesTroupe } from '../web/js/hex/armees.js';
 
 test('la grille retrouve l’hexagone sous chaque point', () => {
   const g = new Grille(272, 337, 4);
@@ -96,4 +97,11 @@ test('qualité automatique : baisse, remonte, ne s’emballe pas', () => {
   const s = new Regulateur(); s.saute = new Set([1]);
   assert.equal(s.changer(0, 1), 2);
   assert.equal(s.changer(0, 1), 0);
+});
+
+test('les armées de près : uniforme de l’année et armes des figurines', () => {
+  // (les paliers de web_engine : 1700 piques, 1703 silex, 1765 Gribeauval, 1793 levée en masse, 1825 percussion, 1832 chemin de fer)
+  assert.deepEqual([1700, 1702, 1703, 1790, 1793, 1830, 1832, 1900].map(palierDeAn), [0, 0, 1, 2, 3, 4, 5, 5]);
+  // les grenadiers avec la ligne, les tirailleurs en infanterie légère
+  assert.deepEqual(armesTroupe({ inf: 300, grenadiers: 50, tir: 240, cav: 200 }), { inf: 350, leg: 240, cav: 200, art: 0 });
 });

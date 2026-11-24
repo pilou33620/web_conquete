@@ -637,6 +637,9 @@ export class MapView {
   minZoom() { return Math.min(this.vw / this.W, this.vh / (this.H * this.K)) * 0.6; }   // (0,6 : sur un téléphone en hauteur, toute la France tient dans la bande au-dessus du panneau de départ)
 
   armyScreen(d) {
+    // de près sur le plateau, l'armée en figurines (hex/armees.js) : là où elles sont posées
+    const p3 = this.hex && this.plateau.armees.pos(d.a?.id);
+    if (p3) return this.toScreen(p3[0], p3[1]);
     let [x, y] = this.toScreen(d.x, d.y);
     const a = d.a;
     if (a && a.n != null && a.st !== 'battle') {
@@ -2577,9 +2580,11 @@ export class MapView {
   drawArmies(ctx, time) {
     const z = this.cam.z, st = this.state;
     const detailed = z >= 5.5, vie = z >= Z.VIE && !this.papierVu();
+    // de près sur le plateau, les armées en figurines 3D (hex/armees.js) : ici seulement l'anneau de sélection et le nom
+    const t3 = this.hex && this.plateau.armees.pres;
     // de près, les armées en colonne de route ou au bivouac (carte/guerre.js) ; le jeton et la formation restent
     // en dessous de Z.VIE, et leur place reste celle des clics
-    if (detailed) this.guerreDe().armees(ctx, time, vie);
+    if (detailed) this.guerreDe().armees(ctx, time, vie, t3);
     const list = [...this.disp.values()].sort((p, q) => p.y - q.y);
     const atNode = {};
     for (const d of list) if (d.a.n != null && d.a.st !== 'battle') (atNode[d.a.n] = atNode[d.a.n] || []).push(d);
@@ -2596,6 +2601,7 @@ export class MapView {
       if (a.h) ctx.globalAlpha = 0.62;
       if (a.rail && a.n == null) this.drawTrain(ctx, a, d, col, sel, time);
       else if (a.boat && a.n == null) this.drawBoat(ctx, a, d, col, sel, time);
+      else if (t3 && this.plateau.armees.pos(a.id)) this.drawLife(ctx, a, sel, this.plateau.armees.rayonPx);
       else if (vie || (detailed && (a.st === 'battle' || this.combatDe().montre(a)))) this.drawLife(ctx, a, sel);   // (en bataille : la petite scène la montre, carte/combat.js)
       else if (detailed) this.drawFormation(ctx, a, d, col, sel, time);
       else this.drawToken(ctx, a, d, col, sel, time);
@@ -2605,11 +2611,12 @@ export class MapView {
   }
 
   // de près (Z.VIE) : la colonne est dessinée par carte/guerre.js ; ici la sélection et le nom, là où l'on clique
-  drawLife(ctx, a, sel) {
-    if (sel) { ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(0, 0, 26, 14, 0, 0, Math.PI * 2); ctx.stroke(); }
+  // r : la demi-largeur des figurines 3D à l'écran (hex/armees.js), l'anneau autour d'elles et le nom dessous
+  drawLife(ctx, a, sel, r = 26) {
+    if (sel) { ctx.strokeStyle = '#f3d98e'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.54, 0, 0, Math.PI * 2); ctx.stroke(); }
     if (sel || a.o === this.state.me.code) {
       const m = ctx.getTransform(), gen = a.gen ? ` · ${a.gen.name}` : '';
-      this.armyLabels.push({ x: m.e / this.dpr, y: m.f / this.dpr + 16, txt: a.name + gen, warn: !!a.wn?.length, alpha: ctx.globalAlpha });
+      this.armyLabels.push({ x: m.e / this.dpr, y: m.f / this.dpr + Math.max(16, r * 0.95), txt: a.name + gen, warn: !!a.wn?.length, alpha: ctx.globalAlpha });
     }
   }
 
@@ -2643,8 +2650,7 @@ export class MapView {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(fmtMen(a.men), 2.5, 0.5);
     // les armes de l'armée (armies[].armes, sinon d'après ses régiments) : une icône par arme présente, sous la plaque
-    const AR = this.rules.armes || ARME_COL, de = this.rules.arme_de || {};
-    const armes = a.armes || (a.regs || []).reduce((o, r) => { const k = de[r[1]] || 'inf'; o[k] = (o[k] || 0) + (r[2] || 1); return o; }, {});
+    const AR = this.rules.armes || ARME_COL, armes = this.armesDe(a);
     const pres = Object.keys(AR).filter(k => armes[k] > 0);
     let px = -((pres.length - 1) * 15) / 2;
     for (const k of pres) {
@@ -2729,6 +2735,12 @@ export class MapView {
       for (const line of chunk(art, 6)) { row(line, y, gap); y += bd + gap * 2.4; }
     }
     return out;
+  }
+
+  // les armes de l'armée (armies[].armes, sinon d'après ses régiments) : { inf, cav, art, tir, grenadiers } (hommes)
+  armesDe(a) {
+    const de = this.rules.arme_de || {};
+    return a.armes || (a.regs || []).reduce((o, r) => { const k = de[r[1]] || 'inf'; o[k] = (o[k] || 0) + (r[2] || 1); return o; }, {});
   }
 
   drawFormation(ctx, a, d, col, sel, time) {

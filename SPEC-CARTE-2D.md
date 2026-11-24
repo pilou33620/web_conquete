@@ -162,6 +162,8 @@ Les armées et la guerre :
 - **Colonnes.** À partir de `Z.VIE`, chaque armée visible marche en colonne de route sur sa route (`disp`, cap,
   arête), composée d'après ses régiments (`regs` : ligne, légère, cavalerie, artillerie) et son effectif. Les
   tenues suivent le camp. Le jeton et la formation restent en dessous de `Z.VIE` et pour les clics.
+  Sur le plateau 3D (SPEC-HEX, « Armées de près », 24/11/2026), colonne et bivouac ne sont plus dessinés ici : de près,
+  les armées sont des figurines 3D de web_engine ; restent en 2D l'anneau de sélection, le nom et le tracé des ordres.
 - **Bivouac.** Le soir et la nuit, ou à l'arrêt, l'armée monte un bivouac : tentes, feux, faisceaux, chevaux,
   canons parqués.
 - **Traces.** Derrière une armée en marche : route défoncée, champs piétinés. L'historique des positions est gardé

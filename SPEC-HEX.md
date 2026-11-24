@@ -60,6 +60,17 @@ bâtiments d'époque (Ancien Régime, Lumières, Empire, Révolution industriell
   par morceaux de 6 ms par image, du centre vers les bords (`decorProgressif`) ; seuls les cases, le relief, les rivières, les
   routes et les villes sont bâtis aussitôt. Sur toute la carte de l'Aquitaine, l'arrêt passe de 1,5 s à environ 0,3 s (mesures
   dans un conteneur sans carte graphique, plus lent qu'un PC), puis le décor se remplit en une seconde environ.
+- **Armées de près** (24/11/2026, web_engine 2.32.0) : dès qu'un hexagone fait 64 px à l'écran (fenêtre de près, décor
+  complet), chaque armée visible, la nôtre comme celles des autres camps, est un petit groupe de figurines 3D posé par
+  `hex/armees.js` (`maillageTroupe` de `graphismes/rendu/modeles.js`) au lieu de la longue colonne et du bivouac dessinés en
+  2D (`carte/guerre.js`) : porte-drapeau aux couleurs du camp, infanterie de ligne (piquiers en 1700, grenadier ensuite),
+  tirailleurs, un ou deux cavaliers, un canon s'il y a de l'artillerie, d'après `armies[].armes` ; 10 figurines (6 en qualité
+  légère ou quand la qualité automatique coupe les habitants) ; uniforme du palier de l'année (1703 silex, 1765 Gribeauval, 1793,
+  1825, 1832). Au repos, en carré au bivouac (tentes, feu) sur un hexagone libre qui touche sa place, au sud d'abord, face à la
+  caméra ; en marche (ordre en cours, ou la marche du tour rejouée : `disp`, `d.anim`), en colonne courte tournée vers où elle
+  va, qui glisse sur son trajet en marchant au pas. Un groupe par armée, refait seulement quand sa composition, son allure, son
+  camp ou son époque changent ; masqué de loin. Restent en 2D au-dessus : l'anneau de sélection, le nom et le tracé des ordres ;
+  de loin, le jeton et la formation. En train, en bateau, en bataille ou au siège : comme avant.
 - **Perdu pour l'instant** (à ajouter dans web_engine si on le veut) : le paysage des siècles sur le plateau (pinèdes,
   marais drainés, vigne roussie), les enceintes dessinées autour des villes, la teinte des territoires (restent les
   liserés), les étangs plus petits qu'un hexagone, la mer qui fonce vers le large.
@@ -113,6 +124,7 @@ avec un avertissement dans la console : c'est un secours, pas un choix.
 | `web/js/hex/grille.js` | La grille d'hexagones (`Grille`) et la projection inclinée (`K`, `C`, `versEcran`, `versJeu`), sans three.js |
 | `web/js/hex/carte-moteur.js` | La carte du jeu au format du moteur : niveaux de détail (`Niveau`), fenêtre (`cadrer`, `fenetre`) |
 | `web/js/hex/plateau.js` | L'adaptateur : la carte de campagne dessinée par le moteur web_engine, caméra calée sur celle du jeu |
+| `web/js/hex/armees.js` | Les armées de près en figurines 3D de web_engine (`maillageTroupe`) : composition, allure, cap, place près des villes |
 | `web/js/hex/qualite.js` | La qualité automatique du plateau : paliers (définition, ombres, habitants, décor, vie, cases, cadence) et régulateur (SPEC-EMPIRE, « Chargement et fluidité ») |
 | `web/js/hex/champ.js` | Le champ de bataille : hexagones de 40 m, décor, routes, ponts, haies, clôtures, bâtiments (états du serveur), enceinte, barricades, cratères |
 | `web/js/hex/troupes3d.js` | Les troupes en figurines 3D instanciées, posées par la logique de `battle/troupes2d.js` |

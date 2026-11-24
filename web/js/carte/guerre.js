@@ -558,7 +558,8 @@ export class Guerre {
   }
 
   // ---------------------------------------------------------------- les armées (à partir de Z.VIE)
-  armees(ctx, time, vie = true) {
+  // troupes3d : de près sur le plateau, les armées sont des figurines 3D (hex/armees.js) : ni colonne, ni bivouac dessinés ici
+  armees(ctx, time, vie = true, troupes3d = false) {
     const mp = this.map, st = mp.state; if (!st || mp.papierVu()) return;
     const sc = this.scene(time), g = ctx, list = this.armeesDe(time);
     // une armée coupée de ses vivres : un triangle d'alerte près d'elle, de loin comme de près
@@ -573,7 +574,7 @@ export class Guerre {
       return;
     }
     g.save();
-    for (const A of list) {
+    if (!troupes3d) for (const A of list) {
       const a = A.a;
       if (a.st === 'battle' || a.st === 'siege') continue;   // la bataille et le siège les montrent
       g.globalAlpha = a.h ? 0.62 : 1;
