@@ -678,3 +678,43 @@ body.modal-event #proposals { display: none; }   /* une décision à prendre : l
 body:has(#start:not([hidden])) #monde { z-index: 46; top: 12px; left: auto; right: 16px; transform: none; }
 #monde canvas { display: block; width: 210px; height: 100px; border: 1px solid var(--laiton); border-radius: 6px; background: #1d3a52; cursor: pointer; box-shadow: 0 4px 14px var(--ombre); }
 @media (max-width: 760px) { #monde canvas { display: none; } }
+/* (SPEC-POLITIQUE, P10) la diplomatie profonde (diplomatie.js) : fiche (caractère, jauge d'attitude et ses raisons),
+   proposition composée en deux colonnes, ultimatum, propositions reçues, protectorats */
+.dp-fiche { margin: 4px 0; display: flex; flex-direction: column; gap: 3px; }
+.dp-att { display: flex; align-items: center; gap: 8px; }
+.dp-att b { min-width: 38px; text-align: right; }
+.dp-jauge { position: relative; flex: 1; min-width: 120px; height: 10px; border-radius: 5px; background: rgba(0,0,0,.3); border: 1px solid var(--hair); }
+.dp-jauge::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--papier-2); }
+.dp-jauge i { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+.dp-det summary { cursor: pointer; list-style: none; }
+.dp-det summary::-webkit-details-marker { display: none; }
+.dp-det summary .lab::after { content: " ▸"; }
+.dp-det[open] summary .lab::after { content: " ▾"; }
+.dp-raisons { list-style: none; margin: 4px 0; padding: 0; font-size: 14px; max-width: 60ch; }
+.dp-raisons li { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; border-bottom: 1px solid rgba(200,162,83,.12); }
+.dp-raisons .pos { color: #9fdc8a; } .dp-raisons .neg { color: #ff9a85; }
+.dp-retour { float: right; margin-right: 44px; }
+.dp-coat .coat { width: 28px; height: 34px; vertical-align: -4px; margin-right: 8px; }
+.dp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0; }
+.dp-col { border: 1px solid var(--hair); border-radius: 8px; padding: 8px 10px; background: rgba(0,0,0,.14); }
+.dp-col h3 { font-family: var(--f-titre); font-weight: normal; font-size: 20px; margin: 0 0 6px; color: var(--laiton-clair); }
+.dp-clause { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid rgba(200,162,83,.15); }
+.dp-clause select.amount { max-width: 210px; }
+.dp-x { margin-left: auto; }
+.dp-palette { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.dp-plus { font-size: 14px; padding: 4px 9px; }
+.dp-lu ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.dp-lu { gap: 8px; margin: 4px 0 6px; }
+.dp-rep { padding: 6px 10px; border-left: 3px solid var(--laiton); background: rgba(0,0,0,.18); }
+.dp-rep.ok { border-color: var(--sauge); } .dp-rep.non { border-color: #b8564a; }
+.dp-contres { margin-top: 8px; }
+.dp-avert { color: #ffcf85; font-size: 14.5px; }
+.dp-protect { margin: 0 0 10px; padding: 6px 10px; border: 1px solid var(--hair); border-radius: 8px; }
+.proposal.dp-ultimatum .pt { color: #ffb3a6; }
+.badge.alerte { background: #c8322c; animation: dp-pouls 1.4s ease-in-out infinite; }
+@keyframes dp-pouls { 50% { transform: scale(1.25); } }
+@media (max-width: 760px) { .dp-cols { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .badge.alerte { animation: none; } }
+body.modal-diplo #proposals { display: none; }   /* (P10 : elles sont dans la fenêtre) */
+.dp-recues { margin: 0 0 10px; }
+.dp-recues-l { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; margin-top: 4px; }
