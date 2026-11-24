@@ -200,7 +200,9 @@ fn regle_d_acceptation_de_l_ia() {
     for c in ["33", "24"] {
         sans_heritier(&mut g, c, None).set("conjoint", Val::None); // deux chefs seuls
     }
-    let diplo = g.mod_("33", "diplo", 0.0) + g.mod_("33", "prestige", 0.0);
+    // l'IA juge l'attitude (module 6 : relation, souvenirs, même régime…) : on retire ce qui s'ajoute à la relation
+    g.factions.at("24").at("rel").set("33", 0.0);
+    let diplo = g.mod_("33", "diplo", 0.0) + g.mod_("33", "prestige", 0.0) + conquete::engine::memoire::valeur(&g, "24", "33");
     g.factions.at("24").at("rel").set("33", 20.0 - diplo);
     assert!(!evaluer(&g, "24", "33", "mariage", 0), "relation trop basse");
     assert!(evaluer(&g, "24", "33", "mariage", 30), "une dot aide");

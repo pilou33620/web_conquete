@@ -147,11 +147,12 @@ pub fn vue(g: &Game, a: &str, b: &str) -> Val {
 }
 
 /// Un diplomate de `code` est-il posté chez `chez` (module 4) ?
-/// En attendant `agents::diplomate_present(g, code, chez)` (R7) : `factions[code].diplomates`, la liste des camps où il
-/// en a un (posée par les essais). À brancher sur R7 à la fusion.
+/// `agents::diplomate_present(g, code, chez)` (module 4), ou `factions[code].diplomates`, la liste des camps où il
+/// en a un (posée par les essais).
 pub fn diplomate_present(g: &Game, code: &str, chez: &str) -> bool {
+    // un diplomate en ambassade (module 4), ou la liste posée à la main par les essais
     let d = champ(&g.factions.get(code), "diplomates");
-    d.is_list() && d.has(chez)
+    super::agents::diplomate_present(g, code, chez) || (d.is_list() && d.has(chez))
 }
 
 /// Une fois par mois : les souvenirs effacés s'en vont (la sauvegarde ne grossit pas).

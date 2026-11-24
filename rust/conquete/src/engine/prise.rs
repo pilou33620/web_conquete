@@ -906,38 +906,9 @@ impl Game {
         }
         if self.rng.random() < chance {
             if kind == "espionner" {
-                let until = TT::deadline(self, R::SPY_INTEL_TOURS, &[&code]);
-                f.setdefault("intel", dict! {}).set(nid.to_string(), until);
-                if code == self.player {
-                    let gm = py::sum_v(n.at("garrison").iter().map(|r| r.at("n")));
-                    let (x0, y0) = (gn.atf("x"), gn.atf("y"));
-                    let near = self
-                        .armies
-                        .values()
-                        .iter()
-                        .filter(|a| a.at_is("owner", &o) && py::hypot(a.atf("x") - x0, a.atf("y") - y0) < 14.0)
-                        .count();
-                    let t = format!(
-                        "Rapport d'espion sur {name} : milice {}, garnison {}, remparts niveau {}, {near} armée(s) aux environs.",
-                        py::int_v(&n.at("milice")),
-                        py::int_v(&gm),
-                        n.at("fort")
-                    );
-                    self.log("espion", &t, &dict! {"x" => &gx, "y" => &gy, "who" => &o, "important" => true});
-                }
+                self.rapport_espion(&code, nid);
             } else {
-                n.set("fort", py_max(0, &n.at("fort") - 1));
-                let mm = py_max(R::NODE_BASE().at(gn.at("type")).at("milice"), &n.at("milice_max") - 40);
-                n.set("milice_max", &mm);
-                n.set("milice", py_min(n.at("milice"), &mm));
-                if code == self.player {
-                    let t = format!("Sabotage réussi : une brèche s'ouvre dans les remparts de {name}.");
-                    self.log("espion", &t, &dict! {"x" => &gx, "y" => &gy, "who" => &code, "important" => true});
-                }
-                if o == self.player {
-                    let t = format!("Des saboteurs ont endommagé les remparts de {name} !");
-                    self.log("espion", &t, &dict! {"x" => &gx, "y" => &gy, "who" => &code, "important" => true});
-                }
+                self.saboter_remparts(&code, nid);
             }
         } else {
             let pen = if kind == "espionner" { 10 } else { 20 };
@@ -954,6 +925,55 @@ impl Game {
                 let t = format!("Un espion de {} a été arrêté à {name}.", self.fname(&code));
                 self.log("espion", &t, &dict! {"x" => &gx, "y" => &gy, "who" => &code, "important" => true});
             }
+        }
+    }
+
+    /// Le rapport d'un espion sur une place : vision et garnison pendant SPY_INTEL_TOURS, et le journal du joueur.
+    /// (SPEC-POLITIQUE, module 4) : sert aussi à la mission « espionner » d'un agent (engine/agents.rs).
+    pub fn rapport_espion(&mut self, code: &str, nid: i64) {
+        let n = self.nodes.at(nid);
+        let gn = self.geo.nodes.at(nid);
+        let o = n.ats("owner");
+        let (gx, gy, name) = (gn.at("x"), gn.at("y"), gn.ats("name"));
+        let until = TT::deadline(self, R::SPY_INTEL_TOURS, &[code]);
+        self.factions.at(code).setdefault("intel", dict! {}).set(nid.to_string(), until);
+        if code == self.player {
+            let gm = py::sum_v(n.at("garrison").iter().map(|r| r.at("n")));
+            let (x0, y0) = (gn.atf("x"), gn.atf("y"));
+            let near = self
+                .armies
+                .values()
+                .iter()
+                .filter(|a| a.at_is("owner", &o) && py::hypot(a.atf("x") - x0, a.atf("y") - y0) < 14.0)
+                .count();
+            let t = format!(
+                "Rapport d'espion sur {name} : milice {}, garnison {}, remparts niveau {}, {near} armée(s) aux environs.",
+                py::int_v(&n.at("milice")),
+                py::int_v(&gm),
+                n.at("fort")
+            );
+            self.log("espion", &t, &dict! {"x" => &gx, "y" => &gy, "who" => &o, "important" => true});
+        }
+    }
+
+    /// Un sabotage réussi : la place perd un niveau de remparts (et la milice qu'ils logeaient).
+    /// (SPEC-POLITIQUE, module 4) : sert aussi à la mission « saboter_remparts » d'un agent (engine/agents.rs).
+    pub fn saboter_remparts(&mut self, code: &str, nid: i64) {
+        let n = self.nodes.at(nid);
+        let gn = self.geo.nodes.at(nid);
+        let o = n.ats("owner");
+        let (gx, gy, name) = (gn.at("x"), gn.at("y"), gn.ats("name"));
+        n.set("fort", py_max(0, &n.at("fort") - 1));
+        let mm = py_max(R::NODE_BASE().at(gn.at("type")).at("milice"), &n.at("milice_max") - 40);
+        n.set("milice_max", &mm);
+        n.set("milice", py_min(n.at("milice"), &mm));
+        if code == self.player {
+            let t = format!("Sabotage réussi : une brèche s'ouvre dans les remparts de {name}.");
+            self.log("espion", &t, &dict! {"x" => &gx, "y" => &gy, "who" => code, "important" => true});
+        }
+        if o == self.player {
+            let t = format!("Des saboteurs ont endommagé les remparts de {name} !");
+            self.log("espion", &t, &dict! {"x" => &gx, "y" => &gy, "who" => code, "important" => true});
         }
     }
 

@@ -75,6 +75,9 @@ pub fn to_dict(g: &mut Game) -> Val {
     if g.commerce.truthy() {
         d.set("commerce", &g.commerce); // (SPEC-EMPIRE, module 7)
     }
+    if g.agents.truthy() {
+        d.set("agents", &g.agents); // (SPEC-POLITIQUE, module 4)
+    }
     // horloges des IA : sans elles, un chargement relance aussitôt leur diplomatie et leurs propositions
     let ai_state = dict! {};
     for (c, ai) in g.ais.iter() {
@@ -255,6 +258,7 @@ pub fn from_dict(geo: Rc<GeoMap>, d: &Val) -> Result<Game, String> {
     g.flottes = d.get_or("flottes", dict! {}); // (SPEC-EMPIRE, module 2) : une sauvegarde d'avant n'en a pas
     g.navales = d.get_or("navales", dict! {});
     g.commerce = d.get_or("commerce", dict! {}); // (SPEC-EMPIRE, module 7)
+    g.agents = d.get_or("agents", dict! {}); // (SPEC-POLITIQUE, module 4) : une sauvegarde d'avant n'en a pas
     g.diplo = d.at("diplo").iter().map(|e| ((e.ats(0), e.ats(1)), e.ats(2))).collect();
     g.rng = Random::new(g.seed + py::int(g.t * 1000.0));
     g.speed_idx = 0;
@@ -439,7 +443,9 @@ pub fn rules_payload_carte(geo: i64) -> Val {
         "denrees" => R::DENREES(), // le commerce maritime (SPEC-EMPIRE, module 7)
         "CARACTERES" => R::CARACTERES(), "CLAUSES" => R::CLAUSES(), // la diplomatie profonde (SPEC-POLITIQUE, module 6)
         // la politique intérieure (SPEC-POLITIQUE, module 5)
-        "regimes" => R::REGIMES(), "postes" => R::POSTES(), "ministre_traits" => R::MINISTRE_TRAITS(), "classes" => R::CLASSES()
+        "regimes" => R::REGIMES(), "postes" => R::POSTES(), "ministre_traits" => R::MINISTRE_TRAITS(), "classes" => R::CLASSES(),
+        // les agents (SPEC-POLITIQUE, module 4)
+        "AGENTS" => R::AGENTS(), "MISSIONS" => R::MISSIONS(), "agent_traits" => R::AGENT_TRAITS(), "agent_ordre" => R::AGENT_ORDRE()
     }
 }
 
@@ -703,6 +709,12 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
         if side.contains(f.ats("owner").as_str()) {
             let (x, y) = (f.atf("x") + 0.5, f.atf("y") + 0.5);
             srcs.push(tup![x, y, 20.0]); // (sans g.wx : la météo se tire à la demande, et la vue ne doit rien changer à la partie)
+        }
+    }
+    // (SPEC-POLITIQUE, module 4) les agents du joueur et de ses alliés voient autour d'eux (la vue seulement)
+    for a in g.agents.values() {
+        if side.contains(a.ats("owner").as_str()) {
+            srcs.push(tup![a.at("x"), a.at("y"), 8.0]);
         }
     }
     let seen = _seer(&srcs, 20.0);
@@ -1109,6 +1121,7 @@ pub fn player_state(g: &mut Game, since: i64) -> Val {
     out.set("tour", TT::view(g));
     crate::engine::marine::vue(g, &out, &*seen); // flottes, blocus, batailles navales (SPEC-EMPIRE, module 2)
     crate::engine::commerce::vue(g, &out, &*seen); // comptoirs, routes commerciales, marché, traversées (SPEC-EMPIRE, module 7)
+    crate::engine::agents::vue(g, &out, &*seen); // les agents (SPEC-POLITIQUE, module 4)
     // les routes que la crue coupe (pendant la crue seulement) : [arête, début, fin] des tronçons noyés, en km
     // le long du tracé
     let cut = g.cut_edges();

@@ -361,6 +361,7 @@ pub fn begin_turn(g: &mut Game) {
         a.set("rt", false);
     }
     crate::engine::marine::debut_tour(g); // les flottes (SPEC-EMPIRE, module 2)
+    crate::engine::agents::debut_tour(g); // les agents (SPEC-POLITIQUE, module 4)
     settle(g);
 }
 

@@ -272,6 +272,9 @@ impl App {
         if c == "politique" {
             return Ok(crate::engine::politique::commande(g, p, body)); // impôts par classe, ministres, révolution (SPEC-POLITIQUE, module 5)
         }
+        if c == "agent" {
+            return Ok(crate::engine::agents::commande(g, p, body)); // les agents (SPEC-POLITIQUE, module 4)
+        }
         if c == "apercu" {
             // rapport de forces estimé contre une armée ou une place ennemie, sans donner l'ordre
             let cible = body.get("target");

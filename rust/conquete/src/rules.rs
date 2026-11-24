@@ -1859,6 +1859,79 @@ pub const TRIBUT_TOURS_MAX: i64 = 60;
 pub const CARTES_TOURS: i64 = 6;   // ce que montrent les cartes données
 pub const ULTIMATUM_RAPPORT: f64 = 1.5;   // une IA ne cède à un ultimatum que devant un camp au moins 1,5 fois plus fort
 pub const ULTIMATUM_CD: f64 = 365.0;   // jours entre deux ultimatums d'une IA au même camp
+// ------------------------------------------------------------------ les agents (SPEC-POLITIQUE, module 4)
+// Les quatre agents : coût (livres), entretien (livres par mois), jours de formation, bâtiments qui les forment
+// ([chaîne, niveau] : un seul suffit ; « capitale » : la capitale du camp), plafond (1 par type, +1 par place qui a un de
+// ces bâtiments au niveau 2 ou plus, au plus `plafond`), caché (l'espion se tient caché), traits qu'il peut gagner.
+fn _ag(nom: &str, desc: &str, cout: i64, entretien: i64, jours: i64, batiments: Val, plafond: i64, traits: Val) -> Val {
+    dict!{"nom" => nom, "desc" => desc, "cout" => cout, "entretien" => entretien, "jours" => jours, "batiments" => batiments,
+          "plafond" => plafond, "cache" => nom == "Espion", "traits" => traits}
+}
+py_const!(AGENTS, dict!{
+    "espion" => _ag("Espion", "Se tient caché ; espionne, sabote, assassine, soulève les places.", 120, 6, 10,
+                    list![tup!["douane", 1], tup!["port", 1], tup!["marche", 1]], 4, list!["discret", "ruse", "fine_lame"]),
+    "gentilhomme" => _ag("Gentilhomme", "Duels, poste à l'université (recherche), vol de technologie ; démasque les espions.", 180, 8, 14,
+                         list![tup!["universite", 1]], 3, list!["fine_lame", "eloquent", "ruse"]),
+    "pretre" => _ag("Prêtre", "Apaise une place agitée, chasse les prêtres étrangers, dénonce les agents ennemis.", 90, 4, 10,
+                    list![tup!["eglise", 1]], 5, list!["pieux", "eloquent"]),
+    "diplomate" => _ag("Diplomate", "Posté dans une capitale étrangère : propositions mieux reçues, relations meilleures avec le temps.", 200, 10, 14,
+                       list![tup!["capitale", 1], tup!["douane", 3]], 3, list!["eloquent", "ruse"])
+});
+py_const!(AGENT_ORDRE, list!["espion", "gentilhomme", "pretre", "diplomate"]);
+// Les missions : agent, cible (place, armee, agent), chance de base, desc ; guerre : contre un camp en guerre seulement ;
+// chez_soi : dans une place du camp ; etranger : chez un autre camp ; poste : l'agent reste en poste (effet chaque mois).
+fn _mi(agent: &str, nom: &str, cible: &str, base: f64, desc: &str, opt: Val) -> Val {
+    let d = dict!{"agent" => agent, "nom" => nom, "cible" => cible, "base" => base, "desc" => desc};
+    d.update(&opt);
+    d
+}
+py_const!(MISSIONS, dict!{
+    "espionner" => _mi("espion", "Espionner", "place|armee", 0.8,
+                       "Révèle la garnison et les environs (14 km) pendant deux tours ; une armée : sa force et son général.", dict!{"etranger" => true}),
+    "saboter_remparts" => _mi("espion", "Saboter les remparts", "place", 0.5,
+                              "En guerre : la place perd un niveau de fortification.", dict!{"guerre" => true}),
+    "saboter_batiment" => _mi("espion", "Saboter un bâtiment", "place", 0.45,
+                              "En guerre : le meilleur bâtiment de la place perd un niveau (ou la ville est endommagée).", dict!{"guerre" => true}),
+    "saboter_armee" => _mi("espion", "Saboter une armée", "armee", 0.45,
+                           "En guerre : moral et munitions de l'armée en baisse.", dict!{"guerre" => true}),
+    "assassiner" => _mi("espion", "Assassiner", "agent|armee", 0.3, "Tue un agent étranger, ou le général d'une armée.", dict!{"etranger" => true}),
+    "inciter" => _mi("espion", "Inciter à la révolte", "place", 0.45, "L'ordre public de la place s'effondre.", dict!{"etranger" => true}),
+    "duel" => _mi("gentilhomme", "Duel", "agent", 0.5, "Contre un gentilhomme étranger : le vaincu meurt ou rentre blessé.", dict!{"etranger" => true}),
+    "universite" => _mi("gentilhomme", "Poste à l'université", "place", 1.0,
+                        "Dans une de vos villes qui a un collège ou mieux : recherche plus rapide tant qu'il y reste.", dict!{"chez_soi" => true, "poste" => true}),
+    "voler_tech" => _mi("gentilhomme", "Voler une technologie", "place", 0.35,
+                        "Dans une ville étrangère qui a un collège ou mieux : une découverte de ce camp que vous n'avez pas.", dict!{"etranger" => true}),
+    "apaiser" => _mi("pretre", "Apaiser la place", "place", 1.0,
+                     "Dans une de vos places : ordre public en hausse chaque mois tant qu'il y reste.", dict!{"chez_soi" => true, "poste" => true}),
+    "denoncer" => _mi("pretre", "Dénoncer un agent", "agent", 0.6,
+                      "Dans une de vos places : chasse un prêtre étranger ou fait arrêter un agent ennemi démasqué.", dict!{"chez_soi" => true}),
+    "ambassade" => _mi("diplomate", "Ambassade", "place", 1.0,
+                       "Dans la capitale d'un camp en paix : ses propositions vous sont mieux reçues, les relations montent chaque mois.",
+                       dict!{"etranger" => true, "poste" => true})
+});
+// Les traits : le bonus de chance par mission (« * » : toutes).
+py_const!(AGENT_TRAITS, dict!{
+    "discret" => dict!{"nom" => "Discret", "desc" => "Espionnage et sabotage +10 %.",
+                       "fx" => dict!{"espionner" => 0.1, "saboter_remparts" => 0.1, "saboter_batiment" => 0.1, "saboter_armee" => 0.1}},
+    "ruse" => dict!{"nom" => "Rusé", "desc" => "Toutes les missions +5 %.", "fx" => dict!{"*" => 0.05}},
+    "fine_lame" => dict!{"nom" => "Fine lame", "desc" => "Duels et assassinats +10 %.", "fx" => dict!{"duel" => 0.1, "assassiner" => 0.1}},
+    "eloquent" => dict!{"nom" => "Éloquent", "desc" => "Vol de technologie, dénonciation +10 % ; ambassade plus efficace.",
+                        "fx" => dict!{"voler_tech" => 0.1, "denoncer" => 0.1, "ambassade" => 0.1}},
+    "pieux" => dict!{"nom" => "Pieux", "desc" => "Apaise mieux ; dénonciation +10 %.", "fx" => dict!{"apaiser" => 0.1, "denoncer" => 0.1}},
+    "bavard" => dict!{"nom" => "Bavard", "desc" => "Parle trop : toutes les missions −5 %.", "fx" => dict!{"*" => -0.05}}
+});
+pub const AGENT_VITESSE: f64 = 32.0;   // km par jour sur la route (une armée : une vingtaine)
+pub const AGENT_XP: [i64; 5] = [0, 2, 5, 9, 14];   // expérience des niveaux 1 à 5 (une mission réussie : 1, 2 si difficile)
+pub const AGENT_NIVEAU: f64 = 0.05;   // chance gagnée par niveau au-delà du premier
+pub const AGENT_PRIS: f64 = 0.4;   // un échec : pris (incident diplomatique) …
+pub const AGENT_TUE: f64 = 0.2;   // … ou tué ; sinon il s'échappe
+pub const AGENT_REL: i64 = 15;   // relation perdue par la victime quand un agent est pris
+pub const AGENT_DETECTE: f64 = 6.0;   // km : un espion caché est vu par les espions, gentilshommes et cavaliers ennemis à cette distance
+pub const AGENT_PORTEE: f64 = 6.0;   // km : distance d'une armée visée par une mission
+pub const AGENT_RECHERCHE: f64 = 0.1;   // recherche + par gentilhomme posté (plus 25 % par niveau)
+pub const AGENT_APAISE: f64 = 0.06;   // ordre public + par mois d'un prêtre posté (plus 25 % par niveau)
+pub const AGENT_INCITE: f64 = 0.2;   // ordre public perdu par une place soulevée
+pub const AGENT_AMBASSADE: i64 = 1;   // relation gagnée par mois d'ambassade (jusqu'à 60)
 
 
 pub fn tax_label(v: f64) -> String {

@@ -165,7 +165,9 @@ fn jouer_ia(g: &mut Game, ai: &mut AI, nom: &str, op: &Val) -> Val {
             Val::None
         }
         "espionage" => {
-            ai.espionage(g);
+            // (SPEC-POLITIQUE, module 4) l'ancienne `espionage` passe par les agents
+            ai.agents_clock = 0.0;
+            conquete::ai::agents::jouer(g, ai);
             Val::None
         }
         "diplomacy" => {
