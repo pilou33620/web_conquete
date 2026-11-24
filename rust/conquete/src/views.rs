@@ -437,7 +437,7 @@ pub fn rules_payload_carte(geo: i64) -> Val {
         // la marine (SPEC-EMPIRE, module 2)
         "navires" => R::NAVIRES(), "navire_ordre" => R::NAVIRE_ORDRE(), "strats_nav" => R::STRATS_NAV(), "phases_nav" => R::PHASES_NAV(),
         "denrees" => R::DENREES(), // le commerce maritime (SPEC-EMPIRE, module 7)
-        "CARACTERES" => R::CARACTERES(), "CLAUSES" => R::CLAUSES() // la diplomatie profonde (SPEC-POLITIQUE, module 6),
+        "CARACTERES" => R::CARACTERES(), "CLAUSES" => R::CLAUSES(), // la diplomatie profonde (SPEC-POLITIQUE, module 6)
         // la politique intérieure (SPEC-POLITIQUE, module 5)
         "regimes" => R::REGIMES(), "postes" => R::POSTES(), "ministre_traits" => R::MINISTRE_TRAITS(), "classes" => R::CLASSES()
     }
