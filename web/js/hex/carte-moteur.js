@@ -1,6 +1,6 @@
 // La carte du jeu (cases de 1 km : map.terrain, map.dept, map.rivers…) mise au format de carte du moteur commun
 // web_engine (graphismes/rendu/plateau.js, celui du serveur de web_royaumes : l, h, terrain, riviere, fertile, arbres,
-// foret, rivieres…). Sans three.js : testé par tests/hex.test.mjs.
+// foret, rivieres, bras…). Sans three.js : testé par tests/hex.test.mjs.
 //
 // Le moteur est fait pour des cartes de quelques milliers de cases, toutes bâties d'un coup (décor par case). La France
 // d'un coup, le décor (arbres, parcelles) coûte cher : le plateau ne bâtit qu'une fenêtre autour de la caméra. La
@@ -21,9 +21,10 @@ const T = { OCEAN: 0, EAU: 1, PLAINE: 2, FORET: 3, LANDE: 4, MARAIS: 5, COLLINES
 const VERS = [0, 2, 4, 4, 4, 4, 5, 6, 6, 3, 4];
 // rivières montrées selon la taille des hexagones (rang 1 : les fleuves)
 const RANG_MAX = { 4: 3, 8: 3, 16: 2 };
-// bras d'eau étroits (brasDEau) en hexagones de mer jusqu'aux hexagones de 4 cases ; plus loin en ruban de fleuve (des
-// hexagones de mer de 8 cases mangeraient les presqu'îles qui les bordent, le Médoc)
-const PAS_MER = 4;
+// bras d'eau étroits (brasDEau) en hexagones de mer jusqu'aux hexagones de 4 cases, là où l'eau couvre au moins PART_MER de
+// l'hexagone ; ailleurs et plus loin en ruban de mer (des hexagones de mer de 8 cases mangeraient les presqu'îles qui les
+// bordent, le Médoc ; un chenal d'une ou deux cases en hexagones de 4 serait une étendue d'eau)
+const PAS_MER = 4, PART_MER = 0.4;
 // les bras d'eau courts (moins de deux hexagones, au moins COURT_MIN hexagones de profondeur : rias, petits golfes,
 // lagunes) en ruban d'eau jusqu'aux hexagones de 8 cases ; plus loin, il y en aurait sur toute côte découpée
 const PAS_COURTS = 8, COURT_MIN = 0.75;
@@ -44,12 +45,21 @@ export class Niveau {
   constructor(mp, pas, leger = false) {
     const g = this.g = new Grille(mp.W, mp.H, pas), n = g.liste.length, W = mp.W, H = mp.H;
     this.pas = pas; this.leger = leger; this.u = pas / SQ3;   // u : km par unité du moteur (rayon d'un hexagone = 1)
-    const cnt = new Uint16Array(n * 11), jeu = new Uint16Array(n), terre = new Uint16Array(n), hexDe = new Int32Array(W * H);
+    const cnt = new Uint16Array(n * 11), jeu = new Uint16Array(n), terre = new Uint16Array(n), hexDe = new Int32Array(W * H), etroit = new Uint16Array(n);
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
       const h = hexDe[j * W + i] = indexEn(g, i + 0.5, j + 0.5); if (h < 0) continue;
       const c = j * W + i, k = mp.terrain[c];
       cnt[h * 11 + k]++;
       if (k > T.EAU) { terre[h]++; jeu[h] += mp.playable[c] ? 1 : 0; }
+    }
+    // (les cases de chenal, comptées seulement dans les hexagones où l'eau est la plus présente sans couvrir la moitié)
+    if (pas <= PAS_COURTS) {
+      const doute = new Uint8Array(n);
+      for (let h = 0; h < n; h++) {
+        const eau = cnt[h * 11 + T.OCEAN] + cnt[h * 11 + T.EAU];
+        doute[h] = eau > 0 && eau < terre[h] && cnt.subarray(h * 11 + 2, h * 11 + 11).every(v => v <= Math.max(cnt[h * 11], cnt[h * 11 + 1])) ? 1 : 0;
+      }
+      for (let c = 0; c < W * H; c++) { const h = hexDe[c]; if (h >= 0 && doute[h] && mp.terrain[c] <= T.EAU && chenal(mp, c)) etroit[h]++; }
     }
     const ter = this.terrain = new Uint8Array(n), arbres = this.arbres = new Uint8Array(n), foret = this.foret = new Uint8Array(n);
     const fertile = this.fertile = new Uint8Array(n); this.jeu = new Uint8Array(n); this.riviere = new Uint8Array(n);
@@ -57,6 +67,13 @@ export class Niveau {
       let b = 0, bv = -1, tot = 0;
       for (let k = 0; k < 11; k++) { const v = cnt[h * 11 + k]; tot += v; if (v > bv) { bv = v; b = k; } }
       if (!tot) b = T.OCEAN;   // (hors de la carte : la mer)
+      // un chenal (de la terre des deux côtés : la rivière Sainte-Claire, le Saint-Laurent sous Montréal, la Musi) qui ne
+      // couvre pas la moitié d'un hexagone d'au plus PAS_COURTS cases : la terre la plus présente ; il y passe en ruban de mer
+      // (brasDEau) au lieu d'une file d'hexagones d'eau. (Une côte, un lac plus large que le chenal : la plus présente.)
+      const eau = cnt[h * 11 + T.OCEAN] + cnt[h * 11 + T.EAU];
+      if (b <= T.EAU && 2 * eau < tot && 4 * etroit[h] >= 3 * eau) {
+        bv = -1; for (let k = 2; k < 11; k++) if (cnt[h * 11 + k] > bv) { bv = cnt[h * 11 + k]; b = k; }
+      }
       const t = g.liste[h], bois = tot ? (cnt[h * 11 + T.FORET] + cnt[h * 11 + T.LANDE] * 0.5) / tot : 0;
       ter[h] = VERS[b];
       this.jeu[h] = terre[h] > 0 && jeu[h] * 2 >= terre[h] ? 1 : 0;
@@ -68,39 +85,59 @@ export class Niveau {
       if (b === T.MARAIS) arbres[h] = Math.max(arbres[h], 1);
       if (leger) arbres[h] = foret[h];   // (de loin, un arbre par hexagone de forêt : ce sont eux qui coûtent)
     }
-    // les bras d'eau plus étroits qu'un hexagone (estuaires, détroits, rias) : la majorité les effacerait ; de près, leur
-    // chaîne d'hexagones devient de la mer, jusqu'au port du fond, qui garde son hexagone au bord de l'eau
+    // les bras d'eau plus étroits qu'un hexagone (estuaires, détroits, rias, chenaux) : la majorité les effacerait ; de près,
+    // les hexagones de leur chaîne où l'eau est large (PART_MER) deviennent de la mer, sauf le port du fond, qui garde son
+    // hexagone au bord de l'eau ; le reste (un chenal d'une ou deux cases : le Saint-Laurent sous Montréal, la rivière
+    // Sainte-Claire, la Musi) est un ruban de mer (bras du moteur), comme les bras courts et, plus loin, tous les bras
     const bras = brasDEau(g, mp, hexDe, ter, pas);
     if (pas <= PAS_MER) {
       const places = new Set((mp.nodes || []).map(n => indexEn(g, n.x, n.y)));
       for (const ch of bras) {
         if (ch.court) continue;
-        while (ch.length && places.has(ch[ch.length - 1])) ch.pop();
-        for (const h of ch) if (ter[h] >= 3) { ter[h] = 0; fertile[h] = foret[h] = arbres[h] = 0; }
+        let fin = ch.length; while (fin && places.has(ch[fin - 1])) fin--;
+        for (let k = 0; k < fin; k++) {
+          const h = ch[k], tot = cnt.subarray(h * 11, h * 11 + 11).reduce((a, v) => a + v, 0);
+          if (ter[h] >= 3 && (cnt[h * 11 + T.OCEAN] + cnt[h * 11 + T.EAU]) >= PART_MER * tot) { ter[h] = 0; fertile[h] = foret[h] = arbres[h] = 0; }
+        }
       }
     }
     // la côte : la mer au bord des terres devient haut-fond (le sable sous l'eau translucide)
     for (let h = 0; h < n; h++) if (ter[h] === 0 && g.voisins(g.liste[h]).some(v => ter[v.i] >= 3)) ter[h] = 1;
     // les rivières : chaînes d'hexagones voisins, d'amont en aval ; les vallées qu'elles traversent sont mises à plat
-    this.rivieres = [];
+    this.rivieres = []; this.bras = [];
     const rmax = RANG_MAX[pas] ?? 1;
-    // (les bras d'eau en ruban, du fond vers l'eau : les longs plus loin que PAS_MER, les courts à tous les niveaux qui en
-    // ont, sauf là où passe déjà une rivière)
+    // (les bras d'eau en ruban de mer, du fond vers l'eau : les longs (ce qui reste de terre dans leur chaîne), les courts à
+    // tous les niveaux qui en ont, sauf là où passe déjà une rivière ; leurs montagnes mises à plat, comme une vallée)
     const ruban = ch => {
       ch.reverse();
-      for (const h of ch) if (ter[h] >= 3) { this.riviere[h] = 1; fertile[h] = 0; }
-      if (ch.length > 1) this.rivieres.push(ch);
+      if (!ch.some(h => ter[h] >= 3)) return;
+      for (const h of ch) if (ter[h] >= 3) { this.riviere[h] = 1; fertile[h] = 0; if (ter[h] === 6) ter[h] = 5; }
+      if (ch.length > 1) this.bras.push(ch);
     };
-    if (pas > PAS_MER) for (const ch of bras) if (!ch.court) ruban(ch);
+    for (const ch of bras) if (!ch.court) ruban(ch);
+    // (une rivière qui suit un bras long, le Saint-Laurent sous Montréal : son ruban s'arrête au premier hexagone du bras, où
+    // le ruban de mer prend le relais)
+    const enBras = new Set(this.bras.flat().filter(h => ter[h] >= 3));
     for (const rv of mp.m.rivers || []) {
       if (rv.rank > rmax) continue;
       const ch = chaine(g, rv.pts, pas);
       for (const h of ch) if (ter[h] >= 3) { this.riviere[h] = 1; fertile[h] = 0; if (ter[h] === 6) ter[h] = rv.rank < 3 ? 4 : 5; }
-      if (ch.length > 1) this.rivieres.push(ch);
+      let cur = [];
+      ch.forEach((h, k) => {
+        if (!enBras.has(h) || !enBras.has(ch[k - 1]) && k > 0 || !enBras.has(ch[k + 1]) && k < ch.length - 1) cur.push(h);
+        else { if (cur.length > 1) this.rivieres.push(cur); cur = []; }
+      });
+      if (cur.length > 1) this.rivieres.push(cur);
     }
     for (const ch of bras) if (ch.court && !ch.some(h => this.riviere[h])) ruban(ch);
   }
   estEau(h) { return this.terrain[h] < 3; }
+}
+
+// la case d'eau c est-elle dans un chenal : de la terre des deux côtés, à deux cases au plus (pas le bord d'une côte droite) ?
+function chenal({ W, H, terrain }, c) {
+  const i = c % W, j = (c - i) / W, terreEn = (x, y) => x >= 0 && y >= 0 && x < W && y < H && terrain[y * W + x] > T.EAU;
+  return [[1, 0], [0, 1], [1, 1], [1, -1]].some(([a, b]) => (terreEn(i + a, j + b) || terreEn(i + 2 * a, j + 2 * b)) && (terreEn(i - a, j - b) || terreEn(i - 2 * a, j - 2 * b)));
 }
 
 // Les bras d'eau que la majorité efface : des chaînes d'hexagones voisins, chacune de l'eau des hexagones vers le fond.
@@ -114,7 +151,8 @@ export class Niveau {
 // voisins (pas deux fonds voisins, ni un fond contre une autre chaîne), et sans prendre un hexagone d'une autre chaîne.
 function brasDEau(g, mp, hexDe, ter, pas) {
   const { W, H, terrain } = mp, N = W * H, n = g.liste.length;
-  const eau = c => terrain[c] <= T.EAU && hexDe[c] >= 0, perdue = c => eau(c) && ter[hexDe[c]] >= 3;
+  // (les cases d'eau d'un hexagone de terre, et celles d'une eau de moins de 3 hexagones, une flaque au fil d'un chenal : Trois-Rivières)
+  const eau = c => terrain[c] <= T.EAU && hexDe[c] >= 0, perdue = c => eau(c) && (ter[hexDe[c]] >= 3 || taille[comp[hexDe[c]]] < 3);
   const comp = new Int32Array(n).fill(-1), taille = [];   // les eaux des hexagones : composantes des hexagones d'eau
   for (let h0 = 0; h0 < n; h0++) {
     if (comp[h0] >= 0 || ter[h0] >= 3) continue;
@@ -146,8 +184,7 @@ function brasDEau(g, mp, hexDe, ter, pas) {
   };
   for (const [u, v] of ponts.values()) garder([...remonter(u), ...remonter(v).reverse()].filter((h, k, ch) => h !== ch[k - 1]), false);
   // (un fond court entre deux terres, à deux cases au plus de part et d'autre : un chenal, pas le bord d'une côte droite)
-  const terreEn = (i, j) => i >= 0 && j >= 0 && i < W && j < H && terrain[j * W + i] > T.EAU;
-  const etroit = c => { const i = c % W, j = (c - i) / W; return [[1, 0], [0, 1], [1, 1], [1, -1]].some(([a, b]) => (terreEn(i + a, j + b) || terreEn(i + 2 * a, j + 2 * b)) && (terreEn(i - a, j - b) || terreEn(i - 2 * a, j - 2 * b))); };
+  const etroit = c => chenal(mp, c);
   const dmin = pas <= PAS_COURTS ? Math.ceil(COURT_MIN * pas) : 2 * pas;
   const fonds = [...dist].filter(([c, d]) => (d >= 2 * pas || d >= dmin && etroit(c)) && perdue(c) && ![c - 1, c + 1, c - W, c + W].some(v => (dist.get(v) ?? -1) > d)).sort((a, b) => b[1] - a[1]);
   for (const [c, d] of fonds) {
@@ -267,19 +304,19 @@ export function fenetre(N, f, ville = new Set(), sansPont = new Set()) {
   const { c0, r0, l, h } = f, n = l * h, G = N.g.cols;
   const gl = i => (r0 + ((i / l) | 0)) * G + c0 + (i % l);
   const C = { l, h, version: 1, terrain: new Array(n), riviere: new Array(n), fertile: new Array(n), poissons: new Array(n).fill(0),
-    gisement: new Array(n).fill(null), arbres: new Array(n), foret: new Array(n), rivieres: [], gl };
+    gisement: new Array(n).fill(null), arbres: new Array(n), foret: new Array(n), rivieres: [], bras: [], gl };
   for (let i = 0; i < n; i++) {
     const k = gl(i), v = ville.has(k);
     C.terrain[i] = v && N.terrain[k] >= 3 ? 4 : N.terrain[k];
     C.riviere[i] = sansPont.has(k) ? 0 : N.riviere[k]; C.fertile[i] = v ? 0 : N.fertile[k];
     C.arbres[i] = v ? 0 : N.arbres[k]; C.foret[i] = v ? 0 : N.foret[k];
   }
-  // les rivières coupées au bord de la fenêtre
+  // les rivières et les bras de mer coupés au bord de la fenêtre
   const loc = k => { const c = k % G - c0, r = ((k / G) | 0) - r0; return c >= 0 && r >= 0 && c < l && r < h ? r * l + c : -1; };
-  for (const ch of N.rivieres) {
+  for (const [de, vers] of [[N.rivieres, C.rivieres], [N.bras, C.bras]]) for (const ch of de) {
     let cur = [];
-    for (const k of ch) { const i = loc(k); if (i >= 0) cur.push(i); else { if (cur.length > 1) C.rivieres.push(cur); cur = []; } }
-    if (cur.length > 1) C.rivieres.push(cur);
+    for (const k of ch) { const i = loc(k); if (i >= 0) cur.push(i); else { if (cur.length > 1) vers.push(cur); cur = []; } }
+    if (cur.length > 1) vers.push(cur);
   }
   return C;
 }

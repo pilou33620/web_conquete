@@ -48,14 +48,23 @@ test('carte du moteur : indice d’hexagone, fenêtre alignée, taille bornée',
   assert.equal(N.terrain[indexEn(N.g, 15, 25)] <= 1, true); // la côte (haut-fond) ou la mer
   assert.equal(N.foret[indexEn(N.g, 50, 8)], 1);
   assert.equal(N.riviere[indexEn(N.g, 40, 30)], 1);
-  // un estuaire d'une case de large (y = 10, de la mer à x = 38) : effacé par la majorité, gardé par brasDEau (de la mer en
-  // hexagones de 4 cases, un ruban de fleuve plus loin), le port du fond gardant son hexagone
+  // un chenal d'une case de large (y = 10, de la mer à x = 38) : effacé par la majorité, gardé par brasDEau en ruban de mer
+  // (bras), de près comme de loin, sans hexagone de mer en plus ; plus large (trois cases), de près, en hexagones de mer, le
+  // port du fond gardant son hexagone
   const estu = { ...mp, terrain: terrain.map((t, c) => c % W < 38 && ((c / W) | 0) === 10 ? 0 : t) };
-  const E4 = new Niveau(estu, 4), E8 = new Niveau(estu, 8), h8 = indexEn(E8.g, 30, 10);
+  for (const pas of [4, 8]) {
+    const E = new Niveau(estu, pas), h = indexEn(E.g, 30, 10), ch = E.bras.find(ch => ch.includes(h));
+    assert.ok(!E.estEau(h) && E.riviere[h] === 1 && ch && E.estEau(ch[ch.length - 1]) && !E.rivieres.some(ch => ch.includes(h)), `chenal à ${pas} cases`);
+    assert.equal(E.terrain.filter(t => t < 3).length, new Niveau(mp, pas).terrain.filter(t => t < 3).length);
+  }
+  // (dans une terre de quatre sortes, l'eau du chenal est la plus présente de ses hexagones : il reste un ruban)
+  const mele = { ...estu, terrain: estu.terrain.map((t, c) => t && c % W >= 15 ? 2 + (c % W + ((c / W) | 0)) % 4 : t) };
+  for (const pas of [4, 8]) { const E = new Niveau(mele, pas), h = indexEn(E.g, 30, 10); assert.ok(!E.estEau(h) && E.bras.some(ch => ch.includes(h)), `chenal mêlé à ${pas} cases`); }
+  const large = { ...mp, terrain: terrain.map((t, c) => c % W < 38 && Math.abs(((c / W) | 0) - 10) <= 1 ? 0 : t) };
+  const E4 = new Niveau(large, 4);
   assert.ok(E4.estEau(indexEn(E4.g, 30, 10)) && E4.estEau(indexEn(E4.g, 36, 10)));
-  assert.ok(!E8.estEau(h8) && E8.riviere[h8] === 1 && E8.rivieres.some(ch => ch.includes(h8)));
-  estu.nodes = [{ x: 37, y: 10 }];
-  const P4 = new Niveau(estu, 4);
+  large.nodes = [{ x: 37, y: 10 }];
+  const P4 = new Niveau(large, 4);
   assert.ok(!P4.estEau(indexEn(P4.g, 37, 10)) && P4.estEau(indexEn(P4.g, 30, 10)));
   // une côte à peine découpée (une case d'eau dans un hexagone de terre) ne bouge pas
   assert.equal(new Niveau({ ...mp, terrain: terrain.map((t, c) => c === 10 * W + 15 ? 0 : t) }, 4).terrain[indexEn(N.g, 15.5, 10.5)], N.terrain[indexEn(N.g, 15.5, 10.5)]);
@@ -63,7 +72,7 @@ test('carte du moteur : indice d’hexagone, fenêtre alignée, taille bornée',
   // de près et à 8 cases, sans qu'aucun hexagone de terre ne devienne de la mer ; rien à 16 cases
   const golfe = { ...mp, terrain: terrain.map((t, c) => c % W < 21 && ((c / W) | 0) === 40 ? 0 : t) };
   for (const pas of [4, 8]) {
-    const G = new Niveau(golfe, pas), h = indexEn(G.g, 19.5, 40.5), ch = G.rivieres.find(ch => ch.includes(h));
+    const G = new Niveau(golfe, pas), h = indexEn(G.g, 19.5, 40.5), ch = G.bras.find(ch => ch.includes(h));
     assert.ok(!G.estEau(h) && G.riviere[h] === 1 && ch && G.estEau(ch[ch.length - 1]), `golfe à ${pas} cases`);
     assert.equal(G.terrain.filter(t => t < 3).length, new Niveau(mp, pas).terrain.filter(t => t < 3).length);
   }
@@ -71,11 +80,11 @@ test('carte du moteur : indice d’hexagone, fenêtre alignée, taille bornée',
   // une côte droite, quel que soit son angle, ne gagne aucun ruban
   for (let a = 0; a < 180; a += 15) for (const o of [0, 0.6, 1.7]) {
     const t = a * Math.PI / 180, dr = new Uint8Array(80 * 80).map((_, c) => (c % 80 - 39.5) * Math.cos(t) + (((c / 80) | 0) - 39.5) * Math.sin(t) + o > 0 ? 2 : 0);
-    for (const pas of [4, 8]) assert.equal(new Niveau({ W: 80, H: 80, terrain: dr, playable: dr, m: { rivers: [] } }, pas).rivieres.length, 0, `côte à ${a}°`);
+    for (const pas of [4, 8]) assert.equal(new Niveau({ W: 80, H: 80, terrain: dr, playable: dr, m: { rivers: [] } }, pas).bras.length, 0, `côte à ${a}°`);
   }
   // une côte en peigne (un fjord de 5 cases sur deux lignes) : quelques rubans, jamais deux fonds voisins
   const peigne = { ...mp, m: { rivers: [] }, terrain: terrain.map((t, c) => c % W < 20 && ((c / W) | 0) % 2 ? 0 : t) }, P = new Niveau(peigne, 4);
-  const fonds = P.rivieres.map(ch => ch[0]);
+  const fonds = P.bras.map(ch => ch[0]);
   assert.ok(fonds.length >= 1 && fonds.length <= Math.ceil(P.g.rows / 2));
   for (const f of fonds) assert.ok(!P.g.voisins(P.g.liste[f]).some(v => fonds.includes(v.i)));
   for (const [cx, cy] of [[30, 25], [0, 0], [59, 49], [33, 17]]) {
@@ -83,6 +92,8 @@ test('carte du moteur : indice d’hexagone, fenêtre alignée, taille bornée',
     assert.equal(f.r0 % 2, 0);
     assert.equal(C.terrain.length, f.l * f.h);
     for (const ch of C.rivieres) for (const i of ch) assert.ok(i >= 0 && i < f.l * f.h && C.riviere[i] === 1);
+    // (un bras de mer finit par son hexagone d'eau)
+    for (const ch of fenetre(new Niveau(estu, 4), cadrer(new Niveau(estu, 4), cx, cy, 6, 5)).bras) for (const i of ch) assert.ok(i >= 0 && i < 30);
     assert.ok(couvre(f, f.x0, f.x1, f.y0, f.y1));
   }
   const dernier = NIVEAUX.findLastIndex(n => !n.sobre);
