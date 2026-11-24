@@ -19,12 +19,12 @@
 ],
 "BMA": [
 "São Luís | | 17 | port commerce | 2", "Belém | Belém/@-1.46,-48.49 | 12 | port commerce | 2", "Alcântara | | 5 | port | 0", "Caxias | Caxias/@-4.86,-43.36 | 5 | | 0",
-"Santarém | Santarém/@-2.44,-54.71 | 3 | port | 1", "Macapá | | 3 | port | 3", "Cametá | | 4 | port | 0", "Bragança | Bragança/@-1.05,-46.77 | 2 | | 0",
-"Vigia | Vigia/@-0.86,-48.14 | 3 | port | 0", "Gurupá | | 1.5 | port | 1", "Óbidos | | 2 | port | 1", "Itapecuru-Mirim | Itapecuru Mirim/@-3.39,-44.36 | 2 | | 0",
+"Santarém | Santarém/@-2.44,-54.71 | 3 | | 1", "Macapá | | 3 | port | 3", "Cametá | | 4 | port | 0", "Bragança | Bragança/@-1.05,-46.77 | 2 | | 0",
+"Vigia | Vigia/@-0.86,-48.14 | 3 | port | 0", "Gurupá | | 1.5 | port | 1", "Óbidos | | 2 | | 1", "Itapecuru-Mirim | Itapecuru Mirim/@-3.39,-44.36 | 2 | | 0",
 "Viana | Viana/@-3.22,-44.99 | 2 | | 0", "Icatu | | 2 | | 0", "Mazagão | | 2 | | 0", "Monte Alegre | Monte Alegre/@-2.0,-54.07 | 1.5 | | 0",
 "Chaves | Chaves/@-0.16,-49.99 | 1 | port | 0", "Soure | | 1.5 | port | 0", "Oeiras | Oeiras/@-7.02,-42.13 | 4 | | 0", "Parnaíba | Parnaíba/@-2.90,-41.78 | 3 | port commerce | 0",
 "Campo Maior | Campo Maior/@-4.83,-42.17 | 2 | | 0", "Valença do Piauí | | 1 | | 0", "Jerumenha | @-7.09,-43.50 | 1 | | 0", "Pastos Bons | | 1 | | 0",
-"Serpa | Itacoatiara | 1 | port | 0", "Souzel | @-2.80,-52.20 | 0.5 | | 0"
+"Serpa | Itacoatiara | 1 | | 0", "Souzel | @-2.80,-52.20 | 0.5 | | 0"
 ],
 "BRJ": [
 "Rio de Janeiro | | 40 | port commerce | 2", "Praia Grande | Niterói | 3 | port | 1", "Campos | Campos dos Goytacazes/Campos | 6 | | 0", "Cabo Frio | | 3 | port | 1",
@@ -51,7 +51,7 @@
 ],
 "BGO": [
 "Vila Boa | Goiás/@-15.93,-50.14 | 8 | | 0", "Meia Ponte | Pirenópolis | 5 | | 0", "Natividade | Natividade/@-11.71,-47.72 | 3 | | 0", "Santa Luzia | Luziânia | 3 | | 0",
-"Pilar de Goiás | @-14.76,-49.58 | 3 | | 0", "Crixás | | 2 | | 0", "Arraias | | 2 | | 0", "Porto Real | Porto Nacional/@-10.71,-48.42 | 1 | port | 0",
+"Pilar de Goiás | @-14.76,-49.58 | 3 | | 0", "Crixás | | 2 | | 0", "Arraias | | 2 | | 0", "Porto Real | Porto Nacional/@-10.71,-48.42 | 1 | | 0",
 "Cavalcante | Cavalcante/@-13.80,-47.46 | 2 | | 0", "Jaraguá | Jaraguá/@-15.76,-49.33 | 2 | | 0", "Santa Cruz de Goiás | @-17.32,-48.48 | 2 | | 0", "Corumbá de Goiás | @-15.92,-48.81 | 1 | | 0"
 ],
 "BMT": [
@@ -59,10 +59,10 @@
 "Chapada | Chapada dos Guimarães | 1 | | 0", "Rosário Oeste | | 1 | | 0"
 ],
 "BTU": [
-"Maués | | 1 | | 0", "Parintins | Parintins/@-2.63,-56.74 | 0.8 | port | 0", "Aveiro | @-3.61,-55.33 | 0.5 | | 0", "Itaituba | | 0.5 | port | 0"
+"Maués | | 1 | | 0", "Parintins | Parintins/@-2.63,-56.74 | 0.8 | | 0", "Aveiro | @-3.61,-55.33 | 0.5 | | 0", "Itaituba | | 0.5 | | 0"
 ],
 "BGU": [
-"Albuquerque | Corumbá/@-19.0,-57.65 | 0.5 | port | 1", "Coimbra | @-19.92,-57.79 | 0.3 | port | 2", "Miranda | Miranda/@-20.24,-56.38 | 0.3 | | 0", "Camapuã | | 0.3 | | 0",
+"Albuquerque | Corumbá/@-19.0,-57.65 | 0.5 | | 1", "Coimbra | @-19.92,-57.79 | 0.3 | | 2", "Miranda | Miranda/@-20.24,-56.38 | 0.3 | | 0", "Camapuã | | 0.3 | | 0",
 "Nioaque | @-21.14,-55.83 | 0.2 | | 0"
 ],
 "BNL": [

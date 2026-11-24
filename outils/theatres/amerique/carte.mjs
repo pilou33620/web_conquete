@@ -95,6 +95,23 @@ const ESTUAIRES = [
   ['Potomac', 7.5, [[-76.3, 37.98], [-76.6, 38.15], [-76.9, 38.27], [-77.05, 38.4], [-77.1, 38.55], [-77.05, 38.7]]],
   ['Savannah', 7.5, [[-80.80, 32.02], [-80.95, 32.06], [-81.02, 32.08]]],
   ['lac Pontchartrain', 7.5, [[-90.05, 30.15], [-90.07, 30.04]]], // La Nouvelle-Orléans, au bord du lac
+  // remontés par les navires de mer : le Saint-Laurent jusqu'à Montréal (le port, au pied des rapides de Lachine), l'Hudson
+  // jusqu'à Albany, le bas Mississippi par ses passes jusqu'à La Nouvelle-Orléans et Bâton-Rouge (tracés de Natural Earth)
+  ['Saint-Laurent (Québec à Montréal)', 7.5, [[-71.20, 46.81], [-71.39, 46.74], [-71.55, 46.69], [-71.80, 46.65], [-72.01, 46.60], [-72.20, 46.53],
+    [-72.36, 46.42], [-72.50, 46.36], [-72.64, 46.29], [-72.85, 46.22], [-73.00, 46.15], [-73.13, 46.06], [-73.25, 45.90], [-73.38, 45.79],
+    [-73.45, 45.68], [-73.50, 45.60], [-73.53, 45.55]]],
+  ['Hudson', 7.5, [[-74.06, 40.69], [-74.055, 40.76], [-74.01, 40.84], [-73.95, 40.92], [-73.89, 41.00], [-73.88, 41.10], [-73.92, 41.20],
+    [-73.97, 41.32], [-73.96, 41.41], [-73.99, 41.49], [-73.98, 41.57], [-73.95, 41.65], [-73.95, 41.80], [-73.94, 41.88], [-73.96, 41.98],
+    [-73.94, 42.11], [-73.85, 42.25], [-73.78, 42.32], [-73.80, 42.40], [-73.79, 42.50], [-73.775, 42.58]]],
+  ['Mississippi', 7.5, [[-89.40, 28.96], [-89.28, 29.10], [-89.27, 29.20], [-89.43, 29.35], [-89.61, 29.46], [-89.79, 29.58], [-89.97, 29.70],
+    [-90.02, 29.76], [-89.99, 29.85], [-89.98, 29.91], [-90.07, 29.905], [-90.16, 29.92],
+    [-90.23, 29.95], [-90.40, 29.99], [-90.54, 30.06], [-90.72, 30.03],
+    [-90.81, 30.01], [-90.94, 30.13], [-91.07, 30.21], [-91.15, 30.28], [-91.19, 30.38]]],
+  // les Grands Lacs (eaux intérieures : les chutes du Niagara séparent le lac Ontario, les rapides de Lachine la mer) :
+  // les rivières qui relient les lacs Supérieur, Huron, Sainte-Claire et Érié
+  ['rivière Sainte-Marie', 7.5, [[-84.62, 46.53], [-84.45, 46.51], [-84.30, 46.49], [-84.18, 46.44], [-84.18, 46.36], [-84.15, 46.28]]],
+  ['rivière Sainte-Claire', 7.5, [[-82.38, 43.04], [-82.42, 42.95], [-82.46, 42.82], [-82.52, 42.70], [-82.68, 42.64]]],
+  ['rivière de Détroit', 7.5, [[-82.78, 42.33], [-82.95, 42.32], [-83.08, 42.28], [-83.12, 42.18], [-83.14, 42.05]]],
 ];
 
 // ------------------------------------------------------------------ fleuves : estimations (source et embouchure, à 30 km près)
@@ -259,6 +276,11 @@ const CULTURES = {
 const PASSAGES = [
   ['Saint-Laurent', [-64.0, 49.3], [-71.1, 46.88]], ['baie de la Chesapeake', [-75.8, 36.95], [-76.45, 39.3]],
   ['baie de la Delaware', [-74.9, 38.85], [-75.5, 39.7]], ['baie de New York (Hudson)', [-73.85, 40.45], [-74.0, 40.68]],
+  ['Saint-Laurent jusqu\'à Montréal', [-64.0, 49.3], [-73.53, 45.55]], ['Hudson jusqu\'à Albany', [-73.85, 40.45], [-73.775, 42.58]],
+  ['passes du Mississippi', [-89.4, 28.8], [-91.19, 30.38]],
+  // eaux intérieures (sans lien avec la mer) : les lacs Supérieur, Michigan, Huron et Érié se tiennent
+  ['rivière Sainte-Marie (lacs Supérieur et Huron)', [-85.5, 47.0], [-84.0, 46.25]], ['détroit de Mackinac', [-85.5, 45.8], [-84.3, 45.8]],
+  ['rivières Sainte-Claire et de Détroit (lacs Huron et Érié)', [-82.2, 44.0], [-81.5, 42.2]],
 ];
 
 export default {

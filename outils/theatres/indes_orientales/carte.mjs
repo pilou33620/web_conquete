@@ -64,6 +64,29 @@ const COUPES = {
 const DETROITS = [
   ['Détroit de Bali', [[114.42, -8.03], [114.41, -8.13], [114.43, -8.25], [114.5, -8.4]]],
 ];
+// estuaires creusés jusqu'à moins de 10 km du port du fond (outils/THEATRES.md) : [nom, largeur en km, axe de la mer vers
+// l'amont]. Les rivières de Sumatra et de Bornéo remontées par les navires de mer jusqu'aux capitales des sultanats
+// (Palembang et la Musi d'après Natural Earth, Jambi, Siak, Kuching, Samarinda, Bulungan, Pasir, Sambas), la baie de Kendari.
+const ESTUAIRES = [
+  ['Musi', 7.5, [[105.04, -2.33], [105.03, -2.39], [105.02, -2.49], [104.99, -2.57], [104.97, -2.70],
+    [104.91, -2.84], [104.85, -2.94], [104.79, -2.99]]],
+  ['Batang Hari', 7.5, [[103.83, -1.03], [103.82, -1.15], [103.80, -1.28], [103.75, -1.40], [103.70, -1.50], [103.66, -1.56]]],
+  ['Siak', 7.5, [[102.25, 0.97], [102.18, 0.90], [102.12, 0.84], [102.10, 0.82]]],
+  ['rivière de Sarawak', 7.5, [[110.53, 1.62], [110.46, 1.60], [110.40, 1.57]]],
+  ['Mahakam', 7.5, [[117.49, -0.48], [117.44, -0.52], [117.40, -0.56], [117.34, -0.58], [117.26, -0.58], [117.20, -0.55]]],
+  ['Kayan', 7.5, [[117.58, 2.91], [117.50, 2.88], [117.44, 2.86]]], ['Kendilo', 7.5, [[116.30, -1.76], [116.25, -1.83], [116.22, -1.87]]],
+  ['rivière de Sambas', 7.5, [[109.03, 1.30], [109.12, 1.32], [109.20, 1.33]]], ['baie de Kendari', 7.5, [[122.62, -3.97], [122.57, -3.98]]],
+  ['rivière d\'Indrapura', 7.5, [[100.87, -2.05], [100.93, -2.05]]],
+];
+// passages connus, vérifiés sur la grille : [nom, [lon, lat] du large, [lon, lat] du fond]
+const PASSAGES = [
+  ['détroit de Malacca', [99.5, 3.8], [102.5, 1.8]], ['détroit de Singapour', [103.6, 1.15], [104.4, 1.3]],
+  ['détroit de la Sonde', [105.3, -6.6], [106.0, -5.6]], ['détroit de Bali', [114.55, -7.95], [114.55, -8.5]],
+  ['rade de Batavia', [106.85, -5.9], [106.81, -6.07]], ['Musi (Palembang)', [105.3, -2.2], [104.79, -2.99]],
+  ['Batang Hari (Jambi)', [104.0, -0.9], [103.66, -1.56]], ['Barito (Banjarmasin)', [114.4, -3.75], [114.50, -3.40]],
+  ['Siak', [102.2, 1.15], [102.10, 0.82]], ['rivière de Sarawak', [110.6, 1.8], [110.40, 1.57]],
+  ['Mahakam (Samarinda)', [117.6, -0.3], [117.20, -0.55]], ['Kayan (Bulungan)', [117.7, 3.0], [117.44, 2.86]],
+];
 
 // ------------------------------------------------------------------ fleuves : estimations (source et embouchure, à 30 km près)
 // [nom, rang (1 fleuve, 2 grande rivière, 3 rivière), [lon, lat] vers la source, [lon, lat] à l'embouchure ou au confluent,
@@ -226,7 +249,7 @@ export default {
   id: 'indes_orientales', geo: 11, nom: 'Indes orientales',
   cadre: { LON0: 94.8, LON1: 135, LAT0: -11.2, LAT1: 19.2, LAT_REF, KM: 5 }, // 893 × 675 cases, 0,60 million
   places: [200, 450],
-  ENTIERS, COUPES, DETROITS, FLEUVES, NOM_LAC,
+  ENTIERS, COUPES, DETROITS, ESTUAIRES, PASSAGES, FLEUVES, NOM_LAC,
   // ports fluviaux de Bornéo sur des rivières absentes de la carte (Mentaya, Kapuas Murung, Berau)
   PORTS_ADMIS: ['Sampit|OBJ', 'Kuala Kapuas|OBJ', 'Berau|OKU'],
   NE: { rivieres: [], lacs: [] },

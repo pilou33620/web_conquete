@@ -525,7 +525,23 @@ fn les_estuaires_menent_la_mer_jusqu_aux_ports() {
     let port = |nom: &str| M::case_port(&geo, geo.by_name.at(nom).i()).unwrap_or_else(|| panic!("{nom} n'a pas la mer"));
     let large = port("Brest");
     for nom in ["Bordeaux", "Nantes", "Rouen", "Londres", "Anvers", "Rotterdam", "Hambourg", "Brême", "Séville", "Hull", "Liverpool",
-        "Stockholm", "Christiania", "Stettin", "Königsberg", "Southampton", "Izmit"] {
+        "Stockholm", "Christiania", "Stettin", "Königsberg", "Southampton", "Izmit", "Glasgow", "Zaandam"] {
         assert!(M::chemin_mer(&geo, port(nom), large).is_some(), "{nom} : sa mer n'est pas reliée au large");
     }
+    // le bas Danube (Galatz, Braïla, Tulcea) et le Don (Rostov), remontés depuis la mer Noire et la mer d'Azov
+    let large = port("Constantinople");
+    for nom in ["Galatz", "Braïla", "Tulcea", "Rostov-sur-le-Don"] {
+        assert!(M::chemin_mer(&geo, port(nom), large).is_some(), "{nom} : sa mer n'est pas reliée au large");
+    }
+}
+
+/// Rybinsk, sur la haute Volga, est un port de gabares, pas un port de mer : ni mouillage ni chantier naval, mais son quai
+/// de fleuve (outils/theatres/europe/villes.json, sans l'étiquette port).
+#[test]
+fn rybinsk_n_est_pas_un_port_de_mer() {
+    let geo = geo();
+    let n = geo.by_name.at("Rybinsk").i();
+    assert!(!geo.nodes.at(n).at("spec").has("port"));
+    assert!(M::case_port(&geo, n).is_none());
+    assert!(geo.ports.has(n), "Rybinsk a perdu son quai sur la Volga");
 }

@@ -72,8 +72,9 @@ export default {
 - `ESTUAIRES` (facultatif) : `[nom, largeur en km, [[lon, lat], …]]`, l'axe d'un estuaire de la mer vers l'amont, creusé sur
   cette largeur jusqu'à moins de 10 km du port du fond (`marine::case_port` y trouve la mer), quand le bras d'eau des
   sources s'arrête avant lui (la Tamise, la Garonne jusqu'à Bordeaux). Chaque point doit tomber sur l'eau.
-- `PASSAGES` (facultatif) : `[nom, [lon, lat] du large, [lon, lat] du fond]`, les estuaires, détroits et lagunes connus :
-  l'outil vérifie que les deux points sont sur l'eau et reliés d'eau en eau par les cases du moteur.
+- `PASSAGES` (facultatif) : `[nom, [lon, lat] du large, [lon, lat] du fond]`, les estuaires, détroits et lagunes connus (et
+  les rivières qui relient des lacs entre eux) : l'outil vérifie que les deux points sont sur l'eau et reliés d'eau en eau
+  par les cases du moteur.
 - `FLEUVES` : `[nom, rang 1 à 3, [lon, lat] vers la source, [lon, lat] à l'embouchure, /noms Natural Earth admis/]`, ou
   `[nom, rang, [[lon, lat], …]]` pour un cours absent de Natural Earth.
 - `espace` (facultatif, 115 km) : un bourg GeoNames est ajouté là où aucune place du pays n'est plus près (la variable
@@ -117,8 +118,14 @@ relus comme du JSON.
 ## Relevé des côtes
 
 `node outils/releve-cotes.mjs <id> [dossier]` relit `<id>.json` et `places_<id>.json` sur la grille du moteur et liste les
-passages connus coupés, les mers enclavées (sans lien avec le large) et les ports sans mouillage ou dont l'eau ne mène pas
-au large (lacs, ports de fleuve). Il ne change rien. Côté page, `web/js/hex/carte-moteur.js` (`brasDEau`) garde les bras
+passages connus coupés, les mers enclavées (sans lien avec le large ni lac de Natural Earth) et les ports sans mouillage ou
+dont l'eau ne mène pas au large. Les ports d'une eau fermée qui contient un lac (les Grands Lacs, le lac Nicaragua, la
+lagune de Porto-Novo) sont listés à part : ce sont des eaux intérieures, où le moteur bâtit et mène des flottes
+(`marine::est_mer` compte les lacs) sans rejoindre la mer. Il ne change rien. La règle des ports d'estuaire et de fleuve
+(vers 1700-1850) : un fleuve que remontent les navires de mer est creusé jusqu'au port (`ESTUAIRES`, vérifié dans
+`PASSAGES` : le Saint-Laurent jusqu'à Montréal, l'Hudson, le bas Mississippi, le bas Danube, le Don, l'Hooghly, la Musi…) ;
+un port de pirogues ou de gabares (Rybinsk, le haut Mississippi et l'Ohio, l'Amazone au-dessus de Belém, Onitsha) n'a pas
+l'étiquette `port` dans `villes.json` (pas de chantier ni de mouillage) et garde ses quais de fleuve (`waterways`). Côté page, `web/js/hex/carte-moteur.js` (`brasDEau`) garde les bras
 d'eau plus étroits qu'un hexagone : de la mer en hexagones de 4 cases, un ruban de fleuve plus loin.
 
 ## Ajouter un théâtre

@@ -49,7 +49,14 @@ const COUPES = {
 // détroits : aucun pour l'instant (le détroit de Palk et le pont d'Adam restent de la mer à 5 km)
 const DETROITS = [];
 // estuaires creusés jusqu'à moins de 10 km du port du fond (outils/THEATRES.md) : [nom, largeur en km, axe de la mer vers l'amont]
-const ESTUAIRES = [['Hooghly', 7.5, [[88.05, 21.7], [88.1, 22.0], [88.15, 22.2], [88.2, 22.4], [88.28, 22.5]]]];
+const ESTUAIRES = [
+  ['Hooghly', 7.5, [[88.05, 21.7], [88.1, 22.0], [88.15, 22.2], [88.2, 22.4], [88.28, 22.5]]],
+  // remontés par les navires de mer : l'Hooghly de Calcutta à Chandernagor, la crique de Bassein et l'Ulhas jusqu'à Kalyan,
+  // la crique de Rajapur
+  ['Hooghly (Chandernagor)', 7.5, [[88.28, 22.5], [88.31, 22.56], [88.335, 22.64], [88.35, 22.72], [88.36, 22.78]]],
+  ['Ulhas (Kalyan)', 7.5, [[72.81, 19.32], [72.90, 19.31], [72.98, 19.27], [73.05, 19.25], [73.10, 19.23]]],
+  ['crique de Rajapur', 7.5, [[73.33, 16.61], [73.40, 16.63], [73.46, 16.65]]],
+];
 
 // ------------------------------------------------------------------ fleuves : estimations (source et embouchure, à 30 km près)
 // [nom, rang (1 fleuve, 2 grande rivière, 3 rivière), [lon, lat] vers la source, [lon, lat] à l'embouchure ou au confluent,
@@ -151,7 +158,11 @@ const CULTURES = {
 };
 
 // passages connus, vérifiés sur la grille (outils/theatre.mjs) : [nom, [lon, lat] du large, [lon, lat] du fond]
-const PASSAGES = [['golfe de Cambay', [72.0, 20.8], [72.6, 21.9]], ['Hooghly (Gange)', [88.2, 21.5], [88.1, 22.2]]];
+const PASSAGES = [
+  ['golfe de Cambay', [72.0, 20.8], [72.6, 21.9]], ['Hooghly (Gange)', [88.2, 21.5], [88.1, 22.2]],
+  ['Hooghly jusqu\'à Chandernagor', [88.2, 21.5], [88.36, 22.78]],
+  ['crique de Bassein (Kalyan)', [72.7, 19.3], [73.10, 19.23]], ['crique de Rajapur', [73.2, 16.6], [73.46, 16.65]],
+];
 
 export default {
   id: 'inde', geo: 7, nom: 'Inde',
