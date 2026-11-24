@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Équilibre de Conquête</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --other: #c9c8c1;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+  --fort: #d03b3b; --moyen: #fab219; --info: #2a78d6; --bar: #2a78d6; --bar2: #86b6ef;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --other: #444441;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767;
+    --info: #3987e5; --bar: #3987e5; --bar2: #1c5cab;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --other: #444441;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767;
+  --info: #3987e5; --bar: #3987e5; --bar2: #1c5cab;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 20px 16px 60px; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between; }
+h1 { font-size: 22px; margin: 0; }
+h2 { font-size: 17px; margin: 28px 0 10px; }
+h3 { font-size: 14px; margin: 18px 0 6px; color: var(--ink2); }
+.sous { color: var(--ink2); }
+.carte-bloc, .panneau { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
+button, select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--axis); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.onglets { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 4px; }
+.onglets button[aria-selected="true"] { background: var(--ink); color: var(--page); border-color: var(--ink); }
+.tuiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.tuile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.tuile b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.tuile span { color: var(--ink2); font-size: 12px; }
+.alerte { display: flex; gap: 10px; padding: 7px 0; border-top: 1px solid var(--grid); }
+.alerte:first-child { border-top: 0; }
+.marque { flex: none; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; height: fit-content; white-space: nowrap; }
+.marque.fort { background: var(--fort); color: #fff; }
+.marque.moyen { background: var(--moyen); color: #0b0b0b; }
+.marque.info { border: 1px solid var(--info); color: var(--ink2); }
+details.groupe { border-top: 1px solid var(--grid); padding: 6px 0; }
+details.groupe:first-child { border-top: 0; }
+details.groupe summary { cursor: pointer; padding: 2px 0; }
+details.groupe .alerte { margin-left: 18px; }
+details.groupe .alerte:first-of-type { border-top: 0; }
+code { font: 12px ui-monospace, Consolas, monospace; background: var(--page); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; word-break: break-all; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 13px; }
+.defile { overflow-x: auto; }
+th, td { padding: 4px 6px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { color: var(--ink2); font-weight: 600; font-size: 12px; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--surface); }
+th:first-child, td:first-child { text-align: left; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--page); }
+tr.choisi td { background: color-mix(in srgb, var(--s1) 14%, transparent); }
+.pastille { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.outils { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px; }
+.legende { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink2); margin: 6px 0; }
+.legende span { cursor: pointer; }
+.graphe { position: relative; }
+.graphe svg { display: block; width: 100%; }
+.bulle { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 4px 14px rgba(0,0,0,.15);
+  border-radius: 8px; padding: 6px 9px; font-size: 12px; display: none; z-index: 2; min-width: 140px; }
+.bulle div { display: flex; justify-content: space-between; gap: 12px; }
+.grille2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+@media (max-width: 520px) { .grille2 { grid-template-columns: 1fr; } }
+.barres { display: grid; grid-template-columns: minmax(90px, max-content) 1fr auto; gap: 3px 10px; align-items: center; font-size: 12.5px; }
+.barres .nom { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.barres .val { color: var(--ink2); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.piste { height: 12px; position: relative; }
+.piste i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; background: var(--bar); }
+.piste i.b { background: var(--bar2); top: 3px; bottom: 3px; }
+.vide { color: var(--muted); font-style: italic; }
+.note { color: var(--muted); font-size: 12px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div><h1>Équilibre de Conquête</h1><div class="sous" id="entete"></div></div>
+  <button id="theme" type="button">Thème : auto</button>
+</header>
+<div id="tuiles-generales" class="tuiles" style="margin-top:14px"></div>
+<h2>Alertes d'équilibre</h2>
+<div class="panneau" id="alertes"></div>
+<div id="bloc-plantages"></div>
+<div class="onglets" role="tablist" id="onglets"></div>
+<div id="cartes"></div>
+<p class="note">Rapport écrit par <code>bin/equilibre</code> (SPEC-POLITIQUE.md, module 8). Courbes : médiane des parties, bande de la plus petite à la plus grande valeur. Le résumé JSON à donner à l'assistant est à côté de cette page.</p>
+</main>
+<script id="donnees" type="application/json">__DONNEES__</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("donnees").textContent);
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs = {}, ...enfants) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) if (k === "class") e.className = v; else if (k.startsWith("on")) e[k] = v; else e.setAttribute(k, v);
+  for (const c of enfants) if (c != null) e.append(c);
+  return e;
+};
+const sv = (tag, attrs = {}) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
+const fmt = v => v == null || Number.isNaN(v) ? "—" : (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString("fr-FR") : String(Math.round(v * 10) / 10).replace(".", ","));
+const lib = (fam, k) => (D.libelles[fam] && D.libelles[fam][k]) || k;
+const couleur = i => `var(--s${i + 1})`;
+
+// ---- thème : auto, clair, sombre
+const racine = document.documentElement;
+const themes = ["auto", "clair", "sombre"];
+let theme = 0;
+try { theme = Math.max(0, themes.indexOf(localStorage.getItem("equilibre-theme") || "auto")); } catch (e) {}
+const poseTheme = () => {
+  if (theme === 0) racine.removeAttribute("data-theme"); else racine.setAttribute("data-theme", theme === 1 ? "light" : "dark");
+  document.getElementById("theme").textContent = "Thème : " + themes[theme];
+};
+document.getElementById("theme").onclick = () => { theme = (theme + 1) % 3; try { localStorage.setItem("equilibre-theme", themes[theme]); } catch (e) {} poseTheme(); };
+poseTheme();
+
+// ---- en-tête
+const R = D.reglages;
+const duree = s => s >= 3600 ? `${Math.floor(s / 3600)} h ${String(Math.round(s % 3600 / 60)).padStart(2, "0")}` : s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`;
+document.getElementById("entete").textContent =
+  `Série du ${D.date.replace(/-(\d\d)h(\d\d)$/, " à $1 h $2")} — ${duree(D.duree_s)} sur ${R.coeurs} cœurs` + (D.commit ? ` — version ${D.commit}` : "");
+const tuile = (val, texte) => el("div", { class: "tuile" }, el("b", {}, String(val)), el("span", {}, texte));
+const nbParties = D.cartes.reduce((s, c) => s + c.parties, 0);
+document.getElementById("tuiles-generales").append(
+  tuile(nbParties, "parties abouties"), tuile(D.plantages.length, "parties plantées"),
+  tuile(R.annees + " ans", `depuis ${R.epoques.join(", ")}`), tuile(R.parties, "parties par carte et époque"),
+  tuile(D.alertes.filter(a => a.niveau !== "info").length, "alertes à regarder"));
+
+// ---- alertes
+const NIVEAUX = { fort: "Fort", moyen: "À voir", info: "Info" };
+const boite = document.getElementById("alertes");
+if (!D.alertes.length) boite.append(el("div", { class: "vide" }, "Aucune alerte."));
+// une rubrique repliable par carte, ouverte s'il y a une alerte forte
+const parCarte = new Map();
+for (const a of D.alertes) { const k = a.carte || "Série"; if (!parCarte.has(k)) parCarte.set(k, []); parCarte.get(k).push(a); }
+for (const [nom, liste] of parCarte) {
+  const compte = Object.keys(NIVEAUX).map(n => [n, liste.filter(a => a.niveau === n).length]).filter(([, c]) => c);
+  const d = el("details", { class: "groupe" }, el("summary", {}, el("b", {}, nom), " ",
+    ...compte.map(([n, c]) => el("span", { class: "marque " + n, style: "margin-left:6px" }, `${c} ${NIVEAUX[n].toLowerCase()}`))));
+  d.open = liste.some(a => a.niveau === "fort");
+  for (const a of liste) d.append(el("div", { class: "alerte" }, el("span", { class: "marque " + a.niveau }, NIVEAUX[a.niveau] || a.niveau),
+    el("span", {}, a.texte, a.commande ? el("div", {}, el("code", {}, a.commande)) : null)));
+  boite.append(d);
+}
+if (D.plantages.length) {
+  const t = el("table", {}, el("thead", {}, el("tr", {}, ...["Carte", "Époque", "Graine", "Arrêtée le", "Message", "Pour la rejouer"].map(h => el("th", {}, h)))));
+  const tb = el("tbody");
+  for (const p of D.plantages) tb.append(el("tr", {}, el("td", {}, p.carte), el("td", {}, p.epoque), el("td", {}, String(p.graine)), el("td", {}, p.date || "—"),
+    el("td", { style: "white-space:normal;text-align:left" }, p.message), el("td", {}, el("code", {}, p.commande))));
+  t.append(tb);
+  document.getElementById("bloc-plantages").append(el("h2", {}, "Parties plantées"), el("div", { class: "panneau defile" }, t));
+}
+
+// ---- graphique en courbes : lignes = [{nom, couleur, med: [..], bande: [[min,max]..]|null, epais}]
+function courbes(boite, x, lignes, unite) {
+  const largeur = Math.max(300, boite.clientWidth || 700), hauteur = 280;
+  const m = { g: 52, d: 14, h: 12, b: 26 };
+  const pts = lignes.flatMap(l => [...l.med, ...(l.bande || []).flat()]).filter(v => v != null);
+  if (!pts.length || x.length < 1) { boite.replaceChildren(el("div", { class: "vide" }, "Pas de données.")); return; }
+  let lo = Math.min(0, ...pts), hi = Math.max(...pts);
+  if (hi === lo) hi = lo + 1;
+  const pas = (() => { const brut = (hi - lo) / 5, p = 10 ** Math.floor(Math.log10(brut)), r = brut / p; return (r > 5 ? 10 : r > 2 ? 5 : r > 1 ? 2 : 1) * p; })();
+  hi = Math.ceil(hi / pas) * pas; lo = Math.floor(lo / pas) * pas;
+  const X = i => m.g + (x.length > 1 ? i / (x.length - 1) : 0.5) * (largeur - m.g - m.d);
+  const Y = v => m.h + (1 - (v - lo) / (hi - lo)) * (hauteur - m.h - m.b);
+  const s = sv("svg", { viewBox: `0 0 ${largeur} ${hauteur}`, height: hauteur, role: "img" });
+  for (let v = lo; v <= hi + pas / 2; v += pas) {
+    s.append(sv("line", { x1: m.g, x2: largeur - m.d, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    const t = sv("text", { x: m.g - 6, y: Y(v) + 4, "text-anchor": "end", fill: "var(--muted)", "font-size": 11 }); t.textContent = fmt(v); s.append(t);
+  }
+  const pasX = Math.max(1, Math.ceil(x.length / Math.max(2, Math.floor(largeur / 70))));
+  x.forEach((an, i) => { if (i % pasX === 0 || i === x.length - 1) { const t = sv("text", { x: X(i), y: hauteur - 8, "text-anchor": "middle", fill: "var(--muted)", "font-size": 11 }); t.textContent = an; s.append(t); } });
+  const chemin = vals => { let d = "", lev = true; vals.forEach((v, i) => { if (v == null) { lev = true; return; } d += (lev ? "M" : "L") + X(i).toFixed(1) + "," + Y(v).toFixed(1); lev = false; }); return d; };
+  for (const l of lignes) if (l.bande) {
+    const ok = l.bande.map((b, i) => b ? i : -1).filter(i => i >= 0);
+    if (ok.length) s.append(sv("path", { d: "M" + ok.map(i => X(i) + "," + Y(l.bande[i][1])).join("L") + "L" + ok.reverse().map(i => X(i) + "," + Y(l.bande[i][0])).join("L") + "Z", fill: l.couleur, opacity: 0.24 }));
+  }
+  for (const l of [...lignes].sort((a, b) => (a.epais || 0) - (b.epais || 0))) {
+    s.append(sv("path", { d: chemin(l.med), fill: "none", stroke: l.couleur, "stroke-width": l.epais || 1, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+  }
+  const croix = sv("line", { y1: m.h, y2: hauteur - m.b, stroke: "var(--axis)", "stroke-width": 1, visibility: "hidden" });
+  s.append(croix);
+  const bulle = el("div", { class: "bulle" });
+  boite.replaceChildren(s, bulle);
+  const montrees = lignes.filter(l => l.epais >= 2);
+  s.onpointermove = ev => {
+    const r = s.getBoundingClientRect(), px = (ev.clientX - r.left) * largeur / r.width;
+    const i = Math.max(0, Math.min(x.length - 1, Math.round((px - m.g) / (largeur - m.g - m.d) * (x.length - 1))));
+    croix.setAttribute("x1", X(i)); croix.setAttribute("x2", X(i)); croix.setAttribute("visibility", "visible");
+    const rangs = (montrees.length ? montrees : lignes).filter(l => l.med[i] != null).sort((a, b) => b.med[i] - a.med[i]).slice(0, 10);
+    bulle.replaceChildren(el("b", {}, String(x[i])), ...rangs.map(l => el("div", {}, el("span", {}, el("i", { class: "pastille", style: `background:${l.couleur}` }), l.nom),
+      el("span", {}, fmt(l.med[i]) + (l.bande && l.bande[i] ? ` (${fmt(l.bande[i][0])}–${fmt(l.bande[i][1])})` : "")))));
+    bulle.style.display = "block";
+    const bx = (ev.clientX - r.left) + 14, w = bulle.offsetWidth;
+    bulle.style.left = (bx + w > r.width ? bx - w - 28 : bx) + "px";
+    bulle.style.top = Math.max(0, ev.clientY - r.top - 20) + "px";
+  };
+  s.onpointerleave = () => { bulle.style.display = "none"; croix.setAttribute("visibility", "hidden"); };
+}
+const med = b => (b || []).map(v => v ? v[1] : null);
+const etendue = b => (b || []).map(v => v ? [v[0], v[2]] : null);
+
+// ---- barres horizontales : [[nom, a, b]], b en % de a si ratio
+function barres(lignes, c) {
+  const max = Math.max(1, ...lignes.map(l => l[1]), ...(c.b && !c.ratio ? lignes.map(l => l[2]) : []));
+  const g = el("div", { class: "barres" });
+  for (const [nom, a, b] of lignes) {
+    const piste = el("div", { class: "piste" }, el("i", { style: `width:${100 * a / max}%` }));
+    if (c.b && !c.ratio) piste.append(el("i", { class: "b", style: `width:${100 * b / max}%` }));
+    const val = c.b ? (c.ratio ? `${fmt(a)} · ${a ? Math.round(100 * b / a) : 0} % ${c.b}` : `${fmt(a)} / ${fmt(b)}`) : fmt(a);
+    g.append(el("span", { class: "nom", title: nom }, nom), piste, el("span", { class: "val" }, val));
+  }
+  return g;
+}
+
+// ---- une carte
+// [clé, titre court, explication (bulle du titre)]
+const COLONNES = [["nom", "Camp", ""], ["places_fin", "Places", "Places à la fin (médiane des parties)"], ["part", "% places", "Part des places de la carte à la fin (médiane)"],
+  ["tete", "% en tête", "Parties où le camp finit premier en places"], ["domine", "% domine", "Parties où le camp finit au-delà du seuil de domination"],
+  ["survie", "% en vie", "Parties où le camp est encore en vie à la fin"], ["mort", "Rayé vers", "Année où il disparaît (médiane des parties où il disparaît)"],
+  ["guerres_g", "Guerres G", "Guerres gagnées par partie (plus de places prises à l'adversaire, ou adversaire rayé)"], ["guerres_p", "Guerres P", "Guerres perdues par partie"],
+  ["banqueroute", "Banqueroute", "Mois de banqueroute par partie"], ["famine", "Famine", "Mois de famine par partie"],
+  ["revenus_fin", "Revenus", "Revenus à la fin (livres par jour, médiane)"], ["armee_fin", "Hommes", "Hommes sous les armes à la fin (médiane)"], ["techs_fin", "Techn.", "Technologies connues à la fin (médiane)"]];
+function carte(C, conteneur) {
+  const codes = Object.keys(C.camps);
+  // les couleurs suivent le camp (les 8 premiers par places à la fin), pas la mesure affichée
+  const rang = [...codes].sort((a, b) => (C.camps[b].stats.places_fin || 0) - (C.camps[a].stats.places_fin || 0));
+  const teinte = {}; rang.slice(0, 8).forEach((c, i) => teinte[c] = couleur(i));
+  let choisi = rang[0], mesure = "places", tri = ["places_fin", -1];
+  const T = C.temps;
+  conteneur.append(el("div", { class: "tuiles" },
+    tuile(C.parties, "parties abouties"), tuile(`${C.x[0]}–${C.x[C.x.length - 1]}`, "années jouées"), tuile(codes.length, "camps"),
+    tuile(fmt(T.moyen_ms / 1000).replace(/$/, " s"), "tour des IA, en moyenne"), tuile(fmt(T.pire_ms / 1000) + " s", `au pire (graine ${T.pire_graine})`),
+    tuile(C.finies.length, "parties finies avant le terme")));
+
+  // camps : courbes et tableau
+  const series = D.meta.series_camp.filter(([id]) => codes.some(c => C.camps[c].series[id]));
+  const choix = el("select", { "aria-label": "Mesure" }, ...series.map(([id, t]) => el("option", { value: id }, t)));
+  const legende = el("div", { class: "legende" });
+  const graphe = el("div", { class: "graphe" });
+  const tableau = el("table");
+  conteneur.append(el("h2", {}, "Les camps au fil des années"), el("div", { class: "carte-bloc" },
+    el("div", { class: "outils" }, el("label", {}, "Mesure : ", choix), el("span", { class: "note" }, "Cliquez un camp (légende ou tableau) pour voir l'étendue de ses parties.")),
+    legende, graphe, el("div", { class: "defile", style: "max-height:420px;overflow:auto;margin-top:10px" }, tableau)));
+  const dessine = () => {
+    const lignes = codes.filter(c => C.camps[c].series[mesure]).map(c => ({
+      nom: C.camps[c].nom, couleur: teinte[c] || (c === choisi ? "var(--ink)" : "var(--other)"),
+      med: med(C.camps[c].series[mesure]), bande: c === choisi ? etendue(C.camps[c].series[mesure]) : null,
+      epais: c === choisi ? 3 : teinte[c] ? 2 : 1 }));
+    courbes(graphe, C.x, lignes);
+    legende.replaceChildren(...rang.slice(0, 8).concat(teinte[choisi] ? [] : [choisi]).map(c => el("span", { onclick: () => { choisi = c; dessine(); }, style: c === choisi ? "font-weight:600;color:var(--ink)" : "" },
+      el("i", { class: "pastille", style: `background:${teinte[c] || "var(--ink)"}` }), C.camps[c].nom)),
+      el("span", { style: "cursor:default" }, el("i", { class: "pastille", style: "background:var(--other)" }), "les autres"));
+    const tr = codes.map(c => ({ c, ...C.camps[c].stats, nom: C.camps[c].nom }));
+    tr.sort((a, b) => { const [k, s] = tri; const va = a[k], vb = b[k]; return typeof va === "string" ? s * va.localeCompare(vb) : s * ((va ?? -1e18) - (vb ?? -1e18)); });
+    tableau.replaceChildren(el("thead", {}, el("tr", {}, ...COLONNES.map(([k, t, aide]) => el("th", { title: aide, onclick: () => { tri = [k, tri[0] === k ? -tri[1] : -1]; dessine(); } }, t + (tri[0] === k ? (tri[1] < 0 ? " ▾" : " ▴") : ""))))),
+      el("tbody", {}, ...tr.map(l => el("tr", { class: l.c === choisi ? "choisi" : "", onclick: () => { choisi = l.c; dessine(); } },
+        ...COLONNES.map(([k], i) => el("td", {}, i === 0 ? el("span", {}, el("i", { class: "pastille", style: `background:${teinte[l.c] || "var(--other)"}` }), l.nom) : fmt(l[k])))))));
+  };
+  choix.onchange = () => { mesure = choix.value; dessine(); };
+  dessine();
+  new ResizeObserver(() => dessine()).observe(graphe);
+
+  // ce qui arrive : les compteurs
+  const comps = D.meta.compteurs.filter(c => C.compteurs[c.id]);
+  if (comps.length) {
+    const grille = el("div", { class: "grille2" });
+    for (const c of comps) {
+      const lignes = Object.entries(C.compteurs[c.id]).map(([k, v]) => [lib(c.id, k), v[0], v[1]]).sort((a, b) => b[1] - a[1]);
+      const lg = c.b ? (c.ratio ? `longueur : ${c.a} ; à droite, % de ${c.b}` : `${c.a} (barre pleine) / ${c.b} (barre fine)`) : c.a;
+      grille.append(el("div", { class: "carte-bloc" }, el("h3", { style: "margin-top:0" }, c.titre), el("div", { class: "note", style: "margin:0 0 8px" }, `Total des ${C.parties} parties — ${lg}`), barres(lignes, c)));
+    }
+    conteneur.append(el("h2", {}, "Ce que font les IA"), grille);
+  }
+
+  // toute la carte
+  const mondes = D.meta.series_monde.filter(([id]) => C.monde[id]);
+  if (mondes.length) {
+    const grille = el("div", { class: "grille2" });
+    for (const [id, titre] of mondes) {
+      const cles = Object.keys(C.monde[id]);
+      const bloc = el("div", { class: "graphe" });
+      const lignes = cles.slice(0, 8).map((k, i) => ({ nom: lib(id, k), couleur: couleur(i), med: med(C.monde[id][k]), bande: cles.length === 1 ? etendue(C.monde[id][k]) : null, epais: 2 }));
+      const leg = el("div", { class: "legende" }, ...lignes.map(l => el("span", { style: "cursor:default" }, el("i", { class: "pastille", style: `background:${l.couleur}` }), l.nom)));
+      grille.append(el("div", { class: "carte-bloc" }, el("h3", { style: "margin-top:0" }, titre), leg, bloc,
+        cles.length > 8 ? el("div", { class: "note" }, `(${cles.length - 8} autres non montrées)`) : null));
+      requestAnimationFrame(() => { courbes(bloc, C.x, lignes); new ResizeObserver(() => courbes(bloc, C.x, lignes)).observe(bloc); });
+    }
+    conteneur.append(el("h2", {}, "Toute la carte (médiane des parties)"), grille);
+  }
+
+  // catégories (régime, caractère…)
+  for (const [id, titre] of D.meta.categories) if (C.categories[id]) {
+    const t = el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Valeur"), el("th", {}, "Camps (toutes parties)"), el("th", {}, "% moyen des places"))),
+      el("tbody", {}, ...Object.entries(C.categories[id]).sort((a, b) => b[1][0] - a[1][0]).map(([k, v]) => el("tr", {}, el("td", {}, k), el("td", {}, fmt(v[0])), el("td", {}, fmt(v[1]))))));
+    conteneur.append(el("h2", {}, titre), el("div", { class: "carte-bloc" }, t));
+  }
+  if (C.finies.length) {
+    conteneur.append(el("h2", {}, "Parties finies avant le terme"), el("div", { class: "carte-bloc" },
+      ...C.finies.map(f => el("div", {}, `Graine ${f.graine}, ${f.date} : ${f.texte}`))));
+  }
+}
+
+// ---- onglets
+const onglets = document.getElementById("onglets"), cartes = document.getElementById("cartes");
+const vues = D.cartes.map(C => { const d = el("section", { role: "tabpanel" }); d.hidden = true; cartes.append(d); return { C, d, fait: false }; });
+const montre = i => {
+  vues.forEach((v, j) => { v.d.hidden = i !== j; onglets.children[j].setAttribute("aria-selected", String(i === j)); });
+  if (!vues[i].fait) { vues[i].fait = true; carte(vues[i].C, vues[i].d); }
+  try { localStorage.setItem("equilibre-onglet", vues[i].C.nom); } catch (e) {}
+};
+vues.forEach((v, i) => onglets.append(el("button", { role: "tab", type: "button", onclick: () => montre(i) }, `${v.C.nom} · ${v.C.parties} parties`)));
+if (vues.length) {
+  let k = 0;
+  try { k = Math.max(0, vues.findIndex(v => v.C.nom === localStorage.getItem("equilibre-onglet"))); } catch (e) {}
+  montre(k);
+} else cartes.append(el("div", { class: "panneau vide" }, "Aucune partie n'a abouti."));
+</script>
+</body>
+</html>
