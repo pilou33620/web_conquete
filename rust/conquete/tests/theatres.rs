@@ -183,3 +183,19 @@ fn routes_des_theatres() {
     }
     assert!(defauts.is_empty(), "{}", defauts.join("\n"));
 }
+
+/// Les estuaires et les rivières creusés des Indes orientales (outils/theatres/indes_orientales/carte.mjs) : Batavia sur sa
+/// rade, Palembang au bout de la Musi, Jambi, Banjarmasin, Samarinda et Kuching mouillent sur une mer reliée au détroit de
+/// Malacca.
+#[test]
+fn les_ports_des_indes_orientales_ont_la_mer() {
+    use conquete::engine::marine as M;
+    let _verrou = VERROU.lock().unwrap_or_else(|e| e.into_inner());
+    dossier();
+    let g = GeoMap::new(geo::THEATRES.iter().find(|t| t.id == "indes_orientales").unwrap().geo);
+    let port = |nom: &str| M::case_port(&g, g.by_name.at(nom).i()).unwrap_or_else(|| panic!("{nom} n'a pas la mer"));
+    let large = port("Malacca");
+    for nom in ["Batavia", "Palembang", "Jambi", "Banjarmasin", "Samarinda", "Sarawak"] {
+        assert!(M::chemin_mer(&g, port(nom), large).is_some(), "{nom} : sa mer n'est pas reliée au large");
+    }
+}

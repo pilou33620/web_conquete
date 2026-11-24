@@ -145,11 +145,51 @@ fn routes_maritimes_et_comptoirs() {
 fn les_ports_d_estuaire_ont_la_mer() {
     let g = carte(VERSION_MONDE);
     let port = |nom: &str| conquete::engine::marine::case_port(&g, g.by_name.at(nom).i()).unwrap_or_else(|| panic!("{nom} n'a pas la mer"));
-    for (large, noms) in [("Boston", &["Québec", "Baltimore", "Philadelphie"][..]), ("La Havane", &["La Nouvelle-Orléans"][..]), ("Bombay", &["Calcutta", "Surate"][..])] {
+    // (et les fleuves remontés par les navires de mer : le Saint-Laurent jusqu'à Montréal, l'Hudson jusqu'à Albany, le bas
+    // Mississippi jusqu'à Bâton-Rouge, l'Hooghly jusqu'à Chandernagor)
+    for (large, noms) in [
+        ("Boston", &["Québec", "Baltimore", "Philadelphie", "Montréal", "Trois-Rivières", "Albany"][..]),
+        ("La Havane", &["La Nouvelle-Orléans", "Bâton-Rouge"][..]),
+        ("Bombay", &["Calcutta", "Surate", "Chandernagor", "Kalyan"][..]),
+    ] {
         for nom in noms {
             assert!(conquete::engine::marine::chemin_mer(&g, port(nom), port(large)).is_some(), "{nom} : sa mer n'est pas reliée au large");
         }
     }
+}
+
+/// Les Grands Lacs, des eaux intérieures (outils/releve-cotes.mjs) : les lacs Érié, Huron, Michigan et Supérieur se tiennent,
+/// sans lien avec l'océan ni avec le lac Ontario (les chutes du Niagara) ; une flotte se bâtit à Sandusky (lac Érié) et
+/// peut gagner Amherstburg, pas Boston.
+#[test]
+fn les_grands_lacs_sont_des_eaux_interieures() {
+    use conquete::engine::marine as M;
+    let geo = carte(6); // l'Amérique
+    let port = |nom: &str| M::case_port(&geo, geo.by_name.at(nom).i()).unwrap_or_else(|| panic!("{nom} n'a pas d'eau"));
+    let (sandusky, amherstburg) = (port("Sandusky"), port("Amherstburg"));
+    assert!(M::chemin_mer(&geo, sandusky, amherstburg).is_some(), "Sandusky et Amherstburg : le lac Érié coupé");
+    for nom in ["Michilimackinac", "La Baie", "Kaministiquia"] {
+        assert!(M::chemin_mer(&geo, sandusky, port(nom)).is_some(), "le lac Érié et {nom} : les lacs ne se tiennent pas");
+    }
+    for nom in ["Boston", "Québec", "Toronto"] {
+        assert!(M::chemin_mer(&geo, sandusky, port(nom)).is_none(), "le lac Érié mène à {nom}");
+    }
+    assert!(M::chemin_mer(&geo, port("Toronto"), port("Boston")).is_none(), "le lac Ontario mène à la mer");
+    // le chantier naval de Sandusky lance une flotte, sur le lac
+    let mut g = Game::new(geo.clone(), "AIR", &Val::from("normal"), &Val::from(13), &Val::from("1700"));
+    let n = geo.by_name.at("Sandusky").i();
+    g.nodes.at(n).set("owner", "AIR");
+    assert!(conquete::cities::fits(&g, n, "port"), "Sandusky ne peut pas bâtir de port");
+    conquete::cities::slots(&g.nodes.at(n)).set("port", 3);
+    for (k, v) in [("livres", 100000), ("bois", 10000), ("fer", 10000)] {
+        g.factions.at("AIR").at("res").set(k, v);
+    }
+    let (ok, msg) = M::construire(&mut g, "AIR", n, &Val::from("fregate"));
+    assert!(ok, "{msg}");
+    g.nodes.at(n).at("queue").at(-1).set("left", 0.0001);
+    g.update_queues(0.01);
+    let f = g.flottes.values().into_iter().find(|f| f.at("owner") == "AIR" && f.at("a_quai") == n).expect("pas de flotte à Sandusky");
+    assert_eq!((f.ati("x"), f.ati("y")), sandusky);
 }
 
 #[test]

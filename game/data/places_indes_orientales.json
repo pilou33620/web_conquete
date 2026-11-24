@@ -183,7 +183,7 @@
 ["Probolinggo",-7.7543,113.2159,"OMT","ville",["port"],0,4000],
 ["Lasem",-6.69,111.4819,"OMT","ville",["port"],0,5000],
 ["Arjasa",-6.8596,115.2852,"OMT","village",[],0,800],
-["Batavia",-6.2146,106.8451,"ONL","capitale",["port","commerce"],3,100000],
+["Batavia",-6.13,106.81,"ONL","capitale",["port","commerce"],3,100000],
 ["Malacca",2.2329,102.2517,"ONL","ville",["port","commerce"],3,8000],
 ["Ambon",-3.6958,128.1833,"ONL","ville",["port","commerce"],2,10000],
 ["Makassar",-5.1486,119.4319,"ONL","ville",["port","commerce"],2,12000],
@@ -234,7 +234,7 @@
 ["Waimangura",-9.5098,119.2377,"OPT","village",[],0,800],
 ["Olafulihaa",-10.631,123.2347,"OPT","village",[],0,800],
 ["Ledeunu",-10.6058,121.6106,"OPT","village",[],0,800],
-["Sambas",1.3333,109.25,"OSB","capitale",["port"],1,6000],
+["Sambas",1.3316,109.2756,"OSB","capitale",["port"],1,6000],
 ["Pontianak",-0.0319,109.325,"OSB","ville",["port","commerce"],1,8000],
 ["Sukadana",-1.25,109.95,"OSB","ville",["port"],0,3000],
 ["Mempawah",0.371,108.9701,"OSB","ville",["port"],0,4000],
@@ -275,11 +275,10 @@
 ["Maba",0.7007,128.292,"OTI","ville",["port"],0,1000],
 ["Onin",-2.9248,132.2981,"OTI","ville",["port","commerce"],0,1000],
 ["Namatota",-3.6256,133.7693,"OTI","ville",["port"],0,1000],
-["Salawati",-1.05,130.9,"OTI","ville",["port"],0,1000],
+["Salawati",-0.93,130.88,"OTI","ville",["port"],0,1000],
 ["Manokwari",-0.8629,134.064,"OTI","village",[],0,2600],
 ["Tembuni",-1.9083,133.277,"OTI","village",[],0,800],
 ["Teminabuan",-1.4416,132.0143,"OTI","village",[],0,800],
 ["Rasiei",-2.817,134.5292,"OTI","village",[],0,800],
-["Kiruru",-3.9389,134.9696,"OTI","village",[],0,800],
-["Kabare",-0.0149,130.8322,"OTI","village",[],0,800]
+["Kiruru",-3.9389,134.9696,"OTI","village",[],0,800]
 ]

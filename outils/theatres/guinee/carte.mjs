@@ -48,6 +48,24 @@ const COUPES = {
   'Eq. Guinea': { defaut: '~Gabon', retouche: (lon, lat) => lon < 9.1 && lat > 3.0 ? 'GPT' : null }, // Fernando Pó (Bioko)
 };
 const DETROITS = [];
+// estuaires creusés jusqu'à moins de 10 km du port du fond (outils/THEATRES.md) : [nom, largeur en km, axe de la mer vers
+// l'amont]. Les bras du delta du Niger et les rivières de la côte remontés par les navires de traite (Warri, Gwato, Nembe,
+// Creek Town), l'embouchure du Bandama à Grand-Lahou. Onitsha (le Niger, à 200 km de la mer) et Epe (la lagune de Lagos,
+// aux pirogues) ne sont pas des ports de mer ; Porto-Novo est un port de sa lagune (eaux intérieures) ; la barre de la
+// Volta n'est pas franchie par les navires de mer.
+const ESTUAIRES = [
+  ['Forcados et rivière de Warri', 7.5, [[5.51, 5.45], [5.60, 5.49], [5.66, 5.51]]],
+  ['rivière du Bénin', 7.5, [[5.00, 5.82], [5.15, 5.90], [5.25, 5.98], [5.33, 6.07], [5.38, 6.15], [5.40, 6.19]]],
+  ['rivière de Brass', 7.5, [[6.23, 4.40], [6.30, 4.47], [6.36, 4.52]]],
+  ['rivière de Calabar', 7.5, [[8.30, 4.86], [8.28, 4.95], [8.29, 5.00]]],
+  ['Bandama', 7.5, [[-5.00, 5.12], [-5.06, 5.17], [-5.10, 5.18]]],
+];
+// passages connus, vérifiés sur la grille : [nom, [lon, lat] du large, [lon, lat] du fond]
+const PASSAGES = [
+  ['bouches du Niger : Forcados', [5.3, 5.4], [5.66, 5.51]], ['bouches du Niger : rivière de Brass', [6.2, 4.2], [6.36, 4.52]],
+  ['rivière de Bonny', [7.15, 4.2], [7.08, 4.69]], ['rivière du Bénin', [4.9, 5.75], [5.40, 6.19]],
+  ['rivière de Calabar', [8.4, 4.5], [8.29, 5.00]], ['Bandama (Grand-Lahou)', [-5.0, 5.0], [-5.10, 5.18]],
+];
 
 // [nom, rang, [lon, lat] vers la source, [lon, lat] à l'embouchure ou au confluent, noms Natural Earth admis], ou points à la main
 const FLEUVES = [
@@ -62,7 +80,6 @@ const FLEUVES = [
   ['Cross', 2, [[9.75, 5.62], [9.3, 5.75], [8.75, 5.97], [8.33, 6.08], [8.05, 5.95], [7.95, 5.6], [7.98, 5.2], [8.2, 5.0], [8.32, 4.85], [8.4, 4.62]]],
 ];
 const NE = { rivieres: [], lacs: [] }; // pas de fichier régional Natural Earth pour l'Afrique
-const PORTS_ADMIS = ['Gwato|GBE']; // le port de Bénin, sur la crique de la rivière Bénin (trop étroite pour la carte)
 
 const P = (name, short, adj, color, title, pros, cons, mods, [aggr, trade, expand, tech], specialty, moyens, maisons, culture) =>
   ({ name, short, color, adj, title, pros, cons, mods, personality: { aggr, trade, expand, tech }, specialty, moyens, maisons, culture });
@@ -163,7 +180,7 @@ export default {
   id: 'guinee', geo: 8, nom: "Côte de l'Ivoire",
   cadre: { LON0: -13.6, LON1: 12.6, LAT0: -0.3, LAT1: 11.2, LAT_REF: 5.5, KM: 5 },
   places: [100, 320],
-  ENTIERS, COUPES, DETROITS, FLEUVES, NE, PORTS_ADMIS, PAYS, CULTURES,
+  ENTIERS, COUPES, DETROITS, ESTUAIRES, PASSAGES, FLEUVES, NE, PAYS, CULTURES,
   // îles trop petites pour la grille, gardées chacune par une case de terre (outil : ILES) : [lon, lat, camp, nom]
   ILES: [[-13.041, 8.570, 'GGB', 'Île de Bance']],
 };

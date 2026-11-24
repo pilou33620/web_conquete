@@ -81,6 +81,13 @@ const COUPES = {
 };
 // détroits : aucun à rouvrir (Zanzibar, Pemba, Mafia, Nosy Be et Sainte-Marie sont à plus de 7 km du rivage)
 const DETROITS = [];
+// passages connus, vérifiés sur la grille : [nom, [lon, lat] du large, [lon, lat] du fond]. Le Zambèze : sa barre arrête les
+// navires de mer, qui entrent par la rivière de Quelimane (prise pour sa bouche) ; on remonte ensuite en pirogue jusqu'à Sena.
+const PASSAGES = [
+  ['canal du Mozambique', [40.9, -15.2], [46.0, -15.4]], ['rivière de Quelimane (Zambèze)', [37.1, -18.2], [36.88, -17.89]],
+  ['baie de Delagoa', [32.85, -25.9], [32.54, -25.96]], ['baie de Bombetoka (Majunga)', [46.1, -15.5], [46.33, -15.87]],
+  ['canal de Zanzibar', [39.4, -5.7], [39.4, -6.6]],
+];
 
 // ------------------------------------------------------------------ fleuves : estimations (source et embouchure, à 30 km près)
 // [nom, rang (1 fleuve, 2 grande rivière, 3 rivière), [lon, lat] vers la source, [lon, lat] à l'embouchure ou au confluent,
@@ -199,7 +206,7 @@ export default {
   id: 'madagascar', geo: 10, nom: 'Détroit de Madagascar',
   cadre: { LON0: 29, LON1: 58, LAT0: -27, LAT1: -3, LAT_REF, KM: 5 }, // 624 × 533 cases, 0,33 million
   places: [90, 220],
-  ENTIERS, COUPES, DETROITS, FLEUVES, NOM_LAC,
+  ENTIERS, COUPES, DETROITS, PASSAGES, FLEUVES, NOM_LAC,
   NE: { rivieres: [], lacs: [] },
   PAYS,
   CULTURES,

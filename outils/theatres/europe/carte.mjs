@@ -93,6 +93,14 @@ const ESTUAIRES = [
   ['Pregel', 7.5, [[20.05, 54.62], [20.25, 54.68], [20.42, 54.71]]], ['Nogat (Elbing)', 7.5, [[19.55, 54.38], [19.45, 54.27], [19.42, 54.21]]],
   ['Hollands Diep', 7.5, [[3.95, 51.85], [4.10, 51.80], [4.30, 51.73], [4.50, 51.74], [4.60, 51.78]]],
   ['Bråviken', 7.5, [[16.9, 58.62], [16.6, 58.63], [16.35, 58.61]]], ['Byfjorden', 7.5, [[11.55, 58.29], [11.72, 58.33], [11.85, 58.34]]],
+  // remontés par les navires de mer jusqu'au port : la Clyde (Glasgow, creusée depuis 1770), l'IJ (Zaandam), le bas Danube
+  // par le bras de Sulina (Tulcea, Galatz, Braïla), le delta du Don (Azov, Rostov)
+  ['Clyde', 7.5, [[-4.62, 55.94], [-4.50, 55.92], [-4.42, 55.90], [-4.35, 55.88]]],
+  ['IJ', 7.5, [[5.00, 52.42], [4.92, 52.425]]],
+  ['bas Danube', 7.5, [[29.62, 45.16], [29.45, 45.15], [29.30, 45.15], [29.12, 45.16],
+    [28.95, 45.19], [28.80, 45.215], [28.64, 45.235], [28.46, 45.27],
+    [28.33, 45.36], [28.26, 45.44], [28.15, 45.44], [28.06, 45.41], [28.01, 45.35], [27.98, 45.30]]],
+  ['Don', 7.5, [[39.25, 47.13], [39.40, 47.15], [39.52, 47.18], [39.62, 47.21]]],
 ];
 // passages connus, vérifiés sur la grille (outils/theatre.mjs) : [nom, [lon, lat] du large, [lon, lat] du fond], reliés
 // d'eau en eau (les deltas et les embouchures étroites : par les fleuves, finis à la mer)
@@ -108,6 +116,8 @@ const PASSAGES = [
   ['détroit de Gibraltar', [-6.2, 35.9], [-5.0, 36.0]], ['détroit de Messine', [15.65, 38.4], [15.55, 37.95]],
   ['bouches de Bonifacio', [8.8, 41.35], [9.5, 41.35]], ['pas de Calais', [1.3, 50.6], [1.7, 51.2]], ['Sund', [12.45, 56.2], [12.85, 55.5]],
   ['Grand Belt', [11.0, 55.9], [11.0, 55.1]], ['Petit Belt', [9.75, 55.62], [10.0, 55.1]], ['détroit de Kertch', [36.6, 45.5], [36.55, 45.1]],
+  ['Clyde', [-4.93, 55.8], [-4.36, 55.88]], ['IJ', [5.2, 52.5], [4.92, 52.425]], ['bouches du Danube', [29.8, 45.15], [27.98, 45.31]],
+  ['Don', [38.9, 46.95], [39.61, 47.21]],
 ];
 
 // ------------------------------------------------------------------ fleuves : estimations (source et embouchure, à 30 km près)
@@ -301,8 +311,8 @@ export default {
   cadre: { LON0: -11, LON1: 45, LAT0: 29, LAT1: 62, LAT_REF: 46, KM: 5 },
   places: [900, 1400],
   ENTIERS, COUPES, DETROITS, ESTUAIRES, PASSAGES, FLEUVES, NOM_LAC,
-  // (Glasgow sur la Clyde, Nikolaïev sur le liman du Boug : estuaires trop étroits pour la carte)
-  PORTS_ADMIS: ['Glasgow|GB', 'Nikolaïev|CR'],
+  // (Nikolaïev sur le liman du Boug : estuaire trop étroit pour la carte)
+  PORTS_ADMIS: ['Nikolaïev|CR'],
   NE: { rivieres: ['ne_10m_rivers_europe'], lacs: ['ne_10m_lakes_europe'] },
   PAYS,
   CULTURES: {},

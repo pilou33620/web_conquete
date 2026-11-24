@@ -3,8 +3,9 @@
 // codes, trous bouchés, lacs, terres hors jeu ; une case est prise quand son centre est dans le contour), puis liste :
 // - les passages connus (outils/theatres/<id>/carte.mjs, PASSAGES) coupés : un point hors de l'eau, ou les deux points sans
 //   chemin d'eau en eau (4 voisins) ;
-// - les eaux enclavées : cases de mer (pas les lacs) que rien ne relie au large (8 voisins, comme les flottes) ;
-// - les ports sans mouillage (aucune eau à 2 cases : marine::case_port) ou dont le mouillage ne mène pas au large.
+// - les mers enclavées : des eaux que rien ne relie au large (8 voisins, comme les flottes), sans lac de Natural Earth ;
+// - les ports sans mouillage (aucune eau à 2 cases : marine::case_port) ou dont le mouillage ne mène pas au large, sauf
+//   sur un lac (eaux intérieures : les Grands Lacs, le lac Nicaragua), listés à part avec leurs ports.
 // Ne change rien ; sort en erreur s'il trouve un défaut. Les bras d'eau perdus à la conversion des contours en cases sont
 // relevés (et creusés) par outils/theatre.mjs, qui seul a la grille fine.
 import fs from 'node:fs';
@@ -70,14 +71,22 @@ for (const [nom, a, b] of CARTE.PASSAGES || []) {
   for (let q = 0; q < file.length && !vu[cb]; q++) voisins(file[q], v => { if (T[v] < 2 && !vu[v]) { vu[v] = 1; file.push(v); } });
   if (!vu[cb]) defauts.push(`passage ${nom} : coupé`);
 }
-// eaux enclavées (mer sans lien avec le large)
+// eaux fermées (sans lien avec le large, 8 voisins) : un lac de Natural Earth en fait partie (les Grands Lacs, le lac
+// Nicaragua : des eaux intérieures, où l'on navigue sans rejoindre la mer), sinon une mer enclavée (défaut)
+const eauFermee = new Int32Array(N).fill(-1), lacs = []; // case → rang dans lacs ; lacs : { noms, cases, ports }
 {
-  const vu = new Uint8Array(N);
+  const nomEau = new Int32Array(N).fill(-1);
+  geo.waters.forEach((w, k) => remplir(w.ring, c => { nomEau[c] = k; }));
   for (let c0 = 0; c0 < N; c0++) {
-    if (T[c0] || large[c0] || vu[c0]) continue;
-    const file = [c0]; vu[c0] = 1;
-    for (let q = 0; q < file.length; q++) voisins(file[q], v => { if (!T[v] && !vu[v]) { vu[v] = 1; file.push(v); } }, true);
-    defauts.push(`mer enclavée à ${ou(c0)} (${file.length} case${file.length > 1 ? 's' : ''})`);
+    if (T[c0] === 2 || large[c0] || eauFermee[c0] >= 0) continue;
+    const file = [c0], noms = new Set(); eauFermee[c0] = lacs.length;
+    for (let q = 0; q < file.length; q++) {
+      const k = nomEau[file[q]];
+      if (T[file[q]] === 1 && k >= 0 && geo.waters[k].name !== 'Bras de mer') noms.add(geo.waters[k].name);
+      voisins(file[q], v => { if (T[v] < 2 && eauFermee[v] < 0) { eauFermee[v] = lacs.length; file.push(v); } }, true);
+    }
+    lacs.push({ noms: [...noms].sort(), cases: file.length, ports: [] });
+    if (!noms.size && file.some(c => !T[c])) defauts.push(`mer enclavée à ${ou(c0)} (${file.length} case${file.length > 1 ? 's' : ''})`);
   }
 }
 // ports
@@ -91,8 +100,11 @@ for (const [nom, lat, lon, code, , etiq] of places) {
     if ((dx || dy) && i >= 0 && j >= 0 && i < W && j < H && T[c] < 2 && dx * dx + dy * dy < dmin) { dmin = dx * dx + dy * dy; best = c; }
   }
   if (best < 0) defauts.push(`port ${nom}|${code} : pas d'eau à 2 cases`);
+  else if (!large[best] && lacs[eauFermee[best]].noms.length) lacs[eauFermee[best]].ports.push(nom);
   else if (!large[best]) defauts.push(`port ${nom}|${code} : son mouillage (${ou(best)}) ne mène pas au large`);
 }
 console.log(`${ID} : ${W} × ${H} cases, ${(CARTE.PASSAGES || []).length} passages connus, ${places.filter(p => p[5].includes('port')).length} ports ; ${defauts.length} défaut(s)`);
 for (const d of defauts) console.log('  ' + d);
+for (const l of lacs.filter(l => l.ports.length))
+  console.log(`  ports de lac (eaux intérieures de ${l.cases} cases : ${l.noms.join(', ')}) : ${l.ports.join(', ')}`);
 process.exitCode = defauts.length ? 1 : 0;

@@ -31,10 +31,10 @@
 "Saint-Barthélemy | @17.896,-62.850 | 1 | port commerce | 0", "Havre-Aubert | @47.244,-61.839 | 0.3 | port peche | 0"
 ],
 "ALO": [
-"La Nouvelle-Orléans | @29.95,-90.07 | 5.3 | port commerce | 2", "Mobile | @30.69,-88.04 | 1.5 | port | 1", "Natchez | @31.56,-91.40 | 1.5 | port | 1", "Saint-Louis | @38.63,-90.20 | 1 | port commerce | 1",
-"Natchitoches | @31.76,-93.09 | 1 | port | 1", "Les Opélousas | @30.53,-92.08 | 0.8 | | 0", "Sainte-Geneviève | @37.98,-90.04 | 0.7 | port | 0", "Bâton-Rouge | @30.45,-91.15 | 0.5 | port | 0",
-"Kaskaskia | @37.92,-89.91 | 0.5 | port | 1", "Cahokia | @38.57,-90.19 | 0.4 | port | 0", "Biloxi | @30.40,-88.89 | 0.3 | port | 1", "New Madrid | @36.59,-89.53 | 0.3 | port | 0",
-"Saint-Charles | @38.78,-90.48 | 0.3 | port | 0", "Poste des Arkansas | @34.03,-91.35 | 0.2 | port | 1", "Pimitoui | @40.69,-89.59 | 0.2 | port | 0"
+"La Nouvelle-Orléans | @29.95,-90.07 | 5.3 | port commerce | 2", "Mobile | @30.69,-88.04 | 1.5 | port | 1", "Natchez | @31.56,-91.40 | 1.5 | | 1", "Saint-Louis | @38.63,-90.20 | 1 | | 1",
+"Natchitoches | @31.76,-93.09 | 1 | | 1", "Les Opélousas | @30.53,-92.08 | 0.8 | | 0", "Sainte-Geneviève | @37.98,-90.04 | 0.7 | | 0", "Bâton-Rouge | @30.45,-91.15 | 0.5 | port | 0",
+"Kaskaskia | @37.92,-89.91 | 0.5 | | 1", "Cahokia | @38.57,-90.19 | 0.4 | | 0", "Biloxi | @30.40,-88.89 | 0.3 | port | 1", "New Madrid | @36.59,-89.53 | 0.3 | | 0",
+"Saint-Charles | @38.78,-90.48 | 0.3 | | 0", "Poste des Arkansas | @34.03,-91.35 | 0.2 | | 1", "Pimitoui | @40.69,-89.59 | 0.2 | | 0"
 ],
 "AES": [
 "Mexico | Mexico City | 113 | | 1", "Puebla | Puebla | 57 | | 1", "Guanajuato | Guanajuato | 32 | | 0", "Querétaro | Santiago de Querétaro | 30 | | 0",
@@ -62,20 +62,20 @@
 "Saint-Eustache | @17.483,-62.986 | 6 | port commerce | 2", "Saba | @17.626,-63.249 | 1 | port | 0"
 ],
 "AIR": [
-"Onontagué | @42.96,-76.10 | 0.4 | | 1", "Vincennes | @38.68,-87.53 | 0.8 | port | 1", "Chenussio | @42.80,-77.82 | 0.6 | | 0", "Oneida | @43.06,-75.65 | 0.6 | | 0",
-"Kanadesaga | @42.87,-77.00 | 0.5 | | 0", "Kekionga | @41.08,-85.14 | 0.5 | | 0", "Pittsburgh | @40.44,-80.00 | 0.4 | port | 3", "Goiogouen | @42.85,-76.70 | 0.4 | | 0",
-"Canajoharie | @42.90,-74.57 | 0.3 | | 0", "Niagara | @43.26,-79.06 | 0.3 | port | 3", "Marietta | @39.42,-81.45 | 0.3 | port | 1", "Chillicothe | @39.33,-82.98 | 0.3 | | 0",
-"Chouaguen | @43.46,-76.51 | 0.2 | port | 2", "Cincinnati | @39.10,-84.51 | 0.2 | port | 1", "Ouiatenon | @40.41,-86.99 | 0.2 | port | 1", "Sandusky | @41.45,-82.71 | 0.1 | port | 0"
+"Onontagué | @42.96,-76.10 | 0.4 | | 1", "Vincennes | @38.68,-87.53 | 0.8 | | 1", "Chenussio | @42.80,-77.82 | 0.6 | | 0", "Oneida | @43.06,-75.65 | 0.6 | | 0",
+"Kanadesaga | @42.87,-77.00 | 0.5 | | 0", "Kekionga | @41.08,-85.14 | 0.5 | | 0", "Pittsburgh | @40.44,-80.00 | 0.4 | | 3", "Goiogouen | @42.85,-76.70 | 0.4 | | 0",
+"Canajoharie | @42.90,-74.57 | 0.3 | | 0", "Niagara | @43.26,-79.06 | 0.3 | port | 3", "Marietta | @39.42,-81.45 | 0.3 | | 1", "Chillicothe | @39.33,-82.98 | 0.3 | | 0",
+"Chouaguen | @43.46,-76.51 | 0.2 | port | 2", "Cincinnati | @39.10,-84.51 | 0.2 | | 1", "Ouiatenon | @40.41,-86.99 | 0.2 | | 1", "Sandusky | @41.45,-82.71 | 0.1 | port | 0"
 ],
 "AHU": [
 "Détroit | @42.33,-83.05 | 2.2 | port commerce | 2", "Ossossané | @44.65,-79.99 | 0.8 | port | 1", "Michilimackinac | @45.78,-84.73 | 0.3 | port | 2", "Amherstburg | @42.10,-83.11 | 0.3 | port | 2",
 "Toronto | @43.65,-79.38 | 0.2 | port | 0", "La Baie | @44.51,-88.01 | 0.2 | port | 1", "Prairie du Chien | @43.05,-91.14 | 0.2 | | 0", "Saint-Joseph | @41.83,-86.25 | 0.1 | | 1",
-"Saginaw | @43.42,-83.95 | 0.1 | port | 0", "La Pointe | @46.78,-90.79 | 0.1 | port | 0"
+"Saginaw | @43.42,-83.95 | 0.1 | | 0", "La Pointe | @46.78,-90.79 | 0.1 | port | 0"
 ],
 "ACH": [
 "Chota | @35.53,-84.17 | 0.5 | | 0", "Lexington | @38.04,-84.50 | 0.8 | | 0", "Coweta | @32.33,-85.00 | 0.5 | | 0", "Tellico | @35.36,-84.30 | 0.4 | | 0",
-"Chickamauga | @35.05,-85.30 | 0.4 | | 0", "Nashville | @36.16,-86.78 | 0.4 | port | 1", "Keowee | @34.87,-82.89 | 0.3 | | 0", "Nikwasi | @35.18,-83.38 | 0.3 | | 0",
-"Ustanali | @34.54,-84.91 | 0.3 | | 0", "Knoxville | @35.96,-83.92 | 0.3 | port | 1", "Harrodsburg | @37.76,-84.84 | 0.3 | | 1", "Louisville | @38.25,-85.76 | 0.2 | port | 1",
+"Chickamauga | @35.05,-85.30 | 0.4 | | 0", "Nashville | @36.16,-86.78 | 0.4 | | 1", "Keowee | @34.87,-82.89 | 0.3 | | 0", "Nikwasi | @35.18,-83.38 | 0.3 | | 0",
+"Ustanali | @34.54,-84.91 | 0.3 | | 0", "Knoxville | @35.96,-83.92 | 0.3 | | 1", "Harrodsburg | @37.76,-84.84 | 0.3 | | 1", "Louisville | @38.25,-85.76 | 0.2 | | 1",
 "Fort Toulouse | @32.51,-86.25 | 0.1 | | 1"
 ],
 "AIN": [
@@ -84,9 +84,9 @@
 "Sanikiluaq | @56.54,-79.22 | 0.1 | port | 0"
 ],
 "APL": [
-"Villages mandanes | @47.33,-101.39 | 1.5 | port | 0", "Villages pawnees | @41.40,-97.90 | 1 | | 0", "Villages arikaras | @44.37,-100.35 | 0.8 | port | 0", "Quivira | @38.35,-98.20 | 0.5 | | 0",
-"Villages taovayas | @34.02,-97.60 | 0.5 | | 0", "Palo Duro | @34.95,-101.67 | 0.3 | | 0", "Paha Sapa | @44.08,-103.23 | 0.3 | | 0", "Bdote | @44.89,-93.18 | 0.3 | port | 0",
-"Grosses Futaies | @38.07,-102.80 | 0.2 | port | 0", "Medicine Lodge | @37.28,-98.58 | 0.2 | | 0", "Little Bighorn | @45.57,-107.43 | 0.2 | | 0"
+"Villages mandanes | @47.33,-101.39 | 1.5 | | 0", "Villages pawnees | @41.40,-97.90 | 1 | | 0", "Villages arikaras | @44.37,-100.35 | 0.8 | | 0", "Quivira | @38.35,-98.20 | 0.5 | | 0",
+"Villages taovayas | @34.02,-97.60 | 0.5 | | 0", "Palo Duro | @34.95,-101.67 | 0.3 | | 0", "Paha Sapa | @44.08,-103.23 | 0.3 | | 0", "Bdote | @44.89,-93.18 | 0.3 | | 0",
+"Grosses Futaies | @38.07,-102.80 | 0.2 | | 0", "Medicine Lodge | @37.28,-98.58 | 0.2 | | 0", "Little Bighorn | @45.57,-107.43 | 0.2 | | 0"
 ],
 "APU": [
 "Zuñi | @35.07,-108.85 | 1.6 | | 1", "Acoma | @34.90,-107.58 | 0.8 | | 2", "Laguna | @35.04,-107.39 | 0.7 | | 0", "Taos | @36.44,-105.54 | 0.5 | | 1",

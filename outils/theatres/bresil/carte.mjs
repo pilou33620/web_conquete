@@ -42,6 +42,20 @@ const COUPES = {
       : null },
 };
 const DETROITS = [];
+// estuaires creusés jusqu'à moins de 10 km du port du fond (outils/THEATRES.md) : [nom, largeur en km, axe de la mer vers
+// l'amont]. L'Oyapock jusqu'au fort, le bas São Francisco jusqu'à Penedo. L'Amazone au-dessus de Belém (Santarém, Óbidos,
+// Serpa, Parintins, le Tapajós), le Tocantins, le Paraguay (Albuquerque, Coimbra) : des ports de pirogues et de canots, pas
+// de navires de mer avant les vapeurs (l'Amazone n'est ouverte aux navires étrangers qu'en 1867).
+const ESTUAIRES = [
+  ['Oyapock', 7.5, [[-51.62, 4.12], [-51.70, 4.02], [-51.76, 3.96]]],
+  ['São Francisco', 7.5, [[-36.40, -10.50], [-36.45, -10.43], [-36.52, -10.36], [-36.55, -10.32]]],
+];
+// passages connus, vérifiés sur la grille : [nom, [lon, lat] du large, [lon, lat] du fond]
+const PASSAGES = [
+  ['Oyapock', [-51.6, 4.3], [-51.76, 3.96]], ['bouche du São Francisco', [-36.3, -10.6], [-36.55, -10.32]],
+  ['baie de Guanabara', [-43.15, -23.05], [-43.12, -22.72]], ['baie de Tous-les-Saints', [-38.5, -13.1], [-38.65, -12.8]],
+  ['rivière du Pará (Belém)', [-48.0, -0.5], [-48.52, -1.45]], ['baie de São Marcos', [-44.2, -2.2], [-44.5, -2.6]],
+];
 
 // [nom, rang, [lon, lat] vers la source, [lon, lat] à l'embouchure ou au confluent, noms Natural Earth admis], ou points à la main
 const FLEUVES = [
@@ -121,5 +135,5 @@ export default {
   id: 'bresil', geo: 9, nom: 'Côte du Brésil',
   cadre: { LON0: -59.5, LON1: -34.6, LAT0: -29.0, LAT1: 7.5, LAT_REF: -10, KM: 5 },
   places: [150, 450],
-  ENTIERS, COUPES, DETROITS, FLEUVES, NE, PAYS, CULTURES,
+  ENTIERS, COUPES, DETROITS, ESTUAIRES, PASSAGES, FLEUVES, NE, PAYS, CULTURES,
 };
